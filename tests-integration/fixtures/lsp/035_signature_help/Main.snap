@@ -2,7 +2,7 @@
 source: tests-integration/tests/lsp/generated.rs
 expression: report
 ---
-SignatureHelp at Position { line: 15, character: 17 }
+SignatureHelp at Position { line: 16, character: 17 }
 
 ```
 check = fromMaybe life Nothing
@@ -12,14 +12,42 @@ check = fromMaybe life Nothing
 ```purescript
 fromMaybe :: forall (a :: Type). (a :: Type) -> Maybe (a :: Type) -> (a :: Type)
 ```
-  0: (a :: Type)
+→ 0: (a :: Type)
   1: Maybe (a :: Type)
 
 
-SignatureHelp at Position { line: 19, character: 13 }
+SignatureHelp at Position { line: 21, character: 24 }
 
 ```
-check2 = map life []
+check2 = fromMaybe life Nothing
+--                      &
+```
+
+```purescript
+fromMaybe :: forall (a :: Type). (a :: Type) -> Maybe (a :: Type) -> (a :: Type)
+```
+  0: (a :: Type)
+→ 1: Maybe (a :: Type)
+
+
+SignatureHelp at Position { line: 26, character: 10 }
+
+```
+check3 = fromMaybe life Nothing
+--        &
+```
+
+```purescript
+fromMaybe :: forall (a :: Type). (a :: Type) -> Maybe (a :: Type) -> (a :: Type)
+```
+→ 0: (a :: Type)
+  1: Maybe (a :: Type)
+
+
+SignatureHelp at Position { line: 31, character: 13 }
+
+```
+check4 = map life []
 --           &
 ```
 
@@ -28,5 +56,47 @@ map ::
   forall (a :: Type) (b :: Type).
     ((a :: Type) -> (b :: Type)) -> Array (a :: Type) -> Array (b :: Type)
 ```
-  0: (a :: Type) -> (b :: Type)
+→ 0: (a :: Type) -> (b :: Type)
   1: Array (a :: Type)
+
+
+SignatureHelp at Position { line: 35, character: 14 }
+
+```
+check5 = fromMaybe
+--            &
+```
+
+```purescript
+fromMaybe :: forall (a :: Type). (a :: Type) -> Maybe (a :: Type) -> (a :: Type)
+```
+→ 0: (a :: Type)
+  1: Maybe (a :: Type)
+
+
+SignatureHelp at Position { line: 40, character: 25 }
+
+```
+check6 = fromMaybe life Nothing
+--                       &
+```
+
+```purescript
+fromMaybe :: forall (a :: Type). (a :: Type) -> Maybe (a :: Type) -> (a :: Type)
+```
+  0: (a :: Type)
+→ 1: Maybe (a :: Type)
+
+
+SignatureHelp at Position { line: 45, character: 18 }
+
+```
+check7 = fromMaybe life Nothing
+--                &
+```
+
+```purescript
+fromMaybe :: forall (a :: Type). (a :: Type) -> Maybe (a :: Type) -> (a :: Type)
+```
+→ 0: (a :: Type)
+  1: Maybe (a :: Type)

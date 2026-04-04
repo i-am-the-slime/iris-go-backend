@@ -12,10 +12,36 @@ map _ _ = []
 life :: Int
 life = 42
 
+-- cursor on first arg
 check :: Int
 check = fromMaybe life Nothing
 --               &
 
-check2 :: Array Int
-check2 = map life []
+-- cursor on second arg
+check2 :: Int
+check2 = fromMaybe life Nothing
+--                      &
+
+-- cursor on function name in application
+check3 :: Int
+check3 = fromMaybe life Nothing
+--        &
+
+-- cursor on first arg of map
+check4 :: Array Int
+check4 = map life []
 --           &
+
+-- standalone function, cursor on name
+check5 = fromMaybe
+--            &
+
+-- cursor on space after first arg
+check6 :: Int
+check6 = fromMaybe life Nothing
+--                       &
+
+-- cursor between function and first arg
+check7 :: Int
+check7 = fromMaybe life Nothing
+--                &
