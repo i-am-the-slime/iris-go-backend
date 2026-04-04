@@ -209,13 +209,15 @@ impl CursorText {
                 let label_range = label.syntax().text_range();
                 let label_text = label.text().map(|t| SmolStr::new(t.text()));
 
-                if label_range.contains_range(token_range) || label_range.start() == token_range.start() {
+                if label_range.contains_range(token_range)
+                    || label_range.start() == token_range.start()
+                {
                     partial = label_text;
                     edit_range = Some(label_range);
-                } else if label_range.end() <= token_range.start() {
-                    if let Some(text) = label_text {
-                        completed.push(text);
-                    }
+                } else if label_range.end() <= token_range.start()
+                    && let Some(text) = label_text
+                {
+                    completed.push(text);
                 }
             }
 

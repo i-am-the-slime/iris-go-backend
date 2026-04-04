@@ -1,7 +1,7 @@
 use async_lsp::lsp_types::*;
 use checking::ExternalQueries;
-use checking::core::{Type, TypeId};
 use checking::core::pretty::Pretty;
+use checking::core::{Type, TypeId};
 use files::FileId;
 use indexing::{ImportKind, TermItemId, TypeItemId};
 use resolving::ResolvedModule;
@@ -810,10 +810,10 @@ impl CompletionSource for RecordFields<'_> {
         filter: F,
         items: &mut Vec<CompletionItem>,
     ) -> Result<Self::T, AnalyzerError> {
-        let expr_id = context.stabilized.lookup_ptr(self.expr_ptr).ok_or(AnalyzerError::NonFatal)?;
+        let expr_id =
+            context.stabilized.lookup_ptr(self.expr_ptr).ok_or(AnalyzerError::NonFatal)?;
         let checked = context.engine.checked(context.current_file)?;
-        let type_id =
-            checked.nodes.lookup_expression(expr_id).ok_or(AnalyzerError::NonFatal)?;
+        let type_id = checked.nodes.lookup_expression(expr_id).ok_or(AnalyzerError::NonFatal)?;
 
         let mut current_type = type_id;
         for label in self.completed_labels {
@@ -853,7 +853,10 @@ impl CompletionSource for RecordFields<'_> {
     }
 }
 
-fn extract_record_fields(engine: &impl ExternalQueries, type_id: TypeId) -> Option<Vec<(SmolStr, TypeId)>> {
+fn extract_record_fields(
+    engine: &impl ExternalQueries,
+    type_id: TypeId,
+) -> Option<Vec<(SmolStr, TypeId)>> {
     let ty = engine.lookup_type(type_id);
     match ty {
         Type::Application(ctor, arg) => {

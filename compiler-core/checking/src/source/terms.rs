@@ -43,11 +43,13 @@ where
     let expected = normalise::normalise(state, context, expected)?;
     let expected = toolkit::skolemise_forall(state, context, expected)?;
     let expected = toolkit::collect_givens(state, context, expected)?;
-    if let Some(section_result) = context.sectioned.expressions.get(&expression) {
+    let type_id = if let Some(section_result) = context.sectioned.expressions.get(&expression) {
         check_sectioned_expression(state, context, expression, section_result, expected)
     } else {
         check_expression_core(state, context, expression, expected)
-    }
+    }?;
+    state.checked.nodes.expressions.insert(expression, type_id);
+    Ok(type_id)
 }
 
 fn check_sectioned_expression<Q>(
@@ -166,11 +168,13 @@ fn infer_expression_quiet<Q>(
 where
     Q: ExternalQueries,
 {
-    if let Some(section_result) = context.sectioned.expressions.get(&expression) {
+    let type_id = if let Some(section_result) = context.sectioned.expressions.get(&expression) {
         infer_sectioned_expression(state, context, expression, section_result)
     } else {
         infer_expression_core(state, context, expression)
-    }
+    }?;
+    state.checked.nodes.expressions.insert(expression, type_id);
+    Ok(type_id)
 }
 
 fn infer_sectioned_expression<Q>(
@@ -330,7 +334,10 @@ where
 
         lowering::ExpressionKind::RecordAccess { record, labels } => {
             let Some(record) = *record else { return Ok(unknown) };
-            let Some(labels) = labels else { return Ok(unknown) };
+            let Some(labels) = labels else {
+                infer_expression(state, context, record)?;
+                return Ok(unknown);
+            };
             collections::infer_record_access(state, context, record, labels)
         }
 
