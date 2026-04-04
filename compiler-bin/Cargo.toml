@@ -16,6 +16,7 @@ default = []
 no-tracing = ["tracing/max_level_off"]
 
 [dependencies]
+checking = { version = "0.1.0", path = "../compiler-core/checking" }
 diagnostics = { version = "0.1.0", path = "../compiler-core/diagnostics" }
 analyzer = { version = "0.1.0", path = "../compiler-lsp/analyzer" }
 async-lsp = "0.2.2"

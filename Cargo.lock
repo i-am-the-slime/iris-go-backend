@@ -1403,6 +1403,7 @@ version = "0.0.9"
 dependencies = [
  "analyzer",
  "async-lsp",
+ "checking",
  "clap",
  "diagnostics",
  "files",

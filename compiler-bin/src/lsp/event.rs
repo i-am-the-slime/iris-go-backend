@@ -1,6 +1,7 @@
 use analyzer::{common, locate};
 use async_lsp::LanguageClient;
 use async_lsp::lsp_types::*;
+use checking::ExternalQueries;
 use diagnostics::{DiagnosticsContext, ToDiagnostics};
 use files::FileId;
 use itertools::Itertools;
@@ -43,13 +44,17 @@ fn collect_diagnostics_core(
     let indexed = snapshot.engine.indexed(id)?;
     let resolved = snapshot.engine.resolved(id)?;
     let lowered = snapshot.engine.lowered(id)?;
+    let checked = snapshot.engine.checked(id);
 
     let uri = {
         let files = snapshot.files.read();
         common::file_uri(&snapshot.engine, &files, id)?
     };
 
+    let lookup = |id: checking::core::SmolStrId| snapshot.engine.lookup_smol_str(id);
+
     let context = DiagnosticsContext::new(&content, &root, &stabilized, &indexed, &lowered);
+    let context = if checked.is_ok() { context.with_checking_lookup(&lookup) } else { context };
 
     let mut all_diagnostics = vec![];
 
@@ -59,6 +64,12 @@ fn collect_diagnostics_core(
 
     for error in &resolved.errors {
         all_diagnostics.extend(error.to_diagnostics(&context));
+    }
+
+    if let Ok(checked) = &checked {
+        for error in &checked.errors {
+            all_diagnostics.extend(error.to_diagnostics(&context));
+        }
     }
 
     let to_position = |offset: u32| locate::offset_to_position(&content, TextSize::from(offset));
