@@ -79,3 +79,5 @@ fn run_test(folder: &str, file: &str) {
 #[rustfmt::skip] #[test] fn test_033_completion_cache_prefix_main() { run_test("033_completion_cache_prefix", "Main"); }
 
 #[rustfmt::skip] #[test] fn test_034_completion_record_access_main() { run_test("034_completion_record_access", "Main"); }
+
+#[rustfmt::skip] #[test] fn test_035_signature_help_main() { run_test("035_signature_help", "Main"); }

@@ -6,7 +6,7 @@ use analyzer::completion::SuggestionsCache;
 use analyzer::{QueryEngine, prim};
 use async_lsp::lsp_types::{
     CompletionList, CompletionResponse, GotoDefinitionResponse, HoverContents, LanguageString,
-    Location, MarkedString, Position, Url,
+    Location, MarkedString, Position, SignatureHelp, Url,
 };
 use files::{FileId, Files};
 use itertools::Itertools;
@@ -22,10 +22,11 @@ enum CursorKind {
     Completion,
     CompletionCached,
     References,
+    SignatureHelp,
 }
 
 impl CursorKind {
-    const CHARACTERS: &[char] = &['@', '$', '^', '~', '%'];
+    const CHARACTERS: &[char] = &['@', '$', '^', '~', '%', '&'];
 
     fn parse(text: &str) -> Option<CursorKind> {
         match text {
@@ -34,6 +35,7 @@ impl CursorKind {
             "^" => Some(CursorKind::Completion),
             "~" => Some(CursorKind::CompletionCached),
             "%" => Some(CursorKind::References),
+            "&" => Some(CursorKind::SignatureHelp),
             _ => None,
         }
     }
@@ -225,6 +227,35 @@ fn dispatch_cursor(
                 writeln!(result, "{location}").unwrap();
             } else {
                 writeln!(result, "<empty>").unwrap();
+            }
+        }
+        CursorKind::SignatureHelp => {
+            if let Ok(Some(response)) =
+                analyzer::signature_help::implementation(engine, files, uri, position)
+            {
+                render_signature_help(result, &response);
+            } else {
+                writeln!(result, "<empty>").unwrap();
+            }
+        }
+    }
+}
+
+fn render_signature_help(result: &mut String, response: &SignatureHelp) {
+    for sig in &response.signatures {
+        writeln!(result, "```purescript\n{}\n```", sig.label).unwrap();
+        if let Some(active) = sig.active_parameter.or(response.active_parameter) {
+            if let Some(params) = &sig.parameters {
+                for (i, param) in params.iter().enumerate() {
+                    let marker = if i == active as usize { "→" } else { " " };
+                    let label = match &param.label {
+                        async_lsp::lsp_types::ParameterLabel::Simple(s) => s.clone(),
+                        async_lsp::lsp_types::ParameterLabel::LabelOffsets([s, e]) => {
+                            sig.label[*s as usize..*e as usize].to_string()
+                        }
+                    };
+                    writeln!(result, "{marker} {i}: {label}").unwrap();
+                }
             }
         }
     }

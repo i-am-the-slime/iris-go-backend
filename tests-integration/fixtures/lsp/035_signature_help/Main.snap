@@ -1,0 +1,32 @@
+---
+source: tests-integration/tests/lsp/generated.rs
+expression: report
+---
+SignatureHelp at Position { line: 15, character: 17 }
+
+```
+check = fromMaybe life Nothing
+--               &
+```
+
+```purescript
+fromMaybe :: forall (a :: Type). (a :: Type) -> Maybe (a :: Type) -> (a :: Type)
+```
+  0: (a :: Type)
+  1: Maybe (a :: Type)
+
+
+SignatureHelp at Position { line: 19, character: 13 }
+
+```
+check2 = map life []
+--           &
+```
+
+```purescript
+map ::
+  forall (a :: Type) (b :: Type).
+    ((a :: Type) -> (b :: Type)) -> Array (a :: Type) -> Array (b :: Type)
+```
+  0: (a :: Type) -> (b :: Type)
+  1: Array (a :: Type)
