@@ -1,3 +1,5 @@
+use std::time::Duration;
+
 use analyzer::{common, locate};
 use async_lsp::LanguageClient;
 use async_lsp::lsp_types::*;
@@ -15,25 +17,42 @@ pub fn emit_collect_diagnostics(state: &mut State, uri: Url) -> Result<(), LspEr
     let uri = uri.as_str();
 
     if let Some(file_id) = files.id(uri) {
-        state.client.emit(CollectDiagnostics(file_id))?;
+        state.client.emit(CollectDiagnostics { file_id, debounce: false })?;
     }
 
     Ok(())
 }
 
-pub struct CollectDiagnostics(FileId);
+pub fn emit_collect_diagnostics_debounced(state: &mut State, uri: Url) -> Result<(), LspError> {
+    let files = state.files.read();
+    let uri = uri.as_str();
+
+    if let Some(file_id) = files.id(uri) {
+        state.client.emit(CollectDiagnostics { file_id, debounce: true })?;
+    }
+
+    Ok(())
+}
+
+pub struct CollectDiagnostics {
+    file_id: FileId,
+    debounce: bool,
+}
 
 pub fn collect_diagnostics(state: &mut State, id: CollectDiagnostics) -> Result<(), LspError> {
     state.spawn(move |snapshot| {
         let _span = tracing::info_span!("collect-diagnostics-task").entered();
-        collect_diagnostics_core(snapshot, id).inspect_err(|error| error.emit_trace())
+        if id.debounce {
+            std::thread::sleep(Duration::from_millis(150));
+        }
+        collect_diagnostics_core(snapshot, id.file_id).inspect_err(|error| error.emit_trace())
     });
     Ok(())
 }
 
 fn collect_diagnostics_core(
     mut snapshot: StateSnapshot,
-    CollectDiagnostics(id): CollectDiagnostics,
+    id: FileId,
 ) -> Result<(), LspError> {
     let content = snapshot.engine.content(id);
 
