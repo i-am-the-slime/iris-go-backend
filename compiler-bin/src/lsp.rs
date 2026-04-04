@@ -211,8 +211,6 @@ fn initialized_spago(state: &mut State) -> Result<(), LspError> {
 fn load_files(state: &mut State, files: &[PathBuf]) -> Result<(), LspError> {
     tracing::info!("Loading {} files.", files.len());
 
-    let mut urls = vec![];
-
     for file in files {
         let url = url::Url::from_file_path(file).map_err(|_| {
             let file = PathBuf::clone(file);
@@ -222,15 +220,10 @@ fn load_files(state: &mut State, files: &[PathBuf]) -> Result<(), LspError> {
         let uri = url.to_string();
 
         let text = fs::read_to_string(file)?;
-        on_change(state, &uri, &text)?;
-        urls.push(url);
+        on_change(state, &uri, &text)?
     }
 
     tracing::info!("Loaded {} files.", files.len());
-
-    for url in urls {
-        event::emit_collect_diagnostics(state, url)?;
-    }
 
     Ok(())
 }
