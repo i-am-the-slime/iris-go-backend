@@ -312,6 +312,7 @@ fn did_change(state: &mut State, p: DidChangeTextDocumentParams) -> Result<(), L
     }
 
     state.invalidate_workspace_symbols();
+    event::emit_collect_diagnostics(state, p.text_document.uri)?;
 
     Ok(())
 }
