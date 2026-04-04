@@ -45,3 +45,7 @@ check6 = fromMaybe life Nothing
 check7 :: Int
 check7 = fromMaybe life Nothing
 --                &
+
+-- cursor after space past standalone function (real typing scenario)
+check8 = fromMaybe
+--                 &

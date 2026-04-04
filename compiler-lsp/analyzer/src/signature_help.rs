@@ -7,6 +7,7 @@ use lowering::{ExpressionKind, TermVariableResolution};
 use rowan::ast::AstNode;
 use rowan::TextSize;
 use syntax::cst;
+use syntax::SyntaxToken;
 
 use crate::AnalyzerError;
 use crate::locate;
@@ -30,20 +31,16 @@ pub fn implementation(
         locate::position_to_offset(&content, position).ok_or(AnalyzerError::NonFatal)?;
 
     let node = parsed.syntax_node();
-    let token = match node.token_at_offset(offset) {
+    let tokens: Vec<SyntaxToken> = match node.token_at_offset(offset) {
         rowan::TokenAtOffset::None => return Ok(None),
-        rowan::TokenAtOffset::Single(t) => t,
-        rowan::TokenAtOffset::Between(left, right) => {
-            if left.parent_ancestors().any(|n| cst::ExpressionApplicationChain::cast(n).is_some()) {
-                left
-            } else {
-                right
-            }
-        }
+        rowan::TokenAtOffset::Single(t) => vec![t],
+        rowan::TokenAtOffset::Between(left, right) => vec![left, right],
     };
 
-    let resolved = find_application(&token, &stabilized, engine, current_file, offset)
-        .or_else(|| find_standalone_function(&token, &stabilized, engine, current_file));
+    let resolved = tokens.iter()
+        .find_map(|token| find_application(token, &stabilized, engine, current_file, offset))
+        .or_else(|| tokens.iter()
+            .find_map(|token| find_standalone_function(token, &stabilized, engine, current_file)));
 
     let (file_id, term_id, active_parameter) =
         resolved.ok_or(AnalyzerError::NonFatal)?;
@@ -99,7 +96,7 @@ pub fn implementation(
 
 /// Find signature help when cursor is inside an ExpressionApplicationChain.
 fn find_application(
-    token: &syntax::SyntaxToken,
+    token: &SyntaxToken,
     stabilized: &stabilizing::StabilizedModule,
     engine: &QueryEngine,
     current_file: FileId,
@@ -155,10 +152,10 @@ fn active_param_from_cst(
     active
 }
 
-/// Find signature help when cursor is on a standalone variable/constructor
-/// that has a function type (e.g. just typed `fromMaybe` with no args yet).
+/// Find signature help when cursor is on or after a standalone variable/constructor
+/// that has a function type (e.g. `fromMaybe ` with no args yet).
 fn find_standalone_function(
-    token: &syntax::SyntaxToken,
+    token: &SyntaxToken,
     stabilized: &stabilizing::StabilizedModule,
     engine: &QueryEngine,
     current_file: FileId,

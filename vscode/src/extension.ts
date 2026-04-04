@@ -1,8 +1,9 @@
-import { ExtensionContext, workspace } from "vscode";
+import { ExtensionContext, window, workspace } from "vscode";
 
 import {
   LanguageClient,
   LanguageClientOptions,
+  RevealOutputChannelOn,
   ServerOptions,
   TransportKind,
 } from "vscode-languageclient/node";
@@ -13,7 +14,7 @@ export function activate(context: ExtensionContext) {
   const config = workspace.getConfiguration("purescriptAnalyzer");
   const sourceCommand = config.get<string>("sourceCommand");
 
-  const args: string[] = [];
+  const args: string[] = ["--lsp-log", "trace"];
   if (sourceCommand) {
     args.push("--source-command", sourceCommand);
   }
@@ -24,8 +25,13 @@ export function activate(context: ExtensionContext) {
     transport: TransportKind.stdio,
   };
 
+  const outputChannel = window.createOutputChannel("PureScript Analyzer");
+
   const clientOptions: LanguageClientOptions = {
     documentSelector: [{ scheme: "file", language: "purescript" }],
+    outputChannel,
+    traceOutputChannel: outputChannel,
+    revealOutputChannelOn: RevealOutputChannelOn.Info,
   };
 
   client = new LanguageClient(

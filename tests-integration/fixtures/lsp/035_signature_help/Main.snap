@@ -100,3 +100,17 @@ fromMaybe :: forall (a :: Type). (a :: Type) -> Maybe (a :: Type) -> (a :: Type)
 ```
 → 0: (a :: Type)
   1: Maybe (a :: Type)
+
+
+SignatureHelp at Position { line: 49, character: 19 }
+
+```
+check8 = fromMaybe
+--                 &
+```
+
+```purescript
+fromMaybe :: forall (a :: Type). (a :: Type) -> Maybe (a :: Type) -> (a :: Type)
+```
+→ 0: (a :: Type)
+  1: Maybe (a :: Type)
