@@ -298,6 +298,11 @@ fn workspace_symbols(
         .on_non_fatal(None)
 }
 
+fn did_open(state: &mut State, p: DidOpenTextDocumentParams) -> Result<(), LspError> {
+    event::emit_collect_diagnostics(state, p.text_document.uri)?;
+    Ok(())
+}
+
 fn did_change(state: &mut State, p: DidChangeTextDocumentParams) -> Result<(), LspError> {
     let uri = p.text_document.uri.as_str();
 
@@ -400,7 +405,7 @@ pub async fn start(config: Arc<cli::Config>) {
             .request_snapshot::<request::References>(references)
             .request_snapshot::<request::WorkspaceSymbolRequest>(workspace_symbols)
             .notification_ext::<notification::Initialized>(initialized)
-            .notification_ext::<notification::DidOpenTextDocument>(|_, _| Ok(()))
+            .notification_ext::<notification::DidOpenTextDocument>(did_open)
             .notification_ext::<notification::DidSaveTextDocument>(did_save)
             .notification_ext::<notification::DidCloseTextDocument>(|_, _| Ok(()))
             .notification_ext::<notification::DidChangeConfiguration>(|_, _| Ok(()))
