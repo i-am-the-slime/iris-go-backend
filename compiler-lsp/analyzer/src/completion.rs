@@ -20,7 +20,7 @@ use prelude::{CompletionSource, Context, CursorSemantics, CursorText, Filter};
 use sources::{
     ImportedTerms, ImportedTypes, LocalTerms, LocalTypes, PrimTerms, PrimTypes, QualifiedModules,
     QualifiedTerms, QualifiedTermsSuggestions, QualifiedTypes, QualifiedTypesSuggestions,
-    SuggestedTerms, SuggestedTypes, WorkspaceModules,
+    RecordFields, SuggestedTerms, SuggestedTypes, WorkspaceModules,
 };
 use syntax::SyntaxKind;
 
@@ -206,6 +206,13 @@ fn collect(
             if context.collect_types() && !context.has_qualified_import(p) {
                 items.extend(suggestions.qualified_types.iter().cloned());
             }
+        }
+        CursorText::RecordAccess(expr_ptr, completed, partial) => {
+            let source = RecordFields { expr_ptr, completed_labels: completed };
+            match partial {
+                Some(p) => source.collect_into(context, FuzzyMatch(p), into)?,
+                None => source.collect_into(context, NoFilter, into)?,
+            };
         }
     }
 

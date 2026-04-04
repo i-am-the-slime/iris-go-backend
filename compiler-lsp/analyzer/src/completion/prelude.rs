@@ -3,7 +3,7 @@ use building::QueryEngine;
 use files::{FileId, Files};
 use parsing::ParsedModule;
 use resolving::ResolvedModule;
-use rowan::ast::AstNode;
+use rowan::ast::{AstNode, AstPtr};
 use rowan::{TextRange, TextSize, TokenAtOffset};
 use smol_str::SmolStr;
 use stabilizing::StabilizedModule;
@@ -180,14 +180,48 @@ pub enum CursorText {
     Prefix(SmolStr),
     Name(SmolStr),
     Both(SmolStr, SmolStr),
+    RecordAccess(AstPtr<cst::Expression>, Vec<SmolStr>, Option<SmolStr>),
 }
 
 impl CursorText {
     pub fn new(content: &str, token: &SyntaxToken) -> (CursorText, Option<Range>) {
-        CursorText::of_qualified(content, token)
+        CursorText::of_record_access(content, token)
+            .or_else(|| CursorText::of_qualified(content, token))
             .or_else(|| CursorText::of_qualifier(content, token))
             .or_else(|| CursorText::of_module_name(content, token))
             .unwrap_or((CursorText::None, None))
+    }
+
+    fn of_record_access(content: &str, token: &SyntaxToken) -> Option<(CursorText, Option<Range>)> {
+        token.parent_ancestors().find_map(|node| {
+            let access = cst::ExpressionRecordAccess::cast(node)?;
+            let expression = access.expression()?;
+            let expr_ptr = AstPtr::new(&expression);
+
+            let labels: Vec<_> = access.children().collect();
+            let token_range = token.text_range();
+
+            let mut completed = vec![];
+            let mut partial = None;
+            let mut edit_range = None;
+
+            for label in &labels {
+                let label_range = label.syntax().text_range();
+                let label_text = label.text().map(|t| SmolStr::new(t.text()));
+
+                if label_range.contains_range(token_range) || label_range.start() == token_range.start() {
+                    partial = label_text;
+                    edit_range = Some(label_range);
+                } else if label_range.end() <= token_range.start() {
+                    if let Some(text) = label_text {
+                        completed.push(text);
+                    }
+                }
+            }
+
+            let range = edit_range.and_then(|r| locate::text_range_to_range(content, r));
+            Some((CursorText::RecordAccess(expr_ptr, completed, partial), range))
+        })
     }
 
     fn of_qualified(content: &str, token: &SyntaxToken) -> Option<(CursorText, Option<Range>)> {

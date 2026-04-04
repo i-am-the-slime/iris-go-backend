@@ -31,6 +31,7 @@ pub fn implementation(
         CompletionResolveData::TypeItem(f_id, t_id) => {
             AnnotationSyntaxRange::of_file_type(engine, f_id, t_id)
         }
+        CompletionResolveData::RecordField => return Ok(item),
     };
 
     match root_range {
@@ -63,6 +64,7 @@ pub(crate) enum CompletionResolveData {
     Import(#[serde(with = "id")] FileId),
     TermItem(#[serde(with = "id")] FileId, #[serde(with = "id")] TermItemId),
     TypeItem(#[serde(with = "id")] FileId, #[serde(with = "id")] TypeItemId),
+    RecordField,
 }
 
 mod id {

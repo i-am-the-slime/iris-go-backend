@@ -1,0 +1,13 @@
+package:
+  name: test-project
+  dependencies:
+    - prelude
+  test:
+    main: Test.Main
+    dependencies:
+      - effect
+workspace:
+  package_set:
+    registry: 50.1.0
+  backend:
+    cmd: spago bundle-app --minify --platform node

@@ -1,8 +1,13 @@
 use async_lsp::lsp_types::*;
+use checking::ExternalQueries;
+use checking::core::{Type, TypeId};
+use checking::core::pretty::Pretty;
 use files::FileId;
 use indexing::{ImportKind, TermItemId, TypeItemId};
 use resolving::ResolvedModule;
+use rowan::ast::AstPtr;
 use smol_str::SmolStr;
+use syntax::cst;
 
 use crate::AnalyzerError;
 
@@ -787,6 +792,100 @@ impl CompletionSource for QualifiedTypesSuggestions<'_> {
         items: &mut Vec<CompletionItem>,
     ) -> Result<Self::T, AnalyzerError> {
         suggestions_candidates_qualified(self, self.0, context, filter, items)
+    }
+}
+
+/// Yields record fields for record access completion.
+pub struct RecordFields<'a> {
+    pub expr_ptr: &'a AstPtr<cst::Expression>,
+    pub completed_labels: &'a [SmolStr],
+}
+
+impl CompletionSource for RecordFields<'_> {
+    type T = ();
+
+    fn collect_into<F: Filter>(
+        &self,
+        context: &Context,
+        filter: F,
+        items: &mut Vec<CompletionItem>,
+    ) -> Result<Self::T, AnalyzerError> {
+        let expr_id = context.stabilized.lookup_ptr(self.expr_ptr).ok_or(AnalyzerError::NonFatal)?;
+        let checked = context.engine.checked(context.current_file)?;
+        let type_id =
+            checked.nodes.lookup_expression(expr_id).ok_or(AnalyzerError::NonFatal)?;
+
+        let mut current_type = type_id;
+        for label in self.completed_labels {
+            let fields = extract_record_fields(context.engine, current_type)
+                .ok_or(AnalyzerError::NonFatal)?;
+            current_type = fields
+                .iter()
+                .find(|(l, _)| l == label)
+                .map(|(_, t)| *t)
+                .ok_or(AnalyzerError::NonFatal)?;
+        }
+
+        let fields =
+            extract_record_fields(context.engine, current_type).ok_or(AnalyzerError::NonFatal)?;
+
+        for (label, field_type) in &fields {
+            if !filter.matches(label) {
+                continue;
+            }
+
+            let type_str = Pretty::new(context.engine, &checked).render(*field_type);
+
+            let mut item = CompletionItemSpec::new(
+                label.to_string(),
+                context.range,
+                CompletionItemKind::FIELD,
+                CompletionResolveData::RecordField,
+            );
+
+            item.label_detail(format!(" :: {type_str}"));
+            item.label_description("Record".to_string());
+
+            items.push(item.build());
+        }
+
+        Ok(())
+    }
+}
+
+fn extract_record_fields(engine: &impl ExternalQueries, type_id: TypeId) -> Option<Vec<(SmolStr, TypeId)>> {
+    let ty = engine.lookup_type(type_id);
+    match ty {
+        Type::Application(ctor, arg) => {
+            if !is_prim_record(engine, ctor) {
+                return None;
+            }
+            let row_ty = engine.lookup_type(arg);
+            match row_ty {
+                Type::Row(row_id) => {
+                    let row = engine.lookup_row_type(row_id);
+                    Some(row.fields.iter().map(|f| (f.label.clone(), f.id)).collect())
+                }
+                _ => None,
+            }
+        }
+        _ => None,
+    }
+}
+
+fn is_prim_record(engine: &impl ExternalQueries, type_id: TypeId) -> bool {
+    let ty = engine.lookup_type(type_id);
+    if let Type::Constructor(file_id, _) = ty {
+        file_id == engine.prim_id()
+            && engine
+                .resolved(file_id)
+                .ok()
+                .and_then(|resolved| resolved.exports.lookup_type("Record"))
+                .is_some_and(|(_, item_id)| {
+                    matches!(engine.lookup_type(type_id), Type::Constructor(_, tid) if tid == item_id)
+                })
+    } else {
+        false
     }
 }
 
