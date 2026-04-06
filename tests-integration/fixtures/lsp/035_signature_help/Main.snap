@@ -10,10 +10,10 @@ check = fromMaybe life Nothing
 ```
 
 ```purescript
-fromMaybe :: forall (a :: Type). (a :: Type) -> Maybe (a :: Type) -> (a :: Type)
+fromMaybe :: forall a. a -> Maybe a -> a
 ```
-→ 0: (a :: Type)
-  1: Maybe (a :: Type)
+→ 0: a
+  1: Maybe a
 
 
 SignatureHelp at Position { line: 21, character: 24 }
@@ -24,10 +24,10 @@ check2 = fromMaybe life Nothing
 ```
 
 ```purescript
-fromMaybe :: forall (a :: Type). (a :: Type) -> Maybe (a :: Type) -> (a :: Type)
+fromMaybe :: forall a. a -> Maybe a -> a
 ```
-  0: (a :: Type)
-→ 1: Maybe (a :: Type)
+  0: a
+→ 1: Maybe a
 
 
 SignatureHelp at Position { line: 26, character: 10 }
@@ -38,10 +38,10 @@ check3 = fromMaybe life Nothing
 ```
 
 ```purescript
-fromMaybe :: forall (a :: Type). (a :: Type) -> Maybe (a :: Type) -> (a :: Type)
+fromMaybe :: forall a. a -> Maybe a -> a
 ```
-→ 0: (a :: Type)
-  1: Maybe (a :: Type)
+→ 0: a
+  1: Maybe a
 
 
 SignatureHelp at Position { line: 31, character: 13 }
@@ -52,13 +52,10 @@ check4 = map life []
 ```
 
 ```purescript
-map ::
-  forall (a :: Type) (b :: Type).
-    ((a :: Type) -> (b :: Type)) -> Array (a :: Type) -> Array (b :: Type)
+map :: forall a b. (a -> b) -> Array a -> Array b
 ```
-→ 0: Type) (b :: Type).
-    ((a :: Type) -> (b :: Type))
-  1: Array (a :: Type)
+→ 0: (a -> b)
+  1: Array a
 
 
 SignatureHelp at Position { line: 35, character: 14 }
@@ -69,10 +66,10 @@ check5 = fromMaybe
 ```
 
 ```purescript
-fromMaybe :: forall (a :: Type). (a :: Type) -> Maybe (a :: Type) -> (a :: Type)
+fromMaybe :: forall a. a -> Maybe a -> a
 ```
-→ 0: (a :: Type)
-  1: Maybe (a :: Type)
+→ 0: a
+  1: Maybe a
 
 
 SignatureHelp at Position { line: 40, character: 25 }
@@ -83,10 +80,10 @@ check6 = fromMaybe life Nothing
 ```
 
 ```purescript
-fromMaybe :: forall (a :: Type). (a :: Type) -> Maybe (a :: Type) -> (a :: Type)
+fromMaybe :: forall a. a -> Maybe a -> a
 ```
-  0: (a :: Type)
-→ 1: Maybe (a :: Type)
+  0: a
+→ 1: Maybe a
 
 
 SignatureHelp at Position { line: 45, character: 18 }
@@ -97,10 +94,10 @@ check7 = fromMaybe life Nothing
 ```
 
 ```purescript
-fromMaybe :: forall (a :: Type). (a :: Type) -> Maybe (a :: Type) -> (a :: Type)
+fromMaybe :: forall a. a -> Maybe a -> a
 ```
-→ 0: (a :: Type)
-  1: Maybe (a :: Type)
+→ 0: a
+  1: Maybe a
 
 
 SignatureHelp at Position { line: 49, character: 19 }
@@ -111,10 +108,10 @@ check8 = fromMaybe
 ```
 
 ```purescript
-fromMaybe :: forall (a :: Type). (a :: Type) -> Maybe (a :: Type) -> (a :: Type)
+fromMaybe :: forall a. a -> Maybe a -> a
 ```
-→ 0: (a :: Type)
-  1: Maybe (a :: Type)
+→ 0: a
+  1: Maybe a
 
 
 SignatureHelp at Position { line: 53, character: 28 }
@@ -125,10 +122,10 @@ check9 = Just 12 # fromMaybe
 ```
 
 ```purescript
-fromMaybe :: forall (a :: Type). (a :: Type) -> Maybe (a :: Type) -> (a :: Type)
+fromMaybe :: forall a. a -> Maybe a -> a
 ```
-→ 0: (a :: Type)
-  1: Maybe (a :: Type)
+→ 0: a
+  1: Maybe a
 
 
 SignatureHelp at Position { line: 57, character: 20 }
@@ -139,10 +136,10 @@ check10 = fromMaybe
 ```
 
 ```purescript
-fromMaybe :: forall (a :: Type). (a :: Type) -> Maybe (a :: Type) -> (a :: Type)
+fromMaybe :: forall a. a -> Maybe a -> a
 ```
-→ 0: (a :: Type)
-  1: Maybe (a :: Type)
+→ 0: a
+  1: Maybe a
 
 
 SignatureHelp at Position { line: 61, character: 17 }
@@ -153,7 +150,7 @@ check11 = fromMaybe
 ```
 
 ```purescript
-fromMaybe :: forall (a :: Type). (a :: Type) -> Maybe (a :: Type) -> (a :: Type)
+fromMaybe :: forall a. a -> Maybe a -> a
 ```
-→ 0: (a :: Type)
-  1: Maybe (a :: Type)
+→ 0: a
+  1: Maybe a
