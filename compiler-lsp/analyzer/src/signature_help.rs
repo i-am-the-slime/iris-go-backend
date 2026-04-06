@@ -3,7 +3,7 @@ use building::QueryEngine;
 use checking::ExternalQueries;
 use checking::core::{Type, TypeId};
 use files::{FileId, Files};
-use lowering::{ExpressionKind, TermVariableResolution};
+use lowering::{ExpressionId, ExpressionKind, TermVariableResolution};
 use rowan::ast::AstNode;
 use rowan::TextSize;
 use syntax::cst;
@@ -11,6 +11,14 @@ use syntax::SyntaxToken;
 
 use crate::AnalyzerError;
 use crate::locate;
+
+struct Resolved {
+    def_file: FileId,
+    term_id: indexing::TermItemId,
+    /// ExpressionId of the function at the call site (for inferred type lookup).
+    function_expr: ExpressionId,
+    active_parameter: u32,
+}
 
 pub fn implementation(
     engine: &QueryEngine,
@@ -37,8 +45,6 @@ pub fn implementation(
         rowan::TokenAtOffset::Between(left, right) => vec![left, right],
     };
 
-    // Also collect preceding non-trivia tokens for when cursor is at
-    // whitespace/layout tokens past an expression (e.g. `fromMaybe |`).
     let preceding_tokens: Vec<SyntaxToken> = tokens.iter()
         .filter_map(|t| prev_meaningful_token(t))
         .collect();
@@ -52,25 +58,40 @@ pub fn implementation(
         .or_else(|| all_tokens.iter()
             .find_map(|token| find_standalone_function(token, &stabilized, engine, current_file)));
 
-    let (file_id, term_id, active_parameter) =
-        resolved.ok_or(AnalyzerError::NonFatal)?;
+    let resolved = resolved.ok_or(AnalyzerError::NonFatal)?;
 
-    let checked = engine.checked(file_id)?;
-    let type_id = checked.terms.get(&term_id).copied().ok_or(AnalyzerError::NonFatal)?;
+    // Try the inferred type at the call site first, fall back to declared type.
+    let current_checked = engine.checked(current_file)?;
+    let def_checked = engine.checked(resolved.def_file)?;
+
+    let type_id = current_checked
+        .nodes
+        .expressions
+        .get(&resolved.function_expr)
+        .copied()
+        .or_else(|| def_checked.terms.get(&resolved.term_id).copied())
+        .ok_or(AnalyzerError::NonFatal)?;
 
     let (params, _) = collect_function_params(engine, type_id);
     if params.is_empty() {
         return Ok(None);
     }
 
-    let indexed = engine.indexed(file_id)?;
-    let name = indexed.items[term_id]
+    let indexed = engine.indexed(resolved.def_file)?;
+    let name = indexed.items[resolved.term_id]
         .name
         .as_ref()
         .ok_or(AnalyzerError::NonFatal)?
         .to_string();
 
-    let label = checking::core::pretty::Pretty::new(engine, &checked)
+    // Use whichever checked module contains the type for rendering.
+    let render_checked = if current_checked.nodes.expressions.contains_key(&resolved.function_expr) {
+        &current_checked
+    } else {
+        &def_checked
+    };
+
+    let label = checking::core::pretty::Pretty::new(engine, render_checked)
         .signature(&name)
         .render(type_id)
         .to_string();
@@ -83,7 +104,9 @@ pub fn implementation(
         })
         .collect();
 
-    let active_parameter = active_parameter.min(parameters.len() as u32 - 1);
+    let active_parameter = resolved.active_parameter.min(
+        parameters.len().saturating_sub(1) as u32,
+    );
 
     let signature = SignatureInformation {
         label,
@@ -99,14 +122,13 @@ pub fn implementation(
     }))
 }
 
-/// Find signature help when cursor is inside an ExpressionApplicationChain.
 fn find_application(
     token: &SyntaxToken,
     stabilized: &stabilizing::StabilizedModule,
     engine: &QueryEngine,
     current_file: FileId,
     cursor_offset: TextSize,
-) -> Option<(FileId, indexing::TermItemId, u32)> {
+) -> Option<Resolved> {
     let app_chain = token
         .parent_ancestors()
         .find_map(cst::ExpressionApplicationChain::cast)?;
@@ -129,16 +151,12 @@ fn find_application(
     };
 
     let function_id = (*function)?;
-    let (file_id, term_id) = resolve_function(engine, current_file, function_id).ok()?;
+    let (def_file, term_id) = resolve_function(engine, current_file, function_id).ok()?;
+    let active_parameter = active_param_from_cst(&app_chain, cursor_offset);
 
-    let active = active_param_from_cst(&app_chain, cursor_offset);
-
-    Some((file_id, term_id, active))
+    Some(Resolved { def_file, term_id, function_expr: function_id, active_parameter })
 }
 
-/// Determine active parameter from the cursor position relative to
-/// the term arguments in the CST. Cursor past an argument's end
-/// means we've moved on to the next parameter.
 fn active_param_from_cst(
     app_chain: &cst::ExpressionApplicationChain,
     cursor_offset: TextSize,
@@ -157,14 +175,12 @@ fn active_param_from_cst(
     active
 }
 
-/// Find signature help when cursor is on or after a standalone variable/constructor
-/// that has a function type (e.g. `fromMaybe ` with no args yet).
 fn find_standalone_function(
     token: &SyntaxToken,
     stabilized: &stabilizing::StabilizedModule,
     engine: &QueryEngine,
     current_file: FileId,
-) -> Option<(FileId, indexing::TermItemId, u32)> {
+) -> Option<Resolved> {
     let expression = token.parent_ancestors().find_map(|node| {
         let expr = cst::Expression::cast(node)?;
         match &expr {
@@ -181,7 +197,7 @@ fn find_standalone_function(
     let lowered = engine.lowered(current_file).ok()?;
     let kind = lowered.info.get_expression_kind(expression_id)?;
 
-    let (file_id, term_id) = match kind {
+    let (def_file, term_id) = match kind {
         ExpressionKind::Variable { resolution, .. } => {
             let resolution = resolution.as_ref()?;
             match resolution {
@@ -196,13 +212,13 @@ fn find_standalone_function(
         _ => None,
     }?;
 
-    Some((file_id, term_id, 0))
+    Some(Resolved { def_file, term_id, function_expr: expression_id, active_parameter: 0 })
 }
 
 fn resolve_function(
     engine: &QueryEngine,
     current_file: FileId,
-    function_id: lowering::ExpressionId,
+    function_id: ExpressionId,
 ) -> Result<(FileId, indexing::TermItemId), AnalyzerError> {
     let lowered = engine.lowered(current_file)?;
     let kind = lowered
@@ -226,32 +242,21 @@ fn resolve_function(
     }
 }
 
-/// Find byte offset ranges for each parameter in the rendered signature.
-/// The signature looks like `name :: forall ... . T1 -> T2 -> ... -> Result`
-/// We split on top-level ` -> ` to find parameter boundaries.
 fn find_param_offsets(label: &str, param_count: usize) -> Vec<(usize, usize)> {
-    // Find the start of the type part (after `:: ` and any forall/constraint prefix)
     let type_start = label.find(":: ").map(|i| i + 3).unwrap_or(0);
-
-    // Skip past `forall ... .` if present
     let after_forall = skip_forall_prefix(label, type_start);
-
-    // Skip past constraints (`Foo => `)
     let after_constraints = skip_constraints(label, after_forall);
 
-    // Now split on top-level ` -> ` to find parameters
     let mut offsets = vec![];
     let mut pos = after_constraints;
     let bytes = label.as_bytes();
 
     for _ in 0..param_count {
-        // Skip leading whitespace
         while pos < bytes.len() && bytes[pos] == b' ' {
             pos += 1;
         }
         let param_start = pos;
 
-        // Find the next top-level ` -> `
         let mut depth = 0usize;
         while pos < bytes.len() {
             match bytes[pos] {
@@ -263,9 +268,9 @@ fn find_param_offsets(label: &str, param_count: usize) -> Vec<(usize, usize)> {
                     && (pos == 0 || bytes[pos - 1] == b' ')
                     && (pos + 2 >= bytes.len() || bytes[pos + 2] == b' ' || bytes[pos + 2] == b'\n') =>
                 {
-                    let param_end = pos - 1; // before the space before `->`
+                    let param_end = pos - 1;
                     offsets.push((param_start, param_end));
-                    pos += 3; // skip `-> `
+                    pos += 3;
                     break;
                 }
                 _ => {}
@@ -274,7 +279,6 @@ fn find_param_offsets(label: &str, param_count: usize) -> Vec<(usize, usize)> {
         }
 
         if offsets.len() < offsets.capacity() && pos >= bytes.len() {
-            // Last segment (the return type) — don't add it
             break;
         }
     }
@@ -285,7 +289,6 @@ fn find_param_offsets(label: &str, param_count: usize) -> Vec<(usize, usize)> {
 fn skip_forall_prefix(label: &str, start: usize) -> usize {
     let rest = &label[start..];
     if let Some(stripped) = rest.strip_prefix("forall ") {
-        // Find the matching `. `
         let offset_in_rest = label.len() - stripped.len();
         if let Some(dot_pos) = label[offset_in_rest..].find(". ") {
             return offset_in_rest + dot_pos + 2;
@@ -307,9 +310,6 @@ fn skip_constraints(label: &str, start: usize) -> usize {
     pos
 }
 
-/// Walk backwards from a token to find the previous meaningful token.
-/// This handles the case where cursor is on whitespace or layout tokens
-/// after a function name (e.g. `fromMaybe |` at end of line).
 fn prev_meaningful_token(token: &SyntaxToken) -> Option<SyntaxToken> {
     let mut current = token.prev_token()?;
     while current.kind().is_layout_token() {
