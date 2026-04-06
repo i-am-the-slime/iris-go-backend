@@ -56,7 +56,8 @@ map ::
   forall (a :: Type) (b :: Type).
     ((a :: Type) -> (b :: Type)) -> Array (a :: Type) -> Array (b :: Type)
 ```
-→ 0: (a :: Type) -> (b :: Type)
+→ 0: Type) (b :: Type).
+    ((a :: Type) -> (b :: Type))
   1: Array (a :: Type)
 
 

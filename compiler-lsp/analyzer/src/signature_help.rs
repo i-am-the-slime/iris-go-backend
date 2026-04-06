@@ -75,16 +75,11 @@ pub fn implementation(
         .render(type_id)
         .to_string();
 
-    let parameters: Vec<ParameterInformation> = params
-        .iter()
-        .map(|&param_id| {
-            let rendered = checking::core::pretty::Pretty::new(engine, &checked)
-                .render(param_id)
-                .to_string();
-            ParameterInformation {
-                label: ParameterLabel::Simple(rendered),
-                documentation: None,
-            }
+    let parameters: Vec<ParameterInformation> = find_param_offsets(&label, params.len())
+        .into_iter()
+        .map(|(start, end)| ParameterInformation {
+            label: ParameterLabel::LabelOffsets([start as u32, end as u32]),
+            documentation: None,
         })
         .collect();
 
@@ -229,6 +224,87 @@ fn resolve_function(
         }
         _ => Err(AnalyzerError::NonFatal),
     }
+}
+
+/// Find byte offset ranges for each parameter in the rendered signature.
+/// The signature looks like `name :: forall ... . T1 -> T2 -> ... -> Result`
+/// We split on top-level ` -> ` to find parameter boundaries.
+fn find_param_offsets(label: &str, param_count: usize) -> Vec<(usize, usize)> {
+    // Find the start of the type part (after `:: ` and any forall/constraint prefix)
+    let type_start = label.find(":: ").map(|i| i + 3).unwrap_or(0);
+
+    // Skip past `forall ... .` if present
+    let after_forall = skip_forall_prefix(label, type_start);
+
+    // Skip past constraints (`Foo => `)
+    let after_constraints = skip_constraints(label, after_forall);
+
+    // Now split on top-level ` -> ` to find parameters
+    let mut offsets = vec![];
+    let mut pos = after_constraints;
+    let bytes = label.as_bytes();
+
+    for _ in 0..param_count {
+        // Skip leading whitespace
+        while pos < bytes.len() && bytes[pos] == b' ' {
+            pos += 1;
+        }
+        let param_start = pos;
+
+        // Find the next top-level ` -> `
+        let mut depth = 0usize;
+        while pos < bytes.len() {
+            match bytes[pos] {
+                b'(' | b'{' => depth += 1,
+                b')' | b'}' => depth = depth.saturating_sub(1),
+                b'-' if depth == 0
+                    && pos + 2 < bytes.len()
+                    && bytes[pos + 1] == b'>'
+                    && (pos == 0 || bytes[pos - 1] == b' ')
+                    && (pos + 2 >= bytes.len() || bytes[pos + 2] == b' ' || bytes[pos + 2] == b'\n') =>
+                {
+                    let param_end = pos - 1; // before the space before `->`
+                    offsets.push((param_start, param_end));
+                    pos += 3; // skip `-> `
+                    break;
+                }
+                _ => {}
+            }
+            pos += 1;
+        }
+
+        if offsets.len() < offsets.capacity() && pos >= bytes.len() {
+            // Last segment (the return type) — don't add it
+            break;
+        }
+    }
+
+    offsets
+}
+
+fn skip_forall_prefix(label: &str, start: usize) -> usize {
+    let rest = &label[start..];
+    if let Some(stripped) = rest.strip_prefix("forall ") {
+        // Find the matching `. `
+        let offset_in_rest = label.len() - stripped.len();
+        if let Some(dot_pos) = label[offset_in_rest..].find(". ") {
+            return offset_in_rest + dot_pos + 2;
+        }
+    }
+    start
+}
+
+fn skip_constraints(label: &str, start: usize) -> usize {
+    let mut pos = start;
+    loop {
+        let rest = &label[pos..];
+        if let Some(arrow_pos) = rest.find(" => ") {
+            pos = pos + arrow_pos + 4;
+        } else {
+            break;
+        }
+    }
+    pos
 }
 
 /// Walk backwards from a token to find the previous meaningful token.
