@@ -9,6 +9,11 @@ fromMaybe a Nothing = a
 map :: forall a b. (a -> b) -> Array a -> Array b
 map _ _ = []
 
+applyFlipped :: forall a b. a -> (a -> b) -> b
+applyFlipped x f = f x
+
+infixl 1 applyFlipped as #
+
 life :: Int
 life = 42
 
@@ -53,6 +58,20 @@ check8 = fromMaybe
 -- cursor after space in operator chain (VS Code real case)
 check9 = Just 12 # fromMaybe
 --                          &
+
+-- operator chain with explicit arg
+check_op = Just 12 # fromMaybe 0
+--                               &
+
+-- operator chain, cursor on fromMaybe (no explicit args yet)
+check_do :: Maybe Int
+check_do = do
+  Just 12 # fromMaybe 0
+--                    &
+
+-- operator chain standalone, typing position
+check_typing = Just 12 # fromMaybe
+--                                &
 
 -- trailing space after fromMaybe (exactly what VS Code sends)
 check10 = fromMaybe

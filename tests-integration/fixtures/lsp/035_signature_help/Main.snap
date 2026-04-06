@@ -1,8 +1,9 @@
 ---
 source: tests-integration/tests/lsp/generated.rs
+assertion_line: 12
 expression: report
 ---
-SignatureHelp at Position { line: 16, character: 17 }
+SignatureHelp at Position { line: 21, character: 17 }
 
 ```
 check = fromMaybe life Nothing
@@ -10,13 +11,13 @@ check = fromMaybe life Nothing
 ```
 
 ```purescript
-fromMaybe :: forall (a :: Type). (a :: Type) -> Maybe (a :: Type) -> (a :: Type)
+fromMaybe :: Int -> Maybe Int -> Int
 ```
-→ 0: (a :: Type)
-  1: Maybe (a :: Type)
+→ 0: Int
+  1: Maybe Int
 
 
-SignatureHelp at Position { line: 21, character: 24 }
+SignatureHelp at Position { line: 26, character: 24 }
 
 ```
 check2 = fromMaybe life Nothing
@@ -24,13 +25,13 @@ check2 = fromMaybe life Nothing
 ```
 
 ```purescript
-fromMaybe :: forall (a :: Type). (a :: Type) -> Maybe (a :: Type) -> (a :: Type)
+fromMaybe :: Int -> Maybe Int -> Int
 ```
-  0: (a :: Type)
-→ 1: Maybe (a :: Type)
+  0: Int
+→ 1: Maybe Int
 
 
-SignatureHelp at Position { line: 26, character: 10 }
+SignatureHelp at Position { line: 31, character: 10 }
 
 ```
 check3 = fromMaybe life Nothing
@@ -38,13 +39,13 @@ check3 = fromMaybe life Nothing
 ```
 
 ```purescript
-fromMaybe :: forall (a :: Type). (a :: Type) -> Maybe (a :: Type) -> (a :: Type)
+fromMaybe :: Int -> Maybe Int -> Int
 ```
-→ 0: (a :: Type)
-  1: Maybe (a :: Type)
+→ 0: Int
+  1: Maybe Int
 
 
-SignatureHelp at Position { line: 31, character: 13 }
+SignatureHelp at Position { line: 36, character: 13 }
 
 ```
 check4 = map life []
@@ -61,7 +62,7 @@ map ::
   1: Array (a :: Type)
 
 
-SignatureHelp at Position { line: 35, character: 14 }
+SignatureHelp at Position { line: 40, character: 14 }
 
 ```
 check5 = fromMaybe
@@ -75,7 +76,7 @@ fromMaybe :: forall (a :: Type). (a :: Type) -> Maybe (a :: Type) -> (a :: Type)
   1: Maybe (a :: Type)
 
 
-SignatureHelp at Position { line: 40, character: 25 }
+SignatureHelp at Position { line: 45, character: 25 }
 
 ```
 check6 = fromMaybe life Nothing
@@ -83,13 +84,13 @@ check6 = fromMaybe life Nothing
 ```
 
 ```purescript
-fromMaybe :: forall (a :: Type). (a :: Type) -> Maybe (a :: Type) -> (a :: Type)
+fromMaybe :: Int -> Maybe Int -> Int
 ```
-  0: (a :: Type)
-→ 1: Maybe (a :: Type)
+  0: Int
+→ 1: Maybe Int
 
 
-SignatureHelp at Position { line: 45, character: 18 }
+SignatureHelp at Position { line: 50, character: 18 }
 
 ```
 check7 = fromMaybe life Nothing
@@ -97,13 +98,13 @@ check7 = fromMaybe life Nothing
 ```
 
 ```purescript
-fromMaybe :: forall (a :: Type). (a :: Type) -> Maybe (a :: Type) -> (a :: Type)
+fromMaybe :: Int -> Maybe Int -> Int
 ```
-→ 0: (a :: Type)
-  1: Maybe (a :: Type)
+→ 0: Int
+  1: Maybe Int
 
 
-SignatureHelp at Position { line: 49, character: 19 }
+SignatureHelp at Position { line: 54, character: 19 }
 
 ```
 check8 = fromMaybe
@@ -117,7 +118,7 @@ fromMaybe :: forall (a :: Type). (a :: Type) -> Maybe (a :: Type) -> (a :: Type)
   1: Maybe (a :: Type)
 
 
-SignatureHelp at Position { line: 53, character: 28 }
+SignatureHelp at Position { line: 58, character: 28 }
 
 ```
 check9 = Just 12 # fromMaybe
@@ -125,13 +126,55 @@ check9 = Just 12 # fromMaybe
 ```
 
 ```purescript
-fromMaybe :: forall (a :: Type). (a :: Type) -> Maybe (a :: Type) -> (a :: Type)
+fromMaybe :: Int -> Maybe Int -> Int
 ```
-→ 0: (a :: Type)
-  1: Maybe (a :: Type)
+→ 0: Int
+  1: Maybe Int
 
 
-SignatureHelp at Position { line: 57, character: 20 }
+SignatureHelp at Position { line: 62, character: 33 }
+
+```
+check_op = Just 12 # fromMaybe 0
+--                               &
+```
+
+```purescript
+fromMaybe :: Int -> Maybe Int -> Int
+```
+  0: Int
+→ 1: Maybe Int
+
+
+SignatureHelp at Position { line: 68, character: 22 }
+
+```
+  Just 12 # fromMaybe 0
+--                    &
+```
+
+```purescript
+fromMaybe :: Int -> Maybe Int -> Int
+```
+  0: Int
+→ 1: Maybe Int
+
+
+SignatureHelp at Position { line: 72, character: 34 }
+
+```
+check_typing = Just 12 # fromMaybe
+--                                &
+```
+
+```purescript
+fromMaybe :: Int -> Maybe Int -> Int
+```
+→ 0: Int
+  1: Maybe Int
+
+
+SignatureHelp at Position { line: 76, character: 20 }
 
 ```
 check10 = fromMaybe
@@ -145,7 +188,7 @@ fromMaybe :: forall (a :: Type). (a :: Type) -> Maybe (a :: Type) -> (a :: Type)
   1: Maybe (a :: Type)
 
 
-SignatureHelp at Position { line: 61, character: 17 }
+SignatureHelp at Position { line: 80, character: 17 }
 
 ```
 check11 = fromMaybe
