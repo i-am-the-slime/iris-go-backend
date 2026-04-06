@@ -3,7 +3,7 @@ use building::QueryEngine;
 use checking::ExternalQueries;
 use checking::core::{Type, TypeId};
 use files::{FileId, Files};
-use lowering::{ExpressionId, ExpressionKind, TermVariableResolution};
+use lowering::{ExpressionArgument, ExpressionId, ExpressionKind, TermVariableResolution};
 use rowan::ast::AstNode;
 use rowan::TextSize;
 use syntax::cst;
@@ -15,8 +15,10 @@ use crate::locate;
 struct Resolved {
     def_file: FileId,
     term_id: indexing::TermItemId,
-    /// ExpressionId of the function at the call site (for inferred type lookup).
-    function_expr: ExpressionId,
+    /// The application ExpressionId (if inside an application).
+    application_expr: Option<ExpressionId>,
+    /// ExpressionIds of term arguments already applied.
+    applied_args: Vec<ExpressionId>,
     active_parameter: u32,
 }
 
@@ -63,23 +65,16 @@ pub fn implementation(
     let current_checked = engine.checked(current_file)?;
     let def_checked = engine.checked(resolved.def_file)?;
 
-    // Try the inferred type at the call site first (specialized),
-    // but fall back to declared type if it contains unsolved unification variables.
-    let inferred = current_checked
-        .nodes
-        .expressions
-        .get(&resolved.function_expr)
+    let declared_type_id = def_checked.terms.get(&resolved.term_id)
         .copied()
-        .filter(|&id| !has_unification_vars(engine, id));
+        .ok_or(AnalyzerError::NonFatal)?;
 
-    let (type_id, render_checked) = match inferred {
+    // Try to build a specialized type from inferred argument + result types.
+    let specialized = try_specialize(engine, &current_checked, &resolved, declared_type_id);
+
+    let (type_id, render_checked) = match specialized {
         Some(id) => (id, &*current_checked),
-        None => {
-            let id = def_checked.terms.get(&resolved.term_id)
-                .copied()
-                .ok_or(AnalyzerError::NonFatal)?;
-            (id, &*def_checked)
-        }
+        None => (declared_type_id, &*def_checked),
     };
 
     let (params, _) = collect_function_params(engine, type_id);
@@ -125,6 +120,62 @@ pub fn implementation(
     }))
 }
 
+/// Try to build a specialized function type from the inferred types
+/// of the arguments and the application result.
+fn try_specialize(
+    engine: &QueryEngine,
+    checked: &checking::CheckedModule,
+    resolved: &Resolved,
+    declared_type_id: TypeId,
+) -> Option<TypeId> {
+    let app_expr = resolved.application_expr?;
+
+    // Get the result type of the application
+    let result_type = checked.nodes.expressions.get(&app_expr).copied()?;
+    if has_unification_vars(engine, result_type) {
+        return None;
+    }
+
+    // Get inferred types for each applied argument
+    let mut arg_types = vec![];
+    for arg_id in &resolved.applied_args {
+        let arg_type = checked.nodes.expressions.get(arg_id).copied()?;
+        if has_unification_vars(engine, arg_type) {
+            return None;
+        }
+        arg_types.push(arg_type);
+    }
+
+    // Count remaining params from declared type
+    let (declared_params, _) = collect_function_params(engine, declared_type_id);
+    let remaining_params = declared_params.len().checked_sub(arg_types.len())?;
+
+    // Build: arg0 -> arg1 -> ... -> remaining_param_n -> ... -> remaining_param_last -> result
+    // For remaining params, peel from the result type (which is the partially applied return)
+    let mut result_params = vec![];
+    let mut tail = result_type;
+    for _ in 0..remaining_params {
+        match engine.lookup_type(tail) {
+            Type::Function(arg, rest) => {
+                result_params.push(arg);
+                tail = rest;
+            }
+            _ => break,
+        }
+    }
+
+    // Reconstruct: applied_arg_types ++ remaining_params -> final_result
+    let mut function_type = tail;
+    for &param in result_params.iter().rev() {
+        function_type = engine.intern_type(Type::Function(param, function_type));
+    }
+    for &arg in arg_types.iter().rev() {
+        function_type = engine.intern_type(Type::Function(arg, function_type));
+    }
+
+    Some(function_type)
+}
+
 fn find_application(
     token: &SyntaxToken,
     stabilized: &stabilizing::StabilizedModule,
@@ -149,7 +200,7 @@ fn find_application(
     let lowered = engine.lowered(current_file).ok()?;
     let kind = lowered.info.get_expression_kind(expression_id)?;
 
-    let ExpressionKind::Application { function, .. } = kind else {
+    let ExpressionKind::Application { function, arguments } = kind else {
         return None;
     };
 
@@ -157,7 +208,20 @@ fn find_application(
     let (def_file, term_id) = resolve_function(engine, current_file, function_id).ok()?;
     let active_parameter = active_param_from_cst(&app_chain, cursor_offset);
 
-    Some(Resolved { def_file, term_id, function_expr: function_id, active_parameter })
+    let applied_args: Vec<ExpressionId> = arguments.iter()
+        .filter_map(|arg| match arg {
+            ExpressionArgument::Term(id) => *id,
+            ExpressionArgument::Type(_) => None,
+        })
+        .collect();
+
+    Some(Resolved {
+        def_file,
+        term_id,
+        application_expr: Some(expression_id),
+        applied_args,
+        active_parameter,
+    })
 }
 
 fn active_param_from_cst(
@@ -215,7 +279,13 @@ fn find_standalone_function(
         _ => None,
     }?;
 
-    Some(Resolved { def_file, term_id, function_expr: expression_id, active_parameter: 0 })
+    Some(Resolved {
+        def_file,
+        term_id,
+        application_expr: None,
+        applied_args: vec![],
+        active_parameter: 0,
+    })
 }
 
 fn resolve_function(
@@ -321,12 +391,12 @@ fn prev_meaningful_token(token: &SyntaxToken) -> Option<SyntaxToken> {
     Some(current)
 }
 
-/// Check if a type contains unsolved unification variables.
 fn has_unification_vars(engine: &QueryEngine, type_id: TypeId) -> bool {
     match engine.lookup_type(type_id) {
         Type::Unification(_) => true,
-        Type::Function(a, b) => has_unification_vars(engine, a) || has_unification_vars(engine, b),
-        Type::Application(a, b) => has_unification_vars(engine, a) || has_unification_vars(engine, b),
+        Type::Function(a, b) | Type::Application(a, b) | Type::KindApplication(a, b) => {
+            has_unification_vars(engine, a) || has_unification_vars(engine, b)
+        }
         Type::Forall(_, inner) | Type::Constrained(_, inner) | Type::Kinded(inner, _) => {
             has_unification_vars(engine, inner)
         }
