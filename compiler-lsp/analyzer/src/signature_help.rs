@@ -60,17 +60,27 @@ pub fn implementation(
 
     let resolved = resolved.ok_or(AnalyzerError::NonFatal)?;
 
-    // Try the inferred type at the call site first, fall back to declared type.
     let current_checked = engine.checked(current_file)?;
     let def_checked = engine.checked(resolved.def_file)?;
 
-    let type_id = current_checked
+    // Try the inferred type at the call site first (specialized),
+    // but fall back to declared type if it contains unsolved unification variables.
+    let inferred = current_checked
         .nodes
         .expressions
         .get(&resolved.function_expr)
         .copied()
-        .or_else(|| def_checked.terms.get(&resolved.term_id).copied())
-        .ok_or(AnalyzerError::NonFatal)?;
+        .filter(|&id| !has_unification_vars(engine, id));
+
+    let (type_id, render_checked) = match inferred {
+        Some(id) => (id, &*current_checked),
+        None => {
+            let id = def_checked.terms.get(&resolved.term_id)
+                .copied()
+                .ok_or(AnalyzerError::NonFatal)?;
+            (id, &*def_checked)
+        }
+    };
 
     let (params, _) = collect_function_params(engine, type_id);
     if params.is_empty() {
@@ -83,13 +93,6 @@ pub fn implementation(
         .as_ref()
         .ok_or(AnalyzerError::NonFatal)?
         .to_string();
-
-    // Use whichever checked module contains the type for rendering.
-    let render_checked = if current_checked.nodes.expressions.contains_key(&resolved.function_expr) {
-        &current_checked
-    } else {
-        &def_checked
-    };
 
     let label = checking::core::pretty::Pretty::new(engine, render_checked)
         .signature(&name)
@@ -316,6 +319,19 @@ fn prev_meaningful_token(token: &SyntaxToken) -> Option<SyntaxToken> {
         current = current.prev_token()?;
     }
     Some(current)
+}
+
+/// Check if a type contains unsolved unification variables.
+fn has_unification_vars(engine: &QueryEngine, type_id: TypeId) -> bool {
+    match engine.lookup_type(type_id) {
+        Type::Unification(_) => true,
+        Type::Function(a, b) => has_unification_vars(engine, a) || has_unification_vars(engine, b),
+        Type::Application(a, b) => has_unification_vars(engine, a) || has_unification_vars(engine, b),
+        Type::Forall(_, inner) | Type::Constrained(_, inner) | Type::Kinded(inner, _) => {
+            has_unification_vars(engine, inner)
+        }
+        _ => false,
+    }
 }
 
 fn collect_function_params(engine: &QueryEngine, mut type_id: TypeId) -> (Vec<TypeId>, TypeId) {
