@@ -49,3 +49,15 @@ check7 = fromMaybe life Nothing
 -- cursor after space past standalone function (real typing scenario)
 check8 = fromMaybe
 --                 &
+
+-- cursor after space in operator chain (VS Code real case)
+check9 = Just 12 # fromMaybe
+--                          &
+
+-- trailing space after fromMaybe (exactly what VS Code sends)
+check10 = fromMaybe
+--                  &
+
+-- last line with no newline, cursor past fromMaybe
+check11 = fromMaybe
+--               &

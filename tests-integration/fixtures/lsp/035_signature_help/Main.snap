@@ -114,3 +114,45 @@ fromMaybe :: forall (a :: Type). (a :: Type) -> Maybe (a :: Type) -> (a :: Type)
 ```
 → 0: (a :: Type)
   1: Maybe (a :: Type)
+
+
+SignatureHelp at Position { line: 53, character: 28 }
+
+```
+check9 = Just 12 # fromMaybe
+--                          &
+```
+
+```purescript
+fromMaybe :: forall (a :: Type). (a :: Type) -> Maybe (a :: Type) -> (a :: Type)
+```
+→ 0: (a :: Type)
+  1: Maybe (a :: Type)
+
+
+SignatureHelp at Position { line: 57, character: 20 }
+
+```
+check10 = fromMaybe
+--                  &
+```
+
+```purescript
+fromMaybe :: forall (a :: Type). (a :: Type) -> Maybe (a :: Type) -> (a :: Type)
+```
+→ 0: (a :: Type)
+  1: Maybe (a :: Type)
+
+
+SignatureHelp at Position { line: 61, character: 17 }
+
+```
+check11 = fromMaybe
+--               &
+```
+
+```purescript
+fromMaybe :: forall (a :: Type). (a :: Type) -> Maybe (a :: Type) -> (a :: Type)
+```
+→ 0: (a :: Type)
+  1: Maybe (a :: Type)

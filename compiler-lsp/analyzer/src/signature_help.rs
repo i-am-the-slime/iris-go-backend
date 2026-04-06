@@ -37,9 +37,19 @@ pub fn implementation(
         rowan::TokenAtOffset::Between(left, right) => vec![left, right],
     };
 
-    let resolved = tokens.iter()
+    // Also collect preceding non-trivia tokens for when cursor is at
+    // whitespace/layout tokens past an expression (e.g. `fromMaybe |`).
+    let preceding_tokens: Vec<SyntaxToken> = tokens.iter()
+        .filter_map(|t| prev_meaningful_token(t))
+        .collect();
+
+    let all_tokens: Vec<&SyntaxToken> = tokens.iter()
+        .chain(preceding_tokens.iter())
+        .collect();
+
+    let resolved = all_tokens.iter()
         .find_map(|token| find_application(token, &stabilized, engine, current_file, offset))
-        .or_else(|| tokens.iter()
+        .or_else(|| all_tokens.iter()
             .find_map(|token| find_standalone_function(token, &stabilized, engine, current_file)));
 
     let (file_id, term_id, active_parameter) =
@@ -219,6 +229,17 @@ fn resolve_function(
         }
         _ => Err(AnalyzerError::NonFatal),
     }
+}
+
+/// Walk backwards from a token to find the previous meaningful token.
+/// This handles the case where cursor is on whitespace or layout tokens
+/// after a function name (e.g. `fromMaybe |` at end of line).
+fn prev_meaningful_token(token: &SyntaxToken) -> Option<SyntaxToken> {
+    let mut current = token.prev_token()?;
+    while current.kind().is_layout_token() {
+        current = current.prev_token()?;
+    }
+    Some(current)
 }
 
 fn collect_function_params(engine: &QueryEngine, mut type_id: TypeId) -> (Vec<TypeId>, TypeId) {
