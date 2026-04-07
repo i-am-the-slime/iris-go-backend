@@ -763,6 +763,39 @@ where
         }
     }
 
+    zonk_checked_nodes(state, context)?;
+
+    Ok(())
+}
+
+fn zonk_checked_nodes<Q>(state: &mut CheckState, context: &CheckContext<Q>) -> QueryResult<()>
+where
+    Q: ExternalQueries,
+{
+    let binder_ids: Vec<_> = state.checked.nodes.binders.keys().copied().collect();
+    for id in binder_ids {
+        if let Some(t) = state.checked.nodes.binders.get(&id).copied() {
+            let t = zonk::zonk(state, context, t)?;
+            state.checked.nodes.binders.insert(id, t);
+        }
+    }
+
+    let let_ids: Vec<_> = state.checked.nodes.lets.keys().copied().collect();
+    for id in let_ids {
+        if let Some(t) = state.checked.nodes.lets.get(&id).copied() {
+            let t = zonk::zonk(state, context, t)?;
+            state.checked.nodes.lets.insert(id, t);
+        }
+    }
+
+    let pun_ids: Vec<_> = state.checked.nodes.puns.keys().copied().collect();
+    for id in pun_ids {
+        if let Some(t) = state.checked.nodes.puns.get(&id).copied() {
+            let t = zonk::zonk(state, context, t)?;
+            state.checked.nodes.puns.insert(id, t);
+        }
+    }
+
     Ok(())
 }
 

@@ -119,7 +119,7 @@ fn initialize(
             capabilities: ServerCapabilities {
                 completion_provider: Some(CompletionOptions {
                     resolve_provider: Some(true),
-                    trigger_characters: Some(vec![".".to_string()]),
+                    trigger_characters: Some(vec![".".to_string(), " ".to_string()]),
                     all_commit_characters: None,
                     work_done_progress_options: WorkDoneProgressOptions {
                         work_done_progress: None,
@@ -261,6 +261,7 @@ fn completion(
     let _span = tracing::info_span!("completion").entered();
     let uri = p.text_document_position.text_document.uri;
     let position = p.text_document_position.position;
+    let trigger_character = p.context.as_ref().and_then(|c| c.trigger_character.clone());
 
     let mut cache = snapshot.suggestions_cache.write();
 
@@ -270,6 +271,7 @@ fn completion(
         &mut cache,
         uri,
         position,
+        trigger_character.as_deref(),
     )
     .on_non_fatal(None)
 }

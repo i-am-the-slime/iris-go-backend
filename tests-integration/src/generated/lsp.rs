@@ -21,12 +21,13 @@ enum CursorKind {
     Hover,
     Completion,
     CompletionCached,
+    CompletionSpace,
     References,
     SignatureHelp,
 }
 
 impl CursorKind {
-    const CHARACTERS: &[char] = &['@', '$', '^', '~', '%', '&'];
+    const CHARACTERS: &[char] = &['@', '$', '^', '~', '%', '&', '!'];
 
     fn parse(text: &str) -> Option<CursorKind> {
         match text {
@@ -34,6 +35,7 @@ impl CursorKind {
             "$" => Some(CursorKind::Hover),
             "^" => Some(CursorKind::Completion),
             "~" => Some(CursorKind::CompletionCached),
+            "!" => Some(CursorKind::CompletionSpace),
             "%" => Some(CursorKind::References),
             "&" => Some(CursorKind::SignatureHelp),
             _ => None,
@@ -102,7 +104,7 @@ pub fn report(engine: &QueryEngine, files: &Files, id: FileId) -> String {
         }
         writeln!(result).unwrap();
 
-        if matches!(cursor, CursorKind::Completion) {
+        if matches!(cursor, CursorKind::Completion | CursorKind::CompletionSpace) {
             cache = SuggestionsCache::default();
         }
 
@@ -194,9 +196,13 @@ fn dispatch_cursor(
                 writeln!(result, "<empty>").unwrap();
             }
         }
-        CursorKind::Completion | CursorKind::CompletionCached => {
+        CursorKind::Completion | CursorKind::CompletionCached | CursorKind::CompletionSpace => {
+            let trigger = match cursor {
+                CursorKind::CompletionSpace => Some(" "),
+                _ => None,
+            };
             if let Ok(Some(response)) =
-                analyzer::completion::implementation(engine, files, cache, uri, position)
+                analyzer::completion::implementation(engine, files, cache, uri, position, trigger)
             {
                 match response {
                     CompletionResponse::Array(items)

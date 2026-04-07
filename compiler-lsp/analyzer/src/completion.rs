@@ -42,6 +42,7 @@ pub fn implementation(
     cache: &mut SuggestionsCache,
     uri: Url,
     position: Position,
+    trigger_character: Option<&str>,
 ) -> Result<Option<CompletionResponse>, AnalyzerError> {
     let current_file = {
         let uri = uri.as_str();
@@ -93,6 +94,7 @@ pub fn implementation(
         range,
         expected_type,
         token: token.clone(),
+        space_triggered: trigger_character == Some(" "),
     };
 
     let items = collect(&context, cache)?;
@@ -107,6 +109,22 @@ fn collect(
 ) -> Result<Vec<CompletionItem>, AnalyzerError> {
     let mut items = vec![];
     let into = &mut items;
+
+    if context.space_triggered {
+        if context.collect_terms() && context.expected_type.is_some() {
+            // Always include expression-local bindings.
+            let _ = ExpressionLocals.collect_into(context, NoFilter, into);
+
+            // Include module-local and imported terms only if they type-match.
+            let mut candidates = vec![];
+            LocalTerms.collect_into(context, NoFilter, &mut candidates)?;
+            ImportedTerms.collect_into(context, NoFilter, &mut candidates)?;
+            items.extend(candidates.into_iter().filter(|item| {
+                item.sort_text.as_deref().is_some_and(|s| s.starts_with("0!"))
+            }));
+        }
+        return Ok(items);
+    }
 
     match &context.text {
         CursorText::None => {

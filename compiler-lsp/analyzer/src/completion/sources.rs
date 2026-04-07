@@ -4,7 +4,8 @@ use checking::core::pretty::Pretty;
 use checking::core::{Type, TypeId};
 use files::FileId;
 use indexing::{ImportKind, TermItemId, TypeItemId};
-use lowering::scope::GraphNode;
+use lowering::LoweredModule;
+use lowering::scope::{GraphNode, GraphNodeId};
 use resolving::ResolvedModule;
 use rowan::ast::{AstNode, AstPtr};
 use smol_str::SmolStr;
@@ -899,6 +900,39 @@ fn is_prim_record(engine: &impl ExternalQueries, type_id: TypeId) -> bool {
     }
 }
 
+fn find_expression_scope(
+    context: &Context,
+    lowered: &LoweredModule,
+) -> Result<GraphNodeId, AnalyzerError> {
+    let offset = context.token.text_range().start();
+
+    // Walk the CST to find the deepest Expression node covering this offset.
+    let root = context.parsed.syntax_node();
+    let mut node = root;
+
+    loop {
+        let child = node
+            .children()
+            .find(|c| c.text_range().contains_inclusive(offset));
+        match child {
+            Some(c) => node = c,
+            None => break,
+        }
+    }
+
+    // Walk up from the deepest node to find an Expression with a scope entry.
+    for ancestor in node.ancestors() {
+        let Some(expr) = cst::Expression::cast(ancestor) else { continue };
+        let ptr = AstPtr::new(&expr);
+        let Some(expr_id) = context.stabilized.lookup_ptr(&ptr) else { continue };
+        if let Some(scope) = lowered.nodes.lookup_expression(expr_id) {
+            return Ok(scope);
+        }
+    }
+
+    Err(AnalyzerError::NonFatal)
+}
+
 /// Yields expression-local bindings (let-bound variables, function parameters, case binders).
 pub struct ExpressionLocals;
 
@@ -911,18 +945,9 @@ impl CompletionSource for ExpressionLocals {
         filter: F,
         items: &mut Vec<CompletionItem>,
     ) -> Result<Self::T, AnalyzerError> {
-        let expr_id = context
-            .token
-            .parent_ancestors()
-            .find_map(|node| {
-                let expr = cst::Expression::cast(node)?;
-                let ptr = AstPtr::new(&expr);
-                context.stabilized.lookup_ptr(&ptr)
-            })
-            .ok_or(AnalyzerError::NonFatal)?;
-
         let lowered = context.engine.lowered(context.current_file)?;
-        let scope_id = lowered.nodes.lookup_expression(expr_id).ok_or(AnalyzerError::NonFatal)?;
+
+        let scope_id = find_expression_scope(context, &lowered)?;
 
         let checked = context.engine.checked(context.current_file).ok();
 
