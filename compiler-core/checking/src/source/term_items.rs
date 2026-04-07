@@ -796,6 +796,14 @@ where
         }
     }
 
+    let expr_ids: Vec<_> = state.checked.nodes.expressions.keys().copied().collect();
+    for id in expr_ids {
+        if let Some(t) = state.checked.nodes.expressions.get(&id).copied() {
+            let t = zonk::zonk(state, context, t)?;
+            state.checked.nodes.expressions.insert(id, t);
+        }
+    }
+
     Ok(())
 }
 

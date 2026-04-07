@@ -143,6 +143,11 @@ impl LoweringGraph {
         let queue = VecDeque::from([id]);
         GraphIter { inner, queue }
     }
+
+    /// Iterate over all nodes in the graph.
+    pub fn iter(&self) -> impl Iterator<Item = (GraphNodeId, &GraphNode)> {
+        self.inner.iter()
+    }
 }
 
 impl ops::Index<GraphNodeId> for LoweringGraph {

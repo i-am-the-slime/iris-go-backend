@@ -861,7 +861,7 @@ impl CompletionSource for RecordFields<'_> {
     }
 }
 
-fn extract_record_fields(
+pub(super) fn extract_record_fields(
     engine: &impl ExternalQueries,
     type_id: TypeId,
 ) -> Option<Vec<(SmolStr, TypeId)>> {
@@ -911,9 +911,7 @@ fn find_expression_scope(
     let mut node = root;
 
     loop {
-        let child = node
-            .children()
-            .find(|c| c.text_range().contains_inclusive(offset));
+        let child = node.children().find(|c| c.text_range().contains_inclusive(offset));
         match child {
             Some(c) => node = c,
             None => break,

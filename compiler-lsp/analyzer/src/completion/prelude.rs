@@ -32,6 +32,7 @@ pub struct Context<'c, 'a> {
     pub expected_type: Option<TypeId>,
     pub token: SyntaxToken,
     pub space_triggered: bool,
+    pub dot_triggered: bool,
 }
 
 impl Context<'_, '_> {
