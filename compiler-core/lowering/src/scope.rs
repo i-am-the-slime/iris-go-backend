@@ -161,6 +161,12 @@ pub struct LoweringGraphNodes {
     pub(crate) let_node: FxHashMap<LetBindingNameGroupId, GraphNodeId>,
 }
 
+impl LoweringGraphNodes {
+    pub fn lookup_expression(&self, id: ExpressionId) -> Option<GraphNodeId> {
+        self.expression_node.get(&id).copied()
+    }
+}
+
 /// An iterator that traverses the [`LoweringGraph`].
 pub struct GraphIter<'a> {
     inner: &'a Arena<GraphNode>,

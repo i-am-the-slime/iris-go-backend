@@ -18,9 +18,9 @@ use smol_str::SmolStr;
 use filter::{FuzzyMatch, NoFilter, StartsWith};
 use prelude::{CompletionSource, Context, CursorSemantics, CursorText, Filter};
 use sources::{
-    ImportedTerms, ImportedTypes, LocalTerms, LocalTypes, PrimTerms, PrimTypes, QualifiedModules,
-    QualifiedTerms, QualifiedTermsSuggestions, QualifiedTypes, QualifiedTypesSuggestions,
-    RecordFields, SuggestedTerms, SuggestedTypes, WorkspaceModules,
+    ExpressionLocals, ImportedTerms, ImportedTypes, LocalTerms, LocalTypes, PrimTerms, PrimTypes,
+    QualifiedModules, QualifiedTerms, QualifiedTermsSuggestions, QualifiedTypes,
+    QualifiedTypesSuggestions, RecordFields, SuggestedTerms, SuggestedTypes, WorkspaceModules,
 };
 use syntax::SyntaxKind;
 
@@ -92,6 +92,7 @@ pub fn implementation(
         text,
         range,
         expected_type,
+        token: token.clone(),
     };
 
     let items = collect(&context, cache)?;
@@ -116,6 +117,7 @@ fn collect(
             }
             if context.collect_terms() {
                 LocalTerms.collect_into(context, NoFilter, into)?;
+                let _ = ExpressionLocals.collect_into(context, NoFilter, into);
                 ImportedTerms.collect_into(context, NoFilter, into)?;
             }
             if context.collect_types() {
@@ -157,6 +159,7 @@ fn collect(
             }
             if context.collect_terms() {
                 LocalTerms.collect_into(context, FuzzyMatch(n), into)?;
+                let _ = ExpressionLocals.collect_into(context, FuzzyMatch(n), into);
                 ImportedTerms.collect_into(context, FuzzyMatch(n), into)?;
                 if context.collect_implicit_prim() {
                     PrimTerms.collect_into(context, FuzzyMatch(n), into)?;

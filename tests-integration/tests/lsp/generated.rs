@@ -83,3 +83,5 @@ fn run_test(folder: &str, file: &str) {
 #[rustfmt::skip] #[test] fn test_035_signature_help_main() { run_test("035_signature_help", "Main"); }
 
 #[rustfmt::skip] #[test] fn test_036_completion_typed_main() { run_test("036_completion_typed", "Main"); }
+
+#[rustfmt::skip] #[test] fn test_037_completion_expression_locals_main() { run_test("037_completion_expression_locals", "Main"); }

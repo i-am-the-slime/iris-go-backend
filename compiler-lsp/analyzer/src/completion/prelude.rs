@@ -30,6 +30,7 @@ pub struct Context<'c, 'a> {
     pub text: CursorText,
     pub range: Option<Range>,
     pub expected_type: Option<TypeId>,
+    pub token: SyntaxToken,
 }
 
 impl Context<'_, '_> {
@@ -87,12 +88,20 @@ impl Context<'_, '_> {
         file_id: FileId,
         term_id: TermItemId,
     ) {
-        let Some(expected) = self.expected_type else { return };
         let candidate = (|| {
             let checked = self.engine.checked(file_id).ok()?;
             checked.terms.get(&term_id).copied()
         })();
         let Some(candidate) = candidate else { return };
+        self.apply_type_sort_raw(item, candidate);
+    }
+
+    pub fn apply_type_sort_raw(
+        &self,
+        item: &mut super::item::CompletionItemSpec,
+        candidate: checking::core::TypeId,
+    ) {
+        let Some(expected) = self.expected_type else { return };
         let prefix = if signature_help::type_matches(self.engine, expected, candidate) {
             "0!"
         } else {

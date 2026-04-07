@@ -4,8 +4,9 @@ use checking::core::pretty::Pretty;
 use checking::core::{Type, TypeId};
 use files::FileId;
 use indexing::{ImportKind, TermItemId, TypeItemId};
+use lowering::scope::GraphNode;
 use resolving::ResolvedModule;
-use rowan::ast::AstPtr;
+use rowan::ast::{AstNode, AstPtr};
 use smol_str::SmolStr;
 use syntax::cst;
 
@@ -895,6 +896,110 @@ fn is_prim_record(engine: &impl ExternalQueries, type_id: TypeId) -> bool {
                 })
     } else {
         false
+    }
+}
+
+/// Yields expression-local bindings (let-bound variables, function parameters, case binders).
+pub struct ExpressionLocals;
+
+impl CompletionSource for ExpressionLocals {
+    type T = ();
+
+    fn collect_into<F: Filter>(
+        &self,
+        context: &Context,
+        filter: F,
+        items: &mut Vec<CompletionItem>,
+    ) -> Result<Self::T, AnalyzerError> {
+        let expr_id = context
+            .token
+            .parent_ancestors()
+            .find_map(|node| {
+                let expr = cst::Expression::cast(node)?;
+                let ptr = AstPtr::new(&expr);
+                context.stabilized.lookup_ptr(&ptr)
+            })
+            .ok_or(AnalyzerError::NonFatal)?;
+
+        let lowered = context.engine.lowered(context.current_file)?;
+        let scope_id = lowered.nodes.lookup_expression(expr_id).ok_or(AnalyzerError::NonFatal)?;
+
+        let checked = context.engine.checked(context.current_file).ok();
+
+        for (_, node) in lowered.graph.traverse(scope_id) {
+            match node {
+                GraphNode::Binder { binders, puns, .. } => {
+                    for (name, binder_id) in binders {
+                        if !filter.matches(name) {
+                            continue;
+                        }
+                        let mut item = CompletionItemSpec::new(
+                            name.to_string(),
+                            context.range,
+                            CompletionItemKind::VALUE,
+                            CompletionResolveData::RecordField,
+                        );
+                        if let Some(type_id) =
+                            checked.as_ref().and_then(|c| c.nodes.lookup_binder(*binder_id))
+                        {
+                            let type_str = Pretty::new(context.engine, checked.as_ref().unwrap())
+                                .render(type_id);
+                            item.label_detail(format!(" :: {type_str}"));
+                            context.apply_type_sort_raw(&mut item, type_id);
+                        }
+                        item.label_description("Local".to_string());
+                        items.push(item.build());
+                    }
+                    for (name, pun_id) in puns {
+                        if !filter.matches(name) {
+                            continue;
+                        }
+                        let mut item = CompletionItemSpec::new(
+                            name.to_string(),
+                            context.range,
+                            CompletionItemKind::VALUE,
+                            CompletionResolveData::RecordField,
+                        );
+                        if let Some(type_id) =
+                            checked.as_ref().and_then(|c| c.nodes.puns.get(pun_id).copied())
+                        {
+                            let type_str = Pretty::new(context.engine, checked.as_ref().unwrap())
+                                .render(type_id);
+                            item.label_detail(format!(" :: {type_str}"));
+                            context.apply_type_sort_raw(&mut item, type_id);
+                        }
+                        item.label_description("Local".to_string());
+                        items.push(item.build());
+                    }
+                }
+                GraphNode::Let { bindings, .. } => {
+                    for (name, let_id) in bindings {
+                        if !filter.matches(name) {
+                            continue;
+                        }
+                        let mut item = CompletionItemSpec::new(
+                            name.to_string(),
+                            context.range,
+                            CompletionItemKind::VALUE,
+                            CompletionResolveData::RecordField,
+                        );
+                        if let Some(type_id) =
+                            checked.as_ref().and_then(|c| c.nodes.lookup_let(*let_id))
+                        {
+                            let type_str = Pretty::new(context.engine, checked.as_ref().unwrap())
+                                .render(type_id);
+                            item.label_detail(format!(" :: {type_str}"));
+                            context.apply_type_sort_raw(&mut item, type_id);
+                        }
+                        item.label_description("Local".to_string());
+                        items.push(item.build());
+                    }
+                }
+                _ => {}
+            }
+        }
+
+        Ok(())
     }
 }
 

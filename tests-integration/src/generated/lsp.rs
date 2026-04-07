@@ -244,18 +244,18 @@ fn dispatch_cursor(
 fn render_signature_help(result: &mut String, response: &SignatureHelp) {
     for sig in &response.signatures {
         writeln!(result, "```purescript\n{}\n```", sig.label).unwrap();
-        if let Some(active) = sig.active_parameter.or(response.active_parameter) {
-            if let Some(params) = &sig.parameters {
-                for (i, param) in params.iter().enumerate() {
-                    let marker = if i == active as usize { "→" } else { " " };
-                    let label = match &param.label {
-                        async_lsp::lsp_types::ParameterLabel::Simple(s) => s.clone(),
-                        async_lsp::lsp_types::ParameterLabel::LabelOffsets([s, e]) => {
-                            sig.label[*s as usize..*e as usize].to_string()
-                        }
-                    };
-                    writeln!(result, "{marker} {i}: {label}").unwrap();
-                }
+        if let Some(active) = sig.active_parameter.or(response.active_parameter)
+            && let Some(params) = &sig.parameters
+        {
+            for (i, param) in params.iter().enumerate() {
+                let marker = if i == active as usize { "→" } else { " " };
+                let label = match &param.label {
+                    async_lsp::lsp_types::ParameterLabel::Simple(s) => s.clone(),
+                    async_lsp::lsp_types::ParameterLabel::LabelOffsets([s, e]) => {
+                        sig.label[*s as usize..*e as usize].to_string()
+                    }
+                };
+                writeln!(result, "{marker} {i}: {label}").unwrap();
             }
         }
     }

@@ -50,7 +50,7 @@ pub fn implementation(
     };
 
     let preceding_tokens: Vec<SyntaxToken> =
-        tokens.iter().filter_map(|t| prev_meaningful_token(t)).collect();
+        tokens.iter().filter_map(prev_meaningful_token).collect();
 
     let all_tokens: Vec<&SyntaxToken> = tokens.iter().chain(preceding_tokens.iter()).collect();
 
@@ -148,32 +148,29 @@ fn specialize_from_args(
     let mut subst: FxHashMap<Name, TypeId> = FxHashMap::default();
 
     for (i, arg_id) in applied_args.iter().enumerate() {
-        if let Some(arg_type) = checked.nodes.expressions.get(arg_id).copied() {
-            if !has_unification_vars(engine, arg_type) {
-                if let Some(dp) = declared_params.get(i) {
-                    collect_substitution(engine, *dp, arg_type, &mut subst);
-                }
-            }
+        if let Some(arg_type) = checked.nodes.expressions.get(arg_id).copied()
+            && !has_unification_vars(engine, arg_type)
+            && let Some(dp) = declared_params.get(i)
+        {
+            collect_substitution(engine, *dp, arg_type, &mut subst);
         }
     }
 
     // Piped arg fills the LAST declared param (pipeline convention).
-    if let Some(piped) = piped_type {
-        if !has_unification_vars(engine, piped) {
-            if let Some(dp) = declared_params.last() {
-                collect_substitution(engine, *dp, piped, &mut subst);
-            }
-        }
+    if let Some(piped) = piped_type
+        && !has_unification_vars(engine, piped)
+        && let Some(dp) = declared_params.last()
+    {
+        collect_substitution(engine, *dp, piped, &mut subst);
     }
 
     let outer_offset = applied_args.len();
     for (i, arg_id) in outer_args.iter().enumerate() {
-        if let Some(arg_type) = checked.nodes.expressions.get(arg_id).copied() {
-            if !has_unification_vars(engine, arg_type) {
-                if let Some(dp) = declared_params.get(outer_offset + i) {
-                    collect_substitution(engine, *dp, arg_type, &mut subst);
-                }
-            }
+        if let Some(arg_type) = checked.nodes.expressions.get(arg_id).copied()
+            && !has_unification_vars(engine, arg_type)
+            && let Some(dp) = declared_params.get(outer_offset + i)
+        {
+            collect_substitution(engine, *dp, arg_type, &mut subst);
         }
     }
 
@@ -750,7 +747,7 @@ pub fn expected_type_at(
     };
 
     let preceding_tokens: Vec<SyntaxToken> =
-        tokens.iter().filter_map(|t| prev_meaningful_token(t)).collect();
+        tokens.iter().filter_map(prev_meaningful_token).collect();
 
     let all_tokens: Vec<&SyntaxToken> = tokens.iter().chain(preceding_tokens.iter()).collect();
 
