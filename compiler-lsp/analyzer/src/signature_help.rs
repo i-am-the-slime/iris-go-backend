@@ -4,11 +4,11 @@ use checking::ExternalQueries;
 use checking::core::{Name, Type, TypeId};
 use files::{FileId, Files};
 use lowering::{ExpressionId, ExpressionKind, TermVariableResolution};
-use rowan::ast::AstNode;
 use rowan::TextSize;
+use rowan::ast::AstNode;
 use rustc_hash::FxHashMap;
-use syntax::cst;
 use syntax::SyntaxToken;
+use syntax::cst;
 
 use crate::AnalyzerError;
 use crate::locate;
@@ -40,8 +40,7 @@ pub fn implementation(
     let (parsed, _) = engine.parsed(current_file)?;
     let stabilized = engine.stabilized(current_file)?;
 
-    let offset =
-        locate::position_to_offset(&content, position).ok_or(AnalyzerError::NonFatal)?;
+    let offset = locate::position_to_offset(&content, position).ok_or(AnalyzerError::NonFatal)?;
 
     let node = parsed.syntax_node();
     let tokens: Vec<SyntaxToken> = match node.token_at_offset(offset) {
@@ -50,29 +49,32 @@ pub fn implementation(
         rowan::TokenAtOffset::Between(left, right) => vec![left, right],
     };
 
-    let preceding_tokens: Vec<SyntaxToken> = tokens.iter()
-        .filter_map(|t| prev_meaningful_token(t))
-        .collect();
+    let preceding_tokens: Vec<SyntaxToken> =
+        tokens.iter().filter_map(|t| prev_meaningful_token(t)).collect();
 
-    let all_tokens: Vec<&SyntaxToken> = tokens.iter()
-        .chain(preceding_tokens.iter())
-        .collect();
+    let all_tokens: Vec<&SyntaxToken> = tokens.iter().chain(preceding_tokens.iter()).collect();
 
-    let resolved = all_tokens.iter()
+    let resolved = all_tokens
+        .iter()
         .find_map(|token| find_in_operator_chain(token, &stabilized, engine, current_file, offset))
-        .or_else(|| all_tokens.iter()
-            .find_map(|token| find_application(token, &stabilized, engine, current_file, offset)))
-        .or_else(|| all_tokens.iter()
-            .find_map(|token| find_standalone_function(token, &stabilized, engine, current_file)));
+        .or_else(|| {
+            all_tokens.iter().find_map(|token| {
+                find_application(token, &stabilized, engine, current_file, offset)
+            })
+        })
+        .or_else(|| {
+            all_tokens.iter().find_map(|token| {
+                find_standalone_function(token, &stabilized, engine, current_file)
+            })
+        });
 
     let resolved = resolved.ok_or(AnalyzerError::NonFatal)?;
 
     let current_checked = engine.checked(current_file)?;
     let def_checked = engine.checked(resolved.def_file)?;
 
-    let declared_type_id = def_checked.terms.get(&resolved.term_id)
-        .copied()
-        .ok_or(AnalyzerError::NonFatal)?;
+    let declared_type_id =
+        def_checked.terms.get(&resolved.term_id).copied().ok_or(AnalyzerError::NonFatal)?;
 
     let (declared_params, _) = collect_function_params(engine, declared_type_id);
     if declared_params.is_empty() {
@@ -97,11 +99,8 @@ pub fn implementation(
     let (params, _) = collect_function_params(engine, type_id);
 
     let indexed = engine.indexed(resolved.def_file)?;
-    let name = indexed.items[resolved.term_id]
-        .name
-        .as_ref()
-        .ok_or(AnalyzerError::NonFatal)?
-        .to_string();
+    let name =
+        indexed.items[resolved.term_id].name.as_ref().ok_or(AnalyzerError::NonFatal)?.to_string();
 
     let label = checking::core::pretty::Pretty::new(engine, render_checked)
         .signature(&name)
@@ -116,9 +115,7 @@ pub fn implementation(
         })
         .collect();
 
-    let active_parameter = resolved.active_parameter.min(
-        parameters.len().saturating_sub(1) as u32,
-    );
+    let active_parameter = resolved.active_parameter.min(parameters.len().saturating_sub(1) as u32);
 
     let signature = SignatureInformation {
         label,
@@ -262,16 +259,12 @@ fn find_application(
     current_file: FileId,
     cursor_offset: TextSize,
 ) -> Option<Resolved> {
-    let app_chain = token
-        .parent_ancestors()
-        .find_map(cst::ExpressionApplicationChain::cast)?;
+    let app_chain = token.parent_ancestors().find_map(cst::ExpressionApplicationChain::cast)?;
 
-    let app_expr = token
-        .parent_ancestors()
-        .find_map(|node| {
-            cst::ExpressionApplicationChain::cast(node.clone())?;
-            cst::Expression::cast(node)
-        })?;
+    let app_expr = token.parent_ancestors().find_map(|node| {
+        cst::ExpressionApplicationChain::cast(node.clone())?;
+        cst::Expression::cast(node)
+    })?;
 
     let ptr = rowan::ast::AstPtr::new(&app_expr);
     let expression_id = stabilized.lookup_ptr(&ptr)?;
@@ -285,7 +278,8 @@ fn find_application(
 
     let function_id = (*function)?;
 
-    let term_args: Vec<ExpressionId> = arguments.iter()
+    let term_args: Vec<ExpressionId> = arguments
+        .iter()
         .filter_map(|arg| match arg {
             lowering::ExpressionArgument::Term(id) => *id,
             lowering::ExpressionArgument::Type(_) => None,
@@ -296,8 +290,12 @@ fn find_application(
     if let Ok((def_file, term_id)) = resolve_function(engine, current_file, function_id) {
         let active_parameter = active_param_from_cst(&app_chain, cursor_offset);
         return Some(Resolved {
-            def_file, term_id, applied_args: term_args, active_parameter,
-            piped_type: None, outer_args: vec![],
+            def_file,
+            term_id,
+            applied_args: term_args,
+            active_parameter,
+            piped_type: None,
+            outer_args: vec![],
         });
     }
 
@@ -321,9 +319,8 @@ fn find_application(
     let pair_element_id = last_pair.element?;
     let pair_kind = lowered.info.get_expression_kind(pair_element_id)?;
 
-    let (def_file, term_id, inner_args, inner_count) = resolve_pair_function(
-        engine, current_file, pair_kind, &lowered,
-    )?;
+    let (def_file, term_id, inner_args, inner_count) =
+        resolve_pair_function(engine, current_file, pair_kind, &lowered)?;
 
     let checked = engine.checked(current_file).ok()?;
     let piped_type = head
@@ -334,9 +331,12 @@ fn find_application(
     let active_parameter = inner_count + outer_count;
 
     Some(Resolved {
-        def_file, term_id,
-        applied_args: inner_args, outer_args: term_args,
-        active_parameter, piped_type,
+        def_file,
+        term_id,
+        applied_args: inner_args,
+        outer_args: term_args,
+        active_parameter,
+        piped_type,
     })
 }
 
@@ -363,17 +363,13 @@ fn find_in_operator_chain(
     current_file: FileId,
     cursor_offset: TextSize,
 ) -> Option<Resolved> {
-    let pair = token
-        .parent_ancestors()
-        .find_map(cst::ExpressionOperatorPair::cast)?;
+    let pair = token.parent_ancestors().find_map(cst::ExpressionOperatorPair::cast)?;
 
     let chain_expr = token.parent_ancestors().find_map(|node| {
         cst::ExpressionOperatorChain::cast(node.clone())?;
         cst::Expression::cast(node)
     })?;
-    let chain = token
-        .parent_ancestors()
-        .find_map(cst::ExpressionOperatorChain::cast)?;
+    let chain = token.parent_ancestors().find_map(cst::ExpressionOperatorChain::cast)?;
 
     let chain_ptr = rowan::ast::AstPtr::new(&chain_expr);
     let chain_id = stabilized.lookup_ptr(&chain_ptr)?;
@@ -384,9 +380,8 @@ fn find_in_operator_chain(
         return None;
     };
 
-    let pair_index = chain.children().position(|p| {
-        p.syntax().text_range() == pair.syntax().text_range()
-    })?;
+    let pair_index =
+        chain.children().position(|p| p.syntax().text_range() == pair.syntax().text_range())?;
 
     let op_pair = tail.get(pair_index)?;
     let _op_id = op_pair.id?;
@@ -394,15 +389,12 @@ fn find_in_operator_chain(
 
     let pair_kind = lowered.info.get_expression_kind(pair_element_id)?;
 
-    let (def_file, term_id, inner_args, inner_count) = resolve_pair_function(
-        engine, current_file, pair_kind, &lowered,
-    )?;
+    let (def_file, term_id, inner_args, inner_count) =
+        resolve_pair_function(engine, current_file, pair_kind, &lowered)?;
 
     // Check if the operator chain is wrapped in a parent application chain.
     // e.g. `(Just 12 # fromMaybe) 0` where `0` is an outer arg.
-    let (outer_args, outer_count) = find_outer_args(
-        &chain, stabilized, &lowered, cursor_offset,
-    );
+    let (outer_args, outer_count) = find_outer_args(&chain, stabilized, &lowered, cursor_offset);
 
     let checked = engine.checked(current_file).ok()?;
     let piped_type = if pair_index == 0 {
@@ -414,7 +406,9 @@ fn find_in_operator_chain(
         }
     } else {
         let prev_op_id = tail.get(pair_index - 1)?.id?;
-        checked.nodes.lookup_term_operator(prev_op_id)
+        checked
+            .nodes
+            .lookup_term_operator(prev_op_id)
             .map(|b| b.result)
             .filter(|t| !has_unification_vars(engine, *t))
     };
@@ -422,9 +416,12 @@ fn find_in_operator_chain(
     let active_parameter = inner_count + outer_count;
 
     Some(Resolved {
-        def_file, term_id,
-        applied_args: inner_args, outer_args,
-        active_parameter, piped_type,
+        def_file,
+        term_id,
+        applied_args: inner_args,
+        outer_args,
+        active_parameter,
+        piped_type,
     })
 }
 
@@ -452,9 +449,7 @@ fn resolve_pair_function(
         ExpressionKind::Variable { resolution, .. } => {
             let resolution = resolution.as_ref()?;
             match resolution {
-                TermVariableResolution::Reference(f_id, t_id) => {
-                    Some((*f_id, *t_id, vec![], 0u32))
-                }
+                TermVariableResolution::Reference(f_id, t_id) => Some((*f_id, *t_id, vec![], 0u32)),
                 _ => None,
             }
         }
@@ -513,9 +508,7 @@ fn infer_result_type(
 ) -> Option<TypeId> {
     let kind = lowered.info.get_expression_kind(expr_id)?;
     let (func_id, arguments) = match kind {
-        ExpressionKind::Application { function, arguments } => {
-            ((*function)?, arguments)
-        }
+        ExpressionKind::Application { function, arguments } => ((*function)?, arguments),
         ExpressionKind::Constructor { resolution, .. } => {
             let (f_id, t_id) = resolution.as_ref()?;
             let def_checked = engine.checked(*f_id).ok()?;
@@ -614,9 +607,12 @@ fn find_standalone_function(
     }?;
 
     Some(Resolved {
-        def_file, term_id,
-        applied_args: vec![], outer_args: vec![],
-        active_parameter: 0, piped_type: None,
+        def_file,
+        term_id,
+        applied_args: vec![],
+        outer_args: vec![],
+        active_parameter: 0,
+        piped_type: None,
     })
 }
 
@@ -626,10 +622,7 @@ fn resolve_function(
     function_id: ExpressionId,
 ) -> Result<(FileId, indexing::TermItemId), AnalyzerError> {
     let lowered = engine.lowered(current_file)?;
-    let kind = lowered
-        .info
-        .get_expression_kind(function_id)
-        .ok_or(AnalyzerError::NonFatal)?;
+    let kind = lowered.info.get_expression_kind(function_id).ok_or(AnalyzerError::NonFatal)?;
 
     match kind {
         ExpressionKind::Variable { resolution, .. } => {
@@ -671,7 +664,9 @@ fn find_param_offsets(label: &str, param_count: usize) -> Vec<(usize, usize)> {
                     && pos + 2 < bytes.len()
                     && bytes[pos + 1] == b'>'
                     && (pos == 0 || bytes[pos - 1] == b' ')
-                    && (pos + 2 >= bytes.len() || bytes[pos + 2] == b' ' || bytes[pos + 2] == b'\n') =>
+                    && (pos + 2 >= bytes.len()
+                        || bytes[pos + 2] == b' '
+                        || bytes[pos + 2] == b'\n') =>
                 {
                     let param_end = pos - 1;
                     offsets.push((param_start, param_end));
@@ -754,20 +749,24 @@ pub fn expected_type_at(
         rowan::TokenAtOffset::Between(left, right) => vec![left, right],
     };
 
-    let preceding_tokens: Vec<SyntaxToken> = tokens.iter()
-        .filter_map(|t| prev_meaningful_token(t))
-        .collect();
+    let preceding_tokens: Vec<SyntaxToken> =
+        tokens.iter().filter_map(|t| prev_meaningful_token(t)).collect();
 
-    let all_tokens: Vec<&SyntaxToken> = tokens.iter()
-        .chain(preceding_tokens.iter())
-        .collect();
+    let all_tokens: Vec<&SyntaxToken> = tokens.iter().chain(preceding_tokens.iter()).collect();
 
-    let resolved = all_tokens.iter()
+    let resolved = all_tokens
+        .iter()
         .find_map(|token| find_in_operator_chain(token, &stabilized, engine, current_file, offset))
-        .or_else(|| all_tokens.iter()
-            .find_map(|token| find_application(token, &stabilized, engine, current_file, offset)))
-        .or_else(|| all_tokens.iter()
-            .find_map(|token| find_standalone_function(token, &stabilized, engine, current_file)))?;
+        .or_else(|| {
+            all_tokens.iter().find_map(|token| {
+                find_application(token, &stabilized, engine, current_file, offset)
+            })
+        })
+        .or_else(|| {
+            all_tokens.iter().find_map(|token| {
+                find_standalone_function(token, &stabilized, engine, current_file)
+            })
+        })?;
 
     let current_checked = engine.checked(current_file).ok()?;
     let def_checked = engine.checked(resolved.def_file).ok()?;

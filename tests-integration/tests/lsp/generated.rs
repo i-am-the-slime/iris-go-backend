@@ -81,3 +81,5 @@ fn run_test(folder: &str, file: &str) {
 #[rustfmt::skip] #[test] fn test_034_completion_record_access_main() { run_test("034_completion_record_access", "Main"); }
 
 #[rustfmt::skip] #[test] fn test_035_signature_help_main() { run_test("035_signature_help", "Main"); }
+
+#[rustfmt::skip] #[test] fn test_036_completion_typed_main() { run_test("036_completion_typed", "Main"); }
