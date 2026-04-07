@@ -87,6 +87,7 @@ impl CompletionSource for LocalTerms {
             );
 
             item.label_description("Local".to_string());
+            context.apply_type_sort(&mut item, file_id, term_id);
 
             items.push(item.build())
         }
@@ -176,6 +177,7 @@ impl CompletionSource for ImportedTerms {
                 if let Some(description) = description {
                     item.label_description(description);
                 }
+                context.apply_type_sort(&mut item, file_id, term_id);
 
                 items.push(item.build())
             }
@@ -283,6 +285,7 @@ impl CompletionSource for QualifiedTerms<'_> {
                 if let Some(description) = description {
                     item.label_description(description);
                 }
+                context.apply_type_sort(&mut item, file_id, term_id);
 
                 items.push(item.build())
             }
@@ -424,6 +427,7 @@ impl SuggestionsHelper for SuggestedTerms {
         item.label_detail(format!(" (import {module_name})"));
         item.label_description(format!("{module_name}"));
         item.sort_text(format!("{module_name}.{name}"));
+        context.apply_type_sort(&mut item, file_id, item_id);
 
         if let Some((range, new_text)) = range_new_text {
             item.additional_text_edits(vec![TextEdit { range, new_text }]);
@@ -574,6 +578,7 @@ impl CompletionSource for PrimTerms {
             );
 
             item.label_description("Prim".to_string());
+            context.apply_type_sort(&mut item, file_id, term_id);
 
             items.push(item.build())
         }
@@ -676,6 +681,7 @@ impl SuggestionsHelper for QualifiedTermsSuggestions<'_> {
 
         item.edit_text(format!("{}.{name}", self.0));
         item.sort_text(format!("{module_name}.{name}"));
+        context.apply_type_sort(&mut item, file_id, item_id);
 
         if let Some(range) = context.insert_import_range() {
             let new_text = format!("import {module_name} as {}\n", self.0);

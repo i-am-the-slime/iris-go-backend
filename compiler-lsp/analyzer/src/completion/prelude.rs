@@ -1,6 +1,8 @@
 use async_lsp::lsp_types::*;
 use building::QueryEngine;
+use checking::core::TypeId;
 use files::{FileId, Files};
+use indexing::TermItemId;
 use parsing::ParsedModule;
 use resolving::ResolvedModule;
 use rowan::ast::{AstNode, AstPtr};
@@ -9,7 +11,7 @@ use smol_str::SmolStr;
 use stabilizing::StabilizedModule;
 use syntax::{SyntaxKind, SyntaxToken, cst};
 
-use crate::{AnalyzerError, locate};
+use crate::{AnalyzerError, locate, signature_help};
 
 pub struct Context<'c, 'a> {
     pub engine: &'c QueryEngine,
@@ -27,6 +29,7 @@ pub struct Context<'c, 'a> {
     pub semantics: CursorSemantics,
     pub text: CursorText,
     pub range: Option<Range>,
+    pub expected_type: Option<TypeId>,
 }
 
 impl Context<'_, '_> {
@@ -76,6 +79,26 @@ impl Context<'_, '_> {
     pub fn has_type_import(&self, qualifier: Option<&str>, name: &str) -> bool {
         self.resolved.lookup_type(self.prim_resolved, qualifier, name).is_some()
             || self.resolved.lookup_class(self.prim_resolved, qualifier, name).is_some()
+    }
+
+    pub fn apply_type_sort(
+        &self,
+        item: &mut super::item::CompletionItemSpec,
+        file_id: FileId,
+        term_id: TermItemId,
+    ) {
+        let Some(expected) = self.expected_type else { return };
+        let candidate = (|| {
+            let checked = self.engine.checked(file_id).ok()?;
+            checked.terms.get(&term_id).copied()
+        })();
+        let Some(candidate) = candidate else { return };
+        let prefix = if signature_help::type_matches(self.engine, expected, candidate) {
+            "0!"
+        } else {
+            "1!"
+        };
+        item.prefix_sort(prefix);
     }
 }
 

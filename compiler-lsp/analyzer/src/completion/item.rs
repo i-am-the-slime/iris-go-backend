@@ -93,3 +93,16 @@ create_setters!(
     sort_text -> String,
     additional_text_edits -> Vec<TextEdit>,
 );
+
+impl CompletionItemSpec {
+    pub fn prefix_sort(&mut self, prefix: &str) -> &mut CompletionItemSpec {
+        match &mut self.sort_text {
+            Some(existing) => *existing = format!("{prefix}{existing}"),
+            None => {
+                let base = self.edit_text.as_deref().unwrap_or(&self.name);
+                self.sort_text = Some(format!("{prefix}{base}"));
+            }
+        }
+        self
+    }
+}

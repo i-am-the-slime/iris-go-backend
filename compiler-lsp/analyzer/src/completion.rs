@@ -24,7 +24,7 @@ use sources::{
 };
 use syntax::SyntaxKind;
 
-use crate::{AnalyzerError, locate};
+use crate::{AnalyzerError, locate, signature_help};
 
 #[derive(Clone, Default)]
 pub struct SuggestionsCacheEntry {
@@ -76,6 +76,8 @@ pub fn implementation(
     let resolved = engine.resolved(current_file)?;
     let prim_resolved = engine.resolved(prim_id)?;
 
+    let expected_type = signature_help::expected_type_at(engine, current_file, offset);
+
     let context = Context {
         engine,
         files,
@@ -89,6 +91,7 @@ pub fn implementation(
         semantics,
         text,
         range,
+        expected_type,
     };
 
     let items = collect(&context, cache)?;

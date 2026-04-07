@@ -736,6 +736,117 @@ fn has_unification_vars(engine: &QueryEngine, type_id: TypeId) -> bool {
     }
 }
 
+/// Returns the expected parameter type at the given cursor offset, if the cursor
+/// is in an argument position of a function application. Returns `None` if the
+/// expected type contains rigid variables (fully generic — no sorting signal).
+pub fn expected_type_at(
+    engine: &QueryEngine,
+    current_file: FileId,
+    offset: TextSize,
+) -> Option<TypeId> {
+    let (parsed, _) = engine.parsed(current_file).ok()?;
+    let stabilized = engine.stabilized(current_file).ok()?;
+
+    let node = parsed.syntax_node();
+    let tokens: Vec<SyntaxToken> = match node.token_at_offset(offset) {
+        rowan::TokenAtOffset::None => return None,
+        rowan::TokenAtOffset::Single(t) => vec![t],
+        rowan::TokenAtOffset::Between(left, right) => vec![left, right],
+    };
+
+    let preceding_tokens: Vec<SyntaxToken> = tokens.iter()
+        .filter_map(|t| prev_meaningful_token(t))
+        .collect();
+
+    let all_tokens: Vec<&SyntaxToken> = tokens.iter()
+        .chain(preceding_tokens.iter())
+        .collect();
+
+    let resolved = all_tokens.iter()
+        .find_map(|token| find_in_operator_chain(token, &stabilized, engine, current_file, offset))
+        .or_else(|| all_tokens.iter()
+            .find_map(|token| find_application(token, &stabilized, engine, current_file, offset)))
+        .or_else(|| all_tokens.iter()
+            .find_map(|token| find_standalone_function(token, &stabilized, engine, current_file)))?;
+
+    let current_checked = engine.checked(current_file).ok()?;
+    let def_checked = engine.checked(resolved.def_file).ok()?;
+
+    let declared_type_id = def_checked.terms.get(&resolved.term_id).copied()?;
+
+    let specialized = specialize_from_args(
+        engine,
+        &current_checked,
+        &resolved.applied_args,
+        resolved.piped_type,
+        &resolved.outer_args,
+        declared_type_id,
+    );
+
+    let type_id = specialized.unwrap_or(declared_type_id);
+
+    let (params, _) = collect_function_params(engine, type_id);
+    let param_type = params.get(resolved.active_parameter as usize).copied()?;
+
+    if has_rigid_vars(engine, param_type) {
+        return None;
+    }
+
+    Some(param_type)
+}
+
+/// Checks whether a candidate type could fill a position expecting `expected`.
+/// Strips Forall, Constrained, and Function arrows from the candidate to get
+/// its result type, then checks structural equality.
+pub fn type_matches(engine: &QueryEngine, expected: TypeId, candidate_type: TypeId) -> bool {
+    let result = result_type(engine, candidate_type);
+
+    if has_unification_vars(engine, result) {
+        return false;
+    }
+
+    types_equal(engine, expected, result)
+}
+
+fn result_type(engine: &QueryEngine, mut type_id: TypeId) -> TypeId {
+    loop {
+        match engine.lookup_type(type_id) {
+            Type::Forall(_, inner) | Type::Constrained(_, inner) => type_id = inner,
+            Type::Function(_, ret) => type_id = ret,
+            _ => return type_id,
+        }
+    }
+}
+
+fn types_equal(engine: &QueryEngine, a: TypeId, b: TypeId) -> bool {
+    if a == b {
+        return true;
+    }
+    match (engine.lookup_type(a), engine.lookup_type(b)) {
+        (Type::Application(af, aa), Type::Application(bf, ba)) => {
+            types_equal(engine, af, bf) && types_equal(engine, aa, ba)
+        }
+        (Type::Constructor(af, ai), Type::Constructor(bf, bi)) => af == bf && ai == bi,
+        (Type::Function(aa, ar), Type::Function(ba, br)) => {
+            types_equal(engine, aa, ba) && types_equal(engine, ar, br)
+        }
+        _ => false,
+    }
+}
+
+fn has_rigid_vars(engine: &QueryEngine, type_id: TypeId) -> bool {
+    match engine.lookup_type(type_id) {
+        Type::Rigid(..) => true,
+        Type::Function(a, b) | Type::Application(a, b) | Type::KindApplication(a, b) => {
+            has_rigid_vars(engine, a) || has_rigid_vars(engine, b)
+        }
+        Type::Forall(_, inner) | Type::Constrained(_, inner) | Type::Kinded(inner, _) => {
+            has_rigid_vars(engine, inner)
+        }
+        _ => false,
+    }
+}
+
 fn collect_function_params(engine: &QueryEngine, mut type_id: TypeId) -> (Vec<TypeId>, TypeId) {
     let mut params = vec![];
     loop {
