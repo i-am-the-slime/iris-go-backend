@@ -85,3 +85,7 @@ fn run_test(folder: &str, file: &str) {
 #[rustfmt::skip] #[test] fn test_036_completion_typed_main() { run_test("036_completion_typed", "Main"); }
 
 #[rustfmt::skip] #[test] fn test_037_completion_expression_locals_main() { run_test("037_completion_expression_locals", "Main"); }
+
+#[rustfmt::skip] #[test] fn test_038_completion_dot_trigger_main() { run_test("038_completion_dot_trigger", "Main"); }
+
+#[rustfmt::skip] #[test] fn test_039_completion_dot_trigger_let_main() { run_test("039_completion_dot_trigger_let", "Main"); }

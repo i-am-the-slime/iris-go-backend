@@ -154,11 +154,15 @@ fn check_value_groups<Q>(state: &mut CheckState, context: &CheckContext<Q>) -> Q
 where
     Q: ExternalQueries,
 {
+    let mut result = Ok(());
+
     for scc in &context.grouped.term_scc {
         let items = scc.as_slice();
 
         for &item in items {
-            check_term_signature(state, context, item)?;
+            if let Err(e) = check_term_signature(state, context, item) {
+                result = Err(e);
+            }
         }
 
         if scc.is_recursive() {
@@ -168,13 +172,22 @@ where
         let mut term_scc = TermSccState::default();
 
         for &item in items {
-            check_term_equation(state, context, &mut term_scc, item)?;
+            if let Err(e) = check_term_equation(state, context, &mut term_scc, item) {
+                result = Err(e);
+            }
         }
 
-        finalise_term_binding_group(state, context, &mut term_scc, items)?;
+        if let Err(e) = finalise_term_binding_group(state, context, &mut term_scc, items) {
+            result = Err(e);
+        }
     }
 
-    Ok(())
+    // Always zonk, even when checking encountered errors. Binder types that
+    // were solved before the error (e.g. do-bind variables) need their
+    // unification variables replaced with solutions for LSP features to work.
+    zonk_checked_nodes(state, context)?;
+
+    result
 }
 
 fn check_instance_members<Q>(state: &mut CheckState, context: &CheckContext<Q>) -> QueryResult<()>
@@ -762,8 +775,6 @@ where
             });
         }
     }
-
-    zonk_checked_nodes(state, context)?;
 
     Ok(())
 }

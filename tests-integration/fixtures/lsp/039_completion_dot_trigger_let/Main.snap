@@ -1,0 +1,16 @@
+---
+source: tests-integration/tests/lsp/generated.rs
+expression: report
+---
+CompletionDot at Position { line: 11, character: 11 }
+
+```
+  callback.
+--         #
+```
+
+╭──────────┬────────────────┬─────────────────────┬─────────────┬───────────────┬─────────────┬─────────────────────────╮
+│  label   │  label_detail  │  label_description  │  sort_text  │  filter_text  │  text_edit  │  additional_text_edits  │
+├──────────┼────────────────┼─────────────────────┼─────────────┼───────────────┼─────────────┼─────────────────────────┤
+│  nested  │   :: String    │  Record             │  nested     │  nested       │  ...        │  ...                    │
+╰──────────┴────────────────┴─────────────────────┴─────────────┴───────────────┴─────────────┴─────────────────────────╯

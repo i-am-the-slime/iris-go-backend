@@ -115,7 +115,11 @@ pub fn implementation(
         })
         .collect();
 
-    let active_parameter = resolved.active_parameter.min(parameters.len().saturating_sub(1) as u32);
+    let piped_args = u32::from(resolved.piped_type.is_some());
+    let active_parameter = resolved.active_parameter + piped_args;
+    if active_parameter as usize >= parameters.len() {
+        return Ok(None);
+    }
 
     let signature = SignatureInformation {
         label,

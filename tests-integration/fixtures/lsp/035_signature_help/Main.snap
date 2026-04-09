@@ -1,6 +1,5 @@
 ---
 source: tests-integration/tests/lsp/generated.rs
-assertion_line: 12
 expression: report
 ---
 SignatureHelp at Position { line: 21, character: 17 }
@@ -128,8 +127,8 @@ check9 = Just 12 # fromMaybe
 ```purescript
 fromMaybe :: Int -> Maybe Int -> Int
 ```
-→ 0: Int
-  1: Maybe Int
+  0: Int
+→ 1: Maybe Int
 
 
 SignatureHelp at Position { line: 62, character: 33 }
@@ -139,11 +138,7 @@ check_op = Just 12 # fromMaybe 0
 --                               &
 ```
 
-```purescript
-fromMaybe :: Int -> Maybe Int -> Int
-```
-  0: Int
-→ 1: Maybe Int
+<empty>
 
 
 SignatureHelp at Position { line: 68, character: 22 }
@@ -153,11 +148,7 @@ SignatureHelp at Position { line: 68, character: 22 }
 --                    &
 ```
 
-```purescript
-fromMaybe :: Int -> Maybe Int -> Int
-```
-  0: Int
-→ 1: Maybe Int
+<empty>
 
 
 SignatureHelp at Position { line: 72, character: 34 }
@@ -170,8 +161,8 @@ check_typing = Just 12 # fromMaybe
 ```purescript
 fromMaybe :: Int -> Maybe Int -> Int
 ```
-→ 0: Int
-  1: Maybe Int
+  0: Int
+→ 1: Maybe Int
 
 
 SignatureHelp at Position { line: 76, character: 20 }
