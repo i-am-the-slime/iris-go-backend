@@ -126,12 +126,50 @@ where
     }
 }
 
+/// Check a do-block against an expected type. Pre-unifies the expected type
+/// with the do-block's overall result type before checking statements, so
+/// the monad is known early for type class resolution (e.g. MonadAsk).
+pub fn check_do<Q>(
+    state: &mut CheckState,
+    context: &CheckContext<Q>,
+    bind: Option<lowering::TermVariableResolution>,
+    discard: Option<lowering::TermVariableResolution>,
+    statement_ids: &[lowering::DoStatementId],
+    expected: TypeId,
+) -> QueryResult<TypeId>
+where
+    Q: ExternalQueries,
+{
+    // Infer the do-block. The first_continuation (result type) is a fresh
+    // unification variable. Pre-unify it with the expected type so that
+    // the monad `m` is determined before individual statements are checked.
+    // This enables type class resolution (MonadAsk, etc.) in earlier
+    // statements even when the final expression has errors.
+    let result = infer_do_with_hint(state, context, bind, discard, statement_ids, Some(expected))?;
+    unification::subtype(state, context, result, expected)?;
+    Ok(result)
+}
+
 pub fn infer_do<Q>(
     state: &mut CheckState,
     context: &CheckContext<Q>,
     bind: Option<lowering::TermVariableResolution>,
     discard: Option<lowering::TermVariableResolution>,
     statement_ids: &[lowering::DoStatementId],
+) -> QueryResult<TypeId>
+where
+    Q: ExternalQueries,
+{
+    infer_do_with_hint(state, context, bind, discard, statement_ids, None)
+}
+
+fn infer_do_with_hint<Q>(
+    state: &mut CheckState,
+    context: &CheckContext<Q>,
+    bind: Option<lowering::TermVariableResolution>,
+    discard: Option<lowering::TermVariableResolution>,
+    statement_ids: &[lowering::DoStatementId],
+    expected_hint: Option<TypeId>,
 ) -> QueryResult<TypeId>
 where
     Q: ExternalQueries,
@@ -186,23 +224,8 @@ where
         (has_bind, has_discard)
     };
 
-    let bind_type = if has_bind_step {
-        lookup_or_synthesise_bind(state, context, bind)?
-    } else {
-        context.unknown("unused bind")
-    };
-
-    let discard_type = if has_discard_step {
-        lookup_or_synthesise_discard(state, context, discard)?
-    } else {
-        context.unknown("unused discard")
-    };
-
     let pure_expression = match steps.iter().last() {
         Some(statement) => match statement {
-            // Technically valid, syntactically disallowed. This allows
-            // partially-written do expressions to infer, with a friendly
-            // warning to nudge the user that `bind` is prohibited.
             DoStep::Bind { statement, expression, .. } => {
                 state.with_error_crumb(ErrorCrumb::InferringDoBind(*statement), |state| {
                     state.insert_error(ErrorKind::InvalidFinalBind);
@@ -223,21 +246,33 @@ where
         }
     };
 
-    // If either don't actually have expressions, it's empty!
-    let Some(pure_expression) = *pure_expression else {
-        state.insert_error(ErrorKind::EmptyDoBlock);
-        return Ok(context.unknown("empty do block"));
-    };
+    let pure_expression = *pure_expression;
 
-    // Create unification variables that each statement in the do expression
-    // will unify against. The next section will get into more detail how
-    // these are used. These unification variables are used to enable GHC-like
-    // left-to-right checking of do expressions while maintaining the same
-    // semantics as rebindable `do` in PureScript.
+    // Create continuation type variables early so we can pre-unify with
+    // the expected type BEFORE looking up bind/discard. This determines
+    // the monad, enabling type class resolution for bind/discard/ask.
     let continuation_types =
         iter::repeat_with(|| state.fresh_unification(context.queries, context.prim.t))
             .take(action_count)
             .collect_vec();
+
+    if let Some(expected) = expected_hint {
+        if let Some(&first) = continuation_types.first() {
+            let _ = unification::subtype(state, context, first, expected);
+        }
+    }
+
+    let bind_type = if has_bind_step {
+        lookup_or_synthesise_bind(state, context, bind)?
+    } else {
+        context.unknown("unused bind")
+    };
+
+    let discard_type = if has_discard_step {
+        lookup_or_synthesise_discard(state, context, discard)?
+    } else {
+        context.unknown("unused discard")
+    };
 
     // Let's trace over the following example:
     //
@@ -360,7 +395,11 @@ where
     let final_continuation =
         *continuation_types.last().expect("invariant violated: empty continuation_types");
 
-    super::check_expression(state, context, pure_expression, final_continuation)?;
+    if let Some(pure_expression) = pure_expression {
+        super::check_expression(state, context, pure_expression, final_continuation)?;
+    } else {
+        state.insert_error(ErrorKind::EmptyDoBlock);
+    }
 
     Ok(first_continuation)
 }

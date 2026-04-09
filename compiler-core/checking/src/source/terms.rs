@@ -137,6 +137,9 @@ where
         lowering::ExpressionKind::Record { record } => {
             collections::check_record(state, context, record, expected)
         }
+        lowering::ExpressionKind::Do { bind, discard, statements } => {
+            form_do::check_do(state, context, *bind, *discard, statements, expected)
+        }
         _ => {
             let inferred = infer_expression_quiet(state, context, expression)?;
             let inferred = toolkit::instantiate_constrained(state, context, inferred)?;
