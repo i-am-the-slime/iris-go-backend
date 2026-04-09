@@ -356,21 +356,23 @@ fn find_record_type_at_dot(context: &Context) -> Option<TypeId> {
     // Try multiple strategies to find the base expression's record type.
     // The type checker may corrupt types when the parser combines record accesses
     // across declaration boundaries, so we try several approaches.
+    // Binder/annotation types are preferred over expression types because the
+    // parser may combine `ctx.todoId` across lines, corrupting the expression type.
     let base_type = None
         // Strategy 1: annotation type from the enclosing function's signature.
         .or_else(|| {
             let t = annotation_parameter_type(context, dot_start, &base_name)?;
             sources::extract_record_fields(context.engine, t).is_some().then_some(t)
         })
-        // Strategy 2: expression type from the checked module.
+        // Strategy 2: binder type (from do-bind, function param, etc.)
+        .or_else(|| lookup_binder_type_scoped(&checked, &lowered, context, &access, &base_name))
+        // Strategy 3: expression type from the checked module.
         .or_else(|| {
             let expr_ptr = AstPtr::new(&expression);
             let expr_id = context.stabilized.lookup_ptr(&expr_ptr)?;
             let t = checked.nodes.lookup_expression(expr_id)?;
             sources::extract_record_fields(context.engine, t).is_some().then_some(t)
         })
-        // Strategy 3: scoped binder lookup.
-        .or_else(|| lookup_binder_type_scoped(&checked, &lowered, context, &access, &base_name))
         // Strategy 4: global binder search (finds matching name from any scope).
         // If there are completed labels, prefer binders whose record type contains those labels.
         .or_else(|| {

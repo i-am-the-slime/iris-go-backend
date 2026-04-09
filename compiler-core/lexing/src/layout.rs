@@ -398,11 +398,11 @@ impl<'l, 's> Insert<'l, 's> {
             }
 
             _ if LOWER.contains(self.token) && self.qualifier.is_none() => {
-                // If Property is on the stack but the token is on a different line,
-                // this is NOT a record access — it's a new statement. Pop Property
-                // so the normal layout separator logic handles it correctly.
-                if let Some((prop_pos, Delimiter::Property)) = self.layout.stack.last() {
-                    if self.position.line != prop_pos.line {
+                if let Some((_, Delimiter::Property)) = self.layout.stack.last() {
+                    let would_sep = self.layout.stack.iter().rev().skip(1).any(
+                        |(pos, delim)| delim.is_indented() && self.sep_p(*pos),
+                    );
+                    if would_sep {
                         self.pop_stack();
                     }
                 }
