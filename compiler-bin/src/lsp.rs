@@ -39,6 +39,7 @@ pub struct State {
 
     pub workspace_symbols_cache: Arc<RwLock<WorkspaceSymbolsCache>>,
     pub suggestions_cache: Arc<RwLock<SuggestionsCache>>,
+    pub record_fields_cache: Arc<RwLock<analyzer::completion::RecordFieldsCache>>,
 
     pub root: Option<PathBuf>,
 }
@@ -57,9 +58,12 @@ impl State {
         let suggestions_cache = SuggestionsCache::default();
         let suggestions_cache = Arc::new(RwLock::new(suggestions_cache));
 
+        let record_fields_cache = analyzer::completion::RecordFieldsCache::default();
+        let record_fields_cache = Arc::new(RwLock::new(record_fields_cache));
+
         let root = None;
 
-        State { config, client, engine, files, workspace_symbols_cache, suggestions_cache, root }
+        State { config, client, engine, files, workspace_symbols_cache, suggestions_cache, record_fields_cache, root }
     }
 
     fn spawn<T>(&self, f: impl FnOnce(StateSnapshot) -> T + Send + 'static) -> task::JoinHandle<T>
@@ -72,6 +76,7 @@ impl State {
             files: Arc::clone(&self.files),
             workspace_symbols_cache: Arc::clone(&self.workspace_symbols_cache),
             suggestions_cache: Arc::clone(&self.suggestions_cache),
+            record_fields_cache: Arc::clone(&self.record_fields_cache),
         };
         task::spawn_blocking(move || f(snapshot))
     }
@@ -93,6 +98,7 @@ struct StateSnapshot {
     files: Arc<RwLock<Files>>,
     workspace_symbols_cache: Arc<RwLock<WorkspaceSymbolsCache>>,
     suggestions_cache: Arc<RwLock<SuggestionsCache>>,
+    record_fields_cache: Arc<RwLock<analyzer::completion::RecordFieldsCache>>,
 }
 
 impl StateSnapshot {
@@ -264,11 +270,13 @@ fn completion(
     let trigger_character = p.context.as_ref().and_then(|c| c.trigger_character.clone());
 
     let mut cache = snapshot.suggestions_cache.write();
+    let mut record_cache = snapshot.record_fields_cache.write();
 
     analyzer::completion::implementation(
         &snapshot.engine,
         &snapshot.files(),
         &mut cache,
+        &mut record_cache,
         uri,
         position,
         trigger_character.as_deref(),

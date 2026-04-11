@@ -84,6 +84,7 @@ pub fn report(engine: &QueryEngine, files: &Files, id: FileId) -> String {
     let cursors = extract_cursors(&content);
 
     let mut cache = SuggestionsCache::default();
+    let mut record_fields_cache = analyzer::completion::RecordFieldsCache::default();
     let mut result = String::new();
     for (index, (position, cursor)) in cursors.iter().enumerate() {
         let uri = uri.clone();
@@ -113,7 +114,7 @@ pub fn report(engine: &QueryEngine, files: &Files, id: FileId) -> String {
             cache = SuggestionsCache::default();
         }
 
-        dispatch_cursor(&mut result, engine, files, &mut cache, *position, *cursor, uri);
+        dispatch_cursor(&mut result, engine, files, &mut cache, &mut record_fields_cache, *position, *cursor, uri);
     }
 
     redact_paths(result)
@@ -124,6 +125,7 @@ fn dispatch_cursor(
     engine: &QueryEngine,
     files: &Files,
     cache: &mut SuggestionsCache,
+    record_fields_cache: &mut analyzer::completion::RecordFieldsCache,
     position: Position,
     cursor: CursorKind,
     uri: Url,
@@ -211,7 +213,7 @@ fn dispatch_cursor(
                 _ => None,
             };
             if let Ok(Some(response)) =
-                analyzer::completion::implementation(engine, files, cache, uri, position, trigger)
+                analyzer::completion::implementation(engine, files, cache, record_fields_cache, uri, position, trigger)
             {
                 match response {
                     CompletionResponse::Array(items)
