@@ -91,3 +91,5 @@ fn run_test(folder: &str, file: &str) {
 #[rustfmt::skip] #[test] fn test_039_completion_dot_trigger_let_main() { run_test("039_completion_dot_trigger_let", "Main"); }
 
 #[rustfmt::skip] #[test] fn test_040_completion_space_trigger_done_main() { run_test("040_completion_space_trigger_done", "Main"); }
+
+#[rustfmt::skip] #[test] fn test_041_completion_expr_record_union_main() { run_test("041_completion_expr_record_union", "Main"); }

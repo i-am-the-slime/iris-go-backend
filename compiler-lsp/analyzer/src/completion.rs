@@ -525,9 +525,32 @@ fn find_record_binder_type(context: &Context) -> Option<RecordTypeSource> {
         // For expression records, check the expected type at this position.
         if let Some(expected) = context.expected_type {
             let expanded = expand_synonym_type(context, expected).unwrap_or(expected);
-            if sources::extract_record_fields(context.engine, expanded).is_some() {
+            if sources::extract_record_fields(context.engine, expanded)
+                .as_ref()
+                .is_some_and(|f| !f.is_empty())
+            {
                 return Some(RecordTypeSource::TypeId(expanded));
             }
+            // Peel Constrained/Forall wrappers — the expected type may be wrapped.
+            let mut peeled = expanded;
+            loop {
+                match context.engine.lookup_type(peeled) {
+                    checking::core::Type::Forall(_, inner)
+                    | checking::core::Type::Constrained(_, inner) => peeled = inner,
+                    _ => break,
+                }
+            }
+            if peeled != expanded {
+                if sources::extract_record_fields(context.engine, peeled).is_some() {
+                    return Some(RecordTypeSource::TypeId(peeled));
+                }
+            }
+        }
+
+        // Fallback: walk the called function's type tree to find concrete record
+        // fields through Union/CoerceReactProps constraints.
+        if let Some(fields) = application_record_fields(context) {
+            return Some(RecordTypeSource::Fields(fields));
         }
     }
 
@@ -759,6 +782,80 @@ fn annotation_record_fields(
             }
         }
         // Recurse into type structure.
+        match context.engine.lookup_type(tid) {
+            checking::core::Type::Application(a, b)
+            | checking::core::Type::KindApplication(a, b)
+            | checking::core::Type::Function(a, b)
+            | checking::core::Type::Constrained(a, b)
+            | checking::core::Type::Kinded(a, b) => {
+                stack.push(a);
+                stack.push(b);
+            }
+            checking::core::Type::Forall(_, inner) => stack.push(inner),
+            _ => {}
+        }
+    }
+    best
+}
+
+/// Walk the type tree of the called function to find record fields.
+/// Used when inside `ExpressionRecord` as a function argument (e.g. `button { }`),
+/// where the expected_type is an open row variable with no concrete fields.
+/// The concrete fields come from the function's declared type through constraints.
+fn application_record_fields(context: &Context) -> Option<Vec<(SmolStr, TypeId)>> {
+    // Find the enclosing ExpressionApplicationChain, cast to Expression for lookup.
+    let app_expr = context.token.parent_ancestors().find_map(|node| {
+        cst::ExpressionApplicationChain::cast(node.clone())?;
+        cst::Expression::cast(node)
+    })?;
+
+    let ptr = AstPtr::new(&app_expr);
+    let expression_id = context.stabilized.lookup_ptr(&ptr)?;
+
+    let lowered = context.engine.lowered(context.current_file).ok()?;
+    let kind = lowered.info.get_expression_kind(expression_id)?;
+
+    let lowering::ExpressionKind::Application { function, .. } = kind else {
+        return None;
+    };
+    let function_id = (*function)?;
+
+    // Resolve the function to its definition and look up its declared type.
+    let func_kind = lowered.info.get_expression_kind(function_id)?;
+    let (def_file, term_id) = match func_kind {
+        lowering::ExpressionKind::Variable { resolution, .. } => {
+            let lowering::TermVariableResolution::Reference(f, t) = resolution.as_ref()? else {
+                return None;
+            };
+            (*f, *t)
+        }
+        lowering::ExpressionKind::Constructor { resolution, .. } => {
+            let (f, t) = resolution.as_ref()?;
+            (*f, *t)
+        }
+        _ => return None,
+    };
+
+    let def_checked = context.engine.checked(def_file).ok()?;
+    let fn_type = def_checked.terms.get(&term_id).copied()?;
+
+    // Walk the type tree to find row types, same approach as annotation_record_fields.
+    let mut best: Option<Vec<(SmolStr, TypeId)>> = None;
+    let mut stack = vec![fn_type];
+    let mut visited = std::collections::HashSet::new();
+    while let Some(tid) = stack.pop() {
+        if !visited.insert(tid) {
+            continue;
+        }
+        let fields = collect_row_fields(context, tid);
+        if !fields.is_empty() && best.as_ref().is_none_or(|b| fields.len() > b.len()) {
+            best = Some(fields);
+        }
+        if let Some(fields) = sources::extract_record_fields(context.engine, tid) {
+            if best.as_ref().is_none_or(|b| fields.len() > b.len()) {
+                best = Some(fields);
+            }
+        }
         match context.engine.lookup_type(tid) {
             checking::core::Type::Application(a, b)
             | checking::core::Type::KindApplication(a, b)
