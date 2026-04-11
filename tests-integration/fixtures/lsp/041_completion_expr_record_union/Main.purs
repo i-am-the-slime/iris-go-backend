@@ -14,3 +14,10 @@ button _ = ""
 testExprRecord :: String
 testExprRecord = button {  }
 --                       !^
+
+fixed :: { name :: String, age :: String } -> String
+fixed _ = ""
+
+testFixedRecord :: String
+testFixedRecord = fixed {  }
+--                       !^
