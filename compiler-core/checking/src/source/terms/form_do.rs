@@ -395,6 +395,22 @@ where
     let final_continuation =
         *continuation_types.last().expect("invariant violated: empty continuation_types");
 
+    // For the final statement, if it's a bind (e.g. `{ } <- ask` as the only/last
+    // statement), also process it as a bind step to solve the binder type. The loop
+    // above skips this case because tuple_windows on 1 element yields nothing.
+    if let Some(DoStep::Bind { binder_type, expression, .. }) = steps.last() {
+        if let Some(expression) = *expression {
+            let _ = infer_do_bind_core(
+                state,
+                context,
+                bind_type,
+                final_continuation,
+                expression,
+                *binder_type,
+            );
+        }
+    }
+
     if let Some(pure_expression) = pure_expression {
         super::check_expression(state, context, pure_expression, final_continuation)?;
     } else {

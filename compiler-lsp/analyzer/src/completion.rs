@@ -135,6 +135,11 @@ fn collect(
         return Ok(items);
     }
 
+    if let Some(type_id) = find_record_binder_type(context) {
+        emit_record_fields(context, type_id, into)?;
+        return Ok(items);
+    }
+
     if context.dot_triggered {
         if let Some(type_id) = find_record_type_at_dot(context) {
             emit_record_fields(context, type_id, into)?;
@@ -259,6 +264,126 @@ fn collect(
     }
 
     Ok(items)
+}
+
+/// Detect when cursor is inside a record binder `{ }` or record expression `{ }`.
+/// Returns the record type if known, for field/pun completion.
+fn find_record_binder_type(context: &Context) -> Option<TypeId> {
+    let offset = context.token.text_range().start();
+    let root = context.parsed.syntax_node();
+
+    let mut node = root;
+    loop {
+        let child = node.children().find(|c| c.text_range().contains_inclusive(offset));
+        match child {
+            Some(c) => node = c,
+            None => break,
+        }
+    }
+
+    let checked = context.engine.checked(context.current_file).ok()?;
+    let lowered = context.engine.lowered(context.current_file).ok()?;
+
+    // Check for BinderRecord ancestor (pattern destructuring).
+    let in_binder_record = node.ancestors().any(|n| cst::BinderRecord::cast(n).is_some());
+
+    // Check for ExpressionRecord ancestor (record literal in expression).
+    let in_expr_record = node.ancestors().any(|n| cst::ExpressionRecord::cast(n).is_some());
+
+    if !in_binder_record && !in_expr_record {
+        return None;
+    }
+
+    if in_binder_record {
+        // Try 1: Walk up to DoStatementBind and resolve the record type.
+        let type_from_do_bind = node.ancestors().find_map(|n| {
+            let bind_cst = cst::DoStatementBind::cast(n)?;
+
+            // Try binder type first (works for ctx@{ } with solved named binder).
+            let from_binder = bind_cst.binder().and_then(|b| {
+                let ptr = AstPtr::new(&b);
+                let id = context.stabilized.lookup_ptr(&ptr)?;
+                let tid = checked.nodes.lookup_binder(id)?;
+                let expanded = expand_synonym_type(context, tid).unwrap_or(tid);
+                sources::extract_record_fields(context.engine, expanded)
+                    .is_some()
+                    .then_some(expanded)
+            });
+            if from_binder.is_some() {
+                return from_binder;
+            }
+
+            // Try RHS expression type (works for { } <- ask).
+            let expr = bind_cst.expression()?;
+            let expr_ptr = AstPtr::new(&expr);
+            let expr_id = context.stabilized.lookup_ptr(&expr_ptr)?;
+            let tid = checked
+                .nodes
+                .lookup_expression(expr_id)
+                .or_else(|| resolve_rhs_type(context, &checked, expr_id))?;
+            let expanded = expand_synonym_type(context, tid).unwrap_or(tid);
+            sources::extract_record_fields(context.engine, expanded).is_some().then_some(expanded)
+        });
+        if type_from_do_bind.is_some() {
+            return type_from_do_bind;
+        }
+
+        // Try 2: Walk up to find a BinderNamed (@) and use its scope binder type.
+        let type_from_named = node.ancestors().find_map(|n| {
+            let named = cst::BinderNamed::cast(n)?;
+            let name = named.name_token()?.text().to_string();
+            // Search scope graph for this name's binder type.
+            lowered.graph.iter().find_map(|(_, gn)| {
+                let GraphNode::Binder { binders, .. } = gn else { return None };
+                let (_, bid) = binders.iter().find(|(n, _)| **n == name)?;
+                let tid = checked.nodes.lookup_binder(*bid)?;
+                let expanded = expand_synonym_type(context, tid).unwrap_or(tid);
+                sources::extract_record_fields(context.engine, expanded)
+                    .is_some()
+                    .then_some(expanded)
+            })
+        });
+        if type_from_named.is_some() {
+            return type_from_named;
+        }
+
+        // Try 3: Walk up to function equation binders and match by position.
+        let type_from_equation = node.ancestors().find_map(|n| {
+            let equation = cst::ValueEquation::cast(n)?;
+            let fn_name = equation.name_token()?.text().to_string();
+            let (_, term_id) = context.resolved.locals.lookup_term(&fn_name)?;
+            let fn_type = checked.terms.get(&term_id).copied()?;
+            // For a function `f { field } = ...`, the first param type is the record.
+            let mut current = fn_type;
+            loop {
+                match context.engine.lookup_type(current) {
+                    checking::core::Type::Forall(_, inner) => current = inner,
+                    checking::core::Type::Constrained(_, inner) => current = inner,
+                    _ => break,
+                }
+            }
+            let checking::core::Type::Function(arg, _) = context.engine.lookup_type(current) else {
+                return None;
+            };
+            let expanded = expand_synonym_type(context, arg).unwrap_or(arg);
+            sources::extract_record_fields(context.engine, expanded).is_some().then_some(expanded)
+        });
+        if type_from_equation.is_some() {
+            return type_from_equation;
+        }
+    }
+
+    if in_expr_record {
+        // For expression records, check the expected type at this position.
+        if let Some(expected) = context.expected_type {
+            let expanded = expand_synonym_type(context, expected).unwrap_or(expected);
+            if sources::extract_record_fields(context.engine, expanded).is_some() {
+                return Some(expanded);
+            }
+        }
+    }
+
+    None
 }
 
 fn find_record_type_at_dot(context: &Context) -> Option<TypeId> {

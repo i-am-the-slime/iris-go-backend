@@ -28,3 +28,13 @@ handler = do
   ctx <- ask
   ctx.
 --    #
+
+handler2 :: Reader Ctx String
+handler2 = do
+  ctx@{  } <- ask
+--     ^
+
+handler3 :: Reader Ctx String
+handler3 = do
+  {  } <- ask
+-- ^

@@ -399,9 +399,13 @@ impl<'l, 's> Insert<'l, 's> {
 
             _ if LOWER.contains(self.token) && self.qualifier.is_none() => {
                 if let Some((_, Delimiter::Property)) = self.layout.stack.last() {
-                    let would_sep = self.layout.stack.iter().rev().skip(1).any(
-                        |(pos, delim)| delim.is_indented() && self.sep_p(*pos),
-                    );
+                    let would_sep = self
+                        .layout
+                        .stack
+                        .iter()
+                        .rev()
+                        .skip(1)
+                        .any(|(pos, delim)| delim.is_indented() && self.sep_p(*pos));
                     if would_sep {
                         self.pop_stack();
                     }
