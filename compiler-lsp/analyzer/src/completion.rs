@@ -115,8 +115,8 @@ pub fn implementation(
     let items = collect(&context, cache, record_fields_cache, &uri, position)?;
     // Always re-request for record field completions (small lists that need
     // re-querying on backspace), otherwise use heuristic.
-    let is_incomplete = items.len() > 5
-        || items.iter().any(|i| i.kind == Some(CompletionItemKind::FIELD));
+    let is_incomplete =
+        items.len() > 5 || items.iter().any(|i| i.kind == Some(CompletionItemKind::FIELD));
 
     Ok(Some(CompletionResponse::List(CompletionList { is_incomplete, items })))
 }
@@ -152,10 +152,7 @@ fn collect(
             if ident_len > 0 {
                 let start = rowan::TextSize::from(ident_start as u32);
                 let end = rowan::TextSize::from((ident_start + ident_len) as u32);
-                locate::text_range_to_range(
-                    context.content,
-                    rowan::TextRange::new(start, end),
-                )
+                locate::text_range_to_range(context.content, rowan::TextRange::new(start, end))
             } else {
                 // Zero-width insertion at cursor.
                 let pos = locate::text_range_to_range(
@@ -234,8 +231,8 @@ fn collect(
                 }
             };
             let expanded = expand_synonym_type(context, arg).unwrap_or(arg);
-            let fields = sources::extract_record_fields(context.engine, expanded)
-                .or_else(|| {
+            let fields =
+                sources::extract_record_fields(context.engine, expanded).or_else(|| {
                     let collected = collect_row_fields(context, arg);
                     if collected.is_empty() { None } else { Some(collected) }
                 })?;
@@ -243,7 +240,9 @@ fn collect(
         });
         let section_count = section_fields.as_ref().map_or(0, |f| f.len());
 
-        if section_count > dot_count && section_count >= annot_fields.as_ref().map_or(0, |f| f.len()) {
+        if section_count > dot_count
+            && section_count >= annot_fields.as_ref().map_or(0, |f| f.len())
+        {
             emit_record_fields_from_list(context, section_fields.as_ref().unwrap(), into)?;
         } else if annot_fields.as_ref().is_some_and(|f| f.len() > dot_count) {
             emit_record_fields_from_list(context, annot_fields.as_ref().unwrap(), into)?;
@@ -428,10 +427,10 @@ fn find_record_binder_type(context: &Context) -> Option<RecordTypeSource> {
                 let named = cst::BinderNamed::cast(n)?;
                 Some(named.name_token()?.text().to_string())
             });
-            if let Some(name) = name {
-                if let Some(tid) = resolve_name_record_type(context, br_node, &name) {
-                    consider(tid);
-                }
+            if let Some(name) = name
+                && let Some(tid) = resolve_name_record_type(context, br_node, &name)
+            {
+                consider(tid);
             }
         }
 
@@ -439,22 +438,21 @@ fn find_record_binder_type(context: &Context) -> Option<RecordTypeSource> {
         let checked = context.engine.checked(context.current_file).ok()?;
         for ancestor in node.ancestors() {
             let Some(bind_cst) = cst::DoStatementBind::cast(ancestor) else { continue };
-            if let Some(b) = bind_cst.binder() {
-                if let Some(id) = context.stabilized.lookup_ptr(&AstPtr::new(&b)) {
-                    if let Some(tid) = checked.nodes.lookup_binder(id) {
-                        consider(tid);
-                    }
-                }
+            if let Some(b) = bind_cst.binder()
+                && let Some(id) = context.stabilized.lookup_ptr(&AstPtr::new(&b))
+                && let Some(tid) = checked.nodes.lookup_binder(id)
+            {
+                consider(tid);
             }
-            if let Some(expr) = bind_cst.expression() {
-                if let Some(expr_id) = context.stabilized.lookup_ptr(&AstPtr::new(&expr)) {
-                    let tid = checked
-                        .nodes
-                        .lookup_expression(expr_id)
-                        .or_else(|| resolve_rhs_type(context, &checked, expr_id));
-                    if let Some(tid) = tid {
-                        consider(tid);
-                    }
+            if let Some(expr) = bind_cst.expression()
+                && let Some(expr_id) = context.stabilized.lookup_ptr(&AstPtr::new(&expr))
+            {
+                let tid = checked
+                    .nodes
+                    .lookup_expression(expr_id)
+                    .or_else(|| resolve_rhs_type(context, &checked, expr_id));
+                if let Some(tid) = tid {
+                    consider(tid);
                 }
             }
             break;
@@ -486,24 +484,17 @@ fn find_record_binder_type(context: &Context) -> Option<RecordTypeSource> {
         // Merge all sources: annotation fields, binder fields, and RHS fields.
         // The binder may have extra fields (e.g. route params) not in the annotation.
         // Collect all field sources and merge them (union, most fields wins ties).
-        let binder_fields = best_tid
-            .and_then(|(tid, _)| sources::extract_record_fields(context.engine, tid));
-        let all_sources: Vec<&Vec<(SmolStr, TypeId)>> = [
-            annot_fields.as_ref(),
-            binder_fields.as_ref(),
-            rhs_fields.as_ref(),
-        ]
-        .into_iter()
-        .flatten()
-        .collect();
+        let binder_fields =
+            best_tid.and_then(|(tid, _)| sources::extract_record_fields(context.engine, tid));
+        let all_sources: Vec<&Vec<(SmolStr, TypeId)>> =
+            [annot_fields.as_ref(), binder_fields.as_ref(), rhs_fields.as_ref()]
+                .into_iter()
+                .flatten()
+                .collect();
 
         if !all_sources.is_empty() {
             // Start with the source that has the most fields.
-            let mut merged = all_sources
-                .iter()
-                .max_by_key(|f| f.len())
-                .unwrap()
-                .to_vec();
+            let mut merged = all_sources.iter().max_by_key(|f| f.len()).unwrap().to_vec();
             // Add missing fields from other sources.
             for source in &all_sources {
                 for (label, tid) in source.iter() {
@@ -539,10 +530,10 @@ fn find_record_binder_type(context: &Context) -> Option<RecordTypeSource> {
 
         // Walk the called function's type tree to find concrete record fields
         // through Union/CoerceReactProps constraints (e.g. FFIComponent pattern).
-        if let Some(fn_type) = application_function_type(context) {
-            if let Some(fields) = best_fields_from_type_tree(context, fn_type) {
-                return Some(RecordTypeSource::Fields(fields));
-            }
+        if let Some(fn_type) = application_function_type(context)
+            && let Some(fields) = best_fields_from_type_tree(context, fn_type)
+        {
+            return Some(RecordTypeSource::Fields(fields));
         }
     }
 
@@ -639,8 +630,8 @@ fn find_record_type_at_dot(context: &Context) -> Option<TypeId> {
     // Use the shared resolution logic (annotation, scoped binder, global search).
     // Additionally try the expression type from the checked module (strategy 3),
     // which only applies when we have an ExpressionRecordAccess with a base expression.
-    let base_type = resolve_name_record_type(context, access.syntax(), &base_name)
-        .or_else(|| {
+    let base_type =
+        resolve_name_record_type(context, access.syntax(), &base_name).or_else(|| {
             let checked = context.engine.checked(context.current_file).ok()?;
             let expr_ptr = AstPtr::new(&expression);
             let expr_id = context.stabilized.lookup_ptr(&expr_ptr)?;
@@ -774,10 +765,10 @@ fn best_fields_from_type_tree(
         if !fields.is_empty() && best.as_ref().is_none_or(|b| fields.len() > b.len()) {
             best = Some(fields);
         }
-        if let Some(fields) = sources::extract_record_fields(context.engine, tid) {
-            if best.as_ref().is_none_or(|b| fields.len() > b.len()) {
-                best = Some(fields);
-            }
+        if let Some(fields) = sources::extract_record_fields(context.engine, tid)
+            && best.as_ref().is_none_or(|b| fields.len() > b.len())
+        {
+            best = Some(fields);
         }
         match context.engine.lookup_type(tid) {
             checking::core::Type::Application(a, b)
@@ -833,15 +824,12 @@ fn application_function_type(context: &Context) -> Option<TypeId> {
 
     // Try the definition module's declared type, fall back to the current
     // file's inferred expression type (works when def module fails to check).
-    context
-        .engine
-        .checked(def_file)
-        .ok()
-        .and_then(|c| c.terms.get(&term_id).copied())
-        .or_else(|| {
+    context.engine.checked(def_file).ok().and_then(|c| c.terms.get(&term_id).copied()).or_else(
+        || {
             let c = context.engine.checked(context.current_file).ok()?;
             c.nodes.lookup_expression(function_id)
-        })
+        },
+    )
 }
 
 type NameSubstitutions = std::collections::HashMap<checking::core::Name, TypeId>;
@@ -901,18 +889,11 @@ fn collect_row_fields_inner(
         }
         checking::core::Type::Constructor(file_id, type_item_id) => {
             // Nullary synonym expansion.
-            if let Ok(checked) = context.engine.checked(file_id) {
-                if let Some(synonym) = checked.lookup_synonym(type_item_id) {
-                    if synonym.parameters.is_empty() {
-                        collect_row_fields_inner(
-                            context,
-                            synonym.synonym,
-                            subs,
-                            fields,
-                            depth + 1,
-                        );
-                    }
-                }
+            if let Ok(checked) = context.engine.checked(file_id)
+                && let Some(synonym) = checked.lookup_synonym(type_item_id)
+                && synonym.parameters.is_empty()
+            {
+                collect_row_fields_inner(context, synonym.synonym, subs, fields, depth + 1);
             }
         }
         _ => {}
@@ -1006,7 +987,7 @@ fn emit_record_fields_with_range(
     range: Option<Range>,
     items: &mut Vec<CompletionItem>,
 ) -> Result<(), AnalyzerError> {
-    let checked = context.engine.checked(context.current_file)?;
+    let _checked = context.engine.checked(context.current_file)?;
     let fields =
         sources::extract_record_fields(context.engine, type_id).ok_or(AnalyzerError::NonFatal)?;
     emit_record_fields_from_list_with_range(context, &fields, range, items)
@@ -1379,10 +1360,8 @@ fn resolve_name_record_type(
                 .iter()
                 .find(|(n, _)| **n == name)
                 .and_then(|(_, id)| checked.nodes.lookup_binder(*id)),
-            GraphNode::Let { bindings, .. } => bindings
-                .iter()
-                .find(|(n, _)| **n == name)
-                .and_then(|(_, id)| {
+            GraphNode::Let { bindings, .. } => {
+                bindings.iter().find(|(n, _)| **n == name).and_then(|(_, id)| {
                     checked.nodes.lookup_let(*id).or_else(|| {
                         let binding = lowered.info.get_let_binding(*id)?;
                         let eq = binding.equations.first()?;
@@ -1395,7 +1374,8 @@ fn resolve_name_record_type(
                         let expr_id = where_expression.as_ref()?.expression?;
                         checked.nodes.lookup_expression(expr_id)
                     })
-                }),
+                })
+            }
             _ => None,
         };
         if let Some(tid) = candidate {

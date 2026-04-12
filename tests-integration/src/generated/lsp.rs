@@ -5,8 +5,8 @@ use std::fmt::Write;
 use analyzer::completion::SuggestionsCache;
 use analyzer::{QueryEngine, prim};
 use async_lsp::lsp_types::{
-    CompletionList, CompletionResponse, GotoDefinitionResponse, HoverContents, LanguageString,
-    Location, MarkedString, Position, SignatureHelp, Url,
+    CodeActionOrCommand, CompletionList, CompletionResponse, GotoDefinitionResponse, HoverContents,
+    LanguageString, Location, MarkedString, Position, SignatureHelp, TextEdit, Url,
 };
 use files::{FileId, Files};
 use itertools::Itertools;
@@ -25,10 +25,12 @@ enum CursorKind {
     CompletionDot,
     References,
     SignatureHelp,
+    CodeAction,
+    Rename,
 }
 
 impl CursorKind {
-    const CHARACTERS: &[char] = &['@', '$', '^', '~', '%', '&', '!', '#'];
+    const CHARACTERS: &[char] = &['@', '$', '^', '~', '%', '&', '!', '#', '?', '*'];
 
     fn parse(text: &str) -> Option<CursorKind> {
         match text {
@@ -40,6 +42,8 @@ impl CursorKind {
             "#" => Some(CursorKind::CompletionDot),
             "%" => Some(CursorKind::References),
             "&" => Some(CursorKind::SignatureHelp),
+            "?" => Some(CursorKind::CodeAction),
+            "*" => Some(CursorKind::Rename),
             _ => None,
         }
     }
@@ -114,7 +118,16 @@ pub fn report(engine: &QueryEngine, files: &Files, id: FileId) -> String {
             cache = SuggestionsCache::default();
         }
 
-        dispatch_cursor(&mut result, engine, files, &mut cache, &mut record_fields_cache, *position, *cursor, uri);
+        dispatch_cursor(
+            &mut result,
+            engine,
+            files,
+            &mut cache,
+            &mut record_fields_cache,
+            *position,
+            *cursor,
+            uri,
+        );
     }
 
     redact_paths(result)
@@ -212,9 +225,15 @@ fn dispatch_cursor(
                 CursorKind::CompletionDot => Some("."),
                 _ => None,
             };
-            if let Ok(Some(response)) =
-                analyzer::completion::implementation(engine, files, cache, record_fields_cache, uri, position, trigger)
-            {
+            if let Ok(Some(response)) = analyzer::completion::implementation(
+                engine,
+                files,
+                cache,
+                record_fields_cache,
+                uri,
+                position,
+                trigger,
+            ) {
                 match response {
                     CompletionResponse::Array(items)
                     | CompletionResponse::List(CompletionList { items, .. }) => {
@@ -255,6 +274,36 @@ fn dispatch_cursor(
                 writeln!(result, "<empty>").unwrap();
             }
         }
+        CursorKind::CodeAction => {
+            let all_diagnostics = collect_lsp_diagnostics(engine, files, &uri);
+            let diagnostics: Vec<_> = all_diagnostics
+                .into_iter()
+                .filter(|d| {
+                    d.range.start.line <= position.line && d.range.end.line >= position.line
+                })
+                .collect();
+            let range = async_lsp::lsp_types::Range::new(position, position);
+            if let Ok(Some(actions)) =
+                analyzer::code_action::implementation(engine, files, uri, range, &diagnostics)
+            {
+                render_code_actions(result, &actions);
+            } else {
+                writeln!(result, "<empty>").unwrap();
+            }
+        }
+        CursorKind::Rename => {
+            if let Ok(Some(edit)) = analyzer::rename::implementation(
+                engine,
+                files,
+                uri,
+                position,
+                "renamed".to_string(),
+            ) {
+                render_workspace_edit(result, &edit);
+            } else {
+                writeln!(result, "<empty>").unwrap();
+            }
+        }
     }
 }
 
@@ -273,6 +322,102 @@ fn render_signature_help(result: &mut String, response: &SignatureHelp) {
                     }
                 };
                 writeln!(result, "{marker} {i}: {label}").unwrap();
+            }
+        }
+    }
+}
+
+fn collect_lsp_diagnostics(
+    engine: &QueryEngine,
+    files: &Files,
+    uri: &Url,
+) -> Vec<async_lsp::lsp_types::Diagnostic> {
+    use analyzer::locate;
+    use diagnostics::{DiagnosticsContext, ToDiagnostics};
+    use rowan::TextSize;
+
+    let uri_str = uri.as_str();
+    let Some(id) = files.id(uri_str) else { return vec![] };
+
+    let content = engine.content(id);
+    let Ok((parsed, _)) = engine.parsed(id) else { return vec![] };
+    let root = parsed.syntax_node();
+
+    let Ok(stabilized) = engine.stabilized(id) else { return vec![] };
+    let Ok(indexed) = engine.indexed(id) else { return vec![] };
+    let Ok(lowered) = engine.lowered(id) else { return vec![] };
+
+    let context = DiagnosticsContext::new(&content, &root, &stabilized, &indexed, &lowered);
+
+    let mut all = vec![];
+    for error in &lowered.errors {
+        all.extend(error.to_diagnostics(&context));
+    }
+
+    let to_position = |offset: u32| locate::offset_to_position(&content, TextSize::from(offset));
+
+    all.iter()
+        .filter_map(|diagnostic| {
+            let start = to_position(diagnostic.primary.start)?;
+            let end = to_position(diagnostic.primary.end)?;
+            let range = async_lsp::lsp_types::Range { start, end };
+            Some(async_lsp::lsp_types::Diagnostic {
+                range,
+                severity: None,
+                code: Some(async_lsp::lsp_types::NumberOrString::String(
+                    diagnostic.code.to_string(),
+                )),
+                code_description: None,
+                source: Some(format!("analyzer/{}", diagnostic.source)),
+                message: diagnostic.message.clone(),
+                related_information: None,
+                tags: None,
+                data: None,
+            })
+        })
+        .collect()
+}
+
+fn render_code_actions(result: &mut String, actions: &[CodeActionOrCommand]) {
+    for action in actions {
+        match action {
+            CodeActionOrCommand::CodeAction(action) => {
+                writeln!(result, "Action: {}", action.title).unwrap();
+                if let Some(edit) = &action.edit {
+                    render_workspace_edit_inner(result, edit, "  ");
+                }
+            }
+            CodeActionOrCommand::Command(cmd) => {
+                writeln!(result, "Command: {}", cmd.title).unwrap();
+            }
+        }
+    }
+}
+
+fn render_workspace_edit(result: &mut String, edit: &async_lsp::lsp_types::WorkspaceEdit) {
+    render_workspace_edit_inner(result, edit, "");
+}
+
+fn render_workspace_edit_inner(
+    result: &mut String,
+    edit: &async_lsp::lsp_types::WorkspaceEdit,
+    indent: &str,
+) {
+    if let Some(changes) = &edit.changes {
+        let mut entries: Vec<_> = changes.iter().collect();
+        entries.sort_by_key(|(uri, _)| uri.to_string());
+        for (uri, edits) in entries {
+            writeln!(result, "{indent}{uri}:").unwrap();
+            let mut sorted_edits: Vec<&TextEdit> = edits.iter().collect();
+            sorted_edits.sort_by_key(|e| (e.range.start.line, e.range.start.character));
+            for edit in sorted_edits {
+                let r = &edit.range;
+                writeln!(
+                    result,
+                    "{indent}  {}:{}..{}:{} -> {:?}",
+                    r.start.line, r.start.character, r.end.line, r.end.character, edit.new_text,
+                )
+                .unwrap();
             }
         }
     }

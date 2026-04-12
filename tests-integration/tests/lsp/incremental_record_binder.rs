@@ -129,10 +129,7 @@ fn record_binder_fields_persist_through_multiple_keystrokes() {
         let labels: Vec<&str> = items.iter().map(|i| i.label.as_str()).collect();
         eprintln!("{description}: {} fields: {labels:?}", labels.len());
 
-        assert!(
-            labels.contains(&"path"),
-            "{description}: should contain `path`, got: {labels:?}"
-        );
+        assert!(labels.contains(&"path"), "{description}: should contain `path`, got: {labels:?}");
         assert!(
             labels.contains(&"config"),
             "{description}: should contain `config`, got: {labels:?}"
@@ -141,10 +138,7 @@ fn record_binder_fields_persist_through_multiple_keystrokes() {
             labels.contains(&"authApi"),
             "{description}: should contain `authApi`, got: {labels:?}"
         );
-        assert!(
-            labels.contains(&"db"),
-            "{description}: should contain `db`, got: {labels:?}"
-        );
+        assert!(labels.contains(&"db"), "{description}: should contain `db`, got: {labels:?}");
     }
 }
 
@@ -196,10 +190,7 @@ fn record_binder_with_named_binder_and_corruption() {
         let labels: Vec<&str> = items.iter().map(|i| i.label.as_str()).collect();
         eprintln!("{description}: {} fields: {labels:?}", labels.len());
 
-        assert!(
-            labels.contains(&"path"),
-            "{description}: should contain `path`, got: {labels:?}"
-        );
+        assert!(labels.contains(&"path"), "{description}: should contain `path`, got: {labels:?}");
         assert!(
             labels.len() >= 4,
             "{description}: should have at least 4 fields, got: {}",
@@ -216,10 +207,7 @@ fn dot_trigger_shows_all_fields() {
     let id = engine.module_file("Main").expect("Main module not found");
     let content = engine.content(id).to_string();
 
-    let target_line = content
-        .lines()
-        .position(|l| l.trim() == "ctx.")
-        .expect("couldn't find ctx.");
+    let target_line = content.lines().position(|l| l.trim() == "ctx.").expect("couldn't find ctx.");
 
     let uri_str = files.path(id).to_string();
     let uri = Url::parse(&uri_str).unwrap();
@@ -242,18 +230,9 @@ fn dot_trigger_shows_all_fields() {
     let labels: Vec<&str> = items.iter().map(|i| i.label.as_str()).collect();
     eprintln!("dot trigger: {} fields: {labels:?}", labels.len());
 
-    assert!(
-        labels.contains(&"config"),
-        "dot trigger should contain `config`, got: {labels:?}"
-    );
-    assert!(
-        labels.contains(&"authApi"),
-        "dot trigger should contain `authApi`, got: {labels:?}"
-    );
-    assert!(
-        labels.contains(&"db"),
-        "dot trigger should contain `db`, got: {labels:?}"
-    );
+    assert!(labels.contains(&"config"), "dot trigger should contain `config`, got: {labels:?}");
+    assert!(labels.contains(&"authApi"), "dot trigger should contain `authApi`, got: {labels:?}");
+    assert!(labels.contains(&"db"), "dot trigger should contain `db`, got: {labels:?}");
 }
 
 #[test]
@@ -264,10 +243,8 @@ fn record_accessor_section_asks_underscore_dot() {
     let id = engine.module_file("Main").expect("Main module not found");
     let content = engine.content(id).to_string();
 
-    let target_line = content
-        .lines()
-        .position(|l| l.contains("asks _."))
-        .expect("couldn't find asks _.");
+    let target_line =
+        content.lines().position(|l| l.contains("asks _.")).expect("couldn't find asks _.");
 
     let uri_str = files.path(id).to_string();
     let uri = Url::parse(&uri_str).unwrap();
@@ -294,18 +271,9 @@ fn record_accessor_section_asks_underscore_dot() {
     let labels: Vec<&str> = items.iter().map(|i| i.label.as_str()).collect();
     eprintln!("asks _. : {} fields: {labels:?}", labels.len());
 
-    assert!(
-        labels.contains(&"config"),
-        "asks _. should contain `config`, got: {labels:?}"
-    );
-    assert!(
-        labels.contains(&"authApi"),
-        "asks _. should contain `authApi`, got: {labels:?}"
-    );
-    assert!(
-        labels.contains(&"db"),
-        "asks _. should contain `db`, got: {labels:?}"
-    );
+    assert!(labels.contains(&"config"), "asks _. should contain `config`, got: {labels:?}");
+    assert!(labels.contains(&"authApi"), "asks _. should contain `authApi`, got: {labels:?}");
+    assert!(labels.contains(&"db"), "asks _. should contain `db`, got: {labels:?}");
 }
 
 fn extract_items(

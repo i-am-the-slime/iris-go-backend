@@ -93,3 +93,7 @@ fn run_test(folder: &str, file: &str) {
 #[rustfmt::skip] #[test] fn test_040_completion_space_trigger_done_main() { run_test("040_completion_space_trigger_done", "Main"); }
 
 #[rustfmt::skip] #[test] fn test_041_completion_expr_record_union_main() { run_test("041_completion_expr_record_union", "Main"); }
+
+#[rustfmt::skip] #[test] fn test_042_code_action_auto_import_main() { run_test("042_code_action_auto_import", "Main"); }
+
+#[rustfmt::skip] #[test] fn test_043_rename_main() { run_test("043_rename", "Main"); }

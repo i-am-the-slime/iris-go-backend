@@ -1,0 +1,15 @@
+---
+source: tests-integration/tests/lsp/generated.rs
+assertion_line: 12
+expression: report
+---
+Rename at Position { line: 4, character: 6 }
+
+```
+bar = foo 1
+--    *
+```
+
+file:///tests-integration/fixtures/lsp/043_rename/Main.purs:
+  2:0..2:3 -> "renamed"
+  4:6..4:9 -> "renamed"

@@ -63,7 +63,16 @@ impl State {
 
         let root = None;
 
-        State { config, client, engine, files, workspace_symbols_cache, suggestions_cache, record_fields_cache, root }
+        State {
+            config,
+            client,
+            engine,
+            files,
+            workspace_symbols_cache,
+            suggestions_cache,
+            record_fields_cache,
+            root,
+        }
     }
 
     fn spawn<T>(&self, f: impl FnOnce(StateSnapshot) -> T + Send + 'static) -> task::JoinHandle<T>
@@ -145,6 +154,8 @@ fn initialize(
                     },
                 }),
                 workspace_symbol_provider: Some(OneOf::Left(true)),
+                code_action_provider: Some(CodeActionProviderCapability::Simple(true)),
+                rename_provider: Some(OneOf::Left(true)),
                 text_document_sync: Some(TextDocumentSyncCapability::Kind(
                     TextDocumentSyncKind::FULL,
                 )),
@@ -315,6 +326,33 @@ fn signature_help(
         .on_non_fatal(None)
 }
 
+fn code_action(
+    snapshot: StateSnapshot,
+    p: CodeActionParams,
+) -> Result<Option<CodeActionResponse>, LspError> {
+    let _span = tracing::info_span!("code_action").entered();
+    let uri = p.text_document.uri;
+    let range = p.range;
+    let diagnostics = &p.context.diagnostics;
+    analyzer::code_action::implementation(
+        &snapshot.engine,
+        &snapshot.files(),
+        uri,
+        range,
+        diagnostics,
+    )
+    .on_non_fatal(None)
+}
+
+fn rename(snapshot: StateSnapshot, p: RenameParams) -> Result<Option<WorkspaceEdit>, LspError> {
+    let _span = tracing::info_span!("rename").entered();
+    let uri = p.text_document_position.text_document.uri;
+    let position = p.text_document_position.position;
+    let new_name = p.new_name;
+    analyzer::rename::implementation(&snapshot.engine, &snapshot.files(), uri, position, new_name)
+        .on_non_fatal(None)
+}
+
 fn workspace_symbols(
     snapshot: StateSnapshot,
     p: WorkspaceSymbolParams,
@@ -433,6 +471,8 @@ pub async fn start(config: Arc<cli::Config>) {
             .request_snapshot::<request::References>(references)
             .request_snapshot::<request::SignatureHelpRequest>(signature_help)
             .request_snapshot::<request::WorkspaceSymbolRequest>(workspace_symbols)
+            .request_snapshot::<request::CodeActionRequest>(code_action)
+            .request_snapshot::<request::Rename>(rename)
             .notification_ext::<notification::Initialized>(initialized)
             .notification_ext::<notification::DidOpenTextDocument>(did_open)
             .notification_ext::<notification::DidSaveTextDocument>(did_save)
