@@ -1,5 +1,7 @@
 module Main where
 
+import Lib as L
+
 class Union (l :: Row Type) (r :: Row Type) (u :: Row Type) | l r -> u, l u -> r, r u -> l
 
 -- Test 1: direct Union constraint
@@ -53,3 +55,8 @@ div _ _ = unsafeCoerce unit
 testFFI :: JSX
 testFFI = div {  } ""
 --            !^
+
+-- Test 4: cross-module import with FFIComponent and row synonym
+testCrossModule :: L.JSX
+testCrossModule = L.div {  } ""
+--                       !^
