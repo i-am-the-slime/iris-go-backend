@@ -836,8 +836,19 @@ fn application_record_fields(context: &Context) -> Option<Vec<(SmolStr, TypeId)>
         _ => return None,
     };
 
-    let def_checked = context.engine.checked(def_file).ok()?;
-    let fn_type = def_checked.terms.get(&term_id).copied()?;
+    // Try getting the function's declared type from its definition module.
+    // Fall back to the inferred type of the function expression in the current file,
+    // which works even when the definition module fails to type-check.
+    let fn_type = context
+        .engine
+        .checked(def_file)
+        .ok()
+        .and_then(|def_checked| def_checked.terms.get(&term_id).copied())
+        .or_else(|| {
+            let current_checked = context.engine.checked(context.current_file).ok()?;
+            current_checked.nodes.lookup_expression(function_id)
+        });
+    let fn_type = fn_type?;
 
     // Walk the type tree to find row types, same approach as annotation_record_fields.
     let mut best: Option<Vec<(SmolStr, TypeId)>> = None;
