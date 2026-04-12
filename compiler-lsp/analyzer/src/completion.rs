@@ -531,26 +531,14 @@ fn find_record_binder_type(context: &Context) -> Option<RecordTypeSource> {
             {
                 return Some(RecordTypeSource::TypeId(expanded));
             }
-            // Peel Constrained/Forall wrappers — the expected type may be wrapped.
-            let mut peeled = expanded;
-            loop {
-                match context.engine.lookup_type(peeled) {
-                    checking::core::Type::Forall(_, inner)
-                    | checking::core::Type::Constrained(_, inner) => peeled = inner,
-                    _ => break,
-                }
-            }
-            if peeled != expanded {
-                if sources::extract_record_fields(context.engine, peeled).is_some() {
-                    return Some(RecordTypeSource::TypeId(peeled));
-                }
-            }
         }
 
-        // Fallback: walk the called function's type tree to find concrete record
-        // fields through Union/CoerceReactProps constraints.
-        if let Some(fields) = application_record_fields(context) {
-            return Some(RecordTypeSource::Fields(fields));
+        // Walk the called function's type tree to find concrete record fields
+        // through Union/CoerceReactProps constraints (e.g. FFIComponent pattern).
+        if let Some(fn_type) = application_function_type(context) {
+            if let Some(fields) = best_fields_from_type_tree(context, fn_type) {
+                return Some(RecordTypeSource::Fields(fields));
+            }
         }
     }
 
@@ -761,27 +749,32 @@ fn annotation_record_fields(
         .and_then(|sid| checked.nodes.lookup_type(sid))
         .or_else(|| checked.terms.get(&term_id).copied())?;
 
-    // Walk the type tree to find row types, expanding synonym applications
-    // (e.g. `AuthCtx + BaseCtx + ()` → `AuthCtx (BaseCtx ())` → all fields).
+    best_fields_from_type_tree(context, fn_type)
+}
+
+/// Walk a type tree to find the row with the most record fields.
+/// Expands synonym applications and recurses into all type structure
+/// (Application, Constrained, Forall, Function, etc.).
+fn best_fields_from_type_tree(
+    context: &Context,
+    root_type: TypeId,
+) -> Option<Vec<(SmolStr, TypeId)>> {
     let mut best: Option<Vec<(SmolStr, TypeId)>> = None;
-    let mut stack = vec![fn_type];
+    let mut stack = vec![root_type];
     let mut visited = std::collections::HashSet::new();
     while let Some(tid) = stack.pop() {
         if !visited.insert(tid) {
             continue;
         }
-        // Try extracting fields via synonym application expansion.
         let fields = collect_row_fields(context, tid);
         if !fields.is_empty() && best.as_ref().is_none_or(|b| fields.len() > b.len()) {
             best = Some(fields);
         }
-        // Also check for Application(Record, Row).
         if let Some(fields) = sources::extract_record_fields(context.engine, tid) {
             if best.as_ref().is_none_or(|b| fields.len() > b.len()) {
                 best = Some(fields);
             }
         }
-        // Recurse into type structure.
         match context.engine.lookup_type(tid) {
             checking::core::Type::Application(a, b)
             | checking::core::Type::KindApplication(a, b)
@@ -798,12 +791,11 @@ fn annotation_record_fields(
     best
 }
 
-/// Walk the type tree of the called function to find record fields.
-/// Used when inside `ExpressionRecord` as a function argument (e.g. `button { }`),
+/// Look up the type of the called function in an enclosing application.
+/// Used when inside `ExpressionRecord` as a function argument (e.g. `div { }`),
 /// where the expected_type is an open row variable with no concrete fields.
 /// The concrete fields come from the function's declared type through constraints.
-fn application_record_fields(context: &Context) -> Option<Vec<(SmolStr, TypeId)>> {
-    // Find the enclosing ExpressionApplicationChain, cast to Expression for lookup.
+fn application_function_type(context: &Context) -> Option<TypeId> {
     let app_expr = context.token.parent_ancestors().find_map(|node| {
         cst::ExpressionApplicationChain::cast(node.clone())?;
         cst::Expression::cast(node)
@@ -820,7 +812,6 @@ fn application_record_fields(context: &Context) -> Option<Vec<(SmolStr, TypeId)>
     };
     let function_id = (*function)?;
 
-    // Resolve the function to its definition and look up its declared type.
     let func_kind = lowered.info.get_expression_kind(function_id)?;
     let (def_file, term_id) = match func_kind {
         lowering::ExpressionKind::Variable { resolution, .. } => {
@@ -836,51 +827,17 @@ fn application_record_fields(context: &Context) -> Option<Vec<(SmolStr, TypeId)>
         _ => return None,
     };
 
-    // Try getting the function's declared type from its definition module.
-    // Fall back to the inferred type of the function expression in the current file,
-    // which works even when the definition module fails to type-check.
-    let fn_type = context
+    // Try the definition module's declared type, fall back to the current
+    // file's inferred expression type (works when def module fails to check).
+    context
         .engine
         .checked(def_file)
         .ok()
-        .and_then(|def_checked| def_checked.terms.get(&term_id).copied())
+        .and_then(|c| c.terms.get(&term_id).copied())
         .or_else(|| {
-            let current_checked = context.engine.checked(context.current_file).ok()?;
-            current_checked.nodes.lookup_expression(function_id)
-        });
-    let fn_type = fn_type?;
-
-    // Walk the type tree to find row types, same approach as annotation_record_fields.
-    let mut best: Option<Vec<(SmolStr, TypeId)>> = None;
-    let mut stack = vec![fn_type];
-    let mut visited = std::collections::HashSet::new();
-    while let Some(tid) = stack.pop() {
-        if !visited.insert(tid) {
-            continue;
-        }
-        let fields = collect_row_fields(context, tid);
-        if !fields.is_empty() && best.as_ref().is_none_or(|b| fields.len() > b.len()) {
-            best = Some(fields);
-        }
-        if let Some(fields) = sources::extract_record_fields(context.engine, tid) {
-            if best.as_ref().is_none_or(|b| fields.len() > b.len()) {
-                best = Some(fields);
-            }
-        }
-        match context.engine.lookup_type(tid) {
-            checking::core::Type::Application(a, b)
-            | checking::core::Type::KindApplication(a, b)
-            | checking::core::Type::Function(a, b)
-            | checking::core::Type::Constrained(a, b)
-            | checking::core::Type::Kinded(a, b) => {
-                stack.push(a);
-                stack.push(b);
-            }
-            checking::core::Type::Forall(_, inner) => stack.push(inner),
-            _ => {}
-        }
-    }
-    best
+            let c = context.engine.checked(context.current_file).ok()?;
+            c.nodes.lookup_expression(function_id)
+        })
 }
 
 type NameSubstitutions = std::collections::HashMap<checking::core::Name, TypeId>;
