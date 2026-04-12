@@ -190,6 +190,10 @@ fn collect(
             record_fields_cache.insert(cache_key, fields.clone());
         }
 
+        // Hide fields already used in the enclosing record literal/binder.
+        let used_labels = collect_used_record_labels(context);
+        fields.retain(|(label, _)| !used_labels.contains(label));
+
         emit_record_fields_from_list_with_range(context, &fields, range, into)?;
         return Ok(items);
     }
@@ -1165,6 +1169,52 @@ fn find_let_rhs_expr(
         };
         where_expression.as_ref()?.expression
     })
+}
+
+/// Collect labels already present in the enclosing record literal or binder.
+/// Only includes items that end before the cursor token (i.e., fully completed
+/// fields before the current typing position), not the one being typed.
+fn collect_used_record_labels(context: &Context) -> Vec<SmolStr> {
+    let cursor_start = context.token.text_range().start();
+    let root = context.parsed.syntax_node();
+
+    let mut node = root;
+    loop {
+        let child = node.children().find(|c| c.text_range().contains_inclusive(cursor_start));
+        match child {
+            Some(c) => node = c,
+            None => break,
+        }
+    }
+
+    let record_children = node.ancestors().find_map(|ancestor| {
+        if let Some(record) = cst::ExpressionRecord::cast(ancestor.clone()) {
+            return Some(record.children());
+        }
+        if let Some(record) = cst::BinderRecord::cast(ancestor) {
+            return Some(record.children());
+        }
+        None
+    });
+
+    let Some(children) = record_children else { return vec![] };
+    children
+        .filter(|item| {
+            let range = match item {
+                cst::RecordItem::RecordField(f) => f.syntax().text_range(),
+                cst::RecordItem::RecordPun(p) => p.syntax().text_range(),
+            };
+            range.end() <= cursor_start
+        })
+        .filter_map(|item| match item {
+            cst::RecordItem::RecordField(f) => {
+                f.name().and_then(|n| n.text()).map(|t| SmolStr::new(t.text()))
+            }
+            cst::RecordItem::RecordPun(p) => {
+                p.name().and_then(|n| n.text()).map(|t| SmolStr::new(t.text()))
+            }
+        })
+        .collect()
 }
 
 /// Walk a CST record literal, drilling through field names.
