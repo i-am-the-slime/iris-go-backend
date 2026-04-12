@@ -25,3 +25,15 @@ test2 = identity 1
 Action: Import 'identity' from Lib
   file:///tests-integration/fixtures/lsp/042_code_action_auto_import/Main.purs:
     1:0..1:0 -> "import Lib (identity)\n"
+
+
+CodeAction at Position { line: 8, character: 9 }
+
+```
+test3 :: Maybe Int
+--       ?
+```
+
+Action: Import 'Maybe' from Lib
+  file:///tests-integration/fixtures/lsp/042_code_action_auto_import/Main.purs:
+    1:0..1:0 -> "import Lib (Maybe)\n"

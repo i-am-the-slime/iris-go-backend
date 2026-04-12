@@ -10,6 +10,26 @@ bar = foo 1
 --    *
 ```
 
+file:///tests-integration/fixtures/lsp/043_rename/Lib.purs:
+  4:9..4:12 -> "renamed"
 file:///tests-integration/fixtures/lsp/043_rename/Main.purs:
   2:0..2:3 -> "renamed"
   4:6..4:9 -> "renamed"
+  7:6..7:9 -> "renamed"
+  7:11..7:14 -> "renamed"
+
+
+Rename at Position { line: 7, character: 6 }
+
+```
+baz = foo (foo 2)
+--    *
+```
+
+file:///tests-integration/fixtures/lsp/043_rename/Lib.purs:
+  4:9..4:12 -> "renamed"
+file:///tests-integration/fixtures/lsp/043_rename/Main.purs:
+  2:0..2:3 -> "renamed"
+  4:6..4:9 -> "renamed"
+  7:6..7:9 -> "renamed"
+  7:11..7:14 -> "renamed"
