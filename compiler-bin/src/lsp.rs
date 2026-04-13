@@ -226,7 +226,10 @@ fn initialized_spago(state: &mut State) -> Result<(), LspError> {
 
     tracing::info!("Using 'spago.lock'");
 
-    ensure_spago_packages(root);
+    let spago_action = check_spago_status(root);
+    if let Some(action) = spago_action {
+        state.client.emit(event::SpagoAction(action, root.clone()))?;
+    }
 
     let files = spago::source_files(root).map_err(LspError::SpagoLock)?;
     load_files(state, &files)?;
@@ -234,28 +237,30 @@ fn initialized_spago(state: &mut State) -> Result<(), LspError> {
     Ok(())
 }
 
-fn ensure_spago_packages(root: &std::path::Path) {
+fn check_spago_status(root: &std::path::Path) -> Option<SpagoActionKind> {
     let spago_lock = root.join("spago.lock");
     let spago_packages = root.join(".spago").join("p");
 
-    let needs_install = !spago_packages.exists();
-    let needs_lock = is_lockfile_stale(root, &spago_lock);
-
-    if needs_lock {
-        tracing::info!("spago.lock is stale, running 'spago lock'");
-        run_spago(root, "lock");
+    if is_lockfile_stale(root, &spago_lock) {
+        return Some(SpagoActionKind::LockAndInstall);
     }
 
-    if needs_install || needs_lock {
-        tracing::info!("Running 'spago install'");
-        run_spago(root, "install");
+    if !spago_packages.exists() {
+        return Some(SpagoActionKind::Install);
     }
+
+    None
+}
+
+#[derive(Debug, Clone)]
+pub enum SpagoActionKind {
+    Install,
+    LockAndInstall,
 }
 
 fn is_lockfile_stale(root: &std::path::Path, spago_lock: &std::path::Path) -> bool {
     let lock_modified = spago_lock.metadata().and_then(|m| m.modified()).ok();
 
-    // Check root spago.yaml and any workspace package spago.yaml
     let yamls = std::iter::once(root.join("spago.yaml")).chain(
         fs::read_dir(root)
             .into_iter()
@@ -279,19 +284,22 @@ fn is_lockfile_stale(root: &std::path::Path, spago_lock: &std::path::Path) -> bo
     false
 }
 
-fn run_spago(root: &std::path::Path, command: &str) {
+pub fn run_spago(root: &std::path::Path, command: &str) -> bool {
     let result = process::Command::new("spago").arg(command).current_dir(root).output();
 
     match result {
         Ok(output) if output.status.success() => {
             tracing::info!("spago {command} succeeded");
+            true
         }
         Ok(output) => {
             let stderr = String::from_utf8_lossy(&output.stderr);
             tracing::warn!("spago {command} failed: {stderr}");
+            false
         }
         Err(e) => {
             tracing::warn!("Failed to run spago {command}: {e}");
+            false
         }
     }
 }
@@ -543,7 +551,8 @@ pub async fn start(config: Arc<cli::Config>) {
             .notification_ext::<notification::DidCloseTextDocument>(|_, _| Ok(()))
             .notification_ext::<notification::DidChangeConfiguration>(|_, _| Ok(()))
             .notification_ext::<notification::DidChangeTextDocument>(did_change)
-            .event_ext::<event::CollectDiagnostics>(event::collect_diagnostics);
+            .event_ext::<event::CollectDiagnostics>(event::collect_diagnostics)
+            .event_ext::<event::SpagoAction>(event::spago_action);
 
         ServiceBuilder::new()
             .layer(LifecycleLayer::default())

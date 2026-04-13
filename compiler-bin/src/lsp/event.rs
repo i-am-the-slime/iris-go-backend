@@ -1,3 +1,5 @@
+use std::path::PathBuf;
+
 use analyzer::{common, locate};
 use async_lsp::LanguageClient;
 use async_lsp::lsp_types::*;
@@ -6,9 +8,10 @@ use diagnostics::{DiagnosticsContext, ToDiagnostics};
 use files::FileId;
 use itertools::Itertools;
 use rowan::TextSize;
+use tokio::task;
 
 use crate::lsp::error::LspError;
-use crate::lsp::{State, StateSnapshot};
+use crate::lsp::{SpagoActionKind, State, StateSnapshot, run_spago};
 
 pub fn emit_collect_diagnostics(state: &mut State, uri: Url) -> Result<(), LspError> {
     let files = state.files.read();
@@ -120,6 +123,63 @@ fn collect_diagnostics_core(
         diagnostics,
         version: None,
     })?;
+
+    Ok(())
+}
+
+pub struct SpagoAction(pub SpagoActionKind, pub PathBuf);
+
+pub fn spago_action(state: &mut State, action: SpagoAction) -> Result<(), LspError> {
+    let SpagoAction(kind, root) = action;
+    let mut client = state.client.clone();
+
+    let message = match &kind {
+        SpagoActionKind::Install => "Dependencies not fetched. Run spago install?".to_string(),
+        SpagoActionKind::LockAndInstall => {
+            "spago.yaml has changed since last lock. Run spago lock and install?".to_string()
+        }
+    };
+
+    task::spawn(async move {
+        let response = client
+            .show_message_request(ShowMessageRequestParams {
+                typ: MessageType::INFO,
+                message,
+                actions: Some(vec![MessageActionItem {
+                    title: "Yes".to_string(),
+                    properties: Default::default(),
+                }]),
+            })
+            .await;
+
+        let accepted = matches!(response, Ok(Some(ref item)) if item.title == "Yes");
+        if !accepted {
+            return;
+        }
+
+        task::spawn_blocking(move || {
+            let ok = match kind {
+                SpagoActionKind::Install => run_spago(&root, "install"),
+                SpagoActionKind::LockAndInstall => {
+                    run_spago(&root, "lock") && run_spago(&root, "install")
+                }
+            };
+
+            if ok {
+                let _ = client.show_message(ShowMessageParams {
+                    typ: MessageType::INFO,
+                    message: "spago install complete. Please reload the window to pick up new dependencies.".to_string(),
+                });
+            } else {
+                let _ = client.show_message(ShowMessageParams {
+                    typ: MessageType::ERROR,
+                    message: "spago command failed. Check the output for details.".to_string(),
+                });
+            }
+        })
+        .await
+        .ok();
+    });
 
     Ok(())
 }
