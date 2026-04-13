@@ -551,3 +551,5 @@ fn run_test(folder: &str, file: &str) {
 #[rustfmt::skip] #[test] fn test_262_given_stuck_match_collapse_main() { run_test("262_given_stuck_match_collapse", "Main"); }
 
 #[rustfmt::skip] #[test] fn test_263_let_binding_ambiguous_constraint_main() { run_test("263_let_binding_ambiguous_constraint", "Main"); }
+
+#[rustfmt::skip] #[test] fn test_264_ffi_component_synonym_main() { run_test("264_ffi_component_synonym", "Main"); }

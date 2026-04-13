@@ -1,0 +1,38 @@
+---
+source: tests-integration/tests/checking/generated.rs
+assertion_line: 28
+expression: report
+---
+Terms
+div :: Component BaseAttrs
+test1 :: JSX
+test2 :: JSX
+
+Types
+JSX :: Type
+IsJSX :: Type -> Constraint
+CoerceProps :: Type -> Type -> Constraint
+BaseAttrs :: Row Type
+Component :: Row Type -> Type
+
+Synonyms
+type BaseAttrs = ( className :: String )
+type Component props = forall (given :: Row Type) (target :: ?5) (kids :: Type).
+  IsJSX (kids :: Type) =>
+  CoerceProps {| (given :: Row Type) } {| (props :: Row Type) } =>
+  {| (given :: Row Type) } -> (kids :: Type) -> JSX
+
+Classes
+class forall (a :: Type). IsJSX (a :: Type)
+class forall (props :: Type) (targetProps :: Type). CoerceProps (props :: Type) (targetProps :: Type)
+
+Instances
+instance IsJSX JSX
+instance IsJSX String
+instance IsJSX (Array JSX)
+instance forall (t7 :: Row Type) (t9 :: Row Type) (t8 :: Row Type).
+  Union @Type (t7 :: Row Type) (t9 :: Row Type) (t8 :: Row Type) =>
+  CoerceProps {| (t7 :: Row Type) } {| (t8 :: Row Type) }
+
+Roles
+JSX = []

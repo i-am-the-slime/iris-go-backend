@@ -14,7 +14,7 @@ use itertools::Itertools;
 
 use crate::ExternalQueries;
 use crate::context::CheckContext;
-use crate::core::{KindOrType, Type, TypeId, normalise, toolkit, unification};
+use crate::core::{KindOrType, Type, TypeId, normalise, toolkit, unification, zonk};
 use crate::error::ErrorKind;
 use crate::implication::ImplicationId;
 use crate::state::CheckState;
@@ -147,8 +147,6 @@ where
     let mut residual = vec![];
 
     loop {
-        let mut made_progress = false;
-
         'work: while let Some(wanted) = work_queue.pop_front() {
             let Some(application) = constraint_application(state, context, wanted)? else {
                 residual.push(wanted);
@@ -158,9 +156,7 @@ where
             match match_given_instances(state, context, &application, &given)? {
                 Some(MatchInstance::Match { equalities, .. }) => {
                     for (t1, t2) in equalities {
-                        if unification::unify(state, context, t1, t2)? {
-                            made_progress = true;
-                        }
+                        unification::unify(state, context, t1, t2)?;
                     }
                     continue 'work;
                 }
@@ -170,9 +166,7 @@ where
             match match_compiler_instances(state, context, &application, &given)? {
                 Some(MatchInstance::Match { constraints, equalities }) => {
                     for (t1, t2) in equalities {
-                        if unification::unify(state, context, t1, t2)? {
-                            made_progress = true;
-                        }
+                        unification::unify(state, context, t1, t2)?;
                     }
                     let constraints =
                         substitute_constraints(state, context, &substitution, constraints)?;
@@ -193,9 +187,7 @@ where
                     match match_instance(state, context, &application, &instance)? {
                         MatchInstance::Match { constraints, equalities } => {
                             for (t1, t2) in equalities {
-                                if unification::unify(state, context, t1, t2)? {
-                                    made_progress = true;
-                                }
+                                unification::unify(state, context, t1, t2)?;
                             }
                             let constraints =
                                 substitute_constraints(state, context, &substitution, constraints)?;
@@ -211,9 +203,23 @@ where
             residual.push(wanted);
         }
 
-        if made_progress && !residual.is_empty() {
-            work_queue.extend(residual.drain(..));
-        } else {
+        // Re-queue only constraints where a unification variable was solved.
+        // Zonking replaces solved unification variables throughout the type,
+        // so a changed TypeId means progress was made on that constraint.
+        let mut any_woken = false;
+        let mut still_stuck = vec![];
+        for constraint in residual.drain(..) {
+            let zonked = zonk::zonk(state, context, constraint)?;
+            if zonked != constraint {
+                work_queue.push_back(zonked);
+                any_woken = true;
+            } else {
+                still_stuck.push(constraint);
+            }
+        }
+        residual = still_stuck;
+
+        if !any_woken {
             break;
         }
     }
