@@ -226,15 +226,48 @@ fn initialized_spago(state: &mut State) -> Result<(), LspError> {
 
     tracing::info!("Using 'spago.lock'");
 
-    let spago_action = check_spago_status(root);
-    if let Some(action) = spago_action {
-        state.client.emit(event::SpagoAction(action, root.clone()))?;
+    let lockfiles = find_spago_lockfiles(root);
+    tracing::info!("Found {} spago.lock files", lockfiles.len());
+
+    for lockfile_dir in &lockfiles {
+        let spago_action = check_spago_status(lockfile_dir);
+        if let Some(action) = spago_action {
+            state.client.emit(event::SpagoAction(action, lockfile_dir.clone()))?;
+        }
     }
 
-    let files = spago::source_files(root).map_err(LspError::SpagoLock)?;
-    load_files(state, &files)?;
+    let mut all_files = vec![];
+    for lockfile_dir in &lockfiles {
+        match spago::source_files(lockfile_dir) {
+            Ok(files) => all_files.extend(files),
+            Err(e) => tracing::warn!("Failed to read {}: {e}", lockfile_dir.display()),
+        }
+    }
+
+    all_files.sort();
+    all_files.dedup();
+    load_files(state, &all_files)?;
 
     Ok(())
+}
+
+fn find_spago_lockfiles(root: &std::path::Path) -> Vec<PathBuf> {
+    let mut result = vec![];
+
+    if root.join("spago.lock").exists() {
+        result.push(root.to_path_buf());
+    }
+
+    if let Ok(entries) = fs::read_dir(root) {
+        for entry in entries.flatten() {
+            let path = entry.path();
+            if path.is_dir() && path.join("spago.lock").exists() {
+                result.push(path);
+            }
+        }
+    }
+
+    result
 }
 
 fn check_spago_status(root: &std::path::Path) -> Option<SpagoActionKind> {
@@ -242,7 +275,7 @@ fn check_spago_status(root: &std::path::Path) -> Option<SpagoActionKind> {
     let spago_packages = root.join(".spago").join("p");
 
     if is_lockfile_stale(root, &spago_lock) {
-        return Some(SpagoActionKind::LockAndInstall);
+        return Some(SpagoActionKind::Install);
     }
 
     if !spago_packages.exists() {
@@ -255,7 +288,6 @@ fn check_spago_status(root: &std::path::Path) -> Option<SpagoActionKind> {
 #[derive(Debug, Clone)]
 pub enum SpagoActionKind {
     Install,
-    LockAndInstall,
 }
 
 fn is_lockfile_stale(root: &std::path::Path, spago_lock: &std::path::Path) -> bool {

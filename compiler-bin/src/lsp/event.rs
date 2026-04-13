@@ -134,9 +134,8 @@ pub fn spago_action(state: &mut State, action: SpagoAction) -> Result<(), LspErr
     let mut client = state.client.clone();
 
     let message = match &kind {
-        SpagoActionKind::Install => "Dependencies not fetched. Run spago install?".to_string(),
-        SpagoActionKind::LockAndInstall => {
-            "spago.yaml has changed since last lock. Run spago lock and install?".to_string()
+        SpagoActionKind::Install => {
+            "Dependencies may be missing or out of date. Run spago install?".to_string()
         }
     };
 
@@ -160,9 +159,6 @@ pub fn spago_action(state: &mut State, action: SpagoAction) -> Result<(), LspErr
         task::spawn_blocking(move || {
             let ok = match kind {
                 SpagoActionKind::Install => run_spago(&root, "install"),
-                SpagoActionKind::LockAndInstall => {
-                    run_spago(&root, "lock") && run_spago(&root, "install")
-                }
             };
 
             if ok {
