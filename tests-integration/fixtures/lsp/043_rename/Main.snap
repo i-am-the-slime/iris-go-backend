@@ -11,6 +11,7 @@ bar = foo 1
 ```
 
 file:///tests-integration/fixtures/lsp/043_rename/Lib.purs:
+  2:13..2:16 -> "renamed"
   4:9..4:12 -> "renamed"
 file:///tests-integration/fixtures/lsp/043_rename/Main.purs:
   2:0..2:3 -> "renamed"
@@ -27,6 +28,7 @@ baz = foo (foo 2)
 ```
 
 file:///tests-integration/fixtures/lsp/043_rename/Lib.purs:
+  2:13..2:16 -> "renamed"
   4:9..4:12 -> "renamed"
 file:///tests-integration/fixtures/lsp/043_rename/Main.purs:
   2:0..2:3 -> "renamed"

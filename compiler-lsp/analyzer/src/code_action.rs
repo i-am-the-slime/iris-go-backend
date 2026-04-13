@@ -32,6 +32,7 @@ pub fn implementation(
 
     let insert_range = insert_import_range(&parsed, &content);
 
+    let prim_id = engine.prim_id();
     let mut actions = vec![];
 
     for diagnostic in diagnostics {
@@ -52,6 +53,7 @@ pub fn implementation(
             engine,
             files,
             current_file,
+            prim_id,
             &import_ctx,
             insert_range,
             &uri,
@@ -92,6 +94,7 @@ fn collect_imports(
     engine: &QueryEngine,
     files: &Files,
     current_file: files::FileId,
+    prim_id: files::FileId,
     import_ctx: &ImportContext,
     insert_range: Option<Range>,
     uri: &Url,
@@ -100,7 +103,7 @@ fn collect_imports(
     actions: &mut Vec<CodeActionOrCommand>,
 ) -> Result<(), AnalyzerError> {
     for import_id in files.iter_id() {
-        if import_id == current_file {
+        if import_id == current_file || import_id == prim_id {
             continue;
         }
 
