@@ -235,25 +235,63 @@ fn initialized_spago(state: &mut State) -> Result<(), LspError> {
 }
 
 fn ensure_spago_packages(root: &std::path::Path) {
+    let spago_lock = root.join("spago.lock");
     let spago_packages = root.join(".spago").join("p");
-    if spago_packages.exists() {
-        return;
+
+    let needs_install = !spago_packages.exists();
+    let needs_lock = is_lockfile_stale(root, &spago_lock);
+
+    if needs_lock {
+        tracing::info!("spago.lock is stale, running 'spago lock'");
+        run_spago(root, "lock");
     }
 
-    tracing::info!("Dependencies not fetched, running 'spago install'");
+    if needs_install || needs_lock {
+        tracing::info!("Running 'spago install'");
+        run_spago(root, "install");
+    }
+}
 
-    let result = process::Command::new("spago").arg("install").current_dir(root).output();
+fn is_lockfile_stale(root: &std::path::Path, spago_lock: &std::path::Path) -> bool {
+    let lock_modified = spago_lock.metadata().and_then(|m| m.modified()).ok();
+
+    // Check root spago.yaml and any workspace package spago.yaml
+    let yamls = std::iter::once(root.join("spago.yaml")).chain(
+        fs::read_dir(root)
+            .into_iter()
+            .flatten()
+            .filter_map(|e| e.ok())
+            .filter(|e| e.path().is_dir())
+            .map(|e| e.path().join("spago.yaml"))
+            .filter(|p| p.exists()),
+    );
+
+    for yaml in yamls {
+        let yaml_modified = yaml.metadata().and_then(|m| m.modified()).ok();
+        if let Some((yaml_t, lock_t)) = yaml_modified.zip(lock_modified) {
+            if yaml_t > lock_t {
+                tracing::info!("{} is newer than spago.lock", yaml.display());
+                return true;
+            }
+        }
+    }
+
+    false
+}
+
+fn run_spago(root: &std::path::Path, command: &str) {
+    let result = process::Command::new("spago").arg(command).current_dir(root).output();
 
     match result {
         Ok(output) if output.status.success() => {
-            tracing::info!("spago install succeeded");
+            tracing::info!("spago {command} succeeded");
         }
         Ok(output) => {
             let stderr = String::from_utf8_lossy(&output.stderr);
-            tracing::warn!("spago install failed: {stderr}");
+            tracing::warn!("spago {command} failed: {stderr}");
         }
         Err(e) => {
-            tracing::warn!("Failed to run spago install: {e}");
+            tracing::warn!("Failed to run spago {command}: {e}");
         }
     }
 }
