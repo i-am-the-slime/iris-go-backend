@@ -85,18 +85,29 @@ impl ResolvedModule {
         }
     }
 
-    fn lookup_unqualified<ItemId, LookupFn>(&self, lookup: LookupFn) -> Option<(FileId, ItemId)>
+    fn lookup_unqualified<ItemId: Copy, LookupFn>(
+        &self,
+        lookup: LookupFn,
+    ) -> Option<(FileId, ItemId)>
     where
         LookupFn: Fn(&ResolvedImport) -> Option<(FileId, ItemId, ImportKind)>,
     {
-        // Collect candidates first then match the first non-Hidden.
-        let (file_id, item_id, _) = self
-            .unqualified
-            .values()
-            .flatten()
-            .filter_map(lookup)
-            .find(|(_, _, kind)| !matches!(kind, ImportKind::Hidden))?;
-        Some((file_id, item_id))
+        // Prefer explicit imports over implicit (wildcard) ones.
+        let mut fallback = None;
+        for import in self.unqualified.values().flatten() {
+            if let Some((file_id, item_id, kind)) = lookup(import) {
+                match kind {
+                    ImportKind::Hidden => {}
+                    ImportKind::Explicit => return Some((file_id, item_id)),
+                    ImportKind::Implicit => {
+                        if fallback.is_none() {
+                            fallback = Some((file_id, item_id));
+                        }
+                    }
+                }
+            }
+        }
+        fallback
     }
 
     fn lookup_prim_import<ItemId, LookupFn, DefaultFn>(
