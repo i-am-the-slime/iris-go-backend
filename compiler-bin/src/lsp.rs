@@ -226,10 +226,36 @@ fn initialized_spago(state: &mut State) -> Result<(), LspError> {
 
     tracing::info!("Using 'spago.lock'");
 
+    ensure_spago_packages(root);
+
     let files = spago::source_files(root).map_err(LspError::SpagoLock)?;
     load_files(state, &files)?;
 
     Ok(())
+}
+
+fn ensure_spago_packages(root: &std::path::Path) {
+    let spago_packages = root.join(".spago").join("p");
+    if spago_packages.exists() {
+        return;
+    }
+
+    tracing::info!("Dependencies not fetched, running 'spago install'");
+
+    let result = process::Command::new("spago").arg("install").current_dir(root).output();
+
+    match result {
+        Ok(output) if output.status.success() => {
+            tracing::info!("spago install succeeded");
+        }
+        Ok(output) => {
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            tracing::warn!("spago install failed: {stderr}");
+        }
+        Err(e) => {
+            tracing::warn!("Failed to run spago install: {e}");
+        }
+    }
 }
 
 fn load_files(state: &mut State, files: &[PathBuf]) -> Result<(), LspError> {
