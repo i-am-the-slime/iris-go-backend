@@ -75,11 +75,18 @@ where
             buffer.finish()
         };
 
+        // When adding e.g. Maybe(..), filter out a bare Maybe that it supersedes
+        let superseded_prefix =
+            import_item_name.trim().strip_suffix("(..)").map(|prefix| prefix.trim().to_string());
+
         let import_list = import_list
             .children()
             .map(|cst| {
                 let cst = cst.syntax();
                 cst.text().to_smolstr()
+            })
+            .filter(|existing| {
+                if let Some(prefix) = &superseded_prefix { existing.trim() != prefix } else { true }
             })
             .chain(iter::once(import_item_name))
             .join(",");
