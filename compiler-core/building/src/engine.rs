@@ -614,9 +614,15 @@ impl QueryEngine {
     }
 
     pub fn module_file(&self, name: &str) -> Option<FileId> {
+        // Intern unconditionally so the dependency on `QueryKey::Module(id)` is
+        // registered even when the module is currently absent. Returning `None`
+        // early for an un-interned name would skip `get_input`, leaving the
+        // caller with no edge to invalidate — so a later `set_module_file` for a
+        // module that appears mid-session (a new file, a restored rename) would
+        // not re-resolve importers that had cached the "module not found" result.
         let id = {
-            let storage = self.storage.read();
-            storage.interned.module.lookup(name)?
+            let mut storage = self.storage.write();
+            storage.interned.module.intern(name)
         };
         self.get_input(QueryKey::Module(id), |storage| storage.input.module.get(&id))
     }
