@@ -224,7 +224,7 @@ fn initialized_manual(state: &mut State, command: &str) -> Result<(), LspError> 
     });
 
     files.extend(files_from_glob);
-    load_files(state, &files)?;
+    load_files(state, &files, false)?;
 
     Ok(())
 }
@@ -244,14 +244,19 @@ fn initialized_spago(state: &mut State) -> Result<(), LspError> {
         }
     }
 
-    load_spago_sources(state, &lockfiles)
+    load_spago_sources(state, &lockfiles, false)
 }
 
 /// Read every lockfile's source globs and load the resulting files into the
 /// engine, then record the lockfiles' newest mtime so [`reload_sources_if_stale`]
 /// can tell when the set has gone out of date. Idempotent: re-running it picks
-/// up packages that have since appeared on disk.
-fn load_spago_sources(state: &mut State, lockfiles: &[PathBuf]) -> Result<(), LspError> {
+/// up packages that have since appeared on disk. Pass `additive` to skip files
+/// already loaded (a reload), leaving open editor buffers untouched.
+fn load_spago_sources(
+    state: &mut State,
+    lockfiles: &[PathBuf],
+    additive: bool,
+) -> Result<(), LspError> {
     let mut all_files = vec![];
     for lockfile_dir in lockfiles {
         match spago::source_files(lockfile_dir) {
@@ -262,7 +267,7 @@ fn load_spago_sources(state: &mut State, lockfiles: &[PathBuf]) -> Result<(), Ls
 
     all_files.sort();
     all_files.dedup();
-    load_files(state, &all_files)?;
+    load_files(state, &all_files, additive)?;
 
     state.loaded_lock_mtime = max_lockfile_mtime(lockfiles);
 
@@ -278,14 +283,17 @@ fn max_lockfile_mtime(lockfiles: &[PathBuf]) -> Option<SystemTime> {
         .max()
 }
 
-/// Reload the dependency source set when a `spago.lock` has changed since it was
-/// last loaded. Without this the set is frozen at `initialized` for the life of
-/// the session, so an install/build that rewrites the lockfile (or a session
-/// that started while the lockfile was mid-write) leaves modules permanently
-/// unresolvable — there is no "reload the window" in a headless client. Checked
-/// on `did_open`, which clients send before reading diagnostics, so resolution
-/// heals on the next request. No-op under `--source-command`, where the caller
-/// owns the source set.
+/// Reload the source set when a `spago.lock` has changed since it was last
+/// loaded. Without this the set is frozen at `initialized` for the life of the
+/// session, so an install/build that rewrites the lockfile (or a session that
+/// started while the lockfile was mid-write) leaves modules permanently
+/// unresolvable — there is no "reload the window" in a headless client.
+///
+/// Checked on `did_open` and `did_save` — between them every client (editor or
+/// headless MCP) hits one before reading diagnostics, even when it keeps the
+/// document open across requests, so resolution heals on the next request. The
+/// reload is additive (see [`load_files`]), so it never clobbers an open
+/// buffer. No-op under `--source-command`, where the caller owns the set.
 fn reload_sources_if_stale(state: &mut State) -> Result<(), LspError> {
     if state.config.source_command.is_some() {
         return Ok(());
@@ -305,8 +313,8 @@ fn reload_sources_if_stale(state: &mut State) -> Result<(), LspError> {
     };
 
     if stale {
-        tracing::info!("spago.lock changed since last load; reloading dependency sources");
-        load_spago_sources(state, &lockfiles)?;
+        tracing::info!("spago.lock changed since last load; reloading sources");
+        load_spago_sources(state, &lockfiles, true)?;
     }
 
     Ok(())
@@ -397,9 +405,14 @@ pub fn run_spago(root: &std::path::Path, command: &str) -> bool {
     }
 }
 
-fn load_files(state: &mut State, files: &[PathBuf]) -> Result<(), LspError> {
-    tracing::info!("Loading {} files.", files.len());
+/// Load the given files into the engine. When `additive`, files the engine
+/// already knows are skipped rather than re-read — so a reload can add modules
+/// that have appeared without overwriting content the editor is holding for an
+/// open (possibly unsaved) document.
+fn load_files(state: &mut State, files: &[PathBuf], additive: bool) -> Result<(), LspError> {
+    tracing::info!("Loading {} files (additive: {additive}).", files.len());
 
+    let mut loaded = 0;
     for file in files {
         let url = url::Url::from_file_path(file).map_err(|_| {
             let file = PathBuf::clone(file);
@@ -408,11 +421,16 @@ fn load_files(state: &mut State, files: &[PathBuf]) -> Result<(), LspError> {
 
         let uri = url.to_string();
 
+        if additive && state.files.read().id(uri.as_str()).is_some() {
+            continue;
+        }
+
         let text = fs::read_to_string(file)?;
-        on_change(state, &uri, &text)?
+        on_change(state, &uri, &text)?;
+        loaded += 1;
     }
 
-    tracing::info!("Loaded {} files.", files.len());
+    tracing::info!("Loaded {loaded} files.");
 
     Ok(())
 }
@@ -551,6 +569,7 @@ fn did_change(state: &mut State, p: DidChangeTextDocumentParams) -> Result<(), L
 
 fn did_save(state: &mut State, p: DidSaveTextDocumentParams) -> Result<(), LspError> {
     state.invalidate_suggestions_cache();
+    reload_sources_if_stale(state)?;
     event::emit_collect_diagnostics(state, p.text_document.uri)?;
     Ok(())
 }
