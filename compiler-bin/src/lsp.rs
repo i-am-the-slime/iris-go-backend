@@ -6,6 +6,7 @@ use std::borrow::BorrowMut;
 use std::ops::{ControlFlow, Deref};
 use std::path::PathBuf;
 use std::sync::Arc;
+use std::time::SystemTime;
 use std::{env, fs, mem, process};
 
 use analyzer::completion::SuggestionsCache;
@@ -42,6 +43,12 @@ pub struct State {
     pub record_fields_cache: Arc<RwLock<analyzer::completion::RecordFieldsCache>>,
 
     pub root: Option<PathBuf>,
+
+    /// Newest `spago.lock` mtime observed when the dependency source set was
+    /// last loaded. Used to detect that dependencies changed on disk (a
+    /// `spago install`/`build`, a branch switch) so the set can be reloaded
+    /// mid-session — see [`reload_sources_if_stale`].
+    pub loaded_lock_mtime: Option<SystemTime>,
 }
 
 impl State {
@@ -72,6 +79,7 @@ impl State {
             suggestions_cache,
             record_fields_cache,
             root,
+            loaded_lock_mtime: None,
         }
     }
 
@@ -222,11 +230,11 @@ fn initialized_manual(state: &mut State, command: &str) -> Result<(), LspError> 
 }
 
 fn initialized_spago(state: &mut State) -> Result<(), LspError> {
-    let root = state.root.as_ref().ok_or(LspError::MissingRoot)?;
+    let root = state.root.as_ref().ok_or(LspError::MissingRoot)?.clone();
 
     tracing::info!("Using 'spago.lock'");
 
-    let lockfiles = find_spago_lockfiles(root);
+    let lockfiles = find_spago_lockfiles(&root);
     tracing::info!("Found {} spago.lock files", lockfiles.len());
 
     for lockfile_dir in &lockfiles {
@@ -236,8 +244,16 @@ fn initialized_spago(state: &mut State) -> Result<(), LspError> {
         }
     }
 
+    load_spago_sources(state, &lockfiles)
+}
+
+/// Read every lockfile's source globs and load the resulting files into the
+/// engine, then record the lockfiles' newest mtime so [`reload_sources_if_stale`]
+/// can tell when the set has gone out of date. Idempotent: re-running it picks
+/// up packages that have since appeared on disk.
+fn load_spago_sources(state: &mut State, lockfiles: &[PathBuf]) -> Result<(), LspError> {
     let mut all_files = vec![];
-    for lockfile_dir in &lockfiles {
+    for lockfile_dir in lockfiles {
         match spago::source_files(lockfile_dir) {
             Ok(files) => all_files.extend(files),
             Err(e) => tracing::warn!("Failed to read {}: {e}", lockfile_dir.display()),
@@ -247,6 +263,51 @@ fn initialized_spago(state: &mut State) -> Result<(), LspError> {
     all_files.sort();
     all_files.dedup();
     load_files(state, &all_files)?;
+
+    state.loaded_lock_mtime = max_lockfile_mtime(lockfiles);
+
+    Ok(())
+}
+
+/// Newest modification time across the given lockfile directories' `spago.lock`
+/// files, or `None` when none can be stat'd.
+fn max_lockfile_mtime(lockfiles: &[PathBuf]) -> Option<SystemTime> {
+    lockfiles
+        .iter()
+        .filter_map(|dir| dir.join("spago.lock").metadata().and_then(|m| m.modified()).ok())
+        .max()
+}
+
+/// Reload the dependency source set when a `spago.lock` has changed since it was
+/// last loaded. Without this the set is frozen at `initialized` for the life of
+/// the session, so an install/build that rewrites the lockfile (or a session
+/// that started while the lockfile was mid-write) leaves modules permanently
+/// unresolvable — there is no "reload the window" in a headless client. Checked
+/// on `did_open`, which clients send before reading diagnostics, so resolution
+/// heals on the next request. No-op under `--source-command`, where the caller
+/// owns the source set.
+fn reload_sources_if_stale(state: &mut State) -> Result<(), LspError> {
+    if state.config.source_command.is_some() {
+        return Ok(());
+    }
+
+    let Some(root) = state.root.clone() else {
+        return Ok(());
+    };
+
+    let lockfiles = find_spago_lockfiles(&root);
+    let current = max_lockfile_mtime(&lockfiles);
+
+    let stale = match (current, state.loaded_lock_mtime) {
+        (Some(now), Some(loaded)) => now > loaded,
+        (Some(_), None) => true,
+        _ => false,
+    };
+
+    if stale {
+        tracing::info!("spago.lock changed since last load; reloading dependency sources");
+        load_spago_sources(state, &lockfiles)?;
+    }
 
     Ok(())
 }
@@ -469,6 +530,7 @@ fn workspace_symbols(
 }
 
 fn did_open(state: &mut State, p: DidOpenTextDocumentParams) -> Result<(), LspError> {
+    reload_sources_if_stale(state)?;
     event::emit_collect_diagnostics(state, p.text_document.uri)?;
     Ok(())
 }

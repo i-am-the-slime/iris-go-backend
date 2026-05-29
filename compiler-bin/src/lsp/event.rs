@@ -164,7 +164,8 @@ pub fn spago_action(state: &mut State, action: SpagoAction) -> Result<(), LspErr
             if ok {
                 let _ = client.show_message(ShowMessageParams {
                     typ: MessageType::INFO,
-                    message: "spago install complete. Please reload the window to pick up new dependencies.".to_string(),
+                    message: "spago install complete. Dependencies refresh automatically."
+                        .to_string(),
                 });
             } else {
                 let _ = client.show_message(ShowMessageParams {
