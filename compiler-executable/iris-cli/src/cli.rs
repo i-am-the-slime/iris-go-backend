@@ -55,6 +55,36 @@ pub enum Command {
     /// Manage this installation of Iris.
     #[usage(name = "self")]
     Installation(InstallationOptions),
+    /// Write the checked type of every expression and binder as a span-keyed oracle for purs-backend-go.
+    #[usage(name = "dump-types")]
+    DumpTypes(DumpTypesOptions),
+}
+
+#[derive(Debug, Args)]
+#[usage(args_override_self = false)]
+pub struct DumpTypesOptions {
+    /// Workspace package to check.
+    #[usage(short, long, value_name = "NAME")]
+    package: Option<String>,
+
+    /// Directory for the JavaScript the check also builds. Defaults to a temporary directory.
+    #[usage(short, long, value_name = "DIR")]
+    output: Option<PathBuf>,
+
+    /// File to write the type oracle to.
+    #[usage(value_name = "FILE")]
+    destination: PathBuf,
+}
+
+impl DumpTypesOptions {
+    pub fn into_config(self) -> iris_dump_types::DumpConfig {
+        iris_dump_types::DumpConfig {
+            package: self.package,
+            build_output: self.output,
+            destination: self.destination,
+            version: crate::VERSION.to_string(),
+        }
+    }
 }
 
 #[derive(Debug, Args)]
