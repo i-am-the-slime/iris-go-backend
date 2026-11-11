@@ -1,0 +1,11 @@
+---
+source: tests-integration/src/fixtures.rs
+---
+Warning! · [MissingPatterns] · Main.purs:30:18
+  •
+  │
+  • Pattern match is not exhaustive. Missing: Just _
+  │
+  │   refutableGuard = case _ of
+  │                    ╰────────
+  •

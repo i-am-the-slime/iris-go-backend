@@ -1,0 +1,51 @@
+---
+source: tests-integration/src/fixtures.rs
+---
+data Maybe :: Prim.Type -> Prim.Type
+data Maybe @a
+  | Just :: a -> Main.Maybe a
+  | Nothing :: Main.Maybe a
+
+newtype Wrapped :: Prim.Type
+newtype Wrapped
+  | Wrapped :: { inner :: Prim.Int } -> Main.Wrapped
+
+data Pair :: Prim.Type -> Prim.Type -> Prim.Type
+data Pair @a @b
+  | Pair :: a -> b -> Main.Pair a b
+
+wrap :: Prim.Int -> Main.Wrapped
+wrap = \inner -> Wrapped { inner }
+
+pair :: forall a. a -> Main.Pair a a
+pair = \a -> Pair a a
+
+newtypeGuard :: Main.Maybe Prim.Int -> Prim.Int
+newtypeGuard = \v66 ->
+  case v66 of
+    (Just n)
+      | (Wrapped { inner }) <- wrap n -> inner
+    Nothing -> 0
+
+singleConstructorGuard :: Main.Maybe Prim.Int -> Prim.Int
+singleConstructorGuard = \v101 ->
+  case v101 of
+    (Just n)
+      | (Pair a _) <- pair n -> a
+    Nothing -> 0
+
+recordGuard :: Main.Maybe Prim.Int -> Prim.Int
+recordGuard = \v136 ->
+  case v136 of
+    (Just n)
+      | { value } <- { value: n } -> value
+    Nothing -> 0
+
+refutableGuard :: Prim.Partial => Main.Maybe Prim.Int -> Prim.Int
+refutableGuard = \{partialDict} ->
+  \v163 ->
+    (\{partialDict1} ->
+      case v163 of
+        (Just n)
+          | (Just m) <- Just n -> m
+        Nothing -> 0) {partialDict}

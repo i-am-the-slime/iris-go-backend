@@ -1330,6 +1330,37 @@ where
         | lowering::BinderKind::Typed { binder, .. } => {
             binder.is_some_and(|binder| is_irrefutable_binder(context, binder))
         }
+        // `Newtype x <- e` always matches: the type has no other constructor.
+        lowering::BinderKind::Constructor { resolution: Some((file_id, term_id)), arguments } => {
+            is_sole_constructor(context, *file_id, *term_id)
+                && arguments.iter().all(|&argument| is_irrefutable_binder(context, argument))
+        }
+        lowering::BinderKind::Record { record } => record.iter().all(|item| match item {
+            lowering::BinderRecordItem::RecordField { value, .. } => {
+                value.is_some_and(|value| is_irrefutable_binder(context, value))
+            }
+            lowering::BinderRecordItem::RecordPun { .. } => true,
+        }),
+        _ => false,
+    }
+}
+
+/// Whether the constructor is the only constructor of its type.
+fn is_sole_constructor<Q>(context: &CheckContext<Q>, file_id: FileId, term_id: TermItemId) -> bool
+where
+    Q: ExternalQueries,
+{
+    let Ok(indexed) = context.queries.indexed(file_id) else {
+        return false;
+    };
+    let indexing::IndexedTermItemKind::Constructor { type_id: Some(type_id), .. } =
+        indexed.items[term_id].kind
+    else {
+        return false;
+    };
+    match &indexed.items[type_id].kind {
+        indexing::IndexedTypeItemKind::Data { constructors, .. }
+        | indexing::IndexedTypeItemKind::Newtype { constructors, .. } => constructors.len() == 1,
         _ => false,
     }
 }
