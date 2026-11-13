@@ -1,0 +1,7 @@
+markgraf-cli any 82017
+markgraf-cli empty-interface 0
+markgraf-cli panic 8262
+markgraf-cli reflect 0
+markgraf-cli thunk 298
+markgraf-cli type-assertion 2435
+markgraf-cli unsafe 0
