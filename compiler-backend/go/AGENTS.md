@@ -19,6 +19,8 @@ as if a careful person had written it by hand for those types.
 - PureScript `Int` is `int32` and wraps like JS. Conversions to Go's `int` happen only at Go API
   boundaries.
 - No `reflect` and no `unsafe` in generated code.
+- Calls read like the PureScript they come from: `n(f, x)`, never `n.Apply(f, x)`, `Invoke`,
+  `Call2` or similar plumbing names.
 - Output is identical to the JS backend, byte for byte, including float formatting and the edge
   cases of integer arithmetic.
 
