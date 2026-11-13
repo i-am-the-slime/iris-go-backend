@@ -183,7 +183,7 @@ var main_ []int32 = []int32{leavesInt(TreeInt{Tag: TreeIntLeaf, Leaf0: 1}), leav
 	}
 }}, PairE1: TreeInt{Tag: TreeIntLeaf, Leaf0: 1}})}, PairE1: TreeInt{Tag: TreeIntLeaf, Leaf0: 2}})})}
 
-var leavesInt func(TreeInt) int32 = func(argument1 TreeInt) int32 {
+func leavesInt(argument1 TreeInt) int32 {
 	return leavesIntGo(0, argument1)
 }
 

@@ -5,7 +5,7 @@ use crate::mono::{
     Binding, Expression, ExpressionKind, Function, FunctionId, Guard, Guarded, Local, LocalId,
     Pattern, PatternKind, Program,
 };
-use crate::monotype::{MonotypeId, Monotypes};
+use crate::monotype::{Monotype, MonotypeId, Monotypes};
 use crate::simplify::{for_each_child, for_each_child_mut};
 
 pub fn lift_local_functions(
@@ -40,11 +40,68 @@ pub fn lift_local_functions(
             functions.push(Some(created));
         }
     }
-    let functions = functions
+    let mut functions: Vec<Function> = functions
         .into_iter()
         .map(|function| function.expect("invariant violated: function lost during lifting"))
         .collect();
+    if saturate_wrappers(&mut functions, entry, &mut lifter) {
+        for function in &mut functions {
+            flatten_applications(&mut function.body);
+        }
+    }
     Program { functions, entry }
+}
+
+fn saturate_wrappers(
+    functions: &mut [Function],
+    entry: FunctionId,
+    lifter: &mut Lifter<'_>,
+) -> bool {
+    let mut saturated = false;
+    loop {
+        let mut changed = false;
+        for index in 0..functions.len() {
+            if FunctionId(index as u32) == entry {
+                continue;
+            }
+            let ExpressionKind::Apply { function, arguments } = &functions[index].body.kind else {
+                continue;
+            };
+            let ExpressionKind::Function(callee) = function.kind else { continue };
+            if callee.0 as usize == index {
+                continue;
+            }
+            let callee = &functions[callee.0 as usize];
+            if callee.parameters.len() <= arguments.len() {
+                continue;
+            }
+            let missing = callee.parameters[arguments.len()..].to_vec();
+            let result = callee.result;
+            let erased = missing.iter().any(|parameter| erases(lifter.monotypes, parameter.monotype))
+                || erases(lifter.monotypes, result);
+            if erased {
+                continue;
+            }
+            let fresh: Vec<Local> =
+                missing.iter().map(|parameter| lifter.fresh(parameter)).collect();
+            let wrapper = &mut functions[index];
+            let ExpressionKind::Apply { arguments, .. } = &mut wrapper.body.kind else {
+                unreachable!()
+            };
+            for parameter in &fresh {
+                let reference = ExpressionKind::Local(parameter.id);
+                arguments.push(Expression::new(reference, parameter.monotype));
+            }
+            wrapper.body.monotype = result;
+            wrapper.result = result;
+            wrapper.parameters.extend(fresh);
+            changed = true;
+        }
+        if !changed {
+            return saturated;
+        }
+        saturated = true;
+    }
 }
 
 struct Lifter<'m> {
@@ -287,5 +344,23 @@ fn pattern_binders(pattern: &Pattern, binders: &mut FxHashMap<LocalId, Local>) {
             arguments.iter().for_each(|argument| pattern_binders(argument, binders))
         }
         PatternKind::Wildcard | PatternKind::Literal(_) => {}
+    }
+}
+
+fn erases(monotypes: &Monotypes, monotype: MonotypeId) -> bool {
+    match monotypes.get(monotype) {
+        Monotype::Erased(_) => true,
+        Monotype::Function(argument, result) => {
+            erases(monotypes, *argument) || erases(monotypes, *result)
+        }
+        Monotype::Array(element)
+        | Monotype::Effect(element)
+        | Monotype::Reference(element)
+        | Monotype::MutableArray(element)
+        | Monotype::Object(element)
+        | Monotype::Nullable(element)
+        | Monotype::Lazy(element) => erases(monotypes, *element),
+        Monotype::Record(fields) => fields.iter().any(|field| erases(monotypes, field.monotype)),
+        _ => false,
     }
 }
