@@ -11,6 +11,7 @@ mod ownership;
 use std::collections::BTreeSet;
 
 use rustc_hash::{FxHashMap, FxHashSet};
+use smol_str::SmolStr;
 
 use files::FileId;
 use indexing::TermItemId;
@@ -58,6 +59,8 @@ where
         local_names: FxHashSet::default(),
         tail_loop: None,
         owned_snocs: FxHashSet::default(),
+        owning_variants: FxHashMap::default(),
+        pending_owning_variants: vec![],
         inline_sizes: FxHashMap::default(),
         current: None,
         lazy_constants,
@@ -66,6 +69,9 @@ where
     let mut declarations = vec![];
     for index in 0..program.functions.len() {
         declarations.extend(emitter.function(FunctionId(index as u32))?);
+    }
+    while let Some((id, position)) = emitter.pending_owning_variants.pop() {
+        declarations.extend(emitter.owning_variant(id, position)?);
     }
     declarations.extend(emitter.main()?);
     if emitter.imports.contains(GoPackage::Aff.path()) {
@@ -269,6 +275,8 @@ struct Emitter<'p, 'm, 'q, Q> {
     tail_loop: Option<TailLoop>,
     current: Option<FunctionId>,
     owned_snocs: FxHashSet<*const Expression>,
+    owning_variants: FxHashMap<(FunctionId, usize), String>,
+    pending_owning_variants: Vec<(FunctionId, usize)>,
     inline_sizes: FxHashMap<DataType, Option<usize>>,
 }
 
@@ -603,8 +611,28 @@ where
     }
 
     fn function(&mut self, id: FunctionId) -> GoResult<Vec<GoDeclaration>> {
-        let function: &Function = self.program.function(id);
         let name = self.function_names[id.0 as usize].clone();
+        self.function_named(id, name, vec![])
+    }
+
+    fn owning_variant(&mut self, id: FunctionId, position: usize) -> GoResult<Vec<GoDeclaration>> {
+        let name = self.owning_variants[&(id, position)].clone();
+        let function: &Function = self.program.function(id);
+        let owned = self
+            .owned_parameter_snocs(function, position)
+            .into_iter()
+            .flat_map(|(_, nodes)| nodes.into_iter().map(std::ptr::from_ref))
+            .collect();
+        self.function_named(id, name, owned)
+    }
+
+    fn function_named(
+        &mut self,
+        id: FunctionId,
+        name: String,
+        owned_parameters: Vec<*const Expression>,
+    ) -> GoResult<Vec<GoDeclaration>> {
+        let function: &Function = self.program.function(id);
         self.current = Some(id);
         self.locals.clear();
         self.local_names.clear();
@@ -631,19 +659,86 @@ where
             let parameter_names = parameters.iter().map(|(name, _)| name.clone()).collect();
             self.tail_loop = Some(TailLoop { function: id, parameters: parameter_names });
         }
+        let owned =
+            if loops && mode == Mode::Value { self.owned_loop_arrays(id, function) } else { vec![] };
+        let mut owned_nodes: Vec<*const Expression> =
+            owned.iter().flat_map(|(_, _, nodes)| nodes.iter().copied()).collect();
+        owned_nodes.extend(owned_parameters);
+        self.owned_snocs.extend(owned_nodes.iter().copied());
         let mut body = vec![];
-        self.sink(&function.body, mode, Sink::Return, &mut body)?;
+        let emitted = self.sink(&function.body, mode, Sink::Return, &mut body);
+        for node in &owned_nodes {
+            self.owned_snocs.remove(node);
+        }
+        emitted?;
         if loops {
             if let Some(GoStatement::Continue) = body.last() {
                 body.pop();
             }
-            body = vec![GoStatement::Loop(body)];
+            let mut clipped: Vec<GoStatement> = owned
+                .iter()
+                .map(|(position, field, _)| self.clip(&parameters[*position].0, field.as_ref()))
+                .collect();
+            clipped.push(GoStatement::Loop(body));
+            body = clipped;
         }
         if let Some(GoStatement::Return(None)) = body.last() {
             body.pop();
         }
         self.tail_loop = None;
         Ok(vec![GoDeclaration::Function { name, parameters, result, body }])
+    }
+
+    pub(super) fn owned_parameter_snocs<'e>(
+        &self,
+        function: &'e Function,
+        position: usize,
+    ) -> Vec<(Option<SmolStr>, Vec<&'e Expression>)> {
+        let parameter = &function.parameters[position];
+        self.carried_arrays(parameter.monotype)
+            .into_iter()
+            .filter_map(|field| {
+                let carried = ownership::Carried { accumulator: parameter.id, field: field.as_ref() };
+                let nodes = ownership::owned_snocs(carried, &function.body)?;
+                (!nodes.is_empty()).then_some((field, nodes))
+            })
+            .collect()
+    }
+
+    pub(super) fn owning_variant_name(&mut self, id: FunctionId, position: usize) -> String {
+        if let Some(name) = self.owning_variants.get(&(id, position)) {
+            return name.clone();
+        }
+        let base = format!("{}Owning", self.function_names[id.0 as usize]);
+        let name = unique(base, &mut self.global_names);
+        self.owning_variants.insert((id, position), name.clone());
+        self.pending_owning_variants.push((id, position));
+        name
+    }
+
+    fn owned_loop_arrays(
+        &self,
+        id: FunctionId,
+        function: &Function,
+    ) -> Vec<(usize, Option<SmolStr>, Vec<*const Expression>)> {
+        let arity = function.parameters.len();
+        let mut owned = vec![];
+        for (position, parameter) in function.parameters.iter().enumerate() {
+            let tail_call = ownership::TailCall { function: id, arity, position };
+            for field in self.carried_arrays(parameter.monotype) {
+                let carried = ownership::Carried { accumulator: parameter.id, field: field.as_ref() };
+                let Some(nodes) = ownership::owned_loop_snocs(carried, &function.body, tail_call)
+                else {
+                    continue;
+                };
+                if nodes.is_empty() {
+                    continue;
+                }
+                let nodes = nodes.into_iter().map(std::ptr::from_ref).collect();
+                owned.push((position, field, nodes));
+            }
+        }
+        owned
     }
 
     /// A recursive constant: `name()` computes the value once, on first use, as

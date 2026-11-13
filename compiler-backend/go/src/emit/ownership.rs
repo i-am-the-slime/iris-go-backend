@@ -1,7 +1,7 @@
 use smol_str::SmolStr;
 
 use crate::foreign::Foreign;
-use crate::mono::{Expression, ExpressionKind, Guard, Guarded, LocalId, RecordUpdate};
+use crate::mono::{Expression, ExpressionKind, FunctionId, Guard, Guarded, LocalId, RecordUpdate};
 use crate::simplify::for_each_child;
 
 #[derive(Clone, Copy)]
@@ -22,7 +22,62 @@ pub(super) fn owned_snocs<'e>(
     Some(owned)
 }
 
+#[derive(Clone, Copy)]
+pub(super) struct TailCall {
+    pub function: FunctionId,
+    pub arity: usize,
+    pub position: usize,
+}
+
+pub(super) fn owned_loop_snocs<'e>(
+    carried: Carried<'_>,
+    body: &'e Expression,
+    tail_call: TailCall,
+) -> Option<Vec<&'e Expression>> {
+    if reads(carried, body) > 1 {
+        return None;
+    }
+    let mut owned = vec![];
+    loop_results(carried, body, tail_call, &mut owned)?;
+    Some(owned)
+}
+
 const SHARED: usize = 2;
+
+fn loop_results<'e>(
+    carried: Carried<'_>,
+    expression: &'e Expression,
+    tail_call: TailCall,
+    owned: &mut Vec<&'e Expression>,
+) -> Option<()> {
+    match &expression.kind {
+        ExpressionKind::Let { body, .. } => loop_results(carried, body, tail_call, owned),
+        ExpressionKind::If { then, otherwise, .. } => {
+            loop_results(carried, then, tail_call, owned)?;
+            loop_results(carried, otherwise, tail_call, owned)
+        }
+        ExpressionKind::Case { alternatives, .. } => {
+            for alternative in alternatives {
+                match &alternative.body {
+                    Guarded::Unconditional(body) => loop_results(carried, body, tail_call, owned)?,
+                    Guarded::Guards(branches) => {
+                        for branch in branches {
+                            loop_results(carried, &branch.body, tail_call, owned)?;
+                        }
+                    }
+                }
+            }
+            Some(())
+        }
+        ExpressionKind::Apply { function, arguments }
+            if matches!(function.kind, ExpressionKind::Function(id) if id == tail_call.function)
+                && arguments.len() == tail_call.arity =>
+        {
+            results(carried, &arguments[tail_call.position], owned)
+        }
+        _ => Some(()),
+    }
+}
 
 fn is_accumulator(carried: Carried<'_>, expression: &Expression) -> bool {
     matches!(expression.kind, ExpressionKind::Local(id) if id == carried.accumulator)

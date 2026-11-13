@@ -4,18 +4,18 @@ use super::ownership::{Carried, owned_snocs};
 use super::{Emitter, Mode, Sink, binary, call, identifier, identifier_expression, uses_local};
 use crate::error::GoResult;
 use crate::foreign::Iteration;
-use crate::mono::{Expression, ExpressionKind, Local};
+use crate::mono::{Expression, ExpressionKind, FunctionId, Local};
 use crate::monotype::{Monotype, MonotypeId};
 use crate::syntax::{GoExpression, GoStatement, GoType};
 
 enum Callback<'e> {
     Inline { parameters: Vec<&'e Local>, body: &'e Expression },
-    Direct { function: GoExpression, leading: Vec<GoExpression> },
+    Direct { function: GoExpression, callee: FunctionId, leading: Vec<GoExpression> },
 }
 
 enum Found<'e> {
     Inline { parameters: Vec<&'e Local>, body: &'e Expression },
-    Direct { function: GoExpression, leading: &'e [Expression] },
+    Direct { function: GoExpression, callee: FunctionId, leading: &'e [Expression] },
 }
 
 impl<'q, Q> Emitter<'_, '_, 'q, Q>
@@ -46,13 +46,13 @@ where
         let Some(found) = self.callback(&arguments[position], arity) else { return Ok(None) };
         let callback = match found {
             Found::Inline { parameters, body } => Callback::Inline { parameters, body },
-            Found::Direct { function, leading } => {
+            Found::Direct { function, callee, leading } => {
                 let mut values = vec![];
                 for argument in leading {
                     let value = self.value(argument, out)?;
                     values.push(self.hoist(value, "argument", out));
                 }
-                Callback::Direct { function, leading: values }
+                Callback::Direct { function, callee, leading: values }
             }
         };
         let value = match iteration {
@@ -85,7 +85,7 @@ where
                 let direct = callee.parameters.len() == leading.len() + arity
                     && !self.lazy_constants.contains(id);
                 let function = identifier_expression(&self.function_names[id.0 as usize]);
-                direct.then_some(Found::Direct { function, leading })
+                direct.then_some(Found::Direct { function, callee: *id, leading })
             }
             ExpressionKind::Lambda { .. } if leading.is_empty() => {
                 let mut parameters = vec![];
@@ -127,7 +127,7 @@ where
     ) -> GoResult<()> {
         match callback {
             Callback::Inline { body, .. } => self.sink(body, Mode::Value, sink, out),
-            Callback::Direct { function, leading } => {
+            Callback::Direct { function, leading, .. } => {
                 let mut all = leading.clone();
                 all.extend(arguments);
                 self.deliver(call(function.clone(), all), result, sink, out)
@@ -143,7 +143,7 @@ where
     ) -> GoResult<GoExpression> {
         match callback {
             Callback::Inline { body, .. } => self.value(body, out),
-            Callback::Direct { function, leading } => {
+            Callback::Direct { function, leading, .. } => {
                 let mut all = leading.clone();
                 all.extend(arguments);
                 Ok(call(function.clone(), all))
@@ -169,20 +169,10 @@ where
         let array = self.hoist(array, "array", out);
         let accumulator = self.temporary("accumulator");
         out.push(self.define(accumulator.clone(), initial, monotype)?);
+        let callback = self.owning_callback(callback, accumulator_position, &accumulator, out);
         let owned = self.owned_arrays(&callback, accumulator_position, monotype);
         for (field, _) in &owned {
-            let carried = match field {
-                Some(label) => {
-                    super::field(identifier_expression(&accumulator), &identifier(label))
-                }
-                None => identifier_expression(&accumulator),
-            };
-            self.imports.insert("slices".into());
-            let clip = GoExpression::Qualified { package: "slices".into(), name: "Clip".into() };
-            out.push(GoStatement::Assign {
-                targets: vec![carried.clone()],
-                values: vec![call(clip, vec![carried])],
-            });
+            out.push(self.clip(&accumulator, field.as_ref()));
         }
         let owned_nodes: Vec<*const Expression> = owned
             .iter()
@@ -237,6 +227,27 @@ where
         Ok(identifier_expression(&accumulator))
     }
 
+    fn owning_callback<'e>(
+        &mut self,
+        callback: Callback<'e>,
+        accumulator_position: usize,
+        accumulator: &str,
+        out: &mut Vec<GoStatement>,
+    ) -> Callback<'e> {
+        let Callback::Direct { callee, leading, .. } = &callback else { return callback };
+        let position = leading.len() + accumulator_position;
+        let owned = self.owned_parameter_snocs(self.program.function(*callee), position);
+        if owned.is_empty() {
+            return callback;
+        }
+        for (field, _) in &owned {
+            out.push(self.clip(accumulator, field.as_ref()));
+        }
+        let Callback::Direct { callee, leading, .. } = callback else { unreachable!() };
+        let function = identifier_expression(&self.owning_variant_name(callee, position));
+        Callback::Direct { function, callee, leading }
+    }
+
     fn owned_arrays<'e>(
         &self,
         callback: &Callback<'e>,
@@ -245,16 +256,7 @@ where
     ) -> Vec<(Option<SmolStr>, Vec<&'e Expression>)> {
         let Callback::Inline { parameters, body } = callback else { return vec![] };
         let accumulator = parameters[accumulator_position].id;
-        let candidates: Vec<Option<SmolStr>> = match self.monotypes.get(monotype) {
-            Monotype::Array(_) => vec![None],
-            Monotype::Record(fields) => fields
-                .iter()
-                .filter(|field| matches!(self.monotypes.get(field.monotype), Monotype::Array(_)))
-                .map(|field| Some(field.label.clone()))
-                .collect(),
-            _ => vec![],
-        };
-        candidates
+        self.carried_arrays(monotype)
             .into_iter()
             .filter_map(|field| {
                 let carried = Carried { accumulator, field: field.as_ref() };
@@ -262,6 +264,28 @@ where
                 (!nodes.is_empty()).then_some((field, nodes))
             })
             .collect()
+    }
+
+    pub(super) fn carried_arrays(&self, monotype: MonotypeId) -> Vec<Option<SmolStr>> {
+        match self.monotypes.get(monotype) {
+            Monotype::Array(_) => vec![None],
+            Monotype::Record(fields) => fields
+                .iter()
+                .filter(|field| matches!(self.monotypes.get(field.monotype), Monotype::Array(_)))
+                .map(|field| Some(field.label.clone()))
+                .collect(),
+            _ => vec![],
+        }
+    }
+
+    pub(super) fn clip(&mut self, accumulator: &str, field: Option<&SmolStr>) -> GoStatement {
+        let carried = match field {
+            Some(label) => super::field(identifier_expression(accumulator), &identifier(label)),
+            None => identifier_expression(accumulator),
+        };
+        self.imports.insert("slices".into());
+        let clip = GoExpression::Qualified { package: "slices".into(), name: "Clip".into() };
+        GoStatement::Assign { targets: vec![carried.clone()], values: vec![call(clip, vec![carried])] }
     }
 
     fn map(
@@ -547,13 +571,13 @@ where
                     parameters.push((name, self.go_type(monotype)?));
                 }
                 let applied = match found {
-                    Some(Found::Direct { function: name, leading })
+                    Some(Found::Direct { function: name, leading, .. })
                         if leading.is_empty() && !delayed =>
                     {
                         self.tail_loop = saved;
                         return Ok(name);
                     }
-                    Some(Found::Direct { function: name, leading }) => {
+                    Some(Found::Direct { function: name, leading, .. }) => {
                         let mut values = vec![];
                         for argument in leading {
                             let value = self.value(argument, out)?;
