@@ -124,9 +124,12 @@ impl Simplifier<'_> {
         let partial = match &function.body.kind {
             ExpressionKind::Function(_) => true,
             ExpressionKind::Apply { function: callee, arguments } => match callee.kind {
-                ExpressionKind::Function(id) => self.functions[id.0 as usize]
-                    .as_ref()
-                    .is_some_and(|callee| callee.parameters.len() > arguments.len()),
+                ExpressionKind::Function(id) => {
+                    arguments.iter().all(|argument| self.does_no_work(argument))
+                        && self.functions[id.0 as usize]
+                            .as_ref()
+                            .is_some_and(|callee| callee.parameters.len() > arguments.len())
+                }
                 _ => false,
             },
             _ => false,
@@ -154,6 +157,48 @@ impl Simplifier<'_> {
         function.parameters = parameters;
         function.result = result;
         function
+    }
+
+    fn does_no_work(&self, expression: &Expression) -> bool {
+        match &expression.kind {
+            ExpressionKind::Fail(_) | ExpressionKind::Lambda { .. } => true,
+            ExpressionKind::Coerce(value)
+            | ExpressionKind::Access { record: value, .. }
+            | ExpressionKind::EffectPure(value)
+            | ExpressionKind::EffectBind { action: value, .. }
+            | ExpressionKind::EffectEach { array: value, .. } => self.does_no_work(value),
+            ExpressionKind::EffectWhen { condition, action } => {
+                self.does_no_work(condition) && self.does_no_work(action)
+            }
+            ExpressionKind::Construct { arguments, .. } | ExpressionKind::Array(arguments) => {
+                arguments.iter().all(|argument| self.does_no_work(argument))
+            }
+            ExpressionKind::Record(fields) => {
+                fields.iter().all(|(_, value)| self.does_no_work(value))
+            }
+            ExpressionKind::Foreign { foreign, arguments } => {
+                let builds_value = foreign.is_effectful() || matches!(foreign, Foreign::Identity);
+                (builds_value || arguments.is_empty())
+                    && arguments.iter().all(|argument| self.does_no_work(argument))
+            }
+            ExpressionKind::Apply { function, arguments } => {
+                let builds_value = match &function.kind {
+                    ExpressionKind::Function(id) => {
+                        self.functions[id.0 as usize].as_ref().is_some_and(|callee| {
+                            callee.parameters.len() > arguments.len()
+                                || (!self.recursive[id.0 as usize]
+                                    && self.does_no_work(&callee.body))
+                        })
+                    }
+                    ExpressionKind::Lambda { parameters, body } => {
+                        parameters.len() > arguments.len() || self.does_no_work(body)
+                    }
+                    _ => false,
+                };
+                builds_value && arguments.iter().all(|argument| self.does_no_work(argument))
+            }
+            _ => is_trivial(expression),
+        }
     }
 
     /// A function whose body is a lambda keeps its parameters as Go parameters.
@@ -531,19 +576,20 @@ impl Simplifier<'_> {
             .zip(arguments)
             .map(|(local, value)| Binding { local, value })
             .collect();
-        let body_monotype = body.monotype;
-        let mut result =
-            Expression::new(ExpressionKind::Let { bindings, body: Box::new(body) }, body_monotype);
+        let mut body = body;
         if !remaining_parameters.is_empty() {
-            let mut lambda_monotype = body_monotype;
+            let mut lambda_monotype = body.monotype;
             for parameter in remaining_parameters.iter().rev() {
                 lambda_monotype = self.monotypes.function(parameter.monotype, lambda_monotype);
             }
-            result = Expression::new(
-                ExpressionKind::Lambda { parameters: remaining_parameters, body: Box::new(result) },
+            body = Expression::new(
+                ExpressionKind::Lambda { parameters: remaining_parameters, body: Box::new(body) },
                 lambda_monotype,
             );
         }
+        let body_monotype = body.monotype;
+        let result =
+            Expression::new(ExpressionKind::Let { bindings, body: Box::new(body) }, body_monotype);
         let result = self.expression(result);
         self.apply(result, rest, monotype)
     }
@@ -568,9 +614,11 @@ impl Simplifier<'_> {
             let trivial_record = matches!(&binding.value.kind, ExpressionKind::Record(fields)
                 if fields.iter().all(|(_, value)| is_trivial(value)));
             let substitutable = is_trivial(&binding.value)
+                || matches!(binding.value.kind, ExpressionKind::Fail(_))
                 || trivial_record
                 || uses.total == 0
-                || (uses.total == 1 && (uses.under_lambda == 0 || is_lambda(&binding.value)));
+                || (uses.total == 1
+                    && (uses.under_lambda == 0 || self.does_no_work(&binding.value)));
             if substitutable {
                 if uses.total > 0 {
                     body = substitute(body, binding.local.id, &binding.value);
@@ -1134,10 +1182,6 @@ fn is_foreign_wrapper(parameters: &[Local], body: &Expression) -> bool {
         && arguments.iter().zip(parameters).all(|(argument, parameter)| {
             matches!(argument.kind, ExpressionKind::Local(id) if id == parameter.id)
         })
-}
-
-fn is_lambda(expression: &Expression) -> bool {
-    matches!(expression.kind, ExpressionKind::Lambda { .. })
 }
 
 fn size(expression: &Expression) -> usize {

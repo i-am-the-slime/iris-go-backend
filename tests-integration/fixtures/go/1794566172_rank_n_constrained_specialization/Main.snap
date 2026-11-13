@@ -143,8 +143,9 @@ func initializeProgram() IdentitySTStateTIntIdentity {
 				argument3.ST(interpreter11)
 				return argument4(struct{}{}).ST(interpreter11)
 			}, StateTIntIdentity: func(interpreter12 EmitMeasure2) func(int32) TupleIntInt {
+				argument02 := argument3.StateTIntIdentity(interpreter12)
 				return func(s2 int32) TupleIntInt {
-					return bindIdentityInt2(argument3.StateTIntIdentity(interpreter12), func(value3 struct{}) func(int32) TupleIntInt {
+					return bindIdentityInt2(argument02, func(value3 struct{}) func(int32) TupleIntInt {
 						return argument4(value3).StateTIntIdentity(interpreter12)
 					}, s2)
 				}
@@ -157,8 +158,9 @@ func initializeProgram() IdentitySTStateTIntIdentity {
 			argument.ST(interpreter14)
 			return argument2(struct{}{}).ST(interpreter14)
 		}, StateTIntIdentity: func(interpreter15 EmitMeasure2) func(int32) TupleIntInt {
+			argument03 := argument.StateTIntIdentity(interpreter15)
 			return func(s3 int32) TupleIntInt {
-				return bindIdentityInt2(argument.StateTIntIdentity(interpreter15), func(value4 struct{}) func(int32) TupleIntInt {
+				return bindIdentityInt2(argument03, func(value4 struct{}) func(int32) TupleIntInt {
 					return argument2(value4).StateTIntIdentity(interpreter15)
 				}, s3)
 			}
@@ -170,8 +172,9 @@ func initializeProgram() IdentitySTStateTIntIdentity {
 		value5 := argument0.ST(interpreter17)
 		return argument1(value5).ST(interpreter17)
 	}, StateTIntIdentity: func(interpreter18 EmitMeasure2) func(int32) TupleIntInt {
+		argument04 := argument0.StateTIntIdentity(interpreter18)
 		return func(s4 int32) TupleIntInt {
-			return bindIdentityInt(argument0.StateTIntIdentity(interpreter18), func(value6 int32) func(int32) TupleIntInt {
+			return bindIdentityInt(argument04, func(value6 int32) func(int32) TupleIntInt {
 				return argument1(value6).StateTIntIdentity(interpreter18)
 			}, s4)
 		}

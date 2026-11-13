@@ -21,6 +21,8 @@ impl Simplifier<'_> {
             .function_parts(function.monotype)
             .expect("invariant violated: _foldM folds with a function");
 
+        let bind = (self.named_local("bind", bind.monotype), bind);
+        let function = (self.named_local("step", function.monotype), function);
         let object = (self.named_local("object", object.monotype), object);
         let accumulator = self.named_local("accumulator", monotype);
         let key = self.named_local("key", string);
@@ -32,7 +34,7 @@ impl Simplifier<'_> {
         };
         let looked_up = Expression::new(looked_up, value);
         let stepped = ExpressionKind::Apply {
-            function: Box::new(function),
+            function: Box::new(local(&function.0)),
             arguments: vec![local(&current), local(&key), looked_up],
         };
         let stepped = Expression::new(stepped, monotype);
@@ -42,7 +44,7 @@ impl Simplifier<'_> {
             continuation,
         );
         let bound = ExpressionKind::Apply {
-            function: Box::new(bind),
+            function: Box::new(local(&bind.0)),
             arguments: vec![local(&accumulator), continuation],
         };
         let bound = Expression::new(bound, monotype);
@@ -64,8 +66,10 @@ impl Simplifier<'_> {
         let fold =
             ExpressionKind::Foreign { foreign: fold, arguments: vec![step, initial, object_keys] };
         let fold = Expression::new(fold, monotype);
-        let (object, value) = object;
-        let bindings = vec![Binding { local: object, value }];
+        let bindings = [bind, function, object]
+            .into_iter()
+            .map(|(local, value)| Binding { local, value })
+            .collect();
         let folded =
             Expression::new(ExpressionKind::Let { bindings, body: Box::new(fold) }, monotype);
         self.expression(folded)

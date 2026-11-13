@@ -234,6 +234,7 @@ pub enum GoPackage {
     ForeignValue,
     Tauri,
     Regex,
+    Lazy,
 }
 
 impl GoPackage {
@@ -251,6 +252,7 @@ impl GoPackage {
             }
             GoPackage::Tauri => "github.com/i-am-the-slime/purs-backend-go/go-support/tauri",
             GoPackage::Regex => "github.com/i-am-the-slime/purs-backend-go/go-support/regex",
+            GoPackage::Lazy => "github.com/i-am-the-slime/purs-backend-go/go-support/lazy",
             GoPackage::Exception => {
                 "github.com/i-am-the-slime/purs-backend-go/go-support/exception"
             }
@@ -270,6 +272,7 @@ impl GoPackage {
             GoPackage::ForeignValue => "foreignvalue",
             GoPackage::Tauri => "tauri",
             GoPackage::Regex => "regex",
+            GoPackage::Lazy => "lazy",
         }
     }
 }

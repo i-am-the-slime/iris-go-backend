@@ -68,8 +68,9 @@ func initializeMain_() []string {
 	for index2, element2 := range array3 {
 		mapped2[index2] = compose(show, area, element2)
 	}
+	argument0 := MaybeInt{Tag: MaybeIntJust, Just0: 1}
 	argument := func(argument1 MaybeInt) int32 {
-		return pair(MaybeInt{Tag: MaybeIntJust, Just0: 1}, argument1)
+		return pair(argument0, argument1)
 	}
 	array4 := []MaybeInt{MaybeInt{Tag: MaybeIntJust, Just0: 2}, MaybeInt{Tag: MaybeIntNothing}}
 	mapped3 := make([]string, len(array4))

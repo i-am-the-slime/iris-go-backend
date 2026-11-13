@@ -1,6 +1,6 @@
 use super::{
     DataKind, Emitter, binary, call, field, identifier, identifier_expression, is_simple,
-    is_untyped_constant, unique, unit_value,
+    is_untyped_constant, path_root, unique, unit_value,
 };
 use crate::erasure::Erasure;
 use crate::error::{GoError, GoResult};
@@ -32,7 +32,7 @@ where
                 self.coerce(value, from, unfolded, out)
             }
             (Monotype::Record(fields), Monotype::Opaque) => {
-                let record = self.shared(value, out);
+                let record = self.shared(value, "original", out);
                 let mut entries = Vec::with_capacity(fields.len());
                 for record_field in fields.iter() {
                     let field_value = field(record.clone(), &identifier(&record_field.label));
@@ -45,7 +45,7 @@ where
                 self.foreign_record(entries, out)
             }
             (Monotype::Opaque, Monotype::Record(fields)) => {
-                let record = self.shared(value, out);
+                let record = self.shared(value, "original", out);
                 let read = self
                     .go_function(GoFunction { package: GoPackage::Direct, name: "ForeignField" });
                 let mut values = Vec::with_capacity(fields.len());
@@ -65,7 +65,7 @@ where
                 if fields.is_empty() {
                     return Ok(GoExpression::Composite { type_, fields: vec![] });
                 }
-                let function = self.shared(value, out);
+                let function = self.shared(value, "original", out);
                 let mut values = Vec::with_capacity(fields.len());
                 for record_field in fields.iter() {
                     let instance =
@@ -103,7 +103,7 @@ where
                 Monotype::Function(from_argument, from_result),
                 Monotype::Function(to_argument, to_result),
             ) => {
-                let function = self.shared(value, out);
+                let function = self.shared(value, "original", out);
                 let parameter = self.temporary("coerced");
                 let parameter_type = self.go_type(to_argument)?;
                 let mut body = vec![];
@@ -123,15 +123,14 @@ where
                 })
             }
             (Monotype::Lazy(from_result), Monotype::Lazy(to_result)) => {
-                let lazy = self.shared(value, out);
+                let lazy = self.shared(value, "original", out);
                 let mut body = vec![];
-                let forced = call(lazy, vec![]);
+                let forced = call(field(lazy, "Force"), vec![]);
                 self.coerce_returned(forced, from_result, to_result, &mut body)?;
-                let result = self.go_result(to_result)?;
-                Ok(GoExpression::Function { parameters: vec![], result, body })
+                self.lazy_cell(to_result, body)
             }
             (Monotype::Effect(from_result), Monotype::Effect(to_result)) => {
-                let action = self.shared(value, out);
+                let action = self.shared(value, "original", out);
                 let mut body = vec![];
                 let performed = call(action, vec![]);
                 self.coerce_returned(performed, from_result, to_result, &mut body)?;
@@ -218,11 +217,19 @@ where
         DataType { file_id: data.file_id, item: data.item, arguments }
     }
 
-    fn shared(&mut self, value: GoExpression, out: &mut Vec<GoStatement>) -> GoExpression {
-        if is_simple(&value) {
+    pub(super) fn shared(
+        &mut self,
+        value: GoExpression,
+        base: &str,
+        out: &mut Vec<GoStatement>,
+    ) -> GoExpression {
+        let reassigned = path_root(&value).is_some_and(|root| {
+            self.tail_loop.as_ref().is_some_and(|tail_loop| tail_loop.parameters.contains(root))
+        });
+        if is_simple(&value) && !reassigned {
             return value;
         }
-        let name = self.temporary("original");
+        let name = self.temporary(base);
         out.push(GoStatement::Define { names: vec![name.clone()], values: vec![value] });
         identifier_expression(&name)
     }
