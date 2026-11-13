@@ -76,6 +76,16 @@ fn await_fibers(declarations: &mut [GoDeclaration]) {
             && name == "main"
         {
             let await_ = GoExpression::Qualified { package: "aff".into(), name: "Await".into() };
+            // os.Exit skips deferred calls, so an exiting main awaits first.
+            if let Some(GoStatement::Expression(GoExpression::Call { function, .. })) = body.last()
+                && let GoExpression::Qualified { package, name } = function.as_ref()
+                && package == "os"
+                && name == "Exit"
+            {
+                let at = body.len() - 1;
+                body.insert(at, GoStatement::Expression(call(await_, vec![])));
+                continue;
+            }
             body.insert(0, GoStatement::Defer(call(await_, vec![])));
         }
     }
@@ -401,7 +411,27 @@ where
             return Ok(None);
         }
         let function = self.program.function(entry);
+        let status = self.monotypes.effect_result(function.result);
         let body = if function.parameters.is_empty()
+            && let Some(status) = status
+            && let Monotype::Int = self.monotypes.get(status)
+        {
+            // Like an embedded host running an `Effect Int`, the program's
+            // result is its exit status.
+            self.imports.insert("os".into());
+            let exit = GoExpression::Qualified { package: "os".into(), name: "Exit".into() };
+            let status = GoExpression::Conversion {
+                type_: GoType::Int,
+                value: Box::new(identifier_expression("exitStatus")),
+            };
+            vec![
+                GoStatement::Define {
+                    names: vec!["exitStatus".into()],
+                    values: vec![call(identifier_expression(&name), vec![])],
+                },
+                GoStatement::Expression(call(exit, vec![status])),
+            ]
+        } else if function.parameters.is_empty()
             && let Monotype::Effect(_) = self.monotypes.get(function.result)
         {
             vec![GoStatement::Expression(call(identifier_expression(&name), vec![]))]
@@ -1047,6 +1077,10 @@ where
                 let mut performed = call(function, values);
                 if boundary.thunk {
                     performed = call(performed, vec![]);
+                }
+                if boundary.record_result {
+                    let record = self.record_from_results(performed, result, out)?;
+                    return self.deliver(record, result, sink, out);
                 }
                 let performed = if boundary.integer_result {
                     self.narrow(performed, result)
@@ -2621,6 +2655,14 @@ where
             let left = GoExpression::Conversion { type_: GoType::Float64, value: Box::new(left) };
             return binary("/", left, right);
         }
+        if let Operator::NumberMultiply = operator
+            && !(is_untyped_constant(&left) && is_untyped_constant(&right))
+        {
+            // Go may fuse `a*b + c` into one rounding (FMA on arm64); JavaScript
+            // rounds the product first. An explicit conversion forces that.
+            let product = binary("*", left, right);
+            return GoExpression::Conversion { type_: GoType::Float64, value: Box::new(product) };
+        }
         let symbol = match operator {
             Operator::IntAdd | Operator::NumberAdd | Operator::StringAppend => "+",
             Operator::IntSubtract | Operator::NumberSubtract => "-",
@@ -3294,5 +3336,12 @@ fn render_type(type_: &GoType) -> String {
     let declaration = GoDeclaration::Type { name: "T".into(), type_: type_.clone() };
     let file = GoFile { imports: vec![], declarations: vec![declaration] };
     let rendered = file.render();
-    rendered.lines().find_map(|line| line.strip_prefix("type T ")).unwrap_or("any").to_string()
+    // Struct types span lines; type arguments such as `Ref[...]` need one.
+    let Some(start) = rendered.find("type T ") else { return "any".into() };
+    let parts: Vec<&str> = rendered[start + "type T ".len()..]
+        .lines()
+        .map(str::trim)
+        .filter(|line| !line.is_empty())
+        .collect();
+    parts.join("; ").replace("{; ", "{ ").replace("; }", " }")
 }

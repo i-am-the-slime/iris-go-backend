@@ -2,6 +2,10 @@
 //! definitions have a direct Go equivalent. The runtime functions live in the
 //! purs-backend-go `go-support` module.
 
+mod host;
+
+pub use host::is_opaque_foreign_data;
+
 use files::FileId;
 use indexing::TermItemId;
 
@@ -188,6 +192,7 @@ pub enum GoPackage {
     Aff,
     Promise,
     ForeignValue,
+    Tauri,
 }
 
 impl GoPackage {
@@ -203,6 +208,7 @@ impl GoPackage {
             GoPackage::ForeignValue => {
                 "github.com/i-am-the-slime/purs-backend-go/go-support/foreignvalue"
             }
+            GoPackage::Tauri => "github.com/i-am-the-slime/purs-backend-go/go-support/tauri",
             GoPackage::Exception => {
                 "github.com/i-am-the-slime/purs-backend-go/go-support/exception"
             }
@@ -220,6 +226,7 @@ impl GoPackage {
             GoPackage::Aff => "aff",
             GoPackage::Promise => "promise",
             GoPackage::ForeignValue => "foreignvalue",
+            GoPackage::Tauri => "tauri",
         }
     }
 }
@@ -893,6 +900,9 @@ const INTRINSICS: &[(&str, &str, &[&str], Foreign)] = &[
         &["traversableArray", "applicativeEffect"],
         perform("SequenceArray", 1),
     ),
+    // `toEffect :: ST Global ~> Effect` hides its quantifier in the synonym, so
+    // a specialization of its `unsafeCoerce` body would not know the element type.
+    ("Control.Monad.ST.Global", "toEffect", &[], Foreign::Identity),
     ("Control.Parallel.Class", "parallel", &["parallelAff"], Foreign::Identity),
     ("Control.Parallel.Class", "sequential", &["parallelAff"], Foreign::Identity),
     ("Data.Ord", "lessThan", &["ordInt"], compare(Comparison::LessThan)),
@@ -926,6 +936,7 @@ pub fn foreign_import(module_name: &str, name: &str) -> Option<Foreign> {
     }
     FOREIGN_IMPORTS
         .iter()
+        .chain(host::HOST_IMPORTS)
         .find(|(module, item, _)| *module == module_name && *item == name)
         .map(|(_, _, foreign)| *foreign)
 }

@@ -415,6 +415,9 @@ impl Monotypes {
                     }
                     Monotype::Data(DataType { file_id, item, arguments: Arc::from(canonical) })
                 }
+                _ if crate::foreign::is_opaque_foreign_data(&module.name, &name) => {
+                    Monotype::Opaque
+                }
                 _ => {
                     let name = format!("{}.{name}", module.name);
                     return Ok(Err(UnsupportedState::ForeignData { name }));

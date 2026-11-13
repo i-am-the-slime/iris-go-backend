@@ -372,7 +372,12 @@ impl Printer {
                 format!("{operator}{operand}")
             }
             GoExpression::Field { value, name } => {
+                // A composite literal is ambiguous in if/for/switch headers.
+                let composite = matches!(value.as_ref(), GoExpression::Composite { .. });
                 let value = self.expression(value, 6);
+                if composite {
+                    return format!("({value}).{name}");
+                }
                 format!("{value}.{name}")
             }
             GoExpression::Index { value, index } => {

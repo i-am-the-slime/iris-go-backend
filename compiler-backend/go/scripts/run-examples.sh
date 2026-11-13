@@ -83,4 +83,11 @@ cat "$WORK/results.txt"
 passed=$(grep -c ' PASS ' "$WORK/results.txt")
 total=$(wc -l < "$WORK/results.txt" | tr -d ' ')
 echo "passed $passed/$total in $((finished - started)) ms (generated Go in $WORK)"
+status=0
+[ "$passed" = "$total" ] || status=1
+if [ "$#" -eq 0 ]; then
+  echo
+  "$HERE/quality.sh" examples "$WORK" || status=1
+fi
 [ "${KEEP:-0}" = 1 ] || [ "$#" -gt 0 ] || rm -rf "$WORK"
+exit "$status"
