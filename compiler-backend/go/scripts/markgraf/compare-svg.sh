@@ -25,7 +25,6 @@ WORK="${WORK:-$(mktemp -d)}"
 TIMEOUT="${TIMEOUT:-600}"
 SLOWER_PERCENT="${SLOWER_PERCENT:-5}"
 SLOWER_MS="${SLOWER_MS:-10}"
-FONTS="$MARKGRAF/cli/assets/native/fonts"
 
 milliseconds() { perl -MTime::HiRes=time -e 'printf "%.0f", time*1000'; }
 
@@ -33,25 +32,8 @@ if [ -z "${MARKGRAF_JS:-}" ]; then
   MARKGRAF_JS="$("$HERE/build-js-cli.sh" "$WORK/js")" || exit 1
 fi
 
-mkdir -p "$WORK/go/fonts" "$WORK/out"
-(cd "$MARKGRAF/cli" && "$IRIS" go --entry Main.run "$WORK/go") || exit 1
-cp "$HERE/host/host.go" "$WORK/go/"
-for font in Ilisarniq-Demi.otf Ilisarniq-Italic.otf VictorMono-Medium.ttf VictorMono-Bold.ttf \
-  VictorMono-MediumItalic.ttf VictorMono-BoldItalic.ttf; do
-  cp "$FONTS/$font" "$WORK/go/fonts/"
-done
-cat > "$WORK/go/go.mod" <<GOMOD
-module markgraf.example/cli
-
-go 1.23.2
-
-require github.com/i-am-the-slime/purs-backend-go/go-support v0.0.0
-
-replace github.com/i-am-the-slime/purs-backend-go/go-support => $GO_SUPPORT
-GOMOD
-# -tags libm: Math.sin and friends from the C library, as JavaScriptCore does.
-(cd "$WORK/go" && go build -tags libm -o markgraf .) || exit 1
-MARKGRAF_GO="$WORK/go/markgraf"
+mkdir -p "$WORK/out"
+MARKGRAF_GO="$(IRIS="$IRIS" MARKGRAF="$MARKGRAF" GO_SUPPORT="$GO_SUPPORT" "$HERE/build-go-cli.sh" "$WORK/go")" || exit 1
 
 if [ $# -eq 0 ]; then
   set -- "$MARKGRAF"/examples/*.markgraf "$MARKGRAF"/npm/test/Animation/*.markgraf \
