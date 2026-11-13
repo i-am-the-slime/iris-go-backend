@@ -140,6 +140,10 @@ pub struct MaybeConstructors {
     pub nothing: usize,
     pub integer_payload: bool,
     pub witness: Option<usize>,
+    /// The foreign uses `just` and `nothing` at two types: the Maybe its result
+    /// holds an array of, and the result's Maybe. Each is passed twice, in
+    /// that order.
+    pub elements: bool,
 }
 
 const PLAIN: Boundary = Boundary {
@@ -175,13 +179,13 @@ const UNIT_VALUES: Boundary = Boundary { unit_values: true, ..PLAIN };
 const RECORD: Boundary = Boundary { record_result: true, ..PLAIN };
 
 const fn maybe(just: usize, nothing: usize, integers: &'static [usize]) -> Boundary {
-    let constructors = MaybeConstructors { just, nothing, integer_payload: false, witness: None };
+    let constructors = MaybeConstructors { just, nothing, integer_payload: false, witness: None, elements: false };
     Boundary { integers, maybe: Some(constructors), ..PLAIN }
 }
 
 const fn maybe_witnessed(just: usize, nothing: usize, witness: usize) -> Boundary {
     let witness = Some(witness);
-    let constructors = MaybeConstructors { just, nothing, integer_payload: false, witness };
+    let constructors = MaybeConstructors { just, nothing, integer_payload: false, witness, elements: false };
     Boundary { maybe: Some(constructors), ..PLAIN }
 }
 
@@ -189,12 +193,19 @@ const fn maybe_witnessed(just: usize, nothing: usize, witness: usize) -> Boundar
 /// whose Maybe is the foreign's result type.
 const fn maybe_search(nothing: usize, is_just: usize) -> Boundary {
     let constructors =
-        MaybeConstructors { just: usize::MAX, nothing, integer_payload: false, witness: None };
+        MaybeConstructors { just: usize::MAX, nothing, integer_payload: false, witness: None, elements: false };
     Boundary { maybe: Some(constructors), is_just: Some(is_just), ..PLAIN }
 }
 
+/// Both a Maybe of arrays of Maybes, `Maybe (Array (Maybe a))`, and its elements.
+const fn maybe_of_maybes(just: usize, nothing: usize) -> Boundary {
+    let constructors =
+        MaybeConstructors { just, nothing, integer_payload: false, witness: None, elements: true };
+    Boundary { maybe: Some(constructors), ..PLAIN }
+}
+
 const fn maybe_integer(just: usize, nothing: usize, integers: &'static [usize]) -> Boundary {
-    let constructors = MaybeConstructors { just, nothing, integer_payload: true, witness: None };
+    let constructors = MaybeConstructors { just, nothing, integer_payload: true, witness: None, elements: false };
     Boundary { integers, maybe: Some(constructors), ..PLAIN }
 }
 
@@ -222,6 +233,7 @@ pub enum GoPackage {
     Promise,
     ForeignValue,
     Tauri,
+    Regex,
 }
 
 impl GoPackage {
@@ -238,6 +250,7 @@ impl GoPackage {
                 "github.com/i-am-the-slime/purs-backend-go/go-support/foreignvalue"
             }
             GoPackage::Tauri => "github.com/i-am-the-slime/purs-backend-go/go-support/tauri",
+            GoPackage::Regex => "github.com/i-am-the-slime/purs-backend-go/go-support/regex",
             GoPackage::Exception => {
                 "github.com/i-am-the-slime/purs-backend-go/go-support/exception"
             }
@@ -256,6 +269,7 @@ impl GoPackage {
             GoPackage::Promise => "promise",
             GoPackage::ForeignValue => "foreignvalue",
             GoPackage::Tauri => "tauri",
+            GoPackage::Regex => "regex",
         }
     }
 }
@@ -397,6 +411,10 @@ const fn prim(name: &'static str, arity: usize) -> Foreign {
 
 const fn prim_with(name: &'static str, arity: usize, boundary: Boundary) -> Foreign {
     call(GoPackage::Prim, name, arity, boundary)
+}
+
+const fn regex(name: &'static str, arity: usize, boundary: Boundary) -> Foreign {
+    call(GoPackage::Regex, name, arity, boundary)
 }
 
 const fn array(name: &'static str, arity: usize) -> Foreign {
@@ -880,15 +898,16 @@ const FOREIGN_IMPORTS: &[(&str, &str, Foreign)] = &[
     ("Data.Enum", "toCharCode", prim_with("ToCharCode", 1, integers(&[], true))),
     ("Data.Enum", "fromCharCode", prim_with("FromCharCode", 1, integers(&[0], false))),
     ("Data.String.Common", "_localeCompare", prim("LocaleCompare", 5)),
-    ("Data.String.Regex", "showRegexImpl", prim("RegexShow", 1)),
-    ("Data.String.Regex", "regexImpl", prim("RegexImpl", 4)),
-    ("Data.String.Regex", "source", prim("RegexSource", 1)),
-    ("Data.String.Regex", "flagsImpl", direct_with("RegexFlags", 1, RECORD)),
-    ("Data.String.Regex", "test", prim("RegexTest", 2)),
-    ("Data.String.Regex", "replace", prim("RegexReplaceString", 3)),
-    ("Data.String.Regex", "split", prim("RegexSplit", 2)),
-    ("Data.String.Regex", "_replaceBy", prim_with("RegexReplaceBy", 5, maybe_witnessed(0, 1, 3))),
-    ("Data.String.Regex", "_search", prim_with("RegexSearch", 4, maybe_integer(0, 1, &[]))),
+    ("Data.String.Regex", "showRegexImpl", regex("Show", 1, PLAIN)),
+    ("Data.String.Regex", "regexImpl", regex("New", 4, PLAIN)),
+    ("Data.String.Regex", "source", regex("Source", 1, PLAIN)),
+    ("Data.String.Regex", "flagsImpl", regex("Flags", 1, RECORD)),
+    ("Data.String.Regex", "test", regex("Test", 2, PLAIN)),
+    ("Data.String.Regex", "_match", regex("Match", 4, maybe_of_maybes(0, 1))),
+    ("Data.String.Regex", "replace", regex("Replace", 3, PLAIN)),
+    ("Data.String.Regex", "split", regex("Split", 2, PLAIN)),
+    ("Data.String.Regex", "_replaceBy", regex("ReplaceBy", 5, maybe_witnessed(0, 1, 3))),
+    ("Data.String.Regex", "_search", regex("Search", 4, maybe_integer(0, 1, &[]))),
     ("Data.Int", "toNumber", Foreign::Operator(Operator::IntToNumber)),
     ("Data.Int", "quot", prim_with("IntQuot", 2, integers(&[0, 1], true))),
     ("Data.Int", "rem", prim_with("IntRem", 2, integers(&[0, 1], true))),

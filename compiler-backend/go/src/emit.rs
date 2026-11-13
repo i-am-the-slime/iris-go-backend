@@ -358,6 +358,7 @@ const RESERVED: &[&str] = &[
     "aff",
     "promise",
     "foreignvalue",
+    "regex",
     "sync",
     "big",
     "math",
@@ -395,6 +396,7 @@ const IMPORTED_PACKAGES: &[&str] = &[
     "promise",
     "foreignvalue",
     "tauri",
+    "regex",
     "fmt",
     "math",
     "os",
@@ -928,8 +930,8 @@ where
             }
             Monotype::Nullable(element) => GoType::Pointer(Box::new(self.go_type(element)?)),
             Monotype::Regex => {
-                self.imports.insert(GoPackage::Prim.path().into());
-                GoType::Named("prim.RegexValue".into())
+                self.imports.insert(GoPackage::Regex.path().into());
+                GoType::Pointer(Box::new(GoType::Named("regex.Regex".into())))
             }
             Monotype::Mutex => {
                 self.imports.insert("sync".into());
@@ -1185,7 +1187,7 @@ where
         Ok(match self.monotypes.get(monotype).clone() {
             Monotype::Unit => 0,
             Monotype::String | Monotype::Erased(_) | Monotype::Opaque | Monotype::Error => 16,
-            Monotype::Array(_) | Monotype::Regex => 24,
+            Monotype::Array(_) => 24,
             Monotype::Record(fields) => {
                 let mut size = 0;
                 for field in fields.iter() {
@@ -1845,11 +1847,18 @@ where
                 _ if boundary.ignored.contains(&position) => identifier_expression("nil"),
                 _ if boundary.is_just == Some(position) => self.is_just_function(maybe)?,
                 Some(constructors) if constructors.just == position => {
+                    if constructors.elements {
+                        let element = self.array_payload_maybe(maybe)?;
+                        values.push(self.just_function(element, constructors.integer_payload)?);
+                    }
                     self.just_function(maybe, constructors.integer_payload)?
                 }
                 Some(constructors) if constructors.nothing == position => {
-                    let (data, nothing) = self.constructor_named(maybe, "Nothing")?;
-                    self.construct(&data, nothing, vec![])?
+                    if constructors.elements {
+                        let element = self.array_payload_maybe(maybe)?;
+                        values.push(self.nothing_value(element)?);
+                    }
+                    self.nothing_value(maybe)?
                 }
                 _ if boundary.integers.contains(&position) => {
                     let value = self.value(argument, out)?;
@@ -2078,6 +2087,24 @@ where
         integer_payload: bool,
     ) -> GoResult<GoExpression> {
         self.constructor_function(maybe, "Just", integer_payload)
+    }
+
+    fn nothing_value(&mut self, maybe: MonotypeId) -> GoResult<GoExpression> {
+        let (data, nothing) = self.constructor_named(maybe, "Nothing")?;
+        self.construct(&data, nothing, vec![])
+    }
+
+    /// The `Maybe b` of a `Maybe (Array (Maybe b))`.
+    fn array_payload_maybe(&mut self, maybe: MonotypeId) -> GoResult<MonotypeId> {
+        let (data, just) = self.constructor_named(maybe, "Just")?;
+        let layout = self.data_layout(&data)?;
+        let [(_, payload)] = &layout.constructors[just].fields[..] else {
+            unreachable!("invariant violated: Just has one field")
+        };
+        let Monotype::Array(element) = self.monotypes.get(*payload).clone() else {
+            unreachable!("invariant violated: the Maybe holds an array")
+        };
+        Ok(element)
     }
 
     fn is_just_function(&mut self, maybe: MonotypeId) -> GoResult<GoExpression> {

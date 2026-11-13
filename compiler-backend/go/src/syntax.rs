@@ -596,7 +596,7 @@ fn go_string(value: &str) -> String {
             '\n' => rendered.push_str("\\n"),
             '\r' => rendered.push_str("\\r"),
             '\t' => rendered.push_str("\\t"),
-            character if character.is_control() => {
+            character if needs_escape(character) => {
                 let _ = write!(rendered, "\\u{:04x}", character as u32);
             }
             character => rendered.push(character),
@@ -606,13 +606,19 @@ fn go_string(value: &str) -> String {
     rendered
 }
 
+/// Control characters, and the byte order mark, which Go rejects anywhere in a
+/// source file but at its start.
+fn needs_escape(character: char) -> bool {
+    character.is_control() || character == '\u{feff}'
+}
+
 fn go_rune(value: char) -> String {
     match value {
         '\'' => "'\\''".into(),
         '\\' => "'\\\\'".into(),
         '\n' => "'\\n'".into(),
         '\t' => "'\\t'".into(),
-        character if character.is_control() => format!("'\\u{:04x}'", character as u32),
+        character if needs_escape(character) => format!("'\\u{:04x}'", character as u32),
         character => format!("'{character}'"),
     }
 }
