@@ -267,6 +267,9 @@ impl Simplifier<'_> {
                     arguments.into_iter().map(|argument| self.expression(argument)).collect();
                 return self.foreign(foreign, arguments, monotype);
             }
+            ExpressionKind::Reuse { .. } => {
+                unreachable!("invariant violated: cells are reused only after simplification")
+            }
             ExpressionKind::Apply { function, arguments } => {
                 let function = self.expression(*function);
                 let arguments: Vec<Expression> =
@@ -1102,6 +1105,11 @@ fn children_mut(expression: &mut Expression) -> Vec<&mut Expression> {
         ExpressionKind::Construct { arguments, .. } | ExpressionKind::Foreign { arguments, .. } => {
             arguments.iter_mut().collect()
         }
+        ExpressionKind::Reuse { cell, arguments, .. } => {
+            let mut children: Vec<&mut Expression> = arguments.iter_mut().collect();
+            children.push(cell);
+            children
+        }
         ExpressionKind::Apply { function, arguments } => {
             let mut children = vec![function.as_mut()];
             children.extend(arguments.iter_mut());
@@ -1240,6 +1248,10 @@ pub fn for_each_child(expression: &Expression, visitor: &mut impl FnMut(&Express
         }
         ExpressionKind::Construct { arguments, .. } | ExpressionKind::Foreign { arguments, .. } => {
             arguments.iter().for_each(visitor)
+        }
+        ExpressionKind::Reuse { cell, arguments, .. } => {
+            arguments.iter().for_each(&mut *visitor);
+            visitor(cell);
         }
         ExpressionKind::Apply { function, arguments } => {
             visitor(function);

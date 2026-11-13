@@ -65,6 +65,7 @@ pub enum ExpressionKind {
     Local(LocalId),
     Function(FunctionId),
     Construct { data: DataType, constructor: usize, arguments: Vec<Expression> },
+    Reuse { cell: Box<Expression>, data: DataType, constructor: usize, arguments: Vec<Expression> },
     Foreign { foreign: Foreign, arguments: Vec<Expression> },
     Apply { function: Box<Expression>, arguments: Vec<Expression> },
     Lambda { parameters: Vec<Local>, body: Box<Expression> },

@@ -39,33 +39,7 @@ pub fn emit_program<Q>(
 where
     Q: checking::ExternalQueries,
 {
-    let lazy_constants = recursive_constants(program, monotypes);
-    let mut emitter = Emitter {
-        program,
-        foreign_packages,
-        monotypes,
-        context: Context::new(queries),
-        imports: BTreeSet::new(),
-        function_names: vec![],
-        global_names: FxHashSet::default(),
-        record_names: FxHashMap::default(),
-        data_layouts: FxHashMap::default(),
-        converters: FxHashMap::default(),
-        recursive_names: FxHashMap::default(),
-        type_declarations: vec![],
-        reference_declared: false,
-        range_declared: false,
-        locals: FxHashMap::default(),
-        local_names: FxHashSet::default(),
-        tail_loop: None,
-        owned_snocs: FxHashSet::default(),
-        owning_variants: FxHashMap::default(),
-        pending_owning_variants: vec![],
-        inline_sizes: FxHashMap::default(),
-        shared_nullaries: FxHashMap::default(),
-        current: None,
-        lazy_constants,
-    };
+    let mut emitter = Emitter::new(program, monotypes, queries, foreign_packages);
     emitter.assign_function_names();
     let mut declarations = vec![];
     for index in 0..program.functions.len() {
@@ -95,6 +69,47 @@ where
         eprintln!("  ({textual} `any` in the source text)");
     }
     Ok(source)
+}
+
+impl<'p, 'm, 'q, Q> Emitter<'p, 'm, 'q, Q>
+where
+    Q: checking::ExternalQueries,
+{
+    fn new(
+        program: &'p Program,
+        monotypes: &'m mut Monotypes,
+        queries: &'q Q,
+        foreign_packages: &'p ForeignPackages,
+    ) -> Emitter<'p, 'm, 'q, Q> {
+        let lazy_constants = recursive_constants(program, monotypes);
+        Emitter {
+            program,
+            foreign_packages,
+            monotypes,
+            context: Context::new(queries),
+            imports: BTreeSet::new(),
+            function_names: vec![],
+            global_names: FxHashSet::default(),
+            record_names: FxHashMap::default(),
+            data_layouts: FxHashMap::default(),
+            converters: FxHashMap::default(),
+            recursive_names: FxHashMap::default(),
+            type_declarations: vec![],
+            reference_declared: false,
+            range_declared: false,
+            locals: FxHashMap::default(),
+            local_names: FxHashSet::default(),
+            tail_loop: None,
+            owned_snocs: FxHashSet::default(),
+            owning_variants: FxHashMap::default(),
+            pending_owning_variants: vec![],
+            inline_sizes: FxHashMap::default(),
+            shared_nullaries: FxHashMap::default(),
+            materialized: FxHashSet::default(),
+            current: None,
+            lazy_constants,
+        }
+    }
 }
 
 /// The constants (parameterless, effect-free definitions) that belong to a
@@ -280,6 +295,7 @@ struct Emitter<'p, 'm, 'q, Q> {
     pending_owning_variants: Vec<(FunctionId, usize)>,
     inline_sizes: FxHashMap<DataType, Option<usize>>,
     shared_nullaries: FxHashMap<String, String>,
+    materialized: FxHashSet<(FunctionId, LocalId)>,
 }
 
 const INLINE_DATA_LIMIT: usize = 128;
@@ -727,7 +743,8 @@ where
         self.carried_arrays(parameter.monotype)
             .into_iter()
             .filter_map(|field| {
-                let carried = ownership::Carried { accumulator: parameter.id, field: field.as_ref() };
+                let carried =
+                    ownership::Carried { accumulator: parameter.id, field: field.as_ref() };
                 let nodes = ownership::owned_snocs(carried, &function.body)?;
                 (!nodes.is_empty()).then_some((field, nodes))
             })
@@ -755,7 +772,8 @@ where
         for (position, parameter) in function.parameters.iter().enumerate() {
             let tail_call = ownership::TailCall { function: id, arity, position };
             for field in self.carried_arrays(parameter.monotype) {
-                let carried = ownership::Carried { accumulator: parameter.id, field: field.as_ref() };
+                let carried =
+                    ownership::Carried { accumulator: parameter.id, field: field.as_ref() };
                 let Some(nodes) = ownership::owned_loop_snocs(carried, &function.body, tail_call)
                 else {
                     continue;
@@ -866,9 +884,11 @@ where
         let reassigned = |name: &String| {
             self.tail_loop.as_ref().is_some_and(|tail_loop| tail_loop.parameters.contains(name))
         };
+        let materialized =
+            self.current.is_some_and(|function| self.materialized.contains(&(function, local.id)));
         let aliased = match path_root(path) {
             Some(root) if !reassigned(root) => {
-                matches!(path, GoExpression::Identifier(_)) || uses == 1
+                matches!(path, GoExpression::Identifier(_)) || (uses == 1 && !materialized)
             }
             _ => false,
         };
@@ -2740,6 +2760,18 @@ where
                 }
                 self.construct(data, *constructor, values)?
             }
+            ExpressionKind::Reuse { cell, data, constructor, arguments } => {
+                let mut values = vec![];
+                for argument in arguments {
+                    values.push(self.value(argument, out)?);
+                }
+                let cell = self.value(cell, out)?;
+                let layout = self.data_layout(data)?;
+                let composite = self.composite(&layout, *constructor, values);
+                let target = GoExpression::Unary { operator: "*", operand: Box::new(cell.clone()) };
+                out.push(GoStatement::Assign { targets: vec![target], values: vec![composite] });
+                cell
+            }
             ExpressionKind::Foreign { foreign, arguments } => {
                 self.foreign_value(*foreign, arguments, expression.monotype, out)?
             }
@@ -2827,21 +2859,27 @@ where
                 self.shared_nullary(&layout.name, &constructor_layout.tag)
             }
             DataKind::Tagged | DataKind::Product => {
-                let mut fields = vec![];
-                if layout.kind == DataKind::Tagged {
-                    fields.push((
-                        Some("Tag".to_string()),
-                        identifier_expression(&constructor_layout.tag),
-                    ));
-                }
-                for ((field_name, _), value) in constructor_layout.fields.iter().zip(values) {
-                    fields.push((Some(field_name.clone()), value));
-                }
-                let composite =
-                    GoExpression::Composite { type_: GoType::Named(layout.name), fields };
+                let composite = self.composite(&layout, constructor, values);
                 if layout.boxed { GoExpression::Address(Box::new(composite)) } else { composite }
             }
         })
+    }
+
+    fn composite(
+        &self,
+        layout: &DataLayout,
+        constructor: usize,
+        values: Vec<GoExpression>,
+    ) -> GoExpression {
+        let constructor_layout = &layout.constructors[constructor];
+        let mut fields = vec![];
+        if layout.kind == DataKind::Tagged {
+            fields.push((Some("Tag".to_string()), identifier_expression(&constructor_layout.tag)));
+        }
+        for ((field_name, _), value) in constructor_layout.fields.iter().zip(values) {
+            fields.push((Some(field_name.clone()), value));
+        }
+        GoExpression::Composite { type_: GoType::Named(layout.name.clone()), fields }
     }
 
     fn shared_nullary(&mut self, type_name: &str, tag: &str) -> GoExpression {
@@ -3023,7 +3061,8 @@ where
         match literal {
             Literal::Int(value) => GoExpression::Integer(*value),
             Literal::Number(value) => {
-                if value.parse::<f64>().is_ok_and(|value| value == 0.0 && value.is_sign_negative()) {
+                if value.parse::<f64>().is_ok_and(|value| value == 0.0 && value.is_sign_negative())
+                {
                     return self.number_constant(-0.0);
                 }
                 let mut value = value.to_string();
@@ -3369,7 +3408,8 @@ where
     }
 
     fn number_constant(&mut self, value: f64) -> GoExpression {
-        let math = |name: &str| GoExpression::Qualified { package: "math".into(), name: name.into() };
+        let math =
+            |name: &str| GoExpression::Qualified { package: "math".into(), name: name.into() };
         if value.is_nan() {
             self.imports.insert("math".into());
             return call(math("NaN"), vec![]);
