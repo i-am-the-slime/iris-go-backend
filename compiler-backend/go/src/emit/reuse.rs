@@ -8,6 +8,7 @@ use crate::mono::{
 };
 use crate::monotype::{DataType, MonotypeId};
 use crate::simplify::{for_each_child, for_each_child_mut, prune_unreachable, visit};
+use crate::timing::timed;
 
 pub(super) trait Cells {
     fn cell(&mut self, monotype: MonotypeId) -> Option<DataType>;
@@ -26,8 +27,8 @@ pub(super) struct Reused {
 
 pub(super) fn reuse_cells(program: &Program, cells: &mut impl Cells) -> Reused {
     let mut facts = Facts::new(program, cells);
-    facts.settle(program, cells);
-    Emission::new(program, facts).finish(cells)
+    timed("settle ownership", || facts.settle(program, cells));
+    timed("rewrite variants", || Emission::new(program, facts).finish(cells))
 }
 
 const MASK_LIMIT: usize = 64;
@@ -57,6 +58,12 @@ struct Facts {
     writes: FxHashSet<Variant>,
     demanded: Vec<Variant>,
     seen: FxHashSet<Variant>,
+    /// Whether a demanded variant's plan may change: it was never planned, or a
+    /// fact it consulted has changed since it was last planned.
+    stale: Vec<bool>,
+    /// The demanded variants whose plans consulted the facts of a function at an
+    /// ownership mask.
+    consulted_by: FxHashMap<(FunctionId, u64), FxHashSet<usize>>,
 }
 
 impl Facts {
@@ -87,6 +94,8 @@ impl Facts {
             writes: FxHashSet::default(),
             demanded: vec![],
             seen: FxHashSet::default(),
+            stale: vec![],
+            consulted_by: FxHashMap::default(),
         };
         for index in 0..program.functions.len() {
             facts.demand(Variant::plain(FunctionId(index as u32)));
@@ -97,27 +106,47 @@ impl Facts {
     fn demand(&mut self, variant: Variant) {
         if self.seen.insert(variant) {
             self.demanded.push(variant);
+            self.stale.push(true);
         }
     }
 
+    /// Plans every demanded variant in turn until no fact changes. A plan is a
+    /// function of the facts it consults, so a variant is planned again only
+    /// once one of those facts has changed.
     fn settle(&mut self, program: &Program, cells: &mut impl Cells) {
         loop {
             let mut changed = false;
             let mut index = 0;
             while index < self.demanded.len() {
                 let variant = self.demanded[index];
+                let planned = index;
                 index += 1;
+                if !self.stale[planned] {
+                    continue;
+                }
+                self.stale[planned] = false;
                 let function = program.function(variant.function);
-                let plan = Planner::new(program, cells, self, variant).plan(function);
+                let (plan, consulted) =
+                    Planner::new(program, cells, self, variant).plan_consulting(function);
+                for ownership in consulted {
+                    self.consulted_by.entry(ownership).or_default().insert(planned);
+                }
                 let ownership = (variant.function, variant.owned);
+                let mut grown = false;
                 if !plan.result_owned && self.unowned_results.insert(ownership) {
-                    changed = true;
+                    grown = true;
                 }
                 if plan.donor_used && self.donor_used.insert(variant) {
-                    changed = true;
+                    grown = true;
                 }
                 if plan.writes && self.writes.insert(variant) {
+                    grown = true;
+                }
+                if grown {
                     changed = true;
+                    for &consulting in self.consulted_by.get(&ownership).into_iter().flatten() {
+                        self.stale[consulting] = true;
+                    }
                 }
             }
             if !changed {
@@ -218,6 +247,7 @@ struct Planner<'a, C> {
     owned: FxHashMap<LocalId, Vec<LocalId>>,
     alternatives: Vec<Vec<LocalId>>,
     plan: Plan,
+    consulted: Vec<(FunctionId, u64)>,
 }
 
 impl<'a, C: Cells> Planner<'a, C> {
@@ -237,6 +267,7 @@ impl<'a, C: Cells> Planner<'a, C> {
             owned: FxHashMap::default(),
             alternatives: vec![],
             plan: Plan::default(),
+            consulted: vec![],
         }
     }
 
@@ -246,7 +277,12 @@ impl<'a, C: Cells> Planner<'a, C> {
         id
     }
 
-    fn plan(mut self, function: &Function) -> Plan {
+    fn plan(self, function: &Function) -> Plan {
+        self.plan_consulting(function).0
+    }
+
+    /// The plan, with the functions and ownership masks whose facts it consulted.
+    fn plan_consulting(mut self, function: &Function) -> (Plan, Vec<(FunctionId, u64)>) {
         for (position, parameter) in function.parameters.iter().enumerate() {
             if self.variant.owned & (1 << position) != 0
                 && self.cells.cell(parameter.monotype).is_some()
@@ -264,7 +300,7 @@ impl<'a, C: Cells> Planner<'a, C> {
             stock.push(Spare { local, data, origin: Origin::Donor, owners: vec![] });
         }
         self.plan.result_owned = self.expression(&function.body, true, &mut stock, &mut vec![]);
-        self.plan
+        (self.plan, self.consulted)
     }
 
     fn take(
@@ -478,6 +514,7 @@ impl<'a, C: Cells> Planner<'a, C> {
             }
             let variant = Variant { function: id, owned: 1 << position, donor: false };
             self.facts.demand(variant);
+            self.consulted.push((id, variant.owned));
             if self.facts.unowned_results.contains(&(id, variant.owned)) {
                 return false;
             }
@@ -580,6 +617,7 @@ impl<'a, C: Cells> Planner<'a, C> {
         }
         let variant = Variant { function: callee, owned, donor: false };
         self.facts.demand(variant);
+        self.consulted.push((callee, owned));
         let result_owned = !self.facts.unowned_results.contains(&(callee, owned));
         let mut target = None;
         if tail
@@ -1197,11 +1235,14 @@ impl<'p> Emission<'p> {
             let mut function = self.program.function(variant.function).clone();
             let plan = Planner::new(self.program, cells, &mut self.facts, variant).plan(&function);
             let callbacks = plan.callbacks.values();
-            for target in plan.calls.values().map(|(target, _)| target).chain(callbacks) {
-                if !self.identifiers.contains_key(target) {
+            let targets = plan.calls.values().map(|(target, _)| target).chain(callbacks);
+            let mut targets: Vec<Variant> = targets.copied().collect();
+            targets.sort_unstable_by_key(|target| (target.function, target.owned, target.donor));
+            for target in targets {
+                if !self.identifiers.contains_key(&target) {
                     let next = FunctionId(self.identifiers.len() as u32);
-                    self.identifiers.insert(*target, next);
-                    pending.push(*target);
+                    self.identifiers.insert(target, next);
+                    pending.push(target);
                 }
             }
             self.rewrite(&mut function.body, &plan, cells);

@@ -32,20 +32,20 @@ pub struct Function {
     pub body: Expression,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct Local {
     pub id: LocalId,
     pub name: SmolStr,
     pub monotype: MonotypeId,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct Expression {
     pub kind: ExpressionKind,
     pub monotype: MonotypeId,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum Literal {
     Int(i64),
     Number(SmolStr),
@@ -54,7 +54,7 @@ pub enum Literal {
     Boolean(bool),
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum ExpressionKind {
     Literal(Literal),
     Unit,
@@ -80,19 +80,19 @@ pub enum ExpressionKind {
     Fail(SmolStr),
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum RecordUpdate {
     Leaf { label: SmolStr, value: Expression },
     Branch { label: SmolStr, updates: Vec<RecordUpdate> },
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct Binding {
     pub local: Local,
     pub value: Expression,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct Alternative {
     pub patterns: Vec<Pattern>,
     pub body: Guarded,
@@ -112,31 +112,31 @@ impl Alternative {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum Guarded {
     Unconditional(Expression),
     Guards(Vec<GuardedBranch>),
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct GuardedBranch {
     pub guards: Vec<Guard>,
     pub body: Expression,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum Guard {
     Boolean(Expression),
     Pattern { pattern: Pattern, value: Expression },
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct Pattern {
     pub kind: PatternKind,
     pub monotype: MonotypeId,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum PatternKind {
     Wildcard,
     Variable(Local),

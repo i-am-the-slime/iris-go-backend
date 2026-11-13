@@ -10,6 +10,7 @@ checking = { version = "0.1.0", path = "../../compiler-frontend/checking" }
 files = { version = "0.1.0", path = "../../compiler-core/files" }
 indexing = { version = "0.1.0", path = "../../compiler-frontend/indexing" }
 lowering = { version = "0.1.0", path = "../../compiler-frontend/lowering" }
+rayon = "1.12.0"
 rustc-hash = "2.1.3"
 smol_str = "0.3.6"
 thiserror = "2.0.20"

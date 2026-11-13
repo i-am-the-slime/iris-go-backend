@@ -116,6 +116,13 @@ impl Census {
         *self.counts.entry(erasure).or_default() += 1;
     }
 
+    pub fn absorb(&mut self, other: Census) {
+        for (erasure, count) in other.counts {
+            *self.counts.entry(erasure).or_default() += count;
+        }
+        self.assertions += other.assertions;
+    }
+
     pub fn total(&self) -> usize {
         self.counts.values().sum()
     }

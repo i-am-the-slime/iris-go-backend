@@ -5,10 +5,10 @@ examples reflect 0
 examples thunk 94
 examples type-assertion 90
 examples unsafe 0
-markgraf-cli any 4903
+markgraf-cli any 4692
 markgraf-cli empty-interface 0
 markgraf-cli panic 132
 markgraf-cli reflect 0
-markgraf-cli thunk 195
-markgraf-cli type-assertion 1249
+markgraf-cli thunk 187
+markgraf-cli type-assertion 1218
 markgraf-cli unsafe 0

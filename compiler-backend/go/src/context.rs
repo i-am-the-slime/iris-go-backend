@@ -14,6 +14,9 @@ pub struct Context<'q, Q> {
     pub types: TypeOperations<'q, Q>,
     modules: FxHashMap<FileId, Arc<ModuleData>>,
     pub recursive_newtypes: FxHashMap<(FileId, TypeItemId), bool>,
+    /// Canonical spellings of types, with and without erased newtypes, as
+    /// `monotype::canonicalise` computes them from the outermost level.
+    pub canonical: FxHashMap<(checking::TypeId, bool), checking::TypeId>,
 }
 
 pub struct ModuleData {
@@ -33,6 +36,7 @@ where
             types: TypeOperations::new(queries),
             modules: FxHashMap::default(),
             recursive_newtypes: FxHashMap::default(),
+            canonical: FxHashMap::default(),
         }
     }
 

@@ -12,6 +12,7 @@ use crate::mono::{
     RecordUpdate,
 };
 use crate::monotype::{Monotype, MonotypeId, Monotypes};
+use crate::timing::timed;
 use smol_str::SmolStr;
 
 mod object;
@@ -43,6 +44,7 @@ pub fn simplify(program: Program, monotypes: &mut Monotypes, next_local: u32) ->
         });
     }
     let mut simplifier = Simplifier {
+        sizes: functions.iter().map(|function| size(&function.body)).collect(),
         functions: functions.iter().cloned().map(Some).collect(),
         recursive,
         uses,
@@ -62,6 +64,7 @@ pub fn simplify(program: Program, monotypes: &mut Monotypes, next_local: u32) ->
             current = simplifier.eta_expand(current);
             current.body = simplifier.expression(current.body);
             current = simplifier.absorb_lambdas(current);
+            simplifier.sizes[function.0 as usize] = size(&current.body);
             simplifier.functions[function.0 as usize] = Some(current);
         }
     }
@@ -72,6 +75,7 @@ pub fn simplify(program: Program, monotypes: &mut Monotypes, next_local: u32) ->
             .take()
             .expect("invariant violated: function lost during simplification");
         simplifier.settle_records(&mut current.body);
+        simplifier.sizes[index] = size(&current.body);
         simplifier.functions[index] = Some(current);
     }
     let functions: Vec<Function> = simplifier
@@ -81,12 +85,15 @@ pub fn simplify(program: Program, monotypes: &mut Monotypes, next_local: u32) ->
         .collect();
     let next_local = simplifier.next_local;
     let program = Program { functions, entry };
-    let program = crate::lift::lift_local_functions(program, monotypes, next_local);
-    prune(program.functions, entry)
+    let program =
+        timed("lift", || crate::lift::lift_local_functions(program, monotypes, next_local));
+    timed("prune", || prune(program.functions, entry))
 }
 
 struct Simplifier<'m> {
     functions: Vec<Option<Function>>,
+    /// The size of each function's body as it stands in `functions`.
+    sizes: Vec<usize>,
     recursive: Vec<bool>,
     uses: Vec<usize>,
     entry: FunctionId,
@@ -109,7 +116,7 @@ impl Simplifier<'_> {
             return None;
         }
         let function = self.functions[id.0 as usize].as_ref()?;
-        let small = size(&function.body) <= INLINE_SIZE || self.uses[id.0 as usize] == 1;
+        let small = self.sizes[id.0 as usize] <= INLINE_SIZE || self.uses[id.0 as usize] == 1;
         (small && !function.parameters.is_empty() || is_trivial(&function.body)).then_some(function)
     }
 
@@ -1227,6 +1234,11 @@ fn occurrences(expression: &Expression, local: LocalId) -> Occurrences {
 }
 
 fn count(expression: &Expression, local: LocalId, under_lambda: bool, result: &mut Occurrences) {
+    // Callers tell no, one and several occurrences apart, and where a single
+    // one is; past two there is nothing more to learn.
+    if result.total >= 2 {
+        return;
+    }
     match &expression.kind {
         ExpressionKind::Local(id) if *id == local => {
             result.total += 1;

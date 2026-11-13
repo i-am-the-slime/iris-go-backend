@@ -11,7 +11,8 @@
 # Environment: IRIS, MARKGRAF (checkout), GO_SUPPORT, MARKGRAF_JS (a JS CLI;
 # built from the current sources with build-js-cli.sh when unset), WORK,
 # TIMEOUT (seconds per run, default 600), KEEP=1 keeps the work directory.
-# Finally checks the generated Go against the markgraf-cli quality baseline.
+# Finally checks the generated Go against the markgraf-cli quality baseline and
+# the time `iris go` takes against the compile-time baseline (compile-time.sh).
 
 set -uo pipefail
 export LC_ALL=C
@@ -106,5 +107,6 @@ if [ "$slower" -ne 0 ]; then
   failed=$((failed + 1))
 fi
 "$HERE/../quality.sh" markgraf-cli "$WORK/go" || failed=$((failed + 1))
+IRIS="$IRIS" MARKGRAF="$MARKGRAF" WORK="$WORK/compile-time" "$HERE/compile-time.sh" || failed=$((failed + 1))
 [ "${KEEP:-0}" = 1 ] || [ "$failed" -ne 0 ] || rm -rf "$WORK"
 [ "$failed" -eq 0 ]
