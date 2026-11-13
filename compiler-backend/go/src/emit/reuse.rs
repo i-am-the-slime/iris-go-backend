@@ -8,6 +8,7 @@ use crate::mono::{
 };
 use crate::monotype::{DataType, MonotypeId};
 use crate::simplify::{for_each_child, for_each_child_mut, prune_unreachable, visit};
+use crate::timing::timed;
 
 pub(super) trait Cells {
     fn cell(&mut self, monotype: MonotypeId) -> Option<DataType>;
@@ -26,8 +27,8 @@ pub(super) struct Reused {
 
 pub(super) fn reuse_cells(program: &Program, cells: &mut impl Cells) -> Reused {
     let mut facts = Facts::new(program, cells);
-    facts.settle(program, cells);
-    Emission::new(program, facts).finish(cells)
+    timed("settle ownership", || facts.settle(program, cells));
+    timed("rewrite variants", || Emission::new(program, facts).finish(cells))
 }
 
 const MASK_LIMIT: usize = 64;

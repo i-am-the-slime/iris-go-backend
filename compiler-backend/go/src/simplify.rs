@@ -12,6 +12,7 @@ use crate::mono::{
     RecordUpdate,
 };
 use crate::monotype::{Monotype, MonotypeId, Monotypes};
+use crate::timing::timed;
 use smol_str::SmolStr;
 
 mod object;
@@ -81,8 +82,9 @@ pub fn simplify(program: Program, monotypes: &mut Monotypes, next_local: u32) ->
         .collect();
     let next_local = simplifier.next_local;
     let program = Program { functions, entry };
-    let program = crate::lift::lift_local_functions(program, monotypes, next_local);
-    prune(program.functions, entry)
+    let program =
+        timed("lift", || crate::lift::lift_local_functions(program, monotypes, next_local));
+    timed("prune", || prune(program.functions, entry))
 }
 
 struct Simplifier<'m> {

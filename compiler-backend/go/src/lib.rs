@@ -18,6 +18,7 @@ mod scheme;
 mod simplify;
 mod specialize;
 mod syntax;
+mod timing;
 mod types;
 
 pub use error::{GoError, GoResult, UnsupportedState};
@@ -25,6 +26,7 @@ pub use foreign::ForeignPackages;
 
 use crate::scheme::SchemeInstantiations;
 use crate::specialize::Specializer;
+use crate::timing::timed;
 
 pub struct GoProgram {
     pub source: String,
@@ -51,7 +53,7 @@ pub fn compile_program(
     let mut schemes = SchemeInstantiations::default();
     let (entry, mut specializer) = loop {
         let mut specializer = Specializer::new(queries, foreign_packages, schemes);
-        let entry = specializer.specialize_entry(file_id, term)?;
+        let entry = timed("specialize", || specializer.specialize_entry(file_id, term))?;
         match specializer.grown_schemes() {
             Some(grown) => schemes = grown,
             None => break (entry, specializer),
@@ -60,9 +62,10 @@ pub fn compile_program(
     if let Some(blockers) = specializer.blockers()? {
         return Err(GoError::Blocked(blockers));
     }
-    let (functions, mut monotypes, next_local) = specializer.finish();
+    let (functions, mut monotypes, next_local) =
+        timed("finish specialization", || specializer.finish());
     let program = mono::Program { functions, entry };
-    let program = simplify::simplify(program, &mut monotypes, next_local);
+    let program = timed("simplify", || simplify::simplify(program, &mut monotypes, next_local));
     if std::env::var_os("IRIS_GO_DUMP").is_some() {
         for function in &program.functions {
             eprintln!("{function:#?}");
@@ -70,6 +73,7 @@ pub fn compile_program(
         monotypes.dump();
     }
     let functions = program.functions.len();
-    let source = emit::emit_program(&program, &mut monotypes, queries, foreign_packages)?;
+    let source =
+        timed("emit", || emit::emit_program(&program, &mut monotypes, queries, foreign_packages))?;
     Ok(GoProgram { source, functions })
 }

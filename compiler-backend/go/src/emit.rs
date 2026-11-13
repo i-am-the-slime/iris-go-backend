@@ -30,6 +30,7 @@ use crate::mono::{
 use crate::monotype::{DataType, Monotype, MonotypeId, Monotypes};
 use crate::simplify::visit;
 use crate::syntax::{GoCase, GoDeclaration, GoDefault, GoExpression, GoFile, GoStatement, GoType};
+use crate::timing::timed;
 
 pub fn emit_program<Q>(
     program: &Program,
@@ -40,29 +41,33 @@ pub fn emit_program<Q>(
 where
     Q: checking::ExternalQueries,
 {
-    let reused = {
+    let reused = timed("reuse", || {
         let mut probe = Emitter::new(program, monotypes, queries, foreign_packages);
         reuse::reuse_cells(program, &mut probe)
-    };
+    });
     let program = &reused.program;
     let mut emitter = Emitter::new(program, monotypes, queries, foreign_packages);
     emitter.materialized = reused.materialized;
     emitter.assign_function_names();
-    let mut declarations = vec![];
-    for index in 0..program.functions.len() {
-        declarations.extend(emitter.function(FunctionId(index as u32))?);
-    }
-    while let Some((id, position)) = emitter.pending_owning_variants.pop() {
-        declarations.extend(emitter.owning_variant(id, position)?);
-    }
-    declarations.extend(emitter.main()?);
+    let declarations = timed("functions", || {
+        let mut declarations = vec![];
+        for index in 0..program.functions.len() {
+            declarations.extend(emitter.function(FunctionId(index as u32))?);
+        }
+        while let Some((id, position)) = emitter.pending_owning_variants.pop() {
+            declarations.extend(emitter.owning_variant(id, position)?);
+        }
+        declarations.extend(emitter.main()?);
+        GoResult::Ok(declarations)
+    });
+    let mut declarations = declarations?;
     if emitter.imports.contains(GoPackage::Aff.path()) {
         await_fibers(&mut declarations);
     }
     let mut all = std::mem::take(&mut emitter.type_declarations);
     all.extend(declarations);
     let file = GoFile { imports: emitter.imports.into_iter().collect(), declarations: all };
-    let (source, census) = file.render_with_census();
+    let (source, census) = timed("render", || file.render_with_census());
     if std::env::var_os("IRIS_GO_ANY_CENSUS").is_some() {
         let identifier = |c: char| c.is_alphanumeric() || c == '_';
         let textual = source
@@ -3557,8 +3562,7 @@ where
     }
 
     fn number_constant(&mut self, value: f64) -> GoExpression {
-        let math =
-            |name: &str| GoExpression::Qualified { package: "math".into(), name: name.into() };
+        let math = |name: &str| GoExpression::Qualified { package: "math".into(), name: name.into() };
         if value.is_nan() {
             self.imports.insert("math".into());
             return call(math("NaN"), vec![]);
