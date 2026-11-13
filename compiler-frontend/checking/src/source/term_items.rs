@@ -472,6 +472,7 @@ where
             &checked_equations.patterns,
             &member.equations,
         )?;
+        record_equation_exhaustiveness(state, &member.equations, exhaustiveness.exhaustive);
 
         state.report_exhaustiveness(exhaustiveness);
         Ok(record_instance_member(member, signature_member_type, checked_equations))
@@ -489,11 +490,23 @@ where
             &checked_equations.patterns,
             &member.equations,
         )?;
+        record_equation_exhaustiveness(state, &member.equations, exhaustiveness.exhaustive);
 
         state.report_exhaustiveness(exhaustiveness);
         Ok(record_instance_member(member, expected_type, checked_equations))
     } else {
         Ok(None)
+    }
+}
+
+fn record_equation_exhaustiveness(
+    state: &mut CheckState,
+    equations: &[lowering::Equation],
+    exhaustive: bool,
+) {
+    if let Some(first) = equations.iter().find_map(|equation| equation.source) {
+        let pattern_match = tree::PatternMatch::Equations(tree::EquationSource::Item(first));
+        state.record_exhaustiveness(pattern_match, exhaustive);
     }
 }
 
@@ -823,6 +836,7 @@ where
         &checked_equations.patterns,
         equations,
     )?;
+    record_equation_exhaustiveness(state, equations, exhaustiveness.exhaustive);
     state.report_exhaustiveness(exhaustiveness);
     let residuals = state.solve_constraints(context)?;
     Ok((residuals, checked_equations.abstractions, checked_equations.equations))
@@ -847,6 +861,7 @@ where
         &checked_equations.patterns,
         equations,
     )?;
+    record_equation_exhaustiveness(state, equations, exhaustiveness.exhaustive);
     let has_missing = exhaustiveness.missing.is_some();
     state.report_exhaustiveness(exhaustiveness);
     if has_missing {

@@ -591,14 +591,16 @@ where
         let Some(first) = equations.first() else {
             return Err(self.unsupported(scope, UnsupportedState::MissingEquation));
         };
+        let pattern_match = tree::PatternMatch::Equations(first.source);
+        let exhaustive = scope.module.checked.tree.is_exhaustive_match(pattern_match);
         let arity = equations.iter().map(|equation| equation.binders.len()).max().unwrap_or(0);
         if arity == 0 {
-            return self.guarded_expression(scope, &first.guarded_expression);
+            return self.guarded_expression(scope, &first.guarded_expression, exhaustive);
         }
         if let [equation] = equations
             && let Some(parameters) = self.variable_parameters(scope, &equation.binders)?
         {
-            let body = self.guarded_expression(scope, &equation.guarded_expression)?;
+            let body = self.guarded_expression(scope, &equation.guarded_expression, exhaustive)?;
             return Ok(self.lambda(parameters, body));
         }
         let mut parameters = Vec::with_capacity(arity);
@@ -624,13 +626,16 @@ where
             let body = self.guarded(scope, &equation.guarded_expression)?;
             alternatives.push(Alternative { patterns, body });
         }
-        let scrutinees = parameters
+        let scrutinees: Vec<Expression> = parameters
             .iter()
             .map(|parameter| {
                 Expression::new(ExpressionKind::Local(parameter.id), parameter.monotype)
             })
             .collect();
         let monotype = alternatives_monotype(&alternatives);
+        if !exhaustive {
+            alternatives.push(Alternative::match_failure(&scrutinees, monotype));
+        }
         let body = Expression::new(ExpressionKind::Case { scrutinees, alternatives }, monotype);
         Ok(self.lambda(parameters, body))
     }
@@ -724,14 +729,18 @@ where
         &mut self,
         scope: &mut Scope,
         guarded: &tree::GuardedExpression,
+        exhaustive: bool,
     ) -> GoResult<Expression> {
         match self.guarded(scope, guarded)? {
             Guarded::Unconditional(body) => Ok(body),
             Guarded::Guards(branches) => {
                 let monotype = branches[0].body.monotype;
                 let alternative = Alternative { patterns: vec![], body: Guarded::Guards(branches) };
-                let kind =
-                    ExpressionKind::Case { scrutinees: vec![], alternatives: vec![alternative] };
+                let mut alternatives = vec![alternative];
+                if !exhaustive {
+                    alternatives.push(Alternative::match_failure(&[], monotype));
+                }
+                let kind = ExpressionKind::Case { scrutinees: vec![], alternatives };
                 Ok(Expression::new(kind, monotype))
             }
         }
@@ -761,7 +770,7 @@ where
         }
         enum Chunk {
             Names(Vec<Vec<Member>>),
-            Pattern(Pattern, Expression),
+            Pattern(Pattern, Expression, bool),
         }
         let module = Arc::clone(&scope.module);
         let mut chunks = Vec::with_capacity(bindings.chunks.len());
@@ -772,7 +781,9 @@ where
                 tree::LetBindingChunk::Pattern { binder, where_expression, .. } => {
                     let value = self.where_expression(scope, where_expression)?;
                     let pattern = self.pattern(scope, *binder)?;
-                    chunks.push(Chunk::Pattern(pattern, value));
+                    let pattern_match = tree::PatternMatch::LetPattern(*binder);
+                    let exhaustive = module.checked.tree.is_exhaustive_match(pattern_match);
+                    chunks.push(Chunk::Pattern(pattern, value, exhaustive));
                 }
                 tree::LetBindingChunk::PatternError { .. } => {
                     return Err(self.unsupported(scope, UnsupportedState::BinderError));
@@ -866,14 +877,16 @@ where
                         body = Expression::new(kind, monotype);
                     }
                 }
-                Chunk::Pattern(pattern, value) => {
+                Chunk::Pattern(pattern, value, exhaustive) => {
                     let monotype = body.monotype;
                     let alternative =
                         Alternative { patterns: vec![pattern], body: Guarded::Unconditional(body) };
-                    let kind = ExpressionKind::Case {
-                        scrutinees: vec![value],
-                        alternatives: vec![alternative],
-                    };
+                    let scrutinees = vec![value];
+                    let mut alternatives = vec![alternative];
+                    if !exhaustive {
+                        alternatives.push(Alternative::match_failure(&scrutinees, monotype));
+                    }
+                    let kind = ExpressionKind::Case { scrutinees, alternatives };
                     body = Expression::new(kind, monotype);
                 }
             }
@@ -1111,14 +1124,18 @@ where
                 }
                 let body = self.expression(scope, *expression)?;
                 let monotype = body.monotype;
-                let scrutinees = parameters
+                let scrutinees: Vec<Expression> = parameters
                     .iter()
                     .map(|parameter| {
                         Expression::new(ExpressionKind::Local(parameter.id), parameter.monotype)
                     })
                     .collect();
                 let alternative = Alternative { patterns, body: Guarded::Unconditional(body) };
-                let kind = ExpressionKind::Case { scrutinees, alternatives: vec![alternative] };
+                let mut alternatives = vec![alternative];
+                if !module.checked.tree.is_exhaustive_match(tree::PatternMatch::Expression(id)) {
+                    alternatives.push(Alternative::match_failure(&scrutinees, monotype));
+                }
+                let kind = ExpressionKind::Case { scrutinees, alternatives };
                 let body = Expression::new(kind, monotype);
                 return Ok(self.lambda(parameters, body));
             }
@@ -1140,6 +1157,10 @@ where
                     }
                     let body = self.guarded(scope, &alternative.guarded_expression)?;
                     converted.push(Alternative { patterns, body });
+                }
+                if !module.checked.tree.is_exhaustive_match(tree::PatternMatch::Expression(id)) {
+                    let monotype = self.monotype(scope, node.type_id)?;
+                    converted.push(Alternative::match_failure(&converted_scrutinees, monotype));
                 }
                 ExpressionKind::Case { scrutinees: converted_scrutinees, alternatives: converted }
             }

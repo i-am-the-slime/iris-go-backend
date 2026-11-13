@@ -40,10 +40,9 @@ func depthArrayInt(value *Nested) int32 {
 	switch value.Tag {
 	case NestedFlat:
 		return 0
-	case NestedDeep:
+	default: // NestedDeep
 		return 1 + depthArrayInt(value.Deep0)
 	}
-	panic("Failed pattern match")
 }
 
 func main() {

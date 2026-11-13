@@ -84,7 +84,7 @@ func initializeMain_() MaybeArrayInt {
 			default:
 				accumulator = MaybeArrayInt{Tag: MaybeArrayIntNothing}
 			}
-		case MaybeFnIntArrayIntNothing:
+		default: // MaybeFnIntArrayIntNothing
 			accumulator = MaybeArrayInt{Tag: MaybeArrayIntNothing}
 		}
 	}

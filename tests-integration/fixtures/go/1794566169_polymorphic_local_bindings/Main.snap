@@ -18,10 +18,8 @@ func initializePairs() string {
 	var result string
 	if scrutinee {
 		result = "true"
-	} else if !scrutinee {
-		result = "false"
 	} else {
-		panic("Failed pattern match")
+		result = "false"
 	}
 	return result + prim.ShowInt(int(pairsF(pairsF(1))))
 }

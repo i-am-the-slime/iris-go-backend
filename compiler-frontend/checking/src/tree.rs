@@ -12,7 +12,7 @@ use files::FileId;
 use indexing::{DeriveId, DeriveItemId, EquationSourceId, InstanceItemId, TermItemId, TypeItemId};
 use la_arena::{Arena, ArenaMap, Idx};
 use lowering::LetBindingNameGroupId;
-use rustc_hash::FxHashMap;
+use rustc_hash::{FxHashMap, FxHashSet};
 use smol_str::SmolStr;
 
 use crate::TypeId;
@@ -36,6 +36,14 @@ pub struct CheckedTree {
     sections: FxHashMap<lowering::ExpressionId, BinderId>,
     binder_statements: ArenaMap<BinderId, lowering::DoStatementId>,
     instantiations: FxHashMap<ExpressionId, Vec<TypeInstantiation>>,
+    exhaustive_matches: FxHashSet<PatternMatch>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum PatternMatch {
+    Expression(ExpressionId),
+    Equations(EquationSource),
+    LetPattern(BinderId),
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -197,7 +205,7 @@ pub struct ClassMember {
     pub field_type: TypeId,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum EquationSource {
     Item(EquationSourceId),
     Local(lowering::LetBindingEquationId),
@@ -436,6 +444,14 @@ impl CheckedTree {
         &mut self,
     ) -> impl Iterator<Item = &mut TypeInstantiation> + '_ {
         self.instantiations.values_mut().flatten()
+    }
+
+    pub(crate) fn insert_exhaustive_match(&mut self, pattern_match: PatternMatch) {
+        self.exhaustive_matches.insert(pattern_match);
+    }
+
+    pub fn is_exhaustive_match(&self, pattern_match: PatternMatch) -> bool {
+        self.exhaustive_matches.contains(&pattern_match)
     }
 
     pub fn allocate_binder(&mut self, binder: Binder) -> BinderId {

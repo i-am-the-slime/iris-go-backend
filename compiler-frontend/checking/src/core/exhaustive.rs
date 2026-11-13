@@ -1194,6 +1194,13 @@ where
 pub struct ExhaustivenessReport {
     pub missing: Option<Vec<SmolStr>>,
     pub redundant: Vec<SmolStr>,
+    pub exhaustive: bool,
+}
+
+impl ExhaustivenessReport {
+    fn without_patterns(exhaustive: bool) -> ExhaustivenessReport {
+        ExhaustivenessReport { missing: None, redundant: Vec::new(), exhaustive }
+    }
 }
 
 pub fn check_lambda_patterns<Q>(
@@ -1206,7 +1213,7 @@ where
     Q: ExternalQueries,
 {
     if pattern_types.is_empty() {
-        return Ok(ExhaustivenessReport { missing: None, redundant: Vec::new() });
+        return Ok(ExhaustivenessReport::without_patterns(true));
     }
 
     let unconditional =
@@ -1227,7 +1234,7 @@ where
     Q: ExternalQueries,
 {
     if pattern_types.is_empty() {
-        return Ok(ExhaustivenessReport { missing: None, redundant: Vec::new() });
+        return Ok(ExhaustivenessReport::without_patterns(true));
     }
 
     let unconditional = collect_unconditional_rows(
@@ -1251,7 +1258,10 @@ where
     Q: ExternalQueries,
 {
     if pattern_types.is_empty() {
-        return Ok(ExhaustivenessReport { missing: None, redundant: Vec::new() });
+        let exhaustive = equations
+            .iter()
+            .any(|equation| guarded_always_matches(context, equation.guarded.as_ref()));
+        return Ok(ExhaustivenessReport::without_patterns(exhaustive));
     }
 
     let unconditional = collect_unconditional_rows(
@@ -1263,6 +1273,21 @@ where
     )?;
 
     check_exhaustiveness_core(state, context, pattern_types, unconditional)
+}
+
+pub fn guarded_always_matches<Q>(
+    context: &CheckContext<Q>,
+    guarded: Option<&lowering::GuardedExpression>,
+) -> bool
+where
+    Q: ExternalQueries,
+{
+    match guarded {
+        Some(lowering::GuardedExpression::Unconditional { .. }) | None => true,
+        Some(lowering::GuardedExpression::Conditionals { pattern_guarded }) => {
+            has_trivially_true_alternative(context, pattern_guarded)
+        }
+    }
 }
 
 /// Returns `true` if any alternative in a conditional guard set is trivially true.
@@ -1380,13 +1405,8 @@ where
     for item in items {
         let (binders, guarded) = to_binders(item);
 
-        match guarded {
-            Some(lowering::GuardedExpression::Unconditional { .. }) | None => {}
-            Some(lowering::GuardedExpression::Conditionals { pattern_guarded }) => {
-                if !has_trivially_true_alternative(context, pattern_guarded) {
-                    continue;
-                }
-            }
+        if !guarded_always_matches(context, guarded.as_ref()) {
+            continue;
         }
 
         let mut pattern_row = Vec::new();
@@ -1434,7 +1454,8 @@ where
     });
     let missing = missing.transpose()?;
 
-    Ok(ExhaustivenessReport { missing, redundant })
+    let exhaustive = missing.is_none();
+    Ok(ExhaustivenessReport { missing, redundant, exhaustive })
 }
 
 #[cfg(test)]

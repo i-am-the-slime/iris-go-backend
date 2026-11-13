@@ -154,7 +154,10 @@ where
         let scrutinees = scrutinees.into_iter().map(|scrutinee| scrutinee.expression);
         let scrutinees = scrutinees.collect();
         let kind = tree::ExpressionKind::Case { scrutinees, alternatives: Arc::from(alternatives) };
-        self.allocate_expression(result_type, kind)
+        let case = self.allocate_expression(result_type, kind);
+        let pattern_match = tree::PatternMatch::Expression(case.expression);
+        self.state.record_exhaustiveness(pattern_match, true);
+        case
     }
 
     pub fn lambda(

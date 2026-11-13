@@ -1,12 +1,12 @@
 use super::{
     DataKind, Emitter, binary, call, field, identifier, identifier_expression, is_simple,
-    is_untyped_constant, panic_statement, unique, unit_value,
+    is_untyped_constant, unique, unit_value,
 };
 use crate::erasure::Erasure;
 use crate::error::{GoError, GoResult};
 use crate::foreign::{GoFunction, GoPackage};
 use crate::monotype::{DataType, Monotype, MonotypeId, RecordField};
-use crate::syntax::{GoCase, GoDeclaration, GoExpression, GoStatement, GoType};
+use crate::syntax::{GoCase, GoDeclaration, GoDefault, GoExpression, GoStatement, GoType};
 
 impl<'q, Q> Emitter<'_, '_, 'q, Q>
 where
@@ -448,8 +448,12 @@ where
             body.append(&mut case.body);
             return Ok(());
         }
-        body.push(GoStatement::Switch { value: Some(field(value, "Tag")), cases, default: None });
-        body.push(panic_statement("Failed pattern match"));
+        let default = GoDefault::covering(&mut cases);
+        body.push(GoStatement::Switch {
+            value: Some(field(value, "Tag")),
+            cases,
+            default: Some(default),
+        });
         Ok(())
     }
 }

@@ -27,7 +27,7 @@ use crate::mono::{
 };
 use crate::monotype::{DataType, Monotype, MonotypeId, Monotypes};
 use crate::simplify::visit;
-use crate::syntax::{GoCase, GoDeclaration, GoExpression, GoFile, GoStatement, GoType};
+use crate::syntax::{GoCase, GoDeclaration, GoDefault, GoExpression, GoFile, GoStatement, GoType};
 
 pub fn emit_program<Q>(
     program: &Program,
@@ -204,6 +204,13 @@ enum Sink {
 enum Exit {
     Return,
     Break { sink: Sink, label: String },
+}
+
+#[derive(Clone, Copy)]
+struct GuardChain<'e> {
+    mode: Mode,
+    exit: &'e Exit,
+    tested: bool,
 }
 
 struct TailLoop {
@@ -3072,6 +3079,12 @@ where
             values.push(self.value(argument, out)?);
         }
         Ok(match foreign {
+            Foreign::Operator(Operator::Compare(comparison))
+                if !matches!(comparison, Comparison::Equal | Comparison::NotEqual)
+                    && matches!(self.monotypes.get(arguments[0].monotype), Monotype::String) =>
+            {
+                self.string_ordering(comparison, values)
+            }
             Foreign::Operator(operator) => self.operator(operator, values),
             Foreign::Constant(function) => {
                 self.imports.insert(function.package.path().into());
@@ -3113,6 +3126,22 @@ where
         }
         let sign = if (numerator < 0.0) != negative_zero { -1 } else { 1 };
         call(math("Inf"), vec![GoExpression::Integer(sign)])
+    }
+
+    fn string_ordering(
+        &mut self,
+        comparison: Comparison,
+        values: Vec<GoExpression>,
+    ) -> GoExpression {
+        let package = GoPackage::Prim;
+        self.imports.insert(package.path().into());
+        let function = GoExpression::Qualified {
+            package: package.name().into(),
+            name: "CompareString".into(),
+        };
+        let ordering = call(function, values);
+        let zero = GoExpression::Integer(0);
+        self.operator(Operator::Compare(comparison), vec![ordering, zero])
     }
 
     fn operator(&mut self, operator: Operator, mut values: Vec<GoExpression>) -> GoExpression {
@@ -3234,7 +3263,7 @@ where
         }
         let sink = self.prepare_branching_sink(sink, expression, mode, out)?;
         let mut chain: Vec<(Option<GoExpression>, Vec<GoStatement>)> = vec![];
-        let mut exhaustive = false;
+        let mut unconditional = false;
         for alternative in alternatives {
             let (tests, bindings) = self.alternative_tests(&paths, &alternative.patterns)?;
             let branches: Vec<(Vec<&Guard>, &Expression)> = match &alternative.body {
@@ -3271,19 +3300,18 @@ where
                 }
                 self.sink(body, mode, sink.clone(), &mut block)?;
                 let condition = conjunction(conditions);
-                let unconditional = condition.is_none();
+                unconditional = condition.is_none();
                 chain.push((condition, block));
                 if unconditional {
-                    exhaustive = true;
                     break;
                 }
             }
-            if exhaustive {
+            if unconditional {
                 break;
             }
         }
-        if !exhaustive {
-            chain.push((None, vec![panic_statement("Failed pattern match")]));
+        if let Some((condition, _)) = chain.last_mut() {
+            *condition = None;
         }
         let mut statements: Vec<GoStatement> = vec![];
         for (condition, block) in chain.into_iter().rev() {
@@ -3348,7 +3376,8 @@ where
         exit: &Exit,
         out: &mut Vec<GoStatement>,
     ) -> GoResult<()> {
-        for alternative in alternatives {
+        for (position, alternative) in alternatives.iter().enumerate() {
+            let last = position + 1 == alternatives.len();
             let (tests, bindings) = self.alternative_tests(paths, &alternative.patterns)?;
             let mut block = vec![];
             for (local, path) in &bindings {
@@ -3357,8 +3386,10 @@ where
                     self.bind_pattern_local(local, path, uses, &mut block)?;
                 }
             }
-            let terminates = self.guarded_sequential(&alternative.body, mode, exit, &mut block)?;
-            match conjunction(tests) {
+            let terminates =
+                self.guarded_sequential(&alternative.body, mode, exit, last, &mut block)?;
+            let condition = if last { None } else { conjunction(tests) };
+            match condition {
                 None => {
                     out.extend(block);
                     if terminates {
@@ -3370,8 +3401,7 @@ where
                 }
             }
         }
-        out.push(panic_statement("Failed pattern match"));
-        Ok(())
+        unreachable!("invariant violated: the last alternative of a total case always matches")
     }
 
     fn guarded_sequential(
@@ -3379,6 +3409,7 @@ where
         guarded: &Guarded,
         mode: Mode,
         exit: &Exit,
+        last_alternative: bool,
         out: &mut Vec<GoStatement>,
     ) -> GoResult<bool> {
         let branches = match guarded {
@@ -3388,25 +3419,33 @@ where
             }
             Guarded::Guards(branches) => branches,
         };
-        for branch in branches {
-            if self.guard_chain(&branch.guards, vec![], vec![], &branch.body, mode, exit, out)? {
+        for (position, branch) in branches.iter().enumerate() {
+            let tested = !(last_alternative && position + 1 == branches.len());
+            let terminates = self.guard_chain(
+                &branch.guards,
+                vec![],
+                vec![],
+                &branch.body,
+                GuardChain { mode, exit, tested },
+                out,
+            )?;
+            if terminates {
                 return Ok(true);
             }
         }
         Ok(false)
     }
 
-    #[allow(clippy::too_many_arguments)]
     fn guard_chain(
         &mut self,
         guards: &[Guard],
         mut conditions: Vec<GoExpression>,
         mut bindings: Vec<(Local, GoExpression)>,
         body: &Expression,
-        mode: Mode,
-        exit: &Exit,
+        chain: GuardChain<'_>,
         out: &mut Vec<GoStatement>,
     ) -> GoResult<bool> {
+        let GuardChain { mode, exit, tested } = chain;
         let Some((guard, rest)) = guards.split_first() else {
             let mut block = vec![];
             for (local, path) in &bindings {
@@ -3446,15 +3485,18 @@ where
                 }
             }
         }
+        if !tested {
+            tests.clear();
+        }
         if evaluation.is_empty() || conditions.is_empty() {
             out.extend(evaluation);
             conditions.extend(tests);
             bindings.extend(guard_bindings);
-            return self.guard_chain(rest, conditions, bindings, body, mode, exit, out);
+            return self.guard_chain(rest, conditions, bindings, body, chain, out);
         }
         let mut block = evaluation;
         bindings.extend(guard_bindings);
-        self.guard_chain(rest, tests, bindings, body, mode, exit, &mut block)?;
+        self.guard_chain(rest, tests, bindings, body, chain, &mut block)?;
         let condition =
             conjunction(conditions).expect("invariant violated: conditions are pending");
         out.push(GoStatement::If { condition, then: block, otherwise: vec![] });
@@ -3536,14 +3578,11 @@ where
             };
             match value {
                 Some(value) => cases.push(GoCase { values: vec![value], body: block }),
-                None => default = Some(block),
+                None => default = Some(GoDefault { covers: vec![], body: block }),
             }
         }
-        let needs_terminator = default.is_none() && matches!(sink, Sink::Return);
-        out.push(GoStatement::Switch { value: Some(subject), cases, default });
-        if needs_terminator {
-            out.push(panic_statement("Failed pattern match"));
-        }
+        let default = default.unwrap_or_else(|| GoDefault::covering(&mut cases));
+        out.push(GoStatement::Switch { value: Some(subject), cases, default: Some(default) });
         Ok(true)
     }
 
@@ -3772,7 +3811,7 @@ fn breaks_to(statements: &[GoStatement], label: &str) -> bool {
         }
         GoStatement::Switch { cases, default, .. } => {
             cases.iter().any(|case| breaks_to(&case.body, label))
-                || default.as_ref().is_some_and(|default| breaks_to(default, label))
+                || default.as_ref().is_some_and(|default| breaks_to(&default.body, label))
         }
         GoStatement::IfAssert { then, .. } => breaks_to(then, label),
         GoStatement::Loop(body)

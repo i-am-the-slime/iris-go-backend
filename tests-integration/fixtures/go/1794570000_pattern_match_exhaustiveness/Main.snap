@@ -1,0 +1,186 @@
+---
+source: tests-integration/src/fixtures.rs
+---
+package main
+
+import (
+	"fmt"
+	"github.com/i-am-the-slime/purs-backend-go/go-support/array"
+	"github.com/i-am-the-slime/purs-backend-go/go-support/prim"
+)
+
+type Light int
+
+const (
+	LightRed Light = iota
+	LightAmber
+	LightGreen
+)
+
+type Shape struct {
+	Tag        int
+	Circle0    int32
+	Rectangle0 int32
+	Rectangle1 int32
+}
+
+const (
+	ShapeCircle = iota
+	ShapeRectangle
+)
+
+type MaybeInt struct {
+	Tag   int
+	Just0 int32
+}
+
+const (
+	MaybeIntNothing = iota
+	MaybeIntJust
+)
+
+type LeftRight struct {
+	left  int32
+	right int32
+}
+
+type MaybeString struct {
+	Tag   int
+	Just0 string
+}
+
+const (
+	MaybeStringNothing = iota
+	MaybeStringJust
+)
+
+var main_ = initializeMain_()
+
+func initializeMain_() []string {
+	array2 := []Light{LightRed, LightAmber, LightGreen}
+	mapped := make([]string, len(array2))
+	for index, element := range array2 {
+		mapped[index] = name(element)
+	}
+	array3 := []Shape{Shape{Tag: ShapeCircle, Circle0: 1}, Shape{Tag: ShapeRectangle, Rectangle0: 2, Rectangle1: 3}}
+	mapped2 := make([]string, len(array3))
+	for index2, element2 := range array3 {
+		mapped2[index2] = compose(show, area, element2)
+	}
+	argument := func(argument1 MaybeInt) int32 {
+		return pair(MaybeInt{Tag: MaybeIntJust, Just0: 1}, argument1)
+	}
+	array4 := []MaybeInt{MaybeInt{Tag: MaybeIntJust, Just0: 2}, MaybeInt{Tag: MaybeIntNothing}}
+	mapped3 := make([]string, len(array4))
+	for index3, element3 := range array4 {
+		mapped3[index3] = compose2(show, argument, element3)
+	}
+	array5 := []string{"start", "jump"}
+	mapped4 := make([]string, len(array5))
+	for index4, element4 := range array5 {
+		mapped4[index4] = compose3(show, command, element4)
+	}
+	array6 := []int32{500, 5}
+	mapped5 := make([]string, len(array6))
+	for index5, element5 := range array6 {
+		mapped5[index5] = size(true, element5)
+	}
+	array7 := []LeftRight{LeftRight{left: 1, right: 2}}
+	mapped6 := make([]string, len(array7))
+	for index6, element6 := range array7 {
+		mapped6[index6] = compose4(show, sum, element6)
+	}
+	array8 := []MaybeString{MaybeString{Tag: MaybeStringJust, Just0: "here"}}
+	mapped7 := make([]string, len(array8))
+	for index7, value := range array8 {
+		var result string
+		switch value.Tag {
+		case MaybeStringJust:
+			result = value.Just0
+		default:
+			panic("Pattern match failure")
+		}
+		mapped7[index7] = result
+	}
+	return array.Append(mapped, array.Append(mapped2, array.Append(mapped3, array.Append(mapped4, array.Append(mapped5, array.Append(mapped6, mapped7))))))
+}
+
+func name(value Light) string {
+	switch value {
+	case LightRed:
+		return "red"
+	case LightAmber:
+		return "amber"
+	default: // LightGreen
+		return "green"
+	}
+}
+
+func compose(f func(int32) string, g func(Shape) int32, x Shape) string {
+	return f(g(x))
+}
+
+func show(argument0 int32) string {
+	return prim.ShowInt(int(argument0))
+}
+
+func area(argument0 Shape) int32 {
+	switch argument0.Tag {
+	case ShapeCircle:
+		radius := argument0.Circle0
+		return 3 * radius * radius
+	default: // ShapeRectangle
+		return argument0.Rectangle0 * argument0.Rectangle1
+	}
+}
+
+func compose2(f func(int32) string, g func(MaybeInt) int32, x MaybeInt) string {
+	return f(g(x))
+}
+
+func pair(argument0 MaybeInt, argument1 MaybeInt) int32 {
+	if argument0.Tag == MaybeIntJust && argument1.Tag == MaybeIntJust {
+		return argument0.Just0 + argument1.Just0
+	}
+	if argument0.Tag == MaybeIntJust && argument1.Tag == MaybeIntNothing {
+		return argument0.Just0
+	}
+	return 0
+}
+
+func compose3(f func(int32) string, g func(string) int32, x string) string {
+	return f(g(x))
+}
+
+func command(argument0 string) int32 {
+	switch argument0 {
+	case "start":
+		return 1
+	case "stop":
+		return 2
+	default:
+		return 0
+	}
+}
+
+func size(large bool, number int32) string {
+	if large {
+		if number > 100 {
+			return "huge"
+		}
+		return "large"
+	}
+	return "small"
+}
+
+func compose4(f func(int32) string, g func(LeftRight) int32, x LeftRight) string {
+	return f(g(x))
+}
+
+func sum(record LeftRight) int32 {
+	return record.left + record.right
+}
+
+func main() {
+	fmt.Println(main_)
+}

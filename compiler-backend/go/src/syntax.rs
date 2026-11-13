@@ -92,7 +92,7 @@ pub enum GoStatement {
     Switch {
         value: Option<GoExpression>,
         cases: Vec<GoCase>,
-        default: Option<Vec<GoStatement>>,
+        default: Option<GoDefault>,
     },
     /// `if name, ok := value.(T); ok { then }`
     IfAssert {
@@ -133,6 +133,20 @@ pub enum GoStatement {
 pub struct GoCase {
     pub values: Vec<GoExpression>,
     pub body: Vec<GoStatement>,
+}
+
+#[derive(Debug, Clone)]
+pub struct GoDefault {
+    pub covers: Vec<GoExpression>,
+    pub body: Vec<GoStatement>,
+}
+
+impl GoDefault {
+    pub fn covering(cases: &mut Vec<GoCase>) -> GoDefault {
+        let GoCase { values, body } =
+            cases.pop().expect("invariant violated: a total switch has a case");
+        GoDefault { covers: values, body }
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -340,9 +354,15 @@ impl Printer {
                     self.line(&format!("case {}:", values.join(", ")));
                     self.block(&case.body);
                 }
-                if let Some(default) = default {
-                    self.line("default:");
-                    self.block(default);
+                if let Some(GoDefault { covers, body }) = default {
+                    if covers.is_empty() {
+                        self.line("default:");
+                    } else {
+                        let covers: Vec<String> =
+                            covers.iter().map(|value| self.expression(value, 0)).collect();
+                        self.line(&format!("default: // {}", covers.join(", ")));
+                    }
+                    self.block(body);
                 }
                 self.line("}");
             }

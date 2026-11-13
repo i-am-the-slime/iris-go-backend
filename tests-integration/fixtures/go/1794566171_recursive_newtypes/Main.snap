@@ -47,11 +47,10 @@ func countSteps(argument0 Step, argument1 int32) int32 {
 		switch scrutinee.Tag {
 		case MaybeStepNothing:
 			return argument1
-		case MaybeStepJust:
+		default: // MaybeStepJust
 			argument0, argument1 = scrutinee.Just0, argument1 + 1
 			continue
 		}
-		panic("Failed pattern match")
 	}
 }
 

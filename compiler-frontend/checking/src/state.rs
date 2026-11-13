@@ -474,6 +474,12 @@ impl CheckState {
         }
     }
 
+    pub fn record_exhaustiveness(&mut self, pattern_match: tree::PatternMatch, exhaustive: bool) {
+        if exhaustive {
+            self.checked.tree.insert_exhaustive_match(pattern_match);
+        }
+    }
+
     pub fn allocate_pattern(&mut self, kind: PatternKind, t: TypeId) -> PatternId {
         let pattern = Pattern { kind, t };
         self.patterns.intern(pattern)

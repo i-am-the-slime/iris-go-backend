@@ -118,6 +118,7 @@ where
         exhaustive::check_lambda_patterns(state, context, &argument_types, binders)?;
 
     let has_missing = exhaustiveness.missing.is_some();
+    let exhaustive = exhaustiveness.exhaustive;
     state.report_exhaustiveness(exhaustiveness);
 
     let kind = tree::ExpressionKind::Lambda {
@@ -132,7 +133,10 @@ where
         let kind = tree::ExpressionKind::EvidenceAbstraction { binder, expression };
         Ok(super::allocate_expression(state, type_id, kind))
     } else {
-        Ok(super::allocate_expression(state, function_type, kind))
+        let lambda = super::allocate_expression(state, function_type, kind);
+        let pattern_match = tree::PatternMatch::Expression(lambda.expression);
+        state.record_exhaustiveness(pattern_match, exhaustive);
+        Ok(lambda)
     }
 }
 
@@ -204,6 +208,7 @@ where
         exhaustive::check_lambda_patterns(state, context, &arguments, current_binders)?;
 
     let has_missing = exhaustiveness.missing.is_some();
+    let exhaustive = exhaustiveness.exhaustive;
     state.report_exhaustiveness(exhaustiveness);
 
     let kind = tree::ExpressionKind::Lambda {
@@ -213,10 +218,11 @@ where
 
     if has_missing {
         state.push_wanted(context.prim.partial);
-        Ok(super::allocate_expression(state, function_type, kind))
-    } else {
-        Ok(super::allocate_expression(state, function_type, kind))
     }
+    let lambda = super::allocate_expression(state, function_type, kind);
+    let pattern_match = tree::PatternMatch::Expression(lambda.expression);
+    state.record_exhaustiveness(pattern_match, exhaustive);
+    Ok(lambda)
 }
 
 pub fn instantiate_trunk_types<Q>(
@@ -321,6 +327,7 @@ where
     let exhaustiveness = exhaustive::check_case_patterns(state, context, &trunk_types, branches)?;
 
     let has_missing = exhaustiveness.missing.is_some();
+    let exhaustive = exhaustiveness.exhaustive;
     state.report_exhaustiveness(exhaustiveness);
 
     let kind = tree::ExpressionKind::Case {
@@ -340,6 +347,9 @@ where
             Ok(super::allocate_expression(state, expected, kind))
         }
     } else {
-        Ok(super::allocate_expression(state, expected, kind))
+        let case = super::allocate_expression(state, expected, kind);
+        let pattern_match = tree::PatternMatch::Expression(case.expression);
+        state.record_exhaustiveness(pattern_match, exhaustive);
+        Ok(case)
     }
 }

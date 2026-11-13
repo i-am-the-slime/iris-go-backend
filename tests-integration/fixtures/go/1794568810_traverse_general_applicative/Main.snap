@@ -54,13 +54,13 @@ func initializeMain_() []EitherStringArrayInt {
 		switch accumulator2.Tag {
 		case EitherStringArrayIntLeft:
 			result = EitherStringFnIntArrayInt{Tag: EitherStringFnIntArrayIntLeft, Left0: accumulator2.Left0}
-		case EitherStringArrayIntRight:
+		default: // EitherStringArrayIntRight
 			result = EitherStringFnIntArrayInt{Tag: EitherStringFnIntArrayIntRight, Right0: append_(accumulator2.Right0)}
 		}
 		switch result.Tag {
 		case EitherStringFnIntArrayIntLeft:
 			accumulator = EitherStringArrayInt{Tag: EitherStringArrayIntLeft, Left0: result.Left0}
-		case EitherStringFnIntArrayIntRight:
+		default: // EitherStringFnIntArrayIntRight
 			var result2 EitherStringInt
 			if element > 0 {
 				result2 = EitherStringInt{Tag: EitherStringIntRight, Right0: element}
@@ -70,7 +70,7 @@ func initializeMain_() []EitherStringArrayInt {
 			switch result2.Tag {
 			case EitherStringIntLeft:
 				accumulator = EitherStringArrayInt{Tag: EitherStringArrayIntLeft, Left0: result2.Left0}
-			case EitherStringIntRight:
+			default: // EitherStringIntRight
 				accumulator = EitherStringArrayInt{Tag: EitherStringArrayIntRight, Right0: result.Right0(result2.Right0)}
 			}
 		}
@@ -85,13 +85,13 @@ func initializeMain_() []EitherStringArrayInt {
 		switch accumulator4.Tag {
 		case EitherStringArrayIntLeft:
 			result3 = EitherStringFnIntArrayInt{Tag: EitherStringFnIntArrayIntLeft, Left0: accumulator4.Left0}
-		case EitherStringArrayIntRight:
+		default: // EitherStringArrayIntRight
 			result3 = EitherStringFnIntArrayInt{Tag: EitherStringFnIntArrayIntRight, Right0: append_2(accumulator4.Right0)}
 		}
 		switch result3.Tag {
 		case EitherStringFnIntArrayIntLeft:
 			accumulator3 = EitherStringArrayInt{Tag: EitherStringArrayIntLeft, Left0: result3.Left0}
-		case EitherStringFnIntArrayIntRight:
+		default: // EitherStringFnIntArrayIntRight
 			var result4 EitherStringInt
 			if element2 > 0 {
 				result4 = EitherStringInt{Tag: EitherStringIntRight, Right0: element2}
@@ -101,7 +101,7 @@ func initializeMain_() []EitherStringArrayInt {
 			switch result4.Tag {
 			case EitherStringIntLeft:
 				accumulator3 = EitherStringArrayInt{Tag: EitherStringArrayIntLeft, Left0: result4.Left0}
-			case EitherStringIntRight:
+			default: // EitherStringIntRight
 				accumulator3 = EitherStringArrayInt{Tag: EitherStringArrayIntRight, Right0: result3.Right0(result4.Right0)}
 			}
 		}

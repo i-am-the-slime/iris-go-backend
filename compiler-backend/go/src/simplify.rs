@@ -8,7 +8,8 @@ use rustc_hash::{FxHashMap, FxHashSet};
 use crate::foreign::{Comparison, Foreign, Operator};
 use crate::mono::{
     Alternative, Binding, Expression, ExpressionKind, Function, FunctionId, Guard, Guarded,
-    GuardedBranch, Literal, Local, LocalId, Pattern, PatternKind, Program, RecordUpdate,
+    GuardedBranch, Literal, Local, LocalId, PATTERN_MATCH_FAILURE, Pattern, PatternKind, Program,
+    RecordUpdate,
 };
 use crate::monotype::{Monotype, MonotypeId, Monotypes};
 use smol_str::SmolStr;
@@ -315,7 +316,7 @@ impl Simplifier<'_> {
                     .collect();
                 let case = match alternatives.first() {
                     None => Expression::new(
-                        ExpressionKind::Fail(SmolStr::new_static("Failed pattern match")),
+                        ExpressionKind::Fail(SmolStr::new_static(PATTERN_MATCH_FAILURE)),
                         monotype,
                     ),
                     Some(Alternative { body: Guarded::Unconditional(_), .. })

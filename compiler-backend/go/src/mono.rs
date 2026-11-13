@@ -97,6 +97,20 @@ pub struct Alternative {
     pub body: Guarded,
 }
 
+pub const PATTERN_MATCH_FAILURE: &str = "Pattern match failure";
+
+impl Alternative {
+    pub fn match_failure(scrutinees: &[Expression], result: MonotypeId) -> Alternative {
+        let patterns = scrutinees
+            .iter()
+            .map(|scrutinee| Pattern { kind: PatternKind::Wildcard, monotype: scrutinee.monotype })
+            .collect();
+        let failure = ExpressionKind::Fail(SmolStr::new_static(PATTERN_MATCH_FAILURE));
+        let body = Guarded::Unconditional(Expression::new(failure, result));
+        Alternative { patterns, body }
+    }
+}
+
 #[derive(Debug, Clone)]
 pub enum Guarded {
     Unconditional(Expression),

@@ -134,6 +134,8 @@ where
         exhaustive::check_lambda_patterns(state, context, &[binder.type_id], &[binder_id])?;
 
     let has_missing = exhaustiveness.missing.is_some();
+    let pattern_match = tree::PatternMatch::LetPattern(binder.binder);
+    state.record_exhaustiveness(pattern_match, exhaustiveness.exhaustive);
     state.report_exhaustiveness(exhaustiveness);
 
     if has_missing {
@@ -262,6 +264,11 @@ where
                 unification::subtype(state, context, inferred_type, expanded_name_type)?;
             }
 
+            let pattern_match =
+                tree::PatternMatch::Equations(tree::EquationSource::Local(*equation_source));
+            let exhaustive = exhaustive::guarded_always_matches(context, Some(guarded));
+            state.record_exhaustiveness(pattern_match, exhaustive);
+
             let declaration = tree::LocalDeclaration::nullary(
                 id,
                 name_type,
@@ -280,6 +287,10 @@ where
         &checked_equations.patterns,
         &name.equations,
     )?;
+    if let Some(&first) = group.equations.first() {
+        let pattern_match = tree::PatternMatch::Equations(tree::EquationSource::Local(first));
+        state.record_exhaustiveness(pattern_match, exhaustiveness.exhaustive);
+    }
     state.report_exhaustiveness(exhaustiveness);
 
     assert_eq!(
