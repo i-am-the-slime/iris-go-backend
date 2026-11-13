@@ -151,17 +151,34 @@ impl Monotypes {
     where
         Q: checking::ExternalQueries,
     {
+        self.convert(context, type_id, 0)
+    }
+
+    fn convert<Q>(
+        &mut self,
+        context: &mut Context<'_, Q>,
+        type_id: TypeId,
+        expansions: usize,
+    ) -> QueryResult<Result<MonotypeId, UnsupportedState>>
+    where
+        Q: checking::ExternalQueries,
+    {
+        // Inside a newtype expansion the result depends on the newtypes being
+        // expanded, so only conversions outside every expansion are remembered.
+        if expansions > 0 || !self.expanding.is_empty() {
+            return self.convert_uncached(context, type_id, expansions);
+        }
         if let Some(&id) = self.converted.get(&type_id) {
             return Ok(Ok(id));
         }
-        let converted = self.convert(context, type_id, 0)?;
+        let converted = self.convert_uncached(context, type_id, expansions)?;
         if let Ok(id) = converted {
             self.converted.insert(type_id, id);
         }
         Ok(converted)
     }
 
-    fn convert<Q>(
+    fn convert_uncached<Q>(
         &mut self,
         context: &mut Context<'_, Q>,
         type_id: TypeId,
