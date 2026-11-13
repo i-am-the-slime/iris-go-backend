@@ -549,12 +549,18 @@ pub fn go(path: &Path) -> FixtureResult {
     let loaded = crate::load_fixture(folder)?;
     check_source_errors(&loaded.engine, &loaded.files, &loaded.fixture_files)?;
 
-    let program = go::compile_program(&loaded.engine, &file, "main", &go::ForeignPackages::default())?;
+    let compiled =
+        go::compile_program(&loaded.engine, &file, "main", &go::ForeignPackages::default());
+    let output = match compiled {
+        Ok(program) => program.source,
+        Err(go::GoError::Blocked(blockers)) => blockers.to_string(),
+        Err(error) => return Err(error.into()),
+    };
     let mut settings = insta::Settings::clone_current();
     settings.set_snapshot_path(snapshot_path(folder));
     settings.set_prepend_module_to_snapshot(false);
     settings.set_omit_expression(true);
-    settings.bind(|| insta::assert_snapshot!(file, program.source));
+    settings.bind(|| insta::assert_snapshot!(file, output));
 
     Ok(())
 }

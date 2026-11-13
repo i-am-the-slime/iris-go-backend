@@ -17,6 +17,7 @@ use indexing::{IndexedTermItemKind, TermItemId};
 use rustc_hash::FxHashMap;
 use smol_str::{SmolStr, format_smolstr};
 
+use crate::blocker::{Blocker, Blockers};
 use crate::context::{Context, ModuleData};
 use crate::dictionary::{Dictionary, InstanceDictionary, Reflected};
 use crate::error::{GoError, GoResult, UnsupportedState};
@@ -26,9 +27,13 @@ use crate::mono::{
     GuardedBranch, Literal, Local, LocalId, Pattern, PatternKind, RecordUpdate,
 };
 use crate::monotype::{Monotype, MonotypeId, Monotypes};
+use crate::scheme::{
+    SCHEME_INSTANTIATION_LIMIT, SchemeInstantiation, SchemeInstantiations, SchemeKey,
+    constrained_scheme,
+};
 use crate::types::Substitution;
 
-const SPECIALIZATION_LIMIT: usize = 20_000;
+const SPECIALIZATION_LIMIT: usize = 100_000;
 const LOCAL_SPECIALIZATION_LIMIT: usize = 64;
 
 struct IgnoringCallee {
@@ -93,6 +98,7 @@ struct Scope {
     locals: FxHashMap<LocalSource, Local>,
     polymorphic_locals: FxHashMap<lowering::LetBindingNameGroupId, PolymorphicLocal>,
     local_aliases: FxHashMap<lowering::LetBindingNameGroupId, tree::ExpressionId>,
+    scheme_locals: FxHashMap<LocalSource, TypeId>,
     definition: String,
 }
 
@@ -100,6 +106,7 @@ struct PolymorphicLocal {
     name: SmolStr,
     declaration: tree::LocalDeclarationId,
     specializations: Vec<LocalSpecialization>,
+    active: Option<usize>,
 }
 
 struct LocalSpecialization {
@@ -107,6 +114,7 @@ struct LocalSpecialization {
     dictionaries: Arc<[Dictionary]>,
     local: Local,
     value: Option<Expression>,
+    requester: Option<usize>,
 }
 
 enum LocalForm {
@@ -152,16 +160,32 @@ pub struct Specializer<'q, Q> {
     queue: VecDeque<(FunctionId, SpecializationKey, SmolStr)>,
     next_local: u32,
     foreign_packages: &'q ForeignPackages,
+    blockers: Vec<RecordedBlocker>,
+    blocker_positions: FxHashMap<(String, UnsupportedState), usize>,
+    discovered: Vec<(SchemeKey, SchemeInstantiation)>,
+}
+
+struct RecordedBlocker {
+    definition: String,
+    state: UnsupportedState,
+    requester: Option<FunctionId>,
+    occurrences: usize,
 }
 
 impl<'q, Q> Specializer<'q, Q>
 where
     Q: checking::ExternalQueries,
 {
-    pub fn new(queries: &'q Q, foreign_packages: &'q ForeignPackages) -> Specializer<'q, Q> {
+    pub fn new(
+        queries: &'q Q,
+        foreign_packages: &'q ForeignPackages,
+        schemes: SchemeInstantiations,
+    ) -> Specializer<'q, Q> {
+        let mut monotypes = Monotypes::default();
+        monotypes.schemes = schemes;
         Specializer {
             context: Context::new(queries),
-            monotypes: Monotypes::default(),
+            monotypes,
             functions: vec![],
             keys: FxHashMap::default(),
             function_keys: vec![],
@@ -170,6 +194,9 @@ where
             queue: VecDeque::new(),
             next_local: 0,
             foreign_packages,
+            blockers: vec![],
+            blocker_positions: FxHashMap::default(),
+            discovered: vec![],
         }
     }
 
@@ -187,10 +214,109 @@ where
         let entry = self.request(key, name)?;
         while let Some((id, key, name)) = self.queue.pop_front() {
             self.current = Some(id);
-            let function = self.specialize(&key, name)?;
+            let function = match self.specialize(&key, name.clone()) {
+                Ok(function) => function,
+                Err(error) => {
+                    self.record(error)?;
+                    let erased = self.monotypes.intern(Monotype::Erased);
+                    let body = Expression::new(ExpressionKind::Fail(name.clone()), erased);
+                    Function { name, parameters: vec![], result: erased, body }
+                }
+            };
             self.functions[id.0 as usize] = Some(function);
         }
         Ok(entry)
+    }
+
+    pub fn grown_schemes(&self) -> Option<SchemeInstantiations> {
+        if self.discovered.is_empty() {
+            return None;
+        }
+        let mut schemes = self.monotypes.schemes.clone();
+        for (key, instantiation) in &self.discovered {
+            schemes.insert(key.clone(), instantiation.clone());
+        }
+        Some(schemes)
+    }
+
+    pub fn blockers(&mut self) -> GoResult<Option<Blockers>> {
+        if self.blockers.is_empty() {
+            return Ok(None);
+        }
+        Ok(Some(self.report()?))
+    }
+
+    fn record(&mut self, error: GoError) -> GoResult<()> {
+        let GoError::Unsupported { definition, state } = error else {
+            return Err(error);
+        };
+        let key = (definition, state);
+        if let Some(&position) = self.blocker_positions.get(&key) {
+            self.blockers[position].occurrences += 1;
+            return Ok(());
+        }
+        let (definition, state) = key.clone();
+        self.blocker_positions.insert(key, self.blockers.len());
+        let requester = self.current;
+        self.blockers.push(RecordedBlocker { definition, state, requester, occurrences: 1 });
+        Ok(())
+    }
+
+    fn recover(
+        &mut self,
+        result: GoResult<Expression>,
+        monotype: MonotypeId,
+    ) -> GoResult<Expression> {
+        match result {
+            Ok(expression) => Ok(expression),
+            Err(error) => {
+                self.record(error)?;
+                let blocked = SmolStr::new_static("blocked");
+                Ok(Expression::new(ExpressionKind::Fail(blocked), monotype))
+            }
+        }
+    }
+
+    fn report(&mut self) -> GoResult<Blockers> {
+        let recorded = std::mem::take(&mut self.blockers);
+        let mut blockers = Vec::with_capacity(recorded.len());
+        for blocker in recorded {
+            let mut requesters: Vec<String> = vec![];
+            let mut ancestor = blocker.requester;
+            while let Some(id) = ancestor {
+                let description = self.describe(id)?;
+                let repeated = requesters.last() == Some(&description)
+                    || (requesters.is_empty() && description == blocker.definition);
+                if !repeated {
+                    requesters.push(description);
+                }
+                ancestor = self.parents[id.0 as usize];
+            }
+            blockers.push(Blocker {
+                definition: blocker.definition,
+                state: blocker.state,
+                requesters,
+                occurrences: blocker.occurrences,
+            });
+        }
+        Ok(Blockers { blockers })
+    }
+
+    fn describe(&mut self, id: FunctionId) -> GoResult<String> {
+        let definition = self.function_keys[id.0 as usize].definition.clone();
+        self.describe_definition(definition)
+    }
+
+    fn describe_definition(&mut self, definition: Definition) -> GoResult<String> {
+        match definition {
+            Definition::Value { file_id, term } => {
+                Ok(self.context.qualified_term_name(file_id, term)?)
+            }
+            Definition::Member { dictionary, member } => {
+                let member = self.context.qualified_term_name(member.0, member.1)?;
+                Ok(format!("{member} of {}", self.instance_name(dictionary.origin)?))
+            }
+        }
     }
 
     pub fn finish(mut self) -> (Vec<Function>, Monotypes, u32) {
@@ -236,7 +362,7 @@ where
         }
         if self.functions.len() >= SPECIALIZATION_LIMIT {
             return Err(GoError::Unsupported {
-                definition: name.to_string(),
+                definition: self.describe_definition(key.definition)?,
                 state: UnsupportedState::SpecializationLimit { limit: SPECIALIZATION_LIMIT },
             });
         }
@@ -308,6 +434,7 @@ where
                     locals: FxHashMap::default(),
                     polymorphic_locals: FxHashMap::default(),
                     local_aliases: FxHashMap::default(),
+                    scheme_locals: FxHashMap::default(),
                     definition,
                 };
                 (scope, value)
@@ -350,6 +477,7 @@ where
                     locals: FxHashMap::default(),
                     polymorphic_locals: FxHashMap::default(),
                     local_aliases: FxHashMap::default(),
+                    scheme_locals: FxHashMap::default(),
                     definition,
                 };
                 (scope, value)
@@ -653,6 +781,7 @@ where
                                         name,
                                         declaration: declaration_id,
                                         specializations: vec![],
+                                        active: None,
                                     };
                                     let previous = scope.polymorphic_locals.insert(source, entry);
                                     shadowed.push((source, previous));
@@ -672,7 +801,8 @@ where
                         for member in members {
                             converted.push(match member {
                                 Declared::Monomorphic(local, equations) => {
-                                    let value = self.equations(scope, &equations)?;
+                                    let value = self.equations(scope, &equations);
+                                    let value = self.recover(value, local.monotype)?;
                                     Member::Monomorphic(Binding { local, value })
                                 }
                                 Declared::Polymorphic(source) => Member::Polymorphic(source),
@@ -729,6 +859,25 @@ where
     }
 
     fn expression(&mut self, scope: &mut Scope, id: tree::ExpressionId) -> GoResult<Expression> {
+        let result = self.translate_expression(scope, id);
+        if result.is_ok() {
+            return result;
+        }
+        let monotype = self.monotype(scope, scope.module.checked.tree[id].type_id);
+        match monotype {
+            Ok(monotype) => self.recover(result, monotype),
+            Err(error) => {
+                self.record(result.err().expect("invariant violated: result is an error"))?;
+                Err(error)
+            }
+        }
+    }
+
+    fn translate_expression(
+        &mut self,
+        scope: &mut Scope,
+        id: tree::ExpressionId,
+    ) -> GoResult<Expression> {
         let module = Arc::clone(&scope.module);
         let node = &module.checked.tree[id];
         let kind = match &node.kind {
@@ -807,10 +956,7 @@ where
                     scope.givens.insert(*binder, Dictionary::Trivial);
                     return self.expression(scope, *expression);
                 }
-                return Err(self.unsupported(
-                    scope,
-                    UnsupportedState::Construct { construct: "constrained higher-rank arguments" },
-                ));
+                return self.scheme_construction(scope, id);
             }
             tree::ExpressionKind::Lambda { binders, expression } => {
                 if let Some(parameters) = self.variable_parameters(scope, binders)? {
@@ -929,19 +1075,34 @@ where
             && let [argument] = arguments[..]
         {
             let mut argument = self.expression(scope, argument)?;
-            if !matches!(self.monotypes.get(monotype), Monotype::Recursive(_)) {
-                argument.monotype = monotype;
+            if matches!(self.monotypes.get(monotype), Monotype::Recursive(_)) {
+                return Ok(argument);
             }
+            if self.mentions_erased(monotype) {
+                return Ok(self.coerce(argument, monotype));
+            }
+            argument.monotype = monotype;
             return Ok(argument);
         }
-        let mut function = match module.checked.tree[head].kind {
+        let function = match module.checked.tree[head].kind {
             tree::ExpressionKind::Constructor { .. }
             | tree::ExpressionKind::Variable { .. }
             | tree::ExpressionKind::RecordPun { .. }
             | tree::ExpressionKind::EvidenceApplication { .. } => {
-                self.reference(scope, head, result_instantiations, None)?
+                self.reference(scope, head, result_instantiations, None)
             }
-            _ => self.expression(scope, head)?,
+            _ => self.expression(scope, head),
+        };
+        let mut function = match function {
+            Ok(function) => function,
+            Err(error) => {
+                self.record(error)?;
+                for argument in arguments {
+                    self.expression(scope, argument)?;
+                }
+                let blocked = SmolStr::new_static("blocked");
+                return Ok(Expression::new(ExpressionKind::Fail(blocked), monotype));
+            }
         };
         let mut parameter_type = module.checked.tree[head].type_id;
         let mut callee = IgnoringCallee::of(&function, 0);
@@ -1055,6 +1216,135 @@ where
         }
     }
 
+    fn scheme_construction(
+        &mut self,
+        scope: &mut Scope,
+        id: tree::ExpressionId,
+    ) -> GoResult<Expression> {
+        let module = Arc::clone(&scope.module);
+        let closed =
+            self.context.types.substitute(module.checked.tree[id].type_id, &scope.substitution);
+        let Some(scheme) = constrained_scheme(&mut self.context, closed)? else {
+            return Err(self.unsupported(
+                scope,
+                UnsupportedState::Construct { construct: "constrained higher-rank arguments" },
+            ));
+        };
+        let mut binders = vec![];
+        let mut body = id;
+        while let tree::ExpressionKind::EvidenceAbstraction { binder, expression } =
+            module.checked.tree[body].kind
+        {
+            binders.push(binder);
+            body = expression;
+        }
+        if binders.len() != scheme.constraints.len() {
+            return Err(self.unsupported(
+                scope,
+                UnsupportedState::Construct { construct: "constrained higher-rank arguments" },
+            ));
+        }
+        let monotype = self.closed_monotype(scope, closed)?;
+        let instantiations = self.monotypes.schemes.get(&scheme.key).to_vec();
+        let mut fields = Vec::with_capacity(instantiations.len());
+        for instantiation in instantiations {
+            let substitution = scope.substitution.clone();
+            let givens = scope.givens.clone();
+            scope
+                .substitution
+                .extend(scheme.names.iter().copied().zip(instantiation.types.iter().copied()));
+            scope
+                .givens
+                .extend(binders.iter().copied().zip(instantiation.dictionaries.iter().cloned()));
+            let value = self.expression(scope, body);
+            scope.substitution = substitution;
+            scope.givens = givens;
+            fields.push((instantiation.label, value?));
+        }
+        fields.sort_by(|left, right| left.0.cmp(&right.0));
+        Ok(Expression::new(ExpressionKind::Record(fields), monotype))
+    }
+
+    fn instantiated_local_reference(
+        &mut self,
+        scope: &mut Scope,
+        source: LocalSource,
+        instantiations: &Substitution,
+        dictionaries: Vec<Dictionary>,
+    ) -> GoResult<Expression> {
+        let local = self.local_reference(scope, source)?;
+        let Some(&closed) = scope.scheme_locals.get(&source) else {
+            return Ok(local);
+        };
+        let Some(scheme) = constrained_scheme(&mut self.context, closed)? else {
+            return Ok(local);
+        };
+        let Some(types) = scheme
+            .names
+            .iter()
+            .map(|name| instantiations.get(name).copied())
+            .collect::<Option<Vec<TypeId>>>()
+        else {
+            return Ok(local);
+        };
+        let instantiated = scheme.instantiate(&self.context, &types);
+        let monotype = self.closed_monotype(scope, instantiated)?;
+        if let Some(known) = self.monotypes.schemes.find(&scheme.key, &types) {
+            let label = known.label.clone();
+            let kind = ExpressionKind::Access { record: Box::new(local), label };
+            return Ok(Expression::new(kind, monotype));
+        }
+        self.discover(scope, scheme.key, types, dictionaries)?;
+        let pending = SmolStr::new_static("instantiation discovered in this pass");
+        Ok(Expression::new(ExpressionKind::Fail(pending), monotype))
+    }
+
+    fn discover(
+        &mut self,
+        scope: &Scope,
+        key: SchemeKey,
+        types: Vec<TypeId>,
+        dictionaries: Vec<Dictionary>,
+    ) -> GoResult<()> {
+        let pending = self
+            .discovered
+            .iter()
+            .any(|(pending, instantiation)| *pending == key && *instantiation.types == *types);
+        if pending {
+            return Ok(());
+        }
+        let known = self.monotypes.schemes.get(&key);
+        let discovered = self.discovered.iter().filter(|(pending, _)| *pending == key);
+        let mut labels: Vec<SmolStr> = known.iter().map(|known| known.label.clone()).collect();
+        labels.extend(discovered.map(|(_, instantiation)| instantiation.label.clone()));
+        if labels.len() >= SCHEME_INSTANTIATION_LIMIT {
+            return Err(self.unsupported(
+                scope,
+                UnsupportedState::SpecializationLimit { limit: SCHEME_INSTANTIATION_LIMIT },
+            ));
+        }
+        let mut suffix = String::new();
+        for &type_id in &types {
+            self.context.type_suffix(type_id, &mut suffix)?;
+        }
+        let base: String =
+            suffix.chars().filter(|character| character.is_ascii_alphanumeric()).collect();
+        let base = if base.is_empty() { String::from("Instance") } else { base };
+        let mut label = SmolStr::from(&base);
+        let mut index = 1;
+        while labels.contains(&label) {
+            label = format_smolstr!("{base}{index}");
+            index += 1;
+        }
+        let instantiation = SchemeInstantiation {
+            types: Arc::from(types),
+            dictionaries: Arc::from(dictionaries),
+            label,
+        };
+        self.discovered.push((key, instantiation));
+        Ok(())
+    }
+
     fn local_reference(&mut self, scope: &Scope, source: LocalSource) -> GoResult<Expression> {
         let Some(local) = scope.locals.get(&source) else {
             return Err(self.unsupported(
@@ -1141,10 +1431,12 @@ where
 
         match resolution {
             tree::VariableResolution::Generated(binder) => {
-                self.local_reference(scope, self.checked_binder_source(scope, binder))
+                let source = self.checked_binder_source(scope, binder);
+                self.instantiated_local_reference(scope, source, &instantiations, dictionaries)
             }
             tree::VariableResolution::Source(lowering::TermVariableResolution::Binder(binder)) => {
-                self.local_reference(scope, LocalSource::Binder(binder))
+                let source = LocalSource::Binder(binder);
+                self.instantiated_local_reference(scope, source, &instantiations, dictionaries)
             }
             tree::VariableResolution::Source(lowering::TermVariableResolution::Let(group))
                 if scope.polymorphic_locals.contains_key(&group) =>
@@ -1217,8 +1509,22 @@ where
     ) -> GoResult<Expression> {
         let module = Arc::clone(&scope.module);
         let declaration = &module.checked.tree[scope.polymorphic_locals[&source].declaration];
-        let types =
+        let requested =
             self.abstraction_types(scope, &declaration.value.abstractions, instantiations)?;
+        let mut substitution = scope.substitution.clone();
+        substitution.extend(instantiations.iter().map(|(&name, &type_id)| (name, type_id)));
+        let requested_monotype =
+            self.declared_monotype(scope, declaration.type_id, &substitution)?;
+        let types = self.terminate_local_growth(&scope.polymorphic_locals[&source], &requested);
+        for (name, (&requested, &terminated)) in self
+            .abstraction_names(&declaration.value.abstractions)
+            .into_iter()
+            .zip(requested.iter().zip(types.iter()))
+        {
+            if requested != terminated {
+                substitution.insert(name, terminated);
+            }
+        }
         let types: Arc<[TypeId]> = Arc::from(types);
         let dictionaries: Arc<[Dictionary]> = Arc::from(dictionaries);
         let existing =
@@ -1227,10 +1533,9 @@ where
             });
         if let Some(specialization) = existing {
             let local = &specialization.local;
-            return Ok(Expression::new(ExpressionKind::Local(local.id), local.monotype));
+            let expression = Expression::new(ExpressionKind::Local(local.id), local.monotype);
+            return Ok(self.coerce(expression, requested_monotype));
         }
-        let mut substitution = scope.substitution.clone();
-        substitution.extend(instantiations.iter().map(|(&name, &type_id)| (name, type_id)));
         let monotype = self.declared_monotype(scope, declaration.type_id, &substitution)?;
         let polymorphic = scope
             .polymorphic_locals
@@ -1238,13 +1543,47 @@ where
             .expect("invariant violated: polymorphic local is in scope");
         let local = self.fresh_local(polymorphic.name.clone(), monotype);
         let expression = Expression::new(ExpressionKind::Local(local.id), monotype);
+        let requester = polymorphic.active;
         polymorphic.specializations.push(LocalSpecialization {
             types,
             dictionaries,
             local,
             value: None,
+            requester,
         });
-        Ok(expression)
+        Ok(self.coerce(expression, requested_monotype))
+    }
+
+    fn terminate_local_growth(
+        &self,
+        polymorphic: &PolymorphicLocal,
+        requested: &[TypeId],
+    ) -> Vec<TypeId> {
+        let mut types = requested.to_vec();
+        let mut ancestor = polymorphic.active;
+        while let Some(index) = ancestor {
+            let specialization = &polymorphic.specializations[index];
+            for (position, &ancestor_type) in specialization.types.iter().enumerate() {
+                let Some(&requested) = types.get(position) else { continue };
+                if requested != ancestor_type
+                    && self.context.types.contains(requested, ancestor_type)
+                {
+                    types[position] = self.context.types.erased();
+                }
+            }
+            ancestor = specialization.requester;
+        }
+        types
+    }
+
+    fn abstraction_names(&self, abstractions: &[DeclarationAbstraction]) -> Vec<Name> {
+        let names = abstractions.iter().filter_map(|abstraction| match abstraction {
+            DeclarationAbstraction::Type { binder, .. } => {
+                Some(self.context.queries.lookup_forall_binder(*binder).name)
+            }
+            _ => None,
+        });
+        names.collect()
     }
 
     fn specialize_polymorphic_locals(
@@ -1277,17 +1616,21 @@ where
             let dictionaries = Arc::clone(&specialization.dictionaries);
             let substitution = scope.substitution.clone();
             let givens = scope.givens.clone();
+            let active = scope
+                .polymorphic_locals
+                .get_mut(&source)
+                .map(|polymorphic| std::mem::replace(&mut polymorphic.active, Some(index)));
             let specialized = self
                 .bind_abstractions(scope, &value.abstractions, &types, &dictionaries)
                 .and_then(|()| self.equations(scope, &value.equations));
             scope.substitution = substitution;
             scope.givens = givens;
-            let specializations = &mut scope
+            let polymorphic = scope
                 .polymorphic_locals
                 .get_mut(&source)
-                .expect("invariant violated: polymorphic local is in scope")
-                .specializations;
-            specializations[index].value = Some(specialized?);
+                .expect("invariant violated: polymorphic local is in scope");
+            polymorphic.active = active.flatten();
+            polymorphic.specializations[index].value = Some(specialized?);
         }
     }
 
@@ -1720,12 +2063,14 @@ where
                 let local = self.fresh_local(name, monotype);
                 let source = self.checked_binder_source(scope, binder_id);
                 scope.locals.insert(source, local.clone());
+                self.register_scheme_local(scope, source, binder.type_id);
                 PatternKind::Variable(local)
             }
             tree::BinderKind::Named { name, binder: inner } => {
                 let local = self.fresh_local(name.clone(), monotype);
                 let source = self.checked_binder_source(scope, binder_id);
                 scope.locals.insert(source, local.clone());
+                self.register_scheme_local(scope, source, binder.type_id);
                 let pattern = self.pattern(scope, *inner)?;
                 PatternKind::Named { local, pattern: Box::new(pattern) }
             }
@@ -1773,6 +2118,9 @@ where
                     };
                     let mut pattern = self.pattern(scope, *argument)?;
                     if !matches!(self.monotypes.get(monotype), Monotype::Recursive(_)) {
+                        if pattern.monotype != monotype && self.mentions_erased(monotype) {
+                            self.adopt_representation(scope, *argument, &mut pattern, monotype);
+                        }
                         pattern.monotype = monotype;
                     }
                     return Ok(pattern);
@@ -1797,6 +2145,33 @@ where
             }
         };
         Ok(Pattern { kind, monotype })
+    }
+
+    fn adopt_representation(
+        &mut self,
+        scope: &mut Scope,
+        binder: tree::BinderId,
+        pattern: &mut Pattern,
+        monotype: MonotypeId,
+    ) {
+        let (binder, _) = self.unwrap_typed(scope, binder);
+        let source = self.checked_binder_source(scope, binder);
+        if let PatternKind::Variable(local) | PatternKind::Named { local, .. } = &mut pattern.kind {
+            local.monotype = monotype;
+            scope.locals.insert(source, local.clone());
+        }
+    }
+
+    fn register_scheme_local(&mut self, scope: &mut Scope, source: LocalSource, type_id: TypeId) {
+        let closed = self.context.types.substitute(type_id, &scope.substitution);
+        if matches!(
+            self.context.types.lookup(self.context.types.strip_annotations(closed)),
+            Type::Forall(..)
+        ) {
+            scope.scheme_locals.insert(source, closed);
+        } else {
+            scope.scheme_locals.remove(&source);
+        }
     }
 
     fn binder_name(&self, scope: &Scope, binder_id: tree::BinderId) -> SmolStr {

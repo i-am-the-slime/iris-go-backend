@@ -1,6 +1,8 @@
 use building_types::QueryError;
 use thiserror::Error;
 
+use crate::blocker::Blockers;
+
 pub type GoResult<T> = Result<T, GoError>;
 
 #[derive(Debug, Error)]
@@ -13,9 +15,11 @@ pub enum GoError {
     MissingEntry(String),
     #[error("cannot specialize {definition}: {state}")]
     Unsupported { definition: String, state: UnsupportedState },
+    #[error("{0}")]
+    Blocked(Blockers),
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Error)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Error)]
 pub enum UnsupportedState {
     #[error("checked expression contains an error")]
     ExpressionError,
@@ -47,6 +51,8 @@ pub enum UnsupportedState {
     SpecializationLimit { limit: usize },
     #[error("declaration interleaves arguments before its constraints")]
     InterleavedAbstractions,
+    #[error("foreign data type {name} has no Go representation")]
+    ForeignData { name: String },
     #[error("foreign import {name} has no Go implementation")]
     UnknownForeign { name: String },
     #[error("{construct} is not supported by the Go backend yet")]

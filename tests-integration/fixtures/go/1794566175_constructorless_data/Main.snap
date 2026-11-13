@@ -1,0 +1,19 @@
+---
+source: tests-integration/src/fixtures.rs
+---
+package main
+
+import (
+	"fmt"
+	"github.com/i-am-the-slime/purs-backend-go/go-support/array"
+)
+
+var main_ []int32 = array.Append(array.Map(func(value any) int32 {
+	return value.(int32) + 1
+}, values), []int32{3})
+
+var values []any = []any{int32(1), int32(2)}
+
+func main() {
+	fmt.Println(main_)
+}

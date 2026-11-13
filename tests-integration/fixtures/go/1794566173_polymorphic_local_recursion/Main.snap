@@ -1,0 +1,268 @@
+---
+source: tests-integration/src/fixtures.rs
+---
+package main
+
+import (
+	"fmt"
+)
+
+type TreeInt struct {
+	Tag   int
+	Leaf0 int32
+	Pair0 any
+}
+
+const (
+	TreeIntLeaf = iota
+	TreeIntPair
+)
+
+type TreeFnIntInt struct {
+	Tag   int
+	Leaf0 func(int32) int32
+	Pair0 any
+}
+
+const (
+	TreeFnIntIntLeaf = iota
+	TreeFnIntIntPair
+)
+
+type PairEIntInt struct {
+	PairE0 *TreeFnIntInt
+	PairE1 *TreeInt
+}
+
+type TreeFn struct {
+	Tag   int
+	Leaf0 func(any) any
+	Pair0 any
+}
+
+const (
+	TreeFnLeaf = iota
+	TreeFnPair
+)
+
+type Tree struct {
+	Tag   int
+	Leaf0 any
+	Pair0 any
+}
+
+const (
+	TreeLeaf = iota
+	TreePair
+)
+
+type PairE struct {
+	PairE0 *TreeFn
+	PairE1 *Tree
+}
+
+func convert2(value *TreeFnIntInt) *TreeFn {
+	switch value.Tag {
+	case TreeFnIntIntLeaf:
+		return &TreeFn{Tag: TreeFnLeaf, Leaf0: func(coerced any) any {
+			return value.Leaf0(coerced.(int32))
+		}}
+	case TreeFnIntIntPair:
+		return &TreeFn{Tag: TreeFnPair, Pair0: value.Pair0}
+	}
+	panic("Failed pattern match")
+}
+
+func convert3(value *TreeInt) *Tree {
+	switch value.Tag {
+	case TreeIntLeaf:
+		return &Tree{Tag: TreeLeaf, Leaf0: value.Leaf0}
+	case TreeIntPair:
+		return &Tree{Tag: TreePair, Pair0: value.Pair0}
+	}
+	panic("Failed pattern match")
+}
+
+func convert(value *PairEIntInt) *PairE {
+	return &PairE{PairE0: convert2(value.PairE0), PairE1: convert3(value.PairE1)}
+}
+
+type TreeFnIntFnIntInt struct {
+	Tag   int
+	Leaf0 func(int32) func(int32) int32
+	Pair0 any
+}
+
+const (
+	TreeFnIntFnIntIntLeaf = iota
+	TreeFnIntFnIntIntPair
+)
+
+type PairEFnIntIntInt struct {
+	PairE0 *TreeFnIntFnIntInt
+	PairE1 *TreeInt
+}
+
+func convert5(value *TreeFnIntFnIntInt) *TreeFn {
+	switch value.Tag {
+	case TreeFnIntFnIntIntLeaf:
+		return &TreeFn{Tag: TreeFnLeaf, Leaf0: func(coerced2 any) any {
+			original := value.Leaf0(coerced2.(int32))
+			return func(coerced3 any) any {
+				return original(coerced3.(int32))
+			}
+		}}
+	case TreeFnIntFnIntIntPair:
+		return &TreeFn{Tag: TreeFnPair, Pair0: value.Pair0}
+	}
+	panic("Failed pattern match")
+}
+
+func convert4(value *PairEFnIntIntInt) *PairE {
+	return &PairE{PairE0: convert5(value.PairE0), PairE1: convert3(value.PairE1)}
+}
+
+type TreeFnInt struct {
+	Tag   int
+	Leaf0 func(any) int32
+	Pair0 any
+}
+
+const (
+	TreeFnIntLeaf = iota
+	TreeFnIntPair
+)
+
+type PairEInt struct {
+	PairE0 *TreeFnInt
+	PairE1 *Tree
+}
+
+func convert6(value *TreeFnInt) *Tree {
+	switch value.Tag {
+	case TreeFnIntLeaf:
+		return &Tree{Tag: TreeLeaf, Leaf0: func(coerced3 any) any {
+			return value.Leaf0(coerced3)
+		}}
+	case TreeFnIntPair:
+		return &Tree{Tag: TreePair, Pair0: value.Pair0}
+	}
+	panic("Failed pattern match")
+}
+
+func convert8(value *TreeFn) *TreeFnInt {
+	switch value.Tag {
+	case TreeFnLeaf:
+		return &TreeFnInt{Tag: TreeFnIntLeaf, Leaf0: func(coerced5 any) int32 {
+			return value.Leaf0(coerced5).(int32)
+		}}
+	case TreeFnPair:
+		return &TreeFnInt{Tag: TreeFnIntPair, Pair0: value.Pair0}
+	}
+	panic("Failed pattern match")
+}
+
+func convert7(value *PairE) *PairEInt {
+	return &PairEInt{PairE0: convert8(value.PairE0), PairE1: value.PairE1}
+}
+
+func convert9(value *TreeFn) *Tree {
+	switch value.Tag {
+	case TreeFnLeaf:
+		return &Tree{Tag: TreeLeaf, Leaf0: value.Leaf0}
+	case TreeFnPair:
+		return &Tree{Tag: TreePair, Pair0: value.Pair0}
+	}
+	panic("Failed pattern match")
+}
+
+var main_ []int32 = []int32{leavesInt(&TreeInt{Tag: TreeIntLeaf, Leaf0: 1}), leavesInt(&TreeInt{Tag: TreeIntPair, Pair0: convert(&PairEIntInt{PairE0: &TreeFnIntInt{Tag: TreeFnIntIntLeaf, Leaf0: func(value int32) int32 {
+	return value + 1
+}}, PairE1: &TreeInt{Tag: TreeIntLeaf, Leaf0: 1}})}), leavesInt(&TreeInt{Tag: TreeIntPair, Pair0: convert(&PairEIntInt{PairE0: &TreeFnIntInt{Tag: TreeFnIntIntPair, Pair0: convert4(&PairEFnIntIntInt{PairE0: &TreeFnIntFnIntInt{Tag: TreeFnIntFnIntIntLeaf, Leaf0: func(x int32) func(int32) int32 {
+	return func(y int32) int32 {
+		return x + y
+	}
+}}, PairE1: &TreeInt{Tag: TreeIntLeaf, Leaf0: 1}})}, PairE1: &TreeInt{Tag: TreeIntLeaf, Leaf0: 2}})})}
+
+var leavesInt func(*TreeInt) int32 = func(argument1 *TreeInt) int32 {
+	return leavesIntGo(0, argument1)
+}
+
+func leavesIntGo(argument0 int32, argument1 *TreeInt) int32 {
+	switch argument1.Tag {
+	case TreeIntLeaf:
+		return argument0 + 1
+	case TreeIntPair:
+		original3 := func(argument02 *PairEInt) int32 {
+			original := func(argument03 int32) func(*Tree) int32 {
+				return func(argument12 *Tree) int32 {
+					return leavesIntGo2(argument03, argument12)
+				}
+			}
+			return func(coerced int32) func(*TreeFnInt) int32 {
+				original2 := original(coerced)
+				return func(coerced2 *TreeFnInt) int32 {
+					return original2(convert6(coerced2))
+				}
+			}(argument0 + 1)(argument02.PairE0) + leavesIntGo3(argument0 + 1, argument02.PairE1)
+		}
+		return func(coerced4 any) int32 {
+			return original3(convert7(coerced4.(*PairE)))
+		}(argument1.Pair0)
+	}
+	panic("Failed pattern match")
+}
+
+func leavesIntGo2(argument0 int32, argument1 *Tree) int32 {
+	switch argument1.Tag {
+	case TreeLeaf:
+		return argument0 + 1
+	case TreePair:
+		original3 := func(argument02 *PairE) int32 {
+			original := func(argument03 int32) func(*Tree) int32 {
+				return func(argument12 *Tree) int32 {
+					return leavesIntGo2(argument03, argument12)
+				}
+			}
+			return func(coerced int32) func(*TreeFn) int32 {
+				original2 := original(coerced)
+				return func(coerced2 *TreeFn) int32 {
+					return original2(convert9(coerced2))
+				}
+			}(argument0 + 1)(argument02.PairE0) + leavesIntGo3(argument0 + 1, argument02.PairE1)
+		}
+		return func(coerced3 any) int32 {
+			return original3(coerced3.(*PairE))
+		}(argument1.Pair0)
+	}
+	panic("Failed pattern match")
+}
+
+func leavesIntGo3(argument0 int32, argument1 *Tree) int32 {
+	switch argument1.Tag {
+	case TreeLeaf:
+		return argument0 + 1
+	case TreePair:
+		original3 := func(argument02 *PairE) int32 {
+			original := func(argument03 int32) func(*Tree) int32 {
+				return func(argument12 *Tree) int32 {
+					return leavesIntGo2(argument03, argument12)
+				}
+			}
+			return func(coerced int32) func(*TreeFn) int32 {
+				original2 := original(coerced)
+				return func(coerced2 *TreeFn) int32 {
+					return original2(convert9(coerced2))
+				}
+			}(argument0 + 1)(argument02.PairE0) + leavesIntGo3(argument0 + 1, argument02.PairE1)
+		}
+		return func(coerced3 any) int32 {
+			return original3(coerced3.(*PairE))
+		}(argument1.Pair0)
+	}
+	panic("Failed pattern match")
+}
+
+func main() {
+	fmt.Println(main_)
+}

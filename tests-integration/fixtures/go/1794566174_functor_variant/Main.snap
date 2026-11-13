@@ -1,0 +1,177 @@
+---
+source: tests-integration/src/fixtures.rs
+---
+package main
+
+import (
+	"fmt"
+	"github.com/i-am-the-slime/purs-backend-go/go-support/prim"
+)
+
+type Map_Type_Value struct {
+	map_  func(func(any) any) func(any) any
+	type_ string
+	value any
+}
+
+type Proxy int
+
+const (
+	ProxyProxy Proxy = iota
+)
+
+type SayInt struct {
+	Say0 string
+	Say1 int32
+}
+
+type Proxy2 int
+
+const (
+	Proxy2Proxy Proxy2 = iota
+)
+
+type CountInt struct {
+	Count0 func(int32) int32
+}
+
+type Say struct {
+	Say0 string
+	Say1 any
+}
+
+type Map_Type_Value2 struct {
+	map_  func(func(any) any) func(*Say) *Say
+	type_ string
+	value *SayInt
+}
+
+func convert2(value *SayInt) *Say {
+	return &Say{Say0: value.Say0, Say1: value.Say1}
+}
+
+func convert(value Map_Type_Value2) Map_Type_Value {
+	return Map_Type_Value{map_: func(coerced func(any) any) func(any) any {
+		original := value.map_(coerced)
+		return func(coerced2 any) any {
+			return original(coerced2.(*Say))
+		}
+	}, type_: value.type_, value: convert2(value.value)}
+}
+
+type Count struct {
+	Count0 func(int32) any
+}
+
+type Map_Type_Value3 struct {
+	map_  func(func(any) any) func(*Count) *Count
+	type_ string
+	value *CountInt
+}
+
+func convert4(value *CountInt) *Count {
+	return &Count{Count0: func(coerced3 int32) any {
+		return value.Count0(coerced3)
+	}}
+}
+
+func convert3(value Map_Type_Value3) Map_Type_Value {
+	return Map_Type_Value{map_: func(coerced func(any) any) func(any) any {
+		original := value.map_(coerced)
+		return func(coerced2 any) any {
+			return original(coerced2.(*Count))
+		}
+	}, type_: value.type_, value: convert4(value.value)}
+}
+
+func convert5(value *Count) *CountInt {
+	return &CountInt{Count0: func(coerced int32) int32 {
+		return value.Count0(coerced).(int32)
+	}}
+}
+
+func convert6(value *Say) *SayInt {
+	return &SayInt{Say0: value.Say0, Say1: value.Say1.(int32)}
+}
+
+var main_ = initializeMain_()
+
+func initializeMain_() []string {
+	v := say
+	original := func(value int32) int32 {
+		return value * 10
+	}
+	v2 := count
+	original2 := func(value2 int32) int32 {
+		return value2 * 10
+	}
+	return []string{describe(say), describe(count), describe(Map_Type_Value{type_: v.type_, value: v.map_(func(coerced any) any {
+		return original(coerced.(int32))
+	})(v.value), map_: v.map_}), describe(Map_Type_Value{type_: v2.type_, value: v2.map_(func(coerced2 any) any {
+		return original2(coerced2.(int32))
+	})(v2.value), map_: v2.map_})}
+}
+
+var describe func(Map_Type_Value) string = func(r2 Map_Type_Value) string {
+	return onSayIntStringRecordCountRecordCountSay(ProxyProxy, func(argument0 *SayInt) string {
+		return argument0.Say0 + (" " + prim.ShowInt(int(argument0.Say1)))
+	}, func(r Map_Type_Value) string {
+		return onCountIntStringRecordRecordCount(Proxy2Proxy, func(argument02 *CountInt) string {
+			return "count " + prim.ShowInt(int(argument02.Count0(2)))
+		}, case_IntString, r)
+	}, r2)
+}
+
+var say Map_Type_Value = convert(Map_Type_Value2{type_: "say", value: &SayInt{Say0: "hello", Say1: 4}, map_: func(argument0 func(any) any) func(*Say) *Say {
+	return func(argument1 *Say) *Say {
+		return map_(argument0, argument1)
+	}
+}})
+
+var count Map_Type_Value = convert3(Map_Type_Value3{type_: "count", value: &CountInt{Count0: func(value int32) int32 {
+	return value + 1
+}}, map_: func(argument0 func(any) any) func(*Count) *Count {
+	return func(argument1 *Count) *Count {
+		return map_2(argument0, argument1)
+	}
+}})
+
+func case_IntString(r Map_Type_Value) string {
+	panic("Data.Functor.Variant: pattern match failure [" + (r.type_ + "]"))
+	var unreachable string
+	return unreachable
+}
+
+func onCountIntStringRecordRecordCount(p Proxy2, f func(*CountInt) string, g func(Map_Type_Value) string, r Map_Type_Value) string {
+	scrutinee := r
+	if scrutinee.type_ == "count" {
+		return f(convert5(scrutinee.value.(*Count)))
+	}
+	return g(r)
+}
+
+func onSayIntStringRecordCountRecordCountSay(p Proxy, f func(*SayInt) string, g func(Map_Type_Value) string, r Map_Type_Value) string {
+	scrutinee := r
+	if scrutinee.type_ == "say" {
+		return f(convert6(scrutinee.value.(*Say)))
+	}
+	return g(r)
+}
+
+func map_(argument0 func(any) any, argument1 *Say) *Say {
+	return &Say{Say0: argument1.Say0, Say1: argument0(argument1.Say1)}
+}
+
+func map_2(argument0 func(any) any, argument1 *Count) *Count {
+	return &Count{Count0: func(x int32) any {
+		return compose(argument0, argument1.Count0, x)
+	}}
+}
+
+func compose(f func(any) any, g func(int32) any, x int32) any {
+	return f(g(x))
+}
+
+func main() {
+	fmt.Println(main_)
+}

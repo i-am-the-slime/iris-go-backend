@@ -4,6 +4,7 @@
 //! types and evidence, simplifies the resulting monomorphic tree, and renders it
 //! as a single Go `main` package.
 
+pub mod blocker;
 mod context;
 mod dictionary;
 mod emit;
@@ -12,6 +13,7 @@ mod foreign;
 mod lift;
 mod mono;
 mod monotype;
+mod scheme;
 mod simplify;
 mod specialize;
 mod syntax;
@@ -20,6 +22,7 @@ mod types;
 pub use error::{GoError, GoResult, UnsupportedState};
 pub use foreign::ForeignPackages;
 
+use crate::scheme::SchemeInstantiations;
 use crate::specialize::Specializer;
 
 pub struct GoProgram {
@@ -44,8 +47,18 @@ pub fn compile_program(
         .find(|(_, item)| item.name.as_deref() == Some(entry_name))
         .ok_or_else(|| GoError::MissingEntry(qualified.clone()))?;
 
-    let mut specializer = Specializer::new(queries, foreign_packages);
-    let entry = specializer.specialize_entry(file_id, term)?;
+    let mut schemes = SchemeInstantiations::default();
+    let (entry, mut specializer) = loop {
+        let mut specializer = Specializer::new(queries, foreign_packages, schemes);
+        let entry = specializer.specialize_entry(file_id, term)?;
+        match specializer.grown_schemes() {
+            Some(grown) => schemes = grown,
+            None => break (entry, specializer),
+        }
+    };
+    if let Some(blockers) = specializer.blockers()? {
+        return Err(GoError::Blocked(blockers));
+    }
     let (functions, mut monotypes, next_local) = specializer.finish();
     let program = mono::Program { functions, entry };
     let program = simplify::simplify(program, &mut monotypes, next_local);
