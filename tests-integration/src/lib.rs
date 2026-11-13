@@ -126,6 +126,7 @@ pub struct LoadedFixture {
 fn uses_registry_packages(folder: &Path) -> bool {
     folder.starts_with("fixtures/compiler/")
         || folder.starts_with("fixtures/sourcemap/")
+        || folder.starts_with("fixtures/go/")
         || folder.starts_with("../library/")
 }
 

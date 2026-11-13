@@ -11,6 +11,7 @@ checking = { version = "0.1.0", path = "../compiler-frontend/checking" }
 files = { version = "0.1.0", path = "../compiler-core/files" }
 formatting = { version = "0.1.0", path = "../compiler-frontend/formatting" }
 functional = { version = "0.1.0", path = "../compiler-backend/functional" }
+go = { version = "0.1.0", path = "../compiler-backend/go" }
 glob = "0.3.4"
 hashbrown = { version = "0.16.1", features = ["allocator-api2", "equivalent"] }
 indexing = { version = "0.1.0", path = "../compiler-frontend/indexing" }
@@ -74,6 +75,10 @@ harness = false
 
 [[test]]
 name = "sourcemap"
+harness = false
+
+[[test]]
+name = "go"
 harness = false
 
 [[test]]

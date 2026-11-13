@@ -68,6 +68,7 @@ pub enum ExpressionKind {
     Foreign { foreign: Foreign, arguments: Vec<Expression> },
     Apply { function: Box<Expression>, arguments: Vec<Expression> },
     Lambda { parameters: Vec<Local>, body: Box<Expression> },
+    Coerce(Box<Expression>),
     Let { bindings: Vec<Binding>, body: Box<Expression> },
     If { condition: Box<Expression>, then: Box<Expression>, otherwise: Box<Expression> },
     Case { scrutinees: Vec<Expression>, alternatives: Vec<Alternative> },

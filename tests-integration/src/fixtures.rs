@@ -543,6 +543,22 @@ pub fn sourcemap(path: &Path) -> FixtureResult {
     Ok(())
 }
 
+pub fn go(path: &Path) -> FixtureResult {
+    let folder = fixture_folder(path)?;
+    let file = module_name(path)?;
+    let loaded = crate::load_fixture(folder)?;
+    check_source_errors(&loaded.engine, &loaded.files, &loaded.fixture_files)?;
+
+    let program = go::compile_program(&loaded.engine, &file, "main")?;
+    let mut settings = insta::Settings::clone_current();
+    settings.set_snapshot_path(snapshot_path(folder));
+    settings.set_prepend_module_to_snapshot(false);
+    settings.set_omit_expression(true);
+    settings.bind(|| insta::assert_snapshot!(file, program.source));
+
+    Ok(())
+}
+
 pub fn lsp(path: &Path) -> FixtureResult {
     let folder = fixture_folder(path)?;
     let file = module_name(path)?;

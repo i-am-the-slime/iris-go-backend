@@ -29,6 +29,7 @@ pub enum Monotype {
     Effect(MonotypeId),
     Reference(MonotypeId),
     Data(DataType),
+    Recursive(DataType),
     Erased,
 }
 
@@ -62,6 +63,7 @@ pub struct Monotypes {
     lookup: FxHashMap<Monotype, MonotypeId>,
     converted: FxHashMap<TypeId, MonotypeId>,
     constructors: FxHashMap<DataType, Arc<[DataConstructor]>>,
+    unfolded: FxHashMap<DataType, MonotypeId>,
     regular: FxHashMap<(FileId, TypeItemId), bool>,
     expanding: Vec<(FileId, TypeItemId)>,
 }
@@ -251,6 +253,7 @@ impl Monotypes {
                 return self.convert_record(context, row, expansions);
             }
             ("Data.Unit", "Unit") => Monotype::Unit,
+            ("Data.Exists", "Exists") => Monotype::Erased,
             ("Data.Function.Uncurried", name) if name.starts_with("Fn") => {
                 let Some((&result, parameters)) = arguments.split_last() else {
                     return Ok(Err(UnsupportedState::UnsaturatedType { name: name.to_string() }));
@@ -288,6 +291,19 @@ impl Monotypes {
                     let Some(&constructor) = constructors.first() else {
                         return Ok(Err(self.open_type(type_id)));
                     };
+                    if is_recursive_newtype(context, file_id, item)? {
+                        let mut canonical = Vec::with_capacity(arguments.len());
+                        for argument in arguments {
+                            canonical.push(erase_newtypes(
+                                context,
+                                argument,
+                                expansions,
+                                &mut vec![],
+                            )?);
+                        }
+                        let data = DataType { file_id, item, arguments: Arc::from(canonical) };
+                        return Ok(Ok(self.intern(Monotype::Recursive(data))));
+                    }
                     if self.expanding.contains(&(file_id, item)) {
                         return Ok(Ok(self.intern(Monotype::Erased)));
                     }
@@ -403,6 +419,42 @@ impl Monotypes {
         Ok(regular)
     }
 
+    pub fn unfold<Q>(
+        &mut self,
+        context: &mut Context<'_, Q>,
+        data: &DataType,
+    ) -> QueryResult<Result<MonotypeId, UnsupportedState>>
+    where
+        Q: checking::ExternalQueries,
+    {
+        if let Some(&unfolded) = self.unfolded.get(data) {
+            return Ok(Ok(unfolded));
+        }
+        let module = context.module(data.file_id)?;
+        let IndexedTypeItemKind::Newtype { constructors, .. } =
+            &module.indexed.items[data.item].kind
+        else {
+            return Ok(Err(UnsupportedState::MissingDeclaration));
+        };
+        let Some(&constructor) = constructors.first() else {
+            return Ok(Err(UnsupportedState::MissingDeclaration));
+        };
+        let mut applied = context.queries.intern_type(Type::Constructor(data.file_id, data.item));
+        for &argument in data.arguments.iter() {
+            applied = context.queries.intern_type(Type::Application(applied, argument));
+        }
+        let Some(underlying) = newtype_underlying(context, data.file_id, constructor, applied)?
+        else {
+            return Ok(Err(self.open_type(applied)));
+        };
+        let unfolded = match self.monotype(context, underlying)? {
+            Ok(unfolded) => unfolded,
+            Err(error) => return Ok(Err(error)),
+        };
+        self.unfolded.insert(data.clone(), unfolded);
+        Ok(Ok(unfolded))
+    }
+
     pub fn constructors<Q>(
         &mut self,
         context: &mut Context<'_, Q>,
@@ -516,9 +568,13 @@ where
     }
     let (head, arguments) = context.types.spine(type_id);
     match context.types.lookup(head).clone() {
+        Type::Rigid(..) | Type::Unification(_) if erase && arguments.is_empty() => {
+            Ok(context.types.erased())
+        }
         Type::Constructor(file_id, item) => {
             let module = context.module(file_id)?;
             if erase
+                && !is_recursive_newtype(context, file_id, item)?
                 && let IndexedTypeItemKind::Newtype { constructors, .. } =
                     &module.indexed.items[item].kind
                 && let Some(&constructor) = constructors.first()
@@ -599,6 +655,120 @@ where
                 .all(|field| regular_occurrences(context, field.id, file_id, item, parameters))
         }
         _ => true,
+    }
+}
+
+pub fn is_recursive_newtype<Q>(
+    context: &mut Context<'_, Q>,
+    file_id: FileId,
+    item: TypeItemId,
+) -> QueryResult<bool>
+where
+    Q: checking::ExternalQueries,
+{
+    if let Some(&recursive) = context.recursive_newtypes.get(&(file_id, item)) {
+        return Ok(recursive);
+    }
+    let mut visited = vec![(file_id, item)];
+    let recursive = match declared_underlying(context, file_id, item)? {
+        Some(underlying) => mentions_type(context, underlying, (file_id, item), &mut visited, 0)?,
+        None => false,
+    };
+    context.recursive_newtypes.insert((file_id, item), recursive);
+    Ok(recursive)
+}
+
+fn declared_underlying<Q>(
+    context: &mut Context<'_, Q>,
+    file_id: FileId,
+    item: TypeItemId,
+) -> QueryResult<Option<TypeId>>
+where
+    Q: checking::ExternalQueries,
+{
+    let module = context.module(file_id)?;
+    let IndexedTypeItemKind::Newtype { constructors, .. } = &module.indexed.items[item].kind else {
+        return Ok(None);
+    };
+    let Some(signature) = constructors
+        .first()
+        .and_then(|&constructor| module.checked.lookup_term_item_type(constructor))
+    else {
+        return Ok(None);
+    };
+    let (_, body) = context.types.peel_quantifiers(signature);
+    Ok(context.types.function_parts(body).map(|(underlying, _)| underlying))
+}
+
+fn mentions_type<Q>(
+    context: &mut Context<'_, Q>,
+    type_id: TypeId,
+    target: (FileId, TypeItemId),
+    visited: &mut Vec<(FileId, TypeItemId)>,
+    expansions: usize,
+) -> QueryResult<bool>
+where
+    Q: checking::ExternalQueries,
+{
+    if expansions > NEWTYPE_EXPANSION_LIMIT {
+        return Ok(false);
+    }
+    let type_id = context.types.strip_annotations(type_id);
+    match context.types.lookup(type_id).clone() {
+        Type::Function(argument, result) => {
+            return Ok(mentions_type(context, argument, target, visited, expansions)?
+                || mentions_type(context, result, target, visited, expansions)?);
+        }
+        Type::Row(row) => {
+            let row = context.queries.lookup_row_type(row).clone();
+            for field in row.fields.iter() {
+                if mentions_type(context, field.id, target, visited, expansions)? {
+                    return Ok(true);
+                }
+            }
+            return Ok(false);
+        }
+        Type::Forall(_, inner) | Type::Constrained(_, inner) => {
+            return mentions_type(context, inner, target, visited, expansions);
+        }
+        _ => {}
+    }
+    let (head, arguments) = context.types.spine(type_id);
+    for &argument in &arguments {
+        if mentions_type(context, argument, target, visited, expansions)? {
+            return Ok(true);
+        }
+    }
+    match context.types.lookup(head).clone() {
+        Type::Constructor(file_id, item) => {
+            if (file_id, item) == target {
+                return Ok(true);
+            }
+            if visited.contains(&(file_id, item)) {
+                return Ok(false);
+            }
+            visited.push((file_id, item));
+            match declared_underlying(context, file_id, item)? {
+                Some(underlying) => {
+                    mentions_type(context, underlying, target, visited, expansions + 1)
+                }
+                None => Ok(false),
+            }
+        }
+        Type::Synonym(file_id, item) => {
+            let expanded = match expand_synonym(context, file_id, item, &arguments)? {
+                Some(expanded) => expanded,
+                None => {
+                    let module = context.module(file_id)?;
+                    match module.checked.lookup_synonym(item) {
+                        Some(synonym) => synonym.expansion,
+                        None => return Ok(false),
+                    }
+                }
+            };
+            mentions_type(context, expanded, target, visited, expansions + 1)
+        }
+        _ => Ok(false),
     }
 }
 

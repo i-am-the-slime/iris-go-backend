@@ -4169,6 +4169,7 @@ dependencies = [
  "functional",
  "gen-lsp-types",
  "glob",
+ "go",
  "hashbrown 0.16.1",
  "indexing",
  "insta",

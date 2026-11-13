@@ -1,0 +1,313 @@
+use super::{
+    DataKind, Emitter, call, field, identifier, identifier_expression, is_simple,
+    is_untyped_constant, panic_statement, unique, unit_value,
+};
+use crate::error::{GoError, GoResult};
+use crate::monotype::{DataType, Monotype, MonotypeId, RecordField};
+use crate::syntax::{GoCase, GoDeclaration, GoExpression, GoStatement, GoType};
+
+impl<'q, Q> Emitter<'_, '_, 'q, Q>
+where
+    Q: checking::ExternalQueries,
+{
+    pub(super) fn coerce(
+        &mut self,
+        value: GoExpression,
+        from: MonotypeId,
+        to: MonotypeId,
+        out: &mut Vec<GoStatement>,
+    ) -> GoResult<GoExpression> {
+        if from == to || self.go_type(from)? == self.go_type(to)? {
+            return Ok(value);
+        }
+        match (self.monotypes.get(from).clone(), self.monotypes.get(to).clone()) {
+            (Monotype::Recursive(data), _) => {
+                let unfolded = self.unfold(&data)?;
+                self.coerce(value, unfolded, to, out)
+            }
+            (_, Monotype::Recursive(data)) => {
+                let unfolded = self.unfold(&data)?;
+                self.coerce(value, from, unfolded, out)
+            }
+            (_, Monotype::Erased) => {
+                let canonical = self.canonical(from);
+                let value = self.coerce(value, from, canonical, out)?;
+                if is_untyped_constant(&value) {
+                    let type_ = self.go_type(canonical)?;
+                    return Ok(GoExpression::Conversion { type_, value: Box::new(value) });
+                }
+                Ok(value)
+            }
+            (Monotype::Erased, _) => {
+                let canonical = self.canonical(to);
+                let type_ = self.go_type(canonical)?;
+                let value = GoExpression::TypeAssertion { value: Box::new(value), type_ };
+                self.coerce(value, canonical, to, out)
+            }
+            (
+                Monotype::Function(from_argument, from_result),
+                Monotype::Function(to_argument, to_result),
+            ) => {
+                let function = self.shared(value, out);
+                let parameter = self.temporary("coerced");
+                let parameter_type = self.go_type(to_argument)?;
+                let mut body = vec![];
+                let argument = self.coerce(
+                    identifier_expression(&parameter),
+                    to_argument,
+                    from_argument,
+                    &mut body,
+                )?;
+                let invoked = call(function, vec![argument]);
+                self.coerce_invocation(invoked, from_result, to_result, &mut body)?;
+                let result = self.invocation_type(to_result)?;
+                Ok(GoExpression::Function {
+                    parameters: vec![(parameter, parameter_type)],
+                    result,
+                    body,
+                })
+            }
+            (Monotype::Effect(from_result), Monotype::Effect(to_result)) => {
+                let action = self.shared(value, out);
+                let mut body = vec![];
+                let performed = call(action, vec![]);
+                self.coerce_returned(performed, from_result, to_result, &mut body)?;
+                let result = self.go_result(to_result)?;
+                Ok(GoExpression::Function { parameters: vec![], result, body })
+            }
+            (Monotype::Array(_), Monotype::Array(_))
+            | (Monotype::Record(_), Monotype::Record(_))
+            | (Monotype::Data(_), Monotype::Data(_)) => {
+                let converter = self.converter(from, to)?;
+                Ok(call(identifier_expression(&converter), vec![value]))
+            }
+            _ => Err(GoError::Unsupported {
+                definition: "code generation".into(),
+                state: crate::error::UnsupportedState::Construct {
+                    construct: "representation changes between unrelated types",
+                },
+            }),
+        }
+    }
+
+    fn canonical(&mut self, monotype: MonotypeId) -> MonotypeId {
+        let erased = self.monotypes.intern(Monotype::Erased);
+        let canonical = match self.monotypes.get(monotype).clone() {
+            Monotype::Function(..) => Monotype::Function(erased, erased),
+            Monotype::Effect(_) => Monotype::Effect(erased),
+            Monotype::Array(_) => Monotype::Array(erased),
+            Monotype::Record(fields) => {
+                let fields = fields
+                    .iter()
+                    .map(|field| RecordField { label: field.label.clone(), monotype: erased });
+                Monotype::Record(fields.collect())
+            }
+            Monotype::Data(data) => Monotype::Data(self.erase_arguments(&data)),
+            Monotype::Recursive(data) => Monotype::Recursive(self.erase_arguments(&data)),
+            Monotype::Int
+            | Monotype::Number
+            | Monotype::Boolean
+            | Monotype::Char
+            | Monotype::String
+            | Monotype::Unit
+            | Monotype::Reference(_)
+            | Monotype::Erased => return monotype,
+        };
+        self.monotypes.intern(canonical)
+    }
+
+    fn erase_arguments(&self, data: &DataType) -> DataType {
+        let erased = self.context.types.erased();
+        let arguments = data.arguments.iter().map(|_| erased).collect();
+        DataType { file_id: data.file_id, item: data.item, arguments }
+    }
+
+    fn shared(&mut self, value: GoExpression, out: &mut Vec<GoStatement>) -> GoExpression {
+        if is_simple(&value) {
+            return value;
+        }
+        let name = self.temporary("original");
+        out.push(GoStatement::Define { names: vec![name.clone()], values: vec![value] });
+        identifier_expression(&name)
+    }
+
+    fn invocation_type(&mut self, result: MonotypeId) -> GoResult<Option<GoType>> {
+        let performed = self.monotypes.effect_result(result).unwrap_or(result);
+        self.go_result(performed)
+    }
+
+    fn coerce_invocation(
+        &mut self,
+        invoked: GoExpression,
+        from: MonotypeId,
+        to: MonotypeId,
+        body: &mut Vec<GoStatement>,
+    ) -> GoResult<()> {
+        match (self.monotypes.effect_result(from), self.monotypes.effect_result(to)) {
+            (Some(from_result), Some(to_result)) => {
+                self.coerce_returned(invoked, from_result, to_result, body)
+            }
+            (None, Some(to_result)) => {
+                let action = self.coerce(invoked, from, to, body)?;
+                self.coerce_returned(call(action, vec![]), to_result, to_result, body)
+            }
+            (Some(from_result), None) => {
+                let result = self.go_result(from_result)?;
+                let mut performed = vec![];
+                self.coerce_returned(invoked, from_result, from_result, &mut performed)?;
+                let action = GoExpression::Function { parameters: vec![], result, body: performed };
+                let effect = self.monotypes.intern(Monotype::Effect(from_result));
+                let action = self.coerce(action, effect, to, body)?;
+                body.push(GoStatement::Return(Some(action)));
+                Ok(())
+            }
+            (None, None) => self.coerce_returned(invoked, from, to, body),
+        }
+    }
+
+    fn coerce_returned(
+        &mut self,
+        invoked: GoExpression,
+        from: MonotypeId,
+        to: MonotypeId,
+        body: &mut Vec<GoStatement>,
+    ) -> GoResult<()> {
+        match (self.is_unit(from), self.is_unit(to)) {
+            (true, true) => body.push(GoStatement::Expression(invoked)),
+            (true, false) => {
+                body.push(GoStatement::Expression(invoked));
+                let value = self.coerce(unit_value(), from, to, body)?;
+                body.push(GoStatement::Return(Some(value)));
+            }
+            (false, true) => body.push(GoStatement::Expression(invoked)),
+            (false, false) => {
+                let value = self.coerce(invoked, from, to, body)?;
+                body.push(GoStatement::Return(Some(value)));
+            }
+        }
+        Ok(())
+    }
+
+    fn converter(&mut self, from: MonotypeId, to: MonotypeId) -> GoResult<String> {
+        if let Some(name) = self.converters.get(&(from, to)) {
+            return Ok(name.clone());
+        }
+        let name = unique("convert".to_string(), &mut self.global_names);
+        self.converters.insert((from, to), name.clone());
+        let parameter_type = self.go_type(from)?;
+        let result_type = self.go_type(to)?;
+        let value = identifier_expression("value");
+        let mut body = vec![];
+        match (self.monotypes.get(from).clone(), self.monotypes.get(to).clone()) {
+            (Monotype::Array(from_element), Monotype::Array(to_element)) => {
+                let empty = GoExpression::Composite { type_: result_type.clone(), fields: vec![] };
+                body.push(GoStatement::Define {
+                    names: vec!["converted".into()],
+                    values: vec![empty],
+                });
+                let mut each = vec![];
+                let element = self.coerce(
+                    identifier_expression("element"),
+                    from_element,
+                    to_element,
+                    &mut each,
+                )?;
+                each.push(GoStatement::Assign {
+                    targets: vec![identifier_expression("converted")],
+                    values: vec![call(
+                        identifier_expression("append"),
+                        vec![identifier_expression("converted"), element],
+                    )],
+                });
+                body.push(GoStatement::Range {
+                    element: "element".into(),
+                    iterable: value,
+                    body: each,
+                });
+                body.push(GoStatement::Return(Some(identifier_expression("converted"))));
+            }
+            (Monotype::Record(from_fields), Monotype::Record(to_fields)) => {
+                let mut fields = vec![];
+                for (from_field, to_field) in from_fields.iter().zip(to_fields.iter()) {
+                    let label = identifier(&to_field.label);
+                    let field_value = field(value.clone(), &label);
+                    let converted = self.coerce(
+                        field_value,
+                        from_field.monotype,
+                        to_field.monotype,
+                        &mut body,
+                    )?;
+                    fields.push((Some(label), converted));
+                }
+                body.push(GoStatement::Return(Some(GoExpression::Composite {
+                    type_: result_type.clone(),
+                    fields,
+                })));
+            }
+            (Monotype::Data(from_data), Monotype::Data(to_data)) => {
+                self.convert_data(&from_data, &to_data, value, &mut body)?;
+            }
+            _ => unreachable!("invariant violated: converter requested for non-composite types"),
+        }
+        self.type_declarations.push(GoDeclaration::Function {
+            name: name.clone(),
+            parameters: vec![("value".into(), parameter_type)],
+            result: Some(result_type),
+            body,
+        });
+        Ok(name)
+    }
+
+    fn convert_data(
+        &mut self,
+        from: &DataType,
+        to: &DataType,
+        value: GoExpression,
+        body: &mut Vec<GoStatement>,
+    ) -> GoResult<()> {
+        let from_layout = self.data_layout(from)?;
+        let to_layout = self.data_layout(to)?;
+        if from_layout.kind == DataKind::Enumeration {
+            let type_ = GoType::Named(to_layout.name);
+            body.push(GoStatement::Return(Some(GoExpression::Conversion {
+                type_,
+                value: Box::new(value),
+            })));
+            return Ok(());
+        }
+        let mut cases = vec![];
+        for (constructor, (from_constructor, to_constructor)) in
+            from_layout.constructors.iter().zip(to_layout.constructors.iter()).enumerate()
+        {
+            let mut statements = vec![];
+            let mut values = vec![];
+            for ((from_field, from_monotype), (_, to_monotype)) in
+                from_constructor.fields.iter().zip(to_constructor.fields.iter())
+            {
+                let field_value = field(value.clone(), from_field);
+                values.push(self.coerce(
+                    field_value,
+                    *from_monotype,
+                    *to_monotype,
+                    &mut statements,
+                )?);
+            }
+            let constructed = self.construct(to, constructor, values)?;
+            statements.push(GoStatement::Return(Some(constructed)));
+            cases.push(GoCase {
+                values: vec![identifier_expression(&from_constructor.tag)],
+                body: statements,
+            });
+        }
+        if from_layout.kind == DataKind::Product {
+            let [case] = &mut cases[..] else {
+                unreachable!("invariant violated: product data has one constructor")
+            };
+            body.append(&mut case.body);
+            return Ok(());
+        }
+        body.push(GoStatement::Switch { value: Some(field(value, "Tag")), cases, default: None });
+        body.push(panic_statement("Failed pattern match"));
+        Ok(())
+    }
+}

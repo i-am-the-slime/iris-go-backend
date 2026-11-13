@@ -13,6 +13,7 @@ pub struct Context<'q, Q> {
     pub queries: &'q Q,
     pub types: TypeOperations<'q, Q>,
     modules: FxHashMap<FileId, Arc<ModuleData>>,
+    pub recursive_newtypes: FxHashMap<(FileId, TypeItemId), bool>,
 }
 
 pub struct ModuleData {
@@ -27,7 +28,12 @@ where
     Q: checking::ExternalQueries,
 {
     pub fn new(queries: &'q Q) -> Context<'q, Q> {
-        Context { queries, types: TypeOperations::new(queries), modules: FxHashMap::default() }
+        Context {
+            queries,
+            types: TypeOperations::new(queries),
+            modules: FxHashMap::default(),
+            recursive_newtypes: FxHashMap::default(),
+        }
     }
 
     pub fn module(&mut self, file_id: FileId) -> QueryResult<Arc<ModuleData>> {

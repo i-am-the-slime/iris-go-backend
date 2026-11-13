@@ -1,0 +1,61 @@
+---
+source: tests-integration/src/fixtures.rs
+---
+package main
+
+import (
+	"fmt"
+	"github.com/i-am-the-slime/purs-backend-go/go-support/array"
+	"github.com/i-am-the-slime/purs-backend-go/go-support/prim"
+)
+
+type MinisName struct {
+	minis []MinisName
+	name  string
+}
+
+type Step func(int32) *MaybeStep
+
+type MaybeStep struct {
+	Tag   int
+	Just0 Step
+}
+
+const (
+	MaybeStepNothing = iota
+	MaybeStepJust
+)
+
+var main_ []string = array.Append(names(MinisName{name: "root", minis: []MinisName{MinisName{name: "a", minis: []MinisName{}}}}), []string{prim.ShowInt(int(countSteps(func(n int32) *MaybeStep {
+	if n < 3 {
+		return &MaybeStep{Tag: MaybeStepJust, Just0: func(_ int32) *MaybeStep {
+			return &MaybeStep{Tag: MaybeStepNothing}
+		}}
+	}
+	return &MaybeStep{Tag: MaybeStepNothing}
+}, 0)))})
+
+func names(level MinisName) []string {
+	return array.Append([]string{level.name}, array.Bind(level.minis, func(argument0 MinisName) []string {
+		return names(argument0)
+	}))
+}
+
+func countSteps(argument0 Step, argument1 int32) int32 {
+	for {
+		scrutinee := argument0(argument1)
+		switch scrutinee.Tag {
+		case MaybeStepNothing:
+			return argument1
+		case MaybeStepJust:
+			step := scrutinee.Just0
+			argument0, argument1 = step, argument1 + 1
+			continue
+		}
+		panic("Failed pattern match")
+	}
+}
+
+func main() {
+	fmt.Println(main_)
+}

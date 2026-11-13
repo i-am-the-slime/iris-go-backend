@@ -1,9 +1,10 @@
 //! Rendering of the simplified monomorphic tree as Go.
-//!
 //! Values of type `Effect a` are Go `func() A`, and a function `a -> Effect b` is a
 //! Go `func(A) B` that performs its effects when called. Effectful code is emitted
 //! in perform mode, where binds become statements and `pure x` becomes `x`; an
 //! effect only turns into a closure where it is used as a first-class value.
+
+mod coerce;
 
 use std::collections::BTreeSet;
 
@@ -37,6 +38,8 @@ where
         global_names: FxHashSet::default(),
         record_names: FxHashMap::default(),
         data_layouts: FxHashMap::default(),
+        converters: FxHashMap::default(),
+        recursive_names: FxHashMap::default(),
         type_declarations: vec![],
         reference_declared: false,
         range_declared: false,
@@ -104,6 +107,8 @@ struct Emitter<'p, 'm, 'q, Q> {
     global_names: FxHashSet<String>,
     record_names: FxHashMap<MonotypeId, String>,
     data_layouts: FxHashMap<DataType, DataLayout>,
+    converters: FxHashMap<(MonotypeId, MonotypeId), String>,
+    recursive_names: FxHashMap<DataType, String>,
     type_declarations: Vec<GoDeclaration>,
     reference_declared: bool,
     range_declared: bool,
@@ -451,6 +456,7 @@ where
                 let rendered = render_type(&value);
                 GoType::Pointer(Box::new(GoType::Named(format!("Ref[{rendered}]"))))
             }
+            Monotype::Recursive(data) => self.recursive_type(&data)?,
             Monotype::Data(data) => {
                 let layout = self.data_layout(&data)?;
                 match layout.kind {
@@ -461,6 +467,32 @@ where
                 }
             }
         })
+    }
+
+    fn recursive_type(&mut self, data: &DataType) -> GoResult<GoType> {
+        if let Some(name) = self.recursive_names.get(data) {
+            return Ok(GoType::Named(name.clone()));
+        }
+        let unfolded = self.unfold(data)?;
+        if let Monotype::Record(_) | Monotype::Data(_) = self.monotypes.get(unfolded) {
+            return self.go_type(unfolded);
+        }
+        let mut base = self.context.type_name(data.file_id, data.item)?.to_string();
+        for &argument in data.arguments.iter() {
+            self.context.type_suffix(argument, &mut base)?;
+        }
+        let name = unique(identifier(&base), &mut self.global_names);
+        self.recursive_names.insert(data.clone(), name.clone());
+        let type_ = self.go_type(unfolded)?;
+        self.type_declarations.push(GoDeclaration::Type { name: name.clone(), type_ });
+        Ok(GoType::Named(name))
+    }
+
+    fn unfold(&mut self, data: &DataType) -> GoResult<MonotypeId> {
+        match self.monotypes.unfold(&mut self.context, data)? {
+            Ok(unfolded) => Ok(unfolded),
+            Err(state) => Err(GoError::Unsupported { definition: "code generation".into(), state }),
+        }
     }
 
     fn go_result(&mut self, monotype: MonotypeId) -> GoResult<Option<GoType>> {
@@ -1053,6 +1085,10 @@ where
                 applied
             }
             ExpressionKind::Lambda { parameters, body } => self.lambda(parameters, body)?,
+            ExpressionKind::Coerce(value) => {
+                let coerced = self.value(value, out)?;
+                self.coerce(coerced, value.monotype, expression.monotype, out)?
+            }
             ExpressionKind::Let { bindings, body } => {
                 self.bindings(bindings, out)?;
                 self.value(body, out)?
@@ -1420,7 +1456,10 @@ where
                 self.narrow(constant, monotype)
             }
             Foreign::Unit => unit_value(),
-            Foreign::UnsafeCoerce | Foreign::Identity => values.remove(0),
+            Foreign::UnsafeCoerce => {
+                self.coerce(values.remove(0), arguments[0].monotype, monotype, out)?
+            }
+            Foreign::Identity => values.remove(0),
             _ => unreachable!("invariant violated: effectful foreign reached value conversion"),
         })
     }

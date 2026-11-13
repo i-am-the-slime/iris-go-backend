@@ -1,0 +1,65 @@
+---
+source: tests-integration/src/fixtures.rs
+---
+package main
+
+import (
+	"fmt"
+)
+
+func convert2(value []int32) []any {
+	converted := []any{}
+	for _, element := range value {
+		converted = append(converted, element)
+	}
+	return converted
+}
+
+func convert(value [][]int32) []any {
+	converted := []any{}
+	for _, element := range value {
+		converted = append(converted, convert2(element))
+	}
+	return converted
+}
+
+type Nested struct {
+	Tag   int
+	Flat0 any
+	Deep0 *Nested
+}
+
+const (
+	NestedFlat = iota
+	NestedDeep
+)
+
+var main_ = initializeMain_()
+
+func initializeMain_() []int32 {
+	scrutinee := &Nested{Tag: NestedDeep, Deep0: &Nested{Tag: NestedDeep, Deep0: &Nested{Tag: NestedFlat, Flat0: convert([][]int32{[]int32{1}})}}}
+	var result int32
+	switch scrutinee.Tag {
+	case NestedFlat:
+		result = 0
+	case NestedDeep:
+		inner := scrutinee.Deep0
+		result = 1 + depthArrayInt(inner)
+	}
+	return []int32{1 + 2, result}
+}
+
+func depthArrayInt(value *Nested) int32 {
+	switch value.Tag {
+	case NestedFlat:
+		return 0
+	case NestedDeep:
+		inner := value.Deep0
+		return 1 + depthArrayInt(inner)
+	}
+	panic("Failed pattern match")
+}
+
+func main() {
+	fmt.Println(main_)
+}

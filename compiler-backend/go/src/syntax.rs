@@ -35,6 +35,7 @@ pub enum GoExpression {
     Composite { type_: GoType, fields: Vec<(Option<String>, GoExpression)> },
     Address(Box<GoExpression>),
     Conversion { type_: GoType, value: Box<GoExpression> },
+    TypeAssertion { value: Box<GoExpression>, type_: GoType },
     Function { parameters: Vec<(String, GoType)>, result: Option<GoType>, body: Vec<GoStatement> },
 }
 
@@ -380,6 +381,11 @@ impl Printer {
                 let type_ = self.type_(type_);
                 let value = self.expression(value, 0);
                 format!("{type_}({value})")
+            }
+            GoExpression::TypeAssertion { value, type_ } => {
+                let value = self.expression(value, 6);
+                let type_ = self.type_(type_);
+                format!("{value}.({type_})")
             }
             GoExpression::Function { parameters, result, body } => {
                 let signature = self.signature(parameters, result.as_ref());

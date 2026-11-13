@@ -1,0 +1,80 @@
+---
+source: tests-integration/src/fixtures.rs
+---
+package main
+
+import (
+	"fmt"
+	"github.com/i-am-the-slime/purs-backend-go/go-support/array"
+	"github.com/i-am-the-slime/purs-backend-go/go-support/prim"
+)
+
+var main_ = initializeMain_()
+
+func initializeMain_() []string {
+	var go_ func(func(int32) string) func(int32) func([]string) []string
+	var go_2 func(func(int32) int32) func(int32) func([]int32) []int32
+	go_ = func(f func(int32) string) func(int32) func([]string) []string {
+		return func(n int32) func([]string) []string {
+			return func(accumulated []string) []string {
+				if n <= 0 {
+					return accumulated
+				}
+				return go_(f)(n - 1)(array.Append(accumulated, []string{f(n)}))
+			}
+		}
+	}
+	go_2 = func(f2 func(int32) int32) func(int32) func([]int32) []int32 {
+		return func(n2 int32) func([]int32) []int32 {
+			return func(accumulated2 []int32) []int32 {
+				if n2 <= 0 {
+					return accumulated2
+				}
+				return go_2(f2)(n2 - 1)(array.Append(accumulated2, []int32{f2(n2)}))
+			}
+		}
+	}
+	return []string{"x" + prim.ShowInt(int(2)), pairs, joined, prim.ShowArray(show2, go_(show)(3)([]string{})) + prim.ShowArray(show, go_2(identity)(3)([]int32{}))}
+}
+
+var pairs = initializePairs()
+
+func initializePairs() string {
+	scrutinee := !!true
+	var result string
+	if scrutinee {
+		result = "true"
+	} else if !scrutinee {
+		result = "false"
+	} else {
+		panic("Failed pattern match")
+	}
+	f := func(value int32) int32 {
+		return value + 1
+	}
+	return result + prim.ShowInt(int(func(x int32) int32 {
+		return compose(f, f, x)
+	}(1)))
+}
+
+var joined string = "<" + (prim.ShowInt(int(3)) + ">") + ("<" + (prim.ShowString("y") + ">"))
+
+func show(argument0 int32) string {
+	return prim.ShowInt(int(argument0))
+}
+
+func compose(f func(int32) int32, g func(int32) int32, x int32) int32 {
+	return f(g(x))
+}
+
+func show2(argument0 string) string {
+	return prim.ShowString(argument0)
+}
+
+func identity(x int32) int32 {
+	return x
+}
+
+func main() {
+	fmt.Println(main_)
+}

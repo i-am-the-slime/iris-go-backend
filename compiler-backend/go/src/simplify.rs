@@ -210,6 +210,16 @@ impl Simplifier<'_> {
             ExpressionKind::Lambda { parameters, body } => {
                 ExpressionKind::Lambda { parameters, body: Box::new(self.expression(*body)) }
             }
+            ExpressionKind::Coerce(value) => {
+                let mut value = self.expression(*value);
+                if let ExpressionKind::Coerce(inner) = value.kind {
+                    value = *inner;
+                }
+                if value.monotype == monotype {
+                    return value;
+                }
+                ExpressionKind::Coerce(Box::new(value))
+            }
             ExpressionKind::Let { bindings, body } => {
                 let bindings: Vec<Binding> = bindings
                     .into_iter()
@@ -732,7 +742,7 @@ fn children_mut(expression: &mut Expression) -> Vec<&mut Expression> {
             children
         }
         ExpressionKind::If { condition, then, otherwise } => vec![condition, then, otherwise],
-        ExpressionKind::EffectPure(value) => vec![value],
+        ExpressionKind::EffectPure(value) | ExpressionKind::Coerce(value) => vec![value],
         ExpressionKind::EffectWhen { condition, action } => vec![condition, action],
         _ => vec![],
     }
@@ -861,7 +871,7 @@ pub fn for_each_child(expression: &Expression, visitor: &mut impl FnMut(&Express
                 }
             }
         }
-        ExpressionKind::EffectPure(value) => visitor(value),
+        ExpressionKind::EffectPure(value) | ExpressionKind::Coerce(value) => visitor(value),
         ExpressionKind::EffectBind { action, body, .. } => {
             visitor(action);
             visitor(body);
