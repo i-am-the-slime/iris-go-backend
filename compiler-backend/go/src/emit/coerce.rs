@@ -99,28 +99,9 @@ where
                 let value = GoExpression::TypeAssertion { value: Box::new(value), type_ };
                 self.coerce(value, canonical, to, out)
             }
-            (
-                Monotype::Function(from_argument, from_result),
-                Monotype::Function(to_argument, to_result),
-            ) => {
+            (Monotype::Function(..), Monotype::Function(..)) => {
                 let function = self.shared(value, "original", out);
-                let parameter = self.temporary("coerced");
-                let parameter_type = self.go_type(to_argument)?;
-                let mut body = vec![];
-                let argument = self.coerce(
-                    identifier_expression(&parameter),
-                    to_argument,
-                    from_argument,
-                    &mut body,
-                )?;
-                let invoked = call(function, vec![argument]);
-                self.coerce_invocation(invoked, from_result, to_result, &mut body)?;
-                let result = self.invocation_type(to_result)?;
-                Ok(GoExpression::Function {
-                    parameters: vec![(parameter, parameter_type)],
-                    result,
-                    body,
-                })
+                self.coerce_function(function, from, to)
             }
             (Monotype::Lazy(from_result), Monotype::Lazy(to_result)) => {
                 let lazy = self.shared(value, "original", out);
@@ -151,6 +132,58 @@ where
                 },
             }),
         }
+    }
+
+    fn coerce_function(
+        &mut self,
+        function: GoExpression,
+        from: MonotypeId,
+        to: MonotypeId,
+    ) -> GoResult<GoExpression> {
+        let arity = self.arity(to);
+        let (to_arguments, to_result) = self.leading_arrows(to, arity);
+        let mut parameters = Vec::with_capacity(arity);
+        let mut body = vec![];
+        let mut callable = self.value_callable(function, from);
+        let mut pending = vec![];
+        let mut source = from;
+        for to_argument in to_arguments {
+            if self.monotypes.function_parts(source).is_none() {
+                let remaining = self.monotypes.result_after(to, parameters.len());
+                let canonical = self.canonical(remaining);
+                let type_ = self.go_type(canonical)?;
+                let asserted =
+                    GoExpression::TypeAssertion { value: Box::new(callable.function), type_ };
+                callable = self.value_callable(asserted, canonical);
+                source = canonical;
+            }
+            let (from_argument, from_rest) = self
+                .monotypes
+                .function_parts(source)
+                .expect("invariant violated: a coerced function takes its arguments");
+            let parameter = self.temporary("coerced");
+            parameters.push((parameter.clone(), self.go_type(to_argument)?));
+            let argument = self.coerce(
+                identifier_expression(&parameter),
+                to_argument,
+                from_argument,
+                &mut body,
+            )?;
+            pending.push(argument);
+            source = from_rest;
+            if pending.len() == callable.arity {
+                let invoked = call(callable.function, std::mem::take(&mut pending));
+                callable = self.value_callable(invoked, source);
+            }
+        }
+        let invoked = if pending.is_empty() {
+            callable.function
+        } else {
+            self.apply_arguments(callable, pending, &mut body)?
+        };
+        self.coerce_invocation(invoked, source, to_result, &mut body)?;
+        let result = self.invocation_type(to_result)?;
+        Ok(GoExpression::Function { parameters, result, body })
     }
 
     pub(super) fn foreign_record(

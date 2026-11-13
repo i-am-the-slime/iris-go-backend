@@ -4,6 +4,7 @@
 //! in perform mode, where binds become statements and `pure x` becomes `x`; an
 //! effect only turns into a closure where it is used as a first-class value.
 
+mod application;
 mod coerce;
 mod iteration;
 mod ownership;
@@ -17,11 +18,13 @@ use smol_str::SmolStr;
 use files::FileId;
 use indexing::TermItemId;
 
+use self::application::Callable;
+use crate::arity::Arities;
 use crate::context::{Context, capitalise};
 use crate::erasure::Erasure;
 use crate::error::{GoError, GoResult};
 use crate::foreign::{
-    Boundary, Comparison, Foreign, ForeignPackages, GoFunction, GoPackage, Operator,
+    Boundary, Comparison, Foreign, ForeignPackages, GoFunction, GoPackage, Operator, Spelled,
 };
 use crate::mono::{
     Alternative, Binding, Expression, ExpressionKind, Function, FunctionId, Guard, Guarded,
@@ -40,12 +43,14 @@ pub fn emit_program<Q>(
 where
     Q: checking::ExternalQueries,
 {
+    let arities = crate::arity::choose(program, monotypes);
     let reused = {
-        let mut probe = Emitter::new(program, monotypes, queries, foreign_packages);
+        let mut probe =
+            Emitter::new(program, monotypes, queries, foreign_packages, arities.clone());
         reuse::reuse_cells(program, &mut probe)
     };
     let program = &reused.program;
-    let mut emitter = Emitter::new(program, monotypes, queries, foreign_packages);
+    let mut emitter = Emitter::new(program, monotypes, queries, foreign_packages, arities);
     emitter.materialized = reused.materialized;
     emitter.assign_function_names();
     let mut declarations = vec![];
@@ -87,6 +92,7 @@ where
         monotypes: &'m mut Monotypes,
         queries: &'q Q,
         foreign_packages: &'p ForeignPackages,
+        arities: Arities,
     ) -> Emitter<'p, 'm, 'q, Q> {
         let lazy_constants = recursive_constants(program, monotypes);
         Emitter {
@@ -119,6 +125,7 @@ where
             materialized: FxHashSet::default(),
             current: None,
             lazy_constants,
+            arities,
         }
     }
 }
@@ -411,6 +418,7 @@ struct Emitter<'p, 'm, 'q, Q> {
     retaining: FxHashMap<MonotypeId, bool>,
     erasing: FxHashMap<MonotypeId, bool>,
     materialized: FxHashSet<(FunctionId, LocalId)>,
+    arities: Arities,
 }
 
 const INLINE_DATA_LIMIT: usize = 128;
@@ -1068,13 +1076,18 @@ where
             Monotype::Opaque => GoType::Erased(Erasure::Foreign),
             Monotype::Array(element) => GoType::Slice(Box::new(self.go_type(element)?)),
             Monotype::Record(_) => GoType::Named(self.record_name(monotype)?),
-            Monotype::Function(argument, result) => {
-                let argument = self.go_type(argument)?;
+            Monotype::Function(..) => {
+                let arity = self.arity(monotype);
+                let (arguments, result) = self.leading_arrows(monotype, arity);
+                let mut parameters = Vec::with_capacity(arguments.len());
+                for argument in arguments {
+                    parameters.push(self.go_type(argument)?);
+                }
                 let result = match self.monotypes.get(result) {
                     Monotype::Effect(inner) => self.go_result(*inner)?,
                     _ => self.go_result(result)?,
                 };
-                GoType::Function { parameters: vec![argument], result: result.map(Box::new) }
+                GoType::Function { parameters, result: result.map(Box::new) }
             }
             Monotype::Effect(result) => {
                 let result = self.go_result(result)?;
@@ -1610,26 +1623,7 @@ where
                 ));
             }
         }
-        let (last, leading) =
-            arguments.split_last().expect("invariant violated: application without arguments");
-        let partial_monotype = self.monotypes.function(
-            last.monotype,
-            self.monotypes.result_after(function.monotype, arguments.len()),
-        );
-        let partial = if leading.is_empty() {
-            self.value(function, out)?
-        } else {
-            let partial = Expression::new(
-                ExpressionKind::Apply {
-                    function: Box::new(function.clone()),
-                    arguments: leading.to_vec(),
-                },
-                partial_monotype,
-            );
-            self.value(&partial, out)?
-        };
-        let last = self.value(last, out)?;
-        Ok(call(partial, vec![last]))
+        self.application_value(function, arguments, out)
     }
 
     fn perform_foreign(
@@ -1848,6 +1842,7 @@ where
             Monotype::Function(argument, result) => {
                 let effect = self.monotypes.effect_result(result);
                 let differs = effect.is_some()
+                    || self.arity(monotype) > 1
                     || self.convention_type(argument)?.is_some()
                     || self.convention_type(result)?.is_some();
                 if !differs {
@@ -1952,63 +1947,97 @@ where
                     body,
                 }
             }
-            Monotype::Function(argument, result) => {
-                let GoType::Function { parameters, result: target_result } = target else {
-                    unreachable!()
-                };
+            Monotype::Function(..) => {
                 let value = self.shared(value, "function", out);
-                let parameter = self.temporary("argument");
-                let reverse = match direction {
-                    Direction::ToConvention => Direction::FromConvention,
-                    Direction::FromConvention => Direction::ToConvention,
+                let callable = self.value_callable(value, monotype);
+                let layers = match direction {
+                    Direction::ToConvention => callable.arity,
+                    Direction::FromConvention => {
+                        assert_eq!(
+                            callable.arity, 1,
+                            "invariant violated: functions received from foreign code stay curried"
+                        );
+                        1
+                    }
                 };
-                let mut body = vec![];
-                let argument = self.convert_convention(
-                    identifier_expression(&parameter),
-                    argument,
-                    reverse,
-                    &mut body,
-                )?;
-                let applied = call(value, vec![argument]);
-                match (self.monotypes.get(result).clone(), direction) {
-                    (Monotype::Effect(inner), Direction::ToConvention) => {
-                        let thunk_type = target_result.clone().map(|type_| *type_);
-                        let Some(GoType::Function { result: inner_type, .. }) = thunk_type else {
-                            unreachable!()
-                        };
-                        let mut thunk_body = vec![];
-                        let performed =
-                            self.convert_convention(applied, inner, direction, &mut thunk_body)?;
-                        thunk_body.push(returning(performed, inner_type.is_some()));
-                        let thunk = GoExpression::Function {
-                            parameters: vec![],
-                            result: inner_type.clone().map(|type_| *type_),
-                            body: thunk_body,
-                        };
-                        body.push(GoStatement::Return(Some(thunk)));
-                    }
-                    (Monotype::Effect(inner), Direction::FromConvention) => {
-                        let performed = self.convert_convention(
-                            call(applied, vec![]),
-                            inner,
-                            direction,
-                            &mut body,
-                        )?;
-                        body.push(returning(performed, target_result.is_some()));
-                    }
-                    _ => {
-                        let converted =
-                            self.convert_convention(applied, result, direction, &mut body)?;
-                        body.push(returning(converted, target_result.is_some()));
-                    }
-                }
-                GoExpression::Function {
-                    parameters: vec![(parameter, parameters[0].clone())],
-                    result: target_result.map(|type_| *type_),
-                    body,
-                }
+                self.convention_layer(callable, vec![], monotype, layers, direction)?
             }
             _ => value,
+        })
+    }
+
+    fn convention_layer(
+        &mut self,
+        callable: Callable,
+        mut supplied: Vec<GoExpression>,
+        monotype: MonotypeId,
+        layers: usize,
+        direction: Direction,
+    ) -> GoResult<GoExpression> {
+        let target = match direction {
+            Direction::ToConvention => self.convention_or_native(monotype)?,
+            Direction::FromConvention => self.go_type(monotype)?,
+        };
+        let GoType::Function { parameters, result: target_result } = target else { unreachable!() };
+        let (argument, result) = self
+            .monotypes
+            .function_parts(monotype)
+            .expect("invariant violated: a converted function takes an argument");
+        let parameter = self.temporary("argument");
+        let reverse = match direction {
+            Direction::ToConvention => Direction::FromConvention,
+            Direction::FromConvention => Direction::ToConvention,
+        };
+        let mut body = vec![];
+        let argument = self.convert_convention(
+            identifier_expression(&parameter),
+            argument,
+            reverse,
+            &mut body,
+        )?;
+        if layers > 1 {
+            supplied.push(self.shared(argument, "argument", &mut body));
+            let inner = self.convention_layer(callable, supplied, result, layers - 1, direction)?;
+            body.push(GoStatement::Return(Some(inner)));
+            return Ok(GoExpression::Function {
+                parameters: vec![(parameter, parameters[0].clone())],
+                result: target_result.map(|type_| *type_),
+                body,
+            });
+        }
+        supplied.push(argument);
+        let applied = self.apply_arguments(callable, supplied, &mut body)?;
+        match (self.monotypes.get(result).clone(), direction) {
+            (Monotype::Effect(inner), Direction::ToConvention) => {
+                let thunk_type = target_result.clone().map(|type_| *type_);
+                let Some(GoType::Function { result: inner_type, .. }) = thunk_type else {
+                    unreachable!()
+                };
+                let mut thunk_body = vec![];
+                let performed =
+                    self.convert_convention(applied, inner, direction, &mut thunk_body)?;
+                thunk_body.push(returning(performed, inner_type.is_some()));
+                let thunk = GoExpression::Function {
+                    parameters: vec![],
+                    result: inner_type.clone().map(|type_| *type_),
+                    body: thunk_body,
+                };
+                body.push(GoStatement::Return(Some(thunk)));
+            }
+            (Monotype::Effect(inner), Direction::FromConvention) => {
+                let performed =
+                    self.convert_convention(call(applied, vec![]), inner, direction, &mut body)?;
+                body.push(returning(performed, target_result.is_some()));
+            }
+            _ => {
+                let converted = self.convert_convention(applied, result, direction, &mut body)?;
+                body.push(returning(converted, target_result.is_some()));
+            }
+        }
+        Ok(GoExpression::Function {
+            parameters: vec![(parameter, parameters[0].clone())],
+            result: target_result.map(|type_| *type_),
+            body,
         })
     }
 
@@ -2121,7 +2150,15 @@ where
                 }
                 _ => {
                     let value = self.value(argument, out)?;
-                    self.typed_constant(value, argument.monotype)?
+                    let declared = boundary.signature.and_then(|signature| {
+                        signature.parameters.get(position).map(Spelled::arrows)
+                    });
+                    match declared {
+                        Some(arrows) if arrows > 0 => {
+                            self.curried_callback(value, argument.monotype, arrows, out)?
+                        }
+                        _ => self.typed_constant(value, argument.monotype)?,
+                    }
                 }
             };
             values.push(value);
@@ -2200,8 +2237,14 @@ where
             parameters.push((name.clone(), self.go_type(parameter)?));
             arguments.push(identifier_expression(&name));
         }
-        let applied = call(value, arguments);
         let mut body = vec![];
+        let applied = match parameter {
+            Some(_) => {
+                let callable = self.value_callable(value, monotype);
+                self.apply_arguments(callable, arguments, &mut body)?
+            }
+            None => call(value, arguments),
+        };
         if self.is_unit(result) {
             body.push(GoStatement::Expression(applied));
             body.push(GoStatement::Return(Some(unit_value())));
@@ -2262,8 +2305,11 @@ where
         };
         let parameter = self.temporary("argument");
         let parameter_type = self.go_type(argument)?;
-        let applied = call(function, vec![identifier_expression(&parameter)]);
-        let body = if arrows == 1 {
+        let mut body = vec![];
+        let callable = self.value_callable(function, monotype);
+        let applied =
+            self.apply_arguments(callable, vec![identifier_expression(&parameter)], &mut body)?;
+        let tail = if arrows == 1 {
             let Monotype::Effect(inner) = self.monotypes.get(result).clone() else {
                 unreachable!("invariant violated: a uniform callback ends in an effect")
             };
@@ -2287,6 +2333,7 @@ where
                 GoStatement::Return(Some(adapted)),
             ]
         };
+        body.extend(tail);
         Ok(GoExpression::Function {
             parameters: vec![(parameter, parameter_type)],
             result: Some(self.uniform_type(result, arrows - 1)?),
@@ -2679,7 +2726,8 @@ where
                 self.sink(lambda_body, Mode::Value, sink(), &mut body)
             }
             _ => self.value(thunk, &mut body).and_then(|function| {
-                let forced = call(function, vec![unit_value()]);
+                let callable = self.value_callable(function, thunk.monotype);
+                let forced = self.apply_arguments(callable, vec![unit_value()], &mut body)?;
                 self.deliver(forced, value, sink(), &mut body)
             }),
         };
@@ -2901,7 +2949,7 @@ where
                 identifier_expression(&name)
             }
             ExpressionKind::Local(id) => self.local(*id)?,
-            ExpressionKind::Function(id) => self.function_value(*id)?,
+            ExpressionKind::Function(id) => self.function_value(*id, expression.monotype)?,
             ExpressionKind::Construct { data, constructor, arguments } => {
                 let mut values = vec![];
                 for argument in arguments {
@@ -2932,7 +2980,9 @@ where
                 }
                 applied
             }
-            ExpressionKind::Lambda { parameters, body } => self.lambda(parameters, body)?,
+            ExpressionKind::Lambda { parameters, body } => {
+                self.lambda(expression.monotype, parameters, body)?
+            }
             ExpressionKind::Coerce(value) => {
                 let coerced = self.value(value, out)?;
                 self.coerce(coerced, value.monotype, expression.monotype, out)?
@@ -3127,7 +3177,8 @@ where
         let found = self.construct(&data, just, vec![integer])?;
         let missing = self.construct(&data, nothing, vec![])?;
         self.imports.insert("math".into());
-        let math = |name: &str| GoExpression::Qualified { package: "math".into(), name: name.into() };
+        let math =
+            |name: &str| GoExpression::Qualified { package: "math".into(), name: name.into() };
         let whole = binary("==", call(math("Trunc"), vec![number.clone()]), number.clone());
         let condition = binary(
             "&&",
@@ -3243,111 +3294,31 @@ where
         Ok(GoExpression::Function { parameters: vec![], result: result_type, body })
     }
 
-    fn lambda(&mut self, parameters: &[Local], body: &Expression) -> GoResult<GoExpression> {
-        let (first, rest) =
-            parameters.split_first().expect("invariant violated: lambda without parameters");
-        let name =
-            if uses_local(body, first.id) { self.bind_local(first) } else { "_".to_string() };
-        let parameter_type = self.go_type(first.monotype)?;
-        let saved = self.tail_loop.take();
-        let mut statements = vec![];
-        let result_monotype;
-        if rest.is_empty() {
-            let mode = if self.monotypes.effect_result(body.monotype).is_some() {
-                Mode::Perform
-            } else {
-                Mode::Value
-            };
-            result_monotype = self.monotypes.effect_result(body.monotype).unwrap_or(body.monotype);
-            self.sink(body, mode, Sink::Return, &mut statements)?;
-        } else {
-            let mut inner_monotype = body.monotype;
-            for parameter in rest.iter().rev() {
-                inner_monotype = self.monotypes.function(parameter.monotype, inner_monotype);
-            }
-            result_monotype = inner_monotype;
-            let inner = self.lambda(rest, body)?;
-            statements.push(GoStatement::Return(Some(inner)));
-        }
-        self.tail_loop = saved;
-        if let Some(GoStatement::Return(None)) = statements.last() {
-            statements.pop();
-        }
-        let result = self.go_result(result_monotype)?;
-        Ok(GoExpression::Function {
-            parameters: vec![(name, parameter_type)],
-            result,
-            body: statements,
-        })
-    }
-
-    fn function_value(&mut self, id: FunctionId) -> GoResult<GoExpression> {
-        let function = self.program.function(id);
-        let name = self.function_names[id.0 as usize].clone();
-        if self.lazy_constants.contains(&id) {
-            return Ok(call(identifier_expression(&name), vec![]));
-        }
-        if function.parameters.len() <= 1 {
-            return Ok(identifier_expression(&name));
-        }
-        let parameters: Vec<Local> = function.parameters.clone();
-        self.curried_wrapper(identifier_expression(&name), vec![], &parameters, function.result)
-    }
-
-    /// Partial applications of uncurried Go functions become curried closures.
-    fn curried_wrapper(
-        &mut self,
-        function: GoExpression,
-        supplied: Vec<GoExpression>,
-        remaining: &[Local],
-        result: MonotypeId,
-    ) -> GoResult<GoExpression> {
-        let (first, rest) =
-            remaining.split_first().expect("invariant violated: wrapper without parameters");
-        let name = self.temporary(&identifier(&first.name));
-        let parameter_type = self.go_type(first.monotype)?;
-        let mut supplied = supplied;
-        supplied.push(identifier_expression(&name));
-        let (body, result_monotype) = if rest.is_empty() {
-            let call = call(function, supplied);
-            let effect_result = self.monotypes.effect_result(result);
-            let returned = effect_result.unwrap_or(result);
-            if self.is_unit(returned) {
-                (vec![GoStatement::Expression(call)], returned)
-            } else {
-                (vec![GoStatement::Return(Some(call))], returned)
-            }
-        } else {
-            let mut inner_monotype = result;
-            for parameter in rest.iter().rev() {
-                inner_monotype = self.monotypes.function(parameter.monotype, inner_monotype);
-            }
-            let inner = self.curried_wrapper(function, supplied, rest, result)?;
-            (vec![GoStatement::Return(Some(inner))], inner_monotype)
-        };
-        let result_type = self.go_result(result_monotype)?;
-        Ok(GoExpression::Function {
-            parameters: vec![(name, parameter_type)],
-            result: result_type,
-            body,
-        })
-    }
-
     fn application_value(
         &mut self,
         function: &Expression,
         arguments: &[Expression],
         out: &mut Vec<GoStatement>,
     ) -> GoResult<GoExpression> {
-        let captured_by: Option<Vec<String>> = match function.kind {
-            ExpressionKind::Function(id) => {
-                let callee = self.program.function(id);
-                (callee.parameters.len() > arguments.len()).then(|| {
-                    callee.parameters.iter().map(|parameter| identifier(&parameter.name)).collect()
-                })
+        let (callable, values) = self.application(function, arguments, 0, out)?;
+        self.apply_arguments(callable, values, out)
+    }
+
+    fn application(
+        &mut self,
+        function: &Expression,
+        arguments: &[Expression],
+        extra: usize,
+        out: &mut Vec<GoStatement>,
+    ) -> GoResult<(Callable, Vec<GoExpression>)> {
+        let known = match function.kind {
+            ExpressionKind::Function(id) if !self.program.function(id).parameters.is_empty() => {
+                Some(self.known_callable(id, function.monotype))
             }
             _ => None,
         };
+        let captured_by = known.as_ref().filter(|callee| callee.arity > arguments.len() + extra);
+        let captured_by = captured_by.map(|callee| callee.names.clone());
         let mut values = vec![];
         for (position, argument) in arguments.iter().enumerate() {
             let value = self.value(argument, out)?;
@@ -3357,28 +3328,14 @@ where
             };
             values.push(value);
         }
-        if let ExpressionKind::Function(id) = function.kind {
-            let callee = self.program.function(id);
-            let arity = callee.parameters.len();
-            let name = identifier_expression(&self.function_names[id.0 as usize].clone());
-            if arity > values.len() {
-                let remaining = callee.parameters[values.len()..].to_vec();
-                return self.curried_wrapper(name, values, &remaining, callee.result);
+        let callable = match known {
+            Some(callable) => callable,
+            None => {
+                let value = self.value(function, out)?;
+                self.value_callable(value, function.monotype)
             }
-            if arity > 0 {
-                let rest = values.split_off(arity);
-                let mut result = call(name, values);
-                for value in rest {
-                    result = call(result, vec![value]);
-                }
-                return Ok(result);
-            }
-        }
-        let mut result = self.value(function, out)?;
-        for value in values {
-            result = call(result, vec![value]);
-        }
-        Ok(result)
+        };
+        Ok((callable, values))
     }
 
     fn foreign_value(

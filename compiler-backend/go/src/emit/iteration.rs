@@ -285,7 +285,10 @@ where
         };
         self.imports.insert("slices".into());
         let clip = GoExpression::Qualified { package: "slices".into(), name: "Clip".into() };
-        GoStatement::Assign { targets: vec![carried.clone()], values: vec![call(clip, vec![carried])] }
+        GoStatement::Assign {
+            targets: vec![carried.clone()],
+            values: vec![call(clip, vec![carried])],
+        }
     }
 
     fn map(
@@ -563,6 +566,11 @@ where
                 }
                 self.sink(lambda_body, mode, Sink::Return, &mut body)
             }
+            None if !delayed && arity > 1 && self.arity(function.monotype) == arity => {
+                let value = self.value(function, out)?;
+                self.tail_loop = saved;
+                return Ok(value);
+            }
             found => {
                 let mut arguments = vec![];
                 for &monotype in &parameter_monotypes {
@@ -588,11 +596,9 @@ where
                     }
                     _ => {
                         let value = self.value(function, out)?;
-                        let mut applied = self.hoist(value, "function", out);
-                        for argument in arguments {
-                            applied = call(applied, vec![argument]);
-                        }
-                        applied
+                        let function_value = self.hoist(value, "function", out);
+                        let callable = self.value_callable(function_value, function.monotype);
+                        self.apply_arguments(callable, arguments, &mut body)?
                     }
                 };
                 let applied = if delayed {

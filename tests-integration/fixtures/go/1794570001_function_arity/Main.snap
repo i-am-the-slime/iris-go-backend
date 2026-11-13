@@ -1,0 +1,128 @@
+---
+source: tests-integration/src/fixtures.rs
+---
+package main
+
+import (
+	"fmt"
+	"github.com/i-am-the-slime/purs-backend-go/go-support/array"
+	"github.com/i-am-the-slime/purs-backend-go/go-support/prim"
+)
+
+var main_ = initializeMain_()
+
+func initializeMain_() []string {
+	function := fromInt(4)
+	argument2 := func(seed int32) []int32 {
+		return shared(func(a int32, b int32) int32 {
+			return prim.MultiplyInt32(a, 10) + b
+		}, seed)
+	}
+	array2 := []int32{1, 2}
+	mapped := make([]string, len(array2))
+	for index, element := range array2 {
+		mapped[index] = compose(showInt, argument2, element)
+	}
+	array3 := []func(int32) func(string) string{prepared, func(a2 int32) func(string) string {
+		return func(b2 string) string {
+			return prim.ShowInt(int(a2)) + b2
+		}
+	}}
+	mapped2 := make([]string, len(array3))
+	for index2, element2 := range array3 {
+		mapped2[index2] = compose2(showString, curried, element2)
+	}
+	array4 := []func(int32, int32) int32{add, func(a3 int32, b3 int32) int32 {
+		return prim.MultiplyInt32(a3, b3) + 1
+	}}
+	mapped3 := make([]string, len(array4))
+	for index3, combine := range array4 {
+		mapped3[index3] = prim.ShowInt(int(array.Foldl(combine, int32(0), []int32{1, 2, 3})))
+	}
+	return array.Append([]string{prim.ShowInt(int(fromInt(3)(func(argument int32) int32 {
+		return function(func(value int32) int32 {
+			return value + 1
+		}, argument)
+	}, 0)))}, array.Append(mapped, array.Append(mapped2, mapped3)))
+}
+
+func show(argument0 int32) string {
+	return prim.ShowInt(int(argument0))
+}
+
+func fromInt(argument0 int32) func(func(int32) int32, int32) int32 {
+	switch argument0 {
+	case 0:
+		return zeroCInt
+	default:
+		n := fromInt(argument0 - 1)
+		return func(f func(int32) int32, x int32) int32 {
+			return succCInt(n, f, x)
+		}
+	}
+}
+
+func compose(f func([]int32) string, g func(int32) []int32, x int32) string {
+	return f(g(x))
+}
+
+func showInt(argument1 []int32) string {
+	return prim.ShowArray(show, argument1)
+}
+
+func shared(op func(int32, int32) int32, seed int32) []int32 {
+	argument := prim.MultiplyInt32(seed, seed)
+	partial := func(argument2 int32) int32 {
+		return op(argument, argument2)
+	}
+	return []int32{op(1, 2), partial(3), partial(4)}
+}
+
+func add(argument0 int32, argument1 int32) int32 {
+	return argument0 + argument1
+}
+
+func compose2(f func([]string) string, g func(func(int32) func(string) string) []string, x func(int32) func(string) string) string {
+	return f(g(x))
+}
+
+func showString(argument1 []string) string {
+	return prim.ShowArray(show2, argument1)
+}
+
+func curried(f func(int32) func(string) string) []string {
+	g := f(4)
+	return []string{f(1)("a"), g("b"), g("c")}
+}
+
+func prepared(a int32) func(string) string {
+	prefix := repeat(a)
+	return func(b string) string {
+		return prefix + b
+	}
+}
+
+func zeroCInt(ignored func(int32) int32, x int32) int32 {
+	return x
+}
+
+func succCInt(n func(func(int32) int32, int32) int32, f func(int32) int32, x int32) int32 {
+	return f(n(f, x))
+}
+
+func show2(argument0 string) string {
+	return prim.ShowString(argument0)
+}
+
+func repeat(argument0 int32) string {
+	switch argument0 {
+	case 0:
+		return ""
+	default:
+		return "*" + repeat(argument0 - 1)
+	}
+}
+
+func main() {
+	fmt.Println(main_)
+}

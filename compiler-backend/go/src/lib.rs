@@ -4,6 +4,7 @@
 //! types and evidence, simplifies the resulting monomorphic tree, and renders it
 //! as a single Go `main` package.
 
+mod arity;
 pub mod blocker;
 mod context;
 mod dictionary;
