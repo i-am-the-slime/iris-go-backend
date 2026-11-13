@@ -1197,11 +1197,14 @@ impl<'p> Emission<'p> {
             let mut function = self.program.function(variant.function).clone();
             let plan = Planner::new(self.program, cells, &mut self.facts, variant).plan(&function);
             let callbacks = plan.callbacks.values();
-            for target in plan.calls.values().map(|(target, _)| target).chain(callbacks) {
-                if !self.identifiers.contains_key(target) {
+            let targets = plan.calls.values().map(|(target, _)| target).chain(callbacks);
+            let mut targets: Vec<Variant> = targets.copied().collect();
+            targets.sort_unstable_by_key(|target| (target.function, target.owned, target.donor));
+            for target in targets {
+                if !self.identifiers.contains_key(&target) {
                     let next = FunctionId(self.identifiers.len() as u32);
-                    self.identifiers.insert(*target, next);
-                    pending.push(*target);
+                    self.identifiers.insert(target, next);
+                    pending.push(target);
                 }
             }
             self.rewrite(&mut function.body, &plan, cells);
