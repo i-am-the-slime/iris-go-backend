@@ -1590,6 +1590,9 @@ where
                         self.instantiated_monotype(scope, current, file_id, term, &instantiations)?;
                     return self.constructor(scope, file_id, term, monotype);
                 }
+                tree::ExpressionKind::EvidenceAbstraction { .. } => {
+                    return self.evidence_redex(scope, current, dictionaries);
+                }
                 _ => {
                     if dictionaries.is_empty() {
                         return self.expression(scope, current);
@@ -1649,6 +1652,43 @@ where
                 self.global_reference(scope, file_id, term, &instantiations, dictionaries, monotype)
             }
         }
+    }
+
+    fn evidence_redex(
+        &mut self,
+        scope: &mut Scope,
+        abstraction: tree::ExpressionId,
+        dictionaries: Vec<Dictionary>,
+    ) -> GoResult<Expression> {
+        let module = Arc::clone(&scope.module);
+        let tree = &module.checked.tree;
+        let mut binders = Vec::with_capacity(dictionaries.len());
+        let mut body = abstraction;
+        while binders.len() < dictionaries.len()
+            && let tree::ExpressionKind::EvidenceAbstraction { binder, expression } = tree[body].kind
+        {
+            binders.push(binder);
+            body = expression;
+        }
+        if binders.len() != dictionaries.len() {
+            return Err(self.unsupported(
+                scope,
+                UnsupportedState::Construct { construct: "evidence applied to a non-reference" },
+            ));
+        }
+        let previous: Vec<_> = binders
+            .iter()
+            .zip(dictionaries)
+            .map(|(&binder, dictionary)| (binder, scope.givens.insert(binder, dictionary)))
+            .collect();
+        let reduced = self.expression(scope, body);
+        for (binder, given) in previous {
+            match given {
+                Some(dictionary) => scope.givens.insert(binder, dictionary),
+                None => scope.givens.remove(&binder),
+            };
+        }
+        reduced
     }
 
     fn local_form(
@@ -2743,3 +2783,4 @@ fn alternatives_monotype(alternatives: &[Alternative]) -> MonotypeId {
 fn string_literal(value: &lowering::StringLiteral) -> String {
     String::from_utf16_lossy(value.as_utf16())
 }
+
