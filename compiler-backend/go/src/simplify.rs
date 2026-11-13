@@ -44,6 +44,7 @@ pub fn simplify(program: Program, monotypes: &mut Monotypes, next_local: u32) ->
         });
     }
     let mut simplifier = Simplifier {
+        sizes: functions.iter().map(|function| size(&function.body)).collect(),
         functions: functions.iter().cloned().map(Some).collect(),
         recursive,
         uses,
@@ -63,6 +64,7 @@ pub fn simplify(program: Program, monotypes: &mut Monotypes, next_local: u32) ->
             current = simplifier.eta_expand(current);
             current.body = simplifier.expression(current.body);
             current = simplifier.absorb_lambdas(current);
+            simplifier.sizes[function.0 as usize] = size(&current.body);
             simplifier.functions[function.0 as usize] = Some(current);
         }
     }
@@ -73,6 +75,7 @@ pub fn simplify(program: Program, monotypes: &mut Monotypes, next_local: u32) ->
             .take()
             .expect("invariant violated: function lost during simplification");
         simplifier.settle_records(&mut current.body);
+        simplifier.sizes[index] = size(&current.body);
         simplifier.functions[index] = Some(current);
     }
     let functions: Vec<Function> = simplifier
@@ -89,6 +92,8 @@ pub fn simplify(program: Program, monotypes: &mut Monotypes, next_local: u32) ->
 
 struct Simplifier<'m> {
     functions: Vec<Option<Function>>,
+    /// The size of each function's body as it stands in `functions`.
+    sizes: Vec<usize>,
     recursive: Vec<bool>,
     uses: Vec<usize>,
     entry: FunctionId,
@@ -111,7 +116,7 @@ impl Simplifier<'_> {
             return None;
         }
         let function = self.functions[id.0 as usize].as_ref()?;
-        let small = size(&function.body) <= INLINE_SIZE || self.uses[id.0 as usize] == 1;
+        let small = self.sizes[id.0 as usize] <= INLINE_SIZE || self.uses[id.0 as usize] == 1;
         (small && !function.parameters.is_empty() || is_trivial(&function.body)).then_some(function)
     }
 
