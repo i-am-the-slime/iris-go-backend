@@ -167,9 +167,10 @@ pub struct Specializer<'q, Q> {
     foreign_packages: &'q ForeignPackages,
     blockers: Vec<RecordedBlocker>,
     blocker_positions: FxHashMap<(String, UnsupportedState), usize>,
-    /// Whether this pass met an instantiation of a scheme that the schemes it
-    /// started with did not list.
-    discovered: bool,
+    /// Whether this pass grew the schemes it started with: it met a new
+    /// instantiation of a scheme, a new rank-N field type, or an owner whose
+    /// rank-N fields stay erased.
+    grown: bool,
     callback_arities: FxHashMap<(FileId, TermItemId), &'static [usize]>,
 }
 
@@ -204,7 +205,7 @@ where
             foreign_packages,
             blockers: vec![],
             blocker_positions: FxHashMap::default(),
-            discovered: false,
+            grown: false,
             callback_arities: FxHashMap::default(),
         }
     }
@@ -233,25 +234,31 @@ where
                 }
             };
             self.functions[id.0 as usize] = Some(function);
+            self.adopt_rank_n_fields();
         }
         Ok(entry)
     }
 
-    pub fn grown_schemes(&self) -> Option<SchemeInstantiations> {
-        if !self.discovered
-            && self.monotypes.new_rank_n_keys.is_empty()
-            && self.monotypes.new_erased_owners.is_empty()
-        {
-            return None;
+    /// Rank-N field types met while specializing a function are specialized for
+    /// the rest of the pass, as discovered instantiations are.
+    fn adopt_rank_n_fields(&mut self) {
+        let erased = std::mem::take(&mut self.monotypes.new_erased_owners);
+        let keys = std::mem::take(&mut self.monotypes.new_rank_n_keys);
+        if erased.is_empty() && keys.is_empty() {
+            return;
         }
-        let mut schemes = self.monotypes.schemes.clone();
-        for owner in &self.monotypes.new_erased_owners {
-            schemes.erase_owner(owner.clone());
+        for owner in erased {
+            self.monotypes.schemes.erase_owner(owner);
         }
-        for (key, owner) in &self.monotypes.new_rank_n_keys {
-            schemes.add_rank_n(key.clone(), owner.clone());
+        for (key, owner) in keys {
+            self.monotypes.schemes.add_rank_n(key, owner);
         }
-        Some(schemes)
+        self.grown = true;
+    }
+
+    pub fn grown_schemes(&mut self) -> Option<SchemeInstantiations> {
+        self.adopt_rank_n_fields();
+        self.grown.then(|| self.monotypes.schemes.clone())
     }
 
     pub fn blockers(&mut self) -> GoResult<Option<Blockers>> {
@@ -1519,7 +1526,7 @@ where
         // discovered in one pass instead of one pass per link. Values built
         // before it lack it, so the pass is repeated.
         self.monotypes.schemes.insert(key, instantiation);
-        self.discovered = true;
+        self.grown = true;
         Ok(())
     }
 
