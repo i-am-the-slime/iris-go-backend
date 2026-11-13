@@ -29,7 +29,7 @@ where
                 let unfolded = self.unfold(&data)?;
                 self.coerce(value, from, unfolded, out)
             }
-            (_, Monotype::Erased) => {
+            (_, Monotype::Erased | Monotype::Opaque) => {
                 let canonical = self.canonical(from);
                 let value = self.coerce(value, from, canonical, out)?;
                 if is_untyped_constant(&value) {
@@ -38,7 +38,7 @@ where
                 }
                 Ok(value)
             }
-            (Monotype::Erased, _) => {
+            (Monotype::Erased | Monotype::Opaque, _) => {
                 let canonical = self.canonical(to);
                 let type_ = self.go_type(canonical)?;
                 let value = GoExpression::TypeAssertion { value: Box::new(value), type_ };
