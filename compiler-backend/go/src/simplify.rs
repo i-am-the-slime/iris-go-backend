@@ -13,6 +13,9 @@ use crate::mono::{
 use crate::monotype::Monotypes;
 use smol_str::SmolStr;
 
+mod object;
+mod record;
+
 const INLINE_SIZE: usize = 40;
 const INLINE_FUEL: usize = 2_000;
 
@@ -46,6 +49,8 @@ pub fn simplify(program: Program, monotypes: &mut Monotypes, next_local: u32) ->
         next_local,
         fuel: 0,
         monotypes,
+        record_orders: FxHashMap::default(),
+        records_settled: false,
     };
     for component in &components {
         for &function in component {
@@ -58,6 +63,15 @@ pub fn simplify(program: Program, monotypes: &mut Monotypes, next_local: u32) ->
             current = simplifier.absorb_lambdas(current);
             simplifier.functions[function.0 as usize] = Some(current);
         }
+    }
+    simplifier.records_settled = true;
+    simplifier.fuel = 0;
+    for index in 0..simplifier.functions.len() {
+        let mut current = simplifier.functions[index]
+            .take()
+            .expect("invariant violated: function lost during simplification");
+        simplifier.settle_records(&mut current.body);
+        simplifier.functions[index] = Some(current);
     }
     let functions: Vec<Function> = simplifier
         .functions
@@ -78,6 +92,8 @@ struct Simplifier<'m> {
     next_local: u32,
     fuel: usize,
     monotypes: &'m mut Monotypes,
+    record_orders: FxHashMap<LocalId, Vec<SmolStr>>,
+    records_settled: bool,
 }
 
 impl Simplifier<'_> {
@@ -219,10 +235,7 @@ impl Simplifier<'_> {
                 if let ExpressionKind::Coerce(inner) = value.kind {
                     value = *inner;
                 }
-                if value.monotype == monotype {
-                    return value;
-                }
-                ExpressionKind::Coerce(Box::new(value))
+                return self.coerce(value, monotype);
             }
             ExpressionKind::Let { bindings, body } => {
                 let bindings: Vec<Binding> = bindings
@@ -232,6 +245,9 @@ impl Simplifier<'_> {
                         value: self.expression(binding.value),
                     })
                     .collect();
+                for binding in &bindings {
+                    self.remember_record_order(binding);
+                }
                 let body = self.expression(*body);
                 return self.let_bindings(bindings, body);
             }
@@ -595,6 +611,12 @@ impl Simplifier<'_> {
             }
             Foreign::Identity => {
                 arguments.pop().expect("invariant violated: identity has one argument")
+            }
+            Foreign::Record(operation) => self.record_operation(operation, arguments, monotype),
+            Foreign::ObjectFoldM => self.object_fold(arguments, monotype),
+            Foreign::UnsafeCoerce => {
+                let value = arguments.pop().expect("invariant violated: coerce has one argument");
+                self.coerce(value, monotype)
             }
             foreign => Expression::new(ExpressionKind::Foreign { foreign, arguments }, monotype),
         }

@@ -1,8 +1,9 @@
 use super::{
-    DataKind, Emitter, call, field, identifier, identifier_expression, is_simple,
+    DataKind, Emitter, binary, call, field, identifier, identifier_expression, is_simple,
     is_untyped_constant, panic_statement, unique, unit_value,
 };
 use crate::error::{GoError, GoResult};
+use crate::foreign::{GoFunction, GoPackage};
 use crate::monotype::{DataType, Monotype, MonotypeId, RecordField};
 use crate::syntax::{GoCase, GoDeclaration, GoExpression, GoStatement, GoType};
 
@@ -28,6 +29,43 @@ where
             (_, Monotype::Recursive(data)) => {
                 let unfolded = self.unfold(&data)?;
                 self.coerce(value, from, unfolded, out)
+            }
+            (Monotype::Record(fields), Monotype::Opaque) => {
+                let record = self.shared(value, out);
+                let mut entries = Vec::with_capacity(fields.len());
+                for record_field in fields.iter() {
+                    let field_value = field(record.clone(), &identifier(&record_field.label));
+                    entries.push((
+                        record_field.label.to_string(),
+                        field_value,
+                        record_field.monotype,
+                    ));
+                }
+                self.foreign_record(entries, out)
+            }
+            (Monotype::Opaque, Monotype::Record(fields)) => {
+                let record = self.shared(value, out);
+                let read = self
+                    .go_function(GoFunction { package: GoPackage::Direct, name: "ForeignField" });
+                let mut values = Vec::with_capacity(fields.len());
+                for record_field in fields.iter() {
+                    let label = GoExpression::String(record_field.label.to_string());
+                    let field_value = call(read.clone(), vec![record.clone(), label]);
+                    let field_value = self.coerce(field_value, from, record_field.monotype, out)?;
+                    values.push((Some(identifier(&record_field.label)), field_value));
+                }
+                let type_ = GoType::Named(self.record_name(to)?);
+                Ok(GoExpression::Composite { type_, fields: values })
+            }
+            (Monotype::Array(_), Monotype::Opaque) => {
+                let foreign_array = self.monotypes.intern(Monotype::Array(to));
+                self.coerce(value, from, foreign_array, out)
+            }
+            (Monotype::Opaque, Monotype::Array(_)) => {
+                let foreign_array = self.monotypes.intern(Monotype::Array(from));
+                let type_ = self.go_type(foreign_array)?;
+                let value = GoExpression::TypeAssertion { value: Box::new(value), type_ };
+                self.coerce(value, foreign_array, to, out)
             }
             (_, Monotype::Erased | Monotype::Opaque) => {
                 let canonical = self.canonical(from);
@@ -76,6 +114,7 @@ where
                 Ok(GoExpression::Function { parameters: vec![], result, body })
             }
             (Monotype::Array(_), Monotype::Array(_))
+            | (Monotype::Nullable(_), Monotype::Nullable(_))
             | (Monotype::Record(_), Monotype::Record(_))
             | (Monotype::Data(_), Monotype::Data(_)) => {
                 let converter = self.converter(from, to)?;
@@ -88,6 +127,29 @@ where
                 },
             }),
         }
+    }
+
+    pub(super) fn foreign_record(
+        &mut self,
+        entries: Vec<(String, GoExpression, MonotypeId)>,
+        out: &mut Vec<GoStatement>,
+    ) -> GoResult<GoExpression> {
+        let foreign = self.monotypes.intern(Monotype::Opaque);
+        let mut keys = Vec::with_capacity(entries.len());
+        let mut values = Vec::with_capacity(entries.len());
+        for (label, value, monotype) in entries {
+            keys.push((None, GoExpression::String(label)));
+            values.push((None, self.coerce(value, monotype, foreign, out)?));
+        }
+        let keys = GoExpression::Composite {
+            type_: GoType::Slice(Box::new(GoType::String)),
+            fields: keys,
+        };
+        let values =
+            GoExpression::Composite { type_: GoType::Slice(Box::new(GoType::Any)), fields: values };
+        let record =
+            self.go_function(GoFunction { package: GoPackage::Direct, name: "ForeignRecord" });
+        Ok(call(record, vec![keys, values]))
     }
 
     fn canonical(&mut self, monotype: MonotypeId) -> MonotypeId {
@@ -231,6 +293,24 @@ where
                     body: each,
                 });
                 body.push(GoStatement::Return(Some(identifier_expression("converted"))));
+            }
+            (Monotype::Nullable(from_element), Monotype::Nullable(to_element)) => {
+                let absent = binary("==", value.clone(), identifier_expression("nil"));
+                body.push(GoStatement::If {
+                    condition: absent,
+                    then: vec![GoStatement::Return(Some(identifier_expression("nil")))],
+                    otherwise: vec![],
+                });
+                let present = GoExpression::Unary { operator: "*", operand: Box::new(value) };
+                let element = self.coerce(present, from_element, to_element, &mut body)?;
+                let type_ = self.go_type(to_element)?;
+                body.push(GoStatement::Variable {
+                    name: "converted".into(),
+                    type_,
+                    value: Some(element),
+                });
+                let converted = GoExpression::Address(Box::new(identifier_expression("converted")));
+                body.push(GoStatement::Return(Some(converted)));
             }
             (Monotype::Record(from_fields), Monotype::Record(to_fields)) => {
                 let mut fields = vec![];

@@ -549,7 +549,8 @@ pub fn go(path: &Path) -> FixtureResult {
     let loaded = crate::load_fixture(folder)?;
     check_source_errors(&loaded.engine, &loaded.files, &loaded.fixture_files)?;
 
-    let program = go::compile_program(&loaded.engine, &file, "main", &go::ForeignPackages::default())?;
+    let program =
+        go::compile_program(&loaded.engine, &file, "main", &go::ForeignPackages::default())?;
     let mut settings = insta::Settings::clone_current();
     settings.set_snapshot_path(snapshot_path(folder));
     settings.set_prepend_module_to_snapshot(false);

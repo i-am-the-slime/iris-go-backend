@@ -936,23 +936,8 @@ where
             }
             return Ok(argument);
         }
-        if let tree::ExpressionKind::Variable {
-            resolution:
-                tree::VariableResolution::Source(lowering::TermVariableResolution::Reference(
-                    file_id,
-                    term,
-                )),
-        } = module.checked.tree[head].kind
-            && arguments.len() >= 3
-            && self.is_traverse_array_implementation((file_id, term))?
-        {
-            return self.traverse_array(
-                scope,
-                head,
-                (file_id, term),
-                &result_instantiations,
-                &arguments,
-            );
+        if let Some(reference) = self.traversal_reference(scope, head, &arguments)? {
+            return self.traverse_array(scope, reference, &arguments);
         }
         let mut function = match module.checked.tree[head].kind {
             tree::ExpressionKind::Constructor { .. }

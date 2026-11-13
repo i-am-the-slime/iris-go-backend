@@ -1,0 +1,48 @@
+---
+source: tests-integration/src/fixtures.rs
+---
+package main
+
+import (
+	"fmt"
+)
+
+type NameSizeTags struct {
+	name string
+	size int32
+	tags []string
+}
+
+type DraftLabelSize struct {
+	draft bool
+	label string
+	size  int32
+}
+
+type DraftLabelSizeTags struct {
+	draft bool
+	label string
+	size  int32
+	tags  []string
+}
+
+type DraftNameSizeTags struct {
+	draft bool
+	name  string
+	size  int32
+	tags  []string
+}
+
+var main_ = initializeMain_()
+
+func initializeMain_() NameSizeTags {
+	r13 := DraftLabelSize{label: "box", size: 1, draft: true}
+	r12 := DraftLabelSizeTags{label: r13.label, size: r13.size, draft: r13.draft, tags: []string{"new"}}
+	r1 := DraftLabelSizeTags{label: r12.label, size: r12.size + 1, draft: r12.draft, tags: r12.tags}
+	r2 := DraftNameSizeTags{size: r1.size, draft: r1.draft, tags: r1.tags, name: r1.label}
+	return NameSizeTags{size: r2.size, tags: r2.tags, name: r2.name}
+}
+
+func main() {
+	fmt.Println(main_)
+}
