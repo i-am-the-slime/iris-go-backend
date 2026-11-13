@@ -1,8 +1,8 @@
 examples any 493
 examples empty-interface 0
-examples panic 25
+examples panic 30
 examples reflect 0
-examples thunk 96
+examples thunk 97
 examples type-assertion 90
 examples unsafe 0
 markgraf-cli any 5209
