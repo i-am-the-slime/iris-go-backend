@@ -1218,6 +1218,11 @@ fn occurrences(expression: &Expression, local: LocalId) -> Occurrences {
 }
 
 fn count(expression: &Expression, local: LocalId, under_lambda: bool, result: &mut Occurrences) {
+    // Callers tell no, one and several occurrences apart, and where a single
+    // one is; past two there is nothing more to learn.
+    if result.total >= 2 {
+        return;
+    }
     match &expression.kind {
         ExpressionKind::Local(id) if *id == local => {
             result.total += 1;
