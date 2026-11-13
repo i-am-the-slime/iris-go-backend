@@ -160,45 +160,7 @@ impl Simplifier<'_> {
     }
 
     fn does_no_work(&self, expression: &Expression) -> bool {
-        match &expression.kind {
-            ExpressionKind::Fail(_) | ExpressionKind::Lambda { .. } => true,
-            ExpressionKind::Coerce(value)
-            | ExpressionKind::Access { record: value, .. }
-            | ExpressionKind::EffectPure(value)
-            | ExpressionKind::EffectBind { action: value, .. }
-            | ExpressionKind::EffectEach { array: value, .. } => self.does_no_work(value),
-            ExpressionKind::EffectWhen { condition, action } => {
-                self.does_no_work(condition) && self.does_no_work(action)
-            }
-            ExpressionKind::Construct { arguments, .. } | ExpressionKind::Array(arguments) => {
-                arguments.iter().all(|argument| self.does_no_work(argument))
-            }
-            ExpressionKind::Record(fields) => {
-                fields.iter().all(|(_, value)| self.does_no_work(value))
-            }
-            ExpressionKind::Foreign { foreign, arguments } => {
-                let builds_value = foreign.is_effectful() || matches!(foreign, Foreign::Identity);
-                (builds_value || arguments.is_empty())
-                    && arguments.iter().all(|argument| self.does_no_work(argument))
-            }
-            ExpressionKind::Apply { function, arguments } => {
-                let builds_value = match &function.kind {
-                    ExpressionKind::Function(id) => {
-                        self.functions[id.0 as usize].as_ref().is_some_and(|callee| {
-                            callee.parameters.len() > arguments.len()
-                                || (!self.recursive[id.0 as usize]
-                                    && self.does_no_work(&callee.body))
-                        })
-                    }
-                    ExpressionKind::Lambda { parameters, body } => {
-                        parameters.len() > arguments.len() || self.does_no_work(body)
-                    }
-                    _ => false,
-                };
-                builds_value && arguments.iter().all(|argument| self.does_no_work(argument))
-            }
-            _ => is_trivial(expression),
-        }
+        does_no_work(self, expression)
     }
 
     /// A function whose body is a lambda keeps its parameters as Go parameters.
@@ -1173,6 +1135,60 @@ fn alternatives_size(alternatives: &[Alternative]) -> usize {
     total
 }
 
+pub(crate) trait KnownFunctions {
+    fn known(&self, id: FunctionId) -> Option<&Function>;
+    fn is_recursive(&self, id: FunctionId) -> bool;
+}
+
+impl KnownFunctions for Simplifier<'_> {
+    fn known(&self, id: FunctionId) -> Option<&Function> {
+        self.functions[id.0 as usize].as_ref()
+    }
+
+    fn is_recursive(&self, id: FunctionId) -> bool {
+        self.recursive[id.0 as usize]
+    }
+}
+
+pub(crate) fn does_no_work(known: &impl KnownFunctions, expression: &Expression) -> bool {
+    match &expression.kind {
+        ExpressionKind::Fail(_) | ExpressionKind::Lambda { .. } => true,
+        ExpressionKind::Coerce(value)
+        | ExpressionKind::Access { record: value, .. }
+        | ExpressionKind::EffectPure(value)
+        | ExpressionKind::EffectBind { action: value, .. }
+        | ExpressionKind::EffectEach { array: value, .. } => does_no_work(known, value),
+        ExpressionKind::EffectWhen { condition, action } => {
+            does_no_work(known, condition) && does_no_work(known, action)
+        }
+        ExpressionKind::Construct { arguments, .. } | ExpressionKind::Array(arguments) => {
+            arguments.iter().all(|argument| does_no_work(known, argument))
+        }
+        ExpressionKind::Record(fields) => {
+            fields.iter().all(|(_, value)| does_no_work(known, value))
+        }
+        ExpressionKind::Foreign { foreign, arguments } => {
+            let builds_value = foreign.is_effectful() || matches!(foreign, Foreign::Identity);
+            (builds_value || arguments.is_empty())
+                && arguments.iter().all(|argument| does_no_work(known, argument))
+        }
+        ExpressionKind::Apply { function, arguments } => {
+            let builds_value = match &function.kind {
+                ExpressionKind::Function(id) => known.known(*id).is_some_and(|callee| {
+                    callee.parameters.len() > arguments.len()
+                        || (!known.is_recursive(*id) && does_no_work(known, &callee.body))
+                }),
+                ExpressionKind::Lambda { parameters, body } => {
+                    parameters.len() > arguments.len() || does_no_work(known, body)
+                }
+                _ => false,
+            };
+            builds_value && arguments.iter().all(|argument| does_no_work(known, argument))
+        }
+        _ => is_trivial(expression),
+    }
+}
+
 pub(crate) fn is_trivial(expression: &Expression) -> bool {
     match &expression.kind {
         ExpressionKind::Literal(_) | ExpressionKind::Unit | ExpressionKind::Local(_) => true,
@@ -1382,7 +1398,7 @@ pub fn for_each_child_mut(expression: &mut Expression, visitor: &mut impl FnMut(
     }
 }
 
-fn function_references(expression: &Expression) -> FxHashSet<FunctionId> {
+pub(crate) fn function_references(expression: &Expression) -> FxHashSet<FunctionId> {
     let mut references = FxHashSet::default();
     visit(expression, &mut |node| {
         if let ExpressionKind::Function(id) = node.kind {
@@ -1393,7 +1409,9 @@ fn function_references(expression: &Expression) -> FxHashSet<FunctionId> {
 }
 
 /// Tarjan's algorithm; components come out callees first.
-fn strongly_connected_components(references: &[FxHashSet<FunctionId>]) -> Vec<Vec<FunctionId>> {
+pub(crate) fn strongly_connected_components(
+    references: &[FxHashSet<FunctionId>],
+) -> Vec<Vec<FunctionId>> {
     struct State<'r> {
         references: &'r [FxHashSet<FunctionId>],
         index: Vec<Option<usize>>,
