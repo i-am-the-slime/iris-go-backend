@@ -97,7 +97,7 @@ pub struct Alternative {
     pub body: Guarded,
 }
 
-pub const PATTERN_MATCH_FAILURE: &str = "Pattern match failure";
+pub const PATTERN_MATCH_FAILURE: &str = "Failed pattern match";
 
 impl Alternative {
     pub fn match_failure(scrutinees: &[Expression], result: MonotypeId) -> Alternative {

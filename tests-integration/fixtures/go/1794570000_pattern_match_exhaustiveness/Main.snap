@@ -1,5 +1,6 @@
 ---
 source: tests-integration/src/fixtures.rs
+assertion_line: 563
 ---
 package main
 
@@ -98,7 +99,7 @@ func initializeMain_() []string {
 		case MaybeStringJust:
 			result = value.Just0
 		default:
-			panic("Pattern match failure")
+			panic("Failed pattern match")
 		}
 		mapped7[index7] = result
 	}
