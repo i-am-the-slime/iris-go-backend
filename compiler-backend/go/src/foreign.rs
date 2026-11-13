@@ -65,6 +65,10 @@ pub enum Foreign {
     MakeAff,
     ForkFiber,
     NewFiber,
+    MutexNew,
+    WithMutex,
+    LazyDefer,
+    LazyForce,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -97,6 +101,8 @@ pub struct Boundary {
     pub unit_values: bool,
     pub record_arguments: &'static [usize],
     pub maybe_destructor: Option<MaybeDestructor>,
+    /// A `Maybe b -> Boolean` argument rebuilt as a tag test on the result's Maybe.
+    pub is_just: Option<usize>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -118,6 +124,7 @@ const PLAIN: Boundary = Boundary {
     unit_values: false,
     record_arguments: &[],
     maybe_destructor: None,
+    is_just: None,
 };
 
 const fn integers(arguments: &'static [usize], result: bool) -> Boundary {
@@ -143,6 +150,14 @@ const fn maybe_witnessed(just: usize, nothing: usize, witness: usize) -> Boundar
     let witness = Some(witness);
     let constructors = MaybeConstructors { just, nothing, integer_payload: false, witness };
     Boundary { maybe: Some(constructors), ..PLAIN }
+}
+
+/// A search that returns its `nothing` argument or one of the callback's results,
+/// whose Maybe is the foreign's result type.
+const fn maybe_search(nothing: usize, is_just: usize) -> Boundary {
+    let constructors =
+        MaybeConstructors { just: usize::MAX, nothing, integer_payload: false, witness: None };
+    Boundary { maybe: Some(constructors), is_just: Some(is_just), ..PLAIN }
 }
 
 const fn maybe_integer(just: usize, nothing: usize, integers: &'static [usize]) -> Boundary {
@@ -227,6 +242,13 @@ pub enum Operator {
     ArrayLength,
     ArrayIndex,
     IntToNumber,
+    IntAnd,
+    IntOr,
+    IntXor,
+    IntShiftLeft,
+    IntShiftRight,
+    IntZeroFillShiftRight,
+    IntComplement,
     Compare(Comparison),
 }
 
@@ -247,7 +269,8 @@ impl Operator {
             | Operator::NumberNegate
             | Operator::BooleanNot
             | Operator::ArrayLength
-            | Operator::IntToNumber => 1,
+            | Operator::IntToNumber
+            | Operator::IntComplement => 1,
             _ => 2,
         }
     }
@@ -261,6 +284,9 @@ impl Foreign {
             | Foreign::Perform { arity, .. }
             | Foreign::Project { arity, .. } => arity,
             Foreign::Constant(_) | Foreign::Unit | Foreign::MutableArrayNew => 0,
+            Foreign::MutexNew => 0,
+            Foreign::WithMutex => 2,
+            Foreign::LazyDefer | Foreign::LazyForce => 1,
             Foreign::UnsafeCoerce | Foreign::Identity | Foreign::EffectPure | Foreign::Print => 1,
             Foreign::Throw | Foreign::Crash | Foreign::MakeAff | Foreign::AssocArray => 1,
             Foreign::ForkFiber | Foreign::NewFiber => 2,
@@ -316,6 +342,8 @@ impl Foreign {
                 | Foreign::MakeAff
                 | Foreign::ForkFiber
                 | Foreign::NewFiber
+                | Foreign::MutexNew
+                | Foreign::WithMutex
         )
     }
 }
@@ -395,6 +423,10 @@ const fn constant(name: &'static str) -> Foreign {
     Foreign::Constant(GoFunction { package: GoPackage::Prim, name })
 }
 
+const fn direct_constant(name: &'static str) -> Foreign {
+    Foreign::Constant(GoFunction { package: GoPackage::Direct, name })
+}
+
 const fn compare(comparison: Comparison) -> Foreign {
     Foreign::Operator(Operator::Compare(comparison))
 }
@@ -437,6 +469,7 @@ const FOREIGN_IMPORTS: &[(&str, &str, Foreign)] = &[
     ("Data.Ord", "ordCharImpl", prim("OrdChar", 5)),
     ("Data.Ord", "ordArrayImpl", direct("CompareArray", 3)),
     ("Data.Show", "intercalate", prim("StringJoinWith", 2)),
+    ("Data.Show.Generic", "intercalate", prim("StringJoinWith", 2)),
     ("Control.Apply", "arrayApply", array("Apply", 2)),
     ("Record.Unsafe", "unsafeGet", Foreign::RecordGet),
     ("Record.Unsafe", "unsafeSet", Foreign::Record(RecordOperation::Insert)),
@@ -485,6 +518,8 @@ const FOREIGN_IMPORTS: &[(&str, &str, Foreign)] = &[
     ("Data.Array", "scanrImpl", array("Scanr", 3)),
     ("Data.Array", "unconsImpl", direct("Uncons", 3)),
     ("Data.Array", "sortByImpl", direct("SortBy", 3)),
+    ("Data.Array", "findMapImpl", direct_with("FindMap", 4, maybe_search(0, 1))),
+    ("Data.Array.Parallel", "parallelMap", array("Map", 2)),
     ("Data.Array", "findIndexImpl", array_with("FindIndex", 4, maybe_integer(0, 1, &[]))),
     ("Data.Array", "findLastIndexImpl", array_with("FindLastIndex", 4, maybe_integer(0, 1, &[]))),
     ("Data.Array", "_insertAt", array_with("InsertAt", 5, maybe(0, 1, &[2]))),
@@ -737,13 +772,13 @@ const FOREIGN_IMPORTS: &[(&str, &str, Foreign)] = &[
     ("Data.Int", "fromNumberImpl", prim_with("IntFromNumber", 3, maybe_integer(0, 1, &[]))),
     ("Data.Int", "fromStringAsImpl", prim_with("IntFromStringAs", 4, maybe_integer(0, 1, &[2]))),
     ("Data.Int", "toStringAs", prim_with("IntToStringAs", 2, integers(&[0, 1], false))),
-    ("Data.Int", "and", prim_with("IntAnd", 2, integers(&[0, 1], true))),
-    ("Data.Int", "or", prim_with("IntOr", 2, integers(&[0, 1], true))),
-    ("Data.Int", "xor", prim_with("IntXor", 2, integers(&[0, 1], true))),
-    ("Data.Int", "shl", prim_with("IntShl", 2, integers(&[0, 1], true))),
-    ("Data.Int", "shr", prim_with("IntShr", 2, integers(&[0, 1], true))),
-    ("Data.Int", "zshr", prim_with("IntZshr", 2, integers(&[0, 1], true))),
-    ("Data.Int", "complement", prim_with("IntComplement", 1, integers(&[0], true))),
+    ("Data.Int.Bits", "and", Foreign::Operator(Operator::IntAnd)),
+    ("Data.Int.Bits", "or", Foreign::Operator(Operator::IntOr)),
+    ("Data.Int.Bits", "xor", Foreign::Operator(Operator::IntXor)),
+    ("Data.Int.Bits", "shl", Foreign::Operator(Operator::IntShiftLeft)),
+    ("Data.Int.Bits", "shr", Foreign::Operator(Operator::IntShiftRight)),
+    ("Data.Int.Bits", "zshr", Foreign::Operator(Operator::IntZeroFillShiftRight)),
+    ("Data.Int.Bits", "complement", Foreign::Operator(Operator::IntComplement)),
     ("Data.Enum", "toCharCode", prim_with("ToCharCode", 1, integers(&[], true))),
     ("Data.Enum", "fromCharCode", prim_with("FromCharCode", 1, integers(&[0], false))),
     ("Data.String.Common", "_localeCompare", prim("LocaleCompare", 5)),
@@ -760,6 +795,37 @@ const FOREIGN_IMPORTS: &[(&str, &str, Foreign)] = &[
     ("Data.Int", "quot", prim_with("IntQuot", 2, integers(&[0, 1], true))),
     ("Data.Int", "rem", prim_with("IntRem", 2, integers(&[0, 1], true))),
     ("Data.Int", "pow", prim_with("IntPow", 2, integers(&[0, 1], true))),
+    ("JS.BigInt", "fromStringImpl", direct_with("BigIntFromString", 3, maybe(0, 1, &[]))),
+    ("JS.BigInt", "fromStringAsImpl", direct_with("BigIntFromStringAs", 4, maybe(0, 1, &[]))),
+    ("JS.BigInt", "fromNumberImpl", direct_with("BigIntFromNumber", 3, maybe(0, 1, &[]))),
+    ("JS.BigInt", "fromInt", direct("BigIntFromInt", 1)),
+    ("JS.BigInt", "fromTypeLevelInt", direct("BigIntFromTypeLevelInt", 1)),
+    ("JS.BigInt", "toNumber", direct("BigIntToNumber", 1)),
+    ("JS.BigInt", "biAdd", direct("BigIntAdd", 2)),
+    ("JS.BigInt", "biMul", direct("BigIntMul", 2)),
+    ("JS.BigInt", "biSub", direct("BigIntSub", 2)),
+    ("JS.BigInt", "biMod", direct("BigIntMod", 2)),
+    ("JS.BigInt", "biDiv", direct("BigIntDiv", 2)),
+    ("JS.BigInt", "biDegree", direct("BigIntDegree", 1)),
+    ("JS.BigInt", "biZero", direct_constant("BigIntZero")),
+    ("JS.BigInt", "biOne", direct_constant("BigIntOne")),
+    ("JS.BigInt", "pow", direct("BigIntPow", 2)),
+    ("JS.BigInt", "not", direct("BigIntNot", 1)),
+    ("JS.BigInt", "or", direct("BigIntOr", 2)),
+    ("JS.BigInt", "xor", direct("BigIntXor", 2)),
+    ("JS.BigInt", "and", direct("BigIntAnd", 2)),
+    ("JS.BigInt", "shl", direct("BigIntShl", 2)),
+    ("JS.BigInt", "shr", direct("BigIntShr", 2)),
+    ("JS.BigInt", "biEquals", direct("BigIntEquals", 2)),
+    ("JS.BigInt", "biCompare", direct("BigIntCompare", 2)),
+    ("JS.BigInt", "toString", direct("BigIntToString", 1)),
+    ("JS.BigInt", "toStringAs", direct("BigIntToStringAs", 2)),
+    ("JS.BigInt", "asIntN", direct("BigIntAsIntN", 2)),
+    ("JS.BigInt", "asUintN", direct("BigIntAsUintN", 2)),
+    ("Effect.Synchronized", "newMutex", Foreign::MutexNew),
+    ("Effect.Synchronized", "withMutex", Foreign::WithMutex),
+    ("Data.Lazy", "defer", Foreign::LazyDefer),
+    ("Data.Lazy", "force", Foreign::LazyForce),
     ("Partial.Unsafe", "_unsafePartial", Foreign::Identity),
     ("Partial", "_crashWith", Foreign::Crash),
     ("Effect.Unsafe", "unsafePerformEffect", Foreign::RunEffect),

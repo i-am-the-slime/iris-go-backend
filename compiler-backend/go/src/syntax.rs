@@ -257,7 +257,11 @@ impl Printer {
             }
             GoStatement::Range { element, iterable, body } => {
                 let iterable = self.expression(iterable, 0);
-                self.line(&format!("for _, {element} := range {iterable} {{"));
+                if element == "_" {
+                    self.line(&format!("for range {iterable} {{"));
+                } else {
+                    self.line(&format!("for _, {element} := range {iterable} {{"));
+                }
                 self.block(body);
                 self.line("}");
             }

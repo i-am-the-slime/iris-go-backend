@@ -203,6 +203,16 @@ const RESERVED: &[&str] = &[
     "fmt",
     "prim",
     "array",
+    "direct",
+    "object",
+    "nullable",
+    "exception",
+    "aff",
+    "promise",
+    "foreignvalue",
+    "sync",
+    "big",
+    "math",
     "Ref",
 ];
 
@@ -579,6 +589,18 @@ where
             Monotype::Regex => {
                 self.imports.insert(GoPackage::Prim.path().into());
                 GoType::Named("prim.RegexValue".into())
+            }
+            Monotype::Mutex => {
+                self.imports.insert("sync".into());
+                GoType::Pointer(Box::new(GoType::Named("sync.Mutex".into())))
+            }
+            Monotype::BigInt => {
+                self.imports.insert("math/big".into());
+                GoType::Pointer(Box::new(GoType::Named("big.Int".into())))
+            }
+            Monotype::Lazy(value) => {
+                let result = self.go_result(value)?;
+                GoType::Function { parameters: vec![], result: result.map(Box::new) }
             }
             Monotype::Error => {
                 self.imports.insert(GoPackage::Exception.path().into());
@@ -972,6 +994,14 @@ where
                 return self.effect_loop(foreign, arguments, result, sink, out);
             }
             Foreign::EffectFor => return self.effect_for(arguments, result, sink, out),
+            Foreign::WithMutex => return self.with_mutex(arguments, result, sink, out),
+            Foreign::MutexNew => {
+                self.imports.insert("sync".into());
+                let mutex = call(identifier_expression("new"), vec![identifier_expression(
+                    "sync.Mutex",
+                )]);
+                return self.deliver(mutex, result, sink, out);
+            }
             Foreign::MakeAff => {
                 let performed = self.make_aff(arguments, out)?;
                 return self.deliver(performed, result, sink, out);
@@ -1358,6 +1388,7 @@ where
                     self.just_value_function(witness)?
                 }
                 _ if boundary.ignored.contains(&position) => identifier_expression("nil"),
+                _ if boundary.is_just == Some(position) => self.is_just_function(maybe)?,
                 Some(constructors) if constructors.just == position => {
                     self.just_function(maybe, constructors.integer_payload)?
                 }
@@ -1507,6 +1538,19 @@ where
         integer_payload: bool,
     ) -> GoResult<GoExpression> {
         self.constructor_function(maybe, "Just", integer_payload)
+    }
+
+    fn is_just_function(&mut self, maybe: MonotypeId) -> GoResult<GoExpression> {
+        let (data, just) = self.constructor_named(maybe, "Just")?;
+        let layout = self.data_layout(&data)?;
+        let parameter = self.temporary("maybe");
+        let tag = field(identifier_expression(&parameter), "Tag");
+        let is_just = binary("==", tag, identifier_expression(&layout.constructors[just].tag));
+        Ok(GoExpression::Function {
+            parameters: vec![(parameter, self.go_type(maybe)?)],
+            result: Some(GoType::Bool),
+            body: vec![GoStatement::Return(Some(is_just))],
+        })
     }
 
     fn just_value_function(&mut self, maybe: MonotypeId) -> GoResult<GoExpression> {
@@ -1788,6 +1832,73 @@ where
         self.tail_loop = saved;
         out.push(GoStatement::Loop(body));
         self.deliver(unit_value(), result, sink, out)
+    }
+
+    /// `withMutex mutex action` holds the lock while the action runs and releases
+    /// it even when the action throws. As the last action of a Go function the lock
+    /// is released by `defer`; elsewhere the critical section is its own closure.
+    fn with_mutex(
+        &mut self,
+        arguments: &[Expression],
+        result: MonotypeId,
+        sink: Sink,
+        out: &mut Vec<GoStatement>,
+    ) -> GoResult<()> {
+        let mutex = self.value(&arguments[0], out)?;
+        let mutex = self.hoist(mutex, "mutex", out);
+        let lock = call(field(mutex.clone(), "Lock"), vec![]);
+        let unlock = call(field(mutex, "Unlock"), vec![]);
+        let saved = self.tail_loop.take();
+        let outcome = if let Sink::Return = sink {
+            out.push(GoStatement::Expression(lock));
+            out.push(GoStatement::Defer(unlock));
+            self.sink(&arguments[1], Mode::Perform, Sink::Return, out)
+        } else {
+            let mut body = vec![GoStatement::Expression(lock), GoStatement::Defer(unlock)];
+            self.sink(&arguments[1], Mode::Perform, Sink::Return, &mut body)
+                .and_then(|()| {
+                    if let Some(GoStatement::Return(None)) = body.last() {
+                        body.pop();
+                    }
+                    let result_type = self.go_result(result)?;
+                    let section =
+                        GoExpression::Function { parameters: vec![], result: result_type, body };
+                    self.deliver(call(section, vec![]), result, sink, out)
+                })
+        };
+        self.tail_loop = saved;
+        outcome
+    }
+
+    /// `defer thunk` memoizes the thunk with `sync.OnceValue`, or `sync.OnceFunc`
+    /// when the deferred value is `Unit`.
+    fn lazy_defer(&mut self, thunk: &Expression, lazy: MonotypeId) -> GoResult<GoExpression> {
+        let Monotype::Lazy(value) = *self.monotypes.get(lazy) else {
+            unreachable!("invariant violated: defer returns a Lazy")
+        };
+        let saved = self.tail_loop.take();
+        let mut body = vec![];
+        let outcome = match &thunk.kind {
+            ExpressionKind::Lambda { parameters, body: lambda_body } if parameters.len() == 1 => {
+                self.locals.insert(parameters[0].id, unit_value());
+                self.sink(lambda_body, Mode::Value, Sink::Return, &mut body)
+            }
+            _ => self.value(thunk, &mut body).and_then(|function| {
+                let forced = call(function, vec![unit_value()]);
+                self.deliver(forced, value, Sink::Return, &mut body)
+            }),
+        };
+        self.tail_loop = saved;
+        outcome?;
+        if let Some(GoStatement::Return(None)) = body.last() {
+            body.pop();
+        }
+        let result = self.go_result(value)?;
+        let once = if result.is_some() { "OnceValue" } else { "OnceFunc" };
+        self.imports.insert("sync".into());
+        let once = GoExpression::Qualified { package: "sync".into(), name: once.into() };
+        let thunk = GoExpression::Function { parameters: vec![], result, body };
+        Ok(call(once, vec![thunk]))
     }
 
     fn effect_for(
@@ -2352,6 +2463,21 @@ where
         if let Foreign::MaybeIndex = foreign {
             return self.maybe_index(arguments, monotype, out);
         }
+        if let Foreign::LazyDefer = foreign {
+            return self.lazy_defer(&arguments[0], monotype);
+        }
+        if let Foreign::LazyForce = foreign {
+            if let ExpressionKind::Foreign { foreign: Foreign::LazyDefer, arguments: deferred } =
+                &arguments[0].kind
+                && let ExpressionKind::Lambda { parameters, body } = &deferred[0].kind
+                && let [parameter] = parameters.as_slice()
+            {
+                self.locals.insert(parameter.id, unit_value());
+                return self.value(body, out);
+            }
+            let lazy = self.value(&arguments[0], out)?;
+            return Ok(call(lazy, vec![]));
+        }
         if let Foreign::RunEffect = foreign {
             if self.is_unit(monotype) {
                 self.sink(&arguments[0], Mode::Perform, Sink::Discard, out)?;
@@ -2444,6 +2570,18 @@ where
         value
     }
 
+    /// Go rejects constant division by zero, which JavaScript evaluates to an
+    /// infinity or NaN.
+    fn division_by_zero(&mut self, numerator: f64, negative_zero: bool) -> GoExpression {
+        self.imports.insert("math".into());
+        let math = |name: &str| GoExpression::Qualified { package: "math".into(), name: name.into() };
+        if numerator == 0.0 || numerator.is_nan() {
+            return call(math("NaN"), vec![]);
+        }
+        let sign = if (numerator < 0.0) != negative_zero { -1 } else { 1 };
+        call(math("Inf"), vec![GoExpression::Integer(sign)])
+    }
+
     fn operator(&mut self, operator: Operator, mut values: Vec<GoExpression>) -> GoExpression {
         let unary = |operator: &'static str, values: &mut Vec<GoExpression>| GoExpression::Unary {
             operator,
@@ -2461,6 +2599,7 @@ where
                     type_: GoType::Float64,
                     value: Box::new(values.remove(0)),
                 },
+                Operator::IntComplement => unary("^", &mut values),
                 _ => unreachable!(),
             };
         }
@@ -2468,6 +2607,19 @@ where
         let left = values.pop().expect("invariant violated: binary operator arity");
         if let Operator::ArrayIndex = operator {
             return GoExpression::Index { value: Box::new(left), index: Box::new(right) };
+        }
+        if let Some(bitwise) = bitwise(operator, left.clone(), right.clone()) {
+            return bitwise;
+        }
+        if let Operator::NumberDivide = operator
+            && is_untyped_constant(&left)
+            && is_untyped_constant(&right)
+        {
+            if let (Some(numerator), Some(0.0)) = (float_constant(&left), float_constant(&right)) {
+                return self.division_by_zero(numerator, constant_is_negative(&right));
+            }
+            let left = GoExpression::Conversion { type_: GoType::Float64, value: Box::new(left) };
+            return binary("/", left, right);
         }
         let symbol = match operator {
             Operator::IntAdd | Operator::NumberAdd | Operator::StringAppend => "+",
@@ -2935,6 +3087,92 @@ const RANGE_SOURCE: &str = "func rangeInt32(start int32, end int32) []int32 {
 \treturn elements
 }
 ";
+
+/// The Data.Int.Bits operators, which follow JavaScript: operands are int32 and
+/// shift counts are taken modulo 32. Constant operands are folded so that Go never
+/// sees an untyped constant overflow int32 or uint32.
+fn bitwise(operator: Operator, left: GoExpression, right: GoExpression) -> Option<GoExpression> {
+    let symbol = match operator {
+        Operator::IntAnd => "&",
+        Operator::IntOr => "|",
+        Operator::IntXor => "^",
+        Operator::IntShiftLeft => "<<",
+        Operator::IntShiftRight | Operator::IntZeroFillShiftRight => ">>",
+        _ => return None,
+    };
+    if let (Some(x), Some(y)) = (int32_constant(&left), int32_constant(&right)) {
+        return Some(GoExpression::Integer(fold_bitwise(operator, x, y)));
+    }
+    let shifts = !matches!(operator, Operator::IntAnd | Operator::IntOr | Operator::IntXor);
+    if !shifts {
+        return Some(binary(symbol, left, right));
+    }
+    let count = match int32_constant(&right) {
+        Some(count) => GoExpression::Integer(i64::from(count & 31)),
+        None => binary("&", right, GoExpression::Integer(31)),
+    };
+    let int32 = || GoType::Named("int32".into());
+    if let Operator::IntZeroFillShiftRight = operator {
+        let unsigned = match int32_constant(&left) {
+            Some(x) => GoExpression::Integer(i64::from(x as u32)),
+            None => left,
+        };
+        let unsigned = GoExpression::Conversion {
+            type_: GoType::Named("uint32".into()),
+            value: Box::new(unsigned),
+        };
+        return Some(GoExpression::Conversion {
+            type_: int32(),
+            value: Box::new(binary(symbol, unsigned, count)),
+        });
+    }
+    let left = match is_untyped_constant(&left) {
+        true => GoExpression::Conversion { type_: int32(), value: Box::new(left) },
+        false => left,
+    };
+    Some(binary(symbol, left, count))
+}
+
+fn float_constant(expression: &GoExpression) -> Option<f64> {
+    match expression {
+        GoExpression::Integer(value) => Some(*value as f64),
+        GoExpression::Float(value) => value.parse().ok(),
+        GoExpression::Unary { operator: "-", operand } => float_constant(operand).map(|value| -value),
+        _ => None,
+    }
+}
+
+fn constant_is_negative(expression: &GoExpression) -> bool {
+    match expression {
+        GoExpression::Float(value) => value.starts_with('-'),
+        GoExpression::Integer(value) => *value < 0,
+        GoExpression::Unary { operator: "-", operand } => !constant_is_negative(operand),
+        _ => false,
+    }
+}
+
+fn int32_constant(expression: &GoExpression) -> Option<i32> {
+    match expression {
+        GoExpression::Integer(value) => i32::try_from(*value).ok(),
+        GoExpression::Unary { operator: "-", operand } => match operand.as_ref() {
+            GoExpression::Integer(value) => i32::try_from(-*value).ok(),
+            _ => None,
+        },
+        _ => None,
+    }
+}
+
+fn fold_bitwise(operator: Operator, x: i32, y: i32) -> i64 {
+    let count = (y & 31) as u32;
+    i64::from(match operator {
+        Operator::IntAnd => x & y,
+        Operator::IntOr => x | y,
+        Operator::IntXor => x ^ y,
+        Operator::IntShiftLeft => x.wrapping_shl(count),
+        Operator::IntShiftRight => x >> count,
+        _ => ((x as u32) >> count) as i32,
+    })
+}
 
 fn is_untyped_constant(expression: &GoExpression) -> bool {
     match expression {

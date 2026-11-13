@@ -1181,13 +1181,16 @@ where
             | Monotype::Unit
             | Monotype::Error
             | Monotype::Opaque
-            | Monotype::Regex => false,
+            | Monotype::Regex
+            | Monotype::Mutex
+            | Monotype::BigInt => false,
             Monotype::Array(inner)
             | Monotype::Effect(inner)
             | Monotype::Reference(inner)
             | Monotype::MutableArray(inner)
             | Monotype::Object(inner)
-            | Monotype::Nullable(inner) => self.mentions_erased(*inner),
+            | Monotype::Nullable(inner)
+            | Monotype::Lazy(inner) => self.mentions_erased(*inner),
             Monotype::Function(argument, result) => {
                 self.mentions_erased(*argument) || self.mentions_erased(*result)
             }

@@ -35,6 +35,9 @@ pub enum Monotype {
     Error,
     Opaque,
     Regex,
+    Mutex,
+    BigInt,
+    Lazy(MonotypeId),
     Data(DataType),
     Recursive(DataType),
     Erased,
@@ -334,6 +337,12 @@ impl Monotypes {
             },
             ("Effect.Exception", "Error") => Monotype::Error,
             ("Data.String.Regex", "Regex") => Monotype::Regex,
+            ("Effect.Synchronized", "Mutex") => Monotype::Mutex,
+            ("JS.BigInt", "BigInt") => Monotype::BigInt,
+            ("Data.Lazy", "Lazy") => match unary(self, context, arguments.first())? {
+                Ok(value) => Monotype::Lazy(value),
+                Err(error) => return Ok(Err(error)),
+            },
             ("Promise.Internal", "Promise")
             | ("Promise.Rejection", "Rejection")
             | ("Foreign", "Foreign") => Monotype::Opaque,

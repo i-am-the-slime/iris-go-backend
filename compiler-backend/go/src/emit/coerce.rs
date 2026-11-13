@@ -105,6 +105,14 @@ where
                     body,
                 })
             }
+            (Monotype::Lazy(from_result), Monotype::Lazy(to_result)) => {
+                let lazy = self.shared(value, out);
+                let mut body = vec![];
+                let forced = call(lazy, vec![]);
+                self.coerce_returned(forced, from_result, to_result, &mut body)?;
+                let result = self.go_result(to_result)?;
+                Ok(GoExpression::Function { parameters: vec![], result, body })
+            }
             (Monotype::Effect(from_result), Monotype::Effect(to_result)) => {
                 let action = self.shared(value, out);
                 let mut body = vec![];
@@ -161,6 +169,7 @@ where
             Monotype::MutableArray(_) => Monotype::MutableArray(erased),
             Monotype::Object(_) => Monotype::Object(erased),
             Monotype::Nullable(_) => Monotype::Nullable(erased),
+            Monotype::Lazy(_) => Monotype::Lazy(erased),
             Monotype::Record(fields) => {
                 let fields = fields
                     .iter()
@@ -179,6 +188,8 @@ where
             | Monotype::Error
             | Monotype::Opaque
             | Monotype::Regex
+            | Monotype::Mutex
+            | Monotype::BigInt
             | Monotype::Erased => return monotype,
         };
         self.monotypes.intern(canonical)
