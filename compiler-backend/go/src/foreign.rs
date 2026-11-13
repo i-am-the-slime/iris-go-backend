@@ -118,6 +118,30 @@ pub struct Boundary {
     pub iteration: Option<Iteration>,
     pub uncurried: &'static [(usize, usize)],
     pub uncurried_perform: bool,
+    pub signature: Option<&'static Signature>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct Signature {
+    pub parameters: Vec<Spelled>,
+    pub result: Spelled,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub enum Spelled {
+    Opaque,
+    Function(Box<Spelled>, Box<Spelled>),
+    Array(Box<Spelled>),
+    Effect(Box<Spelled>),
+}
+
+impl Spelled {
+    pub fn arrows(&self) -> usize {
+        match self {
+            Spelled::Function(_, result) => 1 + result.arrows(),
+            _ => 0,
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -162,6 +186,7 @@ const PLAIN: Boundary = Boundary {
     iteration: None,
     uncurried: &[],
     uncurried_perform: false,
+    signature: None,
 };
 
 const fn integers(arguments: &'static [usize], result: bool) -> Boundary {
@@ -179,21 +204,28 @@ const UNIT_VALUES: Boundary = Boundary { unit_values: true, ..PLAIN };
 const RECORD: Boundary = Boundary { record_result: true, ..PLAIN };
 
 const fn maybe(just: usize, nothing: usize, integers: &'static [usize]) -> Boundary {
-    let constructors = MaybeConstructors { just, nothing, integer_payload: false, witness: None, elements: false };
+    let constructors =
+        MaybeConstructors { just, nothing, integer_payload: false, witness: None, elements: false };
     Boundary { integers, maybe: Some(constructors), ..PLAIN }
 }
 
 const fn maybe_witnessed(just: usize, nothing: usize, witness: usize) -> Boundary {
     let witness = Some(witness);
-    let constructors = MaybeConstructors { just, nothing, integer_payload: false, witness, elements: false };
+    let constructors =
+        MaybeConstructors { just, nothing, integer_payload: false, witness, elements: false };
     Boundary { maybe: Some(constructors), ..PLAIN }
 }
 
 /// A search that returns its `nothing` argument or one of the callback's results,
 /// whose Maybe is the foreign's result type.
 const fn maybe_search(nothing: usize, is_just: usize) -> Boundary {
-    let constructors =
-        MaybeConstructors { just: usize::MAX, nothing, integer_payload: false, witness: None, elements: false };
+    let constructors = MaybeConstructors {
+        just: usize::MAX,
+        nothing,
+        integer_payload: false,
+        witness: None,
+        elements: false,
+    };
     Boundary { maybe: Some(constructors), is_just: Some(is_just), ..PLAIN }
 }
 
@@ -205,7 +237,8 @@ const fn maybe_of_maybes(just: usize, nothing: usize) -> Boundary {
 }
 
 const fn maybe_integer(just: usize, nothing: usize, integers: &'static [usize]) -> Boundary {
-    let constructors = MaybeConstructors { just, nothing, integer_payload: true, witness: None, elements: false };
+    let constructors =
+        MaybeConstructors { just, nothing, integer_payload: true, witness: None, elements: false };
     Boundary { integers, maybe: Some(constructors), ..PLAIN }
 }
 

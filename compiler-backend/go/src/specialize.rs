@@ -22,7 +22,7 @@ use crate::context::{Context, ModuleData};
 use crate::dictionary::{Dictionary, InstanceDictionary, Reflected};
 use crate::erasure::Erasure;
 use crate::error::{GoError, GoResult, UnsupportedState};
-use crate::foreign::{self, Boundary, Foreign, ForeignPackages};
+use crate::foreign::{self, Boundary, Foreign, ForeignPackages, Signature, Spelled};
 use crate::mono::{
     Alternative, Binding, Expression, ExpressionKind, Function, FunctionId, Guard, Guarded,
     GuardedBranch, Literal, Local, LocalId, Pattern, PatternKind, RecordUpdate,
@@ -168,7 +168,7 @@ pub struct Specializer<'q, Q> {
     blockers: Vec<RecordedBlocker>,
     blocker_positions: FxHashMap<(String, UnsupportedState), usize>,
     discovered: Vec<(SchemeKey, SchemeInstantiation)>,
-    callback_arities: FxHashMap<(FileId, TermItemId), &'static [usize]>,
+    callback_arities: FxHashMap<(FileId, TermItemId), (&'static [usize], &'static Signature)>,
 }
 
 struct RecordedBlocker {
@@ -1665,7 +1665,8 @@ where
         let mut binders = Vec::with_capacity(dictionaries.len());
         let mut body = abstraction;
         while binders.len() < dictionaries.len()
-            && let tree::ExpressionKind::EvidenceAbstraction { binder, expression } = tree[body].kind
+            && let tree::ExpressionKind::EvidenceAbstraction { binder, expression } =
+                tree[body].kind
         {
             binders.push(binder);
             body = expression;
@@ -2184,37 +2185,95 @@ where
         term: TermItemId,
         foreign: Foreign,
     ) -> GoResult<Foreign> {
-        let Foreign::Call { function, arity, boundary } = foreign else { return Ok(foreign) };
-        if let Some(&arities) = self.callback_arities.get(&(file_id, term)) {
-            return Ok(Foreign::Call {
-                function,
-                arity,
-                boundary: Boundary { callback_arities: arities, ..boundary },
-            });
-        }
-        let module = self.context.module(file_id)?;
-        let Some(signature) = module.checked.lookup_term_item_type(term) else {
-            return Ok(foreign);
+        let boundary = match foreign {
+            Foreign::Call { boundary, .. } | Foreign::Perform { boundary, .. } => boundary,
+            _ => return Ok(foreign),
         };
-        let signature = crate::monotype::expand_synonyms(&mut self.context, signature)?;
-        let (_, mut current) = self.context.types.peel_quantifiers(signature);
-        let mut arities = vec![];
-        while let Some((parameter, result)) = self.context.types.function_parts(current) {
-            let (_, mut parameter) = self.context.types.peel_quantifiers(parameter);
-            let mut arrows = 0;
-            while let Some((_, result)) = self.context.types.function_parts(parameter) {
-                arrows += 1;
-                parameter = result;
+        let declared = match self.callback_arities.get(&(file_id, term)) {
+            Some(&declared) => declared,
+            None => {
+                let module = self.context.module(file_id)?;
+                let Some(signature) = module.checked.lookup_term_item_type(term) else {
+                    return Ok(foreign);
+                };
+                let signature = crate::monotype::expand_synonyms(&mut self.context, signature)?;
+                let (_, mut current) = self.context.types.peel_quantifiers(signature);
+                let mut arities = vec![];
+                let mut parameters = vec![];
+                while let Some((parameter, result)) = self.context.types.function_parts(current) {
+                    let (_, parameter) = self.context.types.peel_quantifiers(parameter);
+                    let mut arrows = 0;
+                    let mut inner = parameter;
+                    while let Some((_, result)) = self.context.types.function_parts(inner) {
+                        arrows += 1;
+                        inner = result;
+                    }
+                    arities.push(arrows);
+                    parameters.push(self.spelled(parameter)?);
+                    current = result;
+                }
+                if parameters.is_empty() {
+                    let (parts, result) = self.uncurried_parts(current)?;
+                    parameters = parts;
+                    current = result;
+                }
+                let result = self.spelled(current)?;
+                let arities: &'static [usize] = Box::leak(arities.into_boxed_slice());
+                let signature: &'static Signature =
+                    Box::leak(Box::new(Signature { parameters, result }));
+                self.callback_arities.insert((file_id, term), (arities, signature));
+                (arities, signature)
             }
-            arities.push(arrows);
-            current = result;
+        };
+        let (arities, signature) = declared;
+        let boundary =
+            Boundary { callback_arities: arities, signature: Some(signature), ..boundary };
+        Ok(match foreign {
+            Foreign::Call { function, arity, .. } => Foreign::Call { function, arity, boundary },
+            Foreign::Perform { function, arity, .. } => {
+                Foreign::Perform { function, arity, boundary }
+            }
+            _ => unreachable!(),
+        })
+    }
+
+    fn uncurried_parts(&mut self, type_id: TypeId) -> GoResult<(Vec<Spelled>, TypeId)> {
+        let (head, arguments) = self.context.types.spine(type_id);
+        let Type::Constructor(file_id, item) = self.context.types.lookup(head).clone() else {
+            return Ok((vec![], type_id));
+        };
+        let module = self.context.module(file_id)?;
+        let name = module.indexed.items[item].name.clone().unwrap_or_default();
+        let uncurried = module.name == "Data.Function.Uncurried"
+            && name.strip_prefix("Fn").is_some_and(|count| count.parse::<usize>().is_ok());
+        let Some((&result, parameters)) = arguments.split_last().filter(|_| uncurried) else {
+            return Ok((vec![], type_id));
+        };
+        let mut spelled = Vec::with_capacity(parameters.len());
+        for &parameter in parameters {
+            spelled.push(self.spelled(parameter)?);
         }
-        let arities: &'static [usize] = Box::leak(arities.into_boxed_slice());
-        self.callback_arities.insert((file_id, term), arities);
-        Ok(Foreign::Call {
-            function,
-            arity,
-            boundary: Boundary { callback_arities: arities, ..boundary },
+        Ok((spelled, result))
+    }
+
+    fn spelled(&mut self, type_id: TypeId) -> GoResult<Spelled> {
+        let (_, type_id) = self.context.types.peel_quantifiers(type_id);
+        if let Some((argument, result)) = self.context.types.function_parts(type_id) {
+            let argument = self.spelled(argument)?;
+            let result = self.spelled(result)?;
+            return Ok(Spelled::Function(Box::new(argument), Box::new(result)));
+        }
+        let (head, arguments) = self.context.types.spine(type_id);
+        let Type::Constructor(file_id, item) = self.context.types.lookup(head).clone() else {
+            return Ok(Spelled::Opaque);
+        };
+        let [argument] = arguments[..] else { return Ok(Spelled::Opaque) };
+        let module = self.context.module(file_id)?;
+        let name = module.indexed.items[item].name.clone().unwrap_or_default();
+        Ok(match (module.name.as_str(), name.as_str()) {
+            ("Prim", "Array") => Spelled::Array(Box::new(self.spelled(argument)?)),
+            ("Effect", "Effect") => Spelled::Effect(Box::new(self.spelled(argument)?)),
+            _ => Spelled::Opaque,
         })
     }
 
@@ -2783,4 +2842,3 @@ fn alternatives_monotype(alternatives: &[Alternative]) -> MonotypeId {
 fn string_literal(value: &lowering::StringLiteral) -> String {
     String::from_utf16_lossy(value.as_utf16())
 }
-
