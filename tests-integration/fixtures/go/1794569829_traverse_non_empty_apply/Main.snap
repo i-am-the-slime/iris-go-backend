@@ -20,16 +20,6 @@ const (
 	MaybeArrayIntJust
 )
 
-type MaybeFnIntArrayInt struct {
-	Tag   int
-	Just0 func(int32) []int32
-}
-
-const (
-	MaybeFnIntArrayIntNothing = iota
-	MaybeFnIntArrayIntJust
-)
-
 type MaybeInt struct {
 	Tag   int
 	Just0 int32
@@ -40,54 +30,65 @@ const (
 	MaybeIntJust
 )
 
+type MaybeFnIntArrayInt struct {
+	Tag   int
+	Just0 func(int32) []int32
+}
+
+const (
+	MaybeFnIntArrayIntNothing = iota
+	MaybeFnIntArrayIntJust
+)
+
 var main_ = initializeMain_()
 
-func initializeMain_() *MaybeArrayInt {
+func initializeMain_() MaybeArrayInt {
 	array_ := array.Append([]int32{2}, []int32{4, 8})
 	append_ := direct.Appender[int32]()
 	n := array_[0]
-	var result4 *MaybeInt
+	var result2 MaybeInt
 	if int32(prim.IntMod(int(n), int(2))) == 0 {
-		result4 = &MaybeInt{Tag: MaybeIntJust, Just0: int32(prim.IntDiv(int(n), int(2)))}
+		result2 = MaybeInt{Tag: MaybeIntJust, Just0: int32(prim.IntDiv(int(n), int(2)))}
 	} else {
-		result4 = &MaybeInt{Tag: MaybeIntNothing}
+		result2 = MaybeInt{Tag: MaybeIntNothing}
 	}
-	var result3 *MaybeArrayInt
-	switch result4.Tag {
+	var result MaybeArrayInt
+	switch result2.Tag {
 	case MaybeIntJust:
-		result3 = &MaybeArrayInt{Tag: MaybeArrayIntJust, Just0: []int32{result4.Just0}}
+		result = MaybeArrayInt{Tag: MaybeArrayIntJust, Just0: []int32{result2.Just0}}
 	default:
-		result3 = &MaybeArrayInt{Tag: MaybeArrayIntNothing}
+		result = MaybeArrayInt{Tag: MaybeArrayIntNothing}
 	}
-	performed := array.Foldl(func(accumulator *MaybeArrayInt) func(int32) *MaybeArrayInt {
-		return func(element int32) *MaybeArrayInt {
-			var result *MaybeFnIntArrayInt
-			switch accumulator.Tag {
-			case MaybeArrayIntJust:
-				result = &MaybeFnIntArrayInt{Tag: MaybeFnIntArrayIntJust, Just0: append_(accumulator.Just0)}
-			default:
-				result = &MaybeFnIntArrayInt{Tag: MaybeFnIntArrayIntNothing}
-			}
-			switch result.Tag {
-			case MaybeFnIntArrayIntJust:
-				var result2 *MaybeInt
-				if int32(prim.IntMod(int(element), int(2))) == 0 {
-					result2 = &MaybeInt{Tag: MaybeIntJust, Just0: int32(prim.IntDiv(int(element), int(2)))}
-				} else {
-					result2 = &MaybeInt{Tag: MaybeIntNothing}
-				}
-				switch result2.Tag {
-				case MaybeIntJust:
-					return &MaybeArrayInt{Tag: MaybeArrayIntJust, Just0: result.Just0(result2.Just0)}
-				default:
-					return &MaybeArrayInt{Tag: MaybeArrayIntNothing}
-				}
-			case MaybeFnIntArrayIntNothing:
-				return &MaybeArrayInt{Tag: MaybeArrayIntNothing}
-			}
-			panic("Failed pattern match")
+	array2 := array.Slice(int(1), int(int32(len(array_))), array_)
+	accumulator := result
+	for _, element := range array2 {
+		accumulator2 := accumulator
+		var result3 MaybeFnIntArrayInt
+		switch accumulator2.Tag {
+		case MaybeArrayIntJust:
+			result3 = MaybeFnIntArrayInt{Tag: MaybeFnIntArrayIntJust, Just0: append_(accumulator2.Just0)}
+		default:
+			result3 = MaybeFnIntArrayInt{Tag: MaybeFnIntArrayIntNothing}
 		}
-	}, result3, array.Slice(int(1), int(int32(len(array_))), array_))
+		switch result3.Tag {
+		case MaybeFnIntArrayIntJust:
+			var result4 MaybeInt
+			if int32(prim.IntMod(int(element), int(2))) == 0 {
+				result4 = MaybeInt{Tag: MaybeIntJust, Just0: int32(prim.IntDiv(int(element), int(2)))}
+			} else {
+				result4 = MaybeInt{Tag: MaybeIntNothing}
+			}
+			switch result4.Tag {
+			case MaybeIntJust:
+				accumulator = MaybeArrayInt{Tag: MaybeArrayIntJust, Just0: result3.Just0(result4.Just0)}
+			default:
+				accumulator = MaybeArrayInt{Tag: MaybeArrayIntNothing}
+			}
+		case MaybeFnIntArrayIntNothing:
+			accumulator = MaybeArrayInt{Tag: MaybeArrayIntNothing}
+		}
+	}
+	performed := accumulator
 	return performed
 }
 

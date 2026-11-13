@@ -316,6 +316,7 @@ where
                     )],
                 });
                 body.push(GoStatement::Range {
+                    index: None,
                     element: "element".into(),
                     iterable: value,
                     body: each,
@@ -393,7 +394,7 @@ where
         let from_remembers = self.remember_origin(from)?;
         let to_remembers = self.remember_origin(to)?;
         if from_remembers && !to_remembers {
-            let type_ = GoType::Pointer(Box::new(GoType::Named(to_layout.name.clone())));
+            let type_ = to_layout.go_type();
             let origin = field(value.clone(), "Origin");
             body.push(GoStatement::IfAssert {
                 name: "original".into(),
@@ -425,10 +426,14 @@ where
                 )?);
             }
             let mut constructed = self.construct(to, constructor, values)?;
-            if let (Some(origin), GoExpression::Address(composite)) = (&origin, &mut constructed)
-                && let GoExpression::Composite { fields, .. } = composite.as_mut()
-            {
-                fields.push((Some("Origin".into()), origin.clone()));
+            if let Some(origin) = &origin {
+                let composite = match &mut constructed {
+                    GoExpression::Address(composite) => composite.as_mut(),
+                    composite => composite,
+                };
+                if let GoExpression::Composite { fields, .. } = composite {
+                    fields.push((Some("Origin".into()), origin.clone()));
+                }
             }
             statements.push(GoStatement::Return(Some(constructed)));
             cases.push(GoCase {

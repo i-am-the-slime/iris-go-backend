@@ -1904,14 +1904,13 @@ where
         declared: TypeId,
         instantiations: &Substitution,
     ) -> GoResult<TypeId> {
-        // A synonym such as `~>` may hide the quantifiers being instantiated.
         let mut current = crate::monotype::expand_synonyms(&mut self.context, declared)?;
         let mut names = vec![];
         loop {
             let (bound, inner) = self.context.types.peel_quantifiers(current);
             let (constraints, inner) = self.context.types.peel_constraints(inner);
             names.extend(bound);
-            current = inner;
+            current = crate::monotype::expand_synonyms(&mut self.context, inner)?;
             if constraints.is_empty()
                 && !matches!(self.context.types.lookup(current), Type::Forall(..))
             {

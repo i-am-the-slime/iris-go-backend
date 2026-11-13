@@ -33,8 +33,8 @@ type TupleUnitInt struct {
 }
 
 type EmitMeasure2 struct {
-	emit    func(int32) func(int32) *TupleUnitInt
-	measure func(string) func(int32) *TupleIntInt
+	emit    func(int32) func(int32) TupleUnitInt
+	measure func(string) func(int32) TupleIntInt
 }
 
 type EmitMeasure3 struct {
@@ -45,13 +45,13 @@ type EmitMeasure3 struct {
 type IdentitySTStateTIntIdentity struct {
 	Identity          func(EmitMeasure3) int32
 	ST                func(EmitMeasure) int32
-	StateTIntIdentity func(EmitMeasure2) func(int32) *TupleIntInt
+	StateTIntIdentity func(EmitMeasure2) func(int32) TupleIntInt
 }
 
 type IdentitySTStateTIntIdentity2 struct {
 	Identity          func(EmitMeasure3)
 	ST                func(EmitMeasure)
-	StateTIntIdentity func(EmitMeasure2) func(int32) *TupleUnitInt
+	StateTIntIdentity func(EmitMeasure2) func(int32) TupleUnitInt
 }
 
 var main_ []int32 = []int32{recorded, counted, measured}
@@ -76,14 +76,14 @@ func initializeRecorded() int32 {
 var counted = initializeCounted()
 
 func initializeCounted() int32 {
-	scrutinee := program.StateTIntIdentity(EmitMeasure2{emit: func(_ int32) func(int32) *TupleUnitInt {
-		return func(x int32) *TupleUnitInt {
-			return compose(pure, func(s int32) *TupleUnitInt {
-				return &TupleUnitInt{Tuple0: struct{}{}, Tuple1: s + 1}
+	scrutinee := program.StateTIntIdentity(EmitMeasure2{emit: func(_ int32) func(int32) TupleUnitInt {
+		return func(x int32) TupleUnitInt {
+			return compose(pure, func(s int32) TupleUnitInt {
+				return TupleUnitInt{Tuple0: struct{}{}, Tuple1: s + 1}
 			}, x)
 		}
-	}, measure: func(_ string) func(int32) *TupleIntInt {
-		return func(s2 int32) *TupleIntInt {
+	}, measure: func(_ string) func(int32) TupleIntInt {
+		return func(s2 int32) TupleIntInt {
 			return pureIdentityInt(3, s2)
 		}
 	}})(0)
@@ -102,7 +102,7 @@ func initializeProgram() IdentitySTStateTIntIdentity {
 		return interpreter.measure("hello")
 	}, ST: func(interpreter2 EmitMeasure) int32 {
 		return interpreter2.measure("hello")
-	}, StateTIntIdentity: func(interpreter3 EmitMeasure2) func(int32) *TupleIntInt {
+	}, StateTIntIdentity: func(interpreter3 EmitMeasure2) func(int32) TupleIntInt {
 		return interpreter3.measure("hello")
 	}}
 	argument1 := func(width int32) IdentitySTStateTIntIdentity {
@@ -110,7 +110,7 @@ func initializeProgram() IdentitySTStateTIntIdentity {
 			interpreter4.emit(width)
 		}, ST: func(interpreter5 EmitMeasure) {
 			interpreter5.emit(width)
-		}, StateTIntIdentity: func(interpreter6 EmitMeasure2) func(int32) *TupleUnitInt {
+		}, StateTIntIdentity: func(interpreter6 EmitMeasure2) func(int32) TupleUnitInt {
 			return interpreter6.emit(width)
 		}}
 		argument2 := func(_ struct{}) IdentitySTStateTIntIdentity {
@@ -119,7 +119,7 @@ func initializeProgram() IdentitySTStateTIntIdentity {
 				interpreter7.emit(value)
 			}, ST: func(interpreter8 EmitMeasure) {
 				interpreter8.emit(value)
-			}, StateTIntIdentity: func(interpreter9 EmitMeasure2) func(int32) *TupleUnitInt {
+			}, StateTIntIdentity: func(interpreter9 EmitMeasure2) func(int32) TupleUnitInt {
 				return interpreter9.emit(value)
 			}}
 			argument4 := func(_ struct{}) IdentitySTStateTIntIdentity {
@@ -128,8 +128,8 @@ func initializeProgram() IdentitySTStateTIntIdentity {
 					return value2
 				}, ST: func(_ EmitMeasure) int32 {
 					return value2
-				}, StateTIntIdentity: func(_ EmitMeasure2) func(int32) *TupleIntInt {
-					return func(s int32) *TupleIntInt {
+				}, StateTIntIdentity: func(_ EmitMeasure2) func(int32) TupleIntInt {
+					return func(s int32) TupleIntInt {
 						return pureIdentityInt(value2, s)
 					}
 				}}
@@ -140,9 +140,9 @@ func initializeProgram() IdentitySTStateTIntIdentity {
 			}, ST: func(interpreter11 EmitMeasure) int32 {
 				argument3.ST(interpreter11)
 				return argument4(struct{}{}).ST(interpreter11)
-			}, StateTIntIdentity: func(interpreter12 EmitMeasure2) func(int32) *TupleIntInt {
-				return func(s2 int32) *TupleIntInt {
-					return bindIdentityInt2(argument3.StateTIntIdentity(interpreter12), func(value3 struct{}) func(int32) *TupleIntInt {
+			}, StateTIntIdentity: func(interpreter12 EmitMeasure2) func(int32) TupleIntInt {
+				return func(s2 int32) TupleIntInt {
+					return bindIdentityInt2(argument3.StateTIntIdentity(interpreter12), func(value3 struct{}) func(int32) TupleIntInt {
 						return argument4(value3).StateTIntIdentity(interpreter12)
 					}, s2)
 				}
@@ -154,9 +154,9 @@ func initializeProgram() IdentitySTStateTIntIdentity {
 		}, ST: func(interpreter14 EmitMeasure) int32 {
 			argument.ST(interpreter14)
 			return argument2(struct{}{}).ST(interpreter14)
-		}, StateTIntIdentity: func(interpreter15 EmitMeasure2) func(int32) *TupleIntInt {
-			return func(s3 int32) *TupleIntInt {
-				return bindIdentityInt2(argument.StateTIntIdentity(interpreter15), func(value4 struct{}) func(int32) *TupleIntInt {
+		}, StateTIntIdentity: func(interpreter15 EmitMeasure2) func(int32) TupleIntInt {
+			return func(s3 int32) TupleIntInt {
+				return bindIdentityInt2(argument.StateTIntIdentity(interpreter15), func(value4 struct{}) func(int32) TupleIntInt {
 					return argument2(value4).StateTIntIdentity(interpreter15)
 				}, s3)
 			}
@@ -167,33 +167,33 @@ func initializeProgram() IdentitySTStateTIntIdentity {
 	}, ST: func(interpreter17 EmitMeasure) int32 {
 		value5 := argument0.ST(interpreter17)
 		return argument1(value5).ST(interpreter17)
-	}, StateTIntIdentity: func(interpreter18 EmitMeasure2) func(int32) *TupleIntInt {
-		return func(s4 int32) *TupleIntInt {
-			return bindIdentityInt(argument0.StateTIntIdentity(interpreter18), func(value6 int32) func(int32) *TupleIntInt {
+	}, StateTIntIdentity: func(interpreter18 EmitMeasure2) func(int32) TupleIntInt {
+		return func(s4 int32) TupleIntInt {
+			return bindIdentityInt(argument0.StateTIntIdentity(interpreter18), func(value6 int32) func(int32) TupleIntInt {
 				return argument1(value6).StateTIntIdentity(interpreter18)
 			}, s4)
 		}
 	}}
 }
 
-func pureIdentityInt(a int32, s int32) *TupleIntInt {
-	return &TupleIntInt{Tuple0: a, Tuple1: s}
+func pureIdentityInt(a int32, s int32) TupleIntInt {
+	return TupleIntInt{Tuple0: a, Tuple1: s}
 }
 
-func bindIdentityInt(argument0 func(int32) *TupleIntInt, argument1 func(int32) func(int32) *TupleIntInt, s int32) *TupleIntInt {
+func bindIdentityInt(argument0 func(int32) TupleIntInt, argument1 func(int32) func(int32) TupleIntInt, s int32) TupleIntInt {
 	scrutinee := argument0(s)
 	return argument1(scrutinee.Tuple0)(scrutinee.Tuple1)
 }
 
-func compose(f func(*TupleUnitInt) *TupleUnitInt, g func(int32) *TupleUnitInt, x int32) *TupleUnitInt {
+func compose(f func(TupleUnitInt) TupleUnitInt, g func(int32) TupleUnitInt, x int32) TupleUnitInt {
 	return f(g(x))
 }
 
-func pure(value *TupleUnitInt) *TupleUnitInt {
+func pure(value TupleUnitInt) TupleUnitInt {
 	return value
 }
 
-func bindIdentityInt2(argument0 func(int32) *TupleUnitInt, argument1 func(struct{}) func(int32) *TupleIntInt, s int32) *TupleIntInt {
+func bindIdentityInt2(argument0 func(int32) TupleUnitInt, argument1 func(struct{}) func(int32) TupleIntInt, s int32) TupleIntInt {
 	scrutinee := argument0(s)
 	return argument1(scrutinee.Tuple0)(scrutinee.Tuple1)
 }

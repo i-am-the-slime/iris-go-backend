@@ -8,9 +8,15 @@ import (
 	"github.com/i-am-the-slime/purs-backend-go/go-support/array"
 )
 
-var main_ []int32 = array.Append(array.Map(func(value any) int32 {
-	return value.(int32) + 1
-}, values), []int32{3})
+var main_ = initializeMain_()
+
+func initializeMain_() []int32 {
+	mapped := make([]int32, len(values))
+	for index, value := range values {
+		mapped[index] = value.(int32) + 1
+	}
+	return array.Append(mapped, []int32{3})
+}
 
 var values []any = []any{int32(1), int32(2)}
 

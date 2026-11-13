@@ -50,7 +50,10 @@ pub enum Foreign {
     EffectUntil,
     EffectFor,
     MaybeIndex,
+    IntFromNumber,
     Range,
+    Snoc,
+    Ordering,
     RecordGet,
     Record(RecordOperation),
     AssocArray,
@@ -112,6 +115,23 @@ pub struct Boundary {
     pub callback_arities: &'static [usize],
     /// A `Maybe b -> Boolean` argument rebuilt as a tag test on the result's Maybe.
     pub is_just: Option<usize>,
+    pub iteration: Option<Iteration>,
+    pub uncurried: &'static [(usize, usize)],
+    pub uncurried_perform: bool,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum Iteration {
+    FoldLeft,
+    FoldRight,
+    Map,
+    MapWithIndex,
+    Filter,
+    Any,
+    All,
+    Bind,
+    FindIndex,
+    FindLastIndex,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -135,6 +155,9 @@ const PLAIN: Boundary = Boundary {
     maybe_destructor: None,
     is_just: None,
     callback_arities: &[],
+    iteration: None,
+    uncurried: &[],
+    uncurried_perform: false,
 };
 
 const fn integers(arguments: &'static [usize], result: bool) -> Boundary {
@@ -310,7 +333,9 @@ impl Foreign {
             Foreign::EffectFor => 3,
             Foreign::ObjectFoldM => 4,
             Foreign::MaybeIndex => 4,
-            Foreign::Range | Foreign::RecordGet => 2,
+            Foreign::IntFromNumber => 3,
+            Foreign::Ordering => 5,
+            Foreign::Range | Foreign::Snoc | Foreign::RecordGet => 2,
             Foreign::Record(operation) => operation.arity(),
             Foreign::Unfoldr | Foreign::Unfoldr1 => 6,
             Foreign::ReferenceWrite | Foreign::ReferenceWriteThrough | Foreign::ReferenceModify => {
@@ -382,6 +407,31 @@ const fn array_with(name: &'static str, arity: usize, boundary: Boundary) -> For
     call(GoPackage::Array, name, arity, boundary)
 }
 
+const fn iteration(
+    package: GoPackage,
+    name: &'static str,
+    arity: usize,
+    iteration: Iteration,
+) -> Foreign {
+    call(package, name, arity, Boundary { iteration: Some(iteration), ..PLAIN })
+}
+
+const fn uncurried(foreign: Foreign, callbacks: &'static [(usize, usize)]) -> Foreign {
+    match foreign {
+        Foreign::Call { function, arity, boundary } => Foreign::Call {
+            function,
+            arity,
+            boundary: Boundary { uncurried: callbacks, ..boundary },
+        },
+        Foreign::Perform { function, arity, boundary } => Foreign::Perform {
+            function,
+            arity,
+            boundary: Boundary { uncurried: callbacks, ..boundary },
+        },
+        foreign => foreign,
+    }
+}
+
 const fn direct(name: &'static str, arity: usize) -> Foreign {
     call(GoPackage::Direct, name, arity, PLAIN)
 }
@@ -444,9 +494,14 @@ const fn compare(comparison: Comparison) -> Foreign {
     Foreign::Operator(Operator::Compare(comparison))
 }
 
-pub const ARRAY_FOLD: Foreign = array("Foldl", 3);
+pub const ARRAY_FOLD: Foreign =
+    uncurried(iteration(GoPackage::Array, "Foldl", 3, Iteration::FoldLeft), &[(0, 2)]);
 
-pub const EFFECT_FOLD: Foreign = direct("FoldlEffect", 3);
+pub const EFFECT_FOLD: Foreign = direct_with(
+    "FoldlEffect",
+    3,
+    Boundary { uncurried: &[(0, 2)], uncurried_perform: true, ..PLAIN },
+);
 
 pub const OBJECT_KEYS: Foreign = object("Keys", 1, PLAIN);
 
@@ -474,13 +529,13 @@ const FOREIGN_IMPORTS: &[(&str, &str, Foreign)] = &[
     ("Data.Eq", "eqNumberImpl", compare(Comparison::Equal)),
     ("Data.Eq", "eqCharImpl", compare(Comparison::Equal)),
     ("Data.Eq", "eqStringImpl", compare(Comparison::Equal)),
-    ("Data.Eq", "eqArrayImpl", array("Eq", 3)),
+    ("Data.Eq", "eqArrayImpl", uncurried(array("Eq", 3), &[(0, 2)])),
     ("Data.Ord", "ordBooleanImpl", prim("OrdBoolean", 5)),
-    ("Data.Ord", "ordIntImpl", prim_with("OrdInt", 5, integers(&[3, 4], false))),
-    ("Data.Ord", "ordNumberImpl", prim("OrdNumber", 5)),
-    ("Data.Ord", "ordStringImpl", prim("OrdString", 5)),
-    ("Data.Ord", "ordCharImpl", prim("OrdChar", 5)),
-    ("Data.Ord", "ordArrayImpl", direct("CompareArray", 3)),
+    ("Data.Ord", "ordIntImpl", Foreign::Ordering),
+    ("Data.Ord", "ordNumberImpl", Foreign::Ordering),
+    ("Data.Ord", "ordStringImpl", Foreign::Ordering),
+    ("Data.Ord", "ordCharImpl", Foreign::Ordering),
+    ("Data.Ord", "ordArrayImpl", uncurried(direct("CompareArray", 3), &[(0, 2)])),
     ("Data.Show", "intercalate", prim("StringJoinWith", 2)),
     ("Data.Show.Generic", "intercalate", prim("StringJoinWith", 2)),
     ("Control.Apply", "arrayApply", array("Apply", 2)),
@@ -504,42 +559,62 @@ const FOREIGN_IMPORTS: &[(&str, &str, Foreign)] = &[
     ("Data.Show", "showStringImpl", prim("ShowString", 1)),
     ("Data.Show", "showArrayImpl", prim("ShowArray", 2)),
     ("Data.Unit", "unit", Foreign::Unit),
-    ("Data.Functor", "arrayMap", array("Map", 2)),
+    ("Data.Functor", "arrayMap", iteration(GoPackage::Array, "Map", 2, Iteration::Map)),
     ("Data.Bounded", "topInt", constant("TopInt")),
     ("Data.Bounded", "bottomInt", constant("BottomInt")),
     ("Data.Bounded", "topNumber", constant("TopNumber")),
     ("Data.Bounded", "bottomNumber", constant("BottomNumber")),
     ("Data.Bounded", "topChar", constant("TopChar")),
     ("Data.Bounded", "bottomChar", constant("BottomChar")),
-    ("Data.Foldable", "foldrArray", array("Foldr", 3)),
-    ("Data.Foldable", "foldlArray", array("Foldl", 3)),
+    (
+        "Data.Foldable",
+        "foldrArray",
+        uncurried(iteration(GoPackage::Array, "Foldr", 3, Iteration::FoldRight), &[(0, 2)]),
+    ),
+    ("Data.Foldable", "foldlArray", ARRAY_FOLD),
     ("Data.Array", "length", Foreign::Operator(Operator::ArrayLength)),
     ("Data.Array", "reverse", array("Reverse", 1)),
     ("Data.Array", "concat", array("Concat", 1)),
     ("Data.Array", "indexImpl", Foreign::MaybeIndex),
     ("Data.Array", "unsafeIndexImpl", Foreign::Operator(Operator::ArrayIndex)),
-    ("Data.Array", "filterImpl", array("Filter", 2)),
+    ("Data.Array", "filterImpl", iteration(GoPackage::Array, "Filter", 2, Iteration::Filter)),
     ("Data.Array", "sliceImpl", array_with("Slice", 3, integers(&[0, 1], false))),
     ("Data.Array", "rangeImpl", Foreign::Range),
     ("Data.Array", "replicateImpl", array_with("Replicate", 2, integers(&[0], false))),
-    ("Data.Array", "zipWithImpl", array("ZipWith", 3)),
-    ("Data.Array", "anyImpl", array("Any", 2)),
+    ("Data.Array", "zipWithImpl", uncurried(array("ZipWith", 3), &[(0, 2)])),
+    ("Data.Array", "anyImpl", iteration(GoPackage::Array, "Any", 2, Iteration::Any)),
     ("Data.Array", "partitionImpl", direct_with("Partition", 2, RECORD)),
     ("Data.Array", "fromFoldableImpl", direct("FromFoldable", 2)),
-    ("Data.Array", "allImpl", direct("All", 2)),
-    ("Data.Array", "scanlImpl", array("Scanl", 3)),
-    ("Data.Array", "scanrImpl", array("Scanr", 3)),
-    ("Data.Array", "unconsImpl", direct("Uncons", 3)),
-    ("Data.Array", "sortByImpl", direct("SortBy", 3)),
+    ("Data.Array", "allImpl", iteration(GoPackage::Direct, "All", 2, Iteration::All)),
+    ("Data.Array", "scanlImpl", uncurried(array("Scanl", 3), &[(0, 2)])),
+    ("Data.Array", "scanrImpl", uncurried(array("Scanr", 3), &[(0, 2)])),
+    ("Data.Array", "unconsImpl", uncurried(direct("Uncons", 3), &[(1, 2)])),
+    ("Data.Array", "sortByImpl", uncurried(direct("SortBy", 3), &[(0, 2)])),
     ("Data.Array", "findMapImpl", direct_with("FindMap", 4, maybe_search(0, 1))),
     ("Data.Array.Parallel", "parallelMap", array("Map", 2)),
-    ("Data.Array", "findIndexImpl", array_with("FindIndex", 4, maybe_integer(0, 1, &[]))),
-    ("Data.Array", "findLastIndexImpl", array_with("FindLastIndex", 4, maybe_integer(0, 1, &[]))),
+    (
+        "Data.Array",
+        "findIndexImpl",
+        array_with(
+            "FindIndex",
+            4,
+            Boundary { iteration: Some(Iteration::FindIndex), ..maybe_integer(0, 1, &[]) },
+        ),
+    ),
+    (
+        "Data.Array",
+        "findLastIndexImpl",
+        array_with(
+            "FindLastIndex",
+            4,
+            Boundary { iteration: Some(Iteration::FindLastIndex), ..maybe_integer(0, 1, &[]) },
+        ),
+    ),
     ("Data.Array", "_insertAt", array_with("InsertAt", 5, maybe(0, 1, &[2]))),
     ("Data.Array", "_deleteAt", direct_with("DeleteAt", 4, maybe(0, 1, &[]))),
     ("Data.Array", "_updateAt", direct_with("UpdateAt", 5, maybe(0, 1, &[]))),
-    ("Data.Array.NonEmpty.Internal", "foldr1Impl", array("Foldr1", 2)),
-    ("Data.Array.NonEmpty.Internal", "foldl1Impl", array("Foldl1", 2)),
+    ("Data.Array.NonEmpty.Internal", "foldr1Impl", uncurried(array("Foldr1", 2), &[(0, 2)])),
+    ("Data.Array.NonEmpty.Internal", "foldl1Impl", uncurried(array("Foldl1", 2), &[(0, 2)])),
     ("Data.Array.ST", "new", Foreign::MutableArrayNew),
     ("Data.Array.ST", "unsafeFreezeImpl", thunk(GoPackage::Array, "UnsafeFreeze", 1, PLAIN)),
     ("Data.Array.ST", "unsafeThawImpl", thunk(GoPackage::Array, "UnsafeThaw", 1, PLAIN)),
@@ -559,7 +634,7 @@ const FOREIGN_IMPORTS: &[(&str, &str, Foreign)] = &[
         thunk(GoPackage::Array, "UnshiftAll", 2, integers(&[], true)),
     ),
     ("Data.Array.ST", "spliceImpl", thunk(GoPackage::Array, "Splice", 4, integers(&[0, 1], false))),
-    ("Data.Array.ST", "sortByImpl", perform("SortByMutable", 3)),
+    ("Data.Array.ST", "sortByImpl", uncurried(perform("SortByMutable", 3), &[(0, 2)])),
     ("Data.Array.ST", "toAssocArrayImpl", Foreign::AssocArray),
     (
         "Data.Array.ST.Partial",
@@ -640,7 +715,7 @@ const FOREIGN_IMPORTS: &[(&str, &str, Foreign)] = &[
     ("Foreign.Object", "_copyST", thunk(GoPackage::Object, "CopyST", 1, PLAIN)),
     ("Foreign.Object", "runST", Foreign::RunEffect),
     ("Foreign.Object", "_fmapObject", object("FmapObject", 2, PLAIN)),
-    ("Foreign.Object", "_mapWithKey", object("MapWithKey", 2, PLAIN)),
+    ("Foreign.Object", "_mapWithKey", uncurried(object("MapWithKey", 2, PLAIN), &[(1, 2)])),
     ("Foreign.Object", "_foldM", Foreign::ObjectFoldM),
     (
         "Foreign.Object",
@@ -651,15 +726,16 @@ const FOREIGN_IMPORTS: &[(&str, &str, Foreign)] = &[
             Boundary {
                 ignored: &[3],
                 maybe_destructor: Some(MaybeDestructor { position: 3, witness: 2 }),
+                uncurried: &[(2, 3)],
                 ..PLAIN
             },
         ),
     ),
-    ("Foreign.Object", "all", object("All", 2, PLAIN)),
+    ("Foreign.Object", "all", uncurried(object("All", 2, PLAIN), &[(0, 2)])),
     ("Foreign.Object", "size", object("Size", 1, integers(&[], true))),
     ("Foreign.Object", "_lookup", object("Lookup", 4, PLAIN)),
     ("Foreign.Object", "_lookupST", thunk(GoPackage::Object, "LookupST", 4, PLAIN)),
-    ("Foreign.Object", "toArrayWithKey", object("ToArrayWithKey", 2, PLAIN)),
+    ("Foreign.Object", "toArrayWithKey", uncurried(object("ToArrayWithKey", 2, PLAIN), &[(0, 2)])),
     ("Foreign.Object", "keys", object("Keys", 1, PLAIN)),
     ("Foreign.Object.ST", "new", thunk(GoPackage::Object, "New", 0, INSTANTIATE)),
     ("Foreign.Object.ST", "peekImpl", thunk(GoPackage::Object, "PeekImpl", 4, PLAIN)),
@@ -670,10 +746,17 @@ const FOREIGN_IMPORTS: &[(&str, &str, Foreign)] = &[
         "unsafeFreeze",
         thunk(GoPackage::Object, "UnsafeFreeze", 1, PLAIN),
     ),
-    ("Data.FunctorWithIndex", "mapWithIndexArray", direct("MapWithIndex", 2)),
+    (
+        "Data.FunctorWithIndex",
+        "mapWithIndexArray",
+        uncurried(
+            iteration(GoPackage::Direct, "MapWithIndex", 2, Iteration::MapWithIndex),
+            &[(0, 2)],
+        ),
+    ),
     ("Data.Unfoldable", "unfoldrArrayImpl", Foreign::Unfoldr),
     ("Data.Unfoldable1", "unfoldr1ArrayImpl", Foreign::Unfoldr1),
-    ("Control.Bind", "arrayBind", array("Bind", 2)),
+    ("Control.Bind", "arrayBind", iteration(GoPackage::Array, "Bind", 2, Iteration::Bind)),
     ("Data.String.Common", "joinWith", prim("StringJoinWith", 2)),
     ("Data.String.Common", "split", prim("StringSplit", 2)),
     ("Data.String.Common", "toUpper", prim("StringToUpper", 1)),
@@ -782,7 +865,7 @@ const FOREIGN_IMPORTS: &[(&str, &str, Foreign)] = &[
         prim_with("NumberToExponential", 2, integers(&[0], false)),
     ),
     ("Data.Number.Format", "toString", prim("NumberToString", 1)),
-    ("Data.Int", "fromNumberImpl", prim_with("IntFromNumber", 3, maybe_integer(0, 1, &[]))),
+    ("Data.Int", "fromNumberImpl", Foreign::IntFromNumber),
     ("Data.Int", "fromStringAsImpl", prim_with("IntFromStringAs", 4, maybe_integer(0, 1, &[2]))),
     ("Data.Int", "toStringAs", prim_with("IntToStringAs", 2, integers(&[0, 1], false))),
     ("Data.Int.Bits", "and", Foreign::Operator(Operator::IntAnd)),
@@ -873,7 +956,7 @@ const FOREIGN_IMPORTS: &[(&str, &str, Foreign)] = &[
 /// Library functions replaced wholesale, keyed by the instance of their first
 /// dictionary when they are overloaded.
 const INTRINSICS: &[(&str, &str, &[&str], Foreign)] = &[
-    ("Data.Array", "snoc", &[], array("Snoc", 2)),
+    ("Data.Array", "snoc", &[], Foreign::Snoc),
     (
         "Data.Foldable",
         "traverse_",

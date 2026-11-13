@@ -5,7 +5,6 @@ package main
 
 import (
 	"fmt"
-	"github.com/i-am-the-slime/purs-backend-go/go-support/array"
 	"github.com/i-am-the-slime/purs-backend-go/go-support/direct"
 	"github.com/i-am-the-slime/purs-backend-go/go-support/prim"
 )
@@ -45,70 +44,70 @@ const (
 
 var main_ = initializeMain_()
 
-func initializeMain_() []*EitherStringArrayInt {
+func initializeMain_() []EitherStringArrayInt {
 	append_ := direct.Appender[int32]()
-	performed := array.Foldl(func(accumulator *EitherStringArrayInt) func(int32) *EitherStringArrayInt {
-		return func(element int32) *EitherStringArrayInt {
-			var result *EitherStringFnIntArrayInt
-			switch accumulator.Tag {
-			case EitherStringArrayIntLeft:
-				result = &EitherStringFnIntArrayInt{Tag: EitherStringFnIntArrayIntLeft, Left0: accumulator.Left0}
-			case EitherStringArrayIntRight:
-				result = &EitherStringFnIntArrayInt{Tag: EitherStringFnIntArrayIntRight, Right0: append_(accumulator.Right0)}
-			}
-			switch result.Tag {
-			case EitherStringFnIntArrayIntLeft:
-				return &EitherStringArrayInt{Tag: EitherStringArrayIntLeft, Left0: result.Left0}
-			case EitherStringFnIntArrayIntRight:
-				var result2 *EitherStringInt
-				if element > 0 {
-					result2 = &EitherStringInt{Tag: EitherStringIntRight, Right0: element}
-				} else {
-					result2 = &EitherStringInt{Tag: EitherStringIntLeft, Left0: "not positive: " + prim.ShowInt(int(element))}
-				}
-				switch result2.Tag {
-				case EitherStringIntLeft:
-					return &EitherStringArrayInt{Tag: EitherStringArrayIntLeft, Left0: result2.Left0}
-				case EitherStringIntRight:
-					return &EitherStringArrayInt{Tag: EitherStringArrayIntRight, Right0: result.Right0(result2.Right0)}
-				}
-				panic("Failed pattern match")
-			}
-			panic("Failed pattern match")
+	array2 := []int32{1, 2, 3}
+	accumulator := EitherStringArrayInt{Tag: EitherStringArrayIntRight, Right0: []int32{}}
+	for _, element := range array2 {
+		accumulator2 := accumulator
+		var result EitherStringFnIntArrayInt
+		switch accumulator2.Tag {
+		case EitherStringArrayIntLeft:
+			result = EitherStringFnIntArrayInt{Tag: EitherStringFnIntArrayIntLeft, Left0: accumulator2.Left0}
+		case EitherStringArrayIntRight:
+			result = EitherStringFnIntArrayInt{Tag: EitherStringFnIntArrayIntRight, Right0: append_(accumulator2.Right0)}
 		}
-	}, &EitherStringArrayInt{Tag: EitherStringArrayIntRight, Right0: []int32{}}, []int32{1, 2, 3})
+		switch result.Tag {
+		case EitherStringFnIntArrayIntLeft:
+			accumulator = EitherStringArrayInt{Tag: EitherStringArrayIntLeft, Left0: result.Left0}
+		case EitherStringFnIntArrayIntRight:
+			var result2 EitherStringInt
+			if element > 0 {
+				result2 = EitherStringInt{Tag: EitherStringIntRight, Right0: element}
+			} else {
+				result2 = EitherStringInt{Tag: EitherStringIntLeft, Left0: "not positive: " + prim.ShowInt(int(element))}
+			}
+			switch result2.Tag {
+			case EitherStringIntLeft:
+				accumulator = EitherStringArrayInt{Tag: EitherStringArrayIntLeft, Left0: result2.Left0}
+			case EitherStringIntRight:
+				accumulator = EitherStringArrayInt{Tag: EitherStringArrayIntRight, Right0: result.Right0(result2.Right0)}
+			}
+		}
+	}
+	performed := accumulator
 	append_2 := direct.Appender[int32]()
-	performed2 := array.Foldl(func(accumulator2 *EitherStringArrayInt) func(int32) *EitherStringArrayInt {
-		return func(element2 int32) *EitherStringArrayInt {
-			var result3 *EitherStringFnIntArrayInt
-			switch accumulator2.Tag {
-			case EitherStringArrayIntLeft:
-				result3 = &EitherStringFnIntArrayInt{Tag: EitherStringFnIntArrayIntLeft, Left0: accumulator2.Left0}
-			case EitherStringArrayIntRight:
-				result3 = &EitherStringFnIntArrayInt{Tag: EitherStringFnIntArrayIntRight, Right0: append_2(accumulator2.Right0)}
-			}
-			switch result3.Tag {
-			case EitherStringFnIntArrayIntLeft:
-				return &EitherStringArrayInt{Tag: EitherStringArrayIntLeft, Left0: result3.Left0}
-			case EitherStringFnIntArrayIntRight:
-				var result4 *EitherStringInt
-				if element2 > 0 {
-					result4 = &EitherStringInt{Tag: EitherStringIntRight, Right0: element2}
-				} else {
-					result4 = &EitherStringInt{Tag: EitherStringIntLeft, Left0: "not positive: " + prim.ShowInt(int(element2))}
-				}
-				switch result4.Tag {
-				case EitherStringIntLeft:
-					return &EitherStringArrayInt{Tag: EitherStringArrayIntLeft, Left0: result4.Left0}
-				case EitherStringIntRight:
-					return &EitherStringArrayInt{Tag: EitherStringArrayIntRight, Right0: result3.Right0(result4.Right0)}
-				}
-				panic("Failed pattern match")
-			}
-			panic("Failed pattern match")
+	array3 := []int32{1, -2, 3}
+	accumulator3 := EitherStringArrayInt{Tag: EitherStringArrayIntRight, Right0: []int32{}}
+	for _, element2 := range array3 {
+		accumulator4 := accumulator3
+		var result3 EitherStringFnIntArrayInt
+		switch accumulator4.Tag {
+		case EitherStringArrayIntLeft:
+			result3 = EitherStringFnIntArrayInt{Tag: EitherStringFnIntArrayIntLeft, Left0: accumulator4.Left0}
+		case EitherStringArrayIntRight:
+			result3 = EitherStringFnIntArrayInt{Tag: EitherStringFnIntArrayIntRight, Right0: append_2(accumulator4.Right0)}
 		}
-	}, &EitherStringArrayInt{Tag: EitherStringArrayIntRight, Right0: []int32{}}, []int32{1, -2, 3})
-	return []*EitherStringArrayInt{performed, performed2}
+		switch result3.Tag {
+		case EitherStringFnIntArrayIntLeft:
+			accumulator3 = EitherStringArrayInt{Tag: EitherStringArrayIntLeft, Left0: result3.Left0}
+		case EitherStringFnIntArrayIntRight:
+			var result4 EitherStringInt
+			if element2 > 0 {
+				result4 = EitherStringInt{Tag: EitherStringIntRight, Right0: element2}
+			} else {
+				result4 = EitherStringInt{Tag: EitherStringIntLeft, Left0: "not positive: " + prim.ShowInt(int(element2))}
+			}
+			switch result4.Tag {
+			case EitherStringIntLeft:
+				accumulator3 = EitherStringArrayInt{Tag: EitherStringArrayIntLeft, Left0: result4.Left0}
+			case EitherStringIntRight:
+				accumulator3 = EitherStringArrayInt{Tag: EitherStringArrayIntRight, Right0: result3.Right0(result4.Right0)}
+			}
+		}
+	}
+	performed2 := accumulator3
+	return []EitherStringArrayInt{performed, performed2}
 }
 
 func main() {

@@ -14,6 +14,7 @@
 # Finally checks the generated Go against the markgraf-cli quality baseline.
 
 set -uo pipefail
+export LC_ALL=C
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT="$(cd "$HERE/../../../.." && pwd)"
@@ -22,6 +23,8 @@ MARKGRAF="${MARKGRAF:-/Users/mark/Developer/markgraf}"
 GO_SUPPORT="${GO_SUPPORT:-/Users/mark/Developer/purs-backend-go/go-support}"
 WORK="${WORK:-$(mktemp -d)}"
 TIMEOUT="${TIMEOUT:-600}"
+SLOWER_PERCENT="${SLOWER_PERCENT:-5}"
+SLOWER_MS="${SLOWER_MS:-10}"
 FONTS="$MARKGRAF/cli/assets/native/fonts"
 
 milliseconds() { perl -MTime::HiRes=time -e 'printf "%.0f", time*1000'; }
@@ -69,8 +72,11 @@ run() { # implementation input mode output → status and time in $WORK/out
 
 normalise() { sed -e "s|$WORK/out/||g" "$1"; }
 
-passed=0 failed=0
-printf '%-44s %-7s %-9s %8s %8s\n' file mode result js_ms go_ms
+run "$MARKGRAF_JS" "$1" "$WORK/out/warm-up.js.svg" --still "" >/dev/null
+run "$MARKGRAF_GO" "$1" "$WORK/out/warm-up.go.svg" --still "" >/dev/null
+
+passed=0 failed=0 slower=0 js_total=0 go_total=0 worst_ratio=0 worst=""
+printf '%-44s %-7s %-9s %8s %8s %6s\n' file mode result js_ms go_ms go/js
 for input in "$@"; do
   name="$(basename "$input" .markgraf)"
   for mode in still frame; do
@@ -93,10 +99,30 @@ for input in "$@"; do
     fi
     [ "$(cat "$js.status")" = 0 ] || [ "$result" != identical ] || result="identical (exit $(cat "$js.status"))"
     case "$result" in identical*) passed=$((passed + 1)) ;; *) failed=$((failed + 1)) ;; esac
-    printf '%-44s %-7s %-9s %8s %8s\n' "$name" "$mode" "$result" "$js_ms" "$go_ms"
+    if [ $((go_ms * 100)) -gt $((js_ms * (100 + SLOWER_PERCENT) + SLOWER_MS * 100)) ]; then
+      js_again=$(run "$MARKGRAF_JS" "$input" "$js" "${arguments[@]}")
+      go_again=$(run "$MARKGRAF_GO" "$input" "$go" "${arguments[@]}")
+      js_ms=$((js_again < js_ms ? js_again : js_ms)) go_ms=$((go_again < go_ms ? go_again : go_ms))
+    fi
+    js_total=$((js_total + js_ms)) go_total=$((go_total + go_ms))
+    ratio=$(awk -v go="$go_ms" -v js="$js_ms" 'BEGIN { printf "%.2f", go / (js > 0 ? js : 1) }')
+    if awk -v ratio="$ratio" -v worst="$worst_ratio" 'BEGIN { exit !(ratio > worst) }'; then
+      worst_ratio=$ratio worst="$name $mode"
+    fi
+    if [ $((go_ms * 100)) -gt $((js_ms * (100 + SLOWER_PERCENT) + SLOWER_MS * 100)) ]; then
+      slower=$((slower + 1))
+      ratio="$ratio SLOWER"
+    fi
+    printf '%-44s %-7s %-9s %8s %8s %6s\n' "$name" "$mode" "$result" "$js_ms" "$go_ms" "$ratio"
   done
 done
 echo "Markgraf SVG: $passed identical, $failed different (work directory $WORK)"
+total_ratio=$(awk -v go="$go_total" -v js="$js_total" 'BEGIN { printf "%.2f", go / (js > 0 ? js : 1) }')
+echo "Markgraf time: JavaScript $js_total ms, Go $go_total ms (Go/JS $total_ratio), worst Go/JS $worst_ratio ($worst)"
+if [ "$slower" -ne 0 ]; then
+  echo "Markgraf time: Go is slower than JavaScript beyond $SLOWER_PERCENT% + $SLOWER_MS ms on $slower exports"
+  failed=$((failed + 1))
+fi
 "$HERE/../quality.sh" markgraf-cli "$WORK/go" || failed=$((failed + 1))
 [ "${KEEP:-0}" = 1 ] || [ "$failed" -ne 0 ] || rm -rf "$WORK"
 [ "$failed" -eq 0 ]

@@ -61,6 +61,8 @@ pub enum GoExpression {
     Address(Box<GoExpression>),
     Conversion { type_: GoType, value: Box<GoExpression> },
     TypeAssertion { value: Box<GoExpression>, type_: GoType },
+    Type(GoType),
+    Spread(Box<GoExpression>),
     Function { parameters: Vec<(String, GoType)>, result: Option<GoType>, body: Vec<GoStatement> },
 }
 
@@ -101,6 +103,7 @@ pub enum GoStatement {
     },
     Loop(Vec<GoStatement>),
     Range {
+        index: Option<String>,
         element: String,
         iterable: GoExpression,
         body: Vec<GoStatement>,
@@ -111,8 +114,18 @@ pub enum GoStatement {
         end: GoExpression,
         body: Vec<GoStatement>,
     },
+    CountingDown {
+        variable: String,
+        start: GoExpression,
+        body: Vec<GoStatement>,
+    },
     Continue,
     Break,
+    BreakTo(String),
+    LabeledLoop {
+        label: String,
+        body: Vec<GoStatement>,
+    },
     Block(Vec<GoStatement>),
 }
 
@@ -338,12 +351,17 @@ impl Printer {
                 self.block(body);
                 self.line("}");
             }
-            GoStatement::Range { element, iterable, body } => {
+            GoStatement::Range { index, element, iterable, body } => {
                 let iterable = self.expression(iterable, 0);
-                if element == "_" {
-                    self.line(&format!("for range {iterable} {{"));
-                } else {
-                    self.line(&format!("for _, {element} := range {iterable} {{"));
+                match (index, element.as_str()) {
+                    (None, "_") => self.line(&format!("for range {iterable} {{")),
+                    (None, element) => {
+                        self.line(&format!("for _, {element} := range {iterable} {{"))
+                    }
+                    (Some(index), "_") => self.line(&format!("for {index} := range {iterable} {{")),
+                    (Some(index), element) => {
+                        self.line(&format!("for {index}, {element} := range {iterable} {{"))
+                    }
                 }
                 self.block(body);
                 self.line("}");
@@ -357,8 +375,24 @@ impl Printer {
                 self.block(body);
                 self.line("}");
             }
+            GoStatement::CountingDown { variable, start, body } => {
+                let start = self.expression(start, 0);
+                self.line(&format!("for {variable} := {start}; {variable} >= 0; {variable}-- {{"));
+                self.block(body);
+                self.line("}");
+            }
             GoStatement::Continue => self.line("continue"),
             GoStatement::Break => self.line("break"),
+            GoStatement::BreakTo(label) => self.line(&format!("break {label}")),
+            GoStatement::LabeledLoop { label, body } => {
+                let indentation = self.indentation;
+                self.indentation = indentation.saturating_sub(1);
+                self.line(&format!("{label}:"));
+                self.indentation = indentation;
+                self.line("for {");
+                self.block(body);
+                self.line("}");
+            }
             GoStatement::Block(body) => {
                 self.line("{");
                 self.block(body);
@@ -504,6 +538,8 @@ impl Printer {
                 let type_ = self.type_(type_);
                 format!("{value}.({type_})")
             }
+            GoExpression::Type(type_) => self.type_(type_),
+            GoExpression::Spread(value) => format!("{}...", self.expression(value, 0)),
             GoExpression::Function { parameters, result, body } => {
                 let signature = self.signature(parameters, result.as_ref());
                 let mut rendered = format!("func{signature} {{\n");

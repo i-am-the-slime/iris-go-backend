@@ -44,10 +44,10 @@ type Say struct {
 type Map_Type_Value2 struct {
 	map_  func(func(any) any) func(*Say) *Say
 	type_ string
-	value *SayInt
+	value SayInt
 }
 
-func convert2(value *SayInt) *Say {
+func convert2(value SayInt) *Say {
 	return &Say{Say0: value.Say0, Say1: value.Say1, Origin: value}
 }
 
@@ -68,10 +68,10 @@ type Count struct {
 type Map_Type_Value3 struct {
 	map_  func(func(any) any) func(*Count) *Count
 	type_ string
-	value *CountInt
+	value CountInt
 }
 
-func convert4(value *CountInt) *Count {
+func convert4(value CountInt) *Count {
 	return &Count{Count0: func(coerced3 int32) any {
 		return value.Count0(coerced3)
 	}, Origin: value}
@@ -86,20 +86,20 @@ func convert3(value Map_Type_Value3) Map_Type_Value {
 	}, type_: value.type_, value: convert4(value.value)}
 }
 
-func convert5(value *Count) *CountInt {
-	if original, ok := value.Origin.(*CountInt); ok {
+func convert5(value *Count) CountInt {
+	if original, ok := value.Origin.(CountInt); ok {
 		return original
 	}
-	return &CountInt{Count0: func(coerced int32) int32 {
+	return CountInt{Count0: func(coerced int32) int32 {
 		return value.Count0(coerced).(int32)
 	}}
 }
 
-func convert6(value *Say) *SayInt {
-	if original, ok := value.Origin.(*SayInt); ok {
+func convert6(value *Say) SayInt {
+	if original, ok := value.Origin.(SayInt); ok {
 		return original
 	}
-	return &SayInt{Say0: value.Say0, Say1: value.Say1.(int32)}
+	return SayInt{Say0: value.Say0, Say1: value.Say1.(int32)}
 }
 
 var main_ = initializeMain_()
@@ -119,22 +119,22 @@ func initializeMain_() []string {
 }
 
 var describe func(Map_Type_Value) string = func(r2 Map_Type_Value) string {
-	return onSayIntStringRecordCountRecordCountSay(ProxyProxy, func(argument0 *SayInt) string {
+	return onSayIntStringRecordCountRecordCountSay(ProxyProxy, func(argument0 SayInt) string {
 		return argument0.Say0 + (" " + prim.ShowInt(int(argument0.Say1)))
 	}, func(r Map_Type_Value) string {
-		return onCountIntStringRecordRecordCount(Proxy2Proxy, func(argument02 *CountInt) string {
+		return onCountIntStringRecordRecordCount(Proxy2Proxy, func(argument02 CountInt) string {
 			return "count " + prim.ShowInt(int(argument02.Count0(2)))
 		}, case_IntString, r)
 	}, r2)
 }
 
-var say Map_Type_Value = convert(Map_Type_Value2{type_: "say", value: &SayInt{Say0: "hello", Say1: 4}, map_: func(argument0 func(any) any) func(*Say) *Say {
+var say Map_Type_Value = convert(Map_Type_Value2{type_: "say", value: SayInt{Say0: "hello", Say1: 4}, map_: func(argument0 func(any) any) func(*Say) *Say {
 	return func(argument1 *Say) *Say {
 		return map_(argument0, argument1)
 	}
 }})
 
-var count Map_Type_Value = convert3(Map_Type_Value3{type_: "count", value: &CountInt{Count0: func(value int32) int32 {
+var count Map_Type_Value = convert3(Map_Type_Value3{type_: "count", value: CountInt{Count0: func(value int32) int32 {
 	return value + 1
 }}, map_: func(argument0 func(any) any) func(*Count) *Count {
 	return func(argument1 *Count) *Count {
@@ -148,14 +148,14 @@ func case_IntString(r Map_Type_Value) string {
 	return unreachable
 }
 
-func onCountIntStringRecordRecordCount(p Proxy2, f func(*CountInt) string, g func(Map_Type_Value) string, r Map_Type_Value) string {
+func onCountIntStringRecordRecordCount(p Proxy2, f func(CountInt) string, g func(Map_Type_Value) string, r Map_Type_Value) string {
 	if r.type_ == "count" {
 		return f(convert5(r.value.(*Count)))
 	}
 	return g(r)
 }
 
-func onSayIntStringRecordCountRecordCountSay(p Proxy, f func(*SayInt) string, g func(Map_Type_Value) string, r Map_Type_Value) string {
+func onSayIntStringRecordCountRecordCountSay(p Proxy, f func(SayInt) string, g func(Map_Type_Value) string, r Map_Type_Value) string {
 	if r.type_ == "say" {
 		return f(convert6(r.value.(*Say)))
 	}

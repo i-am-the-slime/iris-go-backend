@@ -5,6 +5,8 @@
 //! effect only turns into a closure where it is used as a first-class value.
 
 mod coerce;
+mod iteration;
+mod ownership;
 
 use std::collections::BTreeSet;
 
@@ -55,6 +57,8 @@ where
         locals: FxHashMap::default(),
         local_names: FxHashSet::default(),
         tail_loop: None,
+        owned_snocs: FxHashSet::default(),
+        inline_sizes: FxHashMap::default(),
         current: None,
         lazy_constants,
     };
@@ -197,6 +201,11 @@ enum Sink {
     Discard,
 }
 
+enum Exit {
+    Return,
+    Break { sink: Sink, label: String },
+}
+
 struct TailLoop {
     function: FunctionId,
     parameters: Vec<String>,
@@ -212,6 +221,7 @@ struct DataLayout {
     /// conversion needs it), so converting back returns the original instead
     /// of wrapping its closures once more.
     erases_arguments: bool,
+    boxed: bool,
     /// The position of the struct's declaration in `type_declarations`.
     declaration: Option<usize>,
 }
@@ -251,6 +261,17 @@ struct Emitter<'p, 'm, 'q, Q> {
     local_names: FxHashSet<String>,
     tail_loop: Option<TailLoop>,
     current: Option<FunctionId>,
+    owned_snocs: FxHashSet<*const Expression>,
+    inline_sizes: FxHashMap<DataType, Option<usize>>,
+}
+
+const INLINE_DATA_LIMIT: usize = 128;
+
+impl DataLayout {
+    fn go_type(&self) -> GoType {
+        let named = GoType::Named(self.name.clone());
+        if self.boxed { GoType::Pointer(Box::new(named)) } else { named }
+    }
 }
 
 const RESERVED: &[&str] = &[
@@ -325,6 +346,7 @@ const RESERVED: &[&str] = &[
     "sync",
     "big",
     "math",
+    "slices",
     "Ref",
 ];
 
@@ -365,6 +387,7 @@ const IMPORTED_PACKAGES: &[&str] = &[
     "strconv",
     "strings",
     "big",
+    "slices",
 ];
 
 fn unique(base: String, taken: &mut FxHashSet<String>) -> String {
@@ -833,12 +856,7 @@ where
             }
             Monotype::Data(data) => {
                 let layout = self.data_layout(&data)?;
-                match layout.kind {
-                    DataKind::Enumeration => GoType::Named(layout.name),
-                    DataKind::Tagged | DataKind::Product => {
-                        GoType::Pointer(Box::new(GoType::Named(layout.name)))
-                    }
-                }
+                layout.go_type()
             }
         })
     }
@@ -949,11 +967,13 @@ where
         }
         let erases_arguments = kind != DataKind::Enumeration
             && data.arguments.iter().any(|&argument| self.context.types.contains_erased(argument));
+        let boxed = self.is_boxed(data)?;
         let layout = DataLayout {
             name: name.clone(),
             kind,
             constructors: layouts.clone(),
             erases_arguments,
+            boxed,
             declaration: None,
         };
         self.data_layouts.insert(data.clone(), layout.clone());
@@ -993,6 +1013,90 @@ where
             }
         }
         Ok(self.data_layouts.get(data).cloned().unwrap_or(layout))
+    }
+
+    fn contains_itself(&mut self, data: &DataType) -> GoResult<bool> {
+        let mut pending: Vec<MonotypeId> = vec![];
+        let mut visited: FxHashSet<DataType> = FxHashSet::default();
+        visited.insert(data.clone());
+        pending.extend(self.constructor_fields(data)?);
+        while let Some(monotype) = pending.pop() {
+            match self.monotypes.get(monotype).clone() {
+                Monotype::Data(inner) if inner == *data => return Ok(true),
+                Monotype::Data(inner) => {
+                    if visited.insert(inner.clone()) {
+                        pending.extend(self.constructor_fields(&inner)?);
+                    }
+                }
+                Monotype::Record(fields) => {
+                    pending.extend(fields.iter().map(|field| field.monotype))
+                }
+                Monotype::Recursive(_) => return Ok(true),
+                _ => {}
+            }
+        }
+        Ok(false)
+    }
+
+    fn constructor_fields(&mut self, data: &DataType) -> GoResult<Vec<MonotypeId>> {
+        let constructors = match self.monotypes.constructors(&mut self.context, data)? {
+            Ok(constructors) => constructors,
+            Err(state) => {
+                return Err(GoError::Unsupported { definition: "code generation".into(), state });
+            }
+        };
+        Ok(constructors.iter().flat_map(|constructor| constructor.fields.iter().copied()).collect())
+    }
+
+    fn is_boxed(&mut self, data: &DataType) -> GoResult<bool> {
+        Ok(self.inline_size(data)?.is_none_or(|size| size > INLINE_DATA_LIMIT))
+    }
+
+    fn inline_size(&mut self, data: &DataType) -> GoResult<Option<usize>> {
+        if let Some(&size) = self.inline_sizes.get(data) {
+            return Ok(size);
+        }
+        let constructors = match self.monotypes.constructors(&mut self.context, data)? {
+            Ok(constructors) => constructors,
+            Err(state) => {
+                return Err(GoError::Unsupported { definition: "code generation".into(), state });
+            }
+        };
+        let erases_arguments =
+            data.arguments.iter().any(|&argument| self.context.types.contains_erased(argument));
+        let size = if erases_arguments || self.contains_itself(data)? {
+            None
+        } else {
+            let mut size = if constructors.len() > 1 { 8 } else { 0 };
+            for constructor in constructors.iter() {
+                for &field in constructor.fields.iter() {
+                    size += self.value_size(field)?;
+                }
+            }
+            Some(size)
+        };
+        self.inline_sizes.insert(data.clone(), size);
+        Ok(size)
+    }
+
+    fn value_size(&mut self, monotype: MonotypeId) -> GoResult<usize> {
+        Ok(match self.monotypes.get(monotype).clone() {
+            Monotype::Unit => 0,
+            Monotype::String | Monotype::Erased(_) | Monotype::Opaque | Monotype::Error => 16,
+            Monotype::Array(_) | Monotype::Regex => 24,
+            Monotype::Record(fields) => {
+                let mut size = 0;
+                for field in fields.iter() {
+                    size += self.value_size(field.monotype)?;
+                }
+                size
+            }
+            Monotype::Data(data) => match self.inline_size(&data)? {
+                Some(size) if size <= INLINE_DATA_LIMIT => size,
+                _ => 8,
+            },
+            _ => 8,
+        })
     }
 
     /// Adds the `Origin` field to an erased layout's struct, once.
@@ -1157,6 +1261,7 @@ where
                 self.sink(body, Mode::Perform, Sink::Discard, &mut statements)?;
                 self.tail_loop = saved;
                 out.push(GoStatement::Range {
+                    index: None,
                     element: element_name,
                     iterable: array,
                     body: statements,
@@ -1664,6 +1769,11 @@ where
                     let value = self.value(argument, out)?;
                     self.unit_valued(value, argument.monotype)?
                 }
+                _ if let Some(&(_, arity)) =
+                    boundary.uncurried.iter().find(|(callback, _)| *callback == position) =>
+                {
+                    self.uncurried_callback(argument, arity, boundary.uncurried_perform, out)?
+                }
                 _ if uniform
                     && let Some(&arrows) = boundary.callback_arities.get(position)
                     && arrows > 0
@@ -1924,18 +2034,10 @@ where
             ],
         };
         let element_type = self.go_type(element)?;
-        let inner = GoExpression::Function {
-            parameters: vec![(value, element_type.clone())],
-            result: Some(record_type.clone()),
-            body: vec![GoStatement::Return(Some(associate))],
-        };
         Ok(GoExpression::Function {
-            parameters: vec![(index, GoType::Named("int32".into()))],
-            result: Some(GoType::Function {
-                parameters: vec![element_type],
-                result: Some(Box::new(record_type)),
-            }),
-            body: vec![GoStatement::Return(Some(inner))],
+            parameters: vec![(index, GoType::Named("int32".into())), (value, element_type)],
+            result: Some(record_type),
+            body: vec![GoStatement::Return(Some(associate))],
         })
     }
 
@@ -2524,10 +2626,9 @@ where
                 for ((field_name, _), value) in constructor_layout.fields.iter().zip(values) {
                     fields.push((Some(field_name.clone()), value));
                 }
-                GoExpression::Address(Box::new(GoExpression::Composite {
-                    type_: GoType::Named(layout.name),
-                    fields,
-                }))
+                let composite =
+                    GoExpression::Composite { type_: GoType::Named(layout.name), fields };
+                if layout.boxed { GoExpression::Address(Box::new(composite)) } else { composite }
             }
         })
     }
@@ -2586,6 +2687,47 @@ where
             binary(">=", index, GoExpression::Integer(0)),
             binary("<", widened, length),
         );
+        let target = vec![identifier_expression(&name)];
+        out.push(GoStatement::If {
+            condition,
+            then: vec![GoStatement::Assign { targets: target.clone(), values: vec![found] }],
+            otherwise: vec![GoStatement::Assign { targets: target, values: vec![missing] }],
+        });
+        Ok(identifier_expression(&name))
+    }
+
+    fn int_from_number(
+        &mut self,
+        number: &Expression,
+        monotype: MonotypeId,
+        out: &mut Vec<GoStatement>,
+    ) -> GoResult<GoExpression> {
+        let number = self.value(number, out)?;
+        let number = self.hoist(number, "number", out);
+        let (data, just) = self.constructor_named(monotype, "Just")?;
+        let (_, nothing) = self.constructor_named(monotype, "Nothing")?;
+        let integer = GoExpression::Conversion {
+            type_: GoType::Named("int32".into()),
+            value: Box::new(number.clone()),
+        };
+        let found = self.construct(&data, just, vec![integer])?;
+        let missing = self.construct(&data, nothing, vec![])?;
+        self.imports.insert("math".into());
+        let math =
+            |name: &str| GoExpression::Qualified { package: "math".into(), name: name.into() };
+        let whole = binary("==", call(math("Trunc"), vec![number.clone()]), number.clone());
+        let condition = binary(
+            "&&",
+            whole,
+            binary(
+                "&&",
+                binary(">=", number.clone(), math("MinInt32")),
+                binary("<=", number, math("MaxInt32")),
+            ),
+        );
+        let name = self.temporary("integer");
+        let type_ = self.go_type(monotype)?;
+        out.push(GoStatement::Variable { name: name.clone(), type_, value: None });
         let target = vec![identifier_expression(&name)];
         out.push(GoStatement::If {
             condition,
@@ -2835,6 +2977,19 @@ where
         if let Foreign::MaybeIndex = foreign {
             return self.maybe_index(arguments, monotype, out);
         }
+        if let Foreign::IntFromNumber = foreign {
+            return self.int_from_number(&arguments[2], monotype, out);
+        }
+        if let Foreign::Snoc = foreign {
+            let array = self.value(&arguments[0], out)?;
+            let element = self.value(&arguments[1], out)?;
+            let element = self.typed_constant(element, arguments[1].monotype)?;
+            if self.owned_snocs.contains(&std::ptr::from_ref(&arguments[0])) {
+                return Ok(call(identifier_expression("append"), vec![array, element]));
+            }
+            let snoc = GoFunction { package: GoPackage::Array, name: "Snoc" };
+            return Ok(call(self.go_function(snoc), vec![array, element]));
+        }
         if let Foreign::LazyDefer = foreign {
             return self.lazy_defer(&arguments[0], monotype);
         }
@@ -2893,6 +3048,11 @@ where
         if let Foreign::Project { file_id, term, .. } = foreign {
             let called = self.project_call(file_id, term, arguments, out)?;
             return self.out_of_convention(called, monotype);
+        }
+        if let Foreign::Call { boundary: Boundary { iteration: Some(iteration), .. }, .. } = foreign
+            && let Some(iterated) = self.iteration(iteration, arguments, monotype, out)?
+        {
+            return Ok(iterated);
         }
         if let Foreign::Call { function, boundary, .. } = foreign {
             let values = self.boundary_arguments(arguments, boundary, monotype, true, out)?;
@@ -3070,7 +3230,7 @@ where
             return Ok(());
         }
         if let Sink::Return = sink {
-            return self.sequential_case(&paths, alternatives, mode, out);
+            return self.sequential_case(&paths, alternatives, mode, &Exit::Return, out);
         }
         let sink = self.prepare_branching_sink(sink, expression, mode, out)?;
         let mut chain: Vec<(Option<GoExpression>, Vec<GoStatement>)> = vec![];
@@ -3091,26 +3251,12 @@ where
                 }
                 for guard in guards {
                     let Guard::Boolean(condition) = guard else {
-                        return self.closure_case(
-                            &paths,
-                            alternatives,
-                            expression,
-                            mode,
-                            sink,
-                            out,
-                        );
+                        return self.labelled_case(&paths, alternatives, mode, sink, out);
                     };
                     let mut hoisted = vec![];
                     let condition = self.value(condition, &mut hoisted)?;
                     if !hoisted.is_empty() {
-                        return self.closure_case(
-                            &paths,
-                            alternatives,
-                            expression,
-                            mode,
-                            sink,
-                            out,
-                        );
+                        return self.labelled_case(&paths, alternatives, mode, sink, out);
                     }
                     if !matches!(condition, GoExpression::Boolean(true)) {
                         conditions.push(condition);
@@ -3152,28 +3298,46 @@ where
         Ok(())
     }
 
-    fn closure_case(
+    fn exit_with(
+        &mut self,
+        body: &Expression,
+        mode: Mode,
+        exit: &Exit,
+        out: &mut Vec<GoStatement>,
+    ) -> GoResult<()> {
+        match exit {
+            Exit::Return => self.sink(body, mode, Sink::Return, out),
+            Exit::Break { sink, label } => {
+                self.sink(body, mode, sink.clone(), out)?;
+                if !ends_in_panic(out) {
+                    out.push(GoStatement::BreakTo(label.clone()));
+                }
+                Ok(())
+            }
+        }
+    }
+
+    fn labelled_case(
         &mut self,
         paths: &[GoExpression],
         alternatives: &[Alternative],
-        expression: &Expression,
         mode: Mode,
         sink: Sink,
         out: &mut Vec<GoStatement>,
     ) -> GoResult<()> {
-        let result = match mode {
-            Mode::Perform => {
-                self.monotypes.effect_result(expression.monotype).unwrap_or(expression.monotype)
-            }
-            Mode::Value => expression.monotype,
-        };
-        let result_type = self.go_result(result)?;
+        let label = self.temporary("matched");
+        let exit = Exit::Break { sink, label: label.clone() };
         let saved = self.tail_loop.take();
         let mut body = vec![];
-        self.sequential_case(paths, alternatives, mode, &mut body)?;
+        let outcome = self.sequential_case(paths, alternatives, mode, &exit, &mut body);
         self.tail_loop = saved;
-        let closure = GoExpression::Function { parameters: vec![], result: result_type, body };
-        self.deliver(call(closure, vec![]), result, sink, out)
+        outcome?;
+        if breaks_to(&body, &label) {
+            out.push(GoStatement::LabeledLoop { label, body });
+        } else {
+            out.extend(body);
+        }
+        Ok(())
     }
 
     fn sequential_case(
@@ -3181,6 +3345,7 @@ where
         paths: &[GoExpression],
         alternatives: &[Alternative],
         mode: Mode,
+        exit: &Exit,
         out: &mut Vec<GoStatement>,
     ) -> GoResult<()> {
         for alternative in alternatives {
@@ -3192,7 +3357,7 @@ where
                     self.bind_pattern_local(local, path, uses, &mut block)?;
                 }
             }
-            let terminates = self.guarded_sequential(&alternative.body, mode, &mut block)?;
+            let terminates = self.guarded_sequential(&alternative.body, mode, exit, &mut block)?;
             match conjunction(tests) {
                 None => {
                     out.extend(block);
@@ -3213,23 +3378,25 @@ where
         &mut self,
         guarded: &Guarded,
         mode: Mode,
+        exit: &Exit,
         out: &mut Vec<GoStatement>,
     ) -> GoResult<bool> {
         let branches = match guarded {
             Guarded::Unconditional(body) => {
-                self.sink(body, mode, Sink::Return, out)?;
+                self.exit_with(body, mode, exit, out)?;
                 return Ok(true);
             }
             Guarded::Guards(branches) => branches,
         };
         for branch in branches {
-            if self.guard_chain(&branch.guards, vec![], vec![], &branch.body, mode, out)? {
+            if self.guard_chain(&branch.guards, vec![], vec![], &branch.body, mode, exit, out)? {
                 return Ok(true);
             }
         }
         Ok(false)
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn guard_chain(
         &mut self,
         guards: &[Guard],
@@ -3237,6 +3404,7 @@ where
         mut bindings: Vec<(Local, GoExpression)>,
         body: &Expression,
         mode: Mode,
+        exit: &Exit,
         out: &mut Vec<GoStatement>,
     ) -> GoResult<bool> {
         let Some((guard, rest)) = guards.split_first() else {
@@ -3247,7 +3415,7 @@ where
                     self.bind_pattern_local(local, path, uses, &mut block)?;
                 }
             }
-            self.sink(body, mode, Sink::Return, &mut block)?;
+            self.exit_with(body, mode, exit, &mut block)?;
             return Ok(match conjunction(conditions) {
                 None => {
                     out.extend(block);
@@ -3282,11 +3450,11 @@ where
             out.extend(evaluation);
             conditions.extend(tests);
             bindings.extend(guard_bindings);
-            return self.guard_chain(rest, conditions, bindings, body, mode, out);
+            return self.guard_chain(rest, conditions, bindings, body, mode, exit, out);
         }
         let mut block = evaluation;
         bindings.extend(guard_bindings);
-        self.guard_chain(rest, tests, bindings, body, mode, &mut block)?;
+        self.guard_chain(rest, tests, bindings, body, mode, exit, &mut block)?;
         let condition =
             conjunction(conditions).expect("invariant violated: conditions are pending");
         out.push(GoStatement::If { condition, then: block, otherwise: vec![] });
@@ -3586,6 +3754,35 @@ fn is_effect_node(expression: &Expression) -> bool {
             | ExpressionKind::EffectWhen { .. }
     ) || matches!(&expression.kind, ExpressionKind::Foreign { foreign, .. } if foreign.is_effectful())
         || matches!(&expression.kind, ExpressionKind::Apply { .. })
+}
+
+fn ends_in_panic(statements: &[GoStatement]) -> bool {
+    matches!(
+        statements.last(),
+        Some(GoStatement::Expression(GoExpression::Call { function, .. }))
+            if matches!(function.as_ref(), GoExpression::Identifier(name) if name == "panic")
+    )
+}
+
+fn breaks_to(statements: &[GoStatement], label: &str) -> bool {
+    statements.iter().any(|statement| match statement {
+        GoStatement::BreakTo(target) => target == label,
+        GoStatement::If { then, otherwise, .. } => {
+            breaks_to(then, label) || breaks_to(otherwise, label)
+        }
+        GoStatement::Switch { cases, default, .. } => {
+            cases.iter().any(|case| breaks_to(&case.body, label))
+                || default.as_ref().is_some_and(|default| breaks_to(default, label))
+        }
+        GoStatement::IfAssert { then, .. } => breaks_to(then, label),
+        GoStatement::Loop(body)
+        | GoStatement::LabeledLoop { body, .. }
+        | GoStatement::Block(body)
+        | GoStatement::Range { body, .. }
+        | GoStatement::Counting { body, .. }
+        | GoStatement::CountingDown { body, .. } => breaks_to(body, label),
+        _ => false,
+    })
 }
 
 fn ends_in_jump(statements: &[GoStatement]) -> bool {
