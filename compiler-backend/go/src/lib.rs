@@ -12,6 +12,7 @@ pub mod erasure;
 pub mod error;
 mod foreign;
 mod lift;
+mod merge;
 mod mono;
 mod monotype;
 mod scheme;
@@ -66,6 +67,7 @@ pub fn compile_program(
         timed("finish specialization", || specializer.finish());
     let program = mono::Program { functions, entry };
     let program = timed("simplify", || simplify::simplify(program, &mut monotypes, next_local));
+    let program = timed("merge", || merge::merge_identical_functions(program));
     if std::env::var_os("IRIS_GO_DUMP").is_some() {
         for function in &program.functions {
             eprintln!("{function:#?}");
