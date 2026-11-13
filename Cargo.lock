@@ -1248,6 +1248,7 @@ dependencies = [
  "files",
  "indexing",
  "lowering",
+ "rayon",
  "rustc-hash",
  "smol_str",
  "thiserror",

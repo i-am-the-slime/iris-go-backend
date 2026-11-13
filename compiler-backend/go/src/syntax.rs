@@ -2,6 +2,8 @@
 
 use std::fmt::Write;
 
+use rayon::prelude::*;
+
 #[derive(Debug, Clone, Eq)]
 pub enum GoType {
     Named(String),
@@ -201,9 +203,22 @@ impl GoFile {
             }
             printer.output.push_str(")\n");
         }
-        for declaration in &self.declarations {
-            printer.output.push('\n');
-            printer.declaration(declaration);
+        // Declarations render independently, so they render in parallel and
+        // join in order.
+        let rendered: Vec<(String, crate::erasure::Census)> = self
+            .declarations
+            .par_iter()
+            .map(|declaration| {
+                let mut printer =
+                    Printer { output: String::new(), indentation: 0, census: Default::default() };
+                printer.output.push('\n');
+                printer.declaration(declaration);
+                (printer.output, printer.census)
+            })
+            .collect();
+        for (output, census) in rendered {
+            printer.output.push_str(&output);
+            printer.census.absorb(census);
         }
         (printer.output, printer.census)
     }
