@@ -21,7 +21,7 @@ pub enum GoType {
 #[derive(Debug, Clone)]
 pub enum GoExpression {
     Identifier(String),
-    Qualified { package: &'static str, name: String },
+    Qualified { package: String, name: String },
     Integer(i64),
     Float(String),
     String(String),
@@ -45,12 +45,15 @@ pub enum GoStatement {
     Variable { name: String, type_: GoType, value: Option<GoExpression> },
     Assign { targets: Vec<GoExpression>, values: Vec<GoExpression> },
     Expression(GoExpression),
+    Defer(GoExpression),
     Return(Option<GoExpression>),
     If { condition: GoExpression, then: Vec<GoStatement>, otherwise: Vec<GoStatement> },
     Switch { value: Option<GoExpression>, cases: Vec<GoCase>, default: Option<Vec<GoStatement>> },
     Loop(Vec<GoStatement>),
     Range { element: String, iterable: GoExpression, body: Vec<GoStatement> },
+    Counting { variable: String, start: GoExpression, end: GoExpression, body: Vec<GoStatement> },
     Continue,
+    Break,
     Block(Vec<GoStatement>),
 }
 
@@ -86,7 +89,7 @@ pub enum GoDeclaration {
 }
 
 pub struct GoFile {
-    pub imports: Vec<&'static str>,
+    pub imports: Vec<String>,
     pub declarations: Vec<GoDeclaration>,
 }
 
@@ -212,6 +215,10 @@ impl Printer {
                 let expression = self.expression(expression, 0);
                 self.line(&expression);
             }
+            GoStatement::Defer(expression) => {
+                let expression = self.expression(expression, 0);
+                self.line(&format!("defer {expression}"));
+            }
             GoStatement::Return(None) => self.line("return"),
             GoStatement::Return(Some(value)) => {
                 let value = self.expression(value, 0);
@@ -254,7 +261,17 @@ impl Printer {
                 self.block(body);
                 self.line("}");
             }
+            GoStatement::Counting { variable, start, end, body } => {
+                let start = self.expression(start, 0);
+                let end = self.expression(end, 0);
+                self.line(&format!(
+                    "for {variable} := {start}; {variable} < {end}; {variable}++ {{"
+                ));
+                self.block(body);
+                self.line("}");
+            }
             GoStatement::Continue => self.line("continue"),
+            GoStatement::Break => self.line("break"),
             GoStatement::Block(body) => {
                 self.line("{");
                 self.block(body);

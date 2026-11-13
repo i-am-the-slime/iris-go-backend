@@ -2,10 +2,35 @@
 //! definitions have a direct Go equivalent. The runtime functions live in the
 //! purs-backend-go `go-support` module.
 
+use files::FileId;
+use indexing::TermItemId;
+
+#[derive(Debug, Clone, Default)]
+pub struct ForeignPackages {
+    pub module_path: String,
+    pub modules: Vec<String>,
+}
+
+impl ForeignPackages {
+    pub fn provides(&self, module_name: &str) -> bool {
+        self.modules.iter().any(|module| module == module_name)
+    }
+
+    pub fn package_name(module_name: &str) -> String {
+        format!("{}_ffi", module_name.replace('.', "_"))
+    }
+
+    pub fn import_path(&self, module_name: &str) -> String {
+        format!("{}/{}", self.module_path, ForeignPackages::package_name(module_name))
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Foreign {
     Operator(Operator),
-    Call { function: GoFunction, arity: usize, integers: Integers },
+    Project { file_id: FileId, term: TermItemId, arity: usize, effectful: bool },
+    Call { function: GoFunction, arity: usize, boundary: Boundary },
+    Perform { function: GoFunction, arity: usize, boundary: Boundary },
     RunEffect,
     Constant(GoFunction),
     Unit,
@@ -13,28 +38,94 @@ pub enum Foreign {
     Identity,
     EffectPure,
     EffectBind,
+    EffectMap,
     EffectForEach,
     EffectTraverseArray,
     EffectForArray,
+    EffectWhile,
+    EffectUntil,
+    EffectFor,
     MaybeIndex,
     Range,
-    EffectCall { function: GoFunction, arity: usize },
+    RecordGet,
+    Unfoldr,
+    Unfoldr1,
     Print,
     ReferenceNew,
     ReferenceRead,
     ReferenceWrite,
+    ReferenceWriteThrough,
     ReferenceModify,
+    MutableArrayNew,
+    Throw,
+    Crash,
+    MakeAff,
+    ForkFiber,
+    NewFiber,
 }
 
-/// Which arguments and whether the result of a go-support function are Go `int`
-/// where generated code uses `int32`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub struct Integers {
-    pub arguments: &'static [usize],
-    pub result: bool,
+pub struct Boundary {
+    pub integers: &'static [usize],
+    pub integer_result: bool,
+    pub ignored: &'static [usize],
+    pub maybe: Option<MaybeConstructors>,
+    pub thunk: bool,
+    pub record_result: bool,
+    pub instantiate: bool,
+    pub unit_values: bool,
+    pub record_arguments: &'static [usize],
 }
 
-const NO_INTEGERS: Integers = Integers { arguments: &[], result: false };
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct MaybeConstructors {
+    pub just: usize,
+    pub nothing: usize,
+    pub integer_payload: bool,
+    pub witness: Option<usize>,
+}
+
+const PLAIN: Boundary = Boundary {
+    integers: &[],
+    integer_result: false,
+    ignored: &[],
+    maybe: None,
+    thunk: false,
+    record_result: false,
+    instantiate: false,
+    unit_values: false,
+    record_arguments: &[],
+};
+
+const fn integers(arguments: &'static [usize], result: bool) -> Boundary {
+    Boundary { integers: arguments, integer_result: result, ..PLAIN }
+}
+
+const fn ignoring(arguments: &'static [usize]) -> Boundary {
+    Boundary { ignored: arguments, ..PLAIN }
+}
+
+const INSTANTIATE: Boundary = Boundary { instantiate: true, ..PLAIN };
+
+const UNIT_VALUES: Boundary = Boundary { unit_values: true, ..PLAIN };
+
+const RECORD: Boundary = Boundary { record_result: true, ..PLAIN };
+
+const fn maybe(just: usize, nothing: usize, integers: &'static [usize]) -> Boundary {
+    let constructors = MaybeConstructors { just, nothing, integer_payload: false, witness: None };
+    Boundary { integers, maybe: Some(constructors), ..PLAIN }
+}
+
+const fn maybe_witnessed(just: usize, nothing: usize, witness: usize) -> Boundary {
+    let witness = Some(witness);
+    let constructors = MaybeConstructors { just, nothing, integer_payload: false, witness };
+    Boundary { maybe: Some(constructors), ..PLAIN }
+}
+
+const fn maybe_integer(just: usize, nothing: usize, integers: &'static [usize]) -> Boundary {
+    let constructors = MaybeConstructors { just, nothing, integer_payload: true, witness: None };
+    Boundary { integers, maybe: Some(constructors), ..PLAIN }
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct GoFunction {
@@ -46,6 +137,13 @@ pub struct GoFunction {
 pub enum GoPackage {
     Prim,
     Array,
+    Direct,
+    Object,
+    Nullable,
+    Exception,
+    Aff,
+    Promise,
+    ForeignValue,
 }
 
 impl GoPackage {
@@ -53,6 +151,17 @@ impl GoPackage {
         match self {
             GoPackage::Prim => "github.com/i-am-the-slime/purs-backend-go/go-support/prim",
             GoPackage::Array => "github.com/i-am-the-slime/purs-backend-go/go-support/array",
+            GoPackage::Direct => "github.com/i-am-the-slime/purs-backend-go/go-support/direct",
+            GoPackage::Object => "github.com/i-am-the-slime/purs-backend-go/go-support/object",
+            GoPackage::Nullable => "github.com/i-am-the-slime/purs-backend-go/go-support/nullable",
+            GoPackage::Aff => "github.com/i-am-the-slime/purs-backend-go/go-support/aff",
+            GoPackage::Promise => "github.com/i-am-the-slime/purs-backend-go/go-support/promise",
+            GoPackage::ForeignValue => {
+                "github.com/i-am-the-slime/purs-backend-go/go-support/foreignvalue"
+            }
+            GoPackage::Exception => {
+                "github.com/i-am-the-slime/purs-backend-go/go-support/exception"
+            }
         }
     }
 
@@ -60,6 +169,13 @@ impl GoPackage {
         match self {
             GoPackage::Prim => "prim",
             GoPackage::Array => "array",
+            GoPackage::Direct => "direct",
+            GoPackage::Object => "object",
+            GoPackage::Nullable => "nullable",
+            GoPackage::Exception => "exception",
+            GoPackage::Aff => "aff",
+            GoPackage::Promise => "promise",
+            GoPackage::ForeignValue => "foreignvalue",
         }
     }
 }
@@ -112,65 +228,135 @@ impl Foreign {
     pub fn arity(self) -> usize {
         match self {
             Foreign::Operator(operator) => operator.arity(),
-            Foreign::Call { arity, .. } | Foreign::EffectCall { arity, .. } => arity,
-            Foreign::Constant(_) | Foreign::Unit => 0,
+            Foreign::Call { arity, .. }
+            | Foreign::Perform { arity, .. }
+            | Foreign::Project { arity, .. } => arity,
+            Foreign::Constant(_) | Foreign::Unit | Foreign::MutableArrayNew => 0,
             Foreign::UnsafeCoerce | Foreign::Identity | Foreign::EffectPure | Foreign::Print => 1,
-            Foreign::RunEffect => 1,
+            Foreign::Throw | Foreign::Crash | Foreign::MakeAff => 1,
+            Foreign::ForkFiber | Foreign::NewFiber => 2,
+            Foreign::RunEffect | Foreign::EffectUntil => 1,
             Foreign::ReferenceNew | Foreign::ReferenceRead => 1,
-            Foreign::EffectBind | Foreign::EffectForEach => 2,
-            Foreign::EffectTraverseArray | Foreign::EffectForArray => 2,
+            Foreign::EffectBind | Foreign::EffectMap | Foreign::EffectForEach => 2,
+            Foreign::EffectTraverseArray | Foreign::EffectForArray | Foreign::EffectWhile => 2,
+            Foreign::EffectFor => 3,
             Foreign::MaybeIndex => 4,
-            Foreign::Range => 2,
-            Foreign::ReferenceWrite | Foreign::ReferenceModify => 2,
+            Foreign::Range | Foreign::RecordGet => 2,
+            Foreign::Unfoldr | Foreign::Unfoldr1 => 6,
+            Foreign::ReferenceWrite | Foreign::ReferenceWriteThrough | Foreign::ReferenceModify => {
+                2
+            }
+        }
+    }
+
+    pub fn ignored_arguments(self) -> &'static [usize] {
+        match self {
+            Foreign::Call { boundary, .. } | Foreign::Perform { boundary, .. } => boundary.ignored,
+            Foreign::NewFiber => &[0],
+            _ => &[],
         }
     }
 
     pub fn is_effectful(self) -> bool {
+        if let Foreign::Project { effectful, .. } = self {
+            return effectful;
+        }
         matches!(
             self,
             Foreign::EffectPure
                 | Foreign::EffectBind
+                | Foreign::EffectMap
                 | Foreign::EffectForEach
                 | Foreign::EffectTraverseArray
                 | Foreign::EffectForArray
-                | Foreign::EffectCall { .. }
+                | Foreign::EffectWhile
+                | Foreign::EffectUntil
+                | Foreign::EffectFor
+                | Foreign::Perform { .. }
                 | Foreign::Print
                 | Foreign::ReferenceNew
                 | Foreign::ReferenceRead
                 | Foreign::ReferenceWrite
+                | Foreign::ReferenceWriteThrough
                 | Foreign::ReferenceModify
+                | Foreign::MutableArrayNew
+                | Foreign::Throw
+                | Foreign::MakeAff
+                | Foreign::ForkFiber
+                | Foreign::NewFiber
         )
     }
 }
 
-const fn prim(name: &'static str, arity: usize) -> Foreign {
-    let function = GoFunction { package: GoPackage::Prim, name };
-    Foreign::Call { function, arity, integers: NO_INTEGERS }
+const fn call(package: GoPackage, name: &'static str, arity: usize, boundary: Boundary) -> Foreign {
+    let function = GoFunction { package, name };
+    Foreign::Call { function, arity, boundary }
 }
 
-const fn prim_integers(
-    name: &'static str,
-    arity: usize,
-    arguments: &'static [usize],
-    result: bool,
-) -> Foreign {
-    let function = GoFunction { package: GoPackage::Prim, name };
-    Foreign::Call { function, arity, integers: Integers { arguments, result } }
+const fn prim(name: &'static str, arity: usize) -> Foreign {
+    call(GoPackage::Prim, name, arity, PLAIN)
+}
+
+const fn prim_with(name: &'static str, arity: usize, boundary: Boundary) -> Foreign {
+    call(GoPackage::Prim, name, arity, boundary)
 }
 
 const fn array(name: &'static str, arity: usize) -> Foreign {
-    let function = GoFunction { package: GoPackage::Array, name };
-    Foreign::Call { function, arity, integers: NO_INTEGERS }
+    call(GoPackage::Array, name, arity, PLAIN)
 }
 
-const fn array_integers(
+const fn array_with(name: &'static str, arity: usize, boundary: Boundary) -> Foreign {
+    call(GoPackage::Array, name, arity, boundary)
+}
+
+const fn direct(name: &'static str, arity: usize) -> Foreign {
+    call(GoPackage::Direct, name, arity, PLAIN)
+}
+
+const fn direct_with(name: &'static str, arity: usize, boundary: Boundary) -> Foreign {
+    call(GoPackage::Direct, name, arity, boundary)
+}
+
+const fn perform(name: &'static str, arity: usize) -> Foreign {
+    let function = GoFunction { package: GoPackage::Direct, name };
+    Foreign::Perform { function, arity, boundary: PLAIN }
+}
+
+const fn thunk(
+    package: GoPackage,
     name: &'static str,
     arity: usize,
-    arguments: &'static [usize],
-    result: bool,
+    boundary: Boundary,
 ) -> Foreign {
-    let function = GoFunction { package: GoPackage::Array, name };
-    Foreign::Call { function, arity, integers: Integers { arguments, result } }
+    let function = GoFunction { package, name };
+    Foreign::Perform { function, arity, boundary: Boundary { thunk: true, ..boundary } }
+}
+
+const fn perform_in(
+    package: GoPackage,
+    name: &'static str,
+    arity: usize,
+    boundary: Boundary,
+) -> Foreign {
+    let function = GoFunction { package, name };
+    Foreign::Perform { function, arity, boundary }
+}
+
+const fn perform_with(name: &'static str, arity: usize, boundary: Boundary) -> Foreign {
+    let function = GoFunction { package: GoPackage::Direct, name };
+    Foreign::Perform { function, arity, boundary }
+}
+
+const fn object(name: &'static str, arity: usize, boundary: Boundary) -> Foreign {
+    call(GoPackage::Object, name, arity, boundary)
+}
+
+const fn exception(name: &'static str, arity: usize, boundary: Boundary) -> Foreign {
+    call(GoPackage::Exception, name, arity, boundary)
+}
+
+const fn foreign_value(name: &'static str, arity: usize) -> Foreign {
+    call(GoPackage::ForeignValue, name, arity, PLAIN)
 }
 
 const fn constant(name: &'static str) -> Foreign {
@@ -188,10 +374,10 @@ const FOREIGN_IMPORTS: &[(&str, &str, Foreign)] = &[
     ("Data.Semiring", "numMul", Foreign::Operator(Operator::NumberMultiply)),
     ("Data.Ring", "intSub", Foreign::Operator(Operator::IntSubtract)),
     ("Data.Ring", "numSub", Foreign::Operator(Operator::NumberSubtract)),
-    ("Data.EuclideanRing", "intDiv", prim_integers("IntDiv", 2, &[0, 1], true)),
-    ("Data.EuclideanRing", "intMod", prim_integers("IntMod", 2, &[0, 1], true)),
+    ("Data.EuclideanRing", "intDiv", prim_with("IntDiv", 2, integers(&[0, 1], true))),
+    ("Data.EuclideanRing", "intMod", prim_with("IntMod", 2, integers(&[0, 1], true))),
     ("Data.EuclideanRing", "numDiv", Foreign::Operator(Operator::NumberDivide)),
-    ("Data.EuclideanRing", "intDegree", prim_integers("IntDegree", 1, &[0], true)),
+    ("Data.EuclideanRing", "intDegree", prim_with("IntDegree", 1, integers(&[0], true))),
     ("Data.Eq", "eqBooleanImpl", compare(Comparison::Equal)),
     ("Data.Eq", "eqIntImpl", compare(Comparison::Equal)),
     ("Data.Eq", "eqNumberImpl", compare(Comparison::Equal)),
@@ -199,16 +385,20 @@ const FOREIGN_IMPORTS: &[(&str, &str, Foreign)] = &[
     ("Data.Eq", "eqStringImpl", compare(Comparison::Equal)),
     ("Data.Eq", "eqArrayImpl", array("Eq", 3)),
     ("Data.Ord", "ordBooleanImpl", prim("OrdBoolean", 5)),
-    ("Data.Ord", "ordIntImpl", prim_integers("OrdInt", 5, &[3, 4], false)),
+    ("Data.Ord", "ordIntImpl", prim_with("OrdInt", 5, integers(&[3, 4], false))),
     ("Data.Ord", "ordNumberImpl", prim("OrdNumber", 5)),
     ("Data.Ord", "ordStringImpl", prim("OrdString", 5)),
     ("Data.Ord", "ordCharImpl", prim("OrdChar", 5)),
+    ("Data.Ord", "ordArrayImpl", direct("CompareArray", 3)),
+    ("Data.Show", "intercalate", prim("StringJoinWith", 2)),
+    ("Control.Apply", "arrayApply", array("Apply", 2)),
+    ("Record.Unsafe", "unsafeGet", Foreign::RecordGet),
     ("Data.HeytingAlgebra", "boolConj", Foreign::Operator(Operator::BooleanAnd)),
     ("Data.HeytingAlgebra", "boolDisj", Foreign::Operator(Operator::BooleanOr)),
     ("Data.HeytingAlgebra", "boolNot", Foreign::Operator(Operator::BooleanNot)),
     ("Data.Semigroup", "concatString", Foreign::Operator(Operator::StringAppend)),
     ("Data.Semigroup", "concatArray", array("Append", 2)),
-    ("Data.Show", "showIntImpl", prim_integers("ShowInt", 1, &[0], false)),
+    ("Data.Show", "showIntImpl", prim_with("ShowInt", 1, integers(&[0], false))),
     ("Data.Show", "showNumberImpl", prim("ShowNumber", 1)),
     ("Data.Show", "showCharImpl", prim("ShowChar", 1)),
     ("Data.Show", "showStringImpl", prim("ShowString", 1)),
@@ -229,8 +419,142 @@ const FOREIGN_IMPORTS: &[(&str, &str, Foreign)] = &[
     ("Data.Array", "indexImpl", Foreign::MaybeIndex),
     ("Data.Array", "unsafeIndexImpl", Foreign::Operator(Operator::ArrayIndex)),
     ("Data.Array", "filterImpl", array("Filter", 2)),
-    ("Data.Array", "sliceImpl", array_integers("Slice", 3, &[0, 1], false)),
+    ("Data.Array", "sliceImpl", array_with("Slice", 3, integers(&[0, 1], false))),
     ("Data.Array", "rangeImpl", Foreign::Range),
+    ("Data.Array", "replicateImpl", array_with("Replicate", 2, integers(&[0], false))),
+    ("Data.Array", "zipWithImpl", array("ZipWith", 3)),
+    ("Data.Array", "anyImpl", array("Any", 2)),
+    ("Data.Array", "partitionImpl", direct_with("Partition", 2, RECORD)),
+    ("Data.Array", "fromFoldableImpl", direct("FromFoldable", 2)),
+    ("Data.Array", "allImpl", direct("All", 2)),
+    ("Data.Array", "scanlImpl", array("Scanl", 3)),
+    ("Data.Array", "scanrImpl", array("Scanr", 3)),
+    ("Data.Array", "unconsImpl", direct("Uncons", 3)),
+    ("Data.Array", "sortByImpl", direct("SortBy", 3)),
+    ("Data.Array", "findIndexImpl", array_with("FindIndex", 4, maybe_integer(0, 1, &[]))),
+    ("Data.Array", "findLastIndexImpl", array_with("FindLastIndex", 4, maybe_integer(0, 1, &[]))),
+    ("Data.Array", "_insertAt", array_with("InsertAt", 5, maybe(0, 1, &[2]))),
+    ("Data.Array", "_deleteAt", direct_with("DeleteAt", 4, maybe(0, 1, &[]))),
+    ("Data.Array", "_updateAt", direct_with("UpdateAt", 5, maybe(0, 1, &[]))),
+    ("Data.Array.ST", "new", Foreign::MutableArrayNew),
+    ("Data.Array.ST", "unsafeFreezeImpl", thunk(GoPackage::Array, "UnsafeFreeze", 1, PLAIN)),
+    ("Data.Array.ST", "unsafeThawImpl", thunk(GoPackage::Array, "UnsafeThaw", 1, PLAIN)),
+    ("Data.Array.ST", "thawImpl", thunk(GoPackage::Array, "Thaw", 1, PLAIN)),
+    ("Data.Array.ST", "freezeImpl", thunk(GoPackage::Array, "Freeze", 1, PLAIN)),
+    ("Data.Array.ST", "cloneImpl", thunk(GoPackage::Array, "Clone", 1, PLAIN)),
+    ("Data.Array.ST", "peekImpl", thunk(GoPackage::Array, "Peek", 4, integers(&[2], false))),
+    ("Data.Array.ST", "pokeImpl", thunk(GoPackage::Array, "Poke", 3, integers(&[0], false))),
+    ("Data.Array.ST", "lengthImpl", thunk(GoPackage::Array, "Length", 1, integers(&[], true))),
+    ("Data.Array.ST", "popImpl", thunk(GoPackage::Array, "Pop", 3, maybe(0, 1, &[]))),
+    ("Data.Array.ST", "shiftImpl", thunk(GoPackage::Array, "Shift", 3, maybe(0, 1, &[]))),
+    ("Data.Array.ST", "pushImpl", thunk(GoPackage::Array, "Push", 2, integers(&[], true))),
+    ("Data.Array.ST", "pushAllImpl", thunk(GoPackage::Array, "PushAll", 2, integers(&[], true))),
+    (
+        "Data.Array.ST",
+        "unshiftAllImpl",
+        thunk(GoPackage::Array, "UnshiftAll", 2, integers(&[], true)),
+    ),
+    ("Data.Array.ST", "spliceImpl", thunk(GoPackage::Array, "Splice", 4, integers(&[0, 1], false))),
+    ("Data.Array.ST", "sortByImpl", perform("SortByMutable", 3)),
+    (
+        "Data.Array.ST.Partial",
+        "peekImpl",
+        thunk(GoPackage::Array, "PeekUnsafe", 2, integers(&[0], false)),
+    ),
+    (
+        "Data.Array.ST.Partial",
+        "pokeImpl",
+        thunk(GoPackage::Array, "PokeUnsafe", 3, integers(&[0], false)),
+    ),
+    ("Effect.Exception", "showErrorImpl", exception("ShowErrorImpl", 1, PLAIN)),
+    ("Effect.Exception", "error", exception("NewError", 1, PLAIN)),
+    ("Effect.Exception", "errorWithCause", exception("ErrorWithCause", 2, PLAIN)),
+    ("Effect.Exception", "errorWithName", exception("ErrorWithName", 2, PLAIN)),
+    ("Effect.Exception", "message", exception("Message", 1, PLAIN)),
+    ("Effect.Exception", "name", exception("Name", 1, PLAIN)),
+    ("Effect.Exception", "stackImpl", exception("StackImpl", 3, maybe(0, 1, &[]))),
+    ("Effect.Exception", "throwException", Foreign::Throw),
+    ("Effect.Exception", "catchException", perform_with("CatchException", 2, UNIT_VALUES)),
+    ("Effect.Aff", "_pure", Foreign::EffectPure),
+    ("Effect.Aff", "_bind", Foreign::EffectBind),
+    ("Effect.Aff", "_map", Foreign::EffectMap),
+    ("Effect.Aff", "_liftEffect", Foreign::Identity),
+    ("Effect.Aff", "_throwError", Foreign::Throw),
+    ("Effect.Aff", "_catchError", perform_with("CatchError", 2, UNIT_VALUES)),
+    ("Effect.Aff", "_delay", perform_in(GoPackage::Aff, "DelayDirect", 2, ignoring(&[0]))),
+    ("Effect.Aff", "_parAffMap", Foreign::EffectMap),
+    ("Effect.Aff", "_parAffApply", perform_in(GoPackage::Aff, "ParApplyDirect", 2, UNIT_VALUES)),
+    ("Effect.Aff", "_parAffAlt", perform_in(GoPackage::Aff, "ParAltDirect", 2, UNIT_VALUES)),
+    ("Effect.Aff", "_sequential", Foreign::Identity),
+    (
+        "Effect.Aff",
+        "generalBracket",
+        perform_in(
+            GoPackage::Aff,
+            "GeneralBracketDirect",
+            3,
+            Boundary { record_arguments: &[1], ..UNIT_VALUES },
+        ),
+    ),
+    ("Effect.Aff", "makeAff", Foreign::MakeAff),
+    ("Effect.Aff", "_fork", Foreign::ForkFiber),
+    ("Effect.Aff", "_makeFiber", Foreign::NewFiber),
+    ("Promise.Internal", "resolve", call(GoPackage::Promise, "Resolve", 1, PLAIN)),
+    ("Promise.Internal", "reject", call(GoPackage::Promise, "Reject", 1, PLAIN)),
+    ("Promise.Internal", "then_", perform_in(GoPackage::Promise, "Then", 2, PLAIN)),
+    ("Promise.Internal", "thenOrCatch", perform_in(GoPackage::Promise, "ThenOrCatch", 3, PLAIN)),
+    ("Promise.Internal", "catch", perform_in(GoPackage::Promise, "Catch", 2, PLAIN)),
+    ("Promise.Internal", "all", perform_in(GoPackage::Promise, "All", 1, PLAIN)),
+    ("Promise.Internal", "race", perform_in(GoPackage::Promise, "Race", 1, PLAIN)),
+    ("Promise.Rejection", "fromError", call(GoPackage::Promise, "FromError", 1, PLAIN)),
+    ("Promise.Rejection", "_toError", call(GoPackage::Promise, "ToError", 3, maybe(0, 1, &[]))),
+    ("Foreign", "typeOf", foreign_value("TypeOf", 1)),
+    ("Foreign", "tagOf", foreign_value("TagOf", 1)),
+    ("Foreign", "isNull", foreign_value("IsNull", 1)),
+    ("Foreign", "isUndefined", foreign_value("IsUndefined", 1)),
+    ("Foreign", "isArray", foreign_value("IsArray", 1)),
+    ("Foreign.Index", "unsafeReadPropImpl", foreign_value("UnsafeReadPropImpl", 4)),
+    ("Foreign.Index", "unsafeHasOwnProperty", foreign_value("UnsafeHasOwnProperty", 2)),
+    ("Foreign.Index", "unsafeHasProperty", foreign_value("UnsafeHasProperty", 2)),
+    (
+        "Yoga.JSON",
+        "_undefined",
+        Foreign::Constant(GoFunction { package: GoPackage::ForeignValue, name: "Undefined" }),
+    ),
+    ("Yoga.JSON", "_unsafeStringify", foreign_value("UnsafeStringify", 1)),
+    (
+        "Yoga.JSON",
+        "_unsafePrettyStringify",
+        call(GoPackage::ForeignValue, "UnsafePrettyStringify", 2, integers(&[0], false)),
+    ),
+    ("Yoga.JSON", "_parseJSON", perform_in(GoPackage::ForeignValue, "ParseJSON", 1, PLAIN)),
+    ("Data.Nullable", "null", call(GoPackage::Nullable, "Null", 0, INSTANTIATE)),
+    ("Data.Nullable", "notNull", call(GoPackage::Nullable, "NotNull", 1, PLAIN)),
+    ("Data.Nullable", "nullable", call(GoPackage::Nullable, "Nullable", 3, PLAIN)),
+    ("Foreign.Object", "empty", object("Empty", 0, INSTANTIATE)),
+    ("Foreign.Object", "_copyST", thunk(GoPackage::Object, "CopyST", 1, PLAIN)),
+    ("Foreign.Object", "runST", Foreign::RunEffect),
+    ("Foreign.Object", "_fmapObject", object("FmapObject", 2, PLAIN)),
+    ("Foreign.Object", "_mapWithKey", object("MapWithKey", 2, PLAIN)),
+    ("Foreign.Object", "_foldM", object("FoldM", 4, PLAIN)),
+    ("Foreign.Object", "all", object("All", 2, PLAIN)),
+    ("Foreign.Object", "size", object("Size", 1, integers(&[], true))),
+    ("Foreign.Object", "_lookup", object("Lookup", 4, PLAIN)),
+    ("Foreign.Object", "_lookupST", thunk(GoPackage::Object, "LookupST", 4, PLAIN)),
+    ("Foreign.Object", "toArrayWithKey", object("ToArrayWithKey", 2, PLAIN)),
+    ("Foreign.Object", "keys", object("Keys", 1, PLAIN)),
+    ("Foreign.Object.ST", "new", thunk(GoPackage::Object, "New", 0, INSTANTIATE)),
+    ("Foreign.Object.ST", "peekImpl", thunk(GoPackage::Object, "PeekImpl", 4, PLAIN)),
+    ("Foreign.Object.ST", "poke", thunk(GoPackage::Object, "Poke", 3, PLAIN)),
+    ("Foreign.Object.ST", "delete", thunk(GoPackage::Object, "Delete", 2, PLAIN)),
+    (
+        "Foreign.Object.ST.Unsafe",
+        "unsafeFreeze",
+        thunk(GoPackage::Object, "UnsafeFreeze", 1, PLAIN),
+    ),
+    ("Data.FunctorWithIndex", "mapWithIndexArray", direct("MapWithIndex", 2)),
+    ("Data.Unfoldable", "unfoldrArrayImpl", Foreign::Unfoldr),
+    ("Data.Unfoldable1", "unfoldr1ArrayImpl", Foreign::Unfoldr1),
     ("Control.Bind", "arrayBind", array("Bind", 2)),
     ("Data.String.Common", "joinWith", prim("StringJoinWith", 2)),
     ("Data.String.Common", "split", prim("StringSplit", 2)),
@@ -239,16 +563,143 @@ const FOREIGN_IMPORTS: &[(&str, &str, Foreign)] = &[
     ("Data.String.Common", "trim", prim("StringTrim", 1)),
     ("Data.String.Common", "replace", prim("StringReplace", 3)),
     ("Data.String.Common", "replaceAll", prim("StringReplaceAll", 3)),
+    ("Data.String.CodeUnits", "singleton", prim("CharSingleton", 1)),
+    ("Data.String.CodeUnits", "fromCharArray", prim("CharArrayToString", 1)),
+    ("Data.String.CodeUnits", "toCharArray", prim("StringToCharArray", 1)),
+    ("Data.String.CodeUnits", "length", prim_with("CodeUnitLength", 1, integers(&[], true))),
+    (
+        "Data.String.CodeUnits",
+        "countPrefix",
+        prim_with("CodeUnitCountPrefix", 2, integers(&[], true)),
+    ),
+    ("Data.String.CodeUnits", "take", prim_with("CodeUnitTake", 2, integers(&[0], false))),
+    ("Data.String.CodeUnits", "drop", prim_with("CodeUnitDrop", 2, integers(&[0], false))),
+    ("Data.String.CodeUnits", "slice", prim_with("CodeUnitSlice", 3, integers(&[0, 1], false))),
+    ("Data.String.CodeUnits", "splitAt", direct_with("SplitAt", 2, RECORD)),
+    ("Data.String.CodeUnits", "_charAt", prim_with("CodeUnitCharAt", 4, maybe(0, 1, &[2]))),
+    ("Data.String.CodeUnits", "_toChar", prim_with("CodeUnitToChar", 3, maybe(0, 1, &[]))),
+    (
+        "Data.String.CodeUnits",
+        "_indexOf",
+        prim_with("CodeUnitIndexOf", 4, maybe_integer(0, 1, &[])),
+    ),
+    (
+        "Data.String.CodeUnits",
+        "_indexOfStartingAt",
+        prim_with("CodeUnitIndexOfStartingAt", 5, maybe_integer(0, 1, &[3])),
+    ),
+    (
+        "Data.String.CodeUnits",
+        "_lastIndexOf",
+        prim_with("CodeUnitLastIndexOf", 4, maybe_integer(0, 1, &[])),
+    ),
+    (
+        "Data.String.CodeUnits",
+        "_lastIndexOfStartingAt",
+        prim_with("CodeUnitLastIndexOfStartingAt", 5, maybe_integer(0, 1, &[3])),
+    ),
+    ("Data.String.CodePoints", "_singleton", direct_with("CodePointSingleton", 2, ignoring(&[0]))),
+    (
+        "Data.String.CodePoints",
+        "_fromCodePointArray",
+        direct_with("CodePointsFromArray", 2, ignoring(&[0])),
+    ),
+    (
+        "Data.String.CodePoints",
+        "_toCodePointArray",
+        direct_with("ToCodePointArray", 3, ignoring(&[0, 1])),
+    ),
+    (
+        "Data.String.CodePoints",
+        "_codePointAt",
+        direct_with("CodePointAt", 6, Boundary { ignored: &[0, 3], ..maybe(1, 2, &[]) }),
+    ),
+    (
+        "Data.String.CodePoints",
+        "_countPrefix",
+        direct_with("CodePointCountPrefix", 4, ignoring(&[0, 1])),
+    ),
+    ("Data.String.CodePoints", "_take", direct_with("CodePointTake", 3, ignoring(&[0]))),
+    (
+        "Data.String.CodePoints",
+        "_unsafeCodePointAt0",
+        direct_with("CodePointAt0", 2, ignoring(&[0])),
+    ),
+    ("Data.String.Unsafe", "char", prim("CharFromString", 1)),
+    ("Data.String.Unsafe", "charAt", prim_with("CharAt", 2, integers(&[0], false))),
+    ("Data.Number", "nan", constant("NumberNaN")),
+    ("Data.Number", "infinity", constant("NumberInfinity")),
+    ("Data.Number", "isNaN", prim("NumberIsNaN", 1)),
+    ("Data.Number", "isFinite", prim("NumberIsFinite", 1)),
+    ("Data.Number", "fromStringImpl", prim_with("NumberFromString", 4, maybe(2, 3, &[]))),
+    ("Data.Number", "abs", prim("NumberAbs", 1)),
+    ("Data.Number", "acos", prim("NumberAcos", 1)),
+    ("Data.Number", "asin", prim("NumberAsin", 1)),
+    ("Data.Number", "atan", prim("NumberAtan", 1)),
+    ("Data.Number", "atan2", prim("NumberAtan2", 2)),
+    ("Data.Number", "ceil", prim("NumberCeil", 1)),
+    ("Data.Number", "cos", prim("NumberCos", 1)),
+    ("Data.Number", "exp", prim("NumberExp", 1)),
+    ("Data.Number", "floor", prim("NumberFloor", 1)),
+    ("Data.Number", "log", prim("NumberLog", 1)),
+    ("Data.Number", "max", prim("NumberMax", 2)),
+    ("Data.Number", "min", prim("NumberMin", 2)),
+    ("Data.Number", "pow", prim("NumberPow", 2)),
+    ("Data.Number", "remainder", prim("NumberRemainder", 2)),
+    ("Data.Number", "round", prim("NumberRound", 1)),
+    ("Data.Number", "sign", prim("NumberSign", 1)),
+    ("Data.Number", "sin", prim("NumberSin", 1)),
+    ("Data.Number", "sqrt", prim("NumberSqrt", 1)),
+    ("Data.Number", "tan", prim("NumberTan", 1)),
+    ("Data.Number", "trunc", prim("NumberTrunc", 1)),
+    (
+        "Data.Number.Format",
+        "toPrecisionNative",
+        prim_with("NumberToPrecision", 2, integers(&[0], false)),
+    ),
+    ("Data.Number.Format", "toFixedNative", prim_with("NumberToFixed", 2, integers(&[0], false))),
+    (
+        "Data.Number.Format",
+        "toExponentialNative",
+        prim_with("NumberToExponential", 2, integers(&[0], false)),
+    ),
+    ("Data.Number.Format", "toString", prim("NumberToString", 1)),
+    ("Data.Int", "fromNumberImpl", prim_with("IntFromNumber", 3, maybe_integer(0, 1, &[]))),
+    ("Data.Int", "fromStringAsImpl", prim_with("IntFromStringAs", 4, maybe_integer(0, 1, &[2]))),
+    ("Data.Int", "toStringAs", prim_with("IntToStringAs", 2, integers(&[0, 1], false))),
+    ("Data.Int", "and", prim_with("IntAnd", 2, integers(&[0, 1], true))),
+    ("Data.Int", "or", prim_with("IntOr", 2, integers(&[0, 1], true))),
+    ("Data.Int", "xor", prim_with("IntXor", 2, integers(&[0, 1], true))),
+    ("Data.Int", "shl", prim_with("IntShl", 2, integers(&[0, 1], true))),
+    ("Data.Int", "shr", prim_with("IntShr", 2, integers(&[0, 1], true))),
+    ("Data.Int", "zshr", prim_with("IntZshr", 2, integers(&[0, 1], true))),
+    ("Data.Int", "complement", prim_with("IntComplement", 1, integers(&[0], true))),
+    ("Data.Enum", "toCharCode", prim_with("ToCharCode", 1, integers(&[], true))),
+    ("Data.Enum", "fromCharCode", prim_with("FromCharCode", 1, integers(&[0], false))),
+    ("Data.String.Common", "_localeCompare", prim("LocaleCompare", 5)),
+    ("Data.String.Regex", "showRegexImpl", prim("RegexShow", 1)),
+    ("Data.String.Regex", "regexImpl", prim("RegexImpl", 4)),
+    ("Data.String.Regex", "source", prim("RegexSource", 1)),
+    ("Data.String.Regex", "flagsImpl", direct_with("RegexFlags", 1, RECORD)),
+    ("Data.String.Regex", "test", prim("RegexTest", 2)),
+    ("Data.String.Regex", "replace", prim("RegexReplace", 3)),
+    ("Data.String.Regex", "split", prim("RegexSplit", 2)),
+    ("Data.String.Regex", "_replaceBy", prim_with("RegexReplaceBy", 5, maybe_witnessed(0, 1, 3))),
+    ("Data.String.Regex", "_search", prim_with("RegexSearch", 4, maybe_integer(0, 1, &[]))),
     ("Data.Int", "toNumber", Foreign::Operator(Operator::IntToNumber)),
-    ("Data.Int", "quot", prim_integers("IntQuot", 2, &[0, 1], true)),
-    ("Data.Int", "rem", prim_integers("IntRem", 2, &[0, 1], true)),
-    ("Data.Int", "pow", prim_integers("IntPow", 2, &[0, 1], true)),
+    ("Data.Int", "quot", prim_with("IntQuot", 2, integers(&[0, 1], true))),
+    ("Data.Int", "rem", prim_with("IntRem", 2, integers(&[0, 1], true))),
+    ("Data.Int", "pow", prim_with("IntPow", 2, integers(&[0, 1], true))),
     ("Partial.Unsafe", "_unsafePartial", Foreign::Identity),
+    ("Partial", "_crashWith", Foreign::Crash),
     ("Effect.Unsafe", "unsafePerformEffect", Foreign::RunEffect),
     ("Unsafe.Coerce", "unsafeCoerce", Foreign::UnsafeCoerce),
     ("Effect", "pureE", Foreign::EffectPure),
     ("Effect", "bindE", Foreign::EffectBind),
     ("Effect", "foreachE", Foreign::EffectForEach),
+    ("Effect", "whileE", Foreign::EffectWhile),
+    ("Effect", "untilE", Foreign::EffectUntil),
+    ("Effect", "forE", Foreign::EffectFor),
     ("Effect.Console", "log", Foreign::Print),
     ("Effect.Console", "info", Foreign::Print),
     ("Effect.Console", "warn", Foreign::Print),
@@ -262,6 +713,12 @@ const FOREIGN_IMPORTS: &[(&str, &str, Foreign)] = &[
     ("Control.Monad.ST.Internal", "pure_", Foreign::EffectPure),
     ("Control.Monad.ST.Internal", "bind_", Foreign::EffectBind),
     ("Control.Monad.ST.Internal", "foreach", Foreign::EffectForEach),
+    ("Control.Monad.ST.Internal", "map_", Foreign::EffectMap),
+    ("Control.Monad.ST.Internal", "while", Foreign::EffectWhile),
+    ("Control.Monad.ST.Internal", "for", Foreign::EffectFor),
+    ("Control.Monad.ST.Internal", "write", Foreign::ReferenceWriteThrough),
+    ("Control.Monad.ST.Internal", "modifyImpl", Foreign::ReferenceModify),
+    ("Control.Monad.ST.Internal", "run", Foreign::RunEffect),
 ];
 
 /// Library functions replaced wholesale, keyed by the instance of their first
@@ -275,6 +732,33 @@ const INTRINSICS: &[(&str, &str, &[&str], Foreign)] = &[
         Foreign::EffectTraverseArray,
     ),
     ("Data.Foldable", "for_", &["applicativeEffect", "foldableArray"], Foreign::EffectForArray),
+    (
+        "Data.Traversable",
+        "traverse",
+        &["traversableArray", "applicativeEffect"],
+        perform("TraverseArray", 2),
+    ),
+    ("Data.Traversable", "for", &["applicativeEffect", "traversableArray"], perform("ForArray", 2)),
+    (
+        "Data.Traversable",
+        "traverse",
+        &["traversableArray", "applicativeParAff"],
+        perform_in(GoPackage::Aff, "TraverseParArrayDirect", 2, UNIT_VALUES),
+    ),
+    (
+        "Data.Traversable",
+        "sequence",
+        &["traversableArray", "applicativeParAff"],
+        perform_in(GoPackage::Aff, "SequenceParArrayDirect", 1, PLAIN),
+    ),
+    (
+        "Data.Traversable",
+        "sequence",
+        &["traversableArray", "applicativeEffect"],
+        perform("SequenceArray", 1),
+    ),
+    ("Control.Parallel.Class", "parallel", &["parallelAff"], Foreign::Identity),
+    ("Control.Parallel.Class", "sequential", &["parallelAff"], Foreign::Identity),
     ("Data.Ord", "lessThan", &["ordInt"], compare(Comparison::LessThan)),
     ("Data.Ord", "lessThanOrEq", &["ordInt"], compare(Comparison::LessThanOrEqual)),
     ("Data.Ord", "greaterThan", &["ordInt"], compare(Comparison::GreaterThan)),
@@ -324,7 +808,12 @@ pub fn intrinsic(module_name: &str, name: &str, instances: &[&str]) -> Option<Fo
 
 /// `FnN` types are curried functions in Go, so converting to and from them is free.
 fn uncurried_conversion(module_name: &str, name: &str) -> Option<Foreign> {
-    let arity = name.strip_prefix("runFn").or_else(|| name.strip_prefix("mkFn"))?;
-    (module_name == "Data.Function.Uncurried" && arity.parse::<u8>().is_ok())
-        .then_some(Foreign::Identity)
+    let (run, make) = match module_name {
+        "Data.Function.Uncurried" => ("runFn", "mkFn"),
+        "Effect.Uncurried" => ("runEffectFn", "mkEffectFn"),
+        "Control.Monad.ST.Uncurried" => ("runSTFn", "mkSTFn"),
+        _ => return None,
+    };
+    let arity = name.strip_prefix(run).or_else(|| name.strip_prefix(make))?;
+    arity.parse::<u8>().is_ok().then_some(Foreign::Identity)
 }

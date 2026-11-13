@@ -9,6 +9,7 @@ mod dictionary;
 mod emit;
 pub mod error;
 mod foreign;
+mod lift;
 mod mono;
 mod monotype;
 mod simplify;
@@ -17,6 +18,7 @@ mod syntax;
 mod types;
 
 pub use error::{GoError, GoResult, UnsupportedState};
+pub use foreign::ForeignPackages;
 
 use crate::specialize::Specializer;
 
@@ -29,6 +31,7 @@ pub fn compile_program(
     queries: &impl checking::ExternalQueries,
     entry_module: &str,
     entry_name: &str,
+    foreign_packages: &ForeignPackages,
 ) -> GoResult<GoProgram> {
     let qualified = format!("{entry_module}.{entry_name}");
     let file_id = queries
@@ -41,7 +44,7 @@ pub fn compile_program(
         .find(|(_, item)| item.name.as_deref() == Some(entry_name))
         .ok_or_else(|| GoError::MissingEntry(qualified.clone()))?;
 
-    let mut specializer = Specializer::new(queries);
+    let mut specializer = Specializer::new(queries, foreign_packages);
     let entry = specializer.specialize_entry(file_id, term)?;
     let (functions, mut monotypes, next_local) = specializer.finish();
     let program = mono::Program { functions, entry };
@@ -52,6 +55,6 @@ pub fn compile_program(
         }
     }
     let functions = program.functions.len();
-    let source = emit::emit_program(&program, &mut monotypes, queries)?;
+    let source = emit::emit_program(&program, &mut monotypes, queries, foreign_packages)?;
     Ok(GoProgram { source, functions })
 }

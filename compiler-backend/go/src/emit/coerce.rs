@@ -96,6 +96,9 @@ where
             Monotype::Function(..) => Monotype::Function(erased, erased),
             Monotype::Effect(_) => Monotype::Effect(erased),
             Monotype::Array(_) => Monotype::Array(erased),
+            Monotype::MutableArray(_) => Monotype::MutableArray(erased),
+            Monotype::Object(_) => Monotype::Object(erased),
+            Monotype::Nullable(_) => Monotype::Nullable(erased),
             Monotype::Record(fields) => {
                 let fields = fields
                     .iter()
@@ -111,6 +114,9 @@ where
             | Monotype::String
             | Monotype::Unit
             | Monotype::Reference(_)
+            | Monotype::Error
+            | Monotype::Opaque
+            | Monotype::Regex
             | Monotype::Erased => return monotype,
         };
         self.monotypes.intern(canonical)

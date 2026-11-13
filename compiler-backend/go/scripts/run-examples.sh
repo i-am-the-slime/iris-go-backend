@@ -29,14 +29,6 @@ run_one() {
   expected="$(printf '%b' "$expected")"
   local project="$EXAMPLES/$name" out="$WORK/$name"
   mkdir -p "$out"
-  local started finished
-  started=$(perl -MTime::HiRes=time -e 'printf "%.0f", time*1000')
-  if ! (cd "$project" && timeout 120 "$IRIS" go --entry "$entry" "$out") >"$out/compile.log" 2>&1; then
-    printf '%-26s %-8s %6s  %s\n' "$name" "COMPILE" "-" "$(grep -v '^go:' "$out/compile.log" | head -1 | cut -c1-150)"
-    return 1
-  fi
-  finished=$(perl -MTime::HiRes=time -e 'printf "%.0f", time*1000')
-  local elapsed=$((finished - started))
   cat > "$out/go.mod" <<GOMOD
 module example.com/t
 
@@ -46,6 +38,14 @@ require github.com/i-am-the-slime/purs-backend-go/go-support v0.0.0
 
 replace github.com/i-am-the-slime/purs-backend-go/go-support => $GO_SUPPORT
 GOMOD
+  local started finished
+  started=$(perl -MTime::HiRes=time -e 'printf "%.0f", time*1000')
+  if ! (cd "$project" && timeout 120 "$IRIS" go --entry "$entry" "$out") >"$out/compile.log" 2>&1; then
+    printf '%-26s %-8s %6s  %s\n' "$name" "COMPILE" "-" "$(grep -v '^go:' "$out/compile.log" | head -1 | cut -c1-150)"
+    return 1
+  fi
+  finished=$(perl -MTime::HiRes=time -e 'printf "%.0f", time*1000')
+  local elapsed=$((finished - started))
   if ! (cd "$out" && go build -o program . ) >"$out/build.log" 2>&1; then
     printf '%-26s %-8s %6s  %s\n' "$name" "GO" "$elapsed" "$(grep -m1 -v '^#' "$out/build.log" | cut -c1-150)"
     return 1

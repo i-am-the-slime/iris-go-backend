@@ -6,7 +6,7 @@ use std::collections::VecDeque;
 use std::sync::Arc;
 
 use checking::TypeId;
-use checking::core::Type;
+use checking::core::{Name, Type};
 use checking::evidence::{
     Evidence, EvidenceBinderId, EvidenceId, EvidenceState, EvidenceVarId, InstanceCandidateOrigin,
     ReflectableEvidence, ReflectableOrdering, SynthesizedEvidence,
@@ -20,7 +20,7 @@ use smol_str::{SmolStr, format_smolstr};
 use crate::context::{Context, ModuleData};
 use crate::dictionary::{Dictionary, InstanceDictionary, Reflected};
 use crate::error::{GoError, GoResult, UnsupportedState};
-use crate::foreign::{self, Foreign};
+use crate::foreign::{self, Foreign, ForeignPackages};
 use crate::mono::{
     Alternative, Binding, Expression, ExpressionKind, Function, FunctionId, Guard, Guarded,
     GuardedBranch, Literal, Local, LocalId, Pattern, PatternKind, RecordUpdate,
@@ -30,6 +30,39 @@ use crate::types::Substitution;
 
 const SPECIALIZATION_LIMIT: usize = 20_000;
 const LOCAL_SPECIALIZATION_LIMIT: usize = 64;
+
+struct IgnoringCallee {
+    ignored: &'static [usize],
+    monotype: MonotypeId,
+    offset: usize,
+}
+
+impl IgnoringCallee {
+    fn of(function: &Expression, offset: usize) -> IgnoringCallee {
+        let ignored = match &function.kind {
+            ExpressionKind::Lambda { body, .. } => match body.kind {
+                ExpressionKind::Foreign { foreign, .. } => foreign.ignored_arguments(),
+                _ => &[],
+            },
+            _ => &[],
+        };
+        IgnoringCallee { ignored, monotype: function.monotype, offset }
+    }
+
+    fn ignores(&self, monotypes: &Monotypes, position: usize) -> Option<MonotypeId> {
+        let position = position.checked_sub(self.offset)?;
+        if !self.ignored.contains(&position) {
+            return None;
+        }
+        let remaining = monotypes.result_after(self.monotype, position);
+        monotypes.function_parts(remaining).map(|(parameter, _)| parameter)
+    }
+}
+
+fn is_foreign_wrapper(function: &Expression, expected: Foreign) -> bool {
+    matches!(&function.kind, ExpressionKind::Lambda { body, .. }
+        if matches!(body.kind, ExpressionKind::Foreign { foreign, .. } if foreign == expected))
+}
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 enum Definition {
@@ -118,13 +151,14 @@ pub struct Specializer<'q, Q> {
     current: Option<FunctionId>,
     queue: VecDeque<(FunctionId, SpecializationKey, SmolStr)>,
     next_local: u32,
+    foreign_packages: &'q ForeignPackages,
 }
 
 impl<'q, Q> Specializer<'q, Q>
 where
     Q: checking::ExternalQueries,
 {
-    pub fn new(queries: &'q Q) -> Specializer<'q, Q> {
+    pub fn new(queries: &'q Q, foreign_packages: &'q ForeignPackages) -> Specializer<'q, Q> {
         Specializer {
             context: Context::new(queries),
             monotypes: Monotypes::default(),
@@ -135,6 +169,7 @@ where
             current: None,
             queue: VecDeque::new(),
             next_local: 0,
+            foreign_packages,
         }
     }
 
@@ -760,7 +795,7 @@ where
             | tree::ExpressionKind::Variable { .. }
             | tree::ExpressionKind::RecordPun { .. }
             | tree::ExpressionKind::EvidenceApplication { .. } => {
-                return self.reference(scope, id);
+                return self.reference(scope, id, Substitution::default(), None);
             }
             tree::ExpressionKind::Section { binder } => {
                 return self.local_reference(scope, self.checked_binder_source(scope, *binder));
@@ -876,9 +911,15 @@ where
         let monotype = self.monotype(scope, module.checked.tree[id].type_id)?;
         let mut arguments = vec![];
         let mut head = id;
+        let mut result_instantiations = Substitution::default();
         while let tree::ExpressionKind::TermApplication { function, argument } =
             module.checked.tree[head].kind
         {
+            for instantiation in module.checked.tree.lookup_instantiations(head) {
+                let closed =
+                    self.context.types.substitute(instantiation.argument, &scope.substitution);
+                result_instantiations.insert(instantiation.name, closed);
+            }
             arguments.push(argument);
             head = function;
         }
@@ -893,10 +934,40 @@ where
             }
             return Ok(argument);
         }
-        let mut function = self.expression(scope, head)?;
+        let mut function = match module.checked.tree[head].kind {
+            tree::ExpressionKind::Constructor { .. }
+            | tree::ExpressionKind::Variable { .. }
+            | tree::ExpressionKind::RecordPun { .. }
+            | tree::ExpressionKind::EvidenceApplication { .. } => {
+                self.reference(scope, head, result_instantiations, None)?
+            }
+            _ => self.expression(scope, head)?,
+        };
+        let mut parameter_type = module.checked.tree[head].type_id;
+        let mut callee = IgnoringCallee::of(&function, 0);
         let mut converted = Vec::with_capacity(arguments.len());
-        for argument in arguments {
-            converted.push(self.expression(scope, argument)?);
+        for (position, argument) in arguments.into_iter().enumerate() {
+            let expected = self.context.types.function_parts(parameter_type);
+            if let Some((_, result)) = expected {
+                parameter_type = result;
+            }
+            if let Some(parameter) = callee.ignores(&self.monotypes, position) {
+                let ignored = SmolStr::new_static("ignored foreign argument");
+                converted.push(Expression::new(ExpressionKind::Fail(ignored), parameter));
+                continue;
+            }
+            let converted_argument = match (&module.checked.tree[argument].kind, expected) {
+                (
+                    tree::ExpressionKind::Variable { .. }
+                    | tree::ExpressionKind::EvidenceApplication { .. },
+                    Some((expected, _)),
+                ) => self.reference(scope, argument, Substitution::default(), Some(expected))?,
+                _ => self.expression(scope, argument)?,
+            };
+            if position == 0 && is_foreign_wrapper(&function, Foreign::Identity) {
+                callee = IgnoringCallee::of(&converted_argument, 1);
+            }
+            converted.push(converted_argument);
         }
         if self.monotypes.get(function.monotype) == &Monotype::Erased {
             let mut expected = monotype;
@@ -941,10 +1012,16 @@ where
             | Monotype::Boolean
             | Monotype::Char
             | Monotype::String
-            | Monotype::Unit => false,
-            Monotype::Array(inner) | Monotype::Effect(inner) | Monotype::Reference(inner) => {
-                self.mentions_erased(*inner)
-            }
+            | Monotype::Unit
+            | Monotype::Error
+            | Monotype::Opaque
+            | Monotype::Regex => false,
+            Monotype::Array(inner)
+            | Monotype::Effect(inner)
+            | Monotype::Reference(inner)
+            | Monotype::MutableArray(inner)
+            | Monotype::Object(inner)
+            | Monotype::Nullable(inner) => self.mentions_erased(*inner),
             Monotype::Function(argument, result) => {
                 self.mentions_erased(*argument) || self.mentions_erased(*result)
             }
@@ -990,10 +1067,15 @@ where
         Ok(Expression::new(ExpressionKind::Local(local.id), local.monotype))
     }
 
-    fn reference(&mut self, scope: &mut Scope, id: tree::ExpressionId) -> GoResult<Expression> {
+    fn reference(
+        &mut self,
+        scope: &mut Scope,
+        id: tree::ExpressionId,
+        mut instantiations: Substitution,
+        expected: Option<TypeId>,
+    ) -> GoResult<Expression> {
         let module = Arc::clone(&scope.module);
         let tree = &module.checked.tree;
-        let mut instantiations = Substitution::default();
         let mut dictionaries = vec![];
         let mut current = id;
         let resolution = loop {
@@ -1079,6 +1161,14 @@ where
                 file_id,
                 term,
             )) => {
+                let checked = expected.unwrap_or(tree[id].type_id);
+                self.recover_inner_instantiations(
+                    scope,
+                    checked,
+                    file_id,
+                    term,
+                    &mut instantiations,
+                )?;
                 let monotype =
                     self.instantiated_monotype(scope, current, file_id, term, &instantiations)?;
                 self.global_reference(scope, file_id, term, &instantiations, dictionaries, monotype)
@@ -1220,6 +1310,61 @@ where
         bindings.collect()
     }
 
+    fn recover_inner_instantiations(
+        &mut self,
+        scope: &Scope,
+        checked: TypeId,
+        file_id: FileId,
+        term: TermItemId,
+        instantiations: &mut Substitution,
+    ) -> GoResult<()> {
+        let module = self.context.module(file_id)?;
+        let Some(declared) = module.checked.lookup_term_item_type(term) else {
+            return Ok(());
+        };
+        let declared = self.outer_body(declared);
+        let declared = self.context.types.substitute(declared, instantiations);
+        let mut inner = vec![];
+        let pattern = self.strip_inner_quantifiers(declared, &mut inner)?;
+        inner.retain(|name| !instantiations.contains_key(name));
+        if inner.is_empty() {
+            return Ok(());
+        }
+        let checked = self.context.types.substitute(checked, &scope.substitution);
+        let checked = self.strip_inner_quantifiers(checked, &mut vec![])?;
+        let mut bindings = Substitution::default();
+        if self.context.types.match_type(pattern, checked, &inner, &mut bindings) {
+            instantiations.extend(bindings);
+        }
+        Ok(())
+    }
+
+    fn outer_body(&self, mut current: TypeId) -> TypeId {
+        loop {
+            let (bound, inner) = self.context.types.peel_quantifiers(current);
+            let (constraints, inner) = self.context.types.peel_constraints(inner);
+            current = inner;
+            if bound.is_empty() && constraints.is_empty() {
+                return current;
+            }
+        }
+    }
+
+    fn strip_inner_quantifiers(
+        &mut self,
+        type_id: TypeId,
+        names: &mut Vec<Name>,
+    ) -> GoResult<TypeId> {
+        let type_id = crate::monotype::expand_synonyms(&mut self.context, type_id)?;
+        let (bound, body) = self.context.types.peel_quantifiers(type_id);
+        names.extend(bound);
+        let Some((argument, result)) = self.context.types.function_parts(body) else {
+            return Ok(body);
+        };
+        let result = self.strip_inner_quantifiers(result, names)?;
+        Ok(self.context.queries.intern_type(Type::Function(argument, result)))
+    }
+
     /// The type of a reference after the checker's implicit instantiation: the
     /// declared type with its quantifiers replaced and its constraints discharged.
     fn instantiated_monotype(
@@ -1297,11 +1442,15 @@ where
             matches!(module.indexed.items[term].kind, IndexedTermItemKind::Foreign { .. });
         match () {
             () if is_foreign => {
-                let Some(foreign) = foreign::foreign_import(&module.name, &name) else {
-                    let name = format!("{}.{name}", module.name);
-                    return Err(self.unsupported(scope, UnsupportedState::UnknownForeign { name }));
-                };
-                Ok(self.foreign(foreign, monotype))
+                if let Some(foreign) = foreign::foreign_import(&module.name, &name) {
+                    return Ok(self.foreign(foreign, monotype));
+                }
+                if self.foreign_packages.provides(&module.name) {
+                    let foreign = self.project_foreign(file_id, term, monotype);
+                    return Ok(self.foreign(foreign, monotype));
+                }
+                let name = format!("{}.{name}", module.name);
+                Err(self.unsupported(scope, UnsupportedState::UnknownForeign { name }))
             }
             () if is_constructor => self.constructor(scope, file_id, term, monotype),
             () if is_member => {
@@ -1383,10 +1532,10 @@ where
                 ));
             }
         };
-        let instance_name = self.instance_name(instance.origin)?;
-        if let Some(foreign) =
-            foreign::intrinsic(&member_module.name, &member_name, &[instance_name.as_str()])
-        {
+        let mut instance_names = vec![self.instance_name(instance.origin)?];
+        instance_names.extend(self.dictionary_names(&dictionaries)?);
+        let instances: Vec<&str> = instance_names.iter().map(SmolStr::as_str).collect();
+        if let Some(foreign) = foreign::intrinsic(&member_module.name, &member_name, &instances) {
             return Ok(self.foreign(foreign, monotype));
         }
         let (_, module, declaration) = self.instance_declaration(instance.origin)?;
@@ -1435,11 +1584,6 @@ where
         for abstraction in abstractions {
             match abstraction {
                 DeclarationAbstraction::Type { binder, .. } => {
-                    if seen_argument {
-                        return Err(
-                            self.unsupported(scope, UnsupportedState::InterleavedAbstractions)
-                        );
-                    }
                     let binder = self.context.queries.lookup_forall_binder(*binder);
                     let Some(&argument) = instantiations.get(&binder.name) else {
                         let variable = match scope.module.checked.lookup_name(binder.name) {
@@ -1461,6 +1605,17 @@ where
             }
         }
         Ok(types)
+    }
+
+    fn project_foreign(&self, file_id: FileId, term: TermItemId, monotype: MonotypeId) -> Foreign {
+        let mut arity = 0;
+        let mut current = monotype;
+        while let Some((_, result)) = self.monotypes.function_parts(current) {
+            arity += 1;
+            current = result;
+        }
+        let effectful = self.monotypes.effect_result(current).is_some();
+        Foreign::Project { file_id, term, arity, effectful }
     }
 
     fn foreign(&mut self, foreign: Foreign, monotype: MonotypeId) -> Expression {
@@ -1859,6 +2014,7 @@ where
                 }));
             };
             let constraint = crate::monotype::expand_synonyms(&mut self.context, constraint)?;
+            let head = crate::monotype::expand_synonyms(&mut self.context, head)?;
             if !self.context.types.match_type(head, constraint, &names, &mut bindings) {
                 let pretty =
                     checking::core::pretty::Pretty::new(self.context.queries, &module.checked);
@@ -1879,6 +2035,8 @@ where
             };
             let constraint = self.context.types.substitute(constraint, scope.substitution);
             let constraint = crate::monotype::expand_synonyms(&mut self.context, constraint)?;
+            let instance_constraint =
+                crate::monotype::expand_synonyms(&mut self.context, instance_constraint)?;
             self.context.types.match_type(instance_constraint, constraint, &names, &mut bindings);
             recorded.push(Some(constraint));
         }
