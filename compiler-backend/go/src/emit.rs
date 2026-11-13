@@ -62,6 +62,7 @@ where
         owning_variants: FxHashMap::default(),
         pending_owning_variants: vec![],
         inline_sizes: FxHashMap::default(),
+        shared_nullaries: FxHashMap::default(),
         current: None,
         lazy_constants,
     };
@@ -278,6 +279,7 @@ struct Emitter<'p, 'm, 'q, Q> {
     owning_variants: FxHashMap<(FunctionId, usize), String>,
     pending_owning_variants: Vec<(FunctionId, usize)>,
     inline_sizes: FxHashMap<DataType, Option<usize>>,
+    shared_nullaries: FxHashMap<String, String>,
 }
 
 const INLINE_DATA_LIMIT: usize = 128;
@@ -2817,6 +2819,13 @@ where
         let constructor_layout = layout.constructors[constructor].clone();
         Ok(match layout.kind {
             DataKind::Enumeration => identifier_expression(&constructor_layout.tag),
+            DataKind::Tagged
+                if layout.boxed
+                    && !layout.erases_arguments
+                    && constructor_layout.fields.is_empty() =>
+            {
+                self.shared_nullary(&layout.name, &constructor_layout.tag)
+            }
             DataKind::Tagged | DataKind::Product => {
                 let mut fields = vec![];
                 if layout.kind == DataKind::Tagged {
@@ -2833,6 +2842,22 @@ where
                 if layout.boxed { GoExpression::Address(Box::new(composite)) } else { composite }
             }
         })
+    }
+
+    fn shared_nullary(&mut self, type_name: &str, tag: &str) -> GoExpression {
+        if let Some(name) = self.shared_nullaries.get(tag) {
+            return identifier_expression(name);
+        }
+        let name = unique(format!("shared{tag}"), &mut self.global_names);
+        let fields = vec![(Some("Tag".to_string()), identifier_expression(tag))];
+        let composite = GoExpression::Composite { type_: GoType::Named(type_name.into()), fields };
+        self.type_declarations.push(GoDeclaration::Variable {
+            name: name.clone(),
+            type_: None,
+            value: GoExpression::Address(Box::new(composite)),
+        });
+        self.shared_nullaries.insert(tag.to_string(), name.clone());
+        identifier_expression(&name)
     }
 
     fn constructor_named(

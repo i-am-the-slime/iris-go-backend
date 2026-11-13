@@ -26,13 +26,15 @@ const (
 	MaybeStepJust
 )
 
+var sharedMaybeStepNothing = &MaybeStep{Tag: MaybeStepNothing}
+
 var main_ []string = array.Append(names(MinisName{name: "root", minis: []MinisName{MinisName{name: "a", minis: []MinisName{}}}}), []string{prim.ShowInt(int(countSteps(func(n int32) *MaybeStep {
 	if n < 3 {
 		return &MaybeStep{Tag: MaybeStepJust, Just0: func(_ int32) *MaybeStep {
-			return &MaybeStep{Tag: MaybeStepNothing}
+			return sharedMaybeStepNothing
 		}}
 	}
-	return &MaybeStep{Tag: MaybeStepNothing}
+	return sharedMaybeStepNothing
 }, 0)))})
 
 func names(level MinisName) []string {
