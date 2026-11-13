@@ -2,7 +2,7 @@
 //! against the checker's recorded instantiations and evidence, so each generated
 //! function is closed: no type variables and no dictionaries remain.
 
-use std::collections::VecDeque;
+use std::collections::{BTreeSet, VecDeque};
 use std::sync::Arc;
 
 use checking::TypeId;
@@ -171,6 +171,10 @@ pub struct Specializer<'q, Q> {
     /// instantiation of a scheme, a new rank-N field type, or an owner whose
     /// rank-N fields stay erased.
     grown: bool,
+    /// The functions that built a value of each scheme from its instantiations.
+    constructions: FxHashMap<SchemeKey, Vec<FunctionId>>,
+    /// Functions that built a value of a scheme before the scheme grew.
+    stale: BTreeSet<FunctionId>,
     callback_arities: FxHashMap<(FileId, TermItemId), &'static [usize]>,
 }
 
@@ -206,6 +210,8 @@ where
             blockers: vec![],
             blocker_positions: FxHashMap::default(),
             grown: false,
+            constructions: FxHashMap::default(),
+            stale: BTreeSet::new(),
             callback_arities: FxHashMap::default(),
         }
     }
@@ -222,7 +228,7 @@ where
             dictionaries: Arc::from([]),
         };
         let entry = self.request(key, name)?;
-        while let Some((id, key, name)) = self.queue.pop_front() {
+        while let Some((id, key, name)) = self.next_specialization() {
             self.current = Some(id);
             let function = match self.specialize(&key, name.clone()) {
                 Ok(function) => function,
@@ -237,6 +243,30 @@ where
             self.adopt_rank_n_fields();
         }
         Ok(entry)
+    }
+
+    /// The next requested function, or else a stale one. A pass that grew the
+    /// schemes is repeated from scratch, but first the functions that built a
+    /// scheme's value without its newer instantiations are specialized again,
+    /// so that instantiations met only inside those are discovered in this pass
+    /// rather than in one more pass per link of the chain.
+    fn next_specialization(&mut self) -> Option<(FunctionId, SpecializationKey, SmolStr)> {
+        if let Some(requested) = self.queue.pop_front() {
+            return Some(requested);
+        }
+        let stale = self.stale.pop_first()?;
+        let key = self.function_keys[stale.0 as usize].clone();
+        let function = self.functions[stale.0 as usize].as_ref();
+        let function = function.expect("invariant violated: a stale function was specialized");
+        Some((stale, key, function.name.clone()))
+    }
+
+    fn note_construction(&mut self, key: &SchemeKey) {
+        let Some(current) = self.current else { return };
+        let functions = self.constructions.entry(key.clone()).or_default();
+        if functions.last() != Some(&current) {
+            functions.push(current);
+        }
     }
 
     /// Rank-N field types met while specializing a function are specialized for
@@ -963,6 +993,7 @@ where
             return Ok(None);
         }
         let monotype = self.closed_monotype(scope, closed)?;
+        self.note_construction(&scheme.key);
         let instantiations = self.monotypes.schemes.get(&scheme.key).to_vec();
         let mut fields = Vec::with_capacity(instantiations.len());
         let enclosing = scope.rank_n_body.replace(id);
@@ -1434,6 +1465,7 @@ where
             ));
         }
         let monotype = self.closed_monotype(scope, closed)?;
+        self.note_construction(&scheme.key);
         let instantiations = self.monotypes.schemes.get(&scheme.key).to_vec();
         let mut fields = Vec::with_capacity(instantiations.len());
         for instantiation in instantiations {
@@ -1525,6 +1557,9 @@ where
         // chain of instantiations, each met only inside the previous one, is
         // discovered in one pass instead of one pass per link. Values built
         // before it lack it, so the pass is repeated.
+        if let Some(functions) = self.constructions.get(&key) {
+            self.stale.extend(functions.iter().copied());
+        }
         self.monotypes.schemes.insert(key, instantiation);
         self.grown = true;
         Ok(())
