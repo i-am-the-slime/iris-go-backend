@@ -35,9 +35,10 @@ type PairEIntInt struct {
 }
 
 type TreeFn struct {
-	Tag   int
-	Leaf0 func(any) any
-	Pair0 any
+	Tag    int
+	Leaf0  func(any) any
+	Pair0  any
+	Origin any
 }
 
 const (
@@ -46,9 +47,10 @@ const (
 )
 
 type Tree struct {
-	Tag   int
-	Leaf0 any
-	Pair0 any
+	Tag    int
+	Leaf0  any
+	Pair0  any
+	Origin any
 }
 
 const (
@@ -59,6 +61,7 @@ const (
 type PairE struct {
 	PairE0 *TreeFn
 	PairE1 *Tree
+	Origin any
 }
 
 func convert2(value *TreeFnIntInt) *TreeFn {
@@ -66,9 +69,9 @@ func convert2(value *TreeFnIntInt) *TreeFn {
 	case TreeFnIntIntLeaf:
 		return &TreeFn{Tag: TreeFnLeaf, Leaf0: func(coerced any) any {
 			return value.Leaf0(coerced.(int32))
-		}}
+		}, Origin: value}
 	case TreeFnIntIntPair:
-		return &TreeFn{Tag: TreeFnPair, Pair0: value.Pair0}
+		return &TreeFn{Tag: TreeFnPair, Pair0: value.Pair0, Origin: value}
 	}
 	panic("Failed pattern match")
 }
@@ -76,15 +79,15 @@ func convert2(value *TreeFnIntInt) *TreeFn {
 func convert3(value *TreeInt) *Tree {
 	switch value.Tag {
 	case TreeIntLeaf:
-		return &Tree{Tag: TreeLeaf, Leaf0: value.Leaf0}
+		return &Tree{Tag: TreeLeaf, Leaf0: value.Leaf0, Origin: value}
 	case TreeIntPair:
-		return &Tree{Tag: TreePair, Pair0: value.Pair0}
+		return &Tree{Tag: TreePair, Pair0: value.Pair0, Origin: value}
 	}
 	panic("Failed pattern match")
 }
 
 func convert(value *PairEIntInt) *PairE {
-	return &PairE{PairE0: convert2(value.PairE0), PairE1: convert3(value.PairE1)}
+	return &PairE{PairE0: convert2(value.PairE0), PairE1: convert3(value.PairE1), Origin: value}
 }
 
 type TreeFnIntFnIntInt struct {
@@ -111,21 +114,22 @@ func convert5(value *TreeFnIntFnIntInt) *TreeFn {
 			return func(coerced3 any) any {
 				return original(coerced3.(int32))
 			}
-		}}
+		}, Origin: value}
 	case TreeFnIntFnIntIntPair:
-		return &TreeFn{Tag: TreeFnPair, Pair0: value.Pair0}
+		return &TreeFn{Tag: TreeFnPair, Pair0: value.Pair0, Origin: value}
 	}
 	panic("Failed pattern match")
 }
 
 func convert4(value *PairEFnIntIntInt) *PairE {
-	return &PairE{PairE0: convert5(value.PairE0), PairE1: convert3(value.PairE1)}
+	return &PairE{PairE0: convert5(value.PairE0), PairE1: convert3(value.PairE1), Origin: value}
 }
 
 type TreeFnInt struct {
-	Tag   int
-	Leaf0 func(any) int32
-	Pair0 any
+	Tag    int
+	Leaf0  func(any) int32
+	Pair0  any
+	Origin any
 }
 
 const (
@@ -136,6 +140,7 @@ const (
 type PairEInt struct {
 	PairE0 *TreeFnInt
 	PairE1 *Tree
+	Origin any
 }
 
 func convert6(value *TreeFnInt) *Tree {
@@ -143,9 +148,9 @@ func convert6(value *TreeFnInt) *Tree {
 	case TreeFnIntLeaf:
 		return &Tree{Tag: TreeLeaf, Leaf0: func(coerced3 any) any {
 			return value.Leaf0(coerced3)
-		}}
+		}, Origin: value.Origin}
 	case TreeFnIntPair:
-		return &Tree{Tag: TreePair, Pair0: value.Pair0}
+		return &Tree{Tag: TreePair, Pair0: value.Pair0, Origin: value.Origin}
 	}
 	panic("Failed pattern match")
 }
@@ -155,23 +160,23 @@ func convert8(value *TreeFn) *TreeFnInt {
 	case TreeFnLeaf:
 		return &TreeFnInt{Tag: TreeFnIntLeaf, Leaf0: func(coerced5 any) int32 {
 			return value.Leaf0(coerced5).(int32)
-		}}
+		}, Origin: value.Origin}
 	case TreeFnPair:
-		return &TreeFnInt{Tag: TreeFnIntPair, Pair0: value.Pair0}
+		return &TreeFnInt{Tag: TreeFnIntPair, Pair0: value.Pair0, Origin: value.Origin}
 	}
 	panic("Failed pattern match")
 }
 
 func convert7(value *PairE) *PairEInt {
-	return &PairEInt{PairE0: convert8(value.PairE0), PairE1: value.PairE1}
+	return &PairEInt{PairE0: convert8(value.PairE0), PairE1: value.PairE1, Origin: value.Origin}
 }
 
 func convert9(value *TreeFn) *Tree {
 	switch value.Tag {
 	case TreeFnLeaf:
-		return &Tree{Tag: TreeLeaf, Leaf0: value.Leaf0}
+		return &Tree{Tag: TreeLeaf, Leaf0: value.Leaf0, Origin: value.Origin}
 	case TreeFnPair:
-		return &Tree{Tag: TreePair, Pair0: value.Pair0}
+		return &Tree{Tag: TreePair, Pair0: value.Pair0, Origin: value.Origin}
 	}
 	panic("Failed pattern match")
 }

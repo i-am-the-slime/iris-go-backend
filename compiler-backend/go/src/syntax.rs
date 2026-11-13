@@ -2,7 +2,7 @@
 
 use std::fmt::Write;
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, Eq)]
 pub enum GoType {
     Named(String),
     Int,
@@ -12,10 +12,35 @@ pub enum GoType {
     String,
     EmptyStruct,
     Any,
+    /// `any` standing for a type erased for the given reason.
+    Erased(crate::erasure::Erasure),
     Slice(Box<GoType>),
     Pointer(Box<GoType>),
-    Function { parameters: Vec<GoType>, result: Option<Box<GoType>> },
+    Function {
+        parameters: Vec<GoType>,
+        result: Option<Box<GoType>>,
+    },
     Struct(Vec<(String, GoType)>),
+}
+
+/// Types compare as Go sees them: every flavour of `any` is the same type.
+impl PartialEq for GoType {
+    fn eq(&self, other: &GoType) -> bool {
+        use GoType::*;
+        match (self, other) {
+            (Any | Erased(_), Any | Erased(_)) => true,
+            (Named(left), Named(right)) => left == right,
+            (Int, Int) | (Float64, Float64) | (Bool, Bool) | (Rune, Rune) => true,
+            (String, String) | (EmptyStruct, EmptyStruct) => true,
+            (Slice(left), Slice(right)) | (Pointer(left), Pointer(right)) => left == right,
+            (
+                Function { parameters: left, result: left_result },
+                Function { parameters: right, result: right_result },
+            ) => left == right && left_result == right_result,
+            (Struct(left), Struct(right)) => left == right,
+            _ => false,
+        }
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -41,17 +66,51 @@ pub enum GoExpression {
 
 #[derive(Debug, Clone)]
 pub enum GoStatement {
-    Define { names: Vec<String>, values: Vec<GoExpression> },
-    Variable { name: String, type_: GoType, value: Option<GoExpression> },
-    Assign { targets: Vec<GoExpression>, values: Vec<GoExpression> },
+    Define {
+        names: Vec<String>,
+        values: Vec<GoExpression>,
+    },
+    Variable {
+        name: String,
+        type_: GoType,
+        value: Option<GoExpression>,
+    },
+    Assign {
+        targets: Vec<GoExpression>,
+        values: Vec<GoExpression>,
+    },
     Expression(GoExpression),
     Defer(GoExpression),
     Return(Option<GoExpression>),
-    If { condition: GoExpression, then: Vec<GoStatement>, otherwise: Vec<GoStatement> },
-    Switch { value: Option<GoExpression>, cases: Vec<GoCase>, default: Option<Vec<GoStatement>> },
+    If {
+        condition: GoExpression,
+        then: Vec<GoStatement>,
+        otherwise: Vec<GoStatement>,
+    },
+    Switch {
+        value: Option<GoExpression>,
+        cases: Vec<GoCase>,
+        default: Option<Vec<GoStatement>>,
+    },
+    /// `if name, ok := value.(T); ok { then }`
+    IfAssert {
+        name: String,
+        value: GoExpression,
+        type_: GoType,
+        then: Vec<GoStatement>,
+    },
     Loop(Vec<GoStatement>),
-    Range { element: String, iterable: GoExpression, body: Vec<GoStatement> },
-    Counting { variable: String, start: GoExpression, end: GoExpression, body: Vec<GoStatement> },
+    Range {
+        element: String,
+        iterable: GoExpression,
+        body: Vec<GoStatement>,
+    },
+    Counting {
+        variable: String,
+        start: GoExpression,
+        end: GoExpression,
+        body: Vec<GoStatement>,
+    },
     Continue,
     Break,
     Block(Vec<GoStatement>),
@@ -75,6 +134,11 @@ pub enum GoDeclaration {
         type_name: Option<String>,
         names: Vec<String>,
     },
+    /// `var name T`, zero-initialised.
+    Declared {
+        name: String,
+        type_: GoType,
+    },
     Variable {
         name: String,
         type_: Option<GoType>,
@@ -95,7 +159,13 @@ pub struct GoFile {
 
 impl GoFile {
     pub fn render(&self) -> String {
-        let mut printer = Printer { output: String::new(), indentation: 0 };
+        self.render_with_census().0
+    }
+
+    /// The source together with a count of the `any` it contains, by cause.
+    pub fn render_with_census(&self) -> (String, crate::erasure::Census) {
+        let mut printer =
+            Printer { output: String::new(), indentation: 0, census: Default::default() };
         printer.output.push_str("package main\n");
         if !self.imports.is_empty() {
             printer.output.push_str("\nimport (\n");
@@ -108,13 +178,14 @@ impl GoFile {
             printer.output.push('\n');
             printer.declaration(declaration);
         }
-        printer.output
+        (printer.output, printer.census)
     }
 }
 
 struct Printer {
     output: String,
     indentation: usize,
+    census: crate::erasure::Census,
 }
 
 impl Printer {
@@ -148,6 +219,10 @@ impl Printer {
                 }
                 self.indentation -= 1;
                 self.line(")");
+            }
+            GoDeclaration::Declared { name, type_ } => {
+                let type_ = self.type_(type_);
+                self.line(&format!("var {name} {type_}"));
             }
             GoDeclaration::Variable { name, type_, value } => {
                 let value = self.expression(value, 0);
@@ -230,6 +305,14 @@ impl Printer {
                 self.block(then);
                 self.else_chain(otherwise);
             }
+            GoStatement::IfAssert { name, value, type_, then } => {
+                self.census.assertions += 1;
+                let value = self.expression(value, 6);
+                let type_ = self.type_(type_);
+                self.line(&format!("if {name}, ok := {value}.({type_}); ok {{"));
+                self.block(then);
+                self.line("}");
+            }
             GoStatement::Switch { value, cases, default } => {
                 match value {
                     Some(value) => {
@@ -310,7 +393,14 @@ impl Printer {
             GoType::Rune => "rune".into(),
             GoType::String => "string".into(),
             GoType::EmptyStruct => "struct{}".into(),
-            GoType::Any => "any".into(),
+            GoType::Any => {
+                self.census.record(crate::erasure::Erasure::Runtime);
+                "any".into()
+            }
+            GoType::Erased(erasure) => {
+                self.census.record(*erasure);
+                "any".into()
+            }
             GoType::Slice(element) => format!("[]{}", self.type_(element)),
             GoType::Pointer(element) => format!("*{}", self.type_(element)),
             GoType::Function { parameters, result } => {
@@ -409,6 +499,7 @@ impl Printer {
                 format!("{type_}({value})")
             }
             GoExpression::TypeAssertion { value, type_ } => {
+                self.census.assertions += 1;
                 let value = self.expression(value, 6);
                 let type_ = self.type_(type_);
                 format!("{value}.({type_})")

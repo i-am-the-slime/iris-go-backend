@@ -271,6 +271,14 @@ impl Simplifier<'_> {
                     .into_iter()
                     .zip(scrutinees)
                     .filter_map(|(pattern, value)| match pattern.kind {
+                        // A newtype pattern may bind the wrapped representation of a
+                        // recursive newtype, which the binding keeps.
+                        PatternKind::Variable(local) if local.monotype != value.monotype => {
+                            let monotype = local.monotype;
+                            let value =
+                                Expression::new(ExpressionKind::Coerce(Box::new(value)), monotype);
+                            Some(Binding { local, value })
+                        }
                         PatternKind::Variable(local) => Some(Binding { local, value }),
                         _ => None,
                     })
@@ -542,7 +550,12 @@ impl Simplifier<'_> {
         }
         for binding in bindings.into_iter().rev() {
             let uses = occurrences(&body, binding.local.id);
+            // A record of trivial fields, such as a rank-N value's
+            // specializations, is copied so that its field accesses resolve.
+            let trivial_record = matches!(&binding.value.kind, ExpressionKind::Record(fields)
+                if fields.iter().all(|(_, value)| is_trivial(value)));
             let substitutable = is_trivial(&binding.value)
+                || trivial_record
                 || uses.total == 0
                 || (uses.total == 1 && (uses.under_lambda == 0 || is_lambda(&binding.value)));
             if substitutable {
@@ -1131,7 +1144,15 @@ fn substitute_in_place(expression: &mut Expression, local: LocalId, value: &Expr
     if let ExpressionKind::Local(id) = expression.kind
         && id == local
     {
+        // The reference may expect another representation of the same value,
+        // as a newtype constructor's result does a recursive newtype.
+        let monotype = expression.monotype;
         *expression = value.clone();
+        if expression.monotype != monotype {
+            let coerced =
+                std::mem::replace(expression, Expression::new(ExpressionKind::Unit, monotype));
+            expression.kind = ExpressionKind::Coerce(Box::new(coerced));
+        }
         return;
     }
     for_each_child_mut(expression, &mut |child| substitute_in_place(child, local, value));

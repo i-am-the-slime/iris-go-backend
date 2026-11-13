@@ -8,6 +8,7 @@ pub mod blocker;
 mod context;
 mod dictionary;
 mod emit;
+pub mod erasure;
 pub mod error;
 mod foreign;
 mod lift;
@@ -66,6 +67,7 @@ pub fn compile_program(
         for function in &program.functions {
             eprintln!("{function:#?}");
         }
+        monotypes.dump();
     }
     let functions = program.functions.len();
     let source = emit::emit_program(&program, &mut monotypes, queries, foreign_packages)?;

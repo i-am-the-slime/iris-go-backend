@@ -1,0 +1,17 @@
+---
+source: tests-integration/src/fixtures.rs
+---
+package main
+
+import (
+	"os"
+)
+
+func main_() int32 {
+	return 3
+}
+
+func main() {
+	exitStatus := main_()
+	os.Exit(int(exitStatus))
+}

@@ -112,7 +112,7 @@ pub(super) const HOST_IMPORTS: &[(&str, &str, Foreign)] = &[
     ("Graphics.Canvas.Extra", "supportsCanvasElement", perform("SupportsCanvasElement", 0)),
     ("Graphics.Canvas.Extra", "createCanvasElementImpl", canvas(0)),
     ("Graphics.Canvas.Extra", "createOffscreenCanvasImpl", canvas(2)),
-    ("Graphics.Canvas.Extra", "getContext2DNullable", canvas(1)),
+    ("Graphics.Canvas.Extra", "getContext2DNullable", perform("GetContext2DNullable", 1)),
     ("Graphics.Canvas.Extra", "setFontKerningImpl", canvas(2)),
     ("Graphics.Canvas.Extra", "measureTextInkImpl", perform_record("MeasureTextInkImpl", 2)),
     ("Web.Font.Loading", "hasFontSet", perform("HasFontSet", 0)),

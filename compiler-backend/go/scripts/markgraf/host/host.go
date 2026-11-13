@@ -7,6 +7,8 @@ package main
 import (
 	_ "embed"
 
+	// Throughput-oriented garbage collector pacing, unless GOGC is set.
+	_ "github.com/i-am-the-slime/purs-backend-go/go-support/gctune"
 	"github.com/i-am-the-slime/purs-backend-go/go-support/tauri"
 )
 

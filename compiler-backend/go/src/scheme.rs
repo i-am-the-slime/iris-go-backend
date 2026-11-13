@@ -32,6 +32,8 @@ pub struct SchemeInstantiation {
 #[derive(Debug, Clone, Default)]
 pub struct SchemeInstantiations {
     known: FxHashMap<SchemeKey, Vec<SchemeInstantiation>>,
+    rank_n: FxHashMap<SchemeKey, String>,
+    erased_owners: rustc_hash::FxHashSet<String>,
 }
 
 impl SchemeInstantiations {
@@ -43,8 +45,41 @@ impl SchemeInstantiations {
         self.get(key).iter().find(|instantiation| *instantiation.types == *types)
     }
 
+    /// Whether an unconstrained `forall` with this key is specialized.
+    pub fn is_rank_n(&self, key: &SchemeKey) -> bool {
+        self.rank_n.contains_key(key)
+    }
+
+    /// Specializes the rank-N field type `key` of `owner`, a newtype or
+    /// constructor, unless that owner's fields stay erased.
+    pub fn add_rank_n(&mut self, key: SchemeKey, owner: String) {
+        if !self.erased_owners.contains(&owner) {
+            self.rank_n.insert(key, owner);
+        }
+    }
+
+    /// Keeps every rank-N field of `owner` erased: some occurrence of it holds
+    /// already-erased types (a VariantF's functor, say), and values move
+    /// between its occurrences by coercion, which only a shared representation
+    /// allows.
+    pub fn erase_owner(&mut self, owner: String) {
+        self.rank_n.retain(|_, existing| *existing != owner);
+        self.erased_owners.insert(owner);
+    }
+
+    pub fn is_erased_owner(&self, owner: &str) -> bool {
+        self.erased_owners.contains(owner)
+    }
+
     pub fn insert(&mut self, key: SchemeKey, instantiation: SchemeInstantiation) {
         self.known.entry(key).or_default().push(instantiation);
+    }
+}
+
+impl SchemeKey {
+    /// The first keyed type: a rank-N scheme's canonical body.
+    pub fn body(&self) -> TypeId {
+        self.0[0]
     }
 }
 
@@ -90,6 +125,41 @@ where
         constraints.iter().map(|&constraint| context.types.substitute(constraint, &placeholders));
     let key = SchemeKey(canonical.collect());
     Ok(Some(ConstrainedScheme { names, constraints, body, key }))
+}
+
+/// An unconstrained `forall`, such as a CPS parser's answer type, keyed by its
+/// body: values of the type become one specialization per instantiation, like
+/// constrained schemes. The caller decides whether the body depends on the
+/// variables at all (a phantom region needs no specialization).
+pub fn rank_n_scheme<Q>(
+    context: &mut Context<'_, Q>,
+    type_id: TypeId,
+) -> QueryResult<Option<ConstrainedScheme>>
+where
+    Q: checking::ExternalQueries,
+{
+    let type_id = context.types.strip_annotations(type_id);
+    if !matches!(context.types.lookup(type_id), Type::Forall(..)) {
+        return Ok(None);
+    }
+    let (names, inner) = context.types.peel_quantifiers(type_id);
+    let (constraints, body) = context.types.peel_constraints(inner);
+    for &constraint in &constraints {
+        if !crate::monotype::is_partial(context, constraint)? {
+            return Ok(None);
+        }
+    }
+    let placeholders: Substitution = names
+        .iter()
+        .enumerate()
+        .map(|(position, &name)| (name, placeholder(context, position)))
+        .collect();
+    // The key is the body in a canonical spelling, so that every occurrence of
+    // the same rank-N type finds the same instantiations.
+    let keyed = context.types.substitute(body, &placeholders);
+    let keyed = crate::monotype::expand_synonyms(context, keyed)?;
+    let key = SchemeKey(Arc::from([keyed]));
+    Ok(Some(ConstrainedScheme { names, constraints: vec![], body, key }))
 }
 
 fn placeholder<Q>(context: &Context<'_, Q>, position: usize) -> TypeId

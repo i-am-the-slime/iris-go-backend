@@ -36,8 +36,9 @@ type CountInt struct {
 }
 
 type Say struct {
-	Say0 string
-	Say1 any
+	Say0   string
+	Say1   any
+	Origin any
 }
 
 type Map_Type_Value2 struct {
@@ -47,7 +48,7 @@ type Map_Type_Value2 struct {
 }
 
 func convert2(value *SayInt) *Say {
-	return &Say{Say0: value.Say0, Say1: value.Say1}
+	return &Say{Say0: value.Say0, Say1: value.Say1, Origin: value}
 }
 
 func convert(value Map_Type_Value2) Map_Type_Value {
@@ -61,6 +62,7 @@ func convert(value Map_Type_Value2) Map_Type_Value {
 
 type Count struct {
 	Count0 func(int32) any
+	Origin any
 }
 
 type Map_Type_Value3 struct {
@@ -72,7 +74,7 @@ type Map_Type_Value3 struct {
 func convert4(value *CountInt) *Count {
 	return &Count{Count0: func(coerced3 int32) any {
 		return value.Count0(coerced3)
-	}}
+	}, Origin: value}
 }
 
 func convert3(value Map_Type_Value3) Map_Type_Value {
@@ -85,12 +87,18 @@ func convert3(value Map_Type_Value3) Map_Type_Value {
 }
 
 func convert5(value *Count) *CountInt {
+	if original, ok := value.Origin.(*CountInt); ok {
+		return original
+	}
 	return &CountInt{Count0: func(coerced int32) int32 {
 		return value.Count0(coerced).(int32)
 	}}
 }
 
 func convert6(value *Say) *SayInt {
+	if original, ok := value.Origin.(*SayInt); ok {
+		return original
+	}
 	return &SayInt{Say0: value.Say0, Say1: value.Say1.(int32)}
 }
 

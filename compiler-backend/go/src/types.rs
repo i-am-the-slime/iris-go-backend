@@ -4,7 +4,13 @@ use checking::TypeId;
 use checking::core::{Name, RowField, RowType, Type};
 use rustc_hash::FxHashMap;
 
+use crate::erasure::Erasure;
+
 pub type Substitution = FxHashMap<Name, TypeId>;
+
+/// Erased stand-ins are rigid variables numbered down from here, clear of the
+/// scheme placeholders just below `u32::MAX`.
+const ERASED_UNIQUE: u32 = u32::MAX - 4096;
 
 pub struct TypeOperations<'q, Q> {
     queries: &'q Q,
@@ -19,11 +25,42 @@ where
     }
 
     /// A closed stand-in for a type the program cannot specialize on, such as the
-    /// element type under polymorphic recursion. It becomes Go `any`.
-    pub fn erased(&self) -> TypeId {
-        let name = Name { file: self.queries.prim_id(), unique: u32::MAX, scoped: false };
+    /// element type under polymorphic recursion. It becomes Go `any`, and
+    /// remembers why for the `any` census.
+    pub fn erased(&self, erasure: Erasure) -> TypeId {
+        let unique = ERASED_UNIQUE - erasure.tracked().code();
+        let name = Name { file: self.queries.prim_id(), unique, scoped: false };
         let kind = self.queries.intern_type(Type::Unification(u32::MAX));
         self.queries.intern_type(Type::Rigid(name, checking::core::Depth(0), kind))
+    }
+
+    /// The cause of an erased stand-in type.
+    pub fn erasure(&self, type_id: TypeId) -> Option<Erasure> {
+        let Type::Rigid(name, _, _) = self.lookup(self.strip_annotations(type_id)) else {
+            return None;
+        };
+        if name.file != self.queries.prim_id() || name.scoped {
+            return None;
+        }
+        Erasure::from_code(ERASED_UNIQUE.checked_sub(name.unique)?)
+    }
+
+    /// Whether a type mentions an erased stand-in anywhere.
+    pub fn contains_erased(&self, outer: TypeId) -> bool {
+        let outer = self.strip_annotations(outer);
+        if self.erasure(outer).is_some() {
+            return true;
+        }
+        match self.lookup(outer) {
+            Type::Application(function, argument) | Type::Function(function, argument) => {
+                self.contains_erased(*function) || self.contains_erased(*argument)
+            }
+            Type::Row(row) => {
+                let row = self.queries.lookup_row_type(*row);
+                row.fields.iter().any(|field| self.contains_erased(field.id))
+            }
+            _ => false,
+        }
     }
 
     pub fn contains(&self, outer: TypeId, inner: TypeId) -> bool {

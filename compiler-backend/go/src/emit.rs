@@ -14,6 +14,7 @@ use files::FileId;
 use indexing::TermItemId;
 
 use crate::context::{Context, capitalise};
+use crate::erasure::Erasure;
 use crate::error::{GoError, GoResult};
 use crate::foreign::{
     Boundary, Comparison, Foreign, ForeignPackages, GoFunction, GoPackage, Operator,
@@ -35,6 +36,7 @@ pub fn emit_program<Q>(
 where
     Q: checking::ExternalQueries,
 {
+    let lazy_constants = recursive_constants(program, monotypes);
     let mut emitter = Emitter {
         program,
         foreign_packages,
@@ -54,6 +56,7 @@ where
         local_names: FxHashSet::default(),
         tail_loop: None,
         current: None,
+        lazy_constants,
     };
     emitter.assign_function_names();
     let mut declarations = vec![];
@@ -67,7 +70,96 @@ where
     let mut all = std::mem::take(&mut emitter.type_declarations);
     all.extend(declarations);
     let file = GoFile { imports: emitter.imports.into_iter().collect(), declarations: all };
-    Ok(file.render())
+    let (source, census) = file.render_with_census();
+    if std::env::var_os("IRIS_GO_ANY_CENSUS").is_some() {
+        let identifier = |c: char| c.is_alphanumeric() || c == '_';
+        let textual = source
+            .match_indices("any")
+            .filter(|&(at, _)| {
+                !source[..at].chars().next_back().is_some_and(identifier)
+                    && !source[at + 3..].chars().next().is_some_and(identifier)
+            })
+            .count();
+        eprint!("{census}");
+        eprintln!("  ({textual} `any` in the source text)");
+    }
+    Ok(source)
+}
+
+/// The constants (parameterless, effect-free definitions) that belong to a
+/// reference cycle, found as strongly connected components (Tarjan).
+fn recursive_constants(program: &Program, monotypes: &Monotypes) -> FxHashSet<FunctionId> {
+    let count = program.functions.len();
+    let mut edges: Vec<Vec<usize>> = Vec::with_capacity(count);
+    for function in &program.functions {
+        let mut targets = vec![];
+        crate::simplify::visit(&function.body, &mut |expression| {
+            if let ExpressionKind::Function(id) = expression.kind {
+                targets.push(id.0 as usize);
+            }
+        });
+        targets.sort_unstable();
+        targets.dedup();
+        edges.push(targets);
+    }
+    let mut index = vec![usize::MAX; count];
+    let mut low = vec![0; count];
+    let mut on_stack = vec![false; count];
+    let mut stack = vec![];
+    let mut next = 0;
+    let mut recursive = vec![false; count];
+    for root in 0..count {
+        if index[root] != usize::MAX {
+            continue;
+        }
+        let mut work = vec![(root, 0usize)];
+        while let Some(&mut (node, ref mut edge)) = work.last_mut() {
+            if *edge == 0 && index[node] == usize::MAX {
+                index[node] = next;
+                low[node] = next;
+                next += 1;
+                stack.push(node);
+                on_stack[node] = true;
+            }
+            if let Some(&target) = edges[node].get(*edge) {
+                *edge += 1;
+                if index[target] == usize::MAX {
+                    work.push((target, 0));
+                } else if on_stack[target] {
+                    low[node] = low[node].min(index[target]);
+                }
+                continue;
+            }
+            work.pop();
+            if let Some(&(parent, _)) = work.last() {
+                low[parent] = low[parent].min(low[node]);
+            }
+            if low[node] == index[node] {
+                let mut component = vec![];
+                loop {
+                    let member = stack.pop().expect("invariant violated: Tarjan stack");
+                    on_stack[member] = false;
+                    component.push(member);
+                    if member == node {
+                        break;
+                    }
+                }
+                let cyclic = component.len() > 1 || edges[node].contains(&node);
+                for member in component {
+                    recursive[member] = cyclic;
+                }
+            }
+        }
+    }
+    let mut constants = FxHashSet::default();
+    for (position, function) in program.functions.iter().enumerate() {
+        let constant =
+            function.parameters.is_empty() && monotypes.effect_result(function.result).is_none();
+        if recursive[position] && constant {
+            constants.insert(FunctionId(position as u32));
+        }
+    }
+    constants
 }
 
 fn await_fibers(declarations: &mut [GoDeclaration]) {
@@ -115,6 +207,13 @@ struct DataLayout {
     name: String,
     kind: DataKind,
     constructors: Vec<ConstructorLayout>,
+    /// Whether the layout erases type arguments. Such a value, converted from
+    /// a fully typed one, remembers it in an `Origin` field (added once a
+    /// conversion needs it), so converting back returns the original instead
+    /// of wrapping its closures once more.
+    erases_arguments: bool,
+    /// The position of the struct's declaration in `type_declarations`.
+    declaration: Option<usize>,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -138,6 +237,9 @@ struct Emitter<'p, 'm, 'q, Q> {
     imports: BTreeSet<String>,
     function_names: Vec<String>,
     global_names: FxHashSet<String>,
+    /// Constants that refer back to themselves through other definitions; Go
+    /// rejects such package-level initializers, so they are computed on first use.
+    lazy_constants: FxHashSet<FunctionId>,
     record_names: FxHashMap<MonotypeId, String>,
     data_layouts: FxHashMap<DataType, DataLayout>,
     converters: FxHashMap<(MonotypeId, MonotypeId), String>,
@@ -243,6 +345,27 @@ fn identifier(name: &str) -> String {
     }
     sanitized
 }
+
+/// Package names generated code may import.
+const IMPORTED_PACKAGES: &[&str] = &[
+    "prim",
+    "array",
+    "direct",
+    "object",
+    "nullable",
+    "exception",
+    "aff",
+    "promise",
+    "foreignvalue",
+    "tauri",
+    "fmt",
+    "math",
+    "os",
+    "sync",
+    "strconv",
+    "strings",
+    "big",
+];
 
 fn unique(base: String, taken: &mut FxHashSet<String>) -> String {
     if taken.insert(base.clone()) {
@@ -465,6 +588,9 @@ where
         let effect_result = self.monotypes.effect_result(function.result);
         let mode = if effect_result.is_some() { Mode::Perform } else { Mode::Value };
         if function.parameters.is_empty() && mode == Mode::Value {
+            if self.lazy_constants.contains(&id) {
+                return self.lazy_constant(&name, function);
+            }
             return self.constant(&name, function);
         }
         let result = self.go_result(effect_result.unwrap_or(function.result))?;
@@ -488,6 +614,42 @@ where
         }
         self.tail_loop = None;
         Ok(vec![GoDeclaration::Function { name, parameters, result, body }])
+    }
+
+    /// A recursive constant: `name()` computes the value once, on first use, as
+    /// JavaScript's lazily initialised recursive bindings do.
+    fn lazy_constant(&mut self, name: &str, function: &Function) -> GoResult<Vec<GoDeclaration>> {
+        let type_ = self.go_type(function.result)?;
+        let mut statements = vec![];
+        let value = self.value(&function.body, &mut statements)?;
+        let cell = unique(format!("{name}Value"), &mut self.global_names);
+        let ready = unique(format!("{name}Ready"), &mut self.global_names);
+        statements.push(GoStatement::Assign {
+            targets: vec![identifier_expression(&cell)],
+            values: vec![value],
+        });
+        statements.push(GoStatement::Assign {
+            targets: vec![identifier_expression(&ready)],
+            values: vec![identifier_expression("true")],
+        });
+        let compute = GoStatement::If {
+            condition: GoExpression::Unary {
+                operator: "!",
+                operand: Box::new(identifier_expression(&ready)),
+            },
+            then: statements,
+            otherwise: vec![],
+        };
+        Ok(vec![
+            GoDeclaration::Declared { name: cell.clone(), type_: type_.clone() },
+            GoDeclaration::Declared { name: ready, type_: GoType::Bool },
+            GoDeclaration::Function {
+                name: name.into(),
+                parameters: vec![],
+                result: Some(type_),
+                body: vec![compute, GoStatement::Return(Some(identifier_expression(&cell)))],
+            },
+        ])
     }
 
     fn constant(&mut self, name: &str, function: &Function) -> GoResult<Vec<GoDeclaration>> {
@@ -556,8 +718,13 @@ where
             }
             _ => false,
         };
-        if aliased {
+        if aliased || uses == 0 {
             self.locals.insert(local.id, path.clone());
+            return Ok(());
+        }
+        // A Unit field carries no information; its uses read the unit value.
+        if self.is_unit(local.monotype) {
+            self.locals.insert(local.id, unit_value());
             return Ok(());
         }
         let name = self.bind_local(local);
@@ -566,13 +733,31 @@ where
     }
 
     fn bind_local(&mut self, local: &Local) -> String {
-        let name = unique(identifier(&local.name), &mut self.local_names);
+        let name = self.local_name(identifier(&local.name));
         self.locals.insert(local.id, identifier_expression(&name));
         name
     }
 
     fn temporary(&mut self, base: &str) -> String {
-        unique(base.to_string(), &mut self.local_names)
+        self.local_name(base.to_string())
+    }
+
+    /// A fresh local that shadows no global function or type, nor an imported
+    /// package, any of which the function body may still need to refer to.
+    fn local_name(&mut self, base: String) -> String {
+        let taken = |emitter: &Self, candidate: &String| {
+            emitter.local_names.contains(candidate)
+                || emitter.global_names.contains(candidate)
+                || IMPORTED_PACKAGES.contains(&candidate.as_str())
+        };
+        let mut candidate = base.clone();
+        let mut counter = 2;
+        while taken(self, &candidate) {
+            candidate = format!("{base}{counter}");
+            counter += 1;
+        }
+        self.local_names.insert(candidate.clone());
+        candidate
     }
 
     fn local(&self, id: LocalId) -> GoResult<GoExpression> {
@@ -590,7 +775,8 @@ where
             Monotype::Char => GoType::Rune,
             Monotype::String => GoType::String,
             Monotype::Unit => GoType::EmptyStruct,
-            Monotype::Erased | Monotype::Opaque => GoType::Any,
+            Monotype::Erased(erasure) => GoType::Erased(erasure),
+            Monotype::Opaque => GoType::Erased(Erasure::Foreign),
             Monotype::Array(element) => GoType::Slice(Box::new(self.go_type(element)?)),
             Monotype::Record(_) => GoType::Named(self.record_name(monotype)?),
             Monotype::Function(argument, result) => {
@@ -761,7 +947,15 @@ where
                 .collect();
             layouts.push(ConstructorLayout { tag, fields });
         }
-        let layout = DataLayout { name: name.clone(), kind, constructors: layouts.clone() };
+        let erases_arguments = kind != DataKind::Enumeration
+            && data.arguments.iter().any(|&argument| self.context.types.contains_erased(argument));
+        let layout = DataLayout {
+            name: name.clone(),
+            kind,
+            constructors: layouts.clone(),
+            erases_arguments,
+            declaration: None,
+        };
         self.data_layouts.insert(data.clone(), layout.clone());
         match kind {
             DataKind::Enumeration => {
@@ -783,6 +977,10 @@ where
                         fields.push((field_name.clone(), self.go_type(*monotype)?));
                     }
                 }
+
+                if let Some(layout) = self.data_layouts.get_mut(data) {
+                    layout.declaration = Some(self.type_declarations.len());
+                }
                 self.type_declarations.push(GoDeclaration::Type {
                     name: name.clone(),
                     type_: GoType::Struct(fields),
@@ -794,7 +992,23 @@ where
                 }
             }
         }
-        Ok(layout)
+        Ok(self.data_layouts.get(data).cloned().unwrap_or(layout))
+    }
+
+    /// Adds the `Origin` field to an erased layout's struct, once.
+    fn remember_origin(&mut self, data: &DataType) -> GoResult<bool> {
+        let layout = self.data_layout(data)?;
+        if !layout.erases_arguments {
+            return Ok(false);
+        }
+        if let Some(position) = layout.declaration
+            && let GoDeclaration::Type { type_: GoType::Struct(fields), .. } =
+                &mut self.type_declarations[position]
+            && !fields.iter().any(|(name, _)| name == "Origin")
+        {
+            fields.push(("Origin".to_string(), GoType::Any));
+        }
+        Ok(true)
     }
 
     fn sink(
@@ -1027,9 +1241,8 @@ where
             Foreign::WithMutex => return self.with_mutex(arguments, result, sink, out),
             Foreign::MutexNew => {
                 self.imports.insert("sync".into());
-                let mutex = call(identifier_expression("new"), vec![identifier_expression(
-                    "sync.Mutex",
-                )]);
+                let mutex =
+                    call(identifier_expression("new"), vec![identifier_expression("sync.Mutex")]);
                 return self.deliver(mutex, result, sink, out);
             }
             Foreign::MakeAff => {
@@ -1072,7 +1285,7 @@ where
                 return self.deliver(performed, result, sink, out);
             }
             Foreign::Perform { function, boundary, .. } => {
-                let values = self.boundary_arguments(arguments, boundary, result, out)?;
+                let values = self.boundary_arguments(arguments, boundary, result, false, out)?;
                 let function = self.boundary_function(function, boundary, result)?;
                 let mut performed = call(function, values);
                 if boundary.thunk {
@@ -1403,6 +1616,7 @@ where
         arguments: &[Expression],
         boundary: Boundary,
         result: MonotypeId,
+        uniform: bool,
         out: &mut Vec<GoStatement>,
     ) -> GoResult<Vec<GoExpression>> {
         let maybe = match boundary.maybe.and_then(|constructors| constructors.witness) {
@@ -1449,6 +1663,15 @@ where
                 _ if boundary.unit_values => {
                     let value = self.value(argument, out)?;
                     self.unit_valued(value, argument.monotype)?
+                }
+                _ if uniform
+                    && let Some(&arrows) = boundary.callback_arities.get(position)
+                    && arrows > 0
+                    && self.effect_after(argument.monotype, arrows) =>
+                {
+                    let value = self.value(argument, out)?;
+                    let value = self.hoist(value, "function", out);
+                    self.uniform_function(value, argument.monotype, arrows)?
                 }
                 _ => {
                     let value = self.value(argument, out)?;
@@ -1540,6 +1763,77 @@ where
             Monotype::Effect(result) => (None, *result),
             _ => unreachable!("invariant violated: only functions and effects are callable"),
         }
+    }
+
+    /// Whether a function's result after `arrows` applications is an effect,
+    /// which direct style performs on application instead of returning it.
+    fn effect_after(&self, monotype: MonotypeId, arrows: usize) -> bool {
+        match self.monotypes.get(monotype) {
+            Monotype::Function(_, result) if arrows == 1 => {
+                matches!(self.monotypes.get(*result), Monotype::Effect(_))
+            }
+            Monotype::Function(_, result) => self.effect_after(*result, arrows - 1),
+            _ => false,
+        }
+    }
+
+    /// The type of a callback as a generic go-support helper sees it: after
+    /// `arrows` applications it returns the effect as a value.
+    fn uniform_type(&mut self, monotype: MonotypeId, arrows: usize) -> GoResult<GoType> {
+        let Monotype::Function(argument, result) = self.monotypes.get(monotype).clone() else {
+            return self.go_type(monotype);
+        };
+        let parameter = self.go_type(argument)?;
+        let result = if arrows == 1 {
+            self.go_type(result)?
+        } else {
+            self.uniform_type(result, arrows - 1)?
+        };
+        Ok(GoType::Function { parameters: vec![parameter], result: Some(Box::new(result)) })
+    }
+
+    /// Adapts a direct-style callback to `uniform_type`, delaying its effect.
+    fn uniform_function(
+        &mut self,
+        function: GoExpression,
+        monotype: MonotypeId,
+        arrows: usize,
+    ) -> GoResult<GoExpression> {
+        let Monotype::Function(argument, result) = self.monotypes.get(monotype).clone() else {
+            return Ok(function);
+        };
+        let parameter = self.temporary("argument");
+        let parameter_type = self.go_type(argument)?;
+        let applied = call(function, vec![identifier_expression(&parameter)]);
+        let body = if arrows == 1 {
+            let Monotype::Effect(inner) = self.monotypes.get(result).clone() else {
+                unreachable!("invariant violated: a uniform callback ends in an effect")
+            };
+            let performed = if self.is_unit(inner) {
+                vec![GoStatement::Expression(applied)]
+            } else {
+                vec![GoStatement::Return(Some(applied))]
+            };
+            let action = GoExpression::Function {
+                parameters: vec![],
+                result: self.go_result(inner)?,
+                body: performed,
+            };
+            vec![GoStatement::Return(Some(action))]
+        } else {
+            let partial = self.temporary("partial");
+            let adapted =
+                self.uniform_function(identifier_expression(&partial), result, arrows - 1)?;
+            vec![
+                GoStatement::Define { names: vec![partial], values: vec![applied] },
+                GoStatement::Return(Some(adapted)),
+            ]
+        };
+        Ok(GoExpression::Function {
+            parameters: vec![(parameter, parameter_type)],
+            result: Some(self.uniform_type(result, arrows - 1)?),
+            body,
+        })
     }
 
     fn has_unit_result(&self, monotype: MonotypeId) -> bool {
@@ -1889,16 +2183,15 @@ where
             self.sink(&arguments[1], Mode::Perform, Sink::Return, out)
         } else {
             let mut body = vec![GoStatement::Expression(lock), GoStatement::Defer(unlock)];
-            self.sink(&arguments[1], Mode::Perform, Sink::Return, &mut body)
-                .and_then(|()| {
-                    if let Some(GoStatement::Return(None)) = body.last() {
-                        body.pop();
-                    }
-                    let result_type = self.go_result(result)?;
-                    let section =
-                        GoExpression::Function { parameters: vec![], result: result_type, body };
-                    self.deliver(call(section, vec![]), result, sink, out)
-                })
+            self.sink(&arguments[1], Mode::Perform, Sink::Return, &mut body).and_then(|()| {
+                if let Some(GoStatement::Return(None)) = body.last() {
+                    body.pop();
+                }
+                let result_type = self.go_result(result)?;
+                let section =
+                    GoExpression::Function { parameters: vec![], result: result_type, body };
+                self.deliver(call(section, vec![]), result, sink, out)
+            })
         };
         self.tail_loop = saved;
         outcome
@@ -1943,6 +2236,8 @@ where
         out: &mut Vec<GoStatement>,
     ) -> GoResult<()> {
         let start = self.value(&arguments[0], out)?;
+        // `index := 0` would be a Go int; the counter is a PureScript Int.
+        let start = self.typed_constant(start, arguments[0].monotype)?;
         let end = self.value(&arguments[1], out)?;
         let end = self.hoist(end, "end", out);
         let saved = self.tail_loop.take();
@@ -2115,6 +2410,13 @@ where
             ExpressionKind::Access { record, label } => {
                 let record = self.value(record, out)?;
                 field(record, &identifier(label))
+            }
+            ExpressionKind::Update { record: source, updates }
+                if source.monotype != expression.monotype =>
+            {
+                let value = self.value(source, out)?;
+                let value = self.hoist(value, "record", out);
+                self.rebuilt_record(value, expression.monotype, updates, out)?
             }
             ExpressionKind::Update { record, updates } => {
                 let record = self.value(record, out)?;
@@ -2293,6 +2595,39 @@ where
         Ok(identifier_expression(&name))
     }
 
+    /// A record update that changes field types (`r { f = g r.f }` at a new
+    /// type) builds the result anew instead of copying the source's struct.
+    fn rebuilt_record(
+        &mut self,
+        source: GoExpression,
+        target: MonotypeId,
+        updates: &[RecordUpdate],
+        out: &mut Vec<GoStatement>,
+    ) -> GoResult<GoExpression> {
+        let Monotype::Record(fields) = self.monotypes.get(target).clone() else {
+            unreachable!("invariant violated: a record update produces a record")
+        };
+        let mut values = Vec::with_capacity(fields.len());
+        for record_field in fields.iter() {
+            let label = identifier(&record_field.label);
+            let update = updates.iter().find(|update| match update {
+                RecordUpdate::Leaf { label: updated, .. }
+                | RecordUpdate::Branch { label: updated, .. } => *updated == record_field.label,
+            });
+            let value = match update {
+                Some(RecordUpdate::Leaf { value, .. }) => self.value(value, out)?,
+                Some(RecordUpdate::Branch { updates, .. }) => {
+                    let nested = self.hoist(field(source.clone(), &label), "record", out);
+                    self.rebuilt_record(nested, record_field.monotype, updates, out)?
+                }
+                None => field(source.clone(), &label),
+            };
+            values.push((Some(label), value));
+        }
+        let type_ = GoType::Named(self.record_name(target)?);
+        Ok(GoExpression::Composite { type_, fields: values })
+    }
+
     fn updates(
         &mut self,
         target: GoExpression,
@@ -2390,6 +2725,9 @@ where
     fn function_value(&mut self, id: FunctionId) -> GoResult<GoExpression> {
         let function = self.program.function(id);
         let name = self.function_names[id.0 as usize].clone();
+        if self.lazy_constants.contains(&id) {
+            return Ok(call(identifier_expression(&name), vec![]));
+        }
         if function.parameters.len() <= 1 {
             return Ok(identifier_expression(&name));
         }
@@ -2557,7 +2895,7 @@ where
             return self.out_of_convention(called, monotype);
         }
         if let Foreign::Call { function, boundary, .. } = foreign {
-            let values = self.boundary_arguments(arguments, boundary, monotype, out)?;
+            let values = self.boundary_arguments(arguments, boundary, monotype, true, out)?;
             let function = self.boundary_function(function, boundary, monotype)?;
             let result = call(function, values);
             if boundary.record_result {
@@ -2608,7 +2946,8 @@ where
     /// infinity or NaN.
     fn division_by_zero(&mut self, numerator: f64, negative_zero: bool) -> GoExpression {
         self.imports.insert("math".into());
-        let math = |name: &str| GoExpression::Qualified { package: "math".into(), name: name.into() };
+        let math =
+            |name: &str| GoExpression::Qualified { package: "math".into(), name: name.into() };
         if numerator == 0.0 || numerator.is_nan() {
             return call(math("NaN"), vec![]);
         }
@@ -2655,6 +2994,15 @@ where
             let left = GoExpression::Conversion { type_: GoType::Float64, value: Box::new(left) };
             return binary("/", left, right);
         }
+        // Go folds untyped constants exactly; JavaScript rounds every step.
+        let left = match operator {
+            Operator::NumberAdd | Operator::NumberSubtract | Operator::NumberMultiply
+                if is_untyped_constant(&left) && is_untyped_constant(&right) =>
+            {
+                GoExpression::Conversion { type_: GoType::Float64, value: Box::new(left) }
+            }
+            _ => left,
+        };
         if let Operator::NumberMultiply = operator
             && !(is_untyped_constant(&left) && is_untyped_constant(&right))
         {
@@ -3179,7 +3527,9 @@ fn float_constant(expression: &GoExpression) -> Option<f64> {
     match expression {
         GoExpression::Integer(value) => Some(*value as f64),
         GoExpression::Float(value) => value.parse().ok(),
-        GoExpression::Unary { operator: "-", operand } => float_constant(operand).map(|value| -value),
+        GoExpression::Unary { operator: "-", operand } => {
+            float_constant(operand).map(|value| -value)
+        }
         _ => None,
     }
 }

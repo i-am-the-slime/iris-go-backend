@@ -2,6 +2,7 @@ use super::{
     DataKind, Emitter, binary, call, field, identifier, identifier_expression, is_simple,
     is_untyped_constant, panic_statement, unique, unit_value,
 };
+use crate::erasure::Erasure;
 use crate::error::{GoError, GoResult};
 use crate::foreign::{GoFunction, GoPackage};
 use crate::monotype::{DataType, Monotype, MonotypeId, RecordField};
@@ -57,6 +58,22 @@ where
                 let type_ = GoType::Named(self.record_name(to)?);
                 Ok(GoExpression::Composite { type_, fields: values })
             }
+            // A function at its erased polymorphic type becomes a specialized
+            // rank-N value: each instantiation is the function used at it.
+            (Monotype::Function(..), Monotype::Record(fields)) => {
+                let type_ = GoType::Named(self.record_name(to)?);
+                if fields.is_empty() {
+                    return Ok(GoExpression::Composite { type_, fields: vec![] });
+                }
+                let function = self.shared(value, out);
+                let mut values = Vec::with_capacity(fields.len());
+                for record_field in fields.iter() {
+                    let instance =
+                        self.coerce(function.clone(), from, record_field.monotype, out)?;
+                    values.push((Some(identifier(&record_field.label)), instance));
+                }
+                Ok(GoExpression::Composite { type_, fields: values })
+            }
             (Monotype::Array(_), Monotype::Opaque) => {
                 let foreign_array = self.monotypes.intern(Monotype::Array(to));
                 self.coerce(value, from, foreign_array, out)
@@ -67,7 +84,7 @@ where
                 let value = GoExpression::TypeAssertion { value: Box::new(value), type_ };
                 self.coerce(value, foreign_array, to, out)
             }
-            (_, Monotype::Erased | Monotype::Opaque) => {
+            (_, Monotype::Erased(_) | Monotype::Opaque) => {
                 let canonical = self.canonical(from);
                 let value = self.coerce(value, from, canonical, out)?;
                 if is_untyped_constant(&value) {
@@ -76,7 +93,7 @@ where
                 }
                 Ok(value)
             }
-            (Monotype::Erased | Monotype::Opaque, _) => {
+            (Monotype::Erased(_) | Monotype::Opaque, _) => {
                 let canonical = self.canonical(to);
                 let type_ = self.go_type(canonical)?;
                 let value = GoExpression::TypeAssertion { value: Box::new(value), type_ };
@@ -161,7 +178,7 @@ where
     }
 
     fn canonical(&mut self, monotype: MonotypeId) -> MonotypeId {
-        let erased = self.monotypes.intern(Monotype::Erased);
+        let erased = self.monotypes.intern(Monotype::Erased(Erasure::Boxing));
         let canonical = match self.monotypes.get(monotype).clone() {
             Monotype::Function(..) => Monotype::Function(erased, erased),
             Monotype::Effect(_) => Monotype::Effect(erased),
@@ -190,13 +207,13 @@ where
             | Monotype::Regex
             | Monotype::Mutex
             | Monotype::BigInt
-            | Monotype::Erased => return monotype,
+            | Monotype::Erased(_) => return monotype,
         };
         self.monotypes.intern(canonical)
     }
 
     fn erase_arguments(&self, data: &DataType) -> DataType {
-        let erased = self.context.types.erased();
+        let erased = self.context.types.erased(Erasure::Boxing);
         let arguments = data.arguments.iter().map(|_| erased).collect();
         DataType { file_id: data.file_id, item: data.item, arguments }
     }
@@ -372,6 +389,24 @@ where
             })));
             return Ok(());
         }
+        // A typed value converted to an erased layout and back is the original.
+        let from_remembers = self.remember_origin(from)?;
+        let to_remembers = self.remember_origin(to)?;
+        if from_remembers && !to_remembers {
+            let type_ = GoType::Pointer(Box::new(GoType::Named(to_layout.name.clone())));
+            let origin = field(value.clone(), "Origin");
+            body.push(GoStatement::IfAssert {
+                name: "original".into(),
+                value: origin,
+                type_,
+                then: vec![GoStatement::Return(Some(identifier_expression("original")))],
+            });
+        }
+        let origin = match (from_remembers, to_remembers) {
+            (false, true) => Some(value.clone()),
+            (true, true) => Some(field(value.clone(), "Origin")),
+            _ => None,
+        };
         let mut cases = vec![];
         for (constructor, (from_constructor, to_constructor)) in
             from_layout.constructors.iter().zip(to_layout.constructors.iter()).enumerate()
@@ -389,7 +424,12 @@ where
                     &mut statements,
                 )?);
             }
-            let constructed = self.construct(to, constructor, values)?;
+            let mut constructed = self.construct(to, constructor, values)?;
+            if let (Some(origin), GoExpression::Address(composite)) = (&origin, &mut constructed)
+                && let GoExpression::Composite { fields, .. } = composite.as_mut()
+            {
+                fields.push((Some("Origin".into()), origin.clone()));
+            }
             statements.push(GoStatement::Return(Some(constructed)));
             cases.push(GoCase {
                 values: vec![identifier_expression(&from_constructor.tag)],

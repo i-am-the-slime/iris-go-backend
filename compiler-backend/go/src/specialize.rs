@@ -20,8 +20,9 @@ use smol_str::{SmolStr, format_smolstr};
 use crate::blocker::{Blocker, Blockers};
 use crate::context::{Context, ModuleData};
 use crate::dictionary::{Dictionary, InstanceDictionary, Reflected};
+use crate::erasure::Erasure;
 use crate::error::{GoError, GoResult, UnsupportedState};
-use crate::foreign::{self, Foreign, ForeignPackages};
+use crate::foreign::{self, Boundary, Foreign, ForeignPackages};
 use crate::mono::{
     Alternative, Binding, Expression, ExpressionKind, Function, FunctionId, Guard, Guarded,
     GuardedBranch, Literal, Local, LocalId, Pattern, PatternKind, RecordUpdate,
@@ -101,6 +102,8 @@ struct Scope {
     polymorphic_locals: FxHashMap<lowering::LetBindingNameGroupId, PolymorphicLocal>,
     local_aliases: FxHashMap<lowering::LetBindingNameGroupId, tree::ExpressionId>,
     scheme_locals: FxHashMap<LocalSource, TypeId>,
+    /// The expression being specialized at one instantiation of its rank-N type.
+    rank_n_body: Option<tree::ExpressionId>,
     definition: String,
 }
 
@@ -165,6 +168,7 @@ pub struct Specializer<'q, Q> {
     blockers: Vec<RecordedBlocker>,
     blocker_positions: FxHashMap<(String, UnsupportedState), usize>,
     discovered: Vec<(SchemeKey, SchemeInstantiation)>,
+    callback_arities: FxHashMap<(FileId, TermItemId), &'static [usize]>,
 }
 
 struct RecordedBlocker {
@@ -199,6 +203,7 @@ where
             blockers: vec![],
             blocker_positions: FxHashMap::default(),
             discovered: vec![],
+            callback_arities: FxHashMap::default(),
         }
     }
 
@@ -220,7 +225,7 @@ where
                 Ok(function) => function,
                 Err(error) => {
                     self.record(error)?;
-                    let erased = self.monotypes.intern(Monotype::Erased);
+                    let erased = self.monotypes.intern(Monotype::Erased(Erasure::FailedDefinition));
                     let body = Expression::new(ExpressionKind::Fail(name.clone()), erased);
                     Function { name, parameters: vec![], result: erased, body }
                 }
@@ -231,10 +236,19 @@ where
     }
 
     pub fn grown_schemes(&self) -> Option<SchemeInstantiations> {
-        if self.discovered.is_empty() {
+        if self.discovered.is_empty()
+            && self.monotypes.new_rank_n_keys.is_empty()
+            && self.monotypes.new_erased_owners.is_empty()
+        {
             return None;
         }
         let mut schemes = self.monotypes.schemes.clone();
+        for owner in &self.monotypes.new_erased_owners {
+            schemes.erase_owner(owner.clone());
+        }
+        for (key, owner) in &self.monotypes.new_rank_n_keys {
+            schemes.add_rank_n(key.clone(), owner.clone());
+        }
         for (key, instantiation) in &self.discovered {
             schemes.insert(key.clone(), instantiation.clone());
         }
@@ -392,7 +406,7 @@ where
                     if requested != *ancestor_type
                         && self.context.types.contains(requested, *ancestor_type)
                     {
-                        types[position] = self.context.types.erased();
+                        types[position] = self.context.types.erased(Erasure::PolymorphicRecursion);
                         changed = true;
                     }
                 }
@@ -437,6 +451,7 @@ where
                     polymorphic_locals: FxHashMap::default(),
                     local_aliases: FxHashMap::default(),
                     scheme_locals: FxHashMap::default(),
+                    rank_n_body: None,
                     definition,
                 };
                 (scope, value)
@@ -480,6 +495,7 @@ where
                     polymorphic_locals: FxHashMap::default(),
                     local_aliases: FxHashMap::default(),
                     scheme_locals: FxHashMap::default(),
+                    rank_n_body: None,
                     definition,
                 };
                 (scope, value)
@@ -545,7 +561,18 @@ where
     }
 
     fn monotype(&mut self, scope: &Scope, type_id: TypeId) -> GoResult<MonotypeId> {
-        let closed = self.context.types.substitute(type_id, &scope.substitution);
+        let mut closed = self.context.types.substitute(type_id, &scope.substitution);
+        // Inside one instantiation of a rank-N expression its quantifiers are
+        // already substituted; the expression has the instantiated type.
+        while let Type::Forall(binder, inner) =
+            self.context.types.lookup(self.context.types.strip_annotations(closed)).clone()
+        {
+            let binder = self.context.queries.lookup_forall_binder(binder);
+            if !scope.substitution.contains_key(&binder.name) {
+                break;
+            }
+            closed = inner;
+        }
         self.closed_monotype(scope, closed)
     }
 
@@ -880,6 +907,115 @@ where
         scope: &mut Scope,
         id: tree::ExpressionId,
     ) -> GoResult<Expression> {
+        if let Some(constructed) = self.rank_n_construction(scope, id)? {
+            return Ok(constructed);
+        }
+        self.translate_expression_at(scope, id)
+    }
+
+    /// An expression checked against an unconstrained `forall` (a CPS parser
+    /// passed to its constructor, say) becomes one specialization per
+    /// instantiation of the quantified variables, as a record of them.
+    fn rank_n_construction(
+        &mut self,
+        scope: &mut Scope,
+        id: tree::ExpressionId,
+    ) -> GoResult<Option<Expression>> {
+        if scope.rank_n_body == Some(id) {
+            return Ok(None);
+        }
+        let type_id = scope.module.checked.tree[id].type_id;
+        let closed = self.context.types.substitute(type_id, &scope.substitution);
+        let closed = self.instantiate_inner_quantifiers(scope, id, closed);
+        if !matches!(
+            self.context.types.lookup(self.context.types.strip_annotations(closed)),
+            Type::Forall(..)
+        ) {
+            return Ok(None);
+        }
+        let Some(scheme) = self.monotypes.scheme_for(&mut self.context, closed)? else {
+            return Ok(None);
+        };
+        // Checking against a `forall` binds scoped skolems; a polymorphic
+        // reference's own quantifiers are instantiated where it is used.
+        if !scheme.constraints.is_empty()
+            || scheme.names.iter().any(|name| !name.scoped || scope.substitution.contains_key(name))
+        {
+            return Ok(None);
+        }
+        let monotype = self.closed_monotype(scope, closed)?;
+        let instantiations = self.monotypes.schemes.get(&scheme.key).to_vec();
+        let mut fields = Vec::with_capacity(instantiations.len());
+        let enclosing = scope.rank_n_body.replace(id);
+        for instantiation in instantiations {
+            let substitution = scope.substitution.clone();
+            scope
+                .substitution
+                .extend(scheme.names.iter().copied().zip(instantiation.types.iter().copied()));
+            let value = self.translate_expression_at(scope, id);
+            scope.substitution = substitution;
+            match value {
+                Ok(value) => fields.push((instantiation.label, value)),
+                Err(error) => {
+                    scope.rank_n_body = enclosing;
+                    return Err(error);
+                }
+            }
+        }
+        scope.rank_n_body = enclosing;
+        fields.sort_by(|left, right| left.0.cmp(&right.0));
+        Ok(Some(Expression::new(ExpressionKind::Record(fields), monotype)))
+    }
+
+    /// A polymorphic reference checked against a `forall` has the type
+    /// `forall sk. <its own forall a. ...>`; its own quantifiers are
+    /// instantiated in terms of the skolems where it is used, as the tree
+    /// records, which leaves the rank-N type it is checked against.
+    fn instantiate_inner_quantifiers(
+        &mut self,
+        scope: &Scope,
+        id: tree::ExpressionId,
+        closed: TypeId,
+    ) -> TypeId {
+        let stripped = self.context.types.strip_annotations(closed);
+        let Type::Forall(binder, inner) = self.context.types.lookup(stripped).clone() else {
+            return closed;
+        };
+        if !self.context.queries.lookup_forall_binder(binder).name.scoped {
+            return closed;
+        }
+        let rest = self.instantiate_inner_quantifiers(scope, id, inner);
+        let (names, body) = self.context.types.peel_quantifiers(rest);
+        if names.iter().all(|name| name.scoped) || names.is_empty() {
+            return self.context.queries.intern_type(Type::Forall(binder, rest));
+        }
+        let tree = &scope.module.checked.tree;
+        let mut instantiations = Substitution::default();
+        let mut current = id;
+        loop {
+            for instantiation in tree.lookup_instantiations(current) {
+                let argument =
+                    self.context.types.substitute(instantiation.argument, &scope.substitution);
+                instantiations.insert(instantiation.name, argument);
+            }
+            match tree[current].kind {
+                tree::ExpressionKind::EvidenceApplication { function, .. } => current = function,
+                _ => break,
+            }
+        }
+        if !names.iter().all(|name| instantiations.contains_key(name)) {
+            return closed;
+        }
+        let (_, body) = self.context.types.peel_constraints(body);
+        let body = self.context.types.substitute(body, &instantiations);
+        self.context.queries.intern_type(Type::Forall(binder, body))
+    }
+
+    fn translate_expression_at(
+        &mut self,
+        scope: &mut Scope,
+        id: tree::ExpressionId,
+    ) -> GoResult<Expression> {
         let module = Arc::clone(&scope.module);
         let node = &module.checked.tree[id];
         let kind = match &node.kind {
@@ -1135,7 +1271,7 @@ where
             }
             converted.push(converted_argument);
         }
-        if self.monotypes.get(function.monotype) == &Monotype::Erased {
+        if let Monotype::Erased(_) = self.monotypes.get(function.monotype) {
             let mut expected = monotype;
             for argument in converted.iter().rev() {
                 expected = self.monotypes.function(argument.monotype, expected);
@@ -1163,16 +1299,35 @@ where
 
     fn coerce(&mut self, expression: Expression, monotype: MonotypeId) -> Expression {
         if expression.monotype == monotype
-            || !(self.mentions_erased(expression.monotype) || self.mentions_erased(monotype))
+            || !(self.mentions_erased(expression.monotype)
+                || self.mentions_erased(monotype)
+                || self.mentions_recursive(expression.monotype)
+                || self.mentions_recursive(monotype))
         {
             return expression;
         }
         Expression::new(ExpressionKind::Coerce(Box::new(expression)), monotype)
     }
 
+    /// Whether a type contains a recursive newtype, whose named Go type differs
+    /// from its unfolded representation inside function types.
+    fn mentions_recursive(&self, monotype: MonotypeId) -> bool {
+        match self.monotypes.get(monotype) {
+            Monotype::Recursive(_) => true,
+            Monotype::Array(inner)
+            | Monotype::Effect(inner)
+            | Monotype::Lazy(inner)
+            | Monotype::Nullable(inner) => self.mentions_recursive(*inner),
+            Monotype::Function(argument, result) => {
+                self.mentions_recursive(*argument) || self.mentions_recursive(*result)
+            }
+            _ => false,
+        }
+    }
+
     fn mentions_erased(&self, monotype: MonotypeId) -> bool {
         match self.monotypes.get(monotype) {
-            Monotype::Erased => true,
+            Monotype::Erased(_) => true,
             Monotype::Int
             | Monotype::Number
             | Monotype::Boolean
@@ -1198,8 +1353,7 @@ where
                 fields.iter().any(|field| self.mentions_erased(field.monotype))
             }
             Monotype::Data(data) | Monotype::Recursive(data) => {
-                let erased = self.context.types.erased();
-                data.arguments.iter().any(|&argument| self.context.types.contains(argument, erased))
+                data.arguments.iter().any(|&argument| self.context.types.contains_erased(argument))
             }
         }
     }
@@ -1284,7 +1438,7 @@ where
         let Some(&closed) = scope.scheme_locals.get(&source) else {
             return Ok(local);
         };
-        let Some(scheme) = constrained_scheme(&mut self.context, closed)? else {
+        let Some(scheme) = self.monotypes.scheme_for(&mut self.context, closed)? else {
             return Ok(local);
         };
         let Some(types) = scheme
@@ -1576,7 +1730,7 @@ where
                 if requested != ancestor_type
                     && self.context.types.contains(requested, ancestor_type)
                 {
-                    types[position] = self.context.types.erased();
+                    types[position] = self.context.types.erased(Erasure::PolymorphicRecursion);
                 }
             }
             ancestor = specialization.requester;
@@ -1745,12 +1899,13 @@ where
     }
 
     fn instantiated_type(
-        &self,
+        &mut self,
         scope: &Scope,
         declared: TypeId,
         instantiations: &Substitution,
     ) -> GoResult<TypeId> {
-        let mut current = declared;
+        // A synonym such as `~>` may hide the quantifiers being instantiated.
+        let mut current = crate::monotype::expand_synonyms(&mut self.context, declared)?;
         let mut names = vec![];
         loop {
             let (bound, inner) = self.context.types.peel_quantifiers(current);
@@ -1794,6 +1949,7 @@ where
         match () {
             () if is_foreign => {
                 if let Some(foreign) = foreign::foreign_import(&module.name, &name) {
+                    let foreign = self.with_callback_arities(file_id, term, foreign)?;
                     return Ok(self.foreign(foreign, monotype));
                 }
                 if self.foreign_packages.provides(&module.name) {
@@ -1823,6 +1979,7 @@ where
                 let instance_names = self.dictionary_names(&dictionaries)?;
                 let instances: Vec<&str> = instance_names.iter().map(SmolStr::as_str).collect();
                 if let Some(foreign) = foreign::intrinsic(&module.name, &name, &instances) {
+                    let foreign = self.with_callback_arities(file_id, term, foreign)?;
                     return Ok(self.foreign(foreign, monotype));
                 }
                 let declaration =
@@ -1956,6 +2113,49 @@ where
             }
         }
         Ok(types)
+    }
+
+    /// Records how many arrows each parameter of a generic helper declares; see
+    /// `Boundary::callback_arities`. Only pure helpers (`Call`) take
+    /// uniformly represented callbacks.
+    fn with_callback_arities(
+        &mut self,
+        file_id: FileId,
+        term: TermItemId,
+        foreign: Foreign,
+    ) -> GoResult<Foreign> {
+        let Foreign::Call { function, arity, boundary } = foreign else { return Ok(foreign) };
+        if let Some(&arities) = self.callback_arities.get(&(file_id, term)) {
+            return Ok(Foreign::Call {
+                function,
+                arity,
+                boundary: Boundary { callback_arities: arities, ..boundary },
+            });
+        }
+        let module = self.context.module(file_id)?;
+        let Some(signature) = module.checked.lookup_term_item_type(term) else {
+            return Ok(foreign);
+        };
+        let signature = crate::monotype::expand_synonyms(&mut self.context, signature)?;
+        let (_, mut current) = self.context.types.peel_quantifiers(signature);
+        let mut arities = vec![];
+        while let Some((parameter, result)) = self.context.types.function_parts(current) {
+            let (_, mut parameter) = self.context.types.peel_quantifiers(parameter);
+            let mut arrows = 0;
+            while let Some((_, result)) = self.context.types.function_parts(parameter) {
+                arrows += 1;
+                parameter = result;
+            }
+            arities.push(arrows);
+            current = result;
+        }
+        let arities: &'static [usize] = Box::leak(arities.into_boxed_slice());
+        self.callback_arities.insert((file_id, term), arities);
+        Ok(Foreign::Call {
+            function,
+            arity,
+            boundary: Boundary { callback_arities: arities, ..boundary },
+        })
     }
 
     fn project_foreign(&self, file_id: FileId, term: TermItemId, monotype: MonotypeId) -> Foreign {
@@ -2125,7 +2325,16 @@ where
                         return Err(self.unsupported(scope, UnsupportedState::BinderError));
                     };
                     let mut pattern = self.pattern(scope, *argument)?;
-                    if !matches!(self.monotypes.get(monotype), Monotype::Recursive(_)) {
+                    if let Monotype::Recursive(data) = self.monotypes.get(monotype).clone() {
+                        // The wrapped value has the unfolded representation, as the
+                        // declared type of a function like `step (ListT m) = m` says.
+                        let unfolded = match self.monotypes.unfold(&mut self.context, &data)? {
+                            Ok(unfolded) => unfolded,
+                            Err(state) => return Err(self.unsupported(scope, state)),
+                        };
+                        self.adopt_representation(scope, *argument, &mut pattern, unfolded);
+                        pattern.monotype = unfolded;
+                    } else {
                         if pattern.monotype != monotype && self.mentions_erased(monotype) {
                             self.adopt_representation(scope, *argument, &mut pattern, monotype);
                         }

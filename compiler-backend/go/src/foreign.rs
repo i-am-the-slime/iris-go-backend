@@ -105,6 +105,11 @@ pub struct Boundary {
     pub unit_values: bool,
     pub record_arguments: &'static [usize],
     pub maybe_destructor: Option<MaybeDestructor>,
+    /// For each parameter, the arrows its declared PureScript type spells out
+    /// (zero for non-functions). Filled in from the declaration when the
+    /// foreign is referenced; generic helpers see an effect after exactly that
+    /// many applications as a value, where direct style would perform it.
+    pub callback_arities: &'static [usize],
     /// A `Maybe b -> Boolean` argument rebuilt as a tag test on the result's Maybe.
     pub is_just: Option<usize>,
 }
@@ -129,6 +134,7 @@ const PLAIN: Boundary = Boundary {
     record_arguments: &[],
     maybe_destructor: None,
     is_just: None,
+    callback_arities: &[],
 };
 
 const fn integers(arguments: &'static [usize], result: bool) -> Boundary {
@@ -900,9 +906,6 @@ const INTRINSICS: &[(&str, &str, &[&str], Foreign)] = &[
         &["traversableArray", "applicativeEffect"],
         perform("SequenceArray", 1),
     ),
-    // `toEffect :: ST Global ~> Effect` hides its quantifier in the synonym, so
-    // a specialization of its `unsafeCoerce` body would not know the element type.
-    ("Control.Monad.ST.Global", "toEffect", &[], Foreign::Identity),
     ("Control.Parallel.Class", "parallel", &["parallelAff"], Foreign::Identity),
     ("Control.Parallel.Class", "sequential", &["parallelAff"], Foreign::Identity),
     ("Data.Ord", "lessThan", &["ordInt"], compare(Comparison::LessThan)),

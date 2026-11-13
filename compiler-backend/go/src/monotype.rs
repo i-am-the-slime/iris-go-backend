@@ -9,8 +9,9 @@ use rustc_hash::FxHashMap;
 use smol_str::SmolStr;
 
 use crate::context::Context;
+use crate::erasure::Erasure;
 use crate::error::UnsupportedState;
-use crate::scheme::{ConstrainedScheme, SchemeInstantiations, constrained_scheme};
+use crate::scheme::{ConstrainedScheme, SchemeInstantiations, constrained_scheme, rank_n_scheme};
 use crate::types::Substitution;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
@@ -40,7 +41,7 @@ pub enum Monotype {
     Lazy(MonotypeId),
     Data(DataType),
     Recursive(DataType),
-    Erased,
+    Erased(Erasure),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -77,10 +78,18 @@ pub struct Monotypes {
     regular: FxHashMap<(FileId, TypeItemId), bool>,
     expanding: Vec<TypeId>,
     pub schemes: SchemeInstantiations,
+    /// Rank-N field types met in this pass that the schemes do not list yet.
+    pub new_rank_n_keys: Vec<(crate::scheme::SchemeKey, String)>,
+    /// Owners of rank-N fields met with erased types in this pass.
+    pub new_erased_owners: Vec<String>,
 }
 
 impl Monotypes {
     pub fn intern(&mut self, monotype: Monotype) -> MonotypeId {
+        let monotype = match monotype {
+            Monotype::Erased(erasure) => Monotype::Erased(erasure.tracked()),
+            monotype => monotype,
+        };
         if let Some(&id) = self.lookup.get(&monotype) {
             return id;
         }
@@ -88,6 +97,13 @@ impl Monotypes {
         self.interned.push(monotype.clone());
         self.lookup.insert(monotype, id);
         id
+    }
+
+    /// Lists every interned monotype, for `IRIS_GO_DUMP`.
+    pub fn dump(&self) {
+        for (index, monotype) in self.interned.iter().enumerate() {
+            eprintln!("monotype {index}: {monotype:?}");
+        }
     }
 
     pub fn get(&self, id: MonotypeId) -> &Monotype {
@@ -172,11 +188,22 @@ impl Monotypes {
                 };
                 Monotype::Function(argument, result)
             }
-            Type::Forall(_, inner) => match constrained_scheme(context, type_id)? {
+            Type::Forall(..) => match self.scheme_for(context, type_id)? {
                 Some(scheme) => return self.convert_scheme(context, &scheme, expansions),
-                None => return self.convert(context, inner, expansions),
+                None => {
+                    // Without constraints there is no instantiation to specialize
+                    // on yet: the quantified variables are erased.
+                    let (names, inner) = context.types.peel_quantifiers(type_id);
+                    let erased = context.types.erased(Erasure::RankN);
+                    let substitution: crate::types::Substitution =
+                        names.into_iter().map(|name| (name, erased)).collect();
+                    let inner = context.types.substitute(inner, &substitution);
+                    return self.convert(context, inner, expansions);
+                }
             },
-            Type::Rigid(..) => Monotype::Erased,
+            Type::Rigid(..) => {
+                Monotype::Erased(context.types.erasure(type_id).unwrap_or(Erasure::TypeVariable))
+            }
             Type::Unification(_) => Monotype::Unit,
             Type::Application(..) | Type::Constructor(..) | Type::Synonym(..) => {
                 return self.convert_application(context, type_id, expansions);
@@ -220,7 +247,10 @@ impl Monotypes {
                     })),
                 };
             }
-            Type::Rigid(..) | Type::Unification(_) => return Ok(Ok(self.intern(Monotype::Erased))),
+            Type::Rigid(..) | Type::Unification(_) => {
+                let erasure = context.types.erasure(head).unwrap_or(Erasure::VariableApplication);
+                return Ok(Ok(self.intern(Monotype::Erased(erasure))));
+            }
             Type::Function(..) if arguments.is_empty() => {
                 return self.convert(context, head, expansions);
             }
@@ -264,7 +294,7 @@ impl Monotypes {
             }
             ("Data.Unit", "Unit") => Monotype::Unit,
             ("Data.Functor.Variant", "VariantF" | "VariantFRep")
-                if arguments.iter().any(|&argument| argument != context.types.erased()) =>
+                if arguments.iter().any(|&argument| context.types.erasure(argument).is_none()) =>
             {
                 let Some(representation) =
                     module.indexed.items.iter_types().find_map(|(item, indexed)| {
@@ -273,7 +303,7 @@ impl Monotypes {
                 else {
                     return Ok(Err(open_type(context, type_id)?));
                 };
-                let erased = context.types.erased();
+                let erased = context.types.erased(Erasure::VariantRow);
                 let representation =
                     context.queries.intern_type(Type::Constructor(file_id, representation));
                 let representation =
@@ -282,7 +312,7 @@ impl Monotypes {
                     context.queries.intern_type(Type::Application(representation, erased));
                 return self.convert(context, representation, expansions);
             }
-            ("Data.Exists", "Exists") => Monotype::Erased,
+            ("Data.Exists", "Exists") => Monotype::Erased(Erasure::Existential),
             ("Data.Function.Uncurried", name) if name.starts_with("Fn") => {
                 let Some((&result, parameters)) = arguments.split_last() else {
                     return Ok(Err(UnsupportedState::UnsaturatedType { name: name.to_string() }));
@@ -383,20 +413,22 @@ impl Monotypes {
                         return Ok(Ok(self.intern(Monotype::Recursive(data))));
                     }
                     if self.expanding.contains(&type_id) {
-                        return Ok(Ok(self.intern(Monotype::Erased)));
+                        return Ok(Ok(self.intern(Monotype::Erased(Erasure::NewtypeCycle))));
                     }
                     let Some(underlying) =
                         newtype_underlying(context, file_id, constructor, type_id)?
                     else {
                         return Ok(Err(open_type(context, type_id)?));
                     };
+                    let owner = format!("{}.{name}", module.name);
+                    self.note_rank_n_field(context, underlying, &owner)?;
                     self.expanding.push(type_id);
                     let converted = self.convert(context, underlying, expansions + 1);
                     self.expanding.pop();
                     return converted;
                 }
                 IndexedTypeItemKind::Data { constructors, .. } if constructors.is_empty() => {
-                    Monotype::Erased
+                    Monotype::Erased(Erasure::EmptyData)
                 }
                 IndexedTypeItemKind::Data { .. } => {
                     let regular = self.is_regular(context, file_id, item)?;
@@ -410,7 +442,7 @@ impl Monotypes {
                                 &mut vec![],
                             )?);
                         } else {
-                            canonical.push(context.types.erased());
+                            canonical.push(context.types.erased(Erasure::NonRegular));
                         }
                     }
                     Monotype::Data(DataType { file_id, item, arguments: Arc::from(canonical) })
@@ -446,6 +478,88 @@ impl Monotypes {
             curried = self.function(parameter, curried);
         }
         Ok(Ok(curried))
+    }
+
+    /// The scheme a quantified type is specialized by: its constraints, or for
+    /// an unconstrained `forall` its body, when some newtype or constructor
+    /// field has that type and its representation depends on the quantified
+    /// variables (see `note_rank_n_field`). Other foralls are erased.
+    pub fn scheme_for<Q>(
+        &mut self,
+        context: &mut Context<'_, Q>,
+        type_id: TypeId,
+    ) -> QueryResult<Option<ConstrainedScheme>>
+    where
+        Q: checking::ExternalQueries,
+    {
+        if let Some(scheme) = constrained_scheme(context, type_id)? {
+            return Ok(Some(scheme));
+        }
+        let Some(scheme) = rank_n_scheme(context, type_id)? else { return Ok(None) };
+        if !self.schemes.is_rank_n(&scheme.key) {
+            return Ok(None);
+        }
+        Ok(Some(scheme))
+    }
+
+    /// A newtype or constructor field whose type is a rank-N `forall` (a CPS
+    /// parser's answer type) is specialized per instantiation, and so is every
+    /// other occurrence of that same type. A field met for the first time asks
+    /// for another specialization pass in which all occurrences agree.
+    fn note_rank_n_field<Q>(
+        &mut self,
+        context: &mut Context<'_, Q>,
+        field: TypeId,
+        owner: &str,
+    ) -> QueryResult<()>
+    where
+        Q: checking::ExternalQueries,
+    {
+        if constrained_scheme(context, field)?.is_some() {
+            return Ok(());
+        }
+        let Some(scheme) = rank_n_scheme(context, field)? else { return Ok(()) };
+        if self.schemes.is_erased_owner(owner) || self.new_erased_owners.iter().any(|o| o == owner)
+        {
+            return Ok(());
+        }
+        if context.types.contains_erased(scheme.key.body()) {
+            self.new_erased_owners.push(owner.to_string());
+            return Ok(());
+        }
+        if self.schemes.is_rank_n(&scheme.key)
+            || self.new_rank_n_keys.iter().any(|(key, _)| *key == scheme.key)
+        {
+            return Ok(());
+        }
+        let probes = [context.types.erased(Erasure::RankN), self.probe_type(context)];
+        let mut converted = Vec::with_capacity(probes.len());
+        for probe in probes {
+            let types: Vec<TypeId> = scheme.names.iter().map(|_| probe).collect();
+            let instantiated = scheme.instantiate(context, &types);
+            match self.convert(context, instantiated, 1)? {
+                Ok(monotype) => converted.push(monotype),
+                Err(_) => return Ok(()),
+            }
+        }
+        if converted[0] != converted[1] {
+            if std::env::var_os("IRIS_GO_DEBUG_RANK_N").is_some() {
+                let mut suffix = String::new();
+                let _ = context.type_suffix(scheme.body, &mut suffix);
+                eprintln!("rank-N field of {owner}: forall {} . {suffix}", scheme.names.len());
+            }
+            self.new_rank_n_keys.push((scheme.key, owner.to_string()));
+        }
+        Ok(())
+    }
+
+    /// A closed type no program value can be confused with, to test whether a
+    /// representation depends on a variable.
+    fn probe_type<Q>(&mut self, context: &mut Context<'_, Q>) -> TypeId
+    where
+        Q: checking::ExternalQueries,
+    {
+        context.types.erased(Erasure::Runtime)
     }
 
     fn convert_scheme<Q>(
@@ -621,6 +735,9 @@ impl Monotypes {
             let mut fields = Vec::with_capacity(field_types.len());
             for field_type in field_types {
                 let field_type = context.types.substitute(field_type, &substitution);
+                let constructor = module.indexed.items[term].name.clone().unwrap_or_default();
+                let owner = format!("{}.{constructor}", module.name);
+                self.note_rank_n_field(context, field_type, &owner)?;
                 match self.monotype(context, field_type)? {
                     Ok(field) => fields.push(field),
                     Err(error) => return Ok(Err(error)),
@@ -686,8 +803,22 @@ where
                 let id = canonicalise(context, field.id, expansions, expanding, erase)?;
                 fields.push(checking::core::RowField { label: field.label.clone(), id });
             }
+            // A tail such as `RENDER ()` in `METRICS + RENDER + ()` is a synonym
+            // for more fields: expand it and flatten, so that every spelling of a
+            // closed row has one canonical form.
+            let mut tail = row.tail;
+            while let Some(current) = tail {
+                let expanded = canonicalise(context, current, expansions, expanding, erase)?;
+                let Type::Row(inner) = context.types.lookup(expanded).clone() else {
+                    tail = Some(expanded);
+                    break;
+                };
+                let inner = context.queries.lookup_row_type(inner).clone();
+                fields.extend(inner.fields.iter().cloned());
+                tail = inner.tail;
+            }
             fields.sort_by(|left, right| left.label.cmp(&right.label));
-            let row = checking::core::RowType { fields: Arc::from(fields), tail: row.tail };
+            let row = checking::core::RowType { fields: Arc::from(fields), tail };
             let row = context.queries.intern_row_type(row);
             return Ok(context.queries.intern_type(Type::Row(row)));
         }
@@ -696,7 +827,10 @@ where
     let (head, arguments) = context.types.spine(type_id);
     match context.types.lookup(head).clone() {
         Type::Rigid(..) | Type::Unification(_) if erase && arguments.is_empty() => {
-            Ok(context.types.erased())
+            if context.types.erasure(head).is_some() {
+                return Ok(head);
+            }
+            Ok(context.types.erased(Erasure::ArgumentVariable))
         }
         Type::Constructor(file_id, item) => {
             let module = context.module(file_id)?;
@@ -709,7 +843,7 @@ where
                     newtype_underlying(context, file_id, constructor, type_id)?
             {
                 if expanding.contains(&type_id) {
-                    return Ok(context.types.erased());
+                    return Ok(context.types.erased(Erasure::NewtypeCycle));
                 }
                 expanding.push(type_id);
                 let erased = canonicalise(context, underlying, expansions + 1, expanding, erase);
