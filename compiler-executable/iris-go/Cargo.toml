@@ -1,0 +1,11 @@
+[package]
+name = "iris-go"
+version = "0.1.0"
+edition = "2024"
+license.workspace = true
+description = "Compiles a Spago workspace from an entry point to a single Go program."
+
+[dependencies]
+go = { version = "0.1.0", path = "../../compiler-backend/go" }
+iris-build = { version = "0.1.0", path = "../iris-build" }
+tempfile = "3.27.0"

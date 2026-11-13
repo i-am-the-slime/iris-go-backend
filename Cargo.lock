@@ -1240,6 +1240,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "go"
+version = "0.1.0"
+dependencies = [
+ "building-types",
+ "checking",
+ "files",
+ "indexing",
+ "lowering",
+ "rustc-hash",
+ "smol_str",
+ "thiserror",
+]
+
+[[package]]
 name = "half"
 version = "2.7.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1663,6 +1677,7 @@ dependencies = [
  "formatting",
  "iris-build",
  "iris-dump-types",
+ "iris-go",
  "iris-lsp",
  "iris-package",
  "iris-self-update",
@@ -1736,6 +1751,15 @@ dependencies = [
  "iris-build",
  "line-index",
  "serde_json",
+ "tempfile",
+]
+
+[[package]]
+name = "iris-go"
+version = "0.1.0"
+dependencies = [
+ "go",
+ "iris-build",
  "tempfile",
 ]
 

@@ -44,6 +44,7 @@ pub enum EvidenceState {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct EvidenceEntry {
     pub state: EvidenceState,
+    pub constraint: Option<TypeId>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -103,9 +104,19 @@ pub struct Evidences {
 impl Evidences {
     pub fn fresh_variable(&mut self) -> EvidenceVarId {
         let id = EvidenceVarId(self.variables.len() as u32);
-        let entry = EvidenceEntry { state: EvidenceState::Unsolved };
+        let entry = EvidenceEntry { state: EvidenceState::Unsolved, constraint: None };
         self.variables.push(entry);
         id
+    }
+
+    pub fn fresh_wanted(&mut self, constraint: TypeId) -> EvidenceVarId {
+        let id = self.fresh_variable();
+        self[id].constraint = Some(constraint);
+        id
+    }
+
+    pub(crate) fn constraints_mut(&mut self) -> impl Iterator<Item = &mut TypeId> {
+        self.variables.iter_mut().filter_map(|entry| entry.constraint.as_mut())
     }
 
     pub fn fresh_binder(&mut self, constraint: TypeId) -> EvidenceBinderId {

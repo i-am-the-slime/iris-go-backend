@@ -55,7 +55,7 @@ impl Unified {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SubtypeApplication {
-    Type { result: TypeId },
+    Type { result: TypeId, instantiation: crate::tree::TypeInstantiation },
     Evidence { evidence: EvidenceVarId, constraint: TypeId, result: TypeId },
 }
 
@@ -179,7 +179,8 @@ where
             let binder = context.lookup_forall_binder(*binder_id);
             let argument = state.fresh_unification(context.queries, binder.kind);
             let result = SubstituteName::one(state, context, binder.name, argument, *inner)?;
-            applications.push(SubtypeApplication::Type { result });
+            let instantiation = crate::tree::TypeInstantiation { name: binder.name, argument };
+            applications.push(SubtypeApplication::Type { result, instantiation });
             subtype_with_applications_core(state, context, result, t2, applications)
         }
         (Type::Constrained(constraint, result), _) => {

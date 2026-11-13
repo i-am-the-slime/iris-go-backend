@@ -101,13 +101,18 @@ type Stuck = FxHashMap<u32, Vec<ConstraintInScope>>;
 type ConstraintSet = IndexMap<ConstraintKey, ConstraintEvidence, FxBuildHasher>;
 type Skolem = Vec<ConstraintInScope>;
 
-fn fresh_scoped_constraints(
+fn fresh_scoped_constraints<Q>(
     state: &mut CheckState,
+    context: &CheckContext<Q>,
     parent: &ConstraintInScope,
     constraints: Vec<CanonicalConstraintId>,
-) -> Vec<ConstraintInScope> {
+) -> Vec<ConstraintInScope>
+where
+    Q: ExternalQueries,
+{
     let constraints = constraints.into_iter().map(|wanted| {
-        let wanted_evidence = state.checked.evidence.fresh_variable();
+        let constraint = state.canonicals.type_id(context, wanted);
+        let wanted_evidence = state.checked.evidence.fresh_wanted(constraint);
         let given = Rc::clone(&parent.key.given);
         let given_evidence = Rc::clone(&parent.evidence.given);
         let crumbs = Arc::clone(&parent.evidence.crumbs);
@@ -292,7 +297,8 @@ where
             match matching::match_provided(state, context, constraint.key.wanted, provided)? {
                 matching::MatchInstance::Match { unifications, constraints } => {
                     state.checked.evidence.solve(constraint.evidence.wanted, provided_evidence);
-                    let constraints = fresh_scoped_constraints(state, &constraint, constraints);
+                    let constraints =
+                        fresh_scoped_constraints(state, context, &constraint, constraints);
                     work.extend_from_parts(unifications, constraints);
                     continue 'work;
                 }
@@ -337,7 +343,8 @@ where
                     }
                 }
 
-                let constraints = fresh_scoped_constraints(state, &constraint, constraints);
+                let constraints =
+                    fresh_scoped_constraints(state, context, &constraint, constraints);
                 work.extend_from_parts(unifications, constraints);
                 continue 'work;
             }
@@ -353,7 +360,8 @@ where
             for &candidate in chain {
                 match matching::match_declared(state, context, constraint.key.wanted, candidate)? {
                     matching::MatchInstance::Match { unifications, constraints } => {
-                        let constraints = fresh_scoped_constraints(state, &constraint, constraints);
+                        let constraints =
+                            fresh_scoped_constraints(state, context, &constraint, constraints);
                         let subgoals = constraints
                             .iter()
                             .map(|constraint| constraint.evidence.wanted)

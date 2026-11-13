@@ -58,6 +58,35 @@ pub enum Command {
     /// Write the checked type of every expression and binder as a span-keyed oracle for purs-backend-go.
     #[usage(name = "dump-types")]
     DumpTypes(DumpTypesOptions),
+    /// Compile a Spago workspace from an entry point to a single Go program.
+    Go(GoOptions),
+}
+
+#[derive(Debug, Args)]
+#[usage(args_override_self = false)]
+pub struct GoOptions {
+    /// Workspace package to compile.
+    #[usage(short, long, value_name = "NAME")]
+    package: Option<String>,
+
+    /// Qualified entry point, such as Main.main.
+    #[usage(long, value_name = "MODULE.NAME", default = "Main.main")]
+    entry: String,
+
+    /// Directory to write main.go to.
+    #[usage(value_name = "DIR")]
+    destination: PathBuf,
+}
+
+impl GoOptions {
+    pub fn into_config(self) -> iris_go::GoConfig {
+        iris_go::GoConfig {
+            package: self.package,
+            entry: self.entry,
+            destination: self.destination,
+            version: crate::VERSION.to_string(),
+        }
+    }
 }
 
 #[derive(Debug, Args)]

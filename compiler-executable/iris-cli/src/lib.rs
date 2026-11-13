@@ -22,6 +22,13 @@ pub fn run() -> i32 {
                 1
             }
         },
+        cli::Command::Go(options) => match iris_go::run(options.into_config()) {
+            Ok(()) => 0,
+            Err(error) => {
+                eprintln!("{error}");
+                1
+            }
+        },
         cli::Command::New(options) => match iris_package::create(options.into_config()) {
             Ok(package) => {
                 println!(

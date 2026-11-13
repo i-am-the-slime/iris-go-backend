@@ -16,7 +16,7 @@ use rustc_hash::FxHashMap;
 use smol_str::SmolStr;
 
 use crate::TypeId;
-use crate::core::{ForallBinderId, Role, SmolStrId};
+use crate::core::{ForallBinderId, Name, Role, SmolStrId};
 use crate::evidence::{Evidence, EvidenceBinderId, EvidenceVarId, SuperclassId};
 
 pub type ExpressionId = Idx<Expression>;
@@ -35,6 +35,13 @@ pub struct CheckedTree {
     lets: ArenaMap<LetBindingNameGroupId, LocalDeclarationId>,
     sections: FxHashMap<lowering::ExpressionId, BinderId>,
     binder_statements: ArenaMap<BinderId, lowering::DoStatementId>,
+    instantiations: FxHashMap<ExpressionId, Vec<TypeInstantiation>>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct TypeInstantiation {
+    pub name: Name,
+    pub argument: TypeId,
 }
 
 #[derive(Debug, Default, PartialEq, Eq)]
@@ -411,6 +418,24 @@ impl CheckedTree {
         source: ExpressionSource,
     ) {
         self.arena.expressions[expression].source.get_or_insert(source);
+    }
+
+    pub(crate) fn record_instantiations(
+        &mut self,
+        expression: ExpressionId,
+        instantiations: impl IntoIterator<Item = TypeInstantiation>,
+    ) {
+        self.instantiations.entry(expression).or_default().extend(instantiations);
+    }
+
+    pub fn lookup_instantiations(&self, expression: ExpressionId) -> &[TypeInstantiation] {
+        self.instantiations.get(&expression).map_or(&[], Vec::as_slice)
+    }
+
+    pub(crate) fn instantiations_mut(
+        &mut self,
+    ) -> impl Iterator<Item = &mut TypeInstantiation> + '_ {
+        self.instantiations.values_mut().flatten()
     }
 
     pub fn allocate_binder(&mut self, binder: Binder) -> BinderId {

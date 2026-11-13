@@ -171,6 +171,12 @@ where
     }
     state.checked.tree.arena.expressions = expressions;
 
+    let mut tree = mem::take(&mut state.checked.tree);
+    for instantiation in tree.instantiations_mut() {
+        instantiation.argument = zonk(state, context, instantiation.argument)?;
+    }
+    state.checked.tree = tree;
+
     let mut binders = mem::take(&mut state.checked.tree.arena.binders);
     for (_, binder) in binders.iter_mut() {
         binder.type_id = zonk(state, context, binder.type_id)?;
@@ -262,6 +268,12 @@ where
         let constraint = zonk(state, context, constraint)?;
         state.checked.evidence.bind_binder(id, constraint);
     }
+
+    let mut evidence = mem::take(&mut state.checked.evidence);
+    for constraint in evidence.constraints_mut() {
+        *constraint = zonk(state, context, *constraint)?;
+    }
+    state.checked.evidence = evidence;
 
     Ok(())
 }

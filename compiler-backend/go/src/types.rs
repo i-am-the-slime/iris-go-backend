@@ -1,0 +1,287 @@
+use std::sync::Arc;
+
+use checking::TypeId;
+use checking::core::{Name, RowField, RowType, Type};
+use rustc_hash::FxHashMap;
+
+pub type Substitution = FxHashMap<Name, TypeId>;
+
+pub struct TypeOperations<'q, Q> {
+    queries: &'q Q,
+}
+
+impl<'q, Q> TypeOperations<'q, Q>
+where
+    Q: checking::ExternalQueries,
+{
+    pub fn new(queries: &'q Q) -> TypeOperations<'q, Q> {
+        TypeOperations { queries }
+    }
+
+    /// A closed stand-in for a type the program cannot specialize on, such as the
+    /// element type under polymorphic recursion. It becomes Go `any`.
+    pub fn erased(&self) -> TypeId {
+        let name = Name { file: self.queries.prim_id(), unique: u32::MAX, scoped: false };
+        let kind = self.queries.intern_type(Type::Unification(u32::MAX));
+        self.queries.intern_type(Type::Rigid(name, checking::core::Depth(0), kind))
+    }
+
+    pub fn contains(&self, outer: TypeId, inner: TypeId) -> bool {
+        let outer = self.strip_annotations(outer);
+        if outer == self.strip_annotations(inner) {
+            return true;
+        }
+        match self.lookup(outer) {
+            Type::Application(function, argument) | Type::Function(function, argument) => {
+                self.contains(*function, inner) || self.contains(*argument, inner)
+            }
+            Type::Row(row) => {
+                let row = self.queries.lookup_row_type(*row);
+                row.fields.iter().any(|field| self.contains(field.id, inner))
+            }
+            _ => false,
+        }
+    }
+
+    pub fn lookup(&self, type_id: TypeId) -> &'q Type {
+        self.queries.lookup_type(type_id)
+    }
+
+    pub fn substitute(&self, type_id: TypeId, substitution: &Substitution) -> TypeId {
+        if substitution.is_empty() || !self.queries.lookup_type_flags(type_id).has_rigid() {
+            return type_id;
+        }
+        let substituted = match self.lookup(type_id).clone() {
+            Type::Rigid(name, _, _) => return substitution.get(&name).copied().unwrap_or(type_id),
+            Type::Application(function, argument) => Type::Application(
+                self.substitute(function, substitution),
+                self.substitute(argument, substitution),
+            ),
+            Type::KindApplication(function, _) => return self.substitute(function, substitution),
+            Type::Kinded(inner, _) => return self.substitute(inner, substitution),
+            Type::Forall(binder, inner) => {
+                Type::Forall(binder, self.substitute(inner, substitution))
+            }
+            Type::Constrained(constraint, inner) => Type::Constrained(
+                self.substitute(constraint, substitution),
+                self.substitute(inner, substitution),
+            ),
+            Type::ConstraintOrigin(constraint, _) => {
+                return self.substitute(constraint, substitution);
+            }
+            Type::Function(argument, result) => Type::Function(
+                self.substitute(argument, substitution),
+                self.substitute(result, substitution),
+            ),
+            Type::Row(row) => {
+                let row = self.queries.lookup_row_type(row).clone();
+                return self.substitute_row(row, substitution);
+            }
+            Type::Constructor(..)
+            | Type::Synonym(..)
+            | Type::Integer(_)
+            | Type::String(..)
+            | Type::Unification(_)
+            | Type::Free(_)
+            | Type::Unknown(_) => return type_id,
+        };
+        self.queries.intern_type(substituted)
+    }
+
+    fn substitute_row(&self, row: RowType, substitution: &Substitution) -> TypeId {
+        let mut fields: Vec<RowField> = row
+            .fields
+            .iter()
+            .map(|field| RowField {
+                label: field.label.clone(),
+                id: self.substitute(field.id, substitution),
+            })
+            .collect();
+        let mut tail = row.tail.map(|tail| self.substitute(tail, substitution));
+        while let Some(tail_id) = tail {
+            let Type::Row(tail_row) = self.strip(tail_id) else { break };
+            let tail_row = self.queries.lookup_row_type(*tail_row).clone();
+            fields.extend(tail_row.fields.iter().cloned());
+            tail = tail_row.tail;
+        }
+        fields.sort_by(|left, right| left.label.cmp(&right.label));
+        let row = RowType { fields: Arc::from(fields), tail };
+        let row = self.queries.intern_row_type(row);
+        self.queries.intern_type(Type::Row(row))
+    }
+
+    fn strip(&self, mut type_id: TypeId) -> &'q Type {
+        loop {
+            match self.lookup(type_id) {
+                Type::Kinded(inner, _) | Type::ConstraintOrigin(inner, _) => type_id = *inner,
+                Type::KindApplication(function, _) => type_id = *function,
+                other => return other,
+            }
+        }
+    }
+
+    pub fn strip_annotations(&self, mut type_id: TypeId) -> TypeId {
+        loop {
+            match self.lookup(type_id) {
+                Type::Kinded(inner, _) | Type::ConstraintOrigin(inner, _) => type_id = *inner,
+                Type::KindApplication(function, _) => type_id = *function,
+                _ => return type_id,
+            }
+        }
+    }
+
+    pub fn spine(&self, type_id: TypeId) -> (TypeId, Vec<TypeId>) {
+        let mut arguments = vec![];
+        let mut current = self.strip_annotations(type_id);
+        while let Type::Application(function, argument) = self.lookup(current) {
+            arguments.push(*argument);
+            current = self.strip_annotations(*function);
+        }
+        arguments.reverse();
+        (current, arguments)
+    }
+
+    pub fn peel_quantifiers(&self, mut type_id: TypeId) -> (Vec<Name>, TypeId) {
+        let mut names = vec![];
+        loop {
+            match self.lookup(type_id) {
+                Type::Forall(binder, inner) => {
+                    names.push(self.queries.lookup_forall_binder(*binder).name);
+                    type_id = *inner;
+                }
+                Type::Kinded(inner, _) | Type::ConstraintOrigin(inner, _) => type_id = *inner,
+                _ => return (names, type_id),
+            }
+        }
+    }
+
+    pub fn peel_constraints(&self, mut type_id: TypeId) -> (Vec<TypeId>, TypeId) {
+        let mut constraints = vec![];
+        loop {
+            match self.lookup(type_id) {
+                Type::Constrained(constraint, inner) => {
+                    constraints.push(*constraint);
+                    type_id = *inner;
+                }
+                Type::Kinded(inner, _) | Type::ConstraintOrigin(inner, _) => type_id = *inner,
+                _ => return (constraints, type_id),
+            }
+        }
+    }
+
+    pub fn function_parts(&self, type_id: TypeId) -> Option<(TypeId, TypeId)> {
+        match self.strip(type_id) {
+            Type::Function(argument, result) => Some((*argument, *result)),
+            Type::Application(function_argument, result) => {
+                let Type::Application(constructor, argument) = self.strip(*function_argument)
+                else {
+                    return None;
+                };
+                let Type::Constructor(file_id, item) = self.strip(*constructor) else {
+                    return None;
+                };
+                let is_function = *file_id == self.queries.prim_id()
+                    && self.queries.indexed(*file_id).ok().is_some_and(|indexed| {
+                        indexed.items[*item].name.as_deref() == Some("Function")
+                    });
+                is_function.then_some((*argument, *result))
+            }
+            _ => None,
+        }
+    }
+
+    /// Matches `pattern`, whose variables in `variables` are pattern variables, against
+    /// `target`. Type-class resolution already happened in the checker; matching only
+    /// recovers which types the chosen declaration's variables stand for.
+    pub fn match_type(
+        &self,
+        pattern: TypeId,
+        target: TypeId,
+        variables: &[Name],
+        bindings: &mut Substitution,
+    ) -> bool {
+        let pattern = self.strip_annotations(pattern);
+        let target = self.strip_annotations(target);
+        if pattern == target {
+            return true;
+        }
+        match (self.lookup(pattern), self.lookup(target)) {
+            (Type::Rigid(name, _, _), _) if variables.contains(name) => match bindings.get(name) {
+                Some(&bound) => bound == target || self.equivalent(bound, target),
+                None => {
+                    bindings.insert(*name, target);
+                    true
+                }
+            },
+            (Type::Application(pattern_function, pattern_argument), Type::Application(..)) => {
+                let (pattern_function, pattern_argument) = (*pattern_function, *pattern_argument);
+                let Type::Application(target_function, target_argument) = *self.lookup(target)
+                else {
+                    return false;
+                };
+                self.match_type(pattern_function, target_function, variables, bindings)
+                    && self.match_type(pattern_argument, target_argument, variables, bindings)
+            }
+            (Type::Function(pattern_argument, pattern_result), Type::Function(..)) => {
+                let (pattern_argument, pattern_result) = (*pattern_argument, *pattern_result);
+                let Type::Function(target_argument, target_result) = *self.lookup(target) else {
+                    return false;
+                };
+                self.match_type(pattern_argument, target_argument, variables, bindings)
+                    && self.match_type(pattern_result, target_result, variables, bindings)
+            }
+            (Type::Function(..), _) | (_, Type::Function(..)) => {
+                let (Some(pattern_parts), Some(target_parts)) =
+                    (self.function_parts(pattern), self.function_parts(target))
+                else {
+                    return false;
+                };
+                self.match_type(pattern_parts.0, target_parts.0, variables, bindings)
+                    && self.match_type(pattern_parts.1, target_parts.1, variables, bindings)
+            }
+            (Type::Row(pattern_row), Type::Row(target_row)) => {
+                let pattern_row = self.queries.lookup_row_type(*pattern_row).clone();
+                let target_row = self.queries.lookup_row_type(*target_row).clone();
+                self.match_row(pattern_row, target_row, variables, bindings)
+            }
+            (Type::Constructor(..), Type::Constructor(..)) => false,
+            (Type::Forall(_, pattern_inner), Type::Forall(_, target_inner)) => {
+                self.match_type(*pattern_inner, *target_inner, variables, bindings)
+            }
+            _ => self.equivalent(pattern, target),
+        }
+    }
+
+    fn match_row(
+        &self,
+        pattern: RowType,
+        target: RowType,
+        variables: &[Name],
+        bindings: &mut Substitution,
+    ) -> bool {
+        let mut remaining: Vec<RowField> = target.fields.to_vec();
+        for field in pattern.fields.iter() {
+            let Some(position) = remaining.iter().position(|other| other.label == field.label)
+            else {
+                return false;
+            };
+            let other = remaining.remove(position);
+            if !self.match_type(field.id, other.id, variables, bindings) {
+                return false;
+            }
+        }
+        match pattern.tail {
+            Some(tail) => {
+                let rest = RowType { fields: Arc::from(remaining), tail: target.tail };
+                let rest = self.queries.intern_row_type(rest);
+                let rest = self.queries.intern_type(Type::Row(rest));
+                self.match_type(tail, rest, variables, bindings)
+            }
+            None => remaining.is_empty() && target.tail.is_none(),
+        }
+    }
+
+    fn equivalent(&self, left: TypeId, right: TypeId) -> bool {
+        self.strip_annotations(left) == self.strip_annotations(right)
+    }
+}

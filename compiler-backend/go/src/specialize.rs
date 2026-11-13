@@ -1,0 +1,1640 @@
+//! Whole-program specialization from an entry point. Every reference is resolved
+//! against the checker's recorded instantiations and evidence, so each generated
+//! function is closed: no type variables and no dictionaries remain.
+
+use std::collections::VecDeque;
+use std::sync::Arc;
+
+use checking::TypeId;
+use checking::core::Type;
+use checking::evidence::{
+    Evidence, EvidenceBinderId, EvidenceId, EvidenceState, EvidenceVarId, InstanceCandidateOrigin,
+    ReflectableEvidence, ReflectableOrdering, SynthesizedEvidence,
+};
+use checking::tree::{self, DeclarationAbstraction, TermDeclarationKind};
+use files::FileId;
+use indexing::{IndexedTermItemKind, TermItemId};
+use rustc_hash::FxHashMap;
+use smol_str::{SmolStr, format_smolstr};
+
+use crate::context::{Context, ModuleData};
+use crate::dictionary::{Dictionary, InstanceDictionary, Reflected};
+use crate::error::{GoError, GoResult, UnsupportedState};
+use crate::foreign::{self, Foreign};
+use crate::mono::{
+    Alternative, Binding, Expression, ExpressionKind, Function, FunctionId, Guard, Guarded,
+    GuardedBranch, Literal, Local, LocalId, Pattern, PatternKind, RecordUpdate,
+};
+use crate::monotype::{Monotype, MonotypeId, Monotypes};
+use crate::types::Substitution;
+
+const SPECIALIZATION_LIMIT: usize = 20_000;
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+enum Definition {
+    Value { file_id: FileId, term: TermItemId },
+    Member { dictionary: Arc<InstanceDictionary>, member: (FileId, TermItemId) },
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+struct SpecializationKey {
+    definition: Definition,
+    types: Arc<[TypeId]>,
+    dictionaries: Arc<[Dictionary]>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+enum LocalSource {
+    Binder(lowering::BinderId),
+    Checked(tree::BinderId),
+    Let(lowering::LetBindingNameGroupId),
+    RecordPun(lowering::RecordPunId),
+}
+
+struct Scope {
+    file_id: FileId,
+    module: Arc<ModuleData>,
+    substitution: Substitution,
+    givens: FxHashMap<EvidenceBinderId, Dictionary>,
+    locals: FxHashMap<LocalSource, Local>,
+    definition: String,
+}
+
+struct EvidenceScope<'a> {
+    file_id: FileId,
+    module: &'a Arc<ModuleData>,
+    substitution: &'a Substitution,
+    givens: &'a FxHashMap<EvidenceBinderId, Dictionary>,
+    definition: &'a str,
+}
+
+impl EvidenceScope<'_> {
+    fn unsupported(&self, state: UnsupportedState) -> GoError {
+        GoError::Unsupported { definition: self.definition.to_string(), state }
+    }
+}
+
+impl Scope {
+    fn evidence(&self) -> EvidenceScope<'_> {
+        EvidenceScope {
+            file_id: self.file_id,
+            module: &self.module,
+            substitution: &self.substitution,
+            givens: &self.givens,
+            definition: &self.definition,
+        }
+    }
+}
+
+pub struct Specializer<'q, Q> {
+    context: Context<'q, Q>,
+    pub monotypes: Monotypes,
+    functions: Vec<Option<Function>>,
+    keys: FxHashMap<SpecializationKey, FunctionId>,
+    function_keys: Vec<SpecializationKey>,
+    parents: Vec<Option<FunctionId>>,
+    current: Option<FunctionId>,
+    queue: VecDeque<(FunctionId, SpecializationKey, SmolStr)>,
+    next_local: u32,
+}
+
+impl<'q, Q> Specializer<'q, Q>
+where
+    Q: checking::ExternalQueries,
+{
+    pub fn new(queries: &'q Q) -> Specializer<'q, Q> {
+        Specializer {
+            context: Context::new(queries),
+            monotypes: Monotypes::default(),
+            functions: vec![],
+            keys: FxHashMap::default(),
+            function_keys: vec![],
+            parents: vec![],
+            current: None,
+            queue: VecDeque::new(),
+            next_local: 0,
+        }
+    }
+
+    pub fn context(&mut self) -> &mut Context<'q, Q> {
+        &mut self.context
+    }
+
+    pub fn specialize_entry(&mut self, file_id: FileId, term: TermItemId) -> GoResult<FunctionId> {
+        let name = self.context.term_name(file_id, term)?;
+        let key = SpecializationKey {
+            definition: Definition::Value { file_id, term },
+            types: Arc::from([]),
+            dictionaries: Arc::from([]),
+        };
+        let entry = self.request(key, name)?;
+        while let Some((id, key, name)) = self.queue.pop_front() {
+            self.current = Some(id);
+            let function = self.specialize(&key, name)?;
+            self.functions[id.0 as usize] = Some(function);
+        }
+        Ok(entry)
+    }
+
+    pub fn finish(self) -> (Vec<Function>, Monotypes, u32) {
+        let functions = self.functions.into_iter().map(|function| {
+            function.expect("invariant violated: requested specialization was never produced")
+        });
+        (functions.collect(), self.monotypes, self.next_local)
+    }
+
+    fn request(&mut self, key: SpecializationKey, name: SmolStr) -> GoResult<FunctionId> {
+        let key = self.terminate_growth(key);
+        if let Some(&id) = self.keys.get(&key) {
+            return Ok(id);
+        }
+        if self.functions.len() >= SPECIALIZATION_LIMIT {
+            return Err(GoError::Unsupported {
+                definition: name.to_string(),
+                state: UnsupportedState::SpecializationLimit { limit: SPECIALIZATION_LIMIT },
+            });
+        }
+        let id = FunctionId(self.functions.len() as u32);
+        self.functions.push(None);
+        self.function_keys.push(key.clone());
+        self.parents.push(self.current);
+        self.keys.insert(key.clone(), id);
+        self.queue.push_back((id, key, name));
+        Ok(id)
+    }
+
+    /// Polymorphic recursion requests a definition at ever larger types. When a
+    /// request embeds the types of the same definition further up its chain of
+    /// requesters, the growing positions are erased so specialization terminates.
+    fn terminate_growth(&mut self, mut key: SpecializationKey) -> SpecializationKey {
+        let mut ancestor = self.current;
+        let mut types: Vec<TypeId> = key.types.to_vec();
+        let mut changed = false;
+        while let Some(id) = ancestor {
+            let ancestor_key = &self.function_keys[id.0 as usize];
+            if ancestor_key.definition == key.definition {
+                for (position, ancestor_type) in ancestor_key.types.iter().enumerate() {
+                    let Some(requested) = types.get(position).copied() else { continue };
+                    if requested != *ancestor_type
+                        && self.context.types.contains(requested, *ancestor_type)
+                    {
+                        types[position] = self.context.types.erased();
+                        changed = true;
+                    }
+                }
+            }
+            ancestor = self.parents[id.0 as usize];
+        }
+        if changed {
+            key.types = Arc::from(types);
+        }
+        key
+    }
+
+    fn fresh_local(&mut self, name: SmolStr, monotype: MonotypeId) -> Local {
+        let id = LocalId(self.next_local);
+        self.next_local += 1;
+        Local { id, name, monotype }
+    }
+
+    fn specialize(&mut self, key: &SpecializationKey, name: SmolStr) -> GoResult<Function> {
+        let (mut scope, value) = match &key.definition {
+            Definition::Value { file_id, term } => {
+                let module = self.context.module(*file_id)?;
+                let definition = self.context.qualified_term_name(*file_id, *term)?;
+                let unsupported =
+                    |state| GoError::Unsupported { definition: definition.clone(), state };
+                let declaration = module
+                    .checked
+                    .tree
+                    .lookup_term(*term)
+                    .ok_or_else(|| unsupported(UnsupportedState::MissingDeclaration))?;
+                let TermDeclarationKind::Value(value) = &module.checked.tree[declaration].kind
+                else {
+                    return Err(unsupported(UnsupportedState::MissingDeclaration));
+                };
+                let value = (Arc::clone(&value.abstractions), Arc::clone(&value.equations));
+                let scope = Scope {
+                    file_id: *file_id,
+                    module: Arc::clone(&module),
+                    substitution: Substitution::default(),
+                    givens: FxHashMap::default(),
+                    locals: FxHashMap::default(),
+                    definition,
+                };
+                (scope, value)
+            }
+            Definition::Member { dictionary, member } => {
+                let (file_id, module, declaration) =
+                    self.instance_declaration(dictionary.origin)?;
+                let member_name = self.context.qualified_term_name(member.0, member.1)?;
+                let definition =
+                    format!("{member_name} of {}", self.instance_name(dictionary.origin)?);
+                let unsupported =
+                    |state| GoError::Unsupported { definition: definition.clone(), state };
+                let TermDeclarationKind::Instance(instance) =
+                    &module.checked.tree[declaration].kind
+                else {
+                    return Err(unsupported(UnsupportedState::MissingDeclaration));
+                };
+                let tree::InstanceImplementation::Members(members) = &instance.implementation
+                else {
+                    return Err(unsupported(UnsupportedState::MissingDeclaration));
+                };
+                let Some(implementation) =
+                    members.iter().find(|implementation| implementation.resolution == *member)
+                else {
+                    return Err(unsupported(UnsupportedState::MissingInstanceMember {
+                        member: member_name.clone(),
+                    }));
+                };
+                let value = (
+                    Arc::clone(&implementation.abstractions),
+                    Arc::clone(&implementation.equations),
+                );
+                let (substitution, givens) =
+                    self.instance_environment(&module, declaration, dictionary)?;
+                let scope = Scope {
+                    file_id,
+                    module: Arc::clone(&module),
+                    substitution,
+                    givens,
+                    locals: FxHashMap::default(),
+                    definition,
+                };
+                (scope, value)
+            }
+        };
+        let (abstractions, equations) = value;
+        self.bind_abstractions(&mut scope, &abstractions, &key.types, &key.dictionaries)?;
+        let body = self.equations(&mut scope, &equations)?;
+        Ok(self.function(name, body))
+    }
+
+    fn function(&mut self, name: SmolStr, body: Expression) -> Function {
+        let mut parameters = vec![];
+        let mut body = body;
+        while let ExpressionKind::Lambda { .. } = body.kind {
+            let ExpressionKind::Lambda { parameters: lambda_parameters, body: lambda_body } =
+                body.kind
+            else {
+                unreachable!()
+            };
+            parameters.extend(lambda_parameters);
+            body = *lambda_body;
+        }
+        let result = body.monotype;
+        Function { name, parameters, result, body }
+    }
+
+    fn bind_abstractions(
+        &mut self,
+        scope: &mut Scope,
+        abstractions: &[DeclarationAbstraction],
+        types: &[TypeId],
+        dictionaries: &[Dictionary],
+    ) -> GoResult<()> {
+        let mut types = types.iter();
+        let mut dictionaries = dictionaries.iter();
+        for abstraction in abstractions {
+            match abstraction {
+                DeclarationAbstraction::Type { binder, rigid } => {
+                    let Some(&argument) = types.next() else {
+                        return Err(self.unsupported(scope, UnsupportedState::MissingDeclaration));
+                    };
+                    let binder = self.context.queries.lookup_forall_binder(*binder);
+                    scope.substitution.insert(binder.name, argument);
+                    if let Type::Rigid(name, _, _) = self.context.types.lookup(*rigid) {
+                        scope.substitution.insert(*name, argument);
+                    }
+                }
+                DeclarationAbstraction::Evidence { binder, .. } => {
+                    let Some(dictionary) = dictionaries.next() else {
+                        return Err(self.unsupported(scope, UnsupportedState::UnboundEvidence));
+                    };
+                    scope.givens.insert(*binder, dictionary.clone());
+                }
+                DeclarationAbstraction::Argument => {}
+            }
+        }
+        Ok(())
+    }
+
+    fn unsupported(&self, scope: &Scope, state: UnsupportedState) -> GoError {
+        GoError::Unsupported { definition: scope.definition.clone(), state }
+    }
+
+    fn monotype(&mut self, scope: &Scope, type_id: TypeId) -> GoResult<MonotypeId> {
+        let closed = self.context.types.substitute(type_id, &scope.substitution);
+        self.closed_monotype(scope, closed)
+    }
+
+    fn closed_monotype(&mut self, scope: &Scope, closed: TypeId) -> GoResult<MonotypeId> {
+        match self.monotypes.monotype(&mut self.context, closed)? {
+            Ok(monotype) => Ok(monotype),
+            Err(state) => Err(self.unsupported(scope, state)),
+        }
+    }
+
+    fn equations(
+        &mut self,
+        scope: &mut Scope,
+        equations: &[tree::Equation],
+    ) -> GoResult<Expression> {
+        let Some(first) = equations.first() else {
+            return Err(self.unsupported(scope, UnsupportedState::MissingEquation));
+        };
+        let arity = equations.iter().map(|equation| equation.binders.len()).max().unwrap_or(0);
+        if arity == 0 {
+            return self.guarded_expression(scope, &first.guarded_expression);
+        }
+        if let [equation] = equations
+            && let Some(parameters) = self.variable_parameters(scope, &equation.binders)?
+        {
+            let body = self.guarded_expression(scope, &equation.guarded_expression)?;
+            return Ok(self.lambda(parameters, body));
+        }
+        let mut parameters = Vec::with_capacity(arity);
+        for position in 0..arity {
+            let binder = equations
+                .iter()
+                .find_map(|equation| equation.binders.get(position))
+                .copied()
+                .expect("invariant violated: arity is the maximum binder count");
+            let monotype = self.monotype(scope, scope.module.checked.tree[binder].type_id)?;
+            parameters.push(self.fresh_local(format_smolstr!("argument{position}"), monotype));
+        }
+        let mut alternatives = Vec::with_capacity(equations.len());
+        for equation in equations {
+            let mut patterns = Vec::with_capacity(arity);
+            for &binder in equation.binders.iter() {
+                patterns.push(self.pattern(scope, binder)?);
+            }
+            for parameter in &parameters[patterns.len()..] {
+                patterns
+                    .push(Pattern { kind: PatternKind::Wildcard, monotype: parameter.monotype });
+            }
+            let body = self.guarded(scope, &equation.guarded_expression)?;
+            alternatives.push(Alternative { patterns, body });
+        }
+        let scrutinees = parameters
+            .iter()
+            .map(|parameter| {
+                Expression::new(ExpressionKind::Local(parameter.id), parameter.monotype)
+            })
+            .collect();
+        let monotype = alternatives_monotype(&alternatives);
+        let body = Expression::new(ExpressionKind::Case { scrutinees, alternatives }, monotype);
+        Ok(self.lambda(parameters, body))
+    }
+
+    fn variable_parameters(
+        &mut self,
+        scope: &mut Scope,
+        binders: &[tree::BinderId],
+    ) -> GoResult<Option<Vec<Local>>> {
+        let all_variables = binders.iter().all(|&binder| {
+            matches!(
+                self.unwrap_typed(scope, binder).1,
+                tree::BinderKind::Variable | tree::BinderKind::Wildcard
+            )
+        });
+        if !all_variables {
+            return Ok(None);
+        }
+        let mut parameters = Vec::with_capacity(binders.len());
+        for &binder in binders {
+            let pattern = self.pattern(scope, binder)?;
+            let local = match pattern.kind {
+                PatternKind::Variable(local) => local,
+                PatternKind::Wildcard => {
+                    self.fresh_local(SmolStr::new_static("ignored"), pattern.monotype)
+                }
+                _ => unreachable!(
+                    "invariant violated: variable binders convert to variable patterns"
+                ),
+            };
+            parameters.push(local);
+        }
+        Ok(Some(parameters))
+    }
+
+    fn unwrap_typed<'s>(
+        &self,
+        scope: &'s Scope,
+        mut binder: tree::BinderId,
+    ) -> (tree::BinderId, &'s tree::BinderKind) {
+        loop {
+            match &scope.module.checked.tree[binder].kind {
+                tree::BinderKind::Typed { binder: inner, .. } => binder = *inner,
+                kind => return (binder, kind),
+            }
+        }
+    }
+
+    fn lambda(&mut self, parameters: Vec<Local>, body: Expression) -> Expression {
+        let mut monotype = body.monotype;
+        for parameter in parameters.iter().rev() {
+            monotype = self.monotypes.function(parameter.monotype, monotype);
+        }
+        Expression::new(ExpressionKind::Lambda { parameters, body: Box::new(body) }, monotype)
+    }
+
+    fn guarded(
+        &mut self,
+        scope: &mut Scope,
+        guarded: &tree::GuardedExpression,
+    ) -> GoResult<Guarded> {
+        if let [alternative] = guarded.alternatives.as_ref()
+            && alternative.pattern_guards.is_empty()
+        {
+            let body = self.where_expression(scope, &alternative.where_expression)?;
+            return Ok(Guarded::Unconditional(body));
+        }
+        let mut branches = Vec::with_capacity(guarded.alternatives.len());
+        for alternative in guarded.alternatives.iter() {
+            let mut guards = Vec::with_capacity(alternative.pattern_guards.len());
+            for guard in alternative.pattern_guards.iter() {
+                let guard = match guard {
+                    tree::PatternGuard::Boolean { expression } => {
+                        Guard::Boolean(self.expression(scope, *expression)?)
+                    }
+                    tree::PatternGuard::Pattern { binder, expression, .. } => {
+                        let value = self.expression(scope, *expression)?;
+                        let pattern = self.pattern(scope, *binder)?;
+                        Guard::Pattern { pattern, value }
+                    }
+                };
+                guards.push(guard);
+            }
+            let body = self.where_expression(scope, &alternative.where_expression)?;
+            branches.push(GuardedBranch { guards, body });
+        }
+        Ok(Guarded::Guards(branches))
+    }
+
+    fn guarded_expression(
+        &mut self,
+        scope: &mut Scope,
+        guarded: &tree::GuardedExpression,
+    ) -> GoResult<Expression> {
+        match self.guarded(scope, guarded)? {
+            Guarded::Unconditional(body) => Ok(body),
+            Guarded::Guards(branches) => {
+                let monotype = branches[0].body.monotype;
+                let alternative = Alternative { patterns: vec![], body: Guarded::Guards(branches) };
+                let kind =
+                    ExpressionKind::Case { scrutinees: vec![], alternatives: vec![alternative] };
+                Ok(Expression::new(kind, monotype))
+            }
+        }
+    }
+
+    fn where_expression(
+        &mut self,
+        scope: &mut Scope,
+        where_expression: &tree::WhereExpression,
+    ) -> GoResult<Expression> {
+        self.let_bindings(scope, &where_expression.bindings, where_expression.expression)
+    }
+
+    fn let_bindings(
+        &mut self,
+        scope: &mut Scope,
+        bindings: &tree::LetBindings,
+        body: tree::ExpressionId,
+    ) -> GoResult<Expression> {
+        enum Chunk {
+            Names(Vec<Vec<Binding>>),
+            Pattern(Pattern, Expression),
+        }
+        let module = Arc::clone(&scope.module);
+        let mut chunks = Vec::with_capacity(bindings.chunks.len());
+        for chunk in bindings.chunks.iter() {
+            match chunk {
+                tree::LetBindingChunk::Pattern { binder, where_expression, .. } => {
+                    let value = self.where_expression(scope, where_expression)?;
+                    let pattern = self.pattern(scope, *binder)?;
+                    chunks.push(Chunk::Pattern(pattern, value));
+                }
+                tree::LetBindingChunk::PatternError { .. } => {
+                    return Err(self.unsupported(scope, UnsupportedState::BinderError));
+                }
+                tree::LetBindingChunk::Names { groups, .. } => {
+                    let mut declarations = vec![];
+                    for group in groups.iter() {
+                        let mut members = vec![];
+                        for &source in group.as_slice() {
+                            let Some(declaration) = module.checked.tree.lookup_let(source) else {
+                                return Err(self.unsupported(
+                                    scope,
+                                    UnsupportedState::MissingLocalDeclaration,
+                                ));
+                            };
+                            let declaration = &module.checked.tree[declaration];
+                            if declaration.value.abstractions.iter().any(|abstraction| {
+                                !matches!(abstraction, DeclarationAbstraction::Argument)
+                            }) {
+                                return Err(self.unsupported(
+                                    scope,
+                                    UnsupportedState::Construct {
+                                        construct: "polymorphic local bindings",
+                                    },
+                                ));
+                            }
+                            let monotype = self.monotype(scope, declaration.type_id)?;
+                            let name = module
+                                .lowered
+                                .tree
+                                .get_let_binding_group(source)
+                                .name
+                                .clone()
+                                .unwrap_or_else(|| SmolStr::new_static("binding"));
+                            let local = self.fresh_local(name, monotype);
+                            scope.locals.insert(LocalSource::Let(source), local.clone());
+                            members.push((local, Arc::clone(&declaration.value.equations)));
+                        }
+                        declarations.push(members);
+                    }
+                    let mut groups = Vec::with_capacity(declarations.len());
+                    for members in declarations {
+                        let mut bindings = Vec::with_capacity(members.len());
+                        for (local, equations) in members {
+                            let value = self.equations(scope, &equations)?;
+                            bindings.push(Binding { local, value });
+                        }
+                        groups.push(bindings);
+                    }
+                    chunks.push(Chunk::Names(groups));
+                }
+            }
+        }
+        let mut body = self.expression(scope, body)?;
+        for chunk in chunks.into_iter().rev() {
+            match chunk {
+                Chunk::Names(groups) => {
+                    for bindings in groups.into_iter().rev() {
+                        let monotype = body.monotype;
+                        let kind = ExpressionKind::Let { bindings, body: Box::new(body) };
+                        body = Expression::new(kind, monotype);
+                    }
+                }
+                Chunk::Pattern(pattern, value) => {
+                    let monotype = body.monotype;
+                    let alternative =
+                        Alternative { patterns: vec![pattern], body: Guarded::Unconditional(body) };
+                    let kind = ExpressionKind::Case {
+                        scrutinees: vec![value],
+                        alternatives: vec![alternative],
+                    };
+                    body = Expression::new(kind, monotype);
+                }
+            }
+        }
+        Ok(body)
+    }
+
+    fn expression(&mut self, scope: &mut Scope, id: tree::ExpressionId) -> GoResult<Expression> {
+        let module = Arc::clone(&scope.module);
+        let node = &module.checked.tree[id];
+        let kind = match &node.kind {
+            tree::ExpressionKind::Error => {
+                return Err(self.unsupported(scope, UnsupportedState::ExpressionError));
+            }
+            tree::ExpressionKind::String { value, .. } => {
+                ExpressionKind::Literal(Literal::String(string_literal(value)))
+            }
+            tree::ExpressionKind::Char { value } => ExpressionKind::Literal(Literal::Char(*value)),
+            tree::ExpressionKind::Boolean { value } => {
+                ExpressionKind::Literal(Literal::Boolean(*value))
+            }
+            tree::ExpressionKind::Integer { value } => {
+                let monotype = self.monotype(scope, node.type_id)?;
+                if let Monotype::Number = self.monotypes.get(monotype) {
+                    let value = format_smolstr!("{value}");
+                    return Ok(Expression::new(
+                        ExpressionKind::Literal(Literal::Number(value)),
+                        monotype,
+                    ));
+                }
+                ExpressionKind::Literal(Literal::Int(*value))
+            }
+            tree::ExpressionKind::Number { value } => {
+                ExpressionKind::Literal(Literal::Number(value.clone()))
+            }
+            tree::ExpressionKind::Array { elements } => {
+                let mut converted = Vec::with_capacity(elements.len());
+                for &element in elements.iter() {
+                    converted.push(self.expression(scope, element)?);
+                }
+                ExpressionKind::Array(converted)
+            }
+            tree::ExpressionKind::Record { fields } => {
+                let mut converted = Vec::with_capacity(fields.len());
+                for field in fields.iter() {
+                    let (label, expression) = match field {
+                        tree::RecordExpressionField::Field { label, expression }
+                        | tree::RecordExpressionField::Pun { label, expression, .. } => {
+                            (label, expression)
+                        }
+                    };
+                    converted.push((label.clone(), self.expression(scope, *expression)?));
+                }
+                ExpressionKind::Record(converted)
+            }
+            tree::ExpressionKind::RecordAccess { record, labels } => {
+                let mut record = self.expression(scope, *record)?;
+                for label in labels.iter() {
+                    let monotype = self.field_monotype(scope, record.monotype, label)?;
+                    let kind =
+                        ExpressionKind::Access { record: Box::new(record), label: label.clone() };
+                    record = Expression::new(kind, monotype);
+                }
+                return Ok(record);
+            }
+            tree::ExpressionKind::RecordUpdate { record, updates } => {
+                let record = self.expression(scope, *record)?;
+                let updates = self.record_updates(scope, updates)?;
+                ExpressionKind::Update { record: Box::new(record), updates }
+            }
+            tree::ExpressionKind::Constructor { .. }
+            | tree::ExpressionKind::Variable { .. }
+            | tree::ExpressionKind::RecordPun { .. }
+            | tree::ExpressionKind::EvidenceApplication { .. } => {
+                return self.reference(scope, id);
+            }
+            tree::ExpressionKind::Section { binder } => {
+                return self.local_reference(scope, self.checked_binder_source(scope, *binder));
+            }
+            tree::ExpressionKind::TermApplication { .. } => return self.application(scope, id),
+            tree::ExpressionKind::EvidenceAbstraction { binder, expression } => {
+                let constraint = module.checked.evidence[*binder].constraint;
+                if crate::monotype::is_partial(&mut self.context, constraint)? {
+                    scope.givens.insert(*binder, Dictionary::Trivial);
+                    return self.expression(scope, *expression);
+                }
+                return Err(self.unsupported(
+                    scope,
+                    UnsupportedState::Construct { construct: "constrained higher-rank arguments" },
+                ));
+            }
+            tree::ExpressionKind::Lambda { binders, expression } => {
+                if let Some(parameters) = self.variable_parameters(scope, binders)? {
+                    let body = self.expression(scope, *expression)?;
+                    return Ok(self.lambda(parameters, body));
+                }
+                let mut parameters = Vec::with_capacity(binders.len());
+                let mut patterns = Vec::with_capacity(binders.len());
+                for (position, &binder) in binders.iter().enumerate() {
+                    let pattern = self.pattern(scope, binder)?;
+                    let name = format_smolstr!("argument{position}");
+                    parameters.push(self.fresh_local(name, pattern.monotype));
+                    patterns.push(pattern);
+                }
+                let body = self.expression(scope, *expression)?;
+                let monotype = body.monotype;
+                let scrutinees = parameters
+                    .iter()
+                    .map(|parameter| {
+                        Expression::new(ExpressionKind::Local(parameter.id), parameter.monotype)
+                    })
+                    .collect();
+                let alternative = Alternative { patterns, body: Guarded::Unconditional(body) };
+                let kind = ExpressionKind::Case { scrutinees, alternatives: vec![alternative] };
+                let body = Expression::new(kind, monotype);
+                return Ok(self.lambda(parameters, body));
+            }
+            tree::ExpressionKind::IfThenElse { condition, then, else_ } => ExpressionKind::If {
+                condition: Box::new(self.expression(scope, *condition)?),
+                then: Box::new(self.expression(scope, *then)?),
+                otherwise: Box::new(self.expression(scope, *else_)?),
+            },
+            tree::ExpressionKind::Case { scrutinees, alternatives } => {
+                let mut converted_scrutinees = Vec::with_capacity(scrutinees.len());
+                for &scrutinee in scrutinees.iter() {
+                    converted_scrutinees.push(self.expression(scope, scrutinee)?);
+                }
+                let mut converted = Vec::with_capacity(alternatives.len());
+                for alternative in alternatives.iter() {
+                    let mut patterns = Vec::with_capacity(alternative.binders.len());
+                    for &binder in alternative.binders.iter() {
+                        patterns.push(self.pattern(scope, binder)?);
+                    }
+                    let body = self.guarded(scope, &alternative.guarded_expression)?;
+                    converted.push(Alternative { patterns, body });
+                }
+                ExpressionKind::Case { scrutinees: converted_scrutinees, alternatives: converted }
+            }
+            tree::ExpressionKind::Let { bindings, expression } => {
+                return self.let_bindings(scope, bindings, *expression);
+            }
+        };
+        let monotype = self.monotype(scope, node.type_id)?;
+        Ok(Expression::new(kind, monotype))
+    }
+
+    fn field_monotype(
+        &mut self,
+        scope: &Scope,
+        record: MonotypeId,
+        label: &str,
+    ) -> GoResult<MonotypeId> {
+        if let Monotype::Record(fields) = self.monotypes.get(record)
+            && let Some(field) = fields.iter().find(|field| field.label == label)
+        {
+            return Ok(field.monotype);
+        }
+        Err(self
+            .unsupported(scope, UnsupportedState::OpenType { rendered: format!("{{ {label} }}") }))
+    }
+
+    fn record_updates(
+        &mut self,
+        scope: &mut Scope,
+        updates: &[tree::RecordExpressionUpdate],
+    ) -> GoResult<Vec<RecordUpdate>> {
+        let mut converted = Vec::with_capacity(updates.len());
+        for update in updates {
+            converted.push(match update {
+                tree::RecordExpressionUpdate::Leaf { label, expression } => RecordUpdate::Leaf {
+                    label: label.clone(),
+                    value: self.expression(scope, *expression)?,
+                },
+                tree::RecordExpressionUpdate::Branch { label, updates } => RecordUpdate::Branch {
+                    label: label.clone(),
+                    updates: self.record_updates(scope, updates)?,
+                },
+                tree::RecordExpressionUpdate::Error => {
+                    return Err(self.unsupported(scope, UnsupportedState::ExpressionError));
+                }
+            });
+        }
+        Ok(converted)
+    }
+
+    fn application(&mut self, scope: &mut Scope, id: tree::ExpressionId) -> GoResult<Expression> {
+        let module = Arc::clone(&scope.module);
+        let monotype = self.monotype(scope, module.checked.tree[id].type_id)?;
+        let mut arguments = vec![];
+        let mut head = id;
+        while let tree::ExpressionKind::TermApplication { function, argument } =
+            module.checked.tree[head].kind
+        {
+            arguments.push(argument);
+            head = function;
+        }
+        arguments.reverse();
+        if let tree::ExpressionKind::Constructor { resolution } = module.checked.tree[head].kind
+            && self.is_newtype_constructor(resolution)?
+            && let [argument] = arguments[..]
+        {
+            let mut argument = self.expression(scope, argument)?;
+            argument.monotype = monotype;
+            return Ok(argument);
+        }
+        let function = self.expression(scope, head)?;
+        let mut converted = Vec::with_capacity(arguments.len());
+        for argument in arguments {
+            converted.push(self.expression(scope, argument)?);
+        }
+        let kind = ExpressionKind::Apply { function: Box::new(function), arguments: converted };
+        Ok(Expression::new(kind, monotype))
+    }
+
+    fn is_newtype_constructor(&mut self, (file_id, term): (FileId, TermItemId)) -> GoResult<bool> {
+        let module = self.context.module(file_id)?;
+        let IndexedTermItemKind::Constructor { type_id: Some(type_item), .. } =
+            module.indexed.items[term].kind
+        else {
+            return Ok(false);
+        };
+        Ok(matches!(
+            module.indexed.items[type_item].kind,
+            indexing::IndexedTypeItemKind::Newtype { .. }
+        ))
+    }
+
+    fn checked_binder_source(&self, scope: &Scope, binder: tree::BinderId) -> LocalSource {
+        match scope.module.checked.tree[binder].source {
+            tree::BinderSource::Binder(source) => LocalSource::Binder(source),
+            _ => LocalSource::Checked(binder),
+        }
+    }
+
+    fn local_reference(&mut self, scope: &Scope, source: LocalSource) -> GoResult<Expression> {
+        let Some(local) = scope.locals.get(&source) else {
+            return Err(self.unsupported(
+                scope,
+                UnsupportedState::Construct {
+                    construct: "references to locals outside their scope",
+                },
+            ));
+        };
+        Ok(Expression::new(ExpressionKind::Local(local.id), local.monotype))
+    }
+
+    fn reference(&mut self, scope: &mut Scope, id: tree::ExpressionId) -> GoResult<Expression> {
+        let module = Arc::clone(&scope.module);
+        let tree = &module.checked.tree;
+        let mut instantiations = Substitution::default();
+        let mut evidences = vec![];
+        let mut current = id;
+        loop {
+            for instantiation in tree.lookup_instantiations(current) {
+                let closed =
+                    self.context.types.substitute(instantiation.argument, &scope.substitution);
+                instantiations.insert(instantiation.name, closed);
+            }
+            match tree[current].kind {
+                tree::ExpressionKind::EvidenceApplication { function, evidence, constraint } => {
+                    evidences.push((evidence, constraint));
+                    current = function;
+                }
+                _ => break,
+            }
+        }
+        evidences.reverse();
+        let mut dictionaries = Vec::with_capacity(evidences.len());
+        for (evidence, constraint) in evidences {
+            let constraint = self.context.types.substitute(constraint, &scope.substitution);
+            dictionaries.push(self.resolve_evidence(&scope.evidence(), evidence, constraint)?);
+        }
+
+        let resolution = match &tree[current].kind {
+            tree::ExpressionKind::Variable { resolution }
+            | tree::ExpressionKind::RecordPun { resolution, .. } => *resolution,
+            tree::ExpressionKind::Constructor { resolution } => {
+                let (file_id, term) = *resolution;
+                let monotype =
+                    self.instantiated_monotype(scope, current, file_id, term, &instantiations)?;
+                return self.constructor(scope, file_id, term, monotype);
+            }
+            _ => {
+                if dictionaries.is_empty() {
+                    return self.expression(scope, current);
+                }
+                return Err(self.unsupported(
+                    scope,
+                    UnsupportedState::Construct {
+                        construct: "evidence applied to a non-reference",
+                    },
+                ));
+            }
+        };
+
+        match resolution {
+            tree::VariableResolution::Generated(binder) => {
+                self.local_reference(scope, self.checked_binder_source(scope, binder))
+            }
+            tree::VariableResolution::Source(lowering::TermVariableResolution::Binder(binder)) => {
+                self.local_reference(scope, LocalSource::Binder(binder))
+            }
+            tree::VariableResolution::Source(lowering::TermVariableResolution::Let(group)) => {
+                self.local_reference(scope, LocalSource::Let(group))
+            }
+            tree::VariableResolution::Source(lowering::TermVariableResolution::RecordPun(pun)) => {
+                self.local_reference(scope, LocalSource::RecordPun(pun))
+            }
+            tree::VariableResolution::Source(lowering::TermVariableResolution::Reference(
+                file_id,
+                term,
+            )) => {
+                let monotype =
+                    self.instantiated_monotype(scope, current, file_id, term, &instantiations)?;
+                self.global_reference(scope, file_id, term, &instantiations, dictionaries, monotype)
+            }
+        }
+    }
+
+    /// The type of a reference after the checker's implicit instantiation: the
+    /// declared type with its quantifiers replaced and its constraints discharged.
+    fn instantiated_monotype(
+        &mut self,
+        scope: &Scope,
+        node: tree::ExpressionId,
+        file_id: FileId,
+        term: TermItemId,
+        instantiations: &Substitution,
+    ) -> GoResult<MonotypeId> {
+        let module = self.context.module(file_id)?;
+        let declared = module
+            .checked
+            .lookup_term_item_type(term)
+            .unwrap_or(scope.module.checked.tree[node].type_id);
+        let mut current = declared;
+        let mut names = vec![];
+        loop {
+            let (bound, inner) = self.context.types.peel_quantifiers(current);
+            let (constraints, inner) = self.context.types.peel_constraints(inner);
+            names.extend(bound);
+            current = inner;
+            if constraints.is_empty()
+                && !matches!(self.context.types.lookup(current), Type::Forall(..))
+            {
+                break;
+            }
+        }
+        for name in &names {
+            if !instantiations.contains_key(name) {
+                let variable = format!("{name:?}");
+                return Err(
+                    self.unsupported(scope, UnsupportedState::UninstantiatedVariable { variable })
+                );
+            }
+        }
+        let closed = self.context.types.substitute(current, instantiations);
+        self.closed_monotype(scope, closed)
+    }
+
+    fn global_reference(
+        &mut self,
+        scope: &mut Scope,
+        file_id: FileId,
+        term: TermItemId,
+        instantiations: &Substitution,
+        dictionaries: Vec<Dictionary>,
+        monotype: MonotypeId,
+    ) -> GoResult<Expression> {
+        let module = self.context.module(file_id)?;
+        let name = module.indexed.items[term].name.clone().unwrap_or_default();
+        let is_constructor =
+            matches!(module.indexed.items[term].kind, IndexedTermItemKind::Constructor { .. });
+        let is_member =
+            matches!(module.indexed.items[term].kind, IndexedTermItemKind::ClassMember { .. });
+        let is_foreign =
+            matches!(module.indexed.items[term].kind, IndexedTermItemKind::Foreign { .. });
+        match () {
+            () if is_foreign => {
+                let Some(foreign) = foreign::foreign_import(&module.name, &name) else {
+                    let name = format!("{}.{name}", module.name);
+                    return Err(self.unsupported(scope, UnsupportedState::UnknownForeign { name }));
+                };
+                Ok(self.foreign(foreign, monotype))
+            }
+            () if is_constructor => self.constructor(scope, file_id, term, monotype),
+            () if is_member => {
+                let mut dictionaries = dictionaries.into_iter();
+                let Some(dictionary) = dictionaries.next() else {
+                    return Err(self.unsupported(scope, UnsupportedState::UnboundEvidence));
+                };
+                let rest: Vec<Dictionary> = dictionaries.collect();
+                self.member_reference(
+                    scope,
+                    (file_id, term),
+                    dictionary,
+                    instantiations,
+                    rest,
+                    monotype,
+                )
+            }
+            () => {
+                let instance_names = self.dictionary_names(&dictionaries)?;
+                let instances: Vec<&str> = instance_names.iter().map(SmolStr::as_str).collect();
+                if let Some(foreign) = foreign::intrinsic(&module.name, &name, &instances) {
+                    return Ok(self.foreign(foreign, monotype));
+                }
+                let declaration =
+                    module.checked.tree.lookup_term(term).ok_or_else(|| {
+                        self.unsupported(scope, UnsupportedState::MissingDeclaration)
+                    })?;
+                let TermDeclarationKind::Value(value) = &module.checked.tree[declaration].kind
+                else {
+                    return Err(self.unsupported(scope, UnsupportedState::MissingDeclaration));
+                };
+                let types = self.abstraction_types(scope, &value.abstractions, instantiations)?;
+                let suffix = self.type_suffix(&types)?;
+                let key = SpecializationKey {
+                    definition: Definition::Value { file_id, term },
+                    types: Arc::from(types),
+                    dictionaries: Arc::from(dictionaries),
+                };
+                let id = self.request(key, format_smolstr!("{name}{suffix}"))?;
+                Ok(Expression::new(ExpressionKind::Function(id), monotype))
+            }
+        }
+    }
+
+    fn member_reference(
+        &mut self,
+        scope: &mut Scope,
+        member: (FileId, TermItemId),
+        dictionary: Dictionary,
+        instantiations: &Substitution,
+        dictionaries: Vec<Dictionary>,
+        monotype: MonotypeId,
+    ) -> GoResult<Expression> {
+        let member_module = self.context.module(member.0)?;
+        let member_name = member_module.indexed.items[member.1].name.clone().unwrap_or_default();
+        let instance = match dictionary {
+            Dictionary::Instance(instance) => instance,
+            Dictionary::Symbol(symbol) => {
+                return Ok(self.constant_function(Literal::String(symbol.to_string()), monotype));
+            }
+            Dictionary::Reflectable(reflected) => {
+                let literal = match reflected {
+                    Reflected::Integer(value) => Literal::Int(i64::from(value)),
+                    Reflected::String(value) => Literal::String(value.to_string()),
+                    Reflected::Boolean(value) => Literal::Boolean(value),
+                    Reflected::Ordering(_) => {
+                        return Err(self.unsupported(
+                            scope,
+                            UnsupportedState::Construct { construct: "reflected orderings" },
+                        ));
+                    }
+                };
+                return Ok(self.constant_function(literal, monotype));
+            }
+            Dictionary::Trivial => {
+                return Err(self.unsupported(
+                    scope,
+                    UnsupportedState::MissingInstanceMember { member: member_name.to_string() },
+                ));
+            }
+        };
+        let instance_name = self.instance_name(instance.origin)?;
+        if let Some(foreign) =
+            foreign::intrinsic(&member_module.name, &member_name, &[instance_name.as_str()])
+        {
+            return Ok(self.foreign(foreign, monotype));
+        }
+        let (_, module, declaration) = self.instance_declaration(instance.origin)?;
+        let TermDeclarationKind::Instance(declared) = &module.checked.tree[declaration].kind else {
+            return Err(self.unsupported(scope, UnsupportedState::MissingDeclaration));
+        };
+        let tree::InstanceImplementation::Members(members) = &declared.implementation else {
+            return Err(self.unsupported(scope, UnsupportedState::MissingDeclaration));
+        };
+        let Some(implementation) =
+            members.iter().find(|implementation| implementation.resolution == member)
+        else {
+            return Err(self.unsupported(
+                scope,
+                UnsupportedState::MissingInstanceMember { member: member_name.to_string() },
+            ));
+        };
+        let types = self.abstraction_types(scope, &implementation.abstractions, instantiations)?;
+        let suffix = self.type_suffix(&instance.types)?;
+        let key = SpecializationKey {
+            definition: Definition::Member { dictionary: instance, member },
+            types: Arc::from(types),
+            dictionaries: Arc::from(dictionaries),
+        };
+        let id = self.request(key, format_smolstr!("{member_name}{suffix}"))?;
+        Ok(Expression::new(ExpressionKind::Function(id), monotype))
+    }
+
+    fn constant_function(&mut self, literal: Literal, monotype: MonotypeId) -> Expression {
+        let Some((argument, result)) = self.monotypes.function_parts(monotype) else {
+            return Expression::new(ExpressionKind::Literal(literal), monotype);
+        };
+        let parameter = self.fresh_local(SmolStr::new_static("proxy"), argument);
+        let body = Expression::new(ExpressionKind::Literal(literal), result);
+        self.lambda(vec![parameter], body)
+    }
+
+    fn abstraction_types(
+        &mut self,
+        scope: &Scope,
+        abstractions: &[DeclarationAbstraction],
+        instantiations: &Substitution,
+    ) -> GoResult<Vec<TypeId>> {
+        let mut types = vec![];
+        let mut seen_argument = false;
+        for abstraction in abstractions {
+            match abstraction {
+                DeclarationAbstraction::Type { binder, .. } => {
+                    if seen_argument {
+                        return Err(
+                            self.unsupported(scope, UnsupportedState::InterleavedAbstractions)
+                        );
+                    }
+                    let binder = self.context.queries.lookup_forall_binder(*binder);
+                    let Some(&argument) = instantiations.get(&binder.name) else {
+                        let variable = match scope.module.checked.lookup_name(binder.name) {
+                            Some(text) => self.context.queries.lookup_smol_str(text).to_string(),
+                            None => binder.name.as_text().to_string(),
+                        };
+                        return Err(self.unsupported(
+                            scope,
+                            UnsupportedState::UninstantiatedVariable { variable },
+                        ));
+                    };
+                    types.push(argument);
+                }
+                DeclarationAbstraction::Evidence { .. } if seen_argument => {
+                    return Err(self.unsupported(scope, UnsupportedState::InterleavedAbstractions));
+                }
+                DeclarationAbstraction::Evidence { .. } => {}
+                DeclarationAbstraction::Argument => seen_argument = true,
+            }
+        }
+        Ok(types)
+    }
+
+    fn foreign(&mut self, foreign: Foreign, monotype: MonotypeId) -> Expression {
+        let arity = foreign.arity();
+        if arity == 0 {
+            return Expression::new(
+                ExpressionKind::Foreign { foreign, arguments: vec![] },
+                monotype,
+            );
+        }
+        let mut parameters = Vec::with_capacity(arity);
+        let mut current = monotype;
+        for position in 0..arity {
+            let (argument, result) = self
+                .monotypes
+                .function_parts(current)
+                .expect("invariant violated: foreign arity exceeds its function type");
+            parameters.push(self.fresh_local(format_smolstr!("argument{position}"), argument));
+            current = result;
+        }
+        let arguments = parameters
+            .iter()
+            .map(|parameter| {
+                Expression::new(ExpressionKind::Local(parameter.id), parameter.monotype)
+            })
+            .collect();
+        let body = Expression::new(ExpressionKind::Foreign { foreign, arguments }, current);
+        self.lambda(parameters, body)
+    }
+
+    fn constructor(
+        &mut self,
+        scope: &Scope,
+        file_id: FileId,
+        term: TermItemId,
+        monotype: MonotypeId,
+    ) -> GoResult<Expression> {
+        if self.is_newtype_constructor((file_id, term))? {
+            let (argument, _) =
+                self.monotypes.function_parts(monotype).unwrap_or((monotype, monotype));
+            let parameter = self.fresh_local(SmolStr::new_static("value"), argument);
+            let body = Expression::new(ExpressionKind::Local(parameter.id), argument);
+            return Ok(self.lambda(vec![parameter], body));
+        }
+        let mut result = monotype;
+        while let Some((_, inner)) = self.monotypes.function_parts(result) {
+            result = inner;
+        }
+        let Monotype::Data(data) = self.monotypes.get(result).clone() else {
+            return Err(self.unsupported(
+                scope,
+                UnsupportedState::OpenType { rendered: "constructor".into() },
+            ));
+        };
+        let constructors = match self.monotypes.constructors(&mut self.context, &data)? {
+            Ok(constructors) => constructors,
+            Err(state) => return Err(self.unsupported(scope, state)),
+        };
+        let Some(index) = constructors.iter().position(|constructor| constructor.term == term)
+        else {
+            return Err(self.unsupported(scope, UnsupportedState::MissingDeclaration));
+        };
+        let fields = constructors[index].fields.clone();
+        let parameters: Vec<Local> = fields
+            .iter()
+            .enumerate()
+            .map(|(position, &field)| self.fresh_local(format_smolstr!("value{position}"), field))
+            .collect();
+        let arguments = parameters
+            .iter()
+            .map(|parameter| {
+                Expression::new(ExpressionKind::Local(parameter.id), parameter.monotype)
+            })
+            .collect();
+        let kind = ExpressionKind::Construct { data, constructor: index, arguments };
+        let body = Expression::new(kind, result);
+        if parameters.is_empty() {
+            return Ok(body);
+        }
+        Ok(self.lambda(parameters, body))
+    }
+
+    fn pattern(&mut self, scope: &mut Scope, binder_id: tree::BinderId) -> GoResult<Pattern> {
+        let module = Arc::clone(&scope.module);
+        let binder = &module.checked.tree[binder_id];
+        let monotype = self.monotype(scope, binder.type_id)?;
+        let kind = match &binder.kind {
+            tree::BinderKind::Typed { binder, .. } => return self.pattern(scope, *binder),
+            tree::BinderKind::Error => {
+                return Err(self.unsupported(scope, UnsupportedState::BinderError));
+            }
+            tree::BinderKind::Integer { value } => {
+                PatternKind::Literal(Literal::Int(i64::from(*value)))
+            }
+            tree::BinderKind::Number { negative, value } => {
+                let value = if *negative { format_smolstr!("-{value}") } else { value.clone() };
+                PatternKind::Literal(Literal::Number(value))
+            }
+            tree::BinderKind::Variable => {
+                let name = self.binder_name(scope, binder_id);
+                let local = self.fresh_local(name, monotype);
+                let source = self.checked_binder_source(scope, binder_id);
+                scope.locals.insert(source, local.clone());
+                PatternKind::Variable(local)
+            }
+            tree::BinderKind::Named { name, binder: inner } => {
+                let local = self.fresh_local(name.clone(), monotype);
+                let source = self.checked_binder_source(scope, binder_id);
+                scope.locals.insert(source, local.clone());
+                let pattern = self.pattern(scope, *inner)?;
+                PatternKind::Named { local, pattern: Box::new(pattern) }
+            }
+            tree::BinderKind::Wildcard => PatternKind::Wildcard,
+            tree::BinderKind::String { value } => {
+                PatternKind::Literal(Literal::String(string_literal(value)))
+            }
+            tree::BinderKind::Char { value } => PatternKind::Literal(Literal::Char(*value)),
+            tree::BinderKind::Boolean { value } => PatternKind::Literal(Literal::Boolean(*value)),
+            tree::BinderKind::Array { elements } => {
+                let mut patterns = Vec::with_capacity(elements.len());
+                for &element in elements.iter() {
+                    patterns.push(self.pattern(scope, element)?);
+                }
+                PatternKind::Array(patterns)
+            }
+            tree::BinderKind::Record { fields } => {
+                let mut patterns = Vec::with_capacity(fields.len());
+                for field in fields.iter() {
+                    match field {
+                        tree::RecordBinderField::Field { label, binder } => {
+                            patterns.push((label.clone(), self.pattern(scope, *binder)?));
+                        }
+                        tree::RecordBinderField::Pun { label } => {
+                            let Some(pun) = self.record_pun_source(scope, binder_id, label) else {
+                                return Err(self.unsupported(scope, UnsupportedState::BinderError));
+                            };
+                            let field_monotype = self.field_monotype(scope, monotype, label)?;
+                            let local = self.fresh_local(label.clone(), field_monotype);
+                            scope.locals.insert(LocalSource::RecordPun(pun), local.clone());
+                            let pattern = Pattern {
+                                kind: PatternKind::Variable(local),
+                                monotype: field_monotype,
+                            };
+                            patterns.push((label.clone(), pattern));
+                        }
+                    }
+                }
+                PatternKind::Record(patterns)
+            }
+            tree::BinderKind::Constructor { resolution, arguments } => {
+                if self.is_newtype_constructor(*resolution)? {
+                    let [argument] = arguments.as_ref() else {
+                        return Err(self.unsupported(scope, UnsupportedState::BinderError));
+                    };
+                    let mut pattern = self.pattern(scope, *argument)?;
+                    pattern.monotype = monotype;
+                    return Ok(pattern);
+                }
+                let Monotype::Data(data) = self.monotypes.get(monotype).clone() else {
+                    return Err(self.unsupported(scope, UnsupportedState::BinderError));
+                };
+                let constructors = match self.monotypes.constructors(&mut self.context, &data)? {
+                    Ok(constructors) => constructors,
+                    Err(state) => return Err(self.unsupported(scope, state)),
+                };
+                let Some(constructor) =
+                    constructors.iter().position(|constructor| constructor.term == resolution.1)
+                else {
+                    return Err(self.unsupported(scope, UnsupportedState::BinderError));
+                };
+                let mut patterns = Vec::with_capacity(arguments.len());
+                for &argument in arguments.iter() {
+                    patterns.push(self.pattern(scope, argument)?);
+                }
+                PatternKind::Constructor { data, constructor, arguments: patterns }
+            }
+        };
+        Ok(Pattern { kind, monotype })
+    }
+
+    fn binder_name(&self, scope: &Scope, binder_id: tree::BinderId) -> SmolStr {
+        let binder = &scope.module.checked.tree[binder_id];
+        match binder.source {
+            tree::BinderSource::Binder(source) => {
+                match scope.module.lowered.tree.get_binder_kind(source) {
+                    Some(lowering::BinderKind::Variable { variable: Some(name) }) => name.clone(),
+                    Some(lowering::BinderKind::Named { named: Some(name), .. }) => name.clone(),
+                    _ => SmolStr::new_static("value"),
+                }
+            }
+            tree::BinderSource::Generated { name, .. } => {
+                SmolStr::clone(self.context.queries.lookup_smol_str(name))
+            }
+            _ => SmolStr::new_static("value"),
+        }
+    }
+
+    fn record_pun_source(
+        &self,
+        scope: &Scope,
+        binder_id: tree::BinderId,
+        label: &str,
+    ) -> Option<lowering::RecordPunId> {
+        let tree::BinderSource::Binder(source) = scope.module.checked.tree[binder_id].source else {
+            return None;
+        };
+        let lowering::BinderKind::Record { record } =
+            scope.module.lowered.tree.get_binder_kind(source)?
+        else {
+            return None;
+        };
+        record.iter().find_map(|field| {
+            let lowering::BinderRecordItem::RecordPun { id, name } = field else {
+                return None;
+            };
+            name.as_deref().filter(|name| *name == label).map(|_| *id)
+        })
+    }
+
+    fn instance_declaration(
+        &mut self,
+        origin: InstanceCandidateOrigin,
+    ) -> GoResult<(FileId, Arc<ModuleData>, tree::TermDeclarationId)> {
+        let (file_id, declaration) = match origin {
+            InstanceCandidateOrigin::Instance(file_id, instance) => {
+                let module = self.context.module(file_id)?;
+                let item = module.indexed.pairs.instance_to_item(instance);
+                (file_id, item.and_then(|item| module.checked.tree.lookup_instance(item)))
+            }
+            InstanceCandidateOrigin::Derive(file_id, derive) => {
+                let module = self.context.module(file_id)?;
+                let item = module.indexed.pairs.derive_to_item(derive);
+                (file_id, item.and_then(|item| module.checked.tree.lookup_derive(item)))
+            }
+        };
+        let module = self.context.module(file_id)?;
+        match declaration {
+            Some(declaration) => Ok((file_id, module, declaration)),
+            None => Err(GoError::Unsupported {
+                definition: self.instance_name(origin)?.to_string(),
+                state: UnsupportedState::MissingDeclaration,
+            }),
+        }
+    }
+
+    fn instance_name(&mut self, origin: InstanceCandidateOrigin) -> GoResult<SmolStr> {
+        let name = match origin {
+            InstanceCandidateOrigin::Instance(file_id, instance) => {
+                let module = self.context.module(file_id)?;
+                let item = module.indexed.pairs.instance_to_item(instance);
+                item.and_then(|item| module.indexed.items[item].name.clone())
+            }
+            InstanceCandidateOrigin::Derive(file_id, derive) => {
+                let module = self.context.module(file_id)?;
+                let item = module.indexed.pairs.derive_to_item(derive);
+                item.and_then(|item| module.indexed.items[item].name.clone())
+            }
+        };
+        Ok(name.unwrap_or_else(|| SmolStr::new_static("instance")))
+    }
+
+    fn dictionary_names(&mut self, dictionaries: &[Dictionary]) -> GoResult<Vec<SmolStr>> {
+        let mut names = Vec::with_capacity(dictionaries.len());
+        for dictionary in dictionaries {
+            names.push(match dictionary {
+                Dictionary::Instance(instance) => self.instance_name(instance.origin)?,
+                _ => SmolStr::default(),
+            });
+        }
+        Ok(names)
+    }
+
+    /// The closed types an instance's variables stand for, and the dictionaries for
+    /// its own constraints, keyed the way its member bodies refer to them.
+    fn instance_environment(
+        &mut self,
+        module: &ModuleData,
+        declaration: tree::TermDeclarationId,
+        dictionary: &InstanceDictionary,
+    ) -> GoResult<(Substitution, FxHashMap<EvidenceBinderId, Dictionary>)> {
+        let TermDeclarationKind::Instance(instance) = &module.checked.tree[declaration].kind else {
+            unreachable!("invariant violated: instance origin has a non-instance declaration")
+        };
+        let signature = module.checked.tree[declaration].type_id;
+        let (names, _) = self.context.types.peel_quantifiers(signature);
+        let mut substitution = Substitution::default();
+        for (position, &argument) in dictionary.types.iter().enumerate() {
+            if let Some(&name) = names.get(position) {
+                substitution.insert(name, argument);
+            }
+            if let Some(&rigid) = instance.rigid_parameters.get(position)
+                && let Type::Rigid(name, _, _) = self.context.types.lookup(rigid)
+            {
+                substitution.insert(*name, argument);
+            }
+        }
+        let mut givens = FxHashMap::default();
+        for (evidence, dictionary) in instance.evidences.iter().zip(dictionary.context.iter()) {
+            if let Evidence::Given(binder) = evidence.evidence {
+                givens.insert(binder, dictionary.clone());
+            }
+        }
+        Ok((substitution, givens))
+    }
+
+    fn resolve_evidence(
+        &mut self,
+        scope: &EvidenceScope<'_>,
+        variable: EvidenceVarId,
+        constraint: TypeId,
+    ) -> GoResult<Dictionary> {
+        let EvidenceState::Solved(proof) = scope.module.checked.evidence[variable].state else {
+            return Err(scope.unsupported(UnsupportedState::UnsolvedEvidence));
+        };
+        self.resolve_proof(scope, proof, Some(constraint))
+    }
+
+    fn resolve_proof(
+        &mut self,
+        scope: &EvidenceScope<'_>,
+        proof: EvidenceId,
+        constraint: Option<TypeId>,
+    ) -> GoResult<Dictionary> {
+        let evidence = scope.module.checked.evidence[proof].clone();
+        match evidence {
+            Evidence::Variable(variable) => {
+                let EvidenceState::Solved(proof) = scope.module.checked.evidence[variable].state
+                else {
+                    return Err(scope.unsupported(UnsupportedState::UnsolvedEvidence));
+                };
+                self.resolve_proof(scope, proof, constraint)
+            }
+            Evidence::Given(binder) => match scope.givens.get(&binder) {
+                Some(dictionary) => Ok(dictionary.clone()),
+                None => Err(scope.unsupported(UnsupportedState::UnboundEvidence)),
+            },
+            Evidence::Instance { origin, subgoals } => {
+                self.resolve_instance(scope, origin, &subgoals, constraint)
+            }
+            Evidence::Superclass { parent, superclass } => {
+                let Dictionary::Instance(parent) = self.resolve_proof(scope, parent, None)? else {
+                    let superclass = format!("{superclass:?}");
+                    return Err(
+                        scope.unsupported(UnsupportedState::MissingSuperclass { superclass })
+                    );
+                };
+                self.resolve_superclass(scope, &parent, superclass)
+            }
+            Evidence::Trivial => Ok(Dictionary::Trivial),
+            Evidence::Synthesized(SynthesizedEvidence::IsSymbol(symbol)) => {
+                Ok(Dictionary::Symbol(SmolStr::from(string_literal(&symbol))))
+            }
+            Evidence::Synthesized(SynthesizedEvidence::Reflectable(reflectable)) => {
+                let reflected = match reflectable {
+                    ReflectableEvidence::Integer(value) => Reflected::Integer(value),
+                    ReflectableEvidence::String(value) => {
+                        Reflected::String(SmolStr::from(string_literal(&value)))
+                    }
+                    ReflectableEvidence::Boolean(value) => Reflected::Boolean(value),
+                    ReflectableEvidence::Ordering(ordering) => {
+                        Reflected::Ordering(match ordering {
+                            ReflectableOrdering::Less => SmolStr::new_static("LT"),
+                            ReflectableOrdering::Equal => SmolStr::new_static("EQ"),
+                            ReflectableOrdering::Greater => SmolStr::new_static("GT"),
+                        })
+                    }
+                };
+                Ok(Dictionary::Reflectable(reflected))
+            }
+            Evidence::Synthesized(SynthesizedEvidence::Service(_)) => {
+                Err(scope
+                    .unsupported(UnsupportedState::Construct { construct: "service evidence" }))
+            }
+        }
+    }
+
+    fn resolve_instance(
+        &mut self,
+        scope: &EvidenceScope<'_>,
+        origin: InstanceCandidateOrigin,
+        subgoals: &[EvidenceVarId],
+        constraint: Option<TypeId>,
+    ) -> GoResult<Dictionary> {
+        let (file_id, module, declaration) = self.instance_declaration(origin)?;
+        let signature = module.checked.tree[declaration].type_id;
+        let (names, body) = self.context.types.peel_quantifiers(signature);
+        let (contexts, head) = self.context.types.peel_constraints(body);
+        let mut bindings = Substitution::default();
+        if !names.is_empty() {
+            let Some(constraint) = constraint else {
+                return Err(scope.unsupported(UnsupportedState::Construct {
+                    construct: "superclasses of instances with type variables",
+                }));
+            };
+            let constraint = crate::monotype::expand_synonyms(&mut self.context, constraint)?;
+            if !self.context.types.match_type(head, constraint, &names, &mut bindings) {
+                let pretty =
+                    checking::core::pretty::Pretty::new(self.context.queries, &module.checked);
+                let constraint = match pretty.render(constraint) {
+                    Ok(rendered) => {
+                        format!("{rendered} against instance {}", self.instance_name(origin)?)
+                    }
+                    Err(_) => format!("{constraint:?}"),
+                };
+                return Err(scope.unsupported(UnsupportedState::InstanceMismatch { constraint }));
+            }
+        }
+        let mut recorded = Vec::with_capacity(subgoals.len());
+        for (&subgoal, &instance_constraint) in subgoals.iter().zip(contexts.iter()) {
+            let Some(constraint) = scope.module.checked.evidence[subgoal].constraint else {
+                recorded.push(None);
+                continue;
+            };
+            let constraint = self.context.types.substitute(constraint, scope.substitution);
+            let constraint = crate::monotype::expand_synonyms(&mut self.context, constraint)?;
+            self.context.types.match_type(instance_constraint, constraint, &names, &mut bindings);
+            recorded.push(Some(constraint));
+        }
+        let mut types = Vec::with_capacity(names.len());
+        for name in &names {
+            match bindings.get(name) {
+                Some(&bound) => types.push(bound),
+                None => {
+                    let unconstrained =
+                        self.context.queries.intern_type(Type::Unification(u32::MAX));
+                    types.push(unconstrained);
+                }
+            }
+        }
+        let mut context = Vec::with_capacity(subgoals.len());
+        for ((&subgoal, &instance_constraint), recorded) in
+            subgoals.iter().zip(contexts.iter()).zip(recorded)
+        {
+            let constraint = recorded
+                .unwrap_or_else(|| self.context.types.substitute(instance_constraint, &bindings));
+            context.push(self.resolve_evidence(scope, subgoal, constraint)?);
+        }
+        let dictionary = Arc::new(InstanceDictionary {
+            origin,
+            types: Arc::from(types),
+            context: Arc::from(context),
+        });
+        let TermDeclarationKind::Instance(instance) = &module.checked.tree[declaration].kind else {
+            return Err(scope.unsupported(UnsupportedState::MissingDeclaration));
+        };
+        if let tree::InstanceImplementation::Delegate { constraint, evidence } =
+            instance.implementation
+        {
+            let (substitution, givens) =
+                self.instance_environment(&module, declaration, &dictionary)?;
+            let constraint = self.context.types.substitute(constraint, &substitution);
+            let instance_scope = EvidenceScope {
+                file_id,
+                module: &module,
+                substitution: &substitution,
+                givens: &givens,
+                definition: scope.definition,
+            };
+            return self.resolve_evidence(&instance_scope, evidence, constraint);
+        }
+        Ok(Dictionary::Instance(dictionary))
+    }
+
+    fn resolve_superclass(
+        &mut self,
+        scope: &EvidenceScope<'_>,
+        parent: &Arc<InstanceDictionary>,
+        superclass: checking::evidence::SuperclassId,
+    ) -> GoResult<Dictionary> {
+        let (file_id, module, declaration) = self.instance_declaration(parent.origin)?;
+        let TermDeclarationKind::Instance(instance) = &module.checked.tree[declaration].kind else {
+            return Err(scope.unsupported(UnsupportedState::MissingDeclaration));
+        };
+        let Some(entry) = instance.superclasses.iter().find(|entry| entry.id == superclass) else {
+            let superclass = format!("{superclass:?}");
+            return Err(scope.unsupported(UnsupportedState::MissingSuperclass { superclass }));
+        };
+        let entry = *entry;
+        let (substitution, givens) = self.instance_environment(&module, declaration, parent)?;
+        let constraint = self.context.types.substitute(entry.constraint, &substitution);
+        let instance_scope = EvidenceScope {
+            file_id,
+            module: &module,
+            substitution: &substitution,
+            givens: &givens,
+            definition: scope.definition,
+        };
+        self.resolve_evidence(&instance_scope, entry.evidence, constraint)
+    }
+
+    fn type_suffix(&mut self, types: &[TypeId]) -> GoResult<String> {
+        let mut suffix = String::new();
+        for &type_id in types {
+            self.context.type_suffix(type_id, &mut suffix)?;
+        }
+        Ok(suffix)
+    }
+}
+
+fn alternatives_monotype(alternatives: &[Alternative]) -> MonotypeId {
+    match &alternatives[0].body {
+        Guarded::Unconditional(body) => body.monotype,
+        Guarded::Guards(branches) => branches[0].body.monotype,
+    }
+}
+
+fn string_literal(value: &lowering::StringLiteral) -> String {
+    String::from_utf16_lossy(value.as_utf16())
+}

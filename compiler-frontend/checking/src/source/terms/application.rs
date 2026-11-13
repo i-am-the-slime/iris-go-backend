@@ -18,12 +18,12 @@ pub struct UnanchoredApplication {
 }
 
 pub enum ImplicitApplication {
-    Type { result: TypeId },
+    Type { result: TypeId, instantiations: Vec<tree::TypeInstantiation> },
     Evidence { evidence: EvidenceVarId, constraint: TypeId, result: TypeId },
 }
 
 enum PendingImplicitApplication {
-    Type { result: TypeId },
+    Type { result: TypeId, instantiations: Vec<tree::TypeInstantiation> },
     Constraint { constraint: TypeId, result: TypeId },
 }
 
@@ -139,8 +139,23 @@ pub fn instantiate_callable_foralls<Q>(
     state: &mut CheckState,
     context: &CheckContext<Q>,
     binder: ForallBinder,
-    mut body: TypeId,
+    body: TypeId,
 ) -> QueryResult<TypeId>
+where
+    Q: ExternalQueries,
+{
+    let (instantiated, _) = instantiate_recorded_foralls(state, context, binder, body)?;
+    Ok(instantiated)
+}
+
+/// Instantiates like [`instantiate_callable_foralls`], also returning the
+/// argument chosen for each binder so the tree can record it.
+pub fn instantiate_recorded_foralls<Q>(
+    state: &mut CheckState,
+    context: &CheckContext<Q>,
+    binder: ForallBinder,
+    mut body: TypeId,
+) -> QueryResult<(TypeId, Vec<tree::TypeInstantiation>)>
 where
     Q: ExternalQueries,
 {
@@ -149,6 +164,7 @@ where
 
     let mut bindings = NameToType::default();
     bindings.insert(binder.name, argument);
+    let mut instantiations = vec![tree::TypeInstantiation { name: binder.name, argument }];
 
     safe_loop! {
         let expanded = normalise::expand(state, context, body)?;
@@ -163,10 +179,12 @@ where
         let binder_kind = normalise::expand(state, context, binder_kind)?;
         let argument = state.fresh_unification(context.queries, binder_kind);
         bindings.insert(binder.name, argument);
+        instantiations.push(tree::TypeInstantiation { name: binder.name, argument });
         body = inner;
     }
 
-    SubstituteName::many(state, context, &bindings, body)
+    let instantiated = SubstituteName::many(state, context, &bindings, body)?;
+    Ok((instantiated, instantiations))
 }
 
 pub fn instantiate_expression<Q>(
@@ -182,7 +200,10 @@ where
         match *context.lookup_type(type_id) {
             Type::Forall(binder_id, body) => {
                 let binder = context.lookup_forall_binder(binder_id);
-                expression.type_id = instantiate_callable_foralls(state, context, binder, body)?;
+                let (instantiated, instantiations) =
+                    instantiate_recorded_foralls(state, context, binder, body)?;
+                state.checked.tree.record_instantiations(expression.expression, instantiations);
+                expression.type_id = instantiated;
             }
             Type::Constrained(constraint, result) => {
                 let evidence = state.push_wanted(constraint);
@@ -236,8 +257,9 @@ where
     safe_loop! {
         match analyse_callable_head(state, context, function)? {
             CallableAnalysis::Forall { binder, body } => {
-                let result = instantiate_callable_foralls(state, context, binder, body)?;
-                implicit.push(PendingImplicitApplication::Type { result });
+                let (result, instantiations) =
+                    instantiate_recorded_foralls(state, context, binder, body)?;
+                implicit.push(PendingImplicitApplication::Type { result, instantiations });
                 function = result;
             }
             CallableAnalysis::Constraint { constraint, result } => {
@@ -246,8 +268,8 @@ where
             }
             CallableAnalysis::Function { argument, result } => {
                 let implicit = implicit.into_iter().map(|application| match application {
-                    PendingImplicitApplication::Type { result } => {
-                        ImplicitApplication::Type { result }
+                    PendingImplicitApplication::Type { result, instantiations } => {
+                        ImplicitApplication::Type { result, instantiations }
                     }
                     PendingImplicitApplication::Constraint { constraint, result } => {
                         let evidence = state.push_wanted(constraint);
@@ -276,7 +298,9 @@ where
     let applications =
         unification::subtype_with_applications(state, context, expression.type_id, expected)?;
     let applications = applications.into_iter().map(|application| match application {
-        unification::SubtypeApplication::Type { result } => ImplicitApplication::Type { result },
+        unification::SubtypeApplication::Type { result, instantiation } => {
+            ImplicitApplication::Type { result, instantiations: vec![instantiation] }
+        }
         unification::SubtypeApplication::Evidence { evidence, constraint, result } => {
             ImplicitApplication::Evidence { evidence, constraint, result }
         }
@@ -291,7 +315,8 @@ fn materialize_implicit_applications(
 ) -> ElaboratedExpression {
     for application in implicit {
         match application {
-            ImplicitApplication::Type { result } => {
+            ImplicitApplication::Type { result, instantiations } => {
+                state.checked.tree.record_instantiations(expression.expression, instantiations);
                 expression.type_id = result;
             }
             ImplicitApplication::Evidence { evidence, constraint, result } => {
@@ -372,7 +397,10 @@ where
     safe_loop! {
         match analyse_callable_head(state, context, function.type_id)? {
             CallableAnalysis::Forall { binder, body } => {
-                function.type_id = instantiate_callable_foralls(state, context, binder, body)?;
+                let (instantiated, instantiations) =
+                    instantiate_recorded_foralls(state, context, binder, body)?;
+                state.checked.tree.record_instantiations(function.expression, instantiations);
+                function.type_id = instantiated;
             }
             CallableAnalysis::Constraint { constraint, result } => {
                 let evidence = state.push_wanted(constraint);
@@ -421,12 +449,17 @@ where
                     let (argument, _) = types::check_kind(state, context, argument, binder_kind)?;
                     let result =
                         SubstituteName::one(state, context, binder.name, argument, body)?;
+                    let instantiation = tree::TypeInstantiation { name: binder.name, argument };
+                    state.checked.tree.record_instantiations(function.expression, [instantiation]);
                     let application =
                         ElaboratedExpression { type_id: result, expression: function.expression };
                     break Ok(ApplicationStep::Applied(application));
                 }
 
-                function.type_id = instantiate_callable_foralls(state, context, binder, body)?;
+                let (instantiated, instantiations) =
+                    instantiate_recorded_foralls(state, context, binder, body)?;
+                state.checked.tree.record_instantiations(function.expression, instantiations);
+                function.type_id = instantiated;
             }
             Type::Constrained(constraint, result) => {
                 let evidence = state.push_wanted(constraint);
