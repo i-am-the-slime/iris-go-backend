@@ -786,6 +786,29 @@ fn canonicalise<Q>(
 where
     Q: checking::ExternalQueries,
 {
+    // Below a newtype expansion the result depends on the expansions above it,
+    // so only outermost results are remembered.
+    if expansions > 0 || !expanding.is_empty() {
+        return canonicalise_uncached(context, type_id, expansions, expanding, erase);
+    }
+    if let Some(&canonical) = context.canonical.get(&(type_id, erase)) {
+        return Ok(canonical);
+    }
+    let canonical = canonicalise_uncached(context, type_id, expansions, expanding, erase)?;
+    context.canonical.insert((type_id, erase), canonical);
+    Ok(canonical)
+}
+
+fn canonicalise_uncached<Q>(
+    context: &mut Context<'_, Q>,
+    type_id: TypeId,
+    expansions: usize,
+    expanding: &mut Vec<TypeId>,
+    erase: bool,
+) -> QueryResult<TypeId>
+where
+    Q: checking::ExternalQueries,
+{
     if expansions > NEWTYPE_EXPANSION_LIMIT {
         return Ok(type_id);
     }
