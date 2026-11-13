@@ -1173,7 +1173,7 @@ fn alternatives_size(alternatives: &[Alternative]) -> usize {
     total
 }
 
-fn is_trivial(expression: &Expression) -> bool {
+pub(crate) fn is_trivial(expression: &Expression) -> bool {
     match &expression.kind {
         ExpressionKind::Literal(_) | ExpressionKind::Unit | ExpressionKind::Local(_) => true,
         ExpressionKind::Function(_) => true,

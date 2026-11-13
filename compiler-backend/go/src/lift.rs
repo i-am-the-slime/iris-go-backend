@@ -6,7 +6,7 @@ use crate::mono::{
     Pattern, PatternKind, Program,
 };
 use crate::monotype::{Monotype, MonotypeId, Monotypes};
-use crate::simplify::{for_each_child, for_each_child_mut};
+use crate::simplify::{for_each_child, for_each_child_mut, is_trivial};
 
 pub fn lift_local_functions(
     program: Program,
@@ -68,7 +68,7 @@ fn saturate_wrappers(
                 continue;
             };
             let ExpressionKind::Function(callee) = function.kind else { continue };
-            if callee.0 as usize == index {
+            if callee.0 as usize == index || !arguments.iter().all(is_trivial) {
                 continue;
             }
             let callee = &functions[callee.0 as usize];
