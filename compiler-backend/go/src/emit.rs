@@ -998,6 +998,14 @@ where
                 let record = self.fiber_record(handle, result, out)?;
                 return self.deliver(record, result, sink, out);
             }
+            Foreign::AssocArray => {
+                let array = self.value(&arguments[0], out)?;
+                let associated = self.associated_elements(result)?;
+                let map = GoFunction { package: GoPackage::Direct, name: "MapWithIndex" };
+                let elements = GoExpression::Unary { operator: "*", operand: Box::new(array) };
+                let associated = call(self.go_function(map), vec![associated, elements]);
+                return self.deliver(associated, result, sink, out);
+            }
             Foreign::Project { file_id, term, .. } => {
                 let thunk = self.project_call(file_id, term, arguments, out)?;
                 let performed = self.out_of_convention(call(thunk, vec![]), result)?;
@@ -1303,11 +1311,15 @@ where
         if !boundary.instantiate {
             return Ok(function);
         }
-        let (Monotype::Object(element)
-        | Monotype::MutableArray(element)
-        | Monotype::Nullable(element)) = self.monotypes.get(result).clone()
-        else {
-            unreachable!("invariant violated: an instantiated foreign returns a collection")
+        let element = match self.monotypes.get(result).clone() {
+            Monotype::Object(element)
+            | Monotype::MutableArray(element)
+            | Monotype::Nullable(element) => element,
+            Monotype::Function(argument, _) => match self.monotypes.get(argument) {
+                Monotype::Array(element) => *element,
+                _ => unreachable!("invariant violated: an instantiated function takes an array"),
+            },
+            _ => unreachable!("invariant violated: an instantiated foreign returns a collection"),
         };
         let GoExpression::Qualified { package, name } = function else { unreachable!() };
         let element = render_type(&self.go_type(element)?);
@@ -1336,6 +1348,15 @@ where
         let mut values = vec![];
         for (position, argument) in arguments.iter().enumerate() {
             let value = match boundary.maybe {
+                _ if let Some(destructor) = boundary.maybe_destructor
+                    && destructor.position == position =>
+                {
+                    let mut witness = arguments[destructor.witness].monotype;
+                    while let Some((_, result)) = self.monotypes.function_parts(witness) {
+                        witness = result;
+                    }
+                    self.just_value_function(witness)?
+                }
                 _ if boundary.ignored.contains(&position) => identifier_expression("nil"),
                 Some(constructors) if constructors.just == position => {
                     self.just_function(maybe, constructors.integer_payload)?
@@ -1486,6 +1507,64 @@ where
         integer_payload: bool,
     ) -> GoResult<GoExpression> {
         self.constructor_function(maybe, "Just", integer_payload)
+    }
+
+    fn just_value_function(&mut self, maybe: MonotypeId) -> GoResult<GoExpression> {
+        let (data, just) = self.constructor_named(maybe, "Just")?;
+        let layout = self.data_layout(&data)?;
+        let constructor = &layout.constructors[just];
+        let [(payload, payload_monotype)] = &constructor.fields[..] else {
+            unreachable!("invariant violated: Just has one field")
+        };
+        let parameter = self.temporary("maybe");
+        let value = identifier_expression(&parameter);
+        let is_just =
+            binary("==", field(value.clone(), "Tag"), identifier_expression(&constructor.tag));
+        let payload = GoExpression::Address(Box::new(field(value, payload)));
+        let payload_type = self.go_type(*payload_monotype)?;
+        Ok(GoExpression::Function {
+            parameters: vec![(parameter, self.go_type(maybe)?)],
+            result: Some(GoType::Pointer(Box::new(payload_type))),
+            body: vec![
+                GoStatement::If {
+                    condition: is_just,
+                    then: vec![GoStatement::Return(Some(payload))],
+                    otherwise: vec![],
+                },
+                GoStatement::Return(Some(identifier_expression("nil"))),
+            ],
+        })
+    }
+
+    fn associated_elements(&mut self, associated: MonotypeId) -> GoResult<GoExpression> {
+        let Monotype::Array(record) = self.monotypes.get(associated).clone() else {
+            unreachable!("invariant violated: toAssocArray returns an array")
+        };
+        let element = self.record_field_monotype(record, "value");
+        let index = self.temporary("index");
+        let value = self.temporary("value");
+        let record_type = GoType::Named(self.record_name(record)?);
+        let associate = GoExpression::Composite {
+            type_: record_type.clone(),
+            fields: vec![
+                (Some(identifier("index")), identifier_expression(&index)),
+                (Some(identifier("value")), identifier_expression(&value)),
+            ],
+        };
+        let element_type = self.go_type(element)?;
+        let inner = GoExpression::Function {
+            parameters: vec![(value, element_type.clone())],
+            result: Some(record_type.clone()),
+            body: vec![GoStatement::Return(Some(associate))],
+        };
+        Ok(GoExpression::Function {
+            parameters: vec![(index, GoType::Named("int32".into()))],
+            result: Some(GoType::Function {
+                parameters: vec![element_type],
+                result: Some(Box::new(record_type)),
+            }),
+            body: vec![GoStatement::Return(Some(inner))],
+        })
     }
 
     fn constructor_function(
@@ -2293,6 +2372,14 @@ where
             };
             let record = self.value(&arguments[1], out)?;
             return Ok(field(record, &identifier(label)));
+        }
+        if let Foreign::Record(_) = foreign {
+            return Err(GoError::Unsupported {
+                definition: "code generation".into(),
+                state: crate::error::UnsupportedState::Construct {
+                    construct: "record builders with labels unknown at compile time",
+                },
+            });
         }
         if let Foreign::Crash = foreign {
             let message = self.value(&arguments[0], out)?;

@@ -43,6 +43,41 @@ where
         }
     }
 
+    pub fn rigid_names(&self, type_id: TypeId, names: &mut Vec<Name>) {
+        if !self.queries.lookup_type_flags(type_id).has_rigid() {
+            return;
+        }
+        match self.lookup(type_id) {
+            Type::Rigid(name, _, _) => {
+                if !names.contains(name) {
+                    names.push(*name);
+                }
+            }
+            Type::Application(function, argument) | Type::Function(function, argument) => {
+                self.rigid_names(*function, names);
+                self.rigid_names(*argument, names);
+            }
+            Type::Constrained(constraint, inner) => {
+                self.rigid_names(*constraint, names);
+                self.rigid_names(*inner, names);
+            }
+            Type::Forall(_, inner)
+            | Type::Kinded(inner, _)
+            | Type::ConstraintOrigin(inner, _)
+            | Type::KindApplication(inner, _) => self.rigid_names(*inner, names),
+            Type::Row(row) => {
+                let row = self.queries.lookup_row_type(*row);
+                for field in row.fields.iter() {
+                    self.rigid_names(field.id, names);
+                }
+                if let Some(tail) = row.tail {
+                    self.rigid_names(tail, names);
+                }
+            }
+            _ => {}
+        }
+    }
+
     pub fn lookup(&self, type_id: TypeId) -> &'q Type {
         self.queries.lookup_type(type_id)
     }

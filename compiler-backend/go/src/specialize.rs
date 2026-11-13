@@ -33,6 +33,8 @@ use crate::scheme::{
 };
 use crate::types::Substitution;
 
+mod traverse;
+
 const SPECIALIZATION_LIMIT: usize = 100_000;
 const LOCAL_SPECIALIZATION_LIMIT: usize = 64;
 
@@ -1083,6 +1085,9 @@ where
             }
             argument.monotype = monotype;
             return Ok(argument);
+        }
+        if let Some(reference) = self.traversal_reference(scope, head, &arguments)? {
+            return self.traverse_array(scope, reference, &arguments);
         }
         let function = match module.checked.tree[head].kind {
             tree::ExpressionKind::Constructor { .. }

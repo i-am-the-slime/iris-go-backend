@@ -1,0 +1,247 @@
+use smol_str::SmolStr;
+
+use super::Simplifier;
+use crate::foreign::{self, Foreign, RecordOperation};
+use crate::mono::{Binding, Expression, ExpressionKind, Literal, Local, LocalId};
+use crate::monotype::{Monotype, MonotypeId};
+
+type Fields = Vec<(SmolStr, Expression)>;
+
+impl Simplifier<'_> {
+    pub(super) fn record_operation(
+        &mut self,
+        operation: RecordOperation,
+        arguments: Vec<Expression>,
+        monotype: MonotypeId,
+    ) -> Expression {
+        let mut bindings = vec![];
+        let Some(fields) = self.operate(operation, &arguments, &mut bindings) else {
+            let kind = ExpressionKind::Foreign { foreign: Foreign::Record(operation), arguments };
+            return Expression::new(kind, monotype);
+        };
+        let Some(fields) = self.retyped(fields, monotype) else {
+            let kind = ExpressionKind::Foreign { foreign: Foreign::Record(operation), arguments };
+            return Expression::new(kind, monotype);
+        };
+        let mut record = Expression::new(ExpressionKind::Record(fields), monotype);
+        for bindings in bindings.into_iter().rev() {
+            record =
+                Expression::new(ExpressionKind::Let { bindings, body: Box::new(record) }, monotype);
+        }
+        self.expression(record)
+    }
+
+    pub(super) fn coerce(&mut self, value: Expression, monotype: MonotypeId) -> Expression {
+        if value.monotype == monotype {
+            return value;
+        }
+        if let Monotype::Record(_) = self.monotypes.get(value.monotype)
+            && let Monotype::Opaque = self.monotypes.get(monotype)
+        {
+            return self.foreign_record(value, monotype);
+        }
+        Expression::new(ExpressionKind::Coerce(Box::new(value)), monotype)
+    }
+
+    pub(super) fn remember_record_order(&mut self, binding: &Binding) {
+        if let Some(order) = self.record_order(&binding.value) {
+            self.record_orders.insert(binding.local.id, order);
+        }
+    }
+
+    fn record_order(&self, record: &Expression) -> Option<Vec<SmolStr>> {
+        match &record.kind {
+            ExpressionKind::Record(fields) => {
+                Some(fields.iter().map(|(label, _)| label.clone()).collect())
+            }
+            ExpressionKind::Let { body, .. } => self.record_order(body),
+            ExpressionKind::Local(id) => self.record_orders.get(id).cloned(),
+            _ => None,
+        }
+    }
+
+    fn foreign_record(&mut self, record: Expression, foreign: MonotypeId) -> Expression {
+        let mut bindings = vec![];
+        let Some(fields) = self.fields(&record, &mut bindings) else {
+            return Expression::new(ExpressionKind::Coerce(Box::new(record)), foreign);
+        };
+        let string = self.monotypes.intern(Monotype::String);
+        let keys = self.monotypes.intern(Monotype::Array(string));
+        let values = self.monotypes.intern(Monotype::Array(foreign));
+        let (labels, fields): (Vec<_>, Vec<_>) = fields
+            .into_iter()
+            .map(|(label, value)| {
+                let label = ExpressionKind::Literal(Literal::String(label.to_string()));
+                let value = ExpressionKind::Coerce(Box::new(value));
+                (Expression::new(label, string), Expression::new(value, foreign))
+            })
+            .unzip();
+        let arguments = vec![
+            Expression::new(ExpressionKind::Array(labels), keys),
+            Expression::new(ExpressionKind::Array(fields), values),
+        ];
+        let kind = ExpressionKind::Foreign { foreign: foreign::FOREIGN_RECORD, arguments };
+        let mut converted = Expression::new(kind, foreign);
+        for bindings in bindings.into_iter().rev() {
+            let kind = ExpressionKind::Let { bindings, body: Box::new(converted) };
+            converted = Expression::new(kind, foreign);
+        }
+        self.expression(converted)
+    }
+
+    pub(super) fn settle_records(&mut self, expression: &mut Expression) {
+        if let ExpressionKind::Let { bindings, body } = &mut expression.kind {
+            for binding in bindings.iter_mut() {
+                self.settle_records(&mut binding.value);
+                self.remember_record_order(binding);
+            }
+            self.settle_records(body);
+            return;
+        }
+        super::for_each_child_mut(expression, &mut |child| self.settle_records(child));
+        let monotype = expression.monotype;
+        match &mut expression.kind {
+            ExpressionKind::Foreign { foreign: Foreign::Record(operation), arguments } => {
+                let operation = *operation;
+                let arguments = std::mem::take(arguments);
+                *expression = self.record_operation(operation, arguments, monotype);
+            }
+            ExpressionKind::Coerce(value) => {
+                let value = std::mem::replace(
+                    &mut **value,
+                    Expression::new(ExpressionKind::Unit, monotype),
+                );
+                *expression = self.coerce(value, monotype);
+            }
+            _ => {}
+        }
+    }
+
+    fn operate(
+        &mut self,
+        operation: RecordOperation,
+        arguments: &[Expression],
+        bindings: &mut Vec<Vec<Binding>>,
+    ) -> Option<Fields> {
+        match (operation, arguments) {
+            (RecordOperation::Insert, [label, value, record]) => {
+                let label = literal_label(label)?;
+                let mut fields = self.fields(record, bindings)?;
+                assign(&mut fields, label, value.clone());
+                Some(fields)
+            }
+            (RecordOperation::Modify, [label, function, record]) => {
+                let label = literal_label(label)?;
+                let mut fields = self.fields(record, bindings)?;
+                let (_, previous) = fields.iter_mut().find(|(field, _)| *field == label)?;
+                let result = self.monotypes.result_after(function.monotype, 1);
+                let modified = ExpressionKind::Apply {
+                    function: Box::new(function.clone()),
+                    arguments: vec![previous.clone()],
+                };
+                *previous = Expression::new(modified, result);
+                Some(fields)
+            }
+            (RecordOperation::Delete, [label, record]) => {
+                let label = literal_label(label)?;
+                let mut fields = self.fields(record, bindings)?;
+                fields.retain(|(field, _)| *field != label);
+                Some(fields)
+            }
+            (RecordOperation::Rename, [from, to, record]) => {
+                let from = literal_label(from)?;
+                let to = literal_label(to)?;
+                let mut fields = self.fields(record, bindings)?;
+                let position = fields.iter().position(|(field, _)| *field == from)?;
+                let (_, value) = fields.remove(position);
+                assign(&mut fields, to, value);
+                Some(fields)
+            }
+            (RecordOperation::Union, [left, right]) => {
+                let left = self.fields(left, bindings)?;
+                let mut fields = self.fields(right, bindings)?;
+                for (label, value) in left {
+                    assign(&mut fields, label, value);
+                }
+                Some(fields)
+            }
+            _ => None,
+        }
+    }
+
+    fn fields(&mut self, record: &Expression, bindings: &mut Vec<Vec<Binding>>) -> Option<Fields> {
+        match &record.kind {
+            ExpressionKind::Record(fields) => Some(fields.clone()),
+            ExpressionKind::Let { bindings: inner, body } => {
+                bindings.push(inner.clone());
+                self.fields(body, bindings)
+            }
+            _ => {
+                let Monotype::Record(types) = self.monotypes.get(record.monotype).clone() else {
+                    return None;
+                };
+                let order = match self.record_order(record) {
+                    Some(order) if order.len() == types.len() => order,
+                    _ if !self.records_settled => return None,
+                    _ => types.iter().map(|field| field.label.clone()).collect(),
+                };
+                let record = self.shared(record.clone(), bindings);
+                let mut fields = Vec::with_capacity(order.len());
+                for label in order {
+                    let field = types.iter().find(|field| field.label == label)?;
+                    let kind = ExpressionKind::Access {
+                        record: Box::new(record.clone()),
+                        label: label.clone(),
+                    };
+                    fields.push((label, Expression::new(kind, field.monotype)));
+                }
+                Some(fields)
+            }
+        }
+    }
+
+    fn retyped(&mut self, fields: Fields, monotype: MonotypeId) -> Option<Fields> {
+        let Monotype::Record(types) = self.monotypes.get(monotype).clone() else {
+            return None;
+        };
+        if fields.len() != types.len() {
+            return None;
+        }
+        let mut retyped = Vec::with_capacity(fields.len());
+        for (label, value) in fields {
+            let field = types.iter().find(|field| field.label == label)?;
+            if value.monotype == field.monotype {
+                retyped.push((label, value));
+                continue;
+            }
+            let coerced = ExpressionKind::Coerce(Box::new(value));
+            retyped.push((label, Expression::new(coerced, field.monotype)));
+        }
+        Some(retyped)
+    }
+
+    fn shared(&mut self, record: Expression, bindings: &mut Vec<Vec<Binding>>) -> Expression {
+        if let ExpressionKind::Local(_) = record.kind {
+            return record;
+        }
+        let template = Local { id: LocalId(0), name: "record".into(), monotype: record.monotype };
+        let local = self.fresh(&template);
+        let reference = Expression::new(ExpressionKind::Local(local.id), local.monotype);
+        bindings.push(vec![Binding { local, value: record }]);
+        reference
+    }
+}
+
+fn assign(fields: &mut Fields, label: SmolStr, value: Expression) {
+    match fields.iter_mut().find(|(field, _)| *field == label) {
+        Some((_, previous)) => *previous = value,
+        None => fields.push((label, value)),
+    }
+}
+
+fn literal_label(label: &Expression) -> Option<SmolStr> {
+    match &label.kind {
+        ExpressionKind::Literal(Literal::String(label)) => Some(SmolStr::from(label.as_str())),
+        _ => None,
+    }
+}

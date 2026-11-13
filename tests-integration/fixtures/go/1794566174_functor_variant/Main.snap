@@ -97,19 +97,17 @@ func convert6(value *Say) *SayInt {
 var main_ = initializeMain_()
 
 func initializeMain_() []string {
-	v := say
 	original := func(value int32) int32 {
 		return value * 10
 	}
-	v2 := count
 	original2 := func(value2 int32) int32 {
 		return value2 * 10
 	}
-	return []string{describe(say), describe(count), describe(Map_Type_Value{type_: v.type_, value: v.map_(func(coerced any) any {
+	return []string{describe(say), describe(count), describe(Map_Type_Value{type_: say.type_, value: say.map_(func(coerced any) any {
 		return original(coerced.(int32))
-	})(v.value), map_: v.map_}), describe(Map_Type_Value{type_: v2.type_, value: v2.map_(func(coerced2 any) any {
+	})(say.value), map_: say.map_}), describe(Map_Type_Value{type_: count.type_, value: count.map_(func(coerced2 any) any {
 		return original2(coerced2.(int32))
-	})(v2.value), map_: v2.map_})}
+	})(count.value), map_: count.map_})}
 }
 
 var describe func(Map_Type_Value) string = func(r2 Map_Type_Value) string {
@@ -143,17 +141,15 @@ func case_IntString(r Map_Type_Value) string {
 }
 
 func onCountIntStringRecordRecordCount(p Proxy2, f func(*CountInt) string, g func(Map_Type_Value) string, r Map_Type_Value) string {
-	scrutinee := r
-	if scrutinee.type_ == "count" {
-		return f(convert5(scrutinee.value.(*Count)))
+	if r.type_ == "count" {
+		return f(convert5(r.value.(*Count)))
 	}
 	return g(r)
 }
 
 func onSayIntStringRecordCountRecordCountSay(p Proxy, f func(*SayInt) string, g func(Map_Type_Value) string, r Map_Type_Value) string {
-	scrutinee := r
-	if scrutinee.type_ == "say" {
-		return f(convert6(scrutinee.value.(*Say)))
+	if r.type_ == "say" {
+		return f(convert6(r.value.(*Say)))
 	}
 	return g(r)
 }

@@ -1,0 +1,96 @@
+---
+source: tests-integration/src/fixtures.rs
+---
+package main
+
+import (
+	"fmt"
+	"github.com/i-am-the-slime/purs-backend-go/go-support/array"
+	"github.com/i-am-the-slime/purs-backend-go/go-support/direct"
+	"github.com/i-am-the-slime/purs-backend-go/go-support/prim"
+)
+
+type MaybeArrayInt struct {
+	Tag   int
+	Just0 []int32
+}
+
+const (
+	MaybeArrayIntNothing = iota
+	MaybeArrayIntJust
+)
+
+type MaybeFnIntArrayInt struct {
+	Tag   int
+	Just0 func(int32) []int32
+}
+
+const (
+	MaybeFnIntArrayIntNothing = iota
+	MaybeFnIntArrayIntJust
+)
+
+type MaybeInt struct {
+	Tag   int
+	Just0 int32
+}
+
+const (
+	MaybeIntNothing = iota
+	MaybeIntJust
+)
+
+var main_ = initializeMain_()
+
+func initializeMain_() *MaybeArrayInt {
+	array_ := array.Append([]int32{2}, []int32{4, 8})
+	append_ := direct.Appender[int32]()
+	n := array_[0]
+	var result4 *MaybeInt
+	if int32(prim.IntMod(int(n), int(2))) == 0 {
+		result4 = &MaybeInt{Tag: MaybeIntJust, Just0: int32(prim.IntDiv(int(n), int(2)))}
+	} else {
+		result4 = &MaybeInt{Tag: MaybeIntNothing}
+	}
+	var result3 *MaybeArrayInt
+	switch result4.Tag {
+	case MaybeIntJust:
+		result3 = &MaybeArrayInt{Tag: MaybeArrayIntJust, Just0: []int32{result4.Just0}}
+	default:
+		result3 = &MaybeArrayInt{Tag: MaybeArrayIntNothing}
+	}
+	performed := array.Foldl(func(accumulator *MaybeArrayInt) func(int32) *MaybeArrayInt {
+		return func(element int32) *MaybeArrayInt {
+			var result *MaybeFnIntArrayInt
+			switch accumulator.Tag {
+			case MaybeArrayIntJust:
+				result = &MaybeFnIntArrayInt{Tag: MaybeFnIntArrayIntJust, Just0: append_(accumulator.Just0)}
+			default:
+				result = &MaybeFnIntArrayInt{Tag: MaybeFnIntArrayIntNothing}
+			}
+			switch result.Tag {
+			case MaybeFnIntArrayIntJust:
+				var result2 *MaybeInt
+				if int32(prim.IntMod(int(element), int(2))) == 0 {
+					result2 = &MaybeInt{Tag: MaybeIntJust, Just0: int32(prim.IntDiv(int(element), int(2)))}
+				} else {
+					result2 = &MaybeInt{Tag: MaybeIntNothing}
+				}
+				switch result2.Tag {
+				case MaybeIntJust:
+					return &MaybeArrayInt{Tag: MaybeArrayIntJust, Just0: result.Just0(result2.Just0)}
+				default:
+					return &MaybeArrayInt{Tag: MaybeArrayIntNothing}
+				}
+			case MaybeFnIntArrayIntNothing:
+				return &MaybeArrayInt{Tag: MaybeArrayIntNothing}
+			}
+			panic("Failed pattern match")
+		}
+	}, result3, array.Slice(int(1), int(int32(len(array_))), array_))
+	return performed
+}
+
+func main() {
+	fmt.Println(main_)
+}

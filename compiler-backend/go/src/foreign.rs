@@ -48,6 +48,9 @@ pub enum Foreign {
     MaybeIndex,
     Range,
     RecordGet,
+    Record(RecordOperation),
+    AssocArray,
+    ObjectFoldM,
     Unfoldr,
     Unfoldr1,
     Print,
@@ -65,6 +68,24 @@ pub enum Foreign {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum RecordOperation {
+    Insert,
+    Modify,
+    Delete,
+    Rename,
+    Union,
+}
+
+impl RecordOperation {
+    pub fn arity(self) -> usize {
+        match self {
+            RecordOperation::Insert | RecordOperation::Modify | RecordOperation::Rename => 3,
+            RecordOperation::Delete | RecordOperation::Union => 2,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct Boundary {
     pub integers: &'static [usize],
     pub integer_result: bool,
@@ -75,6 +96,7 @@ pub struct Boundary {
     pub instantiate: bool,
     pub unit_values: bool,
     pub record_arguments: &'static [usize],
+    pub maybe_destructor: Option<MaybeDestructor>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -95,6 +117,7 @@ const PLAIN: Boundary = Boundary {
     instantiate: false,
     unit_values: false,
     record_arguments: &[],
+    maybe_destructor: None,
 };
 
 const fn integers(arguments: &'static [usize], result: bool) -> Boundary {
@@ -125,6 +148,12 @@ const fn maybe_witnessed(just: usize, nothing: usize, witness: usize) -> Boundar
 const fn maybe_integer(just: usize, nothing: usize, integers: &'static [usize]) -> Boundary {
     let constructors = MaybeConstructors { just, nothing, integer_payload: true, witness: None };
     Boundary { integers, maybe: Some(constructors), ..PLAIN }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct MaybeDestructor {
+    pub position: usize,
+    pub witness: usize,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -233,15 +262,17 @@ impl Foreign {
             | Foreign::Project { arity, .. } => arity,
             Foreign::Constant(_) | Foreign::Unit | Foreign::MutableArrayNew => 0,
             Foreign::UnsafeCoerce | Foreign::Identity | Foreign::EffectPure | Foreign::Print => 1,
-            Foreign::Throw | Foreign::Crash | Foreign::MakeAff => 1,
+            Foreign::Throw | Foreign::Crash | Foreign::MakeAff | Foreign::AssocArray => 1,
             Foreign::ForkFiber | Foreign::NewFiber => 2,
             Foreign::RunEffect | Foreign::EffectUntil => 1,
             Foreign::ReferenceNew | Foreign::ReferenceRead => 1,
             Foreign::EffectBind | Foreign::EffectMap | Foreign::EffectForEach => 2,
             Foreign::EffectTraverseArray | Foreign::EffectForArray | Foreign::EffectWhile => 2,
             Foreign::EffectFor => 3,
+            Foreign::ObjectFoldM => 4,
             Foreign::MaybeIndex => 4,
             Foreign::Range | Foreign::RecordGet => 2,
+            Foreign::Record(operation) => operation.arity(),
             Foreign::Unfoldr | Foreign::Unfoldr1 => 6,
             Foreign::ReferenceWrite | Foreign::ReferenceWriteThrough | Foreign::ReferenceModify => {
                 2
@@ -280,6 +311,7 @@ impl Foreign {
                 | Foreign::ReferenceWriteThrough
                 | Foreign::ReferenceModify
                 | Foreign::MutableArrayNew
+                | Foreign::AssocArray
                 | Foreign::Throw
                 | Foreign::MakeAff
                 | Foreign::ForkFiber
@@ -367,6 +399,20 @@ const fn compare(comparison: Comparison) -> Foreign {
     Foreign::Operator(Operator::Compare(comparison))
 }
 
+pub const ARRAY_FOLD: Foreign = array("Foldl", 3);
+
+pub const EFFECT_FOLD: Foreign = direct("FoldlEffect", 3);
+
+pub const OBJECT_KEYS: Foreign = object("Keys", 1, PLAIN);
+
+pub const OBJECT_INDEX: Foreign = object("UnsafeIndex", 2, PLAIN);
+
+pub const ARRAY_SLICE: Foreign = array_with("Slice", 3, integers(&[0, 1], false));
+
+pub const FOREIGN_RECORD: Foreign = direct("ForeignRecord", 2);
+
+pub const APPENDER: Foreign = perform_in(GoPackage::Direct, "Appender", 0, INSTANTIATE);
+
 const FOREIGN_IMPORTS: &[(&str, &str, Foreign)] = &[
     ("Data.Semiring", "intAdd", Foreign::Operator(Operator::IntAdd)),
     ("Data.Semiring", "intMul", Foreign::Operator(Operator::IntMultiply)),
@@ -393,6 +439,14 @@ const FOREIGN_IMPORTS: &[(&str, &str, Foreign)] = &[
     ("Data.Show", "intercalate", prim("StringJoinWith", 2)),
     ("Control.Apply", "arrayApply", array("Apply", 2)),
     ("Record.Unsafe", "unsafeGet", Foreign::RecordGet),
+    ("Record.Unsafe", "unsafeSet", Foreign::Record(RecordOperation::Insert)),
+    ("Record.Unsafe", "unsafeDelete", Foreign::Record(RecordOperation::Delete)),
+    ("Record.Unsafe.Union", "unsafeUnionFn", Foreign::Record(RecordOperation::Union)),
+    ("Record.Builder", "copyRecord", Foreign::Identity),
+    ("Record.Builder", "unsafeInsert", Foreign::Record(RecordOperation::Insert)),
+    ("Record.Builder", "unsafeModify", Foreign::Record(RecordOperation::Modify)),
+    ("Record.Builder", "unsafeDelete", Foreign::Record(RecordOperation::Delete)),
+    ("Record.Builder", "unsafeRename", Foreign::Record(RecordOperation::Rename)),
     ("Data.HeytingAlgebra", "boolConj", Foreign::Operator(Operator::BooleanAnd)),
     ("Data.HeytingAlgebra", "boolDisj", Foreign::Operator(Operator::BooleanOr)),
     ("Data.HeytingAlgebra", "boolNot", Foreign::Operator(Operator::BooleanNot)),
@@ -436,6 +490,8 @@ const FOREIGN_IMPORTS: &[(&str, &str, Foreign)] = &[
     ("Data.Array", "_insertAt", array_with("InsertAt", 5, maybe(0, 1, &[2]))),
     ("Data.Array", "_deleteAt", direct_with("DeleteAt", 4, maybe(0, 1, &[]))),
     ("Data.Array", "_updateAt", direct_with("UpdateAt", 5, maybe(0, 1, &[]))),
+    ("Data.Array.NonEmpty.Internal", "foldr1Impl", array("Foldr1", 2)),
+    ("Data.Array.NonEmpty.Internal", "foldl1Impl", array("Foldl1", 2)),
     ("Data.Array.ST", "new", Foreign::MutableArrayNew),
     ("Data.Array.ST", "unsafeFreezeImpl", thunk(GoPackage::Array, "UnsafeFreeze", 1, PLAIN)),
     ("Data.Array.ST", "unsafeThawImpl", thunk(GoPackage::Array, "UnsafeThaw", 1, PLAIN)),
@@ -456,6 +512,7 @@ const FOREIGN_IMPORTS: &[(&str, &str, Foreign)] = &[
     ),
     ("Data.Array.ST", "spliceImpl", thunk(GoPackage::Array, "Splice", 4, integers(&[0, 1], false))),
     ("Data.Array.ST", "sortByImpl", perform("SortByMutable", 3)),
+    ("Data.Array.ST", "toAssocArrayImpl", Foreign::AssocArray),
     (
         "Data.Array.ST.Partial",
         "peekImpl",
@@ -536,7 +593,20 @@ const FOREIGN_IMPORTS: &[(&str, &str, Foreign)] = &[
     ("Foreign.Object", "runST", Foreign::RunEffect),
     ("Foreign.Object", "_fmapObject", object("FmapObject", 2, PLAIN)),
     ("Foreign.Object", "_mapWithKey", object("MapWithKey", 2, PLAIN)),
-    ("Foreign.Object", "_foldM", object("FoldM", 4, PLAIN)),
+    ("Foreign.Object", "_foldM", Foreign::ObjectFoldM),
+    (
+        "Foreign.Object",
+        "_foldSCObject",
+        direct_with(
+            "FoldSCObject",
+            4,
+            Boundary {
+                ignored: &[3],
+                maybe_destructor: Some(MaybeDestructor { position: 3, witness: 2 }),
+                ..PLAIN
+            },
+        ),
+    ),
     ("Foreign.Object", "all", object("All", 2, PLAIN)),
     ("Foreign.Object", "size", object("Size", 1, integers(&[], true))),
     ("Foreign.Object", "_lookup", object("Lookup", 4, PLAIN)),
