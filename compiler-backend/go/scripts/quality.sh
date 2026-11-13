@@ -41,7 +41,7 @@ measure() {
   PATTERN='$n += () = /\.\((?!type\))[A-Za-z_*\[]/g; END { print $n+0, "\n" }' count "${dirs[@]}" | sed 's/^/type-assertion /'
   PATTERN='$n += () = /\breflect\./g; END { print $n+0, "\n" }' count "${dirs[@]}" | sed 's/^/reflect /'
   PATTERN='$n += () = /\bunsafe\./g; END { print $n+0, "\n" }' count "${dirs[@]}" | sed 's/^/unsafe /'
-  PATTERN='$n += () = /\bfunc\(\)\s*[^{(]*\{/g; END { print $n+0, "\n" }' count "${dirs[@]}" | sed 's/^/thunk /'
+  PATTERN='$n += () = /\bfunc\(\)\s*[^{(,]*\{/g; END { print $n+0, "\n" }' count "${dirs[@]}" | sed 's/^/thunk /'
   PATTERN='$n += () = /\bpanic\(/g; END { print $n+0, "\n" }' count "${dirs[@]}" | sed 's/^/panic /'
 }
 
