@@ -1303,11 +1303,15 @@ where
         if !boundary.instantiate {
             return Ok(function);
         }
-        let (Monotype::Object(element)
-        | Monotype::MutableArray(element)
-        | Monotype::Nullable(element)) = self.monotypes.get(result).clone()
-        else {
-            unreachable!("invariant violated: an instantiated foreign returns a collection")
+        let element = match self.monotypes.get(result).clone() {
+            Monotype::Object(element)
+            | Monotype::MutableArray(element)
+            | Monotype::Nullable(element) => element,
+            Monotype::Function(argument, _) => match self.monotypes.get(argument) {
+                Monotype::Array(element) => *element,
+                _ => unreachable!("invariant violated: an instantiated function takes an array"),
+            },
+            _ => unreachable!("invariant violated: an instantiated foreign returns a collection"),
         };
         let GoExpression::Qualified { package, name } = function else { unreachable!() };
         let element = render_type(&self.go_type(element)?);

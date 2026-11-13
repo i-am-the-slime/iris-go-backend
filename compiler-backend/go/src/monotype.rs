@@ -71,7 +71,7 @@ pub struct Monotypes {
     constructors: FxHashMap<DataType, Arc<[DataConstructor]>>,
     unfolded: FxHashMap<DataType, MonotypeId>,
     regular: FxHashMap<(FileId, TypeItemId), bool>,
-    expanding: Vec<(FileId, TypeItemId)>,
+    expanding: Vec<TypeId>,
 }
 
 impl Monotypes {
@@ -353,7 +353,7 @@ impl Monotypes {
                         let data = DataType { file_id, item, arguments: Arc::from(canonical) };
                         return Ok(Ok(self.intern(Monotype::Recursive(data))));
                     }
-                    if self.expanding.contains(&(file_id, item)) {
+                    if self.expanding.contains(&type_id) {
                         return Ok(Ok(self.intern(Monotype::Erased)));
                     }
                     let Some(underlying) =
@@ -361,7 +361,7 @@ impl Monotypes {
                     else {
                         return Ok(Err(self.open_type(type_id)));
                     };
-                    self.expanding.push((file_id, item));
+                    self.expanding.push(type_id);
                     let converted = self.convert(context, underlying, expansions + 1);
                     self.expanding.pop();
                     return converted;
@@ -585,7 +585,7 @@ fn erase_newtypes<Q>(
     context: &mut Context<'_, Q>,
     type_id: TypeId,
     expansions: usize,
-    expanding: &mut Vec<(FileId, TypeItemId)>,
+    expanding: &mut Vec<TypeId>,
 ) -> QueryResult<TypeId>
 where
     Q: checking::ExternalQueries,
@@ -606,7 +606,7 @@ fn canonicalise<Q>(
     context: &mut Context<'_, Q>,
     type_id: TypeId,
     expansions: usize,
-    expanding: &mut Vec<(FileId, TypeItemId)>,
+    expanding: &mut Vec<TypeId>,
     erase: bool,
 ) -> QueryResult<TypeId>
 where
@@ -651,10 +651,10 @@ where
                 && let Some(underlying) =
                     newtype_underlying(context, file_id, constructor, type_id)?
             {
-                if expanding.contains(&(file_id, item)) {
+                if expanding.contains(&type_id) {
                     return Ok(context.types.erased());
                 }
-                expanding.push((file_id, item));
+                expanding.push(type_id);
                 let erased = canonicalise(context, underlying, expansions + 1, expanding, erase);
                 expanding.pop();
                 return erased;

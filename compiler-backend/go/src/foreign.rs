@@ -367,6 +367,10 @@ const fn compare(comparison: Comparison) -> Foreign {
     Foreign::Operator(Operator::Compare(comparison))
 }
 
+pub const ARRAY_FOLD: Foreign = array("Foldl", 3);
+
+pub const APPENDER: Foreign = perform_in(GoPackage::Direct, "Appender", 0, INSTANTIATE);
+
 const FOREIGN_IMPORTS: &[(&str, &str, Foreign)] = &[
     ("Data.Semiring", "intAdd", Foreign::Operator(Operator::IntAdd)),
     ("Data.Semiring", "intMul", Foreign::Operator(Operator::IntMultiply)),

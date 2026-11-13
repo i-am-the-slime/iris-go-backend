@@ -28,6 +28,8 @@ use crate::mono::{
 use crate::monotype::{Monotype, MonotypeId, Monotypes};
 use crate::types::Substitution;
 
+mod traverse;
+
 const SPECIALIZATION_LIMIT: usize = 20_000;
 const LOCAL_SPECIALIZATION_LIMIT: usize = 64;
 
@@ -933,6 +935,24 @@ where
                 argument.monotype = monotype;
             }
             return Ok(argument);
+        }
+        if let tree::ExpressionKind::Variable {
+            resolution:
+                tree::VariableResolution::Source(lowering::TermVariableResolution::Reference(
+                    file_id,
+                    term,
+                )),
+        } = module.checked.tree[head].kind
+            && arguments.len() >= 3
+            && self.is_traverse_array_implementation((file_id, term))?
+        {
+            return self.traverse_array(
+                scope,
+                head,
+                (file_id, term),
+                &result_instantiations,
+                &arguments,
+            );
         }
         let mut function = match module.checked.tree[head].kind {
             tree::ExpressionKind::Constructor { .. }
