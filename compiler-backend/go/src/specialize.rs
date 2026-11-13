@@ -167,7 +167,9 @@ pub struct Specializer<'q, Q> {
     foreign_packages: &'q ForeignPackages,
     blockers: Vec<RecordedBlocker>,
     blocker_positions: FxHashMap<(String, UnsupportedState), usize>,
-    discovered: Vec<(SchemeKey, SchemeInstantiation)>,
+    /// Whether this pass met an instantiation of a scheme that the schemes it
+    /// started with did not list.
+    discovered: bool,
     callback_arities: FxHashMap<(FileId, TermItemId), &'static [usize]>,
 }
 
@@ -202,7 +204,7 @@ where
             foreign_packages,
             blockers: vec![],
             blocker_positions: FxHashMap::default(),
-            discovered: vec![],
+            discovered: false,
             callback_arities: FxHashMap::default(),
         }
     }
@@ -236,7 +238,7 @@ where
     }
 
     pub fn grown_schemes(&self) -> Option<SchemeInstantiations> {
-        if self.discovered.is_empty()
+        if !self.discovered
             && self.monotypes.new_rank_n_keys.is_empty()
             && self.monotypes.new_erased_owners.is_empty()
         {
@@ -248,9 +250,6 @@ where
         }
         for (key, owner) in &self.monotypes.new_rank_n_keys {
             schemes.add_rank_n(key.clone(), owner.clone());
-        }
-        for (key, instantiation) in &self.discovered {
-            schemes.insert(key.clone(), instantiation.clone());
         }
         Some(schemes)
     }
@@ -1489,17 +1488,8 @@ where
         types: Vec<TypeId>,
         dictionaries: Vec<Dictionary>,
     ) -> GoResult<()> {
-        let pending = self
-            .discovered
-            .iter()
-            .any(|(pending, instantiation)| *pending == key && *instantiation.types == *types);
-        if pending {
-            return Ok(());
-        }
         let known = self.monotypes.schemes.get(&key);
-        let discovered = self.discovered.iter().filter(|(pending, _)| *pending == key);
-        let mut labels: Vec<SmolStr> = known.iter().map(|known| known.label.clone()).collect();
-        labels.extend(discovered.map(|(_, instantiation)| instantiation.label.clone()));
+        let labels: Vec<SmolStr> = known.iter().map(|known| known.label.clone()).collect();
         if labels.len() >= SCHEME_INSTANTIATION_LIMIT {
             return Err(self.unsupported(
                 scope,
@@ -1524,7 +1514,12 @@ where
             dictionaries: Arc::from(dictionaries),
             label,
         };
-        self.discovered.push((key, instantiation));
+        // The rest of this pass already specializes the new instantiation, so a
+        // chain of instantiations, each met only inside the previous one, is
+        // discovered in one pass instead of one pass per link. Values built
+        // before it lack it, so the pass is repeated.
+        self.monotypes.schemes.insert(key, instantiation);
+        self.discovered = true;
         Ok(())
     }
 
