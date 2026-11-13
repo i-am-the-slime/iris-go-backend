@@ -2899,6 +2899,9 @@ where
         match literal {
             Literal::Int(value) => GoExpression::Integer(*value),
             Literal::Number(value) => {
+                if value.parse::<f64>().is_ok_and(|value| value == 0.0 && value.is_sign_negative()) {
+                    return self.number_constant(-0.0);
+                }
                 let mut value = value.to_string();
                 if !value.contains(['.', 'e', 'E'])
                     && matches!(self.monotypes.get(monotype), Monotype::Number)
@@ -3210,17 +3213,40 @@ where
         value
     }
 
-    /// Go rejects constant division by zero, which JavaScript evaluates to an
-    /// infinity or NaN.
-    fn division_by_zero(&mut self, numerator: f64, negative_zero: bool) -> GoExpression {
-        self.imports.insert("math".into());
-        let math =
-            |name: &str| GoExpression::Qualified { package: "math".into(), name: name.into() };
-        if numerator == 0.0 || numerator.is_nan() {
+    fn fold_number(
+        &mut self,
+        operator: Operator,
+        left: &GoExpression,
+        right: &GoExpression,
+    ) -> Option<GoExpression> {
+        let fold: fn(f64, f64) -> f64 = match operator {
+            Operator::NumberAdd => |left, right| left + right,
+            Operator::NumberSubtract => |left, right| left - right,
+            Operator::NumberMultiply => |left, right| left * right,
+            Operator::NumberDivide => |left, right| left / right,
+            _ => return None,
+        };
+        let folded = fold(float_constant(left)?, float_constant(right)?);
+        Some(self.number_constant(folded))
+    }
+
+    fn number_constant(&mut self, value: f64) -> GoExpression {
+        let math = |name: &str| GoExpression::Qualified { package: "math".into(), name: name.into() };
+        if value.is_nan() {
+            self.imports.insert("math".into());
             return call(math("NaN"), vec![]);
         }
-        let sign = if (numerator < 0.0) != negative_zero { -1 } else { 1 };
-        call(math("Inf"), vec![GoExpression::Integer(sign)])
+        if value.is_infinite() {
+            self.imports.insert("math".into());
+            let sign = if value < 0.0 { -1 } else { 1 };
+            return call(math("Inf"), vec![GoExpression::Integer(sign)]);
+        }
+        if value == 0.0 && value.is_sign_negative() {
+            self.imports.insert("math".into());
+            let zero = GoExpression::Integer(0);
+            return call(math("Copysign"), vec![zero, GoExpression::Integer(-1)]);
+        }
+        GoExpression::Float(format!("{value:?}"))
     }
 
     fn string_ordering(
@@ -3246,7 +3272,11 @@ where
         };
         if operator.arity() == 1 {
             return match operator {
-                Operator::IntNegate | Operator::NumberNegate => unary("-", &mut values),
+                Operator::NumberNegate => match float_constant(&values[0]) {
+                    Some(value) => self.number_constant(-value),
+                    None => unary("-", &mut values),
+                },
+                Operator::IntNegate => unary("-", &mut values),
                 Operator::BooleanNot => unary("!", &mut values),
                 Operator::ArrayLength => GoExpression::Conversion {
                     type_: GoType::Named("int32".into()),
@@ -3268,13 +3298,17 @@ where
         if let Some(bitwise) = bitwise(operator, left.clone(), right.clone()) {
             return bitwise;
         }
+        if let Operator::IntMultiply = operator {
+            let multiply = GoFunction { package: GoPackage::Prim, name: "MultiplyInt32" };
+            return call(self.go_function(multiply), vec![left, right]);
+        }
+        if let Some(folded) = self.fold_number(operator, &left, &right) {
+            return folded;
+        }
         if let Operator::NumberDivide = operator
             && is_untyped_constant(&left)
             && is_untyped_constant(&right)
         {
-            if let (Some(numerator), Some(0.0)) = (float_constant(&left), float_constant(&right)) {
-                return self.division_by_zero(numerator, constant_is_negative(&right));
-            }
             let left = GoExpression::Conversion { type_: GoType::Float64, value: Box::new(left) };
             return binary("/", left, right);
         }
@@ -3298,7 +3332,7 @@ where
         let symbol = match operator {
             Operator::IntAdd | Operator::NumberAdd | Operator::StringAppend => "+",
             Operator::IntSubtract | Operator::NumberSubtract => "-",
-            Operator::IntMultiply | Operator::NumberMultiply => "*",
+            Operator::NumberMultiply => "*",
             Operator::NumberDivide => "/",
             Operator::BooleanAnd => "&&",
             Operator::BooleanOr => "||",
@@ -3833,15 +3867,6 @@ fn float_constant(expression: &GoExpression) -> Option<f64> {
             float_constant(operand).map(|value| -value)
         }
         _ => None,
-    }
-}
-
-fn constant_is_negative(expression: &GoExpression) -> bool {
-    match expression {
-        GoExpression::Float(value) => value.starts_with('-'),
-        GoExpression::Integer(value) => *value < 0,
-        GoExpression::Unary { operator: "-", operand } => !constant_is_negative(operand),
-        _ => false,
     }
 }
 

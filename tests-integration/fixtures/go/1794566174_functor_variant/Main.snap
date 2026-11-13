@@ -1,5 +1,6 @@
 ---
 source: tests-integration/src/fixtures.rs
+assertion_line: 563
 ---
 package main
 
@@ -106,10 +107,10 @@ var main_ = initializeMain_()
 
 func initializeMain_() []string {
 	original := func(value int32) int32 {
-		return value * 10
+		return prim.MultiplyInt32(value, 10)
 	}
 	original2 := func(value2 int32) int32 {
-		return value2 * 10
+		return prim.MultiplyInt32(value2, 10)
 	}
 	return []string{describe(say), describe(count), describe(Map_Type_Value{type_: say.type_, value: say.map_(func(coerced any) any {
 		return original(coerced.(int32))

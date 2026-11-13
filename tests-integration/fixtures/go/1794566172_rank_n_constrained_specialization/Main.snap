@@ -1,11 +1,13 @@
 ---
 source: tests-integration/src/fixtures.rs
+assertion_line: 563
 ---
 package main
 
 import (
 	"fmt"
 	"github.com/i-am-the-slime/purs-backend-go/go-support/direct"
+	"github.com/i-am-the-slime/purs-backend-go/go-support/prim"
 )
 
 type Ref[T any] struct {
@@ -114,7 +116,7 @@ func initializeProgram() IdentitySTStateTIntIdentity {
 			return interpreter6.emit(width)
 		}}
 		argument2 := func(_ struct{}) IdentitySTStateTIntIdentity {
-			value := width * 2
+			value := prim.MultiplyInt32(width, 2)
 			argument3 := IdentitySTStateTIntIdentity2{Identity: func(interpreter7 EmitMeasure3) {
 				interpreter7.emit(value)
 			}, ST: func(interpreter8 EmitMeasure) {

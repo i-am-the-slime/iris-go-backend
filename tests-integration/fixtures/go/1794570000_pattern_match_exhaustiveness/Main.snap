@@ -129,9 +129,9 @@ func area(argument0 Shape) int32 {
 	switch argument0.Tag {
 	case ShapeCircle:
 		radius := argument0.Circle0
-		return 3 * radius * radius
+		return prim.MultiplyInt32(prim.MultiplyInt32(3, radius), radius)
 	default: // ShapeRectangle
-		return argument0.Rectangle0 * argument0.Rectangle1
+		return prim.MultiplyInt32(argument0.Rectangle0, argument0.Rectangle1)
 	}
 }
 
