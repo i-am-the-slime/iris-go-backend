@@ -479,6 +479,15 @@ impl Simplifier<'_> {
                 };
                 Expression::new(kind, monotype)
             }
+            Foreign::EffectMap => {
+                let action = arguments.pop().expect("invariant violated: map has two arguments");
+                let function = arguments.pop().expect("invariant violated: map has two arguments");
+                let value =
+                    self.monotypes.effect_result(action.monotype).unwrap_or(action.monotype);
+                let (local, mapped) = self.open_function(function, value);
+                let body = Expression::new(ExpressionKind::EffectPure(Box::new(mapped)), monotype);
+                self.effect_bind(action, local, body, monotype)
+            }
             Foreign::Identity => {
                 arguments.pop().expect("invariant violated: identity has one argument")
             }
@@ -763,8 +772,17 @@ fn is_trivial(expression: &Expression) -> bool {
         ExpressionKind::Function(_) => true,
         ExpressionKind::Foreign { arguments, .. } => arguments.is_empty(),
         ExpressionKind::Construct { arguments, .. } => arguments.is_empty(),
+        ExpressionKind::Lambda { parameters, body } => is_foreign_wrapper(parameters, body),
         _ => false,
     }
+}
+
+fn is_foreign_wrapper(parameters: &[Local], body: &Expression) -> bool {
+    let ExpressionKind::Foreign { arguments, .. } = &body.kind else { return false };
+    arguments.len() == parameters.len()
+        && arguments.iter().zip(parameters).all(|(argument, parameter)| {
+            matches!(argument.kind, ExpressionKind::Local(id) if id == parameter.id)
+        })
 }
 
 fn is_lambda(expression: &Expression) -> bool {

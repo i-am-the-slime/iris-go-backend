@@ -28,6 +28,12 @@ pub enum Monotype {
     Function(MonotypeId, MonotypeId),
     Effect(MonotypeId),
     Reference(MonotypeId),
+    MutableArray(MonotypeId),
+    Object(MonotypeId),
+    Nullable(MonotypeId),
+    Error,
+    Opaque,
+    Regex,
     Data(DataType),
     Erased,
 }
@@ -265,16 +271,59 @@ impl Monotypes {
                 }
                 return self.convert(context, curried, expansions);
             }
-            ("Effect", "Effect") => match unary(self, context, arguments.first())? {
-                Ok(result) => Monotype::Effect(result),
-                Err(error) => return Ok(Err(error)),
-            },
+            ("Effect.Uncurried", name) if name.starts_with("EffectFn") => {
+                let Some((&result, parameters)) = arguments.split_last() else {
+                    return Ok(Err(UnsupportedState::UnsaturatedType { name: name.to_string() }));
+                };
+                let result = match self.convert(context, result, expansions)? {
+                    Ok(result) => self.intern(Monotype::Effect(result)),
+                    Err(error) => return Ok(Err(error)),
+                };
+                return self.curried_function(context, parameters, result, expansions);
+            }
+            ("Control.Monad.ST.Uncurried", name) if name.starts_with("STFn") => {
+                let [parameters @ .., _, result] = &arguments[..] else {
+                    return Ok(Err(UnsupportedState::UnsaturatedType { name: name.to_string() }));
+                };
+                let result = match self.convert(context, *result, expansions)? {
+                    Ok(result) => self.intern(Monotype::Effect(result)),
+                    Err(error) => return Ok(Err(error)),
+                };
+                return self.curried_function(context, parameters, result, expansions);
+            }
+            ("Effect", "Effect") | ("Effect.Aff", "Aff" | "ParAff") => {
+                match unary(self, context, arguments.first())? {
+                    Ok(result) => Monotype::Effect(result),
+                    Err(error) => return Ok(Err(error)),
+                }
+            }
             ("Control.Monad.ST.Internal", "ST") => match unary(self, context, arguments.get(1))? {
                 Ok(result) => Monotype::Effect(result),
                 Err(error) => return Ok(Err(error)),
             },
             ("Effect.Ref", "Ref") => match unary(self, context, arguments.first())? {
                 Ok(value) => Monotype::Reference(value),
+                Err(error) => return Ok(Err(error)),
+            },
+            ("Data.Array.ST", "STArray") => match unary(self, context, arguments.get(1))? {
+                Ok(element) => Monotype::MutableArray(element),
+                Err(error) => return Ok(Err(error)),
+            },
+            ("Effect.Exception", "Error") => Monotype::Error,
+            ("Data.String.Regex", "Regex") => Monotype::Regex,
+            ("Promise.Internal", "Promise")
+            | ("Promise.Rejection", "Rejection")
+            | ("Foreign", "Foreign") => Monotype::Opaque,
+            ("Data.Nullable", "Nullable") => match unary(self, context, arguments.first())? {
+                Ok(element) => Monotype::Nullable(element),
+                Err(error) => return Ok(Err(error)),
+            },
+            ("Foreign.Object", "Object") => match unary(self, context, arguments.first())? {
+                Ok(element) => Monotype::Object(element),
+                Err(error) => return Ok(Err(error)),
+            },
+            ("Foreign.Object.ST", "STObject") => match unary(self, context, arguments.get(1))? {
+                Ok(element) => Monotype::Object(element),
                 Err(error) => return Ok(Err(error)),
             },
             ("Control.Monad.ST.Internal", "STRef") => {
@@ -326,6 +375,27 @@ impl Monotypes {
             },
         };
         Ok(Ok(self.intern(monotype)))
+    }
+
+    fn curried_function<Q>(
+        &mut self,
+        context: &mut Context<'_, Q>,
+        parameters: &[TypeId],
+        result: MonotypeId,
+        expansions: usize,
+    ) -> QueryResult<Result<MonotypeId, UnsupportedState>>
+    where
+        Q: checking::ExternalQueries,
+    {
+        let mut curried = result;
+        for &parameter in parameters.iter().rev() {
+            let parameter = match self.convert(context, parameter, expansions)? {
+                Ok(parameter) => parameter,
+                Err(error) => return Ok(Err(error)),
+            };
+            curried = self.function(parameter, curried);
+        }
+        Ok(Ok(curried))
     }
 
     fn convert_record<Q>(

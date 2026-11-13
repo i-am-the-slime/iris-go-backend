@@ -20,7 +20,7 @@ use smol_str::{SmolStr, format_smolstr};
 use crate::context::{Context, ModuleData};
 use crate::dictionary::{Dictionary, InstanceDictionary, Reflected};
 use crate::error::{GoError, GoResult, UnsupportedState};
-use crate::foreign::{self, Foreign};
+use crate::foreign::{self, Foreign, ForeignPackages};
 use crate::mono::{
     Alternative, Binding, Expression, ExpressionKind, Function, FunctionId, Guard, Guarded,
     GuardedBranch, Literal, Local, LocalId, Pattern, PatternKind, RecordUpdate,
@@ -29,6 +29,39 @@ use crate::monotype::{Monotype, MonotypeId, Monotypes};
 use crate::types::Substitution;
 
 const SPECIALIZATION_LIMIT: usize = 20_000;
+
+struct IgnoringCallee {
+    ignored: &'static [usize],
+    monotype: MonotypeId,
+    offset: usize,
+}
+
+impl IgnoringCallee {
+    fn of(function: &Expression, offset: usize) -> IgnoringCallee {
+        let ignored = match &function.kind {
+            ExpressionKind::Lambda { body, .. } => match body.kind {
+                ExpressionKind::Foreign { foreign, .. } => foreign.ignored_arguments(),
+                _ => &[],
+            },
+            _ => &[],
+        };
+        IgnoringCallee { ignored, monotype: function.monotype, offset }
+    }
+
+    fn ignores(&self, monotypes: &Monotypes, position: usize) -> Option<MonotypeId> {
+        let position = position.checked_sub(self.offset)?;
+        if !self.ignored.contains(&position) {
+            return None;
+        }
+        let remaining = monotypes.result_after(self.monotype, position);
+        monotypes.function_parts(remaining).map(|(parameter, _)| parameter)
+    }
+}
+
+fn is_foreign_wrapper(function: &Expression, expected: Foreign) -> bool {
+    matches!(&function.kind, ExpressionKind::Lambda { body, .. }
+        if matches!(body.kind, ExpressionKind::Foreign { foreign, .. } if foreign == expected))
+}
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 enum Definition {
@@ -96,13 +129,14 @@ pub struct Specializer<'q, Q> {
     current: Option<FunctionId>,
     queue: VecDeque<(FunctionId, SpecializationKey, SmolStr)>,
     next_local: u32,
+    foreign_packages: &'q ForeignPackages,
 }
 
 impl<'q, Q> Specializer<'q, Q>
 where
     Q: checking::ExternalQueries,
 {
-    pub fn new(queries: &'q Q) -> Specializer<'q, Q> {
+    pub fn new(queries: &'q Q, foreign_packages: &'q ForeignPackages) -> Specializer<'q, Q> {
         Specializer {
             context: Context::new(queries),
             monotypes: Monotypes::default(),
@@ -113,6 +147,7 @@ where
             current: None,
             queue: VecDeque::new(),
             next_local: 0,
+            foreign_packages,
         }
     }
 
@@ -793,9 +828,19 @@ where
             return Ok(argument);
         }
         let function = self.expression(scope, head)?;
+        let mut callee = IgnoringCallee::of(&function, 0);
         let mut converted = Vec::with_capacity(arguments.len());
-        for argument in arguments {
-            converted.push(self.expression(scope, argument)?);
+        for (position, argument) in arguments.into_iter().enumerate() {
+            if let Some(parameter) = callee.ignores(&self.monotypes, position) {
+                let ignored = SmolStr::new_static("ignored foreign argument");
+                converted.push(Expression::new(ExpressionKind::Fail(ignored), parameter));
+                continue;
+            }
+            let argument = self.expression(scope, argument)?;
+            if position == 0 && is_foreign_wrapper(&function, Foreign::Identity) {
+                callee = IgnoringCallee::of(&argument, 1);
+            }
+            converted.push(argument);
         }
         let kind = ExpressionKind::Apply { function: Box::new(function), arguments: converted };
         Ok(Expression::new(kind, monotype))
@@ -965,11 +1010,15 @@ where
             matches!(module.indexed.items[term].kind, IndexedTermItemKind::Foreign { .. });
         match () {
             () if is_foreign => {
-                let Some(foreign) = foreign::foreign_import(&module.name, &name) else {
-                    let name = format!("{}.{name}", module.name);
-                    return Err(self.unsupported(scope, UnsupportedState::UnknownForeign { name }));
-                };
-                Ok(self.foreign(foreign, monotype))
+                if let Some(foreign) = foreign::foreign_import(&module.name, &name) {
+                    return Ok(self.foreign(foreign, monotype));
+                }
+                if self.foreign_packages.provides(&module.name) {
+                    let foreign = self.project_foreign(file_id, term, monotype);
+                    return Ok(self.foreign(foreign, monotype));
+                }
+                let name = format!("{}.{name}", module.name);
+                Err(self.unsupported(scope, UnsupportedState::UnknownForeign { name }))
             }
             () if is_constructor => self.constructor(scope, file_id, term, monotype),
             () if is_member => {
@@ -1051,10 +1100,10 @@ where
                 ));
             }
         };
-        let instance_name = self.instance_name(instance.origin)?;
-        if let Some(foreign) =
-            foreign::intrinsic(&member_module.name, &member_name, &[instance_name.as_str()])
-        {
+        let mut instance_names = vec![self.instance_name(instance.origin)?];
+        instance_names.extend(self.dictionary_names(&dictionaries)?);
+        let instances: Vec<&str> = instance_names.iter().map(SmolStr::as_str).collect();
+        if let Some(foreign) = foreign::intrinsic(&member_module.name, &member_name, &instances) {
             return Ok(self.foreign(foreign, monotype));
         }
         let (_, module, declaration) = self.instance_declaration(instance.origin)?;
@@ -1129,6 +1178,17 @@ where
             }
         }
         Ok(types)
+    }
+
+    fn project_foreign(&self, file_id: FileId, term: TermItemId, monotype: MonotypeId) -> Foreign {
+        let mut arity = 0;
+        let mut current = monotype;
+        while let Some((_, result)) = self.monotypes.function_parts(current) {
+            arity += 1;
+            current = result;
+        }
+        let effectful = self.monotypes.effect_result(current).is_some();
+        Foreign::Project { file_id, term, arity, effectful }
     }
 
     fn foreign(&mut self, foreign: Foreign, monotype: MonotypeId) -> Expression {
