@@ -7,6 +7,7 @@
 mod coerce;
 mod iteration;
 mod ownership;
+mod reuse;
 
 use std::collections::BTreeSet;
 
@@ -39,7 +40,13 @@ pub fn emit_program<Q>(
 where
     Q: checking::ExternalQueries,
 {
+    let reused = {
+        let mut probe = Emitter::new(program, monotypes, queries, foreign_packages);
+        reuse::reuse_cells(program, &mut probe)
+    };
+    let program = &reused.program;
     let mut emitter = Emitter::new(program, monotypes, queries, foreign_packages);
+    emitter.materialized = reused.materialized;
     emitter.assign_function_names();
     let mut declarations = vec![];
     for index in 0..program.functions.len() {
@@ -105,10 +112,114 @@ where
             pending_owning_variants: vec![],
             inline_sizes: FxHashMap::default(),
             shared_nullaries: FxHashMap::default(),
+            cell_types: FxHashMap::default(),
+            reaching: FxHashMap::default(),
+            retaining: FxHashMap::default(),
+            erasing: FxHashMap::default(),
             materialized: FxHashSet::default(),
             current: None,
             lazy_constants,
         }
+    }
+}
+
+impl<Q> reuse::Cells for Emitter<'_, '_, '_, Q>
+where
+    Q: checking::ExternalQueries,
+{
+    fn cell(&mut self, monotype: MonotypeId) -> Option<DataType> {
+        let Monotype::Data(data) = self.monotypes.get(monotype).clone() else { return None };
+        if let Some(&cell) = self.cell_types.get(&data) {
+            return cell.then_some(data);
+        }
+        let cell = self.is_cell(&data);
+        self.cell_types.insert(data.clone(), cell);
+        cell.then_some(data)
+    }
+
+    fn is_spine(&mut self, cell: &DataType, field: MonotypeId) -> bool {
+        let Some(child) = reuse::Cells::cell(self, field) else { return false };
+        let key = (child.clone(), cell.clone());
+        if let Some(&reaches) = self.reaching.get(&key) {
+            return reaches;
+        }
+        let reaches = self.reaches(&child, cell).unwrap_or(false);
+        self.reaching.insert(key, reaches);
+        reaches
+    }
+
+    fn is_effect(&self, monotype: MonotypeId) -> bool {
+        self.monotypes.effect_result(monotype).is_some()
+    }
+
+    fn is_suspended(&self, monotype: MonotypeId) -> bool {
+        matches!(self.monotypes.get(monotype), Monotype::Lazy(_) | Monotype::Effect(_))
+    }
+
+    fn erases(&mut self, monotype: MonotypeId) -> bool {
+        if let Some(&erases) = self.erasing.get(&monotype) {
+            return erases;
+        }
+        self.erasing.insert(monotype, false);
+        let erases = match self.monotypes.get(monotype).clone() {
+            Monotype::Erased(_) | Monotype::Recursive(_) => true,
+            Monotype::Data(data) => {
+                data.arguments.iter().any(|&argument| self.context.types.contains_erased(argument))
+            }
+            Monotype::Function(argument, result) => {
+                reuse::Cells::erases(self, argument) || reuse::Cells::erases(self, result)
+            }
+            Monotype::Array(element)
+            | Monotype::Effect(element)
+            | Monotype::Reference(element)
+            | Monotype::MutableArray(element)
+            | Monotype::Object(element)
+            | Monotype::Nullable(element)
+            | Monotype::Lazy(element) => reuse::Cells::erases(self, element),
+            Monotype::Record(fields) => {
+                fields.iter().any(|field| reuse::Cells::erases(self, field.monotype))
+            }
+            _ => false,
+        };
+        self.erasing.insert(monotype, erases);
+        erases
+    }
+
+    fn retains(&mut self, monotype: MonotypeId) -> bool {
+        if let Some(&retains) = self.retaining.get(&monotype) {
+            return retains;
+        }
+        self.retaining.insert(monotype, true);
+        let retains = match self.monotypes.get(monotype).clone() {
+            Monotype::Int
+            | Monotype::Number
+            | Monotype::Boolean
+            | Monotype::Char
+            | Monotype::String
+            | Monotype::Unit
+            | Monotype::BigInt
+            | Monotype::Regex => false,
+            Monotype::Array(element) => reuse::Cells::retains(self, element),
+            Monotype::Record(fields) => {
+                fields.iter().any(|field| reuse::Cells::retains(self, field.monotype))
+            }
+            Monotype::Data(data) => {
+                reuse::Cells::cell(self, monotype).is_some()
+                    || self.constructor_fields(&data).map_or(true, |fields| {
+                        fields.into_iter().any(|field| reuse::Cells::retains(self, field))
+                    })
+            }
+            _ => true,
+        };
+        self.retaining.insert(monotype, retains);
+        retains
+    }
+
+    fn function_type(&mut self, parameters: &[MonotypeId], result: MonotypeId) -> MonotypeId {
+        parameters
+            .iter()
+            .rev()
+            .fold(result, |result, &parameter| self.monotypes.function(parameter, result))
     }
 }
 
@@ -295,6 +406,10 @@ struct Emitter<'p, 'm, 'q, Q> {
     pending_owning_variants: Vec<(FunctionId, usize)>,
     inline_sizes: FxHashMap<DataType, Option<usize>>,
     shared_nullaries: FxHashMap<String, String>,
+    cell_types: FxHashMap<DataType, bool>,
+    reaching: FxHashMap<(DataType, DataType), bool>,
+    retaining: FxHashMap<MonotypeId, bool>,
+    erasing: FxHashMap<MonotypeId, bool>,
     materialized: FxHashSet<(FunctionId, LocalId)>,
 }
 
@@ -1185,6 +1300,40 @@ where
                     pending.extend(fields.iter().map(|field| field.monotype))
                 }
                 Monotype::Recursive(_) => return Ok(true),
+                _ => {}
+            }
+        }
+        Ok(false)
+    }
+
+    fn is_cell(&mut self, data: &DataType) -> bool {
+        let Ok(Ok(constructors)) = self.monotypes.constructors(&mut self.context, data) else {
+            return false;
+        };
+        let has_fields = constructors.iter().any(|constructor| !constructor.fields.is_empty());
+        let erases_arguments =
+            data.arguments.iter().any(|&argument| self.context.types.contains_erased(argument));
+        has_fields && !erases_arguments && self.is_boxed(data).unwrap_or(false)
+    }
+
+    fn reaches(&mut self, from: &DataType, target: &DataType) -> GoResult<bool> {
+        let mut pending: Vec<MonotypeId> = vec![];
+        let mut visited: FxHashSet<DataType> = FxHashSet::default();
+        visited.insert(from.clone());
+        pending.extend(self.constructor_fields(from)?);
+        while let Some(monotype) = pending.pop() {
+            match self.monotypes.get(monotype).clone() {
+                Monotype::Data(inner) | Monotype::Recursive(inner) if inner == *target => {
+                    return Ok(true);
+                }
+                Monotype::Data(inner) => {
+                    if visited.insert(inner.clone()) {
+                        pending.extend(self.constructor_fields(&inner)?);
+                    }
+                }
+                Monotype::Record(fields) => {
+                    pending.extend(fields.iter().map(|field| field.monotype))
+                }
                 _ => {}
             }
         }

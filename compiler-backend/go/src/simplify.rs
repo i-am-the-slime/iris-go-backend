@@ -1232,7 +1232,7 @@ pub fn visit(expression: &Expression, visitor: &mut impl FnMut(&Expression)) {
     for_each_child(expression, &mut |child| visit(child, visitor));
 }
 
-pub fn for_each_child(expression: &Expression, visitor: &mut impl FnMut(&Expression)) {
+pub fn for_each_child<'e>(expression: &'e Expression, visitor: &mut impl FnMut(&'e Expression)) {
     match &expression.kind {
         ExpressionKind::Literal(_)
         | ExpressionKind::Unit
@@ -1302,7 +1302,7 @@ pub fn for_each_child(expression: &Expression, visitor: &mut impl FnMut(&Express
     }
 }
 
-fn for_each_update(updates: &[RecordUpdate], visitor: &mut impl FnMut(&Expression)) {
+fn for_each_update<'e>(updates: &'e [RecordUpdate], visitor: &mut impl FnMut(&'e Expression)) {
     for update in updates {
         match update {
             RecordUpdate::Leaf { value, .. } => visitor(value),
@@ -1457,6 +1457,13 @@ fn strongly_connected_components(references: &[FxHashSet<FunctionId>]) -> Vec<Ve
 }
 
 fn prune(functions: Vec<Function>, entry: FunctionId) -> Program {
+    prune_unreachable(functions, entry).0
+}
+
+pub(crate) fn prune_unreachable(
+    functions: Vec<Function>,
+    entry: FunctionId,
+) -> (Program, FxHashMap<FunctionId, FunctionId>) {
     let mut reachable = vec![false; functions.len()];
     let mut pending = vec![entry];
     while let Some(id) = pending.pop() {
@@ -1476,7 +1483,8 @@ fn prune(functions: Vec<Function>, entry: FunctionId) -> Program {
     for function in &mut kept {
         renumber(&mut function.body, &renumbering);
     }
-    Program { functions: kept, entry: renumbering[&entry] }
+    let entry = renumbering[&entry];
+    (Program { functions: kept, entry }, renumbering)
 }
 
 fn renumber(expression: &mut Expression, renumbering: &FxHashMap<FunctionId, FunctionId>) {
