@@ -885,7 +885,7 @@ const FOREIGN_IMPORTS: &[(&str, &str, Foreign)] = &[
     ("Data.String.Regex", "source", prim("RegexSource", 1)),
     ("Data.String.Regex", "flagsImpl", direct_with("RegexFlags", 1, RECORD)),
     ("Data.String.Regex", "test", prim("RegexTest", 2)),
-    ("Data.String.Regex", "replace", prim("RegexReplace", 3)),
+    ("Data.String.Regex", "replace", prim("RegexReplaceString", 3)),
     ("Data.String.Regex", "split", prim("RegexSplit", 2)),
     ("Data.String.Regex", "_replaceBy", prim_with("RegexReplaceBy", 5, maybe_witnessed(0, 1, 3))),
     ("Data.String.Regex", "_search", prim_with("RegexSearch", 4, maybe_integer(0, 1, &[]))),
