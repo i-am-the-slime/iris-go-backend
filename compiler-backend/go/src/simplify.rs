@@ -11,6 +11,7 @@ use crate::mono::{
     GuardedBranch, Literal, Local, LocalId, Pattern, PatternKind, Program, RecordUpdate,
 };
 use crate::monotype::Monotypes;
+use smol_str::SmolStr;
 
 const INLINE_SIZE: usize = 40;
 const INLINE_FUEL: usize = 2_000;
@@ -63,7 +64,10 @@ pub fn simplify(program: Program, monotypes: &mut Monotypes, next_local: u32) ->
         .into_iter()
         .map(|function| function.expect("invariant violated: function lost during simplification"))
         .collect();
-    prune(functions, entry)
+    let next_local = simplifier.next_local;
+    let program = Program { functions, entry };
+    let program = crate::lift::lift_local_functions(program, monotypes, next_local);
+    prune(program.functions, entry)
 }
 
 struct Simplifier<'m> {
@@ -251,19 +255,39 @@ impl Simplifier<'_> {
                 );
                 return self.expression(body);
             }
-            ExpressionKind::Case { scrutinees, alternatives } => ExpressionKind::Case {
-                scrutinees: scrutinees
-                    .into_iter()
-                    .map(|scrutinee| self.expression(scrutinee))
-                    .collect(),
-                alternatives: alternatives
+            ExpressionKind::Case { scrutinees, alternatives } => {
+                let scrutinees: Vec<Expression> =
+                    scrutinees.into_iter().map(|scrutinee| self.expression(scrutinee)).collect();
+                let (bindings, scrutinees, alternatives) =
+                    self.eliminate_columns(scrutinees, alternatives);
+                let alternatives: Vec<Alternative> = alternatives
                     .into_iter()
                     .map(|alternative| Alternative {
                         patterns: alternative.patterns,
                         body: self.guarded(alternative.body),
                     })
-                    .collect(),
-            },
+                    .collect();
+                let case = match alternatives.first() {
+                    None => Expression::new(
+                        ExpressionKind::Fail(SmolStr::new_static("Failed pattern match")),
+                        monotype,
+                    ),
+                    Some(Alternative { body: Guarded::Unconditional(_), .. })
+                        if scrutinees.is_empty() =>
+                    {
+                        let Some(Alternative { body: Guarded::Unconditional(body), .. }) =
+                            alternatives.into_iter().next()
+                        else {
+                            unreachable!()
+                        };
+                        body
+                    }
+                    Some(_) => {
+                        Expression::new(ExpressionKind::Case { scrutinees, alternatives }, monotype)
+                    }
+                };
+                return self.let_bindings(bindings, case);
+            }
             ExpressionKind::EffectPure(value) => {
                 ExpressionKind::EffectPure(Box::new(self.expression(*value)))
             }
@@ -283,6 +307,73 @@ impl Simplifier<'_> {
             },
         };
         Expression::new(kind, monotype)
+    }
+
+    fn eliminate_columns(
+        &mut self,
+        mut scrutinees: Vec<Expression>,
+        mut alternatives: Vec<Alternative>,
+    ) -> (Vec<Binding>, Vec<Expression>, Vec<Alternative>) {
+        let mut bindings = vec![];
+        for column in (0..scrutinees.len()).rev() {
+            let Some(outcomes) = column_outcomes(&scrutinees[column], &alternatives, column) else {
+                continue;
+            };
+            let scrutinee = scrutinees.remove(column);
+            let template =
+                Local { id: LocalId(0), name: "scrutinee".into(), monotype: scrutinee.monotype };
+            let whole = self.fresh(&template);
+            let fields: Vec<Local> = match &scrutinee.kind {
+                ExpressionKind::Construct { arguments, .. } => arguments
+                    .iter()
+                    .map(|argument| {
+                        let template = Local {
+                            id: LocalId(0),
+                            name: "field".into(),
+                            monotype: argument.monotype,
+                        };
+                        self.fresh(&template)
+                    })
+                    .collect(),
+                _ => vec![],
+            };
+            let mut kept = Vec::with_capacity(alternatives.len());
+            for (mut alternative, outcome) in alternatives.into_iter().zip(outcomes) {
+                let pattern = alternative.patterns.remove(column);
+                if let ColumnOutcome::Matches = outcome {
+                    for (local, field) in pattern_variables(&pattern) {
+                        let value = match field {
+                            Some(position) => local_expression(&fields[position]),
+                            None => match &scrutinee.kind {
+                                ExpressionKind::Construct { data, constructor, .. }
+                                    if !fields.is_empty() =>
+                                {
+                                    let kind = ExpressionKind::Construct {
+                                        data: data.clone(),
+                                        constructor: *constructor,
+                                        arguments: fields.iter().map(local_expression).collect(),
+                                    };
+                                    Expression::new(kind, scrutinee.monotype)
+                                }
+                                _ => local_expression(&whole),
+                            },
+                        };
+                        substitute_guarded(&mut alternative.body, local, &value);
+                    }
+                    kept.push(alternative);
+                }
+            }
+            alternatives = kept;
+            match scrutinee.kind {
+                ExpressionKind::Construct { arguments, .. } if !fields.is_empty() => {
+                    for (local, value) in fields.into_iter().zip(arguments) {
+                        bindings.push(Binding { local, value });
+                    }
+                }
+                _ => bindings.push(Binding { local: whole, value: scrutinee }),
+            }
+        }
+        (bindings, scrutinees, alternatives)
     }
 
     fn updates(&mut self, updates: Vec<RecordUpdate>) -> Vec<RecordUpdate> {
@@ -342,6 +433,10 @@ impl Simplifier<'_> {
             ExpressionKind::Lambda { parameters, body } if self.fuel > 0 => {
                 self.fuel -= 1;
                 self.beta(parameters, *body, arguments, monotype)
+            }
+            ExpressionKind::Let { bindings, body } => {
+                let body = self.apply(*body, arguments, monotype);
+                Expression::new(ExpressionKind::Let { bindings, body: Box::new(body) }, monotype)
             }
             ExpressionKind::Function(id) if self.fuel > 0 => {
                 let inlined = self.inlinable(id).and_then(|function| {
@@ -709,6 +804,96 @@ impl Simplifier<'_> {
             kind => kind,
         };
         Pattern { kind, monotype: pattern.monotype }
+    }
+}
+
+enum ColumnOutcome {
+    Matches,
+    Fails,
+}
+
+fn column_outcomes(
+    scrutinee: &Expression,
+    alternatives: &[Alternative],
+    column: usize,
+) -> Option<Vec<ColumnOutcome>> {
+    let mut outcomes = Vec::with_capacity(alternatives.len());
+    for alternative in alternatives {
+        let pattern = &alternative.patterns[column];
+        let outcome = match (&pattern.kind, &scrutinee.kind) {
+            (PatternKind::Wildcard | PatternKind::Variable(_), _) => ColumnOutcome::Matches,
+            (
+                PatternKind::Constructor { constructor, arguments, .. },
+                ExpressionKind::Construct { constructor: known, .. },
+            ) => {
+                if constructor != known {
+                    ColumnOutcome::Fails
+                } else if arguments.iter().all(|argument| {
+                    matches!(argument.kind, PatternKind::Wildcard | PatternKind::Variable(_))
+                }) {
+                    ColumnOutcome::Matches
+                } else {
+                    return None;
+                }
+            }
+            (PatternKind::Literal(pattern), ExpressionKind::Literal(known)) => {
+                match literals_equal(pattern, known)? {
+                    true => ColumnOutcome::Matches,
+                    false => ColumnOutcome::Fails,
+                }
+            }
+            _ => return None,
+        };
+        outcomes.push(outcome);
+    }
+    Some(outcomes)
+}
+
+fn literals_equal(left: &Literal, right: &Literal) -> Option<bool> {
+    match (left, right) {
+        (Literal::Int(left), Literal::Int(right)) => Some(left == right),
+        (Literal::String(left), Literal::String(right)) => Some(left == right),
+        (Literal::Char(left), Literal::Char(right)) => Some(left == right),
+        (Literal::Boolean(left), Literal::Boolean(right)) => Some(left == right),
+        _ => None,
+    }
+}
+
+fn pattern_variables(pattern: &Pattern) -> Vec<(LocalId, Option<usize>)> {
+    match &pattern.kind {
+        PatternKind::Variable(local) => vec![(local.id, None)],
+        PatternKind::Constructor { arguments, .. } => arguments
+            .iter()
+            .enumerate()
+            .filter_map(|(position, argument)| match &argument.kind {
+                PatternKind::Variable(local) => Some((local.id, Some(position))),
+                _ => None,
+            })
+            .collect(),
+        _ => vec![],
+    }
+}
+
+fn local_expression(local: &Local) -> Expression {
+    Expression::new(ExpressionKind::Local(local.id), local.monotype)
+}
+
+fn substitute_guarded(guarded: &mut Guarded, local: LocalId, value: &Expression) {
+    match guarded {
+        Guarded::Unconditional(body) => substitute_in_place(body, local, value),
+        Guarded::Guards(branches) => {
+            for branch in branches {
+                for guard in &mut branch.guards {
+                    match guard {
+                        Guard::Boolean(condition) => substitute_in_place(condition, local, value),
+                        Guard::Pattern { value: guarded_value, .. } => {
+                            substitute_in_place(guarded_value, local, value)
+                        }
+                    }
+                }
+                substitute_in_place(&mut branch.body, local, value);
+            }
+        }
     }
 }
 

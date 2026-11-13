@@ -1,0 +1,20 @@
+package:
+  name: markgraf-compaction-driver
+  dependencies:
+    - arrays
+    - console
+    - effect
+    - foldable-traversable
+    - layered-layout
+    - maybe
+    - ordered-collections
+    - prelude
+    - strings
+    - tuples
+workspace:
+  packageSet:
+    registry: 73.2.0
+  extraPackages:
+    yoga-json: "5.2.0"
+    layered-layout:
+      path: @LAYERED_LAYOUT@

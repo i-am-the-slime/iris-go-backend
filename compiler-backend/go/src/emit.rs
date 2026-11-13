@@ -43,6 +43,7 @@ where
         locals: FxHashMap::default(),
         local_names: FxHashSet::default(),
         tail_loop: None,
+        current: None,
     };
     emitter.assign_function_names();
     let mut declarations = vec![];
@@ -110,6 +111,7 @@ struct Emitter<'p, 'm, 'q, Q> {
     locals: FxHashMap<LocalId, GoExpression>,
     local_names: FxHashSet<String>,
     tail_loop: Option<TailLoop>,
+    current: Option<FunctionId>,
 }
 
 const RESERVED: &[&str] = &[
@@ -277,16 +279,43 @@ fn uses_local(expression: &Expression, local: LocalId) -> bool {
     found
 }
 
-fn guarded_uses_local(guarded: &Guarded, local: LocalId) -> bool {
+fn path_root(path: &GoExpression) -> Option<&String> {
+    match path {
+        GoExpression::Identifier(name) => Some(name),
+        GoExpression::Field { value, .. } => path_root(value),
+        _ => None,
+    }
+}
+
+fn local_uses(expression: &Expression, local: LocalId) -> usize {
+    let mut uses = 0;
+    visit(expression, &mut |node| {
+        if let ExpressionKind::Local(id) = node.kind
+            && id == local
+        {
+            uses += 1;
+        }
+    });
+    uses
+}
+
+fn guarded_local_uses(guarded: &Guarded, local: LocalId) -> usize {
     match guarded {
-        Guarded::Unconditional(body) => uses_local(body, local),
-        Guarded::Guards(branches) => branches.iter().any(|branch| {
-            uses_local(&branch.body, local)
-                || branch.guards.iter().any(|guard| match guard {
-                    Guard::Boolean(condition) => uses_local(condition, local),
-                    Guard::Pattern { value, .. } => uses_local(value, local),
-                })
-        }),
+        Guarded::Unconditional(body) => local_uses(body, local),
+        Guarded::Guards(branches) => branches
+            .iter()
+            .map(|branch| {
+                let guards: usize = branch
+                    .guards
+                    .iter()
+                    .map(|guard| match guard {
+                        Guard::Boolean(condition) => local_uses(condition, local),
+                        Guard::Pattern { value, .. } => local_uses(value, local),
+                    })
+                    .sum();
+                guards + local_uses(&branch.body, local)
+            })
+            .sum(),
     }
 }
 
@@ -339,6 +368,7 @@ where
     fn function(&mut self, id: FunctionId) -> GoResult<Vec<GoDeclaration>> {
         let function: &Function = self.program.function(id);
         let name = self.function_names[id.0 as usize].clone();
+        self.current = Some(id);
         self.locals.clear();
         self.local_names.clear();
         self.tail_loop = None;
@@ -356,7 +386,7 @@ where
         let result = self.go_result(effect_result.unwrap_or(function.result))?;
         let loops = !function.parameters.is_empty()
             && has_tail_call(&function.body, id, function.parameters.len(), mode)
-            && !captures_parameters(&function.body, &function.parameters);
+            && !captures_parameters(&function.body, &function.parameters, mode, self.monotypes);
         if loops {
             let parameter_names = parameters.iter().map(|(name, _)| name.clone()).collect();
             self.tail_loop = Some(TailLoop { function: id, parameters: parameter_names });
@@ -405,6 +435,52 @@ where
         ])
     }
 
+    fn current_definition(&self) -> String {
+        match self.current {
+            Some(id) => format!("code generation of {}", self.program.function(id).name),
+            None => "code generation".into(),
+        }
+    }
+
+    fn is_total(&mut self, pattern: &Pattern) -> bool {
+        match &pattern.kind {
+            PatternKind::Wildcard | PatternKind::Variable(_) => true,
+            PatternKind::Named { pattern, .. } => self.is_total(pattern),
+            PatternKind::Record(fields) => fields.iter().all(|(_, field)| self.is_total(field)),
+            PatternKind::Constructor { data, arguments, .. } => {
+                let product =
+                    self.data_layout(data).is_ok_and(|layout| layout.kind == DataKind::Product);
+                product && arguments.iter().all(|argument| self.is_total(argument))
+            }
+            PatternKind::Literal(_) | PatternKind::Array(_) => false,
+        }
+    }
+
+    fn bind_pattern_local(
+        &mut self,
+        local: &Local,
+        path: &GoExpression,
+        uses: usize,
+        out: &mut Vec<GoStatement>,
+    ) -> GoResult<()> {
+        let reassigned = |name: &String| {
+            self.tail_loop.as_ref().is_some_and(|tail_loop| tail_loop.parameters.contains(name))
+        };
+        let aliased = match path_root(path) {
+            Some(root) if !reassigned(root) => {
+                matches!(path, GoExpression::Identifier(_)) || uses == 1
+            }
+            _ => false,
+        };
+        if aliased {
+            self.locals.insert(local.id, path.clone());
+            return Ok(());
+        }
+        let name = self.bind_local(local);
+        out.push(self.define(name, path.clone(), local.monotype)?);
+        Ok(())
+    }
+
     fn bind_local(&mut self, local: &Local) -> String {
         let name = unique(identifier(&local.name), &mut self.local_names);
         self.locals.insert(local.id, identifier_expression(&name));
@@ -417,7 +493,7 @@ where
 
     fn local(&self, id: LocalId) -> GoResult<GoExpression> {
         self.locals.get(&id).cloned().ok_or_else(|| GoError::Unsupported {
-            definition: "code generation".into(),
+            definition: self.current_definition(),
             state: crate::error::UnsupportedState::Construct { construct: "unbound local" },
         })
     }
@@ -868,7 +944,7 @@ where
             }
             Foreign::EffectPure => self.deliver(values.remove(0), result, sink, out),
             _ => Err(GoError::Unsupported {
-                definition: "code generation".into(),
+                definition: self.current_definition(),
                 state: crate::error::UnsupportedState::Construct {
                     construct: "unsaturated effect primitives",
                 },
@@ -1057,6 +1133,32 @@ where
                 self.bindings(bindings, out)?;
                 self.value(body, out)?
             }
+            ExpressionKind::Case { scrutinees, alternatives }
+                if alternatives.first().is_some_and(|first| {
+                    matches!(first.body, Guarded::Unconditional(_))
+                        && first.patterns.iter().all(|pattern| self.is_total(pattern))
+                }) =>
+            {
+                let first = &alternatives[0];
+                let mut paths = vec![];
+                for (scrutinee, pattern) in scrutinees.iter().zip(&first.patterns) {
+                    if let PatternKind::Wildcard = pattern.kind {
+                        paths.push(unit_value());
+                        continue;
+                    }
+                    let value = self.value(scrutinee, out)?;
+                    paths.push(self.hoist(value, "scrutinee", out));
+                }
+                let Guarded::Unconditional(body) = &first.body else { unreachable!() };
+                let (_, bindings) = self.alternative_tests(&paths, &first.patterns)?;
+                for (local, path) in &bindings {
+                    let uses = local_uses(body, local.id);
+                    if uses > 0 {
+                        self.bind_pattern_local(local, path, uses, out)?;
+                    }
+                }
+                self.value(body, out)?
+            }
             ExpressionKind::If { .. } | ExpressionKind::Case { .. } => {
                 if self.is_unit(expression.monotype) {
                     self.sink(expression, Mode::Value, Sink::Discard, out)?;
@@ -1116,7 +1218,7 @@ where
     ) -> GoResult<(DataType, usize)> {
         let Monotype::Data(data) = self.monotypes.get(monotype).clone() else {
             return Err(GoError::Unsupported {
-                definition: "code generation".into(),
+                definition: self.current_definition(),
                 state: crate::error::UnsupportedState::Construct {
                     construct: "Maybe results of a non-Maybe type",
                 },
@@ -1125,7 +1227,7 @@ where
         let constructors = match self.monotypes.constructors(&mut self.context, &data)? {
             Ok(constructors) => constructors,
             Err(state) => {
-                return Err(GoError::Unsupported { definition: "code generation".into(), state });
+                return Err(GoError::Unsupported { definition: self.current_definition(), state });
             }
         };
         let index =
@@ -1503,6 +1605,20 @@ where
             let value = self.value(scrutinee, out)?;
             paths.push(self.hoist(value, "scrutinee", out));
         }
+        if let Some(first) = alternatives.first()
+            && let Guarded::Unconditional(body) = &first.body
+        {
+            let (tests, bindings) = self.alternative_tests(&paths, &first.patterns)?;
+            if tests.is_empty() {
+                for (local, path) in &bindings {
+                    let uses = local_uses(body, local.id);
+                    if uses > 0 {
+                        self.bind_pattern_local(local, path, uses, out)?;
+                    }
+                }
+                return self.sink(body, mode, sink, out);
+            }
+        }
         if self.try_switch(expression, &paths, scrutinees, alternatives, mode, sink.clone(), out)? {
             return Ok(());
         }
@@ -1528,12 +1644,26 @@ where
                 }
                 for guard in guards {
                     let Guard::Boolean(condition) = guard else {
-                        return self.closure_case(expression, mode, sink, out);
+                        return self.closure_case(
+                            &paths,
+                            alternatives,
+                            expression,
+                            mode,
+                            sink,
+                            out,
+                        );
                     };
                     let mut hoisted = vec![];
                     let condition = self.value(condition, &mut hoisted)?;
                     if !hoisted.is_empty() {
-                        return self.closure_case(expression, mode, sink, out);
+                        return self.closure_case(
+                            &paths,
+                            alternatives,
+                            expression,
+                            mode,
+                            sink,
+                            out,
+                        );
                     }
                     if !matches!(condition, GoExpression::Boolean(true)) {
                         conditions.push(condition);
@@ -1541,9 +1671,9 @@ where
                 }
                 let mut block = vec![];
                 for (local, path) in &bindings {
-                    if uses_local(body, local.id) {
-                        let name = self.bind_local(local);
-                        block.push(self.define(name, path.clone(), local.monotype)?);
+                    let uses = local_uses(body, local.id);
+                    if uses > 0 {
+                        self.bind_pattern_local(local, path, uses, &mut block)?;
                     }
                 }
                 self.sink(body, mode, sink.clone(), &mut block)?;
@@ -1577,6 +1707,8 @@ where
 
     fn closure_case(
         &mut self,
+        paths: &[GoExpression],
+        alternatives: &[Alternative],
         expression: &Expression,
         mode: Mode,
         sink: Sink,
@@ -1591,7 +1723,7 @@ where
         let result_type = self.go_result(result)?;
         let saved = self.tail_loop.take();
         let mut body = vec![];
-        self.sink(expression, mode, Sink::Return, &mut body)?;
+        self.sequential_case(paths, alternatives, mode, &mut body)?;
         self.tail_loop = saved;
         let closure = GoExpression::Function { parameters: vec![], result: result_type, body };
         self.deliver(call(closure, vec![]), result, sink, out)
@@ -1608,9 +1740,9 @@ where
             let (tests, bindings) = self.alternative_tests(paths, &alternative.patterns)?;
             let mut block = vec![];
             for (local, path) in &bindings {
-                if guarded_uses_local(&alternative.body, local.id) {
-                    let name = self.bind_local(local);
-                    block.push(self.define(name, path.clone(), local.monotype)?);
+                let uses = guarded_local_uses(&alternative.body, local.id);
+                if uses > 0 {
+                    self.bind_pattern_local(local, path, uses, &mut block)?;
                 }
             }
             let terminates = self.guarded_sequential(&alternative.body, mode, &mut block)?;
@@ -1644,43 +1776,73 @@ where
             Guarded::Guards(branches) => branches,
         };
         for branch in branches {
-            let mut conditions = vec![];
-            let mut nested_bindings = vec![];
-            for guard in &branch.guards {
-                match guard {
-                    Guard::Boolean(condition) => {
-                        let condition = self.value(condition, out)?;
-                        if !matches!(condition, GoExpression::Boolean(true)) {
-                            conditions.push(condition);
-                        }
-                    }
-                    Guard::Pattern { pattern, value } => {
-                        let value = self.value(value, out)?;
-                        let value = self.hoist(value, "guarded", out);
-                        let mut bindings = vec![];
-                        self.pattern_tests(pattern, value, &mut conditions, &mut bindings)?;
-                        nested_bindings.extend(bindings);
-                    }
-                }
+            if self.guard_chain(&branch.guards, vec![], vec![], &branch.body, mode, out)? {
+                return Ok(true);
             }
+        }
+        Ok(false)
+    }
+
+    fn guard_chain(
+        &mut self,
+        guards: &[Guard],
+        mut conditions: Vec<GoExpression>,
+        mut bindings: Vec<(Local, GoExpression)>,
+        body: &Expression,
+        mode: Mode,
+        out: &mut Vec<GoStatement>,
+    ) -> GoResult<bool> {
+        let Some((guard, rest)) = guards.split_first() else {
             let mut block = vec![];
-            for (local, path) in &nested_bindings {
-                if uses_local(&branch.body, local.id) {
-                    let name = self.bind_local(local);
-                    block.push(self.define(name, path.clone(), local.monotype)?);
+            for (local, path) in &bindings {
+                let uses = local_uses(body, local.id);
+                if uses > 0 {
+                    self.bind_pattern_local(local, path, uses, &mut block)?;
                 }
             }
-            self.sink(&branch.body, mode, Sink::Return, &mut block)?;
-            match conjunction(conditions) {
+            self.sink(body, mode, Sink::Return, &mut block)?;
+            return Ok(match conjunction(conditions) {
                 None => {
                     out.extend(block);
-                    return Ok(true);
+                    true
                 }
                 Some(condition) => {
-                    out.push(GoStatement::If { condition, then: block, otherwise: vec![] })
+                    out.push(GoStatement::If { condition, then: block, otherwise: vec![] });
+                    false
+                }
+            });
+        };
+        let mut evaluation = vec![];
+        let mut tests = vec![];
+        let mut guard_bindings = vec![];
+        match guard {
+            Guard::Boolean(condition) => {
+                let condition = self.value(condition, &mut evaluation)?;
+                if !matches!(condition, GoExpression::Boolean(true)) {
+                    tests.push(condition);
+                }
+            }
+            Guard::Pattern { pattern, value } => {
+                let value = self.value(value, &mut evaluation)?;
+                let value = self.hoist(value, "guarded", &mut evaluation);
+                self.pattern_tests(pattern, value, &mut tests, &mut guard_bindings)?;
+                for (local, path) in &guard_bindings {
+                    self.locals.insert(local.id, path.clone());
                 }
             }
         }
+        if evaluation.is_empty() || conditions.is_empty() {
+            out.extend(evaluation);
+            conditions.extend(tests);
+            bindings.extend(guard_bindings);
+            return self.guard_chain(rest, conditions, bindings, body, mode, out);
+        }
+        let mut block = evaluation;
+        bindings.extend(guard_bindings);
+        self.guard_chain(rest, tests, bindings, body, mode, &mut block)?;
+        let condition =
+            conjunction(conditions).expect("invariant violated: conditions are pending");
+        out.push(GoStatement::If { condition, then: block, otherwise: vec![] });
         Ok(false)
     }
 
@@ -1743,9 +1905,9 @@ where
             self.pattern_tests(pattern, path.clone(), &mut tests, &mut bindings)?;
             let mut block = vec![];
             for (local, binding_path) in &bindings {
-                if uses_local(body, local.id) {
-                    let name = self.bind_local(local);
-                    block.push(self.define(name, binding_path.clone(), local.monotype)?);
+                let uses = local_uses(body, local.id);
+                if uses > 0 {
+                    self.bind_pattern_local(local, binding_path, uses, &mut block)?;
                 }
             }
             self.sink(body, mode, sink.clone(), &mut block)?;
@@ -1923,16 +2085,66 @@ fn has_tail_call(expression: &Expression, function: FunctionId, arity: usize, mo
     }
 }
 
-fn captures_parameters(expression: &Expression, parameters: &[Local]) -> bool {
-    let mut captured = false;
-    visit(expression, &mut |node| {
-        if let ExpressionKind::Lambda { body, .. } = &node.kind
-            && parameters.iter().any(|parameter| uses_local(body, parameter.id))
-        {
-            captured = true;
+fn captures_parameters(
+    expression: &Expression,
+    parameters: &[Local],
+    mode: Mode,
+    monotypes: &Monotypes,
+) -> bool {
+    let uses_parameter = |expression: &Expression| {
+        parameters.iter().any(|parameter| uses_local(expression, parameter.id))
+    };
+    let captures = |expression: &Expression, mode: Mode| {
+        captures_parameters(expression, parameters, mode, monotypes)
+    };
+    if mode == Mode::Value
+        && is_effect_node(expression)
+        && monotypes.effect_result(expression.monotype).is_some()
+    {
+        return uses_parameter(expression);
+    }
+    match &expression.kind {
+        ExpressionKind::Lambda { body, .. } => uses_parameter(body),
+        ExpressionKind::EffectPure(value) if mode == Mode::Perform => captures(value, Mode::Value),
+        ExpressionKind::EffectBind { action, body, .. } if mode == Mode::Perform => {
+            captures(action, Mode::Perform) || captures(body, Mode::Perform)
         }
-    });
-    captured
+        ExpressionKind::EffectEach { .. } | ExpressionKind::EffectWhen { .. }
+            if mode == Mode::Perform =>
+        {
+            uses_parameter(expression)
+        }
+        ExpressionKind::EffectPure(_)
+        | ExpressionKind::EffectBind { .. }
+        | ExpressionKind::EffectEach { .. }
+        | ExpressionKind::EffectWhen { .. } => uses_parameter(expression),
+        ExpressionKind::Let { bindings, body } => {
+            bindings.iter().any(|binding| captures(&binding.value, Mode::Value))
+                || captures(body, mode)
+        }
+        ExpressionKind::If { condition, then, otherwise } => {
+            captures(condition, Mode::Value) || captures(then, mode) || captures(otherwise, mode)
+        }
+        ExpressionKind::Case { scrutinees, alternatives } => {
+            scrutinees.iter().any(|scrutinee| captures(scrutinee, Mode::Value))
+                || alternatives.iter().any(|alternative| match &alternative.body {
+                    Guarded::Unconditional(body) => captures(body, mode),
+                    Guarded::Guards(branches) => branches.iter().any(|branch| {
+                        branch.guards.iter().any(|guard| match guard {
+                            Guard::Boolean(condition) => captures(condition, Mode::Value),
+                            Guard::Pattern { value, .. } => captures(value, Mode::Value),
+                        }) || captures(&branch.body, mode)
+                    }),
+                })
+        }
+        _ => {
+            let mut captured = false;
+            crate::simplify::for_each_child(expression, &mut |child| {
+                captured = captured || captures(child, Mode::Value);
+            });
+            captured
+        }
+    }
 }
 
 fn render_type(type_: &GoType) -> String {

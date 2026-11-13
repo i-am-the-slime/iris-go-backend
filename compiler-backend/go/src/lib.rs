@@ -9,6 +9,7 @@ mod dictionary;
 mod emit;
 pub mod error;
 mod foreign;
+mod lift;
 mod mono;
 mod monotype;
 mod simplify;

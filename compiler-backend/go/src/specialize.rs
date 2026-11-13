@@ -6,7 +6,7 @@ use std::collections::VecDeque;
 use std::sync::Arc;
 
 use checking::TypeId;
-use checking::core::Type;
+use checking::core::{Name, Type};
 use checking::evidence::{
     Evidence, EvidenceBinderId, EvidenceId, EvidenceState, EvidenceVarId, InstanceCandidateOrigin,
     ReflectableEvidence, ReflectableOrdering, SynthesizedEvidence,
@@ -661,7 +661,7 @@ where
             | tree::ExpressionKind::Variable { .. }
             | tree::ExpressionKind::RecordPun { .. }
             | tree::ExpressionKind::EvidenceApplication { .. } => {
-                return self.reference(scope, id);
+                return self.reference(scope, id, Substitution::default(), None);
             }
             tree::ExpressionKind::Section { binder } => {
                 return self.local_reference(scope, self.checked_binder_source(scope, *binder));
@@ -777,9 +777,15 @@ where
         let monotype = self.monotype(scope, module.checked.tree[id].type_id)?;
         let mut arguments = vec![];
         let mut head = id;
+        let mut result_instantiations = Substitution::default();
         while let tree::ExpressionKind::TermApplication { function, argument } =
             module.checked.tree[head].kind
         {
+            for instantiation in module.checked.tree.lookup_instantiations(head) {
+                let closed =
+                    self.context.types.substitute(instantiation.argument, &scope.substitution);
+                result_instantiations.insert(instantiation.name, closed);
+            }
             arguments.push(argument);
             head = function;
         }
@@ -792,10 +798,31 @@ where
             argument.monotype = monotype;
             return Ok(argument);
         }
-        let function = self.expression(scope, head)?;
+        let function = match module.checked.tree[head].kind {
+            tree::ExpressionKind::Constructor { .. }
+            | tree::ExpressionKind::Variable { .. }
+            | tree::ExpressionKind::RecordPun { .. }
+            | tree::ExpressionKind::EvidenceApplication { .. } => {
+                self.reference(scope, head, result_instantiations, None)?
+            }
+            _ => self.expression(scope, head)?,
+        };
+        let mut parameter_type = module.checked.tree[head].type_id;
         let mut converted = Vec::with_capacity(arguments.len());
         for argument in arguments {
-            converted.push(self.expression(scope, argument)?);
+            let expected = self.context.types.function_parts(parameter_type);
+            let converted_argument = match (&module.checked.tree[argument].kind, expected) {
+                (
+                    tree::ExpressionKind::Variable { .. }
+                    | tree::ExpressionKind::EvidenceApplication { .. },
+                    Some((expected, _)),
+                ) => self.reference(scope, argument, Substitution::default(), Some(expected))?,
+                _ => self.expression(scope, argument)?,
+            };
+            converted.push(converted_argument);
+            if let Some((_, result)) = expected {
+                parameter_type = result;
+            }
         }
         let kind = ExpressionKind::Apply { function: Box::new(function), arguments: converted };
         Ok(Expression::new(kind, monotype))
@@ -833,10 +860,15 @@ where
         Ok(Expression::new(ExpressionKind::Local(local.id), local.monotype))
     }
 
-    fn reference(&mut self, scope: &mut Scope, id: tree::ExpressionId) -> GoResult<Expression> {
+    fn reference(
+        &mut self,
+        scope: &mut Scope,
+        id: tree::ExpressionId,
+        mut instantiations: Substitution,
+        expected: Option<TypeId>,
+    ) -> GoResult<Expression> {
         let module = Arc::clone(&scope.module);
         let tree = &module.checked.tree;
-        let mut instantiations = Substitution::default();
         let mut evidences = vec![];
         let mut current = id;
         loop {
@@ -899,11 +931,74 @@ where
                 file_id,
                 term,
             )) => {
+                let checked = expected.unwrap_or(tree[id].type_id);
+                self.recover_inner_instantiations(
+                    scope,
+                    checked,
+                    file_id,
+                    term,
+                    &mut instantiations,
+                )?;
                 let monotype =
                     self.instantiated_monotype(scope, current, file_id, term, &instantiations)?;
                 self.global_reference(scope, file_id, term, &instantiations, dictionaries, monotype)
             }
         }
+    }
+
+    fn recover_inner_instantiations(
+        &mut self,
+        scope: &Scope,
+        checked: TypeId,
+        file_id: FileId,
+        term: TermItemId,
+        instantiations: &mut Substitution,
+    ) -> GoResult<()> {
+        let module = self.context.module(file_id)?;
+        let Some(declared) = module.checked.lookup_term_item_type(term) else {
+            return Ok(());
+        };
+        let declared = self.outer_body(declared);
+        let declared = self.context.types.substitute(declared, instantiations);
+        let mut inner = vec![];
+        let pattern = self.strip_inner_quantifiers(declared, &mut inner)?;
+        inner.retain(|name| !instantiations.contains_key(name));
+        if inner.is_empty() {
+            return Ok(());
+        }
+        let checked = self.context.types.substitute(checked, &scope.substitution);
+        let checked = self.strip_inner_quantifiers(checked, &mut vec![])?;
+        let mut bindings = Substitution::default();
+        if self.context.types.match_type(pattern, checked, &inner, &mut bindings) {
+            instantiations.extend(bindings);
+        }
+        Ok(())
+    }
+
+    fn outer_body(&self, mut current: TypeId) -> TypeId {
+        loop {
+            let (bound, inner) = self.context.types.peel_quantifiers(current);
+            let (constraints, inner) = self.context.types.peel_constraints(inner);
+            current = inner;
+            if bound.is_empty() && constraints.is_empty() {
+                return current;
+            }
+        }
+    }
+
+    fn strip_inner_quantifiers(
+        &mut self,
+        type_id: TypeId,
+        names: &mut Vec<Name>,
+    ) -> GoResult<TypeId> {
+        let type_id = crate::monotype::expand_synonyms(&mut self.context, type_id)?;
+        let (bound, body) = self.context.types.peel_quantifiers(type_id);
+        names.extend(bound);
+        let Some((argument, result)) = self.context.types.function_parts(body) else {
+            return Ok(body);
+        };
+        let result = self.strip_inner_quantifiers(result, names)?;
+        Ok(self.context.queries.intern_type(Type::Function(argument, result)))
     }
 
     /// The type of a reference after the checker's implicit instantiation: the
@@ -1103,11 +1198,6 @@ where
         for abstraction in abstractions {
             match abstraction {
                 DeclarationAbstraction::Type { binder, .. } => {
-                    if seen_argument {
-                        return Err(
-                            self.unsupported(scope, UnsupportedState::InterleavedAbstractions)
-                        );
-                    }
                     let binder = self.context.queries.lookup_forall_binder(*binder);
                     let Some(&argument) = instantiations.get(&binder.name) else {
                         let variable = match scope.module.checked.lookup_name(binder.name) {
@@ -1524,6 +1614,7 @@ where
                 }));
             };
             let constraint = crate::monotype::expand_synonyms(&mut self.context, constraint)?;
+            let head = crate::monotype::expand_synonyms(&mut self.context, head)?;
             if !self.context.types.match_type(head, constraint, &names, &mut bindings) {
                 let pretty =
                     checking::core::pretty::Pretty::new(self.context.queries, &module.checked);
@@ -1544,6 +1635,8 @@ where
             };
             let constraint = self.context.types.substitute(constraint, scope.substitution);
             let constraint = crate::monotype::expand_synonyms(&mut self.context, constraint)?;
+            let instance_constraint =
+                crate::monotype::expand_synonyms(&mut self.context, instance_constraint)?;
             self.context.types.match_type(instance_constraint, constraint, &names, &mut bindings);
             recorded.push(Some(constraint));
         }
