@@ -40,6 +40,11 @@ impl Simplifier<'_> {
         {
             return self.foreign_record(value, monotype);
         }
+        if let Monotype::Record(_) = self.monotypes.get(value.monotype)
+            && let Monotype::Object(element) = *self.monotypes.get(monotype)
+        {
+            return self.homogeneous_object(value, element, monotype);
+        }
         Expression::new(ExpressionKind::Coerce(Box::new(value)), monotype)
     }
 
@@ -85,6 +90,39 @@ impl Simplifier<'_> {
         for bindings in bindings.into_iter().rev() {
             let kind = ExpressionKind::Let { bindings, body: Box::new(converted) };
             converted = Expression::new(kind, foreign);
+        }
+        self.expression(converted)
+    }
+
+    fn homogeneous_object(
+        &mut self,
+        record: Expression,
+        element: MonotypeId,
+        object: MonotypeId,
+    ) -> Expression {
+        let mut bindings = vec![];
+        let Some(fields) = self.fields(&record, &mut bindings) else {
+            return Expression::new(ExpressionKind::Coerce(Box::new(record)), object);
+        };
+        let string = self.monotypes.intern(Monotype::String);
+        let keys = self.monotypes.intern(Monotype::Array(string));
+        let values = self.monotypes.intern(Monotype::Array(element));
+        let (labels, fields): (Vec<_>, Vec<_>) = fields
+            .into_iter()
+            .map(|(label, value)| {
+                let label = ExpressionKind::Literal(Literal::String(label.to_string()));
+                (Expression::new(label, string), self.coerce(value, element))
+            })
+            .unzip();
+        let arguments = vec![
+            Expression::new(ExpressionKind::Array(labels), keys),
+            Expression::new(ExpressionKind::Array(fields), values),
+        ];
+        let kind = ExpressionKind::Foreign { foreign: foreign::OBJECT_FROM_ENTRIES, arguments };
+        let mut converted = Expression::new(kind, object);
+        for bindings in bindings.into_iter().rev() {
+            let kind = ExpressionKind::Let { bindings, body: Box::new(converted) };
+            converted = Expression::new(kind, object);
         }
         self.expression(converted)
     }

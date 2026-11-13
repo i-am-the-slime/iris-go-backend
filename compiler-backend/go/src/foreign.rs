@@ -507,6 +507,8 @@ pub const OBJECT_KEYS: Foreign = object("Keys", 1, PLAIN);
 
 pub const OBJECT_INDEX: Foreign = object("UnsafeIndex", 2, PLAIN);
 
+pub const OBJECT_FROM_ENTRIES: Foreign = object("FromEntries", 2, PLAIN);
+
 pub const ARRAY_SLICE: Foreign = array_with("Slice", 3, integers(&[0, 1], false));
 
 pub const FOREIGN_RECORD: Foreign = direct("ForeignRecord", 2);
