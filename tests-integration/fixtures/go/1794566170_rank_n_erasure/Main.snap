@@ -23,9 +23,9 @@ func convert(value [][]int32) []any {
 }
 
 type Nested struct {
-	Tag   int
 	Flat0 any
 	Deep0 *Nested
+	Tag   uint8
 }
 
 const (

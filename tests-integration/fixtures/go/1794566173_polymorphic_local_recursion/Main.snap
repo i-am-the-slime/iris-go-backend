@@ -7,9 +7,9 @@ package main
 import "fmt"
 
 type TreeInt struct {
-	Tag   int
-	Leaf0 int32
 	Pair0 any
+	Leaf0 int32
+	Tag   uint8
 }
 
 const (
@@ -18,9 +18,9 @@ const (
 )
 
 type TreeFnIntInt struct {
-	Tag   int
 	Leaf0 func(int32) int32
 	Pair0 any
+	Tag   uint8
 }
 
 const (
@@ -34,10 +34,10 @@ type PairEIntInt struct {
 }
 
 type TreeFn struct {
-	Tag    int
 	Leaf0  func(any) any
 	Pair0  any
 	Origin any
+	Tag    uint8
 }
 
 const (
@@ -46,10 +46,9 @@ const (
 )
 
 type Tree struct {
-	Tag    int
-	Leaf0  any
-	Pair0  any
+	Field0 any
 	Origin any
+	Tag    uint8
 }
 
 const (
@@ -77,9 +76,9 @@ func convert2(value TreeFnIntInt) *TreeFn {
 func convert3(value TreeInt) *Tree {
 	switch value.Tag {
 	case TreeIntLeaf:
-		return &Tree{Tag: TreeLeaf, Leaf0: value.Leaf0, Origin: value}
+		return &Tree{Tag: TreeLeaf, Field0: value.Leaf0, Origin: value}
 	default: // TreeIntPair
-		return &Tree{Tag: TreePair, Pair0: value.Pair0, Origin: value}
+		return &Tree{Tag: TreePair, Field0: value.Pair0, Origin: value}
 	}
 }
 
@@ -88,9 +87,9 @@ func convert(value PairEIntInt) *PairE {
 }
 
 type TreeFnIntFnIntInt struct {
-	Tag   int
 	Leaf0 func(int32) func(int32) int32
 	Pair0 any
+	Tag   uint8
 }
 
 const (
@@ -122,10 +121,10 @@ func convert4(value PairEFnIntIntInt) *PairE {
 }
 
 type TreeFnInt struct {
-	Tag    int
 	Leaf0  func(any) int32
 	Pair0  any
 	Origin any
+	Tag    uint8
 }
 
 const (
@@ -157,20 +156,20 @@ func convert6(value *PairE) *PairEInt {
 func convert8(value *TreeFnInt) *Tree {
 	switch value.Tag {
 	case TreeFnIntLeaf:
-		return &Tree{Tag: TreeLeaf, Leaf0: func(coerced4 any) any {
+		return &Tree{Tag: TreeLeaf, Field0: func(coerced4 any) any {
 			return value.Leaf0(coerced4)
 		}, Origin: value.Origin}
 	default: // TreeFnIntPair
-		return &Tree{Tag: TreePair, Pair0: value.Pair0, Origin: value.Origin}
+		return &Tree{Tag: TreePair, Field0: value.Pair0, Origin: value.Origin}
 	}
 }
 
 func convert9(value *TreeFn) *Tree {
 	switch value.Tag {
 	case TreeFnLeaf:
-		return &Tree{Tag: TreeLeaf, Leaf0: value.Leaf0, Origin: value.Origin}
+		return &Tree{Tag: TreeLeaf, Field0: value.Leaf0, Origin: value.Origin}
 	default: // TreeFnPair
-		return &Tree{Tag: TreePair, Pair0: value.Pair0, Origin: value.Origin}
+		return &Tree{Tag: TreePair, Field0: value.Pair0, Origin: value.Origin}
 	}
 }
 
@@ -211,7 +210,7 @@ func leavesIntGo2(argument0 int32, argument1 *Tree) int32 {
 	case TreeLeaf:
 		return argument0 + 1
 	default: // TreePair
-		scrutinee := argument1.Pair0.(*PairE)
+		scrutinee := argument1.Field0.(*PairE)
 		original := func(argument02 int32) func(*Tree) int32 {
 			return func(argument12 *Tree) int32 {
 				return leavesIntGo2(argument02, argument12)
@@ -231,7 +230,7 @@ func leavesIntGo3(argument0 int32, argument1 *Tree) int32 {
 	case TreeLeaf:
 		return argument0 + 1
 	default: // TreePair
-		scrutinee := argument1.Pair0.(*PairE)
+		scrutinee := argument1.Field0.(*PairE)
 		original := func(argument02 int32) func(*Tree) int32 {
 			return func(argument12 *Tree) int32 {
 				return leavesIntGo2(argument02, argument12)

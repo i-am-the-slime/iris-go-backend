@@ -18,8 +18,8 @@ type MinisName struct {
 type Step func(int32) *MaybeStep
 
 type MaybeStep struct {
-	Tag   int
 	Just0 Step
+	Tag   uint8
 }
 
 const (
