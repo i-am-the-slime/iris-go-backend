@@ -18,6 +18,7 @@ use smol_str::SmolStr;
 mod fold;
 mod object;
 mod record;
+mod unpack;
 
 const INLINE_SIZE: usize = 40;
 const INLINE_FUEL: usize = 2_000;
@@ -754,7 +755,13 @@ impl Simplifier<'_> {
                     body = self.expression(body);
                 }
             } else {
-                kept.push(binding);
+                match self.unpack(binding, body) {
+                    Ok(unpacked) => body = unpacked,
+                    Err((binding, original)) => {
+                        body = original;
+                        kept.push(binding);
+                    }
+                }
             }
         }
         if kept.is_empty() {
