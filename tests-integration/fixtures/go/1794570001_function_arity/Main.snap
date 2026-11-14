@@ -14,7 +14,7 @@ package show
 import "github.com/i-am-the-slime/purs-backend-go/go-support/prim"
 
 func Show(argument0 int32) string {
-	return prim.ShowInt(int(argument0))
+	return prim.ShowInt(argument0)
 }
 
 func Show2(argument0 string) string {
@@ -47,7 +47,7 @@ func initializeMain_() []string {
 	}
 	array3 := []func(int32) func(string) string{prepared, func(a2 int32) func(string) string {
 		return func(b2 string) string {
-			return prim.ShowInt(int(a2)) + b2
+			return prim.ShowInt(a2) + b2
 		}
 	}}
 	mapped2 := make([]string, len(array3))
@@ -60,13 +60,13 @@ func initializeMain_() []string {
 	}}
 	mapped3 := make([]string, len(array4))
 	for index3, combine := range array4 {
-		mapped3[index3] = prim.ShowInt(int(array.Foldl(combine, int32(0), []int32{1, 2, 3})))
+		mapped3[index3] = prim.ShowInt(array.Foldl(combine, int32(0), []int32{1, 2, 3}))
 	}
-	return array.Append([]string{prim.ShowInt(int(fromInt(3)(func(argument int32) int32 {
+	return array.Append([]string{prim.ShowInt(fromInt(3)(func(argument int32) int32 {
 		return function(func(value int32) int32 {
 			return value + 1
 		}, argument)
-	}, 0)))}, array.Append(mapped, array.Append(mapped2, mapped3)))
+	}, 0))}, array.Append(mapped, array.Append(mapped2, mapped3)))
 }
 
 func fromInt(argument0 int32) func(func(int32) int32, int32) int32 {

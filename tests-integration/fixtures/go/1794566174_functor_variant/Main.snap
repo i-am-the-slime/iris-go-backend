@@ -110,11 +110,11 @@ func initializeMain_() []string {
 func describe(r Map_Type_Value) string {
 	if r.Type == "say" {
 		scrutinee := convert(r.Value.(*Say))
-		return scrutinee.Say0 + " " + prim.ShowInt(int(scrutinee.Say1))
+		return scrutinee.Say0 + " " + prim.ShowInt(scrutinee.Say1)
 	}
 	if r.Type == "count" {
 		scrutinee2 := convert2(r.Value.(*Count))
-		return "count " + prim.ShowInt(int(scrutinee2.Count0(2)))
+		return "count " + prim.ShowInt(scrutinee2.Count0(2))
 	}
 	panic("Data.Functor.Variant: pattern match failure [" + r.Type + "]")
 	var unreachable string

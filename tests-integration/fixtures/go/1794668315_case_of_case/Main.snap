@@ -59,7 +59,7 @@ func initializeMain_() []string {
 	} else {
 		result5 = "none"
 	}
-	return []string{result, prim.ShowInt(int(result2)), prim.ShowInt(int(prim.MultiplyInt32(field, field))), result3, result4, result5}
+	return []string{result, prim.ShowInt(result2), prim.ShowInt(prim.MultiplyInt32(field, field)), result3, result4, result5}
 }
 
 func opaque(x int32) int32 {
@@ -72,11 +72,11 @@ func opaque(x int32) int32 {
 }
 
 func mainJoin(m int32) string {
-	return prim.ShowInt(int(m)) + prim.ShowInt(int(m)) + prim.ShowInt(int(m)) + prim.ShowInt(int(m)) + prim.ShowInt(int(m)) + prim.ShowInt(int(m)) + prim.ShowInt(int(m)) + prim.ShowInt(int(m)) + prim.ShowInt(int(m)) + prim.ShowInt(int(m)) + prim.ShowInt(int(m))
+	return prim.ShowInt(m) + prim.ShowInt(m) + prim.ShowInt(m) + prim.ShowInt(m) + prim.ShowInt(m) + prim.ShowInt(m) + prim.ShowInt(m) + prim.ShowInt(m) + prim.ShowInt(m) + prim.ShowInt(m) + prim.ShowInt(m)
 }
 
 func mainJoin2(m int32) string {
-	return prim.ShowInt(int(m)) + prim.ShowInt(int(m)) + prim.ShowInt(int(m)) + prim.ShowInt(int(m)) + prim.ShowInt(int(m)) + prim.ShowInt(int(m)) + prim.ShowInt(int(m)) + prim.ShowInt(int(m)) + prim.ShowInt(int(m)) + prim.ShowInt(int(m)) + prim.ShowInt(int(m)) + prim.ShowInt(int(m)) + prim.ShowInt(int(m)) + prim.ShowInt(int(m)) + prim.ShowInt(int(m)) + prim.ShowInt(int(m)) + prim.ShowInt(int(m)) + prim.ShowInt(int(m)) + prim.ShowInt(int(m)) + prim.ShowInt(int(m))
+	return prim.ShowInt(m) + prim.ShowInt(m) + prim.ShowInt(m) + prim.ShowInt(m) + prim.ShowInt(m) + prim.ShowInt(m) + prim.ShowInt(m) + prim.ShowInt(m) + prim.ShowInt(m) + prim.ShowInt(m) + prim.ShowInt(m) + prim.ShowInt(m) + prim.ShowInt(m) + prim.ShowInt(m) + prim.ShowInt(m) + prim.ShowInt(m) + prim.ShowInt(m) + prim.ShowInt(m) + prim.ShowInt(m) + prim.ShowInt(m)
 }
 
 func main() {

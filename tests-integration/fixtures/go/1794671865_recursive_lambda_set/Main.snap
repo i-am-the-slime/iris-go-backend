@@ -64,7 +64,7 @@ func countDown(argument0 int32, argument1 *IntToInt) int32 {
 			return runIntToInt(argument1, 0)
 		}
 		n := argument0
-		if int32(prim.IntMod(int(n), int(2))) == 0 {
+		if prim.IntMod(n, 2) == 0 {
 			argument0, argument1 = n - 1, intToIntCells.New(IntToInt{Tag: IntToIntCountDown, Argument1: argument1, N: n})
 			continue
 		}

@@ -81,7 +81,7 @@ func initializeRecorded() int32 {
 		modified := StateValue{State: s_2, Value: s_2}
 		value.Value = modified.State
 	}, Measure: func(text string) int32 {
-		return int32(direct.CodePointLength(text))
+		return direct.CodePointLength(text)
 	}})
 	value4 := value.Value
 	performed := value4 + value2
@@ -105,7 +105,7 @@ func initializeCounted() int32 {
 
 var measured int32 = program.Identity(shared.EmitMeasure2{Emit: func(_ int32) {
 }, Measure: func(text string) int32 {
-	return int32(direct.CodePointLength(text))
+	return direct.CodePointLength(text)
 }})
 
 var program tuple.IdentitySTStateTIntIdentity = tuple.IdentitySTStateTIntIdentity{Identity: func(interpreter shared.EmitMeasure2) int32 {

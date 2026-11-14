@@ -29,14 +29,14 @@ const (
 
 var sharedMaybeStepNothing = &MaybeStep{Tag: MaybeStepNothing}
 
-var main_ []string = array.Append(names(MinisName{Name: "root", Minis: []MinisName{MinisName{Name: "a", Minis: []MinisName{}}}}), []string{prim.ShowInt(int(countSteps(func(n int32) *MaybeStep {
+var main_ []string = array.Append(names(MinisName{Name: "root", Minis: []MinisName{MinisName{Name: "a", Minis: []MinisName{}}}}), []string{prim.ShowInt(countSteps(func(n int32) *MaybeStep {
 	if n < 3 {
 		return &MaybeStep{Tag: MaybeStepJust, Just0: func(_ int32) *MaybeStep {
 			return sharedMaybeStepNothing
 		}}
 	}
 	return sharedMaybeStepNothing
-}, 0)))})
+}, 0))})
 
 func names(level MinisName) []string {
 	return array.Append([]string{level.Name}, array.Bind(level.Minis, func(argument0 MinisName) []string {

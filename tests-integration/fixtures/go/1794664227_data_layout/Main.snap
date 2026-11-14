@@ -95,7 +95,7 @@ func initializeMain_() ColoursExpressionItemsSampleShapes {
 	exprs[4] = Expr{Tag: ExprVal, Val0: 2}
 	exprs[5] = Expr{Tag: ExprVal, Val0: 3}
 	exprs[6] = Expr{Tag: ExprVal, Val0: 4}
-	return ColoursExpressionItemsSampleShapes{Expression: evaluate(&exprs[0]), Shapes: mapped, Items: mapped2, Colours: mapped3, Sample: "strue" + prim.ShowNumber(float64(0.5)) + prim.ShowInt(int(3))}
+	return ColoursExpressionItemsSampleShapes{Expression: evaluate(&exprs[0]), Shapes: mapped, Items: mapped2, Colours: mapped3, Sample: "strue" + prim.ShowNumber(float64(0.5)) + prim.ShowInt(3)}
 }
 
 func evaluate(argument0 *Expr) int32 {

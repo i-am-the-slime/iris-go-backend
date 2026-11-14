@@ -1927,11 +1927,6 @@ where
                     let record = self.record_from_results(performed, result, out)?;
                     return self.deliver(record, result, sink, out);
                 }
-                let performed = if boundary.integer_result {
-                    self.narrow(performed, result)
-                } else {
-                    performed
-                };
                 return self.deliver(performed, result, sink, out);
             }
             _ => {}
@@ -2330,13 +2325,14 @@ where
                     self.just_value_function(witness)?
                 }
                 _ if boundary.ignored.contains(&position) => identifier_expression("nil"),
+                _ if boundary.int32_parameters.contains(&position) => self.value(argument, out)?,
                 _ if boundary.is_just == Some(position) => self.is_just_function(maybe)?,
                 Some(constructors) if constructors.just == position => {
                     if constructors.elements {
                         let element = self.array_payload_maybe(maybe)?;
-                        values.push(self.just_function(element, constructors.integer_payload)?);
+                        values.push(self.just_function(element)?);
                     }
-                    self.just_function(maybe, constructors.integer_payload)?
+                    self.just_function(maybe)?
                 }
                 Some(constructors) if constructors.nothing == position => {
                     if constructors.elements {
@@ -2344,10 +2340,6 @@ where
                         values.push(self.nothing_value(element)?);
                     }
                     self.nothing_value(maybe)?
-                }
-                _ if boundary.integers.contains(&position) => {
-                    let value = self.value(argument, out)?;
-                    GoExpression::Conversion { type_: GoType::Int, value: Box::new(value) }
                 }
                 _ if boundary.record_arguments.contains(&position) => {
                     let record = self.value(argument, out)?;
@@ -2596,12 +2588,8 @@ where
         Ok(GoType::Function { parameters, result: Some(Box::new(result)) })
     }
 
-    fn just_function(
-        &mut self,
-        maybe: MonotypeId,
-        integer_payload: bool,
-    ) -> GoResult<GoExpression> {
-        self.constructor_function(maybe, "Just", integer_payload)
+    fn just_function(&mut self, maybe: MonotypeId) -> GoResult<GoExpression> {
+        self.constructor_function(maybe, "Just")
     }
 
     fn nothing_value(&mut self, maybe: MonotypeId) -> GoResult<GoExpression> {
@@ -2689,18 +2677,12 @@ where
         &mut self,
         monotype: MonotypeId,
         constructor: &str,
-        integer_payload: bool,
     ) -> GoResult<GoExpression> {
         let (data, index) = self.constructor_named(monotype, constructor)?;
         let payload = self.constructor_field_monotype(monotype, constructor, 0)?;
         let parameter = self.temporary("payload");
-        let (parameter_type, value) = if integer_payload {
-            let narrowed = self.narrow(identifier_expression(&parameter), payload);
-            (GoType::Int, narrowed)
-        } else {
-            (self.go_type(payload)?, identifier_expression(&parameter))
-        };
-        let constructed = self.construct(&data, index, vec![value])?;
+        let parameter_type = self.go_type(payload)?;
+        let constructed = self.construct(&data, index, vec![identifier_expression(&parameter)])?;
         let result = self.go_type(monotype)?;
         Ok(GoExpression::Function {
             parameters: vec![(parameter, parameter_type)],
@@ -2792,8 +2774,8 @@ where
             .monotypes
             .function_parts(on_complete)
             .expect("invariant violated: onComplete takes a record");
-        let left = self.constructor_function(either, "Left", false)?;
-        let right = self.constructor_function(either, "Right", false)?;
+        let left = self.constructor_function(either, "Left")?;
+        let right = self.constructor_function(either, "Right")?;
         let (unit_data, unit_right) = self.constructor_named(unit_either, "Right")?;
         let unit_right = self.construct(&unit_data, unit_right, vec![unit_value()])?;
         let handler = self.record_field_projection(completion, "handler")?;
@@ -3780,11 +3762,7 @@ where
             if boundary.record_result {
                 return self.record_from_results(result, monotype, out);
             }
-            return Ok(if boundary.integer_result {
-                self.narrow(result, monotype)
-            } else {
-                result
-            });
+            return Ok(result);
         }
         let mut values = vec![];
         for argument in arguments {

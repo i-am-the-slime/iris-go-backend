@@ -40,7 +40,7 @@ func initializeMain_() []either.EitherStringArrayInt {
 			if element > 0 {
 				accumulator = either.EitherStringArrayInt{Tag: either.EitherStringArrayIntRight, Right0: append_(accumulator2.Right0)(element)}
 			} else {
-				accumulator = either.EitherStringArrayInt{Tag: either.EitherStringArrayIntLeft, Left0: "not positive: " + prim.ShowInt(int(element))}
+				accumulator = either.EitherStringArrayInt{Tag: either.EitherStringArrayIntLeft, Left0: "not positive: " + prim.ShowInt(element)}
 			}
 		}
 	}
@@ -57,7 +57,7 @@ func initializeMain_() []either.EitherStringArrayInt {
 			if element2 > 0 {
 				accumulator3 = either.EitherStringArrayInt{Tag: either.EitherStringArrayIntRight, Right0: append_2(accumulator4.Right0)(element2)}
 			} else {
-				accumulator3 = either.EitherStringArrayInt{Tag: either.EitherStringArrayIntLeft, Left0: "not positive: " + prim.ShowInt(int(element2))}
+				accumulator3 = either.EitherStringArrayInt{Tag: either.EitherStringArrayIntLeft, Left0: "not positive: " + prim.ShowInt(element2)}
 			}
 		}
 	}

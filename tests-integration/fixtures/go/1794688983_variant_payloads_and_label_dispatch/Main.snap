@@ -101,16 +101,16 @@ func initializeMain_() []string {
 	for index3, element3 := range problems {
 		mapped3[index3] = someLabels(element3)
 	}
-	return array.Append(mapped, array.Append(mapped2, array.Append(mapped3, []string{shrunk.Name + prim.ShowInt(int(shrunk.Base))})))
+	return array.Append(mapped, array.Append(mapped2, array.Append(mapped3, []string{shrunk.Name + prim.ShowInt(shrunk.Base)})))
 }
 
 func byLabel(r shared.Type_Value) string {
 	if r.Type == "late" {
 		scrutinee := convert(r.Value.(After2))
-		return "late " + prim.ShowInt(int(scrutinee.After))
+		return "late " + prim.ShowInt(scrutinee.After)
 	}
 	if r.Type == "invalid" {
-		return "invalid " + prim.ShowInt(int(r.Value.(int32)))
+		return "invalid " + prim.ShowInt(r.Value.(int32))
 	}
 	if r.Type == "missing" {
 		return "missing " + r.Value.(string)
@@ -134,9 +134,9 @@ func byRecord(argument shared.Type_Value) string {
 		record := InvalidLateMissing{Missing: func(name string) string {
 			return "no " + name
 		}, Invalid: func(code int32) string {
-			return "bad " + prim.ShowInt(int(prim.MultiplyInt32(code, 2)))
+			return "bad " + prim.ShowInt(prim.MultiplyInt32(code, 2))
 		}, Late: func(argument02 After) string {
-			return "after " + prim.ShowInt(int(argument02.After))
+			return "after " + prim.ShowInt(argument02.After)
 		}}
 		var field func(any) string
 		switch argument.Type {
@@ -161,7 +161,7 @@ func byRecord(argument shared.Type_Value) string {
 func someLabels(argument shared.Type_Value) string {
 	if argument.Type == "invalid" {
 		record := Invalid{Invalid: func(code int32) string {
-			return prim.ShowInt(int(code + 1))
+			return prim.ShowInt(code + 1)
 		}}
 		var field func(any) string
 		switch argument.Type {

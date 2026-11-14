@@ -6,7 +6,7 @@
 #
 #   compiler-backend/go/scripts/markgraf/build-go-cli.sh OUT_DIR
 #
-# Environment: IRIS, MARKGRAF (checkout), GO_SUPPORT.
+# Environment: IRIS, MARKGRAF (checkout), GO_SUPPORT, GOEXPERIMENT (default simd).
 
 set -euo pipefail
 
@@ -15,6 +15,9 @@ ROOT="$(cd "$HERE/../../../.." && pwd)"
 IRIS="${IRIS:-$ROOT/target/release/iris}"
 MARKGRAF="${MARKGRAF:-/Users/mark/Developer/markgraf}"
 GO_SUPPORT="${GO_SUPPORT:-/Users/mark/Developer/purs-backend-go/go-support}"
+# go-support scans strings sixteen bytes at a time with SIMD, an experiment
+# in Go 1.27.0 (simd/archsimd) whose API may change in later releases.
+export GOEXPERIMENT="${GOEXPERIMENT:-simd}"
 OUT="$1"
 FONTS="$MARKGRAF/cli/assets/native/fonts"
 
