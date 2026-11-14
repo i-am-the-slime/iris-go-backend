@@ -1594,6 +1594,17 @@ where
         types: Vec<TypeId>,
         dictionaries: Vec<Dictionary>,
     ) -> GoResult<()> {
+        self.discover_labelled(scope, key, types, dictionaries, None)
+    }
+
+    fn discover_labelled(
+        &mut self,
+        scope: &Scope,
+        key: SchemeKey,
+        types: Vec<TypeId>,
+        dictionaries: Vec<Dictionary>,
+        preferred: Option<SmolStr>,
+    ) -> GoResult<()> {
         let known = self.monotypes.schemes.get(&key);
         let labels: Vec<SmolStr> = known.iter().map(|known| known.label.clone()).collect();
         if labels.len() >= SCHEME_INSTANTIATION_LIMIT {
@@ -1602,19 +1613,10 @@ where
                 UnsupportedState::SpecializationLimit { limit: SCHEME_INSTANTIATION_LIMIT },
             ));
         }
-        let mut suffix = String::new();
-        for &type_id in &types {
-            self.context.type_suffix(type_id, &mut suffix)?;
-        }
-        let base: String =
-            suffix.chars().filter(|character| character.is_ascii_alphanumeric()).collect();
-        let base = if base.is_empty() { String::from("Instance") } else { base };
-        let mut label = SmolStr::from(&base);
-        let mut index = 1;
-        while labels.contains(&label) {
-            label = format_smolstr!("{base}{index}");
-            index += 1;
-        }
+        let label = match preferred.filter(|preferred| !labels.contains(preferred)) {
+            Some(preferred) => preferred,
+            None => self.fresh_instantiation_label(&types, &labels)?,
+        };
         let instantiation = SchemeInstantiation {
             types: Arc::from(types),
             dictionaries: Arc::from(dictionaries),
@@ -1627,8 +1629,88 @@ where
         if let Some(functions) = self.constructions.get(&key) {
             self.stale.extend(functions.iter().copied());
         }
-        self.monotypes.schemes.insert(key, instantiation);
+        self.monotypes.schemes.insert(key.clone(), instantiation.clone());
         self.grown = true;
+        for source in self.monotypes.schemes.coerced_sources(&key).to_vec() {
+            self.share_instantiation(scope, source, &instantiation)?;
+        }
+        Ok(())
+    }
+
+    fn fresh_instantiation_label(
+        &mut self,
+        types: &[TypeId],
+        labels: &[SmolStr],
+    ) -> GoResult<SmolStr> {
+        let mut suffix = String::new();
+        for &type_id in types {
+            self.context.type_suffix(type_id, &mut suffix)?;
+        }
+        let base: String =
+            suffix.chars().filter(|character| character.is_ascii_alphanumeric()).collect();
+        let base = if base.is_empty() { String::from("Instance") } else { base };
+        let mut label = SmolStr::from(&base);
+        let mut index = 1;
+        while labels.contains(&label) {
+            label = format_smolstr!("{base}{index}");
+            index += 1;
+        }
+        Ok(label)
+    }
+
+    fn share_instantiation(
+        &mut self,
+        scope: &Scope,
+        source: SchemeKey,
+        instantiation: &SchemeInstantiation,
+    ) -> GoResult<()> {
+        if self.monotypes.schemes.find(&source, &instantiation.types).is_some() {
+            return Ok(());
+        }
+        let types = instantiation.types.to_vec();
+        let dictionaries = instantiation.dictionaries.to_vec();
+        let label = Some(instantiation.label.clone());
+        self.discover_labelled(scope, source, types, dictionaries, label)
+    }
+
+    fn link_coerced_rank_n(
+        &mut self,
+        scope: &Scope,
+        file_id: FileId,
+        term: TermItemId,
+        instantiations: &Substitution,
+    ) -> GoResult<()> {
+        let module = self.context.module(file_id)?;
+        let Some(declared) = module.checked.lookup_term_item_type(term) else {
+            return Ok(());
+        };
+        let declared = self.outer_body(declared);
+        let closed = self.context.types.substitute(declared, instantiations);
+        let Some((from, to)) = self.context.types.function_parts(closed) else {
+            return Ok(());
+        };
+        self.link_coercion(scope, from, to)
+    }
+
+    fn link_coercion(&mut self, scope: &Scope, from: TypeId, to: TypeId) -> GoResult<()> {
+        let from = crate::monotype::expand_synonyms(&mut self.context, from)?;
+        let to = crate::monotype::expand_synonyms(&mut self.context, to)?;
+        if let (Some((from_argument, from_result)), Some((to_argument, to_result))) =
+            (self.context.types.function_parts(from), self.context.types.function_parts(to))
+        {
+            self.link_coercion(scope, to_argument, from_argument)?;
+            return self.link_coercion(scope, from_result, to_result);
+        }
+        let source = self.monotypes.rank_n_key(&mut self.context, from)?;
+        let target = self.monotypes.rank_n_key(&mut self.context, to)?;
+        let (Some(source), Some(target)) = (source, target) else { return Ok(()) };
+        if source == target || !self.monotypes.schemes.link_coercion(source.clone(), target.clone())
+        {
+            return Ok(());
+        }
+        for instantiation in self.monotypes.schemes.get(&target).to_vec() {
+            self.share_instantiation(scope, source.clone(), &instantiation)?;
+        }
         Ok(())
     }
 
@@ -2145,6 +2227,9 @@ where
         match () {
             () if is_foreign => {
                 if let Some(foreign) = foreign::foreign_import(&module.name, &name) {
+                    if let Foreign::UnsafeCoerce = foreign {
+                        self.link_coerced_rank_n(scope, file_id, term, instantiations)?;
+                    }
                     let foreign = self.with_callback_arities(file_id, term, foreign)?;
                     return Ok(self.foreign(foreign, monotype));
                 }

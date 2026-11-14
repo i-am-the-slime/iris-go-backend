@@ -585,6 +585,45 @@ impl Monotypes {
         Ok(Some(scheme))
     }
 
+    pub fn rank_n_key<Q>(
+        &mut self,
+        context: &mut Context<'_, Q>,
+        type_id: TypeId,
+    ) -> QueryResult<Option<crate::scheme::SchemeKey>>
+    where
+        Q: checking::ExternalQueries,
+    {
+        let mut current = type_id;
+        for _ in 0..NEWTYPE_EXPANSION_LIMIT {
+            let expanded = expand_synonyms(context, current)?;
+            current = context.types.strip_annotations(expanded);
+            if let Type::Forall(..) = context.types.lookup(current) {
+                let scheme = self.scheme_for(context, current)?;
+                return Ok(scheme.filter(|scheme| scheme.constraints.is_empty()).map(|s| s.key));
+            }
+            let (head, _) = context.types.spine(current);
+            let Type::Constructor(file_id, item) = context.types.lookup(head).clone() else {
+                return Ok(None);
+            };
+            let module = context.module(file_id)?;
+            let IndexedTypeItemKind::Newtype { constructors, .. } =
+                &module.indexed.items[item].kind
+            else {
+                return Ok(None);
+            };
+            let Some(&constructor) = constructors.first() else { return Ok(None) };
+            if is_recursive_newtype(context, file_id, item)? {
+                return Ok(None);
+            }
+            let Some(underlying) = newtype_underlying(context, file_id, constructor, current)?
+            else {
+                return Ok(None);
+            };
+            current = underlying;
+        }
+        Ok(None)
+    }
+
     /// A newtype or constructor field whose type is a rank-N `forall` (a CPS
     /// parser's answer type) is specialized per instantiation, and so is every
     /// other occurrence of that same type. A field met for the first time asks
