@@ -34,6 +34,7 @@ use crate::scheme::{
 };
 use crate::types::Substitution;
 
+mod growth;
 mod patterns;
 mod spine;
 mod traverse;
@@ -192,6 +193,8 @@ pub struct Specializer<'q, Q> {
     /// Functions that built a value of a scheme before the scheme grew.
     stale: BTreeSet<FunctionId>,
     callback_arities: FxHashMap<(FileId, TermItemId), (&'static [usize], &'static Signature)>,
+    constructing: Vec<(SchemeKey, Arc<[TypeId]>)>,
+    growing_owners: Vec<String>,
 }
 
 struct RecordedBlocker {
@@ -230,6 +233,8 @@ where
             constructions: FxHashMap::default(),
             stale: BTreeSet::new(),
             callback_arities: FxHashMap::default(),
+            constructing: vec![],
+            growing_owners: vec![],
         }
     }
 
@@ -301,11 +306,15 @@ where
     fn adopt_rank_n_fields(&mut self) {
         let erased = std::mem::take(&mut self.monotypes.new_erased_owners);
         let keys = std::mem::take(&mut self.monotypes.new_rank_n_keys);
-        if erased.is_empty() && keys.is_empty() {
+        let growing = std::mem::take(&mut self.growing_owners);
+        if erased.is_empty() && keys.is_empty() && growing.is_empty() {
             return;
         }
         for owner in erased {
             self.monotypes.schemes.erase_owner(owner);
+        }
+        for owner in growing {
+            self.monotypes.schemes.erase_growing_owner(owner);
         }
         for (key, owner) in keys {
             self.monotypes.schemes.add_rank_n(key, owner);
@@ -435,7 +444,7 @@ where
     }
 
     fn request(&mut self, key: SpecializationKey, name: SmolStr) -> GoResult<FunctionId> {
-        let key = self.terminate_growth(key);
+        let key = self.terminate_growth(key)?;
         if let Some(&id) = self.keys.get(&key) {
             return Ok(id);
         }
@@ -457,29 +466,39 @@ where
     /// Polymorphic recursion requests a definition at ever larger types. When a
     /// request embeds the types of the same definition further up its chain of
     /// requesters, the growing positions are erased so specialization terminates.
-    fn terminate_growth(&mut self, mut key: SpecializationKey) -> SpecializationKey {
+    fn terminate_growth(&mut self, mut key: SpecializationKey) -> GoResult<SpecializationKey> {
         let mut ancestor = self.current;
         let mut types: Vec<TypeId> = key.types.to_vec();
         let mut changed = false;
+        let mut evidence_grows = false;
         while let Some(id) = ancestor {
             let ancestor_key = &self.function_keys[id.0 as usize];
             if ancestor_key.definition == key.definition {
+                let mut grows = false;
                 for (position, ancestor_type) in ancestor_key.types.iter().enumerate() {
                     let Some(requested) = types.get(position).copied() else { continue };
                     if requested != *ancestor_type
                         && self.context.types.contains(requested, *ancestor_type)
                     {
                         types[position] = self.context.types.erased(Erasure::PolymorphicRecursion);
-                        changed = true;
+                        grows = true;
                     }
                 }
+                evidence_grows |= grows && ancestor_key.dictionaries != key.dictionaries;
+                changed |= grows;
             }
             ancestor = self.parents[id.0 as usize];
+        }
+        if evidence_grows {
+            return Err(GoError::Unsupported {
+                definition: self.describe_definition(key.definition)?,
+                state: UnsupportedState::GrowingEvidence,
+            });
         }
         if changed {
             key.types = Arc::from(types);
         }
-        key
+        Ok(key)
     }
 
     fn fresh_local(&mut self, name: SmolStr, monotype: MonotypeId) -> Local {
@@ -1029,7 +1048,7 @@ where
             return Ok(None);
         }
         let Some(scheme) = self.monotypes.scheme_for(&mut self.context, closed)? else {
-            return Ok(None);
+            return self.grown_construction(scope, id, closed);
         };
         // Checking against a `forall` binds scoped skolems; a polymorphic
         // reference's own quantifiers are instantiated where it is used.
@@ -1048,7 +1067,9 @@ where
             scope
                 .substitution
                 .extend(scheme.names.iter().copied().zip(instantiation.types.iter().copied()));
+            self.constructing.push((scheme.key.clone(), Arc::clone(&instantiation.types)));
             let value = self.translate_expression_at(scope, id);
+            self.constructing.pop();
             scope.substitution = substitution;
             match value {
                 Ok(value) => fields.push((instantiation.label, value)),
@@ -1534,7 +1555,9 @@ where
             scope
                 .givens
                 .extend(binders.iter().copied().zip(instantiation.dictionaries.iter().cloned()));
+            self.constructing.push((scheme.key.clone(), Arc::clone(&instantiation.types)));
             let value = self.expression(scope, body);
+            self.constructing.pop();
             scope.substitution = substitution;
             scope.givens = givens;
             fields.push((instantiation.label, value?));
@@ -1584,6 +1607,14 @@ where
         types: Vec<TypeId>,
         dictionaries: Vec<Dictionary>,
     ) -> GoResult<()> {
+        if self.grows_construction(&key, &types) {
+            let Some(owner) = self.monotypes.schemes.rank_n_owner(&key) else {
+                return Err(self.unsupported(scope, UnsupportedState::GrowingEvidence));
+            };
+            self.growing_owners.push(owner.to_string());
+            self.grown = true;
+            return Ok(());
+        }
         let known = self.monotypes.schemes.get(&key);
         let labels: Vec<SmolStr> = known.iter().map(|known| known.label.clone()).collect();
         if labels.len() >= SCHEME_INSTANTIATION_LIMIT {

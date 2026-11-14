@@ -55,6 +55,10 @@ pub enum UnsupportedState {
     #[error("specialization exceeded {limit} instances; polymorphic recursion is not supported")]
     SpecializationLimit { limit: usize },
     #[error(
+        "polymorphic recursion grows the type class evidence it passes, which only run-time dictionaries could erase"
+    )]
+    GrowingEvidence,
+    #[error(
         "foreign data type {name} has no Go representation; a Go foreign package for its module (go-ffi/<module>.go) declares it as a named type"
     )]
     ForeignData { name: String },

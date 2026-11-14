@@ -51,7 +51,9 @@ impl UnsupportedState {
             UnsupportedState::UnknownForeign { .. } => BlockerKind::MissingForeign,
             UnsupportedState::ForeignData { .. } => BlockerKind::ForeignData,
             UnsupportedState::Construct { .. } => BlockerKind::Construct,
-            UnsupportedState::SpecializationLimit { .. } => BlockerKind::SpecializationLimit,
+            UnsupportedState::SpecializationLimit { .. } | UnsupportedState::GrowingEvidence => {
+                BlockerKind::SpecializationLimit
+            }
             UnsupportedState::OpenType { .. } | UnsupportedState::UnsaturatedType { .. } => {
                 BlockerKind::OpenType
             }

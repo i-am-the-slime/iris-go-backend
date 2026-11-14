@@ -224,8 +224,15 @@ impl Monotypes {
                 None => {
                     // Without constraints there is no instantiation to specialize
                     // on yet: the quantified variables are erased.
+                    let erasure = match self.schemes.has_grown() {
+                        true => match rank_n_scheme(context, type_id)? {
+                            Some(scheme) => self.schemes.rank_n_erasure(&scheme.key),
+                            None => Erasure::RankN,
+                        },
+                        false => Erasure::RankN,
+                    };
                     let (names, inner) = context.types.peel_quantifiers(type_id);
-                    let erased = context.types.erased(Erasure::RankN);
+                    let erased = context.types.erased(erasure);
                     let substitution: crate::types::Substitution =
                         names.into_iter().map(|name| (name, erased)).collect();
                     let inner = context.types.substitute(inner, &substitution);
