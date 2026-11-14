@@ -1292,7 +1292,6 @@ where
 
     fn application(&mut self, scope: &mut Scope, id: tree::ExpressionId) -> GoResult<Expression> {
         let module = Arc::clone(&scope.module);
-        let monotype = self.monotype(scope, module.checked.tree[id].type_id)?;
         let mut arguments = vec![];
         let mut head = id;
         let mut result_instantiations = Substitution::default();
@@ -1307,6 +1306,11 @@ where
             arguments.push(argument);
             head = function;
         }
+        let monotype = self.instantiated_result_monotype(
+            scope,
+            module.checked.tree[id].type_id,
+            &result_instantiations,
+        )?;
         arguments.reverse();
         if let tree::ExpressionKind::Constructor { resolution } = module.checked.tree[head].kind
             && self.is_newtype_constructor(resolution)?
@@ -1395,6 +1399,21 @@ where
             return Ok(self.coerce(applied, monotype));
         }
         Ok(Expression::new(kind, monotype))
+    }
+
+    fn instantiated_result_monotype(
+        &mut self,
+        scope: &Scope,
+        type_id: TypeId,
+        result_instantiations: &Substitution,
+    ) -> GoResult<MonotypeId> {
+        if result_instantiations.is_empty() {
+            return self.monotype(scope, type_id);
+        }
+        let stripped =
+            self.strip_instantiated_result_quantifiers(type_id, result_instantiations)?;
+        let instantiated = self.context.types.substitute(stripped, result_instantiations);
+        self.monotype(scope, instantiated)
     }
 
     fn coerce(&mut self, expression: Expression, monotype: MonotypeId) -> Expression {
