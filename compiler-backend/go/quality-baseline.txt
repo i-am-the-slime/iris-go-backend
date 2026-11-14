@@ -9,8 +9,8 @@ examples type-assertion 89
 examples unsafe 0
 markgraf-cli any 4274
 markgraf-cli empty-interface 0
-markgraf-cli funcs 18040
-markgraf-cli lines 228925
+markgraf-cli funcs 18039
+markgraf-cli lines 228947
 markgraf-cli panic 56
 markgraf-cli reflect 0
 markgraf-cli thunk 164
