@@ -1,0 +1,31 @@
+---
+source: tests-integration/src/fixtures.rs
+---
+// main.go
+package main
+
+import "fmt"
+
+type FirstSecond struct {
+	First  int32
+	Second string
+}
+
+type FirstSecond2 struct {
+	First  int32
+	Second struct{}
+}
+
+var main_ = initializeMain_()
+
+func initializeMain_() []int32 {
+	updated := FirstSecond{First: 1, Second: "s"}
+	updated.First = 99
+	updated2 := FirstSecond2{First: 0, Second: struct{}{}}
+	updated2.First = 3
+	return []int32{updated.First, 7, updated2.First}
+}
+
+func main() {
+	fmt.Println(main_)
+}

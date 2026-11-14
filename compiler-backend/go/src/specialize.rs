@@ -2506,14 +2506,14 @@ where
                 let local = self.fresh_local(name, monotype);
                 let source = self.checked_binder_source(scope, binder_id);
                 scope.locals.insert(source, local.clone());
-                self.register_scheme_local(scope, source, binder.type_id);
+                self.register_scheme_local(scope, source, binder.type_id)?;
                 PatternKind::Variable(local)
             }
             tree::BinderKind::Named { name, binder: inner } => {
                 let local = self.fresh_local(name.clone(), monotype);
                 let source = self.checked_binder_source(scope, binder_id);
                 scope.locals.insert(source, local.clone());
-                self.register_scheme_local(scope, source, binder.type_id);
+                self.register_scheme_local(scope, source, binder.type_id)?;
                 let pattern = self.pattern(scope, *inner)?;
                 PatternKind::Named { local, pattern: Box::new(pattern) }
             }
@@ -2614,8 +2614,20 @@ where
         }
     }
 
-    fn register_scheme_local(&mut self, scope: &mut Scope, source: LocalSource, type_id: TypeId) {
+    /// A binder whose type is quantified, directly or through a synonym such as
+    /// profunctor-lenses' `Lens s a`, is instantiated at each of its uses.
+    fn register_scheme_local(
+        &mut self,
+        scope: &mut Scope,
+        source: LocalSource,
+        type_id: TypeId,
+    ) -> GoResult<()> {
         let closed = self.context.types.substitute(type_id, &scope.substitution);
+        let (head, _) = self.context.types.spine(closed);
+        let closed = match self.context.types.lookup(head) {
+            Type::Synonym(..) => crate::monotype::expand_synonyms(&mut self.context, closed)?,
+            _ => closed,
+        };
         if matches!(
             self.context.types.lookup(self.context.types.strip_annotations(closed)),
             Type::Forall(..)
@@ -2624,6 +2636,7 @@ where
         } else {
             scope.scheme_locals.remove(&source);
         }
+        Ok(())
     }
 
     fn binder_name(&self, scope: &Scope, binder_id: tree::BinderId) -> SmolStr {
