@@ -170,17 +170,83 @@ impl Simplifier<'_> {
         does_no_work(self, expression)
     }
 
-    /// A function whose body is a lambda keeps its parameters as Go parameters.
+    /// A function whose body is a lambda keeps its parameters as Go parameters,
+    /// and so does one whose body only chooses between lambdas: the choice is
+    /// too cheap to share between applications of the chosen lambda.
     fn absorb_lambdas(&mut self, mut function: Function) -> Function {
-        while let ExpressionKind::Lambda { .. } = function.body.kind {
-            let ExpressionKind::Lambda { parameters, body } = function.body.kind else {
-                unreachable!()
-            };
-            function.parameters.extend(parameters);
-            function.body = *body;
+        loop {
+            if let ExpressionKind::Lambda { .. } = function.body.kind {
+                let ExpressionKind::Lambda { parameters, body } = function.body.kind else {
+                    unreachable!()
+                };
+                function.parameters.extend(parameters);
+                function.body = *body;
+            } else if !function.parameters.is_empty()
+                && let Some(template) = chosen_lambda_parameter(&function.body)
+            {
+                let parameter = self.fresh(&template.clone());
+                let body = std::mem::replace(
+                    &mut function.body,
+                    Expression::new(ExpressionKind::Unit, parameter.monotype),
+                );
+                function.body = self.apply_chosen_lambdas(body, &parameter);
+                function.parameters.push(parameter);
+            } else {
+                break;
+            }
         }
         function.result = function.body.monotype;
         function
+    }
+
+    /// Applies each lambda that `chosen_lambda_parameter` accepted to the
+    /// parameter that replaces their first ones.
+    fn apply_chosen_lambdas(&mut self, expression: Expression, parameter: &Local) -> Expression {
+        let monotype = self.monotypes.result_after(expression.monotype, 1);
+        let kind = match expression.kind {
+            ExpressionKind::Lambda { mut parameters, body } => {
+                let first = parameters.remove(0);
+                let body = substitute(*body, first.id, &local_expression(parameter));
+                if parameters.is_empty() {
+                    return body;
+                }
+                ExpressionKind::Lambda { parameters, body: Box::new(body) }
+            }
+            ExpressionKind::Let { bindings, body } => {
+                let body = self.apply_chosen_lambdas(*body, parameter);
+                ExpressionKind::Let { bindings, body: Box::new(body) }
+            }
+            ExpressionKind::If { condition, then, otherwise } => ExpressionKind::If {
+                condition,
+                then: Box::new(self.apply_chosen_lambdas(*then, parameter)),
+                otherwise: Box::new(self.apply_chosen_lambdas(*otherwise, parameter)),
+            },
+            ExpressionKind::Case { scrutinees, alternatives } => {
+                let alternatives = alternatives
+                    .into_iter()
+                    .map(|alternative| {
+                        let body = match alternative.body {
+                            Guarded::Unconditional(body) => {
+                                Guarded::Unconditional(self.apply_chosen_lambdas(body, parameter))
+                            }
+                            Guarded::Guards(branches) => Guarded::Guards(
+                                branches
+                                    .into_iter()
+                                    .map(|branch| GuardedBranch {
+                                        guards: branch.guards,
+                                        body: self.apply_chosen_lambdas(branch.body, parameter),
+                                    })
+                                    .collect(),
+                            ),
+                        };
+                        Alternative { patterns: alternative.patterns, body }
+                    })
+                    .collect();
+                ExpressionKind::Case { scrutinees, alternatives }
+            }
+            _ => unreachable!("invariant violated: only chosen lambdas take the parameter"),
+        };
+        Expression::new(kind, monotype)
     }
 
     fn expression(&mut self, expression: Expression) -> Expression {
@@ -209,13 +275,7 @@ impl Simplifier<'_> {
             ),
             ExpressionKind::Access { record, label } => {
                 let record = self.expression(*record);
-                if let ExpressionKind::Record(fields) = &record.kind
-                    && fields.iter().all(|(_, value)| is_trivial(value))
-                    && let Some((_, value)) = fields.iter().find(|(field, _)| *field == label)
-                {
-                    return value.clone();
-                }
-                ExpressionKind::Access { record: Box::new(record), label }
+                return project(record, label, monotype);
             }
             ExpressionKind::Update { record, updates } => ExpressionKind::Update {
                 record: Box::new(self.expression(*record)),
@@ -503,10 +563,11 @@ impl Simplifier<'_> {
                 Expression::new(ExpressionKind::Let { bindings, body: Box::new(body) }, monotype)
             }
             ExpressionKind::Function(id) if self.fuel > 0 => {
+                // A partial application inlines too: `beta` binds the given
+                // arguments outside the lambda over the missing parameters.
                 let inlined = self.inlinable(id).and_then(|function| {
-                    (arguments.len() >= function.parameters.len()
-                        && !function.parameters.is_empty())
-                    .then(|| (function.parameters.clone(), function.body.clone()))
+                    (!function.parameters.is_empty())
+                        .then(|| (function.parameters.clone(), function.body.clone()))
                 });
                 let Some((parameters, body)) = inlined else {
                     let function = Expression::new(ExpressionKind::Function(id), function.monotype);
@@ -967,6 +1028,117 @@ impl Simplifier<'_> {
             kind => kind,
         };
         Pattern { kind, monotype: pattern.monotype }
+    }
+}
+
+/// The first parameter of the lambdas that an expression chooses between, when
+/// it does nothing else: its conditions, scrutinees and bindings are cheap and
+/// cannot fail, so every application may repeat them instead of sharing the
+/// chosen lambda.
+fn chosen_lambda_parameter(expression: &Expression) -> Option<&Local> {
+    match &expression.kind {
+        ExpressionKind::Lambda { parameters, .. } => parameters.first(),
+        ExpressionKind::Let { bindings, body } => {
+            bindings.iter().all(|binding| is_cheap(&binding.value)).then_some(())?;
+            chosen_lambda_parameter(body)
+        }
+        ExpressionKind::If { condition, then, otherwise } => {
+            is_cheap(condition).then_some(())?;
+            chosen_lambda_parameter(otherwise)?;
+            chosen_lambda_parameter(then)
+        }
+        ExpressionKind::Case { scrutinees, alternatives } => {
+            scrutinees.iter().all(is_cheap).then_some(())?;
+            let mut chosen = None;
+            for alternative in alternatives {
+                match &alternative.body {
+                    Guarded::Unconditional(body) => {
+                        chosen = chosen.or(Some(chosen_lambda_parameter(body)?));
+                    }
+                    Guarded::Guards(branches) => {
+                        for branch in branches {
+                            let cheap = branch.guards.iter().all(|guard| match guard {
+                                Guard::Boolean(condition) => is_cheap(condition),
+                                Guard::Pattern { value, .. } => is_cheap(value),
+                            });
+                            cheap.then_some(())?;
+                            chosen = chosen.or(Some(chosen_lambda_parameter(&branch.body)?));
+                        }
+                    }
+                }
+            }
+            chosen
+        }
+        _ => None,
+    }
+}
+
+/// Whether evaluating the expression costs no more than a few instructions,
+/// allocates nothing and cannot fail.
+fn is_cheap(expression: &Expression) -> bool {
+    match &expression.kind {
+        ExpressionKind::Literal(_)
+        | ExpressionKind::Unit
+        | ExpressionKind::Local(_)
+        | ExpressionKind::Function(_) => true,
+        ExpressionKind::Foreign { foreign: Foreign::Operator(operator), arguments }
+            if *operator != Operator::ArrayIndex && *operator != Operator::StringAppend =>
+        {
+            arguments.iter().all(is_cheap)
+        }
+        ExpressionKind::Access { record: value, .. } | ExpressionKind::Coerce(value) => {
+            is_cheap(value)
+        }
+        _ => false,
+    }
+}
+
+/// A field of a record that was just built is the field's value, once the
+/// other fields' values can be dropped.
+fn project(record: Expression, label: SmolStr, monotype: MonotypeId) -> Expression {
+    match record.kind {
+        ExpressionKind::Record(fields)
+            if fields.iter().all(|(field, value)| *field == label || is_discardable(value)) =>
+        {
+            let (_, value) = fields
+                .into_iter()
+                .find(|(field, _)| *field == label)
+                .expect("invariant violated: a record has the field its type promises");
+            value
+        }
+        ExpressionKind::Let { bindings, body } => {
+            let body = project(*body, label, monotype);
+            Expression::new(ExpressionKind::Let { bindings, body: Box::new(body) }, monotype)
+        }
+        kind => {
+            let record = Expression::new(kind, record.monotype);
+            Expression::new(ExpressionKind::Access { record: Box::new(record), label }, monotype)
+        }
+    }
+}
+
+/// Whether evaluating the expression can be skipped without a trace: it is
+/// pure, cannot fail, and calls nothing that could.
+fn is_discardable(expression: &Expression) -> bool {
+    match &expression.kind {
+        ExpressionKind::Literal(_)
+        | ExpressionKind::Unit
+        | ExpressionKind::Local(_)
+        | ExpressionKind::Function(_)
+        | ExpressionKind::Lambda { .. } => true,
+        ExpressionKind::Foreign { foreign: Foreign::Operator(operator), arguments }
+            if *operator != Operator::ArrayIndex =>
+        {
+            arguments.iter().all(is_discardable)
+        }
+        ExpressionKind::Construct { arguments, .. }
+        | ExpressionKind::Array(arguments) => arguments.iter().all(is_discardable),
+        ExpressionKind::Foreign { arguments, .. } => arguments.is_empty(),
+        ExpressionKind::Record(fields) => fields.iter().all(|(_, value)| is_discardable(value)),
+        ExpressionKind::Access { record: value, .. } | ExpressionKind::Coerce(value) => {
+            is_discardable(value)
+        }
+        _ => false,
     }
 }
 
