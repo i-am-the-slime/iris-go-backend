@@ -1,4 +1,5 @@
 
+use super::buffers::{to_bytes, to_string};
 use super::fusion::{Demand, Need, Order, Pipeline};
 use super::ownership::{Carried, Place, owned_snocs};
 use super::{Emitter, Mode, Sink, call, field_name, identifier_expression, uses_local};
@@ -178,7 +179,14 @@ where
         let need = Need::Argument { callback: &callback, position: element_position };
         let pipeline = self.pipeline(array, demand, need, out)?;
         let accumulator = self.temporary("accumulator");
-        out.push(self.define(accumulator.clone(), initial, monotype)?);
+        let string_appends = self.owned_string_appends(&callback, accumulator_position, monotype);
+        let buffered = !string_appends.is_empty();
+        if buffered {
+            let names = vec![accumulator.clone()];
+            out.push(GoStatement::Define { names, values: vec![to_bytes(initial)] });
+        } else {
+            out.push(self.define(accumulator.clone(), initial, monotype)?);
+        }
         let callback = self.owning_callback(callback, accumulator_position, &accumulator, out);
         let owned = self.owned_arrays(&callback, accumulator_position, monotype);
         for (place, _) in &owned {
@@ -187,6 +195,7 @@ where
         let owned_nodes: Vec<*const Expression> = owned
             .iter()
             .flat_map(|(_, nodes)| nodes.iter().map(|node| std::ptr::from_ref(*node)))
+            .chain(string_appends.into_iter().map(std::ptr::from_ref))
             .collect();
         self.owned_snocs.extend(owned_nodes.iter().copied());
         let saved = self.tail_loop.take();
@@ -197,6 +206,12 @@ where
             self.owned_snocs.remove(node);
         }
         out.push(outcome?);
+        if buffered {
+            let built = self.temporary("built");
+            let value = to_string(identifier_expression(&accumulator));
+            out.push(GoStatement::Define { names: vec![built.clone()], values: vec![value] });
+            return Ok(identifier_expression(&built));
+        }
         Ok(identifier_expression(&accumulator))
     }
 

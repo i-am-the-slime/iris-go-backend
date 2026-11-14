@@ -6,6 +6,7 @@
 
 mod application;
 mod blocks;
+mod buffers;
 mod chunks;
 mod closures;
 mod coerce;
@@ -235,6 +236,7 @@ where
             tail_groups: vec![],
             tail_group_of: FxHashMap::default(),
             owned_snocs: FxHashSet::default(),
+            byte_buffers: FxHashMap::default(),
             owning_variants: FxHashMap::default(),
             pending_owning_variants: vec![],
             inline_shapes: FxHashMap::default(),
@@ -560,6 +562,9 @@ struct Emitter<'p, 'm, 'q, Q> {
     tail_group_of: FxHashMap<FunctionId, usize>,
     current: Option<FunctionId>,
     owned_snocs: FxHashSet<*const Expression>,
+    /// The string parameters of the tail loop being emitted that it builds in a `[]byte`, with
+    /// the buffer's name; the parameter itself reads `string(buffer)`.
+    byte_buffers: FxHashMap<LocalId, String>,
     owning_variants: FxHashMap<(FunctionId, usize), String>,
     pending_owning_variants: Vec<(FunctionId, usize)>,
     inline_shapes: FxHashMap<DataType, Option<layout::Shape>>,
@@ -961,6 +966,7 @@ where
         self.locals.clear();
         self.local_names.clear();
         self.tail_loop = None;
+        self.byte_buffers.clear();
         let mut parameters = vec![];
         for parameter in &function.parameters {
             let parameter_name = self.bind_local(parameter);
@@ -988,9 +994,27 @@ where
         } else {
             vec![]
         };
+        // A string parameter that the loop only appends to grows in a `[]byte` of its own.
+        let strings = if loops && mode == Mode::Value {
+            self.owned_loop_strings(id, function, &captured)
+        } else {
+            vec![]
+        };
+        let mut buffers = vec![];
+        for (position, _) in &strings {
+            let parameter = &parameters[*position].0;
+            let buffer = self.local_name(format!("{parameter}Bytes"));
+            let local = function.parameters[*position].id;
+            self.locals.insert(local, buffers::to_string(identifier_expression(&buffer)));
+            self.byte_buffers.insert(local, buffer.clone());
+            buffers.push((*position, buffer));
+        }
         if loops {
-            let parameter_names: Vec<String> =
+            let mut parameter_names: Vec<String> =
                 parameters.iter().map(|(name, _)| name.clone()).collect();
+            for (position, buffer) in &buffers {
+                parameter_names[*position] = buffer.clone();
+            }
             let target =
                 LoopTarget { function: id, parameters: parameter_names.clone(), step: None };
             self.tail_loop = Some(TailLoop {
@@ -1018,6 +1042,7 @@ where
         };
         let mut owned_nodes: Vec<*const Expression> =
             owned.iter().flat_map(|(_, _, nodes)| nodes.iter().copied()).collect();
+        owned_nodes.extend(strings.into_iter().flat_map(|(_, nodes)| nodes));
         owned_nodes.extend(owned_parameters);
         self.owned_snocs.extend(owned_nodes.iter().copied());
         let mut body = vec![];
@@ -1036,6 +1061,13 @@ where
                 .iter()
                 .map(|(position, place, _)| self.clip(&parameters[*position].0, place))
                 .collect();
+            for (position, buffer) in &buffers {
+                let parameter = identifier_expression(&parameters[*position].0);
+                clipped.push(GoStatement::Define {
+                    names: vec![buffer.clone()],
+                    values: vec![buffers::to_bytes(parameter)],
+                });
+            }
             clipped.push(GoStatement::Loop(body));
             body = clipped;
         }
@@ -1043,6 +1075,7 @@ where
             body.pop();
         }
         self.tail_loop = None;
+        self.byte_buffers.clear();
         Ok(vec![GoDeclaration::Function { name, parameters, result, body }])
     }
 
@@ -1659,6 +1692,11 @@ where
             values.push(value);
         }
         for (parameter, argument) in parameters.iter().zip(arguments) {
+            if let ExpressionKind::Local(id) = argument.kind
+                && self.byte_buffers.get(&id) == Some(parameter)
+            {
+                continue;
+            }
             let value = self.value(argument, out)?;
             if let GoExpression::Identifier(name) = &value
                 && name == parameter
@@ -3588,6 +3626,11 @@ where
         }
         if let Foreign::IntFromNumber = foreign {
             return self.int_from_number(&arguments[2], monotype, out);
+        }
+        if let Foreign::Operator(Operator::StringAppend) = foreign
+            && self.owned_snocs.contains(&std::ptr::from_ref(&arguments[0]))
+        {
+            return self.append_to_buffer(arguments, out);
         }
         if foreign.calls(crate::foreign::ARRAY_APPEND)
             && self.owned_snocs.contains(&std::ptr::from_ref(&arguments[0]))
