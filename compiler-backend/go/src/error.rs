@@ -38,7 +38,7 @@ pub enum UnsupportedState {
     UnsolvedEvidence,
     #[error("evidence refers to a dictionary parameter that is not in scope")]
     UnboundEvidence,
-    #[error("evidence is applied to a result that its definition does not abstract over")]
+    #[error("evidence is applied to a value whose type does not abstract over it")]
     UnabstractedEvidence,
     #[error("instance head does not match the constraint {constraint}")]
     InstanceMismatch { constraint: String },

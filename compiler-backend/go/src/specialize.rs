@@ -1574,20 +1574,32 @@ where
         dictionaries: Vec<Dictionary>,
     ) -> GoResult<Expression> {
         let local = self.local_reference(scope, source)?;
-        let Some(&closed) = scope.scheme_locals.get(&source) else {
+        let scheme = match scope.scheme_locals.get(&source) {
+            Some(&closed) => self.monotypes.scheme_for(&mut self.context, closed)?,
+            None => None,
+        };
+        let Some(scheme) = scheme else {
+            if !dictionaries.is_empty() {
+                return Err(self.unsupported(scope, UnsupportedState::UnabstractedEvidence));
+            }
             return Ok(local);
         };
-        let Some(scheme) = self.monotypes.scheme_for(&mut self.context, closed)? else {
-            return Ok(local);
-        };
-        let Some(types) = scheme
-            .names
-            .iter()
-            .map(|name| instantiations.get(name).copied())
-            .collect::<Option<Vec<TypeId>>>()
-        else {
-            return Ok(local);
-        };
+        let uninstantiated = scheme.names.iter().find(|name| !instantiations.contains_key(name));
+        if let Some(&name) = uninstantiated {
+            let passed_whole = dictionaries.is_empty()
+                && scheme.names.iter().all(|name| !instantiations.contains_key(name));
+            if passed_whole {
+                return Ok(local);
+            }
+            let variable = match scope.module.checked.lookup_name(name) {
+                Some(text) => self.context.queries.lookup_smol_str(text).to_string(),
+                None => name.as_text().to_string(),
+            };
+            return Err(
+                self.unsupported(scope, UnsupportedState::UninstantiatedVariable { variable })
+            );
+        }
+        let types: Vec<TypeId> = scheme.names.iter().map(|name| instantiations[name]).collect();
         let instantiated = scheme.instantiate(&self.context, &types);
         let monotype = self.closed_monotype(scope, instantiated)?;
         if let Some(known) = self.monotypes.schemes.find(&scheme.key, &types) {
@@ -1775,10 +1787,12 @@ where
                 self.polymorphic_local_reference(scope, group, &instantiations, dictionaries)
             }
             tree::VariableResolution::Source(lowering::TermVariableResolution::Let(group)) => {
-                self.local_reference(scope, LocalSource::Let(group))
+                let source = LocalSource::Let(group);
+                self.instantiated_local_reference(scope, source, &instantiations, dictionaries)
             }
             tree::VariableResolution::Source(lowering::TermVariableResolution::RecordPun(pun)) => {
-                self.local_reference(scope, LocalSource::RecordPun(pun))
+                let source = LocalSource::RecordPun(pun);
+                self.instantiated_local_reference(scope, source, &instantiations, dictionaries)
             }
             tree::VariableResolution::Source(lowering::TermVariableResolution::Reference(
                 file_id,
@@ -2188,6 +2202,14 @@ where
         let is_foreign =
             matches!(module.indexed.items[term].kind, IndexedTermItemKind::Foreign { .. });
         match () {
+            () if is_foreign
+                && dictionaries.iter().any(|dictionary| *dictionary != Dictionary::Trivial) =>
+            {
+                Err(self.unsupported(
+                    scope,
+                    UnsupportedState::Construct { construct: "foreign imports with constraints" },
+                ))
+            }
             () if is_foreign => {
                 if let Some(foreign) = foreign::foreign_import(&module.name, &name) {
                     let foreign = self.with_callback_arities(file_id, term, foreign)?;
