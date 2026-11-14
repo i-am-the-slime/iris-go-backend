@@ -5,6 +5,7 @@
 //! effect only turns into a closure where it is used as a first-class value.
 
 mod application;
+mod chunks;
 mod coerce;
 mod deduplicate;
 mod fusion;
@@ -90,6 +91,15 @@ where
     }
     timed("ranges", || ranges::read_elements_in_place(&mut declarations));
     timed("lengths", || lengths::count_lengths_up_to_comparisons(&mut declarations));
+    let chunked = timed("chunks", || {
+        let taken = |name: &str| {
+            emitter.global_names.contains(name) || IMPORTED_PACKAGES.contains(&name)
+        };
+        chunks::allocate_linked_cells_in_chunks(&mut declarations, &taken)
+    });
+    if chunked {
+        emitter.imports.insert(GoPackage::Alloc.path().into());
+    }
     let mut homes: FxHashMap<String, ModuleIndex> = std::mem::take(&mut emitter.homes)
         .into_iter()
         .filter_map(|(name, file)| Some((name, modules.index(file)?)))
@@ -644,6 +654,7 @@ const IMPORTED_PACKAGES: &[&str] = &[
     "foreignvalue",
     "tauri",
     "regex",
+    "alloc",
     "fmt",
     "math",
     "os",

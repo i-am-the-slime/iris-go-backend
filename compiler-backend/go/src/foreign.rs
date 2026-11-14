@@ -268,6 +268,7 @@ pub enum GoPackage {
     Tauri,
     Regex,
     Lazy,
+    Alloc,
 }
 
 impl GoPackage {
@@ -286,6 +287,7 @@ impl GoPackage {
             GoPackage::Tauri => "github.com/i-am-the-slime/purs-backend-go/go-support/tauri",
             GoPackage::Regex => "github.com/i-am-the-slime/purs-backend-go/go-support/regex",
             GoPackage::Lazy => "github.com/i-am-the-slime/purs-backend-go/go-support/lazy",
+            GoPackage::Alloc => "github.com/i-am-the-slime/purs-backend-go/go-support/alloc",
             GoPackage::Exception => {
                 "github.com/i-am-the-slime/purs-backend-go/go-support/exception"
             }
@@ -306,6 +308,7 @@ impl GoPackage {
             GoPackage::Tauri => "tauri",
             GoPackage::Regex => "regex",
             GoPackage::Lazy => "lazy",
+            GoPackage::Alloc => "alloc",
         }
     }
 }
