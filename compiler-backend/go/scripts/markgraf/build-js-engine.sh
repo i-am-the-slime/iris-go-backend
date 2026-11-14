@@ -10,11 +10,11 @@
 # Every JavaScript baseline runs this one file: the Tauri native host embeds it
 # (build-js-cli.sh), and js-host/host.js runs it under Deno and Bun.
 #
-# Environment: MARKGRAF (checkout).
+# Environment: MARKGRAF (checkout; pinned.sh).
 
 set -euo pipefail
 
-MARKGRAF="${MARKGRAF:-/Users/mark/Developer/markgraf}"
+source "$(dirname "${BASH_SOURCE[0]}")/pinned.sh"
 OUT="${1:-${TMPDIR:-/tmp}/markgraf-js-cli}"
 CLI="$MARKGRAF/cli"
 NPM="$MARKGRAF/npm"

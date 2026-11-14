@@ -7,12 +7,12 @@
 #
 #   compiler-backend/go/scripts/markgraf/build-js-cli.sh [OUT_DIR]
 #
-# Environment: MARKGRAF (checkout), CARGO_TARGET_DIR (defaults to the Markgraf
+# Environment: MARKGRAF (checkout; pinned.sh), CARGO_TARGET_DIR (defaults to the Markgraf
 # CLI's own target directory so Skia is not rebuilt).
 
 set -euo pipefail
 
-MARKGRAF="${MARKGRAF:-/Users/mark/Developer/markgraf}"
+source "$(dirname "${BASH_SOURCE[0]}")/pinned.sh"
 OUT="${1:-${TMPDIR:-/tmp}/markgraf-js-cli}"
 CLI="$MARKGRAF/cli"
 export CARGO_TARGET_DIR="${CARGO_TARGET_DIR:-$CLI/target}"

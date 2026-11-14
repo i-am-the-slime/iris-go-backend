@@ -26,7 +26,7 @@ GO_SUPPORT="${GO_SUPPORT:-/Users/mark/Developer/purs-backend-go/go-support}"
 # go-support scans strings sixteen bytes at a time with SIMD, an experiment
 # in Go 1.27.0 (simd/archsimd) whose API may change in later releases.
 export GOEXPERIMENT="${GOEXPERIMENT:-simd}"
-PURS_BACKEND_ES="${PURS_BACKEND_ES:-/Users/mark/Developer/markgraf/npm/node_modules/.bin/purs-backend-es}"
+PURS_BACKEND_ES="${PURS_BACKEND_ES:-${MARKGRAF_GATES:-/Users/mark/Developer/markgraf-gates}/npm/node_modules/.bin/purs-backend-es}"
 WORK="${WORK:-${TMPDIR:-/tmp}/iris-pathological}"
 JOBS="${JOBS:-6}"
 TIMEOUT="${TIMEOUT:-600}"

@@ -5,7 +5,7 @@ set -euo pipefail
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT="$(cd "$HERE/../../../.." && pwd)"
 IRIS="${IRIS:-$ROOT/target/release/iris}"
-MARKGRAF="${MARKGRAF:-/Users/mark/Developer/markgraf}"
+source "$(dirname "${BASH_SOURCE[0]}")/pinned.sh"
 LAYERED_LAYOUT="${LAYERED_LAYOUT:-$MARKGRAF/.spago/p/layered-layout/d7cf719be196556fe9e2d55b6ea1d6f4ca5a5713}"
 GO_SUPPORT="${GO_SUPPORT:-/Users/mark/Developer/purs-backend-go/go-support}"
 # go-support scans strings sixteen bytes at a time with SIMD, an experiment

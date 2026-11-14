@@ -6,14 +6,14 @@
 #
 #   compiler-backend/go/scripts/markgraf/build-go-cli.sh OUT_DIR
 #
-# Environment: IRIS, MARKGRAF (checkout), GO_SUPPORT, GOEXPERIMENT (default simd).
+# Environment: IRIS, MARKGRAF (checkout; pinned.sh), GO_SUPPORT, GOEXPERIMENT (default simd).
 
 set -euo pipefail
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT="$(cd "$HERE/../../../.." && pwd)"
 IRIS="${IRIS:-$ROOT/target/release/iris}"
-MARKGRAF="${MARKGRAF:-/Users/mark/Developer/markgraf}"
+source "$(dirname "${BASH_SOURCE[0]}")/pinned.sh"
 GO_SUPPORT="${GO_SUPPORT:-/Users/mark/Developer/purs-backend-go/go-support}"
 # go-support scans strings sixteen bytes at a time with SIMD, an experiment
 # in Go 1.27.0 (simd/archsimd) whose API may change in later releases.

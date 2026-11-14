@@ -8,7 +8,7 @@
 #   compiler-backend/go/scripts/markgraf/compare-svg.sh            # default files
 #   compiler-backend/go/scripts/markgraf/compare-svg.sh a.markgraf # chosen files
 #
-# Environment: IRIS, MARKGRAF (checkout), GO_SUPPORT, MARKGRAF_JS (a JS CLI;
+# Environment: IRIS, MARKGRAF (checkout; pinned.sh), GO_SUPPORT, MARKGRAF_JS (a JS CLI;
 # built from the current sources with build-js-cli.sh when unset), WORK,
 # TIMEOUT (seconds per run, default 600), KEEP=1 keeps the work directory.
 # Finally checks the generated Go against the markgraf-cli quality baseline and
@@ -20,7 +20,7 @@ export LC_ALL=C
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT="$(cd "$HERE/../../../.." && pwd)"
 IRIS="${IRIS:-$ROOT/target/release/iris}"
-MARKGRAF="${MARKGRAF:-/Users/mark/Developer/markgraf}"
+source "$(dirname "${BASH_SOURCE[0]}")/pinned.sh"
 GO_SUPPORT="${GO_SUPPORT:-/Users/mark/Developer/purs-backend-go/go-support}"
 WORK="${WORK:-$(mktemp -d)}"
 TIMEOUT="${TIMEOUT:-600}"

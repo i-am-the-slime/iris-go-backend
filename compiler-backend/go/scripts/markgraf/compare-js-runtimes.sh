@@ -13,7 +13,7 @@
 #   compiler-backend/go/scripts/markgraf/compare-js-runtimes.sh            # default files
 #   compiler-backend/go/scripts/markgraf/compare-js-runtimes.sh a.markgraf # chosen files
 #
-# Environment: IRIS, MARKGRAF (checkout), GO_SUPPORT, MARKGRAF_GO (a Go CLI;
+# Environment: IRIS, MARKGRAF (checkout; pinned.sh), GO_SUPPORT, MARKGRAF_GO (a Go CLI;
 # built with build-go-cli.sh when unset), WORK, TIMEOUT (seconds per run,
 # default 600), KEEP=1 keeps the work directory. Timing follows compare-svg.sh:
 # one warm-up run each, and an export where Go looks slower than a JavaScript
@@ -25,7 +25,7 @@ set -uo pipefail
 export LC_ALL=C
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-MARKGRAF="${MARKGRAF:-/Users/mark/Developer/markgraf}"
+source "$(dirname "${BASH_SOURCE[0]}")/pinned.sh"
 WORK="${WORK:-$(mktemp -d)}"
 TIMEOUT="${TIMEOUT:-600}"
 SLOWER_PERCENT="${SLOWER_PERCENT:-5}"

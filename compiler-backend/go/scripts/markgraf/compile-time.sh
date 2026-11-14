@@ -14,7 +14,7 @@
 # only ever lowers the baseline; raising it is a hand edit in a reviewed change
 # that says why.
 #
-# Environment: IRIS, MARKGRAF (checkout), RUNS (default 3), MARGIN_PERCENT
+# Environment: IRIS, MARKGRAF (checkout; pinned.sh), RUNS (default 3), MARGIN_PERCENT
 # (default 20), MARGIN_SECONDS (default 0.2), WORK.
 
 set -uo pipefail
@@ -23,7 +23,7 @@ export LC_ALL=C
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT="$(cd "$HERE/../../../.." && pwd)"
 IRIS="${IRIS:-$ROOT/target/release/iris}"
-MARKGRAF="${MARKGRAF:-/Users/mark/Developer/markgraf}"
+source "$(dirname "${BASH_SOURCE[0]}")/pinned.sh"
 BASELINE="${BASELINE:-$HERE/../../compile-time-baseline.txt}"
 RUNS="${RUNS:-3}"
 MARGIN_PERCENT="${MARGIN_PERCENT:-20}"
