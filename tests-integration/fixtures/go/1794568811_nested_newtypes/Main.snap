@@ -19,7 +19,7 @@ import (
 	"github.com/i-am-the-slime/purs-backend-go/go-support/prim"
 )
 
-var main_ string = "Box " + ("Box " + prim.ShowArray(show.Show, []int32{1, 2}))
+var main_ string = "Box Box " + prim.ShowArray(show.Show, []int32{1, 2})
 
 func main() {
 	fmt.Println(main_)

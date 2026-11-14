@@ -33,7 +33,7 @@ const (
 	NestedDeep
 )
 
-var main_ []int32 = []int32{1 + 2, 1 + depthArrayInt(&Nested{Tag: NestedDeep, Deep0: &Nested{Tag: NestedFlat, Flat0: convert([][]int32{[]int32{1}})}})}
+var main_ []int32 = []int32{3, 1 + depthArrayInt(&Nested{Tag: NestedDeep, Deep0: &Nested{Tag: NestedFlat, Flat0: convert([][]int32{[]int32{1}})}})}
 
 func depthArrayInt(value *Nested) int32 {
 	switch value.Tag {

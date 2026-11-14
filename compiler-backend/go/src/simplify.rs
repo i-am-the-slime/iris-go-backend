@@ -15,6 +15,7 @@ use crate::monotype::{Monotype, MonotypeId, Monotypes};
 use crate::timing::timed;
 use smol_str::SmolStr;
 
+mod fold;
 mod object;
 mod record;
 
@@ -383,11 +384,9 @@ impl Simplifier<'_> {
                 if let ExpressionKind::Literal(Literal::Boolean(value)) = condition.kind {
                     return self.expression(if value { *then } else { *otherwise });
                 }
-                ExpressionKind::If {
-                    condition: Box::new(condition),
-                    then: Box::new(self.expression(*then)),
-                    otherwise: Box::new(self.expression(*otherwise)),
-                }
+                let then = self.expression(*then);
+                let otherwise = self.expression(*otherwise);
+                return self.boolean_choice(condition, then, otherwise, monotype);
             }
             ExpressionKind::Case { scrutinees, alternatives } if binds_only(&alternatives) => {
                 let alternative =
@@ -845,6 +844,13 @@ impl Simplifier<'_> {
                 self.coerce(value, monotype)
             }
             Foreign::Ordering => self.ordering(arguments, monotype),
+            Foreign::Operator(_) => self.operator(foreign, arguments, monotype),
+            foreign
+                if foreign.calls(crate::foreign::INT_DIVIDE)
+                    || foreign.calls(crate::foreign::INT_MODULO) =>
+            {
+                self.operator(foreign, arguments, monotype)
+            }
             foreign => Expression::new(ExpressionKind::Foreign { foreign, arguments }, monotype),
         }
     }

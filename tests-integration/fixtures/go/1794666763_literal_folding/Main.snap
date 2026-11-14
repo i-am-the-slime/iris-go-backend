@@ -1,0 +1,125 @@
+---
+source: tests-integration/src/fixtures.rs
+---
+// main.go
+package main
+
+import (
+	"fmt"
+	"github.com/i-am-the-slime/purs-backend-go/go-support/prim"
+	"math"
+)
+
+var main_ = initializeMain_()
+
+func initializeMain_() []string {
+	scrutinee := opaqueNumber(12345.0, 0.0) / 0.0 == math.NaN()
+	var result string
+	if scrutinee {
+		result = "true"
+	} else {
+		result = "false"
+	}
+	scrutinee2 := opaqueNumber(12345.0, 0.0) / 0.0 < 1.0
+	var result2 string
+	if scrutinee2 {
+		result2 = "true"
+	} else {
+		result2 = "false"
+	}
+	scrutinee3 := !(opaqueNumber(12345.0, 0.0) / 0.0 < 1.0)
+	var result3 string
+	if scrutinee3 {
+		result3 = "true"
+	} else {
+		result3 = "false"
+	}
+	scrutinee4 := opaqueNumber(12345.0, math.Copysign(0, -1)) == 0.0
+	var result4 string
+	if scrutinee4 {
+		result4 = "true"
+	} else {
+		result4 = "false"
+	}
+	scrutinee5 := prim.CompareString(opaqueString("sentinel", "é"), "z") < 0
+	var result5 string
+	if scrutinee5 {
+		result5 = "true"
+	} else {
+		result5 = "false"
+	}
+	scrutinee6 := prim.CompareString(opaqueString("sentinel", "😀"), "￿") < 0
+	var result6 string
+	if scrutinee6 {
+		result6 = "true"
+	} else {
+		result6 = "false"
+	}
+	scrutinee7 := opaqueInt(12345, 3) >= 4
+	var result7 string
+	if scrutinee7 {
+		result7 = "true"
+	} else {
+		result7 = "false"
+	}
+	scrutinee8 := opaqueInt(12345, 1) < 2
+	var result8 string
+	if scrutinee8 {
+		result8 = "true"
+	} else {
+		result8 = "false"
+	}
+	scrutinee9 := opaqueInt(12345, 1) >= 2
+	var result9 string
+	if scrutinee9 {
+		result9 = "true"
+	} else {
+		result9 = "false"
+	}
+	scrutinee10 := opaqueInt(12345, 3) < 4
+	var result10 string
+	if scrutinee10 {
+		result10 = "true"
+	} else {
+		result10 = "false"
+	}
+	scrutinee11 := opaqueInt(12345, 0) >= 0 && opaqueInt(12345, 3) < 4
+	var result11 string
+	if scrutinee11 {
+		result11 = "true"
+	} else {
+		result11 = "false"
+	}
+	return []string{prim.ShowInt(int(-2147483648)) + "/" + prim.ShowInt(int(opaqueInt(12345, 2147483647) + 1)), prim.ShowInt(int(2147483647)) + "/" + prim.ShowInt(int(opaqueInt(12345, -2147483648) - 1)), prim.ShowInt(int(0)) + "/" + prim.ShowInt(int(prim.MultiplyInt32(opaqueInt(12345, 65536), 65536))), prim.ShowInt(int(0)) + "/" + prim.ShowInt(int(prim.MultiplyInt32(opaqueInt(12345, 2147483647), 2147483647))), prim.ShowInt(int(-67153024)) + "/" + prim.ShowInt(int(prim.MultiplyInt32(opaqueInt(12345, 123456789), 987654321))), prim.ShowInt(int(-2147483648)) + "/" + prim.ShowInt(int(-opaqueInt(12345, -2147483648))), prim.ShowInt(int(3)) + "/" + prim.ShowInt(int(int32(prim.IntDiv(int(opaqueInt(12345, 7)), int(2))))), prim.ShowInt(int(-4)) + "/" + prim.ShowInt(int(int32(prim.IntDiv(int(opaqueInt(12345, -7)), int(2))))), prim.ShowInt(int(-3)) + "/" + prim.ShowInt(int(int32(prim.IntDiv(int(opaqueInt(12345, 7)), int(-2))))), prim.ShowInt(int(4)) + "/" + prim.ShowInt(int(int32(prim.IntDiv(int(opaqueInt(12345, -7)), int(-2))))), prim.ShowInt(int(1)) + "/" + prim.ShowInt(int(int32(prim.IntMod(int(opaqueInt(12345, 7)), int(-2))))), prim.ShowInt(int(1)) + "/" + prim.ShowInt(int(int32(prim.IntMod(int(opaqueInt(12345, -7)), int(2))))), prim.ShowInt(int(1)) + "/" + prim.ShowInt(int(int32(prim.IntMod(int(opaqueInt(12345, -7)), int(-2))))), prim.ShowInt(int(0)) + "/" + prim.ShowInt(int(int32(prim.IntDiv(int(opaqueInt(12345, 5)), int(0))))), prim.ShowInt(int(0)) + "/" + prim.ShowInt(int(int32(prim.IntMod(int(opaqueInt(12345, 5)), int(0))))), prim.ShowInt(int(int32(prim.IntDiv(int(-2147483648), int(-1))))) + "/" + prim.ShowInt(int(int32(prim.IntDiv(int(opaqueInt(12345, -2147483648)), int(-1))))), prim.ShowNumber(float64(0.30000000000000004)) + "/" + prim.ShowNumber(opaqueNumber(12345.0, 0.1) + 0.2), prim.ShowNumber(math.Inf(-1)) + "/" + prim.ShowNumber(1.0 / float64(opaqueNumber(12345.0, 0.0) * -1.0)), prim.ShowNumber(math.Inf(-1)) + "/" + prim.ShowNumber(1.0 / opaqueNumber(12345.0, math.Copysign(0, -1))), prim.ShowNumber(math.NaN()) + "/" + prim.ShowNumber(opaqueNumber(12345.0, 0.0) / 0.0), prim.ShowNumber(math.Inf(1)) + "/" + prim.ShowNumber(float64(opaqueNumber(12345.0, 1.0e308) * 10.0)), "false/" + result, "false/" + result2, "true/" + result3, "true/" + result4, prim.ShowNumber(float64(0.3333333333333333)) + "/" + prim.ShowNumber(opaqueNumber(12345.0, 1.0) / 3.0), prim.ShowString("ab") + "/" + prim.ShowString(opaqueString("sentinel", "a") + "b"), "false/" + result5, "true/" + result6, "true/true", "false/" + result7, "true/" + result8, "false/" + result9, prim.ShowInt(int(opaqueInt(12345, 5) + 3)) + "/" + prim.ShowInt(int(opaqueInt(12345, 5) + 3)), prim.ShowInt(int(opaqueInt(12345, 1) + -2147483648)) + "/" + prim.ShowInt(int(opaqueInt(12345, 2147483647) + 2)), prim.ShowString("xy" + opaqueString("sentinel", "z")) + "/" + prim.ShowString("xy" + opaqueString("sentinel", "z")), result10 + "/" + result11}
+}
+
+func opaqueInt(sentinel int32, x int32) int32 {
+	for {
+		if x == sentinel {
+			continue
+		}
+		return x
+	}
+}
+
+func opaqueNumber(sentinel float64, x float64) float64 {
+	for {
+		if x == sentinel {
+			continue
+		}
+		return x
+	}
+}
+
+func opaqueString(sentinel string, x string) string {
+	for {
+		if x == sentinel {
+			continue
+		}
+		return x
+	}
+}
+
+func main() {
+	fmt.Println(main_)
+}

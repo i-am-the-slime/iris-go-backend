@@ -34,20 +34,9 @@ import (
 
 var main_ []string = []string{"x" + prim.ShowInt(int(2)), pairs, joined, prim.ShowArray(show.Show2, mainGo(show.Show, 3, []string{})) + prim.ShowArray(show.Show, mainGo2(category.Identity, 3, []int32{}))}
 
-var pairs = initializePairs()
+var pairs string = "true" + prim.ShowInt(int(pairsF(pairsF(1))))
 
-func initializePairs() string {
-	scrutinee := !!true
-	var result string
-	if scrutinee {
-		result = "true"
-	} else {
-		result = "false"
-	}
-	return result + prim.ShowInt(int(pairsF(pairsF(1))))
-}
-
-var joined string = "<" + (prim.ShowInt(int(3)) + ">") + ("<" + (prim.ShowString("y") + ">"))
+var joined string = "<" + prim.ShowInt(int(3)) + "><" + prim.ShowString("y") + ">"
 
 func mainGo(f func(int32) string, n int32, accumulated []string) []string {
 	for {

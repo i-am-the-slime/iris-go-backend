@@ -92,9 +92,8 @@ where
     timed("ranges", || ranges::read_elements_in_place(&mut declarations));
     timed("lengths", || lengths::count_lengths_up_to_comparisons(&mut declarations));
     let chunked = timed("chunks", || {
-        let taken = |name: &str| {
-            emitter.global_names.contains(name) || IMPORTED_PACKAGES.contains(&name)
-        };
+        let taken =
+            |name: &str| emitter.global_names.contains(name) || IMPORTED_PACKAGES.contains(&name);
         chunks::allocate_linked_cells_in_chunks(&mut declarations, &taken)
     });
     if chunked {
@@ -3398,9 +3397,12 @@ where
         match literal {
             Literal::Int(value) => GoExpression::Integer(*value),
             Literal::Number(value) => {
-                if value.parse::<f64>().is_ok_and(|value| value == 0.0 && value.is_sign_negative())
+                // Folding leaves -0, NaN and the infinities, which Go spells
+                // as calls.
+                if let Ok(number) = value.parse::<f64>()
+                    && (!number.is_finite() || (number == 0.0 && number.is_sign_negative()))
                 {
-                    return self.number_constant(-0.0);
+                    return self.number_constant(number);
                 }
                 let mut value = value.to_string();
                 if !value.contains(['.', 'e', 'E'])
@@ -4314,7 +4316,7 @@ fn int32_constant(expression: &GoExpression) -> Option<i32> {
     }
 }
 
-fn fold_bitwise(operator: Operator, x: i32, y: i32) -> i64 {
+pub(crate) fn fold_bitwise(operator: Operator, x: i32, y: i32) -> i64 {
     let count = (y & 31) as u32;
     i64::from(match operator {
         Operator::IntAnd => x & y,
