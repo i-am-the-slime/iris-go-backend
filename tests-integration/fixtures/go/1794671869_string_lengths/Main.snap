@@ -6,14 +6,14 @@ package maybe
 
 import "fixture/shared"
 
-type MaybeRecordHeadTail struct {
+type MaybeHeadTail struct {
 	Just0 shared.HeadTail
 	Tag   uint8
 }
 
 const (
-	MaybeRecordHeadTailNothing = iota
-	MaybeRecordHeadTailJust
+	MaybeHeadTailNothing = iota
+	MaybeHeadTailJust
 )
 
 type MaybeChar struct {
@@ -65,23 +65,23 @@ func initializeMain_() []string {
 func countSpacesUnconsingCountsUpToTwo(text string, count int32) int32 {
 	for {
 		scrutinee := prim.CodeUnitLengthUpTo(2, text)
-		var result maybe.MaybeRecordHeadTail
+		var result maybe.MaybeHeadTail
 		switch scrutinee {
 		case 0:
-			result = maybe.MaybeRecordHeadTail{Tag: maybe.MaybeRecordHeadTailNothing}
+			result = maybe.MaybeHeadTail{Tag: maybe.MaybeHeadTailNothing}
 		case 1:
-			result = maybe.MaybeRecordHeadTail{Tag: maybe.MaybeRecordHeadTailJust, Just0: shared.HeadTail{Head: prim.ToCharCode(prim.CharAt(0, text)), Tail: ""}}
+			result = maybe.MaybeHeadTail{Tag: maybe.MaybeHeadTailJust, Just0: shared.HeadTail{Head: prim.ToCharCode(prim.CharAt(0, text)), Tail: ""}}
 		default:
 			cu0 := prim.ToCharCode(prim.CharAt(0, text))
 			cu1 := prim.ToCharCode(prim.CharAt(1, text))
 			if 55296 <= cu0 && cu0 <= 56319 && (56320 <= cu1 && cu1 <= 57343) {
-				result = maybe.MaybeRecordHeadTail{Tag: maybe.MaybeRecordHeadTailJust, Just0: shared.HeadTail{Head: prim.MultiplyInt32(cu0 - 55296, 1024) + (cu1 - 56320) + 65536, Tail: prim.CodeUnitDrop(2, text)}}
+				result = maybe.MaybeHeadTail{Tag: maybe.MaybeHeadTailJust, Just0: shared.HeadTail{Head: prim.MultiplyInt32(cu0 - 55296, 1024) + (cu1 - 56320) + 65536, Tail: prim.CodeUnitDrop(2, text)}}
 			} else {
-				result = maybe.MaybeRecordHeadTail{Tag: maybe.MaybeRecordHeadTailJust, Just0: shared.HeadTail{Head: cu0, Tail: prim.CodeUnitDrop(1, text)}}
+				result = maybe.MaybeHeadTail{Tag: maybe.MaybeHeadTailJust, Just0: shared.HeadTail{Head: cu0, Tail: prim.CodeUnitDrop(1, text)}}
 			}
 		}
 		switch result.Tag {
-		case maybe.MaybeRecordHeadTailJust:
+		case maybe.MaybeHeadTailJust:
 			var result2 int32
 			if result.Just0.Head == prim.ToCharCode(rune(' ')) {
 				result2 = count + 1
@@ -90,7 +90,7 @@ func countSpacesUnconsingCountsUpToTwo(text string, count int32) int32 {
 			}
 			text, count = result.Just0.Tail, result2
 			continue
-		default: // maybe.MaybeRecordHeadTailNothing
+		default: // maybe.MaybeHeadTailNothing
 			return count
 		}
 	}

@@ -72,8 +72,10 @@ pub fn compile_program(
     if let Some(blockers) = specializer.blockers()? {
         return Err(GoError::Blocked(blockers));
     }
+    let erased_newtypes = std::mem::take(&mut specializer.context().erased_newtypes);
     let (functions, mut monotypes, next_local) =
         timed("finish specialization", || specializer.finish());
+    monotypes.erased_newtypes = erased_newtypes;
     let program = mono::Program { functions, entry };
     let eliminators = emit::Eliminators::find(&program, &monotypes);
     let program = timed("simplify", || simplify::simplify(program, &mut monotypes, next_local));

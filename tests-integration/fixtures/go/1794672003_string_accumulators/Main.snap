@@ -9,7 +9,7 @@ import (
 	"github.com/i-am-the-slime/purs-backend-go/go-support/prim"
 )
 
-type ExitFoldLoopPrependedReadInFoldReadInLoop struct {
+type MainResult struct {
 	Exit       int32
 	Fold       string
 	Loop       string
@@ -20,7 +20,7 @@ type ExitFoldLoopPrependedReadInFoldReadInLoop struct {
 
 var main_ = initializeMain_()
 
-func initializeMain_() ExitFoldLoopPrependedReadInFoldReadInLoop {
+func initializeMain_() MainResult {
 	accumulator := []byte("start:")
 	for i := int32(1); i < 13; i++ {
 		acc := accumulator
@@ -41,7 +41,7 @@ func initializeMain_() ExitFoldLoopPrependedReadInFoldReadInLoop {
 		acc3 := accumulator3
 		accumulator3 = prim.ShowInt(i3) + acc3
 	}
-	return ExitFoldLoopPrependedReadInFoldReadInLoop{Fold: built, Loop: mainGo(0, ""), Exit: mainGo2(0, "x"), ReadInFold: accumulator2, ReadInLoop: mainGo3(0, ""), Prepended: accumulator3}
+	return MainResult{Fold: built, Loop: mainGo(0, ""), Exit: mainGo2(0, "x"), ReadInFold: accumulator2, ReadInLoop: mainGo3(0, ""), Prepended: accumulator3}
 }
 
 func mainGo(i int32, acc string) string {

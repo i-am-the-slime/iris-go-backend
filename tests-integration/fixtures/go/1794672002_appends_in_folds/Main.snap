@@ -37,7 +37,7 @@ import (
 	"slices"
 )
 
-type AppendedCombinedEscapingSnocs struct {
+type MainResult struct {
 	Appended []int32
 	Combined either.EitherStringArrayInt
 	Escaping [][]int32
@@ -51,7 +51,7 @@ type AccSeen struct {
 
 var main_ = initializeMain_()
 
-func initializeMain_() AppendedCombinedEscapingSnocs {
+func initializeMain_() MainResult {
 	accumulator := []int32{}
 	accumulator = slices.Clip(accumulator)
 	for x := int32(1); x < 6; x++ {
@@ -85,7 +85,7 @@ func initializeMain_() AppendedCombinedEscapingSnocs {
 		r := accumulator4
 		accumulator4 = AccSeen{Acc: array.Append(r.Acc, []int32{x3}), Seen: append(r.Seen, r.Acc)}
 	}
-	return AppendedCombinedEscapingSnocs{Appended: accumulator, Snocs: accumulator2, Combined: accumulator3, Escaping: accumulator4.Seen}
+	return MainResult{Appended: accumulator, Snocs: accumulator2, Combined: accumulator3, Escaping: accumulator4.Seen}
 }
 
 func main() {

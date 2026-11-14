@@ -6,7 +6,7 @@ package variant
 
 import "fixture/shared"
 
-func Case_String(r shared.Type_Value) string {
+func Case_String(r shared.VariantRep) string {
 	panic("Data.Variant: pattern match failure [" + r.Type + "]")
 	var unreachable string
 	return unreachable
@@ -17,7 +17,7 @@ package shrink
 
 import "fixture/shared"
 
-func ShrinkRecordBaseNameScaleRecordBaseNameRecordScaleConsIntConsStringNil(argument1 shared.BaseNameScale) shared.BaseName {
+func ShrinkBaseNameScaleBaseNameScaleConsIntConsStringNil(argument1 shared.BaseNameScale) shared.BaseName {
 	return shared.BaseName{Base: argument1.Base, Name: argument1.Name}
 }
 
@@ -33,52 +33,52 @@ import (
 	"github.com/i-am-the-slime/purs-backend-go/go-support/prim"
 )
 
-type After struct {
+type AfterOfInt struct {
 	After int32
 }
 
-type After2 struct {
+type AfterOfValue struct {
 	After any
 }
 
-func convert(value After2) After {
-	return After{After: value.After.(int32)}
+func convert(value AfterOfValue) AfterOfInt {
+	return AfterOfInt{After: value.After.(int32)}
 }
 
-type Type_Value2 struct {
+type VariantRepString struct {
 	Type  string
 	Value string
 }
 
-func convert2(value Type_Value2) shared.Type_Value {
-	return shared.Type_Value{Type: value.Type, Value: value.Value}
+func convert2(value VariantRepString) shared.VariantRep {
+	return shared.VariantRep{Type: value.Type, Value: value.Value}
 }
 
-type Type_Value3 struct {
+type VariantRepInt struct {
 	Type  string
 	Value int32
 }
 
-func convert3(value Type_Value3) shared.Type_Value {
-	return shared.Type_Value{Type: value.Type, Value: value.Value}
+func convert3(value VariantRepInt) shared.VariantRep {
+	return shared.VariantRep{Type: value.Type, Value: value.Value}
 }
 
-type Type_Value4 struct {
+type VariantRepAfter struct {
 	Type  string
-	Value After
+	Value AfterOfInt
 }
 
-func convert5(value After) After2 {
-	return After2{After: value.After}
+func convert4(value AfterOfInt) AfterOfValue {
+	return AfterOfValue{After: value.After}
 }
 
-func convert4(value Type_Value4) shared.Type_Value {
-	return shared.Type_Value{Type: value.Type, Value: convert5(value.Value)}
+func convert5(value VariantRepAfter) shared.VariantRep {
+	return shared.VariantRep{Type: value.Type, Value: convert4(value.Value)}
 }
 
 type InvalidLateMissing struct {
 	Invalid func(int32) string
-	Late    func(After) string
+	Late    func(AfterOfInt) string
 	Missing func(string) string
 }
 
@@ -104,9 +104,9 @@ func initializeMain_() []string {
 	return array.Append(mapped, array.Append(mapped2, array.Append(mapped3, []string{shrunk.Name + prim.ShowInt(shrunk.Base)})))
 }
 
-func byLabel(r shared.Type_Value) string {
+func byLabel(r shared.VariantRep) string {
 	if r.Type == "late" {
-		scrutinee := convert(r.Value.(After2))
+		scrutinee := convert(r.Value.(AfterOfValue))
 		return "late " + prim.ShowInt(scrutinee.After)
 	}
 	if r.Type == "invalid" {
@@ -118,9 +118,9 @@ func byLabel(r shared.Type_Value) string {
 	return variant.Case_String(r)
 }
 
-var problems []shared.Type_Value = []shared.Type_Value{convert2(Type_Value2{Type: "missing", Value: "user"}), convert3(Type_Value3{Type: "invalid", Value: 3}), convert4(Type_Value4{Type: "late", Value: After{After: 5}})}
+var problems []shared.VariantRep = []shared.VariantRep{convert2(VariantRepString{Type: "missing", Value: "user"}), convert3(VariantRepInt{Type: "invalid", Value: 3}), convert5(VariantRepAfter{Type: "late", Value: AfterOfInt{After: 5}})}
 
-func byRecord(argument shared.Type_Value) string {
+func byRecord(argument shared.VariantRep) string {
 	argument0 := argument.Type
 	var result bool
 	if argument0 == "invalid" {
@@ -135,7 +135,7 @@ func byRecord(argument shared.Type_Value) string {
 			return "no " + name
 		}, Invalid: func(code int32) string {
 			return "bad " + prim.ShowInt(prim.MultiplyInt32(code, 2))
-		}, Late: func(argument02 After) string {
+		}, Late: func(argument02 AfterOfInt) string {
 			return "after " + prim.ShowInt(argument02.After)
 		}}
 		var field func(any) string
@@ -146,7 +146,7 @@ func byRecord(argument shared.Type_Value) string {
 			}
 		case "late":
 			field = func(coerced2 any) string {
-				return record.Late(convert(coerced2.(After2)))
+				return record.Late(convert(coerced2.(AfterOfValue)))
 			}
 		case "missing":
 			field = func(coerced3 any) string {
@@ -158,7 +158,7 @@ func byRecord(argument shared.Type_Value) string {
 	return variant.Case_String(argument)
 }
 
-func someLabels(argument shared.Type_Value) string {
+func someLabels(argument shared.VariantRep) string {
 	if argument.Type == "invalid" {
 		record := Invalid{Invalid: func(code int32) string {
 			return prim.ShowInt(code + 1)
@@ -175,7 +175,7 @@ func someLabels(argument shared.Type_Value) string {
 	return "unhandled"
 }
 
-var shrunk shared.BaseName = shrink.ShrinkRecordBaseNameScaleRecordBaseNameRecordScaleConsIntConsStringNil(shared.BaseNameScale{Base: 1, Name: "context", Scale: 2})
+var shrunk shared.BaseName = shrink.ShrinkBaseNameScaleBaseNameScaleConsIntConsStringNil(shared.BaseNameScale{Base: 1, Name: "context", Scale: 2})
 
 func main() {
 	fmt.Println(main_)
@@ -184,7 +184,7 @@ func main() {
 // shared/shared.go
 package shared
 
-type Type_Value struct {
+type VariantRep struct {
 	Type  string
 	Value any
 }

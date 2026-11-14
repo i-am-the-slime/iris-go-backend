@@ -10,8 +10,8 @@ import (
 	"github.com/i-am-the-slime/purs-backend-go/go-support/prim"
 )
 
-type MinisName struct {
-	Minis []MinisName
+type Level struct {
+	Minis []Level
 	Name  string
 }
 
@@ -29,7 +29,7 @@ const (
 
 var sharedMaybeStepNothing = &MaybeStep{Tag: MaybeStepNothing}
 
-var main_ []string = array.Append(names(MinisName{Name: "root", Minis: []MinisName{MinisName{Name: "a", Minis: []MinisName{}}}}), []string{prim.ShowInt(countSteps(func(n int32) *MaybeStep {
+var main_ []string = array.Append(names(Level{Name: "root", Minis: []Level{Level{Name: "a", Minis: []Level{}}}}), []string{prim.ShowInt(countSteps(func(n int32) *MaybeStep {
 	if n < 3 {
 		return &MaybeStep{Tag: MaybeStepJust, Just0: func(_ int32) *MaybeStep {
 			return sharedMaybeStepNothing
@@ -38,8 +38,8 @@ var main_ []string = array.Append(names(MinisName{Name: "root", Minis: []MinisNa
 	return sharedMaybeStepNothing
 }, 0))})
 
-func names(level MinisName) []string {
-	return array.Append([]string{level.Name}, array.Bind(level.Minis, func(argument0 MinisName) []string {
+func names(level Level) []string {
+	return array.Append([]string{level.Name}, array.Bind(level.Minis, func(argument0 Level) []string {
 		return names(argument0)
 	}))
 }

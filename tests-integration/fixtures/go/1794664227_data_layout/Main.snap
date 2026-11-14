@@ -9,7 +9,7 @@ import (
 	"github.com/i-am-the-slime/purs-backend-go/go-support/prim"
 )
 
-type ColoursExpressionItemsSampleShapes struct {
+type MainResult struct {
 	Colours    []string
 	Expression int32
 	Items      []int32
@@ -71,7 +71,7 @@ const (
 
 var main_ = initializeMain_()
 
-func initializeMain_() ColoursExpressionItemsSampleShapes {
+func initializeMain_() MainResult {
 	array2 := []Shape{Shape{Tag: ShapeCircle, FieldA0: 1.0}, Shape{Tag: ShapeSquare, FieldA0: 2.0}, Shape{Tag: ShapeLabel, FieldB0: "a", FieldB1: true}, Shape{Tag: ShapeCaption, FieldB0: "b", FieldB1: false}, Shape{Tag: ShapePoint}}
 	mapped := make([]string, len(array2))
 	for index, element := range array2 {
@@ -95,7 +95,7 @@ func initializeMain_() ColoursExpressionItemsSampleShapes {
 	exprs[4] = Expr{Tag: ExprVal, Val0: 2}
 	exprs[5] = Expr{Tag: ExprVal, Val0: 3}
 	exprs[6] = Expr{Tag: ExprVal, Val0: 4}
-	return ColoursExpressionItemsSampleShapes{Expression: evaluate(&exprs[0]), Shapes: mapped, Items: mapped2, Colours: mapped3, Sample: "strue" + prim.ShowNumber(float64(0.5)) + prim.ShowInt(3)}
+	return MainResult{Expression: evaluate(&exprs[0]), Shapes: mapped, Items: mapped2, Colours: mapped3, Sample: "strue" + prim.ShowNumber(float64(0.5)) + prim.ShowInt(3)}
 }
 
 func evaluate(argument0 *Expr) int32 {

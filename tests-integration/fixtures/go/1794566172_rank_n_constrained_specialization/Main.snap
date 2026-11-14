@@ -16,31 +16,31 @@ type TupleUnitInt struct {
 	Tuple1 int32
 }
 
-type EmitMeasure struct {
+type Interpreter struct {
 	Emit    func(int32) func(int32) TupleUnitInt
 	Measure func(string) func(int32) TupleIntInt
 }
 
-type IdentitySTStateTIntIdentity struct {
-	Identity          func(shared.EmitMeasure2) int32
-	ST                func(shared.EmitMeasure) int32
-	StateTIntIdentity func(EmitMeasure) func(int32) TupleIntInt
+type SceneInt struct {
+	Identity          func(shared.InterpreterIdentity) int32
+	ST                func(shared.InterpreterST) int32
+	StateTIntIdentity func(Interpreter) func(int32) TupleIntInt
 }
 
-type IdentitySTStateTIntIdentity2 struct {
-	Identity          func(shared.EmitMeasure2)
-	ST                func(shared.EmitMeasure)
-	StateTIntIdentity func(EmitMeasure) func(int32) TupleUnitInt
+type SceneUnit struct {
+	Identity          func(shared.InterpreterIdentity)
+	ST                func(shared.InterpreterST)
+	StateTIntIdentity func(Interpreter) func(int32) TupleUnitInt
 }
 
-func Discard(argument IdentitySTStateTIntIdentity2, argument2 func(struct{}) IdentitySTStateTIntIdentity) IdentitySTStateTIntIdentity {
-	return IdentitySTStateTIntIdentity{Identity: func(interpreter shared.EmitMeasure2) int32 {
+func Discard(argument SceneUnit, argument2 func(struct{}) SceneInt) SceneInt {
+	return SceneInt{Identity: func(interpreter shared.InterpreterIdentity) int32 {
 		argument.Identity(interpreter)
 		return argument2(struct{}{}).Identity(interpreter)
-	}, ST: func(interpreter2 shared.EmitMeasure) int32 {
+	}, ST: func(interpreter2 shared.InterpreterST) int32 {
 		argument.ST(interpreter2)
 		return argument2(struct{}{}).ST(interpreter2)
-	}, StateTIntIdentity: func(interpreter3 EmitMeasure) func(int32) TupleIntInt {
+	}, StateTIntIdentity: func(interpreter3 Interpreter) func(int32) TupleIntInt {
 		argument0 := argument.StateTIntIdentity(interpreter3)
 		return func(s int32) TupleIntInt {
 			scrutinee := argument0(s)
@@ -75,7 +75,7 @@ var recorded = initializeRecorded()
 
 func initializeRecorded() int32 {
 	value := &Ref[int32]{Value: 0}
-	value2 := program.ST(shared.EmitMeasure{Emit: func(value3 int32) {
+	value2 := program.ST(shared.InterpreterST{Emit: func(value3 int32) {
 		s2 := value.Value
 		s_2 := s2 + value3
 		modified := StateValue{State: s_2, Value: s_2}
@@ -91,7 +91,7 @@ func initializeRecorded() int32 {
 var counted = initializeCounted()
 
 func initializeCounted() int32 {
-	scrutinee := program.StateTIntIdentity(tuple.EmitMeasure{Emit: func(_ int32) func(int32) tuple.TupleUnitInt {
+	scrutinee := program.StateTIntIdentity(tuple.Interpreter{Emit: func(_ int32) func(int32) tuple.TupleUnitInt {
 		return func(x int32) tuple.TupleUnitInt {
 			return tuple.TupleUnitInt{Tuple0: struct{}{}, Tuple1: x + 1}
 		}
@@ -103,17 +103,17 @@ func initializeCounted() int32 {
 	return scrutinee.Tuple1
 }
 
-var measured int32 = program.Identity(shared.EmitMeasure2{Emit: func(_ int32) {
+var measured int32 = program.Identity(shared.InterpreterIdentity{Emit: func(_ int32) {
 }, Measure: func(text string) int32 {
 	return direct.CodePointLength(text)
 }})
 
-var program tuple.IdentitySTStateTIntIdentity = tuple.IdentitySTStateTIntIdentity{Identity: func(interpreter shared.EmitMeasure2) int32 {
+var program tuple.SceneInt = tuple.SceneInt{Identity: func(interpreter shared.InterpreterIdentity) int32 {
 	return programArgument1(interpreter.Measure("hello")).Identity(interpreter)
-}, ST: func(interpreter2 shared.EmitMeasure) int32 {
+}, ST: func(interpreter2 shared.InterpreterST) int32 {
 	value := interpreter2.Measure("hello")
 	return programArgument1(value).ST(interpreter2)
-}, StateTIntIdentity: func(interpreter3 tuple.EmitMeasure) func(int32) tuple.TupleIntInt {
+}, StateTIntIdentity: func(interpreter3 tuple.Interpreter) func(int32) tuple.TupleIntInt {
 	argument0 := interpreter3.Measure("hello")
 	return func(s int32) tuple.TupleIntInt {
 		scrutinee := argument0(s)
@@ -121,28 +121,28 @@ var program tuple.IdentitySTStateTIntIdentity = tuple.IdentitySTStateTIntIdentit
 	}
 }}
 
-func programArgument1(width int32) tuple.IdentitySTStateTIntIdentity {
-	return tuple.Discard(tuple.IdentitySTStateTIntIdentity2{Identity: func(interpreter shared.EmitMeasure2) {
+func programArgument1(width int32) tuple.SceneInt {
+	return tuple.Discard(tuple.SceneUnit{Identity: func(interpreter shared.InterpreterIdentity) {
 		interpreter.Emit(width)
-	}, ST: func(interpreter2 shared.EmitMeasure) {
+	}, ST: func(interpreter2 shared.InterpreterST) {
 		interpreter2.Emit(width)
-	}, StateTIntIdentity: func(interpreter3 tuple.EmitMeasure) func(int32) tuple.TupleUnitInt {
+	}, StateTIntIdentity: func(interpreter3 tuple.Interpreter) func(int32) tuple.TupleUnitInt {
 		return interpreter3.Emit(width)
-	}}, func(_ struct{}) tuple.IdentitySTStateTIntIdentity {
+	}}, func(_ struct{}) tuple.SceneInt {
 		value := prim.MultiplyInt32(width, 2)
-		return tuple.Discard(tuple.IdentitySTStateTIntIdentity2{Identity: func(interpreter4 shared.EmitMeasure2) {
+		return tuple.Discard(tuple.SceneUnit{Identity: func(interpreter4 shared.InterpreterIdentity) {
 			interpreter4.Emit(value)
-		}, ST: func(interpreter5 shared.EmitMeasure) {
+		}, ST: func(interpreter5 shared.InterpreterST) {
 			interpreter5.Emit(value)
-		}, StateTIntIdentity: func(interpreter6 tuple.EmitMeasure) func(int32) tuple.TupleUnitInt {
+		}, StateTIntIdentity: func(interpreter6 tuple.Interpreter) func(int32) tuple.TupleUnitInt {
 			return interpreter6.Emit(value)
-		}}, func(_ struct{}) tuple.IdentitySTStateTIntIdentity {
+		}}, func(_ struct{}) tuple.SceneInt {
 			value2 := width + 1
-			return tuple.IdentitySTStateTIntIdentity{Identity: func(_ shared.EmitMeasure2) int32 {
+			return tuple.SceneInt{Identity: func(_ shared.InterpreterIdentity) int32 {
 				return value2
-			}, ST: func(_ shared.EmitMeasure) int32 {
+			}, ST: func(_ shared.InterpreterST) int32 {
 				return value2
-			}, StateTIntIdentity: func(_ tuple.EmitMeasure) func(int32) tuple.TupleIntInt {
+			}, StateTIntIdentity: func(_ tuple.Interpreter) func(int32) tuple.TupleIntInt {
 				return func(s int32) tuple.TupleIntInt {
 					return tuple.TupleIntInt{Tuple0: value2, Tuple1: s}
 				}
@@ -158,12 +158,12 @@ func main() {
 // shared/shared.go
 package shared
 
-type EmitMeasure struct {
+type InterpreterST struct {
 	Emit    func(int32)
 	Measure func(string) int32
 }
 
-type EmitMeasure2 struct {
+type InterpreterIdentity struct {
 	Emit    func(int32)
 	Measure func(string) int32
 }

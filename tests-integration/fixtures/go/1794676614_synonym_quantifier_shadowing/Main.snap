@@ -80,7 +80,7 @@ const (
 	FreeCommandBind
 )
 
-type StateValue struct {
+type StateValueOfValue struct {
 	State int32
 	Value any
 }
@@ -97,7 +97,7 @@ const (
 	FreeCommandIntBind
 )
 
-type StateValue2 struct {
+type StateValueOfInt struct {
 	State int32
 	Value int32
 }
@@ -301,12 +301,12 @@ var main_ []int32 = []int32{foldFreeCommandIntInt(intoState, program, 0).Value +
 	}}
 }, instructions), 0).Value}
 
-func foldFreeCommandIntInt(k func(*Command, int32) StateValue, program2 FreeCommandInt, state int32) StateValue2 {
+func foldFreeCommandIntInt(k func(*Command, int32) StateValueOfValue, program2 FreeCommandInt, state int32) StateValueOfInt {
 	for {
 		switch program2.Tag {
 		case FreeCommandIntPure:
 			a := program2.Pure0
-			return StateValue2{Value: a, State: state}
+			return StateValueOfInt{Value: a, State: state}
 		default: // FreeCommandIntBind
 			command := program2.Bind0
 			continue_ := program2.Bind1
@@ -317,12 +317,12 @@ func foldFreeCommandIntInt(k func(*Command, int32) StateValue, program2 FreeComm
 	}
 }
 
-func intoState(value *Command, ignored int32) StateValue {
+func intoState(value *Command, ignored int32) StateValueOfValue {
 	switch value.Tag {
 	case CommandPush:
-		return StateValue{Value: value.Push1, State: value.Push0}
+		return StateValueOfValue{Value: value.Push1, State: value.Push0}
 	default: // CommandPop
-		return StateValue{Value: value.Pop0(ignored), State: ignored}
+		return StateValueOfValue{Value: value.Pop0(ignored), State: ignored}
 	}
 }
 

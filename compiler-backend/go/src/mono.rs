@@ -5,7 +5,11 @@
 //! cell: the tag of the lambda that created it and the values that lambda captures.
 //! A `Closure` pattern matches one tag and binds its captures.
 
+use std::sync::Arc;
+
+use checking::TypeId;
 use files::FileId;
+use rustc_hash::FxHashMap;
 use smol_str::SmolStr;
 
 use crate::foreign::Foreign;
@@ -21,6 +25,21 @@ pub struct LocalId(pub u32);
 pub struct Program {
     pub functions: Vec<Function>,
     pub entry: FunctionId,
+}
+
+pub type FunctionSpellings = FxHashMap<SmolStr, FunctionSpelling>;
+
+/// How a function's name was formed, so that the emitter can spell the types
+/// in it with the short names it gives them.
+#[derive(Debug, Clone)]
+pub enum FunctionSpelling {
+    /// A definition's name followed by the types it is specialized at.
+    Specialized { name: SmolStr, types: Arc<[TypeId]> },
+    /// A local function lifted out of another, named after both.
+    Lifted { parent: SmolStr, local: SmolStr },
+    /// The function that runs the cells of a closed function type, `run`
+    /// followed by the type's name.
+    Dispatch { closure: crate::monotype::MonotypeId },
 }
 
 impl Program {

@@ -10,6 +10,10 @@ use crate::monotype::{DataType, MonotypeId};
 use crate::simplify::{for_each_child, for_each_child_mut, prune_unreachable, visit};
 use crate::timing::timed;
 
+/// What the name of a variant that reuses its arguments' cells adds to its
+/// function's name.
+pub(super) const REUSING: &str = "Reusing";
+
 pub(super) trait Cells {
     fn cell(&mut self, monotype: MonotypeId) -> Option<DataType>;
     fn is_spine(&mut self, cell: &DataType, field: MonotypeId) -> bool;
@@ -1257,7 +1261,7 @@ impl<'p> Emission<'p> {
             }
             self.rewrite(&mut function.body, &plan, cells);
             if !variant.is_plain() {
-                function.name = SmolStr::new(format!("{}Reusing", function.name));
+                function.name = SmolStr::new(format!("{}{REUSING}", function.name));
             }
             if let Some(donor) = plan.donor {
                 let monotype = function.result;

@@ -6,13 +6,13 @@ package main
 
 import "fmt"
 
-type NameSizeTags struct {
+type MainResult struct {
 	Name string
 	Size int32
 	Tags []string
 }
 
-var main_ NameSizeTags = NameSizeTags{Size: 2, Tags: []string{"new"}, Name: "box"}
+var main_ MainResult = MainResult{Size: 2, Tags: []string{"new"}, Name: "box"}
 
 func main() {
 	fmt.Println(main_)

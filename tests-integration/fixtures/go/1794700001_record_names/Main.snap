@@ -1,0 +1,136 @@
+---
+source: tests-integration/src/fixtures.rs
+---
+// Data/Maybe/maybe.go
+package maybe
+
+import "fixture/shared"
+
+type MaybeTiming struct {
+	Just0 shared.Timing
+	Tag   uint8
+}
+
+const (
+	MaybeTimingNothing = iota
+	MaybeTimingJust
+)
+
+// Data/Show/show.go
+package show
+
+import "github.com/i-am-the-slime/purs-backend-go/go-support/prim"
+
+func Show(argument0 float64) string {
+	return prim.ShowNumber(argument0)
+}
+
+// main.go
+package main
+
+import (
+	"fixture/Data/Maybe"
+	"fixture/Data/Show"
+	"fixture/shared"
+	"fmt"
+	"github.com/i-am-the-slime/purs-backend-go/go-support/prim"
+)
+
+type Adjustment struct {
+	Factor float64
+	Offset float64
+}
+
+type Margin struct {
+	Bottom float64
+	Top    float64
+}
+
+type Timing struct {
+	Height float64
+	Label  string
+	Width  float64
+}
+
+type Span struct {
+	From int32
+	To   int32
+}
+
+type PairInt struct {
+	Left  int32
+	Right int32
+}
+
+type PairString struct {
+	Left  string
+	Right string
+}
+
+var main_ = initializeMain_()
+
+func initializeMain_() string {
+	array2 := []maybe.MaybeTiming{maybe.MaybeTiming{Tag: maybe.MaybeTimingJust, Just0: shared.Timing{Start: 2.0, End: 3.0}}, maybe.MaybeTiming{Tag: maybe.MaybeTimingNothing}}
+	var accumulator float64 = 0.0
+	for timingIndex := range array2 {
+		acc := accumulator
+		var result float64
+		switch array2[timingIndex].Tag {
+		case maybe.MaybeTimingJust:
+			x := array2[timingIndex].Just0
+			result = x.End - x.Start
+		default:
+			result = 0.0
+		}
+		accumulator = acc + result
+	}
+	array3 := []Adjustment{Adjustment{Factor: 3.0, Offset: 1.0}}
+	var accumulator2 float64 = 2.0
+	for adjustmentIndex := range array3 {
+		acc2 := accumulator2
+		accumulator2 = float64(acc2 * array3[adjustmentIndex].Factor) + array3[adjustmentIndex].Offset
+	}
+	array4 := []Margin{Margin{Top: 1.0, Bottom: 2.0}}
+	var accumulator3 float64 = 0.0
+	for marginIndex := range array4 {
+		acc3 := accumulator3
+		accumulator3 = acc3 + array4[marginIndex].Top + array4[marginIndex].Bottom
+	}
+	array5 := []Timing{Timing{Width: 2.0, Height: 3.0, Label: "box"}}
+	var accumulator4 float64 = 0.0
+	for shapeIndex := range array5 {
+		acc4 := accumulator4
+		accumulator4 = acc4 + float64(array5[shapeIndex].Width * array5[shapeIndex].Height)
+	}
+	array6 := []Span{Span{From: 2, To: 7}}
+	var accumulator5 int32 = 0
+	for argument1Index := range array6 {
+		argument0 := accumulator5
+		accumulator5 = argument0 + array6[argument1Index].To - array6[argument1Index].From
+	}
+	array7 := []PairInt{PairInt{Left: 1, Right: 2}}
+	var accumulator6 int32 = 0
+	for pairIndex := range array7 {
+		acc5 := accumulator6
+		accumulator6 = acc5 + array7[pairIndex].Left + array7[pairIndex].Right
+	}
+	array8 := []PairString{PairString{Left: "a", Right: "b"}}
+	accumulator7 := ""
+	for pair2Index := range array8 {
+		acc6 := accumulator7
+		accumulator7 = acc6 + array8[pair2Index].Left + array8[pair2Index].Right
+	}
+	return prim.ShowArray(show.Show, []float64{3.0, accumulator, accumulator2, accumulator3, accumulator4}) + prim.ShowInt(accumulator5 + accumulator6) + accumulator7
+}
+
+func main() {
+	fmt.Println(main_)
+}
+
+// shared/shared.go
+package shared
+
+type Timing struct {
+	End   float64
+	Start float64
+}

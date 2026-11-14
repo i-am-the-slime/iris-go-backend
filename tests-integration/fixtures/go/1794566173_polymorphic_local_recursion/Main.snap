@@ -62,7 +62,7 @@ type PairE struct {
 	Origin any
 }
 
-func convert2(value TreeFnIntInt) *TreeFn {
+func convert(value TreeFnIntInt) *TreeFn {
 	switch value.Tag {
 	case TreeFnIntIntLeaf:
 		return &TreeFn{Tag: TreeFnLeaf, Leaf0: func(coerced any) any {
@@ -73,7 +73,7 @@ func convert2(value TreeFnIntInt) *TreeFn {
 	}
 }
 
-func convert3(value TreeInt) *Tree {
+func convert2(value TreeInt) *Tree {
 	switch value.Tag {
 	case TreeIntLeaf:
 		return &Tree{Tag: TreeLeaf, Field0: value.Leaf0, Origin: value}
@@ -82,8 +82,8 @@ func convert3(value TreeInt) *Tree {
 	}
 }
 
-func convert(value PairEIntInt) *PairE {
-	return &PairE{PairE0: convert2(value.PairE0), PairE1: convert3(value.PairE1), Origin: value}
+func convert3(value PairEIntInt) *PairE {
+	return &PairE{PairE0: convert(value.PairE0), PairE1: convert2(value.PairE1), Origin: value}
 }
 
 type TreeFnIntFnIntInt struct {
@@ -102,7 +102,7 @@ type PairEFnIntIntInt struct {
 	PairE1 TreeInt
 }
 
-func convert5(value TreeFnIntFnIntInt) *TreeFn {
+func convert4(value TreeFnIntFnIntInt) *TreeFn {
 	switch value.Tag {
 	case TreeFnIntFnIntIntLeaf:
 		return &TreeFn{Tag: TreeFnLeaf, Leaf0: func(coerced2 any) any {
@@ -116,8 +116,8 @@ func convert5(value TreeFnIntFnIntInt) *TreeFn {
 	}
 }
 
-func convert4(value PairEFnIntIntInt) *PairE {
-	return &PairE{PairE0: convert5(value.PairE0), PairE1: convert3(value.PairE1), Origin: value}
+func convert5(value PairEFnIntIntInt) *PairE {
+	return &PairE{PairE0: convert4(value.PairE0), PairE1: convert2(value.PairE1), Origin: value}
 }
 
 type TreeFnInt struct {
@@ -138,7 +138,7 @@ type PairEInt struct {
 	Origin any
 }
 
-func convert7(value *TreeFn) *TreeFnInt {
+func convert6(value *TreeFn) *TreeFnInt {
 	switch value.Tag {
 	case TreeFnLeaf:
 		return &TreeFnInt{Tag: TreeFnIntLeaf, Leaf0: func(coerced any) int32 {
@@ -149,8 +149,8 @@ func convert7(value *TreeFn) *TreeFnInt {
 	}
 }
 
-func convert6(value *PairE) *PairEInt {
-	return &PairEInt{PairE0: convert7(value.PairE0), PairE1: value.PairE1, Origin: value.Origin}
+func convert7(value *PairE) *PairEInt {
+	return &PairEInt{PairE0: convert6(value.PairE0), PairE1: value.PairE1, Origin: value.Origin}
 }
 
 func convert8(value *TreeFnInt) *Tree {
@@ -173,9 +173,9 @@ func convert9(value *TreeFn) *Tree {
 	}
 }
 
-var main_ []int32 = []int32{leavesInt(TreeInt{Tag: TreeIntLeaf, Leaf0: 1}), leavesInt(TreeInt{Tag: TreeIntPair, Pair0: convert(PairEIntInt{PairE0: TreeFnIntInt{Tag: TreeFnIntIntLeaf, Leaf0: func(value int32) int32 {
+var main_ []int32 = []int32{leavesInt(TreeInt{Tag: TreeIntLeaf, Leaf0: 1}), leavesInt(TreeInt{Tag: TreeIntPair, Pair0: convert3(PairEIntInt{PairE0: TreeFnIntInt{Tag: TreeFnIntIntLeaf, Leaf0: func(value int32) int32 {
 	return value + 1
-}}, PairE1: TreeInt{Tag: TreeIntLeaf, Leaf0: 1}})}), leavesInt(TreeInt{Tag: TreeIntPair, Pair0: convert(PairEIntInt{PairE0: TreeFnIntInt{Tag: TreeFnIntIntPair, Pair0: convert4(PairEFnIntIntInt{PairE0: TreeFnIntFnIntInt{Tag: TreeFnIntFnIntIntLeaf, Leaf0: func(x int32) func(int32) int32 {
+}}, PairE1: TreeInt{Tag: TreeIntLeaf, Leaf0: 1}})}), leavesInt(TreeInt{Tag: TreeIntPair, Pair0: convert3(PairEIntInt{PairE0: TreeFnIntInt{Tag: TreeFnIntIntPair, Pair0: convert5(PairEFnIntIntInt{PairE0: TreeFnIntFnIntInt{Tag: TreeFnIntFnIntIntLeaf, Leaf0: func(x int32) func(int32) int32 {
 	return func(y int32) int32 {
 		return x + y
 	}
@@ -190,7 +190,7 @@ func leavesIntGo(argument0 int32, argument1 TreeInt) int32 {
 	case TreeIntLeaf:
 		return argument0 + 1
 	default: // TreeIntPair
-		scrutinee := convert6(argument1.Pair0.(*PairE))
+		scrutinee := convert7(argument1.Pair0.(*PairE))
 		original := func(argument02 int32) func(*Tree) int32 {
 			return func(argument12 *Tree) int32 {
 				return leavesIntGo2(argument02, argument12)

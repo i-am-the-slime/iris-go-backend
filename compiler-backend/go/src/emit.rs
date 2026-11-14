@@ -16,6 +16,7 @@ mod groups;
 mod iteration;
 mod layout;
 mod lengths;
+mod names;
 mod ownership;
 mod packages;
 mod ranges;
@@ -157,6 +158,14 @@ where
             (declaration, home)
         })
         .collect();
+    let declared: FxHashSet<String> = all
+        .iter()
+        .flat_map(|(declaration, _)| match declaration {
+            GoDeclaration::Constants { names, .. } => names.clone(),
+            declaration => declaration.name().map(str::to_string).into_iter().collect(),
+        })
+        .collect();
+    timed("names", || emitter.spell_pending(modules, &declared))?;
     let packaging = packages::Packaging {
         modules,
         module_path,
@@ -231,6 +240,7 @@ where
             range_name: None,
             homes: FxHashMap::default(),
             spellings: FxHashMap::default(),
+            pending_spellings: vec![],
             locals: FxHashMap::default(),
             local_names: FxHashSet::default(),
             tail_loop: None,
@@ -557,6 +567,8 @@ struct Emitter<'p, 'm, 'q, Q> {
     homes: FxHashMap<String, FileId>,
     /// How each global name was formed, so that a package can spell it anew.
     spellings: FxHashMap<String, Spelling>,
+    /// Globals whose spelling waits until every record has its name.
+    pending_spellings: Vec<(String, names::PendingSpelling)>,
     locals: FxHashMap<LocalId, GoExpression>,
     local_names: FxHashSet<String>,
     tail_loop: Option<TailLoop>,
@@ -889,7 +901,13 @@ where
                 self.global_names.insert("main".into());
                 "main".to_string()
             } else {
-                self.global_name(Spelling::Base(identifier(&function.name)))
+                let full = identifier(&function.name);
+                match self.function_parts(&function.name) {
+                    Ok(Some(parts)) => {
+                        self.pending_global(full, names::PendingSpelling::Parts(parts))
+                    }
+                    Ok(None) | Err(_) => self.global_name(Spelling::Base(full)),
+                }
             };
             self.function_names.push(name);
         }
@@ -1383,11 +1401,7 @@ where
         if let Monotype::Record(_) | Monotype::Data(_) = self.monotypes.get(unfolded) {
             return self.go_type(unfolded);
         }
-        let mut base = self.context.type_name(data.file_id, data.item)?.to_string();
-        for &argument in data.arguments.iter() {
-            self.context.type_suffix(argument, &mut base)?;
-        }
-        let name = self.global_name(Spelling::Base(identifier(&base)));
+        let name = self.data_type_global(data)?;
         self.homes.insert(name.clone(), data.file_id);
         self.recursive_names.insert(data.clone(), name.clone());
         let type_ = self.go_type(unfolded)?;
@@ -1465,7 +1479,7 @@ where
         } else {
             fields.iter().map(|field| capitalise(&identifier(&field.label))).collect()
         };
-        let name = self.global_name(Spelling::Base(base));
+        let name = self.pending_global(base, names::PendingSpelling::Record(monotype));
         self.record_names.insert(monotype, name.clone());
         let mut go_fields = vec![];
         for field in fields.iter() {
@@ -1476,15 +1490,21 @@ where
         Ok(name)
     }
 
+    /// A data type's global: its name followed by its type arguments.
+    fn data_type_global(&mut self, data: &DataType) -> GoResult<String> {
+        let mut full = self.context.type_name(data.file_id, data.item)?.to_string();
+        for &argument in data.arguments.iter() {
+            self.context.type_suffix(argument, &mut full)?;
+        }
+        let parts = self.data_parts(data)?;
+        Ok(self.pending_global(identifier(&full), names::PendingSpelling::Parts(parts)))
+    }
+
     fn data_layout(&mut self, data: &DataType) -> GoResult<DataLayout> {
         if let Some(layout) = self.data_layouts.get(data) {
             return Ok(layout.clone());
         }
-        let mut base = self.context.type_name(data.file_id, data.item)?.to_string();
-        for &argument in data.arguments.iter() {
-            self.context.type_suffix(argument, &mut base)?;
-        }
-        let name = self.global_name(Spelling::Base(identifier(&base)));
+        let name = self.data_type_global(data)?;
         self.homes.insert(name.clone(), data.file_id);
         let constructors = match self.monotypes.constructors(&mut self.context, data)? {
             Ok(constructors) => constructors,

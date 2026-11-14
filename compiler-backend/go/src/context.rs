@@ -17,6 +17,17 @@ pub struct Context<'q, Q> {
     /// Canonical spellings of types, with and without erased newtypes, as
     /// `monotype::canonicalise` computes them from the outermost level.
     pub canonical: FxHashMap<(checking::TypeId, bool), checking::TypeId>,
+    /// Newtypes, with their arguments, that canonicalisation erased to the
+    /// type they wrap, in the order met; a record may be named after one.
+    pub erased_newtypes: Vec<ErasedNewtype>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ErasedNewtype {
+    pub file_id: FileId,
+    pub item: TypeItemId,
+    pub arguments: Arc<[checking::TypeId]>,
+    pub erased: checking::TypeId,
 }
 
 pub struct ModuleData {
@@ -37,6 +48,7 @@ where
             modules: FxHashMap::default(),
             recursive_newtypes: FxHashMap::default(),
             canonical: FxHashMap::default(),
+            erased_newtypes: vec![],
         }
     }
 

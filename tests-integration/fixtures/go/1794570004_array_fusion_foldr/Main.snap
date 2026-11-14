@@ -23,7 +23,7 @@ import (
 	"github.com/i-am-the-slime/purs-backend-go/go-support/prim"
 )
 
-type LastSmallOverFilterOverMap struct {
+type MainResult struct {
 	LastSmall  maybe.MaybeInt
 	OverFilter string
 	OverMap    string
@@ -31,7 +31,7 @@ type LastSmallOverFilterOverMap struct {
 
 var main_ = initializeMain_()
 
-func initializeMain_() LastSmallOverFilterOverMap {
+func initializeMain_() MainResult {
 	accumulator := ""
 	for index := len(numbers) - 1; index >= 0; index-- {
 		value := numbers[index]
@@ -60,7 +60,7 @@ func initializeMain_() LastSmallOverFilterOverMap {
 			break
 		}
 	}
-	return LastSmallOverFilterOverMap{OverMap: accumulator, OverFilter: accumulator2, LastSmall: found}
+	return MainResult{OverMap: accumulator, OverFilter: accumulator2, LastSmall: found}
 }
 
 var numbers []int32 = []int32{3, 1, 4, 1, 5, 9, 2, 6}

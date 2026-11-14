@@ -9,7 +9,7 @@ import (
 	"github.com/i-am-the-slime/purs-backend-go/go-support/prim"
 )
 
-type Map_Type_Value struct {
+type VariantFRep struct {
 	Map   func(func(any) any) func(any) any
 	Type  string
 	Value any
@@ -51,44 +51,44 @@ func convert2(value *Count) CountInt {
 	}}
 }
 
-type Map_Type_Value2 struct {
+type Map_Type_ValueOfFnFnValueValueFnSaySaySayInt struct {
 	Map   func(func(any) any) func(*Say) *Say
 	Type  string
 	Value SayInt
 }
 
-func convert4(value SayInt) *Say {
+func convert3(value SayInt) *Say {
 	return &Say{Say0: value.Say0, Say1: value.Say1, Origin: value}
 }
 
-func convert3(value Map_Type_Value2) Map_Type_Value {
-	return Map_Type_Value{Map: func(coerced func(any) any) func(any) any {
+func convert4(value Map_Type_ValueOfFnFnValueValueFnSaySaySayInt) VariantFRep {
+	return VariantFRep{Map: func(coerced func(any) any) func(any) any {
 		original := value.Map(coerced)
 		return func(coerced2 any) any {
 			return original(coerced2.(*Say))
 		}
-	}, Type: value.Type, Value: convert4(value.Value)}
+	}, Type: value.Type, Value: convert3(value.Value)}
 }
 
-type Map_Type_Value3 struct {
+type Map_Type_ValueOfFnFnValueValueFnCountCountCountInt struct {
 	Map   func(func(any) any) func(*Count) *Count
 	Type  string
 	Value CountInt
 }
 
-func convert6(value CountInt) *Count {
+func convert5(value CountInt) *Count {
 	return &Count{Count0: func(coerced3 int32) any {
 		return value.Count0(coerced3)
 	}, Origin: value}
 }
 
-func convert5(value Map_Type_Value3) Map_Type_Value {
-	return Map_Type_Value{Map: func(coerced func(any) any) func(any) any {
+func convert6(value Map_Type_ValueOfFnFnValueValueFnCountCountCountInt) VariantFRep {
+	return VariantFRep{Map: func(coerced func(any) any) func(any) any {
 		original := value.Map(coerced)
 		return func(coerced2 any) any {
 			return original(coerced2.(*Count))
 		}
-	}, Type: value.Type, Value: convert6(value.Value)}
+	}, Type: value.Type, Value: convert5(value.Value)}
 }
 
 var main_ = initializeMain_()
@@ -100,14 +100,14 @@ func initializeMain_() []string {
 	original2 := func(value2 int32) int32 {
 		return prim.MultiplyInt32(value2, 10)
 	}
-	return []string{describe(say), describe(count), describe(Map_Type_Value{Type: say.Type, Value: say.Map(func(coerced any) any {
+	return []string{describe(say), describe(count), describe(VariantFRep{Type: say.Type, Value: say.Map(func(coerced any) any {
 		return original(coerced.(int32))
-	})(say.Value), Map: say.Map}), describe(Map_Type_Value{Type: count.Type, Value: count.Map(func(coerced2 any) any {
+	})(say.Value), Map: say.Map}), describe(VariantFRep{Type: count.Type, Value: count.Map(func(coerced2 any) any {
 		return original2(coerced2.(int32))
 	})(count.Value), Map: count.Map})}
 }
 
-func describe(r Map_Type_Value) string {
+func describe(r VariantFRep) string {
 	if r.Type == "say" {
 		scrutinee := convert(r.Value.(*Say))
 		return scrutinee.Say0 + " " + prim.ShowInt(scrutinee.Say1)
@@ -121,13 +121,13 @@ func describe(r Map_Type_Value) string {
 	return unreachable
 }
 
-var say Map_Type_Value = convert3(Map_Type_Value2{Type: "say", Value: SayInt{Say0: "hello", Say1: 4}, Map: func(argument0 func(any) any) func(*Say) *Say {
+var say VariantFRep = convert4(Map_Type_ValueOfFnFnValueValueFnSaySaySayInt{Type: "say", Value: SayInt{Say0: "hello", Say1: 4}, Map: func(argument0 func(any) any) func(*Say) *Say {
 	return func(argument1 *Say) *Say {
 		return map_(argument0, argument1)
 	}
 }})
 
-var count Map_Type_Value = convert5(Map_Type_Value3{Type: "count", Value: CountInt{Count0: func(value int32) int32 {
+var count VariantFRep = convert6(Map_Type_ValueOfFnFnValueValueFnCountCountCountInt{Type: "count", Value: CountInt{Count0: func(value int32) int32 {
 	return value + 1
 }}, Map: func(argument0 func(any) any) func(*Count) *Count {
 	return func(argument1 *Count) *Count {

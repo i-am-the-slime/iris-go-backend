@@ -10,7 +10,7 @@ import (
 	"github.com/i-am-the-slime/purs-backend-go/go-support/prim"
 )
 
-type DescribeDouble struct {
+type Ops struct {
 	Describe func(int32) string
 	Double   func(int32) int32
 }
@@ -31,7 +31,7 @@ func initializeMain_() []string {
 	return array.Append(mapped, mapped2)
 }
 
-var opsForLeft DescribeDouble = DescribeDouble{Double: func(n int32) int32 {
+var opsForLeft Ops = Ops{Double: func(n int32) int32 {
 	return prim.MultiplyInt32(n, 2)
 }, Describe: func(n2 int32) string {
 	return "n = " + prim.ShowInt(n2)

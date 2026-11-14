@@ -27,7 +27,7 @@ import (
 	"github.com/i-am-the-slime/purs-backend-go/go-support/prim"
 )
 
-type BelowComprehensionIndexedMaterialisedOverRangePairs struct {
+type MainResult struct {
 	Below         int32
 	Comprehension []int32
 	Indexed       []int32
@@ -38,7 +38,7 @@ type BelowComprehensionIndexedMaterialisedOverRangePairs struct {
 
 var main_ = initializeMain_()
 
-func initializeMain_() BelowComprehensionIndexedMaterialisedOverRangePairs {
+func initializeMain_() MainResult {
 	bound := []string{}
 	for _, value := range numbers {
 		if value < 4 {
@@ -87,7 +87,7 @@ func initializeMain_() BelowComprehensionIndexedMaterialisedOverRangePairs {
 			mapped2 = append(mapped2, show.Show(x4))
 		}
 	}
-	return BelowComprehensionIndexedMaterialisedOverRangePairs{Pairs: bound, Below: count, Comprehension: bound2, OverRange: accumulator, Indexed: mapped, Materialised: mapped2}
+	return MainResult{Pairs: bound, Below: count, Comprehension: bound2, OverRange: accumulator, Indexed: mapped, Materialised: mapped2}
 }
 
 var numbers []int32 = []int32{3, 1, 4, 1, 5, 9, 2, 6}

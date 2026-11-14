@@ -17,7 +17,7 @@ import (
 	"github.com/i-am-the-slime/purs-backend-go/go-support/prim"
 )
 
-type EarlyExitEarlyExitMappingCallsFusedFusedMappingCallsKeptLengthPredicateCallsSharedSharedMappingCalls struct {
+type MainResult struct {
 	EarlyExit             bool
 	EarlyExitMappingCalls int32
 	Fused                 int32
@@ -39,7 +39,7 @@ type StateValue struct {
 
 var main_ = initializeMain_()
 
-func initializeMain_() EarlyExitEarlyExitMappingCallsFusedFusedMappingCallsKeptLengthPredicateCallsSharedSharedMappingCalls {
+func initializeMain_() MainResult {
 	value := &Ref[int32]{Value: 0}
 	value2 := &Ref[int32]{Value: 0}
 	value3 := &Ref[int32]{Value: 0}
@@ -113,7 +113,7 @@ func initializeMain_() EarlyExitEarlyExitMappingCallsFusedFusedMappingCallsKeptL
 			count = count + 1
 		}
 	}
-	performed := EarlyExitEarlyExitMappingCallsFusedFusedMappingCallsKeptLengthPredicateCallsSharedSharedMappingCalls{Fused: value11, Shared: value12, EarlyExit: value13, PredicateCalls: value6, FusedMappingCalls: value7, SharedMappingCalls: value8, EarlyExitMappingCalls: value10, KeptLength: count}
+	performed := MainResult{Fused: value11, Shared: value12, EarlyExit: value13, PredicateCalls: value6, FusedMappingCalls: value7, SharedMappingCalls: value8, EarlyExitMappingCalls: value10, KeptLength: count}
 	return performed
 }
 

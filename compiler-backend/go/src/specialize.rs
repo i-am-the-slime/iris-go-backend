@@ -24,8 +24,8 @@ use crate::erasure::Erasure;
 use crate::error::{GoError, GoResult, UnsupportedState};
 use crate::foreign::{self, Boundary, Foreign, ForeignPackages, Signature, Spelled};
 use crate::mono::{
-    Alternative, Binding, Expression, ExpressionKind, Function, FunctionId, Guard, Guarded,
-    GuardedBranch, Literal, Local, LocalId, Pattern, PatternKind, RecordUpdate,
+    Alternative, Binding, Expression, ExpressionKind, Function, FunctionId, FunctionSpelling,
+    Guard, Guarded, GuardedBranch, Literal, Local, LocalId, Pattern, PatternKind, RecordUpdate,
 };
 use crate::monotype::{Monotype, MonotypeId, Monotypes};
 use crate::scheme::{
@@ -2168,13 +2168,13 @@ where
                     return Err(self.unsupported(scope, UnsupportedState::MissingDeclaration));
                 };
                 let types = self.abstraction_types(scope, &value.abstractions, instantiations)?;
-                let suffix = self.type_suffix(&types)?;
+                let name = self.specialized_name(name, &types)?;
                 let key = SpecializationKey {
                     definition: Definition::Value { file_id, term },
                     types: Arc::from(types),
                     dictionaries: Arc::from(dictionaries),
                 };
-                let id = self.request(key, format_smolstr!("{name}{suffix}"))?;
+                let id = self.request(key, name)?;
                 Ok(Expression::new(ExpressionKind::Function(id), monotype))
             }
         }
@@ -2239,13 +2239,13 @@ where
             ));
         };
         let types = self.abstraction_types(scope, &implementation.abstractions, instantiations)?;
-        let suffix = self.type_suffix(&instance.types)?;
+        let name = self.specialized_name(member_name, &instance.types)?;
         let key = SpecializationKey {
             definition: Definition::Member { dictionary: instance, member },
             types: Arc::from(types),
             dictionaries: Arc::from(dictionaries),
         };
-        let id = self.request(key, format_smolstr!("{member_name}{suffix}"))?;
+        let id = self.request(key, name)?;
         Ok(Expression::new(ExpressionKind::Function(id), monotype))
     }
 
@@ -2939,12 +2939,17 @@ where
         self.resolve_evidence(&instance_scope, entry.evidence, constraint)
     }
 
-    fn type_suffix(&mut self, types: &[TypeId]) -> GoResult<String> {
-        let mut suffix = String::new();
+    /// A definition's name followed by the types it is specialized at, which
+    /// the emitter spells again once it has named their records.
+    fn specialized_name(&mut self, name: SmolStr, types: &[TypeId]) -> GoResult<SmolStr> {
+        let mut spelled = name.to_string();
         for &type_id in types {
-            self.context.type_suffix(type_id, &mut suffix)?;
+            self.context.type_suffix(type_id, &mut spelled)?;
         }
-        Ok(suffix)
+        let spelled = SmolStr::from(spelled);
+        let spelling = FunctionSpelling::Specialized { name, types: Arc::from(types) };
+        self.monotypes.function_spellings.entry(spelled.clone()).or_insert(spelling);
+        Ok(spelled)
     }
 }
 
