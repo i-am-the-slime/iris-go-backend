@@ -5,8 +5,8 @@ source: tests-integration/src/fixtures.rs
 package maybe
 
 type MaybeArrayInt struct {
-	Tag   int
 	Just0 []int32
+	Tag   uint8
 }
 
 const (
@@ -15,8 +15,8 @@ const (
 )
 
 type MaybeInt struct {
-	Tag   int
 	Just0 int32
+	Tag   uint8
 }
 
 const (
@@ -25,8 +25,8 @@ const (
 )
 
 type MaybeFnIntArrayInt struct {
-	Tag   int
 	Just0 func(int32) []int32
+	Tag   uint8
 }
 
 const (

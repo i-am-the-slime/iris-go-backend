@@ -5,8 +5,8 @@ source: tests-integration/src/fixtures.rs
 package maybe
 
 type MaybeInt struct {
-	Tag   int
 	Just0 int32
+	Tag   uint8
 }
 
 const (

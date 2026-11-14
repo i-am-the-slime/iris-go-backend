@@ -5,8 +5,8 @@ source: tests-integration/src/fixtures.rs
 package maybe
 
 type MaybeInt struct {
-	Tag   int
 	Just0 int32
+	Tag   uint8
 }
 
 const (
@@ -15,8 +15,8 @@ const (
 )
 
 type MaybeString struct {
-	Tag   int
 	Just0 string
+	Tag   uint8
 }
 
 const (
@@ -34,7 +34,7 @@ import (
 	"github.com/i-am-the-slime/purs-backend-go/go-support/prim"
 )
 
-type Light int
+type Light uint8
 
 const (
 	LightRed Light = iota
@@ -43,10 +43,10 @@ const (
 )
 
 type Shape struct {
-	Tag        int
 	Circle0    int32
 	Rectangle0 int32
 	Rectangle1 int32
+	Tag        uint8
 }
 
 const (

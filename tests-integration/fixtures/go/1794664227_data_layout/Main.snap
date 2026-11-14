@@ -1,0 +1,165 @@
+---
+source: tests-integration/src/fixtures.rs
+---
+// main.go
+package main
+
+import (
+	"fmt"
+	"github.com/i-am-the-slime/purs-backend-go/go-support/prim"
+)
+
+type ColoursExpressionItemsSampleShapes struct {
+	Colours    []string
+	Expression int32
+	Items      []int32
+	Sample     string
+	Shapes     []string
+}
+
+type Expr struct {
+	Field0 *Expr
+	Field1 *Expr
+	Val0   int32
+	Tag    uint8
+}
+
+const (
+	ExprVal = iota
+	ExprAdd
+	ExprMul
+	ExprSub
+)
+
+type Shape struct {
+	FieldB0 string
+	FieldA0 float64
+	Tag     uint8
+	FieldB1 bool
+}
+
+const (
+	ShapeCircle = iota
+	ShapeSquare
+	ShapeLabel
+	ShapeCaption
+	ShapePoint
+)
+
+type Item struct {
+	Field0  string
+	Pair0   int32
+	Pair1   int32
+	Couple0 int32
+	Couple1 int32
+	Tag     uint8
+}
+
+const (
+	ItemField = iota
+	ItemPair
+	ItemCouple
+)
+
+type Colour uint8
+
+const (
+	ColourRed Colour = iota
+	ColourGreen
+	ColourBlue
+)
+
+var main_ = initializeMain_()
+
+func initializeMain_() ColoursExpressionItemsSampleShapes {
+	array2 := []Shape{Shape{Tag: ShapeCircle, FieldA0: 1.0}, Shape{Tag: ShapeSquare, FieldA0: 2.0}, Shape{Tag: ShapeLabel, FieldB0: "a", FieldB1: true}, Shape{Tag: ShapeCaption, FieldB0: "b", FieldB1: false}, Shape{Tag: ShapePoint}}
+	mapped := make([]string, len(array2))
+	for index, element := range array2 {
+		mapped[index] = describe(element)
+	}
+	array3 := []Item{Item{Tag: ItemField, Field0: "x"}, Item{Tag: ItemPair, Pair0: 1, Pair1: 2}, Item{Tag: ItemCouple, Couple0: 3, Couple1: 4}}
+	mapped2 := make([]int32, len(array3))
+	for index2, element2 := range array3 {
+		mapped2[index2] = itemTotal(element2)
+	}
+	array4 := []Colour{ColourRed, ColourGreen, ColourBlue}
+	mapped3 := make([]string, len(array4))
+	for index3, element3 := range array4 {
+		mapped3[index3] = colourName(element3)
+	}
+	exprs := make([]Expr, 7)
+	exprs[0] = Expr{Tag: ExprAdd, Field0: &exprs[1], Field1: &exprs[2]}
+	exprs[1] = Expr{Tag: ExprVal, Val0: 1}
+	exprs[2] = Expr{Tag: ExprSub, Field0: &exprs[3], Field1: &exprs[6]}
+	exprs[3] = Expr{Tag: ExprMul, Field0: &exprs[4], Field1: &exprs[5]}
+	exprs[4] = Expr{Tag: ExprVal, Val0: 2}
+	exprs[5] = Expr{Tag: ExprVal, Val0: 3}
+	exprs[6] = Expr{Tag: ExprVal, Val0: 4}
+	return ColoursExpressionItemsSampleShapes{Expression: evaluate(&exprs[0]), Shapes: mapped, Items: mapped2, Colours: mapped3, Sample: "s" + ("true" + (prim.ShowNumber(float64(0.5)) + prim.ShowInt(int(3))))}
+}
+
+func evaluate(argument0 *Expr) int32 {
+	switch argument0.Tag {
+	case ExprVal:
+		return argument0.Val0
+	case ExprAdd:
+		return evaluate(argument0.Field0) + evaluate(argument0.Field1)
+	case ExprMul:
+		return prim.MultiplyInt32(evaluate(argument0.Field0), evaluate(argument0.Field1))
+	default: // ExprSub
+		return evaluate(argument0.Field0) - evaluate(argument0.Field1)
+	}
+}
+
+func describe(argument0 Shape) string {
+	switch argument0.Tag {
+	case ShapeCircle:
+		return "circle " + prim.ShowNumber(argument0.FieldA0)
+	case ShapeSquare:
+		return "square " + prim.ShowNumber(argument0.FieldA0)
+	case ShapeLabel:
+		var result string
+		if argument0.FieldB1 {
+			result = "true"
+		} else {
+			result = "false"
+		}
+		return "label " + (argument0.FieldB0 + result)
+	case ShapeCaption:
+		var result2 string
+		if argument0.FieldB1 {
+			result2 = "true"
+		} else {
+			result2 = "false"
+		}
+		return "caption " + (argument0.FieldB0 + result2)
+	default: // ShapePoint
+		return "point"
+	}
+}
+
+func itemTotal(argument0 Item) int32 {
+	switch argument0.Tag {
+	case ItemField:
+		return 0
+	case ItemPair:
+		return argument0.Pair0 + argument0.Pair1
+	default: // ItemCouple
+		return prim.MultiplyInt32(argument0.Couple0, argument0.Couple1)
+	}
+}
+
+func colourName(argument0 Colour) string {
+	switch argument0 {
+	case ColourRed:
+		return "red"
+	case ColourGreen:
+		return "green"
+	default: // ColourBlue
+		return "blue"
+	}
+}
+
+func main() {
+	fmt.Println(main_)
+}

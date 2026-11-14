@@ -5,11 +5,13 @@
 //! effect only turns into a closure where it is used as a first-class value.
 
 mod application;
+mod blocks;
 mod chunks;
 mod coerce;
 mod deduplicate;
 mod fusion;
 mod iteration;
+mod layout;
 mod lengths;
 mod ownership;
 mod packages;
@@ -92,14 +94,18 @@ where
     timed("ranges", || ranges::read_elements_in_place(&mut declarations));
     timed("lengths", || lengths::count_lengths_up_to_comparisons(&mut declarations));
     let chunked = timed("chunks", || {
-        let taken = |name: &str| {
-            emitter.global_names.contains(name) || IMPORTED_PACKAGES.contains(&name)
-        };
+        let taken =
+            |name: &str| emitter.global_names.contains(name) || IMPORTED_PACKAGES.contains(&name);
         chunks::allocate_linked_cells_in_chunks(&mut declarations, &taken)
     });
     if chunked {
         emitter.imports.insert(GoPackage::Alloc.path().into());
     }
+    timed("blocks", || {
+        let taken =
+            |name: &str| emitter.global_names.contains(name) || IMPORTED_PACKAGES.contains(&name);
+        blocks::allocate_nested_cells_together(&mut declarations, &taken)
+    });
     let mut homes: FxHashMap<String, ModuleIndex> = std::mem::take(&mut emitter.homes)
         .into_iter()
         .filter_map(|(name, file)| Some((name, modules.index(file)?)))
@@ -215,13 +221,14 @@ where
             owned_snocs: FxHashSet::default(),
             owning_variants: FxHashMap::default(),
             pending_owning_variants: vec![],
-            inline_sizes: FxHashMap::default(),
+            inline_shapes: FxHashMap::default(),
             shared_nullaries: FxHashMap::default(),
             cell_types: FxHashMap::default(),
             reaching: FxHashMap::default(),
             retaining: FxHashMap::default(),
             erasing: FxHashMap::default(),
             materialized: FxHashSet::default(),
+            uninitialized_locals: FxHashSet::default(),
             current: None,
             lazy_constants,
             arities,
@@ -470,6 +477,9 @@ struct DataLayout {
     boxed: bool,
     /// The position of the struct's declaration in `type_declarations`.
     declaration: Option<usize>,
+    /// The position of the `Origin` field among the struct's fields: after the
+    /// last that holds pointers, so the collector scans no further.
+    origin_position: usize,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -516,13 +526,16 @@ struct Emitter<'p, 'm, 'q, Q> {
     owned_snocs: FxHashSet<*const Expression>,
     owning_variants: FxHashMap<(FunctionId, usize), String>,
     pending_owning_variants: Vec<(FunctionId, usize)>,
-    inline_sizes: FxHashMap<DataType, Option<usize>>,
+    inline_shapes: FxHashMap<DataType, Option<layout::Shape>>,
     shared_nullaries: FxHashMap<String, String>,
     cell_types: FxHashMap<DataType, bool>,
     reaching: FxHashMap<(DataType, DataType), bool>,
     retaining: FxHashMap<MonotypeId, bool>,
     erasing: FxHashMap<MonotypeId, bool>,
     materialized: FxHashSet<(FunctionId, LocalId)>,
+    /// The locals of the recursive bindings being assigned, which still hold
+    /// Go's zero value.
+    uninitialized_locals: FxHashSet<LocalId>,
     arities: Arities,
 }
 
@@ -1364,21 +1377,24 @@ where
         } else {
             DataKind::Tagged
         };
+        let plan = match kind {
+            DataKind::Enumeration => None,
+            DataKind::Tagged | DataKind::Product => Some(self.plan_slots(&constructors)?),
+        };
         let mut layouts = vec![];
-        for constructor in constructors.iter() {
+        for (index, constructor) in constructors.iter().enumerate() {
             let tag = self.global_name(Spelling::derived(
                 "",
                 name.clone(),
                 &identifier(&constructor.name),
             ));
-            let fields = constructor
-                .fields
-                .iter()
-                .enumerate()
-                .map(|(position, &monotype)| {
-                    (format!("{}{position}", identifier(&constructor.name)), monotype)
-                })
-                .collect();
+            let fields = match &plan {
+                Some(plan) => {
+                    let slots = plan.constructors[index].iter().cloned();
+                    slots.zip(constructor.fields.iter().copied()).collect()
+                }
+                None => vec![],
+            };
             layouts.push(ConstructorLayout { tag, fields });
         }
         let erases_arguments = kind != DataKind::Enumeration
@@ -1391,42 +1407,32 @@ where
             erases_arguments,
             boxed,
             declaration: None,
+            origin_position: plan.as_ref().map_or(0, |plan| plan.pointer_prefix),
         };
         self.data_layouts.insert(data.clone(), layout.clone());
-        match kind {
-            DataKind::Enumeration => {
-                self.type_declarations.push(GoDeclaration::Type {
-                    name: name.clone(),
-                    type_: GoType::Named("int".into()),
-                });
-                let names = layouts.iter().map(|constructor| constructor.tag.clone()).collect();
-                self.type_declarations
-                    .push(GoDeclaration::Constants { type_name: Some(name), names });
-            }
-            DataKind::Tagged | DataKind::Product => {
-                let mut fields = vec![];
-                if kind == DataKind::Tagged {
-                    fields.push(("Tag".to_string(), GoType::Int));
-                }
-                for constructor in &layouts {
-                    for (field_name, monotype) in &constructor.fields {
-                        fields.push((field_name.clone(), self.go_type(*monotype)?));
-                    }
-                }
-
-                if let Some(layout) = self.data_layouts.get_mut(data) {
-                    layout.declaration = Some(self.type_declarations.len());
-                }
-                self.type_declarations.push(GoDeclaration::Type {
-                    name: name.clone(),
-                    type_: GoType::Struct(fields),
-                });
-                if kind == DataKind::Tagged {
-                    let names = layouts.iter().map(|constructor| constructor.tag.clone()).collect();
-                    self.type_declarations
-                        .push(GoDeclaration::Constants { type_name: None, names });
-                }
-            }
+        let names = layouts.iter().map(|constructor| constructor.tag.clone()).collect();
+        let Some(plan) = plan else {
+            self.type_declarations.push(GoDeclaration::Type {
+                name: name.clone(),
+                type_: layout::tag_type(constructors.len()),
+            });
+            self.type_declarations.push(GoDeclaration::Constants { type_name: Some(name), names });
+            return Ok(layout);
+        };
+        let mut fields = vec![];
+        for slot in plan.slots {
+            fields.push(match slot {
+                layout::Slot::Tag => ("Tag".to_string(), layout::tag_type(constructors.len())),
+                layout::Slot::Field { name, monotype } => (name, self.go_type(monotype)?),
+            });
+        }
+        if let Some(layout) = self.data_layouts.get_mut(data) {
+            layout.declaration = Some(self.type_declarations.len());
+        }
+        self.type_declarations
+            .push(GoDeclaration::Type { name: name.clone(), type_: GoType::Struct(fields) });
+        if kind == DataKind::Tagged {
+            self.type_declarations.push(GoDeclaration::Constants { type_name: None, names });
         }
         Ok(self.data_layouts.get(data).cloned().unwrap_or(layout))
     }
@@ -1499,54 +1505,8 @@ where
     }
 
     fn is_boxed(&mut self, data: &DataType) -> GoResult<bool> {
-        Ok(self.inline_size(data)?.is_none_or(|size| size > INLINE_DATA_LIMIT))
-    }
-
-    fn inline_size(&mut self, data: &DataType) -> GoResult<Option<usize>> {
-        if let Some(&size) = self.inline_sizes.get(data) {
-            return Ok(size);
-        }
-        let constructors = match self.monotypes.constructors(&mut self.context, data)? {
-            Ok(constructors) => constructors,
-            Err(state) => {
-                return Err(GoError::Unsupported { definition: "code generation".into(), state });
-            }
-        };
-        let erases_arguments =
-            data.arguments.iter().any(|&argument| self.context.types.contains_erased(argument));
-        let size = if erases_arguments || self.contains_itself(data)? {
-            None
-        } else {
-            let mut size = if constructors.len() > 1 { 8 } else { 0 };
-            for constructor in constructors.iter() {
-                for &field in constructor.fields.iter() {
-                    size += self.value_size(field)?;
-                }
-            }
-            Some(size)
-        };
-        self.inline_sizes.insert(data.clone(), size);
-        Ok(size)
-    }
-
-    fn value_size(&mut self, monotype: MonotypeId) -> GoResult<usize> {
-        Ok(match self.monotypes.get(monotype).clone() {
-            Monotype::Unit => 0,
-            Monotype::String | Monotype::Erased(_) | Monotype::Opaque | Monotype::Error => 16,
-            Monotype::Array(_) => 24,
-            Monotype::Record(fields) => {
-                let mut size = 0;
-                for field in fields.iter() {
-                    size += self.value_size(field.monotype)?;
-                }
-                size
-            }
-            Monotype::Data(data) => match self.inline_size(&data)? {
-                Some(size) if size <= INLINE_DATA_LIMIT => size,
-                _ => 8,
-            },
-            _ => 8,
-        })
+        let shape = self.inline_shape(data)?;
+        Ok(shape.is_none_or(|shape| shape.size() > INLINE_DATA_LIMIT))
     }
 
     /// Adds the `Origin` field to an erased layout's struct, once.
@@ -1560,7 +1520,7 @@ where
                 &mut self.type_declarations[position]
             && !fields.iter().any(|(name, _)| name == "Origin")
         {
-            fields.push(("Origin".to_string(), GoType::Any));
+            fields.insert(layout.origin_position, ("Origin".to_string(), GoType::Any));
         }
         Ok(true)
     }
@@ -2873,6 +2833,33 @@ where
         self.lazy_cell(value, body)
     }
 
+    /// Whether a deferred body is a value already. Evaluating it when the
+    /// cell is made costs less than the closure that would suspend it, and
+    /// cannot fail, so no program can tell the difference. `does_no_work`
+    /// is not enough: it admits a `Fail`, which must wait to be forced, and a
+    /// constant, whose first use computes it. A local that a recursive binding
+    /// is still assigning, as in `ones = defer \_ -> Cons 1 ones`, has no value
+    /// yet; a lambda may capture it, since Go captures the variable.
+    fn is_already_a_value(&self, expression: &Expression) -> bool {
+        match &expression.kind {
+            ExpressionKind::Literal(_) | ExpressionKind::Unit | ExpressionKind::Lambda { .. } => {
+                true
+            }
+            ExpressionKind::Local(id) => !self.uninitialized_locals.contains(id),
+            ExpressionKind::Function(id) => !self.program.function(*id).parameters.is_empty(),
+            ExpressionKind::Construct { arguments, .. } | ExpressionKind::Array(arguments) => {
+                arguments.iter().all(|argument| self.is_already_a_value(argument))
+            }
+            ExpressionKind::Record(fields) => {
+                fields.iter().all(|(_, value)| self.is_already_a_value(value))
+            }
+            ExpressionKind::Coerce(value) | ExpressionKind::Access { record: value, .. } => {
+                self.is_already_a_value(value)
+            }
+            _ => false,
+        }
+    }
+
     pub(super) fn lazy_cell(
         &mut self,
         value: MonotypeId,
@@ -3013,14 +3000,26 @@ where
                 out.push(GoStatement::Variable { name: name.clone(), type_, value: None });
                 names.push(name);
             }
+            let group: Vec<LocalId> = bindings.iter().map(|binding| binding.local.id).collect();
+            self.uninitialized_locals.extend(group.iter().copied());
+            let mut outcome = Ok(());
             for (binding, name) in bindings.iter().zip(names) {
-                let value = self.value(&binding.value, out)?;
+                let value = match self.value(&binding.value, out) {
+                    Ok(value) => value,
+                    Err(error) => {
+                        outcome = Err(error);
+                        break;
+                    }
+                };
                 out.push(GoStatement::Assign {
                     targets: vec![identifier_expression(&name)],
                     values: vec![value],
                 });
             }
-            return Ok(());
+            for local in group {
+                self.uninitialized_locals.remove(&local);
+            }
+            return outcome;
         }
         for binding in bindings {
             if self.is_unit(binding.local.monotype) {
@@ -3523,6 +3522,24 @@ where
             return Ok(call(self.go_function(snoc), vec![array, element]));
         }
         if let Foreign::LazyDefer = foreign {
+            if let ExpressionKind::Lambda { parameters, body } = &arguments[0].kind
+                && let [parameter] = parameters.as_slice()
+                && self.is_already_a_value(body)
+            {
+                self.locals.insert(parameter.id, unit_value());
+                let value = self.value(body, out)?;
+                let value = self.typed_constant(value, body.monotype)?;
+                self.imports.insert(GoPackage::Lazy.path().into());
+                let mut evaluated =
+                    GoExpression::Qualified { package: "lazy".into(), name: "Evaluated".into() };
+                let type_ = self.go_type(body.monotype)?;
+                if matches!(type_, GoType::Any | GoType::Erased(_)) {
+                    // Go would infer the dynamic type of the value instead.
+                    let function = Box::new(evaluated);
+                    evaluated = GoExpression::Instantiation { function, arguments: vec![type_] };
+                }
+                return Ok(call(evaluated, vec![value]));
+            }
             return self.lazy_defer(&arguments[0], monotype);
         }
         if let Foreign::LazyForce = foreign {

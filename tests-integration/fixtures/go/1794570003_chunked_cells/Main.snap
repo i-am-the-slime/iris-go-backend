@@ -11,9 +11,9 @@ import (
 )
 
 type ListInt struct {
-	Tag   int
-	Cons0 int32
 	Cons1 *ListInt
+	Cons0 int32
+	Tag   uint8
 }
 
 const (
@@ -31,10 +31,10 @@ type LargestNumbersOwnedLargestTotal struct {
 var sharedListIntNil = &ListInt{Tag: ListIntNil}
 
 type Tree struct {
-	Tag   int
 	Node0 *Tree
-	Node1 int32
 	Node2 *Tree
+	Node1 int32
+	Tag   uint8
 }
 
 const (
