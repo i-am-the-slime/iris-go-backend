@@ -1,0 +1,75 @@
+---
+source: tests-integration/src/fixtures.rs
+---
+// main.go
+package main
+
+import (
+	"github.com/i-am-the-slime/purs-backend-go/go-support/array"
+	"os"
+)
+
+type Ref[T any] struct {
+	Value T
+}
+
+type StateValue struct {
+	State int32
+	Value int32
+}
+
+type PushSubscribe struct {
+	Push      func(int32)
+	Subscribe func(func(int32)) func()
+}
+
+type StateValue2 struct {
+	State []func(int32)
+	Value []func(int32)
+}
+
+func main_() int32 {
+	value := &Ref[int32]{Value: 0}
+	value2 := create()
+	value3 := create()
+	subscribe := value3.Subscribe
+	subscribe(func(n int32) {
+		s2 := value.Value
+		s_2 := s2 + n
+		modified := StateValue{State: s_2, Value: s_2}
+		value.Value = modified.State
+	})
+	value4 := &Ref[int32]{Value: 0}
+	subscribe(func(n2 int32) {
+		value4.Value = n2
+	})
+	value2.Subscribe(func(n3 int32) {
+		value7 := value4.Value
+		value3.Push(value7 + n3)
+	})
+	value2.Push(1)
+	value2.Push(2)
+	return value.Value
+}
+
+func create() PushSubscribe {
+	value := &Ref[[]func(int32)]{Value: []func(int32){}}
+	return PushSubscribe{Subscribe: func(k func(int32)) func() {
+		s2 := value.Value
+		s_2 := array.Append(s2, []func(int32){k})
+		modified := StateValue2{State: s_2, Value: s_2}
+		value.Value = modified.State
+		return func() {
+		}
+	}, Push: func(n int32) {
+		value2 := value.Value
+		for _, value3 := range value2 {
+			value3(n)
+		}
+	}}
+}
+
+func main() {
+	exitStatus := main_()
+	os.Exit(int(exitStatus))
+}
