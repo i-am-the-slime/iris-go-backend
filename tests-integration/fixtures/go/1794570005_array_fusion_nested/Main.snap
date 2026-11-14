@@ -1,0 +1,97 @@
+---
+source: tests-integration/src/fixtures.rs
+---
+// Data/Semiring/semiring.go
+package semiring
+
+func Add(argument0 int32, argument1 int32) int32 {
+	return argument0 + argument1
+}
+
+// Data/Show/show.go
+package show
+
+import "github.com/i-am-the-slime/purs-backend-go/go-support/prim"
+
+func Show(argument0 int32) string {
+	return prim.ShowInt(int(argument0))
+}
+
+// main.go
+package main
+
+import (
+	"fixture/Data/Semiring"
+	"fixture/Data/Show"
+	"fmt"
+	"github.com/i-am-the-slime/purs-backend-go/go-support/prim"
+)
+
+type BelowComprehensionIndexedMaterialisedOverRangePairs struct {
+	Below         int32
+	Comprehension []int32
+	Indexed       []int32
+	Materialised  []string
+	OverRange     int32
+	Pairs         []string
+}
+
+var main_ = initializeMain_()
+
+func initializeMain_() BelowComprehensionIndexedMaterialisedOverRangePairs {
+	bound := []string{}
+	for _, value := range numbers {
+		if value < 4 {
+			for _, value2 := range numbers {
+				if value2 > value {
+					bound = append(bound, prim.ShowInt(int(value)) + (":" + prim.ShowInt(int(value2))))
+				}
+			}
+		}
+	}
+	var count int32 = 0
+	for _, x := range numbers {
+		for _, value3 := range numbers {
+			if value3 < x {
+				count = count + 1
+			}
+		}
+	}
+	bound2 := []int32{}
+	for _, x2 := range numbers {
+		for y := int32(1); y < 3; y++ {
+			var result []int32
+			if x2 > 4 {
+				result = []int32{prim.MultiplyInt32(x2, y)}
+			} else {
+				result = []int32{}
+			}
+			bound2 = append(bound2, result...)
+		}
+	}
+	var accumulator int32 = 0
+	for value4 := int32(1); value4 < 11; value4++ {
+		accumulated := accumulator
+		accumulator = semiring.Add(accumulated, prim.MultiplyInt32(value4, 2))
+	}
+	mapped := make([]int32, len(numbers))
+	for slot, value5 := range numbers {
+		x3 := value5 + 1
+		i := int32(slot)
+		mapped[slot] = prim.MultiplyInt32(i, 100) + x3
+	}
+	mapped2 := []string{}
+	for _, value6 := range numbers {
+		x4 := value6 + 1
+		if int32(prim.IntMod(int(x4), int(2))) == 0 {
+			mapped2 = append(mapped2, show.Show(x4))
+		}
+	}
+	return BelowComprehensionIndexedMaterialisedOverRangePairs{Pairs: bound, Below: count, Comprehension: bound2, OverRange: accumulator, Indexed: mapped, Materialised: mapped2}
+}
+
+var numbers []int32 = []int32{3, 1, 4, 1, 5, 9, 2, 6}
+
+func main() {
+	fmt.Println(main_)
+}

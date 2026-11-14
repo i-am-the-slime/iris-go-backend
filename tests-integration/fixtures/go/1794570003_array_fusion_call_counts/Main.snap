@@ -1,0 +1,134 @@
+---
+source: tests-integration/src/fixtures.rs
+---
+// Data/Semiring/semiring.go
+package semiring
+
+func Add(argument0 int32, argument1 int32) int32 {
+	return argument0 + argument1
+}
+
+// main.go
+package main
+
+import (
+	"fixture/Data/Semiring"
+	"fmt"
+	"github.com/i-am-the-slime/purs-backend-go/go-support/prim"
+)
+
+type EarlyExitEarlyExitMappingCallsFusedFusedMappingCallsKeptLengthPredicateCallsSharedSharedMappingCalls struct {
+	EarlyExit             bool
+	EarlyExitMappingCalls int32
+	Fused                 int32
+	FusedMappingCalls     int32
+	KeptLength            int32
+	PredicateCalls        int32
+	Shared                int32
+	SharedMappingCalls    int32
+}
+
+type Ref[T any] struct {
+	Value T
+}
+
+type StateValue struct {
+	State int32
+	Value int32
+}
+
+var main_ = initializeMain_()
+
+func initializeMain_() EarlyExitEarlyExitMappingCallsFusedFusedMappingCallsKeptLengthPredicateCallsSharedSharedMappingCalls {
+	value := &Ref[int32]{Value: 0}
+	value2 := &Ref[int32]{Value: 0}
+	value3 := &Ref[int32]{Value: 0}
+	value4 := &Ref[int32]{Value: 0}
+	value5 := &Ref[bool]{Value: false}
+	argument := func(value6 int32) int32 {
+		return prim.MultiplyInt32(value6, 3)
+	}
+	argument2 := func(value7 int32) bool {
+		return value7 > 2
+	}
+	var accumulator int32 = 0
+	for _, element := range numbers {
+		if countedIntBoolean(value, argument2, element) {
+			accumulated := accumulator
+			accumulator = semiring.Add(accumulated, countedIntInt(value2, argument, element))
+		}
+	}
+	value3.Value = accumulator
+	value8 := value.Value
+	calls2 := value2.Value
+	modified := StateValue{State: 0, Value: calls2}
+	value2.Value = modified.State
+	value9 := modified.Value
+	argument3 := func(value10 int32) int32 {
+		return prim.MultiplyInt32(value10, 3)
+	}
+	mapped := make([]int32, len(numbers))
+	for index, element2 := range numbers {
+		mapped[index] = countedIntInt(value2, argument3, element2)
+	}
+	tripled := mapped
+	var accumulator2 int32 = 0
+	for _, element3 := range tripled {
+		accumulated2 := accumulator2
+		accumulator2 = semiring.Add(accumulated2, element3)
+	}
+	value4.Value = accumulator2 + int32(len(tripled))
+	calls4 := value2.Value
+	modified2 := StateValue{State: 0, Value: calls4}
+	value2.Value = modified2.State
+	value11 := modified2.Value
+	argument4 := func(value12 int32) int32 {
+		return prim.MultiplyInt32(value12, 3)
+	}
+	found := false
+	for _, element4 := range numbers {
+		value13 := countedIntInt(value2, argument4, element4)
+		if value13 > 20 {
+			found = true
+			break
+		}
+	}
+	value5.Value = found
+	value14 := value2.Value
+	value15 := value3.Value
+	value16 := value4.Value
+	value17 := value5.Value
+	var count int32 = 0
+	for _, value18 := range numbers {
+		value19 := prim.MultiplyInt32(value18, 3)
+		if value19 > 10 {
+			count = count + 1
+		}
+	}
+	performed := EarlyExitEarlyExitMappingCallsFusedFusedMappingCallsKeptLengthPredicateCallsSharedSharedMappingCalls{Fused: value15, Shared: value16, EarlyExit: value17, PredicateCalls: value8, FusedMappingCalls: value9, SharedMappingCalls: value11, EarlyExitMappingCalls: value14, KeptLength: count}
+	return performed
+}
+
+func countedIntInt(counter *Ref[int32], f func(int32) int32, x int32) int32 {
+	s2 := counter.Value
+	s_2 := s2 + 1
+	modified := StateValue{State: s_2, Value: s_2}
+	counter.Value = modified.State
+	performed := f(x)
+	return performed
+}
+
+func countedIntBoolean(counter *Ref[int32], f func(int32) bool, x int32) bool {
+	s2 := counter.Value
+	s_2 := s2 + 1
+	modified := StateValue{State: s_2, Value: s_2}
+	counter.Value = modified.State
+	performed := f(x)
+	return performed
+}
+
+var numbers []int32 = []int32{3, 1, 4, 1, 5, 9, 2, 6}
+
+func main() {
+	fmt.Println(main_)
+}
