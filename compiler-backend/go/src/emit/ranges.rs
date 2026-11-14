@@ -20,7 +20,9 @@ pub fn read_elements_in_place(declarations: &mut [GoDeclaration]) {
     for declaration in declarations {
         let mut names = FxHashSet::default();
         declaration.for_each_name_mut(&mut |name| {
-            let (crate::syntax::Name::Reference(name) | crate::syntax::Name::Binder(name)) = name;
+            let (crate::syntax::Name::Reference(name)
+            | crate::syntax::Name::Written(name)
+            | crate::syntax::Name::Binder(name)) = name;
             names.insert(name.clone());
         });
         match declaration {

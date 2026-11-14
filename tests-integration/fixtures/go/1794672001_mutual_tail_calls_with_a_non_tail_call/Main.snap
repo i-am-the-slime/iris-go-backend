@@ -1,0 +1,77 @@
+---
+source: tests-integration/src/fixtures.rs
+---
+// main.go
+package main
+
+import (
+	"fmt"
+	"github.com/i-am-the-slime/purs-backend-go/go-support/prim"
+)
+
+type DepthLetters struct {
+	Depth   int32
+	Letters string
+}
+
+var main_ DepthLetters = DepthLetters{Depth: depth(0, 30), Letters: a(7, "")}
+
+const (
+	depthStep = iota
+	branchStep
+)
+
+func depthOrBranch(step int, acc int32, n int32) int32 {
+	for {
+		switch step {
+		case depthStep:
+			if n <= 0 {
+				return acc
+			}
+			if int32(prim.IntMod(int(n), int(2))) == 0 {
+				step = branchStep
+				continue
+			}
+			acc, n = acc + 1, n - 1
+		default: // branchStep
+			step, acc, n = depthStep, acc + depth(0, int32(prim.IntDiv(int(n), int(4)))), n - 1
+		}
+	}
+}
+
+func depth(acc int32, n int32) int32 {
+	return depthOrBranch(depthStep, acc, n)
+}
+
+const (
+	aStep = iota
+	bStep
+	cStep
+)
+
+func aGroup(step int, n int32, s string) string {
+	for {
+		switch step {
+		case aStep:
+			if n <= 0 {
+				return s
+			}
+			step, n, s = bStep, n - 1, s + "a"
+		case bStep:
+			if n <= 0 {
+				return s
+			}
+			step, s, n = cStep, prim.ShowInt(int(n)), n - 1
+		default: // cStep
+			step, s = aStep, s + "c"
+		}
+	}
+}
+
+func a(n int32, s string) string {
+	return aGroup(aStep, n, s)
+}
+
+func main() {
+	fmt.Println(main_)
+}

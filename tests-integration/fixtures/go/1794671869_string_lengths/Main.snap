@@ -1,0 +1,144 @@
+---
+source: tests-integration/src/fixtures.rs
+---
+// Data/Maybe/maybe.go
+package maybe
+
+import "fixture/shared"
+
+type MaybeRecordHeadTail struct {
+	Just0 shared.HeadTail
+	Tag   uint8
+}
+
+const (
+	MaybeRecordHeadTailNothing = iota
+	MaybeRecordHeadTailJust
+)
+
+type MaybeChar struct {
+	Just0 rune
+	Tag   uint8
+}
+
+const (
+	MaybeCharNothing = iota
+	MaybeCharJust
+)
+
+// main.go
+package main
+
+import (
+	"fixture/Data/Maybe"
+	"fixture/shared"
+	"fmt"
+	"github.com/i-am-the-slime/purs-backend-go/go-support/direct"
+	"github.com/i-am-the-slime/purs-backend-go/go-support/prim"
+)
+
+var main_ = initializeMain_()
+
+func initializeMain_() []string {
+	scrutinee := int32(prim.CodeUnitLengthUpTo(3, "ab"))
+	var result string
+	switch scrutinee {
+	case 0:
+		result = "empty"
+	case 1:
+		result = "one"
+	case 2:
+		result = "two"
+	default:
+		result = "many"
+	}
+	scrutinee2 := int32(direct.CodePointLengthUpTo(5, "word")) < 4
+	var result2 string
+	if scrutinee2 {
+		result2 = "true"
+	} else {
+		result2 = "false"
+	}
+	return []string{prim.ShowInt(int(countSpacesUnconsingCountsUpToTwo("a b c", 0))), result, result2, prim.ShowInt(int(int32(direct.CodePointLength("a😀")))), prim.ShowInt(int(unchangedTextLengthIsCountedBeforeTheLoop("banana", 0, 0))), prim.ShowInt(int(changedRestLengthIsCountedEachIteration("abcdefghij", 0)))}
+}
+
+func countSpacesUnconsingCountsUpToTwo(text string, count int32) int32 {
+	for {
+		scrutinee := int32(prim.CodeUnitLengthUpTo(2, text))
+		var result maybe.MaybeRecordHeadTail
+		switch scrutinee {
+		case 0:
+			result = maybe.MaybeRecordHeadTail{Tag: maybe.MaybeRecordHeadTailNothing}
+		case 1:
+			result = maybe.MaybeRecordHeadTail{Tag: maybe.MaybeRecordHeadTailJust, Just0: shared.HeadTail{Head: int32(prim.ToCharCode(prim.CharAt(int(0), text))), Tail: ""}}
+		default:
+			cu0 := int32(prim.ToCharCode(prim.CharAt(int(0), text)))
+			cu1 := int32(prim.ToCharCode(prim.CharAt(int(1), text)))
+			if 55296 <= cu0 && cu0 <= 56319 && (56320 <= cu1 && cu1 <= 57343) {
+				result = maybe.MaybeRecordHeadTail{Tag: maybe.MaybeRecordHeadTailJust, Just0: shared.HeadTail{Head: prim.MultiplyInt32(cu0 - 55296, 1024) + (cu1 - 56320) + 65536, Tail: prim.CodeUnitDrop(int(2), text)}}
+			} else {
+				result = maybe.MaybeRecordHeadTail{Tag: maybe.MaybeRecordHeadTailJust, Just0: shared.HeadTail{Head: cu0, Tail: prim.CodeUnitDrop(int(1), text)}}
+			}
+		}
+		switch result.Tag {
+		case maybe.MaybeRecordHeadTailJust:
+			var result2 int32
+			if result.Just0.Head == int32(prim.ToCharCode(rune(' '))) {
+				result2 = count + 1
+			} else {
+				result2 = count
+			}
+			text, count = result.Just0.Tail, result2
+			continue
+		default: // maybe.MaybeRecordHeadTailNothing
+			return count
+		}
+	}
+}
+
+func unchangedTextLengthIsCountedBeforeTheLoop(text string, i int32, count int32) int32 {
+	textLength := prim.CodeUnitLength(text)
+	for {
+		if i >= int32(textLength) {
+			return count
+		}
+		scrutinee := prim.CodeUnitCharAt(func(payload rune) maybe.MaybeChar {
+			return maybe.MaybeChar{Tag: maybe.MaybeCharJust, Just0: payload}
+		}, maybe.MaybeChar{Tag: maybe.MaybeCharNothing}, int(i), text)
+		var result2 bool
+		switch scrutinee.Tag {
+		case maybe.MaybeCharJust:
+			result2 = scrutinee.Just0 == 'a'
+		default:
+			result2 = false
+		}
+		var result int32
+		if result2 {
+			result = count + 1
+		} else {
+			result = count
+		}
+		i, count = i + 1, result
+	}
+}
+
+func changedRestLengthIsCountedEachIteration(rest string, count int32) int32 {
+	for {
+		if int32(prim.CodeUnitLengthUpTo(4, rest)) < 3 {
+			return count
+		}
+		rest, count = prim.CodeUnitDrop(int(int32(prim.IntDiv(int(int32(prim.CodeUnitLength(rest))), int(2)))), rest), count + 1
+	}
+}
+
+func main() {
+	fmt.Println(main_)
+}
+
+// shared/shared.go
+package shared
+
+type HeadTail struct {
+	Head int32
+	Tail string
+}

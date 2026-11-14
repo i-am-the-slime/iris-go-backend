@@ -241,6 +241,9 @@ pub enum GoDeclaration {
 /// local, or a local the declaration binds.
 pub enum Name<'a> {
     Reference(&'a mut String),
+    /// A reference the code may change the value of: an assignment's target
+    /// or a variable whose address it takes.
+    Written(&'a mut String),
     Binder(&'a mut String),
 }
 
@@ -498,7 +501,8 @@ fn expression_references(expression: &mut GoExpression, visit: &mut impl FnMut(R
     }
 }
 
-fn statements_names(statements: &mut [GoStatement], visit: &mut impl FnMut(Name<'_>)) {
+/// Visits every name the statements use or bind, in order.
+pub fn statements_names(statements: &mut [GoStatement], visit: &mut impl FnMut(Name<'_>)) {
     for statement in statements {
         statement_names(statement, visit);
     }
@@ -517,7 +521,7 @@ fn statement_names(statement: &mut GoStatement, visit: &mut impl FnMut(Name<'_>)
             }
         }
         GoStatement::Assign { targets, values } => {
-            targets.iter_mut().for_each(|target| expression_names(target, visit));
+            targets.iter_mut().for_each(|target| written_names(target, visit));
             values.iter_mut().for_each(|value| expression_names(value, visit));
         }
         GoStatement::Expression(value) | GoStatement::Defer(value) => {
@@ -577,6 +581,20 @@ fn statement_names(statement: &mut GoStatement, visit: &mut impl FnMut(Name<'_>)
     }
 }
 
+/// The names in an assignment's target or under `&`: the variable whose
+/// value changes, and the names read to find the place within it.
+fn written_names(target: &mut GoExpression, visit: &mut impl FnMut(Name<'_>)) {
+    match target {
+        GoExpression::Identifier(name) => visit(Name::Written(name)),
+        GoExpression::Field { value, .. } => written_names(value, visit),
+        GoExpression::Index { value, index } => {
+            written_names(value, visit);
+            expression_names(index, visit);
+        }
+        target => expression_names(target, visit),
+    }
+}
+
 fn expression_names(expression: &mut GoExpression, visit: &mut impl FnMut(Name<'_>)) {
     match expression {
         GoExpression::Identifier(name) => visit(Name::Reference(name)),
@@ -599,9 +617,9 @@ fn expression_names(expression: &mut GoExpression, visit: &mut impl FnMut(Name<'
             expression_names(value, visit);
             expression_names(index, visit);
         }
+        GoExpression::Address(value) => written_names(value, visit),
         GoExpression::Unary { operand: value, .. }
         | GoExpression::Field { value, .. }
-        | GoExpression::Address(value)
         | GoExpression::Conversion { value, .. }
         | GoExpression::TypeAssertion { value, .. }
         | GoExpression::Spread(value) => expression_names(value, visit),

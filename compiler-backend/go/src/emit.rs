@@ -6,11 +6,13 @@
 
 mod application;
 mod blocks;
+mod buffers;
 mod chunks;
 mod closures;
 mod coerce;
 mod deduplicate;
 mod fusion;
+mod groups;
 mod iteration;
 mod layout;
 mod lengths;
@@ -22,7 +24,6 @@ mod reuse;
 use std::collections::BTreeSet;
 
 use rustc_hash::{FxHashMap, FxHashSet};
-use smol_str::SmolStr;
 
 use files::FileId;
 use indexing::TermItemId;
@@ -76,6 +77,10 @@ where
     emitter.materialized = reused.materialized;
     emitter.closure_sets = closure_sets;
     emitter.assign_function_names();
+    let groups = timed("groups", || {
+        groups::tail_call_groups(program, emitter.monotypes, &emitter.lazy_constants)
+    });
+    emitter.name_tail_groups(groups);
     let entry_origin = program.function(program.entry).origin;
     let declarations = timed("functions", || {
         let mut declarations = vec![];
@@ -96,24 +101,24 @@ where
         GoResult::Ok(declarations)
     });
     let mut declarations = declarations?;
+    let unused = emitter.unused_tail_group_entries();
+    if !unused.is_empty() {
+        declarations.retain(|declaration| declaration.name().is_none_or(|n| !unused.contains(n)));
+    }
     if emitter.imports.contains(GoPackage::Aff.path()) {
         await_fibers(&mut declarations);
     }
     timed("ranges", || ranges::read_elements_in_place(&mut declarations));
+    let taken =
+        |name: &str| emitter.global_names.contains(name) || IMPORTED_PACKAGES.contains(&name);
     timed("lengths", || lengths::count_lengths_up_to_comparisons(&mut declarations));
-    let chunked = timed("chunks", || {
-        let taken =
-            |name: &str| emitter.global_names.contains(name) || IMPORTED_PACKAGES.contains(&name);
-        chunks::allocate_linked_cells_in_chunks(&mut declarations, &taken)
-    });
+    timed("invariant lengths", || lengths::hoist_loop_invariant_lengths(&mut declarations, &taken));
+    let chunked =
+        timed("chunks", || chunks::allocate_linked_cells_in_chunks(&mut declarations, &taken));
     if chunked {
         emitter.imports.insert(GoPackage::Alloc.path().into());
     }
-    timed("blocks", || {
-        let taken =
-            |name: &str| emitter.global_names.contains(name) || IMPORTED_PACKAGES.contains(&name);
-        blocks::allocate_nested_cells_together(&mut declarations, &taken)
-    });
+    timed("blocks", || blocks::allocate_nested_cells_together(&mut declarations, &taken));
     let mut homes: FxHashMap<String, ModuleIndex> = std::mem::take(&mut emitter.homes)
         .into_iter()
         .filter_map(|(name, file)| Some((name, modules.index(file)?)))
@@ -228,7 +233,11 @@ where
             locals: FxHashMap::default(),
             local_names: FxHashSet::default(),
             tail_loop: None,
+            tail_groups: vec![],
+            tail_group_of: FxHashMap::default(),
+            referenced: Default::default(),
             owned_snocs: FxHashSet::default(),
+            byte_buffers: FxHashMap::default(),
             owning_variants: FxHashMap::default(),
             pending_owning_variants: vec![],
             inline_shapes: FxHashMap::default(),
@@ -469,9 +478,24 @@ struct GuardChain<'e> {
     tested: bool,
 }
 
+/// The loop around a function body, or around a group's bodies, that a tail call jumps back to.
 struct TailLoop {
+    /// Every variable that a jump reassigns.
+    parameters: Vec<String>,
+    /// The functions whose saturated tail calls jump, with their parameters' variables.
+    targets: Vec<LoopTarget>,
+    /// The function whose body is being emitted.
+    current: FunctionId,
+    /// The variable selecting the member a group's loop runs next.
+    step: Option<String>,
+}
+
+#[derive(Clone)]
+struct LoopTarget {
     function: FunctionId,
     parameters: Vec<String>,
+    /// The value of the group's step variable that runs this function.
+    step: Option<GoExpression>,
 }
 
 #[derive(Clone)]
@@ -535,8 +559,15 @@ struct Emitter<'p, 'm, 'q, Q> {
     locals: FxHashMap<LocalId, GoExpression>,
     local_names: FxHashSet<String>,
     tail_loop: Option<TailLoop>,
+    tail_groups: Vec<groups::TailGroup>,
+    tail_group_of: FxHashMap<FunctionId, usize>,
+    /// The functions that emitted code names, so that an unused group entry can be dropped.
+    referenced: std::cell::RefCell<FxHashSet<FunctionId>>,
     current: Option<FunctionId>,
     owned_snocs: FxHashSet<*const Expression>,
+    /// The string parameters of the tail loop being emitted that it builds in a `[]byte`, with
+    /// the buffer's name; the parameter itself reads `string(buffer)`.
+    byte_buffers: FxHashMap<LocalId, String>,
     owning_variants: FxHashMap<(FunctionId, usize), String>,
     pending_owning_variants: Vec<(FunctionId, usize)>,
     inline_shapes: FxHashMap<DataType, Option<layout::Shape>>,
@@ -909,6 +940,9 @@ where
     }
 
     fn function(&mut self, id: FunctionId) -> GoResult<Vec<GoDeclaration>> {
+        if let Some(&group) = self.tail_group_of.get(&id) {
+            return self.tail_group_member(id, group);
+        }
         let name = self.function_names[id.0 as usize].clone();
         self.function_named(id, name, vec![])
     }
@@ -935,6 +969,7 @@ where
         self.locals.clear();
         self.local_names.clear();
         self.tail_loop = None;
+        self.byte_buffers.clear();
         let mut parameters = vec![];
         for parameter in &function.parameters {
             let parameter_name = self.bind_local(parameter);
@@ -962,9 +997,35 @@ where
         } else {
             vec![]
         };
+        // A string parameter that the loop only appends to grows in a `[]byte` of its own.
+        let strings = if loops && mode == Mode::Value {
+            self.owned_loop_strings(id, function, &captured)
+        } else {
+            vec![]
+        };
+        let mut buffers = vec![];
+        for (position, _) in &strings {
+            let parameter = &parameters[*position].0;
+            let buffer = self.local_name(format!("{parameter}Bytes"));
+            let local = function.parameters[*position].id;
+            self.locals.insert(local, buffers::to_string(identifier_expression(&buffer)));
+            self.byte_buffers.insert(local, buffer.clone());
+            buffers.push((*position, buffer));
+        }
         if loops {
-            let parameter_names = parameters.iter().map(|(name, _)| name.clone()).collect();
-            self.tail_loop = Some(TailLoop { function: id, parameters: parameter_names });
+            let mut parameter_names: Vec<String> =
+                parameters.iter().map(|(name, _)| name.clone()).collect();
+            for (position, buffer) in &buffers {
+                parameter_names[*position] = buffer.clone();
+            }
+            let target =
+                LoopTarget { function: id, parameters: parameter_names.clone(), step: None };
+            self.tail_loop = Some(TailLoop {
+                parameters: parameter_names,
+                targets: vec![target],
+                current: id,
+                step: None,
+            });
         }
         let mut iteration_copies = vec![];
         for &position in &captured {
@@ -984,6 +1045,7 @@ where
         };
         let mut owned_nodes: Vec<*const Expression> =
             owned.iter().flat_map(|(_, _, nodes)| nodes.iter().copied()).collect();
+        owned_nodes.extend(strings.into_iter().flat_map(|(_, nodes)| nodes));
         owned_nodes.extend(owned_parameters);
         self.owned_snocs.extend(owned_nodes.iter().copied());
         let mut body = vec![];
@@ -1000,8 +1062,15 @@ where
             body = iteration_copies;
             let mut clipped: Vec<GoStatement> = owned
                 .iter()
-                .map(|(position, field, _)| self.clip(&parameters[*position].0, field.as_ref()))
+                .map(|(position, place, _)| self.clip(&parameters[*position].0, place))
                 .collect();
+            for (position, buffer) in &buffers {
+                let parameter = identifier_expression(&parameters[*position].0);
+                clipped.push(GoStatement::Define {
+                    names: vec![buffer.clone()],
+                    values: vec![buffers::to_bytes(parameter)],
+                });
+            }
             clipped.push(GoStatement::Loop(body));
             body = clipped;
         }
@@ -1009,22 +1078,22 @@ where
             body.pop();
         }
         self.tail_loop = None;
+        self.byte_buffers.clear();
         Ok(vec![GoDeclaration::Function { name, parameters, result, body }])
     }
 
     pub(super) fn owned_parameter_snocs<'e>(
-        &self,
+        &mut self,
         function: &'e Function,
         position: usize,
-    ) -> Vec<(Option<SmolStr>, Vec<&'e Expression>)> {
+    ) -> Vec<(ownership::Place, Vec<&'e Expression>)> {
         let parameter = &function.parameters[position];
-        self.carried_arrays(parameter.monotype)
+        self.carried_places(parameter.monotype)
             .into_iter()
-            .filter_map(|field| {
-                let carried =
-                    ownership::Carried { accumulator: parameter.id, field: field.as_ref() };
+            .filter_map(|place| {
+                let carried = ownership::Carried::new(parameter.id, &place);
                 let nodes = ownership::owned_snocs(carried, &function.body)?;
-                (!nodes.is_empty()).then_some((field, nodes))
+                (!nodes.is_empty()).then_some((place, nodes))
             })
             .collect()
     }
@@ -1041,17 +1110,16 @@ where
     }
 
     fn owned_loop_arrays(
-        &self,
+        &mut self,
         id: FunctionId,
         function: &Function,
-    ) -> Vec<(usize, Option<SmolStr>, Vec<*const Expression>)> {
+    ) -> Vec<(usize, ownership::Place, Vec<*const Expression>)> {
         let arity = function.parameters.len();
         let mut owned = vec![];
         for (position, parameter) in function.parameters.iter().enumerate() {
             let tail_call = ownership::TailCall { function: id, arity, position };
-            for field in self.carried_arrays(parameter.monotype) {
-                let carried =
-                    ownership::Carried { accumulator: parameter.id, field: field.as_ref() };
+            for place in self.carried_places(parameter.monotype) {
+                let carried = ownership::Carried::new(parameter.id, &place);
                 let Some(nodes) = ownership::owned_loop_snocs(carried, &function.body, tail_call)
                 else {
                     continue;
@@ -1060,7 +1128,7 @@ where
                     continue;
                 }
                 let nodes = nodes.into_iter().map(std::ptr::from_ref).collect();
-                owned.push((position, field, nodes));
+                owned.push((position, place, nodes));
             }
         }
         owned
@@ -1623,11 +1691,18 @@ where
             ExpressionKind::Apply { function, arguments } if matches!(sink, Sink::Return) => {
                 if let ExpressionKind::Function(id) = function.kind
                     && let Some(tail_loop) = &self.tail_loop
-                    && tail_loop.function == id
-                    && tail_loop.parameters.len() == arguments.len()
+                    && let Some(target) = tail_loop.targets.iter().find(|target| {
+                        target.function == id && target.parameters.len() == arguments.len()
+                    })
                 {
-                    let parameters = tail_loop.parameters.clone();
-                    return self.tail_call(&parameters, arguments, out);
+                    let step = match (&tail_loop.step, &target.step) {
+                        (Some(variable), Some(value)) if id != tail_loop.current => {
+                            Some((variable.clone(), value.clone()))
+                        }
+                        _ => None,
+                    };
+                    let parameters = target.parameters.clone();
+                    return self.tail_call(&parameters, arguments, step, out);
                 }
                 self.leaf(expression, mode, sink, out)
             }
@@ -1639,11 +1714,21 @@ where
         &mut self,
         parameters: &[String],
         arguments: &[Expression],
+        step: Option<(String, GoExpression)>,
         out: &mut Vec<GoStatement>,
     ) -> GoResult<()> {
         let mut targets = vec![];
         let mut values = vec![];
+        if let Some((variable, value)) = step {
+            targets.push(identifier_expression(&variable));
+            values.push(value);
+        }
         for (parameter, argument) in parameters.iter().zip(arguments) {
+            if let ExpressionKind::Local(id) = argument.kind
+                && self.byte_buffers.get(&id) == Some(parameter)
+            {
+                continue;
+            }
             let value = self.value(argument, out)?;
             if let GoExpression::Identifier(name) = &value
                 && name == parameter
@@ -1763,10 +1848,7 @@ where
                 for argument in arguments {
                     values.push(self.value(argument, out)?);
                 }
-                return Ok(call(
-                    identifier_expression(&self.function_names[id.0 as usize].clone()),
-                    values,
-                ));
+                return Ok(call(identifier_expression(self.function_reference(id)), values));
             }
         }
         self.application_value(function, arguments, out)
@@ -3573,6 +3655,22 @@ where
         }
         if let Foreign::IntFromNumber = foreign {
             return self.int_from_number(&arguments[2], monotype, out);
+        }
+        if let Foreign::Operator(Operator::StringAppend) = foreign
+            && self.owned_snocs.contains(&std::ptr::from_ref(&arguments[0]))
+        {
+            return self.append_to_buffer(arguments, out);
+        }
+        if foreign.calls(crate::foreign::ARRAY_APPEND)
+            && self.owned_snocs.contains(&std::ptr::from_ref(&arguments[0]))
+            && let ExpressionKind::Array(elements) = &arguments[1].kind
+        {
+            let mut values = vec![self.value(&arguments[0], out)?];
+            for element in elements {
+                let value = self.value(element, out)?;
+                values.push(self.typed_constant(value, element.monotype)?);
+            }
+            return Ok(call(identifier_expression("append"), values));
         }
         if let Foreign::Snoc = foreign {
             let array = self.value(&arguments[0], out)?;
