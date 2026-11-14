@@ -116,8 +116,11 @@ impl Simplifier<'_> {
             return None;
         }
         let function = self.functions[id.0 as usize].as_ref()?;
-        let small = self.sizes[id.0 as usize] <= INLINE_SIZE || self.uses[id.0 as usize] == 1;
-        (small && !function.parameters.is_empty() || is_trivial(&function.body)).then_some(function)
+        let once = self.uses[id.0 as usize] == 1;
+        // A copy of a failure saves no work, only adds another place to fail.
+        let small = self.sizes[id.0 as usize] <= INLINE_SIZE && !can_fail(&function.body);
+        ((small || once) && !function.parameters.is_empty() || is_trivial(&function.body))
+            .then_some(function)
     }
 
     /// A point-free definition such as `void = map (const unit)` becomes a function
@@ -604,6 +607,11 @@ impl Simplifier<'_> {
                 self.fuel -= 1;
                 self.beta(parameters, *body, arguments, monotype)
             }
+            ExpressionKind::Coerce(inner)
+                if self.fuel > 0 && matches!(inner.kind, ExpressionKind::Lambda { .. }) =>
+            {
+                self.apply_coerced_lambda(*inner, function.monotype, arguments, monotype)
+            }
             ExpressionKind::Let { bindings, body } => {
                 let body = self.apply(*body, arguments, monotype);
                 self.let_bindings(bindings, body)
@@ -638,6 +646,39 @@ impl Simplifier<'_> {
                 Expression::new(kind, monotype)
             }
         }
+    }
+
+    /// A lambda seen as another representation of its type, such as a newtype
+    /// over a function, takes its arguments in its own representation.
+    fn apply_coerced_lambda(
+        &mut self,
+        lambda: Expression,
+        coerced: MonotypeId,
+        mut arguments: Vec<Expression>,
+        monotype: MonotypeId,
+    ) -> Expression {
+        let ExpressionKind::Lambda { parameters, body } = lambda.kind else {
+            unreachable!("invariant violated: only a coerced lambda is applied through")
+        };
+        let taken = arguments.len().min(parameters.len());
+        if crate::arity::arrows(self.monotypes, coerced) < taken {
+            let lambda =
+                Expression::new(ExpressionKind::Lambda { parameters, body }, lambda.monotype);
+            let function = Expression::new(ExpressionKind::Coerce(Box::new(lambda)), coerced);
+            let kind = ExpressionKind::Apply { function: Box::new(function), arguments };
+            return Expression::new(kind, monotype);
+        }
+        self.fuel -= 1;
+        let rest = arguments.split_off(taken);
+        let arguments: Vec<Expression> = arguments
+            .into_iter()
+            .zip(&parameters)
+            .map(|(argument, parameter)| self.coerce(argument, parameter.monotype))
+            .collect();
+        let result = self.monotypes.result_after(lambda.monotype, taken);
+        let applied = self.beta(parameters, *body, arguments, result);
+        let applied = self.coerce(applied, self.monotypes.result_after(coerced, taken));
+        self.apply(applied, rest, monotype)
     }
 
     fn beta(
@@ -1109,6 +1150,12 @@ impl Simplifier<'_> {
     }
 }
 
+fn can_fail(expression: &Expression) -> bool {
+    let mut fails = false;
+    visit(expression, &mut |node| fails |= matches!(node.kind, ExpressionKind::Fail(_)));
+    fails
+}
+
 /// The first parameter of the lambdas that an expression chooses between, when
 /// it does nothing else: its conditions, scrutinees and bindings are cheap and
 /// cannot fail, so every application may repeat them instead of sharing the
@@ -1209,8 +1256,9 @@ fn is_discardable(expression: &Expression) -> bool {
         {
             arguments.iter().all(is_discardable)
         }
-        ExpressionKind::Construct { arguments, .. }
-        | ExpressionKind::Array(arguments) => arguments.iter().all(is_discardable),
+        ExpressionKind::Construct { arguments, .. } | ExpressionKind::Array(arguments) => {
+            arguments.iter().all(is_discardable)
+        }
         ExpressionKind::Foreign { arguments, .. } => arguments.is_empty(),
         ExpressionKind::Record(fields) => fields.iter().all(|(_, value)| is_discardable(value)),
         ExpressionKind::Access { record: value, .. } | ExpressionKind::Coerce(value) => {
