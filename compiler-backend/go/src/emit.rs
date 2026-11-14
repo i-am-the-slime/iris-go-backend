@@ -7,6 +7,7 @@
 mod application;
 mod coerce;
 mod deduplicate;
+mod fusion;
 mod iteration;
 mod lengths;
 mod ownership;
@@ -3568,6 +3569,11 @@ where
         if let Foreign::Project { file_id, term, .. } = foreign {
             let called = self.project_call(file_id, term, arguments, out)?;
             return self.out_of_convention(called, monotype, out);
+        }
+        if let Foreign::Operator(Operator::ArrayLength) = foreign
+            && self.is_fusible(&arguments[0])
+        {
+            return self.fused_length(&arguments[0], monotype, out);
         }
         if let Foreign::Call { boundary: Boundary { iteration: Some(iteration), .. }, .. } = foreign
             && let Some(iterated) = self.iteration(iteration, arguments, monotype, out)?

@@ -1,21 +1,41 @@
 use smol_str::SmolStr;
 
+use super::fusion::{Demand, Need, Order, Pipeline};
 use super::ownership::{Carried, owned_snocs};
-use super::{Emitter, Mode, Sink, binary, call, field_name, identifier_expression, uses_local};
+use super::{Emitter, Mode, Sink, call, field_name, identifier_expression, uses_local};
 use crate::error::GoResult;
 use crate::foreign::Iteration;
 use crate::mono::{Expression, ExpressionKind, FunctionId, Local};
-use crate::monotype::{Monotype, MonotypeId};
+use crate::monotype::{DataType, Monotype, MonotypeId};
 use crate::syntax::{GoExpression, GoStatement, GoType};
 
-enum Callback<'e> {
+pub(super) enum Callback<'e> {
     Inline { parameters: Vec<&'e Local>, body: &'e Expression },
     Direct { function: GoExpression, callee: FunctionId, leading: Vec<GoExpression> },
 }
 
-enum Found<'e> {
+pub(super) enum Found<'e> {
     Inline { parameters: Vec<&'e Local>, body: &'e Expression },
     Direct { function: GoExpression, callee: FunctionId, leading: &'e [Expression] },
+}
+
+impl Callback<'_> {
+    /// Whether the callback reads its argument at `position`.
+    pub(super) fn reads(&self, position: usize) -> bool {
+        match self {
+            Callback::Inline { parameters, body } => uses_local(body, parameters[position].id),
+            Callback::Direct { .. } => true,
+        }
+    }
+}
+
+impl Found<'_> {
+    pub(super) fn reads(&self, position: usize) -> bool {
+        match self {
+            Found::Inline { parameters, body } => uses_local(body, parameters[position].id),
+            Found::Direct { .. } => true,
+        }
+    }
 }
 
 impl<'q, Q> Emitter<'_, '_, 'q, Q>
@@ -44,17 +64,7 @@ where
             return Ok(None);
         }
         let Some(found) = self.callback(&arguments[position], arity) else { return Ok(None) };
-        let callback = match found {
-            Found::Inline { parameters, body } => Callback::Inline { parameters, body },
-            Found::Direct { function, callee, leading } => {
-                let mut values = vec![];
-                for argument in leading {
-                    let value = self.value(argument, out)?;
-                    values.push(self.hoist(value, "argument", out));
-                }
-                Callback::Direct { function, callee, leading: values }
-            }
-        };
+        let callback = self.capture(found, out)?;
         let value = match iteration {
             Iteration::FoldLeft | Iteration::FoldRight => {
                 self.fold(iteration, callback, &arguments[1], &arguments[2], monotype, out)?
@@ -74,7 +84,7 @@ where
         Ok(Some(value))
     }
 
-    fn callback<'e>(&self, function: &'e Expression, arity: usize) -> Option<Found<'e>> {
+    pub(super) fn callback<'e>(&self, function: &'e Expression, arity: usize) -> Option<Found<'e>> {
         let (head, leading): (&Expression, &[Expression]) = match &function.kind {
             ExpressionKind::Apply { function, arguments } => (function, arguments),
             _ => (function, &[]),
@@ -117,7 +127,7 @@ where
         }
     }
 
-    fn apply_callback(
+    pub(super) fn apply_callback(
         &mut self,
         callback: &Callback<'_>,
         arguments: Vec<GoExpression>,
@@ -135,7 +145,7 @@ where
         }
     }
 
-    fn callback_value(
+    pub(super) fn callback_value(
         &mut self,
         callback: &Callback<'_>,
         arguments: Vec<GoExpression>,
@@ -160,13 +170,14 @@ where
         monotype: MonotypeId,
         out: &mut Vec<GoStatement>,
     ) -> GoResult<GoExpression> {
-        let (accumulator_position, element_position) = match iteration {
-            Iteration::FoldLeft => (0, 1),
-            _ => (1, 0),
+        let (accumulator_position, element_position, order) = match iteration {
+            Iteration::FoldLeft => (0, 1, Order::Forward),
+            _ => (1, 0, Order::Backward),
         };
         let initial = self.value(initial, out)?;
-        let array = self.value(array, out)?;
-        let array = self.hoist(array, "array", out);
+        let demand = Demand { order, ..Demand::FORWARD };
+        let need = Need::Argument { callback: &callback, position: element_position };
+        let pipeline = self.pipeline(array, demand, need, out)?;
         let accumulator = self.temporary("accumulator");
         out.push(self.define(accumulator.clone(), initial, monotype)?);
         let callback = self.owning_callback(callback, accumulator_position, &accumulator, out);
@@ -180,51 +191,38 @@ where
             .collect();
         self.owned_snocs.extend(owned_nodes.iter().copied());
         let saved = self.tail_loop.take();
-        let parameter = self.loop_variable(&callback, accumulator_position, "accumulated");
-        let element = self.loop_variable(&callback, element_position, "element");
-        let mut body = vec![];
-        if parameter != "_" {
-            body.push(GoStatement::Define {
-                names: vec![parameter.clone()],
-                values: vec![identifier_expression(&accumulator)],
-            });
-        }
-        let mut arguments = vec![identifier_expression(&parameter)];
-        arguments.insert(element_position, identifier_expression(&element));
-        let outcome = self.apply_callback(
-            &callback,
-            arguments,
-            monotype,
-            Sink::Assign(accumulator.clone()),
-            &mut body,
-        );
+        let positions = (accumulator_position, element_position);
+        let outcome = self.fold_loop(&callback, pipeline, positions, &accumulator, monotype);
         self.tail_loop = saved;
         for node in &owned_nodes {
             self.owned_snocs.remove(node);
         }
-        outcome?;
-        let statement = match iteration {
-            Iteration::FoldLeft => {
-                GoStatement::Range { index: None, element, iterable: array, body }
-            }
-            _ => {
-                let index = self.temporary("index");
-                if element != "_" {
-                    let indexed = GoExpression::Index {
-                        value: Box::new(array.clone()),
-                        index: Box::new(identifier_expression(&index)),
-                    };
-                    body.insert(
-                        0,
-                        GoStatement::Define { names: vec![element], values: vec![indexed] },
-                    );
-                }
-                let last = binary("-", length(array), GoExpression::Integer(1));
-                GoStatement::CountingDown { variable: index, start: last, body }
-            }
-        };
-        out.push(statement);
+        out.push(outcome?);
         Ok(identifier_expression(&accumulator))
+    }
+
+    fn fold_loop(
+        &mut self,
+        callback: &Callback<'_>,
+        pipeline: Pipeline<'_>,
+        (accumulator_position, element_position): (usize, usize),
+        accumulator: &str,
+        monotype: MonotypeId,
+    ) -> GoResult<GoStatement> {
+        let parameter = self.loop_variable(callback, accumulator_position, "accumulated");
+        let need = Need::Argument { callback, position: element_position };
+        let mut opened = self.open(pipeline, need, None)?;
+        if parameter != "_" {
+            opened.body.body().push(GoStatement::Define {
+                names: vec![parameter.clone()],
+                values: vec![identifier_expression(accumulator)],
+            });
+        }
+        let mut arguments = vec![identifier_expression(&parameter)];
+        arguments.insert(element_position, opened.element);
+        let sink = Sink::Assign(accumulator.to_string());
+        self.apply_callback(callback, arguments, monotype, sink, opened.body.body())?;
+        Ok(self.close(opened.body))
     }
 
     fn owning_callback<'e>(
@@ -299,48 +297,71 @@ where
         monotype: MonotypeId,
         out: &mut Vec<GoStatement>,
     ) -> GoResult<GoExpression> {
-        let array = self.value(array, out)?;
-        let array = self.hoist(array, "array", out);
+        let indexed = iteration == Iteration::MapWithIndex;
+        let demand = Demand { positions: indexed, ..Demand::FORWARD };
+        let need = Need::Argument { callback: &callback, position: usize::from(indexed) };
+        let pipeline = self.pipeline(array, demand, need, out)?;
         let mapped_type = self.go_type(monotype)?;
         let mapped = self.temporary("mapped");
-        let allocation = call(
-            identifier_expression("make"),
-            vec![GoExpression::Type(mapped_type), length(array.clone())],
-        );
+        let in_place = pipeline.positional_source().is_some();
+        let allocation = match pipeline.positional_source() {
+            Some(source) => call(
+                identifier_expression("make"),
+                vec![GoExpression::Type(mapped_type), length(source.clone())],
+            ),
+            None => GoExpression::Composite { type_: mapped_type, fields: vec![] },
+        };
         out.push(GoStatement::Define { names: vec![mapped.clone()], values: vec![allocation] });
         let saved = self.tail_loop.take();
-        let (index, element) = match iteration {
-            Iteration::MapWithIndex => {
-                let index = self.loop_variable(&callback, 0, "index");
-                (index, self.loop_variable(&callback, 1, "element"))
-            }
-            _ => ("_".to_string(), self.loop_variable(&callback, 0, "element")),
-        };
-        let slot = if index == "_" { self.temporary("index") } else { self.temporary("slot") };
-        let mut body = vec![];
-        let mut arguments = vec![identifier_expression(&element)];
-        if iteration == Iteration::MapWithIndex && index != "_" {
-            body.push(GoStatement::Define {
+        let outcome = self.map_loop(indexed, &callback, pipeline, &mapped, in_place);
+        self.tail_loop = saved;
+        out.push(outcome?);
+        Ok(identifier_expression(&mapped))
+    }
+
+    fn map_loop(
+        &mut self,
+        indexed: bool,
+        callback: &Callback<'_>,
+        pipeline: Pipeline<'_>,
+        mapped: &str,
+        in_place: bool,
+    ) -> GoResult<GoStatement> {
+        let index = if indexed { self.loop_variable(callback, 0, "index") } else { "_".into() };
+        let slot = in_place.then_some(if index == "_" { "index" } else { "slot" });
+        let need = Need::Argument { callback, position: usize::from(indexed) };
+        let mut opened = self.open(pipeline, need, slot)?;
+        let mut arguments = vec![opened.element];
+        if indexed && index != "_" {
+            let slot = opened.index.as_deref().expect("invariant violated: an indexed map has a slot");
+            opened.body.body().push(GoStatement::Define {
                 names: vec![index.clone()],
                 values: vec![GoExpression::Conversion {
                     type_: GoType::Named("int32".into()),
-                    value: Box::new(identifier_expression(&slot)),
+                    value: Box::new(identifier_expression(slot)),
                 }],
             });
             arguments.insert(0, identifier_expression(&index));
         }
-        let outcome = self.callback_value(&callback, arguments, &mut body);
-        self.tail_loop = saved;
-        let value = outcome?;
-        body.push(GoStatement::Assign {
-            targets: vec![GoExpression::Index {
-                value: Box::new(identifier_expression(&mapped)),
-                index: Box::new(identifier_expression(&slot)),
-            }],
-            values: vec![value],
-        });
-        out.push(GoStatement::Range { index: Some(slot), element, iterable: array, body });
-        Ok(identifier_expression(&mapped))
+        let value = self.callback_value(callback, arguments, opened.body.body())?;
+        let statement = match &opened.index {
+            Some(slot) => GoStatement::Assign {
+                targets: vec![GoExpression::Index {
+                    value: Box::new(identifier_expression(mapped)),
+                    index: Box::new(identifier_expression(slot)),
+                }],
+                values: vec![value],
+            },
+            None => GoStatement::Assign {
+                targets: vec![identifier_expression(mapped)],
+                values: vec![call(
+                    identifier_expression("append"),
+                    vec![identifier_expression(mapped), value],
+                )],
+            },
+        };
+        opened.body.body().push(statement);
+        Ok(self.close(opened.body))
     }
 
     fn filter(
@@ -350,8 +371,8 @@ where
         monotype: MonotypeId,
         out: &mut Vec<GoStatement>,
     ) -> GoResult<GoExpression> {
-        let array = self.value(array, out)?;
-        let array = self.hoist(array, "array", out);
+        let need = Need::Variable { callback: &callback, position: 0 };
+        let pipeline = self.pipeline(array, Demand::FORWARD, need, out)?;
         let kept_type = self.go_type(monotype)?;
         let kept = self.temporary("kept");
         out.push(GoStatement::Define {
@@ -359,29 +380,35 @@ where
             values: vec![GoExpression::Composite { type_: kept_type, fields: vec![] }],
         });
         let saved = self.tail_loop.take();
-        let element = match &callback {
-            Callback::Inline { parameters, .. } => self.bind_local(parameters[0]),
-            Callback::Direct { .. } => self.temporary("element"),
-        };
-        let mut body = vec![];
-        let outcome =
-            self.callback_value(&callback, vec![identifier_expression(&element)], &mut body);
+        let outcome = self.filter_loop(&callback, pipeline, &kept);
         self.tail_loop = saved;
-        let condition = outcome?;
+        out.push(outcome?);
+        Ok(identifier_expression(&kept))
+    }
+
+    fn filter_loop(
+        &mut self,
+        callback: &Callback<'_>,
+        pipeline: Pipeline<'_>,
+        kept: &str,
+    ) -> GoResult<GoStatement> {
+        let need = Need::Variable { callback, position: 0 };
+        let mut opened = self.open(pipeline, need, None)?;
+        let element = opened.element.clone();
+        let condition = self.callback_value(callback, vec![element.clone()], opened.body.body())?;
         let appended = call(
             identifier_expression("append"),
-            vec![identifier_expression(&kept), identifier_expression(&element)],
+            vec![identifier_expression(kept), element],
         );
-        body.push(GoStatement::If {
+        opened.body.body().push(GoStatement::If {
             condition,
             then: vec![GoStatement::Assign {
-                targets: vec![identifier_expression(&kept)],
+                targets: vec![identifier_expression(kept)],
                 values: vec![appended],
             }],
             otherwise: vec![],
         });
-        out.push(GoStatement::Range { index: None, element, iterable: array, body });
-        Ok(identifier_expression(&kept))
+        Ok(self.close(opened.body))
     }
 
     fn search(
@@ -391,8 +418,9 @@ where
         array: &Expression,
         out: &mut Vec<GoStatement>,
     ) -> GoResult<GoExpression> {
-        let array = self.value(array, out)?;
-        let array = self.hoist(array, "array", out);
+        let demand = Demand { breaks: true, ..Demand::FORWARD };
+        let need = Need::Argument { callback: &callback, position: 0 };
+        let pipeline = self.pipeline(array, demand, need, out)?;
         let looking_for = iteration == Iteration::Any;
         let found = self.temporary(if looking_for { "found" } else { "every" });
         out.push(GoStatement::Define {
@@ -400,30 +428,39 @@ where
             values: vec![GoExpression::Boolean(!looking_for)],
         });
         let saved = self.tail_loop.take();
-        let element = self.loop_variable(&callback, 0, "element");
-        let mut body = vec![];
-        let outcome =
-            self.callback_value(&callback, vec![identifier_expression(&element)], &mut body);
+        let outcome = self.search_loop(looking_for, &callback, pipeline, &found);
         self.tail_loop = saved;
-        let condition = outcome?;
+        out.push(outcome?);
+        Ok(identifier_expression(&found))
+    }
+
+    fn search_loop(
+        &mut self,
+        looking_for: bool,
+        callback: &Callback<'_>,
+        pipeline: Pipeline<'_>,
+        found: &str,
+    ) -> GoResult<GoStatement> {
+        let need = Need::Argument { callback, position: 0 };
+        let mut opened = self.open(pipeline, need, None)?;
+        let condition = self.callback_value(callback, vec![opened.element], opened.body.body())?;
         let condition = if looking_for {
             condition
         } else {
             GoExpression::Unary { operator: "!", operand: Box::new(condition) }
         };
-        body.push(GoStatement::If {
+        opened.body.body().push(GoStatement::If {
             condition,
             then: vec![
                 GoStatement::Assign {
-                    targets: vec![identifier_expression(&found)],
+                    targets: vec![identifier_expression(found)],
                     values: vec![GoExpression::Boolean(looking_for)],
                 },
                 GoStatement::Break,
             ],
             otherwise: vec![],
         });
-        out.push(GoStatement::Range { index: None, element, iterable: array, body });
-        Ok(identifier_expression(&found))
+        Ok(self.close(opened.body))
     }
 }
 
@@ -438,8 +475,8 @@ where
         monotype: MonotypeId,
         out: &mut Vec<GoStatement>,
     ) -> GoResult<GoExpression> {
-        let array = self.value(array, out)?;
-        let array = self.hoist(array, "array", out);
+        let need = Need::Argument { callback: &callback, position: 0 };
+        let pipeline = self.pipeline(array, Demand::FORWARD, need, out)?;
         let bound_type = self.go_type(monotype)?;
         let bound = self.temporary("bound");
         out.push(GoStatement::Define {
@@ -447,22 +484,30 @@ where
             values: vec![GoExpression::Composite { type_: bound_type, fields: vec![] }],
         });
         let saved = self.tail_loop.take();
-        let element = self.loop_variable(&callback, 0, "element");
-        let mut body = vec![];
-        let outcome =
-            self.callback_value(&callback, vec![identifier_expression(&element)], &mut body);
+        let outcome = self.bind_loop(&callback, pipeline, &bound);
         self.tail_loop = saved;
-        let produced = outcome?;
+        out.push(outcome?);
+        Ok(identifier_expression(&bound))
+    }
+
+    fn bind_loop(
+        &mut self,
+        callback: &Callback<'_>,
+        pipeline: Pipeline<'_>,
+        bound: &str,
+    ) -> GoResult<GoStatement> {
+        let need = Need::Argument { callback, position: 0 };
+        let mut opened = self.open(pipeline, need, None)?;
+        let produced = self.callback_value(callback, vec![opened.element], opened.body.body())?;
         let appended = call(
             identifier_expression("append"),
-            vec![identifier_expression(&bound), GoExpression::Spread(Box::new(produced))],
+            vec![identifier_expression(bound), GoExpression::Spread(Box::new(produced))],
         );
-        body.push(GoStatement::Assign {
-            targets: vec![identifier_expression(&bound)],
+        opened.body.body().push(GoStatement::Assign {
+            targets: vec![identifier_expression(bound)],
             values: vec![appended],
         });
-        out.push(GoStatement::Range { index: None, element, iterable: array, body });
-        Ok(identifier_expression(&bound))
+        Ok(self.close(opened.body))
     }
 
     fn find_index(
@@ -473,53 +518,53 @@ where
         monotype: MonotypeId,
         out: &mut Vec<GoStatement>,
     ) -> GoResult<GoExpression> {
-        let array = self.value(array, out)?;
-        let array = self.hoist(array, "array", out);
+        let order = match iteration {
+            Iteration::FindIndex => Order::Forward,
+            _ => Order::Backward,
+        };
+        let demand = Demand { order, positions: true, breaks: true };
+        let need = Need::Argument { callback: &callback, position: 0 };
+        let pipeline = self.pipeline(array, demand, need, out)?;
         let (data, nothing) = self.constructor_named(monotype, "Nothing")?;
         let (_, just) = self.constructor_named(monotype, "Just")?;
         let found = self.temporary("found");
         let absent = self.construct(&data, nothing, vec![])?;
         out.push(GoStatement::Define { names: vec![found.clone()], values: vec![absent] });
         let saved = self.tail_loop.take();
-        let element = self.loop_variable(&callback, 0, "element");
-        let index = self.temporary("index");
-        let mut body = vec![];
-        let ascending = iteration == Iteration::FindIndex;
-        if !ascending && element != "_" {
-            let indexed = GoExpression::Index {
-                value: Box::new(array.clone()),
-                index: Box::new(identifier_expression(&index)),
-            };
-            body.push(GoStatement::Define { names: vec![element.clone()], values: vec![indexed] });
-        }
-        let outcome =
-            self.callback_value(&callback, vec![identifier_expression(&element)], &mut body);
+        let outcome = self.find_loop(&callback, pipeline, (&data, just), &found);
         self.tail_loop = saved;
-        let condition = outcome?;
+        out.push(outcome?);
+        Ok(identifier_expression(&found))
+    }
+
+    fn find_loop(
+        &mut self,
+        callback: &Callback<'_>,
+        pipeline: Pipeline<'_>,
+        (data, just): (&DataType, usize),
+        found: &str,
+    ) -> GoResult<GoStatement> {
+        let need = Need::Argument { callback, position: 0 };
+        let mut opened = self.open(pipeline, need, Some("index"))?;
+        let index = opened.index.clone().expect("invariant violated: a search by index has one");
+        let condition = self.callback_value(callback, vec![opened.element], opened.body.body())?;
         let position = GoExpression::Conversion {
             type_: GoType::Named("int32".into()),
             value: Box::new(identifier_expression(&index)),
         };
-        let present = self.construct(&data, just, vec![position])?;
-        body.push(GoStatement::If {
+        let present = self.construct(data, just, vec![position])?;
+        opened.body.body().push(GoStatement::If {
             condition,
             then: vec![
                 GoStatement::Assign {
-                    targets: vec![identifier_expression(&found)],
+                    targets: vec![identifier_expression(found)],
                     values: vec![present],
                 },
                 GoStatement::Break,
             ],
             otherwise: vec![],
         });
-        let statement = if ascending {
-            GoStatement::Range { index: Some(index), element, iterable: array, body }
-        } else {
-            let last = binary("-", length(array), GoExpression::Integer(1));
-            GoStatement::CountingDown { variable: index, start: last, body }
-        };
-        out.push(statement);
-        Ok(identifier_expression(&found))
+        Ok(self.close(opened.body))
     }
 }
 
