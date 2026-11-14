@@ -148,6 +148,7 @@ where
         };
         name.and_then(|name| homes.get(name)).copied()
     };
+    emitter.settle_round_trips();
     let mut all = std::mem::take(&mut emitter.type_declarations);
     all.extend(declarations);
     let all: Vec<(GoDeclaration, Option<ModuleIndex>)> = all
@@ -225,6 +226,7 @@ where
             closure_sets: FxHashMap::default(),
             closure_layouts: FxHashMap::default(),
             converters: FxHashMap::default(),
+            round_trips: vec![],
             recursive_names: FxHashMap::default(),
             type_declarations: vec![],
             reference_declared: false,
@@ -547,6 +549,7 @@ struct Emitter<'p, 'm, 'q, Q> {
     closure_sets: FxHashMap<MonotypeId, closures::ClosureSet>,
     closure_layouts: FxHashMap<MonotypeId, DataLayout>,
     converters: FxHashMap<(MonotypeId, MonotypeId), String>,
+    round_trips: Vec<coerce::RoundTrip>,
     recursive_names: FxHashMap<DataType, String>,
     type_declarations: Vec<GoDeclaration>,
     reference_declared: bool,
