@@ -19,7 +19,7 @@ import (
 
 type Instruction struct {
 	Store1 any
-	Load0  func(int32) any
+	Load   func(int32) any
 	Origin any
 	Store0 int32
 	Tag    uint8
@@ -32,7 +32,7 @@ const (
 
 type Command struct {
 	Push1  any
-	Pop0   func(int32) any
+	Pop    func(int32) any
 	Origin any
 	Push0  int32
 	Tag    uint8
@@ -45,7 +45,7 @@ const (
 
 type CommandVal struct {
 	Push1 any
-	Pop0  func(int32) any
+	Pop   func(int32) any
 	Push0 int32
 	Tag   uint8
 }
@@ -63,12 +63,12 @@ func convert(value *Command) CommandVal {
 	case CommandPush:
 		return CommandVal{Tag: CommandValPush, Push0: value.Push0, Push1: value.Push1}
 	default: // CommandPop
-		return CommandVal{Tag: CommandValPop, Pop0: value.Pop0}
+		return CommandVal{Tag: CommandValPop, Pop: value.Pop}
 	}
 }
 
 type FreeCommand struct {
-	Pure0  any
+	Pure   any
 	Bind0  CommandVal
 	Bind1  func(any) *FreeCommand
 	Origin any
@@ -88,7 +88,7 @@ type StateValueOfValue struct {
 type FreeCommandInt struct {
 	Bind0 CommandVal
 	Bind1 func(any) FreeCommandInt
-	Pure0 int32
+	Pure  int32
 	Tag   uint8
 }
 
@@ -107,13 +107,13 @@ func convert2(value CommandVal) *Command {
 	case CommandValPush:
 		return &Command{Tag: CommandPush, Push0: value.Push0, Push1: value.Push1, Origin: value}
 	default: // CommandValPop
-		return &Command{Tag: CommandPop, Pop0: value.Pop0, Origin: value}
+		return &Command{Tag: CommandPop, Pop: value.Pop, Origin: value}
 	}
 }
 
 type CommandUnit struct {
 	Push1 struct{}
-	Pop0  func(int32)
+	Pop   func(int32)
 	Push0 int32
 	Tag   uint8
 }
@@ -128,15 +128,15 @@ func convert3(value CommandUnit) CommandVal {
 	case CommandUnitPush:
 		return CommandVal{Tag: CommandValPush, Push0: value.Push0, Push1: value.Push1}
 	default: // CommandUnitPop
-		return CommandVal{Tag: CommandValPop, Pop0: func(coerced int32) any {
-			value.Pop0(coerced)
+		return CommandVal{Tag: CommandValPop, Pop: func(coerced int32) any {
+			value.Pop(coerced)
 			return struct{}{}
 		}}
 	}
 }
 
 type FreeCommandUnit struct {
-	Pure0 struct{}
+	Pure  struct{}
 	Bind0 CommandVal
 	Bind1 func(any) FreeCommandUnit
 	Tag   uint8
@@ -148,7 +148,7 @@ const (
 )
 
 type CommandInt struct {
-	Pop0  func(int32) int32
+	Pop   func(int32) int32
 	Push0 int32
 	Push1 int32
 	Tag   uint8
@@ -164,15 +164,15 @@ func convert4(value CommandInt) CommandVal {
 	case CommandIntPush:
 		return CommandVal{Tag: CommandValPush, Push0: value.Push0, Push1: value.Push1}
 	default: // CommandIntPop
-		return CommandVal{Tag: CommandValPop, Pop0: func(coerced2 int32) any {
-			return value.Pop0(coerced2)
+		return CommandVal{Tag: CommandValPop, Pop: func(coerced2 int32) any {
+			return value.Pop(coerced2)
 		}}
 	}
 }
 
 type InstructionVal struct {
 	Store1 any
-	Load0  func(int32) any
+	Load   func(int32) any
 	Store0 int32
 	Tag    uint8
 }
@@ -185,7 +185,7 @@ const (
 type FreeInstructionInt struct {
 	Bind0 InstructionVal
 	Bind1 func(any) FreeInstructionInt
-	Pure0 int32
+	Pure  int32
 	Tag   uint8
 }
 
@@ -196,7 +196,7 @@ const (
 
 type InstructionUnit struct {
 	Store1 struct{}
-	Load0  func(int32)
+	Load   func(int32)
 	Store0 int32
 	Tag    uint8
 }
@@ -211,15 +211,15 @@ func convert5(value InstructionUnit) InstructionVal {
 	case InstructionUnitStore:
 		return InstructionVal{Tag: InstructionValStore, Store0: value.Store0, Store1: value.Store1}
 	default: // InstructionUnitLoad
-		return InstructionVal{Tag: InstructionValLoad, Load0: func(coerced int32) any {
-			value.Load0(coerced)
+		return InstructionVal{Tag: InstructionValLoad, Load: func(coerced int32) any {
+			value.Load(coerced)
 			return struct{}{}
 		}}
 	}
 }
 
 type FreeInstructionUnit struct {
-	Pure0 struct{}
+	Pure  struct{}
 	Bind0 InstructionVal
 	Bind1 func(any) FreeInstructionUnit
 	Tag   uint8
@@ -231,7 +231,7 @@ const (
 )
 
 type InstructionInt struct {
-	Load0  func(int32) int32
+	Load   func(int32) int32
 	Store0 int32
 	Store1 int32
 	Tag    uint8
@@ -247,8 +247,8 @@ func convert6(value InstructionInt) InstructionVal {
 	case InstructionIntStore:
 		return InstructionVal{Tag: InstructionValStore, Store0: value.Store0, Store1: value.Store1}
 	default: // InstructionIntLoad
-		return InstructionVal{Tag: InstructionValLoad, Load0: func(coerced2 int32) any {
-			return value.Load0(coerced2)
+		return InstructionVal{Tag: InstructionValLoad, Load: func(coerced2 int32) any {
+			return value.Load(coerced2)
 		}}
 	}
 }
@@ -258,12 +258,12 @@ func convert7(value InstructionVal) *Instruction {
 	case InstructionValStore:
 		return &Instruction{Tag: InstructionStore, Store0: value.Store0, Store1: value.Store1, Origin: value}
 	default: // InstructionValLoad
-		return &Instruction{Tag: InstructionLoad, Load0: value.Load0, Origin: value}
+		return &Instruction{Tag: InstructionLoad, Load: value.Load, Origin: value}
 	}
 }
 
 type FreeCommandVal struct {
-	Pure0 any
+	Pure  any
 	Bind0 CommandVal
 	Bind1 func(any) FreeCommandVal
 	Tag   uint8
@@ -280,7 +280,7 @@ func convert8(value *FreeCommand) FreeCommandVal {
 	}
 	switch value.Tag {
 	case FreeCommandPure:
-		return FreeCommandVal{Tag: FreeCommandValPure, Pure0: value.Pure0}
+		return FreeCommandVal{Tag: FreeCommandValPure, Pure: value.Pure}
 	default: // FreeCommandBind
 		return FreeCommandVal{Tag: FreeCommandValBind, Bind0: value.Bind0, Bind1: func(coerced any) FreeCommandVal {
 			return convert8(value.Bind1(coerced))
@@ -294,10 +294,10 @@ var main_ []int32 = []int32{foldFreeCommandIntInt(intoState, program, 0).Value +
 	case InstructionStore:
 		result = &Command{Tag: CommandPush, Push0: x.Store0, Push1: x.Store1}
 	default: // InstructionLoad
-		result = &Command{Tag: CommandPop, Pop0: x.Load0}
+		result = &Command{Tag: CommandPop, Pop: x.Load}
 	}
 	return &FreeCommand{Tag: FreeCommandBind, Bind0: convert(result), Bind1: func(value any) *FreeCommand {
-		return &FreeCommand{Tag: FreeCommandPure, Pure0: value}
+		return &FreeCommand{Tag: FreeCommandPure, Pure: value}
 	}}
 }, instructions), 0).Value}
 
@@ -305,7 +305,7 @@ func foldFreeCommandIntInt(k func(*Command, int32) StateValueOfValue, program2 F
 	for {
 		switch program2.Tag {
 		case FreeCommandIntPure:
-			a := program2.Pure0
+			a := program2.Pure
 			return StateValueOfInt{Value: a, State: state}
 		default: // FreeCommandIntBind
 			command := program2.Bind0
@@ -322,32 +322,32 @@ func intoState(value *Command, ignored int32) StateValueOfValue {
 	case CommandPush:
 		return StateValueOfValue{Value: value.Push1, State: value.Push0}
 	default: // CommandPop
-		return StateValueOfValue{Value: value.Pop0(ignored), State: ignored}
+		return StateValueOfValue{Value: value.Pop(ignored), State: ignored}
 	}
 }
 
 var program FreeCommandInt = andThenCommandUnitInt(FreeCommandUnit{Tag: FreeCommandUnitBind, Bind0: convert3(CommandUnit{Tag: CommandUnitPush, Push0: 41, Push1: struct{}{}}), Bind1: func(_ any) FreeCommandUnit {
-	return FreeCommandUnit{Tag: FreeCommandUnitPure, Pure0: struct{}{}}
+	return FreeCommandUnit{Tag: FreeCommandUnitPure, Pure: struct{}{}}
 }}, func(_ struct{}) FreeCommandInt {
-	return FreeCommandInt{Tag: FreeCommandIntBind, Bind0: convert4(CommandInt{Tag: CommandIntPop, Pop0: category.Identity}), Bind1: func(value any) FreeCommandInt {
-		return FreeCommandInt{Tag: FreeCommandIntPure, Pure0: value.(int32)}
+	return FreeCommandInt{Tag: FreeCommandIntBind, Bind0: convert4(CommandInt{Tag: CommandIntPop, Pop: category.Identity}), Bind1: func(value any) FreeCommandInt {
+		return FreeCommandInt{Tag: FreeCommandIntPure, Pure: value.(int32)}
 	}}
 })
 
 var instructions FreeInstructionInt = andThenInstructionUnitInt(FreeInstructionUnit{Tag: FreeInstructionUnitBind, Bind0: convert5(InstructionUnit{Tag: InstructionUnitStore, Store0: 6, Store1: struct{}{}}), Bind1: func(_ any) FreeInstructionUnit {
-	return FreeInstructionUnit{Tag: FreeInstructionUnitPure, Pure0: struct{}{}}
+	return FreeInstructionUnit{Tag: FreeInstructionUnitPure, Pure: struct{}{}}
 }}, func(_ struct{}) FreeInstructionInt {
-	return FreeInstructionInt{Tag: FreeInstructionIntBind, Bind0: convert6(InstructionInt{Tag: InstructionIntLoad, Load0: func(value int32) int32 {
+	return FreeInstructionInt{Tag: FreeInstructionIntBind, Bind0: convert6(InstructionInt{Tag: InstructionIntLoad, Load: func(value int32) int32 {
 		return prim.MultiplyInt32(value, 7)
 	}}), Bind1: func(value2 any) FreeInstructionInt {
-		return FreeInstructionInt{Tag: FreeInstructionIntPure, Pure0: value2.(int32)}
+		return FreeInstructionInt{Tag: FreeInstructionIntPure, Pure: value2.(int32)}
 	}}
 })
 
 func andThenCommandUnitInt(program2 FreeCommandUnit, next func(struct{}) FreeCommandInt) FreeCommandInt {
 	switch program2.Tag {
 	case FreeCommandUnitPure:
-		return next(program2.Pure0)
+		return next(program2.Pure)
 	default: // FreeCommandUnitBind
 		return FreeCommandInt{Tag: FreeCommandIntBind, Bind0: program2.Bind0, Bind1: func(value any) FreeCommandInt {
 			return andThenCommandUnitInt(program2.Bind1(value), next)
@@ -358,7 +358,7 @@ func andThenCommandUnitInt(program2 FreeCommandUnit, next func(struct{}) FreeCom
 func substFreeInstructionCommandInt(k func(*Instruction) *FreeCommand, value FreeInstructionInt) FreeCommandInt {
 	switch value.Tag {
 	case FreeInstructionIntPure:
-		return FreeCommandInt{Tag: FreeCommandIntPure, Pure0: value.Pure0}
+		return FreeCommandInt{Tag: FreeCommandIntPure, Pure: value.Pure}
 	default: // FreeInstructionIntBind
 		return andThenCommandValInt(convert8(k(convert7(value.Bind0))), func(value2 any) FreeCommandInt {
 			return substFreeInstructionCommandInt(k, value.Bind1(value2))
@@ -369,7 +369,7 @@ func substFreeInstructionCommandInt(k func(*Instruction) *FreeCommand, value Fre
 func andThenInstructionUnitInt(program2 FreeInstructionUnit, next func(struct{}) FreeInstructionInt) FreeInstructionInt {
 	switch program2.Tag {
 	case FreeInstructionUnitPure:
-		return next(program2.Pure0)
+		return next(program2.Pure)
 	default: // FreeInstructionUnitBind
 		return FreeInstructionInt{Tag: FreeInstructionIntBind, Bind0: program2.Bind0, Bind1: func(value any) FreeInstructionInt {
 			return andThenInstructionUnitInt(program2.Bind1(value), next)
@@ -380,7 +380,7 @@ func andThenInstructionUnitInt(program2 FreeInstructionUnit, next func(struct{})
 func andThenCommandValInt(program2 FreeCommandVal, next func(any) FreeCommandInt) FreeCommandInt {
 	switch program2.Tag {
 	case FreeCommandValPure:
-		return next(program2.Pure0)
+		return next(program2.Pure)
 	default: // FreeCommandValBind
 		return FreeCommandInt{Tag: FreeCommandIntBind, Bind0: program2.Bind0, Bind1: func(value any) FreeCommandInt {
 			return andThenCommandValInt(program2.Bind1(value), next)

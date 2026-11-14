@@ -7,8 +7,8 @@ package maybe
 import "fixture/shared"
 
 type MaybeTiming struct {
-	Just0 shared.Timing
-	Tag   uint8
+	Just shared.Timing
+	Tag  uint8
 }
 
 const (
@@ -70,14 +70,14 @@ type PairString struct {
 var main_ = initializeMain_()
 
 func initializeMain_() string {
-	array2 := []maybe.MaybeTiming{maybe.MaybeTiming{Tag: maybe.MaybeTimingJust, Just0: shared.Timing{Start: 2.0, End: 3.0}}, maybe.MaybeTiming{Tag: maybe.MaybeTimingNothing}}
+	array2 := []maybe.MaybeTiming{maybe.MaybeTiming{Tag: maybe.MaybeTimingJust, Just: shared.Timing{Start: 2.0, End: 3.0}}, maybe.MaybeTiming{Tag: maybe.MaybeTimingNothing}}
 	var accumulator float64 = 0.0
 	for timingIndex := range array2 {
 		acc := accumulator
 		var result float64
 		switch array2[timingIndex].Tag {
 		case maybe.MaybeTimingJust:
-			x := array2[timingIndex].Just0
+			x := array2[timingIndex].Just
 			result = x.End - x.Start
 		default:
 			result = 0.0

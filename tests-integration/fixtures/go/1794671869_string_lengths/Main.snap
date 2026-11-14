@@ -7,8 +7,8 @@ package maybe
 import "fixture/shared"
 
 type MaybeHeadTail struct {
-	Just0 shared.HeadTail
-	Tag   uint8
+	Just shared.HeadTail
+	Tag  uint8
 }
 
 const (
@@ -17,8 +17,8 @@ const (
 )
 
 type MaybeChar struct {
-	Just0 rune
-	Tag   uint8
+	Just rune
+	Tag  uint8
 }
 
 const (
@@ -70,25 +70,25 @@ func countSpacesUnconsingCountsUpToTwo(text string, count int32) int32 {
 		case 0:
 			result = maybe.MaybeHeadTail{Tag: maybe.MaybeHeadTailNothing}
 		case 1:
-			result = maybe.MaybeHeadTail{Tag: maybe.MaybeHeadTailJust, Just0: shared.HeadTail{Head: prim.ToCharCode(prim.CharAt(0, text)), Tail: ""}}
+			result = maybe.MaybeHeadTail{Tag: maybe.MaybeHeadTailJust, Just: shared.HeadTail{Head: prim.ToCharCode(prim.CharAt(0, text)), Tail: ""}}
 		default:
 			cu0 := prim.ToCharCode(prim.CharAt(0, text))
 			cu1 := prim.ToCharCode(prim.CharAt(1, text))
 			if 55296 <= cu0 && cu0 <= 56319 && (56320 <= cu1 && cu1 <= 57343) {
-				result = maybe.MaybeHeadTail{Tag: maybe.MaybeHeadTailJust, Just0: shared.HeadTail{Head: prim.MultiplyInt32(cu0 - 55296, 1024) + (cu1 - 56320) + 65536, Tail: prim.CodeUnitDrop(2, text)}}
+				result = maybe.MaybeHeadTail{Tag: maybe.MaybeHeadTailJust, Just: shared.HeadTail{Head: prim.MultiplyInt32(cu0 - 55296, 1024) + (cu1 - 56320) + 65536, Tail: prim.CodeUnitDrop(2, text)}}
 			} else {
-				result = maybe.MaybeHeadTail{Tag: maybe.MaybeHeadTailJust, Just0: shared.HeadTail{Head: cu0, Tail: prim.CodeUnitDrop(1, text)}}
+				result = maybe.MaybeHeadTail{Tag: maybe.MaybeHeadTailJust, Just: shared.HeadTail{Head: cu0, Tail: prim.CodeUnitDrop(1, text)}}
 			}
 		}
 		switch result.Tag {
 		case maybe.MaybeHeadTailJust:
 			var result2 int32
-			if result.Just0.Head == prim.ToCharCode(rune(' ')) {
+			if result.Just.Head == prim.ToCharCode(rune(' ')) {
 				result2 = count + 1
 			} else {
 				result2 = count
 			}
-			text, count = result.Just0.Tail, result2
+			text, count = result.Just.Tail, result2
 			continue
 		default: // maybe.MaybeHeadTailNothing
 			return count
@@ -103,12 +103,12 @@ func unchangedTextLengthIsCountedBeforeTheLoop(text string, i int32, count int32
 			return count
 		}
 		scrutinee := textUnits.CharAt(func(payload rune) maybe.MaybeChar {
-			return maybe.MaybeChar{Tag: maybe.MaybeCharJust, Just0: payload}
+			return maybe.MaybeChar{Tag: maybe.MaybeCharJust, Just: payload}
 		}, maybe.MaybeChar{Tag: maybe.MaybeCharNothing}, i)
 		var result2 bool
 		switch scrutinee.Tag {
 		case maybe.MaybeCharJust:
-			result2 = scrutinee.Just0 == 'a'
+			result2 = scrutinee.Just == 'a'
 		default:
 			result2 = false
 		}

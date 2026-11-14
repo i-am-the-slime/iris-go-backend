@@ -5,8 +5,8 @@ source: tests-integration/src/fixtures.rs
 package maybe
 
 type MaybeInt struct {
-	Just0 int32
-	Tag   uint8
+	Just int32
+	Tag  uint8
 }
 
 const (
@@ -15,8 +15,8 @@ const (
 )
 
 type MaybeString struct {
-	Just0 string
-	Tag   uint8
+	Just string
+	Tag  uint8
 }
 
 const (
@@ -43,7 +43,7 @@ const (
 )
 
 type Shape struct {
-	Circle0    int32
+	Circle     int32
 	Rectangle0 int32
 	Rectangle1 int32
 	Tag        uint8
@@ -67,26 +67,26 @@ func initializeMain_() []string {
 	for index, element := range array2 {
 		mapped[index] = name(element)
 	}
-	array3 := []Shape{Shape{Tag: ShapeCircle, Circle0: 1}, Shape{Tag: ShapeRectangle, Rectangle0: 2, Rectangle1: 3}}
+	array3 := []Shape{Shape{Tag: ShapeCircle, Circle: 1}, Shape{Tag: ShapeRectangle, Rectangle0: 2, Rectangle1: 3}}
 	mapped2 := make([]string, len(array3))
 	for index2 := range array3 {
 		var result int32
 		switch array3[index2].Tag {
 		case ShapeCircle:
-			radius := array3[index2].Circle0
+			radius := array3[index2].Circle
 			result = prim.MultiplyInt32(prim.MultiplyInt32(3, radius), radius)
 		default: // ShapeRectangle
 			result = prim.MultiplyInt32(array3[index2].Rectangle0, array3[index2].Rectangle1)
 		}
 		mapped2[index2] = prim.ShowInt(result)
 	}
-	array4 := []maybe.MaybeInt{maybe.MaybeInt{Tag: maybe.MaybeIntJust, Just0: 2}, maybe.MaybeInt{Tag: maybe.MaybeIntNothing}}
+	array4 := []maybe.MaybeInt{maybe.MaybeInt{Tag: maybe.MaybeIntJust, Just: 2}, maybe.MaybeInt{Tag: maybe.MaybeIntNothing}}
 	mapped3 := make([]string, len(array4))
 	for index3 := range array4 {
 		var result2 int32
 		switch array4[index3].Tag {
 		case maybe.MaybeIntJust:
-			result2 = 1 + array4[index3].Just0
+			result2 = 1 + array4[index3].Just
 		default: // maybe.MaybeIntNothing
 			result2 = 1
 		}
@@ -122,13 +122,13 @@ func initializeMain_() []string {
 	for index6 := range array7 {
 		mapped6[index6] = prim.ShowInt(array7[index6].Left + array7[index6].Right)
 	}
-	array8 := []maybe.MaybeString{maybe.MaybeString{Tag: maybe.MaybeStringJust, Just0: "here"}}
+	array8 := []maybe.MaybeString{maybe.MaybeString{Tag: maybe.MaybeStringJust, Just: "here"}}
 	mapped7 := make([]string, len(array8))
 	for index7 := range array8 {
 		var result5 string
 		switch array8[index7].Tag {
 		case maybe.MaybeStringJust:
-			result5 = array8[index7].Just0
+			result5 = array8[index7].Just
 		default:
 			panic("Failed pattern match")
 		}

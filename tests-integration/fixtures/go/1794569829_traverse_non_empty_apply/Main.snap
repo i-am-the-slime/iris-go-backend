@@ -5,8 +5,8 @@ source: tests-integration/src/fixtures.rs
 package maybe
 
 type MaybeArrayInt struct {
-	Just0 []int32
-	Tag   uint8
+	Just []int32
+	Tag  uint8
 }
 
 const (
@@ -33,7 +33,7 @@ func initializeMain_() maybe.MaybeArrayInt {
 	n := array_[0]
 	var result maybe.MaybeArrayInt
 	if prim.IntMod(n, 2) == 0 {
-		result = maybe.MaybeArrayInt{Tag: maybe.MaybeArrayIntJust, Just0: []int32{prim.IntDiv(n, 2)}}
+		result = maybe.MaybeArrayInt{Tag: maybe.MaybeArrayIntJust, Just: []int32{prim.IntDiv(n, 2)}}
 	} else {
 		result = maybe.MaybeArrayInt{Tag: maybe.MaybeArrayIntNothing}
 	}
@@ -44,7 +44,7 @@ func initializeMain_() maybe.MaybeArrayInt {
 		switch accumulator2.Tag {
 		case maybe.MaybeArrayIntJust:
 			if prim.IntMod(element, 2) == 0 {
-				accumulator = maybe.MaybeArrayInt{Tag: maybe.MaybeArrayIntJust, Just0: append_(accumulator2.Just0)(prim.IntDiv(element, 2))}
+				accumulator = maybe.MaybeArrayInt{Tag: maybe.MaybeArrayIntJust, Just: append_(accumulator2.Just)(prim.IntDiv(element, 2))}
 			} else {
 				accumulator = maybe.MaybeArrayInt{Tag: maybe.MaybeArrayIntNothing}
 			}

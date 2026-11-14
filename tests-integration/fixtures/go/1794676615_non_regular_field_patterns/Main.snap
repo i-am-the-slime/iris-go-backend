@@ -5,13 +5,13 @@ source: tests-integration/src/fixtures.rs
 package tuple
 
 type TupleIntInt struct {
-	Tuple0 int32
-	Tuple1 int32
+	First  int32
+	Second int32
 }
 
 type Tuple struct {
-	Tuple0 any
-	Tuple1 any
+	First  any
+	Second any
 	Origin any
 }
 
@@ -26,10 +26,10 @@ import (
 )
 
 type Sequence struct {
-	Zero0 *Sequence
-	One0  any
-	One1  *Sequence
-	Tag   uint8
+	Zero *Sequence
+	One0 any
+	One1 *Sequence
+	Tag  uint8
 }
 
 const (
@@ -39,14 +39,14 @@ const (
 )
 
 func convert(value tuple.TupleIntInt) *tuple.Tuple {
-	return &tuple.Tuple{Tuple0: value.Tuple0, Tuple1: value.Tuple1, Origin: value}
+	return &tuple.Tuple{First: value.First, Second: value.Second, Origin: value}
 }
 
 func convert2(value *tuple.Tuple) tuple.TupleIntInt {
 	if original, ok := value.Origin.(tuple.TupleIntInt); ok {
 		return original
 	}
-	return tuple.TupleIntInt{Tuple0: value.Tuple0.(int32), Tuple1: value.Tuple1.(int32)}
+	return tuple.TupleIntInt{First: value.First.(int32), Second: value.Second.(int32)}
 }
 
 var main_ = initializeMain_()
@@ -63,16 +63,16 @@ func initializeMain_() []int32 {
 			case SequenceEmpty:
 				accumulator = &Sequence{Tag: SequenceOne, One0: a, One1: &Sequence{Tag: SequenceEmpty}}
 			case SequenceZero:
-				accumulator = sequenceCells.New(Sequence{Tag: SequenceOne, One0: a, One1: b.Zero0})
+				accumulator = sequenceCells.New(Sequence{Tag: SequenceOne, One0: a, One1: b.Zero})
 			default: // SequenceOne
 				original := func(x2 any) func(*Sequence) *Sequence {
 					return func(value *Sequence) *Sequence {
 						return consTupleIntInt(x2, value)
 					}
 				}
-				accumulator = &Sequence{Tag: SequenceZero, Zero0: func(coerced tuple.TupleIntInt) func(*Sequence) *Sequence {
+				accumulator = &Sequence{Tag: SequenceZero, Zero: func(coerced tuple.TupleIntInt) func(*Sequence) *Sequence {
 					return original(convert(coerced))
-				}(tuple.TupleIntInt{Tuple0: a, Tuple1: b.One0.(int32)})(b.One1)}
+				}(tuple.TupleIntInt{First: a, Second: b.One0.(int32)})(b.One1)}
 			}
 		}
 		var result int32
@@ -88,16 +88,16 @@ func initializeMain_() []int32 {
 			if accumulator.Tag == SequenceOne && accumulator.One1.Tag == SequenceOne {
 				guarded2 := accumulator.One0.(int32)
 				guarded3 := convert2(accumulator.One1.One0.(*tuple.Tuple))
-				result = guarded2 + prim.MultiplyInt32(guarded3.Tuple0, 10) + guarded3.Tuple1
+				result = guarded2 + prim.MultiplyInt32(guarded3.First, 10) + guarded3.Second
 				break matched
 			}
 			if accumulator.Tag == SequenceOne {
 				result = accumulator.One0.(int32)
 				break matched
 			}
-			if accumulator.Tag == SequenceZero && accumulator.Zero0.Tag == SequenceOne {
-				guarded4 := convert2(accumulator.Zero0.One0.(*tuple.Tuple))
-				result = guarded4.Tuple0 - guarded4.Tuple1
+			if accumulator.Tag == SequenceZero && accumulator.Zero.Tag == SequenceOne {
+				guarded4 := convert2(accumulator.Zero.One0.(*tuple.Tuple))
+				result = guarded4.First - guarded4.Second
 				break matched
 			}
 			result = 0
@@ -113,16 +113,16 @@ func consTupleIntInt(x any, value *Sequence) *Sequence {
 	case SequenceEmpty:
 		return &Sequence{Tag: SequenceOne, One0: x, One1: &Sequence{Tag: SequenceEmpty}}
 	case SequenceZero:
-		return &Sequence{Tag: SequenceOne, One0: x, One1: value.Zero0}
+		return &Sequence{Tag: SequenceOne, One0: x, One1: value.Zero}
 	default: // SequenceOne
 		original := func(x2 any) func(*Sequence) *Sequence {
 			return func(value2 *Sequence) *Sequence {
 				return consTupleIntInt(x2, value2)
 			}
 		}
-		return &Sequence{Tag: SequenceZero, Zero0: func(coerced *tuple.Tuple) func(*Sequence) *Sequence {
+		return &Sequence{Tag: SequenceZero, Zero: func(coerced *tuple.Tuple) func(*Sequence) *Sequence {
 			return original(coerced)
-		}(&tuple.Tuple{Tuple0: x, Tuple1: value.One0})(value.One1)}
+		}(&tuple.Tuple{First: x, Second: value.One0})(value.One1)}
 	}
 }
 

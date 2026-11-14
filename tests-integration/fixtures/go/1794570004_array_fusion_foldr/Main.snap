@@ -5,8 +5,8 @@ source: tests-integration/src/fixtures.rs
 package maybe
 
 type MaybeInt struct {
-	Just0 int32
-	Tag   uint8
+	Just int32
+	Tag  uint8
 }
 
 const (
@@ -56,7 +56,7 @@ func initializeMain_() MainResult {
 		value3 := numbers[index3]
 		value4 := prim.MultiplyInt32(value3, 2)
 		if value4 < 5 {
-			found = maybe.MaybeInt{Tag: maybe.MaybeIntJust, Just0: int32(index3)}
+			found = maybe.MaybeInt{Tag: maybe.MaybeIntJust, Just: int32(index3)}
 			break
 		}
 	}

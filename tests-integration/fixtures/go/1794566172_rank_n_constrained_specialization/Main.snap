@@ -7,13 +7,13 @@ package tuple
 import "fixture/shared"
 
 type TupleIntInt struct {
-	Tuple0 int32
-	Tuple1 int32
+	First  int32
+	Second int32
 }
 
 type TupleUnitInt struct {
-	Tuple0 struct{}
-	Tuple1 int32
+	First  struct{}
+	Second int32
 }
 
 type Interpreter struct {
@@ -44,7 +44,7 @@ func Discard(argument SceneUnit, argument2 func(struct{}) SceneInt) SceneInt {
 		argument0 := argument.StateTIntIdentity(interpreter3)
 		return func(s int32) TupleIntInt {
 			scrutinee := argument0(s)
-			return argument2(scrutinee.Tuple0).StateTIntIdentity(interpreter3)(scrutinee.Tuple1)
+			return argument2(scrutinee.First).StateTIntIdentity(interpreter3)(scrutinee.Second)
 		}
 	}}
 }
@@ -93,14 +93,14 @@ var counted = initializeCounted()
 func initializeCounted() int32 {
 	scrutinee := program.StateTIntIdentity(tuple.Interpreter{Emit: func(_ int32) func(int32) tuple.TupleUnitInt {
 		return func(x int32) tuple.TupleUnitInt {
-			return tuple.TupleUnitInt{Tuple0: struct{}{}, Tuple1: x + 1}
+			return tuple.TupleUnitInt{First: struct{}{}, Second: x + 1}
 		}
 	}, Measure: func(_ string) func(int32) tuple.TupleIntInt {
 		return func(s int32) tuple.TupleIntInt {
-			return tuple.TupleIntInt{Tuple0: 3, Tuple1: s}
+			return tuple.TupleIntInt{First: 3, Second: s}
 		}
 	}})(0)
-	return scrutinee.Tuple1
+	return scrutinee.Second
 }
 
 var measured int32 = program.Identity(shared.InterpreterIdentity{Emit: func(_ int32) {
@@ -117,7 +117,7 @@ var program tuple.SceneInt = tuple.SceneInt{Identity: func(interpreter shared.In
 	argument0 := interpreter3.Measure("hello")
 	return func(s int32) tuple.TupleIntInt {
 		scrutinee := argument0(s)
-		return programArgument1(scrutinee.Tuple0).StateTIntIdentity(interpreter3)(scrutinee.Tuple1)
+		return programArgument1(scrutinee.First).StateTIntIdentity(interpreter3)(scrutinee.Second)
 	}
 }}
 
@@ -144,7 +144,7 @@ func programArgument1(width int32) tuple.SceneInt {
 				return value2
 			}, StateTIntIdentity: func(_ tuple.Interpreter) func(int32) tuple.TupleIntInt {
 				return func(s int32) tuple.TupleIntInt {
-					return tuple.TupleIntInt{Tuple0: value2, Tuple1: s}
+					return tuple.TupleIntInt{First: value2, Second: s}
 				}
 			}}
 		})

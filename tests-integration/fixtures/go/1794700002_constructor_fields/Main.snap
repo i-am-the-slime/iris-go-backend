@@ -1,0 +1,158 @@
+---
+source: tests-integration/src/fixtures.rs
+---
+// Data/Either/either.go
+package either
+
+type EitherStringInt struct {
+	Left  string
+	Right int32
+	Tag   uint8
+}
+
+const (
+	EitherStringIntLeft = iota
+	EitherStringIntRight
+)
+
+// Data/List/Types/types.go
+package types
+
+type ListInt struct {
+	Cons1 *ListInt
+	Cons0 int32
+	Tag   uint8
+}
+
+const (
+	ListIntNil = iota
+	ListIntCons
+)
+
+// Data/Maybe/maybe.go
+package maybe
+
+type MaybeInt struct {
+	Just int32
+	Tag  uint8
+}
+
+const (
+	MaybeIntNothing = iota
+	MaybeIntJust
+)
+
+// Data/Show/show.go
+package show
+
+import "github.com/i-am-the-slime/purs-backend-go/go-support/prim"
+
+func Show(argument0 string) string {
+	return prim.ShowString(argument0)
+}
+
+// main.go
+package main
+
+import (
+	"fixture/Data/Either"
+	"fixture/Data/List/Types"
+	"fixture/Data/Maybe"
+	"fixture/Data/Show"
+	"fmt"
+	"github.com/i-am-the-slime/purs-backend-go/go-support/prim"
+)
+
+type TupleMaybeIntEitherStringInt struct {
+	Second either.EitherStringInt
+	First  maybe.MaybeInt
+}
+
+var sharedListIntNil = &types.ListInt{Tag: types.ListIntNil}
+
+type Labelled struct {
+	Tag0 string
+	Tag  uint8
+}
+
+const (
+	LabelledTag = iota
+	LabelledUntagged
+)
+
+type Entry struct {
+	Duo0   string
+	Duo1   string
+	Trio0  string
+	Trio1  string
+	Field0 int32
+	Field1 int32
+	Tag    uint8
+}
+
+const (
+	EntryField = iota
+	EntryDuo
+	EntryTrio
+)
+
+var main_ = initializeMain_()
+
+func initializeMain_() string {
+	array2 := []TupleMaybeIntEitherStringInt{TupleMaybeIntEitherStringInt{First: maybe.MaybeInt{Tag: maybe.MaybeIntJust, Just: 1}, Second: either.EitherStringInt{Tag: either.EitherStringIntRight, Right: 2}}, TupleMaybeIntEitherStringInt{First: maybe.MaybeInt{Tag: maybe.MaybeIntNothing}, Second: either.EitherStringInt{Tag: either.EitherStringIntLeft, Left: "x"}}}
+	var accumulator int32 = 0
+	for argument1Index := range array2 {
+		argument0 := accumulator
+		if array2[argument1Index].First.Tag == maybe.MaybeIntJust && array2[argument1Index].Second.Tag == either.EitherStringIntRight {
+			accumulator = argument0 + array2[argument1Index].First.Just + array2[argument1Index].Second.Right
+		} else if array2[argument1Index].Second.Tag == either.EitherStringIntLeft {
+			accumulator = argument0 - 1
+		} else {
+			accumulator = argument0
+		}
+	}
+	array3 := []Labelled{Labelled{Tag: LabelledTag, Tag0: "t"}, Labelled{Tag: LabelledUntagged}}
+	mapped := make([]string, len(array3))
+	for index, element := range array3 {
+		mapped[index] = label(element)
+	}
+	array4 := []Entry{Entry{Tag: EntryField, Field0: 5, Field1: 1}, Entry{Tag: EntryDuo, Duo0: "a", Duo1: "b"}, Entry{Tag: EntryTrio, Trio0: "c", Trio1: "d"}}
+	mapped2 := make([]string, len(array4))
+	for index2, element2 := range array4 {
+		mapped2[index2] = entry(element2)
+	}
+	return prim.ShowInt(accumulator + mainSum(&types.ListInt{Tag: types.ListIntCons, Cons0: 3, Cons1: &types.ListInt{Tag: types.ListIntCons, Cons0: 4, Cons1: sharedListIntNil}})) + prim.ShowArray(show.Show, mapped) + prim.ShowArray(show.Show, mapped2)
+}
+
+func label(argument0 Labelled) string {
+	switch argument0.Tag {
+	case LabelledTag:
+		return argument0.Tag0
+	default: // LabelledUntagged
+		return "none"
+	}
+}
+
+func entry(argument0 Entry) string {
+	switch argument0.Tag {
+	case EntryField:
+		return prim.ShowInt(argument0.Field0 - argument0.Field1)
+	case EntryDuo:
+		return argument0.Duo0 + argument0.Duo1
+	default: // EntryTrio
+		return argument0.Trio1 + argument0.Trio0
+	}
+}
+
+func mainSum(argument0 *types.ListInt) int32 {
+	switch argument0.Tag {
+	case types.ListIntNil:
+		return 0
+	default: // types.ListIntCons
+		return argument0.Cons0 + mainSum(argument0.Cons1)
+	}
+}
+
+func main() {
+	fmt.Println(main_)
+}
