@@ -202,7 +202,8 @@ fn highest_pattern_local(pattern: &Pattern) -> u32 {
         PatternKind::Record(fields) => {
             fields.iter().map(|(_, pattern)| highest_pattern_local(pattern)).max().unwrap_or(0)
         }
-        PatternKind::Constructor { arguments, .. } => {
+        PatternKind::Constructor { arguments, .. }
+        | PatternKind::Closure { captures: arguments, .. } => {
             arguments.iter().map(highest_pattern_local).max().unwrap_or(0)
         }
     }
@@ -412,6 +413,7 @@ impl<'a, C: Cells> Planner<'a, C> {
                 arguments,
             } if arguments.len() == 3 => self.fold(expression, *iteration, arguments, stock, after),
             ExpressionKind::Lambda { .. }
+            | ExpressionKind::Closure { .. }
             | ExpressionKind::EffectPure(_)
             | ExpressionKind::EffectBind { .. }
             | ExpressionKind::EffectEach { .. }
@@ -782,6 +784,11 @@ impl<'a, C: Cells> Planner<'a, C> {
                     self.pattern(field, None, None, alternative, body, stock);
                 }
             }
+            PatternKind::Closure { captures, .. } => {
+                for capture in captures {
+                    self.pattern(capture, None, None, alternative, body, stock);
+                }
+            }
             PatternKind::Constructor { data, arguments, .. } => {
                 let cell = self.cells.cell(pattern.monotype);
                 if let Some(owners) = &owners
@@ -883,7 +890,8 @@ impl<'a, C: Cells> Planner<'a, C> {
             PatternKind::Wildcard
             | PatternKind::Literal(_)
             | PatternKind::Array(_)
-            | PatternKind::Record(_) => {}
+            | PatternKind::Record(_)
+            | PatternKind::Closure { .. } => {}
         }
     }
 }
@@ -919,6 +927,7 @@ impl Counter<'_> {
                 Paths::event(Event::Conflict)
             }
             ExpressionKind::Lambda { .. }
+            | ExpressionKind::Closure { .. }
             | ExpressionKind::EffectPure(_)
             | ExpressionKind::EffectBind { .. }
             | ExpressionKind::EffectEach { .. }
@@ -1202,7 +1211,8 @@ fn pattern_locals(pattern: &Pattern, locals: &mut Vec<LocalId>) {
         PatternKind::Record(fields) => {
             fields.iter().for_each(|(_, field)| pattern_locals(field, locals))
         }
-        PatternKind::Constructor { arguments, .. } => {
+        PatternKind::Constructor { arguments, .. }
+        | PatternKind::Closure { captures: arguments, .. } => {
             arguments.iter().for_each(|argument| pattern_locals(argument, locals))
         }
     }
@@ -1376,7 +1386,8 @@ fn rewrite_pattern(pattern: &mut Pattern, plan: &Plan) {
         PatternKind::Record(fields) => {
             fields.iter_mut().for_each(|(_, field)| rewrite_pattern(field, plan))
         }
-        PatternKind::Constructor { arguments, .. } => {
+        PatternKind::Constructor { arguments, .. }
+        | PatternKind::Closure { captures: arguments, .. } => {
             arguments.iter_mut().for_each(|argument| rewrite_pattern(argument, plan))
         }
         PatternKind::Wildcard | PatternKind::Variable(_) | PatternKind::Literal(_) => {}

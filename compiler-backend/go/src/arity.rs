@@ -19,6 +19,11 @@ impl Arities {
     pub fn of(&self, monotype: MonotypeId) -> usize {
         self.widened.get(&monotype).copied().unwrap_or(1)
     }
+
+    /// The function types that take more than one argument at a time.
+    pub fn widened(&self) -> impl Iterator<Item = (MonotypeId, usize)> + '_ {
+        self.widened.iter().map(|(&monotype, &arity)| (monotype, arity))
+    }
 }
 
 pub fn choose(program: &Program, monotypes: &Monotypes) -> Arities {
@@ -70,7 +75,7 @@ pub fn arrows(monotypes: &Monotypes, mut monotype: MonotypeId) -> usize {
     count
 }
 
-fn keeps_representation(foreign: &Foreign) -> bool {
+pub(crate) fn keeps_representation(foreign: &Foreign) -> bool {
     matches!(
         foreign,
         Foreign::Operator(_)

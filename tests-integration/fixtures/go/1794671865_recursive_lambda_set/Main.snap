@@ -1,0 +1,104 @@
+---
+source: tests-integration/src/fixtures.rs
+---
+// main.go
+package main
+
+import (
+	"fmt"
+	"github.com/i-am-the-slime/purs-backend-go/go-support/alloc"
+	"github.com/i-am-the-slime/purs-backend-go/go-support/prim"
+)
+
+type ContinuedForced struct {
+	Continued int32
+	Forced    int32
+}
+
+type LazyInt struct {
+	Argument1 *LazyInt
+	Tag       uint8
+}
+
+const (
+	LazyIntMain_ = iota
+	LazyIntBuildThunks
+)
+
+var sharedLazyIntMain_ = &LazyInt{Tag: LazyIntMain_}
+
+type IntToInt struct {
+	Argument1 *IntToInt
+	N         int32
+	Tag       uint8
+}
+
+const (
+	IntToIntMain_ = iota
+	IntToIntCountDown
+	IntToIntCountDown2
+)
+
+var sharedIntToIntMain_ = &IntToInt{Tag: IntToIntMain_}
+
+var main_ ContinuedForced = ContinuedForced{Forced: forceInt(buildThunks(1000, sharedLazyIntMain_)), Continued: countDown(10, sharedIntToIntMain_)}
+
+func buildThunks(argument0 int32, argument1 *LazyInt) *LazyInt {
+	var lazyIntCells alloc.Cells[LazyInt]
+	for {
+		switch argument0 {
+		case 0:
+			return argument1
+		default:
+			n := argument0
+			argument0, argument1 = n - 1, lazyIntCells.New(LazyInt{Tag: LazyIntBuildThunks, Argument1: argument1})
+			continue
+		}
+	}
+}
+
+func countDown(argument0 int32, argument1 *IntToInt) int32 {
+	var intToIntCells alloc.Cells[IntToInt]
+	for {
+		if argument0 == 0 {
+			return runIntToInt(argument1, 0)
+		}
+		n := argument0
+		if int32(prim.IntMod(int(n), int(2))) == 0 {
+			argument0, argument1 = n - 1, intToIntCells.New(IntToInt{Tag: IntToIntCountDown, Argument1: argument1, N: n})
+			continue
+		}
+		argument0, argument1 = n - 1, intToIntCells.New(IntToInt{Tag: IntToIntCountDown2, Argument1: argument1})
+	}
+}
+
+func forceInt(lazy *LazyInt) int32 {
+	switch lazy.Tag {
+	case LazyIntMain_:
+		return 0
+	default: // LazyIntBuildThunks
+		return forceInt(lazy.Argument1) + 1
+	}
+}
+
+func runIntToInt(function *IntToInt, x int32) int32 {
+	for {
+		switch function.Tag {
+		case IntToIntMain_:
+			return x - 1
+		case IntToIntCountDown:
+			argument1 := function.Argument1
+			n := function.N
+			function, x = argument1, x + n
+			continue
+		default: // IntToIntCountDown2
+			argument12 := function.Argument1
+			function, x = argument12, prim.MultiplyInt32(x, 2)
+			continue
+		}
+	}
+}
+
+func main() {
+	fmt.Println(main_)
+}

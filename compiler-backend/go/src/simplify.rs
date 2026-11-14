@@ -319,6 +319,10 @@ impl Simplifier<'_> {
             ExpressionKind::Array(elements) => ExpressionKind::Array(
                 elements.into_iter().map(|element| self.expression(element)).collect(),
             ),
+            ExpressionKind::Closure { tag, captures } => ExpressionKind::Closure {
+                tag,
+                captures: captures.into_iter().map(|capture| self.expression(capture)).collect(),
+            },
             ExpressionKind::Record(fields) => ExpressionKind::Record(
                 fields.into_iter().map(|(label, value)| (label, self.expression(value))).collect(),
             ),
@@ -1383,9 +1387,9 @@ fn children_mut(expression: &mut Expression) -> Vec<&mut Expression> {
             update_children(updates, &mut children);
             children
         }
-        ExpressionKind::Construct { arguments, .. } | ExpressionKind::Foreign { arguments, .. } => {
-            arguments.iter_mut().collect()
-        }
+        ExpressionKind::Construct { arguments, .. }
+        | ExpressionKind::Foreign { arguments, .. }
+        | ExpressionKind::Closure { captures: arguments, .. } => arguments.iter_mut().collect(),
         ExpressionKind::Reuse { cell, arguments, .. } => {
             let mut children: Vec<&mut Expression> = arguments.iter_mut().collect();
             children.push(cell);
@@ -1586,9 +1590,9 @@ pub fn for_each_child<'e>(expression: &'e Expression, visitor: &mut impl FnMut(&
             visitor(record);
             for_each_update(updates, visitor);
         }
-        ExpressionKind::Construct { arguments, .. } | ExpressionKind::Foreign { arguments, .. } => {
-            arguments.iter().for_each(visitor)
-        }
+        ExpressionKind::Construct { arguments, .. }
+        | ExpressionKind::Foreign { arguments, .. }
+        | ExpressionKind::Closure { captures: arguments, .. } => arguments.iter().for_each(visitor),
         ExpressionKind::Reuse { cell, arguments, .. } => {
             arguments.iter().for_each(&mut *visitor);
             visitor(cell);

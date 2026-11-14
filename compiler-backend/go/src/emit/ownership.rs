@@ -180,7 +180,8 @@ fn reads(carried: Carried<'_>, expression: &Expression) -> usize {
                 0
             }
         }
-        ExpressionKind::EffectPure(_)
+        ExpressionKind::Closure { .. }
+        | ExpressionKind::EffectPure(_)
         | ExpressionKind::EffectBind { .. }
         | ExpressionKind::EffectEach { .. }
         | ExpressionKind::EffectWhen { .. } => {

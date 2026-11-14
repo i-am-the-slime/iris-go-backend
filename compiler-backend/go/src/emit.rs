@@ -7,6 +7,7 @@
 mod application;
 mod blocks;
 mod chunks;
+mod closures;
 mod coerce;
 mod deduplicate;
 mod fusion;
@@ -45,11 +46,13 @@ use crate::simplify::visit;
 use crate::syntax::{GoCase, GoDeclaration, GoDefault, GoExpression, GoStatement, GoType};
 use crate::timing::timed;
 
+pub(crate) use self::closures::Eliminators;
 pub use self::packages::GoSourceFile;
 
 pub fn emit_program<Q>(
-    program: &Program,
+    mut program: Program,
     monotypes: &mut Monotypes,
+    eliminators: &Eliminators,
     queries: &Q,
     foreign_packages: &ForeignPackages,
     modules: &Modules,
@@ -58,7 +61,11 @@ pub fn emit_program<Q>(
 where
     Q: checking::ExternalQueries,
 {
-    let arities = crate::arity::choose(program, monotypes);
+    let arities = crate::arity::choose(&program, monotypes);
+    let closure_sets = timed("closures", || {
+        closures::defunctionalize(&mut program, monotypes, queries, &arities, eliminators)
+    })?;
+    let program = &program;
     let reused = timed("reuse", || {
         let mut probe =
             Emitter::new(program, monotypes, queries, foreign_packages, arities.clone());
@@ -67,6 +74,7 @@ where
     let program = &reused.program;
     let mut emitter = Emitter::new(program, monotypes, queries, foreign_packages, arities);
     emitter.materialized = reused.materialized;
+    emitter.closure_sets = closure_sets;
     emitter.assign_function_names();
     let entry_origin = program.function(program.entry).origin;
     let declarations = timed("functions", || {
@@ -208,6 +216,8 @@ where
             global_names: FxHashSet::default(),
             record_names: FxHashMap::default(),
             data_layouts: FxHashMap::default(),
+            closure_sets: FxHashMap::default(),
+            closure_layouts: FxHashMap::default(),
             converters: FxHashMap::default(),
             recursive_names: FxHashMap::default(),
             type_declarations: vec![],
@@ -508,6 +518,9 @@ struct Emitter<'p, 'm, 'q, Q> {
     lazy_constants: FxHashSet<FunctionId>,
     record_names: FxHashMap<MonotypeId, String>,
     data_layouts: FxHashMap<DataType, DataLayout>,
+    /// The closed function types that are cells, and their structs.
+    closure_sets: FxHashMap<MonotypeId, closures::ClosureSet>,
+    closure_layouts: FxHashMap<MonotypeId, DataLayout>,
     converters: FxHashMap<(MonotypeId, MonotypeId), String>,
     recursive_names: FxHashMap<DataType, String>,
     type_declarations: Vec<GoDeclaration>,
@@ -1135,6 +1148,12 @@ where
                     self.data_layout(data).is_ok_and(|layout| layout.kind == DataKind::Product);
                 product && arguments.iter().all(|argument| self.is_total(argument))
             }
+            PatternKind::Closure { captures, .. } => {
+                let product = self
+                    .closure_layout(pattern.monotype)
+                    .is_ok_and(|layout| layout.kind == DataKind::Product);
+                product && captures.iter().all(|capture| self.is_total(capture))
+            }
             PatternKind::Literal(_) | PatternKind::Array(_) => false,
         }
     }
@@ -1218,6 +1237,9 @@ where
             Monotype::Opaque => GoType::Erased(Erasure::Foreign),
             Monotype::Array(element) => GoType::Slice(Box::new(self.go_type(element)?)),
             Monotype::Record(_) => GoType::Named(self.record_name(monotype)?),
+            Monotype::Function(..) if self.closure_sets.contains_key(&monotype) => {
+                self.closure_layout(monotype)?.go_type()
+            }
             Monotype::Function(..) => {
                 let arity = self.arity(monotype);
                 let (arguments, result) = self.leading_arrows(monotype, arity);
@@ -2847,7 +2869,9 @@ where
             }
             ExpressionKind::Local(id) => !self.uninitialized_locals.contains(id),
             ExpressionKind::Function(id) => !self.program.function(*id).parameters.is_empty(),
-            ExpressionKind::Construct { arguments, .. } | ExpressionKind::Array(arguments) => {
+            ExpressionKind::Construct { arguments, .. }
+            | ExpressionKind::Array(arguments)
+            | ExpressionKind::Closure { captures: arguments, .. } => {
                 arguments.iter().all(|argument| self.is_already_a_value(argument))
             }
             ExpressionKind::Record(fields) => {
@@ -3118,6 +3142,13 @@ where
             }
             ExpressionKind::Lambda { parameters, body } => {
                 self.lambda(expression.monotype, parameters, body)?
+            }
+            ExpressionKind::Closure { tag, captures } => {
+                let mut values = vec![];
+                for capture in captures {
+                    values.push(self.value(capture, out)?);
+                }
+                self.closure_value(expression.monotype, *tag, values)?
             }
             ExpressionKind::Coerce(value) => {
                 let coerced = self.value(value, out)?;
@@ -4100,7 +4131,8 @@ where
                 let Guarded::Unconditional(_) = alternative.body else { return false };
                 let pattern = &alternative.patterns[0];
                 match &pattern.kind {
-                    PatternKind::Constructor { arguments, .. } => {
+                    PatternKind::Constructor { arguments, .. }
+                    | PatternKind::Closure { captures: arguments, .. } => {
                         arguments.iter().all(Pattern::is_irrefutable)
                     }
                     PatternKind::Literal(
@@ -4116,8 +4148,14 @@ where
             return Ok(false);
         }
         let subject = match self.monotypes.get(scrutinee.monotype).clone() {
-            Monotype::Data(data) => {
-                let layout = self.data_layout(&data)?;
+            Monotype::Data(_) | Monotype::Function(..) => {
+                let layout = match self.monotypes.get(scrutinee.monotype).clone() {
+                    Monotype::Data(data) => self.data_layout(&data)?,
+                    _ if self.closure_sets.contains_key(&scrutinee.monotype) => {
+                        self.closure_layout(scrutinee.monotype)?
+                    }
+                    _ => return Ok(false),
+                };
                 match layout.kind {
                     DataKind::Enumeration => path.clone(),
                     DataKind::Tagged => field(path.clone(), "Tag"),
@@ -4151,6 +4189,10 @@ where
                 PatternKind::Constructor { data, constructor, .. } => {
                     let layout = self.data_layout(data)?;
                     Some(identifier_expression(&layout.constructors[*constructor].tag))
+                }
+                PatternKind::Closure { tag, .. } => {
+                    let layout = self.closure_layout(pattern.monotype)?;
+                    Some(identifier_expression(&layout.constructors[*tag].tag))
                 }
                 PatternKind::Literal(literal) => Some(self.literal(literal, pattern.monotype)),
                 _ => None,
@@ -4223,28 +4265,50 @@ where
             }
             PatternKind::Constructor { data, constructor, arguments } => {
                 let layout = self.data_layout(data)?;
-                let constructor_layout = &layout.constructors[*constructor];
-                match layout.kind {
-                    DataKind::Enumeration => {
-                        tests.push(binary(
-                            "==",
-                            path.clone(),
-                            identifier_expression(&constructor_layout.tag),
-                        ));
-                    }
-                    DataKind::Tagged => {
-                        tests.push(binary(
-                            "==",
-                            field(path.clone(), "Tag"),
-                            identifier_expression(&constructor_layout.tag),
-                        ));
-                    }
-                    DataKind::Product => {}
-                }
-                for ((field_name, _), argument) in constructor_layout.fields.iter().zip(arguments) {
-                    self.pattern_tests(argument, field(path.clone(), field_name), tests, bindings)?;
-                }
+                self.constructor_tests(&layout, *constructor, arguments, path, tests, bindings)?;
             }
+            PatternKind::Closure { tag, captures } => {
+                let layout = self.closure_layout(pattern.monotype)?;
+                self.constructor_tests(&layout, *tag, captures, path, tests, bindings)?;
+            }
+        }
+        Ok(())
+    }
+}
+
+impl<Q> Emitter<'_, '_, '_, Q>
+where
+    Q: checking::ExternalQueries,
+{
+    fn constructor_tests(
+        &mut self,
+        layout: &DataLayout,
+        constructor: usize,
+        arguments: &[Pattern],
+        path: GoExpression,
+        tests: &mut Vec<GoExpression>,
+        bindings: &mut Vec<(Local, GoExpression)>,
+    ) -> GoResult<()> {
+        let constructor_layout = &layout.constructors[constructor];
+        match layout.kind {
+            DataKind::Enumeration => {
+                tests.push(binary(
+                    "==",
+                    path.clone(),
+                    identifier_expression(&constructor_layout.tag),
+                ));
+            }
+            DataKind::Tagged => {
+                tests.push(binary(
+                    "==",
+                    field(path.clone(), "Tag"),
+                    identifier_expression(&constructor_layout.tag),
+                ));
+            }
+            DataKind::Product => {}
+        }
+        for ((field_name, _), argument) in constructor_layout.fields.iter().zip(arguments) {
+            self.pattern_tests(argument, field(path.clone(), field_name), tests, bindings)?;
         }
         Ok(())
     }

@@ -210,7 +210,8 @@ fn canonical_pattern(pattern: &mut Pattern, numbering: &mut FxHashMap<LocalId, L
         PatternKind::Record(fields) => {
             fields.iter_mut().for_each(|(_, field)| canonical_pattern(field, numbering))
         }
-        PatternKind::Constructor { arguments, .. } => {
+        PatternKind::Constructor { arguments, .. }
+        | PatternKind::Closure { captures: arguments, .. } => {
             arguments.iter_mut().for_each(|argument| canonical_pattern(argument, numbering))
         }
     }
