@@ -333,7 +333,8 @@ where
         let mut opened = self.open(pipeline, need, slot)?;
         let mut arguments = vec![opened.element];
         if indexed && index != "_" {
-            let slot = opened.index.as_deref().expect("invariant violated: an indexed map has a slot");
+            let slot =
+                opened.index.as_deref().expect("invariant violated: an indexed map has a slot");
             opened.body.body().push(GoStatement::Define {
                 names: vec![index.clone()],
                 values: vec![GoExpression::Conversion {
@@ -396,10 +397,8 @@ where
         let mut opened = self.open(pipeline, need, None)?;
         let element = opened.element.clone();
         let condition = self.callback_value(callback, vec![element.clone()], opened.body.body())?;
-        let appended = call(
-            identifier_expression("append"),
-            vec![identifier_expression(kept), element],
-        );
+        let appended =
+            call(identifier_expression("append"), vec![identifier_expression(kept), element]);
         opened.body.body().push(GoStatement::If {
             condition,
             then: vec![GoStatement::Assign {

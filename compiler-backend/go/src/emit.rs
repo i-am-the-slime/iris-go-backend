@@ -3571,7 +3571,7 @@ where
             return self.out_of_convention(called, monotype, out);
         }
         if let Foreign::Operator(Operator::ArrayLength) = foreign
-            && self.is_fusible(&arguments[0])
+            && self.is_fusible(&arguments[0], fusion::Demand::FORWARD)
         {
             return self.fused_length(&arguments[0], monotype, out);
         }

@@ -44,7 +44,10 @@ pub(super) struct Pipeline<'e> {
 enum Source {
     Array(GoExpression),
     /// `first .. last` counting up.
-    Range { first: i64, last: i64 },
+    Range {
+        first: i64,
+        last: i64,
+    },
 }
 
 /// What lies between a consumer and its source, nearest the consumer first.
@@ -103,9 +106,15 @@ impl Demand {
 pub(super) enum Need<'c, 'e> {
     Nothing,
     /// As one argument of its callback.
-    Argument { callback: &'c Callback<'e>, position: usize },
+    Argument {
+        callback: &'c Callback<'e>,
+        position: usize,
+    },
     /// As its callback's argument and once more besides.
-    Variable { callback: &'c Callback<'e>, position: usize },
+    Variable {
+        callback: &'c Callback<'e>,
+        position: usize,
+    },
     /// As a value it stores, once.
     Value,
 }
@@ -190,24 +199,19 @@ impl<'q, Q> Emitter<'_, '_, 'q, Q>
 where
     Q: checking::ExternalQueries,
 {
-    /// Whether `array` is a stage or a range that a consumer's loop can absorb.
-    pub(super) fn is_fusible(&self, array: &Expression) -> bool {
-        self.stage_parts(array, Demand::FORWARD, false).is_some()
-            || literal_range(array).is_some()
+    /// Whether `array`, past any `let`, is a stage or a range that a
+    /// consumer's loop can absorb.
+    pub(super) fn is_fusible(&self, array: &Expression, demand: Demand) -> bool {
+        let array = past_bindings(array);
+        self.stage_parts(array, demand, false).is_some() || literal_range(array).is_some()
     }
 
     /// The pipeline a `concatMap` callback returns, which can run as a loop
     /// nested in the caller's instead of building the array it returns.
     pub(super) fn nested_pipeline<'e>(&self, callback: &Callback<'e>) -> Option<&'e Expression> {
         let Callback::Inline { body, .. } = callback else { return None };
-        let mut array = *body;
-        while let ExpressionKind::Let { body, .. } = &array.kind {
-            array = body;
-        }
         let nested = Demand { nested: true, ..Demand::FORWARD };
-        let fusible = self.stage_parts(array, nested, false).is_some()
-            || literal_range(array).is_some();
-        fusible.then_some(*body)
+        self.is_fusible(body, nested).then_some(*body)
     }
 
     /// Evaluates what the stages and the source capture, in the order separate
@@ -334,9 +338,7 @@ where
         let needed = needed_inputs(&stages, need);
         let element = if needed[0] { self.element_name(&stages, 0, need) } else { "_".into() };
         let stage_positions = stages.iter().enumerate().any(|(position, stage)| {
-            stage.kind == StageKind::MapWithIndex
-                && needed[position + 1]
-                && stage.callback.reads(0)
+            stage.kind == StageKind::MapWithIndex && needed[position + 1] && stage.callback.reads(0)
         });
         let index = match index_base {
             Some(base) => Some(self.temporary(base)),
@@ -381,7 +383,13 @@ where
                         let name = self.element_name(remaining.make_contiguous(), 0, need);
                         let sink = Sink::Define(name.clone());
                         let callback = &stage.callback;
-                        self.apply_callback(callback, arguments, stage.produces, sink, body.body())?;
+                        self.apply_callback(
+                            callback,
+                            arguments,
+                            stage.produces,
+                            sink,
+                            body.body(),
+                        )?;
                         identifier_expression(&name)
                     }
                 }
@@ -398,7 +406,8 @@ where
                     let source = match self.nested_pipeline(&stage.callback) {
                         Some(inner) => {
                             let demand = Demand { nested: true, ..Demand::FORWARD };
-                            let nested = self.pipeline_reading(inner, demand, downstream, body.body())?;
+                            let nested =
+                                self.pipeline_reading(inner, demand, downstream, body.body())?;
                             for stage in nested.stages.into_iter().rev() {
                                 remaining.push_front(stage);
                             }
@@ -541,7 +550,10 @@ where
                     return identifier_expression("_");
                 }
                 let name = self.bind_local(parameters[0]);
-                body.push(GoStatement::Define { names: vec![name.clone()], values: vec![position] });
+                body.push(GoStatement::Define {
+                    names: vec![name.clone()],
+                    values: vec![position],
+                });
                 identifier_expression(&name)
             }
             Callback::Direct { .. } => position,
@@ -550,7 +562,12 @@ where
 
     /// A name for the elements entering stage `position`: the parameter of the
     /// first callback that reads them, or a fresh `element`.
-    fn element_name(&mut self, stages: &[Stage<'_>], position: usize, need: Need<'_, '_>) -> String {
+    fn element_name(
+        &mut self,
+        stages: &[Stage<'_>],
+        position: usize,
+        need: Need<'_, '_>,
+    ) -> String {
         for stage in &stages[position..] {
             let Callback::Inline { parameters, body } = &stage.callback else {
                 return self.temporary("element");
@@ -655,7 +672,9 @@ fn takes_expression(downstream: &[Stage<'_>], need: Need<'_, '_>) -> bool {
         Some(stage) => {
             stage.kind != StageKind::Filter && matches!(stage.callback, Callback::Direct { .. })
         }
-        None => matches!(need, Need::Argument { callback: Callback::Direct { .. }, .. } | Need::Value),
+        None => {
+            matches!(need, Need::Argument { callback: Callback::Direct { .. }, .. } | Need::Value)
+        }
     }
 }
 
@@ -664,6 +683,13 @@ fn element_position(kind: StageKind) -> usize {
         StageKind::MapWithIndex => 1,
         _ => 0,
     }
+}
+
+fn past_bindings(mut expression: &Expression) -> &Expression {
+    while let ExpressionKind::Let { body, .. } = &expression.kind {
+        expression = body;
+    }
+    expression
 }
 
 /// `first .. last` with literal bounds that count up.
