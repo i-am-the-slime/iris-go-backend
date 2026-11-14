@@ -119,10 +119,6 @@ func isEven(argument0 int32) bool {
 	return isEvenOrIsOdd(isEvenStep, argument0)
 }
 
-func isOdd(argument0 int32) bool {
-	return isEvenOrIsOdd(isOddStep, argument0)
-}
-
 func main() {
 	fmt.Println(main_)
 }

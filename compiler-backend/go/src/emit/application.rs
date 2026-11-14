@@ -39,7 +39,7 @@ where
     pub(super) fn known_callable(&self, id: FunctionId, monotype: MonotypeId) -> Callable {
         let function = self.program.function(id);
         Callable {
-            function: identifier_expression(&self.function_names[id.0 as usize]),
+            function: identifier_expression(self.function_reference(id)),
             monotype,
             arity: function.parameters.len(),
             names: function
@@ -132,7 +132,7 @@ where
         monotype: MonotypeId,
     ) -> GoResult<GoExpression> {
         let function = self.program.function(id);
-        let name = self.function_names[id.0 as usize].clone();
+        let name = self.function_reference(id).to_string();
         if self.lazy_constants.contains(&id) {
             return Ok(call(identifier_expression(&name), vec![]));
         }

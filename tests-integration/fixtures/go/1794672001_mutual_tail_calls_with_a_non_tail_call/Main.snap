@@ -72,18 +72,6 @@ func a(n int32, s string) string {
 	return aGroup(aStep, n, s)
 }
 
-func branch(acc int32, n int32) int32 {
-	return depthOrBranch(branchStep, acc, n)
-}
-
-func b(n int32, s string) string {
-	return aGroup(bStep, n, s)
-}
-
-func c(label string, n int32) string {
-	return aGroup(cStep, n, label)
-}
-
 func main() {
 	fmt.Println(main_)
 }

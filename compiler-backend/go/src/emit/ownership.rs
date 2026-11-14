@@ -162,8 +162,10 @@ fn snoc_of_carried<'e>(carried: Carried<'_>, expression: &'e Expression) -> Opti
     let ExpressionKind::Foreign { foreign, arguments } = &expression.kind else { return None };
     let appends = match foreign {
         Foreign::Snoc | Foreign::Operator(Operator::StringAppend) => true,
-        _ => foreign.calls(foreign::ARRAY_APPEND)
-            && matches!(arguments[1].kind, ExpressionKind::Array(_)),
+        _ => {
+            foreign.calls(foreign::ARRAY_APPEND)
+                && matches!(arguments[1].kind, ExpressionKind::Array(_))
+        }
     };
     (appends && is_carried(carried, &arguments[0])).then_some(&arguments[0])
 }

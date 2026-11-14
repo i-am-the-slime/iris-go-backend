@@ -189,6 +189,23 @@ where
         }
     }
 
+    /// The name of a function as code refers to it, noting the reference.
+    pub(super) fn function_reference(&self, id: FunctionId) -> &str {
+        self.referenced.borrow_mut().insert(id);
+        &self.function_names[id.0 as usize]
+    }
+
+    /// The entries of group members that no emitted code calls, since only other members reach
+    /// them, by a jump inside the loop; never the program's entry, which `main` calls.
+    pub(super) fn unused_tail_group_entries(&self) -> FxHashSet<String> {
+        let referenced = self.referenced.borrow();
+        self.tail_group_of
+            .keys()
+            .filter(|member| **member != self.program.entry && !referenced.contains(member))
+            .map(|member| self.function_names[member.0 as usize].clone())
+            .collect()
+    }
+
     /// A member's entry, preceded by the group's steps and loop when it is the first member.
     pub(super) fn tail_group_member(
         &mut self,
@@ -322,9 +339,18 @@ where
             cases.push(GoCase { values: vec![identifier_expression(&steps[member])], body });
         }
         let default = GoDefault::covering(&mut cases);
-        let switch = GoStatement::Switch { value: Some(identifier_expression(&step)), cases, default: Some(default) };
+        let switch = GoStatement::Switch {
+            value: Some(identifier_expression(&step)),
+            cases,
+            default: Some(default),
+        };
         let name = self.tail_groups[group].name.clone();
-        Ok(GoDeclaration::Function { name, parameters, result, body: vec![GoStatement::Loop(vec![switch])] })
+        Ok(GoDeclaration::Function {
+            name,
+            parameters,
+            result,
+            body: vec![GoStatement::Loop(vec![switch])],
+        })
     }
 
     /// The loop's parameter variables: each member's parameters, sharing a variable with an
@@ -339,10 +365,9 @@ where
             let mut taken: Vec<usize> = vec![];
             for parameter in &function.parameters {
                 let type_ = self.go_type(parameter.monotype)?;
-                let shared = slots
-                    .iter()
-                    .enumerate()
-                    .position(|(slot, (_, slot_type))| *slot_type == type_ && !taken.contains(&slot));
+                let shared = slots.iter().enumerate().position(|(slot, (_, slot_type))| {
+                    *slot_type == type_ && !taken.contains(&slot)
+                });
                 let slot = match shared {
                     Some(slot) => slot,
                     None => {

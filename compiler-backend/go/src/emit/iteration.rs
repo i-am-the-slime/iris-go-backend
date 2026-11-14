@@ -1,4 +1,3 @@
-
 use super::buffers::{to_bytes, to_string};
 use super::fusion::{Demand, Need, Order, Pipeline};
 use super::ownership::{Carried, Place, owned_snocs};
@@ -94,7 +93,7 @@ where
                 let callee = self.program.function(*id);
                 let direct = callee.parameters.len() == leading.len() + arity
                     && !self.lazy_constants.contains(id);
-                let function = identifier_expression(&self.function_names[id.0 as usize]);
+                let function = identifier_expression(self.function_reference(*id));
                 direct.then_some(Found::Direct { function, callee: *id, leading })
             }
             ExpressionKind::Lambda { .. } if leading.is_empty() => {
@@ -292,7 +291,9 @@ where
                 .map(|field| Place::Field(field.label.clone()))
                 .collect(),
             Monotype::Data(data) => {
-                let Ok(layout) = self.data_layout(&data) else { return vec![] };
+                // Laying a type out declares it where the declarations stand, so only a type
+                // the emitted code has already laid out, as the accumulator's, is considered.
+                let Some(layout) = self.data_layouts.get(&data).cloned() else { return vec![] };
                 if layout.boxed || layout.kind == super::DataKind::Enumeration {
                     return vec![];
                 }

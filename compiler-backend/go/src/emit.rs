@@ -101,6 +101,10 @@ where
         GoResult::Ok(declarations)
     });
     let mut declarations = declarations?;
+    let unused = emitter.unused_tail_group_entries();
+    if !unused.is_empty() {
+        declarations.retain(|declaration| declaration.name().is_none_or(|n| !unused.contains(n)));
+    }
     if emitter.imports.contains(GoPackage::Aff.path()) {
         await_fibers(&mut declarations);
     }
@@ -235,6 +239,7 @@ where
             tail_loop: None,
             tail_groups: vec![],
             tail_group_of: FxHashMap::default(),
+            referenced: Default::default(),
             owned_snocs: FxHashSet::default(),
             byte_buffers: FxHashMap::default(),
             owning_variants: FxHashMap::default(),
@@ -560,6 +565,8 @@ struct Emitter<'p, 'm, 'q, Q> {
     tail_loop: Option<TailLoop>,
     tail_groups: Vec<groups::TailGroup>,
     tail_group_of: FxHashMap<FunctionId, usize>,
+    /// The functions that emitted code names, so that an unused group entry can be dropped.
+    referenced: std::cell::RefCell<FxHashSet<FunctionId>>,
     current: Option<FunctionId>,
     owned_snocs: FxHashSet<*const Expression>,
     /// The string parameters of the tail loop being emitted that it builds in a `[]byte`, with
@@ -1816,10 +1823,7 @@ where
                 for argument in arguments {
                     values.push(self.value(argument, out)?);
                 }
-                return Ok(call(
-                    identifier_expression(&self.function_names[id.0 as usize].clone()),
-                    values,
-                ));
+                return Ok(call(identifier_expression(self.function_reference(id)), values));
             }
         }
         self.application_value(function, arguments, out)
