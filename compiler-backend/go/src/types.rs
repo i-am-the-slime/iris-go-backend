@@ -81,7 +81,16 @@ where
     }
 
     pub fn rigid_names(&self, type_id: TypeId, names: &mut Vec<Name>) {
-        if !self.queries.lookup_type_flags(type_id).has_rigid() {
+        self.rigid_names_outside(type_id, None, names);
+    }
+
+    pub fn rigid_names_outside(
+        &self,
+        type_id: TypeId,
+        excluded: Option<TypeId>,
+        names: &mut Vec<Name>,
+    ) {
+        if !self.queries.lookup_type_flags(type_id).has_rigid() || Some(type_id) == excluded {
             return;
         }
         match self.lookup(type_id) {
@@ -91,24 +100,24 @@ where
                 }
             }
             Type::Application(function, argument) | Type::Function(function, argument) => {
-                self.rigid_names(*function, names);
-                self.rigid_names(*argument, names);
+                self.rigid_names_outside(*function, excluded, names);
+                self.rigid_names_outside(*argument, excluded, names);
             }
             Type::Constrained(constraint, inner) => {
-                self.rigid_names(*constraint, names);
-                self.rigid_names(*inner, names);
+                self.rigid_names_outside(*constraint, excluded, names);
+                self.rigid_names_outside(*inner, excluded, names);
             }
             Type::Forall(_, inner)
             | Type::Kinded(inner, _)
             | Type::ConstraintOrigin(inner, _)
-            | Type::KindApplication(inner, _) => self.rigid_names(*inner, names),
+            | Type::KindApplication(inner, _) => self.rigid_names_outside(*inner, excluded, names),
             Type::Row(row) => {
                 let row = self.queries.lookup_row_type(*row);
                 for field in row.fields.iter() {
-                    self.rigid_names(field.id, names);
+                    self.rigid_names_outside(field.id, excluded, names);
                 }
                 if let Some(tail) = row.tail {
-                    self.rigid_names(tail, names);
+                    self.rigid_names_outside(tail, excluded, names);
                 }
             }
             _ => {}

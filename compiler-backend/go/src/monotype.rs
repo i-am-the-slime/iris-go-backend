@@ -77,6 +77,7 @@ pub struct Monotypes {
     lookup: FxHashMap<Monotype, MonotypeId>,
     converted: FxHashMap<TypeId, MonotypeId>,
     constructors: FxHashMap<DataType, Arc<[DataConstructor]>>,
+    used_parameters: FxHashMap<(FileId, TypeItemId), Arc<[bool]>>,
     unfolded: FxHashMap<DataType, MonotypeId>,
     regular: FxHashMap<(FileId, TypeItemId), bool>,
     expanding: Vec<TypeId>,
@@ -871,6 +872,52 @@ impl Monotypes {
         let constructors: Arc<[DataConstructor]> = Arc::from(constructors);
         self.constructors.insert(data.clone(), Arc::clone(&constructors));
         Ok(Ok(constructors))
+    }
+
+    pub fn used_parameters<Q>(
+        &mut self,
+        context: &mut Context<'_, Q>,
+        file_id: FileId,
+        item: TypeItemId,
+    ) -> QueryResult<Arc<[bool]>>
+    where
+        Q: checking::ExternalQueries,
+    {
+        if let Some(used) = self.used_parameters.get(&(file_id, item)) {
+            return Ok(Arc::clone(used));
+        }
+        let module = context.module(file_id)?;
+        let terms = match &module.indexed.items[item].kind {
+            IndexedTypeItemKind::Data { constructors, .. }
+            | IndexedTypeItemKind::Newtype { constructors, .. } => constructors.clone(),
+            _ => vec![],
+        };
+        let mut used: Vec<bool> = vec![];
+        for term in terms {
+            let Some(signature) = module.checked.lookup_term_item_type(term) else { continue };
+            let (_, mut current) = context.types.peel_quantifiers(signature);
+            let mut fields = vec![];
+            while let Some((field, result)) = context.types.function_parts(current) {
+                fields.push(field);
+                current = result;
+            }
+            let mut mentioned = vec![];
+            for field in fields {
+                context.types.rigid_names_outside(field, Some(current), &mut mentioned);
+            }
+            let (_, parameters) = context.types.spine(current);
+            used.resize(used.len().max(parameters.len()), false);
+            for (position, parameter) in parameters.iter().enumerate() {
+                if let Type::Rigid(name, _, _) = context.types.lookup(*parameter)
+                    && mentioned.contains(name)
+                {
+                    used[position] = true;
+                }
+            }
+        }
+        let used: Arc<[bool]> = Arc::from(used);
+        self.used_parameters.insert((file_id, item), Arc::clone(&used));
+        Ok(used)
     }
 }
 
