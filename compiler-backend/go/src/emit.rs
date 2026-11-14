@@ -3428,9 +3428,19 @@ where
         out: &mut Vec<GoStatement>,
     ) -> GoResult<GoExpression> {
         let number = self.value(number, out)?;
-        let number = self.hoist(number, "number", out);
         let (data, just) = self.constructor_named(monotype, "Just")?;
         let (_, nothing) = self.constructor_named(monotype, "Nothing")?;
+        // Go rejects `int32(c)` for a constant `c` that is not an int32, so a literal is decided here.
+        if let Some(constant) = float_constant(&number) {
+            let fits = constant.trunc() == constant
+                && constant >= f64::from(i32::MIN)
+                && constant <= f64::from(i32::MAX);
+            if fits {
+                return self.construct(&data, just, vec![GoExpression::Integer(constant as i64)]);
+            }
+            return self.construct(&data, nothing, vec![]);
+        }
+        let number = self.hoist(number, "number", out);
         let integer = GoExpression::Conversion {
             type_: GoType::Named("int32".into()),
             value: Box::new(number.clone()),
