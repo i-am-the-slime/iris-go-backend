@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 #
-# Measures escape hatches in generated Go and ratchets them against
-# compiler-backend/go/quality-baseline.txt: a scope fails when any metric
-# rises above its baseline, and asks for the baseline to be lowered when one
-# drops below it.
+# Measures escape hatches and size (lines, functions) in generated Go, and
+# ratchets them against compiler-backend/go/quality-baseline.txt: a scope fails
+# when any metric rises above its baseline, and asks for the baseline to be
+# lowered when one drops below it.
 #
 #   compiler-backend/go/scripts/quality.sh SCOPE DIR...           # check
 #   compiler-backend/go/scripts/quality.sh --update SCOPE DIR...  # lower baseline
@@ -26,6 +26,9 @@ fi
 scope="${1:?usage: quality.sh [--update] SCOPE DIR...}"
 shift
 [ "$#" -gt 0 ] || { echo "quality.sh: no directories given" >&2; exit 2; }
+for dir in "$@"; do
+  [ -d "$dir" ] || { echo "quality.sh: no directory $dir" >&2; exit 2; }
+done
 
 files() { find "$@" -name '*.go' -type f -print0; }
 
@@ -43,6 +46,13 @@ measure() {
   PATTERN='$n += () = /\bunsafe\./g; END { print $n+0, "\n" }' count "${dirs[@]}" | sed 's/^/unsafe /'
   PATTERN='$n += () = /\bfunc\(\)\s*[^{(,]*\{/g; END { print $n+0, "\n" }' count "${dirs[@]}" | sed 's/^/thunk /'
   PATTERN='$n += () = /\bpanic\(/g; END { print $n+0, "\n" }' count "${dirs[@]}" | sed 's/^/panic /'
+  # Size: every line Go parses, and every function it compiles, top-level or
+  # literal; a literal is `func(` not in a type (after `]`, `) ` or a name)
+  # whose signature ends in `{`.
+  PATTERN='$n++; END { print $n+0, "\n" }' count "${dirs[@]}" | sed 's/^/lines /'
+  PATTERN='$n++ if /^func /;
+    $n += () = /(?<![\]\w])(?<!\) )func(\((?:[^()]++|(?1))*\))(?:struct\{\}|[^(){};\n]|(?1))*\{(?!\})/g;
+    END { print $n+0, "\n" }' count "${dirs[@]}" | sed 's/^/funcs /'
 }
 
 baseline_value() {
@@ -50,7 +60,6 @@ baseline_value() {
 }
 
 current="$(measure "$@")"
-lines="$(files "$@" | xargs -0 cat | wc -l | tr -d ' ')"
 
 status=0
 lowered=()
@@ -70,7 +79,6 @@ while read -r metric value; do
   fi
   printf '%-16s %10s %10s%s\n' "$metric" "${base:--}" "$value" "$mark"
 done <<< "$current"
-printf '%-16s %10s %10s\n' "lines" "" "$lines"
 
 if [ "$update" = 1 ]; then
   if [ "$status" != 0 ]; then
