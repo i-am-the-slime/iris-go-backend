@@ -385,6 +385,22 @@ where
                 body.push(GoStatement::Return(Some(converted)));
             }
             (Monotype::Record(from_fields), Monotype::Record(to_fields)) => {
+                // Records of one row differ only in their fields' representations. Rows that
+                // differ arise from a rank-N value whose instantiations at one type were never
+                // requested before an `unsafeCoerce` to another (Yoga.Om's `expandErr`).
+                let same_labels = from_fields.len() == to_fields.len()
+                    && from_fields
+                        .iter()
+                        .zip(to_fields.iter())
+                        .all(|(from, to)| from.label == to.label);
+                if !same_labels {
+                    return Err(GoError::Unsupported {
+                        definition: "code generation".into(),
+                        state: crate::error::UnsupportedState::Construct {
+                            construct: "a coercion between records with different fields (a rank-N value coerced to another instantiation)",
+                        },
+                    });
+                }
                 let mut fields = vec![];
                 for (from_field, to_field) in from_fields.iter().zip(to_fields.iter()) {
                     let label = field_name(&to_field.label);
