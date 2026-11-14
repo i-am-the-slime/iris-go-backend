@@ -687,8 +687,14 @@ impl Monotypes {
         {
             return Ok(Err(open_type(context, row)?));
         }
-        let mut fields = Vec::with_capacity(row_type.fields.len());
+        let mut fields: Vec<RecordField> = Vec::with_capacity(row_type.fields.len());
         for field in row_type.fields.iter() {
+            // A row lists a duplicated label leftmost first. A record value
+            // holds only that one, as a JS object does after `Record.union`,
+            // and `Lacks` keeps the shadowed types from being observed.
+            if fields.iter().any(|known| known.label == field.label) {
+                continue;
+            }
             let monotype = match self.convert(context, field.id, expansions)? {
                 Ok(monotype) => monotype,
                 Err(error) => return Ok(Err(error)),
