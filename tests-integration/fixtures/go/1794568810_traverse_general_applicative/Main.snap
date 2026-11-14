@@ -15,28 +15,6 @@ const (
 	EitherStringArrayIntRight
 )
 
-type EitherStringFnIntArrayInt struct {
-	Left0  string
-	Right0 func(int32) []int32
-	Tag    uint8
-}
-
-const (
-	EitherStringFnIntArrayIntLeft = iota
-	EitherStringFnIntArrayIntRight
-)
-
-type EitherStringInt struct {
-	Left0  string
-	Right0 int32
-	Tag    uint8
-}
-
-const (
-	EitherStringIntLeft = iota
-	EitherStringIntRight
-)
-
 // main.go
 package main
 
@@ -55,28 +33,14 @@ func initializeMain_() []either.EitherStringArrayInt {
 	accumulator := either.EitherStringArrayInt{Tag: either.EitherStringArrayIntRight, Right0: []int32{}}
 	for _, element := range array2 {
 		accumulator2 := accumulator
-		var result either.EitherStringFnIntArrayInt
 		switch accumulator2.Tag {
 		case either.EitherStringArrayIntLeft:
-			result = either.EitherStringFnIntArrayInt{Tag: either.EitherStringFnIntArrayIntLeft, Left0: accumulator2.Left0}
+			accumulator = either.EitherStringArrayInt{Tag: either.EitherStringArrayIntLeft, Left0: accumulator2.Left0}
 		default: // either.EitherStringArrayIntRight
-			result = either.EitherStringFnIntArrayInt{Tag: either.EitherStringFnIntArrayIntRight, Right0: append_(accumulator2.Right0)}
-		}
-		switch result.Tag {
-		case either.EitherStringFnIntArrayIntLeft:
-			accumulator = either.EitherStringArrayInt{Tag: either.EitherStringArrayIntLeft, Left0: result.Left0}
-		default: // either.EitherStringFnIntArrayIntRight
-			var result2 either.EitherStringInt
 			if element > 0 {
-				result2 = either.EitherStringInt{Tag: either.EitherStringIntRight, Right0: element}
+				accumulator = either.EitherStringArrayInt{Tag: either.EitherStringArrayIntRight, Right0: append_(accumulator2.Right0)(element)}
 			} else {
-				result2 = either.EitherStringInt{Tag: either.EitherStringIntLeft, Left0: "not positive: " + prim.ShowInt(int(element))}
-			}
-			switch result2.Tag {
-			case either.EitherStringIntLeft:
-				accumulator = either.EitherStringArrayInt{Tag: either.EitherStringArrayIntLeft, Left0: result2.Left0}
-			default: // either.EitherStringIntRight
-				accumulator = either.EitherStringArrayInt{Tag: either.EitherStringArrayIntRight, Right0: result.Right0(result2.Right0)}
+				accumulator = either.EitherStringArrayInt{Tag: either.EitherStringArrayIntLeft, Left0: "not positive: " + prim.ShowInt(int(element))}
 			}
 		}
 	}
@@ -86,28 +50,14 @@ func initializeMain_() []either.EitherStringArrayInt {
 	accumulator3 := either.EitherStringArrayInt{Tag: either.EitherStringArrayIntRight, Right0: []int32{}}
 	for _, element2 := range array3 {
 		accumulator4 := accumulator3
-		var result3 either.EitherStringFnIntArrayInt
 		switch accumulator4.Tag {
 		case either.EitherStringArrayIntLeft:
-			result3 = either.EitherStringFnIntArrayInt{Tag: either.EitherStringFnIntArrayIntLeft, Left0: accumulator4.Left0}
+			accumulator3 = either.EitherStringArrayInt{Tag: either.EitherStringArrayIntLeft, Left0: accumulator4.Left0}
 		default: // either.EitherStringArrayIntRight
-			result3 = either.EitherStringFnIntArrayInt{Tag: either.EitherStringFnIntArrayIntRight, Right0: append_2(accumulator4.Right0)}
-		}
-		switch result3.Tag {
-		case either.EitherStringFnIntArrayIntLeft:
-			accumulator3 = either.EitherStringArrayInt{Tag: either.EitherStringArrayIntLeft, Left0: result3.Left0}
-		default: // either.EitherStringFnIntArrayIntRight
-			var result4 either.EitherStringInt
 			if element2 > 0 {
-				result4 = either.EitherStringInt{Tag: either.EitherStringIntRight, Right0: element2}
+				accumulator3 = either.EitherStringArrayInt{Tag: either.EitherStringArrayIntRight, Right0: append_2(accumulator4.Right0)(element2)}
 			} else {
-				result4 = either.EitherStringInt{Tag: either.EitherStringIntLeft, Left0: "not positive: " + prim.ShowInt(int(element2))}
-			}
-			switch result4.Tag {
-			case either.EitherStringIntLeft:
-				accumulator3 = either.EitherStringArrayInt{Tag: either.EitherStringArrayIntLeft, Left0: result4.Left0}
-			default: // either.EitherStringIntRight
-				accumulator3 = either.EitherStringArrayInt{Tag: either.EitherStringArrayIntRight, Right0: result3.Right0(result4.Right0)}
+				accumulator3 = either.EitherStringArrayInt{Tag: either.EitherStringArrayIntLeft, Left0: "not positive: " + prim.ShowInt(int(element2))}
 			}
 		}
 	}

@@ -40,7 +40,8 @@ total Nil = 0
 total (Cons value rest) = value + total rest
 
 main
-  :: { built :: Int
+  :: Int
+  -> { built :: Int
      , mirrored :: Int
      , two :: Int
      , linked :: Int
@@ -48,12 +49,12 @@ main
      , positive :: Boolean
      , negative :: Boolean
      }
-main =
+main n =
   { built: evaluate (build 4)
   , mirrored: evaluate (mirror (build 3))
   , two: evaluate (twoCellsAreAllocatedOneByOne 2)
   , linked: total (loopLinkedCellsAreChunked 5)
-  , literal: total (Cons 1 (Cons 2 (Cons 3 Nil)))
-  , positive: onlyEvaluatedWhenPositive 3
-  , negative: onlyEvaluatedWhenPositive (-3)
+  , literal: total (Cons n (Cons 2 (Cons 3 Nil)))
+  , positive: onlyEvaluatedWhenPositive n
+  , negative: onlyEvaluatedWhenPositive (negate n)
   }

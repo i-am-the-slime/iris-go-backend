@@ -47,15 +47,13 @@ const (
 
 var sharedListIntNil = &ListInt{Tag: ListIntNil}
 
-var main_ = initializeMain_()
-
-func initializeMain_() BuiltLinkedLiteralMirroredNegativePositiveTwo {
-	var n int32 = -3
+func main_(n int32) BuiltLinkedLiteralMirroredNegativePositiveTwo {
+	n2 := -n
 	listInts := make([]ListInt, 3)
-	listInts[0] = ListInt{Tag: ListIntCons, Cons0: 1, Cons1: &listInts[1]}
+	listInts[0] = ListInt{Tag: ListIntCons, Cons0: n, Cons1: &listInts[1]}
 	listInts[1] = ListInt{Tag: ListIntCons, Cons0: 2, Cons1: &listInts[2]}
 	listInts[2] = ListInt{Tag: ListIntCons, Cons0: 3, Cons1: sharedListIntNil}
-	return BuiltLinkedLiteralMirroredNegativePositiveTwo{Built: evaluate(build(4)), Mirrored: evaluate(mirrorReusing(build(3))), Two: evaluate(&Expr{Tag: ExprAdd, Field0: build(2), Field1: &Expr{Tag: ExprVal, Val0: 2}}), Linked: total(mainGo(5, sharedListIntNil)), Literal: total(&listInts[0]), Positive: 3 > 0 && evaluate(&Expr{Tag: ExprAdd, Field0: &Expr{Tag: ExprVal, Val0: 3}, Field1: &Expr{Tag: ExprMul, Field0: &Expr{Tag: ExprVal, Val0: 2}, Field1: &Expr{Tag: ExprVal, Val0: 3}}}) > 5, Negative: n > 0 && evaluate(&Expr{Tag: ExprAdd, Field0: &Expr{Tag: ExprVal, Val0: n}, Field1: &Expr{Tag: ExprMul, Field0: &Expr{Tag: ExprVal, Val0: 2}, Field1: &Expr{Tag: ExprVal, Val0: n}}}) > 5}
+	return BuiltLinkedLiteralMirroredNegativePositiveTwo{Built: evaluate(build(4)), Mirrored: evaluate(mirrorReusing(build(3))), Two: evaluate(&Expr{Tag: ExprAdd, Field0: build(2), Field1: &Expr{Tag: ExprVal, Val0: 2}}), Linked: total(mainGo(5, sharedListIntNil)), Literal: total(&listInts[0]), Positive: n > 0 && evaluate(&Expr{Tag: ExprAdd, Field0: &Expr{Tag: ExprVal, Val0: n}, Field1: &Expr{Tag: ExprMul, Field0: &Expr{Tag: ExprVal, Val0: 2}, Field1: &Expr{Tag: ExprVal, Val0: n}}}) > 5, Negative: n2 > 0 && evaluate(&Expr{Tag: ExprAdd, Field0: &Expr{Tag: ExprVal, Val0: n2}, Field1: &Expr{Tag: ExprMul, Field0: &Expr{Tag: ExprVal, Val0: 2}, Field1: &Expr{Tag: ExprVal, Val0: n2}}}) > 5}
 }
 
 func evaluate(argument0 *Expr) int32 {

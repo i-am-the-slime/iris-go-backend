@@ -12,7 +12,7 @@ type NameSizeTags struct {
 	Tags []string
 }
 
-var main_ NameSizeTags = NameSizeTags{Size: 1 + 1, Tags: []string{"new"}, Name: "box"}
+var main_ NameSizeTags = NameSizeTags{Size: 2, Tags: []string{"new"}, Name: "box"}
 
 func main() {
 	fmt.Println(main_)

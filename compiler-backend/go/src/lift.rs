@@ -359,7 +359,7 @@ fn pattern_binders(pattern: &Pattern, binders: &mut FxHashMap<LocalId, Local>) {
     }
 }
 
-fn erases(monotypes: &Monotypes, monotype: MonotypeId) -> bool {
+pub(crate) fn erases(monotypes: &Monotypes, monotype: MonotypeId) -> bool {
     match monotypes.get(monotype) {
         Monotype::Erased(_) => true,
         Monotype::Function(argument, result) => {

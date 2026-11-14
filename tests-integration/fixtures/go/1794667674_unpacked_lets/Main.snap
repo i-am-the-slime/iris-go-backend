@@ -1,0 +1,78 @@
+---
+source: tests-integration/src/fixtures.rs
+---
+// Data/Maybe/maybe.go
+package maybe
+
+type MaybeInt struct {
+	Just0 int32
+	Tag   uint8
+}
+
+const (
+	MaybeIntNothing = iota
+	MaybeIntJust
+)
+
+type MaybeMaybeInt struct {
+	Just0 MaybeInt
+	Tag   uint8
+}
+
+const (
+	MaybeMaybeIntNothing = iota
+	MaybeMaybeIntJust
+)
+
+// main.go
+package main
+
+import (
+	"fixture/Data/Maybe"
+	"fmt"
+	"github.com/i-am-the-slime/purs-backend-go/go-support/prim"
+)
+
+type XY struct {
+	X int32
+	Y int32
+}
+
+var main_ = initializeMain_()
+
+func initializeMain_() []int32 {
+	boxWidth := opaque(3)
+	point := XY{X: opaque(5), Y: opaque(5)}
+	var result XY
+	if point.X > 0 {
+		result = point
+	} else {
+		result = XY{X: 0, Y: point.Y}
+	}
+	found := maybe.MaybeMaybeInt{Tag: maybe.MaybeMaybeIntJust, Just0: maybe.MaybeInt{Tag: maybe.MaybeIntJust, Just0: opaque(6)}}
+	var result2 int32
+	if found.Tag == maybe.MaybeMaybeIntJust && found.Just0.Tag == maybe.MaybeIntJust {
+		result2 = found.Just0.Just0
+	} else {
+		switch found.Tag {
+		case maybe.MaybeMaybeIntJust:
+			result2 = 1
+		default: // maybe.MaybeMaybeIntNothing
+			result2 = 0
+		}
+	}
+	return []int32{prim.MultiplyInt32(boxWidth, opaque(4)) + boxWidth, prim.MultiplyInt32(opaque(4), opaque(6)), result.Y, result2}
+}
+
+func opaque(x int32) int32 {
+	for {
+		if x == 12345 {
+			continue
+		}
+		return x
+	}
+}
+
+func main() {
+	fmt.Println(main_)
+}

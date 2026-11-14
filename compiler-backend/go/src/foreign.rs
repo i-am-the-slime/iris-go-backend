@@ -366,6 +366,17 @@ impl Operator {
 }
 
 impl Foreign {
+    /// Whether this calls the same Go function as `other`, whatever the
+    /// boundary learned from the declaration that references it.
+    pub fn calls(self, other: Foreign) -> bool {
+        match (self, other) {
+            (Foreign::Call { function, .. }, Foreign::Call { function: other, .. }) => {
+                function == other
+            }
+            _ => false,
+        }
+    }
+
     pub fn arity(self) -> usize {
         match self {
             Foreign::Operator(operator) => operator.arity(),
@@ -570,6 +581,10 @@ pub const ARRAY_SLICE: Foreign = array_with("Slice", 3, integers(&[0, 1], false)
 
 pub const FOREIGN_RECORD: Foreign = direct("ForeignRecord", 2);
 
+pub const INT_DIVIDE: Foreign = prim_with("IntDiv", 2, integers(&[0, 1], true));
+
+pub const INT_MODULO: Foreign = prim_with("IntMod", 2, integers(&[0, 1], true));
+
 pub const APPENDER: Foreign = perform_in(GoPackage::Direct, "Appender", 0, INSTANTIATE);
 
 const FOREIGN_IMPORTS: &[(&str, &str, Foreign)] = &[
@@ -579,8 +594,8 @@ const FOREIGN_IMPORTS: &[(&str, &str, Foreign)] = &[
     ("Data.Semiring", "numMul", Foreign::Operator(Operator::NumberMultiply)),
     ("Data.Ring", "intSub", Foreign::Operator(Operator::IntSubtract)),
     ("Data.Ring", "numSub", Foreign::Operator(Operator::NumberSubtract)),
-    ("Data.EuclideanRing", "intDiv", prim_with("IntDiv", 2, integers(&[0, 1], true))),
-    ("Data.EuclideanRing", "intMod", prim_with("IntMod", 2, integers(&[0, 1], true))),
+    ("Data.EuclideanRing", "intDiv", INT_DIVIDE),
+    ("Data.EuclideanRing", "intMod", INT_MODULO),
     ("Data.EuclideanRing", "numDiv", Foreign::Operator(Operator::NumberDivide)),
     ("Data.EuclideanRing", "intDegree", prim_with("IntDegree", 1, integers(&[0], true))),
     ("Data.Eq", "eqBooleanImpl", compare(Comparison::Equal)),
