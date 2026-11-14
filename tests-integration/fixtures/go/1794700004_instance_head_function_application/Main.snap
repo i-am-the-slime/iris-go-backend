@@ -1,0 +1,37 @@
+---
+source: tests-integration/src/fixtures.rs
+---
+// Data/Monoid/Endo/endo.go
+package endo
+
+func MemptyFnInt(argument int32) int32 {
+	return argument
+}
+
+// main.go
+package main
+
+import (
+	"fixture/Data/Monoid/Endo"
+	"fmt"
+	"github.com/i-am-the-slime/purs-backend-go/go-support/prim"
+)
+
+var main_ = initializeMain_()
+
+func initializeMain_() int32 {
+	array2 := []int32{1, 2, 3}
+	accumulator := endo.MemptyFnInt
+	for index := len(array2) - 1; index >= 0; index-- {
+		x := array2[index]
+		acc := accumulator
+		accumulator = func(x2 int32) int32 {
+			return prim.MultiplyInt32(acc(x2), 10) + x
+		}
+	}
+	return accumulator(0)
+}
+
+func main() {
+	fmt.Println(main_)
+}
