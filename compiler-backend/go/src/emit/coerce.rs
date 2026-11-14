@@ -240,6 +240,7 @@ where
             | Monotype::Regex
             | Monotype::Mutex
             | Monotype::BigInt
+            | Monotype::ForeignData(_)
             | Monotype::Erased(_) => return monotype,
         };
         self.monotypes.intern(canonical)

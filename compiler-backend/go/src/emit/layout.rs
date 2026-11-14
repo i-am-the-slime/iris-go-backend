@@ -175,7 +175,12 @@ where
             Monotype::Boolean => Shape::scalar(1),
             Monotype::Int | Monotype::Char => Shape::scalar(4),
             Monotype::Number => Shape::scalar(8),
-            Monotype::String | Monotype::Erased(_) | Monotype::Opaque => Shape::words(2),
+            // A foreign type's size is the foreign package's choice; it is
+            // counted as an interface value.
+            Monotype::String
+            | Monotype::Erased(_)
+            | Monotype::Opaque
+            | Monotype::ForeignData(_) => Shape::words(2),
             Monotype::Error => Shape::words(4),
             Monotype::Array(_) => Shape::words(3),
             Monotype::Record(fields) => {

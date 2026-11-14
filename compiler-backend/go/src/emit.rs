@@ -1263,6 +1263,7 @@ where
                 GoType::Pointer(Box::new(reference_type(value)))
             }
             Monotype::Recursive(data) => self.recursive_type(&data)?,
+            Monotype::ForeignData(data) => self.foreign_data_type(&data)?,
             Monotype::MutableArray(element) => {
                 GoType::Pointer(Box::new(GoType::Slice(Box::new(self.go_type(element)?))))
             }
@@ -1323,6 +1324,34 @@ where
         let type_ = self.go_type(unfolded)?;
         self.type_declarations.push(GoDeclaration::Type { name: name.clone(), type_ });
         Ok(GoType::Named(name))
+    }
+
+    /// The named type a project's Go foreign package declares for one of its
+    /// module's `foreign import data` types, instantiated at the Go types of
+    /// the arguments when the type takes any.
+    fn foreign_data_type(&mut self, data: &DataType) -> GoResult<GoType> {
+        let module_name = self.context.module(data.file_id)?.name.clone();
+        self.imports.insert(self.foreign_packages.import_path(&module_name));
+        let type_name = self.context.type_name(data.file_id, data.item)?;
+        let name =
+            format!("{}.{}", ForeignPackages::package_name(&module_name), capitalise(&type_name));
+        if data.arguments.is_empty() {
+            return Ok(GoType::Named(name));
+        }
+        let mut arguments = Vec::with_capacity(data.arguments.len());
+        for &argument in data.arguments.iter() {
+            let monotype = match self.monotypes.monotype(&mut self.context, argument)? {
+                Ok(monotype) => monotype,
+                Err(state) => {
+                    return Err(GoError::Unsupported {
+                        definition: "code generation".into(),
+                        state,
+                    });
+                }
+            };
+            arguments.push(self.go_type(monotype)?);
+        }
+        Ok(GoType::Generic { name, arguments })
     }
 
     fn unfold(&mut self, data: &DataType) -> GoResult<MonotypeId> {

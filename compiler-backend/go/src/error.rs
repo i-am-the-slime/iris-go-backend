@@ -53,7 +53,9 @@ pub enum UnsupportedState {
     SpecializationLimit { limit: usize },
     #[error("declaration interleaves arguments before its constraints")]
     InterleavedAbstractions,
-    #[error("foreign data type {name} has no Go representation")]
+    #[error(
+        "foreign data type {name} has no Go representation; a Go foreign package for its module (go-ffi/<module>.go) declares it as a named type"
+    )]
     ForeignData { name: String },
     #[error("foreign import {name} has no Go implementation")]
     UnknownForeign { name: String },

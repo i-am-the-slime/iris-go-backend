@@ -211,6 +211,7 @@ where
     ) -> Specializer<'q, Q> {
         let mut monotypes = Monotypes::default();
         monotypes.schemes = schemes;
+        monotypes.foreign_modules = foreign_packages.modules.clone();
         Specializer {
             context: Context::new(queries),
             monotypes,
@@ -1457,7 +1458,7 @@ where
             Monotype::Record(fields) => {
                 fields.iter().any(|field| self.mentions_erased(field.monotype))
             }
-            Monotype::Data(data) | Monotype::Recursive(data) => {
+            Monotype::Data(data) | Monotype::Recursive(data) | Monotype::ForeignData(data) => {
                 data.arguments.iter().any(|&argument| self.context.types.contains_erased(argument))
             }
         }

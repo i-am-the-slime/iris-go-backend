@@ -40,6 +40,9 @@ pub enum Monotype {
     BigInt,
     Lazy(MonotypeId),
     Data(DataType),
+    /// A `foreign import data` type that the project's Go foreign package for
+    /// its module declares, as a named Go type of the same name.
+    ForeignData(DataType),
     Recursive(DataType),
     Erased(Erasure),
 }
@@ -85,6 +88,8 @@ pub struct Monotypes {
     pub new_rank_n_keys: Vec<(crate::scheme::SchemeKey, String)>,
     /// Owners of rank-N fields met with erased types in this pass.
     pub new_erased_owners: Vec<String>,
+    /// Modules whose foreign imports the project implements in Go.
+    pub foreign_modules: Vec<String>,
 }
 
 impl Monotypes {
@@ -490,6 +495,17 @@ impl Monotypes {
                 }
                 _ if crate::foreign::is_opaque_foreign_data(&module.name, &name) => {
                     Monotype::Opaque
+                }
+                _ if self.foreign_modules.iter().any(|provided| *provided == module.name) => {
+                    let mut canonical = Vec::with_capacity(arguments.len());
+                    for argument in arguments {
+                        canonical.push(erase_newtypes(context, argument, expansions, &mut vec![])?);
+                    }
+                    Monotype::ForeignData(DataType {
+                        file_id,
+                        item,
+                        arguments: Arc::from(canonical),
+                    })
                 }
                 _ => {
                     let name = format!("{}.{name}", module.name);
