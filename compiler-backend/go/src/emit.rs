@@ -8,8 +8,10 @@ mod application;
 mod coerce;
 mod deduplicate;
 mod iteration;
+mod lengths;
 mod ownership;
 mod packages;
+mod ranges;
 mod reuse;
 
 use std::collections::BTreeSet;
@@ -85,6 +87,8 @@ where
     if emitter.imports.contains(GoPackage::Aff.path()) {
         await_fibers(&mut declarations);
     }
+    timed("ranges", || ranges::read_elements_in_place(&mut declarations));
+    timed("lengths", || lengths::count_lengths_up_to_comparisons(&mut declarations));
     let mut homes: FxHashMap<String, ModuleIndex> = std::mem::take(&mut emitter.homes)
         .into_iter()
         .filter_map(|(name, file)| Some((name, modules.index(file)?)))
