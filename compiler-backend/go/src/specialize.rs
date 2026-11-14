@@ -1297,10 +1297,10 @@ where
     fn application(&mut self, scope: &mut Scope, id: tree::ExpressionId) -> GoResult<Expression> {
         let module = Arc::clone(&scope.module);
         let monotype = self.monotype(scope, module.checked.tree[id].type_id)?;
-        let spine::ApplicationSpine { head, arguments, trailing, instantiations } =
+        let spine::ApplicationSpine { head, arguments, trailing: evidence, instantiations } =
             self.application_spine(scope, id);
         let result_instantiations = instantiations;
-        let trailing = self.trailing_dictionaries(scope, &trailing)?;
+        let trailing = self.trailing_dictionaries(scope, &evidence)?;
         if let tree::ExpressionKind::Constructor { resolution } = module.checked.tree[head].kind
             && trailing.is_empty()
             && self.is_newtype_constructor(resolution)?
@@ -1315,6 +1315,15 @@ where
             }
             argument.monotype = monotype;
             return Ok(argument);
+        }
+        if !trailing.is_empty()
+            && let [argument] = arguments[..]
+            && self.is_unsafe_coerce(scope, head)?
+        {
+            let result = module.checked.tree[id].type_id;
+            let result = self.context.types.substitute(result, &scope.substitution);
+            let result = (result, monotype);
+            return self.coerced_with_evidence(scope, argument, &evidence, trailing, result);
         }
         if trailing.is_empty()
             && let Some(reference) = self.traversal_reference(scope, head, &arguments)?
