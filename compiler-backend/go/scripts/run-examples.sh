@@ -46,7 +46,7 @@ GOMOD
   fi
   finished=$(perl -MTime::HiRes=time -e 'printf "%.0f", time*1000')
   local elapsed=$((finished - started))
-  if ! (cd "$out" && go build -gcflags="-c=$(sysctl -n hw.ncpu)" -ldflags=-w -o program . ) >"$out/build.log" 2>&1; then
+  if ! (cd "$out" && go build -gcflags="-c=$(sysctl -n hw.ncpu) -dwarf=false" -ldflags=-w -o program . ) >"$out/build.log" 2>&1; then
     printf '%-26s %-8s %6s  %s\n' "$name" "GO" "$elapsed" "$(grep -m1 -v '^#' "$out/build.log" | cut -c1-150)"
     return 1
   fi

@@ -36,6 +36,7 @@ replace github.com/i-am-the-slime/purs-backend-go/go-support => $GO_SUPPORT
 GOMOD
 # -tags libm: Math.sin and friends from the C library, as JavaScriptCore does.
 # -c: compile the one large package on every core instead of four.
-# -w: no DWARF, which more than halves link time.
-(cd "$OUT" && go build -tags libm -gcflags="-c=$(sysctl -n hw.ncpu)" -ldflags=-w -o markgraf .) >&2
+# -dwarf=false and -w: no DWARF; the compiler would generate it only for the
+# linker to drop, and without it link time more than halves.
+(cd "$OUT" && go build -tags libm -gcflags="-c=$(sysctl -n hw.ncpu) -dwarf=false" -ldflags=-w -o markgraf .) >&2
 echo "$OUT/markgraf"
