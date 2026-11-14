@@ -1,0 +1,59 @@
+---
+source: tests-integration/src/fixtures.rs
+---
+// Data/Array/array.go
+package dataarray
+
+import "github.com/i-am-the-slime/purs-backend-go/go-support/direct"
+
+func FoldMEffectIntInt(f func(int32, int32) int32, b int32, argument2 []int32) int32 {
+	function := func(_ struct{}) int32 {
+		return b
+	}
+	return direct.Uncons(func(argument struct{}) func() int32 {
+		return func() int32 {
+			return function(argument)
+		}
+	}, func(a int32, as []int32) func() int32 {
+		return func() int32 {
+			value := f(b, a)
+			return FoldMEffectIntInt(f, value, as)
+		}
+	}, argument2)()
+}
+
+// main.go
+package main
+
+import (
+	"fixture/Data/Array"
+	"github.com/i-am-the-slime/purs-backend-go/go-support/prim"
+	"os"
+)
+
+type Ref[T any] struct {
+	Value T
+}
+
+type StateValue struct {
+	State int32
+	Value int32
+}
+
+func main_() int32 {
+	value := &Ref[int32]{Value: 0}
+	value2 := dataarray.FoldMEffectIntInt(func(acc int32, n int32) int32 {
+		s2 := value.Value
+		s_2 := s2 + 1
+		modified := StateValue{State: s_2, Value: s_2}
+		value.Value = modified.State
+		return acc + n
+	}, 0, []int32{1, 2, 3})
+	value3 := value.Value
+	return prim.MultiplyInt32(value2, 10) + value3
+}
+
+func main() {
+	exitStatus := main_()
+	os.Exit(int(exitStatus))
+}

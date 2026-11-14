@@ -2330,6 +2330,7 @@ where
                 }
                 if parameters.is_empty() {
                     let (parts, result) = self.uncurried_parts(current)?;
+                    arities = parts.iter().map(Spelled::arrows).collect();
                     parameters = parts;
                     current = result;
                 }
