@@ -15,7 +15,7 @@ impl Simplifier<'_> {
         monotype: MonotypeId,
     ) -> Expression {
         let mut bindings = vec![];
-        let Some(fields) = self.operate(operation, &arguments, &mut bindings) else {
+        let Some(fields) = self.operate(operation, &arguments, monotype, &mut bindings) else {
             let kind = ExpressionKind::Foreign { foreign: Foreign::Record(operation), arguments };
             return Expression::new(kind, monotype);
         };
@@ -140,6 +140,26 @@ impl Simplifier<'_> {
                 self.remember_record_order(binding);
             }
             self.settle_records(body);
+            // A settled operation may no longer read a binding (`shrinkImpl`'s
+            // keys), which then goes as any unused binding does.
+            let unused = |binding: &Binding, bindings: &[Binding], body: &Expression| {
+                super::occurrences(body, binding.local.id).total == 0
+                    && bindings
+                        .iter()
+                        .all(|other| super::occurrences(&other.value, binding.local.id).total == 0)
+            };
+            while let Some(position) =
+                bindings.iter().position(|binding| unused(binding, bindings, body))
+            {
+                bindings.remove(position);
+            }
+            if bindings.is_empty() {
+                let body = std::mem::replace(
+                    &mut **body,
+                    Expression::new(ExpressionKind::Unit, expression.monotype),
+                );
+                *expression = body;
+            }
             return;
         }
         super::for_each_child_mut(expression, &mut |child| self.settle_records(child));
@@ -165,9 +185,18 @@ impl Simplifier<'_> {
         &mut self,
         operation: RecordOperation,
         arguments: &[Expression],
+        monotype: MonotypeId,
         bindings: &mut Vec<Vec<Binding>>,
     ) -> Option<Fields> {
         match (operation, arguments) {
+            (RecordOperation::Shrink, [_keys, record]) => {
+                let Monotype::Record(kept) = self.monotypes.get(monotype).clone() else {
+                    return None;
+                };
+                let mut fields = self.fields(record, bindings)?;
+                fields.retain(|(field, _)| kept.iter().any(|kept| kept.label == *field));
+                Some(fields)
+            }
             (RecordOperation::Insert, [label, value, record]) => {
                 let label = literal_label(label)?;
                 let mut fields = self.fields(record, bindings)?;
@@ -287,5 +316,72 @@ fn literal_label(label: &Expression) -> Option<SmolStr> {
     match &label.kind {
         ExpressionKind::Literal(Literal::String(label)) => Some(SmolStr::from(label.as_str())),
         _ => None,
+    }
+}
+
+impl Simplifier<'_> {
+    /// `unsafeHas label record` with a label known only at run time asks
+    /// whether the label is one of the record type's.
+    pub(super) fn record_has(
+        &mut self,
+        arguments: Vec<Expression>,
+        monotype: MonotypeId,
+    ) -> Expression {
+        let Some(fields) = self.dynamic_fields(&arguments) else {
+            let kind = ExpressionKind::Foreign { foreign: Foreign::RecordHas, arguments };
+            return Expression::new(kind, monotype);
+        };
+        let [label, _record]: [Expression; 2] =
+            arguments.try_into().expect("invariant violated: unsafeHas has two arguments");
+        let mut bindings = vec![];
+        let label = self.shared_operand(label, "label", &mut bindings);
+        let mut has = Expression::new(ExpressionKind::Literal(Literal::Boolean(false)), monotype);
+        for field in fields.iter().rev() {
+            let kind = ExpressionKind::If {
+                condition: Box::new(self.label_is(&label, &field.label)),
+                then: Box::new(Expression::new(
+                    ExpressionKind::Literal(Literal::Boolean(true)),
+                    monotype,
+                )),
+                otherwise: Box::new(has),
+            };
+            has = Expression::new(kind, monotype);
+        }
+        self.expression(self.bound(bindings, has))
+    }
+
+    /// The fields of a record read through `unsafeGet` or `unsafeHas` when the
+    /// label is not a literal and the record's type is a closed record.
+    fn dynamic_fields(
+        &self,
+        arguments: &[Expression],
+    ) -> Option<Vec<crate::monotype::RecordField>> {
+        let [label, record] = arguments else { return None };
+        if let ExpressionKind::Literal(Literal::String(_)) = label.kind {
+            return None;
+        }
+        match self.monotypes.get(record.monotype) {
+            Monotype::Record(fields) => Some(fields.to_vec()),
+            _ => None,
+        }
+    }
+
+    fn label_is(&mut self, label: &Expression, expected: &SmolStr) -> Expression {
+        let boolean = self.monotypes.intern(Monotype::Boolean);
+        let expected = Expression::new(
+            ExpressionKind::Literal(Literal::String(expected.to_string())),
+            label.monotype,
+        );
+        let foreign = Foreign::Operator(foreign::Operator::Compare(foreign::Comparison::Equal));
+        let arguments = vec![label.clone(), expected];
+        Expression::new(ExpressionKind::Foreign { foreign, arguments }, boolean)
+    }
+
+    fn bound(&self, bindings: Vec<Binding>, body: Expression) -> Expression {
+        if bindings.is_empty() {
+            return body;
+        }
+        let monotype = body.monotype;
+        Expression::new(ExpressionKind::Let { bindings, body: Box::new(body) }, monotype)
     }
 }

@@ -1,0 +1,201 @@
+---
+source: tests-integration/src/fixtures.rs
+---
+// Data/Variant/variant.go
+package variant
+
+import "fixture/shared"
+
+func Case_String(r shared.Type_Value) string {
+	panic("Data.Variant: pattern match failure [" + r.Type + "]")
+	var unreachable string
+	return unreachable
+}
+
+// Record/Studio/Shrink/shrink.go
+package shrink
+
+import "fixture/shared"
+
+func ShrinkRecordBaseNameScaleRecordBaseNameRecordScaleConsIntConsStringNil(argument1 shared.BaseNameScale) shared.BaseName {
+	return shared.BaseName{Base: argument1.Base, Name: argument1.Name}
+}
+
+// main.go
+package main
+
+import (
+	"fixture/Data/Variant"
+	"fixture/Record/Studio/Shrink"
+	"fixture/shared"
+	"fmt"
+	"github.com/i-am-the-slime/purs-backend-go/go-support/array"
+	"github.com/i-am-the-slime/purs-backend-go/go-support/prim"
+)
+
+type After struct {
+	After int32
+}
+
+type After2 struct {
+	After any
+}
+
+func convert(value After2) After {
+	return After{After: value.After.(int32)}
+}
+
+type Type_Value2 struct {
+	Type  string
+	Value string
+}
+
+func convert2(value Type_Value2) shared.Type_Value {
+	return shared.Type_Value{Type: value.Type, Value: value.Value}
+}
+
+type Type_Value3 struct {
+	Type  string
+	Value int32
+}
+
+func convert3(value Type_Value3) shared.Type_Value {
+	return shared.Type_Value{Type: value.Type, Value: value.Value}
+}
+
+type Type_Value4 struct {
+	Type  string
+	Value After
+}
+
+func convert5(value After) After2 {
+	return After2{After: value.After}
+}
+
+func convert4(value Type_Value4) shared.Type_Value {
+	return shared.Type_Value{Type: value.Type, Value: convert5(value.Value)}
+}
+
+type InvalidLateMissing struct {
+	Invalid func(int32) string
+	Late    func(After) string
+	Missing func(string) string
+}
+
+type Invalid struct {
+	Invalid func(int32) string
+}
+
+var main_ = initializeMain_()
+
+func initializeMain_() []string {
+	mapped := make([]string, len(problems))
+	for index, element := range problems {
+		mapped[index] = byLabel(element)
+	}
+	mapped2 := make([]string, len(problems))
+	for index2, element2 := range problems {
+		mapped2[index2] = byRecord(element2)
+	}
+	mapped3 := make([]string, len(problems))
+	for index3, element3 := range problems {
+		mapped3[index3] = someLabels(element3)
+	}
+	return array.Append(mapped, array.Append(mapped2, array.Append(mapped3, []string{shrunk.Name + prim.ShowInt(int(shrunk.Base))})))
+}
+
+func byLabel(r shared.Type_Value) string {
+	if r.Type == "late" {
+		scrutinee := convert(r.Value.(After2))
+		return "late " + prim.ShowInt(int(scrutinee.After))
+	}
+	if r.Type == "invalid" {
+		return "invalid " + prim.ShowInt(int(r.Value.(int32)))
+	}
+	if r.Type == "missing" {
+		return "missing " + r.Value.(string)
+	}
+	return variant.Case_String(r)
+}
+
+var problems []shared.Type_Value = []shared.Type_Value{convert2(Type_Value2{Type: "missing", Value: "user"}), convert3(Type_Value3{Type: "invalid", Value: 3}), convert4(Type_Value4{Type: "late", Value: After{After: 5}})}
+
+func byRecord(argument shared.Type_Value) string {
+	argument0 := argument.Type
+	var result bool
+	if argument0 == "invalid" {
+		result = true
+	} else if argument0 == "late" {
+		result = true
+	} else {
+		result = argument0 == "missing"
+	}
+	if result {
+		record := InvalidLateMissing{Missing: func(name string) string {
+			return "no " + name
+		}, Invalid: func(code int32) string {
+			return "bad " + prim.ShowInt(int(prim.MultiplyInt32(code, 2)))
+		}, Late: func(argument02 After) string {
+			return "after " + prim.ShowInt(int(argument02.After))
+		}}
+		var field func(any) string
+		switch argument.Type {
+		case "invalid":
+			field = func(coerced any) string {
+				return record.Invalid(coerced.(int32))
+			}
+		case "late":
+			field = func(coerced2 any) string {
+				return record.Late(convert(coerced2.(After2)))
+			}
+		case "missing":
+			field = func(coerced3 any) string {
+				return record.Missing(coerced3.(string))
+			}
+		}
+		return field(argument.Value)
+	}
+	return variant.Case_String(argument)
+}
+
+func someLabels(argument shared.Type_Value) string {
+	if argument.Type == "invalid" {
+		record := Invalid{Invalid: func(code int32) string {
+			return prim.ShowInt(int(code + 1))
+		}}
+		var field func(any) string
+		switch argument.Type {
+		case "invalid":
+			field = func(coerced any) string {
+				return record.Invalid(coerced.(int32))
+			}
+		}
+		return field(argument.Value)
+	}
+	return "unhandled"
+}
+
+var shrunk shared.BaseName = shrink.ShrinkRecordBaseNameScaleRecordBaseNameRecordScaleConsIntConsStringNil(shared.BaseNameScale{Base: 1, Name: "context", Scale: 2})
+
+func main() {
+	fmt.Println(main_)
+}
+
+// shared/shared.go
+package shared
+
+type Type_Value struct {
+	Type  string
+	Value any
+}
+
+type BaseName struct {
+	Base int32
+	Name string
+}
+
+type BaseNameScale struct {
+	Base  int32
+	Name  string
+	Scale int32
+}

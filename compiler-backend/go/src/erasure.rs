@@ -19,7 +19,8 @@ pub enum Erasure {
     ArgumentVariable,
     /// A type variable applied to arguments (`f a` with `f` unknown).
     VariableApplication,
-    /// The row of a `VariantF`, whose functors are chosen at run time.
+    /// The payload of a `Variant` or the row of a `VariantF`, whose types the
+    /// label chooses at run time.
     VariantRow,
     /// `Data.Exists.Exists`, an existential by construction.
     Existential,
@@ -40,6 +41,10 @@ pub enum Erasure {
     Foreign,
     /// `any` written by the backend itself rather than derived from a type.
     Runtime,
+    /// A type the checker left unsolved, so that nothing in the program fixes
+    /// it: the value comes from an `unsafeCoerce` or a foreign whose result
+    /// type is free (`Data.Variant`'s payloads, say).
+    Unsolved,
 }
 
 impl Erasure {
@@ -56,7 +61,7 @@ impl Erasure {
         }
     }
 
-    pub const ALL: [Erasure; 14] = [
+    pub const ALL: [Erasure; 15] = [
         Erasure::ArgumentVariable,
         Erasure::TypeVariable,
         Erasure::RankN,
@@ -71,6 +76,7 @@ impl Erasure {
         Erasure::FailedDefinition,
         Erasure::Foreign,
         Erasure::Runtime,
+        Erasure::Unsolved,
     ];
 
     pub fn code(self) -> u32 {
@@ -89,7 +95,7 @@ impl fmt::Display for Erasure {
             Erasure::RankN => "rank-N forall (unconstrained)",
             Erasure::ArgumentVariable => "type variable in data type arguments",
             Erasure::VariableApplication => "type variable application",
-            Erasure::VariantRow => "VariantF row",
+            Erasure::VariantRow => "Variant payload or VariantF row",
             Erasure::Existential => "Data.Exists",
             Erasure::NewtypeCycle => "newtype cycle",
             Erasure::EmptyData => "empty data type",
@@ -99,6 +105,7 @@ impl fmt::Display for Erasure {
             Erasure::FailedDefinition => "failed definition",
             Erasure::Foreign => "foreign (JavaScript) value",
             Erasure::Runtime => "backend runtime plumbing",
+            Erasure::Unsolved => "type the checker left unsolved",
         };
         f.write_str(text)
     }

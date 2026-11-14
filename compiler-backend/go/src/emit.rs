@@ -3727,15 +3727,18 @@ where
         }
         if let Foreign::RecordGet = foreign {
             let ExpressionKind::Literal(Literal::String(label)) = &arguments[0].kind else {
-                return Err(GoError::Unsupported {
-                    definition: "code generation".into(),
-                    state: crate::error::UnsupportedState::Construct {
-                        construct: "record access through a label unknown at compile time",
-                    },
-                });
+                return self.record_get_by_label(arguments, monotype, out);
             };
             let record = self.value(&arguments[1], out)?;
             return Ok(field(record, &field_name(label)));
+        }
+        if let Foreign::RecordHas = foreign {
+            return Err(GoError::Unsupported {
+                definition: "code generation".into(),
+                state: crate::error::UnsupportedState::Construct {
+                    construct: "a label test on a value whose record type is not closed",
+                },
+            });
         }
         if let Foreign::Record(_) = foreign {
             return Err(GoError::Unsupported {
@@ -3810,6 +3813,63 @@ where
             Foreign::Identity => values.remove(0),
             _ => unreachable!("invariant violated: effectful foreign reached value conversion"),
         })
+    }
+
+    /// `unsafeGet label record` with a label known only at run time, over a
+    /// record whose fields the specialised type fixes: a switch over the
+    /// labels of the fields that can stand at the requested type. A field
+    /// whose type has a different shape cannot be the one read, since the
+    /// caller uses the result at its own type; `Data.Variant` reads its
+    /// handlers this way after asking `unsafeHas`.
+    fn record_get_by_label(
+        &mut self,
+        arguments: &[Expression],
+        monotype: MonotypeId,
+        out: &mut Vec<GoStatement>,
+    ) -> GoResult<GoExpression> {
+        let Monotype::Record(fields) = self.monotypes.get(arguments[1].monotype).clone() else {
+            return Err(GoError::Unsupported {
+                definition: "code generation".into(),
+                state: crate::error::UnsupportedState::Construct {
+                    construct: "record access through a run-time label into a value that is not a closed record",
+                },
+            });
+        };
+        let label = self.value(&arguments[0], out)?;
+        let record = self.value(&arguments[1], out)?;
+        let record = self.shared(record, "record", out);
+        let chosen = self.temporary("field");
+        let mut cases = Vec::with_capacity(fields.len());
+        for record_field in fields.iter() {
+            let mut body = vec![];
+            let read = field(record.clone(), &field_name(&record_field.label));
+            let value = match self.coerce(read, record_field.monotype, monotype, &mut body) {
+                Ok(value) => value,
+                Err(GoError::Unsupported {
+                    state: crate::error::UnsupportedState::Construct { construct },
+                    ..
+                }) if construct == coerce::UNRELATED_TYPES => continue,
+                Err(error) => return Err(error),
+            };
+            body.push(GoStatement::Assign {
+                targets: vec![identifier_expression(&chosen)],
+                values: vec![value],
+            });
+            let label = GoExpression::String(record_field.label.to_string());
+            cases.push(GoCase { values: vec![label], body });
+        }
+        if cases.is_empty() {
+            return Err(GoError::Unsupported {
+                definition: "code generation".into(),
+                state: crate::error::UnsupportedState::Construct {
+                    construct: "record access through a run-time label where no field has the requested type",
+                },
+            });
+        }
+        let type_ = self.go_type(monotype)?;
+        out.push(GoStatement::Variable { name: chosen.clone(), type_, value: None });
+        out.push(GoStatement::Switch { value: Some(label), cases, default: None });
+        Ok(identifier_expression(&chosen))
     }
 
     /// go-support represents PureScript `Int` as Go `int`; generated code uses

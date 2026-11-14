@@ -25,6 +25,11 @@ pub(super) fn unpackable(binding: &Binding, body: &Expression) -> bool {
         }
 }
 
+/// Whether every use of the binding in the body reads a field of it.
+pub(super) fn only_read(binding: &Binding, body: &Expression) -> bool {
+    only_taken_apart(body, binding.local.id, binding.local.monotype, None)
+}
+
 impl Simplifier<'_> {
     /// The body with an `unpackable` binding's value taken apart.
     pub(super) fn unpack(&mut self, binding: Binding, body: Expression) -> Expression {

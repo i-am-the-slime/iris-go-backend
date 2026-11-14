@@ -1,7 +1,7 @@
-examples any 627
+examples any 626
 examples empty-interface 0
-examples funcs 2227
-examples lines 55576
+examples funcs 2226
+examples lines 55568
 examples panic 28
 examples reflect 0
 examples thunk 77

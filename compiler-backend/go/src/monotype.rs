@@ -235,7 +235,10 @@ impl Monotypes {
             Type::Rigid(..) => {
                 Monotype::Erased(context.types.erasure(type_id).unwrap_or(Erasure::TypeVariable))
             }
-            Type::Unification(_) => Monotype::Unit,
+            // The backend's own stand-in for a type nothing constrains, which
+            // holds no information.
+            Type::Unification(u32::MAX) => Monotype::Unit,
+            Type::Unification(_) => Monotype::Erased(Erasure::Unsolved.tracked()),
             Type::Application(..) | Type::Constructor(..) | Type::Synonym(..) => {
                 return self.convert_application(context, type_id, expansions);
             }
@@ -339,6 +342,29 @@ impl Monotypes {
                     context.queries.intern_type(Type::Constructor(file_id, representation));
                 let representation =
                     context.queries.intern_type(Type::Application(representation, erased));
+                let representation =
+                    context.queries.intern_type(Type::Application(representation, erased));
+                return self.convert(context, representation, expansions);
+            }
+            // `Variant` is `foreign import data`, built and taken apart through
+            // `unsafeCoerce` to `VariantRep`, whose payload type depends on the
+            // label at run time.
+            ("Data.Variant", "Variant") => {
+                let Some(internal) = context.queries.module_file("Data.Variant.Internal") else {
+                    return Ok(Err(open_type(context, type_id)?));
+                };
+                let Some(representation) =
+                    context.module(internal)?.indexed.items.iter_types().find_map(
+                        |(item, indexed)| {
+                            (indexed.name.as_deref() == Some("VariantRep")).then_some(item)
+                        },
+                    )
+                else {
+                    return Ok(Err(open_type(context, type_id)?));
+                };
+                let erased = context.types.erased(Erasure::VariantRow);
+                let representation =
+                    context.queries.intern_type(Type::Constructor(internal, representation));
                 let representation =
                     context.queries.intern_type(Type::Application(representation, erased));
                 return self.convert(context, representation, expansions);

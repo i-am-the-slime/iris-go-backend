@@ -331,6 +331,10 @@ impl Simplifier<'_> {
             ),
             ExpressionKind::Access { record, label } => {
                 let record = self.expression(*record);
+                let record = match self.read_through_coercion(record, &label, monotype) {
+                    Ok(read) => return read,
+                    Err(record) => record,
+                };
                 return project(record, label, monotype);
             }
             ExpressionKind::Update { record, updates } => ExpressionKind::Update {
@@ -745,6 +749,7 @@ impl Simplifier<'_> {
             let substitutable = is_trivial(&binding.value)
                 || matches!(binding.value.kind, ExpressionKind::Fail(_))
                 || trivial_record
+                || self.is_coerced_record_read(&binding, &body)
                 || uses.total == 0
                 || (uses.total == 1
                     && (uses.under_lambda == 0 || self.does_no_work(&binding.value)));
@@ -765,6 +770,43 @@ impl Simplifier<'_> {
         kept.reverse();
         let monotype = body.monotype;
         Expression::new(ExpressionKind::Let { bindings: kept, body: Box::new(body) }, monotype)
+    }
+
+    /// A field of a record coerced to another record type is the field of the
+    /// original, coerced. A coercion converts an erased field when it reads
+    /// it, and `Data.Variant` reads a payload at a type only after checking
+    /// the label that promises it.
+    fn read_through_coercion(
+        &mut self,
+        record: Expression,
+        label: &SmolStr,
+        monotype: MonotypeId,
+    ) -> Result<Expression, Expression> {
+        let ExpressionKind::Coerce(source) = &record.kind else { return Err(record) };
+        let (Monotype::Record(from), Monotype::Record(_)) =
+            (self.monotypes.get(source.monotype), self.monotypes.get(record.monotype))
+        else {
+            return Err(record);
+        };
+        let Some(field) = from.iter().find(|field| field.label == *label) else {
+            return Err(record);
+        };
+        let field_monotype = field.monotype;
+        let ExpressionKind::Coerce(source) = record.kind else {
+            unreachable!("invariant violated: the record was just matched as a coercion")
+        };
+        let read = project(*source, label.clone(), field_monotype);
+        Ok(self.coerce(read, monotype))
+    }
+
+    /// A binding of a trivial record coerced to another record type, whose
+    /// every use reads a field: each read converts only its own field.
+    fn is_coerced_record_read(&self, binding: &Binding, body: &Expression) -> bool {
+        let ExpressionKind::Coerce(source) = &binding.value.kind else { return false };
+        is_trivial(source)
+            && matches!(self.monotypes.get(source.monotype), Monotype::Record(_))
+            && matches!(self.monotypes.get(binding.value.monotype), Monotype::Record(_))
+            && unpack::only_read(binding, body)
     }
 
     /// `let a = (let b = e in v)` binds `b` before `a`, which evaluates `e`
@@ -840,6 +882,7 @@ impl Simplifier<'_> {
                 arguments.pop().expect("invariant violated: identity has one argument")
             }
             Foreign::Record(operation) => self.record_operation(operation, arguments, monotype),
+            Foreign::RecordHas => self.record_has(arguments, monotype),
             Foreign::ObjectFoldM => self.object_fold(arguments, monotype),
             Foreign::UnsafeCoerce => {
                 let value = arguments.pop().expect("invariant violated: coerce has one argument");

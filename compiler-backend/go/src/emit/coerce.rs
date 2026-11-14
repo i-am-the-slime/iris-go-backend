@@ -9,6 +9,9 @@ use crate::foreign::{GoFunction, GoPackage};
 use crate::monotype::{DataType, Monotype, MonotypeId, RecordField};
 use crate::syntax::{GoCase, GoDeclaration, GoDefault, GoExpression, GoStatement, GoType};
 
+/// The construct a coercion between types of different shapes reports.
+pub(super) const UNRELATED_TYPES: &str = "representation changes between unrelated types";
+
 impl<'q, Q> Emitter<'_, '_, 'q, Q>
 where
     Q: checking::ExternalQueries,
@@ -128,9 +131,7 @@ where
             }
             _ => Err(GoError::Unsupported {
                 definition: "code generation".into(),
-                state: crate::error::UnsupportedState::Construct {
-                    construct: "representation changes between unrelated types",
-                },
+                state: crate::error::UnsupportedState::Construct { construct: UNRELATED_TYPES },
             }),
         }
     }

@@ -55,6 +55,7 @@ pub enum Foreign {
     Snoc,
     Ordering,
     RecordGet,
+    RecordHas,
     Record(RecordOperation),
     AssocArray,
     ObjectFoldM,
@@ -85,13 +86,17 @@ pub enum RecordOperation {
     Delete,
     Rename,
     Union,
+    /// `Record.Studio.Shrink.shrinkImpl`: the fields of a record that a
+    /// smaller record type names. Its keys argument lists exactly those
+    /// labels (the `Keys` class reflects them), which the type already fixes.
+    Shrink,
 }
 
 impl RecordOperation {
     pub fn arity(self) -> usize {
         match self {
             RecordOperation::Insert | RecordOperation::Modify | RecordOperation::Rename => 3,
-            RecordOperation::Delete | RecordOperation::Union => 2,
+            RecordOperation::Delete | RecordOperation::Union | RecordOperation::Shrink => 2,
         }
     }
 }
@@ -399,7 +404,7 @@ impl Foreign {
             Foreign::MaybeIndex => 4,
             Foreign::IntFromNumber => 3,
             Foreign::Ordering => 5,
-            Foreign::Range | Foreign::Snoc | Foreign::RecordGet => 2,
+            Foreign::Range | Foreign::Snoc | Foreign::RecordGet | Foreign::RecordHas => 2,
             Foreign::Record(operation) => operation.arity(),
             Foreign::Unfoldr | Foreign::Unfoldr1 => 6,
             Foreign::ReferenceWrite | Foreign::ReferenceWriteThrough | Foreign::ReferenceModify => {
@@ -615,9 +620,13 @@ const FOREIGN_IMPORTS: &[(&str, &str, Foreign)] = &[
     ("Data.Show.Generic", "intercalate", prim("StringJoinWith", 2)),
     ("Control.Apply", "arrayApply", array("Apply", 2)),
     ("Record.Unsafe", "unsafeGet", Foreign::RecordGet),
+    // Whether a record has a field of a label; `Data.Variant` asks it before
+    // reading a handler with `unsafeGet`.
+    ("Record.Unsafe", "unsafeHas", Foreign::RecordHas),
     ("Record.Unsafe", "unsafeSet", Foreign::Record(RecordOperation::Insert)),
     ("Record.Unsafe", "unsafeDelete", Foreign::Record(RecordOperation::Delete)),
     ("Record.Unsafe.Union", "unsafeUnionFn", Foreign::Record(RecordOperation::Union)),
+    ("Record.Studio.Shrink", "shrinkImpl", Foreign::Record(RecordOperation::Shrink)),
     ("Record.Builder", "copyRecord", Foreign::Identity),
     ("Record.Builder", "unsafeInsert", Foreign::Record(RecordOperation::Insert)),
     ("Record.Builder", "unsafeModify", Foreign::Record(RecordOperation::Modify)),
