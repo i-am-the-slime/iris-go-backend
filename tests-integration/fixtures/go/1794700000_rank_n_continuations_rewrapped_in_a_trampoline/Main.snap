@@ -27,7 +27,7 @@ type FailureRecordParse struct {
 }
 
 type StepInt2 struct {
-	StepInt func(int32) func(func(func(struct{}) StepInt) StepInt) func(func(FailureRecordParse) StepInt) func(func(int32) StepInt) StepInt
+	StepInt func(int32, func(func(struct{}) StepInt) StepInt, func(FailureRecordParse) StepInt, func(int32) StepInt) StepInt
 }
 
 type FailureRecord struct {
@@ -43,33 +43,21 @@ func convert2(value FailureRecord) FailureRecordParse {
 }
 
 func convert(value StepInt3) StepInt2 {
-	return StepInt2{StepInt: func(coerced int32) func(func(func(struct{}) StepInt) StepInt) func(func(FailureRecordParse) StepInt) func(func(int32) StepInt) StepInt {
-		original := func(argument func(func(struct{}) StepInt) StepInt) func(func(FailureRecord) StepInt) func(func(int32) StepInt) StepInt {
-			return func(argument2 func(FailureRecord) StepInt) func(func(int32) StepInt) StepInt {
-				return func(argument3 func(int32) StepInt) StepInt {
-					return value.StepInt(coerced, argument, argument2, argument3)
-				}
-			}
-		}
-		return func(coerced2 func(func(struct{}) StepInt) StepInt) func(func(FailureRecordParse) StepInt) func(func(int32) StepInt) StepInt {
-			original2 := original(coerced2)
-			return func(coerced3 func(FailureRecordParse) StepInt) func(func(int32) StepInt) StepInt {
-				return original2(func(coerced4 FailureRecord) StepInt {
-					return coerced3(convert2(coerced4))
-				})
-			}
-		}
+	return StepInt2{StepInt: func(coerced int32, coerced2 func(func(struct{}) StepInt) StepInt, coerced3 func(FailureRecordParse) StepInt, coerced5 func(int32) StepInt) StepInt {
+		return value.StepInt(coerced, coerced2, func(coerced4 FailureRecord) StepInt {
+			return coerced3(convert2(coerced4))
+		}, coerced5)
 	}}
 }
 
 var main_ = initializeMain_()
 
 func initializeMain_() []int32 {
-	scrutinee := mainGo(loop(30, 0).StepInt(0)(func(value0 func(struct{}) StepInt) StepInt {
+	scrutinee := mainGo(loop(30, 0).StepInt(0, func(value0 func(struct{}) StepInt) StepInt {
 		return StepInt{Tag: StepIntMore, More0: value0}
-	})(func(argument0 FailureRecordParse) StepInt {
+	}, func(argument0 FailureRecordParse) StepInt {
 		return StepInt{Tag: StepIntStop, Stop0: argument0.Failure0}
-	})(func(value02 int32) StepInt {
+	}, func(value02 int32) StepInt {
 		return StepInt{Tag: StepIntDone, Done0: value02}
 	}))
 	var result int32
@@ -86,49 +74,31 @@ func initializeMain_() []int32 {
 
 func loop(i int32, total int32) StepInt2 {
 	if i <= 0 {
-		return StepInt2{StepInt: func(_ int32) func(func(func(struct{}) StepInt) StepInt) func(func(FailureRecordParse) StepInt) func(func(int32) StepInt) StepInt {
-			return func(_ func(func(struct{}) StepInt) StepInt) func(func(FailureRecordParse) StepInt) func(func(int32) StepInt) StepInt {
-				return func(_ func(FailureRecordParse) StepInt) func(func(int32) StepInt) StepInt {
-					return func(done func(int32) StepInt) StepInt {
-						return done(total)
-					}
-				}
-			}
+		return StepInt2{StepInt: func(_ int32, _ func(func(struct{}) StepInt) StepInt, _ func(FailureRecordParse) StepInt, done func(int32) StepInt) StepInt {
+			return done(total)
 		}}
 	}
-	return StepInt2{StepInt: func(env int32) func(func(func(struct{}) StepInt) StepInt) func(func(FailureRecordParse) StepInt) func(func(int32) StepInt) StepInt {
-		return func(more func(func(struct{}) StepInt) StepInt) func(func(FailureRecordParse) StepInt) func(func(int32) StepInt) StepInt {
-			return func(failure func(FailureRecordParse) StepInt) func(func(int32) StepInt) StepInt {
-				return func(done2 func(int32) StepInt) StepInt {
+	return StepInt2{StepInt: func(env int32, more func(func(struct{}) StepInt) StepInt, failure func(FailureRecordParse) StepInt, done2 func(int32) StepInt) StepInt {
+		return more(func(_ struct{}) StepInt {
+			return askRecordParse.StepInt(env + i, more, failure, func(a int32) StepInt {
+				argument0 := convert(countdown(prim.IntMod(i, 3)))
+				return more(func(_ struct{}) StepInt {
 					return more(func(_ struct{}) StepInt {
-						return askRecordParse.StepInt(env + i)(more)(failure)(func(a int32) StepInt {
-							argument0 := convert(countdown(prim.IntMod(i, 3)))
+						return argument0.StepInt(env, more, failure, func(a2 int32) StepInt {
+							n := loop(i - 1, prim.IntMod(total + a + a2, 1000003))
 							return more(func(_ struct{}) StepInt {
-								return more(func(_ struct{}) StepInt {
-									return argument0.StepInt(env)(more)(failure)(func(a2 int32) StepInt {
-										n := loop(i - 1, prim.IntMod(total + a + a2, 1000003))
-										return more(func(_ struct{}) StepInt {
-											return n.StepInt(env)(more)(failure)(done2)
-										})
-									})
-								})
+								return n.StepInt(env, more, failure, done2)
 							})
 						})
 					})
-				}
-			}
-		}
+				})
+			})
+		})
 	}}
 }
 
-var askRecordParse StepInt2 = StepInt2{StepInt: func(env int32) func(func(func(struct{}) StepInt) StepInt) func(func(FailureRecordParse) StepInt) func(func(int32) StepInt) StepInt {
-	return func(_ func(func(struct{}) StepInt) StepInt) func(func(FailureRecordParse) StepInt) func(func(int32) StepInt) StepInt {
-		return func(_ func(FailureRecordParse) StepInt) func(func(int32) StepInt) StepInt {
-			return func(done func(int32) StepInt) StepInt {
-				return done(env)
-			}
-		}
-	}
+var askRecordParse StepInt2 = StepInt2{StepInt: func(env int32, _ func(func(struct{}) StepInt) StepInt, _ func(FailureRecordParse) StepInt, done func(int32) StepInt) StepInt {
+	return done(env)
 }}
 
 func countdown(n int32) StepInt3 {
