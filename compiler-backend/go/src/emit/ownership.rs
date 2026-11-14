@@ -1,19 +1,45 @@
 use smol_str::SmolStr;
 
-use crate::foreign::Foreign;
-use crate::mono::{Expression, ExpressionKind, FunctionId, Guard, Guarded, LocalId, RecordUpdate};
+use crate::foreign::{self, Foreign, Operator};
+use crate::mono::{
+    Expression, ExpressionKind, FunctionId, Guard, Guarded, LocalId, PatternKind, RecordUpdate,
+};
 use crate::simplify::for_each_child;
+
+/// Where an accumulator keeps the array, or the string, that a loop appends to.
+#[derive(Clone)]
+pub(super) enum Place {
+    /// The accumulator itself.
+    Whole,
+    /// A field of the accumulator record.
+    Field(SmolStr),
+    /// The field at `index` of the accumulator's constructor `constructor`, read through the
+    /// locals that a `case` on the accumulator binds to it. `go_field` is its Go field.
+    Constructor { constructor: usize, index: usize, go_field: String },
+}
 
 #[derive(Clone, Copy)]
 pub(super) struct Carried<'a> {
     pub accumulator: LocalId,
-    pub field: Option<&'a SmolStr>,
+    pub place: &'a Place,
+    /// The locals that patterns bind to the carried constructor field.
+    aliases: &'a [LocalId],
 }
 
+impl<'a> Carried<'a> {
+    pub(super) fn new(accumulator: LocalId, place: &'a Place) -> Carried<'a> {
+        Carried { accumulator, place, aliases: &[] }
+    }
+}
+
+/// The appends in `step` that may extend the carried value in place, when the step reads it
+/// only to append to it or to return it unchanged.
 pub(super) fn owned_snocs<'e>(
     carried: Carried<'_>,
     step: &'e Expression,
 ) -> Option<Vec<&'e Expression>> {
+    let aliases = aliases(carried, step)?;
+    let carried = Carried { aliases: &aliases, ..carried };
     if reads(carried, step) > 1 {
         return None;
     }
@@ -34,12 +60,48 @@ pub(super) fn owned_loop_snocs<'e>(
     body: &'e Expression,
     tail_call: TailCall,
 ) -> Option<Vec<&'e Expression>> {
+    let aliases = aliases(carried, body)?;
+    let carried = Carried { aliases: &aliases, ..carried };
     if reads(carried, body) > 1 {
         return None;
     }
     let mut owned = vec![];
     loop_results(carried, body, tail_call, &mut owned)?;
     Some(owned)
+}
+
+/// The locals bound to the carried constructor field by patterns on the accumulator; none when
+/// a pattern binds the accumulator as a whole, which would read it once more.
+fn aliases(carried: Carried<'_>, expression: &Expression) -> Option<Vec<LocalId>> {
+    let Place::Constructor { constructor, index, .. } = *carried.place else {
+        return Some(vec![]);
+    };
+    let mut aliases = vec![];
+    let mut whole = false;
+    crate::simplify::visit(expression, &mut |expression| {
+        let ExpressionKind::Case { scrutinees, alternatives } = &expression.kind else { return };
+        for (position, scrutinee) in scrutinees.iter().enumerate() {
+            if !is_accumulator(carried, scrutinee) {
+                continue;
+            }
+            for alternative in alternatives {
+                match &alternative.patterns[position].kind {
+                    PatternKind::Constructor { constructor: matched, arguments, .. }
+                        if *matched == constructor =>
+                    {
+                        match &arguments[index].kind {
+                            PatternKind::Variable(local) => aliases.push(local.id),
+                            PatternKind::Wildcard => {}
+                            _ => whole = true,
+                        }
+                    }
+                    PatternKind::Constructor { .. } | PatternKind::Wildcard => {}
+                    _ => whole = true,
+                }
+            }
+        }
+    });
+    (!whole).then_some(aliases)
 }
 
 const SHARED: usize = 2;
@@ -84,24 +146,26 @@ fn is_accumulator(carried: Carried<'_>, expression: &Expression) -> bool {
 }
 
 fn is_carried(carried: Carried<'_>, expression: &Expression) -> bool {
-    match (&expression.kind, carried.field) {
-        (ExpressionKind::Local(id), None) => *id == carried.accumulator,
-        (ExpressionKind::Access { record, label }, Some(field)) => {
+    match (&expression.kind, carried.place) {
+        (ExpressionKind::Local(id), Place::Whole) => *id == carried.accumulator,
+        (ExpressionKind::Access { record, label }, Place::Field(field)) => {
             label == field && is_accumulator(carried, record)
         }
+        (ExpressionKind::Local(id), Place::Constructor { .. }) => carried.aliases.contains(id),
         _ => false,
     }
 }
 
+/// `snoc carried x`, `carried <> [x, …]` or, for a string, `carried <> s`: the carried value,
+/// which an owned append extends in place.
 fn snoc_of_carried<'e>(carried: Carried<'_>, expression: &'e Expression) -> Option<&'e Expression> {
-    match &expression.kind {
-        ExpressionKind::Foreign { foreign: Foreign::Snoc, arguments }
-            if is_carried(carried, &arguments[0]) =>
-        {
-            Some(&arguments[0])
-        }
-        _ => None,
-    }
+    let ExpressionKind::Foreign { foreign, arguments } = &expression.kind else { return None };
+    let appends = match foreign {
+        Foreign::Snoc | Foreign::Operator(Operator::StringAppend) => true,
+        _ => foreign.calls(foreign::ARRAY_APPEND)
+            && matches!(arguments[1].kind, ExpressionKind::Array(_)),
+    };
+    (appends && is_carried(carried, &arguments[0])).then_some(&arguments[0])
 }
 
 fn results<'e>(
@@ -129,15 +193,22 @@ fn results<'e>(
             Some(())
         }
         ExpressionKind::Fail(_) => Some(()),
-        _ if carried.field.is_none() => carried_value(carried, expression, owned),
+        _ if matches!(carried.place, Place::Whole) => carried_value(carried, expression, owned),
         ExpressionKind::Local(id) if *id == carried.accumulator => Some(()),
+        ExpressionKind::Construct { constructor, arguments, .. } => match *carried.place {
+            Place::Constructor { constructor: carrying, index, .. } if *constructor == carrying => {
+                carried_value(carried, &arguments[index], owned)
+            }
+            Place::Constructor { .. } => Some(()),
+            _ => None,
+        },
         ExpressionKind::Record(fields) => {
-            let field = carried.field?;
+            let Place::Field(field) = carried.place else { return None };
             let (_, value) = fields.iter().find(|(label, _)| label == field)?;
             carried_value(carried, value, owned)
         }
         ExpressionKind::Update { record, updates } if is_accumulator(carried, record) => {
-            let field = carried.field?;
+            let Place::Field(field) = carried.place else { return None };
             let updated = updates.iter().find_map(|update| match update {
                 RecordUpdate::Leaf { label, value } if label == field => Some(value),
                 _ => None,
@@ -193,8 +264,17 @@ fn reads(carried: Carried<'_>, expression: &Expression) -> usize {
             reads(carried, condition) + reads(carried, then).max(reads(carried, otherwise))
         }
         ExpressionKind::Case { scrutinees, alternatives } => {
-            let scrutinised: usize =
-                scrutinees.iter().map(|scrutinee| reads(carried, scrutinee)).sum();
+            // Matching a constructor on the accumulator reads the carried field only through
+            // the aliases the patterns bind.
+            let destructured = |scrutinee: &Expression| {
+                matches!(carried.place, Place::Constructor { .. })
+                    && is_accumulator(carried, scrutinee)
+            };
+            let scrutinised: usize = scrutinees
+                .iter()
+                .filter(|scrutinee| !destructured(scrutinee))
+                .map(|scrutinee| reads(carried, scrutinee))
+                .sum();
             let branches = alternatives
                 .iter()
                 .map(|alternative| guarded_reads(carried, &alternative.body))
@@ -211,7 +291,7 @@ fn reads(carried: Carried<'_>, expression: &Expression) -> usize {
 }
 
 fn overwrites(carried: Carried<'_>, updates: &[RecordUpdate]) -> bool {
-    let Some(field) = carried.field else { return false };
+    let Place::Field(field) = carried.place else { return false };
     updates
         .iter()
         .any(|update| matches!(update, RecordUpdate::Leaf { label, .. } if label == field))

@@ -585,6 +585,7 @@ pub const INT_DIVIDE: Foreign = prim_with("IntDiv", 2, integers(&[0, 1], true));
 
 pub const INT_MODULO: Foreign = prim_with("IntMod", 2, integers(&[0, 1], true));
 
+pub const ARRAY_APPEND: Foreign = array("Append", 2);
 pub const APPENDER: Foreign = perform_in(GoPackage::Direct, "Appender", 0, INSTANTIATE);
 
 const FOREIGN_IMPORTS: &[(&str, &str, Foreign)] = &[
@@ -626,7 +627,7 @@ const FOREIGN_IMPORTS: &[(&str, &str, Foreign)] = &[
     ("Data.HeytingAlgebra", "boolDisj", Foreign::Operator(Operator::BooleanOr)),
     ("Data.HeytingAlgebra", "boolNot", Foreign::Operator(Operator::BooleanNot)),
     ("Data.Semigroup", "concatString", Foreign::Operator(Operator::StringAppend)),
-    ("Data.Semigroup", "concatArray", array("Append", 2)),
+    ("Data.Semigroup", "concatArray", ARRAY_APPEND),
     ("Data.Show", "showIntImpl", prim_with("ShowInt", 1, integers(&[0], false))),
     ("Data.Show", "showNumberImpl", prim("ShowNumber", 1)),
     ("Data.Show", "showCharImpl", prim("ShowChar", 1)),

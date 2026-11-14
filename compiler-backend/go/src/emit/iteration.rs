@@ -1,7 +1,6 @@
-use smol_str::SmolStr;
 
 use super::fusion::{Demand, Need, Order, Pipeline};
-use super::ownership::{Carried, owned_snocs};
+use super::ownership::{Carried, Place, owned_snocs};
 use super::{Emitter, Mode, Sink, call, field_name, identifier_expression, uses_local};
 use crate::error::GoResult;
 use crate::foreign::Iteration;
@@ -182,8 +181,8 @@ where
         out.push(self.define(accumulator.clone(), initial, monotype)?);
         let callback = self.owning_callback(callback, accumulator_position, &accumulator, out);
         let owned = self.owned_arrays(&callback, accumulator_position, monotype);
-        for (field, _) in &owned {
-            out.push(self.clip(&accumulator, field.as_ref()));
+        for (place, _) in &owned {
+            out.push(self.clip(&accumulator, place));
         }
         let owned_nodes: Vec<*const Expression> = owned
             .iter()
@@ -238,8 +237,8 @@ where
         if owned.is_empty() {
             return callback;
         }
-        for (field, _) in &owned {
-            out.push(self.clip(accumulator, field.as_ref()));
+        for (place, _) in &owned {
+            out.push(self.clip(accumulator, place));
         }
         let Callback::Direct { callee, leading, .. } = callback else { unreachable!() };
         let function = identifier_expression(&self.owning_variant_name(callee, position));
@@ -247,39 +246,65 @@ where
     }
 
     fn owned_arrays<'e>(
-        &self,
+        &mut self,
         callback: &Callback<'e>,
         accumulator_position: usize,
         monotype: MonotypeId,
-    ) -> Vec<(Option<SmolStr>, Vec<&'e Expression>)> {
+    ) -> Vec<(Place, Vec<&'e Expression>)> {
         let Callback::Inline { parameters, body } = callback else { return vec![] };
         let accumulator = parameters[accumulator_position].id;
-        self.carried_arrays(monotype)
+        let body: &'e Expression = body;
+        self.carried_places(monotype)
             .into_iter()
-            .filter_map(|field| {
-                let carried = Carried { accumulator, field: field.as_ref() };
-                let nodes = owned_snocs(carried, body)?;
-                (!nodes.is_empty()).then_some((field, nodes))
+            .filter_map(|place| {
+                let nodes = owned_snocs(Carried::new(accumulator, &place), body)?;
+                (!nodes.is_empty()).then_some((place, nodes))
             })
             .collect()
     }
 
-    pub(super) fn carried_arrays(&self, monotype: MonotypeId) -> Vec<Option<SmolStr>> {
-        match self.monotypes.get(monotype) {
-            Monotype::Array(_) => vec![None],
+    /// The places of an accumulator of this type that hold an array: itself, its record's
+    /// fields, or a field of one of its constructors when it is held by value.
+    pub(super) fn carried_places(&mut self, monotype: MonotypeId) -> Vec<Place> {
+        let is_array = |emitter: &Self, monotype: MonotypeId| {
+            matches!(emitter.monotypes.get(monotype), Monotype::Array(_))
+        };
+        match self.monotypes.get(monotype).clone() {
+            Monotype::Array(_) => vec![Place::Whole],
             Monotype::Record(fields) => fields
                 .iter()
-                .filter(|field| matches!(self.monotypes.get(field.monotype), Monotype::Array(_)))
-                .map(|field| Some(field.label.clone()))
+                .filter(|field| is_array(self, field.monotype))
+                .map(|field| Place::Field(field.label.clone()))
                 .collect(),
+            Monotype::Data(data) => {
+                let Ok(layout) = self.data_layout(&data) else { return vec![] };
+                if layout.boxed || layout.kind == super::DataKind::Enumeration {
+                    return vec![];
+                }
+                let mut places = vec![];
+                for (constructor, constructor_layout) in layout.constructors.iter().enumerate() {
+                    for (index, (go_field, field)) in constructor_layout.fields.iter().enumerate() {
+                        if is_array(self, *field) {
+                            let go_field = go_field.clone();
+                            places.push(Place::Constructor { constructor, index, go_field });
+                        }
+                    }
+                }
+                places
+            }
             _ => vec![],
         }
     }
 
-    pub(super) fn clip(&mut self, accumulator: &str, field: Option<&SmolStr>) -> GoStatement {
-        let carried = match field {
-            Some(label) => super::field(identifier_expression(accumulator), &field_name(label)),
-            None => identifier_expression(accumulator),
+    pub(super) fn clip(&mut self, accumulator: &str, place: &Place) -> GoStatement {
+        let carried = match place {
+            Place::Whole => identifier_expression(accumulator),
+            Place::Field(label) => {
+                super::field(identifier_expression(accumulator), &field_name(label))
+            }
+            Place::Constructor { go_field, .. } => {
+                super::field(identifier_expression(accumulator), go_field)
+            }
         };
         self.imports.insert("slices".into());
         let clip = GoExpression::Qualified { package: "slices".into(), name: "Clip".into() };

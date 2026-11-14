@@ -23,7 +23,6 @@ mod reuse;
 use std::collections::BTreeSet;
 
 use rustc_hash::{FxHashMap, FxHashSet};
-use smol_str::SmolStr;
 
 use files::FileId;
 use indexing::TermItemId;
@@ -1035,7 +1034,7 @@ where
             body = iteration_copies;
             let mut clipped: Vec<GoStatement> = owned
                 .iter()
-                .map(|(position, field, _)| self.clip(&parameters[*position].0, field.as_ref()))
+                .map(|(position, place, _)| self.clip(&parameters[*position].0, place))
                 .collect();
             clipped.push(GoStatement::Loop(body));
             body = clipped;
@@ -1048,18 +1047,17 @@ where
     }
 
     pub(super) fn owned_parameter_snocs<'e>(
-        &self,
+        &mut self,
         function: &'e Function,
         position: usize,
-    ) -> Vec<(Option<SmolStr>, Vec<&'e Expression>)> {
+    ) -> Vec<(ownership::Place, Vec<&'e Expression>)> {
         let parameter = &function.parameters[position];
-        self.carried_arrays(parameter.monotype)
+        self.carried_places(parameter.monotype)
             .into_iter()
-            .filter_map(|field| {
-                let carried =
-                    ownership::Carried { accumulator: parameter.id, field: field.as_ref() };
+            .filter_map(|place| {
+                let carried = ownership::Carried::new(parameter.id, &place);
                 let nodes = ownership::owned_snocs(carried, &function.body)?;
-                (!nodes.is_empty()).then_some((field, nodes))
+                (!nodes.is_empty()).then_some((place, nodes))
             })
             .collect()
     }
@@ -1076,17 +1074,16 @@ where
     }
 
     fn owned_loop_arrays(
-        &self,
+        &mut self,
         id: FunctionId,
         function: &Function,
-    ) -> Vec<(usize, Option<SmolStr>, Vec<*const Expression>)> {
+    ) -> Vec<(usize, ownership::Place, Vec<*const Expression>)> {
         let arity = function.parameters.len();
         let mut owned = vec![];
         for (position, parameter) in function.parameters.iter().enumerate() {
             let tail_call = ownership::TailCall { function: id, arity, position };
-            for field in self.carried_arrays(parameter.monotype) {
-                let carried =
-                    ownership::Carried { accumulator: parameter.id, field: field.as_ref() };
+            for place in self.carried_places(parameter.monotype) {
+                let carried = ownership::Carried::new(parameter.id, &place);
                 let Some(nodes) = ownership::owned_loop_snocs(carried, &function.body, tail_call)
                 else {
                     continue;
@@ -1095,7 +1092,7 @@ where
                     continue;
                 }
                 let nodes = nodes.into_iter().map(std::ptr::from_ref).collect();
-                owned.push((position, field, nodes));
+                owned.push((position, place, nodes));
             }
         }
         owned
@@ -3591,6 +3588,17 @@ where
         }
         if let Foreign::IntFromNumber = foreign {
             return self.int_from_number(&arguments[2], monotype, out);
+        }
+        if foreign.calls(crate::foreign::ARRAY_APPEND)
+            && self.owned_snocs.contains(&std::ptr::from_ref(&arguments[0]))
+            && let ExpressionKind::Array(elements) = &arguments[1].kind
+        {
+            let mut values = vec![self.value(&arguments[0], out)?];
+            for element in elements {
+                let value = self.value(element, out)?;
+                values.push(self.typed_constant(value, element.monotype)?);
+            }
+            return Ok(call(identifier_expression("append"), values));
         }
         if let Foreign::Snoc = foreign {
             let array = self.value(&arguments[0], out)?;
