@@ -1,0 +1,51 @@
+# dhall-purescript (github.com/MonoidMusician/dhall-purescript, commit 469c3e1, main = ps0.15), vendored
+# without the modules that need Node, fetch, CBOR or SHA-256 libraries (CLI.Main, Imports.Retrieve,
+# Imports.Resolve, Imports.Hash, Core.CBOR, Lib.CBOR): Dhall is not in the registry, and its own
+# package set (psc-0.15.2-20220531) predates the one this corpus uses.
+package:
+  name: dhall-vendored
+  dependencies:
+    - arrays
+    - bifunctors
+    - bigints
+    - console
+    - const
+    - contravariant
+    - control
+    - datetime
+    - effect
+    - either
+    - enums
+    - exceptions
+    - fixed-points
+    - foldable-traversable
+    - foreign
+    - foreign-object
+    - free
+    - functors
+    - identity
+    - integers
+    - lazy
+    - lists
+    - matryoshka
+    - maybe
+    - naturals
+    - newtype
+    - nonempty
+    - nullable
+    - ordered-collections
+    - orders
+    - partial
+    - prelude
+    - profunctor
+    - profunctor-lenses
+    - record
+    - strings
+    - these
+    - transformers
+    - tuples
+    - typelevel-prelude
+    - unfoldable
+    - unsafe-coerce
+    - unsafe-reference
+    - variant

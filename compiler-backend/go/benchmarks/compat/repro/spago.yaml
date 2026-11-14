@@ -1,0 +1,4 @@
+package:
+  name: compat-repro
+  dependencies:
+    - compat-corpus
