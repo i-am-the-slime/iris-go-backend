@@ -1,0 +1,131 @@
+---
+source: tests-integration/src/fixtures.rs
+---
+// Data/Tuple/tuple.go
+package tuple
+
+type TupleIntInt struct {
+	Tuple0 int32
+	Tuple1 int32
+}
+
+type Tuple struct {
+	Tuple0 any
+	Tuple1 any
+	Origin any
+}
+
+// main.go
+package main
+
+import (
+	"fixture/Data/Tuple"
+	"fmt"
+	"github.com/i-am-the-slime/purs-backend-go/go-support/alloc"
+	"github.com/i-am-the-slime/purs-backend-go/go-support/prim"
+)
+
+type Sequence struct {
+	Zero0 *Sequence
+	One0  any
+	One1  *Sequence
+	Tag   uint8
+}
+
+const (
+	SequenceEmpty = iota
+	SequenceZero
+	SequenceOne
+)
+
+func convert(value tuple.TupleIntInt) *tuple.Tuple {
+	return &tuple.Tuple{Tuple0: value.Tuple0, Tuple1: value.Tuple1, Origin: value}
+}
+
+func convert2(value *tuple.Tuple) tuple.TupleIntInt {
+	if original, ok := value.Origin.(tuple.TupleIntInt); ok {
+		return original
+	}
+	return tuple.TupleIntInt{Tuple0: value.Tuple0.(int32), Tuple1: value.Tuple1.(int32)}
+}
+
+var main_ = initializeMain_()
+
+func initializeMain_() []int32 {
+	array2 := [][]int32{[]int32{1}, []int32{1, 2, 3}, []int32{4, 5, 6}, []int32{9, 3}, []int32{}}
+	mapped := make([]int32, len(array2))
+	var sequenceCells alloc.Cells[Sequence]
+	for index, x := range array2 {
+		accumulator := &Sequence{Tag: SequenceEmpty}
+		for _, a := range x {
+			b := accumulator
+			switch b.Tag {
+			case SequenceEmpty:
+				accumulator = &Sequence{Tag: SequenceOne, One0: a, One1: &Sequence{Tag: SequenceEmpty}}
+			case SequenceZero:
+				accumulator = sequenceCells.New(Sequence{Tag: SequenceOne, One0: a, One1: b.Zero0})
+			default: // SequenceOne
+				original := func(x2 any) func(*Sequence) *Sequence {
+					return func(value *Sequence) *Sequence {
+						return consTupleIntInt(x2, value)
+					}
+				}
+				accumulator = &Sequence{Tag: SequenceZero, Zero0: func(coerced tuple.TupleIntInt) func(*Sequence) *Sequence {
+					return original(convert(coerced))
+				}(tuple.TupleIntInt{Tuple0: a, Tuple1: b.One0.(int32)})(b.One1)}
+			}
+		}
+		var result int32
+	matched:
+		for {
+			if accumulator.Tag == SequenceOne {
+				guarded := accumulator.One0.(int32)
+				if guarded == 1 {
+					result = 100
+					break matched
+				}
+			}
+			if accumulator.Tag == SequenceOne && accumulator.One1.Tag == SequenceOne {
+				guarded2 := accumulator.One0.(int32)
+				guarded3 := convert2(accumulator.One1.One0.(*tuple.Tuple))
+				result = guarded2 + prim.MultiplyInt32(guarded3.Tuple0, 10) + guarded3.Tuple1
+				break matched
+			}
+			if accumulator.Tag == SequenceOne {
+				result = accumulator.One0.(int32)
+				break matched
+			}
+			if accumulator.Tag == SequenceZero && accumulator.Zero0.Tag == SequenceOne {
+				guarded4 := convert2(accumulator.Zero0.One0.(*tuple.Tuple))
+				result = guarded4.Tuple0 - guarded4.Tuple1
+				break matched
+			}
+			result = 0
+			break matched
+		}
+		mapped[index] = result
+	}
+	return mapped
+}
+
+func consTupleIntInt(x any, value *Sequence) *Sequence {
+	switch value.Tag {
+	case SequenceEmpty:
+		return &Sequence{Tag: SequenceOne, One0: x, One1: &Sequence{Tag: SequenceEmpty}}
+	case SequenceZero:
+		return &Sequence{Tag: SequenceOne, One0: x, One1: value.Zero0}
+	default: // SequenceOne
+		original := func(x2 any) func(*Sequence) *Sequence {
+			return func(value2 *Sequence) *Sequence {
+				return consTupleIntInt(x2, value2)
+			}
+		}
+		return &Sequence{Tag: SequenceZero, Zero0: func(coerced *tuple.Tuple) func(*Sequence) *Sequence {
+			return original(coerced)
+		}(&tuple.Tuple{Tuple0: x, Tuple1: value.One0})(value.One1)}
+	}
+}
+
+func main() {
+	fmt.Println(main_)
+}

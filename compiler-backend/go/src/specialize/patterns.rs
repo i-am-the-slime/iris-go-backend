@@ -9,7 +9,9 @@ use smol_str::SmolStr;
 
 use super::Specializer;
 use crate::error::{GoError, GoResult, UnsupportedState};
-use crate::mono::{Alternative, Binding, Expression, ExpressionKind, Guard, Guarded, GuardedBranch};
+use crate::mono::{
+    Alternative, Binding, Expression, ExpressionKind, Guard, Guarded, GuardedBranch,
+};
 use crate::mono::{Pattern, PatternKind};
 
 impl<Q> Specializer<'_, Q>
@@ -134,7 +136,8 @@ where
     }
 
     fn pattern_error(&mut self, state: UnsupportedState) -> GoError {
-        let definition = self.current.map(|id| self.function_keys[id.0 as usize].definition.clone());
+        let definition =
+            self.current.map(|id| self.function_keys[id.0 as usize].definition.clone());
         let definition = match definition.map(|definition| self.describe_definition(definition)) {
             Some(Ok(definition)) => definition,
             Some(Err(error)) => return error,

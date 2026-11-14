@@ -622,9 +622,15 @@ where
     }
 
     fn monotype(&mut self, scope: &Scope, type_id: TypeId) -> GoResult<MonotypeId> {
-        // Inside one instantiation of a rank-N expression its quantifiers are
-        // already substituted; the expression has the instantiated type.
-        let mut instantiated = type_id;
+        // Inside one instantiation of a rank-N expression, or in the body of a
+        // definition whose result is quantified (`hoistFree k = ...` has type
+        // `Free f ~> Free g`), the quantifiers are already substituted; the
+        // expression has the instantiated type.
+        let (head, _) = self.context.types.spine(type_id);
+        let mut instantiated = match self.context.types.lookup(head) {
+            Type::Synonym(..) => crate::monotype::expand_synonyms(&mut self.context, type_id)?,
+            _ => type_id,
+        };
         while let Type::Forall(binder, inner) =
             self.context.types.lookup(self.context.types.strip_annotations(instantiated)).clone()
         {
@@ -635,6 +641,14 @@ where
             instantiated = inner;
         }
         let closed = self.context.types.substitute(instantiated, &scope.substitution);
+        self.closed_monotype(scope, closed)
+    }
+
+    /// A binder's quantifiers are never instantiated where it binds: a parameter
+    /// of type `f ~> m` is a rank-N value, even when an enclosing instantiation
+    /// gave a quantifier of the same synonym a type.
+    fn binder_monotype(&mut self, scope: &Scope, type_id: TypeId) -> GoResult<MonotypeId> {
+        let closed = self.context.types.substitute(type_id, &scope.substitution);
         self.closed_monotype(scope, closed)
     }
 
@@ -672,7 +686,8 @@ where
                 .find_map(|equation| equation.binders.get(position))
                 .copied()
                 .expect("invariant violated: arity is the maximum binder count");
-            let monotype = self.monotype(scope, scope.module.checked.tree[binder].type_id)?;
+            let monotype =
+                self.binder_monotype(scope, scope.module.checked.tree[binder].type_id)?;
             parameters.push(self.fresh_local(format_smolstr!("argument{position}"), monotype));
         }
         let mut alternatives = Vec::with_capacity(equations.len());
@@ -2472,7 +2487,7 @@ where
     fn pattern(&mut self, scope: &mut Scope, binder_id: tree::BinderId) -> GoResult<Pattern> {
         let module = Arc::clone(&scope.module);
         let binder = &module.checked.tree[binder_id];
-        let monotype = self.monotype(scope, binder.type_id)?;
+        let monotype = self.binder_monotype(scope, binder.type_id)?;
         let kind = match &binder.kind {
             tree::BinderKind::Typed { binder, .. } => return self.pattern(scope, *binder),
             tree::BinderKind::Error => {
