@@ -6,6 +6,8 @@ mod host;
 
 pub use host::is_opaque_foreign_data;
 
+use std::sync::OnceLock;
+
 use files::FileId;
 use indexing::TermItemId;
 
@@ -560,6 +562,35 @@ pub const EFFECT_FOLD: Foreign = direct_with(
     3,
     Boundary { uncurried: &[(0, 2)], uncurried_perform: true, ..PLAIN },
 );
+
+pub fn array_fold() -> Foreign {
+    static SIGNATURE: OnceLock<Signature> = OnceLock::new();
+    with_signature(ARRAY_FOLD, SIGNATURE.get_or_init(|| fold_signature(Spelled::Opaque)))
+}
+
+pub fn effect_fold() -> Foreign {
+    static SIGNATURE: OnceLock<Signature> = OnceLock::new();
+    let effect = || Spelled::Effect(Box::new(Spelled::Opaque));
+    with_signature(EFFECT_FOLD, SIGNATURE.get_or_init(|| fold_signature(effect())))
+}
+
+fn fold_signature(result: Spelled) -> Signature {
+    let element = Box::new(Spelled::Function(Box::new(Spelled::Opaque), Box::new(result.clone())));
+    let step = Spelled::Function(Box::new(Spelled::Opaque), element);
+    let array = Spelled::Array(Box::new(Spelled::Opaque));
+    Signature { parameters: vec![step, Spelled::Opaque, array], result }
+}
+
+fn with_signature(foreign: Foreign, signature: &'static Signature) -> Foreign {
+    match foreign {
+        Foreign::Call { function, arity, boundary } => Foreign::Call {
+            function,
+            arity,
+            boundary: Boundary { signature: Some(signature), ..boundary },
+        },
+        foreign => foreign,
+    }
+}
 
 pub const OBJECT_KEYS: Foreign = object("Keys", 1, PLAIN);
 

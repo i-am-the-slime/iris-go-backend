@@ -1,0 +1,33 @@
+---
+source: tests-integration/src/fixtures.rs
+---
+// main.go
+package main
+
+import (
+	"fmt"
+	"github.com/i-am-the-slime/purs-backend-go/go-support/direct"
+	"github.com/i-am-the-slime/purs-backend-go/go-support/prim"
+)
+
+var main_ = initializeMain_()
+
+func initializeMain_() []int32 {
+	append_ := direct.Appender[int32]()
+	array2 := []int32{1, 2, 3}
+	accumulator := func(_ int32, _ int32) []int32 {
+		return []int32{}
+	}
+	for _, element := range array2 {
+		accumulator2 := accumulator
+		accumulator = func(scale int32, offset int32) []int32 {
+			return append_(accumulator2(scale, offset))(prim.MultiplyInt32(element, scale) + offset)
+		}
+	}
+	performed := accumulator
+	return performed(3, 1)
+}
+
+func main() {
+	fmt.Println(main_)
+}
