@@ -20,6 +20,7 @@ mod ownership;
 mod packages;
 mod ranges;
 mod reuse;
+mod views;
 
 use std::collections::BTreeSet;
 

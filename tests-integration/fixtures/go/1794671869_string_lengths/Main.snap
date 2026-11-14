@@ -97,14 +97,14 @@ func countSpacesUnconsingCountsUpToTwo(text string, count int32) int32 {
 }
 
 func unchangedTextLengthIsCountedBeforeTheLoop(text string, i int32, count int32) int32 {
-	textLength := prim.CodeUnitLength(text)
+	textUnits := prim.UTF16(text)
 	for {
-		if i >= int32(textLength) {
+		if i >= int32(textUnits.Length()) {
 			return count
 		}
-		scrutinee := prim.CodeUnitCharAt(func(payload rune) maybe.MaybeChar {
+		scrutinee := textUnits.CharAt(func(payload rune) maybe.MaybeChar {
 			return maybe.MaybeChar{Tag: maybe.MaybeCharJust, Just0: payload}
-		}, maybe.MaybeChar{Tag: maybe.MaybeCharNothing}, int(i), text)
+		}, maybe.MaybeChar{Tag: maybe.MaybeCharNothing}, int(i))
 		var result2 bool
 		switch scrutinee.Tag {
 		case maybe.MaybeCharJust:
