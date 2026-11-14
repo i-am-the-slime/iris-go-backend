@@ -11,6 +11,7 @@ mod closures;
 mod coerce;
 mod deduplicate;
 mod fusion;
+mod groups;
 mod iteration;
 mod layout;
 mod lengths;
@@ -76,6 +77,10 @@ where
     emitter.materialized = reused.materialized;
     emitter.closure_sets = closure_sets;
     emitter.assign_function_names();
+    let groups = timed("groups", || {
+        groups::tail_call_groups(program, emitter.monotypes, &emitter.lazy_constants)
+    });
+    emitter.name_tail_groups(groups);
     let entry_origin = program.function(program.entry).origin;
     let declarations = timed("functions", || {
         let mut declarations = vec![];
@@ -228,6 +233,8 @@ where
             locals: FxHashMap::default(),
             local_names: FxHashSet::default(),
             tail_loop: None,
+            tail_groups: vec![],
+            tail_group_of: FxHashMap::default(),
             owned_snocs: FxHashSet::default(),
             owning_variants: FxHashMap::default(),
             pending_owning_variants: vec![],
@@ -469,9 +476,24 @@ struct GuardChain<'e> {
     tested: bool,
 }
 
+/// The loop around a function body, or around a group's bodies, that a tail call jumps back to.
 struct TailLoop {
+    /// Every variable that a jump reassigns.
+    parameters: Vec<String>,
+    /// The functions whose saturated tail calls jump, with their parameters' variables.
+    targets: Vec<LoopTarget>,
+    /// The function whose body is being emitted.
+    current: FunctionId,
+    /// The variable selecting the member a group's loop runs next.
+    step: Option<String>,
+}
+
+#[derive(Clone)]
+struct LoopTarget {
     function: FunctionId,
     parameters: Vec<String>,
+    /// The value of the group's step variable that runs this function.
+    step: Option<GoExpression>,
 }
 
 #[derive(Clone)]
@@ -535,6 +557,8 @@ struct Emitter<'p, 'm, 'q, Q> {
     locals: FxHashMap<LocalId, GoExpression>,
     local_names: FxHashSet<String>,
     tail_loop: Option<TailLoop>,
+    tail_groups: Vec<groups::TailGroup>,
+    tail_group_of: FxHashMap<FunctionId, usize>,
     current: Option<FunctionId>,
     owned_snocs: FxHashSet<*const Expression>,
     owning_variants: FxHashMap<(FunctionId, usize), String>,
@@ -909,6 +933,9 @@ where
     }
 
     fn function(&mut self, id: FunctionId) -> GoResult<Vec<GoDeclaration>> {
+        if let Some(&group) = self.tail_group_of.get(&id) {
+            return self.tail_group_member(id, group);
+        }
         let name = self.function_names[id.0 as usize].clone();
         self.function_named(id, name, vec![])
     }
@@ -963,8 +990,16 @@ where
             vec![]
         };
         if loops {
-            let parameter_names = parameters.iter().map(|(name, _)| name.clone()).collect();
-            self.tail_loop = Some(TailLoop { function: id, parameters: parameter_names });
+            let parameter_names: Vec<String> =
+                parameters.iter().map(|(name, _)| name.clone()).collect();
+            let target =
+                LoopTarget { function: id, parameters: parameter_names.clone(), step: None };
+            self.tail_loop = Some(TailLoop {
+                parameters: parameter_names,
+                targets: vec![target],
+                current: id,
+                step: None,
+            });
         }
         let mut iteration_copies = vec![];
         for &position in &captured {
@@ -1594,11 +1629,18 @@ where
             ExpressionKind::Apply { function, arguments } if matches!(sink, Sink::Return) => {
                 if let ExpressionKind::Function(id) = function.kind
                     && let Some(tail_loop) = &self.tail_loop
-                    && tail_loop.function == id
-                    && tail_loop.parameters.len() == arguments.len()
+                    && let Some(target) = tail_loop.targets.iter().find(|target| {
+                        target.function == id && target.parameters.len() == arguments.len()
+                    })
                 {
-                    let parameters = tail_loop.parameters.clone();
-                    return self.tail_call(&parameters, arguments, out);
+                    let step = match (&tail_loop.step, &target.step) {
+                        (Some(variable), Some(value)) if id != tail_loop.current => {
+                            Some((variable.clone(), value.clone()))
+                        }
+                        _ => None,
+                    };
+                    let parameters = target.parameters.clone();
+                    return self.tail_call(&parameters, arguments, step, out);
                 }
                 self.leaf(expression, mode, sink, out)
             }
@@ -1610,10 +1652,15 @@ where
         &mut self,
         parameters: &[String],
         arguments: &[Expression],
+        step: Option<(String, GoExpression)>,
         out: &mut Vec<GoStatement>,
     ) -> GoResult<()> {
         let mut targets = vec![];
         let mut values = vec![];
+        if let Some((variable, value)) = step {
+            targets.push(identifier_expression(&variable));
+            values.push(value);
+        }
         for (parameter, argument) in parameters.iter().zip(arguments) {
             let value = self.value(argument, out)?;
             if let GoExpression::Identifier(name) = &value
