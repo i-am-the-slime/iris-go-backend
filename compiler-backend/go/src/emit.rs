@@ -228,6 +228,7 @@ where
             retaining: FxHashMap::default(),
             erasing: FxHashMap::default(),
             materialized: FxHashSet::default(),
+            uninitialized_locals: FxHashSet::default(),
             current: None,
             lazy_constants,
             arities,
@@ -532,6 +533,9 @@ struct Emitter<'p, 'm, 'q, Q> {
     retaining: FxHashMap<MonotypeId, bool>,
     erasing: FxHashMap<MonotypeId, bool>,
     materialized: FxHashSet<(FunctionId, LocalId)>,
+    /// The locals of the recursive bindings being assigned, which still hold
+    /// Go's zero value.
+    uninitialized_locals: FxHashSet<LocalId>,
     arities: Arities,
 }
 
@@ -2829,6 +2833,33 @@ where
         self.lazy_cell(value, body)
     }
 
+    /// Whether a deferred body is a value already. Evaluating it when the
+    /// cell is made costs less than the closure that would suspend it, and
+    /// cannot fail, so no program can tell the difference. `does_no_work`
+    /// is not enough: it admits a `Fail`, which must wait to be forced, and a
+    /// constant, whose first use computes it. A local that a recursive binding
+    /// is still assigning, as in `ones = defer \_ -> Cons 1 ones`, has no value
+    /// yet; a lambda may capture it, since Go captures the variable.
+    fn is_already_a_value(&self, expression: &Expression) -> bool {
+        match &expression.kind {
+            ExpressionKind::Literal(_) | ExpressionKind::Unit | ExpressionKind::Lambda { .. } => {
+                true
+            }
+            ExpressionKind::Local(id) => !self.uninitialized_locals.contains(id),
+            ExpressionKind::Function(id) => !self.program.function(*id).parameters.is_empty(),
+            ExpressionKind::Construct { arguments, .. } | ExpressionKind::Array(arguments) => {
+                arguments.iter().all(|argument| self.is_already_a_value(argument))
+            }
+            ExpressionKind::Record(fields) => {
+                fields.iter().all(|(_, value)| self.is_already_a_value(value))
+            }
+            ExpressionKind::Coerce(value) | ExpressionKind::Access { record: value, .. } => {
+                self.is_already_a_value(value)
+            }
+            _ => false,
+        }
+    }
+
     pub(super) fn lazy_cell(
         &mut self,
         value: MonotypeId,
@@ -2969,14 +3000,26 @@ where
                 out.push(GoStatement::Variable { name: name.clone(), type_, value: None });
                 names.push(name);
             }
+            let group: Vec<LocalId> = bindings.iter().map(|binding| binding.local.id).collect();
+            self.uninitialized_locals.extend(group.iter().copied());
+            let mut outcome = Ok(());
             for (binding, name) in bindings.iter().zip(names) {
-                let value = self.value(&binding.value, out)?;
+                let value = match self.value(&binding.value, out) {
+                    Ok(value) => value,
+                    Err(error) => {
+                        outcome = Err(error);
+                        break;
+                    }
+                };
                 out.push(GoStatement::Assign {
                     targets: vec![identifier_expression(&name)],
                     values: vec![value],
                 });
             }
-            return Ok(());
+            for local in group {
+                self.uninitialized_locals.remove(&local);
+            }
+            return outcome;
         }
         for binding in bindings {
             if self.is_unit(binding.local.monotype) {
@@ -3479,6 +3522,24 @@ where
             return Ok(call(self.go_function(snoc), vec![array, element]));
         }
         if let Foreign::LazyDefer = foreign {
+            if let ExpressionKind::Lambda { parameters, body } = &arguments[0].kind
+                && let [parameter] = parameters.as_slice()
+                && self.is_already_a_value(body)
+            {
+                self.locals.insert(parameter.id, unit_value());
+                let value = self.value(body, out)?;
+                let value = self.typed_constant(value, body.monotype)?;
+                self.imports.insert(GoPackage::Lazy.path().into());
+                let mut evaluated =
+                    GoExpression::Qualified { package: "lazy".into(), name: "Evaluated".into() };
+                let type_ = self.go_type(body.monotype)?;
+                if matches!(type_, GoType::Any | GoType::Erased(_)) {
+                    // Go would infer the dynamic type of the value instead.
+                    let function = Box::new(evaluated);
+                    evaluated = GoExpression::Instantiation { function, arguments: vec![type_] };
+                }
+                return Ok(call(evaluated, vec![value]));
+            }
             return self.lazy_defer(&arguments[0], monotype);
         }
         if let Foreign::LazyForce = foreign {
