@@ -6,6 +6,7 @@
 
 mod application;
 mod coerce;
+mod deduplicate;
 mod iteration;
 mod ownership;
 mod reuse;
@@ -69,6 +70,8 @@ where
     if emitter.imports.contains(GoPackage::Aff.path()) {
         await_fibers(&mut declarations);
     }
+    let declarations =
+        timed("deduplicate", || deduplicate::merge_identical_declarations(declarations));
     let mut all = std::mem::take(&mut emitter.type_declarations);
     all.extend(declarations);
     let file = GoFile { imports: emitter.imports.into_iter().collect(), declarations: all };
@@ -3519,7 +3522,8 @@ where
     }
 
     fn number_constant(&mut self, value: f64) -> GoExpression {
-        let math = |name: &str| GoExpression::Qualified { package: "math".into(), name: name.into() };
+        let math =
+            |name: &str| GoExpression::Qualified { package: "math".into(), name: name.into() };
         if value.is_nan() {
             self.imports.insert("math".into());
             return call(math("NaN"), vec![]);

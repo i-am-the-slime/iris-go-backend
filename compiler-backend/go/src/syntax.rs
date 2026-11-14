@@ -181,6 +181,170 @@ pub enum GoDeclaration {
     },
 }
 
+/// A name as a declaration uses it: a reference to another declaration or a
+/// local, or a local the declaration binds.
+pub enum Name<'a> {
+    Reference(&'a mut String),
+    Binder(&'a mut String),
+}
+
+impl GoDeclaration {
+    /// The name the declaration declares, if it declares exactly one.
+    pub fn name(&self) -> Option<&str> {
+        match self {
+            GoDeclaration::Type { name, .. }
+            | GoDeclaration::Declared { name, .. }
+            | GoDeclaration::Variable { name, .. }
+            | GoDeclaration::Function { name, .. } => Some(name),
+            GoDeclaration::Source(_) | GoDeclaration::Constants { .. } => None,
+        }
+    }
+
+    /// Visits every name in the declaration's value or body, and the
+    /// parameters it binds; not its own name, types or field labels.
+    pub fn for_each_name_mut(&mut self, visit: &mut impl FnMut(Name<'_>)) {
+        match self {
+            GoDeclaration::Variable { value, .. } => expression_names(value, visit),
+            GoDeclaration::Function { parameters, body, .. } => {
+                for (parameter, _) in parameters.iter_mut() {
+                    visit(Name::Binder(parameter));
+                }
+                statements_names(body, visit);
+            }
+            GoDeclaration::Source(_)
+            | GoDeclaration::Type { .. }
+            | GoDeclaration::Constants { .. }
+            | GoDeclaration::Declared { .. } => {}
+        }
+    }
+
+    pub fn render(&self) -> String {
+        let mut printer =
+            Printer { output: String::new(), indentation: 0, census: Default::default() };
+        printer.declaration(self);
+        printer.output
+    }
+}
+
+fn statements_names(statements: &mut [GoStatement], visit: &mut impl FnMut(Name<'_>)) {
+    for statement in statements {
+        statement_names(statement, visit);
+    }
+}
+
+fn statement_names(statement: &mut GoStatement, visit: &mut impl FnMut(Name<'_>)) {
+    match statement {
+        GoStatement::Define { names, values } => {
+            names.iter_mut().for_each(|name| visit(Name::Binder(name)));
+            values.iter_mut().for_each(|value| expression_names(value, visit));
+        }
+        GoStatement::Variable { name, value, .. } => {
+            visit(Name::Binder(name));
+            if let Some(value) = value {
+                expression_names(value, visit);
+            }
+        }
+        GoStatement::Assign { targets, values } => {
+            targets.iter_mut().for_each(|target| expression_names(target, visit));
+            values.iter_mut().for_each(|value| expression_names(value, visit));
+        }
+        GoStatement::Expression(value) | GoStatement::Defer(value) => {
+            expression_names(value, visit)
+        }
+        GoStatement::Return(value) => {
+            if let Some(value) = value {
+                expression_names(value, visit);
+            }
+        }
+        GoStatement::If { condition, then, otherwise } => {
+            expression_names(condition, visit);
+            statements_names(then, visit);
+            statements_names(otherwise, visit);
+        }
+        GoStatement::IfAssert { name, value, then, .. } => {
+            visit(Name::Binder(name));
+            expression_names(value, visit);
+            statements_names(then, visit);
+        }
+        GoStatement::Switch { value, cases, default } => {
+            if let Some(value) = value {
+                expression_names(value, visit);
+            }
+            for case in cases {
+                case.values.iter_mut().for_each(|value| expression_names(value, visit));
+                statements_names(&mut case.body, visit);
+            }
+            if let Some(default) = default {
+                default.covers.iter_mut().for_each(|value| expression_names(value, visit));
+                statements_names(&mut default.body, visit);
+            }
+        }
+        GoStatement::Range { index, element, iterable, body } => {
+            if let Some(index) = index {
+                visit(Name::Binder(index));
+            }
+            visit(Name::Binder(element));
+            expression_names(iterable, visit);
+            statements_names(body, visit);
+        }
+        GoStatement::Counting { variable, start, end, body } => {
+            visit(Name::Binder(variable));
+            expression_names(start, visit);
+            expression_names(end, visit);
+            statements_names(body, visit);
+        }
+        GoStatement::CountingDown { variable, start, body } => {
+            visit(Name::Binder(variable));
+            expression_names(start, visit);
+            statements_names(body, visit);
+        }
+        GoStatement::Loop(body)
+        | GoStatement::LabeledLoop { body, .. }
+        | GoStatement::Block(body) => statements_names(body, visit),
+        GoStatement::Continue | GoStatement::Break | GoStatement::BreakTo(_) => {}
+    }
+}
+
+fn expression_names(expression: &mut GoExpression, visit: &mut impl FnMut(Name<'_>)) {
+    match expression {
+        GoExpression::Identifier(name) => visit(Name::Reference(name)),
+        GoExpression::Qualified { .. }
+        | GoExpression::Integer(_)
+        | GoExpression::Float(_)
+        | GoExpression::String(_)
+        | GoExpression::Rune(_)
+        | GoExpression::Boolean(_)
+        | GoExpression::Type(_) => {}
+        GoExpression::Call { function, arguments } => {
+            expression_names(function, visit);
+            arguments.iter_mut().for_each(|argument| expression_names(argument, visit));
+        }
+        GoExpression::Binary { left, right, .. } => {
+            expression_names(left, visit);
+            expression_names(right, visit);
+        }
+        GoExpression::Index { value, index } => {
+            expression_names(value, visit);
+            expression_names(index, visit);
+        }
+        GoExpression::Unary { operand: value, .. }
+        | GoExpression::Field { value, .. }
+        | GoExpression::Address(value)
+        | GoExpression::Conversion { value, .. }
+        | GoExpression::TypeAssertion { value, .. }
+        | GoExpression::Spread(value) => expression_names(value, visit),
+        GoExpression::Composite { fields, .. } => {
+            fields.iter_mut().for_each(|(_, value)| expression_names(value, visit));
+        }
+        GoExpression::Function { parameters, body, .. } => {
+            for (parameter, _) in parameters.iter_mut() {
+                visit(Name::Binder(parameter));
+            }
+            statements_names(body, visit);
+        }
+    }
+}
+
 pub struct GoFile {
     pub imports: Vec<String>,
     pub declarations: Vec<GoDeclaration>,

@@ -1,0 +1,41 @@
+---
+source: tests-integration/src/fixtures.rs
+---
+package main
+
+import (
+	"fmt"
+	"github.com/i-am-the-slime/purs-backend-go/go-support/array"
+	"github.com/i-am-the-slime/purs-backend-go/go-support/prim"
+)
+
+type DescribeDouble struct {
+	describe func(int32) string
+	double   func(int32) int32
+}
+
+var main_ = initializeMain_()
+
+func initializeMain_() []string {
+	array2 := []int32{1, 2}
+	mapped := make([]string, len(array2))
+	for index, value := range array2 {
+		mapped[index] = opsForLeft.describe(opsForLeft.double(value))
+	}
+	array3 := []int32{3}
+	mapped2 := make([]string, len(array3))
+	for index2, value2 := range array3 {
+		mapped2[index2] = opsForLeft.describe(opsForLeft.double(value2))
+	}
+	return array.Append(mapped, mapped2)
+}
+
+var opsForLeft DescribeDouble = DescribeDouble{double: func(n int32) int32 {
+	return prim.MultiplyInt32(n, 2)
+}, describe: func(n2 int32) string {
+	return "n = " + prim.ShowInt(int(n2))
+}}
+
+func main() {
+	fmt.Println(main_)
+}
