@@ -1,0 +1,43 @@
+package:
+  name: pathological-benchmarks
+  dependencies:
+    - aff
+    - argonaut-codecs
+    - argonaut-core
+    - arrays
+    - console
+    - control
+    - datetime
+    - effect
+    - either
+    - exceptions
+    - exists
+    - foldable-traversable
+    - foreign-object
+    - free
+    - functions
+    - integers
+    - lazy
+    - lists
+    - maybe
+    - newtype
+    - numbers
+    - ordered-collections
+    - parallel
+    - parsing
+    - partial
+    - prelude
+    - refs
+    - run
+    - st
+    - strings
+    - tailrec
+    - transformers
+    - tuples
+    - unfoldable
+    - unsafe-coerce
+    - variant
+    - yoga-json
+workspace:
+  packageSet:
+    registry: 75.9.1
