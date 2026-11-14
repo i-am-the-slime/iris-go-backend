@@ -1,0 +1,63 @@
+---
+source: tests-integration/src/fixtures.rs
+---
+// main.go
+package main
+
+import (
+	"fmt"
+	"github.com/i-am-the-slime/purs-backend-go/go-support/alloc"
+	"github.com/i-am-the-slime/purs-backend-go/go-support/prim"
+)
+
+type Reader struct {
+	Reader *Reader
+	N      int32
+	Tag    uint8
+}
+
+const (
+	ReaderMain_ = iota
+	ReaderPlus
+)
+
+var sharedReaderMain_ = &Reader{Tag: ReaderMain_}
+
+var main_ int32 = runReader(2, addAll(4, sharedReaderMain_))
+
+func addAll(argument0 int32, argument1 *Reader) *Reader {
+	var readerCells alloc.Cells[Reader]
+	for {
+		switch argument0 {
+		case 0:
+			return argument1
+		default:
+			n := argument0
+			argument0, argument1 = n - 1, readerCells.New(Reader{Tag: ReaderPlus, N: n, Reader: argument1})
+			continue
+		}
+	}
+}
+
+func plus(n int32, reader *Reader, environment int32) int32 {
+	for {
+		if n > 100 {
+			n = n - 100
+			continue
+		}
+		return runReader(environment, reader) + prim.MultiplyInt32(n, environment)
+	}
+}
+
+func runReader(environment int32, reader *Reader) int32 {
+	switch reader.Tag {
+	case ReaderMain_:
+		return environment
+	default: // ReaderPlus
+		return plus(reader.N, reader.Reader, environment)
+	}
+}
+
+func main() {
+	fmt.Println(main_)
+}

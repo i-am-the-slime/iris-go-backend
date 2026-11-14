@@ -291,6 +291,9 @@ fn binders(patterns: &[Pattern]) -> Vec<Local> {
             PatternKind::Constructor { arguments, .. } => {
                 arguments.iter().for_each(|argument| collect(argument, binders))
             }
+            PatternKind::Closure { captures, .. } => {
+                captures.iter().for_each(|capture| collect(capture, binders))
+            }
             PatternKind::Wildcard | PatternKind::Literal(_) => {}
         }
     }

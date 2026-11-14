@@ -1,5 +1,9 @@
 //! A closed, monomorphic tree: every node carries a concrete type, every reference
 //! names one specialization, and no dictionaries remain.
+//!
+//! A `Closure` is a value of a function type that `emit::closures` represents as a
+//! cell: the tag of the lambda that created it and the values that lambda captures.
+//! A `Closure` pattern matches one tag and binds its captures.
 
 use files::FileId;
 use smol_str::SmolStr;
@@ -74,6 +78,7 @@ pub enum ExpressionKind {
     Foreign { foreign: Foreign, arguments: Vec<Expression> },
     Apply { function: Box<Expression>, arguments: Vec<Expression> },
     Lambda { parameters: Vec<Local>, body: Box<Expression> },
+    Closure { tag: usize, captures: Vec<Expression> },
     Coerce(Box<Expression>),
     Let { bindings: Vec<Binding>, body: Box<Expression> },
     If { condition: Box<Expression>, then: Box<Expression>, otherwise: Box<Expression> },
@@ -150,6 +155,7 @@ pub enum PatternKind {
     Array(Vec<Pattern>),
     Record(Vec<(SmolStr, Pattern)>),
     Constructor { data: DataType, constructor: usize, arguments: Vec<Pattern> },
+    Closure { tag: usize, captures: Vec<Pattern> },
 }
 
 impl Pattern {
@@ -160,9 +166,10 @@ impl Pattern {
             PatternKind::Record(fields) => {
                 fields.iter().all(|(_, pattern)| pattern.is_irrefutable())
             }
-            PatternKind::Literal(_) | PatternKind::Array(_) | PatternKind::Constructor { .. } => {
-                false
-            }
+            PatternKind::Literal(_)
+            | PatternKind::Array(_)
+            | PatternKind::Constructor { .. }
+            | PatternKind::Closure { .. } => false,
         }
     }
 }

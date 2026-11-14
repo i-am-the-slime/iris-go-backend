@@ -73,6 +73,7 @@ pub fn compile_program(
     let mut context = context::Context::new(queries);
     let modules = modules::Modules::collect(&mut context, file_id)?;
     let program = mono::Program { functions, entry };
+    let eliminators = emit::Eliminators::find(&program, &monotypes);
     let program = timed("simplify", || simplify::simplify(program, &mut monotypes, next_local));
     let program = timed("merge", || merge::merge_identical_functions(program, &modules));
     if std::env::var_os("IRIS_GO_DUMP").is_some() {
@@ -84,8 +85,9 @@ pub fn compile_program(
     let functions = program.functions.len();
     let files = timed("emit", || {
         emit::emit_program(
-            &program,
+            program,
             &mut monotypes,
+            &eliminators,
             queries,
             foreign_packages,
             &modules,

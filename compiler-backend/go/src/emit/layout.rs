@@ -117,11 +117,22 @@ where
             groups = (0..constructors.len()).map(|index| vec![index]).collect();
             named = NamedSlots::new(constructors, &groups);
         }
+        self.arrange_slots(constructors.len(), named.constructors, named.fields)
+    }
+
+    /// Orders the slots of a struct whose `tags` constructors keep their
+    /// fields in the named slots.
+    pub(super) fn arrange_slots(
+        &mut self,
+        tags: usize,
+        constructors: Vec<Vec<String>>,
+        fields: Vec<(String, MonotypeId)>,
+    ) -> GoResult<SlotPlan> {
         let mut slots = vec![];
-        if constructors.len() > 1 {
-            slots.push((Slot::Tag, tag_shape(constructors.len())));
+        if tags > 1 {
+            slots.push((Slot::Tag, tag_shape(tags)));
         }
-        for (name, monotype) in named.fields {
+        for (name, monotype) in fields {
             let shape = self.value_shape(monotype)?;
             slots.push((Slot::Field { name, monotype }, shape));
         }
@@ -130,7 +141,7 @@ where
         let pointer_prefix =
             slots.iter().filter(|(_, shape)| shape.declaration_rank().0 < 2).count();
         let slots = slots.into_iter().map(|(slot, _)| slot).collect();
-        Ok(SlotPlan { constructors: named.constructors, slots, pointer_prefix, shape })
+        Ok(SlotPlan { constructors, slots, pointer_prefix, shape })
     }
 
     /// The shape of a data type held by value, or `None` when it cannot be:

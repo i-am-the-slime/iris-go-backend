@@ -77,6 +77,9 @@ pub struct Monotypes {
     unfolded: FxHashMap<DataType, MonotypeId>,
     regular: FxHashMap<(FileId, TypeItemId), bool>,
     expanding: Vec<TypeId>,
+    /// The newtype each function type is the representation of, or none when
+    /// several newtypes share it.
+    function_newtypes: FxHashMap<MonotypeId, Option<DataType>>,
     pub schemes: SchemeInstantiations,
     /// Rank-N field types met in this pass that the schemes do not list yet.
     pub new_rank_n_keys: Vec<(crate::scheme::SchemeKey, String)>,
@@ -108,6 +111,12 @@ impl Monotypes {
 
     pub fn get(&self, id: MonotypeId) -> &Monotype {
         &self.interned[id.0 as usize]
+    }
+
+    /// The one newtype whose representation a function type is, as `Lazy Int`
+    /// is `Unit -> Int`.
+    pub fn function_newtype(&self, id: MonotypeId) -> Option<&DataType> {
+        self.function_newtypes.get(&id)?.as_ref()
     }
 
     pub fn unit(&mut self) -> MonotypeId {
@@ -442,6 +451,21 @@ impl Monotypes {
                     self.expanding.push(type_id);
                     let converted = self.convert(context, underlying, expansions + 1);
                     self.expanding.pop();
+                    if let Ok(Ok(converted)) = converted
+                        && let Monotype::Function(..) = self.get(converted)
+                    {
+                        let newtype = DataType { file_id, item, arguments: Arc::from(arguments) };
+                        self.function_newtypes
+                            .entry(converted)
+                            .and_modify(|known| {
+                                if known.as_ref().is_some_and(|known| {
+                                    (known.file_id, known.item) != (file_id, item)
+                                }) {
+                                    *known = None;
+                                }
+                            })
+                            .or_insert(Some(newtype));
+                    }
                     return converted;
                 }
                 IndexedTypeItemKind::Data { constructors, .. } if constructors.is_empty() => {

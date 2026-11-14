@@ -352,7 +352,8 @@ fn pattern_binders(pattern: &Pattern, binders: &mut FxHashMap<LocalId, Local>) {
         PatternKind::Record(fields) => {
             fields.iter().for_each(|(_, field)| pattern_binders(field, binders))
         }
-        PatternKind::Constructor { arguments, .. } => {
+        PatternKind::Constructor { arguments, .. }
+        | PatternKind::Closure { captures: arguments, .. } => {
             arguments.iter().for_each(|argument| pattern_binders(argument, binders))
         }
         PatternKind::Wildcard | PatternKind::Literal(_) => {}

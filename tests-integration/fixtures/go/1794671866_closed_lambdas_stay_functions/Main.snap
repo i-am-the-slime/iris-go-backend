@@ -1,0 +1,54 @@
+---
+source: tests-integration/src/fixtures.rs
+---
+// main.go
+package main
+
+import (
+	"fmt"
+	"github.com/i-am-the-slime/purs-backend-go/go-support/prim"
+)
+
+type AddedScaled struct {
+	Added  int32
+	Scaled int32
+}
+
+type NameRun struct {
+	Name string
+	Run  func(int32) int32
+}
+
+var main_ = initializeMain_()
+
+func initializeMain_() AddedScaled {
+	scrutinee := []NameRun{NameRun{Name: "add", Run: func(x int32) int32 {
+		return x + 3
+	}}, NameRun{Name: "scale", Run: func(x2 int32) int32 {
+		return prim.MultiplyInt32(x2, 3)
+	}}}
+	var result int32
+	if len(scrutinee) == 2 {
+		first := scrutinee[0]
+		result = first.Run(10)
+	} else {
+		result = 10
+	}
+	scrutinee2 := []NameRun{NameRun{Name: "add", Run: func(x3 int32) int32 {
+		return x3 + 3
+	}}, NameRun{Name: "scale", Run: func(x4 int32) int32 {
+		return prim.MultiplyInt32(x4, 3)
+	}}}
+	var result2 int32
+	if len(scrutinee2) == 2 {
+		second := scrutinee2[1]
+		result2 = second.Run(10)
+	} else {
+		result2 = 10
+	}
+	return AddedScaled{Added: result, Scaled: result2}
+}
+
+func main() {
+	fmt.Println(main_)
+}
