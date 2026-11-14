@@ -375,7 +375,7 @@ fn type_name(type_: &GoType) -> &str {
     }
 }
 
-fn lower_first(name: &str) -> String {
+pub(super) fn lower_first(name: &str) -> String {
     let mut characters = name.chars();
     match characters.next() {
         Some(first) => first.to_lowercase().chain(characters).collect(),

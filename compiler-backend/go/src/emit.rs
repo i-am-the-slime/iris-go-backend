@@ -5,6 +5,7 @@
 //! effect only turns into a closure where it is used as a first-class value.
 
 mod application;
+mod blocks;
 mod chunks;
 mod coerce;
 mod deduplicate;
@@ -100,6 +101,11 @@ where
     if chunked {
         emitter.imports.insert(GoPackage::Alloc.path().into());
     }
+    timed("blocks", || {
+        let taken =
+            |name: &str| emitter.global_names.contains(name) || IMPORTED_PACKAGES.contains(&name);
+        blocks::allocate_nested_cells_together(&mut declarations, &taken)
+    });
     let mut homes: FxHashMap<String, ModuleIndex> = std::mem::take(&mut emitter.homes)
         .into_iter()
         .filter_map(|(name, file)| Some((name, modules.index(file)?)))

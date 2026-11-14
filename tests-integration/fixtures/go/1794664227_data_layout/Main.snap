@@ -87,7 +87,15 @@ func initializeMain_() ColoursExpressionItemsSampleShapes {
 	for index3, element3 := range array4 {
 		mapped3[index3] = colourName(element3)
 	}
-	return ColoursExpressionItemsSampleShapes{Expression: evaluate(&Expr{Tag: ExprAdd, Field0: &Expr{Tag: ExprVal, Val0: 1}, Field1: &Expr{Tag: ExprSub, Field0: &Expr{Tag: ExprMul, Field0: &Expr{Tag: ExprVal, Val0: 2}, Field1: &Expr{Tag: ExprVal, Val0: 3}}, Field1: &Expr{Tag: ExprVal, Val0: 4}}}), Shapes: mapped, Items: mapped2, Colours: mapped3, Sample: "s" + ("true" + (prim.ShowNumber(float64(0.5)) + prim.ShowInt(int(3))))}
+	exprs := make([]Expr, 7)
+	exprs[0] = Expr{Tag: ExprAdd, Field0: &exprs[1], Field1: &exprs[2]}
+	exprs[1] = Expr{Tag: ExprVal, Val0: 1}
+	exprs[2] = Expr{Tag: ExprSub, Field0: &exprs[3], Field1: &exprs[6]}
+	exprs[3] = Expr{Tag: ExprMul, Field0: &exprs[4], Field1: &exprs[5]}
+	exprs[4] = Expr{Tag: ExprVal, Val0: 2}
+	exprs[5] = Expr{Tag: ExprVal, Val0: 3}
+	exprs[6] = Expr{Tag: ExprVal, Val0: 4}
+	return ColoursExpressionItemsSampleShapes{Expression: evaluate(&exprs[0]), Shapes: mapped, Items: mapped2, Colours: mapped3, Sample: "s" + ("true" + (prim.ShowNumber(float64(0.5)) + prim.ShowInt(int(3))))}
 }
 
 func evaluate(argument0 *Expr) int32 {

@@ -1,0 +1,132 @@
+---
+source: tests-integration/src/fixtures.rs
+---
+// main.go
+package main
+
+import (
+	"fmt"
+	"github.com/i-am-the-slime/purs-backend-go/go-support/alloc"
+	"github.com/i-am-the-slime/purs-backend-go/go-support/prim"
+)
+
+type BuiltLinkedLiteralMirroredNegativePositiveTwo struct {
+	Built    int32
+	Linked   int32
+	Literal  int32
+	Mirrored int32
+	Negative bool
+	Positive bool
+	Two      int32
+}
+
+type Expr struct {
+	Field0 *Expr
+	Field1 *Expr
+	Val0   int32
+	Tag    uint8
+}
+
+const (
+	ExprVal = iota
+	ExprAdd
+	ExprMul
+	ExprSub
+)
+
+type ListInt struct {
+	Cons1 *ListInt
+	Cons0 int32
+	Tag   uint8
+}
+
+const (
+	ListIntNil = iota
+	ListIntCons
+)
+
+var sharedListIntNil = &ListInt{Tag: ListIntNil}
+
+var main_ = initializeMain_()
+
+func initializeMain_() BuiltLinkedLiteralMirroredNegativePositiveTwo {
+	var n int32 = -3
+	listInts := make([]ListInt, 3)
+	listInts[0] = ListInt{Tag: ListIntCons, Cons0: 1, Cons1: &listInts[1]}
+	listInts[1] = ListInt{Tag: ListIntCons, Cons0: 2, Cons1: &listInts[2]}
+	listInts[2] = ListInt{Tag: ListIntCons, Cons0: 3, Cons1: sharedListIntNil}
+	return BuiltLinkedLiteralMirroredNegativePositiveTwo{Built: evaluate(build(4)), Mirrored: evaluate(mirrorReusing(build(3))), Two: evaluate(&Expr{Tag: ExprAdd, Field0: build(2), Field1: &Expr{Tag: ExprVal, Val0: 2}}), Linked: total(mainGo(5, sharedListIntNil)), Literal: total(&listInts[0]), Positive: 3 > 0 && evaluate(&Expr{Tag: ExprAdd, Field0: &Expr{Tag: ExprVal, Val0: 3}, Field1: &Expr{Tag: ExprMul, Field0: &Expr{Tag: ExprVal, Val0: 2}, Field1: &Expr{Tag: ExprVal, Val0: 3}}}) > 5, Negative: n > 0 && evaluate(&Expr{Tag: ExprAdd, Field0: &Expr{Tag: ExprVal, Val0: n}, Field1: &Expr{Tag: ExprMul, Field0: &Expr{Tag: ExprVal, Val0: 2}, Field1: &Expr{Tag: ExprVal, Val0: n}}}) > 5}
+}
+
+func evaluate(argument0 *Expr) int32 {
+	switch argument0.Tag {
+	case ExprVal:
+		return argument0.Val0
+	case ExprAdd:
+		return evaluate(argument0.Field0) + evaluate(argument0.Field1)
+	case ExprMul:
+		return prim.MultiplyInt32(evaluate(argument0.Field0), evaluate(argument0.Field1))
+	default: // ExprSub
+		return evaluate(argument0.Field0) - evaluate(argument0.Field1)
+	}
+}
+
+func build(argument0 int32) *Expr {
+	switch argument0 {
+	case 0:
+		return &Expr{Tag: ExprVal, Val0: 1}
+	default:
+		exprs := make([]Expr, 5)
+		exprs[0] = Expr{Tag: ExprAdd, Field0: &exprs[1], Field1: &exprs[3]}
+		exprs[1] = Expr{Tag: ExprMul, Field0: &exprs[2], Field1: build(argument0 - 1)}
+		exprs[2] = Expr{Tag: ExprVal, Val0: argument0}
+		exprs[3] = Expr{Tag: ExprSub, Field0: build(argument0 - 1), Field1: &exprs[4]}
+		exprs[4] = Expr{Tag: ExprVal, Val0: 1}
+		return &exprs[0]
+	}
+}
+
+func total(argument0 *ListInt) int32 {
+	switch argument0.Tag {
+	case ListIntNil:
+		return 0
+	default: // ListIntCons
+		return argument0.Cons0 + total(argument0.Cons1)
+	}
+}
+
+func mainGo(remaining int32, list *ListInt) *ListInt {
+	var listIntCells alloc.Cells[ListInt]
+	for {
+		if remaining <= 0 {
+			return list
+		}
+		remaining, list = remaining - 1, listIntCells.New(ListInt{Tag: ListIntCons, Cons0: remaining, Cons1: listIntCells.New(ListInt{Tag: ListIntCons, Cons0: prim.MultiplyInt32(remaining, 10), Cons1: list})})
+	}
+}
+
+func mirrorReusing(argument0 *Expr) *Expr {
+	switch argument0.Tag {
+	case ExprAdd:
+		left := argument0.Field0
+		right := argument0.Field1
+		*argument0 = Expr{Tag: ExprAdd, Field0: mirrorReusing(right), Field1: mirrorReusing(left)}
+		return argument0
+	case ExprMul:
+		left2 := argument0.Field0
+		right2 := argument0.Field1
+		*argument0 = Expr{Tag: ExprMul, Field0: mirrorReusing(right2), Field1: mirrorReusing(left2)}
+		return argument0
+	case ExprSub:
+		left3 := argument0.Field0
+		right3 := argument0.Field1
+		*argument0 = Expr{Tag: ExprSub, Field0: mirrorReusing(right3), Field1: mirrorReusing(left3)}
+		return argument0
+	default:
+		return argument0
+	}
+}
+
+func main() {
+	fmt.Println(main_)
+}
