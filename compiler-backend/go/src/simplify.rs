@@ -203,23 +203,36 @@ impl Simplifier<'_> {
     /// parameter that replaces their first ones.
     fn apply_chosen_lambdas(&mut self, expression: Expression, parameter: &Local) -> Expression {
         let monotype = self.monotypes.result_after(expression.monotype, 1);
-        let kind = match expression.kind {
-            ExpressionKind::Lambda { mut parameters, body } => {
-                let first = parameters.remove(0);
-                let body = substitute(*body, first.id, &local_expression(parameter));
-                if parameters.is_empty() {
-                    return body;
-                }
-                ExpressionKind::Lambda { parameters, body: Box::new(body) }
+        self.map_choices(expression, monotype, &mut |_, chosen| {
+            let ExpressionKind::Lambda { mut parameters, body } = chosen.kind else {
+                unreachable!("invariant violated: only chosen lambdas take the parameter")
+            };
+            let first = parameters.remove(0);
+            let body = substitute(*body, first.id, &local_expression(parameter));
+            if parameters.is_empty() {
+                return body;
             }
+            Expression::new(ExpressionKind::Lambda { parameters, body: Box::new(body) }, monotype)
+        })
+    }
+
+    /// Rewrites what a choice evaluates to, through the lets, ifs and cases
+    /// that choose it, into expressions of `monotype`.
+    fn map_choices(
+        &mut self,
+        expression: Expression,
+        monotype: MonotypeId,
+        chosen: &mut impl FnMut(&mut Self, Expression) -> Expression,
+    ) -> Expression {
+        let kind = match expression.kind {
             ExpressionKind::Let { bindings, body } => {
-                let body = self.apply_chosen_lambdas(*body, parameter);
+                let body = self.map_choices(*body, monotype, chosen);
                 ExpressionKind::Let { bindings, body: Box::new(body) }
             }
             ExpressionKind::If { condition, then, otherwise } => ExpressionKind::If {
                 condition,
-                then: Box::new(self.apply_chosen_lambdas(*then, parameter)),
-                otherwise: Box::new(self.apply_chosen_lambdas(*otherwise, parameter)),
+                then: Box::new(self.map_choices(*then, monotype, chosen)),
+                otherwise: Box::new(self.map_choices(*otherwise, monotype, chosen)),
             },
             ExpressionKind::Case { scrutinees, alternatives } => {
                 let alternatives = alternatives
@@ -227,14 +240,14 @@ impl Simplifier<'_> {
                     .map(|alternative| {
                         let body = match alternative.body {
                             Guarded::Unconditional(body) => {
-                                Guarded::Unconditional(self.apply_chosen_lambdas(body, parameter))
+                                Guarded::Unconditional(self.map_choices(body, monotype, chosen))
                             }
                             Guarded::Guards(branches) => Guarded::Guards(
                                 branches
                                     .into_iter()
                                     .map(|branch| GuardedBranch {
                                         guards: branch.guards,
-                                        body: self.apply_chosen_lambdas(branch.body, parameter),
+                                        body: self.map_choices(branch.body, monotype, chosen),
                                     })
                                     .collect(),
                             ),
@@ -244,9 +257,42 @@ impl Simplifier<'_> {
                     .collect();
                 ExpressionKind::Case { scrutinees, alternatives }
             }
-            _ => unreachable!("invariant violated: only chosen lambdas take the parameter"),
+            ExpressionKind::Fail(message) => ExpressionKind::Fail(message),
+            kind => return chosen(self, Expression::new(kind, expression.monotype)),
         };
         Expression::new(kind, monotype)
+    }
+
+    /// `(case x of A -> f; B -> g) a` is `case x of A -> f a; B -> g a`, with
+    /// `a` evaluated once, before the choice.
+    fn apply_choice(
+        &mut self,
+        choice: Expression,
+        arguments: Vec<Expression>,
+        monotype: MonotypeId,
+    ) -> Expression {
+        let mut bindings = vec![];
+        let arguments: Vec<Expression> = arguments
+            .into_iter()
+            .map(|argument| {
+                if is_trivial(&argument) {
+                    return argument;
+                }
+                let template =
+                    Local { id: LocalId(0), name: "argument".into(), monotype: argument.monotype };
+                let local = self.fresh(&template);
+                let reference = local_expression(&local);
+                bindings.push(Binding { local, value: argument });
+                reference
+            })
+            .collect();
+        let applied = self.map_choices(choice, monotype, &mut |simplifier, chosen| {
+            simplifier.apply(chosen, arguments.clone(), monotype)
+        });
+        if bindings.is_empty() {
+            return applied;
+        }
+        Expression::new(ExpressionKind::Let { bindings, body: Box::new(applied) }, monotype)
     }
 
     fn expression(&mut self, expression: Expression) -> Expression {
@@ -560,7 +606,10 @@ impl Simplifier<'_> {
             }
             ExpressionKind::Let { bindings, body } => {
                 let body = self.apply(*body, arguments, monotype);
-                Expression::new(ExpressionKind::Let { bindings, body: Box::new(body) }, monotype)
+                self.let_bindings(bindings, body)
+            }
+            ExpressionKind::If { .. } | ExpressionKind::Case { .. } => {
+                self.apply_choice(function, arguments, monotype)
             }
             ExpressionKind::Function(id) if self.fuel > 0 => {
                 // A partial application inlines too: `beta` binds the given
@@ -633,6 +682,13 @@ impl Simplifier<'_> {
         let recursive = bindings.iter().any(|binding| {
             bindings.iter().any(|other| occurrences(&binding.value, other.local.id).total > 0)
         });
+        if !recursive
+            && let Some(position) = bindings
+                .iter()
+                .position(|binding| matches!(binding.value.kind, ExpressionKind::Let { .. }))
+        {
+            return self.float_let(bindings, position, body);
+        }
         if recursive {
             let monotype = body.monotype;
             return Expression::new(
@@ -667,6 +723,28 @@ impl Simplifier<'_> {
         kept.reverse();
         let monotype = body.monotype;
         Expression::new(ExpressionKind::Let { bindings: kept, body: Box::new(body) }, monotype)
+    }
+
+    /// `let a = (let b = e in v)` binds `b` before `a`, which evaluates `e`
+    /// when it did and lets `a` be judged by `v` alone.
+    fn float_let(
+        &mut self,
+        mut bindings: Vec<Binding>,
+        position: usize,
+        body: Expression,
+    ) -> Expression {
+        let mut rest = bindings.split_off(position);
+        let value = std::mem::replace(
+            &mut rest[0].value,
+            Expression::new(ExpressionKind::Unit, body.monotype),
+        );
+        let ExpressionKind::Let { bindings: inner, body: value } = value.kind else {
+            unreachable!("invariant violated: the floated binding holds a let")
+        };
+        rest[0].value = *value;
+        let body = self.let_bindings(rest, body);
+        let body = self.let_bindings(inner, body);
+        self.let_bindings(bindings, body)
     }
 
     fn foreign(

@@ -35,6 +35,12 @@ impl Simplifier<'_> {
         if value.monotype == monotype {
             return value;
         }
+        // Unit has one value, so a coerced one is it, whatever it was before.
+        if let Monotype::Unit = self.monotypes.get(monotype)
+            && super::is_discardable(&value)
+        {
+            return Expression::new(ExpressionKind::Unit, monotype);
+        }
         if let Monotype::Record(_) = self.monotypes.get(value.monotype)
             && let Monotype::Opaque = self.monotypes.get(monotype)
         {
