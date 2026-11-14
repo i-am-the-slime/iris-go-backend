@@ -45,7 +45,9 @@ use crate::mono::{
 };
 use crate::monotype::{DataType, Monotype, MonotypeId, Monotypes};
 use crate::simplify::visit;
-use crate::syntax::{GoCase, GoDeclaration, GoDefault, GoExpression, GoStatement, GoType};
+use crate::syntax::{
+    GoCase, GoDeclaration, GoDefault, GoExpression, GoStatement, GoType, Name, statements_names,
+};
 use crate::timing::timed;
 
 pub(crate) use self::closures::Eliminators;
@@ -820,6 +822,28 @@ fn discarded(value: GoExpression) -> GoStatement {
         GoExpression::Conversion { value, .. } => discarded(*value),
         value => GoStatement::Expression(value),
     }
+}
+
+fn statements_reference(statements: &mut [GoStatement], name: &str) -> bool {
+    let mut found = false;
+    statements_names(statements, &mut |reference| {
+        if let Name::Reference(used) | Name::Written(used) = reference {
+            found |= used == name;
+        }
+    });
+    found
+}
+
+/// Performs the action that defines `name` without keeping its result, when that definition is
+/// the last statement: the action is a call, and its result has no use.
+fn discard_definition(statements: &mut [GoStatement], name: &str) {
+    let Some(last) = statements.last_mut() else { return };
+    let GoStatement::Define { names, values } = last else { return };
+    if names.as_slice() != [name] || values.len() != 1 || !is_effectful_call(&values[0]) {
+        return;
+    }
+    let value = values.pop().expect("a definition with one name has one value");
+    *last = discarded(value);
 }
 
 fn uses_local(expression: &Expression, local: LocalId) -> bool {
@@ -1787,14 +1811,21 @@ where
                 self.deliver(value, result, sink, out)
             }
             ExpressionKind::EffectBind { action, local, body } => {
-                let action_sink = if uses_local(body, local.id) && !self.is_unit(local.monotype) {
-                    Sink::Define(self.bind_local(local))
-                } else {
+                if !uses_local(body, local.id) || self.is_unit(local.monotype) {
                     self.locals.insert(local.id, unit_value());
-                    Sink::Discard
-                };
-                self.sink(action, Mode::Perform, action_sink, out)?;
-                self.sink(body, Mode::Perform, sink, out)
+                    self.sink(action, Mode::Perform, Sink::Discard, out)?;
+                    return self.sink(body, Mode::Perform, sink, out);
+                }
+                let name = self.bind_local(local);
+                self.sink(action, Mode::Perform, Sink::Define(name.clone()), out)?;
+                let performed = out.len();
+                self.sink(body, Mode::Perform, sink, out)?;
+                // The body can mention the local only in a value it then discards, such as an
+                // unsubscriber nobody keeps; Go rejects the definition that is left without a use.
+                if !statements_reference(&mut out[performed..], &name) {
+                    discard_definition(&mut out[..performed], &name);
+                }
+                Ok(())
             }
             ExpressionKind::EffectEach { array, element, body } => {
                 let array = self.value(array, out)?;
@@ -3428,9 +3459,19 @@ where
         out: &mut Vec<GoStatement>,
     ) -> GoResult<GoExpression> {
         let number = self.value(number, out)?;
-        let number = self.hoist(number, "number", out);
         let (data, just) = self.constructor_named(monotype, "Just")?;
         let (_, nothing) = self.constructor_named(monotype, "Nothing")?;
+        // Go rejects `int32(c)` for a constant `c` that is not an int32, so a literal is decided here.
+        if let Some(constant) = float_constant(&number) {
+            let fits = constant.trunc() == constant
+                && constant >= f64::from(i32::MIN)
+                && constant <= f64::from(i32::MAX);
+            if fits {
+                return self.construct(&data, just, vec![GoExpression::Integer(constant as i64)]);
+            }
+            return self.construct(&data, nothing, vec![]);
+        }
+        let number = self.hoist(number, "number", out);
         let integer = GoExpression::Conversion {
             type_: GoType::Named("int32".into()),
             value: Box::new(number.clone()),

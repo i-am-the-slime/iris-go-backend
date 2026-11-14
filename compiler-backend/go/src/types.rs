@@ -281,6 +281,15 @@ where
         }
     }
 
+    /// `Prim.Function`, the constructor that `a -> b` applies.
+    fn function_constructor(&self) -> Option<TypeId> {
+        let prim = self.queries.prim_id();
+        let indexed = self.queries.indexed(prim).ok()?;
+        let (item, _) =
+            indexed.items.iter_types().find(|(_, item)| item.name.as_deref() == Some("Function"))?;
+        Some(self.queries.intern_type(Type::Constructor(prim, item)))
+    }
+
     /// Matches `pattern`, whose variables in `variables` are pattern variables, against
     /// `target`. Type-class resolution already happened in the checker; matching only
     /// recovers which types the chosen declaration's variables stand for.
@@ -320,6 +329,16 @@ where
                 };
                 self.match_type(pattern_argument, target_argument, variables, bindings)
                     && self.match_type(pattern_result, target_result, variables, bindings)
+            }
+            // `c a a` in `instance Newtype (Endo c a) (c a a)` against `a -> a`.
+            (Type::Application(..), Type::Function(argument, result))
+                if self.function_parts(pattern).is_none() =>
+            {
+                let (argument, result) = (*argument, *result);
+                let Some(function) = self.function_constructor() else { return false };
+                let applied = self.queries.intern_type(Type::Application(function, argument));
+                let spelled = self.queries.intern_type(Type::Application(applied, result));
+                self.match_type(pattern, spelled, variables, bindings)
             }
             (Type::Function(..), _) | (_, Type::Function(..)) => {
                 let (Some(pattern_parts), Some(target_parts)) =

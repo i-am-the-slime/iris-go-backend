@@ -1,0 +1,57 @@
+---
+source: tests-integration/src/fixtures.rs
+---
+// Data/Maybe/maybe.go
+package maybe
+
+type MaybeInt struct {
+	Just0 int32
+	Tag   uint8
+}
+
+const (
+	MaybeIntNothing = iota
+	MaybeIntJust
+)
+
+// main.go
+package main
+
+import (
+	"fixture/Data/Maybe"
+	"fmt"
+	"math"
+)
+
+var main_ = initializeMain_()
+
+func initializeMain_() []maybe.MaybeInt {
+	number := math.Copysign(0, -1)
+	var integer maybe.MaybeInt
+	if math.Trunc(number) == number && (number >= math.MinInt32 && number <= math.MaxInt32) {
+		integer = maybe.MaybeInt{Tag: maybe.MaybeIntJust, Just0: int32(number)}
+	} else {
+		integer = maybe.MaybeInt{Tag: maybe.MaybeIntNothing}
+	}
+	number2 := opaque(3.0e10)
+	var integer2 maybe.MaybeInt
+	if math.Trunc(number2) == number2 && (number2 >= math.MinInt32 && number2 <= math.MaxInt32) {
+		integer2 = maybe.MaybeInt{Tag: maybe.MaybeIntJust, Just0: int32(number2)}
+	} else {
+		integer2 = maybe.MaybeInt{Tag: maybe.MaybeIntNothing}
+	}
+	return []maybe.MaybeInt{maybe.MaybeInt{Tag: maybe.MaybeIntNothing}, maybe.MaybeInt{Tag: maybe.MaybeIntNothing}, maybe.MaybeInt{Tag: maybe.MaybeIntJust, Just0: 2147483647}, maybe.MaybeInt{Tag: maybe.MaybeIntJust, Just0: -2147483648}, maybe.MaybeInt{Tag: maybe.MaybeIntNothing}, integer, integer2}
+}
+
+func opaque(x float64) float64 {
+	for {
+		if x == 12345.0 {
+			continue
+		}
+		return x
+	}
+}
+
+func main() {
+	fmt.Println(main_)
+}
