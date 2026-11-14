@@ -67,6 +67,10 @@ pub struct DataConstructor {
     pub term: TermItemId,
     pub name: SmolStr,
     pub fields: Vec<MonotypeId>,
+    /// One of the fields is a type equality between apart types, as
+    /// `IntValue (a ~ Int)` has at `Value String`. No value of the data type
+    /// is built with the constructor, so a match on it is unreachable.
+    pub refuted: bool,
 }
 
 const NEWTYPE_EXPANSION_LIMIT: usize = 64;
@@ -822,8 +826,10 @@ impl Monotypes {
                 }
             }
             let mut fields = Vec::with_capacity(field_types.len());
+            let mut refuted = false;
             for field_type in field_types {
                 let field_type = context.types.substitute(field_type, &substitution);
+                refuted |= is_refuted_equality(context, field_type)?;
                 let constructor = module.indexed.items[term].name.clone().unwrap_or_default();
                 let owner = format!("{}.{constructor}", module.name);
                 self.note_rank_n_field(context, field_type, &owner)?;
@@ -833,11 +839,89 @@ impl Monotypes {
                 }
             }
             let name = module.indexed.items[term].name.clone().unwrap_or_default();
-            constructors.push(DataConstructor { term, name, fields });
+            constructors.push(DataConstructor { term, name, fields, refuted });
         }
         let constructors: Arc<[DataConstructor]> = Arc::from(constructors);
         self.constructors.insert(data.clone(), Arc::clone(&constructors));
         Ok(Ok(constructors))
+    }
+}
+
+const EQUALITY_UNWRAP_LIMIT: usize = 8;
+
+/// Whether a type is an equality proof between apart types: after unwrapping
+/// newtypes (`Leibniz a b`), `forall f. f a -> f b` where `a` and `b` are
+/// closed and clash. No value has that type: `Data.Leibniz.refute` turns one
+/// into a `Void` by choosing `f` to map `a` to `Unit` and `b` to `Void`.
+fn is_refuted_equality<Q>(context: &mut Context<'_, Q>, type_id: TypeId) -> QueryResult<bool>
+where
+    Q: checking::ExternalQueries,
+{
+    let mut current = expand_synonyms(context, type_id)?;
+    for _ in 0..EQUALITY_UNWRAP_LIMIT {
+        let (head, _) = context.types.spine(current);
+        let Type::Constructor(file_id, item) = context.types.lookup(head).clone() else { break };
+        let module = context.module(file_id)?;
+        let IndexedTypeItemKind::Newtype { constructors, .. } = &module.indexed.items[item].kind
+        else {
+            return Ok(false);
+        };
+        let Some(&constructor) = constructors.first() else { return Ok(false) };
+        let Some(underlying) = newtype_underlying(context, file_id, constructor, current)? else {
+            return Ok(false);
+        };
+        current = expand_synonyms(context, underlying)?;
+    }
+    let (names, body) = context.types.peel_quantifiers(current);
+    let Some((argument, result)) = context.types.function_parts(body) else { return Ok(false) };
+    let (argument_head, argument_arguments) = context.types.spine(argument);
+    let (result_head, result_arguments) = context.types.spine(result);
+    let (Type::Rigid(argument_variable, ..), Type::Rigid(result_variable, ..)) =
+        (context.types.lookup(argument_head), context.types.lookup(result_head))
+    else {
+        return Ok(false);
+    };
+    let ([left], [right]) = (&argument_arguments[..], &result_arguments[..]) else {
+        return Ok(false);
+    };
+    if argument_variable != result_variable || !names.contains(argument_variable) {
+        return Ok(false);
+    }
+    // Data types share one representation for arguments that differ only by
+    // newtypes, so equalities are refuted only between representations.
+    let left = erase_newtypes(context, *left, 0, &mut vec![])?;
+    let right = erase_newtypes(context, *right, 0, &mut vec![])?;
+    Ok(apart(context, left, right))
+}
+
+/// Whether two types certainly differ: some position holds distinct type
+/// constructors or literals. Anything not closed is never apart.
+fn apart<Q>(context: &mut Context<'_, Q>, left: TypeId, right: TypeId) -> bool
+where
+    Q: checking::ExternalQueries,
+{
+    if let (Some((left_argument, left_result)), Some((right_argument, right_result))) =
+        (context.types.function_parts(left), context.types.function_parts(right))
+    {
+        return apart(context, left_argument, right_argument)
+            || apart(context, left_result, right_result);
+    }
+    let (left_head, left_arguments) = context.types.spine(left);
+    let (right_head, right_arguments) = context.types.spine(right);
+    match (context.types.lookup(left_head), context.types.lookup(right_head)) {
+        (Type::Constructor(left_file, left_item), Type::Constructor(right_file, right_item)) => {
+            if (left_file, left_item) != (right_file, right_item) {
+                return true;
+            }
+            left_arguments.len() == right_arguments.len()
+                && left_arguments
+                    .iter()
+                    .zip(right_arguments.iter())
+                    .any(|(&left, &right)| apart(context, left, right))
+        }
+        (Type::Integer(left), Type::Integer(right)) => left != right,
+        (Type::String(_, left), Type::String(_, right)) => left != right,
+        _ => false,
     }
 }
 

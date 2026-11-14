@@ -22,7 +22,8 @@ where
         &mut self,
         expression: &mut Expression,
     ) -> GoResult<()> {
-        if let ExpressionKind::Case { alternatives, .. } = &mut expression.kind {
+        if let ExpressionKind::Case { scrutinees, alternatives } = &mut expression.kind {
+            self.remove_refuted_alternatives(scrutinees, alternatives, expression.monotype)?;
             for alternative in alternatives {
                 self.alternative_field_representations(alternative)?;
             }
@@ -34,6 +35,71 @@ where
             }
         });
         result
+    }
+
+    /// Drops the alternatives that match a refuted constructor, such as
+    /// `IntValue (a ~ Int)` at `Value String`: no value reaches them, in JS
+    /// either, and their bodies coerce between the apart types.
+    fn remove_refuted_alternatives(
+        &mut self,
+        scrutinees: &[Expression],
+        alternatives: &mut Vec<Alternative>,
+        result: crate::monotype::MonotypeId,
+    ) -> GoResult<()> {
+        let mut kept = Vec::with_capacity(alternatives.len());
+        for alternative in std::mem::take(alternatives) {
+            let mut refuted = false;
+            for pattern in &alternative.patterns {
+                refuted |= self.is_refuted(pattern)?;
+            }
+            if !refuted {
+                kept.push(alternative);
+            }
+        }
+        if kept.is_empty() {
+            kept.push(Alternative::match_failure(scrutinees, result));
+        }
+        *alternatives = kept;
+        Ok(())
+    }
+
+    /// Whether a pattern matches a refuted constructor anywhere inside it.
+    fn is_refuted(&mut self, pattern: &Pattern) -> GoResult<bool> {
+        match &pattern.kind {
+            PatternKind::Wildcard | PatternKind::Variable(_) | PatternKind::Literal(_) => Ok(false),
+            PatternKind::Named { pattern, .. } => self.is_refuted(pattern),
+            PatternKind::Array(elements) | PatternKind::Closure { captures: elements, .. } => {
+                for element in elements {
+                    if self.is_refuted(element)? {
+                        return Ok(true);
+                    }
+                }
+                Ok(false)
+            }
+            PatternKind::Record(fields) => {
+                for (_, field) in fields {
+                    if self.is_refuted(field)? {
+                        return Ok(true);
+                    }
+                }
+                Ok(false)
+            }
+            PatternKind::Constructor { data, constructor, arguments } => {
+                let constructors = match self.monotypes.constructors(&mut self.context, data)? {
+                    Ok(constructors) => constructors,
+                    Err(state) => return Err(self.pattern_error(state)),
+                };
+                if constructors[*constructor].refuted {
+                    return Ok(true);
+                }
+                for argument in arguments {
+                    if self.is_refuted(argument)? {
+                        return Ok(true);
+                    }
+                }
+                Ok(false)
+            }
+        }
     }
 
     fn alternative_field_representations(&mut self, alternative: &mut Alternative) -> GoResult<()> {
