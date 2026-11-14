@@ -139,30 +139,30 @@ type PairEInt struct {
 	Origin any
 }
 
-func convert6(value *TreeFnInt) *Tree {
-	switch value.Tag {
-	case TreeFnIntLeaf:
-		return &Tree{Tag: TreeLeaf, Leaf0: func(coerced3 any) any {
-			return value.Leaf0(coerced3)
-		}, Origin: value.Origin}
-	default: // TreeFnIntPair
-		return &Tree{Tag: TreePair, Pair0: value.Pair0, Origin: value.Origin}
-	}
-}
-
-func convert8(value *TreeFn) *TreeFnInt {
+func convert7(value *TreeFn) *TreeFnInt {
 	switch value.Tag {
 	case TreeFnLeaf:
-		return &TreeFnInt{Tag: TreeFnIntLeaf, Leaf0: func(coerced5 any) int32 {
-			return value.Leaf0(coerced5).(int32)
+		return &TreeFnInt{Tag: TreeFnIntLeaf, Leaf0: func(coerced any) int32 {
+			return value.Leaf0(coerced).(int32)
 		}, Origin: value.Origin}
 	default: // TreeFnPair
 		return &TreeFnInt{Tag: TreeFnIntPair, Pair0: value.Pair0, Origin: value.Origin}
 	}
 }
 
-func convert7(value *PairE) *PairEInt {
-	return &PairEInt{PairE0: convert8(value.PairE0), PairE1: value.PairE1, Origin: value.Origin}
+func convert6(value *PairE) *PairEInt {
+	return &PairEInt{PairE0: convert7(value.PairE0), PairE1: value.PairE1, Origin: value.Origin}
+}
+
+func convert8(value *TreeFnInt) *Tree {
+	switch value.Tag {
+	case TreeFnIntLeaf:
+		return &Tree{Tag: TreeLeaf, Leaf0: func(coerced4 any) any {
+			return value.Leaf0(coerced4)
+		}, Origin: value.Origin}
+	default: // TreeFnIntPair
+		return &Tree{Tag: TreePair, Pair0: value.Pair0, Origin: value.Origin}
+	}
 }
 
 func convert9(value *TreeFn) *Tree {
@@ -191,22 +191,18 @@ func leavesIntGo(argument0 int32, argument1 TreeInt) int32 {
 	case TreeIntLeaf:
 		return argument0 + 1
 	default: // TreeIntPair
-		original3 := func(argument02 *PairEInt) int32 {
-			original := func(argument03 int32) func(*Tree) int32 {
-				return func(argument12 *Tree) int32 {
-					return leavesIntGo2(argument03, argument12)
-				}
+		scrutinee := convert6(argument1.Pair0.(*PairE))
+		original := func(argument02 int32) func(*Tree) int32 {
+			return func(argument12 *Tree) int32 {
+				return leavesIntGo2(argument02, argument12)
 			}
-			return func(coerced int32) func(*TreeFnInt) int32 {
-				original2 := original(coerced)
-				return func(coerced2 *TreeFnInt) int32 {
-					return original2(convert6(coerced2))
-				}
-			}(argument0 + 1)(argument02.PairE0) + leavesIntGo3(argument0 + 1, argument02.PairE1)
 		}
-		return func(coerced4 any) int32 {
-			return original3(convert7(coerced4.(*PairE)))
-		}(argument1.Pair0)
+		return func(coerced2 int32) func(*TreeFnInt) int32 {
+			original2 := original(coerced2)
+			return func(coerced3 *TreeFnInt) int32 {
+				return original2(convert8(coerced3))
+			}
+		}(argument0 + 1)(scrutinee.PairE0) + leavesIntGo3(argument0 + 1, scrutinee.PairE1)
 	}
 }
 
@@ -215,22 +211,18 @@ func leavesIntGo2(argument0 int32, argument1 *Tree) int32 {
 	case TreeLeaf:
 		return argument0 + 1
 	default: // TreePair
-		original3 := func(argument02 *PairE) int32 {
-			original := func(argument03 int32) func(*Tree) int32 {
-				return func(argument12 *Tree) int32 {
-					return leavesIntGo2(argument03, argument12)
-				}
+		scrutinee := argument1.Pair0.(*PairE)
+		original := func(argument02 int32) func(*Tree) int32 {
+			return func(argument12 *Tree) int32 {
+				return leavesIntGo2(argument02, argument12)
 			}
-			return func(coerced int32) func(*TreeFn) int32 {
-				original2 := original(coerced)
-				return func(coerced2 *TreeFn) int32 {
-					return original2(convert9(coerced2))
-				}
-			}(argument0 + 1)(argument02.PairE0) + leavesIntGo3(argument0 + 1, argument02.PairE1)
 		}
-		return func(coerced3 any) int32 {
-			return original3(coerced3.(*PairE))
-		}(argument1.Pair0)
+		return func(coerced int32) func(*TreeFn) int32 {
+			original2 := original(coerced)
+			return func(coerced2 *TreeFn) int32 {
+				return original2(convert9(coerced2))
+			}
+		}(argument0 + 1)(scrutinee.PairE0) + leavesIntGo3(argument0 + 1, scrutinee.PairE1)
 	}
 }
 
@@ -239,22 +231,18 @@ func leavesIntGo3(argument0 int32, argument1 *Tree) int32 {
 	case TreeLeaf:
 		return argument0 + 1
 	default: // TreePair
-		original3 := func(argument02 *PairE) int32 {
-			original := func(argument03 int32) func(*Tree) int32 {
-				return func(argument12 *Tree) int32 {
-					return leavesIntGo2(argument03, argument12)
-				}
+		scrutinee := argument1.Pair0.(*PairE)
+		original := func(argument02 int32) func(*Tree) int32 {
+			return func(argument12 *Tree) int32 {
+				return leavesIntGo2(argument02, argument12)
 			}
-			return func(coerced int32) func(*TreeFn) int32 {
-				original2 := original(coerced)
-				return func(coerced2 *TreeFn) int32 {
-					return original2(convert9(coerced2))
-				}
-			}(argument0 + 1)(argument02.PairE0) + leavesIntGo3(argument0 + 1, argument02.PairE1)
 		}
-		return func(coerced3 any) int32 {
-			return original3(coerced3.(*PairE))
-		}(argument1.Pair0)
+		return func(coerced int32) func(*TreeFn) int32 {
+			original2 := original(coerced)
+			return func(coerced2 *TreeFn) int32 {
+				return original2(convert9(coerced2))
+			}
+		}(argument0 + 1)(scrutinee.PairE0) + leavesIntGo3(argument0 + 1, scrutinee.PairE1)
 	}
 }
 

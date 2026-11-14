@@ -1,19 +1,6 @@
 ---
 source: tests-integration/src/fixtures.rs
 ---
-// Control/Semigroupoid/semigroupoid.go
-package semigroupoid
-
-import "fixture/shared"
-
-func Compose(f func(int32) string, g func(string) int32, x string) string {
-	return f(g(x))
-}
-
-func Compose2(f func(int32) string, g func(shared.LeftRight) int32, x shared.LeftRight) string {
-	return f(g(x))
-}
-
 // Data/Maybe/maybe.go
 package maybe
 
@@ -37,27 +24,11 @@ const (
 	MaybeStringJust
 )
 
-func Compose(f func(int32) string, g func(MaybeInt) int32, x MaybeInt) string {
-	return f(g(x))
-}
-
-// Data/Show/show.go
-package show
-
-import "github.com/i-am-the-slime/purs-backend-go/go-support/prim"
-
-func Show(argument0 int32) string {
-	return prim.ShowInt(int(argument0))
-}
-
 // main.go
 package main
 
 import (
-	"fixture/Control/Semigroupoid"
 	"fixture/Data/Maybe"
-	"fixture/Data/Show"
-	"fixture/shared"
 	"fmt"
 	"github.com/i-am-the-slime/purs-backend-go/go-support/array"
 	"github.com/i-am-the-slime/purs-backend-go/go-support/prim"
@@ -83,6 +54,11 @@ const (
 	ShapeRectangle
 )
 
+type LeftRight struct {
+	Left  int32
+	Right int32
+}
+
 var main_ = initializeMain_()
 
 func initializeMain_() []string {
@@ -93,44 +69,70 @@ func initializeMain_() []string {
 	}
 	array3 := []Shape{Shape{Tag: ShapeCircle, Circle0: 1}, Shape{Tag: ShapeRectangle, Rectangle0: 2, Rectangle1: 3}}
 	mapped2 := make([]string, len(array3))
-	for index2, element2 := range array3 {
-		mapped2[index2] = compose(show.Show, area, element2)
-	}
-	argument0 := maybe.MaybeInt{Tag: maybe.MaybeIntJust, Just0: 1}
-	argument := func(argument1 maybe.MaybeInt) int32 {
-		return pair(argument0, argument1)
+	for index2 := range array3 {
+		var result int32
+		switch array3[index2].Tag {
+		case ShapeCircle:
+			radius := array3[index2].Circle0
+			result = prim.MultiplyInt32(prim.MultiplyInt32(3, radius), radius)
+		default: // ShapeRectangle
+			result = prim.MultiplyInt32(array3[index2].Rectangle0, array3[index2].Rectangle1)
+		}
+		mapped2[index2] = prim.ShowInt(int(result))
 	}
 	array4 := []maybe.MaybeInt{maybe.MaybeInt{Tag: maybe.MaybeIntJust, Just0: 2}, maybe.MaybeInt{Tag: maybe.MaybeIntNothing}}
 	mapped3 := make([]string, len(array4))
-	for index3, element3 := range array4 {
-		mapped3[index3] = maybe.Compose(show.Show, argument, element3)
+	for index3 := range array4 {
+		var result2 int32
+		switch array4[index3].Tag {
+		case maybe.MaybeIntJust:
+			result2 = 1 + array4[index3].Just0
+		default: // maybe.MaybeIntNothing
+			result2 = 1
+		}
+		mapped3[index3] = prim.ShowInt(int(result2))
 	}
 	array5 := []string{"start", "jump"}
 	mapped4 := make([]string, len(array5))
-	for index4, element4 := range array5 {
-		mapped4[index4] = semigroupoid.Compose(show.Show, command, element4)
+	for index4, x3 := range array5 {
+		var result3 int32
+		switch x3 {
+		case "start":
+			result3 = 1
+		case "stop":
+			result3 = 2
+		default:
+			result3 = 0
+		}
+		mapped4[index4] = prim.ShowInt(int(result3))
 	}
 	array6 := []int32{500, 5}
 	mapped5 := make([]string, len(array6))
-	for index5, element5 := range array6 {
-		mapped5[index5] = size(true, element5)
+	for index5, number := range array6 {
+		var result4 string
+		if number > 100 {
+			result4 = "huge"
+		} else {
+			result4 = "large"
+		}
+		mapped5[index5] = result4
 	}
-	array7 := []shared.LeftRight{shared.LeftRight{Left: 1, Right: 2}}
+	array7 := []LeftRight{LeftRight{Left: 1, Right: 2}}
 	mapped6 := make([]string, len(array7))
-	for index6, element6 := range array7 {
-		mapped6[index6] = semigroupoid.Compose2(show.Show, sum, element6)
+	for index6 := range array7 {
+		mapped6[index6] = prim.ShowInt(int(array7[index6].Left + array7[index6].Right))
 	}
 	array8 := []maybe.MaybeString{maybe.MaybeString{Tag: maybe.MaybeStringJust, Just0: "here"}}
 	mapped7 := make([]string, len(array8))
 	for index7 := range array8 {
-		var result string
+		var result5 string
 		switch array8[index7].Tag {
 		case maybe.MaybeStringJust:
-			result = array8[index7].Just0
+			result5 = array8[index7].Just0
 		default:
 			panic("Failed pattern match")
 		}
-		mapped7[index7] = result
+		mapped7[index7] = result5
 	}
 	return array.Append(mapped, array.Append(mapped2, array.Append(mapped3, array.Append(mapped4, array.Append(mapped5, array.Append(mapped6, mapped7))))))
 }
@@ -146,63 +148,6 @@ func name(value Light) string {
 	}
 }
 
-func compose(f func(int32) string, g func(Shape) int32, x Shape) string {
-	return f(g(x))
-}
-
-func area(argument0 Shape) int32 {
-	switch argument0.Tag {
-	case ShapeCircle:
-		radius := argument0.Circle0
-		return prim.MultiplyInt32(prim.MultiplyInt32(3, radius), radius)
-	default: // ShapeRectangle
-		return prim.MultiplyInt32(argument0.Rectangle0, argument0.Rectangle1)
-	}
-}
-
-func pair(argument0 maybe.MaybeInt, argument1 maybe.MaybeInt) int32 {
-	if argument0.Tag == maybe.MaybeIntJust && argument1.Tag == maybe.MaybeIntJust {
-		return argument0.Just0 + argument1.Just0
-	}
-	if argument0.Tag == maybe.MaybeIntJust && argument1.Tag == maybe.MaybeIntNothing {
-		return argument0.Just0
-	}
-	return 0
-}
-
-func command(argument0 string) int32 {
-	switch argument0 {
-	case "start":
-		return 1
-	case "stop":
-		return 2
-	default:
-		return 0
-	}
-}
-
-func size(large bool, number int32) string {
-	if large {
-		if number > 100 {
-			return "huge"
-		}
-		return "large"
-	}
-	return "small"
-}
-
-func sum(record shared.LeftRight) int32 {
-	return record.Left + record.Right
-}
-
 func main() {
 	fmt.Println(main_)
-}
-
-// shared/shared.go
-package shared
-
-type LeftRight struct {
-	Left  int32
-	Right int32
 }

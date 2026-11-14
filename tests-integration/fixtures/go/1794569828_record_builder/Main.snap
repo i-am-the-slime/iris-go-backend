@@ -12,28 +12,7 @@ type NameSizeTags struct {
 	Tags []string
 }
 
-type DraftLabelSizeTags struct {
-	Draft bool
-	Label string
-	Size  int32
-	Tags  []string
-}
-
-type DraftNameSizeTags struct {
-	Draft bool
-	Name  string
-	Size  int32
-	Tags  []string
-}
-
-var main_ = initializeMain_()
-
-func initializeMain_() NameSizeTags {
-	r12 := DraftLabelSizeTags{Label: "box", Size: 1, Draft: true, Tags: []string{"new"}}
-	r1 := DraftLabelSizeTags{Label: r12.Label, Size: r12.Size + 1, Draft: r12.Draft, Tags: r12.Tags}
-	r2 := DraftNameSizeTags{Size: r1.Size, Draft: r1.Draft, Tags: r1.Tags, Name: r1.Label}
-	return NameSizeTags{Size: r2.Size, Tags: r2.Tags, Name: r2.Name}
-}
+var main_ NameSizeTags = NameSizeTags{Size: 1 + 1, Tags: []string{"new"}, Name: "box"}
 
 func main() {
 	fmt.Println(main_)

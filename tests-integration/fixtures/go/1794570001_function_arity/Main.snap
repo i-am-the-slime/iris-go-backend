@@ -1,17 +1,6 @@
 ---
 source: tests-integration/src/fixtures.rs
 ---
-// Control/Semigroupoid/semigroupoid.go
-package semigroupoid
-
-func Compose(f func([]int32) string, g func(int32) []int32, x int32) string {
-	return f(g(x))
-}
-
-func Compose2(f func([]string) string, g func(func(int32) func(string) string) []string, x func(int32) func(string) string) string {
-	return f(g(x))
-}
-
 // Data/Semiring/semiring.go
 package semiring
 
@@ -28,14 +17,6 @@ func Show(argument0 int32) string {
 	return prim.ShowInt(int(argument0))
 }
 
-func ShowInt(argument1 []int32) string {
-	return prim.ShowArray(Show, argument1)
-}
-
-func ShowString(argument1 []string) string {
-	return prim.ShowArray(Show2, argument1)
-}
-
 func Show2(argument0 string) string {
 	return prim.ShowString(argument0)
 }
@@ -44,7 +25,6 @@ func Show2(argument0 string) string {
 package main
 
 import (
-	"fixture/Control/Semigroupoid"
 	"fixture/Data/Semiring"
 	"fixture/Data/Show"
 	"fmt"
@@ -56,15 +36,14 @@ var main_ = initializeMain_()
 
 func initializeMain_() []string {
 	function := fromInt(4)
-	argument2 := func(seed int32) []int32 {
-		return shared(func(a int32, b int32) int32 {
-			return prim.MultiplyInt32(a, 10) + b
-		}, seed)
-	}
 	array2 := []int32{1, 2}
 	mapped := make([]string, len(array2))
-	for index, element := range array2 {
-		mapped[index] = semigroupoid.Compose(show.ShowInt, argument2, element)
+	for index, x := range array2 {
+		a := prim.MultiplyInt32(x, x)
+		partial := func(b int32) int32 {
+			return mainOp(a, b)
+		}
+		mapped[index] = prim.ShowArray(show.Show, []int32{mainOp(1, 2), partial(3), partial(4)})
 	}
 	array3 := []func(int32) func(string) string{prepared, func(a2 int32) func(string) string {
 		return func(b2 string) string {
@@ -72,8 +51,9 @@ func initializeMain_() []string {
 		}
 	}}
 	mapped2 := make([]string, len(array3))
-	for index2, element2 := range array3 {
-		mapped2[index2] = semigroupoid.Compose2(show.ShowString, curried, element2)
+	for index2, x2 := range array3 {
+		g := x2(4)
+		mapped2[index2] = prim.ShowArray(show.Show2, []string{x2(1)("a"), g("b"), g("c")})
 	}
 	array4 := []func(int32, int32) int32{semiring.Add, func(a3 int32, b3 int32) int32 {
 		return prim.MultiplyInt32(a3, b3) + 1
@@ -96,22 +76,9 @@ func fromInt(argument0 int32) func(func(int32) int32, int32) int32 {
 	default:
 		n := fromInt(argument0 - 1)
 		return func(f func(int32) int32, x int32) int32 {
-			return succCInt(n, f, x)
+			return f(n(f, x))
 		}
 	}
-}
-
-func shared(op func(int32, int32) int32, seed int32) []int32 {
-	argument := prim.MultiplyInt32(seed, seed)
-	partial := func(argument2 int32) int32 {
-		return op(argument, argument2)
-	}
-	return []int32{op(1, 2), partial(3), partial(4)}
-}
-
-func curried(f func(int32) func(string) string) []string {
-	g := f(4)
-	return []string{f(1)("a"), g("b"), g("c")}
 }
 
 func prepared(a int32) func(string) string {
@@ -125,10 +92,6 @@ func zeroCInt(ignored func(int32) int32, x int32) int32 {
 	return x
 }
 
-func succCInt(n func(func(int32) int32, int32) int32, f func(int32) int32, x int32) int32 {
-	return f(n(f, x))
-}
-
 func repeat(argument0 int32) string {
 	switch argument0 {
 	case 0:
@@ -136,6 +99,10 @@ func repeat(argument0 int32) string {
 	default:
 		return "*" + repeat(argument0 - 1)
 	}
+}
+
+func mainOp(a int32, b int32) int32 {
+	return prim.MultiplyInt32(a, 10) + b
 }
 
 func main() {

@@ -1150,10 +1150,26 @@ impl Simplifier<'_> {
     }
 }
 
+/// Whether evaluating the expression may reach a failure: a pattern match
+/// failure, a crash or a thrown exception. An argument that a foreign function
+/// ignores is never evaluated.
 fn can_fail(expression: &Expression) -> bool {
-    let mut fails = false;
-    visit(expression, &mut |node| fails |= matches!(node.kind, ExpressionKind::Fail(_)));
-    fails
+    match &expression.kind {
+        ExpressionKind::Fail(_)
+        | ExpressionKind::Foreign { foreign: Foreign::Crash | Foreign::Throw, .. } => true,
+        ExpressionKind::Foreign { foreign, arguments } => {
+            let ignored = foreign.ignored_arguments();
+            arguments
+                .iter()
+                .enumerate()
+                .any(|(position, argument)| !ignored.contains(&position) && can_fail(argument))
+        }
+        _ => {
+            let mut fails = false;
+            for_each_child(expression, &mut |child| fails = fails || can_fail(child));
+            fails
+        }
+    }
 }
 
 /// The first parameter of the lambdas that an expression chooses between, when

@@ -1,58 +1,23 @@
 ---
 source: tests-integration/src/fixtures.rs
 ---
-// Control/Semigroupoid/semigroupoid.go
-package semigroupoid
-
-func Compose(f func(any) any, g func(int32) any, x int32) any {
-	return f(g(x))
-}
-
-// Data/Functor/Variant/variant.go
-package variant
-
-import "fixture/shared"
-
-func Case_IntString(r shared.Map_Type_Value) string {
-	panic("Data.Functor.Variant: pattern match failure [" + (r.Type + "]"))
-	var unreachable string
-	return unreachable
-}
-
-// Type/Proxy/proxy.go
-package proxy
-
-type Proxy int
-
-const (
-	ProxyProxy Proxy = iota
-)
-
-type Proxy2 int
-
-const (
-	Proxy2Proxy Proxy2 = iota
-)
-
 // main.go
 package main
 
 import (
-	"fixture/Control/Semigroupoid"
-	"fixture/Data/Functor/Variant"
-	"fixture/Type/Proxy"
-	"fixture/shared"
 	"fmt"
 	"github.com/i-am-the-slime/purs-backend-go/go-support/prim"
 )
 
+type Map_Type_Value struct {
+	Map   func(func(any) any) func(any) any
+	Type  string
+	Value any
+}
+
 type SayInt struct {
 	Say0 string
 	Say1 int32
-}
-
-type CountInt struct {
-	Count0 func(int32) int32
 }
 
 type Say struct {
@@ -61,23 +26,15 @@ type Say struct {
 	Origin any
 }
 
-type Map_Type_Value2 struct {
-	Map   func(func(any) any) func(*Say) *Say
-	Type  string
-	Value SayInt
+func convert(value *Say) SayInt {
+	if original, ok := value.Origin.(SayInt); ok {
+		return original
+	}
+	return SayInt{Say0: value.Say0, Say1: value.Say1.(int32)}
 }
 
-func convert2(value SayInt) *Say {
-	return &Say{Say0: value.Say0, Say1: value.Say1, Origin: value}
-}
-
-func convert(value Map_Type_Value2) shared.Map_Type_Value {
-	return shared.Map_Type_Value{Map: func(coerced func(any) any) func(any) any {
-		original := value.Map(coerced)
-		return func(coerced2 any) any {
-			return original(coerced2.(*Say))
-		}
-	}, Type: value.Type, Value: convert2(value.Value)}
+type CountInt struct {
+	Count0 func(int32) int32
 }
 
 type Count struct {
@@ -85,28 +42,7 @@ type Count struct {
 	Origin any
 }
 
-type Map_Type_Value3 struct {
-	Map   func(func(any) any) func(*Count) *Count
-	Type  string
-	Value CountInt
-}
-
-func convert4(value CountInt) *Count {
-	return &Count{Count0: func(coerced3 int32) any {
-		return value.Count0(coerced3)
-	}, Origin: value}
-}
-
-func convert3(value Map_Type_Value3) shared.Map_Type_Value {
-	return shared.Map_Type_Value{Map: func(coerced func(any) any) func(any) any {
-		original := value.Map(coerced)
-		return func(coerced2 any) any {
-			return original(coerced2.(*Count))
-		}
-	}, Type: value.Type, Value: convert4(value.Value)}
-}
-
-func convert5(value *Count) CountInt {
+func convert2(value *Count) CountInt {
 	if original, ok := value.Origin.(CountInt); ok {
 		return original
 	}
@@ -115,11 +51,44 @@ func convert5(value *Count) CountInt {
 	}}
 }
 
-func convert6(value *Say) SayInt {
-	if original, ok := value.Origin.(SayInt); ok {
-		return original
-	}
-	return SayInt{Say0: value.Say0, Say1: value.Say1.(int32)}
+type Map_Type_Value2 struct {
+	Map   func(func(any) any) func(*Say) *Say
+	Type  string
+	Value SayInt
+}
+
+func convert4(value SayInt) *Say {
+	return &Say{Say0: value.Say0, Say1: value.Say1, Origin: value}
+}
+
+func convert3(value Map_Type_Value2) Map_Type_Value {
+	return Map_Type_Value{Map: func(coerced func(any) any) func(any) any {
+		original := value.Map(coerced)
+		return func(coerced2 any) any {
+			return original(coerced2.(*Say))
+		}
+	}, Type: value.Type, Value: convert4(value.Value)}
+}
+
+type Map_Type_Value3 struct {
+	Map   func(func(any) any) func(*Count) *Count
+	Type  string
+	Value CountInt
+}
+
+func convert6(value CountInt) *Count {
+	return &Count{Count0: func(coerced3 int32) any {
+		return value.Count0(coerced3)
+	}, Origin: value}
+}
+
+func convert5(value Map_Type_Value3) Map_Type_Value {
+	return Map_Type_Value{Map: func(coerced func(any) any) func(any) any {
+		original := value.Map(coerced)
+		return func(coerced2 any) any {
+			return original(coerced2.(*Count))
+		}
+	}, Type: value.Type, Value: convert6(value.Value)}
 }
 
 var main_ = initializeMain_()
@@ -131,30 +100,34 @@ func initializeMain_() []string {
 	original2 := func(value2 int32) int32 {
 		return prim.MultiplyInt32(value2, 10)
 	}
-	return []string{describe(say), describe(count), describe(shared.Map_Type_Value{Type: say.Type, Value: say.Map(func(coerced any) any {
+	return []string{describe(say), describe(count), describe(Map_Type_Value{Type: say.Type, Value: say.Map(func(coerced any) any {
 		return original(coerced.(int32))
-	})(say.Value), Map: say.Map}), describe(shared.Map_Type_Value{Type: count.Type, Value: count.Map(func(coerced2 any) any {
+	})(say.Value), Map: say.Map}), describe(Map_Type_Value{Type: count.Type, Value: count.Map(func(coerced2 any) any {
 		return original2(coerced2.(int32))
 	})(count.Value), Map: count.Map})}
 }
 
-var describe func(shared.Map_Type_Value) string = func(r2 shared.Map_Type_Value) string {
-	return onSayIntStringRecordCountRecordCountSay(proxy.ProxyProxy, func(argument0 SayInt) string {
-		return argument0.Say0 + (" " + prim.ShowInt(int(argument0.Say1)))
-	}, func(r shared.Map_Type_Value) string {
-		return onCountIntStringRecordRecordCount(proxy.Proxy2Proxy, func(argument02 CountInt) string {
-			return "count " + prim.ShowInt(int(argument02.Count0(2)))
-		}, variant.Case_IntString, r)
-	}, r2)
+func describe(r Map_Type_Value) string {
+	if r.Type == "say" {
+		scrutinee := convert(r.Value.(*Say))
+		return scrutinee.Say0 + (" " + prim.ShowInt(int(scrutinee.Say1)))
+	}
+	if r.Type == "count" {
+		scrutinee2 := convert2(r.Value.(*Count))
+		return "count " + prim.ShowInt(int(scrutinee2.Count0(2)))
+	}
+	panic("Data.Functor.Variant: pattern match failure [" + (r.Type + "]"))
+	var unreachable string
+	return unreachable
 }
 
-var say shared.Map_Type_Value = convert(Map_Type_Value2{Type: "say", Value: SayInt{Say0: "hello", Say1: 4}, Map: func(argument0 func(any) any) func(*Say) *Say {
+var say Map_Type_Value = convert3(Map_Type_Value2{Type: "say", Value: SayInt{Say0: "hello", Say1: 4}, Map: func(argument0 func(any) any) func(*Say) *Say {
 	return func(argument1 *Say) *Say {
 		return map_(argument0, argument1)
 	}
 }})
 
-var count shared.Map_Type_Value = convert3(Map_Type_Value3{Type: "count", Value: CountInt{Count0: func(value int32) int32 {
+var count Map_Type_Value = convert5(Map_Type_Value3{Type: "count", Value: CountInt{Count0: func(value int32) int32 {
 	return value + 1
 }}, Map: func(argument0 func(any) any) func(*Count) *Count {
 	return func(argument1 *Count) *Count {
@@ -162,39 +135,16 @@ var count shared.Map_Type_Value = convert3(Map_Type_Value3{Type: "count", Value:
 	}
 }})
 
-func onCountIntStringRecordRecordCount(p proxy.Proxy2, f func(CountInt) string, g func(shared.Map_Type_Value) string, r shared.Map_Type_Value) string {
-	if r.Type == "count" {
-		return f(convert5(r.Value.(*Count)))
-	}
-	return g(r)
-}
-
-func onSayIntStringRecordCountRecordCountSay(p proxy.Proxy, f func(SayInt) string, g func(shared.Map_Type_Value) string, r shared.Map_Type_Value) string {
-	if r.Type == "say" {
-		return f(convert6(r.Value.(*Say)))
-	}
-	return g(r)
-}
-
 func map_(argument0 func(any) any, argument1 *Say) *Say {
 	return &Say{Say0: argument1.Say0, Say1: argument0(argument1.Say1)}
 }
 
 func map_2(argument0 func(any) any, argument1 *Count) *Count {
 	return &Count{Count0: func(x int32) any {
-		return semigroupoid.Compose(argument0, argument1.Count0, x)
+		return argument0(argument1.Count0(x))
 	}}
 }
 
 func main() {
 	fmt.Println(main_)
-}
-
-// shared/shared.go
-package shared
-
-type Map_Type_Value struct {
-	Map   func(func(any) any) func(any) any
-	Type  string
-	Value any
 }
