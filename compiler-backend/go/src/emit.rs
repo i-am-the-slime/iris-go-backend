@@ -1419,15 +1419,23 @@ where
         Ok(GoType::Named(name))
     }
 
-    /// The named type a project's Go foreign package declares for one of its
-    /// module's `foreign import data` types, instantiated at the Go types of
+    /// The named type a go-support package or a project's Go foreign package
+    /// declares for one of its module's `foreign import data` types, instantiated at the Go types of
     /// the arguments when the type takes any.
     fn foreign_data_type(&mut self, data: &DataType) -> GoResult<GoType> {
         let module_name = self.context.module(data.file_id)?.name.clone();
-        self.imports.insert(self.foreign_packages.import_path(&module_name));
         let type_name = self.context.type_name(data.file_id, data.item)?;
-        let name =
-            format!("{}.{}", ForeignPackages::package_name(&module_name), capitalise(&type_name));
+        let name = match crate::foreign::support_data(&module_name, &type_name) {
+            Some((package, support_name)) => {
+                self.imports.insert(package.path().into());
+                format!("{}.{support_name}", package.name())
+            }
+            None => {
+                self.imports.insert(self.foreign_packages.import_path(&module_name));
+                let package = ForeignPackages::package_name(&module_name);
+                format!("{package}.{}", capitalise(&type_name))
+            }
+        };
         if data.arguments.is_empty() {
             return Ok(GoType::Named(name));
         }

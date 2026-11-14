@@ -259,6 +259,7 @@ pub enum GoPackage {
     Regex,
     Lazy,
     Alloc,
+    Argonaut,
 }
 
 impl GoPackage {
@@ -278,6 +279,7 @@ impl GoPackage {
             GoPackage::Regex => "github.com/i-am-the-slime/purs-backend-go/go-support/regex",
             GoPackage::Lazy => "github.com/i-am-the-slime/purs-backend-go/go-support/lazy",
             GoPackage::Alloc => "github.com/i-am-the-slime/purs-backend-go/go-support/alloc",
+            GoPackage::Argonaut => "github.com/i-am-the-slime/purs-backend-go/go-support/argonaut",
             GoPackage::Exception => {
                 "github.com/i-am-the-slime/purs-backend-go/go-support/exception"
             }
@@ -299,6 +301,7 @@ impl GoPackage {
             GoPackage::Regex => "regex",
             GoPackage::Lazy => "lazy",
             GoPackage::Alloc => "alloc",
+            GoPackage::Argonaut => "argonaut",
         }
     }
 }
@@ -538,6 +541,10 @@ const fn exception(name: &'static str, arity: usize, boundary: Boundary) -> Fore
 
 const fn foreign_value(name: &'static str, arity: usize) -> Foreign {
     call(GoPackage::ForeignValue, name, arity, PLAIN)
+}
+
+const fn argonaut(name: &'static str, arity: usize) -> Foreign {
+    call(GoPackage::Argonaut, name, arity, PLAIN)
 }
 
 const fn constant(name: &'static str) -> Foreign {
@@ -781,6 +788,25 @@ const FOREIGN_IMPORTS: &[(&str, &str, Foreign)] = &[
         call(GoPackage::ForeignValue, "UnsafePrettyStringify", 2, int32_parameters(&[0])),
     ),
     ("Yoga.JSON", "_parseJSON", perform_in(GoPackage::ForeignValue, "ParseJSON", 1, PLAIN)),
+    ("Data.Argonaut.Core", "fromBoolean", argonaut("FromBoolean", 1)),
+    ("Data.Argonaut.Core", "fromNumber", argonaut("FromNumber", 1)),
+    ("Data.Argonaut.Core", "fromString", argonaut("FromString", 1)),
+    ("Data.Argonaut.Core", "fromArray", argonaut("FromArray", 1)),
+    ("Data.Argonaut.Core", "fromObject", argonaut("FromObject", 1)),
+    (
+        "Data.Argonaut.Core",
+        "jsonNull",
+        Foreign::Constant(GoFunction { package: GoPackage::Argonaut, name: "JsonNull" }),
+    ),
+    ("Data.Argonaut.Core", "stringify", argonaut("Stringify", 1)),
+    (
+        "Data.Argonaut.Core",
+        "stringifyWithIndent",
+        call(GoPackage::Argonaut, "StringifyWithIndent", 2, int32_parameters(&[0])),
+    ),
+    ("Data.Argonaut.Core", "_caseJson", argonaut("CaseJson", 7)),
+    ("Data.Argonaut.Core", "_compare", argonaut("Compare", 5)),
+    ("Data.Argonaut.Parser", "_jsonParser", argonaut("JsonParser", 3)),
     ("Data.Nullable", "null", call(GoPackage::Nullable, "Null", 0, INSTANTIATE)),
     ("Data.Nullable", "notNull", call(GoPackage::Nullable, "NotNull", 1, PLAIN)),
     ("Data.Nullable", "nullable", call(GoPackage::Nullable, "Nullable", 3, PLAIN)),
@@ -1113,6 +1139,20 @@ const INTRINSICS: &[(&str, &str, &[&str], Foreign)] = &[
     ("Data.Ring", "negate", &["ringInt"], Foreign::Operator(Operator::IntNegate)),
     ("Data.Ring", "negate", &["ringNumber"], Foreign::Operator(Operator::NumberNegate)),
 ];
+
+/// `foreign import data` types that a go-support package declares, as the
+/// package and the name of their Go type.
+const SUPPORT_DATA: &[(&str, &str, GoPackage, &str)] = &[
+    ("Data.Argonaut.Core", "Json", GoPackage::Argonaut, "Json"),
+    ("Data.Argonaut.Core", "JNull", GoPackage::Argonaut, "JNull"),
+];
+
+pub fn support_data(module_name: &str, name: &str) -> Option<(GoPackage, &'static str)> {
+    SUPPORT_DATA
+        .iter()
+        .find(|(module, item, _, _)| *module == module_name && *item == name)
+        .map(|(_, _, package, type_name)| (*package, *type_name))
+}
 
 pub fn foreign_import(module_name: &str, name: &str) -> Option<Foreign> {
     if let Some(identity) = uncurried_conversion(module_name, name) {

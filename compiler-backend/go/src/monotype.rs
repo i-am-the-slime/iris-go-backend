@@ -40,8 +40,8 @@ pub enum Monotype {
     BigInt,
     Lazy(MonotypeId),
     Data(DataType),
-    /// A `foreign import data` type that the project's Go foreign package for
-    /// its module declares, as a named Go type of the same name.
+    /// A `foreign import data` type that a go-support package or the
+    /// project's Go foreign package for its module declares, as a named Go type.
     ForeignData(DataType),
     Recursive(DataType),
     Erased(Erasure),
@@ -527,7 +527,9 @@ impl Monotypes {
                 _ if crate::foreign::is_opaque_foreign_data(&module.name, &name) => {
                     Monotype::Opaque
                 }
-                _ if self.foreign_modules.iter().any(|provided| *provided == module.name) => {
+                _ if crate::foreign::support_data(&module.name, &name).is_some()
+                    || self.foreign_modules.iter().any(|provided| *provided == module.name) =>
+                {
                     let mut canonical = Vec::with_capacity(arguments.len());
                     for argument in arguments {
                         canonical.push(erase_newtypes(context, argument, expansions, &mut vec![])?);
