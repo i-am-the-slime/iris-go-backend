@@ -47,6 +47,11 @@ package_of() {
 }
 
 build_javascript() {
+  (cd "$HERE" && bun install --silent) || exit 1
+  ln -sfn "$HERE/node_modules" "$WORK/node_modules"
+  # Dhall.Parser's foreign module imports the nearley grammar from ../../grammar.js.
+  "$HERE/node_modules/.bin/nearleyc" "$HERE/dhall/grammar.ne" -o "$WORK/grammar.js" >"$WORK/nearley.log" 2>&1 \
+    || { cat "$WORK/nearley.log"; exit 1; }
   (cd "$HERE" && spago build --quiet) >"$WORK/spago.log" 2>&1 || { cat "$WORK/spago.log"; exit 1; }
   local sources=()
   while IFS= read -r source; do sources+=("$HERE/$source"); done < <(cd "$HERE" && spago sources -p compat-repro 2>/dev/null)

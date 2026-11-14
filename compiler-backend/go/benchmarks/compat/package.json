@@ -1,0 +1,8 @@
+{
+  "name": "compat-corpus",
+  "private": true,
+  "dependencies": {
+    "big-integer": "^1.6.52",
+    "nearley": "^2.20.1"
+  }
+}
