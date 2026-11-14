@@ -1104,8 +1104,7 @@ where
             Monotype::Reference(value) => {
                 self.declare_reference();
                 let value = self.go_type(value)?;
-                let rendered = render_type(&value);
-                GoType::Pointer(Box::new(GoType::Named(format!("Ref[{rendered}]"))))
+                GoType::Pointer(Box::new(reference_type(value)))
             }
             Monotype::Recursive(data) => self.recursive_type(&data)?,
             Monotype::MutableArray(element) => {
@@ -1127,8 +1126,8 @@ where
             Monotype::Lazy(value) => {
                 self.imports.insert(GoPackage::Lazy.path().into());
                 let value = self.go_type(value)?;
-                let rendered = render_type(&value);
-                GoType::Pointer(Box::new(GoType::Named(format!("lazy.Lazy[{rendered}]"))))
+                let lazy = GoType::Generic { name: "lazy.Lazy".into(), arguments: vec![value] };
+                GoType::Pointer(Box::new(lazy))
             }
             Monotype::Error => {
                 self.imports.insert(GoPackage::Exception.path().into());
@@ -1191,8 +1190,9 @@ where
         if std::mem::replace(&mut self.reference_declared, true) {
             return;
         }
-        self.type_declarations.push(GoDeclaration::Type {
-            name: "Ref[T any]".into(),
+        self.type_declarations.push(GoDeclaration::GenericType {
+            name: "Ref".into(),
+            parameter: "T".into(),
             type_: GoType::Struct(vec![("Value".into(), GoType::Named("T".into()))]),
         });
     }
@@ -1729,7 +1729,7 @@ where
                 let value_type = self.go_type(arguments[0].monotype)?;
                 self.declare_reference();
                 let reference = GoExpression::Address(Box::new(GoExpression::Composite {
-                    type_: GoType::Named(format!("Ref[{}]", render_type(&value_type))),
+                    type_: reference_type(value_type),
                     fields: vec![(Some("Value".into()), values.remove(0))],
                 }));
                 self.deliver(reference, result, sink, out)
@@ -2069,9 +2069,8 @@ where
             },
             _ => unreachable!("invariant violated: an instantiated foreign returns a collection"),
         };
-        let GoExpression::Qualified { package, name } = function else { unreachable!() };
-        let element = render_type(&self.go_type(element)?);
-        Ok(GoExpression::Qualified { package, name: format!("{name}[{element}]") })
+        let element = self.go_type(element)?;
+        Ok(GoExpression::Instantiation { function: Box::new(function), arguments: vec![element] })
     }
 
     fn go_function(&mut self, function: GoFunction) -> GoExpression {
@@ -4330,16 +4329,7 @@ fn captures_parameters(
     }
 }
 
-fn render_type(type_: &GoType) -> String {
-    let declaration = GoDeclaration::Type { name: "T".into(), type_: type_.clone() };
-    let file = GoFile { imports: vec![], declarations: vec![declaration] };
-    let rendered = file.render();
-    // Struct types span lines; type arguments such as `Ref[...]` need one.
-    let Some(start) = rendered.find("type T ") else { return "any".into() };
-    let parts: Vec<&str> = rendered[start + "type T ".len()..]
-        .lines()
-        .map(str::trim)
-        .filter(|line| !line.is_empty())
-        .collect();
-    parts.join("; ").replace("{; ", "{ ").replace("; }", " }")
+/// The type of a `Ref` cell holding values of the given type.
+fn reference_type(value: GoType) -> GoType {
+    GoType::Generic { name: "Ref".into(), arguments: vec![value] }
 }

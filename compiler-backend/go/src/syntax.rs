@@ -23,6 +23,11 @@ pub enum GoType {
         result: Option<Box<GoType>>,
     },
     Struct(Vec<(String, GoType)>),
+    /// A generic type instantiated at type arguments, `name[arguments]`.
+    Generic {
+        name: String,
+        arguments: Vec<GoType>,
+    },
 }
 
 /// Types compare as Go sees them: every flavour of `any` is the same type.
@@ -40,6 +45,10 @@ impl PartialEq for GoType {
                 Function { parameters: right, result: right_result },
             ) => left == right && left_result == right_result,
             (Struct(left), Struct(right)) => left == right,
+            (
+                Generic { name: left, arguments: left_arguments },
+                Generic { name: right, arguments: right_arguments },
+            ) => left == right && left_arguments == right_arguments,
             _ => false,
         }
     }
@@ -66,6 +75,8 @@ pub enum GoExpression {
     Type(GoType),
     Spread(Box<GoExpression>),
     Function { parameters: Vec<(String, GoType)>, result: Option<GoType>, body: Vec<GoStatement> },
+    /// A generic function instantiated at type arguments, `function[arguments]`.
+    Instantiation { function: Box<GoExpression>, arguments: Vec<GoType> },
 }
 
 #[derive(Debug, Clone)]
@@ -159,6 +170,12 @@ pub enum GoDeclaration {
         name: String,
         type_: GoType,
     },
+    /// `type name[parameter any] type_`.
+    GenericType {
+        name: String,
+        parameter: String,
+        type_: GoType,
+    },
     Constants {
         type_name: Option<String>,
         names: Vec<String>,
@@ -193,6 +210,7 @@ impl GoDeclaration {
     pub fn name(&self) -> Option<&str> {
         match self {
             GoDeclaration::Type { name, .. }
+            | GoDeclaration::GenericType { name, .. }
             | GoDeclaration::Declared { name, .. }
             | GoDeclaration::Variable { name, .. }
             | GoDeclaration::Function { name, .. } => Some(name),
@@ -213,6 +231,7 @@ impl GoDeclaration {
             }
             GoDeclaration::Source(_)
             | GoDeclaration::Type { .. }
+            | GoDeclaration::GenericType { .. }
             | GoDeclaration::Constants { .. }
             | GoDeclaration::Declared { .. } => {}
         }
@@ -333,6 +352,7 @@ fn expression_names(expression: &mut GoExpression, visit: &mut impl FnMut(Name<'
         | GoExpression::Conversion { value, .. }
         | GoExpression::TypeAssertion { value, .. }
         | GoExpression::Spread(value) => expression_names(value, visit),
+        GoExpression::Instantiation { function, .. } => expression_names(function, visit),
         GoExpression::Composite { fields, .. } => {
             fields.iter_mut().for_each(|(_, value)| expression_names(value, visit));
         }
@@ -409,6 +429,10 @@ impl Printer {
             GoDeclaration::Type { name, type_ } => {
                 let rendered = self.type_(type_);
                 self.line(&format!("type {name} {rendered}"));
+            }
+            GoDeclaration::GenericType { name, parameter, type_ } => {
+                let rendered = self.type_(type_);
+                self.line(&format!("type {name}[{parameter} any] {rendered}"));
             }
             GoDeclaration::Constants { type_name, names } => {
                 self.line("const (");
@@ -665,7 +689,22 @@ impl Printer {
                 rendered.push('}');
                 rendered
             }
+            GoType::Generic { name, arguments } => {
+                let arguments: Vec<String> =
+                    arguments.iter().map(|argument| self.type_argument(argument)).collect();
+                format!("{name}[{}]", arguments.join(", "))
+            }
         }
+    }
+
+    /// A type as a type argument: on one line, since `[...]` cannot span lines.
+    fn type_argument(&mut self, type_: &GoType) -> String {
+        let indentation = std::mem::take(&mut self.indentation);
+        let rendered = self.type_(type_);
+        self.indentation = indentation;
+        let parts: Vec<&str> =
+            rendered.lines().map(str::trim).filter(|line| !line.is_empty()).collect();
+        parts.join("; ").replace("{; ", "{ ").replace("; }", " }")
     }
 
     fn expression(&mut self, expression: &GoExpression, parent_precedence: u8) -> String {
@@ -739,6 +778,12 @@ impl Printer {
             }
             GoExpression::Type(type_) => self.type_(type_),
             GoExpression::Spread(value) => format!("{}...", self.expression(value, 0)),
+            GoExpression::Instantiation { function, arguments } => {
+                let function = self.expression(function, 6);
+                let arguments: Vec<String> =
+                    arguments.iter().map(|argument| self.type_argument(argument)).collect();
+                format!("{function}[{}]", arguments.join(", "))
+            }
             GoExpression::Function { parameters, result, body } => {
                 let signature = self.signature(parameters, result.as_ref());
                 let mut rendered = format!("func{signature} {{\n");
