@@ -23,7 +23,7 @@ mkdir -p "$OUT/fonts"
 cat > "$OUT/go.mod" <<GOMOD
 module markgraf.example/cli
 
-go 1.23.2
+go 1.27.0
 
 require github.com/i-am-the-slime/purs-backend-go/go-support v0.0.0
 

@@ -32,7 +32,7 @@ WORK="${WORK:-$(mktemp -d)}"
 SCOPE=markgraf-cli
 mkdir -p "$WORK/go"
 # The generated packages import each other through the module go.mod names.
-printf 'module markgraf.example/cli\n\ngo 1.23.2\n' > "$WORK/go/go.mod"
+printf 'module markgraf.example/cli\n\ngo 1.27.0\n' > "$WORK/go/go.mod"
 
 update=0
 [ "${1:-}" = "--update" ] && update=1
