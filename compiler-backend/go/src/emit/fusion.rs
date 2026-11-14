@@ -23,11 +23,13 @@
 //! `length` ignores what a `map` computes, and a consumer that stops early
 //! leaves the remaining elements alone.
 
-use super::iteration::Callback;
+use std::collections::VecDeque;
+
+use super::iteration::{Callback, Found};
 use super::{Emitter, Sink, binary, call, identifier_expression, is_simple, uses_local};
 use crate::error::GoResult;
 use crate::foreign::{Boundary, Foreign, Iteration};
-use crate::mono::{Expression, ExpressionKind, Literal};
+use crate::mono::{Binding, Expression, ExpressionKind, Literal};
 use crate::monotype::{Monotype, MonotypeId};
 use crate::syntax::{GoExpression, GoStatement, GoType};
 
@@ -43,6 +45,12 @@ enum Source {
     Array(GoExpression),
     /// `first .. last` counting up.
     Range { first: i64, last: i64 },
+}
+
+/// What lies between a consumer and its source, nearest the consumer first.
+enum Step<'e> {
+    Bindings(&'e [Binding]),
+    Stage { kind: StageKind, callback: Found<'e>, produces: MonotypeId, runs: bool },
 }
 
 struct Stage<'e> {
@@ -80,11 +88,14 @@ pub(super) struct Demand {
     pub positions: bool,
     /// The consumer leaves the loop with `break`, which an inner loop would catch.
     pub breaks: bool,
+    /// The pipeline runs inside another's loop, which counts positions only
+    /// in its own source.
+    pub nested: bool,
 }
 
 impl Demand {
     pub(super) const FORWARD: Demand =
-        Demand { order: Order::Forward, positions: false, breaks: false };
+        Demand { order: Order::Forward, positions: false, breaks: false, nested: false };
 }
 
 /// How a consumer reads the element its loop hands it.
@@ -95,6 +106,8 @@ pub(super) enum Need<'c, 'e> {
     Argument { callback: &'c Callback<'e>, position: usize },
     /// As its callback's argument and once more besides.
     Variable { callback: &'c Callback<'e>, position: usize },
+    /// As a value it stores, once.
+    Value,
 }
 
 /// A loop being built: the source loop, then a frame for every stage that
@@ -121,6 +134,9 @@ pub(super) struct Opened {
     pub element: GoExpression,
     /// The element's position in the source, when the consumer asked for it.
     pub index: Option<String>,
+    /// `element` is an array whose elements are the consumer's, which a
+    /// `concatMap` stage at the end of the pipeline hands over whole.
+    pub spread: bool,
 }
 
 impl Need<'_, '_> {
@@ -128,7 +144,7 @@ impl Need<'_, '_> {
         match self {
             Need::Nothing => false,
             Need::Argument { callback, position } => callback.reads(position),
-            Need::Variable { .. } => true,
+            Need::Variable { .. } | Need::Value => true,
         }
     }
 }
@@ -139,7 +155,13 @@ impl Loop {
     }
 }
 
-impl Pipeline<'_> {
+impl<'e> Pipeline<'e> {
+    /// The pipeline followed by a `concatMap` stage.
+    pub(super) fn then_bind(mut self, callback: Callback<'e>, produces: MonotypeId) -> Self {
+        self.stages.push(Stage { kind: StageKind::Bind, callback, produces });
+        self
+    }
+
     /// The source array, when every stage keeps the elements where they are.
     pub(super) fn positional_source(&self) -> Option<&GoExpression> {
         match &self.source {
@@ -174,6 +196,20 @@ where
             || literal_range(array).is_some()
     }
 
+    /// The pipeline a `concatMap` callback returns, which can run as a loop
+    /// nested in the caller's instead of building the array it returns.
+    pub(super) fn nested_pipeline<'e>(&self, callback: &Callback<'e>) -> Option<&'e Expression> {
+        let Callback::Inline { body, .. } = callback else { return None };
+        let mut array = *body;
+        while let ExpressionKind::Let { body, .. } = &array.kind {
+            array = body;
+        }
+        let nested = Demand { nested: true, ..Demand::FORWARD };
+        let fusible = self.stage_parts(array, nested, false).is_some()
+            || literal_range(array).is_some();
+        fusible.then_some(*body)
+    }
+
     /// Evaluates what the stages and the source capture, in the order separate
     /// loops would have, and leaves the stages' callbacks to `open`. A `map`
     /// whose results nobody reads is dropped with its callback.
@@ -184,36 +220,58 @@ where
         need: Need<'_, '_>,
         out: &mut Vec<GoStatement>,
     ) -> GoResult<Pipeline<'e>> {
-        let mut found = vec![];
+        self.pipeline_reading(array, demand, need.reads(), out)
+    }
+
+    fn pipeline_reading<'e>(
+        &mut self,
+        array: &'e Expression,
+        demand: Demand,
+        read: bool,
+        out: &mut Vec<GoStatement>,
+    ) -> GoResult<Pipeline<'e>> {
+        let mut steps = vec![];
         let mut current = array;
         let mut positional = demand.positions || demand.order == Order::Backward;
-        while let Some((kind, callback, inner)) = self.stage_parts(current, demand, positional) {
+        loop {
+            if let ExpressionKind::Let { bindings, body } = &current.kind {
+                steps.push(Step::Bindings(bindings));
+                current = body;
+                continue;
+            }
+            let Some((kind, callback, inner)) = self.stage_parts(current, demand, positional)
+            else {
+                break;
+            };
             positional |= kind == StageKind::MapWithIndex;
             let produces = match self.monotypes.get(current.monotype) {
                 Monotype::Array(element) => *element,
                 _ => unreachable!("invariant violated: an array stage produces an array"),
             };
-            found.push((kind, callback, produces));
+            steps.push(Step::Stage { kind, callback, produces, runs: true });
             current = inner;
         }
-        // `found` runs from the consumer towards the source, as reads propagate.
-        let mut read = need.reads();
-        let mut running = vec![];
-        for (kind, callback, _) in &found {
+        // Reads propagate from the consumer towards the source, the order of `steps`.
+        let mut read = read;
+        for step in &mut steps {
+            let Step::Stage { kind, callback, runs, .. } = step else { continue };
             let reads = callback.reads(element_position(*kind));
-            let runs = !kind.keeps_positions() || read;
+            *runs = !kind.keeps_positions() || read;
             read = match kind {
                 StageKind::Map | StageKind::MapWithIndex => read && reads,
                 StageKind::Filter => reads || read,
                 StageKind::Bind => reads,
             };
-            running.push(runs);
         }
         let mut stages = vec![];
-        for ((kind, callback, produces), runs) in found.into_iter().zip(running) {
-            if runs {
-                let callback = self.capture(callback, out)?;
-                stages.push(Stage { kind, callback, produces });
+        for step in steps {
+            match step {
+                Step::Bindings(bindings) => self.bindings(bindings, out)?,
+                Step::Stage { kind, callback, produces, runs: true } => {
+                    let callback = self.capture(callback, out)?;
+                    stages.push(Stage { kind, callback, produces });
+                }
+                Step::Stage { runs: false, .. } => {}
             }
         }
         stages.reverse();
@@ -233,7 +291,7 @@ where
         array: &'e Expression,
         demand: Demand,
         positional: bool,
-    ) -> Option<(StageKind, super::iteration::Found<'e>, &'e Expression)> {
+    ) -> Option<(StageKind, Found<'e>, &'e Expression)> {
         let ExpressionKind::Foreign {
             foreign: Foreign::Call { boundary: Boundary { iteration: Some(iteration), .. }, .. },
             arguments,
@@ -252,6 +310,9 @@ where
             return None;
         }
         if demand.breaks && kind == StageKind::Bind {
+            return None;
+        }
+        if demand.nested && kind == StageKind::MapWithIndex {
             return None;
         }
         if self.effect_after(callback.monotype, arity) {
@@ -297,46 +358,36 @@ where
         };
         let mut body = Loop { frames: vec![Frame { header, body: vec![] }] };
         let mut flow = identifier_expression(&element);
-        for (position, stage) in stages.iter().enumerate() {
-            let downstream = needed[position + 1];
+        let mut remaining = VecDeque::from(stages);
+        while let Some(stage) = remaining.pop_front() {
+            let downstream = needed_inputs(remaining.make_contiguous(), need)[0];
             flow = match stage.kind {
+                StageKind::Map | StageKind::MapWithIndex if self.is_unit(stage.produces) => {
+                    super::unit_value()
+                }
                 StageKind::Map | StageKind::MapWithIndex => {
-                    if self.is_unit(stage.produces) {
-                        super::unit_value()
+                    let mut arguments = vec![];
+                    if stage.kind == StageKind::MapWithIndex {
+                        let index = index.as_deref().unwrap_or("_");
+                        arguments.push(self.receive_index(&stage.callback, index, body.body()));
+                    }
+                    let position = arguments.len();
+                    let argument =
+                        self.receive(flow, &stage.callback, position, true, body.body())?;
+                    arguments.push(argument);
+                    if takes_expression(remaining.make_contiguous(), need) {
+                        self.callback_value(&stage.callback, arguments, body.body())?
                     } else {
-                        let mut arguments = vec![];
-                        if stage.kind == StageKind::MapWithIndex {
-                            let index = index.as_deref().unwrap_or("_");
-                            arguments.push(self.receive_index(&stage.callback, index, body.body()));
-                        }
-                        let element_position = arguments.len();
-                        let argument = self.receive(
-                            flow,
-                            &stage.callback,
-                            element_position,
-                            true,
-                            body.body(),
-                        )?;
-                        arguments.push(argument);
-                        if takes_expression(&stages[position + 1..], need) {
-                            self.callback_value(&stage.callback, arguments, body.body())?
-                        } else {
-                            let name = self.element_name(&stages, position + 1, need);
-                            let sink = Sink::Define(name.clone());
-                            let produces = stage.produces;
-                            self.apply_callback(
-                                &stage.callback,
-                                arguments,
-                                produces,
-                                sink,
-                                body.body(),
-                            )?;
-                            identifier_expression(&name)
-                        }
+                        let name = self.element_name(remaining.make_contiguous(), 0, need);
+                        let sink = Sink::Define(name.clone());
+                        let callback = &stage.callback;
+                        self.apply_callback(callback, arguments, stage.produces, sink, body.body())?;
+                        identifier_expression(&name)
                     }
                 }
                 StageKind::Filter => {
-                    let argument = self.receive(flow, &stage.callback, 0, !downstream, body.body())?;
+                    let argument =
+                        self.receive(flow, &stage.callback, 0, !downstream, body.body())?;
                     let condition =
                         self.callback_value(&stage.callback, vec![argument.clone()], body.body())?;
                     body.frames.push(Frame { header: Header::If(condition), body: vec![] });
@@ -344,17 +395,41 @@ where
                 }
                 StageKind::Bind => {
                     let argument = self.receive(flow, &stage.callback, 0, true, body.body())?;
-                    let produced =
-                        self.callback_value(&stage.callback, vec![argument], body.body())?;
-                    let element = if downstream {
-                        self.element_name(&stages, position + 1, need)
+                    let source = match self.nested_pipeline(&stage.callback) {
+                        Some(inner) => {
+                            let demand = Demand { nested: true, ..Demand::FORWARD };
+                            let nested = self.pipeline_reading(inner, demand, downstream, body.body())?;
+                            for stage in nested.stages.into_iter().rev() {
+                                remaining.push_front(stage);
+                            }
+                            nested.source
+                        }
+                        None => {
+                            let produced =
+                                self.callback_value(&stage.callback, vec![argument], body.body())?;
+                            if remaining.is_empty() && matches!(need, Need::Value) {
+                                return Ok(Opened { body, element: produced, index, spread: true });
+                            }
+                            Source::Array(produced)
+                        }
+                    };
+                    let element = if needed_inputs(remaining.make_contiguous(), need)[0] {
+                        self.element_name(remaining.make_contiguous(), 0, need)
                     } else {
                         "_".into()
                     };
-                    let header = Header::Range {
-                        index: None,
-                        element: element.clone(),
-                        iterable: produced,
+                    let header = match source {
+                        Source::Array(iterable) => {
+                            Header::Range { index: None, element: element.clone(), iterable }
+                        }
+                        Source::Range { first, last } => {
+                            let variable = if element == "_" {
+                                self.temporary("value")
+                            } else {
+                                element.clone()
+                            };
+                            Header::Counting { variable, first, last }
+                        }
                     };
                     body.frames.push(Frame { header, body: vec![] });
                     identifier_expression(&element)
@@ -369,8 +444,9 @@ where
             Need::Variable { callback, position } => {
                 self.receive(flow, callback, position, false, body.body())?
             }
+            Need::Value => flow,
         };
-        Ok(Opened { body, element, index })
+        Ok(Opened { body, element, index, spread: false })
     }
 
     /// Closes every frame of a loop into the statement that runs it.
@@ -508,10 +584,9 @@ where
     /// A callback whose leading arguments are evaluated now, once.
     pub(super) fn capture<'e>(
         &mut self,
-        found: super::iteration::Found<'e>,
+        found: Found<'e>,
         out: &mut Vec<GoStatement>,
     ) -> GoResult<Callback<'e>> {
-        use super::iteration::Found;
         Ok(match found {
             Found::Inline { parameters, body } => Callback::Inline { parameters, body },
             Found::Direct { function, callee, leading } => {
@@ -580,7 +655,7 @@ fn takes_expression(downstream: &[Stage<'_>], need: Need<'_, '_>) -> bool {
         Some(stage) => {
             stage.kind != StageKind::Filter && matches!(stage.callback, Callback::Direct { .. })
         }
-        None => matches!(need, Need::Argument { callback: Callback::Direct { .. }, .. }),
+        None => matches!(need, Need::Argument { callback: Callback::Direct { .. }, .. } | Need::Value),
     }
 }
 

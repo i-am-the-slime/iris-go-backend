@@ -484,10 +484,36 @@ where
             values: vec![GoExpression::Composite { type_: bound_type, fields: vec![] }],
         });
         let saved = self.tail_loop.take();
-        let outcome = self.bind_loop(&callback, pipeline, &bound);
+        let outcome = match self.nested_pipeline(&callback) {
+            Some(_) => {
+                let Monotype::Array(produces) = *self.monotypes.get(monotype) else {
+                    unreachable!("invariant violated: concatMap produces an array")
+                };
+                let pipeline = pipeline.then_bind(callback, produces);
+                self.append_loop(pipeline, &bound)
+            }
+            None => self.bind_loop(&callback, pipeline, &bound),
+        };
         self.tail_loop = saved;
         out.push(outcome?);
         Ok(identifier_expression(&bound))
+    }
+
+    /// Appends every element a pipeline produces, one at a time.
+    fn append_loop(&mut self, pipeline: Pipeline<'_>, appended: &str) -> GoResult<GoStatement> {
+        let mut opened = self.open(pipeline, Need::Value, None)?;
+        let element = if opened.spread {
+            GoExpression::Spread(Box::new(opened.element))
+        } else {
+            opened.element
+        };
+        let value =
+            call(identifier_expression("append"), vec![identifier_expression(appended), element]);
+        opened.body.body().push(GoStatement::Assign {
+            targets: vec![identifier_expression(appended)],
+            values: vec![value],
+        });
+        Ok(self.close(opened.body))
     }
 
     fn bind_loop(
@@ -522,7 +548,7 @@ where
             Iteration::FindIndex => Order::Forward,
             _ => Order::Backward,
         };
-        let demand = Demand { order, positions: true, breaks: true };
+        let demand = Demand { order, positions: true, breaks: true, nested: false };
         let need = Need::Argument { callback: &callback, position: 0 };
         let pipeline = self.pipeline(array, demand, need, out)?;
         let (data, nothing) = self.constructor_named(monotype, "Nothing")?;
