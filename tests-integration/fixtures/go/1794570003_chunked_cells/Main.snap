@@ -1,0 +1,136 @@
+---
+source: tests-integration/src/fixtures.rs
+---
+// main.go
+package main
+
+import (
+	"fmt"
+	"github.com/i-am-the-slime/purs-backend-go/go-support/alloc"
+	"github.com/i-am-the-slime/purs-backend-go/go-support/prim"
+)
+
+type ListInt struct {
+	Tag   int
+	Cons0 int32
+	Cons1 *ListInt
+}
+
+const (
+	ListIntNil = iota
+	ListIntCons
+)
+
+type LargestNumbersOwnedLargestTotal struct {
+	Largest      *ListInt
+	Numbers      *ListInt
+	OwnedLargest *ListInt
+	Total        int32
+}
+
+var sharedListIntNil = &ListInt{Tag: ListIntNil}
+
+type Tree struct {
+	Tag   int
+	Node0 *Tree
+	Node1 int32
+	Node2 *Tree
+}
+
+const (
+	TreeLeaf = iota
+	TreeNode
+)
+
+var sharedTreeLeaf = &Tree{Tag: TreeLeaf}
+
+var main_ = initializeMain_()
+
+func initializeMain_() LargestNumbersOwnedLargestTotal {
+	numbers := mainGo(20, sharedListIntNil)
+	return LargestNumbersOwnedLargestTotal{Numbers: numbers, Largest: largestReplacesItsCell(numbers), OwnedLargest: largestReplacesItsCellReusing(mainGo(10, sharedListIntNil)), Total: total(mainGo2(5, sharedTreeLeaf))}
+}
+
+func largestReplacesItsCell(argument1 *ListInt) *ListInt {
+	return largestReplacesItsCellGo(sharedListIntNil, argument1)
+}
+
+func total(argument0 *Tree) int32 {
+	switch argument0.Tag {
+	case TreeLeaf:
+		return 0
+	default: // TreeNode
+		return total(argument0.Node0) + argument0.Node1 + total(argument0.Node2)
+	}
+}
+
+func mainGo(current int32, accumulator *ListInt) *ListInt {
+	var listIntCells alloc.Cells[ListInt]
+	for {
+		if current < 1 {
+			return accumulator
+		}
+		current, accumulator = current - 1, listIntCells.New(ListInt{Tag: ListIntCons, Cons0: current, Cons1: accumulator})
+	}
+}
+
+func mainGo2(remaining int32, tree *Tree) *Tree {
+	var treeCells alloc.Cells[Tree]
+	for {
+		if remaining <= 0 {
+			return tree
+		}
+		remaining, tree = remaining - 1, treeCells.New(Tree{Tag: TreeNode, Node0: tree, Node1: remaining, Node2: treeCells.New(Tree{Tag: TreeNode, Node0: sharedTreeLeaf, Node1: prim.MultiplyInt32(remaining, 2), Node2: sharedTreeLeaf})})
+	}
+}
+
+func largestReplacesItsCellGo(argument0 *ListInt, argument1 *ListInt) *ListInt {
+	for {
+		switch argument1.Tag {
+		case ListIntNil:
+			return argument0
+		default: // ListIntCons
+			value := argument1.Cons0
+			rest := argument1.Cons1
+			if argument0.Tag == ListIntCons {
+				known := argument0.Cons0
+				if known >= value {
+					argument1 = rest
+					continue
+				}
+			}
+			argument0, argument1 = &ListInt{Tag: ListIntCons, Cons0: value, Cons1: sharedListIntNil}, rest
+			continue
+		}
+	}
+}
+
+func largestReplacesItsCellReusing(argument1 *ListInt) *ListInt {
+	return largestReplacesItsCellGoReusing(sharedListIntNil, argument1)
+}
+
+func largestReplacesItsCellGoReusing(argument0 *ListInt, argument1 *ListInt) *ListInt {
+	for {
+		switch argument1.Tag {
+		case ListIntNil:
+			return argument0
+		default: // ListIntCons
+			value := argument1.Cons0
+			rest := argument1.Cons1
+			if argument0.Tag == ListIntCons {
+				known := argument0.Cons0
+				if known >= value {
+					argument1 = rest
+					continue
+				}
+			}
+			*argument1 = ListInt{Tag: ListIntCons, Cons0: value, Cons1: sharedListIntNil}
+			argument0, argument1 = argument1, rest
+			continue
+		}
+	}
+}
+
+func main() {
+	fmt.Println(main_)
+}
