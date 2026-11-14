@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use checking::TypeId;
-use checking::core::{Name, RowField, RowType, Type};
+use checking::core::{ForallBinderId, Name, RowField, RowType, Type};
 use rustc_hash::FxHashMap;
 
 use crate::erasure::Erasure;
@@ -132,7 +132,7 @@ where
             Type::KindApplication(function, _) => return self.substitute(function, substitution),
             Type::Kinded(inner, _) => return self.substitute(inner, substitution),
             Type::Forall(binder, inner) => {
-                Type::Forall(binder, self.substitute(inner, substitution))
+                Type::Forall(binder, self.substitute_under_binder(binder, inner, substitution))
             }
             Type::Constrained(constraint, inner) => Type::Constrained(
                 self.substitute(constraint, substitution),
@@ -158,6 +158,25 @@ where
             | Type::Unknown(_) => return type_id,
         };
         self.queries.intern_type(substituted)
+    }
+
+    /// A synonym's quantifier keeps its name in every expansion, so
+    /// `(f ~> m) -> Free f ~> m` binds the same `a` twice; the inner binder
+    /// shadows the outer one. The substituted types are closed, so they cannot
+    /// capture the binder.
+    fn substitute_under_binder(
+        &self,
+        binder: ForallBinderId,
+        inner: TypeId,
+        substitution: &Substitution,
+    ) -> TypeId {
+        let name = self.queries.lookup_forall_binder(binder).name;
+        if !substitution.contains_key(&name) {
+            return self.substitute(inner, substitution);
+        }
+        let mut shadowed = substitution.clone();
+        shadowed.remove(&name);
+        self.substitute(inner, &shadowed)
     }
 
     fn substitute_row(&self, row: RowType, substitution: &Substitution) -> TypeId {
@@ -317,8 +336,14 @@ where
                 self.match_row(pattern_row, target_row, variables, bindings)
             }
             (Type::Constructor(..), Type::Constructor(..)) => false,
-            (Type::Forall(_, pattern_inner), Type::Forall(_, target_inner)) => {
-                self.match_type(*pattern_inner, *target_inner, variables, bindings)
+            (Type::Forall(binder, pattern_inner), Type::Forall(_, target_inner)) => {
+                let bound = self.queries.lookup_forall_binder(*binder).name;
+                if !variables.contains(&bound) {
+                    return self.match_type(*pattern_inner, *target_inner, variables, bindings);
+                }
+                let free: Vec<Name> =
+                    variables.iter().copied().filter(|&name| name != bound).collect();
+                self.match_type(*pattern_inner, *target_inner, &free, bindings)
             }
             _ => self.equivalent(pattern, target),
         }

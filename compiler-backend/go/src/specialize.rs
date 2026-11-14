@@ -34,6 +34,7 @@ use crate::scheme::{
 };
 use crate::types::Substitution;
 
+mod patterns;
 mod traverse;
 
 const SPECIALIZATION_LIMIT: usize = 100_000;
@@ -244,7 +245,11 @@ where
         let entry = self.request(key, name)?;
         while let Some((id, key, name)) = self.next_specialization() {
             self.current = Some(id);
-            let function = match self.specialize(&key, name.clone()) {
+            let specialized = self.specialize(&key, name.clone()).and_then(|mut function| {
+                self.match_field_representations(&mut function.body)?;
+                Ok(function)
+            });
+            let function = match specialized {
                 Ok(function) => function,
                 Err(error) => {
                     self.record(error)?;
@@ -617,18 +622,19 @@ where
     }
 
     fn monotype(&mut self, scope: &Scope, type_id: TypeId) -> GoResult<MonotypeId> {
-        let mut closed = self.context.types.substitute(type_id, &scope.substitution);
         // Inside one instantiation of a rank-N expression its quantifiers are
         // already substituted; the expression has the instantiated type.
+        let mut instantiated = type_id;
         while let Type::Forall(binder, inner) =
-            self.context.types.lookup(self.context.types.strip_annotations(closed)).clone()
+            self.context.types.lookup(self.context.types.strip_annotations(instantiated)).clone()
         {
             let binder = self.context.queries.lookup_forall_binder(binder);
             if !scope.substitution.contains_key(&binder.name) {
                 break;
             }
-            closed = inner;
+            instantiated = inner;
         }
+        let closed = self.context.types.substitute(instantiated, &scope.substitution);
         self.closed_monotype(scope, closed)
     }
 
@@ -1376,15 +1382,21 @@ where
     }
 
     fn coerce(&mut self, expression: Expression, monotype: MonotypeId) -> Expression {
-        if expression.monotype == monotype
-            || !(self.mentions_erased(expression.monotype)
-                || self.mentions_erased(monotype)
-                || self.mentions_recursive(expression.monotype)
-                || self.mentions_recursive(monotype))
-        {
+        if !self.changes_representation(expression.monotype, monotype) {
             return expression;
         }
         Expression::new(ExpressionKind::Coerce(Box::new(expression)), monotype)
+    }
+
+    /// Whether a value of one type needs converting to stand at another: the
+    /// types of one value differ in representation only through erasure or a
+    /// recursive newtype.
+    fn changes_representation(&self, from: MonotypeId, to: MonotypeId) -> bool {
+        from != to
+            && (self.mentions_erased(from)
+                || self.mentions_erased(to)
+                || self.mentions_recursive(from)
+                || self.mentions_recursive(to))
     }
 
     /// Whether a type contains a recursive newtype, whose named Go type differs
@@ -1947,6 +1959,7 @@ where
             return Ok(());
         };
         let declared = self.outer_body(declared);
+        let declared = self.strip_instantiated_result_quantifiers(declared, instantiations)?;
         let declared = self.context.types.substitute(declared, instantiations);
         let mut inner = vec![];
         let pattern = self.strip_inner_quantifiers(declared, &mut inner)?;
@@ -2044,7 +2057,37 @@ where
                 );
             }
         }
+        let current = self.strip_instantiated_result_quantifiers(current, instantiations)?;
         Ok(self.context.types.substitute(current, instantiations))
+    }
+
+    /// Where a reference is used the checker also instantiates the quantifiers
+    /// in its result positions (`Free f ~> m` after `foldFree`'s argument). A
+    /// quantifier in an argument position is rank-N and stays, even when a
+    /// synonym gave it the same name as an instantiated one.
+    fn strip_instantiated_result_quantifiers(
+        &mut self,
+        type_id: TypeId,
+        instantiations: &Substitution,
+    ) -> GoResult<TypeId> {
+        let mut body = crate::monotype::expand_synonyms(&mut self.context, type_id)?;
+        while let Type::Forall(binder, inner) =
+            self.context.types.lookup(self.context.types.strip_annotations(body)).clone()
+        {
+            let binder = self.context.queries.lookup_forall_binder(binder);
+            if !instantiations.contains_key(&binder.name) {
+                return Ok(body);
+            }
+            body = inner;
+        }
+        let Some((argument, result)) = self.context.types.function_parts(body) else {
+            return Ok(body);
+        };
+        let stripped = self.strip_instantiated_result_quantifiers(result, instantiations)?;
+        if stripped == result {
+            return Ok(body);
+        }
+        Ok(self.context.queries.intern_type(Type::Function(argument, stripped)))
     }
 
     fn global_reference(
