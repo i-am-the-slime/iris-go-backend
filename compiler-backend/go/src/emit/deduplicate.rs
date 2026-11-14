@@ -87,7 +87,7 @@ impl Merging {
                 let binders = binders(declaration);
                 let mut references = vec![];
                 declaration.for_each_name_mut(&mut |name| {
-                    if let Name::Reference(name) = name
+                    if let Name::Reference(name) | Name::Written(name) = name
                         && !binders.contains(name.as_str())
                         && index_of.contains_key(name.as_str())
                     {
@@ -159,7 +159,7 @@ impl Merging {
                     continue;
                 }
                 declaration.for_each_name_mut(&mut |name| {
-                    if let Name::Reference(name) = name
+                    if let Name::Reference(name) | Name::Written(name) = name
                         && *name == from
                     {
                         *name = to.clone();
@@ -189,9 +189,11 @@ fn comparable_text(declaration: &GoDeclaration) -> String {
     };
     declaration.for_each_name_mut(&mut |name| match name {
         Name::Binder(name) => number(name, &mut locals),
-        Name::Reference(name) if locals.contains_key(name.as_str()) => number(name, &mut locals),
-        Name::Reference(name) if *name == own => *name = ITSELF.to_string(),
-        Name::Reference(_) => {}
+        Name::Reference(name) | Name::Written(name) if locals.contains_key(name.as_str()) => {
+            number(name, &mut locals)
+        }
+        Name::Reference(name) | Name::Written(name) if *name == own => *name = ITSELF.to_string(),
+        Name::Reference(_) | Name::Written(_) => {}
     });
     match &mut declaration {
         GoDeclaration::Function { name, .. } | GoDeclaration::Variable { name, .. } => {

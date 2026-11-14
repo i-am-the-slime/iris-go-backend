@@ -46,7 +46,9 @@ pub fn allocate_nested_cells_together(
     for declaration in declarations {
         let mut names = FxHashSet::default();
         declaration.for_each_name_mut(&mut |name| {
-            let (crate::syntax::Name::Reference(name) | crate::syntax::Name::Binder(name)) = name;
+            let (crate::syntax::Name::Reference(name)
+            | crate::syntax::Name::Written(name)
+            | crate::syntax::Name::Binder(name)) = name;
             names.insert(name.clone());
         });
         let mut function = Function { names, taken };

@@ -100,20 +100,16 @@ where
         await_fibers(&mut declarations);
     }
     timed("ranges", || ranges::read_elements_in_place(&mut declarations));
+    let taken =
+        |name: &str| emitter.global_names.contains(name) || IMPORTED_PACKAGES.contains(&name);
     timed("lengths", || lengths::count_lengths_up_to_comparisons(&mut declarations));
-    let chunked = timed("chunks", || {
-        let taken =
-            |name: &str| emitter.global_names.contains(name) || IMPORTED_PACKAGES.contains(&name);
-        chunks::allocate_linked_cells_in_chunks(&mut declarations, &taken)
-    });
+    timed("invariant lengths", || lengths::hoist_loop_invariant_lengths(&mut declarations, &taken));
+    let chunked =
+        timed("chunks", || chunks::allocate_linked_cells_in_chunks(&mut declarations, &taken));
     if chunked {
         emitter.imports.insert(GoPackage::Alloc.path().into());
     }
-    timed("blocks", || {
-        let taken =
-            |name: &str| emitter.global_names.contains(name) || IMPORTED_PACKAGES.contains(&name);
-        blocks::allocate_nested_cells_together(&mut declarations, &taken)
-    });
+    timed("blocks", || blocks::allocate_nested_cells_together(&mut declarations, &taken));
     let mut homes: FxHashMap<String, ModuleIndex> = std::mem::take(&mut emitter.homes)
         .into_iter()
         .filter_map(|(name, file)| Some((name, modules.index(file)?)))
