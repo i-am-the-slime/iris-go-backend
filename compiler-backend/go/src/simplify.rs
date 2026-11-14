@@ -185,9 +185,9 @@ impl Simplifier<'_> {
                 function.parameters.extend(parameters);
                 function.body = *body;
             } else if !function.parameters.is_empty()
-                && let Some(template) = chosen_lambda_parameter(&function.body)
+                && let Some(template) = chosen_lambda_parameter(&function.body).cloned()
             {
-                let parameter = self.fresh(&template.clone());
+                let parameter = self.fresh(&template);
                 let body = std::mem::replace(
                     &mut function.body,
                     Expression::new(ExpressionKind::Unit, parameter.monotype),
@@ -1227,9 +1227,7 @@ fn is_cheap(expression: &Expression) -> bool {
         {
             arguments.iter().all(is_cheap)
         }
-        ExpressionKind::Access { record: value, .. } | ExpressionKind::Coerce(value) => {
-            is_cheap(value)
-        }
+        ExpressionKind::Access { record, .. } => is_cheap(record),
         _ => false,
     }
 }
