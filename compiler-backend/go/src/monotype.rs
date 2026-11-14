@@ -1042,6 +1042,19 @@ where
                 expanding.pop();
                 return erased;
             }
+            if erase
+                && !arguments.is_empty()
+                && ignores_arguments(&module.name, module.indexed.items[item].name.as_deref())
+            {
+                let empty = checking::core::RowType { fields: Arc::from([]), tail: None };
+                let empty = context.queries.intern_row_type(empty);
+                let empty = context.queries.intern_type(Type::Row(empty));
+                let mut rebuilt = head;
+                for _ in arguments {
+                    rebuilt = context.queries.intern_type(Type::Application(rebuilt, empty));
+                }
+                return Ok(rebuilt);
+            }
             if module.name == "Prim"
                 && module.indexed.items[item].name.as_deref() == Some("Function")
                 && let [argument, result] = arguments[..]
@@ -1065,6 +1078,13 @@ where
         },
         _ => Ok(type_id),
     }
+}
+
+fn ignores_arguments(module: &str, name: Option<&str>) -> bool {
+    matches!(
+        (module, name),
+        ("Data.Variant", Some("Variant")) | ("Data.Functor.Variant", Some("VariantF"))
+    )
 }
 
 fn regular_occurrences<Q>(
