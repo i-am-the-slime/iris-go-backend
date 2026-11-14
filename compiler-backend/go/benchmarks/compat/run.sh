@@ -79,8 +79,11 @@ require github.com/i-am-the-slime/purs-backend-go/go-support v0.0.0
 
 replace github.com/i-am-the-slime/purs-backend-go/go-support => $GO_SUPPORT
 GOMOD
-  if ! (cd "$HERE" && IRIS_GO_ANY_CENSUS=1 timeout 300 "$IRIS" go -p "$package" --entry "$name.main" "$out") \
-    >"$out/compile.log" 2>&1; then
+  (cd "$HERE" && IRIS_GO_ANY_CENSUS=1 timeout 300 "$IRIS" go -p "$package" --entry "$name.main" "$out") \
+    >"$out/compile.log" 2>&1
+  local status=$?
+  if [ "$status" = 124 ]; then echo "iris timed out after 300 s" >>"$out/compile.log"; fi
+  if [ "$status" != 0 ]; then
     echo iris >"$out/stage"
     return
   fi
