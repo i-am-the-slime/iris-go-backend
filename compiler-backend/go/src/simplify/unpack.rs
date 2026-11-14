@@ -5,32 +5,30 @@
 
 use smol_str::{SmolStr, format_smolstr};
 
-use super::{Simplifier, column_outcomes, for_each_child, for_each_child_mut, local_expression};
-use crate::mono::{
-    Alternative, Binding, Expression, ExpressionKind, Guard, Guarded, Local, LocalId,
+use super::{
+    Simplifier, column_outcomes, for_each_alternative_child, for_each_child, for_each_child_mut,
+    local_expression,
 };
+use crate::mono::{Binding, Expression, ExpressionKind, Local, LocalId};
+
+/// Whether every use of the binding in the body takes its value apart.
+pub(super) fn unpackable(binding: &Binding, body: &Expression) -> bool {
+    let id = binding.local.id;
+    let monotype = binding.local.monotype;
+    binding.value.monotype == monotype
+        && match &binding.value.kind {
+            ExpressionKind::Record(_) => only_taken_apart(body, id, monotype, None),
+            ExpressionKind::Construct { arguments, .. } if !arguments.is_empty() => {
+                only_taken_apart(body, id, monotype, Some(&binding.value))
+            }
+            _ => false,
+        }
+}
 
 impl Simplifier<'_> {
-    /// The body with the binding's value taken apart, when every use of the
-    /// binding takes it apart; otherwise the binding and body unchanged.
-    pub(super) fn unpack(
-        &mut self,
-        binding: Binding,
-        body: Expression,
-    ) -> Result<Expression, (Binding, Expression)> {
+    /// The body with an `unpackable` binding's value taken apart.
+    pub(super) fn unpack(&mut self, binding: Binding, body: Expression) -> Expression {
         let id = binding.local.id;
-        let monotype = binding.local.monotype;
-        let unpackable = binding.value.monotype == monotype
-            && match &binding.value.kind {
-                ExpressionKind::Record(_) => only_taken_apart(&body, id, monotype, None),
-                ExpressionKind::Construct { arguments, .. } if !arguments.is_empty() => {
-                    only_taken_apart(&body, id, monotype, Some(&binding.value))
-                }
-                _ => false,
-            };
-        if !unpackable {
-            return Err((binding, body));
-        }
         let Binding { local, value } = binding;
         let mut fields = vec![];
         let shape = match value.kind {
@@ -49,7 +47,7 @@ impl Simplifier<'_> {
                 }
                 let arguments = fields.iter().map(|field| local_expression(&field.local)).collect();
                 let kind = ExpressionKind::Construct { data, constructor, arguments };
-                Shape::Construct(Expression::new(kind, value.monotype))
+                Shape::Construct(Box::new(Expression::new(kind, value.monotype)))
             }
             _ => unreachable!("invariant violated: only records and constructors unpack"),
         };
@@ -61,7 +59,7 @@ impl Simplifier<'_> {
         if let Shape::Construct(_) = shape {
             body = self.expression(body);
         }
-        Ok(self.let_bindings(fields, body))
+        self.let_bindings(fields, body)
     }
 
     fn field_binding(&mut self, name: SmolStr, value: Expression) -> Binding {
@@ -72,7 +70,7 @@ impl Simplifier<'_> {
 
 enum Shape {
     Record(Vec<SmolStr>),
-    Construct(Expression),
+    Construct(Box<Expression>),
 }
 
 /// Whether every occurrence of the local reads a field of it or is matched by
@@ -133,35 +131,12 @@ fn take_apart(expression: &mut Expression, id: LocalId, shape: &Shape, fields: &
         }
         (ExpressionKind::Case { scrutinees, .. }, Shape::Construct(construct)) => {
             for scrutinee in scrutinees.iter_mut().filter(|scrutinee| is_whole(scrutinee)) {
-                *scrutinee = construct.clone();
+                *scrutinee = construct.as_ref().clone();
             }
         }
         _ => {}
     }
     for_each_child_mut(expression, &mut |child| take_apart(child, id, shape, fields));
-}
-
-/// The guards and bodies of a case's alternatives.
-fn for_each_alternative_child<'e>(
-    alternatives: &'e [Alternative],
-    visitor: &mut impl FnMut(&'e Expression),
-) {
-    for alternative in alternatives {
-        match &alternative.body {
-            Guarded::Unconditional(body) => visitor(body),
-            Guarded::Guards(branches) => {
-                for branch in branches {
-                    for guard in &branch.guards {
-                        match guard {
-                            Guard::Boolean(condition) => visitor(condition),
-                            Guard::Pattern { value, .. } => visitor(value),
-                        }
-                    }
-                    visitor(&branch.body);
-                }
-            }
-        }
-    }
 }
 
 fn capitalised(label: &str) -> String {

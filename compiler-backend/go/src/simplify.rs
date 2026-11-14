@@ -15,6 +15,7 @@ use crate::monotype::{Monotype, MonotypeId, Monotypes};
 use crate::timing::timed;
 use smol_str::SmolStr;
 
+mod choice;
 mod fold;
 mod object;
 mod record;
@@ -419,17 +420,11 @@ impl Simplifier<'_> {
             ExpressionKind::Case { scrutinees, alternatives } => {
                 let scrutinees: Vec<Expression> =
                     scrutinees.into_iter().map(|scrutinee| self.expression(scrutinee)).collect();
-                if let [scrutinee] = scrutinees.as_slice()
-                    && matches!(
-                        scrutinee.kind,
-                        ExpressionKind::If { .. } | ExpressionKind::Let { .. }
-                    )
-                    && let Some(leaves) = chosen_constructors(scrutinee)
-                    && leaves * alternatives_size(&alternatives) <= INLINE_SIZE
+                let mut scrutinees = scrutinees;
+                if let [scrutinee] = scrutinees.as_mut_slice()
+                    && let Some(distributed) = self.distribute(scrutinee, &alternatives, monotype)
                 {
-                    let [scrutinee] = <[Expression; 1]>::try_from(scrutinees)
-                        .unwrap_or_else(|_| unreachable!("invariant violated: one scrutinee"));
-                    return self.case_of_choice(scrutinee, &alternatives, monotype);
+                    return distributed;
                 }
                 let (bindings, scrutinees, alternatives) =
                     self.eliminate_columns(scrutinees, alternatives);
@@ -754,14 +749,10 @@ impl Simplifier<'_> {
                     body = substitute(body, binding.local.id, &binding.value);
                     body = self.expression(body);
                 }
+            } else if unpack::unpackable(&binding, &body) {
+                body = self.unpack(binding, body);
             } else {
-                match self.unpack(binding, body) {
-                    Ok(unpacked) => body = unpacked,
-                    Err((binding, original)) => {
-                        body = original;
-                        kept.push(binding);
-                    }
-                }
+                kept.push(binding);
             }
         }
         if kept.is_empty() {
@@ -862,46 +853,12 @@ impl Simplifier<'_> {
         }
     }
 
-    fn case_of_choice(
-        &mut self,
-        scrutinee: Expression,
-        alternatives: &[Alternative],
-        monotype: MonotypeId,
-    ) -> Expression {
-        match scrutinee.kind {
-            ExpressionKind::If { condition, then, otherwise } => {
-                let then = self.case_of_choice(*then, alternatives, monotype);
-                let otherwise = self.case_of_choice(*otherwise, alternatives, monotype);
-                let kind = ExpressionKind::If {
-                    condition,
-                    then: Box::new(then),
-                    otherwise: Box::new(otherwise),
-                };
-                Expression::new(kind, monotype)
-            }
-            ExpressionKind::Let { bindings, body } => {
-                let body = self.case_of_choice(*body, alternatives, monotype);
-                Expression::new(ExpressionKind::Let { bindings, body: Box::new(body) }, monotype)
-            }
-            kind => {
-                let scrutinee = Expression::new(kind, scrutinee.monotype);
-                let case = ExpressionKind::Case {
-                    scrutinees: vec![scrutinee],
-                    alternatives: alternatives.to_vec(),
-                };
-                let case = Expression::new(case, monotype);
-                let case = self.rename(case, &mut FxHashMap::default());
-                self.expression(case)
-            }
-        }
-    }
-
     fn ordering(&mut self, arguments: Vec<Expression>, monotype: MonotypeId) -> Expression {
         let [less, equal, greater, left, right]: [Expression; 5] =
             arguments.try_into().expect("invariant violated: ordering has five arguments");
         let mut bindings = vec![];
-        let left = self.shared_operand(left, &mut bindings);
-        let right = self.shared_operand(right, &mut bindings);
+        let left = self.shared_operand(left, "compared", &mut bindings);
+        let right = self.shared_operand(right, "compared", &mut bindings);
         let boolean = self.monotypes.intern(Monotype::Boolean);
         let compare = |comparison, left: &Expression, right: &Expression| {
             let arguments = vec![left.clone(), right.clone()];
@@ -925,14 +882,21 @@ impl Simplifier<'_> {
         Expression::new(ExpressionKind::Let { bindings, body: Box::new(chosen) }, monotype)
     }
 
-    fn shared_operand(&mut self, operand: Expression, bindings: &mut Vec<Binding>) -> Expression {
+    /// The operand itself when it is trivial to repeat, and otherwise a local
+    /// bound to it.
+    fn shared_operand(
+        &mut self,
+        operand: Expression,
+        name: &'static str,
+        bindings: &mut Vec<Binding>,
+    ) -> Expression {
         if is_trivial(&operand) {
             return operand;
         }
-        let id = LocalId(self.next_local);
-        self.next_local += 1;
-        let local = Local { id, name: SmolStr::new_static("compared"), monotype: operand.monotype };
-        let reference = Expression::new(ExpressionKind::Local(id), operand.monotype);
+        let template =
+            Local { id: LocalId(0), name: SmolStr::new_static(name), monotype: operand.monotype };
+        let local = self.fresh(&template);
+        let reference = local_expression(&local);
         bindings.push(Binding { local, value: operand });
         reference
     }
@@ -1416,6 +1380,29 @@ fn children_mut(expression: &mut Expression) -> Vec<&mut Expression> {
     }
 }
 
+/// The guards and bodies of a case's alternatives.
+fn for_each_alternative_child<'e>(
+    alternatives: &'e [Alternative],
+    visitor: &mut impl FnMut(&'e Expression),
+) {
+    for alternative in alternatives {
+        match &alternative.body {
+            Guarded::Unconditional(body) => visitor(body),
+            Guarded::Guards(branches) => {
+                for branch in branches {
+                    for guard in &branch.guards {
+                        match guard {
+                            Guard::Boolean(condition) => visitor(condition),
+                            Guard::Pattern { value, .. } => visitor(value),
+                        }
+                    }
+                    visitor(&branch.body);
+                }
+            }
+        }
+    }
+}
+
 fn update_children<'a>(updates: &'a mut [RecordUpdate], children: &mut Vec<&'a mut Expression>) {
     for update in updates {
         match update {
@@ -1433,17 +1420,6 @@ fn binds_only(alternatives: &[Alternative]) -> bool {
             .patterns
             .iter()
             .all(|pattern| matches!(pattern.kind, PatternKind::Variable(_) | PatternKind::Wildcard))
-}
-
-fn chosen_constructors(expression: &Expression) -> Option<usize> {
-    match &expression.kind {
-        ExpressionKind::If { then, otherwise, .. } => {
-            Some(chosen_constructors(then)? + chosen_constructors(otherwise)?)
-        }
-        ExpressionKind::Let { body, .. } => chosen_constructors(body),
-        ExpressionKind::Construct { arguments, .. } if arguments.is_empty() => Some(1),
-        _ => None,
-    }
 }
 
 fn alternatives_size(alternatives: &[Alternative]) -> usize {
