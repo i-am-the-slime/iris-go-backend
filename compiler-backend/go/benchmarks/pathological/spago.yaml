@@ -38,6 +38,9 @@ package:
     - unsafe-coerce
     - variant
     - yoga-json
+    - yoga-om
 workspace:
   packageSet:
     registry: 75.9.1
+  extraPackages:
+    yoga-om: 2.2.1

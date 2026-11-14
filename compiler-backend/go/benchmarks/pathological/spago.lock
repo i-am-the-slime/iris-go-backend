@@ -41,7 +41,8 @@
             "unfoldable",
             "unsafe-coerce",
             "variant",
-            "yoga-json"
+            "yoga-json",
+            "yoga-om"
           ]
         },
         "test": {
@@ -690,7 +691,9 @@
         "zipperarray": "2.0.0"
       }
     },
-    "extra_packages": {}
+    "extra_packages": {
+      "yoga-om": "2.2.1"
+    }
   },
   "packages": {
     "aff": {
@@ -712,6 +715,26 @@
         "tailrec",
         "transformers",
         "unsafe-coerce"
+      ]
+    },
+    "aff-retry": {
+      "type": "registry",
+      "version": "2.0.0",
+      "integrity": "sha256-rKZNcP4IKSyBFQBVzrCvE0ULoJt0N/uDLLJ0dPotr4k=",
+      "dependencies": [
+        "aff",
+        "arrays",
+        "datetime",
+        "effect",
+        "either",
+        "exceptions",
+        "integers",
+        "maybe",
+        "newtype",
+        "numbers",
+        "prelude",
+        "random",
+        "transformers"
       ]
     },
     "argonaut-codecs": {
@@ -774,6 +797,20 @@
         "tuples",
         "unfoldable",
         "unsafe-coerce"
+      ]
+    },
+    "avar": {
+      "type": "registry",
+      "version": "5.0.1",
+      "integrity": "sha256-8V4SxF4TIWZ9Ik1P4lPzIRUAZeFBe8w5WA2VcCEKsIk=",
+      "dependencies": [
+        "aff",
+        "effect",
+        "either",
+        "exceptions",
+        "functions",
+        "maybe",
+        "prelude"
       ]
     },
     "bifunctors": {
@@ -1052,6 +1089,20 @@
         "unfoldable"
       ]
     },
+    "heterogeneous": {
+      "type": "registry",
+      "version": "0.7.0",
+      "integrity": "sha256-pQwcFvhWL8noktxaoD7FlLs2F2lYf3QHoyO0VOWO3I0=",
+      "dependencies": [
+        "either",
+        "foldable-traversable",
+        "functors",
+        "prelude",
+        "record",
+        "tuples",
+        "variant"
+      ]
+    },
     "identity": {
       "type": "registry",
       "version": "6.0.0",
@@ -1297,6 +1348,16 @@
         "tuples"
       ]
     },
+    "random": {
+      "type": "registry",
+      "version": "6.0.0",
+      "integrity": "sha256-7sZRo6P9UIiXDZ9s2QL9T8h3wlIwLdQrR4+oZKOijQw=",
+      "dependencies": [
+        "effect",
+        "integers",
+        "prelude"
+      ]
+    },
     "record": {
       "type": "registry",
       "version": "4.0.0",
@@ -1304,6 +1365,19 @@
       "dependencies": [
         "functions",
         "prelude",
+        "unsafe-coerce"
+      ]
+    },
+    "record-studio": {
+      "type": "registry",
+      "version": "1.0.4",
+      "integrity": "sha256-CRnFvSXpDDzio+buibUxFU9zPZDd7/lzrYC1Ya3FuIw=",
+      "dependencies": [
+        "heterogeneous",
+        "lists",
+        "prelude",
+        "record",
+        "typelevel-prelude",
         "unsafe-coerce"
       ]
     },
@@ -1443,6 +1517,23 @@
         "type-equality"
       ]
     },
+    "uncurried-transformers": {
+      "type": "registry",
+      "version": "1.1.0",
+      "integrity": "sha256-AqqBMzVLzozVoDorE3QcVVRDkLd7O3624mRHCDnPhaI=",
+      "dependencies": [
+        "control",
+        "effect",
+        "either",
+        "functions",
+        "identity",
+        "prelude",
+        "safe-coerce",
+        "tailrec",
+        "transformers",
+        "tuples"
+      ]
+    },
     "unfoldable": {
       "type": "registry",
       "version": "6.0.0",
@@ -1529,6 +1620,38 @@
         "unsafe-coerce",
         "variant",
         "yoga-tree"
+      ]
+    },
+    "yoga-om": {
+      "type": "registry",
+      "version": "2.2.1",
+      "integrity": "sha256-nahYX6UD7/7chFM5hxGGVITSbiLXKb0gbP3PV8CvsXY=",
+      "dependencies": [
+        "aff",
+        "aff-retry",
+        "avar",
+        "console",
+        "control",
+        "datetime",
+        "effect",
+        "either",
+        "exceptions",
+        "functions",
+        "heterogeneous",
+        "maybe",
+        "newtype",
+        "parallel",
+        "prelude",
+        "record",
+        "record-studio",
+        "refs",
+        "tailrec",
+        "transformers",
+        "tuples",
+        "typelevel-prelude",
+        "uncurried-transformers",
+        "unsafe-coerce",
+        "variant"
       ]
     },
     "yoga-tree": {
