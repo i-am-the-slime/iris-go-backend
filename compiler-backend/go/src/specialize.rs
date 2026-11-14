@@ -35,6 +35,7 @@ use crate::scheme::{
 use crate::types::Substitution;
 
 mod patterns;
+mod spine;
 mod traverse;
 
 const SPECIALIZATION_LIMIT: usize = 100_000;
@@ -614,6 +615,9 @@ where
                 }
                 DeclarationAbstraction::Argument => {}
             }
+        }
+        if dictionaries.next().is_some() {
+            return Err(self.unsupported(scope, UnsupportedState::UnabstractedEvidence));
         }
         Ok(())
     }
@@ -1293,22 +1297,12 @@ where
     fn application(&mut self, scope: &mut Scope, id: tree::ExpressionId) -> GoResult<Expression> {
         let module = Arc::clone(&scope.module);
         let monotype = self.monotype(scope, module.checked.tree[id].type_id)?;
-        let mut arguments = vec![];
-        let mut head = id;
-        let mut result_instantiations = Substitution::default();
-        while let tree::ExpressionKind::TermApplication { function, argument } =
-            module.checked.tree[head].kind
-        {
-            for instantiation in module.checked.tree.lookup_instantiations(head) {
-                let closed =
-                    self.context.types.substitute(instantiation.argument, &scope.substitution);
-                result_instantiations.insert(instantiation.name, closed);
-            }
-            arguments.push(argument);
-            head = function;
-        }
-        arguments.reverse();
+        let spine::ApplicationSpine { head, arguments, trailing, instantiations } =
+            self.application_spine(scope, id);
+        let result_instantiations = instantiations;
+        let trailing = self.trailing_dictionaries(scope, &trailing)?;
         if let tree::ExpressionKind::Constructor { resolution } = module.checked.tree[head].kind
+            && trailing.is_empty()
             && self.is_newtype_constructor(resolution)?
             && let [argument] = arguments[..]
         {
@@ -1322,7 +1316,9 @@ where
             argument.monotype = monotype;
             return Ok(argument);
         }
-        if let Some(reference) = self.traversal_reference(scope, head, &arguments)? {
+        if trailing.is_empty()
+            && let Some(reference) = self.traversal_reference(scope, head, &arguments)?
+        {
             return self.traverse_array(scope, reference, &arguments);
         }
         let function = match module.checked.tree[head].kind {
@@ -1330,9 +1326,13 @@ where
             | tree::ExpressionKind::Variable { .. }
             | tree::ExpressionKind::RecordPun { .. }
             | tree::ExpressionKind::EvidenceApplication { .. } => {
-                self.reference(scope, head, result_instantiations, None)
+                self.trailed_reference(scope, head, result_instantiations.clone(), None, trailing)
             }
-            _ => self.expression(scope, head),
+            _ if trailing.is_empty() => self.expression(scope, head),
+            _ => Err(self.unsupported(
+                scope,
+                UnsupportedState::Construct { construct: "evidence applied to a non-reference" },
+            )),
         };
         let mut function = match function {
             Ok(function) => function,
@@ -1349,7 +1349,7 @@ where
         let mut callee = IgnoringCallee::of(&function, 0);
         let mut converted = Vec::with_capacity(arguments.len());
         for (position, argument) in arguments.into_iter().enumerate() {
-            let expected = self.context.types.function_parts(parameter_type);
+            let expected = self.next_parameter_type(parameter_type, &result_instantiations)?;
             if let Some((_, result)) = expected {
                 parameter_type = result;
             }
@@ -1629,13 +1629,25 @@ where
         &mut self,
         scope: &mut Scope,
         id: tree::ExpressionId,
+        instantiations: Substitution,
+        expected: Option<TypeId>,
+    ) -> GoResult<Expression> {
+        self.trailed_reference(scope, id, instantiations, expected, vec![])
+    }
+
+    fn trailed_reference(
+        &mut self,
+        scope: &mut Scope,
+        id: tree::ExpressionId,
         mut instantiations: Substitution,
         expected: Option<TypeId>,
+        trailing: Vec<Dictionary>,
     ) -> GoResult<Expression> {
         let module = Arc::clone(&scope.module);
         let tree = &module.checked.tree;
         let mut dictionaries = vec![];
         let mut current = id;
+        let mut through_alias = false;
         let resolution = loop {
             let mut evidences = vec![];
             loop {
@@ -1669,17 +1681,23 @@ where
             let resolution = match &tree[current].kind {
                 tree::ExpressionKind::Variable { resolution }
                 | tree::ExpressionKind::RecordPun { resolution, .. } => *resolution,
-                tree::ExpressionKind::Constructor { resolution } => {
+                tree::ExpressionKind::Constructor { resolution } if trailing.is_empty() => {
                     let (file_id, term) = *resolution;
                     let monotype =
                         self.instantiated_monotype(scope, current, file_id, term, &instantiations)?;
                     return self.constructor(scope, file_id, term, monotype);
                 }
                 tree::ExpressionKind::EvidenceAbstraction { .. } => {
+                    dictionaries.extend(trailing);
                     return self.evidence_redex(scope, current, dictionaries);
                 }
+                tree::ExpressionKind::TermApplication { .. }
+                    if !through_alias && !dictionaries.is_empty() && trailing.is_empty() =>
+                {
+                    return self.application(scope, id);
+                }
                 _ => {
-                    if dictionaries.is_empty() {
+                    if dictionaries.is_empty() && trailing.is_empty() {
                         return self.expression(scope, current);
                     }
                     return Err(self.unsupported(
@@ -1695,10 +1713,12 @@ where
                 && let Some(&aliased) = scope.local_aliases.get(&group)
             {
                 current = aliased;
+                through_alias = true;
                 continue;
             }
             break resolution;
         };
+        dictionaries.extend(trailing);
 
         match resolution {
             tree::VariableResolution::Generated(binder) => {
@@ -2087,14 +2107,18 @@ where
         instantiations: &Substitution,
     ) -> GoResult<TypeId> {
         let mut body = crate::monotype::expand_synonyms(&mut self.context, type_id)?;
-        while let Type::Forall(binder, inner) =
-            self.context.types.lookup(self.context.types.strip_annotations(body)).clone()
-        {
-            let binder = self.context.queries.lookup_forall_binder(binder);
-            if !instantiations.contains_key(&binder.name) {
-                return Ok(body);
+        loop {
+            match self.context.types.lookup(self.context.types.strip_annotations(body)).clone() {
+                Type::Forall(binder, inner) => {
+                    let binder = self.context.queries.lookup_forall_binder(binder);
+                    if !instantiations.contains_key(&binder.name) {
+                        return Ok(body);
+                    }
+                    body = inner;
+                }
+                Type::Constrained(_, inner) => body = inner,
+                _ => break,
             }
-            body = inner;
         }
         let Some((argument, result)) = self.context.types.function_parts(body) else {
             return Ok(body);
@@ -2265,7 +2289,6 @@ where
         instantiations: &Substitution,
     ) -> GoResult<Vec<TypeId>> {
         let mut types = vec![];
-        let mut seen_argument = false;
         for abstraction in abstractions {
             match abstraction {
                 DeclarationAbstraction::Type { binder, .. } => {
@@ -2282,11 +2305,7 @@ where
                     };
                     types.push(argument);
                 }
-                DeclarationAbstraction::Evidence { .. } if seen_argument => {
-                    return Err(self.unsupported(scope, UnsupportedState::InterleavedAbstractions));
-                }
-                DeclarationAbstraction::Evidence { .. } => {}
-                DeclarationAbstraction::Argument => seen_argument = true,
+                DeclarationAbstraction::Evidence { .. } | DeclarationAbstraction::Argument => {}
             }
         }
         Ok(types)

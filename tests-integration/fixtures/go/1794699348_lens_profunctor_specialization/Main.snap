@@ -1,0 +1,88 @@
+---
+source: tests-integration/src/fixtures.rs
+---
+// Data/Maybe/maybe.go
+package maybe
+
+type MaybeArrayString struct {
+	Just0 []string
+	Tag   uint8
+}
+
+const (
+	MaybeArrayStringNothing = iota
+	MaybeArrayStringJust
+)
+
+// Data/Show/show.go
+package show
+
+import "github.com/i-am-the-slime/purs-backend-go/go-support/prim"
+
+func Show(argument0 string) string {
+	return prim.ShowString(argument0)
+}
+
+// main.go
+package main
+
+import (
+	"fixture/Data/Maybe"
+	"fixture/Data/Show"
+	"fmt"
+	"github.com/i-am-the-slime/purs-backend-go/go-support/direct"
+	"github.com/i-am-the-slime/purs-backend-go/go-support/prim"
+)
+
+type TagsX struct {
+	Tags []string
+	X    int32
+}
+
+var main_ = initializeMain_()
+
+func initializeMain_() []string {
+	append_ := direct.Appender[string]()
+	accumulator := maybe.MaybeArrayString{Tag: maybe.MaybeArrayStringJust, Just0: []string{}}
+	for _, element := range origin.Tags {
+		accumulator2 := accumulator
+		switch accumulator2.Tag {
+		case maybe.MaybeArrayStringJust:
+			if element == "" {
+				accumulator = maybe.MaybeArrayString{Tag: maybe.MaybeArrayStringNothing}
+			} else {
+				accumulator = maybe.MaybeArrayString{Tag: maybe.MaybeArrayStringJust, Just0: append_(accumulator2.Just0)(element + "!")}
+			}
+		default:
+			accumulator = maybe.MaybeArrayString{Tag: maybe.MaybeArrayStringNothing}
+		}
+	}
+	performed := accumulator
+	var result string
+	switch performed.Tag {
+	case maybe.MaybeArrayStringJust:
+		result = "(Just " + prim.ShowArray(show.Show, (TagsX{Tags: performed.Just0, X: origin.X}).Tags) + ")"
+	default:
+		result = "Nothing"
+	}
+	return []string{prim.ShowInt(prim.MultiplyInt32(origin.X, 2)), prim.ShowInt((TagsX{Tags: origin.Tags, X: origin.X + 1}).X), "(Just " + prim.ShowInt(2) + ")", "Nothing", prim.ShowInt(5), result, prim.ShowInt(1), prim.ShowInt(bump(3, origin).X)}
+}
+
+var origin TagsX = TagsX{X: 3, Tags: []string{"a", "b"}}
+
+func bump(argument0 int32, argument1 TagsX) TagsX {
+	for {
+		switch argument0 {
+		case 0:
+			return argument1
+		default:
+			n := argument0
+			argument0, argument1 = n - 1, TagsX{Tags: argument1.Tags, X: argument1.X + prim.MultiplyInt32(n, 2)}
+			continue
+		}
+	}
+}
+
+func main() {
+	fmt.Println(main_)
+}
