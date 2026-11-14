@@ -9,7 +9,8 @@
 #   KEEP=1 ...                                                # keep generated Go
 #
 # Environment: IRIS (compiler binary), EXAMPLES (purs-backend-go/examples),
-# GO_SUPPORT (purs-backend-go/go-support), JOBS (parallel workers).
+# GO_SUPPORT (purs-backend-go/go-support), JOBS (parallel workers), GOEXPERIMENT
+# (default simd).
 
 set -uo pipefail
 
@@ -18,6 +19,9 @@ ROOT="$(cd "$HERE/../../.." && pwd)"
 IRIS="${IRIS:-$ROOT/target/release/iris}"
 EXAMPLES="${EXAMPLES:-/Users/mark/Developer/purs-backend-go/examples}"
 GO_SUPPORT="${GO_SUPPORT:-/Users/mark/Developer/purs-backend-go/go-support}"
+# go-support scans strings sixteen bytes at a time with SIMD, an experiment
+# in Go 1.27.0 (simd/archsimd) whose API may change in later releases.
+export GOEXPERIMENT="${GOEXPERIMENT:-simd}"
 JOBS="${JOBS:-8}"
 WORK="${WORK:-$(mktemp -d)}"
 mkdir -p "$WORK"

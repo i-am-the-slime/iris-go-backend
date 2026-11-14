@@ -8,6 +8,9 @@ IRIS="${IRIS:-$ROOT/target/release/iris}"
 MARKGRAF="${MARKGRAF:-/Users/mark/Developer/markgraf}"
 LAYERED_LAYOUT="${LAYERED_LAYOUT:-$MARKGRAF/.spago/p/layered-layout/d7cf719be196556fe9e2d55b6ea1d6f4ca5a5713}"
 GO_SUPPORT="${GO_SUPPORT:-/Users/mark/Developer/purs-backend-go/go-support}"
+# go-support scans strings sixteen bytes at a time with SIMD, an experiment
+# in Go 1.27.0 (simd/archsimd) whose API may change in later releases.
+export GOEXPERIMENT="${GOEXPERIMENT:-simd}"
 WORK="${WORK:-$(mktemp -d)}"
 
 mkdir -p "$WORK/driver" "$WORK/go"

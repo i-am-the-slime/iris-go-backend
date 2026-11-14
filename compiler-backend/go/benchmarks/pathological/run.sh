@@ -13,7 +13,8 @@
 #   SKIP_BUILD=1 ...                                                      # reuse WORK's builds
 #   PATHO_CPUPROFILE=/path/prof ...                                       # Go CPU profile (one benchmark)
 #
-# Environment: IRIS, GO_SUPPORT, PURS_BACKEND_ES, WORK (build directory, kept), JOBS.
+# Environment: IRIS, GO_SUPPORT, PURS_BACKEND_ES, WORK (build directory, kept), JOBS,
+# GOEXPERIMENT (default simd).
 
 set -uo pipefail
 
@@ -21,6 +22,9 @@ HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT="$(cd "$HERE/../../../.." && pwd)"
 IRIS="${IRIS:-$ROOT/target/release/iris}"
 GO_SUPPORT="${GO_SUPPORT:-/Users/mark/Developer/purs-backend-go/go-support}"
+# go-support scans strings sixteen bytes at a time with SIMD, an experiment
+# in Go 1.27.0 (simd/archsimd) whose API may change in later releases.
+export GOEXPERIMENT="${GOEXPERIMENT:-simd}"
 PURS_BACKEND_ES="${PURS_BACKEND_ES:-/Users/mark/Developer/markgraf/npm/node_modules/.bin/purs-backend-es}"
 WORK="${WORK:-${TMPDIR:-/tmp}/iris-pathological}"
 JOBS="${JOBS:-6}"
