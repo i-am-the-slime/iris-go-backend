@@ -370,6 +370,11 @@ impl Monotypes {
                 return self.convert(context, representation, expansions);
             }
             ("Data.Exists", "Exists") => Monotype::Erased(Erasure::Existential),
+            // A payload that `Data.Variant`'s `Eq`, `Ord`, `Show` and `Enum`
+            // instances pass to the label's own instance, the same erased value
+            // `VariantRep` holds.
+            ("Data.Variant.Internal", "VariantCase")
+            | ("Data.Variant.Internal", "VariantFCase") => Monotype::Erased(Erasure::VariantRow),
             ("Data.Function.Uncurried", name) if name.starts_with("Fn") => {
                 let Some((&result, parameters)) = arguments.split_last() else {
                     return Ok(Err(UnsupportedState::UnsaturatedType { name: name.to_string() }));
