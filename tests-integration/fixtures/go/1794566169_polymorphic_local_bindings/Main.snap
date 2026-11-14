@@ -28,8 +28,8 @@ import (
 	"fixture/Control/Category"
 	"fixture/Data/Show"
 	"fmt"
-	"github.com/i-am-the-slime/purs-backend-go/go-support/array"
 	"github.com/i-am-the-slime/purs-backend-go/go-support/prim"
+	"slices"
 )
 
 var main_ []string = []string{"x" + prim.ShowInt(int(2)), pairs, joined, prim.ShowArray(show.Show2, mainGo(show.Show, 3, []string{})) + prim.ShowArray(show.Show, mainGo2(category.Identity, 3, []int32{}))}
@@ -39,20 +39,22 @@ var pairs string = "true" + prim.ShowInt(int(pairsF(pairsF(1))))
 var joined string = "<" + prim.ShowInt(int(3)) + "><" + prim.ShowString("y") + ">"
 
 func mainGo(f func(int32) string, n int32, accumulated []string) []string {
+	accumulated = slices.Clip(accumulated)
 	for {
 		if n <= 0 {
 			return accumulated
 		}
-		n, accumulated = n - 1, array.Append(accumulated, []string{f(n)})
+		n, accumulated = n - 1, append(accumulated, f(n))
 	}
 }
 
 func mainGo2(f func(int32) int32, n int32, accumulated []int32) []int32 {
+	accumulated = slices.Clip(accumulated)
 	for {
 		if n <= 0 {
 			return accumulated
 		}
-		n, accumulated = n - 1, array.Append(accumulated, []int32{f(n)})
+		n, accumulated = n - 1, append(accumulated, f(n))
 	}
 }
 

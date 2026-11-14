@@ -1,0 +1,128 @@
+---
+source: tests-integration/src/fixtures.rs
+---
+// Data/Maybe/maybe.go
+package maybe
+
+type MaybeInt struct {
+	Just0 int32
+	Tag   uint8
+}
+
+const (
+	MaybeIntNothing = iota
+	MaybeIntJust
+)
+
+// main.go
+package main
+
+import (
+	"fixture/Data/Maybe"
+	"fmt"
+	"github.com/i-am-the-slime/purs-backend-go/go-support/prim"
+	"math"
+)
+
+type EvenHalvedSteps struct {
+	Even   bool
+	Halved int32
+	Steps  int32
+}
+
+var main_ EvenHalvedSteps = EvenHalvedSteps{Steps: walk(0, 27), Halved: halve(0, 64.0), Even: isEven(100000)}
+
+const (
+	walkStep = iota
+	halveStep
+)
+
+func walkOrHalve(step int, steps int32, n int32, x float64) int32 {
+	for {
+		switch step {
+		case walkStep:
+			if n <= 1 {
+				return steps
+			}
+			if int32(prim.IntMod(int(n), int(2))) == 0 {
+				step, steps, x = halveStep, steps + 1, float64(n)
+				continue
+			}
+			steps, n = steps + 1, prim.MultiplyInt32(3, n) + 1
+		default: // halveStep
+			x2 := prim.NumberFloor(x / 2.0)
+			var result int32
+			if !prim.NumberIsFinite(x2) {
+				result = 0
+			} else if x2 >= float64(int32(prim.TopInt)) {
+				result = int32(prim.TopInt)
+			} else if x2 <= float64(int32(prim.BottomInt)) {
+				result = int32(prim.BottomInt)
+			} else {
+				var integer maybe.MaybeInt
+				if math.Trunc(x2) == x2 && (x2 >= math.MinInt32 && x2 <= math.MaxInt32) {
+					integer = maybe.MaybeInt{Tag: maybe.MaybeIntJust, Just0: int32(x2)}
+				} else {
+					integer = maybe.MaybeInt{Tag: maybe.MaybeIntNothing}
+				}
+				switch integer.Tag {
+				case maybe.MaybeIntNothing:
+					result = 0
+				default: // maybe.MaybeIntJust
+					result = integer.Just0
+				}
+			}
+			step, n = walkStep, result
+		}
+	}
+}
+
+func walk(steps int32, n int32) int32 {
+	return walkOrHalve(walkStep, steps, n, 0)
+}
+
+func halve(steps int32, x float64) int32 {
+	return walkOrHalve(halveStep, steps, 0, x)
+}
+
+const (
+	isEvenStep = iota
+	isOddStep
+)
+
+func isEvenOrIsOdd(step int, argument0 int32) bool {
+	for {
+		switch step {
+		case isEvenStep:
+			switch argument0 {
+			case 0:
+				return true
+			default:
+				k := argument0
+				step, argument0 = isOddStep, k - 1
+				continue
+			}
+		default: // isOddStep
+			switch argument0 {
+			case 0:
+				return false
+			default:
+				k2 := argument0
+				step, argument0 = isEvenStep, k2 - 1
+				continue
+			}
+		}
+	}
+}
+
+func isEven(argument0 int32) bool {
+	return isEvenOrIsOdd(isEvenStep, argument0)
+}
+
+func isOdd(argument0 int32) bool {
+	return isEvenOrIsOdd(isOddStep, argument0)
+}
+
+func main() {
+	fmt.Println(main_)
+}
