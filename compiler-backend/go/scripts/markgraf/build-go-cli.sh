@@ -35,5 +35,7 @@ require github.com/i-am-the-slime/purs-backend-go/go-support v0.0.0
 replace github.com/i-am-the-slime/purs-backend-go/go-support => $GO_SUPPORT
 GOMOD
 # -tags libm: Math.sin and friends from the C library, as JavaScriptCore does.
-(cd "$OUT" && go build -tags libm -o markgraf .) >&2
+# -c: compile the one large package on every core instead of four.
+# -w: no DWARF, which more than halves link time.
+(cd "$OUT" && go build -tags libm -gcflags="-c=$(sysctl -n hw.ncpu)" -ldflags=-w -o markgraf .) >&2
 echo "$OUT/markgraf"

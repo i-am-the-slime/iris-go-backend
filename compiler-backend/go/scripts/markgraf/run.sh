@@ -30,7 +30,7 @@ require github.com/i-am-the-slime/purs-backend-go/go-support v0.0.0
 
 replace github.com/i-am-the-slime/purs-backend-go/go-support => $GO_SUPPORT
 GOMOD
-(cd "$WORK/go" && go build -o compaction .)
+(cd "$WORK/go" && go build -gcflags="-c=$(sysctl -n hw.ncpu)" -ldflags=-w -o compaction .)
 "$WORK/go/compaction" >"$WORK/actual.txt"
 
 if ! diff -u "$WORK/expected.txt" "$WORK/actual.txt"; then
