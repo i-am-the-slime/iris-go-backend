@@ -20,9 +20,9 @@ func initializeMain_() []string {
 	}}
 	mapped := make([]string, len(array2))
 	for index, shift := range array2 {
-		mapped[index] = prim.ShowInt(int(shift(1)))
+		mapped[index] = prim.ShowInt(shift(1))
 	}
-	return array.Append(mapped, array.Append([]string{prim.ShowInt(int(offset(3, 4)))}, array.Map(prefixed(2), []string{"a", "b"})))
+	return array.Append(mapped, array.Append([]string{prim.ShowInt(offset(3, 4))}, array.Map(prefixed(2), []string{"a", "b"})))
 }
 
 func offset(argument0 int32, x int32) int32 {

@@ -78,7 +78,7 @@ func initializeMain_() []string {
 		default: // ShapeRectangle
 			result = prim.MultiplyInt32(array3[index2].Rectangle0, array3[index2].Rectangle1)
 		}
-		mapped2[index2] = prim.ShowInt(int(result))
+		mapped2[index2] = prim.ShowInt(result)
 	}
 	array4 := []maybe.MaybeInt{maybe.MaybeInt{Tag: maybe.MaybeIntJust, Just0: 2}, maybe.MaybeInt{Tag: maybe.MaybeIntNothing}}
 	mapped3 := make([]string, len(array4))
@@ -90,7 +90,7 @@ func initializeMain_() []string {
 		default: // maybe.MaybeIntNothing
 			result2 = 1
 		}
-		mapped3[index3] = prim.ShowInt(int(result2))
+		mapped3[index3] = prim.ShowInt(result2)
 	}
 	array5 := []string{"start", "jump"}
 	mapped4 := make([]string, len(array5))
@@ -104,7 +104,7 @@ func initializeMain_() []string {
 		default:
 			result3 = 0
 		}
-		mapped4[index4] = prim.ShowInt(int(result3))
+		mapped4[index4] = prim.ShowInt(result3)
 	}
 	array6 := []int32{500, 5}
 	mapped5 := make([]string, len(array6))
@@ -120,7 +120,7 @@ func initializeMain_() []string {
 	array7 := []LeftRight{LeftRight{Left: 1, Right: 2}}
 	mapped6 := make([]string, len(array7))
 	for index6 := range array7 {
-		mapped6[index6] = prim.ShowInt(int(array7[index6].Left + array7[index6].Right))
+		mapped6[index6] = prim.ShowInt(array7[index6].Left + array7[index6].Right)
 	}
 	array8 := []maybe.MaybeString{maybe.MaybeString{Tag: maybe.MaybeStringJust, Just0: "here"}}
 	mapped7 := make([]string, len(array8))

@@ -14,7 +14,7 @@ package show
 import "github.com/i-am-the-slime/purs-backend-go/go-support/prim"
 
 func Show(argument0 int32) string {
-	return prim.ShowInt(int(argument0))
+	return prim.ShowInt(argument0)
 }
 
 // main.go
@@ -44,7 +44,7 @@ func initializeMain_() BelowComprehensionIndexedMaterialisedOverRangePairs {
 		if value < 4 {
 			for _, value2 := range numbers {
 				if value2 > value {
-					bound = append(bound, prim.ShowInt(int(value)) + ":" + prim.ShowInt(int(value2)))
+					bound = append(bound, prim.ShowInt(value) + ":" + prim.ShowInt(value2))
 				}
 			}
 		}
@@ -83,7 +83,7 @@ func initializeMain_() BelowComprehensionIndexedMaterialisedOverRangePairs {
 	mapped2 := []string{}
 	for _, value6 := range numbers {
 		x4 := value6 + 1
-		if int32(prim.IntMod(int(x4), int(2))) == 0 {
+		if prim.IntMod(x4, 2) == 0 {
 			mapped2 = append(mapped2, show.Show(x4))
 		}
 	}

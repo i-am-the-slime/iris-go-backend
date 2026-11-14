@@ -14,7 +14,7 @@ package show
 import "github.com/i-am-the-slime/purs-backend-go/go-support/prim"
 
 func Show(argument0 int32) string {
-	return prim.ShowInt(int(argument0))
+	return prim.ShowInt(argument0)
 }
 
 func Show2(argument0 string) string {
@@ -32,11 +32,11 @@ import (
 	"slices"
 )
 
-var main_ []string = []string{"x" + prim.ShowInt(int(2)), pairs, joined, prim.ShowArray(show.Show2, mainGo(show.Show, 3, []string{})) + prim.ShowArray(show.Show, mainGo2(category.Identity, 3, []int32{}))}
+var main_ []string = []string{"x" + prim.ShowInt(2), pairs, joined, prim.ShowArray(show.Show2, mainGo(show.Show, 3, []string{})) + prim.ShowArray(show.Show, mainGo2(category.Identity, 3, []int32{}))}
 
-var pairs string = "true" + prim.ShowInt(int(pairsF(pairsF(1))))
+var pairs string = "true" + prim.ShowInt(pairsF(pairsF(1)))
 
-var joined string = "<" + prim.ShowInt(int(3)) + "><" + prim.ShowString("y") + ">"
+var joined string = "<" + prim.ShowInt(3) + "><" + prim.ShowString("y") + ">"
 
 func mainGo(f func(int32) string, n int32, accumulated []string) []string {
 	accumulated = slices.Clip(accumulated)

@@ -129,8 +129,18 @@ fn statement_parts(statement: &mut GoStatement) {
 
 /// `len(direct.ToCodePointArray(nil, nil, s))`, the code point length as
 /// `Data.String.CodePoints.length` defines it, counts the code points without
-/// building the array.
+/// building the array. `direct.CodePointLength` counts them as an `int32`, so
+/// the Int the length becomes needs no conversion, and the Go `int` that
+/// `len` was needs one.
 fn counted_code_points(value: &mut GoExpression) {
+    if let GoExpression::Conversion { type_: GoType::Named(name), value: converted } = value
+        && name == "int32"
+        && let GoExpression::Conversion { type_: GoType::Int, value: counted } = &mut **converted
+        && is_code_point_length(counted)
+    {
+        *value = std::mem::replace(&mut **counted, GoExpression::Integer(0));
+        return;
+    }
     let GoExpression::Call { function, arguments } = value else { return };
     if !matches!(&**function, GoExpression::Identifier(name) if name == "len") {
         return;
@@ -146,17 +156,24 @@ fn counted_code_points(value: &mut GoExpression) {
         return;
     }
     let Some(string) = converted_arguments.pop() else { return };
-    *value = GoExpression::Call {
+    let counted = GoExpression::Call {
         function: Box::new(GoExpression::Qualified {
             package: "direct".into(),
             name: "CodePointLength".into(),
         }),
         arguments: vec![string],
     };
+    *value = GoExpression::Conversion { type_: GoType::Int, value: Box::new(counted) };
 }
 
-/// `length(s) op literal` or `literal op length(s)`, length possibly
-/// converted to `int32`.
+fn is_code_point_length(value: &GoExpression) -> bool {
+    matches!(value, GoExpression::Call { function, .. }
+        if matches!(&**function, GoExpression::Qualified { package, name }
+            if package == "direct" && name == "CodePointLength"))
+}
+
+/// `length(s) op literal` or `literal op length(s)`, the length possibly
+/// under a conversion.
 fn compared_length(value: &mut GoExpression) {
     let GoExpression::Binary { operator, left, right } = value else { return };
     if !matches!(*operator, "==" | "!=" | "<" | "<=" | ">" | ">=") {
@@ -220,13 +237,11 @@ fn largest_literal<'a>(values: impl Iterator<Item = &'a GoExpression>) -> Option
     largest
 }
 
-/// Turns a length, possibly under an `int32` conversion, into its count up to
+/// Turns a length, possibly under a conversion, into its count up to
 /// `literal + 1`.
 fn cap(length: &mut GoExpression, literal: i64) {
     let call = match length {
-        GoExpression::Conversion { type_: GoType::Named(name), value } if name == "int32" => {
-            &mut **value
-        }
+        GoExpression::Conversion { value, .. } => &mut **value,
         call => call,
     };
     let GoExpression::Call { function, arguments } = call else { return };

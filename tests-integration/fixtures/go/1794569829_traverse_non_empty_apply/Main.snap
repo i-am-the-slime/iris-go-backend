@@ -32,19 +32,19 @@ func initializeMain_() maybe.MaybeArrayInt {
 	append_ := direct.Appender[int32]()
 	n := array_[0]
 	var result maybe.MaybeArrayInt
-	if int32(prim.IntMod(int(n), int(2))) == 0 {
-		result = maybe.MaybeArrayInt{Tag: maybe.MaybeArrayIntJust, Just0: []int32{int32(prim.IntDiv(int(n), int(2)))}}
+	if prim.IntMod(n, 2) == 0 {
+		result = maybe.MaybeArrayInt{Tag: maybe.MaybeArrayIntJust, Just0: []int32{prim.IntDiv(n, 2)}}
 	} else {
 		result = maybe.MaybeArrayInt{Tag: maybe.MaybeArrayIntNothing}
 	}
-	array2 := array.Slice(int(1), int(int32(len(array_))), array_)
+	array2 := array.Slice(1, int32(len(array_)), array_)
 	accumulator := result
 	for _, element := range array2 {
 		accumulator2 := accumulator
 		switch accumulator2.Tag {
 		case maybe.MaybeArrayIntJust:
-			if int32(prim.IntMod(int(element), int(2))) == 0 {
-				accumulator = maybe.MaybeArrayInt{Tag: maybe.MaybeArrayIntJust, Just0: append_(accumulator2.Just0)(int32(prim.IntDiv(int(element), int(2))))}
+			if prim.IntMod(element, 2) == 0 {
+				accumulator = maybe.MaybeArrayInt{Tag: maybe.MaybeArrayIntJust, Just0: append_(accumulator2.Just0)(prim.IntDiv(element, 2))}
 			} else {
 				accumulator = maybe.MaybeArrayInt{Tag: maybe.MaybeArrayIntNothing}
 			}
