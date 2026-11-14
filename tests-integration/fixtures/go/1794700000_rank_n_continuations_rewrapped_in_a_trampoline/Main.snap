@@ -1,0 +1,170 @@
+---
+source: tests-integration/src/fixtures.rs
+---
+// main.go
+package main
+
+import (
+	"fmt"
+	"github.com/i-am-the-slime/purs-backend-go/go-support/prim"
+)
+
+type StepInt struct {
+	More0 func(struct{}) StepInt
+	Stop0 string
+	Done0 int32
+	Tag   uint8
+}
+
+const (
+	StepIntMore = iota
+	StepIntStop
+	StepIntDone
+)
+
+type FailureRecordParse struct {
+	Failure0 string
+}
+
+type StepInt2 struct {
+	StepInt func(int32) func(func(func(struct{}) StepInt) StepInt) func(func(FailureRecordParse) StepInt) func(func(int32) StepInt) StepInt
+}
+
+type FailureRecord struct {
+	Failure0 string
+}
+
+type StepInt3 struct {
+	StepInt func(int32, func(func(struct{}) StepInt) StepInt, func(FailureRecord) StepInt, func(int32) StepInt) StepInt
+}
+
+func convert2(value FailureRecord) FailureRecordParse {
+	return FailureRecordParse{Failure0: value.Failure0}
+}
+
+func convert(value StepInt3) StepInt2 {
+	return StepInt2{StepInt: func(coerced int32) func(func(func(struct{}) StepInt) StepInt) func(func(FailureRecordParse) StepInt) func(func(int32) StepInt) StepInt {
+		original := func(argument func(func(struct{}) StepInt) StepInt) func(func(FailureRecord) StepInt) func(func(int32) StepInt) StepInt {
+			return func(argument2 func(FailureRecord) StepInt) func(func(int32) StepInt) StepInt {
+				return func(argument3 func(int32) StepInt) StepInt {
+					return value.StepInt(coerced, argument, argument2, argument3)
+				}
+			}
+		}
+		return func(coerced2 func(func(struct{}) StepInt) StepInt) func(func(FailureRecordParse) StepInt) func(func(int32) StepInt) StepInt {
+			original2 := original(coerced2)
+			return func(coerced3 func(FailureRecordParse) StepInt) func(func(int32) StepInt) StepInt {
+				return original2(func(coerced4 FailureRecord) StepInt {
+					return coerced3(convert2(coerced4))
+				})
+			}
+		}
+	}}
+}
+
+var main_ = initializeMain_()
+
+func initializeMain_() []int32 {
+	scrutinee := mainGo(loop(30, 0).StepInt(0)(func(value0 func(struct{}) StepInt) StepInt {
+		return StepInt{Tag: StepIntMore, More0: value0}
+	})(func(argument0 FailureRecordParse) StepInt {
+		return StepInt{Tag: StepIntStop, Stop0: argument0.Failure0}
+	})(func(value02 int32) StepInt {
+		return StepInt{Tag: StepIntDone, Done0: value02}
+	}))
+	var result int32
+	switch scrutinee.Tag {
+	case StepIntDone:
+		result = scrutinee.Done0
+	case StepIntStop:
+		result = -1
+	default: // StepIntMore
+		result = -2
+	}
+	return []int32{result}
+}
+
+func loop(i int32, total int32) StepInt2 {
+	if i <= 0 {
+		return StepInt2{StepInt: func(_ int32) func(func(func(struct{}) StepInt) StepInt) func(func(FailureRecordParse) StepInt) func(func(int32) StepInt) StepInt {
+			return func(_ func(func(struct{}) StepInt) StepInt) func(func(FailureRecordParse) StepInt) func(func(int32) StepInt) StepInt {
+				return func(_ func(FailureRecordParse) StepInt) func(func(int32) StepInt) StepInt {
+					return func(done func(int32) StepInt) StepInt {
+						return done(total)
+					}
+				}
+			}
+		}}
+	}
+	return StepInt2{StepInt: func(env int32) func(func(func(struct{}) StepInt) StepInt) func(func(FailureRecordParse) StepInt) func(func(int32) StepInt) StepInt {
+		return func(more func(func(struct{}) StepInt) StepInt) func(func(FailureRecordParse) StepInt) func(func(int32) StepInt) StepInt {
+			return func(failure func(FailureRecordParse) StepInt) func(func(int32) StepInt) StepInt {
+				return func(done2 func(int32) StepInt) StepInt {
+					return more(func(_ struct{}) StepInt {
+						return askRecordParse.StepInt(env + i)(more)(failure)(func(a int32) StepInt {
+							argument0 := convert(countdown(prim.IntMod(i, 3)))
+							return more(func(_ struct{}) StepInt {
+								return more(func(_ struct{}) StepInt {
+									return argument0.StepInt(env)(more)(failure)(func(a2 int32) StepInt {
+										n := loop(i - 1, prim.IntMod(total + a + a2, 1000003))
+										return more(func(_ struct{}) StepInt {
+											return n.StepInt(env)(more)(failure)(done2)
+										})
+									})
+								})
+							})
+						})
+					})
+				}
+			}
+		}
+	}}
+}
+
+var askRecordParse StepInt2 = StepInt2{StepInt: func(env int32) func(func(func(struct{}) StepInt) StepInt) func(func(FailureRecordParse) StepInt) func(func(int32) StepInt) StepInt {
+	return func(_ func(func(struct{}) StepInt) StepInt) func(func(FailureRecordParse) StepInt) func(func(int32) StepInt) StepInt {
+		return func(_ func(FailureRecordParse) StepInt) func(func(int32) StepInt) StepInt {
+			return func(done func(int32) StepInt) StepInt {
+				return done(env)
+			}
+		}
+	}
+}}
+
+func countdown(n int32) StepInt3 {
+	if n <= 0 {
+		return askRecord
+	}
+	return StepInt3{StepInt: func(env int32, more func(func(struct{}) StepInt) StepInt, failure func(FailureRecord) StepInt, done func(int32) StepInt) StepInt {
+		return more(func(_ struct{}) StepInt {
+			return askRecord.StepInt(env, more, failure, func(_ int32) StepInt {
+				n2 := countdown(n - 1)
+				return more(func(_ struct{}) StepInt {
+					return n2.StepInt(env, more, failure, done)
+				})
+			})
+		})
+	}}
+}
+
+var askRecord StepInt3 = StepInt3{StepInt: func(env int32, _ func(func(struct{}) StepInt) StepInt, _ func(FailureRecord) StepInt, done func(int32) StepInt) StepInt {
+	return done(env)
+}}
+
+func mainGo(value StepInt) StepInt {
+	for {
+		switch value.Tag {
+		case StepIntMore:
+			next := value.More0
+			value = next(struct{}{})
+			continue
+		default:
+			step := value
+			return step
+		}
+	}
+}
+
+func main() {
+	fmt.Println(main_)
+}
