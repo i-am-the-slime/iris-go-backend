@@ -8,7 +8,9 @@ mod application;
 mod coerce;
 mod deduplicate;
 mod iteration;
+mod lengths;
 mod ownership;
+mod ranges;
 mod reuse;
 
 use std::collections::BTreeSet;
@@ -70,6 +72,8 @@ where
     if emitter.imports.contains(GoPackage::Aff.path()) {
         await_fibers(&mut declarations);
     }
+    timed("ranges", || ranges::read_elements_in_place(&mut declarations));
+    timed("lengths", || lengths::count_lengths_up_to_comparisons(&mut declarations));
     let declarations =
         timed("deduplicate", || deduplicate::merge_identical_declarations(declarations));
     let mut all = std::mem::take(&mut emitter.type_declarations);

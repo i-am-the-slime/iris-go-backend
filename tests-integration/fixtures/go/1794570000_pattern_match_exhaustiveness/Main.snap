@@ -94,11 +94,11 @@ func initializeMain_() []string {
 	}
 	array8 := []MaybeString{MaybeString{Tag: MaybeStringJust, Just0: "here"}}
 	mapped7 := make([]string, len(array8))
-	for index7, value := range array8 {
+	for index7 := range array8 {
 		var result string
-		switch value.Tag {
+		switch array8[index7].Tag {
 		case MaybeStringJust:
-			result = value.Just0
+			result = array8[index7].Just0
 		default:
 			panic("Failed pattern match")
 		}
