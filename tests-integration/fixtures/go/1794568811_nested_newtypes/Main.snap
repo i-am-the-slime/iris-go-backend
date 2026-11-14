@@ -1,18 +1,25 @@
 ---
 source: tests-integration/src/fixtures.rs
 ---
+// Data/Show/show.go
+package show
+
+import "github.com/i-am-the-slime/purs-backend-go/go-support/prim"
+
+func Show(argument0 int32) string {
+	return prim.ShowInt(int(argument0))
+}
+
+// main.go
 package main
 
 import (
+	"fixture/Data/Show"
 	"fmt"
 	"github.com/i-am-the-slime/purs-backend-go/go-support/prim"
 )
 
-var main_ string = "Box " + ("Box " + prim.ShowArray(show, []int32{1, 2}))
-
-func show(argument0 int32) string {
-	return prim.ShowInt(int(argument0))
-}
+var main_ string = "Box " + ("Box " + prim.ShowArray(show.Show, []int32{1, 2}))
 
 func main() {
 	fmt.Println(main_)

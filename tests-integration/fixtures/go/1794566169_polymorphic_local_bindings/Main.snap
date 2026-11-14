@@ -1,15 +1,38 @@
 ---
 source: tests-integration/src/fixtures.rs
 ---
+// Control/Category/category.go
+package category
+
+func Identity(x int32) int32 {
+	return x
+}
+
+// Data/Show/show.go
+package show
+
+import "github.com/i-am-the-slime/purs-backend-go/go-support/prim"
+
+func Show(argument0 int32) string {
+	return prim.ShowInt(int(argument0))
+}
+
+func Show2(argument0 string) string {
+	return prim.ShowString(argument0)
+}
+
+// main.go
 package main
 
 import (
+	"fixture/Control/Category"
+	"fixture/Data/Show"
 	"fmt"
 	"github.com/i-am-the-slime/purs-backend-go/go-support/array"
 	"github.com/i-am-the-slime/purs-backend-go/go-support/prim"
 )
 
-var main_ []string = []string{"x" + prim.ShowInt(int(2)), pairs, joined, prim.ShowArray(show2, mainGo(show, 3, []string{})) + prim.ShowArray(show, mainGo2(identity, 3, []int32{}))}
+var main_ []string = []string{"x" + prim.ShowInt(int(2)), pairs, joined, prim.ShowArray(show.Show2, mainGo(show.Show, 3, []string{})) + prim.ShowArray(show.Show, mainGo2(category.Identity, 3, []int32{}))}
 
 var pairs = initializePairs()
 
@@ -25,18 +48,6 @@ func initializePairs() string {
 }
 
 var joined string = "<" + (prim.ShowInt(int(3)) + ">") + ("<" + (prim.ShowString("y") + ">"))
-
-func show(argument0 int32) string {
-	return prim.ShowInt(int(argument0))
-}
-
-func show2(argument0 string) string {
-	return prim.ShowString(argument0)
-}
-
-func identity(x int32) int32 {
-	return x
-}
 
 func mainGo(f func(int32) string, n int32, accumulated []string) []string {
 	for {

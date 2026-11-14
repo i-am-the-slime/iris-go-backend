@@ -1,7 +1,7 @@
 use smol_str::SmolStr;
 
 use super::ownership::{Carried, owned_snocs};
-use super::{Emitter, Mode, Sink, binary, call, identifier, identifier_expression, uses_local};
+use super::{Emitter, Mode, Sink, binary, call, field_name, identifier_expression, uses_local};
 use crate::error::GoResult;
 use crate::foreign::Iteration;
 use crate::mono::{Expression, ExpressionKind, FunctionId, Local};
@@ -280,7 +280,7 @@ where
 
     pub(super) fn clip(&mut self, accumulator: &str, field: Option<&SmolStr>) -> GoStatement {
         let carried = match field {
-            Some(label) => super::field(identifier_expression(accumulator), &identifier(label)),
+            Some(label) => super::field(identifier_expression(accumulator), &field_name(label)),
             None => identifier_expression(accumulator),
         };
         self.imports.insert("slices".into());

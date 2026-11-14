@@ -9,6 +9,7 @@ mod coerce;
 mod deduplicate;
 mod iteration;
 mod ownership;
+mod packages;
 mod reuse;
 
 use std::collections::BTreeSet;
@@ -20,6 +21,7 @@ use files::FileId;
 use indexing::TermItemId;
 
 use self::application::Callable;
+use self::packages::Spelling;
 use crate::arity::Arities;
 use crate::context::{Context, capitalise};
 use crate::erasure::Erasure;
@@ -27,21 +29,26 @@ use crate::error::{GoError, GoResult};
 use crate::foreign::{
     Boundary, Comparison, Foreign, ForeignPackages, GoFunction, GoPackage, Operator, Spelled,
 };
+use crate::modules::{ModuleIndex, Modules};
 use crate::mono::{
     Alternative, Binding, Expression, ExpressionKind, Function, FunctionId, Guard, Guarded,
     Literal, Local, LocalId, Pattern, PatternKind, Program, RecordUpdate,
 };
 use crate::monotype::{DataType, Monotype, MonotypeId, Monotypes};
 use crate::simplify::visit;
-use crate::syntax::{GoCase, GoDeclaration, GoDefault, GoExpression, GoFile, GoStatement, GoType};
+use crate::syntax::{GoCase, GoDeclaration, GoDefault, GoExpression, GoStatement, GoType};
 use crate::timing::timed;
+
+pub use self::packages::GoSourceFile;
 
 pub fn emit_program<Q>(
     program: &Program,
     monotypes: &mut Monotypes,
     queries: &Q,
     foreign_packages: &ForeignPackages,
-) -> GoResult<String>
+    modules: &Modules,
+    module_path: &str,
+) -> GoResult<Vec<GoSourceFile>>
 where
     Q: checking::ExternalQueries,
 {
@@ -55,40 +62,107 @@ where
     let mut emitter = Emitter::new(program, monotypes, queries, foreign_packages, arities);
     emitter.materialized = reused.materialized;
     emitter.assign_function_names();
+    let entry_origin = program.function(program.entry).origin;
     let declarations = timed("functions", || {
         let mut declarations = vec![];
         for index in 0..program.functions.len() {
-            declarations.extend(emitter.function(FunctionId(index as u32))?);
+            let id = FunctionId(index as u32);
+            let emitted = emitter.function(id)?;
+            emitter.note_homes(&emitted, program.function(id).origin);
+            declarations.extend(emitted);
         }
         while let Some((id, position)) = emitter.pending_owning_variants.pop() {
-            declarations.extend(emitter.owning_variant(id, position)?);
+            let emitted = emitter.owning_variant(id, position)?;
+            emitter.note_homes(&emitted, program.function(id).origin);
+            declarations.extend(emitted);
         }
-        declarations.extend(emitter.main()?);
+        let main = emitter.main()?;
+        emitter.note_homes(main.as_slice(), entry_origin);
+        declarations.extend(main);
         GoResult::Ok(declarations)
     });
     let mut declarations = declarations?;
     if emitter.imports.contains(GoPackage::Aff.path()) {
         await_fibers(&mut declarations);
     }
-    let declarations =
-        timed("deduplicate", || deduplicate::merge_identical_declarations(declarations));
+    let mut homes: FxHashMap<String, ModuleIndex> = std::mem::take(&mut emitter.homes)
+        .into_iter()
+        .filter_map(|(name, file)| Some((name, modules.index(file)?)))
+        .collect();
+    // The homes of the declarations each declaration stands for.
+    let mut merged: FxHashMap<String, Vec<Option<ModuleIndex>>> = FxHashMap::default();
+    let declarations = timed("deduplicate", || {
+        deduplicate::merge_identical_declarations(declarations, &mut |from, into| {
+            let from_homes = merged.remove(from).unwrap_or_else(|| vec![homes.get(from).copied()]);
+            merged
+                .entry(into.to_string())
+                .or_insert_with(|| vec![homes.get(into).copied()])
+                .extend(from_homes);
+        })
+    });
+    for (name, merged_homes) in merged {
+        match modules.common_home(&merged_homes) {
+            Some(home) => homes.insert(name, home),
+            None => homes.remove(&name),
+        };
+    }
+    let home = |declaration: &GoDeclaration| {
+        let name = match declaration {
+            GoDeclaration::Constants { names, .. } => names.first().map(String::as_str),
+            declaration => declaration.name(),
+        };
+        name.and_then(|name| homes.get(name)).copied()
+    };
     let mut all = std::mem::take(&mut emitter.type_declarations);
     all.extend(declarations);
-    let file = GoFile { imports: emitter.imports.into_iter().collect(), declarations: all };
-    let (source, census) = timed("render", || file.render_with_census());
+    let all: Vec<(GoDeclaration, Option<ModuleIndex>)> = all
+        .into_iter()
+        .map(|declaration| {
+            let home = home(&declaration);
+            (declaration, home)
+        })
+        .collect();
+    let packaging = packages::Packaging {
+        modules,
+        module_path,
+        spellings: &emitter.spellings,
+        imports: &emitter.imports,
+    };
+    let files = timed("packages", || packaging.split(all))?;
     if std::env::var_os("IRIS_GO_ANY_CENSUS").is_some() {
-        let identifier = |c: char| c.is_alphanumeric() || c == '_';
-        let textual = source
-            .match_indices("any")
-            .filter(|&(at, _)| {
-                !source[..at].chars().next_back().is_some_and(identifier)
-                    && !source[at + 3..].chars().next().is_some_and(identifier)
-            })
-            .count();
+        let mut census = crate::erasure::Census::default();
+        let mut textual = 0;
+        for file in &files {
+            let (source, file_census) = file.file.render_with_census();
+            census.absorb(file_census);
+            let identifier = |c: char| c.is_alphanumeric() || c == '_';
+            textual += source
+                .match_indices("any")
+                .filter(|&(at, _)| {
+                    !source[..at].chars().next_back().is_some_and(identifier)
+                        && !source[at + 3..].chars().next().is_some_and(identifier)
+                })
+                .count();
+        }
         eprint!("{census}");
         eprintln!("  ({textual} `any` in the source text)");
     }
-    Ok(source)
+    Ok(files)
+}
+
+impl<Q> Emitter<'_, '_, '_, Q>
+where
+    Q: checking::ExternalQueries,
+{
+    /// Records that the declarations emitted for a function belong to its origin.
+    fn note_homes(&mut self, declarations: &[GoDeclaration], origin: Option<FileId>) {
+        let Some(origin) = origin else { return };
+        for declaration in declarations {
+            if let Some(name) = declaration.name() {
+                self.homes.insert(name.to_string(), origin);
+            }
+        }
+    }
 }
 
 impl<'p, 'm, 'q, Q> Emitter<'p, 'm, 'q, Q>
@@ -117,7 +191,9 @@ where
             recursive_names: FxHashMap::default(),
             type_declarations: vec![],
             reference_declared: false,
-            range_declared: false,
+            range_name: None,
+            homes: FxHashMap::default(),
+            spellings: FxHashMap::default(),
             locals: FxHashMap::default(),
             local_names: FxHashSet::default(),
             tail_loop: None,
@@ -411,7 +487,13 @@ struct Emitter<'p, 'm, 'q, Q> {
     recursive_names: FxHashMap<DataType, String>,
     type_declarations: Vec<GoDeclaration>,
     reference_declared: bool,
-    range_declared: bool,
+    /// The name of the support function `Foreign::Range` calls, once declared.
+    range_name: Option<String>,
+    /// The module each declaration belongs to, where it has one of its own:
+    /// a function's is its origin, a data type's the module defining it.
+    homes: FxHashMap<String, FileId>,
+    /// How each global name was formed, so that a package can spell it anew.
+    spellings: FxHashMap<String, Spelling>,
     locals: FxHashMap<LocalId, GoExpression>,
     local_names: FxHashSet<String>,
     tail_loop: Option<TailLoop>,
@@ -533,6 +615,17 @@ fn identifier(name: &str) -> String {
     sanitized
 }
 
+/// A record field's Go name: exported, since the record's type may live in
+/// another package than the code that builds or reads it.
+fn field_name(label: &str) -> String {
+    let sanitized: String = label
+        .chars()
+        .map(|character| if character.is_alphanumeric() { character } else { '_' })
+        .collect();
+    let name = capitalise(&sanitized);
+    if name.starts_with(char::is_uppercase) { name } else { format!("X{name}") }
+}
+
 /// Package names generated code may import.
 const IMPORTED_PACKAGES: &[&str] = &[
     "prim",
@@ -555,6 +648,18 @@ const IMPORTED_PACKAGES: &[&str] = &[
     "big",
     "slices",
 ];
+
+impl<Q> Emitter<'_, '_, '_, Q>
+where
+    Q: checking::ExternalQueries,
+{
+    /// A fresh global name, remembering how it was formed.
+    fn global_name(&mut self, spelling: Spelling) -> String {
+        let name = unique(spelling.text(), &mut self.global_names);
+        self.spellings.insert(name.clone(), spelling);
+        name
+    }
+}
 
 fn unique(base: String, taken: &mut FxHashSet<String>) -> String {
     if taken.insert(base.clone()) {
@@ -710,7 +815,7 @@ where
                 self.global_names.insert("main".into());
                 "main".to_string()
             } else {
-                unique(identifier(&function.name), &mut self.global_names)
+                self.global_name(Spelling::Base(identifier(&function.name)))
             };
             self.function_names.push(name);
         }
@@ -886,8 +991,8 @@ where
         if let Some(name) = self.owning_variants.get(&(id, position)) {
             return name.clone();
         }
-        let base = format!("{}Owning", self.function_names[id.0 as usize]);
-        let name = unique(base, &mut self.global_names);
+        let function_name = self.function_names[id.0 as usize].clone();
+        let name = self.global_name(Spelling::derived("", function_name, "Owning"));
         self.owning_variants.insert((id, position), name.clone());
         self.pending_owning_variants.push((id, position));
         name
@@ -925,8 +1030,8 @@ where
         let type_ = self.go_type(function.result)?;
         let mut statements = vec![];
         let value = self.value(&function.body, &mut statements)?;
-        let cell = unique(format!("{name}Value"), &mut self.global_names);
-        let ready = unique(format!("{name}Ready"), &mut self.global_names);
+        let cell = self.global_name(Spelling::derived("", name.into(), "Value"));
+        let ready = self.global_name(Spelling::derived("", name.into(), "Ready"));
         statements.push(GoStatement::Assign {
             targets: vec![identifier_expression(&cell)],
             values: vec![value],
@@ -966,7 +1071,7 @@ where
                 value,
             }]);
         }
-        let initializer = unique(format!("initialize{}", capitalise(name)), &mut self.global_names);
+        let initializer = self.global_name(Spelling::derived("initialize", name.into(), ""));
         statements.push(GoStatement::Return(Some(value)));
         let result = self.go_result(function.result)?;
         Ok(vec![
@@ -1161,7 +1266,8 @@ where
         for &argument in data.arguments.iter() {
             self.context.type_suffix(argument, &mut base)?;
         }
-        let name = unique(identifier(&base), &mut self.global_names);
+        let name = self.global_name(Spelling::Base(identifier(&base)));
+        self.homes.insert(name.clone(), data.file_id);
         self.recursive_names.insert(data.clone(), name.clone());
         let type_ = self.go_type(unfolded)?;
         self.type_declarations.push(GoDeclaration::Type { name: name.clone(), type_ });
@@ -1190,6 +1296,7 @@ where
         if std::mem::replace(&mut self.reference_declared, true) {
             return;
         }
+        self.spellings.insert("Ref".into(), Spelling::Base("Ref".into()));
         self.type_declarations.push(GoDeclaration::GenericType {
             name: "Ref".into(),
             parameter: "T".into(),
@@ -1209,11 +1316,11 @@ where
         } else {
             fields.iter().map(|field| capitalise(&identifier(&field.label))).collect()
         };
-        let name = unique(base, &mut self.global_names);
+        let name = self.global_name(Spelling::Base(base));
         self.record_names.insert(monotype, name.clone());
         let mut go_fields = vec![];
         for field in fields.iter() {
-            go_fields.push((identifier(&field.label), self.go_type(field.monotype)?));
+            go_fields.push((field_name(&field.label), self.go_type(field.monotype)?));
         }
         self.type_declarations
             .push(GoDeclaration::Type { name: name.clone(), type_: GoType::Struct(go_fields) });
@@ -1228,7 +1335,8 @@ where
         for &argument in data.arguments.iter() {
             self.context.type_suffix(argument, &mut base)?;
         }
-        let name = unique(identifier(&base), &mut self.global_names);
+        let name = self.global_name(Spelling::Base(identifier(&base)));
+        self.homes.insert(name.clone(), data.file_id);
         let constructors = match self.monotypes.constructors(&mut self.context, data)? {
             Ok(constructors) => constructors,
             Err(state) => return Err(GoError::Unsupported { definition: name, state }),
@@ -1242,8 +1350,11 @@ where
         };
         let mut layouts = vec![];
         for constructor in constructors.iter() {
-            let tag =
-                unique(format!("{name}{}", identifier(&constructor.name)), &mut self.global_names);
+            let tag = self.global_name(Spelling::derived(
+                "",
+                name.clone(),
+                &identifier(&constructor.name),
+            ));
             let fields = constructor
                 .fields
                 .iter()
@@ -1650,8 +1761,10 @@ where
             Foreign::WithMutex => return self.with_mutex(arguments, result, sink, out),
             Foreign::MutexNew => {
                 self.imports.insert("sync".into());
-                let mutex =
-                    call(identifier_expression("new"), vec![identifier_expression("sync.Mutex")]);
+                let mutex = call(
+                    identifier_expression("new"),
+                    vec![GoExpression::Type(GoType::Named("sync.Mutex".into()))],
+                );
                 return self.deliver(mutex, result, sink, out);
             }
             Foreign::MakeAff => {
@@ -1769,9 +1882,10 @@ where
                 }
                 out.push(GoStatement::Assign {
                     targets: vec![field(reference, "Value")],
-                    values: vec![field(identifier_expression(&modified), "state")],
+                    values: vec![field(identifier_expression(&modified), &field_name("state"))],
                 });
-                self.deliver(field(identifier_expression(&modified), "value"), result, sink, out)
+                let value = field(identifier_expression(&modified), &field_name("value"));
+                self.deliver(value, result, sink, out)
             }
             Foreign::Throw => {
                 out.push(GoStatement::Expression(call(
@@ -2133,7 +2247,7 @@ where
                         unreachable!("invariant violated: a record argument has a record type")
                     };
                     for record_field in fields.iter() {
-                        values.push(field(record.clone(), &identifier(&record_field.label)));
+                        values.push(field(record.clone(), &field_name(&record_field.label)));
                     }
                     continue;
                 }
@@ -2218,7 +2332,7 @@ where
         let fields = fields
             .iter()
             .zip(names)
-            .map(|(field, name)| (Some(identifier(&field.label)), identifier_expression(&name)))
+            .map(|(field, name)| (Some(field_name(&field.label)), identifier_expression(&name)))
             .collect();
         Ok(GoExpression::Composite { type_, fields })
     }
@@ -2449,8 +2563,8 @@ where
         let associate = GoExpression::Composite {
             type_: record_type.clone(),
             fields: vec![
-                (Some(identifier("index")), identifier_expression(&index)),
-                (Some(identifier("value")), identifier_expression(&value)),
+                (Some(field_name("index")), identifier_expression(&index)),
+                (Some(field_name("value")), identifier_expression(&value)),
             ],
         };
         let element_type = self.go_type(element)?;
@@ -2498,7 +2612,7 @@ where
             .find(|record_field| record_field.label == label)
             .expect("invariant violated: a projected field exists")
             .monotype;
-        let body = field(identifier_expression("value"), &identifier(label));
+        let body = field(identifier_expression("value"), &field_name(label));
         Ok(GoExpression::Function {
             parameters: vec![("value".into(), self.go_type(record)?)],
             result: self.go_result(field_monotype)?,
@@ -2933,13 +3047,13 @@ where
                 let name = self.record_name(expression.monotype)?;
                 let mut values = vec![];
                 for (label, value) in fields {
-                    values.push((Some(identifier(label)), self.value(value, out)?));
+                    values.push((Some(field_name(label)), self.value(value, out)?));
                 }
                 GoExpression::Composite { type_: GoType::Named(name), fields: values }
             }
             ExpressionKind::Access { record, label } => {
                 let record = self.value(record, out)?;
-                field(record, &identifier(label))
+                field(record, &field_name(label))
             }
             ExpressionKind::Update { record: source, updates }
                 if source.monotype != expression.monotype =>
@@ -3092,7 +3206,7 @@ where
         if let Some(name) = self.shared_nullaries.get(tag) {
             return identifier_expression(name);
         }
-        let name = unique(format!("shared{tag}"), &mut self.global_names);
+        let name = self.global_name(Spelling::derived("shared", tag.into(), ""));
         let fields = vec![(Some("Tag".to_string()), identifier_expression(tag))];
         let composite = GoExpression::Composite { type_: GoType::Named(type_name.into()), fields };
         self.type_declarations.push(GoDeclaration::Variable {
@@ -3222,7 +3336,7 @@ where
         };
         let mut values = Vec::with_capacity(fields.len());
         for record_field in fields.iter() {
-            let label = identifier(&record_field.label);
+            let label = field_name(&record_field.label);
             let update = updates.iter().find(|update| match update {
                 RecordUpdate::Leaf { label: updated, .. }
                 | RecordUpdate::Branch { label: updated, .. } => *updated == record_field.label,
@@ -3252,12 +3366,12 @@ where
                 RecordUpdate::Leaf { label, value } => {
                     let value = self.value(value, out)?;
                     out.push(GoStatement::Assign {
-                        targets: vec![field(target.clone(), &identifier(label))],
+                        targets: vec![field(target.clone(), &field_name(label))],
                         values: vec![value],
                     });
                 }
                 RecordUpdate::Branch { label, updates } => {
-                    self.updates(field(target.clone(), &identifier(label)), updates, out)?;
+                    self.updates(field(target.clone(), &field_name(label)), updates, out)?;
                 }
             }
         }
@@ -3360,14 +3474,21 @@ where
             return self.thunk(&expression);
         }
         if let Foreign::Range = foreign {
-            if !std::mem::replace(&mut self.range_declared, true) {
-                self.type_declarations.push(GoDeclaration::Source(RANGE_SOURCE));
-            }
+            let range = match &self.range_name {
+                Some(name) => name.clone(),
+                None => {
+                    let name = self.global_name(Spelling::Base("rangeInt32".into()));
+                    self.type_declarations
+                        .push(GoDeclaration::Source { name: name.clone(), template: RANGE_SOURCE });
+                    self.range_name = Some(name.clone());
+                    name
+                }
+            };
             let mut values = vec![];
             for argument in arguments {
                 values.push(self.value(argument, out)?);
             }
-            return Ok(call(identifier_expression("rangeInt32"), values));
+            return Ok(call(identifier_expression(&range), values));
         }
         if let Foreign::MaybeIndex = foreign {
             return self.maybe_index(arguments, monotype, out);
@@ -3419,7 +3540,7 @@ where
                 });
             };
             let record = self.value(&arguments[1], out)?;
-            return Ok(field(record, &identifier(label)));
+            return Ok(field(record, &field_name(label)));
         }
         if let Foreign::Record(_) = foreign {
             return Err(GoError::Unsupported {
@@ -4056,7 +4177,7 @@ where
                 for (label, field_pattern) in fields {
                     self.pattern_tests(
                         field_pattern,
-                        field(path.clone(), &identifier(label)),
+                        field(path.clone(), &field_name(label)),
                         tests,
                         bindings,
                     )?;
@@ -4091,7 +4212,7 @@ where
     }
 }
 
-const RANGE_SOURCE: &str = "func rangeInt32(start int32, end int32) []int32 {
+const RANGE_SOURCE: &str = "func {name}(start int32, end int32) []int32 {
 \tstep := int32(1)
 \tif start > end {
 \t\tstep = -1

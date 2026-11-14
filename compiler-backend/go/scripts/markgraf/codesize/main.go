@@ -1,4 +1,4 @@
-// Command codesize attributes the lines and closures of one generated Go file
+// Command codesize attributes the lines and closures of generated Go
 // to their likely causes, so that work on code size starts from numbers.
 //
 //	compiler-backend/go/scripts/markgraf/code-size.sh GENERATED_DIR
@@ -28,7 +28,9 @@ import (
 	"go/printer"
 	"go/token"
 	"go/types"
+	"io/fs"
 	"os"
+	"path/filepath"
 	"regexp"
 	"sort"
 	"strings"
@@ -36,20 +38,41 @@ import (
 
 func main() {
 	if len(os.Args) != 2 {
-		fmt.Fprintln(os.Stderr, "usage: codesize FILE.go")
+		fmt.Fprintln(os.Stderr, "usage: codesize FILE.go|DIR")
 		os.Exit(2)
 	}
-	source, err := os.ReadFile(os.Args[1])
-	check(err)
 	files := token.NewFileSet()
-	file, err := parser.ParseFile(files, os.Args[1], source, parser.SkipObjectResolution)
-	check(err)
+	file, source := parseAll(files, os.Args[1])
 	program := newProgram(files, file, source)
 	program.reportTotals()
 	program.reportDuplicates()
 	program.reportFamilies()
 	program.reportRepeats()
 	program.reportClosures()
+}
+
+// parseAll parses one file, or every .go file under a directory, as one file
+// whose declarations are all of theirs; a program's packages are one program.
+func parseAll(files *token.FileSet, path string) (*ast.File, []byte) {
+	var paths []string
+	check(filepath.WalkDir(path, func(path string, entry fs.DirEntry, err error) error {
+		if err == nil && !entry.IsDir() && strings.HasSuffix(path, ".go") {
+			paths = append(paths, path)
+		}
+		return err
+	}))
+	sort.Strings(paths)
+	all := &ast.File{Name: ast.NewIdent("main")}
+	var sources []byte
+	for _, path := range paths {
+		source, err := os.ReadFile(path)
+		check(err)
+		file, err := parser.ParseFile(files, path, source, parser.SkipObjectResolution)
+		check(err)
+		all.Decls = append(all.Decls, file.Decls...)
+		sources = append(sources, source...)
+	}
+	return all, sources
 }
 
 type program struct {

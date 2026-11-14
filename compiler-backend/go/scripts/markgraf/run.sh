@@ -18,9 +18,6 @@ cd "$WORK/driver"
 spago build --quiet >"$WORK/spago.log" 2>&1 || { cat "$WORK/spago.log"; exit 1; }
 bun --eval "import('$WORK/driver/output/CompactionDriver/index.js').then(module => module.main())" >"$WORK/expected.txt"
 
-started=$(perl -MTime::HiRes=time -e 'printf "%.0f", time*1000')
-"$IRIS" go --entry CompactionDriver.main "$WORK/go"
-finished=$(perl -MTime::HiRes=time -e 'printf "%.0f", time*1000')
 cat > "$WORK/go/go.mod" <<GOMOD
 module markgraf.example/compaction
 
@@ -30,6 +27,9 @@ require github.com/i-am-the-slime/purs-backend-go/go-support v0.0.0
 
 replace github.com/i-am-the-slime/purs-backend-go/go-support => $GO_SUPPORT
 GOMOD
+started=$(perl -MTime::HiRes=time -e 'printf "%.0f", time*1000')
+"$IRIS" go --entry CompactionDriver.main "$WORK/go"
+finished=$(perl -MTime::HiRes=time -e 'printf "%.0f", time*1000')
 (cd "$WORK/go" && go build -gcflags="-c=$(sysctl -n hw.ncpu) -dwarf=false" -ldflags=-w -o compaction .)
 "$WORK/go/compaction" >"$WORK/actual.txt"
 

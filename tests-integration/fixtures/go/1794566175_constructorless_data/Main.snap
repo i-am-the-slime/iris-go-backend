@@ -1,6 +1,7 @@
 ---
 source: tests-integration/src/fixtures.rs
 ---
+// main.go
 package main
 
 import (

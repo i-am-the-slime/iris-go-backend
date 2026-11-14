@@ -1,11 +1,10 @@
 ---
 source: tests-integration/src/fixtures.rs
 ---
+// main.go
 package main
 
-import (
-	"os"
-)
+import "os"
 
 func main_() int32 {
 	return 3

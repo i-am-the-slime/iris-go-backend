@@ -30,7 +30,9 @@ MARGIN_PERCENT="${MARGIN_PERCENT:-20}"
 MARGIN_SECONDS="${MARGIN_SECONDS:-0.2}"
 WORK="${WORK:-$(mktemp -d)}"
 SCOPE=markgraf-cli
-mkdir -p "$WORK"
+mkdir -p "$WORK/go"
+# The generated packages import each other through the module go.mod names.
+printf 'module markgraf.example/cli\n\ngo 1.23.2\n' > "$WORK/go/go.mod"
 
 update=0
 [ "${1:-}" = "--update" ] && update=1

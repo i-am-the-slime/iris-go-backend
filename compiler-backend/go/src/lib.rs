@@ -2,7 +2,7 @@
 //!
 //! The backend specializes the program from an entry point using the checker's
 //! types and evidence, simplifies the resulting monomorphic tree, and renders it
-//! as a single Go `main` package.
+//! as one Go package per PureScript module, the entry module's being `main`.
 
 mod arity;
 pub mod blocker;
@@ -14,6 +14,7 @@ pub mod error;
 mod foreign;
 mod lift;
 mod merge;
+mod modules;
 mod mono;
 mod monotype;
 mod scheme;
@@ -31,7 +32,9 @@ use crate::specialize::Specializer;
 use crate::timing::timed;
 
 pub struct GoProgram {
-    pub source: String,
+    /// Each Go source file, by its path relative to the output directory, in
+    /// order of path.
+    pub files: Vec<(String, String)>,
     pub functions: usize,
 }
 
@@ -40,6 +43,7 @@ pub fn compile_program(
     entry_module: &str,
     entry_name: &str,
     foreign_packages: &ForeignPackages,
+    module_path: &str,
 ) -> GoResult<GoProgram> {
     let qualified = format!("{entry_module}.{entry_name}");
     let file_id = queries
@@ -66,9 +70,11 @@ pub fn compile_program(
     }
     let (functions, mut monotypes, next_local) =
         timed("finish specialization", || specializer.finish());
+    let mut context = context::Context::new(queries);
+    let modules = modules::Modules::collect(&mut context, file_id)?;
     let program = mono::Program { functions, entry };
     let program = timed("simplify", || simplify::simplify(program, &mut monotypes, next_local));
-    let program = timed("merge", || merge::merge_identical_functions(program));
+    let program = timed("merge", || merge::merge_identical_functions(program, &modules));
     if std::env::var_os("IRIS_GO_DUMP").is_some() {
         for function in &program.functions {
             eprintln!("{function:#?}");
@@ -76,7 +82,18 @@ pub fn compile_program(
         monotypes.dump();
     }
     let functions = program.functions.len();
-    let source =
-        timed("emit", || emit::emit_program(&program, &mut monotypes, queries, foreign_packages))?;
-    Ok(GoProgram { source, functions })
+    let files = timed("emit", || {
+        emit::emit_program(
+            &program,
+            &mut monotypes,
+            queries,
+            foreign_packages,
+            &modules,
+            module_path,
+        )
+    })?;
+    let mut files: Vec<(String, String)> =
+        files.into_iter().map(|file| (file.path, file.file.render())).collect();
+    files.sort();
+    Ok(GoProgram { files, functions })
 }

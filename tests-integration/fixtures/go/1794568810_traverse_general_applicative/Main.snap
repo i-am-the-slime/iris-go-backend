@@ -1,13 +1,8 @@
 ---
 source: tests-integration/src/fixtures.rs
 ---
-package main
-
-import (
-	"fmt"
-	"github.com/i-am-the-slime/purs-backend-go/go-support/direct"
-	"github.com/i-am-the-slime/purs-backend-go/go-support/prim"
-)
+// Data/Either/either.go
+package either
 
 type EitherStringArrayInt struct {
 	Tag    int
@@ -42,72 +37,82 @@ const (
 	EitherStringIntRight
 )
 
+// main.go
+package main
+
+import (
+	"fixture/Data/Either"
+	"fmt"
+	"github.com/i-am-the-slime/purs-backend-go/go-support/direct"
+	"github.com/i-am-the-slime/purs-backend-go/go-support/prim"
+)
+
 var main_ = initializeMain_()
 
-func initializeMain_() []EitherStringArrayInt {
+func initializeMain_() []either.EitherStringArrayInt {
 	append_ := direct.Appender[int32]()
 	array2 := []int32{1, 2, 3}
-	accumulator := EitherStringArrayInt{Tag: EitherStringArrayIntRight, Right0: []int32{}}
+	accumulator := either.EitherStringArrayInt{Tag: either.EitherStringArrayIntRight, Right0: []int32{}}
 	for _, element := range array2 {
 		accumulator2 := accumulator
-		var result EitherStringFnIntArrayInt
+		var result either.EitherStringFnIntArrayInt
 		switch accumulator2.Tag {
-		case EitherStringArrayIntLeft:
-			result = EitherStringFnIntArrayInt{Tag: EitherStringFnIntArrayIntLeft, Left0: accumulator2.Left0}
-		default: // EitherStringArrayIntRight
-			result = EitherStringFnIntArrayInt{Tag: EitherStringFnIntArrayIntRight, Right0: append_(accumulator2.Right0)}
+		case either.EitherStringArrayIntLeft:
+			result = either.EitherStringFnIntArrayInt{Tag: either.EitherStringFnIntArrayIntLeft, Left0: accumulator2.Left0}
+		default: // either.EitherStringArrayIntRight
+			result = either.EitherStringFnIntArrayInt{Tag: either.EitherStringFnIntArrayIntRight, Right0: append_(accumulator2.Right0)}
 		}
 		switch result.Tag {
-		case EitherStringFnIntArrayIntLeft:
-			accumulator = EitherStringArrayInt{Tag: EitherStringArrayIntLeft, Left0: result.Left0}
-		default: // EitherStringFnIntArrayIntRight
-			var result2 EitherStringInt
+		case either.EitherStringFnIntArrayIntLeft:
+			accumulator = either.EitherStringArrayInt{Tag: either.EitherStringArrayIntLeft, Left0: result.Left0}
+		default: // either.EitherStringFnIntArrayIntRight
+			var result2 either.EitherStringInt
 			if element > 0 {
-				result2 = EitherStringInt{Tag: EitherStringIntRight, Right0: element}
+				result2 = either.EitherStringInt{Tag: either.EitherStringIntRight, Right0: element}
 			} else {
-				result2 = EitherStringInt{Tag: EitherStringIntLeft, Left0: "not positive: " + prim.ShowInt(int(element))}
+				result2 = either.EitherStringInt{Tag: either.EitherStringIntLeft, Left0: "not positive: " + prim.ShowInt(int(element))}
 			}
 			switch result2.Tag {
-			case EitherStringIntLeft:
-				accumulator = EitherStringArrayInt{Tag: EitherStringArrayIntLeft, Left0: result2.Left0}
-			default: // EitherStringIntRight
-				accumulator = EitherStringArrayInt{Tag: EitherStringArrayIntRight, Right0: result.Right0(result2.Right0)}
+			case either.EitherStringIntLeft:
+				accumulator = either.EitherStringArrayInt{Tag: either.EitherStringArrayIntLeft, Left0: result2.Left0}
+			default: // either.EitherStringIntRight
+				accumulator = either.EitherStringArrayInt{Tag: either.EitherStringArrayIntRight, Right0: result.Right0(result2.Right0)}
 			}
 		}
 	}
 	performed := accumulator
 	append_2 := direct.Appender[int32]()
 	array3 := []int32{1, -2, 3}
-	accumulator3 := EitherStringArrayInt{Tag: EitherStringArrayIntRight, Right0: []int32{}}
+	accumulator3 := either.EitherStringArrayInt{Tag: either.EitherStringArrayIntRight, Right0: []int32{}}
 	for _, element2 := range array3 {
 		accumulator4 := accumulator3
-		var result3 EitherStringFnIntArrayInt
+		var result3 either.EitherStringFnIntArrayInt
 		switch accumulator4.Tag {
-		case EitherStringArrayIntLeft:
-			result3 = EitherStringFnIntArrayInt{Tag: EitherStringFnIntArrayIntLeft, Left0: accumulator4.Left0}
-		default: // EitherStringArrayIntRight
-			result3 = EitherStringFnIntArrayInt{Tag: EitherStringFnIntArrayIntRight, Right0: append_2(accumulator4.Right0)}
+		case either.EitherStringArrayIntLeft:
+			result3 = either.EitherStringFnIntArrayInt{Tag: either.EitherStringFnIntArrayIntLeft, Left0: accumulator4.Left0}
+		default: // either.EitherStringArrayIntRight
+			result3 = either.EitherStringFnIntArrayInt{Tag: either.EitherStringFnIntArrayIntRight, Right0: append_2(accumulator4.Right0)}
 		}
 		switch result3.Tag {
-		case EitherStringFnIntArrayIntLeft:
-			accumulator3 = EitherStringArrayInt{Tag: EitherStringArrayIntLeft, Left0: result3.Left0}
-		default: // EitherStringFnIntArrayIntRight
-			var result4 EitherStringInt
+		case either.EitherStringFnIntArrayIntLeft:
+			accumulator3 = either.EitherStringArrayInt{Tag: either.EitherStringArrayIntLeft, Left0: result3.Left0}
+		default: // either.EitherStringFnIntArrayIntRight
+			var result4 either.EitherStringInt
 			if element2 > 0 {
-				result4 = EitherStringInt{Tag: EitherStringIntRight, Right0: element2}
+				result4 = either.EitherStringInt{Tag: either.EitherStringIntRight, Right0: element2}
 			} else {
-				result4 = EitherStringInt{Tag: EitherStringIntLeft, Left0: "not positive: " + prim.ShowInt(int(element2))}
+				result4 = either.EitherStringInt{Tag: either.EitherStringIntLeft, Left0: "not positive: " + prim.ShowInt(int(element2))}
 			}
 			switch result4.Tag {
-			case EitherStringIntLeft:
-				accumulator3 = EitherStringArrayInt{Tag: EitherStringArrayIntLeft, Left0: result4.Left0}
-			default: // EitherStringIntRight
-				accumulator3 = EitherStringArrayInt{Tag: EitherStringArrayIntRight, Right0: result3.Right0(result4.Right0)}
+			case either.EitherStringIntLeft:
+				accumulator3 = either.EitherStringArrayInt{Tag: either.EitherStringArrayIntLeft, Left0: result4.Left0}
+			default: // either.EitherStringIntRight
+				accumulator3 = either.EitherStringArrayInt{Tag: either.EitherStringArrayIntRight, Right0: result3.Right0(result4.Right0)}
 			}
 		}
 	}
 	performed2 := accumulator3
-	return []EitherStringArrayInt{performed, performed2}
+	return []either.EitherStringArrayInt{performed, performed2}
 }
 
 func main() {

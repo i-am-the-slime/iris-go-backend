@@ -1,11 +1,10 @@
 ---
 source: tests-integration/src/fixtures.rs
 ---
+// main.go
 package main
 
-import (
-	"fmt"
-)
+import "fmt"
 
 type TreeInt struct {
 	Tag   int

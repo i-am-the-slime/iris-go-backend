@@ -19,12 +19,7 @@ OUT="$1"
 FONTS="$MARKGRAF/cli/assets/native/fonts"
 
 mkdir -p "$OUT/fonts"
-(cd "$MARKGRAF/cli" && "$IRIS" go --entry Main.run "$OUT") >&2
-cp "$HERE/host/host.go" "$OUT/"
-for font in Ilisarniq-Demi.otf Ilisarniq-Italic.otf VictorMono-Medium.ttf VictorMono-Bold.ttf \
-  VictorMono-MediumItalic.ttf VictorMono-BoldItalic.ttf; do
-  cp "$FONTS/$font" "$OUT/fonts/"
-done
+# The generated packages import each other through the module go.mod names.
 cat > "$OUT/go.mod" <<GOMOD
 module markgraf.example/cli
 
@@ -34,9 +29,17 @@ require github.com/i-am-the-slime/purs-backend-go/go-support v0.0.0
 
 replace github.com/i-am-the-slime/purs-backend-go/go-support => $GO_SUPPORT
 GOMOD
+(cd "$MARKGRAF/cli" && "$IRIS" go --entry Main.run "$OUT") >&2
+cp "$HERE/host/host.go" "$OUT/"
+for font in Ilisarniq-Demi.otf Ilisarniq-Italic.otf VictorMono-Medium.ttf VictorMono-Bold.ttf \
+  VictorMono-MediumItalic.ttf VictorMono-BoldItalic.ttf; do
+  cp "$FONTS/$font" "$OUT/fonts/"
+done
 # -tags libm: Math.sin and friends from the C library, as JavaScriptCore does.
-# -c: compile the one large package on every core instead of four.
+# -c: compile each package on every core instead of four.
 # -dwarf=false and -w: no DWARF; the compiler would generate it only for the
 # linker to drop, and without it link time more than halves.
-(cd "$OUT" && go build -tags libm -gcflags="-c=$(sysctl -n hw.ncpu) -dwarf=false" -ldflags=-w -o markgraf .) >&2
-echo "$OUT/markgraf"
+# The executable goes in bin/, since a package directory such as Markgraf/
+# takes its name on a case-insensitive file system.
+(cd "$OUT" && go build -tags libm -gcflags="-c=$(sysctl -n hw.ncpu) -dwarf=false" -ldflags=-w -o bin/markgraf .) >&2
+echo "$OUT/bin/markgraf"

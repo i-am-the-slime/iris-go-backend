@@ -549,10 +549,17 @@ pub fn go(path: &Path) -> FixtureResult {
     let loaded = crate::load_fixture(folder)?;
     check_source_errors(&loaded.engine, &loaded.files, &loaded.fixture_files)?;
 
+    let foreign_packages = go::ForeignPackages::default();
     let compiled =
-        go::compile_program(&loaded.engine, &file, "main", &go::ForeignPackages::default());
+        go::compile_program(&loaded.engine, &file, "main", &foreign_packages, "fixture");
     let output = match compiled {
-        Ok(program) => program.source,
+        // Each package's file follows its path, in order of path.
+        Ok(program) => program
+            .files
+            .iter()
+            .map(|(path, source)| format!("// {path}\n{source}"))
+            .collect::<Vec<_>>()
+            .join("\n"),
         Err(go::GoError::Blocked(blockers)) => blockers.to_string(),
         Err(error) => return Err(error.into()),
     };

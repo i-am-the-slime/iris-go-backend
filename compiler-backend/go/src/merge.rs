@@ -6,8 +6,10 @@
 use std::collections::BTreeSet;
 use std::hash::{Hash, Hasher};
 
+use files::FileId;
 use rustc_hash::{FxHashMap, FxHasher};
 
+use crate::modules::Modules;
 use crate::mono::{
     Expression, ExpressionKind, Function, FunctionId, Guard, Guarded, Local, LocalId, Pattern,
     PatternKind, Program,
@@ -21,9 +23,12 @@ use crate::simplify::{for_each_child_mut, prune_unreachable, visit};
 /// compared again. Constants are never merged, because each top-level value is
 /// its own value (two `Ref`s created alike stay distinct), and neither is the
 /// entry point.
-pub fn merge_identical_functions(program: Program) -> Program {
+pub fn merge_identical_functions(program: Program, modules: &Modules) -> Program {
     let Program { mut functions, entry } = program;
     let mut callers = callers(&functions);
+    // The origins of the functions each function stands for.
+    let mut origins: Vec<Vec<Option<FileId>>> =
+        functions.iter().map(|function| vec![function.origin]).collect();
     let mut shapes: Vec<Option<HashedShape>> = functions
         .iter()
         .enumerate()
@@ -40,6 +45,8 @@ pub fn merge_identical_functions(program: Program) -> Program {
         }
         let mut changed = BTreeSet::new();
         for (&merged, &representative) in &redirections {
+            let merged_origins = std::mem::take(&mut origins[merged.0 as usize]);
+            origins[representative.0 as usize].extend(merged_origins);
             shapes[merged.0 as usize] = None;
             let moved = std::mem::take(&mut callers[merged.0 as usize]);
             changed.extend(moved.iter().copied());
@@ -53,7 +60,19 @@ pub fn merge_identical_functions(program: Program) -> Program {
             }
         }
     }
+    for (function, origins) in functions.iter_mut().zip(origins) {
+        if origins.len() > 1 {
+            function.origin = common_origin(&origins, modules);
+        }
+    }
     prune_unreachable(functions, entry).0
+}
+
+/// The origin of a function that stands for functions of these origins.
+fn common_origin(origins: &[Option<FileId>], modules: &Modules) -> Option<FileId> {
+    let homes: Vec<Option<_>> =
+        origins.iter().map(|origin| origin.and_then(|file| modules.index(file))).collect();
+    modules.common_home(&homes).map(|home| modules.file(home))
 }
 
 /// Each function whose shape an earlier function has, mapped to the first such.

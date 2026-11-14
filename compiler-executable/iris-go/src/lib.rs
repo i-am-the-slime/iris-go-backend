@@ -2,7 +2,10 @@
 //!
 //! Loads and checks the workspace the way `iris dump-types` does, then hands the
 //! checked modules to the Go backend, which specializes the program from the
-//! entry point and writes `main.go`.
+//! entry point and writes one Go package per PureScript module: the entry
+//! module's as `main.go`, every other in a directory named after the module.
+//! The destination's `go.mod` names the Go module those packages import each
+//! other through.
 
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -36,25 +39,53 @@ pub fn run(config: GoConfig) -> Result<(), String> {
     let loaded = started.elapsed();
 
     fs::create_dir_all(&config.destination).map_err(|error| error.to_string())?;
-    let foreign_packages = vendor_foreign_packages(&config.destination)?;
-    let program =
-        go::compile_program(&snapshot.engine, entry_module, entry_name, &foreign_packages)
-            .map_err(|error| error.to_string())?;
-    let path = config.destination.join("main.go");
-    fs::write(&path, program.source).map_err(|error| error.to_string())?;
+    let module_path = go_module_path(&config.destination)?;
+    let foreign_packages = vendor_foreign_packages(&config.destination, &module_path)?;
+    let program = go::compile_program(
+        &snapshot.engine,
+        entry_module,
+        entry_name,
+        &foreign_packages,
+        &module_path,
+    )
+    .map_err(|error| error.to_string())?;
+    let files = program.files.len();
+    for (path, source) in program.files {
+        let path = config.destination.join(path);
+        if let Some(directory) = path.parent() {
+            fs::create_dir_all(directory).map_err(|error| error.to_string())?;
+        }
+        fs::write(&path, source).map_err(|error| error.to_string())?;
+    }
     eprintln!(
-        "go: {} functions -> {} (load {:.0?}, total {:.0?})",
+        "go: {} functions in {files} files -> {} (load {:.0?}, total {:.0?})",
         program.functions,
-        path.display(),
+        config.destination.display(),
         loaded,
         started.elapsed()
     );
     Ok(())
 }
 
+/// The Go module path the destination's `go.mod` declares.
+fn go_module_path(destination: &Path) -> Result<String, String> {
+    let go_mod = destination.join("go.mod");
+    let declaration = fs::read_to_string(&go_mod).map_err(|_| {
+        format!("{} must exist to name the Go module the generated packages share", go_mod.display())
+    })?;
+    declaration
+        .lines()
+        .find_map(|line| line.trim().strip_prefix("module "))
+        .map(|module| module.trim().to_string())
+        .ok_or_else(|| format!("{} does not declare a module", go_mod.display()))
+}
+
 const FOREIGN_DIRECTORY: &str = "go-ffi";
 
-fn vendor_foreign_packages(destination: &Path) -> Result<go::ForeignPackages, String> {
+fn vendor_foreign_packages(
+    destination: &Path,
+    module_path: &str,
+) -> Result<go::ForeignPackages, String> {
     let Ok(entries) = fs::read_dir(FOREIGN_DIRECTORY) else {
         return Ok(go::ForeignPackages::default());
     };
@@ -73,17 +104,5 @@ fn vendor_foreign_packages(destination: &Path) -> Result<go::ForeignPackages, St
     if modules.is_empty() {
         return Ok(go::ForeignPackages::default());
     }
-    let go_mod = destination.join("go.mod");
-    let declaration = fs::read_to_string(&go_mod).map_err(|_| {
-        format!(
-            "{} must exist to name the Go module of the {FOREIGN_DIRECTORY} packages",
-            go_mod.display()
-        )
-    })?;
-    let module_path = declaration
-        .lines()
-        .find_map(|line| line.trim().strip_prefix("module "))
-        .map(|module| module.trim().to_string())
-        .ok_or_else(|| format!("{} does not declare a module", go_mod.display()))?;
-    Ok(go::ForeignPackages { module_path, modules })
+    Ok(go::ForeignPackages { module_path: module_path.to_string(), modules })
 }

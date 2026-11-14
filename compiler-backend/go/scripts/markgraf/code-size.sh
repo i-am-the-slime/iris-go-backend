@@ -12,7 +12,6 @@ set -euo pipefail
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 target="${1:?usage: code-size.sh GENERATED_DIR_OR_FILE}"
-[ -d "$target" ] && target="$target/main.go"
 tool="$(mktemp -d)"
 trap 'rm -rf "$tool"' EXIT
 (cd "$HERE/codesize" && go build -o "$tool/codesize" main.go)

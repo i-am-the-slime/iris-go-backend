@@ -57,26 +57,61 @@ impl PartialEq for GoType {
 #[derive(Debug, Clone)]
 pub enum GoExpression {
     Identifier(String),
-    Qualified { package: String, name: String },
+    Qualified {
+        package: String,
+        name: String,
+    },
     Integer(i64),
     Float(String),
     String(String),
     Rune(char),
     Boolean(bool),
-    Call { function: Box<GoExpression>, arguments: Vec<GoExpression> },
-    Binary { operator: &'static str, left: Box<GoExpression>, right: Box<GoExpression> },
-    Unary { operator: &'static str, operand: Box<GoExpression> },
-    Field { value: Box<GoExpression>, name: String },
-    Index { value: Box<GoExpression>, index: Box<GoExpression> },
-    Composite { type_: GoType, fields: Vec<(Option<String>, GoExpression)> },
+    Call {
+        function: Box<GoExpression>,
+        arguments: Vec<GoExpression>,
+    },
+    Binary {
+        operator: &'static str,
+        left: Box<GoExpression>,
+        right: Box<GoExpression>,
+    },
+    Unary {
+        operator: &'static str,
+        operand: Box<GoExpression>,
+    },
+    Field {
+        value: Box<GoExpression>,
+        name: String,
+    },
+    Index {
+        value: Box<GoExpression>,
+        index: Box<GoExpression>,
+    },
+    Composite {
+        type_: GoType,
+        fields: Vec<(Option<String>, GoExpression)>,
+    },
     Address(Box<GoExpression>),
-    Conversion { type_: GoType, value: Box<GoExpression> },
-    TypeAssertion { value: Box<GoExpression>, type_: GoType },
+    Conversion {
+        type_: GoType,
+        value: Box<GoExpression>,
+    },
+    TypeAssertion {
+        value: Box<GoExpression>,
+        type_: GoType,
+    },
     Type(GoType),
     Spread(Box<GoExpression>),
-    Function { parameters: Vec<(String, GoType)>, result: Option<GoType>, body: Vec<GoStatement> },
+    Function {
+        parameters: Vec<(String, GoType)>,
+        result: Option<GoType>,
+        body: Vec<GoStatement>,
+    },
     /// A generic function instantiated at type arguments, `function[arguments]`.
-    Instantiation { function: Box<GoExpression>, arguments: Vec<GoType> },
+    Instantiation {
+        function: Box<GoExpression>,
+        arguments: Vec<GoType>,
+    },
 }
 
 #[derive(Debug, Clone)]
@@ -164,8 +199,12 @@ impl GoDefault {
 
 #[derive(Debug, Clone)]
 pub enum GoDeclaration {
-    /// Fixed support code that generated programs share.
-    Source(&'static str),
+    /// Fixed support code that generated programs share, declaring `name`
+    /// where its template says `{name}`.
+    Source {
+        name: String,
+        template: &'static str,
+    },
     Type {
         name: String,
         type_: GoType,
@@ -210,11 +249,12 @@ impl GoDeclaration {
     pub fn name(&self) -> Option<&str> {
         match self {
             GoDeclaration::Type { name, .. }
+            | GoDeclaration::Source { name, .. }
             | GoDeclaration::GenericType { name, .. }
             | GoDeclaration::Declared { name, .. }
             | GoDeclaration::Variable { name, .. }
             | GoDeclaration::Function { name, .. } => Some(name),
-            GoDeclaration::Source(_) | GoDeclaration::Constants { .. } => None,
+            GoDeclaration::Constants { .. } => None,
         }
     }
 
@@ -229,7 +269,7 @@ impl GoDeclaration {
                 }
                 statements_names(body, visit);
             }
-            GoDeclaration::Source(_)
+            GoDeclaration::Source { .. }
             | GoDeclaration::Type { .. }
             | GoDeclaration::GenericType { .. }
             | GoDeclaration::Constants { .. }
@@ -242,6 +282,219 @@ impl GoDeclaration {
             Printer { output: String::new(), indentation: 0, census: Default::default() };
         printer.declaration(self);
         printer.output
+    }
+}
+
+/// A place where a declaration names something: a value, a type, or a local
+/// it binds. Values and types may refer to other declarations.
+pub enum Reference<'a> {
+    /// An identifier or a qualified identifier expression.
+    Value(&'a mut GoExpression),
+    /// The name of a named or generic type.
+    Type(&'a mut String),
+    Binder(&'a mut String),
+}
+
+impl GoDeclaration {
+    /// Visits every value, type and binder the declaration names, apart from
+    /// the names it declares itself.
+    pub fn for_each_reference_mut(&mut self, visit: &mut impl FnMut(Reference<'_>)) {
+        match self {
+            GoDeclaration::Source { .. } => {}
+            GoDeclaration::Type { type_, .. } | GoDeclaration::Declared { type_, .. } => {
+                type_references(type_, visit)
+            }
+            GoDeclaration::GenericType { parameter, type_, .. } => {
+                let parameter = parameter.clone();
+                type_references(type_, &mut |reference| match reference {
+                    Reference::Type(name) if *name == parameter => {}
+                    reference => visit(reference),
+                });
+            }
+            GoDeclaration::Constants { type_name, .. } => {
+                if let Some(type_name) = type_name {
+                    visit(Reference::Type(type_name));
+                }
+            }
+            GoDeclaration::Variable { type_, value, .. } => {
+                if let Some(type_) = type_ {
+                    type_references(type_, visit);
+                }
+                expression_references(value, visit);
+            }
+            GoDeclaration::Function { parameters, result, body, .. } => {
+                for (parameter, type_) in parameters.iter_mut() {
+                    visit(Reference::Binder(parameter));
+                    type_references(type_, visit);
+                }
+                if let Some(result) = result {
+                    type_references(result, visit);
+                }
+                statements_references(body, visit);
+            }
+        }
+    }
+}
+
+fn type_references(type_: &mut GoType, visit: &mut impl FnMut(Reference<'_>)) {
+    match type_ {
+        GoType::Named(name) => visit(Reference::Type(name)),
+        GoType::Generic { name, arguments } => {
+            visit(Reference::Type(name));
+            arguments.iter_mut().for_each(|argument| type_references(argument, visit));
+        }
+        GoType::Slice(element) | GoType::Pointer(element) => type_references(element, visit),
+        GoType::Function { parameters, result } => {
+            parameters.iter_mut().for_each(|parameter| type_references(parameter, visit));
+            if let Some(result) = result {
+                type_references(result, visit);
+            }
+        }
+        GoType::Struct(fields) => {
+            fields.iter_mut().for_each(|(_, field)| type_references(field, visit));
+        }
+        GoType::Int
+        | GoType::Float64
+        | GoType::Bool
+        | GoType::Rune
+        | GoType::String
+        | GoType::EmptyStruct
+        | GoType::Any
+        | GoType::Erased(_) => {}
+    }
+}
+
+fn statements_references(statements: &mut [GoStatement], visit: &mut impl FnMut(Reference<'_>)) {
+    for statement in statements {
+        statement_references(statement, visit);
+    }
+}
+
+fn statement_references(statement: &mut GoStatement, visit: &mut impl FnMut(Reference<'_>)) {
+    match statement {
+        GoStatement::Define { names, values } => {
+            names.iter_mut().for_each(|name| visit(Reference::Binder(name)));
+            values.iter_mut().for_each(|value| expression_references(value, visit));
+        }
+        GoStatement::Variable { name, type_, value } => {
+            visit(Reference::Binder(name));
+            type_references(type_, visit);
+            if let Some(value) = value {
+                expression_references(value, visit);
+            }
+        }
+        GoStatement::Assign { targets, values } => {
+            targets.iter_mut().for_each(|target| expression_references(target, visit));
+            values.iter_mut().for_each(|value| expression_references(value, visit));
+        }
+        GoStatement::Expression(value) | GoStatement::Defer(value) => {
+            expression_references(value, visit)
+        }
+        GoStatement::Return(value) => {
+            if let Some(value) = value {
+                expression_references(value, visit);
+            }
+        }
+        GoStatement::If { condition, then, otherwise } => {
+            expression_references(condition, visit);
+            statements_references(then, visit);
+            statements_references(otherwise, visit);
+        }
+        GoStatement::IfAssert { name, value, type_, then } => {
+            visit(Reference::Binder(name));
+            expression_references(value, visit);
+            type_references(type_, visit);
+            statements_references(then, visit);
+        }
+        GoStatement::Switch { value, cases, default } => {
+            if let Some(value) = value {
+                expression_references(value, visit);
+            }
+            for case in cases {
+                case.values.iter_mut().for_each(|value| expression_references(value, visit));
+                statements_references(&mut case.body, visit);
+            }
+            if let Some(default) = default {
+                default.covers.iter_mut().for_each(|value| expression_references(value, visit));
+                statements_references(&mut default.body, visit);
+            }
+        }
+        GoStatement::Range { index, element, iterable, body } => {
+            if let Some(index) = index {
+                visit(Reference::Binder(index));
+            }
+            visit(Reference::Binder(element));
+            expression_references(iterable, visit);
+            statements_references(body, visit);
+        }
+        GoStatement::Counting { variable, start, end, body } => {
+            visit(Reference::Binder(variable));
+            expression_references(start, visit);
+            expression_references(end, visit);
+            statements_references(body, visit);
+        }
+        GoStatement::CountingDown { variable, start, body } => {
+            visit(Reference::Binder(variable));
+            expression_references(start, visit);
+            statements_references(body, visit);
+        }
+        GoStatement::Loop(body)
+        | GoStatement::LabeledLoop { body, .. }
+        | GoStatement::Block(body) => statements_references(body, visit),
+        GoStatement::Continue | GoStatement::Break | GoStatement::BreakTo(_) => {}
+    }
+}
+
+fn expression_references(expression: &mut GoExpression, visit: &mut impl FnMut(Reference<'_>)) {
+    match expression {
+        GoExpression::Identifier(_) | GoExpression::Qualified { .. } => {
+            visit(Reference::Value(expression))
+        }
+        GoExpression::Integer(_)
+        | GoExpression::Float(_)
+        | GoExpression::String(_)
+        | GoExpression::Rune(_)
+        | GoExpression::Boolean(_) => {}
+        GoExpression::Type(type_) => type_references(type_, visit),
+        GoExpression::Call { function, arguments } => {
+            expression_references(function, visit);
+            arguments.iter_mut().for_each(|argument| expression_references(argument, visit));
+        }
+        GoExpression::Binary { left, right, .. } => {
+            expression_references(left, visit);
+            expression_references(right, visit);
+        }
+        GoExpression::Index { value, index } => {
+            expression_references(value, visit);
+            expression_references(index, visit);
+        }
+        GoExpression::Unary { operand: value, .. }
+        | GoExpression::Field { value, .. }
+        | GoExpression::Address(value)
+        | GoExpression::Spread(value) => expression_references(value, visit),
+        GoExpression::Conversion { type_, value }
+        | GoExpression::TypeAssertion { value, type_ } => {
+            type_references(type_, visit);
+            expression_references(value, visit);
+        }
+        GoExpression::Composite { type_, fields } => {
+            type_references(type_, visit);
+            fields.iter_mut().for_each(|(_, value)| expression_references(value, visit));
+        }
+        GoExpression::Function { parameters, result, body } => {
+            for (parameter, type_) in parameters.iter_mut() {
+                visit(Reference::Binder(parameter));
+                type_references(type_, visit);
+            }
+            if let Some(result) = result {
+                type_references(result, visit);
+            }
+            statements_references(body, visit);
+        }
+        GoExpression::Instantiation { function, arguments } => {
+            expression_references(function, visit);
+            arguments.iter_mut().for_each(|argument| type_references(argument, visit));
+        }
     }
 }
 
@@ -366,8 +619,16 @@ fn expression_names(expression: &mut GoExpression, visit: &mut impl FnMut(Name<'
 }
 
 pub struct GoFile {
-    pub imports: Vec<String>,
+    pub package: String,
+    pub imports: Vec<GoImport>,
     pub declarations: Vec<GoDeclaration>,
+}
+
+/// `import alias "path"`, or `import "path"` when the package's own name will do.
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
+pub struct GoImport {
+    pub path: String,
+    pub alias: Option<String>,
 }
 
 impl GoFile {
@@ -379,13 +640,27 @@ impl GoFile {
     pub fn render_with_census(&self) -> (String, crate::erasure::Census) {
         let mut printer =
             Printer { output: String::new(), indentation: 0, census: Default::default() };
-        printer.output.push_str("package main\n");
-        if !self.imports.is_empty() {
-            printer.output.push_str("\nimport (\n");
-            for import in &self.imports {
-                let _ = writeln!(printer.output, "\t\"{import}\"");
+        let _ = writeln!(printer.output, "package {}", self.package);
+        let imports: Vec<String> = self
+            .imports
+            .iter()
+            .map(|GoImport { path, alias }| match alias {
+                Some(alias) => format!("{alias} \"{path}\""),
+                None => format!("\"{path}\""),
+            })
+            .collect();
+        match imports.as_slice() {
+            [] => {}
+            [import] => {
+                let _ = writeln!(printer.output, "\nimport {import}");
             }
-            printer.output.push_str(")\n");
+            imports => {
+                printer.output.push_str("\nimport (\n");
+                for import in imports {
+                    let _ = writeln!(printer.output, "\t{import}");
+                }
+                printer.output.push_str(")\n");
+            }
         }
         // Declarations render independently, so they render in parallel and
         // join in order.
@@ -425,7 +700,9 @@ impl Printer {
 
     fn declaration(&mut self, declaration: &GoDeclaration) {
         match declaration {
-            GoDeclaration::Source(source) => self.output.push_str(source),
+            GoDeclaration::Source { name, template } => {
+                self.output.push_str(&template.replace("{name}", name));
+            }
             GoDeclaration::Type { name, type_ } => {
                 let rendered = self.type_(type_);
                 self.line(&format!("type {name} {rendered}"));

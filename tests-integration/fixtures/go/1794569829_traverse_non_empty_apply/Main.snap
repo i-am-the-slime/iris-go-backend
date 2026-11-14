@@ -1,14 +1,8 @@
 ---
 source: tests-integration/src/fixtures.rs
 ---
-package main
-
-import (
-	"fmt"
-	"github.com/i-am-the-slime/purs-backend-go/go-support/array"
-	"github.com/i-am-the-slime/purs-backend-go/go-support/direct"
-	"github.com/i-am-the-slime/purs-backend-go/go-support/prim"
-)
+// Data/Maybe/maybe.go
+package maybe
 
 type MaybeArrayInt struct {
 	Tag   int
@@ -40,52 +34,63 @@ const (
 	MaybeFnIntArrayIntJust
 )
 
+// main.go
+package main
+
+import (
+	"fixture/Data/Maybe"
+	"fmt"
+	"github.com/i-am-the-slime/purs-backend-go/go-support/array"
+	"github.com/i-am-the-slime/purs-backend-go/go-support/direct"
+	"github.com/i-am-the-slime/purs-backend-go/go-support/prim"
+)
+
 var main_ = initializeMain_()
 
-func initializeMain_() MaybeArrayInt {
+func initializeMain_() maybe.MaybeArrayInt {
 	array_ := array.Append([]int32{2}, []int32{4, 8})
 	append_ := direct.Appender[int32]()
 	n := array_[0]
-	var result2 MaybeInt
+	var result2 maybe.MaybeInt
 	if int32(prim.IntMod(int(n), int(2))) == 0 {
-		result2 = MaybeInt{Tag: MaybeIntJust, Just0: int32(prim.IntDiv(int(n), int(2)))}
+		result2 = maybe.MaybeInt{Tag: maybe.MaybeIntJust, Just0: int32(prim.IntDiv(int(n), int(2)))}
 	} else {
-		result2 = MaybeInt{Tag: MaybeIntNothing}
+		result2 = maybe.MaybeInt{Tag: maybe.MaybeIntNothing}
 	}
-	var result MaybeArrayInt
+	var result maybe.MaybeArrayInt
 	switch result2.Tag {
-	case MaybeIntJust:
-		result = MaybeArrayInt{Tag: MaybeArrayIntJust, Just0: []int32{result2.Just0}}
+	case maybe.MaybeIntJust:
+		result = maybe.MaybeArrayInt{Tag: maybe.MaybeArrayIntJust, Just0: []int32{result2.Just0}}
 	default:
-		result = MaybeArrayInt{Tag: MaybeArrayIntNothing}
+		result = maybe.MaybeArrayInt{Tag: maybe.MaybeArrayIntNothing}
 	}
 	array2 := array.Slice(int(1), int(int32(len(array_))), array_)
 	accumulator := result
 	for _, element := range array2 {
 		accumulator2 := accumulator
-		var result3 MaybeFnIntArrayInt
+		var result3 maybe.MaybeFnIntArrayInt
 		switch accumulator2.Tag {
-		case MaybeArrayIntJust:
-			result3 = MaybeFnIntArrayInt{Tag: MaybeFnIntArrayIntJust, Just0: append_(accumulator2.Just0)}
+		case maybe.MaybeArrayIntJust:
+			result3 = maybe.MaybeFnIntArrayInt{Tag: maybe.MaybeFnIntArrayIntJust, Just0: append_(accumulator2.Just0)}
 		default:
-			result3 = MaybeFnIntArrayInt{Tag: MaybeFnIntArrayIntNothing}
+			result3 = maybe.MaybeFnIntArrayInt{Tag: maybe.MaybeFnIntArrayIntNothing}
 		}
 		switch result3.Tag {
-		case MaybeFnIntArrayIntJust:
-			var result4 MaybeInt
+		case maybe.MaybeFnIntArrayIntJust:
+			var result4 maybe.MaybeInt
 			if int32(prim.IntMod(int(element), int(2))) == 0 {
-				result4 = MaybeInt{Tag: MaybeIntJust, Just0: int32(prim.IntDiv(int(element), int(2)))}
+				result4 = maybe.MaybeInt{Tag: maybe.MaybeIntJust, Just0: int32(prim.IntDiv(int(element), int(2)))}
 			} else {
-				result4 = MaybeInt{Tag: MaybeIntNothing}
+				result4 = maybe.MaybeInt{Tag: maybe.MaybeIntNothing}
 			}
 			switch result4.Tag {
-			case MaybeIntJust:
-				accumulator = MaybeArrayInt{Tag: MaybeArrayIntJust, Just0: result3.Just0(result4.Just0)}
+			case maybe.MaybeIntJust:
+				accumulator = maybe.MaybeArrayInt{Tag: maybe.MaybeArrayIntJust, Just0: result3.Just0(result4.Just0)}
 			default:
-				accumulator = MaybeArrayInt{Tag: MaybeArrayIntNothing}
+				accumulator = maybe.MaybeArrayInt{Tag: maybe.MaybeArrayIntNothing}
 			}
-		default: // MaybeFnIntArrayIntNothing
-			accumulator = MaybeArrayInt{Tag: MaybeArrayIntNothing}
+		default: // maybe.MaybeFnIntArrayIntNothing
+			accumulator = maybe.MaybeArrayInt{Tag: maybe.MaybeArrayIntNothing}
 		}
 	}
 	performed := accumulator

@@ -1,6 +1,7 @@
 //! A closed, monomorphic tree: every node carries a concrete type, every reference
 //! names one specialization, and no dictionaries remain.
 
+use files::FileId;
 use smol_str::SmolStr;
 
 use crate::foreign::Foreign;
@@ -27,6 +28,10 @@ impl Program {
 #[derive(Debug, Clone)]
 pub struct Function {
     pub name: SmolStr,
+    /// The module whose definition the function specializes, or whose
+    /// definition it was lifted out of; none once it stands for identical
+    /// functions of modules that do not see each other.
+    pub origin: Option<FileId>,
     pub parameters: Vec<Local>,
     pub result: MonotypeId,
     pub body: Expression,

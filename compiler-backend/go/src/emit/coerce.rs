@@ -1,6 +1,7 @@
+use super::packages::Spelling;
 use super::{
-    DataKind, Emitter, binary, call, field, identifier, identifier_expression, is_simple,
-    is_untyped_constant, path_root, unique, unit_value,
+    DataKind, Emitter, binary, call, field, field_name, identifier_expression, is_simple,
+    is_untyped_constant, path_root, unit_value,
 };
 use crate::erasure::Erasure;
 use crate::error::{GoError, GoResult};
@@ -35,7 +36,7 @@ where
                 let record = self.shared(value, "original", out);
                 let mut entries = Vec::with_capacity(fields.len());
                 for record_field in fields.iter() {
-                    let field_value = field(record.clone(), &identifier(&record_field.label));
+                    let field_value = field(record.clone(), &field_name(&record_field.label));
                     entries.push((
                         record_field.label.to_string(),
                         field_value,
@@ -53,7 +54,7 @@ where
                     let label = GoExpression::String(record_field.label.to_string());
                     let field_value = call(read.clone(), vec![record.clone(), label]);
                     let field_value = self.coerce(field_value, from, record_field.monotype, out)?;
-                    values.push((Some(identifier(&record_field.label)), field_value));
+                    values.push((Some(field_name(&record_field.label)), field_value));
                 }
                 let type_ = GoType::Named(self.record_name(to)?);
                 Ok(GoExpression::Composite { type_, fields: values })
@@ -70,7 +71,7 @@ where
                 for record_field in fields.iter() {
                     let instance =
                         self.coerce(function.clone(), from, record_field.monotype, out)?;
-                    values.push((Some(identifier(&record_field.label)), instance));
+                    values.push((Some(field_name(&record_field.label)), instance));
                 }
                 Ok(GoExpression::Composite { type_, fields: values })
             }
@@ -328,7 +329,7 @@ where
         if let Some(name) = self.converters.get(&(from, to)) {
             return Ok(name.clone());
         }
-        let name = unique("convert".to_string(), &mut self.global_names);
+        let name = self.global_name(Spelling::Base("convert".into()));
         self.converters.insert((from, to), name.clone());
         let parameter_type = self.go_type(from)?;
         let result_type = self.go_type(to)?;
@@ -384,7 +385,7 @@ where
             (Monotype::Record(from_fields), Monotype::Record(to_fields)) => {
                 let mut fields = vec![];
                 for (from_field, to_field) in from_fields.iter().zip(to_fields.iter()) {
-                    let label = identifier(&to_field.label);
+                    let label = field_name(&to_field.label);
                     let field_value = field(value.clone(), &label);
                     let converted = self.coerce(
                         field_value,

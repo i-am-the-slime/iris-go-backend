@@ -17,7 +17,12 @@ use crate::syntax::{GoDeclaration, GoExpression, GoType, Name};
 /// recursive function matches its copies. No Go identifier contains it.
 const ITSELF: &str = "\u{0}itself";
 
-pub(super) fn merge_identical_declarations(declarations: Vec<GoDeclaration>) -> Vec<GoDeclaration> {
+/// `on_merge(merged, representative)` hears of each merge, so that the
+/// representative's package can be chosen to suit the users of both.
+pub(super) fn merge_identical_declarations(
+    declarations: Vec<GoDeclaration>,
+    on_merge: &mut dyn FnMut(&str, &str),
+) -> Vec<GoDeclaration> {
     let mut merging = Merging::new(declarations);
     let mut changed: Vec<usize> = merging.candidates.iter().copied().collect();
     while !changed.is_empty() {
@@ -38,7 +43,7 @@ pub(super) fn merge_identical_declarations(declarations: Vec<GoDeclaration>) -> 
                 merges.push((index, representative));
             }
         }
-        changed = merging.redirect(merges);
+        changed = merging.redirect(merges, on_merge);
     }
     merging.declarations.into_iter().flatten().collect()
 }
@@ -129,7 +134,11 @@ impl Merging {
 
     /// Removes each merged declaration and points its users at the
     /// representative; returns the users, whose texts have changed.
-    fn redirect(&mut self, merges: Vec<(usize, usize)>) -> Vec<usize> {
+    fn redirect(
+        &mut self,
+        merges: Vec<(usize, usize)>,
+        on_merge: &mut dyn FnMut(&str, &str),
+    ) -> Vec<usize> {
         let mut changed = FxHashSet::default();
         for (merged, representative) in merges {
             let Some(declaration) = self.declarations[merged].take() else { continue };
@@ -140,6 +149,7 @@ impl Merging {
                 .and_then(GoDeclaration::name)
                 .expect("invariant violated: representative removed")
                 .to_string();
+            on_merge(&from, &to);
             self.index_of.remove(&from);
             let users = self.users.remove(&from).unwrap_or_default();
             for &user in &users {

@@ -1,3 +1,4 @@
+use files::FileId;
 use rustc_hash::{FxHashMap, FxHashSet};
 use smol_str::format_smolstr;
 
@@ -18,6 +19,7 @@ pub fn lift_local_functions(
     let mut functions: Vec<Option<Function>> = functions.into_iter().map(Some).collect();
     let mut lifter = Lifter {
         created: vec![],
+        origin: None,
         next_function: original,
         monotypes,
         next_local,
@@ -32,6 +34,7 @@ pub fn lift_local_functions(
         }
         collect_binders(&function.body, &mut lifter.binders);
         let base = function.name.clone();
+        lifter.origin = function.origin;
         function.body = lifter.expression(function.body, &base);
         flatten_applications(&mut function.body);
         functions[index] = Some(absorb_lambdas(function));
@@ -77,8 +80,9 @@ fn saturate_wrappers(
             }
             let missing = callee.parameters[arguments.len()..].to_vec();
             let result = callee.result;
-            let erased = missing.iter().any(|parameter| erases(lifter.monotypes, parameter.monotype))
-                || erases(lifter.monotypes, result);
+            let erased =
+                missing.iter().any(|parameter| erases(lifter.monotypes, parameter.monotype))
+                    || erases(lifter.monotypes, result);
             if erased {
                 continue;
             }
@@ -106,6 +110,9 @@ fn saturate_wrappers(
 
 struct Lifter<'m> {
     created: Vec<Function>,
+    /// The origin of the function being lifted from, which its lifted
+    /// functions share.
+    origin: Option<FileId>,
     next_function: usize,
     monotypes: &'m mut Monotypes,
     next_local: u32,
@@ -173,8 +180,13 @@ impl Lifter<'_> {
             let mut all_parameters = parameters;
             all_parameters.extend(lambda_parameters);
             let name = format_smolstr!("{base}{}", crate::context::capitalise(&binding.local.name));
-            let function =
-                Function { name, parameters: all_parameters, result: body.monotype, body: *body };
+            let function = Function {
+                name,
+                origin: self.origin,
+                parameters: all_parameters,
+                result: body.monotype,
+                body: *body,
+            };
             self.created.push(absorb_lambdas(function));
         }
         let mut body = *body;

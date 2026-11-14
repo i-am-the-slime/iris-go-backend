@@ -1,6 +1,7 @@
 ---
 source: tests-integration/src/fixtures.rs
 ---
+// main.go
 package main
 
 import (
@@ -10,8 +11,8 @@ import (
 )
 
 type MinisName struct {
-	minis []MinisName
-	name  string
+	Minis []MinisName
+	Name  string
 }
 
 type Step func(int32) *MaybeStep
@@ -28,7 +29,7 @@ const (
 
 var sharedMaybeStepNothing = &MaybeStep{Tag: MaybeStepNothing}
 
-var main_ []string = array.Append(names(MinisName{name: "root", minis: []MinisName{MinisName{name: "a", minis: []MinisName{}}}}), []string{prim.ShowInt(int(countSteps(func(n int32) *MaybeStep {
+var main_ []string = array.Append(names(MinisName{Name: "root", Minis: []MinisName{MinisName{Name: "a", Minis: []MinisName{}}}}), []string{prim.ShowInt(int(countSteps(func(n int32) *MaybeStep {
 	if n < 3 {
 		return &MaybeStep{Tag: MaybeStepJust, Just0: func(_ int32) *MaybeStep {
 			return sharedMaybeStepNothing
@@ -38,7 +39,7 @@ var main_ []string = array.Append(names(MinisName{name: "root", minis: []MinisNa
 }, 0)))})
 
 func names(level MinisName) []string {
-	return array.Append([]string{level.name}, array.Bind(level.minis, func(argument0 MinisName) []string {
+	return array.Append([]string{level.Name}, array.Bind(level.Minis, func(argument0 MinisName) []string {
 		return names(argument0)
 	}))
 }

@@ -17,6 +17,8 @@ pub enum GoError {
     Unsupported { definition: String, state: UnsupportedState },
     #[error("{0}")]
     Blocked(Blockers),
+    #[error("entry module {entry} is imported by {importer}, but Go cannot import package main")]
+    EntryImported { entry: String, importer: String },
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Error)]

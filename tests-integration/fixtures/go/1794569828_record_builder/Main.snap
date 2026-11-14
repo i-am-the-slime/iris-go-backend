@@ -1,39 +1,38 @@
 ---
 source: tests-integration/src/fixtures.rs
 ---
+// main.go
 package main
 
-import (
-	"fmt"
-)
+import "fmt"
 
 type NameSizeTags struct {
-	name string
-	size int32
-	tags []string
+	Name string
+	Size int32
+	Tags []string
 }
 
 type DraftLabelSizeTags struct {
-	draft bool
-	label string
-	size  int32
-	tags  []string
+	Draft bool
+	Label string
+	Size  int32
+	Tags  []string
 }
 
 type DraftNameSizeTags struct {
-	draft bool
-	name  string
-	size  int32
-	tags  []string
+	Draft bool
+	Name  string
+	Size  int32
+	Tags  []string
 }
 
 var main_ = initializeMain_()
 
 func initializeMain_() NameSizeTags {
-	r12 := DraftLabelSizeTags{label: "box", size: 1, draft: true, tags: []string{"new"}}
-	r1 := DraftLabelSizeTags{label: r12.label, size: r12.size + 1, draft: r12.draft, tags: r12.tags}
-	r2 := DraftNameSizeTags{size: r1.size, draft: r1.draft, tags: r1.tags, name: r1.label}
-	return NameSizeTags{size: r2.size, tags: r2.tags, name: r2.name}
+	r12 := DraftLabelSizeTags{Label: "box", Size: 1, Draft: true, Tags: []string{"new"}}
+	r1 := DraftLabelSizeTags{Label: r12.Label, Size: r12.Size + 1, Draft: r12.Draft, Tags: r12.Tags}
+	r2 := DraftNameSizeTags{Size: r1.Size, Draft: r1.Draft, Tags: r1.Tags, Name: r1.Label}
+	return NameSizeTags{Size: r2.Size, Tags: r2.Tags, Name: r2.Name}
 }
 
 func main() {

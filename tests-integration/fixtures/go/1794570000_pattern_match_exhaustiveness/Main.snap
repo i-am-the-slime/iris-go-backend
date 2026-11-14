@@ -1,10 +1,63 @@
 ---
 source: tests-integration/src/fixtures.rs
-assertion_line: 563
 ---
+// Control/Semigroupoid/semigroupoid.go
+package semigroupoid
+
+import "fixture/shared"
+
+func Compose(f func(int32) string, g func(string) int32, x string) string {
+	return f(g(x))
+}
+
+func Compose2(f func(int32) string, g func(shared.LeftRight) int32, x shared.LeftRight) string {
+	return f(g(x))
+}
+
+// Data/Maybe/maybe.go
+package maybe
+
+type MaybeInt struct {
+	Tag   int
+	Just0 int32
+}
+
+const (
+	MaybeIntNothing = iota
+	MaybeIntJust
+)
+
+type MaybeString struct {
+	Tag   int
+	Just0 string
+}
+
+const (
+	MaybeStringNothing = iota
+	MaybeStringJust
+)
+
+func Compose(f func(int32) string, g func(MaybeInt) int32, x MaybeInt) string {
+	return f(g(x))
+}
+
+// Data/Show/show.go
+package show
+
+import "github.com/i-am-the-slime/purs-backend-go/go-support/prim"
+
+func Show(argument0 int32) string {
+	return prim.ShowInt(int(argument0))
+}
+
+// main.go
 package main
 
 import (
+	"fixture/Control/Semigroupoid"
+	"fixture/Data/Maybe"
+	"fixture/Data/Show"
+	"fixture/shared"
 	"fmt"
 	"github.com/i-am-the-slime/purs-backend-go/go-support/array"
 	"github.com/i-am-the-slime/purs-backend-go/go-support/prim"
@@ -30,31 +83,6 @@ const (
 	ShapeRectangle
 )
 
-type MaybeInt struct {
-	Tag   int
-	Just0 int32
-}
-
-const (
-	MaybeIntNothing = iota
-	MaybeIntJust
-)
-
-type LeftRight struct {
-	left  int32
-	right int32
-}
-
-type MaybeString struct {
-	Tag   int
-	Just0 string
-}
-
-const (
-	MaybeStringNothing = iota
-	MaybeStringJust
-)
-
 var main_ = initializeMain_()
 
 func initializeMain_() []string {
@@ -66,38 +94,38 @@ func initializeMain_() []string {
 	array3 := []Shape{Shape{Tag: ShapeCircle, Circle0: 1}, Shape{Tag: ShapeRectangle, Rectangle0: 2, Rectangle1: 3}}
 	mapped2 := make([]string, len(array3))
 	for index2, element2 := range array3 {
-		mapped2[index2] = compose(show, area, element2)
+		mapped2[index2] = compose(show.Show, area, element2)
 	}
-	argument0 := MaybeInt{Tag: MaybeIntJust, Just0: 1}
-	argument := func(argument1 MaybeInt) int32 {
+	argument0 := maybe.MaybeInt{Tag: maybe.MaybeIntJust, Just0: 1}
+	argument := func(argument1 maybe.MaybeInt) int32 {
 		return pair(argument0, argument1)
 	}
-	array4 := []MaybeInt{MaybeInt{Tag: MaybeIntJust, Just0: 2}, MaybeInt{Tag: MaybeIntNothing}}
+	array4 := []maybe.MaybeInt{maybe.MaybeInt{Tag: maybe.MaybeIntJust, Just0: 2}, maybe.MaybeInt{Tag: maybe.MaybeIntNothing}}
 	mapped3 := make([]string, len(array4))
 	for index3, element3 := range array4 {
-		mapped3[index3] = compose2(show, argument, element3)
+		mapped3[index3] = maybe.Compose(show.Show, argument, element3)
 	}
 	array5 := []string{"start", "jump"}
 	mapped4 := make([]string, len(array5))
 	for index4, element4 := range array5 {
-		mapped4[index4] = compose3(show, command, element4)
+		mapped4[index4] = semigroupoid.Compose(show.Show, command, element4)
 	}
 	array6 := []int32{500, 5}
 	mapped5 := make([]string, len(array6))
 	for index5, element5 := range array6 {
 		mapped5[index5] = size(true, element5)
 	}
-	array7 := []LeftRight{LeftRight{left: 1, right: 2}}
+	array7 := []shared.LeftRight{shared.LeftRight{Left: 1, Right: 2}}
 	mapped6 := make([]string, len(array7))
 	for index6, element6 := range array7 {
-		mapped6[index6] = compose4(show, sum, element6)
+		mapped6[index6] = semigroupoid.Compose2(show.Show, sum, element6)
 	}
-	array8 := []MaybeString{MaybeString{Tag: MaybeStringJust, Just0: "here"}}
+	array8 := []maybe.MaybeString{maybe.MaybeString{Tag: maybe.MaybeStringJust, Just0: "here"}}
 	mapped7 := make([]string, len(array8))
 	for index7, value := range array8 {
 		var result string
 		switch value.Tag {
-		case MaybeStringJust:
+		case maybe.MaybeStringJust:
 			result = value.Just0
 		default:
 			panic("Failed pattern match")
@@ -122,10 +150,6 @@ func compose(f func(int32) string, g func(Shape) int32, x Shape) string {
 	return f(g(x))
 }
 
-func show(argument0 int32) string {
-	return prim.ShowInt(int(argument0))
-}
-
 func area(argument0 Shape) int32 {
 	switch argument0.Tag {
 	case ShapeCircle:
@@ -136,22 +160,14 @@ func area(argument0 Shape) int32 {
 	}
 }
 
-func compose2(f func(int32) string, g func(MaybeInt) int32, x MaybeInt) string {
-	return f(g(x))
-}
-
-func pair(argument0 MaybeInt, argument1 MaybeInt) int32 {
-	if argument0.Tag == MaybeIntJust && argument1.Tag == MaybeIntJust {
+func pair(argument0 maybe.MaybeInt, argument1 maybe.MaybeInt) int32 {
+	if argument0.Tag == maybe.MaybeIntJust && argument1.Tag == maybe.MaybeIntJust {
 		return argument0.Just0 + argument1.Just0
 	}
-	if argument0.Tag == MaybeIntJust && argument1.Tag == MaybeIntNothing {
+	if argument0.Tag == maybe.MaybeIntJust && argument1.Tag == maybe.MaybeIntNothing {
 		return argument0.Just0
 	}
 	return 0
-}
-
-func compose3(f func(int32) string, g func(string) int32, x string) string {
-	return f(g(x))
 }
 
 func command(argument0 string) int32 {
@@ -175,14 +191,18 @@ func size(large bool, number int32) string {
 	return "small"
 }
 
-func compose4(f func(int32) string, g func(LeftRight) int32, x LeftRight) string {
-	return f(g(x))
-}
-
-func sum(record LeftRight) int32 {
-	return record.left + record.right
+func sum(record shared.LeftRight) int32 {
+	return record.Left + record.Right
 }
 
 func main() {
 	fmt.Println(main_)
+}
+
+// shared/shared.go
+package shared
+
+type LeftRight struct {
+	Left  int32
+	Right int32
 }

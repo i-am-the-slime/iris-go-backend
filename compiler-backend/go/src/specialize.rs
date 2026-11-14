@@ -78,6 +78,20 @@ enum Definition {
     Member { dictionary: Arc<InstanceDictionary>, member: (FileId, TermItemId) },
 }
 
+impl Definition {
+    /// The module the definition is written in: an instance member's is the
+    /// instance's module.
+    fn origin(&self) -> FileId {
+        match self {
+            Definition::Value { file_id, .. } => *file_id,
+            Definition::Member { dictionary, .. } => match dictionary.origin {
+                InstanceCandidateOrigin::Instance(file_id, _)
+                | InstanceCandidateOrigin::Derive(file_id, _) => file_id,
+            },
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 struct SpecializationKey {
     definition: Definition,
@@ -236,7 +250,13 @@ where
                     self.record(error)?;
                     let erased = self.monotypes.intern(Monotype::Erased(Erasure::FailedDefinition));
                     let body = Expression::new(ExpressionKind::Fail(name.clone()), erased);
-                    Function { name, parameters: vec![], result: erased, body }
+                    Function {
+                        name,
+                        origin: Some(key.definition.origin()),
+                        parameters: vec![],
+                        result: erased,
+                        body,
+                    }
                 }
             };
             self.functions[id.0 as usize] = Some(function);
@@ -540,10 +560,10 @@ where
         let (abstractions, equations) = value;
         self.bind_abstractions(&mut scope, &abstractions, &key.types, &key.dictionaries)?;
         let body = self.equations(&mut scope, &equations)?;
-        Ok(self.function(name, body))
+        Ok(self.function(name, Some(key.definition.origin()), body))
     }
 
-    fn function(&mut self, name: SmolStr, body: Expression) -> Function {
+    fn function(&mut self, name: SmolStr, origin: Option<FileId>, body: Expression) -> Function {
         let mut parameters = vec![];
         let mut body = body;
         while let ExpressionKind::Lambda { .. } = body.kind {
@@ -556,7 +576,7 @@ where
             body = *lambda_body;
         }
         let result = body.monotype;
-        Function { name, parameters, result, body }
+        Function { name, origin, parameters, result, body }
     }
 
     fn bind_abstractions(
