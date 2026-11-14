@@ -47,8 +47,16 @@ pub fn run(config: GoConfig) -> Result<(), String> {
         entry_name,
         &foreign_packages,
         &module_path,
-    )
-    .map_err(|error| error.to_string())?;
+    );
+    let program = match program {
+        Ok(program) => program,
+        // The checker's own diagnostics say what is wrong and where.
+        Err(go::GoError::SourceErrors { files, module_names }) => {
+            session.report_diagnostics(&files).map_err(|error| error.to_string())?;
+            return Err(go::GoError::SourceErrors { files, module_names }.to_string());
+        }
+        Err(error) => return Err(error.to_string()),
+    };
     let files = program.files.len();
     for (path, source) in program.files {
         let path = config.destination.join(path);
@@ -71,7 +79,10 @@ pub fn run(config: GoConfig) -> Result<(), String> {
 fn go_module_path(destination: &Path) -> Result<String, String> {
     let go_mod = destination.join("go.mod");
     let declaration = fs::read_to_string(&go_mod).map_err(|_| {
-        format!("{} must exist to name the Go module the generated packages share", go_mod.display())
+        format!(
+            "{} must exist to name the Go module the generated packages share",
+            go_mod.display()
+        )
     })?;
     declaration
         .lines()

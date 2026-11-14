@@ -56,6 +56,10 @@ pub fn compile_program(
         .find(|(_, item)| item.name.as_deref() == Some(entry_name))
         .ok_or_else(|| GoError::MissingEntry(qualified.clone()))?;
 
+    let mut context = context::Context::new(queries);
+    let modules = modules::Modules::collect(&mut context, file_id)?;
+    reject_source_errors(queries, &modules)?;
+
     let mut schemes = SchemeInstantiations::default();
     let (entry, mut specializer) = loop {
         let mut specializer = Specializer::new(queries, foreign_packages, schemes);
@@ -70,8 +74,6 @@ pub fn compile_program(
     }
     let (functions, mut monotypes, next_local) =
         timed("finish specialization", || specializer.finish());
-    let mut context = context::Context::new(queries);
-    let modules = modules::Modules::collect(&mut context, file_id)?;
     let program = mono::Program { functions, entry };
     let eliminators = emit::Eliminators::find(&program, &monotypes);
     let program = timed("simplify", || simplify::simplify(program, &mut monotypes, next_local));
@@ -98,4 +100,27 @@ pub fn compile_program(
         files.into_iter().map(|file| (file.path, file.file.render())).collect();
     files.sort();
     Ok(GoProgram { files, functions })
+}
+
+/// Specialization trusts the checker's types, so a module the checker rejected
+/// would surface as a confusing representation error far from its cause.
+fn reject_source_errors(
+    queries: &impl checking::ExternalQueries,
+    modules: &modules::Modules,
+) -> GoResult<()> {
+    let mut files = vec![];
+    let mut module_names = vec![];
+    for index in modules.indices() {
+        let file = modules.file(index);
+        if checking::has_source_errors(queries, file)?
+            || checking::has_checking_errors(queries, file)?
+        {
+            files.push(file);
+            module_names.push(modules.name(index).to_string());
+        }
+    }
+    if files.is_empty() {
+        return Ok(());
+    }
+    Err(GoError::SourceErrors { files, module_names })
 }

@@ -1,4 +1,5 @@
 use building_types::QueryError;
+use files::FileId;
 use thiserror::Error;
 
 use crate::blocker::Blockers;
@@ -9,8 +10,8 @@ pub type GoResult<T> = Result<T, GoError>;
 pub enum GoError {
     #[error(transparent)]
     Query(#[from] QueryError),
-    #[error("module {module_name} has source or checking errors")]
-    SourceErrors { module_name: String },
+    #[error("cannot compile modules with source or checking errors: {}", .module_names.join(", "))]
+    SourceErrors { files: Vec<FileId>, module_names: Vec<String> },
     #[error("entry point {0} does not exist")]
     MissingEntry(String),
     #[error("cannot specialize {definition}: {state}")]

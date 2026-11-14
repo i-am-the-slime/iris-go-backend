@@ -170,6 +170,13 @@ impl BuildSession {
         SessionSnapshot { engine: self.compilation.snapshot(), files: Arc::clone(&self.files) }
     }
 
+    /// Prints the diagnostics of some source files, for a consumer of the
+    /// session that found them erroneous, as a build prints them.
+    pub fn report_diagnostics(&self, files: &[FileId]) -> Result<(), SessionError> {
+        compile::report_file_diagnostics(&self.compilation, files, &self.root, self.color)
+            .map_err(|error| SessionError(error.into()))
+    }
+
     pub fn synchronize_paths(&mut self, paths: &[PathBuf]) -> Result<InputChanges, SessionError> {
         let change = self.synchronize(paths).map_err(SessionError)?;
         self.finish_change(change).map_err(SessionError)

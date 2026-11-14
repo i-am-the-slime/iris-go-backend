@@ -1,0 +1,19 @@
+---
+source: tests-e2e/tests/package_manager/go.rs
+---
+status: 1
+--- stdout
+--- stderr
+Error! · [CannotUnify] · src/Main.purs:12:16
+  •
+  │
+  • Cannot unify '( source :: Int, startT :: Number )' with '( startT :: Number )'
+  │
+  │   main = spansOf segment
+  │                  ╰──────
+  • while
+  │
+  │   matching 'Segment' with '{ spans :: Array { startT :: Number } | ?10 }'
+  •
+
+cannot compile modules with source or checking errors: Main

@@ -111,6 +111,10 @@ impl Modules {
         self.names.len()
     }
 
+    pub fn indices(&self) -> impl Iterator<Item = ModuleIndex> + use<> {
+        (0..self.names.len() as u32).map(ModuleIndex)
+    }
+
     pub fn entry(&self) -> ModuleIndex {
         self.entry
     }

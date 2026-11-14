@@ -392,6 +392,18 @@ where
     Ok((diagnostics, has_errors))
 }
 
+/// Prints the diagnostics of some source files the way a build prints them.
+pub(crate) fn report_file_diagnostics(
+    compilation: &ProjectCompilation,
+    files: &[FileId],
+    root: &Path,
+    color: bool,
+) -> Result<(), CompileError> {
+    let (diagnostics, _) = collect_diagnostics(compilation, files)?;
+    report_diagnostics(compilation, diagnostics, root, color);
+    Ok(())
+}
+
 fn report_diagnostics(
     compilation: &ProjectCompilation,
     diagnostics: Vec<iris_diagnostics::DiagnosticCollection>,
