@@ -1,0 +1,27 @@
+---
+source: tests-integration/src/fixtures.rs
+---
+// main.go
+package main
+
+import (
+	"fmt"
+	"github.com/i-am-the-slime/purs-backend-go/go-support/prim"
+)
+
+var main_ []int32 = []int32{combineWith(2)(3, 4), combineWith(5)(1, 1)}
+
+func combineWith(n int32) func(int32, int32) int32 {
+	if n > 0 {
+		return func(a int32, b int32) int32 {
+			return prim.MultiplyInt32(a, n) + b
+		}
+	}
+	panic("a positive weight")
+	var unreachable func(int32, int32) int32
+	return unreachable
+}
+
+func main() {
+	fmt.Println(main_)
+}

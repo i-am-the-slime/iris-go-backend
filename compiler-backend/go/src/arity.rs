@@ -79,6 +79,7 @@ pub(crate) fn keeps_representation(foreign: &Foreign) -> bool {
     matches!(
         foreign,
         Foreign::Operator(_)
+            | Foreign::Crash
             | Foreign::UnsafeCoerce
             | Foreign::Identity
             | Foreign::Unit
