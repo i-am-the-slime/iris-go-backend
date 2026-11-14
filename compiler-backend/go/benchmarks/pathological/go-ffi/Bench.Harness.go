@@ -4,6 +4,7 @@ package Bench_Harness_ffi
 import (
 	"fmt"
 	"os"
+	"runtime"
 	"runtime/pprof"
 	"strconv"
 	"time"
@@ -36,7 +37,14 @@ func RepetitionCount() int {
 
 var profile *os.File
 
+// With PATHO_MEMSTATS set, StopProfile reports the heap allocations made by every repetition
+// together, as `ALLOCS objects bytes` on stderr.
+var allocated runtime.MemStats
+
 func StartProfile() {
+	if os.Getenv("PATHO_MEMSTATS") != "" {
+		runtime.ReadMemStats(&allocated)
+	}
 	path := os.Getenv("PATHO_CPUPROFILE")
 	if path == "" {
 		return
@@ -52,6 +60,11 @@ func StartProfile() {
 }
 
 func StopProfile() {
+	if os.Getenv("PATHO_MEMSTATS") != "" {
+		var now runtime.MemStats
+		runtime.ReadMemStats(&now)
+		fmt.Fprintf(os.Stderr, "ALLOCS %d %d\n", now.Mallocs-allocated.Mallocs, now.TotalAlloc-allocated.TotalAlloc)
+	}
 	if profile == nil {
 		return
 	}

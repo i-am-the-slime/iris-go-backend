@@ -12,6 +12,7 @@
 #   compiler-backend/go/benchmarks/pathological/run.sh String Record.Wide # module name filters
 #   SKIP_BUILD=1 ...                                                      # reuse WORK's builds
 #   PATHO_CPUPROFILE=/path/prof ...                                       # Go CPU profile (one benchmark)
+#   PATHO_MEMSTATS=1 ...                                                  # Go heap allocations (ALLOCS line on stderr)
 #
 # Environment: IRIS, GO_SUPPORT, PURS_BACKEND_ES, WORK (build directory, kept), JOBS.
 
