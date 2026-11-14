@@ -228,6 +228,7 @@ where
             closure_layouts: FxHashMap::default(),
             converters: FxHashMap::default(),
             recursive_names: FxHashMap::default(),
+            type_aliases: FxHashMap::default(),
             type_declarations: vec![],
             reference_declared: false,
             range_name: None,
@@ -550,6 +551,8 @@ struct Emitter<'p, 'm, 'q, Q> {
     closure_layouts: FxHashMap<MonotypeId, DataLayout>,
     converters: FxHashMap<(MonotypeId, MonotypeId), String>,
     recursive_names: FxHashMap<DataType, String>,
+    /// The type each recursive newtype's alias spells.
+    type_aliases: FxHashMap<String, GoType>,
     type_declarations: Vec<GoDeclaration>,
     reference_declared: bool,
     /// The name of the support function `Foreign::Range` calls, once declared.
@@ -1415,8 +1418,119 @@ where
         self.homes.insert(name.clone(), data.file_id);
         self.recursive_names.insert(data.clone(), name.clone());
         let type_ = self.go_type(unfolded)?;
-        self.type_declarations.push(GoDeclaration::Type { name: name.clone(), type_ });
+        // A defined type would be a second Go type for the unfolding, without
+        // its methods (`Force` of a `Lazy`) and unassignable to it inside
+        // function types, so the newtype is an alias whenever Go allows one.
+        let declaration = if self.unfolding_reaches_itself_unnamed(data, unfolded)? {
+            GoDeclaration::Type { name: name.clone(), type_ }
+        } else {
+            self.type_aliases.insert(name.clone(), type_.clone());
+            GoDeclaration::Alias { name: name.clone(), type_ }
+        };
+        self.type_declarations.push(declaration);
         Ok(GoType::Named(name))
+    }
+
+    /// Whether two monotypes are one Go type, as Go sees it through aliases.
+    pub(super) fn same_go_type(&mut self, left: MonotypeId, right: MonotypeId) -> GoResult<bool> {
+        let mut left = self.go_type(left)?;
+        let mut right = self.go_type(right)?;
+        self.resolve_aliases(&mut left);
+        self.resolve_aliases(&mut right);
+        Ok(left == right)
+    }
+
+    /// Replaces every alias in a Go type by the type it spells. An alias's
+    /// cycle passes through a defined type, which stays named, so this ends.
+    fn resolve_aliases(&self, type_: &mut GoType) {
+        match type_ {
+            GoType::Named(name) => {
+                if let Some(aliased) = self.type_aliases.get(name) {
+                    *type_ = aliased.clone();
+                    self.resolve_aliases(type_);
+                }
+            }
+            GoType::Generic { arguments, .. } => {
+                arguments.iter_mut().for_each(|argument| self.resolve_aliases(argument));
+            }
+            GoType::Slice(element) | GoType::Pointer(element) => self.resolve_aliases(element),
+            GoType::Function { parameters, result } => {
+                parameters.iter_mut().for_each(|parameter| self.resolve_aliases(parameter));
+                if let Some(result) = result {
+                    self.resolve_aliases(result);
+                }
+            }
+            GoType::Struct(fields) => {
+                fields.iter_mut().for_each(|(_, field)| self.resolve_aliases(field));
+            }
+            GoType::Int
+            | GoType::Float64
+            | GoType::Bool
+            | GoType::Rune
+            | GoType::String
+            | GoType::EmptyStruct
+            | GoType::Any
+            | GoType::Erased(_) => {}
+        }
+    }
+
+    /// Whether a recursive newtype's unfolding refers back to the newtype
+    /// without passing through a named Go type (a record or data struct). Go
+    /// rejects such a cycle of aliases, so only then must the newtype be a
+    /// defined type of its own.
+    fn unfolding_reaches_itself_unnamed(
+        &mut self,
+        data: &DataType,
+        unfolded: MonotypeId,
+    ) -> GoResult<bool> {
+        let mut pending = vec![unfolded];
+        let mut visited: FxHashSet<MonotypeId> = FxHashSet::default();
+        while let Some(monotype) = pending.pop() {
+            if !visited.insert(monotype) {
+                continue;
+            }
+            match self.monotypes.get(monotype).clone() {
+                Monotype::Recursive(inner) if inner == *data => return Ok(true),
+                Monotype::Recursive(inner) => pending.push(self.unfold(&inner)?),
+                Monotype::Function(..) if self.closure_sets.contains_key(&monotype) => {}
+                Monotype::Function(argument, result) => pending.extend([argument, result]),
+                Monotype::Array(inner)
+                | Monotype::Effect(inner)
+                | Monotype::Reference(inner)
+                | Monotype::MutableArray(inner)
+                | Monotype::Object(inner)
+                | Monotype::Nullable(inner)
+                | Monotype::Lazy(inner) => pending.push(inner),
+                Monotype::ForeignData(foreign) => {
+                    for &argument in foreign.arguments.iter() {
+                        match self.monotypes.monotype(&mut self.context, argument)? {
+                            Ok(argument) => pending.push(argument),
+                            Err(state) => {
+                                return Err(GoError::Unsupported {
+                                    definition: "code generation".into(),
+                                    state,
+                                });
+                            }
+                        }
+                    }
+                }
+                Monotype::Record(_)
+                | Monotype::Data(_)
+                | Monotype::Int
+                | Monotype::Number
+                | Monotype::Boolean
+                | Monotype::Char
+                | Monotype::String
+                | Monotype::Unit
+                | Monotype::Error
+                | Monotype::Opaque
+                | Monotype::Regex
+                | Monotype::Mutex
+                | Monotype::BigInt
+                | Monotype::Erased(_) => {}
+            }
+        }
+        Ok(false)
     }
 
     /// The named type a project's Go foreign package declares for one of its
