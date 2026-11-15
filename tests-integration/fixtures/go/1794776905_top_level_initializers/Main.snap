@@ -1,0 +1,42 @@
+---
+source: tests-integration/src/fixtures.rs
+---
+// main.go
+package main
+
+import (
+	"fmt"
+	"github.com/i-am-the-slime/purs-backend-go/go-support/exception"
+	"github.com/i-am-the-slime/purs-backend-go/go-support/prim"
+)
+
+var main_ = initializeMain_()
+
+func initializeMain_() []string {
+	defer exception.ReportUncaught()
+	mapped := make([]string, len(names))
+	for index, value := range names {
+		mapped[index] = value + prim.ShowInt(total)
+	}
+	return mapped
+}
+
+var total = initializeTotal()
+
+func initializeTotal() int32 {
+	defer exception.ReportUncaught()
+	return count(5)
+}
+
+var names []string = []string{"a", "b"}
+
+func count(n int32) int32 {
+	if n <= 0 {
+		return 0
+	}
+	return 1 + count(n - 1)
+}
+
+func main() {
+	fmt.Println(main_)
+}

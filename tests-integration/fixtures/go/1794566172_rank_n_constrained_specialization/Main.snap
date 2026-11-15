@@ -57,6 +57,7 @@ import (
 	"fixture/shared"
 	"fmt"
 	"github.com/i-am-the-slime/purs-backend-go/go-support/direct"
+	"github.com/i-am-the-slime/purs-backend-go/go-support/exception"
 	"github.com/i-am-the-slime/purs-backend-go/go-support/prim"
 )
 
@@ -74,6 +75,7 @@ var main_ []int32 = []int32{recorded, counted, measured}
 var recorded = initializeRecorded()
 
 func initializeRecorded() int32 {
+	defer exception.ReportUncaught()
 	ref := &Ref[int32]{Value: 0}
 	i := program.ST(shared.InterpreterST{Emit: func(value int32) {
 		s := ref.Value
@@ -91,6 +93,7 @@ func initializeRecorded() int32 {
 var counted = initializeCounted()
 
 func initializeCounted() int32 {
+	defer exception.ReportUncaught()
 	scrutinee := program.StateTIntIdentity(tuple.Interpreter{Emit: func(_ int32) func(int32) tuple.TupleUnitInt {
 		return func(x int32) tuple.TupleUnitInt {
 			return tuple.TupleUnitInt{First: struct{}{}, Second: x + 1}
@@ -103,10 +106,15 @@ func initializeCounted() int32 {
 	return scrutinee.Second
 }
 
-var measured int32 = program.Identity(shared.InterpreterIdentity{Emit: func(_ int32) {
-}, Measure: func(text string) int32 {
-	return direct.CodePointLength(text)
-}})
+var measured = initializeMeasured()
+
+func initializeMeasured() int32 {
+	defer exception.ReportUncaught()
+	return program.Identity(shared.InterpreterIdentity{Emit: func(_ int32) {
+	}, Measure: func(text string) int32 {
+		return direct.CodePointLength(text)
+	}})
+}
 
 var program tuple.SceneInt = tuple.SceneInt{Identity: func(interpreter shared.InterpreterIdentity) int32 {
 	return programNext(interpreter.Measure("hello")).Identity(interpreter)

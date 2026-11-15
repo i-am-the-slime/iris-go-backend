@@ -304,7 +304,7 @@ where
                         arguments.iter().all(Pattern::is_irrefutable)
                     }
                     PatternKind::Literal(
-                        Literal::Int(_) | Literal::String(_) | Literal::Char(_),
+                        Literal::Int(_) | Literal::String(_) | Literal::Utf16(_) | Literal::Char(_),
                     ) => true,
                     PatternKind::Wildcard | PatternKind::Variable(_) => {
                         position == alternatives.len() - 1

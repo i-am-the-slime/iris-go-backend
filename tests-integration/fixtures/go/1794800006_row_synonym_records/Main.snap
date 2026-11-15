@@ -4,7 +4,11 @@ source: tests-integration/src/fixtures.rs
 // main.go
 package main
 
-import "fmt"
+import (
+	"fmt"
+	"github.com/i-am-the-slime/purs-backend-go/go-support/exception"
+	"github.com/i-am-the-slime/purs-backend-go/go-support/prim"
+)
 
 type SpaceValue struct {
 	Value string
@@ -21,6 +25,7 @@ type KindSpaceAfterSpaceBeforeValue struct {
 var main_ = initializeMain_()
 
 func initializeMain_() string {
+	defer exception.ReportUncaught()
 	array := []KindSpaceAfterSpaceBeforeValue{KindSpaceAfterSpaceBeforeValue{SpaceBefore: false, SpaceAfter: true, Value: "a", Kind: 1}, KindSpaceAfterSpaceBeforeValue{SpaceBefore: true, SpaceAfter: false, Value: "b", Kind: 2}}
 	accumulator := SpaceValue{Value: "", Space: false}
 	for kindSpaceAfterSpaceBeforeValueIndex := range array {
@@ -31,7 +36,7 @@ func initializeMain_() string {
 		} else {
 			result = ""
 		}
-		accumulator = SpaceValue{Value: spaceValue.Value + result + array[kindSpaceAfterSpaceBeforeValueIndex].Value, Space: array[kindSpaceAfterSpaceBeforeValueIndex].SpaceAfter}
+		accumulator = SpaceValue{Value: prim.Concat(spaceValue.Value, result, array[kindSpaceAfterSpaceBeforeValueIndex].Value), Space: array[kindSpaceAfterSpaceBeforeValueIndex].SpaceAfter}
 	}
 	return accumulator.Value
 }

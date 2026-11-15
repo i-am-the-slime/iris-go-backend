@@ -28,6 +28,7 @@ import (
 	"fixture/Data/Show"
 	"fmt"
 	"github.com/i-am-the-slime/purs-backend-go/go-support/array"
+	"github.com/i-am-the-slime/purs-backend-go/go-support/exception"
 	"github.com/i-am-the-slime/purs-backend-go/go-support/prim"
 	"slices"
 )
@@ -52,9 +53,14 @@ func convert2(value []bool) []any {
 	return converted
 }
 
-var main_ []string = []string{describeArrayBoolean(Show{Show: func(coerced any) string {
-	return show.ShowBoolean(convert(coerced.([]any)))
-}}, array.Append([]int32{}, []int32{2}), ">", 1, convert2([]bool{true}))}
+var main_ = initializeMain_()
+
+func initializeMain_() []string {
+	defer exception.ReportUncaught()
+	return []string{describeArrayBoolean(Show{Show: func(coerced any) string {
+		return show.ShowBoolean(convert(coerced.([]any)))
+	}}, array.Append([]int32{}, []int32{2}), ">", 1, convert2([]bool{true}))}
+}
 
 func describeArrayBoolean(showDictionary Show, depths []int32, label string, depth int32, value any) string {
 	depths = slices.Clip(depths)

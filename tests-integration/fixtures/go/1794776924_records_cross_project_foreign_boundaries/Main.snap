@@ -19,6 +19,7 @@ import (
 	"fmt"
 	"github.com/i-am-the-slime/purs-backend-go/go-support/array"
 	"github.com/i-am-the-slime/purs-backend-go/go-support/direct"
+	"github.com/i-am-the-slime/purs-backend-go/go-support/exception"
 	"github.com/i-am-the-slime/purs-backend-go/go-support/nullable"
 	"github.com/i-am-the-slime/purs-backend-go/go-support/prim"
 )
@@ -36,6 +37,7 @@ type Shape struct {
 var main_ = initializeMain_()
 
 func initializeMain_() string {
+	defer exception.ReportUncaught()
 	original := NameSides{Name: "square", Sides: 4}
 	nullable2 := Shapes_ffi.Measure("square")
 	var converted *[]Shape

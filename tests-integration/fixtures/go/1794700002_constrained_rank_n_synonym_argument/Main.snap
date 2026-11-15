@@ -4,7 +4,10 @@ source: tests-integration/src/fixtures.rs
 // main.go
 package main
 
-import "fmt"
+import (
+	"fmt"
+	"github.com/i-am-the-slime/purs-backend-go/go-support/exception"
+)
 
 type IdentityOfString struct {
 	Second string
@@ -19,6 +22,7 @@ type IdentityOfUnit struct {
 var main_ = initializeMain_()
 
 func initializeMain_() []int32 {
+	defer exception.ReportUncaught()
 	updated := IdentityOfString{First: 1, Second: "s"}
 	updated.First = 99
 	updated2 := IdentityOfUnit{First: 0, Second: struct{}{}}

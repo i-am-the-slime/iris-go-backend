@@ -6,6 +6,7 @@ package main
 
 import (
 	"fmt"
+	"github.com/i-am-the-slime/purs-backend-go/go-support/exception"
 	"github.com/i-am-the-slime/purs-backend-go/go-support/prim"
 )
 
@@ -22,6 +23,7 @@ type Operation struct {
 var main_ = initializeMain_()
 
 func initializeMain_() MainResult {
+	defer exception.ReportUncaught()
 	scrutinee := []Operation{Operation{Name: "add", Run: func(x int32) int32 {
 		return x + 3
 	}}, Operation{Name: "scale", Run: func(x int32) int32 {

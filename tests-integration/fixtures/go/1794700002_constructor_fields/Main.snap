@@ -60,6 +60,7 @@ import (
 	"fixture/Data/Maybe"
 	"fixture/Data/Show"
 	"fmt"
+	"github.com/i-am-the-slime/purs-backend-go/go-support/exception"
 	"github.com/i-am-the-slime/purs-backend-go/go-support/prim"
 )
 
@@ -99,6 +100,7 @@ const (
 var main_ = initializeMain_()
 
 func initializeMain_() string {
+	defer exception.ReportUncaught()
 	array := []TupleMaybeIntEitherStringInt{TupleMaybeIntEitherStringInt{First: maybe.MaybeInt{Tag: maybe.MaybeIntJust, Just: 1}, Second: either.EitherStringInt{Tag: either.EitherStringIntRight, Right: 2}}, TupleMaybeIntEitherStringInt{First: maybe.MaybeInt{Tag: maybe.MaybeIntNothing}, Second: either.EitherStringInt{Tag: either.EitherStringIntLeft, Left: "x"}}}
 	var accumulator int32 = 0
 	for tupleIndex := range array {
@@ -138,9 +140,9 @@ func entry(entry Entry) string {
 	case EntryField:
 		return prim.ShowInt(entry.Field0 - entry.Field1)
 	case EntryDuo:
-		return entry.Duo0 + entry.Duo1
+		return prim.Append(entry.Duo0, entry.Duo1)
 	default: // EntryTrio
-		return entry.Trio1 + entry.Trio0
+		return prim.Append(entry.Trio1, entry.Trio0)
 	}
 }
 

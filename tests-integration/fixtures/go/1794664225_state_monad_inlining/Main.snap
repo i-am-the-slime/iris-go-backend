@@ -4,14 +4,22 @@ source: tests-integration/src/fixtures.rs
 // main.go
 package main
 
-import "fmt"
+import (
+	"fmt"
+	"github.com/i-am-the-slime/purs-backend-go/go-support/exception"
+)
 
 type StateValue struct {
 	Value struct{}
 	State int32
 }
 
-var main_ int32 = countDown(60, 0).State
+var main_ = initializeMain_()
+
+func initializeMain_() int32 {
+	defer exception.ReportUncaught()
+	return countDown(60, 0).State
+}
 
 func countDown(n int32, state int32) StateValue {
 	for {

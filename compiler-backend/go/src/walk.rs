@@ -63,6 +63,7 @@ pub fn expression<W: Walk + ?Sized>(walk: &mut W, value: &mut GoExpression) {
         | GoExpression::Integer(_)
         | GoExpression::Float(_)
         | GoExpression::String(_)
+        | GoExpression::Utf16(_)
         | GoExpression::Rune(_)
         | GoExpression::Boolean(_)
         | GoExpression::Type(_) => {}

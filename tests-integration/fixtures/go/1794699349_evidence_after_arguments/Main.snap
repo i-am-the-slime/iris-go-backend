@@ -6,6 +6,7 @@ package main
 
 import (
 	"fmt"
+	"github.com/i-am-the-slime/purs-backend-go/go-support/exception"
 	"github.com/i-am-the-slime/purs-backend-go/go-support/prim"
 )
 
@@ -13,9 +14,19 @@ type Describe struct {
 	Describe func(int32) string
 }
 
-var main_ []string = []string{"value=" + prim.ShowInt(42), "text=" + prim.ShowString("x"), "true", "different", boxedInt.Describe(7), local}
+var main_ = initializeMain_()
 
-var local string = "local=" + prim.ShowInt(13)
+func initializeMain_() []string {
+	defer exception.ReportUncaught()
+	return []string{"value=" + prim.ShowInt(42), "text=" + prim.ShowString("x"), "true", "different", boxedInt.Describe(7), local}
+}
+
+var local = initializeLocal()
+
+func initializeLocal() string {
+	defer exception.ReportUncaught()
+	return "local=" + prim.ShowInt(13)
+}
 
 var boxedInt Describe = Describe{Describe: func(value int32) string {
 	return "boxed " + prim.ShowInt(value)

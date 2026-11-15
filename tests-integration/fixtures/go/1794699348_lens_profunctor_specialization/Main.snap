@@ -1,6 +1,5 @@
 ---
 source: tests-integration/src/fixtures.rs
-assertion_line: 570
 ---
 // Data/Maybe/maybe.go
 package maybe
@@ -32,6 +31,7 @@ import (
 	"fixture/Data/Show"
 	"fmt"
 	"github.com/i-am-the-slime/purs-backend-go/go-support/direct"
+	"github.com/i-am-the-slime/purs-backend-go/go-support/exception"
 	"github.com/i-am-the-slime/purs-backend-go/go-support/prim"
 )
 
@@ -43,6 +43,7 @@ type Point struct {
 var main_ = initializeMain_()
 
 func initializeMain_() []string {
+	defer exception.ReportUncaught()
 	append_ := direct.Appender[string]()
 	accumulator := maybe.MaybeArrayString{Tag: maybe.MaybeArrayStringJust, Just: []string{}}
 	for _, element := range origin.Tags {

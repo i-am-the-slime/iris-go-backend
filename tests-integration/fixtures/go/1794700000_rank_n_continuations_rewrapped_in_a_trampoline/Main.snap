@@ -1,12 +1,12 @@
 ---
 source: tests-integration/src/fixtures.rs
-assertion_line: 570
 ---
 // main.go
 package main
 
 import (
 	"fmt"
+	"github.com/i-am-the-slime/purs-backend-go/go-support/exception"
 	"github.com/i-am-the-slime/purs-backend-go/go-support/prim"
 )
 
@@ -58,6 +58,7 @@ func convert2(value MEmptyInt) MParseInt {
 var main_ = initializeMain_()
 
 func initializeMain_() []int32 {
+	defer exception.ReportUncaught()
 	scrutinee := mainGo(loop(30, 0)(0, More, func(failure FailureParse) StepInt {
 		return StepInt{Tag: StepIntStop, Stop: failure.Failure}
 	}, Done))

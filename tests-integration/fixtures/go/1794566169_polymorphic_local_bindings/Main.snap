@@ -28,15 +28,31 @@ import (
 	"fixture/Control/Category"
 	"fixture/Data/Show"
 	"fmt"
+	"github.com/i-am-the-slime/purs-backend-go/go-support/exception"
 	"github.com/i-am-the-slime/purs-backend-go/go-support/prim"
 	"slices"
 )
 
-var main_ []string = []string{"x" + prim.ShowInt(2), pairs, joined, prim.ShowArray(show.Show2, mainGo(show.Show, 3, []string{})) + prim.ShowArray(show.Show, mainGo2(category.Identity, 3, []int32{}))}
+var main_ = initializeMain_()
 
-var pairs string = "true" + prim.ShowInt(pairsF(pairsF(1)))
+func initializeMain_() []string {
+	defer exception.ReportUncaught()
+	return []string{"x" + prim.ShowInt(2), pairs, joined, prim.ShowArray(show.Show2, mainGo(show.Show, 3, []string{})) + prim.ShowArray(show.Show, mainGo2(category.Identity, 3, []int32{}))}
+}
 
-var joined string = "<" + prim.ShowInt(3) + "><" + prim.ShowString("y") + ">"
+var pairs = initializePairs()
+
+func initializePairs() string {
+	defer exception.ReportUncaught()
+	return "true" + prim.ShowInt(pairsF(pairsF(1)))
+}
+
+var joined = initializeJoined()
+
+func initializeJoined() string {
+	defer exception.ReportUncaught()
+	return "<" + prim.ShowInt(3) + "><" + prim.ShowString("y") + ">"
+}
 
 func mainGo(f func(int32) string, n int32, accumulated []string) []string {
 	accumulated = slices.Clip(accumulated)

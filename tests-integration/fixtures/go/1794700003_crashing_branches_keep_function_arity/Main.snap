@@ -6,10 +6,16 @@ package main
 
 import (
 	"fmt"
+	"github.com/i-am-the-slime/purs-backend-go/go-support/exception"
 	"github.com/i-am-the-slime/purs-backend-go/go-support/prim"
 )
 
-var main_ []int32 = []int32{combineWith(2)(3, 4), combineWith(5)(1, 1)}
+var main_ = initializeMain_()
+
+func initializeMain_() []int32 {
+	defer exception.ReportUncaught()
+	return []int32{combineWith(2)(3, 4), combineWith(5)(1, 1)}
+}
 
 func combineWith(n int32) func(int32, int32) int32 {
 	if n > 0 {

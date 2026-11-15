@@ -34,12 +34,14 @@ import (
 	"fixture/shared"
 	"fmt"
 	"github.com/i-am-the-slime/purs-backend-go/go-support/direct"
+	"github.com/i-am-the-slime/purs-backend-go/go-support/exception"
 	"github.com/i-am-the-slime/purs-backend-go/go-support/prim"
 )
 
 var main_ = initializeMain_()
 
 func initializeMain_() []string {
+	defer exception.ReportUncaught()
 	scrutinee := prim.CodeUnitLengthUpTo(3, "ab")
 	var result string
 	switch scrutinee {

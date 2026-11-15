@@ -7,12 +7,18 @@ package main
 import (
 	"fmt"
 	"github.com/i-am-the-slime/purs-backend-go/go-support/array"
+	"github.com/i-am-the-slime/purs-backend-go/go-support/exception"
 	"strings"
 )
 
-var main_ string = "letters: " + strings.Join([]string{"a", "b", "c"}, ",") + "; nested: " + strings.Join(array.Map(func(element []string) string {
-	return strings.Join(element, ",")
-}, [][]string{[]string{"d", "e"}, []string{"f"}}), ",")
+var main_ = initializeMain_()
+
+func initializeMain_() string {
+	defer exception.ReportUncaught()
+	return "letters: " + strings.Join([]string{"a", "b", "c"}, ",") + "; nested: " + strings.Join(array.Map(func(element []string) string {
+		return strings.Join(element, ",")
+	}, [][]string{[]string{"d", "e"}, []string{"f"}}), ",")
+}
 
 func main() {
 	fmt.Println(main_)

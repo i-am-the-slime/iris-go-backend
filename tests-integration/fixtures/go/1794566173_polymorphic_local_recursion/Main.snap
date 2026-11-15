@@ -1,11 +1,13 @@
 ---
 source: tests-integration/src/fixtures.rs
-assertion_line: 570
 ---
 // main.go
 package main
 
-import "fmt"
+import (
+	"fmt"
+	"github.com/i-am-the-slime/purs-backend-go/go-support/exception"
+)
 
 type TreeInt struct {
 	Pair any
@@ -169,13 +171,18 @@ func convert9(value *TreeFn) *Tree {
 	}
 }
 
-var main_ []int32 = []int32{leavesInt(TreeInt{Tag: TreeIntLeaf, Leaf: 1}), leavesInt(TreeInt{Tag: TreeIntPair, Pair: convert3(PairEIntInt{First: TreeFnIntInt{Tag: TreeFnIntIntLeaf, Leaf: func(value int32) int32 {
-	return value + 1
-}}, Second: TreeInt{Tag: TreeIntLeaf, Leaf: 1}})}), leavesInt(TreeInt{Tag: TreeIntPair, Pair: convert3(PairEIntInt{First: TreeFnIntInt{Tag: TreeFnIntIntPair, Pair: convert5(PairEFnIntIntInt{First: TreeFnIntFnIntInt{Tag: TreeFnIntFnIntIntLeaf, Leaf: func(x int32) func(int32) int32 {
-	return func(y int32) int32 {
-		return x + y
-	}
-}}, Second: TreeInt{Tag: TreeIntLeaf, Leaf: 1}})}, Second: TreeInt{Tag: TreeIntLeaf, Leaf: 2}})})}
+var main_ = initializeMain_()
+
+func initializeMain_() []int32 {
+	defer exception.ReportUncaught()
+	return []int32{leavesInt(TreeInt{Tag: TreeIntLeaf, Leaf: 1}), leavesInt(TreeInt{Tag: TreeIntPair, Pair: convert3(PairEIntInt{First: TreeFnIntInt{Tag: TreeFnIntIntLeaf, Leaf: func(value int32) int32 {
+		return value + 1
+	}}, Second: TreeInt{Tag: TreeIntLeaf, Leaf: 1}})}), leavesInt(TreeInt{Tag: TreeIntPair, Pair: convert3(PairEIntInt{First: TreeFnIntInt{Tag: TreeFnIntIntPair, Pair: convert5(PairEFnIntIntInt{First: TreeFnIntFnIntInt{Tag: TreeFnIntFnIntIntLeaf, Leaf: func(x int32) func(int32) int32 {
+		return func(y int32) int32 {
+			return x + y
+		}
+	}}, Second: TreeInt{Tag: TreeIntLeaf, Leaf: 1}})}, Second: TreeInt{Tag: TreeIntLeaf, Leaf: 2}})})}
+}
 
 func leavesInt(tree TreeInt) int32 {
 	return leavesIntGo(0, tree)

@@ -6,6 +6,7 @@ package main
 
 import (
 	"fmt"
+	"github.com/i-am-the-slime/purs-backend-go/go-support/exception"
 	"github.com/i-am-the-slime/purs-backend-go/go-support/prim"
 )
 
@@ -28,6 +29,7 @@ type ABZ struct {
 var main_ = initializeMain_()
 
 func initializeMain_() []string {
+	defer exception.ReportUncaught()
 	union := AZ{A: 1, Z: defaults.Z}
 	record := Defaults{A: defaults.A, Z: 'y'}
 	record2 := ABZ{A: defaults.A, Z: defaults.Z, B: true}

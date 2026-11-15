@@ -6,6 +6,7 @@ package main
 
 import (
 	"fmt"
+	"github.com/i-am-the-slime/purs-backend-go/go-support/exception"
 	"github.com/i-am-the-slime/purs-backend-go/go-support/refeq"
 )
 
@@ -56,6 +57,7 @@ var sharedChainEnd = &Chain{Tag: ChainEnd}
 var main_ = initializeMain_()
 
 func initializeMain_() []bool {
+	defer exception.ReportUncaught()
 	left := Handler{Name: "a", Run: func(n int32) int32 {
 		return n + 1
 	}}
@@ -74,6 +76,7 @@ func initializeMain_() []bool {
 var counter = initializeCounter()
 
 func initializeCounter() *Ref[int32] {
+	defer exception.ReportUncaught()
 	performed := &Ref[int32]{Value: 0}
 	return performed
 }

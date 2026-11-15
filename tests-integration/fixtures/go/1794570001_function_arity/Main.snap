@@ -29,12 +29,14 @@ import (
 	"fixture/Data/Show"
 	"fmt"
 	"github.com/i-am-the-slime/purs-backend-go/go-support/array"
+	"github.com/i-am-the-slime/purs-backend-go/go-support/exception"
 	"github.com/i-am-the-slime/purs-backend-go/go-support/prim"
 )
 
 var main_ = initializeMain_()
 
 func initializeMain_() []string {
+	defer exception.ReportUncaught()
 	function := fromInt(4)
 	array2 := []int32{1, 2}
 	mapped := make([]string, len(array2))
@@ -84,7 +86,7 @@ func fromInt(n int32) func(func(int32) int32, int32) int32 {
 func prepared(a int32) func(string) string {
 	prefix := repeat(a)
 	return func(b string) string {
-		return prefix + b
+		return prim.Append(prefix, b)
 	}
 }
 

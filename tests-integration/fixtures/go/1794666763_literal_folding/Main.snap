@@ -6,6 +6,7 @@ package main
 
 import (
 	"fmt"
+	"github.com/i-am-the-slime/purs-backend-go/go-support/exception"
 	"github.com/i-am-the-slime/purs-backend-go/go-support/prim"
 	"math"
 )
@@ -13,6 +14,7 @@ import (
 var main_ = initializeMain_()
 
 func initializeMain_() []string {
+	defer exception.ReportUncaught()
 	scrutinee := opaqueNumber(12345.0, 0.0) / 0.0 == math.NaN()
 	var result string
 	if scrutinee {

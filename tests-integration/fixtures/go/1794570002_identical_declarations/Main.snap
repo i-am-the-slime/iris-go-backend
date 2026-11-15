@@ -7,6 +7,7 @@ package main
 import (
 	"fmt"
 	"github.com/i-am-the-slime/purs-backend-go/go-support/array"
+	"github.com/i-am-the-slime/purs-backend-go/go-support/exception"
 	"github.com/i-am-the-slime/purs-backend-go/go-support/prim"
 )
 
@@ -18,6 +19,7 @@ type Ops struct {
 var main_ = initializeMain_()
 
 func initializeMain_() []string {
+	defer exception.ReportUncaught()
 	array2 := []int32{1, 2}
 	mapped := make([]string, len(array2))
 	for index, value := range array2 {

@@ -11,8 +11,10 @@ func Identity(x string) string {
 // Data/Semigroup/semigroup.go
 package semigroup
 
+import "github.com/i-am-the-slime/purs-backend-go/go-support/prim"
+
 func Append_(s string, s2 string) string {
-	return s + s2
+	return prim.Append(s, s2)
 }
 
 // main.go
@@ -23,6 +25,7 @@ import (
 	"fixture/Data/Semigroup"
 	"fmt"
 	"github.com/i-am-the-slime/purs-backend-go/go-support/array"
+	"github.com/i-am-the-slime/purs-backend-go/go-support/exception"
 	"github.com/i-am-the-slime/purs-backend-go/go-support/prim"
 )
 
@@ -37,6 +40,7 @@ func convert(value []rune) []string {
 var main_ = initializeMain_()
 
 func initializeMain_() string {
+	defer exception.ReportUncaught()
 	array2 := convert(array.Append([]rune{'a'}, []rune{'b', 'c'}))
 	mapped := make([]string, len(array2))
 	for index, element := range array2 {

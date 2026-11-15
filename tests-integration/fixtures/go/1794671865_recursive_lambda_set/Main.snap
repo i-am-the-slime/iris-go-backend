@@ -7,6 +7,7 @@ package main
 import (
 	"fmt"
 	"github.com/i-am-the-slime/purs-backend-go/go-support/alloc"
+	"github.com/i-am-the-slime/purs-backend-go/go-support/exception"
 	"github.com/i-am-the-slime/purs-backend-go/go-support/prim"
 )
 
@@ -41,7 +42,12 @@ const (
 
 var sharedIntToIntMain_ = &IntToInt{Tag: IntToIntMain_}
 
-var main_ MainResult = MainResult{Forced: forceInt(buildThunks(1000, sharedLazyIntMain_)), Continued: countDown(10, sharedIntToIntMain_)}
+var main_ = initializeMain_()
+
+func initializeMain_() MainResult {
+	defer exception.ReportUncaught()
+	return MainResult{Forced: forceInt(buildThunks(1000, sharedLazyIntMain_)), Continued: countDown(10, sharedIntToIntMain_)}
+}
 
 func buildThunks(n int32, acc *LazyInt) *LazyInt {
 	var lazyIntCells alloc.Cells[LazyInt]

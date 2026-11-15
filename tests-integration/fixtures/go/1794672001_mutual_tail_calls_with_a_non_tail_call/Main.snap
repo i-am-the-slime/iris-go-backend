@@ -6,6 +6,7 @@ package main
 
 import (
 	"fmt"
+	"github.com/i-am-the-slime/purs-backend-go/go-support/exception"
 	"github.com/i-am-the-slime/purs-backend-go/go-support/prim"
 )
 
@@ -14,7 +15,12 @@ type MainResult struct {
 	Depth   int32
 }
 
-var main_ MainResult = MainResult{Depth: depth(0, 30), Letters: a(7, "")}
+var main_ = initializeMain_()
+
+func initializeMain_() MainResult {
+	defer exception.ReportUncaught()
+	return MainResult{Depth: depth(0, 30), Letters: a(7, "")}
+}
 
 const (
 	depthStep = iota

@@ -1154,7 +1154,7 @@ where
                 return Err(self.unsupported(scope, UnsupportedState::ExpressionError));
             }
             tree::ExpressionKind::String { value, .. } => {
-                ExpressionKind::Literal(Literal::String(string_literal(value)))
+                ExpressionKind::Literal(string_literal(value))
             }
             tree::ExpressionKind::Char { value } => ExpressionKind::Literal(Literal::Char(*value)),
             tree::ExpressionKind::Boolean { value } => {
@@ -2770,7 +2770,7 @@ where
             }
             tree::BinderKind::Wildcard => PatternKind::Wildcard,
             tree::BinderKind::String { value } => {
-                PatternKind::Literal(Literal::String(string_literal(value)))
+                PatternKind::Literal(string_literal(value))
             }
             tree::BinderKind::Char { value } => PatternKind::Literal(Literal::Char(*value)),
             tree::BinderKind::Boolean { value } => PatternKind::Literal(Literal::Boolean(*value)),
@@ -2951,6 +2951,16 @@ fn alternatives_monotype(alternatives: &[Alternative]) -> MonotypeId {
     }
 }
 
-fn string_literal(value: &lowering::StringLiteral) -> String {
+/// The text of a type-level string. Dictionaries carry symbols as Rust strings, so a lone
+/// surrogate in one reads as U+FFFD.
+fn symbol_text(value: &lowering::StringLiteral) -> String {
     String::from_utf16_lossy(value.as_utf16())
+}
+
+/// A string literal: a `Literal::String` unless it holds a lone surrogate.
+fn string_literal(value: &lowering::StringLiteral) -> Literal {
+    match value.to_utf8() {
+        Ok(text) => Literal::String(text),
+        Err(_) => Literal::Utf16(Arc::from(value.as_utf16())),
+    }
 }

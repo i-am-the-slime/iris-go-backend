@@ -6,6 +6,7 @@ package main
 
 import (
 	"fmt"
+	"github.com/i-am-the-slime/purs-backend-go/go-support/exception"
 	"github.com/i-am-the-slime/purs-backend-go/go-support/prim"
 )
 
@@ -71,11 +72,12 @@ var sharedListEntryNil = &ListEntry{Tag: ListEntryNil}
 var main_ = initializeMain_()
 
 func initializeMain_() MainResult {
+	defer exception.ReportUncaught()
 	scrutinee := search(3, 0)
 	var result string
 	switch scrutinee.Tag {
 	case OutcomeFound:
-		result = scrutinee.Found0 + scrutinee.Found9
+		result = prim.Append(scrutinee.Found0, scrutinee.Found9)
 	default: // OutcomeMissing
 		result = "missing"
 	}
@@ -83,7 +85,7 @@ func initializeMain_() MainResult {
 	var result2 string
 	switch scrutinee2.Tag {
 	case OutcomeFound:
-		result2 = scrutinee2.Found0 + scrutinee2.Found9
+		result2 = prim.Append(scrutinee2.Found0, scrutinee2.Found9)
 	default: // OutcomeMissing
 		result2 = "missing"
 	}
@@ -107,7 +109,7 @@ func firsts(list *ListEntry) string {
 		return ""
 	}
 	if list.Tag == ListEntryCons && list.Cons0.Tag == EntryEntry {
-		return list.Cons0.Entry0 + firsts(list.Cons1)
+		return prim.Append(list.Cons0.Entry0, firsts(list.Cons1))
 	}
 	return "_" + firsts(list.Cons1)
 }

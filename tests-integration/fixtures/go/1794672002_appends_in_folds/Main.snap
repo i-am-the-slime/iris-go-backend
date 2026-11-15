@@ -33,6 +33,7 @@ import (
 	"fixture/Data/Either"
 	"fmt"
 	"github.com/i-am-the-slime/purs-backend-go/go-support/array"
+	"github.com/i-am-the-slime/purs-backend-go/go-support/exception"
 	"github.com/i-am-the-slime/purs-backend-go/go-support/prim"
 	"slices"
 )
@@ -52,6 +53,7 @@ type AccSeen struct {
 var main_ = initializeMain_()
 
 func initializeMain_() MainResult {
+	defer exception.ReportUncaught()
 	accumulator := []int32{}
 	accumulator = slices.Clip(accumulator)
 	for x := int32(1); x < 6; x++ {
@@ -70,7 +72,7 @@ func initializeMain_() MainResult {
 	for elementIndex := range array2 {
 		acc := accumulator3
 		if acc.Tag == either.EitherStringArrayIntLeft && array2[elementIndex].Tag == either.EitherStringIntLeft {
-			accumulator3 = either.EitherStringArrayInt{Tag: either.EitherStringArrayIntLeft, Left: acc.Left + array2[elementIndex].Left}
+			accumulator3 = either.EitherStringArrayInt{Tag: either.EitherStringArrayIntLeft, Left: prim.Append(acc.Left, array2[elementIndex].Left)}
 		} else if acc.Tag == either.EitherStringArrayIntLeft && array2[elementIndex].Tag == either.EitherStringIntRight {
 			accumulator3 = either.EitherStringArrayInt{Tag: either.EitherStringArrayIntLeft, Left: acc.Left}
 		} else if acc.Tag == either.EitherStringArrayIntRight && array2[elementIndex].Tag == either.EitherStringIntRight {
