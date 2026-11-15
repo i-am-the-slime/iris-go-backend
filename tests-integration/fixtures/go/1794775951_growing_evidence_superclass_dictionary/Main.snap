@@ -1,0 +1,244 @@
+---
+source: tests-integration/src/fixtures.rs
+---
+// Data/Eq/eq.go
+package eq
+
+import "github.com/i-am-the-slime/purs-backend-go/go-support/array"
+
+func Eq(i int32, i2 int32) bool {
+	return i == i2
+}
+
+func EqInt(array2 []int32, array3 []int32) bool {
+	return array.Eq(Eq, array2, array3)
+}
+
+func Eq2(char rune, char2 rune) bool {
+	return char == char2
+}
+
+func EqChar(array2 []rune, array3 []rune) bool {
+	return array.Eq(Eq2, array2, array3)
+}
+
+// Data/Ord/ord.go
+package ord
+
+import (
+	"fixture/Data/Ordering"
+	"github.com/i-am-the-slime/purs-backend-go/go-support/direct"
+)
+
+func CompareInt(xs []int32, ys []int32) ordering.Ordering {
+	i := direct.CompareArray(func(x int32, y int32) int32 {
+		if x < y {
+			return 1
+		}
+		if x == y {
+			return 0
+		}
+		return -1
+	}, xs, ys)
+	if 0 < i {
+		return ordering.OrderingLT
+	}
+	if 0 == i {
+		return ordering.OrderingEQ
+	}
+	return ordering.OrderingGT
+}
+
+func CompareChar(xs []rune, ys []rune) ordering.Ordering {
+	i := direct.CompareArray(func(x rune, y rune) int32 {
+		if x < y {
+			return 1
+		}
+		if x == y {
+			return 0
+		}
+		return -1
+	}, xs, ys)
+	if 0 < i {
+		return ordering.OrderingLT
+	}
+	if 0 == i {
+		return ordering.OrderingEQ
+	}
+	return ordering.OrderingGT
+}
+
+// Data/Ordering/ordering.go
+package ordering
+
+type Ordering uint8
+
+const (
+	OrderingLT Ordering = iota
+	OrderingGT
+	OrderingEQ
+)
+
+// main.go
+package main
+
+import (
+	"fixture/Data/Eq"
+	"fixture/Data/Ord"
+	"fixture/Data/Ordering"
+	"fmt"
+	"github.com/i-am-the-slime/purs-backend-go/go-support/array"
+	"github.com/i-am-the-slime/purs-backend-go/go-support/direct"
+)
+
+func convert(value []any) []int32 {
+	converted := []int32{}
+	for _, element := range value {
+		converted = append(converted, element.(int32))
+	}
+	return converted
+}
+
+type Eq struct {
+	Eq func(any) func(any) bool
+}
+
+type Ord struct {
+	Eq0     Eq
+	Compare func(any) func(any) ordering.Ordering
+}
+
+func convert2(value []int32) []any {
+	converted := []any{}
+	for _, element := range value {
+		converted = append(converted, element)
+	}
+	return converted
+}
+
+func convert3(value []any) []rune {
+	converted := []rune{}
+	for _, element := range value {
+		converted = append(converted, element.(rune))
+	}
+	return converted
+}
+
+func convert4(value []rune) []any {
+	converted := []any{}
+	for _, element := range value {
+		converted = append(converted, element)
+	}
+	return converted
+}
+
+var main_ = initializeMain_()
+
+func initializeMain_() []string {
+	original := func(array []int32) func([]int32) bool {
+		return func(array2 []int32) bool {
+			return eq.EqInt(array, array2)
+		}
+	}
+	original2 := func(xs []int32) func([]int32) ordering.Ordering {
+		return func(ys []int32) ordering.Ordering {
+			return ord.CompareInt(xs, ys)
+		}
+	}
+	original3 := func(array []rune) func([]rune) bool {
+		return func(array2 []rune) bool {
+			return eq.EqChar(array, array2)
+		}
+	}
+	original4 := func(xs []rune) func([]rune) ordering.Ordering {
+		return func(ys []rune) ordering.Ordering {
+			return ord.CompareChar(xs, ys)
+		}
+	}
+	return []string{relateArrayInt(Ord{Eq0: Eq{Eq: func(coerced any) func(any) bool {
+		original5 := original(convert(coerced.([]any)))
+		return func(coerced2 any) bool {
+			return original5(convert(coerced2.([]any)))
+		}
+	}}, Compare: func(coerced any) func(any) ordering.Ordering {
+		original5 := original2(convert(coerced.([]any)))
+		return func(coerced2 any) ordering.Ordering {
+			return original5(convert(coerced2.([]any)))
+		}
+	}}, 1, convert2([]int32{1}), convert2([]int32{1, 1})), relateArrayInt(Ord{Eq0: Eq{Eq: func(coerced any) func(any) bool {
+		original5 := original3(convert3(coerced.([]any)))
+		return func(coerced2 any) bool {
+			return original5(convert3(coerced2.([]any)))
+		}
+	}}, Compare: func(coerced any) func(any) ordering.Ordering {
+		original5 := original4(convert3(coerced.([]any)))
+		return func(coerced2 any) ordering.Ordering {
+			return original5(convert3(coerced2.([]any)))
+		}
+	}}, 1, convert4([]rune{'a'}), convert4([]rune{'b', 'b'}))}
+}
+
+func relateArrayInt(ordDictionary Ord, depth int32, left any, right any) string {
+	for {
+		ordDictionaryCaptured := ordDictionary
+		if depth == 0 {
+			if ordDictionaryCaptured.Eq0.Eq(left)(right) {
+				return "equal"
+			}
+			scrutinee := ordDictionaryCaptured.Compare(left)(right)
+			switch scrutinee {
+			case ordering.OrderingLT:
+				return "LT"
+			case ordering.OrderingGT:
+				return "GT"
+			default: // ordering.OrderingEQ
+				return "EQ"
+			}
+		}
+		depth2 := depth
+		original := func(array2 []any) func([]any) bool {
+			return func(array3 []any) bool {
+				return array.Eq(func(argument any, argument2 any) bool {
+					return ordDictionaryCaptured.Eq0.Eq(argument)(argument2)
+				}, array2, array3)
+			}
+		}
+		original2 := func(xs []any) func([]any) ordering.Ordering {
+			return func(ys []any) ordering.Ordering {
+				i := direct.CompareArray(func(x any, y any) int32 {
+					scrutinee := ordDictionaryCaptured.Compare(x)(y)
+					switch scrutinee {
+					case ordering.OrderingEQ:
+						return 0
+					case ordering.OrderingLT:
+						return 1
+					default: // ordering.OrderingGT
+						return -1
+					}
+				}, xs, ys)
+				if 0 < i {
+					return ordering.OrderingLT
+				}
+				if 0 == i {
+					return ordering.OrderingEQ
+				}
+				return ordering.OrderingGT
+			}
+		}
+		ordDictionary, depth, left, right = Ord{Eq0: Eq{Eq: func(coerced any) func(any) bool {
+			original3 := original(coerced.([]any))
+			return func(coerced2 any) bool {
+				return original3(coerced2.([]any))
+			}
+		}}, Compare: func(coerced any) func(any) ordering.Ordering {
+			original3 := original2(coerced.([]any))
+			return func(coerced2 any) ordering.Ordering {
+				return original3(coerced2.([]any))
+			}
+		}}, depth2 - 1, []any{left}, []any{right, right}
+	}
+}
+
+func main() {
+	fmt.Println(main_)
+}

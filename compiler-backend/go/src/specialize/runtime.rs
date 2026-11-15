@@ -1,4 +1,3 @@
-
 use std::sync::Arc;
 
 use checking::TypeId;
@@ -39,8 +38,10 @@ where
         requested: &[TypeId],
     ) -> GoResult<Vec<Promotion>> {
         let definition = self.describe_definition(key.definition.clone())?;
-        let growing =
-            || GoError::Unsupported { definition: definition.clone(), state: UnsupportedState::GrowingEvidence };
+        let growing = || GoError::Unsupported {
+            definition: definition.clone(),
+            state: UnsupportedState::GrowingEvidence,
+        };
         let Definition::Value { file_id, term } = key.definition else { return Err(growing()) };
         let module = self.context.module(file_id)?;
         let declaration = module.checked.tree.lookup_term(term).ok_or_else(growing)?;
@@ -66,7 +67,9 @@ where
                         instantiated.insert(name, requested_type);
                     }
                 }
-                DeclarationAbstraction::Evidence { constraint, .. } => constraints.push(*constraint),
+                DeclarationAbstraction::Evidence { constraint, .. } => {
+                    constraints.push(*constraint)
+                }
                 DeclarationAbstraction::Argument => {}
             }
         }
@@ -103,15 +106,13 @@ where
             let mut dictionaries = key.dictionaries.to_vec();
             for promotion in promotions {
                 let Dictionary::Runtime(runtime) = &dictionaries[promotion.position] else {
-                    unreachable!("invariant violated: a promoted dictionary is not passed at run time")
+                    unreachable!(
+                        "invariant violated: a promoted dictionary is not passed at run time"
+                    )
                 };
                 let erased = runtime.constraint;
-                let value = self.runtime_value(
-                    scope,
-                    promotion.dictionary,
-                    promotion.constraint,
-                    erased,
-                )?;
+                let value =
+                    self.runtime_value(scope, promotion.dictionary, promotion.constraint, erased)?;
                 let value = Some(Box::new(value));
                 dictionaries[promotion.position] =
                     Dictionary::Runtime(RuntimeDictionary { constraint: erased, value });
@@ -200,13 +201,15 @@ where
         for constraint in constraints {
             let monotype = self.runtime_monotype(definition, constraint)?;
             let class = self.class_environment(definition, constraint)?;
-            let class = crate::naming::lower_first(&self.context.type_name(class.file_id, class.item)?);
+            let class =
+                crate::naming::lower_first(&self.context.type_name(class.file_id, class.item)?);
             let name = smol_str::format_smolstr!("{class}Dictionary");
             parameters.push(self.fresh_local(name, monotype));
         }
         let mut next = parameters.iter();
         let key = map_key(key, &mut |runtime| {
-            let parameter = next.next().expect("invariant violated: a run-time dictionary has no parameter");
+            let parameter =
+                next.next().expect("invariant violated: a run-time dictionary has no parameter");
             let value = Some(Box::new(parameter.expression()));
             RuntimeDictionary { constraint: runtime.constraint, value }
         });
@@ -222,7 +225,10 @@ where
     ) -> GoResult<Expression> {
         let value = runtime.value.expect("invariant violated: a run-time dictionary has no value");
         let field = self.record_field(*value, &member).ok_or_else(|| {
-            self.unsupported(scope, UnsupportedState::MissingInstanceMember { member: member.to_string() })
+            self.unsupported(
+                scope,
+                UnsupportedState::MissingInstanceMember { member: member.to_string() },
+            )
         })?;
         Ok(self.coerce(field, monotype))
     }
@@ -311,7 +317,8 @@ where
             };
             let dictionary = self.resolve_superclass(&scope.evidence(), &instance, superclass)?;
             let constraint = self.context.types.substitute(entry.constraint, &class.substitution);
-            let erased = self.context.types.substitute(entry.constraint, &erased_class.substitution);
+            let erased =
+                self.context.types.substitute(entry.constraint, &erased_class.substitution);
             fields.push((label, self.runtime_value(scope, dictionary, constraint, erased)?));
         }
         let mut coerced = Vec::with_capacity(fields.len());
@@ -367,7 +374,9 @@ where
     ) -> GoResult<ClassEnvironment> {
         let unsupported = || GoError::Unsupported {
             definition: definition.to_string(),
-            state: UnsupportedState::Construct { construct: "growing evidence of a non-class constraint" },
+            state: UnsupportedState::Construct {
+                construct: "growing evidence of a non-class constraint",
+            },
         };
         let (head, arguments) = self.context.types.spine(constraint);
         let &Type::Constructor(file_id, item) = self.context.types.lookup(head) else {
@@ -398,7 +407,9 @@ where
         let &Type::Constructor(file_id, item) = self.context.types.lookup(head) else {
             return Err(GoError::Unsupported {
                 definition: definition.to_string(),
-                state: UnsupportedState::Construct { construct: "growing evidence of a non-class constraint" },
+                state: UnsupportedState::Construct {
+                    construct: "growing evidence of a non-class constraint",
+                },
             });
         };
         let name = self.context.type_name(file_id, item)?;
@@ -475,5 +486,9 @@ fn map_instance(
     }
     let context = instance.context.iter().map(|dictionary| map_dictionary(dictionary, visit));
     let context = context.collect();
-    Arc::new(InstanceDictionary { origin: instance.origin, types: Arc::clone(&instance.types), context })
+    Arc::new(InstanceDictionary {
+        origin: instance.origin,
+        types: Arc::clone(&instance.types),
+        context,
+    })
 }
