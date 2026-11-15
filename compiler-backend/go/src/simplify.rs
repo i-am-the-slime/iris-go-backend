@@ -748,9 +748,7 @@ impl Simplifier<'_> {
     fn let_bindings(&mut self, bindings: Vec<Binding>, body: Expression) -> Expression {
         let mut body = body;
         let mut kept = vec![];
-        let recursive = bindings.iter().any(|binding| {
-            bindings.iter().any(|other| occurrences(&binding.value, other.local.id).total > 0)
-        });
+        let recursive = bindings.iter().any(|binding| mentions_any(&binding.value, &bindings));
         if !recursive
             && let Some(position) = bindings
                 .iter()
@@ -1554,6 +1552,17 @@ fn size(expression: &Expression) -> usize {
 struct Occurrences {
     total: usize,
     under_lambda: usize,
+}
+
+/// Whether the expression refers to a local one of the bindings binds.
+fn mentions_any(expression: &Expression, bindings: &[Binding]) -> bool {
+    let mut mentioned = false;
+    visit(expression, &mut |node| {
+        if let ExpressionKind::Local(id) = node.kind {
+            mentioned |= bindings.iter().any(|binding| binding.local.id == id);
+        }
+    });
+    mentioned
 }
 
 fn occurrences(expression: &Expression, local: LocalId) -> Occurrences {
