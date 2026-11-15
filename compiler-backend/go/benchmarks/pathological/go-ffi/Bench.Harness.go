@@ -16,8 +16,13 @@ import (
 
 var started time.Time
 
+// PATHO_SIZE replaces the benchmark's size, so that scripts/robust/scaling.sh can time it at n, 2n
+// and 4n.
 func StartClock(size int) func() int {
 	return func() int {
+		if configured, err := strconv.Atoi(os.Getenv("PATHO_SIZE")); err == nil && configured > 0 {
+			size = configured
+		}
 		started = time.Now()
 		return size
 	}

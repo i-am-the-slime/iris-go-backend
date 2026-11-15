@@ -1,8 +1,10 @@
 let started = 0;
 
+// PATHO_SIZE replaces the benchmark's size, so that scripts/robust/scaling.sh can time it at n, 2n and 4n.
 export const startClock = (size) => () => {
+  const configured = parseInt(environment("PATHO_SIZE") ?? "", 10);
   started = performance.now();
-  return size;
+  return Number.isFinite(configured) && configured > 0 ? configured : size;
 };
 
 export const stopClock = (_result) => () => performance.now() - started;

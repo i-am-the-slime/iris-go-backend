@@ -1,0 +1,16 @@
+# Size knobs for the compatibility corpus in scaling.sh, one literal per line:
+#   module|perl pattern|replacement with @N@|base n
+# A module's first line gives the base n reported; every line of the module is scaled by the same
+# factor (1, 2, 4, 8). Patterns must not contain '|' or '/'.
+# Go runs 800000 steps of each loop in under a millisecond, so n starts in the millions.
+Compat.Effects.TailRec|sumTo 100000|sumTo @N@|2000000
+Compat.Effects.TailRec|countDown 100000|countDown @N@|2000000
+Compat.Effects.TailRec|n >= 50000|n >= @N@|2000000
+Compat.Laziness.Lazy|LazyList.range 1 100\)|LazyList.range 1 @N@)|50000
+Compat.Recursion.Schemes|hylo sumList range 100\)|hylo sumList range @N@)|1000
+Compat.Mutable.State|sieve 50\)|sieve @N@)|20000
+# for_ over Effect is not stack safe in JS: Deno overflows its stack at 20000 increments.
+Compat.Mutable.State|Array.range 1 5\)|Array.range 1 @N@)|1000
+Compat.Dhall.Parse|fold 5 Natural|fold @N@ Natural|200
+Compat.Dhall.Eval|natural 5, AST.mkNatural|natural @N@, AST.mkNatural|200
+Compat.Hyrule.TestSuite|replicate 1000 3\) push|replicate @N@ 3) push|2000
