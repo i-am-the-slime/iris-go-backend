@@ -138,10 +138,7 @@ where
                     self.go_function(GoFunction { package: GoPackage::Prim, name: "CharSingleton" });
                 Ok(call(singleton, vec![value]))
             }
-            _ => Err(GoError::Unsupported {
-                definition: "code generation".into(),
-                state: crate::error::UnsupportedState::Construct { construct: UNRELATED_TYPES },
-            }),
+            _ => Err(GoError::unsupported_construct(UNRELATED_TYPES)),
         }
     }
 
@@ -402,12 +399,7 @@ where
                     let Some(from_field) =
                         from_fields.iter().find(|from_field| from_field.label == to_field.label)
                     else {
-                        return Err(GoError::Unsupported {
-                            definition: "code generation".into(),
-                            state: crate::error::UnsupportedState::Construct {
-                                construct: "a coercion between records with different fields (a rank-N value coerced to another instantiation)",
-                            },
-                        });
+                        return Err(GoError::unsupported_construct("a coercion between records with different fields (a rank-N value coerced to another instantiation)"));
                     };
                     let field_value = self.read_field(value.clone(), from, &to_field.label);
                     let converted = self.coerce(

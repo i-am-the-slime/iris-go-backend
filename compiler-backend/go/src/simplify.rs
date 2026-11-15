@@ -153,12 +153,7 @@ impl Simplifier<'_> {
             parameters.push(self.fresh(&template));
             result = inner;
         }
-        let arguments = parameters
-            .iter()
-            .map(|parameter| {
-                Expression::new(ExpressionKind::Local(parameter.id), parameter.monotype)
-            })
-            .collect();
+        let arguments = parameters.iter().map(Local::expression).collect();
         function.body = Expression::new(
             ExpressionKind::Apply { function: Box::new(function.body), arguments },
             result,

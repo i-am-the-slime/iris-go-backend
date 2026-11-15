@@ -1491,10 +1491,7 @@ where
         if let ExpressionKind::Function(id) = function.kind {
             let arity = self.program.function(id).parameters.len();
             if arity == arguments.len() {
-                let mut values = vec![];
-                for argument in arguments {
-                    values.push(self.value(argument, out)?);
-                }
+                let values = self.values(arguments, out)?;
                 return Ok(call(identifier_expression(self.function_reference(id)), values));
             }
         }
@@ -1598,10 +1595,7 @@ where
             }
             _ => {}
         }
-        let mut values = vec![];
-        for argument in arguments {
-            values.push(self.value(argument, out)?);
-        }
+        let mut values = self.values(arguments, out)?;
         match foreign {
             Foreign::Print => {
                 self.imports.insert("fmt".into());
@@ -2524,6 +2518,14 @@ where
         Ok(())
     }
 
+    fn values(
+        &mut self,
+        expressions: &[Expression],
+        out: &mut Vec<GoStatement>,
+    ) -> GoResult<Vec<GoExpression>> {
+        expressions.iter().map(|expression| self.value(expression, out)).collect()
+    }
+
     fn value(
         &mut self,
         expression: &Expression,
@@ -2573,17 +2575,11 @@ where
             ExpressionKind::Local(id) => self.local(*id)?,
             ExpressionKind::Function(id) => self.function_value(*id, expression.monotype)?,
             ExpressionKind::Construct { data, constructor, arguments } => {
-                let mut values = vec![];
-                for argument in arguments {
-                    values.push(self.value(argument, out)?);
-                }
+                let values = self.values(arguments, out)?;
                 self.construct(data, *constructor, values)?
             }
             ExpressionKind::Reuse { cell, data, constructor, arguments } => {
-                let mut values = vec![];
-                for argument in arguments {
-                    values.push(self.value(argument, out)?);
-                }
+                let values = self.values(arguments, out)?;
                 let cell = self.value(cell, out)?;
                 let layout = self.data_layout(data)?;
                 let composite = self.composite(&layout, *constructor, values);
@@ -2609,10 +2605,7 @@ where
                 }
             }
             ExpressionKind::Closure { tag, captures } => {
-                let mut values = vec![];
-                for capture in captures {
-                    values.push(self.value(capture, out)?);
-                }
+                let values = self.values(captures, out)?;
                 self.closure_value(expression.monotype, *tag, values)?
             }
             ExpressionKind::Coerce(value) => {
@@ -3012,10 +3005,7 @@ where
                     name
                 }
             };
-            let mut values = vec![];
-            for argument in arguments {
-                values.push(self.value(argument, out)?);
-            }
+            let values = self.values(arguments, out)?;
             return Ok(call(identifier_expression(&range), values));
         }
         if let Foreign::MaybeIndex = foreign {
@@ -3100,20 +3090,10 @@ where
             return Ok(self.read_field(record, arguments[1].monotype, label));
         }
         if let Foreign::RecordHas = foreign {
-            return Err(GoError::Unsupported {
-                definition: "code generation".into(),
-                state: crate::error::UnsupportedState::Construct {
-                    construct: "a label test on a value whose record type is not closed",
-                },
-            });
+            return Err(GoError::unsupported_construct("a label test on a value whose record type is not closed"));
         }
         if let Foreign::Record(_) = foreign {
-            return Err(GoError::Unsupported {
-                definition: "code generation".into(),
-                state: crate::error::UnsupportedState::Construct {
-                    construct: "record builders with labels unknown at compile time",
-                },
-            });
+            return Err(GoError::unsupported_construct("record builders with labels unknown at compile time"));
         }
         if let Foreign::Crash = foreign {
             let message = self.value(&arguments[0], out)?;
@@ -3152,10 +3132,7 @@ where
         if let Foreign::ReferenceEqual = foreign {
             return self.reference_equal(&arguments[0], &arguments[1], out);
         }
-        let mut values = vec![];
-        for argument in arguments {
-            values.push(self.value(argument, out)?);
-        }
+        let mut values = self.values(arguments, out)?;
         Ok(match foreign {
             Foreign::Operator(Operator::Compare(comparison))
                 if !matches!(comparison, Comparison::Equal | Comparison::NotEqual)
@@ -3194,12 +3171,7 @@ where
         out: &mut Vec<GoStatement>,
     ) -> GoResult<GoExpression> {
         let Monotype::Record(fields) = self.monotypes.get(arguments[1].monotype).clone() else {
-            return Err(GoError::Unsupported {
-                definition: "code generation".into(),
-                state: crate::error::UnsupportedState::Construct {
-                    construct: "record access through a run-time label into a value that is not a closed record",
-                },
-            });
+            return Err(GoError::unsupported_construct("record access through a run-time label into a value that is not a closed record"));
         };
         let label = self.value(&arguments[0], out)?;
         let record = self.value(&arguments[1], out)?;
@@ -3225,12 +3197,7 @@ where
             cases.push(GoCase { values: vec![label], body });
         }
         if cases.is_empty() {
-            return Err(GoError::Unsupported {
-                definition: "code generation".into(),
-                state: crate::error::UnsupportedState::Construct {
-                    construct: "record access through a run-time label where no field has the requested type",
-                },
-            });
+            return Err(GoError::unsupported_construct("record access through a run-time label where no field has the requested type"));
         }
         let type_ = self.go_type(monotype)?;
         out.push(GoStatement::Variable { name: chosen.clone(), type_, value: None });

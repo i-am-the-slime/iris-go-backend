@@ -709,12 +709,7 @@ where
             let body = self.guarded(scope, &equation.guarded_expression)?;
             alternatives.push(Alternative { patterns, body });
         }
-        let scrutinees: Vec<Expression> = parameters
-            .iter()
-            .map(|parameter| {
-                Expression::new(ExpressionKind::Local(parameter.id), parameter.monotype)
-            })
-            .collect();
+        let scrutinees: Vec<Expression> = parameters.iter().map(Local::expression).collect();
         let monotype = alternatives_monotype(&alternatives);
         if !exhaustive {
             alternatives.push(Alternative::match_failure(&scrutinees, monotype));
@@ -1227,12 +1222,7 @@ where
                 }
                 let body = self.expression(scope, *expression)?;
                 let monotype = body.monotype;
-                let scrutinees: Vec<Expression> = parameters
-                    .iter()
-                    .map(|parameter| {
-                        Expression::new(ExpressionKind::Local(parameter.id), parameter.monotype)
-                    })
-                    .collect();
+                let scrutinees: Vec<Expression> = parameters.iter().map(Local::expression).collect();
                 let alternative = Alternative { patterns, body: Guarded::Unconditional(body) };
                 let mut alternatives = vec![alternative];
                 if !module.checked.tree.is_exhaustive_match(tree::PatternMatch::Expression(id)) {
@@ -2690,12 +2680,7 @@ where
             parameters.push(self.fresh_local(self.monotypes.value_name(argument), argument));
             current = result;
         }
-        let arguments = parameters
-            .iter()
-            .map(|parameter| {
-                Expression::new(ExpressionKind::Local(parameter.id), parameter.monotype)
-            })
-            .collect();
+        let arguments = parameters.iter().map(Local::expression).collect();
         let body = Expression::new(ExpressionKind::Foreign { foreign, arguments }, current);
         self.lambda(parameters, body)
     }
@@ -2738,12 +2723,7 @@ where
             .iter()
             .map(|&field| self.fresh_local(self.monotypes.value_name(field), field))
             .collect();
-        let arguments = parameters
-            .iter()
-            .map(|parameter| {
-                Expression::new(ExpressionKind::Local(parameter.id), parameter.monotype)
-            })
-            .collect();
+        let arguments = parameters.iter().map(Local::expression).collect();
         let kind = ExpressionKind::Construct { data, constructor: index, arguments };
         let body = Expression::new(kind, result);
         if parameters.is_empty() {
