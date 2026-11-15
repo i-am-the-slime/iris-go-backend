@@ -9,10 +9,9 @@
 # Targets:
 #   go-support    go vet (default and libm tags) and go test -race over go-support itself
 #   markgraf      the Markgraf CLI (build-go-cli.sh, pinned markgraf-gates): vet, a race build run
-#                 over --still and --frame exports, and a second race build in which the camera
-#                 plan's two parallelMap call sites call array.ParallelMap (iris maps parallelMap to
-#                 the sequential array.Map) on a go-support copy whose parallel threshold is 2, so
-#                 that the goroutines actually run on small diagrams
+#                 over --still and --frame exports, and a second race build on a go-support copy
+#                 whose parallel threshold is 2, so that the camera plan's two parallelMap call
+#                 sites (array.ParallelMap) actually run goroutines on small diagrams
 #   examples      every purs-backend-go example: vet, race build, run
 #   pathological  every pathological benchmark: vet and race build; runs RACE_PATHO (Aff.*, Om.*
 #                 and the Persistent/Lazy ones by default) once each
@@ -138,21 +137,22 @@ target_markgraf() {
   (cd "$out/go" && go build -race -tags libm -gcflags=-dwarf=false -ldflags=-w -o bin/markgraf-race .) >>"$out.build.log" 2>&1 \
     || { echo "markgraf: race build failed" >>"$WORK/failures.txt"; return; }
 
-  # The camera plan's parallelMap call sites, made parallel. They are found by their callees, so
-  # that a renamed temporary does not silently skip the experiment.
+  # The camera plan's parallelMap call sites, found by their callees, so that a renamed result
+  # type or a lost mapping does not silently skip the experiment.
   rm -rf "$out/parallel" "$WORK/go-support-parallel"
   cp -c -R "$out/go" "$out/parallel" 2>/dev/null || cp -R "$out/go" "$out/parallel"
   rsync -a --exclude .jj "$GO_SUPPORT/" "$WORK/go-support-parallel/"
   sed -i '' 's/const parallelMapMinimum = [0-9]*/const parallelMapMinimum = 2/' "$WORK/go-support-parallel/array/parallel.go"
+  grep -q 'const parallelMapMinimum = 2$' "$WORK/go-support-parallel/array/parallel.go" \
+    || echo "markgraf: go-support's parallelMapMinimum was not lowered to 2" >>"$WORK/failures.txt"
   go_mod markgraf.example/cli "$WORK/go-support-parallel" >"$out/parallel/go.mod"
   local plan
   plan="$(ls "$out"/parallel/Markgraf/Animation/Camera/Plan/*.go | head -1)"
   local sites
-  sites="$(grep -nE 'array\.Map\(func\(.*\) [A-Za-z.]*(HandoffsSegment|SegmentSpans) \{' "$plan" | cut -d: -f1)"
+  sites="$(grep -nE 'array\.ParallelMap\(func\(.*\) [A-Za-z.]*(PreparedCameraSegment|LevelCameraSpanSet) \{' "$plan" | cut -d: -f1)"
   if [ "$(echo "$sites" | grep -c .)" != 2 ]; then
     echo "markgraf: expected 2 parallelMap sites in $plan, found: $sites" >>"$WORK/failures.txt"
   else
-    for line in $sites; do sed -i '' -E "${line}s/array\.Map\(/array.ParallelMap(/" "$plan"; done
     (cd "$out/parallel" && go build -race -tags libm -gcflags=-dwarf=false -ldflags=-w -o bin/markgraf-race-parallel .) >>"$out.build.log" 2>&1 \
       || echo "markgraf: parallel race build failed" >>"$WORK/failures.txt"
   fi

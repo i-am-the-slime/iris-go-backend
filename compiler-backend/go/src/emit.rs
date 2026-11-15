@@ -1063,37 +1063,41 @@ where
     }
 
     /// A recursive constant: `name()` computes the value once, on first use, as
-    /// JavaScript's lazily initialised recursive bindings do.
+    /// JavaScript's lazily initialised recursive bindings do, in a `lazy.Lazy` cell, so that
+    /// goroutines that run pure code may share it.
     fn lazy_constant(&mut self, name: &str, function: &Function) -> GoResult<Vec<GoDeclaration>> {
         let type_ = self.go_type(function.result)?;
         let mut statements = vec![];
         let value = self.value(&function.body, &mut statements)?;
-        let cell = self.global_name(Spelling::derived("", name.into(), "Value"));
-        let ready = self.global_name(Spelling::derived("", name.into(), "Ready"));
-        statements.push(GoStatement::Assign {
-            targets: vec![identifier_expression(&cell)],
-            values: vec![value],
-        });
-        statements.push(GoStatement::Assign {
-            targets: vec![identifier_expression(&ready)],
-            values: vec![identifier_expression("true")],
-        });
-        let compute = GoStatement::If {
-            condition: GoExpression::Unary {
-                operator: "!",
-                operand: Box::new(identifier_expression(&ready)),
-            },
-            then: statements,
-            otherwise: vec![],
+        statements.push(GoStatement::Return(Some(value)));
+        let cell = self.global_name(Spelling::derived("", name.into(), "Cell"));
+        let compute = self.global_name(Spelling::derived("compute", name.into(), ""));
+        self.imports.insert(GoPackage::Lazy.path().into());
+        let unevaluated = GoExpression::Instantiation {
+            function: Box::new(GoExpression::Qualified {
+                package: "lazy".into(),
+                name: "Unevaluated".into(),
+            }),
+            arguments: vec![type_.clone()],
         };
+        let force = GoExpression::Field {
+            value: Box::new(identifier_expression(&cell)),
+            name: "ForceWith".into(),
+        };
+        let force = call(force, vec![identifier_expression(&compute)]);
         Ok(vec![
-            GoDeclaration::Declared { name: cell.clone(), type_: type_.clone() },
-            GoDeclaration::Declared { name: ready, type_: GoType::Bool },
+            GoDeclaration::Variable { name: cell, type_: None, value: call(unevaluated, vec![]) },
             GoDeclaration::Function {
                 name: name.into(),
                 parameters: vec![],
+                result: Some(type_.clone()),
+                body: vec![GoStatement::Return(Some(force))],
+            },
+            GoDeclaration::Function {
+                name: compute,
+                parameters: vec![],
                 result: Some(type_),
-                body: vec![compute, GoStatement::Return(Some(identifier_expression(&cell)))],
+                body: statements,
             },
         ])
     }

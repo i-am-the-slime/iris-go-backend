@@ -768,7 +768,7 @@ const FOREIGN_IMPORTS: &[(&str, &str, Foreign)] = &[
     ("Data.Array", "unconsImpl", uncurried(direct("Uncons", 3), &[(1, 2)])),
     ("Data.Array", "sortByImpl", uncurried(direct("SortBy", 3), &[(0, 2)])),
     ("Data.Array", "findMapImpl", direct_with("FindMap", 4, maybe_search(0, 1))),
-    ("Data.Array.Parallel", "parallelMap", array("Map", 2)),
+    ("Data.Array.Parallel", "parallelMap", array("ParallelMap", 2)),
     (
         "Data.Array",
         "findIndexImpl",
