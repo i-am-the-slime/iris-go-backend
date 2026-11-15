@@ -54,8 +54,13 @@ GOMOD
     printf '%-26s %-8s %6s  %s\n' "$name" "GO" "$elapsed" "$(grep -m1 -v '^#' "$out/build.log" | cut -c1-150)"
     return 1
   fi
-  local actual
-  actual="$("$out/program" 2>"$out/run.log")"
+  local actual status
+  actual="$(timeout "${EXAMPLE_TIMEOUT:-120}" "$out/program" 2>"$out/run.log")"
+  status=$?
+  if [ "$status" -eq 124 ]; then
+    printf '%-26s %-8s %6s  no output within %ss\n' "$name" "TIMEOUT" "$elapsed" "${EXAMPLE_TIMEOUT:-120}"
+    return 1
+  fi
   if [ "$actual" != "$expected" ]; then
     printf '%-26s %-8s %6s  got %s\n' "$name" "OUTPUT" "$elapsed" "$(printf '%s' "$actual" | tr '\n' '/' | cut -c1-120)"
     return 1
@@ -63,7 +68,7 @@ GOMOD
   printf '%-26s %-8s %6s\n' "$name" "PASS" "$elapsed"
 }
 export -f run_one
-export IRIS EXAMPLES GO_SUPPORT WORK
+export IRIS EXAMPLES GO_SUPPORT WORK EXAMPLE_TIMEOUT
 
 manifest() {
   grep -E '^  "[A-Za-z0-9_]+\|[^|]+\|(value|effect|program)\|' "$EXAMPLES/run.sh" | sed -E 's/^  "//; s/"$//'
