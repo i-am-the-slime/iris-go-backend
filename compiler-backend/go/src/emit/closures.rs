@@ -958,7 +958,7 @@ where
                 let kind = std::mem::replace(&mut expression.kind, ExpressionKind::Unit);
                 let ExpressionKind::Lambda { parameters, body } = kind else { unreachable!() };
                 let captures = self.captures(&body, &parameters);
-                let values = captures.iter().map(local_expression).collect();
+                let values = captures.iter().map(Local::expression).collect();
                 let shape = Shape {
                     name: self.name.clone(),
                     origin: self.origin,
@@ -1084,7 +1084,7 @@ where
                 return operand;
             }
             let local = rewriter.fresh(SmolStr::new_static("operand"), operand.monotype);
-            let reference = local_expression(&local);
+            let reference = local.expression();
             computed.push(Binding { local, value: operand });
             reference
         };
@@ -1142,10 +1142,6 @@ where
         });
         captures
     }
-}
-
-fn local_expression(local: &Local) -> Expression {
-    Expression::new(ExpressionKind::Local(local.id), local.monotype)
 }
 
 /// Replaces each use of a renamed local.

@@ -30,12 +30,12 @@ impl Simplifier<'_> {
 
         let looked_up = ExpressionKind::Foreign {
             foreign: foreign::OBJECT_INDEX,
-            arguments: vec![local(&object.0), local(&key)],
+            arguments: vec![object.0.expression(), key.expression()],
         };
         let looked_up = Expression::new(looked_up, value);
         let stepped = ExpressionKind::Apply {
-            function: Box::new(local(&function.0)),
-            arguments: vec![local(&current), local(&key), looked_up],
+            function: Box::new(function.0.expression()),
+            arguments: vec![current.expression(), key.expression(), looked_up],
         };
         let stepped = Expression::new(stepped, monotype);
         let continuation = self.monotypes.function(state, monotype);
@@ -44,8 +44,8 @@ impl Simplifier<'_> {
             continuation,
         );
         let bound = ExpressionKind::Apply {
-            function: Box::new(local(&bind.0)),
-            arguments: vec![local(&accumulator), continuation],
+            function: Box::new(bind.0.expression()),
+            arguments: vec![accumulator.expression(), continuation],
         };
         let bound = Expression::new(bound, monotype);
         let step = self.monotypes.function(string, monotype);
@@ -56,7 +56,7 @@ impl Simplifier<'_> {
         );
         let object_keys = ExpressionKind::Foreign {
             foreign: foreign::OBJECT_KEYS,
-            arguments: vec![local(&object.0)],
+            arguments: vec![object.0.expression()],
         };
         let object_keys = Expression::new(object_keys, keys);
         let fold = match self.monotypes.get(monotype) {
@@ -79,8 +79,4 @@ impl Simplifier<'_> {
         let template = Local { id: LocalId(0), name: name.into(), monotype };
         self.fresh(&template)
     }
-}
-
-fn local(local: &Local) -> Expression {
-    Expression::new(ExpressionKind::Local(local.id), local.monotype)
 }

@@ -1,7 +1,7 @@
 use super::buffers::{to_bytes, to_string};
 use super::fusion::{Demand, Need, Order, Pipeline};
 use super::ownership::{Carried, Place, owned_snocs};
-use super::{Emitter, Mode, Sink, call, field_name, identifier_expression, uses_local};
+use super::{Emitter, Mode, Sink, call, field_name, identifier_expression, length, uses_local};
 use crate::error::GoResult;
 use crate::foreign::Iteration;
 use crate::mono::{Expression, ExpressionKind, FunctionId, Local};
@@ -742,8 +742,4 @@ where
         }
         Ok(GoExpression::Function { parameters, result: result_type, body })
     }
-}
-
-fn length(array: GoExpression) -> GoExpression {
-    call(identifier_expression("len"), vec![array])
 }

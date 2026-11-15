@@ -227,7 +227,7 @@ impl Simplifier<'_> {
                 unreachable!("invariant violated: only chosen lambdas take the parameter")
             };
             let first = parameters.remove(0);
-            let body = substitute(*body, first.id, &local_expression(parameter));
+            let body = substitute(*body, first.id, &parameter.expression());
             if parameters.is_empty() {
                 return body;
             }
@@ -300,7 +300,7 @@ impl Simplifier<'_> {
                 let name = self.monotypes.value_name(argument.monotype);
                 let template = Local { id: LocalId(0), name, monotype: argument.monotype };
                 let local = self.fresh(&template);
-                let reference = local_expression(&local);
+                let reference = local.expression();
                 bindings.push(Binding { local, value: argument });
                 reference
             })
@@ -528,7 +528,7 @@ impl Simplifier<'_> {
                 if let ColumnOutcome::Matches = outcome {
                     for (local, field) in pattern_variables(&pattern) {
                         let value = match field {
-                            Some(position) => local_expression(&fields[position]),
+                            Some(position) => fields[position].expression(),
                             None => match &scrutinee.kind {
                                 ExpressionKind::Construct { data, constructor, .. }
                                     if !fields.is_empty() =>
@@ -536,11 +536,11 @@ impl Simplifier<'_> {
                                     let kind = ExpressionKind::Construct {
                                         data: data.clone(),
                                         constructor: *constructor,
-                                        arguments: fields.iter().map(local_expression).collect(),
+                                        arguments: fields.iter().map(Local::expression).collect(),
                                     };
                                     Expression::new(kind, scrutinee.monotype)
                                 }
-                                _ => local_expression(&whole),
+                                _ => whole.expression(),
                             },
                         };
                         substitute_guarded(&mut alternative.body, local, &value);
@@ -952,7 +952,7 @@ impl Simplifier<'_> {
         let template =
             Local { id: LocalId(0), name: SmolStr::new_static(name), monotype: operand.monotype };
         let local = self.fresh(&template);
-        let reference = local_expression(&local);
+        let reference = local.expression();
         bindings.push(Binding { local, value: operand });
         reference
     }
@@ -1313,10 +1313,6 @@ fn pattern_variables(pattern: &Pattern) -> Vec<(LocalId, Option<usize>)> {
             .collect(),
         _ => vec![],
     }
-}
-
-fn local_expression(local: &Local) -> Expression {
-    Expression::new(ExpressionKind::Local(local.id), local.monotype)
 }
 
 fn substitute_guarded(guarded: &mut Guarded, local: LocalId, value: &Expression) {

@@ -14,17 +14,13 @@
 
 use rustc_hash::FxHashSet;
 
-use crate::syntax::{GoDeclaration, GoExpression, GoStatement, Name};
+use crate::syntax::{GoDeclaration, GoExpression, GoStatement};
 
 use crate::walk::{self, Walk, each_expression_in_statement};
 
 pub fn read_elements_in_place(declarations: &mut [GoDeclaration]) {
     for declaration in declarations {
-        let mut names = FxHashSet::default();
-        declaration.for_each_name_mut(&mut |name| {
-            let (Name::Reference(name) | Name::Written(name) | Name::Binder(name)) = name;
-            names.insert(name.clone());
-        });
+        let names = declaration.all_names();
         walk::declaration(&mut InPlace { names }, declaration);
     }
 }

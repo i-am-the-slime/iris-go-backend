@@ -68,6 +68,11 @@ pub struct Local {
 }
 
 impl Local {
+    /// A reference to the local.
+    pub fn expression(&self) -> Expression {
+        Expression::new(ExpressionKind::Local(self.id), self.monotype)
+    }
+
     /// A local no other has the id of, taking the next one from `next_local`.
     pub fn fresh(next_local: &mut u32, name: SmolStr, monotype: MonotypeId) -> Local {
         let id = LocalId(*next_local);

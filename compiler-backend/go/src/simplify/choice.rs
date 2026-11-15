@@ -5,7 +5,7 @@
 
 use rustc_hash::FxHashMap;
 
-use super::{INLINE_SIZE, Simplifier, alternatives_size, column_outcomes, local_expression};
+use super::{INLINE_SIZE, Simplifier, alternatives_size, column_outcomes};
 use crate::foreign::{Comparison, Foreign, Operator};
 use crate::mono::{
     Alternative, Binding, Expression, ExpressionKind, Guarded, Literal, Local, LocalId, Pattern,
@@ -89,8 +89,8 @@ impl Simplifier<'_> {
             let mut lambda = Expression::new(lambda, function);
             self.rename(&mut lambda, &mut FxHashMap::default());
             let call = ExpressionKind::Apply {
-                function: Box::new(local_expression(&join)),
-                arguments: parameters.iter().map(local_expression).collect(),
+                function: Box::new(join.expression()),
+                arguments: parameters.iter().map(Local::expression).collect(),
             };
             let body = Guarded::Unconditional(Expression::new(call, monotype));
             joined.push(Alternative { patterns: alternative.patterns.clone(), body });

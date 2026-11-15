@@ -26,7 +26,7 @@
 use std::collections::VecDeque;
 
 use super::iteration::{Callback, Found};
-use super::{Emitter, Sink, binary, call, identifier_expression, is_simple, uses_local};
+use super::{Emitter, Sink, binary, identifier_expression, is_simple, length, uses_local};
 use crate::error::GoResult;
 use crate::foreign::{Boundary, Foreign, Iteration};
 use crate::mono::{Binding, Expression, ExpressionKind, Literal};
@@ -706,8 +706,4 @@ fn literal_range(array: &Expression) -> Option<(i64, i64)> {
         return None;
     };
     (first <= last && *last < i64::from(i32::MAX)).then_some((*first, *last))
-}
-
-fn length(array: GoExpression) -> GoExpression {
-    call(identifier_expression("len"), vec![array])
 }

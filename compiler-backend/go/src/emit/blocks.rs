@@ -33,7 +33,7 @@ use rustc_hash::FxHashSet;
 
 use crate::naming::{lower_first, numbered};
 use crate::walk::{self, Walk};
-use crate::syntax::{GoDeclaration, GoExpression, GoStatement, GoType, Name};
+use crate::syntax::{GoDeclaration, GoExpression, GoStatement, GoType};
 
 /// The fewest cells of one type in one expression that are allocated together.
 const MINIMUM_CELLS: usize = 3;
@@ -45,11 +45,7 @@ pub fn allocate_nested_cells_together(
     taken: &dyn Fn(&str) -> bool,
 ) {
     for declaration in declarations {
-        let mut names = FxHashSet::default();
-        declaration.for_each_name_mut(&mut |name| {
-            let (Name::Reference(name) | Name::Written(name) | Name::Binder(name)) = name;
-            names.insert(name.clone());
-        });
+        let names = declaration.all_names();
         let mut function = Function { names, taken, always: false, pending: vec![] };
         walk::declaration(&mut function, declaration);
     }

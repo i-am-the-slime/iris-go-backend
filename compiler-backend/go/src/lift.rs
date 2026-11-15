@@ -220,7 +220,7 @@ fn replace_references(
         for argument in arguments.iter_mut() {
             replace_references(argument, targets, captured, renaming);
         }
-        let mut leading: Vec<Expression> = captured.iter().map(local_expression).collect();
+        let mut leading: Vec<Expression> = captured.iter().map(Local::expression).collect();
         leading.append(arguments);
         **function = Expression::new(ExpressionKind::Function(target), monotype);
         *arguments = leading;
@@ -232,12 +232,12 @@ fn replace_references(
             if captured.is_empty() {
                 *expression = function;
             } else {
-                let arguments = captured.iter().map(local_expression).collect();
+                let arguments = captured.iter().map(Local::expression).collect();
                 let kind = ExpressionKind::Apply { function: Box::new(function), arguments };
                 *expression = Expression::new(kind, expression.monotype);
             }
         } else if let Some(renamed) = renaming.get(&id) {
-            *expression = local_expression(renamed);
+            *expression = renamed.expression();
         }
         return;
     }
@@ -277,10 +277,6 @@ fn flatten_applications(expression: &mut Expression) {
     leading.append(arguments);
     *function = inner;
     *arguments = leading;
-}
-
-fn local_expression(local: &Local) -> Expression {
-    Expression::new(ExpressionKind::Local(local.id), local.monotype)
 }
 
 fn free_locals(expression: &Expression, free: &mut FxHashSet<LocalId>) {

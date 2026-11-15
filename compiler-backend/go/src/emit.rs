@@ -650,6 +650,10 @@ fn call(function: GoExpression, arguments: Vec<GoExpression>) -> GoExpression {
     GoExpression::Call { function: Box::new(function), arguments }
 }
 
+fn length(array: GoExpression) -> GoExpression {
+    call(identifier_expression("len"), vec![array])
+}
+
 fn identifier_expression(name: &str) -> GoExpression {
     GoExpression::Identifier(name.to_string())
 }
@@ -1157,6 +1161,22 @@ where
         }
     }
 
+    /// Binds each local the pattern binds and `uses_of` says is used.
+    fn bind_pattern_locals(
+        &mut self,
+        bindings: &[(Local, GoExpression)],
+        uses_of: impl Fn(LocalId) -> usize,
+        out: &mut Vec<GoStatement>,
+    ) -> GoResult<()> {
+        for (local, path) in bindings {
+            let uses = uses_of(local.id);
+            if uses > 0 {
+                self.bind_pattern_local(local, path, uses, out)?;
+            }
+        }
+        Ok(())
+    }
+
     fn bind_pattern_local(
         &mut self,
         local: &Local,
@@ -1175,7 +1195,7 @@ where
             }
             _ => false,
         };
-        if aliased || uses == 0 {
+        if aliased {
             self.locals.insert(local.id, path.clone());
             return Ok(());
         }
@@ -3486,12 +3506,7 @@ where
                 }
                 let Guarded::Unconditional(body) = &first.body else { unreachable!() };
                 let (_, bindings) = self.alternative_tests(&paths, &first.patterns)?;
-                for (local, path) in &bindings {
-                    let uses = local_uses(body, local.id);
-                    if uses > 0 {
-                        self.bind_pattern_local(local, path, uses, out)?;
-                    }
-                }
+                self.bind_pattern_locals(&bindings, |local| local_uses(body, local), out)?;
                 self.value(body, out)?
             }
             ExpressionKind::If { .. } | ExpressionKind::Case { .. } => {
@@ -4263,12 +4278,7 @@ where
         {
             let (tests, bindings) = self.alternative_tests(&paths, &first.patterns)?;
             if tests.is_empty() {
-                for (local, path) in &bindings {
-                    let uses = local_uses(body, local.id);
-                    if uses > 0 {
-                        self.bind_pattern_local(local, path, uses, out)?;
-                    }
-                }
+                self.bind_pattern_locals(&bindings, |local| local_uses(body, local), out)?;
                 return self.sink(body, mode, sink, out);
             }
         }
@@ -4309,12 +4319,7 @@ where
                     }
                 }
                 let mut block = vec![];
-                for (local, path) in &bindings {
-                    let uses = local_uses(body, local.id);
-                    if uses > 0 {
-                        self.bind_pattern_local(local, path, uses, &mut block)?;
-                    }
-                }
+                self.bind_pattern_locals(&bindings, |local| local_uses(body, local), &mut block)?;
                 self.sink(body, mode, sink.clone(), &mut block)?;
                 let condition = conjunction(conditions);
                 unconditional = condition.is_none();
@@ -4397,12 +4402,7 @@ where
             let last = position + 1 == alternatives.len();
             let (tests, bindings) = self.alternative_tests(paths, &alternative.patterns)?;
             let mut block = vec![];
-            for (local, path) in &bindings {
-                let uses = guarded_local_uses(&alternative.body, local.id);
-                if uses > 0 {
-                    self.bind_pattern_local(local, path, uses, &mut block)?;
-                }
-            }
+            self.bind_pattern_locals(&bindings, |local| guarded_local_uses(&alternative.body, local), &mut block)?;
             let terminates =
                 self.guarded_sequential(&alternative.body, mode, exit, last, &mut block)?;
             let condition = if last { None } else { conjunction(tests) };
@@ -4465,12 +4465,7 @@ where
         let GuardChain { mode, exit, tested } = chain;
         let Some((guard, rest)) = guards.split_first() else {
             let mut block = vec![];
-            for (local, path) in &bindings {
-                let uses = local_uses(body, local.id);
-                if uses > 0 {
-                    self.bind_pattern_local(local, path, uses, &mut block)?;
-                }
-            }
+            self.bind_pattern_locals(&bindings, |local| local_uses(body, local), &mut block)?;
             self.exit_with(body, mode, exit, &mut block)?;
             return Ok(match conjunction(conditions) {
                 None => {
@@ -4585,12 +4580,7 @@ where
             let mut bindings = vec![];
             self.pattern_tests(pattern, path.clone(), &mut tests, &mut bindings)?;
             let mut block = vec![];
-            for (local, binding_path) in &bindings {
-                let uses = local_uses(body, local.id);
-                if uses > 0 {
-                    self.bind_pattern_local(local, binding_path, uses, &mut block)?;
-                }
-            }
+            self.bind_pattern_locals(&bindings, |local| local_uses(body, local), &mut block)?;
             self.sink(body, mode, sink.clone(), &mut block)?;
             let value = match &pattern.kind {
                 PatternKind::Constructor { data, constructor, .. } => {

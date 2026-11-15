@@ -3,6 +3,7 @@
 use std::fmt::Write;
 
 use rayon::prelude::*;
+use rustc_hash::FxHashSet;
 
 use crate::walk::{self, Walk};
 
@@ -298,6 +299,16 @@ impl GoDeclaration {
             | GoDeclaration::Constants { .. }
             | GoDeclaration::Declared { .. } => {}
         }
+    }
+
+    /// Every name the declaration's code uses or binds, so that a new one can avoid them all.
+    pub fn all_names(&mut self) -> FxHashSet<String> {
+        let mut names = FxHashSet::default();
+        self.for_each_name_mut(&mut |name| {
+            let (Name::Reference(name) | Name::Written(name) | Name::Binder(name)) = name;
+            names.insert(name.clone());
+        });
+        names
     }
 
     pub fn render(&self) -> String {

@@ -7,7 +7,6 @@ use smol_str::{SmolStr, format_smolstr};
 
 use super::{
     Simplifier, column_outcomes, for_each_alternative_child, for_each_child, for_each_child_mut,
-    local_expression,
 };
 use crate::mono::{Binding, Expression, ExpressionKind, Local, LocalId};
 
@@ -54,7 +53,7 @@ impl Simplifier<'_> {
                 for argument in arguments {
                     fields.push(self.field_binding(local.name.clone(), argument));
                 }
-                let arguments = fields.iter().map(|field| local_expression(&field.local)).collect();
+                let arguments = fields.iter().map(|field| field.local.expression()).collect();
                 let kind = ExpressionKind::Construct { data, constructor, arguments };
                 Shape::Construct(Box::new(Expression::new(kind, value.monotype)))
             }
@@ -131,7 +130,7 @@ fn take_apart(expression: &mut Expression, id: LocalId, shape: &Shape, fields: &
                 .position(|field| field == label)
                 .expect("invariant violated: a record has the field its type promises");
             let monotype = expression.monotype;
-            let mut field = local_expression(&fields[position]);
+            let mut field = fields[position].expression();
             if field.monotype != monotype {
                 field = Expression::new(ExpressionKind::Coerce(Box::new(field)), monotype);
             }
