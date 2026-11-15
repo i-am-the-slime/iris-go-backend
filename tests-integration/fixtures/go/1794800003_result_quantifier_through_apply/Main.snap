@@ -1,0 +1,13 @@
+---
+source: tests-integration/src/fixtures.rs
+---
+// main.go
+package main
+
+import "fmt"
+
+var main_ []string = []string{"applied", "through $"}
+
+func main() {
+	fmt.Println(main_)
+}

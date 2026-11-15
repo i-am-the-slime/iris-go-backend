@@ -1,0 +1,59 @@
+---
+source: tests-integration/src/fixtures.rs
+---
+// Data/Semiring/semiring.go
+package semiring
+
+func Add(argument0 int32, argument1 int32) int32 {
+	return argument0 + argument1
+}
+
+// Data/Tuple/tuple.go
+package tuple
+
+type TupleStringInt struct {
+	Tuple0 string
+	Tuple1 int32
+}
+
+// main.go
+package main
+
+import (
+	"fixture/Data/Semiring"
+	"fixture/Data/Tuple"
+	"fmt"
+)
+
+type TreeTupleStringInt struct {
+	Leaf0 tuple.TupleStringInt
+	Node0 []TreeTupleStringInt
+	Tag   uint8
+}
+
+const (
+	TreeTupleStringIntLeaf = iota
+	TreeTupleStringIntNode
+)
+
+var main_ int32 = countString([]TreeTupleStringInt{TreeTupleStringInt{Tag: TreeTupleStringIntLeaf, Leaf0: tuple.TupleStringInt{Tuple0: "a", Tuple1: 1}}, TreeTupleStringInt{Tag: TreeTupleStringIntNode, Node0: []TreeTupleStringInt{TreeTupleStringInt{Tag: TreeTupleStringIntLeaf, Leaf0: tuple.TupleStringInt{Tuple0: "b", Tuple1: 2}}}}})
+
+func countString(trees []TreeTupleStringInt) int32 {
+	var accumulator int32 = 0
+	for _, element := range trees {
+		accumulated := accumulator
+		accumulator = semiring.Add(accumulated, sizeString(element))
+	}
+	return accumulator
+}
+
+func sizeString(tree TreeTupleStringInt) int32 {
+	if tree.Tag == TreeTupleStringIntLeaf {
+		return tree.Leaf0.Tuple1
+	}
+	return countString(tree.Node0)
+}
+
+func main() {
+	fmt.Println(main_)
+}
