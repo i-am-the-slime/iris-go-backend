@@ -682,6 +682,12 @@ impl Monotypes {
         Q: checking::ExternalQueries,
     {
         let row = context.types.strip_annotations(row);
+        // A row synonym, `Padding (TokValue String ())`, or a row whose tail is
+        // one spells a closed row only once it is expanded and flattened.
+        let row = match context.types.lookup(row) {
+            Type::Row(row_id) if context.queries.lookup_row_type(*row_id).tail.is_none() => row,
+            _ => expand_synonyms(context, row)?,
+        };
         let Type::Row(row_id) = context.types.lookup(row).clone() else {
             return Ok(Err(open_type(context, row)?));
         };
