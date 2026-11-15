@@ -681,11 +681,10 @@ fn choose_aliases(
 
 /// The standard and support packages a declaration refers to.
 fn collect_support(
-    declaration: &GoDeclaration,
+    declaration: &mut GoDeclaration,
     support: &FxHashMap<String, String>,
     imports: &mut BTreeSet<String>,
 ) {
-    let mut declaration = declaration.clone();
     let mut packages: Vec<String> = vec![];
     declaration.for_each_reference_mut(&mut |reference| match reference {
         Reference::Type(name) => packages.extend(qualifiers(name)),
