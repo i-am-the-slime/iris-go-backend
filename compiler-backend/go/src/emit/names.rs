@@ -19,7 +19,7 @@ use indexing::IndexedTypeItemKind;
 
 use super::packages::{SpelledPart, Spelling};
 use super::{Emitter, identifier};
-use crate::context::capitalise;
+use crate::naming::{capitalise, is_vague};
 use crate::error::GoResult;
 use crate::modules::Modules;
 use crate::mono::FunctionSpelling;
@@ -140,36 +140,11 @@ struct Hint {
     instantiated: Option<Vec<NamePart>>,
 }
 
-/// Parameter names that say nothing about what they hold.
-const VAGUE_NAMES: &[&str] = &[
-    "arg",
-    "args",
-    "argument",
-    "acc",
-    "accumulator",
-    "dict",
-    "input",
-    "rec",
-    "record",
-    "result",
-    "self",
-    "this",
-    "value",
-    "values",
-    "xs",
-    "ys",
-];
-
 /// A parameter's or field's name as a record's name, unless it is too vague
 /// to say what the record is.
 fn use_name(name: &str) -> Option<String> {
     let name = identifier(name);
-    let vague = name.len() < 3
-        || !name.starts_with(|character: char| character.is_ascii_alphabetic())
-        || name.ends_with(|character: char| character.is_ascii_digit())
-        || name.contains('_')
-        || VAGUE_NAMES.contains(&name.as_str());
-    (!vague).then(|| capitalise(&name))
+    (!is_vague(&name)).then(|| capitalise(&name))
 }
 
 fn labels_name(fields: &[RecordField]) -> String {

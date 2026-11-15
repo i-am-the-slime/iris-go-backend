@@ -7,6 +7,7 @@ use indexing::{IndexedModule, TermItemId, TypeItemId};
 use rustc_hash::FxHashMap;
 use smol_str::SmolStr;
 
+use crate::naming::capitalise;
 use crate::types::TypeOperations;
 
 pub struct Context<'q, Q> {
@@ -139,13 +140,5 @@ where
         let module = self.module(file_id)?;
         Ok(module.name == module_name
             && module.indexed.items[item].name.as_deref() == Some(type_name))
-    }
-}
-
-pub fn capitalise(text: &str) -> String {
-    let mut characters = text.chars();
-    match characters.next() {
-        Some(first) => first.to_uppercase().chain(characters).collect(),
-        None => String::new(),
     }
 }

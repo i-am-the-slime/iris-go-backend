@@ -31,7 +31,7 @@
 
 use rustc_hash::FxHashSet;
 
-use super::chunks::lower_first;
+use crate::naming::lower_first;
 use crate::walk::{self, Walk};
 use crate::syntax::{GoDeclaration, GoExpression, GoStatement, GoType, Name};
 

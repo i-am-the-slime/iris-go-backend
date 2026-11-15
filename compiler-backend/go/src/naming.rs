@@ -16,6 +16,9 @@ pub const RECORD_VALUE: &str = "\u{1}record";
 /// The name of a value that nothing, not even its type, names.
 pub const UNNAMED_VALUE: &str = "argument";
 
+/// The name of a value whose binder says nothing about it.
+pub const VALUE: &str = "value";
+
 impl Monotypes {
     /// What a value of the type is called when nothing names it.
     pub fn value_name(&self, monotype: MonotypeId) -> SmolStr {
@@ -97,6 +100,149 @@ pub fn lower_camel(name: &str) -> String {
             out
         })
         .collect()
+}
+
+/// Names a global or a package-level identifier must not take: Go's keywords and
+/// predeclared names, and the packages the generated code imports.
+pub const RESERVED: &[&str] = &[
+    "break",
+    "case",
+    "chan",
+    "const",
+    "continue",
+    "default",
+    "defer",
+    "else",
+    "fallthrough",
+    "for",
+    "func",
+    "go",
+    "goto",
+    "if",
+    "import",
+    "interface",
+    "map",
+    "package",
+    "range",
+    "return",
+    "select",
+    "struct",
+    "switch",
+    "type",
+    "var",
+    "append",
+    "bool",
+    "byte",
+    "cap",
+    "clear",
+    "close",
+    "complex",
+    "copy",
+    "delete",
+    "error",
+    "false",
+    "float64",
+    "imag",
+    "int",
+    "int32",
+    "iota",
+    "len",
+    "make",
+    "max",
+    "min",
+    "new",
+    "nil",
+    "panic",
+    "print",
+    "println",
+    "real",
+    "recover",
+    "rune",
+    "string",
+    "true",
+    "any",
+    "main",
+    "init",
+    "fmt",
+    "prim",
+    "array",
+    "direct",
+    "object",
+    "nullable",
+    "exception",
+    "aff",
+    "promise",
+    "foreignvalue",
+    "regex",
+    "sync",
+    "big",
+    "math",
+    "slices",
+    "Ref",
+];
+
+/// A name as a Go identifier: other characters become `_`, a digit start gets a
+/// `_` in front and a reserved word one behind.
+pub fn identifier(name: &str) -> String {
+    let mut sanitized: String = name
+        .chars()
+        .map(
+            |character| {
+                if character.is_alphanumeric() || character == '_' { character } else { '_' }
+            },
+        )
+        .collect();
+    if sanitized.is_empty() || sanitized.starts_with(|character: char| character.is_ascii_digit()) {
+        sanitized.insert(0, '_');
+    }
+    if RESERVED.contains(&sanitized.as_str()) {
+        sanitized.push('_');
+    }
+    sanitized
+}
+
+
+/// The name with its first letter in upper case.
+pub fn capitalise(text: &str) -> String {
+    let mut characters = text.chars();
+    match characters.next() {
+        Some(first) => first.to_uppercase().chain(characters).collect(),
+        None => String::new(),
+    }
+}
+
+/// The name with its first letter in lower case.
+pub fn lower_first(name: &str) -> String {
+    let mut characters = name.chars();
+    match characters.next() {
+        Some(first) => first.to_lowercase().chain(characters).collect(),
+        None => String::new(),
+    }
+}
+
+/// A Go-exported spelling of a name.
+pub fn exported(name: &str) -> String {
+    let capitalised = capitalise(name);
+    if capitalised.starts_with(char::is_uppercase) {
+        capitalised
+    } else {
+        format!("X{capitalised}")
+    }
+}
+
+/// Parameter names that say nothing about what they hold.
+const VAGUE_NAMES: &[&str] = &[
+    "arg", "args", "argument", "acc", "accumulator", "dict", "input", "rec", "record", "result",
+    "self", "this", "value", "values", "xs", "ys",
+];
+
+/// Whether an identifier is too vague to say what its value is.
+pub fn is_vague(name: &str) -> bool {
+    name.len() < 3
+        || !name.starts_with(|character: char| character.is_ascii_alphabetic())
+        || name.ends_with(|character: char| character.is_ascii_digit())
+        || name.contains('_')
+        || VAGUE_NAMES.contains(&name)
 }
 
 #[cfg(test)]

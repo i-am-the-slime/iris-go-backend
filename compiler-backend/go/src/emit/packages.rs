@@ -16,9 +16,8 @@ use std::collections::BTreeSet;
 
 use rustc_hash::{FxHashMap, FxHashSet};
 
-use super::RESERVED;
 use super::names::resolve;
-use crate::context::capitalise;
+use crate::naming::{RESERVED, capitalise, exported, go_safe, lower_camel};
 use crate::error::{GoError, GoResult};
 use crate::modules::{ModuleIndex, ModuleSet, Modules};
 use crate::syntax::{GoDeclaration, GoExpression, GoFile, GoImport, Reference};
@@ -428,7 +427,7 @@ impl Packaging<'_> {
                     Some(naming.name(global, placements[unit]))
                 });
                 let name = name.unwrap_or_else(|| "record".into());
-                crate::value_names::go_safe(&crate::value_names::lower_camel(&name)).to_string()
+                go_safe(&lower_camel(&name)).to_string()
             })
             .collect();
         let support = self.support_aliases();
@@ -895,16 +894,6 @@ impl Naming<'_> {
     /// A name as a place spells it: exported in every package but the root.
     fn spelled(&self, name: &str, place: Place) -> String {
         if Some(place) == self.root { name.to_string() } else { exported(name) }
-    }
-}
-
-/// A Go-exported spelling of a name.
-fn exported(name: &str) -> String {
-    let capitalised = capitalise(name);
-    if capitalised.starts_with(char::is_uppercase) {
-        capitalised
-    } else {
-        format!("X{capitalised}")
     }
 }
 

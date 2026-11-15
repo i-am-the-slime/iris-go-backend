@@ -17,13 +17,13 @@ mod merge;
 mod modules;
 mod mono;
 mod monotype;
+mod naming;
 mod scheme;
 mod simplify;
 mod specialize;
 mod syntax;
 mod timing;
 mod types;
-mod value_names;
 mod walk;
 
 pub use error::{GoError, GoResult, UnsupportedState};

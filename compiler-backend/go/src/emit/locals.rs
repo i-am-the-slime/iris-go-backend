@@ -10,9 +10,8 @@
 
 use rustc_hash::FxHashMap;
 
-use crate::context::capitalise;
 use crate::syntax::{GoDeclaration, GoExpression, GoStatement, GoType};
-use crate::value_names::{GO_PREDECLARED, go_safe};
+use crate::naming::{GO_PREDECLARED, VALUE, capitalise, go_safe};
 
 use crate::walk::{self, Walk as _};
 
@@ -92,7 +91,7 @@ fn wanted(marked: &str, records: &[String]) -> String {
         }
     }
     if out.is_empty() {
-        return "value".into();
+        return VALUE.into();
     }
     go_safe(&out).to_string()
 }

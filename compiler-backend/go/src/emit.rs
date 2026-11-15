@@ -39,7 +39,8 @@ use indexing::TermItemId;
 use self::application::Callable;
 use self::packages::Spelling;
 use crate::arity::Arities;
-use crate::context::{Context, capitalise};
+use crate::context::Context;
+use crate::naming::{capitalise, exported, identifier};
 use crate::erasure::Erasure;
 use crate::error::{GoError, GoResult};
 use crate::foreign::{
@@ -652,101 +653,6 @@ impl DataLayout {
     }
 }
 
-pub(crate) const RESERVED: &[&str] = &[
-    "break",
-    "case",
-    "chan",
-    "const",
-    "continue",
-    "default",
-    "defer",
-    "else",
-    "fallthrough",
-    "for",
-    "func",
-    "go",
-    "goto",
-    "if",
-    "import",
-    "interface",
-    "map",
-    "package",
-    "range",
-    "return",
-    "select",
-    "struct",
-    "switch",
-    "type",
-    "var",
-    "append",
-    "bool",
-    "byte",
-    "cap",
-    "clear",
-    "close",
-    "complex",
-    "copy",
-    "delete",
-    "error",
-    "false",
-    "float64",
-    "imag",
-    "int",
-    "int32",
-    "iota",
-    "len",
-    "make",
-    "max",
-    "min",
-    "new",
-    "nil",
-    "panic",
-    "print",
-    "println",
-    "real",
-    "recover",
-    "rune",
-    "string",
-    "true",
-    "any",
-    "main",
-    "init",
-    "fmt",
-    "prim",
-    "array",
-    "direct",
-    "object",
-    "nullable",
-    "exception",
-    "aff",
-    "promise",
-    "foreignvalue",
-    "regex",
-    "sync",
-    "big",
-    "math",
-    "slices",
-    "Ref",
-];
-
-fn identifier(name: &str) -> String {
-    let mut sanitized: String = name
-        .chars()
-        .map(
-            |character| {
-                if character.is_alphanumeric() || character == '_' { character } else { '_' }
-            },
-        )
-        .collect();
-    if sanitized.is_empty() || sanitized.starts_with(|character: char| character.is_ascii_digit()) {
-        sanitized.insert(0, '_');
-    }
-    if RESERVED.contains(&sanitized.as_str()) {
-        sanitized.push('_');
-    }
-    sanitized
-}
-
 /// A record field's Go name: exported, since the record's type may live in
 /// another package than the code that builds or reads it.
 fn field_name(label: &str) -> String {
@@ -754,8 +660,7 @@ fn field_name(label: &str) -> String {
         .chars()
         .map(|character| if character.is_alphanumeric() { character } else { '_' })
         .collect();
-    let name = capitalise(&sanitized);
-    if name.starts_with(char::is_uppercase) { name } else { format!("X{name}") }
+    exported(&sanitized)
 }
 
 /// Package names generated code may import.
@@ -1362,9 +1267,9 @@ where
     /// token for its record, which the record's Go name replaces once
     /// packaging has chosen it.
     fn local_base(&mut self, name: &str, monotype: MonotypeId) -> String {
-        match name.strip_prefix(crate::value_names::RECORD_VALUE) {
+        match name.strip_prefix(crate::naming::RECORD_VALUE) {
             Some("") => self.value_base(monotype),
-            Some(rest) => identifier(&crate::value_names::lower_camel(rest)),
+            Some(rest) => identifier(&crate::naming::lower_camel(rest)),
             // A name from the type alone is the first to give way.
             None if name == self.monotypes.value_name(monotype) => {
                 format!("{}{}", identifier(name), locals::NUMBERED)
