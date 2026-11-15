@@ -23,6 +23,7 @@ mod specialize;
 mod syntax;
 mod timing;
 mod types;
+mod value_names;
 
 pub use error::{GoError, GoResult, UnsupportedState};
 pub use foreign::ForeignPackages;

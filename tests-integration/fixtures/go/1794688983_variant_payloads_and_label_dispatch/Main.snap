@@ -17,8 +17,8 @@ package shrink
 
 import "fixture/shared"
 
-func ShrinkBaseNameScaleBaseNameScaleConsIntConsStringNil(argument1 shared.BaseNameScale) shared.BaseName {
-	return shared.BaseName{Base: argument1.Base, Name: argument1.Name}
+func ShrinkBaseNameScaleBaseNameScaleConsIntConsStringNil(baseNameScale shared.BaseNameScale) shared.BaseName {
+	return shared.BaseName{Base: baseNameScale.Base, Name: baseNameScale.Name}
 }
 
 // main.go
@@ -94,12 +94,12 @@ func initializeMain_() []string {
 		mapped[index] = byLabel(element)
 	}
 	mapped2 := make([]string, len(problems))
-	for index2, element2 := range problems {
-		mapped2[index2] = byRecord(element2)
+	for index, element := range problems {
+		mapped2[index] = byRecord(element)
 	}
 	mapped3 := make([]string, len(problems))
-	for index3, element3 := range problems {
-		mapped3[index3] = someLabels(element3)
+	for index, element := range problems {
+		mapped3[index] = someLabels(element)
 	}
 	return array.Append(mapped, array.Append(mapped2, array.Append(mapped3, []string{shrunk.Name + prim.ShowInt(shrunk.Base)})))
 }
@@ -120,57 +120,57 @@ func byLabel(r shared.VariantRep) string {
 
 var problems []shared.VariantRep = []shared.VariantRep{convert2(VariantRepString{Type: "missing", Value: "user"}), convert3(VariantRepInt{Type: "invalid", Value: 3}), convert5(VariantRepAfter{Type: "late", Value: AfterOfInt{After: 5}})}
 
-func byRecord(argument shared.VariantRep) string {
-	argument0 := argument.Type
+func byRecord(v shared.VariantRep) string {
+	s := v.Type
 	var result bool
-	if argument0 == "invalid" {
+	if s == "invalid" {
 		result = true
-	} else if argument0 == "late" {
+	} else if s == "late" {
 		result = true
 	} else {
-		result = argument0 == "missing"
+		result = s == "missing"
 	}
 	if result {
 		record := InvalidLateMissing{Missing: func(name string) string {
 			return "no " + name
 		}, Invalid: func(code int32) string {
 			return "bad " + prim.ShowInt(prim.MultiplyInt32(code, 2))
-		}, Late: func(argument02 AfterOfInt) string {
-			return "after " + prim.ShowInt(argument02.After)
+		}, Late: func(afterOfInt AfterOfInt) string {
+			return "after " + prim.ShowInt(afterOfInt.After)
 		}}
 		var field func(any) string
-		switch argument.Type {
+		switch v.Type {
 		case "invalid":
 			field = func(coerced any) string {
 				return record.Invalid(coerced.(int32))
 			}
 		case "late":
-			field = func(coerced2 any) string {
-				return record.Late(convert(coerced2.(AfterOfValue)))
+			field = func(coerced any) string {
+				return record.Late(convert(coerced.(AfterOfValue)))
 			}
 		case "missing":
-			field = func(coerced3 any) string {
-				return record.Missing(coerced3.(string))
+			field = func(coerced any) string {
+				return record.Missing(coerced.(string))
 			}
 		}
-		return field(argument.Value)
+		return field(v.Value)
 	}
-	return variant.Case_String(argument)
+	return variant.Case_String(v)
 }
 
-func someLabels(argument shared.VariantRep) string {
-	if argument.Type == "invalid" {
+func someLabels(v shared.VariantRep) string {
+	if v.Type == "invalid" {
 		record := Invalid{Invalid: func(code int32) string {
 			return prim.ShowInt(code + 1)
 		}}
 		var field func(any) string
-		switch argument.Type {
+		switch v.Type {
 		case "invalid":
 			field = func(coerced any) string {
 				return record.Invalid(coerced.(int32))
 			}
 		}
-		return field(argument.Value)
+		return field(v.Value)
 	}
 	return "unhandled"
 }

@@ -1,6 +1,5 @@
 ---
 source: tests-integration/src/fixtures.rs
-assertion_line: 570
 ---
 // main.go
 package main
@@ -30,18 +29,18 @@ func initializeMain_() []int32 {
 	return mapped
 }
 
-func value(argument0 *Step) int32 {
-	switch argument0.Tag {
+func value(step *Step) int32 {
+	switch step.Tag {
 	case StepDone:
-		return argument0.Done
+		return step.Done
 	default: // StepImpossible
-		return absurdInt(argument0.Impossible)
+		return absurdInt(step.Impossible)
 	}
 }
 
 var steps []*Step = []*Step{&Step{Tag: StepDone, Done: 7}, &Step{Tag: StepDone, Done: 8}}
 
-func absurdInt(argument0 Never) int32 {
+func absurdInt(never Never) int32 {
 	for {
 	}
 }

@@ -689,7 +689,9 @@ where
                 .expect("invariant violated: arity is the maximum binder count");
             let monotype =
                 self.binder_monotype(scope, scope.module.checked.tree[binder].type_id)?;
-            parameters.push(self.fresh_local(format_smolstr!("argument{position}"), monotype));
+            let binders = equations.iter().filter_map(|equation| equation.binders.get(position));
+            let name = self.parameter_name(scope, binders.copied(), monotype);
+            parameters.push(self.fresh_local(name, monotype));
         }
         let mut alternatives = Vec::with_capacity(equations.len());
         for equation in equations {
@@ -716,6 +718,22 @@ where
         }
         let body = Expression::new(ExpressionKind::Case { scrutinees, alternatives }, monotype);
         Ok(self.lambda(parameters, body))
+    }
+
+    /// A parameter that patterns take apart is called by the name a variable
+    /// or as-pattern gives it in one of them, else after its type.
+    fn parameter_name(
+        &self,
+        scope: &Scope,
+        binders: impl IntoIterator<Item = tree::BinderId>,
+        monotype: MonotypeId,
+    ) -> SmolStr {
+        let named = binders.into_iter().find_map(|binder| match self.unwrap_typed(scope, binder) {
+            (binder, tree::BinderKind::Variable) => Some(self.binder_name(scope, binder)),
+            (_, tree::BinderKind::Named { name, .. }) => Some(name.clone()),
+            _ => None,
+        });
+        named.unwrap_or_else(|| self.monotypes.value_name(monotype))
     }
 
     fn variable_parameters(
@@ -1195,9 +1213,9 @@ where
                 }
                 let mut parameters = Vec::with_capacity(binders.len());
                 let mut patterns = Vec::with_capacity(binders.len());
-                for (position, &binder) in binders.iter().enumerate() {
+                for &binder in binders.iter() {
                     let pattern = self.pattern(scope, binder)?;
-                    let name = format_smolstr!("argument{position}");
+                    let name = self.parameter_name(scope, [binder], pattern.monotype);
                     parameters.push(self.fresh_local(name, pattern.monotype));
                     patterns.push(pattern);
                 }
@@ -2449,12 +2467,12 @@ where
         }
         let mut parameters = Vec::with_capacity(arity);
         let mut current = monotype;
-        for position in 0..arity {
+        for _ in 0..arity {
             let (argument, result) = self
                 .monotypes
                 .function_parts(current)
                 .expect("invariant violated: foreign arity exceeds its function type");
-            parameters.push(self.fresh_local(format_smolstr!("argument{position}"), argument));
+            parameters.push(self.fresh_local(self.monotypes.value_name(argument), argument));
             current = result;
         }
         let arguments = parameters
@@ -2478,7 +2496,7 @@ where
             let (argument, _) =
                 self.monotypes.function_parts(monotype).unwrap_or((monotype, monotype));
             let result = self.monotypes.result_after(monotype, 1);
-            let parameter = self.fresh_local(SmolStr::new_static("value"), argument);
+            let parameter = self.fresh_local(self.monotypes.value_name(argument), argument);
             let body = Expression::new(ExpressionKind::Local(parameter.id), result);
             return Ok(self.lambda(vec![parameter], body));
         }
@@ -2503,8 +2521,7 @@ where
         let fields = constructors[index].fields.clone();
         let parameters: Vec<Local> = fields
             .iter()
-            .enumerate()
-            .map(|(position, &field)| self.fresh_local(format_smolstr!("value{position}"), field))
+            .map(|&field| self.fresh_local(self.monotypes.value_name(field), field))
             .collect();
         let arguments = parameters
             .iter()

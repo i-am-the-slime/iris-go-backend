@@ -28,18 +28,18 @@ func initializeMain_() MainResult {
 	}
 	built := string(accumulator)
 	accumulator2 := ""
-	for i2 := int32(1); i2 < 11; i2++ {
-		acc2 := accumulator2
-		if prim.CodeUnitLengthUpTo(6, acc2) > 5 {
-			accumulator2 = acc2
+	for i := int32(1); i < 11; i++ {
+		acc := accumulator2
+		if prim.CodeUnitLengthUpTo(6, acc) > 5 {
+			accumulator2 = acc
 		} else {
-			accumulator2 = acc2 + prim.ShowInt(i2)
+			accumulator2 = acc + prim.ShowInt(i)
 		}
 	}
 	accumulator3 := ""
-	for i3 := int32(1); i3 < 6; i3++ {
-		acc3 := accumulator3
-		accumulator3 = prim.ShowInt(i3) + acc3
+	for i := int32(1); i < 6; i++ {
+		acc := accumulator3
+		accumulator3 = prim.ShowInt(i) + acc
 	}
 	return MainResult{Fold: built, Loop: mainGo(0, ""), Exit: mainGo2(0, "x"), ReadInFold: accumulator2, ReadInLoop: mainGo3(0, ""), Prepended: accumulator3}
 }

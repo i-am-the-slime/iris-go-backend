@@ -164,8 +164,8 @@ func convert4(value CommandInt) CommandVal {
 	case CommandIntPush:
 		return CommandVal{Tag: CommandValPush, Push0: value.Push0, Push1: value.Push1}
 	default: // CommandIntPop
-		return CommandVal{Tag: CommandValPop, Pop: func(coerced2 int32) any {
-			return value.Pop(coerced2)
+		return CommandVal{Tag: CommandValPop, Pop: func(coerced int32) any {
+			return value.Pop(coerced)
 		}}
 	}
 }
@@ -247,8 +247,8 @@ func convert6(value InstructionInt) InstructionVal {
 	case InstructionIntStore:
 		return InstructionVal{Tag: InstructionValStore, Store0: value.Store0, Store1: value.Store1}
 	default: // InstructionIntLoad
-		return InstructionVal{Tag: InstructionValLoad, Load: func(coerced2 int32) any {
-			return value.Load(coerced2)
+		return InstructionVal{Tag: InstructionValLoad, Load: func(coerced int32) any {
+			return value.Load(coerced)
 		}}
 	}
 }
@@ -301,17 +301,17 @@ var main_ []int32 = []int32{foldFreeCommandIntInt(intoState, program, 0).Value +
 	}}
 }, instructions), 0).Value}
 
-func foldFreeCommandIntInt(k func(*Command, int32) StateValueOfValue, program2 FreeCommandInt, state int32) StateValueOfInt {
+func foldFreeCommandIntInt(k func(*Command, int32) StateValueOfValue, program FreeCommandInt, state int32) StateValueOfInt {
 	for {
-		switch program2.Tag {
+		switch program.Tag {
 		case FreeCommandIntPure:
-			a := program2.Pure
+			a := program.Pure
 			return StateValueOfInt{Value: a, State: state}
 		default: // FreeCommandIntBind
-			command := program2.Bind0
-			continue_ := program2.Bind1
+			command := program.Bind0
+			continue_ := program.Bind1
 			result := k(convert2(command), state)
-			program2, state = continue_(result.Value), result.State
+			program, state = continue_(result.Value), result.State
 			continue
 		}
 	}
@@ -339,18 +339,18 @@ var instructions FreeInstructionInt = andThenInstructionUnitInt(FreeInstructionU
 }}, func(_ struct{}) FreeInstructionInt {
 	return FreeInstructionInt{Tag: FreeInstructionIntBind, Bind0: convert6(InstructionInt{Tag: InstructionIntLoad, Load: func(value int32) int32 {
 		return prim.MultiplyInt32(value, 7)
-	}}), Bind1: func(value2 any) FreeInstructionInt {
-		return FreeInstructionInt{Tag: FreeInstructionIntPure, Pure: value2.(int32)}
+	}}), Bind1: func(value any) FreeInstructionInt {
+		return FreeInstructionInt{Tag: FreeInstructionIntPure, Pure: value.(int32)}
 	}}
 })
 
-func andThenCommandUnitInt(program2 FreeCommandUnit, next func(struct{}) FreeCommandInt) FreeCommandInt {
-	switch program2.Tag {
+func andThenCommandUnitInt(program FreeCommandUnit, next func(struct{}) FreeCommandInt) FreeCommandInt {
+	switch program.Tag {
 	case FreeCommandUnitPure:
-		return next(program2.Pure)
+		return next(program.Pure)
 	default: // FreeCommandUnitBind
-		return FreeCommandInt{Tag: FreeCommandIntBind, Bind0: program2.Bind0, Bind1: func(value any) FreeCommandInt {
-			return andThenCommandUnitInt(program2.Bind1(value), next)
+		return FreeCommandInt{Tag: FreeCommandIntBind, Bind0: program.Bind0, Bind1: func(value any) FreeCommandInt {
+			return andThenCommandUnitInt(program.Bind1(value), next)
 		}}
 	}
 }
@@ -366,24 +366,24 @@ func substFreeInstructionCommandInt(k func(*Instruction) *FreeCommand, value Fre
 	}
 }
 
-func andThenInstructionUnitInt(program2 FreeInstructionUnit, next func(struct{}) FreeInstructionInt) FreeInstructionInt {
-	switch program2.Tag {
+func andThenInstructionUnitInt(program FreeInstructionUnit, next func(struct{}) FreeInstructionInt) FreeInstructionInt {
+	switch program.Tag {
 	case FreeInstructionUnitPure:
-		return next(program2.Pure)
+		return next(program.Pure)
 	default: // FreeInstructionUnitBind
-		return FreeInstructionInt{Tag: FreeInstructionIntBind, Bind0: program2.Bind0, Bind1: func(value any) FreeInstructionInt {
-			return andThenInstructionUnitInt(program2.Bind1(value), next)
+		return FreeInstructionInt{Tag: FreeInstructionIntBind, Bind0: program.Bind0, Bind1: func(value any) FreeInstructionInt {
+			return andThenInstructionUnitInt(program.Bind1(value), next)
 		}}
 	}
 }
 
-func andThenCommandValInt(program2 FreeCommandVal, next func(any) FreeCommandInt) FreeCommandInt {
-	switch program2.Tag {
+func andThenCommandValInt(program FreeCommandVal, next func(any) FreeCommandInt) FreeCommandInt {
+	switch program.Tag {
 	case FreeCommandValPure:
-		return next(program2.Pure)
+		return next(program.Pure)
 	default: // FreeCommandValBind
-		return FreeCommandInt{Tag: FreeCommandIntBind, Bind0: program2.Bind0, Bind1: func(value any) FreeCommandInt {
-			return andThenCommandValInt(program2.Bind1(value), next)
+		return FreeCommandInt{Tag: FreeCommandIntBind, Bind0: program.Bind0, Bind1: func(value any) FreeCommandInt {
+			return andThenCommandValInt(program.Bind1(value), next)
 		}}
 	}
 }

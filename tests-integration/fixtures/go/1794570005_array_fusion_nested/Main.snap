@@ -4,8 +4,8 @@ source: tests-integration/src/fixtures.rs
 // Data/Semiring/semiring.go
 package semiring
 
-func Add(argument0 int32, argument1 int32) int32 {
-	return argument0 + argument1
+func Add(i int32, i2 int32) int32 {
+	return i + i2
 }
 
 // Data/Show/show.go
@@ -13,8 +13,8 @@ package show
 
 import "github.com/i-am-the-slime/purs-backend-go/go-support/prim"
 
-func Show(argument0 int32) string {
-	return prim.ShowInt(argument0)
+func Show(i int32) string {
+	return prim.ShowInt(i)
 }
 
 // main.go
@@ -51,18 +51,18 @@ func initializeMain_() MainResult {
 	}
 	var count int32 = 0
 	for _, x := range numbers {
-		for _, value3 := range numbers {
-			if value3 < x {
+		for _, value := range numbers {
+			if value < x {
 				count = count + 1
 			}
 		}
 	}
 	bound2 := []int32{}
-	for _, x2 := range numbers {
+	for _, x := range numbers {
 		for y := int32(1); y < 3; y++ {
 			var result []int32
-			if x2 > 4 {
-				result = []int32{prim.MultiplyInt32(x2, y)}
+			if x > 4 {
+				result = []int32{prim.MultiplyInt32(x, y)}
 			} else {
 				result = []int32{}
 			}
@@ -70,21 +70,21 @@ func initializeMain_() MainResult {
 		}
 	}
 	var accumulator int32 = 0
-	for value4 := int32(1); value4 < 11; value4++ {
+	for value := int32(1); value < 11; value++ {
 		accumulated := accumulator
-		accumulator = semiring.Add(accumulated, prim.MultiplyInt32(value4, 2))
+		accumulator = semiring.Add(accumulated, prim.MultiplyInt32(value, 2))
 	}
 	mapped := make([]int32, len(numbers))
-	for slot, value5 := range numbers {
-		x3 := value5 + 1
+	for slot, value := range numbers {
+		x := value + 1
 		i := int32(slot)
-		mapped[slot] = prim.MultiplyInt32(i, 100) + x3
+		mapped[slot] = prim.MultiplyInt32(i, 100) + x
 	}
 	mapped2 := []string{}
-	for _, value6 := range numbers {
-		x4 := value6 + 1
-		if prim.IntMod(x4, 2) == 0 {
-			mapped2 = append(mapped2, show.Show(x4))
+	for _, value := range numbers {
+		x := value + 1
+		if prim.IntMod(x, 2) == 0 {
+			mapped2 = append(mapped2, show.Show(x))
 		}
 	}
 	return MainResult{Pairs: bound, Below: count, Comprehension: bound2, OverRange: accumulator, Indexed: mapped, Materialised: mapped2}

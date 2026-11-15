@@ -4,8 +4,8 @@ source: tests-integration/src/fixtures.rs
 // Data/Monoid/Endo/endo.go
 package endo
 
-func MemptyFnInt(argument int32) int32 {
-	return argument
+func MemptyFnInt(x int32) int32 {
+	return x
 }
 
 // main.go
@@ -20,10 +20,10 @@ import (
 var main_ = initializeMain_()
 
 func initializeMain_() int32 {
-	array2 := []int32{1, 2, 3}
+	array := []int32{1, 2, 3}
 	accumulator := endo.MemptyFnInt
-	for index := len(array2) - 1; index >= 0; index-- {
-		x := array2[index]
+	for index := len(array) - 1; index >= 0; index-- {
+		x := array[index]
 		acc := accumulator
 		accumulator = func(x2 int32) int32 {
 			return prim.MultiplyInt32(acc(x2), 10) + x

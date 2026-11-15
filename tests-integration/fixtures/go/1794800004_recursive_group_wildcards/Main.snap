@@ -1,12 +1,11 @@
 ---
 source: tests-integration/src/fixtures.rs
-assertion_line: 570
 ---
 // Data/Semiring/semiring.go
 package semiring
 
-func Add(argument0 int32, argument1 int32) int32 {
-	return argument0 + argument1
+func Add(i int32, i2 int32) int32 {
+	return i + i2
 }
 
 // Data/Tuple/tuple.go

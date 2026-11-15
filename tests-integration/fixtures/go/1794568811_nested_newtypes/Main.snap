@@ -6,8 +6,8 @@ package show
 
 import "github.com/i-am-the-slime/purs-backend-go/go-support/prim"
 
-func Show(argument0 int32) string {
-	return prim.ShowInt(argument0)
+func Show(i int32) string {
+	return prim.ShowInt(i)
 }
 
 // main.go

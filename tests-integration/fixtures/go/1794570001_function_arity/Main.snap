@@ -4,8 +4,8 @@ source: tests-integration/src/fixtures.rs
 // Data/Semiring/semiring.go
 package semiring
 
-func Add(argument0 int32, argument1 int32) int32 {
-	return argument0 + argument1
+func Add(i int32, i2 int32) int32 {
+	return i + i2
 }
 
 // Data/Show/show.go
@@ -13,12 +13,12 @@ package show
 
 import "github.com/i-am-the-slime/purs-backend-go/go-support/prim"
 
-func Show(argument0 int32) string {
-	return prim.ShowInt(argument0)
+func Show(i int32) string {
+	return prim.ShowInt(i)
 }
 
-func Show2(argument0 string) string {
-	return prim.ShowString(argument0)
+func Show2(s string) string {
+	return prim.ShowString(s)
 }
 
 // main.go
@@ -45,38 +45,38 @@ func initializeMain_() []string {
 		}
 		mapped[index] = prim.ShowArray(show.Show, []int32{mainOp(1, 2), partial(3), partial(4)})
 	}
-	array3 := []func(int32) func(string) string{prepared, func(a2 int32) func(string) string {
-		return func(b2 string) string {
-			return prim.ShowInt(a2) + b2
+	array3 := []func(int32) func(string) string{prepared, func(a int32) func(string) string {
+		return func(b string) string {
+			return prim.ShowInt(a) + b
 		}
 	}}
 	mapped2 := make([]string, len(array3))
-	for index2, x2 := range array3 {
-		g := x2(4)
-		mapped2[index2] = prim.ShowArray(show.Show2, []string{x2(1)("a"), g("b"), g("c")})
+	for index, x := range array3 {
+		g := x(4)
+		mapped2[index] = prim.ShowArray(show.Show2, []string{x(1)("a"), g("b"), g("c")})
 	}
-	array4 := []func(int32, int32) int32{semiring.Add, func(a3 int32, b3 int32) int32 {
-		return prim.MultiplyInt32(a3, b3) + 1
+	array4 := []func(int32, int32) int32{semiring.Add, func(a int32, b int32) int32 {
+		return prim.MultiplyInt32(a, b) + 1
 	}}
 	mapped3 := make([]string, len(array4))
-	for index3, combine := range array4 {
-		mapped3[index3] = prim.ShowInt(array.Foldl(combine, int32(0), []int32{1, 2, 3}))
+	for index, combine := range array4 {
+		mapped3[index] = prim.ShowInt(array.Foldl(combine, int32(0), []int32{1, 2, 3}))
 	}
-	return array.Append([]string{prim.ShowInt(fromInt(3)(func(argument int32) int32 {
+	return array.Append([]string{prim.ShowInt(fromInt(3)(func(i int32) int32 {
 		return function(func(value int32) int32 {
 			return value + 1
-		}, argument)
+		}, i)
 	}, 0))}, array.Append(mapped, array.Append(mapped2, mapped3)))
 }
 
-func fromInt(argument0 int32) func(func(int32) int32, int32) int32 {
-	switch argument0 {
+func fromInt(n int32) func(func(int32) int32, int32) int32 {
+	switch n {
 	case 0:
 		return zeroCInt
 	default:
-		n := fromInt(argument0 - 1)
+		n2 := fromInt(n - 1)
 		return func(f func(int32) int32, x int32) int32 {
-			return f(n(f, x))
+			return f(n2(f, x))
 		}
 	}
 }
@@ -92,12 +92,12 @@ func zeroCInt(ignored func(int32) int32, x int32) int32 {
 	return x
 }
 
-func repeat(argument0 int32) string {
-	switch argument0 {
+func repeat(n int32) string {
+	switch n {
 	case 0:
 		return ""
 	default:
-		return "*" + repeat(argument0 - 1)
+		return "*" + repeat(n - 1)
 	}
 }
 

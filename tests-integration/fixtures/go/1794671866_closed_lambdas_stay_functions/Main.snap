@@ -24,8 +24,8 @@ var main_ = initializeMain_()
 func initializeMain_() MainResult {
 	scrutinee := []Operation{Operation{Name: "add", Run: func(x int32) int32 {
 		return x + 3
-	}}, Operation{Name: "scale", Run: func(x2 int32) int32 {
-		return prim.MultiplyInt32(x2, 3)
+	}}, Operation{Name: "scale", Run: func(x int32) int32 {
+		return prim.MultiplyInt32(x, 3)
 	}}}
 	var result int32
 	if len(scrutinee) == 2 {
@@ -34,10 +34,10 @@ func initializeMain_() MainResult {
 	} else {
 		result = 10
 	}
-	scrutinee2 := []Operation{Operation{Name: "add", Run: func(x3 int32) int32 {
-		return x3 + 3
-	}}, Operation{Name: "scale", Run: func(x4 int32) int32 {
-		return prim.MultiplyInt32(x4, 3)
+	scrutinee2 := []Operation{Operation{Name: "add", Run: func(x int32) int32 {
+		return x + 3
+	}}, Operation{Name: "scale", Run: func(x int32) int32 {
+		return prim.MultiplyInt32(x, 3)
 	}}}
 	var result2 int32
 	if len(scrutinee2) == 2 {

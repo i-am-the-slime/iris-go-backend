@@ -52,10 +52,10 @@ func convert2(value *tuple.Tuple) tuple.TupleIntInt {
 var main_ = initializeMain_()
 
 func initializeMain_() []int32 {
-	array2 := [][]int32{[]int32{1}, []int32{1, 2, 3}, []int32{4, 5, 6}, []int32{9, 3}, []int32{}}
-	mapped := make([]int32, len(array2))
+	array := [][]int32{[]int32{1}, []int32{1, 2, 3}, []int32{4, 5, 6}, []int32{9, 3}, []int32{}}
+	mapped := make([]int32, len(array))
 	var sequenceCells alloc.Cells[Sequence]
-	for index, x := range array2 {
+	for index, x := range array {
 		accumulator := &Sequence{Tag: SequenceEmpty}
 		for _, a := range x {
 			b := accumulator
@@ -86,9 +86,9 @@ func initializeMain_() []int32 {
 				}
 			}
 			if accumulator.Tag == SequenceOne && accumulator.One1.Tag == SequenceOne {
-				guarded2 := accumulator.One0.(int32)
-				guarded3 := convert2(accumulator.One1.One0.(*tuple.Tuple))
-				result = guarded2 + prim.MultiplyInt32(guarded3.First, 10) + guarded3.Second
+				guarded := accumulator.One0.(int32)
+				guarded2 := convert2(accumulator.One1.One0.(*tuple.Tuple))
+				result = guarded + prim.MultiplyInt32(guarded2.First, 10) + guarded2.Second
 				break matched
 			}
 			if accumulator.Tag == SequenceOne {
@@ -96,8 +96,8 @@ func initializeMain_() []int32 {
 				break matched
 			}
 			if accumulator.Tag == SequenceZero && accumulator.Zero.Tag == SequenceOne {
-				guarded4 := convert2(accumulator.Zero.One0.(*tuple.Tuple))
-				result = guarded4.First - guarded4.Second
+				guarded := convert2(accumulator.Zero.One0.(*tuple.Tuple))
+				result = guarded.First - guarded.Second
 				break matched
 			}
 			result = 0

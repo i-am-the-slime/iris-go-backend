@@ -685,7 +685,8 @@ where
             found => {
                 let mut arguments = vec![];
                 for &monotype in &parameter_monotypes {
-                    let name = self.temporary("argument");
+                    let base = self.value_base(monotype);
+                    let name = self.temporary(&base);
                     arguments.push(identifier_expression(&name));
                     parameters.push((name, self.go_type(monotype)?));
                 }
@@ -699,8 +700,9 @@ where
                     Some(Found::Direct { function: name, leading, .. }) => {
                         let mut values = vec![];
                         for argument in leading {
+                            let base = self.value_base(argument.monotype);
                             let value = self.value(argument, out)?;
-                            values.push(self.hoist(value, "argument", out));
+                            values.push(self.hoist(value, &base, out));
                         }
                         values.extend(arguments);
                         call(name, values)

@@ -26,10 +26,10 @@ const (
 	MaybeIntJust
 )
 
-func ShowChar(argument0 MaybeChar) string {
-	switch argument0.Tag {
+func ShowChar(maybe MaybeChar) string {
+	switch maybe.Tag {
 	case MaybeCharJust:
-		return "(Just " + prim.ShowChar(argument0.Just) + ")"
+		return "(Just " + prim.ShowChar(maybe.Just) + ")"
 	default: // MaybeCharNothing
 		return "Nothing"
 	}
@@ -40,8 +40,8 @@ package show
 
 import "github.com/i-am-the-slime/purs-backend-go/go-support/prim"
 
-func Show(argument0 string) string {
-	return prim.ShowString(argument0)
+func Show(s string) string {
+	return prim.ShowString(s)
 }
 
 // main.go
@@ -74,16 +74,16 @@ var main_ = initializeMain_()
 
 func initializeMain_() []string {
 	text := prim.StringJoinWith(" ", []string{"a😀", "naïve 😀 banana 日本 a𝄞a"})
-	array2 := rangeInt32(0, prim.CodeUnitLength(text) - 1)
-	mapped := make([]maybe.MaybeChar, len(array2))
+	array := rangeInt32(0, prim.CodeUnitLength(text) - 1)
+	mapped := make([]maybe.MaybeChar, len(array))
 	textUnits := prim.UTF16(text)
-	for index, i := range array2 {
+	for index, i := range array {
 		mapped[index] = textUnits.CharAt(func(payload rune) maybe.MaybeChar {
 			return maybe.MaybeChar{Tag: maybe.MaybeCharJust, Just: payload}
 		}, maybe.MaybeChar{Tag: maybe.MaybeCharNothing}, i)
 	}
-	scrutinee := prim.CodeUnitCharAt(func(payload2 rune) maybe.MaybeChar {
-		return maybe.MaybeChar{Tag: maybe.MaybeCharJust, Just: payload2}
+	scrutinee := prim.CodeUnitCharAt(func(payload rune) maybe.MaybeChar {
+		return maybe.MaybeChar{Tag: maybe.MaybeCharJust, Just: payload}
 	}, maybe.MaybeChar{Tag: maybe.MaybeCharNothing}, prim.CodeUnitLength("naïve 😀 banana 日本 a𝄞a") - 3, "naïve 😀 banana 日本 a𝄞a")
 	var result string
 	switch scrutinee.Tag {
@@ -185,39 +185,39 @@ func codePointLoopViewsTheText(text string, i int32, count int32) int32 {
 		if i >= textPoints.Length() {
 			return count
 		}
-		var result3 maybe.MaybeInt
+		var result2 maybe.MaybeInt
 		if i < 0 {
-			result3 = maybe.MaybeInt{Tag: maybe.MaybeIntNothing}
+			result2 = maybe.MaybeInt{Tag: maybe.MaybeIntNothing}
 		} else if i == 0 && text == "" {
-			result3 = maybe.MaybeInt{Tag: maybe.MaybeIntNothing}
+			result2 = maybe.MaybeInt{Tag: maybe.MaybeIntNothing}
 		} else if i == 0 {
 			s := text
-			result3 = maybe.MaybeInt{Tag: maybe.MaybeIntJust, Just: direct.CodePointAt0(nil, s)}
+			result2 = maybe.MaybeInt{Tag: maybe.MaybeIntJust, Just: direct.CodePointAt0(nil, s)}
 		} else {
 			n := i
-			result3 = textPoints.CodePointAt(func(payload int32) maybe.MaybeInt {
+			result2 = textPoints.CodePointAt(func(payload int32) maybe.MaybeInt {
 				return maybe.MaybeInt{Tag: maybe.MaybeIntJust, Just: payload}
 			}, maybe.MaybeInt{Tag: maybe.MaybeIntNothing}, n)
 		}
 		scrutinee := textPoints.Take(i + 1)
-		var result4 maybe.MaybeInt
+		var result3 maybe.MaybeInt
 		if false {
-			result4 = maybe.MaybeInt{Tag: maybe.MaybeIntNothing}
+			result3 = maybe.MaybeInt{Tag: maybe.MaybeIntNothing}
 		} else if scrutinee == "" {
-			result4 = maybe.MaybeInt{Tag: maybe.MaybeIntNothing}
+			result3 = maybe.MaybeInt{Tag: maybe.MaybeIntNothing}
 		} else {
-			result4 = maybe.MaybeInt{Tag: maybe.MaybeIntJust, Just: direct.CodePointAt0(nil, scrutinee)}
+			result3 = maybe.MaybeInt{Tag: maybe.MaybeIntJust, Just: direct.CodePointAt0(nil, scrutinee)}
 		}
-		var result2 bool
-		if result3.Tag == maybe.MaybeIntNothing && result4.Tag == maybe.MaybeIntNothing {
-			result2 = true
-		} else if result3.Tag == maybe.MaybeIntJust && result4.Tag == maybe.MaybeIntJust {
-			result2 = result3.Just == result4.Just
+		var result4 bool
+		if result2.Tag == maybe.MaybeIntNothing && result3.Tag == maybe.MaybeIntNothing {
+			result4 = true
+		} else if result2.Tag == maybe.MaybeIntJust && result3.Tag == maybe.MaybeIntJust {
+			result4 = result2.Just == result3.Just
 		} else {
-			result2 = false
+			result4 = false
 		}
 		var result int32
-		if result2 {
+		if result4 {
 			result = count + 1
 		} else {
 			result = count

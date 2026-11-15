@@ -13,14 +13,14 @@ type StateValue struct {
 
 var main_ int32 = countDown(60, 0).State
 
-func countDown(argument0 int32, state int32) StateValue {
+func countDown(n int32, state int32) StateValue {
 	for {
-		switch argument0 {
+		switch n {
 		case 0:
 			return StateValue{Value: struct{}{}, State: state}
 		default:
-			n := argument0
-			argument0, state = n - 1, state + 1
+			n2 := n
+			n, state = n2 - 1, state + 1
 			continue
 		}
 	}

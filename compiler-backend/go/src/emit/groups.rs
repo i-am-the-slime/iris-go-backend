@@ -371,7 +371,8 @@ where
                 let slot = match shared {
                     Some(slot) => slot,
                     None => {
-                        slots.push((super::identifier(&parameter.name), type_));
+                        let base = self.local_base(&parameter.name, parameter.monotype);
+                        slots.push((base, type_));
                         slots.len() - 1
                     }
                 };

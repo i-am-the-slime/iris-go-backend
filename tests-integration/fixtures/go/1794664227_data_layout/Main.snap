@@ -70,20 +70,20 @@ const (
 var main_ = initializeMain_()
 
 func initializeMain_() MainResult {
-	array2 := []Shape{Shape{Tag: ShapeCircle, FieldA0: 1.0}, Shape{Tag: ShapeSquare, FieldA0: 2.0}, Shape{Tag: ShapeLabel, FieldB0: "a", FieldB1: true}, Shape{Tag: ShapeCaption, FieldB0: "b", FieldB1: false}, Shape{Tag: ShapePoint}}
-	mapped := make([]string, len(array2))
-	for index, element := range array2 {
+	array := []Shape{Shape{Tag: ShapeCircle, FieldA0: 1.0}, Shape{Tag: ShapeSquare, FieldA0: 2.0}, Shape{Tag: ShapeLabel, FieldB0: "a", FieldB1: true}, Shape{Tag: ShapeCaption, FieldB0: "b", FieldB1: false}, Shape{Tag: ShapePoint}}
+	mapped := make([]string, len(array))
+	for index, element := range array {
 		mapped[index] = describe(element)
 	}
-	array3 := []Item{Item{Tag: ItemField, Field: "x"}, Item{Tag: ItemPair, Field0: 1, Field1: 2}, Item{Tag: ItemCouple, Field0: 3, Field1: 4}}
-	mapped2 := make([]int32, len(array3))
-	for index2, element2 := range array3 {
-		mapped2[index2] = itemTotal(element2)
+	array2 := []Item{Item{Tag: ItemField, Field: "x"}, Item{Tag: ItemPair, Field0: 1, Field1: 2}, Item{Tag: ItemCouple, Field0: 3, Field1: 4}}
+	mapped2 := make([]int32, len(array2))
+	for index, element := range array2 {
+		mapped2[index] = itemTotal(element)
 	}
-	array4 := []Colour{ColourRed, ColourGreen, ColourBlue}
-	mapped3 := make([]string, len(array4))
-	for index3, element3 := range array4 {
-		mapped3[index3] = colourName(element3)
+	array3 := []Colour{ColourRed, ColourGreen, ColourBlue}
+	mapped3 := make([]string, len(array3))
+	for index, element := range array3 {
+		mapped3[index] = colourName(element)
 	}
 	exprs := make([]Expr, 7)
 	exprs[0] = Expr{Tag: ExprAdd, Field0: &exprs[1], Field1: &exprs[2]}
@@ -96,59 +96,59 @@ func initializeMain_() MainResult {
 	return MainResult{Expression: evaluate(&exprs[0]), Shapes: mapped, Items: mapped2, Colours: mapped3, Sample: "strue" + prim.ShowNumber(float64(0.5)) + prim.ShowInt(3)}
 }
 
-func evaluate(argument0 *Expr) int32 {
-	switch argument0.Tag {
+func evaluate(expr *Expr) int32 {
+	switch expr.Tag {
 	case ExprVal:
-		return argument0.Val
+		return expr.Val
 	case ExprAdd:
-		return evaluate(argument0.Field0) + evaluate(argument0.Field1)
+		return evaluate(expr.Field0) + evaluate(expr.Field1)
 	case ExprMul:
-		return prim.MultiplyInt32(evaluate(argument0.Field0), evaluate(argument0.Field1))
+		return prim.MultiplyInt32(evaluate(expr.Field0), evaluate(expr.Field1))
 	default: // ExprSub
-		return evaluate(argument0.Field0) - evaluate(argument0.Field1)
+		return evaluate(expr.Field0) - evaluate(expr.Field1)
 	}
 }
 
-func describe(argument0 Shape) string {
-	switch argument0.Tag {
+func describe(shape Shape) string {
+	switch shape.Tag {
 	case ShapeCircle:
-		return "circle " + prim.ShowNumber(argument0.FieldA0)
+		return "circle " + prim.ShowNumber(shape.FieldA0)
 	case ShapeSquare:
-		return "square " + prim.ShowNumber(argument0.FieldA0)
+		return "square " + prim.ShowNumber(shape.FieldA0)
 	case ShapeLabel:
 		var result string
-		if argument0.FieldB1 {
+		if shape.FieldB1 {
 			result = "true"
 		} else {
 			result = "false"
 		}
-		return "label " + argument0.FieldB0 + result
+		return "label " + shape.FieldB0 + result
 	case ShapeCaption:
-		var result2 string
-		if argument0.FieldB1 {
-			result2 = "true"
+		var result string
+		if shape.FieldB1 {
+			result = "true"
 		} else {
-			result2 = "false"
+			result = "false"
 		}
-		return "caption " + argument0.FieldB0 + result2
+		return "caption " + shape.FieldB0 + result
 	default: // ShapePoint
 		return "point"
 	}
 }
 
-func itemTotal(argument0 Item) int32 {
-	switch argument0.Tag {
+func itemTotal(item Item) int32 {
+	switch item.Tag {
 	case ItemField:
 		return 0
 	case ItemPair:
-		return argument0.Field0 + argument0.Field1
+		return item.Field0 + item.Field1
 	default: // ItemCouple
-		return prim.MultiplyInt32(argument0.Field0, argument0.Field1)
+		return prim.MultiplyInt32(item.Field0, item.Field1)
 	}
 }
 
-func colourName(argument0 Colour) string {
-	switch argument0 {
+func colourName(colour Colour) string {
+	switch colour {
 	case ColourRed:
 		return "red"
 	case ColourGreen:
