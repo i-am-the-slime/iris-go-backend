@@ -1,0 +1,85 @@
+---
+source: tests-integration/src/fixtures.rs
+---
+// Data/Show/show.go
+package show
+
+import "github.com/i-am-the-slime/purs-backend-go/go-support/prim"
+
+func Show(i int32) string {
+	return prim.ShowInt(i)
+}
+
+func ShowInt(array []int32) string {
+	return prim.ShowArray(Show, array)
+}
+
+// main.go
+package main
+
+import (
+	"fixture/Data/Show"
+	"fmt"
+	"github.com/i-am-the-slime/purs-backend-go/go-support/prim"
+)
+
+func convert(value []any) []int32 {
+	converted := []int32{}
+	for _, element := range value {
+		converted = append(converted, element.(int32))
+	}
+	return converted
+}
+
+type Show struct {
+	Show func(any) string
+}
+
+func convert2(value []int32) []any {
+	converted := []any{}
+	for _, element := range value {
+		converted = append(converted, element)
+	}
+	return converted
+}
+
+func convert3(value [][]int32) []any {
+	converted := []any{}
+	for _, element := range value {
+		converted = append(converted, convert2(element))
+	}
+	return converted
+}
+
+type Nested struct {
+	Flat any
+	Nest *Nested
+	Tag  uint8
+}
+
+const (
+	NestedFlat = iota
+	NestedNest
+)
+
+var main_ []string = []string{prim.ShowInt(1), "Nest " + showNestedArrayInt(Show{Show: func(coerced any) string {
+	return show.ShowInt(convert(coerced.([]any)))
+}}, &Nested{Tag: NestedNest, Nest: &Nested{Tag: NestedFlat, Flat: convert3([][]int32{[]int32{1, 2}, []int32{3}})}})}
+
+func showNestedArrayInt(showDictionary Show, nested *Nested) string {
+	switch nested.Tag {
+	case NestedFlat:
+		return showDictionary.Show(nested.Flat)
+	default: // NestedNest
+		original := func(array []any) string {
+			return prim.ShowArray(showDictionary.Show, array)
+		}
+		return "Nest " + showNestedArrayInt(Show{Show: func(coerced any) string {
+			return original(coerced.([]any))
+		}}, nested.Nest)
+	}
+}
+
+func main() {
+	fmt.Println(main_)
+}

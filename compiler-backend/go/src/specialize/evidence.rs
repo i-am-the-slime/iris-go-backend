@@ -157,13 +157,18 @@ where
                 self.resolve_instance(scope, origin, &subgoals, constraint)
             }
             Evidence::Superclass { parent, superclass } => {
-                let Dictionary::Instance(parent) = self.resolve_proof(scope, parent, None)? else {
-                    let superclass = format!("{superclass:?}");
-                    return Err(
-                        scope.unsupported(UnsupportedState::MissingSuperclass { superclass })
-                    );
-                };
-                self.resolve_superclass(scope, &parent, superclass)
+                match self.resolve_proof(scope, parent, None)? {
+                    Dictionary::Instance(parent) => {
+                        self.resolve_superclass(scope, &parent, superclass)
+                    }
+                    Dictionary::Runtime(parent) => {
+                        self.runtime_superclass(scope.definition, parent, superclass)
+                    }
+                    _ => {
+                        let superclass = format!("{superclass:?}");
+                        Err(scope.unsupported(UnsupportedState::MissingSuperclass { superclass }))
+                    }
+                }
             }
             Evidence::Trivial => Ok(Dictionary::Trivial),
             Evidence::Synthesized(SynthesizedEvidence::IsSymbol(symbol)) => {

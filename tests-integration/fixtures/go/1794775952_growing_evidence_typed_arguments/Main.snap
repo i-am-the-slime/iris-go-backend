@@ -1,0 +1,82 @@
+---
+source: tests-integration/src/fixtures.rs
+---
+// Data/Show/show.go
+package show
+
+import "github.com/i-am-the-slime/purs-backend-go/go-support/prim"
+
+func Show(boolean bool) string {
+	if boolean {
+		return "true"
+	}
+	return "false"
+}
+
+func ShowBoolean(array []bool) string {
+	return prim.ShowArray(Show, array)
+}
+
+func Show2(i int32) string {
+	return prim.ShowInt(i)
+}
+
+// main.go
+package main
+
+import (
+	"fixture/Data/Show"
+	"fmt"
+	"github.com/i-am-the-slime/purs-backend-go/go-support/array"
+	"github.com/i-am-the-slime/purs-backend-go/go-support/prim"
+	"slices"
+)
+
+func convert(value []any) []bool {
+	converted := []bool{}
+	for _, element := range value {
+		converted = append(converted, element.(bool))
+	}
+	return converted
+}
+
+type Show struct {
+	Show func(any) string
+}
+
+func convert2(value []bool) []any {
+	converted := []any{}
+	for _, element := range value {
+		converted = append(converted, element)
+	}
+	return converted
+}
+
+var main_ []string = []string{describeArrayBoolean(Show{Show: func(coerced any) string {
+	return show.ShowBoolean(convert(coerced.([]any)))
+}}, array.Append([]int32{}, []int32{2}), ">", 1, convert2([]bool{true}))}
+
+func describeArrayBoolean(showDictionary Show, depths []int32, label string, depth int32, value any) string {
+	depths = slices.Clip(depths)
+	labelBytes := []byte(label)
+	for {
+		showDictionaryCaptured := showDictionary
+		switch depth {
+		case 0:
+			return string(labelBytes) + prim.ShowArray(show.Show2, depths) + ": " + showDictionaryCaptured.Show(value)
+		default:
+			depth2 := depth
+			original := func(array []any) string {
+				return prim.ShowArray(showDictionaryCaptured.Show, array)
+			}
+			showDictionary, depths, labelBytes, depth, value = Show{Show: func(coerced any) string {
+				return original(coerced.([]any))
+			}}, append(depths, depth2), append(labelBytes, ">"...), depth2 - 1, []any{value}
+			continue
+		}
+	}
+}
+
+func main() {
+	fmt.Println(main_)
+}

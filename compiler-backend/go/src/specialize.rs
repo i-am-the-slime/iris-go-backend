@@ -36,6 +36,7 @@ use crate::types::{Substituted, Substitution};
 mod evidence;
 mod growth;
 mod patterns;
+mod runtime;
 mod spine;
 mod traverse;
 
@@ -450,7 +451,18 @@ where
     }
 
     fn request(&mut self, key: SpecializationKey, name: SmolStr) -> GoResult<FunctionId> {
-        let key = self.terminate_growth(key)?;
+        let definition = key.definition.clone();
+        let (key, promotions) = self.terminate_growth(key)?;
+        if !promotions.is_empty() {
+            return Err(GoError::Unsupported {
+                definition: self.describe_definition(definition)?,
+                state: UnsupportedState::GrowingEvidence,
+            });
+        }
+        self.enqueue(key, name)
+    }
+
+    fn enqueue(&mut self, key: SpecializationKey, name: SmolStr) -> GoResult<FunctionId> {
         if let Some(&id) = self.keys.get(&key) {
             return Ok(id);
         }
@@ -472,7 +484,11 @@ where
     /// Polymorphic recursion requests a definition at ever larger types. When a
     /// request embeds the types of the same definition further up its chain of
     /// requesters, the growing positions are erased so specialization terminates.
-    fn terminate_growth(&mut self, mut key: SpecializationKey) -> GoResult<SpecializationKey> {
+    fn terminate_growth(
+        &mut self,
+        mut key: SpecializationKey,
+    ) -> GoResult<(SpecializationKey, Vec<runtime::Promotion>)> {
+        let requested = Arc::clone(&key.types);
         let mut ancestor = self.current;
         let mut types: Vec<TypeId> = key.types.to_vec();
         let mut changed = false;
@@ -495,16 +511,14 @@ where
             }
             ancestor = self.parents[id.0 as usize];
         }
-        if evidence_grows {
-            return Err(GoError::Unsupported {
-                definition: self.describe_definition(key.definition)?,
-                state: UnsupportedState::GrowingEvidence,
-            });
-        }
         if changed {
             key.types = Arc::from(types);
         }
-        Ok(key)
+        if !evidence_grows {
+            return Ok((key, vec![]));
+        }
+        let promotions = self.promote_growing_evidence(&mut key, &requested)?;
+        Ok((key, promotions))
     }
 
     fn fresh_local(&mut self, name: SmolStr, monotype: MonotypeId) -> Local {
@@ -512,6 +526,9 @@ where
     }
 
     fn specialize(&mut self, key: &SpecializationKey, name: SmolStr) -> GoResult<Function> {
+        let described = self.describe_definition(key.definition.clone())?;
+        let (key, dictionary_parameters) = self.bind_runtime_dictionaries(key, &described)?;
+        let key = &key;
         let (mut scope, value) = match &key.definition {
             Definition::Value { file_id, term } => {
                 let module = self.context.module(*file_id)?;
@@ -567,7 +584,10 @@ where
         };
         let (abstractions, equations) = value;
         self.bind_abstractions(&mut scope, &abstractions, &key.types, &key.dictionaries)?;
-        let body = self.equations(&mut scope, &equations)?;
+        let mut body = self.equations(&mut scope, &equations)?;
+        if !dictionary_parameters.is_empty() {
+            body = self.lambda(dictionary_parameters, body);
+        }
         Ok(self.function(name, Some(key.definition.origin()), body))
     }
 
@@ -2419,8 +2439,7 @@ where
                     types: Arc::from(types),
                     dictionaries: Arc::from(dictionaries),
                 };
-                let id = self.request(key, name)?;
-                Ok(Expression::new(ExpressionKind::Function(id), monotype))
+                self.request_reference(scope, key, name, monotype)
             }
         }
     }
@@ -2461,6 +2480,9 @@ where
                     UnsupportedState::MissingInstanceMember { member: member_name.to_string() },
                 ));
             }
+            Dictionary::Runtime(runtime) => {
+                return self.runtime_member(scope, runtime, member_name, monotype);
+            }
         };
         let mut instance_names = vec![self.instance_name(instance.origin)?];
         instance_names.extend(self.dictionary_names(&dictionaries)?);
@@ -2490,8 +2512,7 @@ where
             types: Arc::from(types),
             dictionaries: Arc::from(dictionaries),
         };
-        let id = self.request(key, name)?;
-        Ok(Expression::new(ExpressionKind::Function(id), monotype))
+        self.request_reference(scope, key, name, monotype)
     }
 
     fn constant_function(&mut self, literal: Literal, monotype: MonotypeId) -> Expression {

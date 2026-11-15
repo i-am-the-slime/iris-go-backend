@@ -4,6 +4,8 @@ use checking::TypeId;
 use checking::evidence::InstanceCandidateOrigin;
 use smol_str::SmolStr;
 
+use crate::mono::Expression;
+
 /// A type-class dictionary resolved for a closed world. Dictionaries never reach
 /// the generated program: they select which specialization a member reference
 /// calls.
@@ -13,6 +15,13 @@ pub enum Dictionary {
     Symbol(SmolStr),
     Reflectable(Reflected),
     Trivial,
+    Runtime(RuntimeDictionary),
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct RuntimeDictionary {
+    pub constraint: TypeId,
+    pub value: Option<Box<Expression>>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
