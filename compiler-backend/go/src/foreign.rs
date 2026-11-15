@@ -291,6 +291,7 @@ pub enum GoPackage {
     Argonaut,
     AVar,
     YogaOm,
+    BigInts,
 }
 
 impl GoPackage {
@@ -313,6 +314,7 @@ impl GoPackage {
             GoPackage::Argonaut => "github.com/i-am-the-slime/purs-backend-go/go-support/argonaut",
             GoPackage::AVar => "github.com/i-am-the-slime/purs-backend-go/go-support/avar",
             GoPackage::YogaOm => "github.com/i-am-the-slime/purs-backend-go/go-support/yogaom",
+            GoPackage::BigInts => "github.com/i-am-the-slime/purs-backend-go/go-support/bigints",
             GoPackage::Exception => {
                 "github.com/i-am-the-slime/purs-backend-go/go-support/exception"
             }
@@ -337,6 +339,7 @@ impl GoPackage {
             GoPackage::Argonaut => "argonaut",
             GoPackage::AVar => "avar",
             GoPackage::YogaOm => "yogaom",
+            GoPackage::BigInts => "bigints",
         }
     }
 }
@@ -883,7 +886,11 @@ const FOREIGN_IMPORTS: &[(&str, &str, Foreign)] = &[
         ),
     ),
     ("Yoga.Om.Error", "newParallelError", call(GoPackage::YogaOm, "NewParallelError", 1, PLAIN)),
-    ("Yoga.Om.Error", "getParallelError", call(GoPackage::YogaOm, "GetParallelError", 1, RESULT_PARAMETER)),
+    (
+        "Yoga.Om.Error",
+        "getParallelError",
+        call(GoPackage::YogaOm, "GetParallelError", 1, RESULT_PARAMETER),
+    ),
     (
         "Yoga.Om.Error",
         "toParallelErrorImpl",
@@ -1124,6 +1131,44 @@ const FOREIGN_IMPORTS: &[(&str, &str, Foreign)] = &[
     ("JS.BigInt", "toStringAs", direct_with("BigIntToStringAs", 2, int32_parameters(&[0]))),
     ("JS.BigInt", "asIntN", direct_with("BigIntAsIntN", 2, int32_parameters(&[0]))),
     ("JS.BigInt", "asUintN", direct_with("BigIntAsUintN", 2, int32_parameters(&[0]))),
+    ("Data.BigInt", "fromTypeLevelInt", call(GoPackage::BigInts, "FromTypeLevelInt", 1, PLAIN)),
+    (
+        "Data.BigInt",
+        "fromBaseImpl",
+        call(
+            GoPackage::BigInts,
+            "FromBaseImpl",
+            4,
+            Boundary { int32_parameters: &[2], ..maybe(0, 1) },
+        ),
+    ),
+    ("Data.BigInt", "fromInt", call(GoPackage::BigInts, "FromInt", 1, int32_parameters(&[0]))),
+    ("Data.BigInt", "fromNumberImpl", call(GoPackage::BigInts, "FromNumberImpl", 3, maybe(0, 1))),
+    ("Data.BigInt", "toNumber", call(GoPackage::BigInts, "ToNumber", 1, PLAIN)),
+    ("Data.BigInt", "pow", call(GoPackage::BigInts, "Pow", 2, PLAIN)),
+    ("Data.BigInt", "abs", call(GoPackage::BigInts, "Abs", 1, PLAIN)),
+    ("Data.BigInt", "even", call(GoPackage::BigInts, "Even", 1, PLAIN)),
+    ("Data.BigInt", "odd", call(GoPackage::BigInts, "Odd", 1, PLAIN)),
+    ("Data.BigInt", "prime", call(GoPackage::BigInts, "Prime", 1, PLAIN)),
+    ("Data.BigInt", "not", call(GoPackage::BigInts, "Not", 1, PLAIN)),
+    ("Data.BigInt", "or", call(GoPackage::BigInts, "Or", 2, PLAIN)),
+    ("Data.BigInt", "xor", call(GoPackage::BigInts, "Xor", 2, PLAIN)),
+    ("Data.BigInt", "and", call(GoPackage::BigInts, "And", 2, PLAIN)),
+    ("Data.BigInt", "shl", call(GoPackage::BigInts, "Shl", 2, PLAIN)),
+    ("Data.BigInt", "shr", call(GoPackage::BigInts, "Shr", 2, PLAIN)),
+    ("Data.BigInt", "biEquals", call(GoPackage::BigInts, "BiEquals", 2, PLAIN)),
+    ("Data.BigInt", "biCompare", call(GoPackage::BigInts, "BiCompare", 2, PLAIN)),
+    (
+        "Data.BigInt",
+        "digitsInBase",
+        call(GoPackage::BigInts, "DigitsInBase", 2, Boundary { int32_parameters: &[0], ..RECORD }),
+    ),
+    ("Data.BigInt", "toBase", call(GoPackage::BigInts, "ToBase", 2, int32_parameters(&[0]))),
+    ("Data.BigInt", "biAdd", call(GoPackage::BigInts, "BiAdd", 2, PLAIN)),
+    ("Data.BigInt", "biMul", call(GoPackage::BigInts, "BiMul", 2, PLAIN)),
+    ("Data.BigInt", "biSub", call(GoPackage::BigInts, "BiSub", 2, PLAIN)),
+    ("Data.BigInt", "biDiv", call(GoPackage::BigInts, "BiDiv", 2, PLAIN)),
+    ("Data.BigInt", "biMod", call(GoPackage::BigInts, "BiMod", 2, PLAIN)),
     ("Effect.Synchronized", "newMutex", Foreign::MutexNew),
     ("Effect.Synchronized", "withMutex", Foreign::WithMutex),
     ("Data.Lazy", "defer", Foreign::LazyDefer),

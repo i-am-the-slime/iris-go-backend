@@ -36,7 +36,8 @@ use crate::context::{Context, capitalise};
 use crate::erasure::Erasure;
 use crate::error::{GoError, GoResult};
 use crate::foreign::{
-    Boundary, Comparison, Constructed, Foreign, ForeignPackages, GoFunction, GoPackage, Operator, Spelled,
+    Boundary, Comparison, Constructed, Foreign, ForeignPackages, GoFunction, GoPackage, Operator,
+    Spelled,
 };
 use crate::modules::{ModuleIndex, Modules};
 use crate::mono::{

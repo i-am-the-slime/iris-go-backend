@@ -433,7 +433,7 @@ impl Monotypes {
             ("Effect.Exception", "Error") | ("Yoga.Om.Error", "ParallelError") => Monotype::Error,
             ("Data.String.Regex", "Regex") => Monotype::Regex,
             ("Effect.Synchronized", "Mutex") => Monotype::Mutex,
-            ("JS.BigInt", "BigInt") => Monotype::BigInt,
+            ("JS.BigInt", "BigInt") | ("Data.BigInt", "BigInt") => Monotype::BigInt,
             ("Data.Lazy", "Lazy") => match unary(self, context, arguments.first())? {
                 Ok(value) => Monotype::Lazy(value),
                 Err(error) => return Ok(Err(error)),
