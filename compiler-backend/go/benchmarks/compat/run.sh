@@ -55,7 +55,8 @@ build_javascript() {
   (cd "$HERE" && spago build --quiet) >"$WORK/spago.log" 2>&1 || { cat "$WORK/spago.log"; exit 1; }
   local sources=()
   while IFS= read -r source; do sources+=("$HERE/$source"); done < <(cd "$HERE" && spago sources -p compat-repro 2>/dev/null)
-  (cd "$HERE" && purs compile "${sources[@]}" --codegen corefn --output "$WORK/corefn") >"$WORK/purs.log" 2>&1 \
+  # purs writes foreign.js next to corefn.json only when it also generates JavaScript.
+  (cd "$HERE" && purs compile "${sources[@]}" --codegen corefn,js --output "$WORK/corefn") >"$WORK/purs.log" 2>&1 \
     || { cat "$WORK/purs.log"; exit 1; }
   rm -rf "$WORK/es"
   (cd "$HERE" && "$PURS_BACKEND_ES" build --corefn-dir "$WORK/corefn" --output-dir "$WORK/es") >"$WORK/es.log" 2>&1 \
