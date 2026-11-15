@@ -16,7 +16,7 @@ use rustc_hash::FxHashSet;
 
 use crate::syntax::{GoDeclaration, GoExpression, GoStatement, Name};
 
-use super::walk::{self, Walk, each_expression_in_statement};
+use crate::walk::{self, Walk, each_expression_in_statement};
 
 pub fn read_elements_in_place(declarations: &mut [GoDeclaration]) {
     for declaration in declarations {

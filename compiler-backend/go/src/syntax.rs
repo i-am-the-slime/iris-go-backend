@@ -4,6 +4,8 @@ use std::fmt::Write;
 
 use rayon::prelude::*;
 
+use crate::walk::{self, Walk};
+
 #[derive(Debug, Clone, Eq)]
 pub enum GoType {
     Named(String),
@@ -375,271 +377,135 @@ fn type_references(type_: &mut GoType, visit: &mut impl FnMut(Reference<'_>)) {
     }
 }
 
-fn statements_references(statements: &mut [GoStatement], visit: &mut impl FnMut(Reference<'_>)) {
-    for statement in statements {
-        statement_references(statement, visit);
-    }
-}
+/// The references of statements, in order.
+struct References<'v, F>(&'v mut F);
 
-fn statement_references(statement: &mut GoStatement, visit: &mut impl FnMut(Reference<'_>)) {
-    match statement {
-        GoStatement::Define { names, values } => {
-            names.iter_mut().for_each(|name| visit(Reference::Binder(name)));
-            values.iter_mut().for_each(|value| expression_references(value, visit));
-        }
-        GoStatement::Variable { name, type_, value } => {
-            visit(Reference::Binder(name));
-            type_references(type_, visit);
-            if let Some(value) = value {
-                expression_references(value, visit);
-            }
-        }
-        GoStatement::Assign { targets, values } => {
-            targets.iter_mut().for_each(|target| expression_references(target, visit));
-            values.iter_mut().for_each(|value| expression_references(value, visit));
-        }
-        GoStatement::Expression(value) | GoStatement::Defer(value) => {
-            expression_references(value, visit)
-        }
-        GoStatement::Return(value) => {
-            if let Some(value) = value {
-                expression_references(value, visit);
-            }
-        }
-        GoStatement::If { condition, then, otherwise } => {
-            expression_references(condition, visit);
-            statements_references(then, visit);
-            statements_references(otherwise, visit);
-        }
-        GoStatement::IfAssert { name, value, type_, then } => {
-            visit(Reference::Binder(name));
-            expression_references(value, visit);
-            type_references(type_, visit);
-            statements_references(then, visit);
-        }
-        GoStatement::Switch { value, cases, default } => {
-            if let Some(value) = value {
-                expression_references(value, visit);
-            }
-            for case in cases {
-                case.values.iter_mut().for_each(|value| expression_references(value, visit));
-                statements_references(&mut case.body, visit);
-            }
-            if let Some(default) = default {
-                default.covers.iter_mut().for_each(|value| expression_references(value, visit));
-                statements_references(&mut default.body, visit);
-            }
-        }
-        GoStatement::Range { index, element, iterable, body } => {
-            if let Some(index) = index {
-                visit(Reference::Binder(index));
-            }
-            visit(Reference::Binder(element));
-            expression_references(iterable, visit);
-            statements_references(body, visit);
-        }
-        GoStatement::Counting { variable, start, end, body } => {
-            visit(Reference::Binder(variable));
-            expression_references(start, visit);
-            expression_references(end, visit);
-            statements_references(body, visit);
-        }
-        GoStatement::CountingDown { variable, start, body } => {
-            visit(Reference::Binder(variable));
-            expression_references(start, visit);
-            statements_references(body, visit);
-        }
-        GoStatement::Loop(body)
-        | GoStatement::LabeledLoop { body, .. }
-        | GoStatement::Block(body) => statements_references(body, visit),
-        GoStatement::Continue | GoStatement::Break | GoStatement::BreakTo(_) => {}
-    }
+fn statements_references(statements: &mut [GoStatement], visit: &mut impl FnMut(Reference<'_>)) {
+    let mut references = References(visit);
+    statements.iter_mut().for_each(|statement| references.statement(statement));
 }
 
 fn expression_references(expression: &mut GoExpression, visit: &mut impl FnMut(Reference<'_>)) {
-    match expression {
-        GoExpression::Identifier(_) | GoExpression::Qualified { .. } => {
-            visit(Reference::Value(expression))
-        }
-        GoExpression::Integer(_)
-        | GoExpression::Float(_)
-        | GoExpression::String(_)
-        | GoExpression::Rune(_)
-        | GoExpression::Boolean(_) => {}
-        GoExpression::Type(type_) => type_references(type_, visit),
-        GoExpression::Call { function, arguments } => {
-            expression_references(function, visit);
-            arguments.iter_mut().for_each(|argument| expression_references(argument, visit));
-        }
-        GoExpression::Binary { left, right, .. } => {
-            expression_references(left, visit);
-            expression_references(right, visit);
-        }
-        GoExpression::Index { value, index } => {
-            expression_references(value, visit);
-            expression_references(index, visit);
-        }
-        GoExpression::Unary { operand: value, .. }
-        | GoExpression::Field { value, .. }
-        | GoExpression::Address(value)
-        | GoExpression::Spread(value) => expression_references(value, visit),
-        GoExpression::Conversion { type_, value }
-        | GoExpression::TypeAssertion { value, type_ } => {
-            type_references(type_, visit);
-            expression_references(value, visit);
-        }
-        GoExpression::Composite { type_, fields } => {
-            type_references(type_, visit);
-            fields.iter_mut().for_each(|(_, value)| expression_references(value, visit));
-        }
-        GoExpression::Function { parameters, result, body } => {
-            for (parameter, type_) in parameters.iter_mut() {
-                visit(Reference::Binder(parameter));
-                type_references(type_, visit);
+    References(visit).expression(expression)
+}
+
+impl<F: FnMut(Reference<'_>)> Walk for References<'_, F> {
+    fn statement(&mut self, statement: &mut GoStatement) {
+        match statement {
+            GoStatement::Define { names, .. } => {
+                names.iter_mut().for_each(|name| (self.0)(Reference::Binder(name)))
             }
-            if let Some(result) = result {
-                type_references(result, visit);
+            GoStatement::Variable { name, type_, .. } => {
+                (self.0)(Reference::Binder(name));
+                type_references(type_, self.0);
             }
-            statements_references(body, visit);
+            GoStatement::IfAssert { name, type_, .. } => {
+                (self.0)(Reference::Binder(name));
+                type_references(type_, self.0);
+            }
+            GoStatement::Range { index, element, .. } => {
+                index.iter_mut().for_each(|index| (self.0)(Reference::Binder(index)));
+                (self.0)(Reference::Binder(element));
+            }
+            GoStatement::Counting { variable, .. } | GoStatement::CountingDown { variable, .. } => {
+                (self.0)(Reference::Binder(variable))
+            }
+            _ => {}
         }
-        GoExpression::Instantiation { function, arguments } => {
-            expression_references(function, visit);
-            arguments.iter_mut().for_each(|argument| type_references(argument, visit));
+        walk::statement(self, statement);
+    }
+
+    fn expression(&mut self, expression: &mut GoExpression) {
+        match expression {
+            GoExpression::Identifier(_) | GoExpression::Qualified { .. } => {
+                (self.0)(Reference::Value(expression))
+            }
+            GoExpression::Type(type_)
+            | GoExpression::Conversion { type_, .. }
+            | GoExpression::TypeAssertion { type_, .. }
+            | GoExpression::Composite { type_, .. } => type_references(type_, self.0),
+            GoExpression::Function { parameters, result, .. } => {
+                for (parameter, type_) in parameters.iter_mut() {
+                    (self.0)(Reference::Binder(parameter));
+                    type_references(type_, self.0);
+                }
+                if let Some(result) = result {
+                    type_references(result, self.0);
+                }
+            }
+            _ => {}
+        }
+        walk::expression(self, expression);
+        if let GoExpression::Instantiation { arguments, .. } = expression {
+            arguments.iter_mut().for_each(|argument| type_references(argument, self.0));
         }
     }
 }
 
 /// Visits every name the statements use or bind, in order.
 pub fn statements_names(statements: &mut [GoStatement], visit: &mut impl FnMut(Name<'_>)) {
-    for statement in statements {
-        statement_names(statement, visit);
-    }
-}
-
-fn statement_names(statement: &mut GoStatement, visit: &mut impl FnMut(Name<'_>)) {
-    match statement {
-        GoStatement::Define { names, values } => {
-            names.iter_mut().for_each(|name| visit(Name::Binder(name)));
-            values.iter_mut().for_each(|value| expression_names(value, visit));
-        }
-        GoStatement::Variable { name, value, .. } => {
-            visit(Name::Binder(name));
-            if let Some(value) = value {
-                expression_names(value, visit);
-            }
-        }
-        GoStatement::Assign { targets, values } => {
-            targets.iter_mut().for_each(|target| written_names(target, visit));
-            values.iter_mut().for_each(|value| expression_names(value, visit));
-        }
-        GoStatement::Expression(value) | GoStatement::Defer(value) => {
-            expression_names(value, visit)
-        }
-        GoStatement::Return(value) => {
-            if let Some(value) = value {
-                expression_names(value, visit);
-            }
-        }
-        GoStatement::If { condition, then, otherwise } => {
-            expression_names(condition, visit);
-            statements_names(then, visit);
-            statements_names(otherwise, visit);
-        }
-        GoStatement::IfAssert { name, value, then, .. } => {
-            visit(Name::Binder(name));
-            expression_names(value, visit);
-            statements_names(then, visit);
-        }
-        GoStatement::Switch { value, cases, default } => {
-            if let Some(value) = value {
-                expression_names(value, visit);
-            }
-            for case in cases {
-                case.values.iter_mut().for_each(|value| expression_names(value, visit));
-                statements_names(&mut case.body, visit);
-            }
-            if let Some(default) = default {
-                default.covers.iter_mut().for_each(|value| expression_names(value, visit));
-                statements_names(&mut default.body, visit);
-            }
-        }
-        GoStatement::Range { index, element, iterable, body } => {
-            if let Some(index) = index {
-                visit(Name::Binder(index));
-            }
-            visit(Name::Binder(element));
-            expression_names(iterable, visit);
-            statements_names(body, visit);
-        }
-        GoStatement::Counting { variable, start, end, body } => {
-            visit(Name::Binder(variable));
-            expression_names(start, visit);
-            expression_names(end, visit);
-            statements_names(body, visit);
-        }
-        GoStatement::CountingDown { variable, start, body } => {
-            visit(Name::Binder(variable));
-            expression_names(start, visit);
-            statements_names(body, visit);
-        }
-        GoStatement::Loop(body)
-        | GoStatement::LabeledLoop { body, .. }
-        | GoStatement::Block(body) => statements_names(body, visit),
-        GoStatement::Continue | GoStatement::Break | GoStatement::BreakTo(_) => {}
-    }
-}
-
-/// The names in an assignment's target or under `&`: the variable whose
-/// value changes, and the names read to find the place within it.
-fn written_names(target: &mut GoExpression, visit: &mut impl FnMut(Name<'_>)) {
-    match target {
-        GoExpression::Identifier(name) => visit(Name::Written(name)),
-        GoExpression::Field { value, .. } => written_names(value, visit),
-        GoExpression::Index { value, index } => {
-            written_names(value, visit);
-            expression_names(index, visit);
-        }
-        target => expression_names(target, visit),
-    }
+    let mut names = Names(visit);
+    statements.iter_mut().for_each(|statement| names.statement(statement));
 }
 
 fn expression_names(expression: &mut GoExpression, visit: &mut impl FnMut(Name<'_>)) {
-    match expression {
-        GoExpression::Identifier(name) => visit(Name::Reference(name)),
-        GoExpression::Qualified { .. }
-        | GoExpression::Integer(_)
-        | GoExpression::Float(_)
-        | GoExpression::String(_)
-        | GoExpression::Rune(_)
-        | GoExpression::Boolean(_)
-        | GoExpression::Type(_) => {}
-        GoExpression::Call { function, arguments } => {
-            expression_names(function, visit);
-            arguments.iter_mut().for_each(|argument| expression_names(argument, visit));
-        }
-        GoExpression::Binary { left, right, .. } => {
-            expression_names(left, visit);
-            expression_names(right, visit);
-        }
-        GoExpression::Index { value, index } => {
-            expression_names(value, visit);
-            expression_names(index, visit);
-        }
-        GoExpression::Address(value) => written_names(value, visit),
-        GoExpression::Unary { operand: value, .. }
-        | GoExpression::Field { value, .. }
-        | GoExpression::Conversion { value, .. }
-        | GoExpression::TypeAssertion { value, .. }
-        | GoExpression::Spread(value) => expression_names(value, visit),
-        GoExpression::Instantiation { function, .. } => expression_names(function, visit),
-        GoExpression::Composite { fields, .. } => {
-            fields.iter_mut().for_each(|(_, value)| expression_names(value, visit));
-        }
-        GoExpression::Function { parameters, body, .. } => {
-            for (parameter, _) in parameters.iter_mut() {
-                visit(Name::Binder(parameter));
+    Names(visit).expression(expression)
+}
+
+struct Names<'v, F>(&'v mut F);
+
+impl<F: FnMut(Name<'_>)> Names<'_, F> {
+    /// The names in an assignment's target or under `&`: the variable whose
+    /// value changes, and the names read to find the place within it.
+    fn written(&mut self, target: &mut GoExpression) {
+        match target {
+            GoExpression::Identifier(name) => (self.0)(Name::Written(name)),
+            GoExpression::Field { value, .. } => self.written(value),
+            GoExpression::Index { value, index } => {
+                self.written(value);
+                self.expression(index);
             }
-            statements_names(body, visit);
+            target => self.expression(target),
+        }
+    }
+}
+
+impl<F: FnMut(Name<'_>)> Walk for Names<'_, F> {
+    fn statement(&mut self, statement: &mut GoStatement) {
+        match statement {
+            GoStatement::Define { names, .. } => {
+                names.iter_mut().for_each(|name| (self.0)(Name::Binder(name)))
+            }
+            GoStatement::Variable { name, .. } | GoStatement::IfAssert { name, .. } => {
+                (self.0)(Name::Binder(name))
+            }
+            GoStatement::Range { index, element, .. } => {
+                index.iter_mut().for_each(|index| (self.0)(Name::Binder(index)));
+                (self.0)(Name::Binder(element));
+            }
+            GoStatement::Counting { variable, .. } | GoStatement::CountingDown { variable, .. } => {
+                (self.0)(Name::Binder(variable))
+            }
+            GoStatement::Assign { targets, values } => {
+                targets.iter_mut().for_each(|target| self.written(target));
+                return values.iter_mut().for_each(|value| self.expression(value));
+            }
+            _ => {}
+        }
+        walk::statement(self, statement);
+    }
+
+    fn expression(&mut self, expression: &mut GoExpression) {
+        match expression {
+            GoExpression::Identifier(name) => (self.0)(Name::Reference(name)),
+            GoExpression::Address(value) => self.written(value),
+            GoExpression::Function { parameters, .. } => {
+                for (parameter, _) in parameters.iter_mut() {
+                    (self.0)(Name::Binder(parameter));
+                }
+                walk::expression(self, expression);
+            }
+            expression => walk::expression(self, expression),
         }
     }
 }

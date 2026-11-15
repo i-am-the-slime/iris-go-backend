@@ -32,7 +32,7 @@
 use rustc_hash::FxHashSet;
 
 use super::chunks::lower_first;
-use super::walk::{self, Walk};
+use crate::walk::{self, Walk};
 use crate::syntax::{GoDeclaration, GoExpression, GoStatement, GoType, Name};
 
 /// The fewest cells of one type in one expression that are allocated together.

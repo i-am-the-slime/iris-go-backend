@@ -14,7 +14,7 @@ use crate::context::capitalise;
 use crate::syntax::{GoDeclaration, GoExpression, GoStatement, GoType};
 use crate::value_names::{GO_PREDECLARED, go_safe};
 
-use super::walk::{self, Walk as _};
+use crate::walk::{self, Walk as _};
 
 /// Follows a name that emission numbered, before the number.
 pub(super) const NUMBERED: char = 'ǂ';

@@ -18,7 +18,7 @@ use rustc_hash::{FxHashMap, FxHashSet};
 
 use crate::syntax::{GoExpression, GoStatement, Name, statements_names};
 
-use super::walk::{each_block, each_expression_in_statement};
+use crate::walk::{each_block, each_expression_in_statement};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 enum View {

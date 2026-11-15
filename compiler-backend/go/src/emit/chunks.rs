@@ -28,7 +28,7 @@ use rustc_hash::{FxHashMap, FxHashSet};
 
 use crate::syntax::{GoDeclaration, GoExpression, GoStatement, GoType, Name};
 
-use super::walk::{self, Walk};
+use crate::walk::{self, Walk};
 
 /// Rewrites the linked cells of every loop, and tells whether it rewrote any.
 /// `taken` tells which names a new local must not shadow.

@@ -19,7 +19,7 @@ use rustc_hash::FxHashSet;
 
 use crate::syntax::{GoDeclaration, GoExpression, GoStatement, GoType, Name, statements_names};
 
-use super::walk::{self, Walk, each_expression_in_declaration, each_expression_in_statement};
+use crate::walk::{self, Walk, each_expression_in_declaration, each_expression_in_statement};
 use super::views::{carried_unchanged, view_invariant_strings};
 
 pub fn count_lengths_up_to_comparisons(declarations: &mut [GoDeclaration]) {
