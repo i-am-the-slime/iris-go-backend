@@ -75,6 +75,7 @@ pub enum Foreign {
     MakeAff,
     ForkFiber,
     NewFiber,
+    NewSupervisedFiber,
     MutexNew,
     WithMutex,
     LazyDefer,
@@ -127,6 +128,31 @@ pub struct Boundary {
     pub uncurried: &'static [(usize, usize)],
     pub uncurried_perform: bool,
     pub signature: Option<&'static Signature>,
+    pub utility: Option<Utility>,
+    /// The Go helper's one type parameter is its result type, which its
+    /// arguments do not determine.
+    pub result_parameter: bool,
+}
+
+/// A record of polymorphic constructors that JavaScript passes a foreign (the
+/// `FFIUtil` of `Effect.AVar`, say). Go cannot pass polymorphic values, so the
+/// foreign receives, in place of the record, the constructors it uses at the
+/// types its own signature fixes. The record's position is also ignored, so
+/// the record itself is never built.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct Utility {
+    pub position: usize,
+    pub constructors: &'static [Constructed],
+}
+
+/// A constructor of the data type at one place of a foreign's signature: a
+/// function of its field, or the value of a nullary constructor.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum Constructed {
+    /// Of the foreign's result, inside its effect.
+    Result(&'static str),
+    /// Of the parameter of the callback at a position.
+    CallbackParameter(usize, &'static str),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -193,7 +219,11 @@ const PLAIN: Boundary = Boundary {
     uncurried: &[],
     uncurried_perform: false,
     signature: None,
+    utility: None,
+    result_parameter: false,
 };
+
+const RESULT_PARAMETER: Boundary = Boundary { result_parameter: true, ..PLAIN };
 
 const fn int32_parameters(positions: &'static [usize]) -> Boundary {
     Boundary { int32_parameters: positions, ..PLAIN }
@@ -261,6 +291,13 @@ pub enum GoPackage {
     Regex,
     Lazy,
     Alloc,
+    Argonaut,
+    AVar,
+    YogaOm,
+    BigInts,
+    DateTime,
+    Now,
+    Spec,
 }
 
 impl GoPackage {
@@ -280,6 +317,13 @@ impl GoPackage {
             GoPackage::Regex => "github.com/i-am-the-slime/purs-backend-go/go-support/regex",
             GoPackage::Lazy => "github.com/i-am-the-slime/purs-backend-go/go-support/lazy",
             GoPackage::Alloc => "github.com/i-am-the-slime/purs-backend-go/go-support/alloc",
+            GoPackage::Argonaut => "github.com/i-am-the-slime/purs-backend-go/go-support/argonaut",
+            GoPackage::AVar => "github.com/i-am-the-slime/purs-backend-go/go-support/avar",
+            GoPackage::YogaOm => "github.com/i-am-the-slime/purs-backend-go/go-support/yogaom",
+            GoPackage::BigInts => "github.com/i-am-the-slime/purs-backend-go/go-support/bigints",
+            GoPackage::DateTime => "github.com/i-am-the-slime/purs-backend-go/go-support/datetime",
+            GoPackage::Now => "github.com/i-am-the-slime/purs-backend-go/go-support/now",
+            GoPackage::Spec => "github.com/i-am-the-slime/purs-backend-go/go-support/spec",
             GoPackage::Exception => {
                 "github.com/i-am-the-slime/purs-backend-go/go-support/exception"
             }
@@ -301,6 +345,13 @@ impl GoPackage {
             GoPackage::Regex => "regex",
             GoPackage::Lazy => "lazy",
             GoPackage::Alloc => "alloc",
+            GoPackage::Argonaut => "argonaut",
+            GoPackage::AVar => "avar",
+            GoPackage::YogaOm => "yogaom",
+            GoPackage::BigInts => "bigints",
+            GoPackage::DateTime => "datetime",
+            GoPackage::Now => "now",
+            GoPackage::Spec => "spec",
         }
     }
 }
@@ -381,7 +432,7 @@ impl Foreign {
             Foreign::LazyDefer | Foreign::LazyForce => 1,
             Foreign::UnsafeCoerce | Foreign::Identity | Foreign::EffectPure | Foreign::Print => 1,
             Foreign::Throw | Foreign::Crash | Foreign::MakeAff | Foreign::AssocArray => 1,
-            Foreign::ForkFiber | Foreign::NewFiber => 2,
+            Foreign::ForkFiber | Foreign::NewFiber | Foreign::NewSupervisedFiber => 2,
             Foreign::RunEffect | Foreign::EffectUntil => 1,
             Foreign::ReferenceNew | Foreign::ReferenceRead => 1,
             Foreign::EffectBind | Foreign::EffectMap | Foreign::EffectForEach => 2,
@@ -403,7 +454,7 @@ impl Foreign {
     pub fn ignored_arguments(self) -> &'static [usize] {
         match self {
             Foreign::Call { boundary, .. } | Foreign::Perform { boundary, .. } => boundary.ignored,
-            Foreign::NewFiber => &[0],
+            Foreign::NewFiber | Foreign::NewSupervisedFiber => &[0],
             _ => &[],
         }
     }
@@ -436,6 +487,7 @@ impl Foreign {
                 | Foreign::MakeAff
                 | Foreign::ForkFiber
                 | Foreign::NewFiber
+                | Foreign::NewSupervisedFiber
                 | Foreign::MutexNew
                 | Foreign::WithMutex
         )
@@ -541,6 +593,25 @@ const fn exception(name: &'static str, arity: usize, boundary: Boundary) -> Fore
 const fn foreign_value(name: &'static str, arity: usize) -> Foreign {
     call(GoPackage::ForeignValue, name, arity, PLAIN)
 }
+
+const fn argonaut(name: &'static str, arity: usize) -> Foreign {
+    call(GoPackage::Argonaut, name, arity, PLAIN)
+}
+
+/// An `Effect.AVar` foreign, which receives the constructors it uses in place
+/// of its `FFIUtil` record, the first argument.
+const fn avar(name: &'static str, arity: usize, constructors: &'static [Constructed]) -> Foreign {
+    let utility = Some(Utility { position: 0, constructors });
+    perform_in(GoPackage::AVar, name, arity, Boundary { utility, ..ignoring(&[0]) })
+}
+
+const AVAR_PUT_CALLBACK: &[Constructed] =
+    &[Constructed::CallbackParameter(3, "Left"), Constructed::CallbackParameter(3, "Right")];
+
+const AVAR_CALLBACK: &[Constructed] =
+    &[Constructed::CallbackParameter(2, "Left"), Constructed::CallbackParameter(2, "Right")];
+
+const AVAR_MAYBE: &[Constructed] = &[Constructed::Result("Just"), Constructed::Result("Nothing")];
 
 const fn constant(name: &'static str) -> Foreign {
     Foreign::Constant(GoFunction { package: GoPackage::Prim, name })
@@ -783,6 +854,8 @@ const FOREIGN_IMPORTS: &[(&str, &str, Foreign)] = &[
     ("Effect.Aff", "makeAff", Foreign::MakeAff),
     ("Effect.Aff", "_fork", Foreign::ForkFiber),
     ("Effect.Aff", "_makeFiber", Foreign::NewFiber),
+    ("Effect.Aff", "_makeSupervisedFiber", Foreign::NewSupervisedFiber),
+    ("Effect.Aff", "_killAll", perform_in(GoPackage::Aff, "KillAllDirect", 3, PLAIN)),
     ("Promise.Internal", "resolve", call(GoPackage::Promise, "Resolve", 1, PLAIN)),
     ("Promise.Internal", "reject", call(GoPackage::Promise, "Reject", 1, PLAIN)),
     ("Promise.Internal", "then_", perform_in(GoPackage::Promise, "Then", 2, PLAIN)),
@@ -812,6 +885,58 @@ const FOREIGN_IMPORTS: &[(&str, &str, Foreign)] = &[
         call(GoPackage::ForeignValue, "UnsafePrettyStringify", 2, int32_parameters(&[0])),
     ),
     ("Yoga.JSON", "_parseJSON", perform_in(GoPackage::ForeignValue, "ParseJSON", 1, PLAIN)),
+    ("Data.Argonaut.Core", "fromBoolean", argonaut("FromBoolean", 1)),
+    ("Data.Argonaut.Core", "fromNumber", argonaut("FromNumber", 1)),
+    ("Data.Argonaut.Core", "fromString", argonaut("FromString", 1)),
+    ("Data.Argonaut.Core", "fromArray", argonaut("FromArray", 1)),
+    ("Data.Argonaut.Core", "fromObject", argonaut("FromObject", 1)),
+    (
+        "Data.Argonaut.Core",
+        "jsonNull",
+        Foreign::Constant(GoFunction { package: GoPackage::Argonaut, name: "JsonNull" }),
+    ),
+    ("Data.Argonaut.Core", "stringify", argonaut("Stringify", 1)),
+    (
+        "Data.Argonaut.Core",
+        "stringifyWithIndent",
+        call(GoPackage::Argonaut, "StringifyWithIndent", 2, int32_parameters(&[0])),
+    ),
+    ("Data.Argonaut.Core", "_caseJson", argonaut("CaseJson", 7)),
+    ("Data.Argonaut.Core", "_compare", argonaut("Compare", 5)),
+    ("Data.Argonaut.Parser", "_jsonParser", argonaut("JsonParser", 3)),
+    ("Effect.AVar", "empty", perform_in(GoPackage::AVar, "Empty", 0, INSTANTIATE)),
+    ("Effect.AVar", "_newVar", perform_in(GoPackage::AVar, "NewVar", 1, PLAIN)),
+    ("Effect.AVar", "_killVar", avar("KillVar", 3, &[])),
+    ("Effect.AVar", "_putVar", avar("PutVar", 4, AVAR_PUT_CALLBACK)),
+    ("Effect.AVar", "_tryPutVar", avar("TryPutVar", 3, &[])),
+    ("Effect.AVar", "_takeVar", avar("TakeVar", 3, AVAR_CALLBACK)),
+    ("Effect.AVar", "_tryTakeVar", avar("TryTakeVar", 2, AVAR_MAYBE)),
+    ("Effect.AVar", "_readVar", avar("ReadVar", 3, AVAR_CALLBACK)),
+    ("Effect.AVar", "_tryReadVar", avar("TryReadVar", 2, AVAR_MAYBE)),
+    (
+        "Effect.AVar",
+        "_status",
+        avar(
+            "Status",
+            2,
+            &[
+                Constructed::Result("Killed"),
+                Constructed::Result("Filled"),
+                Constructed::Result("Empty"),
+            ],
+        ),
+    ),
+    ("Yoga.Om.Error", "newParallelError", call(GoPackage::YogaOm, "NewParallelError", 1, PLAIN)),
+    (
+        "Yoga.Om.Error",
+        "getParallelError",
+        call(GoPackage::YogaOm, "GetParallelError", 1, RESULT_PARAMETER),
+    ),
+    (
+        "Yoga.Om.Error",
+        "toParallelErrorImpl",
+        call(GoPackage::YogaOm, "ToParallelErrorImpl", 3, maybe(0, 1)),
+    ),
     ("Data.Nullable", "null", call(GoPackage::Nullable, "Null", 0, INSTANTIATE)),
     ("Data.Nullable", "notNull", call(GoPackage::Nullable, "NotNull", 1, PLAIN)),
     ("Data.Nullable", "nullable", call(GoPackage::Nullable, "Nullable", 3, PLAIN)),
@@ -1047,6 +1172,88 @@ const FOREIGN_IMPORTS: &[(&str, &str, Foreign)] = &[
     ("JS.BigInt", "toStringAs", direct_with("BigIntToStringAs", 2, int32_parameters(&[0]))),
     ("JS.BigInt", "asIntN", direct_with("BigIntAsIntN", 2, int32_parameters(&[0]))),
     ("JS.BigInt", "asUintN", direct_with("BigIntAsUintN", 2, int32_parameters(&[0]))),
+    ("Data.BigInt", "fromTypeLevelInt", call(GoPackage::BigInts, "FromTypeLevelInt", 1, PLAIN)),
+    (
+        "Data.BigInt",
+        "fromBaseImpl",
+        call(
+            GoPackage::BigInts,
+            "FromBaseImpl",
+            4,
+            Boundary { int32_parameters: &[2], ..maybe(0, 1) },
+        ),
+    ),
+    ("Data.BigInt", "fromInt", call(GoPackage::BigInts, "FromInt", 1, int32_parameters(&[0]))),
+    ("Data.BigInt", "fromNumberImpl", call(GoPackage::BigInts, "FromNumberImpl", 3, maybe(0, 1))),
+    ("Data.BigInt", "toNumber", call(GoPackage::BigInts, "ToNumber", 1, PLAIN)),
+    ("Data.BigInt", "pow", call(GoPackage::BigInts, "Pow", 2, PLAIN)),
+    ("Data.BigInt", "abs", call(GoPackage::BigInts, "Abs", 1, PLAIN)),
+    ("Data.BigInt", "even", call(GoPackage::BigInts, "Even", 1, PLAIN)),
+    ("Data.BigInt", "odd", call(GoPackage::BigInts, "Odd", 1, PLAIN)),
+    ("Data.BigInt", "prime", call(GoPackage::BigInts, "Prime", 1, PLAIN)),
+    ("Data.BigInt", "not", call(GoPackage::BigInts, "Not", 1, PLAIN)),
+    ("Data.BigInt", "or", call(GoPackage::BigInts, "Or", 2, PLAIN)),
+    ("Data.BigInt", "xor", call(GoPackage::BigInts, "Xor", 2, PLAIN)),
+    ("Data.BigInt", "and", call(GoPackage::BigInts, "And", 2, PLAIN)),
+    ("Data.BigInt", "shl", call(GoPackage::BigInts, "Shl", 2, PLAIN)),
+    ("Data.BigInt", "shr", call(GoPackage::BigInts, "Shr", 2, PLAIN)),
+    ("Data.BigInt", "biEquals", call(GoPackage::BigInts, "BiEquals", 2, PLAIN)),
+    ("Data.BigInt", "biCompare", call(GoPackage::BigInts, "BiCompare", 2, PLAIN)),
+    (
+        "Data.BigInt",
+        "digitsInBase",
+        call(GoPackage::BigInts, "DigitsInBase", 2, Boundary { int32_parameters: &[0], ..RECORD }),
+    ),
+    ("Data.BigInt", "toBase", call(GoPackage::BigInts, "ToBase", 2, int32_parameters(&[0]))),
+    ("Data.BigInt", "biAdd", call(GoPackage::BigInts, "BiAdd", 2, PLAIN)),
+    ("Data.BigInt", "biMul", call(GoPackage::BigInts, "BiMul", 2, PLAIN)),
+    ("Data.BigInt", "biSub", call(GoPackage::BigInts, "BiSub", 2, PLAIN)),
+    ("Data.BigInt", "biDiv", call(GoPackage::BigInts, "BiDiv", 2, PLAIN)),
+    ("Data.BigInt", "biMod", call(GoPackage::BigInts, "BiMod", 2, PLAIN)),
+    ("Effect.Now", "now", perform_in(GoPackage::Now, "Now", 0, PLAIN)),
+    ("Effect.Now", "getTimezoneOffset", perform_in(GoPackage::Now, "GetTimezoneOffset", 0, PLAIN)),
+    (
+        "Data.Date",
+        "canonicalDateImpl",
+        uncurried(
+            call(GoPackage::DateTime, "CanonicalDateImpl", 4, int32_parameters(&[1, 2, 3])),
+            &[(0, 3)],
+        ),
+    ),
+    (
+        "Data.Date",
+        "calcWeekday",
+        call(GoPackage::DateTime, "CalcWeekday", 3, int32_parameters(&[0, 1, 2])),
+    ),
+    (
+        "Data.Date",
+        "calcDiff",
+        call(GoPackage::DateTime, "CalcDiff", 6, int32_parameters(&[0, 1, 2, 3, 4, 5])),
+    ),
+    (
+        "Data.DateTime",
+        "calcDiff",
+        call(
+            GoPackage::DateTime,
+            "CalcDiffDateTime",
+            2,
+            Boundary { record_arguments: &[0, 1], ..PLAIN },
+        ),
+    ),
+    (
+        "Data.DateTime.Instant",
+        "fromDateTimeImpl",
+        call(GoPackage::DateTime, "FromDateTimeImpl", 7, int32_parameters(&[0, 1, 2, 3, 4, 5, 6])),
+    ),
+    (
+        "Data.DateTime.Instant",
+        "toDateTimeImpl",
+        uncurried(call(GoPackage::DateTime, "ToDateTimeImpl", 2, PLAIN), &[(0, 7)]),
+    ),
+    ("Test.Spec.Console", "write", perform_in(GoPackage::Spec, "Write", 1, PLAIN)),
+    ("Test.Spec.Runner", "exit", perform_in(GoPackage::Spec, "Exit", 1, int32_parameters(&[0]))),
+    ("Test.Spec.Assertions.String", "_startsWith", call(GoPackage::Spec, "StartsWith", 2, PLAIN)),
+    ("Test.Spec.Assertions.String", "_endsWith", call(GoPackage::Spec, "EndsWith", 2, PLAIN)),
     ("Effect.Synchronized", "newMutex", Foreign::MutexNew),
     ("Effect.Synchronized", "withMutex", Foreign::WithMutex),
     ("Data.Lazy", "defer", Foreign::LazyDefer),
@@ -1144,6 +1351,22 @@ const INTRINSICS: &[(&str, &str, &[&str], Foreign)] = &[
     ("Data.Ring", "negate", &["ringInt"], Foreign::Operator(Operator::IntNegate)),
     ("Data.Ring", "negate", &["ringNumber"], Foreign::Operator(Operator::NumberNegate)),
 ];
+
+/// `foreign import data` types that a go-support package declares, as the
+/// package and the name of their Go type.
+const SUPPORT_DATA: &[(&str, &str, GoPackage, &str)] = &[
+    ("Data.Argonaut.Core", "Json", GoPackage::Argonaut, "Json"),
+    ("Data.Argonaut.Core", "JNull", GoPackage::Argonaut, "JNull"),
+    ("Effect.AVar", "AVar", GoPackage::AVar, "AVar"),
+    ("Effect.Aff", "Supervisor", GoPackage::Aff, "Supervisor"),
+];
+
+pub fn support_data(module_name: &str, name: &str) -> Option<(GoPackage, &'static str)> {
+    SUPPORT_DATA
+        .iter()
+        .find(|(module, item, _, _)| *module == module_name && *item == name)
+        .map(|(_, _, package, type_name)| (*package, *type_name))
+}
 
 pub fn foreign_import(module_name: &str, name: &str) -> Option<Foreign> {
     if let Some(identity) = uncurried_conversion(module_name, name) {

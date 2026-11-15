@@ -40,8 +40,8 @@ pub enum Monotype {
     BigInt,
     Lazy(MonotypeId),
     Data(DataType),
-    /// A `foreign import data` type that the project's Go foreign package for
-    /// its module declares, as a named Go type of the same name.
+    /// A `foreign import data` type that a go-support package or the
+    /// project's Go foreign package for its module declares, as a named Go type.
     ForeignData(DataType),
     Recursive(DataType),
     Erased(Erasure),
@@ -389,6 +389,11 @@ impl Monotypes {
                 return self.convert(context, representation, expansions);
             }
             ("Data.Exists", "Exists") => Monotype::Erased(Erasure::Existential),
+            // A payload that `Data.Variant`'s `Eq`, `Ord`, `Show` and `Enum`
+            // instances pass to the label's own instance, the same erased value
+            // `VariantRep` holds.
+            ("Data.Variant.Internal", "VariantCase")
+            | ("Data.Variant.Internal", "VariantFCase") => Monotype::Erased(Erasure::VariantRow),
             ("Data.Function.Uncurried", name) if name.starts_with("Fn") => {
                 let Some((&result, parameters)) = arguments.split_last() else {
                     return Ok(Err(UnsupportedState::UnsaturatedType { name: name.to_string() }));
@@ -441,10 +446,13 @@ impl Monotypes {
                 Ok(element) => Monotype::MutableArray(element),
                 Err(error) => return Ok(Err(error)),
             },
-            ("Effect.Exception", "Error") => Monotype::Error,
+            // yoga-om's ParallelError is a JavaScript Error subclass that
+            // `parallelErrorToError` coerces to Error; go-support keeps its
+            // payload in the Error itself.
+            ("Effect.Exception", "Error") | ("Yoga.Om.Error", "ParallelError") => Monotype::Error,
             ("Data.String.Regex", "Regex") => Monotype::Regex,
             ("Effect.Synchronized", "Mutex") => Monotype::Mutex,
-            ("JS.BigInt", "BigInt") => Monotype::BigInt,
+            ("JS.BigInt", "BigInt") | ("Data.BigInt", "BigInt") => Monotype::BigInt,
             ("Data.Lazy", "Lazy") => match unary(self, context, arguments.first())? {
                 Ok(value) => Monotype::Lazy(value),
                 Err(error) => return Ok(Err(error)),
@@ -521,6 +529,23 @@ impl Monotypes {
                     }
                     return converted;
                 }
+                // A data type without constructors that the project's Go foreign
+                // package for its module declares, as for `foreign import data`
+                // (hyrule's `ObjHack`).
+                IndexedTypeItemKind::Data { constructors, .. }
+                    if constructors.is_empty()
+                        && self.foreign_modules.iter().any(|provided| *provided == module.name) =>
+                {
+                    let mut canonical = Vec::with_capacity(arguments.len());
+                    for argument in arguments {
+                        canonical.push(erase_newtypes(context, argument, expansions, &mut vec![])?);
+                    }
+                    Monotype::ForeignData(DataType {
+                        file_id,
+                        item,
+                        arguments: Arc::from(canonical),
+                    })
+                }
                 IndexedTypeItemKind::Data { constructors, .. } if constructors.is_empty() => {
                     Monotype::Erased(Erasure::EmptyData)
                 }
@@ -544,7 +569,9 @@ impl Monotypes {
                 _ if crate::foreign::is_opaque_foreign_data(&module.name, &name) => {
                     Monotype::Opaque
                 }
-                _ if self.foreign_modules.iter().any(|provided| *provided == module.name) => {
+                _ if crate::foreign::support_data(&module.name, &name).is_some()
+                    || self.foreign_modules.iter().any(|provided| *provided == module.name) =>
+                {
                     let mut canonical = Vec::with_capacity(arguments.len());
                     for argument in arguments {
                         canonical.push(erase_newtypes(context, argument, expansions, &mut vec![])?);

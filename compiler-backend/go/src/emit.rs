@@ -37,7 +37,8 @@ use crate::context::{Context, capitalise};
 use crate::erasure::Erasure;
 use crate::error::{GoError, GoResult};
 use crate::foreign::{
-    Boundary, Comparison, Foreign, ForeignPackages, GoFunction, GoPackage, Operator, Spelled,
+    Boundary, Comparison, Constructed, Foreign, ForeignPackages, GoFunction, GoPackage, Operator,
+    Spelled,
 };
 use crate::modules::{ModuleIndex, Modules};
 use crate::mono::{
@@ -1577,15 +1578,25 @@ where
         Ok(false)
     }
 
-    /// The named type a project's Go foreign package declares for one of its
-    /// module's `foreign import data` types, instantiated at the Go types of
+    /// The named type a go-support package or a project's Go foreign package
+    /// declares for one of its module's `foreign import data` types (or
+    /// constructor-less data types), instantiated at the Go types of
     /// the arguments when the type takes any.
     fn foreign_data_type(&mut self, data: &DataType) -> GoResult<GoType> {
         let module_name = self.context.module(data.file_id)?.name.clone();
-        self.imports.insert(self.foreign_packages.import_path(&module_name));
         let type_name = self.context.type_name(data.file_id, data.item)?;
-        let name =
-            format!("{}.{}", ForeignPackages::package_name(&module_name), capitalise(&type_name));
+        let support = crate::foreign::support_data(&module_name, &type_name);
+        let name = match support {
+            Some((package, support_name)) => {
+                self.imports.insert(package.path().into());
+                format!("{}.{support_name}", package.name())
+            }
+            None => {
+                self.imports.insert(self.foreign_packages.import_path(&module_name));
+                let package = ForeignPackages::package_name(&module_name);
+                format!("{package}.{}", self.foreign_type_name(data.file_id, &type_name)?)
+            }
+        };
         if data.arguments.is_empty() {
             return Ok(GoType::Named(name));
         }
@@ -1600,9 +1611,28 @@ where
                     });
                 }
             };
-            arguments.push(self.go_type(monotype)?);
+            // A project's foreign package sees its type arguments in the
+            // convention its functions take them in (an Int is a Go int).
+            let argument = match support {
+                Some(_) => self.go_type(monotype)?,
+                None => self.convention_or_native(monotype)?,
+            };
+            arguments.push(argument);
         }
         Ok(GoType::Generic { name, arguments })
+    }
+
+    /// The Go name of a type a project's foreign package declares: the
+    /// type's own name, capitalised, unless one of the module's values
+    /// capitalises to it too (hyrule's `objHack` builds an `ObjHack`), in which
+    /// case the type's name ends in `Type`.
+    fn foreign_type_name(&mut self, file_id: FileId, type_name: &str) -> GoResult<String> {
+        let name = capitalise(type_name);
+        let module = self.context.module(file_id)?;
+        let taken = module.indexed.items.iter_terms().any(|(_, term)| {
+            term.name.as_deref().is_some_and(|term_name| capitalise(term_name) == name)
+        });
+        Ok(if taken { format!("{name}Type") } else { name })
     }
 
     fn unfold(&mut self, data: &DataType) -> GoResult<MonotypeId> {
@@ -2110,6 +2140,27 @@ where
                 let record = self.fiber_record(handle, result, out)?;
                 return self.deliver(record, result, sink, out);
             }
+            Foreign::NewSupervisedFiber => {
+                let action = self.value(&arguments[1], out)?;
+                let action = self.unit_valued(action, arguments[1].monotype, out)?;
+                let new = GoFunction { package: GoPackage::Aff, name: "NewSupervisedFiber" };
+                let handle = self.temporary("fiber");
+                let supervisor = self.temporary("supervisor");
+                out.push(GoStatement::Define {
+                    names: vec![handle.clone(), supervisor.clone()],
+                    values: vec![call(self.go_function(new), vec![action])],
+                });
+                let fiber = self.record_field_monotype(result, "fiber");
+                let fiber = self.fiber_record(identifier_expression(&handle), fiber, out)?;
+                let supervised = GoExpression::Composite {
+                    type_: GoType::Named(self.record_name(result)?),
+                    fields: vec![
+                        (Some(field_name("fiber")), fiber),
+                        (Some(field_name("supervisor")), identifier_expression(&supervisor)),
+                    ],
+                };
+                return self.deliver(supervised, result, sink, out);
+            }
             Foreign::AssocArray => {
                 let array = self.value(&arguments[0], out)?;
                 let associated = self.associated_elements(result)?;
@@ -2119,7 +2170,7 @@ where
                 return self.deliver(associated, result, sink, out);
             }
             Foreign::Project { file_id, term, .. } => {
-                let thunk = self.project_call(file_id, term, arguments, out)?;
+                let thunk = self.project_call(file_id, term, arguments, result, out)?;
                 let performed = self.out_of_convention(call(thunk, vec![]), result, out)?;
                 return self.deliver(performed, result, sink, out);
             }
@@ -2239,11 +2290,15 @@ where
         }
     }
 
+    /// A call of a project's Go foreign. A foreign without arguments whose
+    /// result is one of the package's generic types is instantiated at the
+    /// result's type arguments, which nothing else would tell Go.
     fn project_call(
         &mut self,
         file_id: FileId,
         term: TermItemId,
         arguments: &[Expression],
+        result: MonotypeId,
         out: &mut Vec<GoStatement>,
     ) -> GoResult<GoExpression> {
         let module_name = self.context.module(file_id)?.name.clone();
@@ -2254,6 +2309,11 @@ where
             name: capitalise(&name),
         };
         if arguments.is_empty() {
+            if let Monotype::ForeignData(data) = self.monotypes.get(result).clone()
+                && let GoType::Generic { arguments, .. } = self.foreign_data_type(&data)?
+            {
+                return Ok(GoExpression::Instantiation { function: Box::new(function), arguments });
+            }
             return Ok(function);
         }
         let mut values = vec![];
@@ -2482,8 +2542,21 @@ where
         result: MonotypeId,
     ) -> GoResult<GoExpression> {
         let function = self.go_function(function);
+        if boundary.result_parameter {
+            let result = self.go_type(result)?;
+            return Ok(GoExpression::Instantiation {
+                function: Box::new(function),
+                arguments: vec![result],
+            });
+        }
         if !boundary.instantiate {
             return Ok(function);
+        }
+        if let Monotype::ForeignData(data) = self.monotypes.get(result).clone() {
+            let GoType::Generic { arguments, .. } = self.foreign_data_type(&data)? else {
+                unreachable!("invariant violated: an instantiated foreign data type has arguments")
+            };
+            return Ok(GoExpression::Instantiation { function: Box::new(function), arguments });
         }
         let element = match self.monotypes.get(result).clone() {
             Monotype::Object(element)
@@ -2521,6 +2594,14 @@ where
         };
         let mut values = vec![];
         for (position, argument) in arguments.iter().enumerate() {
+            if let Some(utility) = boundary.utility
+                && utility.position == position
+            {
+                for &constructed in utility.constructors {
+                    values.push(self.utility_constructor(constructed, arguments, result)?);
+                }
+                continue;
+            }
             let value = match boundary.maybe {
                 _ if let Some(destructor) = boundary.maybe_destructor
                     && destructor.position == position =>
@@ -2594,6 +2675,29 @@ where
             values.push(value);
         }
         Ok(values)
+    }
+
+    fn utility_constructor(
+        &mut self,
+        constructed: Constructed,
+        arguments: &[Expression],
+        result: MonotypeId,
+    ) -> GoResult<GoExpression> {
+        let (data, name) = match constructed {
+            Constructed::Result(name) => (result, name),
+            Constructed::CallbackParameter(position, name) => {
+                let (parameter, _) = self
+                    .monotypes
+                    .function_parts(arguments[position].monotype)
+                    .expect("invariant violated: a utility callback is a function");
+                (parameter, name)
+            }
+        };
+        let (data_type, index) = self.constructor_named(data, name)?;
+        if self.data_layout(&data_type)?.constructors[index].fields.is_empty() {
+            return self.construct(&data_type, index, vec![]);
+        }
+        self.constructor_function(data, name)
     }
 
     fn mentioned_maybe(&mut self, monotype: MonotypeId) -> GoResult<Option<MonotypeId>> {
@@ -3959,7 +4063,7 @@ where
             return self.unfoldr(foreign, arguments, out);
         }
         if let Foreign::Project { file_id, term, .. } = foreign {
-            let called = self.project_call(file_id, term, arguments, out)?;
+            let called = self.project_call(file_id, term, arguments, monotype, out)?;
             return self.out_of_convention(called, monotype, out);
         }
         if let Foreign::Operator(Operator::ArrayLength) = foreign
