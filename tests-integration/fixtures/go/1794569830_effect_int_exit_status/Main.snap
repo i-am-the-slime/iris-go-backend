@@ -4,13 +4,17 @@ source: tests-integration/src/fixtures.rs
 // main.go
 package main
 
-import "os"
+import (
+	"github.com/i-am-the-slime/purs-backend-go/go-support/exception"
+	"os"
+)
 
 func main_() int32 {
 	return 3
 }
 
 func main() {
+	defer exception.ReportUncaught()
 	exitStatus := main_()
 	os.Exit(int(exitStatus))
 }

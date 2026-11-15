@@ -112,6 +112,10 @@ where
     if !unused.is_empty() {
         declarations.retain(|declaration| declaration.name().is_none_or(|n| !unused.contains(n)));
     }
+    if emitter.entry_performs_effects() {
+        emitter.imports.insert(GoPackage::Exception.path().into());
+        report_uncaught_exceptions(&mut declarations);
+    }
     if emitter.imports.contains(GoPackage::Aff.path()) {
         await_fibers(&mut declarations);
     }
@@ -454,6 +458,20 @@ fn recursive_constants(program: &Program, monotypes: &Monotypes) -> FxHashSet<Fu
         }
     }
     constants
+}
+
+/// An exception that escapes `main` ends the program as it ends a JS one: its stack on stderr and
+/// exit status 1. Fibers awaited later report their own failures.
+fn report_uncaught_exceptions(declarations: &mut [GoDeclaration]) {
+    for declaration in declarations {
+        if let GoDeclaration::Function { name, body, .. } = declaration
+            && name == "main"
+        {
+            let report =
+                GoExpression::Qualified { package: "exception".into(), name: "ReportUncaught".into() };
+            body.insert(0, GoStatement::Defer(call(report, vec![])));
+        }
+    }
 }
 
 fn await_fibers(declarations: &mut [GoDeclaration]) {
@@ -953,6 +971,11 @@ where
             };
             self.function_names.push(name);
         }
+    }
+
+    fn entry_performs_effects(&self) -> bool {
+        let function = self.program.function(self.program.entry);
+        function.parameters.is_empty() && self.monotypes.effect_result(function.result).is_some()
     }
 
     fn main(&mut self) -> GoResult<Option<GoDeclaration>> {

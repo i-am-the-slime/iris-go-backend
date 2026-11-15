@@ -6,6 +6,7 @@ package main
 
 import (
 	"github.com/i-am-the-slime/purs-backend-go/go-support/array"
+	"github.com/i-am-the-slime/purs-backend-go/go-support/exception"
 	"os"
 )
 
@@ -70,6 +71,7 @@ func create() CreateResult {
 }
 
 func main() {
+	defer exception.ReportUncaught()
 	exitStatus := main_()
 	os.Exit(int(exitStatus))
 }

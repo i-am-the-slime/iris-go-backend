@@ -1,0 +1,30 @@
+---
+source: tests-integration/src/fixtures.rs
+---
+// main.go
+package main
+
+import "github.com/i-am-the-slime/purs-backend-go/go-support/exception"
+
+type Ref[T any] struct {
+	Value T
+}
+
+type StateValue struct {
+	State int32
+	Value int32
+}
+
+func main() {
+	defer exception.ReportUncaught()
+	ref := &Ref[int32]{Value: 0}
+	s := ref.Value
+	s_ := s + 1
+	modified := StateValue{State: s_, Value: s_}
+	ref.Value = modified.State
+	i := ref.Value
+	scrutinee := i > 0
+	if scrutinee {
+		panic(exception.NewError("boom"))
+	}
+}
