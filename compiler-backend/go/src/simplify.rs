@@ -46,9 +46,10 @@ pub fn simplify(program: Program, monotypes: &mut Monotypes, next_local: u32) ->
             }
         });
     }
+    let sizes = functions.iter().map(|function| size(&function.body)).collect();
     let mut simplifier = Simplifier {
-        sizes: functions.iter().map(|function| size(&function.body)).collect(),
-        functions: functions.iter().cloned().map(Some).collect(),
+        sizes,
+        functions: functions.into_iter().map(Some).collect(),
         recursive,
         uses,
         entry,
