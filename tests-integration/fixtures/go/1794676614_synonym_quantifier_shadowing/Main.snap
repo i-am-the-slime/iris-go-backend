@@ -80,6 +80,10 @@ const (
 	FreeCommandBind
 )
 
+func Pure(pure any) *FreeCommand {
+	return &FreeCommand{Tag: FreeCommandPure, Pure: pure}
+}
+
 type StateValueOfValue struct {
 	State int32
 	Value any
@@ -293,9 +297,7 @@ var main_ []int32 = []int32{foldFreeCommandIntInt(intoState, program, 0).Value +
 	default: // InstructionLoad
 		result = &Command{Tag: CommandPop, Pop: x.Load}
 	}
-	return &FreeCommand{Tag: FreeCommandBind, Bind0: convert(result), Bind1: func(value any) *FreeCommand {
-		return &FreeCommand{Tag: FreeCommandPure, Pure: value}
-	}}
+	return &FreeCommand{Tag: FreeCommandBind, Bind0: convert(result), Bind1: Pure}
 }, instructions), 0).Value}
 
 func foldFreeCommandIntInt(k func(*Command, int32) StateValueOfValue, program2 FreeCommandInt, state int32) StateValueOfInt {

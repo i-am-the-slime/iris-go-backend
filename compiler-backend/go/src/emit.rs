@@ -10,6 +10,7 @@ mod buffers;
 mod chunks;
 mod closures;
 mod coerce;
+mod constructors;
 mod deduplicate;
 mod fusion;
 mod groups;
@@ -259,6 +260,7 @@ where
             pending_owning_variants: vec![],
             inline_shapes: FxHashMap::default(),
             shared_nullaries: FxHashMap::default(),
+            constructor_functions: FxHashMap::default(),
             cell_types: FxHashMap::default(),
             reaching: FxHashMap::default(),
             retaining: FxHashMap::default(),
@@ -562,6 +564,8 @@ struct Emitter<'p, 'm, 'q, Q> {
     closure_sets: FxHashMap<MonotypeId, closures::ClosureSet>,
     closure_layouts: FxHashMap<MonotypeId, DataLayout>,
     converters: FxHashMap<(MonotypeId, MonotypeId), String>,
+    /// The function each constructor used as a value at a function type is.
+    constructor_functions: FxHashMap<(DataType, usize, MonotypeId), String>,
     round_trips: Vec<coerce::RoundTrip>,
     recursive_names: FxHashMap<DataType, String>,
     /// The type each recursive newtype's alias spells.
@@ -3439,7 +3443,10 @@ where
                 applied
             }
             ExpressionKind::Lambda { parameters, body } => {
-                self.lambda(expression.monotype, parameters, body)?
+                match self.constructor_as_value(expression.monotype, parameters, body)? {
+                    Some(function) => function,
+                    None => self.lambda(expression.monotype, parameters, body)?,
+                }
             }
             ExpressionKind::Closure { tag, captures } => {
                 let mut values = vec![];
