@@ -111,9 +111,7 @@ pub fn statement<W: Walk + ?Sized>(walk: &mut W, statement: &mut GoStatement) {
             walk.expression(end);
             walk.block(body);
         }
-        GoStatement::Loop(body)
-        | GoStatement::LabeledLoop { body, .. }
-        | GoStatement::Block(body) => walk.block(body),
+        GoStatement::Loop(body) | GoStatement::LabeledLoop { body, .. } => walk.block(body),
         GoStatement::Variable { value: None, .. }
         | GoStatement::Return(None)
         | GoStatement::Continue
@@ -159,6 +157,23 @@ struct Blocks<F>(F);
 impl<F: FnMut(&mut Vec<GoStatement>)> Walk for Blocks<F> {
     fn expression(&mut self, _: &mut GoExpression) {}
 
+    fn block(&mut self, body: &mut Vec<GoStatement>) {
+        (self.0)(body);
+        body.iter_mut().for_each(|statement| self.statement(statement));
+    }
+}
+
+/// [`each_block`] over a declaration's body, function literals' bodies included.
+pub fn each_block_in_declaration(
+    declaration: &mut GoDeclaration,
+    visit: impl FnMut(&mut Vec<GoStatement>),
+) {
+    self::declaration(&mut Nested(visit), declaration)
+}
+
+struct Nested<F>(F);
+
+impl<F: FnMut(&mut Vec<GoStatement>)> Walk for Nested<F> {
     fn block(&mut self, body: &mut Vec<GoStatement>) {
         (self.0)(body);
         body.iter_mut().for_each(|statement| self.statement(statement));

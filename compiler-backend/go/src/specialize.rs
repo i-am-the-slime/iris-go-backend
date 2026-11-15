@@ -111,7 +111,6 @@ enum LocalSource {
 }
 
 struct Scope {
-    file_id: FileId,
     module: Arc<ModuleData>,
     substitution: Substitution,
     givens: FxHashMap<EvidenceBinderId, Dictionary>,
@@ -146,7 +145,6 @@ enum LocalForm {
 }
 
 struct EvidenceScope<'a> {
-    file_id: FileId,
     module: &'a Arc<ModuleData>,
     substitution: &'a Substitution,
     givens: &'a FxHashMap<EvidenceBinderId, Dictionary>,
@@ -162,7 +160,6 @@ impl EvidenceScope<'_> {
 impl Scope {
     fn evidence(&self) -> EvidenceScope<'_> {
         EvidenceScope {
-            file_id: self.file_id,
             module: &self.module,
             substitution: &self.substitution,
             givens: &self.givens,
@@ -526,7 +523,6 @@ where
                 };
                 let value = (Arc::clone(&value.abstractions), Arc::clone(&value.equations));
                 let scope = Scope {
-                    file_id: *file_id,
                     module: Arc::clone(&module),
                     substitution: Substitution::default(),
                     givens: FxHashMap::default(),
@@ -540,8 +536,7 @@ where
                 (scope, value)
             }
             Definition::Member { dictionary, member } => {
-                let (file_id, module, declaration) =
-                    self.instance_declaration(dictionary.origin)?;
+                let (module, declaration) = self.instance_declaration(dictionary.origin)?;
                 let member_name = self.context.qualified_term_name(member.0, member.1)?;
                 let definition =
                     format!("{member_name} of {}", self.instance_name(dictionary.origin)?);
@@ -570,7 +565,6 @@ where
                 let (substitution, givens) =
                     self.instance_environment(&module, declaration, dictionary)?;
                 let scope = Scope {
-                    file_id,
                     module: Arc::clone(&module),
                     substitution,
                     givens,
@@ -2514,7 +2508,7 @@ where
         if let Some(foreign) = foreign::intrinsic(&member_module.name, &member_name, &instances) {
             return Ok(self.foreign(foreign, monotype));
         }
-        let (_, module, declaration) = self.instance_declaration(instance.origin)?;
+        let (module, declaration) = self.instance_declaration(instance.origin)?;
         let TermDeclarationKind::Instance(declared) = &module.checked.tree[declaration].kind else {
             return Err(self.unsupported(scope, UnsupportedState::MissingDeclaration));
         };
@@ -2967,7 +2961,7 @@ where
     fn instance_declaration(
         &mut self,
         origin: InstanceCandidateOrigin,
-    ) -> GoResult<(FileId, Arc<ModuleData>, tree::TermDeclarationId)> {
+    ) -> GoResult<(Arc<ModuleData>, tree::TermDeclarationId)> {
         let (file_id, declaration) = match origin {
             InstanceCandidateOrigin::Instance(file_id, instance) => {
                 let module = self.context.module(file_id)?;
@@ -2982,7 +2976,7 @@ where
         };
         let module = self.context.module(file_id)?;
         match declaration {
-            Some(declaration) => Ok((file_id, module, declaration)),
+            Some(declaration) => Ok((module, declaration)),
             None => Err(GoError::Unsupported {
                 definition: self.instance_name(origin)?.to_string(),
                 state: UnsupportedState::MissingDeclaration,
@@ -3128,7 +3122,7 @@ where
         subgoals: &[EvidenceVarId],
         constraint: Option<TypeId>,
     ) -> GoResult<Dictionary> {
-        let (file_id, module, declaration) = self.instance_declaration(origin)?;
+        let (module, declaration) = self.instance_declaration(origin)?;
         let signature = module.checked.tree[declaration].type_id;
         let (names, body) = self.context.types.peel_quantifiers(signature);
         let (contexts, head) = self.context.types.peel_constraints(body);
@@ -3200,7 +3194,6 @@ where
                 self.instance_environment(&module, declaration, &dictionary)?;
             let constraint = self.context.types.substitute(constraint, &substitution);
             let instance_scope = EvidenceScope {
-                file_id,
                 module: &module,
                 substitution: &substitution,
                 givens: &givens,
@@ -3217,7 +3210,7 @@ where
         parent: &Arc<InstanceDictionary>,
         superclass: checking::evidence::SuperclassId,
     ) -> GoResult<Dictionary> {
-        let (file_id, module, declaration) = self.instance_declaration(parent.origin)?;
+        let (module, declaration) = self.instance_declaration(parent.origin)?;
         let TermDeclarationKind::Instance(instance) = &module.checked.tree[declaration].kind else {
             return Err(scope.unsupported(UnsupportedState::MissingDeclaration));
         };
@@ -3229,7 +3222,6 @@ where
         let (substitution, givens) = self.instance_environment(&module, declaration, parent)?;
         let constraint = self.context.types.substitute(entry.constraint, &substitution);
         let instance_scope = EvidenceScope {
-            file_id,
             module: &module,
             substitution: &substitution,
             givens: &givens,

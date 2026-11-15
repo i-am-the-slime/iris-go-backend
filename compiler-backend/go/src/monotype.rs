@@ -148,10 +148,6 @@ impl Monotypes {
         self.function_newtypes.get(&id)?.as_ref()
     }
 
-    pub fn unit(&mut self) -> MonotypeId {
-        self.intern(Monotype::Unit)
-    }
-
     pub fn function(&mut self, argument: MonotypeId, result: MonotypeId) -> MonotypeId {
         self.intern(Monotype::Function(argument, result))
     }

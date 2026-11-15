@@ -420,8 +420,7 @@ impl<'a, C: Cells> Planner<'a, C> {
             | ExpressionKind::Closure { .. }
             | ExpressionKind::EffectPure(_)
             | ExpressionKind::EffectBind { .. }
-            | ExpressionKind::EffectEach { .. }
-            | ExpressionKind::EffectWhen { .. } => {
+            | ExpressionKind::EffectEach { .. } => {
                 for_each_child(expression, &mut |child| {
                     self.expression(child, false, &mut vec![], &mut vec![]);
                 });
@@ -934,8 +933,7 @@ impl Counter<'_> {
             | ExpressionKind::Closure { .. }
             | ExpressionKind::EffectPure(_)
             | ExpressionKind::EffectBind { .. }
-            | ExpressionKind::EffectEach { .. }
-            | ExpressionKind::EffectWhen { .. } => {
+            | ExpressionKind::EffectEach { .. } => {
                 if occurs(expression, self.target) {
                     Paths::event(Event::Shared)
                 } else if self.conflicts.iter().any(|&conflict| occurs(expression, conflict)) {

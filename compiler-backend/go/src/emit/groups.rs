@@ -420,7 +420,6 @@ fn terminates(statements: &[GoStatement]) -> bool {
         Some(GoStatement::Switch { cases, default: Some(default), .. }) => {
             cases.iter().all(|case| terminates(&case.body)) && terminates(&default.body)
         }
-        Some(GoStatement::Block(body)) => terminates(body),
         _ => false,
     }
 }

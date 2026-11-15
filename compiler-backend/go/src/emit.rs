@@ -2028,13 +2028,6 @@ where
                 });
                 self.deliver(unit_value(), result, sink, out)
             }
-            ExpressionKind::EffectWhen { condition, action } => {
-                let condition = self.value(condition, out)?;
-                let mut statements = vec![];
-                self.sink(action, Mode::Perform, Sink::Discard, &mut statements)?;
-                out.push(GoStatement::If { condition, then: statements, otherwise: vec![] });
-                self.deliver(unit_value(), result, sink, out)
-            }
             ExpressionKind::Foreign { foreign, arguments } if foreign.is_effectful() => {
                 self.perform_foreign(*foreign, arguments, result, sink, out)
             }
@@ -3589,8 +3582,7 @@ where
             }
             ExpressionKind::EffectPure(_)
             | ExpressionKind::EffectBind { .. }
-            | ExpressionKind::EffectEach { .. }
-            | ExpressionKind::EffectWhen { .. } => self.thunk(expression)?,
+            | ExpressionKind::EffectEach { .. } => self.thunk(expression)?,
         })
     }
 
@@ -4907,7 +4899,6 @@ fn is_effect_node(expression: &Expression) -> bool {
         ExpressionKind::EffectPure(_)
             | ExpressionKind::EffectBind { .. }
             | ExpressionKind::EffectEach { .. }
-            | ExpressionKind::EffectWhen { .. }
     ) || matches!(&expression.kind, ExpressionKind::Foreign { foreign, .. } if foreign.is_effectful())
         || matches!(&expression.kind, ExpressionKind::Apply { .. })
 }
@@ -4933,7 +4924,6 @@ fn breaks_to(statements: &[GoStatement], label: &str) -> bool {
         GoStatement::IfAssert { then, .. } => breaks_to(then, label),
         GoStatement::Loop(body)
         | GoStatement::LabeledLoop { body, .. }
-        | GoStatement::Block(body)
         | GoStatement::Range { body, .. }
         | GoStatement::Counting { body, .. }
         | GoStatement::CountingDown { body, .. } => breaks_to(body, label),
@@ -4997,15 +4987,9 @@ fn captures_parameters(
         ExpressionKind::EffectBind { action, body, .. } if mode == Mode::Perform => {
             captures(action, Mode::Perform) || captures(body, Mode::Perform)
         }
-        ExpressionKind::EffectEach { .. } | ExpressionKind::EffectWhen { .. }
-            if mode == Mode::Perform =>
-        {
-            uses_parameter(expression)
-        }
         ExpressionKind::EffectPure(_)
         | ExpressionKind::EffectBind { .. }
-        | ExpressionKind::EffectEach { .. }
-        | ExpressionKind::EffectWhen { .. } => uses_parameter(expression),
+        | ExpressionKind::EffectEach { .. } => uses_parameter(expression),
         ExpressionKind::Let { bindings, body } => {
             bindings.iter().any(|binding| captures(&binding.value, Mode::Value))
                 || captures(body, mode)

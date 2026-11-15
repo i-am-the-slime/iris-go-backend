@@ -212,7 +212,7 @@ impl Function<'_> {
                     scope.declare(name, None);
                     self.loop_body(then, scope, chunks);
                 }
-                GoStatement::LabeledLoop { body: inner, .. } | GoStatement::Block(inner) => {
+                GoStatement::LabeledLoop { body: inner, .. } => {
                     self.loop_body(inner, scope, chunks)
                 }
                 GoStatement::Loop(_)

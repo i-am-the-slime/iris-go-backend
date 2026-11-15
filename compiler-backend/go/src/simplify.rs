@@ -500,10 +500,6 @@ impl Simplifier<'_> {
                 element,
                 body: Box::new(self.expression(*body)),
             },
-            ExpressionKind::EffectWhen { condition, action } => ExpressionKind::EffectWhen {
-                condition: Box::new(self.expression(*condition)),
-                action: Box::new(self.expression(*action)),
-            },
         };
         Expression::new(kind, monotype)
     }
@@ -1401,7 +1397,6 @@ fn children_mut(expression: &mut Expression) -> Vec<&mut Expression> {
         }
         ExpressionKind::If { condition, then, otherwise } => vec![condition, then, otherwise],
         ExpressionKind::EffectPure(value) | ExpressionKind::Coerce(value) => vec![value],
-        ExpressionKind::EffectWhen { condition, action } => vec![condition, action],
         _ => vec![],
     }
 }
@@ -1492,9 +1487,6 @@ pub(crate) fn does_no_work(known: &impl KnownFunctions, expression: &Expression)
         | ExpressionKind::EffectPure(value)
         | ExpressionKind::EffectBind { action: value, .. }
         | ExpressionKind::EffectEach { array: value, .. } => does_no_work(known, value),
-        ExpressionKind::EffectWhen { condition, action } => {
-            does_no_work(known, condition) && does_no_work(known, action)
-        }
         ExpressionKind::Construct { arguments, .. } | ExpressionKind::Array(arguments) => {
             arguments.iter().all(|argument| does_no_work(known, argument))
         }
@@ -1660,10 +1652,6 @@ pub fn for_each_child<'e>(expression: &'e Expression, visitor: &mut impl FnMut(&
         ExpressionKind::EffectEach { array, body, .. } => {
             visitor(array);
             visitor(body);
-        }
-        ExpressionKind::EffectWhen { condition, action } => {
-            visitor(condition);
-            visitor(action);
         }
     }
 }

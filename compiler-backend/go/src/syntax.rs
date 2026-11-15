@@ -176,7 +176,6 @@ pub enum GoStatement {
         label: String,
         body: Vec<GoStatement>,
     },
-    Block(Vec<GoStatement>),
 }
 
 #[derive(Debug, Clone)]
@@ -795,11 +794,6 @@ impl Printer {
                 self.line(&format!("{label}:"));
                 self.indentation = indentation;
                 self.line("for {");
-                self.block(body);
-                self.line("}");
-            }
-            GoStatement::Block(body) => {
-                self.line("{");
                 self.block(body);
                 self.line("}");
             }
