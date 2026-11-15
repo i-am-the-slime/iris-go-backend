@@ -97,6 +97,8 @@ status=0
 if [ "$#" -eq 0 ]; then
   echo
   "$HERE/quality.sh" examples "$WORK" || status=1
+  echo
+  "$HERE/source-size.sh" || status=1
 fi
 [ "${KEEP:-0}" = 1 ] || [ "$#" -gt 0 ] || rm -rf "$WORK"
 exit "$status"
