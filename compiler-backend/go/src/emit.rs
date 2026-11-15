@@ -23,6 +23,7 @@ mod packages;
 mod ranges;
 mod reference_equality;
 mod reuse;
+mod unreferenced;
 mod views;
 
 use std::collections::BTreeSet;
@@ -130,6 +131,7 @@ where
         emitter.imports.insert(GoPackage::Alloc.path().into());
     }
     timed("blocks", || blocks::allocate_nested_cells_together(&mut declarations, &taken));
+    timed("unreferenced", || unreferenced::drop_unreferenced_definitions(&mut declarations));
     let mut homes: FxHashMap<String, ModuleIndex> = std::mem::take(&mut emitter.homes)
         .into_iter()
         .filter_map(|(name, file)| Some((name, modules.index(file)?)))
