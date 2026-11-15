@@ -1242,8 +1242,7 @@ impl<'p> Emission<'p> {
             pending.push(Variant::plain(id));
         }
         let demanded = self.facts.demanded.len();
-        let mut functions: Vec<Option<Function>> =
-            self.program.functions.iter().cloned().map(Some).collect();
+        let mut functions: Vec<Option<Function>> = (0..count).map(|_| None).collect();
         let mut materialized = FxHashSet::default();
         while let Some(variant) = pending.pop() {
             let mut function = self.program.function(variant.function).clone();
@@ -1285,7 +1284,7 @@ impl<'p> Emission<'p> {
                 function.expect("invariant violated: a planned variant was not emitted")
             })
             .collect();
-        let duplicates = self.duplicates(&functions);
+        let duplicates = self.duplicates(&mut functions);
         for function in &mut functions {
             redirect(&mut function.body, &duplicates);
         }
@@ -1297,9 +1296,11 @@ impl<'p> Emission<'p> {
         Reused { program, materialized }
     }
 
-    fn duplicates(&self, functions: &[Function]) -> FxHashMap<FunctionId, FunctionId> {
-        let mut representatives: FxHashMap<(FunctionId, String), FunctionId> = FxHashMap::default();
-        let mut duplicates = FxHashMap::default();
+    /// The variants that equal an earlier variant of the same function once
+    /// each stops calling itself. Each variant calls itself as an unnamed function while
+    /// they are compared.
+    fn duplicates(&self, functions: &mut [Function]) -> FxHashMap<FunctionId, FunctionId> {
+        let unnamed = FunctionId(u32::MAX);
         let mut variants: Vec<(Variant, FunctionId)> = self
             .identifiers
             .iter()
@@ -1307,16 +1308,28 @@ impl<'p> Emission<'p> {
             .map(|(variant, id)| (*variant, *id))
             .collect();
         variants.sort_by_key(|(_, id)| *id);
-        for (variant, id) in variants {
-            let mut function = functions[id.0 as usize].clone();
-            let mut itself = FxHashMap::default();
-            itself.insert(id, FunctionId(u32::MAX));
-            redirect(&mut function.body, &itself);
-            let shape = format!("{:?}{:?}", function.parameters, function.body);
-            let representative = *representatives.entry((variant.function, shape)).or_insert(id);
-            if representative != id {
-                duplicates.insert(id, representative);
+        for &(_, id) in &variants {
+            let itself = FxHashMap::from_iter([(id, unnamed)]);
+            redirect(&mut functions[id.0 as usize].body, &itself);
+        }
+        let mut representatives: FxHashMap<FunctionId, Vec<FunctionId>> = FxHashMap::default();
+        let mut duplicates = FxHashMap::default();
+        for &(variant, id) in &variants {
+            let same = |other: &FunctionId| {
+                let (this, other) = (&functions[id.0 as usize], &functions[other.0 as usize]);
+                this.parameters == other.parameters && this.body == other.body
+            };
+            let candidates = representatives.entry(variant.function).or_default();
+            match candidates.iter().find(|other| same(other)) {
+                Some(&representative) => {
+                    duplicates.insert(id, representative);
+                }
+                None => candidates.push(id),
             }
+        }
+        for &(_, id) in &variants {
+            let itself = FxHashMap::from_iter([(unnamed, id)]);
+            redirect(&mut functions[id.0 as usize].body, &itself);
         }
         duplicates
     }
