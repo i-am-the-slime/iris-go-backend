@@ -1120,20 +1120,18 @@ where
             return self.context.queries.intern_type(Type::Forall(binder, rest));
         }
         let tree = &scope.module.checked.tree;
-        let mut instantiations = Substitution::default();
+        let mut recorded = Substitution::default();
         let mut current = id;
         loop {
             for instantiation in tree.lookup_instantiations(current) {
-                let argument =
-                    self.context.types.substitute(instantiation.argument, &scope.substitution);
-                instantiations.insert(instantiation.name, argument);
+                recorded.insert(instantiation.name, instantiation.argument);
             }
             match tree[current].kind {
                 tree::ExpressionKind::EvidenceApplication { function, .. } => current = function,
                 _ => break,
             }
         }
-        self.context.types.close(&mut instantiations);
+        let instantiations = self.closed_instantiations(scope, recorded);
         if !names.iter().all(|name| instantiations.contains_key(name)) {
             return closed;
         }
@@ -1452,23 +1450,36 @@ where
         result_instantiations: &Substitution,
     ) -> TypeId {
         let tree = &scope.module.checked.tree;
-        let mut substitution = result_instantiations.clone();
+        let mut recorded = Substitution::default();
         let mut current = node;
         loop {
             for instantiation in tree.lookup_instantiations(current) {
-                let closed =
-                    self.context.types.substitute(instantiation.argument, &scope.substitution);
-                substitution.insert(instantiation.name, closed);
+                recorded.insert(instantiation.name, instantiation.argument);
             }
             match tree[current].kind {
                 tree::ExpressionKind::EvidenceApplication { function, .. } => current = function,
                 _ => break,
             }
         }
+        let mut substitution = result_instantiations.clone();
+        substitution.extend(self.closed_instantiations(scope, recorded));
         self.context.types.close(&mut substitution);
         let node_type = self.outer_body(tree[node].type_id, &mut vec![]);
-        let node_type = self.context.types.substitute(node_type, &scope.substitution);
-        self.context.types.substitute(node_type, &substitution)
+        let node_type = self.context.types.substitute(node_type, &substitution);
+        self.context.types.substitute(node_type, &scope.substitution)
+    }
+
+    /// The instantiations the checker recorded at one reference, closed. They
+    /// bind their names at that reference: where a synonym quantifies both the
+    /// enclosing definition and an annotation inside it (`conv :: m ~> m'` using
+    /// `identity :: List ~> List`), its quantifier is instantiated at the
+    /// annotation as the reference records, not as the enclosing scope does.
+    fn closed_instantiations(&self, scope: &Scope, mut recorded: Substitution) -> Substitution {
+        self.context.types.close(&mut recorded);
+        for argument in recorded.values_mut() {
+            *argument = self.context.types.substitute(*argument, &scope.substitution);
+        }
+        recorded
     }
 
     fn instantiated_result_monotype(
@@ -1872,11 +1883,10 @@ where
         let mut through_alias = false;
         let resolution = loop {
             let mut evidences = vec![];
+            let mut recorded = Substitution::default();
             loop {
                 for instantiation in tree.lookup_instantiations(current) {
-                    let closed =
-                        self.context.types.substitute(instantiation.argument, &scope.substitution);
-                    instantiations.insert(instantiation.name, closed);
+                    recorded.insert(instantiation.name, instantiation.argument);
                 }
                 match tree[current].kind {
                     tree::ExpressionKind::EvidenceApplication {
@@ -1890,6 +1900,7 @@ where
                     _ => break,
                 }
             }
+            instantiations.extend(self.closed_instantiations(scope, recorded));
             self.context.types.close(&mut instantiations);
             evidences.reverse();
             for (evidence, constraint) in evidences {

@@ -1,0 +1,286 @@
+---
+source: tests-integration/src/fixtures.rs
+---
+// Data/List/Types/types.go
+package types
+
+import (
+	"fixture/Data/Tuple"
+	"github.com/i-am-the-slime/purs-backend-go/go-support/alloc"
+)
+
+type ListTupleStringBoolean struct {
+	Cons0 tuple.TupleStringBoolean
+	Cons1 *ListTupleStringBoolean
+	Tag   uint8
+}
+
+const (
+	ListTupleStringBooleanNil = iota
+	ListTupleStringBooleanCons
+)
+
+var SharedListTupleStringBooleanNil = &ListTupleStringBoolean{Tag: ListTupleStringBooleanNil}
+
+type ListTupleStringString struct {
+	Cons0 tuple.TupleStringString
+	Cons1 *ListTupleStringString
+	Tag   uint8
+}
+
+const (
+	ListTupleStringStringNil = iota
+	ListTupleStringStringCons
+)
+
+var SharedListTupleStringStringNil = &ListTupleStringString{Tag: ListTupleStringStringNil}
+
+func Foldr(f func(tuple.TupleStringBoolean) func(any) any, b any) func(*ListTupleStringBoolean) any {
+	return func(x *ListTupleStringBoolean) any {
+		return FoldrGo(f, b, MainGo(SharedListTupleStringBooleanNil, x))
+	}
+}
+
+func Foldr2(f func(tuple.TupleStringString) func(any) any, b any) func(*ListTupleStringString) any {
+	return func(x *ListTupleStringString) any {
+		return FoldrGo2(f, b, MainGo2(SharedListTupleStringStringNil, x))
+	}
+}
+
+func MainGo(b *ListTupleStringBoolean, value *ListTupleStringBoolean) *ListTupleStringBoolean {
+	var listTupleStringBooleanCells alloc.Cells[ListTupleStringBoolean]
+	for {
+		switch value.Tag {
+		case ListTupleStringBooleanNil:
+			return b
+		default: // ListTupleStringBooleanCons
+			a := value.Cons0
+			as := value.Cons1
+			b, value = listTupleStringBooleanCells.New(ListTupleStringBoolean{Tag: ListTupleStringBooleanCons, Cons0: a, Cons1: b}), as
+			continue
+		}
+	}
+}
+
+func MainGo2(b *ListTupleStringString, value *ListTupleStringString) *ListTupleStringString {
+	var listTupleStringStringCells alloc.Cells[ListTupleStringString]
+	for {
+		switch value.Tag {
+		case ListTupleStringStringNil:
+			return b
+		default: // ListTupleStringStringCons
+			a := value.Cons0
+			as := value.Cons1
+			b, value = listTupleStringStringCells.New(ListTupleStringString{Tag: ListTupleStringStringCons, Cons0: a, Cons1: b}), as
+			continue
+		}
+	}
+}
+
+func FoldrGo(f func(tuple.TupleStringBoolean) func(any) any, b any, value *ListTupleStringBoolean) any {
+	for {
+		switch value.Tag {
+		case ListTupleStringBooleanNil:
+			return b
+		default: // ListTupleStringBooleanCons
+			a := value.Cons0
+			as := value.Cons1
+			b, value = f(a)(b), as
+			continue
+		}
+	}
+}
+
+func FoldrGo2(f func(tuple.TupleStringString) func(any) any, b any, value *ListTupleStringString) any {
+	for {
+		switch value.Tag {
+		case ListTupleStringStringNil:
+			return b
+		default: // ListTupleStringStringCons
+			a := value.Cons0
+			as := value.Cons1
+			b, value = f(a)(b), as
+			continue
+		}
+	}
+}
+
+func MainGoReusing(b *ListTupleStringString, value *ListTupleStringString) *ListTupleStringString {
+	for {
+		switch value.Tag {
+		case ListTupleStringStringNil:
+			return b
+		default: // ListTupleStringStringCons
+			a := value.Cons0
+			as := value.Cons1
+			*value = ListTupleStringString{Tag: ListTupleStringStringCons, Cons0: a, Cons1: b}
+			b, value = value, as
+			continue
+		}
+	}
+}
+
+func MainGoReusing2(b *ListTupleStringBoolean, value *ListTupleStringBoolean) *ListTupleStringBoolean {
+	for {
+		switch value.Tag {
+		case ListTupleStringBooleanNil:
+			return b
+		default: // ListTupleStringBooleanCons
+			a := value.Cons0
+			as := value.Cons1
+			*value = ListTupleStringBoolean{Tag: ListTupleStringBooleanCons, Cons0: a, Cons1: b}
+			b, value = value, as
+			continue
+		}
+	}
+}
+
+// Data/Show/show.go
+package show
+
+func Show(boolean bool) string {
+	if boolean {
+		return "true"
+	}
+	return "false"
+}
+
+// Data/Tuple/tuple.go
+package tuple
+
+type TupleStringBoolean struct {
+	First  string
+	Second bool
+}
+
+type TupleStringString struct {
+	First  string
+	Second string
+}
+
+type TupleTupleStringBooleanInt struct {
+	First  TupleStringBoolean
+	Second int32
+}
+
+type TupleTupleStringStringInt struct {
+	First  TupleStringString
+	Second int32
+}
+
+func SndStringBoolean(tuple TupleStringBoolean) bool {
+	return tuple.Second
+}
+
+func SndStringString(tuple TupleStringString) string {
+	return tuple.Second
+}
+
+// main.go
+package main
+
+import (
+	"fixture/Data/List/Types"
+	"fixture/Data/Show"
+	"fixture/Data/Tuple"
+	"fmt"
+	"github.com/i-am-the-slime/purs-backend-go/go-support/alloc"
+	"github.com/i-am-the-slime/purs-backend-go/go-support/array"
+	"github.com/i-am-the-slime/purs-backend-go/go-support/direct"
+	"github.com/i-am-the-slime/purs-backend-go/go-support/exception"
+)
+
+type MaybeTupleTupleStringBooleanInt struct {
+	Just tuple.TupleTupleStringBooleanInt
+	Tag  uint8
+}
+
+const (
+	MaybeTupleTupleStringBooleanIntNothing = iota
+	MaybeTupleTupleStringBooleanIntJust
+)
+
+type MaybeTupleTupleStringStringInt struct {
+	Just tuple.TupleTupleStringStringInt
+	Tag  uint8
+}
+
+const (
+	MaybeTupleTupleStringStringIntNothing = iota
+	MaybeTupleTupleStringStringIntJust
+)
+
+var main_ = initializeMain_()
+
+func initializeMain_() []string {
+	defer exception.ReportUncaught()
+	array2 := []bool{true, false}
+	mapped := make([]tuple.TupleStringBoolean, len(array2))
+	for index, boolean := range array2 {
+		mapped[index] = tuple.TupleStringBoolean{First: "label", Second: boolean}
+	}
+	xs := mapped
+	len_ := int32(len(xs))
+	array3 := direct.FromFoldable(func(f func(tuple.TupleStringBoolean) func(any) any) func(any) func(*types.ListTupleStringBoolean) any {
+		return func(b any) func(*types.ListTupleStringBoolean) any {
+			return types.Foldr(f, b)
+		}
+	}, mainGoReusing(xs, len_, 0, types.SharedListTupleStringBooleanNil))
+	mapped2 := make([]string, len(array3))
+	for index, element := range array3 {
+		mapped2[index] = show.Show(tuple.SndStringBoolean(element))
+	}
+	array4 := []string{"kept"}
+	mapped3 := make([]tuple.TupleStringString, len(array4))
+	for index, s := range array4 {
+		mapped3[index] = tuple.TupleStringString{First: "label", Second: s}
+	}
+	xs2 := mapped3
+	len_2 := int32(len(xs2))
+	array5 := direct.FromFoldable(func(f func(tuple.TupleStringString) func(any) any) func(any) func(*types.ListTupleStringString) any {
+		return func(b any) func(*types.ListTupleStringString) any {
+			return types.Foldr2(f, b)
+		}
+	}, mainGoReusing2(xs2, len_2, 0, types.SharedListTupleStringStringNil))
+	mapped4 := make([]string, len(array5))
+	for index, element := range array5 {
+		mapped4[index] = tuple.SndStringString(element)
+	}
+	return array.Append(mapped2, mapped4)
+}
+
+func mainGoReusing(xs []tuple.TupleStringBoolean, len_ int32, source int32, memo *types.ListTupleStringBoolean) *types.ListTupleStringBoolean {
+	var listTupleStringBooleanCells alloc.Cells[types.ListTupleStringBoolean]
+	for {
+		var result MaybeTupleTupleStringBooleanInt
+		if source < len_ {
+			result = MaybeTupleTupleStringBooleanInt{Tag: MaybeTupleTupleStringBooleanIntJust, Just: tuple.TupleTupleStringBooleanInt{First: xs[source], Second: source + 1}}
+		} else {
+			result = MaybeTupleTupleStringBooleanInt{Tag: MaybeTupleTupleStringBooleanIntNothing}
+		}
+		if result.Tag == MaybeTupleTupleStringBooleanIntNothing {
+			return types.MainGoReusing2(types.SharedListTupleStringBooleanNil, memo)
+		}
+		source, memo = result.Just.Second, listTupleStringBooleanCells.New(types.ListTupleStringBoolean{Tag: types.ListTupleStringBooleanCons, Cons0: result.Just.First, Cons1: memo})
+	}
+}
+
+func mainGoReusing2(xs []tuple.TupleStringString, len_ int32, source int32, memo *types.ListTupleStringString) *types.ListTupleStringString {
+	var listTupleStringStringCells alloc.Cells[types.ListTupleStringString]
+	for {
+		var result MaybeTupleTupleStringStringInt
+		if source < len_ {
+			result = MaybeTupleTupleStringStringInt{Tag: MaybeTupleTupleStringStringIntJust, Just: tuple.TupleTupleStringStringInt{First: xs[source], Second: source + 1}}
+		} else {
+			result = MaybeTupleTupleStringStringInt{Tag: MaybeTupleTupleStringStringIntNothing}
+		}
+		if result.Tag == MaybeTupleTupleStringStringIntNothing {
+			return types.MainGoReusing(types.SharedListTupleStringStringNil, memo)
+		}
+		source, memo = result.Just.Second, listTupleStringStringCells.New(types.ListTupleStringString{Tag: types.ListTupleStringStringCons, Cons0: result.Just.First, Cons1: memo})
+	}
+}
+
+func main() {
+	fmt.Println(main_)
+}
