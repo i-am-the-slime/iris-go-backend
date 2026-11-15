@@ -571,35 +571,20 @@ impl Monotypes {
                     if constructors.is_empty()
                         && self.foreign_modules.iter().any(|provided| *provided == module.name) =>
                 {
-                    let mut canonical = Vec::with_capacity(arguments.len());
-                    for argument in arguments {
-                        canonical.push(erase_newtypes(context, argument, expansions, &mut vec![])?);
-                    }
-                    Monotype::ForeignData(DataType {
-                        file_id,
-                        item,
-                        arguments: Arc::from(canonical),
-                    })
+                    let arguments = erased_newtypes(context, arguments, expansions)?;
+                    Monotype::ForeignData(DataType { file_id, item, arguments })
                 }
                 IndexedTypeItemKind::Data { constructors, .. } if constructors.is_empty() => {
                     Monotype::Erased(Erasure::EmptyData)
                 }
                 IndexedTypeItemKind::Data { .. } => {
                     let regular = self.is_regular(context, file_id, item)?;
-                    let mut canonical = Vec::with_capacity(arguments.len());
-                    for argument in arguments {
-                        if regular {
-                            canonical.push(erase_newtypes(
-                                context,
-                                argument,
-                                expansions,
-                                &mut vec![],
-                            )?);
-                        } else {
-                            canonical.push(context.types.erased(Erasure::NonRegular));
-                        }
-                    }
-                    Monotype::Data(DataType { file_id, item, arguments: Arc::from(canonical) })
+                    let arguments = if regular {
+                        erased_newtypes(context, arguments, expansions)?
+                    } else {
+                        arguments.iter().map(|_| context.types.erased(Erasure::NonRegular)).collect()
+                    };
+                    Monotype::Data(DataType { file_id, item, arguments })
                 }
                 _ if crate::foreign::is_opaque_foreign_data(&module.name, &name) => {
                     Monotype::Opaque
@@ -607,15 +592,8 @@ impl Monotypes {
                 _ if crate::foreign::support_data(&module.name, &name).is_some()
                     || self.foreign_modules.iter().any(|provided| *provided == module.name) =>
                 {
-                    let mut canonical = Vec::with_capacity(arguments.len());
-                    for argument in arguments {
-                        canonical.push(erase_newtypes(context, argument, expansions, &mut vec![])?);
-                    }
-                    Monotype::ForeignData(DataType {
-                        file_id,
-                        item,
-                        arguments: Arc::from(canonical),
-                    })
+                    let arguments = erased_newtypes(context, arguments, expansions)?;
+                    Monotype::ForeignData(DataType { file_id, item, arguments })
                 }
                 _ => {
                     let name = format!("{}.{name}", module.name);
@@ -1517,6 +1495,20 @@ where
         expanded = context.queries.intern_type(Type::Application(expanded, argument));
     }
     Ok(Some(expanded))
+}
+
+fn erased_newtypes<Q>(
+    context: &mut Context<'_, Q>,
+    arguments: impl IntoIterator<Item = TypeId>,
+    expansions: usize,
+) -> QueryResult<Arc<[TypeId]>>
+where
+    Q: checking::ExternalQueries,
+{
+    arguments
+        .into_iter()
+        .map(|argument| erase_newtypes(context, argument, expansions, &mut vec![]))
+        .collect()
 }
 
 fn open_type<Q>(context: &mut Context<'_, Q>, type_id: TypeId) -> QueryResult<Failure>

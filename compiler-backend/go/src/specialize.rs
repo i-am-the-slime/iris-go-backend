@@ -158,6 +158,25 @@ impl EvidenceScope<'_> {
 }
 
 impl Scope {
+    fn new(
+        module: &Arc<ModuleData>,
+        substitution: Substitution,
+        givens: FxHashMap<EvidenceBinderId, Dictionary>,
+        definition: String,
+    ) -> Scope {
+        Scope {
+            module: Arc::clone(module),
+            substitution,
+            givens,
+            locals: FxHashMap::default(),
+            polymorphic_locals: FxHashMap::default(),
+            local_aliases: FxHashMap::default(),
+            scheme_locals: FxHashMap::default(),
+            rank_n_body: None,
+            definition,
+        }
+    }
+
     fn evidence(&self) -> EvidenceScope<'_> {
         EvidenceScope {
             module: &self.module,
@@ -520,17 +539,8 @@ where
                     return Err(unsupported(UnsupportedState::MissingDeclaration));
                 };
                 let value = (Arc::clone(&value.abstractions), Arc::clone(&value.equations));
-                let scope = Scope {
-                    module: Arc::clone(&module),
-                    substitution: Substitution::default(),
-                    givens: FxHashMap::default(),
-                    locals: FxHashMap::default(),
-                    polymorphic_locals: FxHashMap::default(),
-                    local_aliases: FxHashMap::default(),
-                    scheme_locals: FxHashMap::default(),
-                    rank_n_body: None,
-                    definition,
-                };
+                let scope =
+                    Scope::new(&module, Substitution::default(), FxHashMap::default(), definition);
                 (scope, value)
             }
             Definition::Member { dictionary, member } => {
@@ -562,17 +572,7 @@ where
                 );
                 let (substitution, givens) =
                     self.instance_environment(&module, declaration, dictionary)?;
-                let scope = Scope {
-                    module: Arc::clone(&module),
-                    substitution,
-                    givens,
-                    locals: FxHashMap::default(),
-                    polymorphic_locals: FxHashMap::default(),
-                    local_aliases: FxHashMap::default(),
-                    scheme_locals: FxHashMap::default(),
-                    rank_n_body: None,
-                    definition,
-                };
+                let scope = Scope::new(&module, substitution, givens, definition);
                 (scope, value)
             }
         };

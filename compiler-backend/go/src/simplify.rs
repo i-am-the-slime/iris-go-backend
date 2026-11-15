@@ -1112,30 +1112,7 @@ impl Simplifier<'_> {
         pattern: &mut Pattern,
         renaming: &mut FxHashMap<LocalId, LocalId>,
     ) {
-        match &mut pattern.kind {
-            PatternKind::Variable(local) => *local = self.rename_binder(local, renaming),
-            PatternKind::Named { local, pattern } => {
-                *local = self.rename_binder(local, renaming);
-                self.rename_pattern(pattern, renaming);
-            }
-            PatternKind::Array(patterns) => {
-                for pattern in patterns {
-                    self.rename_pattern(pattern, renaming);
-                }
-            }
-            PatternKind::Record(fields) => {
-                for (_, field) in fields {
-                    self.rename_pattern(field, renaming);
-                }
-            }
-            PatternKind::Constructor { arguments: patterns, .. }
-            | PatternKind::Closure { captures: patterns, .. } => {
-                for pattern in patterns {
-                    self.rename_pattern(pattern, renaming);
-                }
-            }
-            PatternKind::Wildcard | PatternKind::Literal(_) => {}
-        }
+        pattern.for_each_local_mut(&mut |local| *local = self.rename_binder(local, renaming));
     }
 }
 

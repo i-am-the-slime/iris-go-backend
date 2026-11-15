@@ -12,7 +12,7 @@ use rustc_hash::{FxHashMap, FxHasher};
 use crate::modules::Modules;
 use crate::mono::{
     Expression, ExpressionKind, Function, FunctionId, Guard, Guarded, Local, LocalId, Pattern,
-    PatternKind, Program,
+    Program,
 };
 use crate::monotype::MonotypeId;
 use crate::simplify::{for_each_child_mut, prune_unreachable, visit};
@@ -197,24 +197,7 @@ fn canonical_expression(
 }
 
 fn canonical_pattern(pattern: &mut Pattern, numbering: &mut FxHashMap<LocalId, LocalId>) {
-    match &mut pattern.kind {
-        PatternKind::Wildcard | PatternKind::Literal(_) => {}
-        PatternKind::Variable(local) => canonical_local(local, numbering),
-        PatternKind::Named { local, pattern } => {
-            canonical_local(local, numbering);
-            canonical_pattern(pattern, numbering);
-        }
-        PatternKind::Array(elements) => {
-            elements.iter_mut().for_each(|element| canonical_pattern(element, numbering))
-        }
-        PatternKind::Record(fields) => {
-            fields.iter_mut().for_each(|(_, field)| canonical_pattern(field, numbering))
-        }
-        PatternKind::Constructor { arguments, .. }
-        | PatternKind::Closure { captures: arguments, .. } => {
-            arguments.iter_mut().for_each(|argument| canonical_pattern(argument, numbering))
-        }
-    }
+    pattern.for_each_local_mut(&mut |local| canonical_local(local, numbering));
 }
 
 fn redirect(expression: &mut Expression, redirections: &FxHashMap<FunctionId, FunctionId>) {

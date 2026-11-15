@@ -9,7 +9,6 @@ use super::{INLINE_SIZE, Simplifier, alternatives_size, column_outcomes, local_e
 use crate::foreign::{Comparison, Foreign, Operator};
 use crate::mono::{
     Alternative, Binding, Expression, ExpressionKind, Guarded, Literal, Local, LocalId, Pattern,
-    PatternKind,
 };
 use crate::monotype::{Monotype, MonotypeId, Monotypes};
 
@@ -275,29 +274,9 @@ fn constructor(expression: &Expression) -> Option<usize> {
 
 /// The variables that patterns bind, in order.
 fn binders(patterns: &[Pattern]) -> Vec<Local> {
-    fn collect(pattern: &Pattern, binders: &mut Vec<Local>) {
-        match &pattern.kind {
-            PatternKind::Variable(local) => binders.push(local.clone()),
-            PatternKind::Named { local, pattern } => {
-                binders.push(local.clone());
-                collect(pattern, binders);
-            }
-            PatternKind::Array(elements) => {
-                elements.iter().for_each(|element| collect(element, binders))
-            }
-            PatternKind::Record(fields) => {
-                fields.iter().for_each(|(_, field)| collect(field, binders))
-            }
-            PatternKind::Constructor { arguments, .. } => {
-                arguments.iter().for_each(|argument| collect(argument, binders))
-            }
-            PatternKind::Closure { captures, .. } => {
-                captures.iter().for_each(|capture| collect(capture, binders))
-            }
-            PatternKind::Wildcard | PatternKind::Literal(_) => {}
-        }
-    }
     let mut collected = vec![];
-    patterns.iter().for_each(|pattern| collect(pattern, &mut collected));
+    for pattern in patterns {
+        pattern.for_each_local(&mut |local| collected.push(local.clone()));
+    }
     collected
 }

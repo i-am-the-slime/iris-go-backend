@@ -47,6 +47,7 @@ use crate::mono::{
     Guard, Guarded, Local, LocalId, Pattern, PatternKind, Program,
 };
 use crate::monotype::{DataType, Failure, Monotype, MonotypeId, Monotypes};
+use crate::lift::collect_binders;
 use crate::naming::{capitalise, lower_first, numbered};
 use crate::simplify::{for_each_child, for_each_child_mut};
 use crate::syntax::{GoDeclaration, GoExpression, GoType};
@@ -663,22 +664,7 @@ where
     }
 
     fn bind_pattern(&mut self, pattern: &Pattern) {
-        match &pattern.kind {
-            PatternKind::Variable(local) => self.bind(local),
-            PatternKind::Named { local, pattern } => {
-                self.bind(local);
-                self.bind_pattern(pattern);
-            }
-            PatternKind::Array(elements)
-            | PatternKind::Constructor { arguments: elements, .. }
-            | PatternKind::Closure { captures: elements, .. } => {
-                elements.iter().for_each(|element| self.bind_pattern(element))
-            }
-            PatternKind::Record(fields) => {
-                fields.iter().for_each(|(_, field)| self.bind_pattern(field))
-            }
-            PatternKind::Wildcard | PatternKind::Literal(_) => {}
-        }
+        pattern.for_each_local(&mut |local| self.bind(local));
     }
 
     fn create(&mut self, monotype: MonotypeId, creation: Creation, parameters: usize) {
@@ -1171,64 +1157,6 @@ fn rename(expression: &mut Expression, renamed: &FxHashMap<LocalId, Expression>)
         return;
     }
     for_each_child_mut(expression, &mut |child| rename(child, renamed));
-}
-
-/// Every local an expression binds.
-fn collect_binders(expression: &Expression, binders: &mut FxHashMap<LocalId, Local>) {
-    crate::simplify::visit(expression, &mut |node| match &node.kind {
-        ExpressionKind::Lambda { parameters, .. } => {
-            for parameter in parameters {
-                binders.insert(parameter.id, parameter.clone());
-            }
-        }
-        ExpressionKind::Let { bindings, .. } => {
-            for Binding { local, .. } in bindings {
-                binders.insert(local.id, local.clone());
-            }
-        }
-        ExpressionKind::Case { alternatives, .. } => {
-            for alternative in alternatives {
-                for pattern in &alternative.patterns {
-                    pattern_binders(pattern, binders);
-                }
-                if let Guarded::Guards(branches) = &alternative.body {
-                    for branch in branches {
-                        for guard in &branch.guards {
-                            if let Guard::Pattern { pattern, .. } = guard {
-                                pattern_binders(pattern, binders);
-                            }
-                        }
-                    }
-                }
-            }
-        }
-        ExpressionKind::EffectBind { local, .. }
-        | ExpressionKind::EffectEach { element: local, .. } => {
-            binders.insert(local.id, local.clone());
-        }
-        _ => {}
-    });
-}
-
-fn pattern_binders(pattern: &Pattern, binders: &mut FxHashMap<LocalId, Local>) {
-    match &pattern.kind {
-        PatternKind::Variable(local) => {
-            binders.insert(local.id, local.clone());
-        }
-        PatternKind::Named { local, pattern } => {
-            binders.insert(local.id, local.clone());
-            pattern_binders(pattern, binders);
-        }
-        PatternKind::Array(elements)
-        | PatternKind::Constructor { arguments: elements, .. }
-        | PatternKind::Closure { captures: elements, .. } => {
-            elements.iter().for_each(|element| pattern_binders(element, binders))
-        }
-        PatternKind::Record(fields) => {
-            fields.iter().for_each(|(_, field)| pattern_binders(field, binders))
-        }
-        PatternKind::Wildcard | PatternKind::Literal(_) => {}
-    }
 }
 
 fn report(uses: &Uses, closed: &[MonotypeId], monotypes: &Monotypes) {

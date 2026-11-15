@@ -165,55 +165,21 @@ impl Facts {
 
 fn highest_local(expression: &Expression) -> u32 {
     let mut highest = 0;
+    let mut bind = |local: &Local| highest = highest.max(local.id.0);
     match &expression.kind {
         ExpressionKind::Local(id) => highest = id.0,
-        ExpressionKind::Lambda { parameters, .. } => {
-            for parameter in parameters {
-                highest = highest.max(parameter.id.0);
-            }
-        }
+        ExpressionKind::Lambda { parameters, .. } => parameters.iter().for_each(&mut bind),
         ExpressionKind::Let { bindings, .. } => {
-            for binding in bindings {
-                highest = highest.max(binding.local.id.0);
-            }
+            bindings.iter().for_each(|binding| bind(&binding.local))
         }
-        ExpressionKind::EffectBind { local, .. } => highest = local.id.0,
-        ExpressionKind::EffectEach { element, .. } => highest = element.id.0,
+        ExpressionKind::EffectBind { local, .. }
+        | ExpressionKind::EffectEach { element: local, .. } => bind(local),
         ExpressionKind::Case { alternatives, .. } => {
-            for alternative in alternatives {
-                for pattern in &alternative.patterns {
-                    highest = highest.max(highest_pattern_local(pattern));
-                }
-                if let Guarded::Guards(branches) = &alternative.body {
-                    for guard in branches.iter().flat_map(|branch| &branch.guards) {
-                        if let Guard::Pattern { pattern, .. } = guard {
-                            highest = highest.max(highest_pattern_local(pattern));
-                        }
-                    }
-                }
-            }
+            alternatives.iter().for_each(|alternative| alternative.for_each_local(&mut bind))
         }
         _ => {}
     }
     highest
-}
-
-fn highest_pattern_local(pattern: &Pattern) -> u32 {
-    match &pattern.kind {
-        PatternKind::Wildcard | PatternKind::Literal(_) => 0,
-        PatternKind::Variable(local) => local.id.0,
-        PatternKind::Named { local, pattern } => local.id.0.max(highest_pattern_local(pattern)),
-        PatternKind::Array(elements) => {
-            elements.iter().map(highest_pattern_local).max().unwrap_or(0)
-        }
-        PatternKind::Record(fields) => {
-            fields.iter().map(|(_, pattern)| highest_pattern_local(pattern)).max().unwrap_or(0)
-        }
-        PatternKind::Constructor { arguments, .. }
-        | PatternKind::Closure { captures: arguments, .. } => {
-            arguments.iter().map(highest_pattern_local).max().unwrap_or(0)
-        }
-    }
 }
 
 #[derive(Clone)]
@@ -706,7 +672,7 @@ impl<'a, C: Cells> Planner<'a, C> {
             let index = self.alternatives.len();
             let mut bound = vec![];
             for pattern in &alternative.patterns {
-                pattern_locals(pattern, &mut bound);
+                pattern.for_each_local(&mut |local| bound.push(local.id));
             }
             self.alternatives.push(bound);
             let mut alternative_stock = stock.clone();
@@ -1175,27 +1141,6 @@ fn guarded_expressions(guarded: &Guarded) -> Vec<&Expression> {
 
 fn guarded_uses(guarded: &Guarded, local: LocalId) -> usize {
     guarded_expressions(guarded).into_iter().filter(|expression| uses_local(expression, local)).count()
-}
-
-fn pattern_locals(pattern: &Pattern, locals: &mut Vec<LocalId>) {
-    match &pattern.kind {
-        PatternKind::Wildcard | PatternKind::Literal(_) => {}
-        PatternKind::Variable(local) => locals.push(local.id),
-        PatternKind::Named { local, pattern } => {
-            locals.push(local.id);
-            pattern_locals(pattern, locals);
-        }
-        PatternKind::Array(elements) => {
-            elements.iter().for_each(|element| pattern_locals(element, locals))
-        }
-        PatternKind::Record(fields) => {
-            fields.iter().for_each(|(_, field)| pattern_locals(field, locals))
-        }
-        PatternKind::Constructor { arguments, .. }
-        | PatternKind::Closure { captures: arguments, .. } => {
-            arguments.iter().for_each(|argument| pattern_locals(argument, locals))
-        }
-    }
 }
 
 struct Emission<'p> {
