@@ -229,7 +229,14 @@ impl Walk for Function<'_> {
     fn block(&mut self, body: &mut Vec<GoStatement>) {
         let mut at = 0;
         while at < body.len() {
-            let changed = self.changed(&mut body[at]);
+            let changed = match &body[at] {
+                GoStatement::Loop(_)
+                | GoStatement::LabeledLoop { .. }
+                | GoStatement::Range { .. }
+                | GoStatement::Counting { .. }
+                | GoStatement::CountingDown { .. } => self.changed(&mut body[at]),
+                _ => FxHashSet::default(),
+            };
             let lengths = match &mut body[at] {
                 GoStatement::Loop(looped) | GoStatement::LabeledLoop { body: looped, .. } => {
                     let mut hoisted = self.views(looped, &changed);
