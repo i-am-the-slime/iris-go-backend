@@ -270,6 +270,10 @@ where
     let mut stuck = Stuck::default();
     let mut skolem = Skolem::default();
     let mut residuals = Vec::new();
+    // Constraints held back because a given may match them once unification variables are
+    // solved, and the ones released to instance search after the work ran out without that.
+    let mut waiting_for_given = Vec::new();
+    let mut instances_allowed = FxHashSet::default();
 
     'work: loop {
         let mut has_unification = false;
@@ -280,10 +284,18 @@ where
         if has_unification {
             wake_constraints(&mut work, &mut stuck, state);
             work.extend_constraints(mem::take(&mut skolem));
+            work.extend_constraints(mem::take(&mut waiting_for_given));
         }
 
         let Some(constraint) = work.pop_next(state, context)? else {
-            break 'work;
+            if waiting_for_given.is_empty() {
+                break 'work;
+            }
+            for constraint in mem::take(&mut waiting_for_given) {
+                instances_allowed.insert(constraint.evidence.wanted);
+                work.extend_constraints([constraint]);
+            }
+            continue 'work;
         };
 
         if ignore_unknown_wanted(state, context, &mut work, &constraint)? {
@@ -309,6 +321,14 @@ where
                 matching::MatchInstance::Apart => (),
             }
         }
+
+        // A given that unification variables keep from matching yet wins over declared
+        // instances while other work may still solve them; only when nothing else is left to
+        // do does instance search get its turn (purs solves after unification is complete).
+        // Constraints whose functional dependencies determine the unknown arguments are left
+        // to instance search: there the instance improves the wanted, as `TypeEquals a a` does.
+        let given_may_match = !blocked.is_empty()
+            && !is_improving_constraint(state, context, constraint.key.wanted)?;
 
         let given = constraint.key.given.iter().copied();
         match compiler::match_compiler_instance(state, context, constraint.key.wanted, given)? {
@@ -355,6 +375,11 @@ where
             Some(compiler::CompilerMatch::Apart) | None => (),
         }
 
+        if given_may_match && !instances_allowed.contains(&constraint.evidence.wanted) {
+            waiting_for_given.push(constraint);
+            continue 'work;
+        }
+
         let search = instances::collect_instance_chains(state, context, constraint.key.wanted)?;
         'chain: for chain in search.chains() {
             for &candidate in chain {
@@ -388,18 +413,14 @@ where
         // due to unsolved unification variables; we will wait for them to be solved.
         blocked.extend(search.blocking);
 
-        if blocked.is_empty() {
-            if blocked_on_skolem {
-                skolem.push(constraint);
-            } else {
-                residuals.push(constraint);
-            }
-        } else {
-            for id in blocked {
-                let constraint = ConstraintInScope::clone(&constraint);
-                stuck.entry(id).or_default().push(constraint);
-            }
-        }
+        defer_constraint(
+            &mut stuck,
+            &mut skolem,
+            &mut residuals,
+            constraint,
+            blocked,
+            blocked_on_skolem,
+        );
     }
 
     let mut unique_residuals = ConstraintSet::default();
@@ -430,6 +451,30 @@ where
     }
 
     Ok(reported_residuals)
+}
+
+/// Parks a constraint that nothing solved: on the unification variables it waits for, on the
+/// skolem list when only rigid variables blocked it, and otherwise as a residual.
+fn defer_constraint(
+    stuck: &mut Stuck,
+    skolem: &mut Skolem,
+    residuals: &mut Vec<ConstraintInScope>,
+    constraint: ConstraintInScope,
+    blocked: FxHashSet<u32>,
+    blocked_on_skolem: bool,
+) {
+    if blocked.is_empty() {
+        if blocked_on_skolem {
+            skolem.push(constraint);
+        } else {
+            residuals.push(constraint);
+        }
+    } else {
+        for id in blocked {
+            let constraint = ConstraintInScope::clone(&constraint);
+            stuck.entry(id).or_default().push(constraint);
+        }
+    }
 }
 
 #[derive(Clone)]

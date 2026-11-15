@@ -1,0 +1,59 @@
+---
+source: tests-integration/src/fixtures.rs
+---
+interface T :: (Prim.Type -> Prim.Type) -> Prim.Constraint
+interface T f where
+
+data V :: forall k0. Prim.Row (Prim.Type -> Prim.Type) -> k0 -> Prim.Type
+data V @r @a
+  | V :: Main.V r a
+
+interface TRL ::
+  Prim.RowList.RowList (Prim.Type -> Prim.Type) ->
+  Prim.Row (Prim.Type -> Prim.Type) ->
+  Prim.Constraint
+interface TRL rl r where
+
+interface Cases :: Prim.RowList.RowList Prim.Type -> Prim.Row (Prim.Type -> Prim.Type) -> Prim.Constraint
+interface Cases rl ri where
+
+interface Handler :: forall k0. k0 -> (Prim.Type -> Prim.Type) -> Prim.Constraint
+interface Handler k f where
+
+data P :: Prim.Row (Prim.Type -> Prim.Type) -> Prim.Type
+data P @r
+  | P :: Main.P r
+
+data Id :: Prim.Type -> Prim.Type
+data Id @a
+  | Id :: a -> Main.Id a
+
+dictionary tVType ::
+  forall r rl.
+  { rowToListDict :: Prim.RowList.RowToList @(Prim.Type -> Prim.Type) r rl } =>
+  { tRLDict :: Main.TRL rl r } =>
+  Main.T (Main.V @Prim.Type r)
+
+dictionary casesNilTypeRow :: Main.Cases (Prim.RowList.Nil @Prim.Type) ()
+
+dictionary handlerTypeFunction :: forall f a b. Main.Handler @Prim.Type (f a -> f b) f
+
+dictionary casesConsType ::
+  forall sym f ri' ri rl k.
+  { consDict :: Prim.Row.Cons @(Prim.Type -> Prim.Type) sym f ri' ri } =>
+  { casesDict :: Main.Cases rl ri' } =>
+  { handlerDict :: Main.Handler @Prim.Type k f } =>
+  Main.Cases (Prim.RowList.Cons @Prim.Type sym k rl) ri
+
+elim :: forall cases casesrl affected unaffected all.
+  Prim.RowList.RowToList @Prim.Type cases casesrl =>
+  Main.Cases casesrl affected =>
+  Prim.Row.Union @(Prim.Type -> Prim.Type) affected unaffected all =>
+  Main.T (Main.V @Prim.Type unaffected) =>
+  {| cases } -> Main.P all -> Prim.Int
+elim = \{rowToListDict} -> \{casesDict} -> \{unionDict} -> \{tDict} -> \_ -> \_ -> 0
+
+test :: forall r. Main.T (Main.V @Prim.Type r) => Main.P ( x :: Main.Id | r ) -> Prim.Int
+test = \{tDict} ->
+  elim {trivial} {casesConsType {trivial} {casesNilTypeRow} {handlerTypeFunction}} {trivial} {tDict}
+    { x: \(Id n) -> Id n }

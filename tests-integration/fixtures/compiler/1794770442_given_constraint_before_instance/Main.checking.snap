@@ -1,0 +1,85 @@
+---
+source: tests-integration/src/fixtures.rs
+---
+Terms
+V ::
+  forall t0 (@r :: Prim.Row (Prim.Type -> Prim.Type)) (@a :: t0).
+    Main.V @t0 (r :: Prim.Row (Prim.Type -> Prim.Type)) (a :: t0)
+P ::
+  forall (@r :: Prim.Row (Prim.Type -> Prim.Type)). Main.P (r :: Prim.Row (Prim.Type -> Prim.Type))
+Id :: forall @a. a -> Main.Id a
+elim ::
+  forall (cases :: Prim.Row Prim.Type) (casesrl :: Prim.RowList.RowList Prim.Type)
+    (affected :: Prim.Row (Prim.Type -> Prim.Type))
+    (unaffected :: Prim.Row (Prim.Type -> Prim.Type)) (all :: Prim.Row (Prim.Type -> Prim.Type)).
+    Prim.RowList.RowToList @Prim.Type
+      (cases :: Prim.Row Prim.Type)
+      (casesrl :: Prim.RowList.RowList Prim.Type) =>
+    Main.Cases
+      (casesrl :: Prim.RowList.RowList Prim.Type)
+      (affected :: Prim.Row (Prim.Type -> Prim.Type)) =>
+    Prim.Row.Union @(Prim.Type -> Prim.Type)
+      (affected :: Prim.Row (Prim.Type -> Prim.Type))
+      (unaffected :: Prim.Row (Prim.Type -> Prim.Type))
+      (all :: Prim.Row (Prim.Type -> Prim.Type)) =>
+    Main.T (Main.V @Prim.Type (unaffected :: Prim.Row (Prim.Type -> Prim.Type))) =>
+    {| (cases :: Prim.Row Prim.Type) } ->
+    Main.P (all :: Prim.Row (Prim.Type -> Prim.Type)) ->
+    Prim.Int
+test ::
+  forall (r :: Prim.Row (Prim.Type -> Prim.Type)).
+    Main.T (Main.V @Prim.Type (r :: Prim.Row (Prim.Type -> Prim.Type))) =>
+    Main.P ( x :: Main.Id | (r :: Prim.Row (Prim.Type -> Prim.Type)) ) -> Prim.Int
+
+Types
+T :: (Prim.Type -> Prim.Type) -> Prim.Constraint
+V :: forall t0. Prim.Row (Prim.Type -> Prim.Type) -> t0 -> Prim.Type
+TRL ::
+  Prim.RowList.RowList (Prim.Type -> Prim.Type) ->
+  Prim.Row (Prim.Type -> Prim.Type) ->
+  Prim.Constraint
+Cases :: Prim.RowList.RowList Prim.Type -> Prim.Row (Prim.Type -> Prim.Type) -> Prim.Constraint
+Handler :: forall t0. t0 -> (Prim.Type -> Prim.Type) -> Prim.Constraint
+P :: Prim.Row (Prim.Type -> Prim.Type) -> Prim.Type
+Id :: Prim.Type -> Prim.Type
+
+Classes
+class forall (f :: Prim.Type -> Prim.Type). Main.T (f :: Prim.Type -> Prim.Type)
+class forall (rl :: Prim.RowList.RowList (Prim.Type -> Prim.Type)) (r :: Prim.Row (Prim.Type -> Prim.Type)). Main.TRL
+  (rl :: Prim.RowList.RowList (Prim.Type -> Prim.Type))
+  (r :: Prim.Row (Prim.Type -> Prim.Type))
+class forall (rl :: Prim.RowList.RowList Prim.Type) (ri :: Prim.Row (Prim.Type -> Prim.Type)). Main.Cases (rl :: Prim.RowList.RowList Prim.Type) (ri :: Prim.Row (Prim.Type -> Prim.Type))
+class forall (t0 :: Prim.Type) (k :: t0) (f :: Prim.Type -> Prim.Type). Main.Handler @t0 (k :: t0) (f :: Prim.Type -> Prim.Type)
+
+Instances
+instance forall (r :: Prim.Row (Prim.Type -> Prim.Type))
+  (rl :: Prim.RowList.RowList (Prim.Type -> Prim.Type)).
+  Prim.RowList.RowToList @(Prim.Type -> Prim.Type)
+    (r :: Prim.Row (Prim.Type -> Prim.Type))
+    (rl :: Prim.RowList.RowList (Prim.Type -> Prim.Type)) =>
+  Main.TRL
+    (rl :: Prim.RowList.RowList (Prim.Type -> Prim.Type))
+    (r :: Prim.Row (Prim.Type -> Prim.Type)) =>
+  Main.T (Main.V @Prim.Type (r :: Prim.Row (Prim.Type -> Prim.Type)))
+instance Main.Cases (Prim.RowList.Nil @Prim.Type) ()
+instance forall (f :: Prim.Type -> Prim.Type) a b.
+  Main.Handler @Prim.Type
+    ((f :: Prim.Type -> Prim.Type) a -> (f :: Prim.Type -> Prim.Type) b)
+    (f :: Prim.Type -> Prim.Type)
+instance forall (sym :: Prim.Symbol) (f :: Prim.Type -> Prim.Type) (ri' :: Prim.Row (Prim.Type -> Prim.Type))
+  (ri :: Prim.Row (Prim.Type -> Prim.Type)) (rl :: Prim.RowList.RowList Prim.Type) k.
+  Prim.Row.Cons @(Prim.Type -> Prim.Type)
+    (sym :: Prim.Symbol)
+    (f :: Prim.Type -> Prim.Type)
+    (ri' :: Prim.Row (Prim.Type -> Prim.Type))
+    (ri :: Prim.Row (Prim.Type -> Prim.Type)) =>
+  Main.Cases (rl :: Prim.RowList.RowList Prim.Type) (ri' :: Prim.Row (Prim.Type -> Prim.Type)) =>
+  Main.Handler @Prim.Type k (f :: Prim.Type -> Prim.Type) =>
+  Main.Cases
+    (Prim.RowList.Cons @Prim.Type (sym :: Prim.Symbol) k (rl :: Prim.RowList.RowList Prim.Type))
+    (ri :: Prim.Row (Prim.Type -> Prim.Type))
+
+Roles
+V = [Phantom, Phantom]
+P = [Phantom]
+Id = [Representational]

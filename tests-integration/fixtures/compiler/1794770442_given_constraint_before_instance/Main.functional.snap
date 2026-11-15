@@ -1,0 +1,25 @@
+---
+source: tests-integration/src/fixtures.rs
+---
+@export constructor V/0
+
+@export instance tVType = \rowToListRRlDict%0 tRLRlRDict%1 -> {  }
+
+@export instance casesNilTypeRow = {  }
+
+@export instance handlerTypeFunction = {  }
+
+@export instance casesConsType = \consSymFRi'RiDict%2 casesRlRi'Dict%3 handlerKFDict%4 -> {  }
+
+@export constructor P/0
+
+@export constructor Id/1
+
+@export elim = \rowToListCasesCasesrlDict%7 casesCasesrlAffectedDict%8 unionAffectedUnaffectedAllDict%9 tVUnaffectedDict%10 ->
+  \$record%5@(_) $p%6@(_) -> 0
+
+@export test = \tVRDict%11 ->
+  elim <trivial evidence> (casesConsType <trivial evidence> casesNilTypeRow handlerTypeFunction)
+    <trivial evidence>
+    tVRDict%11
+    { x: \$id%13@(Id n%12) -> { tag: "Id", _1: n%12 } }
