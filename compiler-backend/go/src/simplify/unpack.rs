@@ -40,10 +40,10 @@ impl Simplifier<'_> {
             ExpressionKind::Record(values) => {
                 let mut labels = vec![];
                 for (label, value) in values {
-                    let name = if local.name == crate::value_names::RECORD_VALUE {
+                    let name = if local.name == crate::naming::RECORD_VALUE {
                         label.clone()
                     } else {
-                        format_smolstr!("{}{}", local.name, capitalised(&label))
+                        format_smolstr!("{}{}", local.name, crate::naming::capitalise(&label))
                     };
                     fields.push(self.field_binding(name, value));
                     labels.push(label);
@@ -146,12 +146,4 @@ fn take_apart(expression: &mut Expression, id: LocalId, shape: &Shape, fields: &
         _ => {}
     }
     for_each_child_mut(expression, &mut |child| take_apart(child, id, shape, fields));
-}
-
-fn capitalised(label: &str) -> String {
-    let mut characters = label.chars();
-    match characters.next() {
-        Some(first) => first.to_uppercase().chain(characters).collect(),
-        None => String::new(),
-    }
 }

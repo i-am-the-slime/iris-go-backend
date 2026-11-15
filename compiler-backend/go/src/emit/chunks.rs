@@ -26,6 +26,7 @@
 
 use rustc_hash::{FxHashMap, FxHashSet};
 
+use crate::naming::{lower_first, numbered};
 use crate::syntax::{GoDeclaration, GoExpression, GoStatement, GoType, Name};
 
 use crate::walk::{self, Walk};
@@ -277,12 +278,7 @@ impl Function<'_> {
             return name.clone();
         }
         let base = format!("{}Cells", lower_first(type_name(type_)));
-        let mut name = base.clone();
-        let mut counter = 2;
-        while self.names.contains(&name) || (self.taken)(&name) {
-            name = format!("{base}{counter}");
-            counter += 1;
-        }
+        let name = numbered(&base, |name| self.names.contains(name) || (self.taken)(name));
         self.names.insert(name.clone());
         chunks.push((type_.clone(), name.clone()));
         name
@@ -293,13 +289,5 @@ fn type_name(type_: &GoType) -> &str {
     match type_ {
         GoType::Named(name) | GoType::Generic { name, .. } => name,
         _ => unreachable!("invariant violated: only named types are chunked"),
-    }
-}
-
-pub(super) fn lower_first(name: &str) -> String {
-    let mut characters = name.chars();
-    match characters.next() {
-        Some(first) => first.to_lowercase().chain(characters).collect(),
-        None => String::new(),
     }
 }

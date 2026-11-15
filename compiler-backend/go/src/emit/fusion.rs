@@ -31,6 +31,7 @@ use crate::error::GoResult;
 use crate::foreign::{Boundary, Foreign, Iteration};
 use crate::mono::{Binding, Expression, ExpressionKind, Literal};
 use crate::monotype::{Monotype, MonotypeId};
+use crate::naming::VALUE;
 use crate::syntax::{GoExpression, GoStatement, GoType};
 
 /// The stages between an array and the consumer that reads it.
@@ -354,7 +355,7 @@ where
             }
             (Source::Range { first, last }, _) => {
                 let variable =
-                    if element == "_" { self.temporary("value") } else { element.clone() };
+                    if element == "_" { self.temporary(VALUE) } else { element.clone() };
                 Header::Counting { variable, first, last }
             }
         };
@@ -433,7 +434,7 @@ where
                         }
                         Source::Range { first, last } => {
                             let variable = if element == "_" {
-                                self.temporary("value")
+                                self.temporary(VALUE)
                             } else {
                                 element.clone()
                             };

@@ -39,7 +39,8 @@ use smol_str::{SmolStr, format_smolstr};
 use super::packages::Spelling;
 use super::{ConstructorLayout, DataKind, DataLayout, Emitter, identifier, layout, uses_local};
 use crate::arity::Arities;
-use crate::context::{Context, capitalise};
+use crate::context::Context;
+use crate::naming::{capitalise, lower_first, numbered};
 use crate::error::{GoError, GoResult};
 use crate::foreign::Foreign;
 use crate::mono::{
@@ -482,7 +483,7 @@ where
             Some(newtype) => self.context.type_name(newtype.file_id, newtype.item)?.to_string(),
             None => "function".to_string(),
         };
-        let closure = fresh(super::chunks::lower_first(&closure_name).into(), monotype);
+        let closure = fresh(lower_first(&closure_name).into(), monotype);
         let mut parameters = vec![];
         let mut passed = vec![];
         for (position, &argument) in building.arguments.iter().enumerate() {
@@ -1361,12 +1362,9 @@ fn closure_slots(
             let slot = match shared {
                 Some((name, _, _)) => name.clone(),
                 None => {
-                    let mut name = base.clone();
-                    let mut counter = 2;
-                    while slots.iter().any(|(taken, _, _)| *taken == name) || name == "Tag" {
-                        name = format!("{base}{counter}");
-                        counter += 1;
-                    }
+                    let name = numbered(&base, |name| {
+                        name == "Tag" || slots.iter().any(|(taken, _, _)| taken == name)
+                    });
                     slots.push((name.clone(), base, capture.monotype));
                     name
                 }

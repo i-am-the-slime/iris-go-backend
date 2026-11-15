@@ -2,6 +2,7 @@ use super::{Emitter, call, identifier_expression};
 use crate::error::GoResult;
 use crate::mono::{Expression, ExpressionKind, FunctionId, Local};
 use crate::monotype::MonotypeId;
+use crate::naming::UNNAMED_VALUE;
 use crate::syntax::{GoExpression, GoStatement, GoType};
 
 pub(super) struct Callable {
@@ -98,7 +99,7 @@ where
                     let (parameters, _) = self.leading_arrows(callable.monotype, position + 1);
                     let base = match parameters.get(position) {
                         Some(&parameter) => self.argument_base(&callable.names, position, parameter),
-                        None => "argument".into(),
+                        None => UNNAMED_VALUE.into(),
                     };
                     self.shared(value, &base, out)
                 }

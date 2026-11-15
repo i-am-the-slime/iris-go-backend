@@ -1801,7 +1801,7 @@ where
         };
         let declared = spellings.iter().find(|(_, _, arguments)| arguments.is_empty());
         let Some(&(file_id, item, _)) = declared else { return Ok(None) };
-        Ok(Some(crate::context::capitalise(&self.context.type_name(file_id, item)?)))
+        Ok(Some(crate::naming::capitalise(&self.context.type_name(file_id, item)?)))
     }
 
     fn share_instantiation(
@@ -2931,13 +2931,13 @@ where
                 match scope.module.lowered.tree.get_binder_kind(source) {
                     Some(lowering::BinderKind::Variable { variable: Some(name) }) => name.clone(),
                     Some(lowering::BinderKind::Named { named: Some(name), .. }) => name.clone(),
-                    _ => SmolStr::new_static("value"),
+                    _ => SmolStr::new_static(crate::naming::VALUE),
                 }
             }
             tree::BinderSource::Generated { name, .. } => {
                 SmolStr::clone(self.context.queries.lookup_smol_str(name))
             }
-            _ => SmolStr::new_static("value"),
+            _ => SmolStr::new_static(crate::naming::VALUE),
         }
     }
 

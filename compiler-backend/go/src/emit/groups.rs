@@ -9,7 +9,7 @@ use rustc_hash::FxHashSet;
 use super::{
     Emitter, LoopTarget, Mode, Sink, TailLoop, call, captures_parameters, identifier_expression,
 };
-use crate::context::capitalise;
+use crate::naming::capitalise;
 use crate::error::GoResult;
 use crate::mono::{Expression, ExpressionKind, Function, FunctionId, Guarded, Program};
 use crate::monotype::Monotypes;

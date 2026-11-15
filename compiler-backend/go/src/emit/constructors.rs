@@ -12,8 +12,8 @@
 //! literal where it is applied.
 
 use super::packages::Spelling;
-use super::{Emitter, RESERVED, identifier, identifier_expression};
-use crate::context::capitalise;
+use super::{Emitter, identifier_expression};
+use crate::naming::{RESERVED, capitalise, identifier, lower_first};
 use crate::error::{GoError, GoResult};
 use crate::mono::{Expression, ExpressionKind, Local};
 use crate::monotype::{DataType, MonotypeId};
@@ -125,17 +125,11 @@ where
 
 /// A constructor function's parameter: its field's name, unexported.
 fn parameter_name(field: &str, position: usize) -> String {
-    let mut characters = field.chars();
-    let lowered: String = match characters.next() {
-        Some(first) => first.to_lowercase().chain(characters).collect(),
-        None => format!("value{position}"),
-    };
+    let lowered = lower_first(field);
+    let lowered = if lowered.is_empty() { format!("value{position}") } else { lowered };
     let mut name = identifier(&lowered);
-    if RESERVED.contains(&name.as_str()) || PREDECLARED.contains(&name.as_str()) {
+    if RESERVED.contains(&name.as_str()) {
         name = format!("{name}Value");
     }
     name
 }
-
-/// Go's predeclared names that a parameter would shadow inside the body.
-const PREDECLARED: &[&str] = &["nil", "true", "false", "iota", "len", "append", "string", "int"];

@@ -179,7 +179,7 @@ impl Lifter<'_> {
             };
             let mut all_parameters = parameters;
             all_parameters.extend(lambda_parameters);
-            let name = format_smolstr!("{base}{}", crate::context::capitalise(&binding.local.name));
+            let name = format_smolstr!("{base}{}", crate::naming::capitalise(&binding.local.name));
             let spelling =
                 FunctionSpelling::Lifted { parent: base.into(), local: binding.local.name.clone() };
             self.monotypes.function_spellings.entry(name.clone()).or_insert(spelling);
