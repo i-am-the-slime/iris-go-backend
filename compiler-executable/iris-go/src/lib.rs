@@ -103,17 +103,40 @@ fn vendor_foreign_packages(
     let mut modules = vec![];
     for entry in entries {
         let path = entry.map_err(|error| error.to_string())?.path();
-        if path.extension().and_then(|extension| extension.to_str()) != Some("go") {
+        // A module's package is one file, `go-ffi/<module>.go`, or a directory of them,
+        // `go-ffi/<module>/`.
+        let (module, files) = if path.is_dir() {
+            let Some(module) = path.file_name().and_then(|name| name.to_str()) else { continue };
+            (module.to_string(), go_files(&path)?)
+        } else if path.extension().and_then(|extension| extension.to_str()) == Some("go") {
+            let Some(module) = path.file_stem().and_then(|stem| stem.to_str()) else { continue };
+            (module.to_string(), vec![(path.clone(), "ffi.go".to_string())])
+        } else {
             continue;
-        }
-        let Some(module) = path.file_stem().and_then(|stem| stem.to_str()) else { continue };
-        let package = destination.join(go::ForeignPackages::package_name(module));
+        };
+        let package = destination.join(go::ForeignPackages::package_name(&module));
         fs::create_dir_all(&package).map_err(|error| error.to_string())?;
-        fs::copy(&path, package.join("ffi.go")).map_err(|error| error.to_string())?;
-        modules.push(module.to_string());
+        for (source, name) in files {
+            fs::copy(&source, package.join(name)).map_err(|error| error.to_string())?;
+        }
+        modules.push(module);
     }
     if modules.is_empty() {
         return Ok(go::ForeignPackages::default());
     }
     Ok(go::ForeignPackages { module_path: module_path.to_string(), modules })
+}
+
+/// The Go source files of a foreign package's directory, tests excepted, with their names.
+fn go_files(directory: &Path) -> Result<Vec<(PathBuf, String)>, String> {
+    let mut files = vec![];
+    for entry in fs::read_dir(directory).map_err(|error| error.to_string())? {
+        let path = entry.map_err(|error| error.to_string())?.path();
+        let Some(name) = path.file_name().and_then(|name| name.to_str()) else { continue };
+        if name.ends_with(".go") && !name.ends_with("_test.go") {
+            files.push((path.clone(), name.to_string()));
+        }
+    }
+    files.sort();
+    Ok(files)
 }

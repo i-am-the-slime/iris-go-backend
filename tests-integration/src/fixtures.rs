@@ -549,7 +549,7 @@ pub fn go(path: &Path) -> FixtureResult {
     let loaded = crate::load_fixture(folder)?;
     check_source_errors(&loaded.engine, &loaded.files, &loaded.fixture_files)?;
 
-    let foreign_packages = go::ForeignPackages::default();
+    let foreign_packages = go_foreign_packages(folder)?;
     let compiled =
         go::compile_program(&loaded.engine, &file, "main", &foreign_packages, "fixture");
     let output = match compiled {
@@ -570,6 +570,26 @@ pub fn go(path: &Path) -> FixtureResult {
     settings.bind(|| insta::assert_snapshot!(file, output));
 
     Ok(())
+}
+
+/// The modules whose foreign imports a fixture's `go-ffi/<module>.go` files implement, as the Go
+/// backend's CLI finds them in a project's `go-ffi` directory.
+fn go_foreign_packages(folder: &Path) -> Result<go::ForeignPackages, io::Error> {
+    let directory = snapshot_path(folder).join("go-ffi");
+    let Ok(entries) = std::fs::read_dir(&directory) else {
+        return Ok(go::ForeignPackages::default());
+    };
+    let mut modules = vec![];
+    for entry in entries {
+        let path = entry?.path();
+        if path.extension().is_some_and(|extension| extension == "go")
+            && let Some(module) = path.file_stem().and_then(|stem| stem.to_str())
+        {
+            modules.push(module.to_string());
+        }
+    }
+    modules.sort();
+    Ok(go::ForeignPackages { module_path: "fixture".to_string(), modules })
 }
 
 pub fn lsp(path: &Path) -> FixtureResult {

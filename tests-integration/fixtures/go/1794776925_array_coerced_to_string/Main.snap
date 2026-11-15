@@ -1,0 +1,19 @@
+---
+source: tests-integration/src/fixtures.rs
+---
+// main.go
+package main
+
+import (
+	"fmt"
+	"github.com/i-am-the-slime/purs-backend-go/go-support/array"
+	"strings"
+)
+
+var main_ string = "letters: " + strings.Join([]string{"a", "b", "c"}, ",") + "; nested: " + strings.Join(array.Map(func(element []string) string {
+	return strings.Join(element, ",")
+}, [][]string{[]string{"d", "e"}, []string{"f"}}), ",")
+
+func main() {
+	fmt.Println(main_)
+}

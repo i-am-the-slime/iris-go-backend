@@ -1,7 +1,7 @@
 //! How values cross into and out of foreign code: the conventions of Go packages' functions.
 
 use super::application::Callable;
-use super::{Direction, Emitter, call, identifier_expression, returning};
+use super::{Direction, Emitter, binary, call, identifier_expression, returning};
 use crate::error::GoResult;
 use crate::foreign::{Boundary, GoFunction, GoPackage, Spelled};
 use crate::mono::Expression;
@@ -17,6 +17,13 @@ where
             Monotype::Int => Some(GoType::Int),
             Monotype::Array(element) => {
                 self.convention_type(element)?.map(|element| GoType::Slice(Box::new(element)))
+            }
+            // A project's foreign package cannot name the struct generated for a record, so a
+            // record crosses as the JavaScript object it is there: a Foreign holding an object
+            // table.
+            Monotype::Record(_) => Some(GoType::Any),
+            Monotype::Nullable(element) => {
+                self.convention_type(element)?.map(|element| GoType::Pointer(Box::new(element)))
             }
             Monotype::Effect(result) => self.convention_type(result)?.map(|result| {
                 GoType::Function { parameters: vec![], result: Some(Box::new(result)) }
@@ -115,6 +122,32 @@ where
                 };
                 let map = self.go_function(GoFunction { package: GoPackage::Array, name: "Map" });
                 call(map, vec![function, value])
+            }
+            Monotype::Record(_) => {
+                let foreign = self.monotypes.intern(Monotype::Opaque);
+                match direction {
+                    Direction::ToConvention => self.coerce(value, monotype, foreign, out)?,
+                    Direction::FromConvention => self.coerce(value, foreign, monotype, out)?,
+                }
+            }
+            Monotype::Nullable(element) => {
+                let value = self.shared(value, "nullable", out);
+                let converted = self.temporary("converted");
+                let mut present = vec![];
+                let inner = GoExpression::Unary { operator: "*", operand: Box::new(value.clone()) };
+                let inner = self.convert_convention(inner, element, direction, &mut present)?;
+                let inner = self.shared(inner, "present", &mut present);
+                present.push(GoStatement::Assign {
+                    targets: vec![identifier_expression(&converted)],
+                    values: vec![GoExpression::Address(Box::new(inner))],
+                });
+                out.push(GoStatement::Variable { name: converted.clone(), type_: target, value: None });
+                out.push(GoStatement::If {
+                    condition: binary("!=", value, identifier_expression("nil")),
+                    then: present,
+                    otherwise: vec![],
+                });
+                identifier_expression(&converted)
             }
             Monotype::Effect(result) => {
                 let value = self.shared(value, "action", out);

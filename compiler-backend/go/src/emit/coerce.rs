@@ -138,6 +138,27 @@ where
                     self.go_function(GoFunction { package: GoPackage::Prim, name: "CharSingleton" });
                 Ok(call(singleton, vec![value]))
             }
+            // JavaScript turns an array that meets a string (`"" + unsafeCoerce array`) into its
+            // elements' strings joined with commas.
+            (Monotype::Array(element), Monotype::String) => {
+                self.imports.insert("strings".into());
+                let join = GoExpression::Qualified { package: "strings".into(), name: "Join".into() };
+                let comma = GoExpression::String(",".into());
+                if let Monotype::String = self.monotypes.get(element) {
+                    return Ok(call(join, vec![value, comma]));
+                }
+                let parameter = self.temporary("element");
+                let mut body = vec![];
+                let text = self.coerce(identifier_expression(&parameter), element, to, &mut body)?;
+                body.push(GoStatement::Return(Some(text)));
+                let render = GoExpression::Function {
+                    parameters: vec![(parameter, self.go_type(element)?)],
+                    result: Some(GoType::String),
+                    body,
+                };
+                let map = self.go_function(GoFunction { package: GoPackage::Array, name: "Map" });
+                Ok(call(join, vec![call(map, vec![render, value]), comma]))
+            }
             _ => Err(GoError::unsupported_construct(UNRELATED_TYPES)),
         }
     }
