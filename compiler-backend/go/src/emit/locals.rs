@@ -14,6 +14,8 @@ use crate::context::capitalise;
 use crate::syntax::{GoDeclaration, GoExpression, GoStatement, GoType};
 use crate::value_names::{GO_PREDECLARED, go_safe};
 
+use super::walk::{self, Walk as _};
+
 /// Follows a name that emission numbered, before the number.
 pub(super) const NUMBERED: char = 'ǂ';
 /// Encloses the index of a record whose Go name names a value.
@@ -58,7 +60,7 @@ pub(super) fn settle(declaration: &mut GoDeclaration, records: &[String]) {
             for (parameter, _) in parameters.iter_mut() {
                 apply.name(parameter);
             }
-            apply.statements(body);
+            apply.block(body);
         }
         GoDeclaration::Variable { value, .. } => apply.expression(value),
         _ => {}
@@ -216,7 +218,7 @@ impl Walk {
         &mut self,
         parameters: &mut [(String, GoType)],
         result: Option<&mut GoType>,
-        body: &mut [GoStatement],
+        body: &mut Vec<GoStatement>,
     ) {
         // A function's signature is in the scope around it; its parameters
         // are in scope in its body alone.
@@ -234,16 +236,18 @@ impl Walk {
         self.exit(scope);
     }
 
-    fn block(&mut self, statements: &mut [GoStatement]) {
-        let scope = self.enter();
-        self.statements(statements);
-        self.exit(scope);
-    }
-
     fn statements(&mut self, statements: &mut [GoStatement]) {
         for statement in statements {
             self.statement(statement);
         }
+    }
+}
+
+impl walk::Walk for Walk {
+    fn block(&mut self, statements: &mut Vec<GoStatement>) {
+        let scope = self.enter();
+        self.statements(statements);
+        self.exit(scope);
     }
 
     fn statement(&mut self, statement: &mut GoStatement) {
@@ -258,23 +262,7 @@ impl Walk {
                     self.expression(value);
                 }
                 self.bind(name);
-            }
-            GoStatement::Assign { targets, values } => {
-                targets.iter_mut().for_each(|target| self.expression(target));
-                values.iter_mut().for_each(|value| self.expression(value));
-            }
-            GoStatement::Expression(expression) | GoStatement::Defer(expression) => {
-                self.expression(expression);
-            }
-            GoStatement::Return(value) => {
-                if let Some(value) = value {
-                    self.expression(value);
-                }
-            }
-            GoStatement::If { condition, then, otherwise } => {
-                self.expression(condition);
-                self.block(then);
-                self.block(otherwise);
+                self.bind(name);
             }
             GoStatement::IfAssert { name, value, type_, then } => {
                 self.expression(value);
@@ -285,20 +273,6 @@ impl Walk {
                 self.statements(then);
                 self.exit(scope);
             }
-            GoStatement::Switch { value, cases, default } => {
-                if let Some(value) = value {
-                    self.expression(value);
-                }
-                for case in cases {
-                    case.values.iter_mut().for_each(|value| self.expression(value));
-                    self.block(&mut case.body);
-                }
-                if let Some(default) = default {
-                    default.covers.iter_mut().for_each(|value| self.expression(value));
-                    self.block(&mut default.body);
-                }
-            }
-            GoStatement::Loop(body) | GoStatement::Block(body) => self.block(body),
             GoStatement::Range { index, element, iterable, body } => {
                 self.expression(iterable);
                 let scope = self.enter();
@@ -324,12 +298,11 @@ impl Walk {
                 self.statements(body);
                 self.exit(scope);
             }
-            GoStatement::LabeledLoop { label, body } => {
+            GoStatement::LabeledLoop { label, .. } | GoStatement::BreakTo(label) => {
                 self.labels.push(label.clone());
-                self.block(body);
+                walk::statement(self, statement);
             }
-            GoStatement::BreakTo(label) => self.labels.push(label.clone()),
-            GoStatement::Continue | GoStatement::Break => {}
+            statement => walk::statement(self, statement),
         }
     }
 
@@ -337,49 +310,26 @@ impl Walk {
         match expression {
             GoExpression::Identifier(name) => self.reference(name),
             GoExpression::Qualified { package, .. } => self.free_name(package.clone()),
-            GoExpression::Integer(_)
-            | GoExpression::Float(_)
-            | GoExpression::String(_)
-            | GoExpression::Rune(_)
-            | GoExpression::Boolean(_) => {}
-            GoExpression::Call { function, arguments } => {
-                self.expression(function);
-                arguments.iter_mut().for_each(|argument| self.expression(argument));
-            }
-            GoExpression::Binary { left, right, .. } => {
-                self.expression(left);
-                self.expression(right);
-            }
-            GoExpression::Unary { operand, .. } => self.expression(operand),
-            GoExpression::Field { value, .. }
-            | GoExpression::Address(value)
-            | GoExpression::Spread(value) => self.expression(value),
-            GoExpression::Index { value, index } => {
-                self.expression(value);
-                self.expression(index);
-            }
-            GoExpression::Composite { type_, fields } => {
-                self.type_(type_);
-                fields.iter_mut().for_each(|(_, value)| self.expression(value));
-            }
-            GoExpression::Conversion { type_, value }
-            | GoExpression::TypeAssertion { value, type_ } => {
-                self.type_(type_);
-                self.expression(value);
-            }
             GoExpression::Type(type_) => self.type_(type_),
             GoExpression::Function { parameters, result, body } => {
                 self.function(parameters, result.as_mut(), body);
+            }
+            GoExpression::Composite { type_, .. }
+            | GoExpression::Conversion { type_, .. }
+            | GoExpression::TypeAssertion { type_, .. } => {
+                self.type_(type_);
+                walk::expression(self, expression);
             }
             GoExpression::Instantiation { function, arguments } => {
                 self.expression(function);
                 arguments.iter_mut().for_each(|argument| self.type_(argument));
             }
+            expression => walk::expression(self, expression),
         }
     }
+}
 
-    /// The names a type spells: a package qualifier, or a type of the
-    /// declaration's own package, or a predeclared type.
+impl Walk {
     fn type_(&mut self, type_: &mut GoType) {
         match type_ {
             GoType::Named(name) => self.type_name(name.clone()),
@@ -500,128 +450,39 @@ impl Apply<'_> {
             *label = settled.clone();
         }
     }
+}
 
-    fn statements(&mut self, statements: &mut [GoStatement]) {
-        for statement in statements {
-            self.statement(statement);
-        }
-    }
-
+impl walk::Walk for Apply<'_> {
     fn statement(&mut self, statement: &mut GoStatement) {
         match statement {
-            GoStatement::Define { names, values } => {
-                values.iter_mut().for_each(|value| self.expression(value));
-                names.iter_mut().for_each(|name| self.name(name));
+            GoStatement::Define { names, .. } => names.iter_mut().for_each(|name| self.name(name)),
+            GoStatement::Variable { name, .. } | GoStatement::IfAssert { name, .. } => {
+                self.name(name)
             }
-            GoStatement::Variable { name, value, .. } => {
-                if let Some(value) = value {
-                    self.expression(value);
-                }
-                self.name(name);
-            }
-            GoStatement::Assign { targets, values } => {
-                targets.iter_mut().for_each(|target| self.expression(target));
-                values.iter_mut().for_each(|value| self.expression(value));
-            }
-            GoStatement::Expression(expression) | GoStatement::Defer(expression) => {
-                self.expression(expression);
-            }
-            GoStatement::Return(value) => {
-                if let Some(value) = value {
-                    self.expression(value);
-                }
-            }
-            GoStatement::If { condition, then, otherwise } => {
-                self.expression(condition);
-                self.statements(then);
-                self.statements(otherwise);
-            }
-            GoStatement::IfAssert { name, value, then, .. } => {
-                self.expression(value);
-                self.name(name);
-                self.statements(then);
-            }
-            GoStatement::Switch { value, cases, default } => {
-                if let Some(value) = value {
-                    self.expression(value);
-                }
-                for case in cases {
-                    case.values.iter_mut().for_each(|value| self.expression(value));
-                    self.statements(&mut case.body);
-                }
-                if let Some(default) = default {
-                    default.covers.iter_mut().for_each(|value| self.expression(value));
-                    self.statements(&mut default.body);
-                }
-            }
-            GoStatement::Loop(body) | GoStatement::Block(body) => self.statements(body),
-            GoStatement::Range { index, element, iterable, body } => {
-                self.expression(iterable);
-                if let Some(index) = index {
-                    self.name(index);
-                }
+            GoStatement::Range { index, element, .. } => {
+                index.iter_mut().for_each(|index| self.name(index));
                 self.name(element);
-                self.statements(body);
             }
-            GoStatement::Counting { variable, start, end, body } => {
-                self.expression(start);
-                self.name(variable);
-                self.expression(end);
-                self.statements(body);
+            GoStatement::Counting { variable, .. } | GoStatement::CountingDown { variable, .. } => {
+                self.name(variable)
             }
-            GoStatement::CountingDown { variable, start, body } => {
-                self.expression(start);
-                self.name(variable);
-                self.statements(body);
+            GoStatement::LabeledLoop { label, .. } | GoStatement::BreakTo(label) => {
+                self.label(label)
             }
-            GoStatement::LabeledLoop { label, body } => {
-                self.label(label);
-                self.statements(body);
-            }
-            GoStatement::BreakTo(label) => self.label(label),
-            GoStatement::Continue | GoStatement::Break => {}
+            _ => {}
         }
+        walk::statement(self, statement);
     }
 
     fn expression(&mut self, expression: &mut GoExpression) {
         match expression {
             GoExpression::Identifier(name) => self.name(name),
-            GoExpression::Qualified { .. }
-            | GoExpression::Integer(_)
-            | GoExpression::Float(_)
-            | GoExpression::String(_)
-            | GoExpression::Rune(_)
-            | GoExpression::Boolean(_)
-            | GoExpression::Type(_) => {}
-            GoExpression::Call { function, arguments } => {
-                self.expression(function);
-                arguments.iter_mut().for_each(|argument| self.expression(argument));
+            GoExpression::Function { parameters, .. } => {
+                parameters.iter_mut().for_each(|(parameter, _)| self.name(parameter))
             }
-            GoExpression::Binary { left, right, .. } => {
-                self.expression(left);
-                self.expression(right);
-            }
-            GoExpression::Unary { operand, .. } => self.expression(operand),
-            GoExpression::Field { value, .. }
-            | GoExpression::Address(value)
-            | GoExpression::Spread(value)
-            | GoExpression::Conversion { value, .. }
-            | GoExpression::TypeAssertion { value, .. } => self.expression(value),
-            GoExpression::Index { value, index } => {
-                self.expression(value);
-                self.expression(index);
-            }
-            GoExpression::Composite { fields, .. } => {
-                fields.iter_mut().for_each(|(_, value)| self.expression(value));
-            }
-            GoExpression::Function { parameters, body, .. } => {
-                for (parameter, _) in parameters.iter_mut() {
-                    self.name(parameter);
-                }
-                self.statements(body);
-            }
-            GoExpression::Instantiation { function, .. } => self.expression(function),
+            _ => {}
         }
+        walk::expression(self, expression);
     }
 }
 
