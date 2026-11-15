@@ -26,6 +26,7 @@ mod ranges;
 mod reference_equality;
 mod reuse;
 mod views;
+mod walk;
 
 use std::collections::BTreeSet;
 
