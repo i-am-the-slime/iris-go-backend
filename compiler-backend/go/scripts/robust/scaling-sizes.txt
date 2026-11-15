@@ -1,0 +1,9 @@
+# Per-benchmark sizing for scaling.sh: name kind [column 3]
+#   linear (default): sizes n, 2n, 4n; column 3 is the starting n (default: half the module's size)
+#   depth: the size is a tree depth, so sizes d, d+1, d+2; column 3 is the tree's branching factor
+#   skip: not scaled
+Bench.Recursion.TreeBuild depth 2
+# generate's three cases have 4, 5 and 3 children.
+Bench.Recursion.JsonTreeWalk depth 4
+# setTimeout(0) is clamped to 4 ms after five nested timers in JS, so the default size takes seconds.
+Bench.Aff.DelayLoop linear 100

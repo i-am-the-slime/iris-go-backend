@@ -13,6 +13,8 @@
 #   SKIP_BUILD=1 ...                                                      # reuse WORK's builds
 #   PATHO_CPUPROFILE=/path/prof ...                                       # Go CPU profile (one benchmark)
 #   PATHO_MEMSTATS=1 ...                                                  # Go heap allocations (ALLOCS line on stderr)
+#   PATHO_SIZE=40000 ...                                                  # replace each benchmark's size
+#   BUILD_ONLY=1 ...                                                      # build into WORK, run nothing
 #
 # Environment: IRIS, GO_SUPPORT, PURS_BACKEND_ES, WORK (build directory, kept), JOBS,
 # GOEXPERIMENT (default simd).
@@ -128,6 +130,7 @@ if [ "${SKIP_BUILD:-0}" != 1 ]; then
   build_javascript || exit 1
   printf '%s\n' "${names[@]}" | xargs -P "$JOBS" -I{} bash -c 'build_go "$1"' _ {}
 fi
+[ "${BUILD_ONLY:-0}" != 1 ] || exit 0
 
 : >"$WORK/load.txt"
 for name in "${names[@]}"; do
