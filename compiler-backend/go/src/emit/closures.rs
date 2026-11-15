@@ -43,8 +43,8 @@ use crate::context::{Context, capitalise};
 use crate::error::{GoError, GoResult};
 use crate::foreign::Foreign;
 use crate::mono::{
-    Alternative, Binding, Expression, ExpressionKind, Function, FunctionId, Guard, Guarded, Local,
-    LocalId, Pattern, PatternKind, Program,
+    Alternative, Binding, Expression, ExpressionKind, Function, FunctionId, FunctionSpelling,
+    Guard, Guarded, Local, LocalId, Pattern, PatternKind, Program,
 };
 use crate::monotype::{DataType, Monotype, MonotypeId, Monotypes};
 use crate::simplify::{for_each_child, for_each_child_mut};
@@ -472,7 +472,10 @@ where
             None => {
                 let origin = newtype.as_ref().map(|newtype| newtype.file_id);
                 let first = building.tags.first().and_then(|shape| shape.origin);
-                (format_smolstr!("run{name}"), origin.or(first))
+                let run = format_smolstr!("run{name}");
+                let spelling = FunctionSpelling::Dispatch { closure: monotype };
+                self.monotypes.function_spellings.entry(run.clone()).or_insert(spelling);
+                (run, origin.or(first))
             }
         };
         let closure_name = match &newtype {
@@ -1275,8 +1278,9 @@ where
         let home = set.home;
         let shapes: Vec<(SmolStr, Vec<Local>)> =
             set.tags.iter().map(|tag| (tag.name.clone(), tag.captures.clone())).collect();
-        let base = set.name.clone();
-        let name = self.global_name(Spelling::Base(identifier(&base)));
+        let base = identifier(&set.name);
+        let parts = self.closure_parts(monotype)?;
+        let name = self.pending_global(base, super::names::PendingSpelling::Parts(parts));
         if let Some(home) = home {
             self.homes.insert(name.clone(), home);
         }

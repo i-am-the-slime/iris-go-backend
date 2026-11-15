@@ -9,20 +9,20 @@ import (
 	"github.com/i-am-the-slime/purs-backend-go/go-support/prim"
 )
 
-type Map_Type_Value struct {
+type VariantFRep struct {
 	Map   func(func(any) any) func(any) any
 	Type  string
 	Value any
 }
 
 type SayInt struct {
-	Say0 string
-	Say1 int32
+	First  string
+	Second int32
 }
 
 type Say struct {
-	Say0   string
-	Say1   any
+	First  string
+	Second any
 	Origin any
 }
 
@@ -30,15 +30,15 @@ func convert(value *Say) SayInt {
 	if original, ok := value.Origin.(SayInt); ok {
 		return original
 	}
-	return SayInt{Say0: value.Say0, Say1: value.Say1.(int32)}
+	return SayInt{First: value.First, Second: value.Second.(int32)}
 }
 
 type CountInt struct {
-	Count0 func(int32) int32
+	Count func(int32) int32
 }
 
 type Count struct {
-	Count0 func(int32) any
+	Count  func(int32) any
 	Origin any
 }
 
@@ -46,49 +46,49 @@ func convert2(value *Count) CountInt {
 	if original, ok := value.Origin.(CountInt); ok {
 		return original
 	}
-	return CountInt{Count0: func(coerced int32) int32 {
-		return value.Count0(coerced).(int32)
+	return CountInt{Count: func(coerced int32) int32 {
+		return value.Count(coerced).(int32)
 	}}
 }
 
-type Map_Type_Value2 struct {
+type Map_Type_ValueOfFnFnValueValueFnSaySaySayInt struct {
 	Map   func(func(any) any) func(*Say) *Say
 	Type  string
 	Value SayInt
 }
 
-func convert4(value SayInt) *Say {
-	return &Say{Say0: value.Say0, Say1: value.Say1, Origin: value}
+func convert3(value SayInt) *Say {
+	return &Say{First: value.First, Second: value.Second, Origin: value}
 }
 
-func convert3(value Map_Type_Value2) Map_Type_Value {
-	return Map_Type_Value{Map: func(coerced func(any) any) func(any) any {
+func convert4(value Map_Type_ValueOfFnFnValueValueFnSaySaySayInt) VariantFRep {
+	return VariantFRep{Map: func(coerced func(any) any) func(any) any {
 		original := value.Map(coerced)
 		return func(coerced2 any) any {
 			return original(coerced2.(*Say))
 		}
-	}, Type: value.Type, Value: convert4(value.Value)}
+	}, Type: value.Type, Value: convert3(value.Value)}
 }
 
-type Map_Type_Value3 struct {
+type Map_Type_ValueOfFnFnValueValueFnCountCountCountInt struct {
 	Map   func(func(any) any) func(*Count) *Count
 	Type  string
 	Value CountInt
 }
 
-func convert6(value CountInt) *Count {
-	return &Count{Count0: func(coerced3 int32) any {
-		return value.Count0(coerced3)
+func convert5(value CountInt) *Count {
+	return &Count{Count: func(coerced3 int32) any {
+		return value.Count(coerced3)
 	}, Origin: value}
 }
 
-func convert5(value Map_Type_Value3) Map_Type_Value {
-	return Map_Type_Value{Map: func(coerced func(any) any) func(any) any {
+func convert6(value Map_Type_ValueOfFnFnValueValueFnCountCountCountInt) VariantFRep {
+	return VariantFRep{Map: func(coerced func(any) any) func(any) any {
 		original := value.Map(coerced)
 		return func(coerced2 any) any {
 			return original(coerced2.(*Count))
 		}
-	}, Type: value.Type, Value: convert6(value.Value)}
+	}, Type: value.Type, Value: convert5(value.Value)}
 }
 
 var main_ = initializeMain_()
@@ -100,34 +100,34 @@ func initializeMain_() []string {
 	original2 := func(value2 int32) int32 {
 		return prim.MultiplyInt32(value2, 10)
 	}
-	return []string{describe(say), describe(count), describe(Map_Type_Value{Type: say.Type, Value: say.Map(func(coerced any) any {
+	return []string{describe(say), describe(count), describe(VariantFRep{Type: say.Type, Value: say.Map(func(coerced any) any {
 		return original(coerced.(int32))
-	})(say.Value), Map: say.Map}), describe(Map_Type_Value{Type: count.Type, Value: count.Map(func(coerced2 any) any {
+	})(say.Value), Map: say.Map}), describe(VariantFRep{Type: count.Type, Value: count.Map(func(coerced2 any) any {
 		return original2(coerced2.(int32))
 	})(count.Value), Map: count.Map})}
 }
 
-func describe(r Map_Type_Value) string {
+func describe(r VariantFRep) string {
 	if r.Type == "say" {
 		scrutinee := convert(r.Value.(*Say))
-		return scrutinee.Say0 + " " + prim.ShowInt(scrutinee.Say1)
+		return scrutinee.First + " " + prim.ShowInt(scrutinee.Second)
 	}
 	if r.Type == "count" {
 		scrutinee2 := convert2(r.Value.(*Count))
-		return "count " + prim.ShowInt(scrutinee2.Count0(2))
+		return "count " + prim.ShowInt(scrutinee2.Count(2))
 	}
 	panic("Data.Functor.Variant: pattern match failure [" + r.Type + "]")
 	var unreachable string
 	return unreachable
 }
 
-var say Map_Type_Value = convert3(Map_Type_Value2{Type: "say", Value: SayInt{Say0: "hello", Say1: 4}, Map: func(argument0 func(any) any) func(*Say) *Say {
+var say VariantFRep = convert4(Map_Type_ValueOfFnFnValueValueFnSaySaySayInt{Type: "say", Value: SayInt{First: "hello", Second: 4}, Map: func(argument0 func(any) any) func(*Say) *Say {
 	return func(argument1 *Say) *Say {
 		return map_(argument0, argument1)
 	}
 }})
 
-var count Map_Type_Value = convert5(Map_Type_Value3{Type: "count", Value: CountInt{Count0: func(value int32) int32 {
+var count VariantFRep = convert6(Map_Type_ValueOfFnFnValueValueFnCountCountCountInt{Type: "count", Value: CountInt{Count: func(value int32) int32 {
 	return value + 1
 }}, Map: func(argument0 func(any) any) func(*Count) *Count {
 	return func(argument1 *Count) *Count {
@@ -136,12 +136,12 @@ var count Map_Type_Value = convert5(Map_Type_Value3{Type: "count", Value: CountI
 }})
 
 func map_(argument0 func(any) any, argument1 *Say) *Say {
-	return &Say{Say0: argument1.Say0, Say1: argument0(argument1.Say1)}
+	return &Say{First: argument1.First, Second: argument0(argument1.Second)}
 }
 
 func map_2(argument0 func(any) any, argument1 *Count) *Count {
-	return &Count{Count0: func(x int32) any {
-		return argument0(argument1.Count0(x))
+	return &Count{Count: func(x int32) any {
+		return argument0(argument1.Count(x))
 	}}
 }
 

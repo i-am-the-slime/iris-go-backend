@@ -5,8 +5,8 @@ source: tests-integration/src/fixtures.rs
 package maybe
 
 type MaybeInt struct {
-	Just0 int32
-	Tag   uint8
+	Just int32
+	Tag  uint8
 }
 
 const (
@@ -24,13 +24,13 @@ import (
 	"math"
 )
 
-type EvenHalvedSteps struct {
+type MainResult struct {
 	Even   bool
 	Halved int32
 	Steps  int32
 }
 
-var main_ EvenHalvedSteps = EvenHalvedSteps{Steps: walk(0, 27), Halved: halve(0, 64.0), Even: isEven(100000)}
+var main_ MainResult = MainResult{Steps: walk(0, 27), Halved: halve(0, 64.0), Even: isEven(100000)}
 
 const (
 	walkStep = iota
@@ -61,7 +61,7 @@ func walkOrHalve(step int, steps int32, n int32, x float64) int32 {
 			} else {
 				var integer maybe.MaybeInt
 				if math.Trunc(x2) == x2 && (x2 >= math.MinInt32 && x2 <= math.MaxInt32) {
-					integer = maybe.MaybeInt{Tag: maybe.MaybeIntJust, Just0: int32(x2)}
+					integer = maybe.MaybeInt{Tag: maybe.MaybeIntJust, Just: int32(x2)}
 				} else {
 					integer = maybe.MaybeInt{Tag: maybe.MaybeIntNothing}
 				}
@@ -69,7 +69,7 @@ func walkOrHalve(step int, steps int32, n int32, x float64) int32 {
 				case maybe.MaybeIntNothing:
 					result = 0
 				default: // maybe.MaybeIntJust
-					result = integer.Just0
+					result = integer.Just
 				}
 			}
 			step, n = walkStep, result

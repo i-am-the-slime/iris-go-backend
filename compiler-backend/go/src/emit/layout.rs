@@ -111,11 +111,16 @@ where
     /// Plans the struct of a data type whose constructors have fields.
     pub(super) fn plan_slots(&mut self, constructors: &[DataConstructor]) -> GoResult<SlotPlan> {
         let mut groups = groups_of_equal_fields(constructors);
-        let mut named = NamedSlots::new(constructors, &groups);
-        if !named.are_distinct() {
+        let mut named = NamedSlots::new(constructors, &groups, Naming::Readable);
+        if !named.are_distinct(constructors.len()) {
+            // A constructor named like another's field or the tag, such as
+            // `Tag`, numbers its fields after itself.
+            named = NamedSlots::new(constructors, &groups, Naming::Positional);
+        }
+        if !named.are_distinct(constructors.len()) {
             // A constructor named like a shared slot, such as `Field`, keeps its own slots.
             groups = (0..constructors.len()).map(|index| vec![index]).collect();
-            named = NamedSlots::new(constructors, &groups);
+            named = NamedSlots::new(constructors, &groups, Naming::Positional);
         }
         self.arrange_slots(constructors.len(), named.constructors, named.fields)
     }
@@ -236,24 +241,41 @@ struct NamedSlots {
     fields: Vec<(String, MonotypeId)>,
 }
 
+/// How the slots a constructor keeps to itself are named.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Naming {
+    /// After the constructor when it has one field, `Just`; by ordinal when
+    /// the type has one constructor, `First`, `Second`; else by position.
+    Readable,
+    /// After the constructor and the position, `Cons0`, `Cons1`.
+    Positional,
+}
+
+/// Field names a data type's struct declares beside its constructors' slots.
+const RESERVED_SLOTS: &[&str] = &["Tag", "Origin"];
+
+const ORDINALS: &[&str] = &[
+    "First", "Second", "Third", "Fourth", "Fifth", "Sixth", "Seventh", "Eighth", "Ninth", "Tenth",
+    "Eleventh", "Twelfth",
+];
+
 impl NamedSlots {
-    /// A constructor with slots of its own names them after itself, `Val0`;
+    /// A constructor with slots of its own names them after itself;
     /// constructors that share slots name them after the position, `Field0`.
-    fn new(constructors: &[DataConstructor], groups: &[Vec<usize>]) -> NamedSlots {
+    fn new(constructors: &[DataConstructor], groups: &[Vec<usize>], naming: Naming) -> NamedSlots {
         let shared_groups = groups.iter().filter(|group| group.len() > 1).count();
         let mut named =
             NamedSlots { constructors: vec![vec![]; constructors.len()], fields: vec![] };
         let mut shared_index = 0;
         for group in groups {
             let first = &constructors[group[0]];
-            let prefix = if group.len() > 1 {
+            let names: Vec<String> = if group.len() > 1 {
                 shared_index += 1;
-                shared_prefix(shared_index, shared_groups)
+                let prefix = shared_prefix(shared_index, shared_groups);
+                (0..first.fields.len()).map(|position| format!("{prefix}{position}")).collect()
             } else {
-                identifier(&first.name)
+                own_slots(first, constructors.len(), naming)
             };
-            let names: Vec<String> =
-                (0..first.fields.len()).map(|position| format!("{prefix}{position}")).collect();
             for &constructor in group {
                 named.constructors[constructor] = names.clone();
             }
@@ -262,9 +284,26 @@ impl NamedSlots {
         named
     }
 
-    fn are_distinct(&self) -> bool {
+    /// Whether no two slots share a name, nor a slot a name the struct
+    /// declares besides, such as the tag of a type of several constructors.
+    fn are_distinct(&self, constructors: usize) -> bool {
         let mut seen = FxHashSet::default();
-        self.fields.iter().all(|(name, _)| seen.insert(name.as_str()))
+        let reserved =
+            |name: &str| RESERVED_SLOTS.contains(&name) && (name != "Tag" || constructors > 1);
+        self.fields.iter().all(|(name, _)| !reserved(name) && seen.insert(name.as_str()))
+    }
+}
+
+/// The slots of a constructor that shares them with no other.
+fn own_slots(constructor: &DataConstructor, constructors: usize, naming: Naming) -> Vec<String> {
+    let name = identifier(&constructor.name);
+    let count = constructor.fields.len();
+    match naming {
+        Naming::Readable if count == 1 => vec![name],
+        Naming::Readable if constructors == 1 && count <= ORDINALS.len() => {
+            ORDINALS[..count].iter().map(|ordinal| ordinal.to_string()).collect()
+        }
+        _ => (0..count).map(|position| format!("{name}{position}")).collect(),
     }
 }
 

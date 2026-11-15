@@ -9,12 +9,12 @@ import (
 	"github.com/i-am-the-slime/purs-backend-go/go-support/prim"
 )
 
-type DepthLetters struct {
+type MainResult struct {
 	Depth   int32
 	Letters string
 }
 
-var main_ DepthLetters = DepthLetters{Depth: depth(0, 30), Letters: a(7, "")}
+var main_ MainResult = MainResult{Depth: depth(0, 30), Letters: a(7, "")}
 
 const (
 	depthStep = iota

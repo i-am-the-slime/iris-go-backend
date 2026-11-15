@@ -1,5 +1,6 @@
 ---
 source: tests-integration/src/fixtures.rs
+assertion_line: 570
 ---
 // main.go
 package main
@@ -9,9 +10,9 @@ import "fmt"
 type Never struct{}
 
 type Step struct {
-	Impossible0 Never
-	Done0       int32
-	Tag         uint8
+	Impossible Never
+	Done       int32
+	Tag        uint8
 }
 
 const (
@@ -32,13 +33,13 @@ func initializeMain_() []int32 {
 func value(argument0 *Step) int32 {
 	switch argument0.Tag {
 	case StepDone:
-		return argument0.Done0
+		return argument0.Done
 	default: // StepImpossible
-		return absurdInt(argument0.Impossible0)
+		return absurdInt(argument0.Impossible)
 	}
 }
 
-var steps []*Step = []*Step{&Step{Tag: StepDone, Done0: 7}, &Step{Tag: StepDone, Done0: 8}}
+var steps []*Step = []*Step{&Step{Tag: StepDone, Done: 7}, &Step{Tag: StepDone, Done: 8}}
 
 func absurdInt(argument0 Never) int32 {
 	for {

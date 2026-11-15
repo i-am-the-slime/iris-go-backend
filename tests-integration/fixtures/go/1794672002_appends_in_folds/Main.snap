@@ -5,9 +5,9 @@ source: tests-integration/src/fixtures.rs
 package either
 
 type EitherStringArrayInt struct {
-	Left0  string
-	Right0 []int32
-	Tag    uint8
+	Left  string
+	Right []int32
+	Tag   uint8
 }
 
 const (
@@ -16,9 +16,9 @@ const (
 )
 
 type EitherStringInt struct {
-	Left0  string
-	Right0 int32
-	Tag    uint8
+	Left  string
+	Right int32
+	Tag   uint8
 }
 
 const (
@@ -37,7 +37,7 @@ import (
 	"slices"
 )
 
-type AppendedCombinedEscapingSnocs struct {
+type MainResult struct {
 	Appended []int32
 	Combined either.EitherStringArrayInt
 	Escaping [][]int32
@@ -51,7 +51,7 @@ type AccSeen struct {
 
 var main_ = initializeMain_()
 
-func initializeMain_() AppendedCombinedEscapingSnocs {
+func initializeMain_() MainResult {
 	accumulator := []int32{}
 	accumulator = slices.Clip(accumulator)
 	for x := int32(1); x < 6; x++ {
@@ -64,19 +64,19 @@ func initializeMain_() AppendedCombinedEscapingSnocs {
 		acc2 := accumulator2
 		accumulator2 = append(acc2, prim.MultiplyInt32(x2, 2))
 	}
-	array2 := []either.EitherStringInt{either.EitherStringInt{Tag: either.EitherStringIntRight, Right0: 1}, either.EitherStringInt{Tag: either.EitherStringIntRight, Right0: 2}, either.EitherStringInt{Tag: either.EitherStringIntRight, Right0: 3}}
-	accumulator3 := either.EitherStringArrayInt{Tag: either.EitherStringArrayIntRight, Right0: []int32{}}
-	accumulator3.Right0 = slices.Clip(accumulator3.Right0)
+	array2 := []either.EitherStringInt{either.EitherStringInt{Tag: either.EitherStringIntRight, Right: 1}, either.EitherStringInt{Tag: either.EitherStringIntRight, Right: 2}, either.EitherStringInt{Tag: either.EitherStringIntRight, Right: 3}}
+	accumulator3 := either.EitherStringArrayInt{Tag: either.EitherStringArrayIntRight, Right: []int32{}}
+	accumulator3.Right = slices.Clip(accumulator3.Right)
 	for elementIndex := range array2 {
 		acc3 := accumulator3
 		if acc3.Tag == either.EitherStringArrayIntLeft && array2[elementIndex].Tag == either.EitherStringIntLeft {
-			accumulator3 = either.EitherStringArrayInt{Tag: either.EitherStringArrayIntLeft, Left0: acc3.Left0 + array2[elementIndex].Left0}
+			accumulator3 = either.EitherStringArrayInt{Tag: either.EitherStringArrayIntLeft, Left: acc3.Left + array2[elementIndex].Left}
 		} else if acc3.Tag == either.EitherStringArrayIntLeft && array2[elementIndex].Tag == either.EitherStringIntRight {
-			accumulator3 = either.EitherStringArrayInt{Tag: either.EitherStringArrayIntLeft, Left0: acc3.Left0}
+			accumulator3 = either.EitherStringArrayInt{Tag: either.EitherStringArrayIntLeft, Left: acc3.Left}
 		} else if acc3.Tag == either.EitherStringArrayIntRight && array2[elementIndex].Tag == either.EitherStringIntRight {
-			accumulator3 = either.EitherStringArrayInt{Tag: either.EitherStringArrayIntRight, Right0: append(acc3.Right0, array2[elementIndex].Right0)}
+			accumulator3 = either.EitherStringArrayInt{Tag: either.EitherStringArrayIntRight, Right: append(acc3.Right, array2[elementIndex].Right)}
 		} else {
-			accumulator3 = either.EitherStringArrayInt{Tag: either.EitherStringArrayIntLeft, Left0: array2[elementIndex].Left0}
+			accumulator3 = either.EitherStringArrayInt{Tag: either.EitherStringArrayIntLeft, Left: array2[elementIndex].Left}
 		}
 	}
 	accumulator4 := AccSeen{Acc: []int32{}, Seen: [][]int32{}}
@@ -85,7 +85,7 @@ func initializeMain_() AppendedCombinedEscapingSnocs {
 		r := accumulator4
 		accumulator4 = AccSeen{Acc: array.Append(r.Acc, []int32{x3}), Seen: append(r.Seen, r.Acc)}
 	}
-	return AppendedCombinedEscapingSnocs{Appended: accumulator, Snocs: accumulator2, Combined: accumulator3, Escaping: accumulator4.Seen}
+	return MainResult{Appended: accumulator, Snocs: accumulator2, Combined: accumulator3, Escaping: accumulator4.Seen}
 }
 
 func main() {

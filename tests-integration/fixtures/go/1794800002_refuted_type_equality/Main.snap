@@ -1,5 +1,6 @@
 ---
 source: tests-integration/src/fixtures.rs
+assertion_line: 570
 ---
 // main.go
 package main
@@ -9,11 +10,11 @@ import (
 	"github.com/i-am-the-slime/purs-backend-go/go-support/prim"
 )
 
-type Empty struct{}
+type Equal struct{}
 
 type ValueInt struct {
-	Field0       Empty
-	StringValue0 Empty
+	Field0       Equal
+	StringValue0 Equal
 	StringValue1 string
 	Pair0        *ValueInt
 	Pair1        *ValueInt
@@ -29,8 +30,8 @@ const (
 )
 
 type ValueString struct {
-	Field0       Empty
-	StringValue0 Empty
+	Field0       Equal
+	StringValue0 Equal
 	StringValue1 string
 	Pair0        *ValueString
 	Pair1        *ValueString
@@ -64,7 +65,7 @@ func evaluateInt(argument0 *ValueInt) int32 {
 	}
 }
 
-var reflTypeInt Empty = Empty{}
+var reflTypeInt Equal = Equal{}
 
 func evaluateString(argument0 *ValueString) string {
 	for {

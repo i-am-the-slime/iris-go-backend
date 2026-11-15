@@ -17,6 +17,7 @@ use std::collections::BTreeSet;
 use rustc_hash::{FxHashMap, FxHashSet};
 
 use super::RESERVED;
+use super::names::resolve;
 use crate::context::capitalise;
 use crate::error::{GoError, GoResult};
 use crate::modules::{ModuleIndex, ModuleSet, Modules};
@@ -26,11 +27,29 @@ use crate::syntax::{GoDeclaration, GoExpression, GoFile, GoImport, Reference};
 #[derive(Debug, Clone)]
 pub(crate) enum Spelling {
     Base(String),
+    /// Candidates from shortest to longest, the longer ones for collisions.
+    Ladder(Vec<String>),
+    /// A name that spells records, such as a data type's applied to one, by
+    /// the names those records end up with; else by `full`.
+    Composed {
+        parts: Vec<SpelledPart>,
+        full: String,
+    },
     /// A name formed from another, such as a constructor's tag from its type.
     Derived {
         prefix: &'static str,
         parent: String,
         suffix: String,
+    },
+}
+
+#[derive(Debug, Clone)]
+pub(crate) enum SpelledPart {
+    Text(String),
+    /// A record, by its global if it is declared, else by `name`.
+    Record {
+        global: Option<String>,
+        name: String,
     },
 }
 
@@ -43,6 +62,8 @@ impl Spelling {
     pub(crate) fn text(&self) -> String {
         match self {
             Spelling::Base(base) => base.clone(),
+            Spelling::Ladder(ladder) => ladder[0].clone(),
+            Spelling::Composed { full, .. } => full.clone(),
             Spelling::Derived { prefix: "", parent, suffix } => format!("{parent}{suffix}"),
             Spelling::Derived { prefix, parent, suffix } => {
                 format!("{prefix}{}{suffix}", capitalise(parent))
@@ -358,13 +379,32 @@ impl Packaging<'_> {
             .iter()
             .find(|(_, package)| package.directory.is_empty())
             .map(|(&place, _)| place);
+        let mut members: FxHashMap<Place, Vec<String>> = FxHashMap::default();
+        let mut binders: FxHashMap<Place, FxHashSet<String>> = FxHashMap::default();
+        for (&place, place_units) in &contents {
+            let place_binders = binders.entry(place).or_default();
+            for &unit in place_units {
+                members.entry(place).or_default().extend(units[unit].names.iter().cloned());
+                for declaration in &units[unit].declarations {
+                    let mut declaration = declaration.clone();
+                    declaration.for_each_reference_mut(&mut |reference| {
+                        if let Reference::Binder(name) = reference {
+                            place_binders.insert(name.clone());
+                        }
+                    });
+                }
+            }
+        }
         let mut naming = Naming {
             unit_of,
             placements,
             spellings: self.spellings,
             root,
+            members,
+            binders,
             names: FxHashMap::default(),
             taken: FxHashMap::default(),
+            named: FxHashSet::default(),
         };
         let mut ordered: Vec<Place> = contents.keys().copied().collect();
         ordered.sort_by(|left, right| packages[left].directory.cmp(&packages[right].directory));
@@ -700,47 +740,142 @@ fn units(declarations: Vec<(GoDeclaration, Option<ModuleIndex>)>) -> Vec<Unit> {
 }
 
 /// Names declarations per package: exported in every package but the root,
-/// whose declarations no other package imports and keep their global names.
+/// whose declarations no other package imports. A package's own names are
+/// chosen together, so that names that collide grow along their ladders;
+/// names formed from another's follow, in the order they are asked for.
 struct Naming<'a> {
     unit_of: &'a FxHashMap<String, usize>,
     placements: &'a [Place],
     spellings: &'a FxHashMap<String, Spelling>,
     root: Option<Place>,
+    /// The globals each place declares, in declaration order.
+    members: FxHashMap<Place, Vec<String>>,
+    /// The local names in each place's code, which no global may shadow.
+    binders: FxHashMap<Place, FxHashSet<String>>,
     names: FxHashMap<String, String>,
     taken: FxHashMap<Place, FxHashSet<String>>,
+    named: FxHashSet<Place>,
 }
 
 impl Naming<'_> {
     /// The name of a global, which lives in `place`, there.
     fn name(&mut self, global: &str, place: Place) -> String {
-        if Some(place) == self.root {
-            return global.to_string();
+        if let Some(name) = self.names.get(global) {
+            return name.clone();
         }
+        self.name_place(place);
         if let Some(name) = self.names.get(global) {
             return name.clone();
         }
         let spelled = match self.spellings.get(global) {
-            Some(Spelling::Base(base)) => base.clone(),
             Some(Spelling::Derived { prefix, parent, suffix }) => {
                 let parent_place = match self.unit_of.get(parent.as_str()) {
                     Some(&unit) => self.placements[unit],
                     None => place,
                 };
                 let parent = self.name(parent, parent_place);
-                format!("{prefix}{parent}{suffix}")
+                let parent = if prefix.is_empty() { parent } else { capitalise(&parent) };
+                self.spelled(&format!("{prefix}{parent}{suffix}"), place)
             }
-            None => global.to_string(),
+            _ => self.spelled(global, place),
         };
+        let binders = self.binders.get(&place);
         let taken = self.taken.entry(place).or_default();
-        let base = exported(&spelled);
-        let mut name = base.clone();
+        let mut name = spelled.clone();
         let mut counter = 2;
-        while !taken.insert(name.clone()) {
-            name = format!("{base}{counter}");
+        while binders.is_some_and(|binders| binders.contains(&name)) || !taken.insert(name.clone())
+        {
+            name = format!("{spelled}{counter}");
             counter += 1;
         }
         self.names.insert(global.to_string(), name.clone());
         name
+    }
+
+    /// Names the globals of a place that are not formed from another's: first
+    /// those spelled on their own, then those that spell records, by the names
+    /// the records got.
+    fn name_place(&mut self, place: Place) {
+        if !self.named.insert(place) {
+            return;
+        }
+        let members = self.members.get(&place).cloned().unwrap_or_default();
+        let (composed, simple): (Vec<String>, Vec<String>) = members
+            .into_iter()
+            .filter(|global| !matches!(self.spellings.get(global), Some(Spelling::Derived { .. })))
+            .partition(|global| {
+                matches!(self.spellings.get(global), Some(Spelling::Composed { .. }))
+            });
+        let simple_ladders: Vec<Vec<String>> = simple
+            .iter()
+            .map(|global| match self.spellings.get(global) {
+                Some(Spelling::Base(base)) => vec![base.clone()],
+                Some(Spelling::Ladder(ladder)) => ladder.clone(),
+                _ => vec![global.clone()],
+            })
+            .collect();
+        self.choose(place, simple, simple_ladders);
+        let composed_ladders: Vec<Vec<String>> = composed
+            .iter()
+            .map(|global| {
+                let Some(Spelling::Composed { parts, full }) = self.spellings.get(global) else {
+                    unreachable!("invariant violated: a composed name lost its parts")
+                };
+                let (parts, full) = (parts.clone(), full.clone());
+                let short: String = parts
+                    .iter()
+                    .map(|part| match part {
+                        SpelledPart::Text(text) => text.clone(),
+                        SpelledPart::Record { global: Some(global), name } => {
+                            self.record_name(global, place).unwrap_or_else(|| name.clone())
+                        }
+                        SpelledPart::Record { global: None, name } => name.clone(),
+                    })
+                    .collect();
+                let short = super::identifier(&short);
+                if short == full { vec![short] } else { vec![short, full] }
+            })
+            .collect();
+        self.choose(place, composed, composed_ladders);
+    }
+
+    /// The name a record's global got, as spelled in a name: unexported.
+    fn record_name(&mut self, global: &str, place: Place) -> Option<String> {
+        let home = self.unit_of.get(global).map(|&unit| self.placements[unit]).unwrap_or(place);
+        if home != place && !self.named.contains(&home) {
+            self.name_place(home);
+        }
+        let name = self.names.get(global)?;
+        let ladder = match self.spellings.get(global) {
+            Some(Spelling::Ladder(ladder)) => ladder,
+            _ => return Some(name.clone()),
+        };
+        // Records are spelled in names as their ladder spells them, unexported.
+        let spelled = ladder.iter().find(|candidate| self.spelled(candidate, home) == *name);
+        Some(spelled.cloned().unwrap_or_else(|| name.clone()))
+    }
+
+    /// Gives globals of a place the names their ladders resolve to, beside
+    /// the names already taken there.
+    fn choose(&mut self, place: Place, globals: Vec<String>, ladders: Vec<Vec<String>>) {
+        let ladders: Vec<Vec<String>> = ladders
+            .iter()
+            .map(|ladder| ladder.iter().map(|candidate| self.spelled(candidate, place)).collect())
+            .collect();
+        let empty = FxHashSet::default();
+        let binders = self.binders.get(&place).unwrap_or(&empty);
+        let taken = self.taken.get(&place).unwrap_or(&empty);
+        let names = resolve(&ladders, &|name| binders.contains(name) || taken.contains(name));
+        let taken = self.taken.entry(place).or_default();
+        for (global, name) in globals.into_iter().zip(names) {
+            taken.insert(name.clone());
+            self.names.insert(global, name);
+        }
+    }
+
+    /// A name as a place spells it: exported in every package but the root.
+    fn spelled(&self, name: &str, place: Place) -> String {
+        if Some(place) == self.root { name.to_string() } else { exported(name) }
     }
 }
 

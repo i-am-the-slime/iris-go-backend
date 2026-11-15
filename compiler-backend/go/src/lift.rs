@@ -3,8 +3,8 @@ use rustc_hash::{FxHashMap, FxHashSet};
 use smol_str::format_smolstr;
 
 use crate::mono::{
-    Binding, Expression, ExpressionKind, Function, FunctionId, Guard, Guarded, Local, LocalId,
-    Pattern, PatternKind, Program,
+    Binding, Expression, ExpressionKind, Function, FunctionId, FunctionSpelling, Guard, Guarded,
+    Local, LocalId, Pattern, PatternKind, Program,
 };
 use crate::monotype::{Monotype, MonotypeId, Monotypes};
 use crate::simplify::{for_each_child, for_each_child_mut, is_trivial};
@@ -180,6 +180,9 @@ impl Lifter<'_> {
             let mut all_parameters = parameters;
             all_parameters.extend(lambda_parameters);
             let name = format_smolstr!("{base}{}", crate::context::capitalise(&binding.local.name));
+            let spelling =
+                FunctionSpelling::Lifted { parent: base.into(), local: binding.local.name.clone() };
+            self.monotypes.function_spellings.entry(name.clone()).or_insert(spelling);
             let function = Function {
                 name,
                 origin: self.origin,
@@ -298,7 +301,7 @@ fn collect_uses(expression: &Expression, used: &mut FxHashSet<LocalId>) {
     for_each_child(expression, &mut |child| collect_uses(child, used));
 }
 
-fn collect_binders(expression: &Expression, binders: &mut FxHashMap<LocalId, Local>) {
+pub(crate) fn collect_binders(expression: &Expression, binders: &mut FxHashMap<LocalId, Local>) {
     match &expression.kind {
         ExpressionKind::Lambda { parameters, .. } => {
             for parameter in parameters {

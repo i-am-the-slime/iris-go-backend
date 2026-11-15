@@ -5,8 +5,8 @@ source: tests-integration/src/fixtures.rs
 package maybe
 
 type MaybeInt struct {
-	Just0 int32
-	Tag   uint8
+	Just int32
+	Tag  uint8
 }
 
 const (
@@ -15,8 +15,8 @@ const (
 )
 
 type MaybeMaybeInt struct {
-	Just0 MaybeInt
-	Tag   uint8
+	Just MaybeInt
+	Tag  uint8
 }
 
 const (
@@ -49,10 +49,10 @@ func initializeMain_() []int32 {
 	} else {
 		result = XY{X: 0, Y: point.Y}
 	}
-	found := maybe.MaybeMaybeInt{Tag: maybe.MaybeMaybeIntJust, Just0: maybe.MaybeInt{Tag: maybe.MaybeIntJust, Just0: opaque(6)}}
+	found := maybe.MaybeMaybeInt{Tag: maybe.MaybeMaybeIntJust, Just: maybe.MaybeInt{Tag: maybe.MaybeIntJust, Just: opaque(6)}}
 	var result2 int32
-	if found.Tag == maybe.MaybeMaybeIntJust && found.Just0.Tag == maybe.MaybeIntJust {
-		result2 = found.Just0.Just0
+	if found.Tag == maybe.MaybeMaybeIntJust && found.Just.Tag == maybe.MaybeIntJust {
+		result2 = found.Just.Just
 	} else {
 		switch found.Tag {
 		case maybe.MaybeMaybeIntJust:

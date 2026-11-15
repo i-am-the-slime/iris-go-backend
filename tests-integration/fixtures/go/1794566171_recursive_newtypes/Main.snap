@@ -10,16 +10,16 @@ import (
 	"github.com/i-am-the-slime/purs-backend-go/go-support/prim"
 )
 
-type MinisName struct {
-	Minis []MinisName
+type Level struct {
+	Minis []Level
 	Name  string
 }
 
 type Step = func(int32) *MaybeStep
 
 type MaybeStep struct {
-	Just0 Step
-	Tag   uint8
+	Just Step
+	Tag  uint8
 }
 
 const (
@@ -29,17 +29,17 @@ const (
 
 var sharedMaybeStepNothing = &MaybeStep{Tag: MaybeStepNothing}
 
-var main_ []string = array.Append(names(MinisName{Name: "root", Minis: []MinisName{MinisName{Name: "a", Minis: []MinisName{}}}}), []string{prim.ShowInt(countSteps(func(n int32) *MaybeStep {
+var main_ []string = array.Append(names(Level{Name: "root", Minis: []Level{Level{Name: "a", Minis: []Level{}}}}), []string{prim.ShowInt(countSteps(func(n int32) *MaybeStep {
 	if n < 3 {
-		return &MaybeStep{Tag: MaybeStepJust, Just0: func(_ int32) *MaybeStep {
+		return &MaybeStep{Tag: MaybeStepJust, Just: func(_ int32) *MaybeStep {
 			return sharedMaybeStepNothing
 		}}
 	}
 	return sharedMaybeStepNothing
 }, 0))})
 
-func names(level MinisName) []string {
-	return array.Append([]string{level.Name}, array.Bind(level.Minis, func(argument0 MinisName) []string {
+func names(level Level) []string {
+	return array.Append([]string{level.Name}, array.Bind(level.Minis, func(argument0 Level) []string {
 		return names(argument0)
 	}))
 }
@@ -51,7 +51,7 @@ func countSteps(argument0 Step, argument1 int32) int32 {
 		case MaybeStepNothing:
 			return argument1
 		default: // MaybeStepJust
-			argument0, argument1 = scrutinee.Just0, argument1 + 1
+			argument0, argument1 = scrutinee.Just, argument1 + 1
 			continue
 		}
 	}

@@ -5,8 +5,8 @@ source: tests-integration/src/fixtures.rs
 package maybe
 
 type MaybeInt struct {
-	Just0 int32
-	Tag   uint8
+	Just int32
+	Tag  uint8
 }
 
 const (
@@ -23,7 +23,7 @@ import (
 	"github.com/i-am-the-slime/purs-backend-go/go-support/prim"
 )
 
-type LastSmallOverFilterOverMap struct {
+type MainResult struct {
 	LastSmall  maybe.MaybeInt
 	OverFilter string
 	OverMap    string
@@ -31,7 +31,7 @@ type LastSmallOverFilterOverMap struct {
 
 var main_ = initializeMain_()
 
-func initializeMain_() LastSmallOverFilterOverMap {
+func initializeMain_() MainResult {
 	accumulator := ""
 	for index := len(numbers) - 1; index >= 0; index-- {
 		value := numbers[index]
@@ -56,11 +56,11 @@ func initializeMain_() LastSmallOverFilterOverMap {
 		value3 := numbers[index3]
 		value4 := prim.MultiplyInt32(value3, 2)
 		if value4 < 5 {
-			found = maybe.MaybeInt{Tag: maybe.MaybeIntJust, Just0: int32(index3)}
+			found = maybe.MaybeInt{Tag: maybe.MaybeIntJust, Just: int32(index3)}
 			break
 		}
 	}
-	return LastSmallOverFilterOverMap{OverMap: accumulator, OverFilter: accumulator2, LastSmall: found}
+	return MainResult{OverMap: accumulator, OverFilter: accumulator2, LastSmall: found}
 }
 
 var numbers []int32 = []int32{3, 1, 4, 1, 5, 9, 2, 6}

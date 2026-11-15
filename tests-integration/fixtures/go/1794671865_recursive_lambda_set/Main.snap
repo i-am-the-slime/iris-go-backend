@@ -10,7 +10,7 @@ import (
 	"github.com/i-am-the-slime/purs-backend-go/go-support/prim"
 )
 
-type ContinuedForced struct {
+type MainResult struct {
 	Continued int32
 	Forced    int32
 }
@@ -41,7 +41,7 @@ const (
 
 var sharedIntToIntMain_ = &IntToInt{Tag: IntToIntMain_}
 
-var main_ ContinuedForced = ContinuedForced{Forced: forceInt(buildThunks(1000, sharedLazyIntMain_)), Continued: countDown(10, sharedIntToIntMain_)}
+var main_ MainResult = MainResult{Forced: forceInt(buildThunks(1000, sharedLazyIntMain_)), Continued: countDown(10, sharedIntToIntMain_)}
 
 func buildThunks(argument0 int32, argument1 *LazyInt) *LazyInt {
 	var lazyIntCells alloc.Cells[LazyInt]

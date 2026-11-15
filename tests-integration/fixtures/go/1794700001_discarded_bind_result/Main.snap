@@ -1,5 +1,6 @@
 ---
 source: tests-integration/src/fixtures.rs
+assertion_line: 570
 ---
 // main.go
 package main
@@ -13,17 +14,17 @@ type Ref[T any] struct {
 	Value T
 }
 
-type StateValue struct {
+type StateValueOfIntInt struct {
 	State int32
 	Value int32
 }
 
-type PushSubscribe struct {
+type CreateResult struct {
 	Push      func(int32)
 	Subscribe func(func(int32)) func()
 }
 
-type StateValue2 struct {
+type StateValueOfArrayFnIntEffectArrayFnIntEffect struct {
 	State []func(int32)
 	Value []func(int32)
 }
@@ -36,7 +37,7 @@ func main_() int32 {
 	subscribe(func(n int32) {
 		s2 := value.Value
 		s_2 := s2 + n
-		modified := StateValue{State: s_2, Value: s_2}
+		modified := StateValueOfIntInt{State: s_2, Value: s_2}
 		value.Value = modified.State
 	})
 	value4 := &Ref[int32]{Value: 0}
@@ -52,12 +53,12 @@ func main_() int32 {
 	return value.Value
 }
 
-func create() PushSubscribe {
+func create() CreateResult {
 	value := &Ref[[]func(int32)]{Value: []func(int32){}}
-	return PushSubscribe{Subscribe: func(k func(int32)) func() {
+	return CreateResult{Subscribe: func(k func(int32)) func() {
 		s2 := value.Value
 		s_2 := array.Append(s2, []func(int32){k})
-		modified := StateValue2{State: s_2, Value: s_2}
+		modified := StateValueOfArrayFnIntEffectArrayFnIntEffect{State: s_2, Value: s_2}
 		value.Value = modified.State
 		return func() {
 		}

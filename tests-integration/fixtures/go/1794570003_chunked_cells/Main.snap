@@ -21,7 +21,7 @@ const (
 	ListIntCons
 )
 
-type LargestNumbersOwnedLargestTotal struct {
+type MainResult struct {
 	Largest      *ListInt
 	Numbers      *ListInt
 	OwnedLargest *ListInt
@@ -46,9 +46,9 @@ var sharedTreeLeaf = &Tree{Tag: TreeLeaf}
 
 var main_ = initializeMain_()
 
-func initializeMain_() LargestNumbersOwnedLargestTotal {
+func initializeMain_() MainResult {
 	numbers := mainGo(20, sharedListIntNil)
-	return LargestNumbersOwnedLargestTotal{Numbers: numbers, Largest: largestReplacesItsCell(numbers), OwnedLargest: largestReplacesItsCellReusing(mainGo(10, sharedListIntNil)), Total: total(mainGo2(5, sharedTreeLeaf))}
+	return MainResult{Numbers: numbers, Largest: largestReplacesItsCell(numbers), OwnedLargest: largestReplacesItsCellReusing(mainGo(10, sharedListIntNil)), Total: total(mainGo2(5, sharedTreeLeaf))}
 }
 
 func largestReplacesItsCell(argument1 *ListInt) *ListInt {

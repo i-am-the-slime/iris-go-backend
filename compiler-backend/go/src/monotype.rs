@@ -94,6 +94,14 @@ pub struct Monotypes {
     pub new_erased_owners: Vec<String>,
     /// Modules whose foreign imports the project implements in Go.
     pub foreign_modules: Vec<String>,
+    /// How the names of specialized and lifted functions were formed, which
+    /// travels with the types those names spell.
+    pub function_spellings: crate::mono::FunctionSpellings,
+    /// The synonyms and newtypes, with their arguments, that each record was
+    /// spelled by where a type was converted, in the order met.
+    pub record_spellings: FxHashMap<MonotypeId, Vec<(FileId, TypeItemId, Arc<[TypeId]>)>>,
+    /// The newtypes specialization erased to the types they wrap.
+    pub erased_newtypes: Vec<crate::context::ErasedNewtype>,
 }
 
 impl Monotypes {
@@ -279,7 +287,13 @@ impl Monotypes {
             Type::Constructor(file_id, item) => (file_id, item),
             Type::Synonym(file_id, item) => {
                 return match expand_synonym(context, file_id, item, &arguments)? {
-                    Some(expanded) => self.convert(context, expanded, expansions + 1),
+                    Some(expanded) => {
+                        let converted = self.convert(context, expanded, expansions + 1)?;
+                        if let Ok(converted) = converted {
+                            self.note_record_spelling(converted, file_id, item, &arguments);
+                        }
+                        Ok(converted)
+                    }
                     None => Ok(Err(UnsupportedState::UnsaturatedType {
                         name: context.type_name(file_id, item)?.to_string(),
                     })),
@@ -486,6 +500,9 @@ impl Monotypes {
                     self.expanding.push(type_id);
                     let converted = self.convert(context, underlying, expansions + 1);
                     self.expanding.pop();
+                    if let Ok(Ok(converted)) = converted {
+                        self.note_record_spelling(converted, file_id, item, &arguments);
+                    }
                     if let Ok(Ok(converted)) = converted
                         && let Monotype::Function(..) = self.get(converted)
                     {
@@ -670,6 +687,37 @@ impl Monotypes {
         }
         fields.sort_by(|left, right| left.label.cmp(&right.label));
         Ok(Ok(self.intern(Monotype::Record(Arc::from(fields)))))
+    }
+
+    /// Remembers that a synonym or newtype applied to `arguments` spelled a
+    /// record, which may then be named after it.
+    fn note_record_spelling(
+        &mut self,
+        converted: MonotypeId,
+        file_id: FileId,
+        item: TypeItemId,
+        arguments: &[TypeId],
+    ) {
+        if !matches!(self.get(converted), Monotype::Record(_)) {
+            return;
+        }
+        let spellings = self.record_spellings.entry(converted).or_default();
+        let spelling = (file_id, item, Arc::from(arguments));
+        if !spellings.contains(&spelling) {
+            spellings.push(spelling);
+        }
+    }
+
+    /// The record of a closed row.
+    pub fn record<Q>(
+        &mut self,
+        context: &mut Context<'_, Q>,
+        row: TypeId,
+    ) -> QueryResult<Result<MonotypeId, UnsupportedState>>
+    where
+        Q: checking::ExternalQueries,
+    {
+        self.convert_record(context, row, 0)
     }
 
     fn convert_record<Q>(
@@ -1048,9 +1096,18 @@ where
                     return Ok(context.types.erased(Erasure::NewtypeCycle));
                 }
                 expanding.push(type_id);
-                let erased = canonicalise(context, underlying, expansions + 1, expanding, erase);
+                let erased = canonicalise(context, underlying, expansions + 1, expanding, erase)?;
                 expanding.pop();
-                return erased;
+                let erased_newtype = crate::context::ErasedNewtype {
+                    file_id,
+                    item,
+                    arguments: Arc::from(arguments),
+                    erased,
+                };
+                if !context.erased_newtypes.contains(&erased_newtype) {
+                    context.erased_newtypes.push(erased_newtype);
+                }
+                return Ok(erased);
             }
             if module.name == "Prim"
                 && module.indexed.items[item].name.as_deref() == Some("Function")

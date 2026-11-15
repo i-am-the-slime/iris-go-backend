@@ -1,17 +1,18 @@
 ---
 source: tests-integration/src/fixtures.rs
+assertion_line: 570
 ---
 // main.go
 package main
 
 import "fmt"
 
-type FirstSecond struct {
+type IdentityOfString struct {
 	First  int32
 	Second string
 }
 
-type FirstSecond2 struct {
+type IdentityOfUnit struct {
 	First  int32
 	Second struct{}
 }
@@ -19,9 +20,9 @@ type FirstSecond2 struct {
 var main_ = initializeMain_()
 
 func initializeMain_() []int32 {
-	updated := FirstSecond{First: 1, Second: "s"}
+	updated := IdentityOfString{First: 1, Second: "s"}
 	updated.First = 99
-	updated2 := FirstSecond2{First: 0, Second: struct{}{}}
+	updated2 := IdentityOfUnit{First: 0, Second: struct{}{}}
 	updated2.First = 3
 	return []int32{updated.First, 7, updated2.First}
 }

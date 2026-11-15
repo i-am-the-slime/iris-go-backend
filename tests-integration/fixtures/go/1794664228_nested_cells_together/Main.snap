@@ -10,7 +10,7 @@ import (
 	"github.com/i-am-the-slime/purs-backend-go/go-support/prim"
 )
 
-type BuiltLinkedLiteralMirroredNegativePositiveTwo struct {
+type MainResult struct {
 	Built    int32
 	Linked   int32
 	Literal  int32
@@ -23,7 +23,7 @@ type BuiltLinkedLiteralMirroredNegativePositiveTwo struct {
 type Expr struct {
 	Field0 *Expr
 	Field1 *Expr
-	Val0   int32
+	Val    int32
 	Tag    uint8
 }
 
@@ -47,19 +47,19 @@ const (
 
 var sharedListIntNil = &ListInt{Tag: ListIntNil}
 
-func main_(n int32) BuiltLinkedLiteralMirroredNegativePositiveTwo {
+func main_(n int32) MainResult {
 	n2 := -n
 	listInts := make([]ListInt, 3)
 	listInts[0] = ListInt{Tag: ListIntCons, Cons0: n, Cons1: &listInts[1]}
 	listInts[1] = ListInt{Tag: ListIntCons, Cons0: 2, Cons1: &listInts[2]}
 	listInts[2] = ListInt{Tag: ListIntCons, Cons0: 3, Cons1: sharedListIntNil}
-	return BuiltLinkedLiteralMirroredNegativePositiveTwo{Built: evaluate(build(4)), Mirrored: evaluate(mirrorReusing(build(3))), Two: evaluate(&Expr{Tag: ExprAdd, Field0: build(2), Field1: &Expr{Tag: ExprVal, Val0: 2}}), Linked: total(mainGo(5, sharedListIntNil)), Literal: total(&listInts[0]), Positive: n > 0 && evaluate(&Expr{Tag: ExprAdd, Field0: &Expr{Tag: ExprVal, Val0: n}, Field1: &Expr{Tag: ExprMul, Field0: &Expr{Tag: ExprVal, Val0: 2}, Field1: &Expr{Tag: ExprVal, Val0: n}}}) > 5, Negative: n2 > 0 && evaluate(&Expr{Tag: ExprAdd, Field0: &Expr{Tag: ExprVal, Val0: n2}, Field1: &Expr{Tag: ExprMul, Field0: &Expr{Tag: ExprVal, Val0: 2}, Field1: &Expr{Tag: ExprVal, Val0: n2}}}) > 5}
+	return MainResult{Built: evaluate(build(4)), Mirrored: evaluate(mirrorReusing(build(3))), Two: evaluate(&Expr{Tag: ExprAdd, Field0: build(2), Field1: &Expr{Tag: ExprVal, Val: 2}}), Linked: total(mainGo(5, sharedListIntNil)), Literal: total(&listInts[0]), Positive: n > 0 && evaluate(&Expr{Tag: ExprAdd, Field0: &Expr{Tag: ExprVal, Val: n}, Field1: &Expr{Tag: ExprMul, Field0: &Expr{Tag: ExprVal, Val: 2}, Field1: &Expr{Tag: ExprVal, Val: n}}}) > 5, Negative: n2 > 0 && evaluate(&Expr{Tag: ExprAdd, Field0: &Expr{Tag: ExprVal, Val: n2}, Field1: &Expr{Tag: ExprMul, Field0: &Expr{Tag: ExprVal, Val: 2}, Field1: &Expr{Tag: ExprVal, Val: n2}}}) > 5}
 }
 
 func evaluate(argument0 *Expr) int32 {
 	switch argument0.Tag {
 	case ExprVal:
-		return argument0.Val0
+		return argument0.Val
 	case ExprAdd:
 		return evaluate(argument0.Field0) + evaluate(argument0.Field1)
 	case ExprMul:
@@ -72,14 +72,14 @@ func evaluate(argument0 *Expr) int32 {
 func build(argument0 int32) *Expr {
 	switch argument0 {
 	case 0:
-		return &Expr{Tag: ExprVal, Val0: 1}
+		return &Expr{Tag: ExprVal, Val: 1}
 	default:
 		exprs := make([]Expr, 5)
 		exprs[0] = Expr{Tag: ExprAdd, Field0: &exprs[1], Field1: &exprs[3]}
 		exprs[1] = Expr{Tag: ExprMul, Field0: &exprs[2], Field1: build(argument0 - 1)}
-		exprs[2] = Expr{Tag: ExprVal, Val0: argument0}
+		exprs[2] = Expr{Tag: ExprVal, Val: argument0}
 		exprs[3] = Expr{Tag: ExprSub, Field0: build(argument0 - 1), Field1: &exprs[4]}
-		exprs[4] = Expr{Tag: ExprVal, Val0: 1}
+		exprs[4] = Expr{Tag: ExprVal, Val: 1}
 		return &exprs[0]
 	}
 }

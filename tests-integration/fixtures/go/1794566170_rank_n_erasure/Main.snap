@@ -6,7 +6,7 @@ package main
 
 import "fmt"
 
-func convert2(value []int32) []any {
+func convert(value []int32) []any {
 	converted := []any{}
 	for _, element := range value {
 		converted = append(converted, element)
@@ -14,18 +14,18 @@ func convert2(value []int32) []any {
 	return converted
 }
 
-func convert(value [][]int32) []any {
+func convert2(value [][]int32) []any {
 	converted := []any{}
 	for _, element := range value {
-		converted = append(converted, convert2(element))
+		converted = append(converted, convert(element))
 	}
 	return converted
 }
 
 type Nested struct {
-	Flat0 any
-	Deep0 *Nested
-	Tag   uint8
+	Flat any
+	Deep *Nested
+	Tag  uint8
 }
 
 const (
@@ -33,14 +33,14 @@ const (
 	NestedDeep
 )
 
-var main_ []int32 = []int32{3, 1 + depthArrayInt(&Nested{Tag: NestedDeep, Deep0: &Nested{Tag: NestedFlat, Flat0: convert([][]int32{[]int32{1}})}})}
+var main_ []int32 = []int32{3, 1 + depthArrayInt(&Nested{Tag: NestedDeep, Deep: &Nested{Tag: NestedFlat, Flat: convert2([][]int32{[]int32{1}})}})}
 
 func depthArrayInt(value *Nested) int32 {
 	switch value.Tag {
 	case NestedFlat:
 		return 0
 	default: // NestedDeep
-		return 1 + depthArrayInt(value.Deep0)
+		return 1 + depthArrayInt(value.Deep)
 	}
 }
 

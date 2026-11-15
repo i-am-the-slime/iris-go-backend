@@ -1,5 +1,6 @@
 ---
 source: tests-integration/src/fixtures.rs
+assertion_line: 570
 ---
 // main.go
 package main
@@ -13,8 +14,8 @@ import (
 type StreamInt = *lazy.Lazy[*TupleIntMaybeStreamInt]
 
 type MaybeStreamInt struct {
-	Just0 StreamInt
-	Tag   uint8
+	Just StreamInt
+	Tag  uint8
 }
 
 const (
@@ -23,15 +24,15 @@ const (
 )
 
 type TupleIntMaybeStreamInt struct {
-	Tuple1 *MaybeStreamInt
-	Tuple0 int32
+	Second *MaybeStreamInt
+	First  int32
 }
 
 type StreamStreamInt = *lazy.Lazy[*TupleStreamIntMaybeStreamStreamInt]
 
 type MaybeStreamStreamInt struct {
-	Just0 StreamStreamInt
-	Tag   uint8
+	Just StreamStreamInt
+	Tag  uint8
 }
 
 const (
@@ -40,8 +41,8 @@ const (
 )
 
 type TupleStreamIntMaybeStreamStreamInt struct {
-	Tuple0 StreamInt
-	Tuple1 *MaybeStreamStreamInt
+	First  StreamInt
+	Second *MaybeStreamStreamInt
 }
 
 var sharedMaybeStreamIntNothing = &MaybeStreamInt{Tag: MaybeStreamIntNothing}
@@ -54,16 +55,16 @@ func initializeMain_() []string {
 	scrutinee := countdown(3).Force()
 	scrutinee2 := countdown(3).Force()
 	var result string
-	switch scrutinee2.Tuple1.Tag {
+	switch scrutinee2.Second.Tag {
 	case MaybeStreamIntJust:
-		scrutinee3 := scrutinee2.Tuple1.Just0.Force()
-		result = "(Just " + prim.ShowInt(scrutinee3.Tuple0) + ")"
+		scrutinee3 := scrutinee2.Second.Just.Force()
+		result = "(Just " + prim.ShowInt(scrutinee3.First) + ")"
 	default:
 		result = "Nothing"
 	}
 	scrutinee4 := tailsInt(countdown(2)).Force()
-	scrutinee5 := scrutinee4.Tuple0.Force()
-	return []string{prim.ShowInt(scrutinee.Tuple0), result, prim.ShowInt(scrutinee5.Tuple0)}
+	scrutinee5 := scrutinee4.First.Force()
+	return []string{prim.ShowInt(scrutinee.First), result, prim.ShowInt(scrutinee5.First)}
 }
 
 func countdown(n int32) *lazy.Lazy[*TupleIntMaybeStreamInt] {
@@ -72,9 +73,9 @@ func countdown(n int32) *lazy.Lazy[*TupleIntMaybeStreamInt] {
 		if n <= 0 {
 			result = sharedMaybeStreamIntNothing
 		} else {
-			result = &MaybeStreamInt{Tag: MaybeStreamIntJust, Just0: countdown(n - 1)}
+			result = &MaybeStreamInt{Tag: MaybeStreamIntJust, Just: countdown(n - 1)}
 		}
-		return &TupleIntMaybeStreamInt{Tuple0: n, Tuple1: result}
+		return &TupleIntMaybeStreamInt{First: n, Second: result}
 	})
 }
 
@@ -82,13 +83,13 @@ func tailsInt(stream StreamInt) *lazy.Lazy[*TupleStreamIntMaybeStreamStreamInt] 
 	return lazy.Defer(func() *TupleStreamIntMaybeStreamStreamInt {
 		scrutinee := stream.Force()
 		var result *MaybeStreamStreamInt
-		switch scrutinee.Tuple1.Tag {
+		switch scrutinee.Second.Tag {
 		case MaybeStreamIntJust:
-			result = &MaybeStreamStreamInt{Tag: MaybeStreamStreamIntJust, Just0: tailsInt(scrutinee.Tuple1.Just0)}
+			result = &MaybeStreamStreamInt{Tag: MaybeStreamStreamIntJust, Just: tailsInt(scrutinee.Second.Just)}
 		default:
 			result = sharedMaybeStreamStreamIntNothing
 		}
-		return &TupleStreamIntMaybeStreamStreamInt{Tuple0: stream, Tuple1: result}
+		return &TupleStreamIntMaybeStreamStreamInt{First: stream, Second: result}
 	})
 }
 
