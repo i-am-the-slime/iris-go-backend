@@ -292,6 +292,9 @@ pub enum GoPackage {
     AVar,
     YogaOm,
     BigInts,
+    DateTime,
+    Now,
+    Spec,
 }
 
 impl GoPackage {
@@ -315,6 +318,9 @@ impl GoPackage {
             GoPackage::AVar => "github.com/i-am-the-slime/purs-backend-go/go-support/avar",
             GoPackage::YogaOm => "github.com/i-am-the-slime/purs-backend-go/go-support/yogaom",
             GoPackage::BigInts => "github.com/i-am-the-slime/purs-backend-go/go-support/bigints",
+            GoPackage::DateTime => "github.com/i-am-the-slime/purs-backend-go/go-support/datetime",
+            GoPackage::Now => "github.com/i-am-the-slime/purs-backend-go/go-support/now",
+            GoPackage::Spec => "github.com/i-am-the-slime/purs-backend-go/go-support/spec",
             GoPackage::Exception => {
                 "github.com/i-am-the-slime/purs-backend-go/go-support/exception"
             }
@@ -340,6 +346,9 @@ impl GoPackage {
             GoPackage::AVar => "avar",
             GoPackage::YogaOm => "yogaom",
             GoPackage::BigInts => "bigints",
+            GoPackage::DateTime => "datetime",
+            GoPackage::Now => "now",
+            GoPackage::Spec => "spec",
         }
     }
 }
@@ -1169,6 +1178,50 @@ const FOREIGN_IMPORTS: &[(&str, &str, Foreign)] = &[
     ("Data.BigInt", "biSub", call(GoPackage::BigInts, "BiSub", 2, PLAIN)),
     ("Data.BigInt", "biDiv", call(GoPackage::BigInts, "BiDiv", 2, PLAIN)),
     ("Data.BigInt", "biMod", call(GoPackage::BigInts, "BiMod", 2, PLAIN)),
+    ("Effect.Now", "now", perform_in(GoPackage::Now, "Now", 0, PLAIN)),
+    ("Effect.Now", "getTimezoneOffset", perform_in(GoPackage::Now, "GetTimezoneOffset", 0, PLAIN)),
+    (
+        "Data.Date",
+        "canonicalDateImpl",
+        uncurried(
+            call(GoPackage::DateTime, "CanonicalDateImpl", 4, int32_parameters(&[1, 2, 3])),
+            &[(0, 3)],
+        ),
+    ),
+    (
+        "Data.Date",
+        "calcWeekday",
+        call(GoPackage::DateTime, "CalcWeekday", 3, int32_parameters(&[0, 1, 2])),
+    ),
+    (
+        "Data.Date",
+        "calcDiff",
+        call(GoPackage::DateTime, "CalcDiff", 6, int32_parameters(&[0, 1, 2, 3, 4, 5])),
+    ),
+    (
+        "Data.DateTime",
+        "calcDiff",
+        call(
+            GoPackage::DateTime,
+            "CalcDiffDateTime",
+            2,
+            Boundary { record_arguments: &[0, 1], ..PLAIN },
+        ),
+    ),
+    (
+        "Data.DateTime.Instant",
+        "fromDateTimeImpl",
+        call(GoPackage::DateTime, "FromDateTimeImpl", 7, int32_parameters(&[0, 1, 2, 3, 4, 5, 6])),
+    ),
+    (
+        "Data.DateTime.Instant",
+        "toDateTimeImpl",
+        uncurried(call(GoPackage::DateTime, "ToDateTimeImpl", 2, PLAIN), &[(0, 7)]),
+    ),
+    ("Test.Spec.Console", "write", perform_in(GoPackage::Spec, "Write", 1, PLAIN)),
+    ("Test.Spec.Runner", "exit", perform_in(GoPackage::Spec, "Exit", 1, int32_parameters(&[0]))),
+    ("Test.Spec.Assertions.String", "_startsWith", call(GoPackage::Spec, "StartsWith", 2, PLAIN)),
+    ("Test.Spec.Assertions.String", "_endsWith", call(GoPackage::Spec, "EndsWith", 2, PLAIN)),
     ("Effect.Synchronized", "newMutex", Foreign::MutexNew),
     ("Effect.Synchronized", "withMutex", Foreign::WithMutex),
     ("Data.Lazy", "defer", Foreign::LazyDefer),
