@@ -507,6 +507,23 @@ impl Monotypes {
                     }
                     return converted;
                 }
+                // A data type without constructors that the project's Go foreign
+                // package for its module declares, as for `foreign import data`
+                // (hyrule's `ObjHack`).
+                IndexedTypeItemKind::Data { constructors, .. }
+                    if constructors.is_empty()
+                        && self.foreign_modules.iter().any(|provided| *provided == module.name) =>
+                {
+                    let mut canonical = Vec::with_capacity(arguments.len());
+                    for argument in arguments {
+                        canonical.push(erase_newtypes(context, argument, expansions, &mut vec![])?);
+                    }
+                    Monotype::ForeignData(DataType {
+                        file_id,
+                        item,
+                        arguments: Arc::from(canonical),
+                    })
+                }
                 IndexedTypeItemKind::Data { constructors, .. } if constructors.is_empty() => {
                     Monotype::Erased(Erasure::EmptyData)
                 }

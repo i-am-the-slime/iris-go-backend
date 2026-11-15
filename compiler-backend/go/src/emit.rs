@@ -1434,7 +1434,7 @@ where
             None => {
                 self.imports.insert(self.foreign_packages.import_path(&module_name));
                 let package = ForeignPackages::package_name(&module_name);
-                format!("{package}.{}", capitalise(&type_name))
+                format!("{package}.{}", self.foreign_type_name(data.file_id, &type_name)?)
             }
         };
         if data.arguments.is_empty() {
@@ -1454,6 +1454,19 @@ where
             arguments.push(self.go_type(monotype)?);
         }
         Ok(GoType::Generic { name, arguments })
+    }
+
+    /// The Go name of a type a project's foreign package declares: the
+    /// type's own name, capitalised, unless one of the module's values
+    /// capitalises to it too (hyrule's `objHack` builds an `ObjHack`), in which
+    /// case the type's name ends in `Type`.
+    fn foreign_type_name(&mut self, file_id: FileId, type_name: &str) -> GoResult<String> {
+        let name = capitalise(type_name);
+        let module = self.context.module(file_id)?;
+        let taken = module.indexed.items.iter_terms().any(|(_, term)| {
+            term.name.as_deref().is_some_and(|term_name| capitalise(term_name) == name)
+        });
+        Ok(if taken { format!("{name}Type") } else { name })
     }
 
     fn unfold(&mut self, data: &DataType) -> GoResult<MonotypeId> {
@@ -1973,7 +1986,7 @@ where
                 return self.deliver(associated, result, sink, out);
             }
             Foreign::Project { file_id, term, .. } => {
-                let thunk = self.project_call(file_id, term, arguments, out)?;
+                let thunk = self.project_call(file_id, term, arguments, result, out)?;
                 let performed = self.out_of_convention(call(thunk, vec![]), result, out)?;
                 return self.deliver(performed, result, sink, out);
             }
@@ -2093,11 +2106,15 @@ where
         }
     }
 
+    /// A call of a project's Go foreign. A foreign without arguments whose
+    /// result is one of the package's generic types is instantiated at the
+    /// result's type arguments, which nothing else would tell Go.
     fn project_call(
         &mut self,
         file_id: FileId,
         term: TermItemId,
         arguments: &[Expression],
+        result: MonotypeId,
         out: &mut Vec<GoStatement>,
     ) -> GoResult<GoExpression> {
         let module_name = self.context.module(file_id)?.name.clone();
@@ -2108,6 +2125,11 @@ where
             name: capitalise(&name),
         };
         if arguments.is_empty() {
+            if let Monotype::ForeignData(data) = self.monotypes.get(result).clone()
+                && let GoType::Generic { arguments, .. } = self.foreign_data_type(&data)?
+            {
+                return Ok(GoExpression::Instantiation { function: Box::new(function), arguments });
+            }
             return Ok(function);
         }
         let mut values = vec![];
@@ -3857,7 +3879,7 @@ where
             return self.unfoldr(foreign, arguments, out);
         }
         if let Foreign::Project { file_id, term, .. } = foreign {
-            let called = self.project_call(file_id, term, arguments, out)?;
+            let called = self.project_call(file_id, term, arguments, monotype, out)?;
             return self.out_of_convention(called, monotype, out);
         }
         if let Foreign::Operator(Operator::ArrayLength) = foreign
