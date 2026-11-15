@@ -1,3 +1,5 @@
+use std::cell::RefCell;
+use std::rc::Rc;
 use std::sync::Arc;
 
 use checking::TypeId;
@@ -14,14 +16,21 @@ const ERASED_UNIQUE: u32 = u32::MAX - 4096;
 
 pub struct TypeOperations<'q, Q> {
     queries: &'q Q,
+    substituted: Substituted,
 }
+
+/// The answers of `substitute`, by substitution (sorted) and then by type. They
+/// hold for every `TypeOperations` over the same queries, so a pass that starts
+/// over keeps them.
+#[derive(Clone, Default)]
+pub struct Substituted(Rc<RefCell<FxHashMap<Vec<(Name, TypeId)>, FxHashMap<TypeId, TypeId>>>>);
 
 impl<'q, Q> TypeOperations<'q, Q>
 where
     Q: checking::ExternalQueries,
 {
-    pub fn new(queries: &'q Q) -> TypeOperations<'q, Q> {
-        TypeOperations { queries }
+    pub fn sharing(queries: &'q Q, substituted: Substituted) -> TypeOperations<'q, Q> {
+        TypeOperations { queries, substituted }
     }
 
     /// A closed stand-in for a type the program cannot specialize on, such as the
@@ -128,31 +137,50 @@ where
         self.queries.lookup_type(type_id)
     }
 
+    /// The type with its rigid variables replaced. Specialization substitutes
+    /// the same types under the same substitutions over and over, so each answer
+    /// is kept.
     pub fn substitute(&self, type_id: TypeId, substitution: &Substitution) -> TypeId {
+        if substitution.is_empty() || !self.queries.lookup_type_flags(type_id).has_rigid() {
+            return type_id;
+        }
+        let mut entries: Vec<(Name, TypeId)> =
+            substitution.iter().map(|(&name, &type_id)| (name, type_id)).collect();
+        entries.sort_unstable();
+        let known = self.substituted.0.borrow().get(&entries).and_then(|known| known.get(&type_id)).copied();
+        if let Some(substituted) = known {
+            return substituted;
+        }
+        let substituted = self.substitute_nodes(type_id, substitution);
+        self.substituted.0.borrow_mut().entry(entries).or_default().insert(type_id, substituted);
+        substituted
+    }
+
+    fn substitute_nodes(&self, type_id: TypeId, substitution: &Substitution) -> TypeId {
         if substitution.is_empty() || !self.queries.lookup_type_flags(type_id).has_rigid() {
             return type_id;
         }
         let substituted = match self.lookup(type_id).clone() {
             Type::Rigid(name, _, _) => return substitution.get(&name).copied().unwrap_or(type_id),
             Type::Application(function, argument) => Type::Application(
-                self.substitute(function, substitution),
-                self.substitute(argument, substitution),
+                self.substitute_nodes(function, substitution),
+                self.substitute_nodes(argument, substitution),
             ),
-            Type::KindApplication(function, _) => return self.substitute(function, substitution),
-            Type::Kinded(inner, _) => return self.substitute(inner, substitution),
+            Type::KindApplication(function, _) => return self.substitute_nodes(function, substitution),
+            Type::Kinded(inner, _) => return self.substitute_nodes(inner, substitution),
             Type::Forall(binder, inner) => {
                 Type::Forall(binder, self.substitute_under_binder(binder, inner, substitution))
             }
             Type::Constrained(constraint, inner) => Type::Constrained(
-                self.substitute(constraint, substitution),
-                self.substitute(inner, substitution),
+                self.substitute_nodes(constraint, substitution),
+                self.substitute_nodes(inner, substitution),
             ),
             Type::ConstraintOrigin(constraint, _) => {
-                return self.substitute(constraint, substitution);
+                return self.substitute_nodes(constraint, substitution);
             }
             Type::Function(argument, result) => Type::Function(
-                self.substitute(argument, substitution),
-                self.substitute(result, substitution),
+                self.substitute_nodes(argument, substitution),
+                self.substitute_nodes(result, substitution),
             ),
             Type::Row(row) => {
                 let row = self.queries.lookup_row_type(row).clone();
@@ -181,11 +209,11 @@ where
     ) -> TypeId {
         let name = self.queries.lookup_forall_binder(binder).name;
         if !substitution.contains_key(&name) {
-            return self.substitute(inner, substitution);
+            return self.substitute_nodes(inner, substitution);
         }
         let mut shadowed = substitution.clone();
         shadowed.remove(&name);
-        self.substitute(inner, &shadowed)
+        self.substitute_nodes(inner, &shadowed)
     }
 
     fn substitute_row(&self, row: RowType, substitution: &Substitution) -> TypeId {
@@ -194,10 +222,10 @@ where
             .iter()
             .map(|field| RowField {
                 label: field.label.clone(),
-                id: self.substitute(field.id, substitution),
+                id: self.substitute_nodes(field.id, substitution),
             })
             .collect();
-        let mut tail = row.tail.map(|tail| self.substitute(tail, substitution));
+        let mut tail = row.tail.map(|tail| self.substitute_nodes(tail, substitution));
         while let Some(tail_id) = tail {
             let Type::Row(tail_row) = self.strip(tail_id) else { break };
             let tail_row = self.queries.lookup_row_type(*tail_row).clone();

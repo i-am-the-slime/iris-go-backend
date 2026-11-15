@@ -62,8 +62,10 @@ pub fn compile_program(
     reject_source_errors(queries, &modules)?;
 
     let mut schemes = SchemeInstantiations::default();
+    let substituted = types::Substituted::default();
     let (entry, mut specializer) = loop {
-        let mut specializer = Specializer::new(queries, foreign_packages, schemes);
+        let mut specializer =
+            Specializer::new(queries, foreign_packages, schemes, substituted.clone());
         let entry = timed("specialize", || specializer.specialize_entry(file_id, term))?;
         match specializer.grown_schemes() {
             Some(grown) => schemes = grown,

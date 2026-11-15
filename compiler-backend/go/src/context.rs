@@ -7,7 +7,7 @@ use indexing::{IndexedModule, TermItemId, TypeItemId};
 use rustc_hash::FxHashMap;
 use smol_str::SmolStr;
 
-use crate::types::TypeOperations;
+use crate::types::{Substituted, TypeOperations};
 
 pub struct Context<'q, Q> {
     pub queries: &'q Q,
@@ -42,9 +42,13 @@ where
     Q: checking::ExternalQueries,
 {
     pub fn new(queries: &'q Q) -> Context<'q, Q> {
+        Context::sharing(queries, Substituted::default())
+    }
+
+    pub fn sharing(queries: &'q Q, substituted: Substituted) -> Context<'q, Q> {
         Context {
             queries,
-            types: TypeOperations::new(queries),
+            types: TypeOperations::sharing(queries, substituted),
             modules: FxHashMap::default(),
             recursive_newtypes: FxHashMap::default(),
             canonical: FxHashMap::default(),

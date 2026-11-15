@@ -32,7 +32,7 @@ use crate::scheme::{
     SCHEME_INSTANTIATION_LIMIT, SchemeInstantiation, SchemeInstantiations, SchemeKey,
     constrained_scheme,
 };
-use crate::types::Substitution;
+use crate::types::{Substituted, Substitution};
 
 mod growth;
 mod patterns;
@@ -212,12 +212,13 @@ where
         queries: &'q Q,
         foreign_packages: &'q ForeignPackages,
         schemes: SchemeInstantiations,
+        substituted: Substituted,
     ) -> Specializer<'q, Q> {
         let mut monotypes = Monotypes::default();
         monotypes.schemes = schemes;
         monotypes.foreign_modules = foreign_packages.modules.clone();
         Specializer {
-            context: Context::new(queries),
+            context: Context::sharing(queries, substituted),
             monotypes,
             functions: vec![],
             keys: FxHashMap::default(),
