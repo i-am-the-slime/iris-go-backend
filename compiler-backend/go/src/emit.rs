@@ -1421,12 +1421,14 @@ where
     }
 
     /// The named type a go-support package or a project's Go foreign package
-    /// declares for one of its module's `foreign import data` types, instantiated at the Go types of
+    /// declares for one of its module's `foreign import data` types (or
+    /// constructor-less data types), instantiated at the Go types of
     /// the arguments when the type takes any.
     fn foreign_data_type(&mut self, data: &DataType) -> GoResult<GoType> {
         let module_name = self.context.module(data.file_id)?.name.clone();
         let type_name = self.context.type_name(data.file_id, data.item)?;
-        let name = match crate::foreign::support_data(&module_name, &type_name) {
+        let support = crate::foreign::support_data(&module_name, &type_name);
+        let name = match support {
             Some((package, support_name)) => {
                 self.imports.insert(package.path().into());
                 format!("{}.{support_name}", package.name())
@@ -1451,7 +1453,13 @@ where
                     });
                 }
             };
-            arguments.push(self.go_type(monotype)?);
+            // A project's foreign package sees its type arguments in the
+            // convention its functions take them in (an Int is a Go int).
+            let argument = match support {
+                Some(_) => self.go_type(monotype)?,
+                None => self.convention_or_native(monotype)?,
+            };
+            arguments.push(argument);
         }
         Ok(GoType::Generic { name, arguments })
     }
