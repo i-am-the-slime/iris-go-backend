@@ -297,6 +297,8 @@ where
             let label = self.context.term_name(class.file_id, member.item_id)?;
             let member_type = self.context.types.substitute(member.field_type, &class.substitution);
             let member_monotype = self.closed_monotype(scope, member_type)?;
+            let field = record.iter().find(|field| field.label == label);
+            let field = field.expect("invariant violated: a member is not in its dictionary");
             let reference = self.member_reference(
                 scope,
                 (class.file_id, member.item_id),
@@ -305,7 +307,7 @@ where
                 vec![],
                 member_monotype,
             )?;
-            fields.push((label, reference));
+            fields.push((label, self.coerce(reference, field.monotype)));
         }
         for (position, entry) in class.class.superclasses.iter().enumerate() {
             let label = self.superclass_label(&scope.definition, entry.constraint, position)?;
@@ -321,14 +323,8 @@ where
                 self.context.types.substitute(entry.constraint, &erased_class.substitution);
             fields.push((label, self.runtime_value(scope, dictionary, constraint, erased)?));
         }
-        let mut coerced = Vec::with_capacity(fields.len());
-        for (label, value) in fields {
-            let field = record.iter().find(|field| field.label == label);
-            let field = field.expect("invariant violated: a dictionary field is not in its record");
-            coerced.push((label, self.coerce(value, field.monotype)));
-        }
-        coerced.sort_by(|left, right| left.0.cmp(&right.0));
-        Ok(Expression::new(ExpressionKind::Record(coerced), monotype))
+        fields.sort_by(|left, right| left.0.cmp(&right.0));
+        Ok(Expression::new(ExpressionKind::Record(fields), monotype))
     }
 
     fn runtime_monotype(&mut self, definition: &str, constraint: TypeId) -> GoResult<MonotypeId> {
@@ -372,18 +368,10 @@ where
         definition: &str,
         constraint: TypeId,
     ) -> GoResult<ClassEnvironment> {
-        let unsupported = || GoError::Unsupported {
-            definition: definition.to_string(),
-            state: UnsupportedState::Construct {
-                construct: "growing evidence of a non-class constraint",
-            },
-        };
-        let (head, arguments) = self.context.types.spine(constraint);
-        let &Type::Constructor(file_id, item) = self.context.types.lookup(head) else {
-            return Err(unsupported());
-        };
+        let (file_id, item) = self.class_head(definition, constraint)?;
         let module = self.context.module(file_id)?;
-        let class = module.checked.lookup_class(item).ok_or_else(unsupported)?;
+        let class = module.checked.lookup_class(item).ok_or_else(|| non_class(definition))?;
+        let (_, arguments) = self.context.types.spine(constraint);
         let mut substitution = Substitution::default();
         for (&binder, &argument) in class.type_parameters.iter().zip(arguments.iter()) {
             substitution.insert(self.context.queries.lookup_forall_binder(binder).name, argument);
@@ -403,17 +391,17 @@ where
         constraint: TypeId,
         position: usize,
     ) -> GoResult<SmolStr> {
-        let (head, _) = self.context.types.spine(constraint);
-        let &Type::Constructor(file_id, item) = self.context.types.lookup(head) else {
-            return Err(GoError::Unsupported {
-                definition: definition.to_string(),
-                state: UnsupportedState::Construct {
-                    construct: "growing evidence of a non-class constraint",
-                },
-            });
-        };
+        let (file_id, item) = self.class_head(definition, constraint)?;
         let name = self.context.type_name(file_id, item)?;
         Ok(smol_str::format_smolstr!("{name}{position}"))
+    }
+
+    fn class_head(&self, definition: &str, constraint: TypeId) -> GoResult<(FileId, TypeItemId)> {
+        let (head, _) = self.context.types.spine(constraint);
+        match self.context.types.lookup(head) {
+            &Type::Constructor(file_id, item) => Ok((file_id, item)),
+            _ => Err(non_class(definition)),
+        }
     }
 
     fn record_field(&mut self, record: Expression, label: &str) -> Option<Expression> {
@@ -423,6 +411,15 @@ where
         let label = field.label.clone();
         let kind = ExpressionKind::Access { record: Box::new(record), label };
         Some(Expression::new(kind, monotype))
+    }
+}
+
+fn non_class(definition: &str) -> GoError {
+    GoError::Unsupported {
+        definition: definition.to_string(),
+        state: UnsupportedState::Construct {
+            construct: "growing evidence of a non-class constraint",
+        },
     }
 }
 
