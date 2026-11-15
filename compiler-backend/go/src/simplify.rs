@@ -150,10 +150,15 @@ impl Simplifier<'_> {
         if !partial {
             return function;
         }
+        let names = self.remaining_parameter_names(&function.body);
         let mut parameters = vec![];
         let mut result = function.result;
         while let Some((argument, inner)) = self.monotypes.function_parts(result) {
-            let template = Local { id: LocalId(0), name: "argument".into(), monotype: argument };
+            let name = names
+                .get(parameters.len())
+                .cloned()
+                .unwrap_or_else(|| self.monotypes.value_name(argument));
+            let template = Local { id: LocalId(0), name, monotype: argument };
             parameters.push(self.fresh(&template));
             result = inner;
         }
@@ -170,6 +175,23 @@ impl Simplifier<'_> {
         function.parameters = parameters;
         function.result = result;
         function
+    }
+
+    /// The names of the parameters a partial application of a known function
+    /// has yet to be given.
+    fn remaining_parameter_names(&self, body: &Expression) -> Vec<SmolStr> {
+        let (id, given) = match &body.kind {
+            ExpressionKind::Function(id) => (*id, 0),
+            ExpressionKind::Apply { function: callee, arguments } => match callee.kind {
+                ExpressionKind::Function(id) => (id, arguments.len()),
+                _ => return vec![],
+            },
+            _ => return vec![],
+        };
+        let Some(callee) = self.functions.get(id.0 as usize).and_then(Option::as_ref) else {
+            return vec![];
+        };
+        callee.parameters.iter().skip(given).map(|parameter| parameter.name.clone()).collect()
     }
 
     fn does_no_work(&self, expression: &Expression) -> bool {
@@ -284,8 +306,8 @@ impl Simplifier<'_> {
                 if is_trivial(&argument) {
                     return argument;
                 }
-                let template =
-                    Local { id: LocalId(0), name: "argument".into(), monotype: argument.monotype };
+                let name = self.monotypes.value_name(argument.monotype);
+                let template = Local { id: LocalId(0), name, monotype: argument.monotype };
                 let local = self.fresh(&template);
                 let reference = local_expression(&local);
                 bindings.push(Binding { local, value: argument });
@@ -971,7 +993,8 @@ impl Simplifier<'_> {
             let lambda = Expression::new(ExpressionKind::Lambda { parameters, body }, monotype);
             return (local, lambda);
         }
-        let template = Local { id: LocalId(0), name: "value".into(), monotype: argument };
+        let name = self.monotypes.value_name(argument);
+        let template = Local { id: LocalId(0), name, monotype: argument };
         let local = self.fresh(&template);
         let result = self.monotypes.result_after(function.monotype, 1);
         let argument = Expression::new(ExpressionKind::Local(local.id), argument);

@@ -101,6 +101,8 @@ pub struct Monotypes {
     /// The synonyms and newtypes, with their arguments, that each record was
     /// spelled by where a type was converted, in the order met.
     pub record_spellings: FxHashMap<MonotypeId, Vec<(FileId, TypeItemId, Arc<[TypeId]>)>>,
+    /// The name of each type constructor met, which names its values.
+    pub type_names: FxHashMap<(FileId, TypeItemId), SmolStr>,
     /// The newtypes specialization erased to the types they wrap.
     pub erased_newtypes: Vec<crate::context::ErasedNewtype>,
 }
@@ -312,6 +314,7 @@ impl Monotypes {
 
         let module = context.module(file_id)?;
         let name = module.indexed.items[item].name.clone().unwrap_or_default();
+        self.type_names.entry((file_id, item)).or_insert_with(|| name.clone());
         let unary = |monotypes: &mut Monotypes,
                      context: &mut Context<'_, Q>,
                      argument: Option<&TypeId>|

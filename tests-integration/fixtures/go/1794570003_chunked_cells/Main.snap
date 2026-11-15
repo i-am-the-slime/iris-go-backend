@@ -51,16 +51,16 @@ func initializeMain_() MainResult {
 	return MainResult{Numbers: numbers, Largest: largestReplacesItsCell(numbers), OwnedLargest: largestReplacesItsCellReusing(mainGo(10, sharedListIntNil)), Total: total(mainGo2(5, sharedTreeLeaf))}
 }
 
-func largestReplacesItsCell(argument1 *ListInt) *ListInt {
-	return largestReplacesItsCellGo(sharedListIntNil, argument1)
+func largestReplacesItsCell(list *ListInt) *ListInt {
+	return largestReplacesItsCellGo(sharedListIntNil, list)
 }
 
-func total(argument0 *Tree) int32 {
-	switch argument0.Tag {
+func total(tree *Tree) int32 {
+	switch tree.Tag {
 	case TreeLeaf:
 		return 0
 	default: // TreeNode
-		return total(argument0.Node0) + argument0.Node1 + total(argument0.Node2)
+		return total(tree.Node0) + tree.Node1 + total(tree.Node2)
 	}
 }
 
@@ -84,48 +84,48 @@ func mainGo2(remaining int32, tree *Tree) *Tree {
 	}
 }
 
-func largestReplacesItsCellGo(argument0 *ListInt, argument1 *ListInt) *ListInt {
+func largestReplacesItsCellGo(best *ListInt, list *ListInt) *ListInt {
 	for {
-		switch argument1.Tag {
+		switch list.Tag {
 		case ListIntNil:
-			return argument0
+			return best
 		default: // ListIntCons
-			value := argument1.Cons0
-			rest := argument1.Cons1
-			if argument0.Tag == ListIntCons {
-				known := argument0.Cons0
+			value := list.Cons0
+			rest := list.Cons1
+			if best.Tag == ListIntCons {
+				known := best.Cons0
 				if known >= value {
-					argument1 = rest
+					list = rest
 					continue
 				}
 			}
-			argument0, argument1 = &ListInt{Tag: ListIntCons, Cons0: value, Cons1: sharedListIntNil}, rest
+			best, list = &ListInt{Tag: ListIntCons, Cons0: value, Cons1: sharedListIntNil}, rest
 			continue
 		}
 	}
 }
 
-func largestReplacesItsCellReusing(argument1 *ListInt) *ListInt {
-	return largestReplacesItsCellGoReusing(sharedListIntNil, argument1)
+func largestReplacesItsCellReusing(list *ListInt) *ListInt {
+	return largestReplacesItsCellGoReusing(sharedListIntNil, list)
 }
 
-func largestReplacesItsCellGoReusing(argument0 *ListInt, argument1 *ListInt) *ListInt {
+func largestReplacesItsCellGoReusing(best *ListInt, list *ListInt) *ListInt {
 	for {
-		switch argument1.Tag {
+		switch list.Tag {
 		case ListIntNil:
-			return argument0
+			return best
 		default: // ListIntCons
-			value := argument1.Cons0
-			rest := argument1.Cons1
-			if argument0.Tag == ListIntCons {
-				known := argument0.Cons0
+			value := list.Cons0
+			rest := list.Cons1
+			if best.Tag == ListIntCons {
+				known := best.Cons0
 				if known >= value {
-					argument1 = rest
+					list = rest
 					continue
 				}
 			}
-			*argument1 = ListInt{Tag: ListIntCons, Cons0: value, Cons1: sharedListIntNil}
-			argument0, argument1 = argument1, rest
+			*list = ListInt{Tag: ListIntCons, Cons0: value, Cons1: sharedListIntNil}
+			best, list = list, rest
 			continue
 		}
 	}

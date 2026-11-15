@@ -4,8 +4,8 @@ source: tests-integration/src/fixtures.rs
 // Data/Semiring/semiring.go
 package semiring
 
-func Add(argument0 int32, argument1 int32) int32 {
-	return argument0 + argument1
+func Add(i int32, i2 int32) int32 {
+	return i + i2
 }
 
 // main.go
@@ -40,80 +40,80 @@ type StateValue struct {
 var main_ = initializeMain_()
 
 func initializeMain_() MainResult {
-	value := &Ref[int32]{Value: 0}
-	value2 := &Ref[int32]{Value: 0}
-	value3 := &Ref[int32]{Value: 0}
-	value4 := &Ref[int32]{Value: 0}
-	value5 := &Ref[bool]{Value: false}
+	ref := &Ref[int32]{Value: 0}
+	ref2 := &Ref[int32]{Value: 0}
+	ref3 := &Ref[int32]{Value: 0}
+	ref4 := &Ref[int32]{Value: 0}
+	ref5 := &Ref[bool]{Value: false}
 	var accumulator int32 = 0
 	for _, x := range numbers {
-		s2 := value.Value
-		s_2 := s2 + 1
-		modified := StateValue{State: s_2, Value: s_2}
-		value.Value = modified.State
+		s := ref.Value
+		s_ := s + 1
+		modified := StateValue{State: s_, Value: s_}
+		ref.Value = modified.State
 		performed2 := x > 2
 		if performed2 {
-			s4 := value2.Value
-			s_4 := s4 + 1
-			modified2 := StateValue{State: s_4, Value: s_4}
-			value2.Value = modified2.State
+			s2 := ref2.Value
+			s_2 := s2 + 1
+			modified2 := StateValue{State: s_2, Value: s_2}
+			ref2.Value = modified2.State
 			performed3 := prim.MultiplyInt32(x, 3)
 			accumulated := accumulator
 			accumulator = semiring.Add(accumulated, performed3)
 		}
 	}
-	value3.Value = accumulator
-	value6 := value.Value
-	calls2 := value2.Value
-	modified3 := StateValue{State: 0, Value: calls2}
-	value2.Value = modified3.State
-	value7 := modified3.Value
+	ref3.Value = accumulator
+	i := ref.Value
+	calls := ref2.Value
+	modified3 := StateValue{State: 0, Value: calls}
+	ref2.Value = modified3.State
+	i2 := modified3.Value
 	mapped := make([]int32, len(numbers))
-	for index, x2 := range numbers {
-		s6 := value2.Value
-		s_6 := s6 + 1
-		modified4 := StateValue{State: s_6, Value: s_6}
-		value2.Value = modified4.State
-		performed4 := prim.MultiplyInt32(x2, 3)
-		mapped[index] = performed4
+	for index, x := range numbers {
+		s := ref2.Value
+		s_ := s + 1
+		modified := StateValue{State: s_, Value: s_}
+		ref2.Value = modified.State
+		performed2 := prim.MultiplyInt32(x, 3)
+		mapped[index] = performed2
 	}
 	tripled := mapped
 	var accumulator2 int32 = 0
 	for _, element := range tripled {
-		accumulated2 := accumulator2
-		accumulator2 = semiring.Add(accumulated2, element)
+		accumulated := accumulator2
+		accumulator2 = semiring.Add(accumulated, element)
 	}
-	value4.Value = accumulator2 + int32(len(tripled))
-	calls4 := value2.Value
-	modified5 := StateValue{State: 0, Value: calls4}
-	value2.Value = modified5.State
-	value8 := modified5.Value
+	ref4.Value = accumulator2 + int32(len(tripled))
+	calls2 := ref2.Value
+	modified4 := StateValue{State: 0, Value: calls2}
+	ref2.Value = modified4.State
+	i3 := modified4.Value
 	found := false
-	for _, x3 := range numbers {
-		s8 := value2.Value
-		s_8 := s8 + 1
-		modified6 := StateValue{State: s_8, Value: s_8}
-		value2.Value = modified6.State
-		performed5 := prim.MultiplyInt32(x3, 3)
-		value9 := performed5
-		if value9 > 20 {
+	for _, x := range numbers {
+		s := ref2.Value
+		s_ := s + 1
+		modified := StateValue{State: s_, Value: s_}
+		ref2.Value = modified.State
+		performed2 := prim.MultiplyInt32(x, 3)
+		value := performed2
+		if value > 20 {
 			found = true
 			break
 		}
 	}
-	value5.Value = found
-	value10 := value2.Value
-	value11 := value3.Value
-	value12 := value4.Value
-	value13 := value5.Value
+	ref5.Value = found
+	i4 := ref2.Value
+	i5 := ref3.Value
+	i6 := ref4.Value
+	boolean := ref5.Value
 	var count int32 = 0
-	for _, value14 := range numbers {
-		value15 := prim.MultiplyInt32(value14, 3)
-		if value15 > 10 {
+	for _, value := range numbers {
+		value2 := prim.MultiplyInt32(value, 3)
+		if value2 > 10 {
 			count = count + 1
 		}
 	}
-	performed := MainResult{Fused: value11, Shared: value12, EarlyExit: value13, PredicateCalls: value6, FusedMappingCalls: value7, SharedMappingCalls: value8, EarlyExitMappingCalls: value10, KeptLength: count}
+	performed := MainResult{Fused: i5, Shared: i6, EarlyExit: boolean, PredicateCalls: i, FusedMappingCalls: i2, SharedMappingCalls: i3, EarlyExitMappingCalls: i4, KeptLength: count}
 	return performed
 }
 

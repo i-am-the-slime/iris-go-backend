@@ -1,6 +1,5 @@
 ---
 source: tests-integration/src/fixtures.rs
-assertion_line: 570
 ---
 // main.go
 package main
@@ -30,42 +29,42 @@ type StateValueOfArrayFnIntEffectArrayFnIntEffect struct {
 }
 
 func main_() int32 {
-	value := &Ref[int32]{Value: 0}
-	value2 := create()
-	value3 := create()
-	subscribe := value3.Subscribe
+	ref := &Ref[int32]{Value: 0}
+	createResult := create()
+	createResult2 := create()
+	subscribe := createResult2.Subscribe
 	subscribe(func(n int32) {
-		s2 := value.Value
-		s_2 := s2 + n
-		modified := StateValueOfIntInt{State: s_2, Value: s_2}
-		value.Value = modified.State
+		s := ref.Value
+		s_ := s + n
+		modified := StateValueOfIntInt{State: s_, Value: s_}
+		ref.Value = modified.State
 	})
-	value4 := &Ref[int32]{Value: 0}
-	subscribe(func(n2 int32) {
-		value4.Value = n2
+	ref2 := &Ref[int32]{Value: 0}
+	subscribe(func(n int32) {
+		ref2.Value = n
 	})
-	value2.Subscribe(func(n3 int32) {
-		value7 := value4.Value
-		value3.Push(value7 + n3)
+	createResult.Subscribe(func(n int32) {
+		i := ref2.Value
+		createResult2.Push(i + n)
 	})
-	value2.Push(1)
-	value2.Push(2)
-	return value.Value
+	createResult.Push(1)
+	createResult.Push(2)
+	return ref.Value
 }
 
 func create() CreateResult {
-	value := &Ref[[]func(int32)]{Value: []func(int32){}}
+	ref := &Ref[[]func(int32)]{Value: []func(int32){}}
 	return CreateResult{Subscribe: func(k func(int32)) func() {
-		s2 := value.Value
-		s_2 := array.Append(s2, []func(int32){k})
-		modified := StateValueOfArrayFnIntEffectArrayFnIntEffect{State: s_2, Value: s_2}
-		value.Value = modified.State
+		s := ref.Value
+		s_ := array.Append(s, []func(int32){k})
+		modified := StateValueOfArrayFnIntEffectArrayFnIntEffect{State: s_, Value: s_}
+		ref.Value = modified.State
 		return func() {
 		}
 	}, Push: func(n int32) {
-		value2 := value.Value
-		for _, value3 := range value2 {
-			value3(n)
+		array := ref.Value
+		for _, f := range array {
+			f(n)
 		}
 	}}
 }

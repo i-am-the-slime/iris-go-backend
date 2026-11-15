@@ -1,4 +1,4 @@
-use super::{Emitter, call, identifier, identifier_expression};
+use super::{Emitter, call, identifier_expression};
 use crate::error::GoResult;
 use crate::mono::{Expression, ExpressionKind, FunctionId, Local};
 use crate::monotype::MonotypeId;
@@ -36,6 +36,14 @@ where
         (parameters, monotype)
     }
 
+    /// The name an argument to a parameter takes: the parameter's, else its type's.
+    fn argument_base(&mut self, names: &[String], position: usize, monotype: MonotypeId) -> String {
+        match names.get(position) {
+            Some(name) => self.local_base(name, monotype),
+            None => self.value_base(monotype),
+        }
+    }
+
     pub(super) fn known_callable(&self, id: FunctionId, monotype: MonotypeId) -> Callable {
         let function = self.program.function(id);
         Callable {
@@ -45,7 +53,7 @@ where
             names: function
                 .parameters
                 .iter()
-                .map(|parameter| identifier(&parameter.name))
+                .map(|parameter| parameter.name.to_string())
                 .collect(),
         }
     }
@@ -87,8 +95,12 @@ where
             let value = match value {
                 value @ GoExpression::Function { .. } => value,
                 value => {
-                    let base = callable.names.get(position).map_or("argument", String::as_str);
-                    self.shared(value, base, out)
+                    let (parameters, _) = self.leading_arrows(callable.monotype, position + 1);
+                    let base = match parameters.get(position) {
+                        Some(&parameter) => self.argument_base(&callable.names, position, parameter),
+                        None => "argument".into(),
+                    };
+                    self.shared(value, &base, out)
                 }
             };
             captured.push(value);
@@ -109,8 +121,8 @@ where
         let mut parameters = Vec::with_capacity(arity);
         let mut arguments = supplied;
         for monotype in parameter_monotypes {
-            let base = callable.names.get(arguments.len()).map_or("argument", String::as_str);
-            let name = self.temporary(base);
+            let base = self.argument_base(&callable.names, arguments.len(), monotype);
+            let name = self.temporary(&base);
             parameters.push((name.clone(), self.go_type(monotype)?));
             arguments.push(identifier_expression(&name));
         }
@@ -189,8 +201,8 @@ where
                 }
             };
             for monotype in extra {
-                let base = callable.names.get(values.len()).map_or("argument", String::as_str);
-                let name = self.temporary(base);
+                let base = self.argument_base(&callable.names, values.len(), monotype);
+                let name = self.temporary(&base);
                 go_parameters.push((name.clone(), self.go_type(monotype)?));
                 values.push(identifier_expression(&name));
             }
@@ -248,7 +260,8 @@ where
             .monotypes
             .function_parts(monotype)
             .expect("invariant violated: a curried callback has its declared arrows");
-        let name = self.temporary("argument");
+        let base = self.value_base(parameter);
+        let name = self.temporary(&base);
         let parameter_type = self.go_type(parameter)?;
         supplied.push(identifier_expression(&name));
         let mut body = vec![];

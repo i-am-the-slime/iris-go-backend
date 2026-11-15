@@ -69,70 +69,70 @@ func initializeMain_() []string {
 	}
 	array3 := []Shape{Shape{Tag: ShapeCircle, Circle: 1}, Shape{Tag: ShapeRectangle, Rectangle0: 2, Rectangle1: 3}}
 	mapped2 := make([]string, len(array3))
-	for index2 := range array3 {
+	for index := range array3 {
 		var result int32
-		switch array3[index2].Tag {
+		switch array3[index].Tag {
 		case ShapeCircle:
-			radius := array3[index2].Circle
+			radius := array3[index].Circle
 			result = prim.MultiplyInt32(prim.MultiplyInt32(3, radius), radius)
 		default: // ShapeRectangle
-			result = prim.MultiplyInt32(array3[index2].Rectangle0, array3[index2].Rectangle1)
+			result = prim.MultiplyInt32(array3[index].Rectangle0, array3[index].Rectangle1)
 		}
-		mapped2[index2] = prim.ShowInt(result)
+		mapped2[index] = prim.ShowInt(result)
 	}
 	array4 := []maybe.MaybeInt{maybe.MaybeInt{Tag: maybe.MaybeIntJust, Just: 2}, maybe.MaybeInt{Tag: maybe.MaybeIntNothing}}
 	mapped3 := make([]string, len(array4))
-	for index3 := range array4 {
-		var result2 int32
-		switch array4[index3].Tag {
+	for index := range array4 {
+		var result int32
+		switch array4[index].Tag {
 		case maybe.MaybeIntJust:
-			result2 = 1 + array4[index3].Just
+			result = 1 + array4[index].Just
 		default: // maybe.MaybeIntNothing
-			result2 = 1
+			result = 1
 		}
-		mapped3[index3] = prim.ShowInt(result2)
+		mapped3[index] = prim.ShowInt(result)
 	}
 	array5 := []string{"start", "jump"}
 	mapped4 := make([]string, len(array5))
-	for index4, x3 := range array5 {
-		var result3 int32
-		switch x3 {
+	for index, x := range array5 {
+		var result int32
+		switch x {
 		case "start":
-			result3 = 1
+			result = 1
 		case "stop":
-			result3 = 2
+			result = 2
 		default:
-			result3 = 0
+			result = 0
 		}
-		mapped4[index4] = prim.ShowInt(result3)
+		mapped4[index] = prim.ShowInt(result)
 	}
 	array6 := []int32{500, 5}
 	mapped5 := make([]string, len(array6))
-	for index5, number := range array6 {
-		var result4 string
+	for index, number := range array6 {
+		var result string
 		if number > 100 {
-			result4 = "huge"
+			result = "huge"
 		} else {
-			result4 = "large"
+			result = "large"
 		}
-		mapped5[index5] = result4
+		mapped5[index] = result
 	}
 	array7 := []LeftRight{LeftRight{Left: 1, Right: 2}}
 	mapped6 := make([]string, len(array7))
-	for index6 := range array7 {
-		mapped6[index6] = prim.ShowInt(array7[index6].Left + array7[index6].Right)
+	for index := range array7 {
+		mapped6[index] = prim.ShowInt(array7[index].Left + array7[index].Right)
 	}
 	array8 := []maybe.MaybeString{maybe.MaybeString{Tag: maybe.MaybeStringJust, Just: "here"}}
 	mapped7 := make([]string, len(array8))
-	for index7 := range array8 {
-		var result5 string
-		switch array8[index7].Tag {
+	for index := range array8 {
+		var result string
+		switch array8[index].Tag {
 		case maybe.MaybeStringJust:
-			result5 = array8[index7].Just
+			result = array8[index].Just
 		default:
 			panic("Failed pattern match")
 		}
-		mapped7[index7] = result5
+		mapped7[index] = result
 	}
 	return array.Append(mapped, array.Append(mapped2, array.Append(mapped3, array.Append(mapped4, array.Append(mapped5, array.Append(mapped6, mapped7))))))
 }

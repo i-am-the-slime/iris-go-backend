@@ -103,10 +103,10 @@ type PairEFnIntIntInt struct {
 func convert4(value TreeFnIntFnIntInt) *TreeFn {
 	switch value.Tag {
 	case TreeFnIntFnIntIntLeaf:
-		return &TreeFn{Tag: TreeFnLeaf, Leaf: func(coerced2 any) any {
-			original := value.Leaf(coerced2.(int32))
-			return func(coerced3 any) any {
-				return original(coerced3.(int32))
+		return &TreeFn{Tag: TreeFnLeaf, Leaf: func(coerced any) any {
+			original := value.Leaf(coerced.(int32))
+			return func(coerced2 any) any {
+				return original(coerced2.(int32))
 			}
 		}}
 	default: // TreeFnIntFnIntIntPair
@@ -152,8 +152,8 @@ func convert7(value *PairE) *PairEInt {
 func convert8(value *TreeFnInt) *Tree {
 	switch value.Tag {
 	case TreeFnIntLeaf:
-		return &Tree{Tag: TreeLeaf, Field0: func(coerced4 any) any {
-			return value.Leaf(coerced4)
+		return &Tree{Tag: TreeLeaf, Field0: func(coerced any) any {
+			return value.Leaf(coerced)
 		}}
 	default: // TreeFnIntPair
 		return &Tree{Tag: TreePair, Field0: value.Pair}
@@ -177,39 +177,39 @@ var main_ []int32 = []int32{leavesInt(TreeInt{Tag: TreeIntLeaf, Leaf: 1}), leave
 	}
 }}, Second: TreeInt{Tag: TreeIntLeaf, Leaf: 1}})}, Second: TreeInt{Tag: TreeIntLeaf, Leaf: 2}})})}
 
-func leavesInt(argument1 TreeInt) int32 {
-	return leavesIntGo(0, argument1)
+func leavesInt(tree TreeInt) int32 {
+	return leavesIntGo(0, tree)
 }
 
-func leavesIntGo(argument0 int32, argument1 TreeInt) int32 {
-	switch argument1.Tag {
+func leavesIntGo(depth int32, tree TreeInt) int32 {
+	switch tree.Tag {
 	case TreeIntLeaf:
-		return argument0 + 1
+		return depth + 1
 	default: // TreeIntPair
-		scrutinee := convert7(argument1.Pair.(*PairE))
-		original := func(argument02 int32) func(*Tree) int32 {
-			return func(argument12 *Tree) int32 {
-				return leavesIntGo2(argument02, argument12)
+		scrutinee := convert7(tree.Pair.(*PairE))
+		original := func(depth2 int32) func(*Tree) int32 {
+			return func(tree2 *Tree) int32 {
+				return leavesIntGo2(depth2, tree2)
 			}
 		}
-		return func(coerced2 int32) func(*TreeFnInt) int32 {
-			original2 := original(coerced2)
-			return func(coerced3 *TreeFnInt) int32 {
-				return original2(convert8(coerced3))
+		return func(coerced int32) func(*TreeFnInt) int32 {
+			original2 := original(coerced)
+			return func(coerced2 *TreeFnInt) int32 {
+				return original2(convert8(coerced2))
 			}
-		}(argument0 + 1)(scrutinee.First) + leavesIntGo3(argument0 + 1, scrutinee.Second)
+		}(depth + 1)(scrutinee.First) + leavesIntGo3(depth + 1, scrutinee.Second)
 	}
 }
 
-func leavesIntGo2(argument0 int32, argument1 *Tree) int32 {
-	switch argument1.Tag {
+func leavesIntGo2(depth int32, tree *Tree) int32 {
+	switch tree.Tag {
 	case TreeLeaf:
-		return argument0 + 1
+		return depth + 1
 	default: // TreePair
-		scrutinee := argument1.Field0.(*PairE)
-		original := func(argument02 int32) func(*Tree) int32 {
-			return func(argument12 *Tree) int32 {
-				return leavesIntGo2(argument02, argument12)
+		scrutinee := tree.Field0.(*PairE)
+		original := func(depth2 int32) func(*Tree) int32 {
+			return func(tree2 *Tree) int32 {
+				return leavesIntGo2(depth2, tree2)
 			}
 		}
 		return func(coerced int32) func(*TreeFn) int32 {
@@ -217,19 +217,19 @@ func leavesIntGo2(argument0 int32, argument1 *Tree) int32 {
 			return func(coerced2 *TreeFn) int32 {
 				return original2(convert9(coerced2))
 			}
-		}(argument0 + 1)(scrutinee.First) + leavesIntGo3(argument0 + 1, scrutinee.Second)
+		}(depth + 1)(scrutinee.First) + leavesIntGo3(depth + 1, scrutinee.Second)
 	}
 }
 
-func leavesIntGo3(argument0 int32, argument1 *Tree) int32 {
-	switch argument1.Tag {
+func leavesIntGo3(depth int32, tree *Tree) int32 {
+	switch tree.Tag {
 	case TreeLeaf:
-		return argument0 + 1
+		return depth + 1
 	default: // TreePair
-		scrutinee := argument1.Field0.(*PairE)
-		original := func(argument02 int32) func(*Tree) int32 {
-			return func(argument12 *Tree) int32 {
-				return leavesIntGo2(argument02, argument12)
+		scrutinee := tree.Field0.(*PairE)
+		original := func(depth2 int32) func(*Tree) int32 {
+			return func(tree2 *Tree) int32 {
+				return leavesIntGo2(depth2, tree2)
 			}
 		}
 		return func(coerced int32) func(*TreeFn) int32 {
@@ -237,7 +237,7 @@ func leavesIntGo3(argument0 int32, argument1 *Tree) int32 {
 			return func(coerced2 *TreeFn) int32 {
 				return original2(convert9(coerced2))
 			}
-		}(argument0 + 1)(scrutinee.First) + leavesIntGo3(argument0 + 1, scrutinee.Second)
+		}(depth + 1)(scrutinee.First) + leavesIntGo3(depth + 1, scrutinee.Second)
 	}
 }
 

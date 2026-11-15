@@ -490,7 +490,8 @@ where
                 passed.push(None);
                 continue;
             }
-            let local = fresh(building.parameter_name(position), argument);
+            let unnamed = self.monotypes.value_name(argument);
+            let local = fresh(building.parameter_name(position).unwrap_or(unnamed), argument);
             passed.push(Some(local.clone()));
             parameters.push(local);
         }
@@ -849,7 +850,7 @@ struct Building {
 impl Building {
     /// The name of a parameter of the function that runs the cells: the one
     /// the lambdas that use their parameter agree on.
-    fn parameter_name(&self, position: usize) -> SmolStr {
+    fn parameter_name(&self, position: usize) -> Option<SmolStr> {
         let mut names = self.tags.iter().filter_map(|shape| match &shape.body {
             Body::Lambda { parameters, body } => parameters
                 .get(position)
@@ -858,8 +859,8 @@ impl Building {
             Body::Known { .. } => None,
         });
         match names.next() {
-            Some(first) if names.all(|name| name == first) => first.clone(),
-            _ => SmolStr::new_static("argument"),
+            Some(first) if names.all(|name| name == first) => Some(first.clone()),
+            _ => None,
         }
     }
 }

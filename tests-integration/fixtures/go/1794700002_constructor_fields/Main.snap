@@ -47,8 +47,8 @@ package show
 
 import "github.com/i-am-the-slime/purs-backend-go/go-support/prim"
 
-func Show(argument0 string) string {
-	return prim.ShowString(argument0)
+func Show(s string) string {
+	return prim.ShowString(s)
 }
 
 // main.go
@@ -99,57 +99,57 @@ const (
 var main_ = initializeMain_()
 
 func initializeMain_() string {
-	array2 := []TupleMaybeIntEitherStringInt{TupleMaybeIntEitherStringInt{First: maybe.MaybeInt{Tag: maybe.MaybeIntJust, Just: 1}, Second: either.EitherStringInt{Tag: either.EitherStringIntRight, Right: 2}}, TupleMaybeIntEitherStringInt{First: maybe.MaybeInt{Tag: maybe.MaybeIntNothing}, Second: either.EitherStringInt{Tag: either.EitherStringIntLeft, Left: "x"}}}
+	array := []TupleMaybeIntEitherStringInt{TupleMaybeIntEitherStringInt{First: maybe.MaybeInt{Tag: maybe.MaybeIntJust, Just: 1}, Second: either.EitherStringInt{Tag: either.EitherStringIntRight, Right: 2}}, TupleMaybeIntEitherStringInt{First: maybe.MaybeInt{Tag: maybe.MaybeIntNothing}, Second: either.EitherStringInt{Tag: either.EitherStringIntLeft, Left: "x"}}}
 	var accumulator int32 = 0
-	for argument1Index := range array2 {
-		argument0 := accumulator
-		if array2[argument1Index].First.Tag == maybe.MaybeIntJust && array2[argument1Index].Second.Tag == either.EitherStringIntRight {
-			accumulator = argument0 + array2[argument1Index].First.Just + array2[argument1Index].Second.Right
-		} else if array2[argument1Index].Second.Tag == either.EitherStringIntLeft {
-			accumulator = argument0 - 1
+	for tupleIndex := range array {
+		acc := accumulator
+		if array[tupleIndex].First.Tag == maybe.MaybeIntJust && array[tupleIndex].Second.Tag == either.EitherStringIntRight {
+			accumulator = acc + array[tupleIndex].First.Just + array[tupleIndex].Second.Right
+		} else if array[tupleIndex].Second.Tag == either.EitherStringIntLeft {
+			accumulator = acc - 1
 		} else {
-			accumulator = argument0
+			accumulator = acc
 		}
 	}
-	array3 := []Labelled{Labelled{Tag: LabelledTag, Tag0: "t"}, Labelled{Tag: LabelledUntagged}}
-	mapped := make([]string, len(array3))
-	for index, element := range array3 {
+	array2 := []Labelled{Labelled{Tag: LabelledTag, Tag0: "t"}, Labelled{Tag: LabelledUntagged}}
+	mapped := make([]string, len(array2))
+	for index, element := range array2 {
 		mapped[index] = label(element)
 	}
-	array4 := []Entry{Entry{Tag: EntryField, Field0: 5, Field1: 1}, Entry{Tag: EntryDuo, Duo0: "a", Duo1: "b"}, Entry{Tag: EntryTrio, Trio0: "c", Trio1: "d"}}
-	mapped2 := make([]string, len(array4))
-	for index2, element2 := range array4 {
-		mapped2[index2] = entry(element2)
+	array3 := []Entry{Entry{Tag: EntryField, Field0: 5, Field1: 1}, Entry{Tag: EntryDuo, Duo0: "a", Duo1: "b"}, Entry{Tag: EntryTrio, Trio0: "c", Trio1: "d"}}
+	mapped2 := make([]string, len(array3))
+	for index, element := range array3 {
+		mapped2[index] = entry(element)
 	}
 	return prim.ShowInt(accumulator + mainSum(&types.ListInt{Tag: types.ListIntCons, Cons0: 3, Cons1: &types.ListInt{Tag: types.ListIntCons, Cons0: 4, Cons1: sharedListIntNil}})) + prim.ShowArray(show.Show, mapped) + prim.ShowArray(show.Show, mapped2)
 }
 
-func label(argument0 Labelled) string {
-	switch argument0.Tag {
+func label(labelled Labelled) string {
+	switch labelled.Tag {
 	case LabelledTag:
-		return argument0.Tag0
+		return labelled.Tag0
 	default: // LabelledUntagged
 		return "none"
 	}
 }
 
-func entry(argument0 Entry) string {
-	switch argument0.Tag {
+func entry(entry Entry) string {
+	switch entry.Tag {
 	case EntryField:
-		return prim.ShowInt(argument0.Field0 - argument0.Field1)
+		return prim.ShowInt(entry.Field0 - entry.Field1)
 	case EntryDuo:
-		return argument0.Duo0 + argument0.Duo1
+		return entry.Duo0 + entry.Duo1
 	default: // EntryTrio
-		return argument0.Trio1 + argument0.Trio0
+		return entry.Trio1 + entry.Trio0
 	}
 }
 
-func mainSum(argument0 *types.ListInt) int32 {
-	switch argument0.Tag {
+func mainSum(list *types.ListInt) int32 {
+	switch list.Tag {
 	case types.ListIntNil:
 		return 0
 	default: // types.ListIntCons
-		return argument0.Cons0 + mainSum(argument0.Cons1)
+		return list.Cons0 + mainSum(list.Cons1)
 	}
 }
 

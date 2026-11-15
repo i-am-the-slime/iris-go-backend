@@ -15,8 +15,8 @@ var main_ = initializeMain_()
 func initializeMain_() []string {
 	array2 := []func(int32) int32{func(x int32) int32 {
 		return offset(2, x)
-	}, func(x2 int32) int32 {
-		return offset(5, x2)
+	}, func(x int32) int32 {
+		return offset(5, x)
 	}}
 	mapped := make([]string, len(array2))
 	for index, shift := range array2 {
@@ -25,35 +25,35 @@ func initializeMain_() []string {
 	return array.Append(mapped, array.Append([]string{prim.ShowInt(offset(3, 4))}, array.Map(prefixed(2), []string{"a", "b"})))
 }
 
-func offset(argument0 int32, x int32) int32 {
-	switch argument0 {
+func offset(n int32, x int32) int32 {
+	switch n {
 	case 0:
 		return x
 	default:
-		return offset(argument0 - 1, x) + 1
+		return offset(n - 1, x) + 1
 	}
 }
 
-func prefixed(argument0 int32) func(string) string {
-	switch argument0 {
+func prefixed(n int32) func(string) string {
+	switch n {
 	case 0:
 		return func(text string) string {
 			return text
 		}
 	default:
-		prefix := repeat(argument0)
-		return func(text2 string) string {
-			return prefix + prefixed(argument0 - 1)(text2)
+		prefix := repeat(n)
+		return func(text string) string {
+			return prefix + prefixed(n - 1)(text)
 		}
 	}
 }
 
-func repeat(argument0 int32) string {
-	switch argument0 {
+func repeat(n int32) string {
+	switch n {
 	case 0:
 		return ""
 	default:
-		return "*" + repeat(argument0 - 1)
+		return "*" + repeat(n - 1)
 	}
 }
 

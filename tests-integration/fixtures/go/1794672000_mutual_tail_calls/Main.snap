@@ -90,33 +90,33 @@ const (
 	isOddStep
 )
 
-func isEvenOrIsOdd(step int, argument0 int32) bool {
+func isEvenOrIsOdd(step int, k int32) bool {
 	for {
 		switch step {
 		case isEvenStep:
-			switch argument0 {
+			switch k {
 			case 0:
 				return true
 			default:
-				k := argument0
-				step, argument0 = isOddStep, k - 1
+				k2 := k
+				step, k = isOddStep, k2 - 1
 				continue
 			}
 		default: // isOddStep
-			switch argument0 {
+			switch k {
 			case 0:
 				return false
 			default:
-				k2 := argument0
-				step, argument0 = isEvenStep, k2 - 1
+				k2 := k
+				step, k = isEvenStep, k2 - 1
 				continue
 			}
 		}
 	}
 }
 
-func isEven(argument0 int32) bool {
-	return isEvenOrIsOdd(isEvenStep, argument0)
+func isEven(k int32) bool {
+	return isEvenOrIsOdd(isEvenStep, k)
 }
 
 func main() {

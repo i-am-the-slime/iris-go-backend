@@ -85,6 +85,8 @@ pub(super) struct Packaging<'a> {
     pub spellings: &'a FxHashMap<String, Spelling>,
     /// The paths of the standard and support packages the program imports.
     pub imports: &'a BTreeSet<String>,
+    /// The records whose Go names name values, by their tokens' indices.
+    pub typed_records: &'a [Option<String>],
 }
 
 /// Declarations that move together: a type and its constructors' tags.
@@ -388,7 +390,9 @@ impl Packaging<'_> {
                 for declaration in &units[unit].declarations {
                     let mut declaration = declaration.clone();
                     declaration.for_each_reference_mut(&mut |reference| {
-                        if let Reference::Binder(name) = reference {
+                        if let Reference::Binder(name) = reference
+                            && !super::locals::is_marked(name)
+                        {
                             place_binders.insert(name.clone());
                         }
                     });
@@ -415,6 +419,18 @@ impl Packaging<'_> {
                 }
             }
         }
+        let record_values: Vec<String> = self
+            .typed_records
+            .iter()
+            .map(|global| {
+                let name = global.as_ref().and_then(|global| {
+                    let &unit = unit_of.get(global.as_str())?;
+                    Some(naming.name(global, placements[unit]))
+                });
+                let name = name.unwrap_or_else(|| "record".into());
+                crate::value_names::go_safe(&crate::value_names::lower_camel(&name)).to_string()
+            })
+            .collect();
         let support = self.support_aliases();
         let mut files = vec![];
         for &place in &ordered {
@@ -433,7 +449,9 @@ impl Packaging<'_> {
                 collect_support(declaration, &support, &mut support_imports);
                 declaration.for_each_reference_mut(&mut |reference| match reference {
                     Reference::Binder(name) => {
-                        avoided.insert(name.clone());
+                        if !super::locals::is_marked(name) {
+                            avoided.insert(name.clone());
+                        }
                     }
                     Reference::Value(GoExpression::Identifier(name)) | Reference::Type(name) => {
                         if let Some(&target) = unit_of.get(name.as_str())
@@ -486,6 +504,7 @@ impl Packaging<'_> {
                     }
                     Reference::Binder(_) => {}
                 });
+                super::locals::settle(declaration, &record_values);
             }
             let mut imports: Vec<GoImport> =
                 support_imports.into_iter().map(|path| GoImport { path, alias: None }).collect();

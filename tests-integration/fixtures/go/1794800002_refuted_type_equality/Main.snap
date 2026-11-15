@@ -1,6 +1,5 @@
 ---
 source: tests-integration/src/fixtures.rs
-assertion_line: 570
 ---
 // main.go
 package main
@@ -48,18 +47,18 @@ const (
 
 var main_ []string = []string{prim.ShowInt(evaluateInt(&ValueInt{Tag: ValueIntPair, Pair0: &ValueInt{Tag: ValueIntIntValue, Field0: reflTypeInt, Field1: 41}, Pair1: &ValueInt{Tag: ValueIntIntValue, Field0: reflTypeInt, Field1: 0}}) + 1), evaluateString(&ValueString{Tag: ValueStringPair, Pair0: &ValueString{Tag: ValueStringStringValue, StringValue0: reflTypeInt, StringValue1: "left"}, Pair1: &ValueString{Tag: ValueStringStringValue, StringValue0: reflTypeInt, StringValue1: "right"}})}
 
-func evaluateInt(argument0 *ValueInt) int32 {
+func evaluateInt(value *ValueInt) int32 {
 	for {
-		switch argument0.Tag {
+		switch value.Tag {
 		case ValueIntIntValue:
-			n := argument0.Field1
+			n := value.Field1
 			return n
 		case ValueIntAgeValue:
-			age := argument0.Field1
+			age := value.Field1
 			return age
 		default: // ValueIntPair
-			left := argument0.Pair0
-			argument0 = left
+			left := value.Pair0
+			value = left
 			continue
 		}
 	}
@@ -67,15 +66,15 @@ func evaluateInt(argument0 *ValueInt) int32 {
 
 var reflTypeInt Equal = Equal{}
 
-func evaluateString(argument0 *ValueString) string {
+func evaluateString(value *ValueString) string {
 	for {
-		switch argument0.Tag {
+		switch value.Tag {
 		case ValueStringStringValue:
-			s := argument0.StringValue1
+			s := value.StringValue1
 			return s
 		default: // ValueStringPair
-			left := argument0.Pair0
-			argument0 = left
+			left := value.Pair0
+			value = left
 			continue
 		}
 	}

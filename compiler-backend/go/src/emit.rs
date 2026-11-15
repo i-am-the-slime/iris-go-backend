@@ -16,6 +16,7 @@ mod groups;
 mod iteration;
 mod layout;
 mod lengths;
+mod locals;
 mod names;
 mod ownership;
 mod packages;
@@ -170,11 +171,17 @@ where
         })
         .collect();
     timed("names", || emitter.spell_pending(modules, &declared))?;
+    let typed_records: Vec<Option<String>> = emitter
+        .typed_records
+        .iter()
+        .map(|monotype| emitter.record_names.get(monotype).cloned())
+        .collect();
     let packaging = packages::Packaging {
         modules,
         module_path,
         spellings: &emitter.spellings,
         imports: &emitter.imports,
+        typed_records: &typed_records,
     };
     let files = timed("packages", || packaging.split(all))?;
     if std::env::var_os("IRIS_GO_ANY_CENSUS").is_some() {
@@ -249,6 +256,7 @@ where
             pending_spellings: vec![],
             locals: FxHashMap::default(),
             local_names: FxHashSet::default(),
+            typed_records: vec![],
             tail_loop: None,
             tail_groups: vec![],
             tail_group_of: FxHashMap::default(),
@@ -579,6 +587,8 @@ struct Emitter<'p, 'm, 'q, Q> {
     pending_spellings: Vec<(String, names::PendingSpelling)>,
     locals: FxHashMap<LocalId, GoExpression>,
     local_names: FxHashSet<String>,
+    /// The records whose Go names name values, by their tokens' indices.
+    typed_records: Vec<MonotypeId>,
     tail_loop: Option<TailLoop>,
     tail_groups: Vec<groups::TailGroup>,
     tail_group_of: FxHashMap<FunctionId, usize>,
@@ -614,7 +624,7 @@ impl DataLayout {
     }
 }
 
-const RESERVED: &[&str] = &[
+pub(crate) const RESERVED: &[&str] = &[
     "break",
     "case",
     "chan",
@@ -1309,9 +1319,40 @@ where
     }
 
     fn bind_local(&mut self, local: &Local) -> String {
-        let name = self.local_name(identifier(&local.name));
+        let base = self.local_base(&local.name, local.monotype);
+        let name = self.local_name(base);
         self.locals.insert(local.id, identifier_expression(&name));
         name
+    }
+
+    /// The Go spelling a local's name starts from: a record value's is a
+    /// token for its record, which the record's Go name replaces once
+    /// packaging has chosen it.
+    fn local_base(&mut self, name: &str, monotype: MonotypeId) -> String {
+        match name.strip_prefix(crate::value_names::RECORD_VALUE) {
+            Some("") => self.value_base(monotype),
+            Some(rest) => identifier(&crate::value_names::lower_camel(rest)),
+            // A name from the type alone is the first to give way.
+            None if name == self.monotypes.value_name(monotype) => {
+                format!("{}{}", identifier(name), locals::NUMBERED)
+            }
+            None => identifier(name),
+        }
+    }
+
+    /// The Go spelling of a value that only its type names.
+    fn value_base(&mut self, monotype: MonotypeId) -> String {
+        if !matches!(self.monotypes.get(monotype), Monotype::Record(_)) {
+            return format!("{}{}", identifier(&self.monotypes.value_name(monotype)), locals::NUMBERED);
+        }
+        let index = match self.typed_records.iter().position(|&known| known == monotype) {
+            Some(index) => index,
+            None => {
+                self.typed_records.push(monotype);
+                self.typed_records.len() - 1
+            }
+        };
+        locals::record_token(index)
     }
 
     fn temporary(&mut self, base: &str) -> String {
@@ -1320,16 +1361,27 @@ where
 
     /// A fresh local that shadows no global function or type, nor an imported
     /// package, any of which the function body may still need to refer to.
+    /// A number it needs follows a mark, so that once the local's Go scope is
+    /// known it can lose the number where nothing there clashes with it.
     fn local_name(&mut self, base: String) -> String {
         let taken = |emitter: &Self, candidate: &String| {
             emitter.local_names.contains(candidate)
                 || emitter.global_names.contains(candidate)
                 || IMPORTED_PACKAGES.contains(&candidate.as_str())
         };
-        let mut candidate = base.clone();
+        // A name that ends in the mark yields to any it clashes with once
+        // settled. So does a package's name, which is free for a local where
+        // the code does not use the package, as only the settled scope shows.
+        let soft = base.ends_with(locals::NUMBERED);
+        let base = base.trim_end_matches(locals::NUMBERED).to_string();
+        let (base, soft) = match base.strip_suffix('_') {
+            Some(stem) if IMPORTED_PACKAGES.contains(&stem) => (stem.to_string(), true),
+            _ => (base, soft),
+        };
+        let mut candidate = if soft { format!("{base}{}", locals::NUMBERED) } else { base.clone() };
         let mut counter = 2;
         while taken(self, &candidate) {
-            candidate = format!("{base}{counter}");
+            candidate = format!("{base}{}{counter}", locals::NUMBERED);
             counter += 1;
         }
         self.local_names.insert(candidate.clone());
@@ -2477,7 +2529,8 @@ where
             .monotypes
             .function_parts(monotype)
             .expect("invariant violated: a converted function takes an argument");
-        let parameter = self.temporary("argument");
+        let base = self.value_base(argument);
+        let parameter = self.temporary(&base);
         let reverse = match direction {
             Direction::ToConvention => Direction::FromConvention,
             Direction::FromConvention => Direction::ToConvention,
@@ -2490,7 +2543,7 @@ where
             &mut body,
         )?;
         if layers > 1 {
-            supplied.push(self.shared(argument, "argument", &mut body));
+            supplied.push(self.shared(argument, &base, &mut body));
             let inner = self.convention_layer(callable, supplied, result, layers - 1, direction)?;
             body.push(GoStatement::Return(Some(inner)));
             return Ok(GoExpression::Function {
@@ -2767,7 +2820,8 @@ where
         let mut parameters = vec![];
         let mut arguments = vec![];
         if let Some(parameter) = parameter {
-            let name = self.temporary("argument");
+            let base = self.value_base(parameter);
+            let name = self.temporary(&base);
             parameters.push((name.clone(), self.go_type(parameter)?));
             arguments.push(identifier_expression(&name));
         }
@@ -2837,7 +2891,8 @@ where
         let Monotype::Function(argument, result) = self.monotypes.get(monotype).clone() else {
             return Ok(function);
         };
-        let parameter = self.temporary("argument");
+        let base = self.value_base(argument);
+        let parameter = self.temporary(&base);
         let parameter_type = self.go_type(argument)?;
         let mut body = vec![];
         let callable = self.value_callable(function, monotype);

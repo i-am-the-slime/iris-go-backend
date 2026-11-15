@@ -40,7 +40,11 @@ impl Simplifier<'_> {
             ExpressionKind::Record(values) => {
                 let mut labels = vec![];
                 for (label, value) in values {
-                    let name = format_smolstr!("{}{}", local.name, capitalised(&label));
+                    let name = if local.name == crate::value_names::RECORD_VALUE {
+                        label.clone()
+                    } else {
+                        format_smolstr!("{}{}", local.name, capitalised(&label))
+                    };
                     fields.push(self.field_binding(name, value));
                     labels.push(label);
                 }

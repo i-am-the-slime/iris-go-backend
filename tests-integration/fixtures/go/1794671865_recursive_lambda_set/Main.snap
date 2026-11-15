@@ -16,8 +16,8 @@ type MainResult struct {
 }
 
 type LazyInt struct {
-	Argument1 *LazyInt
-	Tag       uint8
+	Acc *LazyInt
+	Tag uint8
 }
 
 const (
@@ -28,9 +28,9 @@ const (
 var sharedLazyIntMain_ = &LazyInt{Tag: LazyIntMain_}
 
 type IntToInt struct {
-	Argument1 *IntToInt
-	N         int32
-	Tag       uint8
+	K   *IntToInt
+	N   int32
+	Tag uint8
 }
 
 const (
@@ -43,32 +43,32 @@ var sharedIntToIntMain_ = &IntToInt{Tag: IntToIntMain_}
 
 var main_ MainResult = MainResult{Forced: forceInt(buildThunks(1000, sharedLazyIntMain_)), Continued: countDown(10, sharedIntToIntMain_)}
 
-func buildThunks(argument0 int32, argument1 *LazyInt) *LazyInt {
+func buildThunks(n int32, acc *LazyInt) *LazyInt {
 	var lazyIntCells alloc.Cells[LazyInt]
 	for {
-		switch argument0 {
+		switch n {
 		case 0:
-			return argument1
+			return acc
 		default:
-			n := argument0
-			argument0, argument1 = n - 1, lazyIntCells.New(LazyInt{Tag: LazyIntBuildThunks, Argument1: argument1})
+			n2 := n
+			n, acc = n2 - 1, lazyIntCells.New(LazyInt{Tag: LazyIntBuildThunks, Acc: acc})
 			continue
 		}
 	}
 }
 
-func countDown(argument0 int32, argument1 *IntToInt) int32 {
+func countDown(n int32, k *IntToInt) int32 {
 	var intToIntCells alloc.Cells[IntToInt]
 	for {
-		if argument0 == 0 {
-			return runIntToInt(argument1, 0)
+		if n == 0 {
+			return runIntToInt(k, 0)
 		}
-		n := argument0
-		if prim.IntMod(n, 2) == 0 {
-			argument0, argument1 = n - 1, intToIntCells.New(IntToInt{Tag: IntToIntCountDown, Argument1: argument1, N: n})
+		n2 := n
+		if prim.IntMod(n2, 2) == 0 {
+			n, k = n2 - 1, intToIntCells.New(IntToInt{Tag: IntToIntCountDown, K: k, N: n2})
 			continue
 		}
-		argument0, argument1 = n - 1, intToIntCells.New(IntToInt{Tag: IntToIntCountDown2, Argument1: argument1})
+		n, k = n2 - 1, intToIntCells.New(IntToInt{Tag: IntToIntCountDown2, K: k})
 	}
 }
 
@@ -77,7 +77,7 @@ func forceInt(lazy *LazyInt) int32 {
 	case LazyIntMain_:
 		return 0
 	default: // LazyIntBuildThunks
-		return forceInt(lazy.Argument1) + 1
+		return forceInt(lazy.Acc) + 1
 	}
 }
 
@@ -87,13 +87,13 @@ func runIntToInt(function *IntToInt, x int32) int32 {
 		case IntToIntMain_:
 			return x - 1
 		case IntToIntCountDown:
-			argument1 := function.Argument1
+			k := function.K
 			n := function.N
-			function, x = argument1, x + n
+			function, x = k, x + n
 			continue
 		default: // IntToIntCountDown2
-			argument12 := function.Argument1
-			function, x = argument12, prim.MultiplyInt32(x, 2)
+			k := function.K
+			function, x = k, prim.MultiplyInt32(x, 2)
 			continue
 		}
 	}

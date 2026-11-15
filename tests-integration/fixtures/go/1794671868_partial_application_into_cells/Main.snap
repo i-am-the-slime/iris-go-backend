@@ -25,15 +25,15 @@ var sharedReaderMain_ = &Reader{Tag: ReaderMain_}
 
 var main_ int32 = runReader(2, addAll(4, sharedReaderMain_))
 
-func addAll(argument0 int32, argument1 *Reader) *Reader {
+func addAll(n int32, reader *Reader) *Reader {
 	var readerCells alloc.Cells[Reader]
 	for {
-		switch argument0 {
+		switch n {
 		case 0:
-			return argument1
+			return reader
 		default:
-			n := argument0
-			argument0, argument1 = n - 1, readerCells.New(Reader{Tag: ReaderPlus, N: n, Reader: argument1})
+			n2 := n
+			n, reader = n2 - 1, readerCells.New(Reader{Tag: ReaderPlus, N: n2, Reader: reader})
 			continue
 		}
 	}

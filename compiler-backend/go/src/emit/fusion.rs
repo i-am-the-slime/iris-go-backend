@@ -609,8 +609,9 @@ where
             Found::Direct { function, callee, leading } => {
                 let mut values = vec![];
                 for argument in leading {
+                    let base = self.value_base(argument.monotype);
                     let value = self.value(argument, out)?;
-                    values.push(self.hoist(value, "argument", out));
+                    values.push(self.hoist(value, &base, out));
                 }
                 Callback::Direct { function, callee, leading: values }
             }

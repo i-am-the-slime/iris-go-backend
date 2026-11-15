@@ -44,22 +44,22 @@ func convert(value FailureEmpty) FailureParse {
 }
 
 func convert2(value MEmptyInt) MParseInt {
-	return MParseInt{StepInt: func(coerced int32, coerced2 func(func(struct{}) StepInt) StepInt, coerced3 func(FailureParse) StepInt, coerced5 func(int32) StepInt) StepInt {
-		return value.StepInt(coerced, coerced2, func(coerced4 FailureEmpty) StepInt {
-			return coerced3(convert(coerced4))
-		}, coerced5)
+	return MParseInt{StepInt: func(coerced int32, coerced2 func(func(struct{}) StepInt) StepInt, coerced3 func(FailureParse) StepInt, coerced4 func(int32) StepInt) StepInt {
+		return value.StepInt(coerced, coerced2, func(coerced5 FailureEmpty) StepInt {
+			return coerced3(convert(coerced5))
+		}, coerced4)
 	}}
 }
 
 var main_ = initializeMain_()
 
 func initializeMain_() []int32 {
-	scrutinee := mainGo(loop(30, 0).StepInt(0, func(value0 func(struct{}) StepInt) StepInt {
-		return StepInt{Tag: StepIntMore, More: value0}
-	}, func(argument0 FailureParse) StepInt {
-		return StepInt{Tag: StepIntStop, Stop: argument0.Failure}
-	}, func(value02 int32) StepInt {
-		return StepInt{Tag: StepIntDone, Done: value02}
+	scrutinee := mainGo(loop(30, 0).StepInt(0, func(f func(struct{}) StepInt) StepInt {
+		return StepInt{Tag: StepIntMore, More: f}
+	}, func(failure FailureParse) StepInt {
+		return StepInt{Tag: StepIntStop, Stop: failure.Failure}
+	}, func(i int32) StepInt {
+		return StepInt{Tag: StepIntDone, Done: i}
 	}))
 	var result int32
 	switch scrutinee.Tag {
@@ -79,16 +79,16 @@ func loop(i int32, total int32) MParseInt {
 			return done(total)
 		}}
 	}
-	return MParseInt{StepInt: func(env int32, more func(func(struct{}) StepInt) StepInt, failure func(FailureParse) StepInt, done2 func(int32) StepInt) StepInt {
+	return MParseInt{StepInt: func(env int32, more func(func(struct{}) StepInt) StepInt, failure func(FailureParse) StepInt, done func(int32) StepInt) StepInt {
 		return more(func(_ struct{}) StepInt {
 			return askParse.StepInt(env + i, more, failure, func(a int32) StepInt {
-				argument0 := convert2(countdown(prim.IntMod(i, 3)))
+				mParseInt := convert2(countdown(prim.IntMod(i, 3)))
 				return more(func(_ struct{}) StepInt {
 					return more(func(_ struct{}) StepInt {
-						return argument0.StepInt(env, more, failure, func(a2 int32) StepInt {
+						return mParseInt.StepInt(env, more, failure, func(a2 int32) StepInt {
 							n := loop(i - 1, prim.IntMod(total + a + a2, 1000003))
 							return more(func(_ struct{}) StepInt {
-								return n.StepInt(env, more, failure, done2)
+								return n.StepInt(env, more, failure, done)
 							})
 						})
 					})

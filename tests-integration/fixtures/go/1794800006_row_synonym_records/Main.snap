@@ -21,17 +21,17 @@ type KindSpaceAfterSpaceBeforeValue struct {
 var main_ = initializeMain_()
 
 func initializeMain_() string {
-	array2 := []KindSpaceAfterSpaceBeforeValue{KindSpaceAfterSpaceBeforeValue{SpaceBefore: false, SpaceAfter: true, Value: "a", Kind: 1}, KindSpaceAfterSpaceBeforeValue{SpaceBefore: true, SpaceAfter: false, Value: "b", Kind: 2}}
+	array := []KindSpaceAfterSpaceBeforeValue{KindSpaceAfterSpaceBeforeValue{SpaceBefore: false, SpaceAfter: true, Value: "a", Kind: 1}, KindSpaceAfterSpaceBeforeValue{SpaceBefore: true, SpaceAfter: false, Value: "b", Kind: 2}}
 	accumulator := SpaceValue{Value: "", Space: false}
-	for argument1Index := range array2 {
-		argument0 := accumulator
+	for kindSpaceAfterSpaceBeforeValueIndex := range array {
+		spaceValue := accumulator
 		var result string
-		if argument0.Space && array2[argument1Index].SpaceBefore {
+		if spaceValue.Space && array[kindSpaceAfterSpaceBeforeValueIndex].SpaceBefore {
 			result = " "
 		} else {
 			result = ""
 		}
-		accumulator = SpaceValue{Value: argument0.Value + result + array2[argument1Index].Value, Space: array2[argument1Index].SpaceAfter}
+		accumulator = SpaceValue{Value: spaceValue.Value + result + array[kindSpaceAfterSpaceBeforeValueIndex].Value, Space: array[kindSpaceAfterSpaceBeforeValueIndex].SpaceAfter}
 	}
 	return accumulator.Value
 }

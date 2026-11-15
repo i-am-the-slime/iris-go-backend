@@ -28,18 +28,18 @@ import (
 var main_ = initializeMain_()
 
 func initializeMain_() maybe.MaybeArrayInt {
-	array_ := array.Append([]int32{2}, []int32{4, 8})
+	array2 := array.Append([]int32{2}, []int32{4, 8})
 	append_ := direct.Appender[int32]()
-	n := array_[0]
+	n := array2[0]
 	var result maybe.MaybeArrayInt
 	if prim.IntMod(n, 2) == 0 {
 		result = maybe.MaybeArrayInt{Tag: maybe.MaybeArrayIntJust, Just: []int32{prim.IntDiv(n, 2)}}
 	} else {
 		result = maybe.MaybeArrayInt{Tag: maybe.MaybeArrayIntNothing}
 	}
-	array2 := array.Slice(1, int32(len(array_)), array_)
+	array3 := array.Slice(1, int32(len(array2)), array2)
 	accumulator := result
-	for _, element := range array2 {
+	for _, element := range array3 {
 		accumulator2 := accumulator
 		switch accumulator2.Tag {
 		case maybe.MaybeArrayIntJust:

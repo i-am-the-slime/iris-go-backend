@@ -25,9 +25,9 @@ type MainResult struct {
 var main_ = initializeMain_()
 
 func initializeMain_() MainResult {
-	array2 := []func(int32) int32{chain(2, category.Identity), chain(3, category.Identity)}
+	array := []func(int32) int32{chain(2, category.Identity), chain(3, category.Identity)}
 	var accumulator int32 = 0
-	for _, k := range array2 {
+	for _, k := range array {
 		total := accumulator
 		accumulator = total + k(1)
 	}
@@ -38,32 +38,32 @@ func initializeMain_() MainResult {
 	}).Force()}
 }
 
-func chain(argument0 int32, argument1 func(int32) int32) func(int32) int32 {
+func chain(n int32, k func(int32) int32) func(int32) int32 {
 	for {
-		argument1Captured := argument1
-		switch argument0 {
+		kCaptured := k
+		switch n {
 		case 0:
-			return argument1Captured
+			return kCaptured
 		default:
-			n := argument0
-			argument0, argument1 = n - 1, func(x int32) int32 {
-				return argument1Captured(x + 1)
+			n2 := n
+			n, k = n2 - 1, func(x int32) int32 {
+				return kCaptured(x + 1)
 			}
 			continue
 		}
 	}
 }
 
-func thunks(argument0 int32, argument1 func(struct{}) int32) func(struct{}) int32 {
+func thunks(n int32, t func(struct{}) int32) func(struct{}) int32 {
 	for {
-		argument1Captured := argument1
-		switch argument0 {
+		tCaptured := t
+		switch n {
 		case 0:
-			return argument1Captured
+			return tCaptured
 		default:
-			n := argument0
-			argument0, argument1 = n - 1, func(_ struct{}) int32 {
-				return argument1Captured(struct{}{}) + 1
+			n2 := n
+			n, t = n2 - 1, func(_ struct{}) int32 {
+				return tCaptured(struct{}{}) + 1
 			}
 			continue
 		}

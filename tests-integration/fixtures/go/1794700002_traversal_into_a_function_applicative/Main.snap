@@ -1,5 +1,6 @@
 ---
 source: tests-integration/src/fixtures.rs
+assertion_line: 570
 ---
 // main.go
 package main
@@ -14,11 +15,11 @@ var main_ = initializeMain_()
 
 func initializeMain_() []int32 {
 	append_ := direct.Appender[int32]()
-	array2 := []int32{1, 2, 3}
+	array := []int32{1, 2, 3}
 	accumulator := func(_ int32, _ int32) []int32 {
 		return []int32{}
 	}
-	for _, element := range array2 {
+	for _, element := range array {
 		accumulator2 := accumulator
 		accumulator = func(scale int32, offset int32) []int32 {
 			return append_(accumulator2(scale, offset))(prim.MultiplyInt32(element, scale) + offset)
