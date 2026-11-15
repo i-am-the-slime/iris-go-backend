@@ -1,0 +1,85 @@
+---
+source: tests-integration/src/fixtures.rs
+---
+// main.go
+package main
+
+import (
+	"fmt"
+	"github.com/i-am-the-slime/purs-backend-go/go-support/prim"
+)
+
+type Empty struct{}
+
+type ValueInt struct {
+	Field0       Empty
+	StringValue0 Empty
+	StringValue1 string
+	Pair0        *ValueInt
+	Pair1        *ValueInt
+	Field1       int32
+	Tag          uint8
+}
+
+const (
+	ValueIntIntValue = iota
+	ValueIntAgeValue
+	ValueIntStringValue
+	ValueIntPair
+)
+
+type ValueString struct {
+	Field0       Empty
+	StringValue0 Empty
+	StringValue1 string
+	Pair0        *ValueString
+	Pair1        *ValueString
+	Field1       int32
+	Tag          uint8
+}
+
+const (
+	ValueStringIntValue = iota
+	ValueStringAgeValue
+	ValueStringStringValue
+	ValueStringPair
+)
+
+var main_ []string = []string{prim.ShowInt(evaluateInt(&ValueInt{Tag: ValueIntPair, Pair0: &ValueInt{Tag: ValueIntIntValue, Field0: reflTypeInt, Field1: 41}, Pair1: &ValueInt{Tag: ValueIntIntValue, Field0: reflTypeInt, Field1: 0}}) + 1), evaluateString(&ValueString{Tag: ValueStringPair, Pair0: &ValueString{Tag: ValueStringStringValue, StringValue0: reflTypeInt, StringValue1: "left"}, Pair1: &ValueString{Tag: ValueStringStringValue, StringValue0: reflTypeInt, StringValue1: "right"}})}
+
+func evaluateInt(argument0 *ValueInt) int32 {
+	for {
+		switch argument0.Tag {
+		case ValueIntIntValue:
+			n := argument0.Field1
+			return n
+		case ValueIntAgeValue:
+			age := argument0.Field1
+			return age
+		default: // ValueIntPair
+			left := argument0.Pair0
+			argument0 = left
+			continue
+		}
+	}
+}
+
+var reflTypeInt Empty = Empty{}
+
+func evaluateString(argument0 *ValueString) string {
+	for {
+		switch argument0.Tag {
+		case ValueStringStringValue:
+			s := argument0.StringValue1
+			return s
+		default: // ValueStringPair
+			left := argument0.Pair0
+			argument0 = left
+			continue
+		}
+	}
+}
+
+func main() {
+	fmt.Println(main_)
+}

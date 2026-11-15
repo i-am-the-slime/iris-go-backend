@@ -1325,6 +1325,7 @@ where
         if let Some(reference) = self.traversal_reference(scope, head, &arguments)? {
             return self.traverse_array(scope, reference, &arguments);
         }
+        let head_type = self.instantiated_node_type(scope, head, &result_instantiations);
         let function = match module.checked.tree[head].kind {
             tree::ExpressionKind::Constructor { .. }
             | tree::ExpressionKind::Variable { .. }
@@ -1345,7 +1346,7 @@ where
                 return Ok(Expression::new(ExpressionKind::Fail(blocked), monotype));
             }
         };
-        let mut parameter_type = module.checked.tree[head].type_id;
+        let mut parameter_type = head_type;
         let mut callee = IgnoringCallee::of(&function, 0);
         let mut converted = Vec::with_capacity(arguments.len());
         for (position, argument) in arguments.into_iter().enumerate() {
@@ -1395,6 +1396,34 @@ where
             return Ok(self.coerce(applied, monotype));
         }
         Ok(Expression::new(kind, monotype))
+    }
+
+    /// The type a reference node stands at. The checker gives the node the
+    /// declared type and records the instantiations of its quantifiers apart,
+    /// on the node, its evidence applications, and the applications of it.
+    fn instantiated_node_type(
+        &self,
+        scope: &Scope,
+        node: tree::ExpressionId,
+        result_instantiations: &Substitution,
+    ) -> TypeId {
+        let tree = &scope.module.checked.tree;
+        let mut substitution = result_instantiations.clone();
+        let mut current = node;
+        loop {
+            for instantiation in tree.lookup_instantiations(current) {
+                let closed =
+                    self.context.types.substitute(instantiation.argument, &scope.substitution);
+                substitution.insert(instantiation.name, closed);
+            }
+            match tree[current].kind {
+                tree::ExpressionKind::EvidenceApplication { function, .. } => current = function,
+                _ => break,
+            }
+        }
+        let node_type = self.outer_body(tree[node].type_id, &mut vec![]);
+        let node_type = self.context.types.substitute(node_type, &scope.substitution);
+        self.context.types.substitute(node_type, &substitution)
     }
 
     fn coerce(&mut self, expression: Expression, monotype: MonotypeId) -> Expression {
@@ -1725,7 +1754,7 @@ where
                 term,
             )) => {
                 let checked = expected.unwrap_or(tree[id].type_id);
-                self.recover_inner_instantiations(
+                self.recover_unrecorded_instantiations(
                     scope,
                     checked,
                     file_id,
@@ -1962,7 +1991,11 @@ where
         bindings.collect()
     }
 
-    fn recover_inner_instantiations(
+    /// Recovers, from the type the reference is checked at, the quantifiers
+    /// the checker records no instantiation for: those of a result type, and
+    /// those of a declaration referenced from its own recursive binding group,
+    /// where the reference is monomorphic until the group is generalized.
+    fn recover_unrecorded_instantiations(
         &mut self,
         scope: &Scope,
         checked: TypeId,
@@ -1974,29 +2007,30 @@ where
         let Some(declared) = module.checked.lookup_term_item_type(term) else {
             return Ok(());
         };
-        let declared = self.outer_body(declared);
+        let mut uninstantiated = vec![];
+        let declared = self.outer_body(declared, &mut uninstantiated);
         let declared = self.strip_instantiated_result_quantifiers(declared, instantiations)?;
         let declared = self.context.types.substitute(declared, instantiations);
-        let mut inner = vec![];
-        let pattern = self.strip_inner_quantifiers(declared, &mut inner)?;
-        inner.retain(|name| !instantiations.contains_key(name));
-        if inner.is_empty() {
+        let pattern = self.strip_inner_quantifiers(declared, &mut uninstantiated)?;
+        uninstantiated.retain(|name| !instantiations.contains_key(name));
+        if uninstantiated.is_empty() {
             return Ok(());
         }
         let checked = self.context.types.substitute(checked, &scope.substitution);
         let checked = self.strip_inner_quantifiers(checked, &mut vec![])?;
         let mut bindings = Substitution::default();
-        if self.context.types.match_type(pattern, checked, &inner, &mut bindings) {
+        if self.context.types.match_type(pattern, checked, &uninstantiated, &mut bindings) {
             instantiations.extend(bindings);
         }
         Ok(())
     }
 
-    fn outer_body(&self, mut current: TypeId) -> TypeId {
+    fn outer_body(&self, mut current: TypeId, names: &mut Vec<Name>) -> TypeId {
         loop {
             let (bound, inner) = self.context.types.peel_quantifiers(current);
             let (constraints, inner) = self.context.types.peel_constraints(inner);
             current = inner;
+            names.extend(bound.iter().copied());
             if bound.is_empty() && constraints.is_empty() {
                 return current;
             }

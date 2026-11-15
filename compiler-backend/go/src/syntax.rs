@@ -209,6 +209,12 @@ pub enum GoDeclaration {
         name: String,
         type_: GoType,
     },
+    /// `type name = type_`: another spelling of the same type, for a recursive
+    /// newtype whose cycle already passes through a named type.
+    Alias {
+        name: String,
+        type_: GoType,
+    },
     /// `type name[parameter any] type_`.
     GenericType {
         name: String,
@@ -252,6 +258,7 @@ impl GoDeclaration {
     pub fn name(&self) -> Option<&str> {
         match self {
             GoDeclaration::Type { name, .. }
+            | GoDeclaration::Alias { name, .. }
             | GoDeclaration::Source { name, .. }
             | GoDeclaration::GenericType { name, .. }
             | GoDeclaration::Declared { name, .. }
@@ -274,6 +281,7 @@ impl GoDeclaration {
             }
             GoDeclaration::Source { .. }
             | GoDeclaration::Type { .. }
+            | GoDeclaration::Alias { .. }
             | GoDeclaration::GenericType { .. }
             | GoDeclaration::Constants { .. }
             | GoDeclaration::Declared { .. } => {}
@@ -304,9 +312,9 @@ impl GoDeclaration {
     pub fn for_each_reference_mut(&mut self, visit: &mut impl FnMut(Reference<'_>)) {
         match self {
             GoDeclaration::Source { .. } => {}
-            GoDeclaration::Type { type_, .. } | GoDeclaration::Declared { type_, .. } => {
-                type_references(type_, visit)
-            }
+            GoDeclaration::Type { type_, .. }
+            | GoDeclaration::Alias { type_, .. }
+            | GoDeclaration::Declared { type_, .. } => type_references(type_, visit),
             GoDeclaration::GenericType { parameter, type_, .. } => {
                 let parameter = parameter.clone();
                 type_references(type_, &mut |reference| match reference {
@@ -724,6 +732,10 @@ impl Printer {
             GoDeclaration::Type { name, type_ } => {
                 let rendered = self.type_(type_);
                 self.line(&format!("type {name} {rendered}"));
+            }
+            GoDeclaration::Alias { name, type_ } => {
+                let rendered = self.type_(type_);
+                self.line(&format!("type {name} = {rendered}"));
             }
             GoDeclaration::GenericType { name, parameter, type_ } => {
                 let rendered = self.type_(type_);

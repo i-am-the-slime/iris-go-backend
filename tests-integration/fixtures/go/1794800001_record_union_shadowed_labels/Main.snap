@@ -1,0 +1,53 @@
+---
+source: tests-integration/src/fixtures.rs
+---
+// main.go
+package main
+
+import (
+	"fmt"
+	"github.com/i-am-the-slime/purs-backend-go/go-support/prim"
+)
+
+type AZ struct {
+	A int32
+	Z rune
+}
+
+type AZ2 struct {
+	A string
+	Z rune
+}
+
+type ABZ struct {
+	A string
+	B bool
+	Z rune
+}
+
+var main_ = initializeMain_()
+
+func initializeMain_() []string {
+	union := AZ{A: 1, Z: defaults.Z}
+	record := AZ2{A: defaults.A, Z: 'y'}
+	record2 := ABZ{A: defaults.A, Z: defaults.Z, B: true}
+	var result string
+	if record2.B {
+		result = "true"
+	} else {
+		result = "false"
+	}
+	return []string{prim.ShowInt(union.A) + " " + prim.ShowChar(union.Z), "{ a: " + prim.ShowInt(built.A) + ", z: " + prim.ShowChar(built.Z) + " }", "{ a: " + prim.ShowInt(merged.A) + ", z: " + prim.ShowChar(merged.Z) + " }", "{ a: " + prim.ShowString(flipped.A) + ", z: " + prim.ShowChar(flipped.Z) + " }", "{ a: " + prim.ShowString(record.A) + ", z: " + prim.ShowChar(record.Z) + " }", "{ a: " + prim.ShowString(record2.A) + ", b: " + result + ", z: " + prim.ShowChar(record2.Z) + " }"}
+}
+
+var built AZ = AZ{A: 2, Z: defaults.Z}
+
+var merged AZ = AZ{A: 3, Z: defaults.Z}
+
+var flipped AZ2 = AZ2{A: defaults.A, Z: defaults.Z}
+
+var defaults AZ2 = AZ2{A: "shadowed", Z: 'z'}
+
+func main() {
+	fmt.Println(main_)
+}

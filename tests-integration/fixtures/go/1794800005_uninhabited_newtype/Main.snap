@@ -1,0 +1,50 @@
+---
+source: tests-integration/src/fixtures.rs
+---
+// main.go
+package main
+
+import "fmt"
+
+type Never struct{}
+
+type Step struct {
+	Impossible0 Never
+	Done0       int32
+	Tag         uint8
+}
+
+const (
+	StepDone = iota
+	StepImpossible
+)
+
+var main_ = initializeMain_()
+
+func initializeMain_() []int32 {
+	mapped := make([]int32, len(steps))
+	for index, element := range steps {
+		mapped[index] = value(element)
+	}
+	return mapped
+}
+
+func value(argument0 *Step) int32 {
+	switch argument0.Tag {
+	case StepDone:
+		return argument0.Done0
+	default: // StepImpossible
+		return absurdInt(argument0.Impossible0)
+	}
+}
+
+var steps []*Step = []*Step{&Step{Tag: StepDone, Done0: 7}, &Step{Tag: StepDone, Done0: 8}}
+
+func absurdInt(argument0 Never) int32 {
+	for {
+	}
+}
+
+func main() {
+	fmt.Println(main_)
+}

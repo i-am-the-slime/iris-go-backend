@@ -672,6 +672,7 @@ fn rename_declared(declaration: &mut GoDeclaration, rename: &mut impl FnMut(&str
             }
         }
         GoDeclaration::Type { name, .. }
+        | GoDeclaration::Alias { name, .. }
         | GoDeclaration::GenericType { name, .. }
         | GoDeclaration::Source { name, .. }
         | GoDeclaration::Declared { name, .. }

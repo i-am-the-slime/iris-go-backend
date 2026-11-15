@@ -15,7 +15,7 @@ type MinisName struct {
 	Name  string
 }
 
-type Step func(int32) *MaybeStep
+type Step = func(int32) *MaybeStep
 
 type MaybeStep struct {
 	Just0 Step

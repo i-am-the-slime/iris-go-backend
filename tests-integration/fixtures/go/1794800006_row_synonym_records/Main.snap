@@ -1,0 +1,41 @@
+---
+source: tests-integration/src/fixtures.rs
+---
+// main.go
+package main
+
+import "fmt"
+
+type SpaceValue struct {
+	Space bool
+	Value string
+}
+
+type KindSpaceAfterSpaceBeforeValue struct {
+	Kind        int32
+	SpaceAfter  bool
+	SpaceBefore bool
+	Value       string
+}
+
+var main_ = initializeMain_()
+
+func initializeMain_() string {
+	array2 := []KindSpaceAfterSpaceBeforeValue{KindSpaceAfterSpaceBeforeValue{SpaceBefore: false, SpaceAfter: true, Value: "a", Kind: 1}, KindSpaceAfterSpaceBeforeValue{SpaceBefore: true, SpaceAfter: false, Value: "b", Kind: 2}}
+	accumulator := SpaceValue{Value: "", Space: false}
+	for argument1Index := range array2 {
+		argument0 := accumulator
+		var result string
+		if argument0.Space && array2[argument1Index].SpaceBefore {
+			result = " "
+		} else {
+			result = ""
+		}
+		accumulator = SpaceValue{Value: argument0.Value + result + array2[argument1Index].Value, Space: array2[argument1Index].SpaceAfter}
+	}
+	return accumulator.Value
+}
+
+func main() {
+	fmt.Println(main_)
+}

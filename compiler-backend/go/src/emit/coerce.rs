@@ -23,7 +23,7 @@ where
         to: MonotypeId,
         out: &mut Vec<GoStatement>,
     ) -> GoResult<GoExpression> {
-        if from == to || self.go_type(from)? == self.go_type(to)? {
+        if from == to || self.same_go_type(from, to)? {
             return Ok(value);
         }
         match (self.monotypes.get(from).clone(), self.monotypes.get(to).clone()) {
