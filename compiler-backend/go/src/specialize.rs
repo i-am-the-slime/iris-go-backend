@@ -25,7 +25,7 @@ use crate::error::{GoError, GoResult, UnsupportedState};
 use crate::foreign::{self, Boundary, Foreign, ForeignPackages, Signature, Spelled};
 use crate::mono::{
     Alternative, Binding, Expression, ExpressionKind, Function, FunctionId, FunctionSpelling,
-    Guard, Guarded, GuardedBranch, Literal, Local, LocalId, Pattern, PatternKind, RecordUpdate,
+    Guard, Guarded, GuardedBranch, Literal, Local, Pattern, PatternKind, RecordUpdate,
 };
 use crate::monotype::{Monotype, MonotypeId, Monotypes};
 use crate::scheme::{
@@ -500,9 +500,7 @@ where
     }
 
     fn fresh_local(&mut self, name: SmolStr, monotype: MonotypeId) -> Local {
-        let id = LocalId(self.next_local);
-        self.next_local += 1;
-        Local { id, name, monotype }
+        Local::fresh(&mut self.next_local, name, monotype)
     }
 
     fn specialize(&mut self, key: &SpecializationKey, name: SmolStr) -> GoResult<Function> {
@@ -2843,10 +2841,11 @@ where
                     if let Monotype::Recursive(data) = self.monotypes.get(monotype).clone() {
                         // The wrapped value has the unfolded representation, as the
                         // declared type of a function like `step (ListT m) = m` says.
-                        let unfolded = match self.monotypes.unfold(&mut self.context, &data)? {
-                            Ok(unfolded) => unfolded,
-                            Err(state) => return Err(self.unsupported(scope, state)),
-                        };
+                        let unfolded = self.monotypes.unfold_in(
+                            &mut self.context,
+                            &data,
+                            &scope.definition,
+                        )?;
                         self.adopt_representation(scope, *argument, &mut pattern, unfolded);
                         pattern.monotype = unfolded;
                     } else {

@@ -309,10 +309,7 @@ where
     }
 
     fn unfold(&mut self, data: &DataType) -> GoResult<MonotypeId> {
-        match self.monotypes.unfold(&mut self.context, data)? {
-            Ok(unfolded) => Ok(unfolded),
-            Err(state) => Err(GoError::Unsupported { definition: "code generation".into(), state }),
-        }
+        self.monotypes.unfold_in(&mut self.context, data, "code generation")
     }
 
     /// `Lazy Int` is `LazyInt`, as the struct of a data type is named.
@@ -459,9 +456,7 @@ where
         next_local: &mut u32,
     ) -> GoResult<(Function, ClosureSet)> {
         let mut fresh = |name: SmolStr, monotype: MonotypeId| {
-            let id = LocalId(*next_local);
-            *next_local += 1;
-            Local { id, name, monotype }
+            Local::fresh(next_local, name, monotype)
         };
         let newtype = self.monotypes.function_newtype(monotype).cloned();
         let name = match &newtype {
@@ -949,9 +944,7 @@ where
     Q: checking::ExternalQueries,
 {
     fn fresh(&mut self, name: SmolStr, monotype: MonotypeId) -> Local {
-        let id = LocalId(*self.next_local);
-        *self.next_local += 1;
-        Local { id, name, monotype }
+        Local::fresh(self.next_local, name, monotype)
     }
 
     fn parameters(&self, function: &Expression) -> usize {

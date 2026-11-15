@@ -67,6 +67,15 @@ pub struct Local {
     pub monotype: MonotypeId,
 }
 
+impl Local {
+    /// A local no other has the id of, taking the next one from `next_local`.
+    pub fn fresh(next_local: &mut u32, name: SmolStr, monotype: MonotypeId) -> Local {
+        let id = LocalId(*next_local);
+        *next_local += 1;
+        Local { id, name, monotype }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct Expression {
     pub kind: ExpressionKind,

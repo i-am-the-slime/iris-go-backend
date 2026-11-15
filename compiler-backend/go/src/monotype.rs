@@ -10,7 +10,7 @@ use smol_str::SmolStr;
 
 use crate::context::Context;
 use crate::erasure::Erasure;
-use crate::error::UnsupportedState;
+use crate::error::{GoError, GoResult, UnsupportedState};
 use crate::scheme::{ConstrainedScheme, SchemeInstantiations, constrained_scheme, rank_n_scheme};
 use crate::types::Substitution;
 
@@ -928,6 +928,22 @@ impl Monotypes {
         };
         self.unfolded.insert(data.clone(), unfolded);
         Ok(Ok(unfolded))
+    }
+
+    /// [`Self::unfold`], reporting what cannot be unfolded against `definition`.
+    pub fn unfold_in<Q>(
+        &mut self,
+        context: &mut Context<'_, Q>,
+        data: &DataType,
+        definition: &str,
+    ) -> GoResult<MonotypeId>
+    where
+        Q: checking::ExternalQueries,
+    {
+        match self.unfold(context, data)? {
+            Ok(unfolded) => Ok(unfolded),
+            Err(state) => Err(GoError::Unsupported { definition: definition.to_string(), state }),
+        }
     }
 
     pub fn constructors<Q>(

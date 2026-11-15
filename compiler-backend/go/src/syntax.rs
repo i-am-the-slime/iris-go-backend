@@ -178,6 +178,17 @@ pub enum GoStatement {
     },
 }
 
+impl GoStatement {
+    /// A call of Go's `panic`, which ends the block like a `return`.
+    pub fn is_panic(&self) -> bool {
+        matches!(
+            self,
+            GoStatement::Expression(GoExpression::Call { function, .. })
+                if matches!(function.as_ref(), GoExpression::Identifier(name) if name == "panic")
+        )
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct GoCase {
     pub values: Vec<GoExpression>,

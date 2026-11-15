@@ -1616,10 +1616,7 @@ where
     }
 
     fn unfold(&mut self, data: &DataType) -> GoResult<MonotypeId> {
-        match self.monotypes.unfold(&mut self.context, data)? {
-            Ok(unfolded) => Ok(unfolded),
-            Err(state) => Err(GoError::Unsupported { definition: "code generation".into(), state }),
-        }
+        self.monotypes.unfold_in(&mut self.context, data, "code generation")
     }
 
     fn go_result(&mut self, monotype: MonotypeId) -> GoResult<Option<GoType>> {
@@ -4904,11 +4901,7 @@ fn is_effect_node(expression: &Expression) -> bool {
 }
 
 fn ends_in_panic(statements: &[GoStatement]) -> bool {
-    matches!(
-        statements.last(),
-        Some(GoStatement::Expression(GoExpression::Call { function, .. }))
-            if matches!(function.as_ref(), GoExpression::Identifier(name) if name == "panic")
-    )
+    statements.last().is_some_and(GoStatement::is_panic)
 }
 
 fn breaks_to(statements: &[GoStatement], label: &str) -> bool {
@@ -4933,8 +4926,7 @@ fn breaks_to(statements: &[GoStatement], label: &str) -> bool {
 
 fn ends_in_jump(statements: &[GoStatement]) -> bool {
     matches!(statements.last(), Some(GoStatement::Return(_) | GoStatement::Continue))
-        || matches!(statements.last(), Some(GoStatement::Expression(GoExpression::Call { function, .. }))
-        if matches!(function.as_ref(), GoExpression::Identifier(name) if name == "panic"))
+        || ends_in_panic(statements)
 }
 
 fn has_tail_call(expression: &Expression, function: FunctionId, arity: usize, mode: Mode) -> bool {

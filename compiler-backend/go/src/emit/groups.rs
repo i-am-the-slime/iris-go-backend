@@ -413,9 +413,7 @@ fn zero_value(type_: &GoType) -> Option<GoExpression> {
 fn terminates(statements: &[GoStatement]) -> bool {
     match statements.last() {
         Some(GoStatement::Return(_) | GoStatement::Continue) => true,
-        Some(GoStatement::Expression(GoExpression::Call { function, .. })) => {
-            matches!(function.as_ref(), GoExpression::Identifier(name) if name == "panic")
-        }
+        Some(statement) if statement.is_panic() => true,
         Some(GoStatement::If { then, otherwise, .. }) => terminates(then) && terminates(otherwise),
         Some(GoStatement::Switch { cases, default: Some(default), .. }) => {
             cases.iter().all(|case| terminates(&case.body)) && terminates(&default.body)

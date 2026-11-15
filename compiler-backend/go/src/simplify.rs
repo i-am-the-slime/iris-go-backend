@@ -110,9 +110,7 @@ struct Simplifier<'m> {
 
 impl Simplifier<'_> {
     fn fresh(&mut self, local: &Local) -> Local {
-        let id = LocalId(self.next_local);
-        self.next_local += 1;
-        Local { id, name: local.name.clone(), monotype: local.monotype }
+        Local::fresh(&mut self.next_local, local.name.clone(), local.monotype)
     }
 
     fn inlinable(&self, id: FunctionId) -> Option<&Function> {
@@ -1371,64 +1369,33 @@ fn substitute_guarded(guarded: &mut Guarded, local: LocalId, value: &Expression)
     }
 }
 
-/// The direct sub-expressions of node kinds that bind nothing.
-fn children_mut(expression: &mut Expression) -> Vec<&mut Expression> {
-    match &mut expression.kind {
-        ExpressionKind::Array(elements) => elements.iter_mut().collect(),
-        ExpressionKind::Record(fields) => fields.iter_mut().map(|(_, value)| value).collect(),
-        ExpressionKind::Access { record, .. } => vec![record],
-        ExpressionKind::Update { record, updates } => {
-            let mut children = vec![record.as_mut()];
-            update_children(updates, &mut children);
-            children
-        }
-        ExpressionKind::Construct { arguments, .. }
-        | ExpressionKind::Foreign { arguments, .. }
-        | ExpressionKind::Closure { captures: arguments, .. } => arguments.iter_mut().collect(),
-        ExpressionKind::Reuse { cell, arguments, .. } => {
-            let mut children: Vec<&mut Expression> = arguments.iter_mut().collect();
-            children.push(cell);
-            children
-        }
-        ExpressionKind::Apply { function, arguments } => {
-            let mut children = vec![function.as_mut()];
-            children.extend(arguments.iter_mut());
-            children
-        }
-        ExpressionKind::If { condition, then, otherwise } => vec![condition, then, otherwise],
-        ExpressionKind::EffectPure(value) | ExpressionKind::Coerce(value) => vec![value],
-        _ => vec![],
-    }
-}
-
 /// The guards and bodies of a case's alternatives.
-fn for_each_alternative_child<'e>(
+pub(crate) fn for_each_alternative_child<'e>(
     alternatives: &'e [Alternative],
     visitor: &mut impl FnMut(&'e Expression),
 ) {
     for alternative in alternatives {
-        match &alternative.body {
-            Guarded::Unconditional(body) => visitor(body),
-            Guarded::Guards(branches) => {
-                for branch in branches {
-                    for guard in &branch.guards {
-                        match guard {
-                            Guard::Boolean(condition) => visitor(condition),
-                            Guard::Pattern { value, .. } => visitor(value),
-                        }
-                    }
-                    visitor(&branch.body);
-                }
-            }
-        }
+        for_each_guarded_child(&alternative.body, visitor);
     }
 }
 
-fn update_children<'a>(updates: &'a mut [RecordUpdate], children: &mut Vec<&'a mut Expression>) {
-    for update in updates {
-        match update {
-            RecordUpdate::Leaf { value, .. } => children.push(value),
-            RecordUpdate::Branch { updates, .. } => update_children(updates, children),
+/// The guards and bodies of one alternative's right-hand side.
+pub(crate) fn for_each_guarded_child<'e>(
+    guarded: &'e Guarded,
+    visitor: &mut impl FnMut(&'e Expression),
+) {
+    match guarded {
+        Guarded::Unconditional(body) => visitor(body),
+        Guarded::Guards(branches) => {
+            for branch in branches {
+                for guard in &branch.guards {
+                    match guard {
+                        Guard::Boolean(condition) => visitor(condition),
+                        Guard::Pattern { value, .. } => visitor(value),
+                    }
+                }
+                visitor(&branch.body);
+            }
         }
     }
 }
@@ -1445,22 +1412,7 @@ fn binds_only(alternatives: &[Alternative]) -> bool {
 
 fn alternatives_size(alternatives: &[Alternative]) -> usize {
     let mut total = 0;
-    for alternative in alternatives {
-        match &alternative.body {
-            Guarded::Unconditional(body) => total += size(body),
-            Guarded::Guards(branches) => {
-                for branch in branches {
-                    total += size(&branch.body);
-                    for guard in &branch.guards {
-                        total += match guard {
-                            Guard::Boolean(condition) => size(condition),
-                            Guard::Pattern { value, .. } => size(value),
-                        };
-                    }
-                }
-            }
-        }
-    }
+    for_each_alternative_child(alternatives, &mut |child| total += size(child));
     total
 }
 
@@ -1627,31 +1579,13 @@ pub fn for_each_child<'e>(expression: &'e Expression, visitor: &mut impl FnMut(&
         }
         ExpressionKind::Case { scrutinees, alternatives } => {
             scrutinees.iter().for_each(&mut *visitor);
-            for alternative in alternatives {
-                match &alternative.body {
-                    Guarded::Unconditional(body) => visitor(body),
-                    Guarded::Guards(branches) => {
-                        for branch in branches {
-                            for guard in &branch.guards {
-                                match guard {
-                                    Guard::Boolean(condition) => visitor(condition),
-                                    Guard::Pattern { value, .. } => visitor(value),
-                                }
-                            }
-                            visitor(&branch.body);
-                        }
-                    }
-                }
-            }
+            for_each_alternative_child(alternatives, visitor);
         }
         ExpressionKind::EffectPure(value) | ExpressionKind::Coerce(value) => visitor(value),
-        ExpressionKind::EffectBind { action, body, .. } => {
-            visitor(action);
-            visitor(body);
-        }
-        ExpressionKind::EffectEach { array, body, .. } => {
-            visitor(array);
-            visitor(body);
+        ExpressionKind::EffectBind { action: first, body: second, .. }
+        | ExpressionKind::EffectEach { array: first, body: second, .. } => {
+            visitor(first);
+            visitor(second);
         }
     }
 }
@@ -1696,10 +1630,35 @@ pub fn for_each_child_mut(expression: &mut Expression, visitor: &mut impl FnMut(
         | ExpressionKind::Local(_)
         | ExpressionKind::Function(_)
         | ExpressionKind::Fail(_) => {}
+        ExpressionKind::Array(elements) => elements.iter_mut().for_each(visitor),
+        ExpressionKind::Record(fields) => fields.iter_mut().for_each(|(_, value)| visitor(value)),
+        ExpressionKind::Access { record, .. } => visitor(record),
+        ExpressionKind::Update { record, updates } => {
+            visitor(record);
+            for_each_update_mut(updates, visitor);
+        }
+        ExpressionKind::Construct { arguments, .. }
+        | ExpressionKind::Foreign { arguments, .. }
+        | ExpressionKind::Closure { captures: arguments, .. } => {
+            arguments.iter_mut().for_each(visitor)
+        }
+        ExpressionKind::Reuse { cell, arguments, .. } => {
+            arguments.iter_mut().for_each(&mut *visitor);
+            visitor(cell);
+        }
+        ExpressionKind::Apply { function, arguments } => {
+            visitor(function);
+            arguments.iter_mut().for_each(visitor);
+        }
         ExpressionKind::Lambda { body, .. } => visitor(body),
         ExpressionKind::Let { bindings, body } => {
             bindings.iter_mut().for_each(|binding| visitor(&mut binding.value));
             visitor(body);
+        }
+        ExpressionKind::If { condition, then, otherwise } => {
+            visitor(condition);
+            visitor(then);
+            visitor(otherwise);
         }
         ExpressionKind::Case { scrutinees, alternatives } => {
             scrutinees.iter_mut().for_each(&mut *visitor);
@@ -1720,18 +1679,20 @@ pub fn for_each_child_mut(expression: &mut Expression, visitor: &mut impl FnMut(
                 }
             }
         }
-        ExpressionKind::EffectBind { action, body, .. } => {
-            visitor(action);
-            visitor(body);
+        ExpressionKind::EffectPure(value) | ExpressionKind::Coerce(value) => visitor(value),
+        ExpressionKind::EffectBind { action: first, body: second, .. }
+        | ExpressionKind::EffectEach { array: first, body: second, .. } => {
+            visitor(first);
+            visitor(second);
         }
-        ExpressionKind::EffectEach { array, body, .. } => {
-            visitor(array);
-            visitor(body);
-        }
-        _ => {
-            for child in children_mut(expression) {
-                visitor(child);
-            }
+    }
+}
+
+fn for_each_update_mut(updates: &mut [RecordUpdate], visitor: &mut impl FnMut(&mut Expression)) {
+    for update in updates {
+        match update {
+            RecordUpdate::Leaf { value, .. } => visitor(value),
+            RecordUpdate::Branch { updates, .. } => for_each_update_mut(updates, visitor),
         }
     }
 }

@@ -121,9 +121,7 @@ struct Lifter<'m> {
 
 impl Lifter<'_> {
     fn fresh(&mut self, local: &Local) -> Local {
-        let id = LocalId(self.next_local);
-        self.next_local += 1;
-        Local { id, name: local.name.clone(), monotype: local.monotype }
+        Local::fresh(&mut self.next_local, local.name.clone(), local.monotype)
     }
 
     fn expression(&mut self, mut expression: Expression, base: &str) -> Expression {

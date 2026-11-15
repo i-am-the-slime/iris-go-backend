@@ -1,13 +1,16 @@
 use rustc_hash::{FxHashMap, FxHashSet};
 use smol_str::SmolStr;
 
+use super::uses_local;
 use crate::foreign::{Boundary, Foreign, Iteration};
 use crate::mono::{
     Alternative, Binding, Expression, ExpressionKind, Function, FunctionId, Guard, Guarded, Local,
     LocalId, Pattern, PatternKind, Program,
 };
 use crate::monotype::{DataType, MonotypeId};
-use crate::simplify::{for_each_child, for_each_child_mut, prune_unreachable, visit};
+use crate::simplify::{
+    for_each_child, for_each_child_mut, for_each_guarded_child, prune_unreachable, visit,
+};
 use crate::timing::timed;
 
 /// What the name of a variant that reuses its arguments' cells adds to its
@@ -319,7 +322,7 @@ impl<'a, C: Cells> Planner<'a, C> {
                 && !spare
                     .owners
                     .iter()
-                    .any(|&owner| after.iter().any(|expression| occurs(expression, owner)))
+                    .any(|&owner| after.iter().any(|expression| uses_local(expression, owner)))
         })?;
         let spare = stock.remove(position);
         self.used(&spare);
@@ -424,7 +427,7 @@ impl<'a, C: Cells> Planner<'a, C> {
                 for_each_child(expression, &mut |child| {
                     self.expression(child, false, &mut vec![], &mut vec![]);
                 });
-                stock.retain(|spare| !spare.owners.iter().any(|&owner| occurs(expression, owner)));
+                stock.retain(|spare| !spare.owners.iter().any(|&owner| uses_local(expression, owner)));
                 false
             }
             ExpressionKind::Let { bindings, body } => {
@@ -485,7 +488,7 @@ impl<'a, C: Cells> Planner<'a, C> {
         after.extend([callback, initial]);
         self.expression(array, false, stock, after);
         after.truncate(mark);
-        stock.retain(|spare| !spare.owners.iter().any(|&owner| occurs(callback, owner)));
+        stock.retain(|spare| !spare.owners.iter().any(|&owner| uses_local(callback, owner)));
         let accumulator = match iteration {
             Iteration::FoldLeft => 0,
             _ => 1,
@@ -733,7 +736,7 @@ impl<'a, C: Cells> Planner<'a, C> {
                             };
                             self.expression(value, false, &mut vec![], &mut vec![]);
                             alternative_stock.retain(|spare| {
-                                !spare.owners.iter().any(|&owner| occurs(value, owner))
+                                !spare.owners.iter().any(|&owner| uses_local(value, owner))
                             });
                         }
                         let mut branch_stock = alternative_stock.clone();
@@ -934,9 +937,9 @@ impl Counter<'_> {
             | ExpressionKind::EffectPure(_)
             | ExpressionKind::EffectBind { .. }
             | ExpressionKind::EffectEach { .. } => {
-                if occurs(expression, self.target) {
+                if uses_local(expression, self.target) {
                     Paths::event(Event::Shared)
-                } else if self.conflicts.iter().any(|&conflict| occurs(expression, conflict)) {
+                } else if self.conflicts.iter().any(|&conflict| uses_local(expression, conflict)) {
                     Paths::event(Event::Conflict)
                 } else {
                     Paths::empty()
@@ -1165,38 +1168,13 @@ fn alternative_expressions(alternative: &Alternative) -> Vec<&Expression> {
 }
 
 fn guarded_expressions(guarded: &Guarded) -> Vec<&Expression> {
-    match guarded {
-        Guarded::Unconditional(body) => vec![body],
-        Guarded::Guards(branches) => {
-            let mut expressions = vec![];
-            for branch in branches {
-                for guard in &branch.guards {
-                    expressions.push(match guard {
-                        Guard::Boolean(condition) => condition,
-                        Guard::Pattern { value, .. } => value,
-                    });
-                }
-                expressions.push(&branch.body);
-            }
-            expressions
-        }
-    }
-}
-
-fn occurs(expression: &Expression, local: LocalId) -> bool {
-    let mut found = false;
-    visit(expression, &mut |node| {
-        if let ExpressionKind::Local(id) = node.kind
-            && id == local
-        {
-            found = true;
-        }
-    });
-    found
+    let mut expressions = vec![];
+    for_each_guarded_child(guarded, &mut |expression| expressions.push(expression));
+    expressions
 }
 
 fn guarded_uses(guarded: &Guarded, local: LocalId) -> usize {
-    guarded_expressions(guarded).into_iter().filter(|expression| occurs(expression, local)).count()
+    guarded_expressions(guarded).into_iter().filter(|expression| uses_local(expression, local)).count()
 }
 
 fn pattern_locals(pattern: &Pattern, locals: &mut Vec<LocalId>) {

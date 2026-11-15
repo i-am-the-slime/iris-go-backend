@@ -4,7 +4,7 @@
 //! by a zero-valued stand-in and by the code that uses it, which can never run. A `panic`, like
 //! a `return`, `break` or `continue`, is a terminating statement in Go, so the block ends there.
 
-use crate::syntax::{GoDeclaration, GoExpression, GoStatement};
+use crate::syntax::{GoDeclaration, GoStatement};
 use crate::walk::each_block_in_declaration;
 
 pub(super) fn end_blocks_at_divergence(declarations: &mut [GoDeclaration]) {
@@ -19,9 +19,7 @@ pub(super) fn end_blocks_at_divergence(declarations: &mut [GoDeclaration]) {
 
 fn diverges(statement: &GoStatement) -> bool {
     match statement {
-        GoStatement::Expression(GoExpression::Call { function, .. }) => {
-            matches!(function.as_ref(), GoExpression::Identifier(name) if name == "panic")
-        }
+        statement if statement.is_panic() => true,
         GoStatement::Return(_)
         | GoStatement::Continue
         | GoStatement::Break
