@@ -2,8 +2,8 @@
 
 use super::packages::Spelling;
 use super::{
-    ConstructorLayout, DataKind, DataLayout, Emitter, INLINE_DATA_LIMIT, layout, names,
-    reference_type,
+    ConstructorLayout, DataKind, DataLayout, Emitter, INLINE_DATA_LIMIT, TRANSIENT_DATA_LIMIT,
+    layout, names, reference_type,
 };
 use crate::erasure::Erasure;
 use crate::error::GoResult;
@@ -513,8 +513,13 @@ where
     }
 
     pub(super) fn is_boxed(&mut self, data: &DataType) -> GoResult<bool> {
-        let shape = self.inline_shape(data)?;
-        Ok(shape.is_none_or(|shape| shape.size() > INLINE_DATA_LIMIT))
+        let Some(shape) = self.inline_shape(data)? else { return Ok(true) };
+        let limit = if self.copied_by_containers.contains(data) {
+            INLINE_DATA_LIMIT
+        } else {
+            TRANSIENT_DATA_LIMIT
+        };
+        Ok(shape.size() > limit)
     }
 
     /// Adds the `Origin` field to an erased layout's struct, once.

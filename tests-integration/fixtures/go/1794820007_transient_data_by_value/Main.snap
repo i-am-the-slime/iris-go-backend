@@ -1,0 +1,119 @@
+---
+source: tests-integration/src/fixtures.rs
+---
+// main.go
+package main
+
+import (
+	"fmt"
+	"github.com/i-am-the-slime/purs-backend-go/go-support/prim"
+)
+
+type MainResult struct {
+	Entries string
+	Found   string
+	Missing string
+}
+
+type Outcome struct {
+	Found0 string
+	Found1 string
+	Found2 string
+	Found3 string
+	Found4 string
+	Found5 string
+	Found6 string
+	Found7 string
+	Found8 string
+	Found9 string
+	Tag    uint8
+}
+
+const (
+	OutcomeFound = iota
+	OutcomeMissing
+)
+
+type Entry struct {
+	Entry0 string
+	Entry1 string
+	Entry2 string
+	Entry3 string
+	Entry4 string
+	Entry5 string
+	Entry6 string
+	Entry7 string
+	Entry8 string
+	Entry9 string
+	Tag    uint8
+}
+
+const (
+	EntryEntry = iota
+	EntryBlank
+)
+
+type ListEntry struct {
+	Cons0 *Entry
+	Cons1 *ListEntry
+	Tag   uint8
+}
+
+const (
+	ListEntryNil = iota
+	ListEntryCons
+)
+
+var sharedEntryBlank = &Entry{Tag: EntryBlank}
+
+var sharedListEntryNil = &ListEntry{Tag: ListEntryNil}
+
+var main_ = initializeMain_()
+
+func initializeMain_() MainResult {
+	scrutinee := search(3, 0)
+	var result string
+	switch scrutinee.Tag {
+	case OutcomeFound:
+		result = scrutinee.Found0 + scrutinee.Found9
+	default: // OutcomeMissing
+		result = "missing"
+	}
+	scrutinee2 := search(12, 0)
+	var result2 string
+	switch scrutinee2.Tag {
+	case OutcomeFound:
+		result2 = scrutinee2.Found0 + scrutinee2.Found9
+	default: // OutcomeMissing
+		result2 = "missing"
+	}
+	return MainResult{Found: result, Missing: result2, Entries: firsts(entries)}
+}
+
+func search(target int32, key int32) Outcome {
+	for {
+		if key == target {
+			return Outcome{Tag: OutcomeFound, Found0: prim.ShowInt(key), Found1: "b", Found2: "c", Found3: "d", Found4: "e", Found5: "f", Found6: "g", Found7: "h", Found8: "i", Found9: "j"}
+		}
+		if key > 9 {
+			return Outcome{Tag: OutcomeMissing}
+		}
+		key = key + 1
+	}
+}
+
+func firsts(list *ListEntry) string {
+	if list.Tag == ListEntryNil {
+		return ""
+	}
+	if list.Tag == ListEntryCons && list.Cons0.Tag == EntryEntry {
+		return list.Cons0.Entry0 + firsts(list.Cons1)
+	}
+	return "_" + firsts(list.Cons1)
+}
+
+var entries *ListEntry = &ListEntry{Tag: ListEntryCons, Cons0: &Entry{Tag: EntryEntry, Entry0: "k", Entry1: "l", Entry2: "m", Entry3: "n", Entry4: "o", Entry5: "p", Entry6: "q", Entry7: "r", Entry8: "s", Entry9: "t"}, Cons1: &ListEntry{Tag: ListEntryCons, Cons0: sharedEntryBlank, Cons1: sharedListEntryNil}}
+
+func main() {
+	fmt.Println(main_)
+}
