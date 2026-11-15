@@ -1,10 +1,10 @@
 examples any 776
 examples empty-interface 0
-examples funcs 3053
-examples lines 61896
+examples funcs 3076
+examples lines 62101
 examples panic 43
 examples reflect 0
-examples thunk 159
+examples thunk 165
 examples type-assertion 231
 examples unsafe 0
 go-backend source-lines 30323
