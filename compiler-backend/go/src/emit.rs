@@ -1417,6 +1417,12 @@ where
         let name = self.global_name(Spelling::Base(identifier(&base)));
         self.homes.insert(name.clone(), data.file_id);
         self.recursive_names.insert(data.clone(), name.clone());
+        if self.unfolds_only_to_newtypes(data, unfolded)? {
+            // `newtype X = X X` has no values; nothing reads the empty struct.
+            let type_ = GoType::EmptyStruct;
+            self.type_declarations.push(GoDeclaration::Type { name: name.clone(), type_ });
+            return Ok(GoType::Named(name));
+        }
         let type_ = self.go_type(unfolded)?;
         // A defined type would be a second Go type for the unfolding, without
         // its methods (`Force` of a `Lazy`) and unassignable to it inside
@@ -1472,6 +1478,27 @@ where
             | GoType::Any
             | GoType::Erased(_) => {}
         }
+    }
+
+    /// Whether a recursive newtype unfolds through newtypes alone back to
+    /// itself, as `newtype X = X X` and `Data.Void` do, so that it has no
+    /// constructor that could build a value.
+    fn unfolds_only_to_newtypes(
+        &mut self,
+        data: &DataType,
+        mut unfolded: MonotypeId,
+    ) -> GoResult<bool> {
+        let mut visited: FxHashSet<DataType> = FxHashSet::default();
+        while let Monotype::Recursive(inner) = self.monotypes.get(unfolded).clone() {
+            if inner == *data {
+                return Ok(true);
+            }
+            if !visited.insert(inner.clone()) {
+                return Ok(false);
+            }
+            unfolded = self.unfold(&inner)?;
+        }
+        Ok(false)
     }
 
     /// Whether a recursive newtype's unfolding refers back to the newtype
