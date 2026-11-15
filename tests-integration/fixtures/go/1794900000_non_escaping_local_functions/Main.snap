@@ -1,0 +1,88 @@
+---
+source: tests-integration/src/fixtures.rs
+---
+// Data/Semiring/semiring.go
+package semiring
+
+func Add(i int32, i2 int32) int32 {
+	return i + i2
+}
+
+// main.go
+package main
+
+import (
+	"fixture/Data/Semiring"
+	"github.com/i-am-the-slime/purs-backend-go/go-support/alloc"
+	"github.com/i-am-the-slime/purs-backend-go/go-support/direct"
+	"github.com/i-am-the-slime/purs-backend-go/go-support/exception"
+	"os"
+)
+
+type ListInt struct {
+	Cons1 *ListInt
+	Cons0 int32
+	Tag   uint8
+}
+
+const (
+	ListIntNil = iota
+	ListIntCons
+)
+
+var sharedListIntNil = &ListInt{Tag: ListIntNil}
+
+func main_() int32 {
+	array := direct.FromFoldable(func(f func(int32) func(any) any) func(any) func(*ListInt) any {
+		return func(b any) func(*ListInt) any {
+			return foldr(f, b)
+		}
+	}, &ListInt{Tag: ListIntCons, Cons0: 1, Cons1: &ListInt{Tag: ListIntCons, Cons0: 2, Cons1: sharedListIntNil}})
+	var accumulator int32 = 0
+	for _, element := range array {
+		accumulated := accumulator
+		accumulator = semiring.Add(accumulated, element)
+	}
+	return accumulator
+}
+
+func foldr(f func(int32) func(any) any, b any) func(*ListInt) any {
+	return func(x *ListInt) any {
+		return foldrGo(f, b, foldrGo2(sharedListIntNil, x))
+	}
+}
+
+func foldrGo(f func(int32) func(any) any, accumulator any, list *ListInt) any {
+	for {
+		switch list.Tag {
+		case ListIntNil:
+			return accumulator
+		default: // ListIntCons
+			x := list.Cons0
+			xs := list.Cons1
+			accumulator, list = f(x)(accumulator), xs
+			continue
+		}
+	}
+}
+
+func foldrGo2(accumulator *ListInt, list *ListInt) *ListInt {
+	var listIntCells alloc.Cells[ListInt]
+	for {
+		switch list.Tag {
+		case ListIntNil:
+			return accumulator
+		default: // ListIntCons
+			x := list.Cons0
+			xs := list.Cons1
+			accumulator, list = listIntCells.New(ListInt{Tag: ListIntCons, Cons0: x, Cons1: accumulator}), xs
+			continue
+		}
+	}
+}
+
+func main() {
+	defer exception.ReportUncaught()
+	exitStatus := main_()
+	os.Exit(int(exitStatus))
+}
