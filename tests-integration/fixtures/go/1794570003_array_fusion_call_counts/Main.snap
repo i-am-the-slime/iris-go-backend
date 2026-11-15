@@ -18,7 +18,6 @@ import (
 )
 
 type MainResult struct {
-	EarlyExit             bool
 	EarlyExitMappingCalls int32
 	Fused                 int32
 	FusedMappingCalls     int32
@@ -26,6 +25,7 @@ type MainResult struct {
 	PredicateCalls        int32
 	Shared                int32
 	SharedMappingCalls    int32
+	EarlyExit             bool
 }
 
 type Ref[T any] struct {

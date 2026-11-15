@@ -66,7 +66,7 @@ impl Shape {
     /// Empty slots first, then slots holding pointers, then the rest, each
     /// group from the widest alignment down, which leaves no padding between
     /// slots of one group.
-    fn declaration_rank(self) -> (u8, std::cmp::Reverse<usize>) {
+    pub(super) fn declaration_rank(self) -> (u8, std::cmp::Reverse<usize>) {
         let group = if self.size == 0 {
             0
         } else if self.pointers {
@@ -171,7 +171,37 @@ where
         Ok(shape)
     }
 
-    fn value_shape(&mut self, monotype: MonotypeId) -> GoResult<Shape> {
+    /// The data types held by value, through records and other data, in a
+    /// field of a recursive data type or in an array's elements: copying the
+    /// cell or the array copies them. Computed before any layout, since
+    /// whether a type is boxed depends on it.
+    pub(super) fn data_copied_by_containers(&mut self) -> GoResult<FxHashSet<DataType>> {
+        let mut pending = vec![];
+        for monotype in self.monotypes.ids() {
+            match self.monotypes.get(monotype).clone() {
+                Monotype::Array(element) | Monotype::MutableArray(element) => pending.push(element),
+                Monotype::Data(data) if self.contains_itself(&data)? => {
+                    pending.extend(self.constructor_fields(&data)?)
+                }
+                _ => {}
+            }
+        }
+        let mut copied = FxHashSet::default();
+        while let Some(monotype) = pending.pop() {
+            match self.monotypes.get(monotype).clone() {
+                Monotype::Data(data) if copied.insert(data.clone()) => {
+                    pending.extend(self.constructor_fields(&data)?)
+                }
+                Monotype::Record(fields) => {
+                    pending.extend(fields.iter().map(|field| field.monotype))
+                }
+                _ => {}
+            }
+        }
+        Ok(copied)
+    }
+
+    pub(super) fn value_shape(&mut self, monotype: MonotypeId) -> GoResult<Shape> {
         Ok(match self.monotypes.get(monotype).clone() {
             Monotype::Unit => Shape::scalar(0),
             Monotype::Boolean => Shape::scalar(1),
@@ -190,6 +220,7 @@ where
                 for field in fields.iter() {
                     shapes.push(self.value_shape(field.monotype)?);
                 }
+                shapes.sort_by_key(|shape| shape.declaration_rank());
                 Shape::of_struct(shapes)
             }
             Monotype::Data(data) => {

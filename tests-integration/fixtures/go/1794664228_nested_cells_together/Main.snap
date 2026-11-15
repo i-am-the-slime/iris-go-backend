@@ -15,9 +15,9 @@ type MainResult struct {
 	Linked   int32
 	Literal  int32
 	Mirrored int32
+	Two      int32
 	Negative bool
 	Positive bool
-	Two      int32
 }
 
 type Expr struct {

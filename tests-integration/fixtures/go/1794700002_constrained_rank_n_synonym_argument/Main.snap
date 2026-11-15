@@ -1,6 +1,5 @@
 ---
 source: tests-integration/src/fixtures.rs
-assertion_line: 570
 ---
 // main.go
 package main
@@ -8,13 +7,13 @@ package main
 import "fmt"
 
 type IdentityOfString struct {
-	First  int32
 	Second string
+	First  int32
 }
 
 type IdentityOfUnit struct {
-	First  int32
 	Second struct{}
+	First  int32
 }
 
 var main_ = initializeMain_()

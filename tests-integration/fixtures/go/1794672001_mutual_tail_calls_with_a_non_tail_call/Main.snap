@@ -10,8 +10,8 @@ import (
 )
 
 type MainResult struct {
-	Depth   int32
 	Letters string
+	Depth   int32
 }
 
 var main_ MainResult = MainResult{Depth: depth(0, 30), Letters: a(7, "")}

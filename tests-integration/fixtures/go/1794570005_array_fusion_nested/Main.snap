@@ -28,12 +28,12 @@ import (
 )
 
 type MainResult struct {
-	Below         int32
 	Comprehension []int32
 	Indexed       []int32
 	Materialised  []string
-	OverRange     int32
 	Pairs         []string
+	Below         int32
+	OverRange     int32
 }
 
 var main_ = initializeMain_()

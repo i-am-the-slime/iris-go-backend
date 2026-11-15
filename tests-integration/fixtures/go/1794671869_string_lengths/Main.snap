@@ -139,6 +139,6 @@ func main() {
 package shared
 
 type HeadTail struct {
-	Head int32
 	Tail string
+	Head int32
 }

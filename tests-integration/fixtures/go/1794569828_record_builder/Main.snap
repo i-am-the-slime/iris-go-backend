@@ -8,8 +8,8 @@ import "fmt"
 
 type MainResult struct {
 	Name string
-	Size int32
 	Tags []string
+	Size int32
 }
 
 var main_ MainResult = MainResult{Size: 2, Tags: []string{"new"}, Name: "box"}

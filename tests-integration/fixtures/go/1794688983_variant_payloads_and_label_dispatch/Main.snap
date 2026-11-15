@@ -188,12 +188,12 @@ type VariantRep struct {
 }
 
 type BaseName struct {
-	Base int32
 	Name string
+	Base int32
 }
 
 type BaseNameScale struct {
-	Base  int32
 	Name  string
+	Base  int32
 	Scale int32
 }

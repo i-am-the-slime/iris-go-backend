@@ -10,12 +10,12 @@ import (
 )
 
 type MainResult struct {
-	Exit       int32
 	Fold       string
 	Loop       string
 	Prepended  string
 	ReadInFold string
 	ReadInLoop string
+	Exit       int32
 }
 
 var main_ = initializeMain_()

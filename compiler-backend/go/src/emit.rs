@@ -84,10 +84,14 @@ where
     let reused = timed("reuse", || {
         let mut probe =
             Emitter::new(program, monotypes, queries, foreign_packages, arities.clone());
-        reuse::reuse_cells(program, &mut probe)
+        probe.copied_by_containers = probe.data_copied_by_containers()?;
+        let reused = reuse::reuse_cells(program, &mut probe);
+        GoResult::Ok((reused, probe.copied_by_containers))
     });
+    let (reused, copied_by_containers) = reused?;
     let program = &reused.program;
     let mut emitter = Emitter::new(program, monotypes, queries, foreign_packages, arities);
+    emitter.copied_by_containers = copied_by_containers;
     emitter.materialized = reused.materialized;
     emitter.closure_sets = closure_sets;
     emitter.assign_function_names();
@@ -280,6 +284,7 @@ where
             owning_variants: FxHashMap::default(),
             pending_owning_variants: vec![],
             inline_shapes: FxHashMap::default(),
+            copied_by_containers: FxHashSet::default(),
             shared_nullaries: FxHashMap::default(),
             constructor_functions: FxHashMap::default(),
             cell_types: FxHashMap::default(),
@@ -570,6 +575,9 @@ struct Emitter<'p, 'm, 'q, Q> {
     owning_variants: FxHashMap<(FunctionId, usize), String>,
     pending_owning_variants: Vec<(FunctionId, usize)>,
     inline_shapes: FxHashMap<DataType, Option<layout::Shape>>,
+    /// The data types that a cell or an array copies whenever it is copied;
+    /// only these keep the smaller limit on being held by value.
+    copied_by_containers: FxHashSet<DataType>,
     shared_nullaries: FxHashMap<String, String>,
     cell_types: FxHashMap<DataType, bool>,
     reaching: FxHashMap<(DataType, DataType), bool>,
@@ -583,7 +591,11 @@ struct Emitter<'p, 'm, 'q, Q> {
     arities: Arities,
 }
 
+/// The largest data type held by value that cells and arrays copy.
 const INLINE_DATA_LIMIT: usize = 128;
+/// The largest data type held by value otherwise: a result or a step that is
+/// matched once, where a pointer would cost an allocation per value.
+const TRANSIENT_DATA_LIMIT: usize = 256;
 
 impl DataLayout {
     fn go_type(&self) -> GoType {

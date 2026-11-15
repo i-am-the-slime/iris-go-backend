@@ -47,8 +47,8 @@ type Margin struct {
 }
 
 type Timing struct {
-	Height float64
 	Label  string
+	Height float64
 	Width  float64
 }
 

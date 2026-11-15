@@ -196,6 +196,11 @@ impl Monotypes {
         }
     }
 
+    /// Every monotype interned so far.
+    pub fn ids(&self) -> impl Iterator<Item = MonotypeId> + use<> {
+        (0..self.interned.len() as u32).map(MonotypeId)
+    }
+
     pub fn get(&self, id: MonotypeId) -> &Monotype {
         &self.interned[id.0 as usize]
     }

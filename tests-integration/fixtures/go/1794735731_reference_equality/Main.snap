@@ -1,6 +1,5 @@
 ---
 source: tests-integration/src/fixtures.rs
-assertion_line: 570
 ---
 // main.go
 package main
@@ -22,8 +21,8 @@ type Ref[T any] struct {
 }
 
 type XY struct {
-	X int32
 	Y float64
+	X int32
 }
 
 type Handler struct {
