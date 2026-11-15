@@ -11,10 +11,10 @@ import (
 
 type MainResult struct {
 	Colours    []string
-	Expression int32
 	Items      []int32
 	Sample     string
 	Shapes     []string
+	Expression int32
 }
 
 type Expr struct {

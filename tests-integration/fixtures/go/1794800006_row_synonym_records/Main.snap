@@ -7,15 +7,15 @@ package main
 import "fmt"
 
 type SpaceValue struct {
-	Space bool
 	Value string
+	Space bool
 }
 
 type KindSpaceAfterSpaceBeforeValue struct {
+	Value       string
 	Kind        int32
 	SpaceAfter  bool
 	SpaceBefore bool
-	Value       string
 }
 
 var main_ = initializeMain_()

@@ -66,7 +66,7 @@ impl Shape {
     /// Empty slots first, then slots holding pointers, then the rest, each
     /// group from the widest alignment down, which leaves no padding between
     /// slots of one group.
-    fn declaration_rank(self) -> (u8, std::cmp::Reverse<usize>) {
+    pub(super) fn declaration_rank(self) -> (u8, std::cmp::Reverse<usize>) {
         let group = if self.size == 0 {
             0
         } else if self.pointers {
@@ -201,7 +201,7 @@ where
         Ok(copied)
     }
 
-    fn value_shape(&mut self, monotype: MonotypeId) -> GoResult<Shape> {
+    pub(super) fn value_shape(&mut self, monotype: MonotypeId) -> GoResult<Shape> {
         Ok(match self.monotypes.get(monotype).clone() {
             Monotype::Unit => Shape::scalar(0),
             Monotype::Boolean => Shape::scalar(1),
@@ -220,6 +220,7 @@ where
                 for field in fields.iter() {
                     shapes.push(self.value_shape(field.monotype)?);
                 }
+                shapes.sort_by_key(|shape| shape.declaration_rank());
                 Shape::of_struct(shapes)
             }
             Monotype::Data(data) => {

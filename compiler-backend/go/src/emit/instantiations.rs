@@ -42,7 +42,8 @@ where
     }
 
     /// What a record's type declaration declares: a function type for one
-    /// instantiation, else a struct of the fields.
+    /// instantiation, else a struct of the fields, ordered as a data type's slots
+    /// are: pointers first and no padding between fields.
     pub(super) fn record_declaration(&mut self, record: MonotypeId) -> GoResult<GoType> {
         if let Some(instantiation) = self.single_instantiation(record) {
             return self.go_type(instantiation);
@@ -53,9 +54,11 @@ where
         let mut go_fields = Vec::with_capacity(fields.len());
         for record_field in fields.iter() {
             let name = self.record_field_name(record, &record_field.label);
-            go_fields.push((name, self.go_type(record_field.monotype)?));
+            let shape = self.value_shape(record_field.monotype)?;
+            go_fields.push((shape, (name, self.go_type(record_field.monotype)?)));
         }
-        Ok(GoType::Struct(go_fields))
+        go_fields.sort_by_key(|(shape, _)| shape.declaration_rank());
+        Ok(GoType::Struct(go_fields.into_iter().map(|(_, field)| field).collect()))
     }
 
     /// The Go field that holds a label of a record.

@@ -1,6 +1,5 @@
 ---
 source: tests-integration/src/fixtures.rs
-assertion_line: 570
 ---
 // Control/Category/category.go
 package category
@@ -85,8 +84,8 @@ func Pure(pure any) *FreeCommand {
 }
 
 type StateValueOfValue struct {
-	State int32
 	Value any
+	State int32
 }
 
 type FreeCommandInt struct {

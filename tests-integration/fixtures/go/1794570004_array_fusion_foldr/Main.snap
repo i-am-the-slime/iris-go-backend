@@ -24,9 +24,9 @@ import (
 )
 
 type MainResult struct {
-	LastSmall  maybe.MaybeInt
 	OverFilter string
 	OverMap    string
+	LastSmall  maybe.MaybeInt
 }
 
 var main_ = initializeMain_()

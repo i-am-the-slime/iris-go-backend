@@ -1,6 +1,5 @@
 ---
 source: tests-integration/src/fixtures.rs
-assertion_line: 570
 ---
 // main.go
 package main
@@ -22,8 +21,8 @@ type Defaults struct {
 
 type ABZ struct {
 	A string
-	B bool
 	Z rune
+	B bool
 }
 
 var main_ = initializeMain_()

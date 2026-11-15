@@ -25,9 +25,9 @@ import (
 )
 
 type MainResult struct {
-	Even   bool
 	Halved int32
 	Steps  int32
+	Even   bool
 }
 
 var main_ MainResult = MainResult{Steps: walk(0, 27), Halved: halve(0, 64.0), Even: isEven(100000)}
