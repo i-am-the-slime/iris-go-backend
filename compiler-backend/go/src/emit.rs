@@ -49,7 +49,7 @@ use crate::foreign::{
 };
 use crate::modules::{ModuleIndex, Modules};
 use crate::mono::{
-    Binding, Expression, ExpressionKind, Function, FunctionId, Guard, Guarded,
+    Binding, Expression, ExpressionKind, Function, FunctionId, Guarded,
     Literal, Local, LocalId, Pattern, PatternKind, Program, RecordUpdate,
 };
 use crate::monotype::{DataType, Monotype, MonotypeId, Monotypes};
@@ -340,17 +340,12 @@ where
             Monotype::Function(argument, result) => {
                 reuse::Cells::erases(self, argument) || reuse::Cells::erases(self, result)
             }
-            Monotype::Array(element)
-            | Monotype::Effect(element)
-            | Monotype::Reference(element)
-            | Monotype::MutableArray(element)
-            | Monotype::Object(element)
-            | Monotype::Nullable(element)
-            | Monotype::Lazy(element) => reuse::Cells::erases(self, element),
             Monotype::Record(fields) => {
                 fields.iter().any(|field| reuse::Cells::erases(self, field.monotype))
             }
-            _ => false,
+            container => {
+                container.element().is_some_and(|element| reuse::Cells::erases(self, element))
+            }
         };
         self.erasing.insert(monotype, erases);
         erases
@@ -787,10 +782,7 @@ fn guarded_local_uses(guarded: &Guarded, local: LocalId) -> usize {
                 let guards: usize = branch
                     .guards
                     .iter()
-                    .map(|guard| match guard {
-                        Guard::Boolean(condition) => local_uses(condition, local),
-                        Guard::Pattern { value, .. } => local_uses(value, local),
-                    })
+                    .map(|guard| local_uses(guard.value(), local))
                     .sum();
                 guards + local_uses(&branch.body, local)
             })
@@ -3564,10 +3556,8 @@ fn captures_parameters(
                 || alternatives.iter().any(|alternative| match &alternative.body {
                     Guarded::Unconditional(body) => captures(body, mode),
                     Guarded::Guards(branches) => branches.iter().any(|branch| {
-                        branch.guards.iter().any(|guard| match guard {
-                            Guard::Boolean(condition) => captures(condition, Mode::Value),
-                            Guard::Pattern { value, .. } => captures(value, Mode::Value),
-                        }) || captures(&branch.body, mode)
+                        branch.guards.iter().any(|guard| captures(guard.value(), Mode::Value))
+                            || captures(&branch.body, mode)
                     }),
                 })
         }

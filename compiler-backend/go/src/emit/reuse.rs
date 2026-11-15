@@ -4,7 +4,7 @@ use smol_str::SmolStr;
 use super::uses_local;
 use crate::foreign::{Boundary, Foreign, Iteration};
 use crate::mono::{
-    Alternative, Binding, Expression, ExpressionKind, Function, FunctionId, Guard, Guarded, Local,
+    Alternative, Binding, Expression, ExpressionKind, Function, FunctionId, Guarded, Local,
     LocalId, Pattern, PatternKind, Program,
 };
 use crate::monotype::{DataType, MonotypeId};
@@ -696,10 +696,7 @@ impl<'a, C: Cells> Planner<'a, C> {
                     let mut all = true;
                     for branch in branches {
                         for guard in &branch.guards {
-                            let value = match guard {
-                                Guard::Boolean(condition) => condition,
-                                Guard::Pattern { value, .. } => value,
-                            };
+                            let value = guard.value();
                             self.expression(value, false, &mut vec![], &mut vec![]);
                             alternative_stock.retain(|spare| {
                                 !spare.owners.iter().any(|&owner| uses_local(value, owner))
@@ -950,10 +947,7 @@ impl Counter<'_> {
                         Guarded::Guards(branches) => {
                             for branch in branches {
                                 for guard in &branch.guards {
-                                    let value = match guard {
-                                        Guard::Boolean(condition) => condition,
-                                        Guard::Pattern { value, .. } => value,
-                                    };
+                                    let value = guard.value();
                                     guards = guards.then(self.count(planner, value));
                                 }
                                 bodies = bodies.or(self.count(planner, &branch.body));
@@ -1010,10 +1004,7 @@ impl Counter<'_> {
                 let mut bodies = Paths::nothing();
                 for branch in branches {
                     for guard in &branch.guards {
-                        let value = match guard {
-                            Guard::Boolean(condition) => condition,
-                            Guard::Pattern { value, .. } => value,
-                        };
+                        let value = guard.value();
                         guards = guards.then(self.count(planner, value));
                     }
                     bodies = bodies.or(self.count(planner, &branch.body));

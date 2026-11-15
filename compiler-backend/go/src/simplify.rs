@@ -1159,10 +1159,7 @@ fn chosen_lambda_parameter(expression: &Expression) -> Option<&Local> {
                     }
                     Guarded::Guards(branches) => {
                         for branch in branches {
-                            let cheap = branch.guards.iter().all(|guard| match guard {
-                                Guard::Boolean(condition) => is_cheap(condition),
-                                Guard::Pattern { value, .. } => is_cheap(value),
-                            });
+                            let cheap = branch.guards.iter().all(|guard| is_cheap(guard.value()));
                             cheap.then_some(())?;
                             chosen = chosen.or(Some(chosen_lambda_parameter(&branch.body)?));
                         }
@@ -1316,12 +1313,7 @@ fn substitute_guarded(guarded: &mut Guarded, local: LocalId, value: &Expression)
         Guarded::Guards(branches) => {
             for branch in branches {
                 for guard in &mut branch.guards {
-                    match guard {
-                        Guard::Boolean(condition) => substitute_in_place(condition, local, value),
-                        Guard::Pattern { value: guarded_value, .. } => {
-                            substitute_in_place(guarded_value, local, value)
-                        }
-                    }
+                    substitute_in_place(guard.value_mut(), local, value);
                 }
                 substitute_in_place(&mut branch.body, local, value);
             }
@@ -1627,12 +1619,7 @@ pub fn for_each_child_mut(expression: &mut Expression, visitor: &mut impl FnMut(
                     Guarded::Unconditional(body) => visitor(body),
                     Guarded::Guards(branches) => {
                         for branch in branches {
-                            for guard in &mut branch.guards {
-                                match guard {
-                                    Guard::Boolean(condition) => visitor(condition),
-                                    Guard::Pattern { value, .. } => visitor(value),
-                                }
-                            }
+                            branch.guards.iter_mut().for_each(|guard| visitor(guard.value_mut()));
                             visitor(&mut branch.body);
                         }
                     }

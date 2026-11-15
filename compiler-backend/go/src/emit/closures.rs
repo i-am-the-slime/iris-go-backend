@@ -779,17 +779,10 @@ where
                 self.open(monotype, "crosses into foreign code or a coercion");
                 vec![argument, result]
             }
-            Monotype::Array(inner)
-            | Monotype::Effect(inner)
-            | Monotype::Reference(inner)
-            | Monotype::MutableArray(inner)
-            | Monotype::Object(inner)
-            | Monotype::Nullable(inner)
-            | Monotype::Lazy(inner) => vec![inner],
             Monotype::Record(fields) => fields.iter().map(|field| field.monotype).collect(),
             Monotype::Data(data) => self.types.fields(&data)?,
             Monotype::Recursive(data) => vec![self.types.unfold(&data)?],
-            _ => vec![],
+            container => container.element().into_iter().collect(),
         };
         for part in parts {
             self.escape(part)?;

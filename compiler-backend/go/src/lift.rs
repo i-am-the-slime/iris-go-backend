@@ -318,14 +318,7 @@ pub(crate) fn erases(monotypes: &Monotypes, monotype: MonotypeId) -> bool {
         Monotype::Function(argument, result) => {
             erases(monotypes, *argument) || erases(monotypes, *result)
         }
-        Monotype::Array(element)
-        | Monotype::Effect(element)
-        | Monotype::Reference(element)
-        | Monotype::MutableArray(element)
-        | Monotype::Object(element)
-        | Monotype::Nullable(element)
-        | Monotype::Lazy(element) => erases(monotypes, *element),
         Monotype::Record(fields) => fields.iter().any(|field| erases(monotypes, field.monotype)),
-        _ => false,
+        container => container.element().is_some_and(|element| erases(monotypes, element)),
     }
 }

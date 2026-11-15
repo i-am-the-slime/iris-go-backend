@@ -142,6 +142,25 @@ pub struct Alternative {
 
 pub const PATTERN_MATCH_FAILURE: &str = "Failed pattern match";
 
+impl Guard {
+    /// The expression the guard evaluates.
+    pub fn value(&self) -> &Expression {
+        match self {
+            Guard::Boolean(condition) => condition,
+            Guard::Pattern { value, .. } => value,
+        }
+    }
+}
+
+impl Guard {
+    pub fn value_mut(&mut self) -> &mut Expression {
+        match self {
+            Guard::Boolean(condition) => condition,
+            Guard::Pattern { value, .. } => value,
+        }
+    }
+}
+
 impl Alternative {
     /// Every local the alternative's patterns and pattern guards bind.
     pub fn for_each_local<'a>(&'a self, visit: &mut impl FnMut(&'a Local)) {

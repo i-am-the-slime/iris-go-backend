@@ -47,6 +47,22 @@ pub enum Monotype {
     Erased(Erasure),
 }
 
+impl Monotype {
+    /// The one type a container holds: an array's element, an effect's result.
+    pub fn element(&self) -> Option<MonotypeId> {
+        match self {
+            Monotype::Array(element)
+            | Monotype::Effect(element)
+            | Monotype::Reference(element)
+            | Monotype::MutableArray(element)
+            | Monotype::Object(element)
+            | Monotype::Nullable(element)
+            | Monotype::Lazy(element) => Some(*element),
+            _ => None,
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct RecordField {
     pub label: SmolStr,

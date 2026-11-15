@@ -1502,24 +1502,6 @@ where
     fn mentions_erased(&self, monotype: MonotypeId) -> bool {
         match self.monotypes.get(monotype) {
             Monotype::Erased(_) => true,
-            Monotype::Int
-            | Monotype::Number
-            | Monotype::Boolean
-            | Monotype::Char
-            | Monotype::String
-            | Monotype::Unit
-            | Monotype::Error
-            | Monotype::Opaque
-            | Monotype::Regex
-            | Monotype::Mutex
-            | Monotype::BigInt => false,
-            Monotype::Array(inner)
-            | Monotype::Effect(inner)
-            | Monotype::Reference(inner)
-            | Monotype::MutableArray(inner)
-            | Monotype::Object(inner)
-            | Monotype::Nullable(inner)
-            | Monotype::Lazy(inner) => self.mentions_erased(*inner),
             Monotype::Function(argument, result) => {
                 self.mentions_erased(*argument) || self.mentions_erased(*result)
             }
@@ -1529,6 +1511,7 @@ where
             Monotype::Data(data) | Monotype::Recursive(data) | Monotype::ForeignData(data) => {
                 data.arguments.iter().any(|&argument| self.context.types.contains_erased(argument))
             }
+            other => other.element().is_some_and(|element| self.mentions_erased(element)),
         }
     }
 
