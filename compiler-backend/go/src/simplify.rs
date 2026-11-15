@@ -3,9 +3,10 @@
 //! members and foreign imports); inlining them exposes the effect primitives and
 //! operators that code generation turns into plain Go.
 
-use rustc_hash::{FxHashMap, FxHashSet};
+use rustc_hash::FxHashMap;
 
 use crate::foreign::{Comparison, Foreign, Operator};
+use crate::graph::{on_cycles, strongly_connected};
 use crate::mono::{
     Alternative, Binding, Expression, ExpressionKind, Function, FunctionId, Guard, Guarded,
     GuardedBranch, Literal, Local, LocalId, PATTERN_MATCH_FAILURE, Pattern, PatternKind, Program,
@@ -26,18 +27,9 @@ const INLINE_FUEL: usize = 2_000;
 
 pub fn simplify(program: Program, monotypes: &mut Monotypes, next_local: u32) -> Program {
     let Program { functions, entry } = program;
-    let references: Vec<FxHashSet<FunctionId>> =
-        functions.iter().map(|function| function_references(&function.body)).collect();
-    let components = strongly_connected_components(&references);
-    let mut recursive = vec![false; functions.len()];
-    for component in &components {
-        let is_recursive =
-            component.len() > 1 || references[component[0].0 as usize].contains(&component[0]);
-        for function in component {
-            recursive[function.0 as usize] = is_recursive;
-        }
-    }
-
+    let references = reference_graph(&functions);
+    let components = strongly_connected(&references);
+    let recursive = on_cycles(&references, &components);
     let mut uses = vec![0usize; functions.len()];
     for function in &functions {
         visit(&function.body, &mut |node| {
@@ -61,15 +53,15 @@ pub fn simplify(program: Program, monotypes: &mut Monotypes, next_local: u32) ->
     };
     for component in &components {
         for &function in component {
-            let mut current = simplifier.functions[function.0 as usize]
+            let mut current = simplifier.functions[function]
                 .take()
                 .expect("invariant violated: function simplified twice");
             simplifier.fuel = INLINE_FUEL;
             current = simplifier.eta_expand(current);
             current.body = simplifier.expression(current.body);
             current = simplifier.absorb_lambdas(current);
-            simplifier.sizes[function.0 as usize] = size(&current.body);
-            simplifier.functions[function.0 as usize] = Some(current);
+            simplifier.sizes[function] = size(&current.body);
+            simplifier.functions[function] = Some(current);
         }
     }
     simplifier.records_settled = true;
@@ -1697,80 +1689,25 @@ fn for_each_update_mut(updates: &mut [RecordUpdate], visitor: &mut impl FnMut(&m
     }
 }
 
-pub(crate) fn function_references(expression: &Expression) -> FxHashSet<FunctionId> {
-    let mut references = FxHashSet::default();
+/// The functions the expression refers to, in order of id.
+pub(crate) fn function_references(expression: &Expression) -> Vec<FunctionId> {
+    let mut references = vec![];
     visit(expression, &mut |node| {
         if let ExpressionKind::Function(id) = node.kind {
-            references.insert(id);
+            references.push(id);
         }
     });
+    references.sort_unstable();
+    references.dedup();
     references
 }
 
-/// Tarjan's algorithm; components come out callees first.
-pub(crate) fn strongly_connected_components(
-    references: &[FxHashSet<FunctionId>],
-) -> Vec<Vec<FunctionId>> {
-    struct State<'r> {
-        references: &'r [FxHashSet<FunctionId>],
-        index: Vec<Option<usize>>,
-        lowlink: Vec<usize>,
-        on_stack: Vec<bool>,
-        stack: Vec<usize>,
-        next: usize,
-        components: Vec<Vec<FunctionId>>,
-    }
-
-    fn connect(state: &mut State<'_>, node: usize) {
-        state.index[node] = Some(state.next);
-        state.lowlink[node] = state.next;
-        state.next += 1;
-        state.stack.push(node);
-        state.on_stack[node] = true;
-        let mut successors: Vec<usize> =
-            state.references[node].iter().map(|id| id.0 as usize).collect();
-        successors.sort_unstable();
-        for successor in successors {
-            match state.index[successor] {
-                None => {
-                    connect(state, successor);
-                    state.lowlink[node] = state.lowlink[node].min(state.lowlink[successor]);
-                }
-                Some(index) if state.on_stack[successor] => {
-                    state.lowlink[node] = state.lowlink[node].min(index);
-                }
-                Some(_) => {}
-            }
-        }
-        if Some(state.lowlink[node]) == state.index[node] {
-            let mut component = vec![];
-            while let Some(member) = state.stack.pop() {
-                state.on_stack[member] = false;
-                component.push(FunctionId(member as u32));
-                if member == node {
-                    break;
-                }
-            }
-            state.components.push(component);
-        }
-    }
-
-    let count = references.len();
-    let mut state = State {
-        references,
-        index: vec![None; count],
-        lowlink: vec![0; count],
-        on_stack: vec![false; count],
-        stack: vec![],
-        next: 0,
-        components: vec![],
+/// The functions each function refers to, as indices.
+pub(crate) fn reference_graph(functions: &[Function]) -> Vec<Vec<usize>> {
+    let indices = |function: &Function| {
+        function_references(&function.body).iter().map(|id| id.0 as usize).collect()
     };
-    for node in 0..count {
-        if state.index[node].is_none() {
-            connect(&mut state, node);
-        }
-    }
-    state.components
+    functions.iter().map(indices).collect()
 }
 
 fn prune(functions: Vec<Function>, entry: FunctionId) -> Program {

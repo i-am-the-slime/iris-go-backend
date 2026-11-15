@@ -16,6 +16,7 @@ use std::collections::BTreeSet;
 
 use rustc_hash::{FxHashMap, FxHashSet};
 
+use crate::graph::strongly_connected;
 use crate::naming::{RESERVED, capitalise, exported, go_safe, lower_camel, numbered, resolve};
 use crate::error::{GoError, GoResult};
 use crate::modules::{ModuleIndex, ModuleSet, Modules};
@@ -887,58 +888,4 @@ impl Naming<'_> {
     fn spelled(&self, name: &str, place: Place) -> String {
         if Some(place) == self.root { name.to_string() } else { exported(name) }
     }
-}
-
-/// Strongly connected components of the reference graph, each listed after
-/// every component it refers to (Tarjan).
-fn strongly_connected(edges: &[Vec<usize>]) -> Vec<Vec<usize>> {
-    let count = edges.len();
-    let mut index = vec![usize::MAX; count];
-    let mut low = vec![0; count];
-    let mut on_stack = vec![false; count];
-    let mut stack = vec![];
-    let mut next = 0;
-    let mut components = vec![];
-    for root in 0..count {
-        if index[root] != usize::MAX {
-            continue;
-        }
-        let mut work = vec![(root, 0usize)];
-        while let Some(&mut (node, ref mut edge)) = work.last_mut() {
-            if *edge == 0 && index[node] == usize::MAX {
-                index[node] = next;
-                low[node] = next;
-                next += 1;
-                stack.push(node);
-                on_stack[node] = true;
-            }
-            if let Some(&target) = edges[node].get(*edge) {
-                *edge += 1;
-                if index[target] == usize::MAX {
-                    work.push((target, 0));
-                } else if on_stack[target] {
-                    low[node] = low[node].min(index[target]);
-                }
-                continue;
-            }
-            work.pop();
-            if let Some(&(parent, _)) = work.last() {
-                low[parent] = low[parent].min(low[node]);
-            }
-            if low[node] == index[node] {
-                let mut component = vec![];
-                loop {
-                    let member = stack.pop().expect("invariant violated: Tarjan stack");
-                    on_stack[member] = false;
-                    component.push(member);
-                    if member == node {
-                        break;
-                    }
-                }
-                component.sort_unstable();
-                components.push(component);
-            }
-        }
-    }
-    components
 }

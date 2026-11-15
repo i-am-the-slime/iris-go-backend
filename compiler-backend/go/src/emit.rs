@@ -53,7 +53,8 @@ use crate::mono::{
 };
 use crate::monotype::{DataType, Failure, Monotype, MonotypeId, Monotypes};
 use crate::naming::{capitalise, exported, identifier, numbered};
-use crate::simplify::visit;
+use crate::graph::{on_cycles, strongly_connected};
+use crate::simplify::{reference_graph, visit};
 use crate::syntax::{
     GoCase, GoDeclaration, GoDefault, GoExpression, GoStatement, GoType, Name, statements_names,
 };
@@ -395,68 +396,8 @@ where
 /// The constants (parameterless, effect-free definitions) that belong to a
 /// reference cycle, found as strongly connected components (Tarjan).
 fn recursive_constants(program: &Program, monotypes: &Monotypes) -> FxHashSet<FunctionId> {
-    let count = program.functions.len();
-    let mut edges: Vec<Vec<usize>> = Vec::with_capacity(count);
-    for function in &program.functions {
-        let mut targets = vec![];
-        crate::simplify::visit(&function.body, &mut |expression| {
-            if let ExpressionKind::Function(id) = expression.kind {
-                targets.push(id.0 as usize);
-            }
-        });
-        targets.sort_unstable();
-        targets.dedup();
-        edges.push(targets);
-    }
-    let mut index = vec![usize::MAX; count];
-    let mut low = vec![0; count];
-    let mut on_stack = vec![false; count];
-    let mut stack = vec![];
-    let mut next = 0;
-    let mut recursive = vec![false; count];
-    for root in 0..count {
-        if index[root] != usize::MAX {
-            continue;
-        }
-        let mut work = vec![(root, 0usize)];
-        while let Some(&mut (node, ref mut edge)) = work.last_mut() {
-            if *edge == 0 && index[node] == usize::MAX {
-                index[node] = next;
-                low[node] = next;
-                next += 1;
-                stack.push(node);
-                on_stack[node] = true;
-            }
-            if let Some(&target) = edges[node].get(*edge) {
-                *edge += 1;
-                if index[target] == usize::MAX {
-                    work.push((target, 0));
-                } else if on_stack[target] {
-                    low[node] = low[node].min(index[target]);
-                }
-                continue;
-            }
-            work.pop();
-            if let Some(&(parent, _)) = work.last() {
-                low[parent] = low[parent].min(low[node]);
-            }
-            if low[node] == index[node] {
-                let mut component = vec![];
-                loop {
-                    let member = stack.pop().expect("invariant violated: Tarjan stack");
-                    on_stack[member] = false;
-                    component.push(member);
-                    if member == node {
-                        break;
-                    }
-                }
-                let cyclic = component.len() > 1 || edges[node].contains(&node);
-                for member in component {
-                    recursive[member] = cyclic;
-                }
-            }
-        }
-    }
+    let edges = reference_graph(&program.functions);
+    let recursive = on_cycles(&edges, &strongly_connected(&edges));
     let mut constants = FxHashSet::default();
     for (position, function) in program.functions.iter().enumerate() {
         let constant =

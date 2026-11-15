@@ -12,6 +12,7 @@ mod emit;
 pub mod erasure;
 pub mod error;
 mod foreign;
+mod graph;
 mod lift;
 mod merge;
 mod modules;
