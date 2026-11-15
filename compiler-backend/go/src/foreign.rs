@@ -135,7 +135,8 @@ pub struct Boundary {
 /// A record of polymorphic constructors that JavaScript passes a foreign (the
 /// `FFIUtil` of `Effect.AVar`, say). Go cannot pass polymorphic values, so the
 /// foreign receives, in place of the record, the constructors it uses at the
-/// types its own signature fixes.
+/// types its own signature fixes. The record's position is also ignored, so
+/// the record itself is never built.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct Utility {
     pub position: usize,
@@ -599,7 +600,7 @@ const fn argonaut(name: &'static str, arity: usize) -> Foreign {
 /// of its `FFIUtil` record, the first argument.
 const fn avar(name: &'static str, arity: usize, constructors: &'static [Constructed]) -> Foreign {
     let utility = Some(Utility { position: 0, constructors });
-    perform_in(GoPackage::AVar, name, arity, Boundary { utility, ..PLAIN })
+    perform_in(GoPackage::AVar, name, arity, Boundary { utility, ..ignoring(&[0]) })
 }
 
 const AVAR_PUT_CALLBACK: &[Constructed] =
