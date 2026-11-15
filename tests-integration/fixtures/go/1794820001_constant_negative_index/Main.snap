@@ -1,0 +1,41 @@
+---
+source: tests-integration/src/fixtures.rs
+---
+// Data/Maybe/maybe.go
+package maybe
+
+type MaybeInt struct {
+	Just int32
+	Tag  uint8
+}
+
+const (
+	MaybeIntNothing = iota
+	MaybeIntJust
+)
+
+// main.go
+package main
+
+import (
+	"fixture/Data/Maybe"
+	"fmt"
+)
+
+var main_ = initializeMain_()
+
+func initializeMain_() []maybe.MaybeInt {
+	var element maybe.MaybeInt
+	if 1 >= 0 && int(1) < len(numbers) {
+		element = maybe.MaybeInt{Tag: maybe.MaybeIntJust, Just: numbers[1]}
+	} else {
+		element = maybe.MaybeInt{Tag: maybe.MaybeIntNothing}
+	}
+	return []maybe.MaybeInt{maybe.MaybeInt{Tag: maybe.MaybeIntNothing}, element, maybe.MaybeInt{Tag: maybe.MaybeIntNothing}}
+}
+
+var numbers []int32 = []int32{1, 2, 3}
+
+func main() {
+	fmt.Println(main_)
+}

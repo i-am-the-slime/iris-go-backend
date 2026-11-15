@@ -3756,12 +3756,18 @@ where
         monotype: MonotypeId,
         out: &mut Vec<GoStatement>,
     ) -> GoResult<GoExpression> {
+        let (data, just) = self.constructor_named(monotype, "Just")?;
+        let (_, nothing) = self.constructor_named(monotype, "Nothing")?;
+        // Go rejects a constant negative index even in a branch that cannot run.
+        if let ExpressionKind::Literal(Literal::Int(index)) = arguments[3].kind
+            && index < 0
+        {
+            return self.construct(&data, nothing, vec![]);
+        }
         let elements = self.value(&arguments[2], out)?;
         let elements = self.hoist(elements, "elements", out);
         let index = self.value(&arguments[3], out)?;
         let index = self.hoist(index, "index", out);
-        let (data, just) = self.constructor_named(monotype, "Just")?;
-        let (_, nothing) = self.constructor_named(monotype, "Nothing")?;
         let element = GoExpression::Index {
             value: Box::new(elements.clone()),
             index: Box::new(index.clone()),
