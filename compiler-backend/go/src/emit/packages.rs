@@ -178,14 +178,14 @@ impl Packaging<'_> {
         &self,
         declarations: Vec<(GoDeclaration, Option<ModuleIndex>)>,
     ) -> GoResult<Vec<GoSourceFile>> {
-        let units = units(declarations);
+        let mut units = units(declarations);
         let mut unit_of: FxHashMap<String, usize> = FxHashMap::default();
         for (index, unit) in units.iter().enumerate() {
             for name in &unit.names {
                 unit_of.insert(name.clone(), index);
             }
         }
-        let references = self.references(&units, &unit_of);
+        let references = self.references(&mut units, &unit_of);
         let mut places = Places::new(self.modules);
         let placements = self.place(&units, &references, &mut places);
         let packages = self.packages(&placements, &places)?;
@@ -193,14 +193,13 @@ impl Packaging<'_> {
     }
 
     /// The units each unit refers to.
-    fn references(&self, units: &[Unit], unit_of: &FxHashMap<String, usize>) -> Vec<Vec<usize>> {
+    fn references(&self, units: &mut [Unit], unit_of: &FxHashMap<String, usize>) -> Vec<Vec<usize>> {
         units
-            .iter()
+            .iter_mut()
             .enumerate()
             .map(|(index, unit)| {
                 let mut targets = BTreeSet::new();
-                for declaration in &unit.declarations {
-                    let mut declaration = declaration.clone();
+                for declaration in &mut unit.declarations {
                     declaration.for_each_reference_mut(&mut |reference| {
                         let name = match reference {
                             Reference::Value(GoExpression::Identifier(name)) => name,
@@ -367,7 +366,7 @@ impl Packaging<'_> {
 
     fn render(
         &self,
-        units: Vec<Unit>,
+        mut units: Vec<Unit>,
         unit_of: &FxHashMap<String, usize>,
         placements: &[Place],
         places: &Places,
@@ -387,8 +386,7 @@ impl Packaging<'_> {
             let place_binders = binders.entry(place).or_default();
             for &unit in place_units {
                 members.entry(place).or_default().extend(units[unit].names.iter().cloned());
-                for declaration in &units[unit].declarations {
-                    let mut declaration = declaration.clone();
+                for declaration in &mut units[unit].declarations {
                     declaration.for_each_reference_mut(&mut |reference| {
                         if let Reference::Binder(name) = reference
                             && !super::locals::is_marked(name)
@@ -437,7 +435,7 @@ impl Packaging<'_> {
             let package = &packages[&place];
             let mut declarations: Vec<GoDeclaration> = contents[&place]
                 .iter()
-                .flat_map(|&unit| units[unit].declarations.iter().cloned())
+                .flat_map(|&unit| std::mem::take(&mut units[unit].declarations))
                 .collect();
             let mut support_imports = BTreeSet::new();
             let mut referenced: BTreeSet<Place> = BTreeSet::new();
