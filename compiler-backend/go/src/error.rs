@@ -38,6 +38,8 @@ pub enum UnsupportedState {
     UnsolvedEvidence,
     #[error("evidence refers to a dictionary parameter that is not in scope")]
     UnboundEvidence,
+    #[error("evidence is applied to a value whose type does not abstract over it")]
+    UnabstractedEvidence,
     #[error("instance head does not match the constraint {constraint}")]
     InstanceMismatch { constraint: String },
     #[error("instance has no member {member}")]
@@ -52,8 +54,10 @@ pub enum UnsupportedState {
     UnsaturatedType { name: String },
     #[error("specialization exceeded {limit} instances; polymorphic recursion is not supported")]
     SpecializationLimit { limit: usize },
-    #[error("declaration interleaves arguments before its constraints")]
-    InterleavedAbstractions,
+    #[error(
+        "polymorphic recursion grows the type class evidence it passes, which only run-time dictionaries could erase"
+    )]
+    GrowingEvidence,
     #[error(
         "foreign data type {name} has no Go representation; a Go foreign package for its module (go-ffi/<module>.go) declares it as a named type"
     )]

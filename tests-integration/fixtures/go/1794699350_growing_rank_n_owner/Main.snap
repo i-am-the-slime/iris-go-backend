@@ -1,0 +1,165 @@
+---
+source: tests-integration/src/fixtures.rs
+assertion_line: 570
+---
+// Control/Category/category.go
+package category
+
+func Identity(x int32) int32 {
+	return x
+}
+
+func Identity2(x func(int32) int32) func(int32) int32 {
+	return x
+}
+
+// Data/Tuple/tuple.go
+package tuple
+
+type TupleFnIntInt struct {
+	First  func(int32) any
+	Origin any
+	Second int32
+}
+
+type Tuple struct {
+	First  any
+	Second any
+	Origin any
+}
+
+// main.go
+package main
+
+import (
+	"fixture/Control/Category"
+	"fixture/Data/Tuple"
+	"fmt"
+	"github.com/i-am-the-slime/purs-backend-go/go-support/array"
+	"github.com/i-am-the-slime/purs-backend-go/go-support/prim"
+)
+
+func convert(value []func(func(int32) int32) func(int32) int32) []func(func(int32) int32) any {
+	converted := []func(func(int32) int32) any{}
+	for _, element := range value {
+		converted = append(converted, func(coerced func(int32) int32) any {
+			original := element(coerced)
+			return func(coerced2 any) any {
+				return original(coerced2.(int32))
+			}
+		})
+	}
+	return converted
+}
+
+func convert2(value []any) []func(int32) int32 {
+	converted := []func(int32) int32{}
+	for _, element := range value {
+		original := element.(func(any) any)
+		converted = append(converted, func(coerced int32) int32 {
+			return original(coerced).(int32)
+		})
+	}
+	return converted
+}
+
+func convert3(value *tuple.TupleFnIntInt) *tuple.Tuple {
+	if original, ok := value.Origin.(*tuple.Tuple); ok {
+		return original
+	}
+	return &tuple.Tuple{First: func(coerced any) any {
+		return value.First(coerced.(int32))
+	}, Second: value.Second, Origin: value}
+}
+
+func convert4(value []func(int32) *tuple.TupleFnIntInt) []func(int32) any {
+	converted := []func(int32) any{}
+	for _, element := range value {
+		converted = append(converted, func(coerced int32) any {
+			return convert3(element(coerced))
+		})
+	}
+	return converted
+}
+
+func convert5(value *tuple.Tuple) *tuple.TupleFnIntInt {
+	if original, ok := value.Origin.(*tuple.TupleFnIntInt); ok {
+		return original
+	}
+	original2 := value.First.(func(any) any)
+	return &tuple.TupleFnIntInt{First: func(coerced int32) any {
+		return original2(coerced)
+	}, Second: value.Second.(int32), Origin: value}
+}
+
+func convert6(value []any) []*tuple.TupleFnIntInt {
+	converted := []*tuple.TupleFnIntInt{}
+	for _, element := range value {
+		converted = append(converted, convert5(element.(*tuple.Tuple)))
+	}
+	return converted
+}
+
+func convert7(value []func(int32) int32) []func(int32) any {
+	converted := []func(int32) any{}
+	for _, element := range value {
+		converted = append(converted, func(coerced int32) any {
+			return element(coerced)
+		})
+	}
+	return converted
+}
+
+func convert8(value []any) []int32 {
+	converted := []int32{}
+	for _, element := range value {
+		converted = append(converted, element.(int32))
+	}
+	return converted
+}
+
+var main_ []int32 = func(coerced func([]func(int32) any) []any) func([]func(int32) int32) []int32 {
+	original := sampleWithIntInt(coerced)
+	return func(coerced2 []func(int32) int32) []int32 {
+		return convert8(original(convert7(coerced2)))
+	}
+}(func(questions []func(int32) any) []any {
+	mapped := make([]func(func(int32) int32) func(int32) int32, len(questions))
+	for index := range questions {
+		mapped[index] = category.Identity2
+	}
+	array2 := convert(mapped)
+	mapped2 := make([]any, len(array2))
+	for index, value := range array2 {
+		value2 := func(x int32) any {
+			return value(func(i int32) int32 {
+				return x + i
+			})
+		}
+		mapped2[index] = value2(1)
+	}
+	array3 := convert4(array.Map(func(f func(int32) any) func(int32) *tuple.TupleFnIntInt {
+		return func(i int32) *tuple.TupleFnIntInt {
+			return &tuple.TupleFnIntInt{First: f, Second: i}
+		}
+	}, questions))
+	mapped3 := make([]any, len(array3))
+	for index, value := range array3 {
+		mapped3[index] = value(10)
+	}
+	return array.Apply(array.Map(func(function func(int32) int32) func(*tuple.TupleFnIntInt) any {
+		return func(tuple *tuple.TupleFnIntInt) any {
+			return tuple.First(function(tuple.Second))
+		}
+	}, convert2(mapped2)), convert6(mapped3))
+})([]func(int32) int32{category.Identity, func(value int32) int32 {
+	return prim.MultiplyInt32(value, 2)
+}})
+
+func sampleWithIntInt(f func([]func(int32) any) []any) func([]func(int32) any) []any {
+	return f
+}
+
+func main() {
+	fmt.Println(main_)
+}

@@ -1,0 +1,12 @@
+---
+source: tests-integration/src/fixtures.rs
+---
+cannot specialize Main.main: foreign imports with constraints is not supported by the Go backend yet
+cannot specialize Main.nest: polymorphic recursion grows the type class evidence it passes, which only run-time dictionaries could erase
+  requested by: Main.main
+
+2 blockers; no Go was written
+  unsupported constructs (1):
+    foreign imports with constraints (1): Main.main
+  specialization limits (1):
+    polymorphic recursion grows the type class evidence it passes, which only run-time dictionaries could erase (1): Main.nest

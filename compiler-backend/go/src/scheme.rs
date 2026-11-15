@@ -8,6 +8,7 @@ use smol_str::SmolStr;
 
 use crate::context::Context;
 use crate::dictionary::Dictionary;
+use crate::erasure::Erasure;
 use crate::types::Substitution;
 
 pub const SCHEME_INSTANTIATION_LIMIT: usize = 64;
@@ -35,6 +36,7 @@ pub struct SchemeInstantiations {
     rank_n: FxHashMap<SchemeKey, String>,
     erased_owners: rustc_hash::FxHashSet<String>,
     coerced_sources: FxHashMap<SchemeKey, Vec<SchemeKey>>,
+    grown_keys: rustc_hash::FxHashSet<SchemeKey>,
 }
 
 impl SchemeInstantiations {
@@ -70,6 +72,25 @@ impl SchemeInstantiations {
 
     pub fn is_erased_owner(&self, owner: &str) -> bool {
         self.erased_owners.contains(owner)
+    }
+
+    pub fn rank_n_owner(&self, key: &SchemeKey) -> Option<&str> {
+        self.rank_n.get(key).map(String::as_str)
+    }
+
+    pub fn erase_growing_owner(&mut self, owner: String) {
+        let grown = self.rank_n.iter().filter(|(_, existing)| **existing == owner);
+        let grown: Vec<SchemeKey> = grown.map(|(key, _)| key.clone()).collect();
+        self.grown_keys.extend(grown);
+        self.erase_owner(owner);
+    }
+
+    pub fn has_grown(&self) -> bool {
+        !self.grown_keys.is_empty()
+    }
+
+    pub fn rank_n_erasure(&self, key: &SchemeKey) -> Erasure {
+        if self.grown_keys.contains(key) { Erasure::PolymorphicRecursion } else { Erasure::RankN }
     }
 
     pub fn insert(&mut self, key: SchemeKey, instantiation: SchemeInstantiation) {

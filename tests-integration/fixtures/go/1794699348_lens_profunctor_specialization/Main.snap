@@ -1,0 +1,89 @@
+---
+source: tests-integration/src/fixtures.rs
+assertion_line: 570
+---
+// Data/Maybe/maybe.go
+package maybe
+
+type MaybeArrayString struct {
+	Just []string
+	Tag  uint8
+}
+
+const (
+	MaybeArrayStringNothing = iota
+	MaybeArrayStringJust
+)
+
+// Data/Show/show.go
+package show
+
+import "github.com/i-am-the-slime/purs-backend-go/go-support/prim"
+
+func Show(s string) string {
+	return prim.ShowString(s)
+}
+
+// main.go
+package main
+
+import (
+	"fixture/Data/Maybe"
+	"fixture/Data/Show"
+	"fmt"
+	"github.com/i-am-the-slime/purs-backend-go/go-support/direct"
+	"github.com/i-am-the-slime/purs-backend-go/go-support/prim"
+)
+
+type Point struct {
+	Tags []string
+	X    int32
+}
+
+var main_ = initializeMain_()
+
+func initializeMain_() []string {
+	append_ := direct.Appender[string]()
+	accumulator := maybe.MaybeArrayString{Tag: maybe.MaybeArrayStringJust, Just: []string{}}
+	for _, element := range origin.Tags {
+		accumulator2 := accumulator
+		switch accumulator2.Tag {
+		case maybe.MaybeArrayStringJust:
+			if element == "" {
+				accumulator = maybe.MaybeArrayString{Tag: maybe.MaybeArrayStringNothing}
+			} else {
+				accumulator = maybe.MaybeArrayString{Tag: maybe.MaybeArrayStringJust, Just: append_(accumulator2.Just)(element + "!")}
+			}
+		default:
+			accumulator = maybe.MaybeArrayString{Tag: maybe.MaybeArrayStringNothing}
+		}
+	}
+	performed := accumulator
+	var result string
+	switch performed.Tag {
+	case maybe.MaybeArrayStringJust:
+		result = "(Just " + prim.ShowArray(show.Show, (Point{Tags: performed.Just, X: origin.X}).Tags) + ")"
+	default:
+		result = "Nothing"
+	}
+	return []string{prim.ShowInt(prim.MultiplyInt32(origin.X, 2)), prim.ShowInt((Point{Tags: origin.Tags, X: origin.X + 1}).X), "(Just " + prim.ShowInt(2) + ")", "Nothing", prim.ShowInt(5), result, prim.ShowInt(1), prim.ShowInt(bump(3, origin).X)}
+}
+
+var origin Point = Point{X: 3, Tags: []string{"a", "b"}}
+
+func bump(n int32, point Point) Point {
+	for {
+		switch n {
+		case 0:
+			return point
+		default:
+			n2 := n
+			n, point = n2 - 1, Point{Tags: point.Tags, X: point.X + prim.MultiplyInt32(n2, 2)}
+			continue
+		}
+	}
+}
+
+func main() {
+	fmt.Println(main_)
+}

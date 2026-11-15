@@ -34,7 +34,9 @@ use crate::scheme::{
 };
 use crate::types::Substitution;
 
+mod growth;
 mod patterns;
+mod spine;
 mod traverse;
 
 const SPECIALIZATION_LIMIT: usize = 100_000;
@@ -191,6 +193,8 @@ pub struct Specializer<'q, Q> {
     /// Functions that built a value of a scheme before the scheme grew.
     stale: BTreeSet<FunctionId>,
     callback_arities: FxHashMap<(FileId, TermItemId), (&'static [usize], &'static Signature)>,
+    constructing: Vec<(SchemeKey, Arc<[TypeId]>)>,
+    growing_owners: Vec<String>,
 }
 
 struct RecordedBlocker {
@@ -229,6 +233,8 @@ where
             constructions: FxHashMap::default(),
             stale: BTreeSet::new(),
             callback_arities: FxHashMap::default(),
+            constructing: vec![],
+            growing_owners: vec![],
         }
     }
 
@@ -300,11 +306,15 @@ where
     fn adopt_rank_n_fields(&mut self) {
         let erased = std::mem::take(&mut self.monotypes.new_erased_owners);
         let keys = std::mem::take(&mut self.monotypes.new_rank_n_keys);
-        if erased.is_empty() && keys.is_empty() {
+        let growing = std::mem::take(&mut self.growing_owners);
+        if erased.is_empty() && keys.is_empty() && growing.is_empty() {
             return;
         }
         for owner in erased {
             self.monotypes.schemes.erase_owner(owner);
+        }
+        for owner in growing {
+            self.monotypes.schemes.erase_growing_owner(owner);
         }
         for (key, owner) in keys {
             self.monotypes.schemes.add_rank_n(key, owner);
@@ -434,7 +444,7 @@ where
     }
 
     fn request(&mut self, key: SpecializationKey, name: SmolStr) -> GoResult<FunctionId> {
-        let key = self.terminate_growth(key);
+        let key = self.terminate_growth(key)?;
         if let Some(&id) = self.keys.get(&key) {
             return Ok(id);
         }
@@ -456,29 +466,39 @@ where
     /// Polymorphic recursion requests a definition at ever larger types. When a
     /// request embeds the types of the same definition further up its chain of
     /// requesters, the growing positions are erased so specialization terminates.
-    fn terminate_growth(&mut self, mut key: SpecializationKey) -> SpecializationKey {
+    fn terminate_growth(&mut self, mut key: SpecializationKey) -> GoResult<SpecializationKey> {
         let mut ancestor = self.current;
         let mut types: Vec<TypeId> = key.types.to_vec();
         let mut changed = false;
+        let mut evidence_grows = false;
         while let Some(id) = ancestor {
             let ancestor_key = &self.function_keys[id.0 as usize];
             if ancestor_key.definition == key.definition {
+                let mut grows = false;
                 for (position, ancestor_type) in ancestor_key.types.iter().enumerate() {
                     let Some(requested) = types.get(position).copied() else { continue };
                     if requested != *ancestor_type
                         && self.context.types.contains(requested, *ancestor_type)
                     {
                         types[position] = self.context.types.erased(Erasure::PolymorphicRecursion);
-                        changed = true;
+                        grows = true;
                     }
                 }
+                evidence_grows |= grows && ancestor_key.dictionaries != key.dictionaries;
+                changed |= grows;
             }
             ancestor = self.parents[id.0 as usize];
+        }
+        if evidence_grows {
+            return Err(GoError::Unsupported {
+                definition: self.describe_definition(key.definition)?,
+                state: UnsupportedState::GrowingEvidence,
+            });
         }
         if changed {
             key.types = Arc::from(types);
         }
-        key
+        Ok(key)
     }
 
     fn fresh_local(&mut self, name: SmolStr, monotype: MonotypeId) -> Local {
@@ -614,6 +634,9 @@ where
                 }
                 DeclarationAbstraction::Argument => {}
             }
+        }
+        if dictionaries.next().is_some() {
+            return Err(self.unsupported(scope, UnsupportedState::UnabstractedEvidence));
         }
         Ok(())
     }
@@ -1043,7 +1066,7 @@ where
             return Ok(None);
         }
         let Some(scheme) = self.monotypes.scheme_for(&mut self.context, closed)? else {
-            return Ok(None);
+            return self.grown_construction(scope, id, closed);
         };
         // Checking against a `forall` binds scoped skolems; a polymorphic
         // reference's own quantifiers are instantiated where it is used.
@@ -1062,7 +1085,9 @@ where
             scope
                 .substitution
                 .extend(scheme.names.iter().copied().zip(instantiation.types.iter().copied()));
+            self.constructing.push((scheme.key.clone(), Arc::clone(&instantiation.types)));
             let value = self.translate_expression_at(scope, id);
+            self.constructing.pop();
             scope.substitution = substitution;
             match value {
                 Ok(value) => fields.push((instantiation.label, value)),
@@ -1310,27 +1335,17 @@ where
 
     fn application(&mut self, scope: &mut Scope, id: tree::ExpressionId) -> GoResult<Expression> {
         let module = Arc::clone(&scope.module);
-        let mut arguments = vec![];
-        let mut head = id;
-        let mut result_instantiations = Substitution::default();
-        while let tree::ExpressionKind::TermApplication { function, argument } =
-            module.checked.tree[head].kind
-        {
-            for instantiation in module.checked.tree.lookup_instantiations(head) {
-                let closed =
-                    self.context.types.substitute(instantiation.argument, &scope.substitution);
-                result_instantiations.insert(instantiation.name, closed);
-            }
-            arguments.push(argument);
-            head = function;
-        }
+        let spine::ApplicationSpine { head, arguments, trailing: evidence, instantiations } =
+            self.application_spine(scope, id);
+        let result_instantiations = instantiations;
         let monotype = self.instantiated_result_monotype(
             scope,
             module.checked.tree[id].type_id,
             &result_instantiations,
         )?;
-        arguments.reverse();
+        let trailing = self.trailing_dictionaries(scope, &evidence)?;
         if let tree::ExpressionKind::Constructor { resolution } = module.checked.tree[head].kind
+            && trailing.is_empty()
             && self.is_newtype_constructor(resolution)?
             && let [argument] = arguments[..]
         {
@@ -1344,7 +1359,18 @@ where
             argument.monotype = monotype;
             return Ok(argument);
         }
-        if let Some(reference) = self.traversal_reference(scope, head, &arguments)? {
+        if !trailing.is_empty()
+            && let [argument] = arguments[..]
+            && self.is_unsafe_coerce(scope, head)?
+        {
+            let result = module.checked.tree[id].type_id;
+            let result = self.context.types.substitute(result, &scope.substitution);
+            let result = (result, monotype);
+            return self.coerced_with_evidence(scope, argument, &evidence, trailing, result);
+        }
+        if trailing.is_empty()
+            && let Some(reference) = self.traversal_reference(scope, head, &arguments)?
+        {
             return self.traverse_array(scope, reference, &arguments);
         }
         let head_type = self.instantiated_node_type(scope, head, &result_instantiations);
@@ -1353,9 +1379,13 @@ where
             | tree::ExpressionKind::Variable { .. }
             | tree::ExpressionKind::RecordPun { .. }
             | tree::ExpressionKind::EvidenceApplication { .. } => {
-                self.reference(scope, head, result_instantiations, None)
+                self.trailed_reference(scope, head, result_instantiations.clone(), None, trailing)
             }
-            _ => self.expression(scope, head),
+            _ if trailing.is_empty() => self.expression(scope, head),
+            _ => Err(self.unsupported(
+                scope,
+                UnsupportedState::Construct { construct: "evidence applied to a non-reference" },
+            )),
         };
         let mut function = match function {
             Ok(function) => function,
@@ -1372,7 +1402,7 @@ where
         let mut callee = IgnoringCallee::of(&function, 0);
         let mut converted = Vec::with_capacity(arguments.len());
         for (position, argument) in arguments.into_iter().enumerate() {
-            let expected = self.context.types.function_parts(parameter_type);
+            let expected = self.next_parameter_type(parameter_type, &result_instantiations)?;
             if let Some((_, result)) = expected {
                 parameter_type = result;
             }
@@ -1590,7 +1620,9 @@ where
             scope
                 .givens
                 .extend(binders.iter().copied().zip(instantiation.dictionaries.iter().cloned()));
+            self.constructing.push((scheme.key.clone(), Arc::clone(&instantiation.types)));
             let value = self.expression(scope, body);
+            self.constructing.pop();
             scope.substitution = substitution;
             scope.givens = givens;
             fields.push((instantiation.label, value?));
@@ -1607,20 +1639,32 @@ where
         dictionaries: Vec<Dictionary>,
     ) -> GoResult<Expression> {
         let local = self.local_reference(scope, source)?;
-        let Some(&closed) = scope.scheme_locals.get(&source) else {
+        let scheme = match scope.scheme_locals.get(&source) {
+            Some(&closed) => self.monotypes.scheme_for(&mut self.context, closed)?,
+            None => None,
+        };
+        let Some(scheme) = scheme else {
+            if !dictionaries.is_empty() {
+                return Err(self.unsupported(scope, UnsupportedState::UnabstractedEvidence));
+            }
             return Ok(local);
         };
-        let Some(scheme) = self.monotypes.scheme_for(&mut self.context, closed)? else {
-            return Ok(local);
-        };
-        let Some(types) = scheme
-            .names
-            .iter()
-            .map(|name| instantiations.get(name).copied())
-            .collect::<Option<Vec<TypeId>>>()
-        else {
-            return Ok(local);
-        };
+        let uninstantiated = scheme.names.iter().find(|name| !instantiations.contains_key(name));
+        if let Some(&name) = uninstantiated {
+            let passed_whole = dictionaries.is_empty()
+                && scheme.names.iter().all(|name| !instantiations.contains_key(name));
+            if passed_whole {
+                return Ok(local);
+            }
+            let variable = match scope.module.checked.lookup_name(name) {
+                Some(text) => self.context.queries.lookup_smol_str(text).to_string(),
+                None => name.as_text().to_string(),
+            };
+            return Err(
+                self.unsupported(scope, UnsupportedState::UninstantiatedVariable { variable })
+            );
+        }
+        let types: Vec<TypeId> = scheme.names.iter().map(|name| instantiations[name]).collect();
         let instantiated = scheme.instantiate(&self.context, &types);
         let monotype = self.closed_monotype(scope, instantiated)?;
         if let Some(known) = self.monotypes.schemes.find(&scheme.key, &types) {
@@ -1651,6 +1695,14 @@ where
         dictionaries: Vec<Dictionary>,
         preferred: Option<SmolStr>,
     ) -> GoResult<()> {
+        if self.grows_construction(&key, &types) {
+            let Some(owner) = self.monotypes.schemes.rank_n_owner(&key) else {
+                return Err(self.unsupported(scope, UnsupportedState::GrowingEvidence));
+            };
+            self.growing_owners.push(owner.to_string());
+            self.grown = true;
+            return Ok(());
+        }
         let known = self.monotypes.schemes.get(&key);
         let labels: Vec<SmolStr> = known.iter().map(|known| known.label.clone()).collect();
         if labels.len() >= SCHEME_INSTANTIATION_LIMIT {
@@ -1776,13 +1828,25 @@ where
         &mut self,
         scope: &mut Scope,
         id: tree::ExpressionId,
+        instantiations: Substitution,
+        expected: Option<TypeId>,
+    ) -> GoResult<Expression> {
+        self.trailed_reference(scope, id, instantiations, expected, vec![])
+    }
+
+    fn trailed_reference(
+        &mut self,
+        scope: &mut Scope,
+        id: tree::ExpressionId,
         mut instantiations: Substitution,
         expected: Option<TypeId>,
+        trailing: Vec<Dictionary>,
     ) -> GoResult<Expression> {
         let module = Arc::clone(&scope.module);
         let tree = &module.checked.tree;
         let mut dictionaries = vec![];
         let mut current = id;
+        let mut through_alias = false;
         let resolution = loop {
             let mut evidences = vec![];
             loop {
@@ -1816,17 +1880,23 @@ where
             let resolution = match &tree[current].kind {
                 tree::ExpressionKind::Variable { resolution }
                 | tree::ExpressionKind::RecordPun { resolution, .. } => *resolution,
-                tree::ExpressionKind::Constructor { resolution } => {
+                tree::ExpressionKind::Constructor { resolution } if trailing.is_empty() => {
                     let (file_id, term) = *resolution;
                     let monotype =
                         self.instantiated_monotype(scope, current, file_id, term, &instantiations)?;
                     return self.constructor(scope, file_id, term, monotype);
                 }
                 tree::ExpressionKind::EvidenceAbstraction { .. } => {
+                    dictionaries.extend(trailing);
                     return self.evidence_redex(scope, current, dictionaries);
                 }
+                tree::ExpressionKind::TermApplication { .. }
+                    if !through_alias && !dictionaries.is_empty() && trailing.is_empty() =>
+                {
+                    return self.application(scope, id);
+                }
                 _ => {
-                    if dictionaries.is_empty() {
+                    if dictionaries.is_empty() && trailing.is_empty() {
                         return self.expression(scope, current);
                     }
                     return Err(self.unsupported(
@@ -1842,10 +1912,12 @@ where
                 && let Some(&aliased) = scope.local_aliases.get(&group)
             {
                 current = aliased;
+                through_alias = true;
                 continue;
             }
             break resolution;
         };
+        dictionaries.extend(trailing);
 
         match resolution {
             tree::VariableResolution::Generated(binder) => {
@@ -1862,10 +1934,12 @@ where
                 self.polymorphic_local_reference(scope, group, &instantiations, dictionaries)
             }
             tree::VariableResolution::Source(lowering::TermVariableResolution::Let(group)) => {
-                self.local_reference(scope, LocalSource::Let(group))
+                let source = LocalSource::Let(group);
+                self.instantiated_local_reference(scope, source, &instantiations, dictionaries)
             }
             tree::VariableResolution::Source(lowering::TermVariableResolution::RecordPun(pun)) => {
-                self.local_reference(scope, LocalSource::RecordPun(pun))
+                let source = LocalSource::RecordPun(pun);
+                self.instantiated_local_reference(scope, source, &instantiations, dictionaries)
             }
             tree::VariableResolution::Source(lowering::TermVariableResolution::Reference(
                 file_id,
@@ -2239,14 +2313,18 @@ where
         instantiations: &Substitution,
     ) -> GoResult<TypeId> {
         let mut body = crate::monotype::expand_synonyms(&mut self.context, type_id)?;
-        while let Type::Forall(binder, inner) =
-            self.context.types.lookup(self.context.types.strip_annotations(body)).clone()
-        {
-            let binder = self.context.queries.lookup_forall_binder(binder);
-            if !instantiations.contains_key(&binder.name) {
-                return Ok(body);
+        loop {
+            match self.context.types.lookup(self.context.types.strip_annotations(body)).clone() {
+                Type::Forall(binder, inner) => {
+                    let binder = self.context.queries.lookup_forall_binder(binder);
+                    if !instantiations.contains_key(&binder.name) {
+                        return Ok(body);
+                    }
+                    body = inner;
+                }
+                Type::Constrained(_, inner) => body = inner,
+                _ => break,
             }
-            body = inner;
         }
         let Some((argument, result)) = self.context.types.function_parts(body) else {
             return Ok(body);
@@ -2276,6 +2354,14 @@ where
         let is_foreign =
             matches!(module.indexed.items[term].kind, IndexedTermItemKind::Foreign { .. });
         match () {
+            () if is_foreign
+                && dictionaries.iter().any(|dictionary| *dictionary != Dictionary::Trivial) =>
+            {
+                Err(self.unsupported(
+                    scope,
+                    UnsupportedState::Construct { construct: "foreign imports with constraints" },
+                ))
+            }
             () if is_foreign => {
                 if let Some(foreign) = foreign::foreign_import(&module.name, &name) {
                     if let Foreign::UnsafeCoerce = foreign {
@@ -2420,7 +2506,6 @@ where
         instantiations: &Substitution,
     ) -> GoResult<Vec<TypeId>> {
         let mut types = vec![];
-        let mut seen_argument = false;
         for abstraction in abstractions {
             match abstraction {
                 DeclarationAbstraction::Type { binder, .. } => {
@@ -2437,11 +2522,7 @@ where
                     };
                     types.push(argument);
                 }
-                DeclarationAbstraction::Evidence { .. } if seen_argument => {
-                    return Err(self.unsupported(scope, UnsupportedState::InterleavedAbstractions));
-                }
-                DeclarationAbstraction::Evidence { .. } => {}
-                DeclarationAbstraction::Argument => seen_argument = true,
+                DeclarationAbstraction::Evidence { .. } | DeclarationAbstraction::Argument => {}
             }
         }
         Ok(types)

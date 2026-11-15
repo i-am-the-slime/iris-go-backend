@@ -51,15 +51,17 @@ impl UnsupportedState {
             UnsupportedState::UnknownForeign { .. } => BlockerKind::MissingForeign,
             UnsupportedState::ForeignData { .. } => BlockerKind::ForeignData,
             UnsupportedState::Construct { .. }
-            | UnsupportedState::InterleavedAbstractions
             | UnsupportedState::ReferenceEqualityAcrossTypes { .. } => BlockerKind::Construct,
-            UnsupportedState::SpecializationLimit { .. } => BlockerKind::SpecializationLimit,
+            UnsupportedState::SpecializationLimit { .. } | UnsupportedState::GrowingEvidence => {
+                BlockerKind::SpecializationLimit
+            }
             UnsupportedState::OpenType { .. } | UnsupportedState::UnsaturatedType { .. } => {
                 BlockerKind::OpenType
             }
             UnsupportedState::UninstantiatedVariable { .. } => BlockerKind::UninstantiatedVariable,
             UnsupportedState::UnsolvedEvidence
             | UnsupportedState::UnboundEvidence
+            | UnsupportedState::UnabstractedEvidence
             | UnsupportedState::InstanceMismatch { .. }
             | UnsupportedState::MissingInstanceMember { .. }
             | UnsupportedState::MissingSuperclass { .. } => BlockerKind::Evidence,
