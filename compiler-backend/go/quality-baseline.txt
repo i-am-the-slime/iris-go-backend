@@ -1,11 +1,11 @@
-examples any 626
+examples any 791
 examples empty-interface 0
-examples funcs 2232
-examples lines 55705
-examples panic 28
+examples funcs 3129
+examples lines 60950
+examples panic 39
 examples reflect 0
-examples thunk 77
-examples type-assertion 165
+examples thunk 151
+examples type-assertion 228
 examples unsafe 0
 markgraf-cli any 4267
 markgraf-cli empty-interface 0
