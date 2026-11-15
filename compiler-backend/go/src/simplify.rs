@@ -46,9 +46,10 @@ pub fn simplify(program: Program, monotypes: &mut Monotypes, next_local: u32) ->
             }
         });
     }
+    let sizes = functions.iter().map(|function| size(&function.body)).collect();
     let mut simplifier = Simplifier {
-        sizes: functions.iter().map(|function| size(&function.body)).collect(),
-        functions: functions.iter().cloned().map(Some).collect(),
+        sizes,
+        functions: functions.into_iter().map(Some).collect(),
         recursive,
         uses,
         entry,
@@ -335,8 +336,8 @@ impl Simplifier<'_> {
                     && function.parameters.is_empty()
                     && is_trivial(&function.body)
                 {
-                    let body = function.body.clone();
-                    let body = self.rename(body, &mut FxHashMap::default());
+                    let mut body = function.body.clone();
+                    self.rename(&mut body, &mut FxHashMap::default());
                     return self.expression(body);
                 }
                 ExpressionKind::Function(id)
@@ -662,7 +663,8 @@ impl Simplifier<'_> {
                     .iter()
                     .map(|parameter| self.rename_binder(parameter, &mut renaming))
                     .collect();
-                let body = self.rename(body, &mut renaming);
+                let mut body = body;
+                self.rename(&mut body, &mut renaming);
                 self.beta(parameters, body, arguments, monotype)
             }
             kind => {
@@ -735,19 +737,18 @@ impl Simplifier<'_> {
                 lambda_monotype,
             );
         }
-        let body_monotype = body.monotype;
-        let result =
-            Expression::new(ExpressionKind::Let { bindings, body: Box::new(body) }, body_monotype);
-        let result = self.expression(result);
+        for binding in &bindings {
+            self.remember_record_order(binding);
+        }
+        let body = self.expression(body);
+        let result = self.let_bindings(bindings, body);
         self.apply(result, rest, monotype)
     }
 
     fn let_bindings(&mut self, bindings: Vec<Binding>, body: Expression) -> Expression {
         let mut body = body;
         let mut kept = vec![];
-        let recursive = bindings.iter().any(|binding| {
-            bindings.iter().any(|other| occurrences(&binding.value, other.local.id).total > 0)
-        });
+        let recursive = bindings.iter().any(|binding| mentions_any(&binding.value, &bindings));
         if !recursive
             && let Some(position) = bindings
                 .iter()
@@ -1051,149 +1052,104 @@ impl Simplifier<'_> {
 
     fn rename(
         &mut self,
-        expression: Expression,
+        expression: &mut Expression,
         renaming: &mut FxHashMap<LocalId, LocalId>,
-    ) -> Expression {
-        let monotype = expression.monotype;
-        let kind = match expression.kind {
-            ExpressionKind::Local(id) => {
-                ExpressionKind::Local(renaming.get(&id).copied().unwrap_or(id))
-            }
+    ) {
+        match &mut expression.kind {
+            ExpressionKind::Local(id) => *id = renaming.get(id).copied().unwrap_or(*id),
             ExpressionKind::Lambda { parameters, body } => {
-                let parameters = parameters
-                    .iter()
-                    .map(|parameter| self.rename_binder(parameter, renaming))
-                    .collect();
-                ExpressionKind::Lambda { parameters, body: Box::new(self.rename(*body, renaming)) }
+                self.rename_binders(parameters, renaming);
+                self.rename(body, renaming);
             }
             ExpressionKind::Let { bindings, body } => {
-                let locals: Vec<Local> = bindings
-                    .iter()
-                    .map(|binding| self.rename_binder(&binding.local, renaming))
-                    .collect();
-                let bindings = bindings
-                    .into_iter()
-                    .zip(locals)
-                    .map(|(binding, local)| Binding {
-                        local,
-                        value: self.rename(binding.value, renaming),
-                    })
-                    .collect();
-                ExpressionKind::Let { bindings, body: Box::new(self.rename(*body, renaming)) }
+                for binding in bindings.iter_mut() {
+                    binding.local = self.rename_binder(&binding.local, renaming);
+                }
+                for binding in bindings {
+                    self.rename(&mut binding.value, renaming);
+                }
+                self.rename(body, renaming);
             }
             ExpressionKind::EffectBind { action, local, body } => {
-                let action = self.rename(*action, renaming);
-                let local = self.rename_binder(&local, renaming);
-                ExpressionKind::EffectBind {
-                    action: Box::new(action),
-                    local,
-                    body: Box::new(self.rename(*body, renaming)),
-                }
+                self.rename(action, renaming);
+                *local = self.rename_binder(local, renaming);
+                self.rename(body, renaming);
             }
             ExpressionKind::EffectEach { array, element, body } => {
-                let array = self.rename(*array, renaming);
-                let element = self.rename_binder(&element, renaming);
-                ExpressionKind::EffectEach {
-                    array: Box::new(array),
-                    element,
-                    body: Box::new(self.rename(*body, renaming)),
-                }
+                self.rename(array, renaming);
+                *element = self.rename_binder(element, renaming);
+                self.rename(body, renaming);
             }
             ExpressionKind::Case { scrutinees, alternatives } => {
-                let scrutinees = scrutinees
-                    .into_iter()
-                    .map(|scrutinee| self.rename(scrutinee, renaming))
-                    .collect();
-                let alternatives = alternatives
-                    .into_iter()
-                    .map(|alternative| {
-                        let patterns = alternative
-                            .patterns
-                            .into_iter()
-                            .map(|pattern| self.rename_pattern(pattern, renaming))
-                            .collect();
-                        let body = match alternative.body {
-                            Guarded::Unconditional(body) => {
-                                Guarded::Unconditional(self.rename(body, renaming))
-                            }
-                            Guarded::Guards(branches) => Guarded::Guards(
-                                branches
-                                    .into_iter()
-                                    .map(|branch| GuardedBranch {
-                                        guards: branch
-                                            .guards
-                                            .into_iter()
-                                            .map(|guard| match guard {
-                                                Guard::Boolean(condition) => {
-                                                    Guard::Boolean(self.rename(condition, renaming))
-                                                }
-                                                Guard::Pattern { pattern, value } => {
-                                                    let value = self.rename(value, renaming);
-                                                    let pattern =
-                                                        self.rename_pattern(pattern, renaming);
-                                                    Guard::Pattern { pattern, value }
-                                                }
-                                            })
-                                            .collect(),
-                                        body: self.rename(branch.body, renaming),
-                                    })
-                                    .collect(),
-                            ),
-                        };
-                        Alternative { patterns, body }
-                    })
-                    .collect();
-                ExpressionKind::Case { scrutinees, alternatives }
-            }
-            kind => {
-                let mut expression = Expression::new(kind, monotype);
-                for child in children_mut(&mut expression) {
-                    let taken =
-                        std::mem::replace(child, Expression::new(ExpressionKind::Unit, monotype));
-                    *child = self.rename(taken, renaming);
+                for scrutinee in scrutinees {
+                    self.rename(scrutinee, renaming);
                 }
-                return expression;
+                for alternative in alternatives {
+                    for pattern in &mut alternative.patterns {
+                        self.rename_pattern(pattern, renaming);
+                    }
+                    self.rename_guarded(&mut alternative.body, renaming);
+                }
             }
-        };
-        Expression::new(kind, monotype)
+            _ => for_each_child_mut(expression, &mut |child| self.rename(child, renaming)),
+        }
     }
 
-    fn rename_pattern(
-        &mut self,
-        pattern: Pattern,
-        renaming: &mut FxHashMap<LocalId, LocalId>,
-    ) -> Pattern {
-        let kind = match pattern.kind {
-            PatternKind::Variable(local) => {
-                PatternKind::Variable(self.rename_binder(&local, renaming))
+    fn rename_guarded(&mut self, guarded: &mut Guarded, renaming: &mut FxHashMap<LocalId, LocalId>) {
+        match guarded {
+            Guarded::Unconditional(body) => self.rename(body, renaming),
+            Guarded::Guards(branches) => {
+                for branch in branches {
+                    for guard in &mut branch.guards {
+                        match guard {
+                            Guard::Boolean(condition) => self.rename(condition, renaming),
+                            Guard::Pattern { pattern, value } => {
+                                self.rename(value, renaming);
+                                self.rename_pattern(pattern, renaming);
+                            }
+                        }
+                    }
+                    self.rename(&mut branch.body, renaming);
+                }
             }
-            PatternKind::Named { local, pattern: inner } => PatternKind::Named {
-                local: self.rename_binder(&local, renaming),
-                pattern: Box::new(self.rename_pattern(*inner, renaming)),
-            },
-            PatternKind::Array(elements) => PatternKind::Array(
-                elements
-                    .into_iter()
-                    .map(|element| self.rename_pattern(element, renaming))
-                    .collect(),
-            ),
-            PatternKind::Record(fields) => PatternKind::Record(
-                fields
-                    .into_iter()
-                    .map(|(label, field)| (label, self.rename_pattern(field, renaming)))
-                    .collect(),
-            ),
-            PatternKind::Constructor { data, constructor, arguments } => PatternKind::Constructor {
-                data,
-                constructor,
-                arguments: arguments
-                    .into_iter()
-                    .map(|argument| self.rename_pattern(argument, renaming))
-                    .collect(),
-            },
-            kind => kind,
-        };
-        Pattern { kind, monotype: pattern.monotype }
+        }
+    }
+
+    fn rename_binders(
+        &mut self,
+        locals: &mut [Local],
+        renaming: &mut FxHashMap<LocalId, LocalId>,
+    ) {
+        for local in locals {
+            *local = self.rename_binder(local, renaming);
+        }
+    }
+
+    fn rename_pattern(&mut self, pattern: &mut Pattern, renaming: &mut FxHashMap<LocalId, LocalId>) {
+        match &mut pattern.kind {
+            PatternKind::Variable(local) => *local = self.rename_binder(local, renaming),
+            PatternKind::Named { local, pattern } => {
+                *local = self.rename_binder(local, renaming);
+                self.rename_pattern(pattern, renaming);
+            }
+            PatternKind::Array(patterns) => {
+                for pattern in patterns {
+                    self.rename_pattern(pattern, renaming);
+                }
+            }
+            PatternKind::Record(fields) => {
+                for (_, field) in fields {
+                    self.rename_pattern(field, renaming);
+                }
+            }
+            PatternKind::Constructor { arguments: patterns, .. }
+            | PatternKind::Closure { captures: patterns, .. } => {
+                for pattern in patterns {
+                    self.rename_pattern(pattern, renaming);
+                }
+            }
+            PatternKind::Wildcard | PatternKind::Literal(_) => {}
+        }
     }
 }
 
@@ -1596,6 +1552,17 @@ fn size(expression: &Expression) -> usize {
 struct Occurrences {
     total: usize,
     under_lambda: usize,
+}
+
+/// Whether the expression refers to a local one of the bindings binds.
+fn mentions_any(expression: &Expression, bindings: &[Binding]) -> bool {
+    let mut mentioned = false;
+    visit(expression, &mut |node| {
+        if let ExpressionKind::Local(id) = node.kind {
+            mentioned |= bindings.iter().any(|binding| binding.local.id == id);
+        }
+    });
+    mentioned
 }
 
 fn occurrences(expression: &Expression, local: LocalId) -> Occurrences {

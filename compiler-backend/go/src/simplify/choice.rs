@@ -52,8 +52,8 @@ impl Simplifier<'_> {
                 scrutinees: vec![chosen],
                 alternatives: alternatives.to_vec(),
             };
-            let case = Expression::new(case, monotype);
-            let case = simplifier.rename(case, &mut FxHashMap::default());
+            let mut case = Expression::new(case, monotype);
+            simplifier.rename(&mut case, &mut FxHashMap::default());
             simplifier.expression(case)
         });
         Some(self.let_bindings(joins, distributed))
@@ -87,8 +87,8 @@ impl Simplifier<'_> {
                 parameters: parameters.clone(),
                 body: Box::new(body.clone()),
             };
-            let lambda = Expression::new(lambda, function);
-            let lambda = self.rename(lambda, &mut FxHashMap::default());
+            let mut lambda = Expression::new(lambda, function);
+            self.rename(&mut lambda, &mut FxHashMap::default());
             let call = ExpressionKind::Apply {
                 function: Box::new(local_expression(&join)),
                 arguments: parameters.iter().map(local_expression).collect(),
