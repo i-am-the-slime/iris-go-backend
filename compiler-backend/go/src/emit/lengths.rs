@@ -17,6 +17,7 @@
 
 use rustc_hash::FxHashSet;
 
+use crate::naming::numbered;
 use crate::syntax::{GoDeclaration, GoExpression, GoStatement, GoType, Name, statements_names};
 
 use crate::walk::{self, Walk, each_expression_in_declaration, each_expression_in_statement};
@@ -333,12 +334,7 @@ impl Function<'_> {
     }
 
     fn fresh(&mut self, base: String) -> String {
-        let mut candidate = base.clone();
-        let mut counter = 2;
-        while self.names.contains(&candidate) || (self.taken)(&candidate) {
-            candidate = format!("{base}{counter}");
-            counter += 1;
-        }
+        let candidate = numbered(&base, |name| self.names.contains(name) || (self.taken)(name));
         self.names.insert(candidate.clone());
         candidate
     }

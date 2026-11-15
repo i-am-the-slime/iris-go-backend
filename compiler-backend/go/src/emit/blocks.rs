@@ -31,7 +31,7 @@
 
 use rustc_hash::FxHashSet;
 
-use crate::naming::lower_first;
+use crate::naming::{lower_first, numbered};
 use crate::walk::{self, Walk};
 use crate::syntax::{GoDeclaration, GoExpression, GoStatement, GoType, Name};
 
@@ -205,12 +205,7 @@ impl Function<'_> {
         let unqualified = type_name.rsplit('.').next().unwrap_or(type_name);
         let mut base = lower_first(unqualified);
         base.push_str(if base.ends_with('s') { "Cells" } else { "s" });
-        let mut name = base.clone();
-        let mut counter = 2;
-        while self.names.contains(&name) || (self.taken)(&name) {
-            name = format!("{base}{counter}");
-            counter += 1;
-        }
+        let name = numbered(&base, |name| self.names.contains(name) || (self.taken)(name));
         self.names.insert(name.clone());
         name
     }

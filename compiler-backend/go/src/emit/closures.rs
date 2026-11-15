@@ -40,7 +40,7 @@ use super::packages::Spelling;
 use super::{ConstructorLayout, DataKind, DataLayout, Emitter, identifier, layout, uses_local};
 use crate::arity::Arities;
 use crate::context::Context;
-use crate::naming::{capitalise, lower_first};
+use crate::naming::{capitalise, lower_first, numbered};
 use crate::error::{GoError, GoResult};
 use crate::foreign::Foreign;
 use crate::mono::{
@@ -1362,12 +1362,9 @@ fn closure_slots(
             let slot = match shared {
                 Some((name, _, _)) => name.clone(),
                 None => {
-                    let mut name = base.clone();
-                    let mut counter = 2;
-                    while slots.iter().any(|(taken, _, _)| *taken == name) || name == "Tag" {
-                        name = format!("{base}{counter}");
-                        counter += 1;
-                    }
+                    let name = numbered(&base, |name| {
+                        name == "Tag" || slots.iter().any(|(taken, _, _)| taken == name)
+                    });
                     slots.push((name.clone(), base, capture.monotype));
                     name
                 }

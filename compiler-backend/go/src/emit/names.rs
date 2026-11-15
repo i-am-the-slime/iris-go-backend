@@ -10,7 +10,7 @@
 //! collide climb theirs, so that a new type elsewhere renames nothing it does
 //! not collide with.
 
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::BTreeSet;
 
 use rustc_hash::{FxHashMap, FxHashSet};
 use smol_str::SmolStr;
@@ -19,7 +19,7 @@ use indexing::IndexedTypeItemKind;
 
 use super::packages::{SpelledPart, Spelling};
 use super::{Emitter, identifier};
-use crate::naming::{capitalise, is_vague};
+use crate::naming::{capitalise, is_vague, ladder};
 use crate::error::GoResult;
 use crate::modules::Modules;
 use crate::mono::FunctionSpelling;
@@ -41,76 +41,6 @@ pub(super) enum NamePart {
 pub(super) enum PendingSpelling {
     Record(MonotypeId),
     Parts(Vec<NamePart>),
-}
-
-/// The first candidate of each ladder that no other ladder wants, and that
-/// `taken` allows. A collision moves every name in it one step up its ladder,
-/// except that a name alone on the lowest step of the collision keeps it: a
-/// name that grew into another's does not displace it. Names still colliding
-/// at the top of their ladders, or whose ladders climb alike, are told apart
-/// by a count, in ladder order.
-pub(super) fn resolve(ladders: &[Vec<String>], taken: &dyn Fn(&str) -> bool) -> Vec<String> {
-    let mut steps = vec![0; ladders.len()];
-    loop {
-        let mut wanting: BTreeMap<&str, Vec<usize>> = BTreeMap::new();
-        for (index, ladder) in ladders.iter().enumerate() {
-            wanting.entry(ladder[steps[index]].as_str()).or_default().push(index);
-        }
-        let mut climbed = false;
-        for (name, indices) in &wanting {
-            let forbidden = taken(name);
-            if indices.len() == 1 && !forbidden {
-                continue;
-            }
-            // Names that would climb alike stay as they are and are counted.
-            let remaining = |index: usize| &ladders[index][steps[index]..];
-            if !forbidden && indices.iter().all(|&index| remaining(index) == remaining(indices[0]))
-            {
-                continue;
-            }
-            let lowest = indices.iter().map(|&index| steps[index]).min().unwrap_or(0);
-            let on_lowest = indices.iter().filter(|&&index| steps[index] == lowest).count();
-            for &index in indices {
-                let keeps = !forbidden && on_lowest == 1 && steps[index] == lowest;
-                if !keeps && steps[index] + 1 < ladders[index].len() {
-                    steps[index] += 1;
-                    climbed = true;
-                }
-            }
-        }
-        if !climbed {
-            break;
-        }
-    }
-    let wanted = |index: usize| ladders[index][steps[index]].as_str();
-    let mut wanting: FxHashMap<&str, usize> = FxHashMap::default();
-    for index in 0..ladders.len() {
-        *wanting.entry(wanted(index)).or_default() += 1;
-    }
-    let mut chosen: FxHashSet<String> = FxHashSet::default();
-    let mut names: Vec<Option<String>> = vec![None; ladders.len()];
-    for index in 0..ladders.len() {
-        let name = wanted(index);
-        if wanting[name] == 1 && !taken(name) {
-            chosen.insert(name.to_string());
-            names[index] = Some(name.to_string());
-        }
-    }
-    let mut counted: Vec<usize> =
-        (0..ladders.len()).filter(|&index| names[index].is_none()).collect();
-    counted.sort_by_key(|&index| (steps[index], index));
-    for index in counted {
-        let base = wanted(index);
-        let mut name = base.to_string();
-        let mut counter = 2;
-        while taken(&name) || chosen.contains(&name) {
-            name = format!("{base}{counter}");
-            counter += 1;
-        }
-        chosen.insert(name.clone());
-        names[index] = Some(name);
-    }
-    names.into_iter().map(|name| name.expect("invariant violated: a ladder left unnamed")).collect()
 }
 
 /// Where a record's name comes from, strongest first.
@@ -225,17 +155,6 @@ fn spell_parts(parts: &[NamePart], short: &FxHashMap<MonotypeId, String>) -> Str
         })
         .collect();
     identifier(&spelled)
-}
-
-/// A ladder without repeated candidates.
-fn ladder(candidates: impl IntoIterator<Item = String>) -> Vec<String> {
-    let mut ladder: Vec<String> = vec![];
-    for candidate in candidates {
-        if !candidate.is_empty() && !ladder.contains(&candidate) {
-            ladder.push(candidate);
-        }
-    }
-    ladder
 }
 
 impl<Q> Emitter<'_, '_, '_, Q>
@@ -861,56 +780,5 @@ where
         Ok(converted
             .ok()
             .filter(|&monotype| matches!(self.monotypes.get(monotype), Monotype::Record(_))))
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::resolve;
-
-    fn ladders(ladders: &[&[&str]]) -> Vec<Vec<String>> {
-        ladders.iter().map(|ladder| ladder.iter().map(|name| name.to_string()).collect()).collect()
-    }
-
-    #[test]
-    fn names_that_collide_with_nothing_stay_short() {
-        let ladders = ladders(&[&["Timing", "EasingTiming"], &["Layout", "SpecLayout"]]);
-        assert_eq!(resolve(&ladders, &|_| false), ["Timing", "Layout"]);
-    }
-
-    #[test]
-    fn colliding_names_climb_until_they_differ() {
-        let ladders = ladders(&[
-            &["Timing", "EasingTiming", "TimingWithEasing"],
-            &["Timing", "MainTiming", "TimingWithProbe"],
-            &["Layout"],
-        ]);
-        assert_eq!(resolve(&ladders, &|_| false), ["EasingTiming", "MainTiming", "Layout"]);
-    }
-
-    #[test]
-    fn a_name_that_grows_into_another_does_not_displace_it() {
-        let ladders = ladders(&[
-            &["Timing", "MainTiming"],
-            &["Timing", "EasingTiming"],
-            &["MainTiming", "MainTimingWithProbe"],
-        ]);
-        assert_eq!(
-            resolve(&ladders, &|_| false),
-            ["MainTiming2", "EasingTiming", "MainTiming"].map(String::from)
-        );
-    }
-
-    #[test]
-    fn names_that_would_climb_alike_are_counted_where_they_are() {
-        let ladders =
-            ladders(&[&["MaybeArgs", "MaybeRecordInput"], &["MaybeArgs", "MaybeRecordInput"]]);
-        assert_eq!(resolve(&ladders, &|_| false), ["MaybeArgs", "MaybeArgs2"]);
-    }
-
-    #[test]
-    fn taken_names_are_never_chosen() {
-        let ladders = ladders(&[&["timing", "scheduleTiming"]]);
-        assert_eq!(resolve(&ladders, &|name| name == "timing"), ["scheduleTiming"]);
     }
 }

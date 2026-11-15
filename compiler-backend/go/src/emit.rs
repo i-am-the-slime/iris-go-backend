@@ -40,7 +40,7 @@ use self::application::Callable;
 use self::packages::Spelling;
 use crate::arity::Arities;
 use crate::context::Context;
-use crate::naming::{capitalise, exported, identifier};
+use crate::naming::{capitalise, exported, identifier, numbered};
 use crate::erasure::Erasure;
 use crate::error::{GoError, GoResult};
 use crate::foreign::{
@@ -700,17 +700,7 @@ where
 }
 
 fn unique(base: String, taken: &mut FxHashSet<String>) -> String {
-    if taken.insert(base.clone()) {
-        return base;
-    }
-    let mut counter = 2;
-    loop {
-        let candidate = format!("{base}{counter}");
-        if taken.insert(candidate.clone()) {
-            return candidate;
-        }
-        counter += 1;
-    }
+    numbered(&base, |name| !taken.insert(name.to_string()))
 }
 
 fn call(function: GoExpression, arguments: Vec<GoExpression>) -> GoExpression {
