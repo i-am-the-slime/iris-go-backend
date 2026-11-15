@@ -73,6 +73,7 @@ pub enum Foreign {
     MakeAff,
     ForkFiber,
     NewFiber,
+    NewSupervisedFiber,
     MutexNew,
     WithMutex,
     LazyDefer,
@@ -125,6 +126,30 @@ pub struct Boundary {
     pub uncurried: &'static [(usize, usize)],
     pub uncurried_perform: bool,
     pub signature: Option<&'static Signature>,
+    pub utility: Option<Utility>,
+    /// The Go helper's one type parameter is its result type, which its
+    /// arguments do not determine.
+    pub result_parameter: bool,
+}
+
+/// A record of polymorphic constructors that JavaScript passes a foreign (the
+/// `FFIUtil` of `Effect.AVar`, say). Go cannot pass polymorphic values, so the
+/// foreign receives, in place of the record, the constructors it uses at the
+/// types its own signature fixes.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct Utility {
+    pub position: usize,
+    pub constructors: &'static [Constructed],
+}
+
+/// A constructor of the data type at one place of a foreign's signature: a
+/// function of its field, or the value of a nullary constructor.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum Constructed {
+    /// Of the foreign's result, inside its effect.
+    Result(&'static str),
+    /// Of the parameter of the callback at a position.
+    CallbackParameter(usize, &'static str),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -191,7 +216,11 @@ const PLAIN: Boundary = Boundary {
     uncurried: &[],
     uncurried_perform: false,
     signature: None,
+    utility: None,
+    result_parameter: false,
 };
+
+const RESULT_PARAMETER: Boundary = Boundary { result_parameter: true, ..PLAIN };
 
 const fn int32_parameters(positions: &'static [usize]) -> Boundary {
     Boundary { int32_parameters: positions, ..PLAIN }
@@ -260,6 +289,8 @@ pub enum GoPackage {
     Lazy,
     Alloc,
     Argonaut,
+    AVar,
+    YogaOm,
 }
 
 impl GoPackage {
@@ -280,6 +311,8 @@ impl GoPackage {
             GoPackage::Lazy => "github.com/i-am-the-slime/purs-backend-go/go-support/lazy",
             GoPackage::Alloc => "github.com/i-am-the-slime/purs-backend-go/go-support/alloc",
             GoPackage::Argonaut => "github.com/i-am-the-slime/purs-backend-go/go-support/argonaut",
+            GoPackage::AVar => "github.com/i-am-the-slime/purs-backend-go/go-support/avar",
+            GoPackage::YogaOm => "github.com/i-am-the-slime/purs-backend-go/go-support/yogaom",
             GoPackage::Exception => {
                 "github.com/i-am-the-slime/purs-backend-go/go-support/exception"
             }
@@ -302,6 +335,8 @@ impl GoPackage {
             GoPackage::Lazy => "lazy",
             GoPackage::Alloc => "alloc",
             GoPackage::Argonaut => "argonaut",
+            GoPackage::AVar => "avar",
+            GoPackage::YogaOm => "yogaom",
         }
     }
 }
@@ -382,7 +417,7 @@ impl Foreign {
             Foreign::LazyDefer | Foreign::LazyForce => 1,
             Foreign::UnsafeCoerce | Foreign::Identity | Foreign::EffectPure | Foreign::Print => 1,
             Foreign::Throw | Foreign::Crash | Foreign::MakeAff | Foreign::AssocArray => 1,
-            Foreign::ForkFiber | Foreign::NewFiber => 2,
+            Foreign::ForkFiber | Foreign::NewFiber | Foreign::NewSupervisedFiber => 2,
             Foreign::RunEffect | Foreign::EffectUntil => 1,
             Foreign::ReferenceNew | Foreign::ReferenceRead => 1,
             Foreign::EffectBind | Foreign::EffectMap | Foreign::EffectForEach => 2,
@@ -404,7 +439,7 @@ impl Foreign {
     pub fn ignored_arguments(self) -> &'static [usize] {
         match self {
             Foreign::Call { boundary, .. } | Foreign::Perform { boundary, .. } => boundary.ignored,
-            Foreign::NewFiber => &[0],
+            Foreign::NewFiber | Foreign::NewSupervisedFiber => &[0],
             _ => &[],
         }
     }
@@ -437,6 +472,7 @@ impl Foreign {
                 | Foreign::MakeAff
                 | Foreign::ForkFiber
                 | Foreign::NewFiber
+                | Foreign::NewSupervisedFiber
                 | Foreign::MutexNew
                 | Foreign::WithMutex
         )
@@ -546,6 +582,21 @@ const fn foreign_value(name: &'static str, arity: usize) -> Foreign {
 const fn argonaut(name: &'static str, arity: usize) -> Foreign {
     call(GoPackage::Argonaut, name, arity, PLAIN)
 }
+
+/// An `Effect.AVar` foreign, which receives the constructors it uses in place
+/// of its `FFIUtil` record, the first argument.
+const fn avar(name: &'static str, arity: usize, constructors: &'static [Constructed]) -> Foreign {
+    let utility = Some(Utility { position: 0, constructors });
+    perform_in(GoPackage::AVar, name, arity, Boundary { utility, ..PLAIN })
+}
+
+const AVAR_PUT_CALLBACK: &[Constructed] =
+    &[Constructed::CallbackParameter(3, "Left"), Constructed::CallbackParameter(3, "Right")];
+
+const AVAR_CALLBACK: &[Constructed] =
+    &[Constructed::CallbackParameter(2, "Left"), Constructed::CallbackParameter(2, "Right")];
+
+const AVAR_MAYBE: &[Constructed] = &[Constructed::Result("Just"), Constructed::Result("Nothing")];
 
 const fn constant(name: &'static str) -> Foreign {
     Foreign::Constant(GoFunction { package: GoPackage::Prim, name })
@@ -759,6 +810,8 @@ const FOREIGN_IMPORTS: &[(&str, &str, Foreign)] = &[
     ("Effect.Aff", "makeAff", Foreign::MakeAff),
     ("Effect.Aff", "_fork", Foreign::ForkFiber),
     ("Effect.Aff", "_makeFiber", Foreign::NewFiber),
+    ("Effect.Aff", "_makeSupervisedFiber", Foreign::NewSupervisedFiber),
+    ("Effect.Aff", "_killAll", perform_in(GoPackage::Aff, "KillAllDirect", 3, PLAIN)),
     ("Promise.Internal", "resolve", call(GoPackage::Promise, "Resolve", 1, PLAIN)),
     ("Promise.Internal", "reject", call(GoPackage::Promise, "Reject", 1, PLAIN)),
     ("Promise.Internal", "then_", perform_in(GoPackage::Promise, "Then", 2, PLAIN)),
@@ -807,6 +860,35 @@ const FOREIGN_IMPORTS: &[(&str, &str, Foreign)] = &[
     ("Data.Argonaut.Core", "_caseJson", argonaut("CaseJson", 7)),
     ("Data.Argonaut.Core", "_compare", argonaut("Compare", 5)),
     ("Data.Argonaut.Parser", "_jsonParser", argonaut("JsonParser", 3)),
+    ("Effect.AVar", "empty", perform_in(GoPackage::AVar, "Empty", 0, INSTANTIATE)),
+    ("Effect.AVar", "_newVar", perform_in(GoPackage::AVar, "NewVar", 1, PLAIN)),
+    ("Effect.AVar", "_killVar", avar("KillVar", 3, &[])),
+    ("Effect.AVar", "_putVar", avar("PutVar", 4, AVAR_PUT_CALLBACK)),
+    ("Effect.AVar", "_tryPutVar", avar("TryPutVar", 3, &[])),
+    ("Effect.AVar", "_takeVar", avar("TakeVar", 3, AVAR_CALLBACK)),
+    ("Effect.AVar", "_tryTakeVar", avar("TryTakeVar", 2, AVAR_MAYBE)),
+    ("Effect.AVar", "_readVar", avar("ReadVar", 3, AVAR_CALLBACK)),
+    ("Effect.AVar", "_tryReadVar", avar("TryReadVar", 2, AVAR_MAYBE)),
+    (
+        "Effect.AVar",
+        "_status",
+        avar(
+            "Status",
+            2,
+            &[
+                Constructed::Result("Killed"),
+                Constructed::Result("Filled"),
+                Constructed::Result("Empty"),
+            ],
+        ),
+    ),
+    ("Yoga.Om.Error", "newParallelError", call(GoPackage::YogaOm, "NewParallelError", 1, PLAIN)),
+    ("Yoga.Om.Error", "getParallelError", call(GoPackage::YogaOm, "GetParallelError", 1, RESULT_PARAMETER)),
+    (
+        "Yoga.Om.Error",
+        "toParallelErrorImpl",
+        call(GoPackage::YogaOm, "ToParallelErrorImpl", 3, maybe(0, 1)),
+    ),
     ("Data.Nullable", "null", call(GoPackage::Nullable, "Null", 0, INSTANTIATE)),
     ("Data.Nullable", "notNull", call(GoPackage::Nullable, "NotNull", 1, PLAIN)),
     ("Data.Nullable", "nullable", call(GoPackage::Nullable, "Nullable", 3, PLAIN)),
@@ -1145,6 +1227,8 @@ const INTRINSICS: &[(&str, &str, &[&str], Foreign)] = &[
 const SUPPORT_DATA: &[(&str, &str, GoPackage, &str)] = &[
     ("Data.Argonaut.Core", "Json", GoPackage::Argonaut, "Json"),
     ("Data.Argonaut.Core", "JNull", GoPackage::Argonaut, "JNull"),
+    ("Effect.AVar", "AVar", GoPackage::AVar, "AVar"),
+    ("Effect.Aff", "Supervisor", GoPackage::Aff, "Supervisor"),
 ];
 
 pub fn support_data(module_name: &str, name: &str) -> Option<(GoPackage, &'static str)> {

@@ -36,7 +36,7 @@ use crate::context::{Context, capitalise};
 use crate::erasure::Erasure;
 use crate::error::{GoError, GoResult};
 use crate::foreign::{
-    Boundary, Comparison, Foreign, ForeignPackages, GoFunction, GoPackage, Operator, Spelled,
+    Boundary, Comparison, Constructed, Foreign, ForeignPackages, GoFunction, GoPackage, Operator, Spelled,
 };
 use crate::modules::{ModuleIndex, Modules};
 use crate::mono::{
@@ -1942,6 +1942,27 @@ where
                 let record = self.fiber_record(handle, result, out)?;
                 return self.deliver(record, result, sink, out);
             }
+            Foreign::NewSupervisedFiber => {
+                let action = self.value(&arguments[1], out)?;
+                let action = self.unit_valued(action, arguments[1].monotype, out)?;
+                let new = GoFunction { package: GoPackage::Aff, name: "NewSupervisedFiber" };
+                let handle = self.temporary("fiber");
+                let supervisor = self.temporary("supervisor");
+                out.push(GoStatement::Define {
+                    names: vec![handle.clone(), supervisor.clone()],
+                    values: vec![call(self.go_function(new), vec![action])],
+                });
+                let fiber = self.record_field_monotype(result, "fiber");
+                let fiber = self.fiber_record(identifier_expression(&handle), fiber, out)?;
+                let supervised = GoExpression::Composite {
+                    type_: GoType::Named(self.record_name(result)?),
+                    fields: vec![
+                        (Some(field_name("fiber")), fiber),
+                        (Some(field_name("supervisor")), identifier_expression(&supervisor)),
+                    ],
+                };
+                return self.deliver(supervised, result, sink, out);
+            }
             Foreign::AssocArray => {
                 let array = self.value(&arguments[0], out)?;
                 let associated = self.associated_elements(result)?;
@@ -2314,8 +2335,21 @@ where
         result: MonotypeId,
     ) -> GoResult<GoExpression> {
         let function = self.go_function(function);
+        if boundary.result_parameter {
+            let result = self.go_type(result)?;
+            return Ok(GoExpression::Instantiation {
+                function: Box::new(function),
+                arguments: vec![result],
+            });
+        }
         if !boundary.instantiate {
             return Ok(function);
+        }
+        if let Monotype::ForeignData(data) = self.monotypes.get(result).clone() {
+            let GoType::Generic { arguments, .. } = self.foreign_data_type(&data)? else {
+                unreachable!("invariant violated: an instantiated foreign data type has arguments")
+            };
+            return Ok(GoExpression::Instantiation { function: Box::new(function), arguments });
         }
         let element = match self.monotypes.get(result).clone() {
             Monotype::Object(element)
@@ -2353,6 +2387,14 @@ where
         };
         let mut values = vec![];
         for (position, argument) in arguments.iter().enumerate() {
+            if let Some(utility) = boundary.utility
+                && utility.position == position
+            {
+                for &constructed in utility.constructors {
+                    values.push(self.utility_constructor(constructed, arguments, result)?);
+                }
+                continue;
+            }
             let value = match boundary.maybe {
                 _ if let Some(destructor) = boundary.maybe_destructor
                     && destructor.position == position =>
@@ -2426,6 +2468,29 @@ where
             values.push(value);
         }
         Ok(values)
+    }
+
+    fn utility_constructor(
+        &mut self,
+        constructed: Constructed,
+        arguments: &[Expression],
+        result: MonotypeId,
+    ) -> GoResult<GoExpression> {
+        let (data, name) = match constructed {
+            Constructed::Result(name) => (result, name),
+            Constructed::CallbackParameter(position, name) => {
+                let (parameter, _) = self
+                    .monotypes
+                    .function_parts(arguments[position].monotype)
+                    .expect("invariant violated: a utility callback is a function");
+                (parameter, name)
+            }
+        };
+        let (data_type, index) = self.constructor_named(data, name)?;
+        if self.data_layout(&data_type)?.constructors[index].fields.is_empty() {
+            return self.construct(&data_type, index, vec![]);
+        }
+        self.constructor_function(data, name)
     }
 
     fn mentioned_maybe(&mut self, monotype: MonotypeId) -> GoResult<Option<MonotypeId>> {

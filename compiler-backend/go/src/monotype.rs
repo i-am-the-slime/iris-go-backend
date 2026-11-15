@@ -427,7 +427,10 @@ impl Monotypes {
                 Ok(element) => Monotype::MutableArray(element),
                 Err(error) => return Ok(Err(error)),
             },
-            ("Effect.Exception", "Error") => Monotype::Error,
+            // yoga-om's ParallelError is a JavaScript Error subclass that
+            // `parallelErrorToError` coerces to Error; go-support keeps its
+            // payload in the Error itself.
+            ("Effect.Exception", "Error") | ("Yoga.Om.Error", "ParallelError") => Monotype::Error,
             ("Data.String.Regex", "Regex") => Monotype::Regex,
             ("Effect.Synchronized", "Mutex") => Monotype::Mutex,
             ("JS.BigInt", "BigInt") => Monotype::BigInt,
