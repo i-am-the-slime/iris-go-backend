@@ -1286,6 +1286,10 @@ fn literals_equal(left: &Literal, right: &Literal) -> Option<bool> {
     match (left, right) {
         (Literal::Int(left), Literal::Int(right)) => Some(left == right),
         (Literal::String(left), Literal::String(right)) => Some(left == right),
+        (Literal::Utf16(left), Literal::Utf16(right)) => Some(left == right),
+        (Literal::String(_), Literal::Utf16(_)) | (Literal::Utf16(_), Literal::String(_)) => {
+            Some(false)
+        }
         (Literal::Char(left), Literal::Char(right)) => Some(left == right),
         (Literal::Boolean(left), Literal::Boolean(right)) => Some(left == right),
         _ => None,

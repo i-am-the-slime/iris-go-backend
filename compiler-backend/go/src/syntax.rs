@@ -1,6 +1,7 @@
 //! A small Go syntax tree with a printer that follows `gofmt` layout.
 
 use std::fmt::Write;
+use std::sync::Arc;
 
 use rayon::prelude::*;
 use rustc_hash::FxHashSet;
@@ -67,6 +68,9 @@ pub enum GoExpression {
     Integer(i64),
     Float(String),
     String(String),
+    /// A string holding a lone surrogate, as its UTF-16 code units: Go spells it in WTF-8, the
+    /// representation go-support's prim package gives PureScript strings.
+    Utf16(Arc<[u16]>),
     Rune(char),
     Boolean(bool),
     Call {
@@ -901,6 +905,7 @@ impl Printer {
             GoExpression::Integer(value) => value.to_string(),
             GoExpression::Float(value) => value.clone(),
             GoExpression::String(value) => go_string(value),
+            GoExpression::Utf16(units) => go_utf16_string(units),
             GoExpression::Rune(value) => go_rune(*value),
             GoExpression::Boolean(value) => value.to_string(),
             GoExpression::Call { function, arguments } => {
@@ -1011,6 +1016,29 @@ fn go_string(value: &str) -> String {
                 let _ = write!(rendered, "\\u{:04x}", character as u32);
             }
             character => rendered.push(character),
+        }
+    }
+    rendered.push('"');
+    rendered
+}
+
+/// A Go string literal of UTF-16 code units: each lone surrogate as the three bytes of its WTF-8
+/// encoding, everything else as `go_string` writes it.
+fn go_utf16_string(units: &[u16]) -> String {
+    let mut rendered = String::from("\"");
+    for decoded in char::decode_utf16(units.iter().copied()) {
+        match decoded {
+            Ok(character) => {
+                let quoted = go_string(character.encode_utf8(&mut [0; 4]));
+                rendered.push_str(&quoted[1..quoted.len() - 1]);
+            }
+            Err(error) => {
+                let unit = error.unpaired_surrogate();
+                let bytes = [0xED, 0x80 | ((unit >> 6) & 0x3F) as u8, 0x80 | (unit & 0x3F) as u8];
+                for byte in bytes {
+                    let _ = write!(rendered, "\\x{byte:02x}");
+                }
+            }
         }
     }
     rendered.push('"');

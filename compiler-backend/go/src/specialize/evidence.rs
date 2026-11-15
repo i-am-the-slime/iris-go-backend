@@ -1,6 +1,6 @@
 //! Resolving a constraint's evidence to a dictionary: instances, superclasses and givens.
 
-use super::{Specializer, string_literal};
+use super::{Specializer, symbol_text};
 use crate::context::ModuleData;
 use crate::dictionary::{Dictionary, InstanceDictionary, Reflected};
 use crate::error::{GoError, GoResult, UnsupportedState};
@@ -167,13 +167,13 @@ where
             }
             Evidence::Trivial => Ok(Dictionary::Trivial),
             Evidence::Synthesized(SynthesizedEvidence::IsSymbol(symbol)) => {
-                Ok(Dictionary::Symbol(SmolStr::from(string_literal(&symbol))))
+                Ok(Dictionary::Symbol(SmolStr::from(symbol_text(&symbol))))
             }
             Evidence::Synthesized(SynthesizedEvidence::Reflectable(reflectable)) => {
                 let reflected = match reflectable {
                     ReflectableEvidence::Integer(value) => Reflected::Integer(value),
                     ReflectableEvidence::String(value) => {
-                        Reflected::String(SmolStr::from(string_literal(&value)))
+                        Reflected::String(SmolStr::from(symbol_text(&value)))
                     }
                     ReflectableEvidence::Boolean(value) => Reflected::Boolean(value),
                     ReflectableEvidence::Ordering(ordering) => {

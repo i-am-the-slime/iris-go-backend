@@ -280,9 +280,8 @@ impl<'l> Value<'l> {
             Literal::Number(value) => Value::Number(value.parse().ok()?),
             Literal::Boolean(value) => Value::Boolean(*value),
             Literal::Char(value) => Value::Char(*value),
-            // A lone surrogate reached the tree as a replacement character,
-            // which neither concatenates nor orders as the surrogate would.
-            Literal::String(value) if value.contains(char::REPLACEMENT_CHARACTER) => return None,
+            // Folding works on Rust strings, which cannot hold a lone surrogate.
+            Literal::Utf16(_) => return None,
             Literal::String(value) => Value::String(value),
         })
     }

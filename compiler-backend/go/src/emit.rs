@@ -28,11 +28,13 @@ mod packages;
 mod ranges;
 mod reference_equality;
 mod reuse;
+mod strings;
 mod types;
 mod unreferenced;
 mod views;
 
 use std::collections::BTreeSet;
+use std::sync::Arc;
 
 use rustc_hash::{FxHashMap, FxHashSet};
 
@@ -699,6 +701,7 @@ fn is_simple(expression: &GoExpression) -> bool {
             | GoExpression::Integer(_)
             | GoExpression::Float(_)
             | GoExpression::String(_)
+            | GoExpression::Utf16(_)
             | GoExpression::Rune(_)
             | GoExpression::Boolean(_)
     ) || matches!(expression, GoExpression::Field { value, .. } if is_simple(value))
@@ -1609,6 +1612,7 @@ where
                 self.imports.insert("fmt".into());
                 let print =
                     GoExpression::Qualified { package: "fmt".into(), name: "Println".into() };
+                let values = values.into_iter().map(|value| self.printable(value)).collect();
                 out.push(GoStatement::Expression(call(print, values)));
                 self.deliver(unit_value(), result, sink, out)
             }
@@ -2924,6 +2928,7 @@ where
                 GoExpression::Float(value)
             }
             Literal::String(value) => GoExpression::String(value.clone()),
+            Literal::Utf16(units) => GoExpression::Utf16(Arc::clone(units)),
             Literal::Char(value) => GoExpression::Rune(*value),
             Literal::Boolean(value) => GoExpression::Boolean(*value),
         }
@@ -3307,6 +3312,9 @@ where
         let left = values.pop().expect("invariant violated: binary operator arity");
         if let Operator::ArrayIndex = operator {
             return GoExpression::Index { value: Box::new(left), index: Box::new(right) };
+        }
+        if let Operator::StringAppend = operator {
+            return self.string_append(left, right);
         }
         if let Some(bitwise) = bitwise(operator, left.clone(), right.clone()) {
             return bitwise;

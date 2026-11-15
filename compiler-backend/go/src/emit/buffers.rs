@@ -7,7 +7,7 @@
 
 use super::iteration::Callback;
 use super::ownership::{self, Carried, Place};
-use super::{Emitter, call, identifier_expression};
+use super::{Emitter, identifier_expression};
 use crate::error::GoResult;
 use crate::mono::{Expression, ExpressionKind, Function, FunctionId};
 use crate::monotype::{Monotype, MonotypeId};
@@ -30,8 +30,7 @@ where
             _ => self.value(&arguments[0], out)?,
         };
         let suffix = self.value(&arguments[1], out)?;
-        let spread = GoExpression::Spread(Box::new(suffix));
-        Ok(call(identifier_expression("append"), vec![buffer, spread]))
+        Ok(self.buffer_append(buffer, suffix))
     }
 
     /// The appends of a fold's step that extend its string accumulator in place.

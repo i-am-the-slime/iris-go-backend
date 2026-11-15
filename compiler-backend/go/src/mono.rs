@@ -92,6 +92,8 @@ pub enum Literal {
     Int(i64),
     Number(SmolStr),
     String(String),
+    /// A string holding a lone surrogate, which a Rust `String` cannot, as its UTF-16 code units.
+    Utf16(Arc<[u16]>),
     Char(char),
     Boolean(bool),
 }
