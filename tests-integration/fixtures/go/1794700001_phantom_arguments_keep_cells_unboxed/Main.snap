@@ -1,0 +1,63 @@
+---
+source: tests-integration/src/fixtures.rs
+assertion_line: 570
+---
+// main.go
+package main
+
+import "fmt"
+
+type StepInt struct {
+	More func(struct{}) StepInt
+	Done int32
+	Tag  uint8
+}
+
+const (
+	StepIntMore = iota
+	StepIntDone
+)
+
+type Count struct {
+	StepInt func(func(func(struct{}) StepInt) StepInt, func(int32) StepInt) StepInt
+}
+
+var main_ []int32 = []int32{mainGo(countdown(10, 0).StepInt(func(value0 func(struct{}) StepInt) StepInt {
+	return StepInt{Tag: StepIntMore, More: value0}
+}, func(value02 int32) StepInt {
+	return StepInt{Tag: StepIntDone, Done: value02}
+}))}
+
+func countdown(n int32, total int32) Count {
+	if n <= 0 {
+		return Count{StepInt: func(_ func(func(struct{}) StepInt) StepInt, done func(int32) StepInt) StepInt {
+			return done(total)
+		}}
+	}
+	return Count{StepInt: func(more func(func(struct{}) StepInt) StepInt, done2 func(int32) StepInt) StepInt {
+		return more(func(_ struct{}) StepInt {
+			n2 := countdown(n - 1, total + n)
+			return more(func(_ struct{}) StepInt {
+				return n2.StepInt(more, done2)
+			})
+		})
+	}}
+}
+
+func mainGo(value StepInt) int32 {
+	for {
+		switch value.Tag {
+		case StepIntMore:
+			next := value.More
+			value = next(struct{}{})
+			continue
+		default: // StepIntDone
+			a := value.Done
+			return a
+		}
+	}
+}
+
+func main() {
+	fmt.Println(main_)
+}

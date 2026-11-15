@@ -1,5 +1,6 @@
 ---
 source: tests-integration/src/fixtures.rs
+assertion_line: 570
 ---
 // main.go
 package main
@@ -34,10 +35,9 @@ type PairEIntInt struct {
 }
 
 type TreeFn struct {
-	Leaf   func(any) any
-	Pair   any
-	Origin any
-	Tag    uint8
+	Leaf func(any) any
+	Pair any
+	Tag  uint8
 }
 
 const (
@@ -47,7 +47,6 @@ const (
 
 type Tree struct {
 	Field0 any
-	Origin any
 	Tag    uint8
 }
 
@@ -59,7 +58,6 @@ const (
 type PairE struct {
 	First  *TreeFn
 	Second *Tree
-	Origin any
 }
 
 func convert(value TreeFnIntInt) *TreeFn {
@@ -67,23 +65,23 @@ func convert(value TreeFnIntInt) *TreeFn {
 	case TreeFnIntIntLeaf:
 		return &TreeFn{Tag: TreeFnLeaf, Leaf: func(coerced any) any {
 			return value.Leaf(coerced.(int32))
-		}, Origin: value}
+		}}
 	default: // TreeFnIntIntPair
-		return &TreeFn{Tag: TreeFnPair, Pair: value.Pair, Origin: value}
+		return &TreeFn{Tag: TreeFnPair, Pair: value.Pair}
 	}
 }
 
 func convert2(value TreeInt) *Tree {
 	switch value.Tag {
 	case TreeIntLeaf:
-		return &Tree{Tag: TreeLeaf, Field0: value.Leaf, Origin: value}
+		return &Tree{Tag: TreeLeaf, Field0: value.Leaf}
 	default: // TreeIntPair
-		return &Tree{Tag: TreePair, Field0: value.Pair, Origin: value}
+		return &Tree{Tag: TreePair, Field0: value.Pair}
 	}
 }
 
 func convert3(value PairEIntInt) *PairE {
-	return &PairE{First: convert(value.First), Second: convert2(value.Second), Origin: value}
+	return &PairE{First: convert(value.First), Second: convert2(value.Second)}
 }
 
 type TreeFnIntFnIntInt struct {
@@ -110,21 +108,20 @@ func convert4(value TreeFnIntFnIntInt) *TreeFn {
 			return func(coerced3 any) any {
 				return original(coerced3.(int32))
 			}
-		}, Origin: value}
+		}}
 	default: // TreeFnIntFnIntIntPair
-		return &TreeFn{Tag: TreeFnPair, Pair: value.Pair, Origin: value}
+		return &TreeFn{Tag: TreeFnPair, Pair: value.Pair}
 	}
 }
 
 func convert5(value PairEFnIntIntInt) *PairE {
-	return &PairE{First: convert4(value.First), Second: convert2(value.Second), Origin: value}
+	return &PairE{First: convert4(value.First), Second: convert2(value.Second)}
 }
 
 type TreeFnInt struct {
-	Leaf   func(any) int32
-	Pair   any
-	Origin any
-	Tag    uint8
+	Leaf func(any) int32
+	Pair any
+	Tag  uint8
 }
 
 const (
@@ -135,7 +132,6 @@ const (
 type PairEInt struct {
 	First  *TreeFnInt
 	Second *Tree
-	Origin any
 }
 
 func convert6(value *TreeFn) *TreeFnInt {
@@ -143,14 +139,14 @@ func convert6(value *TreeFn) *TreeFnInt {
 	case TreeFnLeaf:
 		return &TreeFnInt{Tag: TreeFnIntLeaf, Leaf: func(coerced any) int32 {
 			return value.Leaf(coerced).(int32)
-		}, Origin: value.Origin}
+		}}
 	default: // TreeFnPair
-		return &TreeFnInt{Tag: TreeFnIntPair, Pair: value.Pair, Origin: value.Origin}
+		return &TreeFnInt{Tag: TreeFnIntPair, Pair: value.Pair}
 	}
 }
 
 func convert7(value *PairE) *PairEInt {
-	return &PairEInt{First: convert6(value.First), Second: value.Second, Origin: value.Origin}
+	return &PairEInt{First: convert6(value.First), Second: value.Second}
 }
 
 func convert8(value *TreeFnInt) *Tree {
@@ -158,18 +154,18 @@ func convert8(value *TreeFnInt) *Tree {
 	case TreeFnIntLeaf:
 		return &Tree{Tag: TreeLeaf, Field0: func(coerced4 any) any {
 			return value.Leaf(coerced4)
-		}, Origin: value.Origin}
+		}}
 	default: // TreeFnIntPair
-		return &Tree{Tag: TreePair, Field0: value.Pair, Origin: value.Origin}
+		return &Tree{Tag: TreePair, Field0: value.Pair}
 	}
 }
 
 func convert9(value *TreeFn) *Tree {
 	switch value.Tag {
 	case TreeFnLeaf:
-		return &Tree{Tag: TreeLeaf, Field0: value.Leaf, Origin: value.Origin}
+		return &Tree{Tag: TreeLeaf, Field0: value.Leaf}
 	default: // TreeFnPair
-		return &Tree{Tag: TreePair, Field0: value.Pair, Origin: value.Origin}
+		return &Tree{Tag: TreePair, Field0: value.Pair}
 	}
 }
 

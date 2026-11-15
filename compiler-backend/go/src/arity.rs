@@ -79,6 +79,7 @@ pub(crate) fn keeps_representation(foreign: &Foreign) -> bool {
     matches!(
         foreign,
         Foreign::Operator(_)
+            | Foreign::Crash
             | Foreign::UnsafeCoerce
             | Foreign::Identity
             | Foreign::Unit
@@ -152,6 +153,7 @@ struct Uses<'p> {
     calls: Vec<(MonotypeId, usize)>,
     creations: Vec<&'p Expression>,
     foreign: FxHashSet<MonotypeId>,
+    coercions: FxHashSet<(MonotypeId, MonotypeId)>,
 }
 
 impl<'p> Uses<'p> {
@@ -186,7 +188,7 @@ impl<'p> Uses<'p> {
                 self.creations.push(expression)
             }
             ExpressionKind::Coerce(value) if value.monotype != expression.monotype => {
-                self.received(expression.monotype, monotypes);
+                self.coerced(value.monotype, expression.monotype, monotypes);
             }
             ExpressionKind::Foreign { foreign, arguments } => match foreign {
                 Foreign::Call { boundary, .. } | Foreign::Perform { boundary, .. } => {
@@ -214,6 +216,38 @@ impl<'p> Uses<'p> {
             _ => {}
         }
         for_each_child(expression, &mut |child| self.collect(child, known, monotypes));
+    }
+
+    fn coerced(&mut self, from: MonotypeId, to: MonotypeId, monotypes: &Monotypes) {
+        if from == to || !self.coercions.insert((from, to)) {
+            return;
+        }
+        match (monotypes.get(from), monotypes.get(to)) {
+            (
+                Monotype::Function(from_argument, from_result),
+                Monotype::Function(to_argument, to_result),
+            ) => {
+                self.coerced(*to_argument, *from_argument, monotypes);
+                self.coerced(*from_result, *to_result, monotypes);
+            }
+            (Monotype::Record(from_fields), Monotype::Record(to_fields)) => {
+                for to_field in to_fields.iter() {
+                    match from_fields.iter().find(|from_field| from_field.label == to_field.label) {
+                        Some(from_field) => {
+                            self.coerced(from_field.monotype, to_field.monotype, monotypes)
+                        }
+                        None => self.received(to_field.monotype, monotypes),
+                    }
+                }
+            }
+            (Monotype::Array(from_element), Monotype::Array(to_element))
+            | (Monotype::Effect(from_element), Monotype::Effect(to_element))
+            | (Monotype::Lazy(from_element), Monotype::Lazy(to_element))
+            | (Monotype::Nullable(from_element), Monotype::Nullable(to_element)) => {
+                self.coerced(*from_element, *to_element, monotypes);
+            }
+            _ => self.received(to, monotypes),
+        }
     }
 
     fn exchanged(&mut self, arguments: &[Expression], result: MonotypeId, monotypes: &Monotypes) {
@@ -351,6 +385,11 @@ impl<'p> Uses<'p> {
         };
         for &monotype in &self.foreign {
             limit(monotype, 1);
+        }
+        for &(from, to) in &self.coercions {
+            if monotypes.function_parts(to).is_some() {
+                limit(to, arities.of(from));
+            }
         }
         for creation in &self.creations {
             if monotypes.function_parts(creation.monotype).is_some()

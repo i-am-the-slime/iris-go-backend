@@ -141,8 +141,8 @@ where
         let snocced = apply_to(apply, vec![snocs, result], accumulated);
         let step = self.lambda(vec![accumulator, current], snocced);
         let fold = match self.monotypes.get(accumulated) {
-            Monotype::Effect(_) => foreign::EFFECT_FOLD,
-            _ => foreign::ARRAY_FOLD,
+            Monotype::Effect(_) => foreign::effect_fold(),
+            _ => foreign::array_fold(),
         };
         let fold =
             ExpressionKind::Foreign { foreign: fold, arguments: vec![step, initial, remaining] };

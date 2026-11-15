@@ -151,6 +151,7 @@ where
         };
         name.and_then(|name| homes.get(name)).copied()
     };
+    emitter.settle_round_trips();
     let mut all = std::mem::take(&mut emitter.type_declarations);
     all.extend(declarations);
     let all: Vec<(GoDeclaration, Option<ModuleIndex>)> = all
@@ -236,6 +237,7 @@ where
             closure_sets: FxHashMap::default(),
             closure_layouts: FxHashMap::default(),
             converters: FxHashMap::default(),
+            round_trips: vec![],
             recursive_names: FxHashMap::default(),
             type_aliases: FxHashMap::default(),
             type_declarations: vec![],
@@ -260,6 +262,7 @@ where
             reaching: FxHashMap::default(),
             retaining: FxHashMap::default(),
             erasing: FxHashMap::default(),
+            erasing_layouts: FxHashMap::default(),
             materialized: FxHashSet::default(),
             uninitialized_locals: FxHashSet::default(),
             current: None,
@@ -309,9 +312,7 @@ where
         self.erasing.insert(monotype, false);
         let erases = match self.monotypes.get(monotype).clone() {
             Monotype::Erased(_) | Monotype::Recursive(_) => true,
-            Monotype::Data(data) => {
-                data.arguments.iter().any(|&argument| self.context.types.contains_erased(argument))
-            }
+            Monotype::Data(data) => self.erases_arguments(&data).unwrap_or(true),
             Monotype::Function(argument, result) => {
                 reuse::Cells::erases(self, argument) || reuse::Cells::erases(self, result)
             }
@@ -560,6 +561,7 @@ struct Emitter<'p, 'm, 'q, Q> {
     closure_sets: FxHashMap<MonotypeId, closures::ClosureSet>,
     closure_layouts: FxHashMap<MonotypeId, DataLayout>,
     converters: FxHashMap<(MonotypeId, MonotypeId), String>,
+    round_trips: Vec<coerce::RoundTrip>,
     recursive_names: FxHashMap<DataType, String>,
     /// The type each recursive newtype's alias spells.
     type_aliases: FxHashMap<String, GoType>,
@@ -594,6 +596,7 @@ struct Emitter<'p, 'm, 'q, Q> {
     reaching: FxHashMap<(DataType, DataType), bool>,
     retaining: FxHashMap<MonotypeId, bool>,
     erasing: FxHashMap<MonotypeId, bool>,
+    erasing_layouts: FxHashMap<DataType, bool>,
     materialized: FxHashSet<(FunctionId, LocalId)>,
     /// The locals of the recursive bindings being assigned, which still hold
     /// Go's zero value.
@@ -1702,8 +1705,7 @@ where
             };
             layouts.push(ConstructorLayout { tag, fields });
         }
-        let erases_arguments = kind != DataKind::Enumeration
-            && data.arguments.iter().any(|&argument| self.context.types.contains_erased(argument));
+        let erases_arguments = kind != DataKind::Enumeration && self.erases_arguments(data)?;
         let boxed = self.is_boxed(data)?;
         let layout = DataLayout {
             name: name.clone(),
@@ -1770,8 +1772,7 @@ where
             return false;
         };
         let has_fields = constructors.iter().any(|constructor| !constructor.fields.is_empty());
-        let erases_arguments =
-            data.arguments.iter().any(|&argument| self.context.types.contains_erased(argument));
+        let erases_arguments = self.erases_arguments(data).unwrap_or(true);
         has_fields && !erases_arguments && self.is_boxed(data).unwrap_or(false)
     }
 
@@ -1807,6 +1808,20 @@ where
             }
         };
         Ok(constructors.iter().flat_map(|constructor| constructor.fields.iter().copied()).collect())
+    }
+
+    fn erases_arguments(&mut self, data: &DataType) -> GoResult<bool> {
+        if let Some(&erases) = self.erasing_layouts.get(data) {
+            return Ok(erases);
+        }
+        let used = self.monotypes.used_parameters(&mut self.context, data.file_id, data.item)?;
+        let erases = data
+            .arguments
+            .iter()
+            .zip(used.iter())
+            .any(|(&argument, &used)| used && self.context.types.contains_erased(argument));
+        self.erasing_layouts.insert(data.clone(), erases);
+        Ok(erases)
     }
 
     fn is_boxed(&mut self, data: &DataType) -> GoResult<bool> {

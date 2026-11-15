@@ -81,6 +81,7 @@ pub struct Monotypes {
     lookup: FxHashMap<Monotype, MonotypeId>,
     converted: FxHashMap<TypeId, MonotypeId>,
     constructors: FxHashMap<DataType, Arc<[DataConstructor]>>,
+    used_parameters: FxHashMap<(FileId, TypeItemId), Arc<[bool]>>,
     unfolded: FxHashMap<DataType, MonotypeId>,
     regular: FxHashMap<(FileId, TypeItemId), bool>,
     expanding: Vec<TypeId>,
@@ -606,6 +607,45 @@ impl Monotypes {
         Ok(Some(scheme))
     }
 
+    pub fn rank_n_key<Q>(
+        &mut self,
+        context: &mut Context<'_, Q>,
+        type_id: TypeId,
+    ) -> QueryResult<Option<crate::scheme::SchemeKey>>
+    where
+        Q: checking::ExternalQueries,
+    {
+        let mut current = type_id;
+        for _ in 0..NEWTYPE_EXPANSION_LIMIT {
+            let expanded = expand_synonyms(context, current)?;
+            current = context.types.strip_annotations(expanded);
+            if let Type::Forall(..) = context.types.lookup(current) {
+                let scheme = self.scheme_for(context, current)?;
+                return Ok(scheme.filter(|scheme| scheme.constraints.is_empty()).map(|s| s.key));
+            }
+            let (head, _) = context.types.spine(current);
+            let Type::Constructor(file_id, item) = context.types.lookup(head).clone() else {
+                return Ok(None);
+            };
+            let module = context.module(file_id)?;
+            let IndexedTypeItemKind::Newtype { constructors, .. } =
+                &module.indexed.items[item].kind
+            else {
+                return Ok(None);
+            };
+            let Some(&constructor) = constructors.first() else { return Ok(None) };
+            if is_recursive_newtype(context, file_id, item)? {
+                return Ok(None);
+            }
+            let Some(underlying) = newtype_underlying(context, file_id, constructor, current)?
+            else {
+                return Ok(None);
+            };
+            current = underlying;
+        }
+        Ok(None)
+    }
+
     /// A newtype or constructor field whose type is a rank-N `forall` (a CPS
     /// parser's answer type) is specialized per instantiation, and so is every
     /// other occurrence of that same type. A field met for the first time asks
@@ -899,6 +939,52 @@ impl Monotypes {
         self.constructors.insert(data.clone(), Arc::clone(&constructors));
         Ok(Ok(constructors))
     }
+
+    pub fn used_parameters<Q>(
+        &mut self,
+        context: &mut Context<'_, Q>,
+        file_id: FileId,
+        item: TypeItemId,
+    ) -> QueryResult<Arc<[bool]>>
+    where
+        Q: checking::ExternalQueries,
+    {
+        if let Some(used) = self.used_parameters.get(&(file_id, item)) {
+            return Ok(Arc::clone(used));
+        }
+        let module = context.module(file_id)?;
+        let terms = match &module.indexed.items[item].kind {
+            IndexedTypeItemKind::Data { constructors, .. }
+            | IndexedTypeItemKind::Newtype { constructors, .. } => constructors.clone(),
+            _ => vec![],
+        };
+        let mut used: Vec<bool> = vec![];
+        for term in terms {
+            let Some(signature) = module.checked.lookup_term_item_type(term) else { continue };
+            let (_, mut current) = context.types.peel_quantifiers(signature);
+            let mut fields = vec![];
+            while let Some((field, result)) = context.types.function_parts(current) {
+                fields.push(field);
+                current = result;
+            }
+            let mut mentioned = vec![];
+            for field in fields {
+                context.types.rigid_names_outside(field, Some(current), &mut mentioned);
+            }
+            let (_, parameters) = context.types.spine(current);
+            used.resize(used.len().max(parameters.len()), false);
+            for (position, parameter) in parameters.iter().enumerate() {
+                if let Type::Rigid(name, _, _) = context.types.lookup(*parameter)
+                    && mentioned.contains(name)
+                {
+                    used[position] = true;
+                }
+            }
+        }
+        let used: Arc<[bool]> = Arc::from(used);
+        self.used_parameters.insert((file_id, item), Arc::clone(&used));
+        Ok(used)
+    }
 }
 
 const EQUALITY_UNWRAP_LIMIT: usize = 8;
@@ -1109,6 +1195,19 @@ where
                 }
                 return Ok(erased);
             }
+            if erase
+                && !arguments.is_empty()
+                && ignores_arguments(&module.name, module.indexed.items[item].name.as_deref())
+            {
+                let empty = checking::core::RowType { fields: Arc::from([]), tail: None };
+                let empty = context.queries.intern_row_type(empty);
+                let empty = context.queries.intern_type(Type::Row(empty));
+                let mut rebuilt = head;
+                for _ in arguments {
+                    rebuilt = context.queries.intern_type(Type::Application(rebuilt, empty));
+                }
+                return Ok(rebuilt);
+            }
             if module.name == "Prim"
                 && module.indexed.items[item].name.as_deref() == Some("Function")
                 && let [argument, result] = arguments[..]
@@ -1132,6 +1231,13 @@ where
         },
         _ => Ok(type_id),
     }
+}
+
+fn ignores_arguments(module: &str, name: Option<&str>) -> bool {
+    matches!(
+        (module, name),
+        ("Data.Variant", Some("Variant")) | ("Data.Functor.Variant", Some("VariantF"))
+    )
 }
 
 fn regular_occurrences<Q>(

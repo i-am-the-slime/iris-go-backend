@@ -1,5 +1,6 @@
 ---
 source: tests-integration/src/fixtures.rs
+assertion_line: 570
 ---
 // Control/Category/category.go
 package category
@@ -20,7 +21,6 @@ import (
 type Instruction struct {
 	Store1 any
 	Load   func(int32) any
-	Origin any
 	Store0 int32
 	Tag    uint8
 }
@@ -256,9 +256,9 @@ func convert6(value InstructionInt) InstructionVal {
 func convert7(value InstructionVal) *Instruction {
 	switch value.Tag {
 	case InstructionValStore:
-		return &Instruction{Tag: InstructionStore, Store0: value.Store0, Store1: value.Store1, Origin: value}
+		return &Instruction{Tag: InstructionStore, Store0: value.Store0, Store1: value.Store1}
 	default: // InstructionValLoad
-		return &Instruction{Tag: InstructionLoad, Load: value.Load, Origin: value}
+		return &Instruction{Tag: InstructionLoad, Load: value.Load}
 	}
 }
 
@@ -275,9 +275,6 @@ const (
 )
 
 func convert8(value *FreeCommand) FreeCommandVal {
-	if original, ok := value.Origin.(FreeCommandVal); ok {
-		return original
-	}
 	switch value.Tag {
 	case FreeCommandPure:
 		return FreeCommandVal{Tag: FreeCommandValPure, Pure: value.Pure}

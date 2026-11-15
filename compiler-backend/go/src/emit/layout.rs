@@ -161,8 +161,7 @@ where
                 return Err(GoError::Unsupported { definition: "code generation".into(), state });
             }
         };
-        let erases_arguments =
-            data.arguments.iter().any(|&argument| self.context.types.contains_erased(argument));
+        let erases_arguments = self.erases_arguments(data)?;
         let shape = if erases_arguments || self.contains_itself(data)? {
             None
         } else if constructors.iter().all(|constructor| constructor.fields.is_empty()) {

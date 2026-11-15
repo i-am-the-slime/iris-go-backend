@@ -34,6 +34,7 @@ pub struct SchemeInstantiations {
     known: FxHashMap<SchemeKey, Vec<SchemeInstantiation>>,
     rank_n: FxHashMap<SchemeKey, String>,
     erased_owners: rustc_hash::FxHashSet<String>,
+    coerced_sources: FxHashMap<SchemeKey, Vec<SchemeKey>>,
 }
 
 impl SchemeInstantiations {
@@ -73,6 +74,19 @@ impl SchemeInstantiations {
 
     pub fn insert(&mut self, key: SchemeKey, instantiation: SchemeInstantiation) {
         self.known.entry(key).or_default().push(instantiation);
+    }
+
+    pub fn link_coercion(&mut self, source: SchemeKey, target: SchemeKey) -> bool {
+        let sources = self.coerced_sources.entry(target).or_default();
+        if sources.contains(&source) {
+            return false;
+        }
+        sources.push(source);
+        true
+    }
+
+    pub fn coerced_sources(&self, target: &SchemeKey) -> &[SchemeKey] {
+        self.coerced_sources.get(target).map_or(&[], Vec::as_slice)
     }
 }
 

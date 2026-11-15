@@ -1,0 +1,141 @@
+---
+source: tests-integration/src/fixtures.rs
+assertion_line: 570
+---
+// main.go
+package main
+
+import (
+	"fmt"
+	"github.com/i-am-the-slime/purs-backend-go/go-support/prim"
+)
+
+type StepInt struct {
+	More func(struct{}) StepInt
+	Stop string
+	Done int32
+	Tag  uint8
+}
+
+const (
+	StepIntMore = iota
+	StepIntStop
+	StepIntDone
+)
+
+type FailureParse struct {
+	Failure string
+}
+
+type MParseInt struct {
+	StepInt func(int32, func(func(struct{}) StepInt) StepInt, func(FailureParse) StepInt, func(int32) StepInt) StepInt
+}
+
+type FailureEmpty struct {
+	Failure string
+}
+
+type MEmptyInt struct {
+	StepInt func(int32, func(func(struct{}) StepInt) StepInt, func(FailureEmpty) StepInt, func(int32) StepInt) StepInt
+}
+
+func convert(value FailureEmpty) FailureParse {
+	return FailureParse{Failure: value.Failure}
+}
+
+func convert2(value MEmptyInt) MParseInt {
+	return MParseInt{StepInt: func(coerced int32, coerced2 func(func(struct{}) StepInt) StepInt, coerced3 func(FailureParse) StepInt, coerced5 func(int32) StepInt) StepInt {
+		return value.StepInt(coerced, coerced2, func(coerced4 FailureEmpty) StepInt {
+			return coerced3(convert(coerced4))
+		}, coerced5)
+	}}
+}
+
+var main_ = initializeMain_()
+
+func initializeMain_() []int32 {
+	scrutinee := mainGo(loop(30, 0).StepInt(0, func(value0 func(struct{}) StepInt) StepInt {
+		return StepInt{Tag: StepIntMore, More: value0}
+	}, func(argument0 FailureParse) StepInt {
+		return StepInt{Tag: StepIntStop, Stop: argument0.Failure}
+	}, func(value02 int32) StepInt {
+		return StepInt{Tag: StepIntDone, Done: value02}
+	}))
+	var result int32
+	switch scrutinee.Tag {
+	case StepIntDone:
+		result = scrutinee.Done
+	case StepIntStop:
+		result = -1
+	default: // StepIntMore
+		result = -2
+	}
+	return []int32{result}
+}
+
+func loop(i int32, total int32) MParseInt {
+	if i <= 0 {
+		return MParseInt{StepInt: func(_ int32, _ func(func(struct{}) StepInt) StepInt, _ func(FailureParse) StepInt, done func(int32) StepInt) StepInt {
+			return done(total)
+		}}
+	}
+	return MParseInt{StepInt: func(env int32, more func(func(struct{}) StepInt) StepInt, failure func(FailureParse) StepInt, done2 func(int32) StepInt) StepInt {
+		return more(func(_ struct{}) StepInt {
+			return askParse.StepInt(env + i, more, failure, func(a int32) StepInt {
+				argument0 := convert2(countdown(prim.IntMod(i, 3)))
+				return more(func(_ struct{}) StepInt {
+					return more(func(_ struct{}) StepInt {
+						return argument0.StepInt(env, more, failure, func(a2 int32) StepInt {
+							n := loop(i - 1, prim.IntMod(total + a + a2, 1000003))
+							return more(func(_ struct{}) StepInt {
+								return n.StepInt(env, more, failure, done2)
+							})
+						})
+					})
+				})
+			})
+		})
+	}}
+}
+
+var askParse MParseInt = MParseInt{StepInt: func(env int32, _ func(func(struct{}) StepInt) StepInt, _ func(FailureParse) StepInt, done func(int32) StepInt) StepInt {
+	return done(env)
+}}
+
+func countdown(n int32) MEmptyInt {
+	if n <= 0 {
+		return askEmpty
+	}
+	return MEmptyInt{StepInt: func(env int32, more func(func(struct{}) StepInt) StepInt, failure func(FailureEmpty) StepInt, done func(int32) StepInt) StepInt {
+		return more(func(_ struct{}) StepInt {
+			return askEmpty.StepInt(env, more, failure, func(_ int32) StepInt {
+				n2 := countdown(n - 1)
+				return more(func(_ struct{}) StepInt {
+					return n2.StepInt(env, more, failure, done)
+				})
+			})
+		})
+	}}
+}
+
+var askEmpty MEmptyInt = MEmptyInt{StepInt: func(env int32, _ func(func(struct{}) StepInt) StepInt, _ func(FailureEmpty) StepInt, done func(int32) StepInt) StepInt {
+	return done(env)
+}}
+
+func mainGo(value StepInt) StepInt {
+	for {
+		switch value.Tag {
+		case StepIntMore:
+			next := value.More
+			value = next(struct{}{})
+			continue
+		default:
+			step := value
+			return step
+		}
+	}
+}
+
+func main() {
+	fmt.Println(main_)
+}

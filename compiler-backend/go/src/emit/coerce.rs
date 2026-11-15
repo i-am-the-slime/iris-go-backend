@@ -1,3 +1,5 @@
+use rustc_hash::FxHashSet;
+
 use super::packages::Spelling;
 use super::{
     DataKind, Emitter, binary, call, field, field_name, identifier_expression, is_simple,
@@ -388,21 +390,18 @@ where
                 // Records of one row differ only in their fields' representations. Rows that
                 // differ arise from a rank-N value whose instantiations at one type were never
                 // requested before an `unsafeCoerce` to another (Yoga.Om's `expandErr`).
-                let same_labels = from_fields.len() == to_fields.len()
-                    && from_fields
-                        .iter()
-                        .zip(to_fields.iter())
-                        .all(|(from, to)| from.label == to.label);
-                if !same_labels {
-                    return Err(GoError::Unsupported {
-                        definition: "code generation".into(),
-                        state: crate::error::UnsupportedState::Construct {
-                            construct: "a coercion between records with different fields (a rank-N value coerced to another instantiation)",
-                        },
-                    });
-                }
                 let mut fields = vec![];
-                for (from_field, to_field) in from_fields.iter().zip(to_fields.iter()) {
+                for to_field in to_fields.iter() {
+                    let Some(from_field) =
+                        from_fields.iter().find(|from_field| from_field.label == to_field.label)
+                    else {
+                        return Err(GoError::Unsupported {
+                            definition: "code generation".into(),
+                            state: crate::error::UnsupportedState::Construct {
+                                construct: "a coercion between records with different fields (a rank-N value coerced to another instantiation)",
+                            },
+                        });
+                    };
                     let label = field_name(&to_field.label);
                     let field_value = field(value.clone(), &label);
                     let converted = self.coerce(
@@ -419,7 +418,11 @@ where
                 })));
             }
             (Monotype::Data(from_data), Monotype::Data(to_data)) => {
-                self.convert_data(&from_data, &to_data, value, &mut body)?;
+                let round_trip = self.convert_data(&from_data, &to_data, value, &mut body)?;
+                if let Some(mut round_trip) = round_trip {
+                    round_trip.converter = self.type_declarations.len();
+                    self.round_trips.push(round_trip);
+                }
             }
             _ => unreachable!("invariant violated: converter requested for non-composite types"),
         }
@@ -438,7 +441,7 @@ where
         to: &DataType,
         value: GoExpression,
         body: &mut Vec<GoStatement>,
-    ) -> GoResult<()> {
+    ) -> GoResult<Option<RoundTrip>> {
         let from_layout = self.data_layout(from)?;
         let to_layout = self.data_layout(to)?;
         if from_layout.kind == DataKind::Enumeration {
@@ -447,12 +450,12 @@ where
                 type_,
                 value: Box::new(value),
             })));
-            return Ok(());
+            return Ok(None);
         }
         // A typed value converted to an erased layout and back is the original.
         let from_remembers = self.remember_origin(from)?;
         let to_remembers = self.remember_origin(to)?;
-        if from_remembers && !to_remembers {
+        if from_remembers {
             let type_ = to_layout.go_type();
             let origin = field(value.clone(), "Origin");
             body.push(GoStatement::IfAssert {
@@ -462,11 +465,7 @@ where
                 then: vec![GoStatement::Return(Some(identifier_expression("original")))],
             });
         }
-        let origin = match (from_remembers, to_remembers) {
-            (false, true) => Some(value.clone()),
-            (true, true) => Some(field(value.clone(), "Origin")),
-            _ => None,
-        };
+        let origin = to_remembers.then(|| value.clone());
         let mut cases = vec![];
         for (constructor, (from_constructor, to_constructor)) in
             from_layout.constructors.iter().zip(to_layout.constructors.iter()).enumerate()
@@ -500,12 +499,19 @@ where
                 body: statements,
             });
         }
+        let round_trip = (from_remembers || to_remembers).then(|| RoundTrip {
+            converter: 0,
+            from: from_layout.name.clone(),
+            to: to_layout.name.clone(),
+            checks: from_remembers,
+            remembers: to_remembers.then_some(to_layout.declaration).flatten(),
+        });
         if from_layout.kind == DataKind::Product {
             let [case] = &mut cases[..] else {
                 unreachable!("invariant violated: product data has one constructor")
             };
             body.append(&mut case.body);
-            return Ok(());
+            return Ok(round_trip);
         }
         let default = GoDefault::covering(&mut cases);
         body.push(GoStatement::Switch {
@@ -513,6 +519,74 @@ where
             cases,
             default: Some(default),
         });
-        Ok(())
+        Ok(round_trip)
+    }
+
+    pub(super) fn settle_round_trips(&mut self) {
+        let round_trips = std::mem::take(&mut self.round_trips);
+        let converted: FxHashSet<(&str, &str)> = round_trips
+            .iter()
+            .map(|round_trip| (round_trip.from.as_str(), round_trip.to.as_str()))
+            .collect();
+        let mut remembering = FxHashSet::default();
+        let mut filled = FxHashSet::default();
+        for round_trip in &round_trips {
+            remembering.extend(round_trip.remembers);
+            if converted.contains(&(round_trip.to.as_str(), round_trip.from.as_str())) {
+                filled.extend(round_trip.remembers);
+                continue;
+            }
+            let GoDeclaration::Function { body, .. } =
+                &mut self.type_declarations[round_trip.converter]
+            else {
+                unreachable!("invariant violated: a round trip names its converter")
+            };
+            if round_trip.checks {
+                body.remove(0);
+            }
+            if round_trip.remembers.is_some() {
+                forget_origins(body);
+            }
+        }
+        for position in remembering.difference(&filled) {
+            if let GoDeclaration::Type { type_: GoType::Struct(fields), .. } =
+                &mut self.type_declarations[*position]
+            {
+                fields.retain(|(name, _)| name != "Origin");
+            }
+        }
+    }
+}
+
+pub(super) struct RoundTrip {
+    converter: usize,
+    from: String,
+    to: String,
+    checks: bool,
+    remembers: Option<usize>,
+}
+
+fn forget_origins(statements: &mut [GoStatement]) {
+    for statement in statements {
+        match statement {
+            GoStatement::Return(Some(returned)) => {
+                let composite = match returned {
+                    GoExpression::Address(composite) => composite.as_mut(),
+                    composite => composite,
+                };
+                if let GoExpression::Composite { fields, .. } = composite {
+                    fields.retain(|(name, _)| name.as_deref() != Some("Origin"));
+                }
+            }
+            GoStatement::Switch { cases, default, .. } => {
+                for case in cases {
+                    forget_origins(&mut case.body);
+                }
+                if let Some(default) = default {
+                    forget_origins(&mut default.body);
+                }
+            }
+            _ => {}
+        }
     }
 }
