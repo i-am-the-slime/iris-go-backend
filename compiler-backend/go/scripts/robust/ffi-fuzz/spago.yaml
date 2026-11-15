@@ -1,0 +1,26 @@
+package:
+  name: ffi-fuzz
+  dependencies:
+    - argonaut-core
+    - arrays
+    - console
+    - effect
+    - enums
+    - foldable-traversable
+    - foreign-object
+    - integers
+    - lists
+    - maybe
+    - numbers
+    - ordered-collections
+    - partial
+    - prelude
+    - st
+    - strings
+    - tuples
+    - unfoldable
+    - unsafe-coerce
+    - yoga-json
+workspace:
+  packageSet:
+    registry: 75.9.1
