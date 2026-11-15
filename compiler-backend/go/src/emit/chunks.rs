@@ -26,7 +26,9 @@
 
 use rustc_hash::{FxHashMap, FxHashSet};
 
-use crate::syntax::{GoDeclaration, GoExpression, GoStatement, GoType};
+use crate::syntax::{GoDeclaration, GoExpression, GoStatement, GoType, Name};
+
+use super::walk::{self, Walk};
 
 /// Rewrites the linked cells of every loop, and tells whether it rewrote any.
 /// `taken` tells which names a new local must not shadow.
@@ -38,17 +40,11 @@ pub fn allocate_linked_cells_in_chunks(
     for declaration in declarations {
         let mut names = FxHashSet::default();
         declaration.for_each_name_mut(&mut |name| {
-            let (crate::syntax::Name::Reference(name)
-            | crate::syntax::Name::Written(name)
-            | crate::syntax::Name::Binder(name)) = name;
+            let (Name::Reference(name) | Name::Written(name) | Name::Binder(name)) = name;
             names.insert(name.clone());
         });
         let mut function = Function { names, taken, chunked: false };
-        match declaration {
-            GoDeclaration::Function { body, .. } => function.body(body),
-            GoDeclaration::Variable { value, .. } => function.literals(value),
-            _ => {}
-        }
+        walk::declaration(&mut function, declaration);
         chunked |= function.chunked;
     }
     chunked
@@ -110,9 +106,9 @@ impl Scope {
     }
 }
 
-impl Function<'_> {
+impl Walk for Function<'_> {
     /// A function body: each outermost loop gets the chunks its cells need.
-    fn body(&mut self, body: &mut Vec<GoStatement>) {
+    fn block(&mut self, body: &mut Vec<GoStatement>) {
         let mut rewritten = Vec::with_capacity(body.len());
         for mut statement in std::mem::take(body) {
             let mut chunks = Chunks::new();
@@ -121,31 +117,7 @@ impl Function<'_> {
                 | GoStatement::Range { .. }
                 | GoStatement::Counting { .. }
                 | GoStatement::CountingDown { .. } => self.loop_(&mut statement, &mut chunks),
-                GoStatement::If { condition, then, otherwise } => {
-                    self.literals(condition);
-                    self.body(then);
-                    self.body(otherwise);
-                }
-                GoStatement::Switch { value, cases, default } => {
-                    if let Some(value) = value {
-                        self.literals(value);
-                    }
-                    for case in cases {
-                        case.values.iter_mut().for_each(|value| self.literals(value));
-                        self.body(&mut case.body);
-                    }
-                    if let Some(default) = default {
-                        self.body(&mut default.body);
-                    }
-                }
-                GoStatement::IfAssert { value, then, .. } => {
-                    self.literals(value);
-                    self.body(then);
-                }
-                GoStatement::LabeledLoop { body: inner, .. } | GoStatement::Block(inner) => {
-                    self.body(inner)
-                }
-                statement => statement_expressions(statement, &mut |value| self.literals(value)),
+                statement => self.statement(statement),
             }
             for (type_, name) in chunks {
                 let type_ = GoType::Generic { name: "alloc.Cells".into(), arguments: vec![type_] };
@@ -155,14 +127,16 @@ impl Function<'_> {
         }
         *body = rewritten;
     }
+}
 
+impl Function<'_> {
     /// A loop, whose body starts a scope of its own.
     fn loop_(&mut self, statement: &mut GoStatement, chunks: &mut Chunks) {
         let mut scope = Scope::default();
         match statement {
             GoStatement::Loop(body) => self.loop_body(body, &mut scope, chunks),
             GoStatement::Range { index, element, iterable, body } => {
-                self.literals(iterable);
+                self.expression(iterable);
                 if let Some(index) = index {
                     scope.declare(index, None);
                 }
@@ -170,13 +144,13 @@ impl Function<'_> {
                 self.loop_body(body, &mut scope, chunks);
             }
             GoStatement::Counting { variable, start, end, body } => {
-                self.literals(start);
-                self.literals(end);
+                self.expression(start);
+                self.expression(end);
                 scope.declare(variable, None);
                 self.loop_body(body, &mut scope, chunks);
             }
             GoStatement::CountingDown { variable, start, body } => {
-                self.literals(start);
+                self.expression(start);
                 scope.declare(variable, None);
                 self.loop_body(body, &mut scope, chunks);
             }
@@ -188,7 +162,7 @@ impl Function<'_> {
         for statement in body {
             match statement {
                 GoStatement::Define { names, values } => {
-                    values.iter_mut().for_each(|value| self.literals(value));
+                    values.iter_mut().for_each(|value| self.expression(value));
                     for (index, name) in names.iter().enumerate() {
                         let value = (names.len() == values.len()).then(|| &values[index]);
                         scope.declare(name, value);
@@ -196,7 +170,7 @@ impl Function<'_> {
                 }
                 GoStatement::Variable { name, value, .. } => {
                     if let Some(value) = value {
-                        self.literals(value);
+                        self.expression(value);
                     }
                     scope.declare(name, value.as_ref());
                 }
@@ -209,23 +183,23 @@ impl Function<'_> {
                                 self.carried(value, variable, scope, chunks)
                             }
                             target => {
-                                self.literals(target);
-                                self.literals(value);
+                                self.expression(target);
+                                self.expression(value);
                             }
                         }
                     }
                 }
                 GoStatement::If { condition, then, otherwise } => {
-                    self.literals(condition);
+                    self.expression(condition);
                     self.loop_body(then, scope, chunks);
                     self.loop_body(otherwise, scope, chunks);
                 }
                 GoStatement::Switch { value, cases, default } => {
                     if let Some(value) = value {
-                        self.literals(value);
+                        self.expression(value);
                     }
                     for case in cases {
-                        case.values.iter_mut().for_each(|value| self.literals(value));
+                        case.values.iter_mut().for_each(|value| self.expression(value));
                         self.loop_body(&mut case.body, scope, chunks);
                     }
                     if let Some(default) = default {
@@ -233,7 +207,7 @@ impl Function<'_> {
                     }
                 }
                 GoStatement::IfAssert { name, value, then, .. } => {
-                    self.literals(value);
+                    self.expression(value);
                     scope.declare(name, None);
                     self.loop_body(then, scope, chunks);
                 }
@@ -244,7 +218,7 @@ impl Function<'_> {
                 | GoStatement::Range { .. }
                 | GoStatement::Counting { .. }
                 | GoStatement::CountingDown { .. } => self.loop_(statement, chunks),
-                statement => statement_expressions(statement, &mut |value| self.literals(value)),
+                statement => self.statement(statement),
             }
         }
     }
@@ -266,7 +240,7 @@ impl Function<'_> {
             GoExpression::Composite { fields, .. } => fields
                 .iter_mut()
                 .for_each(|(_, field)| self.carried(field, variable, scope, chunks)),
-            value => self.literals(value),
+            value => self.expression(value),
         }
     }
 
@@ -275,10 +249,10 @@ impl Function<'_> {
         match value {
             GoExpression::Address(composite) => {
                 let GoExpression::Composite { type_, fields } = composite.as_mut() else {
-                    return self.literals(value);
+                    return self.expression(value);
                 };
                 if !matches!(type_, GoType::Named(_) | GoType::Generic { .. }) {
-                    return self.literals(value);
+                    return self.expression(value);
                 }
                 fields.iter_mut().for_each(|(_, field)| self.chunked_cells(field, chunks));
                 let chunk = self.chunk(type_, chunks);
@@ -293,7 +267,7 @@ impl Function<'_> {
             GoExpression::Composite { fields, .. } => {
                 fields.iter_mut().for_each(|(_, field)| self.chunked_cells(field, chunks))
             }
-            value => self.literals(value),
+            value => self.expression(value),
         }
     }
 
@@ -312,61 +286,6 @@ impl Function<'_> {
         self.names.insert(name.clone());
         chunks.push((type_.clone(), name.clone()));
         name
-    }
-
-    /// The function literals inside an expression, each a function body.
-    fn literals(&mut self, value: &mut GoExpression) {
-        match value {
-            GoExpression::Function { body, .. } => self.body(body),
-            GoExpression::Call { function, arguments } => {
-                self.literals(function);
-                arguments.iter_mut().for_each(|argument| self.literals(argument));
-            }
-            GoExpression::Binary { left, right, .. } => {
-                self.literals(left);
-                self.literals(right);
-            }
-            GoExpression::Index { value, index } => {
-                self.literals(value);
-                self.literals(index);
-            }
-            GoExpression::Unary { operand: value, .. }
-            | GoExpression::Field { value, .. }
-            | GoExpression::Address(value)
-            | GoExpression::Conversion { value, .. }
-            | GoExpression::TypeAssertion { value, .. }
-            | GoExpression::Spread(value)
-            | GoExpression::Instantiation { function: value, .. } => self.literals(value),
-            GoExpression::Composite { fields, .. } => {
-                fields.iter_mut().for_each(|(_, field)| self.literals(field))
-            }
-            GoExpression::Identifier(_)
-            | GoExpression::Qualified { .. }
-            | GoExpression::Integer(_)
-            | GoExpression::Float(_)
-            | GoExpression::String(_)
-            | GoExpression::Rune(_)
-            | GoExpression::Boolean(_)
-            | GoExpression::Type(_) => {}
-        }
-    }
-}
-
-/// The expressions of a statement that holds no statements.
-fn statement_expressions(statement: &mut GoStatement, visit: &mut dyn FnMut(&mut GoExpression)) {
-    match statement {
-        GoStatement::Define { values, .. } => values.iter_mut().for_each(visit),
-        GoStatement::Variable { value, .. } | GoStatement::Return(value) => {
-            if let Some(value) = value {
-                visit(value);
-            }
-        }
-        GoStatement::Assign { targets, values } => {
-            targets.iter_mut().for_each(&mut *visit);
-            values.iter_mut().for_each(visit);
-        }
-        GoStatement::Expression(value) | GoStatement::Defer(value) => visit(value),
-        _ => {}
     }
 }
 
