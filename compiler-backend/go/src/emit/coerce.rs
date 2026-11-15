@@ -30,11 +30,11 @@ where
             return Ok(value);
         }
         match (self.monotypes.get(from).clone(), self.monotypes.get(to).clone()) {
-            (Monotype::Recursive(data), _) => {
+            (Monotype::Recursive(data), _) if !self.is_uninhabited(&data)? => {
                 let unfolded = self.unfold(&data)?;
                 self.coerce(value, unfolded, to, out)
             }
-            (_, Monotype::Recursive(data)) => {
+            (_, Monotype::Recursive(data)) if !self.is_uninhabited(&data)? => {
                 let unfolded = self.unfold(&data)?;
                 self.coerce(value, from, unfolded, out)
             }
@@ -236,6 +236,14 @@ where
         let record =
             self.go_function(GoFunction { package: GoPackage::Direct, name: "ForeignRecord" });
         Ok(call(record, vec![keys, values]))
+    }
+
+    /// Whether a recursive newtype unfolds through newtypes alone back to
+    /// itself, as `Data.Void` does. Unfolding it never reaches another
+    /// representation, so a coercion stops at its named empty struct.
+    fn is_uninhabited(&mut self, data: &DataType) -> GoResult<bool> {
+        let unfolded = self.unfold(data)?;
+        self.unfolds_only_to_newtypes(data, unfolded)
     }
 
     fn canonical(&mut self, monotype: MonotypeId) -> MonotypeId {
