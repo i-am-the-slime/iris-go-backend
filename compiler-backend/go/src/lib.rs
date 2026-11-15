@@ -5,13 +5,14 @@
 //! as one Go package per PureScript module, the entry module's being `main`.
 
 mod arity;
-pub mod blocker;
+mod blocker;
 mod context;
 mod dictionary;
 mod emit;
-pub mod erasure;
-pub mod error;
+mod erasure;
+mod error;
 mod foreign;
+mod graph;
 mod lift;
 mod merge;
 mod modules;

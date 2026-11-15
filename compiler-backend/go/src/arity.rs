@@ -1,11 +1,12 @@
 use rustc_hash::{FxHashMap, FxHashSet};
 
 use crate::foreign::{Foreign, Spelled};
+use crate::graph::{on_cycles, strongly_connected};
 use crate::mono::{Expression, ExpressionKind, Function, FunctionId, Program};
 use crate::monotype::{Monotype, MonotypeId, Monotypes};
 use crate::simplify::{
-    KnownFunctions, does_no_work, for_each_child, function_references,
-    strongly_connected_components,
+    KnownFunctions, does_no_work, for_each_child,
+    reference_graph,
 };
 
 const ROUNDS: usize = 16;
@@ -121,16 +122,8 @@ struct Known<'p> {
 
 impl<'p> Known<'p> {
     fn new(program: &'p Program) -> Known<'p> {
-        let references: Vec<FxHashSet<FunctionId>> =
-            program.functions.iter().map(|function| function_references(&function.body)).collect();
-        let mut recursive = vec![false; program.functions.len()];
-        for component in strongly_connected_components(&references) {
-            let cyclic =
-                component.len() > 1 || references[component[0].0 as usize].contains(&component[0]);
-            for function in component {
-                recursive[function.0 as usize] = cyclic;
-            }
-        }
+        let references = reference_graph(&program.functions);
+        let recursive = on_cycles(&references, &strongly_connected(&references));
         Known { program, recursive }
     }
 

@@ -3,9 +3,10 @@
 //! members and foreign imports); inlining them exposes the effect primitives and
 //! operators that code generation turns into plain Go.
 
-use rustc_hash::{FxHashMap, FxHashSet};
+use rustc_hash::FxHashMap;
 
 use crate::foreign::{Comparison, Foreign, Operator};
+use crate::graph::{on_cycles, strongly_connected};
 use crate::mono::{
     Alternative, Binding, Expression, ExpressionKind, Function, FunctionId, Guard, Guarded,
     GuardedBranch, Literal, Local, LocalId, PATTERN_MATCH_FAILURE, Pattern, PatternKind, Program,
@@ -26,18 +27,9 @@ const INLINE_FUEL: usize = 2_000;
 
 pub fn simplify(program: Program, monotypes: &mut Monotypes, next_local: u32) -> Program {
     let Program { functions, entry } = program;
-    let references: Vec<FxHashSet<FunctionId>> =
-        functions.iter().map(|function| function_references(&function.body)).collect();
-    let components = strongly_connected_components(&references);
-    let mut recursive = vec![false; functions.len()];
-    for component in &components {
-        let is_recursive =
-            component.len() > 1 || references[component[0].0 as usize].contains(&component[0]);
-        for function in component {
-            recursive[function.0 as usize] = is_recursive;
-        }
-    }
-
+    let references = reference_graph(&functions);
+    let components = strongly_connected(&references);
+    let recursive = on_cycles(&references, &components);
     let mut uses = vec![0usize; functions.len()];
     for function in &functions {
         visit(&function.body, &mut |node| {
@@ -61,15 +53,15 @@ pub fn simplify(program: Program, monotypes: &mut Monotypes, next_local: u32) ->
     };
     for component in &components {
         for &function in component {
-            let mut current = simplifier.functions[function.0 as usize]
+            let mut current = simplifier.functions[function]
                 .take()
                 .expect("invariant violated: function simplified twice");
             simplifier.fuel = INLINE_FUEL;
             current = simplifier.eta_expand(current);
             current.body = simplifier.expression(current.body);
             current = simplifier.absorb_lambdas(current);
-            simplifier.sizes[function.0 as usize] = size(&current.body);
-            simplifier.functions[function.0 as usize] = Some(current);
+            simplifier.sizes[function] = size(&current.body);
+            simplifier.functions[function] = Some(current);
         }
     }
     simplifier.records_settled = true;
@@ -110,9 +102,7 @@ struct Simplifier<'m> {
 
 impl Simplifier<'_> {
     fn fresh(&mut self, local: &Local) -> Local {
-        let id = LocalId(self.next_local);
-        self.next_local += 1;
-        Local { id, name: local.name.clone(), monotype: local.monotype }
+        Local::fresh(&mut self.next_local, local.name.clone(), local.monotype)
     }
 
     fn inlinable(&self, id: FunctionId) -> Option<&Function> {
@@ -163,12 +153,7 @@ impl Simplifier<'_> {
             parameters.push(self.fresh(&template));
             result = inner;
         }
-        let arguments = parameters
-            .iter()
-            .map(|parameter| {
-                Expression::new(ExpressionKind::Local(parameter.id), parameter.monotype)
-            })
-            .collect();
+        let arguments = parameters.iter().map(Local::expression).collect();
         function.body = Expression::new(
             ExpressionKind::Apply { function: Box::new(function.body), arguments },
             result,
@@ -237,7 +222,7 @@ impl Simplifier<'_> {
                 unreachable!("invariant violated: only chosen lambdas take the parameter")
             };
             let first = parameters.remove(0);
-            let body = substitute(*body, first.id, &local_expression(parameter));
+            let body = substitute(*body, first.id, &parameter.expression());
             if parameters.is_empty() {
                 return body;
             }
@@ -310,7 +295,7 @@ impl Simplifier<'_> {
                 let name = self.monotypes.value_name(argument.monotype);
                 let template = Local { id: LocalId(0), name, monotype: argument.monotype };
                 let local = self.fresh(&template);
-                let reference = local_expression(&local);
+                let reference = local.expression();
                 bindings.push(Binding { local, value: argument });
                 reference
             })
@@ -500,10 +485,6 @@ impl Simplifier<'_> {
                 element,
                 body: Box::new(self.expression(*body)),
             },
-            ExpressionKind::EffectWhen { condition, action } => ExpressionKind::EffectWhen {
-                condition: Box::new(self.expression(*condition)),
-                action: Box::new(self.expression(*action)),
-            },
         };
         Expression::new(kind, monotype)
     }
@@ -542,7 +523,7 @@ impl Simplifier<'_> {
                 if let ColumnOutcome::Matches = outcome {
                     for (local, field) in pattern_variables(&pattern) {
                         let value = match field {
-                            Some(position) => local_expression(&fields[position]),
+                            Some(position) => fields[position].expression(),
                             None => match &scrutinee.kind {
                                 ExpressionKind::Construct { data, constructor, .. }
                                     if !fields.is_empty() =>
@@ -550,11 +531,11 @@ impl Simplifier<'_> {
                                     let kind = ExpressionKind::Construct {
                                         data: data.clone(),
                                         constructor: *constructor,
-                                        arguments: fields.iter().map(local_expression).collect(),
+                                        arguments: fields.iter().map(Local::expression).collect(),
                                     };
                                     Expression::new(kind, scrutinee.monotype)
                                 }
-                                _ => local_expression(&whole),
+                                _ => whole.expression(),
                             },
                         };
                         substitute_guarded(&mut alternative.body, local, &value);
@@ -966,7 +947,7 @@ impl Simplifier<'_> {
         let template =
             Local { id: LocalId(0), name: SmolStr::new_static(name), monotype: operand.monotype };
         let local = self.fresh(&template);
-        let reference = local_expression(&local);
+        let reference = local.expression();
         bindings.push(Binding { local, value: operand });
         reference
     }
@@ -1050,11 +1031,7 @@ impl Simplifier<'_> {
         fresh
     }
 
-    fn rename(
-        &mut self,
-        expression: &mut Expression,
-        renaming: &mut FxHashMap<LocalId, LocalId>,
-    ) {
+    fn rename(&mut self, expression: &mut Expression, renaming: &mut FxHashMap<LocalId, LocalId>) {
         match &mut expression.kind {
             ExpressionKind::Local(id) => *id = renaming.get(id).copied().unwrap_or(*id),
             ExpressionKind::Lambda { parameters, body } => {
@@ -1095,7 +1072,11 @@ impl Simplifier<'_> {
         }
     }
 
-    fn rename_guarded(&mut self, guarded: &mut Guarded, renaming: &mut FxHashMap<LocalId, LocalId>) {
+    fn rename_guarded(
+        &mut self,
+        guarded: &mut Guarded,
+        renaming: &mut FxHashMap<LocalId, LocalId>,
+    ) {
         match guarded {
             Guarded::Unconditional(body) => self.rename(body, renaming),
             Guarded::Guards(branches) => {
@@ -1115,41 +1096,18 @@ impl Simplifier<'_> {
         }
     }
 
-    fn rename_binders(
-        &mut self,
-        locals: &mut [Local],
-        renaming: &mut FxHashMap<LocalId, LocalId>,
-    ) {
+    fn rename_binders(&mut self, locals: &mut [Local], renaming: &mut FxHashMap<LocalId, LocalId>) {
         for local in locals {
             *local = self.rename_binder(local, renaming);
         }
     }
 
-    fn rename_pattern(&mut self, pattern: &mut Pattern, renaming: &mut FxHashMap<LocalId, LocalId>) {
-        match &mut pattern.kind {
-            PatternKind::Variable(local) => *local = self.rename_binder(local, renaming),
-            PatternKind::Named { local, pattern } => {
-                *local = self.rename_binder(local, renaming);
-                self.rename_pattern(pattern, renaming);
-            }
-            PatternKind::Array(patterns) => {
-                for pattern in patterns {
-                    self.rename_pattern(pattern, renaming);
-                }
-            }
-            PatternKind::Record(fields) => {
-                for (_, field) in fields {
-                    self.rename_pattern(field, renaming);
-                }
-            }
-            PatternKind::Constructor { arguments: patterns, .. }
-            | PatternKind::Closure { captures: patterns, .. } => {
-                for pattern in patterns {
-                    self.rename_pattern(pattern, renaming);
-                }
-            }
-            PatternKind::Wildcard | PatternKind::Literal(_) => {}
-        }
+    fn rename_pattern(
+        &mut self,
+        pattern: &mut Pattern,
+        renaming: &mut FxHashMap<LocalId, LocalId>,
+    ) {
+        pattern.for_each_local_mut(&mut |local| *local = self.rename_binder(local, renaming));
     }
 }
 
@@ -1201,10 +1159,7 @@ fn chosen_lambda_parameter(expression: &Expression) -> Option<&Local> {
                     }
                     Guarded::Guards(branches) => {
                         for branch in branches {
-                            let cheap = branch.guards.iter().all(|guard| match guard {
-                                Guard::Boolean(condition) => is_cheap(condition),
-                                Guard::Pattern { value, .. } => is_cheap(value),
-                            });
+                            let cheap = branch.guards.iter().all(|guard| is_cheap(guard.value()));
                             cheap.then_some(())?;
                             chosen = chosen.or(Some(chosen_lambda_parameter(&branch.body)?));
                         }
@@ -1352,22 +1307,13 @@ fn pattern_variables(pattern: &Pattern) -> Vec<(LocalId, Option<usize>)> {
     }
 }
 
-fn local_expression(local: &Local) -> Expression {
-    Expression::new(ExpressionKind::Local(local.id), local.monotype)
-}
-
 fn substitute_guarded(guarded: &mut Guarded, local: LocalId, value: &Expression) {
     match guarded {
         Guarded::Unconditional(body) => substitute_in_place(body, local, value),
         Guarded::Guards(branches) => {
             for branch in branches {
                 for guard in &mut branch.guards {
-                    match guard {
-                        Guard::Boolean(condition) => substitute_in_place(condition, local, value),
-                        Guard::Pattern { value: guarded_value, .. } => {
-                            substitute_in_place(guarded_value, local, value)
-                        }
-                    }
+                    substitute_in_place(guard.value_mut(), local, value);
                 }
                 substitute_in_place(&mut branch.body, local, value);
             }
@@ -1375,65 +1321,33 @@ fn substitute_guarded(guarded: &mut Guarded, local: LocalId, value: &Expression)
     }
 }
 
-/// The direct sub-expressions of node kinds that bind nothing.
-fn children_mut(expression: &mut Expression) -> Vec<&mut Expression> {
-    match &mut expression.kind {
-        ExpressionKind::Array(elements) => elements.iter_mut().collect(),
-        ExpressionKind::Record(fields) => fields.iter_mut().map(|(_, value)| value).collect(),
-        ExpressionKind::Access { record, .. } => vec![record],
-        ExpressionKind::Update { record, updates } => {
-            let mut children = vec![record.as_mut()];
-            update_children(updates, &mut children);
-            children
-        }
-        ExpressionKind::Construct { arguments, .. }
-        | ExpressionKind::Foreign { arguments, .. }
-        | ExpressionKind::Closure { captures: arguments, .. } => arguments.iter_mut().collect(),
-        ExpressionKind::Reuse { cell, arguments, .. } => {
-            let mut children: Vec<&mut Expression> = arguments.iter_mut().collect();
-            children.push(cell);
-            children
-        }
-        ExpressionKind::Apply { function, arguments } => {
-            let mut children = vec![function.as_mut()];
-            children.extend(arguments.iter_mut());
-            children
-        }
-        ExpressionKind::If { condition, then, otherwise } => vec![condition, then, otherwise],
-        ExpressionKind::EffectPure(value) | ExpressionKind::Coerce(value) => vec![value],
-        ExpressionKind::EffectWhen { condition, action } => vec![condition, action],
-        _ => vec![],
-    }
-}
-
 /// The guards and bodies of a case's alternatives.
-fn for_each_alternative_child<'e>(
+pub(crate) fn for_each_alternative_child<'e>(
     alternatives: &'e [Alternative],
     visitor: &mut impl FnMut(&'e Expression),
 ) {
     for alternative in alternatives {
-        match &alternative.body {
-            Guarded::Unconditional(body) => visitor(body),
-            Guarded::Guards(branches) => {
-                for branch in branches {
-                    for guard in &branch.guards {
-                        match guard {
-                            Guard::Boolean(condition) => visitor(condition),
-                            Guard::Pattern { value, .. } => visitor(value),
-                        }
-                    }
-                    visitor(&branch.body);
-                }
-            }
-        }
+        for_each_guarded_child(&alternative.body, visitor);
     }
 }
 
-fn update_children<'a>(updates: &'a mut [RecordUpdate], children: &mut Vec<&'a mut Expression>) {
-    for update in updates {
-        match update {
-            RecordUpdate::Leaf { value, .. } => children.push(value),
-            RecordUpdate::Branch { updates, .. } => update_children(updates, children),
+/// The guards and bodies of one alternative's right-hand side.
+pub(crate) fn for_each_guarded_child<'e>(
+    guarded: &'e Guarded,
+    visitor: &mut impl FnMut(&'e Expression),
+) {
+    match guarded {
+        Guarded::Unconditional(body) => visitor(body),
+        Guarded::Guards(branches) => {
+            for branch in branches {
+                for guard in &branch.guards {
+                    match guard {
+                        Guard::Boolean(condition) => visitor(condition),
+                        Guard::Pattern { value, .. } => visitor(value),
+                    }
+                }
+                visitor(&branch.body);
+            }
         }
     }
 }
@@ -1450,22 +1364,7 @@ fn binds_only(alternatives: &[Alternative]) -> bool {
 
 fn alternatives_size(alternatives: &[Alternative]) -> usize {
     let mut total = 0;
-    for alternative in alternatives {
-        match &alternative.body {
-            Guarded::Unconditional(body) => total += size(body),
-            Guarded::Guards(branches) => {
-                for branch in branches {
-                    total += size(&branch.body);
-                    for guard in &branch.guards {
-                        total += match guard {
-                            Guard::Boolean(condition) => size(condition),
-                            Guard::Pattern { value, .. } => size(value),
-                        };
-                    }
-                }
-            }
-        }
-    }
+    for_each_alternative_child(alternatives, &mut |child| total += size(child));
     total
 }
 
@@ -1492,9 +1391,6 @@ pub(crate) fn does_no_work(known: &impl KnownFunctions, expression: &Expression)
         | ExpressionKind::EffectPure(value)
         | ExpressionKind::EffectBind { action: value, .. }
         | ExpressionKind::EffectEach { array: value, .. } => does_no_work(known, value),
-        ExpressionKind::EffectWhen { condition, action } => {
-            does_no_work(known, condition) && does_no_work(known, action)
-        }
         ExpressionKind::Construct { arguments, .. } | ExpressionKind::Array(arguments) => {
             arguments.iter().all(|argument| does_no_work(known, argument))
         }
@@ -1635,35 +1531,13 @@ pub fn for_each_child<'e>(expression: &'e Expression, visitor: &mut impl FnMut(&
         }
         ExpressionKind::Case { scrutinees, alternatives } => {
             scrutinees.iter().for_each(&mut *visitor);
-            for alternative in alternatives {
-                match &alternative.body {
-                    Guarded::Unconditional(body) => visitor(body),
-                    Guarded::Guards(branches) => {
-                        for branch in branches {
-                            for guard in &branch.guards {
-                                match guard {
-                                    Guard::Boolean(condition) => visitor(condition),
-                                    Guard::Pattern { value, .. } => visitor(value),
-                                }
-                            }
-                            visitor(&branch.body);
-                        }
-                    }
-                }
-            }
+            for_each_alternative_child(alternatives, visitor);
         }
         ExpressionKind::EffectPure(value) | ExpressionKind::Coerce(value) => visitor(value),
-        ExpressionKind::EffectBind { action, body, .. } => {
-            visitor(action);
-            visitor(body);
-        }
-        ExpressionKind::EffectEach { array, body, .. } => {
-            visitor(array);
-            visitor(body);
-        }
-        ExpressionKind::EffectWhen { condition, action } => {
-            visitor(condition);
-            visitor(action);
+        ExpressionKind::EffectBind { action: first, body: second, .. }
+        | ExpressionKind::EffectEach { array: first, body: second, .. } => {
+            visitor(first);
+            visitor(second);
         }
     }
 }
@@ -1708,10 +1582,35 @@ pub fn for_each_child_mut(expression: &mut Expression, visitor: &mut impl FnMut(
         | ExpressionKind::Local(_)
         | ExpressionKind::Function(_)
         | ExpressionKind::Fail(_) => {}
+        ExpressionKind::Array(elements) => elements.iter_mut().for_each(visitor),
+        ExpressionKind::Record(fields) => fields.iter_mut().for_each(|(_, value)| visitor(value)),
+        ExpressionKind::Access { record, .. } => visitor(record),
+        ExpressionKind::Update { record, updates } => {
+            visitor(record);
+            for_each_update_mut(updates, visitor);
+        }
+        ExpressionKind::Construct { arguments, .. }
+        | ExpressionKind::Foreign { arguments, .. }
+        | ExpressionKind::Closure { captures: arguments, .. } => {
+            arguments.iter_mut().for_each(visitor)
+        }
+        ExpressionKind::Reuse { cell, arguments, .. } => {
+            arguments.iter_mut().for_each(&mut *visitor);
+            visitor(cell);
+        }
+        ExpressionKind::Apply { function, arguments } => {
+            visitor(function);
+            arguments.iter_mut().for_each(visitor);
+        }
         ExpressionKind::Lambda { body, .. } => visitor(body),
         ExpressionKind::Let { bindings, body } => {
             bindings.iter_mut().for_each(|binding| visitor(&mut binding.value));
             visitor(body);
+        }
+        ExpressionKind::If { condition, then, otherwise } => {
+            visitor(condition);
+            visitor(then);
+            visitor(otherwise);
         }
         ExpressionKind::Case { scrutinees, alternatives } => {
             scrutinees.iter_mut().for_each(&mut *visitor);
@@ -1720,108 +1619,50 @@ pub fn for_each_child_mut(expression: &mut Expression, visitor: &mut impl FnMut(
                     Guarded::Unconditional(body) => visitor(body),
                     Guarded::Guards(branches) => {
                         for branch in branches {
-                            for guard in &mut branch.guards {
-                                match guard {
-                                    Guard::Boolean(condition) => visitor(condition),
-                                    Guard::Pattern { value, .. } => visitor(value),
-                                }
-                            }
+                            branch.guards.iter_mut().for_each(|guard| visitor(guard.value_mut()));
                             visitor(&mut branch.body);
                         }
                     }
                 }
             }
         }
-        ExpressionKind::EffectBind { action, body, .. } => {
-            visitor(action);
-            visitor(body);
-        }
-        ExpressionKind::EffectEach { array, body, .. } => {
-            visitor(array);
-            visitor(body);
-        }
-        _ => {
-            for child in children_mut(expression) {
-                visitor(child);
-            }
+        ExpressionKind::EffectPure(value) | ExpressionKind::Coerce(value) => visitor(value),
+        ExpressionKind::EffectBind { action: first, body: second, .. }
+        | ExpressionKind::EffectEach { array: first, body: second, .. } => {
+            visitor(first);
+            visitor(second);
         }
     }
 }
 
-pub(crate) fn function_references(expression: &Expression) -> FxHashSet<FunctionId> {
-    let mut references = FxHashSet::default();
+fn for_each_update_mut(updates: &mut [RecordUpdate], visitor: &mut impl FnMut(&mut Expression)) {
+    for update in updates {
+        match update {
+            RecordUpdate::Leaf { value, .. } => visitor(value),
+            RecordUpdate::Branch { updates, .. } => for_each_update_mut(updates, visitor),
+        }
+    }
+}
+
+/// The functions the expression refers to, in order of id.
+pub(crate) fn function_references(expression: &Expression) -> Vec<FunctionId> {
+    let mut references = vec![];
     visit(expression, &mut |node| {
         if let ExpressionKind::Function(id) = node.kind {
-            references.insert(id);
+            references.push(id);
         }
     });
+    references.sort_unstable();
+    references.dedup();
     references
 }
 
-/// Tarjan's algorithm; components come out callees first.
-pub(crate) fn strongly_connected_components(
-    references: &[FxHashSet<FunctionId>],
-) -> Vec<Vec<FunctionId>> {
-    struct State<'r> {
-        references: &'r [FxHashSet<FunctionId>],
-        index: Vec<Option<usize>>,
-        lowlink: Vec<usize>,
-        on_stack: Vec<bool>,
-        stack: Vec<usize>,
-        next: usize,
-        components: Vec<Vec<FunctionId>>,
-    }
-
-    fn connect(state: &mut State<'_>, node: usize) {
-        state.index[node] = Some(state.next);
-        state.lowlink[node] = state.next;
-        state.next += 1;
-        state.stack.push(node);
-        state.on_stack[node] = true;
-        let mut successors: Vec<usize> =
-            state.references[node].iter().map(|id| id.0 as usize).collect();
-        successors.sort_unstable();
-        for successor in successors {
-            match state.index[successor] {
-                None => {
-                    connect(state, successor);
-                    state.lowlink[node] = state.lowlink[node].min(state.lowlink[successor]);
-                }
-                Some(index) if state.on_stack[successor] => {
-                    state.lowlink[node] = state.lowlink[node].min(index);
-                }
-                Some(_) => {}
-            }
-        }
-        if Some(state.lowlink[node]) == state.index[node] {
-            let mut component = vec![];
-            while let Some(member) = state.stack.pop() {
-                state.on_stack[member] = false;
-                component.push(FunctionId(member as u32));
-                if member == node {
-                    break;
-                }
-            }
-            state.components.push(component);
-        }
-    }
-
-    let count = references.len();
-    let mut state = State {
-        references,
-        index: vec![None; count],
-        lowlink: vec![0; count],
-        on_stack: vec![false; count],
-        stack: vec![],
-        next: 0,
-        components: vec![],
+/// The functions each function refers to, as indices.
+pub(crate) fn reference_graph(functions: &[Function]) -> Vec<Vec<usize>> {
+    let indices = |function: &Function| {
+        function_references(&function.body).iter().map(|id| id.0 as usize).collect()
     };
-    for node in 0..count {
-        if state.index[node].is_none() {
-            connect(&mut state, node);
-        }
-    }
-    state.components
+    functions.iter().map(indices).collect()
 }
 
 fn prune(functions: Vec<Function>, entry: FunctionId) -> Program {

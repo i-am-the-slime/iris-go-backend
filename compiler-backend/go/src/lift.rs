@@ -3,11 +3,10 @@ use rustc_hash::{FxHashMap, FxHashSet};
 use smol_str::format_smolstr;
 
 use crate::mono::{
-    Binding, Expression, ExpressionKind, Function, FunctionId, FunctionSpelling, Guard, Guarded,
-    Local, LocalId, Pattern, PatternKind, Program,
+    Expression, ExpressionKind, Function, FunctionId, FunctionSpelling, Local, LocalId, Program,
 };
 use crate::monotype::{Monotype, MonotypeId, Monotypes};
-use crate::simplify::{for_each_child, for_each_child_mut, is_trivial};
+use crate::simplify::{for_each_child, for_each_child_mut, is_trivial, visit};
 
 pub fn lift_local_functions(
     program: Program,
@@ -121,9 +120,7 @@ struct Lifter<'m> {
 
 impl Lifter<'_> {
     fn fresh(&mut self, local: &Local) -> Local {
-        let id = LocalId(self.next_local);
-        self.next_local += 1;
-        Local { id, name: local.name.clone(), monotype: local.monotype }
+        Local::fresh(&mut self.next_local, local.name.clone(), local.monotype)
     }
 
     fn expression(&mut self, mut expression: Expression, base: &str) -> Expression {
@@ -223,7 +220,7 @@ fn replace_references(
         for argument in arguments.iter_mut() {
             replace_references(argument, targets, captured, renaming);
         }
-        let mut leading: Vec<Expression> = captured.iter().map(local_expression).collect();
+        let mut leading: Vec<Expression> = captured.iter().map(Local::expression).collect();
         leading.append(arguments);
         **function = Expression::new(ExpressionKind::Function(target), monotype);
         *arguments = leading;
@@ -235,12 +232,12 @@ fn replace_references(
             if captured.is_empty() {
                 *expression = function;
             } else {
-                let arguments = captured.iter().map(local_expression).collect();
+                let arguments = captured.iter().map(Local::expression).collect();
                 let kind = ExpressionKind::Apply { function: Box::new(function), arguments };
                 *expression = Expression::new(kind, expression.monotype);
             }
         } else if let Some(renamed) = renaming.get(&id) {
-            *expression = local_expression(renamed);
+            *expression = renamed.expression();
         }
         return;
     }
@@ -282,10 +279,6 @@ fn flatten_applications(expression: &mut Expression) {
     *arguments = leading;
 }
 
-fn local_expression(local: &Local) -> Expression {
-    Expression::new(ExpressionKind::Local(local.id), local.monotype)
-}
-
 fn free_locals(expression: &Expression, free: &mut FxHashSet<LocalId>) {
     let mut used = FxHashSet::default();
     let mut bound = FxHashMap::default();
@@ -302,65 +295,21 @@ fn collect_uses(expression: &Expression, used: &mut FxHashSet<LocalId>) {
 }
 
 pub(crate) fn collect_binders(expression: &Expression, binders: &mut FxHashMap<LocalId, Local>) {
-    match &expression.kind {
-        ExpressionKind::Lambda { parameters, .. } => {
-            for parameter in parameters {
-                binders.insert(parameter.id, parameter.clone());
-            }
-        }
+    let mut bind = |local: &Local| {
+        binders.insert(local.id, local.clone());
+    };
+    visit(expression, &mut |node| match &node.kind {
+        ExpressionKind::Lambda { parameters, .. } => parameters.iter().for_each(&mut bind),
         ExpressionKind::Let { bindings, .. } => {
-            for Binding { local, .. } in bindings {
-                binders.insert(local.id, local.clone());
-            }
+            bindings.iter().for_each(|binding| bind(&binding.local))
         }
-        ExpressionKind::EffectBind { local, .. } => {
-            binders.insert(local.id, local.clone());
-        }
-        ExpressionKind::EffectEach { element, .. } => {
-            binders.insert(element.id, element.clone());
-        }
+        ExpressionKind::EffectBind { local, .. }
+        | ExpressionKind::EffectEach { element: local, .. } => bind(local),
         ExpressionKind::Case { alternatives, .. } => {
-            for alternative in alternatives {
-                for pattern in &alternative.patterns {
-                    pattern_binders(pattern, binders);
-                }
-                if let Guarded::Guards(branches) = &alternative.body {
-                    for branch in branches {
-                        for guard in &branch.guards {
-                            if let Guard::Pattern { pattern, .. } = guard {
-                                pattern_binders(pattern, binders);
-                            }
-                        }
-                    }
-                }
-            }
+            alternatives.iter().for_each(|alternative| alternative.for_each_local(&mut bind))
         }
         _ => {}
-    }
-    for_each_child(expression, &mut |child| collect_binders(child, binders));
-}
-
-fn pattern_binders(pattern: &Pattern, binders: &mut FxHashMap<LocalId, Local>) {
-    match &pattern.kind {
-        PatternKind::Variable(local) => {
-            binders.insert(local.id, local.clone());
-        }
-        PatternKind::Named { local, pattern } => {
-            binders.insert(local.id, local.clone());
-            pattern_binders(pattern, binders);
-        }
-        PatternKind::Array(elements) => {
-            elements.iter().for_each(|element| pattern_binders(element, binders))
-        }
-        PatternKind::Record(fields) => {
-            fields.iter().for_each(|(_, field)| pattern_binders(field, binders))
-        }
-        PatternKind::Constructor { arguments, .. }
-        | PatternKind::Closure { captures: arguments, .. } => {
-            arguments.iter().for_each(|argument| pattern_binders(argument, binders))
-        }
-        PatternKind::Wildcard | PatternKind::Literal(_) => {}
-    }
+    });
 }
 
 pub(crate) fn erases(monotypes: &Monotypes, monotype: MonotypeId) -> bool {
@@ -369,14 +318,7 @@ pub(crate) fn erases(monotypes: &Monotypes, monotype: MonotypeId) -> bool {
         Monotype::Function(argument, result) => {
             erases(monotypes, *argument) || erases(monotypes, *result)
         }
-        Monotype::Array(element)
-        | Monotype::Effect(element)
-        | Monotype::Reference(element)
-        | Monotype::MutableArray(element)
-        | Monotype::Object(element)
-        | Monotype::Nullable(element)
-        | Monotype::Lazy(element) => erases(monotypes, *element),
         Monotype::Record(fields) => fields.iter().any(|field| erases(monotypes, field.monotype)),
-        _ => false,
+        container => container.element().is_some_and(|element| erases(monotypes, element)),
     }
 }

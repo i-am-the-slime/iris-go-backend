@@ -10,6 +10,7 @@ use crate::error::{GoError, GoResult};
 use crate::foreign::{GoFunction, GoPackage};
 use crate::monotype::{DataType, Monotype, MonotypeId, RecordField};
 use crate::syntax::{GoCase, GoDeclaration, GoDefault, GoExpression, GoStatement, GoType};
+use crate::walk::each_block;
 
 /// The construct a coercion between types of different shapes reports.
 pub(super) const UNRELATED_TYPES: &str = "representation changes between unrelated types";
@@ -137,10 +138,7 @@ where
                     self.go_function(GoFunction { package: GoPackage::Prim, name: "CharSingleton" });
                 Ok(call(singleton, vec![value]))
             }
-            _ => Err(GoError::Unsupported {
-                definition: "code generation".into(),
-                state: crate::error::UnsupportedState::Construct { construct: UNRELATED_TYPES },
-            }),
+            _ => Err(GoError::unsupported_construct(UNRELATED_TYPES)),
         }
     }
 
@@ -401,12 +399,7 @@ where
                     let Some(from_field) =
                         from_fields.iter().find(|from_field| from_field.label == to_field.label)
                     else {
-                        return Err(GoError::Unsupported {
-                            definition: "code generation".into(),
-                            state: crate::error::UnsupportedState::Construct {
-                                construct: "a coercion between records with different fields (a rank-N value coerced to another instantiation)",
-                            },
-                        });
+                        return Err(GoError::unsupported_construct("a coercion between records with different fields (a rank-N value coerced to another instantiation)"));
                     };
                     let field_value = self.read_field(value.clone(), from, &to_field.label);
                     let converted = self.coerce(
@@ -569,10 +562,10 @@ pub(super) struct RoundTrip {
     remembers: Option<usize>,
 }
 
-fn forget_origins(statements: &mut [GoStatement]) {
-    for statement in statements {
-        match statement {
-            GoStatement::Return(Some(returned)) => {
+fn forget_origins(body: &mut Vec<GoStatement>) {
+    each_block(body, |block| {
+        for statement in block {
+            if let GoStatement::Return(Some(returned)) = statement {
                 let composite = match returned {
                     GoExpression::Address(composite) => composite.as_mut(),
                     composite => composite,
@@ -581,15 +574,6 @@ fn forget_origins(statements: &mut [GoStatement]) {
                     fields.retain(|(name, _)| name.as_deref() != Some("Origin"));
                 }
             }
-            GoStatement::Switch { cases, default, .. } => {
-                for case in cases {
-                    forget_origins(&mut case.body);
-                }
-                if let Some(default) = default {
-                    forget_origins(&mut default.body);
-                }
-            }
-            _ => {}
         }
-    }
+    })
 }

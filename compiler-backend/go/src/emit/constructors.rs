@@ -13,10 +13,10 @@
 
 use super::packages::Spelling;
 use super::{Emitter, identifier_expression};
-use crate::naming::{RESERVED, capitalise, identifier, lower_first};
-use crate::error::{GoError, GoResult};
+use crate::error::GoResult;
 use crate::mono::{Expression, ExpressionKind, Local};
 use crate::monotype::{DataType, MonotypeId};
+use crate::naming::{RESERVED, capitalise, identifier, lower_first};
 use crate::syntax::{GoDeclaration, GoExpression, GoStatement};
 
 impl<Q> Emitter<'_, '_, '_, Q>
@@ -90,10 +90,10 @@ where
         if fields.len() != parameters.len() {
             return Ok(None);
         }
-        let constructors = match self.monotypes.constructors(&mut self.context, data)? {
-            Ok(constructors) => constructors,
-            Err(state) => return Err(GoError::Unsupported { definition: layout.name, state }),
-        };
+        let constructors = self
+            .monotypes
+            .constructors(&mut self.context, data)
+            .map_err(|failure| failure.at(&layout.name))?;
         let constructor_name = capitalise(&identifier(&constructors[constructor].name));
         let qualified = format!("{constructor_name}{}", layout.name);
         let name = self.global_name(Spelling::Ladder(vec![constructor_name, qualified]));

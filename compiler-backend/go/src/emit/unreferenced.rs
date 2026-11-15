@@ -10,6 +10,7 @@ use rustc_hash::FxHashSet;
 
 use super::{discarded, is_effectful_call};
 use crate::syntax::{GoDeclaration, GoExpression, GoStatement, Name};
+use crate::walk::each_block_in_declaration;
 
 pub(super) fn drop_unreferenced_definitions(declarations: &mut [GoDeclaration]) {
     for declaration in declarations {
@@ -21,7 +22,7 @@ pub(super) fn drop_unreferenced_definitions(declarations: &mut [GoDeclaration]) 
 fn drop_unreferenced(declaration: &mut GoDeclaration) -> bool {
     let referenced = referenced_names(declaration);
     let mut dropped = false;
-    each_declaration_block(declaration, &mut |block| {
+    each_block_in_declaration(declaration, |block| {
         block.retain(|statement| {
             let unreferenced = match statement {
                 GoStatement::Define { names, values } => {
@@ -97,113 +98,5 @@ fn is_inert(value: &GoExpression) -> bool {
         | GoExpression::Type(_)
         | GoExpression::Spread(_)
         | GoExpression::Instantiation { .. } => false,
-    }
-}
-
-/// Visits every block of a function's body or of the function literals in a variable's value.
-pub(super) fn each_declaration_block(
-    declaration: &mut GoDeclaration,
-    visit: &mut dyn FnMut(&mut Vec<GoStatement>),
-) {
-    match declaration {
-        GoDeclaration::Function { body, .. } => each_block(body, visit),
-        GoDeclaration::Variable { value, .. } => expression_blocks(value, visit),
-        _ => {}
-    }
-}
-
-/// Visits a block and every block nested in it, in function literals too.
-fn each_block(block: &mut Vec<GoStatement>, visit: &mut dyn FnMut(&mut Vec<GoStatement>)) {
-    visit(block);
-    for statement in block.iter_mut() {
-        statement_blocks(statement, visit);
-    }
-}
-
-fn statement_blocks(statement: &mut GoStatement, visit: &mut dyn FnMut(&mut Vec<GoStatement>)) {
-    match statement {
-        GoStatement::Define { values, .. } => {
-            values.iter_mut().for_each(|value| expression_blocks(value, visit));
-        }
-        GoStatement::Variable { value, .. } | GoStatement::Return(value) => {
-            if let Some(value) = value {
-                expression_blocks(value, visit);
-            }
-        }
-        GoStatement::Assign { targets, values } => {
-            targets.iter_mut().chain(values).for_each(|value| expression_blocks(value, visit));
-        }
-        GoStatement::Expression(value) | GoStatement::Defer(value) => {
-            expression_blocks(value, visit);
-        }
-        GoStatement::If { condition, then, otherwise } => {
-            expression_blocks(condition, visit);
-            each_block(then, visit);
-            each_block(otherwise, visit);
-        }
-        GoStatement::IfAssert { value, then, .. } => {
-            expression_blocks(value, visit);
-            each_block(then, visit);
-        }
-        GoStatement::Switch { value, cases, default } => {
-            if let Some(value) = value {
-                expression_blocks(value, visit);
-            }
-            for case in cases {
-                case.values.iter_mut().for_each(|value| expression_blocks(value, visit));
-                each_block(&mut case.body, visit);
-            }
-            if let Some(default) = default {
-                default.covers.iter_mut().for_each(|value| expression_blocks(value, visit));
-                each_block(&mut default.body, visit);
-            }
-        }
-        GoStatement::Range { iterable: start, body, .. }
-        | GoStatement::CountingDown { start, body, .. } => {
-            expression_blocks(start, visit);
-            each_block(body, visit);
-        }
-        GoStatement::Counting { start, end, body, .. } => {
-            expression_blocks(start, visit);
-            expression_blocks(end, visit);
-            each_block(body, visit);
-        }
-        GoStatement::Loop(body)
-        | GoStatement::LabeledLoop { body, .. }
-        | GoStatement::Block(body) => each_block(body, visit),
-        GoStatement::Continue | GoStatement::Break | GoStatement::BreakTo(_) => {}
-    }
-}
-
-fn expression_blocks(expression: &mut GoExpression, visit: &mut dyn FnMut(&mut Vec<GoStatement>)) {
-    match expression {
-        GoExpression::Function { body, .. } => each_block(body, visit),
-        GoExpression::Call { function, arguments } => {
-            expression_blocks(function, visit);
-            arguments.iter_mut().for_each(|argument| expression_blocks(argument, visit));
-        }
-        GoExpression::Binary { left, right, .. }
-        | GoExpression::Index { value: left, index: right } => {
-            expression_blocks(left, visit);
-            expression_blocks(right, visit);
-        }
-        GoExpression::Unary { operand: value, .. }
-        | GoExpression::Field { value, .. }
-        | GoExpression::Address(value)
-        | GoExpression::Conversion { value, .. }
-        | GoExpression::TypeAssertion { value, .. }
-        | GoExpression::Spread(value)
-        | GoExpression::Instantiation { function: value, .. } => expression_blocks(value, visit),
-        GoExpression::Composite { fields, .. } => {
-            fields.iter_mut().for_each(|(_, value)| expression_blocks(value, visit));
-        }
-        GoExpression::Identifier(_)
-        | GoExpression::Qualified { .. }
-        | GoExpression::Integer(_)
-        | GoExpression::Float(_)
-        | GoExpression::String(_)
-        | GoExpression::Rune(_)
-        | GoExpression::Boolean(_)
-        | GoExpression::Type(_) => {}
     }
 }

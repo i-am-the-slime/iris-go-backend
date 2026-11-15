@@ -121,23 +121,23 @@ where
             Some(pure) => {
                 let pure = self.rank_two_argument(scope, arguments[2], pure)?;
                 let empty = Expression::new(ExpressionKind::Array(vec![]), elements);
-                (apply_to(pure, vec![empty], accumulated), local(&array))
+                (apply_to(pure, vec![empty], accumulated), array.expression())
             }
             None => {
                 let map = self.rank_two_argument(scope, arguments[1], traversal.map_singleton)?;
                 let first = self.fresh_local(SmolStr::new_static("first"), element);
-                let singleton = ExpressionKind::Array(vec![local(&first)]);
+                let singleton = ExpressionKind::Array(vec![first.expression()]);
                 let singleton = Expression::new(singleton, elements);
                 let singleton = self.lambda(vec![first], singleton);
                 let head = self.array_head(&array);
-                let head = apply_to(local(&function), vec![head], step);
+                let head = apply_to(function.expression(), vec![head], step);
                 let initial = apply_to(map, vec![singleton, head], accumulated);
                 (initial, self.array_tail(&array))
             }
         };
         let snocs = self.monotypes.result_after(map.monotype, 2);
-        let snocs = apply_to(map, vec![local(&append), local(&accumulator)], snocs);
-        let result = apply_to(local(&function), vec![local(&current)], step);
+        let snocs = apply_to(map, vec![append.expression(), accumulator.expression()], snocs);
+        let result = apply_to(function.expression(), vec![current.expression()], step);
         let snocced = apply_to(apply, vec![snocs, result], accumulated);
         let step = self.lambda(vec![accumulator, current], snocced);
         let fold = match self.monotypes.get(accumulated) {
@@ -262,7 +262,7 @@ where
         let first = Expression::new(ExpressionKind::Literal(Literal::Int(0)), integer);
         let index = ExpressionKind::Foreign {
             foreign: Foreign::Operator(Operator::ArrayIndex),
-            arguments: vec![local(array), first],
+            arguments: vec![array.expression(), first],
         };
         Expression::new(index, element)
     }
@@ -272,12 +272,12 @@ where
         let second = Expression::new(ExpressionKind::Literal(Literal::Int(1)), integer);
         let length = ExpressionKind::Foreign {
             foreign: Foreign::Operator(Operator::ArrayLength),
-            arguments: vec![local(array)],
+            arguments: vec![array.expression()],
         };
         let length = Expression::new(length, integer);
         let tail = ExpressionKind::Foreign {
             foreign: foreign::ARRAY_SLICE,
-            arguments: vec![second, length, local(array)],
+            arguments: vec![second, length, array.expression()],
         };
         Expression::new(tail, array.monotype)
     }
@@ -332,10 +332,6 @@ fn global_reference(kind: &tree::ExpressionKind) -> Option<(FileId, TermItemId)>
         return None;
     };
     Some((file_id, term))
-}
-
-fn local(local: &Local) -> Expression {
-    Expression::new(ExpressionKind::Local(local.id), local.monotype)
 }
 
 fn apply_to(function: Expression, arguments: Vec<Expression>, result: MonotypeId) -> Expression {

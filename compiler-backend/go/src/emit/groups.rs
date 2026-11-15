@@ -9,6 +9,7 @@ use rustc_hash::FxHashSet;
 use super::{
     Emitter, LoopTarget, Mode, Sink, TailLoop, call, captures_parameters, identifier_expression,
 };
+use crate::graph::strongly_connected;
 use crate::naming::capitalise;
 use crate::error::GoResult;
 use crate::mono::{Expression, ExpressionKind, Function, FunctionId, Guarded, Program};
@@ -103,61 +104,6 @@ fn tail_callees(
         }
         _ => {}
     }
-}
-
-/// Tarjan's algorithm, iteratively, so that long call chains do not exhaust the stack.
-fn strongly_connected(successors: &[Vec<usize>]) -> Vec<Vec<usize>> {
-    const UNVISITED: usize = usize::MAX;
-    let count = successors.len();
-    let mut index = vec![UNVISITED; count];
-    let mut lowest = vec![0; count];
-    let mut on_stack = vec![false; count];
-    let mut stack = vec![];
-    let mut components = vec![];
-    let mut next = 0;
-    for root in 0..count {
-        if index[root] != UNVISITED || successors[root].is_empty() {
-            continue;
-        }
-        let mut work: Vec<(usize, usize)> = vec![(root, 0)];
-        index[root] = next;
-        lowest[root] = next;
-        next += 1;
-        stack.push(root);
-        on_stack[root] = true;
-        while let Some(&mut (node, ref mut edge)) = work.last_mut() {
-            if let Some(&successor) = successors[node].get(*edge) {
-                *edge += 1;
-                if index[successor] == UNVISITED {
-                    index[successor] = next;
-                    lowest[successor] = next;
-                    next += 1;
-                    stack.push(successor);
-                    on_stack[successor] = true;
-                    work.push((successor, 0));
-                } else if on_stack[successor] {
-                    lowest[node] = lowest[node].min(index[successor]);
-                }
-                continue;
-            }
-            work.pop();
-            if let Some(&(parent, _)) = work.last() {
-                lowest[parent] = lowest[parent].min(lowest[node]);
-            }
-            if lowest[node] == index[node] {
-                let mut component = vec![];
-                while let Some(member) = stack.pop() {
-                    on_stack[member] = false;
-                    component.push(member);
-                    if member == node {
-                        break;
-                    }
-                }
-                components.push(component);
-            }
-        }
-    }
-    components
 }
 
 impl<'q, Q> Emitter<'_, '_, 'q, Q>
@@ -413,14 +359,11 @@ fn zero_value(type_: &GoType) -> Option<GoExpression> {
 fn terminates(statements: &[GoStatement]) -> bool {
     match statements.last() {
         Some(GoStatement::Return(_) | GoStatement::Continue) => true,
-        Some(GoStatement::Expression(GoExpression::Call { function, .. })) => {
-            matches!(function.as_ref(), GoExpression::Identifier(name) if name == "panic")
-        }
+        Some(statement) if statement.is_panic() => true,
         Some(GoStatement::If { then, otherwise, .. }) => terminates(then) && terminates(otherwise),
         Some(GoStatement::Switch { cases, default: Some(default), .. }) => {
             cases.iter().all(|case| terminates(&case.body)) && terminates(&default.body)
         }
-        Some(GoStatement::Block(body)) => terminates(body),
         _ => false,
     }
 }

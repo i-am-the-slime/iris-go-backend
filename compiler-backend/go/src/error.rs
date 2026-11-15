@@ -71,3 +71,13 @@ pub enum UnsupportedState {
     #[error("{construct} is not supported by the Go backend yet")]
     Construct { construct: &'static str },
 }
+
+impl GoError {
+    /// A construct the emitter cannot compile.
+    pub fn unsupported_construct(construct: &'static str) -> GoError {
+        GoError::Unsupported {
+            definition: "code generation".into(),
+            state: UnsupportedState::Construct { construct },
+        }
+    }
+}

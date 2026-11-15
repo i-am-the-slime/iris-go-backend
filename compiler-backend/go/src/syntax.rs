@@ -3,6 +3,7 @@
 use std::fmt::Write;
 
 use rayon::prelude::*;
+use rustc_hash::FxHashSet;
 
 use crate::walk::{self, Walk};
 
@@ -176,7 +177,17 @@ pub enum GoStatement {
         label: String,
         body: Vec<GoStatement>,
     },
-    Block(Vec<GoStatement>),
+}
+
+impl GoStatement {
+    /// A call of Go's `panic`, which ends the block like a `return`.
+    pub fn is_panic(&self) -> bool {
+        matches!(
+            self,
+            GoStatement::Expression(GoExpression::Call { function, .. })
+                if matches!(function.as_ref(), GoExpression::Identifier(name) if name == "panic")
+        )
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -288,6 +299,16 @@ impl GoDeclaration {
             | GoDeclaration::Constants { .. }
             | GoDeclaration::Declared { .. } => {}
         }
+    }
+
+    /// Every name the declaration's code uses or binds, so that a new one can avoid them all.
+    pub fn all_names(&mut self) -> FxHashSet<String> {
+        let mut names = FxHashSet::default();
+        self.for_each_name_mut(&mut |name| {
+            let (Name::Reference(name) | Name::Written(name) | Name::Binder(name)) = name;
+            names.insert(name.clone());
+        });
+        names
     }
 
     pub fn render(&self) -> String {
@@ -795,11 +816,6 @@ impl Printer {
                 self.line(&format!("{label}:"));
                 self.indentation = indentation;
                 self.line("for {");
-                self.block(body);
-                self.line("}");
-            }
-            GoStatement::Block(body) => {
-                self.line("{");
                 self.block(body);
                 self.line("}");
             }

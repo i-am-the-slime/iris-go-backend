@@ -27,7 +27,7 @@
 use rustc_hash::{FxHashMap, FxHashSet};
 
 use crate::naming::{lower_first, numbered};
-use crate::syntax::{GoDeclaration, GoExpression, GoStatement, GoType, Name};
+use crate::syntax::{GoDeclaration, GoExpression, GoStatement, GoType};
 
 use crate::walk::{self, Walk};
 
@@ -39,11 +39,7 @@ pub fn allocate_linked_cells_in_chunks(
 ) -> bool {
     let mut chunked = false;
     for declaration in declarations {
-        let mut names = FxHashSet::default();
-        declaration.for_each_name_mut(&mut |name| {
-            let (Name::Reference(name) | Name::Written(name) | Name::Binder(name)) = name;
-            names.insert(name.clone());
-        });
+        let names = declaration.all_names();
         let mut function = Function { names, taken, chunked: false };
         walk::declaration(&mut function, declaration);
         chunked |= function.chunked;
@@ -212,7 +208,7 @@ impl Function<'_> {
                     scope.declare(name, None);
                     self.loop_body(then, scope, chunks);
                 }
-                GoStatement::LabeledLoop { body: inner, .. } | GoStatement::Block(inner) => {
+                GoStatement::LabeledLoop { body: inner, .. } => {
                     self.loop_body(inner, scope, chunks)
                 }
                 GoStatement::Loop(_)

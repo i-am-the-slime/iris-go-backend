@@ -17,8 +17,8 @@
 use rustc_hash::FxHashSet;
 
 use super::{Emitter, identifier};
-use crate::error::{GoError, GoResult};
-use crate::monotype::{DataConstructor, DataType, Monotype, MonotypeId};
+use crate::error::GoResult;
+use crate::monotype::{DataConstructor, DataType, Failure, Monotype, MonotypeId};
 use crate::syntax::GoType;
 
 /// The size and alignment Go gives a value, and whether the collector scans it.
@@ -155,12 +155,10 @@ where
         if let Some(&shape) = self.inline_shapes.get(data) {
             return Ok(shape);
         }
-        let constructors = match self.monotypes.constructors(&mut self.context, data)? {
-            Ok(constructors) => constructors,
-            Err(state) => {
-                return Err(GoError::Unsupported { definition: "code generation".into(), state });
-            }
-        };
+        let constructors = self
+            .monotypes
+            .constructors(&mut self.context, data)
+            .map_err(Failure::in_code_generation)?;
         let erases_arguments = self.erases_arguments(data)?;
         let shape = if erases_arguments || self.contains_itself(data)? {
             None

@@ -67,6 +67,20 @@ pub struct Local {
     pub monotype: MonotypeId,
 }
 
+impl Local {
+    /// A reference to the local.
+    pub fn expression(&self) -> Expression {
+        Expression::new(ExpressionKind::Local(self.id), self.monotype)
+    }
+
+    /// A local no other has the id of, taking the next one from `next_local`.
+    pub fn fresh(next_local: &mut u32, name: SmolStr, monotype: MonotypeId) -> Local {
+        let id = LocalId(*next_local);
+        *next_local += 1;
+        Local { id, name, monotype }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct Expression {
     pub kind: ExpressionKind,
@@ -105,7 +119,6 @@ pub enum ExpressionKind {
     EffectPure(Box<Expression>),
     EffectBind { action: Box<Expression>, local: Local, body: Box<Expression> },
     EffectEach { array: Box<Expression>, element: Local, body: Box<Expression> },
-    EffectWhen { condition: Box<Expression>, action: Box<Expression> },
     Fail(SmolStr),
 }
 
@@ -129,7 +142,38 @@ pub struct Alternative {
 
 pub const PATTERN_MATCH_FAILURE: &str = "Failed pattern match";
 
+impl Guard {
+    /// The expression the guard evaluates.
+    pub fn value(&self) -> &Expression {
+        match self {
+            Guard::Boolean(condition) => condition,
+            Guard::Pattern { value, .. } => value,
+        }
+    }
+}
+
+impl Guard {
+    pub fn value_mut(&mut self) -> &mut Expression {
+        match self {
+            Guard::Boolean(condition) => condition,
+            Guard::Pattern { value, .. } => value,
+        }
+    }
+}
+
 impl Alternative {
+    /// Every local the alternative's patterns and pattern guards bind.
+    pub fn for_each_local<'a>(&'a self, visit: &mut impl FnMut(&'a Local)) {
+        self.patterns.iter().for_each(|pattern| pattern.for_each_local(visit));
+        if let Guarded::Guards(branches) = &self.body {
+            for guard in branches.iter().flat_map(|branch| &branch.guards) {
+                if let Guard::Pattern { pattern, .. } = guard {
+                    pattern.for_each_local(visit);
+                }
+            }
+        }
+    }
+
     pub fn match_failure(scrutinees: &[Expression], result: MonotypeId) -> Alternative {
         let patterns = scrutinees
             .iter()
@@ -178,6 +222,46 @@ pub enum PatternKind {
 }
 
 impl Pattern {
+    /// Every local the pattern binds, outer before inner.
+    pub fn for_each_local<'p>(&'p self, visit: &mut impl FnMut(&'p Local)) {
+        match &self.kind {
+            PatternKind::Wildcard | PatternKind::Literal(_) => {}
+            PatternKind::Variable(local) => visit(local),
+            PatternKind::Named { local, pattern } => {
+                visit(local);
+                pattern.for_each_local(visit);
+            }
+            PatternKind::Array(patterns)
+            | PatternKind::Constructor { arguments: patterns, .. }
+            | PatternKind::Closure { captures: patterns, .. } => {
+                patterns.iter().for_each(|pattern| pattern.for_each_local(visit))
+            }
+            PatternKind::Record(fields) => {
+                fields.iter().for_each(|(_, pattern)| pattern.for_each_local(visit))
+            }
+        }
+    }
+
+    /// [`Self::for_each_local`], to rename or retype them.
+    pub fn for_each_local_mut(&mut self, visit: &mut impl FnMut(&mut Local)) {
+        match &mut self.kind {
+            PatternKind::Wildcard | PatternKind::Literal(_) => {}
+            PatternKind::Variable(local) => visit(local),
+            PatternKind::Named { local, pattern } => {
+                visit(local);
+                pattern.for_each_local_mut(visit);
+            }
+            PatternKind::Array(patterns)
+            | PatternKind::Constructor { arguments: patterns, .. }
+            | PatternKind::Closure { captures: patterns, .. } => {
+                patterns.iter_mut().for_each(|pattern| pattern.for_each_local_mut(visit))
+            }
+            PatternKind::Record(fields) => {
+                fields.iter_mut().for_each(|(_, pattern)| pattern.for_each_local_mut(visit))
+            }
+        }
+    }
+
     pub fn is_irrefutable(&self) -> bool {
         match &self.kind {
             PatternKind::Wildcard | PatternKind::Variable(_) => true,

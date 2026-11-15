@@ -256,8 +256,7 @@ fn reads(carried: Carried<'_>, expression: &Expression) -> usize {
         ExpressionKind::Closure { .. }
         | ExpressionKind::EffectPure(_)
         | ExpressionKind::EffectBind { .. }
-        | ExpressionKind::EffectEach { .. }
-        | ExpressionKind::EffectWhen { .. } => {
+        | ExpressionKind::EffectEach { .. } => {
             let mut total = 0;
             for_each_child(expression, &mut |child| total += reads(carried, child));
             if total > 0 { SHARED } else { 0 }

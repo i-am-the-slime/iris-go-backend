@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use building_types::QueryResult;
+use building_types::{QueryError, QueryResult};
 use checking::TypeId;
 use checking::core::{Name, Type};
 use files::FileId;
@@ -10,7 +10,7 @@ use smol_str::SmolStr;
 
 use crate::context::Context;
 use crate::erasure::Erasure;
-use crate::error::UnsupportedState;
+use crate::error::{GoError, GoResult, UnsupportedState};
 use crate::scheme::{ConstrainedScheme, SchemeInstantiations, constrained_scheme, rank_n_scheme};
 use crate::types::Substitution;
 
@@ -47,10 +47,74 @@ pub enum Monotype {
     Erased(Erasure),
 }
 
+impl Monotype {
+    /// The one type a container holds: an array's element, an effect's result.
+    pub fn element(&self) -> Option<MonotypeId> {
+        match self {
+            Monotype::Array(element)
+            | Monotype::Effect(element)
+            | Monotype::Reference(element)
+            | Monotype::MutableArray(element)
+            | Monotype::Object(element)
+            | Monotype::Nullable(element)
+            | Monotype::Lazy(element) => Some(*element),
+            _ => None,
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct RecordField {
     pub label: SmolStr,
     pub monotype: MonotypeId,
+}
+
+/// What stops a type from converting: the checker's queries failing, or a type the backend
+/// cannot compile.
+#[derive(Debug)]
+pub enum Failure {
+    Query(QueryError),
+    Unsupported(UnsupportedState),
+}
+
+pub type Converted<T> = Result<T, Failure>;
+
+/// What converted, or nothing when the backend cannot compile the type.
+pub fn supported<T>(converted: Converted<T>) -> QueryResult<Option<T>> {
+    match converted {
+        Ok(value) => Ok(Some(value)),
+        Err(Failure::Unsupported(_)) => Ok(None),
+        Err(Failure::Query(error)) => Err(error),
+    }
+}
+
+impl From<QueryError> for Failure {
+    fn from(error: QueryError) -> Failure {
+        Failure::Query(error)
+    }
+}
+
+impl From<UnsupportedState> for Failure {
+    fn from(state: UnsupportedState) -> Failure {
+        Failure::Unsupported(state)
+    }
+}
+
+impl Failure {
+    /// The error as reported by the emitter, which has no definition to name.
+    pub fn in_code_generation(self) -> GoError {
+        self.at("code generation")
+    }
+
+    /// The error as reported against the definition being compiled.
+    pub fn at(self, definition: &str) -> GoError {
+        match self {
+            Failure::Query(error) => GoError::Query(error),
+            Failure::Unsupported(state) => {
+                GoError::Unsupported { definition: definition.to_string(), state }
+            }
+        }
+    }
 }
 
 /// A data type applied to closed type arguments. Arguments stay checker types rather
@@ -148,10 +212,6 @@ impl Monotypes {
         self.function_newtypes.get(&id)?.as_ref()
     }
 
-    pub fn unit(&mut self) -> MonotypeId {
-        self.intern(Monotype::Unit)
-    }
-
     pub fn function(&mut self, argument: MonotypeId, result: MonotypeId) -> MonotypeId {
         self.intern(Monotype::Function(argument, result))
     }
@@ -185,7 +245,7 @@ impl Monotypes {
         &mut self,
         context: &mut Context<'_, Q>,
         type_id: TypeId,
-    ) -> QueryResult<Result<MonotypeId, UnsupportedState>>
+    ) -> Converted<MonotypeId>
     where
         Q: checking::ExternalQueries,
     {
@@ -197,7 +257,7 @@ impl Monotypes {
         context: &mut Context<'_, Q>,
         type_id: TypeId,
         expansions: usize,
-    ) -> QueryResult<Result<MonotypeId, UnsupportedState>>
+    ) -> Converted<MonotypeId>
     where
         Q: checking::ExternalQueries,
     {
@@ -207,13 +267,13 @@ impl Monotypes {
             return self.convert_uncached(context, type_id, expansions);
         }
         if let Some(&id) = self.converted.get(&type_id) {
-            return Ok(Ok(id));
+            return Ok(id);
         }
-        let converted = self.convert_uncached(context, type_id, expansions)?;
+        let converted = self.convert_uncached(context, type_id, expansions);
         if let Ok(id) = converted {
             self.converted.insert(type_id, id);
         }
-        Ok(converted)
+        converted
     }
 
     fn convert_uncached<Q>(
@@ -221,26 +281,20 @@ impl Monotypes {
         context: &mut Context<'_, Q>,
         type_id: TypeId,
         expansions: usize,
-    ) -> QueryResult<Result<MonotypeId, UnsupportedState>>
+    ) -> Converted<MonotypeId>
     where
         Q: checking::ExternalQueries,
     {
         if expansions > NEWTYPE_EXPANSION_LIMIT {
-            return Ok(Err(UnsupportedState::Construct {
-                construct: "infinitely nested newtypes",
-            }));
+            return Err(
+                UnsupportedState::Construct { construct: "infinitely nested newtypes" }.into()
+            );
         }
         let type_id = context.types.strip_annotations(type_id);
         let monotype = match context.types.lookup(type_id).clone() {
             Type::Function(argument, result) => {
-                let argument = match self.convert(context, argument, expansions)? {
-                    Ok(argument) => argument,
-                    Err(error) => return Ok(Err(error)),
-                };
-                let result = match self.convert(context, result, expansions)? {
-                    Ok(result) => result,
-                    Err(error) => return Ok(Err(error)),
-                };
+                let argument = self.convert(context, argument, expansions)?;
+                let result = self.convert(context, result, expansions)?;
                 Monotype::Function(argument, result)
             }
             Type::Forall(..) => match self.scheme_for(context, type_id)? {
@@ -277,19 +331,20 @@ impl Monotypes {
                 if is_partial(context, constraint)? {
                     return self.convert(context, inner, expansions);
                 }
-                return Ok(Err(UnsupportedState::Construct {
+                return Err(UnsupportedState::Construct {
                     construct: "constrained types in argument positions",
-                }));
+                }
+                .into());
             }
             Type::Row(_) | Type::Integer(_) | Type::String(..) => {
-                return Ok(Err(open_type(context, type_id)?));
+                return Err(open_type(context, type_id)?);
             }
-            Type::Free(_) | Type::Unknown(_) => return Ok(Err(open_type(context, type_id)?)),
+            Type::Free(_) | Type::Unknown(_) => return Err(open_type(context, type_id)?),
             Type::Kinded(..) | Type::KindApplication(..) | Type::ConstraintOrigin(..) => {
                 unreachable!("invariant violated: annotations are stripped before conversion")
             }
         };
-        Ok(Ok(self.intern(monotype)))
+        Ok(self.intern(monotype))
     }
 
     fn convert_application<Q>(
@@ -297,7 +352,7 @@ impl Monotypes {
         context: &mut Context<'_, Q>,
         type_id: TypeId,
         expansions: usize,
-    ) -> QueryResult<Result<MonotypeId, UnsupportedState>>
+    ) -> Converted<MonotypeId>
     where
         Q: checking::ExternalQueries,
     {
@@ -307,25 +362,26 @@ impl Monotypes {
             Type::Synonym(file_id, item) => {
                 return match expand_synonym(context, file_id, item, &arguments)? {
                     Some(expanded) => {
-                        let converted = self.convert(context, expanded, expansions + 1)?;
+                        let converted = self.convert(context, expanded, expansions + 1);
                         if let Ok(converted) = converted {
                             self.note_record_spelling(converted, file_id, item, &arguments);
                         }
-                        Ok(converted)
+                        converted
                     }
-                    None => Ok(Err(UnsupportedState::UnsaturatedType {
+                    None => Err(UnsupportedState::UnsaturatedType {
                         name: context.type_name(file_id, item)?.to_string(),
-                    })),
+                    }
+                    .into()),
                 };
             }
             Type::Rigid(..) | Type::Unification(_) => {
                 let erasure = context.types.erasure(head).unwrap_or(Erasure::VariableApplication);
-                return Ok(Ok(self.intern(Monotype::Erased(erasure))));
+                return Ok(self.intern(Monotype::Erased(erasure)));
             }
             Type::Function(..) if arguments.is_empty() => {
                 return self.convert(context, head, expansions);
             }
-            _ => return Ok(Err(open_type(context, type_id)?)),
+            _ => return Err(open_type(context, type_id)?),
         };
 
         let module = context.module(file_id)?;
@@ -334,10 +390,10 @@ impl Monotypes {
         let unary = |monotypes: &mut Monotypes,
                      context: &mut Context<'_, Q>,
                      argument: Option<&TypeId>|
-         -> QueryResult<Result<MonotypeId, UnsupportedState>> {
+         -> Converted<MonotypeId> {
             match argument {
                 Some(&argument) => monotypes.convert(context, argument, expansions),
-                None => Ok(Err(UnsupportedState::UnsaturatedType { name: name.to_string() })),
+                None => Err(UnsupportedState::UnsaturatedType { name: name.to_string() }.into()),
             }
         };
 
@@ -347,20 +403,17 @@ impl Monotypes {
             ("Prim", "Boolean") => Monotype::Boolean,
             ("Prim", "Char") => Monotype::Char,
             ("Prim", "String") => Monotype::String,
-            ("Prim", "Array") => match unary(self, context, arguments.first())? {
-                Ok(element) => Monotype::Array(element),
-                Err(error) => return Ok(Err(error)),
-            },
+            ("Prim", "Array") => Monotype::Array(unary(self, context, arguments.first())?),
             ("Prim", "Function") => {
                 let [argument, result] = arguments[..] else {
-                    return Ok(Err(UnsupportedState::UnsaturatedType { name: name.to_string() }));
+                    return Err(UnsupportedState::UnsaturatedType { name: name.to_string() }.into());
                 };
                 let function = context.queries.intern_type(Type::Function(argument, result));
                 return self.convert(context, function, expansions);
             }
             ("Prim", "Record") => {
                 let Some(&row) = arguments.first() else {
-                    return Ok(Err(UnsupportedState::UnsaturatedType { name: name.to_string() }));
+                    return Err(UnsupportedState::UnsaturatedType { name: name.to_string() }.into());
                 };
                 return self.convert_record(context, row, expansions);
             }
@@ -373,7 +426,7 @@ impl Monotypes {
                         (indexed.name.as_deref() == Some("VariantFRep")).then_some(item)
                     })
                 else {
-                    return Ok(Err(open_type(context, type_id)?));
+                    return Err(open_type(context, type_id)?);
                 };
                 let erased = context.types.erased(Erasure::VariantRow);
                 let representation =
@@ -389,7 +442,7 @@ impl Monotypes {
             // label at run time.
             ("Data.Variant", "Variant") => {
                 let Some(internal) = context.queries.module_file("Data.Variant.Internal") else {
-                    return Ok(Err(open_type(context, type_id)?));
+                    return Err(open_type(context, type_id)?);
                 };
                 let Some(representation) =
                     context.module(internal)?.indexed.items.iter_types().find_map(
@@ -398,7 +451,7 @@ impl Monotypes {
                         },
                     )
                 else {
-                    return Ok(Err(open_type(context, type_id)?));
+                    return Err(open_type(context, type_id)?);
                 };
                 let erased = context.types.erased(Erasure::VariantRow);
                 let representation =
@@ -415,7 +468,7 @@ impl Monotypes {
             | ("Data.Variant.Internal", "VariantFCase") => Monotype::Erased(Erasure::VariantRow),
             ("Data.Function.Uncurried", name) if name.starts_with("Fn") => {
                 let Some((&result, parameters)) = arguments.split_last() else {
-                    return Ok(Err(UnsupportedState::UnsaturatedType { name: name.to_string() }));
+                    return Err(UnsupportedState::UnsaturatedType { name: name.to_string() }.into());
                 };
                 let mut curried = result;
                 for &parameter in parameters.iter().rev() {
@@ -429,42 +482,30 @@ impl Monotypes {
             }
             ("Effect.Uncurried", name) if name.starts_with("EffectFn") => {
                 let Some((&result, parameters)) = arguments.split_last() else {
-                    return Ok(Err(UnsupportedState::UnsaturatedType { name: name.to_string() }));
+                    return Err(UnsupportedState::UnsaturatedType { name: name.to_string() }.into());
                 };
-                let result = match self.convert(context, result, expansions)? {
-                    Ok(result) => self.intern(Monotype::Effect(result)),
-                    Err(error) => return Ok(Err(error)),
-                };
+                let result = self.convert(context, result, expansions)?;
+                let result = self.intern(Monotype::Effect(result));
                 return self.curried_function(context, parameters, result, expansions);
             }
             ("Control.Monad.ST.Uncurried", name) if name.starts_with("STFn") => {
                 let [parameters @ .., _, result] = &arguments[..] else {
-                    return Ok(Err(UnsupportedState::UnsaturatedType { name: name.to_string() }));
+                    return Err(UnsupportedState::UnsaturatedType { name: name.to_string() }.into());
                 };
-                let result = match self.convert(context, *result, expansions)? {
-                    Ok(result) => self.intern(Monotype::Effect(result)),
-                    Err(error) => return Ok(Err(error)),
-                };
+                let result = self.convert(context, *result, expansions)?;
+                let result = self.intern(Monotype::Effect(result));
                 return self.curried_function(context, parameters, result, expansions);
             }
             ("Effect", "Effect") | ("Effect.Aff", "Aff" | "ParAff") => {
-                match unary(self, context, arguments.first())? {
-                    Ok(result) => Monotype::Effect(result),
-                    Err(error) => return Ok(Err(error)),
-                }
+                Monotype::Effect(unary(self, context, arguments.first())?)
             }
-            ("Control.Monad.ST.Internal", "ST") => match unary(self, context, arguments.get(1))? {
-                Ok(result) => Monotype::Effect(result),
-                Err(error) => return Ok(Err(error)),
-            },
-            ("Effect.Ref", "Ref") => match unary(self, context, arguments.first())? {
-                Ok(value) => Monotype::Reference(value),
-                Err(error) => return Ok(Err(error)),
-            },
-            ("Data.Array.ST", "STArray") => match unary(self, context, arguments.get(1))? {
-                Ok(element) => Monotype::MutableArray(element),
-                Err(error) => return Ok(Err(error)),
-            },
+            ("Control.Monad.ST.Internal", "ST") => {
+                Monotype::Effect(unary(self, context, arguments.get(1))?)
+            }
+            ("Effect.Ref", "Ref") => Monotype::Reference(unary(self, context, arguments.first())?),
+            ("Data.Array.ST", "STArray") => {
+                Monotype::MutableArray(unary(self, context, arguments.get(1))?)
+            }
             // yoga-om's ParallelError is a JavaScript Error subclass that
             // `parallelErrorToError` coerces to Error; go-support keeps its
             // payload in the Error itself.
@@ -472,35 +513,26 @@ impl Monotypes {
             ("Data.String.Regex", "Regex") => Monotype::Regex,
             ("Effect.Synchronized", "Mutex") => Monotype::Mutex,
             ("JS.BigInt", "BigInt") | ("Data.BigInt", "BigInt") => Monotype::BigInt,
-            ("Data.Lazy", "Lazy") => match unary(self, context, arguments.first())? {
-                Ok(value) => Monotype::Lazy(value),
-                Err(error) => return Ok(Err(error)),
-            },
+            ("Data.Lazy", "Lazy") => Monotype::Lazy(unary(self, context, arguments.first())?),
             ("Promise.Internal", "Promise")
             | ("Promise.Rejection", "Rejection")
             | ("Foreign", "Foreign") => Monotype::Opaque,
-            ("Data.Nullable", "Nullable") => match unary(self, context, arguments.first())? {
-                Ok(element) => Monotype::Nullable(element),
-                Err(error) => return Ok(Err(error)),
-            },
-            ("Foreign.Object", "Object") => match unary(self, context, arguments.first())? {
-                Ok(element) => Monotype::Object(element),
-                Err(error) => return Ok(Err(error)),
-            },
-            ("Foreign.Object.ST", "STObject") => match unary(self, context, arguments.get(1))? {
-                Ok(element) => Monotype::Object(element),
-                Err(error) => return Ok(Err(error)),
-            },
+            ("Data.Nullable", "Nullable") => {
+                Monotype::Nullable(unary(self, context, arguments.first())?)
+            }
+            ("Foreign.Object", "Object") => {
+                Monotype::Object(unary(self, context, arguments.first())?)
+            }
+            ("Foreign.Object.ST", "STObject") => {
+                Monotype::Object(unary(self, context, arguments.get(1))?)
+            }
             ("Control.Monad.ST.Internal", "STRef") => {
-                match unary(self, context, arguments.get(1))? {
-                    Ok(value) => Monotype::Reference(value),
-                    Err(error) => return Ok(Err(error)),
-                }
+                Monotype::Reference(unary(self, context, arguments.get(1))?)
             }
             _ => match &module.indexed.items[item].kind {
                 IndexedTypeItemKind::Newtype { constructors, .. } => {
                     let Some(&constructor) = constructors.first() else {
-                        return Ok(Err(open_type(context, type_id)?));
+                        return Err(open_type(context, type_id)?);
                     };
                     if is_recursive_newtype(context, file_id, item)? {
                         let mut canonical = Vec::with_capacity(arguments.len());
@@ -513,25 +545,25 @@ impl Monotypes {
                             )?);
                         }
                         let data = DataType { file_id, item, arguments: Arc::from(canonical) };
-                        return Ok(Ok(self.intern(Monotype::Recursive(data))));
+                        return Ok(self.intern(Monotype::Recursive(data)));
                     }
                     if self.expanding.contains(&type_id) {
-                        return Ok(Ok(self.intern(Monotype::Erased(Erasure::NewtypeCycle))));
+                        return Ok(self.intern(Monotype::Erased(Erasure::NewtypeCycle)));
                     }
                     let Some(underlying) =
                         newtype_underlying(context, file_id, constructor, type_id)?
                     else {
-                        return Ok(Err(open_type(context, type_id)?));
+                        return Err(open_type(context, type_id)?);
                     };
                     let owner = format!("{}.{name}", module.name);
                     self.note_rank_n_field(context, underlying, &owner)?;
                     self.expanding.push(type_id);
                     let converted = self.convert(context, underlying, expansions + 1);
                     self.expanding.pop();
-                    if let Ok(Ok(converted)) = converted {
+                    if let Ok(converted) = converted {
                         self.note_record_spelling(converted, file_id, item, &arguments);
                     }
-                    if let Ok(Ok(converted)) = converted
+                    if let Ok(converted) = converted
                         && let Monotype::Function(..) = self.get(converted)
                     {
                         let newtype = DataType { file_id, item, arguments: Arc::from(arguments) };
@@ -555,35 +587,20 @@ impl Monotypes {
                     if constructors.is_empty()
                         && self.foreign_modules.iter().any(|provided| *provided == module.name) =>
                 {
-                    let mut canonical = Vec::with_capacity(arguments.len());
-                    for argument in arguments {
-                        canonical.push(erase_newtypes(context, argument, expansions, &mut vec![])?);
-                    }
-                    Monotype::ForeignData(DataType {
-                        file_id,
-                        item,
-                        arguments: Arc::from(canonical),
-                    })
+                    let arguments = erased_newtypes(context, arguments, expansions)?;
+                    Monotype::ForeignData(DataType { file_id, item, arguments })
                 }
                 IndexedTypeItemKind::Data { constructors, .. } if constructors.is_empty() => {
                     Monotype::Erased(Erasure::EmptyData)
                 }
                 IndexedTypeItemKind::Data { .. } => {
                     let regular = self.is_regular(context, file_id, item)?;
-                    let mut canonical = Vec::with_capacity(arguments.len());
-                    for argument in arguments {
-                        if regular {
-                            canonical.push(erase_newtypes(
-                                context,
-                                argument,
-                                expansions,
-                                &mut vec![],
-                            )?);
-                        } else {
-                            canonical.push(context.types.erased(Erasure::NonRegular));
-                        }
-                    }
-                    Monotype::Data(DataType { file_id, item, arguments: Arc::from(canonical) })
+                    let arguments = if regular {
+                        erased_newtypes(context, arguments, expansions)?
+                    } else {
+                        arguments.iter().map(|_| context.types.erased(Erasure::NonRegular)).collect()
+                    };
+                    Monotype::Data(DataType { file_id, item, arguments })
                 }
                 _ if crate::foreign::is_opaque_foreign_data(&module.name, &name) => {
                     Monotype::Opaque
@@ -591,23 +608,16 @@ impl Monotypes {
                 _ if crate::foreign::support_data(&module.name, &name).is_some()
                     || self.foreign_modules.iter().any(|provided| *provided == module.name) =>
                 {
-                    let mut canonical = Vec::with_capacity(arguments.len());
-                    for argument in arguments {
-                        canonical.push(erase_newtypes(context, argument, expansions, &mut vec![])?);
-                    }
-                    Monotype::ForeignData(DataType {
-                        file_id,
-                        item,
-                        arguments: Arc::from(canonical),
-                    })
+                    let arguments = erased_newtypes(context, arguments, expansions)?;
+                    Monotype::ForeignData(DataType { file_id, item, arguments })
                 }
                 _ => {
                     let name = format!("{}.{name}", module.name);
-                    return Ok(Err(UnsupportedState::ForeignData { name }));
+                    return Err(UnsupportedState::ForeignData { name }.into());
                 }
             },
         };
-        Ok(Ok(self.intern(monotype)))
+        Ok(self.intern(monotype))
     }
 
     fn curried_function<Q>(
@@ -616,19 +626,16 @@ impl Monotypes {
         parameters: &[TypeId],
         result: MonotypeId,
         expansions: usize,
-    ) -> QueryResult<Result<MonotypeId, UnsupportedState>>
+    ) -> Converted<MonotypeId>
     where
         Q: checking::ExternalQueries,
     {
         let mut curried = result;
         for &parameter in parameters.iter().rev() {
-            let parameter = match self.convert(context, parameter, expansions)? {
-                Ok(parameter) => parameter,
-                Err(error) => return Ok(Err(error)),
-            };
+            let parameter = self.convert(context, parameter, expansions)?;
             curried = self.function(parameter, curried);
         }
-        Ok(Ok(curried))
+        Ok(curried)
     }
 
     /// The scheme a quantified type is specialized by: its constraints, or for
@@ -727,9 +734,9 @@ impl Monotypes {
         for probe in probes {
             let types: Vec<TypeId> = scheme.names.iter().map(|_| probe).collect();
             let instantiated = scheme.instantiate(context, &types);
-            match self.convert(context, instantiated, 1)? {
-                Ok(monotype) => converted.push(monotype),
-                Err(_) => return Ok(()),
+            match supported(self.convert(context, instantiated, 1))? {
+                Some(monotype) => converted.push(monotype),
+                None => return Ok(()),
             }
         }
         if converted[0] != converted[1] {
@@ -757,7 +764,7 @@ impl Monotypes {
         context: &mut Context<'_, Q>,
         scheme: &ConstrainedScheme,
         expansions: usize,
-    ) -> QueryResult<Result<MonotypeId, UnsupportedState>>
+    ) -> Converted<MonotypeId>
     where
         Q: checking::ExternalQueries,
     {
@@ -765,10 +772,7 @@ impl Monotypes {
         let mut fields = Vec::with_capacity(instantiations.len());
         for instantiation in instantiations {
             let instantiated = scheme.instantiate(context, &instantiation.types);
-            let monotype = match self.convert(context, instantiated, expansions)? {
-                Ok(monotype) => monotype,
-                Err(error) => return Ok(Err(error)),
-            };
+            let monotype = self.convert(context, instantiated, expansions)?;
             fields.push(RecordField { label: instantiation.label, monotype });
         }
         fields.sort_by(|left, right| left.label.cmp(&right.label));
@@ -777,7 +781,7 @@ impl Monotypes {
         if is_rank_n {
             self.instantiated_records.insert(record);
         }
-        Ok(Ok(record))
+        Ok(record)
     }
 
     /// Remembers that a synonym or newtype applied to `arguments` spelled a
@@ -800,11 +804,7 @@ impl Monotypes {
     }
 
     /// The record of a closed row.
-    pub fn record<Q>(
-        &mut self,
-        context: &mut Context<'_, Q>,
-        row: TypeId,
-    ) -> QueryResult<Result<MonotypeId, UnsupportedState>>
+    pub fn record<Q>(&mut self, context: &mut Context<'_, Q>, row: TypeId) -> Converted<MonotypeId>
     where
         Q: checking::ExternalQueries,
     {
@@ -816,7 +816,7 @@ impl Monotypes {
         context: &mut Context<'_, Q>,
         row: TypeId,
         expansions: usize,
-    ) -> QueryResult<Result<MonotypeId, UnsupportedState>>
+    ) -> Converted<MonotypeId>
     where
         Q: checking::ExternalQueries,
     {
@@ -828,13 +828,13 @@ impl Monotypes {
             _ => expand_synonyms(context, row)?,
         };
         let Type::Row(row_id) = context.types.lookup(row).clone() else {
-            return Ok(Err(open_type(context, row)?));
+            return Err(open_type(context, row)?);
         };
         let row_type = context.queries.lookup_row_type(row_id).clone();
         if let Some(tail) = row_type.tail
             && !matches!(context.types.lookup(tail), Type::Unification(_))
         {
-            return Ok(Err(open_type(context, row)?));
+            return Err(open_type(context, row)?);
         }
         let mut fields: Vec<RecordField> = Vec::with_capacity(row_type.fields.len());
         for field in row_type.fields.iter() {
@@ -844,14 +844,11 @@ impl Monotypes {
             if fields.iter().any(|known| known.label == field.label) {
                 continue;
             }
-            let monotype = match self.convert(context, field.id, expansions)? {
-                Ok(monotype) => monotype,
-                Err(error) => return Ok(Err(error)),
-            };
+            let monotype = self.convert(context, field.id, expansions)?;
             fields.push(RecordField { label: field.label.clone(), monotype });
         }
         fields.sort_by(|left, right| left.label.cmp(&right.label));
-        Ok(Ok(self.intern(Monotype::Record(Arc::from(fields)))))
+        Ok(self.intern(Monotype::Record(Arc::from(fields))))
     }
 
     /// A non-regular data type, such as `data Nested a = Flat | Deep a (Nested (Array a))`,
@@ -902,21 +899,21 @@ impl Monotypes {
         &mut self,
         context: &mut Context<'_, Q>,
         data: &DataType,
-    ) -> QueryResult<Result<MonotypeId, UnsupportedState>>
+    ) -> Converted<MonotypeId>
     where
         Q: checking::ExternalQueries,
     {
         if let Some(&unfolded) = self.unfolded.get(data) {
-            return Ok(Ok(unfolded));
+            return Ok(unfolded);
         }
         let module = context.module(data.file_id)?;
         let IndexedTypeItemKind::Newtype { constructors, .. } =
             &module.indexed.items[data.item].kind
         else {
-            return Ok(Err(UnsupportedState::MissingDeclaration));
+            return Err(UnsupportedState::MissingDeclaration.into());
         };
         let Some(&constructor) = constructors.first() else {
-            return Ok(Err(UnsupportedState::MissingDeclaration));
+            return Err(UnsupportedState::MissingDeclaration.into());
         };
         let mut applied = context.queries.intern_type(Type::Constructor(data.file_id, data.item));
         for &argument in data.arguments.iter() {
@@ -924,26 +921,36 @@ impl Monotypes {
         }
         let Some(underlying) = newtype_underlying(context, data.file_id, constructor, applied)?
         else {
-            return Ok(Err(open_type(context, applied)?));
+            return Err(open_type(context, applied)?);
         };
-        let unfolded = match self.monotype(context, underlying)? {
-            Ok(unfolded) => unfolded,
-            Err(error) => return Ok(Err(error)),
-        };
+        let unfolded = self.monotype(context, underlying)?;
         self.unfolded.insert(data.clone(), unfolded);
-        Ok(Ok(unfolded))
+        Ok(unfolded)
+    }
+
+    /// [`Self::unfold`], reporting what cannot be unfolded against `definition`.
+    pub fn unfold_in<Q>(
+        &mut self,
+        context: &mut Context<'_, Q>,
+        data: &DataType,
+        definition: &str,
+    ) -> GoResult<MonotypeId>
+    where
+        Q: checking::ExternalQueries,
+    {
+        self.unfold(context, data).map_err(|failure| failure.at(definition))
     }
 
     pub fn constructors<Q>(
         &mut self,
         context: &mut Context<'_, Q>,
         data: &DataType,
-    ) -> QueryResult<Result<Arc<[DataConstructor]>, UnsupportedState>>
+    ) -> Converted<Arc<[DataConstructor]>>
     where
         Q: checking::ExternalQueries,
     {
         if let Some(constructors) = self.constructors.get(data) {
-            return Ok(Ok(Arc::clone(constructors)));
+            return Ok(Arc::clone(constructors));
         }
         let module = context.module(data.file_id)?;
         let terms = match &module.indexed.items[data.item].kind {
@@ -954,7 +961,7 @@ impl Monotypes {
         let mut constructors = Vec::with_capacity(terms.len());
         for term in terms {
             let Some(signature) = module.checked.lookup_term_item_type(term) else {
-                return Ok(Err(UnsupportedState::MissingDeclaration));
+                return Err(UnsupportedState::MissingDeclaration.into());
             };
             let (_, body) = context.types.peel_quantifiers(signature);
             let mut field_types = vec![];
@@ -978,17 +985,14 @@ impl Monotypes {
                 let constructor = module.indexed.items[term].name.clone().unwrap_or_default();
                 let owner = format!("{}.{constructor}", module.name);
                 self.note_rank_n_field(context, field_type, &owner)?;
-                match self.monotype(context, field_type)? {
-                    Ok(field) => fields.push(field),
-                    Err(error) => return Ok(Err(error)),
-                }
+                fields.push(self.monotype(context, field_type)?)
             }
             let name = module.indexed.items[term].name.clone().unwrap_or_default();
             constructors.push(DataConstructor { term, name, fields, refuted });
         }
         let constructors: Arc<[DataConstructor]> = Arc::from(constructors);
         self.constructors.insert(data.clone(), Arc::clone(&constructors));
-        Ok(Ok(constructors))
+        Ok(constructors)
     }
 
     pub fn used_parameters<Q>(
@@ -1509,12 +1513,26 @@ where
     Ok(Some(expanded))
 }
 
-fn open_type<Q>(context: &mut Context<'_, Q>, type_id: TypeId) -> QueryResult<UnsupportedState>
+fn erased_newtypes<Q>(
+    context: &mut Context<'_, Q>,
+    arguments: impl IntoIterator<Item = TypeId>,
+    expansions: usize,
+) -> QueryResult<Arc<[TypeId]>>
+where
+    Q: checking::ExternalQueries,
+{
+    arguments
+        .into_iter()
+        .map(|argument| erase_newtypes(context, argument, expansions, &mut vec![]))
+        .collect()
+}
+
+fn open_type<Q>(context: &mut Context<'_, Q>, type_id: TypeId) -> QueryResult<Failure>
 where
     Q: checking::ExternalQueries,
 {
     let prim = context.module(context.queries.prim_id())?;
     let pretty = checking::core::pretty::Pretty::new(context.queries, &prim.checked);
     let rendered = pretty.render(type_id)?.to_string();
-    Ok(UnsupportedState::OpenType { rendered })
+    Ok(UnsupportedState::OpenType { rendered }.into())
 }

@@ -19,11 +19,11 @@ use indexing::IndexedTypeItemKind;
 
 use super::packages::{SpelledPart, Spelling};
 use super::{Emitter, identifier};
-use crate::naming::{capitalise, is_vague, ladder};
 use crate::error::GoResult;
 use crate::modules::Modules;
 use crate::mono::FunctionSpelling;
-use crate::monotype::{Monotype, MonotypeId, RecordField};
+use crate::monotype::{Monotype, MonotypeId, RecordField, supported};
+use crate::naming::{capitalise, is_vague, ladder};
 
 /// A piece of a name that spells types.
 #[derive(Debug, Clone)]
@@ -287,9 +287,9 @@ where
             Type::Row(_) => {
                 let mut labels = String::new();
                 self.context.type_suffix(type_id, &mut labels)?;
-                match self.monotypes.record(&mut self.context, type_id)? {
-                    Ok(monotype) => parts.push(NamePart::Record { monotype, labels }),
-                    Err(_) => parts.push(NamePart::Text(labels)),
+                match supported(self.monotypes.record(&mut self.context, type_id))? {
+                    Some(monotype) => parts.push(NamePart::Record { monotype, labels }),
+                    None => parts.push(NamePart::Text(labels)),
                 }
             }
             _ => {
@@ -601,7 +601,9 @@ where
         // nothing about the record it holds.
         data.retain(|data| data.arguments.is_empty());
         for data in data {
-            let Ok(constructors) = self.monotypes.constructors(&mut self.context, &data)? else {
+            let Some(constructors) =
+                supported(self.monotypes.constructors(&mut self.context, &data))?
+            else {
                 continue;
             };
             let type_name =
@@ -776,9 +778,8 @@ where
         if !newtype && labels.is_none_or(|labels| !label_sets.contains(&labels)) {
             return Ok(None);
         }
-        let converted = self.monotypes.monotype(&mut self.context, type_id)?;
+        let converted = supported(self.monotypes.monotype(&mut self.context, type_id))?;
         Ok(converted
-            .ok()
             .filter(|&monotype| matches!(self.monotypes.get(monotype), Monotype::Record(_))))
     }
 }

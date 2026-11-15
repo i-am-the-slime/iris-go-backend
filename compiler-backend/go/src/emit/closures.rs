@@ -40,14 +40,15 @@ use super::packages::Spelling;
 use super::{ConstructorLayout, DataKind, DataLayout, Emitter, identifier, layout, uses_local};
 use crate::arity::Arities;
 use crate::context::Context;
-use crate::naming::{capitalise, lower_first, numbered};
-use crate::error::{GoError, GoResult};
+use crate::error::GoResult;
 use crate::foreign::Foreign;
 use crate::mono::{
     Alternative, Binding, Expression, ExpressionKind, Function, FunctionId, FunctionSpelling,
     Guard, Guarded, Local, LocalId, Pattern, PatternKind, Program,
 };
-use crate::monotype::{DataType, Monotype, MonotypeId, Monotypes};
+use crate::monotype::{DataType, Failure, Monotype, MonotypeId, Monotypes};
+use crate::lift::collect_binders;
+use crate::naming::{capitalise, lower_first, numbered};
 use crate::simplify::{for_each_child, for_each_child_mut};
 use crate::syntax::{GoDeclaration, GoExpression, GoType};
 
@@ -299,20 +300,15 @@ where
 
     /// The types of every constructor's fields.
     fn fields(&mut self, data: &DataType) -> GoResult<Vec<MonotypeId>> {
-        match self.monotypes.constructors(&mut self.context, data)? {
-            Ok(constructors) => Ok(constructors
-                .iter()
-                .flat_map(|constructor| constructor.fields.iter().copied())
-                .collect()),
-            Err(state) => Err(GoError::Unsupported { definition: "code generation".into(), state }),
-        }
+        let constructors = self
+            .monotypes
+            .constructors(&mut self.context, data)
+            .map_err(Failure::in_code_generation)?;
+        Ok(constructors.iter().flat_map(|constructor| constructor.fields.iter().copied()).collect())
     }
 
     fn unfold(&mut self, data: &DataType) -> GoResult<MonotypeId> {
-        match self.monotypes.unfold(&mut self.context, data)? {
-            Ok(unfolded) => Ok(unfolded),
-            Err(state) => Err(GoError::Unsupported { definition: "code generation".into(), state }),
-        }
+        self.monotypes.unfold_in(&mut self.context, data, "code generation")
     }
 
     /// `Lazy Int` is `LazyInt`, as the struct of a data type is named.
@@ -458,11 +454,8 @@ where
         eliminators: &Eliminators,
         next_local: &mut u32,
     ) -> GoResult<(Function, ClosureSet)> {
-        let mut fresh = |name: SmolStr, monotype: MonotypeId| {
-            let id = LocalId(*next_local);
-            *next_local += 1;
-            Local { id, name, monotype }
-        };
+        let mut fresh =
+            |name: SmolStr, monotype: MonotypeId| Local::fresh(next_local, name, monotype);
         let newtype = self.monotypes.function_newtype(monotype).cloned();
         let name = match &newtype {
             Some(newtype) => self.data_type_name(newtype)?,
@@ -671,22 +664,7 @@ where
     }
 
     fn bind_pattern(&mut self, pattern: &Pattern) {
-        match &pattern.kind {
-            PatternKind::Variable(local) => self.bind(local),
-            PatternKind::Named { local, pattern } => {
-                self.bind(local);
-                self.bind_pattern(pattern);
-            }
-            PatternKind::Array(elements)
-            | PatternKind::Constructor { arguments: elements, .. }
-            | PatternKind::Closure { captures: elements, .. } => {
-                elements.iter().for_each(|element| self.bind_pattern(element))
-            }
-            PatternKind::Record(fields) => {
-                fields.iter().for_each(|(_, field)| self.bind_pattern(field))
-            }
-            PatternKind::Wildcard | PatternKind::Literal(_) => {}
-        }
+        pattern.for_each_local(&mut |local| self.bind(local));
     }
 
     fn create(&mut self, monotype: MonotypeId, creation: Creation, parameters: usize) {
@@ -801,17 +779,10 @@ where
                 self.open(monotype, "crosses into foreign code or a coercion");
                 vec![argument, result]
             }
-            Monotype::Array(inner)
-            | Monotype::Effect(inner)
-            | Monotype::Reference(inner)
-            | Monotype::MutableArray(inner)
-            | Monotype::Object(inner)
-            | Monotype::Nullable(inner)
-            | Monotype::Lazy(inner) => vec![inner],
             Monotype::Record(fields) => fields.iter().map(|field| field.monotype).collect(),
             Monotype::Data(data) => self.types.fields(&data)?,
             Monotype::Recursive(data) => vec![self.types.unfold(&data)?],
-            _ => vec![],
+            container => container.element().into_iter().collect(),
         };
         for part in parts {
             self.escape(part)?;
@@ -949,9 +920,7 @@ where
     Q: checking::ExternalQueries,
 {
     fn fresh(&mut self, name: SmolStr, monotype: MonotypeId) -> Local {
-        let id = LocalId(*self.next_local);
-        *self.next_local += 1;
-        Local { id, name, monotype }
+        Local::fresh(self.next_local, name, monotype)
     }
 
     fn parameters(&self, function: &Expression) -> usize {
@@ -982,7 +951,7 @@ where
                 let kind = std::mem::replace(&mut expression.kind, ExpressionKind::Unit);
                 let ExpressionKind::Lambda { parameters, body } = kind else { unreachable!() };
                 let captures = self.captures(&body, &parameters);
-                let values = captures.iter().map(local_expression).collect();
+                let values = captures.iter().map(Local::expression).collect();
                 let shape = Shape {
                     name: self.name.clone(),
                     origin: self.origin,
@@ -1108,7 +1077,7 @@ where
                 return operand;
             }
             let local = rewriter.fresh(SmolStr::new_static("operand"), operand.monotype);
-            let reference = local_expression(&local);
+            let reference = local.expression();
             computed.push(Binding { local, value: operand });
             reference
         };
@@ -1168,10 +1137,6 @@ where
     }
 }
 
-fn local_expression(local: &Local) -> Expression {
-    Expression::new(ExpressionKind::Local(local.id), local.monotype)
-}
-
 /// Replaces each use of a renamed local.
 fn rename(expression: &mut Expression, renamed: &FxHashMap<LocalId, Expression>) {
     if let ExpressionKind::Local(id) = expression.kind
@@ -1181,64 +1146,6 @@ fn rename(expression: &mut Expression, renamed: &FxHashMap<LocalId, Expression>)
         return;
     }
     for_each_child_mut(expression, &mut |child| rename(child, renamed));
-}
-
-/// Every local an expression binds.
-fn collect_binders(expression: &Expression, binders: &mut FxHashMap<LocalId, Local>) {
-    crate::simplify::visit(expression, &mut |node| match &node.kind {
-        ExpressionKind::Lambda { parameters, .. } => {
-            for parameter in parameters {
-                binders.insert(parameter.id, parameter.clone());
-            }
-        }
-        ExpressionKind::Let { bindings, .. } => {
-            for Binding { local, .. } in bindings {
-                binders.insert(local.id, local.clone());
-            }
-        }
-        ExpressionKind::Case { alternatives, .. } => {
-            for alternative in alternatives {
-                for pattern in &alternative.patterns {
-                    pattern_binders(pattern, binders);
-                }
-                if let Guarded::Guards(branches) = &alternative.body {
-                    for branch in branches {
-                        for guard in &branch.guards {
-                            if let Guard::Pattern { pattern, .. } = guard {
-                                pattern_binders(pattern, binders);
-                            }
-                        }
-                    }
-                }
-            }
-        }
-        ExpressionKind::EffectBind { local, .. }
-        | ExpressionKind::EffectEach { element: local, .. } => {
-            binders.insert(local.id, local.clone());
-        }
-        _ => {}
-    });
-}
-
-fn pattern_binders(pattern: &Pattern, binders: &mut FxHashMap<LocalId, Local>) {
-    match &pattern.kind {
-        PatternKind::Variable(local) => {
-            binders.insert(local.id, local.clone());
-        }
-        PatternKind::Named { local, pattern } => {
-            binders.insert(local.id, local.clone());
-            pattern_binders(pattern, binders);
-        }
-        PatternKind::Array(elements)
-        | PatternKind::Constructor { arguments: elements, .. }
-        | PatternKind::Closure { captures: elements, .. } => {
-            elements.iter().for_each(|element| pattern_binders(element, binders))
-        }
-        PatternKind::Record(fields) => {
-            fields.iter().for_each(|(_, field)| pattern_binders(field, binders))
-        }
-        PatternKind::Wildcard | PatternKind::Literal(_) => {}
-    }
 }
 
 fn report(uses: &Uses, closed: &[MonotypeId], monotypes: &Monotypes) {
