@@ -5,6 +5,8 @@
 //! pattern guard: `One x _` on a `Sequence Int` binds the erased field and
 //! asserts `x` to `Int`.
 
+use std::sync::Arc;
+
 use smol_str::SmolStr;
 
 use super::Specializer;
@@ -13,6 +15,7 @@ use crate::mono::{
     Alternative, Binding, Expression, ExpressionKind, Guard, Guarded, GuardedBranch,
 };
 use crate::mono::{Pattern, PatternKind};
+use crate::monotype::{DataConstructor, DataType, Failure};
 
 impl<Q> Specializer<'_, Q>
 where
@@ -85,10 +88,7 @@ where
                 Ok(false)
             }
             PatternKind::Constructor { data, constructor, arguments } => {
-                let constructors = match self.monotypes.constructors(&mut self.context, data)? {
-                    Ok(constructors) => constructors,
-                    Err(state) => return Err(self.pattern_error(state)),
-                };
+                let constructors = self.constructors_of(data)?;
                 if constructors[*constructor].refuted {
                     return Ok(true);
                 }
@@ -166,10 +166,7 @@ where
                 Ok(())
             }
             PatternKind::Constructor { data, constructor, arguments } => {
-                let constructors = match self.monotypes.constructors(&mut self.context, data)? {
-                    Ok(constructors) => constructors,
-                    Err(state) => return Err(self.pattern_error(state)),
-                };
+                let constructors = self.constructors_of(data)?;
                 let fields = constructors[*constructor].fields.clone();
                 for (argument, &field) in arguments.iter_mut().zip(fields.iter()) {
                     if !self.changes_representation(field, argument.monotype) {
@@ -198,6 +195,14 @@ where
                 }
                 Ok(())
             }
+        }
+    }
+
+    fn constructors_of(&mut self, data: &DataType) -> GoResult<Arc<[DataConstructor]>> {
+        match self.monotypes.constructors(&mut self.context, data) {
+            Ok(constructors) => Ok(constructors),
+            Err(Failure::Unsupported(state)) => Err(self.pattern_error(state)),
+            Err(Failure::Query(error)) => Err(error.into()),
         }
     }
 

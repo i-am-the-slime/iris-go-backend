@@ -27,7 +27,7 @@ use crate::mono::{
     Alternative, Binding, Expression, ExpressionKind, Function, FunctionId, FunctionSpelling,
     Guard, Guarded, GuardedBranch, Literal, Local, Pattern, PatternKind, RecordUpdate,
 };
-use crate::monotype::{Monotype, MonotypeId, Monotypes};
+use crate::monotype::{Monotype, MonotypeId, Monotypes, supported};
 use crate::scheme::{
     SCHEME_INSTANTIATION_LIMIT, SchemeInstantiation, SchemeInstantiations, SchemeKey,
     constrained_scheme,
@@ -670,10 +670,8 @@ where
     }
 
     fn closed_monotype(&mut self, scope: &Scope, closed: TypeId) -> GoResult<MonotypeId> {
-        match self.monotypes.monotype(&mut self.context, closed)? {
-            Ok(monotype) => Ok(monotype),
-            Err(state) => Err(self.unsupported(scope, state)),
-        }
+        let monotype = self.monotypes.monotype(&mut self.context, closed);
+        monotype.map_err(|failure| failure.at(&scope.definition))
     }
 
     fn equations(
@@ -1788,7 +1786,9 @@ where
         {
             return Ok(None);
         }
-        let Ok(record) = self.monotypes.record(&mut self.context, row)? else { return Ok(None) };
+        let Some(record) = supported(self.monotypes.record(&mut self.context, row))? else {
+            return Ok(None);
+        };
         let Some(spellings) = self.monotypes.record_spellings.get(&record) else {
             return Ok(None);
         };
@@ -2736,10 +2736,10 @@ where
                 UnsupportedState::OpenType { rendered: "constructor".into() },
             ));
         };
-        let constructors = match self.monotypes.constructors(&mut self.context, &data)? {
-            Ok(constructors) => constructors,
-            Err(state) => return Err(self.unsupported(scope, state)),
-        };
+        let constructors = self
+            .monotypes
+            .constructors(&mut self.context, &data)
+            .map_err(|failure| failure.at(&scope.definition))?;
         let Some(index) = constructors.iter().position(|constructor| constructor.term == term)
         else {
             return Err(self.unsupported(scope, UnsupportedState::MissingDeclaration));
@@ -2859,10 +2859,10 @@ where
                 let Monotype::Data(data) = self.monotypes.get(monotype).clone() else {
                     return Err(self.unsupported(scope, UnsupportedState::BinderError));
                 };
-                let constructors = match self.monotypes.constructors(&mut self.context, &data)? {
-                    Ok(constructors) => constructors,
-                    Err(state) => return Err(self.unsupported(scope, state)),
-                };
+                let constructors = self
+                    .monotypes
+                    .constructors(&mut self.context, &data)
+                    .map_err(|failure| failure.at(&scope.definition))?;
                 let Some(constructor) =
                     constructors.iter().position(|constructor| constructor.term == resolution.1)
                 else {

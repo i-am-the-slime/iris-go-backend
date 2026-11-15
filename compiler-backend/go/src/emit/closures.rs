@@ -40,14 +40,14 @@ use super::packages::Spelling;
 use super::{ConstructorLayout, DataKind, DataLayout, Emitter, identifier, layout, uses_local};
 use crate::arity::Arities;
 use crate::context::Context;
-use crate::naming::{capitalise, lower_first, numbered};
-use crate::error::{GoError, GoResult};
+use crate::error::GoResult;
 use crate::foreign::Foreign;
 use crate::mono::{
     Alternative, Binding, Expression, ExpressionKind, Function, FunctionId, FunctionSpelling,
     Guard, Guarded, Local, LocalId, Pattern, PatternKind, Program,
 };
-use crate::monotype::{DataType, Monotype, MonotypeId, Monotypes};
+use crate::monotype::{DataType, Failure, Monotype, MonotypeId, Monotypes};
+use crate::naming::{capitalise, lower_first, numbered};
 use crate::simplify::{for_each_child, for_each_child_mut};
 use crate::syntax::{GoDeclaration, GoExpression, GoType};
 
@@ -299,13 +299,11 @@ where
 
     /// The types of every constructor's fields.
     fn fields(&mut self, data: &DataType) -> GoResult<Vec<MonotypeId>> {
-        match self.monotypes.constructors(&mut self.context, data)? {
-            Ok(constructors) => Ok(constructors
-                .iter()
-                .flat_map(|constructor| constructor.fields.iter().copied())
-                .collect()),
-            Err(state) => Err(GoError::Unsupported { definition: "code generation".into(), state }),
-        }
+        let constructors = self
+            .monotypes
+            .constructors(&mut self.context, data)
+            .map_err(Failure::in_code_generation)?;
+        Ok(constructors.iter().flat_map(|constructor| constructor.fields.iter().copied()).collect())
     }
 
     fn unfold(&mut self, data: &DataType) -> GoResult<MonotypeId> {
@@ -455,9 +453,8 @@ where
         eliminators: &Eliminators,
         next_local: &mut u32,
     ) -> GoResult<(Function, ClosureSet)> {
-        let mut fresh = |name: SmolStr, monotype: MonotypeId| {
-            Local::fresh(next_local, name, monotype)
-        };
+        let mut fresh =
+            |name: SmolStr, monotype: MonotypeId| Local::fresh(next_local, name, monotype);
         let newtype = self.monotypes.function_newtype(monotype).cloned();
         let name = match &newtype {
             Some(newtype) => self.data_type_name(newtype)?,

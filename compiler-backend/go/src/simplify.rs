@@ -1044,11 +1044,7 @@ impl Simplifier<'_> {
         fresh
     }
 
-    fn rename(
-        &mut self,
-        expression: &mut Expression,
-        renaming: &mut FxHashMap<LocalId, LocalId>,
-    ) {
+    fn rename(&mut self, expression: &mut Expression, renaming: &mut FxHashMap<LocalId, LocalId>) {
         match &mut expression.kind {
             ExpressionKind::Local(id) => *id = renaming.get(id).copied().unwrap_or(*id),
             ExpressionKind::Lambda { parameters, body } => {
@@ -1089,7 +1085,11 @@ impl Simplifier<'_> {
         }
     }
 
-    fn rename_guarded(&mut self, guarded: &mut Guarded, renaming: &mut FxHashMap<LocalId, LocalId>) {
+    fn rename_guarded(
+        &mut self,
+        guarded: &mut Guarded,
+        renaming: &mut FxHashMap<LocalId, LocalId>,
+    ) {
         match guarded {
             Guarded::Unconditional(body) => self.rename(body, renaming),
             Guarded::Guards(branches) => {
@@ -1109,17 +1109,17 @@ impl Simplifier<'_> {
         }
     }
 
-    fn rename_binders(
-        &mut self,
-        locals: &mut [Local],
-        renaming: &mut FxHashMap<LocalId, LocalId>,
-    ) {
+    fn rename_binders(&mut self, locals: &mut [Local], renaming: &mut FxHashMap<LocalId, LocalId>) {
         for local in locals {
             *local = self.rename_binder(local, renaming);
         }
     }
 
-    fn rename_pattern(&mut self, pattern: &mut Pattern, renaming: &mut FxHashMap<LocalId, LocalId>) {
+    fn rename_pattern(
+        &mut self,
+        pattern: &mut Pattern,
+        renaming: &mut FxHashMap<LocalId, LocalId>,
+    ) {
         match &mut pattern.kind {
             PatternKind::Variable(local) => *local = self.rename_binder(local, renaming),
             PatternKind::Named { local, pattern } => {

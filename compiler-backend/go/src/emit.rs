@@ -40,7 +40,6 @@ use self::application::Callable;
 use self::packages::Spelling;
 use crate::arity::Arities;
 use crate::context::Context;
-use crate::naming::{capitalise, exported, identifier, numbered};
 use crate::erasure::Erasure;
 use crate::error::{GoError, GoResult};
 use crate::foreign::{
@@ -52,7 +51,8 @@ use crate::mono::{
     Alternative, Binding, Expression, ExpressionKind, Function, FunctionId, Guard, Guarded,
     Literal, Local, LocalId, Pattern, PatternKind, Program, RecordUpdate,
 };
-use crate::monotype::{DataType, Monotype, MonotypeId, Monotypes};
+use crate::monotype::{DataType, Failure, Monotype, MonotypeId, Monotypes};
+use crate::naming::{capitalise, exported, identifier, numbered};
 use crate::simplify::visit;
 use crate::syntax::{
     GoCase, GoDeclaration, GoDefault, GoExpression, GoStatement, GoType, Name, statements_names,
@@ -475,8 +475,10 @@ fn report_uncaught_exceptions(declarations: &mut [GoDeclaration]) {
         if let GoDeclaration::Function { name, body, .. } = declaration
             && name == "main"
         {
-            let report =
-                GoExpression::Qualified { package: "exception".into(), name: "ReportUncaught".into() };
+            let report = GoExpression::Qualified {
+                package: "exception".into(),
+                name: "ReportUncaught".into(),
+            };
             body.insert(0, GoStatement::Defer(call(report, vec![])));
         }
     }
@@ -1271,7 +1273,11 @@ where
     /// The Go spelling of a value that only its type names.
     fn value_base(&mut self, monotype: MonotypeId) -> String {
         if !matches!(self.monotypes.get(monotype), Monotype::Record(_)) {
-            return format!("{}{}", identifier(&self.monotypes.value_name(monotype)), locals::NUMBERED);
+            return format!(
+                "{}{}",
+                identifier(&self.monotypes.value_name(monotype)),
+                locals::NUMBERED
+            );
         }
         let index = match self.typed_records.iter().position(|&known| known == monotype) {
             Some(index) => index,
@@ -1528,15 +1534,8 @@ where
                 | Monotype::Lazy(inner) => pending.push(inner),
                 Monotype::ForeignData(foreign) => {
                     for &argument in foreign.arguments.iter() {
-                        match self.monotypes.monotype(&mut self.context, argument)? {
-                            Ok(argument) => pending.push(argument),
-                            Err(state) => {
-                                return Err(GoError::Unsupported {
-                                    definition: "code generation".into(),
-                                    state,
-                                });
-                            }
-                        }
+                        let argument = self.monotypes.monotype(&mut self.context, argument);
+                        pending.push(argument.map_err(Failure::in_code_generation)?);
                     }
                 }
                 Monotype::Record(_)
@@ -1582,15 +1581,10 @@ where
         }
         let mut arguments = Vec::with_capacity(data.arguments.len());
         for &argument in data.arguments.iter() {
-            let monotype = match self.monotypes.monotype(&mut self.context, argument)? {
-                Ok(monotype) => monotype,
-                Err(state) => {
-                    return Err(GoError::Unsupported {
-                        definition: "code generation".into(),
-                        state,
-                    });
-                }
-            };
+            let monotype = self
+                .monotypes
+                .monotype(&mut self.context, argument)
+                .map_err(Failure::in_code_generation)?;
             // A project's foreign package sees its type arguments in the
             // convention its functions take them in (an Int is a Go int).
             let argument = match support {
@@ -1677,10 +1671,10 @@ where
         }
         let name = self.data_type_global(data)?;
         self.homes.insert(name.clone(), data.file_id);
-        let constructors = match self.monotypes.constructors(&mut self.context, data)? {
-            Ok(constructors) => constructors,
-            Err(state) => return Err(GoError::Unsupported { definition: name, state }),
-        };
+        let constructors = self
+            .monotypes
+            .constructors(&mut self.context, data)
+            .map_err(|failure| failure.at(&name))?;
         let kind = if constructors.iter().all(|constructor| constructor.fields.is_empty()) {
             DataKind::Enumeration
         } else if constructors.len() == 1 {
@@ -1771,7 +1765,7 @@ where
     }
 
     fn is_cell(&mut self, data: &DataType) -> bool {
-        let Ok(Ok(constructors)) = self.monotypes.constructors(&mut self.context, data) else {
+        let Ok(constructors) = self.monotypes.constructors(&mut self.context, data) else {
             return false;
         };
         let has_fields = constructors.iter().any(|constructor| !constructor.fields.is_empty());
@@ -1804,12 +1798,10 @@ where
     }
 
     fn constructor_fields(&mut self, data: &DataType) -> GoResult<Vec<MonotypeId>> {
-        let constructors = match self.monotypes.constructors(&mut self.context, data)? {
-            Ok(constructors) => constructors,
-            Err(state) => {
-                return Err(GoError::Unsupported { definition: "code generation".into(), state });
-            }
-        };
+        let constructors = self
+            .monotypes
+            .constructors(&mut self.context, data)
+            .map_err(Failure::in_code_generation)?;
         Ok(constructors.iter().flat_map(|constructor| constructor.fields.iter().copied()).collect())
     }
 
@@ -3653,12 +3645,10 @@ where
                 },
             });
         };
-        let constructors = match self.monotypes.constructors(&mut self.context, &data)? {
-            Ok(constructors) => constructors,
-            Err(state) => {
-                return Err(GoError::Unsupported { definition: self.current_definition(), state });
-            }
-        };
+        let constructors = self
+            .monotypes
+            .constructors(&mut self.context, &data)
+            .map_err(|failure| failure.at(&self.current_definition()))?;
         let index =
             constructors.iter().position(|constructor| constructor.name == name).unwrap_or(0);
         Ok((data, index))
