@@ -11,6 +11,7 @@ mod chunks;
 mod closures;
 mod coerce;
 mod deduplicate;
+mod diverging;
 mod fusion;
 mod groups;
 mod iteration;
@@ -131,6 +132,7 @@ where
         emitter.imports.insert(GoPackage::Alloc.path().into());
     }
     timed("blocks", || blocks::allocate_nested_cells_together(&mut declarations, &taken));
+    timed("divergence", || diverging::end_blocks_at_divergence(&mut declarations));
     timed("unreferenced", || unreferenced::drop_unreferenced_definitions(&mut declarations));
     let mut homes: FxHashMap<String, ModuleIndex> = std::mem::take(&mut emitter.homes)
         .into_iter()

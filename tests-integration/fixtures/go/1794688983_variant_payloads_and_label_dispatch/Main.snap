@@ -8,8 +8,6 @@ import "fixture/shared"
 
 func Case_String(r shared.VariantRep) string {
 	panic("Data.Variant: pattern match failure [" + r.Type + "]")
-	var unreachable string
-	return unreachable
 }
 
 // Record/Studio/Shrink/shrink.go
