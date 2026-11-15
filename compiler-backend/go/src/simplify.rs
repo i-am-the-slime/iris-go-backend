@@ -736,10 +736,11 @@ impl Simplifier<'_> {
                 lambda_monotype,
             );
         }
-        let body_monotype = body.monotype;
-        let result =
-            Expression::new(ExpressionKind::Let { bindings, body: Box::new(body) }, body_monotype);
-        let result = self.expression(result);
+        for binding in &bindings {
+            self.remember_record_order(binding);
+        }
+        let body = self.expression(body);
+        let result = self.let_bindings(bindings, body);
         self.apply(result, rest, monotype)
     }
 
