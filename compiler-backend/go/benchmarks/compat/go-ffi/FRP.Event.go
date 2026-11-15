@@ -70,9 +70,8 @@ func foreachSubscriber[A any](object *subscribers[A], f func(A) func()) {
 	var run func(level int)
 	run = func(level int) {
 		object.levels = append(object.levels, map[int]A{})
-		current := object.levels[level]
-		for _, key := range sortedKeys(current) {
-			value := current[key]
+		for _, entry := range sortedEntries(object.levels[level]) {
+			key, value := entry.key, entry.value
 			f(value)()
 			if len(object.levels[level+1]) > 0 {
 				run(level + 1)
@@ -92,11 +91,18 @@ func foreachSubscriber[A any](object *subscribers[A], f func(A) func()) {
 	}
 }
 
-func sortedKeys[A any](entries map[int]A) []int {
-	keys := make([]int, 0, len(entries))
-	for key := range entries {
-		keys = append(keys, key)
+// entry is one key-subscriber pair of a level, taken before its subscribers run: like
+// `Object.entries` in Event.js, a subscriber removed by an earlier one in the same push still runs.
+type entry[A any] struct {
+	key   int
+	value A
+}
+
+func sortedEntries[A any](level map[int]A) []entry[A] {
+	entries := make([]entry[A], 0, len(level))
+	for key, value := range level {
+		entries = append(entries, entry[A]{key, value})
 	}
-	sort.Ints(keys)
-	return keys
+	sort.Slice(entries, func(i, j int) bool { return entries[i].key < entries[j].key })
+	return entries
 }
