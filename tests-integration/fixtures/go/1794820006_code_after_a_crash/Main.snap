@@ -1,0 +1,46 @@
+---
+source: tests-integration/src/fixtures.rs
+---
+// main.go
+package main
+
+import (
+	"github.com/i-am-the-slime/purs-backend-go/go-support/exception"
+	"github.com/i-am-the-slime/purs-backend-go/go-support/prim"
+	"os"
+)
+
+type Ref[T any] struct {
+	Value T
+}
+
+type StateValue struct {
+	State int32
+	Value int32
+}
+
+func main_() int32 {
+	ref := &Ref[int32]{Value: 1}
+	i := ref.Value
+	s := ref.Value
+	s_ := s + 1
+	modified := StateValue{State: s_, Value: s_}
+	ref.Value = modified.State
+	scrutinee := i > 5
+	if scrutinee {
+		panic(exception.NewError("too many"))
+	}
+	var result int32
+	if i > 100 {
+		panic("too large")
+	} else {
+		result = prim.MultiplyInt32(i, 2)
+	}
+	return result
+}
+
+func main() {
+	defer exception.ReportUncaught()
+	exitStatus := main_()
+	os.Exit(int(exitStatus))
+}

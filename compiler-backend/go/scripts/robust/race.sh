@@ -21,8 +21,7 @@
 # $TMPDIR/iris-race), JOBS, TIMEOUT (seconds per race run, default 600), MARKGRAF_INPUTS (files),
 # GOEXPERIMENT (default simd).
 #
-# Exit status 1 when any target has a race, a vet complaint not on the noise list, or a failed
-# build. Vet's `unreachable code` after an emitted panic is reported but counted as noise.
+# Exit status 1 when any target has a race, a vet complaint, or a failed build.
 
 set -uo pipefail
 export LC_ALL=C
@@ -43,7 +42,6 @@ export GORACE="halt_on_error=0 history_size=2"
 mkdir -p "$WORK"
 export IRIS GO_SUPPORT EXAMPLES WORK GOEXPERIMENT TIMEOUT
 
-VET_NOISE='unreachable code'
 
 go_mod() { # module-name go-support-dir
   cat <<GOMOD
@@ -267,9 +265,6 @@ echo "== vet complaints, by location ($(wc -l <"$WORK/vet.txt" | tr -d ' ') in a
 # The program prefix (`example X: `) is dropped for deduplication only where the location is in
 # go-support; generated files are per program.
 sort "$WORK/vet.txt" | awk -F': ' '{ count[$0]++ } END { for (k in count) print count[k] "x " k }' | sort -k2 | sed 's/^/  /'
-noise="$(grep -c -- "$VET_NOISE" "$WORK/vet.txt")"
-real="$(grep -vc -- "$VET_NOISE" "$WORK/vet.txt")"
-echo "  ($noise noise: '$VET_NOISE' after an emitted panic; $real other)"
 
 echo
 echo "== data races, by location pair ($(grep -c . "$WORK/races.txt") reports)"
@@ -282,7 +277,7 @@ echo "== build failures: $(grep -c . "$WORK/failures.txt")"
 sed 's/^/  /' "$WORK/failures.txt"
 
 status=0
-[ "$real" = 0 ] || status=1
+[ -s "$WORK/vet.txt" ] && status=1
 [ -s "$WORK/races.txt" ] && status=1
 [ -s "$WORK/failures.txt" ] && status=1
 exit "$status"

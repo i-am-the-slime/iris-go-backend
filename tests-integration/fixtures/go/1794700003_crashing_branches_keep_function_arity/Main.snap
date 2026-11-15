@@ -18,8 +18,6 @@ func combineWith(n int32) func(int32, int32) int32 {
 		}
 	}
 	panic("a positive weight")
-	var unreachable func(int32, int32) int32
-	return unreachable
 }
 
 func main() {

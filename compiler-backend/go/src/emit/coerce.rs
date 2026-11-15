@@ -130,6 +130,13 @@ where
                 let converter = self.converter(from, to)?;
                 Ok(call(identifier_expression(&converter), vec![value]))
             }
+            // JavaScript represents a Char as a string of one code unit, so an `unsafeCoerce`
+            // from Char to String (Data.String.NonEmpty.CodeUnits.fromFoldable1) is that string.
+            (Monotype::Char, Monotype::String) => {
+                let singleton =
+                    self.go_function(GoFunction { package: GoPackage::Prim, name: "CharSingleton" });
+                Ok(call(singleton, vec![value]))
+            }
             _ => Err(GoError::Unsupported {
                 definition: "code generation".into(),
                 state: crate::error::UnsupportedState::Construct { construct: UNRELATED_TYPES },

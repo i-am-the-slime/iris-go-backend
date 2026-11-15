@@ -117,8 +117,6 @@ func describe(r VariantFRep) string {
 		return "count " + prim.ShowInt(scrutinee.Count(2))
 	}
 	panic("Data.Functor.Variant: pattern match failure [" + r.Type + "]")
-	var unreachable string
-	return unreachable
 }
 
 var say VariantFRep = convert4(Map_Type_ValueOfFnFnValueValueFnSaySaySayInt{Type: "say", Value: SayInt{First: "hello", Second: 4}, Map: func(f func(any) any) func(*Say) *Say {

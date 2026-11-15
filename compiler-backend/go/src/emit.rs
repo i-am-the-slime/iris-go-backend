@@ -12,6 +12,7 @@ mod closures;
 mod coerce;
 mod constructors;
 mod deduplicate;
+mod diverging;
 mod fusion;
 mod groups;
 mod instantiations;
@@ -25,6 +26,7 @@ mod packages;
 mod ranges;
 mod reference_equality;
 mod reuse;
+mod unreferenced;
 mod views;
 
 use std::collections::BTreeSet;
@@ -114,6 +116,10 @@ where
     if !unused.is_empty() {
         declarations.retain(|declaration| declaration.name().is_none_or(|n| !unused.contains(n)));
     }
+    if emitter.entry_performs_effects() {
+        emitter.imports.insert(GoPackage::Exception.path().into());
+        report_uncaught_exceptions(&mut declarations);
+    }
     if emitter.imports.contains(GoPackage::Aff.path()) {
         await_fibers(&mut declarations);
     }
@@ -128,6 +134,8 @@ where
         emitter.imports.insert(GoPackage::Alloc.path().into());
     }
     timed("blocks", || blocks::allocate_nested_cells_together(&mut declarations, &taken));
+    timed("divergence", || diverging::end_blocks_at_divergence(&mut declarations));
+    timed("unreferenced", || unreferenced::drop_unreferenced_definitions(&mut declarations));
     let mut homes: FxHashMap<String, ModuleIndex> = std::mem::take(&mut emitter.homes)
         .into_iter()
         .filter_map(|(name, file)| Some((name, modules.index(file)?)))
@@ -457,6 +465,20 @@ fn recursive_constants(program: &Program, monotypes: &Monotypes) -> FxHashSet<Fu
         }
     }
     constants
+}
+
+/// An exception that escapes `main` ends the program as it ends a JS one: its stack on stderr and
+/// exit status 1. Fibers awaited later report their own failures.
+fn report_uncaught_exceptions(declarations: &mut [GoDeclaration]) {
+    for declaration in declarations {
+        if let GoDeclaration::Function { name, body, .. } = declaration
+            && name == "main"
+        {
+            let report =
+                GoExpression::Qualified { package: "exception".into(), name: "ReportUncaught".into() };
+            body.insert(0, GoStatement::Defer(call(report, vec![])));
+        }
+    }
 }
 
 fn await_fibers(declarations: &mut [GoDeclaration]) {
@@ -958,6 +980,11 @@ where
             };
             self.function_names.push(name);
         }
+    }
+
+    fn entry_performs_effects(&self) -> bool {
+        let function = self.program.function(self.program.entry);
+        function.parameters.is_empty() && self.monotypes.effect_result(function.result).is_some()
     }
 
     fn main(&mut self) -> GoResult<Option<GoDeclaration>> {
@@ -3760,12 +3787,18 @@ where
         monotype: MonotypeId,
         out: &mut Vec<GoStatement>,
     ) -> GoResult<GoExpression> {
+        let (data, just) = self.constructor_named(monotype, "Just")?;
+        let (_, nothing) = self.constructor_named(monotype, "Nothing")?;
+        // Go rejects a constant negative index even in a branch that cannot run.
+        if let ExpressionKind::Literal(Literal::Int(index)) = arguments[3].kind
+            && index < 0
+        {
+            return self.construct(&data, nothing, vec![]);
+        }
         let elements = self.value(&arguments[2], out)?;
         let elements = self.hoist(elements, "elements", out);
         let index = self.value(&arguments[3], out)?;
         let index = self.hoist(index, "index", out);
-        let (data, just) = self.constructor_named(monotype, "Just")?;
-        let (_, nothing) = self.constructor_named(monotype, "Nothing")?;
         let element = GoExpression::Index {
             value: Box::new(elements.clone()),
             index: Box::new(index.clone()),
