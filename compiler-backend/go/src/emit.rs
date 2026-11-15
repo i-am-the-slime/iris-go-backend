@@ -21,6 +21,7 @@ mod names;
 mod ownership;
 mod packages;
 mod ranges;
+mod reference_equality;
 mod reuse;
 mod views;
 
@@ -4139,6 +4140,9 @@ where
                 return self.record_from_results(result, monotype, out);
             }
             return Ok(result);
+        }
+        if let Foreign::ReferenceEqual = foreign {
+            return self.reference_equal(&arguments[0], &arguments[1], out);
         }
         let mut values = vec![];
         for argument in arguments {

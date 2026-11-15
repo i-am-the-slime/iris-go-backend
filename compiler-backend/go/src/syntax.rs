@@ -644,6 +644,15 @@ fn expression_names(expression: &mut GoExpression, visit: &mut impl FnMut(Name<'
     }
 }
 
+impl GoType {
+    /// The type as Go spells it, on one line.
+    pub fn render(&self) -> String {
+        let mut printer =
+            Printer { output: String::new(), indentation: 0, census: Default::default() };
+        printer.type_argument(self)
+    }
+}
+
 pub struct GoFile {
     pub package: String,
     pub imports: Vec<GoImport>,

@@ -60,6 +60,10 @@ pub enum UnsupportedState {
     ForeignData { name: String },
     #[error("foreign import {name} has no Go implementation")]
     UnknownForeign { name: String },
+    #[error(
+        "reallyUnsafeRefEq compares values of different Go types, {left} and {right}, which share no reference"
+    )]
+    ReferenceEqualityAcrossTypes { left: String, right: String },
     #[error("{construct} is not supported by the Go backend yet")]
     Construct { construct: &'static str },
 }

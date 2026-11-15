@@ -50,9 +50,9 @@ impl UnsupportedState {
         match self {
             UnsupportedState::UnknownForeign { .. } => BlockerKind::MissingForeign,
             UnsupportedState::ForeignData { .. } => BlockerKind::ForeignData,
-            UnsupportedState::Construct { .. } | UnsupportedState::InterleavedAbstractions => {
-                BlockerKind::Construct
-            }
+            UnsupportedState::Construct { .. }
+            | UnsupportedState::InterleavedAbstractions
+            | UnsupportedState::ReferenceEqualityAcrossTypes { .. } => BlockerKind::Construct,
             UnsupportedState::SpecializationLimit { .. } => BlockerKind::SpecializationLimit,
             UnsupportedState::OpenType { .. } | UnsupportedState::UnsaturatedType { .. } => {
                 BlockerKind::OpenType
