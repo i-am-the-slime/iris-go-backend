@@ -41,8 +41,8 @@ set -uo pipefail
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT="$(cd "$HERE/../../../.." && pwd)"
 IRIS="${IRIS:-$ROOT/target/release/iris}"
-[ -x "$IRIS" ] || IRIS=/Users/mark/Developer/iris-robust/target/release/iris
-GO_SUPPORT="${GO_SUPPORT:-/Users/mark/Developer/pbg-robust/go-support}"
+[ -x "$IRIS" ] || IRIS=/Users/mark/Developer/purescript-iris/target/release/iris
+GO_SUPPORT="${GO_SUPPORT:-/Users/mark/Developer/purs-backend-go/go-support}"
 export GOEXPERIMENT="${GOEXPERIMENT:-simd}"
 WORK="${WORK:-${TMPDIR:-/tmp}/iris-robust-suites}"
 JOBS="${JOBS:-4}"
