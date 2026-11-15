@@ -20,6 +20,7 @@ package main
 import (
 	"fixture/Data/Maybe"
 	"fmt"
+	"github.com/i-am-the-slime/purs-backend-go/go-support/exception"
 	"github.com/i-am-the-slime/purs-backend-go/go-support/prim"
 	"math"
 )
@@ -30,7 +31,12 @@ type MainResult struct {
 	Even   bool
 }
 
-var main_ MainResult = MainResult{Steps: walk(0, 27), Halved: halve(0, 64.0), Even: isEven(100000)}
+var main_ = initializeMain_()
+
+func initializeMain_() MainResult {
+	defer exception.ReportUncaught()
+	return MainResult{Steps: walk(0, 27), Halved: halve(0, 64.0), Even: isEven(100000)}
+}
 
 const (
 	walkStep = iota

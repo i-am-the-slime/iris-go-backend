@@ -58,6 +58,7 @@ use crate::monotype::{DataType, Monotype, MonotypeId, Monotypes};
 use crate::naming::{capitalise, exported, identifier, numbered};
 use crate::graph::{on_cycles, strongly_connected};
 use crate::simplify::{reference_graph, visit};
+use crate::walk::{self, Walk};
 use crate::syntax::{
     GoCase, GoDeclaration, GoExpression, GoStatement, GoType, Name, statements_names,
 };
@@ -410,6 +411,24 @@ fn recursive_constants(program: &Program, monotypes: &Monotypes) -> FxHashSet<Fu
         }
     }
     constants
+}
+
+/// Whether evaluating an expression calls a function, which may throw; the bodies of function
+/// literals do not run when the literal is evaluated.
+fn runs_code(expression: &GoExpression) -> bool {
+    struct Calls(bool);
+    impl Walk for Calls {
+        fn expression(&mut self, value: &mut GoExpression) {
+            match value {
+                GoExpression::Function { .. } => {}
+                GoExpression::Call { .. } => self.0 = true,
+                _ => walk::expression(self, value),
+            }
+        }
+    }
+    let mut calls = Calls(false);
+    calls.expression(&mut expression.clone());
+    calls.0
 }
 
 /// An exception that escapes `main` ends the program as it ends a JS one: its stack on stderr and
@@ -1117,11 +1136,14 @@ where
         ])
     }
 
+    /// A top-level value. One whose evaluation runs code is computed by an initializer that
+    /// reports an exception escaping it as main does: package variables are initialized before
+    /// main runs, and a JS module that throws while it loads ends the program the same way.
     fn constant(&mut self, name: &str, function: &Function) -> GoResult<Vec<GoDeclaration>> {
         let type_ = self.go_type(function.result)?;
         let mut statements = vec![];
         let value = self.value(&function.body, &mut statements)?;
-        if statements.is_empty() {
+        if statements.is_empty() && !runs_code(&value) {
             return Ok(vec![GoDeclaration::Variable {
                 name: name.into(),
                 type_: Some(type_),
@@ -1129,6 +1151,8 @@ where
             }]);
         }
         let initializer = self.global_name(Spelling::derived("initialize", name.into(), ""));
+        let report = GoFunction { package: GoPackage::Exception, name: "ReportUncaught" };
+        statements.insert(0, GoStatement::Defer(call(self.go_function(report), vec![])));
         statements.push(GoStatement::Return(Some(value)));
         let result = self.go_result(function.result)?;
         Ok(vec![

@@ -33,6 +33,7 @@ import (
 	"fixture/Data/Show"
 	"fixture/shared"
 	"fmt"
+	"github.com/i-am-the-slime/purs-backend-go/go-support/exception"
 	"github.com/i-am-the-slime/purs-backend-go/go-support/prim"
 )
 
@@ -70,6 +71,7 @@ type PairString struct {
 var main_ = initializeMain_()
 
 func initializeMain_() string {
+	defer exception.ReportUncaught()
 	array := []maybe.MaybeTiming{maybe.MaybeTiming{Tag: maybe.MaybeTimingJust, Just: shared.Timing{Start: 2.0, End: 3.0}}, maybe.MaybeTiming{Tag: maybe.MaybeTimingNothing}}
 	var accumulator float64 = 0.0
 	for timingIndex := range array {

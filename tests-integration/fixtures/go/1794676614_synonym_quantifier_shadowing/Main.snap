@@ -14,6 +14,7 @@ package main
 import (
 	"fixture/Control/Category"
 	"fmt"
+	"github.com/i-am-the-slime/purs-backend-go/go-support/exception"
 	"github.com/i-am-the-slime/purs-backend-go/go-support/prim"
 )
 
@@ -288,16 +289,21 @@ func convert8(value *FreeCommand) FreeCommandVal {
 	}
 }
 
-var main_ []int32 = []int32{foldFreeCommandIntInt(intoState, program, 0).Value + 1, foldFreeCommandIntInt(intoState, substFreeInstructionCommandInt(func(x *Instruction) *FreeCommand {
-	var result *Command
-	switch x.Tag {
-	case InstructionStore:
-		result = &Command{Tag: CommandPush, Push0: x.Store0, Push1: x.Store1}
-	default: // InstructionLoad
-		result = &Command{Tag: CommandPop, Pop: x.Load}
-	}
-	return &FreeCommand{Tag: FreeCommandBind, Bind0: convert(result), Bind1: Pure}
-}, instructions), 0).Value}
+var main_ = initializeMain_()
+
+func initializeMain_() []int32 {
+	defer exception.ReportUncaught()
+	return []int32{foldFreeCommandIntInt(intoState, program, 0).Value + 1, foldFreeCommandIntInt(intoState, substFreeInstructionCommandInt(func(x *Instruction) *FreeCommand {
+		var result *Command
+		switch x.Tag {
+		case InstructionStore:
+			result = &Command{Tag: CommandPush, Push0: x.Store0, Push1: x.Store1}
+		default: // InstructionLoad
+			result = &Command{Tag: CommandPop, Pop: x.Load}
+		}
+		return &FreeCommand{Tag: FreeCommandBind, Bind0: convert(result), Bind1: Pure}
+	}, instructions), 0).Value}
+}
 
 func foldFreeCommandIntInt(k func(*Command, int32) StateValueOfValue, program FreeCommandInt, state int32) StateValueOfInt {
 	for {
@@ -324,23 +330,33 @@ func intoState(value *Command, ignored int32) StateValueOfValue {
 	}
 }
 
-var program FreeCommandInt = andThenCommandUnitInt(FreeCommandUnit{Tag: FreeCommandUnitBind, Bind0: convert3(CommandUnit{Tag: CommandUnitPush, Push0: 41, Push1: struct{}{}}), Bind1: func(_ any) FreeCommandUnit {
-	return FreeCommandUnit{Tag: FreeCommandUnitPure, Pure: struct{}{}}
-}}, func(_ struct{}) FreeCommandInt {
-	return FreeCommandInt{Tag: FreeCommandIntBind, Bind0: convert4(CommandInt{Tag: CommandIntPop, Pop: category.Identity}), Bind1: func(value any) FreeCommandInt {
-		return FreeCommandInt{Tag: FreeCommandIntPure, Pure: value.(int32)}
-	}}
-})
+var program = initializeProgram()
 
-var instructions FreeInstructionInt = andThenInstructionUnitInt(FreeInstructionUnit{Tag: FreeInstructionUnitBind, Bind0: convert5(InstructionUnit{Tag: InstructionUnitStore, Store0: 6, Store1: struct{}{}}), Bind1: func(_ any) FreeInstructionUnit {
-	return FreeInstructionUnit{Tag: FreeInstructionUnitPure, Pure: struct{}{}}
-}}, func(_ struct{}) FreeInstructionInt {
-	return FreeInstructionInt{Tag: FreeInstructionIntBind, Bind0: convert6(InstructionInt{Tag: InstructionIntLoad, Load: func(value int32) int32 {
-		return prim.MultiplyInt32(value, 7)
-	}}), Bind1: func(value any) FreeInstructionInt {
-		return FreeInstructionInt{Tag: FreeInstructionIntPure, Pure: value.(int32)}
-	}}
-})
+func initializeProgram() FreeCommandInt {
+	defer exception.ReportUncaught()
+	return andThenCommandUnitInt(FreeCommandUnit{Tag: FreeCommandUnitBind, Bind0: convert3(CommandUnit{Tag: CommandUnitPush, Push0: 41, Push1: struct{}{}}), Bind1: func(_ any) FreeCommandUnit {
+		return FreeCommandUnit{Tag: FreeCommandUnitPure, Pure: struct{}{}}
+	}}, func(_ struct{}) FreeCommandInt {
+		return FreeCommandInt{Tag: FreeCommandIntBind, Bind0: convert4(CommandInt{Tag: CommandIntPop, Pop: category.Identity}), Bind1: func(value any) FreeCommandInt {
+			return FreeCommandInt{Tag: FreeCommandIntPure, Pure: value.(int32)}
+		}}
+	})
+}
+
+var instructions = initializeInstructions()
+
+func initializeInstructions() FreeInstructionInt {
+	defer exception.ReportUncaught()
+	return andThenInstructionUnitInt(FreeInstructionUnit{Tag: FreeInstructionUnitBind, Bind0: convert5(InstructionUnit{Tag: InstructionUnitStore, Store0: 6, Store1: struct{}{}}), Bind1: func(_ any) FreeInstructionUnit {
+		return FreeInstructionUnit{Tag: FreeInstructionUnitPure, Pure: struct{}{}}
+	}}, func(_ struct{}) FreeInstructionInt {
+		return FreeInstructionInt{Tag: FreeInstructionIntBind, Bind0: convert6(InstructionInt{Tag: InstructionIntLoad, Load: func(value int32) int32 {
+			return prim.MultiplyInt32(value, 7)
+		}}), Bind1: func(value any) FreeInstructionInt {
+			return FreeInstructionInt{Tag: FreeInstructionIntPure, Pure: value.(int32)}
+		}}
+	})
+}
 
 func andThenCommandUnitInt(program FreeCommandUnit, next func(struct{}) FreeCommandInt) FreeCommandInt {
 	switch program.Tag {

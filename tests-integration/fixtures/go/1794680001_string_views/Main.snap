@@ -53,6 +53,7 @@ import (
 	"fmt"
 	"github.com/i-am-the-slime/purs-backend-go/go-support/array"
 	"github.com/i-am-the-slime/purs-backend-go/go-support/direct"
+	"github.com/i-am-the-slime/purs-backend-go/go-support/exception"
 	"github.com/i-am-the-slime/purs-backend-go/go-support/prim"
 	"slices"
 )
@@ -73,6 +74,7 @@ func rangeInt32(start int32, end int32) []int32 {
 var main_ = initializeMain_()
 
 func initializeMain_() []string {
+	defer exception.ReportUncaught()
 	text := prim.StringJoinWith(" ", []string{"a😀", "naïve 😀 banana 日本 a𝄞a"})
 	array := rangeInt32(0, prim.CodeUnitLength(text) - 1)
 	mapped := make([]maybe.MaybeChar, len(array))

@@ -33,6 +33,7 @@ import (
 	"fixture/Data/Either"
 	"fmt"
 	"github.com/i-am-the-slime/purs-backend-go/go-support/array"
+	"github.com/i-am-the-slime/purs-backend-go/go-support/exception"
 	"github.com/i-am-the-slime/purs-backend-go/go-support/prim"
 	"slices"
 )
@@ -52,6 +53,7 @@ type AccSeen struct {
 var main_ = initializeMain_()
 
 func initializeMain_() MainResult {
+	defer exception.ReportUncaught()
 	accumulator := []int32{}
 	accumulator = slices.Clip(accumulator)
 	for x := int32(1); x < 6; x++ {

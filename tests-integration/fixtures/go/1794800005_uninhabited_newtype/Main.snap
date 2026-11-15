@@ -4,7 +4,10 @@ source: tests-integration/src/fixtures.rs
 // main.go
 package main
 
-import "fmt"
+import (
+	"fmt"
+	"github.com/i-am-the-slime/purs-backend-go/go-support/exception"
+)
 
 type Never struct{}
 
@@ -22,6 +25,7 @@ const (
 var main_ = initializeMain_()
 
 func initializeMain_() []int32 {
+	defer exception.ReportUncaught()
 	mapped := make([]int32, len(steps))
 	for index, element := range steps {
 		mapped[index] = value(element)

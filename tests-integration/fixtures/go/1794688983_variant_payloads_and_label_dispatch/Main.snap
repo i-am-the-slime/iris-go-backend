@@ -28,6 +28,7 @@ import (
 	"fixture/shared"
 	"fmt"
 	"github.com/i-am-the-slime/purs-backend-go/go-support/array"
+	"github.com/i-am-the-slime/purs-backend-go/go-support/exception"
 	"github.com/i-am-the-slime/purs-backend-go/go-support/prim"
 )
 
@@ -87,6 +88,7 @@ type Invalid struct {
 var main_ = initializeMain_()
 
 func initializeMain_() []string {
+	defer exception.ReportUncaught()
 	mapped := make([]string, len(problems))
 	for index, element := range problems {
 		mapped[index] = byLabel(element)
@@ -116,7 +118,12 @@ func byLabel(r shared.VariantRep) string {
 	return variant.Case_String(r)
 }
 
-var problems []shared.VariantRep = []shared.VariantRep{convert2(VariantRepString{Type: "missing", Value: "user"}), convert3(VariantRepInt{Type: "invalid", Value: 3}), convert5(VariantRepAfter{Type: "late", Value: AfterOfInt{After: 5}})}
+var problems = initializeProblems()
+
+func initializeProblems() []shared.VariantRep {
+	defer exception.ReportUncaught()
+	return []shared.VariantRep{convert2(VariantRepString{Type: "missing", Value: "user"}), convert3(VariantRepInt{Type: "invalid", Value: 3}), convert5(VariantRepAfter{Type: "late", Value: AfterOfInt{After: 5}})}
+}
 
 func byRecord(v shared.VariantRep) string {
 	s := v.Type
@@ -173,7 +180,12 @@ func someLabels(v shared.VariantRep) string {
 	return "unhandled"
 }
 
-var shrunk shared.BaseName = shrink.ShrinkBaseNameScaleBaseNameScaleConsIntConsStringNil(shared.BaseNameScale{Base: 1, Name: "context", Scale: 2})
+var shrunk = initializeShrunk()
+
+func initializeShrunk() shared.BaseName {
+	defer exception.ReportUncaught()
+	return shrink.ShrinkBaseNameScaleBaseNameScaleConsIntConsStringNil(shared.BaseNameScale{Base: 1, Name: "context", Scale: 2})
+}
 
 func main() {
 	fmt.Println(main_)

@@ -256,8 +256,8 @@ classify() {
   if ! cmp -s "$dir/js.out" "$dir/go.out"; then
     echo "$js|OUTPUT MISMATCH|$(diff "$dir/js.out" "$dir/go.out" | grep -m4 '^[<>]' | tr '\n' ' ' | cut -c1-300)"; return
   fi
-  # Exit codes differ between runtimes for an uncaught exception (Bun 1, Go 2); success must agree.
-  if [ "$(( $(cat "$dir/js.status") == 0 ))" != "$(( $(cat "$dir/go.status") == 0 ))" ]; then
+  # An uncaught exception exits with status 1 in both, also one thrown while the program loads.
+  if [ "$(cat "$dir/js.status")" != "$(cat "$dir/go.status")" ]; then
     echo "$js|EXIT MISMATCH|go exit $(cat "$dir/go.status"): $(tail -2 "$dir/go.err" | tr '\n' ' ' | cut -c1-200)"; return
   fi
   echo "$js|OK|$(wc -l <"$dir/js.out" | tr -d ' ') lines"

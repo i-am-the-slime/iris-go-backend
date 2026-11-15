@@ -1,6 +1,5 @@
 ---
 source: tests-integration/src/fixtures.rs
-assertion_line: 570
 ---
 // main.go
 package main
@@ -8,12 +7,14 @@ package main
 import (
 	"fmt"
 	"github.com/i-am-the-slime/purs-backend-go/go-support/direct"
+	"github.com/i-am-the-slime/purs-backend-go/go-support/exception"
 	"github.com/i-am-the-slime/purs-backend-go/go-support/prim"
 )
 
 var main_ = initializeMain_()
 
 func initializeMain_() []int32 {
+	defer exception.ReportUncaught()
 	append_ := direct.Appender[int32]()
 	array := []int32{1, 2, 3}
 	accumulator := func(_ int32, _ int32) []int32 {

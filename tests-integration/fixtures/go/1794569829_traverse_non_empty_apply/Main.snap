@@ -22,12 +22,14 @@ import (
 	"fmt"
 	"github.com/i-am-the-slime/purs-backend-go/go-support/array"
 	"github.com/i-am-the-slime/purs-backend-go/go-support/direct"
+	"github.com/i-am-the-slime/purs-backend-go/go-support/exception"
 	"github.com/i-am-the-slime/purs-backend-go/go-support/prim"
 )
 
 var main_ = initializeMain_()
 
 func initializeMain_() maybe.MaybeArrayInt {
+	defer exception.ReportUncaught()
 	array2 := array.Append([]int32{2}, []int32{4, 8})
 	append_ := direct.Appender[int32]()
 	n := array2[0]

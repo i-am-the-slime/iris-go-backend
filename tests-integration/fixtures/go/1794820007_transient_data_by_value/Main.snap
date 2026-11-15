@@ -6,6 +6,7 @@ package main
 
 import (
 	"fmt"
+	"github.com/i-am-the-slime/purs-backend-go/go-support/exception"
 	"github.com/i-am-the-slime/purs-backend-go/go-support/prim"
 )
 
@@ -71,6 +72,7 @@ var sharedListEntryNil = &ListEntry{Tag: ListEntryNil}
 var main_ = initializeMain_()
 
 func initializeMain_() MainResult {
+	defer exception.ReportUncaught()
 	scrutinee := search(3, 0)
 	var result string
 	switch scrutinee.Tag {

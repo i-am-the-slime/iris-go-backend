@@ -1,6 +1,5 @@
 ---
 source: tests-integration/src/fixtures.rs
-assertion_line: 570
 ---
 // Data/Maybe/maybe.go
 package maybe
@@ -21,12 +20,14 @@ package main
 import (
 	"fixture/Data/Maybe"
 	"fmt"
+	"github.com/i-am-the-slime/purs-backend-go/go-support/exception"
 	"math"
 )
 
 var main_ = initializeMain_()
 
 func initializeMain_() []maybe.MaybeInt {
+	defer exception.ReportUncaught()
 	number := math.Copysign(0, -1)
 	var integer maybe.MaybeInt
 	if math.Trunc(number) == number && (number >= math.MinInt32 && number <= math.MaxInt32) {

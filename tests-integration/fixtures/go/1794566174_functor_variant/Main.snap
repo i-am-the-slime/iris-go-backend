@@ -6,6 +6,7 @@ package main
 
 import (
 	"fmt"
+	"github.com/i-am-the-slime/purs-backend-go/go-support/exception"
 	"github.com/i-am-the-slime/purs-backend-go/go-support/prim"
 )
 
@@ -94,6 +95,7 @@ func convert6(value Map_Type_ValueOfFnFnValueValueFnCountCountCountInt) VariantF
 var main_ = initializeMain_()
 
 func initializeMain_() []string {
+	defer exception.ReportUncaught()
 	original := func(value int32) int32 {
 		return prim.MultiplyInt32(value, 10)
 	}
@@ -119,19 +121,29 @@ func describe(r VariantFRep) string {
 	panic("Data.Functor.Variant: pattern match failure [" + r.Type + "]")
 }
 
-var say VariantFRep = convert4(Map_Type_ValueOfFnFnValueValueFnSaySaySayInt{Type: "say", Value: SayInt{First: "hello", Second: 4}, Map: func(f func(any) any) func(*Say) *Say {
-	return func(say *Say) *Say {
-		return map_(f, say)
-	}
-}})
+var say = initializeSay()
 
-var count VariantFRep = convert6(Map_Type_ValueOfFnFnValueValueFnCountCountCountInt{Type: "count", Value: CountInt{Count: func(value int32) int32 {
-	return value + 1
-}}, Map: func(f func(any) any) func(*Count) *Count {
-	return func(count *Count) *Count {
-		return map_2(f, count)
-	}
-}})
+func initializeSay() VariantFRep {
+	defer exception.ReportUncaught()
+	return convert4(Map_Type_ValueOfFnFnValueValueFnSaySaySayInt{Type: "say", Value: SayInt{First: "hello", Second: 4}, Map: func(f func(any) any) func(*Say) *Say {
+		return func(say *Say) *Say {
+			return map_(f, say)
+		}
+	}})
+}
+
+var count = initializeCount()
+
+func initializeCount() VariantFRep {
+	defer exception.ReportUncaught()
+	return convert6(Map_Type_ValueOfFnFnValueValueFnCountCountCountInt{Type: "count", Value: CountInt{Count: func(value int32) int32 {
+		return value + 1
+	}}, Map: func(f func(any) any) func(*Count) *Count {
+		return func(count *Count) *Count {
+			return map_2(f, count)
+		}
+	}})
+}
 
 func map_(f func(any) any, say *Say) *Say {
 	return &Say{First: say.First, Second: f(say.Second)}

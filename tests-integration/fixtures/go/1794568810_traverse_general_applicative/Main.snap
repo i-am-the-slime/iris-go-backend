@@ -22,12 +22,14 @@ import (
 	"fixture/Data/Either"
 	"fmt"
 	"github.com/i-am-the-slime/purs-backend-go/go-support/direct"
+	"github.com/i-am-the-slime/purs-backend-go/go-support/exception"
 	"github.com/i-am-the-slime/purs-backend-go/go-support/prim"
 )
 
 var main_ = initializeMain_()
 
 func initializeMain_() []either.EitherStringArrayInt {
+	defer exception.ReportUncaught()
 	append_ := direct.Appender[int32]()
 	array := []int32{1, 2, 3}
 	accumulator := either.EitherStringArrayInt{Tag: either.EitherStringArrayIntRight, Right: []int32{}}

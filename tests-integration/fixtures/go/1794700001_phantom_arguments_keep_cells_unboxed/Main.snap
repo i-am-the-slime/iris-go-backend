@@ -1,11 +1,13 @@
 ---
 source: tests-integration/src/fixtures.rs
-assertion_line: 570
 ---
 // main.go
 package main
 
-import "fmt"
+import (
+	"fmt"
+	"github.com/i-am-the-slime/purs-backend-go/go-support/exception"
+)
 
 type StepInt struct {
 	More func(struct{}) StepInt
@@ -28,7 +30,12 @@ func Done(done int32) StepInt {
 
 type Count func(func(func(struct{}) StepInt) StepInt, func(int32) StepInt) StepInt
 
-var main_ []int32 = []int32{mainGo(countdown(10, 0)(More, Done))}
+var main_ = initializeMain_()
+
+func initializeMain_() []int32 {
+	defer exception.ReportUncaught()
+	return []int32{mainGo(countdown(10, 0)(More, Done))}
+}
 
 func countdown(n int32, total int32) Count {
 	if n <= 0 {

@@ -23,6 +23,7 @@ import (
 	"fixture/Data/Semiring"
 	"fixture/Data/Tuple"
 	"fmt"
+	"github.com/i-am-the-slime/purs-backend-go/go-support/exception"
 )
 
 type TreeTupleStringInt struct {
@@ -36,7 +37,12 @@ const (
 	TreeTupleStringIntNode
 )
 
-var main_ int32 = countString([]TreeTupleStringInt{TreeTupleStringInt{Tag: TreeTupleStringIntLeaf, Leaf: tuple.TupleStringInt{First: "a", Second: 1}}, TreeTupleStringInt{Tag: TreeTupleStringIntNode, Node: []TreeTupleStringInt{TreeTupleStringInt{Tag: TreeTupleStringIntLeaf, Leaf: tuple.TupleStringInt{First: "b", Second: 2}}}}})
+var main_ = initializeMain_()
+
+func initializeMain_() int32 {
+	defer exception.ReportUncaught()
+	return countString([]TreeTupleStringInt{TreeTupleStringInt{Tag: TreeTupleStringIntLeaf, Leaf: tuple.TupleStringInt{First: "a", Second: 1}}, TreeTupleStringInt{Tag: TreeTupleStringIntNode, Node: []TreeTupleStringInt{TreeTupleStringInt{Tag: TreeTupleStringIntLeaf, Leaf: tuple.TupleStringInt{First: "b", Second: 2}}}}})
+}
 
 func countString(trees []TreeTupleStringInt) int32 {
 	var accumulator int32 = 0

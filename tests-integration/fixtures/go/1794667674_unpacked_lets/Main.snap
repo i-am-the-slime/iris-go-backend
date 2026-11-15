@@ -30,6 +30,7 @@ package main
 import (
 	"fixture/Data/Maybe"
 	"fmt"
+	"github.com/i-am-the-slime/purs-backend-go/go-support/exception"
 	"github.com/i-am-the-slime/purs-backend-go/go-support/prim"
 )
 
@@ -41,6 +42,7 @@ type XY struct {
 var main_ = initializeMain_()
 
 func initializeMain_() []int32 {
+	defer exception.ReportUncaught()
 	boxWidth := opaque(3)
 	point := XY{X: opaque(5), Y: opaque(5)}
 	var result XY

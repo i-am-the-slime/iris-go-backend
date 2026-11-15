@@ -7,6 +7,7 @@ package main
 import (
 	"fmt"
 	"github.com/i-am-the-slime/purs-backend-go/go-support/alloc"
+	"github.com/i-am-the-slime/purs-backend-go/go-support/exception"
 	"github.com/i-am-the-slime/purs-backend-go/go-support/prim"
 )
 
@@ -23,7 +24,12 @@ const (
 
 var sharedReaderMain_ = &Reader{Tag: ReaderMain_}
 
-var main_ int32 = runReader(2, addAll(4, sharedReaderMain_))
+var main_ = initializeMain_()
+
+func initializeMain_() int32 {
+	defer exception.ReportUncaught()
+	return runReader(2, addAll(4, sharedReaderMain_))
+}
 
 func addAll(n int32, reader *Reader) *Reader {
 	var readerCells alloc.Cells[Reader]

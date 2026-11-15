@@ -6,6 +6,7 @@ package main
 
 import (
 	"fmt"
+	"github.com/i-am-the-slime/purs-backend-go/go-support/exception"
 	"github.com/i-am-the-slime/purs-backend-go/go-support/prim"
 )
 
@@ -70,6 +71,7 @@ const (
 var main_ = initializeMain_()
 
 func initializeMain_() MainResult {
+	defer exception.ReportUncaught()
 	array := []Shape{Shape{Tag: ShapeCircle, FieldA0: 1.0}, Shape{Tag: ShapeSquare, FieldA0: 2.0}, Shape{Tag: ShapeLabel, FieldB0: "a", FieldB1: true}, Shape{Tag: ShapeCaption, FieldB0: "b", FieldB1: false}, Shape{Tag: ShapePoint}}
 	mapped := make([]string, len(array))
 	for index, element := range array {

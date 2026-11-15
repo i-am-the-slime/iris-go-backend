@@ -7,6 +7,7 @@ package main
 import (
 	"fmt"
 	"github.com/i-am-the-slime/purs-backend-go/go-support/alloc"
+	"github.com/i-am-the-slime/purs-backend-go/go-support/exception"
 	"github.com/i-am-the-slime/purs-backend-go/go-support/prim"
 )
 
@@ -47,6 +48,7 @@ var sharedTreeLeaf = &Tree{Tag: TreeLeaf}
 var main_ = initializeMain_()
 
 func initializeMain_() MainResult {
+	defer exception.ReportUncaught()
 	numbers := mainGo(20, sharedListIntNil)
 	return MainResult{Numbers: numbers, Largest: largestReplacesItsCell(numbers), OwnedLargest: largestReplacesItsCellReusing(mainGo(10, sharedListIntNil)), Total: total(mainGo2(5, sharedTreeLeaf))}
 }
