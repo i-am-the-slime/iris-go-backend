@@ -4,7 +4,10 @@ source: tests-integration/src/fixtures.rs
 // main.go
 package main
 
-import "fmt"
+import (
+	"fmt"
+	"github.com/i-am-the-slime/purs-backend-go/go-support/prim"
+)
 
 type SpaceValue struct {
 	Value string
@@ -31,7 +34,7 @@ func initializeMain_() string {
 		} else {
 			result = ""
 		}
-		accumulator = SpaceValue{Value: spaceValue.Value + result + array[kindSpaceAfterSpaceBeforeValueIndex].Value, Space: array[kindSpaceAfterSpaceBeforeValueIndex].SpaceAfter}
+		accumulator = SpaceValue{Value: prim.Concat(spaceValue.Value, result, array[kindSpaceAfterSpaceBeforeValueIndex].Value), Space: array[kindSpaceAfterSpaceBeforeValueIndex].SpaceAfter}
 	}
 	return accumulator.Value
 }

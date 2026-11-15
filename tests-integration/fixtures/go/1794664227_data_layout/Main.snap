@@ -122,7 +122,7 @@ func describe(shape Shape) string {
 		} else {
 			result = "false"
 		}
-		return "label " + shape.FieldB0 + result
+		return prim.Concat("label ", shape.FieldB0, result)
 	case ShapeCaption:
 		var result string
 		if shape.FieldB1 {
@@ -130,7 +130,7 @@ func describe(shape Shape) string {
 		} else {
 			result = "false"
 		}
-		return "caption " + shape.FieldB0 + result
+		return prim.Concat("caption ", shape.FieldB0, result)
 	default: // ShapePoint
 		return "point"
 	}

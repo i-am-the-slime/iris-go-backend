@@ -118,7 +118,7 @@ func initializeMain_() string {
 	accumulator7 := ""
 	for pairIndex := range array7 {
 		acc := accumulator7
-		accumulator7 = acc + array7[pairIndex].Left + array7[pairIndex].Right
+		accumulator7 = prim.Concat(acc, array7[pairIndex].Left, array7[pairIndex].Right)
 	}
 	return prim.ShowArray(show.Show, []float64{3.0, accumulator, accumulator2, accumulator3, accumulator4}) + prim.ShowInt(accumulator5 + accumulator6) + accumulator7
 }

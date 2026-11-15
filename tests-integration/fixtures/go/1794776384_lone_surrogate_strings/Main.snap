@@ -1,0 +1,34 @@
+---
+source: tests-integration/src/fixtures.rs
+---
+// main.go
+package main
+
+import (
+	"fmt"
+	"github.com/i-am-the-slime/purs-backend-go/go-support/prim"
+)
+
+var main_ = initializeMain_()
+
+func initializeMain_() []string {
+	s := prim.CodeUnitTake(1, "𝐀")
+	var result2 bool
+	switch s {
+	case "\xed\xa0\xb5":
+		result2 = false
+	default:
+		result2 = prim.CodeUnitLengthUpTo(3, s) == 2
+	}
+	var result string
+	if result2 {
+		result = "true"
+	} else {
+		result = "false"
+	}
+	return []string{prim.Append(prim.CodeUnitDrop(1, "a\xed\xa0\xb5"), prim.CodeUnitDrop(1, "𝐀")), prim.Append("a\xed\xa0\xb5", prim.CodeUnitDrop(1, "𝐀")), "<" + "a\xed\xa0\xb5" + ", " + "a\xed\xa0\xb5" + ">", result}
+}
+
+func main() {
+	fmt.Println(main_)
+}

@@ -70,7 +70,7 @@ func initializeMain_() MainResult {
 	for elementIndex := range array2 {
 		acc := accumulator3
 		if acc.Tag == either.EitherStringArrayIntLeft && array2[elementIndex].Tag == either.EitherStringIntLeft {
-			accumulator3 = either.EitherStringArrayInt{Tag: either.EitherStringArrayIntLeft, Left: acc.Left + array2[elementIndex].Left}
+			accumulator3 = either.EitherStringArrayInt{Tag: either.EitherStringArrayIntLeft, Left: prim.Append(acc.Left, array2[elementIndex].Left)}
 		} else if acc.Tag == either.EitherStringArrayIntLeft && array2[elementIndex].Tag == either.EitherStringIntRight {
 			accumulator3 = either.EitherStringArrayInt{Tag: either.EitherStringArrayIntLeft, Left: acc.Left}
 		} else if acc.Tag == either.EitherStringArrayIntRight && array2[elementIndex].Tag == either.EitherStringIntRight {

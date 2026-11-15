@@ -43,7 +43,7 @@ func prefixed(n int32) func(string) string {
 	default:
 		prefix := repeat(n)
 		return func(text string) string {
-			return prefix + prefixed(n - 1)(text)
+			return prim.Append(prefix, prefixed(n - 1)(text))
 		}
 	}
 }

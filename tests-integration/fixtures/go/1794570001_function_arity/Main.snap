@@ -84,7 +84,7 @@ func fromInt(n int32) func(func(int32) int32, int32) int32 {
 func prepared(a int32) func(string) string {
 	prefix := repeat(a)
 	return func(b string) string {
-		return prefix + b
+		return prim.Append(prefix, b)
 	}
 }
 

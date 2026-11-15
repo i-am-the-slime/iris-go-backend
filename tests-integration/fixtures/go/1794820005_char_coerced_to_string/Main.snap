@@ -11,8 +11,10 @@ func Identity(x string) string {
 // Data/Semigroup/semigroup.go
 package semigroup
 
+import "github.com/i-am-the-slime/purs-backend-go/go-support/prim"
+
 func Append_(s string, s2 string) string {
-	return s + s2
+	return prim.Append(s, s2)
 }
 
 // main.go

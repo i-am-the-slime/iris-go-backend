@@ -9,3 +9,5 @@ prelude
 strings
 tuples
 either
+exceptions
+partial

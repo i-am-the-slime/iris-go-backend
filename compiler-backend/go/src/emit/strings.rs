@@ -1,9 +1,10 @@
 //! A PureScript string is a sequence of UTF-16 code units; go-support's prim package holds it in a
 //! Go string as WTF-8, where a lone leading surrogate directly followed by a lone trailing one must
 //! be spelled as the code point they form. Two such halves can only meet where two strings are
-//! appended, and only where neither side of the join is a non-empty string constant, whose ends
-//! are never lone surrogates. So an append is Go's own `+` wherever every join has a constant on
-//! one side, and `prim.Append` or `prim.Concat`, which join the halves, otherwise. Text leaving
+//! appended, and only where neither side of the join is known to end in whole characters: a
+//! non-empty string constant, or the result of a go-support function that always begins and ends
+//! in ASCII, such as `prim.ShowInt`. So an append is Go's own `+` wherever every join has such an
+//! operand on one side, and `prim.Append` or `prim.Concat`, which join the halves, otherwise. Text leaving
 //! the program goes through `prim.ToUTF8`, which writes each lone surrogate as U+FFFD.
 
 use super::{Emitter, binary, call, identifier_expression};
@@ -24,7 +25,7 @@ where
         let mut operands = vec![];
         flatten(left, &mut operands);
         flatten(right, &mut operands);
-        if operands.windows(2).all(|join| is_text_constant(&join[0]) || is_text_constant(&join[1]))
+        if operands.windows(2).all(|join| has_whole_ends(&join[0]) || has_whole_ends(&join[1]))
         {
             return operands
                 .into_iter()
@@ -41,7 +42,7 @@ where
         buffer: GoExpression,
         suffix: GoExpression,
     ) -> GoExpression {
-        if is_text_constant(&suffix) {
+        if has_whole_ends(&suffix) {
             let spread = GoExpression::Spread(Box::new(suffix));
             return call(identifier_expression("append"), vec![buffer, spread]);
         }
@@ -81,7 +82,31 @@ fn is_prim_append(function: &GoExpression) -> bool {
     )
 }
 
-/// A non-empty string constant of valid UTF-8, which begins and ends with whole code points.
-fn is_text_constant(expression: &GoExpression) -> bool {
-    matches!(expression, GoExpression::String(text) if !text.is_empty())
+/// A string that begins and ends with whole code points: a non-empty constant of valid UTF-8, or
+/// what a go-support function returns that never returns an empty string and always begins and
+/// ends in ASCII (digits, signs, quotes and brackets).
+fn has_whole_ends(expression: &GoExpression) -> bool {
+    match expression {
+        GoExpression::String(text) => !text.is_empty(),
+        GoExpression::Call { function, .. } => matches!(
+            &**function,
+            GoExpression::Qualified { package, name }
+                if package == GoPackage::Prim.name() && ASCII_ENDED.contains(&name.as_str())
+        ),
+        _ => false,
+    }
 }
+
+/// The go-support prim functions whose result is never empty and begins and ends in ASCII.
+const ASCII_ENDED: &[&str] = &[
+    "ShowInt",
+    "ShowNumber",
+    "ShowString",
+    "ShowChar",
+    "ShowArray",
+    "IntToStringAs",
+    "NumberToString",
+    "NumberToFixed",
+    "NumberToPrecision",
+    "NumberToExponential",
+];

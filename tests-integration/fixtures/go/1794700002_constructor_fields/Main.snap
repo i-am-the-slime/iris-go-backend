@@ -138,9 +138,9 @@ func entry(entry Entry) string {
 	case EntryField:
 		return prim.ShowInt(entry.Field0 - entry.Field1)
 	case EntryDuo:
-		return entry.Duo0 + entry.Duo1
+		return prim.Append(entry.Duo0, entry.Duo1)
 	default: // EntryTrio
-		return entry.Trio1 + entry.Trio0
+		return prim.Append(entry.Trio1, entry.Trio0)
 	}
 }
 
