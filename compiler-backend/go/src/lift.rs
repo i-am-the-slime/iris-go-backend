@@ -3,7 +3,8 @@ use rustc_hash::{FxHashMap, FxHashSet};
 use smol_str::format_smolstr;
 
 use crate::mono::{
-    Expression, ExpressionKind, Function, FunctionId, FunctionSpelling, Local, LocalId, Program,
+    Binding, Expression, ExpressionKind, Function, FunctionId, FunctionSpelling, Local, LocalId,
+    Program,
 };
 use crate::monotype::{Monotype, MonotypeId, Monotypes};
 use crate::simplify::{for_each_child, for_each_child_mut, is_trivial, visit};
@@ -46,20 +47,69 @@ pub fn lift_local_functions(
         .into_iter()
         .map(|function| function.expect("invariant violated: function lost during lifting"))
         .collect();
-    if saturate_wrappers(&mut functions, entry, &mut lifter) {
-        for function in &mut functions {
-            flatten_applications(&mut function.body);
-        }
+    saturate_wrappers(&mut functions, entry, &mut lifter);
+    let arities: Vec<usize> = functions.iter().map(|function| function.parameters.len()).collect();
+    for function in &mut functions {
+        inline_called_partial_applications(&mut function.body, &arities);
+        flatten_applications(&mut function.body);
     }
     Program { functions, entry }
 }
 
-fn saturate_wrappers(
-    functions: &mut [Function],
-    entry: FunctionId,
-    lifter: &mut Lifter<'_>,
-) -> bool {
-    let mut saturated = false;
+fn inline_called_partial_applications(expression: &mut Expression, arities: &[usize]) {
+    for_each_child_mut(expression, &mut |child| inline_called_partial_applications(child, arities));
+    let ExpressionKind::Let { bindings, body } = &mut expression.kind else { return };
+    let mut free = FxHashSet::default();
+    for binding in bindings.iter() {
+        free_locals(&binding.value, &mut free);
+    }
+    let (inlined, kept): (Vec<Binding>, Vec<Binding>) =
+        std::mem::take(bindings).into_iter().partition(|binding| {
+            is_partial_application(&binding.value, arities)
+                && !free.contains(&binding.local.id)
+                && only_called(body, binding.local.id)
+        });
+    for binding in &inlined {
+        substitute_calls(body, binding.local.id, &binding.value);
+    }
+    *bindings = kept;
+    if bindings.is_empty() {
+        let monotype = body.monotype;
+        *expression = std::mem::replace(body, Expression::new(ExpressionKind::Unit, monotype));
+    }
+}
+
+fn is_partial_application(value: &Expression, arities: &[usize]) -> bool {
+    let ExpressionKind::Apply { function, arguments } = &value.kind else { return false };
+    let ExpressionKind::Function(id) = function.kind else { return false };
+    arguments.len() < arities[id.0 as usize] && arguments.iter().all(is_trivial)
+}
+
+fn only_called(expression: &Expression, local: LocalId) -> bool {
+    match &expression.kind {
+        ExpressionKind::Local(id) => *id != local,
+        ExpressionKind::Apply { function, arguments } if matches!(function.kind, ExpressionKind::Local(id) if id == local) => {
+            arguments.iter().all(|argument| only_called(argument, local))
+        }
+        _ => {
+            let mut called = true;
+            for_each_child(expression, &mut |child| called &= only_called(child, local));
+            called
+        }
+    }
+}
+
+fn substitute_calls(expression: &mut Expression, local: LocalId, value: &Expression) {
+    if let ExpressionKind::Local(id) = expression.kind
+        && id == local
+    {
+        *expression = value.clone();
+        return;
+    }
+    for_each_child_mut(expression, &mut |child| substitute_calls(child, local, value));
+}
+
+fn saturate_wrappers(functions: &mut [Function], entry: FunctionId, lifter: &mut Lifter<'_>) {
     loop {
         let mut changed = false;
         for index in 0..functions.len() {
@@ -101,9 +151,8 @@ fn saturate_wrappers(
             changed = true;
         }
         if !changed {
-            return saturated;
+            return;
         }
-        saturated = true;
     }
 }
 
