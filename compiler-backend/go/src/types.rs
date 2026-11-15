@@ -173,6 +173,27 @@ where
     /// `(f ~> m) -> Free f ~> m` binds the same `a` twice; the inner binder
     /// shadows the outer one. The substituted types are closed, so they cannot
     /// capture the binder.
+    /// Closes the instantiations recorded on one reference over each other. A reference under an
+    /// annotation, `(f :: forall a. T)`, instantiates f's quantifiers at the annotation's `a`,
+    /// and the same node records the instantiation of `a` itself.
+    pub fn close(&self, substitution: &mut Substitution) {
+        for _ in 0..substitution.len() {
+            let mut changed = false;
+            let names: Vec<Name> = substitution.keys().copied().collect();
+            for name in names {
+                let argument = substitution[&name];
+                let closed = self.substitute(argument, substitution);
+                if closed != argument {
+                    substitution.insert(name, closed);
+                    changed = true;
+                }
+            }
+            if !changed {
+                return;
+            }
+        }
+    }
+
     fn substitute_under_binder(
         &self,
         binder: ForallBinderId,

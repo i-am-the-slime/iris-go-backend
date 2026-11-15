@@ -380,6 +380,37 @@ where
     Ok(allocate_expression(state, function_type, kind))
 }
 
+/// Checking against a polymorphic annotation, `(e :: forall a. T)`, binds a fresh skolem for each
+/// of its quantifiers, and `e`'s own instantiations name those skolems; instantiating the
+/// annotation where it is used names its quantifiers instead. Recording each skolem as its
+/// quantifier lets an instantiation of `e` be followed to the type it is used at.
+fn relate_annotation_skolems<Q>(
+    state: &mut CheckState,
+    context: &CheckContext<Q>,
+    expression: tree::ExpressionId,
+    annotation: TypeId,
+) -> QueryResult<()>
+where
+    Q: ExternalQueries,
+{
+    let mut annotation = normalise::expand(state, context, annotation)?;
+    let mut checked = state.checked.tree[expression].type_id;
+    let mut relations = vec![];
+    while let Type::Forall(quantifier, annotation_inner) = *context.lookup_type(annotation)
+        && let Type::Forall(skolem, checked_inner) = *context.lookup_type(checked)
+    {
+        let quantifier = context.lookup_forall_binder(quantifier);
+        let skolem = context.lookup_forall_binder(skolem);
+        let bound =
+            context.queries.intern_type(Type::Rigid(quantifier.name, state.depth, quantifier.kind));
+        relations.push(tree::TypeInstantiation { name: skolem.name, argument: bound });
+        annotation = normalise::expand(state, context, annotation_inner)?;
+        checked = checked_inner;
+    }
+    state.checked.tree.record_instantiations(expression, relations);
+    Ok(())
+}
+
 fn infer_expression_core<Q>(
     state: &mut CheckState,
     context: &CheckContext<Q>,
@@ -408,6 +439,7 @@ where
 
             let (t, _) = types::infer_kind(state, context, *t)?;
             let ElaboratedExpression { expression, .. } = check_expression(state, context, *e, t)?;
+            relate_annotation_skolems(state, context, expression, t)?;
             Ok(ElaboratedExpression { type_id: t, expression })
         }
 

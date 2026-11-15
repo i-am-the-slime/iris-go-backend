@@ -1113,6 +1113,7 @@ where
                 _ => break,
             }
         }
+        self.context.types.close(&mut instantiations);
         if !names.iter().all(|name| instantiations.contains_key(name)) {
             return closed;
         }
@@ -1324,6 +1325,7 @@ where
             arguments.push(argument);
             head = function;
         }
+        self.context.types.close(&mut result_instantiations);
         let monotype = self.instantiated_result_monotype(
             scope,
             module.checked.tree[id].type_id,
@@ -1443,6 +1445,7 @@ where
                 _ => break,
             }
         }
+        self.context.types.close(&mut substitution);
         let node_type = self.outer_body(tree[node].type_id, &mut vec![]);
         let node_type = self.context.types.substitute(node_type, &scope.substitution);
         self.context.types.substitute(node_type, &substitution)
@@ -1803,6 +1806,7 @@ where
                     _ => break,
                 }
             }
+            self.context.types.close(&mut instantiations);
             evidences.reverse();
             for (evidence, constraint) in evidences {
                 let constraint = self.context.types.substitute(constraint, &scope.substitution);

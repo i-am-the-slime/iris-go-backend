@@ -1,0 +1,28 @@
+---
+source: tests-integration/src/fixtures.rs
+---
+// main.go
+package main
+
+import (
+	"fmt"
+	"github.com/i-am-the-slime/purs-backend-go/go-support/array"
+)
+
+var main_ = initializeMain_()
+
+func initializeMain_() []int32 {
+	array2 := &[]int32{}
+	array.Push(int32(1), array2)()
+	array.Push(int32(1), array2)()
+	performed := array.UnsafeFreeze(array2)()
+	array3 := &[]int32{}
+	array.Push(int32(2), array3)()
+	array.Push(int32(2), array3)()
+	performed2 := array.UnsafeFreeze(array3)()
+	return array.Append(performed, performed2)
+}
+
+func main() {
+	fmt.Println(main_)
+}
