@@ -2,7 +2,7 @@ use rustc_hash::FxHashSet;
 
 use super::packages::Spelling;
 use super::{
-    DataKind, Emitter, binary, call, field, field_name, identifier_expression, is_simple,
+    DataKind, Emitter, binary, call, field, identifier_expression, is_simple,
     is_untyped_constant, path_root, unit_value,
 };
 use crate::erasure::Erasure;
@@ -41,7 +41,7 @@ where
                 let record = self.shared(value, "original", out);
                 let mut entries = Vec::with_capacity(fields.len());
                 for record_field in fields.iter() {
-                    let field_value = field(record.clone(), &field_name(&record_field.label));
+                    let field_value = self.read_field(record.clone(), from, &record_field.label);
                     entries.push((
                         record_field.label.to_string(),
                         field_value,
@@ -59,16 +59,15 @@ where
                     let label = GoExpression::String(record_field.label.to_string());
                     let field_value = call(read.clone(), vec![record.clone(), label]);
                     let field_value = self.coerce(field_value, from, record_field.monotype, out)?;
-                    values.push((Some(field_name(&record_field.label)), field_value));
+                    values.push((record_field.label.clone(), field_value));
                 }
-                let type_ = GoType::Named(self.record_name(to)?);
-                Ok(GoExpression::Composite { type_, fields: values })
+                self.record_value(to, values)
             }
             // A function at its erased polymorphic type becomes a specialized
             // rank-N value: each instantiation is the function used at it.
             (Monotype::Function(..), Monotype::Record(fields)) => {
-                let type_ = GoType::Named(self.record_name(to)?);
                 if fields.is_empty() {
+                    let type_ = GoType::Named(self.record_name(to)?);
                     return Ok(GoExpression::Composite { type_, fields: vec![] });
                 }
                 let function = self.shared(value, "original", out);
@@ -76,9 +75,9 @@ where
                 for record_field in fields.iter() {
                     let instance =
                         self.coerce(function.clone(), from, record_field.monotype, out)?;
-                    values.push((Some(field_name(&record_field.label)), instance));
+                    values.push((record_field.label.clone(), instance));
                 }
-                Ok(GoExpression::Composite { type_, fields: values })
+                self.record_value(to, values)
             }
             (Monotype::Array(_), Monotype::Opaque) => {
                 let foreign_array = self.monotypes.intern(Monotype::Array(to));
@@ -402,20 +401,17 @@ where
                             },
                         });
                     };
-                    let label = field_name(&to_field.label);
-                    let field_value = field(value.clone(), &label);
+                    let field_value = self.read_field(value.clone(), from, &to_field.label);
                     let converted = self.coerce(
                         field_value,
                         from_field.monotype,
                         to_field.monotype,
                         &mut body,
                     )?;
-                    fields.push((Some(label), converted));
+                    fields.push((to_field.label.clone(), converted));
                 }
-                body.push(GoStatement::Return(Some(GoExpression::Composite {
-                    type_: result_type.clone(),
-                    fields,
-                })));
+                let converted = self.record_value(to, fields)?;
+                body.push(GoStatement::Return(Some(converted)));
             }
             (Monotype::Data(from_data), Monotype::Data(to_data)) => {
                 let round_trip = self.convert_data(&from_data, &to_data, value, &mut body)?;

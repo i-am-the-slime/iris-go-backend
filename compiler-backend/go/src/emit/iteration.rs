@@ -285,6 +285,8 @@ where
         };
         match self.monotypes.get(monotype).clone() {
             Monotype::Array(_) => vec![Place::Whole],
+            // A rank-N value's instantiations are functions, never arrays.
+            Monotype::Record(_) if self.monotypes.is_instantiated_record(monotype) => vec![],
             Monotype::Record(fields) => fields
                 .iter()
                 .filter(|field| is_array(self, field.monotype))

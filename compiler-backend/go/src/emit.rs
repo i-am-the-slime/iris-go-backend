@@ -10,9 +10,11 @@ mod buffers;
 mod chunks;
 mod closures;
 mod coerce;
+mod constructors;
 mod deduplicate;
 mod fusion;
 mod groups;
+mod instantiations;
 mod iteration;
 mod layout;
 mod lengths;
@@ -268,6 +270,7 @@ where
             pending_owning_variants: vec![],
             inline_shapes: FxHashMap::default(),
             shared_nullaries: FxHashMap::default(),
+            constructor_functions: FxHashMap::default(),
             cell_types: FxHashMap::default(),
             reaching: FxHashMap::default(),
             retaining: FxHashMap::default(),
@@ -571,6 +574,8 @@ struct Emitter<'p, 'm, 'q, Q> {
     closure_sets: FxHashMap<MonotypeId, closures::ClosureSet>,
     closure_layouts: FxHashMap<MonotypeId, DataLayout>,
     converters: FxHashMap<(MonotypeId, MonotypeId), String>,
+    /// The function each constructor used as a value at a function type is.
+    constructor_functions: FxHashMap<(DataType, usize, MonotypeId), String>,
     round_trips: Vec<coerce::RoundTrip>,
     recursive_names: FxHashMap<DataType, String>,
     /// The type each recursive newtype's alias spells.
@@ -1407,7 +1412,7 @@ where
             Monotype::Erased(erasure) => GoType::Erased(erasure),
             Monotype::Opaque => GoType::Erased(Erasure::Foreign),
             Monotype::Array(element) => GoType::Slice(Box::new(self.go_type(element)?)),
-            Monotype::Record(_) => GoType::Named(self.record_name(monotype)?),
+            Monotype::Record(_) => self.record_go_type(monotype)?,
             Monotype::Function(..) if self.closure_sets.contains_key(&monotype) => {
                 self.closure_layout(monotype)?.go_type()
             }
@@ -1732,12 +1737,8 @@ where
         };
         let name = self.pending_global(base, names::PendingSpelling::Record(monotype));
         self.record_names.insert(monotype, name.clone());
-        let mut go_fields = vec![];
-        for field in fields.iter() {
-            go_fields.push((field_name(&field.label), self.go_type(field.monotype)?));
-        }
-        self.type_declarations
-            .push(GoDeclaration::Type { name: name.clone(), type_: GoType::Struct(go_fields) });
+        let type_ = self.record_declaration(monotype)?;
+        self.type_declarations.push(GoDeclaration::Type { name: name.clone(), type_ });
         Ok(name)
     }
 
@@ -2691,7 +2692,8 @@ where
                         unreachable!("invariant violated: a record argument has a record type")
                     };
                     for record_field in fields.iter() {
-                        values.push(field(record.clone(), &field_name(&record_field.label)));
+                        let label = &record_field.label;
+                        values.push(self.read_field(record.clone(), argument.monotype, label));
                     }
                     continue;
                 }
@@ -2795,13 +2797,12 @@ where
         let names: Vec<String> =
             fields.iter().map(|field| self.temporary(&identifier(&field.label))).collect();
         out.push(GoStatement::Define { names: names.clone(), values: vec![results] });
-        let type_ = GoType::Named(self.record_name(monotype)?);
-        let fields = fields
+        let values = fields
             .iter()
             .zip(names)
-            .map(|(field, name)| (Some(field_name(&field.label)), identifier_expression(&name)))
+            .map(|(field, name)| (field.label.clone(), identifier_expression(&name)))
             .collect();
-        Ok(GoExpression::Composite { type_, fields })
+        self.record_value(monotype, values)
     }
 
     fn unit_valued(
@@ -3071,7 +3072,7 @@ where
             .find(|record_field| record_field.label == label)
             .expect("invariant violated: a projected field exists")
             .monotype;
-        let body = field(identifier_expression("value"), &field_name(label));
+        let body = self.read_field(identifier_expression("value"), record, label);
         Ok(GoExpression::Function {
             parameters: vec![("value".into(), self.go_type(record)?)],
             result: self.go_result(field_monotype)?,
@@ -3544,29 +3545,29 @@ where
                 GoExpression::Composite { type_, fields }
             }
             ExpressionKind::Record(fields) => {
-                let name = self.record_name(expression.monotype)?;
                 let mut values = vec![];
                 for (label, value) in fields {
-                    values.push((Some(field_name(label)), self.value(value, out)?));
+                    values.push((label.clone(), self.value(value, out)?));
                 }
-                GoExpression::Composite { type_: GoType::Named(name), fields: values }
+                self.record_value(expression.monotype, values)?
             }
             ExpressionKind::Access { record, label } => {
-                let record = self.value(record, out)?;
-                field(record, &field_name(label))
+                let value = self.value(record, out)?;
+                self.read_field(value, record.monotype, label)
             }
             ExpressionKind::Update { record: source, updates }
                 if source.monotype != expression.monotype =>
             {
                 let value = self.value(source, out)?;
                 let value = self.hoist(value, "record", out);
-                self.rebuilt_record(value, expression.monotype, updates, out)?
+                self.rebuilt_record(value, source.monotype, expression.monotype, updates, out)?
             }
             ExpressionKind::Update { record, updates } => {
                 let record = self.value(record, out)?;
                 let name = self.temporary("updated");
                 out.push(GoStatement::Define { names: vec![name.clone()], values: vec![record] });
-                self.updates(identifier_expression(&name), updates, out)?;
+                let updated = identifier_expression(&name);
+                self.updates(updated, expression.monotype, updates, out)?;
                 identifier_expression(&name)
             }
             ExpressionKind::Local(id) => self.local(*id)?,
@@ -3602,7 +3603,10 @@ where
                 applied
             }
             ExpressionKind::Lambda { parameters, body } => {
-                self.lambda(expression.monotype, parameters, body)?
+                match self.constructor_as_value(expression.monotype, parameters, body)? {
+                    Some(function) => function,
+                    None => self.lambda(expression.monotype, parameters, body)?,
+                }
             }
             ExpressionKind::Closure { tag, captures } => {
                 let mut values = vec![];
@@ -3844,6 +3848,7 @@ where
     fn rebuilt_record(
         &mut self,
         source: GoExpression,
+        source_record: MonotypeId,
         target: MonotypeId,
         updates: &[RecordUpdate],
         out: &mut Vec<GoStatement>,
@@ -3853,28 +3858,31 @@ where
         };
         let mut values = Vec::with_capacity(fields.len());
         for record_field in fields.iter() {
-            let label = field_name(&record_field.label);
+            let label = &record_field.label;
             let update = updates.iter().find(|update| match update {
                 RecordUpdate::Leaf { label: updated, .. }
-                | RecordUpdate::Branch { label: updated, .. } => *updated == record_field.label,
+                | RecordUpdate::Branch { label: updated, .. } => updated == label,
             });
+            let read = self.read_field(source.clone(), source_record, label);
             let value = match update {
                 Some(RecordUpdate::Leaf { value, .. }) => self.value(value, out)?,
                 Some(RecordUpdate::Branch { updates, .. }) => {
-                    let nested = self.hoist(field(source.clone(), &label), "record", out);
-                    self.rebuilt_record(nested, record_field.monotype, updates, out)?
+                    let nested = self.hoist(read, "record", out);
+                    let nested_record = self.record_field_monotype(source_record, label);
+                    let target = record_field.monotype;
+                    self.rebuilt_record(nested, nested_record, target, updates, out)?
                 }
-                None => field(source.clone(), &label),
+                None => read,
             };
-            values.push((Some(label), value));
+            values.push((label.clone(), value));
         }
-        let type_ = GoType::Named(self.record_name(target)?);
-        Ok(GoExpression::Composite { type_, fields: values })
+        self.record_value(target, values)
     }
 
     fn updates(
         &mut self,
         target: GoExpression,
+        record: MonotypeId,
         updates: &[RecordUpdate],
         out: &mut Vec<GoStatement>,
     ) -> GoResult<()> {
@@ -3883,12 +3891,14 @@ where
                 RecordUpdate::Leaf { label, value } => {
                     let value = self.value(value, out)?;
                     out.push(GoStatement::Assign {
-                        targets: vec![field(target.clone(), &field_name(label))],
+                        targets: vec![self.read_field(target.clone(), record, label)],
                         values: vec![value],
                     });
                 }
                 RecordUpdate::Branch { label, updates } => {
-                    self.updates(field(target.clone(), &field_name(label)), updates, out)?;
+                    let nested = self.read_field(target.clone(), record, label);
+                    let nested_record = self.record_field_monotype(record, label);
+                    self.updates(nested, nested_record, updates, out)?;
                 }
             }
         }
@@ -4089,7 +4099,7 @@ where
                 return self.record_get_by_label(arguments, monotype, out);
             };
             let record = self.value(&arguments[1], out)?;
-            return Ok(field(record, &field_name(label)));
+            return Ok(self.read_field(record, arguments[1].monotype, label));
         }
         if let Foreign::RecordHas = foreign {
             return Err(GoError::Unsupported {
@@ -4200,7 +4210,7 @@ where
         let mut cases = Vec::with_capacity(fields.len());
         for record_field in fields.iter() {
             let mut body = vec![];
-            let read = field(record.clone(), &field_name(&record_field.label));
+            let read = self.read_field(record.clone(), arguments[1].monotype, &record_field.label);
             let value = match self.coerce(read, record_field.monotype, monotype, &mut body) {
                 Ok(value) => value,
                 Err(GoError::Unsupported {
@@ -4804,12 +4814,8 @@ where
             }
             PatternKind::Record(fields) => {
                 for (label, field_pattern) in fields {
-                    self.pattern_tests(
-                        field_pattern,
-                        field(path.clone(), &field_name(label)),
-                        tests,
-                        bindings,
-                    )?;
+                    let field_path = self.read_field(path.clone(), pattern.monotype, label);
+                    self.pattern_tests(field_pattern, field_path, tests, bindings)?;
                 }
             }
             PatternKind::Constructor { data, constructor, arguments } => {

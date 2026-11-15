@@ -1742,7 +1742,7 @@ where
     ) -> GoResult<SmolStr> {
         let mut suffix = String::new();
         for &type_id in types {
-            self.context.type_suffix(type_id, &mut suffix)?;
+            self.instantiation_suffix(type_id, &mut suffix)?;
         }
         let base: String =
             suffix.chars().filter(|character| character.is_ascii_alphanumeric()).collect();
@@ -1754,6 +1754,51 @@ where
             index += 1;
         }
         Ok(label)
+    }
+
+    /// A type's spelling in an instantiation's label, as `type_suffix` spells
+    /// it, except that a record a synonym or newtype names is spelled by that
+    /// name: `SurfaceAnim` rather than all its labels.
+    fn instantiation_suffix(&mut self, type_id: TypeId, output: &mut String) -> GoResult<()> {
+        let type_id = self.context.types.strip_annotations(type_id);
+        match self.context.types.lookup(type_id).clone() {
+            Type::Application(function, argument) => {
+                if let Some(name) = self.declared_record_name(function, argument)? {
+                    output.push_str(&name);
+                    return Ok(());
+                }
+                self.instantiation_suffix(function, output)?;
+                self.instantiation_suffix(argument, output)?;
+            }
+            Type::Function(argument, result) => {
+                output.push_str("Fn");
+                self.instantiation_suffix(argument, output)?;
+                self.instantiation_suffix(result, output)?;
+            }
+            _ => self.context.type_suffix(type_id, output)?,
+        }
+        Ok(())
+    }
+
+    /// The name of the synonym or newtype, without arguments, that spelled
+    /// the record `Record row` where a type was converted.
+    fn declared_record_name(&mut self, function: TypeId, row: TypeId) -> GoResult<Option<String>> {
+        let function = self.context.types.strip_annotations(function);
+        let Type::Constructor(file_id, item) = self.context.types.lookup(function).clone() else {
+            return Ok(None);
+        };
+        if file_id != self.context.queries.prim_id()
+            || self.context.type_name(file_id, item)? != "Record"
+        {
+            return Ok(None);
+        }
+        let Ok(record) = self.monotypes.record(&mut self.context, row)? else { return Ok(None) };
+        let Some(spellings) = self.monotypes.record_spellings.get(&record) else {
+            return Ok(None);
+        };
+        let declared = spellings.iter().find(|(_, _, arguments)| arguments.is_empty());
+        let Some(&(file_id, item, _)) = declared else { return Ok(None) };
+        Ok(Some(crate::context::capitalise(&self.context.type_name(file_id, item)?)))
     }
 
     fn share_instantiation(

@@ -105,6 +105,9 @@ pub struct Monotypes {
     pub type_names: FxHashMap<(FileId, TypeItemId), SmolStr>,
     /// The newtypes specialization erased to the types they wrap.
     pub erased_newtypes: Vec<crate::context::ErasedNewtype>,
+    /// The records that hold a rank-N value specialized at each of its
+    /// instantiations, one field per instantiation.
+    instantiated_records: rustc_hash::FxHashSet<MonotypeId>,
 }
 
 impl Monotypes {
@@ -131,6 +134,12 @@ impl Monotypes {
 
     pub fn get(&self, id: MonotypeId) -> &Monotype {
         &self.interned[id.0 as usize]
+    }
+
+    /// Whether a record holds a rank-N value, one field per instantiation,
+    /// rather than a PureScript record.
+    pub fn is_instantiated_record(&self, id: MonotypeId) -> bool {
+        self.instantiated_records.contains(&id)
     }
 
     /// The one newtype whose representation a function type is, as `Lazy Int`
@@ -763,7 +772,12 @@ impl Monotypes {
             fields.push(RecordField { label: instantiation.label, monotype });
         }
         fields.sort_by(|left, right| left.label.cmp(&right.label));
-        Ok(Ok(self.intern(Monotype::Record(Arc::from(fields)))))
+        let is_rank_n = scheme.constraints.is_empty() && !fields.is_empty();
+        let record = self.intern(Monotype::Record(Arc::from(fields)));
+        if is_rank_n {
+            self.instantiated_records.insert(record);
+        }
+        Ok(Ok(record))
     }
 
     /// Remembers that a synonym or newtype applied to `arguments` spelled a
