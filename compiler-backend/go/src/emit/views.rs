@@ -18,7 +18,7 @@ use rustc_hash::{FxHashMap, FxHashSet};
 
 use crate::syntax::{GoExpression, GoStatement, Name, statements_names};
 
-use super::ranges::each_expression_in_statement;
+use crate::walk::{each_block, each_expression_in_statement};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 enum View {
@@ -111,7 +111,7 @@ pub(super) fn view_invariant_strings(
     };
     let mut indexed: Vec<(String, View)> = vec![];
     for statement in looped.iter_mut() {
-        each_expression_in_statement(statement, &mut |value| {
+        each_expression_in_statement(statement, |value| {
             let Some((operation, string)) = operation_on(value) else { return };
             let Some(string) = viewed_string(string) else { return };
             if indexes_at_a_variable_position(operation, value)
@@ -132,7 +132,7 @@ pub(super) fn view_invariant_strings(
         })
         .collect();
     for statement in looped.iter_mut() {
-        each_expression_in_statement(statement, &mut |value| {
+        each_expression_in_statement(statement, |value| {
             let Some((operation, string)) = operation_on(value) else { return };
             let Some(string) = viewed_string(string) else { return };
             let Some((_, local)) =
@@ -177,7 +177,7 @@ pub(super) fn carried_unchanged(
     });
     let mut copies: FxHashMap<String, String> = FxHashMap::default();
     let mut copied_back: FxHashMap<(String, String), usize> = FxHashMap::default();
-    each_block_mut(looped, &mut |block| {
+    each_block(looped, |block| {
         for statement in block.iter() {
             match statement {
                 GoStatement::Define { names, values } => {
@@ -236,7 +236,7 @@ fn aliases(
         Name::Reference(_) => {}
     });
     let mut aliases = FxHashMap::default();
-    each_block_mut(looped, &mut |block| {
+    each_block(looped, |block| {
         for statement in block.iter() {
             let GoStatement::Define { names, values } = statement else { continue };
             let ([alias], [GoExpression::Identifier(original)]) =
@@ -301,44 +301,11 @@ fn drop_unused_aliases(looped: &mut Vec<GoStatement>, aliases: &FxHashSet<String
             used.insert(name.clone());
         }
     });
-    each_block_mut(looped, &mut |block| {
+    each_block(looped, |block| {
         block.retain(|statement| {
             let GoStatement::Define { names, .. } = statement else { return true };
             let [alias] = names.as_slice() else { return true };
             !aliases.contains(alias) || used.contains(alias)
         });
     });
-}
-
-/// Visits a block and every block nested in its statements, outside
-/// function literals.
-fn each_block_mut(block: &mut Vec<GoStatement>, visit: &mut dyn FnMut(&mut Vec<GoStatement>)) {
-    visit(block);
-    for statement in block.iter_mut() {
-        for nested in nested_blocks(statement) {
-            each_block_mut(nested, visit);
-        }
-    }
-}
-
-fn nested_blocks(statement: &mut GoStatement) -> Vec<&mut Vec<GoStatement>> {
-    match statement {
-        GoStatement::If { then, otherwise, .. } => vec![then, otherwise],
-        GoStatement::Switch { cases, default, .. } => {
-            let mut blocks: Vec<&mut Vec<GoStatement>> =
-                cases.iter_mut().map(|case| &mut case.body).collect();
-            if let Some(default) = default {
-                blocks.push(&mut default.body);
-            }
-            blocks
-        }
-        GoStatement::IfAssert { then: body, .. }
-        | GoStatement::Range { body, .. }
-        | GoStatement::Counting { body, .. }
-        | GoStatement::CountingDown { body, .. }
-        | GoStatement::Loop(body)
-        | GoStatement::LabeledLoop { body, .. }
-        | GoStatement::Block(body) => vec![body],
-        _ => vec![],
-    }
 }

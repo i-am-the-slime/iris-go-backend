@@ -19,111 +19,37 @@ use rustc_hash::FxHashSet;
 
 use crate::syntax::{GoDeclaration, GoExpression, GoStatement, GoType, Name, statements_names};
 
-use super::ranges::{each_expression, each_expression_in_statement};
+use crate::walk::{self, Walk, each_expression_in_declaration, each_expression_in_statement};
 use super::views::{carried_unchanged, view_invariant_strings};
 
 pub fn count_lengths_up_to_comparisons(declarations: &mut [GoDeclaration]) {
     for declaration in declarations {
-        match declaration {
-            GoDeclaration::Function { body, .. } => block(body),
-            GoDeclaration::Variable { value, .. } => expression(value),
-            _ => {}
-        }
+        walk::declaration(&mut Capped, declaration);
     }
 }
 
 /// Rewrites a block, and every block and expression inside it, once each.
-fn block(body: &mut [GoStatement]) {
-    for statement in body.iter_mut() {
-        statement_parts(statement);
-    }
-    switched_lengths(body);
-}
+struct Capped;
 
-fn expression(value: &mut GoExpression) {
-    match value {
-        GoExpression::Function { body, .. } => block(body),
-        GoExpression::Call { function, arguments } => {
-            expression(function);
-            arguments.iter_mut().for_each(expression);
-        }
-        GoExpression::Binary { left, right, .. } => {
-            expression(left);
-            expression(right);
-        }
-        GoExpression::Index { value, index } => {
-            expression(value);
-            expression(index);
-        }
-        GoExpression::Unary { operand: value, .. }
-        | GoExpression::Field { value, .. }
-        | GoExpression::Address(value)
-        | GoExpression::Conversion { value, .. }
-        | GoExpression::TypeAssertion { value, .. }
-        | GoExpression::Spread(value)
-        | GoExpression::Instantiation { function: value, .. } => expression(value),
-        GoExpression::Composite { fields, .. } => {
-            fields.iter_mut().for_each(|(_, value)| expression(value))
-        }
-        _ => {}
+impl Walk for Capped {
+    fn expression(&mut self, value: &mut GoExpression) {
+        walk::expression(self, value);
+        counted_code_points(value);
+        compared_length(value);
     }
-    counted_code_points(value);
-    compared_length(value);
-}
 
-fn statement_parts(statement: &mut GoStatement) {
-    match statement {
-        GoStatement::Define { values, .. } => values.iter_mut().for_each(expression),
-        GoStatement::Variable { value: Some(value), .. }
-        | GoStatement::Return(Some(value))
-        | GoStatement::Expression(value)
-        | GoStatement::Defer(value) => expression(value),
-        GoStatement::Assign { targets, values } => {
-            targets.iter_mut().for_each(expression);
-            values.iter_mut().for_each(expression);
+    fn statement(&mut self, statement: &mut GoStatement) {
+        walk::statement(self, statement);
+        if let GoStatement::Switch { value: Some(value), cases, .. } = statement
+            && let Some(largest) = largest_literal(cases.iter().flat_map(|case| &case.values))
+        {
+            cap(value, largest);
         }
-        GoStatement::If { condition, then, otherwise } => {
-            expression(condition);
-            block(then);
-            block(otherwise);
-        }
-        GoStatement::Switch { value, cases, default } => {
-            if let Some(value) = value {
-                expression(value);
-                if let Some(largest) = largest_literal(cases.iter().flat_map(|case| &case.values)) {
-                    cap(value, largest);
-                }
-            }
-            for case in cases {
-                case.values.iter_mut().for_each(expression);
-                block(&mut case.body);
-            }
-            if let Some(default) = default {
-                default.covers.iter_mut().for_each(expression);
-                block(&mut default.body);
-            }
-        }
-        GoStatement::IfAssert { value, then, .. } => {
-            expression(value);
-            block(then);
-        }
-        GoStatement::Range { iterable, body, .. } => {
-            expression(iterable);
-            block(body);
-        }
-        GoStatement::Counting { start, end, body, .. } => {
-            expression(start);
-            expression(end);
-            block(body);
-        }
-        GoStatement::CountingDown { start, body, .. } => {
-            expression(start);
-            block(body);
-        }
-        GoStatement::Loop(body)
-        | GoStatement::LabeledLoop { body, .. }
-        | GoStatement::Block(body) => block(body),
-        _ => {}
+    }
+
+    fn block(&mut self, body: &mut Vec<GoStatement>) {
+        body.iter_mut().for_each(|statement| self.statement(statement));
+        switched_lengths(body);
     }
 }
 
@@ -215,7 +141,7 @@ fn switched_lengths(body: &mut [GoStatement]) {
         };
         let mut uses = 0;
         for statement in rest.iter_mut() {
-            each_expression_in_statement(statement, &mut |e| {
+            each_expression_in_statement(statement, |e| {
                 if matches!(e, GoExpression::Identifier(used) if used == name) {
                     uses += 1;
                 }
@@ -283,11 +209,7 @@ pub fn hoist_loop_invariant_lengths(
         });
         let written_by_literals = written_by_literals(declaration);
         let mut function = Function { names, locals, written_by_literals, taken };
-        match declaration {
-            GoDeclaration::Function { body, .. } => function.body(body),
-            GoDeclaration::Variable { value, .. } => function.literals(value),
-            _ => {}
-        }
+        function.declaration(declaration);
     }
 }
 
@@ -302,29 +224,19 @@ struct Function<'a> {
     taken: &'a dyn Fn(&str) -> bool,
 }
 
-impl Function<'_> {
-    fn body(&mut self, body: &mut Vec<GoStatement>) {
-        self.loops(body);
-        for statement in body.iter_mut() {
-            each_expression_in_statement(statement, &mut |value| self.literal(value));
-        }
-    }
-
-    fn literals(&mut self, value: &mut GoExpression) {
-        each_expression(value, &mut |value| self.literal(value));
-    }
-
-    fn literal(&mut self, value: &mut GoExpression) {
-        if let GoExpression::Function { body, .. } = value {
-            self.loops(body);
-        }
-    }
-
+impl Walk for Function<'_> {
     /// The loops in a block, outside function literals, outermost first.
-    fn loops(&mut self, body: &mut Vec<GoStatement>) {
+    fn block(&mut self, body: &mut Vec<GoStatement>) {
         let mut at = 0;
         while at < body.len() {
-            let changed = self.changed(&mut body[at]);
+            let changed = match &body[at] {
+                GoStatement::Loop(_)
+                | GoStatement::LabeledLoop { .. }
+                | GoStatement::Range { .. }
+                | GoStatement::Counting { .. }
+                | GoStatement::CountingDown { .. } => self.changed(&mut body[at]),
+                _ => FxHashSet::default(),
+            };
             let lengths = match &mut body[at] {
                 GoStatement::Loop(looped) | GoStatement::LabeledLoop { body: looped, .. } => {
                     let mut hoisted = self.views(looped, &changed);
@@ -341,30 +253,25 @@ impl Function<'_> {
                 body.insert(at, GoStatement::Define { names: vec![local], values: vec![length] });
             }
             at += hoisted;
-            match &mut body[at] {
-                GoStatement::If { then, otherwise, .. } => {
-                    self.loops(then);
-                    self.loops(otherwise);
-                }
-                GoStatement::Switch { cases, default, .. } => {
-                    for case in cases {
-                        self.loops(&mut case.body);
-                    }
-                    if let Some(default) = default {
-                        self.loops(&mut default.body);
-                    }
-                }
-                GoStatement::IfAssert { then: body, .. }
-                | GoStatement::Range { body, .. }
-                | GoStatement::Counting { body, .. }
-                | GoStatement::CountingDown { body, .. }
-                | GoStatement::Loop(body)
-                | GoStatement::LabeledLoop { body, .. }
-                | GoStatement::Block(body) => self.loops(body),
-                _ => {}
-            }
+            self.statement(&mut body[at]);
             at += 1;
         }
+    }
+
+    fn expression(&mut self, _: &mut GoExpression) {}
+}
+
+impl Function<'_> {
+    /// The loops of the declaration's body and of every function literal in it.
+    fn declaration(&mut self, declaration: &mut GoDeclaration) {
+        if let GoDeclaration::Function { body, .. } = declaration {
+            self.block(body);
+        }
+        each_expression_in_declaration(declaration, |value| {
+            if let GoExpression::Function { body, .. } = value {
+                self.block(body);
+            }
+        });
     }
 
     /// Replaces each length of a string the loop never changes with a new
@@ -377,7 +284,7 @@ impl Function<'_> {
         let mut hoisted: Vec<(String, GoExpression)> = vec![];
         let mut locals: Vec<((&'static str, String), String)> = vec![];
         for statement in looped.iter_mut() {
-            each_expression_in_statement(statement, &mut |value| {
+            each_expression_in_statement(statement, |value| {
                 let Some(counted) = length_of_variable(value) else { return };
                 if changed.contains(&counted.1) {
                     return;
@@ -440,23 +347,14 @@ impl Function<'_> {
 /// The variables written inside the declaration's function literals.
 fn written_by_literals(declaration: &mut GoDeclaration) -> FxHashSet<String> {
     let mut written = FxHashSet::default();
-    let mut literal = |value: &mut GoExpression| {
+    each_expression_in_declaration(declaration, |value| {
         let GoExpression::Function { body, .. } = value else { return };
         statements_names(body, &mut |name| {
             if let Name::Written(name) = name {
                 written.insert(name.clone());
             }
         });
-    };
-    match declaration {
-        GoDeclaration::Function { body, .. } => {
-            for statement in body.iter_mut() {
-                each_expression_in_statement(statement, &mut literal);
-            }
-        }
-        GoDeclaration::Variable { value, .. } => each_expression(value, &mut literal),
-        _ => {}
-    }
+    });
     written
 }
 

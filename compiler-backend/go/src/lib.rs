@@ -24,6 +24,7 @@ mod syntax;
 mod timing;
 mod types;
 mod value_names;
+mod walk;
 
 pub use error::{GoError, GoResult, UnsupportedState};
 pub use foreign::ForeignPackages;

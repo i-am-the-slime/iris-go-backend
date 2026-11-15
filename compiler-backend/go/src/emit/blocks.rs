@@ -32,7 +32,8 @@
 use rustc_hash::FxHashSet;
 
 use super::chunks::lower_first;
-use crate::syntax::{GoDeclaration, GoExpression, GoStatement, GoType};
+use crate::walk::{self, Walk};
+use crate::syntax::{GoDeclaration, GoExpression, GoStatement, GoType, Name};
 
 /// The fewest cells of one type in one expression that are allocated together.
 const MINIMUM_CELLS: usize = 3;
@@ -46,17 +47,11 @@ pub fn allocate_nested_cells_together(
     for declaration in declarations {
         let mut names = FxHashSet::default();
         declaration.for_each_name_mut(&mut |name| {
-            let (crate::syntax::Name::Reference(name)
-            | crate::syntax::Name::Written(name)
-            | crate::syntax::Name::Binder(name)) = name;
+            let (Name::Reference(name) | Name::Written(name) | Name::Binder(name)) = name;
             names.insert(name.clone());
         });
-        let mut function = Function { names, taken };
-        match declaration {
-            GoDeclaration::Function { body, .. } => function.block(body),
-            GoDeclaration::Variable { value, .. } => function.expression(value, None),
-            _ => {}
-        }
+        let mut function = Function { names, taken, always: false, pending: vec![] };
+        walk::declaration(&mut function, declaration);
     }
 }
 
@@ -64,143 +59,75 @@ struct Function<'a> {
     /// Every name the declaration uses, so that a block shadows none of them.
     names: FxHashSet<String>,
     taken: &'a dyn Fn(&str) -> bool,
+    /// Whether the statement always evaluates the expression visited, so that
+    /// the blocks its cells need may go before the statement.
+    always: bool,
+    /// The blocks the statement visited needs, to go before it.
+    pending: Vec<GoStatement>,
 }
 
-impl Function<'_> {
+impl Walk for Function<'_> {
     /// A list of statements, each preceded by the blocks its expressions need.
     fn block(&mut self, body: &mut Vec<GoStatement>) {
+        let always = self.always;
+        let outer = std::mem::take(&mut self.pending);
         let mut rewritten = Vec::with_capacity(body.len());
         for mut statement in std::mem::take(body) {
-            let mut blocks = vec![];
-            self.statement(&mut statement, &mut blocks);
-            rewritten.extend(blocks);
+            self.statement(&mut statement);
+            rewritten.append(&mut self.pending);
             rewritten.push(statement);
         }
         *body = rewritten;
+        self.always = always;
+        self.pending = outer;
     }
 
-    fn statement(&mut self, statement: &mut GoStatement, blocks: &mut Vec<GoStatement>) {
-        match statement {
-            GoStatement::Define { values, .. } => {
-                values.iter_mut().for_each(|value| self.expression(value, Some(blocks)))
-            }
-            GoStatement::Variable { value, .. } => {
-                if let Some(value) = value {
-                    self.expression(value, Some(blocks));
-                }
-            }
-            GoStatement::Assign { targets, values } => {
-                targets.iter_mut().for_each(|target| self.expression(target, None));
-                values.iter_mut().for_each(|value| self.expression(value, Some(blocks)));
-            }
-            GoStatement::Expression(value) | GoStatement::Return(Some(value)) => {
-                self.expression(value, Some(blocks))
-            }
-            GoStatement::Defer(value) => self.expression(value, None),
-            GoStatement::If { condition, then, otherwise } => {
-                self.expression(condition, None);
-                self.block(then);
-                self.block(otherwise);
-            }
-            GoStatement::Switch { value, cases, default } => {
-                if let Some(value) = value {
-                    self.expression(value, None);
-                }
-                for case in cases {
-                    case.values.iter_mut().for_each(|value| self.expression(value, None));
-                    self.block(&mut case.body);
-                }
-                if let Some(default) = default {
-                    self.block(&mut default.body);
-                }
-            }
-            GoStatement::IfAssert { value, then, .. } => {
-                self.expression(value, None);
-                self.block(then);
-            }
-            GoStatement::Range { iterable, body, .. } => {
-                self.expression(iterable, None);
-                self.block(body);
-            }
-            GoStatement::Counting { start, end, body, .. } => {
-                self.expression(start, None);
-                self.expression(end, None);
-                self.block(body);
-            }
-            GoStatement::CountingDown { start, body, .. } => {
-                self.expression(start, None);
-                self.block(body);
-            }
-            GoStatement::Loop(body)
-            | GoStatement::LabeledLoop { body, .. }
-            | GoStatement::Block(body) => self.block(body),
-            GoStatement::Return(None)
-            | GoStatement::Continue
-            | GoStatement::Break
-            | GoStatement::BreakTo(_) => {}
+    fn statement(&mut self, statement: &mut GoStatement) {
+        if let GoStatement::Assign { targets, values } = statement {
+            self.always = false;
+            targets.iter_mut().for_each(|target| self.expression(target));
+            self.always = true;
+            return values.iter_mut().for_each(|value| self.expression(value));
         }
+        self.always = matches!(
+            statement,
+            GoStatement::Define { .. }
+                | GoStatement::Variable { .. }
+                | GoStatement::Expression(_)
+                | GoStatement::Return(_)
+        );
+        walk::statement(self, statement);
     }
 
-    /// An expression. With `blocks`, its statement always evaluates it, and
-    /// the blocks its cells need go there; without, only the function
+    /// An expression. When its statement always evaluates it, the blocks its
+    /// cells need go before that statement; otherwise only the function
     /// literals inside it are rewritten.
-    fn expression(&mut self, value: &mut GoExpression, mut blocks: Option<&mut Vec<GoStatement>>) {
-        if let Some(blocks) = blocks.as_deref_mut()
+    fn expression(&mut self, value: &mut GoExpression) {
+        if self.always
             && let Some(type_) = cell_type(value)
             && nested_cells(value, &type_) >= MINIMUM_CELLS
         {
-            return self.allocate_together(value, type_, blocks);
+            return self.allocate_together(value, type_);
         }
         match value {
-            GoExpression::Function { body, .. } => self.block(body),
             GoExpression::Binary { operator: "&&" | "||", left, right } => {
-                self.expression(left, blocks);
-                self.expression(right, None);
+                self.expression(left);
+                let always = std::mem::replace(&mut self.always, false);
+                self.expression(right);
+                self.always = always;
             }
-            GoExpression::Binary { left, right, .. } => {
-                self.expression(left, blocks.as_deref_mut());
-                self.expression(right, blocks);
-            }
-            GoExpression::Call { function, arguments } => {
-                self.expression(function, blocks.as_deref_mut());
-                for argument in arguments {
-                    self.expression(argument, blocks.as_deref_mut());
-                }
-            }
-            GoExpression::Index { value, index } => {
-                self.expression(value, blocks.as_deref_mut());
-                self.expression(index, blocks);
-            }
-            GoExpression::Composite { fields, .. } => {
-                for (_, field) in fields {
-                    self.expression(field, blocks.as_deref_mut());
-                }
-            }
-            GoExpression::Unary { operand: value, .. }
-            | GoExpression::Field { value, .. }
-            | GoExpression::Address(value)
-            | GoExpression::Conversion { value, .. }
-            | GoExpression::TypeAssertion { value, .. }
-            | GoExpression::Spread(value)
-            | GoExpression::Instantiation { function: value, .. } => self.expression(value, blocks),
-            GoExpression::Identifier(_)
-            | GoExpression::Qualified { .. }
-            | GoExpression::Integer(_)
-            | GoExpression::Float(_)
-            | GoExpression::String(_)
-            | GoExpression::Rune(_)
-            | GoExpression::Boolean(_)
-            | GoExpression::Type(_) => {}
+            _ => walk::expression(self, value),
         }
     }
+}
 
+impl Function<'_> {
     /// Replaces the cell `value` and the cells of `type_` nested in it with
-    /// cells of one slice, built in `blocks`.
+    /// cells of one slice, built in `pending`.
     fn allocate_together(
         &mut self,
         value: &mut GoExpression,
         type_: GoType,
-        blocks: &mut Vec<GoStatement>,
     ) {
         let slice = self.fresh_name(&type_);
         let mut cells = vec![];
@@ -208,7 +135,7 @@ impl Function<'_> {
         let GoExpression::Address(root) = root else {
             unreachable!("invariant violated: a cell is the address of a composite")
         };
-        self.number(*root, &type_, &slice, &mut cells, blocks);
+        self.number(*root, &type_, &slice, &mut cells);
         let allocation = GoExpression::Call {
             function: Box::new(GoExpression::Identifier("make".into())),
             arguments: vec![
@@ -216,9 +143,9 @@ impl Function<'_> {
                 GoExpression::Integer(cells.len() as i64),
             ],
         };
-        blocks.push(GoStatement::Define { names: vec![slice.clone()], values: vec![allocation] });
+        self.pending.push(GoStatement::Define { names: vec![slice.clone()], values: vec![allocation] });
         for (index, cell) in cells.into_iter().enumerate() {
-            blocks.push(GoStatement::Assign {
+            self.pending.push(GoStatement::Assign {
                 targets: vec![element(&slice, index)],
                 values: vec![cell],
             });
@@ -235,11 +162,10 @@ impl Function<'_> {
         type_: &GoType,
         slice: &str,
         cells: &mut Vec<GoExpression>,
-        blocks: &mut Vec<GoStatement>,
     ) {
         let index = cells.len();
         cells.push(GoExpression::Integer(0));
-        self.number_fields(&mut composite, type_, slice, cells, blocks);
+        self.number_fields(&mut composite, type_, slice, cells);
         cells[index] = composite;
     }
 
@@ -249,7 +175,6 @@ impl Function<'_> {
         type_: &GoType,
         slice: &str,
         cells: &mut Vec<GoExpression>,
-        blocks: &mut Vec<GoStatement>,
     ) {
         let GoExpression::Composite { fields, .. } = composite else {
             unreachable!("invariant violated: only composites are numbered")
@@ -262,11 +187,11 @@ impl Function<'_> {
                     unreachable!("invariant violated: a cell is the address of a composite")
                 };
                 *field = GoExpression::Address(Box::new(element(slice, cells.len())));
-                self.number(*nested, type_, slice, cells, blocks);
+                self.number(*nested, type_, slice, cells);
             } else if let GoExpression::Composite { .. } = field {
-                self.number_fields(field, type_, slice, cells, blocks);
+                self.number_fields(field, type_, slice, cells);
             } else {
-                self.expression(field, Some(blocks));
+                self.expression(field);
             }
         }
     }
