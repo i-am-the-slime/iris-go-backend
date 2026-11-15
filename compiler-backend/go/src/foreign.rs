@@ -41,6 +41,9 @@ pub enum Foreign {
     Constant(GoFunction),
     Unit,
     UnsafeCoerce,
+    /// `Unsafe.Reference.reallyUnsafeRefEq`, decided per instantiation from
+    /// the Go type both arguments share.
+    ReferenceEqual,
     Identity,
     EffectPure,
     EffectBind,
@@ -298,6 +301,7 @@ pub enum GoPackage {
     DateTime,
     Now,
     Spec,
+    RefEq,
 }
 
 impl GoPackage {
@@ -324,6 +328,7 @@ impl GoPackage {
             GoPackage::DateTime => "github.com/i-am-the-slime/purs-backend-go/go-support/datetime",
             GoPackage::Now => "github.com/i-am-the-slime/purs-backend-go/go-support/now",
             GoPackage::Spec => "github.com/i-am-the-slime/purs-backend-go/go-support/spec",
+            GoPackage::RefEq => "github.com/i-am-the-slime/purs-backend-go/go-support/refeq",
             GoPackage::Exception => {
                 "github.com/i-am-the-slime/purs-backend-go/go-support/exception"
             }
@@ -352,6 +357,7 @@ impl GoPackage {
             GoPackage::DateTime => "datetime",
             GoPackage::Now => "now",
             GoPackage::Spec => "spec",
+            GoPackage::RefEq => "refeq",
         }
     }
 }
@@ -428,7 +434,7 @@ impl Foreign {
             | Foreign::Project { arity, .. } => arity,
             Foreign::Constant(_) | Foreign::Unit | Foreign::MutableArrayNew => 0,
             Foreign::MutexNew => 0,
-            Foreign::WithMutex => 2,
+            Foreign::WithMutex | Foreign::ReferenceEqual => 2,
             Foreign::LazyDefer | Foreign::LazyForce => 1,
             Foreign::UnsafeCoerce | Foreign::Identity | Foreign::EffectPure | Foreign::Print => 1,
             Foreign::Throw | Foreign::Crash | Foreign::MakeAff | Foreign::AssocArray => 1,
@@ -1262,6 +1268,7 @@ const FOREIGN_IMPORTS: &[(&str, &str, Foreign)] = &[
     ("Partial", "_crashWith", Foreign::Crash),
     ("Effect.Unsafe", "unsafePerformEffect", Foreign::RunEffect),
     ("Unsafe.Coerce", "unsafeCoerce", Foreign::UnsafeCoerce),
+    ("Unsafe.Reference", "reallyUnsafeRefEq", Foreign::ReferenceEqual),
     ("Effect", "pureE", Foreign::EffectPure),
     ("Effect", "bindE", Foreign::EffectBind),
     ("Effect", "foreachE", Foreign::EffectForEach),

@@ -1,0 +1,8 @@
+---
+source: tests-integration/src/fixtures.rs
+---
+cannot specialize main: reallyUnsafeRefEq compares values of different Go types, int32 and string, which share no reference
+
+1 blockers; no Go was written
+  unsupported constructs (1):
+    reallyUnsafeRefEq compares values of different Go types, int32 and string, which share no reference (1): main

@@ -81,6 +81,7 @@ pub(crate) fn keeps_representation(foreign: &Foreign) -> bool {
         Foreign::Operator(_)
             | Foreign::Crash
             | Foreign::UnsafeCoerce
+            | Foreign::ReferenceEqual
             | Foreign::Identity
             | Foreign::Unit
             | Foreign::EffectPure

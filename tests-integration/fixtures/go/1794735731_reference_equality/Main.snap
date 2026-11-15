@@ -1,0 +1,83 @@
+---
+source: tests-integration/src/fixtures.rs
+---
+// main.go
+package main
+
+import (
+	"fmt"
+	"github.com/i-am-the-slime/purs-backend-go/go-support/refeq"
+)
+
+type Room uint8
+
+const (
+	RoomKitchen Room = iota
+	RoomGarden
+)
+
+type Ref[T any] struct {
+	Value T
+}
+
+type XY struct {
+	X int32
+	Y float64
+}
+
+type Handler struct {
+	Name string
+	Run  func(int32) int32
+}
+
+type Shape struct {
+	Field0 float64
+	Tag    uint8
+}
+
+const (
+	ShapeCircle = iota
+	ShapeSquare
+)
+
+type Chain struct {
+	Link1 *Chain
+	Link0 int32
+	Tag   uint8
+}
+
+const (
+	ChainEnd = iota
+	ChainLink
+)
+
+var sharedChainEnd = &Chain{Tag: ChainEnd}
+
+var main_ = initializeMain_()
+
+func initializeMain_() []bool {
+	left := Handler{Name: "a", Run: func(n3 int32) int32 {
+		return n3 + 1
+	}}
+	right := Handler{Name: "a", Run: func(n4 int32) int32 {
+		return n4 + 2
+	}}
+	return []bool{int32(1) == int32(2), float64(1.0) == float64(1.0), true == false, rune('a') == rune('a'), "a" == "b", struct{}{} == struct{}{}, RoomKitchen == RoomGarden, refeq.SameFunc(func(n int32) int32 {
+		return n + 1
+	}, func(n2 int32) int32 {
+		return n2 + 2
+	}), refeq.SameFunc(func() {
+	}, func() {
+	}), refeq.SameSlice([]int32{1}, []int32{1}), counter == counter, XY{X: 1, Y: 2.0} == XY{X: 1, Y: 3.0}, left.Name == right.Name && refeq.SameFunc(left.Run, right.Run), Shape{Tag: ShapeCircle, Field0: 1.0} == Shape{Tag: ShapeSquare, Field0: 1.0}, &Chain{Tag: ChainLink, Link0: 1, Link1: sharedChainEnd} == sharedChainEnd}
+}
+
+var counter = initializeCounter()
+
+func initializeCounter() *Ref[int32] {
+	performed := &Ref[int32]{Value: 0}
+	return performed
+}
+
+func main() {
+	fmt.Println(main_)
+}
