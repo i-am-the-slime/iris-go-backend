@@ -2391,7 +2391,7 @@ where
                     if !instantiations.contains_key(&binder.name) {
                         return Ok(body);
                     }
-                    body = inner;
+                    body = crate::monotype::expand_synonyms(&mut self.context, inner)?;
                 }
                 Type::Constrained(_, inner) => body = inner,
                 _ => break,
