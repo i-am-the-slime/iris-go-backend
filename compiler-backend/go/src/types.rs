@@ -48,6 +48,11 @@ where
         let Type::Rigid(name, _, _) = self.lookup(self.strip_annotations(type_id)) else {
             return None;
         };
+        self.name_erasure(*name)
+    }
+
+    /// The cause of an erased stand-in, by the name of its variable.
+    pub fn name_erasure(&self, name: Name) -> Option<Erasure> {
         if name.file != self.queries.prim_id() || name.scoped {
             return None;
         }

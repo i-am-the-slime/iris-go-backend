@@ -1123,19 +1123,7 @@ where
         if names.iter().all(|name| name.scoped) || names.is_empty() {
             return self.context.queries.intern_type(Type::Forall(binder, rest));
         }
-        let tree = &scope.module.checked.tree;
-        let mut recorded = Substitution::default();
-        let mut current = id;
-        loop {
-            for instantiation in tree.lookup_instantiations(current) {
-                recorded.insert(instantiation.name, instantiation.argument);
-            }
-            match tree[current].kind {
-                tree::ExpressionKind::EvidenceApplication { function, .. } => current = function,
-                _ => break,
-            }
-        }
-        let instantiations = self.closed_instantiations(scope, recorded);
+        let instantiations = self.recorded_instantiations(scope, id);
         if !names.iter().all(|name| instantiations.contains_key(name)) {
             return closed;
         }
@@ -1454,6 +1442,17 @@ where
         result_instantiations: &Substitution,
     ) -> TypeId {
         let tree = &scope.module.checked.tree;
+        let mut substitution = result_instantiations.clone();
+        substitution.extend(self.recorded_instantiations(scope, node));
+        self.context.types.close(&mut substitution);
+        let node_type = self.outer_body(tree[node].type_id, &mut vec![]);
+        let node_type = self.context.types.substitute(node_type, &substitution);
+        self.context.types.substitute(node_type, &scope.substitution)
+    }
+
+    /// The instantiations recorded at a reference and its evidence applications.
+    fn recorded_instantiations(&self, scope: &Scope, node: tree::ExpressionId) -> Substitution {
+        let tree = &scope.module.checked.tree;
         let mut recorded = Substitution::default();
         let mut current = node;
         loop {
@@ -1465,12 +1464,7 @@ where
                 _ => break,
             }
         }
-        let mut substitution = result_instantiations.clone();
-        substitution.extend(self.closed_instantiations(scope, recorded));
-        self.context.types.close(&mut substitution);
-        let node_type = self.outer_body(tree[node].type_id, &mut vec![]);
-        let node_type = self.context.types.substitute(node_type, &substitution);
-        self.context.types.substitute(node_type, &scope.substitution)
+        self.closed_instantiations(scope, recorded)
     }
 
     /// The instantiations the checker recorded at one reference, closed. They
@@ -1985,6 +1979,7 @@ where
                 term,
             )) => {
                 let checked = expected.unwrap_or(tree[id].type_id);
+                self.erase_rank_n_skolems(scope, checked, &mut instantiations)?;
                 self.recover_unrecorded_instantiations(
                     scope,
                     checked,
@@ -2226,6 +2221,43 @@ where
     /// the checker records no instantiation for: those of a result type, and
     /// those of a declaration referenced from its own recursive binding group,
     /// where the reference is monomorphic until the group is generalized.
+    /// A reference checked against an unspecialized `forall` (`measure` passed
+    /// as `Algebra`, `forall node ops. ...`) is instantiated at the skolems the
+    /// checker introduced for its quantifiers. That `forall` is erased, so its
+    /// skolems are too, and the reference is specialized at the erased type the
+    /// parameter has.
+    fn erase_rank_n_skolems(
+        &mut self,
+        scope: &Scope,
+        checked: TypeId,
+        instantiations: &mut Substitution,
+    ) -> GoResult<()> {
+        let checked = self.context.types.substitute(checked, &scope.substitution);
+        let checked = crate::monotype::expand_synonyms(&mut self.context, checked)?;
+        let checked = self.context.types.strip_annotations(checked);
+        if !matches!(self.context.types.lookup(checked), Type::Forall(..)) {
+            return Ok(());
+        }
+        if self.monotypes.scheme_for(&mut self.context, checked)?.is_some() {
+            return Ok(());
+        }
+        let mut skolems = vec![];
+        for &argument in instantiations.values() {
+            self.context.types.rigid_names(argument, &mut skolems);
+        }
+        let erased = self.context.types.erased(Erasure::RankN);
+        let skolems: Substitution = skolems
+            .into_iter()
+            .filter(|name| !scope.substitution.contains_key(name))
+            .filter(|&name| self.context.types.name_erasure(name).is_none())
+            .map(|name| (name, erased))
+            .collect();
+        for argument in instantiations.values_mut() {
+            *argument = self.context.types.substitute(*argument, &skolems);
+        }
+        Ok(())
+    }
+
     fn recover_unrecorded_instantiations(
         &mut self,
         scope: &Scope,

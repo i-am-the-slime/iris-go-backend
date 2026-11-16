@@ -856,8 +856,12 @@ impl Monotypes {
             return Err(open_type(context, row)?);
         };
         let row_type = context.queries.lookup_row_type(row_id).clone();
+        // An erased row variable, the `ops` of an erased `forall node ops.
+        // Record (Operations node ops) -> ...`, stands for fields the code cannot
+        // name; the record holds the ones it can.
         if let Some(tail) = row_type.tail
             && !matches!(context.types.lookup(tail), Type::Unification(_))
+            && context.types.erasure(tail).is_none()
         {
             return Err(open_type(context, row)?);
         }
