@@ -1,0 +1,66 @@
+---
+source: tests-integration/src/fixtures.rs
+---
+// main.go
+package main
+
+import (
+	"fmt"
+	"github.com/i-am-the-slime/purs-backend-go/go-support/array"
+	"github.com/i-am-the-slime/purs-backend-go/go-support/exception"
+	"github.com/i-am-the-slime/purs-backend-go/go-support/lazy"
+	"github.com/i-am-the-slime/purs-backend-go/go-support/prim"
+)
+
+type Stream = *lazy.Lazy[*TupleLabelledLazyStream]
+
+type MaybeStream struct {
+	Just Stream
+	Tag  uint8
+}
+
+const (
+	MaybeStreamNothing = iota
+	MaybeStreamJust
+)
+
+type Labelled struct {
+	First  string
+	Second *MaybeStream
+}
+
+type TupleLabelledLazyStream struct {
+	First  *Labelled
+	Second *lazy.Lazy[*lazy.Lazy[*TupleLabelledLazyStream]]
+}
+
+var sharedMaybeStreamNothing = &MaybeStream{Tag: MaybeStreamNothing}
+
+var main_ = initializeMain_()
+
+func initializeMain_() []string {
+	defer exception.ReportUncaught()
+	return take(3, from(1))
+}
+
+func take(n int32, stream Stream) []string {
+	switch n {
+	case 0:
+		return []string{}
+	default:
+		scrutinee := stream.Force()
+		return array.Append([]string{scrutinee.First.First}, take(n - 1, scrutinee.Second.Force()))
+	}
+}
+
+func from(n int32) *lazy.Lazy[*TupleLabelledLazyStream] {
+	return lazy.Defer(func() *TupleLabelledLazyStream {
+		return &TupleLabelledLazyStream{First: &Labelled{First: prim.ShowInt(n), Second: sharedMaybeStreamNothing}, Second: lazy.Defer(func() Stream {
+			return from(n + 1)
+		})}
+	})
+}
+
+func main() {
+	fmt.Println(main_)
+}

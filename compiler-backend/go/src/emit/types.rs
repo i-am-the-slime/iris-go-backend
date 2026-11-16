@@ -12,7 +12,7 @@ use crate::monotype::{DataType, Failure, Monotype, MonotypeId};
 use crate::naming::{capitalise, identifier};
 use crate::syntax::{GoDeclaration, GoType};
 use files::FileId;
-use rustc_hash::FxHashSet;
+use rustc_hash::{FxHashMap, FxHashSet};
 
 impl<Q> Emitter<'_, '_, '_, Q>
 where
@@ -137,6 +137,31 @@ where
         self.resolve_aliases(&mut left);
         self.resolve_aliases(&mut right);
         Ok(left == right)
+    }
+
+    /// Go cannot yet instantiate a generic type at an alias of a generic
+    /// instantiation that is still being declared (go.dev/issue/78296, "an
+    /// incomplete alias"): `type Cofree = *lazy.Lazy[*Cell]` while a struct
+    /// that `Cell` reaches holds a `*lazy.Lazy[Cofree]`. Every type argument
+    /// in a type declaration spells such an alias out, which is the same Go
+    /// type and leaves the cycle to pass through the struct alone.
+    pub(super) fn spell_out_generic_alias_arguments(&mut self) {
+        let generic: FxHashSet<String> = self
+            .type_aliases
+            .iter()
+            .filter(|(_, aliased)| is_generic_instantiation(aliased))
+            .map(|(name, _)| name.clone())
+            .collect();
+        if generic.is_empty() {
+            return;
+        }
+        for declaration in &mut self.type_declarations {
+            if let GoDeclaration::Type { type_, .. } | GoDeclaration::Alias { type_, .. } =
+                declaration
+            {
+                spell_out_arguments(type_, &self.type_aliases, &generic, false);
+            }
+        }
     }
 
     /// Replaces every alias in a Go type by the type it spells. An alias's
@@ -536,5 +561,42 @@ where
             fields.insert(layout.origin_position, ("Origin".to_string(), GoType::Any));
         }
         Ok(true)
+    }
+}
+
+/// `*lazy.Lazy[T]` and the like: a generic instantiation, behind pointers.
+fn is_generic_instantiation(type_: &GoType) -> bool {
+    match type_ {
+        GoType::Generic { .. } => true,
+        GoType::Pointer(inner) => is_generic_instantiation(inner),
+        _ => false,
+    }
+}
+
+/// Spells out each alias in `generic` where it is, or is inside, a type argument.
+fn spell_out_arguments(
+    type_: &mut GoType,
+    aliases: &FxHashMap<String, GoType>,
+    generic: &FxHashSet<String>,
+    in_argument: bool,
+) {
+    if let GoType::Named(name) = type_
+        && in_argument
+        && generic.contains(name.as_str())
+    {
+        *type_ = aliases[name.as_str()].clone();
+    }
+    let in_argument = in_argument || matches!(type_, GoType::Generic { .. });
+    let inner: Vec<&mut GoType> = match type_ {
+        GoType::Generic { arguments, .. } => arguments.iter_mut().collect(),
+        GoType::Slice(element) | GoType::Pointer(element) => vec![element],
+        GoType::Function { parameters, result } => {
+            parameters.iter_mut().chain(result.as_deref_mut()).collect()
+        }
+        GoType::Struct(fields) => fields.iter_mut().map(|(_, field)| field).collect(),
+        _ => vec![],
+    };
+    for type_ in inner {
+        spell_out_arguments(type_, aliases, generic, in_argument);
     }
 }

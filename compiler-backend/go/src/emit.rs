@@ -175,6 +175,7 @@ where
         name.and_then(|name| homes.get(name)).copied()
     };
     emitter.settle_round_trips();
+    emitter.spell_out_generic_alias_arguments();
     let mut all = std::mem::take(&mut emitter.type_declarations);
     all.extend(declarations);
     let all: Vec<(GoDeclaration, Option<ModuleIndex>)> = all
