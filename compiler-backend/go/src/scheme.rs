@@ -35,6 +35,9 @@ pub struct SchemeInstantiations {
     known: FxHashMap<SchemeKey, Vec<SchemeInstantiation>>,
     rank_n: FxHashMap<SchemeKey, String>,
     erased_owners: rustc_hash::FxHashSet<String>,
+    /// Field types an erased owner holds, which stay erased whichever other
+    /// owner holds them too.
+    erased_keys: rustc_hash::FxHashSet<SchemeKey>,
     coerced_sources: FxHashMap<SchemeKey, Vec<SchemeKey>>,
     grown_keys: rustc_hash::FxHashSet<SchemeKey>,
 }
@@ -56,9 +59,22 @@ impl SchemeInstantiations {
     /// Specializes the rank-N field type `key` of `owner`, a newtype or
     /// constructor, unless that owner's fields stay erased.
     pub fn add_rank_n(&mut self, key: SchemeKey, owner: String) {
-        if !self.erased_owners.contains(&owner) {
+        if !self.erased_owners.contains(&owner) && !self.erased_keys.contains(&key) {
             self.rank_n.insert(key, owner);
         }
+    }
+
+    /// Keeps the rank-N field type `key` erased: an erased owner holds it, and
+    /// its values move by coercion between that owner and any other holding
+    /// the same type (`Mapper VariantFCase` inside a `List`), which only a
+    /// shared representation allows.
+    pub fn erase_key(&mut self, key: SchemeKey) {
+        self.rank_n.remove(&key);
+        self.erased_keys.insert(key);
+    }
+
+    pub fn is_erased_key(&self, key: &SchemeKey) -> bool {
+        self.erased_keys.contains(key)
     }
 
     /// Keeps every rank-N field of `owner` erased: some occurrence of it holds
@@ -66,7 +82,9 @@ impl SchemeInstantiations {
     /// between its occurrences by coercion, which only a shared representation
     /// allows.
     pub fn erase_owner(&mut self, owner: String) {
-        self.rank_n.retain(|_, existing| *existing != owner);
+        let owned = self.rank_n.iter().filter(|(_, existing)| **existing == owner);
+        let owned: Vec<SchemeKey> = owned.map(|(key, _)| key.clone()).collect();
+        owned.into_iter().for_each(|key| self.erase_key(key));
         self.erased_owners.insert(owner);
     }
 

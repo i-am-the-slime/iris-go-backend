@@ -1,0 +1,240 @@
+---
+source: tests-integration/src/fixtures.rs
+---
+// Data/Functor/Variant/variant.go
+package variant
+
+import "fixture/Data/List/Types"
+
+func LookupMapperCase(tag string, list *types.ListString, list2 *types.List) func(func(any) any) func(any) any {
+	for {
+		if list.Tag == types.ListStringCons && list2.Tag == types.ListCons {
+			t := list.Cons0
+			ts := list.Cons1
+			m := list2.Cons0
+			ms := list2.Cons1
+			if t == tag {
+				return m
+			}
+			list, list2 = ts, ms
+			continue
+		}
+		list, list2 = types.SharedListStringNil, types.SharedListNil
+	}
+}
+
+// Data/List/Types/types.go
+package types
+
+type ListString struct {
+	Cons0 string
+	Cons1 *ListString
+	Tag   uint8
+}
+
+const (
+	ListStringNil = iota
+	ListStringCons
+)
+
+var SharedListStringNil = &ListString{Tag: ListStringNil}
+
+type List struct {
+	Cons0 func(func(any) any) func(any) any
+	Cons1 *List
+	Tag   uint8
+}
+
+const (
+	ListNil = iota
+	ListCons
+)
+
+var SharedListNil = &List{Tag: ListNil}
+
+// main.go
+package main
+
+import (
+	"fixture/Data/Functor/Variant"
+	"fixture/Data/List/Types"
+	"fmt"
+	"github.com/i-am-the-slime/purs-backend-go/go-support/exception"
+	"github.com/i-am-the-slime/purs-backend-go/go-support/prim"
+)
+
+type BoxInt struct {
+	Box int32
+}
+
+type Box struct {
+	Box    any
+	Origin any
+}
+
+type Map_Type_ValueOfFnFnValueValueFnBoxBoxBoxInt struct {
+	Map   func(func(any) any) func(*Box) *Box
+	Type  string
+	Value BoxInt
+}
+
+type VariantFRep struct {
+	Map   func(func(any) any) func(any) any
+	Type  string
+	Value any
+}
+
+func convert(value BoxInt) *Box {
+	return &Box{Box: value.Box, Origin: value}
+}
+
+func convert2(value Map_Type_ValueOfFnFnValueValueFnBoxBoxBoxInt) VariantFRep {
+	return VariantFRep{Map: func(coerced func(any) any) func(any) any {
+		original := value.Map(coerced)
+		return func(coerced2 any) any {
+			return original(coerced2.(*Box))
+		}
+	}, Type: value.Type, Value: convert(value.Value)}
+}
+
+func convert3(value *Box) BoxInt {
+	if original, ok := value.Origin.(BoxInt); ok {
+		return original
+	}
+	return BoxInt{Box: value.Box.(int32)}
+}
+
+type PairInt struct {
+	First  int32
+	Second int32
+}
+
+type Pair struct {
+	First  any
+	Second any
+	Origin any
+}
+
+func convert4(value *Pair) PairInt {
+	if original, ok := value.Origin.(PairInt); ok {
+		return original
+	}
+	return PairInt{First: value.First.(int32), Second: value.Second.(int32)}
+}
+
+type Map_Type_ValueOfFnFnValueValueFnPairPairPairInt struct {
+	Map   func(func(any) any) func(*Pair) *Pair
+	Type  string
+	Value PairInt
+}
+
+func convert5(value PairInt) *Pair {
+	return &Pair{First: value.First, Second: value.Second, Origin: value}
+}
+
+func convert6(value Map_Type_ValueOfFnFnValueValueFnPairPairPairInt) VariantFRep {
+	return VariantFRep{Map: func(coerced func(any) any) func(any) any {
+		original := value.Map(coerced)
+		return func(coerced2 any) any {
+			return original(coerced2.(*Pair))
+		}
+	}, Type: value.Type, Value: convert5(value.Value)}
+}
+
+var main_ = initializeMain_()
+
+func initializeMain_() []string {
+	defer exception.ReportUncaught()
+	a := convert2(Map_Type_ValueOfFnFnValueValueFnBoxBoxBoxInt{Type: "first", Value: BoxInt{Box: 41}, Map: func(function func(any) any) func(*Box) *Box {
+		return func(value *Box) *Box {
+			return map_(function, value)
+		}
+	}})
+	original := func(value int32) int32 {
+		return value + 1
+	}
+	vValue := a.Map(func(coerced any) any {
+		return original(coerced.(int32))
+	})(a.Value)
+	var result string
+	if a.Type == "first" {
+		scrutinee := convert3(vValue.(*Box))
+		result = "box " + prim.ShowInt(scrutinee.Box)
+	} else {
+		scrutinee := convert4(vValue.(*Pair))
+		result = "pair " + prim.ShowInt(scrutinee.First) + " " + prim.ShowInt(scrutinee.Second)
+	}
+	v := convert6(Map_Type_ValueOfFnFnValueValueFnPairPairPairInt{Type: "second", Value: PairInt{First: 1, Second: 2}, Map: func(function func(any) any) func(*Pair) *Pair {
+		return func(value *Pair) *Pair {
+			return map_2(function, value)
+		}
+	}})
+	var a2 VariantFRep
+	if v.Type == "second" {
+		scrutinee := convert4(v.Value.(*Pair))
+		a2 = VariantFRep{Type: v.Type, Map: variant.LookupMapperCase(v.Type, &types.ListString{Tag: types.ListStringCons, Cons0: "first", Cons1: &types.ListString{Tag: types.ListStringCons, Cons0: "second", Cons1: types.SharedListStringNil}}, &types.List{Tag: types.ListCons, Cons0: mapperBox, Cons1: &types.List{Tag: types.ListCons, Cons0: mapperPair, Cons1: types.SharedListNil}}), Value: convert5(PairInt{First: scrutinee.Second, Second: scrutinee.First})}
+	} else {
+		a2 = v
+	}
+	original2 := func(value int32) int32 {
+		return prim.MultiplyInt32(value, 2)
+	}
+	vValue2 := a2.Map(func(coerced any) any {
+		return original2(coerced.(int32))
+	})(a2.Value)
+	var result2 string
+	if a2.Type == "first" {
+		scrutinee := convert3(vValue2.(*Box))
+		result2 = "box " + prim.ShowInt(scrutinee.Box)
+	} else {
+		scrutinee := convert4(vValue2.(*Pair))
+		result2 = "pair " + prim.ShowInt(scrutinee.First) + " " + prim.ShowInt(scrutinee.Second)
+	}
+	return []string{result, result2}
+}
+
+var mapperBox = initializeMapperBox()
+
+func initializeMapperBox() func(func(any) any) func(any) any {
+	defer exception.ReportUncaught()
+	original := func(function func(any) any) func(*Box) *Box {
+		return func(value *Box) *Box {
+			return map_(function, value)
+		}
+	}
+	return func(coerced func(any) any) func(any) any {
+		original2 := original(coerced)
+		return func(coerced2 any) any {
+			return original2(coerced2.(*Box))
+		}
+	}
+}
+
+var mapperPair = initializeMapperPair()
+
+func initializeMapperPair() func(func(any) any) func(any) any {
+	defer exception.ReportUncaught()
+	original := func(function func(any) any) func(*Pair) *Pair {
+		return func(value *Pair) *Pair {
+			return map_2(function, value)
+		}
+	}
+	return func(coerced func(any) any) func(any) any {
+		original2 := original(coerced)
+		return func(coerced2 any) any {
+			return original2(coerced2.(*Pair))
+		}
+	}
+}
+
+func map_(function func(any) any, value *Box) *Box {
+	return &Box{Box: function(value.Box)}
+}
+
+func map_2(function func(any) any, value *Pair) *Pair {
+	return &Pair{First: function(value.First), Second: function(value.Second)}
+}
+
+func main() {
+	fmt.Println(main_)
+}

@@ -312,9 +312,10 @@ where
     /// the rest of the pass, as discovered instantiations are.
     fn adopt_rank_n_fields(&mut self) {
         let erased = std::mem::take(&mut self.monotypes.new_erased_owners);
+        let erased_keys = std::mem::take(&mut self.monotypes.new_erased_keys);
         let keys = std::mem::take(&mut self.monotypes.new_rank_n_keys);
         let growing = std::mem::take(&mut self.growing_owners);
-        if erased.is_empty() && keys.is_empty() && growing.is_empty() {
+        if erased.is_empty() && erased_keys.is_empty() && keys.is_empty() && growing.is_empty() {
             return;
         }
         for owner in erased {
@@ -325,6 +326,9 @@ where
         }
         for (key, owner) in keys {
             self.monotypes.schemes.add_rank_n(key, owner);
+        }
+        for key in erased_keys {
+            self.monotypes.schemes.erase_key(key);
         }
         self.grown = true;
     }

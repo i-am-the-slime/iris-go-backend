@@ -157,6 +157,8 @@ pub struct Monotypes {
     pub new_rank_n_keys: Vec<(crate::scheme::SchemeKey, String)>,
     /// Owners of rank-N fields met with erased types in this pass.
     pub new_erased_owners: Vec<String>,
+    /// Rank-N field types met in this pass that an erased owner holds.
+    pub new_erased_keys: Vec<crate::scheme::SchemeKey>,
     /// Modules whose foreign imports the project implements in Go.
     pub foreign_modules: Vec<String>,
     /// How the names of specialized and lifted functions were formed, which
@@ -723,6 +725,7 @@ impl Monotypes {
         let Some(scheme) = rank_n_scheme(context, field)? else { return Ok(()) };
         if self.schemes.is_erased_owner(owner) || self.new_erased_owners.iter().any(|o| o == owner)
         {
+            self.note_erased_key(scheme.key);
             return Ok(());
         }
         if context.types.contains_erased(scheme.key.body()) {
@@ -730,6 +733,7 @@ impl Monotypes {
             return Ok(());
         }
         if self.schemes.is_rank_n(&scheme.key)
+            || self.schemes.is_erased_key(&scheme.key)
             || self.new_rank_n_keys.iter().any(|(key, _)| *key == scheme.key)
         {
             return Ok(());
@@ -753,6 +757,22 @@ impl Monotypes {
             self.new_rank_n_keys.push((scheme.key, owner.to_string()));
         }
         Ok(())
+    }
+
+    /// An erased owner's field type stays erased in every other owner too.
+    /// Specialized in this pass already, it is erased from the next one on;
+    /// otherwise no conversion of this pass depends on it, so it is erased at
+    /// once.
+    fn note_erased_key(&mut self, key: crate::scheme::SchemeKey) {
+        if self.schemes.is_erased_key(&key) || self.new_erased_keys.contains(&key) {
+            return;
+        }
+        let pending = self.new_rank_n_keys.iter().any(|(pending, _)| *pending == key);
+        if self.schemes.is_rank_n(&key) || pending {
+            self.new_erased_keys.push(key);
+        } else {
+            self.schemes.erase_key(key);
+        }
     }
 
     /// A closed type no program value can be confused with, to test whether a
