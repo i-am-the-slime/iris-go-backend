@@ -49,14 +49,6 @@ where
         let append = GoFunction { package: GoPackage::Prim, name: "AppendString" };
         call(self.go_function(append), vec![buffer, suffix])
     }
-
-    /// A string as it leaves the program as UTF-8 text, each lone surrogate U+FFFD.
-    pub(super) fn printable(&mut self, text: GoExpression) -> GoExpression {
-        if matches!(text, GoExpression::String(_)) {
-            return text;
-        }
-        call(self.go_function(GoFunction { package: GoPackage::Prim, name: "ToUTF8" }), vec![text])
-    }
 }
 
 /// The operands of an append chain: a string `+` is one already emitted, and so are calls to

@@ -1633,14 +1633,6 @@ where
         }
         let mut values = self.values(arguments, out)?;
         match foreign {
-            Foreign::Print => {
-                self.imports.insert("fmt".into());
-                let print =
-                    GoExpression::Qualified { package: "fmt".into(), name: "Println".into() };
-                let values = values.into_iter().map(|value| self.printable(value)).collect();
-                out.push(GoStatement::Expression(call(print, values)));
-                self.deliver(unit_value(), result, sink, out)
-            }
             Foreign::ReferenceNew => {
                 let value_type = self.go_type(arguments[0].monotype)?;
                 self.declare_reference();

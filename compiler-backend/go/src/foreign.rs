@@ -66,7 +66,6 @@ pub enum Foreign {
     ObjectFoldM,
     Unfoldr,
     Unfoldr1,
-    Print,
     ReferenceNew,
     ReferenceRead,
     ReferenceWrite,
@@ -302,6 +301,7 @@ pub enum GoPackage {
     Now,
     Spec,
     RefEq,
+    Console,
 }
 
 impl GoPackage {
@@ -329,6 +329,7 @@ impl GoPackage {
             GoPackage::Now => "github.com/i-am-the-slime/purs-backend-go/go-support/now",
             GoPackage::Spec => "github.com/i-am-the-slime/purs-backend-go/go-support/spec",
             GoPackage::RefEq => "github.com/i-am-the-slime/purs-backend-go/go-support/refeq",
+            GoPackage::Console => "github.com/i-am-the-slime/purs-backend-go/go-support/console",
             GoPackage::Exception => {
                 "github.com/i-am-the-slime/purs-backend-go/go-support/exception"
             }
@@ -358,6 +359,7 @@ impl GoPackage {
             GoPackage::Now => "now",
             GoPackage::Spec => "spec",
             GoPackage::RefEq => "refeq",
+            GoPackage::Console => "console",
         }
     }
 }
@@ -436,7 +438,7 @@ impl Foreign {
             Foreign::MutexNew => 0,
             Foreign::WithMutex | Foreign::ReferenceEqual => 2,
             Foreign::LazyDefer | Foreign::LazyForce => 1,
-            Foreign::UnsafeCoerce | Foreign::Identity | Foreign::EffectPure | Foreign::Print => 1,
+            Foreign::UnsafeCoerce | Foreign::Identity | Foreign::EffectPure => 1,
             Foreign::Throw | Foreign::Crash | Foreign::MakeAff | Foreign::AssocArray => 1,
             Foreign::ForkFiber | Foreign::NewFiber | Foreign::NewSupervisedFiber => 2,
             Foreign::RunEffect | Foreign::EffectUntil => 1,
@@ -481,7 +483,6 @@ impl Foreign {
                 | Foreign::EffectUntil
                 | Foreign::EffectFor
                 | Foreign::Perform { .. }
-                | Foreign::Print
                 | Foreign::ReferenceNew
                 | Foreign::ReferenceRead
                 | Foreign::ReferenceWrite
@@ -1275,10 +1276,22 @@ const FOREIGN_IMPORTS: &[(&str, &str, Foreign)] = &[
     ("Effect", "whileE", Foreign::EffectWhile),
     ("Effect", "untilE", Foreign::EffectUntil),
     ("Effect", "forE", Foreign::EffectFor),
-    ("Effect.Console", "log", Foreign::Print),
-    ("Effect.Console", "info", Foreign::Print),
-    ("Effect.Console", "warn", Foreign::Print),
-    ("Effect.Console", "error", Foreign::Print),
+    ("Effect.Console", "log", perform_in(GoPackage::Console, "Print", 1, PLAIN)),
+    ("Effect.Console", "info", perform_in(GoPackage::Console, "Print", 1, PLAIN)),
+    ("Effect.Console", "debug", perform_in(GoPackage::Console, "Print", 1, PLAIN)),
+    ("Effect.Console", "warn", perform_in(GoPackage::Console, "PrintError", 1, PLAIN)),
+    ("Effect.Console", "error", perform_in(GoPackage::Console, "PrintError", 1, PLAIN)),
+    ("Effect.Console", "group", perform_in(GoPackage::Console, "Group", 1, PLAIN)),
+    (
+        "Effect.Console",
+        "groupCollapsed",
+        perform_in(GoPackage::Console, "GroupCollapsed", 1, PLAIN),
+    ),
+    ("Effect.Console", "groupEnd", perform_in(GoPackage::Console, "GroupEnd", 0, PLAIN)),
+    ("Effect.Console", "time", perform_in(GoPackage::Console, "Time", 1, PLAIN)),
+    ("Effect.Console", "timeLog", perform_in(GoPackage::Console, "TimeLog", 1, PLAIN)),
+    ("Effect.Console", "timeEnd", perform_in(GoPackage::Console, "TimeEnd", 1, PLAIN)),
+    ("Effect.Console", "clear", perform_in(GoPackage::Console, "Clear", 0, PLAIN)),
     ("Effect.Ref", "_new", Foreign::ReferenceNew),
     ("Effect.Ref", "read", Foreign::ReferenceRead),
     ("Effect.Ref", "write", Foreign::ReferenceWrite),
