@@ -10,11 +10,24 @@ type ExistsApplyEInt uint8
 
 type ExistsApplyEBoolean uint8
 
+func Convert(value ExistsApplyENumber) any {
+	return nil
+}
+
+func Convert2(value ExistsApplyEInt) any {
+	return nil
+}
+
+func Convert3(value ExistsApplyEBoolean) any {
+	return nil
+}
+
 // main.go
 package main
 
 import (
 	"fixture/Data/Exists"
+	"fixture/shared"
 	"fmt"
 	"github.com/i-am-the-slime/purs-backend-go/go-support/array"
 	"github.com/i-am-the-slime/purs-backend-go/go-support/direct"
@@ -22,16 +35,10 @@ import (
 	"github.com/i-am-the-slime/purs-backend-go/go-support/prim"
 )
 
-type Person struct {
-	Name  string
-	Age   int32
-	Admin bool
-}
-
 type ApFnNumberFnIntFnBooleanPerson struct {
-	Done   func(float64) func(int32) func(bool) Person
+	Done   func(float64) func(int32) func(bool) shared.Person
 	Field0 string
-	Field1 func(float64) func(int32) func(bool) Person
+	Field1 func(float64) func(int32) func(bool) shared.Person
 	Apply  any
 	Tag    uint8
 }
@@ -66,9 +73,9 @@ type ExistsApplyEFnIntFnBooleanPerson struct {
 }
 
 type ApFnIntFnBooleanPerson struct {
-	Done   func(int32) func(bool) Person
+	Done   func(int32) func(bool) shared.Person
 	Field0 string
-	Field1 func(int32) func(bool) Person
+	Field1 func(int32) func(bool) shared.Person
 	Apply  ExistsApplyEFnIntFnBooleanPerson
 	Tag    uint8
 }
@@ -103,9 +110,9 @@ type ExistsApplyEFnBooleanPerson struct {
 }
 
 type ApFnBooleanPerson struct {
-	Done   func(bool) Person
+	Done   func(bool) shared.Person
 	Field0 string
-	Field1 func(bool) Person
+	Field1 func(bool) shared.Person
 	Apply  ExistsApplyEFnBooleanPerson
 	Tag    uint8
 }
@@ -140,9 +147,9 @@ type ExistsApplyEPerson struct {
 }
 
 type ApPerson struct {
-	Done   Person
+	Done   shared.Person
 	Field0 string
-	Field1 Person
+	Field1 shared.Person
 	Apply  ExistsApplyEPerson
 	Tag    uint8
 }
@@ -168,16 +175,6 @@ const (
 	ApApply
 )
 
-type AdminAgeName struct {
-	Admin any
-	Age   any
-	Name  any
-}
-
-func convert(value Person) AdminAgeName {
-	return AdminAgeName{Admin: value.Admin, Age: value.Age, Name: value.Name}
-}
-
 type ApFn struct {
 	Done   func(any) any
 	Field0 string
@@ -198,7 +195,7 @@ type ApplyE struct {
 	Second *Ap
 }
 
-func convert2(value ApFnNumberFnIntFnBooleanPerson) *ApFn {
+func convert(value ApFnNumberFnIntFnBooleanPerson) *ApFn {
 	switch value.Tag {
 	case ApFnNumberFnIntFnBooleanPersonDone:
 		return &ApFn{Tag: ApFnDone, Done: func(coerced any) any {
@@ -206,7 +203,7 @@ func convert2(value ApFnNumberFnIntFnBooleanPerson) *ApFn {
 			return func(coerced2 any) any {
 				original2 := original(coerced2.(int32))
 				return func(coerced3 any) any {
-					return convert(original2(coerced3.(bool)))
+					return shared.Convert(original2(coerced3.(bool)))
 				}
 			}
 		}}
@@ -216,7 +213,7 @@ func convert2(value ApFnNumberFnIntFnBooleanPerson) *ApFn {
 			return func(coerced2 any) any {
 				original2 := original(coerced2.(int32))
 				return func(coerced3 any) any {
-					return convert(original2(coerced3.(bool)))
+					return shared.Convert(original2(coerced3.(bool)))
 				}
 			}
 		}}
@@ -225,90 +222,78 @@ func convert2(value ApFnNumberFnIntFnBooleanPerson) *ApFn {
 	}
 }
 
-func convert3(value exists.ExistsApplyENumber) any {
-	return nil
-}
-
-func convert4(value ApNumber) *Ap {
+func convert2(value ApNumber) *Ap {
 	switch value.Tag {
 	case ApNumberDone:
 		return &Ap{Tag: ApDone, Done0: value.Done}
 	case ApNumberField:
 		return &Ap{Tag: ApField, Field0: value.Field0, Field1: value.Field1}
 	default: // ApNumberApply
-		return &Ap{Tag: ApApply, Apply0: convert3(value.Apply)}
+		return &Ap{Tag: ApApply, Apply0: exists.Convert(value.Apply)}
 	}
 }
 
-func convert5(value ApplyEFnIntFnBooleanPersonNumber) *ApplyE {
-	return &ApplyE{First: convert2(value.First), Second: convert4(value.Second)}
+func convert3(value ApplyEFnIntFnBooleanPersonNumber) *ApplyE {
+	return &ApplyE{First: convert(value.First), Second: convert2(value.Second)}
 }
 
-func convert6(value ExistsApplyEFnIntFnBooleanPerson) any {
-	return convert5(value.Number)
+func convert4(value ExistsApplyEFnIntFnBooleanPerson) any {
+	return convert3(value.Number)
 }
 
-func convert7(value ApFnIntFnBooleanPerson) *ApFn {
+func convert5(value ApFnIntFnBooleanPerson) *ApFn {
 	switch value.Tag {
 	case ApFnIntFnBooleanPersonDone:
 		return &ApFn{Tag: ApFnDone, Done: func(coerced any) any {
 			original := value.Done(coerced.(int32))
 			return func(coerced2 any) any {
-				return convert(original(coerced2.(bool)))
+				return shared.Convert(original(coerced2.(bool)))
 			}
 		}}
 	case ApFnIntFnBooleanPersonField:
 		return &ApFn{Tag: ApFnField, Field0: value.Field0, Field1: func(coerced any) any {
 			original := value.Field1(coerced.(int32))
 			return func(coerced2 any) any {
-				return convert(original(coerced2.(bool)))
+				return shared.Convert(original(coerced2.(bool)))
 			}
 		}}
 	default: // ApFnIntFnBooleanPersonApply
-		return &ApFn{Tag: ApFnApply, Apply: convert6(value.Apply)}
+		return &ApFn{Tag: ApFnApply, Apply: convert4(value.Apply)}
 	}
 }
 
-func convert8(value exists.ExistsApplyEInt) any {
-	return nil
-}
-
-func convert9(value ApInt) *Ap {
+func convert6(value ApInt) *Ap {
 	switch value.Tag {
 	case ApIntDone:
 		return &Ap{Tag: ApDone, Done0: value.Done}
 	case ApIntField:
 		return &Ap{Tag: ApField, Field0: value.Field0, Field1: value.Field1}
 	default: // ApIntApply
-		return &Ap{Tag: ApApply, Apply0: convert8(value.Apply)}
+		return &Ap{Tag: ApApply, Apply0: exists.Convert2(value.Apply)}
 	}
 }
 
-func convert10(value ApplyEFnBooleanPersonInt) *ApplyE {
-	return &ApplyE{First: convert7(value.First), Second: convert9(value.Second)}
+func convert7(value ApplyEFnBooleanPersonInt) *ApplyE {
+	return &ApplyE{First: convert5(value.First), Second: convert6(value.Second)}
 }
 
-func convert11(value ExistsApplyEFnBooleanPerson) any {
-	return convert10(value.Int)
+func convert8(value ExistsApplyEFnBooleanPerson) any {
+	return convert7(value.Int)
 }
 
-func convert12(value ApFnBooleanPerson) *Ap {
+func convert9(value ApFnBooleanPerson) *Ap {
 	switch value.Tag {
 	case ApFnBooleanPersonDone:
 		return &Ap{Tag: ApDone, Done0: func(coerced any) any {
-			return convert(value.Done(coerced.(bool)))
+			return shared.Convert(value.Done(coerced.(bool)))
 		}}
 	case ApFnBooleanPersonField:
 		return &Ap{Tag: ApField, Field0: value.Field0, Field1: func(coerced any) any {
-			return convert(value.Field1(coerced.(bool)))
+			return shared.Convert(value.Field1(coerced.(bool)))
 		}}
 	default: // ApFnBooleanPersonApply
-		return &Ap{Tag: ApApply, Apply0: convert11(value.Apply)}
+		return &Ap{Tag: ApApply, Apply0: convert8(value.Apply)}
 	}
-}
-
-func convert13(value AdminAgeName) Person {
-	return Person{Admin: value.Admin.(bool), Age: value.Age.(int32), Name: value.Name.(string)}
 }
 
 type ApFnNumberString struct {
@@ -348,7 +333,7 @@ const (
 	ApStringApply
 )
 
-func convert14(value ApFnNumberString) *Ap {
+func convert10(value ApFnNumberString) *Ap {
 	switch value.Tag {
 	case ApFnNumberStringDone:
 		return &Ap{Tag: ApDone, Done0: func(coerced any) any {
@@ -363,7 +348,7 @@ func convert14(value ApFnNumberString) *Ap {
 	}
 }
 
-func convert15(value *Ap) ApFnNumberString {
+func convert11(value *Ap) ApFnNumberString {
 	if original, ok := value.Origin.(ApFnNumberString); ok {
 		return original
 	}
@@ -397,7 +382,7 @@ const (
 	ApFnBooleanFnNumberStringApply
 )
 
-func convert16(value *Ap) ApFnBooleanFnNumberString {
+func convert12(value *Ap) ApFnBooleanFnNumberString {
 	switch value.Tag {
 	case ApDone:
 		original := value.Done0.(func(any) any)
@@ -425,7 +410,7 @@ type ApplyEFnNumberStringBoolean struct {
 	Second ApBoolean
 }
 
-func convert17(value ApFnBooleanFnNumberString) *ApFn {
+func convert13(value ApFnBooleanFnNumberString) *ApFn {
 	switch value.Tag {
 	case ApFnBooleanFnNumberStringDone:
 		return &ApFn{Tag: ApFnDone, Done: func(coerced any) any {
@@ -446,26 +431,22 @@ func convert17(value ApFnBooleanFnNumberString) *ApFn {
 	}
 }
 
-func convert18(value exists.ExistsApplyEBoolean) any {
-	return nil
-}
-
-func convert19(value ApBoolean) *Ap {
+func convert14(value ApBoolean) *Ap {
 	switch value.Tag {
 	case ApBooleanDone:
 		return &Ap{Tag: ApDone, Done0: value.Done}
 	case ApBooleanField:
 		return &Ap{Tag: ApField, Field0: value.Field0, Field1: value.Field1}
 	default: // ApBooleanApply
-		return &Ap{Tag: ApApply, Apply0: convert18(value.Apply)}
+		return &Ap{Tag: ApApply, Apply0: exists.Convert3(value.Apply)}
 	}
 }
 
-func convert20(value ApplyEFnNumberStringBoolean) *ApplyE {
-	return &ApplyE{First: convert17(value.First), Second: convert19(value.Second)}
+func convert15(value ApplyEFnNumberStringBoolean) *ApplyE {
+	return &ApplyE{First: convert13(value.First), Second: convert14(value.Second)}
 }
 
-func convert21(value *ApFn) *Ap {
+func convert16(value *ApFn) *Ap {
 	if original, ok := value.Origin.(*Ap); ok {
 		return original
 	}
@@ -479,7 +460,7 @@ func convert21(value *ApFn) *Ap {
 	}
 }
 
-func convert22(value *Ap) *ApFn {
+func convert17(value *Ap) *ApFn {
 	if original, ok := value.Origin.(*ApFn); ok {
 		return original
 	}
@@ -511,9 +492,9 @@ func initializeMain_() []string {
 		default: // ApBooleanField
 			result2 = []string{person.Apply.Boolean.Second.Field0}
 		}
-		result = array.Append(namesFnBooleanPerson(convert12(person.Apply.Boolean.First)), result2)
+		result = array.Append(namesFnBooleanPerson(convert9(person.Apply.Boolean.First)), result2)
 	}
-	var record Person
+	var record shared.Person
 	switch person.Tag {
 	case ApPersonDone:
 		record = person.Done
@@ -527,10 +508,10 @@ func initializeMain_() []string {
 		default: // ApBooleanField
 			result2 = person.Apply.Boolean.Second.Field1
 		}
-		record = func(coerced ApFnBooleanPerson) func(bool) Person {
-			original := runFnBooleanPerson(convert12(coerced)).(func(any) any)
-			return func(coerced2 bool) Person {
-				return convert13(original(coerced2).(AdminAgeName))
+		record = func(coerced ApFnBooleanPerson) func(bool) shared.Person {
+			original := runFnBooleanPerson(convert9(coerced)).(func(any) any)
+			return func(coerced2 bool) shared.Person {
+				return shared.Convert2(original(coerced2).(shared.AdminAgeName))
 			}
 		}(person.Apply.Boolean.First)(result2)
 	}
@@ -565,11 +546,11 @@ func initializeMain_() []string {
 			result2 = greeting.Apply.Number.Second.Field1
 		}
 		result4 = func(coerced ApFnNumberString) func(float64) string {
-			original3 := runFnBooleanPerson(convert14(coerced)).(func(any) any)
+			original3 := runFnBooleanPerson(convert10(coerced)).(func(any) any)
 			return func(coerced2 float64) string {
 				return original3(coerced2).(string)
 			}
-		}(convert15(original(func(coerced any) any {
+		}(convert11(original(func(coerced any) any {
 			original3 := coerced.(func(any) any)
 			original4 := original2(func(coerced2 float64) string {
 				return original3(coerced2).(string)
@@ -577,7 +558,7 @@ func initializeMain_() []string {
 			return func(coerced2 any) any {
 				return original4(coerced2.(float64))
 			}
-		})(convert14(greeting.Apply.Number.First))))(result2)
+		})(convert10(greeting.Apply.Number.First))))(result2)
 	}
 	var result5 string
 	switch greeting.Tag {
@@ -594,7 +575,7 @@ func initializeMain_() []string {
 			result2 = greeting.Apply.Number.Second.Field1
 		}
 		result5 = func(coerced ApFnNumberString) func(float64) string {
-			original := runFnBooleanPerson(convert14(coerced)).(func(any) any)
+			original := runFnBooleanPerson(convert10(coerced)).(func(any) any)
 			return func(coerced2 float64) string {
 				return original(coerced2).(string)
 			}
@@ -603,9 +584,9 @@ func initializeMain_() []string {
 	return []string{prim.StringJoinWith(",", result), "{ admin: " + result3 + ", age: " + prim.ShowInt(record.Age) + ", name: " + prim.ShowString(record.Name) + " }", result4, prim.ShowInt(direct.CodePointLength(result5))}
 }
 
-var person *ApPerson = &ApPerson{Tag: ApPersonApply, Apply: ExistsApplyEPerson{Boolean: ApplyEPersonBoolean{First: ApFnBooleanPerson{Tag: ApFnBooleanPersonApply, Apply: ExistsApplyEFnBooleanPerson{Int: ApplyEFnBooleanPersonInt{First: ApFnIntFnBooleanPerson{Tag: ApFnIntFnBooleanPersonField, Field0: "name", Field1: func(value int32) func(bool) Person {
-	return func(value2 bool) Person {
-		return Person{Name: "ada", Age: value, Admin: value2}
+var person *ApPerson = &ApPerson{Tag: ApPersonApply, Apply: ExistsApplyEPerson{Boolean: ApplyEPersonBoolean{First: ApFnBooleanPerson{Tag: ApFnBooleanPersonApply, Apply: ExistsApplyEFnBooleanPerson{Int: ApplyEFnBooleanPersonInt{First: ApFnIntFnBooleanPerson{Tag: ApFnIntFnBooleanPersonField, Field0: "name", Field1: func(value int32) func(bool) shared.Person {
+	return func(value2 bool) shared.Person {
+		return shared.Person{Name: "ada", Age: value, Admin: value2}
 	}
 }}, Second: ApInt{Tag: ApIntField, Field0: "age", Field1: 36}}}}, Second: ApBoolean{Tag: ApBooleanField, Field0: "admin", Field1: true}}}}
 
@@ -629,7 +610,7 @@ func initializeGreeting() ApString {
 				return map_(f, value)
 			}
 		}
-		original2 := func(value func(bool) Person) func(bool) func(float64) string {
+		original2 := func(value func(bool) shared.Person) func(bool) func(float64) string {
 			return func(x bool) func(float64) string {
 				p := value(x)
 				return func(n float64) string {
@@ -637,10 +618,10 @@ func initializeGreeting() ApString {
 				}
 			}
 		}
-		result = ApFnNumberString{Tag: ApFnNumberStringApply, Apply: convert20(ApplyEFnNumberStringBoolean{First: convert16(original(func(coerced any) any {
+		result = ApFnNumberString{Tag: ApFnNumberStringApply, Apply: convert15(ApplyEFnNumberStringBoolean{First: convert12(original(func(coerced any) any {
 			original3 := coerced.(func(any) any)
-			original4 := original2(func(coerced2 bool) Person {
-				return convert13(original3(coerced2).(AdminAgeName))
+			original4 := original2(func(coerced2 bool) shared.Person {
+				return shared.Convert2(original3(coerced2).(shared.AdminAgeName))
 			})
 			return func(coerced2 any) any {
 				original5 := original4(coerced2.(bool))
@@ -648,7 +629,7 @@ func initializeGreeting() ApString {
 					return original5(coerced3.(float64))
 				}
 			}
-		})(convert12(person.Apply.Boolean.First))), Second: person.Apply.Boolean.Second})}
+		})(convert9(person.Apply.Boolean.First))), Second: person.Apply.Boolean.Second})}
 	}
 	return ApString{Tag: ApStringApply, Apply: ExistsApplyEString{Number: ApplyEStringNumber{First: result, Second: ApNumber{Tag: ApNumberField, Field0: "count", Field1: 3.5}}}}
 }
@@ -661,7 +642,7 @@ func namesFnBooleanPerson(value *Ap) []string {
 		return []string{value.Field0}
 	default: // ApApply
 		scrutinee := value.Apply0.(*ApplyE)
-		return array.Append(namesFnBooleanPerson(convert21(scrutinee.First)), namesFnBooleanPerson(scrutinee.Second))
+		return array.Append(namesFnBooleanPerson(convert16(scrutinee.First)), namesFnBooleanPerson(scrutinee.Second))
 	}
 }
 
@@ -673,7 +654,7 @@ func runFnBooleanPerson(value *Ap) any {
 		return value.Field1
 	default: // ApApply
 		scrutinee := value.Apply0.(*ApplyE)
-		return runFnBooleanPerson(convert21(scrutinee.First)).(func(any) any)(runFnBooleanPerson(scrutinee.Second))
+		return runFnBooleanPerson(convert16(scrutinee.First)).(func(any) any)(runFnBooleanPerson(scrutinee.Second))
 	}
 }
 
@@ -695,16 +676,39 @@ func map_(f func(any) any, value *Ap) *Ap {
 				return f(value2(x))
 			}
 		}
-		return &Ap{Tag: ApApply, Apply0: &ApplyE{First: convert22(original(func(coerced any) any {
+		return &Ap{Tag: ApApply, Apply0: &ApplyE{First: convert17(original(func(coerced any) any {
 			return original2(coerced.(func(any) any))
-		})(convert21(scrutinee.First))), Second: scrutinee.Second}}
+		})(convert16(scrutinee.First))), Second: scrutinee.Second}}
 	}
 }
 
-func greetingF(p Person, n float64) string {
+func greetingF(p shared.Person, n float64) string {
 	return p.Name + " is " + prim.ShowInt(p.Age) + " " + prim.ShowNumber(n)
 }
 
 func main() {
 	fmt.Println(main_)
+}
+
+// shared/shared.go
+package shared
+
+type Person struct {
+	Name  string
+	Age   int32
+	Admin bool
+}
+
+type AdminAgeName struct {
+	Admin any
+	Age   any
+	Name  any
+}
+
+func Convert(value Person) AdminAgeName {
+	return AdminAgeName{Admin: value.Admin, Age: value.Age, Name: value.Name}
+}
+
+func Convert2(value AdminAgeName) Person {
+	return Person{Admin: value.Admin.(bool), Age: value.Age.(int32), Name: value.Name.(string)}
 }

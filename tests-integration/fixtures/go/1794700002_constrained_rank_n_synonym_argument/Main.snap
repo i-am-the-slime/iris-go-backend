@@ -5,9 +5,28 @@ source: tests-integration/src/fixtures.rs
 package main
 
 import (
+	"fixture/shared"
 	"fmt"
 	"github.com/i-am-the-slime/purs-backend-go/go-support/exception"
 )
+
+var main_ = initializeMain_()
+
+func initializeMain_() []int32 {
+	defer exception.ReportUncaught()
+	updated := shared.IdentityOfString{First: 1, Second: "s"}
+	updated.First = 99
+	updated2 := shared.IdentityOfUnit{First: 0, Second: struct{}{}}
+	updated2.First = 3
+	return []int32{updated.First, 7, updated2.First}
+}
+
+func main() {
+	fmt.Println(main_)
+}
+
+// shared/shared.go
+package shared
 
 type IdentityOfString struct {
 	Second string
@@ -17,19 +36,4 @@ type IdentityOfString struct {
 type IdentityOfUnit struct {
 	Second struct{}
 	First  int32
-}
-
-var main_ = initializeMain_()
-
-func initializeMain_() []int32 {
-	defer exception.ReportUncaught()
-	updated := IdentityOfString{First: 1, Second: "s"}
-	updated.First = 99
-	updated2 := IdentityOfUnit{First: 0, Second: struct{}{}}
-	updated2.First = 3
-	return []int32{updated.First, 7, updated2.First}
-}
-
-func main() {
-	fmt.Println(main_)
 }

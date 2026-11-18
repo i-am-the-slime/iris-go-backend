@@ -5,79 +5,83 @@ source: tests-integration/src/fixtures.rs
 package main
 
 import (
+	"fixture/shared"
 	"fmt"
 	"github.com/i-am-the-slime/purs-backend-go/go-support/exception"
 	"github.com/i-am-the-slime/purs-backend-go/go-support/prim"
 )
+
+var main_ = initializeMain_()
+
+func initializeMain_() shared.MainResult {
+	defer exception.ReportUncaught()
+	return shared.MainResult{Depth: depth(0, 30), Letters: a(7, "")}
+}
+
+func depthOrBranch(step int, acc int32, n int32) int32 {
+	for {
+		switch step {
+		case shared.DepthStep:
+			if n <= 0 {
+				return acc
+			}
+			if prim.IntMod(n, 2) == 0 {
+				step = shared.BranchStep
+				continue
+			}
+			acc, n = acc + 1, n - 1
+		default: // shared.BranchStep
+			step, acc, n = shared.DepthStep, acc + depth(0, prim.IntDiv(n, 4)), n - 1
+		}
+	}
+}
+
+func depth(acc int32, n int32) int32 {
+	return depthOrBranch(shared.DepthStep, acc, n)
+}
+
+func aGroup(step int, n int32, s string) string {
+	for {
+		switch step {
+		case shared.AStep:
+			if n <= 0 {
+				return s
+			}
+			step, n, s = shared.BStep, n - 1, s + "a"
+		case shared.BStep:
+			if n <= 0 {
+				return s
+			}
+			step, s, n = shared.CStep, prim.ShowInt(n), n - 1
+		default: // shared.CStep
+			step, s = shared.AStep, s + "c"
+		}
+	}
+}
+
+func a(n int32, s string) string {
+	return aGroup(shared.AStep, n, s)
+}
+
+func main() {
+	fmt.Println(main_)
+}
+
+// shared/shared.go
+package shared
 
 type MainResult struct {
 	Letters string
 	Depth   int32
 }
 
-var main_ = initializeMain_()
-
-func initializeMain_() MainResult {
-	defer exception.ReportUncaught()
-	return MainResult{Depth: depth(0, 30), Letters: a(7, "")}
-}
-
 const (
-	depthStep = iota
-	branchStep
+	DepthStep = iota
+	BranchStep
 )
 
-func depthOrBranch(step int, acc int32, n int32) int32 {
-	for {
-		switch step {
-		case depthStep:
-			if n <= 0 {
-				return acc
-			}
-			if prim.IntMod(n, 2) == 0 {
-				step = branchStep
-				continue
-			}
-			acc, n = acc + 1, n - 1
-		default: // branchStep
-			step, acc, n = depthStep, acc + depth(0, prim.IntDiv(n, 4)), n - 1
-		}
-	}
-}
-
-func depth(acc int32, n int32) int32 {
-	return depthOrBranch(depthStep, acc, n)
-}
-
 const (
-	aStep = iota
-	bStep
-	cStep
+	AStep = iota
+	BStep
+	CStep
 )
-
-func aGroup(step int, n int32, s string) string {
-	for {
-		switch step {
-		case aStep:
-			if n <= 0 {
-				return s
-			}
-			step, n, s = bStep, n - 1, s + "a"
-		case bStep:
-			if n <= 0 {
-				return s
-			}
-			step, s, n = cStep, prim.ShowInt(n), n - 1
-		default: // cStep
-			step, s = aStep, s + "c"
-		}
-	}
-}
-
-func a(n int32, s string) string {
-	return aGroup(aStep, n, s)
-}
-
-func main() {
-	fmt.Println(main_)
-}

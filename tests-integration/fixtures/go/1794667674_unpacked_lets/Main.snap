@@ -29,27 +29,23 @@ package main
 
 import (
 	"fixture/Data/Maybe"
+	"fixture/shared"
 	"fmt"
 	"github.com/i-am-the-slime/purs-backend-go/go-support/exception"
 	"github.com/i-am-the-slime/purs-backend-go/go-support/prim"
 )
-
-type XY struct {
-	X int32
-	Y int32
-}
 
 var main_ = initializeMain_()
 
 func initializeMain_() []int32 {
 	defer exception.ReportUncaught()
 	boxWidth := opaque(3)
-	point := XY{X: opaque(5), Y: opaque(5)}
-	var result XY
+	point := shared.XY{X: opaque(5), Y: opaque(5)}
+	var result shared.XY
 	if point.X > 0 {
 		result = point
 	} else {
-		result = XY{X: 0, Y: point.Y}
+		result = shared.XY{X: 0, Y: point.Y}
 	}
 	found := maybe.MaybeMaybeInt{Tag: maybe.MaybeMaybeIntJust, Just: maybe.MaybeInt{Tag: maybe.MaybeIntJust, Just: opaque(6)}}
 	var result2 int32
@@ -77,4 +73,12 @@ func opaque(x int32) int32 {
 
 func main() {
 	fmt.Println(main_)
+}
+
+// shared/shared.go
+package shared
+
+type XY struct {
+	X int32
+	Y int32
 }

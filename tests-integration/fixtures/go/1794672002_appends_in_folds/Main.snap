@@ -15,6 +15,13 @@ const (
 	EitherStringArrayIntRight
 )
 
+type MainResult struct {
+	Appended []int32
+	Combined EitherStringArrayInt
+	Escaping [][]int32
+	Snocs    []int32
+}
+
 type EitherStringInt struct {
 	Left  string
 	Right int32
@@ -31,6 +38,7 @@ package main
 
 import (
 	"fixture/Data/Either"
+	"fixture/shared"
 	"fmt"
 	"github.com/i-am-the-slime/purs-backend-go/go-support/array"
 	"github.com/i-am-the-slime/purs-backend-go/go-support/exception"
@@ -38,21 +46,9 @@ import (
 	"slices"
 )
 
-type MainResult struct {
-	Appended []int32
-	Combined either.EitherStringArrayInt
-	Escaping [][]int32
-	Snocs    []int32
-}
-
-type AccSeen struct {
-	Acc  []int32
-	Seen [][]int32
-}
-
 var main_ = initializeMain_()
 
-func initializeMain_() MainResult {
+func initializeMain_() either.MainResult {
 	defer exception.ReportUncaught()
 	accumulator := []int32{}
 	accumulator = slices.Clip(accumulator)
@@ -81,15 +77,23 @@ func initializeMain_() MainResult {
 			accumulator3 = either.EitherStringArrayInt{Tag: either.EitherStringArrayIntLeft, Left: array2[elementIndex].Left}
 		}
 	}
-	accumulator4 := AccSeen{Acc: []int32{}, Seen: [][]int32{}}
+	accumulator4 := shared.AccSeen{Acc: []int32{}, Seen: [][]int32{}}
 	accumulator4.Seen = slices.Clip(accumulator4.Seen)
 	for x := int32(1); x < 5; x++ {
 		r := accumulator4
-		accumulator4 = AccSeen{Acc: array.Append(r.Acc, []int32{x}), Seen: append(r.Seen, r.Acc)}
+		accumulator4 = shared.AccSeen{Acc: array.Append(r.Acc, []int32{x}), Seen: append(r.Seen, r.Acc)}
 	}
-	return MainResult{Appended: accumulator, Snocs: accumulator2, Combined: accumulator3, Escaping: accumulator4.Seen}
+	return either.MainResult{Appended: accumulator, Snocs: accumulator2, Combined: accumulator3, Escaping: accumulator4.Seen}
 }
 
 func main() {
 	fmt.Println(main_)
+}
+
+// shared/shared.go
+package shared
+
+type AccSeen struct {
+	Acc  []int32
+	Seen [][]int32
 }

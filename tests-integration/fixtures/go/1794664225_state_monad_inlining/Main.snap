@@ -5,14 +5,10 @@ source: tests-integration/src/fixtures.rs
 package main
 
 import (
+	"fixture/shared"
 	"fmt"
 	"github.com/i-am-the-slime/purs-backend-go/go-support/exception"
 )
-
-type StateValue struct {
-	Value struct{}
-	State int32
-}
 
 var main_ = initializeMain_()
 
@@ -21,11 +17,11 @@ func initializeMain_() int32 {
 	return countDown(60, 0).State
 }
 
-func countDown(n int32, state int32) StateValue {
+func countDown(n int32, state int32) shared.StateValue {
 	for {
 		switch n {
 		case 0:
-			return StateValue{Value: struct{}{}, State: state}
+			return shared.StateValue{Value: struct{}{}, State: state}
 		default:
 			n2 := n
 			n, state = n2 - 1, state + 1
@@ -36,4 +32,12 @@ func countDown(n int32, state int32) StateValue {
 
 func main() {
 	fmt.Println(main_)
+}
+
+// shared/shared.go
+package shared
+
+type StateValue struct {
+	Value struct{}
+	State int32
 }

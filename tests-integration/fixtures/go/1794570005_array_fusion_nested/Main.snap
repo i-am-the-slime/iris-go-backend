@@ -23,23 +23,15 @@ package main
 import (
 	"fixture/Data/Semiring"
 	"fixture/Data/Show"
+	"fixture/shared"
 	"fmt"
 	"github.com/i-am-the-slime/purs-backend-go/go-support/exception"
 	"github.com/i-am-the-slime/purs-backend-go/go-support/prim"
 )
 
-type MainResult struct {
-	Comprehension []int32
-	Indexed       []int32
-	Materialised  []string
-	Pairs         []string
-	Below         int32
-	OverRange     int32
-}
-
 var main_ = initializeMain_()
 
-func initializeMain_() MainResult {
+func initializeMain_() shared.MainResult {
 	defer exception.ReportUncaught()
 	bound := []string{}
 	for _, value := range numbers {
@@ -89,11 +81,23 @@ func initializeMain_() MainResult {
 			mapped2 = append(mapped2, show.Show(x))
 		}
 	}
-	return MainResult{Pairs: bound, Below: count, Comprehension: bound2, OverRange: accumulator, Indexed: mapped, Materialised: mapped2}
+	return shared.MainResult{Pairs: bound, Below: count, Comprehension: bound2, OverRange: accumulator, Indexed: mapped, Materialised: mapped2}
 }
 
 var numbers []int32 = []int32{3, 1, 4, 1, 5, 9, 2, 6}
 
 func main() {
 	fmt.Println(main_)
+}
+
+// shared/shared.go
+package shared
+
+type MainResult struct {
+	Comprehension []int32
+	Indexed       []int32
+	Materialised  []string
+	Pairs         []string
+	Below         int32
+	OverRange     int32
 }

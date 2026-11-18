@@ -29,6 +29,7 @@ package main
 
 import (
 	"fixture/Data/Maybe"
+	"fixture/shared"
 	"fmt"
 	"github.com/i-am-the-slime/purs-backend-go/go-support/array"
 	"github.com/i-am-the-slime/purs-backend-go/go-support/exception"
@@ -54,11 +55,6 @@ const (
 	ShapeCircle = iota
 	ShapeRectangle
 )
-
-type LeftRight struct {
-	Left  int32
-	Right int32
-}
 
 var main_ = initializeMain_()
 
@@ -119,7 +115,7 @@ func initializeMain_() []string {
 		}
 		mapped5[index] = result
 	}
-	array7 := []LeftRight{LeftRight{Left: 1, Right: 2}}
+	array7 := []shared.LeftRight{shared.LeftRight{Left: 1, Right: 2}}
 	mapped6 := make([]string, len(array7))
 	for index := range array7 {
 		mapped6[index] = prim.ShowInt(array7[index].Left + array7[index].Right)
@@ -152,4 +148,12 @@ func name(value Light) string {
 
 func main() {
 	fmt.Println(main_)
+}
+
+// shared/shared.go
+package shared
+
+type LeftRight struct {
+	Left  int32
+	Right int32
 }

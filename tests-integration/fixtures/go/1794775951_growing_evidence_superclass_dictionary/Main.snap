@@ -71,6 +71,8 @@ func CompareChar(xs []rune, ys []rune) ordering.Ordering {
 // Data/Ordering/ordering.go
 package ordering
 
+import "fixture/shared"
+
 type Ordering uint8
 
 const (
@@ -79,6 +81,11 @@ const (
 	OrderingEQ
 )
 
+type Ord struct {
+	Eq0     shared.Eq
+	Compare func(any) func(any) Ordering
+}
+
 // main.go
 package main
 
@@ -86,54 +93,12 @@ import (
 	"fixture/Data/Eq"
 	"fixture/Data/Ord"
 	"fixture/Data/Ordering"
+	"fixture/shared"
 	"fmt"
 	"github.com/i-am-the-slime/purs-backend-go/go-support/array"
 	"github.com/i-am-the-slime/purs-backend-go/go-support/direct"
 	"github.com/i-am-the-slime/purs-backend-go/go-support/exception"
 )
-
-func convert(value any) []int32 {
-	array := value.([]any)
-	converted := make([]int32, len(array))
-	for index, element := range array {
-		converted[index] = element.(int32)
-	}
-	return converted
-}
-
-type Eq struct {
-	Eq func(any) func(any) bool
-}
-
-type Ord struct {
-	Eq0     Eq
-	Compare func(any) func(any) ordering.Ordering
-}
-
-func convert2(value []int32) any {
-	converted := make([]any, len(value))
-	for index, element := range value {
-		converted[index] = element
-	}
-	return converted
-}
-
-func convert3(value any) []rune {
-	array := value.([]any)
-	converted := make([]rune, len(array))
-	for index, element := range array {
-		converted[index] = element.(rune)
-	}
-	return converted
-}
-
-func convert4(value []rune) any {
-	converted := make([]any, len(value))
-	for index, element := range value {
-		converted[index] = element
-	}
-	return converted
-}
 
 var main_ = initializeMain_()
 
@@ -159,30 +124,30 @@ func initializeMain_() []string {
 			return ord.CompareChar(xs, ys)
 		}
 	}
-	return []string{relateArrayInt(Ord{Eq0: Eq{Eq: func(coerced any) func(any) bool {
-		original5 := original(convert(coerced))
+	return []string{relateArrayInt(ordering.Ord{Eq0: shared.Eq{Eq: func(coerced any) func(any) bool {
+		original5 := original(shared.Convert(coerced))
 		return func(coerced2 any) bool {
-			return original5(convert(coerced2))
+			return original5(shared.Convert(coerced2))
 		}
 	}}, Compare: func(coerced any) func(any) ordering.Ordering {
-		original5 := original2(convert(coerced))
+		original5 := original2(shared.Convert(coerced))
 		return func(coerced2 any) ordering.Ordering {
-			return original5(convert(coerced2))
+			return original5(shared.Convert(coerced2))
 		}
-	}}, 1, convert2([]int32{1}), convert2([]int32{1, 1})), relateArrayInt(Ord{Eq0: Eq{Eq: func(coerced any) func(any) bool {
-		original5 := original3(convert3(coerced))
+	}}, 1, shared.Convert2([]int32{1}), shared.Convert2([]int32{1, 1})), relateArrayInt(ordering.Ord{Eq0: shared.Eq{Eq: func(coerced any) func(any) bool {
+		original5 := original3(shared.Convert3(coerced))
 		return func(coerced2 any) bool {
-			return original5(convert3(coerced2))
+			return original5(shared.Convert3(coerced2))
 		}
 	}}, Compare: func(coerced any) func(any) ordering.Ordering {
-		original5 := original4(convert3(coerced))
+		original5 := original4(shared.Convert3(coerced))
 		return func(coerced2 any) ordering.Ordering {
-			return original5(convert3(coerced2))
+			return original5(shared.Convert3(coerced2))
 		}
-	}}, 1, convert4([]rune{'a'}), convert4([]rune{'b', 'b'}))}
+	}}, 1, shared.Convert4([]rune{'a'}), shared.Convert4([]rune{'b', 'b'}))}
 }
 
-func relateArrayInt(ordDictionary Ord, depth int32, left any, right any) string {
+func relateArrayInt(ordDictionary ordering.Ord, depth int32, left any, right any) string {
 	for {
 		ordDictionaryCaptured := ordDictionary
 		if depth == 0 {
@@ -229,7 +194,7 @@ func relateArrayInt(ordDictionary Ord, depth int32, left any, right any) string 
 				return ordering.OrderingGT
 			}
 		}
-		ordDictionary, depth, left, right = Ord{Eq0: Eq{Eq: func(coerced any) func(any) bool {
+		ordDictionary, depth, left, right = ordering.Ord{Eq0: shared.Eq{Eq: func(coerced any) func(any) bool {
 			original3 := original(coerced.([]any))
 			return func(coerced2 any) bool {
 				return original3(coerced2.([]any))
@@ -245,4 +210,45 @@ func relateArrayInt(ordDictionary Ord, depth int32, left any, right any) string 
 
 func main() {
 	fmt.Println(main_)
+}
+
+// shared/shared.go
+package shared
+
+func Convert(value any) []int32 {
+	array := value.([]any)
+	converted := make([]int32, len(array))
+	for index, element := range array {
+		converted[index] = element.(int32)
+	}
+	return converted
+}
+
+type Eq struct {
+	Eq func(any) func(any) bool
+}
+
+func Convert2(value []int32) any {
+	converted := make([]any, len(value))
+	for index, element := range value {
+		converted[index] = element
+	}
+	return converted
+}
+
+func Convert3(value any) []rune {
+	array := value.([]any)
+	converted := make([]rune, len(array))
+	for index, element := range array {
+		converted[index] = element.(rune)
+	}
+	return converted
+}
+
+func Convert4(value []rune) any {
+	converted := make([]any, len(value))
+	for index, element := range value {
+		converted[index] = element
+	}
+	return converted
 }

@@ -19,43 +19,33 @@ package main
 
 import (
 	"fixture/Data/Maybe"
+	"fixture/shared"
 	"fmt"
 	"github.com/i-am-the-slime/purs-backend-go/go-support/exception"
 	"github.com/i-am-the-slime/purs-backend-go/go-support/prim"
 	"math"
 )
 
-type MainResult struct {
-	Halved int32
-	Steps  int32
-	Even   bool
-}
-
 var main_ = initializeMain_()
 
-func initializeMain_() MainResult {
+func initializeMain_() shared.MainResult {
 	defer exception.ReportUncaught()
-	return MainResult{Steps: walk(0, 27), Halved: halve(0, 64.0), Even: isEven(100000)}
+	return shared.MainResult{Steps: walk(0, 27), Halved: halve(0, 64.0), Even: isEven(100000)}
 }
-
-const (
-	walkStep = iota
-	halveStep
-)
 
 func walkOrHalve(step int, steps int32, n int32, x float64) int32 {
 	for {
 		switch step {
-		case walkStep:
+		case shared.WalkStep:
 			if n <= 1 {
 				return steps
 			}
 			if prim.IntMod(n, 2) == 0 {
-				step, steps, x = halveStep, steps + 1, float64(n)
+				step, steps, x = shared.HalveStep, steps + 1, float64(n)
 				continue
 			}
 			steps, n = steps + 1, prim.MultiplyInt32(3, n) + 1
-		default: // halveStep
+		default: // shared.HalveStep
 			x2 := prim.NumberFloor(x / 2.0)
 			var result int32
 			if !prim.NumberIsFinite(x2) {
@@ -78,43 +68,38 @@ func walkOrHalve(step int, steps int32, n int32, x float64) int32 {
 					result = integer.Just
 				}
 			}
-			step, n = walkStep, result
+			step, n = shared.WalkStep, result
 		}
 	}
 }
 
 func walk(steps int32, n int32) int32 {
-	return walkOrHalve(walkStep, steps, n, 0)
+	return walkOrHalve(shared.WalkStep, steps, n, 0)
 }
 
 func halve(steps int32, x float64) int32 {
-	return walkOrHalve(halveStep, steps, 0, x)
+	return walkOrHalve(shared.HalveStep, steps, 0, x)
 }
-
-const (
-	isEvenStep = iota
-	isOddStep
-)
 
 func isEvenOrIsOdd(step int, k int32) bool {
 	for {
 		switch step {
-		case isEvenStep:
+		case shared.IsEvenStep:
 			switch k {
 			case 0:
 				return true
 			default:
 				k2 := k
-				step, k = isOddStep, k2 - 1
+				step, k = shared.IsOddStep, k2 - 1
 				continue
 			}
-		default: // isOddStep
+		default: // shared.IsOddStep
 			switch k {
 			case 0:
 				return false
 			default:
 				k2 := k
-				step, k = isEvenStep, k2 - 1
+				step, k = shared.IsEvenStep, k2 - 1
 				continue
 			}
 		}
@@ -122,9 +107,28 @@ func isEvenOrIsOdd(step int, k int32) bool {
 }
 
 func isEven(k int32) bool {
-	return isEvenOrIsOdd(isEvenStep, k)
+	return isEvenOrIsOdd(shared.IsEvenStep, k)
 }
 
 func main() {
 	fmt.Println(main_)
 }
+
+// shared/shared.go
+package shared
+
+type MainResult struct {
+	Halved int32
+	Steps  int32
+	Even   bool
+}
+
+const (
+	WalkStep = iota
+	HalveStep
+)
+
+const (
+	IsEvenStep = iota
+	IsOddStep
+)

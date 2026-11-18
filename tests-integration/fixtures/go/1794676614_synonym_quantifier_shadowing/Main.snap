@@ -13,6 +13,7 @@ package main
 
 import (
 	"fixture/Control/Category"
+	"fixture/shared"
 	"fmt"
 	"github.com/i-am-the-slime/purs-backend-go/go-support/exception"
 	"github.com/i-am-the-slime/purs-backend-go/go-support/prim"
@@ -84,11 +85,6 @@ func Pure(pure any) *FreeCommand {
 	return &FreeCommand{Tag: FreeCommandPure, Pure: pure}
 }
 
-type StateValueOfValue struct {
-	Value any
-	State int32
-}
-
 type FreeCommandInt struct {
 	Bind0 CommandVal
 	Bind1 func(any) FreeCommandInt
@@ -100,11 +96,6 @@ const (
 	FreeCommandIntPure = iota
 	FreeCommandIntBind
 )
-
-type StateValueOfInt struct {
-	State int32
-	Value int32
-}
 
 func convert2(value CommandVal) *Command {
 	switch value.Tag {
@@ -305,12 +296,12 @@ func initializeMain_() []int32 {
 	}, instructions), 0).Value}
 }
 
-func foldFreeCommandIntInt(k func(*Command, int32) StateValueOfValue, program FreeCommandInt, state int32) StateValueOfInt {
+func foldFreeCommandIntInt(k func(*Command, int32) shared.StateValueOfValue, program FreeCommandInt, state int32) shared.StateValueOfInt {
 	for {
 		switch program.Tag {
 		case FreeCommandIntPure:
 			a := program.Pure
-			return StateValueOfInt{Value: a, State: state}
+			return shared.StateValueOfInt{Value: a, State: state}
 		default: // FreeCommandIntBind
 			command := program.Bind0
 			continue_ := program.Bind1
@@ -321,12 +312,12 @@ func foldFreeCommandIntInt(k func(*Command, int32) StateValueOfValue, program Fr
 	}
 }
 
-func intoState(value *Command, ignored int32) StateValueOfValue {
+func intoState(value *Command, ignored int32) shared.StateValueOfValue {
 	switch value.Tag {
 	case CommandPush:
-		return StateValueOfValue{Value: value.Push1, State: value.Push0}
+		return shared.StateValueOfValue{Value: value.Push1, State: value.Push0}
 	default: // CommandPop
-		return StateValueOfValue{Value: value.Pop(ignored), State: ignored}
+		return shared.StateValueOfValue{Value: value.Pop(ignored), State: ignored}
 	}
 }
 
@@ -404,4 +395,17 @@ func andThenCommandValInt(program FreeCommandVal, next func(any) FreeCommandInt)
 
 func main() {
 	fmt.Println(main_)
+}
+
+// shared/shared.go
+package shared
+
+type StateValueOfValue struct {
+	Value any
+	State int32
+}
+
+type StateValueOfInt struct {
+	State int32
+	Value int32
 }

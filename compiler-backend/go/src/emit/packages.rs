@@ -255,6 +255,7 @@ impl Packaging<'_> {
         }
         let mut census = PlacementCensus::default();
         let mut placements: Vec<Option<Place>> = vec![None; components.len()];
+        let entry = places.module(self.modules.entry());
         // Users come before what they use.
         for index in (0..components.len()).rev() {
             let natural = places.needing(&needs[index]);
@@ -269,6 +270,8 @@ impl Packaging<'_> {
                 1 => user_places.first().copied(),
                 _ => None,
             };
+            let natural_needs_entry = places.sees(natural, entry);
+            let only_user = only_user.filter(|&user| user != entry || natural_needs_entry);
             let homeless = components[index].iter().all(|&unit| units[unit].home.is_none());
             let place = match (places.meeting(natural), only_user) {
                 // Code of a module's own lives there.

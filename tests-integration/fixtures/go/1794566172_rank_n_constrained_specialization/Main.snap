@@ -61,26 +61,17 @@ import (
 	"github.com/i-am-the-slime/purs-backend-go/go-support/prim"
 )
 
-type Ref[T any] struct {
-	Value T
-}
-
-type StateValue struct {
-	State int32
-	Value int32
-}
-
 var main_ []int32 = []int32{recorded, counted, measured}
 
 var recorded = initializeRecorded()
 
 func initializeRecorded() int32 {
 	defer exception.ReportUncaught()
-	ref := &Ref[int32]{Value: 0}
+	ref := &shared.Ref[int32]{Value: 0}
 	i := program.ST(shared.InterpreterST{Emit: func(value int32) {
 		s := ref.Value
 		s_ := s + value
-		modified := StateValue{State: s_, Value: s_}
+		modified := shared.StateValue{State: s_, Value: s_}
 		ref.Value = modified.State
 	}, Measure: func(text string) int32 {
 		return direct.CodePointLength(text)
@@ -165,6 +156,15 @@ func main() {
 
 // shared/shared.go
 package shared
+
+type Ref[T any] struct {
+	Value T
+}
+
+type StateValue struct {
+	State int32
+	Value int32
+}
 
 type InterpreterST struct {
 	Emit    func(int32)

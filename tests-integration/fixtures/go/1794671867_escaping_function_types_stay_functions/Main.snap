@@ -13,19 +13,15 @@ package main
 
 import (
 	"fixture/Control/Category"
+	"fixture/shared"
 	"fmt"
 	"github.com/i-am-the-slime/purs-backend-go/go-support/exception"
 	"github.com/i-am-the-slime/purs-backend-go/go-support/lazy"
 )
 
-type MainResult struct {
-	Memoised int32
-	Summed   int32
-}
-
 var main_ = initializeMain_()
 
-func initializeMain_() MainResult {
+func initializeMain_() shared.MainResult {
 	defer exception.ReportUncaught()
 	array := []func(int32) int32{chain(2, category.Identity), chain(3, category.Identity)}
 	var accumulator int32 = 0
@@ -33,7 +29,7 @@ func initializeMain_() MainResult {
 		total := accumulator
 		accumulator = total + k(1)
 	}
-	return MainResult{Summed: accumulator, Memoised: lazy.Defer(func() int32 {
+	return shared.MainResult{Summed: accumulator, Memoised: lazy.Defer(func() int32 {
 		return thunks(3, func(_ struct{}) int32 {
 			return 0
 		})(struct{}{})
@@ -74,4 +70,12 @@ func thunks(n int32, t func(struct{}) int32) func(struct{}) int32 {
 
 func main() {
 	fmt.Println(main_)
+}
+
+// shared/shared.go
+package shared
+
+type MainResult struct {
+	Memoised int32
+	Summed   int32
 }

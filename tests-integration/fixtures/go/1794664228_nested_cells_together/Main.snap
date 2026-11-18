@@ -5,20 +5,11 @@ source: tests-integration/src/fixtures.rs
 package main
 
 import (
+	"fixture/shared"
 	"fmt"
 	"github.com/i-am-the-slime/purs-backend-go/go-support/alloc"
 	"github.com/i-am-the-slime/purs-backend-go/go-support/prim"
 )
-
-type MainResult struct {
-	Built    int32
-	Linked   int32
-	Literal  int32
-	Mirrored int32
-	Two      int32
-	Negative bool
-	Positive bool
-}
 
 type Expr struct {
 	Field0 *Expr
@@ -47,13 +38,13 @@ const (
 
 var sharedListIntNil = &ListInt{Tag: ListIntNil}
 
-func main_(n int32) MainResult {
+func main_(n int32) shared.MainResult {
 	n2 := -n
 	listInts := make([]ListInt, 3)
 	listInts[0] = ListInt{Tag: ListIntCons, Cons0: n, Cons1: &listInts[1]}
 	listInts[1] = ListInt{Tag: ListIntCons, Cons0: 2, Cons1: &listInts[2]}
 	listInts[2] = ListInt{Tag: ListIntCons, Cons0: 3, Cons1: sharedListIntNil}
-	return MainResult{Built: evaluate(build(4)), Mirrored: evaluate(mirrorReusing(build(3))), Two: evaluate(&Expr{Tag: ExprAdd, Field0: build(2), Field1: &Expr{Tag: ExprVal, Val: 2}}), Linked: total(mainGo(5, sharedListIntNil)), Literal: total(&listInts[0]), Positive: n > 0 && evaluate(&Expr{Tag: ExprAdd, Field0: &Expr{Tag: ExprVal, Val: n}, Field1: &Expr{Tag: ExprMul, Field0: &Expr{Tag: ExprVal, Val: 2}, Field1: &Expr{Tag: ExprVal, Val: n}}}) > 5, Negative: n2 > 0 && evaluate(&Expr{Tag: ExprAdd, Field0: &Expr{Tag: ExprVal, Val: n2}, Field1: &Expr{Tag: ExprMul, Field0: &Expr{Tag: ExprVal, Val: 2}, Field1: &Expr{Tag: ExprVal, Val: n2}}}) > 5}
+	return shared.MainResult{Built: evaluate(build(4)), Mirrored: evaluate(mirrorReusing(build(3))), Two: evaluate(&Expr{Tag: ExprAdd, Field0: build(2), Field1: &Expr{Tag: ExprVal, Val: 2}}), Linked: total(mainGo(5, sharedListIntNil)), Literal: total(&listInts[0]), Positive: n > 0 && evaluate(&Expr{Tag: ExprAdd, Field0: &Expr{Tag: ExprVal, Val: n}, Field1: &Expr{Tag: ExprMul, Field0: &Expr{Tag: ExprVal, Val: 2}, Field1: &Expr{Tag: ExprVal, Val: n}}}) > 5, Negative: n2 > 0 && evaluate(&Expr{Tag: ExprAdd, Field0: &Expr{Tag: ExprVal, Val: n2}, Field1: &Expr{Tag: ExprMul, Field0: &Expr{Tag: ExprVal, Val: 2}, Field1: &Expr{Tag: ExprVal, Val: n2}}}) > 5}
 }
 
 func evaluate(expr *Expr) int32 {
@@ -127,4 +118,17 @@ func mirrorReusing(value *Expr) *Expr {
 
 func main() {
 	fmt.Println(main_)
+}
+
+// shared/shared.go
+package shared
+
+type MainResult struct {
+	Built    int32
+	Linked   int32
+	Literal  int32
+	Mirrored int32
+	Two      int32
+	Negative bool
+	Positive bool
 }

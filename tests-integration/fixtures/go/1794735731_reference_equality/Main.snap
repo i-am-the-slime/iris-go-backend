@@ -5,6 +5,7 @@ source: tests-integration/src/fixtures.rs
 package main
 
 import (
+	"fixture/shared"
 	"fmt"
 	"github.com/i-am-the-slime/purs-backend-go/go-support/exception"
 	"github.com/i-am-the-slime/purs-backend-go/go-support/refeq"
@@ -16,20 +17,6 @@ const (
 	RoomKitchen Room = iota
 	RoomGarden
 )
-
-type Ref[T any] struct {
-	Value T
-}
-
-type XY struct {
-	Y float64
-	X int32
-}
-
-type Handler struct {
-	Name string
-	Run  func(int32) int32
-}
 
 type Shape struct {
 	Field0 float64
@@ -58,10 +45,10 @@ var main_ = initializeMain_()
 
 func initializeMain_() []bool {
 	defer exception.ReportUncaught()
-	left := Handler{Name: "a", Run: func(n int32) int32 {
+	left := shared.Handler{Name: "a", Run: func(n int32) int32 {
 		return n + 1
 	}}
-	right := Handler{Name: "a", Run: func(n int32) int32 {
+	right := shared.Handler{Name: "a", Run: func(n int32) int32 {
 		return n + 2
 	}}
 	return []bool{int32(1) == int32(2), float64(1.0) == float64(1.0), true == false, rune('a') == rune('a'), "a" == "b", struct{}{} == struct{}{}, RoomKitchen == RoomGarden, refeq.SameFunc(func(n int32) int32 {
@@ -70,17 +57,34 @@ func initializeMain_() []bool {
 		return n + 2
 	}), refeq.SameFunc(func() {
 	}, func() {
-	}), refeq.SameSlice([]int32{1}, []int32{1}), counter == counter, XY{X: 1, Y: 2.0} == XY{X: 1, Y: 3.0}, left.Name == right.Name && refeq.SameFunc(left.Run, right.Run), Shape{Tag: ShapeCircle, Field0: 1.0} == Shape{Tag: ShapeSquare, Field0: 1.0}, &Chain{Tag: ChainLink, Link0: 1, Link1: sharedChainEnd} == sharedChainEnd}
+	}), refeq.SameSlice([]int32{1}, []int32{1}), counter == counter, shared.XY{X: 1, Y: 2.0} == shared.XY{X: 1, Y: 3.0}, left.Name == right.Name && refeq.SameFunc(left.Run, right.Run), Shape{Tag: ShapeCircle, Field0: 1.0} == Shape{Tag: ShapeSquare, Field0: 1.0}, &Chain{Tag: ChainLink, Link0: 1, Link1: sharedChainEnd} == sharedChainEnd}
 }
 
 var counter = initializeCounter()
 
-func initializeCounter() *Ref[int32] {
+func initializeCounter() *shared.Ref[int32] {
 	defer exception.ReportUncaught()
-	performed := &Ref[int32]{Value: 0}
+	performed := &shared.Ref[int32]{Value: 0}
 	return performed
 }
 
 func main() {
 	fmt.Println(main_)
+}
+
+// shared/shared.go
+package shared
+
+type Ref[T any] struct {
+	Value T
+}
+
+type XY struct {
+	Y float64
+	X int32
+}
+
+type Handler struct {
+	Name string
+	Run  func(int32) int32
 }

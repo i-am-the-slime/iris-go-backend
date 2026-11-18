@@ -5,10 +5,42 @@ source: tests-integration/src/fixtures.rs
 package main
 
 import (
+	"fixture/shared"
 	"fmt"
 	"github.com/i-am-the-slime/purs-backend-go/go-support/exception"
 	"github.com/i-am-the-slime/purs-backend-go/go-support/prim"
 )
+
+var main_ = initializeMain_()
+
+func initializeMain_() []string {
+	defer exception.ReportUncaught()
+	union := shared.AZ{A: 1, Z: defaults.Z}
+	record := shared.Defaults{A: defaults.A, Z: 'y'}
+	record2 := shared.ABZ{A: defaults.A, Z: defaults.Z, B: true}
+	var result string
+	if record2.B {
+		result = "true"
+	} else {
+		result = "false"
+	}
+	return []string{prim.ShowInt(union.A) + " " + prim.ShowChar(union.Z), "{ a: " + prim.ShowInt(built.A) + ", z: " + prim.ShowChar(built.Z) + " }", "{ a: " + prim.ShowInt(merged.A) + ", z: " + prim.ShowChar(merged.Z) + " }", "{ a: " + prim.ShowString(flipped.A) + ", z: " + prim.ShowChar(flipped.Z) + " }", "{ a: " + prim.ShowString(record.A) + ", z: " + prim.ShowChar(record.Z) + " }", "{ a: " + prim.ShowString(record2.A) + ", b: " + result + ", z: " + prim.ShowChar(record2.Z) + " }"}
+}
+
+var built shared.AZ = shared.AZ{A: 2, Z: defaults.Z}
+
+var merged shared.AZ = shared.AZ{A: 3, Z: defaults.Z}
+
+var flipped shared.Defaults = shared.Defaults{A: defaults.A, Z: defaults.Z}
+
+var defaults shared.Defaults = shared.Defaults{A: "shadowed", Z: 'z'}
+
+func main() {
+	fmt.Println(main_)
+}
+
+// shared/shared.go
+package shared
 
 type AZ struct {
 	A int32
@@ -24,32 +56,4 @@ type ABZ struct {
 	A string
 	Z rune
 	B bool
-}
-
-var main_ = initializeMain_()
-
-func initializeMain_() []string {
-	defer exception.ReportUncaught()
-	union := AZ{A: 1, Z: defaults.Z}
-	record := Defaults{A: defaults.A, Z: 'y'}
-	record2 := ABZ{A: defaults.A, Z: defaults.Z, B: true}
-	var result string
-	if record2.B {
-		result = "true"
-	} else {
-		result = "false"
-	}
-	return []string{prim.ShowInt(union.A) + " " + prim.ShowChar(union.Z), "{ a: " + prim.ShowInt(built.A) + ", z: " + prim.ShowChar(built.Z) + " }", "{ a: " + prim.ShowInt(merged.A) + ", z: " + prim.ShowChar(merged.Z) + " }", "{ a: " + prim.ShowString(flipped.A) + ", z: " + prim.ShowChar(flipped.Z) + " }", "{ a: " + prim.ShowString(record.A) + ", z: " + prim.ShowChar(record.Z) + " }", "{ a: " + prim.ShowString(record2.A) + ", b: " + result + ", z: " + prim.ShowChar(record2.Z) + " }"}
-}
-
-var built AZ = AZ{A: 2, Z: defaults.Z}
-
-var merged AZ = AZ{A: 3, Z: defaults.Z}
-
-var flipped Defaults = Defaults{A: defaults.A, Z: defaults.Z}
-
-var defaults Defaults = Defaults{A: "shadowed", Z: 'z'}
-
-func main() {
-	fmt.Println(main_)
 }

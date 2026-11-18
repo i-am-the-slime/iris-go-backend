@@ -13,27 +13,12 @@ package main
 
 import (
 	"fixture/Data/Semiring"
+	"fixture/shared"
 	"fmt"
 	"github.com/i-am-the-slime/purs-backend-go/go-support/array"
 	"github.com/i-am-the-slime/purs-backend-go/go-support/exception"
 	"github.com/i-am-the-slime/purs-backend-go/go-support/prim"
 )
-
-func convert(value any) []int32 {
-	return value.([]int32)
-}
-
-func convert2(value any) []string {
-	return value.([]string)
-}
-
-func convert3(value []int32) any {
-	return value
-}
-
-func convert4(value []string) any {
-	return value
-}
 
 var main_ = initializeMain_()
 
@@ -41,7 +26,7 @@ func initializeMain_() []int32 {
 	defer exception.ReportUncaught()
 	mapped := make([]int32, len(numbers))
 	for index, hidden := range numbers {
-		array := convert(hidden)
+		array := shared.Convert(hidden)
 		var accumulator int32 = 0
 		for _, element := range array {
 			accumulated := accumulator
@@ -51,7 +36,7 @@ func initializeMain_() []int32 {
 	}
 	mapped2 := make([]int32, len(words))
 	for index, hidden := range words {
-		array := convert2(hidden)
+		array := shared.Convert2(hidden)
 		var accumulator int32 = 0
 		for range array {
 			accumulated := accumulator
@@ -66,16 +51,35 @@ var numbers = initializeNumbers()
 
 func initializeNumbers() []any {
 	defer exception.ReportUncaught()
-	return []any{convert3([]int32{1, 2}), convert3([]int32{3})}
+	return []any{shared.Convert3([]int32{1, 2}), shared.Convert3([]int32{3})}
 }
 
 var words = initializeWords()
 
 func initializeWords() []any {
 	defer exception.ReportUncaught()
-	return []any{convert4([]string{"a", "b"})}
+	return []any{shared.Convert4([]string{"a", "b"})}
 }
 
 func main() {
 	fmt.Println(main_)
+}
+
+// shared/shared.go
+package shared
+
+func Convert(value any) []int32 {
+	return value.([]int32)
+}
+
+func Convert2(value any) []string {
+	return value.([]string)
+}
+
+func Convert3(value []int32) any {
+	return value
+}
+
+func Convert4(value []string) any {
+	return value
 }

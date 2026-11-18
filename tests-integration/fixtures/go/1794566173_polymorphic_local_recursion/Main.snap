@@ -6,6 +6,10 @@ package exists
 
 type ExistsPairEFnIntFnIntInt uint8
 
+func Convert(value ExistsPairEFnIntFnIntInt) any {
+	return nil
+}
+
 // main.go
 package main
 
@@ -92,11 +96,7 @@ type PairE struct {
 	Second *Tree
 }
 
-func convert(value exists.ExistsPairEFnIntFnIntInt) any {
-	return nil
-}
-
-func convert2(value TreeFnIntFnIntInt) *TreeFn {
+func convert(value TreeFnIntFnIntInt) *TreeFn {
 	switch value.Tag {
 	case TreeFnIntFnIntIntLeaf:
 		return &TreeFn{Tag: TreeFnLeaf, Leaf: func(coerced any) any {
@@ -106,58 +106,58 @@ func convert2(value TreeFnIntFnIntInt) *TreeFn {
 			}
 		}}
 	default: // TreeFnIntFnIntIntPair
-		return &TreeFn{Tag: TreeFnPair, Pair: convert(value.Pair)}
+		return &TreeFn{Tag: TreeFnPair, Pair: exists.Convert(value.Pair)}
 	}
 }
 
-func convert3(value *TreeFnIntInt) *TreeFn {
+func convert2(value *TreeFnIntInt) *TreeFn {
 	switch value.Tag {
 	case TreeFnIntIntLeaf:
 		return &TreeFn{Tag: TreeFnLeaf, Leaf: func(coerced any) any {
 			return value.Leaf(coerced.(int32))
 		}}
 	default: // TreeFnIntIntPair
-		return &TreeFn{Tag: TreeFnPair, Pair: convert8(value.Pair)}
+		return &TreeFn{Tag: TreeFnPair, Pair: convert7(value.Pair)}
 	}
 }
 
-func convert4(value *PairEIntInt) *PairE {
-	return &PairE{First: convert3(value.First), Second: convert6(value.Second)}
+func convert3(value *PairEIntInt) *PairE {
+	return &PairE{First: convert2(value.First), Second: convert5(value.Second)}
 }
 
-func convert5(value *ExistsPairEInt) any {
-	return convert4(value.Int)
+func convert4(value *ExistsPairEInt) any {
+	return convert3(value.Int)
 }
 
-func convert6(value *TreeInt) *Tree {
+func convert5(value *TreeInt) *Tree {
 	switch value.Tag {
 	case TreeIntLeaf:
 		return &Tree{Tag: TreeLeaf, Field0: value.Leaf}
 	default: // TreeIntPair
-		return &Tree{Tag: TreePair, Field0: convert5(value.Pair)}
+		return &Tree{Tag: TreePair, Field0: convert4(value.Pair)}
 	}
 }
 
-func convert7(value *PairEFnIntIntInt) *PairE {
-	return &PairE{First: convert2(value.First), Second: convert6(value.Second)}
+func convert6(value *PairEFnIntIntInt) *PairE {
+	return &PairE{First: convert(value.First), Second: convert5(value.Second)}
 }
 
-func convert8(value *ExistsPairEFnIntInt) any {
-	return convert7(value.Int)
+func convert7(value *ExistsPairEFnIntInt) any {
+	return convert6(value.Int)
 }
 
-func convert9(value *TreeFnIntInt) *Tree {
+func convert8(value *TreeFnIntInt) *Tree {
 	switch value.Tag {
 	case TreeFnIntIntLeaf:
 		return &Tree{Tag: TreeLeaf, Field0: func(coerced any) any {
 			return value.Leaf(coerced.(int32))
 		}}
 	default: // TreeFnIntIntPair
-		return &Tree{Tag: TreePair, Field0: convert8(value.Pair)}
+		return &Tree{Tag: TreePair, Field0: convert7(value.Pair)}
 	}
 }
 
-func convert10(value *TreeFn) *Tree {
+func convert9(value *TreeFn) *Tree {
 	switch value.Tag {
 	case TreeFnLeaf:
 		return &Tree{Tag: TreeLeaf, Field0: value.Leaf}
@@ -193,7 +193,7 @@ func leavesIntGo(depth int32, tree *TreeInt) int32 {
 				return leavesIntGo2(depth2, tree2)
 			}
 		}
-		return original(depth + 1)(convert9(tree.Pair.Int.First)) + leavesIntGo(depth + 1, tree.Pair.Int.Second)
+		return original(depth + 1)(convert8(tree.Pair.Int.First)) + leavesIntGo(depth + 1, tree.Pair.Int.Second)
 	}
 }
 
@@ -208,7 +208,7 @@ func leavesIntGo2(depth int32, tree *Tree) int32 {
 				return leavesIntGo2(depth2, tree2)
 			}
 		}
-		return original(depth + 1)(convert10(scrutinee.First)) + leavesIntGo3(depth + 1, scrutinee.Second)
+		return original(depth + 1)(convert9(scrutinee.First)) + leavesIntGo3(depth + 1, scrutinee.Second)
 	}
 }
 
@@ -223,7 +223,7 @@ func leavesIntGo3(depth int32, tree *Tree) int32 {
 				return leavesIntGo2(depth2, tree2)
 			}
 		}
-		return original(depth + 1)(convert10(scrutinee.First)) + leavesIntGo3(depth + 1, scrutinee.Second)
+		return original(depth + 1)(convert9(scrutinee.First)) + leavesIntGo3(depth + 1, scrutinee.Second)
 	}
 }
 

@@ -5,16 +5,12 @@ source: tests-integration/src/fixtures.rs
 package main
 
 import (
+	"fixture/shared"
 	"fmt"
 	"github.com/i-am-the-slime/purs-backend-go/go-support/array"
 	"github.com/i-am-the-slime/purs-backend-go/go-support/exception"
 	"github.com/i-am-the-slime/purs-backend-go/go-support/prim"
 )
-
-type Level struct {
-	Minis []Level
-	Name  string
-}
 
 type Step = func(int32) *MaybeStep
 
@@ -34,7 +30,7 @@ var main_ = initializeMain_()
 
 func initializeMain_() []string {
 	defer exception.ReportUncaught()
-	return array.Append(names(Level{Name: "root", Minis: []Level{Level{Name: "a", Minis: []Level{}}}}), []string{prim.ShowInt(countSteps(func(n int32) *MaybeStep {
+	return array.Append(names(shared.Level{Name: "root", Minis: []shared.Level{shared.Level{Name: "a", Minis: []shared.Level{}}}}), []string{prim.ShowInt(countSteps(func(n int32) *MaybeStep {
 		if n < 3 {
 			return &MaybeStep{Tag: MaybeStepJust, Just: func(_ int32) *MaybeStep {
 				return sharedMaybeStepNothing
@@ -44,7 +40,7 @@ func initializeMain_() []string {
 	}, 0))})
 }
 
-func names(level Level) []string {
+func names(level shared.Level) []string {
 	return array.Append([]string{level.Name}, array.Bind(level.Minis, names))
 }
 
@@ -63,4 +59,12 @@ func countSteps(step Step, n int32) int32 {
 
 func main() {
 	fmt.Println(main_)
+}
+
+// shared/shared.go
+package shared
+
+type Level struct {
+	Minis []Level
+	Name  string
 }

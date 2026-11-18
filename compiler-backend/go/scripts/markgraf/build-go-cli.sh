@@ -44,5 +44,5 @@ done
 # linker to drop, and without it link time more than halves.
 # The executable goes in bin/, since a package directory such as Markgraf/
 # takes its name on a case-insensitive file system.
-(cd "$OUT" && go build -tags libm -gcflags="-c=$(sysctl -n hw.ncpu) -dwarf=false" -ldflags=-w -o bin/markgraf .) >&2
+(cd "$OUT" && GOGC=400 go build -tags libm -gcflags="all=-c=$(sysctl -n hw.ncpu) -dwarf=false" -ldflags=-w -o bin/markgraf .) >&2
 echo "$OUT/bin/markgraf"

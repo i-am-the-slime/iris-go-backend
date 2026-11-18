@@ -5,10 +5,37 @@ source: tests-integration/src/fixtures.rs
 package main
 
 import (
+	"fixture/shared"
 	"fmt"
 	"github.com/i-am-the-slime/purs-backend-go/go-support/exception"
 	"github.com/i-am-the-slime/purs-backend-go/go-support/prim"
 )
+
+var main_ = initializeMain_()
+
+func initializeMain_() string {
+	defer exception.ReportUncaught()
+	array := []shared.KindSpaceAfterSpaceBeforeValue{shared.KindSpaceAfterSpaceBeforeValue{SpaceBefore: false, SpaceAfter: true, Value: "a", Kind: 1}, shared.KindSpaceAfterSpaceBeforeValue{SpaceBefore: true, SpaceAfter: false, Value: "b", Kind: 2}}
+	accumulator := shared.SpaceValue{Value: "", Space: false}
+	for kindSpaceAfterSpaceBeforeValueIndex := range array {
+		spaceValue := accumulator
+		var result string
+		if spaceValue.Space && array[kindSpaceAfterSpaceBeforeValueIndex].SpaceBefore {
+			result = " "
+		} else {
+			result = ""
+		}
+		accumulator = shared.SpaceValue{Value: prim.Concat(spaceValue.Value, result, array[kindSpaceAfterSpaceBeforeValueIndex].Value), Space: array[kindSpaceAfterSpaceBeforeValueIndex].SpaceAfter}
+	}
+	return accumulator.Value
+}
+
+func main() {
+	fmt.Println(main_)
+}
+
+// shared/shared.go
+package shared
 
 type SpaceValue struct {
 	Value string
@@ -20,27 +47,4 @@ type KindSpaceAfterSpaceBeforeValue struct {
 	Kind        int32
 	SpaceAfter  bool
 	SpaceBefore bool
-}
-
-var main_ = initializeMain_()
-
-func initializeMain_() string {
-	defer exception.ReportUncaught()
-	array := []KindSpaceAfterSpaceBeforeValue{KindSpaceAfterSpaceBeforeValue{SpaceBefore: false, SpaceAfter: true, Value: "a", Kind: 1}, KindSpaceAfterSpaceBeforeValue{SpaceBefore: true, SpaceAfter: false, Value: "b", Kind: 2}}
-	accumulator := SpaceValue{Value: "", Space: false}
-	for kindSpaceAfterSpaceBeforeValueIndex := range array {
-		spaceValue := accumulator
-		var result string
-		if spaceValue.Space && array[kindSpaceAfterSpaceBeforeValueIndex].SpaceBefore {
-			result = " "
-		} else {
-			result = ""
-		}
-		accumulator = SpaceValue{Value: prim.Concat(spaceValue.Value, result, array[kindSpaceAfterSpaceBeforeValueIndex].Value), Space: array[kindSpaceAfterSpaceBeforeValueIndex].SpaceAfter}
-	}
-	return accumulator.Value
-}
-
-func main() {
-	fmt.Println(main_)
 }

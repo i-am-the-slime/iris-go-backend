@@ -5,16 +5,11 @@ source: tests-integration/src/fixtures.rs
 package main
 
 import (
+	"fixture/shared"
 	"fmt"
 	"github.com/i-am-the-slime/purs-backend-go/go-support/exception"
 	"github.com/i-am-the-slime/purs-backend-go/go-support/prim"
 )
-
-type MainResult struct {
-	Entries string
-	Found   string
-	Missing string
-}
 
 type Outcome struct {
 	Found0 string
@@ -71,7 +66,7 @@ var sharedListEntryNil = &ListEntry{Tag: ListEntryNil}
 
 var main_ = initializeMain_()
 
-func initializeMain_() MainResult {
+func initializeMain_() shared.MainResult {
 	defer exception.ReportUncaught()
 	scrutinee := search(3, 0)
 	var result string
@@ -89,7 +84,7 @@ func initializeMain_() MainResult {
 	default: // OutcomeMissing
 		result2 = "missing"
 	}
-	return MainResult{Found: result, Missing: result2, Entries: firsts(entries)}
+	return shared.MainResult{Found: result, Missing: result2, Entries: firsts(entries)}
 }
 
 func search(target int32, key int32) Outcome {
@@ -118,4 +113,13 @@ var entries *ListEntry = &ListEntry{Tag: ListEntryCons, Cons0: &Entry{Tag: Entry
 
 func main() {
 	fmt.Println(main_)
+}
+
+// shared/shared.go
+package shared
+
+type MainResult struct {
+	Entries string
+	Found   string
+	Missing string
 }

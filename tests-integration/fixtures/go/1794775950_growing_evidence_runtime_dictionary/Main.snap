@@ -19,31 +19,11 @@ package main
 
 import (
 	"fixture/Data/Show"
+	"fixture/shared"
 	"fmt"
 	"github.com/i-am-the-slime/purs-backend-go/go-support/exception"
 	"github.com/i-am-the-slime/purs-backend-go/go-support/prim"
 )
-
-func convert(value any) []int32 {
-	array := value.([]any)
-	converted := make([]int32, len(array))
-	for index, element := range array {
-		converted[index] = element.(int32)
-	}
-	return converted
-}
-
-type Show struct {
-	Show func(any) string
-}
-
-func convert2(value [][]int32) any {
-	converted := make([]any, len(value))
-	for index, element := range value {
-		converted[index] = convert3(element)
-	}
-	return converted
-}
 
 type Nested struct {
 	Flat any
@@ -56,29 +36,21 @@ const (
 	NestedNest
 )
 
-func convert3(value []int32) any {
-	converted := make([]any, len(value))
-	for index, element := range value {
-		converted[index] = element
-	}
-	return converted
-}
-
 var main_ = initializeMain_()
 
 func initializeMain_() []string {
 	defer exception.ReportUncaught()
-	return []string{prim.ShowInt(1), "Nest " + showNestedArrayInt(Show{Show: func(coerced any) string {
-		return show.ShowInt(convert(coerced))
-	}}, &Nested{Tag: NestedNest, Nest: &Nested{Tag: NestedFlat, Flat: convert2([][]int32{[]int32{1, 2}, []int32{3}})}})}
+	return []string{prim.ShowInt(1), "Nest " + showNestedArrayInt(shared.Show{Show: func(coerced any) string {
+		return show.ShowInt(shared.Convert(coerced))
+	}}, &Nested{Tag: NestedNest, Nest: &Nested{Tag: NestedFlat, Flat: shared.Convert2([][]int32{[]int32{1, 2}, []int32{3}})}})}
 }
 
-func showNestedArrayInt(showDictionary Show, nested *Nested) string {
+func showNestedArrayInt(showDictionary shared.Show, nested *Nested) string {
 	switch nested.Tag {
 	case NestedFlat:
 		return showDictionary.Show(nested.Flat)
 	default: // NestedNest
-		return "Nest " + showNestedArrayInt(Show{Show: func(coerced any) string {
+		return "Nest " + showNestedArrayInt(shared.Show{Show: func(coerced any) string {
 			return prim.ShowArray(showDictionary.Show, coerced.([]any))
 		}}, nested.Nest)
 	}
@@ -86,4 +58,36 @@ func showNestedArrayInt(showDictionary Show, nested *Nested) string {
 
 func main() {
 	fmt.Println(main_)
+}
+
+// shared/shared.go
+package shared
+
+func Convert(value any) []int32 {
+	array := value.([]any)
+	converted := make([]int32, len(array))
+	for index, element := range array {
+		converted[index] = element.(int32)
+	}
+	return converted
+}
+
+type Show struct {
+	Show func(any) string
+}
+
+func Convert2(value [][]int32) any {
+	converted := make([]any, len(value))
+	for index, element := range value {
+		converted[index] = Convert3(element)
+	}
+	return converted
+}
+
+func Convert3(value []int32) any {
+	converted := make([]any, len(value))
+	for index, element := range value {
+		converted[index] = element
+	}
+	return converted
 }

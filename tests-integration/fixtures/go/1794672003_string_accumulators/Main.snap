@@ -5,23 +5,15 @@ source: tests-integration/src/fixtures.rs
 package main
 
 import (
+	"fixture/shared"
 	"fmt"
 	"github.com/i-am-the-slime/purs-backend-go/go-support/exception"
 	"github.com/i-am-the-slime/purs-backend-go/go-support/prim"
 )
 
-type MainResult struct {
-	Fold       string
-	Loop       string
-	Prepended  string
-	ReadInFold string
-	ReadInLoop string
-	Exit       int32
-}
-
 var main_ = initializeMain_()
 
-func initializeMain_() MainResult {
+func initializeMain_() shared.MainResult {
 	defer exception.ReportUncaught()
 	accumulator := []byte("start:")
 	for i := int32(1); i < 13; i++ {
@@ -43,7 +35,7 @@ func initializeMain_() MainResult {
 		acc := accumulator3
 		accumulator3 = prim.ShowInt(i) + acc
 	}
-	return MainResult{Fold: built, Loop: mainGo(0, ""), Exit: mainGo2(0, "x"), ReadInFold: accumulator2, ReadInLoop: mainGo3(0, ""), Prepended: accumulator3}
+	return shared.MainResult{Fold: built, Loop: mainGo(0, ""), Exit: mainGo2(0, "x"), ReadInFold: accumulator2, ReadInLoop: mainGo3(0, ""), Prepended: accumulator3}
 }
 
 func mainGo(i int32, acc string) string {
@@ -81,4 +73,16 @@ func mainGo3(i int32, acc string) string {
 
 func main() {
 	fmt.Println(main_)
+}
+
+// shared/shared.go
+package shared
+
+type MainResult struct {
+	Fold       string
+	Loop       string
+	Prepended  string
+	ReadInFold string
+	ReadInLoop string
+	Exit       int32
 }

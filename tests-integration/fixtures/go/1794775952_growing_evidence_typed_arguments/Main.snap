@@ -26,6 +26,7 @@ package main
 
 import (
 	"fixture/Data/Show"
+	"fixture/shared"
 	"fmt"
 	"github.com/i-am-the-slime/purs-backend-go/go-support/array"
 	"github.com/i-am-the-slime/purs-backend-go/go-support/exception"
@@ -33,7 +34,41 @@ import (
 	"slices"
 )
 
-func convert(value any) []bool {
+var main_ = initializeMain_()
+
+func initializeMain_() []string {
+	defer exception.ReportUncaught()
+	return []string{describeArrayBoolean(shared.Show{Show: func(coerced any) string {
+		return show.ShowBoolean(shared.Convert(coerced))
+	}}, array.Append([]int32{}, []int32{2}), ">", 1, shared.Convert2([]bool{true}))}
+}
+
+func describeArrayBoolean(showDictionary shared.Show, depths []int32, label string, depth int32, value any) string {
+	depths = slices.Clip(depths)
+	labelBytes := []byte(label)
+	for {
+		showDictionaryCaptured := showDictionary
+		switch depth {
+		case 0:
+			return string(labelBytes) + prim.ShowArray(show.Show2, depths) + ": " + showDictionaryCaptured.Show(value)
+		default:
+			depth2 := depth
+			showDictionary, depths, labelBytes, depth, value = shared.Show{Show: func(coerced any) string {
+				return prim.ShowArray(showDictionaryCaptured.Show, coerced.([]any))
+			}}, append(depths, depth2), append(labelBytes, ">"...), depth2 - 1, []any{value}
+			continue
+		}
+	}
+}
+
+func main() {
+	fmt.Println(main_)
+}
+
+// shared/shared.go
+package shared
+
+func Convert(value any) []bool {
 	array := value.([]any)
 	converted := make([]bool, len(array))
 	for index, element := range array {
@@ -46,41 +81,10 @@ type Show struct {
 	Show func(any) string
 }
 
-func convert2(value []bool) any {
+func Convert2(value []bool) any {
 	converted := make([]any, len(value))
 	for index, element := range value {
 		converted[index] = element
 	}
 	return converted
-}
-
-var main_ = initializeMain_()
-
-func initializeMain_() []string {
-	defer exception.ReportUncaught()
-	return []string{describeArrayBoolean(Show{Show: func(coerced any) string {
-		return show.ShowBoolean(convert(coerced))
-	}}, array.Append([]int32{}, []int32{2}), ">", 1, convert2([]bool{true}))}
-}
-
-func describeArrayBoolean(showDictionary Show, depths []int32, label string, depth int32, value any) string {
-	depths = slices.Clip(depths)
-	labelBytes := []byte(label)
-	for {
-		showDictionaryCaptured := showDictionary
-		switch depth {
-		case 0:
-			return string(labelBytes) + prim.ShowArray(show.Show2, depths) + ": " + showDictionaryCaptured.Show(value)
-		default:
-			depth2 := depth
-			showDictionary, depths, labelBytes, depth, value = Show{Show: func(coerced any) string {
-				return prim.ShowArray(showDictionaryCaptured.Show, coerced.([]any))
-			}}, append(depths, depth2), append(labelBytes, ">"...), depth2 - 1, []any{value}
-			continue
-		}
-	}
-}
-
-func main() {
-	fmt.Println(main_)
 }

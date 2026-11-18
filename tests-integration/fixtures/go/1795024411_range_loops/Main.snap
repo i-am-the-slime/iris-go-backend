@@ -13,76 +13,52 @@ package main
 
 import (
 	"fixture/Data/Semiring"
+	"fixture/shared"
 	"fmt"
 	"github.com/i-am-the-slime/purs-backend-go/go-support/array"
 	"github.com/i-am-the-slime/purs-backend-go/go-support/exception"
 	"github.com/i-am-the-slime/purs-backend-go/go-support/prim"
 )
 
-type MainResult struct {
-	Descending []int32
-	Indexed    []int32
-	Listed     string
-	Visited    []int32
-	Counted    int32
-	Summed     int32
-}
-
-type Ref[T any] struct {
-	Value T
-}
-
-func rangeSteps(start int32, end int32) (int32, int64) {
-	if start > end {
-		return -1, int64(start) - int64(end) + 1
-	}
-	return 1, int64(end) - int64(start) + 1
-}
-
-type StateValue struct {
-	State []int32
-	Value []int32
-}
-
 var main_ = initializeMain_()
 
-func initializeMain_() MainResult {
+func initializeMain_() shared.MainResult {
 	defer exception.ReportUncaught()
-	ref := &Ref[int32]{Value: 4}
+	ref := &shared.Ref[int32]{Value: 4}
 	i := ref.Value
-	ref2 := &Ref[[]int32]{Value: []int32{}}
-	step, count := rangeSteps(i, 1)
+	ref2 := &shared.Ref[[]int32]{Value: []int32{}}
+	step, count := shared.RangeSteps(i, 1)
 	for index := range count {
 		i2 := i + int32(index) * step
 		s := ref2.Value
 		s_ := array.Append(s, []int32{i2})
-		modified := StateValue{State: s_, Value: s_}
+		modified := shared.StateValue{State: s_, Value: s_}
 		ref2.Value = modified.State
 	}
 	array2 := ref2.Value
-	step2, count2 := rangeSteps(1, i)
+	step2, count2 := shared.RangeSteps(1, i)
 	var accumulator int32 = 0
 	for index := range count2 {
 		element := 1 + int32(index) * step2
 		accumulated := accumulator
 		accumulator = semiring.Add(accumulated, element)
 	}
-	step3, count3 := rangeSteps(i, 1)
+	step3, count3 := shared.RangeSteps(i, 1)
 	accumulator2 := ""
 	for index := count3 - 1; index >= 0; index-- {
 		x := i + int32(index) * step3
 		rest := accumulator2
 		accumulator2 = prim.ShowInt(x) + "," + rest
 	}
-	_, count4 := rangeSteps(1, i)
-	step4, count5 := rangeSteps(1, i)
+	_, count4 := shared.RangeSteps(1, i)
+	step4, count5 := shared.RangeSteps(1, i)
 	mapped := make([]int32, count5)
 	for slot := range count5 {
 		x := 1 + int32(slot) * step4
 		index := int32(slot)
 		mapped[slot] = prim.MultiplyInt32(index, x)
 	}
-	performed := MainResult{Visited: array2, Summed: accumulator, Listed: accumulator2, Counted: int32(count4), Indexed: mapped, Descending: descending}
+	performed := shared.MainResult{Visited: array2, Summed: accumulator, Listed: accumulator2, Counted: int32(count4), Indexed: mapped, Descending: descending}
 	return performed
 }
 
@@ -100,4 +76,32 @@ func initializeDescending() []int32 {
 
 func main() {
 	fmt.Println(main_)
+}
+
+// shared/shared.go
+package shared
+
+type MainResult struct {
+	Descending []int32
+	Indexed    []int32
+	Listed     string
+	Visited    []int32
+	Counted    int32
+	Summed     int32
+}
+
+type Ref[T any] struct {
+	Value T
+}
+
+func RangeSteps(start int32, end int32) (int32, int64) {
+	if start > end {
+		return -1, int64(start) - int64(end) + 1
+	}
+	return 1, int64(end) - int64(start) + 1
+}
+
+type StateValue struct {
+	State []int32
+	Value []int32
 }

@@ -5,16 +5,11 @@ source: tests-integration/src/fixtures.rs
 package main
 
 import (
+	"fixture/shared"
 	"fmt"
 	"github.com/i-am-the-slime/purs-backend-go/go-support/exception"
 	"github.com/i-am-the-slime/purs-backend-go/go-support/prim"
 )
-
-type VariantFRep struct {
-	Map   func(func(any) any) func(any) any
-	Type  string
-	Value any
-}
 
 type SayInt struct {
 	First  string
@@ -62,8 +57,8 @@ func convert3(value SayInt) *Say {
 	return &Say{First: value.First, Second: value.Second, Origin: value}
 }
 
-func convert4(value Map_Type_ValueOfFnFnValueValueFnSaySaySayInt) VariantFRep {
-	return VariantFRep{Map: func(coerced func(any) any) func(any) any {
+func convert4(value Map_Type_ValueOfFnFnValueValueFnSaySaySayInt) shared.VariantFRep {
+	return shared.VariantFRep{Map: func(coerced func(any) any) func(any) any {
 		original := value.Map(coerced)
 		return func(coerced2 any) any {
 			return original(coerced2.(*Say))
@@ -83,8 +78,8 @@ func convert5(value CountInt) *Count {
 	}, Origin: value}
 }
 
-func convert6(value Map_Type_ValueOfFnFnValueValueFnCountCountCountInt) VariantFRep {
-	return VariantFRep{Map: func(coerced func(any) any) func(any) any {
+func convert6(value Map_Type_ValueOfFnFnValueValueFnCountCountCountInt) shared.VariantFRep {
+	return shared.VariantFRep{Map: func(coerced func(any) any) func(any) any {
 		original := value.Map(coerced)
 		return func(coerced2 any) any {
 			return original(coerced2.(*Count))
@@ -96,14 +91,14 @@ var main_ = initializeMain_()
 
 func initializeMain_() []string {
 	defer exception.ReportUncaught()
-	return []string{describe(say), describe(count), describe(VariantFRep{Type: say.Type, Value: say.Map(func(coerced any) any {
+	return []string{describe(say), describe(count), describe(shared.VariantFRep{Type: say.Type, Value: say.Map(func(coerced any) any {
 		return prim.MultiplyInt32(coerced.(int32), 10)
-	})(say.Value), Map: say.Map}), describe(VariantFRep{Type: count.Type, Value: count.Map(func(coerced any) any {
+	})(say.Value), Map: say.Map}), describe(shared.VariantFRep{Type: count.Type, Value: count.Map(func(coerced any) any {
 		return prim.MultiplyInt32(coerced.(int32), 10)
 	})(count.Value), Map: count.Map})}
 }
 
-func describe(r VariantFRep) string {
+func describe(r shared.VariantFRep) string {
 	if r.Type == "say" {
 		scrutinee := convert(r.Value.(*Say))
 		return scrutinee.First + " " + prim.ShowInt(scrutinee.Second)
@@ -117,7 +112,7 @@ func describe(r VariantFRep) string {
 
 var say = initializeSay()
 
-func initializeSay() VariantFRep {
+func initializeSay() shared.VariantFRep {
 	defer exception.ReportUncaught()
 	return convert4(Map_Type_ValueOfFnFnValueValueFnSaySaySayInt{Type: "say", Value: SayInt{First: "hello", Second: 4}, Map: func(f func(any) any) func(*Say) *Say {
 		return func(say *Say) *Say {
@@ -128,7 +123,7 @@ func initializeSay() VariantFRep {
 
 var count = initializeCount()
 
-func initializeCount() VariantFRep {
+func initializeCount() shared.VariantFRep {
 	defer exception.ReportUncaught()
 	return convert6(Map_Type_ValueOfFnFnValueValueFnCountCountCountInt{Type: "count", Value: CountInt{Count: func(value int32) int32 {
 		return value + 1
@@ -151,4 +146,13 @@ func map_2(f func(any) any, count *Count) *Count {
 
 func main() {
 	fmt.Println(main_)
+}
+
+// shared/shared.go
+package shared
+
+type VariantFRep struct {
+	Map   func(func(any) any) func(any) any
+	Type  string
+	Value any
 }

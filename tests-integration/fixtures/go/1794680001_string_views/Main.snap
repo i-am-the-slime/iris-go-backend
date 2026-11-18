@@ -50,6 +50,7 @@ package main
 import (
 	"fixture/Data/Maybe"
 	"fixture/Data/Show"
+	"fixture/shared"
 	"fmt"
 	"github.com/i-am-the-slime/purs-backend-go/go-support/array"
 	"github.com/i-am-the-slime/purs-backend-go/go-support/direct"
@@ -58,19 +59,12 @@ import (
 	"slices"
 )
 
-func rangeSteps(start int32, end int32) (int32, int64) {
-	if start > end {
-		return -1, int64(start) - int64(end) + 1
-	}
-	return 1, int64(end) - int64(start) + 1
-}
-
 var main_ = initializeMain_()
 
 func initializeMain_() []string {
 	defer exception.ReportUncaught()
 	text := prim.StringJoinWith(" ", []string{"a😀", "naïve 😀 banana 日本 a𝄞a"})
-	step, count := rangeSteps(0, prim.CodeUnitLength(text) - 1)
+	step, count := shared.RangeSteps(0, prim.CodeUnitLength(text) - 1)
 	mapped := make([]maybe.MaybeChar, count)
 	textUnits := prim.UTF16(text)
 	for index := range count {
@@ -268,4 +262,14 @@ func closureInTheLoopReadsTheView(text string, i int32, found []maybe.MaybeChar)
 
 func main() {
 	fmt.Println(main_)
+}
+
+// shared/shared.go
+package shared
+
+func RangeSteps(start int32, end int32) (int32, int64) {
+	if start > end {
+		return -1, int64(start) - int64(end) + 1
+	}
+	return 1, int64(end) - int64(start) + 1
 }

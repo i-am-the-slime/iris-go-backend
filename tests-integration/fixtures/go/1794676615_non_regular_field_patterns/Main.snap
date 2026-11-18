@@ -15,6 +15,17 @@ type Tuple struct {
 	Origin any
 }
 
+func Convert(value TupleIntInt) *Tuple {
+	return &Tuple{First: value.First, Second: value.Second, Origin: value}
+}
+
+func Convert2(value *Tuple) TupleIntInt {
+	if original, ok := value.Origin.(TupleIntInt); ok {
+		return original
+	}
+	return TupleIntInt{First: value.First.(int32), Second: value.Second.(int32)}
+}
+
 // main.go
 package main
 
@@ -39,17 +50,6 @@ const (
 	SequenceOne
 )
 
-func convert(value tuple.TupleIntInt) *tuple.Tuple {
-	return &tuple.Tuple{First: value.First, Second: value.Second, Origin: value}
-}
-
-func convert2(value *tuple.Tuple) tuple.TupleIntInt {
-	if original, ok := value.Origin.(tuple.TupleIntInt); ok {
-		return original
-	}
-	return tuple.TupleIntInt{First: value.First.(int32), Second: value.Second.(int32)}
-}
-
 var main_ = initializeMain_()
 
 func initializeMain_() []int32 {
@@ -72,7 +72,7 @@ func initializeMain_() []int32 {
 						return consTupleIntInt(x2, value)
 					}
 				}
-				accumulator = &Sequence{Tag: SequenceZero, Zero: original(convert(tuple.TupleIntInt{First: a, Second: b.One0.(int32)}))(b.One1)}
+				accumulator = &Sequence{Tag: SequenceZero, Zero: original(tuple.Convert(tuple.TupleIntInt{First: a, Second: b.One0.(int32)}))(b.One1)}
 			}
 		}
 		var result int32
@@ -87,7 +87,7 @@ func initializeMain_() []int32 {
 			}
 			if accumulator.Tag == SequenceOne && accumulator.One1.Tag == SequenceOne {
 				guarded := accumulator.One0.(int32)
-				guarded2 := convert2(accumulator.One1.One0.(*tuple.Tuple))
+				guarded2 := tuple.Convert2(accumulator.One1.One0.(*tuple.Tuple))
 				result = guarded + prim.MultiplyInt32(guarded2.First, 10) + guarded2.Second
 				break matched
 			}
@@ -96,7 +96,7 @@ func initializeMain_() []int32 {
 				break matched
 			}
 			if accumulator.Tag == SequenceZero && accumulator.Zero.Tag == SequenceOne {
-				guarded := convert2(accumulator.Zero.One0.(*tuple.Tuple))
+				guarded := tuple.Convert2(accumulator.Zero.One0.(*tuple.Tuple))
 				result = guarded.First - guarded.Second
 				break matched
 			}

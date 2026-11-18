@@ -29,16 +29,12 @@ package main
 import (
 	"fixture/Data/Maybe"
 	"fixture/Data/Show"
+	"fixture/shared"
 	"fmt"
 	"github.com/i-am-the-slime/purs-backend-go/go-support/direct"
 	"github.com/i-am-the-slime/purs-backend-go/go-support/exception"
 	"github.com/i-am-the-slime/purs-backend-go/go-support/prim"
 )
-
-type Point struct {
-	Tags []string
-	X    int32
-}
 
 var main_ = initializeMain_()
 
@@ -63,23 +59,23 @@ func initializeMain_() []string {
 	var result string
 	switch performed.Tag {
 	case maybe.MaybeArrayStringJust:
-		result = "(Just " + prim.ShowArray(show.Show, (Point{Tags: performed.Just, X: origin.X}).Tags) + ")"
+		result = "(Just " + prim.ShowArray(show.Show, (shared.Point{Tags: performed.Just, X: origin.X}).Tags) + ")"
 	default:
 		result = "Nothing"
 	}
-	return []string{prim.ShowInt(prim.MultiplyInt32(origin.X, 2)), prim.ShowInt((Point{Tags: origin.Tags, X: origin.X + 1}).X), "(Just " + prim.ShowInt(2) + ")", "Nothing", prim.ShowInt(5), result, prim.ShowInt(1), prim.ShowInt(bump(3, origin).X)}
+	return []string{prim.ShowInt(prim.MultiplyInt32(origin.X, 2)), prim.ShowInt((shared.Point{Tags: origin.Tags, X: origin.X + 1}).X), "(Just " + prim.ShowInt(2) + ")", "Nothing", prim.ShowInt(5), result, prim.ShowInt(1), prim.ShowInt(bump(3, origin).X)}
 }
 
-var origin Point = Point{X: 3, Tags: []string{"a", "b"}}
+var origin shared.Point = shared.Point{X: 3, Tags: []string{"a", "b"}}
 
-func bump(n int32, point Point) Point {
+func bump(n int32, point shared.Point) shared.Point {
 	for {
 		switch n {
 		case 0:
 			return point
 		default:
 			n2 := n
-			n, point = n2 - 1, Point{Tags: point.Tags, X: point.X + prim.MultiplyInt32(n2, 2)}
+			n, point = n2 - 1, shared.Point{Tags: point.Tags, X: point.X + prim.MultiplyInt32(n2, 2)}
 			continue
 		}
 	}
@@ -87,4 +83,12 @@ func bump(n int32, point Point) Point {
 
 func main() {
 	fmt.Println(main_)
+}
+
+// shared/shared.go
+package shared
+
+type Point struct {
+	Tags []string
+	X    int32
 }

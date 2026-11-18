@@ -5,16 +5,12 @@ source: tests-integration/src/fixtures.rs
 package main
 
 import (
+	"fixture/shared"
 	"fmt"
 	"github.com/i-am-the-slime/purs-backend-go/go-support/alloc"
 	"github.com/i-am-the-slime/purs-backend-go/go-support/exception"
 	"github.com/i-am-the-slime/purs-backend-go/go-support/prim"
 )
-
-type MainResult struct {
-	Continued int32
-	Forced    int32
-}
 
 type LazyInt struct {
 	Acc *LazyInt
@@ -44,9 +40,9 @@ var sharedIntToIntMain_ = &IntToInt{Tag: IntToIntMain_}
 
 var main_ = initializeMain_()
 
-func initializeMain_() MainResult {
+func initializeMain_() shared.MainResult {
 	defer exception.ReportUncaught()
-	return MainResult{Forced: forceInt(buildThunks(1000, sharedLazyIntMain_)), Continued: countDown(10, sharedIntToIntMain_)}
+	return shared.MainResult{Forced: forceInt(buildThunks(1000, sharedLazyIntMain_)), Continued: countDown(10, sharedIntToIntMain_)}
 }
 
 func buildThunks(n int32, acc *LazyInt) *LazyInt {
@@ -107,4 +103,12 @@ func runIntToInt(function *IntToInt, x int32) int32 {
 
 func main() {
 	fmt.Println(main_)
+}
+
+// shared/shared.go
+package shared
+
+type MainResult struct {
+	Continued int32
+	Forced    int32
 }

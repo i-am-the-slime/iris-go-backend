@@ -29,6 +29,8 @@ const (
 	ListIntCons
 )
 
+var SharedListIntNil = &ListInt{Tag: ListIntNil}
+
 // Data/Maybe/maybe.go
 package maybe
 
@@ -59,17 +61,11 @@ import (
 	"fixture/Data/List/Types"
 	"fixture/Data/Maybe"
 	"fixture/Data/Show"
+	"fixture/shared/Data.Either+Data.Tuple"
 	"fmt"
 	"github.com/i-am-the-slime/purs-backend-go/go-support/exception"
 	"github.com/i-am-the-slime/purs-backend-go/go-support/prim"
 )
-
-type TupleMaybeIntEitherStringInt struct {
-	Second either.EitherStringInt
-	First  maybe.MaybeInt
-}
-
-var sharedListIntNil = &types.ListInt{Tag: types.ListIntNil}
 
 type Labelled struct {
 	Tag0 string
@@ -101,7 +97,7 @@ var main_ = initializeMain_()
 
 func initializeMain_() string {
 	defer exception.ReportUncaught()
-	array := []TupleMaybeIntEitherStringInt{TupleMaybeIntEitherStringInt{First: maybe.MaybeInt{Tag: maybe.MaybeIntJust, Just: 1}, Second: either.EitherStringInt{Tag: either.EitherStringIntRight, Right: 2}}, TupleMaybeIntEitherStringInt{First: maybe.MaybeInt{Tag: maybe.MaybeIntNothing}, Second: either.EitherStringInt{Tag: either.EitherStringIntLeft, Left: "x"}}}
+	array := []either_tuple.TupleMaybeIntEitherStringInt{either_tuple.TupleMaybeIntEitherStringInt{First: maybe.MaybeInt{Tag: maybe.MaybeIntJust, Just: 1}, Second: either.EitherStringInt{Tag: either.EitherStringIntRight, Right: 2}}, either_tuple.TupleMaybeIntEitherStringInt{First: maybe.MaybeInt{Tag: maybe.MaybeIntNothing}, Second: either.EitherStringInt{Tag: either.EitherStringIntLeft, Left: "x"}}}
 	var accumulator int32 = 0
 	for tupleIndex := range array {
 		acc := accumulator
@@ -123,7 +119,7 @@ func initializeMain_() string {
 	for index, element := range array3 {
 		mapped2[index] = entry(element)
 	}
-	return prim.ShowInt(accumulator + mainSum(&types.ListInt{Tag: types.ListIntCons, Cons0: 3, Cons1: &types.ListInt{Tag: types.ListIntCons, Cons0: 4, Cons1: sharedListIntNil}})) + prim.ShowArray(show.Show, mapped) + prim.ShowArray(show.Show, mapped2)
+	return prim.ShowInt(accumulator + mainSum(&types.ListInt{Tag: types.ListIntCons, Cons0: 3, Cons1: &types.ListInt{Tag: types.ListIntCons, Cons0: 4, Cons1: types.SharedListIntNil}})) + prim.ShowArray(show.Show, mapped) + prim.ShowArray(show.Show, mapped2)
 }
 
 func label(labelled Labelled) string {
@@ -157,4 +153,17 @@ func mainSum(list *types.ListInt) int32 {
 
 func main() {
 	fmt.Println(main_)
+}
+
+// shared/Data.Either+Data.Tuple/either_tuple.go
+package either_tuple
+
+import (
+	"fixture/Data/Either"
+	"fixture/Data/Maybe"
+)
+
+type TupleMaybeIntEitherStringInt struct {
+	Second either.EitherStringInt
+	First  maybe.MaybeInt
 }

@@ -38,27 +38,19 @@ package main
 import (
 	"fixture/Data/Array"
 	"fixture/Data/Tuple"
+	"fixture/shared"
 	"github.com/i-am-the-slime/purs-backend-go/go-support/exception"
 	"github.com/i-am-the-slime/purs-backend-go/go-support/prim"
 	"os"
 )
 
-type Ref[T any] struct {
-	Value T
-}
-
-type StateValue struct {
-	State int32
-	Value int32
-}
-
 func main_() int32 {
 	var i int32 = 1
-	ref := &Ref[int32]{Value: 0}
+	ref := &shared.Ref[int32]{Value: 0}
 	dataarray.FoldMEffectTupleUnitUnitUnit(func(_ struct{}, pair tuple.TupleUnitUnit) {
 		s := ref.Value
 		s_ := s + 1
-		modified := StateValue{State: s_, Value: s_}
+		modified := shared.StateValue{State: s_, Value: s_}
 		ref.Value = modified.State
 	}, struct{}{}, units)
 	i2 := ref.Value
@@ -84,4 +76,13 @@ package shared
 type ActualExpected struct {
 	Actual   struct{}
 	Expected struct{}
+}
+
+type Ref[T any] struct {
+	Value T
+}
+
+type StateValue struct {
+	State int32
+	Value int32
 }

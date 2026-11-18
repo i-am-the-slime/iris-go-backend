@@ -5,20 +5,17 @@ source: tests-integration/src/fixtures.rs
 package main
 
 import (
+	"fixture/shared"
 	"fmt"
 	"github.com/i-am-the-slime/purs-backend-go/go-support/exception"
 	"github.com/i-am-the-slime/purs-backend-go/go-support/prim"
 )
 
-type Id struct {
-	Id string
-}
-
 var main_ = initializeMain_()
 
 func initializeMain_() []string {
 	defer exception.ReportUncaught()
-	xs := []Id{Id{Id: "a"}}
+	xs := []shared.Id{shared.Id{Id: "a"}}
 	var result string
 	if 0 < int32(len(xs)) {
 		result = xs[0].Id
@@ -83,4 +80,11 @@ func mainJoin2(m int32) string {
 
 func main() {
 	fmt.Println(main_)
+}
+
+// shared/shared.go
+package shared
+
+type Id struct {
+	Id string
 }

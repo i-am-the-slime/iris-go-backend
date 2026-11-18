@@ -33,7 +33,7 @@ GOMOD
 started=$(perl -MTime::HiRes=time -e 'printf "%.0f", time*1000')
 "$IRIS" go --entry CompactionDriver.main "$WORK/go"
 finished=$(perl -MTime::HiRes=time -e 'printf "%.0f", time*1000')
-(cd "$WORK/go" && go build -gcflags="-c=$(sysctl -n hw.ncpu) -dwarf=false" -ldflags=-w -o compaction .)
+(cd "$WORK/go" && GOGC=400 go build -gcflags="all=-c=$(sysctl -n hw.ncpu) -dwarf=false" -ldflags=-w -o compaction .)
 "$WORK/go/compaction" >"$WORK/actual.txt"
 
 if ! diff -u "$WORK/expected.txt" "$WORK/actual.txt"; then

@@ -5,16 +5,12 @@ source: tests-integration/src/fixtures.rs
 package main
 
 import (
+	"fixture/shared"
 	"fmt"
 	"github.com/i-am-the-slime/purs-backend-go/go-support/array"
 	"github.com/i-am-the-slime/purs-backend-go/go-support/exception"
 	"github.com/i-am-the-slime/purs-backend-go/go-support/prim"
 )
-
-type Ops struct {
-	Describe func(int32) string
-	Double   func(int32) int32
-}
 
 var main_ = initializeMain_()
 
@@ -33,7 +29,7 @@ func initializeMain_() []string {
 	return array.Append(mapped, mapped2)
 }
 
-var opsForLeft Ops = Ops{Double: func(n int32) int32 {
+var opsForLeft shared.Ops = shared.Ops{Double: func(n int32) int32 {
 	return prim.MultiplyInt32(n, 2)
 }, Describe: func(n int32) string {
 	return "n = " + prim.ShowInt(n)
@@ -41,4 +37,12 @@ var opsForLeft Ops = Ops{Double: func(n int32) int32 {
 
 func main() {
 	fmt.Println(main_)
+}
+
+// shared/shared.go
+package shared
+
+type Ops struct {
+	Describe func(int32) string
+	Double   func(int32) int32
 }

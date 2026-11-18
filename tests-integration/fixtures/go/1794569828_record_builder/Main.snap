@@ -4,16 +4,22 @@ source: tests-integration/src/fixtures.rs
 // main.go
 package main
 
-import "fmt"
+import (
+	"fixture/shared"
+	"fmt"
+)
+
+var main_ shared.MainResult = shared.MainResult{Size: 2, Tags: []string{"new"}, Name: "box"}
+
+func main() {
+	fmt.Println(main_)
+}
+
+// shared/shared.go
+package shared
 
 type MainResult struct {
 	Name string
 	Tags []string
 	Size int32
-}
-
-var main_ MainResult = MainResult{Size: 2, Tags: []string{"new"}, Name: "box"}
-
-func main() {
-	fmt.Println(main_)
 }

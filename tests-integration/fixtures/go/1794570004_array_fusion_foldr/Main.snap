@@ -14,6 +14,12 @@ const (
 	MaybeIntJust
 )
 
+type MainResult struct {
+	OverFilter string
+	OverMap    string
+	LastSmall  MaybeInt
+}
+
 // main.go
 package main
 
@@ -24,15 +30,9 @@ import (
 	"github.com/i-am-the-slime/purs-backend-go/go-support/prim"
 )
 
-type MainResult struct {
-	OverFilter string
-	OverMap    string
-	LastSmall  maybe.MaybeInt
-}
-
 var main_ = initializeMain_()
 
-func initializeMain_() MainResult {
+func initializeMain_() maybe.MainResult {
 	defer exception.ReportUncaught()
 	accumulator := ""
 	for index := len(numbers) - 1; index >= 0; index-- {
@@ -62,7 +62,7 @@ func initializeMain_() MainResult {
 			break
 		}
 	}
-	return MainResult{OverMap: accumulator, OverFilter: accumulator2, LastSmall: found}
+	return maybe.MainResult{OverMap: accumulator, OverFilter: accumulator2, LastSmall: found}
 }
 
 var numbers []int32 = []int32{3, 1, 4, 1, 5, 9, 2, 6}
