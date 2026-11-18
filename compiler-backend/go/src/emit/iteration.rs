@@ -1,7 +1,7 @@
 use super::buffers::{to_bytes, to_string};
 use super::fusion::{Demand, Need, Order, Pipeline};
 use super::ownership::{Carried, Place, owned_snocs};
-use super::{Emitter, Mode, Sink, call, field_name, identifier_expression, length, uses_local};
+use super::{Emitter, Mode, Sink, call, field_name, identifier_expression, uses_local};
 use crate::error::GoResult;
 use crate::foreign::Iteration;
 use crate::mono::{Expression, ExpressionKind, FunctionId, Local};
@@ -346,12 +346,12 @@ where
         let pipeline = self.pipeline(array, demand, need, out)?;
         let mapped_type = self.go_type(monotype)?;
         let mapped = self.temporary("mapped");
-        let in_place = pipeline.positional_source().is_some();
-        let allocation = match pipeline.positional_source() {
-            Some(source) => call(
-                identifier_expression("make"),
-                vec![GoExpression::Type(mapped_type), length(source.clone())],
-            ),
+        let positional_length = pipeline.known_length();
+        let in_place = positional_length.is_some();
+        let allocation = match positional_length {
+            Some(count) => {
+                call(identifier_expression("make"), vec![GoExpression::Type(mapped_type), count])
+            }
             None => GoExpression::Composite { type_: mapped_type, fields: vec![] },
         };
         out.push(GoStatement::Define { names: vec![mapped.clone()], values: vec![allocation] });

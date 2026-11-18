@@ -1,0 +1,103 @@
+---
+source: tests-integration/src/fixtures.rs
+---
+// Data/Semiring/semiring.go
+package semiring
+
+func Add(i int32, i2 int32) int32 {
+	return i + i2
+}
+
+// main.go
+package main
+
+import (
+	"fixture/Data/Semiring"
+	"fmt"
+	"github.com/i-am-the-slime/purs-backend-go/go-support/array"
+	"github.com/i-am-the-slime/purs-backend-go/go-support/exception"
+	"github.com/i-am-the-slime/purs-backend-go/go-support/prim"
+)
+
+type MainResult struct {
+	Descending []int32
+	Indexed    []int32
+	Listed     string
+	Visited    []int32
+	Counted    int32
+	Summed     int32
+}
+
+type Ref[T any] struct {
+	Value T
+}
+
+func rangeSteps(start int32, end int32) (int32, int64) {
+	if start > end {
+		return -1, int64(start) - int64(end) + 1
+	}
+	return 1, int64(end) - int64(start) + 1
+}
+
+type StateValue struct {
+	State []int32
+	Value []int32
+}
+
+var main_ = initializeMain_()
+
+func initializeMain_() MainResult {
+	defer exception.ReportUncaught()
+	ref := &Ref[int32]{Value: 4}
+	i := ref.Value
+	ref2 := &Ref[[]int32]{Value: []int32{}}
+	step, count := rangeSteps(i, 1)
+	for index := range count {
+		i2 := i + int32(index) * step
+		s := ref2.Value
+		s_ := array.Append(s, []int32{i2})
+		modified := StateValue{State: s_, Value: s_}
+		ref2.Value = modified.State
+	}
+	array2 := ref2.Value
+	step2, count2 := rangeSteps(1, i)
+	var accumulator int32 = 0
+	for index := range count2 {
+		element := 1 + int32(index) * step2
+		accumulated := accumulator
+		accumulator = semiring.Add(accumulated, element)
+	}
+	step3, count3 := rangeSteps(i, 1)
+	accumulator2 := ""
+	for index := count3 - 1; index >= 0; index-- {
+		x := i + int32(index) * step3
+		rest := accumulator2
+		accumulator2 = prim.ShowInt(x) + "," + rest
+	}
+	_, count4 := rangeSteps(1, i)
+	step4, count5 := rangeSteps(1, i)
+	mapped := make([]int32, count5)
+	for slot := range count5 {
+		x := 1 + int32(slot) * step4
+		index := int32(slot)
+		mapped[slot] = prim.MultiplyInt32(index, x)
+	}
+	performed := MainResult{Visited: array2, Summed: accumulator, Listed: accumulator2, Counted: int32(count4), Indexed: mapped, Descending: descending}
+	return performed
+}
+
+var descending = initializeDescending()
+
+func initializeDescending() []int32 {
+	defer exception.ReportUncaught()
+	mapped := make([]int32, 3)
+	for index := range 3 {
+		value := 3 - int32(index)
+		mapped[index] = prim.MultiplyInt32(value, 2)
+	}
+	return mapped
+}
+
+func main() {
+	fmt.Println(main_)
+}

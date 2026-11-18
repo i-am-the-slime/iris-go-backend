@@ -275,7 +275,7 @@ where
             type_aliases: FxHashMap::default(),
             type_declarations: vec![],
             reference_declared: false,
-            range_name: None,
+            support_functions: FxHashMap::default(),
             homes: FxHashMap::default(),
             spellings: FxHashMap::default(),
             pending_spellings: vec![],
@@ -575,8 +575,8 @@ struct Emitter<'p, 'm, 'q, Q> {
     type_aliases: FxHashMap<String, GoType>,
     type_declarations: Vec<GoDeclaration>,
     reference_declared: bool,
-    /// The name of the support function `Foreign::Range` calls, once declared.
-    range_name: Option<String>,
+    /// The name of each support function declared so far, by the base of its name.
+    support_functions: FxHashMap<&'static str, String>,
     /// The module each declaration belongs to, where it has one of its own:
     /// a function's is its origin, a data type's the module defining it.
     homes: FxHashMap<String, FileId>,
@@ -1488,6 +1488,10 @@ where
                     discard_definition(&mut out[..performed], &name);
                 }
                 Ok(())
+            }
+            ExpressionKind::EffectEach { array, element, body } if fusion::is_range(array) => {
+                self.each_in_range(array, element, body, out)?;
+                self.deliver(unit_value(), result, sink, out)
             }
             ExpressionKind::EffectEach { array, element, body } => {
                 let array = self.value(array, out)?;
@@ -3014,6 +3018,21 @@ where
         Ok((callable, values))
     }
 
+    /// The name of a support function, declared from its template on first use.
+    pub(super) fn support_function(
+        &mut self,
+        base: &'static str,
+        template: &'static str,
+    ) -> String {
+        if let Some(name) = self.support_functions.get(base) {
+            return name.clone();
+        }
+        let name = self.global_name(Spelling::Base(base.into()));
+        self.type_declarations.push(GoDeclaration::Source { name: name.clone(), template });
+        self.support_functions.insert(base, name.clone());
+        name
+    }
+
     fn foreign_value(
         &mut self,
         foreign: Foreign,
@@ -3029,16 +3048,7 @@ where
             return self.thunk(&expression);
         }
         if let Foreign::Range = foreign {
-            let range = match &self.range_name {
-                Some(name) => name.clone(),
-                None => {
-                    let name = self.global_name(Spelling::Base("rangeInt32".into()));
-                    self.type_declarations
-                        .push(GoDeclaration::Source { name: name.clone(), template: RANGE_SOURCE });
-                    self.range_name = Some(name.clone());
-                    name
-                }
-            };
+            let range = self.support_function("rangeInt32", RANGE_SOURCE);
             let values = self.values(arguments, out)?;
             return Ok(call(identifier_expression(&range), values));
         }
@@ -3394,16 +3404,27 @@ where
 }
 
 const RANGE_SOURCE: &str = "func {name}(start int32, end int32) []int32 {
-\tstep := int32(1)
+\tstep, count := int32(1), int64(end)-int64(start)+1
 \tif start > end {
-\t\tstep = -1
+\t\tstep, count = -1, int64(start)-int64(end)+1
 \t}
-\telements := []int32{start}
-\tfor value := start; value != end; {
+\telements := make([]int32, count)
+\tvalue := start
+\tfor index := range elements {
+\t\telements[index] = value
 \t\tvalue += step
-\t\telements = append(elements, value)
 \t}
 \treturn elements
+}
+";
+
+/// The step and the number of elements of `start .. end`, which a loop that
+/// stands for the range counts through instead of building it.
+const RANGE_STEPS_SOURCE: &str = "func {name}(start int32, end int32) (int32, int64) {
+\tif start > end {
+\t\treturn -1, int64(start) - int64(end) + 1
+\t}
+\treturn 1, int64(end) - int64(start) + 1
 }
 ";
 

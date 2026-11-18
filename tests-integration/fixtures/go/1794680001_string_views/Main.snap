@@ -58,17 +58,11 @@ import (
 	"slices"
 )
 
-func rangeInt32(start int32, end int32) []int32 {
-	step := int32(1)
+func rangeSteps(start int32, end int32) (int32, int64) {
 	if start > end {
-		step = -1
+		return -1, int64(start) - int64(end) + 1
 	}
-	elements := []int32{start}
-	for value := start; value != end; {
-		value += step
-		elements = append(elements, value)
-	}
-	return elements
+	return 1, int64(end) - int64(start) + 1
 }
 
 var main_ = initializeMain_()
@@ -76,10 +70,11 @@ var main_ = initializeMain_()
 func initializeMain_() []string {
 	defer exception.ReportUncaught()
 	text := prim.StringJoinWith(" ", []string{"a😀", "naïve 😀 banana 日本 a𝄞a"})
-	array := rangeInt32(0, prim.CodeUnitLength(text) - 1)
-	mapped := make([]maybe.MaybeChar, len(array))
+	step, count := rangeSteps(0, prim.CodeUnitLength(text) - 1)
+	mapped := make([]maybe.MaybeChar, count)
 	textUnits := prim.UTF16(text)
-	for index, i := range array {
+	for index := range count {
+		i := int32(index) * step
 		mapped[index] = textUnits.CharAt(func(payload rune) maybe.MaybeChar {
 			return maybe.MaybeChar{Tag: maybe.MaybeCharJust, Just: payload}
 		}, maybe.MaybeChar{Tag: maybe.MaybeCharNothing}, i)

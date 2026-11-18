@@ -15,7 +15,18 @@
 //!
 //! A `map` stage binds its result, a `filter` stage guards the rest of the
 //! body, and a `concatMap` stage opens a loop over the array its callback
-//! returns. A `first .. last` range with literal bounds needs no array at all.
+//! returns. A `first .. last` range needs no array at all: with literal bounds
+//! that count up the loop counts from `first` to `last`, and otherwise it
+//! counts through the range's positions, which a support function works out
+//! from the bounds, since the range descends when `first > last`:
+//!
+//! ```go
+//! step, count := rangeSteps(first, last)
+//! for index := range count {
+//!     x := first + int32(index)*step
+//!     ...
+//! }
+//! ```
 //!
 //! The callbacks are pure, so interleaving the stages is not observable. Each
 //! callback still sees its elements in their order and is called for exactly
@@ -26,10 +37,10 @@
 use std::collections::VecDeque;
 
 use super::iteration::{Callback, Found};
-use super::{Emitter, Sink, binary, identifier_expression, is_simple, length, uses_local};
+use super::{Emitter, Mode, Sink, binary, identifier_expression, is_simple, length, uses_local};
 use crate::error::GoResult;
 use crate::foreign::{Boundary, Foreign, Iteration};
-use crate::mono::{Binding, Expression, ExpressionKind, Literal};
+use crate::mono::{Binding, Expression, ExpressionKind, Literal, Local};
 use crate::monotype::{Monotype, MonotypeId};
 use crate::naming::VALUE;
 use crate::syntax::{GoExpression, GoStatement, GoType};
@@ -49,6 +60,15 @@ enum Source {
         first: i64,
         last: i64,
     },
+    /// `first .. last` with bounds known when the loop starts: `count`
+    /// elements from `first`, `step` apart.
+    Stepping(Steps),
+}
+
+struct Steps {
+    first: GoExpression,
+    step: GoExpression,
+    count: GoExpression,
 }
 
 /// What lies between a consumer and its source, nearest the consumer first.
@@ -135,6 +155,7 @@ enum Header {
     Range { index: Option<String>, element: String, iterable: GoExpression },
     Counting { variable: String, first: i64, last: i64 },
     Backward { index: Option<String>, element: String, array: GoExpression },
+    Stepping { index: Option<String>, element: String, steps: Steps, order: Order },
     If(GoExpression),
 }
 
@@ -172,14 +193,6 @@ impl<'e> Pipeline<'e> {
         self
     }
 
-    /// The source array, when every stage keeps the elements where they are.
-    pub(super) fn positional_source(&self) -> Option<&GoExpression> {
-        match &self.source {
-            Source::Array(array) if self.keeps_positions() => Some(array),
-            _ => None,
-        }
-    }
-
     pub(super) fn keeps_positions(&self) -> bool {
         self.stages.iter().all(|stage| stage.kind.keeps_positions())
     }
@@ -192,6 +205,7 @@ impl<'e> Pipeline<'e> {
         Some(match &self.source {
             Source::Array(array) => length(array.clone()),
             Source::Range { first, last } => GoExpression::Integer(last - first + 1),
+            Source::Stepping(steps) => steps.count.clone(),
         })
     }
 }
@@ -204,7 +218,7 @@ where
     /// consumer's loop can absorb.
     pub(super) fn is_fusible(&self, array: &Expression, demand: Demand) -> bool {
         let array = past_bindings(array);
-        self.stage_parts(array, demand, false).is_some() || literal_range(array).is_some()
+        self.stage_parts(array, demand, false).is_some() || range_bounds(array).is_some()
     }
 
     /// The pipeline a `concatMap` callback returns, which can run as a loop
@@ -280,15 +294,48 @@ where
             }
         }
         stages.reverse();
-        let range = literal_range(current).filter(|_| !positional);
-        let source = match range {
-            Some((first, last)) => Source::Range { first, last },
-            None => {
+        let source = match (literal_range(current), range_bounds(current)) {
+            (Some((first, last)), _) if !positional => Source::Range { first, last },
+            (_, Some(bounds)) => Source::Stepping(self.steps(bounds, read, out)?),
+            (_, None) => {
                 let value = self.value(current, out)?;
                 Source::Array(self.hoist(value, "array", out))
             }
         };
         Ok(Pipeline { source, stages, order: demand.order })
+    }
+
+    /// Works out where a range's loop starts, which way it counts and how far.
+    /// A loop that reads no element only needs to know how far.
+    fn steps(
+        &mut self,
+        (first, last): (&Expression, &Expression),
+        read: bool,
+        out: &mut Vec<GoStatement>,
+    ) -> GoResult<Steps> {
+        if let Some((first, last)) = literal_bounds(first, last) {
+            let step = GoExpression::Integer(if first > last { -1 } else { 1 });
+            let count = GoExpression::Integer((last - first).abs() + 1);
+            return Ok(Steps { first: GoExpression::Integer(first), step, count });
+        }
+        let start = self.value(first, out)?;
+        let start = if is_simple(&start) {
+            start
+        } else {
+            let start = self.typed_constant(start, first.monotype)?;
+            self.hoist(start, "first", out)
+        };
+        let end = self.value(last, out)?;
+        let range_steps = self.support_function("rangeSteps", super::RANGE_STEPS_SOURCE);
+        let step = if read { self.temporary("step") } else { "_".into() };
+        let count = self.temporary("count");
+        let steps = super::call(identifier_expression(&range_steps), vec![start.clone(), end]);
+        out.push(GoStatement::Define {
+            names: vec![step.clone(), count.clone()],
+            values: vec![steps],
+        });
+        let step = identifier_expression(&step);
+        Ok(Steps { first: start, step, count: identifier_expression(&count) })
     }
 
     fn stage_parts<'e>(
@@ -346,19 +393,7 @@ where
             None if stage_positions => Some(self.temporary("index")),
             None => None,
         };
-        let header = match (source, order) {
-            (Source::Array(array), Order::Forward) => {
-                Header::Range { index: index.clone(), element: element.clone(), iterable: array }
-            }
-            (Source::Array(array), Order::Backward) => {
-                Header::Backward { index: index.clone(), element: element.clone(), array }
-            }
-            (Source::Range { first, last }, _) => {
-                let variable =
-                    if element == "_" { self.temporary(VALUE) } else { element.clone() };
-                Header::Counting { variable, first, last }
-            }
-        };
+        let header = self.header(source, order, index.clone(), element.clone());
         let mut body = Loop { frames: vec![Frame { header, body: vec![] }] };
         let mut flow = identifier_expression(&element);
         let mut remaining = VecDeque::from(stages);
@@ -428,19 +463,7 @@ where
                     } else {
                         "_".into()
                     };
-                    let header = match source {
-                        Source::Array(iterable) => {
-                            Header::Range { index: None, element: element.clone(), iterable }
-                        }
-                        Source::Range { first, last } => {
-                            let variable = if element == "_" {
-                                self.temporary(VALUE)
-                            } else {
-                                element.clone()
-                            };
-                            Header::Counting { variable, first, last }
-                        }
-                    };
+                    let header = self.header(source, Order::Forward, None, element.clone());
                     body.frames.push(Frame { header, body: vec![] });
                     identifier_expression(&element)
                 }
@@ -457,6 +480,35 @@ where
             Need::Value => flow,
         };
         Ok(Opened { body, element, index, spread: false })
+    }
+
+    /// The loop over a source, handing the consumer `element` and, when it
+    /// asks for it, the element's position as `index`.
+    fn header(
+        &mut self,
+        source: Source,
+        order: Order,
+        index: Option<String>,
+        element: String,
+    ) -> Header {
+        match (source, order) {
+            (Source::Array(iterable), Order::Forward) => Header::Range { index, element, iterable },
+            (Source::Array(array), Order::Backward) => Header::Backward { index, element, array },
+            // A consumer that stores each element at its position counts positions.
+            (Source::Range { first, last }, order) if index.is_some() => {
+                let steps = Steps {
+                    first: GoExpression::Integer(first),
+                    step: GoExpression::Integer(1),
+                    count: GoExpression::Integer(last - first + 1),
+                };
+                Header::Stepping { index, element, steps, order }
+            }
+            (Source::Range { first, last }, _) => {
+                let variable = if element == "_" { self.temporary(VALUE) } else { element };
+                Header::Counting { variable, first, last }
+            }
+            (Source::Stepping(steps), order) => Header::Stepping { index, element, steps, order },
+        }
     }
 
     /// Closes every frame of a loop into the statement that runs it.
@@ -491,6 +543,27 @@ where
                     }
                     let last = binary("-", length(array), GoExpression::Integer(1));
                     GoStatement::CountingDown { variable: index, start: last, body }
+                }
+                Header::Stepping { index, element, steps, order } => {
+                    let counted = element != "_" || order == Order::Backward;
+                    let index = index.or_else(|| counted.then(|| self.temporary("index")));
+                    if let Some(index) = index.as_deref().filter(|_| element != "_") {
+                        let values = vec![stepped_value(&steps, index)];
+                        body.insert(0, GoStatement::Define { names: vec![element], values });
+                    }
+                    match (order, index) {
+                        (Order::Backward, Some(variable)) => {
+                            let start = match steps.count {
+                                GoExpression::Integer(count) => GoExpression::Integer(count - 1),
+                                count => binary("-", count, GoExpression::Integer(1)),
+                            };
+                            GoStatement::CountingDown { variable, start, body }
+                        }
+                        (_, index) => {
+                            let (element, iterable) = ("_".into(), steps.count);
+                            GoStatement::Range { index, element, iterable, body }
+                        }
+                    }
                 }
                 Header::If(condition) => {
                     GoStatement::If { condition, then: body, otherwise: vec![] }
@@ -619,6 +692,29 @@ where
         })
     }
 
+    /// Performs an effect for every element of a range, counting through the
+    /// range instead of building it. The effects run in the range's order.
+    pub(super) fn each_in_range(
+        &mut self,
+        array: &Expression,
+        element: &Local,
+        body: &Expression,
+        out: &mut Vec<GoStatement>,
+    ) -> GoResult<()> {
+        let callback = Callback::Inline { parameters: vec![element], body };
+        let need = Need::Argument { callback: &callback, position: 0 };
+        let pipeline = self.pipeline(array, Demand::FORWARD, need, out)?;
+        let saved = self.tail_loop.take();
+        let opened = self.open(pipeline, need, None).and_then(|mut opened| {
+            self.sink(body, Mode::Perform, Sink::Discard, opened.body.body())?;
+            Ok(opened)
+        });
+        self.tail_loop = saved;
+        let statement = self.close(opened?.body);
+        out.push(statement);
+        Ok(())
+    }
+
     /// The number of elements a pipeline produces, counted without building them.
     pub(super) fn fused_length(
         &mut self,
@@ -694,16 +790,50 @@ fn past_bindings(mut expression: &Expression) -> &Expression {
     expression
 }
 
-/// `first .. last` with literal bounds that count up.
-fn literal_range(array: &Expression) -> Option<(i64, i64)> {
+/// The element at `index` of a range: `first + int32(index)*step`, which
+/// wraps like the range's own arithmetic.
+fn stepped_value(steps: &Steps, index: &str) -> GoExpression {
+    let position = GoExpression::Conversion {
+        type_: GoType::Named("int32".into()),
+        value: Box::new(identifier_expression(index)),
+    };
+    let offset = match steps.step {
+        GoExpression::Integer(1) => position,
+        GoExpression::Integer(-1) => return binary("-", steps.first.clone(), position),
+        _ => binary("*", position, steps.step.clone()),
+    };
+    match steps.first {
+        GoExpression::Integer(0) => offset,
+        _ => binary("+", steps.first.clone(), offset),
+    }
+}
+
+/// Whether `array` is `first .. last`.
+pub(super) fn is_range(array: &Expression) -> bool {
+    range_bounds(array).is_some()
+}
+
+/// The bounds of `first .. last`.
+fn range_bounds(array: &Expression) -> Option<(&Expression, &Expression)> {
     let ExpressionKind::Foreign { foreign: Foreign::Range, arguments } = &array.kind else {
         return None;
     };
     let [first, last] = arguments.as_slice() else { return None };
+    Some((first, last))
+}
+
+/// `first .. last` with literal bounds that count up.
+fn literal_range(array: &Expression) -> Option<(i64, i64)> {
+    let (first, last) = range_bounds(array)?;
+    let (first, last) = literal_bounds(first, last)?;
+    (first <= last && last < i64::from(i32::MAX)).then_some((first, last))
+}
+
+fn literal_bounds(first: &Expression, last: &Expression) -> Option<(i64, i64)> {
     let (ExpressionKind::Literal(Literal::Int(first)), ExpressionKind::Literal(Literal::Int(last))) =
         (&first.kind, &last.kind)
     else {
         return None;
     };
-    (first <= last && *last < i64::from(i32::MAX)).then_some((*first, *last))
+    Some((*first, *last))
 }
