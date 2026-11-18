@@ -18,7 +18,6 @@ path = "src/bin/iris.rs"
 [dependencies]
 directories = "6.0.0"
 formatting = { path = "../../compiler-frontend/formatting" }
-iris-dump-types = { version = "0.1.0", path = "../iris-dump-types" }
 iris-go = { version = "0.1.0", path = "../iris-go" }
 iris-build = { version = "0.1.0", path = "../iris-build" }
 iris-lsp = { version = "0.1.0", path = "../iris-lsp" }

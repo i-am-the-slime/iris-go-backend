@@ -1677,7 +1677,6 @@ dependencies = [
  "directories",
  "formatting",
  "iris-build",
- "iris-dump-types",
  "iris-go",
  "iris-lsp",
  "iris-package",
@@ -1739,20 +1738,6 @@ dependencies = [
  "serde",
  "thiserror",
  "ts-rs",
-]
-
-[[package]]
-name = "iris-dump-types"
-version = "0.1.0"
-dependencies = [
- "building",
- "checking",
- "files",
- "indexing",
- "iris-build",
- "line-index",
- "serde_json",
- "tempfile",
 ]
 
 [[package]]

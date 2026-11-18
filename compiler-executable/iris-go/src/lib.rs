@@ -1,6 +1,6 @@
 //! Whole-program Go compilation of a Spago workspace.
 //!
-//! Loads and checks the workspace the way `iris dump-types` does, then hands the
+//! Loads and checks the workspace the way `iris watch` does, then hands the
 //! checked modules to the Go backend, which specializes the program from the
 //! entry point and writes one Go package per PureScript module: the entry
 //! module's as `main.go`, every other in a directory named after the module.
