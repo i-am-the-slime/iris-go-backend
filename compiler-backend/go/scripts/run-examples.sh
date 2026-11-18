@@ -44,7 +44,7 @@ replace github.com/i-am-the-slime/purs-backend-go/go-support => $GO_SUPPORT
 GOMOD
   local started finished
   started=$(perl -MTime::HiRes=time -e 'printf "%.0f", time*1000')
-  if ! (cd "$project" && timeout 120 "$IRIS" go --entry "$entry" "$out") >"$out/compile.log" 2>&1; then
+  if ! (cd "$project" && IRIS_GO_ANY_CENSUS=1 timeout 120 "$IRIS" go --entry "$entry" "$out") >"$out/compile.log" 2>&1; then
     printf '%-26s %-8s %6s  %s\n' "$name" "COMPILE" "-" "$(grep -v '^go:' "$out/compile.log" | head -1 | cut -c1-150)"
     return 1
   fi

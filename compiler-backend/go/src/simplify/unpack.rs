@@ -9,24 +9,25 @@ use super::{
     Simplifier, column_outcomes, for_each_alternative_child, for_each_child, for_each_child_mut,
 };
 use crate::mono::{Binding, Expression, ExpressionKind, Local, LocalId};
+use crate::monotype::Monotypes;
 
 /// Whether every use of the binding in the body takes its value apart.
-pub(super) fn unpackable(binding: &Binding, body: &Expression) -> bool {
+pub(super) fn unpackable(binding: &Binding, body: &Expression, monotypes: &Monotypes) -> bool {
     let id = binding.local.id;
     let monotype = binding.local.monotype;
-    binding.value.monotype == monotype
+    monotypes.same_without_causes(binding.value.monotype, monotype)
         && match &binding.value.kind {
-            ExpressionKind::Record(_) => only_taken_apart(body, id, monotype, None),
+            ExpressionKind::Record(_) => only_taken_apart(body, id, monotype, None, monotypes),
             ExpressionKind::Construct { arguments, .. } if !arguments.is_empty() => {
-                only_taken_apart(body, id, monotype, Some(&binding.value))
+                only_taken_apart(body, id, monotype, Some(&binding.value), monotypes)
             }
             _ => false,
         }
 }
 
 /// Whether every use of the binding in the body reads a field of it.
-pub(super) fn only_read(binding: &Binding, body: &Expression) -> bool {
-    only_taken_apart(body, binding.local.id, binding.local.monotype, None)
+pub(super) fn only_read(binding: &Binding, body: &Expression, monotypes: &Monotypes) -> bool {
+    only_taken_apart(body, binding.local.id, binding.local.monotype, None, monotypes)
 }
 
 impl Simplifier<'_> {
@@ -61,7 +62,7 @@ impl Simplifier<'_> {
         };
         let locals: Vec<Local> = fields.iter().map(|field| field.local.clone()).collect();
         let mut body = body;
-        take_apart(&mut body, id, &shape, &locals);
+        take_apart(&mut body, id, &shape, &locals, self.monotypes);
         // A read became its field's local; a match resolves only when it is
         // simplified again.
         if let Shape::Construct(_) = shape {
@@ -88,10 +89,11 @@ fn only_taken_apart(
     id: LocalId,
     monotype: crate::monotype::MonotypeId,
     construct: Option<&Expression>,
+    monotypes: &Monotypes,
 ) -> bool {
     let is_whole = |expression: &Expression| {
         matches!(expression.kind, ExpressionKind::Local(found) if found == id)
-            && expression.monotype == monotype
+            && monotypes.same_without_causes(expression.monotype, monotype)
     };
     match &expression.kind {
         ExpressionKind::Local(found) => *found != id,
@@ -103,25 +105,33 @@ fn only_taken_apart(
                     Some(construct) if is_whole(scrutinee) => {
                         column_outcomes(construct, alternatives, column).is_some()
                     }
-                    _ => only_taken_apart(scrutinee, id, monotype, construct),
+                    _ => only_taken_apart(scrutinee, id, monotype, construct, monotypes),
                 };
             }
             for_each_alternative_child(alternatives, &mut |child| {
-                taken_apart = taken_apart && only_taken_apart(child, id, monotype, construct)
+                taken_apart = taken_apart
+                    && only_taken_apart(child, id, monotype, construct, monotypes)
             });
             taken_apart
         }
         _ => {
             let mut taken_apart = true;
             for_each_child(expression, &mut |child| {
-                taken_apart = taken_apart && only_taken_apart(child, id, monotype, construct)
+                taken_apart = taken_apart
+                    && only_taken_apart(child, id, monotype, construct, monotypes)
             });
             taken_apart
         }
     }
 }
 
-fn take_apart(expression: &mut Expression, id: LocalId, shape: &Shape, fields: &[Local]) {
+fn take_apart(
+    expression: &mut Expression,
+    id: LocalId,
+    shape: &Shape,
+    fields: &[Local],
+    monotypes: &Monotypes,
+) {
     let is_whole = |expression: &Expression| matches!(expression.kind, ExpressionKind::Local(found) if found == id);
     match (&mut expression.kind, shape) {
         (ExpressionKind::Access { record, label }, Shape::Record(labels)) if is_whole(record) => {
@@ -131,7 +141,7 @@ fn take_apart(expression: &mut Expression, id: LocalId, shape: &Shape, fields: &
                 .expect("invariant violated: a record has the field its type promises");
             let monotype = expression.monotype;
             let mut field = fields[position].expression();
-            if field.monotype != monotype {
+            if !monotypes.same_without_causes(field.monotype, monotype) {
                 field = Expression::new(ExpressionKind::Coerce(Box::new(field)), monotype);
             }
             *expression = field;
@@ -144,5 +154,5 @@ fn take_apart(expression: &mut Expression, id: LocalId, shape: &Shape, fields: &
         }
         _ => {}
     }
-    for_each_child_mut(expression, &mut |child| take_apart(child, id, shape, fields));
+    for_each_child_mut(expression, &mut |child| take_apart(child, id, shape, fields, monotypes));
 }

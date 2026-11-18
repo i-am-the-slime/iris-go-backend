@@ -32,7 +32,8 @@ require github.com/i-am-the-slime/purs-backend-go/go-support v0.0.0
 
 replace github.com/i-am-the-slime/purs-backend-go/go-support => $GO_SUPPORT
 GOMOD
-(cd "$MARKGRAF/cli" && "$IRIS" go --entry Main.run "$OUT") >&2
+(cd "$MARKGRAF/cli" && IRIS_GO_ANY_CENSUS=1 "$IRIS" go --entry Main.run "$OUT") 2>&1 | tee "$OUT/compile.log" >&2
+[ "${PIPESTATUS[0]}" = 0 ] || exit 1
 cp "$HERE/host/host.go" "$OUT/"
 for font in Ilisarniq-Demi.otf Ilisarniq-Italic.otf VictorMono-Medium.ttf VictorMono-Bold.ttf \
   VictorMono-MediumItalic.ttf VictorMono-BoldItalic.ttf; do

@@ -326,8 +326,10 @@ where
         .enumerate()
         .map(|(position, &name)| (name, context.types.placeholder(position)))
         .collect();
-    let canonical =
-        constraints.iter().map(|&constraint| context.types.substitute(constraint, &placeholders));
+    let canonical = constraints.iter().map(|&constraint| {
+        let constraint = context.types.substitute(constraint, &placeholders);
+        context.types.without_causes(constraint)
+    });
     let key = SchemeKey(canonical.collect());
     Ok(Some(ConstrainedScheme { names, constraints, body, key }))
 }
@@ -363,6 +365,7 @@ where
     // the same rank-N type finds the same instantiations.
     let keyed = context.types.substitute(body, &placeholders);
     let keyed = crate::monotype::expand_synonyms(context, keyed)?;
+    let keyed = context.types.without_causes(keyed);
     let key = SchemeKey(Arc::from([keyed]));
     Ok(Some(ConstrainedScheme { names, constraints: vec![], body, key }))
 }

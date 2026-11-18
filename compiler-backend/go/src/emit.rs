@@ -237,6 +237,9 @@ where
         }
         eprint!("{census}");
         eprintln!("  ({textual} `any` in the source text)");
+        for (erasure, count) in census.rows() {
+            eprintln!("any-cause {} {count}", erasure.name());
+        }
     }
     Ok(files)
 }
@@ -2607,7 +2610,7 @@ where
                 self.read_field(value, record.monotype, label)
             }
             ExpressionKind::Update { record: source, updates }
-                if source.monotype != expression.monotype =>
+                if !self.monotypes.same_without_causes(source.monotype, expression.monotype) =>
             {
                 let value = self.value(source, out)?;
                 let value = self.hoist(value, "record", out);

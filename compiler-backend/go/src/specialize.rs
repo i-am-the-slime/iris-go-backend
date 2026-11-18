@@ -550,7 +550,8 @@ where
     }
 
     fn enqueue(&mut self, key: SpecializationKey, name: SmolStr) -> GoResult<FunctionId> {
-        if let Some(&id) = self.keys.get(&key) {
+        let canonical = self.without_causes(&key);
+        if let Some(&id) = self.keys.get(&canonical) {
             return Ok(id);
         }
         if self.functions.len() >= SPECIALIZATION_LIMIT {
@@ -564,9 +565,24 @@ where
         self.function_reads.push(vec![]);
         self.function_keys.push(key.clone());
         self.parents.push(self.current);
-        self.keys.insert(key.clone(), id);
+        self.keys.insert(canonical, id);
         self.queue.push_back((id, key, name));
         Ok(id)
+    }
+
+    fn without_causes(&self, key: &SpecializationKey) -> SpecializationKey {
+        let types = self.types_without_causes(&key.types);
+        SpecializationKey {
+            definition: key.definition.clone(),
+            types,
+            dictionaries: Arc::clone(&key.dictionaries),
+        }
+    }
+
+    fn types_without_causes(&self, types: &Arc<[TypeId]>) -> Arc<[TypeId]> {
+        let collapsed: Vec<TypeId> =
+            types.iter().map(|&type_id| self.context.types.without_causes(type_id)).collect();
+        if collapsed[..] == types[..] { Arc::clone(types) } else { Arc::from(collapsed) }
     }
 
     /// Polymorphic recursion requests a definition at ever larger types. When a
@@ -587,9 +603,7 @@ where
                 let mut grows = false;
                 for (position, ancestor_type) in ancestor_key.types.iter().enumerate() {
                     let Some(requested) = types.get(position).copied() else { continue };
-                    if requested != *ancestor_type
-                        && self.context.types.contains(requested, *ancestor_type)
-                    {
+                    if self.context.types.grows(requested, *ancestor_type) {
                         types[position] = self.context.types.erased(Erasure::PolymorphicRecursion);
                         grows = true;
                     }
@@ -1588,7 +1602,11 @@ where
         let instantiated = self.context.types.substitute(stripped, result_instantiations);
         self.monotype(scope, instantiated)
     }
-    fn coerce(&mut self, expression: Expression, monotype: MonotypeId) -> Expression {
+    fn coerce(&mut self, mut expression: Expression, monotype: MonotypeId) -> Expression {
+        if self.monotypes.same_without_causes(expression.monotype, monotype) {
+            expression.monotype = monotype;
+            return expression;
+        }
         if !self.changes_representation(expression.monotype, monotype) {
             return expression;
         }
@@ -1600,7 +1618,7 @@ where
     /// types of one value differ in representation only through erasure or a
     /// recursive newtype.
     fn changes_representation(&self, from: MonotypeId, to: MonotypeId) -> bool {
-        from != to
+        !self.monotypes.same_without_causes(from, to)
             && (self.mentions_erased(from)
                 || self.mentions_erased(to)
                 || self.mentions_recursive(from)
@@ -2187,9 +2205,11 @@ where
         }
         let types: Arc<[TypeId]> = Arc::from(types);
         let dictionaries: Arc<[Dictionary]> = Arc::from(dictionaries);
+        let canonical = self.types_without_causes(&types);
         let existing =
             scope.polymorphic_locals[&source].specializations.iter().find(|specialization| {
-                specialization.types == types && specialization.dictionaries == dictionaries
+                self.types_without_causes(&specialization.types) == canonical
+                    && specialization.dictionaries == dictionaries
             });
         if let Some(specialization) = existing {
             let local = &specialization.local;
@@ -2225,9 +2245,7 @@ where
             let specialization = &polymorphic.specializations[index];
             for (position, &ancestor_type) in specialization.types.iter().enumerate() {
                 let Some(&requested) = types.get(position) else { continue };
-                if requested != ancestor_type
-                    && self.context.types.contains(requested, ancestor_type)
-                {
+                if self.context.types.grows(requested, ancestor_type) {
                     types[position] = self.context.types.erased(Erasure::PolymorphicRecursion);
                 }
             }
@@ -2982,7 +3000,9 @@ where
                         self.adopt_representation(scope, *argument, &mut pattern, unfolded);
                         pattern.monotype = unfolded;
                     } else {
-                        if pattern.monotype != monotype && self.mentions_erased(monotype) {
+                        if !self.monotypes.same_without_causes(pattern.monotype, monotype)
+                            && self.mentions_erased(monotype)
+                        {
                             self.adopt_representation(scope, *argument, &mut pattern, monotype);
                         }
                         pattern.monotype = monotype;

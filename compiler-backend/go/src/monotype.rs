@@ -180,14 +180,11 @@ pub struct Monotypes {
     /// instantiations, one field per instantiation.
     instantiated_records: rustc_hash::FxHashSet<MonotypeId>,
     existential: Option<(FileId, TypeItemId)>,
+    collapsed: FxHashMap<MonotypeId, MonotypeId>,
 }
 
 impl Monotypes {
     pub fn intern(&mut self, monotype: Monotype) -> MonotypeId {
-        let monotype = match monotype {
-            Monotype::Erased(erasure) => Monotype::Erased(erasure.tracked()),
-            monotype => monotype,
-        };
         if let Some(&id) = self.lookup.get(&monotype) {
             return id;
         }
@@ -195,6 +192,68 @@ impl Monotypes {
         self.interned.push(monotype.clone());
         self.lookup.insert(monotype, id);
         id
+    }
+
+    pub fn same_without_causes(&self, left: MonotypeId, right: MonotypeId) -> bool {
+        if left == right {
+            return true;
+        }
+        match (self.get(left), self.get(right)) {
+            (Monotype::Erased(_), Monotype::Erased(_)) => true,
+            (Monotype::Function(left_argument, left_result), Monotype::Function(argument, result)) =>
+            {
+                self.same_without_causes(*left_argument, *argument)
+                    && self.same_without_causes(*left_result, *result)
+            }
+            (Monotype::Record(left_fields), Monotype::Record(fields)) => {
+                left_fields.len() == fields.len()
+                    && left_fields.iter().zip(fields.iter()).all(|(left_field, field)| {
+                        left_field.label == field.label
+                            && self.same_without_causes(left_field.monotype, field.monotype)
+                    })
+            }
+            (left, right) => {
+                std::mem::discriminant(left) == std::mem::discriminant(right)
+                    && match (left.element(), right.element()) {
+                        (Some(left_element), Some(element)) => {
+                            self.same_without_causes(left_element, element)
+                        }
+                        _ => false,
+                    }
+            }
+        }
+    }
+
+    pub fn without_causes(&mut self, id: MonotypeId) -> MonotypeId {
+        if let Some(&collapsed) = self.collapsed.get(&id) {
+            return collapsed;
+        }
+        let collapsed = match self.get(id).clone() {
+            Monotype::Erased(_) => Monotype::Erased(Erasure::TypeVariable),
+            Monotype::Function(argument, result) => {
+                Monotype::Function(self.without_causes(argument), self.without_causes(result))
+            }
+            Monotype::Record(fields) => {
+                let fields = fields.iter().map(|field| RecordField {
+                    label: field.label.clone(),
+                    monotype: self.without_causes(field.monotype),
+                });
+                Monotype::Record(fields.collect())
+            }
+            Monotype::Array(element) => Monotype::Array(self.without_causes(element)),
+            Monotype::Effect(element) => Monotype::Effect(self.without_causes(element)),
+            Monotype::Reference(element) => Monotype::Reference(self.without_causes(element)),
+            Monotype::MutableArray(element) => {
+                Monotype::MutableArray(self.without_causes(element))
+            }
+            Monotype::Object(element) => Monotype::Object(self.without_causes(element)),
+            Monotype::Nullable(element) => Monotype::Nullable(self.without_causes(element)),
+            Monotype::Lazy(element) => Monotype::Lazy(self.without_causes(element)),
+            monotype => monotype,
+        };
+        let collapsed = self.intern(collapsed);
+        self.collapsed.insert(id, collapsed);
+        collapsed
     }
 
     /// Lists every interned monotype, for `IRIS_GO_DUMP`.
@@ -396,7 +455,7 @@ impl Monotypes {
             // The backend's own stand-in for a type nothing constrains, which
             // holds no information.
             Type::Unification(u32::MAX) => Monotype::Unit,
-            Type::Unification(_) => Monotype::Erased(Erasure::Unsolved.tracked()),
+            Type::Unification(_) => Monotype::Erased(Erasure::Unsolved),
             Type::Application(..) | Type::Constructor(..) | Type::Synonym(..) => {
                 return self.convert_application(context, type_id, expansions);
             }

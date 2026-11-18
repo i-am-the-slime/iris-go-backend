@@ -175,7 +175,7 @@ fn plan(
     monotypes: &Monotypes,
 ) -> Option<Vec<Placement>> {
     let mut selections = vec![0usize; alternatives.len()];
-    if !select(choice, choice.monotype, alternatives, &mut selections) {
+    if !select(choice, choice.monotype, alternatives, &mut selections, monotypes) {
         return None;
     }
     let mut copied = 0;
@@ -211,24 +211,31 @@ fn select(
     monotype: MonotypeId,
     alternatives: &[Alternative],
     selections: &mut [usize],
+    monotypes: &Monotypes,
 ) -> bool {
     match &choice.kind {
         ExpressionKind::If { then, otherwise, .. } => {
-            select(then, monotype, alternatives, selections)
-                && select(otherwise, monotype, alternatives, selections)
+            select(then, monotype, alternatives, selections, monotypes)
+                && select(otherwise, monotype, alternatives, selections, monotypes)
         }
-        ExpressionKind::Let { body, .. } => select(body, monotype, alternatives, selections),
+        ExpressionKind::Let { body, .. } => {
+            select(body, monotype, alternatives, selections, monotypes)
+        }
         ExpressionKind::Case { alternatives: inner, .. } => {
             inner.iter().all(|alternative| match &alternative.body {
-                Guarded::Unconditional(body) => select(body, monotype, alternatives, selections),
+                Guarded::Unconditional(body) => {
+                    select(body, monotype, alternatives, selections, monotypes)
+                }
                 Guarded::Guards(branches) => branches
                     .iter()
-                    .all(|branch| select(&branch.body, monotype, alternatives, selections)),
+                    .all(|branch| {
+                        select(&branch.body, monotype, alternatives, selections, monotypes)
+                    }),
             })
         }
         ExpressionKind::Fail(_) => true,
         ExpressionKind::Construct { .. } | ExpressionKind::Literal(_)
-            if choice.monotype == monotype =>
+            if monotypes.same_without_causes(choice.monotype, monotype) =>
         {
             let Some(outcomes) = column_outcomes(choice, alternatives, 0) else { return false };
             // A guarded alternative may fall through to the ones after it.

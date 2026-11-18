@@ -18,7 +18,7 @@ use rustc_hash::FxHashSet;
 
 use super::{Emitter, identifier};
 use crate::error::GoResult;
-use crate::monotype::{DataConstructor, DataType, Failure, Monotype, MonotypeId};
+use crate::monotype::{DataConstructor, DataType, Failure, Monotype, MonotypeId, Monotypes};
 use crate::syntax::GoType;
 
 /// The size and alignment Go gives a value, and whether the collector scans it.
@@ -110,7 +110,7 @@ where
 {
     /// Plans the struct of a data type whose constructors have fields.
     pub(super) fn plan_slots(&mut self, constructors: &[DataConstructor]) -> GoResult<SlotPlan> {
-        let mut groups = groups_of_equal_fields(constructors);
+        let mut groups = groups_of_equal_fields(constructors, self.monotypes);
         let mut named = NamedSlots::new(constructors, &groups, Naming::Readable);
         if !named.are_distinct(constructors.len()) {
             // A constructor named like another's field or the tag, such as
@@ -247,14 +247,23 @@ where
 
 /// The constructors with fields, grouped by the types of their fields, in
 /// order of first appearance.
-fn groups_of_equal_fields(constructors: &[DataConstructor]) -> Vec<Vec<usize>> {
+fn groups_of_equal_fields(
+    constructors: &[DataConstructor],
+    monotypes: &Monotypes,
+) -> Vec<Vec<usize>> {
     let mut groups: Vec<Vec<usize>> = vec![];
     for (index, constructor) in constructors.iter().enumerate() {
         if constructor.fields.is_empty() {
             continue;
         }
-        let same =
-            groups.iter_mut().find(|group| constructors[group[0]].fields == constructor.fields);
+        let equal_fields = |fields: &[MonotypeId]| {
+            fields.len() == constructor.fields.len()
+                && fields
+                    .iter()
+                    .zip(constructor.fields.iter())
+                    .all(|(&field, &other)| monotypes.same_without_causes(field, other))
+        };
+        let same = groups.iter_mut().find(|group| equal_fields(&constructors[group[0]].fields));
         match same {
             Some(group) => group.push(index),
             None => groups.push(vec![index]),

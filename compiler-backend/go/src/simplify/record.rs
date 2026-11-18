@@ -33,8 +33,9 @@ impl Simplifier<'_> {
         self.expression(record)
     }
 
-    pub(super) fn coerce(&mut self, value: Expression, monotype: MonotypeId) -> Expression {
-        if value.monotype == monotype {
+    pub(super) fn coerce(&mut self, mut value: Expression, monotype: MonotypeId) -> Expression {
+        if self.monotypes.same_without_causes(value.monotype, monotype) {
+            value.monotype = monotype;
             return value;
         }
         // Unit has one value, so a coerced one is it, whatever it was before.
@@ -285,7 +286,7 @@ impl Simplifier<'_> {
         let mut retyped = Vec::with_capacity(fields.len());
         for (label, value) in fields {
             let field = types.iter().find(|field| field.label == label)?;
-            if value.monotype == field.monotype {
+            if self.monotypes.same_without_causes(value.monotype, field.monotype) {
                 retyped.push((label, value));
                 continue;
             }

@@ -77,7 +77,8 @@ pub fn compile_program(
     let program = mono::Program { functions, entry };
     let eliminators = emit::Eliminators::find(&program, &monotypes);
     let program = timed("simplify", || simplify::simplify(program, &mut monotypes, next_local));
-    let program = timed("merge", || merge::merge_identical_functions(program, &modules));
+    let program =
+        timed("merge", || merge::merge_identical_functions(program, &modules, &mut monotypes));
     if std::env::var_os("IRIS_GO_DUMP").is_some() {
         for function in &program.functions {
             eprintln!("{function:#?}");

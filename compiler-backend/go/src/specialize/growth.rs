@@ -14,7 +14,7 @@ where
         self.constructing.iter().any(|(constructed, enclosing)| {
             constructed == key
                 && types.iter().zip(enclosing.iter()).any(|(&requested, &enclosing)| {
-                    requested != enclosing && self.context.types.contains(requested, enclosing)
+                    self.context.types.grows(requested, enclosing)
                 })
         })
     }

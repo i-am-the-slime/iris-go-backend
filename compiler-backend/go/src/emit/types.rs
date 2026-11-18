@@ -30,7 +30,7 @@ where
             Monotype::Opaque => GoType::Erased(Erasure::Foreign),
             Monotype::Array(element) => GoType::Slice(Box::new(self.go_type(element)?)),
             Monotype::Record(_) => self.record_go_type(monotype)?,
-            Monotype::Function(..) if self.closure_sets.contains_key(&monotype) => {
+            Monotype::Function(..) if self.has_closure_set(monotype) => {
                 self.closure_layout(monotype)?.go_type()
             }
             Monotype::Function(..) => {
@@ -131,6 +131,11 @@ where
     }
 
     /// Whether two monotypes are one Go type, as Go sees it through aliases.
+    pub(super) fn has_closure_set(&mut self, monotype: MonotypeId) -> bool {
+        let monotype = self.monotypes.without_causes(monotype);
+        self.closure_sets.contains_key(&monotype)
+    }
+
     pub(super) fn same_go_type(&mut self, left: MonotypeId, right: MonotypeId) -> GoResult<bool> {
         let mut left = self.go_type(left)?;
         let mut right = self.go_type(right)?;
@@ -238,7 +243,7 @@ where
             match self.monotypes.get(monotype).clone() {
                 Monotype::Recursive(inner) if inner == *data => return Ok(true),
                 Monotype::Recursive(inner) => pending.push(self.unfold(&inner)?),
-                Monotype::Function(..) if self.closure_sets.contains_key(&monotype) => {}
+                Monotype::Function(..) if self.has_closure_set(monotype) => {}
                 Monotype::Function(argument, result) => pending.extend([argument, result]),
                 Monotype::Array(inner)
                 | Monotype::Effect(inner)

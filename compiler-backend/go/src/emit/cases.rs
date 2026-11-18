@@ -319,7 +319,7 @@ where
             Monotype::Data(_) | Monotype::Function(..) => {
                 let layout = match self.monotypes.get(scrutinee.monotype).clone() {
                     Monotype::Data(data) => self.data_layout(&data)?,
-                    _ if self.closure_sets.contains_key(&scrutinee.monotype) => {
+                    _ if self.has_closure_set(scrutinee.monotype) => {
                         self.closure_layout(scrutinee.monotype)?
                     }
                     _ => return Ok(false),

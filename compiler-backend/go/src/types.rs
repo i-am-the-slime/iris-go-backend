@@ -1,4 +1,4 @@
-use std::cell::{Cell, RefCell};
+use std::cell::{Cell, OnceCell, RefCell};
 use std::hash::{Hash, Hasher};
 use std::rc::Rc;
 use std::sync::Arc;
@@ -21,6 +21,8 @@ pub struct TypeOperations<'q, Q> {
     queries: &'q Q,
     substituted: Substituted,
     erased: RefCell<FxHashMap<Erasure, TypeId>>,
+    collapsed_causes: OnceCell<(Substitution, u64)>,
+    without_causes: RefCell<FxHashMap<TypeId, TypeId>>,
     phantom: Cell<Option<TypeId>>,
     placeholders: RefCell<Vec<TypeId>>,
 }
@@ -95,6 +97,8 @@ where
             queries,
             substituted,
             erased: RefCell::default(),
+            collapsed_causes: OnceCell::new(),
+            without_causes: RefCell::default(),
             phantom: Cell::default(),
             placeholders: RefCell::default(),
         }
@@ -107,7 +111,7 @@ where
         if let Some(&erased) = self.erased.borrow().get(&erasure) {
             return erased;
         }
-        let erased = self.stand_in(ERASED_UNIQUE - erasure.tracked().code());
+        let erased = self.stand_in(ERASED_UNIQUE - erasure.code());
         self.erased.borrow_mut().insert(erasure, erased);
         erased
     }
@@ -143,21 +147,27 @@ where
         self.queries.intern_type(Type::Rigid(name, Depth(0), kind))
     }
 
-    /// The type with every erased stand-in in it at the one cause that a build
-    /// without the census gives them all, so that the census, which tells causes
-    /// apart, still declares one Go type per representation.
     pub fn without_causes(&self, type_id: TypeId) -> TypeId {
-        let untracked = self.erased(Erasure::TypeVariable);
-        let mut substitution = Substitution::default();
-        for erasure in Erasure::ALL {
-            let erased = self.erased(erasure);
-            if erased != untracked
-                && let Type::Rigid(name, _, _) = self.lookup(erased)
-            {
-                substitution.insert(*name, untracked);
-            }
+        if let Some(&collapsed) = self.without_causes.borrow().get(&type_id) {
+            return collapsed;
         }
-        self.substitute(type_id, &substitution)
+        let (substitution, fingerprint) = self.collapsed_causes.get_or_init(|| {
+            let untracked = self.erased(Erasure::TypeVariable);
+            let mut substitution = Substitution::default();
+            for erasure in Erasure::ALL {
+                let erased = self.erased(erasure);
+                if erased != untracked
+                    && let Type::Rigid(name, _, _) = self.lookup(erased)
+                {
+                    substitution.insert(*name, untracked);
+                }
+            }
+            let fingerprint = fingerprint(&substitution);
+            (substitution, fingerprint)
+        });
+        let collapsed = self.substitute_fingerprinted(type_id, substitution, *fingerprint);
+        self.without_causes.borrow_mut().insert(type_id, collapsed);
+        collapsed
     }
 
     /// The cause of an erased stand-in type.
@@ -192,6 +202,12 @@ where
             }
             _ => false,
         }
+    }
+
+    pub fn grows(&self, requested: TypeId, enclosing: TypeId) -> bool {
+        let requested = self.without_causes(requested);
+        let enclosing = self.without_causes(enclosing);
+        requested != enclosing && self.contains(requested, enclosing)
     }
 
     pub fn contains(&self, outer: TypeId, inner: TypeId) -> bool {
@@ -266,7 +282,18 @@ where
         if substitution.is_empty() || !self.queries.lookup_type_flags(type_id).has_rigid() {
             return type_id;
         }
-        let fingerprint = fingerprint(substitution);
+        self.substitute_fingerprinted(type_id, substitution, fingerprint(substitution))
+    }
+
+    fn substitute_fingerprinted(
+        &self,
+        type_id: TypeId,
+        substitution: &Substitution,
+        fingerprint: u64,
+    ) -> TypeId {
+        if substitution.is_empty() || !self.queries.lookup_type_flags(type_id).has_rigid() {
+            return type_id;
+        }
         if let Some(substituted) = self.substituted.answer(fingerprint, substitution, type_id) {
             return substituted;
         }

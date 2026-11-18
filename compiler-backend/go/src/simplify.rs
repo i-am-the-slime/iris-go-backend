@@ -217,12 +217,13 @@ impl Simplifier<'_> {
     /// parameter that replaces their first ones.
     fn apply_chosen_lambdas(&mut self, expression: Expression, parameter: &Local) -> Expression {
         let monotype = self.monotypes.result_after(expression.monotype, 1);
-        self.map_choices(expression, monotype, &mut |_, chosen| {
+        self.map_choices(expression, monotype, &mut |simplifier, chosen| {
             let ExpressionKind::Lambda { mut parameters, body } = chosen.kind else {
                 unreachable!("invariant violated: only chosen lambdas take the parameter")
             };
             let first = parameters.remove(0);
-            let body = substitute(*body, first.id, &parameter.expression());
+            let body =
+                substitute(*body, first.id, &parameter.expression(), simplifier.monotypes);
             if parameters.is_empty() {
                 return body;
             }
@@ -417,7 +418,9 @@ impl Simplifier<'_> {
                     .filter_map(|(pattern, value)| match pattern.kind {
                         // A newtype pattern may bind the wrapped representation of a
                         // recursive newtype, which the binding keeps.
-                        PatternKind::Variable(local) if local.monotype != value.monotype => {
+                        PatternKind::Variable(local)
+                            if !self.monotypes.same_without_causes(local.monotype, value.monotype) =>
+                        {
                             let monotype = local.monotype;
                             let value =
                                 Expression::new(ExpressionKind::Coerce(Box::new(value)), monotype);
@@ -538,7 +541,7 @@ impl Simplifier<'_> {
                                 _ => whole.expression(),
                             },
                         };
-                        substitute_guarded(&mut alternative.body, local, &value);
+                        substitute_guarded(&mut alternative.body, local, &value, self.monotypes);
                     }
                     kept.push(alternative);
                 }
@@ -759,10 +762,10 @@ impl Simplifier<'_> {
                     && (uses.under_lambda == 0 || self.does_no_work(&binding.value)));
             if substitutable {
                 if uses.total > 0 {
-                    body = substitute(body, binding.local.id, &binding.value);
+                    body = substitute(body, binding.local.id, &binding.value, self.monotypes);
                     body = self.expression(body);
                 }
-            } else if unpack::unpackable(&binding, &body) {
+            } else if unpack::unpackable(&binding, &body, self.monotypes) {
                 body = self.unpack(binding, body);
             } else {
                 kept.push(binding);
@@ -810,7 +813,7 @@ impl Simplifier<'_> {
         is_trivial(source)
             && matches!(self.monotypes.get(source.monotype), Monotype::Record(_))
             && matches!(self.monotypes.get(binding.value.monotype), Monotype::Record(_))
-            && unpack::only_read(binding, body)
+            && unpack::only_read(binding, body, self.monotypes)
     }
 
     /// `let a = (let b = e in v)` binds `b` before `a`, which evaluates `e`
@@ -1311,15 +1314,20 @@ fn pattern_variables(pattern: &Pattern) -> Vec<(LocalId, Option<usize>)> {
     }
 }
 
-fn substitute_guarded(guarded: &mut Guarded, local: LocalId, value: &Expression) {
+fn substitute_guarded(
+    guarded: &mut Guarded,
+    local: LocalId,
+    value: &Expression,
+    monotypes: &Monotypes,
+) {
     match guarded {
-        Guarded::Unconditional(body) => substitute_in_place(body, local, value),
+        Guarded::Unconditional(body) => substitute_in_place(body, local, value, monotypes),
         Guarded::Guards(branches) => {
             for branch in branches {
                 for guard in &mut branch.guards {
-                    substitute_in_place(guard.value_mut(), local, value);
+                    substitute_in_place(guard.value_mut(), local, value, monotypes);
                 }
-                substitute_in_place(&mut branch.body, local, value);
+                substitute_in_place(&mut branch.body, local, value, monotypes);
             }
         }
     }
@@ -1555,13 +1563,23 @@ fn for_each_update<'e>(updates: &'e [RecordUpdate], visitor: &mut impl FnMut(&'e
     }
 }
 
-fn substitute(expression: Expression, local: LocalId, value: &Expression) -> Expression {
+fn substitute(
+    expression: Expression,
+    local: LocalId,
+    value: &Expression,
+    monotypes: &Monotypes,
+) -> Expression {
     let mut expression = expression;
-    substitute_in_place(&mut expression, local, value);
+    substitute_in_place(&mut expression, local, value, monotypes);
     expression
 }
 
-fn substitute_in_place(expression: &mut Expression, local: LocalId, value: &Expression) {
+fn substitute_in_place(
+    expression: &mut Expression,
+    local: LocalId,
+    value: &Expression,
+    monotypes: &Monotypes,
+) {
     if let ExpressionKind::Local(id) = expression.kind
         && id == local
     {
@@ -1569,14 +1587,16 @@ fn substitute_in_place(expression: &mut Expression, local: LocalId, value: &Expr
         // as a newtype constructor's result does a recursive newtype.
         let monotype = expression.monotype;
         *expression = value.clone();
-        if expression.monotype != monotype {
+        if !monotypes.same_without_causes(expression.monotype, monotype) {
             let coerced =
                 std::mem::replace(expression, Expression::new(ExpressionKind::Unit, monotype));
             expression.kind = ExpressionKind::Coerce(Box::new(coerced));
         }
         return;
     }
-    for_each_child_mut(expression, &mut |child| substitute_in_place(child, local, value));
+    for_each_child_mut(expression, &mut |child| {
+        substitute_in_place(child, local, value, monotypes)
+    });
 }
 
 pub fn for_each_child_mut(expression: &mut Expression, visitor: &mut impl FnMut(&mut Expression)) {

@@ -1,12 +1,13 @@
 #!/usr/bin/env bash
 #
-# Measures escape hatches and size (lines, functions) in generated Go, and
-# ratchets them against compiler-backend/go/quality-baseline.txt: a scope fails
-# when any metric rises above its baseline, and asks for the baseline to be
-# lowered when one drops below it.
+# Measures escape hatches, readability and size (lines, functions) in generated
+# Go, and ratchets them against compiler-backend/go/quality-baseline.txt: a
+# scope fails when any metric rises above its baseline, and asks for the
+# baseline to be lowered when one drops below it.
 #
 #   compiler-backend/go/scripts/quality.sh SCOPE DIR...           # check
 #   compiler-backend/go/scripts/quality.sh --update SCOPE DIR...  # lower baseline
+#   compiler-backend/go/scripts/quality.sh --lint DIR...          # gofmt -s, staticcheck
 #
 # SCOPE names a row group in the baseline (e.g. examples, markgraf-cli). DIR
 # holds generated .go files, searched recursively. --update only ever lowers
@@ -19,11 +20,26 @@ HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 BASELINE="${BASELINE:-$HERE/../quality-baseline.txt}"
 
 update=0
-if [ "${1:-}" = "--update" ]; then
-  update=1
-  shift
+lint=0
+case "${1:-}" in
+  --update) update=1; shift ;;
+  --lint) lint=1; shift ;;
+esac
+if [ "$lint" = 1 ]; then
+  [ "$#" -gt 0 ] || { echo "quality.sh: no directories given" >&2; exit 2; }
+  unformatted="$(find "$@" -name '*.go' -type f -exec gofmt -s -l {} +)"
+  echo "gofmt -s would change $(printf '%s' "$unformatted" | grep -c .) files"
+  printf '%s\n' "$unformatted" | grep . | head -20
+  if command -v staticcheck >/dev/null 2>&1; then
+    for dir in "$@"; do
+      (cd "$dir" && staticcheck ./... 2>&1 | head -40)
+    done
+  else
+    echo "staticcheck is not installed; only gofmt was run"
+  fi
+  exit 0
 fi
-scope="${1:?usage: quality.sh [--update] SCOPE DIR...}"
+scope="${1:?usage: quality.sh [--update|--lint] SCOPE DIR...}"
 shift
 [ "$#" -gt 0 ] || { echo "quality.sh: no directories given" >&2; exit 2; }
 for dir in "$@"; do
@@ -36,10 +52,16 @@ count() {
   files "$@" | xargs -0 cat | perl -ne "$PATTERN"
 }
 
+causes() {
+  find "$@" -name compile.log -type f -exec cat {} + 2>/dev/null \
+    | awk '$1 == "any-cause" { n[$2] += $3 } END { for (c in n) print "any:" c, n[c] }' | sort
+}
+
 measure() {
   local dirs=("$@")
   # Each metric is a perl snippet that adds its matches to $n and prints at END.
-  PATTERN='$n += () = /\bany\b/g; END { print $n+0, "\n" }' count "${dirs[@]}" | sed 's/^/any /'
+  PATTERN='s/\[([^\[\]]*)\]/"[" . ($1 =~ s{\b\w+(?:\s*,\s*\w+)*\s+any\b}{}gr) . "]"/ge; $n += () = /\bany\b/g; END { print $n+0, "\n" }' count "${dirs[@]}" | sed 's/^/any /'
+  causes "${dirs[@]}"
   PATTERN='$n += () = /\binterface\s*\{\s*\}/g; END { print $n+0, "\n" }' count "${dirs[@]}" | sed 's/^/empty-interface /'
   PATTERN='$n += () = /\.\((?!type\))[A-Za-z_*\[]/g; END { print $n+0, "\n" }' count "${dirs[@]}" | sed 's/^/type-assertion /'
   PATTERN='$n += () = /\breflect\./g; END { print $n+0, "\n" }' count "${dirs[@]}" | sed 's/^/reflect /'
@@ -53,6 +75,10 @@ measure() {
   PATTERN='$n++ if /^func /;
     $n += () = /(?<![\]\w])(?<!\) )func(\((?:[^()]++|(?1))*\))(?:struct\{\}|[^(){};\n]|(?1))*\{(?!\})/g;
     END { print $n+0, "\n" }' count "${dirs[@]}" | sed 's/^/funcs /'
+  PATTERN='$n++ if /^func [Cc]onvert\d*\(/; END { print $n+0, "\n" }' count "${dirs[@]}" | sed 's/^/converters /'
+  PATTERN='$n++ if /^\s*Origin\s+any\b/; END { print $n+0, "\n" }' count "${dirs[@]}" | sed 's/^/origin-fields /'
+  PATTERN='if (/^type (\w+)/) { $n = length($1) if length($1) > $n } END { print $n+0, "\n" }' count "${dirs[@]}" | sed 's/^/max-identifier /'
+  PATTERN='if (/^(\t+)/) { $n = length($1) if length($1) > $n } END { print $n+0, "\n" }' count "${dirs[@]}" | sed 's/^/max-nesting /'
 }
 
 baseline_value() {

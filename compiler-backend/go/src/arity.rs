@@ -14,10 +14,12 @@ const ROUNDS: usize = 16;
 #[derive(Debug, Default, Clone)]
 pub struct Arities {
     widened: FxHashMap<MonotypeId, usize>,
+    collapsed: FxHashMap<MonotypeId, MonotypeId>,
 }
 
 impl Arities {
     pub fn of(&self, monotype: MonotypeId) -> usize {
+        let monotype = self.collapsed.get(&monotype).copied().unwrap_or(monotype);
         self.widened.get(&monotype).copied().unwrap_or(1)
     }
 
@@ -27,13 +29,15 @@ impl Arities {
     }
 }
 
-pub fn choose(program: &Program, monotypes: &Monotypes) -> Arities {
+pub fn choose(program: &Program, monotypes: &mut Monotypes) -> Arities {
     let known = Known::new(program);
-    let mut uses = Uses::default();
+    let collapsed: FxHashMap<MonotypeId, MonotypeId> =
+        monotypes.ids().map(|monotype| (monotype, monotypes.without_causes(monotype))).collect();
+    let mut uses = Uses { collapsed: collapsed.clone(), ..Uses::default() };
     for function in &program.functions {
         uses.collect(&function.body, &known, monotypes);
     }
-    let mut arities = Arities::default();
+    let mut arities = Arities { widened: FxHashMap::default(), collapsed };
     let mut previous = None;
     for _ in 0..ROUNDS {
         let demand = uses.demand(&arities, monotypes);
@@ -148,9 +152,14 @@ struct Uses<'p> {
     creations: Vec<&'p Expression>,
     foreign: FxHashSet<MonotypeId>,
     coercions: FxHashSet<(MonotypeId, MonotypeId)>,
+    collapsed: FxHashMap<MonotypeId, MonotypeId>,
 }
 
 impl<'p> Uses<'p> {
+    fn canonical(&self, monotype: MonotypeId) -> MonotypeId {
+        self.collapsed.get(&monotype).copied().unwrap_or(monotype)
+    }
+
     fn collect(&mut self, expression: &'p Expression, known: &Known<'_>, monotypes: &Monotypes) {
         match &expression.kind {
             ExpressionKind::Apply { function, arguments } => {
@@ -159,13 +168,14 @@ impl<'p> Uses<'p> {
                         let parameters = known.parameters(id);
                         if arguments.len() > parameters {
                             let result = monotypes.result_after(function.monotype, parameters);
-                            self.calls.push((result, arguments.len() - parameters));
+                            self.calls.push((self.canonical(result), arguments.len() - parameters));
                         } else if arguments.len() < parameters {
                             self.creations.push(expression);
                         }
                     }
                     _ => {
-                        self.calls.push((function.monotype, arguments.len()));
+                        let function = self.canonical(function.monotype);
+                        self.calls.push((function, arguments.len()));
                         self.creations.push(expression);
                     }
                 }
@@ -181,13 +191,15 @@ impl<'p> Uses<'p> {
             ExpressionKind::Function(id) if known.parameters(*id) > 0 => {
                 self.creations.push(expression)
             }
-            ExpressionKind::Coerce(value) if value.monotype != expression.monotype => {
+            ExpressionKind::Coerce(value)
+                if !monotypes.same_without_causes(value.monotype, expression.monotype) =>
+            {
                 self.coerced(value.monotype, expression.monotype, monotypes);
             }
             ExpressionKind::Foreign { foreign, arguments } => match foreign {
                 Foreign::Call { boundary, .. } | Foreign::Perform { boundary, .. } => {
                     for &(position, arity) in boundary.uncurried {
-                        self.calls.push((arguments[position].monotype, arity));
+                        self.calls.push((self.canonical(arguments[position].monotype), arity));
                     }
                     let declared = boundary
                         .signature
@@ -213,6 +225,7 @@ impl<'p> Uses<'p> {
     }
 
     fn coerced(&mut self, from: MonotypeId, to: MonotypeId, monotypes: &Monotypes) {
+        let (from, to) = (self.canonical(from), self.canonical(to));
         if from == to || !self.coercions.insert((from, to)) {
             return;
         }
@@ -245,13 +258,14 @@ impl<'p> Uses<'p> {
     }
 
     fn exchanged(&mut self, arguments: &[Expression], result: MonotypeId, monotypes: &Monotypes) {
-        self.received(result, monotypes);
+        self.received(self.canonical(result), monotypes);
         for argument in arguments {
-            self.sent(argument.monotype, monotypes);
+            self.sent(self.canonical(argument.monotype), monotypes);
         }
     }
 
     fn spelled_callback(&mut self, spelled: &Spelled, monotype: MonotypeId, monotypes: &Monotypes) {
+        let monotype = self.canonical(monotype);
         match (spelled, monotypes.get(monotype)) {
             (Spelled::Function(parameter, rest), Monotype::Function(argument, result)) => {
                 self.spelled_received(parameter, *argument, monotypes);
@@ -268,6 +282,7 @@ impl<'p> Uses<'p> {
         monotype: MonotypeId,
         monotypes: &Monotypes,
     ) {
+        let monotype = self.canonical(monotype);
         let Some((parameter, rest)) = parameters.split_first() else {
             return self.spelled_received(result, monotype, monotypes);
         };
@@ -389,7 +404,7 @@ impl<'p> Uses<'p> {
             if monotypes.function_parts(creation.monotype).is_some()
                 && let Some(free) = free(creation, arities, known, monotypes)
             {
-                limit(creation.monotype, free);
+                limit(self.canonical(creation.monotype), free);
             }
         }
         caps
@@ -425,7 +440,7 @@ impl<'p> Uses<'p> {
             } else {
                 self.creations
                     .iter()
-                    .filter(|creation| creation.monotype == monotype)
+                    .filter(|creation| monotypes.same_without_causes(creation.monotype, monotype))
                     .filter_map(|creation| {
                         let free = free(creation, arities, known, monotypes)?;
                         let kind = match creation.kind {

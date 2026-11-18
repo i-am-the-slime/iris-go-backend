@@ -281,6 +281,10 @@ where
         matches!(self.monotypes.get(monotype), Monotype::Unit)
     }
 
+    fn canonical(&mut self, monotype: MonotypeId) -> MonotypeId {
+        self.monotypes.without_causes(monotype)
+    }
+
     /// How many arguments a value of a function type takes at once.
     fn arity(&self, monotype: MonotypeId) -> usize {
         if self.is_function(monotype) { self.arities.of(monotype) } else { 1 }
@@ -580,7 +584,9 @@ where
                 }
                 return Ok(());
             }
-            ExpressionKind::Coerce(value) if value.monotype != monotype => {
+            ExpressionKind::Coerce(value)
+                if !self.types.monotypes.same_without_causes(value.monotype, monotype) =>
+            {
                 self.escape(monotype)?;
                 self.escape(value.monotype)?;
             }
@@ -668,6 +674,7 @@ where
     }
 
     fn create(&mut self, monotype: MonotypeId, creation: Creation, parameters: usize) {
+        let monotype = self.types.canonical(monotype);
         if self.types.monotypes.function_parts(monotype).is_none() {
             return;
         }
@@ -681,6 +688,7 @@ where
 
     /// Notes that the current function creates or calls values of `monotype`.
     fn touch(&mut self, monotype: MonotypeId) {
+        let monotype = self.types.canonical(monotype);
         let functions = self.uses.touching.entry(monotype).or_default();
         if functions.last() != Some(&self.current) {
             functions.push(self.current);
@@ -714,11 +722,13 @@ where
                     && arguments.len() == parameters.len() =>
             {
                 for (parameter, argument) in parameters.iter().zip(arguments) {
-                    if argument.monotype == parameter.monotype
+                    let monotypes = &self.types.monotypes;
+                    if monotypes.same_without_causes(argument.monotype, parameter.monotype)
                         && self.creates(argument)
                         && uses_local(argument, parameter.id)
                     {
-                        self.uses.linked.insert(parameter.monotype);
+                        let linked = self.types.canonical(parameter.monotype);
+                        self.uses.linked.insert(linked);
                     }
                 }
             }
@@ -752,7 +762,8 @@ where
     }
 
     /// A value of `monotype` applied to `arguments` arguments.
-    fn call(&mut self, mut monotype: MonotypeId, mut arguments: usize) {
+    fn call(&mut self, monotype: MonotypeId, mut arguments: usize) {
+        let mut monotype = self.types.canonical(monotype);
         while arguments > 0 && self.types.monotypes.function_parts(monotype).is_some() {
             self.touch(monotype);
             let arity = self.types.arity(monotype);
@@ -765,12 +776,14 @@ where
     }
 
     fn open(&mut self, monotype: MonotypeId, reason: &'static str) {
+        let monotype = self.types.canonical(monotype);
         self.uses.open.entry(monotype).or_insert(reason);
     }
 
     /// Every function type a value of `monotype` holds crosses into code
     /// that expects Go functions.
     fn escape(&mut self, monotype: MonotypeId) -> GoResult<()> {
+        let monotype = self.types.canonical(monotype);
         if !self.escaped.insert(monotype) {
             return Ok(());
         }
@@ -938,7 +951,7 @@ where
             }
             _ => for_each_child_mut(expression, &mut |child| self.rewrite(child)),
         }
-        let monotype = expression.monotype;
+        let monotype = self.types.canonical(expression.monotype);
         if !self.sets.contains_key(&monotype) {
             if let ExpressionKind::Apply { .. } = expression.kind {
                 self.call(expression);
@@ -1035,7 +1048,7 @@ where
             (*function, arguments)
         };
         while !rest.is_empty() {
-            let monotype = value.monotype;
+            let monotype = self.types.canonical(value.monotype);
             let arity = self.types.arity(monotype).min(rest.len());
             let remaining = rest.split_off(arity);
             let taken = std::mem::replace(&mut rest, remaining);
@@ -1100,7 +1113,8 @@ where
         Expression::new(ExpressionKind::Let { bindings: computed, body: Box::new(call) }, result)
     }
 
-    fn reaches_closed(&self, mut monotype: MonotypeId, mut arguments: usize) -> bool {
+    fn reaches_closed(&mut self, monotype: MonotypeId, mut arguments: usize) -> bool {
+        let mut monotype = self.types.canonical(monotype);
         while arguments > 0 && self.types.monotypes.function_parts(monotype).is_some() {
             if self.sets.contains_key(&monotype) {
                 return true;
@@ -1180,6 +1194,7 @@ where
     /// The struct of a closed function type: a tag per shape and a slot per
     /// capture, shared by shapes that capture alike named values of one type.
     pub(super) fn closure_layout(&mut self, monotype: MonotypeId) -> GoResult<DataLayout> {
+        let monotype = self.monotypes.without_causes(monotype);
         if let Some(layout) = self.closure_layouts.get(&monotype) {
             return Ok(layout.clone());
         }
@@ -1196,7 +1211,7 @@ where
         // A linked set has a shape that captures the set's own type, so the
         // cells always have fields and are always pointers.
         let kind = if shapes.len() == 1 { DataKind::Product } else { DataKind::Tagged };
-        let (slots_of_shapes, fields) = closure_slots(&shapes);
+        let (slots_of_shapes, fields) = closure_slots(&shapes, self.monotypes);
         let mut constructors = vec![];
         for ((tag_name, _), slots) in shapes.iter().zip(&slots_of_shapes) {
             let suffix = capitalise(&identifier(tag_name));
@@ -1255,6 +1270,7 @@ where
 /// with the same name and type share one.
 fn closure_slots(
     shapes: &[(SmolStr, Vec<Local>)],
+    monotypes: &Monotypes,
 ) -> (Vec<Vec<String>>, Vec<(String, MonotypeId)>) {
     // Each slot with the name its captures share, before a counter kept it distinct.
     let mut slots: Vec<(String, String, MonotypeId)> = vec![];
@@ -1264,7 +1280,9 @@ fn closure_slots(
         for capture in captures {
             let base = capitalise(&identifier(&capture.name));
             let shared = slots.iter().find(|(name, slot_base, monotype)| {
-                *monotype == capture.monotype && *slot_base == base && !of_shape.contains(name)
+                monotypes.same_without_causes(*monotype, capture.monotype)
+                    && *slot_base == base
+                    && !of_shape.contains(name)
             });
             let slot = match shared {
                 Some((name, _, _)) => name.clone(),

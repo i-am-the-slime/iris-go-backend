@@ -198,7 +198,11 @@ where
             return Ok(None);
         }
         let witnesses = self.monotypes.schemes.witnesses(family);
-        if let Some(index) = witnesses.iter().position(|known| known.types[0] == witness) {
+        let requested = self.context.types.without_causes(witness);
+        let known_witness = |known: &SchemeInstantiation| {
+            self.context.types.without_causes(known.types[0]) == requested
+        };
+        if let Some(index) = witnesses.iter().position(known_witness) {
             return Ok(Some(index));
         }
         if witnesses.len() >= WITNESS_LIMIT || self.grows_family(family, witness) {
@@ -238,7 +242,7 @@ where
         self.constructing.iter().any(|(key, enclosing)| {
             self.monotypes.schemes.continuation_family(key) == Some(family)
                 && enclosing.first().is_some_and(|&enclosing| {
-                    enclosing != witness && self.context.types.contains(witness, enclosing)
+                    self.context.types.grows(witness, enclosing)
                 })
         })
     }

@@ -1,8 +1,6 @@
 //! Why a type became Go `any`. Every erasure carries its cause from the point
 //! where the specializer or the monotype conversion gave up on a concrete type,
-//! so `IRIS_GO_ANY_CENSUS=1` can report how many `any` each cause emits. The
-//! census build tells causes apart, so its output can differ slightly (more
-//! conversions between differently-erased types) from a normal build.
+//! so `IRIS_GO_ANY_CENSUS=1` can report how many `any` each cause emits.
 
 use std::fmt;
 
@@ -49,19 +47,6 @@ pub enum Erasure {
 }
 
 impl Erasure {
-    /// The cause as the program's types record it. Distinct causes make
-    /// distinct (if equally erased) types, which changes the emitted
-    /// conversions, so causes are told apart only while taking the census.
-    pub fn tracked(self) -> Erasure {
-        static CENSUS: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
-        let census = *CENSUS.get_or_init(|| std::env::var_os("IRIS_GO_ANY_CENSUS").is_some());
-        if census || matches!(self, Erasure::Foreign | Erasure::Runtime) {
-            self
-        } else {
-            Erasure::TypeVariable
-        }
-    }
-
     pub const ALL: [Erasure; 16] = [
         Erasure::ArgumentVariable,
         Erasure::TypeVariable,
@@ -87,6 +72,27 @@ impl Erasure {
 
     pub fn from_code(code: u32) -> Option<Erasure> {
         Erasure::ALL.get(code as usize).copied()
+    }
+
+    pub fn name(self) -> &'static str {
+        match self {
+            Erasure::TypeVariable => "type-variable",
+            Erasure::RankN => "rank-n",
+            Erasure::ArgumentVariable => "argument-variable",
+            Erasure::VariableApplication => "variable-application",
+            Erasure::VariantRow => "variant-row",
+            Erasure::Existential => "existential",
+            Erasure::UnboundedWitnesses => "unbounded-witnesses",
+            Erasure::NewtypeCycle => "newtype-cycle",
+            Erasure::EmptyData => "empty-data",
+            Erasure::NonRegular => "non-regular",
+            Erasure::PolymorphicRecursion => "polymorphic-recursion",
+            Erasure::Boxing => "boxing",
+            Erasure::FailedDefinition => "failed-definition",
+            Erasure::Foreign => "foreign",
+            Erasure::Runtime => "runtime",
+            Erasure::Unsolved => "unsolved",
+        }
     }
 }
 
@@ -136,15 +142,19 @@ impl Census {
     pub fn total(&self) -> usize {
         self.counts.values().sum()
     }
+
+    pub fn rows(&self) -> Vec<(Erasure, usize)> {
+        let mut rows: Vec<(Erasure, usize)> =
+            self.counts.iter().map(|(&erasure, &count)| (erasure, count)).collect();
+        rows.sort_by(|left, right| right.1.cmp(&left.1).then(left.0.cmp(&right.0)));
+        rows
+    }
 }
 
 impl fmt::Display for Census {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let mut rows: Vec<(Erasure, usize)> =
-            self.counts.iter().map(|(&erasure, &count)| (erasure, count)).collect();
-        rows.sort_by(|left, right| right.1.cmp(&left.1).then(left.0.cmp(&right.0)));
         writeln!(f, "any census: {} `any`, {} type assertions", self.total(), self.assertions)?;
-        for (erasure, count) in rows {
+        for (erasure, count) in self.rows() {
             writeln!(f, "  {count:>8}  {erasure}")?;
         }
         Ok(())

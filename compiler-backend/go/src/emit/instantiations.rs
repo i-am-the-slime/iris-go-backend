@@ -107,9 +107,9 @@ where
     }
 
     /// Whether a function type is a Go function type rather than a cell.
-    fn is_plain_function(&self, monotype: MonotypeId) -> bool {
+    fn is_plain_function(&mut self, monotype: MonotypeId) -> bool {
         matches!(self.monotypes.get(monotype), Monotype::Function(..))
-            && !self.closure_sets.contains_key(&monotype)
+            && !self.has_closure_set(monotype)
     }
 }
 
