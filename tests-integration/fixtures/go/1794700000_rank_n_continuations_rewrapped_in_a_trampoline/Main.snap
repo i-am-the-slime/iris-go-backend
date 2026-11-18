@@ -27,7 +27,7 @@ func More(more func(struct{}) StepInt) StepInt {
 	return StepInt{Tag: StepIntMore, More: more}
 }
 
-type FailureParse struct {
+type Failure struct {
 	Failure string
 }
 
@@ -35,31 +35,13 @@ func Done(done int32) StepInt {
 	return StepInt{Tag: StepIntDone, Done: done}
 }
 
-type MParseInt func(int32, func(func(struct{}) StepInt) StepInt, func(FailureParse) StepInt, func(int32) StepInt) StepInt
-
-type FailureEmpty struct {
-	Failure string
-}
-
-type MEmptyInt func(int32, func(func(struct{}) StepInt) StepInt, func(FailureEmpty) StepInt, func(int32) StepInt) StepInt
-
-func convert(value FailureEmpty) FailureParse {
-	return FailureParse{Failure: value.Failure}
-}
-
-func convert2(value MEmptyInt) MParseInt {
-	return func(coerced int32, coerced2 func(func(struct{}) StepInt) StepInt, coerced3 func(FailureParse) StepInt, coerced4 func(int32) StepInt) StepInt {
-		return value(coerced, coerced2, func(coerced5 FailureEmpty) StepInt {
-			return coerced3(convert(coerced5))
-		}, coerced4)
-	}
-}
+type M func(int32, func(func(struct{}) StepInt) StepInt, func(Failure) StepInt, func(int32) StepInt) StepInt
 
 var main_ = initializeMain_()
 
 func initializeMain_() []int32 {
 	defer exception.ReportUncaught()
-	scrutinee := mainGo(loop(30, 0)(0, More, func(failure FailureParse) StepInt {
+	scrutinee := mainGo(loop(30, 0)(0, More, func(failure Failure) StepInt {
 		return StepInt{Tag: StepIntStop, Stop: failure.Failure}
 	}, Done))
 	var result int32
@@ -74,19 +56,19 @@ func initializeMain_() []int32 {
 	return []int32{result}
 }
 
-func loop(i int32, total int32) MParseInt {
+func loop(i int32, total int32) M {
 	if i <= 0 {
-		return func(_ int32, _ func(func(struct{}) StepInt) StepInt, _ func(FailureParse) StepInt, done func(int32) StepInt) StepInt {
+		return func(_ int32, _ func(func(struct{}) StepInt) StepInt, _ func(Failure) StepInt, done func(int32) StepInt) StepInt {
 			return done(total)
 		}
 	}
-	return func(env int32, more func(func(struct{}) StepInt) StepInt, failure func(FailureParse) StepInt, done func(int32) StepInt) StepInt {
+	return func(env int32, more func(func(struct{}) StepInt) StepInt, failure func(Failure) StepInt, done func(int32) StepInt) StepInt {
 		return more(func(_ struct{}) StepInt {
 			return askParse(env + i, more, failure, func(a int32) StepInt {
-				mParseInt := convert2(countdown(prim.IntMod(i, 3)))
+				m := countdown(prim.IntMod(i, 3))
 				return more(func(_ struct{}) StepInt {
 					return more(func(_ struct{}) StepInt {
-						return mParseInt(env, more, failure, func(a2 int32) StepInt {
+						return m(env, more, failure, func(a2 int32) StepInt {
 							n := loop(i - 1, prim.IntMod(total + a + a2, 1000003))
 							return more(func(_ struct{}) StepInt {
 								return n(env, more, failure, done)
@@ -99,17 +81,17 @@ func loop(i int32, total int32) MParseInt {
 	}
 }
 
-var askParse MParseInt = func(env int32, _ func(func(struct{}) StepInt) StepInt, _ func(FailureParse) StepInt, done func(int32) StepInt) StepInt {
+var askParse M = func(env int32, _ func(func(struct{}) StepInt) StepInt, _ func(Failure) StepInt, done func(int32) StepInt) StepInt {
 	return done(env)
 }
 
-func countdown(n int32) MEmptyInt {
+func countdown(n int32) M {
 	if n <= 0 {
-		return askEmpty
+		return askParse
 	}
-	return func(env int32, more func(func(struct{}) StepInt) StepInt, failure func(FailureEmpty) StepInt, done func(int32) StepInt) StepInt {
+	return func(env int32, more func(func(struct{}) StepInt) StepInt, failure func(Failure) StepInt, done func(int32) StepInt) StepInt {
 		return more(func(_ struct{}) StepInt {
-			return askEmpty(env, more, failure, func(_ int32) StepInt {
+			return askParse(env, more, failure, func(_ int32) StepInt {
 				n2 := countdown(n - 1)
 				return more(func(_ struct{}) StepInt {
 					return n2(env, more, failure, done)
@@ -117,10 +99,6 @@ func countdown(n int32) MEmptyInt {
 			})
 		})
 	}
-}
-
-var askEmpty MEmptyInt = func(env int32, _ func(func(struct{}) StepInt) StepInt, _ func(FailureEmpty) StepInt, done func(int32) StepInt) StepInt {
-	return done(env)
 }
 
 func mainGo(value StepInt) StepInt {

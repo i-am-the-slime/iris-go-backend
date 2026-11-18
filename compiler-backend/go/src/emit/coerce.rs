@@ -91,7 +91,7 @@ where
                 self.coerce(value, foreign_array, to, out)
             }
             (_, Monotype::Erased(_) | Monotype::Opaque) => {
-                let canonical = self.canonical(from);
+                let canonical = self.canonical(from)?;
                 let value = self.coerce(value, from, canonical, out)?;
                 if is_untyped_constant(&value) {
                     let type_ = self.go_type(canonical)?;
@@ -100,7 +100,7 @@ where
                 Ok(value)
             }
             (Monotype::Erased(_) | Monotype::Opaque, _) => {
-                let canonical = self.canonical(to);
+                let canonical = self.canonical(to)?;
                 let type_ = self.go_type(canonical)?;
                 let value = GoExpression::TypeAssertion { value: Box::new(value), type_ };
                 self.coerce(value, canonical, to, out)
@@ -179,7 +179,7 @@ where
         for to_argument in to_arguments {
             if self.monotypes.function_parts(source).is_none() {
                 let remaining = self.monotypes.result_after(to, parameters.len());
-                let canonical = self.canonical(remaining);
+                let canonical = self.canonical(remaining)?;
                 let type_ = self.go_type(canonical)?;
                 let asserted =
                     GoExpression::TypeAssertion { value: Box::new(callable.function), type_ };
@@ -246,7 +246,7 @@ where
         self.unfolds_only_to_newtypes(data, unfolded)
     }
 
-    fn canonical(&mut self, monotype: MonotypeId) -> MonotypeId {
+    fn canonical(&mut self, monotype: MonotypeId) -> GoResult<MonotypeId> {
         let erased = self.monotypes.intern(Monotype::Erased(Erasure::Boxing));
         let canonical = match self.monotypes.get(monotype).clone() {
             Monotype::Function(..) => Monotype::Function(erased, erased),
@@ -262,8 +262,8 @@ where
                     .map(|field| RecordField { label: field.label.clone(), monotype: erased });
                 Monotype::Record(fields.collect())
             }
-            Monotype::Data(data) => Monotype::Data(self.erase_arguments(&data)),
-            Monotype::Recursive(data) => Monotype::Recursive(self.erase_arguments(&data)),
+            Monotype::Data(data) => Monotype::Data(self.erase_arguments(&data)?),
+            Monotype::Recursive(data) => Monotype::Recursive(self.erase_arguments(&data)?),
             Monotype::Int
             | Monotype::Number
             | Monotype::Boolean
@@ -277,15 +277,17 @@ where
             | Monotype::Mutex
             | Monotype::BigInt
             | Monotype::ForeignData(_)
-            | Monotype::Erased(_) => return monotype,
+            | Monotype::Erased(_) => return Ok(monotype),
         };
-        self.monotypes.intern(canonical)
+        Ok(self.monotypes.intern(canonical))
     }
 
-    fn erase_arguments(&self, data: &DataType) -> DataType {
+    fn erase_arguments(&mut self, data: &DataType) -> GoResult<DataType> {
         let erased = self.context.types.erased(Erasure::Boxing);
         let arguments = data.arguments.iter().map(|_| erased).collect();
-        DataType { file_id: data.file_id, item: data.item, arguments }
+        let erased =
+            self.monotypes.data_type(&mut self.context, data.file_id, data.item, arguments)?;
+        Ok(erased)
     }
 
     pub(super) fn shared(

@@ -551,7 +551,7 @@ impl Monotypes {
                                 &mut vec![],
                             )?);
                         }
-                        let data = DataType { file_id, item, arguments: Arc::from(canonical) };
+                        let data = self.data_type(context, file_id, item, Arc::from(canonical))?;
                         return Ok(self.intern(Monotype::Recursive(data)));
                     }
                     if self.expanding.contains(&type_id) {
@@ -607,7 +607,7 @@ impl Monotypes {
                     } else {
                         arguments.iter().map(|_| context.types.erased(Erasure::NonRegular)).collect()
                     };
-                    Monotype::Data(DataType { file_id, item, arguments })
+                    Monotype::Data(self.data_type(context, file_id, item, arguments)?)
                 }
                 _ if crate::foreign::is_opaque_foreign_data(&module.name, &name) => {
                     Monotype::Opaque
@@ -1022,6 +1022,33 @@ impl Monotypes {
         let constructors: Arc<[DataConstructor]> = Arc::from(constructors);
         self.constructors.insert(data.clone(), Arc::clone(&constructors));
         Ok(constructors)
+    }
+
+    /// A data type at its arguments, with the argument of each phantom parameter
+    /// replaced by one stand-in and each erasure at one cause. No field of
+    /// `Free f a` holds an `a`, so `Free f Unit` and `Free f Int` are one
+    /// representation, one Go type, and a value moves between them unchanged.
+    pub fn data_type<Q>(
+        &mut self,
+        context: &mut Context<'_, Q>,
+        file_id: FileId,
+        item: TypeItemId,
+        arguments: Arc<[TypeId]>,
+    ) -> QueryResult<DataType>
+    where
+        Q: checking::ExternalQueries,
+    {
+        let used = self.used_parameters(context, file_id, item)?;
+        let phantom = context.types.phantom();
+        let arguments = arguments
+            .iter()
+            .enumerate()
+            .map(|(position, &argument)| match used.get(position) {
+                Some(false) => phantom,
+                _ => context.types.without_causes(argument),
+            })
+            .collect();
+        Ok(DataType { file_id, item, arguments })
     }
 
     pub fn used_parameters<Q>(

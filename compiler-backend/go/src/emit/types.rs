@@ -164,10 +164,12 @@ where
         }
     }
 
-    /// Replaces every alias in a Go type by the type it spells. An alias's
-    /// cycle passes through a defined type, which stays named, so this ends.
+    /// Replaces every alias in a Go type by the type it spells, and every
+    /// erasure by the `any` it is whatever the census says caused it. An
+    /// alias's cycle passes through a defined type, which stays named, so this ends.
     pub(super) fn resolve_aliases(&self, type_: &mut GoType) {
         match type_ {
+            GoType::Erased(_) => *type_ = GoType::Any,
             GoType::Named(name) => {
                 if let Some(aliased) = self.type_aliases.get(name) {
                     *type_ = aliased.clone();
@@ -193,8 +195,7 @@ where
             | GoType::Rune
             | GoType::String
             | GoType::EmptyStruct
-            | GoType::Any
-            | GoType::Erased(_) => {}
+            | GoType::Any => {}
         }
     }
 

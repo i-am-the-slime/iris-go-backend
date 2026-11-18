@@ -13,6 +13,8 @@ pub type Substitution = FxHashMap<Name, TypeId>;
 /// Erased stand-ins are rigid variables numbered down from here, clear of the
 /// scheme placeholders just below `u32::MAX`.
 const ERASED_UNIQUE: u32 = u32::MAX - 4096;
+/// The phantom stand-in, below every erased one.
+const PHANTOM_UNIQUE: u32 = ERASED_UNIQUE - 1024;
 
 pub struct TypeOperations<'q, Q> {
     queries: &'q Q,
@@ -41,6 +43,31 @@ where
         let name = Name { file: self.queries.prim_id(), unique, scoped: false };
         let kind = self.queries.intern_type(Type::Unification(u32::MAX));
         self.queries.intern_type(Type::Rigid(name, checking::core::Depth(0), kind))
+    }
+
+    /// The stand-in for the argument of a phantom parameter, which no
+    /// representation mentions. It is no erasure: nothing holds a value of it.
+    pub fn phantom(&self) -> TypeId {
+        let name = Name { file: self.queries.prim_id(), unique: PHANTOM_UNIQUE, scoped: false };
+        let kind = self.queries.intern_type(Type::Unification(u32::MAX));
+        self.queries.intern_type(Type::Rigid(name, checking::core::Depth(0), kind))
+    }
+
+    /// The type with every erased stand-in in it at the one cause that a build
+    /// without the census gives them all, so that the census, which tells causes
+    /// apart, still declares one Go type per representation.
+    pub fn without_causes(&self, type_id: TypeId) -> TypeId {
+        let untracked = self.erased(Erasure::TypeVariable);
+        let mut substitution = Substitution::default();
+        for erasure in Erasure::ALL {
+            let erased = self.erased(erasure);
+            if erased != untracked
+                && let Type::Rigid(name, _, _) = self.lookup(erased)
+            {
+                substitution.insert(*name, untracked);
+            }
+        }
+        self.substitute(type_id, &substitution)
     }
 
     /// The cause of an erased stand-in type.

@@ -1,0 +1,52 @@
+---
+source: tests-integration/src/fixtures.rs
+---
+// main.go
+package main
+
+import (
+	"fmt"
+	"github.com/i-am-the-slime/purs-backend-go/go-support/exception"
+)
+
+type Step struct {
+	Step1 func(int32) Step
+	Step0 int32
+	Done  int32
+	Tag   uint8
+}
+
+const (
+	StepStep = iota
+	StepDone
+)
+
+var main_ = initializeMain_()
+
+func initializeMain_() []int32 {
+	defer exception.ReportUncaught()
+	return []int32{run(countdown(3))}
+}
+
+func run(step Step) int32 {
+	switch step.Tag {
+	case StepDone:
+		return step.Done
+	default: // StepStep
+		n := step.Step0
+		return n + run(step.Step1(n - 1))
+	}
+}
+
+func countdown(n int32) Step {
+	switch n {
+	case 0:
+		return Step{Tag: StepDone, Done: 0}
+	default:
+		return Step{Tag: StepStep, Step0: n, Step1: countdown}
+	}
+}
+
+func main() {
+	fmt.Println(main_)
+}
