@@ -122,12 +122,7 @@ var main_ = initializeMain_()
 
 func initializeMain_() []int32 {
 	defer exception.ReportUncaught()
-	return func(coerced func([]func(int32) any) []any) func([]func(int32) int32) []int32 {
-		original := sampleWithIntInt(coerced)
-		return func(coerced2 []func(int32) int32) []int32 {
-			return convert8(original(convert7(coerced2)))
-		}
-	}(func(questions []func(int32) any) []any {
+	return convert8(sampleWithIntInt(func(questions []func(int32) any) []any {
 		mapped := make([]func(func(int32) int32) func(int32) int32, len(questions))
 		for index := range questions {
 			mapped[index] = category.Identity2
@@ -156,9 +151,9 @@ func initializeMain_() []int32 {
 				return tuple.First(function(tuple.Second))
 			}
 		}, convert2(mapped2)), convert6(mapped3))
-	})([]func(int32) int32{category.Identity, func(value int32) int32 {
+	})(convert7([]func(int32) int32{category.Identity, func(value int32) int32 {
 		return prim.MultiplyInt32(value, 2)
-	}})
+	}})))
 }
 
 func sampleWithIntInt(f func([]func(int32) any) []any) func([]func(int32) any) []any {

@@ -150,11 +150,8 @@ func initializeMain_() []string {
 			return map_(function, value)
 		}
 	}})
-	original := func(value int32) int32 {
-		return value + 1
-	}
 	vValue := a.Map(func(coerced any) any {
-		return original(coerced.(int32))
+		return coerced.(int32) + 1
 	})(a.Value)
 	var result string
 	if a.Type == "first" {
@@ -176,11 +173,8 @@ func initializeMain_() []string {
 	} else {
 		a2 = v
 	}
-	original2 := func(value int32) int32 {
-		return prim.MultiplyInt32(value, 2)
-	}
 	vValue2 := a2.Map(func(coerced any) any {
-		return original2(coerced.(int32))
+		return prim.MultiplyInt32(coerced.(int32), 2)
 	})(a2.Value)
 	var result2 string
 	if a2.Type == "first" {
@@ -193,37 +187,21 @@ func initializeMain_() []string {
 	return []string{result, result2}
 }
 
-var mapperBox = initializeMapperBox()
-
-func initializeMapperBox() func(func(any) any) func(any) any {
-	defer exception.ReportUncaught()
-	original := func(function func(any) any) func(*Box) *Box {
-		return func(value *Box) *Box {
-			return map_(function, value)
-		}
+var mapperBox func(func(any) any) func(any) any = func(coerced func(any) any) func(any) any {
+	original := func(value *Box) *Box {
+		return map_(coerced, value)
 	}
-	return func(coerced func(any) any) func(any) any {
-		original2 := original(coerced)
-		return func(coerced2 any) any {
-			return original2(coerced2.(*Box))
-		}
+	return func(coerced2 any) any {
+		return original(coerced2.(*Box))
 	}
 }
 
-var mapperPair = initializeMapperPair()
-
-func initializeMapperPair() func(func(any) any) func(any) any {
-	defer exception.ReportUncaught()
-	original := func(function func(any) any) func(*Pair) *Pair {
-		return func(value *Pair) *Pair {
-			return map_2(function, value)
-		}
+var mapperPair func(func(any) any) func(any) any = func(coerced func(any) any) func(any) any {
+	original := func(value *Pair) *Pair {
+		return map_2(coerced, value)
 	}
-	return func(coerced func(any) any) func(any) any {
-		original2 := original(coerced)
-		return func(coerced2 any) any {
-			return original2(coerced2.(*Pair))
-		}
+	return func(coerced2 any) any {
+		return original(coerced2.(*Pair))
 	}
 }
 

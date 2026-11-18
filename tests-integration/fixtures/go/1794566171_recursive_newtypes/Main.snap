@@ -45,9 +45,7 @@ func initializeMain_() []string {
 }
 
 func names(level Level) []string {
-	return array.Append([]string{level.Name}, array.Bind(level.Minis, func(level2 Level) []string {
-		return names(level2)
-	}))
+	return array.Append([]string{level.Name}, array.Bind(level.Minis, names))
 }
 
 func countSteps(step Step, n int32) int32 {

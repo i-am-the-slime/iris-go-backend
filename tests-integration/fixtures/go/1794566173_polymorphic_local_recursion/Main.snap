@@ -199,12 +199,7 @@ func leavesIntGo(depth int32, tree TreeInt) int32 {
 				return leavesIntGo2(depth2, tree2)
 			}
 		}
-		return func(coerced int32) func(*TreeFnInt) int32 {
-			original2 := original(coerced)
-			return func(coerced2 *TreeFnInt) int32 {
-				return original2(convert8(coerced2))
-			}
-		}(depth + 1)(scrutinee.First) + leavesIntGo3(depth + 1, scrutinee.Second)
+		return original(depth + 1)(convert8(scrutinee.First)) + leavesIntGo3(depth + 1, scrutinee.Second)
 	}
 }
 
@@ -219,12 +214,7 @@ func leavesIntGo2(depth int32, tree *Tree) int32 {
 				return leavesIntGo2(depth2, tree2)
 			}
 		}
-		return func(coerced int32) func(*TreeFn) int32 {
-			original2 := original(coerced)
-			return func(coerced2 *TreeFn) int32 {
-				return original2(convert9(coerced2))
-			}
-		}(depth + 1)(scrutinee.First) + leavesIntGo3(depth + 1, scrutinee.Second)
+		return original(depth + 1)(convert9(scrutinee.First)) + leavesIntGo3(depth + 1, scrutinee.Second)
 	}
 }
 
@@ -239,12 +229,7 @@ func leavesIntGo3(depth int32, tree *Tree) int32 {
 				return leavesIntGo2(depth2, tree2)
 			}
 		}
-		return func(coerced int32) func(*TreeFn) int32 {
-			original2 := original(coerced)
-			return func(coerced2 *TreeFn) int32 {
-				return original2(convert9(coerced2))
-			}
-		}(depth + 1)(scrutinee.First) + leavesIntGo3(depth + 1, scrutinee.Second)
+		return original(depth + 1)(convert9(scrutinee.First)) + leavesIntGo3(depth + 1, scrutinee.Second)
 	}
 }
 

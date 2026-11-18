@@ -78,11 +78,8 @@ func showNestedArrayInt(showDictionary Show, nested *Nested) string {
 	case NestedFlat:
 		return showDictionary.Show(nested.Flat)
 	default: // NestedNest
-		original := func(array []any) string {
-			return prim.ShowArray(showDictionary.Show, array)
-		}
 		return "Nest " + showNestedArrayInt(Show{Show: func(coerced any) string {
-			return original(coerced.([]any))
+			return prim.ShowArray(showDictionary.Show, coerced.([]any))
 		}}, nested.Nest)
 	}
 }

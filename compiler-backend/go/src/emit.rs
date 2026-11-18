@@ -18,6 +18,7 @@ mod deduplicate;
 mod diverging;
 mod fusion;
 mod groups;
+mod immediate;
 mod instantiations;
 mod iteration;
 mod layout;
@@ -134,6 +135,7 @@ where
     if emitter.imports.contains(GoPackage::Aff.path()) {
         await_fibers(&mut declarations);
     }
+    timed("immediate", || immediate::reduce_immediate_calls(&mut declarations));
     timed("ranges", || ranges::read_elements_in_place(&mut declarations));
     let taken =
         |name: &str| emitter.global_names.contains(name) || IMPORTED_PACKAGES.contains(&name);
@@ -2636,6 +2638,9 @@ where
                 applied
             }
             ExpressionKind::Lambda { parameters, body } => {
+                if let Some(callee) = self.eta_reduced(expression.monotype, parameters, body)? {
+                    return self.value(callee, out);
+                }
                 match self.constructor_as_value(expression.monotype, parameters, body)? {
                     Some(function) => function,
                     None => self.lambda(expression.monotype, parameters, body)?,
@@ -2980,6 +2985,13 @@ where
         arguments: &[Expression],
         out: &mut Vec<GoStatement>,
     ) -> GoResult<GoExpression> {
+        if let ExpressionKind::Coerce(inner) = &function.kind
+            && self.applies_through_coercion(inner.monotype, function.monotype, arguments.len())?
+        {
+            let values = self.values(arguments, out)?;
+            let coerced = self.value(inner, out)?;
+            return self.coerce_applied(coerced, inner.monotype, function.monotype, values, out);
+        }
         let (callable, values) = self.application(function, arguments, 0, out)?;
         self.apply_arguments(callable, values, out)
     }

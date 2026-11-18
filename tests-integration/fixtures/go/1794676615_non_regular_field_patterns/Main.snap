@@ -72,9 +72,7 @@ func initializeMain_() []int32 {
 						return consTupleIntInt(x2, value)
 					}
 				}
-				accumulator = &Sequence{Tag: SequenceZero, Zero: func(coerced tuple.TupleIntInt) func(*Sequence) *Sequence {
-					return original(convert(coerced))
-				}(tuple.TupleIntInt{First: a, Second: b.One0.(int32)})(b.One1)}
+				accumulator = &Sequence{Tag: SequenceZero, Zero: original(convert(tuple.TupleIntInt{First: a, Second: b.One0.(int32)}))(b.One1)}
 			}
 		}
 		var result int32
@@ -122,9 +120,7 @@ func consTupleIntInt(x any, value *Sequence) *Sequence {
 				return consTupleIntInt(x2, value2)
 			}
 		}
-		return &Sequence{Tag: SequenceZero, Zero: func(coerced *tuple.Tuple) func(*Sequence) *Sequence {
-			return original(coerced)
-		}(&tuple.Tuple{First: x, Second: value.One0})(value.One1)}
+		return &Sequence{Tag: SequenceZero, Zero: original(&tuple.Tuple{First: x, Second: value.One0})(value.One1)}
 	}
 }
 

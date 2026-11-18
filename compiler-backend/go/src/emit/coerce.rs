@@ -15,6 +15,13 @@ use crate::walk::each_block;
 /// The construct a coercion between types of different shapes reports.
 pub(super) const UNRELATED_TYPES: &str = "representation changes between unrelated types";
 
+/// Where the arguments of a coerced call come from: the application, or the parameters of the
+/// closure the call is the body of.
+enum Arguments<'p> {
+    Given(std::vec::IntoIter<GoExpression>),
+    Parameters(&'p mut Vec<(String, GoType)>),
+}
+
 impl<'q, Q> Emitter<'_, '_, 'q, Q>
 where
     Q: checking::ExternalQueries,
@@ -117,6 +124,11 @@ where
                 self.coerce(value, canonical, to, out)
             }
             (Monotype::Function(..), Monotype::Function(..)) => {
+                if let GoExpression::Function { .. } = value
+                    && let Some(composed) = self.compose_coercion(value.clone(), from, to)?
+                {
+                    return Ok(composed);
+                }
                 let function = self.shared(value, "original", out);
                 self.coerce_function(function, from, to)
             }
@@ -181,15 +193,125 @@ where
         to: MonotypeId,
     ) -> GoResult<GoExpression> {
         let arity = self.arity(to);
-        let (to_arguments, to_result) = self.leading_arrows(to, arity);
         let mut parameters = Vec::with_capacity(arity);
         let mut body = vec![];
+        let closure = Arguments::Parameters(&mut parameters);
+        let (invoked, source) = self.coerced_call(function, from, to, closure, &mut body)?;
+        let to_result = self.monotypes.result_after(to, parameters.len());
+        self.coerce_invocation(invoked, source, to_result, &mut body)?;
+        let result = self.invocation_type(to_result)?;
+        Ok(GoExpression::Function { parameters, result, body })
+    }
+
+    /// A function literal coerced to another function type as one literal, which calls nothing
+    /// that the coerced literal did: its body is the literal's, with its own parameters coerced.
+    /// `None` where the literal does not reduce into the call, which then calls it by name.
+    fn compose_coercion(
+        &mut self,
+        literal: GoExpression,
+        from: MonotypeId,
+        to: MonotypeId,
+    ) -> GoResult<Option<GoExpression>> {
+        let mut composed = self.coerce_function(literal, from, to)?;
+        super::immediate::reduce_immediate_calls_in(&mut composed);
+        Ok((!super::immediate::calls_a_literal(&composed)).then_some(composed))
+    }
+
+    /// Whether `(coerce f) x …`, `f` at `from` seen as `to`, can call `f` where it is applied,
+    /// with its arguments and its result coerced, instead of making a closure that is called
+    /// once. It can when it takes every argument the closure would and its call returns a value;
+    /// a call that performs an effect or returns nothing stays in a closure's body.
+    pub(super) fn applies_through_coercion(
+        &mut self,
+        from: MonotypeId,
+        to: MonotypeId,
+        supplied: usize,
+    ) -> GoResult<bool> {
+        let functions = matches!(self.monotypes.get(from), Monotype::Function(..))
+            && matches!(self.monotypes.get(to), Monotype::Function(..));
+        if !functions || from == to || self.same_go_type(from, to)? {
+            return Ok(false);
+        }
+        let arity = self.arity(to);
+        if supplied < arity {
+            return Ok(false);
+        }
+        let (to_arguments, returned) = self.leading_arrows(to, arity);
+        let mut source = from;
+        for (position, to_argument) in to_arguments.into_iter().enumerate() {
+            if self.monotypes.function_parts(source).is_none() {
+                source = self.canonical(self.monotypes.result_after(to, position))?;
+            }
+            let Some((from_argument, rest)) = self.monotypes.function_parts(source) else {
+                return Ok(false);
+            };
+            if self.crosses_interface(to_argument, from_argument)? {
+                return Ok(false);
+            }
+            source = rest;
+        }
+        let returns_value = |monotype| {
+            self.monotypes.effect_result(monotype).is_none() && !self.is_unit(monotype)
+        };
+        Ok(returns_value(source) && returns_value(returned) && !self.crosses_interface(source, returned)?)
+    }
+
+    /// Whether a coercion moves a value into or out of an interface. Only a parameter or a
+    /// result of the interface type boxes it in Go, and a value at an erased type may still have
+    /// its own, so the closure's signature has to stay.
+    fn crosses_interface(&mut self, from: MonotypeId, to: MonotypeId) -> GoResult<bool> {
+        let interface = |type_: GoType| matches!(type_, GoType::Any | GoType::Erased(_));
+        Ok(interface(self.go_type(to)?) != interface(self.go_type(from)?))
+    }
+
+    /// `(coerce f) x …` where [`Self::applies_through_coercion`] says it can be: `f` called with
+    /// the arguments coerced to its own parameters, its result coerced to `to`'s.
+    pub(super) fn coerce_applied(
+        &mut self,
+        function: GoExpression,
+        from: MonotypeId,
+        to: MonotypeId,
+        mut arguments: Vec<GoExpression>,
+        out: &mut Vec<GoStatement>,
+    ) -> GoResult<GoExpression> {
+        let function = match function {
+            literal @ GoExpression::Function { .. } => self.shared(literal, "original", out),
+            function => function,
+        };
+        let rest = arguments.split_off(self.arity(to));
+        let given = Arguments::Given(arguments.into_iter());
+        let (invoked, source) = self.coerced_call(function, from, to, given, out)?;
+        let returned = self.monotypes.result_after(to, self.arity(to));
+        if !rest.is_empty() && self.applies_through_coercion(source, returned, rest.len())? {
+            return self.coerce_applied(invoked, source, returned, rest, out);
+        }
+        let result = self.coerce(invoked, source, returned, out)?;
+        if rest.is_empty() {
+            return Ok(result);
+        }
+        let callable = self.value_callable(result, returned);
+        self.apply_arguments(callable, rest, out)
+    }
+
+    /// A function at `from` called as `to` with `to`'s first arguments: the call, and the type
+    /// of what it returns. The arguments are given, or become parameters of the closure that
+    /// `body` belongs to.
+    fn coerced_call(
+        &mut self,
+        function: GoExpression,
+        from: MonotypeId,
+        to: MonotypeId,
+        mut arguments: Arguments<'_>,
+        body: &mut Vec<GoStatement>,
+    ) -> GoResult<(GoExpression, MonotypeId)> {
+        let arity = self.arity(to);
+        let (to_arguments, _) = self.leading_arrows(to, arity);
         let mut callable = self.value_callable(function, from);
         let mut pending = vec![];
         let mut source = from;
-        for to_argument in to_arguments {
+        for (position, to_argument) in to_arguments.into_iter().enumerate() {
             if self.monotypes.function_parts(source).is_none() {
-                let remaining = self.monotypes.result_after(to, parameters.len());
+                let remaining = self.monotypes.result_after(to, position);
                 let canonical = self.canonical(remaining)?;
                 let type_ = self.go_type(canonical)?;
                 let asserted =
@@ -201,14 +323,15 @@ where
                 .monotypes
                 .function_parts(source)
                 .expect("invariant violated: a coerced function takes its arguments");
-            let parameter = self.temporary("coerced");
-            parameters.push((parameter.clone(), self.go_type(to_argument)?));
-            let argument = self.coerce(
-                identifier_expression(&parameter),
-                to_argument,
-                from_argument,
-                &mut body,
-            )?;
+            let argument = match &mut arguments {
+                Arguments::Given(given) => given.next().expect("a coerced call has its arguments"),
+                Arguments::Parameters(parameters) => {
+                    let parameter = self.temporary("coerced");
+                    parameters.push((parameter.clone(), self.go_type(to_argument)?));
+                    identifier_expression(&parameter)
+                }
+            };
+            let argument = self.coerce(argument, to_argument, from_argument, body)?;
             pending.push(argument);
             source = from_rest;
             if pending.len() == callable.arity {
@@ -219,11 +342,9 @@ where
         let invoked = if pending.is_empty() {
             callable.function
         } else {
-            self.apply_arguments(callable, pending, &mut body)?
+            self.apply_arguments(callable, pending, body)?
         };
-        self.coerce_invocation(invoked, source, to_result, &mut body)?;
-        let result = self.invocation_type(to_result)?;
-        Ok(GoExpression::Function { parameters, result, body })
+        Ok((invoked, source))
     }
 
     pub(super) fn foreign_record(

@@ -58,7 +58,7 @@ where
 
     /// The parameters of a lambda and of the lambdas it returns, as far as Go
     /// takes them in one call, and the body they share.
-    fn merged_lambda<'e>(
+    pub(super) fn merged_lambda<'e>(
         &self,
         monotype: MonotypeId,
         parameters: &[Local],

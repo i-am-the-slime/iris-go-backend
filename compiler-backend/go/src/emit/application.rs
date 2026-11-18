@@ -1,4 +1,4 @@
-use super::{Emitter, call, identifier_expression};
+use super::{Emitter, call, identifier_expression, uses_local};
 use crate::error::GoResult;
 use crate::mono::{Expression, ExpressionKind, FunctionId, Local};
 use crate::monotype::MonotypeId;
@@ -154,6 +154,70 @@ where
         }
         let callable = self.known_callable(id, monotype);
         self.closure(callable, vec![], monotype)
+    }
+
+    /// The function a lambda only passes its parameters on to, `\x y -> f x y`, when Go gives
+    /// that function the lambda's own type and it is a value already: the lambda is `f` itself,
+    /// not a closure that looks `f` up at every call. A coercion that keeps the Go type is no
+    /// coercion here.
+    pub(super) fn eta_reduced<'e>(
+        &mut self,
+        monotype: MonotypeId,
+        parameters: &[Local],
+        body: &'e Expression,
+    ) -> GoResult<Option<&'e Expression>> {
+        let (parameters, body) = self.merged_lambda(monotype, parameters, body);
+        let ExpressionKind::Apply { function, arguments } = &self.same_representation(body)?.kind
+        else {
+            return Ok(None);
+        };
+        if parameters.is_empty()
+            || parameters.len() != self.arity(monotype)
+            || arguments.len() != parameters.len()
+        {
+            return Ok(None);
+        }
+        for (argument, parameter) in arguments.iter().zip(&parameters) {
+            let argument = self.same_representation(argument)?;
+            if !matches!(argument.kind, ExpressionKind::Local(id) if id == parameter.id) {
+                return Ok(None);
+            }
+        }
+        let function = self.same_representation(function)?;
+        let captures_parameter =
+            parameters.iter().any(|parameter| uses_local(function, parameter.id));
+        if captures_parameter
+            || !self.is_evaluated(function)
+            || !self.same_go_type(function.monotype, monotype)?
+        {
+            return Ok(None);
+        }
+        Ok(Some(function))
+    }
+
+    /// The expression under the coercions that leave its Go type as it is.
+    fn same_representation<'e>(
+        &mut self,
+        mut expression: &'e Expression,
+    ) -> GoResult<&'e Expression> {
+        while let ExpressionKind::Coerce(inner) = &expression.kind
+            && self.same_go_type(inner.monotype, expression.monotype)?
+        {
+            expression = inner;
+        }
+        Ok(expression)
+    }
+
+    /// Whether reading the expression's value does no work and cannot fail: a local that has its
+    /// value, a global that is not computed on first use, or a field of such a record. Reading it
+    /// when a closure would have been made is then the same as reading it at every call.
+    fn is_evaluated(&self, expression: &Expression) -> bool {
+        match &expression.kind {
+            ExpressionKind::Local(id) => !self.uninitialized_locals.contains(id),
+            ExpressionKind::Function(id) => !self.lazy_constants.contains(id),
+            ExpressionKind::Access { record, .. } => self.is_evaluated(record),
+            _ => false,
+        }
     }
 
     pub(super) fn lambda(
