@@ -6,6 +6,7 @@
 
 mod application;
 mod blocks;
+mod boxing;
 mod buffers;
 mod cases;
 mod chunks;
@@ -174,6 +175,7 @@ where
         };
         name.and_then(|name| homes.get(name)).copied()
     };
+    emitter.settle_array_boxes()?;
     emitter.settle_round_trips();
     emitter.spell_out_generic_alias_arguments();
     let mut all = std::mem::take(&mut emitter.type_declarations);
@@ -268,6 +270,7 @@ where
             closure_layouts: FxHashMap::default(),
             converters: FxHashMap::default(),
             round_trips: vec![],
+            array_boxes: Default::default(),
             recursive_names: FxHashMap::default(),
             type_aliases: FxHashMap::default(),
             type_declarations: vec![],
@@ -566,6 +569,7 @@ struct Emitter<'p, 'm, 'q, Q> {
     /// The function each constructor used as a value at a function type is.
     constructor_functions: FxHashMap<(DataType, usize, MonotypeId), String>,
     round_trips: Vec<coerce::RoundTrip>,
+    array_boxes: boxing::ArrayBoxes,
     recursive_names: FxHashMap<DataType, String>,
     /// The type each recursive newtype's alias spells.
     type_aliases: FxHashMap<String, GoType>,

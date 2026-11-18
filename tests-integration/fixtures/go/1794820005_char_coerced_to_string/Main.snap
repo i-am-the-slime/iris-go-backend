@@ -30,9 +30,9 @@ import (
 )
 
 func convert(value []rune) []string {
-	converted := []string{}
-	for _, element := range value {
-		converted = append(converted, prim.CharSingleton(element))
+	converted := make([]string, len(value))
+	for index, element := range value {
+		converted[index] = prim.CharSingleton(element)
 	}
 	return converted
 }

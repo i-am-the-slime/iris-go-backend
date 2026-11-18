@@ -3,7 +3,7 @@ use rustc_hash::FxHashSet;
 use super::packages::Spelling;
 use super::{
     DataKind, Emitter, binary, call, field, identifier_expression, is_simple,
-    is_untyped_constant, path_root, unit_value,
+    is_untyped_constant, length, path_root, unit_value,
 };
 use crate::erasure::Erasure;
 use crate::error::{GoError, GoResult};
@@ -26,6 +26,11 @@ where
         to: MonotypeId,
         out: &mut Vec<GoStatement>,
     ) -> GoResult<GoExpression> {
+        match (self.monotypes.get(from), self.monotypes.get(to)) {
+            (Monotype::Opaque, Monotype::Erased(_)) => self.array_boxes.foreign_values_enter = true,
+            (Monotype::Erased(_), Monotype::Opaque) => self.array_boxes.erased_values_leave = true,
+            _ => {}
+        }
         if from == to || self.same_go_type(from, to)? {
             return Ok(value);
         }
@@ -80,11 +85,17 @@ where
                 }
                 self.record_value(to, values)
             }
+            (Monotype::Array(_), Monotype::Erased(_)) => self.box_array(value, from, true),
+            (Monotype::Erased(_), Monotype::Array(_)) => self.box_array(value, to, false),
             (Monotype::Array(_), Monotype::Opaque) => {
+                let type_ = self.go_type(from)?;
+                self.array_boxes.cross(from, type_, true);
                 let foreign_array = self.monotypes.intern(Monotype::Array(to));
                 self.coerce(value, from, foreign_array, out)
             }
             (Monotype::Opaque, Monotype::Array(_)) => {
+                let type_ = self.go_type(to)?;
+                self.array_boxes.cross(to, type_, true);
                 let foreign_array = self.monotypes.intern(Monotype::Array(from));
                 let type_ = self.go_type(foreign_array)?;
                 let value = GoExpression::TypeAssertion { value: Box::new(value), type_ };
@@ -246,7 +257,7 @@ where
         self.unfolds_only_to_newtypes(data, unfolded)
     }
 
-    fn canonical(&mut self, monotype: MonotypeId) -> GoResult<MonotypeId> {
+    pub(super) fn canonical(&mut self, monotype: MonotypeId) -> GoResult<MonotypeId> {
         let erased = self.monotypes.intern(Monotype::Erased(Erasure::Boxing));
         let canonical = match self.monotypes.get(monotype).clone() {
             Monotype::Function(..) => Monotype::Function(erased, erased),
@@ -376,32 +387,7 @@ where
         let mut body = vec![];
         match (self.monotypes.get(from).clone(), self.monotypes.get(to).clone()) {
             (Monotype::Array(from_element), Monotype::Array(to_element)) => {
-                let empty = GoExpression::Composite { type_: result_type.clone(), fields: vec![] };
-                body.push(GoStatement::Define {
-                    names: vec!["converted".into()],
-                    values: vec![empty],
-                });
-                let mut each = vec![];
-                let element = self.coerce(
-                    identifier_expression("element"),
-                    from_element,
-                    to_element,
-                    &mut each,
-                )?;
-                each.push(GoStatement::Assign {
-                    targets: vec![identifier_expression("converted")],
-                    values: vec![call(
-                        identifier_expression("append"),
-                        vec![identifier_expression("converted"), element],
-                    )],
-                });
-                body.push(GoStatement::Range {
-                    index: None,
-                    element: "element".into(),
-                    iterable: value,
-                    body: each,
-                });
-                body.push(GoStatement::Return(Some(identifier_expression("converted"))));
+                self.convert_elements(value, from_element, to_element, &result_type, &mut body)?;
             }
             (Monotype::Nullable(from_element), Monotype::Nullable(to_element)) => {
                 let absent = binary("==", value.clone(), identifier_expression("nil"));
@@ -460,6 +446,40 @@ where
             body,
         });
         Ok(name)
+    }
+
+    /// The statements that return an array's elements converted, into a new
+    /// array of the result type.
+    pub(super) fn convert_elements(
+        &mut self,
+        array: GoExpression,
+        from_element: MonotypeId,
+        to_element: MonotypeId,
+        result_type: &GoType,
+        body: &mut Vec<GoStatement>,
+    ) -> GoResult<()> {
+        let allocation = call(
+            identifier_expression("make"),
+            vec![GoExpression::Type(result_type.clone()), length(array.clone())],
+        );
+        let names = vec!["converted".into()];
+        body.push(GoStatement::Define { names, values: vec![allocation] });
+        let mut each = vec![];
+        let element = identifier_expression("element");
+        let element = self.coerce(element, from_element, to_element, &mut each)?;
+        let slot = GoExpression::Index {
+            value: Box::new(identifier_expression("converted")),
+            index: Box::new(identifier_expression("index")),
+        };
+        each.push(GoStatement::Assign { targets: vec![slot], values: vec![element] });
+        body.push(GoStatement::Range {
+            index: Some("index".into()),
+            element: "element".into(),
+            iterable: array,
+            body: each,
+        });
+        body.push(GoStatement::Return(Some(identifier_expression("converted"))));
+        Ok(())
     }
 
     fn convert_data(

@@ -92,10 +92,11 @@ import (
 	"github.com/i-am-the-slime/purs-backend-go/go-support/exception"
 )
 
-func convert(value []any) []int32 {
-	converted := []int32{}
-	for _, element := range value {
-		converted = append(converted, element.(int32))
+func convert(value any) []int32 {
+	array := value.([]any)
+	converted := make([]int32, len(array))
+	for index, element := range array {
+		converted[index] = element.(int32)
 	}
 	return converted
 }
@@ -109,26 +110,27 @@ type Ord struct {
 	Compare func(any) func(any) ordering.Ordering
 }
 
-func convert2(value []int32) []any {
-	converted := []any{}
-	for _, element := range value {
-		converted = append(converted, element)
+func convert2(value []int32) any {
+	converted := make([]any, len(value))
+	for index, element := range value {
+		converted[index] = element
 	}
 	return converted
 }
 
-func convert3(value []any) []rune {
-	converted := []rune{}
-	for _, element := range value {
-		converted = append(converted, element.(rune))
+func convert3(value any) []rune {
+	array := value.([]any)
+	converted := make([]rune, len(array))
+	for index, element := range array {
+		converted[index] = element.(rune)
 	}
 	return converted
 }
 
-func convert4(value []rune) []any {
-	converted := []any{}
-	for _, element := range value {
-		converted = append(converted, element)
+func convert4(value []rune) any {
+	converted := make([]any, len(value))
+	for index, element := range value {
+		converted[index] = element
 	}
 	return converted
 }
@@ -158,24 +160,24 @@ func initializeMain_() []string {
 		}
 	}
 	return []string{relateArrayInt(Ord{Eq0: Eq{Eq: func(coerced any) func(any) bool {
-		original5 := original(convert(coerced.([]any)))
+		original5 := original(convert(coerced))
 		return func(coerced2 any) bool {
-			return original5(convert(coerced2.([]any)))
+			return original5(convert(coerced2))
 		}
 	}}, Compare: func(coerced any) func(any) ordering.Ordering {
-		original5 := original2(convert(coerced.([]any)))
+		original5 := original2(convert(coerced))
 		return func(coerced2 any) ordering.Ordering {
-			return original5(convert(coerced2.([]any)))
+			return original5(convert(coerced2))
 		}
 	}}, 1, convert2([]int32{1}), convert2([]int32{1, 1})), relateArrayInt(Ord{Eq0: Eq{Eq: func(coerced any) func(any) bool {
-		original5 := original3(convert3(coerced.([]any)))
+		original5 := original3(convert3(coerced))
 		return func(coerced2 any) bool {
-			return original5(convert3(coerced2.([]any)))
+			return original5(convert3(coerced2))
 		}
 	}}, Compare: func(coerced any) func(any) ordering.Ordering {
-		original5 := original4(convert3(coerced.([]any)))
+		original5 := original4(convert3(coerced))
 		return func(coerced2 any) ordering.Ordering {
-			return original5(convert3(coerced2.([]any)))
+			return original5(convert3(coerced2))
 		}
 	}}, 1, convert4([]rune{'a'}), convert4([]rune{'b', 'b'}))}
 }

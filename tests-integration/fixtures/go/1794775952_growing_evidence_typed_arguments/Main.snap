@@ -33,10 +33,11 @@ import (
 	"slices"
 )
 
-func convert(value []any) []bool {
-	converted := []bool{}
-	for _, element := range value {
-		converted = append(converted, element.(bool))
+func convert(value any) []bool {
+	array := value.([]any)
+	converted := make([]bool, len(array))
+	for index, element := range array {
+		converted[index] = element.(bool)
 	}
 	return converted
 }
@@ -45,10 +46,10 @@ type Show struct {
 	Show func(any) string
 }
 
-func convert2(value []bool) []any {
-	converted := []any{}
-	for _, element := range value {
-		converted = append(converted, element)
+func convert2(value []bool) any {
+	converted := make([]any, len(value))
+	for index, element := range value {
+		converted[index] = element
 	}
 	return converted
 }
@@ -58,7 +59,7 @@ var main_ = initializeMain_()
 func initializeMain_() []string {
 	defer exception.ReportUncaught()
 	return []string{describeArrayBoolean(Show{Show: func(coerced any) string {
-		return show.ShowBoolean(convert(coerced.([]any)))
+		return show.ShowBoolean(convert(coerced))
 	}}, array.Append([]int32{}, []int32{2}), ">", 1, convert2([]bool{true}))}
 }
 

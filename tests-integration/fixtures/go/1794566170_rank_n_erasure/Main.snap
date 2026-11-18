@@ -9,20 +9,8 @@ import (
 	"github.com/i-am-the-slime/purs-backend-go/go-support/exception"
 )
 
-func convert(value []int32) []any {
-	converted := []any{}
-	for _, element := range value {
-		converted = append(converted, element)
-	}
-	return converted
-}
-
-func convert2(value [][]int32) []any {
-	converted := []any{}
-	for _, element := range value {
-		converted = append(converted, convert(element))
-	}
-	return converted
+func convert(value [][]int32) any {
+	return value
 }
 
 type Nested struct {
@@ -40,7 +28,7 @@ var main_ = initializeMain_()
 
 func initializeMain_() []int32 {
 	defer exception.ReportUncaught()
-	return []int32{3, 1 + depthArrayInt(&Nested{Tag: NestedDeep, Deep: &Nested{Tag: NestedFlat, Flat: convert2([][]int32{[]int32{1}})}})}
+	return []int32{3, 1 + depthArrayInt(&Nested{Tag: NestedDeep, Deep: &Nested{Tag: NestedFlat, Flat: convert([][]int32{[]int32{1}})}})}
 }
 
 func depthArrayInt(value *Nested) int32 {

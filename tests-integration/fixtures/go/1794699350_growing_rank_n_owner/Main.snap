@@ -40,25 +40,25 @@ import (
 )
 
 func convert(value []func(func(int32) int32) func(int32) int32) []func(func(int32) int32) any {
-	converted := []func(func(int32) int32) any{}
-	for _, element := range value {
-		converted = append(converted, func(coerced func(int32) int32) any {
+	converted := make([]func(func(int32) int32) any, len(value))
+	for index, element := range value {
+		converted[index] = func(coerced func(int32) int32) any {
 			original := element(coerced)
 			return func(coerced2 any) any {
 				return original(coerced2.(int32))
 			}
-		})
+		}
 	}
 	return converted
 }
 
 func convert2(value []any) []func(int32) int32 {
-	converted := []func(int32) int32{}
-	for _, element := range value {
+	converted := make([]func(int32) int32, len(value))
+	for index, element := range value {
 		original := element.(func(any) any)
-		converted = append(converted, func(coerced int32) int32 {
+		converted[index] = func(coerced int32) int32 {
 			return original(coerced).(int32)
-		})
+		}
 	}
 	return converted
 }
@@ -73,11 +73,11 @@ func convert3(value *tuple.TupleFnIntInt) *tuple.Tuple {
 }
 
 func convert4(value []func(int32) *tuple.TupleFnIntInt) []func(int32) any {
-	converted := []func(int32) any{}
-	for _, element := range value {
-		converted = append(converted, func(coerced int32) any {
+	converted := make([]func(int32) any, len(value))
+	for index, element := range value {
+		converted[index] = func(coerced int32) any {
 			return convert3(element(coerced))
-		})
+		}
 	}
 	return converted
 }
@@ -93,27 +93,27 @@ func convert5(value *tuple.Tuple) *tuple.TupleFnIntInt {
 }
 
 func convert6(value []any) []*tuple.TupleFnIntInt {
-	converted := []*tuple.TupleFnIntInt{}
-	for _, element := range value {
-		converted = append(converted, convert5(element.(*tuple.Tuple)))
+	converted := make([]*tuple.TupleFnIntInt, len(value))
+	for index, element := range value {
+		converted[index] = convert5(element.(*tuple.Tuple))
 	}
 	return converted
 }
 
 func convert7(value []func(int32) int32) []func(int32) any {
-	converted := []func(int32) any{}
-	for _, element := range value {
-		converted = append(converted, func(coerced int32) any {
+	converted := make([]func(int32) any, len(value))
+	for index, element := range value {
+		converted[index] = func(coerced int32) any {
 			return element(coerced)
-		})
+		}
 	}
 	return converted
 }
 
 func convert8(value []any) []int32 {
-	converted := []int32{}
-	for _, element := range value {
-		converted = append(converted, element.(int32))
+	converted := make([]int32, len(value))
+	for index, element := range value {
+		converted[index] = element.(int32)
 	}
 	return converted
 }
