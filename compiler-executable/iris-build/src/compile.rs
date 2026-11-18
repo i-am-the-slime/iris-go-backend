@@ -67,6 +67,12 @@ pub enum PackageExecution {
     Parallel,
 }
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum BuildStage {
+    Checked,
+    JavaScript,
+}
+
 pub struct InitialBuildConfig<'a, Metadata, SourceMetadata> {
     pub root: &'a Path,
     pub source_globs: &'a [PathBuf],
@@ -75,6 +81,7 @@ pub struct InitialBuildConfig<'a, Metadata, SourceMetadata> {
     pub prim_metadata: Metadata,
     pub source_metadata: SourceMetadata,
     pub execution: PackageExecution,
+    pub stage: BuildStage,
     pub events: &'a dyn BuildEventSink,
 }
 
@@ -145,6 +152,7 @@ where
         prim_metadata,
         source_metadata,
         execution,
+        stage,
         events,
     } = config;
     let started = Instant::now();
@@ -189,7 +197,7 @@ where
     let execute = |package: &super::plan::PlannedPackage| {
         let package_sources = package.source_paths.iter().map(|path| sources[path]);
         let package_sources = package_sources.collect_vec();
-        query_package(engine, &package_sources)
+        query_package(engine, &package_sources, stage)
     };
     let execution = match execution {
         PackageExecution::Serial => executor::execute_serial(&plan, events, &execute),
@@ -201,7 +209,7 @@ where
     let sources = sources.into_values().collect_vec();
     let no_inputs = sources.is_empty();
     let (diagnostics, has_errors, failure) = match execution {
-        Ok(()) => match collect_diagnostics(&compilation, &sources) {
+        Ok(()) => match collect_diagnostics(&compilation, &sources, stage) {
             Ok((diagnostics, has_errors)) => (diagnostics, has_errors, None),
             Err(error) => (Vec::new(), true, Some(error)),
         },
@@ -217,6 +225,7 @@ pub(crate) fn build_initial_packages(
     source_globs: &[PathBuf],
     output: &Path,
     packages: &[DiscoveredPackage],
+    stage: BuildStage,
     events: &dyn BuildEventSink,
 ) -> Result<InitialBuild<(), SourceOwner>, CompileError> {
     let owners = packages
@@ -241,6 +250,7 @@ pub(crate) fn build_initial_packages(
             SourceOwner::Package(SourcePackage::new(package))
         },
         execution: PackageExecution::Parallel,
+        stage,
         events,
     })
 }
@@ -248,8 +258,14 @@ pub(crate) fn build_initial_packages(
 pub(crate) fn build(config: BuildConfig<'_>) -> Result<BTreeSet<String>, CompileError> {
     let started = Instant::now();
     let BuildConfig { root, output, source_globs, packages, color, diagnostics, events } = config;
-    let initial =
-        build_initial_packages(&root, &source_globs, output.directory(), &packages, events)?;
+    let initial = build_initial_packages(
+        &root,
+        &source_globs,
+        output.directory(),
+        &packages,
+        BuildStage::JavaScript,
+        events,
+    )?;
     let InitialBuildParts { compilation, source_paths: _, mut report } = initial.into_parts();
     if report.no_inputs {
         return Err(CompileError::NoInputs);
@@ -281,8 +297,9 @@ pub(crate) fn rebuild(
 ) -> Result<Compiled, CompileError> {
     let sources = compilation.source_ids().collect_vec();
     let engine = compilation.query_engine();
-    query_package(engine, &sources)?;
-    let (diagnostic_collections, has_errors) = collect_diagnostics(compilation, &sources)?;
+    query_package(engine, &sources, BuildStage::JavaScript)?;
+    let (diagnostic_collections, has_errors) =
+        collect_diagnostics(compilation, &sources, BuildStage::JavaScript)?;
     if diagnostics {
         report_diagnostics(compilation, diagnostic_collections, root, color);
     }
@@ -361,7 +378,11 @@ fn read_source_unit(path: &Path) -> Result<SourceUnitRead, CompileError> {
     Ok(SourceUnitRead { unit, source, foreign })
 }
 
-fn query_package(engine: &building::QueryEngine, sources: &[FileId]) -> Result<(), CompileError> {
+fn query_package(
+    engine: &building::QueryEngine,
+    sources: &[FileId],
+    stage: BuildStage,
+) -> Result<(), CompileError> {
     sources.par_iter().try_for_each(|&file_id| {
         let engine = engine.snapshot();
         engine.stabilized(file_id)?;
@@ -369,8 +390,10 @@ fn query_package(engine: &building::QueryEngine, sources: &[FileId]) -> Result<(
         engine.resolved(file_id)?;
         engine.lowered(file_id)?;
         engine.checked(file_id)?;
-        engine.foreign_validation(file_id)?;
-        let _ = engine.javascript(file_id)?;
+        if stage == BuildStage::JavaScript {
+            engine.foreign_validation(file_id)?;
+            let _ = engine.javascript(file_id)?;
+        }
         Ok::<_, CompileError>(())
     })
 }
@@ -378,13 +401,17 @@ fn query_package(engine: &building::QueryEngine, sources: &[FileId]) -> Result<(
 fn collect_diagnostics<Version, Metadata>(
     compilation: &CompilationState<Version, Metadata>,
     sources: &[FileId],
+    stage: BuildStage,
 ) -> Result<(Vec<iris_diagnostics::DiagnosticCollection>, bool), CompileError>
 where
     Version: Clone + Ord,
     Metadata: Clone,
 {
     let engine = compilation.snapshot();
-    let diagnostics = iris_diagnostics::collect_diagnostics(&engine, sources)?;
+    let diagnostics = match stage {
+        BuildStage::Checked => iris_diagnostics::collect_checked_diagnostics(&engine, sources)?,
+        BuildStage::JavaScript => iris_diagnostics::collect_diagnostics(&engine, sources)?,
+    };
     let has_errors = diagnostics
         .iter()
         .flat_map(iris_diagnostics::DiagnosticCollection::diagnostics)
@@ -398,8 +425,9 @@ pub(crate) fn report_file_diagnostics(
     files: &[FileId],
     root: &Path,
     color: bool,
+    stage: BuildStage,
 ) -> Result<(), CompileError> {
-    let (diagnostics, _) = collect_diagnostics(compilation, files)?;
+    let (diagnostics, _) = collect_diagnostics(compilation, files, stage)?;
     report_diagnostics(compilation, diagnostics, root, color);
     Ok(())
 }

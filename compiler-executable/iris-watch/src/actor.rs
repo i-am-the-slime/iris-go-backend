@@ -13,7 +13,7 @@ use std::path::PathBuf;
 use std::time::Duration;
 
 use iris_build::{
-    BuildSession, BuildSessionConfig, InputChange, PreparedProject, RebuildOutcome,
+    BuildSession, BuildSessionConfig, BuildStage, InputChange, PreparedProject, RebuildOutcome,
     initialize_project,
 };
 use iris_progress::WatchOutcome;
@@ -70,7 +70,7 @@ impl BuildActor {
             version: String::clone(&config.version),
         };
         let initialized = task::spawn_blocking(move || {
-            let project = initialize_project(project)?;
+            let project = initialize_project(project, BuildStage::JavaScript)?;
             let mut session = BuildSession::new(project, session_config)?;
             let initial_inputs = session.take_initial_inputs();
             let changes = session.rescan()?;

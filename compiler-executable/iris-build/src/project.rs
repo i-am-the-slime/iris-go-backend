@@ -9,8 +9,9 @@ use path_absolutize::Absolutize;
 use thiserror::Error;
 use url::Url;
 
-use super::compile::{self, CompileError};
+use super::compile::{self, BuildStage, CompileError};
 use super::events::{BuildEvent, BuildEventSink, ProgressEventSink, SilentBuildEvents};
+use super::fetch::FetchStamp;
 use super::output::BuildOutput;
 use super::ownership::SourceOwner;
 use super::packages::DiscoveredPackage;
@@ -61,6 +62,8 @@ enum ProjectFailure {
     Workspace(#[from] WorkspaceError),
     #[error("failed to determine the current directory: {0}")]
     CurrentDirectory(io::Error),
+    #[error("failed to check whether the dependencies Spago fetched are current: {0}")]
+    FetchStamp(io::Error),
     #[error("failed to normalize output directory {}: {error}", path.display())]
     NormalizeOutput { path: PathBuf, error: io::Error },
     #[error("failed to execute Node.js: {source}")]
@@ -120,6 +123,7 @@ pub struct PreparedProject {
 pub struct InitializedProject {
     pub(crate) project: PreparedProject,
     pub(crate) build: compile::InitialBuild<(), SourceOwner>,
+    pub(crate) stage: BuildStage,
 }
 
 impl PreparedProject {
@@ -153,8 +157,11 @@ pub fn resolve_output(output: Option<&Path>) -> Result<PathBuf, ProjectError> {
     resolve_output_inner(output).map_err(ProjectError)
 }
 
-pub fn initialize_project(project: PreparedProject) -> Result<InitializedProject, ProjectError> {
-    initialize_project_inner(project).map_err(ProjectError)
+pub fn initialize_project(
+    project: PreparedProject,
+    stage: BuildStage,
+) -> Result<InitializedProject, ProjectError> {
+    initialize_project_inner(project, stage).map_err(ProjectError)
 }
 
 pub fn run(config: RunConfig) -> Result<(), ExecutionError> {
@@ -196,11 +203,18 @@ fn compile_project(
 
 fn initialize_project_inner(
     project: PreparedProject,
+    stage: BuildStage,
 ) -> Result<InitializedProject, ProjectFailure> {
     let PreparedProject { root, output, source_globs, packages } = &project;
-    let build =
-        compile::build_initial_packages(root, source_globs, output, packages, &SilentBuildEvents)?;
-    Ok(InitializedProject { project, build })
+    let build = compile::build_initial_packages(
+        root,
+        source_globs,
+        output,
+        packages,
+        stage,
+        &SilentBuildEvents,
+    )?;
+    Ok(InitializedProject { project, build, stage })
 }
 
 fn run_project(config: RunConfig) -> Result<(), ProjectFailure> {
@@ -300,8 +314,7 @@ fn prepare_workspace(
     quiet: bool,
     output: PathBuf,
 ) -> Result<PreparedProject, ProjectFailure> {
-    let spago = iris_spago::SpagoCommand::with_workspace_root(current_directory, &workspace.root)?;
-    spago.fetch(workspace.selected.as_deref(), !quiet)?;
+    fetch_dependencies(workspace, current_directory, quiet)?;
     let discovered = super::packages::discover_packages(workspace)?;
     Ok(PreparedProject {
         root: PathBuf::clone(&workspace.root),
@@ -309,6 +322,20 @@ fn prepare_workspace(
         source_globs: discovered.source_globs,
         packages: discovered.packages,
     })
+}
+
+fn fetch_dependencies(
+    workspace: &Workspace,
+    current_directory: &Path,
+    quiet: bool,
+) -> Result<(), ProjectFailure> {
+    if FetchStamp::of(workspace).map_err(ProjectFailure::FetchStamp)?.is_current() {
+        return Ok(());
+    }
+    let spago = iris_spago::SpagoCommand::with_workspace_root(current_directory, &workspace.root)?;
+    spago.fetch(workspace.selected.as_deref(), !quiet)?;
+    let fetched = FetchStamp::of(workspace).map_err(ProjectFailure::FetchStamp)?;
+    fetched.record().map_err(ProjectFailure::FetchStamp)
 }
 
 fn project_output(root: &Path, configured: Option<&Path>) -> Result<PathBuf, ProjectFailure> {

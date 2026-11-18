@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use building_types::QueryResult;
 use files::FileId;
-use foreign_javascript::ForeignQueries;
+use foreign_javascript::{ForeignQueries, ForeignValidation};
 
 use crate::{Diagnostic, DiagnosticsContext, ExternalQueries, ToDiagnostics};
 
@@ -41,19 +41,38 @@ where
     Q: ExternalQueries + ForeignQueries + javascript::ModuleQueries,
 {
     let collections = source_files.iter().map(|&file_id| {
+        let foreign_validation = queries.foreign_validation(file_id)?;
         let javascript = queries.javascript(file_id)?;
-        collect_file_diagnostics(queries, file_id, javascript)
+        let translation = JavaScriptTranslation { foreign_validation, javascript };
+        collect_file_diagnostics(queries, file_id, Some(translation))
     });
     collections.collect()
+}
+
+pub fn collect_checked_diagnostics<Q>(
+    queries: &Q,
+    source_files: &[FileId],
+) -> QueryResult<Vec<DiagnosticCollection>>
+where
+    Q: ExternalQueries,
+{
+    let collections =
+        source_files.iter().map(|&file_id| collect_file_diagnostics(queries, file_id, None));
+    collections.collect()
+}
+
+struct JavaScriptTranslation {
+    foreign_validation: Arc<ForeignValidation>,
+    javascript: javascript::ModuleResult<Arc<javascript::Module>>,
 }
 
 fn collect_file_diagnostics<Q>(
     queries: &Q,
     file_id: FileId,
-    javascript: javascript::ModuleResult<Arc<javascript::Module>>,
+    translation: Option<JavaScriptTranslation>,
 ) -> QueryResult<DiagnosticCollection>
 where
-    Q: ExternalQueries + ForeignQueries,
+    Q: ExternalQueries,
 {
     let content = queries.content(file_id)?;
     let (parsed, parse_errors) = queries.parsed(file_id)?;
@@ -64,7 +83,6 @@ where
     let lowered = queries.lowered(file_id)?;
     let grouped = queries.grouped(file_id)?;
     let checked = queries.checked(file_id)?;
-    let foreign_validation = queries.foreign_validation(file_id)?;
 
     let context = DiagnosticsContext::new(
         queries,
@@ -99,18 +117,21 @@ where
     }
 
     let foreign_start = diagnostics.len();
-    for error in foreign_validation.errors.iter() {
-        diagnostics.extend(error.to_diagnostics(&context)?);
-    }
-
-    let backend_start = diagnostics.len();
-    match javascript {
-        Ok(module) => {
-            for diagnostic in module.diagnostics() {
-                diagnostics.extend(diagnostic.to_diagnostics(&context)?);
-            }
+    let mut backend_start = foreign_start;
+    if let Some(JavaScriptTranslation { foreign_validation, javascript }) = translation {
+        for error in foreign_validation.errors.iter() {
+            diagnostics.extend(error.to_diagnostics(&context)?);
         }
-        Err(error) => diagnostics.extend(error.to_diagnostics(&context)?),
+
+        backend_start = diagnostics.len();
+        match javascript {
+            Ok(module) => {
+                for diagnostic in module.diagnostics() {
+                    diagnostics.extend(diagnostic.to_diagnostics(&context)?);
+                }
+            }
+            Err(error) => diagnostics.extend(error.to_diagnostics(&context)?),
+        }
     }
 
     Ok(DiagnosticCollection {

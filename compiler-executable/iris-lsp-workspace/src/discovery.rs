@@ -4,7 +4,7 @@ use std::collections::BTreeMap;
 use std::io;
 use std::path::{Path, PathBuf};
 
-use iris_build::compile::{InitialBuildConfig, PackageExecution, build_initial};
+use iris_build::compile::{BuildStage, InitialBuildConfig, PackageExecution, build_initial};
 use iris_build::events::BuildEventSink;
 use iris_build::plan::PackageInput;
 use itertools::Itertools;
@@ -90,6 +90,7 @@ pub(crate) fn build_prepared_workspace(
                 .expect("invariant violated: discovered source has no LSP metadata")
         },
         execution: PackageExecution::Parallel,
+        stage: BuildStage::JavaScript,
         events,
     })?;
 

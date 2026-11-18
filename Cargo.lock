@@ -1247,6 +1247,7 @@ dependencies = [
  "checking",
  "files",
  "indexing",
+ "libc",
  "lowering",
  "rayon",
  "rustc-hash",

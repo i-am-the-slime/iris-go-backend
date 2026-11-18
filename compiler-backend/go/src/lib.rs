@@ -30,6 +30,7 @@ mod walk;
 
 pub use error::{GoError, GoResult, UnsupportedState};
 pub use foreign::ForeignPackages;
+pub use timing::Work;
 
 use crate::scheme::SchemeInstantiations;
 use crate::specialize::Specializer;

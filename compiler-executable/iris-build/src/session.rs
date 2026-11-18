@@ -12,7 +12,9 @@ use prim_constants::MODULE_MAP;
 use thiserror::Error;
 use url::Url;
 
-use super::compile::{self, CompileError, Compiled, InitialBuildReport, ProjectCompilation};
+use super::compile::{
+    self, BuildStage, CompileError, Compiled, InitialBuildReport, ProjectCompilation,
+};
 use super::output::{BuildOutput, OutputError};
 use super::ownership::{SourceOwner, SourceOwnership, SourcePackage};
 use super::packages::PackagesError;
@@ -111,6 +113,7 @@ pub struct BuildSession {
     initial_inputs: Vec<InputChange>,
     color: bool,
     diagnostics: bool,
+    stage: BuildStage,
 }
 
 impl BuildSession {
@@ -151,6 +154,7 @@ impl BuildSession {
             initial_inputs,
             color: config.color,
             diagnostics: config.diagnostics,
+            stage: initialized.stage,
         })
     }
 
@@ -173,7 +177,8 @@ impl BuildSession {
     /// Prints the diagnostics of some source files, for a consumer of the
     /// session that found them erroneous, as a build prints them.
     pub fn report_diagnostics(&self, files: &[FileId]) -> Result<(), SessionError> {
-        compile::report_file_diagnostics(&self.compilation, files, &self.root, self.color)
+        let stage = self.stage;
+        compile::report_file_diagnostics(&self.compilation, files, &self.root, self.color, stage)
             .map_err(|error| SessionError(error.into()))
     }
 

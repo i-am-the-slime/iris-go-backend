@@ -4,7 +4,7 @@ mod convert;
 mod model;
 mod render;
 
-pub use collection::{DiagnosticCollection, collect_diagnostics};
+pub use collection::{DiagnosticCollection, collect_checked_diagnostics, collect_diagnostics};
 pub use context::{DiagnosticsContext, ExternalQueries};
 pub use convert::ToDiagnostics;
 pub use model::{Diagnostic, DiagnosticCode, RelatedSpan, Severity, Span};

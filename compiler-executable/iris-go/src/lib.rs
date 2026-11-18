@@ -11,7 +11,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::time::Instant;
 
-use iris_build::{BuildSession, BuildSessionConfig, ProjectConfig};
+use iris_build::{BuildSession, BuildSessionConfig, BuildStage, ProjectConfig};
 
 pub struct GoConfig {
     pub package: Option<String>,
@@ -22,6 +22,7 @@ pub struct GoConfig {
 
 pub fn run(config: GoConfig) -> Result<(), String> {
     let started = Instant::now();
+    let work_started = go::Work::so_far();
     let (entry_module, entry_name) = config
         .entry
         .rsplit_once('.')
@@ -31,16 +32,19 @@ pub fn run(config: GoConfig) -> Result<(), String> {
     let output = Some(scratch.path().join("output"));
     let project = ProjectConfig { package: config.package, output, quiet: true };
     let project = iris_build::prepare_project(project).map_err(|error| error.to_string())?;
-    let project = iris_build::initialize_project(project).map_err(|error| error.to_string())?;
+    let project = iris_build::initialize_project(project, BuildStage::Checked)
+        .map_err(|error| error.to_string())?;
     let session_config =
         BuildSessionConfig { color: false, diagnostics: false, version: config.version };
     let session = BuildSession::new(project, session_config).map_err(|error| error.to_string())?;
     let snapshot = session.snapshot();
     let loaded = started.elapsed();
+    let load_work = go::Work::so_far().since(work_started);
 
     fs::create_dir_all(&config.destination).map_err(|error| error.to_string())?;
     let module_path = go_module_path(&config.destination)?;
     let foreign_packages = vendor_foreign_packages(&config.destination, &module_path)?;
+    let backend_started = go::Work::so_far();
     let program = go::compile_program(
         &snapshot.engine,
         entry_module,
@@ -48,6 +52,7 @@ pub fn run(config: GoConfig) -> Result<(), String> {
         &foreign_packages,
         &module_path,
     );
+    let backend_work = go::Work::so_far().since(backend_started);
     let program = match program {
         Ok(program) => program,
         // The checker's own diagnostics say what is wrong and where.
@@ -66,11 +71,13 @@ pub fn run(config: GoConfig) -> Result<(), String> {
         fs::write(&path, source).map_err(|error| error.to_string())?;
     }
     eprintln!(
-        "go: {} functions in {files} files -> {} (load {:.0?}, total {:.0?})",
+        "go: {} functions in {files} files -> {} (load {:.0?}, {load_work}; backend \
+         {backend_work}; total {:.0?}, {})",
         program.functions,
         config.destination.display(),
         loaded,
-        started.elapsed()
+        started.elapsed(),
+        go::Work::so_far().since(work_started)
     );
     Ok(())
 }

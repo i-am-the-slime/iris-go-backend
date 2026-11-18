@@ -6,6 +6,7 @@ pub mod compilation;
 pub mod compile;
 pub mod packages;
 
+mod fetch;
 mod output;
 mod ownership;
 mod project;
@@ -13,6 +14,7 @@ mod session;
 mod walk;
 mod workspace;
 
+pub use compile::BuildStage;
 pub use packages::{DiscoveredPackage, DiscoveredPackages, PackagesError, discover_packages};
 pub use workspace::{Workspace, WorkspaceError};
 
