@@ -5,6 +5,7 @@ mod asynchronous;
 mod declaration;
 mod evidence;
 mod expression;
+mod known;
 mod services;
 mod stylex;
 mod synchronous;
@@ -218,11 +219,11 @@ fn convert(mut context: Context<'_, impl checking::ExternalQueries>) -> Conversi
         .iter()
         .filter_map(|declaration| declaration.recursive_group.map(|_| declaration.global.id));
     let recursive_globals = recursive_globals.collect::<FxHashSet<_>>();
-    for declaration in &declarations {
-        if let DeclarationKind::Value(expression) = declaration.kind {
-            inline_simple_bindings(&mut context.storage, expression, &recursive_globals);
-        }
-    }
+    let roots = declarations.iter().filter_map(|declaration| match declaration.kind {
+        DeclarationKind::Value(expression) => Some(expression),
+        DeclarationKind::Constructor { .. } | DeclarationKind::Foreign => None,
+    });
+    inline_simple_bindings(&mut context.storage, roots, &recursive_globals);
     // StyleX consumes the emitted expressions, including literals substituted for local bindings.
     let stylex_theme_imports = context.validate_stylex_uses(&declarations)?;
 
@@ -680,10 +681,10 @@ where
         if let Some(dependency) = self.dependencies.get(&file_id) {
             return Ok(SmolStr::clone(&dependency.module_name));
         }
-        let content = self.queries.content(file_id)?;
-        let (parsed, _) = self.queries.parsed(file_id)?;
-        let name = parsed
-            .module_name(&content)
+        let indexed = self.indexed_module(file_id)?;
+        let name = indexed
+            .name
+            .clone()
             .expect("invariant violated: referenced checked module has no source module name");
         Ok(name)
     }

@@ -25,6 +25,8 @@ pub(crate) struct Parser<'t> {
 
 type Rule = fn(&mut Parser);
 
+const EVENTS_PER_TOKEN: usize = 6;
+
 struct Checkpoint {
     index: usize,
     output: usize,
@@ -42,7 +44,7 @@ struct FailedAlternative {
 impl<'t> Parser<'t> {
     pub(crate) fn new(tokens: &'t [SyntaxKind]) -> Parser<'t> {
         let index = 0;
-        let output = Vec::with_capacity(tokens.len());
+        let output = Vec::with_capacity(tokens.len() * EVENTS_PER_TOKEN);
         let errors = Vec::new();
         let fuel = Cell::new(u16::MAX);
         let failed_alternatives = HashMap::new();
@@ -1021,6 +1023,7 @@ fn newtype_signature_or_equation(p: &mut Parser) {
         p.expect(SyntaxKind::UPPER);
         types::type_atom(p);
         n.end(p, SyntaxKind::DataConstructor);
+        derive_clauses(p);
         m.end(p, SyntaxKind::NewtypeEquation);
     }
 }
@@ -1039,6 +1042,7 @@ fn data_signature_or_equation(p: &mut Parser) {
         if p.eat(SyntaxKind::EQUAL) {
             data_constructors(p);
         }
+        derive_clauses(p);
         m.end(p, SyntaxKind::DataEquation);
     }
 }
@@ -1059,11 +1063,49 @@ fn data_constructor(p: &mut Parser) {
     m.end(p, SyntaxKind::DataConstructor);
 }
 
+fn derive_clauses(p: &mut Parser) {
+    while p.at(SyntaxKind::DERIVE) {
+        derive_clause(p);
+    }
+}
+
+const DERIVE_CLAUSE_RECOVERY: TokenSet =
+    TokenSet::new(&[SyntaxKind::DERIVE, SyntaxKind::LAYOUT_SEPARATOR, SyntaxKind::LAYOUT_END]);
+
+fn derive_clause(p: &mut Parser) {
+    let mut m = p.start();
+    p.expect(SyntaxKind::DERIVE);
+    p.expect(SyntaxKind::LEFT_PARENTHESIS);
+    if p.at(SyntaxKind::RIGHT_PARENTHESIS) {
+        p.error("Expected UPPER");
+    }
+    while !p.at(SyntaxKind::RIGHT_PARENTHESIS) && !p.at_eof() {
+        if p.at(SyntaxKind::UPPER) {
+            let mut n = p.start();
+            names::upper(p);
+            n.end(p, SyntaxKind::DeriveClass);
+            if p.at(SyntaxKind::COMMA) && p.at_next(SyntaxKind::RIGHT_PARENTHESIS) {
+                p.error_recover("Trailing comma");
+            } else if !p.at(SyntaxKind::RIGHT_PARENTHESIS) {
+                p.expect(SyntaxKind::COMMA);
+            }
+        } else {
+            if p.at_in(DERIVE_CLAUSE_RECOVERY) {
+                break;
+            }
+            p.error_recover("Unexpected token in derive clause");
+        }
+    }
+    p.expect(SyntaxKind::RIGHT_PARENTHESIS);
+    m.end(p, SyntaxKind::DeriveClause);
+}
+
 const TYPE_VARIABLE_BINDING_START: TokenSet =
     TokenSet::new(&[SyntaxKind::LEFT_PARENTHESIS]).union(names::LOWER);
 
 const TYPE_VARIABLE_BINDING_END: TokenSet = TokenSet::new(&[
     SyntaxKind::EQUAL,
+    SyntaxKind::DERIVE,
     SyntaxKind::PIPE,
     SyntaxKind::WHERE,
     SyntaxKind::LAYOUT_SEPARATOR,

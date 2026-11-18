@@ -10,6 +10,7 @@ use indexing::{DeriveItemId, EquationSourceId, InstanceItemId, TermItemId, TypeI
 use la_arena::{Arena, ArenaMap, Idx};
 use rustc_hash::FxHashMap;
 use smol_str::SmolStr;
+use stabilizing::{AstIdMap, StabilizedModule};
 
 use crate::literal::StringLiteral;
 use crate::source::*;
@@ -372,10 +373,14 @@ pub struct InstanceItem {
 
 #[derive(Debug, PartialEq, Eq)]
 pub struct DeriveItem {
-    pub newtype: bool,
-    pub constraints: Arc<[TypeId]>,
     pub resolution: Option<(FileId, TypeItemId)>,
-    pub arguments: Arc<[TypeId]>,
+    pub kind: DeriveItemKind,
+}
+
+#[derive(Debug, PartialEq, Eq)]
+pub enum DeriveItemKind {
+    Declaration { newtype: bool, constraints: Arc<[TypeId]>, arguments: Arc<[TypeId]> },
+    Clause { type_id: TypeItemId },
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -455,8 +460,8 @@ pub enum Domain {
 #[derive(Debug, Default, PartialEq, Eq)]
 pub struct LoweredTree {
     pub(crate) binders: FxHashMap<BinderId, BinderKind>,
-    pub(crate) expressions: FxHashMap<ExpressionId, ExpressionKind>,
-    pub(crate) types: FxHashMap<TypeId, TypeKind>,
+    pub(crate) expressions: AstIdMap<ExpressionId, ExpressionKind>,
+    pub(crate) types: AstIdMap<TypeId, TypeKind>,
     pub(crate) term_items: ArenaMap<TermItemId, TermItemKind>,
     pub(crate) type_items: ArenaMap<TypeItemId, TypeItemKind>,
     pub(crate) instance_items: ArenaMap<InstanceItemId, InstanceItem>,
@@ -472,16 +477,30 @@ pub struct LoweredTree {
 }
 
 impl LoweredTree {
+    pub(crate) fn new(stabilized: &StabilizedModule) -> LoweredTree {
+        let expressions = AstIdMap::with_capacity(stabilized, stabilized.expression_count());
+        let types = AstIdMap::with_capacity(stabilized, stabilized.type_count());
+        LoweredTree { expressions, types, ..LoweredTree::default() }
+    }
+
+    pub fn expression_count(&self) -> usize {
+        self.expressions.len()
+    }
+
+    pub fn type_count(&self) -> usize {
+        self.types.len()
+    }
+
     pub fn iter_binder(&self) -> impl Iterator<Item = (BinderId, &BinderKind)> {
         self.binders.iter().map(|(k, v)| (*k, v))
     }
 
     pub fn iter_expression(&self) -> impl Iterator<Item = (ExpressionId, &ExpressionKind)> {
-        self.expressions.iter().map(|(k, v)| (*k, v))
+        self.expressions.iter()
     }
 
     pub fn iter_type(&self) -> impl Iterator<Item = (TypeId, &TypeKind)> {
-        self.types.iter().map(|(k, v)| (*k, v))
+        self.types.iter()
     }
 
     pub fn iter_do_statement(&self) -> impl Iterator<Item = (DoStatementId, &DoStatement)> {
@@ -507,11 +526,11 @@ impl LoweredTree {
     }
 
     pub fn get_expression_kind(&self, id: ExpressionId) -> Option<&ExpressionKind> {
-        self.expressions.get(&id)
+        self.expressions.get(id)
     }
 
     pub fn get_type_kind(&self, id: TypeId) -> Option<&TypeKind> {
-        self.types.get(&id)
+        self.types.get(id)
     }
 
     pub fn get_do_statement(&self, id: DoStatementId) -> Option<&DoStatement> {

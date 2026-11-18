@@ -7,33 +7,43 @@ use oxc_ast::{Comment, CommentKind, CommentPosition};
 use oxc_span::Span;
 use smol_str::SmolStr;
 
-/// Every generated node gets its own one-character line tagged with its origin, because Oxc drops a
-/// mapping whose source position repeats the previous one and skips empty spans.
+/// Every generated node gets its own two-character position tagged with its origin, because Oxc
+/// drops a mapping whose source position repeats the previous one, skips empty spans, and maps
+/// the end of a span as well as its start.
 #[derive(Clone)]
-pub(crate) struct ProgramText(Rc<ProgramTextState>);
+pub(crate) struct ProgramText {
+    inner: Rc<ProgramTextState>,
+}
 
 struct ProgramTextState {
     origin: Cell<Option<Origin>>,
-    function_name: RefCell<Option<SmolStr>>,
+    function_name: Cell<Option<NameIndex>>,
     contents: RefCell<ProgramTextContents>,
 }
 
 #[derive(Default)]
 struct ProgramTextContents {
-    text: String,
-    lines: Vec<ProgramLine>,
+    positions: Vec<ProgramPosition>,
+    names: Vec<SmolStr>,
+    comment_text: String,
     comments: Vec<Comment>,
 }
 
-enum ProgramLine {
-    Node(ProgramNode),
+enum ProgramPosition {
+    Node { origin: Option<Origin>, name: Option<NameIndex> },
     Comment,
 }
 
-#[derive(Clone)]
-pub(crate) struct ProgramNode {
-    pub(crate) origin: Option<Origin>,
-    pub(crate) name: Option<SmolStr>,
+const POSITION_WIDTH: u32 = 2;
+
+#[derive(Clone, Copy)]
+pub(crate) struct NameIndex(u32);
+
+pub(crate) struct ProgramSource {
+    pub(crate) text: String,
+    pub(crate) comments: Vec<Comment>,
+    positions: Vec<ProgramPosition>,
+    names: Vec<SmolStr>,
 }
 
 pub(crate) struct OriginScope {
@@ -43,51 +53,65 @@ pub(crate) struct OriginScope {
 
 pub(crate) struct FunctionNameScope {
     text: ProgramText,
-    enclosing: Option<SmolStr>,
+    enclosing: Option<NameIndex>,
 }
 
 impl ProgramText {
     pub(crate) fn new() -> ProgramText {
         let state = ProgramTextState {
             origin: Cell::new(None),
-            function_name: RefCell::new(None),
+            function_name: Cell::new(None),
             contents: RefCell::default(),
         };
-        ProgramText(Rc::new(state))
+        ProgramText { inner: Rc::new(state) }
     }
 
     pub(crate) fn span(&self) -> Span {
         self.named_span(None)
     }
 
-    pub(crate) fn named_span(&self, name: Option<SmolStr>) -> Span {
-        let node = ProgramNode { origin: self.0.origin.get(), name };
-        let start = self.0.contents.borrow_mut().push_line(" ", ProgramLine::Node(node));
+    pub(crate) fn named_span(&self, name: Option<NameIndex>) -> Span {
+        let origin = self.inner.origin.get();
+        let mut contents = self.inner.contents.borrow_mut();
+        let start = contents.push_position(ProgramPosition::Node { origin, name });
         Span::new(start, start + 1)
     }
 
-    pub(crate) fn function_name(&self) -> Option<SmolStr> {
-        Option::clone(&self.0.function_name.borrow())
+    pub(crate) fn register_name(&self, name: &SmolStr) -> NameIndex {
+        let mut contents = self.inner.contents.borrow_mut();
+        let index = NameIndex(contents.names.len() as u32);
+        contents.names.push(SmolStr::clone(name));
+        index
+    }
+
+    pub(crate) fn function_name(&self) -> Option<NameIndex> {
+        self.inner.function_name.get()
     }
 
     pub(crate) fn enter_origin(&self, origin: Option<Origin>) -> OriginScope {
-        let enclosing = self.0.origin.get();
+        let enclosing = self.inner.origin.get();
         if origin.is_some() {
-            self.0.origin.set(origin);
+            self.inner.origin.set(origin);
         }
         OriginScope { text: ProgramText::clone(self), enclosing }
     }
 
-    pub(crate) fn enter_function_name(&self, name: Option<SmolStr>) -> FunctionNameScope {
-        let enclosing = self.0.function_name.replace(name);
+    pub(crate) fn enter_function_name(&self, name: Option<NameIndex>) -> FunctionNameScope {
+        let enclosing = self.inner.function_name.replace(name);
         FunctionNameScope { text: ProgramText::clone(self), enclosing }
     }
 
     pub(crate) fn line_comment(&self, text: &str) -> Span {
-        let mut contents = self.0.contents.borrow_mut();
-        let start = contents.push_line(&format!("// {text}"), ProgramLine::Comment);
-        let end = start + 3 + text.len() as u32;
-        let attached_to = contents.push_line(" ", ProgramLine::Comment);
+        assert!(
+            !text.contains('\n'),
+            "invariant violated: program text comment contains a newline"
+        );
+        let mut contents = self.inner.contents.borrow_mut();
+        let start = contents.comment_text.len() as u32;
+        contents.comment_text.push_str("// ");
+        contents.comment_text.push_str(text);
+        let end = contents.comment_text.len() as u32;
+        let attached_to = contents.push_position(ProgramPosition::Comment);
 
         let mut comment = Comment::new(start, end, CommentKind::Line);
         comment.attached_to = attached_to;
@@ -97,43 +121,51 @@ impl ProgramText {
         Span::empty(attached_to)
     }
 
-    pub(crate) fn source_text(&self) -> String {
-        String::clone(&self.0.contents.borrow().text)
+    pub(crate) fn finish(&self) -> ProgramSource {
+        let ProgramTextContents { positions, names, comment_text, comments } =
+            self.inner.contents.take();
+        let comment_offset = positions.len() as u32 * POSITION_WIDTH;
+        let mut text = " ".repeat(comment_offset as usize);
+        text.push_str(&comment_text);
+        let comments = comments.into_iter().map(|mut comment| {
+            comment.span =
+                Span::new(comment.span.start + comment_offset, comment.span.end + comment_offset);
+            comment
+        });
+        let comments = comments.collect();
+        ProgramSource { text, comments, positions, names }
     }
+}
 
-    pub(crate) fn comments(&self) -> Vec<Comment> {
-        Vec::clone(&self.0.contents.borrow().comments)
+impl ProgramTextContents {
+    fn push_position(&mut self, position: ProgramPosition) -> u32 {
+        let start = self.positions.len() as u32 * POSITION_WIDTH;
+        self.positions.push(position);
+        start
     }
+}
 
-    pub(crate) fn line_node(&self, line: u32) -> ProgramNode {
-        match &self.0.contents.borrow().lines[line as usize] {
-            ProgramLine::Node(node) => ProgramNode::clone(node),
-            ProgramLine::Comment => {
+impl ProgramSource {
+    pub(crate) fn node(&self, column: u32) -> (Option<Origin>, Option<&SmolStr>) {
+        match self.positions[(column / POSITION_WIDTH) as usize] {
+            ProgramPosition::Node { origin, name } => {
+                (origin, name.map(|NameIndex(index)| &self.names[index as usize]))
+            }
+            ProgramPosition::Comment => {
                 unreachable!("invariant violated: generated code was mapped to a comment")
             }
         }
     }
 }
 
-impl ProgramTextContents {
-    fn push_line(&mut self, line: &str, kind: ProgramLine) -> u32 {
-        assert!(!line.contains('\n'), "invariant violated: program text line contains a newline");
-        let start = self.text.len() as u32;
-        self.text.push_str(line);
-        self.text.push('\n');
-        self.lines.push(kind);
-        start
-    }
-}
-
 impl Drop for OriginScope {
     fn drop(&mut self) {
-        self.text.0.origin.set(self.enclosing);
+        self.text.inner.origin.set(self.enclosing);
     }
 }
 
 impl Drop for FunctionNameScope {
     fn drop(&mut self) {
-        self.text.0.function_name.replace(self.enclosing.take());
+        self.text.inner.function_name.set(self.enclosing);
     }
 }

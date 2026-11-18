@@ -18,7 +18,7 @@ use oxc_syntax::operator::{AssignmentOperator, BinaryOperator, UpdateOperator};
 use smol_str::SmolStr;
 
 use crate::convert::identifier_is_binding;
-use crate::program_text::{ProgramNode, ProgramText};
+use crate::program_text::{NameIndex, ProgramSource, ProgramText};
 use crate::source_map::{OriginMapping, Position};
 use crate::tree::{ExpressionId, Tree};
 
@@ -59,7 +59,11 @@ impl<'a> Writer<'a> {
         self.program_text.named_span(self.function_name())
     }
 
-    pub(crate) fn function_name(&self) -> Option<SmolStr> {
+    pub(crate) fn register_name(&self, name: &SmolStr) -> NameIndex {
+        self.program_text.register_name(name)
+    }
+
+    pub(crate) fn function_name(&self) -> Option<NameIndex> {
         self.program_text.function_name()
     }
 
@@ -351,7 +355,7 @@ impl<'a> Writer<'a> {
     pub(crate) fn function<R>(
         &mut self,
         name: &str,
-        source_name: Option<SmolStr>,
+        source_name: Option<NameIndex>,
         parameters: Vec<SmolStr>,
         exported: bool,
         render: impl FnOnce(&mut Writer<'a>) -> R,
@@ -389,7 +393,7 @@ impl<'a> Writer<'a> {
     pub(crate) fn constant_arrow<R>(
         &mut self,
         name: &str,
-        source_name: Option<SmolStr>,
+        source_name: Option<NameIndex>,
         parameters: Vec<SmolStr>,
         render: impl FnOnce(&mut Writer<'a>) -> R,
     ) -> R {
@@ -411,7 +415,7 @@ impl<'a> Writer<'a> {
     pub(crate) fn arrow<R>(
         &mut self,
         tree: &mut Tree<'a>,
-        source_name: Option<SmolStr>,
+        source_name: Option<NameIndex>,
         parameters: Vec<SmolStr>,
         render: impl FnOnce(&mut Tree<'a>, &mut Writer<'a>) -> R,
     ) -> (ExpressionId, R) {
@@ -471,7 +475,7 @@ impl<'a> Writer<'a> {
     pub(crate) fn constant_iife<R>(
         &mut self,
         name: &str,
-        source_name: Option<SmolStr>,
+        source_name: Option<NameIndex>,
         exported: bool,
         render: impl FnOnce(&mut Writer<'a>) -> R,
     ) -> R {
@@ -828,17 +832,19 @@ impl<'a> Writer<'a> {
     }
 
     pub(crate) fn finish(self) -> String {
-        self.generate(None).code
+        let (output, _) = self.generate(None);
+        output.code
     }
 
     pub(crate) fn finish_with_mappings(self) -> (String, Vec<OriginMapping>) {
-        let program_text = ProgramText::clone(&self.program_text);
-        let output = self.generate(Some(PathBuf::new()));
+        let (output, source) = self.generate(Some(PathBuf::new()));
         let map = output.map.expect("invariant violated: generated code has no source map");
-        let mut mappings = Vec::<OriginMapping>::new();
-        for token in map.get_tokens() {
+        let tokens = map.get_tokens();
+        let mut mappings = Vec::<OriginMapping>::with_capacity(tokens.len());
+        for token in tokens {
             let generated = Position { line: token.get_dst_line(), column: token.get_dst_col() };
-            let ProgramNode { origin, mut name } = program_text.line_node(token.get_src_line());
+            let (origin, name) = source.node(token.get_src_col());
+            let mut name = name.cloned();
             if let Some(previous) = mappings.pop_if(|previous| previous.generated == generated) {
                 name = name.or(previous.name);
             }
@@ -854,11 +860,12 @@ impl<'a> Writer<'a> {
         (output.code, mappings)
     }
 
-    fn generate(self, source_map_path: Option<PathBuf>) -> CodegenReturn<'a> {
+    fn generate(self, source_map_path: Option<PathBuf>) -> (CodegenReturn<'a>, ProgramSource) {
         let body = ArenaVec::from_iter_in(self.statements, &self.allocator);
-        let source_text = self.allocator.alloc_str(&self.program_text.source_text());
+        let source = self.program_text.finish();
+        let source_text = self.allocator.alloc_str(&source.text);
         let span = Span::new(0, source_text.len() as u32);
-        let comments = ArenaVec::from_iter_in(self.program_text.comments(), &self.allocator);
+        let comments = ArenaVec::from_iter_in(source.comments.iter().copied(), &self.allocator);
         let program = Program::new(
             span,
             SourceType::mjs(),
@@ -875,7 +882,7 @@ impl<'a> Writer<'a> {
             source_map_path,
             ..CodegenOptions::default()
         };
-        Codegen::new().with_options(options).build(&program)
+        (Codegen::new().with_options(options).build(&program), source)
     }
 }
 

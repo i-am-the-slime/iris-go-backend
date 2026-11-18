@@ -5,28 +5,56 @@ use std::num::NonZeroU32;
 use hashbrown::HashTable;
 use rustc_hash::FxBuildHasher;
 use syntax::ast::{AstNode, AstPtr};
-use syntax::{SyntaxNode, SyntaxNodePtr};
+use syntax::{SyntaxNode, SyntaxNodePtr, cst};
 
 use crate::AstId;
 
 pub struct StabilizedModule {
     arena: Vec<SyntaxNodePtr>,
     table: HashTable<NonZeroU32>,
+    counts: NodeCounts,
+}
+
+#[derive(Default)]
+struct NodeCounts {
+    expressions: usize,
+    types: usize,
+}
+
+impl NodeCounts {
+    #[inline]
+    fn record(&mut self, ptr: SyntaxNodePtr) {
+        if cst::Expression::can_cast(ptr.kind()) {
+            self.expressions += 1;
+        } else if cst::Type::can_cast(ptr.kind()) {
+            self.types += 1;
+        }
+    }
 }
 
 impl Default for StabilizedModule {
     fn default() -> StabilizedModule {
         let arena = Vec::new();
         let table = HashTable::default();
-        StabilizedModule { arena, table }
+        let counts = NodeCounts::default();
+        StabilizedModule { arena, table, counts }
     }
 }
 
 impl StabilizedModule {
-    pub(crate) fn with_capacity(capacity: usize) -> StabilizedModule {
-        let arena = Vec::with_capacity(capacity);
-        let table = HashTable::with_capacity(capacity);
-        StabilizedModule { arena, table }
+    pub(crate) fn from_arena(mut arena: Vec<SyntaxNodePtr>) -> StabilizedModule {
+        arena.shrink_to_fit();
+        let mut table = HashTable::with_capacity(arena.len());
+        let mut counts = NodeCounts::default();
+
+        for (index, &ptr) in arena.iter().enumerate() {
+            counts.record(ptr);
+            let id = NonZeroU32::MIN.saturating_add(index as u32);
+            let hash = FxBuildHasher.hash_one(ptr);
+            table.insert_unique(hash, id, |&id| arena_hasher(&arena, id));
+        }
+
+        StabilizedModule { arena, table, counts }
     }
 
     pub fn allocate(&mut self, node: &SyntaxNode) {
@@ -36,6 +64,7 @@ impl StabilizedModule {
 
     pub(crate) fn allocate_ptr(&mut self, ptr: SyntaxNodePtr) {
         let hash = FxBuildHasher.hash_one(ptr);
+        self.counts.record(ptr);
 
         let id = {
             self.arena.push(ptr);
@@ -72,6 +101,18 @@ impl StabilizedModule {
 
     pub fn syntax_ptr<N: AstNode>(&self, id: AstId<N>) -> Option<SyntaxNodePtr> {
         arena_index(&self.arena, id.id)
+    }
+
+    pub(crate) fn len(&self) -> usize {
+        self.arena.len()
+    }
+
+    pub fn expression_count(&self) -> usize {
+        self.counts.expressions
+    }
+
+    pub fn type_count(&self) -> usize {
+        self.counts.types
     }
 
     pub fn shrink_to_fit(&mut self) {
@@ -119,19 +160,16 @@ fn arena_hasher(arena: &[SyntaxNodePtr], id: NonZeroU32) -> u64 {
 #[cfg(test)]
 mod tests {
     use syntax::ast::AstPtr;
-    use syntax::{SyntaxKind, SyntaxNode, SyntaxNodePtr, SyntaxValue, TreeOwner, cst};
+    use syntax::{SyntaxKind, SyntaxNode, SyntaxNodePtr, TreeBuilder, cst};
 
     use super::StabilizedModule;
 
     fn annotation(text_length: usize) -> SyntaxNode {
-        let mut builder = syntree::Builder::new_with();
-        let node = SyntaxValue::node(SyntaxKind::Annotation);
-        builder.open(node).unwrap();
-        let token = SyntaxValue::token(SyntaxKind::TEXT);
-        builder.token(token, text_length).unwrap();
-        builder.close().unwrap();
-        let owner = TreeOwner::new(builder.build().unwrap());
-        SyntaxNode::new_root(owner)
+        let mut builder = TreeBuilder::with_capacity(2);
+        builder.open(SyntaxKind::Annotation);
+        builder.token(SyntaxKind::TEXT, text_length.try_into().unwrap());
+        builder.close();
+        SyntaxNode::new_root(builder.build())
     }
 
     #[test]

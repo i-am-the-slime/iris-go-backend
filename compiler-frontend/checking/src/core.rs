@@ -19,6 +19,7 @@ use std::sync::Arc;
 
 use files::FileId;
 use indexing::{TermItemId, TypeItemId};
+use rustc_hash::FxHashSet;
 use smol_str::{SmolStr, SmolStrBuilder};
 
 /// A globally unique identity for a rigid type variable.
@@ -164,7 +165,7 @@ pub struct CheckedClass {
 }
 
 /// Represents a checked instance declaration head.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CheckedInstance {
     /// Type class reference.
     pub resolution: (FileId, TypeItemId),
@@ -239,6 +240,16 @@ pub struct CheckedInstance {
     /// [signature]: CheckedInstance::signature
     /// [matchable]: CheckedInstance::matchable
     pub matchable: TypeId,
+    pub head: Option<Arc<InstanceHead>>,
+}
+
+#[derive(Debug, PartialEq, Eq)]
+pub struct InstanceHead {
+    pub binders: Vec<ForallBinder>,
+    pub pattern_variables: FxHashSet<Name>,
+    pub constraints: Vec<TypeId>,
+    pub arguments: Vec<ApplicationArgument>,
+    pub type_arguments: Vec<TypeId>,
 }
 
 /// The core type representation used by the checker after name resolution.
@@ -297,12 +308,14 @@ impl TypeFlags {
     pub(crate) const MAY_EXPAND: u8 = 1 << 4;
     pub(crate) const HAS_UNKNOWN: u8 = 1 << 5;
     pub(crate) const HAS_SYNONYM: u8 = 1 << 6;
+    pub(crate) const HAS_SCOPED_RIGID: u8 = 1 << 7;
 
     const TRANSITIVE: u8 = TypeFlags::HAS_UNIFICATION
         | TypeFlags::HAS_RIGID
         | TypeFlags::HAS_NESTED_ROW
         | TypeFlags::HAS_UNKNOWN
-        | TypeFlags::HAS_SYNONYM;
+        | TypeFlags::HAS_SYNONYM
+        | TypeFlags::HAS_SCOPED_RIGID;
 
     pub(crate) fn from_bits(bits: u8) -> TypeFlags {
         TypeFlags(bits)
@@ -350,6 +363,10 @@ impl TypeFlags {
     /// [`has_unification`]: TypeFlags::has_unification
     pub fn has_rigid(self) -> bool {
         self.0 & TypeFlags::HAS_RIGID != 0
+    }
+
+    pub(crate) fn has_scoped_rigid(self) -> bool {
+        self.0 & TypeFlags::HAS_SCOPED_RIGID != 0
     }
 
     /// Whether this type contains unification or rigid variables.

@@ -1,54 +1,59 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-mise_version=2026.9.3
-export PATH="$HOME/.local/bin:$PATH"
-if [[ "$("$HOME/.local/bin/mise" version 2>/dev/null | cut -d' ' -f1 || true)" != "$mise_version" ]]; then
-  echo '--- Installing mise'
-  curl --proto '=https' --tlsv1.2 -fsSL https://mise.run \
-    | MISE_VERSION="$mise_version" sh
+export PATH="$HOME/.nix-profile/bin:$PATH"
+export NIX_CONFIG="extra-experimental-features = nix-command flakes"
+if ! command -v nix > /dev/null; then
+  echo '--- Installing Nix'
+  curl --proto '=https' --tlsv1.2 -fsSL https://nixos.org/nix/install | sh -s -- --no-daemon
 fi
 
-echo '--- Installing configured development tools'
-mise trust mise.toml
-mise install --yes
-eval "$(mise env --shell bash)"
-mise ls --current
-
-# Amp and supervised services start in fresh non-interactive login shells,
-# while the Terminal starts interactive shells that read .bashrc.
-repository_root="$PWD"
-profile_marker="# Iris mise environment: $repository_root"
-if [[ ! -e "$HOME/.bash_profile" ]]; then
-  # Creating .bash_profile must not hide the previously selected login file.
-  if [[ -r "$HOME/.bash_login" ]]; then
-    printf '%s\n' '[[ ! -r "$HOME/.bash_login" ]] || . "$HOME/.bash_login"' >> "$HOME/.bash_profile"
-  else
-    printf '%s\n' '[[ ! -r "$HOME/.profile" ]] || . "$HOME/.profile"' >> "$HOME/.bash_profile"
-  fi
+echo '--- Removing development tools installed by mise'
+if command -v rustup > /dev/null; then
+  rustup self uninstall -y
 fi
+rm -rf "$HOME/.local/bin/mise" "$HOME/.local/share/mise" "$HOME/.local/state/mise" "$HOME/.cache/mise"
+sudo rm -f /etc/profile.d/iris-mise.sh
+sudo sed -i '\|/etc/profile.d/iris-mise.sh|d' /etc/bash.bashrc
 
-for shell_profile in "$HOME/.bash_profile" "$HOME/.bashrc"; do
-  if grep -Fqx "$profile_marker" "$shell_profile" 2>/dev/null; then
-    if ! grep -Fq 'IRIS_MISE_' "$shell_profile"; then
-      continue
-    fi
+echo '--- Building the development shell'
+state_directory="$HOME/.local/state/iris"
+mkdir -p "$state_directory"
+nix print-dev-env --profile "$state_directory/development-shell" --json > "$state_directory/development-shell.json"
 
-    # Replace the original login-only hook when updating an existing orb.
-    temporary_profile="$(mktemp)"
-    awk -v marker="$profile_marker" '
-      $0 == marker { replacing = 1; next }
-      replacing && $0 == "fi" { replacing = 0; next }
-      !replacing { print }
-    ' "$shell_profile" > "$temporary_profile"
-    cat "$temporary_profile" > "$shell_profile"
-    rm "$temporary_profile"
-  fi
-  cat >> "$shell_profile" <<EOF
+jq -r '
+  def sandbox_only: IN("HOME", "PATH", "SHELL", "CONFIG_SHELL", "HOST_PATH", "TERM", "TZ", "OLDPWD",
+    "SOURCE_DATE_EPOCH", "NIX_BUILD_TOP", "NIX_BUILD_CORES", "NIX_LOG_FD", "NIX_ENFORCE_PURITY",
+    "TMP", "TMPDIR", "TEMP", "TEMPDIR");
+  .variables
+  | "iris_nix_path=\(.PATH.value | @sh)",
+    "case \"$PATH\" in",
+    "  \"$iris_nix_path\" | \"$iris_nix_path\":*) ;;",
+    "  *) PATH=\"$iris_nix_path${PATH:+:$PATH}\" ;;",
+    "esac",
+    "export PATH",
+    "unset iris_nix_path",
+    (to_entries[]
+      | select(.value.type == "exported" and (.key | test("^[A-Z][A-Z0-9_]*$")) and (.key | sandbox_only | not))
+      | "export \(.key)=\(.value.value | @sh)"),
+    .shellHook.value
+' "$state_directory/development-shell.json" | sudo tee /etc/profile.d/iris-nix.sh > /dev/null
 
-$profile_marker
-eval "\$("$HOME/.local/bin/mise" --cd "$repository_root" env --shell bash)"
-EOF
+hook='[ ! -r /etc/profile.d/iris-nix.sh ] || . /etc/profile.d/iris-nix.sh'
+append_hook_last() {
+  local startup_file="$1"
+  shift
+  local contents
+  contents="$(grep -vFx "$hook" "$startup_file" 2> /dev/null || true)"
+  printf '%s\n\n%s\n' "$contents" "$hook" | "$@" tee "$startup_file" > /dev/null
+}
+append_hook_last /etc/bash.bashrc sudo
+for startup_file in "$HOME/.bashrc" "$HOME/.profile" "$HOME/.bash_profile"; do
+  append_hook_last "$startup_file" env
 done
+
+. /etc/profile.d/iris-nix.sh
+rustc --version
+node --version
 
 printf '\nSetup complete in %ss.\n' "$SECONDS"
