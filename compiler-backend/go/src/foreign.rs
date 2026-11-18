@@ -135,6 +135,13 @@ pub struct Boundary {
     /// The Go helper's one type parameter is its result type, which its
     /// arguments do not determine.
     pub result_parameter: bool,
+    pub accumulator: Option<Accumulator>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct Accumulator {
+    pub parameter: usize,
+    pub element: usize,
 }
 
 /// A record of polymorphic constructors that JavaScript passes a foreign (the
@@ -224,6 +231,7 @@ const PLAIN: Boundary = Boundary {
     signature: None,
     utility: None,
     result_parameter: false,
+    accumulator: None,
 };
 
 const RESULT_PARAMETER: Boundary = Boundary { result_parameter: true, ..PLAIN };
@@ -241,6 +249,9 @@ const INSTANTIATE: Boundary = Boundary { instantiate: true, ..PLAIN };
 const UNIT_VALUES: Boundary = Boundary { unit_values: true, ..PLAIN };
 
 const RECORD: Boundary = Boundary { record_result: true, ..PLAIN };
+
+const CONS_LIST_ACCUMULATOR: Boundary =
+    Boundary { accumulator: Some(Accumulator { parameter: 0, element: 1 }), ..PLAIN };
 
 const fn maybe(just: usize, nothing: usize) -> Boundary {
     let constructors = MaybeConstructors { just, nothing, witness: None, elements: false };
@@ -778,7 +789,7 @@ const FOREIGN_IMPORTS: &[(&str, &str, Foreign)] = &[
     ("Data.Array", "zipWithImpl", uncurried(array("ZipWith", 3), &[(0, 2)])),
     ("Data.Array", "anyImpl", iteration(GoPackage::Array, "Any", 2, Iteration::Any)),
     ("Data.Array", "partitionImpl", direct_with("Partition", 2, RECORD)),
-    ("Data.Array", "fromFoldableImpl", direct("FromFoldable", 2)),
+    ("Data.Array", "fromFoldableImpl", direct_with("FromFoldable", 2, CONS_LIST_ACCUMULATOR)),
     ("Data.Array", "allImpl", iteration(GoPackage::Direct, "All", 2, Iteration::All)),
     ("Data.Array", "scanlImpl", uncurried(array("Scanl", 3), &[(0, 2)])),
     ("Data.Array", "scanrImpl", uncurried(array("Scanr", 3), &[(0, 2)])),

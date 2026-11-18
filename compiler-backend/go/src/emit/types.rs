@@ -79,6 +79,12 @@ where
                 let lazy = GoType::Generic { name: "lazy.Lazy".into(), arguments: vec![value] };
                 GoType::Pointer(Box::new(lazy))
             }
+            Monotype::ConsList(element) => {
+                self.imports.insert(GoPackage::Direct.path().into());
+                let element = self.go_type(element)?;
+                let name = "direct.ConsList".into();
+                GoType::Pointer(Box::new(GoType::Generic { name, arguments: vec![element] }))
+            }
             Monotype::Error => {
                 self.imports.insert(GoPackage::Exception.path().into());
                 GoType::Named("exception.Error".into())
@@ -251,7 +257,8 @@ where
                 | Monotype::MutableArray(inner)
                 | Monotype::Object(inner)
                 | Monotype::Nullable(inner)
-                | Monotype::Lazy(inner) => pending.push(inner),
+                | Monotype::Lazy(inner)
+                | Monotype::ConsList(inner) => pending.push(inner),
                 Monotype::ForeignData(foreign) => {
                     for &argument in foreign.arguments.iter() {
                         let argument = self.monotypes.monotype(&mut self.context, argument);

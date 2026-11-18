@@ -16,6 +16,7 @@ pub type Substitution = FxHashMap<Name, TypeId>;
 const ERASED_UNIQUE: u32 = u32::MAX - 4096;
 /// The phantom stand-in, below every erased one.
 const PHANTOM_UNIQUE: u32 = ERASED_UNIQUE - 1024;
+const CONS_LIST_UNIQUE: u32 = PHANTOM_UNIQUE - 1;
 
 pub struct TypeOperations<'q, Q> {
     queries: &'q Q,
@@ -24,6 +25,7 @@ pub struct TypeOperations<'q, Q> {
     collapsed_causes: OnceCell<(Substitution, u64)>,
     without_causes: RefCell<FxHashMap<TypeId, TypeId>>,
     phantom: Cell<Option<TypeId>>,
+    cons_list: Cell<Option<TypeId>>,
     placeholders: RefCell<Vec<TypeId>>,
 }
 
@@ -100,6 +102,7 @@ where
             collapsed_causes: OnceCell::new(),
             without_causes: RefCell::default(),
             phantom: Cell::default(),
+            cons_list: Cell::default(),
             placeholders: RefCell::default(),
         }
     }
@@ -125,6 +128,23 @@ where
         let phantom = self.stand_in(PHANTOM_UNIQUE);
         self.phantom.set(Some(phantom));
         phantom
+    }
+
+    pub fn cons_list(&self) -> TypeId {
+        if let Some(cons_list) = self.cons_list.get() {
+            return cons_list;
+        }
+        let cons_list = self.stand_in(CONS_LIST_UNIQUE);
+        self.cons_list.set(Some(cons_list));
+        cons_list
+    }
+
+    pub fn is_cons_list(&self, type_id: TypeId) -> bool {
+        self.cons_list.get() == Some(self.strip_annotations(type_id))
+    }
+
+    pub fn is_cons_list_name(&self, name: Name) -> bool {
+        name.file == self.queries.prim_id() && !name.scoped && name.unique == CONS_LIST_UNIQUE
     }
 
     /// The stand-in for the quantified variable at a position of a scheme, so

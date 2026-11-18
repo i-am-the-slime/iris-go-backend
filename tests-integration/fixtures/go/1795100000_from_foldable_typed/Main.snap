@@ -1,0 +1,403 @@
+---
+source: tests-integration/src/fixtures.rs
+---
+// Data/Foldable/foldable.go
+package foldable
+
+import (
+	"fixture/Data/Maybe"
+	"github.com/i-am-the-slime/purs-backend-go/go-support/direct"
+)
+
+func Foldr(f func(string) func(*direct.ConsList[string]) *direct.ConsList[string], z *direct.ConsList[string], maybe2 maybe.MaybeString) *direct.ConsList[string] {
+	switch maybe2.Tag {
+	case maybe.MaybeStringNothing:
+		return z
+	default: // maybe.MaybeStringJust
+		return f(maybe2.Just)(z)
+	}
+}
+
+// Data/List/Types/types.go
+package types
+
+import (
+	"github.com/i-am-the-slime/purs-backend-go/go-support/alloc"
+	"github.com/i-am-the-slime/purs-backend-go/go-support/direct"
+)
+
+type ListInt struct {
+	Cons1 *ListInt
+	Cons0 int32
+	Tag   uint8
+}
+
+const (
+	ListIntNil = iota
+	ListIntCons
+)
+
+var SharedListIntNil = &ListInt{Tag: ListIntNil}
+
+type ListString struct {
+	Cons0 string
+	Cons1 *ListString
+	Tag   uint8
+}
+
+const (
+	ListStringNil = iota
+	ListStringCons
+)
+
+var SharedListStringNil = &ListString{Tag: ListStringNil}
+
+func Foldr(f func(int32) func(*direct.ConsList[int32]) *direct.ConsList[int32], b *direct.ConsList[int32]) func(*ListInt) *direct.ConsList[int32] {
+	return func(x *ListInt) *direct.ConsList[int32] {
+		return FoldrGo(f, b, FoldrGo2(SharedListIntNil, x))
+	}
+}
+
+func FoldrGo(f func(int32) func(*direct.ConsList[int32]) *direct.ConsList[int32], b *direct.ConsList[int32], value *ListInt) *direct.ConsList[int32] {
+	for {
+		switch value.Tag {
+		case ListIntNil:
+			return b
+		default: // ListIntCons
+			a := value.Cons0
+			as := value.Cons1
+			b, value = f(a)(b), as
+			continue
+		}
+	}
+}
+
+func FoldrGo2(acc *ListInt, list *ListInt) *ListInt {
+	var listIntCells alloc.Cells[ListInt]
+	for {
+		switch list.Tag {
+		case ListIntNil:
+			return acc
+		default: // ListIntCons
+			x := list.Cons0
+			xs := list.Cons1
+			acc, list = listIntCells.New(ListInt{Tag: ListIntCons, Cons0: x, Cons1: acc}), xs
+			continue
+		}
+	}
+}
+
+// Data/Map/Internal/internal.go
+package internal
+
+import "fixture/Data/List/Types"
+
+type MapStringUnit struct {
+	Node3 struct{}
+	Node2 string
+	Node4 *MapStringUnit
+	Node5 *MapStringUnit
+	Node0 int32
+	Node1 int32
+	Tag   uint8
+}
+
+const (
+	MapStringUnitLeaf = iota
+	MapStringUnitNode
+)
+
+var SharedMapStringUnitLeaf = &MapStringUnit{Tag: MapStringUnitLeaf}
+
+func KeysStringUnit(m *MapStringUnit) *types.ListString {
+	return KeysStringUnitGo(m, types.SharedListStringNil)
+}
+
+func UnsafeNodeStringUnit(k string, v struct{}, l *MapStringUnit, r *MapStringUnit) *MapStringUnit {
+	switch l.Tag {
+	case MapStringUnitLeaf:
+		switch r.Tag {
+		case MapStringUnitLeaf:
+			return &MapStringUnit{Tag: MapStringUnitNode, Node0: 1, Node1: 1, Node2: k, Node3: v, Node4: l, Node5: r}
+		default: // MapStringUnitNode
+			return &MapStringUnit{Tag: MapStringUnitNode, Node0: 1 + r.Node0, Node1: 1 + r.Node1, Node2: k, Node3: v, Node4: l, Node5: r}
+		}
+	default: // MapStringUnitNode
+		h1 := l.Node0
+		s1 := l.Node1
+		switch r.Tag {
+		case MapStringUnitLeaf:
+			return &MapStringUnit{Tag: MapStringUnitNode, Node0: 1 + h1, Node1: 1 + s1, Node2: k, Node3: v, Node4: l, Node5: r}
+		default: // MapStringUnitNode
+			h2 := r.Node0
+			var result int32
+			if h1 > h2 {
+				result = h1
+			} else {
+				result = h2
+			}
+			return &MapStringUnit{Tag: MapStringUnitNode, Node0: 1 + result, Node1: 1 + s1 + r.Node1, Node2: k, Node3: v, Node4: l, Node5: r}
+		}
+	}
+}
+
+func KeysStringUnitGo(m_ *MapStringUnit, z_ *types.ListString) *types.ListString {
+	for {
+		switch m_.Tag {
+		case MapStringUnitLeaf:
+			return z_
+		default: // MapStringUnitNode
+			k := m_.Node2
+			l := m_.Node4
+			r := m_.Node5
+			m_, z_ = l, &types.ListString{Tag: types.ListStringCons, Cons0: k, Cons1: KeysStringUnitGo(r, z_)}
+			continue
+		}
+	}
+}
+
+func UnsafeBalancedNodeStringUnitHeight(value *MapStringUnit) int32 {
+	switch value.Tag {
+	case MapStringUnitLeaf:
+		return 0
+	default: // MapStringUnitNode
+		return value.Node0
+	}
+}
+
+func UnsafeBalancedNodeStringUnitReusing(k string, v struct{}, l *MapStringUnit, r *MapStringUnit, donor *MapStringUnit) *MapStringUnit {
+	switch l.Tag {
+	case MapStringUnitLeaf:
+		if r.Tag == MapStringUnitLeaf {
+			*donor = MapStringUnit{Tag: MapStringUnitNode, Node0: 1, Node1: 1, Node2: k, Node3: v, Node4: SharedMapStringUnitLeaf, Node5: SharedMapStringUnitLeaf}
+			return donor
+		}
+		if r.Tag == MapStringUnitNode {
+			rh := r.Node0
+			rk := r.Node2
+			rl := r.Node4
+			rr := r.Node5
+			if rh > 1 {
+				return UnsafeBalancedNodeStringUnitRotateLeftReusing(UnsafeBalancedNodeStringUnitHeight, k, v, l, rk, struct{}{}, rl, rr, donor)
+			}
+		}
+		return UnsafeNodeStringUnitReusing(k, v, l, r, donor)
+	default: // MapStringUnitNode
+		lh := l.Node0
+		lk := l.Node2
+		ll := l.Node4
+		lr := l.Node5
+		if r.Tag == MapStringUnitNode {
+			rh := r.Node0
+			rk := r.Node2
+			rl := r.Node4
+			rr := r.Node5
+			if rh > lh + 1 {
+				return UnsafeBalancedNodeStringUnitRotateLeftReusing(UnsafeBalancedNodeStringUnitHeight, k, v, l, rk, struct{}{}, rl, rr, donor)
+			}
+			if lh > rh + 1 {
+				return UnsafeBalancedNodeStringUnitRotateRightReusing(UnsafeBalancedNodeStringUnitHeight, k, v, lk, struct{}{}, ll, lr, r, donor)
+			}
+		}
+		if r.Tag == MapStringUnitLeaf {
+			if lh > 1 {
+				return UnsafeBalancedNodeStringUnitRotateRightReusing(UnsafeBalancedNodeStringUnitHeight, k, v, lk, struct{}{}, ll, lr, r, donor)
+			}
+		}
+		return UnsafeNodeStringUnitReusing(k, v, l, r, donor)
+	}
+}
+
+func UnsafeNodeStringUnitReusing(k string, v struct{}, l *MapStringUnit, r *MapStringUnit, donor *MapStringUnit) *MapStringUnit {
+	switch l.Tag {
+	case MapStringUnitLeaf:
+		switch r.Tag {
+		case MapStringUnitLeaf:
+			*donor = MapStringUnit{Tag: MapStringUnitNode, Node0: 1, Node1: 1, Node2: k, Node3: v, Node4: l, Node5: r}
+			return donor
+		default: // MapStringUnitNode
+			h2 := r.Node0
+			s2 := r.Node1
+			*donor = MapStringUnit{Tag: MapStringUnitNode, Node0: 1 + h2, Node1: 1 + s2, Node2: k, Node3: v, Node4: l, Node5: r}
+			return donor
+		}
+	default: // MapStringUnitNode
+		h1 := l.Node0
+		s1 := l.Node1
+		switch r.Tag {
+		case MapStringUnitLeaf:
+			*donor = MapStringUnit{Tag: MapStringUnitNode, Node0: 1 + h1, Node1: 1 + s1, Node2: k, Node3: v, Node4: l, Node5: r}
+			return donor
+		default: // MapStringUnitNode
+			h2 := r.Node0
+			s2 := r.Node1
+			var result int32
+			if h1 > h2 {
+				result = h1
+			} else {
+				result = h2
+			}
+			*donor = MapStringUnit{Tag: MapStringUnitNode, Node0: 1 + result, Node1: 1 + s1 + s2, Node2: k, Node3: v, Node4: l, Node5: r}
+			return donor
+		}
+	}
+}
+
+func UnsafeBalancedNodeStringUnitRotateRightReusing(height func(*MapStringUnit) int32, k string, v struct{}, lk string, lv struct{}, ll *MapStringUnit, lr *MapStringUnit, r *MapStringUnit, donor *MapStringUnit) *MapStringUnit {
+	if lr.Tag == MapStringUnitNode {
+		rh := lr.Node0
+		rk := lr.Node2
+		rl := lr.Node4
+		rr := lr.Node5
+		if height(ll) <= rh {
+			return UnsafeNodeStringUnitReusing(rk, struct{}{}, UnsafeNodeStringUnit(lk, lv, ll, rl), UnsafeNodeStringUnit(k, v, rr, r), donor)
+		}
+	}
+	return UnsafeNodeStringUnitReusing(lk, lv, ll, UnsafeNodeStringUnit(k, v, lr, r), donor)
+}
+
+func UnsafeBalancedNodeStringUnitRotateLeftReusing(height func(*MapStringUnit) int32, k string, v struct{}, l *MapStringUnit, rk string, rv struct{}, rl *MapStringUnit, rr *MapStringUnit, donor *MapStringUnit) *MapStringUnit {
+	if rl.Tag == MapStringUnitNode {
+		lh := rl.Node0
+		lk := rl.Node2
+		ll := rl.Node4
+		lr := rl.Node5
+		if lh > height(rr) {
+			return UnsafeNodeStringUnitReusing(lk, struct{}{}, UnsafeNodeStringUnit(k, v, l, ll), UnsafeNodeStringUnit(rk, rv, lr, rr), donor)
+		}
+	}
+	return UnsafeNodeStringUnitReusing(rk, rv, UnsafeNodeStringUnit(k, v, l, rl), rr, donor)
+}
+
+// Data/Maybe/maybe.go
+package maybe
+
+type MaybeString struct {
+	Just string
+	Tag  uint8
+}
+
+const (
+	MaybeStringNothing = iota
+	MaybeStringJust
+)
+
+// Data/Set/set.go
+package set
+
+import (
+	list "fixture/Data/List/Types"
+	m "fixture/Data/Map/Internal"
+	"github.com/i-am-the-slime/purs-backend-go/go-support/direct"
+)
+
+func Foldr(f func(string) func(*direct.ConsList[string]) *direct.ConsList[string], x *direct.ConsList[string]) func(*m.MapStringUnit) *direct.ConsList[string] {
+	return func(x2 *m.MapStringUnit) *direct.ConsList[string] {
+		return FoldrGo(f, x, FoldrGoReusing(list.SharedListStringNil, m.KeysStringUnit(x2)))
+	}
+}
+
+func FoldrGo(f func(string) func(*direct.ConsList[string]) *direct.ConsList[string], b *direct.ConsList[string], value *list.ListString) *direct.ConsList[string] {
+	for {
+		switch value.Tag {
+		case list.ListStringNil:
+			return b
+		default: // list.ListStringCons
+			a := value.Cons0
+			as := value.Cons1
+			b, value = f(a)(b), as
+			continue
+		}
+	}
+}
+
+func FoldrGoReusing(acc *list.ListString, list2 *list.ListString) *list.ListString {
+	for {
+		switch list2.Tag {
+		case list.ListStringNil:
+			return acc
+		default: // list.ListStringCons
+			x := list2.Cons0
+			xs := list2.Cons1
+			*list2 = list.ListString{Tag: list.ListStringCons, Cons0: x, Cons1: acc}
+			acc, list2 = list2, xs
+			continue
+		}
+	}
+}
+
+// main.go
+package main
+
+import (
+	"fixture/Data/Foldable"
+	"fixture/Data/List/Types"
+	"fixture/Data/Map/Internal"
+	"fixture/Data/Maybe"
+	"fixture/Data/Set"
+	"fmt"
+	"github.com/i-am-the-slime/purs-backend-go/go-support/direct"
+	"github.com/i-am-the-slime/purs-backend-go/go-support/exception"
+	"github.com/i-am-the-slime/purs-backend-go/go-support/prim"
+)
+
+var main_ = initializeMain_()
+
+func initializeMain_() int32 {
+	defer exception.ReportUncaught()
+	return int32(len(direct.FromFoldable(func(f func(int32) func(*direct.ConsList[int32]) *direct.ConsList[int32]) func(*direct.ConsList[int32]) func(*types.ListInt) *direct.ConsList[int32] {
+		return func(b *direct.ConsList[int32]) func(*types.ListInt) *direct.ConsList[int32] {
+			return types.Foldr(f, b)
+		}
+	}, numbers))) + int32(len(direct.FromFoldable(func(f func(string) func(*direct.ConsList[string]) *direct.ConsList[string]) func(*direct.ConsList[string]) func(maybe.MaybeString) *direct.ConsList[string] {
+		return func(z *direct.ConsList[string]) func(maybe.MaybeString) *direct.ConsList[string] {
+			return func(maybe maybe.MaybeString) *direct.ConsList[string] {
+				return foldable.Foldr(f, z, maybe)
+			}
+		}
+	}, maybe.MaybeString{Tag: maybe.MaybeStringJust, Just: "x"}))) + int32(len(direct.FromFoldable(func(f func(string) func(*direct.ConsList[string]) *direct.ConsList[string]) func(*direct.ConsList[string]) func(*internal.MapStringUnit) *direct.ConsList[string] {
+		return func(x *direct.ConsList[string]) func(*internal.MapStringUnit) *direct.ConsList[string] {
+			return set.Foldr(f, x)
+		}
+	}, words)))
+}
+
+var numbers *types.ListInt = &types.ListInt{Tag: types.ListIntCons, Cons0: 1, Cons1: &types.ListInt{Tag: types.ListIntCons, Cons0: 2, Cons1: &types.ListInt{Tag: types.ListIntCons, Cons0: 3, Cons1: types.SharedListIntNil}}}
+
+var words = initializeWords()
+
+func initializeWords() *internal.MapStringUnit {
+	defer exception.ReportUncaught()
+	array := []string{"b", "a"}
+	accumulator := internal.SharedMapStringUnitLeaf
+	for _, a := range array {
+		m := accumulator
+		accumulator = wordsGoReusing(a, m)
+	}
+	return accumulator
+}
+
+func wordsGoReusing(a string, value *internal.MapStringUnit) *internal.MapStringUnit {
+	switch value.Tag {
+	case internal.MapStringUnitLeaf:
+		return &internal.MapStringUnit{Tag: internal.MapStringUnitNode, Node0: 1, Node1: 1, Node2: a, Node3: struct{}{}, Node4: internal.SharedMapStringUnitLeaf, Node5: internal.SharedMapStringUnitLeaf}
+	default: // internal.MapStringUnitNode
+		mh := value.Node0
+		ms := value.Node1
+		mk := value.Node2
+		ml := value.Node4
+		mr := value.Node5
+		if prim.CompareString(a, mk) < 0 {
+			return internal.UnsafeBalancedNodeStringUnitReusing(mk, struct{}{}, wordsGoReusing(a, ml), mr, value)
+		}
+		if a == mk {
+			*value = internal.MapStringUnit{Tag: internal.MapStringUnitNode, Node0: mh, Node1: ms, Node2: a, Node3: struct{}{}, Node4: ml, Node5: mr}
+			return value
+		}
+		return internal.UnsafeBalancedNodeStringUnitReusing(mk, struct{}{}, ml, wordsGoReusing(a, mr), value)
+	}
+}
+
+func main() {
+	fmt.Println(main_)
+}

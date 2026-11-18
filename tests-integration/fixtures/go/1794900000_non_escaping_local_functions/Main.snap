@@ -33,8 +33,8 @@ const (
 var sharedListIntNil = &ListInt{Tag: ListIntNil}
 
 func main_() int32 {
-	array := direct.FromFoldable(func(f func(int32) func(any) any) func(any) func(*ListInt) any {
-		return func(b any) func(*ListInt) any {
+	array := direct.FromFoldable(func(f func(int32) func(*direct.ConsList[int32]) *direct.ConsList[int32]) func(*direct.ConsList[int32]) func(*ListInt) *direct.ConsList[int32] {
+		return func(b *direct.ConsList[int32]) func(*ListInt) *direct.ConsList[int32] {
 			return foldr(f, b)
 		}
 	}, &ListInt{Tag: ListIntCons, Cons0: 1, Cons1: &ListInt{Tag: ListIntCons, Cons0: 2, Cons1: sharedListIntNil}})
@@ -46,13 +46,13 @@ func main_() int32 {
 	return accumulator
 }
 
-func foldr(f func(int32) func(any) any, b any) func(*ListInt) any {
-	return func(x *ListInt) any {
+func foldr(f func(int32) func(*direct.ConsList[int32]) *direct.ConsList[int32], b *direct.ConsList[int32]) func(*ListInt) *direct.ConsList[int32] {
+	return func(x *ListInt) *direct.ConsList[int32] {
 		return foldrGo(f, b, foldrGo2(sharedListIntNil, x))
 	}
 }
 
-func foldrGo(f func(int32) func(any) any, accumulator any, list *ListInt) any {
+func foldrGo(f func(int32) func(*direct.ConsList[int32]) *direct.ConsList[int32], accumulator *direct.ConsList[int32], list *ListInt) *direct.ConsList[int32] {
 	for {
 		switch list.Tag {
 		case ListIntNil:

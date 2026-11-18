@@ -240,6 +240,10 @@ where
                 text(parts, "Lazy");
                 self.monotype_parts(value, parts)?;
             }
+            Monotype::ConsList(element) => {
+                text(parts, "ConsList");
+                self.monotype_parts(element, parts)?;
+            }
             Monotype::Record(fields) => {
                 parts.push(NamePart::Record { monotype, labels: labels_name(&fields) });
             }
@@ -507,6 +511,7 @@ where
             Monotype::Effect(result) => inner(self, "Effect", result)?,
             Monotype::Nullable(element) => inner(self, "Nullable", element)?,
             Monotype::Lazy(value) => inner(self, "Lazy", value)?,
+            Monotype::ConsList(element) => inner(self, "ConsList", element)?,
             Monotype::Reference(value) => inner(self, "Ref", value)?,
             Monotype::Record(fields) => match short.get(&monotype) {
                 Some(name) => name.clone(),

@@ -43,6 +43,7 @@ impl Monotypes {
             Monotype::Mutex => "mutex",
             Monotype::BigInt => "bigInt",
             Monotype::Lazy(_) => "lazy",
+            Monotype::ConsList(_) => "list",
             Monotype::Data(data) | Monotype::ForeignData(data) | Monotype::Recursive(data) => {
                 match self.type_names.get(&(data.file_id, data.item)) {
                     Some(name) => return go_safe(&lower_camel(name)),

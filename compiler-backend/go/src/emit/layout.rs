@@ -240,6 +240,7 @@ where
             | Monotype::Mutex
             | Monotype::BigInt
             | Monotype::Lazy(_)
+            | Monotype::ConsList(_)
             | Monotype::Recursive(_) => Shape::POINTER,
         })
     }

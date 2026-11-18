@@ -400,6 +400,7 @@ where
             Monotype::Object(_) => Monotype::Object(erased),
             Monotype::Nullable(_) => Monotype::Nullable(erased),
             Monotype::Lazy(_) => Monotype::Lazy(erased),
+            Monotype::ConsList(_) => Monotype::ConsList(erased),
             Monotype::Record(fields) => {
                 let fields = fields
                     .iter()

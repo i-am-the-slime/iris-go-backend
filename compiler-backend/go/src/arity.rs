@@ -250,6 +250,7 @@ impl<'p> Uses<'p> {
             (Monotype::Array(from_element), Monotype::Array(to_element))
             | (Monotype::Effect(from_element), Monotype::Effect(to_element))
             | (Monotype::Lazy(from_element), Monotype::Lazy(to_element))
+            | (Monotype::ConsList(from_element), Monotype::ConsList(to_element))
             | (Monotype::Nullable(from_element), Monotype::Nullable(to_element)) => {
                 self.coerced(*from_element, *to_element, monotypes);
             }

@@ -45,6 +45,7 @@ pub struct SchemeInstantiations {
     families: FxHashMap<TypeId, ExistsFamily>,
     erased_families: FxHashMap<TypeId, Erasure>,
     continuation_families: FxHashMap<SchemeKey, TypeId>,
+    accumulators: FxHashMap<SchemeKey, TypeId>,
     version: u32,
     written: FxHashMap<Decision, u32>,
     reads: RefCell<Vec<Read>>,
@@ -66,6 +67,7 @@ pub enum Decision {
     Continuations(TypeId),
     FamilyErasure(TypeId),
     ContinuationFamily(SchemeKey),
+    Accumulator(SchemeKey),
 }
 
 /// A read of the schemes: a decision at the version the schemes had then,
@@ -128,6 +130,20 @@ impl SchemeInstantiations {
 
     pub fn find(&self, key: &SchemeKey, types: &[TypeId]) -> Option<&SchemeInstantiation> {
         self.get(key).iter().find(|instantiation| *instantiation.types == *types)
+    }
+
+    pub fn accumulator(&self, key: &SchemeKey) -> Option<TypeId> {
+        self.note_read(Decision::Accumulator(key.clone()));
+        self.accumulators.get(key).copied()
+    }
+
+    pub fn add_accumulator(&mut self, key: SchemeKey, accumulator: TypeId) -> bool {
+        if self.accumulators.contains_key(&key) {
+            return false;
+        }
+        self.note_write(Decision::Accumulator(key.clone()));
+        self.accumulators.insert(key, accumulator);
+        true
     }
 
     /// Whether an unconstrained `forall` with this key is specialized.

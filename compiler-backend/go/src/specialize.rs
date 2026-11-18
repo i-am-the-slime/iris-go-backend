@@ -21,7 +21,7 @@ use crate::context::{Context, ModuleData};
 use crate::dictionary::{Dictionary, InstanceDictionary, Reflected};
 use crate::erasure::Erasure;
 use crate::error::{GoError, GoResult, UnsupportedState};
-use crate::foreign::{self, Boundary, Foreign, ForeignPackages, Signature, Spelled};
+use crate::foreign::{self, Accumulator, Boundary, Foreign, ForeignPackages, Signature, Spelled};
 use crate::mono::{
     Alternative, Binding, Expression, ExpressionKind, Function, FunctionId, FunctionSpelling,
     Guard, Guarded, GuardedBranch, Literal, Local, Pattern, PatternKind, RecordUpdate,
@@ -29,6 +29,7 @@ use crate::mono::{
 use crate::monotype::{Monotype, MonotypeId, Monotypes, supported};
 use crate::scheme::{
     Read, SCHEME_INSTANTIATION_LIMIT, SchemeInstantiation, SchemeKey, constrained_scheme,
+    rank_n_scheme,
 };
 use crate::timing::timed;
 use crate::types::{Substituted, Substitution};
@@ -1633,6 +1634,7 @@ where
             Monotype::Array(inner)
             | Monotype::Effect(inner)
             | Monotype::Lazy(inner)
+            | Monotype::ConsList(inner)
             | Monotype::Nullable(inner) => self.mentions_recursive(*inner),
             Monotype::Function(argument, result) => {
                 self.mentions_recursive(*argument) || self.mentions_recursive(*result)
@@ -2359,11 +2361,16 @@ where
         for &argument in instantiations.values() {
             self.context.types.rigid_names(argument, &mut skolems);
         }
-        let erased = self.context.types.erased(Erasure::RankN);
+        let accumulator = match rank_n_scheme(&mut self.context, checked)? {
+            Some(scheme) => self.monotypes.schemes.accumulator(&scheme.key),
+            None => None,
+        };
+        let erased = accumulator.unwrap_or_else(|| self.context.types.erased(Erasure::RankN));
         let skolems: Substitution = skolems
             .into_iter()
             .filter(|name| !scope.substitution.contains_key(name))
             .filter(|&name| self.context.types.name_erasure(name).is_none())
+            .filter(|&name| !self.context.types.is_cons_list_name(name))
             .map(|name| (name, erased))
             .collect();
         for argument in instantiations.values_mut() {
@@ -2556,6 +2563,16 @@ where
                         }
                     }
                     let foreign = self.with_callback_arities(file_id, term, foreign)?;
+                    let accumulator = match foreign {
+                        Foreign::Call { boundary, .. } => boundary.accumulator,
+                        _ => None,
+                    };
+                    let monotype = match accumulator {
+                        Some(fold) => {
+                            self.accumulated_monotype(scope, file_id, term, instantiations, fold)?
+                        }
+                        None => monotype,
+                    };
                     return Ok(self.foreign(foreign, monotype));
                 }
                 if self.foreign_packages.provides(&module.name) {
@@ -2792,15 +2809,70 @@ where
         Ok(learned.interned())
     }
 
-    fn uncurried_parts(&mut self, type_id: TypeId) -> GoResult<(Vec<Spelled>, TypeId)> {
-        let (head, arguments) = self.context.types.spine(type_id);
+    /// The type of a foreign fold whose rank-2 accumulator the Go helper fixes
+    /// at a cons list of the elements: the quantified accumulator of the
+    /// declared parameter is instantiated before the type is converted, so the
+    /// fold specializes at the list rather than at an erased type.
+    fn accumulated_monotype(
+        &mut self,
+        scope: &Scope,
+        file_id: FileId,
+        term: TermItemId,
+        instantiations: &Substitution,
+        accumulator: Accumulator,
+    ) -> GoResult<MonotypeId> {
+        let module = self.context.module(file_id)?;
+        let declared = module
+            .checked
+            .lookup_term_item_type(term)
+            .ok_or_else(|| self.unsupported(scope, UnsupportedState::MissingDeclaration))?;
+        let declared = crate::monotype::expand_synonyms(&mut self.context, declared)?;
+        let (names, body) = self.context.types.peel_quantifiers(declared);
+        let element = names.get(accumulator.element).and_then(|name| instantiations.get(name));
+        let Some(&element) = element else {
+            let variable = format!("accumulator element {}", accumulator.element);
+            let state = UnsupportedState::UninstantiatedVariable { variable };
+            return Err(self.unsupported(scope, state));
+        };
+        let cons_list = self.context.types.cons_list();
+        let cons_list = self.context.queries.intern_type(Type::Application(cons_list, element));
+        let (head, arguments) = self.context.types.spine(body);
+        let parameter = match self.is_uncurried_function(head)? {
+            true => arguments.get(accumulator.parameter).copied(),
+            false => {
+                let mut current = body;
+                for _ in 0..accumulator.parameter {
+                    let parts = self.context.types.function_parts(current);
+                    current = parts.map_or(current, |(_, rest)| rest);
+                }
+                self.context.types.function_parts(current).map(|(parameter, _)| parameter)
+            }
+        };
+        let Some(parameter) = parameter else {
+            return Err(self.unsupported(scope, UnsupportedState::MissingDeclaration));
+        };
+        let parameter = self.context.types.substitute(parameter, instantiations);
+        if let Some(scheme) = rank_n_scheme(&mut self.context, parameter)?
+            && self.monotypes.schemes.add_accumulator(scheme.key, cons_list)
+        {
+            self.grown = true;
+        }
+        self.declared_monotype(scope, declared, instantiations)
+    }
+
+    fn is_uncurried_function(&mut self, head: TypeId) -> GoResult<bool> {
         let Type::Constructor(file_id, item) = self.context.types.lookup(head).clone() else {
-            return Ok((vec![], type_id));
+            return Ok(false);
         };
         let module = self.context.module(file_id)?;
         let name = module.indexed.items[item].name.clone().unwrap_or_default();
-        let uncurried = module.name == "Data.Function.Uncurried"
-            && name.strip_prefix("Fn").is_some_and(|count| count.parse::<usize>().is_ok());
+        Ok(module.name == "Data.Function.Uncurried"
+            && name.strip_prefix("Fn").is_some_and(|count| count.parse::<usize>().is_ok()))
+    }
+
+    fn uncurried_parts(&mut self, type_id: TypeId) -> GoResult<(Vec<Spelled>, TypeId)> {
+        let (head, arguments) = self.context.types.spine(type_id);
+        let uncurried = self.is_uncurried_function(head)?;
         let Some((&result, parameters)) = arguments.split_last().filter(|_| uncurried) else {
             return Ok((vec![], type_id));
         };

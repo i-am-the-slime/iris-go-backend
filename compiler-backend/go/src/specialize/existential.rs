@@ -352,6 +352,7 @@ where
             (Monotype::Array(source), Monotype::Array(target))
             | (Monotype::Effect(source), Monotype::Effect(target))
             | (Monotype::Lazy(source), Monotype::Lazy(target))
+            | (Monotype::ConsList(source), Monotype::ConsList(target))
             | (Monotype::Nullable(source), Monotype::Nullable(target)) => {
                 self.note_crossings(source, target);
             }
@@ -395,6 +396,7 @@ where
             Monotype::Object(_) => Monotype::Object(erased),
             Monotype::Nullable(_) => Monotype::Nullable(erased),
             Monotype::Lazy(_) => Monotype::Lazy(erased),
+            Monotype::ConsList(_) => Monotype::ConsList(erased),
             Monotype::Record(fields) => {
                 let fields = fields
                     .iter()

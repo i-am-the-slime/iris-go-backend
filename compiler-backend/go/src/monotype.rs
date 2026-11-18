@@ -41,6 +41,7 @@ pub enum Monotype {
     Mutex,
     BigInt,
     Lazy(MonotypeId),
+    ConsList(MonotypeId),
     Data(DataType),
     /// A `foreign import data` type that a go-support package or the
     /// project's Go foreign package for its module declares, as a named Go type.
@@ -59,7 +60,8 @@ impl Monotype {
             | Monotype::MutableArray(element)
             | Monotype::Object(element)
             | Monotype::Nullable(element)
-            | Monotype::Lazy(element) => Some(*element),
+            | Monotype::Lazy(element)
+            | Monotype::ConsList(element) => Some(*element),
             _ => None,
         }
     }
@@ -249,6 +251,7 @@ impl Monotypes {
             Monotype::Object(element) => Monotype::Object(self.without_causes(element)),
             Monotype::Nullable(element) => Monotype::Nullable(self.without_causes(element)),
             Monotype::Lazy(element) => Monotype::Lazy(self.without_causes(element)),
+            Monotype::ConsList(element) => Monotype::ConsList(self.without_causes(element)),
             monotype => monotype,
         };
         let collapsed = self.intern(collapsed);
@@ -432,6 +435,17 @@ impl Monotypes {
             Type::Forall(..) => match self.scheme_for(context, type_id)? {
                 Some(scheme) => return self.convert_scheme(context, &scheme, expansions),
                 None => {
+                    let accumulator = match rank_n_scheme(context, type_id)? {
+                        Some(scheme) => self.schemes.accumulator(&scheme.key),
+                        None => None,
+                    };
+                    if let Some(accumulator) = accumulator {
+                        let (names, inner) = context.types.peel_quantifiers(type_id);
+                        let substitution: crate::types::Substitution =
+                            names.into_iter().map(|name| (name, accumulator)).collect();
+                        let inner = context.types.substitute(inner, &substitution);
+                        return self.convert(context, inner, expansions);
+                    }
                     // Without constraints there is no instantiation to specialize
                     // on yet: the quantified variables are erased.
                     let erasure = match self.schemes.has_grown() {
@@ -505,6 +519,14 @@ impl Monotypes {
                     }
                     .into()),
                 };
+            }
+            Type::Rigid(..) if context.types.is_cons_list(head) => {
+                let [element] = arguments[..] else {
+                    let name = "ConsList".into();
+                    return Err(UnsupportedState::UnsaturatedType { name }.into());
+                };
+                let element = self.convert(context, element, expansions)?;
+                return Ok(self.intern(Monotype::ConsList(element)));
             }
             Type::Rigid(..) | Type::Unification(_) => {
                 let erasure = context.types.erasure(head).unwrap_or(Erasure::VariableApplication);
