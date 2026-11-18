@@ -1,0 +1,57 @@
+---
+source: tests-integration/src/fixtures.rs
+---
+// main.go
+package main
+
+import (
+	"fmt"
+	"github.com/i-am-the-slime/purs-backend-go/go-support/exception"
+)
+
+type NestInt struct {
+	Nest int32
+}
+
+type Nest struct {
+	Nest any
+}
+
+func convert(value NestInt) *Nest {
+	return &Nest{Nest: value.Nest}
+}
+
+type NestString struct {
+	Nest string
+}
+
+func convert2(value NestString) *Nest {
+	return &Nest{Nest: value.Nest}
+}
+
+type NestNest struct {
+	Nest   *Nest
+	Origin any
+}
+
+func convert3(value *NestNest) *Nest {
+	return &Nest{Nest: value.Nest}
+}
+
+var main_ = initializeMain_()
+
+func initializeMain_() []int32 {
+	defer exception.ReportUncaught()
+	return []int32{nested(3, convert(NestInt{Nest: 1})), nested(4, convert2(NestString{Nest: "deep"}))}
+}
+
+func nested(n int32, e any) int32 {
+	if n <= 0 {
+		return 0
+	}
+	return 1 + nested(n - 1, convert3(&NestNest{Nest: e.(*Nest)}))
+}
+
+func main() {
+	fmt.Println(main_)
+}
