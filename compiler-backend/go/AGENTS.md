@@ -47,7 +47,9 @@ Work is done when every gate passes. A passing gate that was weakened to pass do
 
 - Erasing a type to `any` to get past a Go type error.
 - Generic runtime helpers over `any` where a specialised, typed function can be emitted.
-- Special-casing a function, module or type by name to make one program build.
+- Special-casing a function, module or type by name to make one program build. The one exception
+  is `primitives::known`, a small table of primitives of very stable libraries (`Data.Exists`)
+  whose meaning the backend implements in general, approved by the maintainer.
 - Stubbing a foreign or emitting `panic("not implemented")` for code the target program reaches.
 - Weakening a test: removing an edge case, loosening a comparison, excluding an example, or
   accepting a regenerated snapshot without reading the diff.

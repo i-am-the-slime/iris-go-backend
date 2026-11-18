@@ -22,6 +22,8 @@ enum Arguments<'p> {
     Parameters(&'p mut Vec<(String, GoType)>),
 }
 
+const TYPED_EXISTENTIAL: &str = "a typed Data.Exists rebuilt from another representation";
+
 impl<'q, Q> Emitter<'_, '_, 'q, Q>
 where
     Q: checking::ExternalQueries,
@@ -107,6 +109,16 @@ where
                 let type_ = self.go_type(foreign_array)?;
                 let value = GoExpression::TypeAssertion { value: Box::new(value), type_ };
                 self.coerce(value, foreign_array, to, out)
+            }
+            (Monotype::Data(data), Monotype::Erased(_) | Monotype::Opaque)
+                if self.monotypes.exists_family(&data).is_some() =>
+            {
+                self.erase_existential(value, from, &data, to)
+            }
+            (_, Monotype::Data(data)) | (Monotype::Data(data), _)
+                if self.monotypes.exists_family(&data).is_some() =>
+            {
+                Err(GoError::unsupported_construct(TYPED_EXISTENTIAL))
             }
             (_, Monotype::Erased(_) | Monotype::Opaque) => {
                 let canonical = self.canonical(from)?;

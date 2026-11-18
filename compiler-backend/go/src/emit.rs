@@ -16,6 +16,7 @@ mod conventions;
 mod constructors;
 mod deduplicate;
 mod diverging;
+mod existential;
 mod fusion;
 mod groups;
 mod immediate;

@@ -433,13 +433,17 @@ where
             origin_position: plan.as_ref().map_or(0, |plan| plan.pointer_prefix),
         };
         self.data_layouts.insert(data.clone(), layout.clone());
-        let names = layouts.iter().map(|constructor| constructor.tag.clone()).collect();
+        let names: Vec<String> =
+            layouts.iter().map(|constructor| constructor.tag.clone()).collect();
         let Some(plan) = plan else {
             self.type_declarations.push(GoDeclaration::Type {
                 name: name.clone(),
                 type_: layout::tag_type(constructors.len()),
             });
-            self.type_declarations.push(GoDeclaration::Constants { type_name: Some(name), names });
+            if !names.is_empty() {
+                let constants = GoDeclaration::Constants { type_name: Some(name), names };
+                self.type_declarations.push(constants);
+            }
             return Ok(layout);
         };
         let mut fields = vec![];

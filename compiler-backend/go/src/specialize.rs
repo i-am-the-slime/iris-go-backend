@@ -34,6 +34,7 @@ use crate::scheme::{
 use crate::types::{Substituted, Substitution};
 
 mod evidence;
+mod existential;
 mod growth;
 mod patterns;
 mod runtime;
@@ -201,6 +202,8 @@ pub struct Specializer<'q, Q> {
     callback_arities: FxHashMap<(FileId, TermItemId), (&'static [usize], &'static Signature)>,
     constructing: Vec<(SchemeKey, Arc<[TypeId]>)>,
     growing_owners: Vec<String>,
+    erased_families: Vec<(TypeId, Erasure)>,
+    crossings: rustc_hash::FxHashSet<(MonotypeId, MonotypeId)>,
 }
 
 struct RecordedBlocker {
@@ -242,6 +245,8 @@ where
             callback_arities: FxHashMap::default(),
             constructing: vec![],
             growing_owners: vec![],
+            erased_families: vec![],
+            crossings: rustc_hash::FxHashSet::default(),
         }
     }
 
@@ -281,6 +286,7 @@ where
             self.functions[id.0 as usize] = Some(function);
             self.adopt_rank_n_fields();
         }
+        self.note_reference_crossings();
         Ok(entry)
     }
 
@@ -315,8 +321,17 @@ where
         let erased_keys = std::mem::take(&mut self.monotypes.new_erased_keys);
         let keys = std::mem::take(&mut self.monotypes.new_rank_n_keys);
         let growing = std::mem::take(&mut self.growing_owners);
-        if erased.is_empty() && erased_keys.is_empty() && keys.is_empty() && growing.is_empty() {
+        let families = std::mem::take(&mut self.erased_families);
+        if erased.is_empty()
+            && erased_keys.is_empty()
+            && keys.is_empty()
+            && growing.is_empty()
+            && families.is_empty()
+        {
             return;
+        }
+        for (family, erasure) in families {
+            self.monotypes.schemes.erase_family(family, erasure);
         }
         for owner in erased {
             self.monotypes.schemes.erase_owner(owner);
@@ -429,6 +444,24 @@ where
             self.reconcile_references(&mut function.body, &signatures);
         }
         (functions, self.monotypes, self.next_local)
+    }
+
+    fn note_reference_crossings(&mut self) {
+        let functions = std::mem::take(&mut self.functions);
+        let signatures: Vec<Option<MonotypeId>> = functions
+            .iter()
+            .map(|function| function.as_ref().map(|function| self.signature(function)))
+            .collect();
+        let mut mismatches = vec![];
+        for function in functions.iter().flatten() {
+            mismatched_references(&function.body, &signatures, &mut mismatches);
+        }
+        self.functions = functions;
+        for (signature, expected) in mismatches {
+            if self.changes_representation(signature, expected) {
+                self.note_crossings(signature, expected);
+            }
+        }
     }
 
     fn signature(&mut self, function: &Function) -> MonotypeId {
@@ -1398,7 +1431,9 @@ where
                     tree::ExpressionKind::Variable { .. }
                     | tree::ExpressionKind::EvidenceApplication { .. },
                     Some((expected, _)),
-                ) => self.reference(scope, argument, Substitution::default(), Some(expected))?,
+                ) if !self.is_continuation(scope, expected)? => {
+                    self.reference(scope, argument, Substitution::default(), Some(expected))?
+                }
                 _ => self.expression(scope, argument)?,
             };
             if position == 0 && is_foreign_wrapper(&function, Foreign::Identity) {
@@ -1430,6 +1465,14 @@ where
             return Ok(self.coerce(applied, monotype));
         }
         Ok(Expression::new(kind, monotype))
+    }
+
+    fn is_continuation(&mut self, scope: &Scope, expected: TypeId) -> GoResult<bool> {
+        let closed = self.context.types.substitute(expected, &scope.substitution);
+        let Some(scheme) = crate::scheme::rank_n_scheme(&mut self.context, closed)? else {
+            return Ok(false);
+        };
+        Ok(self.monotypes.schemes.continuation_family(&scheme.key).is_some())
     }
 
     /// The type a reference node stands at. The checker gives the node the
@@ -1498,6 +1541,7 @@ where
         if !self.changes_representation(expression.monotype, monotype) {
             return expression;
         }
+        self.note_crossings(expression.monotype, monotype);
         Expression::new(ExpressionKind::Coerce(Box::new(expression)), monotype)
     }
 
@@ -2437,6 +2481,9 @@ where
                 if let Some(foreign) = foreign::foreign_import(&module.name, &name) {
                     if let Foreign::UnsafeCoerce = foreign {
                         self.link_coerced_rank_n(scope, file_id, term, instantiations)?;
+                        if let Some((from, to)) = self.monotypes.function_parts(monotype) {
+                            self.note_crossings(from, to);
+                        }
                     }
                     let foreign = self.with_callback_arities(file_id, term, foreign)?;
                     return Ok(self.foreign(foreign, monotype));
@@ -2480,6 +2527,18 @@ where
                     return Err(self.unsupported(scope, UnsupportedState::MissingDeclaration));
                 };
                 let types = self.abstraction_types(scope, &value.abstractions, instantiations)?;
+                if let Some(primitive) = crate::primitives::known(&module.name, &name)
+                    && let Some(expression) = self.primitive(
+                        scope,
+                        primitive,
+                        (file_id, term),
+                        &types,
+                        instantiations,
+                        monotype,
+                    )?
+                {
+                    return Ok(expression);
+                }
                 let name = self.specialized_name(name, &types)?;
                 let key = SpecializationKey {
                     definition: Definition::Value { file_id, term },
@@ -2765,7 +2824,8 @@ where
             .monotypes
             .constructors(&mut self.context, &data)
             .map_err(|failure| failure.at(&scope.definition))?;
-        let Some(index) = constructors.iter().position(|constructor| constructor.term == term)
+        let Some(index) =
+            constructors.iter().position(|constructor| constructor.term == Some(term))
         else {
             return Err(self.unsupported(scope, UnsupportedState::MissingDeclaration));
         };
@@ -2883,8 +2943,9 @@ where
                     .monotypes
                     .constructors(&mut self.context, &data)
                     .map_err(|failure| failure.at(&scope.definition))?;
-                let Some(constructor) =
-                    constructors.iter().position(|constructor| constructor.term == resolution.1)
+                let Some(constructor) = constructors
+                    .iter()
+                    .position(|constructor| constructor.term == Some(resolution.1))
                 else {
                     return Err(self.unsupported(scope, UnsupportedState::BinderError));
                 };
@@ -2989,6 +3050,24 @@ where
         self.monotypes.function_spellings.entry(spelled.clone()).or_insert(spelling);
         Ok(spelled)
     }
+}
+
+fn mismatched_references(
+    expression: &Expression,
+    signatures: &[Option<MonotypeId>],
+    mismatches: &mut Vec<(MonotypeId, MonotypeId)>,
+) {
+    if let ExpressionKind::Function(id) = expression.kind {
+        if let Some(signature) = signatures[id.0 as usize]
+            && signature != expression.monotype
+        {
+            mismatches.push((signature, expression.monotype));
+        }
+        return;
+    }
+    crate::simplify::for_each_child(expression, &mut |child| {
+        mismatched_references(child, signatures, mismatches)
+    });
 }
 
 fn alternatives_monotype(alternatives: &[Alternative]) -> MonotypeId {

@@ -19,6 +19,7 @@ mod modules;
 mod mono;
 mod monotype;
 mod naming;
+mod primitives;
 mod scheme;
 mod simplify;
 mod specialize;

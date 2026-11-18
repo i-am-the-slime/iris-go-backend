@@ -40,6 +40,15 @@ pub struct SchemeInstantiations {
     erased_keys: rustc_hash::FxHashSet<SchemeKey>,
     coerced_sources: FxHashMap<SchemeKey, Vec<SchemeKey>>,
     grown_keys: rustc_hash::FxHashSet<SchemeKey>,
+    families: FxHashMap<TypeId, ExistsFamily>,
+    erased_families: FxHashMap<TypeId, Erasure>,
+    continuation_families: FxHashMap<SchemeKey, TypeId>,
+}
+
+#[derive(Debug, Clone, Default)]
+pub struct ExistsFamily {
+    pub witnesses: Vec<SchemeInstantiation>,
+    pub continuations: Vec<SchemeKey>,
 }
 
 impl SchemeInstantiations {
@@ -126,6 +135,49 @@ impl SchemeInstantiations {
 
     pub fn coerced_sources(&self, target: &SchemeKey) -> &[SchemeKey] {
         self.coerced_sources.get(target).map_or(&[], Vec::as_slice)
+    }
+
+    pub fn witnesses(&self, family: TypeId) -> &[SchemeInstantiation] {
+        self.families.get(&family).map_or(&[], |family| family.witnesses.as_slice())
+    }
+
+    pub fn continuations(&self, family: TypeId) -> &[SchemeKey] {
+        self.families.get(&family).map_or(&[], |family| family.continuations.as_slice())
+    }
+
+    pub fn family_erasure(&self, family: TypeId) -> Option<Erasure> {
+        self.erased_families.get(&family).copied()
+    }
+
+    pub fn continuation_family(&self, key: &SchemeKey) -> Option<TypeId> {
+        self.continuation_families.get(key).copied()
+    }
+
+    pub fn add_witness(&mut self, family: TypeId, witness: SchemeInstantiation) {
+        if self.erased_families.contains_key(&family) {
+            return;
+        }
+        self.families.entry(family).or_default().witnesses.push(witness);
+    }
+
+    pub fn add_continuation(&mut self, family: TypeId, key: SchemeKey) {
+        if self.erased_families.contains_key(&family) {
+            return;
+        }
+        self.rank_n.insert(key.clone(), format!("Data.Exists.runExists {family:?}"));
+        self.continuation_families.insert(key.clone(), family);
+        self.families.entry(family).or_default().continuations.push(key);
+    }
+
+    pub fn erase_family(&mut self, family: TypeId, erasure: Erasure) {
+        if let Some(erased) = self.families.remove(&family) {
+            for key in erased.continuations {
+                self.continuation_families.remove(&key);
+                self.known.remove(&key);
+                self.erase_key(key);
+            }
+        }
+        self.erased_families.entry(family).or_insert(erasure);
     }
 }
 

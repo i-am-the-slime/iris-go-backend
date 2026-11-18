@@ -24,6 +24,7 @@ pub enum Erasure {
     VariantRow,
     /// `Data.Exists.Exists`, an existential by construction.
     Existential,
+    UnboundedWitnesses,
     /// A newtype that unfolds into itself without a recursive data type.
     NewtypeCycle,
     /// A data type with no constructors.
@@ -61,13 +62,14 @@ impl Erasure {
         }
     }
 
-    pub const ALL: [Erasure; 15] = [
+    pub const ALL: [Erasure; 16] = [
         Erasure::ArgumentVariable,
         Erasure::TypeVariable,
         Erasure::RankN,
         Erasure::VariableApplication,
         Erasure::VariantRow,
         Erasure::Existential,
+        Erasure::UnboundedWitnesses,
         Erasure::NewtypeCycle,
         Erasure::EmptyData,
         Erasure::NonRegular,
@@ -97,6 +99,7 @@ impl fmt::Display for Erasure {
             Erasure::VariableApplication => "type variable application",
             Erasure::VariantRow => "Variant payload or VariantF row",
             Erasure::Existential => "Data.Exists",
+            Erasure::UnboundedWitnesses => "Data.Exists with unbounded witnesses",
             Erasure::NewtypeCycle => "newtype cycle",
             Erasure::EmptyData => "empty data type",
             Erasure::NonRegular => "non-regular data type",

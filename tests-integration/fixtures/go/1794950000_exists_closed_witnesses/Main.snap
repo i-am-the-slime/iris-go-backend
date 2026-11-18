@@ -36,24 +36,10 @@ import (
 	"github.com/i-am-the-slime/purs-backend-go/go-support/prim"
 )
 
-type Described struct {
-	First  any
-	Second func(any) string
-	Third  func(any) any
-}
-
 type DescribedInt struct {
 	Second func(int32) string
 	Third  func(int32) int32
 	First  int32
-}
-
-func convert(value DescribedInt) *Described {
-	return &Described{First: value.First, Second: func(coerced any) string {
-		return value.Second(coerced.(int32))
-	}, Third: func(coerced any) any {
-		return value.Third(coerced.(int32))
-	}}
 }
 
 type DescribedString struct {
@@ -62,106 +48,71 @@ type DescribedString struct {
 	Third  func(string) string
 }
 
-func convert2(value DescribedString) *Described {
-	return &Described{First: value.First, Second: func(coerced any) string {
-		return value.Second(coerced.(string))
-	}, Third: func(coerced any) any {
-		return value.Third(coerced.(string))
-	}}
-}
-
 type DescribedArrayNumber struct {
 	First  []float64
 	Second func([]float64) string
 	Third  func([]float64) []float64
 }
 
-func convert3(value []float64) []any {
-	converted := []any{}
-	for _, element := range value {
-		converted = append(converted, element)
-	}
-	return converted
+type ExistsDescribed struct {
+	Int         DescribedInt
+	String      DescribedString
+	ArrayNumber DescribedArrayNumber
+	Tag         uint8
 }
 
-func convert4(value []any) []float64 {
-	converted := []float64{}
-	for _, element := range value {
-		converted = append(converted, element.(float64))
-	}
-	return converted
-}
-
-func convert5(value DescribedArrayNumber) *Described {
-	return &Described{First: convert3(value.First), Second: func(coerced any) string {
-		return value.Second(convert4(coerced.([]any)))
-	}, Third: func(coerced any) any {
-		return convert3(value.Third(convert4(coerced.([]any))))
-	}}
-}
+const (
+	ExistsDescribedInt = iota
+	ExistsDescribedString
+	ExistsDescribedArrayNumber
+)
 
 var main_ = initializeMain_()
 
 func initializeMain_() []string {
 	defer exception.ReportUncaught()
 	mapped := make([]string, len(things))
-	for index, thing := range things {
-		mapped[index] = prim.Append(render(step(thing)), renderTwice(thing))
+	for index := range things {
+		var result string
+		switch things[index].Tag {
+		case ExistsDescribedInt:
+			result = things[index].Int.Second(things[index].Int.Third(things[index].Int.First))
+		case ExistsDescribedString:
+			result = things[index].String.Second(things[index].String.Third(things[index].String.First))
+		default: // ExistsDescribedArrayNumber
+			result = things[index].ArrayNumber.Second(things[index].ArrayNumber.Third(things[index].ArrayNumber.First))
+		}
+		var result2 string
+		switch things[index].Tag {
+		case ExistsDescribedInt:
+			value := things[index].Int.First
+			describe := things[index].Int.Second
+			result2 = prim.Append(describe(value), describe(things[index].Int.Third(value)))
+		case ExistsDescribedString:
+			value := things[index].String.First
+			describe := things[index].String.Second
+			result2 = prim.Append(describe(value), describe(things[index].String.Third(value)))
+		default: // ExistsDescribedArrayNumber
+			value := things[index].ArrayNumber.First
+			describe := things[index].ArrayNumber.Second
+			result2 = prim.Append(describe(value), describe(things[index].ArrayNumber.Third(value)))
+		}
+		mapped[index] = prim.Append(result, result2)
 	}
 	return mapped
 }
 
-var render = initializeRender()
-
-func initializeRender() func(any) string {
-	defer exception.ReportUncaught()
-	original := func(described *Described) string {
-		return described.Second(described.First)
+var things []ExistsDescribed = []ExistsDescribed{ExistsDescribed{Tag: ExistsDescribedInt, Int: DescribedInt{First: 1, Second: show.Show, Third: func(value int32) int32 {
+	return value + 1
+}}}, ExistsDescribed{Tag: ExistsDescribedString, String: DescribedString{First: "a", Second: category.Identity, Third: func(value string) string {
+	return value + "!"
+}}}, ExistsDescribed{Tag: ExistsDescribedArrayNumber, ArrayNumber: DescribedArrayNumber{First: []float64{1.5}, Second: show.ShowNumber, Third: func(array []float64) []float64 {
+	mapped := make([]float64, len(array))
+	for index, value := range array {
+		mapped[index] = float64(value * 2.0)
 	}
-	return func(coerced any) string {
-		return original(coerced.(*Described))
-	}
-}
-
-var step = initializeStep()
-
-func initializeStep() func(any) any {
-	defer exception.ReportUncaught()
-	original := func(described *Described) any {
-		next := described.Third
-		return &Described{First: next(described.First), Second: described.Second, Third: next}
-	}
-	return func(coerced any) any {
-		return original(coerced.(*Described))
-	}
-}
-
-var renderTwice func(any) string = func(coerced any) string {
-	return describeTwice(coerced.(*Described))
-}
-
-var things = initializeThings()
-
-func initializeThings() []any {
-	defer exception.ReportUncaught()
-	return []any{convert(DescribedInt{First: 1, Second: show.Show, Third: func(value int32) int32 {
-		return value + 1
-	}}), convert2(DescribedString{First: "a", Second: category.Identity, Third: func(value string) string {
-		return value + "!"
-	}}), convert5(DescribedArrayNumber{First: []float64{1.5}, Second: show.ShowNumber, Third: func(array []float64) []float64 {
-		mapped := make([]float64, len(array))
-		for index, value := range array {
-			mapped[index] = float64(value * 2.0)
-		}
-		return mapped
-	}})}
-}
-
-func describeTwice(described *Described) string {
-	value := described.First
-	describe := described.Second
-	return prim.Append(describe(value), describe(described.Third(value)))
-}
+	return mapped
+}}}}
 
 func main() {
 	fmt.Println(main_)

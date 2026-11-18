@@ -128,7 +128,7 @@ pub struct DataType {
 
 #[derive(Debug, Clone)]
 pub struct DataConstructor {
-    pub term: TermItemId,
+    pub term: Option<TermItemId>,
     pub name: SmolStr,
     pub fields: Vec<MonotypeId>,
     /// One of the fields is a type equality between apart types, as
@@ -174,6 +174,7 @@ pub struct Monotypes {
     /// The records that hold a rank-N value specialized at each of its
     /// instantiations, one field per instantiation.
     instantiated_records: rustc_hash::FxHashSet<MonotypeId>,
+    existential: Option<(FileId, TypeItemId)>,
 }
 
 impl Monotypes {
@@ -467,7 +468,20 @@ impl Monotypes {
                     context.queries.intern_type(Type::Application(representation, erased));
                 return self.convert(context, representation, expansions);
             }
-            ("Data.Exists", "Exists") => Monotype::Erased(Erasure::Existential),
+            ("Data.Exists", "Exists") => {
+                let Some(&family) = arguments.first() else {
+                    return Err(UnsupportedState::UnsaturatedType { name: name.to_string() }.into());
+                };
+                let family = erase_newtypes(context, family, expansions, &mut vec![])?;
+                if context.types.contains_erased(family) {
+                    Monotype::Erased(Erasure::Existential)
+                } else if let Some(erasure) = self.schemes.family_erasure(family) {
+                    Monotype::Erased(erasure)
+                } else {
+                    self.existential = Some((file_id, item));
+                    Monotype::Data(DataType { file_id, item, arguments: Arc::from([family]) })
+                }
+            }
             // A payload that `Data.Variant`'s `Eq`, `Ord`, `Show` and `Enum`
             // instances pass to the label's own instance, the same erased value
             // `VariantRep` holds.
@@ -978,6 +992,9 @@ impl Monotypes {
     where
         Q: checking::ExternalQueries,
     {
+        if let Some(family) = self.exists_family(data) {
+            return self.witness_constructors(context, family);
+        }
         if let Some(constructors) = self.constructors.get(data) {
             return Ok(Arc::clone(constructors));
         }
@@ -1014,10 +1031,12 @@ impl Monotypes {
                 let constructor = module.indexed.items[term].name.clone().unwrap_or_default();
                 let owner = format!("{}.{constructor}", module.name);
                 self.note_rank_n_field(context, field_type, &owner)?;
-                fields.push(self.monotype(context, field_type)?)
+                let field = self.monotype(context, field_type)?;
+                refuted |= self.is_uninhabited_family(field);
+                fields.push(field)
             }
             let name = module.indexed.items[term].name.clone().unwrap_or_default();
-            constructors.push(DataConstructor { term, name, fields, refuted });
+            constructors.push(DataConstructor { term: Some(term), name, fields, refuted });
         }
         let constructors: Arc<[DataConstructor]> = Arc::from(constructors);
         self.constructors.insert(data.clone(), Arc::clone(&constructors));
@@ -1049,6 +1068,40 @@ impl Monotypes {
             })
             .collect();
         Ok(DataType { file_id, item, arguments })
+    }
+
+    pub fn exists_family(&self, data: &DataType) -> Option<TypeId> {
+        let existential = self.existential?;
+        let [family] = data.arguments[..] else { return None };
+        ((data.file_id, data.item) == existential).then_some(family)
+    }
+
+    fn is_uninhabited_family(&self, monotype: MonotypeId) -> bool {
+        let Monotype::Data(data) = self.get(monotype) else { return false };
+        self.exists_family(data).is_some_and(|family| self.schemes.witnesses(family).is_empty())
+    }
+
+    fn witness_constructors<Q>(
+        &mut self,
+        context: &mut Context<'_, Q>,
+        family: TypeId,
+    ) -> Converted<Arc<[DataConstructor]>>
+    where
+        Q: checking::ExternalQueries,
+    {
+        let witnesses = self.schemes.witnesses(family).to_vec();
+        let mut constructors = Vec::with_capacity(witnesses.len());
+        for witness in witnesses {
+            let payload = context.queries.intern_type(Type::Application(family, witness.types[0]));
+            let fields = vec![self.monotype(context, payload)?];
+            constructors.push(DataConstructor {
+                term: None,
+                name: witness.label,
+                fields,
+                refuted: false,
+            });
+        }
+        Ok(Arc::from(constructors))
     }
 
     pub fn used_parameters<Q>(
@@ -1189,6 +1242,13 @@ where
     Q: checking::ExternalQueries,
 {
     canonicalise(context, type_id, expansions, expanding, true)
+}
+
+pub fn data_argument<Q>(context: &mut Context<'_, Q>, type_id: TypeId) -> QueryResult<TypeId>
+where
+    Q: checking::ExternalQueries,
+{
+    erase_newtypes(context, type_id, 0, &mut vec![])
 }
 
 /// Expands every synonym in a closed type, so that instance heads match it

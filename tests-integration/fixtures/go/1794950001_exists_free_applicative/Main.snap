@@ -1,10 +1,20 @@
 ---
 source: tests-integration/src/fixtures.rs
 ---
+// Data/Exists/exists.go
+package exists
+
+type ExistsApplyENumber uint8
+
+type ExistsApplyEInt uint8
+
+type ExistsApplyEBoolean uint8
+
 // main.go
 package main
 
 import (
+	"fixture/Data/Exists"
 	"fmt"
 	"github.com/i-am-the-slime/purs-backend-go/go-support/array"
 	"github.com/i-am-the-slime/purs-backend-go/go-support/direct"
@@ -18,11 +28,122 @@ type Person struct {
 	Admin bool
 }
 
+type ApFnNumberFnIntFnBooleanPerson struct {
+	Done   func(float64) func(int32) func(bool) Person
+	Field0 string
+	Field1 func(float64) func(int32) func(bool) Person
+	Apply  any
+	Tag    uint8
+}
+
+const (
+	ApFnNumberFnIntFnBooleanPersonDone = iota
+	ApFnNumberFnIntFnBooleanPersonField
+	ApFnNumberFnIntFnBooleanPersonApply
+)
+
+type ApNumber struct {
+	Field0 string
+	Done   float64
+	Field1 float64
+	Tag    uint8
+	Apply  exists.ExistsApplyENumber
+}
+
+const (
+	ApNumberDone = iota
+	ApNumberField
+	ApNumberApply
+)
+
+type ApplyEFnIntFnBooleanPersonNumber struct {
+	First  ApFnNumberFnIntFnBooleanPerson
+	Second ApNumber
+}
+
+type ExistsApplyEFnIntFnBooleanPerson struct {
+	Number ApplyEFnIntFnBooleanPersonNumber
+}
+
+type ApFnIntFnBooleanPerson struct {
+	Done   func(int32) func(bool) Person
+	Field0 string
+	Field1 func(int32) func(bool) Person
+	Apply  ExistsApplyEFnIntFnBooleanPerson
+	Tag    uint8
+}
+
+const (
+	ApFnIntFnBooleanPersonDone = iota
+	ApFnIntFnBooleanPersonField
+	ApFnIntFnBooleanPersonApply
+)
+
+type ApInt struct {
+	Field0 string
+	Done   int32
+	Field1 int32
+	Tag    uint8
+	Apply  exists.ExistsApplyEInt
+}
+
+const (
+	ApIntDone = iota
+	ApIntField
+	ApIntApply
+)
+
+type ApplyEFnBooleanPersonInt struct {
+	First  ApFnIntFnBooleanPerson
+	Second ApInt
+}
+
+type ExistsApplyEFnBooleanPerson struct {
+	Int ApplyEFnBooleanPersonInt
+}
+
+type ApFnBooleanPerson struct {
+	Done   func(bool) Person
+	Field0 string
+	Field1 func(bool) Person
+	Apply  ExistsApplyEFnBooleanPerson
+	Tag    uint8
+}
+
+const (
+	ApFnBooleanPersonDone = iota
+	ApFnBooleanPersonField
+	ApFnBooleanPersonApply
+)
+
+type ApBoolean struct {
+	Field0 string
+	Tag    uint8
+	Done   bool
+	Field1 bool
+	Apply  exists.ExistsApplyEBoolean
+}
+
+const (
+	ApBooleanDone = iota
+	ApBooleanField
+	ApBooleanApply
+)
+
+type ApplyEPersonBoolean struct {
+	First  ApFnBooleanPerson
+	Second ApBoolean
+}
+
+type ExistsApplyEPerson struct {
+	Boolean ApplyEPersonBoolean
+}
+
 type ApPerson struct {
 	Done   Person
 	Field0 string
 	Field1 Person
-	Apply  any
+	Apply  ExistsApplyEPerson
 	Tag    uint8
 }
 
@@ -30,20 +151,6 @@ const (
 	ApPersonDone = iota
 	ApPersonField
 	ApPersonApply
-)
-
-type ApFnPerson struct {
-	Done   func(any) Person
-	Field0 string
-	Field1 func(any) Person
-	Apply  any
-	Tag    uint8
-}
-
-const (
-	ApFnPersonDone = iota
-	ApFnPersonField
-	ApFnPersonApply
 )
 
 type Ap struct {
@@ -61,9 +168,14 @@ const (
 	ApApply
 )
 
-type ApplyEPerson struct {
-	First  *ApFnPerson
-	Second *Ap
+type AdminAgeName struct {
+	Admin any
+	Age   any
+	Name  any
+}
+
+func convert(value Person) AdminAgeName {
+	return AdminAgeName{Admin: value.Admin, Age: value.Age, Name: value.Name}
 }
 
 type ApFn struct {
@@ -86,275 +198,117 @@ type ApplyE struct {
 	Second *Ap
 }
 
-type AdminAgeName struct {
-	Admin any
-	Age   any
-	Name  any
-}
-
-func convert(value AdminAgeName) Person {
-	return Person{Admin: value.Admin.(bool), Age: value.Age.(int32), Name: value.Name.(string)}
-}
-
-func convert2(value *ApFn) *ApFnPerson {
+func convert2(value ApFnNumberFnIntFnBooleanPerson) *ApFn {
 	switch value.Tag {
-	case ApFnDone:
-		return &ApFnPerson{Tag: ApFnPersonDone, Done: func(coerced any) Person {
-			return convert(value.Done(coerced).(AdminAgeName))
+	case ApFnNumberFnIntFnBooleanPersonDone:
+		return &ApFn{Tag: ApFnDone, Done: func(coerced any) any {
+			original := value.Done(coerced.(float64))
+			return func(coerced2 any) any {
+				original2 := original(coerced2.(int32))
+				return func(coerced3 any) any {
+					return convert(original2(coerced3.(bool)))
+				}
+			}
 		}}
-	case ApFnField:
-		return &ApFnPerson{Tag: ApFnPersonField, Field0: value.Field0, Field1: func(coerced any) Person {
-			return convert(value.Field1(coerced).(AdminAgeName))
+	case ApFnNumberFnIntFnBooleanPersonField:
+		return &ApFn{Tag: ApFnField, Field0: value.Field0, Field1: func(coerced any) any {
+			original := value.Field1(coerced.(float64))
+			return func(coerced2 any) any {
+				original2 := original(coerced2.(int32))
+				return func(coerced3 any) any {
+					return convert(original2(coerced3.(bool)))
+				}
+			}
 		}}
-	default: // ApFnApply
-		return &ApFnPerson{Tag: ApFnPersonApply, Apply: value.Apply}
+	default: // ApFnNumberFnIntFnBooleanPersonApply
+		return &ApFn{Tag: ApFnApply, Apply: value.Apply}
 	}
 }
 
-func convert3(value *ApplyE) *ApplyEPerson {
-	return &ApplyEPerson{First: convert2(value.First), Second: value.Second}
+func convert3(value exists.ExistsApplyENumber) any {
+	return nil
 }
 
-func convert4(value Person) AdminAgeName {
-	return AdminAgeName{Admin: value.Admin, Age: value.Age, Name: value.Name}
-}
-
-func convert5(value *ApFnPerson) *Ap {
+func convert4(value ApNumber) *Ap {
 	switch value.Tag {
-	case ApFnPersonDone:
-		return &Ap{Tag: ApDone, Done0: func(coerced any) any {
-			return convert4(value.Done(coerced))
-		}}
-	case ApFnPersonField:
-		return &Ap{Tag: ApField, Field0: value.Field0, Field1: func(coerced any) any {
-			return convert4(value.Field1(coerced))
-		}}
-	default: // ApFnPersonApply
-		return &Ap{Tag: ApApply, Apply0: value.Apply}
+	case ApNumberDone:
+		return &Ap{Tag: ApDone, Done0: value.Done}
+	case ApNumberField:
+		return &Ap{Tag: ApField, Field0: value.Field0, Field1: value.Field1}
+	default: // ApNumberApply
+		return &Ap{Tag: ApApply, Apply0: convert3(value.Apply)}
 	}
 }
 
-type ApString struct {
-	Done   string
-	Field0 string
-	Field1 string
-	Apply  any
-	Tag    uint8
+func convert5(value ApplyEFnIntFnBooleanPersonNumber) *ApplyE {
+	return &ApplyE{First: convert2(value.First), Second: convert4(value.Second)}
 }
 
-const (
-	ApStringDone = iota
-	ApStringField
-	ApStringApply
-)
-
-type ApFnString struct {
-	Done   func(any) string
-	Field0 string
-	Field1 func(any) string
-	Apply  any
-	Origin any
-	Tag    uint8
+func convert6(value ExistsApplyEFnIntFnBooleanPerson) any {
+	return convert5(value.Number)
 }
 
-const (
-	ApFnStringDone = iota
-	ApFnStringField
-	ApFnStringApply
-)
-
-type ApplyEString struct {
-	First  *ApFnString
-	Second *Ap
-}
-
-func convert6(value *ApFn) *ApFnString {
-	switch value.Tag {
-	case ApFnDone:
-		return &ApFnString{Tag: ApFnStringDone, Done: func(coerced any) string {
-			return value.Done(coerced).(string)
-		}}
-	case ApFnField:
-		return &ApFnString{Tag: ApFnStringField, Field0: value.Field0, Field1: func(coerced any) string {
-			return value.Field1(coerced).(string)
-		}}
-	default: // ApFnApply
-		return &ApFnString{Tag: ApFnStringApply, Apply: value.Apply}
-	}
-}
-
-func convert7(value *ApplyE) *ApplyEString {
-	return &ApplyEString{First: convert6(value.First), Second: value.Second}
-}
-
-func convert8(value *ApFnString) *Ap {
-	if original, ok := value.Origin.(*Ap); ok {
-		return original
-	}
-	switch value.Tag {
-	case ApFnStringDone:
-		return &Ap{Tag: ApDone, Done0: func(coerced any) any {
-			return value.Done(coerced)
-		}, Origin: value}
-	case ApFnStringField:
-		return &Ap{Tag: ApField, Field0: value.Field0, Field1: func(coerced any) any {
-			return value.Field1(coerced)
-		}, Origin: value}
-	default: // ApFnStringApply
-		return &Ap{Tag: ApApply, Apply0: value.Apply, Origin: value}
-	}
-}
-
-func convert9(value *Ap) *ApFnString {
-	if original, ok := value.Origin.(*ApFnString); ok {
-		return original
-	}
-	switch value.Tag {
-	case ApDone:
-		original := value.Done0.(func(any) any)
-		return &ApFnString{Tag: ApFnStringDone, Done: func(coerced any) string {
-			return original(coerced).(string)
-		}, Origin: value}
-	case ApField:
-		original := value.Field1.(func(any) any)
-		return &ApFnString{Tag: ApFnStringField, Field0: value.Field0, Field1: func(coerced any) string {
-			return original(coerced).(string)
-		}, Origin: value}
-	default: // ApApply
-		return &ApFnString{Tag: ApFnStringApply, Apply: value.Apply0, Origin: value}
-	}
-}
-
-type ApFnIntFnBooleanPerson struct {
-	Done   func(int32) func(bool) Person
-	Field0 string
-	Field1 func(int32) func(bool) Person
-	Apply  any
-	Tag    uint8
-}
-
-const (
-	ApFnIntFnBooleanPersonDone = iota
-	ApFnIntFnBooleanPersonField
-	ApFnIntFnBooleanPersonApply
-)
-
-type ApInt struct {
-	Field0 string
-	Apply  any
-	Done   int32
-	Field1 int32
-	Tag    uint8
-}
-
-const (
-	ApIntDone = iota
-	ApIntField
-	ApIntApply
-)
-
-type ApplyEFnBooleanPersonInt struct {
-	First  ApFnIntFnBooleanPerson
-	Second ApInt
-}
-
-func convert10(value ApFnIntFnBooleanPerson) *ApFn {
+func convert7(value ApFnIntFnBooleanPerson) *ApFn {
 	switch value.Tag {
 	case ApFnIntFnBooleanPersonDone:
 		return &ApFn{Tag: ApFnDone, Done: func(coerced any) any {
 			original := value.Done(coerced.(int32))
 			return func(coerced2 any) any {
-				return convert4(original(coerced2.(bool)))
+				return convert(original(coerced2.(bool)))
 			}
 		}}
 	case ApFnIntFnBooleanPersonField:
 		return &ApFn{Tag: ApFnField, Field0: value.Field0, Field1: func(coerced any) any {
 			original := value.Field1(coerced.(int32))
 			return func(coerced2 any) any {
-				return convert4(original(coerced2.(bool)))
+				return convert(original(coerced2.(bool)))
 			}
 		}}
 	default: // ApFnIntFnBooleanPersonApply
-		return &ApFn{Tag: ApFnApply, Apply: value.Apply}
+		return &ApFn{Tag: ApFnApply, Apply: convert6(value.Apply)}
 	}
 }
 
-func convert11(value ApInt) *Ap {
+func convert8(value exists.ExistsApplyEInt) any {
+	return nil
+}
+
+func convert9(value ApInt) *Ap {
 	switch value.Tag {
 	case ApIntDone:
 		return &Ap{Tag: ApDone, Done0: value.Done}
 	case ApIntField:
 		return &Ap{Tag: ApField, Field0: value.Field0, Field1: value.Field1}
 	default: // ApIntApply
-		return &Ap{Tag: ApApply, Apply0: value.Apply}
+		return &Ap{Tag: ApApply, Apply0: convert8(value.Apply)}
 	}
 }
 
-func convert12(value ApplyEFnBooleanPersonInt) *ApplyE {
-	return &ApplyE{First: convert10(value.First), Second: convert11(value.Second)}
+func convert10(value ApplyEFnBooleanPersonInt) *ApplyE {
+	return &ApplyE{First: convert7(value.First), Second: convert9(value.Second)}
 }
 
-type ApFnBooleanPerson struct {
-	Done   func(bool) Person
-	Field0 string
-	Field1 func(bool) Person
-	Apply  any
-	Tag    uint8
+func convert11(value ExistsApplyEFnBooleanPerson) any {
+	return convert10(value.Int)
 }
 
-const (
-	ApFnBooleanPersonDone = iota
-	ApFnBooleanPersonField
-	ApFnBooleanPersonApply
-)
-
-type ApBoolean struct {
-	Field0 string
-	Apply  any
-	Tag    uint8
-	Done   bool
-	Field1 bool
-}
-
-const (
-	ApBooleanDone = iota
-	ApBooleanField
-	ApBooleanApply
-)
-
-type ApplyEPersonBoolean struct {
-	First  ApFnBooleanPerson
-	Second ApBoolean
-}
-
-func convert13(value ApFnBooleanPerson) *ApFn {
+func convert12(value ApFnBooleanPerson) *Ap {
 	switch value.Tag {
 	case ApFnBooleanPersonDone:
-		return &ApFn{Tag: ApFnDone, Done: func(coerced any) any {
-			return convert4(value.Done(coerced.(bool)))
+		return &Ap{Tag: ApDone, Done0: func(coerced any) any {
+			return convert(value.Done(coerced.(bool)))
 		}}
 	case ApFnBooleanPersonField:
-		return &ApFn{Tag: ApFnField, Field0: value.Field0, Field1: func(coerced any) any {
-			return convert4(value.Field1(coerced.(bool)))
+		return &Ap{Tag: ApField, Field0: value.Field0, Field1: func(coerced any) any {
+			return convert(value.Field1(coerced.(bool)))
 		}}
 	default: // ApFnBooleanPersonApply
-		return &ApFn{Tag: ApFnApply, Apply: value.Apply}
+		return &Ap{Tag: ApApply, Apply0: convert11(value.Apply)}
 	}
 }
 
-func convert14(value ApBoolean) *Ap {
-	switch value.Tag {
-	case ApBooleanDone:
-		return &Ap{Tag: ApDone, Done0: value.Done}
-	case ApBooleanField:
-		return &Ap{Tag: ApField, Field0: value.Field0, Field1: value.Field1}
-	default: // ApBooleanApply
-		return &Ap{Tag: ApApply, Apply0: value.Apply}
-	}
-}
-
-func convert15(value ApplyEPersonBoolean) *ApplyE {
-	return &ApplyE{First: convert13(value.First), Second: convert14(value.Second)}
+func convert13(value AdminAgeName) Person {
+	return Person{Admin: value.Admin.(bool), Age: value.Age.(int32), Name: value.Name.(string)}
 }
 
 type ApFnNumberString struct {
@@ -371,25 +325,83 @@ const (
 	ApFnNumberStringApply
 )
 
-type ApFnFnNumberString struct {
-	Done   func(any) func(float64) string
+type ApplyEStringNumber struct {
+	First  ApFnNumberString
+	Second ApNumber
+}
+
+type ExistsApplyEString struct {
+	Number ApplyEStringNumber
+}
+
+type ApString struct {
+	Done   string
 	Field0 string
-	Field1 func(any) func(float64) string
+	Field1 string
+	Apply  ExistsApplyEString
+	Tag    uint8
+}
+
+const (
+	ApStringDone = iota
+	ApStringField
+	ApStringApply
+)
+
+func convert14(value ApFnNumberString) *Ap {
+	switch value.Tag {
+	case ApFnNumberStringDone:
+		return &Ap{Tag: ApDone, Done0: func(coerced any) any {
+			return value.Done(coerced.(float64))
+		}, Origin: value}
+	case ApFnNumberStringField:
+		return &Ap{Tag: ApField, Field0: value.Field0, Field1: func(coerced any) any {
+			return value.Field1(coerced.(float64))
+		}, Origin: value}
+	default: // ApFnNumberStringApply
+		return &Ap{Tag: ApApply, Apply0: value.Apply, Origin: value}
+	}
+}
+
+func convert15(value *Ap) ApFnNumberString {
+	if original, ok := value.Origin.(ApFnNumberString); ok {
+		return original
+	}
+	switch value.Tag {
+	case ApDone:
+		original := value.Done0.(func(any) any)
+		return ApFnNumberString{Tag: ApFnNumberStringDone, Done: func(coerced float64) string {
+			return original(coerced).(string)
+		}}
+	case ApField:
+		original := value.Field1.(func(any) any)
+		return ApFnNumberString{Tag: ApFnNumberStringField, Field0: value.Field0, Field1: func(coerced float64) string {
+			return original(coerced).(string)
+		}}
+	default: // ApApply
+		return ApFnNumberString{Tag: ApFnNumberStringApply, Apply: value.Apply0}
+	}
+}
+
+type ApFnBooleanFnNumberString struct {
+	Done   func(bool) func(float64) string
+	Field0 string
+	Field1 func(bool) func(float64) string
 	Apply  any
 	Tag    uint8
 }
 
 const (
-	ApFnFnNumberStringDone = iota
-	ApFnFnNumberStringField
-	ApFnFnNumberStringApply
+	ApFnBooleanFnNumberStringDone = iota
+	ApFnBooleanFnNumberStringField
+	ApFnBooleanFnNumberStringApply
 )
 
-func convert16(value *Ap) *ApFnFnNumberString {
+func convert16(value *Ap) ApFnBooleanFnNumberString {
 	switch value.Tag {
 	case ApDone:
 		original := value.Done0.(func(any) any)
-		return &ApFnFnNumberString{Tag: ApFnFnNumberStringDone, Done: func(coerced any) func(float64) string {
+		return ApFnBooleanFnNumberString{Tag: ApFnBooleanFnNumberStringDone, Done: func(coerced bool) func(float64) string {
 			original2 := original(coerced).(func(any) any)
 			return func(coerced2 float64) string {
 				return original2(coerced2).(string)
@@ -397,98 +409,63 @@ func convert16(value *Ap) *ApFnFnNumberString {
 		}}
 	case ApField:
 		original := value.Field1.(func(any) any)
-		return &ApFnFnNumberString{Tag: ApFnFnNumberStringField, Field0: value.Field0, Field1: func(coerced any) func(float64) string {
+		return ApFnBooleanFnNumberString{Tag: ApFnBooleanFnNumberStringField, Field0: value.Field0, Field1: func(coerced bool) func(float64) string {
 			original2 := original(coerced).(func(any) any)
 			return func(coerced2 float64) string {
 				return original2(coerced2).(string)
 			}
 		}}
 	default: // ApApply
-		return &ApFnFnNumberString{Tag: ApFnFnNumberStringApply, Apply: value.Apply0}
+		return ApFnBooleanFnNumberString{Tag: ApFnBooleanFnNumberStringApply, Apply: value.Apply0}
 	}
 }
 
-type ApplyEFnNumberString struct {
-	First  *ApFnFnNumberString
-	Second *Ap
-	Origin any
+type ApplyEFnNumberStringBoolean struct {
+	First  ApFnBooleanFnNumberString
+	Second ApBoolean
 }
 
-func convert17(value *ApFnFnNumberString) *ApFn {
+func convert17(value ApFnBooleanFnNumberString) *ApFn {
 	switch value.Tag {
-	case ApFnFnNumberStringDone:
+	case ApFnBooleanFnNumberStringDone:
 		return &ApFn{Tag: ApFnDone, Done: func(coerced any) any {
-			original := value.Done(coerced)
+			original := value.Done(coerced.(bool))
 			return func(coerced2 any) any {
 				return original(coerced2.(float64))
 			}
 		}}
-	case ApFnFnNumberStringField:
+	case ApFnBooleanFnNumberStringField:
 		return &ApFn{Tag: ApFnField, Field0: value.Field0, Field1: func(coerced any) any {
-			original := value.Field1(coerced)
+			original := value.Field1(coerced.(bool))
 			return func(coerced2 any) any {
 				return original(coerced2.(float64))
 			}
 		}}
-	default: // ApFnFnNumberStringApply
+	default: // ApFnBooleanFnNumberStringApply
 		return &ApFn{Tag: ApFnApply, Apply: value.Apply}
 	}
 }
 
-func convert18(value *ApplyEFnNumberString) *ApplyE {
-	return &ApplyE{First: convert17(value.First), Second: value.Second}
+func convert18(value exists.ExistsApplyEBoolean) any {
+	return nil
 }
 
-type ApNumber struct {
-	Field0 string
-	Apply  any
-	Done   float64
-	Field1 float64
-	Tag    uint8
-}
-
-const (
-	ApNumberDone = iota
-	ApNumberField
-	ApNumberApply
-)
-
-type ApplyEStringNumber struct {
-	First  ApFnNumberString
-	Second ApNumber
-}
-
-func convert19(value ApFnNumberString) *ApFn {
+func convert19(value ApBoolean) *Ap {
 	switch value.Tag {
-	case ApFnNumberStringDone:
-		return &ApFn{Tag: ApFnDone, Done: func(coerced any) any {
-			return value.Done(coerced.(float64))
-		}}
-	case ApFnNumberStringField:
-		return &ApFn{Tag: ApFnField, Field0: value.Field0, Field1: func(coerced any) any {
-			return value.Field1(coerced.(float64))
-		}}
-	default: // ApFnNumberStringApply
-		return &ApFn{Tag: ApFnApply, Apply: value.Apply}
-	}
-}
-
-func convert20(value ApNumber) *Ap {
-	switch value.Tag {
-	case ApNumberDone:
+	case ApBooleanDone:
 		return &Ap{Tag: ApDone, Done0: value.Done}
-	case ApNumberField:
+	case ApBooleanField:
 		return &Ap{Tag: ApField, Field0: value.Field0, Field1: value.Field1}
-	default: // ApNumberApply
-		return &Ap{Tag: ApApply, Apply0: value.Apply}
+	default: // ApBooleanApply
+		return &Ap{Tag: ApApply, Apply0: convert18(value.Apply)}
 	}
 }
 
-func convert21(value ApplyEStringNumber) *ApplyE {
-	return &ApplyE{First: convert19(value.First), Second: convert20(value.Second)}
+func convert20(value ApplyEFnNumberStringBoolean) *ApplyE {
+	return &ApplyE{First: convert17(value.First), Second: convert19(value.Second)}
 }
 
-func convert22(value *ApFn) *Ap {
+func convert21(value *ApFn) *Ap {
 	if original, ok := value.Origin.(*Ap); ok {
 		return original
 	}
@@ -502,7 +479,7 @@ func convert22(value *ApFn) *Ap {
 	}
 }
 
-func convert23(value *Ap) *ApFn {
+func convert22(value *Ap) *ApFn {
 	if original, ok := value.Origin.(*ApFn); ok {
 		return original
 	}
@@ -527,10 +504,14 @@ func initializeMain_() []string {
 	case ApPersonField:
 		result = []string{person.Field0}
 	default: // ApPersonApply
-		scrutinee := convert3(person.Apply.(*ApplyE))
-		result = array.Append(func(coerced *ApFnPerson) []string {
-			return namesFnPerson(convert5(coerced))
-		}(scrutinee.First), namesFnPerson(scrutinee.Second))
+		var result2 []string
+		switch person.Apply.Boolean.Second.Tag {
+		case ApBooleanDone:
+			result2 = []string{}
+		default: // ApBooleanField
+			result2 = []string{person.Apply.Boolean.Second.Field0}
+		}
+		result = array.Append(namesFnBooleanPerson(convert12(person.Apply.Boolean.First)), result2)
 	}
 	var record Person
 	switch person.Tag {
@@ -539,85 +520,94 @@ func initializeMain_() []string {
 	case ApPersonField:
 		record = person.Field1
 	default: // ApPersonApply
-		scrutinee := convert3(person.Apply.(*ApplyE))
-		record = func(coerced *ApFnPerson) func(any) Person {
-			original := runFnPerson(convert5(coerced)).(func(any) any)
-			return func(coerced2 any) Person {
-				return convert(original(coerced2).(AdminAgeName))
+		var result2 bool
+		switch person.Apply.Boolean.Second.Tag {
+		case ApBooleanDone:
+			result2 = person.Apply.Boolean.Second.Done
+		default: // ApBooleanField
+			result2 = person.Apply.Boolean.Second.Field1
+		}
+		record = func(coerced ApFnBooleanPerson) func(bool) Person {
+			original := runFnBooleanPerson(convert12(coerced)).(func(any) any)
+			return func(coerced2 bool) Person {
+				return convert13(original(coerced2).(AdminAgeName))
 			}
-		}(scrutinee.First)(runFnPerson(scrutinee.Second))
-	}
-	var result2 string
-	if record.Admin {
-		result2 = "true"
-	} else {
-		result2 = "false"
+		}(person.Apply.Boolean.First)(result2)
 	}
 	var result3 string
+	if record.Admin {
+		result3 = "true"
+	} else {
+		result3 = "false"
+	}
+	var result4 string
 	switch greeting.Tag {
 	case ApStringDone:
-		result3 = prim.StringToUpper(greeting.Done)
+		result4 = prim.StringToUpper(greeting.Done)
 	case ApStringField:
-		result3 = prim.StringToUpper(greeting.Field1)
+		result4 = prim.StringToUpper(greeting.Field1)
 	default: // ApStringApply
-		scrutinee := convert7(greeting.Apply.(*ApplyE))
 		original := func(f func(any) any) func(*Ap) *Ap {
 			return func(value *Ap) *Ap {
 				return map_(f, value)
 			}
 		}
-		result3 = func(coerced *ApFnString) func(any) string {
-			original2 := runFnPerson(convert8(coerced)).(func(any) any)
-			return func(coerced2 any) string {
-				return original2(coerced2).(string)
-			}
-		}(func(coerced func(func(any) string) func(any) string) func(*ApFnString) *ApFnString {
-			original4 := original(func(coerced2 any) any {
-				original2 := coerced2.(func(any) any)
-				original3 := coerced(func(coerced3 any) string {
-					return original2(coerced3).(string)
-				})
-				return func(coerced3 any) any {
-					return original3(coerced3)
-				}
-			})
-			return func(coerced2 *ApFnString) *ApFnString {
-				return convert9(original4(convert8(coerced2)))
-			}
-		}(func(value func(any) string) func(any) string {
-			return func(x any) string {
+		original2 := func(value func(float64) string) func(float64) string {
+			return func(x float64) string {
 				return prim.StringToUpper(value(x))
 			}
-		})(scrutinee.First))(runFnPerson(scrutinee.Second))
+		}
+		var result2 float64
+		switch greeting.Apply.Number.Second.Tag {
+		case ApNumberDone:
+			result2 = greeting.Apply.Number.Second.Done
+		default: // ApNumberField
+			result2 = greeting.Apply.Number.Second.Field1
+		}
+		result4 = func(coerced ApFnNumberString) func(float64) string {
+			original3 := runFnBooleanPerson(convert14(coerced)).(func(any) any)
+			return func(coerced2 float64) string {
+				return original3(coerced2).(string)
+			}
+		}(convert15(original(func(coerced any) any {
+			original3 := coerced.(func(any) any)
+			original4 := original2(func(coerced2 float64) string {
+				return original3(coerced2).(string)
+			})
+			return func(coerced2 any) any {
+				return original4(coerced2.(float64))
+			}
+		})(convert14(greeting.Apply.Number.First))))(result2)
 	}
-	var result4 string
+	var result5 string
 	switch greeting.Tag {
 	case ApStringDone:
-		result4 = greeting.Done
+		result5 = greeting.Done
 	case ApStringField:
-		result4 = greeting.Field1
+		result5 = greeting.Field1
 	default: // ApStringApply
-		scrutinee := convert7(greeting.Apply.(*ApplyE))
-		result4 = func(coerced *ApFnString) func(any) string {
-			original := runFnPerson(convert8(coerced)).(func(any) any)
-			return func(coerced2 any) string {
+		var result2 float64
+		switch greeting.Apply.Number.Second.Tag {
+		case ApNumberDone:
+			result2 = greeting.Apply.Number.Second.Done
+		default: // ApNumberField
+			result2 = greeting.Apply.Number.Second.Field1
+		}
+		result5 = func(coerced ApFnNumberString) func(float64) string {
+			original := runFnBooleanPerson(convert14(coerced)).(func(any) any)
+			return func(coerced2 float64) string {
 				return original(coerced2).(string)
 			}
-		}(scrutinee.First)(runFnPerson(scrutinee.Second))
+		}(greeting.Apply.Number.First)(result2)
 	}
-	return []string{prim.StringJoinWith(",", result), "{ admin: " + result2 + ", age: " + prim.ShowInt(record.Age) + ", name: " + prim.ShowString(record.Name) + " }", result3, prim.ShowInt(direct.CodePointLength(result4))}
+	return []string{prim.StringJoinWith(",", result), "{ admin: " + result3 + ", age: " + prim.ShowInt(record.Age) + ", name: " + prim.ShowString(record.Name) + " }", result4, prim.ShowInt(direct.CodePointLength(result5))}
 }
 
-var person = initializePerson()
-
-func initializePerson() ApPerson {
-	defer exception.ReportUncaught()
-	return ApPerson{Tag: ApPersonApply, Apply: convert15(ApplyEPersonBoolean{First: ApFnBooleanPerson{Tag: ApFnBooleanPersonApply, Apply: convert12(ApplyEFnBooleanPersonInt{First: ApFnIntFnBooleanPerson{Tag: ApFnIntFnBooleanPersonField, Field0: "name", Field1: func(value int32) func(bool) Person {
-		return func(value2 bool) Person {
-			return Person{Name: "ada", Age: value, Admin: value2}
-		}
-	}}, Second: ApInt{Tag: ApIntField, Field0: "age", Field1: 36}})}, Second: ApBoolean{Tag: ApBooleanField, Field0: "admin", Field1: true}})}
-}
+var person *ApPerson = &ApPerson{Tag: ApPersonApply, Apply: ExistsApplyEPerson{Boolean: ApplyEPersonBoolean{First: ApFnBooleanPerson{Tag: ApFnBooleanPersonApply, Apply: ExistsApplyEFnBooleanPerson{Int: ApplyEFnBooleanPersonInt{First: ApFnIntFnBooleanPerson{Tag: ApFnIntFnBooleanPersonField, Field0: "name", Field1: func(value int32) func(bool) Person {
+	return func(value2 bool) Person {
+		return Person{Name: "ada", Age: value, Admin: value2}
+	}
+}}, Second: ApInt{Tag: ApIntField, Field0: "age", Field1: 36}}}}, Second: ApBoolean{Tag: ApBooleanField, Field0: "admin", Field1: true}}}}
 
 var greeting = initializeGreeting()
 
@@ -634,41 +624,36 @@ func initializeGreeting() ApString {
 			return greetingF(person.Field1, n)
 		}}
 	default: // ApPersonApply
-		scrutinee := convert3(person.Apply.(*ApplyE))
 		original := func(f func(any) any) func(*Ap) *Ap {
 			return func(value *Ap) *Ap {
 				return map_(f, value)
 			}
 		}
-		result = ApFnNumberString{Tag: ApFnNumberStringApply, Apply: convert18(&ApplyEFnNumberString{First: func(coerced func(func(any) Person) func(any) func(float64) string) func(*ApFnPerson) *ApFnFnNumberString {
-			original5 := original(func(coerced2 any) any {
-				original2 := coerced2.(func(any) any)
-				original3 := coerced(func(coerced3 any) Person {
-					return convert(original2(coerced3).(AdminAgeName))
-				})
-				return func(coerced3 any) any {
-					original4 := original3(coerced3)
-					return func(coerced4 any) any {
-						return original4(coerced4.(float64))
-					}
-				}
-			})
-			return func(coerced2 *ApFnPerson) *ApFnFnNumberString {
-				return convert16(original5(convert5(coerced2)))
-			}
-		}(func(value func(any) Person) func(any) func(float64) string {
-			return func(x any) func(float64) string {
+		original2 := func(value func(bool) Person) func(bool) func(float64) string {
+			return func(x bool) func(float64) string {
 				p := value(x)
 				return func(n float64) string {
 					return greetingF(p, n)
 				}
 			}
-		})(scrutinee.First), Second: scrutinee.Second})}
+		}
+		result = ApFnNumberString{Tag: ApFnNumberStringApply, Apply: convert20(ApplyEFnNumberStringBoolean{First: convert16(original(func(coerced any) any {
+			original3 := coerced.(func(any) any)
+			original4 := original2(func(coerced2 bool) Person {
+				return convert13(original3(coerced2).(AdminAgeName))
+			})
+			return func(coerced2 any) any {
+				original5 := original4(coerced2.(bool))
+				return func(coerced3 any) any {
+					return original5(coerced3.(float64))
+				}
+			}
+		})(convert12(person.Apply.Boolean.First))), Second: person.Apply.Boolean.Second})}
 	}
-	return ApString{Tag: ApStringApply, Apply: convert21(ApplyEStringNumber{First: result, Second: ApNumber{Tag: ApNumberField, Field0: "count", Field1: 3.5}})}
+	return ApString{Tag: ApStringApply, Apply: ExistsApplyEString{Number: ApplyEStringNumber{First: result, Second: ApNumber{Tag: ApNumberField, Field0: "count", Field1: 3.5}}}}
 }
 
-func namesFnPerson(value *Ap) []string {
+func namesFnBooleanPerson(value *Ap) []string {
 	switch value.Tag {
 	case ApDone:
 		return []string{}
@@ -676,13 +661,11 @@ func namesFnPerson(value *Ap) []string {
 		return []string{value.Field0}
 	default: // ApApply
 		scrutinee := value.Apply0.(*ApplyE)
-		return array.Append(func(coerced *ApFn) []string {
-			return namesFnPerson(convert22(coerced))
-		}(scrutinee.First), namesFnPerson(scrutinee.Second))
+		return array.Append(namesFnBooleanPerson(convert21(scrutinee.First)), namesFnBooleanPerson(scrutinee.Second))
 	}
 }
 
-func runFnPerson(value *Ap) any {
+func runFnBooleanPerson(value *Ap) any {
 	switch value.Tag {
 	case ApDone:
 		return value.Done0
@@ -690,9 +673,7 @@ func runFnPerson(value *Ap) any {
 		return value.Field1
 	default: // ApApply
 		scrutinee := value.Apply0.(*ApplyE)
-		return func(coerced *ApFn) func(any) any {
-			return runFnPerson(convert22(coerced)).(func(any) any)
-		}(scrutinee.First)(runFnPerson(scrutinee.Second))
+		return runFnBooleanPerson(convert21(scrutinee.First)).(func(any) any)(runFnBooleanPerson(scrutinee.Second))
 	}
 }
 
@@ -709,18 +690,14 @@ func map_(f func(any) any, value *Ap) *Ap {
 				return map_(f2, value2)
 			}
 		}
-		return &Ap{Tag: ApApply, Apply0: &ApplyE{First: func(coerced func(func(any) any) func(any) any) func(*ApFn) *ApFn {
-			original2 := original(func(coerced2 any) any {
-				return coerced(coerced2.(func(any) any))
-			})
-			return func(coerced2 *ApFn) *ApFn {
-				return convert23(original2(convert22(coerced2)))
-			}
-		}(func(value2 func(any) any) func(any) any {
+		original2 := func(value2 func(any) any) func(any) any {
 			return func(x any) any {
 				return f(value2(x))
 			}
-		})(scrutinee.First), Second: scrutinee.Second}}
+		}
+		return &Ap{Tag: ApApply, Apply0: &ApplyE{First: convert22(original(func(coerced any) any {
+			return original2(coerced.(func(any) any))
+		})(convert21(scrutinee.First))), Second: scrutinee.Second}}
 	}
 }
 
