@@ -18,7 +18,9 @@
 use rustc_hash::FxHashSet;
 
 use crate::naming::numbered;
-use crate::syntax::{GoDeclaration, GoExpression, GoStatement, GoType, Name, statements_names};
+use crate::syntax::{
+    DeclarationNames, GoDeclaration, GoExpression, GoStatement, GoType, Name, statements_names,
+};
 
 use crate::walk::{self, Walk, each_expression_in_declaration, each_expression_in_statement};
 use super::views::{carried_unchanged, view_invariant_strings};
@@ -196,29 +198,22 @@ fn counted_up_to(package: &str, name: &str) -> Option<&'static str> {
 /// `taken` tells which names a new local must not shadow.
 pub fn hoist_loop_invariant_lengths(
     declarations: &mut [GoDeclaration],
+    names: &mut [DeclarationNames],
     taken: &dyn Fn(&str) -> bool,
 ) {
-    for declaration in declarations {
-        let mut names = FxHashSet::default();
-        let mut locals = FxHashSet::default();
-        declaration.for_each_name_mut(&mut |name| {
-            if let Name::Binder(name) = &name {
-                locals.insert(name.to_string());
-            }
-            let (Name::Reference(name) | Name::Written(name) | Name::Binder(name)) = name;
-            names.insert(name.clone());
-        });
+    for (declaration, names) in declarations.iter_mut().zip(names) {
         let written_by_literals = written_by_literals(declaration);
-        let mut function = Function { names, locals, written_by_literals, taken };
+        let mut function =
+            Function { names: &mut names.names, locals: &names.locals, written_by_literals, taken };
         function.declaration(declaration);
     }
 }
 
 struct Function<'a> {
     /// Every name the declaration uses, so that a hoisted length shadows none.
-    names: FxHashSet<String>,
+    names: &'a mut FxHashSet<String>,
     /// The variables the declaration binds, which no other code can change.
-    locals: FxHashSet<String>,
+    locals: &'a FxHashSet<String>,
     /// The variables that a function literal writes, which a loop calling it
     /// changes without writing them itself.
     written_by_literals: FxHashSet<String>,
@@ -310,10 +305,8 @@ impl Function<'_> {
         looped: &mut Vec<GoStatement>,
         changed: &FxHashSet<String>,
     ) -> Vec<(String, GoExpression)> {
-        let locals = std::mem::take(&mut self.locals);
-        let views = view_invariant_strings(looped, changed, &locals, &mut |base| self.fresh(base));
-        self.locals = locals;
-        views
+        let locals = self.locals;
+        view_invariant_strings(looped, changed, locals, &mut |base| self.fresh(base))
     }
 
     /// The variables a loop, its binders included, may change.

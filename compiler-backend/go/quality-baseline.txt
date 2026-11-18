@@ -7,7 +7,7 @@ examples reflect 0
 examples thunk 165
 examples type-assertion 213
 examples unsafe 0
-go-backend source-lines 32968
+go-backend source-lines 33209
 markgraf-cli any 3311
 markgraf-cli empty-interface 0
 markgraf-cli funcs 16749

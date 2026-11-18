@@ -63,7 +63,8 @@ use crate::graph::{on_cycles, strongly_connected};
 use crate::simplify::{reference_graph, visit};
 use crate::walk::{self, Walk};
 use crate::syntax::{
-    GoCase, GoDeclaration, GoExpression, GoStatement, GoType, Name, statements_names,
+    DeclarationNames, GoCase, GoDeclaration, GoExpression, GoStatement, GoType, Name,
+    statements_names,
 };
 use crate::timing::timed;
 
@@ -141,13 +142,21 @@ where
     let taken =
         |name: &str| emitter.global_names.contains(name) || IMPORTED_PACKAGES.contains(&name);
     timed("lengths", || lengths::count_lengths_up_to_comparisons(&mut declarations));
-    timed("invariant lengths", || lengths::hoist_loop_invariant_lengths(&mut declarations, &taken));
-    let chunked =
-        timed("chunks", || chunks::allocate_linked_cells_in_chunks(&mut declarations, &taken));
+    let mut names: Vec<DeclarationNames> = timed("names used", || {
+        declarations.iter_mut().map(GoDeclaration::declared_names).collect()
+    });
+    timed("invariant lengths", || {
+        lengths::hoist_loop_invariant_lengths(&mut declarations, &mut names, &taken)
+    });
+    let chunked = timed("chunks", || {
+        chunks::allocate_linked_cells_in_chunks(&mut declarations, &mut names, &taken)
+    });
     if chunked {
         emitter.imports.insert(GoPackage::Alloc.path().into());
     }
-    timed("blocks", || blocks::allocate_nested_cells_together(&mut declarations, &taken));
+    timed("blocks", || {
+        blocks::allocate_nested_cells_together(&mut declarations, &mut names, &taken)
+    });
     timed("divergence", || diverging::end_blocks_at_divergence(&mut declarations));
     timed("unreferenced", || unreferenced::drop_unreferenced_definitions(&mut declarations));
     let mut homes: FxHashMap<String, ModuleIndex> = std::mem::take(&mut emitter.homes)

@@ -300,12 +300,20 @@ impl GoDeclaration {
 
     /// Every name the declaration's code uses or binds, so that a new one can avoid them all.
     pub fn all_names(&mut self) -> FxHashSet<String> {
+        self.declared_names().names
+    }
+
+    pub fn declared_names(&mut self) -> DeclarationNames {
         let mut names = FxHashSet::default();
+        let mut locals = FxHashSet::default();
         self.for_each_name_mut(&mut |name| {
+            if let Name::Binder(name) = &name {
+                locals.insert(name.to_string());
+            }
             let (Name::Reference(name) | Name::Written(name) | Name::Binder(name)) = name;
             names.insert(name.clone());
         });
-        names
+        DeclarationNames { names, locals }
     }
 
     pub fn render(&self) -> String {
@@ -314,6 +322,11 @@ impl GoDeclaration {
         printer.declaration(self);
         printer.output
     }
+}
+
+pub struct DeclarationNames {
+    pub names: FxHashSet<String>,
+    pub locals: FxHashSet<String>,
 }
 
 /// A place where a declaration names something: a value, a type, or a local

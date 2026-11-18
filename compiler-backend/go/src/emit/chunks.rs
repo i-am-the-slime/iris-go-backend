@@ -27,7 +27,7 @@
 use rustc_hash::{FxHashMap, FxHashSet};
 
 use crate::naming::{lower_first, numbered};
-use crate::syntax::{GoDeclaration, GoExpression, GoStatement, GoType};
+use crate::syntax::{DeclarationNames, GoDeclaration, GoExpression, GoStatement, GoType};
 
 use crate::walk::{self, Walk};
 
@@ -35,12 +35,12 @@ use crate::walk::{self, Walk};
 /// `taken` tells which names a new local must not shadow.
 pub fn allocate_linked_cells_in_chunks(
     declarations: &mut [GoDeclaration],
+    names: &mut [DeclarationNames],
     taken: &dyn Fn(&str) -> bool,
 ) -> bool {
     let mut chunked = false;
-    for declaration in declarations {
-        let names = declaration.all_names();
-        let mut function = Function { names, taken, chunked: false };
+    for (declaration, names) in declarations.iter_mut().zip(names) {
+        let mut function = Function { names: &mut names.names, taken, chunked: false };
         walk::declaration(&mut function, declaration);
         chunked |= function.chunked;
     }
@@ -49,7 +49,7 @@ pub fn allocate_linked_cells_in_chunks(
 
 struct Function<'a> {
     /// Every name the declaration uses, so that a chunk shadows none of them.
-    names: FxHashSet<String>,
+    names: &'a mut FxHashSet<String>,
     taken: &'a dyn Fn(&str) -> bool,
     chunked: bool,
 }

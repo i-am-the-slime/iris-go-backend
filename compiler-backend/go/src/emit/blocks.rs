@@ -33,7 +33,7 @@ use rustc_hash::FxHashSet;
 
 use crate::naming::{lower_first, numbered};
 use crate::walk::{self, Walk};
-use crate::syntax::{GoDeclaration, GoExpression, GoStatement, GoType};
+use crate::syntax::{DeclarationNames, GoDeclaration, GoExpression, GoStatement, GoType};
 
 /// The fewest cells of one type in one expression that are allocated together.
 const MINIMUM_CELLS: usize = 3;
@@ -42,10 +42,11 @@ const MINIMUM_CELLS: usize = 3;
 /// tells which names a new local must not shadow.
 pub fn allocate_nested_cells_together(
     declarations: &mut [GoDeclaration],
+    names: &mut [DeclarationNames],
     taken: &dyn Fn(&str) -> bool,
 ) {
-    for declaration in declarations {
-        let names = declaration.all_names();
+    for (declaration, names) in declarations.iter_mut().zip(names) {
+        let names = &mut names.names;
         let mut function = Function { names, taken, always: false, pending: vec![] };
         walk::declaration(&mut function, declaration);
     }
@@ -53,7 +54,7 @@ pub fn allocate_nested_cells_together(
 
 struct Function<'a> {
     /// Every name the declaration uses, so that a block shadows none of them.
-    names: FxHashSet<String>,
+    names: &'a mut FxHashSet<String>,
     taken: &'a dyn Fn(&str) -> bool,
     /// Whether the statement always evaluates the expression visited, so that
     /// the blocks its cells need may go before the statement.
