@@ -16,14 +16,14 @@ impl Simplifier<'_> {
     /// otherwise rewritten by the identities that hold for every operand.
     pub(super) fn operator(
         &mut self,
-        foreign: Foreign,
+        foreign: &'static Foreign,
         arguments: Vec<Expression>,
         monotype: MonotypeId,
     ) -> Expression {
-        if let Some(literal) = evaluate(foreign, &arguments) {
+        if let Some(literal) = evaluate(*foreign, &arguments) {
             return Expression::new(ExpressionKind::Literal(literal), monotype);
         }
-        let Foreign::Operator(operator) = foreign else {
+        let Foreign::Operator(operator) = *foreign else {
             return Expression::new(ExpressionKind::Foreign { foreign, arguments }, monotype);
         };
         match (operator, <[Expression; 1]>::try_from(arguments)) {
@@ -72,7 +72,7 @@ impl Simplifier<'_> {
             ExpressionKind::Foreign {
                 foreign: Foreign::Operator(Operator::Compare(comparison)),
                 arguments,
-            } if let Some(negated) = self.negated(comparison, &arguments[0]) => {
+            } if let Some(negated) = self.negated(*comparison, &arguments[0]) => {
                 operation(Operator::Compare(negated), arguments, monotype)
             }
             kind => {
@@ -165,7 +165,7 @@ fn associate(
 fn flatten(operator: Operator, expression: Expression, operands: &mut Vec<Expression>) {
     match expression.kind {
         ExpressionKind::Foreign { foreign: Foreign::Operator(inner), arguments }
-            if inner == operator =>
+            if *inner == operator =>
         {
             for argument in arguments {
                 flatten(operator, argument, operands);
@@ -208,7 +208,7 @@ fn nest(operator: Operator, operands: Vec<Expression>, monotype: MonotypeId) -> 
 }
 
 fn operation(operator: Operator, arguments: Vec<Expression>, monotype: MonotypeId) -> Expression {
-    let foreign = Foreign::Operator(operator);
+    let foreign = Foreign::Operator(operator).interned();
     Expression::new(ExpressionKind::Foreign { foreign, arguments }, monotype)
 }
 

@@ -16,11 +16,13 @@ impl Simplifier<'_> {
     ) -> Expression {
         let mut bindings = vec![];
         let Some(fields) = self.operate(operation, &arguments, monotype, &mut bindings) else {
-            let kind = ExpressionKind::Foreign { foreign: Foreign::Record(operation), arguments };
+            let foreign = Foreign::Record(operation).interned();
+            let kind = ExpressionKind::Foreign { foreign, arguments };
             return Expression::new(kind, monotype);
         };
         let Some(fields) = self.retyped(fields, monotype) else {
-            let kind = ExpressionKind::Foreign { foreign: Foreign::Record(operation), arguments };
+            let foreign = Foreign::Record(operation).interned();
+            let kind = ExpressionKind::Foreign { foreign, arguments };
             return Expression::new(kind, monotype);
         };
         let mut record = Expression::new(ExpressionKind::Record(fields), monotype);
@@ -91,7 +93,7 @@ impl Simplifier<'_> {
             Expression::new(ExpressionKind::Array(labels), keys),
             Expression::new(ExpressionKind::Array(fields), values),
         ];
-        let kind = ExpressionKind::Foreign { foreign: foreign::FOREIGN_RECORD, arguments };
+        let kind = ExpressionKind::Foreign { foreign: &foreign::FOREIGN_RECORD, arguments };
         let mut converted = Expression::new(kind, foreign);
         for bindings in bindings.into_iter().rev() {
             let kind = ExpressionKind::Let { bindings, body: Box::new(converted) };
@@ -124,7 +126,7 @@ impl Simplifier<'_> {
             Expression::new(ExpressionKind::Array(labels), keys),
             Expression::new(ExpressionKind::Array(fields), values),
         ];
-        let kind = ExpressionKind::Foreign { foreign: foreign::OBJECT_FROM_ENTRIES, arguments };
+        let kind = ExpressionKind::Foreign { foreign: &foreign::OBJECT_FROM_ENTRIES, arguments };
         let mut converted = Expression::new(kind, object);
         for bindings in bindings.into_iter().rev() {
             let kind = ExpressionKind::Let { bindings, body: Box::new(converted) };
@@ -328,7 +330,7 @@ impl Simplifier<'_> {
         monotype: MonotypeId,
     ) -> Expression {
         let Some(fields) = self.dynamic_fields(&arguments) else {
-            let kind = ExpressionKind::Foreign { foreign: Foreign::RecordHas, arguments };
+            let kind = ExpressionKind::Foreign { foreign: &Foreign::RecordHas, arguments };
             return Expression::new(kind, monotype);
         };
         let [label, _record]: [Expression; 2] =
@@ -372,7 +374,8 @@ impl Simplifier<'_> {
             ExpressionKind::Literal(Literal::String(expected.to_string())),
             label.monotype,
         );
-        let foreign = Foreign::Operator(foreign::Operator::Compare(foreign::Comparison::Equal));
+        let equal = foreign::Operator::Compare(foreign::Comparison::Equal);
+        let foreign = Foreign::Operator(equal).interned();
         let arguments = vec![label.clone(), expected];
         Expression::new(ExpressionKind::Foreign { foreign, arguments }, boolean)
     }

@@ -1,10 +1,11 @@
-use std::cell::RefCell;
+use std::cell::{Cell, RefCell};
+use std::hash::{Hash, Hasher};
 use std::rc::Rc;
 use std::sync::Arc;
 
 use checking::TypeId;
-use checking::core::{ForallBinderId, Name, RowField, RowType, Type};
-use rustc_hash::FxHashMap;
+use checking::core::{Depth, ForallBinderId, Name, RowField, RowType, Type};
+use rustc_hash::{FxHashMap, FxHasher};
 
 use crate::erasure::Erasure;
 
@@ -19,38 +20,127 @@ const PHANTOM_UNIQUE: u32 = ERASED_UNIQUE - 1024;
 pub struct TypeOperations<'q, Q> {
     queries: &'q Q,
     substituted: Substituted,
+    erased: RefCell<FxHashMap<Erasure, TypeId>>,
+    phantom: Cell<Option<TypeId>>,
+    placeholders: RefCell<Vec<TypeId>>,
 }
 
-/// The answers of `substitute`, by substitution (sorted) and then by type. They
-/// hold for every `TypeOperations` over the same queries, so a pass that starts
-/// over keeps them.
+/// The answers of `substitute`, by substitution and then by type. They hold for
+/// every `TypeOperations` over the same queries, so a pass that starts over
+/// keeps them.
 #[derive(Clone, Default)]
-pub struct Substituted(Rc<RefCell<FxHashMap<Vec<(Name, TypeId)>, FxHashMap<TypeId, TypeId>>>>);
+pub struct Substituted(Rc<RefCell<FxHashMap<u64, SubstitutionAnswers>>>);
+
+#[derive(Default)]
+struct SubstitutionAnswers {
+    entries: Vec<(Name, TypeId)>,
+    by_type: FxHashMap<TypeId, TypeId>,
+}
+
+impl Substituted {
+    fn answer(
+        &self,
+        fingerprint: u64,
+        substitution: &Substitution,
+        type_id: TypeId,
+    ) -> Option<TypeId> {
+        let answers = self.0.borrow();
+        let answers = answers.get(&fingerprint)?;
+        if !answers.is_of(substitution) {
+            return None;
+        }
+        answers.by_type.get(&type_id).copied()
+    }
+
+    fn remember(
+        &self,
+        fingerprint: u64,
+        substitution: &Substitution,
+        type_id: TypeId,
+        answer: TypeId,
+    ) {
+        let mut answers = self.0.borrow_mut();
+        let answers = answers.entry(fingerprint).or_insert_with(|| SubstitutionAnswers {
+            entries: substitution.iter().map(|(&name, &type_id)| (name, type_id)).collect(),
+            by_type: FxHashMap::default(),
+        });
+        if answers.is_of(substitution) {
+            answers.by_type.insert(type_id, answer);
+        }
+    }
+}
+
+impl SubstitutionAnswers {
+    fn is_of(&self, substitution: &Substitution) -> bool {
+        self.entries.len() == substitution.len()
+            && self.entries.iter().all(|(name, type_id)| substitution.get(name) == Some(type_id))
+    }
+}
+
+/// The same for the same entries in whichever order the map holds them.
+fn fingerprint(substitution: &Substitution) -> u64 {
+    substitution.iter().fold(0u64, |fingerprint, entry| {
+        let mut hasher = FxHasher::default();
+        entry.hash(&mut hasher);
+        fingerprint.wrapping_add(hasher.finish())
+    })
+}
 
 impl<'q, Q> TypeOperations<'q, Q>
 where
     Q: checking::ExternalQueries,
 {
     pub fn sharing(queries: &'q Q, substituted: Substituted) -> TypeOperations<'q, Q> {
-        TypeOperations { queries, substituted }
+        TypeOperations {
+            queries,
+            substituted,
+            erased: RefCell::default(),
+            phantom: Cell::default(),
+            placeholders: RefCell::default(),
+        }
     }
 
     /// A closed stand-in for a type the program cannot specialize on, such as the
     /// element type under polymorphic recursion. It becomes Go `any`, and
     /// remembers why for the `any` census.
     pub fn erased(&self, erasure: Erasure) -> TypeId {
-        let unique = ERASED_UNIQUE - erasure.tracked().code();
-        let name = Name { file: self.queries.prim_id(), unique, scoped: false };
-        let kind = self.queries.intern_type(Type::Unification(u32::MAX));
-        self.queries.intern_type(Type::Rigid(name, checking::core::Depth(0), kind))
+        if let Some(&erased) = self.erased.borrow().get(&erasure) {
+            return erased;
+        }
+        let erased = self.stand_in(ERASED_UNIQUE - erasure.tracked().code());
+        self.erased.borrow_mut().insert(erasure, erased);
+        erased
     }
 
     /// The stand-in for the argument of a phantom parameter, which no
     /// representation mentions. It is no erasure: nothing holds a value of it.
     pub fn phantom(&self) -> TypeId {
-        let name = Name { file: self.queries.prim_id(), unique: PHANTOM_UNIQUE, scoped: false };
+        if let Some(phantom) = self.phantom.get() {
+            return phantom;
+        }
+        let phantom = self.stand_in(PHANTOM_UNIQUE);
+        self.phantom.set(Some(phantom));
+        phantom
+    }
+
+    /// The stand-in for the quantified variable at a position of a scheme, so
+    /// that every scheme's key spells its variables the same way.
+    pub fn placeholder(&self, position: usize) -> TypeId {
+        if let Some(&placeholder) = self.placeholders.borrow().get(position) {
+            return placeholder;
+        }
+        let placeholder = self.stand_in(u32::MAX - 1 - position as u32);
+        let mut placeholders = self.placeholders.borrow_mut();
+        let length = placeholders.len().max(position + 1);
+        placeholders.resize(length, placeholder);
+        placeholders[position] = placeholder;
+        placeholder
+    }
+
+    fn stand_in(&self, unique: u32) -> TypeId {
+        let name = Name { file: self.queries.prim_id(), unique, scoped: false };
         let kind = self.queries.intern_type(Type::Unification(u32::MAX));
-        self.queries.intern_type(Type::Rigid(name, checking::core::Depth(0), kind))
+        self.queries.intern_type(Type::Rigid(name, Depth(0), kind))
     }
 
     /// The type with every erased stand-in in it at the one cause that a build
@@ -176,15 +266,12 @@ where
         if substitution.is_empty() || !self.queries.lookup_type_flags(type_id).has_rigid() {
             return type_id;
         }
-        let mut entries: Vec<(Name, TypeId)> =
-            substitution.iter().map(|(&name, &type_id)| (name, type_id)).collect();
-        entries.sort_unstable();
-        let known = self.substituted.0.borrow().get(&entries).and_then(|known| known.get(&type_id)).copied();
-        if let Some(substituted) = known {
+        let fingerprint = fingerprint(substitution);
+        if let Some(substituted) = self.substituted.answer(fingerprint, substitution, type_id) {
             return substituted;
         }
         let substituted = self.substitute_nodes(type_id, substitution);
-        self.substituted.0.borrow_mut().entry(entries).or_default().insert(type_id, substituted);
+        self.substituted.remember(fingerprint, substitution, type_id, substituted);
         substituted
     }
 
@@ -194,29 +281,45 @@ where
         }
         let substituted = match self.lookup(type_id).clone() {
             Type::Rigid(name, _, _) => return substitution.get(&name).copied().unwrap_or(type_id),
-            Type::Application(function, argument) => Type::Application(
-                self.substitute_nodes(function, substitution),
-                self.substitute_nodes(argument, substitution),
-            ),
+            Type::Application(function, argument) => {
+                let substituted_function = self.substitute_nodes(function, substitution);
+                let substituted_argument = self.substitute_nodes(argument, substitution);
+                if substituted_function == function && substituted_argument == argument {
+                    return type_id;
+                }
+                Type::Application(substituted_function, substituted_argument)
+            }
             Type::KindApplication(function, _) => return self.substitute_nodes(function, substitution),
             Type::Kinded(inner, _) => return self.substitute_nodes(inner, substitution),
             Type::Forall(binder, inner) => {
-                Type::Forall(binder, self.substitute_under_binder(binder, inner, substitution))
+                let substituted_inner = self.substitute_under_binder(binder, inner, substitution);
+                if substituted_inner == inner {
+                    return type_id;
+                }
+                Type::Forall(binder, substituted_inner)
             }
-            Type::Constrained(constraint, inner) => Type::Constrained(
-                self.substitute_nodes(constraint, substitution),
-                self.substitute_nodes(inner, substitution),
-            ),
+            Type::Constrained(constraint, inner) => {
+                let substituted_constraint = self.substitute_nodes(constraint, substitution);
+                let substituted_inner = self.substitute_nodes(inner, substitution);
+                if substituted_constraint == constraint && substituted_inner == inner {
+                    return type_id;
+                }
+                Type::Constrained(substituted_constraint, substituted_inner)
+            }
             Type::ConstraintOrigin(constraint, _) => {
                 return self.substitute_nodes(constraint, substitution);
             }
-            Type::Function(argument, result) => Type::Function(
-                self.substitute_nodes(argument, substitution),
-                self.substitute_nodes(result, substitution),
-            ),
+            Type::Function(argument, result) => {
+                let substituted_argument = self.substitute_nodes(argument, substitution);
+                let substituted_result = self.substitute_nodes(result, substitution);
+                if substituted_argument == argument && substituted_result == result {
+                    return type_id;
+                }
+                Type::Function(substituted_argument, substituted_result)
+            }
             Type::Row(row) => {
                 let row = self.queries.lookup_row_type(row).clone();
-                return self.substitute_row(row, substitution);
+                return self.substitute_row(type_id, row, substitution);
             }
             Type::Constructor(..)
             | Type::Synonym(..)
@@ -269,7 +372,7 @@ where
         self.substitute_nodes(inner, &shadowed)
     }
 
-    fn substitute_row(&self, row: RowType, substitution: &Substitution) -> TypeId {
+    fn substitute_row(&self, type_id: TypeId, row: RowType, substitution: &Substitution) -> TypeId {
         let mut fields: Vec<RowField> = row
             .fields
             .iter()
@@ -279,6 +382,9 @@ where
             })
             .collect();
         let mut tail = row.tail.map(|tail| self.substitute_nodes(tail, substitution));
+        if self.is_same_row(&row, &fields, tail) {
+            return type_id;
+        }
         while let Some(tail_id) = tail {
             let Type::Row(tail_row) = self.strip(tail_id) else { break };
             let tail_row = self.queries.lookup_row_type(*tail_row).clone();
@@ -289,6 +395,15 @@ where
         let row = RowType { fields: Arc::from(fields), tail };
         let row = self.queries.intern_row_type(row);
         self.queries.intern_type(Type::Row(row))
+    }
+
+    /// Whether substituting left the row as it is, and sorting and flattening
+    /// it would too: its fields are sorted and its tail is no row.
+    fn is_same_row(&self, row: &RowType, fields: &[RowField], tail: Option<TypeId>) -> bool {
+        tail == row.tail
+            && !tail.is_some_and(|tail| matches!(self.strip(tail), Type::Row(_)))
+            && row.fields.iter().zip(fields).all(|(before, after)| before.id == after.id)
+            && fields.windows(2).all(|pair| pair[0].label <= pair[1].label)
     }
 
     fn strip(&self, mut type_id: TypeId) -> &'q Type {

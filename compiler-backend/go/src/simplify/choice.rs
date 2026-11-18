@@ -127,17 +127,17 @@ impl Simplifier<'_> {
         let zero = Expression::new(ExpressionKind::Literal(Literal::Int(0)), int);
         let length = operation(Operator::ArrayLength, vec![elements.clone()], int);
         let non_negative = self.operator(
-            Foreign::Operator(Operator::Compare(Comparison::GreaterThanOrEqual)),
+            &Foreign::Operator(Operator::Compare(Comparison::GreaterThanOrEqual)),
             vec![index.clone(), zero],
             boolean,
         );
         let below_length = self.operator(
-            Foreign::Operator(Operator::Compare(Comparison::LessThan)),
+            &Foreign::Operator(Operator::Compare(Comparison::LessThan)),
             vec![index.clone(), length],
             boolean,
         );
         let within = self.operator(
-            Foreign::Operator(Operator::BooleanAnd),
+            &Foreign::Operator(Operator::BooleanAnd),
             vec![non_negative, below_length],
             boolean,
         );
@@ -261,7 +261,7 @@ fn mentions_erased(alternative: &Alternative, monotypes: &Monotypes) -> bool {
 }
 
 fn operation(operator: Operator, arguments: Vec<Expression>, monotype: MonotypeId) -> Expression {
-    let foreign = Foreign::Operator(operator);
+    let foreign = Foreign::Operator(operator).interned();
     Expression::new(ExpressionKind::Foreign { foreign, arguments }, monotype)
 }
 

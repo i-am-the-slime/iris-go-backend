@@ -191,7 +191,7 @@ where
         };
         let module = self.context.module(file_id)?;
         let Some(name) = module.indexed.items[term].name.as_deref() else { return Ok(false) };
-        Ok(foreign::foreign_import(&module.name, name) == Some(Foreign::UnsafeCoerce))
+        Ok(foreign::foreign_import(&module.name, name) == Some(&Foreign::UnsafeCoerce))
     }
 
     pub(super) fn coerced_with_evidence(
@@ -214,7 +214,7 @@ where
         scope.substitution = substitution;
         let argument = argument?;
         let function = self.monotypes.function(argument.monotype, monotype);
-        let function = self.foreign(Foreign::UnsafeCoerce, function);
+        let function = self.foreign(&Foreign::UnsafeCoerce, function);
         let arguments = vec![argument];
         let kind = ExpressionKind::Apply { function: Box::new(function), arguments };
         Ok(Expression::new(kind, monotype))

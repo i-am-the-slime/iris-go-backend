@@ -837,7 +837,7 @@ impl Simplifier<'_> {
 
     fn foreign(
         &mut self,
-        foreign: Foreign,
+        foreign: &'static Foreign,
         mut arguments: Vec<Expression>,
         monotype: crate::monotype::MonotypeId,
     ) -> Expression {
@@ -885,7 +885,7 @@ impl Simplifier<'_> {
             Foreign::Identity => {
                 arguments.pop().expect("invariant violated: identity has one argument")
             }
-            Foreign::Record(operation) => self.record_operation(operation, arguments, monotype),
+            Foreign::Record(operation) => self.record_operation(*operation, arguments, monotype),
             Foreign::RecordHas => self.record_has(arguments, monotype),
             Foreign::ObjectFoldM => self.object_fold(arguments, monotype),
             Foreign::UnsafeCoerce => {
@@ -913,7 +913,7 @@ impl Simplifier<'_> {
         let boolean = self.monotypes.intern(Monotype::Boolean);
         let compare = |comparison, left: &Expression, right: &Expression| {
             let arguments = vec![left.clone(), right.clone()];
-            let foreign = Foreign::Operator(Operator::Compare(comparison));
+            let foreign = Foreign::Operator(Operator::Compare(comparison)).interned();
             Expression::new(ExpressionKind::Foreign { foreign, arguments }, boolean)
         };
         let equal_or_greater = ExpressionKind::If {

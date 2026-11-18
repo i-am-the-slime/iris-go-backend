@@ -29,7 +29,7 @@ impl Simplifier<'_> {
         let current = self.named_local("state", state);
 
         let looked_up = ExpressionKind::Foreign {
-            foreign: foreign::OBJECT_INDEX,
+            foreign: &foreign::OBJECT_INDEX,
             arguments: vec![object.0.expression(), key.expression()],
         };
         let looked_up = Expression::new(looked_up, value);
@@ -55,7 +55,7 @@ impl Simplifier<'_> {
             step,
         );
         let object_keys = ExpressionKind::Foreign {
-            foreign: foreign::OBJECT_KEYS,
+            foreign: &foreign::OBJECT_KEYS,
             arguments: vec![object.0.expression()],
         };
         let object_keys = Expression::new(object_keys, keys);

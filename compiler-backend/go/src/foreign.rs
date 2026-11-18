@@ -6,10 +6,11 @@ mod host;
 
 pub use host::is_opaque_foreign_data;
 
-use std::sync::OnceLock;
+use std::sync::{Mutex, OnceLock};
 
 use files::FileId;
 use indexing::TermItemId;
+use rustc_hash::FxHashMap;
 
 #[derive(Debug, Clone, Default)]
 pub struct ForeignPackages {
@@ -417,6 +418,15 @@ impl Operator {
 }
 
 impl Foreign {
+    /// The one static copy of this description, which expressions refer to:
+    /// a boundary learned from a declaration is interned like the tables'.
+    pub fn interned(self) -> &'static Foreign {
+        static INTERNED: OnceLock<Mutex<FxHashMap<Foreign, &'static Foreign>>> = OnceLock::new();
+        let interned = INTERNED.get_or_init(Mutex::default);
+        let mut interned = interned.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
+        interned.entry(self).or_insert_with(|| Box::leak(Box::new(self)))
+    }
+
     /// Whether this calls the same Go function as `other`, whatever the
     /// boundary learned from the declaration that references it.
     pub fn calls(self, other: Foreign) -> bool {
@@ -641,15 +651,21 @@ pub const EFFECT_FOLD: Foreign = direct_with(
     Boundary { uncurried: &[(0, 2)], uncurried_perform: true, ..PLAIN },
 );
 
-pub fn array_fold() -> Foreign {
+pub fn array_fold() -> &'static Foreign {
+    static FOLD: OnceLock<Foreign> = OnceLock::new();
     static SIGNATURE: OnceLock<Signature> = OnceLock::new();
-    with_signature(ARRAY_FOLD, SIGNATURE.get_or_init(|| fold_signature(Spelled::Opaque)))
+    FOLD.get_or_init(|| {
+        with_signature(ARRAY_FOLD, SIGNATURE.get_or_init(|| fold_signature(Spelled::Opaque)))
+    })
 }
 
-pub fn effect_fold() -> Foreign {
+pub fn effect_fold() -> &'static Foreign {
+    static FOLD: OnceLock<Foreign> = OnceLock::new();
     static SIGNATURE: OnceLock<Signature> = OnceLock::new();
     let effect = || Spelled::Effect(Box::new(Spelled::Opaque));
-    with_signature(EFFECT_FOLD, SIGNATURE.get_or_init(|| fold_signature(effect())))
+    FOLD.get_or_init(|| {
+        with_signature(EFFECT_FOLD, SIGNATURE.get_or_init(|| fold_signature(effect())))
+    })
 }
 
 fn fold_signature(result: Spelled) -> Signature {
@@ -1388,7 +1404,7 @@ pub fn support_data(module_name: &str, name: &str) -> Option<(GoPackage, &'stati
         .map(|(_, _, package, type_name)| (*package, *type_name))
 }
 
-pub fn foreign_import(module_name: &str, name: &str) -> Option<Foreign> {
+pub fn foreign_import(module_name: &str, name: &str) -> Option<&'static Foreign> {
     if let Some(identity) = uncurried_conversion(module_name, name) {
         return Some(identity);
     }
@@ -1396,10 +1412,10 @@ pub fn foreign_import(module_name: &str, name: &str) -> Option<Foreign> {
         .iter()
         .chain(host::HOST_IMPORTS)
         .find(|(module, item, _)| *module == module_name && *item == name)
-        .map(|(_, _, foreign)| *foreign)
+        .map(|(_, _, foreign)| foreign)
 }
 
-pub fn intrinsic(module_name: &str, name: &str, instances: &[&str]) -> Option<Foreign> {
+pub fn intrinsic(module_name: &str, name: &str, instances: &[&str]) -> Option<&'static Foreign> {
     if let Some(identity) = uncurried_conversion(module_name, name) {
         return Some(identity);
     }
@@ -1408,11 +1424,11 @@ pub fn intrinsic(module_name: &str, name: &str, instances: &[&str]) -> Option<Fo
         .find(|(module, item, expected, _)| {
             *module == module_name && *item == name && instances.starts_with(expected)
         })
-        .map(|(_, _, _, foreign)| *foreign)
+        .map(|(_, _, _, foreign)| foreign)
 }
 
 /// `FnN` types are curried functions in Go, so converting to and from them is free.
-fn uncurried_conversion(module_name: &str, name: &str) -> Option<Foreign> {
+fn uncurried_conversion(module_name: &str, name: &str) -> Option<&'static Foreign> {
     let (run, make) = match module_name {
         "Data.Function.Uncurried" => ("runFn", "mkFn"),
         "Effect.Uncurried" => ("runEffectFn", "mkEffectFn"),
@@ -1420,5 +1436,5 @@ fn uncurried_conversion(module_name: &str, name: &str) -> Option<Foreign> {
         _ => return None,
     };
     let arity = name.strip_prefix(run).or_else(|| name.strip_prefix(make))?;
-    arity.parse::<u8>().is_ok().then_some(Foreign::Identity)
+    arity.parse::<u8>().is_ok().then_some(&Foreign::Identity)
 }

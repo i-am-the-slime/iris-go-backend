@@ -85,7 +85,7 @@ where
     fn uncurried_conversion(&mut self, (file_id, term): (FileId, TermItemId)) -> GoResult<bool> {
         let module = self.context.module(file_id)?;
         let name = module.indexed.items[term].name.clone().unwrap_or_default();
-        Ok(foreign::foreign_import(&module.name, &name) == Some(Foreign::Identity)
+        Ok(foreign::foreign_import(&module.name, &name) == Some(&Foreign::Identity)
             && name.starts_with("runFn"))
     }
 
@@ -149,7 +149,7 @@ where
         let fold = Expression::new(fold, accumulated);
 
         let allocated = self.monotypes.intern(Monotype::Effect(snoc));
-        let allocate = ExpressionKind::Foreign { foreign: foreign::APPENDER, arguments: vec![] };
+        let allocate = ExpressionKind::Foreign { foreign: &foreign::APPENDER, arguments: vec![] };
         let folded = self.monotypes.intern(Monotype::Effect(accumulated));
         let traversed = ExpressionKind::EffectBind {
             action: Box::new(Expression::new(allocate, allocated)),
@@ -157,7 +157,7 @@ where
             body: Box::new(Expression::new(ExpressionKind::EffectPure(Box::new(fold)), folded)),
         };
         let traversed = ExpressionKind::Foreign {
-            foreign: Foreign::RunEffect,
+            foreign: &Foreign::RunEffect,
             arguments: vec![Expression::new(traversed, folded)],
         };
         let traversed = Expression::new(traversed, accumulated);
@@ -261,7 +261,7 @@ where
         let integer = self.monotypes.intern(Monotype::Int);
         let first = Expression::new(ExpressionKind::Literal(Literal::Int(0)), integer);
         let index = ExpressionKind::Foreign {
-            foreign: Foreign::Operator(Operator::ArrayIndex),
+            foreign: &Foreign::Operator(Operator::ArrayIndex),
             arguments: vec![array.expression(), first],
         };
         Expression::new(index, element)
@@ -271,12 +271,12 @@ where
         let integer = self.monotypes.intern(Monotype::Int);
         let second = Expression::new(ExpressionKind::Literal(Literal::Int(1)), integer);
         let length = ExpressionKind::Foreign {
-            foreign: Foreign::Operator(Operator::ArrayLength),
+            foreign: &Foreign::Operator(Operator::ArrayLength),
             arguments: vec![array.expression()],
         };
         let length = Expression::new(length, integer);
         let tail = ExpressionKind::Foreign {
-            foreign: foreign::ARRAY_SLICE,
+            foreign: &foreign::ARRAY_SLICE,
             arguments: vec![second, length, array.expression()],
         };
         Expression::new(tail, array.monotype)

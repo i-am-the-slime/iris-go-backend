@@ -76,7 +76,7 @@ impl IgnoringCallee {
 
 fn is_foreign_wrapper(function: &Expression, expected: Foreign) -> bool {
     matches!(&function.kind, ExpressionKind::Lambda { body, .. }
-        if matches!(body.kind, ExpressionKind::Foreign { foreign, .. } if foreign == expected))
+        if matches!(body.kind, ExpressionKind::Foreign { foreign, .. } if *foreign == expected))
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -2489,7 +2489,7 @@ where
                     return Ok(self.foreign(foreign, monotype));
                 }
                 if self.foreign_packages.provides(&module.name) {
-                    let foreign = self.project_foreign(file_id, term, monotype);
+                    let foreign = self.project_foreign(file_id, term, monotype).interned();
                     return Ok(self.foreign(foreign, monotype));
                 }
                 let name = format!("{}.{name}", module.name);
@@ -2666,10 +2666,10 @@ where
         &mut self,
         file_id: FileId,
         term: TermItemId,
-        foreign: Foreign,
-    ) -> GoResult<Foreign> {
+        foreign: &'static Foreign,
+    ) -> GoResult<&'static Foreign> {
         let boundary = match foreign {
-            Foreign::Call { boundary, .. } | Foreign::Perform { boundary, .. } => boundary,
+            Foreign::Call { boundary, .. } | Foreign::Perform { boundary, .. } => *boundary,
             _ => return Ok(foreign),
         };
         let declared = match self.callback_arities.get(&(file_id, term)) {
@@ -2712,13 +2712,14 @@ where
         let (arities, signature) = declared;
         let boundary =
             Boundary { callback_arities: arities, signature: Some(signature), ..boundary };
-        Ok(match foreign {
+        let learned = match *foreign {
             Foreign::Call { function, arity, .. } => Foreign::Call { function, arity, boundary },
             Foreign::Perform { function, arity, .. } => {
                 Foreign::Perform { function, arity, boundary }
             }
             _ => unreachable!(),
-        })
+        };
+        Ok(learned.interned())
     }
 
     fn uncurried_parts(&mut self, type_id: TypeId) -> GoResult<(Vec<Spelled>, TypeId)> {
@@ -2772,7 +2773,7 @@ where
         Foreign::Project { file_id, term, arity, effectful }
     }
 
-    fn foreign(&mut self, foreign: Foreign, monotype: MonotypeId) -> Expression {
+    fn foreign(&mut self, foreign: &'static Foreign, monotype: MonotypeId) -> Expression {
         let arity = foreign.arity();
         if arity == 0 {
             return Expression::new(

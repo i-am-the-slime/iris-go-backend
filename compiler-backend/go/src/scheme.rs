@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use building_types::QueryResult;
 use checking::TypeId;
-use checking::core::{Depth, Name, Type};
+use checking::core::{Name, Type};
 use rustc_hash::FxHashMap;
 use smol_str::SmolStr;
 
@@ -224,7 +224,7 @@ where
     let placeholders: Substitution = names
         .iter()
         .enumerate()
-        .map(|(position, &name)| (name, placeholder(context, position)))
+        .map(|(position, &name)| (name, context.types.placeholder(position)))
         .collect();
     let canonical =
         constraints.iter().map(|&constraint| context.types.substitute(constraint, &placeholders));
@@ -257,7 +257,7 @@ where
     let placeholders: Substitution = names
         .iter()
         .enumerate()
-        .map(|(position, &name)| (name, placeholder(context, position)))
+        .map(|(position, &name)| (name, context.types.placeholder(position)))
         .collect();
     // The key is the body in a canonical spelling, so that every occurrence of
     // the same rank-N type finds the same instantiations.
@@ -265,14 +265,4 @@ where
     let keyed = crate::monotype::expand_synonyms(context, keyed)?;
     let key = SchemeKey(Arc::from([keyed]));
     Ok(Some(ConstrainedScheme { names, constraints: vec![], body, key }))
-}
-
-fn placeholder<Q>(context: &Context<'_, Q>, position: usize) -> TypeId
-where
-    Q: checking::ExternalQueries,
-{
-    let unique = u32::MAX - 1 - position as u32;
-    let name = Name { file: context.queries.prim_id(), unique, scoped: false };
-    let kind = context.queries.intern_type(Type::Unification(u32::MAX));
-    context.queries.intern_type(Type::Rigid(name, Depth(0), kind))
 }

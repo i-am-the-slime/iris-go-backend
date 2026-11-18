@@ -1516,7 +1516,7 @@ where
                 self.deliver(unit_value(), result, sink, out)
             }
             ExpressionKind::Foreign { foreign, arguments } if foreign.is_effectful() => {
-                self.perform_foreign(*foreign, arguments, result, sink, out)
+                self.perform_foreign(**foreign, arguments, result, sink, out)
             }
             ExpressionKind::Apply { function, arguments } => {
                 let performed = self.perform_application(function, arguments, out)?;
@@ -2628,7 +2628,7 @@ where
                 cell
             }
             ExpressionKind::Foreign { foreign, arguments } => {
-                self.foreign_value(*foreign, arguments, expression.monotype, out)?
+                self.foreign_value(foreign, arguments, expression.monotype, out)?
             }
             ExpressionKind::Apply { function, arguments } => {
                 let applied = self.application_value(function, arguments, out)?;
@@ -3048,7 +3048,7 @@ where
 
     fn foreign_value(
         &mut self,
-        foreign: Foreign,
+        foreign: &'static Foreign,
         arguments: &[Expression],
         monotype: MonotypeId,
         out: &mut Vec<GoStatement>,
@@ -3160,24 +3160,24 @@ where
             out.push(GoStatement::Variable { name: name.clone(), type_, value: None });
             return Ok(identifier_expression(&name));
         }
-        if let Foreign::Unfoldr | Foreign::Unfoldr1 = foreign {
-            return self.unfoldr(foreign, arguments, out);
+        if let Foreign::Unfoldr | Foreign::Unfoldr1 = *foreign {
+            return self.unfoldr(*foreign, arguments, out);
         }
-        if let Foreign::Project { file_id, term, .. } = foreign {
+        if let Foreign::Project { file_id, term, .. } = *foreign {
             let called = self.project_call(file_id, term, arguments, monotype, out)?;
             return self.out_of_convention(called, monotype, out);
         }
-        if let Foreign::Operator(Operator::ArrayLength) = foreign
+        if let Foreign::Operator(Operator::ArrayLength) = *foreign
             && self.is_fusible(&arguments[0], fusion::Demand::FORWARD)
         {
             return self.fused_length(&arguments[0], monotype, out);
         }
-        if let Foreign::Call { boundary: Boundary { iteration: Some(iteration), .. }, .. } = foreign
+        if let Foreign::Call { boundary: Boundary { iteration: Some(iteration), .. }, .. } = *foreign
             && let Some(iterated) = self.iteration(iteration, arguments, monotype, out)?
         {
             return Ok(iterated);
         }
-        if let Foreign::Call { function, boundary, .. } = foreign {
+        if let Foreign::Call { function, boundary, .. } = *foreign {
             let values = self.boundary_arguments(arguments, boundary, monotype, true, out)?;
             let function = self.boundary_function(function, boundary, monotype)?;
             let result = call(function, values);
@@ -3186,11 +3186,11 @@ where
             }
             return Ok(result);
         }
-        if let Foreign::ReferenceEqual = foreign {
+        if let Foreign::ReferenceEqual = *foreign {
             return self.reference_equal(&arguments[0], &arguments[1], out);
         }
         let mut values = self.values(arguments, out)?;
-        Ok(match foreign {
+        Ok(match *foreign {
             Foreign::Operator(Operator::Compare(comparison))
                 if !matches!(comparison, Comparison::Equal | Comparison::NotEqual)
                     && matches!(self.monotypes.get(arguments[0].monotype), Monotype::String) =>

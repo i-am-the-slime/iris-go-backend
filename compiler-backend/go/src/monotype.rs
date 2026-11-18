@@ -1283,6 +1283,16 @@ where
     Ok(canonical)
 }
 
+/// Whether a closed row's fields came back from canonicalisation as they were,
+/// already in label order, so that rebuilding the row would intern it again.
+fn is_canonical_already(
+    row: &checking::core::RowType,
+    fields: &[checking::core::RowField],
+) -> bool {
+    row.fields.iter().zip(fields).all(|(before, after)| before.id == after.id)
+        && fields.windows(2).all(|pair| pair[0].label <= pair[1].label)
+}
+
 fn canonicalise_uncached<Q>(
     context: &mut Context<'_, Q>,
     type_id: TypeId,
@@ -1299,9 +1309,13 @@ where
     let type_id = context.types.strip_annotations(type_id);
     match context.types.lookup(type_id).clone() {
         Type::Function(argument, result) => {
-            let argument = canonicalise(context, argument, expansions, expanding, erase)?;
-            let result = canonicalise(context, result, expansions, expanding, erase)?;
-            return Ok(context.queries.intern_type(Type::Function(argument, result)));
+            let canonical_argument = canonicalise(context, argument, expansions, expanding, erase)?;
+            let canonical_result = canonicalise(context, result, expansions, expanding, erase)?;
+            if canonical_argument == argument && canonical_result == result {
+                return Ok(type_id);
+            }
+            let function = Type::Function(canonical_argument, canonical_result);
+            return Ok(context.queries.intern_type(function));
         }
         Type::Row(row) => {
             let row = context.queries.lookup_row_type(row).clone();
@@ -1309,6 +1323,9 @@ where
             for field in row.fields.iter() {
                 let id = canonicalise(context, field.id, expansions, expanding, erase)?;
                 fields.push(checking::core::RowField { label: field.label.clone(), id });
+            }
+            if row.tail.is_none() && is_canonical_already(&row, &fields) {
+                return Ok(type_id);
             }
             // A tail such as `RENDER ()` in `METRICS + RENDER + ()` is a synonym
             // for more fields: expand it and flatten, so that every spelling of a
