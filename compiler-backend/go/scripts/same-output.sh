@@ -34,8 +34,7 @@ generate() {
   printf 'module markgraf.example/cli\n\ngo 1.27.0\n' > "$out/markgraf/go.mod"
   (cd "$MARKGRAF/cli" && "$IRIS" go --entry Main.run "$out/markgraf") >"$out/markgraf.log" 2>&1 \
     || echo "markgraf: iris go failed (see $out/markgraf.log)"
-  grep -E '^  "[A-Za-z0-9_]+\|[^|]+\|(value|effect|program)\|' "$EXAMPLES/run.sh" \
-    | sed -E 's/^  "//' | cut -d'|' -f1,2 | tr '|' ' ' \
+  cut -d'|' -f1,2 "$EXAMPLES/examples.txt" | tr '|' ' ' \
     | OUT="$out" EXAMPLES="$EXAMPLES" IRIS="$IRIS" xargs -P "$JOBS" -n 2 sh -c '
         name="$0"; entry="$1"; dir="$OUT/examples/$name"
         mkdir -p "$dir"

@@ -208,7 +208,7 @@ export -f build_example
 
 target_examples() {
   echo "== examples ($EXAMPLES)"
-  grep -E '^  "[A-Za-z0-9_]+\|[^|]+\|(value|effect|program)\|' "$EXAMPLES/run.sh" | sed -E 's/^  "//; s/"$//' \
+  cat "$EXAMPLES/examples.txt" \
     >"$WORK/examples.manifest"
   mkdir -p "$WORK/examples"
   local count

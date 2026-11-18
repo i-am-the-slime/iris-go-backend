@@ -2,7 +2,7 @@
 #
 # Compiles purs-backend-go's example projects with `iris go`, builds each with
 # `go build`, runs it, and compares stdout with the expectation recorded in
-# purs-backend-go's examples/run.sh.
+# purs-backend-go's examples/examples.txt.
 #
 #   compiler-backend/go/scripts/run-examples.sh               # every example
 #   compiler-backend/go/scripts/run-examples.sh Tco01 Array01 # selected examples
@@ -71,7 +71,7 @@ export -f run_one
 export IRIS EXAMPLES GO_SUPPORT WORK EXAMPLE_TIMEOUT
 
 manifest() {
-  grep -E '^  "[A-Za-z0-9_]+\|[^|]+\|(value|effect|program)\|' "$EXAMPLES/run.sh" | sed -E 's/^  "//; s/"$//'
+  cat "$EXAMPLES/examples.txt"
 }
 
 selected() {
