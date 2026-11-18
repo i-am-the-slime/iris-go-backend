@@ -1,3 +1,4 @@
+use std::cell::RefCell;
 use std::sync::Arc;
 
 use building_types::QueryResult;
@@ -9,6 +10,7 @@ use smol_str::SmolStr;
 use crate::context::Context;
 use crate::dictionary::Dictionary;
 use crate::erasure::Erasure;
+use crate::monotype::DataType;
 use crate::types::Substitution;
 
 pub const SCHEME_INSTANTIATION_LIMIT: usize = 64;
@@ -43,6 +45,37 @@ pub struct SchemeInstantiations {
     families: FxHashMap<TypeId, ExistsFamily>,
     erased_families: FxHashMap<TypeId, Erasure>,
     continuation_families: FxHashMap<SchemeKey, TypeId>,
+    version: u32,
+    written: FxHashMap<Decision, u32>,
+    reads: RefCell<Vec<Read>>,
+}
+
+/// One answer the schemes give, which specialization reads and growth may
+/// change: a function that read an answer before it changed is specialized
+/// again.
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub enum Decision {
+    Instantiations(SchemeKey),
+    RankN(SchemeKey),
+    ErasedKey(SchemeKey),
+    Grown(SchemeKey),
+    AnyGrown,
+    ErasedOwner(String),
+    Coerced(SchemeKey),
+    Witnesses(TypeId),
+    Continuations(TypeId),
+    FamilyErasure(TypeId),
+    ContinuationFamily(SchemeKey),
+}
+
+/// A read of the schemes: a decision at the version the schemes had then,
+/// or a cached conversion whose own reads stand for it.
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub enum Read {
+    Decision(Decision, u32),
+    Converted(TypeId),
+    Unfolded(DataType),
+    Constructors(DataType),
 }
 
 #[derive(Debug, Clone, Default)]
@@ -52,7 +85,44 @@ pub struct ExistsFamily {
 }
 
 impl SchemeInstantiations {
+    fn note_read(&self, decision: Decision) {
+        self.reads.borrow_mut().push(Read::Decision(decision, self.version));
+    }
+
+    fn note_write(&mut self, decision: Decision) {
+        self.version += 1;
+        self.written.insert(decision, self.version);
+    }
+
+    pub fn note_cached(&self, read: Read) {
+        self.reads.borrow_mut().push(read);
+    }
+
+    pub fn reads_len(&self) -> usize {
+        self.reads.borrow().len()
+    }
+
+    pub fn reads_since(&self, start: usize) -> Vec<Read> {
+        self.reads.borrow()[start..].to_vec()
+    }
+
+    pub fn take_reads(&self) -> Vec<Read> {
+        std::mem::take(&mut *self.reads.borrow_mut())
+    }
+
+    /// The number of writes so far; equal before and after a round that grew
+    /// nothing.
+    pub fn version(&self) -> u32 {
+        self.version
+    }
+
+    /// Whether the decision changed after the version at which it was read.
+    pub fn is_written_since(&self, decision: &Decision, version: u32) -> bool {
+        self.written.get(decision).is_some_and(|&written| written > version)
+    }
+
     pub fn get(&self, key: &SchemeKey) -> &[SchemeInstantiation] {
+        self.note_read(Decision::Instantiations(key.clone()));
         self.known.get(key).map_or(&[], Vec::as_slice)
     }
 
@@ -62,6 +132,7 @@ impl SchemeInstantiations {
 
     /// Whether an unconstrained `forall` with this key is specialized.
     pub fn is_rank_n(&self, key: &SchemeKey) -> bool {
+        self.note_read(Decision::RankN(key.clone()));
         self.rank_n.contains_key(key)
     }
 
@@ -69,6 +140,7 @@ impl SchemeInstantiations {
     /// constructor, unless that owner's fields stay erased.
     pub fn add_rank_n(&mut self, key: SchemeKey, owner: String) {
         if !self.erased_owners.contains(&owner) && !self.erased_keys.contains(&key) {
+            self.note_write(Decision::RankN(key.clone()));
             self.rank_n.insert(key, owner);
         }
     }
@@ -78,11 +150,14 @@ impl SchemeInstantiations {
     /// the same type (`Mapper VariantFCase` inside a `List`), which only a
     /// shared representation allows.
     pub fn erase_key(&mut self, key: SchemeKey) {
+        self.note_write(Decision::RankN(key.clone()));
+        self.note_write(Decision::ErasedKey(key.clone()));
         self.rank_n.remove(&key);
         self.erased_keys.insert(key);
     }
 
     pub fn is_erased_key(&self, key: &SchemeKey) -> bool {
+        self.note_read(Decision::ErasedKey(key.clone()));
         self.erased_keys.contains(key)
     }
 
@@ -94,62 +169,78 @@ impl SchemeInstantiations {
         let owned = self.rank_n.iter().filter(|(_, existing)| **existing == owner);
         let owned: Vec<SchemeKey> = owned.map(|(key, _)| key.clone()).collect();
         owned.into_iter().for_each(|key| self.erase_key(key));
+        self.note_write(Decision::ErasedOwner(owner.clone()));
         self.erased_owners.insert(owner);
     }
 
     pub fn is_erased_owner(&self, owner: &str) -> bool {
+        self.note_read(Decision::ErasedOwner(owner.to_string()));
         self.erased_owners.contains(owner)
     }
 
     pub fn rank_n_owner(&self, key: &SchemeKey) -> Option<&str> {
+        self.note_read(Decision::RankN(key.clone()));
         self.rank_n.get(key).map(String::as_str)
     }
 
     pub fn erase_growing_owner(&mut self, owner: String) {
         let grown = self.rank_n.iter().filter(|(_, existing)| **existing == owner);
         let grown: Vec<SchemeKey> = grown.map(|(key, _)| key.clone()).collect();
+        for key in &grown {
+            self.note_write(Decision::Grown(key.clone()));
+        }
+        self.note_write(Decision::AnyGrown);
         self.grown_keys.extend(grown);
         self.erase_owner(owner);
     }
 
     pub fn has_grown(&self) -> bool {
+        self.note_read(Decision::AnyGrown);
         !self.grown_keys.is_empty()
     }
 
     pub fn rank_n_erasure(&self, key: &SchemeKey) -> Erasure {
+        self.note_read(Decision::Grown(key.clone()));
         if self.grown_keys.contains(key) { Erasure::PolymorphicRecursion } else { Erasure::RankN }
     }
 
     pub fn insert(&mut self, key: SchemeKey, instantiation: SchemeInstantiation) {
+        self.note_write(Decision::Instantiations(key.clone()));
         self.known.entry(key).or_default().push(instantiation);
     }
 
     pub fn link_coercion(&mut self, source: SchemeKey, target: SchemeKey) -> bool {
-        let sources = self.coerced_sources.entry(target).or_default();
+        let sources = self.coerced_sources.entry(target.clone()).or_default();
         if sources.contains(&source) {
             return false;
         }
         sources.push(source);
+        self.note_write(Decision::Coerced(target));
         true
     }
 
     pub fn coerced_sources(&self, target: &SchemeKey) -> &[SchemeKey] {
+        self.note_read(Decision::Coerced(target.clone()));
         self.coerced_sources.get(target).map_or(&[], Vec::as_slice)
     }
 
     pub fn witnesses(&self, family: TypeId) -> &[SchemeInstantiation] {
+        self.note_read(Decision::Witnesses(family));
         self.families.get(&family).map_or(&[], |family| family.witnesses.as_slice())
     }
 
     pub fn continuations(&self, family: TypeId) -> &[SchemeKey] {
+        self.note_read(Decision::Continuations(family));
         self.families.get(&family).map_or(&[], |family| family.continuations.as_slice())
     }
 
     pub fn family_erasure(&self, family: TypeId) -> Option<Erasure> {
+        self.note_read(Decision::FamilyErasure(family));
         self.erased_families.get(&family).copied()
     }
 
     pub fn continuation_family(&self, key: &SchemeKey) -> Option<TypeId> {
+        self.note_read(Decision::ContinuationFamily(key.clone()));
         self.continuation_families.get(key).copied()
     }
 
@@ -157,6 +248,7 @@ impl SchemeInstantiations {
         if self.erased_families.contains_key(&family) {
             return;
         }
+        self.note_write(Decision::Witnesses(family));
         self.families.entry(family).or_default().witnesses.push(witness);
     }
 
@@ -164,6 +256,9 @@ impl SchemeInstantiations {
         if self.erased_families.contains_key(&family) {
             return;
         }
+        self.note_write(Decision::RankN(key.clone()));
+        self.note_write(Decision::ContinuationFamily(key.clone()));
+        self.note_write(Decision::Continuations(family));
         self.rank_n.insert(key.clone(), format!("Data.Exists.runExists {family:?}"));
         self.continuation_families.insert(key.clone(), family);
         self.families.entry(family).or_default().continuations.push(key);
@@ -171,12 +266,17 @@ impl SchemeInstantiations {
 
     pub fn erase_family(&mut self, family: TypeId, erasure: Erasure) {
         if let Some(erased) = self.families.remove(&family) {
+            self.note_write(Decision::Witnesses(family));
+            self.note_write(Decision::Continuations(family));
             for key in erased.continuations {
+                self.note_write(Decision::ContinuationFamily(key.clone()));
+                self.note_write(Decision::Instantiations(key.clone()));
                 self.continuation_families.remove(&key);
                 self.known.remove(&key);
                 self.erase_key(key);
             }
         }
+        self.note_write(Decision::FamilyErasure(family));
         self.erased_families.entry(family).or_insert(erasure);
     }
 }

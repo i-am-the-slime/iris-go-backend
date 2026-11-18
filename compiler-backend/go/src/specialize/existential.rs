@@ -256,12 +256,13 @@ where
         self.grown = true;
     }
 
-    fn pending(&self, monotype: MonotypeId) -> Expression {
+    fn pending(&mut self, monotype: MonotypeId) -> Expression {
+        self.note_pending();
         Expression::new(ExpressionKind::Fail(SmolStr::new_static(PENDING)), monotype)
     }
 
     fn pending_or_unsupported(
-        &self,
+        &mut self,
         scope: &Scope,
         monotype: MonotypeId,
     ) -> GoResult<Option<Expression>> {

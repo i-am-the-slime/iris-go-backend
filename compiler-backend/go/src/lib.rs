@@ -32,7 +32,6 @@ pub use error::{GoError, GoResult, UnsupportedState};
 pub use foreign::ForeignPackages;
 pub use timing::Work;
 
-use crate::scheme::SchemeInstantiations;
 use crate::specialize::Specializer;
 use crate::timing::timed;
 
@@ -65,17 +64,9 @@ pub fn compile_program(
     let modules = modules::Modules::collect(&mut context, file_id)?;
     reject_source_errors(queries, &modules)?;
 
-    let mut schemes = SchemeInstantiations::default();
     let substituted = types::Substituted::default();
-    let (entry, mut specializer) = loop {
-        let mut specializer =
-            Specializer::new(queries, foreign_packages, schemes, substituted.clone());
-        let entry = timed("specialize", || specializer.specialize_entry(file_id, term))?;
-        match specializer.grown_schemes() {
-            Some(grown) => schemes = grown,
-            None => break (entry, specializer),
-        }
-    };
+    let mut specializer = Specializer::new(queries, foreign_packages, substituted);
+    let entry = timed("specialize", || specializer.specialize_entry(file_id, term))?;
     if let Some(blockers) = specializer.blockers()? {
         return Err(GoError::Blocked(blockers));
     }

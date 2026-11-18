@@ -28,9 +28,9 @@ use crate::mono::{
 };
 use crate::monotype::{Monotype, MonotypeId, Monotypes, supported};
 use crate::scheme::{
-    SCHEME_INSTANTIATION_LIMIT, SchemeInstantiation, SchemeInstantiations, SchemeKey,
-    constrained_scheme,
+    Read, SCHEME_INSTANTIATION_LIMIT, SchemeInstantiation, SchemeKey, constrained_scheme,
 };
+use crate::timing::timed;
 use crate::types::{Substituted, Substitution};
 
 mod evidence;
@@ -191,10 +191,15 @@ pub struct Specializer<'q, Q> {
     foreign_packages: &'q ForeignPackages,
     blockers: Vec<RecordedBlocker>,
     blocker_positions: FxHashMap<(String, UnsupportedState), usize>,
-    /// Whether this pass grew the schemes it started with: it met a new
-    /// instantiation of a scheme, a new rank-N field type, or an owner whose
-    /// rank-N fields stay erased.
+    /// What each function read of the schemes while it was specialized.
+    function_reads: Vec<Vec<Read>>,
+    /// Whether this round grew the schemes: it met a new instantiation of a
+    /// scheme, a new rank-N field type, or an owner whose rank-N fields stay
+    /// erased.
     grown: bool,
+    /// Functions left with a placeholder for what this round still had to
+    /// discover, to specialize again whether or not they read what grew.
+    pending_functions: BTreeSet<FunctionId>,
     /// The functions that built a value of each scheme from its instantiations.
     constructions: FxHashMap<SchemeKey, Vec<FunctionId>>,
     /// Functions that built a value of a scheme before the scheme grew.
@@ -220,11 +225,9 @@ where
     pub fn new(
         queries: &'q Q,
         foreign_packages: &'q ForeignPackages,
-        schemes: SchemeInstantiations,
         substituted: Substituted,
     ) -> Specializer<'q, Q> {
         let mut monotypes = Monotypes::default();
-        monotypes.schemes = schemes;
         monotypes.foreign_modules = foreign_packages.modules.clone();
         Specializer {
             context: Context::sharing(queries, substituted),
@@ -239,7 +242,9 @@ where
             foreign_packages,
             blockers: vec![],
             blocker_positions: FxHashMap::default(),
+            function_reads: vec![],
             grown: false,
+            pending_functions: BTreeSet::new(),
             constructions: FxHashMap::default(),
             stale: BTreeSet::new(),
             callback_arities: FxHashMap::default(),
@@ -262,8 +267,38 @@ where
             dictionaries: Arc::from([]),
         };
         let entry = self.request(key, name)?;
+        let mut round = 0;
+        loop {
+            self.grown = false;
+            let version = self.monotypes.schemes.version();
+            let specialized = timed(&format!("round {round}"), || {
+                self.specialize_requested()?;
+                self.note_reference_crossings();
+                self.adopt_rank_n_fields();
+                Ok::<_, GoError>(())
+            });
+            specialized?;
+            if self.monotypes.schemes.version() == version {
+                break;
+            }
+            let mut stale = self.stale_functions();
+            stale.append(&mut self.pending_functions);
+            if stale.is_empty() {
+                break;
+            }
+            self.monotypes.forget_stale_conversions();
+            self.stale.extend(stale);
+            round += 1;
+        }
+        Ok(entry)
+    }
+
+    /// Specializes every requested function, and the stale ones after them,
+    /// recording what each read of the schemes.
+    fn specialize_requested(&mut self) -> GoResult<()> {
         while let Some((id, key, name)) = self.next_specialization() {
             self.current = Some(id);
+            self.monotypes.schemes.take_reads();
             let specialized = self.specialize(&key, name.clone()).and_then(|mut function| {
                 self.match_field_representations(&mut function.body)?;
                 Ok(function)
@@ -285,9 +320,29 @@ where
             };
             self.functions[id.0 as usize] = Some(function);
             self.adopt_rank_n_fields();
+            self.function_reads[id.0 as usize] = self.monotypes.schemes.take_reads();
         }
-        self.note_reference_crossings();
-        Ok(entry)
+        Ok(())
+    }
+
+    pub(super) fn note_pending(&mut self) {
+        if let Some(current) = self.current {
+            self.pending_functions.insert(current);
+        }
+    }
+
+    /// The functions that read a decision of the schemes before growth
+    /// changed it, which must be specialized again under the schemes as they
+    /// are now.
+    fn stale_functions(&self) -> BTreeSet<FunctionId> {
+        let mut memo = FxHashMap::default();
+        let mut stale = BTreeSet::new();
+        for (index, reads) in self.function_reads.iter().enumerate() {
+            if reads.iter().any(|read| self.monotypes.is_stale(read, &mut memo)) {
+                stale.insert(FunctionId(index as u32));
+            }
+        }
+        stale
     }
 
     /// The next requested function, or else a stale one. A pass that grew the
@@ -346,11 +401,6 @@ where
             self.monotypes.schemes.erase_key(key);
         }
         self.grown = true;
-    }
-
-    pub fn grown_schemes(&mut self) -> Option<SchemeInstantiations> {
-        self.adopt_rank_n_fields();
-        self.grown.then(|| self.monotypes.schemes.clone())
     }
 
     pub fn blockers(&mut self) -> GoResult<Option<Blockers>> {
@@ -511,6 +561,7 @@ where
         }
         let id = FunctionId(self.functions.len() as u32);
         self.functions.push(None);
+        self.function_reads.push(vec![]);
         self.function_keys.push(key.clone());
         self.parents.push(self.current);
         self.keys.insert(key.clone(), id);
@@ -1702,6 +1753,7 @@ where
             return Ok(Expression::new(kind, monotype));
         }
         self.discover(scope, scheme.key, types, dictionaries)?;
+        self.note_pending();
         let pending = SmolStr::new_static("instantiation discovered in this pass");
         Ok(Expression::new(ExpressionKind::Fail(pending), monotype))
     }

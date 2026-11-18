@@ -11,7 +11,9 @@ use smol_str::SmolStr;
 use crate::context::Context;
 use crate::erasure::Erasure;
 use crate::error::{GoError, GoResult, UnsupportedState};
-use crate::scheme::{ConstrainedScheme, SchemeInstantiations, constrained_scheme, rank_n_scheme};
+use crate::scheme::{
+    ConstrainedScheme, Read, SchemeInstantiations, constrained_scheme, rank_n_scheme,
+};
 use crate::types::Substitution;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
@@ -144,9 +146,12 @@ pub struct Monotypes {
     interned: Vec<Monotype>,
     lookup: FxHashMap<Monotype, MonotypeId>,
     converted: FxHashMap<TypeId, MonotypeId>,
+    converted_reads: FxHashMap<TypeId, Vec<Read>>,
     constructors: FxHashMap<DataType, Arc<[DataConstructor]>>,
+    constructors_reads: FxHashMap<DataType, Vec<Read>>,
     used_parameters: FxHashMap<(FileId, TypeItemId), Arc<[bool]>>,
     unfolded: FxHashMap<DataType, MonotypeId>,
+    unfolded_reads: FxHashMap<DataType, Vec<Read>>,
     regular: FxHashMap<(FileId, TypeItemId), bool>,
     expanding: Vec<TypeId>,
     /// The newtype each function type is the representation of, or none when
@@ -275,13 +280,73 @@ impl Monotypes {
             return self.convert_uncached(context, type_id, expansions);
         }
         if let Some(&id) = self.converted.get(&type_id) {
+            self.schemes.note_cached(Read::Converted(type_id));
             return Ok(id);
         }
+        let reads_start = self.schemes.reads_len();
         let converted = self.convert_uncached(context, type_id, expansions);
         if let Ok(id) = converted {
             self.converted.insert(type_id, id);
+            self.converted_reads.insert(type_id, self.schemes.reads_since(reads_start));
         }
         converted
+    }
+
+    /// Whether what a read saw has changed since: the decision was written
+    /// after the read, or the cached conversion read something that changed.
+    pub fn is_stale(&self, read: &Read, memo: &mut FxHashMap<Read, bool>) -> bool {
+        let reads = match read {
+            Read::Decision(decision, version) => {
+                return self.schemes.is_written_since(decision, *version);
+            }
+            Read::Converted(type_id) => self.converted_reads.get(type_id),
+            Read::Unfolded(data) => self.unfolded_reads.get(data),
+            Read::Constructors(data) => self.constructors_reads.get(data),
+        };
+        if let Some(&stale) = memo.get(read) {
+            return stale;
+        }
+        let Some(reads) = reads else { return true };
+        memo.insert(read.clone(), false);
+        let stale = reads.iter().any(|read| self.is_stale(read, memo));
+        memo.insert(read.clone(), stale);
+        stale
+    }
+
+    /// Forgets the cached conversions that read a decision that changed since,
+    /// so that they are converted again under the schemes as they are now.
+    pub fn forget_stale_conversions(&mut self) {
+        let mut memo = FxHashMap::default();
+        let stale_types: Vec<TypeId> = self
+            .converted_reads
+            .keys()
+            .copied()
+            .filter(|&type_id| self.is_stale(&Read::Converted(type_id), &mut memo))
+            .collect();
+        let stale_unfolded: Vec<DataType> = self
+            .unfolded_reads
+            .keys()
+            .cloned()
+            .filter(|data| self.is_stale(&Read::Unfolded(data.clone()), &mut memo))
+            .collect();
+        let stale_constructors: Vec<DataType> = self
+            .constructors_reads
+            .keys()
+            .cloned()
+            .filter(|data| self.is_stale(&Read::Constructors(data.clone()), &mut memo))
+            .collect();
+        for type_id in stale_types {
+            self.converted.remove(&type_id);
+            self.converted_reads.remove(&type_id);
+        }
+        for data in stale_unfolded {
+            self.unfolded.remove(&data);
+            self.unfolded_reads.remove(&data);
+        }
+        for data in stale_constructors {
+            self.constructors.remove(&data);
+            self.constructors_reads.remove(&data);
+        }
     }
 
     fn convert_uncached<Q>(
@@ -947,8 +1012,10 @@ impl Monotypes {
         Q: checking::ExternalQueries,
     {
         if let Some(&unfolded) = self.unfolded.get(data) {
+            self.schemes.note_cached(Read::Unfolded(data.clone()));
             return Ok(unfolded);
         }
+        let reads_start = self.schemes.reads_len();
         let module = context.module(data.file_id)?;
         let IndexedTypeItemKind::Newtype { constructors, .. } =
             &module.indexed.items[data.item].kind
@@ -968,6 +1035,7 @@ impl Monotypes {
         };
         let unfolded = self.monotype(context, underlying)?;
         self.unfolded.insert(data.clone(), unfolded);
+        self.unfolded_reads.insert(data.clone(), self.schemes.reads_since(reads_start));
         Ok(unfolded)
     }
 
@@ -996,8 +1064,10 @@ impl Monotypes {
             return self.witness_constructors(context, family);
         }
         if let Some(constructors) = self.constructors.get(data) {
+            self.schemes.note_cached(Read::Constructors(data.clone()));
             return Ok(Arc::clone(constructors));
         }
+        let reads_start = self.schemes.reads_len();
         let module = context.module(data.file_id)?;
         let terms = match &module.indexed.items[data.item].kind {
             IndexedTypeItemKind::Data { constructors, .. }
@@ -1040,6 +1110,7 @@ impl Monotypes {
         }
         let constructors: Arc<[DataConstructor]> = Arc::from(constructors);
         self.constructors.insert(data.clone(), Arc::clone(&constructors));
+        self.constructors_reads.insert(data.clone(), self.schemes.reads_since(reads_start));
         Ok(constructors)
     }
 

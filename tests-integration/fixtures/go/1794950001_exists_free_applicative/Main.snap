@@ -634,30 +634,6 @@ func initializeGreeting() ApString {
 	return ApString{Tag: ApStringApply, Apply: ExistsApplyEString{Number: ApplyEStringNumber{First: result, Second: ApNumber{Tag: ApNumberField, Field0: "count", Field1: 3.5}}}}
 }
 
-func namesFnBooleanPerson(value *Ap) []string {
-	switch value.Tag {
-	case ApDone:
-		return []string{}
-	case ApField:
-		return []string{value.Field0}
-	default: // ApApply
-		scrutinee := value.Apply0.(*ApplyE)
-		return array.Append(namesFnBooleanPerson(convert16(scrutinee.First)), namesFnBooleanPerson(scrutinee.Second))
-	}
-}
-
-func runFnBooleanPerson(value *Ap) any {
-	switch value.Tag {
-	case ApDone:
-		return value.Done0
-	case ApField:
-		return value.Field1
-	default: // ApApply
-		scrutinee := value.Apply0.(*ApplyE)
-		return runFnBooleanPerson(convert16(scrutinee.First)).(func(any) any)(runFnBooleanPerson(scrutinee.Second))
-	}
-}
-
 func map_(f func(any) any, value *Ap) *Ap {
 	switch value.Tag {
 	case ApDone:
@@ -679,6 +655,30 @@ func map_(f func(any) any, value *Ap) *Ap {
 		return &Ap{Tag: ApApply, Apply0: &ApplyE{First: convert17(original(func(coerced any) any {
 			return original2(coerced.(func(any) any))
 		})(convert16(scrutinee.First))), Second: scrutinee.Second}}
+	}
+}
+
+func namesFnBooleanPerson(value *Ap) []string {
+	switch value.Tag {
+	case ApDone:
+		return []string{}
+	case ApField:
+		return []string{value.Field0}
+	default: // ApApply
+		scrutinee := value.Apply0.(*ApplyE)
+		return array.Append(namesFnBooleanPerson(convert16(scrutinee.First)), namesFnBooleanPerson(scrutinee.Second))
+	}
+}
+
+func runFnBooleanPerson(value *Ap) any {
+	switch value.Tag {
+	case ApDone:
+		return value.Done0
+	case ApField:
+		return value.Field1
+	default: // ApApply
+		scrutinee := value.Apply0.(*ApplyE)
+		return runFnBooleanPerson(convert16(scrutinee.First)).(func(any) any)(runFnBooleanPerson(scrutinee.Second))
 	}
 }
 
