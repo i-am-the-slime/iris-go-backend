@@ -89,6 +89,9 @@ func initializeMain_() shared.MainResult {
 	i5 := ref3.Value
 	i6 := ref4.Value
 	boolean := ref5.Value
+	f := func(value int32) shared.MainResult {
+		return shared.MainResult{Fused: i5, Shared: i6, EarlyExit: boolean, PredicateCalls: i, FusedMappingCalls: i2, SharedMappingCalls: i3, EarlyExitMappingCalls: i4, KeptLength: value}
+	}
 	var count int32 = 0
 	for _, value := range numbers {
 		value2 := prim.MultiplyInt32(value, 3)
@@ -96,7 +99,8 @@ func initializeMain_() shared.MainResult {
 			count = count + 1
 		}
 	}
-	performed := shared.MainResult{Fused: i5, Shared: i6, EarlyExit: boolean, PredicateCalls: i, FusedMappingCalls: i2, SharedMappingCalls: i3, EarlyExitMappingCalls: i4, KeptLength: count}
+	i7 := count
+	performed := f(i7)
 	return performed
 }
 

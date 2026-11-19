@@ -995,7 +995,7 @@ impl Simplifier<'_> {
         monotype: crate::monotype::MonotypeId,
     ) -> Expression {
         match action.kind {
-            ExpressionKind::EffectPure(value) => {
+            ExpressionKind::EffectPure(value) if builds_safely(&body) => {
                 let bindings = vec![Binding { local, value: *value }];
                 self.let_bindings(bindings, body)
             }
@@ -1114,6 +1114,35 @@ impl Simplifier<'_> {
     }
 }
 
+fn builds_safely(expression: &Expression) -> bool {
+    match &expression.kind {
+        ExpressionKind::EffectPure(value) => is_discardable(value),
+        ExpressionKind::EffectBind { action, .. } => builds_safely(action),
+        ExpressionKind::Let { bindings, body } => {
+            bindings.iter().all(|binding| is_discardable(&binding.value)) && builds_safely(body)
+        }
+        ExpressionKind::If { condition, then, otherwise } => {
+            is_discardable(condition) && builds_safely(then) && builds_safely(otherwise)
+        }
+        ExpressionKind::Case { scrutinees, alternatives } => {
+            scrutinees.iter().all(is_discardable)
+                && alternatives.iter().all(|alternative| match &alternative.body {
+                    Guarded::Unconditional(body) => builds_safely(body),
+                    Guarded::Guards(branches) => branches.iter().all(|branch| {
+                        branch.guards.iter().all(|guard| is_discardable(guard.value()))
+                            && builds_safely(&branch.body)
+                    }),
+                })
+        }
+        ExpressionKind::Foreign { foreign, .. } => foreign.is_effectful(),
+        ExpressionKind::EffectEach { .. }
+        | ExpressionKind::Apply { .. }
+        | ExpressionKind::Local(_)
+        | ExpressionKind::Function(_) => true,
+        _ => false,
+    }
+}
+
 /// Whether evaluating the expression may reach a failure: a pattern match
 /// failure, a crash or a thrown exception. An argument that a foreign function
 /// ignores is never evaluated.
@@ -1219,7 +1248,7 @@ fn project(record: Expression, label: SmolStr, monotype: MonotypeId) -> Expressi
 
 /// Whether evaluating the expression can be skipped without a trace: it is
 /// pure, cannot fail, and calls nothing that could.
-fn is_discardable(expression: &Expression) -> bool {
+pub(crate) fn is_discardable(expression: &Expression) -> bool {
     match &expression.kind {
         ExpressionKind::Literal(_)
         | ExpressionKind::Unit

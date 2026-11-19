@@ -2592,7 +2592,7 @@ where
     ) -> GoResult<GoExpression> {
         if self.monotypes.effect_result(expression.monotype).is_some() && is_effect_node(expression)
         {
-            return self.thunk(expression);
+            return self.thunk(expression, out);
         }
         Ok(match &expression.kind {
             ExpressionKind::Literal(literal) => self.literal(literal, expression.monotype),
@@ -2717,7 +2717,7 @@ where
             }
             ExpressionKind::EffectPure(_)
             | ExpressionKind::EffectBind { .. }
-            | ExpressionKind::EffectEach { .. } => self.thunk(expression)?,
+            | ExpressionKind::EffectEach { .. } => self.thunk(expression, out)?,
         })
     }
 
@@ -2992,10 +2992,56 @@ where
     }
 
     /// A first-class effect: the only place an `Effect` becomes a Go closure.
-    fn thunk(&mut self, expression: &Expression) -> GoResult<GoExpression> {
+    fn thunk(
+        &mut self,
+        expression: &Expression,
+        out: &mut Vec<GoStatement>,
+    ) -> GoResult<GoExpression> {
         let result =
             self.monotypes.effect_result(expression.monotype).unwrap_or(expression.monotype);
         let result_type = self.go_result(result)?;
+        match &expression.kind {
+            ExpressionKind::Let { bindings, body } => {
+                self.bindings(bindings, out)?;
+                return self.thunk(body, out);
+            }
+            ExpressionKind::EffectPure(value) if self.builds_eagerly(value) => {
+                let value = self.value(value, out)?;
+                let value = self.hoist(value, "pure", out);
+                let returned = (!self.is_unit(result)).then_some(GoStatement::Return(Some(value)));
+                let body = returned.into_iter().collect();
+                return Ok(GoExpression::Function { parameters: vec![], result: result_type, body });
+            }
+            ExpressionKind::EffectBind { action, local, body }
+                if let ExpressionKind::EffectPure(value) = &action.kind
+                    && self.builds_eagerly(value) =>
+            {
+                let value = self.value(value, out)?;
+                if uses_local(body, local.id) && !self.is_unit(local.monotype) {
+                    let name = self.bind_local(local);
+                    out.push(self.define(name, value, local.monotype)?);
+                } else {
+                    self.locals.insert(local.id, unit_value());
+                    if is_effectful_call(&value) {
+                        out.push(discarded(value));
+                    }
+                }
+                return self.deferred_thunk(body, result_type);
+            }
+            _ => {}
+        }
+        self.deferred_thunk(expression, result_type)
+    }
+
+    fn builds_eagerly(&self, value: &Expression) -> bool {
+        !self.is_already_a_value(value) && !crate::simplify::is_discardable(value)
+    }
+
+    fn deferred_thunk(
+        &mut self,
+        expression: &Expression,
+        result_type: Option<GoType>,
+    ) -> GoResult<GoExpression> {
         let saved = self.tail_loop.take();
         let mut body = vec![];
         self.sink(expression, Mode::Perform, Sink::Return, &mut body)?;
@@ -3084,7 +3130,7 @@ where
                 ExpressionKind::Foreign { foreign, arguments: arguments.to_vec() },
                 monotype,
             );
-            return self.thunk(&expression);
+            return self.thunk(&expression, out);
         }
         if let Foreign::Range = foreign {
             let range = self.support_function("rangeInt32", RANGE_SOURCE);
