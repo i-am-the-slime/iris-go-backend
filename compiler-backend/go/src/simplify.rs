@@ -789,7 +789,9 @@ impl Simplifier<'_> {
             );
         }
         for binding in bindings.into_iter().rev() {
-            let uses = occurrences(&body, binding.local.id);
+            // A cell helper's two uses are told from more.
+            let helper = self.is_cell_helper(&binding.value);
+            let uses = occurrences_up_to(&body, binding.local.id, if helper { 3 } else { 2 });
             // A record of trivial fields, such as a rank-N value's
             // specializations, is copied so that its field accesses resolve.
             let trivial_record = matches!(&binding.value.kind, ExpressionKind::Record(fields)
@@ -800,7 +802,8 @@ impl Simplifier<'_> {
                 || self.is_coerced_record_read(&binding, &body)
                 || uses.total == 0
                 || (uses.total == 1
-                    && (uses.under_lambda == 0 || self.does_no_work(&binding.value)));
+                    && (uses.under_lambda == 0 || self.does_no_work(&binding.value)))
+                || (helper && uses.total == 2 && uses.applied == 2);
             if substitutable {
                 if uses.total > 0 {
                     body = substitute(body, binding.local.id, &binding.value, self.monotypes);
@@ -818,6 +821,22 @@ impl Simplifier<'_> {
         kept.reverse();
         let monotype = body.monotype;
         Expression::new(ExpressionKind::Let { bindings: kept, body: Box::new(body) }, monotype)
+    }
+
+    /// A small lambda that reads or writes a reference cell of its
+    /// surroundings, which is inlined where it is called (never passed) at
+    /// both of two uses. Inlined, it leaves the cell in one Go function, where
+    /// the cell can stay a plain local (emit/references.rs); lifted, it would
+    /// take the cell as a parameter and keep it in memory. A lambda passed as
+    /// a value would become two closures that `unsafeRefEq` tells apart, and
+    /// one that performs effects through `unsafePerformEffect` keeps them
+    /// where JavaScript runs them.
+    fn is_cell_helper(&self, value: &Expression) -> bool {
+        matches!(value.kind, ExpressionKind::Lambda { .. })
+            && is_within_size(value, INLINE_SIZE)
+            && captures_reference(value, self.monotypes)
+            && !can_fail(value)
+            && !runs_effect(value)
     }
 
     /// A field of a record coerced to another record type is the field of the
@@ -1213,6 +1232,16 @@ impl Simplifier<'_> {
     }
 }
 
+/// Whether the expression runs an action in pure code: unsafePerformEffect,
+/// or runST, which shares its foreign and is told apart only by its type.
+fn runs_effect(expression: &Expression) -> bool {
+    let mut runs = false;
+    visit(expression, &mut |node| {
+        runs |= matches!(node.kind, ExpressionKind::Foreign { foreign: Foreign::RunEffect, .. });
+    });
+    runs
+}
+
 /// Whether evaluating the expression may reach a failure: a pattern match
 /// failure, a crash or a thrown exception. An argument that a foreign function
 /// ignores is never evaluated.
@@ -1555,10 +1584,49 @@ fn size(expression: &Expression) -> usize {
     total
 }
 
+/// Whether the expression has at most `limit` nodes, read no further.
+fn is_within_size(expression: &Expression, limit: usize) -> bool {
+    fn counted(expression: &Expression, remaining: &mut usize) -> bool {
+        if *remaining == 0 {
+            return false;
+        }
+        *remaining -= 1;
+        let mut within = true;
+        for_each_child(expression, &mut |child| within = within && counted(child, remaining));
+        within
+    }
+    counted(expression, &mut { limit })
+}
+
+/// Whether the lambda reads or writes a reference cell of its surroundings.
+fn captures_reference(lambda: &Expression, monotypes: &Monotypes) -> bool {
+    let is_cell = |node: &Expression| {
+        matches!(node.kind, ExpressionKind::Local(_))
+            && matches!(monotypes.get(node.monotype), Monotype::Reference(_))
+    };
+    let mut cells = vec![];
+    visit(lambda, &mut |node| {
+        if let ExpressionKind::Local(id) = node.kind
+            && is_cell(node)
+        {
+            cells.push(id);
+        }
+    });
+    if cells.is_empty() {
+        return false;
+    }
+    let mut bound = FxHashMap::default();
+    crate::lift::collect_binders(lambda, &mut bound);
+    cells.iter().any(|id| !bound.contains_key(id))
+}
+
 #[derive(Default)]
 struct Occurrences {
     total: usize,
     under_lambda: usize,
+    /// Occurrences as the function of an application.
+    applied: usize,
+    limit: usize,
 }
 
 /// Whether the expression refers to a local one of the bindings binds.
@@ -1572,16 +1640,23 @@ fn mentions_any(expression: &Expression, bindings: &[Binding]) -> bool {
     mentioned
 }
 
+/// No, one and several occurrences.
 fn occurrences(expression: &Expression, local: LocalId) -> Occurrences {
-    let mut result = Occurrences::default();
+    occurrences_up_to(expression, local, 2)
+}
+
+/// The occurrences up to `limit`, past which counting stops: telling more
+/// apart means reading all of the expression.
+fn occurrences_up_to(expression: &Expression, local: LocalId, limit: usize) -> Occurrences {
+    let mut result = Occurrences { limit, ..Occurrences::default() };
     count(expression, local, false, &mut result);
     result
 }
 
 fn count(expression: &Expression, local: LocalId, under_lambda: bool, result: &mut Occurrences) {
     // Callers tell no, one and several occurrences apart, and where a single
-    // one is; past two there is nothing more to learn.
-    if result.total >= 2 {
+    // one is; past the limit there is nothing more to learn.
+    if result.total >= result.limit {
         return;
     }
     match &expression.kind {
@@ -1590,6 +1665,13 @@ fn count(expression: &Expression, local: LocalId, under_lambda: bool, result: &m
             if under_lambda {
                 result.under_lambda += 1;
             }
+        }
+        ExpressionKind::Apply { function, arguments }
+            if matches!(function.kind, ExpressionKind::Local(id) if id == local) =>
+        {
+            result.applied += 1;
+            count(function, local, under_lambda, result);
+            arguments.iter().for_each(|argument| count(argument, local, under_lambda, result));
         }
         ExpressionKind::Lambda { body, .. } => count(body, local, true, result),
         ExpressionKind::EffectEach { array, body, .. } => {

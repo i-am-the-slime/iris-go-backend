@@ -1,0 +1,94 @@
+---
+source: tests-integration/src/fixtures.rs
+---
+// Control/Monad/Rec/Class/class.go
+package class
+
+type StepIntUnit struct {
+	Done struct{}
+	Loop int32
+	Tag  uint8
+}
+
+const (
+	StepIntUnitLoop = iota
+	StepIntUnitDone
+)
+
+// main.go
+package main
+
+import (
+	"fixture/Control/Monad/Rec/Class"
+	"fixture/shared"
+	"fmt"
+	"github.com/i-am-the-slime/purs-backend-go/go-support/exception"
+)
+
+var main_ = initializeMain_()
+
+func initializeMain_() shared.MainResult {
+	defer exception.ReportUncaught()
+	var ref int32 = 0
+	var step class.StepIntUnit
+	if false {
+		step = class.StepIntUnit{Tag: class.StepIntUnitDone, Done: struct{}{}}
+	} else {
+		s_ := ref + 1
+		ref = s_
+		step = class.StepIntUnit{Tag: class.StepIntUnitLoop, Loop: 2}
+	}
+	ref2 := step
+	for {
+		var result bool
+		switch ref2.Tag {
+		case class.StepIntUnitLoop:
+			result = true
+		default:
+			result = false
+		}
+		if !result {
+			break
+		}
+		switch ref2.Tag {
+		case class.StepIntUnitLoop:
+			a_ := ref2.Loop
+			var step2 class.StepIntUnit
+			if a_ > 10 {
+				step2 = class.StepIntUnit{Tag: class.StepIntUnitDone, Done: struct{}{}}
+			} else {
+				s_ := ref + a_
+				ref = s_
+				step2 = class.StepIntUnit{Tag: class.StepIntUnitLoop, Loop: a_ + 1}
+			}
+			ref2 = step2
+		default: // class.StepIntUnitDone
+		}
+	}
+	return shared.MainResult{Total: ref, Scaled: []int32{mainScale(1), mainScale(2)}}
+}
+
+func mainScale(x int32) int32 {
+	return 40 + x
+}
+
+func main() {
+	fmt.Println(main_)
+}
+
+// shared/shared.go
+package shared
+
+type MainResult struct {
+	Scaled []int32
+	Total  int32
+}
+
+type Ref[T any] struct {
+	Value T
+}
+
+type StateValue struct {
+	State int32
+	Value int32
+}

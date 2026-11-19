@@ -11,8 +11,8 @@ examples any:unsolved 1
 examples any:variant-row 67
 examples converters 95
 examples empty-interface 0
-examples funcs 3042
-examples lines 56308
+examples funcs 3041
+examples lines 56311
 examples max-identifier 127
 examples max-nesting 19
 examples origin-fields 16
@@ -21,7 +21,7 @@ examples reflect 0
 examples thunk 165
 examples type-assertion 205
 examples unsafe 0
-go-backend source-lines 36556
+go-backend source-lines 36638
 markgraf-cli any 2118
 markgraf-cli any:boxing 1329
 markgraf-cli any:empty-data 171
