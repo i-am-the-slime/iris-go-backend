@@ -1,0 +1,34 @@
+package:
+  name: go-fuzz
+  dependencies:
+    - aff
+    - arrays
+    - bifunctors
+    - console
+    - control
+    - effect
+    - either
+    - enums
+    - exceptions
+    - exists
+    - foldable-traversable
+    - integers
+    - lazy
+    - lists
+    - maybe
+    - newtype
+    - numbers
+    - ordered-collections
+    - parallel
+    - partial
+    - prelude
+    - refs
+    - st
+    - strings
+    - tailrec
+    - tuples
+    - unfoldable
+    - variant
+workspace:
+  packageSet:
+    registry: 75.9.1
