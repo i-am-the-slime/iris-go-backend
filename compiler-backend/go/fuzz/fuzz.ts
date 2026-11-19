@@ -171,7 +171,10 @@ const commandRecheck = async (arguments_: Arguments): Promise<void> => {
   const worker = new Worker(join(work, "recheck"), toolchain);
   await worker.prepare(template);
   const counts = new Map<string, number>();
+  const again = flags.has("all");
   for (const directory of positional) {
+    // A crash part-way through a long recheck must not cost the results already written.
+    if (!again && existsSync(join(directory, "recheck.json"))) continue;
     const sources = readdirSync(directory).filter((name) => name.endsWith(".purs"));
     const source = sources.includes("minimal.purs") ? "minimal.purs" : sources[0];
     const text = readFileSync(join(directory, source), "utf8");
@@ -241,7 +244,14 @@ const commandReport = (arguments_: Arguments): void => {
       const directory = join(classPath, program);
       const resultPath = join(directory, "result.json");
       if (!existsSync(resultPath)) continue;
-      const result = JSON.parse(readFileSync(resultPath, "utf8")) as { seed: number; classification: Classification; detail: string };
+      let result = JSON.parse(readFileSync(resultPath, "utf8")) as { seed: number; classification: Classification; detail: string };
+      // A recheck with a newer compiler supersedes the campaign's verdict.
+      const recheckPath = join(directory, "recheck.json");
+      if (existsSync(recheckPath)) {
+        const recheck = JSON.parse(readFileSync(recheckPath, "utf8")) as { classification: Classification; detail: string };
+        if (recheck.classification === "OK") continue;
+        result = { ...result, classification: recheck.classification, detail: recheck.detail };
+      }
       const minimalPath = join(directory, "minimal.json");
       if (existsSync(minimalPath)) {
         const minimal = JSON.parse(readFileSync(minimalPath, "utf8")) as { classification: Classification; detail: string; signature: string; lines: number };
