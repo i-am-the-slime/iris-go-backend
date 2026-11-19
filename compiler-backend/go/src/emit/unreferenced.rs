@@ -8,9 +8,9 @@
 
 use rustc_hash::FxHashSet;
 
-use super::{discarded, is_effectful_call};
-use crate::syntax::{GoDeclaration, GoExpression, GoStatement, Name};
-use crate::walk::each_block_in_declaration;
+use super::discarded;
+use crate::syntax::{GoDeclaration, GoExpression, GoStatement};
+use crate::walk::{self, Walk, each_block_in_declaration};
 
 pub(super) fn drop_unreferenced_definitions(declarations: &mut [GoDeclaration]) {
     for declaration in declarations {
@@ -20,56 +20,148 @@ pub(super) fn drop_unreferenced_definitions(declarations: &mut [GoDeclaration]) 
 }
 
 fn drop_unreferenced(declaration: &mut GoDeclaration) -> bool {
-    let referenced = referenced_names(declaration);
+    let read = read_names(declaration);
+    let unread = |name: &String| name != "_" && !read.contains(name);
+    let unread_target = |target: &GoExpression| {
+        matches!(target, GoExpression::Identifier(name) if unread(name))
+    };
     let mut dropped = false;
     each_block_in_declaration(declaration, |block| {
-        block.retain(|statement| {
-            let unreferenced = match statement {
-                GoStatement::Define { names, values } => {
-                    matches!(names.as_slice(), [name] if !referenced.contains(name))
-                        && matches!(values.as_slice(), [value] if is_inert(value))
-                }
-                GoStatement::Variable { name, value, .. } => {
-                    !referenced.contains(name) && value.as_ref().is_none_or(is_inert)
-                }
-                _ => false,
-            };
-            dropped |= unreferenced;
-            !unreferenced
-        });
-        for statement in block.iter_mut() {
+        for statement in std::mem::take(block) {
             match statement {
-                GoStatement::Define { names, values }
-                    if matches!(names.as_slice(), [name] if !referenced.contains(name))
-                        && matches!(values.as_slice(), [value] if is_effectful_call(value)) =>
-                {
-                    let value = values.pop().expect("a definition with one name has one value");
-                    *statement = discarded(value);
+                GoStatement::Define { names, values } if names.iter().all(unread) => {
+                    values.into_iter().for_each(|value| effects(value, block));
                     dropped = true;
                 }
-                GoStatement::Range { element, .. }
-                    if element != "_" && !referenced.contains(element) =>
-                {
-                    *element = "_".into();
+                GoStatement::Define { mut names, values } if names.iter().any(unread) => {
+                    for name in names.iter_mut().filter(|name| unread(name)) {
+                        *name = "_".into();
+                    }
+                    block.push(GoStatement::Define { names, values });
                     dropped = true;
                 }
-                _ => {}
+                GoStatement::Variable { name, value, .. } if unread(&name) => {
+                    value.into_iter().for_each(|value| effects(value, block));
+                    dropped = true;
+                }
+                GoStatement::Assign { targets, values } if targets.iter().all(unread_target) => {
+                    values.into_iter().for_each(|value| effects(value, block));
+                    dropped = true;
+                }
+                GoStatement::Assign { mut targets, values }
+                    if targets.iter().any(unread_target) =>
+                {
+                    for target in targets.iter_mut().filter(|target| unread_target(target)) {
+                        *target = GoExpression::Identifier("_".into());
+                    }
+                    block.push(GoStatement::Assign { targets, values });
+                    dropped = true;
+                }
+                GoStatement::Range { index, element, iterable, body }
+                    if index.as_ref().is_some_and(unread) || unread(&element) =>
+                {
+                    let index = index.filter(|index| !unread(index));
+                    let element = if unread(&element) { "_".into() } else { element };
+                    block.push(GoStatement::Range { index, element, iterable, body });
+                    dropped = true;
+                }
+                GoStatement::IfAssert { name, value, type_, then } if unread(&name) => {
+                    block.push(GoStatement::IfAssert { name: "_".into(), value, type_, then });
+                    dropped = true;
+                }
+                GoStatement::If { condition, then, otherwise }
+                    if then.is_empty() && otherwise.is_empty() && is_inert(&condition) =>
+                {
+                    dropped = true;
+                }
+                GoStatement::Switch { value, cases, default }
+                    if value.as_ref().is_none_or(is_inert)
+                        && cases.iter().all(|case| {
+                            case.body.is_empty() && case.values.iter().all(is_inert)
+                        })
+                        && default.as_ref().is_none_or(|default| default.body.is_empty()) =>
+                {
+                    dropped = true;
+                }
+                statement => block.push(statement),
             }
         }
     });
     dropped
 }
 
-/// Every name the statements read or write; a write counts, since Go accepts a local that is
-/// only written through a field or an index.
-fn referenced_names(declaration: &mut GoDeclaration) -> FxHashSet<String> {
-    let mut referenced = FxHashSet::default();
-    declaration.for_each_name_mut(&mut |name| {
-        if let Name::Reference(name) | Name::Written(name) = name {
-            referenced.insert(name.clone());
+fn read_names(declaration: &mut GoDeclaration) -> FxHashSet<String> {
+    struct Reads(FxHashSet<String>);
+
+    impl Walk for Reads {
+        fn statement(&mut self, statement: &mut GoStatement) {
+            if let GoStatement::Assign { targets, values } = statement {
+                for target in targets.iter_mut() {
+                    if !matches!(target, GoExpression::Identifier(_)) {
+                        self.expression(target);
+                    }
+                }
+                values.iter_mut().for_each(|value| self.expression(value));
+                return;
+            }
+            walk::statement(self, statement);
         }
-    });
-    referenced
+
+        fn expression(&mut self, expression: &mut GoExpression) {
+            if let GoExpression::Identifier(name) = expression {
+                self.0.insert(name.clone());
+            }
+            walk::expression(self, expression);
+        }
+    }
+
+    let mut reads = Reads(FxHashSet::default());
+    walk::declaration(&mut reads, declaration);
+    reads.0
+}
+
+fn effects(value: GoExpression, out: &mut Vec<GoStatement>) {
+    match value {
+        GoExpression::Call { function, arguments } if is_value_only_builtin(&function) => {
+            arguments.into_iter().for_each(|argument| effects(argument, out));
+        }
+        call @ GoExpression::Call { .. } => out.push(discarded(call)),
+        GoExpression::Conversion { value, .. }
+        | GoExpression::Field { value, .. }
+        | GoExpression::Address(value)
+        | GoExpression::Unary { operand: value, .. }
+        | GoExpression::TypeAssertion { value, .. }
+        | GoExpression::Spread(value)
+        | GoExpression::Instantiation { function: value, .. } => effects(*value, out),
+        GoExpression::Composite { fields, .. } => {
+            fields.into_iter().for_each(|(_, field)| effects(field, out));
+        }
+        GoExpression::Binary { left, right, .. } => {
+            effects(*left, out);
+            effects(*right, out);
+        }
+        GoExpression::Index { value, index } => {
+            effects(*value, out);
+            effects(*index, out);
+        }
+        GoExpression::Identifier(_)
+        | GoExpression::Qualified { .. }
+        | GoExpression::Integer(_)
+        | GoExpression::Float(_)
+        | GoExpression::String(_)
+        | GoExpression::Utf16(_)
+        | GoExpression::Rune(_)
+        | GoExpression::Boolean(_)
+        | GoExpression::Function { .. }
+        | GoExpression::Type(_) => {}
+    }
+}
+
+fn is_value_only_builtin(function: &GoExpression) -> bool {
+    matches!(
+        function,
+        GoExpression::Identifier(name) if matches!(name.as_str(), "append" | "len" | "make" | "new")
+    )
 }
 
 /// Whether evaluating the value has no effect and cannot panic.

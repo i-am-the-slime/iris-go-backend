@@ -1,0 +1,144 @@
+---
+source: tests-integration/src/fixtures.rs
+---
+// Data/Either/either.go
+package either
+
+type EitherIntInt struct {
+	Field0 int32
+	Tag    uint8
+}
+
+const (
+	EitherIntIntLeft = iota
+	EitherIntIntRight
+)
+
+// Data/Maybe/maybe.go
+package maybe
+
+type MaybeInt struct {
+	Just int32
+	Tag  uint8
+}
+
+const (
+	MaybeIntNothing = iota
+	MaybeIntJust
+)
+
+type MaybeArrayInt struct {
+	Just []int32
+	Tag  uint8
+}
+
+const (
+	MaybeArrayIntNothing = iota
+	MaybeArrayIntJust
+)
+
+// Data/Ord/ord.go
+package ord
+
+import "fixture/Data/Ordering"
+
+func Compare(char rune, char2 rune) ordering.Ordering {
+	if char < char2 {
+		return ordering.OrderingLT
+	}
+	if char == char2 {
+		return ordering.OrderingEQ
+	}
+	return ordering.OrderingGT
+}
+
+// Data/Ordering/ordering.go
+package ordering
+
+type Ordering uint8
+
+const (
+	OrderingLT Ordering = iota
+	OrderingGT
+	OrderingEQ
+)
+
+// main.go
+package main
+
+import (
+	"fixture/Data/Either"
+	"fixture/Data/Maybe"
+	"fixture/Data/Ord"
+	"fixture/Data/Ordering"
+	"fixture/shared"
+	"github.com/i-am-the-slime/purs-backend-go/go-support/direct"
+	"github.com/i-am-the-slime/purs-backend-go/go-support/exception"
+	"github.com/i-am-the-slime/purs-backend-go/go-support/prim"
+	"math"
+	"os"
+)
+
+func main_() int32 {
+	x := prim.NumberTrunc(float64(0.5))
+	if !prim.NumberIsFinite(x) {
+	} else if x >= float64(int32(prim.TopInt)) {
+	} else if x <= float64(int32(prim.BottomInt)) {
+	} else if math.Trunc(x) == x && (x >= math.MinInt32 && x <= math.MaxInt32) {
+	}
+	direct.DeleteAt(func(payload []int32) maybe.MaybeArrayInt {
+		return maybe.MaybeArrayInt{Tag: maybe.MaybeArrayIntJust, Just: payload}
+	}, maybe.MaybeArrayInt{Tag: maybe.MaybeArrayIntNothing}, int32(0), []int32{})
+	ref := &shared.Ref[int32]{Value: 0}
+	count := ref.Value
+	elements := []int32{10, 20}
+	var result int32
+	if count >= 0 && count < int32(len(elements)) {
+		result = elements[count]
+	} else {
+		result = 0
+	}
+	modified := shared.StateValue{State: count + 1, Value: result}
+	ref.Value = modified.State
+	i := ref.Value
+	scrutinee := either.EitherIntInt{Tag: either.EitherIntIntRight, Field0: -1}
+	var result2 int32
+	if scrutinee.Tag == either.EitherIntIntRight && scrutinee.Field0 == -1 {
+		direct.SortBy(ord.Compare, func(value ordering.Ordering) int32 {
+			switch value {
+			case ordering.OrderingGT:
+				return 1
+			case ordering.OrderingEQ:
+				return 0
+			default: // ordering.OrderingLT
+				return -1
+			}
+		}, []rune{'b', 'a'})
+		result2 = 2
+	} else {
+		result2 = 1
+	}
+	return prim.MultiplyInt32(i, 10) + result2
+}
+
+func main() {
+	defer exception.ReportUncaught()
+	exitStatus := main_()
+	os.Exit(int(exitStatus))
+}
+
+// shared/shared.go
+package shared
+
+type Ref[T any] struct {
+	Value T
+}
+
+type StateValue struct {
+	State int32
+	Value int32
+}
+
+type Items struct {
+	Items []rune
+}
