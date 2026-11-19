@@ -1,0 +1,57 @@
+---
+source: tests-integration/src/fixtures.rs
+---
+// main.go
+package main
+
+import (
+	"fmt"
+	"github.com/i-am-the-slime/purs-backend-go/go-support/array"
+	"github.com/i-am-the-slime/purs-backend-go/go-support/exception"
+	"github.com/i-am-the-slime/purs-backend-go/go-support/prim"
+)
+
+var main_ = initializeMain_()
+
+func initializeMain_() []int32 {
+	defer exception.ReportUncaught()
+	xs := []int32{4}
+	xs2 := []int32{}
+	array2 := &[]int32{}
+	a := array.Append(xs, []int32{5})
+	if len(a) == 0 {
+		*array2 = append(*array2, 0)
+	} else {
+		*array2 = append(*array2, 1)
+	}
+	mapped := make([]int32, len(xs))
+	for index, value := range xs {
+		mapped[index] = prim.MultiplyInt32(value, 2)
+	}
+	if len(mapped) == 1 {
+		x := mapped[0]
+		*array2 = append(*array2, x)
+	}
+	performed := array.UnsafeFreeze(array2)()
+	array3 := &[]int32{}
+	a2 := array.Append(xs2, []int32{})
+	if len(a2) == 0 {
+		*array3 = append(*array3, 0)
+	} else {
+		*array3 = append(*array3, 1)
+	}
+	mapped2 := make([]int32, len(xs2))
+	for index, value := range xs2 {
+		mapped2[index] = prim.MultiplyInt32(value, 2)
+	}
+	if len(mapped2) == 1 {
+		x := mapped2[0]
+		*array3 = append(*array3, x)
+	}
+	performed2 := array.UnsafeFreeze(array3)()
+	return array.Append(performed, performed2)
+}
+
+func main() {
+	fmt.Println(main_)
+}
