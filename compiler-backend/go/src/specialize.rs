@@ -2666,21 +2666,20 @@ where
         let instance = match dictionary {
             Dictionary::Instance(instance) => instance,
             Dictionary::Symbol(symbol) => {
-                return Ok(self.constant_function(Literal::String(symbol.to_string()), monotype));
+                let symbol = ExpressionKind::Literal(Literal::String(symbol.to_string()));
+                return Ok(self.constant_function(symbol, monotype));
             }
             Dictionary::Reflectable(reflected) => {
                 let literal = match reflected {
                     Reflected::Integer(value) => Literal::Int(i64::from(value)),
                     Reflected::String(value) => Literal::String(value.to_string()),
                     Reflected::Boolean(value) => Literal::Boolean(value),
-                    Reflected::Ordering(_) => {
-                        return Err(self.unsupported(
-                            scope,
-                            UnsupportedState::Construct { construct: "reflected orderings" },
-                        ));
+                    Reflected::Ordering(name) => {
+                        let constructed = self.reflected_constructor(scope, &name, monotype)?;
+                        return Ok(self.constant_function(constructed, monotype));
                     }
                 };
-                return Ok(self.constant_function(literal, monotype));
+                return Ok(self.constant_function(ExpressionKind::Literal(literal), monotype));
             }
             Dictionary::Trivial => {
                 return Err(self.unsupported(
@@ -2723,12 +2722,34 @@ where
         self.request_reference(scope, key, name, monotype)
     }
 
-    fn constant_function(&mut self, literal: Literal, monotype: MonotypeId) -> Expression {
+    /// A reflected type-level `Ordering` is the term-level constructor of the same name.
+    fn reflected_constructor(
+        &mut self,
+        scope: &Scope,
+        name: &str,
+        monotype: MonotypeId,
+    ) -> GoResult<ExpressionKind> {
+        let result = self.monotypes.result_after(monotype, 1);
+        let Monotype::Data(data) = self.monotypes.get(result).clone() else {
+            let rendered = format!("reflected {name}");
+            return Err(self.unsupported(scope, UnsupportedState::OpenType { rendered }));
+        };
+        let constructors = self.monotypes.constructors(&mut self.context, &data);
+        let constructors = constructors.map_err(|failure| failure.at(&scope.definition))?;
+        let Some(index) = constructors.iter().position(|constructor| constructor.name == name)
+        else {
+            return Err(self.unsupported(scope, UnsupportedState::MissingDeclaration));
+        };
+        Ok(ExpressionKind::Construct { data, constructor: index, arguments: vec![] })
+    }
+
+    /// The member of a compiler-solved class: a constant behind its `Proxy`.
+    fn constant_function(&mut self, constant: ExpressionKind, monotype: MonotypeId) -> Expression {
         let Some((argument, result)) = self.monotypes.function_parts(monotype) else {
-            return Expression::new(ExpressionKind::Literal(literal), monotype);
+            return Expression::new(constant, monotype);
         };
         let parameter = self.fresh_local(SmolStr::new_static("proxy"), argument);
-        let body = Expression::new(ExpressionKind::Literal(literal), result);
+        let body = Expression::new(constant, result);
         self.lambda(vec![parameter], body)
     }
 

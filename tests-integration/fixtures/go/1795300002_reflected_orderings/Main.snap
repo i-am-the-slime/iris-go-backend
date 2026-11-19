@@ -1,0 +1,45 @@
+---
+source: tests-integration/src/fixtures.rs
+---
+// Data/Ordering/ordering.go
+package ordering
+
+type Ordering uint8
+
+const (
+	OrderingLT Ordering = iota
+	OrderingGT
+	OrderingEQ
+)
+
+func Show(ordering Ordering) string {
+	switch ordering {
+	case OrderingLT:
+		return "LT"
+	case OrderingGT:
+		return "GT"
+	default: // OrderingEQ
+		return "EQ"
+	}
+}
+
+// main.go
+package main
+
+import (
+	"fixture/Data/Ordering"
+	"fmt"
+	"github.com/i-am-the-slime/purs-backend-go/go-support/exception"
+	"github.com/i-am-the-slime/purs-backend-go/go-support/prim"
+)
+
+var main_ = initializeMain_()
+
+func initializeMain_() []string {
+	defer exception.ReportUncaught()
+	return []string{prim.ShowArray(ordering.Show, []ordering.Ordering{ordering.OrderingLT, ordering.OrderingEQ, ordering.OrderingGT}), "GT", "true"}
+}
+
+func main() {
+	fmt.Println(main_)
+}
