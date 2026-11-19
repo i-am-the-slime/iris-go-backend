@@ -1,7 +1,9 @@
 use super::buffers::{to_bytes, to_string};
 use super::fusion::{Demand, Need, Order, Pipeline};
 use super::ownership::{Carried, Place, owned_snocs};
-use super::{Emitter, Mode, Sink, call, field_name, identifier_expression, uses_local};
+use super::{
+    Emitter, Mode, Sink, call, field_name, identifier_expression, unit_value, uses_local,
+};
 use crate::error::GoResult;
 use crate::foreign::Iteration;
 use crate::mono::{Expression, ExpressionKind, FunctionId, Local};
@@ -152,10 +154,15 @@ where
     ) -> GoResult<GoExpression> {
         match callback {
             Callback::Inline { body, .. } => self.value(body, out),
-            Callback::Direct { function, leading, .. } => {
+            Callback::Direct { function, callee, leading } => {
                 let mut all = leading.clone();
                 all.extend(arguments);
-                Ok(call(function.clone(), all))
+                let applied = call(function.clone(), all);
+                if !self.is_unit(self.program.function(*callee).result) {
+                    return Ok(applied);
+                }
+                out.push(GoStatement::Expression(applied));
+                Ok(unit_value())
             }
         }
     }
@@ -663,7 +670,10 @@ where
             _ => (Mode::Value, result),
         };
         let delayed = effect.is_some() && !perform;
-        let result_type = self.go_result(result)?;
+        let unit_valued = mode == Mode::Value && !delayed && self.is_unit(result);
+        let result_type =
+            if unit_valued { Some(GoType::EmptyStruct) } else { self.go_result(result)? };
+        let result_sink = if unit_valued { Sink::Discard } else { Sink::Return };
         let saved = self.tail_loop.take();
         let mut parameters = vec![];
         let mut body = vec![];
@@ -677,9 +687,13 @@ where
                     };
                     parameters.push((name, self.go_type(local.monotype)?));
                 }
-                self.sink(lambda_body, mode, Sink::Return, &mut body)
+                self.sink(lambda_body, mode, result_sink, &mut body)
             }
-            None if !delayed && arity > 1 && self.arity(function.monotype) == arity => {
+            None if !delayed
+                && !unit_valued
+                && arity > 1
+                && self.arity(function.monotype) == arity =>
+            {
                 let value = self.value(function, out)?;
                 self.tail_loop = saved;
                 return Ok(value);
@@ -694,7 +708,7 @@ where
                 }
                 let applied = match found {
                     Some(Found::Direct { function: name, leading, .. })
-                        if leading.is_empty() && !delayed =>
+                        if leading.is_empty() && !delayed && !unit_valued =>
                     {
                         self.tail_loop = saved;
                         return Ok(name);
@@ -732,11 +746,14 @@ where
                 } else {
                     applied
                 };
-                self.deliver(applied, result, Sink::Return, &mut body)
+                self.deliver(applied, result, result_sink, &mut body)
             }
         };
         self.tail_loop = saved;
         outcome?;
+        if unit_valued {
+            body.push(GoStatement::Return(Some(unit_value())));
+        }
         if let Some(GoStatement::Return(None)) = body.last() {
             body.pop();
         }
