@@ -18,8 +18,7 @@
 # Bun and Deno disagree with each other.
 #
 # Environment: IRIS, GO_SUPPORT, PURS_BACKEND_ES, WORK (kept), JOBS, FUZZ_SEED, FUZZ_RANDOM,
-# FUZZ_CHUNK (cases per program), FUZZ_GO_TAGS (e.g. `libm`: go-support's transcendental functions
-# from the C library, as JavaScriptCore on macOS computes them), GOEXPERIMENT (default simd).
+# FUZZ_CHUNK (cases per program), FUZZ_GO_TAGS (go build tags), GOEXPERIMENT (default simd).
 
 set -uo pipefail
 

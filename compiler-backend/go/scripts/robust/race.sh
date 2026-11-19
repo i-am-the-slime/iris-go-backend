@@ -7,7 +7,7 @@
 #   compiler-backend/go/scripts/robust/race.sh go-support markgraf   # chosen targets
 #
 # Targets:
-#   go-support    go vet (default and libm tags) and go test -race over go-support itself
+#   go-support    go vet and go test -race over go-support itself
 #   markgraf      the Markgraf CLI (build-go-cli.sh, pinned markgraf-gates): vet, a race build run
 #                 over --still and --frame exports, and a second race build on a go-support copy
 #                 whose parallel threshold is 2, so that the camera plan's two parallelMap call
@@ -116,7 +116,6 @@ GO
 target_go_support() {
   echo "== go-support ($GO_SUPPORT)"
   (cd "$GO_SUPPORT" && go vet ./... 2>&1) | grep -E ':[0-9]+:[0-9]+: ' | sed 's/^/go-support: /' >>"$WORK/vet.txt"
-  (cd "$GO_SUPPORT" && go vet -tags libm ./... 2>&1) | grep -E ':[0-9]+:[0-9]+: ' | sed 's/^/go-support(libm): /' >>"$WORK/vet.txt"
   (cd "$GO_SUPPORT" && go test -race -count=1 ./... >"$WORK/go-support-race.txt" 2>&1)
   local status=$?
   race_keys "$WORK/go-support-race.txt" go-support-tests >>"$WORK/races.txt"
@@ -132,9 +131,9 @@ target_markgraf() {
   if ! IRIS="$IRIS" GO_SUPPORT="$GO_SUPPORT" "$GO_DIR/scripts/markgraf/build-go-cli.sh" "$out/go" >"$out.build.log" 2>&1; then
     echo "markgraf: build-go-cli.sh failed (see $out.build.log)" >>"$WORK/failures.txt"; return
   fi
-  vet_into "$out/go" "$out.vet" libm
+  vet_into "$out/go" "$out.vet"
   sed 's/^/markgraf: /' "$out.vet" >>"$WORK/vet.txt"
-  (cd "$out/go" && go build -race -tags libm -gcflags=-dwarf=false -ldflags=-w -o bin/markgraf-race .) >>"$out.build.log" 2>&1 \
+  (cd "$out/go" && go build -race -gcflags=-dwarf=false -ldflags=-w -o bin/markgraf-race .) >>"$out.build.log" 2>&1 \
     || { echo "markgraf: race build failed" >>"$WORK/failures.txt"; return; }
 
   # The camera plan's parallelMap call sites, found by their callees, so that a renamed result
@@ -153,7 +152,7 @@ target_markgraf() {
   if [ "$(echo "$sites" | grep -c .)" != 2 ]; then
     echo "markgraf: expected 2 parallelMap sites in $plan, found: $sites" >>"$WORK/failures.txt"
   else
-    (cd "$out/parallel" && go build -race -tags libm -gcflags=-dwarf=false -ldflags=-w -o bin/markgraf-race-parallel .) >>"$out.build.log" 2>&1 \
+    (cd "$out/parallel" && go build -race -gcflags=-dwarf=false -ldflags=-w -o bin/markgraf-race-parallel .) >>"$out.build.log" 2>&1 \
       || echo "markgraf: parallel race build failed" >>"$WORK/failures.txt"
   fi
 
