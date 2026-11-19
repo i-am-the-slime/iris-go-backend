@@ -447,7 +447,7 @@ impl Simplifier<'_> {
                 }
                 let (bindings, scrutinees, alternatives) =
                     self.eliminate_columns(scrutinees, alternatives);
-                let alternatives: Vec<Alternative> = alternatives
+                let alternatives: Vec<Alternative> = reachable(alternatives)
                     .into_iter()
                     .map(|alternative| Alternative {
                         patterns: alternative.patterns,
@@ -1239,6 +1239,63 @@ fn is_discardable(expression: &Expression) -> bool {
         ExpressionKind::Access { record: value, .. } | ExpressionKind::Coerce(value) => {
             is_discardable(value)
         }
+        _ => false,
+    }
+}
+
+fn reachable(alternatives: Vec<Alternative>) -> Vec<Alternative> {
+    let mut kept: Vec<Alternative> = Vec::with_capacity(alternatives.len());
+    for alternative in alternatives {
+        let shadowed = kept.iter().any(|earlier| {
+            matches!(earlier.body, Guarded::Unconditional(_))
+                && earlier
+                    .patterns
+                    .iter()
+                    .zip(&alternative.patterns)
+                    .all(|(earlier, later)| subsumes(earlier, later))
+        });
+        if !shadowed {
+            kept.push(alternative);
+        }
+    }
+    kept
+}
+
+fn irrefutable(pattern: &Pattern) -> bool {
+    match &pattern.kind {
+        PatternKind::Wildcard | PatternKind::Variable(_) => true,
+        PatternKind::Named { pattern, .. } => irrefutable(pattern),
+        PatternKind::Record(fields) => fields.iter().all(|(_, field)| irrefutable(field)),
+        _ => false,
+    }
+}
+
+fn subsumes(earlier: &Pattern, later: &Pattern) -> bool {
+    let each = |earlier: &[Pattern], later: &[Pattern]| {
+        earlier.len() == later.len()
+            && earlier.iter().zip(later).all(|(earlier, later)| subsumes(earlier, later))
+    };
+    match (&earlier.kind, &later.kind) {
+        _ if irrefutable(earlier) => true,
+        (PatternKind::Named { pattern, .. }, _) => subsumes(pattern, later),
+        (_, PatternKind::Named { pattern, .. }) => subsumes(earlier, pattern),
+        (PatternKind::Literal(earlier), PatternKind::Literal(later)) => {
+            literals_equal(earlier, later) == Some(true)
+        }
+        (PatternKind::Array(earlier), PatternKind::Array(later)) => each(earlier, later),
+        (PatternKind::Record(earlier), PatternKind::Record(later)) => {
+            earlier.iter().all(|(label, field)| {
+                later.iter().any(|(other, pattern)| other == label && subsumes(field, pattern))
+            })
+        }
+        (
+            PatternKind::Constructor { constructor: earlier, arguments: x, .. },
+            PatternKind::Constructor { constructor: later, arguments: y, .. },
+        )
+        | (
+            PatternKind::Closure { tag: earlier, captures: x },
+            PatternKind::Closure { tag: later, captures: y },
+        ) => earlier == later && each(x, y),
         _ => false,
     }
 }

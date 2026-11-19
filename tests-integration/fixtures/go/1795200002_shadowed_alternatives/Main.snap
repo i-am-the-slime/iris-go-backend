@@ -1,0 +1,109 @@
+---
+source: tests-integration/src/fixtures.rs
+---
+// Data/Either/either.go
+package either
+
+import (
+	"fixture/Data/Maybe"
+	"fixture/Data/Ordering"
+)
+
+type EitherMaybeBooleanInt struct {
+	Right int32
+	Tag   uint8
+	Left  maybe.MaybeBoolean
+}
+
+const (
+	EitherMaybeBooleanIntLeft = iota
+	EitherMaybeBooleanIntRight
+)
+
+type EitherIntBV struct {
+	Left  int32
+	Right ordering.BV
+	Tag   uint8
+}
+
+const (
+	EitherIntBVLeft = iota
+	EitherIntBVRight
+)
+
+// Data/Maybe/maybe.go
+package maybe
+
+type MaybeBoolean struct {
+	Tag  uint8
+	Just bool
+}
+
+const (
+	MaybeBooleanNothing = iota
+	MaybeBooleanJust
+)
+
+// Data/Ordering/ordering.go
+package ordering
+
+type Ordering uint8
+
+const (
+	OrderingLT Ordering = iota
+	OrderingGT
+	OrderingEQ
+)
+
+type BV struct {
+	V int32
+	B Ordering
+}
+
+// main.go
+package main
+
+import (
+	"fixture/Data/Either"
+	"fixture/Data/Maybe"
+	"fixture/Data/Ordering"
+	"github.com/i-am-the-slime/purs-backend-go/go-support/exception"
+	"os"
+)
+
+func main_() int32 {
+	scrutinee := either.EitherMaybeBooleanInt{Tag: either.EitherMaybeBooleanIntLeft, Left: maybe.MaybeBoolean{Tag: maybe.MaybeBooleanNothing}}
+	var result2 bool
+	switch scrutinee.Tag {
+	case either.EitherMaybeBooleanIntLeft:
+		switch scrutinee.Left.Tag {
+		case maybe.MaybeBooleanNothing:
+			result2 = false
+		default:
+			result2 = false
+		}
+	default:
+		result2 = false
+	}
+	var result int32
+	if result2 {
+		result = 1
+	} else {
+		result = 0
+	}
+	scrutinee2 := either.EitherIntBV{Tag: either.EitherIntBVRight, Right: ordering.BV{B: ordering.OrderingEQ, V: 1000}}
+	var result3 int32
+	switch scrutinee2.Tag {
+	case either.EitherIntBVRight:
+		result3 = scrutinee2.Right.V
+	default:
+		result3 = 3
+	}
+	return result + 3 + result3
+}
+
+func main() {
+	defer exception.ReportUncaught()
+	exitStatus := main_()
+	os.Exit(int(exitStatus))
+}
