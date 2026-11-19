@@ -30,12 +30,16 @@ pub fn known(module: &str, name: &str) -> Option<Primitive> {
 pub enum KnownType {
     Maybe,
     Variant,
+    /// Control.Monad.Free's `Val`, the constructorless type that stands for the
+    /// result of every step a `Free` hides behind `unsafeCoerce`.
+    FreeValue,
 }
 
 pub fn known_type(module: &str, name: &str) -> Option<KnownType> {
     match (module, name) {
         ("Data.Maybe", "Maybe") => Some(KnownType::Maybe),
         ("Data.Variant", "Variant") => Some(KnownType::Variant),
+        ("Control.Monad.Free", "Val") => Some(KnownType::FreeValue),
         _ => None,
     }
 }

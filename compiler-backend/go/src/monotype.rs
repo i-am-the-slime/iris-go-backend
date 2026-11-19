@@ -774,7 +774,9 @@ impl Monotypes {
                     Monotype::ForeignData(DataType { file_id, item, arguments })
                 }
                 IndexedTypeItemKind::Data { constructors, .. } if constructors.is_empty() => {
-                    Monotype::Erased(Erasure::EmptyData)
+                    let free = crate::primitives::known_type(&module.name, &name)
+                        == Some(crate::primitives::KnownType::FreeValue);
+                    Monotype::Erased(if free { Erasure::FreeValue } else { Erasure::EmptyData })
                 }
                 IndexedTypeItemKind::Data { .. } => {
                     let regular = self.is_regular(context, file_id, item)?;

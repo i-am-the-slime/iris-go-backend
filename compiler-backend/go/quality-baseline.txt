@@ -1,8 +1,9 @@
 examples any 563
 examples any:boxing 113
-examples any:empty-data 102
+examples any:empty-data 0
 examples any:existential 10
 examples any:foreign 55
+examples any:free-value 102
 examples any:polymorphic-recursion 41
 examples any:rank-n 81
 examples any:runtime 16
@@ -21,12 +22,13 @@ examples reflect 0
 examples thunk 165
 examples type-assertion 205
 examples unsafe 0
-go-backend source-lines 36781
+go-backend source-lines 36794
 markgraf-cli any 2118
 markgraf-cli any:boxing 1329
-markgraf-cli any:empty-data 171
+markgraf-cli any:empty-data 0
 markgraf-cli any:existential 47
 markgraf-cli any:foreign 71
+markgraf-cli any:free-value 171
 markgraf-cli any:polymorphic-recursion 40
 markgraf-cli any:rank-n 110
 markgraf-cli any:runtime 40

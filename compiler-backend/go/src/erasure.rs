@@ -27,6 +27,10 @@ pub enum Erasure {
     NewtypeCycle,
     /// A data type with no constructors.
     EmptyData,
+    /// Control.Monad.Free's `Val`: a `Free` stores each step's result as `Val`
+    /// and coerces it back to the type the next continuation expects, so the
+    /// values are of every type the program's steps produce.
+    FreeValue,
     /// The arguments of a non-regular data type (`data T a = ... (T (f a))`).
     NonRegular,
     /// A specialization request that embeds its own requester's types and
@@ -47,7 +51,7 @@ pub enum Erasure {
 }
 
 impl Erasure {
-    pub const ALL: [Erasure; 16] = [
+    pub const ALL: [Erasure; 17] = [
         Erasure::ArgumentVariable,
         Erasure::TypeVariable,
         Erasure::RankN,
@@ -64,6 +68,7 @@ impl Erasure {
         Erasure::Foreign,
         Erasure::Runtime,
         Erasure::Unsolved,
+        Erasure::FreeValue,
     ];
 
     pub fn code(self) -> u32 {
@@ -85,6 +90,7 @@ impl Erasure {
             Erasure::UnboundedWitnesses => "unbounded-witnesses",
             Erasure::NewtypeCycle => "newtype-cycle",
             Erasure::EmptyData => "empty-data",
+            Erasure::FreeValue => "free-value",
             Erasure::NonRegular => "non-regular",
             Erasure::PolymorphicRecursion => "polymorphic-recursion",
             Erasure::Boxing => "boxing",
@@ -108,6 +114,7 @@ impl fmt::Display for Erasure {
             Erasure::UnboundedWitnesses => "Data.Exists with unbounded witnesses",
             Erasure::NewtypeCycle => "newtype cycle",
             Erasure::EmptyData => "empty data type",
+            Erasure::FreeValue => "Control.Monad.Free step result (Val)",
             Erasure::NonRegular => "non-regular data type",
             Erasure::PolymorphicRecursion => "polymorphic recursion",
             Erasure::Boxing => "boxing at an erased position",
