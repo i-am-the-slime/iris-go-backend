@@ -1,0 +1,74 @@
+---
+source: tests-integration/src/fixtures.rs
+---
+// Data/List/Types/types.go
+package types
+
+type ListUnit struct {
+	Cons0 struct{}
+	Cons1 *ListUnit
+	Tag   uint8
+}
+
+const (
+	ListUnitNil = iota
+	ListUnitCons
+)
+
+var SharedListUnitNil = &ListUnit{Tag: ListUnitNil}
+
+// Data/Maybe/maybe.go
+package maybe
+
+type Int int64
+
+const NoInt Int = 1 << 32
+
+// main.go
+package main
+
+import (
+	list "fixture/Data/List/Types"
+	"fmt"
+	"github.com/i-am-the-slime/purs-backend-go/go-support/alloc"
+	"github.com/i-am-the-slime/purs-backend-go/go-support/exception"
+)
+
+var main_ = initializeMain_()
+
+func initializeMain_() []int32 {
+	defer exception.ReportUncaught()
+	return []int32{defaulted(1.0), defaulted(2.0), defaulted(3.0)}
+}
+
+func defaulted(ignored float64) int32 {
+	array := []struct{}{struct{}{}, struct{}{}, struct{}{}}
+	accumulator := list.SharedListUnitNil
+	var listUnitCells alloc.Cells[list.ListUnit]
+	for index := len(array) - 1; index >= 0; index-- {
+		unit := array[index]
+		accumulator = listUnitCells.New(list.ListUnit{Tag: list.ListUnitCons, Cons0: unit, Cons1: accumulator})
+	}
+	var result int32
+	result = -17
+	return defaultedGo(func(x int32) int32 {
+		return x
+	}, accumulator)(result)
+}
+
+func defaultedGo(b func(int32) int32, value *list.ListUnit) func(int32) int32 {
+	for {
+		switch value.Tag {
+		case list.ListUnitNil:
+			return b
+		default: // list.ListUnitCons
+			as := value.Cons1
+			value = as
+			continue
+		}
+	}
+}
+
+func main() {
+	fmt.Println(main_)
+}
