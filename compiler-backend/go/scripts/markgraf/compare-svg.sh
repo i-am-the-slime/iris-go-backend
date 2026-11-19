@@ -11,6 +11,10 @@
 # Environment: IRIS, MARKGRAF (checkout; pinned.sh), GO_SUPPORT, MARKGRAF_JS (a JS CLI;
 # built from the current sources with build-js-cli.sh when unset), WORK,
 # TIMEOUT (seconds per run, default 600), KEEP=1 keeps the work directory.
+# The JavaScript side depends only on the pinned Markgraf revision and the JS build
+# scripts, so for the pinned checkout its CLI and every export (output, status, best
+# time) are cached in MARKGRAF_JS_CACHE (default ~/.cache/iris-markgraf-js);
+# MARKGRAF_JS_CACHE= turns the cache off. Exports Go runs slower on are re-timed live.
 # Finally checks the generated Go against the markgraf-cli quality baseline and
 # the time `iris go` takes against the compile-time baseline (compile-time.sh).
 
@@ -29,7 +33,19 @@ SLOWER_MS="${SLOWER_MS:-10}"
 
 milliseconds() { perl -MTime::HiRes=time -e 'printf "%.0f", time*1000'; }
 
-if [ -z "${MARKGRAF_JS:-}" ]; then
+JS_CACHE=""
+if [ -z "${MARKGRAF_JS:-}" ] && [ "$MARKGRAF" = "$MARKGRAF_GATES" ] \
+  && [ -n "${MARKGRAF_JS_CACHE-${HOME}/.cache/iris-markgraf-js}" ]; then
+  key="$(cat "$HERE/REVISION" "$HERE/build-js-engine.sh" "$HERE/build-js-cli.sh" \
+    "$MARKGRAF/cli/native/main.rs" | shasum -a 256 | cut -c1-16)"
+  JS_CACHE="${MARKGRAF_JS_CACHE-${HOME}/.cache/iris-markgraf-js}/$key"
+  mkdir -p "$JS_CACHE/exports"
+  if [ ! -x "$JS_CACHE/markgraf" ]; then
+    built="$("$HERE/build-js-cli.sh" "$WORK/js")" || exit 1
+    cp "$built" "$JS_CACHE/markgraf.$$" && mv "$JS_CACHE/markgraf.$$" "$JS_CACHE/markgraf"
+  fi
+  MARKGRAF_JS="$JS_CACHE/markgraf"
+elif [ -z "${MARKGRAF_JS:-}" ]; then
   MARKGRAF_JS="$("$HERE/build-js-cli.sh" "$WORK/js")" || exit 1
 fi
 
@@ -55,7 +71,41 @@ run() { # implementation input mode output → status and time in $WORK/out
 
 normalise() { sed -e "s|$WORK/out/||g" "$1"; }
 
-run "$MARKGRAF_JS" "$1" "$WORK/out/warm-up.js.svg" --still "" >/dev/null
+run_js() { # input output arguments → like run, answered from JS_CACHE when it is on
+  local input="$1" output="$2"; shift 2
+  [ -n "$JS_CACHE" ] || { run "$MARKGRAF_JS" "$input" "$output" "$@"; return; }
+  local entry
+  entry="$JS_CACHE/exports/$({ shasum -a 256 <"$input"; basename "$output"; echo "$*"; } \
+    | shasum -a 256 | cut -c1-32)"
+  if [ ! -e "$entry.ms" ]; then
+    local ms
+    ms=$(run "$MARKGRAF_JS" "$input" "$output" "$@")
+    [ ! -e "$output" ] || cp "$output" "$entry.svg.$$"
+    normalise "$output.stdout" > "$entry.stdout.$$"
+    normalise "$output.stderr" > "$entry.stderr.$$"
+    cp "$output.status" "$entry.status.$$"
+    for part in svg stdout stderr status; do
+      [ ! -e "$entry.$part.$$" ] || mv "$entry.$part.$$" "$entry.$part"
+    done
+    echo "$ms" > "$entry.ms.$$" && mv "$entry.ms.$$" "$entry.ms"
+  fi
+  rm -f "$output"
+  [ ! -e "$entry.svg" ] || cp "$entry.svg" "$output"
+  cp "$entry.stdout" "$output.stdout"; cp "$entry.stderr" "$output.stderr"
+  cp "$entry.status" "$output.status"
+  cat "$entry.ms"
+}
+
+remember_js_time() { # input output milliseconds arguments → keeps the best time in JS_CACHE
+  local input="$1" output="$2" ms="$3"; shift 3
+  [ -n "$JS_CACHE" ] || return 0
+  local entry
+  entry="$JS_CACHE/exports/$({ shasum -a 256 <"$input"; basename "$output"; echo "$*"; } \
+    | shasum -a 256 | cut -c1-32)"
+  [ "$ms" -ge "$(cat "$entry.ms")" ] || { echo "$ms" > "$entry.ms.$$" && mv "$entry.ms.$$" "$entry.ms"; }
+}
+
+run_js "$1" "$WORK/out/warm-up.js.svg" --still "" >/dev/null
 run "$MARKGRAF_GO" "$1" "$WORK/out/warm-up.go.svg" --still "" >/dev/null
 
 passed=0 failed=0 slower=0 js_total=0 go_total=0 worst_ratio=0 worst=""
@@ -68,7 +118,7 @@ for input in "$@"; do
       frame) arguments=(--frame 1) ;;
     esac
     js="$WORK/out/$name.$mode.js.svg" go="$WORK/out/$name.$mode.go.svg"
-    js_ms=$(run "$MARKGRAF_JS" "$input" "$js" "${arguments[@]}")
+    js_ms=$(run_js "$input" "$js" "${arguments[@]}")
     go_ms=$(run "$MARKGRAF_GO" "$input" "$go" "${arguments[@]}")
     result=identical
     if [ "$(cat "$js.status")" != "$(cat "$go.status")" ]; then
@@ -86,6 +136,7 @@ for input in "$@"; do
       js_again=$(run "$MARKGRAF_JS" "$input" "$js" "${arguments[@]}")
       go_again=$(run "$MARKGRAF_GO" "$input" "$go" "${arguments[@]}")
       js_ms=$((js_again < js_ms ? js_again : js_ms)) go_ms=$((go_again < go_ms ? go_again : go_ms))
+      remember_js_time "$input" "$js" "$js_ms" "${arguments[@]}"
     fi
     js_total=$((js_total + js_ms)) go_total=$((go_total + go_ms))
     ratio=$(awk -v go="$go_ms" -v js="$js_ms" 'BEGIN { printf "%.2f", go / (js > 0 ? js : 1) }')
