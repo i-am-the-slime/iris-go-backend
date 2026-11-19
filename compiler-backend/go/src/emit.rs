@@ -715,6 +715,13 @@ fn binary(operator: &'static str, left: GoExpression, right: GoExpression) -> Go
     GoExpression::Binary { operator, left: Box::new(left), right: Box::new(right) }
 }
 
+fn negated(operand: GoExpression) -> GoExpression {
+    match operand {
+        GoExpression::Unary { operator: "-", operand } => *operand,
+        operand => GoExpression::Unary { operator: "-", operand: Box::new(operand) },
+    }
+}
+
 fn unit_value() -> GoExpression {
     GoExpression::Composite { type_: GoType::EmptyStruct, fields: vec![] }
 }
@@ -2811,6 +2818,11 @@ where
         let elements = self.value(&arguments[2], out)?;
         let elements = self.hoist(elements, "elements", out);
         let index = self.value(&arguments[3], out)?;
+        if let GoExpression::Integer(constant) = index
+            && constant < 0
+        {
+            return self.construct(&data, nothing, vec![]);
+        }
         let index = self.hoist(index, "index", out);
         let element = GoExpression::Index {
             value: Box::new(elements.clone()),
@@ -3350,9 +3362,12 @@ where
             return match operator {
                 Operator::NumberNegate => match float_constant(&values[0]) {
                     Some(value) => self.number_constant(-value),
-                    None => unary("-", &mut values),
+                    None => negated(values.remove(0)),
                 },
-                Operator::IntNegate => unary("-", &mut values),
+                Operator::IntNegate => match int32_constant(&values[0]) {
+                    Some(value) => GoExpression::Integer(i64::from(value.wrapping_neg())),
+                    None => negated(values.remove(0)),
+                },
                 Operator::BooleanNot => unary("!", &mut values),
                 Operator::ArrayLength => GoExpression::Conversion {
                     type_: GoType::Named("int32".into()),

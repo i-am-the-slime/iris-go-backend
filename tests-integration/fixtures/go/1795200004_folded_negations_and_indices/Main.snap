@@ -1,0 +1,56 @@
+---
+source: tests-integration/src/fixtures.rs
+---
+// Data/Maybe/maybe.go
+package maybe
+
+type MaybeInt struct {
+	Just int32
+	Tag  uint8
+}
+
+const (
+	MaybeIntNothing = iota
+	MaybeIntJust
+)
+
+// main.go
+package main
+
+import (
+	"fixture/Data/Maybe"
+	"github.com/i-am-the-slime/purs-backend-go/go-support/exception"
+	"os"
+)
+
+func main_() int32 {
+	var result int32
+	switch missing.Tag {
+	case maybe.MaybeIntNothing:
+		result = 10
+	default: // maybe.MaybeIntJust
+		result = missing.Just
+	}
+	return negated + result + 101
+}
+
+var negated int32 = 1
+
+var missing = initializeMissing()
+
+func initializeMissing() maybe.MaybeInt {
+	defer exception.ReportUncaught()
+	var result maybe.MaybeInt
+	if 0 < int32(len([]any{})) {
+		result = maybe.MaybeInt{Tag: maybe.MaybeIntNothing}
+	} else {
+		result = maybe.MaybeInt{Tag: maybe.MaybeIntNothing}
+	}
+	return result
+}
+
+func main() {
+	defer exception.ReportUncaught()
+	exitStatus := main_()
+	os.Exit(int(exitStatus))
+}
