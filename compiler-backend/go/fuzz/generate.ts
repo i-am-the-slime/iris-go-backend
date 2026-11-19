@@ -1533,7 +1533,8 @@ export class Generator {
       thenBranch: base,
       elseBranch: recursive,
     };
-    const start = this.rng.pick([0, 1, 3, 10, 500]);
+    const recursiveReads = JSON.stringify(recursive.body).split(JSON.stringify(rec)).length - 1;
+    const start = this.rng.pick(recursiveReads > 1 ? [0, 1, 3, 10] : [0, 1, 3, 10, 500]);
     return apply(type, call(selfType, "CLazy.fix", lambda(T.fn(selfType, selfType), [varPattern(self, selfType), varPattern(n, T.Int)], body)), literal(T.Int, String(start)));
   }
 
