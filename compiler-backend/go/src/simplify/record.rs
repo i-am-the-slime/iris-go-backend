@@ -150,6 +150,7 @@ impl Simplifier<'_> {
                     && bindings
                         .iter()
                         .all(|other| super::occurrences(&other.value, binding.local.id).total == 0)
+                    && !super::runs_effect(self, &binding.value)
             };
             while let Some(position) =
                 bindings.iter().position(|binding| unused(binding, bindings, body))

@@ -93,6 +93,7 @@ pub(crate) fn keeps_representation(foreign: &Foreign) -> bool {
             | Foreign::EffectBind
             | Foreign::EffectMap
             | Foreign::RunEffect
+            | Foreign::UnsafePerformEffect
             | Foreign::RecordGet
             | Foreign::ReferenceNew
             | Foreign::ReferenceRead

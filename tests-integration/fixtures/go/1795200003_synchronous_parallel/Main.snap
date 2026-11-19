@@ -53,6 +53,7 @@ func main() {
 				aff.DelayDirect(nil, float64(1.0))
 				return x + 10
 			}, []int32{1, 2})
+			var i int32 = 12
 			var accumulator int32 = 0
 			for _, value := range array {
 				accumulator = accumulator + value
@@ -61,7 +62,7 @@ func main() {
 			for _, value := range array2 {
 				accumulator2 = accumulator2 + value
 			}
-			n := accumulator + accumulator2 + 12
+			n := accumulator + accumulator2 + i
 			direct.TraverseArray(func(x func() int32) int32 {
 				return x()
 			}, []func() int32{func() int32 {

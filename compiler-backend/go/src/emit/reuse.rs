@@ -220,6 +220,7 @@ struct Planner<'a, C> {
     next_local: u32,
     owned: FxHashMap<LocalId, Vec<LocalId>>,
     alternatives: Vec<Vec<LocalId>>,
+    hoisted_locals: FxHashMap<(*const Expression, usize), LocalId>,
     plan: Plan,
     consulted: Vec<(FunctionId, u64)>,
 }
@@ -240,6 +241,7 @@ impl<'a, C: Cells> Planner<'a, C> {
             next_local,
             owned: FxHashMap::default(),
             alternatives: vec![],
+            hoisted_locals: FxHashMap::default(),
             plan: Plan::default(),
             consulted: vec![],
         }
@@ -767,7 +769,15 @@ impl<'a, C: Cells> Planner<'a, C> {
                     let (local, origin) = match top {
                         Some(Top::Local(id)) => (id, Origin::Scrutinee { alternative }),
                         Some(Top::Hoisted(case, position)) => {
-                            (self.fresh(), Origin::Hoisted { case, position, alternative })
+                            let local = match self.hoisted_locals.get(&(case, position)) {
+                                Some(&local) => local,
+                                None => {
+                                    let local = self.fresh();
+                                    self.hoisted_locals.insert((case, position), local);
+                                    local
+                                }
+                            };
+                            (local, Origin::Hoisted { case, position, alternative })
                         }
                         None => (
                             self.fresh(),

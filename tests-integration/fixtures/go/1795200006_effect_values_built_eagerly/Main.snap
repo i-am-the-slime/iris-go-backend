@@ -1,0 +1,48 @@
+---
+source: tests-integration/src/fixtures.rs
+---
+// Data/Either/either.go
+package either
+
+import "github.com/i-am-the-slime/purs-backend-go/go-support/exception"
+
+type EitherErrorInt struct {
+	Left  exception.Error
+	Right int32
+	Tag   uint8
+}
+
+const (
+	EitherErrorIntLeft = iota
+	EitherErrorIntRight
+)
+
+// main.go
+package main
+
+import (
+	"github.com/i-am-the-slime/purs-backend-go/go-support/exception"
+	"os"
+)
+
+func main_() int32 {
+	panic("boom")
+}
+
+func main() {
+	defer exception.ReportUncaught()
+	exitStatus := main_()
+	os.Exit(int(exitStatus))
+}
+
+// shared/shared.go
+package shared
+
+type Ref[T any] struct {
+	Value T
+}
+
+type StateValue struct {
+	State int32
+	Value int32
+}

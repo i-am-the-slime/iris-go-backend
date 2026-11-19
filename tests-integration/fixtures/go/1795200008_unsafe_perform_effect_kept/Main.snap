@@ -1,0 +1,84 @@
+---
+source: tests-integration/src/fixtures.rs
+---
+// Control/Category/category.go
+package category
+
+func Identity(x any) any {
+	return x
+}
+
+// main.go
+package main
+
+import (
+	"fixture/Control/Category"
+	"github.com/i-am-the-slime/purs-backend-go/go-support/exception"
+	"os"
+)
+
+func main_() int32 {
+	var ref int32 = 0
+	s_ := ref + 1
+	ref = s_
+	s_2 := ref + 10
+	ref = s_2
+	s_3 := ref + 100
+	ref = s_3
+	mainGo(0, struct{}{})
+	array := &[]any{}
+	s_4 := ref + 1000
+	ref = s_4
+	performed2 := category.Identity
+	within := 0 < len(*array)
+	var performed bool
+	if within {
+		element := (*array)[0]
+		var poked bool
+		if 0 < len(*array) {
+			(*array)[0] = performed2(element)
+			poked = true
+		} else {
+			poked = false
+		}
+		performed = poked
+	} else {
+		performed = false
+	}
+	s_5 := ref + 10000
+	ref = s_5
+	var result int32
+	if performed {
+		result = 1
+	} else {
+		result = 0
+	}
+	return ref + result
+}
+
+func mainGo(n int32, acc struct{}) {
+	for {
+		if n <= 0 {
+			return
+		}
+		n, _ = n - 1, struct{}{}
+	}
+}
+
+func main() {
+	defer exception.ReportUncaught()
+	exitStatus := main_()
+	os.Exit(int(exitStatus))
+}
+
+// shared/shared.go
+package shared
+
+type Ref[T any] struct {
+	Value T
+}
+
+type StateValue struct {
+	State int32
+	Value int32
+}

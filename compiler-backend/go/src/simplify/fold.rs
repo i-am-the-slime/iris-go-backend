@@ -93,6 +93,10 @@ impl Simplifier<'_> {
             Comparison::LessThanOrEqual if ordered => Some(Comparison::GreaterThan),
             Comparison::GreaterThan if ordered => Some(Comparison::LessThanOrEqual),
             Comparison::GreaterThanOrEqual if ordered => Some(Comparison::LessThan),
+            Comparison::LessThan => Some(Comparison::GreaterThanOrEqualOrUnordered),
+            Comparison::LessThanOrEqual => Some(Comparison::GreaterThanOrUnordered),
+            Comparison::GreaterThanOrUnordered => Some(Comparison::LessThanOrEqual),
+            Comparison::GreaterThanOrEqualOrUnordered => Some(Comparison::LessThan),
             _ => None,
         }
     }
@@ -383,6 +387,8 @@ fn compare(comparison: Comparison, left: &Value<'_>, right: &Value<'_>) -> Optio
             Comparison::LessThanOrEqual => x <= y,
             Comparison::GreaterThan => x > y,
             Comparison::GreaterThanOrEqual => x >= y,
+            Comparison::GreaterThanOrUnordered => !(x <= y),
+            Comparison::GreaterThanOrEqualOrUnordered => !(x < y),
         });
     }
     let ordering = match (left, right) {
@@ -396,8 +402,12 @@ fn compare(comparison: Comparison, left: &Value<'_>, right: &Value<'_>) -> Optio
         Comparison::NotEqual => ordering != Ordering::Equal,
         Comparison::LessThan => ordering == Ordering::Less,
         Comparison::LessThanOrEqual => ordering != Ordering::Greater,
-        Comparison::GreaterThan => ordering == Ordering::Greater,
-        Comparison::GreaterThanOrEqual => ordering != Ordering::Less,
+        Comparison::GreaterThan | Comparison::GreaterThanOrUnordered => {
+            ordering == Ordering::Greater
+        }
+        Comparison::GreaterThanOrEqual | Comparison::GreaterThanOrEqualOrUnordered => {
+            ordering != Ordering::Less
+        }
     })
 }
 

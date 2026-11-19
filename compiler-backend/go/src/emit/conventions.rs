@@ -389,7 +389,14 @@ where
                     });
                     match declared {
                         Some(arrows) if arrows > 0 => {
-                            self.curried_callback(value, argument.monotype, arrows, out)?
+                            let callback =
+                                self.curried_callback(value, argument.monotype, arrows, out)?;
+                            if self.is_unit(self.monotypes.result_after(argument.monotype, arrows))
+                            {
+                                self.unit_valued(callback, argument.monotype, out)?
+                            } else {
+                                callback
+                            }
                         }
                         _ => self.typed_constant(value, argument.monotype)?,
                     }

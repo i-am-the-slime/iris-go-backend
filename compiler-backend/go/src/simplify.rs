@@ -3,7 +3,7 @@
 //! members and foreign imports); inlining them exposes the effect primitives and
 //! operators that code generation turns into plain Go.
 
-use rustc_hash::FxHashMap;
+use rustc_hash::{FxHashMap, FxHashSet};
 
 use crate::foreign::{Comparison, Foreign, GoPackage, Operator};
 use crate::suspension::Suspension;
@@ -54,6 +54,7 @@ pub fn simplify(program: Program, monotypes: &mut Monotypes, next_local: u32) ->
         record_orders: FxHashMap::default(),
         records_settled: false,
         suspension,
+        unsafely_effectful_locals: FxHashSet::default(),
     };
     for component in &components {
         for &function in component {
@@ -103,6 +104,7 @@ struct Simplifier<'m> {
     record_orders: FxHashMap<LocalId, Vec<SmolStr>>,
     records_settled: bool,
     suspension: Suspension,
+    unsafely_effectful_locals: FxHashSet<LocalId>,
 }
 
 impl Simplifier<'_> {
@@ -435,6 +437,11 @@ impl Simplifier<'_> {
                     .collect();
                 for binding in &bindings {
                     self.remember_record_order(binding);
+                    if let ExpressionKind::Lambda { body, .. } = &binding.value.kind
+                        && runs_effect(self, body)
+                    {
+                        self.unsafely_effectful_locals.insert(binding.local.id);
+                    }
                 }
                 let body = self.expression(*body);
                 return self.let_bindings(bindings, body);
@@ -488,7 +495,7 @@ impl Simplifier<'_> {
                 }
                 let (bindings, scrutinees, alternatives) =
                     self.eliminate_columns(scrutinees, alternatives);
-                let alternatives: Vec<Alternative> = alternatives
+                let alternatives: Vec<Alternative> = reachable(alternatives)
                     .into_iter()
                     .map(|alternative| Alternative {
                         patterns: alternative.patterns,
@@ -804,7 +811,10 @@ impl Simplifier<'_> {
                 || (uses.total == 1
                     && (uses.under_lambda == 0 || self.does_no_work(&binding.value)))
                 || (helper && uses.total == 2 && uses.applied == 2);
-            if substitutable {
+            let built_in_place = uses.total == 1
+                && matches!(&body.kind, ExpressionKind::EffectBind { action, .. }
+                    if matches!(action.kind, ExpressionKind::Local(id) if id == binding.local.id));
+            if substitutable && (built_in_place || !runs_effect(self, &binding.value)) {
                 if uses.total > 0 {
                     body = substitute(body, binding.local.id, &binding.value, self.monotypes);
                     body = self.expression(body);
@@ -836,7 +846,7 @@ impl Simplifier<'_> {
             && is_within_size(value, INLINE_SIZE)
             && captures_reference(value, self.monotypes)
             && !can_fail(value)
-            && !runs_effect(value)
+            && !runs_any_effect(value)
     }
 
     /// A field of a record coerced to another record type is the field of the
@@ -1113,7 +1123,7 @@ impl Simplifier<'_> {
         monotype: crate::monotype::MonotypeId,
     ) -> Expression {
         match action.kind {
-            ExpressionKind::EffectPure(value) => {
+            ExpressionKind::EffectPure(value) if builds_safely(&body) => {
                 let bindings = vec![Binding { local, value: *value }];
                 self.let_bindings(bindings, body)
             }
@@ -1235,14 +1245,84 @@ impl Simplifier<'_> {
     }
 }
 
-/// Whether the expression runs an action in pure code: unsafePerformEffect,
-/// or runST, which shares its foreign and is told apart only by its type.
-fn runs_effect(expression: &Expression) -> bool {
+// Whether the expression runs an action in pure code anywhere inside it:
+// unsafePerformEffect, or runST.
+fn runs_any_effect(expression: &Expression) -> bool {
     let mut runs = false;
     visit(expression, &mut |node| {
-        runs |= matches!(node.kind, ExpressionKind::Foreign { foreign: Foreign::RunEffect, .. });
+        runs |= matches!(node.kind, ExpressionKind::Foreign {
+            foreign: Foreign::RunEffect | Foreign::UnsafePerformEffect,
+            ..
+        });
     });
     runs
+}
+
+fn builds_safely(expression: &Expression) -> bool {
+    match &expression.kind {
+        ExpressionKind::EffectPure(value) => is_discardable(value),
+        ExpressionKind::EffectBind { action, .. } => builds_safely(action),
+        ExpressionKind::Let { bindings, body } => {
+            bindings.iter().all(|binding| is_discardable(&binding.value)) && builds_safely(body)
+        }
+        ExpressionKind::If { condition, then, otherwise } => {
+            is_discardable(condition) && builds_safely(then) && builds_safely(otherwise)
+        }
+        ExpressionKind::Case { scrutinees, alternatives } => {
+            scrutinees.iter().all(is_discardable)
+                && alternatives.iter().all(|alternative| match &alternative.body {
+                    Guarded::Unconditional(body) => builds_safely(body),
+                    Guarded::Guards(branches) => branches.iter().all(|branch| {
+                        branch.guards.iter().all(|guard| is_discardable(guard.value()))
+                            && builds_safely(&branch.body)
+                    }),
+                })
+        }
+        ExpressionKind::Foreign { foreign, .. } => foreign.is_effectful(),
+        ExpressionKind::EffectEach { .. }
+        | ExpressionKind::Apply { .. }
+        | ExpressionKind::Local(_)
+        | ExpressionKind::Function(_) => true,
+        _ => false,
+    }
+}
+
+fn runs_effect(known: &impl KnownFunctions, expression: &Expression) -> bool {
+    effect_runs(known, expression, false)
+}
+
+fn effect_runs(known: &impl KnownFunctions, expression: &Expression, running: bool) -> bool {
+    match &expression.kind {
+        ExpressionKind::Foreign { foreign: Foreign::UnsafePerformEffect, .. } => true,
+        ExpressionKind::Foreign { foreign: Foreign::RunEffect, arguments } => {
+            arguments.iter().any(|argument| effect_runs(known, argument, true))
+        }
+        ExpressionKind::Lambda { .. } => false,
+        ExpressionKind::EffectBind { action: built, .. }
+        | ExpressionKind::EffectEach { array: built, .. }
+            if !running =>
+        {
+            effect_runs(known, built, running)
+        }
+        ExpressionKind::Apply { function, arguments } => {
+            let callee_runs = match &function.kind {
+                ExpressionKind::Lambda { body, .. } => effect_runs(known, body, running),
+                ExpressionKind::Function(id) => known.known(*id).is_some_and(|callee| {
+                    !known.is_recursive(*id) && effect_runs(known, &callee.body, running)
+                }),
+                ExpressionKind::Local(id) => known.runs_effect_when_applied(*id),
+                _ => effect_runs(known, function, running),
+            };
+            callee_runs || arguments.iter().any(|argument| effect_runs(known, argument, running))
+        }
+        _ => {
+            let mut runs = false;
+            for_each_child(expression, &mut |child| {
+                runs = runs || effect_runs(known, child, running)
+            });
+            runs
+        }
+    }
 }
 
 /// Whether evaluating the expression may reach a failure: a pattern match
@@ -1350,7 +1430,7 @@ fn project(record: Expression, label: SmolStr, monotype: MonotypeId) -> Expressi
 
 /// Whether evaluating the expression can be skipped without a trace: it is
 /// pure, cannot fail, and calls nothing that could.
-fn is_discardable(expression: &Expression) -> bool {
+pub(crate) fn is_discardable(expression: &Expression) -> bool {
     match &expression.kind {
         ExpressionKind::Literal(_)
         | ExpressionKind::Unit
@@ -1370,6 +1450,63 @@ fn is_discardable(expression: &Expression) -> bool {
         ExpressionKind::Access { record: value, .. } | ExpressionKind::Coerce(value) => {
             is_discardable(value)
         }
+        _ => false,
+    }
+}
+
+fn reachable(alternatives: Vec<Alternative>) -> Vec<Alternative> {
+    let mut kept: Vec<Alternative> = Vec::with_capacity(alternatives.len());
+    for alternative in alternatives {
+        let shadowed = kept.iter().any(|earlier| {
+            matches!(earlier.body, Guarded::Unconditional(_))
+                && earlier
+                    .patterns
+                    .iter()
+                    .zip(&alternative.patterns)
+                    .all(|(earlier, later)| subsumes(earlier, later))
+        });
+        if !shadowed {
+            kept.push(alternative);
+        }
+    }
+    kept
+}
+
+fn irrefutable(pattern: &Pattern) -> bool {
+    match &pattern.kind {
+        PatternKind::Wildcard | PatternKind::Variable(_) => true,
+        PatternKind::Named { pattern, .. } => irrefutable(pattern),
+        PatternKind::Record(fields) => fields.iter().all(|(_, field)| irrefutable(field)),
+        _ => false,
+    }
+}
+
+fn subsumes(earlier: &Pattern, later: &Pattern) -> bool {
+    let each = |earlier: &[Pattern], later: &[Pattern]| {
+        earlier.len() == later.len()
+            && earlier.iter().zip(later).all(|(earlier, later)| subsumes(earlier, later))
+    };
+    match (&earlier.kind, &later.kind) {
+        _ if irrefutable(earlier) => true,
+        (PatternKind::Named { pattern, .. }, _) => subsumes(pattern, later),
+        (_, PatternKind::Named { pattern, .. }) => subsumes(earlier, pattern),
+        (PatternKind::Literal(earlier), PatternKind::Literal(later)) => {
+            literals_equal(earlier, later) == Some(true)
+        }
+        (PatternKind::Array(earlier), PatternKind::Array(later)) => each(earlier, later),
+        (PatternKind::Record(earlier), PatternKind::Record(later)) => {
+            earlier.iter().all(|(label, field)| {
+                later.iter().any(|(other, pattern)| other == label && subsumes(field, pattern))
+            })
+        }
+        (
+            PatternKind::Constructor { constructor: earlier, arguments: x, .. },
+            PatternKind::Constructor { constructor: later, arguments: y, .. },
+        )
+        | (
+            PatternKind::Closure { tag: earlier, captures: x },
+            PatternKind::Closure { tag: later, captures: y },
+        ) => earlier == later && each(x, y),
         _ => false,
     }
 }
@@ -1514,6 +1651,10 @@ fn alternatives_size(alternatives: &[Alternative]) -> usize {
 pub(crate) trait KnownFunctions {
     fn known(&self, id: FunctionId) -> Option<&Function>;
     fn is_recursive(&self, id: FunctionId) -> bool;
+
+    fn runs_effect_when_applied(&self, _local: LocalId) -> bool {
+        false
+    }
 }
 
 impl KnownFunctions for Simplifier<'_> {
@@ -1523,6 +1664,10 @@ impl KnownFunctions for Simplifier<'_> {
 
     fn is_recursive(&self, id: FunctionId) -> bool {
         self.recursive[id.0 as usize]
+    }
+
+    fn runs_effect_when_applied(&self, local: LocalId) -> bool {
+        self.unsafely_effectful_locals.contains(&local)
     }
 }
 

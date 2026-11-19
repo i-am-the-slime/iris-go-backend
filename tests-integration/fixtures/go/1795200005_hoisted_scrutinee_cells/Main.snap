@@ -1,0 +1,105 @@
+---
+source: tests-integration/src/fixtures.rs
+---
+// Data/List/Types/types.go
+package types
+
+type ListInt struct {
+	Cons1 *ListInt
+	Cons0 int32
+	Tag   uint8
+}
+
+const (
+	ListIntNil = iota
+	ListIntCons
+)
+
+var SharedListIntNil = &ListInt{Tag: ListIntNil}
+
+// main.go
+package main
+
+import (
+	list "fixture/Data/List/Types"
+	"fixture/shared"
+	"github.com/i-am-the-slime/purs-backend-go/go-support/alloc"
+	"github.com/i-am-the-slime/purs-backend-go/go-support/exception"
+	"os"
+)
+
+type Shape struct {
+	Leaf    *list.ListInt
+	Branch0 *Shape
+	Branch1 shared.FlagsItems
+	Branch2 *Shape
+	Wrap    *Shape
+	Tag     uint8
+}
+
+const (
+	ShapeLeaf = iota
+	ShapeBranch
+	ShapeWrap
+)
+
+func main_() int32 {
+	accumulator := list.SharedListIntNil
+	var listIntCells alloc.Cells[list.ListInt]
+	for index := len([]int32{}) - 1; index >= 0; index-- {
+		i := []int32{}[index]
+		accumulator = listIntCells.New(list.ListInt{Tag: list.ListIntCons, Cons0: i, Cons1: accumulator})
+	}
+	scrutinee := &Shape{Tag: ShapeLeaf, Leaf: accumulator}
+	var result2 *Shape
+	if scrutinee.Tag == ShapeBranch && scrutinee.Branch0.Tag == ShapeWrap && scrutinee.Branch2.Tag == ShapeBranch {
+		accumulator2 := list.SharedListIntNil
+		var listIntCells2 alloc.Cells[list.ListInt]
+		for index := len([]int32{}) - 1; index >= 0; index-- {
+			i := []int32{}[index]
+			accumulator2 = listIntCells2.New(list.ListInt{Tag: list.ListIntCons, Cons0: i, Cons1: accumulator2})
+		}
+		*scrutinee = Shape{Tag: ShapeLeaf, Leaf: accumulator2}
+		result2 = scrutinee
+	} else if scrutinee.Tag == ShapeLeaf && scrutinee.Leaf.Tag == list.ListIntCons {
+		accumulator2 := list.SharedListIntNil
+		var listIntCells3 alloc.Cells[list.ListInt]
+		for index := len([]int32{}) - 1; index >= 0; index-- {
+			i := []int32{}[index]
+			accumulator2 = listIntCells3.New(list.ListInt{Tag: list.ListIntCons, Cons0: i, Cons1: accumulator2})
+		}
+		*scrutinee = Shape{Tag: ShapeLeaf, Leaf: accumulator2}
+		result2 = scrutinee
+	} else {
+		array := []int32{1}
+		accumulator2 := list.SharedListIntNil
+		var listIntCells4 alloc.Cells[list.ListInt]
+		for index := len(array) - 1; index >= 0; index-- {
+			i := array[index]
+			accumulator2 = listIntCells4.New(list.ListInt{Tag: list.ListIntCons, Cons0: i, Cons1: accumulator2})
+		}
+		result2 = &Shape{Tag: ShapeLeaf, Leaf: accumulator2}
+	}
+	var result int32
+	if result2.Tag == ShapeLeaf && result2.Leaf.Tag == list.ListIntCons {
+		n := result2.Leaf.Cons0
+		result = n
+	} else {
+		result = 0
+	}
+	return result
+}
+
+func main() {
+	defer exception.ReportUncaught()
+	exitStatus := main_()
+	os.Exit(int(exitStatus))
+}
+
+// shared/shared.go
+package shared
+
+type FlagsItems struct {
+	Flags []struct{}
+	Items int32
+}

@@ -1,0 +1,124 @@
+---
+source: tests-integration/src/fixtures.rs
+---
+// Data/Ordering/ordering.go
+package ordering
+
+type Ordering uint8
+
+const (
+	OrderingLT Ordering = iota
+	OrderingGT
+	OrderingEQ
+)
+
+// Data/Tuple/tuple.go
+package tuple
+
+type TupleIntUnit struct {
+	Second struct{}
+	First  int32
+}
+
+func SndIntUnit(tuple TupleIntUnit) {
+}
+
+// main.go
+package main
+
+import (
+	"fixture/Data/Ordering"
+	"fixture/Data/Tuple"
+	"github.com/i-am-the-slime/purs-backend-go/go-support/array"
+	"github.com/i-am-the-slime/purs-backend-go/go-support/direct"
+	"github.com/i-am-the-slime/purs-backend-go/go-support/exception"
+	"github.com/i-am-the-slime/purs-backend-go/go-support/prim"
+	"os"
+)
+
+func main_() int32 {
+	array2 := []int32{1}
+	accumulator2 := func(_ int32) {
+	}
+	for range array2 {
+		accumulator2 = func(_ int32) {
+		}
+	}
+	return int32(len(units)) + prim.MultiplyInt32(int32(len(array.Scanl(func(_ struct{}, _ int32) struct{} {
+		return struct{}{}
+	}, array.Foldr(func(_ struct{}, accumulator struct{}) struct{} {
+		return struct{}{}
+	}, struct{}{}, units), []int32{1, 2}))), 10) + prim.MultiplyInt32(int32(len(array.ZipWith(func(_ int32, _ struct{}) struct{} {
+		return struct{}{}
+	}, []int32{1}, units))), 100) + prim.MultiplyInt32(int32(len(array.Map(func(i int32) struct{} {
+		accumulator2(i)
+		return struct{}{}
+	}, []int32{1, 2, 3}))), 1000)
+}
+
+var units = initializeUnits()
+
+func initializeUnits() []struct{} {
+	defer exception.ReportUncaught()
+	array2 := []struct{}{struct{}{}, struct{}{}}
+	mapped := make([]tuple.TupleIntUnit, len(array2))
+	for slot, unit := range array2 {
+		i := int32(slot)
+		mapped[slot] = tuple.TupleIntUnit{First: i, Second: unit}
+	}
+	indexedAndSorted := direct.SortBy(func(_ tuple.TupleIntUnit, _ tuple.TupleIntUnit) ordering.Ordering {
+		return ordering.OrderingEQ
+	}, func(value ordering.Ordering) int32 {
+		switch value {
+		case ordering.OrderingGT:
+			return 1
+		case ordering.OrderingEQ:
+			return 0
+		default: // ordering.OrderingLT
+			return -1
+		}
+	}, mapped)
+	var result []struct{}
+	if 0 < int32(len(indexedAndSorted)) {
+		array3 := array.UnsafeThaw([]tuple.TupleIntUnit{indexedAndSorted[0]})()
+		for range indexedAndSorted {
+			array.UnsafeFreeze(array3)()
+		}
+		performed := array.UnsafeFreeze(array3)()
+		array4 := direct.SortBy(func(x tuple.TupleIntUnit, y tuple.TupleIntUnit) ordering.Ordering {
+			i := x.First
+			i2 := y.First
+			if i < i2 {
+				return ordering.OrderingLT
+			}
+			if i == i2 {
+				return ordering.OrderingEQ
+			}
+			return ordering.OrderingGT
+		}, func(value ordering.Ordering) int32 {
+			switch value {
+			case ordering.OrderingGT:
+				return 1
+			case ordering.OrderingEQ:
+				return 0
+			default: // ordering.OrderingLT
+				return -1
+			}
+		}, performed)
+		mapped2 := make([]struct{}, len(array4))
+		for index, element := range array4 {
+			tuple.SndIntUnit(element)
+			mapped2[index] = struct{}{}
+		}
+		result = mapped2
+	} else {
+		result = []struct{}{}
+	}
+	return result
+}
+
+func main() {
+	defer exception.ReportUncaught()
+	exitStatus := main_()
+	os.Exit(int(exitStatus))
+}

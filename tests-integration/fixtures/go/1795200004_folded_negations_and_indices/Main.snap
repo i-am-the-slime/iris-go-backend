@@ -1,0 +1,49 @@
+---
+source: tests-integration/src/fixtures.rs
+---
+// Data/Maybe/maybe.go
+package maybe
+
+type Int int64
+
+const NoInt Int = 1 << 32
+
+// main.go
+package main
+
+import (
+	"fixture/Data/Maybe"
+	"github.com/i-am-the-slime/purs-backend-go/go-support/exception"
+	"os"
+)
+
+func main_() int32 {
+	var result int32
+	if missing == maybe.NoInt {
+		result = 10
+	} else {
+		result = int32(missing)
+	}
+	return negated + result + 101
+}
+
+var negated int32 = 1
+
+var missing = initializeMissing()
+
+func initializeMissing() maybe.Int {
+	defer exception.ReportUncaught()
+	var result maybe.Int
+	if 0 < int32(len([]any{})) {
+		result = maybe.NoInt
+	} else {
+		result = maybe.NoInt
+	}
+	return result
+}
+
+func main() {
+	defer exception.ReportUncaught()
+	exitStatus := main_()
+	os.Exit(int(exitStatus))
+}

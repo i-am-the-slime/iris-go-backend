@@ -33,9 +33,10 @@ func initializeMain_() shared.MainResult {
 		}
 	}
 	ref3 = accumulator
+	i := ref
 	modified := shared.StateValue{State: 0, Value: ref2}
 	ref2 = modified.State
-	i := modified.Value
+	i2 := modified.Value
 	mapped := make([]int32, len(numbers))
 	for index, x := range numbers {
 		s_ := ref2 + 1
@@ -50,7 +51,7 @@ func initializeMain_() shared.MainResult {
 	ref4 = accumulator2 + int32(len(mapped))
 	modified2 := shared.StateValue{State: 0, Value: ref2}
 	ref2 = modified2.State
-	i2 := modified2.Value
+	i3 := modified2.Value
 	found := false
 	for _, x := range numbers {
 		s_ := ref2 + 1
@@ -62,6 +63,13 @@ func initializeMain_() shared.MainResult {
 		}
 	}
 	ref5 = found
+	i4 := ref2
+	i5 := ref3
+	i6 := ref4
+	boolean := ref5
+	f := func(value int32) shared.MainResult {
+		return shared.MainResult{Fused: i5, Shared: i6, EarlyExit: boolean, PredicateCalls: i, FusedMappingCalls: i2, SharedMappingCalls: i3, EarlyExitMappingCalls: i4, KeptLength: value}
+	}
 	var count int32 = 0
 	for _, value := range numbers {
 		value2 := prim.MultiplyInt32(value, 3)
@@ -69,7 +77,7 @@ func initializeMain_() shared.MainResult {
 			count = count + 1
 		}
 	}
-	performed := shared.MainResult{Fused: ref3, Shared: ref4, EarlyExit: ref5, PredicateCalls: ref, FusedMappingCalls: i, SharedMappingCalls: i2, EarlyExitMappingCalls: ref2, KeptLength: count}
+	performed := f(count)
 	return performed
 }
 
