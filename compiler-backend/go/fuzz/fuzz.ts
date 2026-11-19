@@ -8,7 +8,7 @@
 // Features: a comma list of names, each optionally weighted (`prims=2`), or signed (`+surrogates`,
 // `-aff`) to adjust the defaults; a list of bare names enables only those.
 
-import { appendFileSync, existsSync, mkdirSync, readFileSync, readdirSync, statSync, writeFileSync } from "node:fs";
+import { appendFileSync, cpSync, existsSync, mkdirSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { Program, printProgram } from "./ast.ts";
 import { FEATURES, GeneratorOptions, defaultWeights, generateProgram, parseFeatures } from "./generate.ts";
@@ -22,6 +22,7 @@ import {
   Worker,
   defaultToolchain,
   ensureTemplate,
+  run,
   saveResult,
 } from "./pipeline.ts";
 
@@ -161,6 +162,48 @@ const commandMinimise = async (arguments_: Arguments): Promise<void> => {
   }
 };
 
+/**
+ * Runs a kept program's minimal.purs (or its source) through purs's own JavaScript backend via
+ * spago, a third opinion that says whether Iris's JavaScript or its Go disagrees with purs.
+ */
+const commandAttribute = async (arguments_: Arguments): Promise<void> => {
+  const { flags, positional } = arguments_;
+  const work = flagString(flags, "work", join(SCRATCHPAD, "fuzz-work"));
+  const toolchain = defaultToolchain();
+  const template = await ensureTemplate(work, toolchain);
+  const project = join(work, "purs-oracle");
+  if (!existsSync(join(project, "spago.lock"))) {
+    mkdirSync(join(project, "src", "Fuzz"), { recursive: true });
+    cpSync(join(template, "spago.yaml"), join(project, "spago.yaml"));
+    cpSync(join(template, "spago.lock"), join(project, "spago.lock"));
+  }
+  for (const directory of positional) {
+    const sources = readdirSync(directory).filter((name) => name.endsWith(".purs"));
+    const source = sources.includes("minimal.purs") ? "minimal.purs" : sources[0];
+    const text = readFileSync(join(directory, source), "utf8");
+    const moduleName = /^module (\S+)/m.exec(text)?.[1] ?? "Fuzz.Unknown";
+    for (const stale of readdirSync(join(project, "src", "Fuzz"))) rmSync(join(project, "src", "Fuzz", stale));
+    writeFileSync(join(project, "src", "Fuzz", `${moduleName.replace(/^Fuzz\./, "")}.purs`), text);
+    const build = await run(["spago", "build", "--quiet"], { cwd: project, timeoutMs: 600_000 });
+    if (build.status !== 0) {
+      console.log(`${directory}: purs build failed\n${(build.stdout + build.stderr).split("\n").filter((l) => /Error|error/.test(l)).slice(0, 5).join("\n")}`);
+      continue;
+    }
+    const indexPath = join(project, "output", moduleName, "index.js");
+    const purs = await run(["bun", "-e", `import(${JSON.stringify(indexPath)}).then((module) => module.main())`], { cwd: project, timeoutMs: toolchain.timeouts.run });
+    const read = (name: string) => (existsSync(join(directory, name)) ? readFileSync(join(directory, name), "utf8") : null);
+    const js = read("minimal.js.out")?.split("\n[stderr]\n")[0] ?? read("js.out");
+    const go = read("minimal.go.out")?.split("\n[stderr]\n")[0] ?? read("go.out");
+    const verdict = purs.stdout === js && purs.stdout === go ? "all three agree"
+      : purs.stdout === js ? "purs agrees with Iris JS: Go-side"
+      : purs.stdout === go ? "purs agrees with Iris Go: JS-side"
+      : "purs disagrees with both";
+    writeFileSync(join(directory, "purs.out"), purs.stdout + (purs.stderr ? `\n[stderr]\n${purs.stderr}` : ""));
+    writeFileSync(join(directory, "attribution.txt"), `${verdict}\npurs exit ${purs.status}\n`);
+    console.log(`${directory}: ${verdict} (purs exit ${purs.status})`);
+  }
+};
+
 /** Groups every kept failure by signature, preferring the minimised form where one exists. */
 const commandReport = (arguments_: Arguments): void => {
   const results = flagString(arguments_.flags, "results", join(SCRATCHPAD, "fuzz-results"));
@@ -225,6 +268,9 @@ const main = async () => {
       break;
     case "report":
       commandReport(arguments_);
+      break;
+    case "attribute":
+      await commandAttribute(arguments_);
       break;
     case "features":
       console.log(FEATURES.join("\n"));

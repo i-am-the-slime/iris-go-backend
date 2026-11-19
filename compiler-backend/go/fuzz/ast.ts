@@ -222,8 +222,11 @@ export const printExpr = (expr: Expr, indent: string): string => {
     case "record":
       if (expr.fields.length === 0) return "{}";
       return `{ ${expr.fields.map((field) => `${field.name}: ${printOperand(field.value, deeper)}`).join(", ")} }`;
-    case "access":
-      return `${printAtom(expr.record, indent)}.${expr.field}`;
+    case "access": {
+      // purs rejects a field access directly on a record literal (Iris accepts it).
+      const record = expr.record.kind === "record" ? `(${printExpr(expr.record, indent)})` : printAtom(expr.record, indent);
+      return `${record}.${expr.field}`;
+    }
     case "update": {
       const record = expr.record.kind === "variable" ? expr.record.name : `(${printExpr(expr.record, indent)})`;
       return `${record} { ${expr.fields.map((field) => `${field.name} = ${printOperand(field.value, deeper)}`).join(", ")} }`;

@@ -30,6 +30,7 @@ export const FAILURE_CLASSES: Classification[] = [
   "GO PANIC",
   "TIMEOUT JS",
   "TIMEOUT GO",
+  "JS STACK OVERFLOW",
   "GENERATOR ILL-TYPED",
 ];
 
@@ -216,7 +217,9 @@ export class Worker {
         const errors = diagnostics.split(/\n(?=(?:Error|Warning)! · )/).filter((block) => block.startsWith("Error!"));
         const codes = errors.map((block) => /\[(\w+)\]/.exec(block)?.[1] ?? "?");
         const message = errors[0]?.split("\n").find((line) => /^\s*•\s+\S/.test(line))?.replace(/^\s*•\s*/, "") ?? "";
-        failed.push(this.emptyResult(program, "GENERATOR ILL-TYPED", `${codes.slice(0, 3).join(",")}: ${message.slice(0, 200)}`, diagnostics));
+        // A module that checks but whose JavaScript Iris cannot generate is Iris's failure, not the generator's.
+        const classification: Classification = codes.every((code) => /Codegen|Internal|Panic/i.test(code)) ? "IRIS JS ERROR" : "GENERATOR ILL-TYPED";
+        failed.push(this.emptyResult(program, classification, `${codes.slice(0, 3).join(",")}: ${message.slice(0, 200)}`, diagnostics));
         rmSync(join(this.directory, moduleFile(program.moduleName)), { force: true });
       }
       remaining = remaining.filter((program) => !failing.has(program.moduleName));

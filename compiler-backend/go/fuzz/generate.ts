@@ -1136,8 +1136,15 @@ export class Generator {
   }
 
   private charLiteral(): Expr {
-    const pool = this.on("surrogates") && this.rng.chance(0.15) ? SURROGATE_CHARS : CHAR_EDGES;
-    return literal(T.Char, this.rng.pick(pool));
+    // Iris's JavaScript codegen rejects a Char literal holding a lone surrogate (recorded as a
+    // finding), so surrogates reach programs through String literals and `toEnum` only.
+    return literal(T.Char, this.rng.pick(CHAR_EDGES));
+  }
+
+  /** A lone surrogate Char built at run time, since the literal form does not compile to JavaScript. */
+  private surrogateChar(): Expr {
+    const unit = this.rng.pick(SURROGATE_CHARS).replace(/^'\\x/, "").replace(/'$/, "");
+    return call(T.Char, "fromMaybe", literal(T.Char, "'a'"), annotate(T.maybe(T.Char), call(T.maybe(T.Char), "toEnum", literal(T.Int, String(parseInt(unit, 16))))));
   }
 
   private stringLiteral(): Expr {
@@ -1673,6 +1680,7 @@ export class Generator {
     const sub = () => this.expr(char, env, depth - 1);
     const productions: Production[] = [
       { feature: "strings", weight: 3, build: () => this.charLiteral() },
+      { feature: "surrogates", weight: 2, build: () => this.surrogateChar() },
       { feature: "strings", weight: 2, build: () => call(char, "fromMaybe", sub(), annotate(T.maybe(char), call(T.maybe(char), "toEnum", this.expr(T.Int, env, depth - 1)))) },
       { feature: "strings", weight: 2, build: () => call(char, "fromMaybe", sub(), call(T.maybe(char), "CU.charAt", this.expr(T.Int, env, depth - 1), this.expr(T.String, env, depth - 1))) },
       { feature: "strings", weight: 1, build: () => call(char, "fromMaybe", sub(), call(T.maybe(char), "Char.fromCharCode", this.expr(T.Int, env, depth - 1))) },
