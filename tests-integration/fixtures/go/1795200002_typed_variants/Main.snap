@@ -1,0 +1,106 @@
+---
+source: tests-integration/src/fixtures.rs
+---
+// Data/Variant/variant.go
+package variant
+
+type CircleLabelSquare struct {
+	Label  string
+	Circle float64
+	Square int32
+	Tag    uint8
+}
+
+const (
+	CircleLabelSquareCircle = iota
+	CircleLabelSquareLabel
+	CircleLabelSquareSquare
+)
+
+type CircleSquare struct {
+	Circle float64
+	Square int32
+	Tag    uint8
+}
+
+const (
+	CircleSquareCircle = iota
+	CircleSquareSquare
+)
+
+// main.go
+package main
+
+import (
+	"fixture/Data/Variant"
+	"fmt"
+	"github.com/i-am-the-slime/purs-backend-go/go-support/exception"
+	"github.com/i-am-the-slime/purs-backend-go/go-support/prim"
+)
+
+var main_ = initializeMain_()
+
+func initializeMain_() []string {
+	defer exception.ReportUncaught()
+	n := opaque(1)
+	var result float64
+	if n > 0 {
+		result = 2.25
+	} else if prim.MultiplyInt32(n, n) > 0 {
+		result = 4.0
+	} else {
+		result = 0.0
+	}
+	n2 := opaque(-2)
+	var result2 float64
+	if n2 > 0 {
+		result2 = 2.25
+	} else if prim.MultiplyInt32(n2, n2) > 0 {
+		result2 = 4.0
+	} else {
+		result2 = 0.0
+	}
+	n3 := opaque(3)
+	var result3 string
+	if n3 > 0 {
+		result3 = "circle " + prim.ShowNumber(float64(1.5))
+	} else {
+		result3 = "square " + prim.ShowInt(n3)
+	}
+	n4 := opaque(0)
+	var result4 variant.CircleLabelSquare
+	if n4 > 0 {
+		result4 = variant.CircleLabelSquare{Tag: variant.CircleLabelSquareCircle, Circle: 1.5}
+	} else {
+		result4 = variant.CircleLabelSquare{Tag: variant.CircleLabelSquareSquare, Square: n4}
+	}
+	return []string{prim.ShowNumber(result), prim.ShowNumber(result2), result3, "tag", labelOnly(result4), labelOnly(variant.CircleLabelSquare{Tag: variant.CircleLabelSquareLabel, Label: "x"})}
+}
+
+func opaque(x int32) int32 {
+	for {
+		if x == 12345 {
+			continue
+		}
+		return x
+	}
+}
+
+func labelOnly(variant2 variant.CircleLabelSquare) string {
+	switch variant2.Tag {
+	case variant.CircleLabelSquareCircle:
+		return labelOnlyX(variant.CircleSquare{Tag: variant.CircleSquareCircle, Circle: variant2.Circle})
+	case variant.CircleLabelSquareLabel:
+		return "label " + variant2.Label
+	default: // variant.CircleLabelSquareSquare
+		return labelOnlyX(variant.CircleSquare{Tag: variant.CircleSquareSquare, Square: variant2.Square})
+	}
+}
+
+func labelOnlyX(variant variant.CircleSquare) string {
+	return "a shape"
+}
+
+func main() {
+	fmt.Println(main_)
+}

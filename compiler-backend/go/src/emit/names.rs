@@ -282,6 +282,10 @@ where
         match self.context.types.lookup(type_id).clone() {
             Type::Application(function, argument) => {
                 self.type_parts(function, parts)?;
+                if let Some(labels) = self.context.variant_labels(function, argument)? {
+                    parts.push(NamePart::Text(labels));
+                    return Ok(());
+                }
                 self.type_parts(argument, parts)?;
             }
             Type::Function(argument, result) => {

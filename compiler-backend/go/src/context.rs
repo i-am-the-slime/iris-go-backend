@@ -4,7 +4,7 @@ use building_types::QueryResult;
 use checking::CheckedModule;
 use files::FileId;
 use indexing::{IndexedModule, TermItemId, TypeItemId};
-use rustc_hash::FxHashMap;
+use rustc_hash::{FxHashMap, FxHashSet};
 use smol_str::SmolStr;
 
 use crate::naming::capitalise;
@@ -21,6 +21,7 @@ pub struct Context<'q, Q> {
     /// Newtypes, with their arguments, that canonicalisation erased to the
     /// type they wrap, in the order met; a record may be named after one.
     pub erased_newtypes: Vec<ErasedNewtype>,
+    pub erased_variant_rows: FxHashSet<checking::TypeId>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -54,6 +55,7 @@ where
             recursive_newtypes: FxHashMap::default(),
             canonical: FxHashMap::default(),
             erased_newtypes: vec![],
+            erased_variant_rows: FxHashSet::default(),
         }
     }
 
@@ -107,6 +109,10 @@ where
         match self.types.lookup(type_id).clone() {
             Type::Application(function, argument) => {
                 self.type_suffix(function, output)?;
+                if let Some(labels) = self.variant_labels(function, argument)? {
+                    output.push_str(&labels);
+                    return Ok(());
+                }
                 self.type_suffix(argument, output)?;
             }
             Type::Function(argument, result) => {
@@ -132,6 +138,27 @@ where
             _ => {}
         }
         Ok(())
+    }
+
+    pub fn variant_labels(
+        &mut self,
+        function: checking::TypeId,
+        argument: checking::TypeId,
+    ) -> QueryResult<Option<String>> {
+        use checking::core::Type;
+        let function = self.types.strip_annotations(function);
+        let Type::Constructor(file_id, item) = self.types.lookup(function).clone() else {
+            return Ok(None);
+        };
+        let module = self.module(file_id)?;
+        let name = module.indexed.items[item].name.clone().unwrap_or_default();
+        if crate::primitives::known_type(&module.name, &name) != Some(crate::primitives::KnownType::Variant) {
+            return Ok(None);
+        }
+        let argument = self.types.strip_annotations(argument);
+        let Type::Row(row) = self.types.lookup(argument).clone() else { return Ok(None) };
+        let row = self.queries.lookup_row_type(row).clone();
+        Ok(Some(row.fields.iter().map(|field| capitalise(&field.label)).collect()))
     }
 
     pub fn is_type(

@@ -391,12 +391,33 @@ where
 
     /// A data type's global: its name followed by its type arguments.
     pub(super) fn data_type_global(&mut self, data: &DataType) -> GoResult<String> {
+        if let Some(labels) = self.variant_labels(data)? {
+            let full = format!("Variant{labels}");
+            let parts = vec![
+                names::NamePart::Stutter("Variant".into()),
+                names::NamePart::Text(labels),
+            ];
+            return Ok(self.pending_global(identifier(&full), names::PendingSpelling::Parts(parts)));
+        }
         let mut full = self.context.type_name(data.file_id, data.item)?.to_string();
         for &argument in data.arguments.iter() {
             self.context.type_suffix(argument, &mut full)?;
         }
         let parts = self.data_parts(data)?;
         Ok(self.pending_global(identifier(&full), names::PendingSpelling::Parts(parts)))
+    }
+
+    pub(super) fn variant_labels(&mut self, data: &DataType) -> GoResult<Option<String>> {
+        if self.monotypes.variant_row(data).is_none() {
+            return Ok(None);
+        }
+        let constructors = self
+            .monotypes
+            .constructors(&mut self.context, data)
+            .map_err(Failure::in_code_generation)?;
+        let labels: String =
+            constructors.iter().map(|constructor| capitalise(&identifier(&constructor.name))).collect();
+        Ok(Some(labels))
     }
 
     pub(super) fn data_layout(&mut self, data: &DataType) -> GoResult<DataLayout> {
@@ -432,7 +453,7 @@ where
             let tag = self.global_name(Spelling::derived(
                 "",
                 name.clone(),
-                &identifier(&constructor.name),
+                &capitalise(&identifier(&constructor.name)),
             ));
             let fields = match &plan {
                 Some(plan) => {

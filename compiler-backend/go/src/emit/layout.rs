@@ -17,6 +17,7 @@
 use rustc_hash::FxHashSet;
 
 use super::{Emitter, identifier};
+use crate::naming::capitalise;
 use crate::error::GoResult;
 use crate::monotype::{DataConstructor, DataType, Failure, Monotype, MonotypeId, Monotypes};
 use crate::syntax::GoType;
@@ -350,7 +351,7 @@ impl NamedSlots {
 
 /// The slots of a constructor that shares them with no other.
 fn own_slots(constructor: &DataConstructor, constructors: usize, naming: Naming) -> Vec<String> {
-    let name = identifier(&constructor.name);
+    let name = capitalise(&identifier(&constructor.name));
     let count = constructor.fields.len();
     match naming {
         Naming::Readable if count == 1 => vec![name],

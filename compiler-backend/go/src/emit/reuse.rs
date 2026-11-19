@@ -291,28 +291,28 @@ impl<'a, C: Cells> Planner<'a, C> {
                     .any(|&owner| after.iter().any(|expression| uses_local(expression, owner)))
         })?;
         let spare = stock.remove(position);
-        self.used(&spare);
-        Some(spare.local)
+        Some(self.used(&spare))
     }
 
-    fn used(&mut self, spare: &Spare) {
-        let alternative = match spare.origin {
+    fn used(&mut self, spare: &Spare) -> LocalId {
+        let (local, alternative) = match spare.origin {
             Origin::Donor => {
                 self.plan.donor_used = true;
-                return;
+                return spare.local;
             }
-            Origin::Scrutinee { alternative } => alternative,
+            Origin::Scrutinee { alternative } => (spare.local, alternative),
             Origin::Hoisted { case, position, alternative } => {
-                self.plan.hoisted.insert((case, position), spare.local);
-                alternative
+                let local = *self.plan.hoisted.entry((case, position)).or_insert(spare.local);
+                (local, alternative)
             }
             Origin::Field { pattern, alternative } => {
                 self.plan.pattern_cells.insert(pattern, spare.local);
                 self.plan.materialized.insert(spare.local);
-                alternative
+                (spare.local, alternative)
             }
         };
         self.materialize(alternative);
+        local
     }
 
     fn materialize(&mut self, alternative: usize) {

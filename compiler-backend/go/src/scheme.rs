@@ -66,6 +66,7 @@ pub enum Decision {
     Witnesses(TypeId),
     Continuations(TypeId),
     FamilyErasure(TypeId),
+    VariantErasure(TypeId),
     ContinuationFamily(SchemeKey),
     Accumulator(SchemeKey),
 }
@@ -248,6 +249,14 @@ impl SchemeInstantiations {
     pub fn continuations(&self, family: TypeId) -> &[SchemeKey] {
         self.note_read(Decision::Continuations(family));
         self.families.get(&family).map_or(&[], |family| family.continuations.as_slice())
+    }
+
+    pub fn note_variant_read(&self, row: TypeId) {
+        self.note_read(Decision::VariantErasure(row));
+    }
+
+    pub fn erase_variant(&mut self, row: TypeId) {
+        self.note_write(Decision::VariantErasure(row));
     }
 
     pub fn family_erasure(&self, family: TypeId) -> Option<Erasure> {

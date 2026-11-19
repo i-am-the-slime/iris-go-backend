@@ -39,7 +39,8 @@ where
                 let continuation = self.continuation_type(file_id, term, instantiations)?;
                 self.run_exists(scope, family, continuation, monotype)
             }
-            _ => Ok(None),
+            (Primitive::MakeExists | Primitive::RunExists, _) => Ok(None),
+            _ => self.variant_primitive(scope, primitive, types, monotype),
         }
     }
 
@@ -284,6 +285,17 @@ where
             return;
         }
         match (self.monotypes.get(from).clone(), self.monotypes.get(to).clone()) {
+            (Monotype::Data(source), Monotype::Data(target))
+                if self.monotypes.variant_row(&source).is_some()
+                    && self.monotypes.variant_row(&target).is_some() =>
+            {
+                self.note_variant_crossing(&source, &target);
+            }
+            (Monotype::Record(_), Monotype::Data(target))
+                if self.monotypes.variant_row(&target).is_some() =>
+            {
+                self.note_variant_narrowing(&target);
+            }
             (Monotype::Data(source), Monotype::Data(target)) => {
                 let families =
                     (self.monotypes.exists_family(&source), self.monotypes.exists_family(&target));
@@ -403,6 +415,7 @@ where
                     .map(|field| RecordField { label: field.label.clone(), monotype: erased });
                 Monotype::Record(fields.collect())
             }
+            Monotype::Data(data) if self.monotypes.variant_row(&data).is_some() => return monotype,
             Monotype::Data(data) => Monotype::Data(self.erased_arguments(&data)),
             Monotype::Recursive(data) => Monotype::Recursive(self.erased_arguments(&data)),
             _ => return monotype,

@@ -182,6 +182,7 @@ pub struct Monotypes {
     /// instantiations, one field per instantiation.
     instantiated_records: rustc_hash::FxHashSet<MonotypeId>,
     existential: Option<(FileId, TypeItemId)>,
+    variant: Option<(FileId, TypeItemId)>,
     collapsed: FxHashMap<MonotypeId, MonotypeId>,
 }
 
@@ -595,6 +596,21 @@ impl Monotypes {
             // `unsafeCoerce` to `VariantRep`, whose payload type depends on the
             // label at run time.
             ("Data.Variant", "Variant") => {
+                let Some(&row) = arguments.first() else {
+                    return Err(UnsupportedState::UnsaturatedType { name: name.to_string() }.into());
+                };
+                let closed = closed_row(context, row)?;
+                if let Some(row) = closed {
+                    self.schemes.note_variant_read(row);
+                }
+                if let Some(row) = closed
+                    && !context.erased_variant_rows.contains(&row)
+                    && self.converts_every_field(context, row, expansions)
+                {
+                    self.variant = Some((file_id, item));
+                    let data = self.data_type(context, file_id, item, Arc::from([row]))?;
+                    return Ok(self.intern(Monotype::Data(data)));
+                }
                 let Some(internal) = context.queries.module_file("Data.Variant.Internal") else {
                     return Err(open_type(context, type_id)?);
                 };
@@ -1148,6 +1164,11 @@ impl Monotypes {
             self.schemes.note_cached(Read::Constructors(data.clone()));
             return Ok(Arc::clone(constructors));
         }
+        if let Some(row) = self.variant_row(data) {
+            let constructors = self.variant_constructors(context, row)?;
+            self.constructors.insert(data.clone(), Arc::clone(&constructors));
+            return Ok(constructors);
+        }
         let reads_start = self.schemes.reads_len();
         let module = context.module(data.file_id)?;
         let terms = match &module.indexed.items[data.item].kind {
@@ -1231,6 +1252,55 @@ impl Monotypes {
     fn is_uninhabited_family(&self, monotype: MonotypeId) -> bool {
         let Monotype::Data(data) = self.get(monotype) else { return false };
         self.exists_family(data).is_some_and(|family| self.schemes.witnesses(family).is_empty())
+    }
+
+    fn converts_every_field<Q>(
+        &mut self,
+        context: &mut Context<'_, Q>,
+        row: TypeId,
+        expansions: usize,
+    ) -> bool
+    where
+        Q: checking::ExternalQueries,
+    {
+        let Type::Row(row_id) = context.types.lookup(row).clone() else { return false };
+        let fields = context.queries.lookup_row_type(row_id).fields.clone();
+        fields.iter().all(|field| self.convert(context, field.id, expansions).is_ok())
+    }
+
+    pub fn variant_type(&self) -> Option<(FileId, TypeItemId)> {
+        self.variant
+    }
+
+    pub fn variant_row(&self, data: &DataType) -> Option<TypeId> {
+        let variant = self.variant?;
+        let [row] = data.arguments[..] else { return None };
+        ((data.file_id, data.item) == variant).then_some(row)
+    }
+
+    fn variant_constructors<Q>(
+        &mut self,
+        context: &mut Context<'_, Q>,
+        row: TypeId,
+    ) -> Converted<Arc<[DataConstructor]>>
+    where
+        Q: checking::ExternalQueries,
+    {
+        let Type::Row(row_id) = context.types.lookup(row).clone() else {
+            return Err(open_type(context, row)?);
+        };
+        let row_type = context.queries.lookup_row_type(row_id).clone();
+        let mut constructors: Vec<DataConstructor> = Vec::with_capacity(row_type.fields.len());
+        for field in row_type.fields.iter() {
+            if constructors.iter().any(|known| known.name == field.label) {
+                continue;
+            }
+            let fields = vec![self.monotype(context, field.id)?];
+            let name = field.label.clone();
+            constructors.push(DataConstructor { term: None, name, fields, refuted: false });
+        }
+        constructors.sort_by(|left, right| left.name.cmp(&right.name));
+        Ok(Arc::from(constructors))
     }
 
     fn witness_constructors<Q>(
@@ -1396,6 +1466,52 @@ where
     canonicalise(context, type_id, expansions, expanding, true)
 }
 
+fn closed_row<Q>(context: &mut Context<'_, Q>, row: TypeId) -> QueryResult<Option<TypeId>>
+where
+    Q: checking::ExternalQueries,
+{
+    let row = context.types.strip_annotations(row);
+    let row = match context.types.lookup(row) {
+        Type::Row(row_id) if context.queries.lookup_row_type(*row_id).tail.is_none() => row,
+        _ => expand_synonyms(context, row)?,
+    };
+    let Type::Row(row_id) = context.types.lookup(row).clone() else { return Ok(None) };
+    let row_type = context.queries.lookup_row_type(row_id).clone();
+    let closed = row_type.tail.is_none()
+        && row_type.fields.iter().all(|field| !mentions_open_variable(context, field.id));
+    if !closed {
+        return Ok(None);
+    }
+    let canonical = erase_newtypes(context, row, 0, &mut vec![])?;
+    match context.types.lookup(canonical) {
+        Type::Row(_) => Ok(Some(canonical)),
+        _ => Ok(None),
+    }
+}
+
+fn mentions_open_variable<Q>(context: &Context<'_, Q>, type_id: TypeId) -> bool
+where
+    Q: checking::ExternalQueries,
+{
+    let type_id = context.types.strip_annotations(type_id);
+    match context.types.lookup(type_id).clone() {
+        Type::Free(_) | Type::Unknown(_) => true,
+        Type::Application(function, argument) | Type::Function(function, argument) => {
+            mentions_open_variable(context, function) || mentions_open_variable(context, argument)
+        }
+        Type::Forall(..) | Type::Constrained(..) => {
+            let (_, inner) = context.types.peel_quantifiers(type_id);
+            inner != type_id && mentions_open_variable(context, inner)
+        }
+        Type::Row(row) => {
+            let row = context.queries.lookup_row_type(row).clone();
+            row.fields.iter().any(|field| mentions_open_variable(context, field.id))
+                || row.tail.is_some_and(|tail| mentions_open_variable(context, tail))
+        }
+        _ => false,
+    }
+}
+
 pub fn data_argument<Q>(context: &mut Context<'_, Q>, type_id: TypeId) -> QueryResult<TypeId>
 where
     Q: checking::ExternalQueries,
@@ -1535,8 +1651,12 @@ where
                 }
                 return Ok(erased);
             }
+            let typed_variant = module.name == "Data.Variant"
+                && matches!(arguments[..], [row] if closed_row(context, row)?
+                    .is_some_and(|row| !context.erased_variant_rows.contains(&row)));
             if erase
                 && !arguments.is_empty()
+                && !typed_variant
                 && ignores_arguments(&module.name, module.indexed.items[item].name.as_deref())
             {
                 let empty = checking::core::RowType { fields: Arc::from([]), tail: None };

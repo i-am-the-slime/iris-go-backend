@@ -6,9 +6,40 @@ package variant
 
 import "fixture/shared"
 
-func Case_String(r shared.VariantRepOfValue) string {
-	panic("Data.Variant: pattern match failure [" + r.Type + "]")
+type InvalidLateMissing struct {
+	Missing string
+	Invalid int32
+	Late    shared.After
+	Tag     uint8
 }
+
+const (
+	InvalidLateMissingInvalid = iota
+	InvalidLateMissingLate
+	InvalidLateMissingMissing
+)
+
+type InvalidMissing struct {
+	Missing string
+	Invalid int32
+	Tag     uint8
+}
+
+const (
+	InvalidMissingInvalid = iota
+	InvalidMissingMissing
+)
+
+type LateMissing struct {
+	Missing string
+	Late    shared.After
+	Tag     uint8
+}
+
+const (
+	LateMissingLate = iota
+	LateMissingMissing
+)
 
 // Record/Studio/Shrink/shrink.go
 package shrink
@@ -51,73 +82,39 @@ func initializeMain_() []string {
 	return array.Append(mapped, array.Append(mapped2, array.Append(mapped3, []string{shrunk.Name + prim.ShowInt(shrunk.Base)})))
 }
 
-func byLabel(r shared.VariantRepOfValue) string {
-	if r.Type == "late" {
-		scrutinee := shared.Convert(r.Value.(shared.AfterOfValue))
-		return "late " + prim.ShowInt(scrutinee.After)
+func byLabel(variant2 variant.InvalidLateMissing) string {
+	switch variant2.Tag {
+	case variant.InvalidLateMissingInvalid:
+		return byLabelX(variant.InvalidMissing{Tag: variant.InvalidMissingInvalid, Invalid: variant2.Invalid})
+	case variant.InvalidLateMissingLate:
+		return "late " + prim.ShowInt(variant2.Late.After)
+	default: // variant.InvalidLateMissingMissing
+		return byLabelX(variant.InvalidMissing{Tag: variant.InvalidMissingMissing, Missing: variant2.Missing})
 	}
-	if r.Type == "invalid" {
-		return "invalid " + prim.ShowInt(r.Value.(int32))
-	}
-	if r.Type == "missing" {
-		return "missing " + r.Value.(string)
-	}
-	return variant.Case_String(r)
 }
 
-var problems = initializeProblems()
+var problems []variant.InvalidLateMissing = []variant.InvalidLateMissing{variant.InvalidLateMissing{Tag: variant.InvalidLateMissingMissing, Missing: "user"}, variant.InvalidLateMissing{Tag: variant.InvalidLateMissingInvalid, Invalid: 3}, variant.InvalidLateMissing{Tag: variant.InvalidLateMissingLate, Late: shared.After{After: 5}}}
 
-func initializeProblems() []shared.VariantRepOfValue {
-	defer exception.ReportUncaught()
-	return []shared.VariantRepOfValue{shared.Convert2(shared.VariantRepString{Type: "missing", Value: "user"}), shared.Convert3(shared.VariantRepInt{Type: "invalid", Value: 3}), shared.Convert5(shared.VariantRepAfter{Type: "late", Value: shared.AfterOfInt{After: 5}})}
+func byRecord(variant2 variant.InvalidLateMissing) string {
+	switch variant2.Tag {
+	case variant.InvalidLateMissingInvalid:
+		return "bad " + prim.ShowInt(prim.MultiplyInt32(variant2.Invalid, 2))
+	case variant.InvalidLateMissingLate:
+		return "after " + prim.ShowInt(variant2.Late.After)
+	default: // variant.InvalidLateMissingMissing
+		return "no " + variant2.Missing
+	}
 }
 
-func byRecord(v shared.VariantRepOfValue) string {
-	s := v.Type
-	result := s == "invalid" || s == "late" || s == "missing"
-	if result {
-		record := shared.InvalidLateMissing{Missing: func(name string) string {
-			return "no " + name
-		}, Invalid: func(code int32) string {
-			return "bad " + prim.ShowInt(prim.MultiplyInt32(code, 2))
-		}, Late: func(afterOfInt shared.AfterOfInt) string {
-			return "after " + prim.ShowInt(afterOfInt.After)
-		}}
-		var field func(any) string
-		switch v.Type {
-		case "invalid":
-			field = func(coerced any) string {
-				return record.Invalid(coerced.(int32))
-			}
-		case "late":
-			field = func(coerced any) string {
-				return record.Late(shared.Convert(coerced.(shared.AfterOfValue)))
-			}
-		case "missing":
-			field = func(coerced any) string {
-				return record.Missing(coerced.(string))
-			}
-		}
-		return field(v.Value)
+func someLabels(variant2 variant.InvalidLateMissing) string {
+	switch variant2.Tag {
+	case variant.InvalidLateMissingInvalid:
+		return prim.ShowInt(variant2.Invalid + 1)
+	case variant.InvalidLateMissingLate:
+		return someLabelsFallback(variant.LateMissing{Tag: variant.LateMissingLate, Late: variant2.Late})
+	default: // variant.InvalidLateMissingMissing
+		return someLabelsFallback(variant.LateMissing{Tag: variant.LateMissingMissing, Missing: variant2.Missing})
 	}
-	return variant.Case_String(v)
-}
-
-func someLabels(v shared.VariantRepOfValue) string {
-	if v.Type == "invalid" {
-		record := shared.Invalid{Invalid: func(code int32) string {
-			return prim.ShowInt(code + 1)
-		}}
-		var field func(any) string
-		switch v.Type {
-		case "invalid":
-			field = func(coerced any) string {
-				return record.Invalid(coerced.(int32))
-			}
-		}
-		return field(v.Value)
-	}
-	return "unhandled"
 }
 
 var shrunk = initializeShrunk()
@@ -127,6 +124,19 @@ func initializeShrunk() shared.BaseName {
 	return shrink.ShrinkBaseNameScaleBaseNameScaleConsIntConsStringNil(shared.BaseNameScale{Base: 1, Name: "context", Scale: 2})
 }
 
+func byLabelX(variant2 variant.InvalidMissing) string {
+	switch variant2.Tag {
+	case variant.InvalidMissingInvalid:
+		return "invalid " + prim.ShowInt(variant2.Invalid)
+	default: // variant.InvalidMissingMissing
+		return "missing " + variant2.Missing
+	}
+}
+
+func someLabelsFallback(variant variant.LateMissing) string {
+	return "unhandled"
+}
+
 func main() {
 	fmt.Println(main_)
 }
@@ -134,62 +144,8 @@ func main() {
 // shared/shared.go
 package shared
 
-type VariantRepOfValue struct {
-	Type  string
-	Value any
-}
-
-type AfterOfInt struct {
+type After struct {
 	After int32
-}
-
-type AfterOfValue struct {
-	After any
-}
-
-func Convert(value AfterOfValue) AfterOfInt {
-	return AfterOfInt{After: value.After.(int32)}
-}
-
-type VariantRepString struct {
-	Type  string
-	Value string
-}
-
-func Convert2(value VariantRepString) VariantRepOfValue {
-	return VariantRepOfValue{Type: value.Type, Value: value.Value}
-}
-
-type VariantRepInt struct {
-	Type  string
-	Value int32
-}
-
-func Convert3(value VariantRepInt) VariantRepOfValue {
-	return VariantRepOfValue{Type: value.Type, Value: value.Value}
-}
-
-type VariantRepAfter struct {
-	Type  string
-	Value AfterOfInt
-}
-
-func Convert4(value AfterOfInt) AfterOfValue {
-	return AfterOfValue{After: value.After}
-}
-
-func Convert5(value VariantRepAfter) VariantRepOfValue {
-	return VariantRepOfValue{Type: value.Type, Value: Convert4(value.Value)}
-}
-
-type InvalidLateMissing struct {
-	Invalid func(int32) string
-	Late    func(AfterOfInt) string
-	Missing func(string) string
-}
-
-type Invalid struct {
-	Invalid func(int32) string
 }
 
 type BaseName struct {

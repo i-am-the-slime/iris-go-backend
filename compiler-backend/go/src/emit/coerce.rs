@@ -8,7 +8,8 @@ use super::{
 use crate::erasure::Erasure;
 use crate::error::{GoError, GoResult};
 use crate::foreign::{GoFunction, GoPackage};
-use crate::monotype::{DataType, Monotype, MonotypeId, RecordField};
+use crate::monotype::{DataType, Failure, Monotype, MonotypeId, RecordField};
+use smol_str::SmolStr;
 use crate::syntax::{GoCase, GoDeclaration, GoDefault, GoExpression, GoStatement, GoType};
 use crate::walk::each_block;
 
@@ -109,6 +110,12 @@ where
                 let type_ = self.go_type(foreign_array)?;
                 let value = GoExpression::TypeAssertion { value: Box::new(value), type_ };
                 self.coerce(value, foreign_array, to, out)
+            }
+            (Monotype::Data(data), Monotype::Record(_)) | (Monotype::Record(_), Monotype::Data(data))
+                if self.monotypes.variant_row(&data).is_some() =>
+            {
+                let converter = self.converter(from, to)?;
+                Ok(call(identifier_expression(&converter), vec![value]))
             }
             (Monotype::Data(data), Monotype::Erased(_) | Monotype::Opaque)
                 if self.monotypes.exists_family(&data).is_some() =>
@@ -407,6 +414,9 @@ where
                     .map(|field| RecordField { label: field.label.clone(), monotype: erased });
                 Monotype::Record(fields.collect())
             }
+            Monotype::Data(data) if self.monotypes.variant_row(&data).is_some() => {
+                return Ok(monotype);
+            }
             Monotype::Data(data) => Monotype::Data(self.erase_arguments(&data)?),
             Monotype::Recursive(data) => Monotype::Recursive(self.erase_arguments(&data)?),
             Monotype::Int
@@ -564,6 +574,22 @@ where
                 let converted = self.record_value(to, fields)?;
                 body.push(GoStatement::Return(Some(converted)));
             }
+            (Monotype::Data(from_data), Monotype::Record(_))
+                if self.monotypes.variant_row(&from_data).is_some() =>
+            {
+                self.variant_to_representation(&from_data, to, value, &mut body)?;
+            }
+            (Monotype::Record(_), Monotype::Data(to_data))
+                if self.monotypes.variant_row(&to_data).is_some() =>
+            {
+                self.representation_to_variant(from, &to_data, value, &mut body)?;
+            }
+            (Monotype::Data(from_data), Monotype::Data(to_data))
+                if self.monotypes.variant_row(&from_data).is_some()
+                    && self.monotypes.variant_row(&to_data).is_some() =>
+            {
+                self.convert_variant(&from_data, &to_data, value, &mut body)?;
+            }
             (Monotype::Data(from_data), Monotype::Data(to_data)) => {
                 let round_trip = self.convert_data(&from_data, &to_data, value, &mut body)?;
                 if let Some(mut round_trip) = round_trip {
@@ -717,6 +743,124 @@ where
         Ok(round_trip)
     }
 
+    fn variant_to_representation(
+        &mut self,
+        from: &DataType,
+        representation: MonotypeId,
+        value: GoExpression,
+        body: &mut Vec<GoStatement>,
+    ) -> GoResult<()> {
+        let layout = self.data_layout(from)?;
+        let constructors = self
+            .monotypes
+            .constructors(&mut self.context, from)
+            .map_err(Failure::in_code_generation)?;
+        let payload = self.record_field_monotype(representation, "value");
+        let last = constructors.len().saturating_sub(1);
+        for (index, constructor) in constructors.iter().enumerate() {
+            let mut statements = vec![];
+            let read = self.constructor_field(&layout, index, 0, value.clone());
+            let boxed = self.coerce(read, constructor.fields[0], payload, &mut statements)?;
+            let label = GoExpression::String(constructor.name.to_string());
+            let fields = vec![(SmolStr::new_static("type"), label), (SmolStr::new_static("value"), boxed)];
+            let built = self.record_value(representation, fields)?;
+            statements.push(GoStatement::Return(Some(built)));
+            match self.constructor_test(&layout, index, value.clone()) {
+                Some(condition) if index < last => {
+                    body.push(GoStatement::If { condition, then: statements, otherwise: vec![] });
+                }
+                _ => body.append(&mut statements),
+            }
+        }
+        if constructors.is_empty() {
+            body.push(super::panic_statement(NO_SUCH_LABEL));
+        }
+        Ok(())
+    }
+
+    fn representation_to_variant(
+        &mut self,
+        representation: MonotypeId,
+        to: &DataType,
+        value: GoExpression,
+        body: &mut Vec<GoStatement>,
+    ) -> GoResult<()> {
+        let constructors = self
+            .monotypes
+            .constructors(&mut self.context, to)
+            .map_err(Failure::in_code_generation)?;
+        let payload = self.record_field_monotype(representation, "value");
+        let mut cases = vec![];
+        for (index, constructor) in constructors.iter().enumerate() {
+            let mut statements = vec![];
+            let read = self.read_field(value.clone(), representation, "value");
+            let unboxed = self.coerce(read, payload, constructor.fields[0], &mut statements)?;
+            let built = self.construct(to, index, vec![unboxed])?;
+            statements.push(GoStatement::Return(Some(built)));
+            let label = GoExpression::String(constructor.name.to_string());
+            cases.push(GoCase { values: vec![label], body: statements });
+        }
+        if cases.is_empty() {
+            body.push(super::panic_statement(NO_SUCH_LABEL));
+            return Ok(());
+        }
+        let default = GoDefault { covers: vec![], body: vec![super::panic_statement(NO_SUCH_LABEL)] };
+        let tag = self.read_field(value, representation, "type");
+        body.push(GoStatement::Switch { value: Some(tag), cases, default: Some(default) });
+        Ok(())
+    }
+
+    fn convert_variant(
+        &mut self,
+        from: &DataType,
+        to: &DataType,
+        value: GoExpression,
+        body: &mut Vec<GoStatement>,
+    ) -> GoResult<()> {
+        let layout = self.data_layout(from)?;
+        let from_constructors = self
+            .monotypes
+            .constructors(&mut self.context, from)
+            .map_err(Failure::in_code_generation)?;
+        let to_constructors = self
+            .monotypes
+            .constructors(&mut self.context, to)
+            .map_err(Failure::in_code_generation)?;
+        let mut arms = vec![];
+        for (index, constructor) in from_constructors.iter().enumerate() {
+            let Some(target) =
+                to_constructors.iter().position(|candidate| candidate.name == constructor.name)
+            else {
+                continue;
+            };
+            let mut statements = vec![];
+            let read = self.constructor_field(&layout, index, 0, value.clone());
+            let field = self.coerce(
+                read,
+                constructor.fields[0],
+                to_constructors[target].fields[0],
+                &mut statements,
+            )?;
+            let built = self.construct(to, target, vec![field])?;
+            statements.push(GoStatement::Return(Some(built)));
+            arms.push((self.constructor_test(&layout, index, value.clone()), statements));
+        }
+        let covers_every_label = !arms.is_empty() && arms.len() == from_constructors.len();
+        let last = arms.len().saturating_sub(1);
+        for (position, (test, mut statements)) in arms.into_iter().enumerate() {
+            match test {
+                Some(condition) if position < last || !covers_every_label => {
+                    body.push(GoStatement::If { condition, then: statements, otherwise: vec![] });
+                }
+                _ => body.append(&mut statements),
+            }
+        }
+        if !covers_every_label {
+            body.push(super::panic_statement(NO_SUCH_LABEL));
+        }
+        Ok(())
+    }
+
     pub(super) fn settle_round_trips(&mut self) {
         let round_trips = std::mem::take(&mut self.round_trips);
         let converted: FxHashSet<(&str, &str)> = round_trips
@@ -752,6 +896,8 @@ where
         }
     }
 }
+
+const NO_SUCH_LABEL: &str = "Data.Variant: a label the target row lacks";
 
 pub(super) struct RoundTrip {
     converter: usize,

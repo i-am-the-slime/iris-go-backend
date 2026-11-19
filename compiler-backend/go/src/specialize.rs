@@ -41,6 +41,7 @@ mod patterns;
 mod runtime;
 mod spine;
 mod traverse;
+mod variant;
 
 use self::evidence::EvidenceScope;
 
@@ -210,6 +211,8 @@ pub struct Specializer<'q, Q> {
     growing_owners: Vec<String>,
     erased_families: Vec<(TypeId, Erasure)>,
     crossings: rustc_hash::FxHashSet<(MonotypeId, MonotypeId)>,
+    variant_crossings: Vec<(TypeId, TypeId)>,
+    narrowed_variant_rows: Vec<TypeId>,
 }
 
 struct RecordedBlocker {
@@ -253,6 +256,8 @@ where
             growing_owners: vec![],
             erased_families: vec![],
             crossings: rustc_hash::FxHashSet::default(),
+            variant_crossings: vec![],
+            narrowed_variant_rows: vec![],
         }
     }
 
@@ -378,13 +383,19 @@ where
         let keys = std::mem::take(&mut self.monotypes.new_rank_n_keys);
         let growing = std::mem::take(&mut self.growing_owners);
         let families = std::mem::take(&mut self.erased_families);
+        let narrowed = self.narrowed_variant_rows_to_erase();
         if erased.is_empty()
             && erased_keys.is_empty()
             && keys.is_empty()
             && growing.is_empty()
             && families.is_empty()
+            && narrowed.is_empty()
         {
             return;
+        }
+        for row in narrowed {
+            self.context.erased_variant_rows.insert(row);
+            self.monotypes.schemes.erase_variant(row);
         }
         for (family, erasure) in families {
             self.monotypes.schemes.erase_family(family, erasure);
@@ -1623,7 +1634,9 @@ where
             && (self.mentions_erased(from)
                 || self.mentions_erased(to)
                 || self.mentions_recursive(from)
-                || self.mentions_recursive(to))
+                || self.mentions_recursive(to)
+                || self.mentions_variant(from)
+                || self.mentions_variant(to))
     }
 
     /// Whether a type contains a recursive newtype, whose named Go type differs
