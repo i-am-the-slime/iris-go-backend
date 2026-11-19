@@ -4,6 +4,7 @@
 //! in perform mode, where binds become statements and `pure x` becomes `x`; an
 //! effect only turns into a closure where it is used as a first-class value.
 
+mod aliases;
 mod application;
 mod blocks;
 mod boxing;
@@ -12,6 +13,7 @@ mod cases;
 mod chunks;
 mod closures;
 mod coerce;
+mod conditions;
 mod conventions;
 mod constructors;
 mod deduplicate;
@@ -59,7 +61,7 @@ use crate::mono::{
     Literal, Local, LocalId, Pattern, PatternKind, Program, RecordUpdate,
 };
 use crate::monotype::{DataType, Monotype, MonotypeId, Monotypes};
-use crate::naming::{capitalise, exported, identifier, numbered};
+use crate::naming::{capitalise, exported, identifier, is_vague, lower_first, numbered};
 use crate::graph::{on_cycles, strongly_connected};
 use crate::simplify::{reference_graph, visit};
 use crate::walk::{self, Walk};
@@ -139,6 +141,8 @@ where
         await_fibers(&mut declarations);
     }
     timed("immediate", || immediate::reduce_immediate_calls(&mut declarations));
+    timed("conditions", || conditions::assign_conditions(&mut declarations));
+    timed("aliases", || aliases::substitute_aliases(&mut declarations));
     timed("ranges", || ranges::read_elements_in_place(&mut declarations));
     let taken =
         |name: &str| emitter.global_names.contains(name) || IMPORTED_PACKAGES.contains(&name);
@@ -2696,7 +2700,8 @@ where
                         continue;
                     }
                     let value = self.value(scrutinee, out)?;
-                    paths.push(self.hoist(value, "scrutinee", out));
+                    let base = scrutinee_name(&value);
+                    paths.push(self.hoist(value, &base, out));
                 }
                 let Guarded::Unconditional(body) = &first.body else { unreachable!() };
                 let (_, bindings) = self.alternative_tests(&paths, &first.patterns)?;
@@ -3557,6 +3562,21 @@ fn is_untyped_constant(expression: &GoExpression) -> bool {
             is_untyped_constant(left) && is_untyped_constant(right)
         }
         _ => false,
+    }
+}
+
+fn scrutinee_name(value: &GoExpression) -> String {
+    let named = match value {
+        GoExpression::Call { function, .. } => match function.as_ref() {
+            GoExpression::Qualified { name, .. } => Some(name),
+            _ => None,
+        },
+        GoExpression::Field { name, .. } => Some(name),
+        _ => None,
+    };
+    match named {
+        Some(name) if !is_vague(&lower_first(name)) => lower_first(name),
+        _ => "scrutinee".into(),
     }
 }
 

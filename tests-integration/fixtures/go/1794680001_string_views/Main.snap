@@ -59,12 +59,12 @@ func initializeMain_() []string {
 			return maybe.Char(payload)
 		}, maybe.NoChar, i)
 	}
-	scrutinee := prim.CodeUnitCharAt(func(payload rune) maybe.Char {
+	codeUnitCharAt := prim.CodeUnitCharAt(func(payload rune) maybe.Char {
 		return maybe.Char(payload)
 	}, maybe.NoChar, prim.CodeUnitLength("naïve 😀 banana 日本 a𝄞a") - 3, "naïve 😀 banana 日本 a𝄞a")
 	var result string
-	if scrutinee != maybe.NoChar {
-		result = "(Just " + prim.ShowChar(rune(scrutinee)) + ")"
+	if codeUnitCharAt != maybe.NoChar {
+		result = "(Just " + prim.ShowChar(rune(codeUnitCharAt)) + ")"
 	} else {
 		result = "Nothing"
 	}
@@ -77,12 +77,12 @@ func charAtLoopViewsTheText(text string, i int32, count int32) int32 {
 		if i >= textUnits.Length() {
 			return count
 		}
-		scrutinee := textUnits.CharAt(func(payload rune) maybe.Char {
+		codeUnitCharAt := textUnits.CharAt(func(payload rune) maybe.Char {
 			return maybe.Char(payload)
 		}, maybe.NoChar, i)
 		var result2 bool
-		if scrutinee != maybe.NoChar {
-			result2 = rune(scrutinee) == 'a'
+		if codeUnitCharAt != maybe.NoChar {
+			result2 = rune(codeUnitCharAt) == 'a'
 		} else {
 			result2 = false
 		}
@@ -110,11 +110,11 @@ func unsafeCharAtLoopViewsTheText(text string, i int32, reversed string) string 
 func indexOfLoopViewsTheText(text string, offset int32, count int32) int32 {
 	textUnits := prim.UTF16(text)
 	for {
-		scrutinee := textUnits.IndexOfStartingAt(func(payload int32) maybe.Int {
+		codeUnitIndexOfStartingAt := textUnits.IndexOfStartingAt(func(payload int32) maybe.Int {
 			return maybe.Int(payload)
 		}, maybe.NoInt, "a", offset)
-		if scrutinee != maybe.NoInt {
-			offset, count = int32(scrutinee) + 1, count + 1
+		if codeUnitIndexOfStartingAt != maybe.NoInt {
+			offset, count = int32(codeUnitIndexOfStartingAt) + 1, count + 1
 			continue
 		}
 		return count
@@ -124,17 +124,17 @@ func indexOfLoopViewsTheText(text string, offset int32, count int32) int32 {
 func lastIndexOfLoopViewsTheText(text string, offset int32, count int32) int32 {
 	textUnits := prim.UTF16(text)
 	for {
-		scrutinee := textUnits.LastIndexOfStartingAt(func(payload int32) maybe.Int {
+		codeUnitLastIndexOfStartingAt := textUnits.LastIndexOfStartingAt(func(payload int32) maybe.Int {
 			return maybe.Int(payload)
 		}, maybe.NoInt, "a", offset)
-		if scrutinee != maybe.NoInt {
-			found := int32(scrutinee)
+		if codeUnitLastIndexOfStartingAt != maybe.NoInt {
+			found := int32(codeUnitLastIndexOfStartingAt)
 			if found > 0 {
 				offset, count = found - 1, count + 1
 				continue
 			}
 		}
-		if scrutinee != maybe.NoInt {
+		if codeUnitLastIndexOfStartingAt != maybe.NoInt {
 			return count + 1
 		}
 		return count
@@ -164,22 +164,20 @@ func codePointLoopViewsTheText(text string, i int32, count int32) int32 {
 		} else if i == 0 && text == "" {
 			result2 = maybe.NoInt
 		} else if i == 0 {
-			s := text
-			result2 = maybe.Int(direct.CodePointAt0(nil, s))
+			result2 = maybe.Int(direct.CodePointAt0(nil, text))
 		} else {
-			n := i
 			result2 = textPoints.CodePointAt(func(payload int32) maybe.Int {
 				return maybe.Int(payload)
-			}, maybe.NoInt, n)
+			}, maybe.NoInt, i)
 		}
-		scrutinee := textPoints.Take(i + 1)
+		codePointTake := textPoints.Take(i + 1)
 		var result3 maybe.Int
 		if false {
 			result3 = maybe.NoInt
-		} else if scrutinee == "" {
+		} else if codePointTake == "" {
 			result3 = maybe.NoInt
 		} else {
-			result3 = maybe.Int(direct.CodePointAt0(nil, scrutinee))
+			result3 = maybe.Int(direct.CodePointAt0(nil, codePointTake))
 		}
 		var result4 bool
 		if result2 == maybe.NoInt && result3 == maybe.NoInt {
@@ -201,10 +199,10 @@ func codePointLoopViewsTheText(text string, i int32, count int32) int32 {
 
 func changedTextIsWalkedEachIteration(rest string, count int32) int32 {
 	for {
-		scrutinee := prim.CodeUnitCharAt(func(payload rune) maybe.Char {
+		codeUnitCharAt := prim.CodeUnitCharAt(func(payload rune) maybe.Char {
 			return maybe.Char(payload)
 		}, maybe.NoChar, prim.IntMod(count, 2), rest)
-		if scrutinee != maybe.NoChar {
+		if codeUnitCharAt != maybe.NoChar {
 			rest, count = prim.CodeUnitDrop(1 + prim.IntMod(count, 2), rest), count + 1
 			continue
 		}

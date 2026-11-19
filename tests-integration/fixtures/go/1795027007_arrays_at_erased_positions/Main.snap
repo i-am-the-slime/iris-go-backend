@@ -1,18 +1,10 @@
 ---
 source: tests-integration/src/fixtures.rs
 ---
-// Data/Semiring/semiring.go
-package semiring
-
-func Add(i int32, i2 int32) int32 {
-	return i + i2
-}
-
 // main.go
 package main
 
 import (
-	"fixture/Data/Semiring"
 	"fixture/shared"
 	"fmt"
 	"github.com/i-am-the-slime/purs-backend-go/go-support/array"
@@ -28,9 +20,8 @@ func initializeMain_() []int32 {
 	for index, hidden := range numbers {
 		array := shared.Convert(hidden)
 		var accumulator int32 = 0
-		for _, element := range array {
-			accumulated := accumulator
-			accumulator = semiring.Add(accumulated, element)
+		for _, value := range array {
+			accumulator = accumulator + value
 		}
 		mapped[index] = accumulator
 	}
@@ -39,8 +30,8 @@ func initializeMain_() []int32 {
 		array := shared.Convert2(hidden)
 		var accumulator int32 = 0
 		for range array {
-			accumulated := accumulator
-			accumulator = semiring.Add(accumulated, 1)
+			var value int32 = 1
+			accumulator = accumulator + value
 		}
 		mapped2[index] = prim.MultiplyInt32(0, accumulator)
 	}

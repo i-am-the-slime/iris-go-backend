@@ -26,8 +26,7 @@ func initializeMain_() []int32 {
 			return append_(accumulator2(scale, offset))(prim.MultiplyInt32(element, scale) + offset)
 		}
 	}
-	performed := accumulator
-	return performed(3, 1)
+	return accumulator(3, 1)
 }
 
 func main() {

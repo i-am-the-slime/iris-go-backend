@@ -1,18 +1,10 @@
 ---
 source: tests-integration/src/fixtures.rs
 ---
-// Data/Semiring/semiring.go
-package semiring
-
-func Add(i int32, i2 int32) int32 {
-	return i + i2
-}
-
 // main.go
 package main
 
 import (
-	"fixture/Data/Semiring"
 	"fixture/shared"
 	"fmt"
 	"github.com/i-am-the-slime/purs-backend-go/go-support/exception"
@@ -41,8 +33,7 @@ func initializeMain_() shared.MainResult {
 			modified2 := shared.StateValue{State: s_2, Value: s_2}
 			ref2.Value = modified2.State
 			performed3 := prim.MultiplyInt32(x, 3)
-			accumulated := accumulator
-			accumulator = semiring.Add(accumulated, performed3)
+			accumulator = accumulator + performed3
 		}
 	}
 	ref3.Value = accumulator
@@ -62,9 +53,8 @@ func initializeMain_() shared.MainResult {
 	}
 	tripled := mapped
 	var accumulator2 int32 = 0
-	for _, element := range tripled {
-		accumulated := accumulator2
-		accumulator2 = semiring.Add(accumulated, element)
+	for _, value := range tripled {
+		accumulator2 = accumulator2 + value
 	}
 	ref4.Value = accumulator2 + int32(len(tripled))
 	calls2 := ref2.Value
@@ -78,8 +68,7 @@ func initializeMain_() shared.MainResult {
 		modified := shared.StateValue{State: s_, Value: s_}
 		ref2.Value = modified.State
 		performed2 := prim.MultiplyInt32(x, 3)
-		value := performed2
-		if value > 20 {
+		if performed2 > 20 {
 			found = true
 			break
 		}

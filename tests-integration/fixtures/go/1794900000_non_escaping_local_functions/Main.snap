@@ -1,18 +1,10 @@
 ---
 source: tests-integration/src/fixtures.rs
 ---
-// Data/Semiring/semiring.go
-package semiring
-
-func Add(i int32, i2 int32) int32 {
-	return i + i2
-}
-
 // main.go
 package main
 
 import (
-	"fixture/Data/Semiring"
 	"github.com/i-am-the-slime/purs-backend-go/go-support/alloc"
 	"github.com/i-am-the-slime/purs-backend-go/go-support/direct"
 	"github.com/i-am-the-slime/purs-backend-go/go-support/exception"
@@ -39,9 +31,8 @@ func main_() int32 {
 		}
 	}, &ListInt{Tag: ListIntCons, Cons0: 1, Cons1: &ListInt{Tag: ListIntCons, Cons0: 2, Cons1: sharedListIntNil}})
 	var accumulator int32 = 0
-	for _, element := range array {
-		accumulated := accumulator
-		accumulator = semiring.Add(accumulated, element)
+	for _, value := range array {
+		accumulator = accumulator + value
 	}
 	return accumulator
 }

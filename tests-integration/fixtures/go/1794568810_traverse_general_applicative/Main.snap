@@ -46,7 +46,6 @@ func initializeMain_() []either.EitherStringArrayInt {
 			}
 		}
 	}
-	performed := accumulator
 	append_2 := direct.Appender[int32]()
 	array2 := []int32{1, -2, 3}
 	accumulator3 := either.EitherStringArrayInt{Tag: either.EitherStringArrayIntRight, Right: []int32{}}
@@ -63,8 +62,7 @@ func initializeMain_() []either.EitherStringArrayInt {
 			}
 		}
 	}
-	performed2 := accumulator3
-	return []either.EitherStringArrayInt{performed, performed2}
+	return []either.EitherStringArrayInt{accumulator, accumulator3}
 }
 
 func main() {

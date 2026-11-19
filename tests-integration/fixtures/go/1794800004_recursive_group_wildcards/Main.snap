@@ -1,13 +1,6 @@
 ---
 source: tests-integration/src/fixtures.rs
 ---
-// Data/Semiring/semiring.go
-package semiring
-
-func Add(i int32, i2 int32) int32 {
-	return i + i2
-}
-
 // Data/Tuple/tuple.go
 package tuple
 
@@ -20,7 +13,6 @@ type TupleStringInt struct {
 package main
 
 import (
-	"fixture/Data/Semiring"
 	"fixture/Data/Tuple"
 	"fmt"
 	"github.com/i-am-the-slime/purs-backend-go/go-support/exception"
@@ -47,8 +39,8 @@ func initializeMain_() int32 {
 func countString(trees []TreeTupleStringInt) int32 {
 	var accumulator int32 = 0
 	for _, element := range trees {
-		accumulated := accumulator
-		accumulator = semiring.Add(accumulated, sizeString(element))
+		value := sizeString(element)
+		accumulator = accumulator + value
 	}
 	return accumulator
 }

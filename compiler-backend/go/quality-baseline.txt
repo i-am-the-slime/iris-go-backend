@@ -11,8 +11,8 @@ examples any:unsolved 6
 examples any:variant-row 73
 examples converters 102
 examples empty-interface 0
-examples funcs 3075
-examples lines 56998
+examples funcs 3062
+examples lines 56635
 examples max-identifier 103
 examples max-nesting 19
 examples origin-fields 16
@@ -21,7 +21,7 @@ examples reflect 0
 examples thunk 165
 examples type-assertion 213
 examples unsafe 0
-go-backend source-lines 34450
+go-backend source-lines 34772
 markgraf-cli any 2118
 markgraf-cli any:boxing 1329
 markgraf-cli any:empty-data 171
@@ -34,8 +34,8 @@ markgraf-cli any:type-variable 296
 markgraf-cli any:variant-row 13
 markgraf-cli converters 618
 markgraf-cli empty-interface 0
-markgraf-cli funcs 17100
-markgraf-cli lines 208695
+markgraf-cli funcs 17097
+markgraf-cli lines 206569
 markgraf-cli max-identifier 256
 markgraf-cli max-nesting 58
 markgraf-cli origin-fields 40

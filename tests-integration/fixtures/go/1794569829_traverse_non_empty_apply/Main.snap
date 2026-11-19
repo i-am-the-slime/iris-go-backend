@@ -59,8 +59,7 @@ func initializeMain_() maybe.ArrayInt {
 			accumulator = maybe.NoArrayInt
 		}
 	}
-	performed := accumulator
-	return performed
+	return accumulator
 }
 
 func main() {

@@ -56,8 +56,7 @@ func main_() int32 {
 	i2 := ref.Value
 	var accumulator int32 = 0
 	for range units {
-		total := accumulator
-		accumulator = total + 1
+		accumulator = accumulator + 1
 	}
 	return prim.MultiplyInt32(i, 100) + prim.MultiplyInt32(i2, 10) + accumulator
 }

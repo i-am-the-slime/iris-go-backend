@@ -374,8 +374,7 @@ func initializeWords() *internal.MapStringUnit {
 	array := []string{"b", "a"}
 	accumulator := internal.SharedMapStringUnitLeaf
 	for _, a := range array {
-		m := accumulator
-		accumulator = wordsGoReusing(a, m)
+		accumulator = wordsGoReusing(a, accumulator)
 	}
 	return accumulator
 }

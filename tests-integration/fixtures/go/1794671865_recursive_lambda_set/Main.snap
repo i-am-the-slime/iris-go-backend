@@ -52,8 +52,7 @@ func buildThunks(n int32, acc *LazyInt) *LazyInt {
 		case 0:
 			return acc
 		default:
-			n2 := n
-			n, acc = n2 - 1, lazyIntCells.New(LazyInt{Tag: LazyIntBuildThunks, Acc: acc})
+			n, acc = n - 1, lazyIntCells.New(LazyInt{Tag: LazyIntBuildThunks, Acc: acc})
 			continue
 		}
 	}

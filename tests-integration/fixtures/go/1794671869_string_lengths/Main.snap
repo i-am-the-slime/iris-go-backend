@@ -41,9 +41,9 @@ var main_ = initializeMain_()
 
 func initializeMain_() []string {
 	defer exception.ReportUncaught()
-	scrutinee := prim.CodeUnitLengthUpTo(3, "ab")
+	codeUnitLength := prim.CodeUnitLengthUpTo(3, "ab")
 	var result string
-	switch scrutinee {
+	switch codeUnitLength {
 	case 0:
 		result = "empty"
 	case 1:
@@ -53,9 +53,9 @@ func initializeMain_() []string {
 	default:
 		result = "many"
 	}
-	scrutinee2 := direct.CodePointLengthUpTo(5, "word") < 4
+	scrutinee := direct.CodePointLengthUpTo(5, "word") < 4
 	var result2 string
-	if scrutinee2 {
+	if scrutinee {
 		result2 = "true"
 	} else {
 		result2 = "false"
@@ -65,9 +65,9 @@ func initializeMain_() []string {
 
 func countSpacesUnconsingCountsUpToTwo(text string, count int32) int32 {
 	for {
-		scrutinee := prim.CodeUnitLengthUpTo(2, text)
+		codeUnitLength := prim.CodeUnitLengthUpTo(2, text)
 		var result maybe.HeadTail
-		switch scrutinee {
+		switch codeUnitLength {
 		case 0:
 			result = maybe.NoHeadTail
 		case 1:
@@ -103,12 +103,12 @@ func unchangedTextLengthIsCountedBeforeTheLoop(text string, i int32, count int32
 		if i >= textUnits.Length() {
 			return count
 		}
-		scrutinee := textUnits.CharAt(func(payload rune) maybe.Char {
+		codeUnitCharAt := textUnits.CharAt(func(payload rune) maybe.Char {
 			return maybe.Char(payload)
 		}, maybe.NoChar, i)
 		var result2 bool
-		if scrutinee != maybe.NoChar {
-			result2 = rune(scrutinee) == 'a'
+		if codeUnitCharAt != maybe.NoChar {
+			result2 = rune(codeUnitCharAt) == 'a'
 		} else {
 			result2 = false
 		}

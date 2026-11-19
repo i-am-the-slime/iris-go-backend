@@ -53,14 +53,12 @@ func initializeMain_() either.MainResult {
 	accumulator := []int32{}
 	accumulator = slices.Clip(accumulator)
 	for x := int32(1); x < 6; x++ {
-		acc := accumulator
-		accumulator = append(acc, x)
+		accumulator = append(accumulator, x)
 	}
 	accumulator2 := []int32{1}
 	accumulator2 = slices.Clip(accumulator2)
 	for x := int32(1); x < 6; x++ {
-		acc := accumulator2
-		accumulator2 = append(acc, prim.MultiplyInt32(x, 2))
+		accumulator2 = append(accumulator2, prim.MultiplyInt32(x, 2))
 	}
 	array2 := []either.EitherStringInt{either.EitherStringInt{Tag: either.EitherStringIntRight, Right: 1}, either.EitherStringInt{Tag: either.EitherStringIntRight, Right: 2}, either.EitherStringInt{Tag: either.EitherStringIntRight, Right: 3}}
 	accumulator3 := either.EitherStringArrayInt{Tag: either.EitherStringArrayIntRight, Right: []int32{}}

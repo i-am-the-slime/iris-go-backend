@@ -164,7 +164,6 @@ func relateArrayInt(ordDictionary ordering.Ord, depth int32, left any, right any
 				return "EQ"
 			}
 		}
-		depth2 := depth
 		original := func(array2 []any) func([]any) bool {
 			return func(array3 []any) bool {
 				return array.Eq(func(argument any, argument2 any) bool {
@@ -204,7 +203,7 @@ func relateArrayInt(ordDictionary ordering.Ord, depth int32, left any, right any
 			return func(coerced2 any) ordering.Ordering {
 				return original3(coerced2.([]any))
 			}
-		}}, depth2 - 1, []any{left}, []any{right, right}
+		}}, depth - 1, []any{left}, []any{right, right}
 	}
 }
 

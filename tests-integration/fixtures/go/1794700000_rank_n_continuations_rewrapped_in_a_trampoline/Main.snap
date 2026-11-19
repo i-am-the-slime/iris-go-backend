@@ -109,8 +109,7 @@ func mainGo(value StepInt) StepInt {
 			value = next(struct{}{})
 			continue
 		default:
-			step := value
-			return step
+			return value
 		}
 	}
 }

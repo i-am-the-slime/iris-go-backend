@@ -6,6 +6,7 @@
 use rustc_hash::FxHashMap;
 
 use crate::foreign::{Comparison, Foreign, Operator};
+use crate::naming::is_vague;
 use crate::graph::{on_cycles, strongly_connected};
 use crate::mono::{
     Alternative, Binding, Expression, ExpressionKind, Function, FunctionId, Guard, Guarded,
@@ -115,6 +116,32 @@ impl Simplifier<'_> {
         let small = self.sizes[id.0 as usize] <= INLINE_SIZE && !can_fail(&function.body);
         ((small || once) && !function.parameters.is_empty() || is_trivial(&function.body))
             .then_some(function)
+    }
+
+    fn saturated_callback(&mut self, argument: Expression) -> Expression {
+        let ExpressionKind::Function(id) = argument.kind else { return argument };
+        let Some(function) = self.inlinable(id) else { return argument };
+        let count = function.parameters.len();
+        let wraps_foreign = is_foreign_wrapper(&function.parameters, &function.body);
+        let templates: Vec<Local> = function.parameters.clone();
+        if !wraps_foreign || crate::arity::arrows(self.monotypes, argument.monotype) < count {
+            return argument;
+        }
+        let mut parameters = vec![];
+        let mut result = argument.monotype;
+        for template in &templates {
+            let Some((parameter, inner)) = self.monotypes.function_parts(result) else {
+                return argument;
+            };
+            let name = if is_vague(&template.name) { "value".into() } else { template.name.clone() };
+            let template = Local { id: LocalId(0), name, monotype: parameter };
+            parameters.push(self.fresh(&template));
+            result = inner;
+        }
+        let function = Expression::new(ExpressionKind::Function(id), argument.monotype);
+        let arguments = parameters.iter().map(Local::expression).collect();
+        let body = self.apply(function, arguments, result);
+        Expression::new(ExpressionKind::Lambda { parameters, body: Box::new(body) }, argument.monotype)
     }
 
     /// A point-free definition such as `void = map (const unit)` becomes a function
@@ -361,8 +388,18 @@ impl Simplifier<'_> {
                 }
             }
             ExpressionKind::Foreign { foreign, arguments } => {
-                let arguments: Vec<Expression> =
-                    arguments.into_iter().map(|argument| self.expression(argument)).collect();
+                let iterates = matches!(
+                    foreign,
+                    Foreign::Call { boundary, .. } | Foreign::Perform { boundary, .. }
+                        if boundary.iteration.is_some()
+                );
+                let arguments: Vec<Expression> = arguments
+                    .into_iter()
+                    .map(|argument| {
+                        let argument = self.expression(argument);
+                        if iterates { self.saturated_callback(argument) } else { argument }
+                    })
+                    .collect();
                 return self.foreign(foreign, arguments, monotype);
             }
             ExpressionKind::Reuse { .. } => {

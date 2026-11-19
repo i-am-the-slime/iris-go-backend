@@ -33,7 +33,8 @@ where
                 continue;
             }
             let value = self.value(scrutinee, out)?;
-            paths.push(self.hoist(value, "scrutinee", out));
+            let base = super::scrutinee_name(&value);
+            paths.push(self.hoist(value, &base, out));
         }
         if let Some(first) = alternatives.first()
             && let Guarded::Unconditional(body) = &first.body

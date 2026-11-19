@@ -74,14 +74,7 @@ func initializeProblems() []shared.VariantRepOfValue {
 
 func byRecord(v shared.VariantRepOfValue) string {
 	s := v.Type
-	var result bool
-	if s == "invalid" {
-		result = true
-	} else if s == "late" {
-		result = true
-	} else {
-		result = s == "missing"
-	}
+	result := s == "invalid" || s == "late" || s == "missing"
 	if result {
 		record := shared.InvalidLateMissing{Missing: func(name string) string {
 			return "no " + name

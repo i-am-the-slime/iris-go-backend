@@ -82,8 +82,7 @@ func isEvenOrIsOdd(step int, k int32) bool {
 			case 0:
 				return true
 			default:
-				k2 := k
-				step, k = shared.IsOddStep, k2 - 1
+				step, k = shared.IsOddStep, k - 1
 				continue
 			}
 		default: // shared.IsOddStep
@@ -91,8 +90,7 @@ func isEvenOrIsOdd(step int, k int32) bool {
 			case 0:
 				return false
 			default:
-				k2 := k
-				step, k = shared.IsEvenStep, k2 - 1
+				step, k = shared.IsEvenStep, k - 1
 				continue
 			}
 		}
