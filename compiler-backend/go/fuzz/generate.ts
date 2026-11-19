@@ -31,6 +31,7 @@ export const FEATURES = [
   "classes",
   "hof",
   "containers",
+  "lists",
   "poly",
   "lazy",
   "recursion",
@@ -59,6 +60,7 @@ export const defaultWeights = (): Record<Feature, number> => ({
   classes: 1,
   hof: 1,
   containers: 1,
+  lists: 1,
   poly: 1,
   lazy: 1,
   recursion: 1,
@@ -159,18 +161,301 @@ export class Generator {
     const statements: Statement[] = [];
     const env: Environment = { variables: [], assumed: new Map(), typeVars: [], refs: [], inEffect: true };
     const count = this.rng.int(Math.max(2, this.options.statements - 3), this.options.statements + 3);
+    // An Aff statement goes last: JavaScript runs a launched fiber synchronously up to its first
+    // asynchronous step, so anything logged after it would interleave differently by design.
+    let aff: Statement | null = null;
+    const weights = this.options.weights;
     for (let i = 0; i < count; i++) {
-      const roll = this.rng.next();
-      if (this.on("effects") && roll < 0.18) {
-        statements.push(...this.effectStatements(env));
-      } else if (this.on("aff") && roll < 0.24) {
-        statements.push(this.affStatement(env));
-      } else if (this.on("exceptions") && roll < 0.32) {
-        statements.push(this.exceptionStatement(env));
-      } else {
-        statements.push(this.logStatement(env, i));
+      const choice = this.rng.weighted<string>([
+        [weights.effects * 0.9, "effects"],
+        [weights.aff * 0.3, "aff"],
+        [weights.exceptions * 0.5, "exceptions"],
+        [weights.st * 1.4, "st"],
+        [weights.effects * 0.9, "imperativeEffect"],
+        [3, "log"],
+      ]);
+      if (choice === "effects") statements.push(...this.effectStatements(env));
+      else if (choice === "aff" && aff === null) aff = this.affStatement(env);
+      else if (choice === "exceptions") statements.push(this.exceptionStatement(env));
+      else if (choice === "st") statements.push({ kind: "discard", expr: call(T.effect(T.Unit), "log", binary(T.String, "<>", literal(T.String, `"${i}: "`), call(T.String, "show", this.stProgram(env)))) });
+      else if (choice === "imperativeEffect") statements.push(...this.imperativeEffectStatements(env, i));
+      else statements.push(this.logStatement(env, i));
+    }
+    if (aff) statements.push(aff);
+    return statements;
+  }
+
+  // ---------------------------------------------------------------- imperative programs
+
+  /** An element type for mutable cells and arrays, kept small so that loops stay cheap. */
+  private cellType(env: Environment): Type {
+    return this.rng.weighted<Type>([
+      [4, T.Int],
+      [2, T.Number],
+      [2, T.String],
+      [1, T.Boolean],
+      [1, T.maybe(T.Int)],
+      [1, T.tuple(T.Int, T.String)],
+      [1, T.record([{ name: "n", type: T.Int }, { name: "s", type: T.String }])],
+      [1, this.showableType({ ...env, typeVars: [] }, 1)],
+    ]);
+  }
+
+  /** An index expression, out of bounds about a third of the time. */
+  private index(loopVariable: string | null): Expr {
+    const literalIndex = () => literal(T.Int, String(this.rng.pick([0, 1, 2, 3, -1, -2, 5, 7, 100, 2147483647])));
+    if (loopVariable === null) return literalIndex();
+    return this.rng.weighted<() => Expr>([
+      [3, () => variable(T.Int, loopVariable)],
+      [1, () => binary(T.Int, "*", variable(T.Int, loopVariable), literal(T.Int, "2"))],
+      [1, () => binary(T.Int, "-", variable(T.Int, loopVariable), literal(T.Int, "1"))],
+      [1, () => binary(T.Int, "+", variable(T.Int, loopVariable), literal(T.Int, "100"))],
+      [1, () => call(T.Int, "negate", variable(T.Int, loopVariable))],
+      [1, literalIndex],
+    ])();
+  }
+
+  private discard(expr: Expr): Statement {
+    return { kind: "discard", expr };
+  }
+
+  private bind(name: string, type: Type, expr: Expr): Statement {
+    return { kind: "bind", pattern: varPattern(name, type), expr };
+  }
+
+  private block(statements: Statement[], result: Expr): Expr {
+    return { kind: "doBlock", type: T.Unit, statements, result };
+  }
+
+  /**
+   * `ST.run` over an accumulator STRef, a value STRef and an STArray, driven by for/foreach/while
+   * loops, tailRecM, out-of-bounds peeks and pokes, freezes and nested runs. The result is a
+   * snapshot of all the state, so every step shows in the output.
+   */
+  private stProgram(env: Environment): Expr {
+    const element = this.cellType(env);
+    const acc = this.fresh("acc");
+    const cell = this.fresh("cell");
+    const arr = this.fresh("arr");
+    const snapshots: { name: string; type: Type }[] = [];
+    const pureEnv: Environment = { ...env, inEffect: false, refs: [] };
+    const elementExpr = (loopVariable: string | null) => {
+      const scope = loopVariable ? this.extend(pureEnv, { name: loopVariable, type: T.Int }) : pureEnv;
+      return this.expr(element, scope, 2);
+    };
+    const bumpAcc = (delta: Expr) => this.discard(call(T.Unit, "void", call(T.Unit, "STRef.modify", lambda(T.Unit, [varPattern("a", T.Int)], binary(T.Int, "+", variable(T.Int, "a"), delta)), variable(T.Unit, acc))));
+    const statements: Statement[] = [
+      this.bind(acc, T.Unit, call(T.Unit, "STRef.new", literal(T.Int, "0"))),
+      this.bind(cell, T.Unit, call(T.Unit, "STRef.new", elementExpr(null))),
+      this.rng.chance(0.7)
+        ? this.bind(arr, T.Unit, call(T.Unit, "STArray.thaw", this.expr(T.array(element), pureEnv, 2)))
+        : this.bind(arr, T.Unit, variable(T.Unit, "STArray.new")),
+    ];
+    const stepCount = this.rng.int(3, 8);
+    for (let step = 0; step < stepCount; step++) {
+      const i = this.fresh("i");
+      const m = this.fresh("m");
+      const ok = this.fresh("ok");
+      const n = this.fresh("n");
+      const choice = this.rng.int(0, 15);
+      switch (choice) {
+        case 0:
+        case 1: {
+          const body = this.block(
+            [this.bind(ok, T.Boolean, call(T.Unit, "STArray.poke", this.index(i), elementExpr(i), variable(T.Unit, arr)))],
+            call(T.Unit, "void", call(T.Unit, "STRef.modify", lambda(T.Unit, [varPattern("a", T.Int)], binary(T.Int, "+", variable(T.Int, "a"), { kind: "ifThenElse", type: T.Int, cond: variable(T.Boolean, ok), thenBranch: literal(T.Int, "1"), elseBranch: literal(T.Int, "-1000") })), variable(T.Unit, acc))),
+          );
+          statements.push(this.discard(call(T.Unit, "ST.for", literal(T.Int, String(this.rng.pick([0, -2, 1]))), literal(T.Int, String(this.rng.pick([0, 3, 5, 8]))), lambda(T.Unit, [varPattern(i, T.Int)], body))));
+          break;
+        }
+        case 2:
+        case 3: {
+          const indices: Expr = { kind: "array", type: T.array(T.Int), elements: Array.from({ length: this.rng.int(1, 4) }, () => this.index(null)) };
+          const peeked = this.bind(m, T.maybe(element), call(T.Unit, "STArray.peek", variable(T.Int, i), variable(T.Unit, arr)));
+          const onHit = call(T.Unit, "void", call(T.Unit, "STRef.write", variable(element, "v"), variable(T.Unit, cell)));
+          const branch: Expr = {
+            kind: "case",
+            type: T.Unit,
+            scrutinees: [variable(T.maybe(element), m)],
+            alternatives: [
+              { patterns: [{ kind: "constructor", name: "Just", args: [varPattern("v", element)] }], guards: [], body: onHit },
+              { patterns: [{ kind: "constructor", name: "Nothing", args: [] }], guards: [], body: call(T.Unit, "void", call(T.Unit, "STRef.modify", lambda(T.Unit, [varPattern("a", T.Int)], binary(T.Int, "-", variable(T.Int, "a"), literal(T.Int, "7"))), variable(T.Unit, acc))) },
+            ],
+          };
+          statements.push(this.discard(call(T.Unit, "ST.foreach", indices, lambda(T.Unit, [varPattern(i, T.Int)], this.block([peeked], branch)))));
+          break;
+        }
+        case 4:
+          statements.push(this.bind(n, T.Int, call(T.Unit, "STArray.push", elementExpr(null), variable(T.Unit, arr))));
+          statements.push(bumpAcc(variable(T.Int, n)));
+          break;
+        case 5:
+          statements.push(this.bind(n, T.Int, call(T.Unit, this.rng.pick(["STArray.pushAll", "STArray.unshiftAll"]), this.expr(T.array(element), pureEnv, 2), variable(T.Unit, arr))));
+          statements.push(bumpAcc(variable(T.Int, n)));
+          break;
+        case 6: {
+          const f = this.expr(T.fn(element, element), pureEnv, 2);
+          statements.push(this.bind(ok, T.Boolean, call(T.Unit, "STArray.modify", this.index(null), f, variable(T.Unit, arr))));
+          statements.push(bumpAcc({ kind: "ifThenElse", type: T.Int, cond: variable(T.Boolean, ok), thenBranch: literal(T.Int, "10"), elseBranch: literal(T.Int, "-10") }));
+          break;
+        }
+        case 7:
+          statements.push(this.bind(m, T.maybe(element), call(T.Unit, this.rng.pick(["STArray.pop", "STArray.shift"]), variable(T.Unit, arr))));
+          statements.push(bumpAcc(call(T.Int, "maybe", literal(T.Int, "-3"), lambda(T.Unit, [wildcard], literal(T.Int, "3")), variable(T.maybe(element), m))));
+          if (this.rng.chance(0.5)) statements.push(this.discard(call(T.Unit, "void", call(T.Unit, "STRef.modify", lambda(T.Unit, [varPattern("old", element)], call(element, "fromMaybe", variable(element, "old"), variable(T.maybe(element), m))), variable(T.Unit, cell)))));
+          break;
+        case 8: {
+          const removed = this.fresh("removed");
+          statements.push(this.bind(removed, T.array(element), call(T.Unit, "STArray.splice", this.index(null), literal(T.Int, String(this.rng.pick([0, 1, 2, 100, -1]))), this.expr(T.array(element), pureEnv, 1), variable(T.Unit, arr))));
+          statements.push(bumpAcc(call(T.Int, "Array.length", variable(T.array(element), removed))));
+          break;
+        }
+        case 9:
+          statements.push(this.bind(n, T.Int, call(T.Unit, "STArray.length", variable(T.Unit, arr))));
+          statements.push(bumpAcc(binary(T.Int, "*", variable(T.Int, n), literal(T.Int, "100"))));
+          break;
+        case 10: {
+          const counter = this.fresh("cnt");
+          statements.push(this.bind(counter, T.Unit, call(T.Unit, "STRef.new", literal(T.Int, "0"))));
+          const cond = call(T.Unit, "map", { kind: "section", type: T.Unit, op: "<", operand: literal(T.Int, String(this.rng.int(1, 6))), side: "right" }, call(T.Unit, "STRef.read", variable(T.Unit, counter)));
+          const body = this.block(
+            [this.bind(n, T.Int, call(T.Unit, "STRef.modify", { kind: "section", type: T.Unit, op: "+", operand: literal(T.Int, "1"), side: "right" }, variable(T.Unit, counter)))],
+            call(T.Unit, "void", call(T.Unit, "STArray.poke", this.index(n), elementExpr(n), variable(T.Unit, arr))),
+          );
+          statements.push(this.discard(call(T.Unit, "ST.while", cond, body)));
+          break;
+        }
+        case 11: {
+          const stepBody = this.block(
+            [this.bind(ok, T.Boolean, call(T.Unit, "STArray.poke", this.index(i), elementExpr(i), variable(T.Unit, arr)))],
+            call(T.Unit, "pure", call(T.Unit, "Loop", binary(T.Int, "+", variable(T.Int, i), literal(T.Int, String(this.rng.pick([1, 2])))))),
+          );
+          const loop: Expr = { kind: "ifThenElse", type: T.Unit, cond: binary(T.Boolean, ">=", variable(T.Int, i), literal(T.Int, String(this.rng.pick([3, 5, 7])))), thenBranch: call(T.Unit, "pure", call(T.Unit, "Done", variable(T.Unit, "unit"))), elseBranch: stepBody };
+          statements.push(this.discard(call(T.Unit, "tailRecM", lambda(T.Unit, [varPattern(i, T.Int)], loop), literal(T.Int, "0"))));
+          break;
+        }
+        case 12: {
+          const innerRef = this.fresh("inner");
+          const innerRun = call(T.Int, "ST.run", this.block(
+            [this.bind(innerRef, T.Unit, call(T.Unit, "STRef.new", this.expr(T.Int, pureEnv, 2))), this.discard(call(T.Unit, "void", call(T.Unit, "STRef.modify", this.expr(T.fn(T.Int, T.Int), pureEnv, 2), variable(T.Unit, innerRef))))],
+            call(T.Unit, "STRef.read", variable(T.Unit, innerRef)),
+          ));
+          statements.push(bumpAcc(innerRun));
+          break;
+        }
+        case 13: {
+          const snapshot = this.fresh("snap");
+          statements.push(this.bind(snapshot, T.array(element), call(T.Unit, "STArray.freeze", variable(T.Unit, arr))));
+          snapshots.push({ name: snapshot, type: T.array(element) });
+          break;
+        }
+        case 14: {
+          const copy = this.fresh("copy");
+          const inner = this.fresh("st");
+          const action = lambda(T.Unit, [varPattern(inner, T.Unit)], call(T.Unit, "void", call(T.Unit, "STArray.poke", this.index(null), elementExpr(null), variable(T.Unit, inner))));
+          statements.push(this.bind(copy, T.array(element), call(T.Unit, "STArray.withArray", action, this.expr(T.array(element), pureEnv, 2))));
+          snapshots.push({ name: copy, type: T.array(element) });
+          break;
+        }
+        default: {
+          if (hasClass("Ord", element, this.dataEnvironment)) {
+            statements.push(this.discard(call(T.Unit, "void", call(T.Unit, "STArray.sort", variable(T.Unit, arr)))));
+          } else {
+            const assoc = this.fresh("assoc");
+            statements.push(this.bind(assoc, T.Unit, call(T.Unit, "STArray.toAssocArray", variable(T.Unit, arr))));
+            statements.push(bumpAcc(call(T.Int, "Array.length", variable(T.Unit, assoc))));
+          }
+          break;
+        }
       }
     }
+    const finalAcc = this.fresh("total");
+    const finalCell = this.fresh("value");
+    const finalArray = this.fresh("frozen");
+    statements.push(this.bind(finalAcc, T.Int, call(T.Unit, "STRef.read", variable(T.Unit, acc))));
+    statements.push(this.bind(finalCell, element, call(T.Unit, "STRef.read", variable(T.Unit, cell))));
+    statements.push(this.bind(finalArray, T.array(element), call(T.Unit, this.rng.chance(0.8) ? "STArray.freeze" : "STArray.unsafeFreeze", variable(T.Unit, arr))));
+    const snapshotRecord: Expr = { kind: "record", type: T.Unit, fields: snapshots.map((s) => ({ name: s.name, value: variable(s.type, s.name) })) };
+    const result = call(T.Unit, "Tuple", variable(T.Int, finalAcc), call(T.Unit, "Tuple", variable(element, finalCell), snapshots.length > 0 ? call(T.Unit, "Tuple", variable(T.array(element), finalArray), snapshotRecord) : variable(T.array(element), finalArray)));
+    const resultType = T.tuple(T.Int, T.tuple(element, snapshots.length > 0 ? T.tuple(T.array(element), T.record(snapshots)) : T.array(element)));
+    return annotate(resultType, call(resultType, "ST.run", this.block(statements, call(T.Unit, "pure", result))));
+  }
+
+  /** Effect.Ref cells and loops (forE, foreachE, whileE, tailRecM, for_) logging as they go. */
+  private imperativeEffectStatements(env: Environment, index: number): Statement[] {
+    const element = this.cellType(env);
+    const counter = this.fresh("counter");
+    const cell = this.fresh("cellRef");
+    const items = this.fresh("items");
+    const statements: Statement[] = [
+      this.bind(counter, T.ref(T.Int), call(T.Unit, "Ref.new", literal(T.Int, "0"))),
+      this.bind(cell, T.ref(element), call(T.Unit, "Ref.new", this.expr(element, env, 2))),
+      this.bind(items, T.ref(T.array(element)), call(T.Unit, "Ref.new", this.expr(T.array(element), env, 2))),
+    ];
+    const log = (expr: Expr) => this.discard(call(T.effect(T.Unit), "log", binary(T.String, "<>", literal(T.String, `"${index}: "`), expr)));
+    const bump = (delta: Expr) => this.discard(call(T.Unit, "Ref.modify_", lambda(T.Unit, [varPattern("c", T.Int)], binary(T.Int, "+", variable(T.Int, "c"), delta)), variable(T.Unit, counter)));
+    const stepCount = this.rng.int(2, 5);
+    for (let step = 0; step < stepCount; step++) {
+      const i = this.fresh("i");
+      const scope = this.extend(env, { name: i, type: T.Int });
+      switch (this.rng.int(0, 6)) {
+        case 0: {
+          const body = this.block(
+            [this.discard(call(T.Unit, "Ref.modify_", lambda(T.Unit, [varPattern("xs", T.array(element))], call(T.Unit, "Array.snoc", variable(T.Unit, "xs"), this.expr(element, scope, 2))), variable(T.Unit, items)))],
+            call(T.Unit, "Ref.modify_", { kind: "section", type: T.Unit, op: "+", operand: variable(T.Int, i), side: "right" }, variable(T.Unit, counter)),
+          );
+          statements.push(this.discard(call(T.Unit, "forE", literal(T.Int, String(this.rng.pick([0, -1, 2]))), literal(T.Int, String(this.rng.pick([0, 1, 4, 6]))), lambda(T.Unit, [varPattern(i, T.Int)], body))));
+          break;
+        }
+        case 1: {
+          const x = this.fresh("x");
+          const body = call(T.Unit, "Ref.modify_", lambda(T.Unit, [varPattern("old", element)], this.expr(element, this.extend(env, { name: "old", type: element }, { name: x, type: element }), 2)), variable(T.Unit, cell));
+          statements.push(this.discard(call(T.Unit, "foreachE", this.expr(T.array(element), env, 2), lambda(T.Unit, [varPattern(x, element)], body))));
+          break;
+        }
+        case 2: {
+          const cond = call(T.Unit, "map", { kind: "section", type: T.Unit, op: "<", operand: literal(T.Int, String(this.rng.int(1, 5))), side: "right" }, call(T.Unit, "Ref.read", variable(T.Unit, counter)));
+          const body = this.block(
+            [bump(literal(T.Int, "1"))],
+            call(T.Unit, "Ref.modify_", lambda(T.Unit, [varPattern("xs", T.array(element))], call(T.Unit, "Array.drop", literal(T.Int, "1"), variable(T.Unit, "xs"))), variable(T.Unit, items)),
+          );
+          statements.push(this.discard(call(T.Unit, "whileE", cond, body)));
+          break;
+        }
+        case 3: {
+          const stepBody = this.block([bump(variable(T.Int, i))], call(T.Unit, "pure", call(T.Unit, "Loop", binary(T.Int, "+", variable(T.Int, i), literal(T.Int, "1")))));
+          const loop: Expr = { kind: "ifThenElse", type: T.Unit, cond: binary(T.Boolean, ">", variable(T.Int, i), literal(T.Int, String(this.rng.pick([2, 4, 1000])))), thenBranch: call(T.Unit, "pure", call(T.Unit, "Done", variable(T.Unit, "unit"))), elseBranch: stepBody };
+          statements.push(this.discard(call(T.Unit, "tailRecM", lambda(T.Unit, [varPattern(i, T.Int)], loop), literal(T.Int, "0"))));
+          break;
+        }
+        case 4: {
+          const result = this.fresh("r");
+          const modifier = lambda(T.Unit, [varPattern("c", T.Int)], { kind: "record", type: T.Unit, fields: [{ name: "state", value: binary(T.Int, "+", variable(T.Int, "c"), literal(T.Int, "1")) }, { name: "value", value: binary(T.Int, "*", variable(T.Int, "c"), literal(T.Int, "2")) }] });
+          statements.push(this.bind(result, T.Int, call(T.Unit, "Ref.modify'", modifier, variable(T.Unit, counter))));
+          statements.push(log(call(T.String, "show", variable(T.Int, result))));
+          break;
+        }
+        case 5: {
+          const x = this.fresh("x");
+          const body = log(call(T.String, "show", this.expr(this.showableType(env, 1), this.extend(env, { name: x, type: element }), 2)));
+          statements.push(this.discard(call(T.Unit, "for_", this.expr(T.array(element), env, 2), lambda(T.Unit, [varPattern(x, element)], body.expr))));
+          break;
+        }
+        default: {
+          const previous = this.fresh("prev");
+          statements.push(this.bind(previous, element, call(T.Unit, "Ref.modify", this.expr(T.fn(element, element), env, 2), variable(T.Unit, cell))));
+          statements.push(log(call(T.String, "show", variable(element, previous))));
+          break;
+        }
+      }
+    }
+    const count = this.fresh("count");
+    const value = this.fresh("value");
+    const list = this.fresh("list");
+    statements.push(this.bind(count, T.Int, call(T.Unit, "Ref.read", variable(T.Unit, counter))));
+    statements.push(this.bind(value, element, call(T.Unit, "Ref.read", variable(T.Unit, cell))));
+    statements.push(this.bind(list, T.array(element), call(T.Unit, "Ref.read", variable(T.Unit, items))));
+    statements.push(log(call(T.String, "show", call(T.Unit, "Tuple", variable(T.Int, count), call(T.Unit, "Tuple", variable(element, value), variable(T.array(element), list))))));
     return statements;
   }
 
@@ -672,7 +957,7 @@ export class Generator {
         [this.weight("containers", 1.5), () => T.either(this.typeOnce(env, smaller, options), this.typeOnce(env, smaller, options))],
         [this.weight("containers", 2), () => T.tuple(this.typeOnce(env, smaller, options), this.typeOnce(env, smaller, options))],
         [this.weight("containers", 3), () => T.array(this.typeOnce(env, smaller, options))],
-        [this.weight("containers", 1), () => T.list(this.typeOnce(env, smaller, options))],
+        [this.weight("lists", 1), () => T.list(this.typeOnce(env, smaller, options))],
         [this.weight("containers", 1), () => T.map(this.keyType(env, smaller), this.typeOnce(env, smaller, options))],
         [this.weight("containers", 1), () => T.set(this.keyType(env, smaller))],
         [this.weight("records", 2), () => this.recordType(env, smaller, options)],
@@ -843,7 +1128,7 @@ export class Generator {
       [2, () => T.Int],
       [this.weight("strings", 1), () => T.String],
       [this.weight("containers", 2), () => T.array(this.showableType(env, 1))],
-      [this.weight("containers", 1), () => T.list(this.showableType(env, 1))],
+      [this.weight("lists", 1), () => T.list(this.showableType(env, 1))],
       [this.weight("records", 2), () => this.recordType(env, 1, { allowData: true })],
     ];
     if (this.dataEnvironment.size > 0) {
@@ -977,7 +1262,7 @@ export class Generator {
         const acc = this.boundVariable("acc", type);
         const x = this.boundVariable("x", element);
         const body = this.expr(type, this.extend(env, acc.variable, x.variable), depth - 1);
-        const container = this.rng.chance(0.7) ? T.array(element) : T.list(element);
+        const container = this.on("lists") && this.rng.chance(0.3) ? T.list(element) : T.array(element);
         return call(type, "foldl", lambda(T.fnN([type, element], type), [acc.pattern, x.pattern], body), this.expr(type, env, depth - 1), this.expr(container, env, depth - 1));
       } },
       { feature: "hof", weight: 1, build: () => {
@@ -1242,7 +1527,7 @@ export class Generator {
       { feature: "strings", weight: 1.5, build: () => call(int, "fromEnum", this.expr(T.Char, env, depth - 1)) },
       { feature: "strings", weight: 1, build: () => call(int, "Char.toCharCode", this.expr(T.Char, env, depth - 1)) },
       { feature: "containers", weight: 2, build: () => call(int, "Array.length", this.expr(T.array(this.showableType(env, 1)), env, depth - 1)) },
-      { feature: "containers", weight: 1, build: () => call(int, "List.length", this.expr(T.list(this.showableType(env, 1)), env, depth - 1)) },
+      { feature: "lists", weight: 1, build: () => call(int, "List.length", this.expr(T.list(this.showableType(env, 1)), env, depth - 1)) },
       { feature: "containers", weight: 1, build: () => {
         const key = this.keyType(env, 1);
         return call(int, "Map.size", this.expr(T.map(key, this.showableType(env, 1)), env, depth - 1));
@@ -1598,7 +1883,7 @@ export class Generator {
         const source = this.showableType(env, 1);
         return call(type, "Array.mapMaybe", this.expr(T.fn(source, T.maybe(element)), env, depth - 1), this.expr(T.array(source), env, depth - 1));
       } },
-      { feature: "containers", weight: 1.5, build: () => call(type, "Array.fromFoldable", this.expr(T.list(element), env, depth - 1)) },
+      { feature: "lists", weight: 1.5, build: () => call(type, "Array.fromFoldable", this.expr(T.list(element), env, depth - 1)) },
       { feature: "containers", weight: 1, build: () => call(type, "Array.singleton", this.expr(element, env, depth - 1)) },
       { feature: "hof", weight: 1, build: () => {
         const index = this.boundVariable("i", T.Int);
@@ -1624,7 +1909,7 @@ export class Generator {
       productions.push({ feature: "containers", weight: 1, build: () => call(type, "Array.fromFoldable", call(T.Unit, "Map.keys", this.expr(T.map(element, this.showableType(env, 1)), env, depth - 1))) });
     }
     if (equal) {
-      productions.push({ feature: "containers", weight: 1.5, build: () => call(type, "Array.nub", sub()) });
+      productions.push({ feature: "containers", weight: 1.5, build: () => call(type, ordered ? "Array.nub" : "Array.nubEq", sub()) });
       productions.push({ feature: "containers", weight: 1, build: () => call(type, this.rng.pick(["Array.union", "Array.intersect", "Array.difference"]), sub(), sub()) });
       productions.push({ feature: "containers", weight: 1, build: () => call(type, "Array.delete", this.expr(element, env, depth - 1), sub()) });
     }
@@ -1642,7 +1927,7 @@ export class Generator {
     if (element.tag === "Tuple") {
       productions.push({ feature: "containers", weight: 2, build: () => call(type, "Array.zip", this.expr(T.array(element.first), env, depth - 1), this.expr(T.array(element.second), env, depth - 1)) });
       if (hasClass("Ord", element.first, this.dataEnvironment, env.assumed)) {
-        productions.push({ feature: "containers", weight: 2, build: () => call(type, "Map.toUnfoldable", this.expr(T.map(element.first, element.second), env, depth - 1)) });
+        productions.push({ feature: "containers", weight: 2, build: () => annotate(type, call(type, "Map.toUnfoldable", this.expr(T.map(element.first, element.second), env, depth - 1))) });
       }
     }
     if (element.tag === "Maybe") {
@@ -1812,7 +2097,7 @@ export class Generator {
       productions.push({ feature: "adts", weight: 2, build: () => annotate(type, call(type, "wrap", this.expr(substitute(info.constructors[0].fields[0], bindings), env, depth - 1))) });
       productions.push({ feature: "adts", weight: 2, build: () => {
         const inner = substitute(info.constructors[0].fields[0], bindings);
-        return call(type, "over", variable(T.Unit, info.name), this.expr(T.fn(inner, inner), env, depth - 1), this.expr(type, env, depth - 1));
+        return annotate(type, call(type, "over", variable(T.Unit, info.name), this.expr(T.fn(inner, inner), env, depth - 1), this.expr(type, env, depth - 1)));
       } });
     }
     if (info.params.length === 1 && info.classes.size > 0 && this.declarations.some((d) => d.kind === "data" && d.name === info.name && d.derived.includes("Functor"))) {

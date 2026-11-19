@@ -213,10 +213,10 @@ export class Worker {
       }
       for (const program of named) {
         const diagnostics = diagnosticsFor(log, program.moduleName);
-        const codes = [...diagnostics.matchAll(/Error! · \[(\w+)\]/g)].map((match) => match[1]);
-        failed.push(
-          this.emptyResult(program, "GENERATOR ILL-TYPED", `${codes.slice(0, 3).join(",")}: ${firstLine(diagnostics.replace(/^.*\n/, ""), (line) => /•\s+\S/.test(line)).replace(/^\s*•\s*/, "")}`, diagnostics),
-        );
+        const errors = diagnostics.split(/\n(?=(?:Error|Warning)! · )/).filter((block) => block.startsWith("Error!"));
+        const codes = errors.map((block) => /\[(\w+)\]/.exec(block)?.[1] ?? "?");
+        const message = errors[0]?.split("\n").find((line) => /^\s*•\s+\S/.test(line))?.replace(/^\s*•\s*/, "") ?? "";
+        failed.push(this.emptyResult(program, "GENERATOR ILL-TYPED", `${codes.slice(0, 3).join(",")}: ${message.slice(0, 200)}`, diagnostics));
         rmSync(join(this.directory, moduleFile(program.moduleName)), { force: true });
       }
       remaining = remaining.filter((program) => !failing.has(program.moduleName));
