@@ -2822,13 +2822,15 @@ where
         let type_ = self.go_type(monotype)?;
         out.push(GoStatement::Variable { name: name.clone(), type_, value: None });
         let length = call(identifier_expression("len"), vec![elements]);
-        let widened =
-            GoExpression::Conversion { type_: GoType::Int, value: Box::new(index.clone()) };
-        let condition = binary(
-            "&&",
-            binary(">=", index, GoExpression::Integer(0)),
-            binary("<", widened, length),
-        );
+        let widened = match index {
+            GoExpression::Integer(_) => index.clone(),
+            _ => GoExpression::Conversion { type_: GoType::Int, value: Box::new(index.clone()) },
+        };
+        let in_bounds = binary("<", widened, length);
+        let condition = match index {
+            GoExpression::Integer(constant) if constant >= 0 => in_bounds,
+            _ => binary("&&", binary(">=", index, GoExpression::Integer(0)), in_bounds),
+        };
         let target = vec![identifier_expression(&name)];
         out.push(GoStatement::If {
             condition,

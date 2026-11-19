@@ -28,7 +28,7 @@ var main_ = initializeMain_()
 func initializeMain_() []maybe.MaybeInt {
 	defer exception.ReportUncaught()
 	var element maybe.MaybeInt
-	if 1 >= 0 && int(1) < len(numbers) {
+	if 1 < len(numbers) {
 		element = maybe.MaybeInt{Tag: maybe.MaybeIntJust, Just: numbers[1]}
 	} else {
 		element = maybe.MaybeInt{Tag: maybe.MaybeIntNothing}

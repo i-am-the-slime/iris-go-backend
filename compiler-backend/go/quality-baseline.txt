@@ -21,7 +21,7 @@ examples reflect 0
 examples thunk 165
 examples type-assertion 213
 examples unsafe 0
-go-backend source-lines 33830
+go-backend source-lines 33832
 markgraf-cli any 2118
 markgraf-cli any:boxing 1329
 markgraf-cli any:empty-data 171
