@@ -23,6 +23,7 @@ mod primitives;
 mod scheme;
 mod simplify;
 mod specialize;
+mod suspension;
 mod syntax;
 mod timing;
 mod types;

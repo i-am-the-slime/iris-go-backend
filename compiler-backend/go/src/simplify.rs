@@ -5,7 +5,8 @@
 
 use rustc_hash::FxHashMap;
 
-use crate::foreign::{Comparison, Foreign, Operator};
+use crate::foreign::{Comparison, Foreign, GoPackage, Operator};
+use crate::suspension::Suspension;
 use crate::naming::is_vague;
 use crate::graph::{on_cycles, strongly_connected};
 use crate::mono::{
@@ -27,6 +28,7 @@ const INLINE_SIZE: usize = 40;
 const INLINE_FUEL: usize = 2_000;
 
 pub fn simplify(program: Program, monotypes: &mut Monotypes, next_local: u32) -> Program {
+    let suspension = Suspension::analyse(&program, monotypes);
     let Program { functions, entry } = program;
     let references = reference_graph(&functions);
     let components = strongly_connected(&references);
@@ -51,6 +53,7 @@ pub fn simplify(program: Program, monotypes: &mut Monotypes, next_local: u32) ->
         monotypes,
         record_orders: FxHashMap::default(),
         records_settled: false,
+        suspension,
     };
     for component in &components {
         for &function in component {
@@ -99,6 +102,7 @@ struct Simplifier<'m> {
     monotypes: &'m mut Monotypes,
     record_orders: FxHashMap<LocalId, Vec<SmolStr>>,
     records_settled: bool,
+    suspension: Suspension,
 }
 
 impl Simplifier<'_> {
@@ -882,6 +886,37 @@ impl Simplifier<'_> {
         monotype: crate::monotype::MonotypeId,
     ) -> Expression {
         match foreign {
+            Foreign::Perform { function, .. }
+                if function.package == GoPackage::Aff
+                    && function.name == "TraverseParArrayDirect"
+                    && !self.suspension.traversal_may_suspend(
+                        &arguments[0],
+                        &arguments[1],
+                        self.monotypes,
+                    ) =>
+            {
+                let foreign = &crate::foreign::TRAVERSE_ARRAY;
+                self.foreign(foreign, arguments, monotype)
+            }
+            Foreign::Perform { function, .. }
+                if function.package == GoPackage::Aff
+                    && function.name == "SequenceParArrayDirect"
+                    && !self.suspension.may_suspend(&arguments[0], self.monotypes) =>
+            {
+                Expression::new(
+                    ExpressionKind::Foreign { foreign: &crate::foreign::SEQUENCE_ARRAY, arguments },
+                    monotype,
+                )
+            }
+            Foreign::Perform { function, .. }
+                if function.package == GoPackage::Aff
+                    && function.name == "ParApplyDirect"
+                    && arguments.iter().all(|argument| {
+                        !self.suspension.may_suspend(argument, self.monotypes)
+                    }) =>
+            {
+                self.sequential_apply(arguments, monotype)
+            }
             Foreign::EffectPure => {
                 let value = arguments.pop().expect("invariant violated: pure has one argument");
                 Expression::new(ExpressionKind::EffectPure(Box::new(value)), monotype)
@@ -942,6 +977,33 @@ impl Simplifier<'_> {
             }
             foreign => Expression::new(ExpressionKind::Foreign { foreign, arguments }, monotype),
         }
+    }
+
+    fn sequential_apply(&mut self, arguments: Vec<Expression>, monotype: MonotypeId) -> Expression {
+        let [functions, values]: [Expression; 2] =
+            arguments.try_into().expect("invariant violated: a parallel apply has two arguments");
+        let function_type =
+            self.monotypes.effect_result(functions.monotype).unwrap_or(functions.monotype);
+        let value_type = self.monotypes.effect_result(values.monotype).unwrap_or(values.monotype);
+        let result = self.monotypes.effect_result(monotype).unwrap_or(monotype);
+        let template = Local { id: LocalId(0), name: SmolStr::new_static("f"), monotype: function_type };
+        let function = self.fresh(&template);
+        let template = Local { id: LocalId(0), name: self.monotypes.value_name(value_type), monotype: value_type };
+        let value = self.fresh(&template);
+        let applied = self.apply(function.expression(), vec![value.expression()], result);
+        let pure = Expression::new(ExpressionKind::EffectPure(Box::new(applied)), monotype);
+        let inner = ExpressionKind::EffectBind {
+            action: Box::new(values),
+            local: value,
+            body: Box::new(pure),
+        };
+        let inner = Expression::new(inner, monotype);
+        let outer = ExpressionKind::EffectBind {
+            action: Box::new(functions),
+            local: function,
+            body: Box::new(inner),
+        };
+        Expression::new(outer, monotype)
     }
 
     fn ordering(&mut self, arguments: Vec<Expression>, monotype: MonotypeId) -> Expression {

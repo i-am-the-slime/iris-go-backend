@@ -1,0 +1,84 @@
+---
+source: tests-integration/src/fixtures.rs
+---
+// Data/Either/either.go
+package either
+
+import "github.com/i-am-the-slime/purs-backend-go/go-support/exception"
+
+type EitherErrorUnit struct {
+	Right struct{}
+	Left  exception.Error
+	Tag   uint8
+}
+
+const (
+	EitherErrorUnitLeft = iota
+	EitherErrorUnitRight
+)
+
+type OnComplete struct {
+	Handler func(func(EitherErrorUnit))
+	Rethrow bool
+}
+
+type Fiber struct {
+	IsSuspended func() bool
+	Join        func(func(EitherErrorUnit)) func()
+	Kill        func(exception.Error) func(func(EitherErrorUnit)) func()
+	OnComplete  func(OnComplete) func()
+	Run         func()
+}
+
+// main.go
+package main
+
+import (
+	"fixture/Data/Either"
+	"github.com/i-am-the-slime/purs-backend-go/go-support/aff"
+	"github.com/i-am-the-slime/purs-backend-go/go-support/direct"
+	"github.com/i-am-the-slime/purs-backend-go/go-support/exception"
+	"github.com/i-am-the-slime/purs-backend-go/go-support/prim"
+)
+
+func main() {
+	defer aff.Await()
+	defer exception.ReportUncaught()
+	fiber := aff.NewFiber(func() struct{} {
+		func() {
+			array := direct.TraverseArray(func(x int32) int32 {
+				return prim.MultiplyInt32(x, x)
+			}, []int32{1, 2, 3})
+			array2 := aff.TraverseParArrayDirect(func(x int32) int32 {
+				aff.DelayDirect(nil, float64(1.0))
+				return x + 10
+			}, []int32{1, 2})
+			var accumulator int32 = 0
+			for _, value := range array {
+				accumulator = accumulator + value
+			}
+			var accumulator2 int32 = 0
+			for _, value := range array2 {
+				accumulator2 = accumulator2 + value
+			}
+			n := accumulator + accumulator2 + 12
+			direct.TraverseArray(func(x func() int32) int32 {
+				return x()
+			}, []func() int32{func() int32 {
+				return n
+			}, func() int32 {
+				return n + 1
+			}})
+		}()
+		return struct{}{}
+	})
+	isSuspended, join, kill, onComplete, run := aff.FiberFields(fiber, func(payload exception.Error) either.EitherErrorUnit {
+		return either.EitherErrorUnit{Tag: either.EitherErrorUnitLeft, Left: payload}
+	}, func(payload struct{}) either.EitherErrorUnit {
+		return either.EitherErrorUnit{Tag: either.EitherErrorUnitRight, Right: payload}
+	}, either.EitherErrorUnit{Tag: either.EitherErrorUnitRight, Right: struct{}{}}, func(value either.OnComplete) func(func(either.EitherErrorUnit)) {
+		return value.Handler
+	})
+	fiber2 := either.Fiber{IsSuspended: isSuspended, Join: join, Kill: kill, OnComplete: onComplete, Run: run}
+	fiber2.Run()
+}

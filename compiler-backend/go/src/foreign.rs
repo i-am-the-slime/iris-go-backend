@@ -580,6 +580,9 @@ const fn direct_with(name: &'static str, arity: usize, boundary: Boundary) -> Fo
     call(GoPackage::Direct, name, arity, boundary)
 }
 
+pub const TRAVERSE_ARRAY: Foreign = perform("TraverseArray", 2);
+pub const SEQUENCE_ARRAY: Foreign = perform("SequenceArray", 1);
+
 const fn perform(name: &'static str, arity: usize) -> Foreign {
     let function = GoFunction { package: GoPackage::Direct, name };
     Foreign::Perform { function, arity, boundary: PLAIN }
