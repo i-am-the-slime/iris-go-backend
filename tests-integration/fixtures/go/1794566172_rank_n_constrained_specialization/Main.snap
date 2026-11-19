@@ -70,8 +70,7 @@ func initializeRecorded() int32 {
 	var ref int32 = 0
 	i := program.ST(shared.InterpreterST{Emit: func(value int32) {
 		s_ := ref + value
-		modified := shared.StateValue{State: s_, Value: s_}
-		ref = modified.State
+		ref = s_
 	}, Measure: func(text string) int32 {
 		return direct.CodePointLength(text)
 	}})

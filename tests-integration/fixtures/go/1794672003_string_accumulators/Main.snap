@@ -22,11 +22,8 @@ func initializeMain_() shared.MainResult {
 	built := string(accumulator)
 	accumulator2 := ""
 	for i := int32(1); i < 11; i++ {
-		acc := accumulator2
-		if prim.CodeUnitLengthUpTo(6, acc) > 5 {
-			accumulator2 = acc
-		} else {
-			accumulator2 = acc + prim.ShowInt(i)
+		if !(prim.CodeUnitLengthUpTo(6, accumulator2) > 5) {
+			accumulator2 = accumulator2 + prim.ShowInt(i)
 		}
 	}
 	accumulator3 := ""

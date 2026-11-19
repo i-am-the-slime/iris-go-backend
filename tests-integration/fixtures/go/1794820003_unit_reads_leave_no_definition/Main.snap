@@ -38,7 +38,6 @@ package main
 import (
 	"fixture/Data/Array"
 	"fixture/Data/Tuple"
-	"fixture/shared"
 	"github.com/i-am-the-slime/purs-backend-go/go-support/exception"
 	"github.com/i-am-the-slime/purs-backend-go/go-support/prim"
 	"os"
@@ -49,14 +48,14 @@ func main_() int32 {
 	var ref int32 = 0
 	dataarray.FoldMEffectTupleUnitUnitUnit(func(_ struct{}, pair tuple.TupleUnitUnit) {
 		s_ := ref + 1
-		modified := shared.StateValue{State: s_, Value: s_}
-		ref = modified.State
+		ref = s_
 	}, struct{}{}, units)
+	i2 := ref
 	var accumulator int32 = 0
 	for range units {
 		accumulator = accumulator + 1
 	}
-	return prim.MultiplyInt32(i, 100) + prim.MultiplyInt32(ref, 10) + accumulator
+	return prim.MultiplyInt32(i, 100) + prim.MultiplyInt32(i2, 10) + accumulator
 }
 
 var units []tuple.TupleUnitUnit = []tuple.TupleUnitUnit{tuple.TupleUnitUnit{First: struct{}{}, Second: struct{}{}}, tuple.TupleUnitUnit{First: struct{}{}, Second: struct{}{}}}

@@ -18,15 +18,15 @@ func main_() int32 {
 	subscribe := createResult2.Subscribe
 	subscribe(func(n int32) {
 		s_ := ref + n
-		modified := shared.StateValueOfIntInt{State: s_, Value: s_}
-		ref = modified.State
+		ref = s_
 	})
 	var ref2 int32 = 0
 	subscribe(func(n int32) {
 		ref2 = n
 	})
 	createResult.Subscribe(func(n int32) {
-		createResult2.Push(ref2 + n)
+		i := ref2
+		createResult2.Push(i + n)
 	})
 	createResult.Push(1)
 	createResult.Push(2)
@@ -36,13 +36,14 @@ func main_() int32 {
 func create() shared.CreateResult {
 	ref := []func(int32){}
 	return shared.CreateResult{Subscribe: func(k func(int32)) func() {
-		s_ := array.Append(ref, []func(int32){k})
-		modified := shared.StateValueOfArrayFnIntEffectArrayFnIntEffect{State: s_, Value: s_}
-		ref = modified.State
+		s := ref
+		s_ := array.Append(s, []func(int32){k})
+		ref = s_
 		return func() {
 		}
 	}, Push: func(n int32) {
-		for _, f := range ref {
+		array := ref
+		for _, f := range array {
 			f(n)
 		}
 	}}

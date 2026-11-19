@@ -1,0 +1,88 @@
+---
+source: tests-integration/src/fixtures.rs
+---
+// Data/Tuple/tuple.go
+package tuple
+
+import "fixture/shared"
+
+type TupleIntBody struct {
+	Second shared.Body
+	First  int32
+}
+
+type TupleIntInt struct {
+	First  int32
+	Second int32
+}
+
+// main.go
+package main
+
+import (
+	"fixture/Data/Tuple"
+	"fixture/shared"
+	"fmt"
+	"github.com/i-am-the-slime/purs-backend-go/go-support/exception"
+	"github.com/i-am-the-slime/purs-backend-go/go-support/prim"
+	"slices"
+)
+
+var main_ = initializeMain_()
+
+func initializeMain_() float64 {
+	defer exception.ReportUncaught()
+	bodies := []shared.Body{shared.Body{X: 0.0, Y: 0.0, Vx: 0.0, Vy: 0.0, Mass: 1.0}, shared.Body{X: 1.0, Y: 2.0, Vx: 0.0, Vy: 0.0, Mass: 0.5}}
+	accumulator := shared.Body{X: 0.5, Y: 0.5, Vx: 0.0, Vy: 0.0, Mass: 2.0}
+	for otherIndex := range bodies {
+		accumulator.Vx = accumulator.Vx + float64((bodies[otherIndex].X - accumulator.X) * bodies[otherIndex].Mass)
+		accumulator.Vy = accumulator.Vy + float64((bodies[otherIndex].Y - accumulator.Y) * bodies[otherIndex].Mass)
+	}
+	accumulator2 := shared.Body{X: 0.5, Y: 0.5, Vx: 0.0, Vy: 0.0, Mass: 2.0}
+	for index := range bodies {
+		i := int32(index)
+		if 1 != i {
+			accumulator2.Vx = accumulator2.Vx + float64((bodies[index].X - accumulator2.X) * bodies[index].Mass)
+			accumulator2.Vy = accumulator2.Vy + float64((bodies[index].Y - accumulator2.Y) * bodies[index].Mass)
+		}
+	}
+	var accumulator3 float64 = 0.0
+	for index := range bodies {
+		i := int32(index)
+		accumulator3 = accumulator3 + float64(toNumber(i) * bodies[index].Mass)
+	}
+	array := []int32{3, 4}
+	accumulator4 := []tuple.TupleIntInt{}
+	accumulator4 = slices.Clip(accumulator4)
+	for index, i := range array {
+		i2 := int32(index)
+		accumulator4 = append(accumulator4, tuple.TupleIntInt{First: i2, Second: i})
+	}
+	var accumulator5 int32 = 0
+	for tupleIndex := range accumulator4 {
+		accumulator5 = accumulator5 + prim.MultiplyInt32(accumulator4[tupleIndex].First, accumulator4[tupleIndex].Second)
+	}
+	return accumulator.Vx + accumulator.Vy + accumulator2.Vx + accumulator3 + toNumber(accumulator5)
+}
+
+func toNumber(i int32) float64 {
+	if i == 0 {
+		return 0.0
+	}
+	return 1.0 + toNumber(i - 1)
+}
+
+func main() {
+	fmt.Println(main_)
+}
+
+// shared/shared.go
+package shared
+
+type Body struct {
+	Mass float64
+	Vx   float64
+	Vy   float64
+	X    float64
+	Y    float64
+}

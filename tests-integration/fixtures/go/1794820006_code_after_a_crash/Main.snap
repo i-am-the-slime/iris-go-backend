@@ -5,7 +5,6 @@ source: tests-integration/src/fixtures.rs
 package main
 
 import (
-	"fixture/shared"
 	"github.com/i-am-the-slime/purs-backend-go/go-support/exception"
 	"github.com/i-am-the-slime/purs-backend-go/go-support/prim"
 	"os"
@@ -15,8 +14,7 @@ func main_() int32 {
 	var ref int32 = 1
 	i := ref
 	s_ := ref + 1
-	modified := shared.StateValue{State: s_, Value: s_}
-	ref = modified.State
+	ref = s_
 	scrutinee := i > 5
 	if scrutinee {
 		panic(exception.NewError("too many"))

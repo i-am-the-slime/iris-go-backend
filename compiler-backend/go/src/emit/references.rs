@@ -65,7 +65,8 @@ fn local(statement: GoStatement) -> GoStatement {
 }
 
 fn is_cell_value(expression: &GoExpression, cell: &str) -> bool {
-    matches!(expression, GoExpression::Field { value, name } if name == "Value" && is_named(value, cell))
+    let GoExpression::Field { value, name } = expression else { return false };
+    name == "Value" && is_named(value, cell)
 }
 
 fn stays_local(rest: &mut [GoStatement], name: &str) -> bool {

@@ -73,7 +73,7 @@ fn is_pure(expression: &GoExpression) -> bool {
     }
 }
 
-fn negated(condition: &GoExpression) -> GoExpression {
+pub(super) fn negated(condition: &GoExpression) -> GoExpression {
     match condition {
         GoExpression::Binary { operator: "==", left, right } => {
             GoExpression::Binary { operator: "!=", left: left.clone(), right: right.clone() }

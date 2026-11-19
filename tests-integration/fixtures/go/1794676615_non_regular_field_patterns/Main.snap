@@ -60,19 +60,18 @@ func initializeMain_() []int32 {
 	for index, x := range array {
 		accumulator := &Sequence{Tag: SequenceEmpty}
 		for _, a := range x {
-			b := accumulator
-			switch b.Tag {
+			switch accumulator.Tag {
 			case SequenceEmpty:
 				accumulator = &Sequence{Tag: SequenceOne, One0: a, One1: &Sequence{Tag: SequenceEmpty}}
 			case SequenceZero:
-				accumulator = sequenceCells.New(Sequence{Tag: SequenceOne, One0: a, One1: b.Zero})
+				accumulator = sequenceCells.New(Sequence{Tag: SequenceOne, One0: a, One1: accumulator.Zero})
 			default: // SequenceOne
 				original := func(x2 any) func(*Sequence) *Sequence {
 					return func(value *Sequence) *Sequence {
 						return consTupleIntInt(x2, value)
 					}
 				}
-				accumulator = &Sequence{Tag: SequenceZero, Zero: original(tuple.Convert(tuple.TupleIntInt{First: a, Second: b.One0.(int32)}))(b.One1)}
+				accumulator = &Sequence{Tag: SequenceZero, Zero: original(tuple.Convert(tuple.TupleIntInt{First: a, Second: accumulator.One0.(int32)}))(accumulator.One1)}
 			}
 		}
 		var result int32

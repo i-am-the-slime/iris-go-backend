@@ -38,8 +38,7 @@ func addAll(n int32, reader *Reader) *Reader {
 		case 0:
 			return reader
 		default:
-			n2 := n
-			n, reader = n2 - 1, readerCells.New(Reader{Tag: ReaderPlus, N: n2, Reader: reader})
+			n, reader = n - 1, readerCells.New(Reader{Tag: ReaderPlus, N: n, Reader: reader})
 			continue
 		}
 	}

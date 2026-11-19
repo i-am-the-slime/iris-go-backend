@@ -4,17 +4,13 @@ source: tests-integration/src/fixtures.rs
 // main.go
 package main
 
-import (
-	"fixture/shared"
-	"github.com/i-am-the-slime/purs-backend-go/go-support/exception"
-)
+import "github.com/i-am-the-slime/purs-backend-go/go-support/exception"
 
 func main() {
 	defer exception.ReportUncaught()
 	var ref int32 = 0
 	s_ := ref + 1
-	modified := shared.StateValue{State: s_, Value: s_}
-	ref = modified.State
+	ref = s_
 	scrutinee := ref > 0
 	if scrutinee {
 		panic(exception.NewError("boom"))

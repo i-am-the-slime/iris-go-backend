@@ -13,6 +13,7 @@ mod cases;
 mod chunks;
 mod closures;
 mod coerce;
+mod composites;
 mod conditions;
 mod conventions;
 mod constructors;
@@ -37,6 +38,7 @@ mod reference_equality;
 mod reuse;
 mod strings;
 mod types;
+mod updates;
 mod unreferenced;
 mod views;
 
@@ -142,9 +144,11 @@ where
         await_fibers(&mut declarations);
     }
     timed("references", || references::promote_references(&mut declarations));
+    timed("composites", || composites::take_composites_apart(&mut declarations));
     timed("immediate", || immediate::reduce_immediate_calls(&mut declarations));
     timed("conditions", || conditions::assign_conditions(&mut declarations));
     timed("aliases", || aliases::substitute_aliases(&mut declarations));
+    timed("updates", || updates::update_in_place(&mut declarations));
     timed("ranges", || ranges::read_elements_in_place(&mut declarations));
     let taken =
         |name: &str| emitter.global_names.contains(name) || IMPORTED_PACKAGES.contains(&name);

@@ -18,14 +18,13 @@ func initializeMain_() string {
 	array := []shared.KindSpaceAfterSpaceBeforeValue{shared.KindSpaceAfterSpaceBeforeValue{SpaceBefore: false, SpaceAfter: true, Value: "a", Kind: 1}, shared.KindSpaceAfterSpaceBeforeValue{SpaceBefore: true, SpaceAfter: false, Value: "b", Kind: 2}}
 	accumulator := shared.SpaceValue{Value: "", Space: false}
 	for kindSpaceAfterSpaceBeforeValueIndex := range array {
-		spaceValue := accumulator
 		var result string
-		if spaceValue.Space && array[kindSpaceAfterSpaceBeforeValueIndex].SpaceBefore {
+		if accumulator.Space && array[kindSpaceAfterSpaceBeforeValueIndex].SpaceBefore {
 			result = " "
 		} else {
 			result = ""
 		}
-		accumulator = shared.SpaceValue{Value: prim.Concat(spaceValue.Value, result, array[kindSpaceAfterSpaceBeforeValueIndex].Value), Space: array[kindSpaceAfterSpaceBeforeValueIndex].SpaceAfter}
+		accumulator = shared.SpaceValue{Value: prim.Concat(accumulator.Value, result, array[kindSpaceAfterSpaceBeforeValueIndex].Value), Space: array[kindSpaceAfterSpaceBeforeValueIndex].SpaceAfter}
 	}
 	return accumulator.Value
 }

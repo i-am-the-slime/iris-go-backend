@@ -22,24 +22,20 @@ func main_() int32 {
 		if !continuing {
 			break
 		}
-		i2 := ref3
-		s_ := ref2 + i2
-		modified := shared.StateValue{State: s_, Value: s_}
-		ref2 = modified.State
-		written := i2 + 1
+		s_ := ref2 + ref3
+		ref2 = s_
+		written := ref3 + 1
 		ref3 = written
 	}
 	for i2 := int32(0); i2 < 4; i2++ {
 		s_ := ref2 + i2
-		modified := shared.StateValue{State: s_, Value: s_}
-		ref2 = modified.State
+		ref2 = s_
 	}
 	var ref4 int32 = 0
 	array.Foldr(func(x int32, b func()) func() {
 		return func() {
 			s_ := ref4 + x
-			modified := shared.StateValue{State: s_, Value: s_}
-			ref4 = modified.State
+			ref4 = s_
 			b()
 		}
 	}, func() {
@@ -49,15 +45,13 @@ func main_() int32 {
 
 func drain(cell *shared.Ref[int32], n int32) {
 	for {
-		nCaptured := n
-		if nCaptured <= 0 {
+		if n <= 0 {
 			return
 		}
 		s := cell.Value
-		s_ := s + nCaptured
-		modified := shared.StateValue{State: s_, Value: s_}
-		cell.Value = modified.State
-		n = nCaptured - 1
+		s_ := s + n
+		cell.Value = s_
+		n = n - 1
 	}
 }
 

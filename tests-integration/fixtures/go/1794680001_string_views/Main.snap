@@ -222,9 +222,7 @@ func literalIndexesAloneWalkTheText(text string, count int32) int32 {
 func closureInTheLoopReadsTheView(text string, i int32, found []maybe.Char) []maybe.Char {
 	textUnits := prim.UTF16(text)
 	for {
-		textCaptured := text
-		iCaptured := i
-		if iCaptured >= textUnits.Length() {
+		if i >= textUnits.Length() {
 			return found
 		}
 		array2 := []int32{0, 1}
@@ -232,9 +230,9 @@ func closureInTheLoopReadsTheView(text string, i int32, found []maybe.Char) []ma
 		for index, offset := range array2 {
 			mapped[index] = textUnits.CharAt(func(payload rune) maybe.Char {
 				return maybe.Char(payload)
-			}, maybe.NoChar, iCaptured + offset)
+			}, maybe.NoChar, i + offset)
 		}
-		text, i, found = textCaptured, iCaptured + 3, array.Append(found, mapped)
+		i, found = i + 3, array.Append(found, mapped)
 	}
 }
 

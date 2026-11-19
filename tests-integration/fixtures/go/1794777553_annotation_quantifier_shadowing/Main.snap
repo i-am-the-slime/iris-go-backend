@@ -209,13 +209,12 @@ func initializeMain_() []string {
 	for index, boolean := range array2 {
 		mapped[index] = tuple.TupleStringBoolean{First: "label", Second: boolean}
 	}
-	xs := mapped
-	len_ := int32(len(xs))
+	len_ := int32(len(mapped))
 	array3 := direct.FromFoldable(func(f func(tuple.TupleStringBoolean) func(*direct.ConsList[tuple.TupleStringBoolean]) *direct.ConsList[tuple.TupleStringBoolean]) func(*direct.ConsList[tuple.TupleStringBoolean]) func(*types.ListTupleStringBoolean) *direct.ConsList[tuple.TupleStringBoolean] {
 		return func(b *direct.ConsList[tuple.TupleStringBoolean]) func(*types.ListTupleStringBoolean) *direct.ConsList[tuple.TupleStringBoolean] {
 			return types.Foldr(f, b)
 		}
-	}, mainGoReusing(xs, len_, 0, types.SharedListTupleStringBooleanNil))
+	}, mainGoReusing(mapped, len_, 0, types.SharedListTupleStringBooleanNil))
 	mapped2 := make([]string, len(array3))
 	for index, element := range array3 {
 		mapped2[index] = show.Show(tuple.SndStringBoolean(element))
@@ -225,13 +224,12 @@ func initializeMain_() []string {
 	for index, s := range array4 {
 		mapped3[index] = tuple.TupleStringString{First: "label", Second: s}
 	}
-	xs2 := mapped3
-	len_2 := int32(len(xs2))
+	len_2 := int32(len(mapped3))
 	array5 := direct.FromFoldable(func(f func(tuple.TupleStringString) func(*direct.ConsList[tuple.TupleStringString]) *direct.ConsList[tuple.TupleStringString]) func(*direct.ConsList[tuple.TupleStringString]) func(*types.ListTupleStringString) *direct.ConsList[tuple.TupleStringString] {
 		return func(b *direct.ConsList[tuple.TupleStringString]) func(*types.ListTupleStringString) *direct.ConsList[tuple.TupleStringString] {
 			return types.Foldr2(f, b)
 		}
-	}, mainGoReusing2(xs2, len_2, 0, types.SharedListTupleStringStringNil))
+	}, mainGoReusing2(mapped3, len_2, 0, types.SharedListTupleStringStringNil))
 	mapped4 := make([]string, len(array5))
 	for index, element := range array5 {
 		mapped4[index] = tuple.SndStringString(element)

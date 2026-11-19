@@ -47,11 +47,10 @@ func initializeMain_() maybe.ArrayInt {
 	array3 := array.Slice(1, int32(len(array2)), array2)
 	accumulator := result
 	for _, element := range array3 {
-		accumulator2 := accumulator
-		switch accumulator2.Tag {
+		switch accumulator.Tag {
 		case maybe.TagJust:
 			if prim.IntMod(element, 2) == 0 {
-				accumulator = maybe.JustArrayInt(append_(accumulator2.Just)(prim.IntDiv(element, 2)))
+				accumulator = maybe.JustArrayInt(append_(accumulator.Just)(prim.IntDiv(element, 2)))
 			} else {
 				accumulator = maybe.NoArrayInt
 			}

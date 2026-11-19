@@ -27,7 +27,6 @@ package main
 
 import (
 	"fixture/Data/Array"
-	"fixture/shared"
 	"github.com/i-am-the-slime/purs-backend-go/go-support/exception"
 	"github.com/i-am-the-slime/purs-backend-go/go-support/prim"
 	"os"
@@ -37,11 +36,11 @@ func main_() int32 {
 	var ref int32 = 0
 	i := dataarray.FoldMEffectIntInt(func(acc int32, n int32) int32 {
 		s_ := ref + 1
-		modified := shared.StateValue{State: s_, Value: s_}
-		ref = modified.State
+		ref = s_
 		return acc + n
 	}, 0, []int32{1, 2, 3})
-	return prim.MultiplyInt32(i, 10) + ref
+	i2 := ref
+	return prim.MultiplyInt32(i, 10) + i2
 }
 
 func main() {

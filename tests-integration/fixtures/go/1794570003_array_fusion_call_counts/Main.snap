@@ -23,43 +23,38 @@ func initializeMain_() shared.MainResult {
 	var accumulator int32 = 0
 	for _, x := range numbers {
 		s_ := ref + 1
-		modified := shared.StateValue{State: s_, Value: s_}
-		ref = modified.State
+		ref = s_
 		performed2 := x > 2
 		if performed2 {
 			s_2 := ref2 + 1
-			modified2 := shared.StateValue{State: s_2, Value: s_2}
-			ref2 = modified2.State
+			ref2 = s_2
 			performed3 := prim.MultiplyInt32(x, 3)
 			accumulator = accumulator + performed3
 		}
 	}
 	ref3 = accumulator
-	modified3 := shared.StateValue{State: 0, Value: ref2}
-	ref2 = modified3.State
-	i := modified3.Value
+	modified := shared.StateValue{State: 0, Value: ref2}
+	ref2 = modified.State
+	i := modified.Value
 	mapped := make([]int32, len(numbers))
 	for index, x := range numbers {
 		s_ := ref2 + 1
-		modified := shared.StateValue{State: s_, Value: s_}
-		ref2 = modified.State
+		ref2 = s_
 		performed2 := prim.MultiplyInt32(x, 3)
 		mapped[index] = performed2
 	}
-	tripled := mapped
 	var accumulator2 int32 = 0
-	for _, value := range tripled {
+	for _, value := range mapped {
 		accumulator2 = accumulator2 + value
 	}
-	ref4 = accumulator2 + int32(len(tripled))
-	modified4 := shared.StateValue{State: 0, Value: ref2}
-	ref2 = modified4.State
-	i2 := modified4.Value
+	ref4 = accumulator2 + int32(len(mapped))
+	modified2 := shared.StateValue{State: 0, Value: ref2}
+	ref2 = modified2.State
+	i2 := modified2.Value
 	found := false
 	for _, x := range numbers {
 		s_ := ref2 + 1
-		modified := shared.StateValue{State: s_, Value: s_}
-		ref2 = modified.State
+		ref2 = s_
 		performed2 := prim.MultiplyInt32(x, 3)
 		if performed2 > 20 {
 			found = true

@@ -1,43 +1,46 @@
-use crate::syntax::{GoDeclaration, GoExpression, GoStatement};
+use rustc_hash::FxHashSet;
+
+use crate::syntax::{GoDeclaration, GoExpression, GoStatement, GoType};
 use crate::walk::{self, Walk};
 
 pub(super) fn substitute_aliases(declarations: &mut [GoDeclaration]) {
     for declaration in declarations {
+        let guarded = Guarded::of(declaration);
         walk::each_block_in_declaration(declaration, |block| {
             let mut position = 0;
             while position < block.len() {
-                if !substitute_at(block, position) {
+                if !substitute_at(block, position, &guarded) {
                     position += 1;
                 }
             }
+            drop_self_assignments(block);
         });
     }
 }
 
-fn substitute_at(block: &mut Vec<GoStatement>, position: usize) -> bool {
+fn substitute_at(block: &mut Vec<GoStatement>, position: usize, guarded: &Guarded) -> bool {
     let Some((alias, original)) = defined_alias(&block[position]) else { return false };
+    if guarded.written_in_literal(&alias) || !guarded.is_local(&original) {
+        return false;
+    }
     let rest = &mut block[position + 1..];
-    let mut total = 0;
-    let mut use_at = None;
-    for (offset, statement) in rest.iter_mut().enumerate() {
-        let count = reads(statement, &alias);
-        if count > 0 && use_at.is_none() {
-            use_at = Some(offset);
-        }
-        total += count;
-    }
-    let Some(use_at) = use_at.filter(|_| total == 1) else { return false };
-    if !head_reads_once(&mut rest[use_at], &alias) {
+    let Some(last) = last_read(rest, &alias) else { return false };
+    if guarded.written_in_literal(&original) && rest[..=last].iter_mut().any(calls) {
         return false;
     }
-    if rest[..use_at].iter_mut().any(|statement| writes(statement, &original)) {
+    if rest.iter_mut().any(|statement| writes(statement, &alias)) {
         return false;
     }
-    walk::each_expression_in_statement(&mut rest[use_at], |expression| {
-        if is_named(expression, &alias) {
-            *expression = GoExpression::Identifier(original.clone());
-        }
-    });
+    if read_before_written(&mut rest[..=last], &alias, &original, false).is_none() {
+        return false;
+    }
+    for statement in rest {
+        walk::each_expression_in_statement(statement, |expression| {
+            if is_named(expression, &alias) {
+                *expression = GoExpression::Identifier(original.clone());
+            }
+        });
+    }
     block.remove(position);
     true
 }
@@ -49,60 +52,98 @@ fn defined_alias(statement: &GoStatement) -> Option<(String, String)> {
     (alias != original && original != "nil").then(|| (alias.clone(), original.clone()))
 }
 
-fn heads(statement: &mut GoStatement) -> Option<Vec<&mut GoExpression>> {
-    Some(match statement {
-        GoStatement::Define { values, .. } | GoStatement::Assign { values, .. } => {
-            values.iter_mut().collect()
+fn last_read(rest: &mut [GoStatement], alias: &str) -> Option<usize> {
+    let mut last = None;
+    for (offset, statement) in rest.iter_mut().enumerate() {
+        match reads(statement, alias) {
+            Read::Never => {}
+            Read::Plainly => last = Some(offset),
+            Read::InLiteral => return None,
         }
-        GoStatement::Variable { value: Some(value), .. }
-        | GoStatement::Expression(value)
-        | GoStatement::Defer(value)
-        | GoStatement::Return(Some(value))
-        | GoStatement::If { condition: value, .. }
-        | GoStatement::Switch { value: Some(value), .. }
-        | GoStatement::IfAssert { value, .. }
-        | GoStatement::Range { iterable: value, .. } => vec![value],
-        _ => return None,
-    })
-}
-
-fn head_reads_once(statement: &mut GoStatement, alias: &str) -> bool {
-    let Some(heads) = heads(statement) else { return false };
-    let mut reads = Reads { name: alias, count: 0, in_literal: false };
-    for head in heads {
-        reads.expression(head);
     }
-    reads.count == 1
+    last
 }
 
-fn reads(statement: &mut GoStatement, name: &str) -> usize {
-    let mut reads = Reads { name, count: 0, in_literal: false };
+fn read_before_written(
+    block: &mut [GoStatement],
+    alias: &str,
+    original: &str,
+    mut written: bool,
+) -> Option<bool> {
+    for statement in block {
+        let read = !matches!(reads(statement, alias), Read::Never);
+        if read && written {
+            return None;
+        }
+        written = match statement {
+            GoStatement::If { then, otherwise, .. } => {
+                let after_then = read_before_written(then, alias, original, written)?;
+                let after_otherwise = read_before_written(otherwise, alias, original, written)?;
+                after_then || after_otherwise
+            }
+            GoStatement::IfAssert { then, .. } => {
+                read_before_written(then, alias, original, written)?
+            }
+            GoStatement::Switch { cases, default, .. } => {
+                let mut after = written;
+                for body in cases.iter_mut().map(|case| &mut case.body) {
+                    after |= read_before_written(body, alias, original, written)?;
+                }
+                if let Some(default) = default {
+                    after |= read_before_written(&mut default.body, alias, original, written)?;
+                }
+                after
+            }
+            GoStatement::Range { body, .. }
+            | GoStatement::Counting { body, .. }
+            | GoStatement::CountingDown { body, .. }
+            | GoStatement::Loop(body)
+            | GoStatement::LabeledLoop { body, .. } => {
+                let writes_in_body = body.iter_mut().any(|statement| writes(statement, original));
+                let reads_in_body = body
+                    .iter_mut()
+                    .any(|statement| !matches!(reads(statement, alias), Read::Never));
+                if writes_in_body && reads_in_body {
+                    return None;
+                }
+                written || writes_in_body
+            }
+            statement => written || writes(statement, original),
+        };
+    }
+    Some(written)
+}
+
+enum Read {
+    Never,
+    Plainly,
+    InLiteral,
+}
+
+fn reads(statement: &mut GoStatement, name: &str) -> Read {
+    let mut reads = Reads { name, count: 0, in_literal: false, read_in_literal: false };
     reads.statement(statement);
-    reads.count
+    match (reads.count, reads.read_in_literal) {
+        (_, true) => Read::InLiteral,
+        (0, false) => Read::Never,
+        _ => Read::Plainly,
+    }
 }
 
 struct Reads<'a> {
     name: &'a str,
     count: usize,
     in_literal: bool,
+    read_in_literal: bool,
 }
 
 impl Walk for Reads<'_> {
-    fn statement(&mut self, statement: &mut GoStatement) {
-        if let GoStatement::Assign { targets, .. } = statement
-            && targets.iter().any(|target| is_named(target, self.name))
-        {
-            self.count += 2;
-        }
-        walk::statement(self, statement);
-    }
-
     fn expression(&mut self, value: &mut GoExpression) {
         match value {
             GoExpression::Identifier(name) if name == self.name => {
-                self.count += if self.in_literal { 2 } else { 1 };
+                self.count += 1;
+                self.read_in_literal |= self.in_literal;
             }
-            GoExpression::Address(inner) if is_named(inner, self.name) => self.count += 2,
             GoExpression::Function { .. } => {
                 let enclosing = std::mem::replace(&mut self.in_literal, true);
                 walk::expression(self, value);
@@ -113,7 +154,19 @@ impl Walk for Reads<'_> {
     }
 }
 
-fn writes(statement: &mut GoStatement, name: &str) -> bool {
+pub(super) fn calls(statement: &mut GoStatement) -> bool {
+    let mut found = false;
+    walk::each_expression_in_statement(statement, |expression| {
+        found |= matches!(expression, GoExpression::Call { .. });
+    });
+    found
+}
+
+pub(super) fn mentions(statement: &mut GoStatement, name: &str) -> bool {
+    !matches!(reads(statement, name), Read::Never) || writes(statement, name)
+}
+
+pub(super) fn writes(statement: &mut GoStatement, name: &str) -> bool {
     let mut writes = Writes { name, written: false };
     writes.statement(statement);
     writes.written
@@ -127,14 +180,11 @@ struct Writes<'a> {
 impl Walk for Writes<'_> {
     fn statement(&mut self, statement: &mut GoStatement) {
         let bound: Vec<&str> = match statement {
-            GoStatement::Assign { targets, .. } => targets
-                .iter()
-                .filter_map(|target| match target {
-                    GoExpression::Identifier(name) => Some(name.as_str()),
-                    _ => None,
-                })
-                .collect(),
+            GoStatement::Assign { targets, .. } => {
+                targets.iter().filter_map(|target| target_root(target)).collect()
+            }
             GoStatement::Define { names, .. } => names.iter().map(String::as_str).collect(),
+            GoStatement::Variable { name, .. } | GoStatement::IfAssert { name, .. } => vec![name],
             GoStatement::Range { element, index, .. } => {
                 index.iter().map(String::as_str).chain([element.as_str()]).collect()
             }
@@ -156,6 +206,216 @@ impl Walk for Writes<'_> {
             self.written = true;
         }
         walk::expression(self, value);
+    }
+}
+
+pub(super) fn target_root(target: &GoExpression) -> Option<&str> {
+    match target {
+        GoExpression::Identifier(name) => Some(name),
+        GoExpression::Field { value, .. } | GoExpression::Index { value, .. } => target_root(value),
+        _ => None,
+    }
+}
+
+pub(super) struct Guarded {
+    read: FxHashSet<String>,
+    written: FxHashSet<String>,
+    bound: FxHashSet<String>,
+}
+
+impl Guarded {
+    pub(super) fn of(declaration: &mut GoDeclaration) -> Self {
+        let guarded = Guarded { read: default(), written: default(), bound: default() };
+        let mut literals = Literals { guarded };
+        walk::declaration(&mut literals, declaration);
+        let mut bound = Bound { names: default() };
+        if let GoDeclaration::Function { parameters, .. } = declaration {
+            bound.names.extend(parameters.iter().map(|(name, _)| name.clone()));
+        }
+        walk::declaration(&mut bound, declaration);
+        literals.guarded.bound = bound.names;
+        literals.guarded
+    }
+
+    pub(super) fn is_local(&self, name: &str) -> bool {
+        self.bound.contains(name)
+    }
+
+    pub(super) fn written_in_literal(&self, name: &str) -> bool {
+        self.written.contains(name)
+    }
+
+    pub(super) fn mentioned_in_literal(&self, name: &str) -> bool {
+        self.read.contains(name) || self.written.contains(name)
+    }
+}
+
+fn default<T: Default>() -> T {
+    T::default()
+}
+
+struct Bound {
+    names: FxHashSet<String>,
+}
+
+impl Walk for Bound {
+    fn statement(&mut self, statement: &mut GoStatement) {
+        match statement {
+            GoStatement::Define { names, .. } => self.names.extend(names.iter().cloned()),
+            GoStatement::Variable { name, .. } | GoStatement::IfAssert { name, .. } => {
+                self.names.insert(name.clone());
+            }
+            GoStatement::Range { element, index, .. } => {
+                self.names.extend(index.iter().chain([&*element]).cloned());
+            }
+            GoStatement::Counting { variable, .. } | GoStatement::CountingDown { variable, .. } => {
+                self.names.insert(variable.clone());
+            }
+            _ => {}
+        }
+        walk::statement(self, statement);
+    }
+
+    fn expression(&mut self, value: &mut GoExpression) {
+        if let GoExpression::Function { parameters, .. } = value {
+            self.names.extend(parameters.iter().map(|(name, _)| name.clone()));
+        }
+        walk::expression(self, value);
+    }
+}
+
+struct Literals {
+    guarded: Guarded,
+}
+
+impl Walk for Literals {
+    fn expression(&mut self, value: &mut GoExpression) {
+        match value {
+            GoExpression::Function { parameters, body, .. } => {
+                let (read, written) = Free::of(parameters, body, &mut self.guarded);
+                self.guarded.read.extend(read);
+                self.guarded.written.extend(written);
+            }
+            GoExpression::Address(inner) => {
+                if let Some(root) = target_root(inner) {
+                    self.guarded.written.insert(root.to_string());
+                }
+                walk::expression(self, value);
+            }
+            _ => walk::expression(self, value),
+        }
+    }
+}
+
+struct Free<'g> {
+    read: FxHashSet<String>,
+    written: FxHashSet<String>,
+    bound: FxHashSet<String>,
+    guarded: &'g mut Guarded,
+}
+
+impl<'g> Free<'g> {
+    fn of(
+        parameters: &[(String, GoType)],
+        body: &mut Vec<GoStatement>,
+        guarded: &'g mut Guarded,
+    ) -> (FxHashSet<String>, FxHashSet<String>) {
+        let bound = parameters.iter().map(|(name, _)| name.clone()).collect();
+        let mut free = Free { read: default(), written: default(), bound, guarded };
+        free.block(body);
+        let Free { mut read, mut written, bound, .. } = free;
+        read.retain(|name| !bound.contains(name));
+        written.retain(|name| !bound.contains(name));
+        (read, written)
+    }
+}
+
+impl Walk for Free<'_> {
+    fn statement(&mut self, statement: &mut GoStatement) {
+        match statement {
+            GoStatement::Assign { targets, values } => {
+                for target in targets.iter_mut() {
+                    if let Some(root) = target_root(target) {
+                        self.written.insert(root.to_string());
+                    }
+                    self.expression(target);
+                }
+                values.iter_mut().for_each(|value| self.expression(value));
+                return;
+            }
+            GoStatement::Define { names, .. } => self.bound.extend(names.iter().cloned()),
+            GoStatement::Variable { name, .. } | GoStatement::IfAssert { name, .. } => {
+                self.bound.insert(name.clone());
+            }
+            GoStatement::Range { element, index, .. } => {
+                self.bound.extend(index.iter().chain([&*element]).cloned());
+            }
+            GoStatement::Counting { variable, .. } | GoStatement::CountingDown { variable, .. } => {
+                self.bound.insert(variable.clone());
+            }
+            _ => {}
+        }
+        walk::statement(self, statement);
+    }
+
+    fn expression(&mut self, value: &mut GoExpression) {
+        match value {
+            GoExpression::Identifier(name) => {
+                self.read.insert(name.clone());
+            }
+            GoExpression::Function { parameters, body, .. } => {
+                let (read, written) = Free::of(parameters, body, self.guarded);
+                self.guarded.read.extend(read.iter().cloned());
+                self.guarded.written.extend(written.iter().cloned());
+                self.read.extend(read);
+                self.written.extend(written);
+            }
+            GoExpression::Address(inner) => {
+                if let Some(root) = target_root(inner) {
+                    self.written.insert(root.to_string());
+                }
+                walk::expression(self, value);
+            }
+            _ => walk::expression(self, value),
+        }
+    }
+}
+
+fn drop_self_assignments(block: &mut Vec<GoStatement>) {
+    for statement in block.iter_mut() {
+        if let GoStatement::Assign { targets, values } = statement
+            && targets.len() == values.len()
+        {
+            let kept: Vec<bool> = targets
+                .iter()
+                .zip(values.iter())
+                .map(|(target, value)| !is_same_local(target, value))
+                .collect();
+            let mut keep = kept.iter().copied();
+            targets.retain(|_| keep.next().unwrap_or(true));
+            let mut keep = kept.into_iter();
+            values.retain(|_| keep.next().unwrap_or(true));
+        }
+    }
+    block.retain(|statement| {
+        !matches!(statement, GoStatement::Assign { targets, .. } if targets.is_empty())
+    });
+    for statement in block {
+        if let GoStatement::If { condition, then, otherwise } = statement {
+            drop_self_assignments(then);
+            drop_self_assignments(otherwise);
+            if then.is_empty() && !otherwise.is_empty() {
+                *condition = super::conditions::negated(condition);
+                std::mem::swap(then, otherwise);
+            }
+        }
+    }
+}
+
+fn is_same_local(target: &GoExpression, value: &GoExpression) -> bool {
+    match (target, value) {
+        (GoExpression::Identifier(target), GoExpression::Identifier(value)) => target == value,
+        _ => false,
     }
 }
 

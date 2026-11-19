@@ -52,10 +52,9 @@ func describeArrayBoolean(showDictionary shared.Show, depths []int32, label stri
 		case 0:
 			return string(labelBytes) + prim.ShowArray(show.Show2, depths) + ": " + showDictionaryCaptured.Show(value)
 		default:
-			depth2 := depth
 			showDictionary, depths, labelBytes, depth, value = shared.Show{Show: func(coerced any) string {
 				return prim.ShowArray(showDictionaryCaptured.Show, coerced.([]any))
-			}}, append(depths, depth2), append(labelBytes, ">"...), depth2 - 1, []any{value}
+			}}, append(depths, depth), append(labelBytes, ">"...), depth - 1, []any{value}
 			continue
 		}
 	}

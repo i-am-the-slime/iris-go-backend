@@ -17,29 +17,27 @@ var main_ = initializeMain_()
 func initializeMain_() shared.MainResult {
 	defer exception.ReportUncaught()
 	var ref int32 = 4
-	i := ref
 	ref2 := []int32{}
-	step, count := shared.RangeSteps(i, 1)
+	step, count := shared.RangeSteps(ref, 1)
 	for index := range count {
-		i2 := i + int32(index) * step
-		s_ := array.Append(ref2, []int32{i2})
-		modified := shared.StateValue{State: s_, Value: s_}
-		ref2 = modified.State
+		i := ref + int32(index) * step
+		s_ := array.Append(ref2, []int32{i})
+		ref2 = s_
 	}
-	step2, count2 := shared.RangeSteps(1, i)
+	step2, count2 := shared.RangeSteps(1, ref)
 	var accumulator int32 = 0
 	for index := range count2 {
 		value := 1 + int32(index) * step2
 		accumulator = accumulator + value
 	}
-	step3, count3 := shared.RangeSteps(i, 1)
+	step3, count3 := shared.RangeSteps(ref, 1)
 	accumulator2 := ""
 	for index := count3 - 1; index >= 0; index-- {
-		x := i + int32(index) * step3
+		x := ref + int32(index) * step3
 		accumulator2 = prim.ShowInt(x) + "," + accumulator2
 	}
-	_, count4 := shared.RangeSteps(1, i)
-	step4, count5 := shared.RangeSteps(1, i)
+	_, count4 := shared.RangeSteps(1, ref)
+	step4, count5 := shared.RangeSteps(1, ref)
 	mapped := make([]int32, count5)
 	for slot := range count5 {
 		x := 1 + int32(slot) * step4

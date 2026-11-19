@@ -94,13 +94,10 @@ func initializeMain_() string {
 	array := []either_tuple.TupleMaybeIntEitherStringInt{either_tuple.TupleMaybeIntEitherStringInt{First: maybe.Int(1), Second: either.EitherStringInt{Tag: either.EitherStringIntRight, Right: 2}}, either_tuple.TupleMaybeIntEitherStringInt{First: maybe.NoInt, Second: either.EitherStringInt{Tag: either.EitherStringIntLeft, Left: "x"}}}
 	var accumulator int32 = 0
 	for tupleIndex := range array {
-		acc := accumulator
 		if array[tupleIndex].First != maybe.NoInt && array[tupleIndex].Second.Tag == either.EitherStringIntRight {
-			accumulator = acc + int32(array[tupleIndex].First) + array[tupleIndex].Second.Right
+			accumulator = accumulator + int32(array[tupleIndex].First) + array[tupleIndex].Second.Right
 		} else if array[tupleIndex].Second.Tag == either.EitherStringIntLeft {
-			accumulator = acc - 1
-		} else {
-			accumulator = acc
+			accumulator = accumulator - 1
 		}
 	}
 	array2 := []Labelled{Labelled{Tag: LabelledTag, Tag0: "t"}, Labelled{Tag: LabelledUntagged}}
