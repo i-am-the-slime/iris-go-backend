@@ -1,0 +1,434 @@
+---
+source: tests-integration/src/fixtures.rs
+---
+// Data/Maybe/maybe.go
+package maybe
+
+type Int int64
+
+const NoInt Int = 1 << 32
+
+const TagNothing = 0
+
+const TagJust = 1
+
+type MaybeInt struct {
+	Just Int
+	Tag  uint8
+}
+
+func JustMaybeInt(just Int) MaybeInt {
+	return MaybeInt{Tag: TagJust, Just: just}
+}
+
+var NoMaybeInt = MaybeInt{Tag: TagNothing}
+
+type Char int64
+
+const NoChar Char = 1 << 32
+
+type Boolean uint8
+
+const (
+	False Boolean = iota
+	True
+	NoBoolean
+)
+
+func JustBoolean(just bool) Boolean {
+	if just {
+		return True
+	}
+	return False
+}
+
+// main.go
+package main
+
+import (
+	"fixture/Data/Maybe"
+	"fmt"
+	"github.com/i-am-the-slime/purs-backend-go/go-support/exception"
+	"github.com/i-am-the-slime/purs-backend-go/go-support/prim"
+)
+
+type Tree struct {
+	Node0 *Tree
+	Node2 *Tree
+	Node1 int32
+	Tag   uint8
+}
+
+const (
+	TreeLeaf = iota
+	TreeNode
+)
+
+var sharedTreeLeaf = &Tree{Tag: TreeLeaf}
+
+type Shape struct {
+	Circle  int32
+	Square0 int32
+	Square1 int32
+	Tag     uint8
+}
+
+const (
+	ShapeCircle = iota
+	ShapeSquare
+)
+
+type MaybeShape struct {
+	Just Shape
+	Tag  uint8
+}
+
+func JustShape(just Shape) MaybeShape {
+	return MaybeShape{Tag: maybe.TagJust, Just: just}
+}
+
+var NoShape = MaybeShape{Tag: maybe.TagNothing}
+
+var main_ = initializeMain_()
+
+func initializeMain_() []string {
+	defer exception.ReportUncaught()
+	x := opaque(10)
+	var result int32
+	if x > 0 {
+		result = x + 1
+	} else {
+		result = 0
+	}
+	x2 := opaque(1)
+	x3 := opaque(1)
+	var result2 maybe.Int
+	if x2 > 0 {
+		result2 = maybe.Int(x2 + 1)
+	} else {
+		result2 = maybe.NoInt
+	}
+	var result3 maybe.Int
+	if x3 > 0 {
+		result3 = maybe.Int(x3 + 1)
+	} else {
+		result3 = maybe.NoInt
+	}
+	var result4 bool
+	if result2 == maybe.NoInt && result3 == maybe.NoInt {
+		result4 = true
+	} else if result2 != maybe.NoInt && result3 != maybe.NoInt {
+		result4 = int32(result2) == int32(result3)
+	} else {
+		result4 = false
+	}
+	var result5 string
+	if result4 {
+		result5 = "true"
+	} else {
+		result5 = "false"
+	}
+	x4 := opaque(1)
+	x5 := opaque(2)
+	var result6 maybe.Int
+	if x4 > 0 {
+		result6 = maybe.Int(x4 + 1)
+	} else {
+		result6 = maybe.NoInt
+	}
+	var result7 maybe.Int
+	if x5 > 0 {
+		result7 = maybe.Int(x5 + 1)
+	} else {
+		result7 = maybe.NoInt
+	}
+	var result8 string
+	if result6 == maybe.NoInt && result7 == maybe.NoInt {
+		result8 = "EQ"
+	} else if result6 == maybe.NoInt {
+		result8 = "LT"
+	} else if result7 == maybe.NoInt {
+		result8 = "GT"
+	} else {
+		left0 := int32(result6)
+		right0 := int32(result7)
+		if left0 < right0 {
+			result8 = "LT"
+		} else if left0 == right0 {
+			result8 = "EQ"
+		} else {
+			result8 = "GT"
+		}
+	}
+	var result9 string
+	if opaque(1) > 0 {
+		result9 = "(Just " + prim.ShowChar(rune('c')) + ")"
+	} else {
+		result9 = "Nothing"
+	}
+	x6 := opaque(7)
+	var result10 string
+	if x6 > 0 {
+		scrutinee := x6 > 5
+		var result11 string
+		if scrutinee {
+			result11 = "true"
+		} else {
+			result11 = "false"
+		}
+		result10 = "(Just " + result11 + ")"
+	} else {
+		result10 = "Nothing"
+	}
+	x7 := opaque(4)
+	var result12 string
+	if x7 > 0 {
+		result12 = "(Just " + prim.ShowInt(sumTree(&Tree{Tag: TreeNode, Node0: sharedTreeLeaf, Node1: x7, Node2: sharedTreeLeaf})) + ")"
+	} else {
+		result12 = "Nothing"
+	}
+	x8 := opaque(5)
+	var result13 string
+	if x8 > 0 {
+		result13 = "(Just " + prim.ShowInt(1 + x8) + ")"
+	} else {
+		result13 = "Nothing"
+	}
+	var result14 string
+	if opaque(1) > 0 {
+		result14 = "yes"
+	} else {
+		result14 = "no"
+	}
+	x9 := opaque(2)
+	var result15 string
+	if x9 > 0 {
+		x10 := x9 - 1
+		var result11 string
+		if x10 > 0 {
+			result11 = "(Just " + prim.ShowInt(x10 + 1) + ")"
+		} else {
+			result11 = "Nothing"
+		}
+		result15 = "(Just " + result11 + ")"
+	} else {
+		result15 = "Nothing"
+	}
+	x11 := opaque(-7)
+	x12 := opaque(-7)
+	var result16 MaybeShape
+	if x11 > 0 {
+		result16 = JustShape(Shape{Tag: ShapeCircle, Circle: x11})
+	} else if x11 < -5 {
+		result16 = JustShape(Shape{Tag: ShapeSquare, Square0: x11, Square1: x11})
+	} else {
+		result16 = NoShape
+	}
+	var result17 MaybeShape
+	if x12 > 0 {
+		result17 = JustShape(Shape{Tag: ShapeCircle, Circle: x12})
+	} else if x12 < -5 {
+		result17 = JustShape(Shape{Tag: ShapeSquare, Square0: x12, Square1: x12})
+	} else {
+		result17 = NoShape
+	}
+	var result18 bool
+	if result16.Tag == maybe.TagNothing && result17.Tag == maybe.TagNothing {
+		result18 = true
+	} else if result16.Tag == maybe.TagJust && result17.Tag == maybe.TagJust {
+		if result16.Just.Tag == ShapeCircle && result17.Just.Tag == ShapeCircle {
+			result18 = result16.Just.Circle == result17.Just.Circle
+		} else if result16.Just.Tag == ShapeSquare && result17.Just.Tag == ShapeSquare {
+			if result16.Just.Square0 == result17.Just.Square0 {
+				result18 = result16.Just.Square1 == result17.Just.Square1
+			} else {
+				result18 = false
+			}
+		} else {
+			result18 = false
+		}
+	} else {
+		result18 = false
+	}
+	var result19 string
+	if result18 {
+		result19 = "true"
+	} else {
+		result19 = "false"
+	}
+	x13 := opaque(7)
+	x14 := opaque(-7)
+	var result20 MaybeShape
+	if x13 > 0 {
+		result20 = JustShape(Shape{Tag: ShapeCircle, Circle: x13})
+	} else if x13 < -5 {
+		result20 = JustShape(Shape{Tag: ShapeSquare, Square0: x13, Square1: x13})
+	} else {
+		result20 = NoShape
+	}
+	var result21 MaybeShape
+	if x14 > 0 {
+		result21 = JustShape(Shape{Tag: ShapeCircle, Circle: x14})
+	} else if x14 < -5 {
+		result21 = JustShape(Shape{Tag: ShapeSquare, Square0: x14, Square1: x14})
+	} else {
+		result21 = NoShape
+	}
+	var result22 string
+	if result20.Tag == maybe.TagNothing && result21.Tag == maybe.TagNothing {
+		result22 = "EQ"
+	} else if result20.Tag == maybe.TagNothing {
+		result22 = "LT"
+	} else if result21.Tag == maybe.TagNothing {
+		result22 = "GT"
+	} else if result20.Just.Tag == ShapeCircle && result21.Just.Tag == ShapeCircle {
+		left0 := result20.Just.Circle
+		right0 := result21.Just.Circle
+		if left0 < right0 {
+			result22 = "LT"
+		} else if left0 == right0 {
+			result22 = "EQ"
+		} else {
+			result22 = "GT"
+		}
+	} else if result20.Just.Tag == ShapeCircle {
+		result22 = "LT"
+	} else if result21.Just.Tag == ShapeCircle {
+		result22 = "GT"
+	} else {
+		left0 := result20.Just.Square0
+		left1 := result20.Just.Square1
+		right0 := result21.Just.Square0
+		right1 := result21.Just.Square1
+		if left0 < right0 {
+			result22 = "LT"
+		} else if left0 == right0 {
+			if left1 < right1 {
+				result22 = "LT"
+			} else if left1 == right1 {
+				result22 = "EQ"
+			} else {
+				result22 = "GT"
+			}
+		} else {
+			result22 = "GT"
+		}
+	}
+	scrutinee2 := opaque(0) > 0
+	var result23 string
+	if scrutinee2 {
+		result23 = "true"
+	} else {
+		result23 = "false"
+	}
+	x15 := opaque(1)
+	var result24 maybe.Int
+	if x15 > 0 {
+		result24 = maybe.Int(x15 + 1)
+	} else {
+		result24 = maybe.NoInt
+	}
+	elements := []maybe.Int{result24, maybe.NoInt}
+	var result25 string
+	if 0 < int32(len(elements)) {
+		scrutinee := elements[0]
+		var result11 string
+		if scrutinee != maybe.NoInt {
+			result11 = "(Just " + prim.ShowInt(int32(scrutinee)) + ")"
+		} else {
+			result11 = "Nothing"
+		}
+		result25 = "(Just " + result11 + ")"
+	} else {
+		result25 = "Nothing"
+	}
+	x16 := opaque(1)
+	var result26 *Tree
+	if x16 > 0 {
+		result26 = &Tree{Tag: TreeNode, Node0: sharedTreeLeaf, Node1: x16, Node2: sharedTreeLeaf}
+	} else {
+		result26 = nil
+	}
+	var result27 string
+	if result26 != nil && result26.Tag == TreeNode {
+		result27 = prim.ShowInt(result26.Node1)
+	} else if result26 != nil && result26.Tag == TreeLeaf {
+		result27 = "leaf"
+	} else {
+		result27 = "none"
+	}
+	x17 := opaque(2)
+	var result28 maybe.MaybeInt
+	if x17 > 0 {
+		x10 := x17 - 1
+		var result11 maybe.Int
+		if x10 > 0 {
+			result11 = maybe.Int(x10 + 1)
+		} else {
+			result11 = maybe.NoInt
+		}
+		result28 = maybe.JustMaybeInt(result11)
+	} else {
+		result28 = maybe.NoMaybeInt
+	}
+	var result29 string
+	if result28.Tag == maybe.TagJust && result28.Just != maybe.NoInt {
+		result29 = prim.ShowInt(int32(result28.Just))
+	} else if result28.Tag == maybe.TagJust && result28.Just == maybe.NoInt {
+		result29 = "just nothing"
+	} else {
+		result29 = "nothing"
+	}
+	var result30 maybe.Char
+	if opaque(1) > 0 {
+		result30 = maybe.Char('c')
+	} else {
+		result30 = maybe.NoChar
+	}
+	var result31 string
+	if result30 != maybe.NoChar && rune(result30) == 'c' {
+		result31 = "c"
+	} else if result30 != maybe.NoChar {
+		result31 = "other"
+	} else {
+		result31 = "none"
+	}
+	x18 := opaque(7)
+	var result32 maybe.Boolean
+	if x18 > 0 {
+		result32 = maybe.JustBoolean(x18 > 5)
+	} else {
+		result32 = maybe.NoBoolean
+	}
+	var result33 string
+	if result32 == maybe.True {
+		result33 = "yes"
+	} else if result32 == maybe.False {
+		result33 = "no"
+	} else {
+		result33 = "none"
+	}
+	return []string{prim.ShowInt(result), result5, result8, result9, result10, result12, result13, result14, result15, result19, result22, result23, result25, result27, result29, result31, result33}
+}
+
+func opaque(x int32) int32 {
+	for {
+		if x == 12345 {
+			continue
+		}
+		return x
+	}
+}
+
+func sumTree(tree *Tree) int32 {
+	switch tree.Tag {
+	case TreeLeaf:
+		return 0
+	default: // TreeNode
+		return sumTree(tree.Node0) + tree.Node1 + sumTree(tree.Node2)
+	}
+}
+
+func main() {
+	fmt.Println(main_)
+}

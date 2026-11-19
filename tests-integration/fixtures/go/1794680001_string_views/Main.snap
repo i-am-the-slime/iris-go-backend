@@ -6,33 +6,19 @@ package maybe
 
 import "github.com/i-am-the-slime/purs-backend-go/go-support/prim"
 
-type MaybeChar struct {
-	Just rune
-	Tag  uint8
-}
+type Char int64
 
-const (
-	MaybeCharNothing = iota
-	MaybeCharJust
-)
+const NoChar Char = 1 << 32
 
-type MaybeInt struct {
-	Just int32
-	Tag  uint8
-}
+type Int int64
 
-const (
-	MaybeIntNothing = iota
-	MaybeIntJust
-)
+const NoInt Int = 1 << 32
 
-func ShowChar(maybe MaybeChar) string {
-	switch maybe.Tag {
-	case MaybeCharJust:
-		return "(Just " + prim.ShowChar(maybe.Just) + ")"
-	default: // MaybeCharNothing
-		return "Nothing"
+func ShowChar(maybe Char) string {
+	if maybe != NoChar {
+		return "(Just " + prim.ShowChar(rune(maybe)) + ")"
 	}
+	return "Nothing"
 }
 
 // Data/Show/show.go
@@ -65,25 +51,24 @@ func initializeMain_() []string {
 	defer exception.ReportUncaught()
 	text := prim.StringJoinWith(" ", []string{"a😀", "naïve 😀 banana 日本 a𝄞a"})
 	step, count := shared.RangeSteps(0, prim.CodeUnitLength(text) - 1)
-	mapped := make([]maybe.MaybeChar, count)
+	mapped := make([]maybe.Char, count)
 	textUnits := prim.UTF16(text)
 	for index := range count {
 		i := int32(index) * step
-		mapped[index] = textUnits.CharAt(func(payload rune) maybe.MaybeChar {
-			return maybe.MaybeChar{Tag: maybe.MaybeCharJust, Just: payload}
-		}, maybe.MaybeChar{Tag: maybe.MaybeCharNothing}, i)
+		mapped[index] = textUnits.CharAt(func(payload rune) maybe.Char {
+			return maybe.Char(payload)
+		}, maybe.NoChar, i)
 	}
-	scrutinee := prim.CodeUnitCharAt(func(payload rune) maybe.MaybeChar {
-		return maybe.MaybeChar{Tag: maybe.MaybeCharJust, Just: payload}
-	}, maybe.MaybeChar{Tag: maybe.MaybeCharNothing}, prim.CodeUnitLength("naïve 😀 banana 日本 a𝄞a") - 3, "naïve 😀 banana 日本 a𝄞a")
+	scrutinee := prim.CodeUnitCharAt(func(payload rune) maybe.Char {
+		return maybe.Char(payload)
+	}, maybe.NoChar, prim.CodeUnitLength("naïve 😀 banana 日本 a𝄞a") - 3, "naïve 😀 banana 日本 a𝄞a")
 	var result string
-	switch scrutinee.Tag {
-	case maybe.MaybeCharJust:
-		result = "(Just " + prim.ShowChar(scrutinee.Just) + ")"
-	default: // maybe.MaybeCharNothing
+	if scrutinee != maybe.NoChar {
+		result = "(Just " + prim.ShowChar(rune(scrutinee)) + ")"
+	} else {
 		result = "Nothing"
 	}
-	return []string{prim.ShowInt(charAtLoopViewsTheText("naïve 😀 banana 日本 a𝄞a", 0, 0)), unsafeCharAtLoopViewsTheText("ab😀c", 4, ""), prim.ShowInt(indexOfLoopViewsTheText("naïve 😀 banana 日本 a𝄞a", 0, 0)), prim.ShowInt(lastIndexOfLoopViewsTheText("naïve 😀 banana 日本 a𝄞a", 100, 0)), prim.ShowArray(show.Show, slicesInALoopViewTheText("a😀b𝄞", 0, []string{})), prim.ShowInt(codePointLoopViewsTheText("naïve 😀 banana 日本 a𝄞a", 0, 0)), prim.ShowInt(changedTextIsWalkedEachIteration("naïve 😀 banana 日本 a𝄞a", 0)), prim.ShowInt(literalIndexesAloneWalkTheText("naïve 😀 banana 日本 a𝄞a", 0)), prim.ShowArray(maybe.ShowChar, closureInTheLoopReadsTheView("x😀yz", 0, []maybe.MaybeChar{})), prim.ShowArray(maybe.ShowChar, mapped), result}
+	return []string{prim.ShowInt(charAtLoopViewsTheText("naïve 😀 banana 日本 a𝄞a", 0, 0)), unsafeCharAtLoopViewsTheText("ab😀c", 4, ""), prim.ShowInt(indexOfLoopViewsTheText("naïve 😀 banana 日本 a𝄞a", 0, 0)), prim.ShowInt(lastIndexOfLoopViewsTheText("naïve 😀 banana 日本 a𝄞a", 100, 0)), prim.ShowArray(show.Show, slicesInALoopViewTheText("a😀b𝄞", 0, []string{})), prim.ShowInt(codePointLoopViewsTheText("naïve 😀 banana 日本 a𝄞a", 0, 0)), prim.ShowInt(changedTextIsWalkedEachIteration("naïve 😀 banana 日本 a𝄞a", 0)), prim.ShowInt(literalIndexesAloneWalkTheText("naïve 😀 banana 日本 a𝄞a", 0)), prim.ShowArray(maybe.ShowChar, closureInTheLoopReadsTheView("x😀yz", 0, []maybe.Char{})), prim.ShowArray(maybe.ShowChar, mapped), result}
 }
 
 func charAtLoopViewsTheText(text string, i int32, count int32) int32 {
@@ -92,14 +77,13 @@ func charAtLoopViewsTheText(text string, i int32, count int32) int32 {
 		if i >= textUnits.Length() {
 			return count
 		}
-		scrutinee := textUnits.CharAt(func(payload rune) maybe.MaybeChar {
-			return maybe.MaybeChar{Tag: maybe.MaybeCharJust, Just: payload}
-		}, maybe.MaybeChar{Tag: maybe.MaybeCharNothing}, i)
+		scrutinee := textUnits.CharAt(func(payload rune) maybe.Char {
+			return maybe.Char(payload)
+		}, maybe.NoChar, i)
 		var result2 bool
-		switch scrutinee.Tag {
-		case maybe.MaybeCharJust:
-			result2 = scrutinee.Just == 'a'
-		default:
+		if scrutinee != maybe.NoChar {
+			result2 = rune(scrutinee) == 'a'
+		} else {
 			result2 = false
 		}
 		var result int32
@@ -126,33 +110,31 @@ func unsafeCharAtLoopViewsTheText(text string, i int32, reversed string) string 
 func indexOfLoopViewsTheText(text string, offset int32, count int32) int32 {
 	textUnits := prim.UTF16(text)
 	for {
-		scrutinee := textUnits.IndexOfStartingAt(func(payload int32) maybe.MaybeInt {
-			return maybe.MaybeInt{Tag: maybe.MaybeIntJust, Just: payload}
-		}, maybe.MaybeInt{Tag: maybe.MaybeIntNothing}, "a", offset)
-		switch scrutinee.Tag {
-		case maybe.MaybeIntJust:
-			offset, count = scrutinee.Just + 1, count + 1
+		scrutinee := textUnits.IndexOfStartingAt(func(payload int32) maybe.Int {
+			return maybe.Int(payload)
+		}, maybe.NoInt, "a", offset)
+		if scrutinee != maybe.NoInt {
+			offset, count = int32(scrutinee) + 1, count + 1
 			continue
-		default: // maybe.MaybeIntNothing
-			return count
 		}
+		return count
 	}
 }
 
 func lastIndexOfLoopViewsTheText(text string, offset int32, count int32) int32 {
 	textUnits := prim.UTF16(text)
 	for {
-		scrutinee := textUnits.LastIndexOfStartingAt(func(payload int32) maybe.MaybeInt {
-			return maybe.MaybeInt{Tag: maybe.MaybeIntJust, Just: payload}
-		}, maybe.MaybeInt{Tag: maybe.MaybeIntNothing}, "a", offset)
-		if scrutinee.Tag == maybe.MaybeIntJust {
-			found := scrutinee.Just
+		scrutinee := textUnits.LastIndexOfStartingAt(func(payload int32) maybe.Int {
+			return maybe.Int(payload)
+		}, maybe.NoInt, "a", offset)
+		if scrutinee != maybe.NoInt {
+			found := int32(scrutinee)
 			if found > 0 {
 				offset, count = found - 1, count + 1
 				continue
 			}
 		}
-		if scrutinee.Tag == maybe.MaybeIntJust {
+		if scrutinee != maybe.NoInt {
 			return count + 1
 		}
 		return count
@@ -176,34 +158,34 @@ func codePointLoopViewsTheText(text string, i int32, count int32) int32 {
 		if i >= textPoints.Length() {
 			return count
 		}
-		var result2 maybe.MaybeInt
+		var result2 maybe.Int
 		if i < 0 {
-			result2 = maybe.MaybeInt{Tag: maybe.MaybeIntNothing}
+			result2 = maybe.NoInt
 		} else if i == 0 && text == "" {
-			result2 = maybe.MaybeInt{Tag: maybe.MaybeIntNothing}
+			result2 = maybe.NoInt
 		} else if i == 0 {
 			s := text
-			result2 = maybe.MaybeInt{Tag: maybe.MaybeIntJust, Just: direct.CodePointAt0(nil, s)}
+			result2 = maybe.Int(direct.CodePointAt0(nil, s))
 		} else {
 			n := i
-			result2 = textPoints.CodePointAt(func(payload int32) maybe.MaybeInt {
-				return maybe.MaybeInt{Tag: maybe.MaybeIntJust, Just: payload}
-			}, maybe.MaybeInt{Tag: maybe.MaybeIntNothing}, n)
+			result2 = textPoints.CodePointAt(func(payload int32) maybe.Int {
+				return maybe.Int(payload)
+			}, maybe.NoInt, n)
 		}
 		scrutinee := textPoints.Take(i + 1)
-		var result3 maybe.MaybeInt
+		var result3 maybe.Int
 		if false {
-			result3 = maybe.MaybeInt{Tag: maybe.MaybeIntNothing}
+			result3 = maybe.NoInt
 		} else if scrutinee == "" {
-			result3 = maybe.MaybeInt{Tag: maybe.MaybeIntNothing}
+			result3 = maybe.NoInt
 		} else {
-			result3 = maybe.MaybeInt{Tag: maybe.MaybeIntJust, Just: direct.CodePointAt0(nil, scrutinee)}
+			result3 = maybe.Int(direct.CodePointAt0(nil, scrutinee))
 		}
 		var result4 bool
-		if result2.Tag == maybe.MaybeIntNothing && result3.Tag == maybe.MaybeIntNothing {
+		if result2 == maybe.NoInt && result3 == maybe.NoInt {
 			result4 = true
-		} else if result2.Tag == maybe.MaybeIntJust && result3.Tag == maybe.MaybeIntJust {
-			result4 = result2.Just == result3.Just
+		} else if result2 != maybe.NoInt && result3 != maybe.NoInt {
+			result4 = int32(result2) == int32(result3)
 		} else {
 			result4 = false
 		}
@@ -219,16 +201,14 @@ func codePointLoopViewsTheText(text string, i int32, count int32) int32 {
 
 func changedTextIsWalkedEachIteration(rest string, count int32) int32 {
 	for {
-		scrutinee := prim.CodeUnitCharAt(func(payload rune) maybe.MaybeChar {
-			return maybe.MaybeChar{Tag: maybe.MaybeCharJust, Just: payload}
-		}, maybe.MaybeChar{Tag: maybe.MaybeCharNothing}, prim.IntMod(count, 2), rest)
-		switch scrutinee.Tag {
-		case maybe.MaybeCharJust:
+		scrutinee := prim.CodeUnitCharAt(func(payload rune) maybe.Char {
+			return maybe.Char(payload)
+		}, maybe.NoChar, prim.IntMod(count, 2), rest)
+		if scrutinee != maybe.NoChar {
 			rest, count = prim.CodeUnitDrop(1 + prim.IntMod(count, 2), rest), count + 1
 			continue
-		default: // maybe.MaybeCharNothing
-			return count
 		}
+		return count
 	}
 }
 
@@ -241,7 +221,7 @@ func literalIndexesAloneWalkTheText(text string, count int32) int32 {
 	}
 }
 
-func closureInTheLoopReadsTheView(text string, i int32, found []maybe.MaybeChar) []maybe.MaybeChar {
+func closureInTheLoopReadsTheView(text string, i int32, found []maybe.Char) []maybe.Char {
 	textUnits := prim.UTF16(text)
 	for {
 		textCaptured := text
@@ -250,11 +230,11 @@ func closureInTheLoopReadsTheView(text string, i int32, found []maybe.MaybeChar)
 			return found
 		}
 		array2 := []int32{0, 1}
-		mapped := make([]maybe.MaybeChar, len(array2))
+		mapped := make([]maybe.Char, len(array2))
 		for index, offset := range array2 {
-			mapped[index] = textUnits.CharAt(func(payload rune) maybe.MaybeChar {
-				return maybe.MaybeChar{Tag: maybe.MaybeCharJust, Just: payload}
-			}, maybe.MaybeChar{Tag: maybe.MaybeCharNothing}, iCaptured + offset)
+			mapped[index] = textUnits.CharAt(func(payload rune) maybe.Char {
+				return maybe.Char(payload)
+			}, maybe.NoChar, iCaptured + offset)
 		}
 		text, i, found = textCaptured, iCaptured + 3, array.Append(found, mapped)
 	}

@@ -14,27 +14,15 @@ import (
 
 type Stream = *lazy.Lazy[*TupleLabelledLazyStream]
 
-type MaybeStream struct {
-	Just Stream
-	Tag  uint8
-}
-
-const (
-	MaybeStreamNothing = iota
-	MaybeStreamJust
-)
-
 type Labelled struct {
 	First  string
-	Second *MaybeStream
+	Second Stream
 }
 
 type TupleLabelledLazyStream struct {
 	First  *Labelled
 	Second *lazy.Lazy[*lazy.Lazy[*TupleLabelledLazyStream]]
 }
-
-var sharedMaybeStreamNothing = &MaybeStream{Tag: MaybeStreamNothing}
 
 var main_ = initializeMain_()
 
@@ -55,7 +43,7 @@ func take(n int32, stream Stream) []string {
 
 func from(n int32) *lazy.Lazy[*TupleLabelledLazyStream] {
 	return lazy.Defer(func() *TupleLabelledLazyStream {
-		return &TupleLabelledLazyStream{First: &Labelled{First: prim.ShowInt(n), Second: sharedMaybeStreamNothing}, Second: lazy.Defer(func() Stream {
+		return &TupleLabelledLazyStream{First: &Labelled{First: prim.ShowInt(n), Second: nil}, Second: lazy.Defer(func() Stream {
 			return from(n + 1)
 		})}
 	})

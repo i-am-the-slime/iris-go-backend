@@ -62,6 +62,9 @@ where
                     .map(|branch| (branch.guards.iter().collect(), &branch.body))
                     .collect(),
             };
+            if never_matches(&tests) {
+                continue;
+            }
             for (guards, body) in branches {
                 let mut conditions = tests.clone();
                 for (local, path) in &bindings {
@@ -163,6 +166,9 @@ where
         for (position, alternative) in alternatives.iter().enumerate() {
             let last = position + 1 == alternatives.len();
             let (tests, bindings) = self.alternative_tests(paths, &alternative.patterns)?;
+            if never_matches(&tests) {
+                continue;
+            }
             let mut block = vec![];
             self.bind_pattern_locals(
                 &bindings,
@@ -266,6 +272,9 @@ where
         if !tested {
             tests.clear();
         }
+        if never_matches(&tests) {
+            return Ok(false);
+        }
         if evaluation.is_empty() || conditions.is_empty() {
             out.extend(evaluation);
             conditions.extend(tests);
@@ -324,6 +333,9 @@ where
                     }
                     _ => return Ok(false),
                 };
+                if layout.maybe.as_ref().is_some_and(|maybe| !maybe.is_struct()) {
+                    return Ok(false);
+                }
                 match layout.kind {
                     DataKind::Enumeration => path.clone(),
                     DataKind::Tagged => field(path.clone(), "Tag"),
@@ -443,27 +455,21 @@ where
         tests: &mut Vec<GoExpression>,
         bindings: &mut Vec<(Local, GoExpression)>,
     ) -> GoResult<()> {
-        let constructor_layout = &layout.constructors[constructor];
-        match layout.kind {
-            DataKind::Enumeration => {
-                tests.push(binary(
-                    "==",
-                    path.clone(),
-                    identifier_expression(&constructor_layout.tag),
-                ));
-            }
-            DataKind::Tagged => {
-                tests.push(binary(
-                    "==",
-                    field(path.clone(), "Tag"),
-                    identifier_expression(&constructor_layout.tag),
-                ));
-            }
-            DataKind::Product => {}
+        if let Some(test) = self.maybe_boolean_test(layout, arguments, path.clone()) {
+            tests.push(test);
+            return Ok(());
         }
-        for ((field_name, _), argument) in constructor_layout.fields.iter().zip(arguments) {
-            self.pattern_tests(argument, field(path.clone(), field_name), tests, bindings)?;
+        if let Some(test) = self.constructor_test(layout, constructor, path.clone()) {
+            tests.push(test);
+        }
+        for (position, argument) in arguments.iter().enumerate() {
+            let read = self.constructor_field(layout, constructor, position, path.clone());
+            self.pattern_tests(argument, read, tests, bindings)?;
         }
         Ok(())
     }
+}
+
+fn never_matches(tests: &[GoExpression]) -> bool {
+    tests.iter().any(|test| matches!(test, GoExpression::Boolean(false)))
 }

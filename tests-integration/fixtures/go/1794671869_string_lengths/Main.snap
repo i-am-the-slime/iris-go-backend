@@ -6,25 +6,24 @@ package maybe
 
 import "fixture/shared"
 
-type MaybeHeadTail struct {
+const TagNothing = 0
+
+const TagJust = 1
+
+type HeadTail struct {
 	Just shared.HeadTail
 	Tag  uint8
 }
 
-const (
-	MaybeHeadTailNothing = iota
-	MaybeHeadTailJust
-)
+var NoHeadTail = HeadTail{Tag: TagNothing}
 
-type MaybeChar struct {
-	Just rune
-	Tag  uint8
+func JustHeadTail(just shared.HeadTail) HeadTail {
+	return HeadTail{Tag: TagJust, Just: just}
 }
 
-const (
-	MaybeCharNothing = iota
-	MaybeCharJust
-)
+type Char int64
+
+const NoChar Char = 1 << 32
 
 // main.go
 package main
@@ -67,23 +66,23 @@ func initializeMain_() []string {
 func countSpacesUnconsingCountsUpToTwo(text string, count int32) int32 {
 	for {
 		scrutinee := prim.CodeUnitLengthUpTo(2, text)
-		var result maybe.MaybeHeadTail
+		var result maybe.HeadTail
 		switch scrutinee {
 		case 0:
-			result = maybe.MaybeHeadTail{Tag: maybe.MaybeHeadTailNothing}
+			result = maybe.NoHeadTail
 		case 1:
-			result = maybe.MaybeHeadTail{Tag: maybe.MaybeHeadTailJust, Just: shared.HeadTail{Head: prim.ToCharCode(prim.CharAt(0, text)), Tail: ""}}
+			result = maybe.JustHeadTail(shared.HeadTail{Head: prim.ToCharCode(prim.CharAt(0, text)), Tail: ""})
 		default:
 			cu0 := prim.ToCharCode(prim.CharAt(0, text))
 			cu1 := prim.ToCharCode(prim.CharAt(1, text))
 			if 55296 <= cu0 && cu0 <= 56319 && (56320 <= cu1 && cu1 <= 57343) {
-				result = maybe.MaybeHeadTail{Tag: maybe.MaybeHeadTailJust, Just: shared.HeadTail{Head: prim.MultiplyInt32(cu0 - 55296, 1024) + (cu1 - 56320) + 65536, Tail: prim.CodeUnitDrop(2, text)}}
+				result = maybe.JustHeadTail(shared.HeadTail{Head: prim.MultiplyInt32(cu0 - 55296, 1024) + (cu1 - 56320) + 65536, Tail: prim.CodeUnitDrop(2, text)})
 			} else {
-				result = maybe.MaybeHeadTail{Tag: maybe.MaybeHeadTailJust, Just: shared.HeadTail{Head: cu0, Tail: prim.CodeUnitDrop(1, text)}}
+				result = maybe.JustHeadTail(shared.HeadTail{Head: cu0, Tail: prim.CodeUnitDrop(1, text)})
 			}
 		}
 		switch result.Tag {
-		case maybe.MaybeHeadTailJust:
+		case maybe.TagJust:
 			var result2 int32
 			if result.Just.Head == prim.ToCharCode(rune(' ')) {
 				result2 = count + 1
@@ -92,7 +91,7 @@ func countSpacesUnconsingCountsUpToTwo(text string, count int32) int32 {
 			}
 			text, count = result.Just.Tail, result2
 			continue
-		default: // maybe.MaybeHeadTailNothing
+		default: // maybe.TagNothing
 			return count
 		}
 	}
@@ -104,14 +103,13 @@ func unchangedTextLengthIsCountedBeforeTheLoop(text string, i int32, count int32
 		if i >= textUnits.Length() {
 			return count
 		}
-		scrutinee := textUnits.CharAt(func(payload rune) maybe.MaybeChar {
-			return maybe.MaybeChar{Tag: maybe.MaybeCharJust, Just: payload}
-		}, maybe.MaybeChar{Tag: maybe.MaybeCharNothing}, i)
+		scrutinee := textUnits.CharAt(func(payload rune) maybe.Char {
+			return maybe.Char(payload)
+		}, maybe.NoChar, i)
 		var result2 bool
-		switch scrutinee.Tag {
-		case maybe.MaybeCharJust:
-			result2 = scrutinee.Just == 'a'
-		default:
+		if scrutinee != maybe.NoChar {
+			result2 = rune(scrutinee) == 'a'
+		} else {
 			result2 = false
 		}
 		var result int32

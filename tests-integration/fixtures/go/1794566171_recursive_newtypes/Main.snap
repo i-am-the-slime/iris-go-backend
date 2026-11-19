@@ -12,31 +12,19 @@ import (
 	"github.com/i-am-the-slime/purs-backend-go/go-support/prim"
 )
 
-type Step = func(int32) *MaybeStep
-
-type MaybeStep struct {
-	Just Step
-	Tag  uint8
-}
-
-const (
-	MaybeStepNothing = iota
-	MaybeStepJust
-)
-
-var sharedMaybeStepNothing = &MaybeStep{Tag: MaybeStepNothing}
+type Step func(int32) Step
 
 var main_ = initializeMain_()
 
 func initializeMain_() []string {
 	defer exception.ReportUncaught()
-	return array.Append(names(shared.Level{Name: "root", Minis: []shared.Level{shared.Level{Name: "a", Minis: []shared.Level{}}}}), []string{prim.ShowInt(countSteps(func(n int32) *MaybeStep {
+	return array.Append(names(shared.Level{Name: "root", Minis: []shared.Level{shared.Level{Name: "a", Minis: []shared.Level{}}}}), []string{prim.ShowInt(countSteps(func(n int32) Step {
 		if n < 3 {
-			return &MaybeStep{Tag: MaybeStepJust, Just: func(_ int32) *MaybeStep {
-				return sharedMaybeStepNothing
-			}}
+			return func(_ int32) Step {
+				return nil
+			}
 		}
-		return sharedMaybeStepNothing
+		return nil
 	}, 0))})
 }
 
@@ -47,13 +35,10 @@ func names(level shared.Level) []string {
 func countSteps(step Step, n int32) int32 {
 	for {
 		scrutinee := step(n)
-		switch scrutinee.Tag {
-		case MaybeStepNothing:
+		if scrutinee == nil {
 			return n
-		default: // MaybeStepJust
-			step, n = scrutinee.Just, n + 1
-			continue
 		}
+		step, n = scrutinee, n + 1
 	}
 }
 

@@ -4,15 +4,20 @@ source: tests-integration/src/fixtures.rs
 // Data/Maybe/maybe.go
 package maybe
 
-type MaybeArrayString struct {
+const TagNothing = 0
+
+const TagJust = 1
+
+type ArrayString struct {
 	Just []string
 	Tag  uint8
 }
 
-const (
-	MaybeArrayStringNothing = iota
-	MaybeArrayStringJust
-)
+func JustArrayString(just []string) ArrayString {
+	return ArrayString{Tag: TagJust, Just: just}
+}
+
+var NoArrayString = ArrayString{Tag: TagNothing}
 
 // Data/Show/show.go
 package show
@@ -41,24 +46,24 @@ var main_ = initializeMain_()
 func initializeMain_() []string {
 	defer exception.ReportUncaught()
 	append_ := direct.Appender[string]()
-	accumulator := maybe.MaybeArrayString{Tag: maybe.MaybeArrayStringJust, Just: []string{}}
+	accumulator := maybe.JustArrayString([]string{})
 	for _, element := range origin.Tags {
 		accumulator2 := accumulator
 		switch accumulator2.Tag {
-		case maybe.MaybeArrayStringJust:
+		case maybe.TagJust:
 			if element == "" {
-				accumulator = maybe.MaybeArrayString{Tag: maybe.MaybeArrayStringNothing}
+				accumulator = maybe.NoArrayString
 			} else {
-				accumulator = maybe.MaybeArrayString{Tag: maybe.MaybeArrayStringJust, Just: append_(accumulator2.Just)(element + "!")}
+				accumulator = maybe.JustArrayString(append_(accumulator2.Just)(element + "!"))
 			}
 		default:
-			accumulator = maybe.MaybeArrayString{Tag: maybe.MaybeArrayStringNothing}
+			accumulator = maybe.NoArrayString
 		}
 	}
 	performed := accumulator
 	var result string
 	switch performed.Tag {
-	case maybe.MaybeArrayStringJust:
+	case maybe.TagJust:
 		result = "(Just " + prim.ShowArray(show.Show, (shared.Point{Tags: performed.Just, X: origin.X}).Tags) + ")"
 	default:
 		result = "Nothing"

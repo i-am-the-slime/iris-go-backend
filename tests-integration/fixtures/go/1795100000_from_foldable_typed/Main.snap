@@ -9,11 +9,11 @@ import (
 	"github.com/i-am-the-slime/purs-backend-go/go-support/direct"
 )
 
-func Foldr(f func(string) func(*direct.ConsList[string]) *direct.ConsList[string], z *direct.ConsList[string], maybe2 maybe.MaybeString) *direct.ConsList[string] {
+func Foldr(f func(string) func(*direct.ConsList[string]) *direct.ConsList[string], z *direct.ConsList[string], maybe2 maybe.String) *direct.ConsList[string] {
 	switch maybe2.Tag {
-	case maybe.MaybeStringNothing:
+	case maybe.TagNothing:
 		return z
-	default: // maybe.MaybeStringJust
+	default: // maybe.TagJust
 		return f(maybe2.Just)(z)
 	}
 }
@@ -272,15 +272,18 @@ func UnsafeBalancedNodeStringUnitRotateLeftReusing(height func(*MapStringUnit) i
 // Data/Maybe/maybe.go
 package maybe
 
-type MaybeString struct {
+const TagNothing = 0
+
+const TagJust = 1
+
+type String struct {
 	Just string
 	Tag  uint8
 }
 
-const (
-	MaybeStringNothing = iota
-	MaybeStringJust
-)
+func JustString(just string) String {
+	return String{Tag: TagJust, Just: just}
+}
 
 // Data/Set/set.go
 package set
@@ -349,13 +352,13 @@ func initializeMain_() int32 {
 		return func(b *direct.ConsList[int32]) func(*types.ListInt) *direct.ConsList[int32] {
 			return types.Foldr(f, b)
 		}
-	}, numbers))) + int32(len(direct.FromFoldable(func(f func(string) func(*direct.ConsList[string]) *direct.ConsList[string]) func(*direct.ConsList[string]) func(maybe.MaybeString) *direct.ConsList[string] {
-		return func(z *direct.ConsList[string]) func(maybe.MaybeString) *direct.ConsList[string] {
-			return func(maybe maybe.MaybeString) *direct.ConsList[string] {
+	}, numbers))) + int32(len(direct.FromFoldable(func(f func(string) func(*direct.ConsList[string]) *direct.ConsList[string]) func(*direct.ConsList[string]) func(maybe.String) *direct.ConsList[string] {
+		return func(z *direct.ConsList[string]) func(maybe.String) *direct.ConsList[string] {
+			return func(maybe maybe.String) *direct.ConsList[string] {
 				return foldable.Foldr(f, z, maybe)
 			}
 		}
-	}, maybe.MaybeString{Tag: maybe.MaybeStringJust, Just: "x"}))) + int32(len(direct.FromFoldable(func(f func(string) func(*direct.ConsList[string]) *direct.ConsList[string]) func(*direct.ConsList[string]) func(*internal.MapStringUnit) *direct.ConsList[string] {
+	}, maybe.JustString("x")))) + int32(len(direct.FromFoldable(func(f func(string) func(*direct.ConsList[string]) *direct.ConsList[string]) func(*direct.ConsList[string]) func(*internal.MapStringUnit) *direct.ConsList[string] {
 		return func(x *direct.ConsList[string]) func(*internal.MapStringUnit) *direct.ConsList[string] {
 			return set.Foldr(f, x)
 		}

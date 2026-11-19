@@ -4,15 +4,9 @@ source: tests-integration/src/fixtures.rs
 // Data/Maybe/maybe.go
 package maybe
 
-type MaybeInt struct {
-	Just int32
-	Tag  uint8
-}
+type Int int64
 
-const (
-	MaybeIntNothing = iota
-	MaybeIntJust
-)
+const NoInt Int = 1 << 32
 
 // main.go
 package main
@@ -26,23 +20,23 @@ import (
 
 var main_ = initializeMain_()
 
-func initializeMain_() []maybe.MaybeInt {
+func initializeMain_() []maybe.Int {
 	defer exception.ReportUncaught()
 	number := math.Copysign(0, -1)
-	var integer maybe.MaybeInt
+	var integer maybe.Int
 	if math.Trunc(number) == number && (number >= math.MinInt32 && number <= math.MaxInt32) {
-		integer = maybe.MaybeInt{Tag: maybe.MaybeIntJust, Just: int32(number)}
+		integer = maybe.Int(int32(number))
 	} else {
-		integer = maybe.MaybeInt{Tag: maybe.MaybeIntNothing}
+		integer = maybe.NoInt
 	}
 	number2 := opaque(3.0e10)
-	var integer2 maybe.MaybeInt
+	var integer2 maybe.Int
 	if math.Trunc(number2) == number2 && (number2 >= math.MinInt32 && number2 <= math.MaxInt32) {
-		integer2 = maybe.MaybeInt{Tag: maybe.MaybeIntJust, Just: int32(number2)}
+		integer2 = maybe.Int(int32(number2))
 	} else {
-		integer2 = maybe.MaybeInt{Tag: maybe.MaybeIntNothing}
+		integer2 = maybe.NoInt
 	}
-	return []maybe.MaybeInt{maybe.MaybeInt{Tag: maybe.MaybeIntNothing}, maybe.MaybeInt{Tag: maybe.MaybeIntNothing}, maybe.MaybeInt{Tag: maybe.MaybeIntJust, Just: 2147483647}, maybe.MaybeInt{Tag: maybe.MaybeIntJust, Just: -2147483648}, maybe.MaybeInt{Tag: maybe.MaybeIntNothing}, integer, integer2}
+	return []maybe.Int{maybe.NoInt, maybe.NoInt, maybe.Int(2147483647), maybe.Int(-2147483648), maybe.NoInt, integer, integer2}
 }
 
 func opaque(x float64) float64 {

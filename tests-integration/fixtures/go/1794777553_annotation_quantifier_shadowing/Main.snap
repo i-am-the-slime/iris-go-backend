@@ -136,6 +136,13 @@ func MainGoReusing2(b *ListTupleStringBoolean, value *ListTupleStringBoolean) *L
 	}
 }
 
+// Data/Maybe/maybe.go
+package maybe
+
+const TagNothing = 0
+
+const TagJust = 1
+
 // Data/Show/show.go
 package show
 
@@ -182,6 +189,7 @@ package main
 
 import (
 	"fixture/Data/List/Types"
+	"fixture/Data/Maybe"
 	"fixture/Data/Show"
 	"fixture/Data/Tuple"
 	"fixture/shared/Data.Tuple+Data.Maybe"
@@ -236,11 +244,11 @@ func mainGoReusing(xs []tuple.TupleStringBoolean, len_ int32, source int32, memo
 	for {
 		var result tuple_maybe.MaybeTupleTupleStringBooleanInt
 		if source < len_ {
-			result = tuple_maybe.MaybeTupleTupleStringBooleanInt{Tag: tuple_maybe.MaybeTupleTupleStringBooleanIntJust, Just: tuple.TupleTupleStringBooleanInt{First: xs[source], Second: source + 1}}
+			result = tuple_maybe.JustTupleTupleStringBooleanInt(tuple.TupleTupleStringBooleanInt{First: xs[source], Second: source + 1})
 		} else {
-			result = tuple_maybe.MaybeTupleTupleStringBooleanInt{Tag: tuple_maybe.MaybeTupleTupleStringBooleanIntNothing}
+			result = tuple_maybe.NoTupleTupleStringBooleanInt
 		}
-		if result.Tag == tuple_maybe.MaybeTupleTupleStringBooleanIntNothing {
+		if result.Tag == maybe.TagNothing {
 			return types.MainGoReusing2(types.SharedListTupleStringBooleanNil, memo)
 		}
 		source, memo = result.Just.Second, listTupleStringBooleanCells.New(types.ListTupleStringBoolean{Tag: types.ListTupleStringBooleanCons, Cons0: result.Just.First, Cons1: memo})
@@ -252,11 +260,11 @@ func mainGoReusing2(xs []tuple.TupleStringString, len_ int32, source int32, memo
 	for {
 		var result tuple_maybe.MaybeTupleTupleStringStringInt
 		if source < len_ {
-			result = tuple_maybe.MaybeTupleTupleStringStringInt{Tag: tuple_maybe.MaybeTupleTupleStringStringIntJust, Just: tuple.TupleTupleStringStringInt{First: xs[source], Second: source + 1}}
+			result = tuple_maybe.JustTupleTupleStringStringInt(tuple.TupleTupleStringStringInt{First: xs[source], Second: source + 1})
 		} else {
-			result = tuple_maybe.MaybeTupleTupleStringStringInt{Tag: tuple_maybe.MaybeTupleTupleStringStringIntNothing}
+			result = tuple_maybe.NoTupleTupleStringStringInt
 		}
-		if result.Tag == tuple_maybe.MaybeTupleTupleStringStringIntNothing {
+		if result.Tag == maybe.TagNothing {
 			return types.MainGoReusing(types.SharedListTupleStringStringNil, memo)
 		}
 		source, memo = result.Just.Second, listTupleStringStringCells.New(types.ListTupleStringString{Tag: types.ListTupleStringStringCons, Cons0: result.Just.First, Cons1: memo})
@@ -270,24 +278,29 @@ func main() {
 // shared/Data.Tuple+Data.Maybe/tuple_maybe.go
 package tuple_maybe
 
-import "fixture/Data/Tuple"
+import (
+	"fixture/Data/Maybe"
+	"fixture/Data/Tuple"
+)
 
 type MaybeTupleTupleStringBooleanInt struct {
 	Just tuple.TupleTupleStringBooleanInt
 	Tag  uint8
 }
 
-const (
-	MaybeTupleTupleStringBooleanIntNothing = iota
-	MaybeTupleTupleStringBooleanIntJust
-)
+func JustTupleTupleStringBooleanInt(just tuple.TupleTupleStringBooleanInt) MaybeTupleTupleStringBooleanInt {
+	return MaybeTupleTupleStringBooleanInt{Tag: maybe.TagJust, Just: just}
+}
+
+var NoTupleTupleStringBooleanInt = MaybeTupleTupleStringBooleanInt{Tag: maybe.TagNothing}
 
 type MaybeTupleTupleStringStringInt struct {
 	Just tuple.TupleTupleStringStringInt
 	Tag  uint8
 }
 
-const (
-	MaybeTupleTupleStringStringIntNothing = iota
-	MaybeTupleTupleStringStringIntJust
-)
+func JustTupleTupleStringStringInt(just tuple.TupleTupleStringStringInt) MaybeTupleTupleStringStringInt {
+	return MaybeTupleTupleStringStringInt{Tag: maybe.TagJust, Just: just}
+}
+
+var NoTupleTupleStringStringInt = MaybeTupleTupleStringStringInt{Tag: maybe.TagNothing}

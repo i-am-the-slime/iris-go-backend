@@ -6,15 +6,20 @@ package maybe
 
 import "fixture/shared"
 
-type MaybeMainTiming struct {
+const TagNothing = 0
+
+const TagJust = 1
+
+type MainTiming struct {
 	Just shared.MainTiming
 	Tag  uint8
 }
 
-const (
-	MaybeMainTimingNothing = iota
-	MaybeMainTimingJust
-)
+func JustMainTiming(just shared.MainTiming) MainTiming {
+	return MainTiming{Tag: TagJust, Just: just}
+}
+
+var NoMainTiming = MainTiming{Tag: TagNothing}
 
 // Data/Show/show.go
 package show
@@ -41,13 +46,13 @@ var main_ = initializeMain_()
 
 func initializeMain_() string {
 	defer exception.ReportUncaught()
-	array := []maybe.MaybeMainTiming{maybe.MaybeMainTiming{Tag: maybe.MaybeMainTimingJust, Just: shared.MainTiming{Start: 2.0, End: 3.0}}, maybe.MaybeMainTiming{Tag: maybe.MaybeMainTimingNothing}}
+	array := []maybe.MainTiming{maybe.JustMainTiming(shared.MainTiming{Start: 2.0, End: 3.0}), maybe.NoMainTiming}
 	var accumulator float64 = 0.0
 	for timingIndex := range array {
 		acc := accumulator
 		var result float64
 		switch array[timingIndex].Tag {
-		case maybe.MaybeMainTimingJust:
+		case maybe.TagJust:
 			x := array[timingIndex].Just
 			result = x.End - x.Start
 		default:

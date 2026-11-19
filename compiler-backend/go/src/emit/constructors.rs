@@ -47,6 +47,12 @@ where
         if let Some(name) = self.constructor_functions.get(&key) {
             return Ok(Some(identifier_expression(name)));
         }
+        let layout = self.data_layout(data)?;
+        if let Some(maybe) = &layout.maybe {
+            let name = self.maybe_just_function(&layout, maybe)?;
+            self.constructor_functions.insert(key, name.clone());
+            return Ok(Some(identifier_expression(&name)));
+        }
         let Some(name) =
             self.declare_constructor_function(data, *constructor, &parameters, body)?
         else {

@@ -34,15 +34,9 @@ var SharedListIntNil = &ListInt{Tag: ListIntNil}
 // Data/Maybe/maybe.go
 package maybe
 
-type MaybeInt struct {
-	Just int32
-	Tag  uint8
-}
+type Int int64
 
-const (
-	MaybeIntNothing = iota
-	MaybeIntJust
-)
+const NoInt Int = 1 << 32
 
 // Data/Show/show.go
 package show
@@ -97,12 +91,12 @@ var main_ = initializeMain_()
 
 func initializeMain_() string {
 	defer exception.ReportUncaught()
-	array := []either_tuple.TupleMaybeIntEitherStringInt{either_tuple.TupleMaybeIntEitherStringInt{First: maybe.MaybeInt{Tag: maybe.MaybeIntJust, Just: 1}, Second: either.EitherStringInt{Tag: either.EitherStringIntRight, Right: 2}}, either_tuple.TupleMaybeIntEitherStringInt{First: maybe.MaybeInt{Tag: maybe.MaybeIntNothing}, Second: either.EitherStringInt{Tag: either.EitherStringIntLeft, Left: "x"}}}
+	array := []either_tuple.TupleMaybeIntEitherStringInt{either_tuple.TupleMaybeIntEitherStringInt{First: maybe.Int(1), Second: either.EitherStringInt{Tag: either.EitherStringIntRight, Right: 2}}, either_tuple.TupleMaybeIntEitherStringInt{First: maybe.NoInt, Second: either.EitherStringInt{Tag: either.EitherStringIntLeft, Left: "x"}}}
 	var accumulator int32 = 0
 	for tupleIndex := range array {
 		acc := accumulator
-		if array[tupleIndex].First.Tag == maybe.MaybeIntJust && array[tupleIndex].Second.Tag == either.EitherStringIntRight {
-			accumulator = acc + array[tupleIndex].First.Just + array[tupleIndex].Second.Right
+		if array[tupleIndex].First != maybe.NoInt && array[tupleIndex].Second.Tag == either.EitherStringIntRight {
+			accumulator = acc + int32(array[tupleIndex].First) + array[tupleIndex].Second.Right
 		} else if array[tupleIndex].Second.Tag == either.EitherStringIntLeft {
 			accumulator = acc - 1
 		} else {
@@ -165,5 +159,5 @@ import (
 
 type TupleMaybeIntEitherStringInt struct {
 	Second either.EitherStringInt
-	First  maybe.MaybeInt
+	First  maybe.Int
 }

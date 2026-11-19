@@ -50,6 +50,7 @@ pub(crate) enum SpelledPart {
         global: Option<String>,
         name: String,
     },
+    Stutter(String),
 }
 
 impl Spelling {
@@ -399,9 +400,11 @@ impl Packaging<'_> {
                 }
             }
         }
+        let homes: Vec<Option<ModuleIndex>> = units.iter().map(|unit| unit.home).collect();
         let mut naming = Naming {
             unit_of,
             placements,
+            homes: &homes,
             spellings: self.spellings,
             root,
             members,
@@ -733,6 +736,7 @@ fn rename_declared(declaration: &mut GoDeclaration, rename: &mut impl FnMut(&str
         | GoDeclaration::Alias { name, .. }
         | GoDeclaration::GenericType { name, .. }
         | GoDeclaration::Source { name, .. }
+        | GoDeclaration::Constant { name, .. }
         | GoDeclaration::Variable { name, .. }
         | GoDeclaration::Function { name, .. } => *name = rename(name),
     }
@@ -763,6 +767,7 @@ fn units(declarations: Vec<(GoDeclaration, Option<ModuleIndex>)>) -> Vec<Unit> {
 struct Naming<'a> {
     unit_of: &'a FxHashMap<String, usize>,
     placements: &'a [Place],
+    homes: &'a [Option<ModuleIndex>],
     spellings: &'a FxHashMap<String, Spelling>,
     root: Option<Place>,
     /// The globals each place declares, in declaration order.
@@ -835,21 +840,38 @@ impl Naming<'_> {
                     unreachable!("invariant violated: a composed name lost its parts")
                 };
                 let (parts, full) = (parts.clone(), full.clone());
-                let short: String = parts
-                    .iter()
-                    .map(|part| match part {
-                        SpelledPart::Text(text) => text.clone(),
+                let at_home = self.is_home(global, place);
+                let mut spelled: Vec<String> = vec![];
+                for part in &parts {
+                    spelled.push(match part {
+                        SpelledPart::Text(text) | SpelledPart::Stutter(text) => text.clone(),
                         SpelledPart::Record { global: Some(global), name } => {
                             self.record_name(global, place).unwrap_or_else(|| name.clone())
                         }
                         SpelledPart::Record { global: None, name } => name.clone(),
-                    })
-                    .collect();
-                let short = super::identifier(&short);
-                if short == full { vec![short] } else { vec![short, full] }
+                    });
+                }
+                let stuttering = |keep_stutter: bool| -> Option<String> {
+                    let kept = parts.iter().zip(&spelled).enumerate().filter(|(index, (part, _))| {
+                        !matches!(part, SpelledPart::Stutter(_))
+                            || keep_stutter
+                            || (*index == 0 && !at_home)
+                    });
+                    let text: String = kept.map(|(_, (_, text))| text.as_str()).collect();
+                    (!text.is_empty()).then(|| super::identifier(&text))
+                };
+                let mut ladder: Vec<String> =
+                    [stuttering(false), stuttering(true), Some(full)].into_iter().flatten().collect();
+                ladder.dedup();
+                ladder
             })
             .collect();
         self.choose(place, composed, composed_ladders);
+    }
+
+    fn is_home(&self, global: &str, place: Place) -> bool {
+        let Some(&unit) = self.unit_of.get(global) else { return false };
+        self.homes[unit].is_some_and(|home| Place(home.0) == place)
     }
 
     /// The name a record's global got, as spelled in a name: unexported.

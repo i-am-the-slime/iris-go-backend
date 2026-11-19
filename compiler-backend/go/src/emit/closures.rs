@@ -1227,6 +1227,7 @@ where
             boxed: true,
             declaration: None,
             origin_position: 0,
+            maybe: None,
         };
         self.closure_layouts.insert(monotype, layout.clone());
         let tags: Vec<String> =

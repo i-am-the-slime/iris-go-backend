@@ -4,20 +4,14 @@ source: tests-integration/src/fixtures.rs
 // Data/Maybe/maybe.go
 package maybe
 
-type MaybeInt struct {
-	Just int32
-	Tag  uint8
-}
+type Int int64
 
-const (
-	MaybeIntNothing = iota
-	MaybeIntJust
-)
+const NoInt Int = 1 << 32
 
 type MainResult struct {
 	OverFilter string
 	OverMap    string
-	LastSmall  MaybeInt
+	LastSmall  Int
 }
 
 // main.go
@@ -53,12 +47,12 @@ func initializeMain_() maybe.MainResult {
 		rest := accumulator2
 		accumulator2 = prim.ShowInt(x) + ";" + rest
 	}
-	found := maybe.MaybeInt{Tag: maybe.MaybeIntNothing}
+	found := maybe.NoInt
 	for index := len(numbers) - 1; index >= 0; index-- {
 		value := numbers[index]
 		value2 := prim.MultiplyInt32(value, 2)
 		if value2 < 5 {
-			found = maybe.MaybeInt{Tag: maybe.MaybeIntJust, Just: int32(index)}
+			found = maybe.Int(int32(index))
 			break
 		}
 	}

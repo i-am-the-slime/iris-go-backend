@@ -34,6 +34,7 @@ pub(super) enum NamePart {
         monotype: MonotypeId,
         labels: String,
     },
+    Stutter(String),
 }
 
 /// How a global is to be spelled once every record has its name.
@@ -150,7 +151,7 @@ fn spell_parts(parts: &[NamePart], short: &FxHashMap<MonotypeId, String>) -> Str
     let spelled: String = parts
         .iter()
         .map(|part| match part {
-            NamePart::Text(text) => text.as_str(),
+            NamePart::Text(text) | NamePart::Stutter(text) => text.as_str(),
             NamePart::Record { monotype, labels } => short.get(monotype).unwrap_or(labels).as_str(),
         })
         .collect();
@@ -326,7 +327,7 @@ where
                 PendingSpelling::Parts(parts) => {
                     records.extend(parts.iter().filter_map(|part| match part {
                         NamePart::Record { monotype, .. } => Some(*monotype),
-                        NamePart::Text(_) => None,
+                        NamePart::Text(_) | NamePart::Stutter(_) => None,
                     }));
                 }
             }
@@ -345,6 +346,7 @@ where
                         .into_iter()
                         .map(|part| match part {
                             NamePart::Text(text) => SpelledPart::Text(text),
+                            NamePart::Stutter(text) => SpelledPart::Stutter(text),
                             NamePart::Record { monotype, .. } => SpelledPart::Record {
                                 global: self.record_names.get(&monotype).cloned(),
                                 name: record_ladders[&monotype][0].clone(),

@@ -637,7 +637,7 @@ where
         let from_remembers = self.remember_origin(from)?;
         let to_remembers = self.remember_origin(to)?;
         if from_remembers {
-            let type_ = to_layout.go_type();
+            let type_ = self.layout_type(&to_layout)?;
             let origin = field(value.clone(), "Origin");
             body.push(GoStatement::IfAssert {
                 name: "original".into(),
@@ -647,16 +647,17 @@ where
             });
         }
         let origin = to_remembers.then(|| value.clone());
-        let mut cases = vec![];
+        let mut arms = vec![];
         for (constructor, (from_constructor, to_constructor)) in
             from_layout.constructors.iter().zip(to_layout.constructors.iter()).enumerate()
         {
             let mut statements = vec![];
             let mut values = vec![];
-            for ((from_field, from_monotype), (_, to_monotype)) in
-                from_constructor.fields.iter().zip(to_constructor.fields.iter())
+            for (position, ((_, from_monotype), (_, to_monotype))) in
+                from_constructor.fields.iter().zip(to_constructor.fields.iter()).enumerate()
             {
-                let field_value = field(value.clone(), from_field);
+                let field_value =
+                    self.constructor_field(&from_layout, constructor, position, value.clone());
                 values.push(self.coerce(
                     field_value,
                     *from_monotype,
@@ -664,21 +665,19 @@ where
                     &mut statements,
                 )?);
             }
-            let mut constructed = self.construct(to, constructor, values)?;
-            if let Some(origin) = &origin {
-                let composite = match &mut constructed {
-                    GoExpression::Address(composite) => composite.as_mut(),
-                    composite => composite,
-                };
-                if let GoExpression::Composite { fields, .. } = composite {
-                    fields.push((Some("Origin".into()), origin.clone()));
+            let constructed = match &origin {
+                Some(origin) => {
+                    let mut composite = self.composite(&to_layout, constructor, values);
+                    if let GoExpression::Composite { fields, .. } = &mut composite {
+                        fields.push((Some("Origin".into()), origin.clone()));
+                    }
+                    if to_layout.boxed { GoExpression::Address(Box::new(composite)) } else { composite }
                 }
-            }
+                None => self.construct(to, constructor, values)?,
+            };
             statements.push(GoStatement::Return(Some(constructed)));
-            cases.push(GoCase {
-                values: vec![identifier_expression(&from_constructor.tag)],
-                body: statements,
-            });
+            let test = self.constructor_test(&from_layout, constructor, value.clone());
+            arms.push((test, statements));
         }
         let round_trip = (from_remembers || to_remembers).then(|| RoundTrip {
             converter: 0,
@@ -687,13 +686,28 @@ where
             checks: from_remembers,
             remembers: to_remembers.then_some(to_layout.declaration).flatten(),
         });
-        if from_layout.kind == DataKind::Product {
-            let [case] = &mut cases[..] else {
-                unreachable!("invariant violated: product data has one constructor")
-            };
-            body.append(&mut case.body);
+        let switches_on_tag =
+            from_layout.kind == DataKind::Tagged && from_layout.maybe.as_ref().is_none_or(|maybe| maybe.is_struct());
+        if !switches_on_tag {
+            let last = arms.len() - 1;
+            for (position, (test, mut statements)) in arms.into_iter().enumerate() {
+                match test {
+                    Some(condition) if position < last => {
+                        body.push(GoStatement::If { condition, then: statements, otherwise: vec![] });
+                    }
+                    _ => body.append(&mut statements),
+                }
+            }
             return Ok(round_trip);
         }
+        let mut cases: Vec<GoCase> = arms
+            .into_iter()
+            .zip(&from_layout.constructors)
+            .map(|((_, statements), from_constructor)| GoCase {
+                values: vec![identifier_expression(&from_constructor.tag)],
+                body: statements,
+            })
+            .collect();
         let default = GoDefault::covering(&mut cases);
         body.push(GoStatement::Switch {
             value: Some(field(value, "Tag")),

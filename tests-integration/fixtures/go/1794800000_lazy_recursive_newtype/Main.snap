@@ -13,41 +13,17 @@ import (
 
 type StreamInt = *lazy.Lazy[*TupleIntMaybeStreamInt]
 
-type MaybeStreamInt struct {
-	Just StreamInt
-	Tag  uint8
-}
-
-const (
-	MaybeStreamIntNothing = iota
-	MaybeStreamIntJust
-)
-
 type TupleIntMaybeStreamInt struct {
-	Second *MaybeStreamInt
+	Second StreamInt
 	First  int32
 }
 
 type StreamStreamInt = *lazy.Lazy[*TupleStreamIntMaybeStreamStreamInt]
 
-type MaybeStreamStreamInt struct {
-	Just StreamStreamInt
-	Tag  uint8
-}
-
-const (
-	MaybeStreamStreamIntNothing = iota
-	MaybeStreamStreamIntJust
-)
-
 type TupleStreamIntMaybeStreamStreamInt struct {
 	First  StreamInt
-	Second *MaybeStreamStreamInt
+	Second StreamStreamInt
 }
-
-var sharedMaybeStreamIntNothing = &MaybeStreamInt{Tag: MaybeStreamIntNothing}
-
-var sharedMaybeStreamStreamIntNothing = &MaybeStreamStreamInt{Tag: MaybeStreamStreamIntNothing}
 
 var main_ = initializeMain_()
 
@@ -56,11 +32,10 @@ func initializeMain_() []string {
 	scrutinee := countdown(3).Force()
 	scrutinee2 := countdown(3).Force()
 	var result string
-	switch scrutinee2.Second.Tag {
-	case MaybeStreamIntJust:
-		scrutinee3 := scrutinee2.Second.Just.Force()
+	if scrutinee2.Second != nil {
+		scrutinee3 := scrutinee2.Second.Force()
 		result = "(Just " + prim.ShowInt(scrutinee3.First) + ")"
-	default:
+	} else {
 		result = "Nothing"
 	}
 	scrutinee4 := tailsInt(countdown(2)).Force()
@@ -70,11 +45,11 @@ func initializeMain_() []string {
 
 func countdown(n int32) *lazy.Lazy[*TupleIntMaybeStreamInt] {
 	return lazy.Defer(func() *TupleIntMaybeStreamInt {
-		var result *MaybeStreamInt
+		var result StreamInt
 		if n <= 0 {
-			result = sharedMaybeStreamIntNothing
+			result = nil
 		} else {
-			result = &MaybeStreamInt{Tag: MaybeStreamIntJust, Just: countdown(n - 1)}
+			result = countdown(n - 1)
 		}
 		return &TupleIntMaybeStreamInt{First: n, Second: result}
 	})
@@ -83,12 +58,11 @@ func countdown(n int32) *lazy.Lazy[*TupleIntMaybeStreamInt] {
 func tailsInt(stream StreamInt) *lazy.Lazy[*TupleStreamIntMaybeStreamStreamInt] {
 	return lazy.Defer(func() *TupleStreamIntMaybeStreamStreamInt {
 		scrutinee := stream.Force()
-		var result *MaybeStreamStreamInt
-		switch scrutinee.Second.Tag {
-		case MaybeStreamIntJust:
-			result = &MaybeStreamStreamInt{Tag: MaybeStreamStreamIntJust, Just: tailsInt(scrutinee.Second.Just)}
-		default:
-			result = sharedMaybeStreamStreamIntNothing
+		var result StreamStreamInt
+		if scrutinee.Second != nil {
+			result = tailsInt(scrutinee.Second)
+		} else {
+			result = nil
 		}
 		return &TupleStreamIntMaybeStreamStreamInt{First: stream, Second: result}
 	})

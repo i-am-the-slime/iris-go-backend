@@ -2809,10 +2809,6 @@ where
         Ok(learned.interned())
     }
 
-    /// The type of a foreign fold whose rank-2 accumulator the Go helper fixes
-    /// at a cons list of the elements: the quantified accumulator of the
-    /// declared parameter is instantiated before the type is converted, so the
-    /// fold specializes at the list rather than at an erased type.
     fn accumulated_monotype(
         &mut self,
         scope: &Scope,

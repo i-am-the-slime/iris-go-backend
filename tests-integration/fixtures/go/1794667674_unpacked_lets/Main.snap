@@ -4,25 +4,22 @@ source: tests-integration/src/fixtures.rs
 // Data/Maybe/maybe.go
 package maybe
 
+type Int int64
+
+const NoInt Int = 1 << 32
+
+const TagNothing = 0
+
+const TagJust = 1
+
 type MaybeInt struct {
-	Just int32
+	Just Int
 	Tag  uint8
 }
 
-const (
-	MaybeIntNothing = iota
-	MaybeIntJust
-)
-
-type MaybeMaybeInt struct {
-	Just MaybeInt
-	Tag  uint8
+func JustMaybeInt(just Int) MaybeInt {
+	return MaybeInt{Tag: TagJust, Just: just}
 }
-
-const (
-	MaybeMaybeIntNothing = iota
-	MaybeMaybeIntJust
-)
 
 // main.go
 package main
@@ -47,15 +44,15 @@ func initializeMain_() []int32 {
 	} else {
 		result = shared.XY{X: 0, Y: point.Y}
 	}
-	found := maybe.MaybeMaybeInt{Tag: maybe.MaybeMaybeIntJust, Just: maybe.MaybeInt{Tag: maybe.MaybeIntJust, Just: opaque(6)}}
+	found := maybe.JustMaybeInt(maybe.Int(opaque(6)))
 	var result2 int32
-	if found.Tag == maybe.MaybeMaybeIntJust && found.Just.Tag == maybe.MaybeIntJust {
-		result2 = found.Just.Just
+	if found.Tag == maybe.TagJust && found.Just != maybe.NoInt {
+		result2 = int32(found.Just)
 	} else {
 		switch found.Tag {
-		case maybe.MaybeMaybeIntJust:
+		case maybe.TagJust:
 			result2 = 1
-		default: // maybe.MaybeMaybeIntNothing
+		default: // maybe.TagNothing
 			result2 = 0
 		}
 	}

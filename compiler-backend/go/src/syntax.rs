@@ -242,6 +242,11 @@ pub enum GoDeclaration {
         type_name: Option<String>,
         names: Vec<String>,
     },
+    Constant {
+        name: String,
+        type_: Option<GoType>,
+        value: GoExpression,
+    },
     Variable {
         name: String,
         type_: Option<GoType>,
@@ -273,6 +278,7 @@ impl GoDeclaration {
             | GoDeclaration::Alias { name, .. }
             | GoDeclaration::Source { name, .. }
             | GoDeclaration::GenericType { name, .. }
+            | GoDeclaration::Constant { name, .. }
             | GoDeclaration::Variable { name, .. }
             | GoDeclaration::Function { name, .. } => Some(name),
             GoDeclaration::Constants { .. } => None,
@@ -283,7 +289,9 @@ impl GoDeclaration {
     /// parameters it binds; not its own name, types or field labels.
     pub fn for_each_name_mut(&mut self, visit: &mut impl FnMut(Name<'_>)) {
         match self {
-            GoDeclaration::Variable { value, .. } => expression_names(value, visit),
+            GoDeclaration::Constant { value, .. } | GoDeclaration::Variable { value, .. } => {
+                expression_names(value, visit)
+            }
             GoDeclaration::Function { parameters, body, .. } => {
                 for (parameter, _) in parameters.iter_mut() {
                     visit(Name::Binder(parameter));
@@ -360,7 +368,8 @@ impl GoDeclaration {
                     visit(Reference::Type(type_name));
                 }
             }
-            GoDeclaration::Variable { type_, value, .. } => {
+            GoDeclaration::Constant { type_, value, .. }
+            | GoDeclaration::Variable { type_, value, .. } => {
                 if let Some(type_) = type_ {
                     type_references(type_, visit);
                 }
@@ -662,6 +671,16 @@ impl Printer {
                 }
                 self.indentation -= 1;
                 self.line(")");
+            }
+            GoDeclaration::Constant { name, type_, value } => {
+                let value = self.expression(value, 0);
+                match type_ {
+                    Some(type_) => {
+                        let type_ = self.type_(type_);
+                        self.line(&format!("const {name} {type_} = {value}"));
+                    }
+                    None => self.line(&format!("const {name} = {value}")),
+                }
             }
             GoDeclaration::Variable { name, type_, value } => {
                 let value = self.expression(value, 0);
@@ -971,9 +990,12 @@ impl Printer {
                 format!("&{value}")
             }
             GoExpression::Conversion { type_, value } => {
-                let type_ = self.type_(type_);
+                let rendered = self.type_(type_);
                 let value = self.expression(value, 0);
-                format!("{type_}({value})")
+                match type_ {
+                    GoType::Pointer(_) | GoType::Function { .. } => format!("({rendered})({value})"),
+                    _ => format!("{rendered}({value})"),
+                }
             }
             GoExpression::TypeAssertion { value, type_ } => {
                 self.census.assertions += 1;

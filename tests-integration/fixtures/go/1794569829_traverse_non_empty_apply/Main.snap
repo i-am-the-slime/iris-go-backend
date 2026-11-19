@@ -4,15 +4,20 @@ source: tests-integration/src/fixtures.rs
 // Data/Maybe/maybe.go
 package maybe
 
-type MaybeArrayInt struct {
+const TagNothing = 0
+
+const TagJust = 1
+
+type ArrayInt struct {
 	Just []int32
 	Tag  uint8
 }
 
-const (
-	MaybeArrayIntNothing = iota
-	MaybeArrayIntJust
-)
+func JustArrayInt(just []int32) ArrayInt {
+	return ArrayInt{Tag: TagJust, Just: just}
+}
+
+var NoArrayInt = ArrayInt{Tag: TagNothing}
 
 // main.go
 package main
@@ -28,30 +33,30 @@ import (
 
 var main_ = initializeMain_()
 
-func initializeMain_() maybe.MaybeArrayInt {
+func initializeMain_() maybe.ArrayInt {
 	defer exception.ReportUncaught()
 	array2 := array.Append([]int32{2}, []int32{4, 8})
 	append_ := direct.Appender[int32]()
 	n := array2[0]
-	var result maybe.MaybeArrayInt
+	var result maybe.ArrayInt
 	if prim.IntMod(n, 2) == 0 {
-		result = maybe.MaybeArrayInt{Tag: maybe.MaybeArrayIntJust, Just: []int32{prim.IntDiv(n, 2)}}
+		result = maybe.JustArrayInt([]int32{prim.IntDiv(n, 2)})
 	} else {
-		result = maybe.MaybeArrayInt{Tag: maybe.MaybeArrayIntNothing}
+		result = maybe.NoArrayInt
 	}
 	array3 := array.Slice(1, int32(len(array2)), array2)
 	accumulator := result
 	for _, element := range array3 {
 		accumulator2 := accumulator
 		switch accumulator2.Tag {
-		case maybe.MaybeArrayIntJust:
+		case maybe.TagJust:
 			if prim.IntMod(element, 2) == 0 {
-				accumulator = maybe.MaybeArrayInt{Tag: maybe.MaybeArrayIntJust, Just: append_(accumulator2.Just)(prim.IntDiv(element, 2))}
+				accumulator = maybe.JustArrayInt(append_(accumulator2.Just)(prim.IntDiv(element, 2)))
 			} else {
-				accumulator = maybe.MaybeArrayInt{Tag: maybe.MaybeArrayIntNothing}
+				accumulator = maybe.NoArrayInt
 			}
 		default:
-			accumulator = maybe.MaybeArrayInt{Tag: maybe.MaybeArrayIntNothing}
+			accumulator = maybe.NoArrayInt
 		}
 	}
 	performed := accumulator

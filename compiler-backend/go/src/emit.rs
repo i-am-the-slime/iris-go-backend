@@ -25,6 +25,7 @@ mod iteration;
 mod layout;
 mod lengths;
 mod locals;
+mod maybe;
 mod names;
 mod ownership;
 mod packages;
@@ -308,6 +309,7 @@ where
             inline_shapes: FxHashMap::default(),
             copied_by_containers: FxHashSet::default(),
             shared_nullaries: FxHashMap::default(),
+            maybe_helpers: maybe::MaybeHelpers::new(),
             constructor_functions: FxHashMap::default(),
             cell_types: FxHashMap::default(),
             reaching: FxHashMap::default(),
@@ -549,6 +551,7 @@ struct DataLayout {
     /// The position of the `Origin` field among the struct's fields: after the
     /// last that holds pointers, so the collector scans no further.
     origin_position: usize,
+    maybe: Option<maybe::MaybeLayout>,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -620,6 +623,7 @@ struct Emitter<'p, 'm, 'q, Q> {
     /// only these keep the smaller limit on being held by value.
     copied_by_containers: FxHashSet<DataType>,
     shared_nullaries: FxHashMap<String, String>,
+    maybe_helpers: maybe::MaybeHelpers,
     cell_types: FxHashMap<DataType, bool>,
     reaching: FxHashMap<(DataType, DataType), bool>,
     retaining: FxHashMap<MonotypeId, bool>,
@@ -640,6 +644,9 @@ const TRANSIENT_DATA_LIMIT: usize = 256;
 
 impl DataLayout {
     fn go_type(&self) -> GoType {
+        if let Some(maybe::MaybeLayout::Pointer { .. }) = &self.maybe {
+            unreachable!("invariant violated: a pointer Maybe has its payload's type")
+        }
         let named = GoType::Named(self.name.clone());
         if self.boxed { GoType::Pointer(Box::new(named)) } else { named }
     }
@@ -810,7 +817,9 @@ fn uses_local(expression: &Expression, local: LocalId) -> bool {
 fn path_root(path: &GoExpression) -> Option<&String> {
     match path {
         GoExpression::Identifier(name) => Some(name),
-        GoExpression::Field { value, .. } => path_root(value),
+        GoExpression::Field { value, .. } | GoExpression::Conversion { value, .. } => {
+            path_root(value)
+        }
         _ => None,
     }
 }
@@ -1805,7 +1814,7 @@ where
     fn mentioned_maybe(&mut self, monotype: MonotypeId) -> GoResult<Option<MonotypeId>> {
         match self.monotypes.get(monotype).clone() {
             Monotype::Data(data) => {
-                if self.context.type_name(data.file_id, data.item)? == "Maybe" {
+                if self.maybe_payload(&data)?.is_some() {
                     return Ok(Some(monotype));
                 }
                 Ok(None)
@@ -2028,8 +2037,9 @@ where
         let (data, just) = self.constructor_named(maybe, "Just")?;
         let layout = self.data_layout(&data)?;
         let parameter = self.temporary("maybe");
-        let tag = field(identifier_expression(&parameter), "Tag");
-        let is_just = binary("==", tag, identifier_expression(&layout.constructors[just].tag));
+        let is_just = self
+            .constructor_test(&layout, just, identifier_expression(&parameter))
+            .expect("invariant violated: Just is one of two constructors");
         Ok(GoExpression::Function {
             parameters: vec![(parameter, self.go_type(maybe)?)],
             result: Some(GoType::Bool),
@@ -2040,25 +2050,30 @@ where
     fn just_value_function(&mut self, maybe: MonotypeId) -> GoResult<GoExpression> {
         let (data, just) = self.constructor_named(maybe, "Just")?;
         let layout = self.data_layout(&data)?;
-        let constructor = &layout.constructors[just];
-        let [(payload, payload_monotype)] = &constructor.fields[..] else {
+        let [(_, payload_monotype)] = layout.constructors[just].fields[..] else {
             unreachable!("invariant violated: Just has one field")
         };
         let parameter = self.temporary("maybe");
         let value = identifier_expression(&parameter);
-        let is_just =
-            binary("==", field(value.clone(), "Tag"), identifier_expression(&constructor.tag));
-        let payload = GoExpression::Address(Box::new(field(value, payload)));
-        let payload_type = self.go_type(*payload_monotype)?;
+        let is_just = self
+            .constructor_test(&layout, just, value.clone())
+            .expect("invariant violated: Just is one of two constructors");
+        let payload = self.constructor_field(&layout, just, 0, value);
+        let mut then = vec![];
+        let addressed = if is_simple(&payload) {
+            payload
+        } else {
+            let name = self.temporary("payload");
+            then.push(GoStatement::Define { names: vec![name.clone()], values: vec![payload] });
+            identifier_expression(&name)
+        };
+        then.push(GoStatement::Return(Some(GoExpression::Address(Box::new(addressed)))));
+        let payload_type = self.go_type(payload_monotype)?;
         Ok(GoExpression::Function {
             parameters: vec![(parameter, self.go_type(maybe)?)],
             result: Some(GoType::Pointer(Box::new(payload_type))),
             body: vec![
-                GoStatement::If {
-                    condition: is_just,
-                    then: vec![GoStatement::Return(Some(payload))],
-                    otherwise: vec![],
-                },
+                GoStatement::If { condition: is_just, then, otherwise: vec![] },
                 GoStatement::Return(Some(identifier_expression("nil"))),
             ],
         })
@@ -2245,20 +2260,15 @@ where
         let (data, index) = self.constructor_named(monotype, constructor)?;
         let layout = self.data_layout(&data)?;
         let parameter = identifier_expression("value");
-        let constructor_layout = &layout.constructors[index];
         let (result, body) = match position {
             Some(position) => {
-                let (field_name, field_monotype) = &constructor_layout.fields[position];
-                (self.go_type(*field_monotype)?, field(parameter, field_name))
+                let (_, field_monotype) = layout.constructors[index].fields[position];
+                let read = self.constructor_field(&layout, index, position, parameter);
+                (self.go_type(field_monotype)?, read)
             }
             None => {
-                let tag = identifier_expression(&constructor_layout.tag);
-                let test = match layout.kind {
-                    DataKind::Enumeration => binary("==", parameter, tag),
-                    DataKind::Tagged => binary("==", field(parameter, "Tag"), tag),
-                    DataKind::Product => GoExpression::Boolean(true),
-                };
-                (GoType::Bool, test)
+                let test = self.constructor_test(&layout, index, parameter);
+                (GoType::Bool, test.unwrap_or(GoExpression::Boolean(true)))
             }
         };
         Ok(GoExpression::Function {
@@ -2515,7 +2525,8 @@ where
             && !matches!(self.monotypes.get(monotype), Monotype::String | Monotype::Boolean)
         {
             let type_ = self.go_type(monotype)?;
-            return Ok(GoStatement::Variable { name, type_, value: Some(value) });
+            let value = (!is_nil(&value)).then_some(value);
+            return Ok(GoStatement::Variable { name, type_, value });
         }
         Ok(GoStatement::Define { names: vec![name], values: vec![value] })
     }
@@ -2721,6 +2732,9 @@ where
         values: Vec<GoExpression>,
     ) -> GoResult<GoExpression> {
         let layout = self.data_layout(data)?;
+        if let Some(maybe) = &layout.maybe {
+            return self.construct_maybe(&layout, maybe, constructor, values);
+        }
         let constructor_layout = layout.constructors[constructor].clone();
         Ok(match layout.kind {
             DataKind::Enumeration => identifier_expression(&constructor_layout.tag),
@@ -2738,7 +2752,7 @@ where
         })
     }
 
-    fn composite(
+    pub(super) fn composite(
         &self,
         layout: &DataLayout,
         constructor: usize,
@@ -3537,12 +3551,17 @@ pub(crate) fn fold_bitwise(operator: Operator, x: i32, y: i32) -> i64 {
 fn is_untyped_constant(expression: &GoExpression) -> bool {
     match expression {
         GoExpression::Integer(_) | GoExpression::Float(_) | GoExpression::Rune(_) => true,
+        GoExpression::Identifier(name) => name == "nil",
         GoExpression::Unary { operand, .. } => is_untyped_constant(operand),
         GoExpression::Binary { left, right, .. } => {
             is_untyped_constant(left) && is_untyped_constant(right)
         }
         _ => false,
     }
+}
+
+fn is_nil(expression: &GoExpression) -> bool {
+    matches!(expression, GoExpression::Identifier(name) if name == "nil")
 }
 
 fn is_effect_node(expression: &Expression) -> bool {

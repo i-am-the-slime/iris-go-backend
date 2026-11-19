@@ -155,12 +155,18 @@ where
         if let Some(&shape) = self.inline_shapes.get(data) {
             return Ok(shape);
         }
+        let maybe = match self.maybe_payload(data)? {
+            Some(payload) => Some(self.maybe_representation(payload)?),
+            None => None,
+        };
         let constructors = self
             .monotypes
             .constructors(&mut self.context, data)
             .map_err(Failure::in_code_generation)?;
         let erases_arguments = self.erases_arguments(data)?;
-        let shape = if erases_arguments || self.contains_itself(data)? {
+        let shape = if let Some(shape) = maybe.and_then(maybe_shape) {
+            Some(shape)
+        } else if erases_arguments || self.contains_itself(data)? {
             None
         } else if constructors.iter().all(|constructor| constructor.fields.is_empty()) {
             Some(tag_shape(constructors.len()))
@@ -243,6 +249,16 @@ where
             | Monotype::ConsList(_)
             | Monotype::Recursive(_) => Shape::POINTER,
         })
+    }
+}
+
+fn maybe_shape(representation: super::maybe::Representation) -> Option<Shape> {
+    use super::maybe::Representation;
+    match representation {
+        Representation::Int | Representation::Char => Some(Shape::scalar(8)),
+        Representation::Boolean => Some(Shape::scalar(1)),
+        Representation::Pointer => Some(Shape::POINTER),
+        Representation::Struct => None,
     }
 }
 

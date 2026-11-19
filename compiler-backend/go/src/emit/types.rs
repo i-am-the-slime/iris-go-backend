@@ -100,7 +100,7 @@ where
             }
             Monotype::Data(data) => {
                 let layout = self.data_layout(&data)?;
-                layout.go_type()
+                self.layout_type(&layout)?
             }
         })
     }
@@ -249,6 +249,9 @@ where
             match self.monotypes.get(monotype).clone() {
                 Monotype::Recursive(inner) if inner == *data => return Ok(true),
                 Monotype::Recursive(inner) => pending.push(self.unfold(&inner)?),
+                Monotype::Data(maybe) if let Some(payload) = self.maybe_pointer_payload(&maybe)? => {
+                    pending.push(payload)
+                }
                 Monotype::Function(..) if self.has_closure_set(monotype) => {}
                 Monotype::Function(argument, result) => pending.extend([argument, result]),
                 Monotype::Array(inner)
@@ -400,6 +403,13 @@ where
         if let Some(layout) = self.data_layouts.get(data) {
             return Ok(layout.clone());
         }
+        if let Some(payload) = self.maybe_payload(data)? {
+            let constructors = self
+                .monotypes
+                .constructors(&mut self.context, data)
+                .map_err(Failure::in_code_generation)?;
+            return self.maybe_layout(data, payload, &constructors);
+        }
         let name = self.data_type_global(data)?;
         self.homes.insert(name.clone(), data.file_id);
         let constructors = self
@@ -443,6 +453,7 @@ where
             boxed,
             declaration: None,
             origin_position: plan.as_ref().map_or(0, |plan| plan.pointer_prefix),
+            maybe: None,
         };
         self.data_layouts.insert(data.clone(), layout.clone());
         let names: Vec<String> =

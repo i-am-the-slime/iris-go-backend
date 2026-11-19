@@ -4,25 +4,22 @@ source: tests-integration/src/fixtures.rs
 // Data/Maybe/maybe.go
 package maybe
 
-type MaybeInt struct {
-	Just int32
-	Tag  uint8
-}
+type Int int64
 
-const (
-	MaybeIntNothing = iota
-	MaybeIntJust
-)
+const NoInt Int = 1 << 32
 
-type MaybeString struct {
+const TagNothing = 0
+
+const TagJust = 1
+
+type String struct {
 	Just string
 	Tag  uint8
 }
 
-const (
-	MaybeStringNothing = iota
-	MaybeStringJust
-)
+func JustString(just string) String {
+	return String{Tag: TagJust, Just: just}
+}
 
 // main.go
 package main
@@ -78,14 +75,13 @@ func initializeMain_() []string {
 		}
 		mapped2[index] = prim.ShowInt(result)
 	}
-	array4 := []maybe.MaybeInt{maybe.MaybeInt{Tag: maybe.MaybeIntJust, Just: 2}, maybe.MaybeInt{Tag: maybe.MaybeIntNothing}}
+	array4 := []maybe.Int{maybe.Int(2), maybe.NoInt}
 	mapped3 := make([]string, len(array4))
-	for index := range array4 {
+	for index, x := range array4 {
 		var result int32
-		switch array4[index].Tag {
-		case maybe.MaybeIntJust:
-			result = 1 + array4[index].Just
-		default: // maybe.MaybeIntNothing
+		if x != maybe.NoInt {
+			result = 1 + int32(x)
+		} else {
 			result = 1
 		}
 		mapped3[index] = prim.ShowInt(result)
@@ -120,12 +116,12 @@ func initializeMain_() []string {
 	for index := range array7 {
 		mapped6[index] = prim.ShowInt(array7[index].Left + array7[index].Right)
 	}
-	array8 := []maybe.MaybeString{maybe.MaybeString{Tag: maybe.MaybeStringJust, Just: "here"}}
+	array8 := []maybe.String{maybe.JustString("here")}
 	mapped7 := make([]string, len(array8))
 	for index := range array8 {
 		var result string
 		switch array8[index].Tag {
-		case maybe.MaybeStringJust:
+		case maybe.TagJust:
 			result = array8[index].Just
 		default:
 			panic("Failed pattern match")
