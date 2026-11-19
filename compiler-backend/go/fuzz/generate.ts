@@ -18,6 +18,7 @@ import {
   Program,
   STANDARD_IMPORTS,
   Statement,
+  printPattern,
 } from "./ast.ts";
 
 export const FEATURES = [
@@ -32,11 +33,14 @@ export const FEATURES = [
   "hof",
   "containers",
   "lists",
+  "fromfoldable",
   "poly",
   "lazy",
   "recursion",
   "effects",
   "exceptions",
+  "tryorder",
+  "redundant",
   "st",
   "aff",
 ] as const;
@@ -61,11 +65,14 @@ export const defaultWeights = (): Record<Feature, number> => ({
   hof: 1,
   containers: 1,
   lists: 1,
+  fromfoldable: 1,
   poly: 1,
   lazy: 1,
   recursion: 1,
   effects: 1,
   exceptions: 1,
+  tryorder: 1,
+  redundant: 1,
   st: 1,
   aff: 1,
 });
@@ -78,6 +85,7 @@ type Environment = {
   typeVars: string[];
   refs: Variable[];
   inEffect: boolean;
+  inLoop?: boolean;
 };
 
 type UserFunction = { name: string; signature: PolyType; userClassConstraints: string[]; boundedFirstArgument: number | null };
@@ -143,6 +151,22 @@ export class Generator {
   }
 
   // ---------------------------------------------------------------- programs
+
+  /** Learns the data types a saved program declares, so that defaults can be built for them. */
+  adopt(program: Program): void {
+    for (const declaration of program.declarations) {
+      if (declaration.kind !== "data") continue;
+      const classes = new Set(declaration.derived.filter((c) => c === "Eq" || c === "Ord"));
+      if (declaration.showInstance !== null) classes.add("Show");
+      this.dataEnvironment.set(declaration.name, {
+        name: declaration.name,
+        params: declaration.params,
+        constructors: declaration.constructors,
+        classes,
+        isNewtype: declaration.isNewtype,
+      });
+    }
+  }
 
   generate(moduleName: string): Program {
     if (this.on("adts")) this.declareDataTypes();
@@ -238,7 +262,7 @@ export class Generator {
     const cell = this.fresh("cell");
     const arr = this.fresh("arr");
     const snapshots: { name: string; type: Type }[] = [];
-    const pureEnv: Environment = { ...env, inEffect: false, refs: [] };
+    const pureEnv: Environment = { ...env, inEffect: false, refs: [], inLoop: true };
     const elementExpr = (loopVariable: string | null) => {
       const scope = loopVariable ? this.extend(pureEnv, { name: loopVariable, type: T.Int }) : pureEnv;
       return this.expr(element, scope, 2);
@@ -382,7 +406,8 @@ export class Generator {
   }
 
   /** Effect.Ref cells and loops (forE, foreachE, whileE, tailRecM, for_) logging as they go. */
-  private imperativeEffectStatements(env: Environment, index: number): Statement[] {
+  private imperativeEffectStatements(outerEnv: Environment, index: number): Statement[] {
+    const env: Environment = { ...outerEnv, inLoop: true };
     const element = this.cellType(env);
     const counter = this.fresh("counter");
     const cell = this.fresh("cellRef");
@@ -510,13 +535,20 @@ export class Generator {
     const derived: string[] = [];
     let showInstance: DataDeclaration["showInstance"] = null;
     let manualShow: Equation[] | null = null;
-    if (!hasFunctionField) {
+    // Derivable classes are those every field has; the type itself is assumed to have them, which
+    // is what the derived instance provides for recursive fields.
+    this.dataEnvironment.set(name, { name, params, constructors, classes: new Set(["Eq", "Ord", "Show"]), isNewtype: false });
+    const fieldsHave = (className: T.ClassName) => constructors.every((c) => c.fields.every((f) => hasClass(className, f, this.dataEnvironment, env.assumed)));
+    const canShow = fieldsHave("Show");
+    if (!hasFunctionField && fieldsHave("Eq")) {
       derived.push("Eq");
       classes.add("Eq");
-      if (this.rng.chance(0.85)) {
+      if (this.rng.chance(0.85) && fieldsHave("Ord")) {
         derived.push("Ord");
         classes.add("Ord");
       }
+    }
+    if (!hasFunctionField && canShow) {
       if (this.rng.chance(0.75)) {
         derived.push("Generic");
         showInstance = "generic";
@@ -582,7 +614,7 @@ export class Generator {
     const count = this.rng.int(1, 3);
     for (let i = 0; i < count; i++) {
       const shape = this.rng.pick(["countdown", "nonTail", "structural", "mutual"] as const);
-      const env: Environment = { variables: [], assumed: new Map(), typeVars: [], refs: [], inEffect: false };
+      const env: Environment = { variables: [], assumed: new Map(), typeVars: [], refs: [], inEffect: false, inLoop: true };
       const valueType = this.type(env, 1, { showable: true, allowData: true });
       if (shape === "countdown") {
         const name = this.fresh("count");
@@ -886,6 +918,7 @@ export class Generator {
     const signature: PolyType = { vars: typeVars, constraints, type: T.fnN(paramTypes, resultType) };
     const equations: Equation[] = [];
     const equationCount = this.on("patterns") ? this.rng.int(1, 3) : 1;
+    const seenPatterns = new Set<string>();
     for (let i = 0; i < equationCount; i++) {
       const last = i === equationCount - 1;
       const patterns: Pattern[] = [];
@@ -900,6 +933,9 @@ export class Generator {
           bound.push(...generated.bindings);
         }
       });
+      const shape = patterns.map((p) => printPattern(p).replace(/\b[a-z]\w*\d+\b/g, "_")).join(",");
+      if (!this.on("redundant") && seenPatterns.has(shape)) continue;
+      seenPatterns.add(shape);
       const guardEnv: Environment = { ...env, variables: [...bound] };
       const guards: Alternative["guards"] = [];
       if (this.on("patterns") && this.rng.chance(0.4)) {
@@ -1305,9 +1341,14 @@ export class Generator {
     const scrutinee = this.expr(scrutineeType, env, depth - 1);
     const alternatives: Alternative[] = [];
     const count = this.rng.int(1, 3);
+    const seen = new Set<string>();
     for (let i = 0; i < count; i++) {
       const generated = this.pattern(scrutineeType, 2, env, "c");
       if (generated.irrefutable && i < count - 1) continue;
+      // Without `redundant`, a pattern that repeats an earlier one is skipped.
+      const shape = printPattern(generated.pattern).replace(/\b[a-z]\w*\d+\b/g, "_");
+      if (!this.on("redundant") && seen.has(shape)) continue;
+      seen.add(shape);
       const bodyEnv = this.extend(env, ...generated.bindings);
       const guards: Alternative["guards"] = [];
       if (this.on("patterns") && this.rng.chance(0.3)) {
@@ -1333,7 +1374,8 @@ export class Generator {
         const resultType = this.showableType(env, 1);
         const param = this.boundVariable("y", argType);
         const body = this.expr(resultType, this.extend(bodyEnv, param.variable), depth - 1);
-        bindings.push({ name, signature: null, equations: [{ patterns: [param.pattern], guards: [], body, where: [] }] });
+        // A signature keeps a local function's constraints resolvable even when it is never applied.
+        bindings.push({ name, signature: { vars: [], constraints: [], type: T.fn(argType, resultType) }, equations: [{ patterns: [param.pattern], guards: [], body, where: [] }] });
         bodyEnv = this.extend(bodyEnv, { name, type: T.fn(argType, resultType) });
       } else {
         const valueType = this.showableType(env, 2);
@@ -1446,9 +1488,10 @@ export class Generator {
     const stateType = T.record([{ name: "acc", type }, { name: "i", type: T.Int }]);
     const stepType = T.data("Step", [stateType, type]);
     const state = this.boundVariable("st", stateType);
-    const limit = this.rng.pick([0, 1, 5, 100, 10000, 100000]);
+    // A loop nested in another loop's body stays short, or the product of the limits explodes.
+    const limit = env.inLoop || growable(type) ? this.rng.pick([0, 1, 5, 20]) : this.rng.pick([0, 1, 5, 100, 10000, 100000]);
     const accValue = variable(type, `${state.name}.acc`);
-    const stepEnv = this.extend(env, state.variable, { name: `${state.name}.acc`, type }, { name: `${state.name}.i`, type: T.Int });
+    const stepEnv = { ...this.extend(env, state.variable, { name: `${state.name}.acc`, type }, { name: `${state.name}.i`, type: T.Int }), inLoop: true };
     const next = this.expr(type, stepEnv, depth - 1);
     const body: Expr = {
       kind: "ifThenElse",
@@ -1467,7 +1510,7 @@ export class Generator {
     const n = this.fresh("n");
     const rec = this.fresh("rec");
     const selfType = T.fn(T.Int, type);
-    const loopEnv = this.extend(env, { name: n, type: T.Int }, { name: rec, type });
+    const loopEnv = { ...this.extend(env, { name: n, type: T.Int }, { name: rec, type }), inLoop: true };
     const recursiveCall = apply(type, variable(selfType, self), binary(T.Int, "-", variable(T.Int, n), literal(T.Int, "1")));
     const recursive: Expr = {
       kind: "letIn",
@@ -1630,7 +1673,7 @@ export class Generator {
     const sub = () => this.expr(char, env, depth - 1);
     const productions: Production[] = [
       { feature: "strings", weight: 3, build: () => this.charLiteral() },
-      { feature: "strings", weight: 2, build: () => call(char, "fromMaybe", sub(), call(T.maybe(char), "toEnum", this.expr(T.Int, env, depth - 1))) },
+      { feature: "strings", weight: 2, build: () => call(char, "fromMaybe", sub(), annotate(T.maybe(char), call(T.maybe(char), "toEnum", this.expr(T.Int, env, depth - 1)))) },
       { feature: "strings", weight: 2, build: () => call(char, "fromMaybe", sub(), call(T.maybe(char), "CU.charAt", this.expr(T.Int, env, depth - 1), this.expr(T.String, env, depth - 1))) },
       { feature: "strings", weight: 1, build: () => call(char, "fromMaybe", sub(), call(T.maybe(char), "Char.fromCharCode", this.expr(T.Int, env, depth - 1))) },
       { feature: "strings", weight: 1, build: () => call(char, "fromMaybe", sub(), call(T.maybe(char), this.rng.pick(["succ", "pred"]), sub())) },
@@ -1777,7 +1820,7 @@ export class Generator {
     }
     if (inner.tag === "Char") {
       productions.push({ feature: "strings", weight: 2, build: () => call(type, "CU.charAt", this.expr(T.Int, env, depth - 1), this.expr(T.String, env, depth - 1)) });
-      productions.push({ feature: "strings", weight: 1, build: () => call(type, "toEnum", this.expr(T.Int, env, depth - 1)) });
+      productions.push({ feature: "strings", weight: 1, build: () => annotate(type, call(type, "toEnum", this.expr(T.Int, env, depth - 1))) });
     }
     if (inner.tag === "Number") {
       productions.push({ feature: "prims", weight: 2, build: () => call(type, "Number.fromString", this.expr(T.String, env, depth - 1)) });
@@ -1883,7 +1926,7 @@ export class Generator {
         const source = this.showableType(env, 1);
         return call(type, "Array.mapMaybe", this.expr(T.fn(source, T.maybe(element)), env, depth - 1), this.expr(T.array(source), env, depth - 1));
       } },
-      { feature: "lists", weight: 1.5, build: () => call(type, "Array.fromFoldable", this.expr(T.list(element), env, depth - 1)) },
+      { feature: "fromfoldable", weight: 1.5, build: () => this.on("lists") ? call(type, "Array.fromFoldable", this.expr(T.list(element), env, depth - 1)) : null },
       { feature: "containers", weight: 1, build: () => call(type, "Array.singleton", this.expr(element, env, depth - 1)) },
       { feature: "hof", weight: 1, build: () => {
         const index = this.boundVariable("i", T.Int);
@@ -1905,8 +1948,8 @@ export class Generator {
     ];
     if (ordered) {
       productions.push({ feature: "containers", weight: 2, build: () => call(type, "Array.sort", sub()) });
-      productions.push({ feature: "containers", weight: 1, build: () => call(type, "Array.fromFoldable", this.expr(T.set(element), env, depth - 1)) });
-      productions.push({ feature: "containers", weight: 1, build: () => call(type, "Array.fromFoldable", call(T.Unit, "Map.keys", this.expr(T.map(element, this.showableType(env, 1)), env, depth - 1))) });
+      productions.push({ feature: "fromfoldable", weight: 1, build: () => call(type, "Array.fromFoldable", this.expr(T.set(element), env, depth - 1)) });
+      productions.push({ feature: "fromfoldable", weight: 1, build: () => call(type, "Array.fromFoldable", call(T.Unit, "Map.keys", this.expr(T.map(element, this.showableType(env, 1)), env, depth - 1))) });
     }
     if (equal) {
       productions.push({ feature: "containers", weight: 1.5, build: () => call(type, ordered ? "Array.nub" : "Array.nubEq", sub()) });
@@ -2209,7 +2252,8 @@ export class Generator {
 
   private exceptionStatement(env: Environment): Statement {
     const inner = this.showableType(env, 1);
-    const choice = this.rng.int(0, 2);
+    // Choice 2 relies on the evaluation order of a crashing `pure` argument to `try`.
+    const choice = this.rng.int(0, this.on("tryorder") ? 2 : 1);
     if (choice === 0) {
       const action = this.rng.chance(0.6)
         ? annotate(T.effect(inner), call(T.effect(inner), "Exception.throw", this.expr(T.String, env, 2)))

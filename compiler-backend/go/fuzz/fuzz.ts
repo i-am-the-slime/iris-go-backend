@@ -8,10 +8,11 @@
 // Features: a comma list of names, each optionally weighted (`prims=2`), or signed (`+surrogates`,
 // `-aff`) to adjust the defaults; a list of bare names enables only those.
 
-import { appendFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { appendFileSync, existsSync, mkdirSync, readFileSync, readdirSync, statSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { printProgram } from "./ast.ts";
-import { FEATURES, GeneratorOptions, generateProgram, parseFeatures } from "./generate.ts";
+import { Program, printProgram } from "./ast.ts";
+import { FEATURES, GeneratorOptions, defaultWeights, generateProgram, parseFeatures } from "./generate.ts";
+import { failureKey, minimise } from "./minimise.ts";
 import {
   Classification,
   FAILURE_CLASSES,
@@ -23,7 +24,6 @@ import {
   ensureTemplate,
   saveResult,
 } from "./pipeline.ts";
-import { minimise } from "./minimise.ts";
 
 type Arguments = { positional: string[]; flags: Map<string, string | true> };
 
@@ -65,9 +65,9 @@ export const generatorOptions = (flags: Map<string, string | true>): GeneratorOp
   depth: flagNumber(flags, "depth", 4),
 });
 
-export const programFor = (seed: number, options: GeneratorOptions): ProgramInput => {
+export const programFor = (seed: number, options: GeneratorOptions): ProgramInput & { program: Program } => {
   const program = generateProgram(seed, moduleNameFor(seed), options);
-  return { seed, moduleName: program.moduleName, source: printProgram(program) };
+  return { seed, moduleName: program.moduleName, source: printProgram(program), program };
 };
 
 const SCRATCHPAD = process.env.FUZZ_SCRATCHPAD ?? "/private/tmp/claude-501/-Users-mark-Developer/6b879e15-cbd5-43a2-bd86-225dca16f6f0/scratchpad";
@@ -104,11 +104,14 @@ const commandRun = async (arguments_: Arguments): Promise<void> => {
   const campaignLine = JSON.stringify({ started: new Date().toISOString(), seedFrom, count, features: options.weights, statements: options.statements, depth: options.depth });
   appendFileSync(summaryPath, `${campaignLine}\n`);
 
-  const report = (program: ProgramInput, result: ProgramResult) => {
+  const report = (program: ProgramInput & { program: Program }, result: ProgramResult) => {
     counts.set(result.classification, (counts.get(result.classification) ?? 0) + 1);
     const failing = FAILURE_CLASSES.includes(result.classification);
     const directory = failing || keepOk ? saveResult(results, program, result) : null;
-    if (directory) writeFileSync(join(directory, "options.json"), JSON.stringify(options, null, 2) + "\n");
+    if (directory) {
+      writeFileSync(join(directory, "options.json"), JSON.stringify(options, null, 2) + "\n");
+      writeFileSync(join(directory, "program.json"), JSON.stringify(program.program) + "\n");
+    }
     const row = `${program.moduleName.padEnd(14)} ${result.classification.padEnd(20)} ${result.detail}`;
     console.log(row);
     appendFileSync(summaryPath, `${JSON.stringify({ seed: result.seed, classification: result.classification, detail: result.detail, directory, millis: result.millis, js: result.js?.millis, go: result.go?.millis })}\n`);
@@ -145,8 +148,10 @@ const commandMinimise = async (arguments_: Arguments): Promise<void> => {
   for (const directory of positional) {
     const result = JSON.parse(readFileSync(join(directory, "result.json"), "utf8")) as { seed: number; classification: Classification; detail: string };
     const campaign = readCampaignOptions(directory);
-    console.log(`minimising ${directory} (${result.classification})`);
-    const minimal = await minimise(result.seed, campaign, result.classification, worker, (step) => console.log(`  ${step}`));
+    const programPath = join(directory, "program.json");
+    const saved = existsSync(programPath) ? (JSON.parse(readFileSync(programPath, "utf8")) as Program) : null;
+    console.log(`minimising ${directory} (${result.classification}${saved ? ", from program.json" : ", regenerated from seed"})`);
+    const minimal = await minimise(result.seed, campaign, result.classification, worker, (step) => console.log(`  ${step}`), result.detail, saved);
     const target = join(directory, "minimal.purs");
     writeFileSync(target, minimal.source);
     writeFileSync(join(directory, "minimal.json"), JSON.stringify({ classification: minimal.classification, detail: minimal.detail, signature: minimal.signature, lines: minimal.source.split("\n").length }, null, 2) + "\n");
@@ -156,10 +161,51 @@ const commandMinimise = async (arguments_: Arguments): Promise<void> => {
   }
 };
 
+/** Groups every kept failure by signature, preferring the minimised form where one exists. */
+const commandReport = (arguments_: Arguments): void => {
+  const results = flagString(arguments_.flags, "results", join(SCRATCHPAD, "fuzz-results"));
+  type Entry = { directory: string; seed: number; classification: Classification; detail: string; signature: string; minimised: boolean; lines: number | null };
+  const entries: Entry[] = [];
+  for (const classDirectory of readdirSync(results)) {
+    const classPath = join(results, classDirectory);
+    if (!statSync(classPath).isDirectory()) continue;
+    for (const program of readdirSync(classPath)) {
+      const directory = join(classPath, program);
+      const resultPath = join(directory, "result.json");
+      if (!existsSync(resultPath)) continue;
+      const result = JSON.parse(readFileSync(resultPath, "utf8")) as { seed: number; classification: Classification; detail: string };
+      const minimalPath = join(directory, "minimal.json");
+      if (existsSync(minimalPath)) {
+        const minimal = JSON.parse(readFileSync(minimalPath, "utf8")) as { classification: Classification; detail: string; signature: string; lines: number };
+        entries.push({ directory, seed: result.seed, classification: minimal.classification, detail: minimal.detail, signature: failureKey(minimal.classification, minimal.detail), minimised: true, lines: minimal.lines });
+      } else {
+        entries.push({ directory, seed: result.seed, classification: result.classification, detail: result.detail, signature: failureKey(result.classification, result.detail), minimised: false, lines: null });
+      }
+    }
+  }
+  const groups = new Map<string, Entry[]>();
+  for (const entry of entries) groups.set(entry.signature, [...(groups.get(entry.signature) ?? []), entry]);
+  const sorted = [...groups].sort((a, b) => b[1].length - a[1].length);
+  console.log(`${entries.length} kept failures in ${groups.size} signatures\n`);
+  for (const [signature, members] of sorted) {
+    const minimised = members.filter((m) => m.minimised).sort((a, b) => (a.lines ?? 1e9) - (b.lines ?? 1e9));
+    const representative = minimised[0] ?? members[0];
+    console.log(`## ${members.length}x ${signature.slice(0, 220)}`);
+    console.log(`   detail: ${representative.detail.slice(0, 200)}`);
+    console.log(`   seeds: ${members.map((m) => m.seed).slice(0, 12).join(", ")}${members.length > 12 ? ", ..." : ""}`);
+    console.log(`   repro: ${representative.directory}${representative.minimised ? `/minimal.purs (${representative.lines} lines)` : ""}`);
+    console.log();
+  }
+};
+
 /** The generator options a result's campaign used, recorded in the results directory's summary. */
 const readCampaignOptions = (directory: string): GeneratorOptions => {
   const optionsPath = join(directory, "options.json");
-  if (existsSync(optionsPath)) return JSON.parse(readFileSync(optionsPath, "utf8")) as GeneratorOptions;
+  if (existsSync(optionsPath)) {
+    const saved = JSON.parse(readFileSync(optionsPath, "utf8")) as GeneratorOptions;
+    // Features added after a campaign ran were, in effect, enabled for it.
+    return { ...saved, weights: { ...defaultWeights(), ...saved.weights } };
+  }
   throw new Error(`${optionsPath} is missing; the result was not produced by fuzz.ts run`);
 };
 
@@ -177,11 +223,14 @@ const main = async () => {
     case "minimize":
       await commandMinimise(arguments_);
       break;
+    case "report":
+      commandReport(arguments_);
+      break;
     case "features":
       console.log(FEATURES.join("\n"));
       break;
     default:
-      console.error("usage: bun fuzz.ts gen|run|minimise|features ...");
+      console.error("usage: bun fuzz.ts gen|run|minimise|report|features ...");
       process.exit(2);
   }
 };

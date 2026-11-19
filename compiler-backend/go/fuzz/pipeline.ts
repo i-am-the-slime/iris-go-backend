@@ -314,11 +314,12 @@ export const classify = (js: RunResult, go: RunResult): { classification: Classi
     return { classification: "JS STACK OVERFLOW", detail: `JS overflowed its stack after ${lineCount(js.stdout)} lines; Go finished ${lineCount(go.stdout)}` };
   }
   if (js.stdout !== go.stdout) {
-    const jsLines = js.stdout.split("\n");
-    const goLines = go.stdout.split("\n");
+    const jsLines = js.stdout.replace(/\n$/, "").split("\n");
+    const goLines = go.stdout.replace(/\n$/, "").split("\n");
     let index = 0;
     while (index < jsLines.length && index < goLines.length && jsLines[index] === goLines[index]) index++;
-    const detail = `line ${index + 1}: js ${JSON.stringify(jsLines[index] ?? "<end>").slice(0, 160)} go ${JSON.stringify(goLines[index] ?? "<end>").slice(0, 160)}`;
+    const show = (lines: string[]) => (index < lines.length ? JSON.stringify(lines[index]).slice(0, 160) : "<end>");
+    const detail = `line ${index + 1}: js ${show(jsLines)} go ${show(goLines)}`;
     return { classification: "OUTPUT MISMATCH", detail };
   }
   if (js.status !== go.status) {

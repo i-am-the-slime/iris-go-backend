@@ -32,37 +32,69 @@ export const signatureOf = (classification: Classification, detail: string): str
   return `${classification}: ${erased}`;
 };
 
+/**
+ * What must stay the same while shrinking: the classification, and for compiler and build
+ * failures the kind of message, so that the search does not drift from one bug to another.
+ */
+export const failureKey = (classification: Classification, detail: string): string => {
+  const erase = (text: string) => text.replace(/Fuzz\.P\d+/g, "Fuzz.P").replace(/\d+/g, "N");
+  switch (classification) {
+    case "GO BUILD ERROR": {
+      const message = detail.replace(/^\.\/[\w./]+:\d+:\d+: /, "");
+      const head = /^(in call to [\w.]+|declared and not used|duplicate case|cannot use|undefined|missing return|invalid operation|too many|not enough|mismatched types|cannot infer|does not implement|cannot assign|assignment mismatch|cannot convert|unreachable code|imported and not used|no new variables|invalid recursive type|cannot range|non-boolean|cannot call|[a-zA-Z ]{4,30})/.exec(message);
+      return `${classification}: ${erase(head?.[1] ?? message.slice(0, 40))}`;
+    }
+    case "IRIS ERROR":
+    case "GO PANIC":
+    case "IRIS JS ERROR":
+      return `${classification}: ${erase(detail).slice(0, 80)}`;
+    case "GENERATOR ILL-TYPED":
+      return `${classification}: ${detail.split(":")[0]}`;
+    default:
+      return classification;
+  }
+};
+
 export const minimise = async (
   seed: number,
   options: GeneratorOptions,
   classification: Classification,
   worker: Worker,
   log: (step: string) => void,
+  originalDetail: string = "",
+  saved: Program | null = null,
 ): Promise<MinimalResult> => {
   const moduleName = `Fuzz.P${seed}`;
-  const program = generateProgram(seed, moduleName, options);
+  const program = saved ?? generateProgram(seed, moduleName, options);
   const generator = new Generator(0, options);
+  generator.adopt(program);
   let last: ProgramResult | null = null;
   let checks = 0;
+  let key = failureKey(classification, originalDetail);
 
   const persists = async (): Promise<boolean> => {
     checks++;
+    if (checks % 10 === 0) log(`${checks} checks, ${printProgram(program).split("\n").length} lines`);
     const source = printProgram(program);
     const [result] = await worker.runBatch([{ seed, moduleName, source }]);
     if (result.classification !== classification) return false;
+    if (failureKey(result.classification, result.detail) !== key) return false;
     last = result;
     return true;
   };
 
-  const initial = await persists();
-  if (!initial) {
-    const [result] = await worker.runBatch([{ seed, moduleName, source: printProgram(program) }]);
-    return { source: printProgram(program), classification: result.classification, detail: `does not reproduce ${classification}; got ${result.classification}: ${result.detail}`, signature: signatureOf(result.classification, result.detail), js: result.js, go: result.go };
+  const [first] = await worker.runBatch([{ seed, moduleName, source: printProgram(program) }]);
+  if (first.classification !== classification) {
+    return { source: printProgram(program), classification: first.classification, detail: `does not reproduce ${classification}; got ${first.classification}: ${first.detail}`, signature: signatureOf(first.classification, first.detail), js: first.js, go: first.go };
   }
+  key = failureKey(first.classification, first.detail);
+  last = first;
+  log(`key: ${key}`);
 
   // 1. Main statements, by halves and then one at a time.
   const shrinkList = async <Item>(items: Item[], label: string): Promise<Item[]> => {
-    let current = items;
+    const originalLength = items.length;
+    let current = [...items];
     let chunk = Math.max(1, Math.floor(current.length / 2));
     while (chunk >= 1 && current.length > 1) {
       let start = 0;
@@ -74,7 +106,7 @@ export const minimise = async (
         if (await persists()) {
           current = candidate;
           removedAny = true;
-          log(`${label}: ${items.length} -> ${current.length}`);
+          log(`${label}: ${originalLength} -> ${current.length}`);
         } else {
           apply(current);
           start += chunk;
