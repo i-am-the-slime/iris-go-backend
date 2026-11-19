@@ -12,12 +12,11 @@ import (
 )
 
 func main_() int32 {
-	ref := &shared.Ref[int32]{Value: 1}
-	i := ref.Value
-	s := ref.Value
-	s_ := s + 1
+	var ref int32 = 1
+	i := ref
+	s_ := ref + 1
 	modified := shared.StateValue{State: s_, Value: s_}
-	ref.Value = modified.State
+	ref = modified.State
 	scrutinee := i > 5
 	if scrutinee {
 		panic(exception.NewError("too many"))

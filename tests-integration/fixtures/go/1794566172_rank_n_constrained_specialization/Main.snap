@@ -67,17 +67,15 @@ var recorded = initializeRecorded()
 
 func initializeRecorded() int32 {
 	defer exception.ReportUncaught()
-	ref := &shared.Ref[int32]{Value: 0}
+	var ref int32 = 0
 	i := program.ST(shared.InterpreterST{Emit: func(value int32) {
-		s := ref.Value
-		s_ := s + value
+		s_ := ref + value
 		modified := shared.StateValue{State: s_, Value: s_}
-		ref.Value = modified.State
+		ref = modified.State
 	}, Measure: func(text string) int32 {
 		return direct.CodePointLength(text)
 	}})
-	i2 := ref.Value
-	performed := i2 + i
+	performed := ref + i
 	return performed
 }
 

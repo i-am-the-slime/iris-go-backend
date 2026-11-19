@@ -15,39 +15,34 @@ var main_ = initializeMain_()
 
 func initializeMain_() shared.MainResult {
 	defer exception.ReportUncaught()
-	ref := &shared.Ref[int32]{Value: 0}
-	ref2 := &shared.Ref[int32]{Value: 0}
-	ref3 := &shared.Ref[int32]{Value: 0}
-	ref4 := &shared.Ref[int32]{Value: 0}
-	ref5 := &shared.Ref[bool]{Value: false}
+	var ref int32 = 0
+	var ref2 int32 = 0
+	var ref3 int32 = 0
+	var ref4 int32 = 0
+	ref5 := false
 	var accumulator int32 = 0
 	for _, x := range numbers {
-		s := ref.Value
-		s_ := s + 1
+		s_ := ref + 1
 		modified := shared.StateValue{State: s_, Value: s_}
-		ref.Value = modified.State
+		ref = modified.State
 		performed2 := x > 2
 		if performed2 {
-			s2 := ref2.Value
-			s_2 := s2 + 1
+			s_2 := ref2 + 1
 			modified2 := shared.StateValue{State: s_2, Value: s_2}
-			ref2.Value = modified2.State
+			ref2 = modified2.State
 			performed3 := prim.MultiplyInt32(x, 3)
 			accumulator = accumulator + performed3
 		}
 	}
-	ref3.Value = accumulator
-	i := ref.Value
-	calls := ref2.Value
-	modified3 := shared.StateValue{State: 0, Value: calls}
-	ref2.Value = modified3.State
-	i2 := modified3.Value
+	ref3 = accumulator
+	modified3 := shared.StateValue{State: 0, Value: ref2}
+	ref2 = modified3.State
+	i := modified3.Value
 	mapped := make([]int32, len(numbers))
 	for index, x := range numbers {
-		s := ref2.Value
-		s_ := s + 1
+		s_ := ref2 + 1
 		modified := shared.StateValue{State: s_, Value: s_}
-		ref2.Value = modified.State
+		ref2 = modified.State
 		performed2 := prim.MultiplyInt32(x, 3)
 		mapped[index] = performed2
 	}
@@ -56,28 +51,22 @@ func initializeMain_() shared.MainResult {
 	for _, value := range tripled {
 		accumulator2 = accumulator2 + value
 	}
-	ref4.Value = accumulator2 + int32(len(tripled))
-	calls2 := ref2.Value
-	modified4 := shared.StateValue{State: 0, Value: calls2}
-	ref2.Value = modified4.State
-	i3 := modified4.Value
+	ref4 = accumulator2 + int32(len(tripled))
+	modified4 := shared.StateValue{State: 0, Value: ref2}
+	ref2 = modified4.State
+	i2 := modified4.Value
 	found := false
 	for _, x := range numbers {
-		s := ref2.Value
-		s_ := s + 1
+		s_ := ref2 + 1
 		modified := shared.StateValue{State: s_, Value: s_}
-		ref2.Value = modified.State
+		ref2 = modified.State
 		performed2 := prim.MultiplyInt32(x, 3)
 		if performed2 > 20 {
 			found = true
 			break
 		}
 	}
-	ref5.Value = found
-	i4 := ref2.Value
-	i5 := ref3.Value
-	i6 := ref4.Value
-	boolean := ref5.Value
+	ref5 = found
 	var count int32 = 0
 	for _, value := range numbers {
 		value2 := prim.MultiplyInt32(value, 3)
@@ -85,7 +74,7 @@ func initializeMain_() shared.MainResult {
 			count = count + 1
 		}
 	}
-	performed := shared.MainResult{Fused: i5, Shared: i6, EarlyExit: boolean, PredicateCalls: i, FusedMappingCalls: i2, SharedMappingCalls: i3, EarlyExitMappingCalls: i4, KeptLength: count}
+	performed := shared.MainResult{Fused: ref3, Shared: ref4, EarlyExit: ref5, PredicateCalls: ref, FusedMappingCalls: i, SharedMappingCalls: i2, EarlyExitMappingCalls: ref2, KeptLength: count}
 	return performed
 }
 

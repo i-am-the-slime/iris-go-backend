@@ -1,0 +1,80 @@
+---
+source: tests-integration/src/fixtures.rs
+---
+// main.go
+package main
+
+import (
+	"fixture/shared"
+	"github.com/i-am-the-slime/purs-backend-go/go-support/array"
+	"github.com/i-am-the-slime/purs-backend-go/go-support/exception"
+	"os"
+)
+
+func main_() int32 {
+	ref := &shared.Ref[int32]{Value: 0}
+	drain(ref, 3)
+	i := ref.Value
+	var ref2 int32 = 0
+	var ref3 int32 = 0
+	for {
+		continuing := ref3 < 4
+		if !continuing {
+			break
+		}
+		i2 := ref3
+		s_ := ref2 + i2
+		modified := shared.StateValue{State: s_, Value: s_}
+		ref2 = modified.State
+		written := i2 + 1
+		ref3 = written
+	}
+	for i2 := int32(0); i2 < 4; i2++ {
+		s_ := ref2 + i2
+		modified := shared.StateValue{State: s_, Value: s_}
+		ref2 = modified.State
+	}
+	var ref4 int32 = 0
+	array.Foldr(func(x int32, b func()) func() {
+		return func() {
+			s_ := ref4 + x
+			modified := shared.StateValue{State: s_, Value: s_}
+			ref4 = modified.State
+			b()
+		}
+	}, func() {
+	}, []int32{1, 2})()
+	return ref2 + ref4 + i
+}
+
+func drain(cell *shared.Ref[int32], n int32) {
+	for {
+		nCaptured := n
+		if nCaptured <= 0 {
+			return
+		}
+		s := cell.Value
+		s_ := s + nCaptured
+		modified := shared.StateValue{State: s_, Value: s_}
+		cell.Value = modified.State
+		n = nCaptured - 1
+	}
+}
+
+func main() {
+	defer exception.ReportUncaught()
+	exitStatus := main_()
+	os.Exit(int(exitStatus))
+}
+
+// shared/shared.go
+package shared
+
+type Ref[T any] struct {
+	Value T
+}
+
+type StateValue struct {
+	State int32
+	Value int32
+}

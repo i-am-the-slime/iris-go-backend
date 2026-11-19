@@ -12,41 +12,37 @@ import (
 )
 
 func main_() int32 {
-	ref := &shared.Ref[int32]{Value: 0}
+	var ref int32 = 0
 	createResult := create()
 	createResult2 := create()
 	subscribe := createResult2.Subscribe
 	subscribe(func(n int32) {
-		s := ref.Value
-		s_ := s + n
+		s_ := ref + n
 		modified := shared.StateValueOfIntInt{State: s_, Value: s_}
-		ref.Value = modified.State
+		ref = modified.State
 	})
-	ref2 := &shared.Ref[int32]{Value: 0}
+	var ref2 int32 = 0
 	subscribe(func(n int32) {
-		ref2.Value = n
+		ref2 = n
 	})
 	createResult.Subscribe(func(n int32) {
-		i := ref2.Value
-		createResult2.Push(i + n)
+		createResult2.Push(ref2 + n)
 	})
 	createResult.Push(1)
 	createResult.Push(2)
-	return ref.Value
+	return ref
 }
 
 func create() shared.CreateResult {
-	ref := &shared.Ref[[]func(int32)]{Value: []func(int32){}}
+	ref := []func(int32){}
 	return shared.CreateResult{Subscribe: func(k func(int32)) func() {
-		s := ref.Value
-		s_ := array.Append(s, []func(int32){k})
+		s_ := array.Append(ref, []func(int32){k})
 		modified := shared.StateValueOfArrayFnIntEffectArrayFnIntEffect{State: s_, Value: s_}
-		ref.Value = modified.State
+		ref = modified.State
 		return func() {
 		}
 	}, Push: func(n int32) {
-		array := ref.Value
-		for _, f := range array {
+		for _, f := range ref {
 			f(n)
 		}
 	}}

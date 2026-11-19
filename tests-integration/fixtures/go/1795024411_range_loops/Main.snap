@@ -16,18 +16,16 @@ var main_ = initializeMain_()
 
 func initializeMain_() shared.MainResult {
 	defer exception.ReportUncaught()
-	ref := &shared.Ref[int32]{Value: 4}
-	i := ref.Value
-	ref2 := &shared.Ref[[]int32]{Value: []int32{}}
+	var ref int32 = 4
+	i := ref
+	ref2 := []int32{}
 	step, count := shared.RangeSteps(i, 1)
 	for index := range count {
 		i2 := i + int32(index) * step
-		s := ref2.Value
-		s_ := array.Append(s, []int32{i2})
+		s_ := array.Append(ref2, []int32{i2})
 		modified := shared.StateValue{State: s_, Value: s_}
-		ref2.Value = modified.State
+		ref2 = modified.State
 	}
-	array2 := ref2.Value
 	step2, count2 := shared.RangeSteps(1, i)
 	var accumulator int32 = 0
 	for index := range count2 {
@@ -48,7 +46,7 @@ func initializeMain_() shared.MainResult {
 		index := int32(slot)
 		mapped[slot] = prim.MultiplyInt32(index, x)
 	}
-	performed := shared.MainResult{Visited: array2, Summed: accumulator, Listed: accumulator2, Counted: int32(count4), Indexed: mapped, Descending: descending}
+	performed := shared.MainResult{Visited: ref2, Summed: accumulator, Listed: accumulator2, Counted: int32(count4), Indexed: mapped, Descending: descending}
 	return performed
 }
 

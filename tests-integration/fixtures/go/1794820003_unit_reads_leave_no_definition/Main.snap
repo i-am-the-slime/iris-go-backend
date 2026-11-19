@@ -46,19 +46,17 @@ import (
 
 func main_() int32 {
 	var i int32 = 1
-	ref := &shared.Ref[int32]{Value: 0}
+	var ref int32 = 0
 	dataarray.FoldMEffectTupleUnitUnitUnit(func(_ struct{}, pair tuple.TupleUnitUnit) {
-		s := ref.Value
-		s_ := s + 1
+		s_ := ref + 1
 		modified := shared.StateValue{State: s_, Value: s_}
-		ref.Value = modified.State
+		ref = modified.State
 	}, struct{}{}, units)
-	i2 := ref.Value
 	var accumulator int32 = 0
 	for range units {
 		accumulator = accumulator + 1
 	}
-	return prim.MultiplyInt32(i, 100) + prim.MultiplyInt32(i2, 10) + accumulator
+	return prim.MultiplyInt32(i, 100) + prim.MultiplyInt32(ref, 10) + accumulator
 }
 
 var units []tuple.TupleUnitUnit = []tuple.TupleUnitUnit{tuple.TupleUnitUnit{First: struct{}{}, Second: struct{}{}}, tuple.TupleUnitUnit{First: struct{}{}, Second: struct{}{}}}

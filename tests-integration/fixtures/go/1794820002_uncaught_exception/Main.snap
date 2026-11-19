@@ -11,13 +11,11 @@ import (
 
 func main() {
 	defer exception.ReportUncaught()
-	ref := &shared.Ref[int32]{Value: 0}
-	s := ref.Value
-	s_ := s + 1
+	var ref int32 = 0
+	s_ := ref + 1
 	modified := shared.StateValue{State: s_, Value: s_}
-	ref.Value = modified.State
-	i := ref.Value
-	scrutinee := i > 0
+	ref = modified.State
+	scrutinee := ref > 0
 	if scrutinee {
 		panic(exception.NewError("boom"))
 	}

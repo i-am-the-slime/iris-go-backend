@@ -34,16 +34,14 @@ import (
 )
 
 func main_() int32 {
-	ref := &shared.Ref[int32]{Value: 0}
+	var ref int32 = 0
 	i := dataarray.FoldMEffectIntInt(func(acc int32, n int32) int32 {
-		s := ref.Value
-		s_ := s + 1
+		s_ := ref + 1
 		modified := shared.StateValue{State: s_, Value: s_}
-		ref.Value = modified.State
+		ref = modified.State
 		return acc + n
 	}, 0, []int32{1, 2, 3})
-	i2 := ref.Value
-	return prim.MultiplyInt32(i, 10) + i2
+	return prim.MultiplyInt32(i, 10) + ref
 }
 
 func main() {

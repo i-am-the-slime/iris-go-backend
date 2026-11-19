@@ -32,6 +32,7 @@ mod names;
 mod ownership;
 mod packages;
 mod ranges;
+mod references;
 mod reference_equality;
 mod reuse;
 mod strings;
@@ -140,6 +141,7 @@ where
     if emitter.imports.contains(GoPackage::Aff.path()) {
         await_fibers(&mut declarations);
     }
+    timed("references", || references::promote_references(&mut declarations));
     timed("immediate", || immediate::reduce_immediate_calls(&mut declarations));
     timed("conditions", || conditions::assign_conditions(&mut declarations));
     timed("aliases", || aliases::substitute_aliases(&mut declarations));

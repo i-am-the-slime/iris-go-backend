@@ -159,6 +159,6 @@ impl Walk for Writes<'_> {
     }
 }
 
-fn is_named(value: &GoExpression, name: &str) -> bool {
+pub(super) fn is_named(value: &GoExpression, name: &str) -> bool {
     matches!(value, GoExpression::Identifier(identifier) if identifier == name)
 }
