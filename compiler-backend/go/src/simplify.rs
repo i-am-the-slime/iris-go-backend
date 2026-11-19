@@ -3,7 +3,7 @@
 //! members and foreign imports); inlining them exposes the effect primitives and
 //! operators that code generation turns into plain Go.
 
-use rustc_hash::FxHashMap;
+use rustc_hash::{FxHashMap, FxHashSet};
 
 use crate::foreign::{Comparison, Foreign, Operator};
 use crate::graph::{on_cycles, strongly_connected};
@@ -50,6 +50,7 @@ pub fn simplify(program: Program, monotypes: &mut Monotypes, next_local: u32) ->
         monotypes,
         record_orders: FxHashMap::default(),
         records_settled: false,
+        unsafely_effectful_locals: FxHashSet::default(),
     };
     for component in &components {
         for &function in component {
@@ -98,6 +99,7 @@ struct Simplifier<'m> {
     monotypes: &'m mut Monotypes,
     record_orders: FxHashMap<LocalId, Vec<SmolStr>>,
     records_settled: bool,
+    unsafely_effectful_locals: FxHashSet<LocalId>,
 }
 
 impl Simplifier<'_> {
@@ -394,6 +396,11 @@ impl Simplifier<'_> {
                     .collect();
                 for binding in &bindings {
                     self.remember_record_order(binding);
+                    if let ExpressionKind::Lambda { body, .. } = &binding.value.kind
+                        && runs_effect(self, body)
+                    {
+                        self.unsafely_effectful_locals.insert(binding.local.id);
+                    }
                 }
                 let body = self.expression(*body);
                 return self.let_bindings(bindings, body);
@@ -760,7 +767,10 @@ impl Simplifier<'_> {
                 || uses.total == 0
                 || (uses.total == 1
                     && (uses.under_lambda == 0 || self.does_no_work(&binding.value)));
-            if substitutable {
+            let built_in_place = uses.total == 1
+                && matches!(&body.kind, ExpressionKind::EffectBind { action, .. }
+                    if matches!(action.kind, ExpressionKind::Local(id) if id == binding.local.id));
+            if substitutable && (built_in_place || !runs_effect(self, &binding.value)) {
                 if uses.total > 0 {
                     body = substitute(body, binding.local.id, &binding.value, self.monotypes);
                     body = self.expression(body);
@@ -1143,6 +1153,44 @@ fn builds_safely(expression: &Expression) -> bool {
     }
 }
 
+fn runs_effect(known: &impl KnownFunctions, expression: &Expression) -> bool {
+    effect_runs(known, expression, false)
+}
+
+fn effect_runs(known: &impl KnownFunctions, expression: &Expression, running: bool) -> bool {
+    match &expression.kind {
+        ExpressionKind::Foreign { foreign: Foreign::UnsafePerformEffect, .. } => true,
+        ExpressionKind::Foreign { foreign: Foreign::RunEffect, arguments } => {
+            arguments.iter().any(|argument| effect_runs(known, argument, true))
+        }
+        ExpressionKind::Lambda { .. } => false,
+        ExpressionKind::EffectBind { action: built, .. }
+        | ExpressionKind::EffectEach { array: built, .. }
+            if !running =>
+        {
+            effect_runs(known, built, running)
+        }
+        ExpressionKind::Apply { function, arguments } => {
+            let callee_runs = match &function.kind {
+                ExpressionKind::Lambda { body, .. } => effect_runs(known, body, running),
+                ExpressionKind::Function(id) => known.known(*id).is_some_and(|callee| {
+                    !known.is_recursive(*id) && effect_runs(known, &callee.body, running)
+                }),
+                ExpressionKind::Local(id) => known.runs_effect_when_applied(*id),
+                _ => effect_runs(known, function, running),
+            };
+            callee_runs || arguments.iter().any(|argument| effect_runs(known, argument, running))
+        }
+        _ => {
+            let mut runs = false;
+            for_each_child(expression, &mut |child| {
+                runs = runs || effect_runs(known, child, running)
+            });
+            runs
+        }
+    }
+}
+
 /// Whether evaluating the expression may reach a failure: a pattern match
 /// failure, a crash or a thrown exception. An argument that a foreign function
 /// ignores is never evaluated.
@@ -1469,6 +1517,10 @@ fn alternatives_size(alternatives: &[Alternative]) -> usize {
 pub(crate) trait KnownFunctions {
     fn known(&self, id: FunctionId) -> Option<&Function>;
     fn is_recursive(&self, id: FunctionId) -> bool;
+
+    fn runs_effect_when_applied(&self, _local: LocalId) -> bool {
+        false
+    }
 }
 
 impl KnownFunctions for Simplifier<'_> {
@@ -1478,6 +1530,10 @@ impl KnownFunctions for Simplifier<'_> {
 
     fn is_recursive(&self, id: FunctionId) -> bool {
         self.recursive[id.0 as usize]
+    }
+
+    fn runs_effect_when_applied(&self, local: LocalId) -> bool {
+        self.unsafely_effectful_locals.contains(&local)
     }
 }
 

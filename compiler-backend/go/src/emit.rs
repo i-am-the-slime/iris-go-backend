@@ -3202,7 +3202,7 @@ where
             let lazy = self.value(&arguments[0], out)?;
             return Ok(call(field(lazy, "Force"), vec![]));
         }
-        if let Foreign::RunEffect = foreign {
+        if let Foreign::RunEffect | Foreign::UnsafePerformEffect = foreign {
             if self.is_unit(monotype) {
                 self.sink(&arguments[0], Mode::Perform, Sink::Discard, out)?;
                 return Ok(unit_value());

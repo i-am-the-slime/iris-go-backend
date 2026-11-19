@@ -1,0 +1,110 @@
+---
+source: tests-integration/src/fixtures.rs
+---
+// Control/Category/category.go
+package category
+
+func Identity(x any) any {
+	return x
+}
+
+// Data/Maybe/maybe.go
+package maybe
+
+type Maybe struct {
+	Just any
+	Tag  uint8
+}
+
+const (
+	MaybeNothing = iota
+	MaybeJust
+)
+
+func Just(just any) *Maybe {
+	return &Maybe{Tag: MaybeJust, Just: just}
+}
+
+// main.go
+package main
+
+import (
+	"fixture/Control/Category"
+	"fixture/Data/Maybe"
+	"fixture/shared"
+	"github.com/i-am-the-slime/purs-backend-go/go-support/array"
+	"github.com/i-am-the-slime/purs-backend-go/go-support/exception"
+	"os"
+)
+
+func main_() int32 {
+	ref := &shared.Ref[int32]{Value: 0}
+	s := ref.Value
+	s_ := s + 1
+	modified := shared.StateValue{State: s_, Value: s_}
+	ref.Value = modified.State
+	s2 := ref.Value
+	s_2 := s2 + 10
+	modified2 := shared.StateValue{State: s_2, Value: s_2}
+	ref.Value = modified2.State
+	s3 := ref.Value
+	s_3 := s3 + 100
+	modified3 := shared.StateValue{State: s_3, Value: s_3}
+	ref.Value = modified3.State
+	mainGo(0, struct{}{})
+	array2 := &[]any{}
+	s4 := ref.Value
+	s_4 := s4 + 1000
+	modified4 := shared.StateValue{State: s_4, Value: s_4}
+	ref.Value = modified4.State
+	performed2 := category.Identity
+	f := performed2
+	maybe2 := array.Peek(maybe.Just, &maybe.Maybe{Tag: maybe.MaybeNothing}, 0, array2)()
+	var performed bool
+	switch maybe2.Tag {
+	case maybe.MaybeJust:
+		performed = array.Poke(0, f(maybe2.Just), array2)()
+	default: // maybe.MaybeNothing
+		performed = false
+	}
+	modified5 := performed
+	s5 := ref.Value
+	s_5 := s5 + 10000
+	modified6 := shared.StateValue{State: s_5, Value: s_5}
+	ref.Value = modified6.State
+	i := ref.Value
+	var result int32
+	if modified5 {
+		result = 1
+	} else {
+		result = 0
+	}
+	return i + result
+}
+
+func mainGo(n int32, acc struct{}) {
+	for {
+		if n <= 0 {
+			return
+		}
+		n, _ = n - 1, struct{}{}
+	}
+}
+
+func main() {
+	defer exception.ReportUncaught()
+	exitStatus := main_()
+	os.Exit(int(exitStatus))
+}
+
+// shared/shared.go
+package shared
+
+type Ref[T any] struct {
+	Value T
+}
+
+type StateValue struct {
+	State int32
+	Value int32
+}
