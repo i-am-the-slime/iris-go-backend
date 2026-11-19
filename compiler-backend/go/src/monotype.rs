@@ -975,7 +975,14 @@ impl Monotypes {
         let mut fields = Vec::with_capacity(instantiations.len());
         for instantiation in instantiations {
             let instantiated = scheme.instantiate(context, &instantiation.types);
-            let monotype = self.convert(context, instantiated, expansions)?;
+            let mut monotype = self.convert(context, instantiated, expansions)?;
+            for reified in scheme.reified_constraints(context, &instantiation).into_iter().rev() {
+                let Some(&reflected) = context.types.spine(reified).1.last() else {
+                    return Err(UnsupportedState::UnboundEvidence.into());
+                };
+                let reified = self.convert(context, reflected, expansions)?;
+                monotype = self.intern(Monotype::Function(reified, monotype));
+            }
             fields.push(RecordField { label: instantiation.label, monotype });
         }
         fields.sort_by(|left, right| left.label.cmp(&right.label));

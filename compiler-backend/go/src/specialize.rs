@@ -38,6 +38,7 @@ mod evidence;
 mod existential;
 mod growth;
 mod patterns;
+mod reified;
 mod runtime;
 mod spine;
 mod traverse;
@@ -1725,20 +1726,24 @@ where
         let instantiations = self.monotypes.schemes.get(&scheme.key).to_vec();
         let mut fields = Vec::with_capacity(instantiations.len());
         for instantiation in instantiations {
+            let (parameters, dictionaries) =
+                self.reified_parameters(scope, &scheme, &instantiation)?;
             let substitution = scope.substitution.clone();
             let givens = scope.givens.clone();
             scope
                 .substitution
                 .extend(scheme.names.iter().copied().zip(instantiation.types.iter().copied()));
-            scope
-                .givens
-                .extend(binders.iter().copied().zip(instantiation.dictionaries.iter().cloned()));
+            scope.givens.extend(binders.iter().copied().zip(dictionaries));
             self.constructing.push((scheme.key.clone(), Arc::clone(&instantiation.types)));
             let value = self.expression(scope, body);
             self.constructing.pop();
             scope.substitution = substitution;
             scope.givens = givens;
-            fields.push((instantiation.label, value?));
+            let value = match parameters.is_empty() {
+                true => value?,
+                false => self.lambda(parameters, value?),
+            };
+            fields.push((instantiation.label, value));
         }
         fields.sort_by(|left, right| left.0.cmp(&right.0));
         Ok(Expression::new(ExpressionKind::Record(fields), monotype))
@@ -1789,6 +1794,37 @@ where
         self.note_pending();
         let pending = SmolStr::new_static("instantiation discovered in this pass");
         Ok(Expression::new(ExpressionKind::Fail(pending), monotype))
+    }
+
+    /// The parameters an instantiation's field takes for the values it reifies at run time,
+    /// and its dictionaries with each reified one passed on at run time from its parameter.
+    fn reified_parameters(
+        &mut self,
+        scope: &Scope,
+        scheme: &crate::scheme::ConstrainedScheme,
+        instantiation: &SchemeInstantiation,
+    ) -> GoResult<(Vec<Local>, Vec<Dictionary>)> {
+        let mut reified = scheme.reified_constraints(&self.context, instantiation).into_iter();
+        let mut parameters = vec![];
+        let mut dictionaries = Vec::with_capacity(instantiation.dictionaries.len());
+        for dictionary in instantiation.dictionaries.iter() {
+            let Dictionary::Reflectable(Reflected::Reified) = dictionary else {
+                dictionaries.push(dictionary.clone());
+                continue;
+            };
+            let Some(constraint) = reified.next() else {
+                return Err(self.unsupported(scope, UnsupportedState::UnboundEvidence));
+            };
+            let Some(&reflected) = self.context.types.spine(constraint).1.last() else {
+                return Err(self.unsupported(scope, UnsupportedState::UnboundEvidence));
+            };
+            let monotype = self.closed_monotype(scope, reflected)?;
+            let parameter = self.fresh_local(SmolStr::new_static("reified"), monotype);
+            let value = parameter.expression();
+            dictionaries.push(self.reified_dictionary(&scope.definition, constraint, value)?);
+            parameters.push(parameter);
+        }
+        Ok((parameters, dictionaries))
     }
 
     fn discover(
@@ -2219,6 +2255,7 @@ where
             }
         }
         let types: Arc<[TypeId]> = Arc::from(types);
+        let (dictionaries, runtime_values) = self::runtime::detach_runtime_values(&dictionaries);
         let dictionaries: Arc<[Dictionary]> = Arc::from(dictionaries);
         let canonical = self.types_without_causes(&types);
         let existing =
@@ -2229,9 +2266,13 @@ where
         if let Some(specialization) = existing {
             let local = &specialization.local;
             let expression = Expression::new(ExpressionKind::Local(local.id), local.monotype);
+            let expression = self.applied_local(expression, runtime_values);
             return Ok(self.coerce(expression, requested_monotype));
         }
-        let monotype = self.declared_monotype(scope, declaration.type_id, &substitution)?;
+        let mut monotype = self.declared_monotype(scope, declaration.type_id, &substitution)?;
+        for value in runtime_values.iter().rev() {
+            monotype = self.monotypes.function(value.monotype, monotype);
+        }
         let polymorphic = scope
             .polymorphic_locals
             .get_mut(&source)
@@ -2246,7 +2287,21 @@ where
             value: None,
             requester,
         });
+        let expression = self.applied_local(expression, runtime_values);
         Ok(self.coerce(expression, requested_monotype))
+    }
+
+    /// A local specialization applied to the run-time dictionaries it takes first.
+    fn applied_local(&mut self, local: Expression, arguments: Vec<Expression>) -> Expression {
+        if arguments.is_empty() {
+            return local;
+        }
+        let mut monotype = local.monotype;
+        for _ in &arguments {
+            monotype = self.monotypes.result_after(monotype, 1);
+        }
+        let kind = ExpressionKind::Apply { function: Box::new(local), arguments };
+        Expression::new(kind, monotype)
     }
 
     fn terminate_local_growth(
@@ -2314,8 +2369,15 @@ where
                 .get_mut(&source)
                 .map(|polymorphic| std::mem::replace(&mut polymorphic.active, Some(index)));
             let specialized = self
-                .bind_abstractions(scope, &value.abstractions, &types, &dictionaries)
-                .and_then(|()| self.equations(scope, &value.equations));
+                .bind_local_runtime_dictionaries(&scope.definition, &dictionaries)
+                .and_then(|(dictionaries, parameters)| {
+                    self.bind_abstractions(scope, &value.abstractions, &types, &dictionaries)?;
+                    let body = self.equations(scope, &value.equations)?;
+                    Ok(match parameters.is_empty() {
+                        true => body,
+                        false => self.lambda(parameters, body),
+                    })
+                });
             scope.substitution = substitution;
             scope.givens = givens;
             let polymorphic = scope
@@ -2677,6 +2739,9 @@ where
                     Reflected::Ordering(name) => {
                         let constructed = self.reflected_constructor(scope, &name, monotype)?;
                         return Ok(self.constant_function(constructed, monotype));
+                    }
+                    Reflected::Reified => {
+                        return Err(self.unsupported(scope, UnsupportedState::UnboundEvidence));
                     }
                 };
                 return Ok(self.constant_function(ExpressionKind::Literal(literal), monotype));

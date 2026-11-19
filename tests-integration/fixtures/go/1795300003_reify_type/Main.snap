@@ -1,0 +1,90 @@
+---
+source: tests-integration/src/fixtures.rs
+---
+// Data/Ordering/ordering.go
+package ordering
+
+type Ordering uint8
+
+const (
+	OrderingLT Ordering = iota
+	OrderingGT
+	OrderingEQ
+)
+
+func Show(ordering Ordering) string {
+	switch ordering {
+	case OrderingLT:
+		return "LT"
+	case OrderingGT:
+		return "GT"
+	default: // OrderingEQ
+		return "EQ"
+	}
+}
+
+// Data/Show/show.go
+package show
+
+import "github.com/i-am-the-slime/purs-backend-go/go-support/prim"
+
+func Show(s string) string {
+	return prim.ShowString(s)
+}
+
+// Type/Proxy/proxy.go
+package proxy
+
+type Proxy uint8
+
+const (
+	ProxyProxy Proxy = iota
+)
+
+// main.go
+package main
+
+import (
+	"fixture/Data/Ordering"
+	"fixture/Data/Show"
+	"fixture/Type/Proxy"
+	"fmt"
+	"github.com/i-am-the-slime/purs-backend-go/go-support/exception"
+	"github.com/i-am-the-slime/purs-backend-go/go-support/prim"
+	"slices"
+)
+
+var main_ = initializeMain_()
+
+func initializeMain_() []string {
+	defer exception.ReportUncaught()
+	array := []int32{1, 2, 3}
+	mapped := make([]string, len(array))
+	for index, n := range array {
+		mapped[index] = "item" + prim.ShowInt(n)
+	}
+	array2 := []ordering.Ordering{ordering.OrderingLT, ordering.OrderingEQ, ordering.OrderingGT}
+	mapped2 := make([]ordering.Ordering, len(array2))
+	for index, ordering := range array2 {
+		mapped2[index] = ordering
+	}
+	return []string{prim.ShowInt(42), prim.ShowInt(-8), prim.ShowInt(7), "erin!", "false", "false", "greater", prim.ShowArray(show.Show, mapped), prim.ShowArray(show.Show, reifiedEach(0, []string{})), prim.ShowArray(ordering.Show, mapped2)}
+}
+
+func reifiedEach(n int32, done []string) []string {
+	done = slices.Clip(done)
+	for {
+		if n > 3 {
+			return done
+		}
+		n, done = n + 1, append(done, "n=" + prim.ShowInt(prim.MultiplyInt32(reifiedEachDictionaryReflectType(n, proxy.ProxyProxy), 10) + n) + "n=" + prim.ShowInt(prim.MultiplyInt32(reifiedEachDictionaryReflectType(n, proxy.ProxyProxy), 10) + 1))
+	}
+}
+
+func reifiedEachDictionaryReflectType(n int32, proxy proxy.Proxy) int32 {
+	return n
+}
+
+func main() {
+	fmt.Println(main_)
+}

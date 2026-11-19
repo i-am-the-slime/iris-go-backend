@@ -216,6 +216,39 @@ where
         Ok((key, parameters))
     }
 
+    /// The parameters a local specialization takes for its run-time dictionaries, which its
+    /// references pass (`detach_runtime_values`), and its dictionaries bound to them.
+    pub(super) fn bind_local_runtime_dictionaries(
+        &mut self,
+        definition: &str,
+        dictionaries: &[Dictionary],
+    ) -> GoResult<(Vec<Dictionary>, Vec<Local>)> {
+        if !dictionaries.iter().any(mentions_runtime) {
+            return Ok((dictionaries.to_vec(), vec![]));
+        }
+        let mut constraints = vec![];
+        for dictionary in dictionaries {
+            map_dictionary(dictionary, &mut |runtime| {
+                constraints.push(runtime.constraint);
+                runtime.clone()
+            });
+        }
+        let mut parameters = Vec::with_capacity(constraints.len());
+        for constraint in constraints {
+            let monotype = self.runtime_monotype(definition, constraint)?;
+            parameters.push(self.fresh_local(SmolStr::new_static("dictionary"), monotype));
+        }
+        let mut next = parameters.iter();
+        let mut bind = |runtime: &RuntimeDictionary| {
+            let parameter =
+                next.next().expect("invariant violated: a run-time dictionary has no parameter");
+            let value = Some(Box::new(parameter.expression()));
+            RuntimeDictionary { constraint: runtime.constraint, value }
+        };
+        let bound = dictionaries.iter().map(|dictionary| map_dictionary(dictionary, &mut bind));
+        Ok((bound.collect(), parameters))
+    }
+
     pub(super) fn runtime_member(
         &mut self,
         scope: &Scope,
@@ -325,6 +358,32 @@ where
         }
         fields.sort_by(|left, right| left.0.cmp(&right.0));
         Ok(Expression::new(ExpressionKind::Record(fields), monotype))
+    }
+
+    /// The run-time dictionary of `Reflectable v t` that reflects a value known only at run
+    /// time, the dictionary `Data.Reflectable.reifyType` builds.
+    pub(super) fn reified_dictionary(
+        &mut self,
+        definition: &str,
+        constraint: TypeId,
+        value: Expression,
+    ) -> GoResult<Dictionary> {
+        let monotype = self.runtime_monotype(definition, constraint)?;
+        let Monotype::Record(fields) = self.monotypes.get(monotype).clone() else {
+            unreachable!("invariant violated: a run-time dictionary is not a record")
+        };
+        let [member] = &fields[..] else {
+            return Err(GoError::Unsupported {
+                definition: definition.to_string(),
+                state: UnsupportedState::Construct {
+                    construct: "reifying a class other than Reflectable",
+                },
+            });
+        };
+        let reflect = self.constant_function(value.kind, member.monotype);
+        let record = ExpressionKind::Record(vec![(member.label.clone(), reflect)]);
+        let value = Some(Box::new(Expression::new(record, monotype)));
+        Ok(Dictionary::Runtime(RuntimeDictionary { constraint, value }))
     }
 
     fn runtime_monotype(&mut self, definition: &str, constraint: TypeId) -> GoResult<MonotypeId> {
@@ -488,4 +547,22 @@ fn map_instance(
         types: Arc::clone(&instance.types),
         context,
     })
+}
+
+/// The values of run-time dictionaries, taken out of the dictionaries that hold them: a local
+/// specialization is made where the local is bound, out of reach of the values its reference
+/// sees (a dictionary `reifyType` builds), so the reference passes them as arguments.
+pub(super) fn detach_runtime_values(
+    dictionaries: &[Dictionary],
+) -> (Vec<Dictionary>, Vec<Expression>) {
+    let mut values = vec![];
+    let mut detach = |runtime: &RuntimeDictionary| {
+        if let Some(value) = &runtime.value {
+            values.push((**value).clone());
+        }
+        RuntimeDictionary { constraint: runtime.constraint, value: None }
+    };
+    let detached = dictionaries.iter().map(|dictionary| map_dictionary(dictionary, &mut detach));
+    let detached = detached.collect();
+    (detached, values)
 }

@@ -8,7 +8,7 @@ use rustc_hash::FxHashMap;
 use smol_str::SmolStr;
 
 use crate::context::Context;
-use crate::dictionary::Dictionary;
+use crate::dictionary::{Dictionary, Reflected};
 use crate::erasure::Erasure;
 use crate::monotype::DataType;
 use crate::types::Substitution;
@@ -322,6 +322,27 @@ impl ConstrainedScheme {
             self.names.iter().copied().zip(types.iter().copied()).collect();
         context.types.substitute(self.body, &substitution)
     }
+
+    /// The constraints an instantiation reifies at run time, instantiated: its field takes the
+    /// value of each one's reflected type, the constraint's last argument, before its body.
+    pub fn reified_constraints<Q>(
+        &self,
+        context: &Context<'_, Q>,
+        instantiation: &SchemeInstantiation,
+    ) -> Vec<TypeId>
+    where
+        Q: checking::ExternalQueries,
+    {
+        let substitution: Substitution =
+            self.names.iter().copied().zip(instantiation.types.iter().copied()).collect();
+        let reified = self.constraints.iter().zip(instantiation.dictionaries.iter());
+        reified
+            .filter(|(_, dictionary)| {
+                matches!(dictionary, Dictionary::Reflectable(Reflected::Reified))
+            })
+            .map(|(&constraint, _)| context.types.substitute(constraint, &substitution))
+            .collect()
+    }
 }
 
 pub fn constrained_scheme<Q>(
@@ -353,7 +374,8 @@ where
         .collect();
     let canonical = constraints.iter().map(|&constraint| {
         let constraint = context.types.substitute(constraint, &placeholders);
-        context.types.without_causes(constraint)
+        let constraint = context.types.without_causes(constraint);
+        context.types.without_class_kinds(constraint)
     });
     let key = SchemeKey(canonical.collect());
     Ok(Some(ConstrainedScheme { names, constraints, body, key }))

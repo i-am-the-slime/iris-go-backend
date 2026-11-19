@@ -9,6 +9,7 @@ pub enum Primitive {
     Expand,
     Match,
     OnMatch,
+    ReifyType,
 }
 
 pub fn known(module: &str, name: &str) -> Option<Primitive> {
@@ -22,6 +23,7 @@ pub fn known(module: &str, name: &str) -> Option<Primitive> {
         ("Data.Variant", "expand") => Some(Primitive::Expand),
         ("Data.Variant", "match") => Some(Primitive::Match),
         ("Data.Variant", "onMatch") => Some(Primitive::OnMatch),
+        ("Data.Reflectable", "reifyType") => Some(Primitive::ReifyType),
         _ => None,
     }
 }

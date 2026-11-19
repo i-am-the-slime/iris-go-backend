@@ -933,6 +933,13 @@ where
             && let Monotype::Effect(_) = self.monotypes.get(function.result)
         {
             vec![GoStatement::Expression(call(identifier_expression(&name), vec![]))]
+        } else if let [parameter] = &function.parameters[..]
+            && let Monotype::Unit = self.monotypes.get(parameter.monotype)
+            && let Monotype::Unit = self.monotypes.get(function.result)
+        {
+            // A `Unit -> Unit` entry (the prelude tests' `AlmostEff`) runs, as JavaScript's
+            // `main()` does, instead of printing a function's address.
+            vec![GoStatement::Expression(call(identifier_expression(&name), vec![unit_value()]))]
         } else {
             self.imports.insert("fmt".into());
             let value = identifier_expression(&name);

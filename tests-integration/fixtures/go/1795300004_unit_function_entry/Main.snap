@@ -1,0 +1,12 @@
+---
+source: tests-integration/src/fixtures.rs
+---
+// main.go
+package main
+
+func main_(x struct{}) {
+}
+
+func main() {
+	main_(struct{}{})
+}

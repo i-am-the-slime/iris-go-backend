@@ -39,4 +39,8 @@ pub enum Reflected {
     String(SmolStr),
     Boolean(bool),
     Ordering(SmolStr),
+    /// The value `Data.Reflectable.reifyType` reifies, known only at run time: the field of a
+    /// scheme instantiation that holds it takes the value first, and passes it on as a
+    /// run-time dictionary.
+    Reified,
 }

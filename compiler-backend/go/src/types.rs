@@ -473,6 +473,16 @@ where
         }
     }
 
+    /// A constraint without the kind applications of its class, which the checker spells at
+    /// some occurrences of a constraint and not at others (`Reflectable @k v t` where `v` is
+    /// checked against `reifyType`'s continuation, `Reflectable v t` in its signature).
+    pub fn without_class_kinds(&self, constraint: TypeId) -> TypeId {
+        let (class, arguments) = self.spine(constraint);
+        arguments.into_iter().fold(class, |function, argument| {
+            self.queries.intern_type(Type::Application(function, argument))
+        })
+    }
+
     pub fn spine(&self, type_id: TypeId) -> (TypeId, Vec<TypeId>) {
         let mut arguments = vec![];
         let mut current = self.strip_annotations(type_id);

@@ -36,10 +36,13 @@ where
                 self.make_exists(scope, family, witness, monotype)
             }
             (Primitive::RunExists, &[.., family, _]) => {
-                let continuation = self.continuation_type(file_id, term, instantiations)?;
+                let continuation = self.continuation_type((file_id, term), 0, instantiations)?;
                 self.run_exists(scope, family, continuation, monotype)
             }
             (Primitive::MakeExists | Primitive::RunExists, _) => Ok(None),
+            (Primitive::ReifyType, _) => {
+                self.reify_type(scope, (file_id, term), instantiations, monotype)
+            }
             _ => self.variant_primitive(scope, primitive, types, monotype),
         }
     }
@@ -150,24 +153,25 @@ where
         Ok(Some(self.lambda(vec![handler, value], body)))
     }
 
-    fn continuation_type(
+    /// The type of a primitive's argument at `position`, its continuation, in the primitive's
+    /// signature closed by the reference's instantiations.
+    pub(super) fn continuation_type(
         &mut self,
-        file_id: FileId,
-        term: TermItemId,
+        (file_id, term): (FileId, TermItemId),
+        position: usize,
         instantiations: &Substitution,
     ) -> GoResult<TypeId> {
         let module = self.context.module(file_id)?;
         let declared = module.checked.lookup_term_item_type(term).ok_or_else(|| {
-            crate::error::GoError::unsupported_construct("runExists without its signature")
+            crate::error::GoError::unsupported_construct("a primitive without its signature")
         })?;
-        let declared = self.outer_body(declared, &mut vec![]);
-        let declared = self.context.types.substitute(declared, instantiations);
-        let Some((continuation, _)) = self.context.types.function_parts(declared) else {
-            return Err(crate::error::GoError::unsupported_construct(
-                "runExists without a continuation",
-            ));
-        };
-        Ok(continuation)
+        let mut declared = self.outer_body(declared, &mut vec![]);
+        declared = self.context.types.substitute(declared, instantiations);
+        let without = || crate::error::GoError::unsupported_construct("a primitive's continuation");
+        for _ in 0..position {
+            declared = self.context.types.function_parts(declared).ok_or_else(without)?.1;
+        }
+        Ok(self.context.types.function_parts(declared).ok_or_else(without)?.0)
     }
 
     fn existential_data(&self, monotype: MonotypeId) -> Option<DataType> {
