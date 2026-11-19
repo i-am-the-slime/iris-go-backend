@@ -1,0 +1,29 @@
+package:
+  name: idiom-benchmarks
+  dependencies:
+    - arrays
+    - console
+    - control
+    - effect
+    - enums
+    - foldable-traversable
+    - integers
+    - lists
+    - maybe
+    - numbers
+    - ordered-collections
+    - partial
+    - pathological-benchmarks
+    - prelude
+    - refs
+    - st
+    - strings
+    - tailrec
+    - tuples
+workspace:
+  packageSet:
+    registry: 75.9.1
+  extraPackages:
+    pathological-benchmarks:
+      path: ../pathological
+    yoga-om: 2.2.1
