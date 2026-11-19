@@ -955,7 +955,8 @@ impl Printer {
             }
             GoExpression::Unary { operator, operand } => {
                 let operand = self.expression(operand, 6);
-                format!("{operator}{operand}")
+                let rendered = format!("{operator}{operand}");
+                if parent_precedence > 5 { format!("({rendered})") } else { rendered }
             }
             GoExpression::Field { value, name } => {
                 // A composite literal is ambiguous in if/for/switch headers.

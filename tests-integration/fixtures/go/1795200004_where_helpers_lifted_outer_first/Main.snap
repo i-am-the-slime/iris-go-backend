@@ -8,10 +8,6 @@ type Int int64
 
 const NoInt Int = 1 << 32
 
-func JustInt(just int32) Int {
-	return Int(just)
-}
-
 // main.go
 package main
 
@@ -28,7 +24,7 @@ var main_ = initializeMain_()
 func initializeMain_() []int32 {
 	defer exception.ReportUncaught()
 	array2 := array.Thaw([]int32{3, 1, 2})()
-	i := array.Length(array2)()
+	i := int32(len(*array2))
 	for i2 := int32(1); i2 < i; i2++ {
 		i3 := mainPeekOrZero(array2, i2)
 		mainShiftDown(array2, i3, i2 - 1)
@@ -55,30 +51,43 @@ func mainGo(i int32, acc int32) int32 {
 	}
 }
 
-func mainPeekOrZero(array2 *[]int32, i int32) int32 {
-	maybe2 := array.Peek(maybe.JustInt, maybe.NoInt, i, array2)()
+func mainPeekOrZero(array *[]int32, i int32) int32 {
+	var peeked maybe.Int
+	if i >= 0 && int(i) < len(*array) {
+		peeked = maybe.Int((*array)[i])
+	} else {
+		peeked = maybe.NoInt
+	}
 	var result int32
-	if maybe2 == maybe.NoInt {
+	if peeked == maybe.NoInt {
 		result = 0
 	} else {
-		result = int32(maybe2)
+		result = int32(peeked)
 	}
 	return result
 }
 
-func mainShiftDown(array2 *[]int32, current int32, j int32) {
+func mainShiftDown(array *[]int32, current int32, j int32) {
 	for {
 		if j < 0 {
-			array.Poke(0, current, array2)()
+			if 0 < len(*array) {
+				(*array)[0] = current
+			}
 			return
 		}
-		i := mainPeekOrZero(array2, j)
+		i := mainPeekOrZero(array, j)
 		if i > current {
-			array.Poke(j + 1, i, array2)()
+			index := j + 1
+			if index >= 0 && int(index) < len(*array) {
+				(*array)[index] = i
+			}
 			j = j - 1
 			continue
 		}
-		array.Poke(j + 1, current, array2)()
+		index2 := j + 1
+		if index2 >= 0 && int(index2) < len(*array) {
+			(*array)[index2] = current
+		}
 		return
 	}
 }

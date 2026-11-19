@@ -29,6 +29,7 @@ mod layout;
 mod lengths;
 mod locals;
 mod maybe;
+mod mutable;
 mod names;
 mod ownership;
 mod packages;
@@ -1658,6 +1659,12 @@ where
                 let performed = self.out_of_convention(call(thunk, vec![]), result, out)?;
                 return self.deliver(performed, result, sink, out);
             }
+            Foreign::Perform { function, .. }
+                if function.package == GoPackage::Array
+                    && mutable::ACCESSES.contains(&function.name) =>
+            {
+                return self.mutable_access(function.name, arguments, result, sink, out);
+            }
             Foreign::Perform { function, boundary, .. } => {
                 let values = self.boundary_arguments(arguments, boundary, result, false, out)?;
                 let function = self.boundary_function(function, boundary, result)?;
@@ -2846,16 +2853,7 @@ where
         let name = self.temporary("element");
         let type_ = self.go_type(monotype)?;
         out.push(GoStatement::Variable { name: name.clone(), type_, value: None });
-        let length = call(identifier_expression("len"), vec![elements]);
-        let widened = match index {
-            GoExpression::Integer(_) => index.clone(),
-            _ => GoExpression::Conversion { type_: GoType::Int, value: Box::new(index.clone()) },
-        };
-        let in_bounds = binary("<", widened, length);
-        let condition = match index {
-            GoExpression::Integer(constant) if constant >= 0 => in_bounds,
-            _ => binary("&&", binary(">=", index, GoExpression::Integer(0)), in_bounds),
-        };
+        let condition = mutable::in_bounds(&index, elements);
         let target = vec![identifier_expression(&name)];
         out.push(GoStatement::If {
             condition,
