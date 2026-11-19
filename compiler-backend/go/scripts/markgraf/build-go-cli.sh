@@ -39,11 +39,11 @@ for font in Ilisarniq-Demi.otf Ilisarniq-Italic.otf VictorMono-Medium.ttf Victor
   VictorMono-MediumItalic.ttf VictorMono-BoldItalic.ttf; do
   cp "$FONTS/$font" "$OUT/fonts/"
 done
-# -tags libm: Math.sin and friends from the C library, as JavaScriptCore does.
+# GO_TAGS: extra go build tags.
 # -c: compile each package on every core instead of four.
 # -dwarf=false and -w: no DWARF; the compiler would generate it only for the
 # linker to drop, and without it link time more than halves.
 # The executable goes in bin/, since a package directory such as Markgraf/
 # takes its name on a case-insensitive file system.
-(cd "$OUT" && GOGC=400 go build -tags libm -gcflags="all=-c=$(sysctl -n hw.ncpu) -dwarf=false" -ldflags=-w -o bin/markgraf .) >&2
+(cd "$OUT" && GOGC=400 go build ${GO_TAGS:+-tags "$GO_TAGS"} -gcflags="all=-c=$(sysctl -n hw.ncpu) -dwarf=false" -ldflags=-w -o bin/markgraf .) >&2
 echo "$OUT/bin/markgraf"

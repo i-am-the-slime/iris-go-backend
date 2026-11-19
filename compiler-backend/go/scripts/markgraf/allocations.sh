@@ -41,7 +41,7 @@ func reportMemStats() {
 GO
 sed -i '' 's/^\tos\.Exit(int(exitStatus))$/\treportMemStats()\n\tos.Exit(int(exitStatus))/' "$WORK/go/main.go"
 grep -q 'reportMemStats()' "$WORK/go/main.go" || { echo "allocations.sh: could not find main's os.Exit" >&2; exit 1; }
-(cd "$WORK/go" && go build -tags libm -gcflags="-dwarf=false" -ldflags=-w -o bin/markgraf-memstats .)
+(cd "$WORK/go" && go build -gcflags="-dwarf=false" -ldflags=-w -o bin/markgraf-memstats .)
 
 total_bytes=0
 total_objects=0

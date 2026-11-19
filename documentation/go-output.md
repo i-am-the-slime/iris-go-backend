@@ -36,6 +36,16 @@ line and a stack trace as well. For the same reason, `Effect.Exception.stack` an
 `bottom / -1` is `-2147483648`, the wrapped result. In JavaScript it is `2147483648`, which is not
 a valid `Int` and is a bug in the JavaScript Prelude's `intDiv`. `bottom `mod` -1` is `0` in both.
 
+### Trigonometric, exponential and power functions
+
+`sin`, `cos`, `tan`, `asin`, `acos`, `atan`, `atan2`, `exp`, `log` and `pow` from `Data.Number`
+use Go's `math` package. ECMAScript leaves their last bit to the engine, and V8 and JavaScriptCore
+already disagree with each other, so a result can differ from JavaScript's in the last digit:
+`7.892418775380858` where JavaScript prints `7.892418775380859`. The special cases ECMAScript
+defines (`NaN`, infinities, `-0`, `pow` with a `NaN` exponent or a base of ±1) are the same. A
+program that needs one engine's exact digits can bring its own implementation through a foreign
+import.
+
 ### Unused top-level effects
 
 The Go backend compiles only the definitions that `main` reaches. A top-level value that nothing

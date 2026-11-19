@@ -14,7 +14,9 @@
 # The JavaScript side depends only on the pinned Markgraf revision and the JS build
 # scripts, so for the pinned checkout its CLI and every export (output, status, best
 # time) are cached in MARKGRAF_JS_CACHE (default ~/.cache/iris-markgraf-js);
-# MARKGRAF_JS_CACHE= turns the cache off. Exports Go runs slower on are re-timed live.
+# MARKGRAF_JS_CACHE= turns the cache off. An SVG whose numbers differ from the JS one only
+# by FLOAT_TOLERANCE (relative, default 1e-12) counts as float-close: Go's math package and
+# the JS engines round transcendental functions differently in the last ulp. Exports Go runs slower on are re-timed live.
 # Finally checks the generated Go against the markgraf-cli quality baseline and
 # the time `iris go` takes against the compile-time baseline (compile-time.sh).
 
@@ -30,6 +32,7 @@ WORK="${WORK:-$(mktemp -d)}"
 TIMEOUT="${TIMEOUT:-600}"
 SLOWER_PERCENT="${SLOWER_PERCENT:-5}"
 SLOWER_MS="${SLOWER_MS:-10}"
+FLOAT_TOLERANCE="${FLOAT_TOLERANCE:-1e-12}"
 
 milliseconds() { perl -MTime::HiRes=time -e 'printf "%.0f", time*1000'; }
 
@@ -108,7 +111,7 @@ remember_js_time() { # input output milliseconds arguments → keeps the best ti
 run_js "$1" "$WORK/out/warm-up.js.svg" --still "" >/dev/null
 run "$MARKGRAF_GO" "$1" "$WORK/out/warm-up.go.svg" --still "" >/dev/null
 
-passed=0 failed=0 slower=0 js_total=0 go_total=0 worst_ratio=0 worst=""
+passed=0 close=0 failed=0 slower=0 js_total=0 go_total=0 worst_ratio=0 worst=""
 printf '%-44s %-7s %-9s %8s %8s %6s\n' file mode result js_ms go_ms go/js
 for input in "$@"; do
   name="$(basename "$input" .markgraf)"
@@ -128,10 +131,17 @@ for input in "$@"; do
     elif ! cmp -s <(normalise "$js.stderr") <(normalise "$go.stderr"); then
       result=stderr
     elif [ -e "$js" ] || [ -e "$go" ]; then
-      cmp -s "$js" "$go" || result=svg
+      if ! cmp -s "$js" "$go"; then
+        result=svg
+        bun "$HERE/float-close.ts" "$js" "$go" "$FLOAT_TOLERANCE" >/dev/null && result=float-close
+      fi
     fi
     [ "$(cat "$js.status")" = 0 ] || [ "$result" != identical ] || result="identical (exit $(cat "$js.status"))"
-    case "$result" in identical*) passed=$((passed + 1)) ;; *) failed=$((failed + 1)) ;; esac
+    case "$result" in
+      identical*) passed=$((passed + 1)) ;;
+      float-close) close=$((close + 1)) ;;
+      *) failed=$((failed + 1)) ;;
+    esac
     if [ $((go_ms * 100)) -gt $((js_ms * (100 + SLOWER_PERCENT) + SLOWER_MS * 100)) ]; then
       js_again=$(run "$MARKGRAF_JS" "$input" "$js" "${arguments[@]}")
       go_again=$(run "$MARKGRAF_GO" "$input" "$go" "${arguments[@]}")
@@ -150,7 +160,7 @@ for input in "$@"; do
     printf '%-44s %-7s %-9s %8s %8s %6s\n' "$name" "$mode" "$result" "$js_ms" "$go_ms" "$ratio"
   done
 done
-echo "Markgraf SVG: $passed identical, $failed different (work directory $WORK)"
+echo "Markgraf SVG: $passed identical, $close float-close, $failed different (work directory $WORK)"
 total_ratio=$(awk -v go="$go_total" -v js="$js_total" 'BEGIN { printf "%.2f", go / (js > 0 ? js : 1) }')
 echo "Markgraf time: JavaScript $js_total ms, Go $go_total ms (Go/JS $total_ratio), worst Go/JS $worst_ratio ($worst)"
 if [ "$slower" -ne 0 ]; then

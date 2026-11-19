@@ -182,7 +182,7 @@ function runtime() {
 // ECMAScript leaves Math's transcendental functions implementation-approximated.
 // JavaScriptCore takes them from the C library; V8 has its own port of fdlibm,
 // which differs in the last bit for some arguments (sin, cos, tan, acos, atan2,
-// exp and log all do on the Markgraf examples). Like Go's `-tags libm`, V8
+// exp and log all do on the Markgraf examples). V8
 // calls the C library here, so that Deno computes the reference's numbers.
 // Math.pow follows JavaScriptCore's operationMathPow, which squares and
 // multiplies for integer exponents 0..1000 (0.9 ** 4 is 0.6561000000000001,
