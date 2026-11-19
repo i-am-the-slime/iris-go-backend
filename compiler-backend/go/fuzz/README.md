@@ -22,7 +22,8 @@ A seed names a program: the same seed and features always generate the same sour
 
 `--features` is a comma list. Bare names enable only those features; `+name`, `-name` and
 `name=WEIGHT` adjust the defaults. Features: `prims`, `strings`, `surrogates` (lone surrogates,
-off by default), `transcendental` (libm functions, off by default), `adts`, `records`,
+off by default), `transcendental` (exp, log, trigonometry: Go's math package differs from
+JavaScript in the last bit, off by default), `adts`, `records`,
 `patterns`, `classes`, `hof`, `containers`, `lists`, `poly`, `lazy`, `recursion`, `effects`,
 `exceptions`, `st`, `aff`.
 
