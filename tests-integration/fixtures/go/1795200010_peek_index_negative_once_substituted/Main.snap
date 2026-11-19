@@ -1,0 +1,55 @@
+---
+source: tests-integration/src/fixtures.rs
+---
+// main.go
+package main
+
+import (
+	"fmt"
+	"github.com/i-am-the-slime/purs-backend-go/go-support/array"
+	"github.com/i-am-the-slime/purs-backend-go/go-support/exception"
+)
+
+var main_ = initializeMain_()
+
+func initializeMain_() []int32 {
+	defer exception.ReportUncaught()
+	array2 := array.Thaw([]int32{10, 20, 30})()
+	elements := []func(int32) int32{func(value int32) int32 {
+		return value + 1
+	}}
+	within := 1 < len(*array2)
+	var boolean bool
+	if within {
+		element := (*array2)[1]
+		var result int32
+		if 0 < int32(len(elements)) {
+			result = elements[0](element)
+		} else {
+			result = element
+		}
+		var poked bool
+		if 1 < len(*array2) {
+			(*array2)[1] = result
+			poked = true
+		} else {
+			poked = false
+		}
+		boolean = poked
+	} else {
+		boolean = false
+	}
+	array3 := array.UnsafeFreeze(array2)()
+	var result2 int32
+	if boolean {
+		result2 = 1
+	} else {
+		result2 = 0
+	}
+	performed := array.Append(array3, []int32{0, result2})
+	return performed
+}
+
+func main() {
+	fmt.Println(main_)
+}
