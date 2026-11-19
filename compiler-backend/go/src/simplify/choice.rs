@@ -6,7 +6,9 @@
 use rustc_hash::FxHashMap;
 
 use super::{INLINE_SIZE, Simplifier, alternatives_size, column_outcomes};
-use crate::foreign::{Comparison, Foreign, Operator};
+use crate::foreign::{
+    Comparison, Foreign, GoFunction, GoPackage, MUTABLE_PEEK_UNSAFE, MUTABLE_WITHIN, Operator,
+};
 use crate::mono::{
     Alternative, Binding, Expression, ExpressionKind, Guarded, Literal, Local, LocalId, Pattern,
 };
@@ -157,6 +159,122 @@ impl Simplifier<'_> {
         }
         Some(Expression::new(ExpressionKind::Let { bindings, body: Box::new(choice) }, monotype))
     }
+}
+
+impl Simplifier<'_> {
+    /// `peek i array` whose `Maybe` is matched at once, purely (`map
+    /// (fromMaybe 0) (peek i array)`) or by the actions that follow (`modify`),
+    /// as the bounds test the foreign makes: the alternatives for `Just
+    /// array[i]` when `i` is within the array, those for `Nothing` otherwise.
+    /// The `Maybe` is then never built nor tested, and what the `Just`
+    /// alternative does to `array[i]` sits inside the test that guards it.
+    pub(super) fn peek_choice(
+        &mut self,
+        action: &Expression,
+        local: &Local,
+        body: &Expression,
+        monotype: MonotypeId,
+    ) -> Option<Expression> {
+        let ExpressionKind::Foreign { foreign, arguments } = &action.kind else { return None };
+        if !is_mutable_peek(foreign) {
+            return None;
+        }
+        let (matched, pure) = match &body.kind {
+            ExpressionKind::EffectPure(matched) => (matched.as_ref(), true),
+            _ => (body, false),
+        };
+        let ExpressionKind::Case { scrutinees, alternatives } = &matched.kind else { return None };
+        let [scrutinee] = scrutinees.as_slice() else { return None };
+        let scrutinised = matches!(scrutinee.kind, ExpressionKind::Local(id) if id == local.id);
+        if !scrutinised
+            || super::occurrences(matched, local.id).total != 1
+            || alternatives_size(alternatives) > DUPLICATION
+        {
+            return None;
+        }
+        let [just, nothing, index, array] = arguments.as_slice() else {
+            unreachable!("invariant violated: peek has four arguments")
+        };
+        let Monotype::MutableArray(element) = *self.monotypes.get(array.monotype) else {
+            unreachable!("invariant violated: peek reads a mutable array")
+        };
+        let template = Local { id: LocalId(0), name: "element".into(), monotype: element };
+        let peeked = self.fresh(&template);
+        let found = self.apply(just.clone(), vec![peeked.expression()], local.monotype);
+        constructor(&found)?;
+        constructor(nothing)?;
+        let result = matched.monotype;
+        let chosen = |simplifier: &mut Self, value: Expression| {
+            let resolved = simplifier.resolve(value, alternatives, result);
+            if !pure {
+                return resolved;
+            }
+            Expression::new(ExpressionKind::EffectPure(Box::new(resolved)), monotype)
+        };
+        // Go rejects a constant negative index even in a branch that cannot run.
+        if let ExpressionKind::Literal(Literal::Int(constant)) = index.kind
+            && constant < 0
+        {
+            return Some(chosen(self, nothing.clone()));
+        }
+        let missing = chosen(self, nothing.clone());
+        let found = chosen(self, found);
+        let mut bindings = vec![];
+        let array = self.shared_operand(array.clone(), "array", &mut bindings);
+        let index = self.shared_operand(index.clone(), "index", &mut bindings);
+        let boolean = self.monotypes.intern(Monotype::Boolean);
+        let template = Local { id: LocalId(0), name: "within".into(), monotype: boolean };
+        let within = self.fresh(&template);
+        let read = Expression::new(
+            ExpressionKind::Foreign {
+                foreign: &MUTABLE_PEEK_UNSAFE,
+                arguments: vec![index.clone(), array.clone()],
+            },
+            self.monotypes.intern(Monotype::Effect(element)),
+        );
+        let read = ExpressionKind::EffectBind {
+            action: Box::new(read),
+            local: peeked,
+            body: Box::new(found),
+        };
+        let choice = ExpressionKind::If {
+            condition: Box::new(within.expression()),
+            then: Box::new(Expression::new(read, monotype)),
+            otherwise: Box::new(missing),
+        };
+        let test = Expression::new(
+            ExpressionKind::Foreign { foreign: &MUTABLE_WITHIN, arguments: vec![index, array] },
+            self.monotypes.intern(Monotype::Effect(boolean)),
+        );
+        let tested = ExpressionKind::EffectBind {
+            action: Box::new(test),
+            local: within,
+            body: Box::new(Expression::new(choice, monotype)),
+        };
+        Some(self.let_bindings(bindings, Expression::new(tested, monotype)))
+    }
+
+    /// The alternatives matched against one chosen value, resolved.
+    fn resolve(
+        &mut self,
+        chosen: Expression,
+        alternatives: &[Alternative],
+        monotype: MonotypeId,
+    ) -> Expression {
+        let case =
+            ExpressionKind::Case { scrutinees: vec![chosen], alternatives: alternatives.to_vec() };
+        let mut case = Expression::new(case, monotype);
+        self.rename(&mut case, &mut FxHashMap::default());
+        self.expression(case)
+    }
+}
+
+/// Data.Array.ST's peek.
+fn is_mutable_peek(foreign: &Foreign) -> bool {
+    matches!(
+        foreign,
+        Foreign::Perform { function: GoFunction { package: GoPackage::Array, name: "Peek" }, .. }
+    )
 }
 
 enum Placement {

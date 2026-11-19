@@ -6,7 +6,8 @@ use crate::monotype::MonotypeId;
 use crate::syntax::{GoExpression, GoStatement, GoType};
 use checking;
 
-pub(super) const ACCESSES: &[&str] = &["Peek", "Poke", "PeekUnsafe", "PokeUnsafe", "Length"];
+pub(super) const ACCESSES: &[&str] =
+    &["Peek", "Poke", "PeekUnsafe", "PokeUnsafe", "Length", "Within", "Push"];
 
 impl<Q> Emitter<'_, '_, '_, Q>
 where
@@ -28,6 +29,22 @@ where
                 let elements = self.elements(&arguments[1], out)?;
                 self.deliver(indexed(elements, index), result, sink, out)
             }
+            "Within" => {
+                let index = self.value(&arguments[0], out)?;
+                let elements = self.elements(&arguments[1], out)?;
+                self.deliver(in_bounds(&index, elements), result, sink, out)
+            }
+            "Push" => {
+                let value = self.value(&arguments[0], out)?;
+                let elements = self.elements(&arguments[1], out)?;
+                let appended = call(identifier_expression("append"), vec![elements.clone(), value]);
+                let targets = vec![elements.clone()];
+                out.push(GoStatement::Assign { targets, values: vec![appended] });
+                if let Sink::Discard = sink {
+                    return Ok(());
+                }
+                self.deliver(length(elements), result, sink, out)
+            }
             "PokeUnsafe" => {
                 let index = self.value(&arguments[0], out)?;
                 let value = self.value(&arguments[1], out)?;
@@ -38,10 +55,7 @@ where
             }
             _ => {
                 let elements = self.elements(&arguments[0], out)?;
-                let length = call(identifier_expression("len"), vec![elements]);
-                let type_ = GoType::Named("int32".into());
-                let length = GoExpression::Conversion { type_, value: Box::new(length) };
-                self.deliver(length, result, sink, out)
+                self.deliver(length(elements), result, sink, out)
             }
         }
     }
@@ -141,6 +155,12 @@ where
         let array = self.hoist(array, "array", out);
         Ok(GoExpression::Unary { operator: "*", operand: Box::new(array) })
     }
+}
+
+/// The length of the elements as a PureScript Int.
+fn length(elements: GoExpression) -> GoExpression {
+    let length = call(identifier_expression("len"), vec![elements]);
+    GoExpression::Conversion { type_: GoType::Named("int32".into()), value: Box::new(length) }
 }
 
 fn indexed(elements: GoExpression, index: GoExpression) -> GoExpression {

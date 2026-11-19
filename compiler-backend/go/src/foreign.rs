@@ -715,6 +715,12 @@ pub const INT_DIVIDE: Foreign = prim_with("IntDiv", 2, int32_parameters(&[0, 1])
 pub const INT_MODULO: Foreign = prim_with("IntMod", 2, int32_parameters(&[0, 1]));
 
 pub const ARRAY_APPEND: Foreign = array("Append", 2);
+/// Data.Array.ST.Partial's peek, read without a bounds test.
+pub const MUTABLE_PEEK_UNSAFE: Foreign =
+    thunk(GoPackage::Array, "PeekUnsafe", 2, int32_parameters(&[0]));
+/// Whether an index is within a mutable array: the bounds test of Data.Array.ST's peek, which
+/// the simplifier makes explicit (simplify/choice.rs) and the emitter writes in place.
+pub const MUTABLE_WITHIN: Foreign = thunk(GoPackage::Array, "Within", 2, int32_parameters(&[0]));
 pub const APPENDER: Foreign = perform_in(GoPackage::Direct, "Appender", 0, INSTANTIATE);
 
 const FOREIGN_IMPORTS: &[(&str, &str, Foreign)] = &[
@@ -848,11 +854,7 @@ const FOREIGN_IMPORTS: &[(&str, &str, Foreign)] = &[
     ),
     ("Data.Array.ST", "sortByImpl", uncurried(perform("SortByMutable", 3), &[(0, 2)])),
     ("Data.Array.ST", "toAssocArrayImpl", Foreign::AssocArray),
-    (
-        "Data.Array.ST.Partial",
-        "peekImpl",
-        thunk(GoPackage::Array, "PeekUnsafe", 2, int32_parameters(&[0])),
-    ),
+    ("Data.Array.ST.Partial", "peekImpl", MUTABLE_PEEK_UNSAFE),
     (
         "Data.Array.ST.Partial",
         "pokeImpl",

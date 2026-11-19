@@ -1,18 +1,10 @@
 ---
 source: tests-integration/src/fixtures.rs
 ---
-// Data/Maybe/maybe.go
-package maybe
-
-type Int int64
-
-const NoInt Int = 1 << 32
-
 // main.go
 package main
 
 import (
-	"fixture/Data/Maybe"
 	"fmt"
 	"github.com/i-am-the-slime/purs-backend-go/go-support/array"
 	"github.com/i-am-the-slime/purs-backend-go/go-support/exception"
@@ -52,19 +44,12 @@ func mainGo(i int32, acc int32) int32 {
 }
 
 func mainPeekOrZero(array *[]int32, i int32) int32 {
-	var peeked maybe.Int
-	if i >= 0 && int(i) < len(*array) {
-		peeked = maybe.Int((*array)[i])
-	} else {
-		peeked = maybe.NoInt
+	within := i >= 0 && int(i) < len(*array)
+	if within {
+		element := (*array)[i]
+		return element
 	}
-	var result int32
-	if peeked == maybe.NoInt {
-		result = 0
-	} else {
-		result = int32(peeked)
-	}
-	return result
+	return 0
 }
 
 func mainShiftDown(array *[]int32, current int32, j int32) {

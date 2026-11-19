@@ -1132,6 +1132,9 @@ impl Simplifier<'_> {
             }
             kind => {
                 let action = Expression::new(kind, action.monotype);
+                if let Some(chosen) = self.peek_choice(&action, &local, &body, monotype) {
+                    return chosen;
+                }
                 let kind = ExpressionKind::EffectBind {
                     action: Box::new(action),
                     local,

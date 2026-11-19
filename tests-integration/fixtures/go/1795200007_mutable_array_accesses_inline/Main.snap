@@ -17,11 +17,11 @@ type String struct {
 	Tag  uint8
 }
 
-var NoString = String{Tag: TagNothing}
-
 func JustString(just string) String {
 	return String{Tag: TagJust, Just: just}
 }
+
+var NoString = String{Tag: TagNothing}
 
 // main.go
 package main
@@ -68,17 +68,12 @@ func initializeMain_() []int32 {
 		poked = false
 	}
 	array3 := array.Thaw([]string{"a", "b"})()
-	var peeked2 maybe.String
-	if 1 < len(*array3) {
-		peeked2 = maybe.JustString((*array3)[1])
-	} else {
-		peeked2 = maybe.NoString
-	}
+	within := 1 < len(*array3)
 	var maybe2 maybe.String
-	switch peeked2.Tag {
-	case maybe.TagJust:
-		maybe2 = maybe.JustString("#" + peeked2.Just)
-	default: // maybe.TagNothing
+	if within {
+		element := (*array3)[1]
+		maybe2 = maybe.JustString("#" + element)
+	} else {
 		maybe2 = maybe.NoString
 	}
 	array4 := array.UnsafeFreeze(array2)()
