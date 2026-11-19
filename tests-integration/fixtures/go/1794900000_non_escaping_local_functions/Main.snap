@@ -39,25 +39,11 @@ func main_() int32 {
 
 func foldr(f func(int32) func(*direct.ConsList[int32]) *direct.ConsList[int32], b *direct.ConsList[int32]) func(*ListInt) *direct.ConsList[int32] {
 	return func(x *ListInt) *direct.ConsList[int32] {
-		return foldrGo(f, b, foldrGo2(sharedListIntNil, x))
+		return foldrGo2(f, b, foldrGo(sharedListIntNil, x))
 	}
 }
 
-func foldrGo(f func(int32) func(*direct.ConsList[int32]) *direct.ConsList[int32], accumulator *direct.ConsList[int32], list *ListInt) *direct.ConsList[int32] {
-	for {
-		switch list.Tag {
-		case ListIntNil:
-			return accumulator
-		default: // ListIntCons
-			x := list.Cons0
-			xs := list.Cons1
-			accumulator, list = f(x)(accumulator), xs
-			continue
-		}
-	}
-}
-
-func foldrGo2(accumulator *ListInt, list *ListInt) *ListInt {
+func foldrGo(accumulator *ListInt, list *ListInt) *ListInt {
 	var listIntCells alloc.Cells[ListInt]
 	for {
 		switch list.Tag {
@@ -67,6 +53,20 @@ func foldrGo2(accumulator *ListInt, list *ListInt) *ListInt {
 			x := list.Cons0
 			xs := list.Cons1
 			accumulator, list = listIntCells.New(ListInt{Tag: ListIntCons, Cons0: x, Cons1: accumulator}), xs
+			continue
+		}
+	}
+}
+
+func foldrGo2(f func(int32) func(*direct.ConsList[int32]) *direct.ConsList[int32], accumulator *direct.ConsList[int32], list *ListInt) *direct.ConsList[int32] {
+	for {
+		switch list.Tag {
+		case ListIntNil:
+			return accumulator
+		default: // ListIntCons
+			x := list.Cons0
+			xs := list.Cons1
+			accumulator, list = f(x)(accumulator), xs
 			continue
 		}
 	}

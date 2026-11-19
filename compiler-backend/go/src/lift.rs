@@ -19,6 +19,7 @@ pub fn lift_local_functions(
     let mut functions: Vec<Option<Function>> = functions.into_iter().map(Some).collect();
     let mut lifter = Lifter {
         created: vec![],
+        created_base: original,
         origin: None,
         next_function: original,
         monotypes,
@@ -29,6 +30,7 @@ pub fn lift_local_functions(
         let mut function =
             functions[index].take().expect("invariant violated: function lifted twice");
         lifter.binders.clear();
+        lifter.created_base = lifter.next_function;
         for parameter in &function.parameters {
             lifter.binders.insert(parameter.id, parameter.clone());
         }
@@ -38,7 +40,8 @@ pub fn lift_local_functions(
         function.body = lifter.expression(function.body, &base);
         flatten_applications(&mut function.body);
         functions[index] = Some(absorb_lambdas(function));
-        for mut created in lifter.created.drain(..) {
+        for created in lifter.created.drain(..) {
+            let mut created = created.expect("invariant violated: a lifted function was reserved but never made");
             flatten_applications(&mut created.body);
             functions.push(Some(created));
         }
@@ -157,7 +160,8 @@ fn saturate_wrappers(functions: &mut [Function], entry: FunctionId, lifter: &mut
 }
 
 struct Lifter<'m> {
-    created: Vec<Function>,
+    created: Vec<Option<Function>>,
+    created_base: usize,
     /// The origin of the function being lifted from, which its lifted
     /// functions share.
     origin: Option<FileId>,
@@ -173,18 +177,17 @@ impl Lifter<'_> {
     }
 
     fn expression(&mut self, mut expression: Expression, base: &str) -> Expression {
-        for_each_child_mut(&mut expression, &mut |child| {
-            let taken =
-                std::mem::replace(child, Expression::new(ExpressionKind::Unit, child.monotype));
-            *child = self.expression(taken, base);
-        });
-        let ExpressionKind::Let { bindings, body } = expression.kind else { return expression };
-        if !bindings
-            .iter()
-            .all(|binding| matches!(binding.value.kind, ExpressionKind::Lambda { .. }))
-        {
-            return Expression::new(ExpressionKind::Let { bindings, body }, expression.monotype);
+        let lifts = matches!(&expression.kind, ExpressionKind::Let { bindings, .. }
+            if bindings.iter().all(|binding| matches!(binding.value.kind, ExpressionKind::Lambda { .. })));
+        if !lifts {
+            for_each_child_mut(&mut expression, &mut |child| {
+                let taken =
+                    std::mem::replace(child, Expression::new(ExpressionKind::Unit, child.monotype));
+                *child = self.expression(taken, base);
+            });
+            return expression;
         }
+        let ExpressionKind::Let { bindings, body } = expression.kind else { unreachable!() };
         let group: FxHashSet<LocalId> = bindings.iter().map(|binding| binding.local.id).collect();
         let mut captured = FxHashSet::default();
         for binding in &bindings {
@@ -199,6 +202,7 @@ impl Lifter<'_> {
 
         let first = self.next_function;
         self.next_function += bindings.len();
+        self.created.resize_with(self.next_function - self.created_base, || None);
         let targets: Vec<(LocalId, FunctionId, MonotypeId)> = bindings
             .iter()
             .enumerate()
@@ -211,8 +215,11 @@ impl Lifter<'_> {
             })
             .collect();
 
-        for binding in bindings {
+        for (position, binding) in bindings.into_iter().enumerate() {
             let parameters: Vec<Local> = captured.iter().map(|local| self.fresh(local)).collect();
+            for parameter in &parameters {
+                self.binders.insert(parameter.id, parameter.clone());
+            }
             let renaming: FxHashMap<LocalId, Local> = captured
                 .iter()
                 .zip(&parameters)
@@ -229,18 +236,19 @@ impl Lifter<'_> {
             let spelling =
                 FunctionSpelling::Lifted { parent: base.into(), local: binding.local.name.clone() };
             self.monotypes.function_spellings.entry(name.clone()).or_insert(spelling);
+            let lifted = self.expression(*body, &name);
             let function = Function {
                 name,
                 origin: self.origin,
                 parameters: all_parameters,
-                result: body.monotype,
-                body: *body,
+                result: lifted.monotype,
+                body: lifted,
             };
-            self.created.push(absorb_lambdas(function));
+            self.created[first + position - self.created_base] = Some(absorb_lambdas(function));
         }
         let mut body = *body;
         replace_references(&mut body, &targets, &captured, &FxHashMap::default());
-        body
+        self.expression(body, base)
     }
 }
 

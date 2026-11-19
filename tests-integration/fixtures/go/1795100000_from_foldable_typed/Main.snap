@@ -54,25 +54,11 @@ var SharedListStringNil = &ListString{Tag: ListStringNil}
 
 func Foldr(f func(int32) func(*direct.ConsList[int32]) *direct.ConsList[int32], b *direct.ConsList[int32]) func(*ListInt) *direct.ConsList[int32] {
 	return func(x *ListInt) *direct.ConsList[int32] {
-		return FoldrGo(f, b, FoldrGo2(SharedListIntNil, x))
+		return FoldrGo2(f, b, FoldrGo(SharedListIntNil, x))
 	}
 }
 
-func FoldrGo(f func(int32) func(*direct.ConsList[int32]) *direct.ConsList[int32], b *direct.ConsList[int32], value *ListInt) *direct.ConsList[int32] {
-	for {
-		switch value.Tag {
-		case ListIntNil:
-			return b
-		default: // ListIntCons
-			a := value.Cons0
-			as := value.Cons1
-			b, value = f(a)(b), as
-			continue
-		}
-	}
-}
-
-func FoldrGo2(acc *ListInt, list *ListInt) *ListInt {
+func FoldrGo(acc *ListInt, list *ListInt) *ListInt {
 	var listIntCells alloc.Cells[ListInt]
 	for {
 		switch list.Tag {
@@ -82,6 +68,20 @@ func FoldrGo2(acc *ListInt, list *ListInt) *ListInt {
 			x := list.Cons0
 			xs := list.Cons1
 			acc, list = listIntCells.New(ListInt{Tag: ListIntCons, Cons0: x, Cons1: acc}), xs
+			continue
+		}
+	}
+}
+
+func FoldrGo2(f func(int32) func(*direct.ConsList[int32]) *direct.ConsList[int32], b *direct.ConsList[int32], value *ListInt) *direct.ConsList[int32] {
+	for {
+		switch value.Tag {
+		case ListIntNil:
+			return b
+		default: // ListIntCons
+			a := value.Cons0
+			as := value.Cons1
+			b, value = f(a)(b), as
 			continue
 		}
 	}
@@ -178,7 +178,7 @@ func UnsafeBalancedNodeStringUnitReusing(k string, v struct{}, l *MapStringUnit,
 			rl := r.Node4
 			rr := r.Node5
 			if rh > 1 {
-				return UnsafeBalancedNodeStringUnitRotateLeftReusing(UnsafeBalancedNodeStringUnitHeight, k, v, l, rk, struct{}{}, rl, rr, donor)
+				return UnsafeBalancedNodeStringUnitRotateLeftReusing(k, v, l, rk, struct{}{}, rl, rr, donor)
 			}
 		}
 		return UnsafeNodeStringUnitReusing(k, v, l, r, donor)
@@ -193,15 +193,15 @@ func UnsafeBalancedNodeStringUnitReusing(k string, v struct{}, l *MapStringUnit,
 			rl := r.Node4
 			rr := r.Node5
 			if rh > lh + 1 {
-				return UnsafeBalancedNodeStringUnitRotateLeftReusing(UnsafeBalancedNodeStringUnitHeight, k, v, l, rk, struct{}{}, rl, rr, donor)
+				return UnsafeBalancedNodeStringUnitRotateLeftReusing(k, v, l, rk, struct{}{}, rl, rr, donor)
 			}
 			if lh > rh + 1 {
-				return UnsafeBalancedNodeStringUnitRotateRightReusing(UnsafeBalancedNodeStringUnitHeight, k, v, lk, struct{}{}, ll, lr, r, donor)
+				return UnsafeBalancedNodeStringUnitRotateRightReusing(k, v, lk, struct{}{}, ll, lr, r, donor)
 			}
 		}
 		if r.Tag == MapStringUnitLeaf {
 			if lh > 1 {
-				return UnsafeBalancedNodeStringUnitRotateRightReusing(UnsafeBalancedNodeStringUnitHeight, k, v, lk, struct{}{}, ll, lr, r, donor)
+				return UnsafeBalancedNodeStringUnitRotateRightReusing(k, v, lk, struct{}{}, ll, lr, r, donor)
 			}
 		}
 		return UnsafeNodeStringUnitReusing(k, v, l, r, donor)
@@ -243,30 +243,30 @@ func UnsafeNodeStringUnitReusing(k string, v struct{}, l *MapStringUnit, r *MapS
 	}
 }
 
-func UnsafeBalancedNodeStringUnitRotateRightReusing(height func(*MapStringUnit) int32, k string, v struct{}, lk string, lv struct{}, ll *MapStringUnit, lr *MapStringUnit, r *MapStringUnit, donor *MapStringUnit) *MapStringUnit {
-	if lr.Tag == MapStringUnitNode {
-		rh := lr.Node0
-		rk := lr.Node2
-		rl := lr.Node4
-		rr := lr.Node5
-		if height(ll) <= rh {
-			return UnsafeNodeStringUnitReusing(rk, struct{}{}, UnsafeNodeStringUnit(lk, lv, ll, rl), UnsafeNodeStringUnit(k, v, rr, r), donor)
-		}
-	}
-	return UnsafeNodeStringUnitReusing(lk, lv, ll, UnsafeNodeStringUnit(k, v, lr, r), donor)
-}
-
-func UnsafeBalancedNodeStringUnitRotateLeftReusing(height func(*MapStringUnit) int32, k string, v struct{}, l *MapStringUnit, rk string, rv struct{}, rl *MapStringUnit, rr *MapStringUnit, donor *MapStringUnit) *MapStringUnit {
+func UnsafeBalancedNodeStringUnitRotateLeftReusing(k string, v struct{}, l *MapStringUnit, rk string, rv struct{}, rl *MapStringUnit, rr *MapStringUnit, donor *MapStringUnit) *MapStringUnit {
 	if rl.Tag == MapStringUnitNode {
 		lh := rl.Node0
 		lk := rl.Node2
 		ll := rl.Node4
 		lr := rl.Node5
-		if lh > height(rr) {
+		if lh > UnsafeBalancedNodeStringUnitHeight(rr) {
 			return UnsafeNodeStringUnitReusing(lk, struct{}{}, UnsafeNodeStringUnit(k, v, l, ll), UnsafeNodeStringUnit(rk, rv, lr, rr), donor)
 		}
 	}
 	return UnsafeNodeStringUnitReusing(rk, rv, UnsafeNodeStringUnit(k, v, l, rl), rr, donor)
+}
+
+func UnsafeBalancedNodeStringUnitRotateRightReusing(k string, v struct{}, lk string, lv struct{}, ll *MapStringUnit, lr *MapStringUnit, r *MapStringUnit, donor *MapStringUnit) *MapStringUnit {
+	if lr.Tag == MapStringUnitNode {
+		rh := lr.Node0
+		rk := lr.Node2
+		rl := lr.Node4
+		rr := lr.Node5
+		if UnsafeBalancedNodeStringUnitHeight(ll) <= rh {
+			return UnsafeNodeStringUnitReusing(rk, struct{}{}, UnsafeNodeStringUnit(lk, lv, ll, rl), UnsafeNodeStringUnit(k, v, rr, r), donor)
+		}
+	}
+	return UnsafeNodeStringUnitReusing(lk, lv, ll, UnsafeNodeStringUnit(k, v, lr, r), donor)
 }
 
 // Data/Maybe/maybe.go
