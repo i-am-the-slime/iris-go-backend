@@ -1,0 +1,121 @@
+---
+source: tests-integration/src/fixtures.rs
+---
+// main.go
+package main
+
+import (
+	"github.com/i-am-the-slime/purs-backend-go/go-support/exception"
+	"github.com/i-am-the-slime/purs-backend-go/go-support/prim"
+	"os"
+)
+
+func main_() int32 {
+	var result2 bool
+	if prim.NumberNaN < 0.0 {
+		result2 = false
+	} else if !(prim.NumberNaN <= 1.0) {
+		result2 = false
+	} else {
+		result2 = true
+	}
+	var result int32
+	if result2 {
+		result = 1
+	} else {
+		result = 0
+	}
+	var result3 bool
+	if false {
+		result3 = false
+	} else if !(0.5 <= prim.NumberNaN) {
+		result3 = false
+	} else {
+		result3 = true
+	}
+	var result4 int32
+	if result3 {
+		result4 = 2
+	} else {
+		result4 = 0
+	}
+	var result5 bool
+	if 0.5 < prim.NumberNaN {
+		result5 = false
+	} else if false {
+		result5 = false
+	} else {
+		result5 = true
+	}
+	var result6 int32
+	if result5 {
+		result6 = 4
+	} else {
+		result6 = 0
+	}
+	var result7 int32
+	if !(prim.NumberNaN < 0.0) {
+		result7 = 8
+	} else {
+		result7 = 0
+	}
+	var result8 int32
+	if !(prim.NumberNaN <= 1.0) {
+		result8 = 16
+	} else {
+		result8 = 0
+	}
+	var result9 int32
+	if !(prim.NumberNaN <= 1.0) {
+		result9 = 32
+	} else {
+		result9 = 0
+	}
+	var result10 int32
+	if !(prim.NumberNaN < prim.NumberNaN) {
+		result10 = 64
+	} else {
+		result10 = 0
+	}
+	var y float64
+	if 0.0 < prim.NumberNaN {
+		y = prim.NumberNaN
+	} else if 0.0 == prim.NumberNaN {
+		y = 0.0
+	} else {
+		y = 0.0
+	}
+	var result11 float64
+	if 1.0 < y {
+		result11 = 1.0
+	} else if 1.0 == y {
+		result11 = 1.0
+	} else {
+		result11 = y
+	}
+	var result12 int32
+	if prim.NumberIsNaN(result11) {
+		result12 = 128
+	} else {
+		result12 = 0
+	}
+	var result13 bool
+	if prim.NumberNaN < 0.0 {
+		result13 = false
+	} else {
+		result13 = prim.NumberNaN != 0.0
+	}
+	var result14 int32
+	if result13 {
+		result14 = 256
+	} else {
+		result14 = 0
+	}
+	return result + result4 + result6 + result7 + result8 + result9 + result10 + result12 + result14
+}
+
+func main() {
+	defer exception.ReportUncaught()
+	exitStatus := main_()
+	os.Exit(int(exitStatus))
+}

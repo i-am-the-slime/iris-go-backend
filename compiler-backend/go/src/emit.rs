@@ -3469,6 +3469,15 @@ where
             let product = binary("*", left, right);
             return GoExpression::Conversion { type_: GoType::Float64, value: Box::new(product) };
         }
+        let negated_opposite = match operator {
+            Operator::Compare(Comparison::GreaterThanOrUnordered) => Some("<="),
+            Operator::Compare(Comparison::GreaterThanOrEqualOrUnordered) => Some("<"),
+            _ => None,
+        };
+        if let Some(opposite) = negated_opposite {
+            let opposite = binary(opposite, left, right);
+            return GoExpression::Unary { operator: "!", operand: Box::new(opposite) };
+        }
         let symbol = match operator {
             Operator::IntAdd | Operator::NumberAdd | Operator::StringAppend => "+",
             Operator::IntSubtract | Operator::NumberSubtract => "-",
@@ -3483,6 +3492,9 @@ where
                 Comparison::LessThanOrEqual => "<=",
                 Comparison::GreaterThan => ">",
                 Comparison::GreaterThanOrEqual => ">=",
+                Comparison::GreaterThanOrUnordered | Comparison::GreaterThanOrEqualOrUnordered => {
+                    unreachable!()
+                }
             },
             _ => unreachable!(),
         };

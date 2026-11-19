@@ -412,6 +412,8 @@ pub enum Comparison {
     LessThanOrEqual,
     GreaterThan,
     GreaterThanOrEqual,
+    GreaterThanOrUnordered,
+    GreaterThanOrEqualOrUnordered,
 }
 
 impl Operator {
@@ -1380,8 +1382,13 @@ const INTRINSICS: &[(&str, &str, &[&str], Foreign)] = &[
     ("Data.Ord", "greaterThanOrEq", &["ordInt"], compare(Comparison::GreaterThanOrEqual)),
     ("Data.Ord", "lessThan", &["ordNumber"], compare(Comparison::LessThan)),
     ("Data.Ord", "lessThanOrEq", &["ordNumber"], compare(Comparison::LessThanOrEqual)),
-    ("Data.Ord", "greaterThan", &["ordNumber"], compare(Comparison::GreaterThan)),
-    ("Data.Ord", "greaterThanOrEq", &["ordNumber"], compare(Comparison::GreaterThanOrEqual)),
+    ("Data.Ord", "greaterThan", &["ordNumber"], compare(Comparison::GreaterThanOrUnordered)),
+    (
+        "Data.Ord",
+        "greaterThanOrEq",
+        &["ordNumber"],
+        compare(Comparison::GreaterThanOrEqualOrUnordered),
+    ),
     ("Data.Ord", "lessThan", &["ordString"], compare(Comparison::LessThan)),
     ("Data.Ord", "lessThanOrEq", &["ordString"], compare(Comparison::LessThanOrEqual)),
     ("Data.Ord", "greaterThan", &["ordString"], compare(Comparison::GreaterThan)),

@@ -82,7 +82,7 @@ import (
 func main_() int32 {
 	x := prim.NumberTrunc(float64(0.5))
 	if !prim.NumberIsFinite(x) {
-	} else if x >= float64(int32(prim.TopInt)) {
+	} else if !(x < float64(int32(prim.TopInt))) {
 	} else if x <= float64(int32(prim.BottomInt)) {
 	} else if math.Trunc(x) == x && (x >= math.MinInt32 && x <= math.MaxInt32) {
 	}
