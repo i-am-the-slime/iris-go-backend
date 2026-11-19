@@ -162,6 +162,31 @@ const commandMinimise = async (arguments_: Arguments): Promise<void> => {
   }
 };
 
+/** Runs kept programs (minimal.purs where present) again, with the current compiler, and prints the classification. */
+const commandRecheck = async (arguments_: Arguments): Promise<void> => {
+  const { flags, positional } = arguments_;
+  const work = flagString(flags, "work", join(SCRATCHPAD, "fuzz-work"));
+  const toolchain = defaultToolchain();
+  const template = await ensureTemplate(work, toolchain);
+  const worker = new Worker(join(work, "recheck"), toolchain);
+  await worker.prepare(template);
+  const counts = new Map<string, number>();
+  for (const directory of positional) {
+    const sources = readdirSync(directory).filter((name) => name.endsWith(".purs"));
+    const source = sources.includes("minimal.purs") ? "minimal.purs" : sources[0];
+    const text = readFileSync(join(directory, source), "utf8");
+    const moduleName = /^module (\S+)/m.exec(text)?.[1] ?? "Fuzz.Unknown";
+    const previous = JSON.parse(readFileSync(join(directory, "result.json"), "utf8")) as { classification: Classification };
+    const [result] = await worker.runBatch([{ seed: 0, moduleName, source: text }]);
+    const change = result.classification === previous.classification ? "same" : `was ${previous.classification}`;
+    counts.set(result.classification, (counts.get(result.classification) ?? 0) + 1);
+    console.log(`${directory.replace(/.*fuzz-results\//, "").padEnd(40)} ${result.classification.padEnd(20)} (${change}) ${result.detail.slice(0, 120)}`);
+    writeFileSync(join(directory, "recheck.json"), JSON.stringify({ iris: toolchain.iris, classification: result.classification, detail: result.detail, source }, null, 2) + "\n");
+  }
+  console.log();
+  for (const [classification, number] of [...counts].sort((a, b) => b[1] - a[1])) console.log(`  ${String(number).padStart(5)}  ${classification}`);
+};
+
 /**
  * Runs a kept program's minimal.purs (or its source) through purs's own JavaScript backend via
  * spago, a third opinion that says whether Iris's JavaScript or its Go disagrees with purs.
@@ -229,8 +254,12 @@ const commandReport = (arguments_: Arguments): void => {
   const groups = new Map<string, Entry[]>();
   for (const entry of entries) groups.set(entry.signature, [...(groups.get(entry.signature) ?? []), entry]);
   const sorted = [...groups].sort((a, b) => b[1].length - a[1].length);
+  const copyTo = flagString(arguments_.flags, "copy", "");
+  if (copyTo) mkdirSync(copyTo, { recursive: true });
   console.log(`${entries.length} kept failures in ${groups.size} signatures\n`);
+  let index = 0;
   for (const [signature, members] of sorted) {
+    index++;
     const minimised = members.filter((m) => m.minimised).sort((a, b) => (a.lines ?? 1e9) - (b.lines ?? 1e9));
     const representative = minimised[0] ?? members[0];
     console.log(`## ${members.length}x ${signature.slice(0, 220)}`);
@@ -238,6 +267,18 @@ const commandReport = (arguments_: Arguments): void => {
     console.log(`   seeds: ${members.map((m) => m.seed).slice(0, 12).join(", ")}${members.length > 12 ? ", ..." : ""}`);
     console.log(`   repro: ${representative.directory}${representative.minimised ? `/minimal.purs (${representative.lines} lines)` : ""}`);
     console.log();
+    if (copyTo) {
+      const sourceName = representative.minimised ? "minimal.purs" : readdirSync(representative.directory).find((name) => name.endsWith(".purs"))!;
+      const slug = signature.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 60);
+      const target = join(copyTo, `${String(index).padStart(2, "0")}-${slug}.purs`);
+      const header = [
+        `-- ${representative.classification}: ${representative.detail}`,
+        `-- ${members.length} program(s) with this signature; seeds ${members.map((m) => m.seed).slice(0, 8).join(", ")}`,
+        `-- from ${representative.directory}${representative.minimised ? " (minimised)" : " (not minimised)"}`,
+        "",
+      ].join("\n");
+      writeFileSync(target, header + readFileSync(join(representative.directory, sourceName), "utf8"));
+    }
   }
 };
 
@@ -271,6 +312,9 @@ const main = async () => {
       break;
     case "attribute":
       await commandAttribute(arguments_);
+      break;
+    case "recheck":
+      await commandRecheck(arguments_);
       break;
     case "features":
       console.log(FEATURES.join("\n"));

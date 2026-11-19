@@ -9,6 +9,7 @@ export const FUZZ_DIRECTORY = dirname(new URL(import.meta.url).pathname);
 
 export type Classification =
   | "OK"
+  | "DOCUMENTED DIFFERENCE"
   | "OUTPUT MISMATCH"
   | "EXIT MISMATCH"
   | "IRIS ERROR"
@@ -22,6 +23,7 @@ export type Classification =
   | "GENERATOR ILL-TYPED";
 
 export const FAILURE_CLASSES: Classification[] = [
+  "DOCUMENTED DIFFERENCE",
   "OUTPUT MISMATCH",
   "EXIT MISMATCH",
   "IRIS ERROR",
@@ -323,6 +325,10 @@ export const classify = (js: RunResult, go: RunResult): { classification: Classi
     while (index < jsLines.length && index < goLines.length && jsLines[index] === goLines[index]) index++;
     const show = (lines: string[]) => (index < lines.length ? JSON.stringify(lines[index]).slice(0, 160) : "<end>");
     const detail = `line ${index + 1}: js ${show(jsLines)} go ${show(goLines)}`;
+    const documented = documentedDifferences(jsLines, goLines);
+    if (documented && js.status === go.status) {
+      return { classification: "DOCUMENTED DIFFERENCE", detail: `${documented}; ${detail}` };
+    }
     return { classification: "OUTPUT MISMATCH", detail };
   }
   if (js.status !== go.status) {
@@ -332,6 +338,51 @@ export const classify = (js: RunResult, go: RunResult): { classification: Classi
     };
   }
   return { classification: "OK", detail: `${lineCount(js.stdout)} lines, exit ${js.status}` };
+};
+
+const NUMBER_TOKEN = /-?(?:\d+\.\d+e[+-]?\d+|\d+\.\d+|\d+e[+-]?\d+|\d+|NaN|Infinity)/g;
+
+/**
+ * Whether every differing line differs only in numbers that a documented platform difference
+ * explains: JavaScript Int results outside int32 (`Int.rem x 0` is NaN, `div bottom (-1)` is
+ * 2147483648, `Bits.zshr` is unsigned) and last-ulp results of the numeric library (pow, exp,
+ * log, trigonometry). Returns the reasons, or null when some difference is not of that kind.
+ */
+export const documentedDifferences = (jsLines: string[], goLines: string[]): string | null => {
+  if (jsLines.length !== goLines.length) return null;
+  const reasons = new Set<string>();
+  for (let index = 0; index < jsLines.length; index++) {
+    if (jsLines[index] === goLines[index]) continue;
+    const jsTokens = [...jsLines[index].matchAll(NUMBER_TOKEN)].map((match) => match[0]);
+    const goTokens = [...goLines[index].matchAll(NUMBER_TOKEN)].map((match) => match[0]);
+    if (jsTokens.length !== goTokens.length) return null;
+    if (jsLines[index].replace(NUMBER_TOKEN, "#") !== goLines[index].replace(NUMBER_TOKEN, "#")) return null;
+    for (let token = 0; token < jsTokens.length; token++) {
+      if (jsTokens[token] === goTokens[token]) continue;
+      const reason = numericDifference(jsTokens[token], goTokens[token]);
+      if (reason === null) return null;
+      reasons.add(reason);
+    }
+  }
+  return reasons.size > 0 ? [...reasons].join(", ") : null;
+};
+
+const numericDifference = (js: string, go: string): string | null => {
+  const jsInteger = /^-?\d+$/.test(js);
+  const goInteger = /^-?\d+$/.test(go);
+  if (goInteger && js === "NaN") return "JS Int NaN (rem or quot by zero)";
+  if (goInteger && jsInteger) {
+    const jsValue = BigInt(js);
+    const goValue = BigInt(go);
+    if (jsValue !== goValue && BigInt.asIntN(32, jsValue) === goValue) return "JS Int outside int32 (zshr, div bottom (-1))";
+    return null;
+  }
+  if (jsInteger || goInteger) return null;
+  const x = Number(js);
+  const y = Number(go);
+  if (!Number.isFinite(x) || !Number.isFinite(y) || x === y) return null;
+  const ulps = Math.abs(x - y) / (Math.abs(x) * Number.EPSILON);
+  return ulps <= 4 ? "numeric library last-ulp difference (pow, exp, log, trigonometry)" : null;
 };
 
 const lineCount = (text: string): number => (text === "" ? 0 : text.split("\n").length - (text.endsWith("\n") ? 1 : 0));

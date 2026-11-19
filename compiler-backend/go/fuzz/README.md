@@ -12,7 +12,9 @@ bun fuzz.ts gen --seed 7                                   # print the program f
 bun fuzz.ts run --seed-from 1 --count 500 --jobs 6         # a campaign; failures kept in results
 bun fuzz.ts run --seed-from 1 --count 500 --features "st=3,-lists,-aff"
 bun fuzz.ts minimise RESULTS/go-build-error/P105           # shrink a kept failure to minimal.purs
-bun fuzz.ts report                                         # group kept failures by signature
+bun fuzz.ts report [--copy DIR]                            # group kept failures by signature
+bun fuzz.ts recheck RESULTS/*/P*                           # run kept failures again with the current compiler
+bun fuzz.ts attribute RESULTS/output-mismatch/P16          # purs's JavaScript as a third oracle
 bun fuzz.ts features                                       # the feature names
 ```
 
@@ -29,7 +31,10 @@ Other flags: `--batch` (modules per `iris build`, default 8), `--statements` and
 `--keep-ok`. Environment: `IRIS` (compiler binary, default `target/release/iris`), `GO_SUPPORT`
 (purs-backend-go/go-support checkout), `FUZZ_RUN_TIMEOUT` (milliseconds per program run).
 
-Classifications: `OK`, `OUTPUT MISMATCH`, `EXIT MISMATCH`, `IRIS ERROR` (Go backend rejected
+Classifications: `OK`, `DOCUMENTED DIFFERENCE` (outputs differ only by a documented platform
+difference: a JavaScript Int result outside int32 such as `Int.rem x 0`, `div bottom (-1)` or
+`Bits.zshr`, or a last-ulp result of the numeric library such as `Number.pow`), `OUTPUT
+MISMATCH`, `EXIT MISMATCH`, `IRIS ERROR` (Go backend rejected
 the program), `IRIS JS ERROR` (the JavaScript build failed for a reason other than the generated
 module), `GO BUILD ERROR`, `GO PANIC`, `TIMEOUT JS`, `TIMEOUT GO`, `TIMEOUT BOTH`,
 `JS STACK OVERFLOW` (Bun ran out of stack; Go finished), `GENERATOR ILL-TYPED` (the generated
