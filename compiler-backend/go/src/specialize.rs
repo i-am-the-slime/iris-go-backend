@@ -2589,7 +2589,9 @@ where
                     return Ok(self.foreign(foreign, monotype));
                 }
                 if self.foreign_packages.provides(&module.name) {
-                    let foreign = self.project_foreign(file_id, term, monotype).interned();
+                    let foreign =
+                        self.project_foreign(scope, file_id, term, instantiations, monotype)?;
+                    let foreign = foreign.interned();
                     return Ok(self.foreign(foreign, monotype));
                 }
                 let name = format!("{}.{name}", module.name);
@@ -2913,7 +2915,14 @@ where
         })
     }
 
-    fn project_foreign(&self, file_id: FileId, term: TermItemId, monotype: MonotypeId) -> Foreign {
+    fn project_foreign(
+        &mut self,
+        scope: &Scope,
+        file_id: FileId,
+        term: TermItemId,
+        instantiations: &Substitution,
+        monotype: MonotypeId,
+    ) -> GoResult<Foreign> {
         let mut arity = 0;
         let mut current = monotype;
         while let Some((_, result)) = self.monotypes.function_parts(current) {
@@ -2921,7 +2930,23 @@ where
             current = result;
         }
         let effectful = self.monotypes.effect_result(current).is_some();
-        Foreign::Project { file_id, term, arity, effectful }
+        // Go has no generic variables: a quantified foreign value is a generic function
+        // taking its quantifiers' instantiations in declared order.
+        let mut type_arguments = vec![];
+        let declared = self.context.module(file_id)?.checked.lookup_term_item_type(term);
+        if let Some(declared) = declared.filter(|_| arity == 0) {
+            let declared = crate::monotype::expand_synonyms(&mut self.context, declared)?;
+            for quantifier in self.context.types.peel_quantifiers(declared).0 {
+                let Some(&argument) = instantiations.get(&quantifier) else {
+                    let variable = format!("{quantifier:?}");
+                    let state = UnsupportedState::UninstantiatedVariable { variable };
+                    return Err(self.unsupported(scope, state));
+                };
+                type_arguments.push(self.closed_monotype(scope, argument)?);
+            }
+        }
+        let type_arguments = Box::leak(type_arguments.into_boxed_slice());
+        Ok(Foreign::Project { file_id, term, arity, effectful, type_arguments })
     }
 
     fn foreign(&mut self, foreign: &'static Foreign, monotype: MonotypeId) -> Expression {

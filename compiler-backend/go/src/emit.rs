@@ -49,7 +49,6 @@ use std::sync::Arc;
 use rustc_hash::{FxHashMap, FxHashSet};
 
 use files::FileId;
-use indexing::TermItemId;
 
 use self::application::Callable;
 use self::packages::Spelling;
@@ -1661,8 +1660,8 @@ where
                 let associated = call(self.go_function(map), vec![associated, elements]);
                 return self.deliver(associated, result, sink, out);
             }
-            Foreign::Project { file_id, term, .. } => {
-                let thunk = self.project_call(file_id, term, arguments, result, out)?;
+            Foreign::Project { .. } => {
+                let thunk = self.project_call(foreign, arguments, out)?;
                 let performed = self.out_of_convention(call(thunk, vec![]), result, out)?;
                 return self.deliver(performed, result, sink, out);
             }
@@ -1778,17 +1777,18 @@ where
         }
     }
 
-    /// A call of a project's Go foreign. A foreign without arguments whose
-    /// result is one of the package's generic types is instantiated at the
-    /// result's type arguments, which nothing else would tell Go.
+    /// A call of a project's Go foreign. A quantified one without arguments is
+    /// instantiated, which nothing else would tell Go: as the effect of an
+    /// effectful foreign, and called for the value of any other.
     fn project_call(
         &mut self,
-        file_id: FileId,
-        term: TermItemId,
+        foreign: Foreign,
         arguments: &[Expression],
-        result: MonotypeId,
         out: &mut Vec<GoStatement>,
     ) -> GoResult<GoExpression> {
+        let Foreign::Project { file_id, term, effectful, type_arguments, .. } = foreign else {
+            unreachable!("invariant violated: a project call of another foreign");
+        };
         let module_name = self.context.module(file_id)?.name.clone();
         let name = self.context.term_name(file_id, term)?;
         self.imports.insert(self.foreign_packages.import_path(&module_name));
@@ -1797,12 +1797,14 @@ where
             name: capitalise(&name),
         };
         if arguments.is_empty() {
-            if let Monotype::ForeignData(data) = self.monotypes.get(result).clone()
-                && let GoType::Generic { arguments, .. } = self.foreign_data_type(&data)?
-            {
-                return Ok(GoExpression::Instantiation { function: Box::new(function), arguments });
+            if type_arguments.is_empty() {
+                return Ok(function);
             }
-            return Ok(function);
+            let types = type_arguments.iter().map(|&type_| self.convention_or_native(type_));
+            let arguments = types.collect::<GoResult<Vec<_>>>()?;
+            let function = Box::new(function);
+            let instantiated = GoExpression::Instantiation { function, arguments };
+            return Ok(if effectful { instantiated } else { call(instantiated, vec![]) });
         }
         let mut values = vec![];
         for argument in arguments {
@@ -3258,8 +3260,8 @@ where
         if let Foreign::Unfoldr | Foreign::Unfoldr1 = *foreign {
             return self.unfoldr(*foreign, arguments, out);
         }
-        if let Foreign::Project { file_id, term, .. } = *foreign {
-            let called = self.project_call(file_id, term, arguments, monotype, out)?;
+        if let Foreign::Project { .. } = *foreign {
+            let called = self.project_call(*foreign, arguments, out)?;
             return self.out_of_convention(called, monotype, out);
         }
         if let Foreign::Operator(Operator::ArrayLength) = *foreign

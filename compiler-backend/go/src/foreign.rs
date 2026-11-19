@@ -12,6 +12,8 @@ use files::FileId;
 use indexing::TermItemId;
 use rustc_hash::FxHashMap;
 
+use crate::monotype::MonotypeId;
+
 #[derive(Debug, Clone, Default)]
 pub struct ForeignPackages {
     pub module_path: String,
@@ -35,7 +37,15 @@ impl ForeignPackages {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Foreign {
     Operator(Operator),
-    Project { file_id: FileId, term: TermItemId, arity: usize, effectful: bool },
+    /// A foreign of a Go foreign package; `type_arguments` instantiate a
+    /// quantified one without arguments, a generic Go function.
+    Project {
+        file_id: FileId,
+        term: TermItemId,
+        arity: usize,
+        effectful: bool,
+        type_arguments: &'static [MonotypeId],
+    },
     Call { function: GoFunction, arity: usize, boundary: Boundary },
     Perform { function: GoFunction, arity: usize, boundary: Boundary },
     RunEffect,

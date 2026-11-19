@@ -1,0 +1,39 @@
+---
+source: tests-integration/src/fixtures.rs
+---
+// Data/Show/show.go
+package show
+
+import "github.com/i-am-the-slime/purs-backend-go/go-support/prim"
+
+func Show(i int32) string {
+	return prim.ShowInt(i)
+}
+
+// main.go
+package main
+
+import (
+	"fixture/Data/Show"
+	"fixture/Optional_ffi"
+	"github.com/i-am-the-slime/purs-backend-go/go-support/exception"
+	"github.com/i-am-the-slime/purs-backend-go/go-support/prim"
+)
+
+func main_() []string {
+	optional := Optional_ffi.NewCounter[int]()
+	optional2 := Optional_ffi.NewCounter[bool]()
+	withDefault := Optional_ffi.WithDefault(true, optional2)
+	var result string
+	if withDefault {
+		result = "true"
+	} else {
+		result = "false"
+	}
+	return []string{prim.ShowArray(show.Show, []int32{int32(Optional_ffi.WithDefault(int(1), Optional_ffi.Absent[int]())), int32(Optional_ffi.WithDefault(int(1), Optional_ffi.Present(int(2))))}), Optional_ffi.WithDefault("fallback", Optional_ffi.Absent[string]()), prim.ShowInt(int32(len(Optional_ffi.EmptyArray[string]()))), prim.ShowArray(show.Show, []int32{int32(Optional_ffi.PairSize(Optional_ffi.SwappedPair(int(1), "one"))), int32(Optional_ffi.PairSize(Optional_ffi.EmptySwappedPair[int, string]()))}), prim.ShowInt(int32(Optional_ffi.WithDefault(int(3), optional))), result}
+}
+
+func main() {
+	defer exception.ReportUncaught()
+	main_()
+}

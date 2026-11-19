@@ -118,6 +118,14 @@ Go type there. Without one, the compiler reports `foreign import <name> has no G
 `foreign data type <name> has no Go representation`. Only the foreign imports that `main` reaches
 need an implementation. The support module provides implementations for the core libraries.
 
+Go has no generic variables, so a quantified foreign value without arguments, such as
+`undefined :: forall a. UndefinedOr a`, is a generic Go function without parameters:
+`func Undefined[A any]() UndefinedOr[A]`. It has one type parameter per quantifier, in the order of
+the `forall`, and the compiler calls it with explicit type arguments, spelled as the package's
+functions take them (an `Int` is a Go `int`). When the value is an effect, such as
+`forall a. Effect (Box a)`, the instantiated function is the effect itself, and the compiler calls
+it to perform the effect.
+
 ### Polymorphic recursion
 
 Polymorphic recursion that only changes the types of plain values compiles. Some recursion that
