@@ -82,7 +82,7 @@ fn labels_name(fields: &[RecordField]) -> String {
     if fields.is_empty() {
         return "Empty".into();
     }
-    fields.iter().map(|field| capitalise(&identifier(&field.label))).collect()
+    fields.iter().map(|field| crate::naming::go_field(&field.label)).collect()
 }
 
 /// The hint a record takes its name from: the strongest, and among uses the
@@ -118,7 +118,7 @@ fn distinguishing_labels(own: &[RecordField], others: &[&[RecordField]]) -> Vec<
         .filter(|&(lacking, _)| lacking > 0)
         .collect();
     lacking.sort_by(|left, right| right.0.cmp(&left.0).then_with(|| left.1.cmp(right.1)));
-    lacking.into_iter().take(2).map(|(_, label)| capitalise(&identifier(label))).collect()
+    lacking.into_iter().take(2).map(|(_, label)| crate::naming::go_field(label)).collect()
 }
 
 /// The types of up to `limit` fields that a record shares by label with
@@ -483,7 +483,7 @@ where
             let mut spelled = String::new();
             for field in fields.iter() {
                 let type_name = self.field_type_name(field.monotype, &short, 3)?;
-                spelled.push_str(&capitalise(&identifier(&field.label)));
+                spelled.push_str(&crate::naming::go_field(&field.label));
                 spelled.push_str(&type_name);
                 types.push(type_name);
             }
@@ -623,7 +623,7 @@ where
                 if let [field] = constructor.fields[..]
                     && records.contains(&field)
                 {
-                    let name = capitalise(&identifier(&constructor.name));
+                    let name = crate::naming::go_field(&constructor.name);
                     let qualifier = Some(type_name.clone());
                     hints.entry(field).or_default().push(Hint {
                         source: Source::Wrapped,

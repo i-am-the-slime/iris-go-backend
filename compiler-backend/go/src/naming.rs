@@ -205,6 +205,38 @@ pub fn identifier(name: &str) -> String {
     sanitized
 }
 
+/// A label's or constructor's Go name, exported so that code in any package can use it: the
+/// characters a Go identifier cannot hold become `_`, the first letter is upper case, and a name
+/// that still does not start with an upper-case letter gets an `X` in front. `respondNow` is
+/// `RespondNow`, `_respondNow` is `X_respondNow`, `content-type` is `Content_type`, `1st` is `X1st`.
+/// Two labels can share a name; [`go_fields`] tells them apart.
+pub fn go_field(label: &str) -> String {
+    let sanitized: String = label.chars().map(identifier_character).collect();
+    exported(&sanitized)
+}
+
+/// A character as a Go identifier holds it: a letter or digit as it is, anything else as `_`.
+fn identifier_character(character: char) -> char {
+    if character.is_alphabetic() || character.is_ascii_digit() { character } else { '_' }
+}
+
+/// The Go names of a type's labels, in their order, all different: when labels share a
+/// [`go_field`], the first keeps it and the others take the lowest number no label has, as
+/// `"content-type"` and `content_type` are `Content_type` and `Content_type2`.
+pub fn go_fields(labels: &[&str]) -> Vec<String> {
+    let bases: Vec<String> = labels.iter().map(|label| go_field(label)).collect();
+    let mut taken: rustc_hash::FxHashSet<String> = rustc_hash::FxHashSet::default();
+    bases
+        .iter()
+        .map(|base| {
+            let unavailable = |name: &str| taken.contains(name) || bases.iter().any(|b| b == name);
+            let name =
+                if taken.contains(base) { numbered(base, unavailable) } else { base.clone() };
+            taken.insert(name.clone());
+            name
+        })
+        .collect()
+}
 
 /// The name with its first letter in upper case.
 pub fn capitalise(text: &str) -> String {
@@ -227,11 +259,8 @@ pub fn lower_first(name: &str) -> String {
 /// A Go-exported spelling of a name.
 pub fn exported(name: &str) -> String {
     let capitalised = capitalise(name);
-    if capitalised.starts_with(char::is_uppercase) {
-        capitalised
-    } else {
-        format!("X{capitalised}")
-    }
+    let is_upper_letter = |character: char| character.is_uppercase() && character.is_alphabetic();
+    if capitalised.starts_with(is_upper_letter) { capitalised } else { format!("X{capitalised}") }
 }
 
 /// Parameter names that say nothing about what they hold.
@@ -338,6 +367,27 @@ pub fn ladder(candidates: impl IntoIterator<Item = String>) -> Vec<String> {
 
 #[cfg(test)]
 mod tests {
+
+    #[test]
+    fn every_label_has_an_exported_go_name() {
+        assert_eq!(go_field("respondNow"), "RespondNow");
+        assert_eq!(go_field("_respondNow"), "X_respondNow");
+        assert_eq!(go_field("1st"), "X1st");
+        assert_eq!(go_field("content-type"), "Content_type");
+        assert_eq!(go_field("über"), "Über");
+        assert_eq!(go_field("名前"), "X名前");
+        assert_eq!(go_field(""), "X");
+        assert_eq!(go_field("Just"), "Just");
+    }
+
+    #[test]
+    fn labels_that_share_a_go_name_are_numbered() {
+        assert_eq!(
+            go_fields(&["content-type", "content_type", "x", "X", "Content_type2"]),
+            ["Content_type", "Content_type3", "X", "X2", "Content_type2"]
+        );
+    }
+
     use super::*;
 
     #[test]

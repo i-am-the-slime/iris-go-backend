@@ -16,8 +16,7 @@
 
 use rustc_hash::FxHashSet;
 
-use super::{Emitter, identifier};
-use crate::naming::capitalise;
+use super::Emitter;
 use crate::error::GoResult;
 use crate::monotype::{DataConstructor, DataType, Failure, Monotype, MonotypeId, Monotypes};
 use crate::syntax::GoType;
@@ -122,6 +121,10 @@ where
             // A constructor named like a shared slot, such as `Field`, keeps its own slots.
             groups = (0..constructors.len()).map(|index| vec![index]).collect();
             named = NamedSlots::new(constructors, &groups, Naming::Positional);
+        }
+        if !named.are_distinct(constructors.len()) {
+            // Labels with one Go spelling, such as a Variant's `a` and `A`, number their slots.
+            named.number_repeats(constructors.len());
         }
         self.arrange_slots(constructors.len(), named.constructors, named.fields)
     }
@@ -339,6 +342,27 @@ impl NamedSlots {
         named
     }
 
+    /// Gives each slot that repeats an earlier slot's name, or a name the struct declares
+    /// besides, the lowest number that is free. Every constructor keeps slots of its own.
+    fn number_repeats(&mut self, constructors: usize) {
+        let mut taken: FxHashSet<String> = RESERVED_SLOTS
+            .iter()
+            .filter(|&&name| name != "Tag" || constructors > 1)
+            .map(|name| name.to_string())
+            .collect();
+        let mut field = 0;
+        for slots in &mut self.constructors {
+            for slot in slots.iter_mut() {
+                if taken.contains(slot.as_str()) {
+                    *slot = crate::naming::numbered(slot, |name| taken.contains(name));
+                }
+                taken.insert(slot.clone());
+                self.fields[field].0 = slot.clone();
+                field += 1;
+            }
+        }
+    }
+
     /// Whether no two slots share a name, nor a slot a name the struct
     /// declares besides, such as the tag of a type of several constructors.
     fn are_distinct(&self, constructors: usize) -> bool {
@@ -351,7 +375,7 @@ impl NamedSlots {
 
 /// The slots of a constructor that shares them with no other.
 fn own_slots(constructor: &DataConstructor, constructors: usize, naming: Naming) -> Vec<String> {
-    let name = capitalise(&identifier(&constructor.name));
+    let name = crate::naming::go_field(&constructor.name);
     let count = constructor.fields.len();
     match naming {
         Naming::Readable if count == 1 => vec![name],

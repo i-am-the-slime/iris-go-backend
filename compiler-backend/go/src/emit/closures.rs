@@ -352,7 +352,7 @@ where
             Monotype::Effect(result) => format!("Effect{}", self.monotype_name(result)?),
             Monotype::Lazy(value) => format!("Lazy{}", self.monotype_name(value)?),
             Monotype::Record(fields) => {
-                fields.iter().map(|field| capitalise(&identifier(&field.label))).collect()
+                fields.iter().map(|field| crate::naming::go_field(&field.label)).collect()
             }
             Monotype::Data(data) | Monotype::Recursive(data) => self.data_type_name(&data)?,
             Monotype::Function(..) => "Function".into(),
@@ -1214,7 +1214,7 @@ where
         let (slots_of_shapes, fields) = closure_slots(&shapes, self.monotypes);
         let mut constructors = vec![];
         for ((tag_name, _), slots) in shapes.iter().zip(&slots_of_shapes) {
-            let suffix = capitalise(&identifier(tag_name));
+            let suffix = crate::naming::go_field(tag_name);
             let tag = self.global_name(Spelling::derived("", name.clone(), &suffix));
             let fields = slots.iter().cloned().zip(fields_of(slots, &fields)).collect();
             constructors.push(ConstructorLayout { tag, fields });

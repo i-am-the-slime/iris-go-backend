@@ -11,8 +11,8 @@ use crate::simplify::for_each_child;
 pub(super) enum Place {
     /// The accumulator itself.
     Whole,
-    /// A field of the accumulator record.
-    Field(SmolStr),
+    /// A field of the accumulator record, by its label and its Go field.
+    Field(SmolStr, String),
     /// The field at `index` of the accumulator's constructor `constructor`, read through the
     /// locals that a `case` on the accumulator binds to it. `go_field` is its Go field.
     Constructor { constructor: usize, index: usize, go_field: String },
@@ -148,7 +148,7 @@ fn is_accumulator(carried: Carried<'_>, expression: &Expression) -> bool {
 fn is_carried(carried: Carried<'_>, expression: &Expression) -> bool {
     match (&expression.kind, carried.place) {
         (ExpressionKind::Local(id), Place::Whole) => *id == carried.accumulator,
-        (ExpressionKind::Access { record, label }, Place::Field(field)) => {
+        (ExpressionKind::Access { record, label }, Place::Field(field, _)) => {
             label == field && is_accumulator(carried, record)
         }
         (ExpressionKind::Local(id), Place::Constructor { .. }) => carried.aliases.contains(id),
@@ -205,12 +205,12 @@ fn results<'e>(
             _ => None,
         },
         ExpressionKind::Record(fields) => {
-            let Place::Field(field) = carried.place else { return None };
+            let Place::Field(field, _) = carried.place else { return None };
             let (_, value) = fields.iter().find(|(label, _)| label == field)?;
             carried_value(carried, value, owned)
         }
         ExpressionKind::Update { record, updates } if is_accumulator(carried, record) => {
-            let Place::Field(field) = carried.place else { return None };
+            let Place::Field(field, _) = carried.place else { return None };
             let updated = updates.iter().find_map(|update| match update {
                 RecordUpdate::Leaf { label, value } if label == field => Some(value),
                 _ => None,
@@ -292,7 +292,7 @@ fn reads(carried: Carried<'_>, expression: &Expression) -> usize {
 }
 
 fn overwrites(carried: Carried<'_>, updates: &[RecordUpdate]) -> bool {
-    let Place::Field(field) = carried.place else { return false };
+    let Place::Field(field, _) = carried.place else { return false };
     updates
         .iter()
         .any(|update| matches!(update, RecordUpdate::Leaf { label, .. } if label == field))

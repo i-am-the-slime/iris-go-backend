@@ -385,7 +385,7 @@ where
         let base: String = if fields.is_empty() {
             "Empty".into()
         } else {
-            fields.iter().map(|field| capitalise(&identifier(&field.label))).collect()
+            fields.iter().map(|field| crate::naming::go_field(&field.label)).collect()
         };
         let name = self.pending_global(base, names::PendingSpelling::Record(monotype));
         self.record_names.insert(monotype, name.clone());
@@ -421,7 +421,7 @@ where
             .constructors(&mut self.context, data)
             .map_err(Failure::in_code_generation)?;
         let labels: String =
-            constructors.iter().map(|constructor| capitalise(&identifier(&constructor.name))).collect();
+            constructors.iter().map(|constructor| crate::naming::go_field(&constructor.name)).collect();
         Ok(Some(labels))
     }
 
@@ -458,7 +458,7 @@ where
             let tag = self.global_name(Spelling::derived(
                 "",
                 name.clone(),
-                &capitalise(&identifier(&constructor.name)),
+                &crate::naming::go_field(&constructor.name),
             ));
             let fields = match &plan {
                 Some(plan) => {

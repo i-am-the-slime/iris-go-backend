@@ -1,9 +1,7 @@
 use super::buffers::{to_bytes, to_string};
 use super::fusion::{Demand, Need, Order, Pipeline};
 use super::ownership::{Carried, Place, owned_snocs};
-use super::{
-    Emitter, Mode, Sink, call, field_name, identifier_expression, unit_value, uses_local,
-};
+use super::{Emitter, Mode, Sink, call, identifier_expression, unit_value, uses_local};
 use crate::error::GoResult;
 use crate::foreign::Iteration;
 use crate::mono::{Expression, ExpressionKind, FunctionId, Local};
@@ -297,7 +295,10 @@ where
             Monotype::Record(fields) => fields
                 .iter()
                 .filter(|field| is_array(self, field.monotype))
-                .map(|field| Place::Field(field.label.clone()))
+                .map(|field| {
+                    let go_field = self.record_field_name(monotype, &field.label);
+                    Place::Field(field.label.clone(), go_field)
+                })
                 .collect(),
             Monotype::Data(data) => {
                 // Laying a type out declares it where the declarations stand, so only a type
@@ -324,9 +325,7 @@ where
     pub(super) fn clip(&mut self, accumulator: &str, place: &Place) -> GoStatement {
         let carried = match place {
             Place::Whole => identifier_expression(accumulator),
-            Place::Field(label) => {
-                super::field(identifier_expression(accumulator), &field_name(label))
-            }
+            Place::Field(_, go_field) => super::field(identifier_expression(accumulator), go_field),
             Place::Constructor { go_field, .. } => {
                 super::field(identifier_expression(accumulator), go_field)
             }

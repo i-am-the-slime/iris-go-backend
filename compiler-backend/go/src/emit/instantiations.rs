@@ -62,17 +62,19 @@ where
     }
 
     /// The Go field that holds a label of a record.
+    /// Fields are [`crate::naming::go_fields`] of the record's labels, so that two labels with the
+    /// same Go spelling, such as `"content-type"` and `content_type`, stay apart.
     pub(super) fn record_field_name(&self, record: MonotypeId, label: &str) -> String {
-        if !self.monotypes.is_instantiated_record(record) {
-            return field_name(label);
-        }
         let Monotype::Record(fields) = self.monotypes.get(record) else {
             return field_name(label);
         };
         let labels: Vec<&str> = fields.iter().map(|field| field.label.as_str()).collect();
         let position = labels.iter().position(|&known| known == label);
-        let position = position.expect("invariant violated: an instantiation's label exists");
-        instantiation_field_names(&labels).swap_remove(position)
+        let position = position.expect("invariant violated: a record's label exists");
+        if self.monotypes.is_instantiated_record(record) {
+            return instantiation_field_names(&labels).swap_remove(position);
+        }
+        crate::naming::go_fields(&labels).swap_remove(position)
     }
 
     /// The field `label` of a record value.

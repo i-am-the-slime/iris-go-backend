@@ -18,11 +18,11 @@ type LazyInt struct {
 }
 
 const (
-	LazyIntMain_ = iota
+	LazyIntMain = iota
 	LazyIntBuildThunks
 )
 
-var sharedLazyIntMain_ = &LazyInt{Tag: LazyIntMain_}
+var sharedLazyIntMain = &LazyInt{Tag: LazyIntMain}
 
 type IntToInt struct {
 	K   *IntToInt
@@ -31,18 +31,18 @@ type IntToInt struct {
 }
 
 const (
-	IntToIntMain_ = iota
+	IntToIntMain = iota
 	IntToIntCountDown
 	IntToIntCountDown2
 )
 
-var sharedIntToIntMain_ = &IntToInt{Tag: IntToIntMain_}
+var sharedIntToIntMain = &IntToInt{Tag: IntToIntMain}
 
 var main_ = initializeMain_()
 
 func initializeMain_() shared.MainResult {
 	defer exception.ReportUncaught()
-	return shared.MainResult{Forced: forceInt(buildThunks(1000, sharedLazyIntMain_)), Continued: countDown(10, sharedIntToIntMain_)}
+	return shared.MainResult{Forced: forceInt(buildThunks(1000, sharedLazyIntMain)), Continued: countDown(10, sharedIntToIntMain)}
 }
 
 func buildThunks(n int32, acc *LazyInt) *LazyInt {
@@ -75,7 +75,7 @@ func countDown(n int32, k *IntToInt) int32 {
 
 func forceInt(lazy *LazyInt) int32 {
 	switch lazy.Tag {
-	case LazyIntMain_:
+	case LazyIntMain:
 		return 0
 	default: // LazyIntBuildThunks
 		return forceInt(lazy.Acc) + 1
@@ -85,7 +85,7 @@ func forceInt(lazy *LazyInt) int32 {
 func runIntToInt(function *IntToInt, x int32) int32 {
 	for {
 		switch function.Tag {
-		case IntToIntMain_:
+		case IntToIntMain:
 			return x - 1
 		case IntToIntCountDown:
 			k := function.K

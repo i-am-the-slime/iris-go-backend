@@ -73,7 +73,7 @@ type Box struct {
 	Origin any
 }
 
-type Map_Type_ValueOfFnFnValueValueFnBoxBoxBoxInt struct {
+type MapTypeValueOfFnFnValueValueFnBoxBoxBoxInt struct {
 	Map   func(func(any) any) func(*Box) *Box
 	Type  string
 	Value BoxInt
@@ -83,7 +83,7 @@ func convert(value BoxInt) *Box {
 	return &Box{Box: value.Box, Origin: value}
 }
 
-func convert2(value Map_Type_ValueOfFnFnValueValueFnBoxBoxBoxInt) shared.VariantFRep {
+func convert2(value MapTypeValueOfFnFnValueValueFnBoxBoxBoxInt) shared.VariantFRep {
 	return shared.VariantFRep{Map: func(coerced func(any) any) func(any) any {
 		original := value.Map(coerced)
 		return func(coerced2 any) any {
@@ -117,7 +117,7 @@ func convert4(value *Pair) PairInt {
 	return PairInt{First: value.First.(int32), Second: value.Second.(int32)}
 }
 
-type Map_Type_ValueOfFnFnValueValueFnPairPairPairInt struct {
+type MapTypeValueOfFnFnValueValueFnPairPairPairInt struct {
 	Map   func(func(any) any) func(*Pair) *Pair
 	Type  string
 	Value PairInt
@@ -127,7 +127,7 @@ func convert5(value PairInt) *Pair {
 	return &Pair{First: value.First, Second: value.Second, Origin: value}
 }
 
-func convert6(value Map_Type_ValueOfFnFnValueValueFnPairPairPairInt) shared.VariantFRep {
+func convert6(value MapTypeValueOfFnFnValueValueFnPairPairPairInt) shared.VariantFRep {
 	return shared.VariantFRep{Map: func(coerced func(any) any) func(any) any {
 		original := value.Map(coerced)
 		return func(coerced2 any) any {
@@ -140,7 +140,7 @@ var main_ = initializeMain_()
 
 func initializeMain_() []string {
 	defer exception.ReportUncaught()
-	a := convert2(Map_Type_ValueOfFnFnValueValueFnBoxBoxBoxInt{Type: "first", Value: BoxInt{Box: 41}, Map: func(function func(any) any) func(*Box) *Box {
+	a := convert2(MapTypeValueOfFnFnValueValueFnBoxBoxBoxInt{Type: "first", Value: BoxInt{Box: 41}, Map: func(function func(any) any) func(*Box) *Box {
 		return func(value *Box) *Box {
 			return map_(function, value)
 		}
@@ -156,7 +156,7 @@ func initializeMain_() []string {
 		scrutinee := convert4(vValue.(*Pair))
 		result = "pair " + prim.ShowInt(scrutinee.First) + " " + prim.ShowInt(scrutinee.Second)
 	}
-	v := convert6(Map_Type_ValueOfFnFnValueValueFnPairPairPairInt{Type: "second", Value: PairInt{First: 1, Second: 2}, Map: func(function func(any) any) func(*Pair) *Pair {
+	v := convert6(MapTypeValueOfFnFnValueValueFnPairPairPairInt{Type: "second", Value: PairInt{First: 1, Second: 2}, Map: func(function func(any) any) func(*Pair) *Pair {
 		return func(value *Pair) *Pair {
 			return map_2(function, value)
 		}

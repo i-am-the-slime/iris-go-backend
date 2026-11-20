@@ -16,7 +16,7 @@ use super::{Emitter, identifier_expression};
 use crate::error::GoResult;
 use crate::mono::{Expression, ExpressionKind, Local};
 use crate::monotype::{DataType, MonotypeId};
-use crate::naming::{RESERVED, capitalise, identifier, lower_first};
+use crate::naming::{RESERVED, identifier, lower_first};
 use crate::syntax::{GoDeclaration, GoExpression, GoStatement};
 
 impl<Q> Emitter<'_, '_, '_, Q>
@@ -100,7 +100,7 @@ where
             .monotypes
             .constructors(&mut self.context, data)
             .map_err(|failure| failure.at(&layout.name))?;
-        let constructor_name = capitalise(&identifier(&constructors[constructor].name));
+        let constructor_name = crate::naming::go_field(&constructors[constructor].name);
         let qualified = format!("{constructor_name}{}", layout.name);
         let name = self.global_name(Spelling::Ladder(vec![constructor_name, qualified]));
         self.homes.insert(name.clone(), data.file_id);

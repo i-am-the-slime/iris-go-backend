@@ -47,7 +47,7 @@ func convert2(value *Count) CountInt {
 	}}
 }
 
-type Map_Type_ValueOfFnFnValueValueFnSaySaySayInt struct {
+type MapTypeValueOfFnFnValueValueFnSaySaySayInt struct {
 	Map   func(func(any) any) func(*Say) *Say
 	Type  string
 	Value SayInt
@@ -57,7 +57,7 @@ func convert3(value SayInt) *Say {
 	return &Say{First: value.First, Second: value.Second, Origin: value}
 }
 
-func convert4(value Map_Type_ValueOfFnFnValueValueFnSaySaySayInt) shared.VariantFRep {
+func convert4(value MapTypeValueOfFnFnValueValueFnSaySaySayInt) shared.VariantFRep {
 	return shared.VariantFRep{Map: func(coerced func(any) any) func(any) any {
 		original := value.Map(coerced)
 		return func(coerced2 any) any {
@@ -66,7 +66,7 @@ func convert4(value Map_Type_ValueOfFnFnValueValueFnSaySaySayInt) shared.Variant
 	}, Type: value.Type, Value: convert3(value.Value)}
 }
 
-type Map_Type_ValueOfFnFnValueValueFnCountCountCountInt struct {
+type MapTypeValueOfFnFnValueValueFnCountCountCountInt struct {
 	Map   func(func(any) any) func(*Count) *Count
 	Type  string
 	Value CountInt
@@ -78,7 +78,7 @@ func convert5(value CountInt) *Count {
 	}, Origin: value}
 }
 
-func convert6(value Map_Type_ValueOfFnFnValueValueFnCountCountCountInt) shared.VariantFRep {
+func convert6(value MapTypeValueOfFnFnValueValueFnCountCountCountInt) shared.VariantFRep {
 	return shared.VariantFRep{Map: func(coerced func(any) any) func(any) any {
 		original := value.Map(coerced)
 		return func(coerced2 any) any {
@@ -114,7 +114,7 @@ var say = initializeSay()
 
 func initializeSay() shared.VariantFRep {
 	defer exception.ReportUncaught()
-	return convert4(Map_Type_ValueOfFnFnValueValueFnSaySaySayInt{Type: "say", Value: SayInt{First: "hello", Second: 4}, Map: func(f func(any) any) func(*Say) *Say {
+	return convert4(MapTypeValueOfFnFnValueValueFnSaySaySayInt{Type: "say", Value: SayInt{First: "hello", Second: 4}, Map: func(f func(any) any) func(*Say) *Say {
 		return func(say *Say) *Say {
 			return map_(f, say)
 		}
@@ -125,7 +125,7 @@ var count = initializeCount()
 
 func initializeCount() shared.VariantFRep {
 	defer exception.ReportUncaught()
-	return convert6(Map_Type_ValueOfFnFnValueValueFnCountCountCountInt{Type: "count", Value: CountInt{Count: func(value int32) int32 {
+	return convert6(MapTypeValueOfFnFnValueValueFnCountCountCountInt{Type: "count", Value: CountInt{Count: func(value int32) int32 {
 		return value + 1
 	}}, Map: func(f func(any) any) func(*Count) *Count {
 		return func(count *Count) *Count {

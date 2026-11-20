@@ -18,17 +18,17 @@ type Reader struct {
 }
 
 const (
-	ReaderMain_ = iota
+	ReaderMain = iota
 	ReaderPlus
 )
 
-var sharedReaderMain_ = &Reader{Tag: ReaderMain_}
+var sharedReaderMain = &Reader{Tag: ReaderMain}
 
 var main_ = initializeMain_()
 
 func initializeMain_() int32 {
 	defer exception.ReportUncaught()
-	return runReader(2, addAll(4, sharedReaderMain_))
+	return runReader(2, addAll(4, sharedReaderMain))
 }
 
 func addAll(n int32, reader *Reader) *Reader {
@@ -56,7 +56,7 @@ func plus(n int32, reader *Reader, environment int32) int32 {
 
 func runReader(environment int32, reader *Reader) int32 {
 	switch reader.Tag {
-	case ReaderMain_:
+	case ReaderMain:
 		return environment
 	default: // ReaderPlus
 		return plus(reader.N, reader.Reader, environment)

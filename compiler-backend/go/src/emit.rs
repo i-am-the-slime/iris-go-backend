@@ -64,7 +64,7 @@ use crate::mono::{
     Literal, Local, LocalId, Pattern, PatternKind, Program, RecordUpdate,
 };
 use crate::monotype::{DataType, Monotype, MonotypeId, Monotypes};
-use crate::naming::{capitalise, exported, go_safe, identifier, is_vague, lower_first, numbered};
+use crate::naming::{capitalise, go_safe, identifier, is_vague, lower_first, numbered};
 use crate::graph::{on_cycles, strongly_connected};
 use crate::simplify::{reference_graph, visit};
 use crate::walk::{self, Walk};
@@ -662,14 +662,10 @@ impl DataLayout {
     }
 }
 
-/// A record field's Go name: exported, since the record's type may live in
-/// another package than the code that builds or reads it.
+/// A field's Go name, for a struct whose fields are known not to collide: exported, since
+/// the struct may live in another package than the code that builds or reads it.
 fn field_name(label: &str) -> String {
-    let sanitized: String = label
-        .chars()
-        .map(|character| if character.is_alphanumeric() { character } else { '_' })
-        .collect();
-    exported(&sanitized)
+    crate::naming::go_field(label)
 }
 
 /// Package names generated code may import.

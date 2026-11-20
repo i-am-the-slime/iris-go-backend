@@ -1,0 +1,137 @@
+---
+source: tests-integration/src/fixtures.rs
+---
+// Data/Show/show.go
+package show
+
+import "github.com/i-am-the-slime/iris-go/prim"
+
+func Show(i int32) string {
+	return prim.ShowInt(i)
+}
+
+// Data/Variant/variant.go
+package variant
+
+type AX_respondNowALater struct {
+	Later  string
+	Field0 int32
+	Tag    uint8
+}
+
+const (
+	AX_respondNowALaterA = iota
+	AX_respondNowALaterX_respondNow
+	AX_respondNowALaterA2
+	AX_respondNowALaterLater
+)
+
+type X_respondNowALater struct {
+	Later  string
+	Field0 int32
+	Tag    uint8
+}
+
+const (
+	X_respondNowALaterX_respondNow = iota
+	X_respondNowALaterA
+	X_respondNowALaterLater
+)
+
+type X_respondNowLater struct {
+	Later        string
+	X_respondNow int32
+	Tag          uint8
+}
+
+const (
+	X_respondNowLaterX_respondNow = iota
+	X_respondNowLaterLater
+)
+
+// Labels/labels.go
+package labels
+
+import (
+	"fixture/Data/Variant"
+	"github.com/i-am-the-slime/iris-go/prim"
+)
+
+func Describe(variant2 variant.AX_respondNowALater) string {
+	switch variant2.Tag {
+	case variant.AX_respondNowALaterA:
+		return "A " + prim.ShowInt(variant2.Field0)
+	case variant.AX_respondNowALaterX_respondNow:
+		return DescribeX2(variant.X_respondNowALater{Tag: variant.X_respondNowALaterX_respondNow, Field0: variant2.Field0})
+	case variant.AX_respondNowALaterA2:
+		return DescribeX2(variant.X_respondNowALater{Tag: variant.X_respondNowALaterA, Field0: variant2.Field0})
+	default: // variant.AX_respondNowALaterLater
+		return DescribeX2(variant.X_respondNowALater{Tag: variant.X_respondNowALaterLater, Later: variant2.Later})
+	}
+}
+
+func DescribeX(variant2 variant.X_respondNowLater) string {
+	switch variant2.Tag {
+	case variant.X_respondNowLaterX_respondNow:
+		return "now " + prim.ShowInt(variant2.X_respondNow)
+	default: // variant.X_respondNowLaterLater
+		return "later " + variant2.Later
+	}
+}
+
+func DescribeX2(variant2 variant.X_respondNowALater) string {
+	switch variant2.Tag {
+	case variant.X_respondNowALaterX_respondNow:
+		return DescribeX(variant.X_respondNowLater{Tag: variant.X_respondNowLaterX_respondNow, X_respondNow: variant2.Field0})
+	case variant.X_respondNowALaterA:
+		return "a " + prim.ShowInt(variant2.Field0)
+	default: // variant.X_respondNowALaterLater
+		return DescribeX(variant.X_respondNowLater{Tag: variant.X_respondNowLaterLater, Later: variant2.Later})
+	}
+}
+
+// main.go
+package main
+
+import (
+	"fixture/Data/Show"
+	"fixture/Data/Variant"
+	"fixture/Labels"
+	"fixture/shared"
+	"fmt"
+	"github.com/i-am-the-slime/iris-go/array"
+	"github.com/i-am-the-slime/iris-go/exception"
+	"github.com/i-am-the-slime/iris-go/prim"
+)
+
+var main_ = initializeMain_()
+
+func initializeMain_() []string {
+	defer exception.ReportUncaught()
+	updated := shared.Odd{X_respondNow: 1, X1st: 2, Content_type: "dash", Content_type2: "underscore", X2: 2, X: 3, Über: 4}
+	updated.X_respondNow = 10
+	updated.Content_type = "changed"
+	replies := []variant.AX_respondNowALater{variant.AX_respondNowALater{Tag: variant.AX_respondNowALaterX_respondNow, Field0: 7}, variant.AX_respondNowALater{Tag: variant.AX_respondNowALaterA2, Field0: 1}, variant.AX_respondNowALater{Tag: variant.AX_respondNowALaterA, Field0: 2}, variant.AX_respondNowALater{Tag: variant.AX_respondNowALaterLater, Later: "soon"}}
+	mapped := make([]string, len(replies))
+	for index, element := range replies {
+		mapped[index] = labels.Describe(element)
+	}
+	return array.Append(mapped, []string{prim.ShowArray(show.Show, []int32{updated.X_respondNow, updated.X1st, updated.X2, updated.X, updated.Über}), updated.Content_type + " " + updated.Content_type2, prim.ShowInt(int32(len(replies)))})
+}
+
+func main() {
+	fmt.Println(main_)
+}
+
+// shared/shared.go
+package shared
+
+type Odd struct {
+	Content_type  string
+	Content_type2 string
+	X1st          int32
+	X             int32
+	X_respondNow  int32
+	X2            int32
+	Über          int32
+}

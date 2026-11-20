@@ -215,8 +215,11 @@ func Report(reading Reading) string {
 ```
 
 Your PureScript builds, reads and updates a `Reading` as usual, and Go gets the struct as it is.
-Fields are the labels with their first letter capitalised. A field can hold another named record if
-that one has a struct too:
+Fields are the labels with their first letter capitalised. Characters Go doesn't allow in a name
+become `_`, and a label that doesn't start with a letter gets an `X` in front: `_respondNow` is
+`X_respondNow`, `"content-type"` is `Content_type`. If two labels end up with the same name, the
+second gets a number: `content_type` next to `"content-type"` is `Content_type2`. A field can hold
+another named record if that one has a struct too:
 `Headers []Header`.
 
 A record without a matching struct still works, but Go only sees it as an untyped `any`.
