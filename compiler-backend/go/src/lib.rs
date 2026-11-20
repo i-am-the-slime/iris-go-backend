@@ -30,7 +30,10 @@ mod types;
 mod walk;
 
 pub use error::{GoError, GoResult, UnsupportedState};
-pub use foreign::{ForeignPackages, foreign_files, foreign_source, foreign_structs};
+pub use foreign::{
+    ForeignPackages, ForeignSource, foreign_declarations, foreign_files, foreign_source,
+    foreign_structs,
+};
 pub use timing::Work;
 
 use crate::specialize::Specializer;

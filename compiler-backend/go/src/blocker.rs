@@ -48,8 +48,11 @@ impl BlockerKind {
 impl UnsupportedState {
     pub fn kind(&self) -> BlockerKind {
         match self {
-            UnsupportedState::UnknownForeign { .. } => BlockerKind::MissingForeign,
-            UnsupportedState::ForeignData { .. } => BlockerKind::ForeignData,
+            UnsupportedState::UnknownForeign { .. }
+            | UnsupportedState::MissingGoFunction { .. } => BlockerKind::MissingForeign,
+            UnsupportedState::ForeignData { .. } | UnsupportedState::MissingGoType { .. } => {
+                BlockerKind::ForeignData
+            }
             UnsupportedState::Construct { .. }
             | UnsupportedState::ReferenceEqualityAcrossTypes { .. } => BlockerKind::Construct,
             UnsupportedState::SpecializationLimit { .. } | UnsupportedState::GrowingEvidence => {

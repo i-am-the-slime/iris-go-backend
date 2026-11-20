@@ -65,6 +65,48 @@ pub fn foreign_structs(source: &str) -> Vec<String> {
     structs
 }
 
+/// The top-level names a foreign file declares: its functions, variables and constants, which
+/// implement foreign imports, and its types, which represent foreign data. It reads declarations
+/// at the start of a line, and in `var (`, `const (` and `type (` groups, as `gofmt` lays them out,
+/// so a line inside a raw string literal that looks like a declaration counts as one.
+pub fn foreign_declarations(source: &str) -> (Vec<String>, Vec<String>) {
+    let (mut values, mut types) = (vec![], vec![]);
+    let mut group: Option<&str> = None;
+    for line in source.lines() {
+        if let Some(keyword) = group {
+            if line.starts_with(')') {
+                group = None;
+            } else if let Some(name) = line.strip_prefix('\t').and_then(leading_identifier) {
+                let names = if keyword == "type" { &mut types } else { &mut values };
+                names.push(name.to_string());
+            }
+            continue;
+        }
+        let Some((keyword, rest)) = line.split_once(' ') else { continue };
+        match keyword {
+            "var" | "const" | "type" if rest.starts_with('(') => group = Some(keyword),
+            "func" | "var" | "const" => {
+                if let Some(name) = leading_identifier(rest) {
+                    values.push(name.to_string());
+                }
+            }
+            "type" => {
+                if let Some(name) = leading_identifier(rest) {
+                    types.push(name.to_string());
+                }
+            }
+            _ => {}
+        }
+    }
+    (values, types)
+}
+
+/// The identifier a declaration starts with; a method's receiver is not one.
+fn leading_identifier(text: &str) -> Option<&str> {
+    let end = text.find(|c: char| !(c.is_alphanumeric() || c == '_')).unwrap_or(text.len());
+    (end > 0).then(|| &text[..end])
+}
+
 /// Of a directory's files, those that belong to the source `<stem>.purs`, in order of name:
 /// `<stem>.go`, and `<stem>.<part>.go` unless `<stem>.<part>.purs`, a module of its own, owns it.
 /// Go test files belong to no source.
@@ -117,6 +159,14 @@ mod tests {
     fn a_file_declares_its_top_level_structs() {
         let source = "package ffi\n\ntype Output struct {\n\tStdout string\n}\n\ntype Empty struct{}\n\ntype Mode int\n\ntype Pair[A any] struct{ First A }\n\nfunc f() {\n\ttype local struct{}\n}\n";
         assert_eq!(foreign_structs(source), ["Output", "Empty"]);
+    }
+
+    #[test]
+    fn a_file_declares_its_top_level_names() {
+        let source = "package ffi\n\nfunc Start() Stopwatch { return Stopwatch{} }\n\nfunc Repeat[A any](n int32, x A) []A { return nil }\n\nfunc (s Stopwatch) method() {}\n\nvar Seed int32 = 41\n\nconst (\n\tLimit = 3\n\tother = 4\n)\n\ntype Stopwatch struct{}\n\ntype (\n\tGoError = error\n)\n";
+        let (values, types) = foreign_declarations(source);
+        assert_eq!(values, ["Start", "Repeat", "Seed", "Limit", "other"]);
+        assert_eq!(types, ["Stopwatch", "GoError"]);
     }
 
     #[test]

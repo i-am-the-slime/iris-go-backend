@@ -1223,6 +1223,87 @@ where
         ])
     }
 
+    /// A coercion the program wrote. One Go cannot make is reported at the `unsafeCoerce` that
+    /// asked for it, with both types.
+    fn coerce_at(
+        &mut self,
+        value: GoExpression,
+        from: MonotypeId,
+        to: MonotypeId,
+        out: &mut Vec<GoStatement>,
+    ) -> GoResult<GoExpression> {
+        match self.coerce(value, from, to, out) {
+            Err(GoError::Unsupported {
+                state: crate::error::UnsupportedState::Construct { construct },
+                ..
+            }) if construct == coerce::UNRELATED_TYPES => {
+                Err(self.representation_change(from, to)?)
+            }
+            result => result,
+        }
+    }
+
+    fn representation_change(&mut self, from: MonotypeId, to: MonotypeId) -> GoResult<GoError> {
+        let site = self.monotypes.coercion_sites.get(&(from, to)).cloned();
+        let location = match &site {
+            Some(site) => self.location(site.file_id, site.offset)?,
+            None => String::new(),
+        };
+        let definition = match site {
+            Some(site) => site.definition,
+            None => self.current_definition(),
+        };
+        Ok(GoError::RepresentationChange {
+            location,
+            definition,
+            from: self.purescript_type(from)?,
+            from_go: self.go_type(from)?.render(),
+            to: self.purescript_type(to)?,
+            to_go: self.go_type(to)?.render(),
+        })
+    }
+
+    /// `path:line:column: ` of the offset in the file, with lines and columns from 1.
+    fn location(&mut self, file_id: FileId, offset: Option<u32>) -> GoResult<String> {
+        let Some(offset) = offset else { return Ok(String::new()) };
+        let Some((_, path)) =
+            self.foreign_packages.source_paths.iter().find(|(id, _)| *id == file_id)
+        else {
+            return Ok(String::new());
+        };
+        let path = path.clone();
+        let content = self.context.queries.content(file_id)?;
+        // A syntax node's range starts at the whitespace in front of it.
+        let start = (offset as usize).min(content.len());
+        let start = start + (content[start..].len() - content[start..].trim_start().len());
+        let before = &content[..start];
+        let line = before.matches('\n').count() + 1;
+        let column = before.rsplit('\n').next().map_or(0, |text| text.chars().count()) + 1;
+        Ok(format!("{path}:{line}:{column}: "))
+    }
+
+    /// A type as the program spells it, for messages.
+    fn purescript_type(&mut self, monotype: MonotypeId) -> GoResult<String> {
+        Ok(match self.monotypes.get(monotype).clone() {
+            Monotype::Data(data) | Monotype::ForeignData(data) | Monotype::Recursive(data) => {
+                let module = self.context.module(data.file_id)?.name.clone();
+                format!("{module}.{}", self.context.type_name(data.file_id, data.item)?)
+            }
+            Monotype::Int => "Int".into(),
+            Monotype::Number => "Number".into(),
+            Monotype::String => "String".into(),
+            Monotype::Boolean => "Boolean".into(),
+            Monotype::Char => "Char".into(),
+            Monotype::Unit => "Unit".into(),
+            Monotype::Array(element) => format!("Array {}", self.purescript_type(element)?),
+            Monotype::Record(fields) => {
+                let labels: Vec<&str> = fields.iter().map(|field| field.label.as_str()).collect();
+                format!("{{ {} }}", labels.join(", "))
+            }
+            _ => self.go_type(monotype)?.render(),
+        })
+    }
+
     fn current_definition(&self) -> String {
         match self.current {
             Some(id) => format!("code generation of {}", self.program.function(id).name),
@@ -2781,7 +2862,7 @@ where
             }
             ExpressionKind::Coerce(value) => {
                 let coerced = self.value(value, out)?;
-                self.coerce(coerced, value.monotype, expression.monotype, out)?
+                self.coerce_at(coerced, value.monotype, expression.monotype, out)?
             }
             ExpressionKind::Let { bindings, body } => {
                 self.bindings(bindings, out)?;
@@ -3387,7 +3468,7 @@ where
             }
             Foreign::Unit => unit_value(),
             Foreign::UnsafeCoerce => {
-                self.coerce(values.remove(0), arguments[0].monotype, monotype, out)?
+                self.coerce_at(values.remove(0), arguments[0].monotype, monotype, out)?
             }
             Foreign::Identity => values.remove(0),
             _ => unreachable!("invariant violated: effectful foreign reached value conversion"),

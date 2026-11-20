@@ -24,6 +24,18 @@ pub enum GoError {
         "the Go structs {first} and {second} both represent records with the same fields; a record can have one Go struct"
     )]
     SharedRecordStruct { first: String, second: String },
+    #[error(
+        "{location}cannot specialize {definition}: unsafeCoerce from {from} (Go {from_go}) to {to} (Go {to_go}) changes representation"
+    )]
+    RepresentationChange {
+        /// `path:line:column: `, or empty when the coercion's source is unknown.
+        location: String,
+        definition: String,
+        from: String,
+        from_go: String,
+        to: String,
+        to_go: String,
+    },
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Error)]
@@ -70,6 +82,12 @@ pub enum UnsupportedState {
         "foreign import {name} has no Go implementation; write one in a Go file next to its module's source (Foo.go beside Foo.purs)"
     )]
     UnknownForeign { name: String },
+    #[error("foreign import {name} has no Go implementation in {files} (expected func {function})")]
+    MissingGoFunction { name: String, files: String, function: String },
+    #[error(
+        "foreign data type {name} has no Go representation in {files} (expected type {type_name})"
+    )]
+    MissingGoType { name: String, files: String, type_name: String },
     #[error(
         "reallyUnsafeRefEq compares values of different Go types, {left} and {right}, which share no reference"
     )]

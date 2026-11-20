@@ -6,7 +6,7 @@ mod host;
 mod sources;
 
 pub use host::is_opaque_foreign_data;
-pub use sources::{foreign_files, foreign_source, foreign_structs};
+pub use sources::{foreign_declarations, foreign_files, foreign_source, foreign_structs};
 
 use std::sync::{Mutex, OnceLock};
 
@@ -29,6 +29,21 @@ pub struct ForeignPackages {
     /// The structs those Go files declare, by module: `(module, struct)`. A struct named like a
     /// record synonym of its module represents that record, as [`sources::foreign_structs`] says.
     pub structs: Vec<(String, String)>,
+    /// What the Go files next to each module's source declare.
+    pub sources: Vec<ForeignSource>,
+    /// The paths of the project's source files, as messages that point into them show them.
+    pub source_paths: Vec<(FileId, String)>,
+}
+
+/// The Go files next to a module's source and the names they declare at their top level, which
+/// tell a foreign import its Go function is missing before Go does.
+#[derive(Debug, Clone, Default)]
+pub struct ForeignSource {
+    pub module: String,
+    /// The files, as the message about a missing name shows them.
+    pub files: Vec<String>,
+    pub values: Vec<String>,
+    pub types: Vec<String>,
 }
 
 /// The iris-go runtime's Go module.
@@ -60,6 +75,11 @@ impl ForeignPackages {
         } else {
             format!("{RUNTIME_MODULE}/ffi/{}", ForeignPackages::package_name(module_name))
         }
+    }
+
+    /// What the Go files next to the module's source declare, unless iris-go provides its package.
+    pub fn source(&self, module_name: &str) -> Option<&ForeignSource> {
+        self.sources.iter().find(|source| source.module == module_name)
     }
 
     fn copied(&self, module_name: &str) -> bool {

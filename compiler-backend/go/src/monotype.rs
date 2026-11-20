@@ -121,6 +121,14 @@ impl Failure {
     }
 }
 
+/// The definition an `unsafeCoerce` is written in, and its offset in the module's source.
+#[derive(Debug, Clone)]
+pub struct CoercionSite {
+    pub definition: String,
+    pub file_id: FileId,
+    pub offset: Option<u32>,
+}
+
 /// A data type applied to closed type arguments. Arguments stay checker types rather
 /// than monotypes because they may be higher-kinded, as in `Free f a`.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -171,6 +179,10 @@ pub struct Monotypes {
     /// The records a foreign package's struct represents, with that package's module and the
     /// struct's name.
     pub foreign_records: FxHashMap<MonotypeId, (String, String)>,
+    /// What the Go files next to each module's source declare.
+    pub foreign_sources: Vec<crate::foreign::ForeignSource>,
+    /// Where each `unsafeCoerce` between two types was written, for a coercion Go cannot make.
+    pub coercion_sites: FxHashMap<(MonotypeId, MonotypeId), CoercionSite>,
     /// How the names of specialized and lifted functions were formed, which
     /// travels with the types those names spell.
     pub function_spellings: crate::mono::FunctionSpellings,
@@ -773,6 +785,7 @@ impl Monotypes {
                     if constructors.is_empty()
                         && self.foreign_modules.iter().any(|provided| *provided == module.name) =>
                 {
+                    self.declared_go_type(&module, &name)?;
                     let arguments = erased_newtypes(context, arguments, expansions)?;
                     Monotype::ForeignData(DataType { file_id, item, arguments })
                 }
@@ -796,6 +809,9 @@ impl Monotypes {
                 _ if crate::foreign::support_data(&module.name, &name).is_some()
                     || self.foreign_modules.iter().any(|provided| *provided == module.name) =>
                 {
+                    if crate::foreign::support_data(&module.name, &name).is_none() {
+                        self.declared_go_type(&module, &name)?;
+                    }
                     let arguments = erased_newtypes(context, arguments, expansions)?;
                     Monotype::ForeignData(DataType { file_id, item, arguments })
                 }
@@ -999,6 +1015,29 @@ impl Monotypes {
 
     /// Remembers that a synonym or newtype applied to `arguments` spelled a
     /// record, which may then be named after it.
+    /// Checks that the Go files next to the module's source declare the Go type of its foreign
+    /// data type `name`: the name capitalised, with `Type` added if one of the module's values
+    /// takes that name.
+    fn declared_go_type(&self, module: &crate::context::ModuleData, name: &str) -> Converted<()> {
+        let Some(source) = self.foreign_sources.iter().find(|source| *source.module == *module.name)
+        else {
+            return Ok(());
+        };
+        let mut type_name = crate::naming::capitalise(name);
+        let taken = module.indexed.items.iter_terms().any(|(_, term)| {
+            term.name.as_deref().is_some_and(|term| crate::naming::capitalise(term) == type_name)
+        });
+        if taken {
+            type_name.push_str("Type");
+        }
+        if source.types.contains(&type_name) {
+            return Ok(());
+        }
+        let name = format!("{}.{name}", module.name);
+        let files = source.files.join(", ");
+        Err(UnsupportedState::MissingGoType { name, files, type_name }.into())
+    }
+
     fn note_record_spelling(
         &mut self,
         converted: MonotypeId,

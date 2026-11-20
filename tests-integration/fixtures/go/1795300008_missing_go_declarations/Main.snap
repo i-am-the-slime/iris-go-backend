@@ -1,0 +1,12 @@
+---
+source: tests-integration/src/fixtures.rs
+---
+cannot specialize Main.main: foreign import Clock.elapsed has no Go implementation in Clock.go (expected func Elapsed)
+cannot specialize Main.main: foreign data type Timer.Timer has no Go representation in Timer.go (expected type TimerType)
+  reached 3 times
+
+2 blockers; no Go was written
+  missing foreign implementations (1):
+    foreign import Clock.elapsed has no Go implementation in Clock.go (expected func Elapsed) (1): Main.main
+  foreign data types without a representation (1):
+    foreign data type Timer.Timer has no Go representation in Timer.go (expected type TimerType) (1): Main.main

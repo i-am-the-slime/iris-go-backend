@@ -109,6 +109,8 @@ fn vendor_foreign_packages(
 ) -> Result<go::ForeignPackages, String> {
     let mut modules = vec![];
     let mut structs = vec![];
+    let mut sources = vec![];
+    let here = std::env::current_dir().map_err(|error| error.to_string())?;
     for (file_id, file) in snapshot.files.iter() {
         if file.kind != SourceKind::Project {
             continue;
@@ -119,20 +121,37 @@ fn vendor_foreign_packages(
         }
         let module = go::module_name(&snapshot.engine, *file_id)
             .ok_or_else(|| format!("{} does not declare a module", file.path.display()))?;
+        let mut source = go::ForeignSource { module: module.clone(), ..Default::default() };
         let package = destination.join(go::ForeignPackages::package_name(&module));
         fs::create_dir_all(&package).map_err(|error| error.to_string())?;
         for foreign_file in foreign_files {
-            let source = fs::read_to_string(&foreign_file).map_err(|error| error.to_string())?;
-            for name in go::foreign_structs(&source) {
+            let text = fs::read_to_string(&foreign_file).map_err(|error| error.to_string())?;
+            for name in go::foreign_structs(&text) {
                 structs.push((module.clone(), name));
             }
+            let (values, types) = go::foreign_declarations(&text);
+            source.values.extend(values);
+            source.types.extend(types);
+            let shown = foreign_file.strip_prefix(&here).unwrap_or(&foreign_file);
+            source.files.push(shown.display().to_string());
             let Some(name) = foreign_file.file_name() else { continue };
-            fs::write(package.join(name), go::foreign_source(&module, &source))
+            fs::write(package.join(name), go::foreign_source(&module, &text))
                 .map_err(|error| error.to_string())?;
         }
         modules.push(module);
+        sources.push(source);
     }
     modules.sort();
     structs.sort();
-    Ok(go::ForeignPackages { module_path: module_path.to_string(), modules, structs })
+    let source_paths = snapshot
+        .files
+        .iter()
+        .filter(|(_, file)| file.kind == SourceKind::Project)
+        .map(|(&file_id, file)| {
+            let shown = file.path.strip_prefix(&here).unwrap_or(&file.path);
+            (file_id, shown.display().to_string())
+        })
+        .collect();
+    let module_path = module_path.to_string();
+    Ok(go::ForeignPackages { module_path, modules, structs, sources, source_paths })
 }

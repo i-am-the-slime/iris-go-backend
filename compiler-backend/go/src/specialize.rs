@@ -130,6 +130,14 @@ struct Scope {
     definition: String,
 }
 
+/// A reference to a top-level value, and the expression that makes it.
+#[derive(Clone, Copy)]
+struct Reference {
+    file_id: FileId,
+    term: TermItemId,
+    expression: tree::ExpressionId,
+}
+
 struct PolymorphicLocal {
     name: SmolStr,
     declaration: tree::LocalDeclarationId,
@@ -234,6 +242,7 @@ where
     ) -> Specializer<'q, Q> {
         let mut monotypes = Monotypes::default();
         monotypes.foreign_modules = foreign_packages.provided();
+        monotypes.foreign_sources = foreign_packages.sources.clone();
         Specializer {
             context: Context::sharing(queries, substituted),
             monotypes,
@@ -826,6 +835,35 @@ where
                 });
             }
         }
+        Ok(())
+    }
+
+    /// Notes where the `unsafeCoerce` from `from` to `to` is written, the first time it is met.
+    fn note_coercion_site(
+        &mut self,
+        scope: &Scope,
+        expression: tree::ExpressionId,
+        from: MonotypeId,
+        to: MonotypeId,
+    ) -> GoResult<()> {
+        if self.monotypes.coercion_sites.contains_key(&(from, to)) {
+            return Ok(());
+        }
+        let Some(file_id) = self.context.queries.module_file(&scope.module.name) else {
+            return Ok(());
+        };
+        let offset = match scope.module.checked.tree[expression].source {
+            Some(tree::ExpressionSource::Expression(source)) => {
+                let stabilized = self.context.queries.stabilized(file_id)?;
+                stabilized
+                    .ast_ptr(source)
+                    .map(|pointer| u32::from(pointer.syntax_node_ptr().text_range().start()))
+            }
+            _ => None,
+        };
+        let definition = scope.definition.clone();
+        let site = crate::monotype::CoercionSite { definition, file_id, offset };
+        self.monotypes.coercion_sites.insert((from, to), site);
         Ok(())
     }
 
@@ -2190,7 +2228,8 @@ where
                 )?;
                 let monotype =
                     self.instantiated_monotype(scope, current, file_id, term, &instantiations)?;
-                self.global_reference(scope, file_id, term, &instantiations, dictionaries, monotype)
+                let reference = Reference { file_id, term, expression: id };
+                self.global_reference(scope, reference, &instantiations, dictionaries, monotype)
             }
         }
     }
@@ -2642,12 +2681,12 @@ where
     fn global_reference(
         &mut self,
         scope: &mut Scope,
-        file_id: FileId,
-        term: TermItemId,
+        reference: Reference,
         instantiations: &Substitution,
         dictionaries: Vec<Dictionary>,
         monotype: MonotypeId,
     ) -> GoResult<Expression> {
+        let Reference { file_id, term, expression } = reference;
         let module = self.context.module(file_id)?;
         let name = module.indexed.items[term].name.clone().unwrap_or_default();
         let is_constructor =
@@ -2671,6 +2710,7 @@ where
                         self.link_coerced_rank_n(scope, file_id, term, instantiations)?;
                         if let Some((from, to)) = self.monotypes.function_parts(monotype) {
                             self.note_crossings(from, to);
+                            self.note_coercion_site(scope, expression, from, to)?;
                         }
                     }
                     let foreign = self.with_callback_arities(file_id, term, foreign)?;
@@ -2685,6 +2725,17 @@ where
                         None => monotype,
                     };
                     return Ok(self.foreign(foreign, monotype));
+                }
+                if let Some(source) = self.foreign_packages.source(&module.name) {
+                    let function = crate::naming::capitalise(&name);
+                    if !source.values.contains(&function) {
+                        let state = UnsupportedState::MissingGoFunction {
+                            name: format!("{}.{name}", module.name),
+                            files: source.files.join(", "),
+                            function,
+                        };
+                        return Err(self.unsupported(scope, state));
+                    }
                 }
                 if self.foreign_packages.provides(&module.name) {
                     let foreign =

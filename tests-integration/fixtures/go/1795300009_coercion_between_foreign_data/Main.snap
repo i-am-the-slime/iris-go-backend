@@ -1,0 +1,4 @@
+---
+source: tests-integration/src/fixtures.rs
+---
+Buffers.purs:12:10: cannot specialize Buffers.freeze: unsafeCoerce from Buffers.Mutable (Go Buffers_ffi.Mutable) to Buffers.Frozen (Go Buffers_ffi.Frozen) changes representation

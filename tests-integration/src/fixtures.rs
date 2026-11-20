@@ -549,7 +549,7 @@ pub fn go(path: &Path) -> FixtureResult {
     let loaded = crate::load_fixture(folder)?;
     check_source_errors(&loaded.engine, &loaded.files, &loaded.fixture_files)?;
 
-    let foreign_packages = go_foreign_packages(&loaded)?;
+    let foreign_packages = go_foreign_packages(&loaded, folder)?;
     let compiled = go::compile_program(&loaded.engine, &file, "main", &foreign_packages, "fixture");
     let output = match compiled {
         // Each package's file follows its path, in order of path.
@@ -560,7 +560,10 @@ pub fn go(path: &Path) -> FixtureResult {
             .collect::<Vec<_>>()
             .join("\n"),
         Err(go::GoError::Blocked(blockers)) => blockers.to_string(),
-        Err(error @ go::GoError::SharedRecordStruct { .. }) => error.to_string(),
+        Err(
+            error @ (go::GoError::SharedRecordStruct { .. }
+            | go::GoError::RepresentationChange { .. }),
+        ) => error.to_string(),
         Err(error) => return Err(error.into()),
     };
     let mut settings = insta::Settings::clone_current();
@@ -574,29 +577,47 @@ pub fn go(path: &Path) -> FixtureResult {
 
 /// The modules whose foreign imports a fixture's Go files next to their sources implement, as the
 /// Go backend's CLI finds them.
-fn go_foreign_packages(loaded: &crate::LoadedFixture) -> Result<go::ForeignPackages, io::Error> {
+fn go_foreign_packages(
+    loaded: &crate::LoadedFixture,
+    folder: &Path,
+) -> Result<go::ForeignPackages, io::Error> {
+    let root = snapshot_path(folder);
     let mut modules = vec![];
     let mut structs = vec![];
+    let mut sources = vec![];
+    let mut source_paths = vec![];
     for &file_id in &loaded.fixture_files {
         let uri = loaded.files.path(file_id);
         let Some(path) = Url::parse(&uri).ok().and_then(|url| url.to_file_path().ok()) else {
             continue;
         };
+        let shown = path.strip_prefix(&root).unwrap_or(&path);
+        source_paths.push((file_id, shown.display().to_string()));
         let foreign_files = go::foreign_files(&path)?;
         if foreign_files.is_empty() {
             continue;
         }
         let Some(module) = go::module_name(&loaded.engine, file_id) else { continue };
+        let mut source = go::ForeignSource { module: module.clone(), ..Default::default() };
         for foreign_file in foreign_files {
-            for name in go::foreign_structs(&std::fs::read_to_string(foreign_file)?) {
+            let text = std::fs::read_to_string(&foreign_file)?;
+            for name in go::foreign_structs(&text) {
                 structs.push((module.clone(), name));
             }
+            let (values, types) = go::foreign_declarations(&text);
+            source.values.extend(values);
+            source.types.extend(types);
+            let shown = foreign_file.strip_prefix(&root).unwrap_or(&foreign_file);
+            source.files.push(shown.display().to_string());
         }
         modules.push(module);
+        sources.push(source);
     }
     modules.sort();
     structs.sort();
-    Ok(go::ForeignPackages { module_path: "fixture".to_string(), modules, structs })
+    sources.sort_by(|left, right| left.module.cmp(&right.module));
+    let module_path = "fixture".to_string();
+    Ok(go::ForeignPackages { module_path, modules, structs, sources, source_paths })
 }
 
 pub fn lsp(path: &Path) -> FixtureResult {
