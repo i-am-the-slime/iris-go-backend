@@ -29,7 +29,10 @@ fn drop_unreferenced(declaration: &mut GoDeclaration) -> bool {
     each_block_in_declaration(declaration, |block| {
         for statement in std::mem::take(block) {
             match statement {
-                GoStatement::Define { names, values } if names.iter().all(unread) => {
+                // `_, _ :=` defines nothing, which Go rejects.
+                GoStatement::Define { names, values }
+                    if names.iter().all(|name| name == "_" || unread(name)) =>
+                {
                     values.into_iter().for_each(|value| effects(value, block));
                     dropped = true;
                 }

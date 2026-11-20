@@ -164,12 +164,19 @@ where
         exit: &Exit,
         out: &mut Vec<GoStatement>,
     ) -> GoResult<()> {
-        for (position, alternative) in alternatives.iter().enumerate() {
-            let last = position + 1 == alternatives.len();
+        // An alternative whose tests are constant false is left out, and the last of the rest
+        // is the one the case falls to: when the final alternative never matches, as a
+        // pattern on an array the case knows to be shorter, an earlier one always does.
+        let mut viable = vec![];
+        for alternative in alternatives {
             let (tests, bindings) = self.alternative_tests(paths, &alternative.patterns)?;
-            if never_matches(&tests) {
-                continue;
+            if !never_matches(&tests) {
+                viable.push((alternative, tests, bindings));
             }
+        }
+        let count = viable.len();
+        for (position, (alternative, tests, bindings)) in viable.into_iter().enumerate() {
+            let last = position + 1 == count;
             let mut block = vec![];
             self.bind_pattern_locals(
                 &bindings,

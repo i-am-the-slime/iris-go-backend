@@ -914,6 +914,11 @@ impl Simplifier<'_> {
         mut arguments: Vec<Expression>,
         monotype: crate::monotype::MonotypeId,
     ) -> Expression {
+        if let Some(outside) =
+            choice::negative_within(foreign, &arguments, monotype, self.monotypes)
+        {
+            return outside;
+        }
         match foreign {
             Foreign::Perform { function, .. }
                 if function.package == GoPackage::Aff

@@ -269,6 +269,33 @@ impl Simplifier<'_> {
     }
 }
 
+/// The bounds test of a peek whose index turned out to be a constant below
+/// zero once its binding was substituted: false, so that the read it guards,
+/// whose constant negative index Go rejects even where it cannot run, goes.
+pub(super) fn negative_within(
+    foreign: &Foreign,
+    arguments: &[Expression],
+    monotype: MonotypeId,
+    monotypes: &mut Monotypes,
+) -> Option<Expression> {
+    let Foreign::Perform { function: GoFunction { package: GoPackage::Array, name }, .. } =
+        foreign
+    else {
+        return None;
+    };
+    let ExpressionKind::Literal(Literal::Int(index)) = arguments.first()?.kind else {
+        return None;
+    };
+    if *name != "Within" || index >= 0 {
+        return None;
+    }
+    let outside = Expression::new(
+        ExpressionKind::Literal(Literal::Boolean(false)),
+        monotypes.intern(Monotype::Boolean),
+    );
+    Some(Expression::new(ExpressionKind::EffectPure(Box::new(outside)), monotype))
+}
+
 /// Data.Array.ST's peek.
 fn is_mutable_peek(foreign: &Foreign) -> bool {
     matches!(

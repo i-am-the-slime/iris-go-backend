@@ -64,7 +64,7 @@ use crate::mono::{
     Literal, Local, LocalId, Pattern, PatternKind, Program, RecordUpdate,
 };
 use crate::monotype::{DataType, Monotype, MonotypeId, Monotypes};
-use crate::naming::{capitalise, exported, identifier, is_vague, lower_first, numbered};
+use crate::naming::{capitalise, exported, go_safe, identifier, is_vague, lower_first, numbered};
 use crate::graph::{on_cycles, strongly_connected};
 use crate::simplify::{reference_graph, visit};
 use crate::walk::{self, Walk};
@@ -1357,7 +1357,9 @@ where
         // settled. So does a package's name, which is free for a local where
         // the code does not use the package, as only the settled scope shows.
         let soft = base.ends_with(locals::NUMBERED);
-        let base = base.trim_end_matches(locals::NUMBERED).to_string();
+        // A base taken from a call, as a hoisted scrutinee's `append` from
+        // `array.Append`, must not shadow the Go builtin the code still calls.
+        let base = go_safe(base.trim_end_matches(locals::NUMBERED)).to_string();
         let (base, soft) = match base.strip_suffix('_') {
             Some(stem) if IMPORTED_PACKAGES.contains(&stem) => (stem.to_string(), true),
             _ => (base, soft),
