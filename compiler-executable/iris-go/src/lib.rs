@@ -11,7 +11,9 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::time::Instant;
 
-use iris_build::{BuildSession, BuildSessionConfig, BuildStage, ProjectConfig};
+use iris_build::{
+    BuildSession, BuildSessionConfig, BuildStage, ProjectConfig, SessionSnapshot, SourceKind,
+};
 
 pub struct GoConfig {
     pub package: Option<String>,
@@ -43,7 +45,7 @@ pub fn run(config: GoConfig) -> Result<(), String> {
 
     fs::create_dir_all(&config.destination).map_err(|error| error.to_string())?;
     let module_path = go_module_path(&config.destination)?;
-    let foreign_packages = vendor_foreign_packages(&config.destination, &module_path)?;
+    let foreign_packages = vendor_foreign_packages(&snapshot, &config.destination, &module_path)?;
     let backend_started = go::Work::so_far();
     let program = go::compile_program(
         &snapshot.engine,
@@ -98,52 +100,34 @@ fn go_module_path(destination: &Path) -> Result<String, String> {
         .ok_or_else(|| format!("{} does not declare a module", go_mod.display()))
 }
 
-const FOREIGN_DIRECTORY: &str = "go-ffi";
-
+/// Copies the Go files next to each source file into a package of the program, named after its
+/// module, as the JavaScript backend copies `Foo.js` beside `Foo.purs`.
 fn vendor_foreign_packages(
+    snapshot: &SessionSnapshot,
     destination: &Path,
     module_path: &str,
 ) -> Result<go::ForeignPackages, String> {
-    let Ok(entries) = fs::read_dir(FOREIGN_DIRECTORY) else {
-        return Ok(go::ForeignPackages::default());
-    };
     let mut modules = vec![];
-    for entry in entries {
-        let path = entry.map_err(|error| error.to_string())?.path();
-        // A module's package is one file, `go-ffi/<module>.go`, or a directory of them,
-        // `go-ffi/<module>/`.
-        let (module, files) = if path.is_dir() {
-            let Some(module) = path.file_name().and_then(|name| name.to_str()) else { continue };
-            (module.to_string(), go_files(&path)?)
-        } else if path.extension().and_then(|extension| extension.to_str()) == Some("go") {
-            let Some(module) = path.file_stem().and_then(|stem| stem.to_str()) else { continue };
-            (module.to_string(), vec![(path.clone(), "ffi.go".to_string())])
-        } else {
+    for (file_id, file) in snapshot.files.iter() {
+        if file.kind != SourceKind::Project {
             continue;
-        };
+        }
+        let foreign_files = go::foreign_files(&file.path).map_err(|error| error.to_string())?;
+        if foreign_files.is_empty() {
+            continue;
+        }
+        let module = go::module_name(&snapshot.engine, *file_id)
+            .ok_or_else(|| format!("{} does not declare a module", file.path.display()))?;
         let package = destination.join(go::ForeignPackages::package_name(&module));
         fs::create_dir_all(&package).map_err(|error| error.to_string())?;
-        for (source, name) in files {
-            fs::copy(&source, package.join(name)).map_err(|error| error.to_string())?;
+        for foreign_file in foreign_files {
+            let source = fs::read_to_string(&foreign_file).map_err(|error| error.to_string())?;
+            let Some(name) = foreign_file.file_name() else { continue };
+            fs::write(package.join(name), go::foreign_source(&module, &source))
+                .map_err(|error| error.to_string())?;
         }
         modules.push(module);
     }
-    if modules.is_empty() {
-        return Ok(go::ForeignPackages::default());
-    }
+    modules.sort();
     Ok(go::ForeignPackages { module_path: module_path.to_string(), modules })
-}
-
-/// The Go source files of a foreign package's directory, tests excepted, with their names.
-fn go_files(directory: &Path) -> Result<Vec<(PathBuf, String)>, String> {
-    let mut files = vec![];
-    for entry in fs::read_dir(directory).map_err(|error| error.to_string())? {
-        let path = entry.map_err(|error| error.to_string())?.path();
-        let Some(name) = path.file_name().and_then(|name| name.to_str()) else { continue };
-        if name.ends_with(".go") && !name.ends_with("_test.go") {
-            files.push((path.clone(), name.to_string()));
-        }
-    }
-    files.sort();
-    Ok(files)
 }

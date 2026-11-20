@@ -3,8 +3,10 @@
 //! iris-go runtime module.
 
 mod host;
+mod sources;
 
 pub use host::is_opaque_foreign_data;
+pub use sources::{foreign_files, foreign_source};
 
 use std::sync::{Mutex, OnceLock};
 
@@ -14,15 +16,35 @@ use rustc_hash::FxHashMap;
 
 use crate::monotype::MonotypeId;
 
+/// The Go packages that implement foreign imports. A module's Go files next to its source
+/// (`Foo.go` beside `Foo.purs`) are copied into a package of the program's own Go module;
+/// libraries that ship no Go files of their own take theirs from iris-go's `ffi` packages,
+/// listed in [`LIBRARY_FOREIGNS`]. Either package is named after its module: `FRP_Event_ffi`.
 #[derive(Debug, Clone, Default)]
 pub struct ForeignPackages {
+    /// The Go module the program's `go.mod` declares.
     pub module_path: String,
+    /// The modules with Go files next to their source, copied into the program.
     pub modules: Vec<String>,
 }
 
+/// The iris-go runtime's Go module.
+const RUNTIME_MODULE: &str = "github.com/i-am-the-slime/iris-go";
+
+/// The modules whose foreign imports iris-go implements in a package `ffi/<Module_ffi>`, for
+/// libraries without Go files of their own. Go files next to a module's source take precedence.
+const LIBRARY_FOREIGNS: &[&str] =
+    &["Dhall.Parser", "FRP.Event", "Test.Assert", "Test.QuickCheck.Gen"];
+
 impl ForeignPackages {
     pub fn provides(&self, module_name: &str) -> bool {
-        self.modules.iter().any(|module| module == module_name)
+        self.copied(module_name) || LIBRARY_FOREIGNS.contains(&module_name)
+    }
+
+    /// Every module with a Go foreign package, copied or from iris-go.
+    pub fn provided(&self) -> Vec<String> {
+        let library = LIBRARY_FOREIGNS.iter().map(|module| module.to_string());
+        self.modules.iter().cloned().chain(library).collect()
     }
 
     pub fn package_name(module_name: &str) -> String {
@@ -30,7 +52,15 @@ impl ForeignPackages {
     }
 
     pub fn import_path(&self, module_name: &str) -> String {
-        format!("{}/{}", self.module_path, ForeignPackages::package_name(module_name))
+        if self.copied(module_name) {
+            format!("{}/{}", self.module_path, ForeignPackages::package_name(module_name))
+        } else {
+            format!("{RUNTIME_MODULE}/ffi/{}", ForeignPackages::package_name(module_name))
+        }
+    }
+
+    fn copied(&self, module_name: &str) -> bool {
+        self.modules.iter().any(|module| module == module_name)
     }
 }
 

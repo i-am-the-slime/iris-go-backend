@@ -151,11 +151,9 @@ make_project() {
     cp -R "$WORK/repos/$name/test/." "$project/src/"
     dependencies_of "$name" >"$project/deps"
   fi
-  # Go ports of the test-only foreigns: purescript-assert and quickcheck's float32ToInt32 for
-  # every suite, plus a suite's own test/*.js foreigns from go-ffi-<suite>.
-  cp -R "$HERE/suites/go-ffi" "$project/go-ffi"
-  [ -d "$HERE/suites/go-ffi-$name" ] && cp -R "$HERE/suites/go-ffi-$name/." "$project/go-ffi/"
-  [ "$name" = repro ] && cp -R "$HERE/suites/repro/go-ffi/." "$project/go-ffi/"
+  # Go ports of a suite's own test/*.js foreigns, next to their sources as go-<suite> lays them
+  # out. purescript-assert's and quickcheck's foreigns come from iris-go's ffi packages.
+  [ -d "$HERE/suites/go-$name" ] && cp -R "$HERE/suites/go-$name/." "$project/src/"
   # A suite's patch-<suite>.sh rewrites test code that relies on the JS representation of a type
   # (each patch says what and why); it runs in the project's src directory.
   [ -f "$HERE/suites/patch-$name.sh" ] && (cd "$project/src" && bash "$HERE/suites/patch-$name.sh")

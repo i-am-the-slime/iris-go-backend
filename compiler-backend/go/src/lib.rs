@@ -30,7 +30,7 @@ mod types;
 mod walk;
 
 pub use error::{GoError, GoResult, UnsupportedState};
-pub use foreign::ForeignPackages;
+pub use foreign::{ForeignPackages, foreign_files, foreign_source};
 pub use timing::Work;
 
 use crate::specialize::Specializer;
@@ -102,6 +102,16 @@ pub fn compile_program(
         files.into_iter().map(|file| (file.path, file.file.render())).collect();
     files.sort();
     Ok(GoProgram { files, functions })
+}
+
+/// The module name a source file declares.
+pub fn module_name(
+    queries: &impl checking::ExternalQueries,
+    file_id: files::FileId,
+) -> Option<String> {
+    let content = queries.content(file_id).ok()?;
+    let (parsed, _) = queries.parsed(file_id).ok()?;
+    parsed.module_name(&content).map(|name| name.to_string())
 }
 
 /// Specialization trusts the checker's types, so a module the checker rejected

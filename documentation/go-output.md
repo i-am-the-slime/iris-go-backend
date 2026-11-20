@@ -104,27 +104,114 @@ pure, so the result is the same. A function that hides an effect with `unsafePer
 its effects in an unpredictable order. If several elements throw, the program rethrows the first
 element's exception, as JavaScript's sequential map does.
 
+## Foreign imports
+
+Your `.js` files don't come along to Go. Put a `.go` file right next to them instead:
+
+```
+src/Stopwatch.purs
+src/Stopwatch.js
+src/Stopwatch.go
+```
+
+```purescript
+module Stopwatch where
+
+import Prelude (Unit)
+import Effect (Effect)
+
+foreign import data Stopwatch :: Type
+
+foreign import start :: Effect Stopwatch
+foreign import elapsed :: Stopwatch -> Effect Number
+foreign import repeat :: forall a. Int -> a -> Array a
+foreign import every :: Int -> (Int -> Effect Unit) -> Effect Unit
+```
+
+```go
+package ffi
+
+import "time"
+
+type Stopwatch struct{ started time.Time }
+
+func Start() Stopwatch { return Stopwatch{started: time.Now()} }
+
+func Elapsed(stopwatch Stopwatch) func() float64 {
+	return func() float64 { return float64(time.Since(stopwatch.started).Milliseconds()) }
+}
+
+func Repeat[A any](n int, x A) []A {
+	xs := make([]A, n)
+	for i := range xs {
+		xs[i] = x
+	}
+	return xs
+}
+
+func Every(n int, f func(int) func()) func() {
+	return func() {
+		for i := 0; i < n; i++ {
+			f(i)()
+		}
+	}
+}
+```
+
+Every foreign import is a Go function with its name capitalised. Call the package whatever you
+like, Iris renames it.
+
+| PureScript | Go |
+| --- | --- |
+| `Int` | `int` (but it behaves like a 32-bit `Int`) |
+| `Number` | `float64` |
+| `String` | `string` |
+| `Boolean` | `bool` |
+| `Unit` | `struct{}` |
+| `Array a` | `[]A` |
+| `Effect a` | `func() A`, and `Effect Unit` is just `func()` |
+| `forall a.` | a type parameter `[A any]` |
+| `foreign import data T` | any Go type you declare as `T` |
+
+- **Arguments come all at once.** `repeat :: Int -> a -> Array a` is `Repeat(n int, x A)`, not a
+  function returning a function.
+- **Effects are functions without arguments.** `elapsed` takes its stopwatch and returns the effect.
+  `start` has no arguments, so `Start` _is_ the effect.
+- **Callbacks stay curried.** `Int -> Effect Unit` is `func(int) func()`.
+- **`EffectFn` and `STFn` work the same way.** `EffectFn2 a b c` is `func(A, B) func() C`.
+- **Values with a `forall` are generic functions.** Go has no generic variables, so
+  `undefined :: forall a. UndefinedOr a` is `func Undefined[A any]() UndefinedOr[A]`.
+- **Name clashes get a `Type` suffix.** If your module has a `foreign import data Event` and a
+  value `event`, the Go type is `EventType`.
+
+A big module can spread its Go over several files: `Stopwatch.go`, `Stopwatch.laps.go` and so on.
+`_test.go` files are ignored.
+
+### Libraries
+
+Libraries work the same way. If a package you install has `.go` files next to its `.js` files, Iris
+picks them up. iris-go also ships Go versions of some popular libraries that don't have their own
+yet, such as hyrule's `FRP.Event`, and of all the core libraries. A `.go` file next to the source
+always wins.
+
+You only need Go for the foreign imports your program actually uses. If a module has no Go at all,
+Iris tells you:
+
+```
+cannot specialize Main.main: foreign import Stopwatch.elapsed has no Go implementation; write one in a Go file next to its module's source (Foo.go beside Foo.purs)
+```
+
+If the `.go` file is there but a function is missing, `go build` tells you instead:
+
+```
+./main.go:23:26: undefined: Stopwatch_ffi.Elapsed
+```
+
 ## Programs the Go backend rejects
 
 Iris type-checks the whole program and then specialises every polymorphic function to the concrete
 types that `main` uses. Programs that cannot be specialised fail to compile, with a message that
 starts `cannot specialize <definition>:`. The JavaScript backend compiles them.
-
-### Foreign imports
-
-JavaScript foreign files are not used. Each foreign module needs a Go implementation in
-`go-ffi/<Module>.go` or a `go-ffi/<Module>/` package, and each `foreign import data` needs a named
-Go type there. Without one, the compiler reports `foreign import <name> has no Go implementation` or
-`foreign data type <name> has no Go representation`. Only the foreign imports that `main` reaches
-need an implementation. The support module provides implementations for the core libraries.
-
-Go has no generic variables, so a quantified foreign value without arguments, such as
-`undefined :: forall a. UndefinedOr a`, is a generic Go function without parameters:
-`func Undefined[A any]() UndefinedOr[A]`. It has one type parameter per quantifier, in the order of
-the `forall`, and the compiler calls it with explicit type arguments, spelled as the package's
-functions take them (an `Int` is a Go `int`). When the value is an effect, such as
-`forall a. Effect (Box a)`, the instantiated function is the effect itself, and the compiler calls
-it to perform the effect.
 
 ### Polymorphic recursion
 

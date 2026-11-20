@@ -1,14 +1,14 @@
 // Parses Dhall sources with the JavaScript parser (nearley and the grammar compiled from
-// dhall/grammar.ne, as Dhall/Parser.js does) and with its Go port (go-ffi/Dhall.Parser), and
+// dhall/grammar.ne, as Dhall/Parser.js does) and with its Go port (iris-go's ffi/Dhall_Parser_ffi), and
 // compares every parse, as JSON, in order. The Go side goes through ParseImpl, so the values it
 // prints are the Foreign values the compiled PureScript receives.
 //
-//   GO_SUPPORT=/path/to/go-support bun dhall-parser/compare.ts
+//   GO_SUPPORT=/path/to/iris-go bun dhall-parser/compare.ts
 //
 // Exits non-zero when any source parses differently.
 
 import { createRequire } from "node:module";
-import { copyFileSync, mkdirSync, mkdtempSync, readdirSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { cases } from "./cases.ts";
@@ -58,10 +58,7 @@ function parseInJavaScript(source: string): unknown {
 
 function parseInGo(sources: string[]): string[] {
   const module = join(work, "go");
-  const ffi = join(module, "Dhall_Parser_ffi");
-  mkdirSync(ffi, { recursive: true });
-  const ported = join(compat, "go-ffi/Dhall.Parser");
-  for (const file of readdirSync(ported)) copyFileSync(join(ported, file), join(ffi, file));
+  mkdirSync(module, { recursive: true });
   writeFileSync(
     join(module, "go.mod"),
     `module compat.example/program\n\ngo 1.27.0\n\nrequire github.com/i-am-the-slime/iris-go v0.0.0\n\nreplace github.com/i-am-the-slime/iris-go => ${goSupport}\n`,
@@ -84,7 +81,7 @@ import (
 	"strconv"
 	"strings"
 
-	parser "compat.example/program/Dhall_Parser_ffi"
+	parser "github.com/i-am-the-slime/iris-go/ffi/Dhall_Parser_ffi"
 	"github.com/i-am-the-slime/iris-go/object"
 )
 

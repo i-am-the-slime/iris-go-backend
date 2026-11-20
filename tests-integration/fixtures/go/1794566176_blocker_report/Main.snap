@@ -1,12 +1,12 @@
 ---
 source: tests-integration/src/fixtures.rs
 ---
-cannot specialize Main.main: foreign import Native.version has no Go implementation
-cannot specialize Main.report: foreign import Native.label has no Go implementation
+cannot specialize Main.main: foreign import Native.version has no Go implementation; write one in a Go file next to its module's source (Foo.go beside Foo.purs)
+cannot specialize Main.report: foreign import Native.label has no Go implementation; write one in a Go file next to its module's source (Foo.go beside Foo.purs)
   requested by: Main.main
-cannot specialize Main.render: foreign import Native.label has no Go implementation
+cannot specialize Main.render: foreign import Native.label has no Go implementation; write one in a Go file next to its module's source (Foo.go beside Foo.purs)
   requested by: Main.report <- Main.main
-cannot specialize Main.render: foreign import Native.Graphics.draw has no Go implementation
+cannot specialize Main.render: foreign import Native.Graphics.draw has no Go implementation; write one in a Go file next to its module's source (Foo.go beside Foo.purs)
   requested by: Main.report <- Main.main
 
 4 blockers; no Go was written

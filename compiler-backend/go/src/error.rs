@@ -59,10 +59,12 @@ pub enum UnsupportedState {
     )]
     GrowingEvidence,
     #[error(
-        "foreign data type {name} has no Go representation; a Go foreign package for its module (go-ffi/<module>.go) declares it as a named type"
+        "foreign data type {name} has no Go representation; the Go file next to its module's source (Foo.go beside Foo.purs) declares it as a named type"
     )]
     ForeignData { name: String },
-    #[error("foreign import {name} has no Go implementation")]
+    #[error(
+        "foreign import {name} has no Go implementation; write one in a Go file next to its module's source (Foo.go beside Foo.purs)"
+    )]
     UnknownForeign { name: String },
     #[error(
         "reallyUnsafeRefEq compares values of different Go types, {left} and {right}, which share no reference"

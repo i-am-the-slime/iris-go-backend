@@ -233,7 +233,7 @@ where
         substituted: Substituted,
     ) -> Specializer<'q, Q> {
         let mut monotypes = Monotypes::default();
-        monotypes.foreign_modules = foreign_packages.modules.clone();
+        monotypes.foreign_modules = foreign_packages.provided();
         Specializer {
             context: Context::sharing(queries, substituted),
             monotypes,

@@ -1,12 +1,12 @@
-// Generates go-ffi/Dhall.Parser/grammar.go, the Go tables of the nearley grammar in dhall/grammar.ne
+// Generates iris-go's ffi/Dhall_Parser_ffi/grammar.go, the Go tables of the nearley grammar in dhall/grammar.ne
 // that Dhall.Parser's foreign module parses with in JavaScript.
 //
-//   bun dhall-parser/generate.ts
+//   GO_SUPPORT=/path/to/iris-go bun dhall-parser/generate.ts
 //
 // nearleyc compiles the grammar; this script loads the compiled rules and writes each one as Go:
 // its name, its symbols (a nonterminal, or a terminal as the UTF-16 code units it accepts, found by
 // testing every code unit against the JavaScript regular expression) and its postprocessor. The
-// postprocessors are JavaScript functions, ported by hand in go-ffi/Dhall.Parser/postprocess.go.
+// postprocessors are JavaScript functions, ported by hand in ffi/Dhall_Parser_ffi/postprocess.go.
 // Each one is recognised here by its source text, so that a grammar edit that changes or adds a
 // postprocessor fails the generation until its Go port is written.
 
@@ -16,7 +16,8 @@ import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 
 const compat = join(dirname(new URL(import.meta.url).pathname), "..");
-const output = join(compat, "go-ffi/Dhall.Parser/grammar.go");
+const goSupport = process.env.GO_SUPPORT ?? "/Users/mark/Developer/iris-go";
+const output = join(goSupport, "ffi/Dhall_Parser_ffi/grammar.go");
 
 type Symbol = string | { literal: string } | RegExp;
 type Rule = { name: string; symbols: Symbol[]; postprocess?: Function };

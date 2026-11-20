@@ -1,4 +1,4 @@
-package Optional_ffi
+package ffi
 
 type Optional[A any] struct {
 	value   A

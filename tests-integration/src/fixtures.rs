@@ -549,9 +549,8 @@ pub fn go(path: &Path) -> FixtureResult {
     let loaded = crate::load_fixture(folder)?;
     check_source_errors(&loaded.engine, &loaded.files, &loaded.fixture_files)?;
 
-    let foreign_packages = go_foreign_packages(folder)?;
-    let compiled =
-        go::compile_program(&loaded.engine, &file, "main", &foreign_packages, "fixture");
+    let foreign_packages = go_foreign_packages(&loaded)?;
+    let compiled = go::compile_program(&loaded.engine, &file, "main", &foreign_packages, "fixture");
     let output = match compiled {
         // Each package's file follows its path, in order of path.
         Ok(program) => program
@@ -572,20 +571,19 @@ pub fn go(path: &Path) -> FixtureResult {
     Ok(())
 }
 
-/// The modules whose foreign imports a fixture's `go-ffi/<module>.go` files implement, as the Go
-/// backend's CLI finds them in a project's `go-ffi` directory.
-fn go_foreign_packages(folder: &Path) -> Result<go::ForeignPackages, io::Error> {
-    let directory = snapshot_path(folder).join("go-ffi");
-    let Ok(entries) = std::fs::read_dir(&directory) else {
-        return Ok(go::ForeignPackages::default());
-    };
+/// The modules whose foreign imports a fixture's Go files next to their sources implement, as the
+/// Go backend's CLI finds them.
+fn go_foreign_packages(loaded: &crate::LoadedFixture) -> Result<go::ForeignPackages, io::Error> {
     let mut modules = vec![];
-    for entry in entries {
-        let path = entry?.path();
-        if path.extension().is_some_and(|extension| extension == "go")
-            && let Some(module) = path.file_stem().and_then(|stem| stem.to_str())
+    for &file_id in &loaded.fixture_files {
+        let uri = loaded.files.path(file_id);
+        let Some(path) = Url::parse(&uri).ok().and_then(|url| url.to_file_path().ok()) else {
+            continue;
+        };
+        if !go::foreign_files(&path)?.is_empty()
+            && let Some(module) = go::module_name(&loaded.engine, file_id)
         {
-            modules.push(module.to_string());
+            modules.push(module);
         }
     }
     modules.sort();

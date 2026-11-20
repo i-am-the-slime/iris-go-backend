@@ -1,4 +1,4 @@
-package Shapes_ffi
+package ffi
 
 import "github.com/i-am-the-slime/iris-go/direct"
 
