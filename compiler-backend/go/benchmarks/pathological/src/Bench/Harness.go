@@ -18,26 +18,31 @@ var started time.Time
 
 // PATHO_SIZE replaces the benchmark's size, so that scripts/robust/scaling.sh can time it at n, 2n
 // and 4n.
-func StartClock(size int) func() int {
-	return func() int {
-		if configured, err := strconv.Atoi(os.Getenv("PATHO_SIZE")); err == nil && configured > 0 {
-			size = configured
-		}
-		started = time.Now()
-		return size
+func StartClock(size int32) int32 {
+	if configured, ok := positive("PATHO_SIZE"); ok {
+		size = configured
 	}
+	started = time.Now()
+	return size
 }
 
-func StopClock(_ string) func() float64 {
-	return func() float64 { return float64(time.Since(started).Nanoseconds()) / 1e6 }
+func StopClock(_ string) float64 { return float64(time.Since(started).Nanoseconds()) / 1e6 }
+
+func RepetitionCount() int32 {
+	if configured, ok := positive("PATHO_REPETITIONS"); ok {
+		return configured
+	}
+	return 5
 }
 
-func RepetitionCount() int {
-	configured, err := strconv.Atoi(os.Getenv("PATHO_REPETITIONS"))
+// positive reads a positive Int from the environment variable. A value outside Int's range is as
+// invalid as any other non-number.
+func positive(variable string) (int32, bool) {
+	configured, err := strconv.ParseInt(os.Getenv(variable), 10, 32)
 	if err != nil || configured <= 0 {
-		return 5
+		return 0, false
 	}
-	return configured
+	return int32(configured), true
 }
 
 var profile *os.File
@@ -78,6 +83,6 @@ func StopProfile() {
 	profile = nil
 }
 
-func LogTiming(best float64, first float64) func() {
-	return func() { fmt.Fprintf(os.Stderr, "BENCH %.3f %.3f\n", best, first) }
+func LogTiming(best float64, first float64) {
+	fmt.Fprintf(os.Stderr, "BENCH %.3f %.3f\n", best, first)
 }

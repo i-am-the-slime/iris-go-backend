@@ -14,7 +14,6 @@ where
 {
     pub(super) fn convention_type(&mut self, monotype: MonotypeId) -> GoResult<Option<GoType>> {
         Ok(match self.monotypes.get(monotype).clone() {
-            Monotype::Int => Some(GoType::Int),
             Monotype::Array(element) => {
                 self.convention_type(element)?.map(|element| GoType::Slice(Box::new(element)))
             }
@@ -29,24 +28,20 @@ where
             Monotype::Effect(result) => self.convention_type(result)?.map(|result| {
                 GoType::Function { parameters: vec![], result: Some(Box::new(result)) }
             }),
+            // A function crosses curried, one argument at a time, and a function whose result is
+            // an effect performs it when called: `a -> Effect b` is `func(A) B`, as Iris's own
+            // functions are.
             Monotype::Function(argument, result) => {
-                let effect = self.monotypes.effect_result(result);
-                let differs = effect.is_some()
-                    || self.arity(monotype) > 1
+                let returned = self.monotypes.effect_result(result).unwrap_or(result);
+                let differs = self.arity(monotype) > 1
                     || self.convention_type(argument)?.is_some()
-                    || self.convention_type(result)?.is_some();
+                    || self.convention_type(returned)?.is_some();
                 if !differs {
                     return Ok(None);
                 }
                 let argument = self.convention_or_native(argument)?;
-                let result = match effect {
-                    Some(inner) => {
-                        let inner = self.convention_result(inner)?;
-                        Some(GoType::Function { parameters: vec![], result: inner.map(Box::new) })
-                    }
-                    None => self.convention_result(result)?,
-                };
-                Some(GoType::Function { parameters: vec![argument], result: result.map(Box::new) })
+                let returned = self.convention_result(returned)?;
+                Some(GoType::Function { parameters: vec![argument], result: returned.map(Box::new) })
             }
             _ => None,
         })
@@ -103,7 +98,6 @@ where
             }
         };
         Ok(match self.monotypes.get(monotype).clone() {
-            Monotype::Int => GoExpression::Conversion { type_: target, value: Box::new(value) },
             Monotype::Array(element) => {
                 let GoType::Slice(source_element) = source else { unreachable!() };
                 let GoType::Slice(target_element) = target else { unreachable!() };
@@ -224,33 +218,10 @@ where
         }
         supplied.push(argument);
         let applied = self.apply_arguments(callable, supplied, &mut body)?;
-        match (self.monotypes.get(result).clone(), direction) {
-            (Monotype::Effect(inner), Direction::ToConvention) => {
-                let thunk_type = target_result.clone().map(|type_| *type_);
-                let Some(GoType::Function { result: inner_type, .. }) = thunk_type else {
-                    unreachable!()
-                };
-                let mut thunk_body = vec![];
-                let performed =
-                    self.convert_convention(applied, inner, direction, &mut thunk_body)?;
-                thunk_body.push(returning(performed, inner_type.is_some()));
-                let thunk = GoExpression::Function {
-                    parameters: vec![],
-                    result: inner_type.clone().map(|type_| *type_),
-                    body: thunk_body,
-                };
-                body.push(GoStatement::Return(Some(thunk)));
-            }
-            (Monotype::Effect(inner), Direction::FromConvention) => {
-                let performed =
-                    self.convert_convention(call(applied, vec![]), inner, direction, &mut body)?;
-                body.push(returning(performed, target_result.is_some()));
-            }
-            _ => {
-                let converted = self.convert_convention(applied, result, direction, &mut body)?;
-                body.push(returning(converted, target_result.is_some()));
-            }
-        }
+        // Applying either side performs an effectful result, so only the value converts.
+        let returned = self.monotypes.effect_result(result).unwrap_or(result);
+        let converted = self.convert_convention(applied, returned, direction, &mut body)?;
+        body.push(returning(converted, target_result.is_some()));
         Ok(GoExpression::Function {
             parameters: vec![(parameter, parameters[0].clone())],
             result: target_result.map(|type_| *type_),

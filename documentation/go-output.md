@@ -137,11 +137,11 @@ type Stopwatch struct{ started time.Time }
 
 func Start() Stopwatch { return Stopwatch{started: time.Now()} }
 
-func Elapsed(stopwatch Stopwatch) func() float64 {
-	return func() float64 { return float64(time.Since(stopwatch.started).Milliseconds()) }
+func Elapsed(stopwatch Stopwatch) float64 {
+	return float64(time.Since(stopwatch.started).Milliseconds())
 }
 
-func Repeat[A any](n int, x A) []A {
+func Repeat[A any](n int32, x A) []A {
 	xs := make([]A, n)
 	for i := range xs {
 		xs[i] = x
@@ -149,11 +149,9 @@ func Repeat[A any](n int, x A) []A {
 	return xs
 }
 
-func Every(n int, f func(int) func()) func() {
-	return func() {
-		for i := 0; i < n; i++ {
-			f(i)()
-		}
+func Every(n int32, f func(int32)) {
+	for i := int32(0); i < n; i++ {
+		f(i)
 	}
 }
 ```
@@ -163,22 +161,27 @@ like, Iris renames it.
 
 | PureScript | Go |
 | --- | --- |
-| `Int` | `int` (but it behaves like a 32-bit `Int`) |
+| `Int` | `int32` |
 | `Number` | `float64` |
 | `String` | `string` |
 | `Boolean` | `bool` |
 | `Unit` | `struct{}` |
 | `Array a` | `[]A` |
-| `Effect a` | `func() A`, and `Effect Unit` is just `func()` |
+| `Effect a` | `func() A`, and `Effect Unit` is just `func()` (only where an effect is passed around) |
 | `forall a.` | a type parameter `[A any]` |
 | `foreign import data T` | any Go type you declare as `T` |
 
-- **Arguments come all at once.** `repeat :: Int -> a -> Array a` is `Repeat(n int, x A)`, not a
+- **Arguments come all at once.** `repeat :: Int -> a -> Array a` is `Repeat(n int32, x A)`, not a
   function returning a function.
-- **Effects are functions without arguments.** `elapsed` takes its stopwatch and returns the effect.
+- **Calling a function performs its effect.** `elapsed :: Stopwatch -> Effect Number` is
+  `Elapsed(stopwatch Stopwatch) float64`: no thunk to return, Iris calls it when the effect runs.
   `start` has no arguments, so `Start` _is_ the effect.
-- **Callbacks stay curried.** `Int -> Effect Unit` is `func(int) func()`.
-- **`EffectFn` and `STFn` work the same way.** `EffectFn2 a b c` is `func(A, B) func() C`.
+- **Callbacks stay curried and perform when called.** `Int -> Effect Unit` is `func(int32)`, and
+  `a -> b -> Effect c` is `func(A) func(B) C`.
+- **`EffectFn` and `STFn` work the same way.** `EffectFn2 a b c` is `func(A, B) C`.
+- **An `Int` is an `int32`, everywhere.** Where a Go API wants an `int`, convert it yourself:
+  `os.Exit(int(code))`. Where a Go value might not fit 32 bits, decide what to do about it rather
+  than letting `int32(…)` cut it off: a file size is better a `Number`.
 - **Values with a `forall` are generic functions.** Go has no generic variables, so
   `undefined :: forall a. UndefinedOr a` is `func Undefined[A any]() UndefinedOr[A]`.
 - **Name clashes get a `Type` suffix.** If your module has a `foreign import data Event` and a
@@ -202,8 +205,8 @@ type Reading struct {
 	Rainy   bool
 }
 
-func Current(city string) func() Reading {
-	return func() Reading { return Reading{City: city, Celsius: 11.5, Rainy: true} }
+func Current(city string) Reading {
+	return Reading{City: city, Celsius: 11.5, Rainy: true}
 }
 
 func Report(reading Reading) string {
@@ -212,8 +215,8 @@ func Report(reading Reading) string {
 ```
 
 Your PureScript builds, reads and updates a `Reading` as usual, and Go gets the struct as it is.
-Fields are the labels with their first letter capitalised. Inside a struct, an `Int` is an
-`int32`. A field can hold another named record if that one has a struct too:
+Fields are the labels with their first letter capitalised. A field can hold another named record if
+that one has a struct too:
 `Headers []Header`.
 
 A record without a matching struct still works, but Go only sees it as an untyped `any`.
@@ -238,7 +241,7 @@ cannot specialize Main.main: foreign import Stopwatch.elapsed has no Go implemen
 If the `.go` file is there but a function is missing, `go build` tells you instead:
 
 ```
-./main.go:23:26: undefined: Stopwatch_ffi.Elapsed
+./main.go:18:26: undefined: Stopwatch_ffi.Elapsed
 ```
 
 ## Programs the Go backend rejects

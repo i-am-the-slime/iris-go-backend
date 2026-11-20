@@ -27,9 +27,9 @@ func TestNumberShow(showNumber func(float64) string, _ struct{}) struct{} {
 	return struct{}{}
 }
 
-func MakeArray(length int) []int {
-	array := make([]int, 0, max(length, 0))
-	for i := 0; i < length; i++ {
+func MakeArray(length int32) []int32 {
+	array := make([]int32, 0, max(length, 0))
+	for i := int32(0); i < length; i++ {
 		array = append(array, i)
 	}
 	return array

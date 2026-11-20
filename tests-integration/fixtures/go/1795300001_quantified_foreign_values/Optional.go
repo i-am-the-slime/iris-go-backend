@@ -8,7 +8,7 @@ type Optional[A any] struct {
 type Pair[A any, B any] struct {
 	first  A
 	second B
-	size   int
+	size   int32
 }
 
 func Absent[A any]() Optional[A] { return Optional[A]{} }
@@ -30,6 +30,6 @@ func SwappedPair[A any, B any](a A, b B) Pair[B, A] {
 
 func EmptySwappedPair[A any, B any]() Pair[B, A] { return Pair[B, A]{} }
 
-func PairSize[A any, B any](pair Pair[A, B]) int { return pair.size }
+func PairSize[A any, B any](pair Pair[A, B]) int32 { return pair.size }
 
 func NewCounter[A any]() Optional[A] { return Optional[A]{} }

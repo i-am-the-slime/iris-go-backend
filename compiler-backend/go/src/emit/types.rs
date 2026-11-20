@@ -316,7 +316,7 @@ where
                 .monotype(&mut self.context, argument)
                 .map_err(Failure::in_code_generation)?;
             // A project's foreign package sees its type arguments in the
-            // convention its functions take them in (an Int is a Go int).
+            // convention its functions take them in.
             let argument = match support {
                 Some(_) => self.go_type(monotype)?,
                 None => self.convention_or_native(monotype)?,

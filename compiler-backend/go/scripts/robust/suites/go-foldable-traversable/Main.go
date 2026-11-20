@@ -3,17 +3,17 @@ package Test_Main_ffi
 
 type NEArray[A any] struct{ elements []A }
 
-func ArrayFrom1UpTo(n int) []int {
-	result := []int{}
-	for i := 1; i <= n; i++ {
+func ArrayFrom1UpTo(n int32) []int32 {
+	result := []int32{}
+	for i := int32(1); i <= n; i++ {
 		result = append(result, i)
 	}
 	return result
 }
 
-func ArrayReplicate[A any](n int, x A) []A {
+func ArrayReplicate[A any](n int32, x A) []A {
 	result := []A{}
-	for i := 1; i <= n; i++ {
+	for i := int32(1); i <= n; i++ {
 		result = append(result, x)
 	}
 	return result

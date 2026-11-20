@@ -21,7 +21,7 @@ import (
 )
 
 func main_() []string {
-	optional := Optional_ffi.NewCounter[int]()
+	optional := Optional_ffi.NewCounter[int32]()
 	optional2 := Optional_ffi.NewCounter[bool]()
 	withDefault := Optional_ffi.WithDefault(true, optional2)
 	var result string
@@ -30,7 +30,7 @@ func main_() []string {
 	} else {
 		result = "false"
 	}
-	return []string{prim.ShowArray(show.Show, []int32{int32(Optional_ffi.WithDefault(int(1), Optional_ffi.Absent[int]())), int32(Optional_ffi.WithDefault(int(1), Optional_ffi.Present(int(2))))}), Optional_ffi.WithDefault("fallback", Optional_ffi.Absent[string]()), prim.ShowInt(int32(len(Optional_ffi.EmptyArray[string]()))), prim.ShowArray(show.Show, []int32{int32(Optional_ffi.PairSize(Optional_ffi.SwappedPair(int(1), "one"))), int32(Optional_ffi.PairSize(Optional_ffi.EmptySwappedPair[int, string]()))}), prim.ShowInt(int32(Optional_ffi.WithDefault(int(3), optional))), result}
+	return []string{prim.ShowArray(show.Show, []int32{Optional_ffi.WithDefault(int32(1), Optional_ffi.Absent[int32]()), Optional_ffi.WithDefault(int32(1), Optional_ffi.Present(int32(2)))}), Optional_ffi.WithDefault("fallback", Optional_ffi.Absent[string]()), prim.ShowInt(int32(len(Optional_ffi.EmptyArray[string]()))), prim.ShowArray(show.Show, []int32{Optional_ffi.PairSize(Optional_ffi.SwappedPair(int32(1), "one")), Optional_ffi.PairSize(Optional_ffi.EmptySwappedPair[int32, string]())}), prim.ShowInt(Optional_ffi.WithDefault(int32(3), optional)), result}
 }
 
 func main() {

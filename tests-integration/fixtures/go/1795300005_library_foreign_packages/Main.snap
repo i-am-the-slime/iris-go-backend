@@ -12,5 +12,5 @@ import (
 
 func main() {
 	defer exception.ReportUncaught()
-	Test_Assert_ffi.AssertImpl("reads the bits of a float", int32(Test_QuickCheck_Gen_ffi.Float32ToInt32(1.5)) == 1069547520)()
+	Test_Assert_ffi.AssertImpl("reads the bits of a float", Test_QuickCheck_Gen_ffi.Float32ToInt32(1.5) == 1069547520)
 }

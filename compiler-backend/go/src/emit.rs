@@ -1669,9 +1669,12 @@ where
                 let associated = call(self.go_function(map), vec![associated, elements]);
                 return self.deliver(associated, result, sink, out);
             }
-            Foreign::Project { .. } => {
-                let thunk = self.project_call(foreign, arguments, out)?;
-                let performed = self.out_of_convention(call(thunk, vec![]), result, out)?;
+            // A foreign with arguments performs its effect when called; an effect value
+            // without arguments is a function that performs it.
+            Foreign::Project { arity, .. } => {
+                let called = self.project_call(foreign, arguments, out)?;
+                let called = if arity == 0 { call(called, vec![]) } else { called };
+                let performed = self.out_of_convention(called, result, out)?;
                 return self.deliver(performed, result, sink, out);
             }
             Foreign::Perform { function, .. }
@@ -1795,16 +1798,10 @@ where
         arguments: &[Expression],
         out: &mut Vec<GoStatement>,
     ) -> GoResult<GoExpression> {
-        let Foreign::Project { file_id, term, effectful, type_arguments, .. } = foreign else {
+        let Foreign::Project { effectful, type_arguments, .. } = foreign else {
             unreachable!("invariant violated: a project call of another foreign");
         };
-        let module_name = self.context.module(file_id)?.name.clone();
-        let name = self.context.term_name(file_id, term)?;
-        self.imports.insert(self.foreign_packages.import_path(&module_name));
-        let function = GoExpression::Qualified {
-            package: ForeignPackages::package_name(&module_name),
-            name: capitalise(&name),
-        };
+        let function = self.project_function(foreign)?;
         if arguments.is_empty() {
             if type_arguments.is_empty() {
                 return Ok(function);
@@ -1815,12 +1812,85 @@ where
             let instantiated = GoExpression::Instantiation { function, arguments };
             return Ok(if effectful { instantiated } else { call(instantiated, vec![]) });
         }
+        let generic = self.project_is_generic(foreign)?;
         let mut values = vec![];
         for argument in arguments {
-            let value = self.value(argument, out)?;
-            values.push(self.in_convention(value, argument.monotype, out)?);
+            let value = self.project_argument(argument, generic, out)?;
+            values.push(value);
         }
         Ok(call(function, values))
+    }
+
+    /// A foreign's argument as its Go function takes it. Go infers a generic function's type
+    /// arguments from its arguments, and an untyped integer constant as an `int`, so an `Int`
+    /// constant passed to a generic foreign is typed: `int32(2)`.
+    fn project_argument(
+        &mut self,
+        argument: &Expression,
+        generic: bool,
+        out: &mut Vec<GoStatement>,
+    ) -> GoResult<GoExpression> {
+        let value = self.value(argument, out)?;
+        let value = match self.monotypes.get(argument.monotype) {
+            Monotype::Int if generic => self.typed_constant(value, argument.monotype)?,
+            _ => value,
+        };
+        self.in_convention(value, argument.monotype, out)
+    }
+
+    /// Whether a foreign's declared type is quantified, which makes its Go function generic.
+    fn project_is_generic(&mut self, foreign: Foreign) -> GoResult<bool> {
+        let Foreign::Project { file_id, term, .. } = foreign else {
+            unreachable!("invariant violated: the declared type of another foreign");
+        };
+        let module = self.context.module(file_id)?;
+        let Some(declared) = module.checked.lookup_term_item_type(term) else { return Ok(false) };
+        let declared = crate::monotype::expand_synonyms(&mut self.context, declared)?;
+        Ok(!self.context.types.peel_quantifiers(declared).0.is_empty())
+    }
+
+    /// The Go function of a foreign package that implements a foreign import.
+    fn project_function(&mut self, foreign: Foreign) -> GoResult<GoExpression> {
+        let Foreign::Project { file_id, term, .. } = foreign else {
+            unreachable!("invariant violated: a project function of another foreign");
+        };
+        let module_name = self.context.module(file_id)?.name.clone();
+        let name = self.context.term_name(file_id, term)?;
+        self.imports.insert(self.foreign_packages.import_path(&module_name));
+        Ok(GoExpression::Qualified {
+            package: ForeignPackages::package_name(&module_name),
+            name: capitalise(&name),
+        })
+    }
+
+    /// The effect of an effectful foreign applied to its arguments, not yet performed: a
+    /// function that calls the foreign. The arguments are evaluated now, as the effect value is
+    /// made.
+    fn project_effect(
+        &mut self,
+        foreign: Foreign,
+        arguments: &[Expression],
+        monotype: MonotypeId,
+        out: &mut Vec<GoStatement>,
+    ) -> GoResult<GoExpression> {
+        let function = self.project_function(foreign)?;
+        let generic = self.project_is_generic(foreign)?;
+        let mut bound = Vec::with_capacity(arguments.len());
+        for argument in arguments {
+            let value = self.project_argument(argument, generic, out)?;
+            let base = self.value_base(argument.monotype);
+            let name = self.temporary(&base);
+            out.push(GoStatement::Define { names: vec![name.clone()], values: vec![value] });
+            bound.push(identifier_expression(&name));
+        }
+        let inner = self
+            .monotypes
+            .effect_result(monotype)
+            .expect("invariant violated: an effectful foreign returns an effect");
+        let result = self.convention_result(inner)?;
+        let body = vec![returning(call(function, bound), result.is_some())];
+        let thunk = GoExpression::Function { parameters: vec![], result, body };
+        self.out_of_convention(thunk, monotype, out)
     }
 
     fn utility_constructor(
@@ -3269,7 +3339,10 @@ where
         if let Foreign::Unfoldr | Foreign::Unfoldr1 = *foreign {
             return self.unfoldr(*foreign, arguments, out);
         }
-        if let Foreign::Project { .. } = *foreign {
+        if let Foreign::Project { arity, effectful, .. } = *foreign {
+            if effectful && arity > 0 {
+                return self.project_effect(*foreign, arguments, monotype, out);
+            }
             let called = self.project_call(*foreign, arguments, out)?;
             return self.out_of_convention(called, monotype, out);
         }
