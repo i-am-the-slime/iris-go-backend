@@ -11,7 +11,7 @@ func Identity(x string) string {
 // Data/Semigroup/semigroup.go
 package semigroup
 
-import "github.com/i-am-the-slime/purs-backend-go/go-support/prim"
+import "github.com/i-am-the-slime/iris-go/prim"
 
 func Append_(s string, s2 string) string {
 	return prim.Append(s, s2)
@@ -25,8 +25,8 @@ import (
 	"fixture/Data/Semigroup"
 	"fixture/shared"
 	"fmt"
-	"github.com/i-am-the-slime/purs-backend-go/go-support/array"
-	"github.com/i-am-the-slime/purs-backend-go/go-support/exception"
+	"github.com/i-am-the-slime/iris-go/array"
+	"github.com/i-am-the-slime/iris-go/exception"
 )
 
 var main_ = initializeMain_()
@@ -48,7 +48,7 @@ func main() {
 // shared/shared.go
 package shared
 
-import "github.com/i-am-the-slime/purs-backend-go/go-support/prim"
+import "github.com/i-am-the-slime/iris-go/prim"
 
 func Convert(value []rune) []string {
 	converted := make([]string, len(value))

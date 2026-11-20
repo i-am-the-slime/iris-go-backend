@@ -9,7 +9,7 @@ import (
 	"unicode/utf16"
 	"unicode/utf8"
 
-	"github.com/i-am-the-slime/purs-backend-go/go-support/prim"
+	"github.com/i-am-the-slime/iris-go/prim"
 )
 
 // The grammar's postprocessors (the JavaScript between {% and %} in dhall/grammar.ne), ported one

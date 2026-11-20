@@ -4,7 +4,7 @@ source: tests-integration/src/fixtures.rs
 // main.go
 package main
 
-import "github.com/i-am-the-slime/purs-backend-go/go-support/exception"
+import "github.com/i-am-the-slime/iris-go/exception"
 
 func main() {
 	defer exception.ReportUncaught()

@@ -78,3 +78,26 @@ Always run it after writing files and before other queries, so answers reflect y
   errors have `kind` and `message`.
 - Exit status: 0 answered, 1 the query failed (the message says why, for example an unknown name),
   2 invalid arguments, 4 no watcher.
+
+## Refactorings
+
+`iris watch refactor` runs type-aware code modifications against the running watcher. The watcher
+rescans sources on disk, computes a structured edit plan over the latest snapshot, and the CLI
+verifies file digests before writing edits back to disk.
+
+| Command | Effect |
+|---|---|
+| `iris watch refactor let-signatures [Main]` | Add explicit type signatures to strictly monomorphic `let`, `where`, and multi-line `do`/`ado` `let` bindings across project modules (or one named module), auto-importing missing types as needed |
+
+- Writes modified files by default and prints a summary of signatures added, imports added or
+  updated, and skipped bindings or modules.
+- `--preview` skips writing files, prints a unified diff (`.patch`) to stdout, and prints any
+  skipped bindings or modules to stderr so stdout stays valid patch output.
+- `--json` prints the raw watcher response JSON envelope (`kind` and `value` or `message`);
+  combine `--preview --json` to inspect the machine-readable edit plan without touching disk.
+- Only editable workspace and local project files are modified; fetched dependencies (`.spago/p/`
+  and git checkouts) and `Prim` are excluded and refused when named explicitly. Modules with
+  parse, indexing, resolving, lowering, cycle, checking, foreign, or codegen errors are skipped;
+  naming an errored module explicitly exits with status 1.
+- After applying edits, run `iris watch query wait` and `iris watch query diagnostics` to confirm
+  the rebuild succeeded cleanly.

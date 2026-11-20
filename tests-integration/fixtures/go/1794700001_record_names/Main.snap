@@ -24,7 +24,7 @@ var NoMainTiming = MainTiming{Tag: TagNothing}
 // Data/Show/show.go
 package show
 
-import "github.com/i-am-the-slime/purs-backend-go/go-support/prim"
+import "github.com/i-am-the-slime/iris-go/prim"
 
 func Show(number float64) string {
 	return prim.ShowNumber(number)
@@ -38,8 +38,8 @@ import (
 	"fixture/Data/Show"
 	"fixture/shared"
 	"fmt"
-	"github.com/i-am-the-slime/purs-backend-go/go-support/exception"
-	"github.com/i-am-the-slime/purs-backend-go/go-support/prim"
+	"github.com/i-am-the-slime/iris-go/exception"
+	"github.com/i-am-the-slime/iris-go/prim"
 )
 
 var main_ = initializeMain_()

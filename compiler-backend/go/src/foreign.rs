@@ -1,6 +1,6 @@
 //! Go implementations of foreign imports and of library functions whose PureScript
 //! definitions have a direct Go equivalent. The runtime functions live in the
-//! purs-backend-go `go-support` module.
+//! iris-go runtime module.
 
 mod host;
 
@@ -330,31 +330,31 @@ pub enum GoPackage {
 impl GoPackage {
     pub fn path(self) -> &'static str {
         match self {
-            GoPackage::Prim => "github.com/i-am-the-slime/purs-backend-go/go-support/prim",
-            GoPackage::Array => "github.com/i-am-the-slime/purs-backend-go/go-support/array",
-            GoPackage::Direct => "github.com/i-am-the-slime/purs-backend-go/go-support/direct",
-            GoPackage::Object => "github.com/i-am-the-slime/purs-backend-go/go-support/object",
-            GoPackage::Nullable => "github.com/i-am-the-slime/purs-backend-go/go-support/nullable",
-            GoPackage::Aff => "github.com/i-am-the-slime/purs-backend-go/go-support/aff",
-            GoPackage::Promise => "github.com/i-am-the-slime/purs-backend-go/go-support/promise",
+            GoPackage::Prim => "github.com/i-am-the-slime/iris-go/prim",
+            GoPackage::Array => "github.com/i-am-the-slime/iris-go/array",
+            GoPackage::Direct => "github.com/i-am-the-slime/iris-go/direct",
+            GoPackage::Object => "github.com/i-am-the-slime/iris-go/object",
+            GoPackage::Nullable => "github.com/i-am-the-slime/iris-go/nullable",
+            GoPackage::Aff => "github.com/i-am-the-slime/iris-go/aff",
+            GoPackage::Promise => "github.com/i-am-the-slime/iris-go/promise",
             GoPackage::ForeignValue => {
-                "github.com/i-am-the-slime/purs-backend-go/go-support/foreignvalue"
+                "github.com/i-am-the-slime/iris-go/foreignvalue"
             }
-            GoPackage::Tauri => "github.com/i-am-the-slime/purs-backend-go/go-support/tauri",
-            GoPackage::Regex => "github.com/i-am-the-slime/purs-backend-go/go-support/regex",
-            GoPackage::Lazy => "github.com/i-am-the-slime/purs-backend-go/go-support/lazy",
-            GoPackage::Alloc => "github.com/i-am-the-slime/purs-backend-go/go-support/alloc",
-            GoPackage::Argonaut => "github.com/i-am-the-slime/purs-backend-go/go-support/argonaut",
-            GoPackage::AVar => "github.com/i-am-the-slime/purs-backend-go/go-support/avar",
-            GoPackage::YogaOm => "github.com/i-am-the-slime/purs-backend-go/go-support/yogaom",
-            GoPackage::BigInts => "github.com/i-am-the-slime/purs-backend-go/go-support/bigints",
-            GoPackage::DateTime => "github.com/i-am-the-slime/purs-backend-go/go-support/datetime",
-            GoPackage::Now => "github.com/i-am-the-slime/purs-backend-go/go-support/now",
-            GoPackage::Spec => "github.com/i-am-the-slime/purs-backend-go/go-support/spec",
-            GoPackage::RefEq => "github.com/i-am-the-slime/purs-backend-go/go-support/refeq",
-            GoPackage::Console => "github.com/i-am-the-slime/purs-backend-go/go-support/console",
+            GoPackage::Tauri => "github.com/i-am-the-slime/iris-go/tauri",
+            GoPackage::Regex => "github.com/i-am-the-slime/iris-go/regex",
+            GoPackage::Lazy => "github.com/i-am-the-slime/iris-go/lazy",
+            GoPackage::Alloc => "github.com/i-am-the-slime/iris-go/alloc",
+            GoPackage::Argonaut => "github.com/i-am-the-slime/iris-go/argonaut",
+            GoPackage::AVar => "github.com/i-am-the-slime/iris-go/avar",
+            GoPackage::YogaOm => "github.com/i-am-the-slime/iris-go/yogaom",
+            GoPackage::BigInts => "github.com/i-am-the-slime/iris-go/bigints",
+            GoPackage::DateTime => "github.com/i-am-the-slime/iris-go/datetime",
+            GoPackage::Now => "github.com/i-am-the-slime/iris-go/now",
+            GoPackage::Spec => "github.com/i-am-the-slime/iris-go/spec",
+            GoPackage::RefEq => "github.com/i-am-the-slime/iris-go/refeq",
+            GoPackage::Console => "github.com/i-am-the-slime/iris-go/console",
             GoPackage::Exception => {
-                "github.com/i-am-the-slime/purs-backend-go/go-support/exception"
+                "github.com/i-am-the-slime/iris-go/exception"
             }
         }
     }

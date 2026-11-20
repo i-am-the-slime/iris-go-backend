@@ -1,15 +1,15 @@
 #!/usr/bin/env bash
 #
-# Compiles purs-backend-go's example projects with `iris go`, builds each with
+# Compiles iris-go's example projects with `iris go`, builds each with
 # `go build`, runs it, and compares stdout with the expectation recorded in
-# purs-backend-go's examples/examples.txt.
+# iris-go's examples/examples.txt.
 #
 #   compiler-backend/go/scripts/run-examples.sh               # every example
 #   compiler-backend/go/scripts/run-examples.sh Tco01 Array01 # selected examples
 #   KEEP=1 ...                                                # keep generated Go
 #
-# Environment: IRIS (compiler binary), EXAMPLES (purs-backend-go/examples),
-# GO_SUPPORT (purs-backend-go/go-support), JOBS (parallel workers), GOEXPERIMENT
+# Environment: IRIS (compiler binary), EXAMPLES (iris-go/examples),
+# GO_SUPPORT (an iris-go checkout), JOBS (parallel workers), GOEXPERIMENT
 # (default simd).
 
 set -uo pipefail
@@ -17,8 +17,8 @@ set -uo pipefail
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT="$(cd "$HERE/../../.." && pwd)"
 IRIS="${IRIS:-$ROOT/target/release/iris}"
-EXAMPLES="${EXAMPLES:-/Users/mark/Developer/purs-backend-go/examples}"
-GO_SUPPORT="${GO_SUPPORT:-/Users/mark/Developer/purs-backend-go/go-support}"
+EXAMPLES="${EXAMPLES:-/Users/mark/Developer/iris-go/examples}"
+GO_SUPPORT="${GO_SUPPORT:-/Users/mark/Developer/iris-go}"
 # go-support scans strings sixteen bytes at a time with SIMD, an experiment
 # in Go 1.27.0 (simd/archsimd) whose API may change in later releases.
 export GOEXPERIMENT="${GOEXPERIMENT:-simd}"
@@ -38,9 +38,9 @@ module example.com/t
 
 go 1.27.0
 
-require github.com/i-am-the-slime/purs-backend-go/go-support v0.0.0
+require github.com/i-am-the-slime/iris-go v0.0.0
 
-replace github.com/i-am-the-slime/purs-backend-go/go-support => $GO_SUPPORT
+replace github.com/i-am-the-slime/iris-go => $GO_SUPPORT
 GOMOD
   local started finished
   started=$(perl -MTime::HiRes=time -e 'printf "%.0f", time*1000')

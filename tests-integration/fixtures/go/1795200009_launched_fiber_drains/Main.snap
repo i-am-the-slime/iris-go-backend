@@ -4,7 +4,7 @@ source: tests-integration/src/fixtures.rs
 // Data/Either/either.go
 package either
 
-import "github.com/i-am-the-slime/purs-backend-go/go-support/exception"
+import "github.com/i-am-the-slime/iris-go/exception"
 
 type EitherErrorInt struct {
 	Left  exception.Error
@@ -60,9 +60,9 @@ package main
 import (
 	"fixture/Data/Either"
 	"fixture/shared"
-	"github.com/i-am-the-slime/purs-backend-go/go-support/aff"
-	"github.com/i-am-the-slime/purs-backend-go/go-support/exception"
-	"github.com/i-am-the-slime/purs-backend-go/go-support/prim"
+	"github.com/i-am-the-slime/iris-go/aff"
+	"github.com/i-am-the-slime/iris-go/exception"
+	"github.com/i-am-the-slime/iris-go/prim"
 	"os"
 )
 

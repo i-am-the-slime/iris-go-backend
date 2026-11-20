@@ -16,7 +16,7 @@ package main
 import (
 	"fixture/Data/Exists"
 	"fmt"
-	"github.com/i-am-the-slime/purs-backend-go/go-support/exception"
+	"github.com/i-am-the-slime/iris-go/exception"
 )
 
 type TreeFnIntFnIntInt struct {

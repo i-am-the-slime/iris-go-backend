@@ -62,7 +62,7 @@ export type Toolchain = {
 
 export const defaultToolchain = (): Toolchain => ({
   iris: process.env.IRIS ?? join(FUZZ_DIRECTORY, "..", "..", "..", "target", "release", "iris"),
-  goSupport: process.env.GO_SUPPORT ?? "/Users/mark/Developer/purs-backend-go/go-support",
+  goSupport: process.env.GO_SUPPORT ?? "/Users/mark/Developer/iris-go",
   timeouts: { build: 300_000, irisGo: 120_000, goBuild: 300_000, run: Number(process.env.FUZZ_RUN_TIMEOUT ?? 30_000) },
 });
 
@@ -105,9 +105,9 @@ const goModule = (goSupport: string) =>
 
 go 1.27.0
 
-require github.com/i-am-the-slime/purs-backend-go/go-support v0.0.0
+require github.com/i-am-the-slime/iris-go v0.0.0
 
-replace github.com/i-am-the-slime/purs-backend-go/go-support => ${goSupport}
+replace github.com/i-am-the-slime/iris-go => ${goSupport}
 `;
 
 const GO_ENVIRONMENT = { GOEXPERIMENT: process.env.GOEXPERIMENT ?? "simd", GOFLAGS: "-mod=mod" };

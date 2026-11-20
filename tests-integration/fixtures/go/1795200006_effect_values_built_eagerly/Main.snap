@@ -4,7 +4,7 @@ source: tests-integration/src/fixtures.rs
 // Data/Either/either.go
 package either
 
-import "github.com/i-am-the-slime/purs-backend-go/go-support/exception"
+import "github.com/i-am-the-slime/iris-go/exception"
 
 type EitherErrorInt struct {
 	Left  exception.Error
@@ -21,7 +21,7 @@ const (
 package main
 
 import (
-	"github.com/i-am-the-slime/purs-backend-go/go-support/exception"
+	"github.com/i-am-the-slime/iris-go/exception"
 	"os"
 )
 

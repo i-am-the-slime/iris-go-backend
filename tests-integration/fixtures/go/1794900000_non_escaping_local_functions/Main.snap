@@ -5,9 +5,9 @@ source: tests-integration/src/fixtures.rs
 package main
 
 import (
-	"github.com/i-am-the-slime/purs-backend-go/go-support/alloc"
-	"github.com/i-am-the-slime/purs-backend-go/go-support/direct"
-	"github.com/i-am-the-slime/purs-backend-go/go-support/exception"
+	"github.com/i-am-the-slime/iris-go/alloc"
+	"github.com/i-am-the-slime/iris-go/direct"
+	"github.com/i-am-the-slime/iris-go/exception"
 	"os"
 )
 

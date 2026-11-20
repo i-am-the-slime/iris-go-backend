@@ -30,7 +30,7 @@ JavaScript in the last bit, off by default), `adts`, `records`,
 Other flags: `--batch` (modules per `iris build`, default 8), `--statements` and `--depth`
 (program size), `--work DIR` (project directories, reused between runs), `--results DIR`,
 `--keep-ok`. Environment: `IRIS` (compiler binary, default `target/release/iris`), `GO_SUPPORT`
-(purs-backend-go/go-support checkout), `FUZZ_RUN_TIMEOUT` (milliseconds per program run).
+(iris-go checkout), `FUZZ_RUN_TIMEOUT` (milliseconds per program run).
 
 Classifications: `OK`, `DOCUMENTED DIFFERENCE` (outputs differ only by a documented platform
 difference: a JavaScript Int result outside int32 such as `Int.rem x 0`, `div bottom (-1)` or

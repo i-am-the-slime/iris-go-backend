@@ -7,9 +7,9 @@ package main
 import (
 	"fixture/shared"
 	"fmt"
-	"github.com/i-am-the-slime/purs-backend-go/go-support/alloc"
-	"github.com/i-am-the-slime/purs-backend-go/go-support/exception"
-	"github.com/i-am-the-slime/purs-backend-go/go-support/prim"
+	"github.com/i-am-the-slime/iris-go/alloc"
+	"github.com/i-am-the-slime/iris-go/exception"
+	"github.com/i-am-the-slime/iris-go/prim"
 )
 
 type LazyInt struct {

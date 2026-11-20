@@ -15,7 +15,7 @@ package main
 import (
 	"fixture/Data/Tuple"
 	"fmt"
-	"github.com/i-am-the-slime/purs-backend-go/go-support/exception"
+	"github.com/i-am-the-slime/iris-go/exception"
 )
 
 type TreeTupleStringInt struct {

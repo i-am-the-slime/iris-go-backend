@@ -25,7 +25,7 @@ set -uo pipefail
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT="$(cd "$HERE/../../../.." && pwd)"
 IRIS="${IRIS:-$ROOT/target/release/iris}"
-GO_SUPPORT="${GO_SUPPORT:-/Users/mark/Developer/purs-backend-go/go-support}"
+GO_SUPPORT="${GO_SUPPORT:-/Users/mark/Developer/iris-go}"
 export GOEXPERIMENT="${GOEXPERIMENT:-simd}"
 PURS_BACKEND_ES="${PURS_BACKEND_ES:-${MARKGRAF_GATES:-/Users/mark/Developer/markgraf-gates}/npm/node_modules/.bin/purs-backend-es}"
 WORK="${WORK:-${TMPDIR:-/tmp}/iris-ffi-fuzz}"
@@ -66,9 +66,9 @@ module ffifuzz.example/program
 
 go 1.27.0
 
-require github.com/i-am-the-slime/purs-backend-go/go-support v0.0.0
+require github.com/i-am-the-slime/iris-go v0.0.0
 
-replace github.com/i-am-the-slime/purs-backend-go/go-support => $GO_SUPPORT
+replace github.com/i-am-the-slime/iris-go => $GO_SUPPORT
 GOMOD
   if ! (cd "$PROJECT" && timeout 600 "$IRIS" go --entry "$name.main" "$out") >"$out/compile.log" 2>&1; then
     echo iris >"$out/stage"; return

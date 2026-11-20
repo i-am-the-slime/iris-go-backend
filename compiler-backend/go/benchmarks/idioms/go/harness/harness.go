@@ -8,7 +8,7 @@ import (
 	"strconv"
 	"time"
 
-	_ "github.com/i-am-the-slime/purs-backend-go/go-support/gctune"
+	_ "github.com/i-am-the-slime/iris-go/gctune"
 )
 
 func Run(size int, workload func(n int) string) {

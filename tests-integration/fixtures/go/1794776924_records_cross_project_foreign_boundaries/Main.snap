@@ -4,7 +4,7 @@ source: tests-integration/src/fixtures.rs
 // Data/Show/show.go
 package show
 
-import "github.com/i-am-the-slime/purs-backend-go/go-support/prim"
+import "github.com/i-am-the-slime/iris-go/prim"
 
 func Show(i int32) string {
 	return prim.ShowInt(i)
@@ -18,11 +18,11 @@ import (
 	"fixture/Shapes_ffi"
 	"fixture/shared"
 	"fmt"
-	"github.com/i-am-the-slime/purs-backend-go/go-support/array"
-	"github.com/i-am-the-slime/purs-backend-go/go-support/direct"
-	"github.com/i-am-the-slime/purs-backend-go/go-support/exception"
-	"github.com/i-am-the-slime/purs-backend-go/go-support/nullable"
-	"github.com/i-am-the-slime/purs-backend-go/go-support/prim"
+	"github.com/i-am-the-slime/iris-go/array"
+	"github.com/i-am-the-slime/iris-go/direct"
+	"github.com/i-am-the-slime/iris-go/exception"
+	"github.com/i-am-the-slime/iris-go/nullable"
+	"github.com/i-am-the-slime/iris-go/prim"
 )
 
 var main_ = initializeMain_()

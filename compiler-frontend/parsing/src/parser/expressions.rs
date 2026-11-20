@@ -16,42 +16,52 @@ pub fn expression(p: &mut Parser) {
 
 fn expression_1(p: &mut Parser) {
     let mut m = p.start();
-    let mut i = 0;
 
+    let left_operand = p.checkpoint();
     expression_2(p);
-    while p.at_in(names::OPERATOR) {
-        let mut n = p.start();
-        let mut o = p.start();
-        names::operator(p);
-        o.end(p, SyntaxKind::TermOperator);
-        expression_2(p);
-        n.end(p, SyntaxKind::ExpressionOperatorPair);
-        i += 1;
-    }
-
-    if i > 0 {
+    if p.at_in(names::OPERATOR) {
+        left_operand.expect(p, "Expected expression");
+        loop {
+            let mut n = p.start();
+            let mut o = p.start();
+            names::operator(p);
+            o.end(p, SyntaxKind::TermOperator);
+            let right_operand = p.checkpoint();
+            expression_2(p);
+            right_operand.expect(p, "Expected expression");
+            n.end(p, SyntaxKind::ExpressionOperatorPair);
+            if !p.at_in(names::OPERATOR) {
+                break;
+            }
+        }
         m.end(p, SyntaxKind::ExpressionOperatorChain);
     } else {
+        left_operand.cancel();
         m.cancel(p);
     }
 }
 
 fn expression_2(p: &mut Parser) {
     let mut m = p.start();
-    let mut i = 0;
 
+    let left_operand = p.checkpoint();
     expression_3(p);
-    while p.at(SyntaxKind::TICK) {
-        let mut m = p.start();
-        tick_expression(p);
-        expression_3(p);
-        m.end(p, SyntaxKind::ExpressionInfixPair);
-        i += 1;
-    }
-
-    if i > 0 {
+    if p.at(SyntaxKind::TICK) {
+        left_operand.expect(p, "Expected expression");
+        loop {
+            let mut n = p.start();
+            tick_expression(p);
+            let right_operand = p.checkpoint();
+            expression_3(p);
+            right_operand.expect(p, "Expected expression");
+            n.end(p, SyntaxKind::ExpressionInfixPair);
+            if !p.at(SyntaxKind::TICK) {
+                break;
+            }
+        }
         m.end(p, SyntaxKind::ExpressionInfixChain);
     } else {
+        left_operand.cancel();
         m.cancel(p);
     }
 }
@@ -66,22 +76,27 @@ fn tick_expression(p: &mut Parser) {
 
 fn tick_expression_1(p: &mut Parser) {
     let mut m = p.start();
-    let mut i = 0;
 
+    let left_operand = p.checkpoint();
     expression_3(p);
-    while p.at_in(names::OPERATOR) {
-        let mut n = p.start();
-        let mut o = p.start();
-        names::operator(p);
-        o.end(p, SyntaxKind::TermOperator);
-        expression_3(p);
-        n.end(p, SyntaxKind::ExpressionOperatorPair);
-        i += 1;
-    }
-
-    if i > 0 {
+    if p.at_in(names::OPERATOR) {
+        left_operand.expect(p, "Expected expression");
+        loop {
+            let mut n = p.start();
+            let mut o = p.start();
+            names::operator(p);
+            o.end(p, SyntaxKind::TermOperator);
+            let right_operand = p.checkpoint();
+            expression_3(p);
+            right_operand.expect(p, "Expected expression");
+            n.end(p, SyntaxKind::ExpressionOperatorPair);
+            if !p.at_in(names::OPERATOR) {
+                break;
+            }
+        }
         m.end(p, SyntaxKind::ExpressionOperatorChain);
     } else {
+        left_operand.cancel();
         m.cancel(p);
     }
 }
@@ -313,8 +328,10 @@ fn do_statements(p: &mut Parser) {
 fn do_statement(p: &mut Parser) {
     if p.at(SyntaxKind::LET) {
         do_statement_let(p);
+    } else if p.speculate(binders::binder_left_arrow) {
+        do_statement_bind(p);
     } else {
-        p.prefer_with_prefix(binders::binder_left_arrow, do_statement_bind, do_statement_discard);
+        do_statement_discard(p);
     }
 }
 

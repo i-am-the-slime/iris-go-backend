@@ -7,7 +7,7 @@ ROOT="$(cd "$HERE/../../../.." && pwd)"
 IRIS="${IRIS:-$ROOT/target/release/iris}"
 source "$(dirname "${BASH_SOURCE[0]}")/pinned.sh"
 LAYERED_LAYOUT="${LAYERED_LAYOUT:-$MARKGRAF/.spago/p/layered-layout/d7cf719be196556fe9e2d55b6ea1d6f4ca5a5713}"
-GO_SUPPORT="${GO_SUPPORT:-/Users/mark/Developer/purs-backend-go/go-support}"
+GO_SUPPORT="${GO_SUPPORT:-/Users/mark/Developer/iris-go}"
 # go-support scans strings sixteen bytes at a time with SIMD, an experiment
 # in Go 1.27.0 (simd/archsimd) whose API may change in later releases.
 export GOEXPERIMENT="${GOEXPERIMENT:-simd}"
@@ -26,9 +26,9 @@ module markgraf.example/compaction
 
 go 1.27.0
 
-require github.com/i-am-the-slime/purs-backend-go/go-support v0.0.0
+require github.com/i-am-the-slime/iris-go v0.0.0
 
-replace github.com/i-am-the-slime/purs-backend-go/go-support => $GO_SUPPORT
+replace github.com/i-am-the-slime/iris-go => $GO_SUPPORT
 GOMOD
 started=$(perl -MTime::HiRes=time -e 'printf "%.0f", time*1000')
 "$IRIS" go --entry CompactionDriver.main "$WORK/go"

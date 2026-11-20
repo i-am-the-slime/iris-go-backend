@@ -4,7 +4,7 @@
 // postprocess.go the Go ports of the rules' postprocessors.
 package Dhall_Parser_ffi
 
-import "github.com/i-am-the-slime/purs-backend-go/go-support/direct"
+import "github.com/i-am-the-slime/iris-go/direct"
 
 // ParseImpl implements parseImpl: every parse of the source, in nearley's order, as the values
 // its postprocessors build, or null when the source does not parse.

@@ -3,7 +3,7 @@
 // foreign does.
 package Test_Assert_ffi
 
-import "github.com/i-am-the-slime/purs-backend-go/go-support/exception"
+import "github.com/i-am-the-slime/iris-go/exception"
 
 func AssertImpl(message string, success bool) func() {
 	return func() {

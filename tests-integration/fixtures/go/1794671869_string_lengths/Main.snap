@@ -32,9 +32,9 @@ import (
 	"fixture/Data/Maybe"
 	"fixture/shared"
 	"fmt"
-	"github.com/i-am-the-slime/purs-backend-go/go-support/direct"
-	"github.com/i-am-the-slime/purs-backend-go/go-support/exception"
-	"github.com/i-am-the-slime/purs-backend-go/go-support/prim"
+	"github.com/i-am-the-slime/iris-go/direct"
+	"github.com/i-am-the-slime/iris-go/exception"
+	"github.com/i-am-the-slime/iris-go/prim"
 )
 
 var main_ = initializeMain_()

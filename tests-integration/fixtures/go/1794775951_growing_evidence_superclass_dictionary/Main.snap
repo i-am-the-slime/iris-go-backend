@@ -4,7 +4,7 @@ source: tests-integration/src/fixtures.rs
 // Data/Eq/eq.go
 package eq
 
-import "github.com/i-am-the-slime/purs-backend-go/go-support/array"
+import "github.com/i-am-the-slime/iris-go/array"
 
 func Eq(i int32, i2 int32) bool {
 	return i == i2
@@ -27,7 +27,7 @@ package ord
 
 import (
 	"fixture/Data/Ordering"
-	"github.com/i-am-the-slime/purs-backend-go/go-support/direct"
+	"github.com/i-am-the-slime/iris-go/direct"
 )
 
 func CompareInt(xs []int32, ys []int32) ordering.Ordering {
@@ -95,9 +95,9 @@ import (
 	"fixture/Data/Ordering"
 	"fixture/shared"
 	"fmt"
-	"github.com/i-am-the-slime/purs-backend-go/go-support/array"
-	"github.com/i-am-the-slime/purs-backend-go/go-support/direct"
-	"github.com/i-am-the-slime/purs-backend-go/go-support/exception"
+	"github.com/i-am-the-slime/iris-go/array"
+	"github.com/i-am-the-slime/iris-go/direct"
+	"github.com/i-am-the-slime/iris-go/exception"
 )
 
 var main_ = initializeMain_()

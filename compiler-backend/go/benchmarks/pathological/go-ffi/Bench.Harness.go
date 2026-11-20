@@ -11,7 +11,7 @@ import (
 
 	// The GC pacing every Markgraf host uses (GOGC=400 unless GOGC is set), so that the suite
 	// measures generated code in the configuration it ships in.
-	_ "github.com/i-am-the-slime/purs-backend-go/go-support/gctune"
+	_ "github.com/i-am-the-slime/iris-go/gctune"
 )
 
 var started time.Time

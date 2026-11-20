@@ -65,7 +65,7 @@ import (
 	"fixture/Data/Either"
 	"fixture/Data/Maybe"
 	"fixture/Data/Ordering"
-	"github.com/i-am-the-slime/purs-backend-go/go-support/exception"
+	"github.com/i-am-the-slime/iris-go/exception"
 	"os"
 )
 

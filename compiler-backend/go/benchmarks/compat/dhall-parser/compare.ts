@@ -14,7 +14,7 @@ import { dirname, join } from "node:path";
 import { cases } from "./cases.ts";
 
 const compat = join(dirname(new URL(import.meta.url).pathname), "..");
-const goSupport = process.env.GO_SUPPORT ?? "/Users/mark/Developer/purs-backend-go/go-support";
+const goSupport = process.env.GO_SUPPORT ?? "/Users/mark/Developer/iris-go";
 const require = createRequire(join(compat, "package.json"));
 const nearley = require("nearley");
 const work = mkdtempSync(join(tmpdir(), "dhall-parser-compare-"));
@@ -64,7 +64,7 @@ function parseInGo(sources: string[]): string[] {
   for (const file of readdirSync(ported)) copyFileSync(join(ported, file), join(ffi, file));
   writeFileSync(
     join(module, "go.mod"),
-    `module compat.example/program\n\ngo 1.27.0\n\nrequire github.com/i-am-the-slime/purs-backend-go/go-support v0.0.0\n\nreplace github.com/i-am-the-slime/purs-backend-go/go-support => ${goSupport}\n`,
+    `module compat.example/program\n\ngo 1.27.0\n\nrequire github.com/i-am-the-slime/iris-go v0.0.0\n\nreplace github.com/i-am-the-slime/iris-go => ${goSupport}\n`,
   );
   writeFileSync(join(module, "main.go"), printer);
   writeFileSync(join(work, "sources.json"), JSON.stringify(sources));
@@ -85,7 +85,7 @@ import (
 	"strings"
 
 	parser "compat.example/program/Dhall_Parser_ffi"
-	"github.com/i-am-the-slime/purs-backend-go/go-support/object"
+	"github.com/i-am-the-slime/iris-go/object"
 )
 
 func main() {

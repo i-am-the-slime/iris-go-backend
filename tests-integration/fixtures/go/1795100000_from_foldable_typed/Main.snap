@@ -6,7 +6,7 @@ package foldable
 
 import (
 	"fixture/Data/Maybe"
-	"github.com/i-am-the-slime/purs-backend-go/go-support/direct"
+	"github.com/i-am-the-slime/iris-go/direct"
 )
 
 func Foldr(f func(string) func(*direct.ConsList[string]) *direct.ConsList[string], z *direct.ConsList[string], maybe2 maybe.String) *direct.ConsList[string] {
@@ -22,8 +22,8 @@ func Foldr(f func(string) func(*direct.ConsList[string]) *direct.ConsList[string
 package types
 
 import (
-	"github.com/i-am-the-slime/purs-backend-go/go-support/alloc"
-	"github.com/i-am-the-slime/purs-backend-go/go-support/direct"
+	"github.com/i-am-the-slime/iris-go/alloc"
+	"github.com/i-am-the-slime/iris-go/direct"
 )
 
 type ListInt struct {
@@ -291,7 +291,7 @@ package set
 import (
 	list "fixture/Data/List/Types"
 	m "fixture/Data/Map/Internal"
-	"github.com/i-am-the-slime/purs-backend-go/go-support/direct"
+	"github.com/i-am-the-slime/iris-go/direct"
 )
 
 func Foldr(f func(string) func(*direct.ConsList[string]) *direct.ConsList[string], x *direct.ConsList[string]) func(*m.MapStringUnit) *direct.ConsList[string] {
@@ -339,9 +339,9 @@ import (
 	"fixture/Data/Maybe"
 	"fixture/Data/Set"
 	"fmt"
-	"github.com/i-am-the-slime/purs-backend-go/go-support/direct"
-	"github.com/i-am-the-slime/purs-backend-go/go-support/exception"
-	"github.com/i-am-the-slime/purs-backend-go/go-support/prim"
+	"github.com/i-am-the-slime/iris-go/direct"
+	"github.com/i-am-the-slime/iris-go/exception"
+	"github.com/i-am-the-slime/iris-go/prim"
 )
 
 var main_ = initializeMain_()

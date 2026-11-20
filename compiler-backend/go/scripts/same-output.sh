@@ -8,7 +8,7 @@
 #   compiler-backend/go/scripts/same-output.sh record DIR   # write DIR
 #   compiler-backend/go/scripts/same-output.sh check DIR    # diff against DIR
 #
-# Environment: IRIS (compiler binary), EXAMPLES (purs-backend-go/examples),
+# Environment: IRIS (compiler binary), EXAMPLES (iris-go/examples),
 # MARKGRAF (checkout; pinned.sh), JOBS (parallel workers).
 
 set -uo pipefail
@@ -16,7 +16,7 @@ set -uo pipefail
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT="$(cd "$HERE/../../.." && pwd)"
 IRIS="${IRIS:-$ROOT/target/release/iris}"
-EXAMPLES="${EXAMPLES:-/Users/mark/Developer/purs-backend-go/examples}"
+EXAMPLES="${EXAMPLES:-/Users/mark/Developer/iris-go/examples}"
 JOBS="${JOBS:-8}"
 source "$HERE/markgraf/pinned.sh"
 

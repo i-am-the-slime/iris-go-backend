@@ -6,9 +6,9 @@ package main
 
 import (
 	"fmt"
-	"github.com/i-am-the-slime/purs-backend-go/go-support/array"
-	"github.com/i-am-the-slime/purs-backend-go/go-support/exception"
-	"github.com/i-am-the-slime/purs-backend-go/go-support/prim"
+	"github.com/i-am-the-slime/iris-go/array"
+	"github.com/i-am-the-slime/iris-go/exception"
+	"github.com/i-am-the-slime/iris-go/prim"
 )
 
 var main_ = initializeMain_()

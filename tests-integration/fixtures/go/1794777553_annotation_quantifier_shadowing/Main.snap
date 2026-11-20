@@ -6,8 +6,8 @@ package types
 
 import (
 	"fixture/Data/Tuple"
-	"github.com/i-am-the-slime/purs-backend-go/go-support/alloc"
-	"github.com/i-am-the-slime/purs-backend-go/go-support/direct"
+	"github.com/i-am-the-slime/iris-go/alloc"
+	"github.com/i-am-the-slime/iris-go/direct"
 )
 
 type ListTupleStringBoolean struct {
@@ -194,10 +194,10 @@ import (
 	"fixture/Data/Tuple"
 	"fixture/shared/Data.Tuple+Data.Maybe"
 	"fmt"
-	"github.com/i-am-the-slime/purs-backend-go/go-support/alloc"
-	"github.com/i-am-the-slime/purs-backend-go/go-support/array"
-	"github.com/i-am-the-slime/purs-backend-go/go-support/direct"
-	"github.com/i-am-the-slime/purs-backend-go/go-support/exception"
+	"github.com/i-am-the-slime/iris-go/alloc"
+	"github.com/i-am-the-slime/iris-go/array"
+	"github.com/i-am-the-slime/iris-go/direct"
+	"github.com/i-am-the-slime/iris-go/exception"
 )
 
 var main_ = initializeMain_()

@@ -42,7 +42,7 @@ HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT="$(cd "$HERE/../../../.." && pwd)"
 IRIS="${IRIS:-$ROOT/target/release/iris}"
 [ -x "$IRIS" ] || IRIS=/Users/mark/Developer/purescript-iris/target/release/iris
-GO_SUPPORT="${GO_SUPPORT:-/Users/mark/Developer/purs-backend-go/go-support}"
+GO_SUPPORT="${GO_SUPPORT:-/Users/mark/Developer/iris-go}"
 export GOEXPERIMENT="${GOEXPERIMENT:-simd}"
 WORK="${WORK:-${TMPDIR:-/tmp}/iris-robust-suites}"
 JOBS="${JOBS:-4}"
@@ -200,9 +200,9 @@ module robust.example/suite
 
 go 1.27.0
 
-require github.com/i-am-the-slime/purs-backend-go/go-support v0.0.0
+require github.com/i-am-the-slime/iris-go v0.0.0
 
-replace github.com/i-am-the-slime/purs-backend-go/go-support => $GO_SUPPORT
+replace github.com/i-am-the-slime/iris-go => $GO_SUPPORT
 GOMOD
   if ! (cd "$project" && IRIS_GO_ANY_CENSUS=1 timeout 600 "$IRIS" go --entry "$entry.main" "$out") >"$out/../iris.log" 2>&1; then
     echo iris >"$out/../stage"; return

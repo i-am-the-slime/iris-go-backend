@@ -22,7 +22,7 @@ import (
 	"fixture/Control/Monad/Rec/Class"
 	"fixture/shared"
 	"fmt"
-	"github.com/i-am-the-slime/purs-backend-go/go-support/exception"
+	"github.com/i-am-the-slime/iris-go/exception"
 )
 
 var main_ = initializeMain_()

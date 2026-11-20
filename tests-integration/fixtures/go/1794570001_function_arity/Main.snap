@@ -11,7 +11,7 @@ func Add(i int32, i2 int32) int32 {
 // Data/Show/show.go
 package show
 
-import "github.com/i-am-the-slime/purs-backend-go/go-support/prim"
+import "github.com/i-am-the-slime/iris-go/prim"
 
 func Show(i int32) string {
 	return prim.ShowInt(i)
@@ -28,9 +28,9 @@ import (
 	"fixture/Data/Semiring"
 	"fixture/Data/Show"
 	"fmt"
-	"github.com/i-am-the-slime/purs-backend-go/go-support/array"
-	"github.com/i-am-the-slime/purs-backend-go/go-support/exception"
-	"github.com/i-am-the-slime/purs-backend-go/go-support/prim"
+	"github.com/i-am-the-slime/iris-go/array"
+	"github.com/i-am-the-slime/iris-go/exception"
+	"github.com/i-am-the-slime/iris-go/prim"
 )
 
 var main_ = initializeMain_()

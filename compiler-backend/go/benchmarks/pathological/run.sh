@@ -24,7 +24,7 @@ set -uo pipefail
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT="$(cd "$HERE/../../../.." && pwd)"
 IRIS="${IRIS:-$ROOT/target/release/iris}"
-GO_SUPPORT="${GO_SUPPORT:-/Users/mark/Developer/purs-backend-go/go-support}"
+GO_SUPPORT="${GO_SUPPORT:-/Users/mark/Developer/iris-go}"
 # go-support scans strings sixteen bytes at a time with SIMD, an experiment
 # in Go 1.27.0 (simd/archsimd) whose API may change in later releases.
 export GOEXPERIMENT="${GOEXPERIMENT:-simd}"
@@ -78,9 +78,9 @@ module patho.example/bench
 
 go 1.27.0
 
-require github.com/i-am-the-slime/purs-backend-go/go-support v0.0.0
+require github.com/i-am-the-slime/iris-go v0.0.0
 
-replace github.com/i-am-the-slime/purs-backend-go/go-support => $GO_SUPPORT
+replace github.com/i-am-the-slime/iris-go => $GO_SUPPORT
 GOMOD
   if ! (cd "$HERE" && IRIS_GO_ANY_CENSUS=1 timeout 300 "$IRIS" go --entry "$name.main" "$out") >"$out/compile.log" 2>&1; then
     echo "$name: iris go failed: $(grep -v '^go:' "$out/compile.log" | head -1 | cut -c1-200)"

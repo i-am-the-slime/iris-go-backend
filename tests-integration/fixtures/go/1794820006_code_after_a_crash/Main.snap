@@ -5,8 +5,8 @@ source: tests-integration/src/fixtures.rs
 package main
 
 import (
-	"github.com/i-am-the-slime/purs-backend-go/go-support/exception"
-	"github.com/i-am-the-slime/purs-backend-go/go-support/prim"
+	"github.com/i-am-the-slime/iris-go/exception"
+	"github.com/i-am-the-slime/iris-go/prim"
 	"os"
 )
 

@@ -84,3 +84,7 @@ harness = false
 [[test]]
 name = "library"
 harness = false
+
+[[test]]
+name = "refactor"
+harness = false

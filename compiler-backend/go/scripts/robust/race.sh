@@ -12,7 +12,7 @@
 #                 over --still and --frame exports, and a second race build on a go-support copy
 #                 whose parallel threshold is 2, so that the camera plan's two parallelMap call
 #                 sites (array.ParallelMap) actually run goroutines on small diagrams
-#   examples      every purs-backend-go example: vet, race build, run
+#   examples      every iris-go example: vet, race build, run
 #   pathological  every pathological benchmark: vet and race build; runs RACE_PATHO (Aff.*, Om.*
 #                 and the Persistent/Lazy ones by default) once each
 #
@@ -29,8 +29,8 @@ HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 GO_DIR="$(cd "$HERE/../.." && pwd)"
 ROOT="$(cd "$GO_DIR/../.." && pwd)"
 IRIS="${IRIS:-$ROOT/target/release/iris}"
-GO_SUPPORT="${GO_SUPPORT:-/Users/mark/Developer/purs-backend-go/go-support}"
-EXAMPLES="${EXAMPLES:-/Users/mark/Developer/purs-backend-go/examples}"
+GO_SUPPORT="${GO_SUPPORT:-/Users/mark/Developer/iris-go}"
+EXAMPLES="${EXAMPLES:-/Users/mark/Developer/iris-go/examples}"
 export GOEXPERIMENT="${GOEXPERIMENT:-simd}"
 WORK="${WORK:-${TMPDIR:-/tmp}/iris-race}"
 JOBS="${JOBS:-6}"
@@ -48,9 +48,9 @@ module $1
 
 go 1.27.0
 
-require github.com/i-am-the-slime/purs-backend-go/go-support v0.0.0
+require github.com/i-am-the-slime/iris-go v0.0.0
 
-replace github.com/i-am-the-slime/purs-backend-go/go-support => $2
+replace github.com/i-am-the-slime/iris-go => $2
 GOMOD
 }
 export -f go_mod

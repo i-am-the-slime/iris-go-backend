@@ -14,7 +14,7 @@ HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT="$(cd "$HERE/../../../.." && pwd)"
 IRIS="${IRIS:-$ROOT/target/release/iris}"
 source "$(dirname "${BASH_SOURCE[0]}")/pinned.sh"
-GO_SUPPORT="${GO_SUPPORT:-/Users/mark/Developer/purs-backend-go/go-support}"
+GO_SUPPORT="${GO_SUPPORT:-/Users/mark/Developer/iris-go}"
 # go-support scans strings sixteen bytes at a time with SIMD, an experiment
 # in Go 1.27.0 (simd/archsimd) whose API may change in later releases.
 export GOEXPERIMENT="${GOEXPERIMENT:-simd}"
@@ -28,9 +28,9 @@ module markgraf.example/cli
 
 go 1.27.0
 
-require github.com/i-am-the-slime/purs-backend-go/go-support v0.0.0
+require github.com/i-am-the-slime/iris-go v0.0.0
 
-replace github.com/i-am-the-slime/purs-backend-go/go-support => $GO_SUPPORT
+replace github.com/i-am-the-slime/iris-go => $GO_SUPPORT
 GOMOD
 (cd "$MARKGRAF/cli" && IRIS_GO_ANY_CENSUS=1 "$IRIS" go --entry Main.run "$OUT") 2>&1 | tee "$OUT/compile.log" >&2
 [ "${PIPESTATUS[0]}" = 0 ] || exit 1

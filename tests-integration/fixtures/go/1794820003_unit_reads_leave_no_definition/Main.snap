@@ -6,7 +6,7 @@ package dataarray
 
 import (
 	"fixture/Data/Tuple"
-	"github.com/i-am-the-slime/purs-backend-go/go-support/direct"
+	"github.com/i-am-the-slime/iris-go/direct"
 )
 
 func FoldMEffectTupleUnitUnitUnit(f func(struct{}, tuple.TupleUnitUnit), b struct{}, array []tuple.TupleUnitUnit) {
@@ -38,8 +38,8 @@ package main
 import (
 	"fixture/Data/Array"
 	"fixture/Data/Tuple"
-	"github.com/i-am-the-slime/purs-backend-go/go-support/exception"
-	"github.com/i-am-the-slime/purs-backend-go/go-support/prim"
+	"github.com/i-am-the-slime/iris-go/exception"
+	"github.com/i-am-the-slime/iris-go/prim"
 	"os"
 )
 

@@ -23,8 +23,8 @@ package main
 import (
 	list "fixture/Data/List/Types"
 	"fixture/shared"
-	"github.com/i-am-the-slime/purs-backend-go/go-support/alloc"
-	"github.com/i-am-the-slime/purs-backend-go/go-support/exception"
+	"github.com/i-am-the-slime/iris-go/alloc"
+	"github.com/i-am-the-slime/iris-go/exception"
 	"os"
 )
 

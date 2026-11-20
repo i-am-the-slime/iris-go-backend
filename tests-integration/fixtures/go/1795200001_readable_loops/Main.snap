@@ -11,7 +11,7 @@ const NoChar Char = 1 << 32
 // Data/Show/show.go
 package show
 
-import "github.com/i-am-the-slime/purs-backend-go/go-support/prim"
+import "github.com/i-am-the-slime/iris-go/prim"
 
 func Show(s string) string {
 	return prim.ShowString(s)
@@ -24,8 +24,8 @@ import (
 	"fixture/Data/Maybe"
 	"fixture/Data/Show"
 	"fmt"
-	"github.com/i-am-the-slime/purs-backend-go/go-support/exception"
-	"github.com/i-am-the-slime/purs-backend-go/go-support/prim"
+	"github.com/i-am-the-slime/iris-go/exception"
+	"github.com/i-am-the-slime/iris-go/prim"
 )
 
 type Light uint8

@@ -48,8 +48,8 @@ package main
 import (
 	"fixture/Data/Maybe"
 	"fmt"
-	"github.com/i-am-the-slime/purs-backend-go/go-support/exception"
-	"github.com/i-am-the-slime/purs-backend-go/go-support/prim"
+	"github.com/i-am-the-slime/iris-go/exception"
+	"github.com/i-am-the-slime/iris-go/prim"
 )
 
 type Tree struct {

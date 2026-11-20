@@ -13,7 +13,7 @@ package main
 
 import (
 	"fixture/Control/Category"
-	"github.com/i-am-the-slime/purs-backend-go/go-support/exception"
+	"github.com/i-am-the-slime/iris-go/exception"
 	"os"
 )
 

@@ -5,7 +5,7 @@ package Test_Main_ffi
 import (
 	"math"
 
-	"github.com/i-am-the-slime/purs-backend-go/go-support/exception"
+	"github.com/i-am-the-slime/iris-go/exception"
 )
 
 func TestNumberShow(showNumber func(float64) string, _ struct{}) struct{} {
