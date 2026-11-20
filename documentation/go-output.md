@@ -184,6 +184,40 @@ like, Iris renames it.
 - **Name clashes get a `Type` suffix.** If your module has a `foreign import data Event` and a
   value `event`, the Go type is `EventType`.
 
+### Records
+
+Give a record a name and declare a Go struct with the same name, and the two are the same thing:
+
+```purescript
+type Reading = { city :: String, celsius :: Number, rainy :: Boolean }
+
+foreign import current :: String -> Effect Reading
+foreign import report :: Reading -> String
+```
+
+```go
+type Reading struct {
+	City    string
+	Celsius float64
+	Rainy   bool
+}
+
+func Current(city string) func() Reading {
+	return func() Reading { return Reading{City: city, Celsius: 11.5, Rainy: true} }
+}
+
+func Report(reading Reading) string {
+	return fmt.Sprintf("%s: %.1f°C", reading.City, reading.Celsius)
+}
+```
+
+Your PureScript builds, reads and updates a `Reading` as usual, and Go gets the struct as it is.
+Fields are the labels with their first letter capitalised. Inside a struct, an `Int` is an
+`int32`. A field can hold another named record if that one has a struct too:
+`Headers []Header`.
+
+A record without a matching struct still works, but Go only sees it as an untyped `any`.
+
 A big module can spread its Go over several files: `Stopwatch.go`, `Stopwatch.laps.go` and so on.
 `_test.go` files are ignored.
 

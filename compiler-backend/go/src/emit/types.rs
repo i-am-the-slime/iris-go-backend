@@ -371,6 +371,11 @@ where
     }
 
     pub(super) fn record_name(&mut self, monotype: MonotypeId) -> GoResult<String> {
+        if let Some((module_name, struct_name)) = self.monotypes.foreign_records.get(&monotype) {
+            let package = ForeignPackages::package_name(module_name);
+            self.imports.insert(self.foreign_packages.import_path(module_name));
+            return Ok(format!("{package}.{struct_name}"));
+        }
         if let Some(name) = self.record_names.get(&monotype) {
             return Ok(name.clone());
         }

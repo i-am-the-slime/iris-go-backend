@@ -108,6 +108,7 @@ fn vendor_foreign_packages(
     module_path: &str,
 ) -> Result<go::ForeignPackages, String> {
     let mut modules = vec![];
+    let mut structs = vec![];
     for (file_id, file) in snapshot.files.iter() {
         if file.kind != SourceKind::Project {
             continue;
@@ -122,6 +123,9 @@ fn vendor_foreign_packages(
         fs::create_dir_all(&package).map_err(|error| error.to_string())?;
         for foreign_file in foreign_files {
             let source = fs::read_to_string(&foreign_file).map_err(|error| error.to_string())?;
+            for name in go::foreign_structs(&source) {
+                structs.push((module.clone(), name));
+            }
             let Some(name) = foreign_file.file_name() else { continue };
             fs::write(package.join(name), go::foreign_source(&module, &source))
                 .map_err(|error| error.to_string())?;
@@ -129,5 +133,6 @@ fn vendor_foreign_packages(
         modules.push(module);
     }
     modules.sort();
-    Ok(go::ForeignPackages { module_path: module_path.to_string(), modules })
+    structs.sort();
+    Ok(go::ForeignPackages { module_path: module_path.to_string(), modules, structs })
 }

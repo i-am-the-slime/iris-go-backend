@@ -575,19 +575,27 @@ pub fn go(path: &Path) -> FixtureResult {
 /// Go backend's CLI finds them.
 fn go_foreign_packages(loaded: &crate::LoadedFixture) -> Result<go::ForeignPackages, io::Error> {
     let mut modules = vec![];
+    let mut structs = vec![];
     for &file_id in &loaded.fixture_files {
         let uri = loaded.files.path(file_id);
         let Some(path) = Url::parse(&uri).ok().and_then(|url| url.to_file_path().ok()) else {
             continue;
         };
-        if !go::foreign_files(&path)?.is_empty()
-            && let Some(module) = go::module_name(&loaded.engine, file_id)
-        {
-            modules.push(module);
+        let foreign_files = go::foreign_files(&path)?;
+        if foreign_files.is_empty() {
+            continue;
         }
+        let Some(module) = go::module_name(&loaded.engine, file_id) else { continue };
+        for foreign_file in foreign_files {
+            for name in go::foreign_structs(&std::fs::read_to_string(foreign_file)?) {
+                structs.push((module.clone(), name));
+            }
+        }
+        modules.push(module);
     }
     modules.sort();
-    Ok(go::ForeignPackages { module_path: "fixture".to_string(), modules })
+    structs.sort();
+    Ok(go::ForeignPackages { module_path: "fixture".to_string(), modules, structs })
 }
 
 pub fn lsp(path: &Path) -> FixtureResult {

@@ -168,6 +168,9 @@ pub struct Monotypes {
     pub new_erased_keys: Vec<crate::scheme::SchemeKey>,
     /// Modules whose foreign imports the project implements in Go.
     pub foreign_modules: Vec<String>,
+    /// The records a foreign package's struct represents, with that package's module and the
+    /// struct's name.
+    pub foreign_records: FxHashMap<MonotypeId, (String, String)>,
     /// How the names of specialized and lifted functions were formed, which
     /// travels with the types those names spell.
     pub function_spellings: crate::mono::FunctionSpellings,

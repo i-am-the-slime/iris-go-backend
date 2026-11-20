@@ -20,7 +20,8 @@ where
             }
             // A project's foreign package cannot name the struct generated for a record, so a
             // record crosses as the JavaScript object it is there: a Foreign holding an object
-            // table.
+            // table. A record the foreign package's own struct represents crosses as it is.
+            Monotype::Record(_) if self.monotypes.foreign_records.contains_key(&monotype) => None,
             Monotype::Record(_) => Some(GoType::Any),
             Monotype::Nullable(element) => {
                 self.convention_type(element)?.map(|element| GoType::Pointer(Box::new(element)))

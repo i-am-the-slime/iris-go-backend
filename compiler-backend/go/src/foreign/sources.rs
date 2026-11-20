@@ -47,6 +47,24 @@ pub fn foreign_source(module_name: &str, source: &str) -> String {
     lines.collect()
 }
 
+/// The structs a foreign file declares at its top level: `type Output struct {`. A struct named
+/// like a record synonym of the module, `type Output = { stdout :: String }`, is that record's
+/// Go representation: the generated code builds, reads and passes it as the struct, field
+/// `stdout` as `Stdout`, instead of a struct of its own. Synonyms are transparent, so the struct
+/// represents every record of exactly the synonym's fields.
+pub fn foreign_structs(source: &str) -> Vec<String> {
+    let mut structs = vec![];
+    for line in source.lines() {
+        let Some(rest) = line.strip_prefix("type ") else { continue };
+        let mut words = rest.split_whitespace();
+        let (Some(name), Some(kind)) = (words.next(), words.next()) else { continue };
+        if kind.starts_with("struct") && name.chars().all(|c| c.is_alphanumeric() || c == '_') {
+            structs.push(name.to_string());
+        }
+    }
+    structs
+}
+
 /// Of a directory's files, those that belong to the source `<stem>.purs`, in order of name:
 /// `<stem>.go`, and `<stem>.<part>.go` unless `<stem>.<part>.purs`, a module of its own, owns it.
 /// Go test files belong to no source.
@@ -93,6 +111,12 @@ mod tests {
         let names = ["OrderPricing.purs", "OrderPricing.Input.purs", "OrderPricing.Input.go"];
         assert!(owned_files("OrderPricing", &names).is_empty());
         assert_eq!(owned_files("OrderPricing.Input", &names), ["OrderPricing.Input.go"]);
+    }
+
+    #[test]
+    fn a_file_declares_its_top_level_structs() {
+        let source = "package ffi\n\ntype Output struct {\n\tStdout string\n}\n\ntype Empty struct{}\n\ntype Mode int\n\ntype Pair[A any] struct{ First A }\n\nfunc f() {\n\ttype local struct{}\n}\n";
+        assert_eq!(foreign_structs(source), ["Output", "Empty"]);
     }
 
     #[test]

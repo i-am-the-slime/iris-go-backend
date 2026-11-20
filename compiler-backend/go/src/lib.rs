@@ -30,7 +30,7 @@ mod types;
 mod walk;
 
 pub use error::{GoError, GoResult, UnsupportedState};
-pub use foreign::{ForeignPackages, foreign_files, foreign_source};
+pub use foreign::{ForeignPackages, foreign_files, foreign_source, foreign_structs};
 pub use timing::Work;
 
 use crate::specialize::Specializer;
@@ -67,6 +67,7 @@ pub fn compile_program(
 
     let substituted = types::Substituted::default();
     let mut specializer = Specializer::new(queries, foreign_packages, substituted);
+    specializer.adopt_foreign_structs()?;
     let entry = timed("specialize", || specializer.specialize_entry(file_id, term))?;
     if let Some(blockers) = specializer.blockers()? {
         return Err(GoError::Blocked(blockers));

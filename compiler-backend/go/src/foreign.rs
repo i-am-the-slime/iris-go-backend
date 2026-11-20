@@ -6,7 +6,7 @@ mod host;
 mod sources;
 
 pub use host::is_opaque_foreign_data;
-pub use sources::{foreign_files, foreign_source};
+pub use sources::{foreign_files, foreign_source, foreign_structs};
 
 use std::sync::{Mutex, OnceLock};
 
@@ -26,6 +26,9 @@ pub struct ForeignPackages {
     pub module_path: String,
     /// The modules with Go files next to their source, copied into the program.
     pub modules: Vec<String>,
+    /// The structs those Go files declare, by module: `(module, struct)`. A struct named like a
+    /// record synonym of its module represents that record, as [`sources::foreign_structs`] says.
+    pub structs: Vec<(String, String)>,
 }
 
 /// The iris-go runtime's Go module.

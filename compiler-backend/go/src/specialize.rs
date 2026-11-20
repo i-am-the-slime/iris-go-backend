@@ -793,6 +793,34 @@ where
         self.closed_monotype(scope, closed)
     }
 
+    /// Records the records that foreign packages' structs represent: a struct named like a
+    /// record synonym without parameters of its module stands for that synonym's record.
+    pub fn adopt_foreign_structs(&mut self) -> GoResult<()> {
+        for (module_name, struct_name) in &self.foreign_packages.structs {
+            let Some(file_id) = self.context.queries.module_file(module_name) else { continue };
+            let module = self.context.module(file_id)?;
+            let synonym = module.indexed.items.iter_types().find_map(|(item, indexed)| {
+                (indexed.name.as_deref() == Some(struct_name.as_str())).then_some(item)
+            });
+            let Some(synonym) = synonym.and_then(|item| module.checked.lookup_synonym(item)) else {
+                continue;
+            };
+            if !synonym.parameters.is_empty() {
+                continue;
+            }
+            let expansion = crate::monotype::expand_synonyms(&mut self.context, synonym.expansion)?;
+            let Some(record) = supported(self.monotypes.monotype(&mut self.context, expansion))?
+            else {
+                continue;
+            };
+            if matches!(self.monotypes.get(record), Monotype::Record(_)) {
+                let owner = (module_name.clone(), struct_name.clone());
+                self.monotypes.foreign_records.insert(record, owner);
+            }
+        }
+        Ok(())
+    }
+
     fn closed_monotype(&mut self, scope: &Scope, closed: TypeId) -> GoResult<MonotypeId> {
         let monotype = self.monotypes.monotype(&mut self.context, closed);
         monotype.map_err(|failure| failure.at(&scope.definition))
