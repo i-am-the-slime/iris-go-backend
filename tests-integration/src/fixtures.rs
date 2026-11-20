@@ -560,6 +560,7 @@ pub fn go(path: &Path) -> FixtureResult {
             .collect::<Vec<_>>()
             .join("\n"),
         Err(go::GoError::Blocked(blockers)) => blockers.to_string(),
+        Err(error @ go::GoError::SharedRecordStruct { .. }) => error.to_string(),
         Err(error) => return Err(error.into()),
     };
     let mut settings = insta::Settings::clone_current();

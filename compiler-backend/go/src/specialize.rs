@@ -813,9 +813,17 @@ where
             else {
                 continue;
             };
-            if matches!(self.monotypes.get(record), Monotype::Record(_)) {
-                let owner = (module_name.clone(), struct_name.clone());
-                self.monotypes.foreign_records.insert(record, owner);
+            if !matches!(self.monotypes.get(record), Monotype::Record(_)) {
+                continue;
+            }
+            let owner = (module_name.clone(), struct_name.clone());
+            if let Some((other_module, other_struct)) =
+                self.monotypes.foreign_records.insert(record, owner)
+            {
+                return Err(GoError::SharedRecordStruct {
+                    first: format!("{}.{other_struct}", ForeignPackages::package_name(&other_module)),
+                    second: format!("{}.{struct_name}", ForeignPackages::package_name(module_name)),
+                });
             }
         }
         Ok(())

@@ -20,6 +20,10 @@ pub enum GoError {
     Blocked(Blockers),
     #[error("entry module {entry} is imported by {importer}, but Go cannot import package main")]
     EntryImported { entry: String, importer: String },
+    #[error(
+        "the Go structs {first} and {second} both represent records with the same fields; a record can have one Go struct"
+    )]
+    SharedRecordStruct { first: String, second: String },
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Error)]
