@@ -1,0 +1,18 @@
+---
+source: tests-integration/src/fixtures.rs
+---
+literal :: Type.Proxy.Proxy @Prim.Int ?[missing integer value]
+literal = Proxy
+
+addOverflow :: forall sum.
+  Prim.Int.Add 170141183460469231731687303715884105727 1 sum => Type.Proxy.Proxy @Prim.Int sum
+addOverflow = \{addDict} -> Proxy
+
+mulOverflow :: forall product.
+  Prim.Int.Mul 100000000000000000000 100000000000000000000 product =>
+  Type.Proxy.Proxy @Prim.Int product
+mulOverflow = \{mulDict} -> Proxy
+
+forceSolve :: forall t0 t1.
+  { addOverflow :: Type.Proxy.Proxy @Prim.Int t0, mulOverflow :: Type.Proxy.Proxy @Prim.Int t1 }
+forceSolve = { addOverflow: addOverflow {error}, mulOverflow: mulOverflow {error} }

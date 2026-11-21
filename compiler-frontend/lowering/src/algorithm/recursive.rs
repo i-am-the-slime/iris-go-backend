@@ -69,6 +69,16 @@ fn integer_literal(text: &str, negative: bool) -> Option<i64> {
     if negative { Some(-integer) } else { Some(integer) }
 }
 
+fn type_integer_literal(text: &str, negative: bool) -> Option<i128> {
+    let (digits, radix) = match text.strip_prefix("0x") {
+        Some(hex) => (hex, 16),
+        None => (text, 10),
+    };
+    let sign = if negative { "-" } else { "" };
+    let digits = digits.replace_smolstr("_", "");
+    i128::from_str_radix(&format!("{sign}{digits}"), radix).ok()
+}
+
 fn number_literal(text: &str) -> SmolStr {
     text.replace_smolstr("_", "")
 }
@@ -1082,8 +1092,13 @@ fn lower_type_kind(
         cst::Type::TypeHole(_) => TypeKind::Hole,
         cst::Type::TypeInteger(cst) => {
             let value = cst.integer_token().and_then(|token| {
-                integer_literal(token.text(context.source), cst.minus_token().is_some())
-                    .and_then(|value| i32::try_from(value).ok())
+                let negative = cst.minus_token().is_some();
+                let value = type_integer_literal(token.text(context.source), negative);
+                if value.is_none() {
+                    let id = context.stabilized.lookup_cst(cst).expect_id();
+                    state.errors.push(LoweringError::TypeIntegerTooLarge { id });
+                }
+                value
             });
             TypeKind::Integer { value }
         }

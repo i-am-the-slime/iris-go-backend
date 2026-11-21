@@ -211,7 +211,7 @@ pub enum TypeKind {
     Constructor { resolution: Option<(FileId, TypeItemId)> },
     Forall { bindings: Arc<[TypeVariableBinding]>, inner: Option<TypeId> },
     Hole,
-    Integer { value: Option<i32> },
+    Integer { value: Option<i128> },
     Kinded { type_: Option<TypeId>, kind: Option<TypeId> },
     Operator { resolution: Option<(FileId, TypeItemId)> },
     OperatorChain { head: Option<TypeId>, tail: Arc<[OperatorPair<TypeId>]> },

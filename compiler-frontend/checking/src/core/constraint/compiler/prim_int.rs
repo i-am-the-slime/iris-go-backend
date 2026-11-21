@@ -9,15 +9,19 @@ use crate::context::CheckContext;
 use crate::core::constraint::CanonicalConstraintId;
 use crate::core::constraint::matching::{self, MatchInstance};
 use crate::core::{TypeId, normalise};
+use crate::error::ErrorKind;
 use crate::state::CheckState;
 
-use super::{extract_integer, intern_integer, intern_symbol, match_equality};
+use super::{
+    CompilerMatch, CompilerResolution, extract_integer, intern_integer, intern_symbol,
+    match_equality,
+};
 
 pub fn match_add<Q>(
     state: &mut CheckState,
     context: &CheckContext<Q>,
     arguments: &[TypeId],
-) -> QueryResult<Option<MatchInstance>>
+) -> QueryResult<Option<CompilerMatch>>
 where
     Q: ExternalQueries,
 {
@@ -31,18 +35,15 @@ where
 
     let matched = match (left_int, right_int, sum_int) {
         (Some(left), Some(right), _) => {
-            let result = intern_integer(context, left + right);
-            match_equality(state, context, sum, result)?
+            match_integer(state, context, sum, left.checked_add(right))?
         }
         (Some(left), _, Some(sum_value)) => {
-            let result = intern_integer(context, sum_value - left);
-            match_equality(state, context, right, result)?
+            match_integer(state, context, right, sum_value.checked_sub(left))?
         }
         (_, Some(right), Some(sum_value)) => {
-            let result = intern_integer(context, sum_value - right);
-            match_equality(state, context, left, result)?
+            match_integer(state, context, left, sum_value.checked_sub(right))?
         }
-        _ => matching::blocking_constraint(state, context, &[left, right, sum])?,
+        _ => blocking_constraint(state, context, &[left, right, sum])?,
     };
 
     Ok(Some(matched))
@@ -52,7 +53,7 @@ pub fn match_mul<Q>(
     state: &mut CheckState,
     context: &CheckContext<Q>,
     arguments: &[TypeId],
-) -> QueryResult<Option<MatchInstance>>
+) -> QueryResult<Option<CompilerMatch>>
 where
     Q: ExternalQueries,
 {
@@ -61,14 +62,43 @@ where
     };
 
     let Some(left_int) = extract_integer(state, context, left)? else {
-        return Ok(Some(matching::blocking_constraint(state, context, &[left])?));
+        return Ok(Some(blocking_constraint(state, context, &[left])?));
     };
     let Some(right_int) = extract_integer(state, context, right)? else {
-        return Ok(Some(matching::blocking_constraint(state, context, &[right])?));
+        return Ok(Some(blocking_constraint(state, context, &[right])?));
     };
 
-    let result = intern_integer(context, left_int * right_int);
-    Ok(Some(match_equality(state, context, product, result)?))
+    Ok(Some(match_integer(state, context, product, left_int.checked_mul(right_int))?))
+}
+
+fn match_integer<Q>(
+    state: &mut CheckState,
+    context: &CheckContext<Q>,
+    expected: TypeId,
+    value: Option<i128>,
+) -> QueryResult<CompilerMatch>
+where
+    Q: ExternalQueries,
+{
+    let Some(value) = value else {
+        let resolution = CompilerResolution::Failure(ErrorKind::TypeIntegerTooLarge);
+        return Ok(CompilerMatch::resolved(resolution));
+    };
+    let result = intern_integer(context, value);
+    let instance = match_equality(state, context, expected, result)?;
+    Ok(CompilerMatch::from_instance(instance, CompilerResolution::Trivial))
+}
+
+fn blocking_constraint<Q>(
+    state: &mut CheckState,
+    context: &CheckContext<Q>,
+    arguments: &[TypeId],
+) -> QueryResult<CompilerMatch>
+where
+    Q: ExternalQueries,
+{
+    let instance = matching::blocking_constraint(state, context, arguments)?;
+    Ok(CompilerMatch::from_instance(instance, CompilerResolution::Trivial))
 }
 
 pub fn match_compare<Q>(

@@ -473,6 +473,18 @@ impl ToDiagnostics for LoweringError {
                 )])
             }
 
+            LoweringError::TypeIntegerTooLarge { id } => {
+                let Some(ptr) = context.stabilized.syntax_ptr(*id) else { return Ok(Vec::new()) };
+                let Some(span) = context.span_from_syntax_ptr(&ptr) else { return Ok(Vec::new()) };
+
+                Ok(vec![Diagnostic::error(
+                    "TypeIntegerTooLarge",
+                    TYPE_INTEGER_TOO_LARGE,
+                    span,
+                    "lowering",
+                )])
+            }
+
             LoweringError::OverlappingBinderNames { name, duplicate, existing } => {
                 let span = |source| {
                     let ptr = match source {
@@ -1051,6 +1063,16 @@ impl ToDiagnostics for CheckingError {
                 let message = lookup_message(*message_id);
                 ("CustomFailure", message.to_string())
             }
+            ErrorKind::TypeIntegerTooLarge => {
+                ("TypeIntegerTooLarge", TYPE_INTEGER_TOO_LARGE.to_string())
+            }
+            ErrorKind::ReflectedIntegerOutOfRange { integer } => (
+                "ReflectedIntegerOutOfRange",
+                format!(
+                    "The type-level integer '{integer}' cannot be reflected to an Int; it is \
+                     outside the signed 32-bit range (-2147483648 to 2147483647)."
+                ),
+            ),
             ErrorKind::PropertyIsMissing { labels } => {
                 let labels_str = labels.join(", ");
                 ("PropertyIsMissing", format!("Missing required properties: {labels_str}"))
@@ -1147,6 +1169,9 @@ impl ToDiagnostics for CheckingError {
 }
 
 const MAX_HOLE_BINDINGS: usize = 5;
+
+const TYPE_INTEGER_TOO_LARGE: &str = "The type-level integer is too large; type-level integers \
+    must fit in the signed 128-bit range.";
 
 fn attach_hole_binding_trivia<Q>(
     mut diagnostic: Diagnostic,

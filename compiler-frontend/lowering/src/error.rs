@@ -20,6 +20,9 @@ pub enum LoweringError {
     },
     RecursiveSynonym(RecursiveGroup),
     RecursiveKinds(RecursiveGroup),
+    TypeIntegerTooLarge {
+        id: AstId<cst::TypeInteger>,
+    },
 }
 
 #[derive(Debug, PartialEq, Eq)]
