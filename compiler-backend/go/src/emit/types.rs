@@ -10,7 +10,7 @@ use crate::error::GoResult;
 use crate::foreign::{ForeignPackages, GoPackage};
 use crate::monotype::{DataConstructor, DataType, Failure, Monotype, MonotypeId};
 use crate::naming::{capitalise, identifier};
-use crate::syntax::{GoDeclaration, GoType, StructField};
+use crate::syntax::{GoDeclaration, GoType, SourceLine, StructField};
 use files::FileId;
 use rustc_hash::{FxHashMap, FxHashSet};
 
@@ -122,7 +122,9 @@ where
             // `newtype X = X X` has no values; nothing reads the empty struct.
             let type_ = GoType::EmptyStruct;
             let line = self.data_line(data)?;
-            self.type_declarations.push(GoDeclaration::Type { name: name.clone(), type_, line });
+            let member_lines = vec![];
+            let declaration = GoDeclaration::Type { name: name.clone(), type_, line, member_lines };
+            self.type_declarations.push(declaration);
             return Ok(GoType::Named(name));
         }
         let type_ = self.go_type(unfolded)?;
@@ -131,7 +133,7 @@ where
         // function types, so the newtype is an alias whenever Go allows one.
         let line = self.data_line(data)?;
         let declaration = if self.unfolding_reaches_itself_unnamed(data, unfolded)? {
-            GoDeclaration::Type { name: name.clone(), type_, line }
+            GoDeclaration::Type { name: name.clone(), type_, line, member_lines: vec![] }
         } else {
             self.type_aliases.insert(name.clone(), type_.clone());
             GoDeclaration::Alias { name: name.clone(), type_, line }
@@ -396,7 +398,12 @@ where
         let name = self.pending_global(base, names::PendingSpelling::Record(monotype));
         self.record_names.insert(monotype, name.clone());
         let type_ = self.record_declaration(monotype)?;
-        self.type_declarations.push(GoDeclaration::Type { name: name.clone(), type_, line: None });
+        self.type_declarations.push(GoDeclaration::Type {
+            name: name.clone(),
+            type_,
+            line: None,
+            member_lines: vec![],
+        });
         Ok(name)
     }
 
@@ -502,18 +509,34 @@ where
         let names: Vec<String> =
             layouts.iter().map(|constructor| constructor.tag.clone()).collect();
         let line = self.data_line(data)?;
+        let mut constructor_lines = vec![];
+        for constructor in constructors.iter() {
+            constructor_lines.push(self.constructor_line(data, constructor)?);
+        }
+        let tag_lines: Vec<(String, SourceLine)> = names
+            .iter()
+            .zip(&constructor_lines)
+            .filter_map(|(tag, line)| Some((tag.clone(), line.clone()?)))
+            .collect();
         let Some(plan) = plan else {
             self.type_declarations.push(GoDeclaration::Type {
                 name: name.clone(),
                 type_: layout::tag_type(constructors.len()),
                 line: line.clone(),
+                member_lines: vec![],
             });
             if !names.is_empty() {
-                let constants = GoDeclaration::Constants { type_name: Some(name), names, line };
+                let constants = GoDeclaration::Constants {
+                    type_name: Some(name),
+                    names,
+                    line,
+                    member_lines: tag_lines,
+                };
                 self.type_declarations.push(constants);
             }
             return Ok(layout);
         };
+        let field_lines = slot_lines(&plan.constructors, &constructor_lines);
         let mut fields = vec![];
         for slot in plan.slots {
             fields.push(match slot {
@@ -527,10 +550,20 @@ where
             layout.declaration = Some(self.type_declarations.len());
         }
         let type_ = GoType::Struct(fields);
-        let declaration = GoDeclaration::Type { name: name.clone(), type_, line: line.clone() };
+        let declaration = GoDeclaration::Type {
+            name: name.clone(),
+            type_,
+            line: line.clone(),
+            member_lines: field_lines,
+        };
         self.type_declarations.push(declaration);
         if kind == DataKind::Tagged {
-            self.type_declarations.push(GoDeclaration::Constants { type_name: None, names, line });
+            self.type_declarations.push(GoDeclaration::Constants {
+                type_name: None,
+                names,
+                line,
+                member_lines: tag_lines,
+            });
         }
         if kind == DataKind::Sentinel {
             for constructor in layouts.iter().filter(|constructor| constructor.fields.is_empty()) {
@@ -659,6 +692,23 @@ where
 }
 
 /// `*lazy.Lazy[T]` and the like: a generic instantiation, behind pointers.
+fn slot_lines(
+    slots: &[Vec<String>],
+    constructor_lines: &[Option<SourceLine>],
+) -> Vec<(String, SourceLine)> {
+    let mut lines = vec![];
+    for (constructor, line) in slots.iter().zip(constructor_lines) {
+        let Some(line) = line else { continue };
+        for slot in constructor {
+            let shared = slots.iter().filter(|other| other.contains(slot)).count() > 1;
+            if !shared {
+                lines.push((slot.clone(), line.clone()));
+            }
+        }
+    }
+    lines
+}
+
 fn is_generic_instantiation(type_: &GoType) -> bool {
     match type_ {
         GoType::Generic { .. } => true,

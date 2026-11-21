@@ -326,6 +326,7 @@ pub enum GoDeclaration {
         name: String,
         type_: GoType,
         line: Option<SourceLine>,
+        member_lines: Vec<(String, SourceLine)>,
     },
     /// `type name = type_`: another spelling of the same type, for a recursive
     /// newtype whose cycle already passes through a named type.
@@ -344,6 +345,7 @@ pub enum GoDeclaration {
         type_name: Option<String>,
         names: Vec<String>,
         line: Option<SourceLine>,
+        member_lines: Vec<(String, SourceLine)>,
     },
     Constant {
         name: String,
@@ -773,6 +775,7 @@ struct Printer {
     /// Whether the statement being printed is the last one of a function that returns nothing,
     /// where a `return` says nothing.
     ends_procedure: bool,
+    member_lines: Vec<(String, SourceLine)>,
 }
 
 impl Printer {
@@ -870,8 +873,12 @@ impl Printer {
                 self.output.push_str(&template.replace("{name}", name));
             }
             GoDeclaration::Written { source, .. } => self.output.push_str(source),
-            GoDeclaration::Type { name, type_, .. } => {
+            GoDeclaration::Type { name, type_, member_lines, .. } => {
+                if self.every {
+                    self.member_lines = member_lines.clone();
+                }
                 let rendered = self.type_(type_);
+                self.member_lines.clear();
                 self.line(&format!("type {name} {rendered}"));
             }
             GoDeclaration::Alias { name, type_, .. } => {
@@ -882,10 +889,16 @@ impl Printer {
                 let rendered = self.type_(type_);
                 self.line(&format!("type {name}[{parameter} any] {rendered}"));
             }
-            GoDeclaration::Constants { type_name, names, .. } => {
+            GoDeclaration::Constants { type_name, names, member_lines, .. } => {
                 self.line("const (");
                 self.indentation += 1;
+                let declared = self.attribution.clone();
                 for (position, name) in names.iter().enumerate() {
+                    let member = member_lines.iter().find(|(member, _)| member == name);
+                    self.attribution = match member {
+                        Some((_, line)) => Some(line.clone()),
+                        None => declared.clone(),
+                    };
                     if position == 0 {
                         match type_name {
                             Some(type_name) => self.line(&format!("{name} {type_name} = iota")),
@@ -895,6 +908,7 @@ impl Printer {
                         self.line(name);
                     }
                 }
+                self.attribution = declared;
                 self.indentation -= 1;
                 self.line(")");
             }
@@ -1200,11 +1214,18 @@ impl Printer {
                 let mut rendered = String::from("struct {\n");
                 let width =
                     fields.iter().map(|field| field.name.chars().count()).max().unwrap_or(0);
+                let member_lines = std::mem::take(&mut self.member_lines);
                 let field_types: Vec<String> =
                     fields.iter().map(|field| self.type_(&field.type_)).collect();
                 let type_widths = tagged_type_widths(fields, &field_types);
                 let rows = fields.iter().zip(&field_types).zip(type_widths);
                 for ((field, field_type), type_width) in rows {
+                    if let Some((_, SourceLine { path, line, column })) =
+                        member_lines.iter().find(|(member, _)| *member == field.name)
+                    {
+                        let shown = self.shown_path(path);
+                        let _ = writeln!(rendered, "//line {shown}:{line}:{column}");
+                    }
                     for _ in 0..=self.indentation {
                         rendered.push('\t');
                     }

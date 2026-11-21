@@ -165,6 +165,7 @@ where
                 type_name: None,
                 names: steps,
                 line: None,
+                member_lines: vec![],
             });
             declarations.push(self.tail_group_loop(group)?);
         }

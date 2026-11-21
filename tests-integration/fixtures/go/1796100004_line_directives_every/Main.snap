@@ -29,9 +29,9 @@ type Shape struct {
 
 //line Main.purs:13:1
 const (
-//line Main.purs:13:1
+//line Main.purs:13:14
 	ShapeCircle = iota
-//line Main.purs:13:1
+//line Main.purs:13:30
 	ShapeSquare
 //line Main.purs:13:1
 )

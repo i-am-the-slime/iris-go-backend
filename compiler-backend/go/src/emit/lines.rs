@@ -9,7 +9,7 @@
 use std::sync::Arc;
 
 use files::FileId;
-use indexing::IndexedTypeItemKind;
+use indexing::{IndexedTermItemKind, IndexedTypeItemKind};
 use std::collections::VecDeque;
 
 use rustc_hash::{FxHashMap, FxHashSet};
@@ -18,7 +18,7 @@ use super::Emitter;
 use crate::error::GoResult;
 use crate::foreign::LineCoverage;
 use crate::mono::SourcePosition;
-use crate::monotype::DataType;
+use crate::monotype::{DataConstructor, DataType};
 use crate::syntax::{GoDeclaration, GoExpression, GoStatement, SourceLine};
 use crate::walk::{self, Walk};
 
@@ -125,6 +125,25 @@ where
             _ => None,
         };
         let Some(pointer) = pointer else { return Ok(None) };
+        let offset = u32::from(pointer.text_range().start());
+        self.source_line(SourcePosition { file: data.file_id, offset })
+    }
+
+    pub(super) fn constructor_line(
+        &mut self,
+        data: &DataType,
+        constructor: &DataConstructor,
+    ) -> GoResult<Option<SourceLine>> {
+        let Some(directives) = &self.foreign_packages.line_directives else { return Ok(None) };
+        if directives.coverage != LineCoverage::Every {
+            return Ok(None);
+        }
+        let Some(term) = constructor.term else { return Ok(None) };
+        let module = self.context.module(data.file_id)?;
+        let IndexedTermItemKind::Constructor { id, .. } = module.indexed.items[term].kind else {
+            return Ok(None);
+        };
+        let Some(pointer) = module.stabilized.syntax_ptr(id) else { return Ok(None) };
         let offset = u32::from(pointer.text_range().start());
         self.source_line(SourcePosition { file: data.file_id, offset })
     }

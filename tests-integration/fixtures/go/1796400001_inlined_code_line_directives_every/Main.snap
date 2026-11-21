@@ -1,6 +1,16 @@
 ---
 source: tests-integration/src/fixtures.rs
 ---
+// Data/Eq/eq.go
+package eq
+
+//line eq.go:4
+func Eq(number float64, number2 float64) bool {
+//line eq.go:6
+	return number == number2
+//line eq.go:8
+}
+
 // Data/Show/show.go
 package show
 
@@ -52,62 +62,191 @@ func ThrowUnit(x string) {
 package main
 
 import (
+	dataeq "fixture/Data/Eq"
 	"fixture/Data/Show"
 	"fixture/Effect/Exception"
 	"fixture/shared"
+	arraypkg "github.com/i-am-the-slime/iris-go/array"
 )
 
-//line Main.purs:14:1
+//line Main.purs:11:1
+type Shape struct {
+//line Main.purs:12:5
+	Circle     float64
+//line Main.purs:13:5
+	Rectangle0 float64
+//line Main.purs:13:5
+	Rectangle1 float64
+//line Main.purs:11:1
+	Tag        uint8
+//line Main.purs:11:1
+}
+
+//line Main.purs:11:1
+const (
+//line Main.purs:12:5
+	ShapeCircle = iota
+//line Main.purs:13:5
+	ShapeRectangle
+//line Main.purs:14:5
+	ShapeDot
+//line Main.purs:11:1
+)
+
+//line Main.purs:16:1
+type Colour uint8
+
+//line Main.purs:16:1
+const (
+//line Main.purs:16:15
+	ColourRed Colour = iota
+//line Main.purs:16:21
+	ColourGreen
+//line Main.purs:16:1
+)
+
+//line main.go:48
+type StateValue struct {
+//line main.go:50
+	State []Colour
+//line main.go:52
+	Value []Colour
+//line main.go:54
+}
+
+//line Main.purs:30:1
 func main() {
-//line Main.purs:15:14
+//line Main.purs:31:14
 	var counter int32 = 3
-//line Main.purs:17:15
+//line Main.purs:33:15
 	count := counter + 1
-//line Main.purs:20:3
-	if /*line Main.purs:18:18*/ (count-1) /*line Main.purs:20:3*/ * /*line Main.purs:11:23*/ 2 /*line Main.purs:20:3*/ != 6 {
-//line Main.purs:21:5
+//line Main.purs:35:14
+	many := count > 1
+//line Main.purs:36:3
+	if /*line Main.purs:34:18*/ (count-1) /*line Main.purs:36:3*/ * /*line Main.purs:21:23*/ 2 /*line Main.purs:36:3*/ != 6 {
+//line Main.purs:37:5
 		effectexception.ThrowUnit("twice is wrong")
-//line Main.purs:20:3
+//line Main.purs:36:3
 	}
-//line Main.purs:22:3
-	if count <= /*line Main.purs:19:22*/ 1 /*line Main.purs:22:3*/ {
-//line Main.purs:23:5
+//line Main.purs:38:3
+	if !many {
+//line Main.purs:39:5
 		effectexception.ThrowUnit("many is wrong")
-//line Main.purs:22:3
+//line Main.purs:38:3
 	}
-//line Main.purs:24:18
+//line Main.purs:40:18
 	array := []int32{counter, count}
-//line Main.purs:24:18
+//line Main.purs:40:18
 	mapped := make([]shared.Value, len(array))
-//line Main.purs:24:18
+//line Main.purs:40:18
 	for index2, index := range array {
-//line Main.purs:24:18
+//line Main.purs:40:18
 		mapped[index2] = shared.Value{Value: index * count}
-//line Main.purs:24:18
+//line Main.purs:40:18
 	}
-//line Main.purs:25:3
+//line Main.purs:41:3
 	mapped2 := make([]int32, len(mapped))
-//line Main.purs:25:3
+//line Main.purs:41:3
 	for index := range mapped {
-//line Main.purs:25:3
-		mapped2[index] = mapped[index].Value * /*line Main.purs:11:23*/ 2
-//line Main.purs:25:3
+//line Main.purs:41:3
+		mapped2[index] = mapped[index].Value * /*line Main.purs:21:23*/ 2
+//line Main.purs:41:3
 	}
-//line Main.purs:25:3
+//line Main.purs:41:3
 	if string(show.AppendShowArrayInt(nil, mapped2)) != "[24,32]" {
-//line Main.purs:26:5
+//line Main.purs:42:5
 		effectexception.ThrowUnit("the readings are wrong")
-//line Main.purs:25:3
+//line Main.purs:41:3
 	}
-//line Main.purs:27:3
+//line Main.purs:43:3
 	if int32(len(mapped)) != 2 {
-//line Main.purs:28:5
+//line Main.purs:44:5
 		effectexception.ThrowUnit("the length is wrong")
-//line Main.purs:27:3
+//line Main.purs:43:3
 	}
-//line Main.purs:29:3
-	counter = count * /*line Main.purs:11:23*/ 2
-//line Main.purs:14:1
+//line Main.purs:46:3
+	array2 := []Shape{{Tag: ShapeCircle, Circle: float64(counter)}, {Tag: ShapeRectangle, Rectangle0: 2.0, Rectangle1: float64(count)}, {Tag: ShapeDot}}
+//line Main.purs:46:3
+	mapped3 := make([]float64, len(array2))
+//line Main.purs:46:3
+	for index, element := range array2 {
+//line Main.purs:46:3
+		mapped3[index] = area(element)
+//line Main.purs:46:3
+	}
+//line Main.purs:46:3
+	if arraypkg.Eq(dataeq.Eq, mapped3, []float64{27.0, 8.0, 0.0}) == false {
+//line Main.purs:47:5
+		effectexception.ThrowUnit("the areas are wrong")
+//line Main.purs:46:3
+	}
+//line Main.purs:48:14
+	colours := []Colour{ColourGreen}
+//line Main.purs:49:41
+	var result Colour
+//line Main.purs:49:41
+	if many {
+//line Main.purs:49:54
+		result = ColourRed
+//line Main.purs:49:41
+	} else {
+//line Main.purs:49:63
+		result = ColourGreen
+//line Main.purs:49:41
+	}
+//line Main.purs:49:3
+	colours = arraypkg.Append(colours, []Colour{result})
+//line Main.purs:51:3
+	if arraypkg.Eq(eq, colours, []Colour{ColourGreen, ColourRed}) == false {
+//line Main.purs:52:5
+		effectexception.ThrowUnit("the colour is wrong")
+//line Main.purs:51:3
+	}
+//line Main.purs:53:3
+	counter = count * /*line Main.purs:21:23*/ 2
+//line Main.purs:30:1
+}
+
+//line Main.purs:24:1
+func area(value Shape) float64 {
+//line Main.purs:24:1
+	switch value.Tag {
+//line Main.purs:24:1
+	case ShapeCircle:
+//line Main.purs:24:1
+		radius := value.Circle
+//line Main.purs:25:20
+		return 3.0 * radius * radius
+//line Main.purs:24:1
+	case ShapeRectangle:
+//line Main.purs:26:29
+		return value.Rectangle0 * value.Rectangle1
+//line Main.purs:24:1
+	default: // ShapeDot
+//line Main.purs:27:10
+		return 0.0
+//line Main.purs:24:1
+	}
+//line Main.purs:24:1
+}
+
+//line Main.purs:18:1
+func eq(left Colour, right Colour) bool {
+//line Main.purs:18:1
+	if left == ColourRed && right == ColourRed {
+//line Main.purs:18:1
+		return true
+//line Main.purs:18:1
+	}
+//line Main.purs:18:1
+	if left == ColourGreen && right == ColourGreen {
+//line Main.purs:18:1
+		return true
+//line Main.purs:18:1
+	}
+//line Main.purs:18:1
+	return false
+//line Main.purs:18:1
 }
 
 // shared/shared.go

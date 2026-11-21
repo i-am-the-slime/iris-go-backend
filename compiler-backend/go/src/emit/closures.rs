@@ -1249,12 +1249,14 @@ where
             name,
             type_: GoType::Struct(struct_fields),
             line: None,
+            member_lines: vec![],
         });
         if kind == DataKind::Tagged {
             self.type_declarations.push(GoDeclaration::Constants {
                 type_name: None,
                 names: tags,
                 line: None,
+                member_lines: vec![],
             });
         }
         Ok(layout)
