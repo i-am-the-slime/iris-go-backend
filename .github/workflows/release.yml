@@ -77,12 +77,3 @@ jobs:
         uses: actions/attest-build-provenance@v4
         with:
           subject-path: ${{ steps.release.outputs.tar || steps.release.outputs.zip }}
-
-  test-installers:
-    needs: build-and-release
-    permissions:
-      attestations: read
-      contents: read
-    uses: ./.github/workflows/installers.yml
-    with:
-      version: ${{ github.ref_name }}

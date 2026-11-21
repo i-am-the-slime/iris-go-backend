@@ -1671,7 +1671,7 @@ dependencies = [
 
 [[package]]
 name = "iris-cli"
-version = "0.1.17"
+version = "0.1.17-go.1"
 dependencies = [
  "directories",
  "formatting",
