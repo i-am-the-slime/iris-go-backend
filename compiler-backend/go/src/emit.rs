@@ -38,6 +38,7 @@ mod references;
 mod recycling;
 mod reference_equality;
 mod reuse;
+mod scalars;
 mod strings;
 mod types;
 mod updates;
@@ -150,6 +151,9 @@ where
     timed("conditions", || conditions::assign_conditions(&mut declarations));
     timed("aliases", || aliases::substitute_aliases(&mut declarations));
     timed("updates", || updates::update_in_place(&mut declarations));
+    let structs = scalars::structs_of(&emitter.type_declarations);
+    timed("scalars", || scalars::split_struct_locals(&mut declarations, &structs));
+    timed("aliases", || aliases::substitute_aliases(&mut declarations));
     timed("ranges", || ranges::read_elements_in_place(&mut declarations));
     let taken =
         |name: &str| emitter.global_names.contains(name) || IMPORTED_PACKAGES.contains(&name);
@@ -3811,7 +3815,7 @@ pub(crate) fn fold_bitwise(operator: Operator, x: i32, y: i32) -> i64 {
     })
 }
 
-fn is_untyped_constant(expression: &GoExpression) -> bool {
+pub(super) fn is_untyped_constant(expression: &GoExpression) -> bool {
     match expression {
         GoExpression::Integer(_) | GoExpression::Float(_) | GoExpression::Rune(_) => true,
         GoExpression::Identifier(name) => name == "nil",

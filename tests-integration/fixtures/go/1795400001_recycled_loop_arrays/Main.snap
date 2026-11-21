@@ -60,17 +60,18 @@ func mainGo(i int32, particles []shared.Particle) []shared.Particle {
 			return particles
 		}
 		mapped := shared.Recycle(particlesSpare, len(particles))
-		for index, particle := range particles {
+		for index := range particles {
 			i2 := int32(index)
-			accumulator := particle
+			accumulatorPosition := particles[index].Position
+			accumulatorVelocity := particles[index].Velocity
 			for index2 := range particles {
 				i3 := int32(index2)
 				if i2 != i3 {
-					accumulator.Velocity = accumulator.Velocity + (particles[index2].Position - accumulator.Position) * 0.001
+					accumulatorVelocity = accumulatorVelocity + (particles[index2].Position - accumulatorPosition) * 0.001
 				}
 			}
-			accumulator.Position = accumulator.Position + accumulator.Velocity
-			mapped[index] = accumulator
+			accumulatorPosition = accumulatorPosition + accumulatorVelocity
+			mapped[index] = shared.Particle{Position: accumulatorPosition, Velocity: accumulatorVelocity}
 		}
 		particlesOwned, particlesSpare = mapped, particlesOwned
 		i, particles = i + 1, mapped
