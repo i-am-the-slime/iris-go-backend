@@ -37,11 +37,12 @@ import (
 	"fixture/Data/Maybe"
 	"fixture/Data/Show"
 	"fmt"
-	"github.com/i-am-the-slime/iris-go/array"
+	arraypkg "github.com/i-am-the-slime/iris-go/array"
 	"github.com/i-am-the-slime/iris-go/direct"
 	"github.com/i-am-the-slime/iris-go/exception"
 	"github.com/i-am-the-slime/iris-go/prim"
 	"slices"
+	"strconv"
 )
 
 var main_ = initializeMain_()
@@ -49,7 +50,7 @@ var main_ = initializeMain_()
 func initializeMain_() []string {
 	defer exception.ReportUncaught()
 	text := prim.StringJoinWith(" ", []string{"a😀", "naïve 😀 banana 日本 a𝄞a"})
-	step, count := array.RangeSteps(0, prim.CodeUnitLength(text)-1)
+	step, count := arraypkg.RangeSteps(0, prim.CodeUnitLength(text)-1)
 	mapped := make([]maybe.Char, count)
 	textUnits := prim.UTF16(text)
 	for index := range count {
@@ -67,7 +68,7 @@ func initializeMain_() []string {
 	} else {
 		result = "Nothing"
 	}
-	return []string{prim.ShowInt(charAtLoopViewsTheText("naïve 😀 banana 日本 a𝄞a", 0, 0)), unsafeCharAtLoopViewsTheText("ab😀c", 4, ""), prim.ShowInt(indexOfLoopViewsTheText("naïve 😀 banana 日本 a𝄞a", 0, 0)), prim.ShowInt(lastIndexOfLoopViewsTheText("naïve 😀 banana 日本 a𝄞a", 100, 0)), prim.ShowArray(show.Show, slicesInALoopViewTheText("a😀b𝄞", 0, []string{})), prim.ShowInt(codePointLoopViewsTheText("naïve 😀 banana 日本 a𝄞a", 0, 0)), prim.ShowInt(changedTextIsWalkedEachIteration("naïve 😀 banana 日本 a𝄞a", 0)), prim.ShowInt(literalIndexesAloneWalkTheText("naïve 😀 banana 日本 a𝄞a", 0)), prim.ShowArray(maybe.ShowChar, closureInTheLoopReadsTheView("x😀yz", 0, []maybe.Char{})), prim.ShowArray(maybe.ShowChar, mapped), result}
+	return []string{strconv.Itoa(int(charAtLoopViewsTheText("naïve 😀 banana 日本 a𝄞a", 0, 0))), unsafeCharAtLoopViewsTheText("ab😀c", 4, ""), strconv.Itoa(int(indexOfLoopViewsTheText("naïve 😀 banana 日本 a𝄞a", 0, 0))), strconv.Itoa(int(lastIndexOfLoopViewsTheText("naïve 😀 banana 日本 a𝄞a", 100, 0))), prim.ShowArray(show.Show, slicesInALoopViewTheText("a😀b𝄞", 0, []string{})), strconv.Itoa(int(codePointLoopViewsTheText("naïve 😀 banana 日本 a𝄞a", 0, 0))), strconv.Itoa(int(changedTextIsWalkedEachIteration("naïve 😀 banana 日本 a𝄞a", 0))), strconv.Itoa(int(literalIndexesAloneWalkTheText("naïve 😀 banana 日本 a𝄞a", 0))), prim.ShowArray(maybe.ShowChar, closureInTheLoopReadsTheView("x😀yz", 0, []maybe.Char{})), prim.ShowArray(maybe.ShowChar, mapped), result}
 }
 
 func charAtLoopViewsTheText(text string, i int32, count int32) int32 {
@@ -153,7 +154,7 @@ func slicesInALoopViewTheText(text string, i int32, pieces []string) []string {
 		if i >= textUnits.Length() {
 			return pieces
 		}
-		i, pieces = i+2, array.Bounded(append(pieces, textUnits.Slice(i, i+2), textUnits.Take(i), textUnits.Drop(i)))
+		i, pieces = i+2, arraypkg.Bounded(append(pieces, textUnits.Slice(i, i+2), textUnits.Take(i), textUnits.Drop(i)))
 	}
 }
 
@@ -230,14 +231,14 @@ func closureInTheLoopReadsTheView(text string, i int32, found []maybe.Char) []ma
 		if i >= textUnits.Length() {
 			return found
 		}
-		array2 := []int32{0, 1}
-		mapped := make([]maybe.Char, len(array2))
-		for index, offset := range array2 {
+		array := []int32{0, 1}
+		mapped := make([]maybe.Char, len(array))
+		for index, offset := range array {
 			mapped[index] = textUnits.CharAt(func(payload rune) maybe.Char {
 				return maybe.Char(payload)
 			}, maybe.NoChar, i+offset)
 		}
-		i, found = i+3, array.Append(found, mapped)
+		i, found = i+3, arraypkg.Append(found, mapped)
 	}
 }
 

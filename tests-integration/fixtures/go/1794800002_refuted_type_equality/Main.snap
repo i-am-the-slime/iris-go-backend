@@ -8,7 +8,7 @@ import (
 	"fixture/shared"
 	"fmt"
 	"github.com/i-am-the-slime/iris-go/exception"
-	"github.com/i-am-the-slime/iris-go/prim"
+	"strconv"
 )
 
 type ValueInt struct {
@@ -57,7 +57,7 @@ func initializeMain_() []string {
 	valueStrings[0] = ValueString{Tag: ValueStringPair, Pair0: &valueStrings[1], Pair1: &valueStrings[2]}
 	valueStrings[1] = ValueString{Tag: ValueStringStringValue, StringValue0: reflTypeInt, StringValue1: "left"}
 	valueStrings[2] = ValueString{Tag: ValueStringStringValue, StringValue0: reflTypeInt, StringValue1: "right"}
-	return []string{prim.ShowInt(evaluateInt(&valueInts[0]) + 1), evaluateString(&valueStrings[0])}
+	return []string{strconv.Itoa(int(evaluateInt(&valueInts[0]) + 1)), evaluateString(&valueStrings[0])}
 }
 
 func evaluateInt(value *ValueInt) int32 {
@@ -70,8 +70,7 @@ func evaluateInt(value *ValueInt) int32 {
 			age := value.Field1
 			return age
 		default: // ValueIntPair
-			left := value.Pair0
-			value = left
+			value = value.Pair0
 			continue
 		}
 	}
@@ -86,8 +85,7 @@ func evaluateString(value *ValueString) string {
 			s := value.StringValue1
 			return s
 		default: // ValueStringPair
-			left := value.Pair0
-			value = left
+			value = value.Pair0
 			continue
 		}
 	}

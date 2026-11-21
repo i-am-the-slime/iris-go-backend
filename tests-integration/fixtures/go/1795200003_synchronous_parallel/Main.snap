@@ -43,7 +43,7 @@ import (
 func main() {
 	defer aff.Await()
 	defer exception.ReportUncaught()
-	fiber := aff.NewFiber(func() struct{} {
+	fiber2 := aff.NewFiber(func() struct{} {
 		func() {
 			array := direct.TraverseArray(func(x int32) int32 {
 				return x * x
@@ -64,15 +64,15 @@ func main() {
 		}()
 		return struct{}{}
 	})
-	isSuspended, join, kill, onComplete, run := aff.FiberFields(fiber, func(payload exception.Error) either.EitherErrorUnit {
+	isSuspended, join, kill, onComplete, run := aff.FiberFields(fiber2, func(payload exception.Error) either.EitherErrorUnit {
 		return either.EitherErrorUnit{Tag: either.EitherErrorUnitLeft, Left: payload}
 	}, func(payload struct{}) either.EitherErrorUnit {
 		return either.EitherErrorUnit{Tag: either.EitherErrorUnitRight, Right: payload}
 	}, either.EitherErrorUnit{Tag: either.EitherErrorUnitRight, Right: struct{}{}}, func(value either.OnComplete) func(func(either.EitherErrorUnit)) {
 		return value.Handler
 	})
-	fiber2 := either.Fiber{IsSuspended: isSuspended, Join: join, Kill: kill, OnComplete: onComplete, Run: run}
-	fiber2.Run()
+	fiber := either.Fiber{IsSuspended: isSuspended, Join: join, Kill: kill, OnComplete: onComplete, Run: run}
+	fiber.Run()
 }
 
 // main_neon.go

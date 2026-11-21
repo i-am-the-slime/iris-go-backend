@@ -49,7 +49,7 @@ import (
 	"fixture/shared"
 	"fmt"
 	"github.com/i-am-the-slime/iris-go/exception"
-	"github.com/i-am-the-slime/iris-go/prim"
+	"strconv"
 )
 
 type BoxInt struct {
@@ -130,7 +130,7 @@ func initializeMain_() []string {
 	defer exception.ReportUncaught()
 	a := convert2(MapTypeValueOfFnFnValueValueFnBoxBoxBoxInt{Type: "first", Value: BoxInt{Box: 41}, Map: func(function func(any) any) func(*Box) *Box {
 		return func(value *Box) *Box {
-			return map_(function, value)
+			return mapBox(function, value)
 		}
 	}})
 	vValue := a.Map(func(coerced any) any {
@@ -139,14 +139,14 @@ func initializeMain_() []string {
 	var result string
 	if a.Type == "first" {
 		scrutinee := convert3(vValue.(*Box))
-		result = "box " + prim.ShowInt(scrutinee.Box)
+		result = "box " + strconv.Itoa(int(scrutinee.Box))
 	} else {
 		scrutinee := convert4(vValue.(*Pair))
-		result = "pair " + prim.ShowInt(scrutinee.First) + " " + prim.ShowInt(scrutinee.Second)
+		result = "pair " + strconv.Itoa(int(scrutinee.First)) + " " + strconv.Itoa(int(scrutinee.Second))
 	}
 	v := convert6(MapTypeValueOfFnFnValueValueFnPairPairPairInt{Type: "second", Value: PairInt{First: 1, Second: 2}, Map: func(function func(any) any) func(*Pair) *Pair {
 		return func(value *Pair) *Pair {
-			return map_2(function, value)
+			return mapPair(function, value)
 		}
 	}})
 	var a2 shared.VariantFRep
@@ -162,17 +162,17 @@ func initializeMain_() []string {
 	var result2 string
 	if a2.Type == "first" {
 		scrutinee := convert3(vValue2.(*Box))
-		result2 = "box " + prim.ShowInt(scrutinee.Box)
+		result2 = "box " + strconv.Itoa(int(scrutinee.Box))
 	} else {
 		scrutinee := convert4(vValue2.(*Pair))
-		result2 = "pair " + prim.ShowInt(scrutinee.First) + " " + prim.ShowInt(scrutinee.Second)
+		result2 = "pair " + strconv.Itoa(int(scrutinee.First)) + " " + strconv.Itoa(int(scrutinee.Second))
 	}
 	return []string{result, result2}
 }
 
 var mapperBox func(func(any) any) func(any) any = func(coerced func(any) any) func(any) any {
 	original := func(value *Box) *Box {
-		return map_(coerced, value)
+		return mapBox(coerced, value)
 	}
 	return func(coerced2 any) any {
 		return original(coerced2.(*Box))
@@ -181,18 +181,18 @@ var mapperBox func(func(any) any) func(any) any = func(coerced func(any) any) fu
 
 var mapperPair func(func(any) any) func(any) any = func(coerced func(any) any) func(any) any {
 	original := func(value *Pair) *Pair {
-		return map_2(coerced, value)
+		return mapPair(coerced, value)
 	}
 	return func(coerced2 any) any {
 		return original(coerced2.(*Pair))
 	}
 }
 
-func map_(function func(any) any, value *Box) *Box {
+func mapBox(function func(any) any, value *Box) *Box {
 	return &Box{Box: function(value.Box)}
 }
 
-func map_2(function func(any) any, value *Pair) *Pair {
+func mapPair(function func(any) any, value *Pair) *Pair {
 	return &Pair{First: function(value.First), Second: function(value.Second)}
 }
 

@@ -82,8 +82,7 @@ func blues(value *Chain) int32 {
 			rest := value.Field1
 			return n + blues(rest)
 		case ChainRed:
-			rest := value.Field1
-			value = rest
+			value = value.Field1
 			continue
 		default: // ChainEnd
 			return 0

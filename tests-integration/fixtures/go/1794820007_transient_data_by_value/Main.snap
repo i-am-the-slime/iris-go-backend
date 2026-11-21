@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"github.com/i-am-the-slime/iris-go/exception"
 	"github.com/i-am-the-slime/iris-go/prim"
+	"strconv"
 )
 
 type Outcome struct {
@@ -78,7 +79,7 @@ func initializeMain_() shared.MainResult {
 func search(target int32, key int32) Outcome {
 	for {
 		if key == target {
-			return Outcome{Tag: OutcomeFound, Found0: prim.ShowInt(key), Found1: "b", Found2: "c", Found3: "d", Found4: "e", Found5: "f", Found6: "g", Found7: "h", Found8: "i", Found9: "j"}
+			return Outcome{Tag: OutcomeFound, Found0: strconv.Itoa(int(key)), Found1: "b", Found2: "c", Found3: "d", Found4: "e", Found5: "f", Found6: "g", Found7: "h", Found8: "i", Found9: "j"}
 		}
 		if key > 9 {
 			return Outcome{Tag: OutcomeMissing}

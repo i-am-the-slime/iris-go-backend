@@ -8,7 +8,7 @@ import (
 	"fixture/shared"
 	"fmt"
 	"github.com/i-am-the-slime/iris-go/exception"
-	"github.com/i-am-the-slime/iris-go/prim"
+	"strconv"
 )
 
 var main_ = initializeMain_()
@@ -50,7 +50,7 @@ func initializeMain_() []string {
 	} else {
 		result5 = "none"
 	}
-	return []string{result, prim.ShowInt(result2), prim.ShowInt(field * field), result3, result4, result5}
+	return []string{result, strconv.Itoa(int(result2)), strconv.Itoa(int(field * field)), result3, result4, result5}
 }
 
 func opaque(x int32) int32 {
@@ -63,11 +63,11 @@ func opaque(x int32) int32 {
 }
 
 func mainJoin(m int32) string {
-	return prim.ShowInt(m) + prim.ShowInt(m) + prim.ShowInt(m) + prim.ShowInt(m) + prim.ShowInt(m) + prim.ShowInt(m) + prim.ShowInt(m) + prim.ShowInt(m) + prim.ShowInt(m) + prim.ShowInt(m) + prim.ShowInt(m)
+	return strconv.Itoa(int(m)) + strconv.Itoa(int(m)) + strconv.Itoa(int(m)) + strconv.Itoa(int(m)) + strconv.Itoa(int(m)) + strconv.Itoa(int(m)) + strconv.Itoa(int(m)) + strconv.Itoa(int(m)) + strconv.Itoa(int(m)) + strconv.Itoa(int(m)) + strconv.Itoa(int(m))
 }
 
 func mainJoin2(m int32) string {
-	return prim.ShowInt(m) + prim.ShowInt(m) + prim.ShowInt(m) + prim.ShowInt(m) + prim.ShowInt(m) + prim.ShowInt(m) + prim.ShowInt(m) + prim.ShowInt(m) + prim.ShowInt(m) + prim.ShowInt(m) + prim.ShowInt(m) + prim.ShowInt(m) + prim.ShowInt(m) + prim.ShowInt(m) + prim.ShowInt(m) + prim.ShowInt(m) + prim.ShowInt(m) + prim.ShowInt(m) + prim.ShowInt(m) + prim.ShowInt(m)
+	return strconv.Itoa(int(m)) + strconv.Itoa(int(m)) + strconv.Itoa(int(m)) + strconv.Itoa(int(m)) + strconv.Itoa(int(m)) + strconv.Itoa(int(m)) + strconv.Itoa(int(m)) + strconv.Itoa(int(m)) + strconv.Itoa(int(m)) + strconv.Itoa(int(m)) + strconv.Itoa(int(m)) + strconv.Itoa(int(m)) + strconv.Itoa(int(m)) + strconv.Itoa(int(m)) + strconv.Itoa(int(m)) + strconv.Itoa(int(m)) + strconv.Itoa(int(m)) + strconv.Itoa(int(m)) + strconv.Itoa(int(m)) + strconv.Itoa(int(m))
 }
 
 func main() {

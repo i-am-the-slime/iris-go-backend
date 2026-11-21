@@ -27,21 +27,20 @@ import (
 	"fixture/Data/Either"
 	"fixture/Data/Void"
 	"fmt"
-	"github.com/i-am-the-slime/iris-go/array"
+	arraypkg "github.com/i-am-the-slime/iris-go/array"
 	"github.com/i-am-the-slime/iris-go/exception"
-	"github.com/i-am-the-slime/iris-go/prim"
 )
 
 var main_ = initializeMain_()
 
 func initializeMain_() []string {
 	defer exception.ReportUncaught()
-	array2 := []either.EitherStringVal{{Tag: either.EitherStringValLeft, Left: "no"}, {Tag: either.EitherStringValLeft, Left: "void"}}
-	mapped := make([]string, len(array2))
-	for index, element := range array2 {
+	array := []either.EitherStringVal{{Tag: either.EitherStringValLeft, Left: "no"}, {Tag: either.EitherStringValLeft, Left: "void"}}
+	mapped := make([]string, len(array))
+	for index, element := range array {
 		mapped[index] = describe(element)
 	}
-	return array.Append([]string{prim.ShowInt(2)}, mapped)
+	return arraypkg.Append([]string{"2"}, mapped)
 }
 
 func describe(either2 either.EitherStringVal) string {

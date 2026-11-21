@@ -4,10 +4,10 @@ source: tests-integration/src/fixtures.rs
 // Data/Show/show.go
 package show
 
-import "github.com/i-am-the-slime/iris-go/prim"
+import "strconv"
 
 func Show(i int32) string {
-	return prim.ShowInt(i)
+	return strconv.Itoa(int(i))
 }
 
 // main.go
@@ -18,19 +18,13 @@ import (
 	"fixture/Optional_ffi"
 	"github.com/i-am-the-slime/iris-go/exception"
 	"github.com/i-am-the-slime/iris-go/prim"
+	"strconv"
 )
 
 func main_() []string {
-	optional := Optional_ffi.NewCounter[int32]()
-	optional2 := Optional_ffi.NewCounter[bool]()
-	withDefault := Optional_ffi.WithDefault(true, optional2)
-	var result string
-	if withDefault {
-		result = "true"
-	} else {
-		result = "false"
-	}
-	return []string{prim.ShowArray(show.Show, []int32{Optional_ffi.WithDefault(int32(1), Optional_ffi.Absent[int32]()), Optional_ffi.WithDefault(int32(1), Optional_ffi.Present(int32(2)))}), Optional_ffi.WithDefault("fallback", Optional_ffi.Absent[string]()), prim.ShowInt(int32(len(Optional_ffi.EmptyArray[string]()))), prim.ShowArray(show.Show, []int32{Optional_ffi.PairSize(Optional_ffi.SwappedPair(int32(1), "one")), Optional_ffi.PairSize(Optional_ffi.EmptySwappedPair[int32, string]())}), prim.ShowInt(Optional_ffi.WithDefault(int32(3), optional)), result}
+	counter := Optional_ffi.NewCounter[int32]()
+	again := Optional_ffi.NewCounter[bool]()
+	return []string{prim.ShowArray(show.Show, []int32{Optional_ffi.WithDefault(int32(1), Optional_ffi.Absent[int32]()), Optional_ffi.WithDefault(int32(1), Optional_ffi.Present(int32(2)))}), Optional_ffi.WithDefault("fallback", Optional_ffi.Absent[string]()), strconv.Itoa(len(Optional_ffi.EmptyArray[string]())), prim.ShowArray(show.Show, []int32{Optional_ffi.PairSize(Optional_ffi.SwappedPair(int32(1), "one")), Optional_ffi.PairSize(Optional_ffi.EmptySwappedPair[int32, string]())}), strconv.Itoa(int(Optional_ffi.WithDefault(int32(3), counter))), strconv.FormatBool(Optional_ffi.WithDefault(true, again))}
 }
 
 func main() {

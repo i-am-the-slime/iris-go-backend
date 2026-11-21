@@ -33,6 +33,7 @@ import (
 	"github.com/i-am-the-slime/iris-go/direct"
 	"github.com/i-am-the-slime/iris-go/exception"
 	"github.com/i-am-the-slime/iris-go/prim"
+	"strconv"
 )
 
 type ApFnNumberFnIntFnBooleanPerson struct {
@@ -516,17 +517,11 @@ func initializeMain_() []string {
 		}(person.Apply.Boolean.First)(result2)
 	}
 	var result3 string
-	if record.Admin {
-		result3 = "true"
-	} else {
-		result3 = "false"
-	}
-	var result4 string
 	switch greeting.Tag {
 	case ApStringDone:
-		result4 = prim.StringToUpper(greeting.Done)
+		result3 = prim.StringToUpper(greeting.Done)
 	case ApStringField:
-		result4 = prim.StringToUpper(greeting.Field1)
+		result3 = prim.StringToUpper(greeting.Field1)
 	default: // ApStringApply
 		original := func(f func(any) any) func(*Ap) *Ap {
 			return func(value *Ap) *Ap {
@@ -545,7 +540,7 @@ func initializeMain_() []string {
 		default: // ApNumberField
 			result2 = greeting.Apply.Number.Second.Field1
 		}
-		result4 = func(coerced ApFnNumberString) func(float64) string {
+		result3 = func(coerced ApFnNumberString) func(float64) string {
 			original3 := runFnBooleanPerson(convert10(coerced)).(func(any) any)
 			return func(coerced2 float64) string {
 				return original3(coerced2).(string)
@@ -560,12 +555,12 @@ func initializeMain_() []string {
 			}
 		})(convert10(greeting.Apply.Number.First))))(result2)
 	}
-	var result5 string
+	var result4 string
 	switch greeting.Tag {
 	case ApStringDone:
-		result5 = greeting.Done
+		result4 = greeting.Done
 	case ApStringField:
-		result5 = greeting.Field1
+		result4 = greeting.Field1
 	default: // ApStringApply
 		var result2 float64
 		switch greeting.Apply.Number.Second.Tag {
@@ -574,14 +569,14 @@ func initializeMain_() []string {
 		default: // ApNumberField
 			result2 = greeting.Apply.Number.Second.Field1
 		}
-		result5 = func(coerced ApFnNumberString) func(float64) string {
+		result4 = func(coerced ApFnNumberString) func(float64) string {
 			original := runFnBooleanPerson(convert10(coerced)).(func(any) any)
 			return func(coerced2 float64) string {
 				return original(coerced2).(string)
 			}
 		}(greeting.Apply.Number.First)(result2)
 	}
-	return []string{prim.StringJoinWith(",", result), "{ admin: " + result3 + ", age: " + prim.ShowInt(record.Age) + ", name: " + prim.ShowString(record.Name) + " }", result4, prim.ShowInt(direct.CodePointLength(result5))}
+	return []string{prim.StringJoinWith(",", result), "{ admin: " + strconv.FormatBool(record.Admin) + ", age: " + strconv.Itoa(int(record.Age)) + ", name: " + prim.ShowString(record.Name) + " }", result3, strconv.Itoa(int(direct.CodePointLength(result4)))}
 }
 
 var person *ApPerson = &ApPerson{Tag: ApPersonApply, Apply: ExistsApplyEPerson{Boolean: ApplyEPersonBoolean{First: ApFnBooleanPerson{Tag: ApFnBooleanPersonApply, Apply: ExistsApplyEFnBooleanPerson{Int: ApplyEFnBooleanPersonInt{First: ApFnIntFnBooleanPerson{Tag: ApFnIntFnBooleanPersonField, Field0: "name", Field1: func(value int32) func(bool) shared.Person {
@@ -594,14 +589,14 @@ var greeting = initializeGreeting()
 
 func initializeGreeting() ApString {
 	defer exception.ReportUncaught()
-	var result ApFnNumberString
+	var function ApFnNumberString
 	switch person.Tag {
 	case ApPersonDone:
-		result = ApFnNumberString{Tag: ApFnNumberStringDone, Done: func(n float64) string {
+		function = ApFnNumberString{Tag: ApFnNumberStringDone, Done: func(n float64) string {
 			return greetingF(person.Done, n)
 		}}
 	case ApPersonField:
-		result = ApFnNumberString{Tag: ApFnNumberStringField, Field0: person.Field0, Field1: func(n float64) string {
+		function = ApFnNumberString{Tag: ApFnNumberStringField, Field0: person.Field0, Field1: func(n float64) string {
 			return greetingF(person.Field1, n)
 		}}
 	default: // ApPersonApply
@@ -618,7 +613,7 @@ func initializeGreeting() ApString {
 				}
 			}
 		}
-		result = ApFnNumberString{Tag: ApFnNumberStringApply, Apply: convert15(ApplyEFnNumberStringBoolean{First: convert12(original(func(coerced any) any {
+		function = ApFnNumberString{Tag: ApFnNumberStringApply, Apply: convert15(ApplyEFnNumberStringBoolean{First: convert12(original(func(coerced any) any {
 			original3 := coerced.(func(any) any)
 			original4 := original2(func(coerced2 bool) shared.Person {
 				return shared.Convert2(original3(coerced2).(shared.AdminAgeName))
@@ -631,7 +626,7 @@ func initializeGreeting() ApString {
 			}
 		})(convert9(person.Apply.Boolean.First))), Second: person.Apply.Boolean.Second})}
 	}
-	return ApString{Tag: ApStringApply, Apply: ExistsApplyEString{Number: ApplyEStringNumber{First: result, Second: ApNumber{Tag: ApNumberField, Field0: "count", Field1: 3.5}}}}
+	return ApString{Tag: ApStringApply, Apply: ExistsApplyEString{Number: ApplyEStringNumber{First: function, Second: ApNumber{Tag: ApNumberField, Field0: "count", Field1: 3.5}}}}
 }
 
 func map_(f func(any) any, value *Ap) *Ap {
@@ -683,7 +678,7 @@ func runFnBooleanPerson(value *Ap) any {
 }
 
 func greetingF(p shared.Person, n float64) string {
-	return p.Name + " is " + prim.ShowInt(p.Age) + " " + prim.ShowNumber(n)
+	return p.Name + " is " + strconv.Itoa(int(p.Age)) + " " + prim.ShowNumber(n)
 }
 
 func main() {

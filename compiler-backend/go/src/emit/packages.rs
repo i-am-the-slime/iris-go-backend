@@ -477,6 +477,7 @@ impl Packaging<'_> {
                     .collect(),
                 _ => FxHashMap::default(),
             };
+            let support_aliases = alias_shadowed_support(&support_imports, &support, &mut avoided);
             let aliases = choose_aliases(&referenced, packages, &qualifiers, &avoided, &support);
             for declaration in &mut declarations {
                 rename_declared(declaration, &mut |name| naming.name(name, place));
@@ -508,9 +509,18 @@ impl Packaging<'_> {
                     Reference::Binder(_) => {}
                 });
                 super::locals::settle(declaration, &record_values);
+                requalify_support(declaration, &support_aliases);
             }
-            let mut imports: Vec<GoImport> =
-                support_imports.into_iter().map(|path| GoImport { path, alias: None }).collect();
+            let mut imports: Vec<GoImport> = support_imports
+                .into_iter()
+                .map(|path| {
+                    let alias = support_aliases
+                        .iter()
+                        .find(|(name, _)| support.get(*name) == Some(&path))
+                        .map(|(_, alias)| alias.clone());
+                    GoImport { path, alias }
+                })
+                .collect();
             for home in &referenced {
                 let target = &packages[home];
                 let alias = &aliases[home];
@@ -682,6 +692,67 @@ fn choose_aliases(
         aliases.insert(place, alias);
     }
     aliases
+}
+
+/// Aliases for the standard and support packages a file imports whose names a local of the
+/// file has: the local keeps its name, and the package is imported as `avarpkg`.
+fn alias_shadowed_support(
+    imports: &BTreeSet<String>,
+    support: &FxHashMap<String, String>,
+    avoided: &mut FxHashSet<String>,
+) -> FxHashMap<String, String> {
+    let mut aliases = FxHashMap::default();
+    let mut shadowed: Vec<&String> = support
+        .iter()
+        .filter(|(name, path)| imports.contains(*path) && avoided.contains(*name))
+        .map(|(name, _)| name)
+        .collect();
+    shadowed.sort();
+    for name in shadowed {
+        let base = format!("{name}pkg");
+        let alias = crate::naming::numbered(&base, |candidate| {
+            avoided.contains(candidate) || support.contains_key(candidate)
+        });
+        avoided.insert(alias.clone());
+        aliases.insert(name.clone(), alias);
+    }
+    aliases
+}
+
+/// The declaration with its references to shadowed support packages under their aliases.
+fn requalify_support(declaration: &mut GoDeclaration, aliases: &FxHashMap<String, String>) {
+    if aliases.is_empty() {
+        return;
+    }
+    declaration.for_each_reference_mut(&mut |reference| match reference {
+        Reference::Value(GoExpression::Qualified { package, .. }) => {
+            if let Some(alias) = aliases.get(package.as_str()) {
+                *package = alias.clone();
+            }
+        }
+        Reference::Type(name) => *name = requalified(name, aliases),
+        Reference::Value(_) | Reference::Binder(_) => {}
+    });
+}
+
+/// A type's spelling with each qualifier in `aliases` replaced by its alias.
+fn requalified(text: &str, aliases: &FxHashMap<String, String>) -> String {
+    let mut spelled = String::with_capacity(text.len());
+    let mut word = String::new();
+    for character in text.chars() {
+        if character.is_alphanumeric() || character == '_' {
+            word.push(character);
+            continue;
+        }
+        match aliases.get(&word) {
+            Some(alias) if character == '.' => spelled.push_str(alias),
+            _ => spelled.push_str(&word),
+        }
+        word.clear();
+        spelled.push(character);
+    }
+    spelled.push_str(&word);
+    spelled
 }
 
 /// The standard and support packages a declaration refers to.

@@ -7,14 +7,14 @@ package main
 import (
 	"fixture/Run_ffi"
 	"github.com/i-am-the-slime/iris-go/exception"
-	"github.com/i-am-the-slime/iris-go/prim"
+	"strconv"
 )
 
 func main_() []string {
-	record := Run_ffi.Run("echo")
-	array := Run_ffi.RunAll([]string{"a", "b"})
-	record.Stdout += "!"
-	return []string{Run_ffi.Describe(record), Run_ffi.Describe(made), prim.ShowInt(int32(len(array))), record.Stderr + prim.ShowInt(record.ExitCode)}
+	output := Run_ffi.Run("echo")
+	outputs := Run_ffi.RunAll([]string{"a", "b"})
+	output.Stdout += "!"
+	return []string{Run_ffi.Describe(output), Run_ffi.Describe(made), strconv.Itoa(len(outputs)), output.Stderr + strconv.Itoa(int(output.ExitCode))}
 }
 
 var made Run_ffi.Output = Run_ffi.Output{Stdout: "made", Stderr: "", ExitCode: 3}

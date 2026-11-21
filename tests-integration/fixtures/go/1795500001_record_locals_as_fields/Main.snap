@@ -7,16 +7,11 @@ package show
 import (
 	"fixture/shared"
 	"github.com/i-am-the-slime/iris-go/prim"
+	"strconv"
 )
 
 func ShowTallyConsIntConsStringConsBooleanConsIntNil(record shared.Tally) string {
-	var result string
-	if record.Seen {
-		result = "true"
-	} else {
-		result = "false"
-	}
-	return "{ count: " + prim.ShowInt(record.Count) + ", label: " + prim.ShowString(record.Label) + ", seen: " + result + ", total: " + prim.ShowInt(record.Total) + " }"
+	return "{ count: " + strconv.Itoa(int(record.Count)) + ", label: " + prim.ShowString(record.Label) + ", seen: " + strconv.FormatBool(record.Seen) + ", total: " + strconv.Itoa(int(record.Total)) + " }"
 }
 
 func ShowBodyConsNumberConsNumberConsNumberConsNumberConsNumberNil(record shared.Body) string {
@@ -40,9 +35,10 @@ import (
 	"fixture/Data/Show"
 	"fixture/shared"
 	"fmt"
-	"github.com/i-am-the-slime/iris-go/array"
+	arraypkg "github.com/i-am-the-slime/iris-go/array"
 	"github.com/i-am-the-slime/iris-go/exception"
 	"github.com/i-am-the-slime/iris-go/prim"
+	"strconv"
 )
 
 var main_ = initializeMain_()
@@ -73,51 +69,45 @@ func initializeMain_() []string {
 		mapped[index].X = accumulatorX
 		mapped[index].Y = accumulatorY
 	}
-	array2 := []int32{1, 2, 3, 4}
+	array := []int32{1, 2, 3, 4}
 	accumulatorLabel := ""
 	var accumulatorCount int32 = 0
 	var accumulatorTotal int32 = 0
 	accumulatorSeen := false
-	for _, n := range array2 {
+	for _, n := range array {
 		accumulatorCount += 1
 		accumulatorTotal += n
-		accumulatorLabel += prim.ShowInt(n)
+		accumulatorLabel += strconv.Itoa(int(n))
 		accumulatorSeen = accumulatorSeen || n > 2
 	}
-	var result string
-	if accumulatorSeen {
-		result = "true"
-	} else {
-		result = "false"
-	}
-	array3 := []int32{5}
+	array2 := []int32{5}
 	accumulatorLabel2 := ""
 	var accumulatorCount2 int32 = 0
 	var accumulatorTotal2 int32 = 0
 	accumulatorSeen2 := false
-	for _, n := range array3 {
+	for _, n := range array2 {
 		accumulatorCount2 += 1
 		accumulatorTotal2 += n
-		accumulatorLabel2 += prim.ShowInt(n)
+		accumulatorLabel2 += strconv.Itoa(int(n))
 		accumulatorSeen2 = accumulatorSeen2 || n > 2
 	}
-	array4 := []int32{1, 2, 3}
+	array3 := []int32{1, 2, 3}
 	accumulatorLabel3 := ""
 	var accumulatorCount3 int32 = 0
 	var accumulatorTotal3 int32 = 0
 	accumulatorSeen3 := false
-	for _, n := range array4 {
+	for _, n := range array3 {
 		accumulatorCount3 += 1
 		accumulatorTotal3 += n
-		accumulatorLabel3 += prim.ShowInt(n)
+		accumulatorLabel3 += strconv.Itoa(int(n))
 		accumulatorSeen3 = accumulatorSeen3 || n > 2
 	}
-	array5 := []int32{2, 3, 4}
+	array4 := []int32{2, 3, 4}
 	accumulator := shared.Cells{Rows: 0, Cells: 0}
-	for _, width := range array5 {
+	for _, width := range array4 {
 		updated := accumulator
 		updated.Rows = accumulator.Rows + 1
-		_, count := array.RangeSteps(1, width)
+		_, count := arraypkg.RangeSteps(1, width)
 		accumulatorCells := accumulator.Cells
 		for range count {
 			accumulatorCells += 1
@@ -132,7 +122,7 @@ func initializeMain_() []string {
 		updated.Right = accumulator2.Left
 		accumulator2 = updated
 	}
-	return []string{prim.ShowArray(show.ShowBodyConsNumberConsNumberConsNumberConsNumberConsNumberNil, mapped), "{ count: " + prim.ShowInt(accumulatorCount) + ", label: " + prim.ShowString(accumulatorLabel) + ", seen: " + result + ", total: " + prim.ShowInt(accumulatorTotal) + " }", prim.ShowArray(show.ShowTallyConsIntConsStringConsBooleanConsIntNil, array.Reverse([]shared.Tally{{Label: accumulatorLabel2, Count: accumulatorCount2, Total: accumulatorTotal2, Seen: accumulatorSeen2}, {Label: accumulatorLabel3, Count: accumulatorCount3, Total: accumulatorTotal3, Seen: accumulatorSeen3}})), "{ cells: " + prim.ShowInt(accumulator.Cells) + ", rows: " + prim.ShowInt(accumulator.Rows) + " }", "{ left: " + prim.ShowInt(accumulator2.Left) + ", right: " + prim.ShowInt(accumulator2.Right) + " }"}
+	return []string{prim.ShowArray(show.ShowBodyConsNumberConsNumberConsNumberConsNumberConsNumberNil, mapped), "{ count: " + strconv.Itoa(int(accumulatorCount)) + ", label: " + prim.ShowString(accumulatorLabel) + ", seen: " + strconv.FormatBool(accumulatorSeen) + ", total: " + strconv.Itoa(int(accumulatorTotal)) + " }", prim.ShowArray(show.ShowTallyConsIntConsStringConsBooleanConsIntNil, arraypkg.Reverse([]shared.Tally{{Label: accumulatorLabel2, Count: accumulatorCount2, Total: accumulatorTotal2, Seen: accumulatorSeen2}, {Label: accumulatorLabel3, Count: accumulatorCount3, Total: accumulatorTotal3, Seen: accumulatorSeen3}})), "{ cells: " + strconv.Itoa(int(accumulator.Cells)) + ", rows: " + strconv.Itoa(int(accumulator.Rows)) + " }", "{ left: " + strconv.Itoa(int(accumulator2.Left)) + ", right: " + strconv.Itoa(int(accumulator2.Right)) + " }"}
 }
 
 func main() {

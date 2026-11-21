@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"github.com/i-am-the-slime/iris-go/exception"
 	"github.com/i-am-the-slime/iris-go/prim"
+	"strconv"
 )
 
 var main_ = initializeMain_()
@@ -15,20 +16,14 @@ var main_ = initializeMain_()
 func initializeMain_() []string {
 	defer exception.ReportUncaught()
 	s := prim.CodeUnitTake(1, "𝐀")
-	var result2 bool
+	var result bool
 	switch s {
 	case "\xed\xa0\xb5":
-		result2 = false
+		result = false
 	default:
-		result2 = prim.CodeUnitLengthUpTo(3, s) == 2
+		result = prim.CodeUnitLengthUpTo(3, s) == 2
 	}
-	var result string
-	if result2 {
-		result = "true"
-	} else {
-		result = "false"
-	}
-	return []string{prim.Append(prim.CodeUnitDrop(1, "a\xed\xa0\xb5"), prim.CodeUnitDrop(1, "𝐀")), prim.Append("a\xed\xa0\xb5", prim.CodeUnitDrop(1, "𝐀")), "<" + "a\xed\xa0\xb5" + ", " + "a\xed\xa0\xb5" + ">", result}
+	return []string{prim.Append(prim.CodeUnitDrop(1, "a\xed\xa0\xb5"), prim.CodeUnitDrop(1, "𝐀")), prim.Append("a\xed\xa0\xb5", prim.CodeUnitDrop(1, "𝐀")), "<" + "a\xed\xa0\xb5" + ", " + "a\xed\xa0\xb5" + ">", strconv.FormatBool(result)}
 }
 
 func main() {

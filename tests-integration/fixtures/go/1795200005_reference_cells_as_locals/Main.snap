@@ -12,35 +12,31 @@ import (
 )
 
 func main_() int32 {
-	ref := &shared.Ref[int32]{Value: 0}
-	drain(ref, 3)
-	i := ref.Value
-	var ref2 int32 = 0
-	var ref3 int32 = 0
+	hits := &shared.Ref[int32]{Value: 0}
+	drain(hits, 3)
+	hits2 := hits.Value
+	var total int32 = 0
+	var index int32 = 0
 	for {
-		continuing := ref3 < 4
+		continuing := index < 4
 		if !continuing {
 			break
 		}
-		s_ := ref2 + ref3
-		ref2 = s_
-		written := ref3 + 1
-		ref3 = written
+		total += index
+		index += 1
 	}
-	for i2 := int32(0); i2 < 4; i2++ {
-		s_ := ref2 + i2
-		ref2 = s_
+	for i := int32(0); i < 4; i++ {
+		total += i
 	}
-	var ref4 int32 = 0
+	var total2 int32 = 0
 	array.Foldr(func(x int32, b func()) func() {
 		return func() {
-			s_ := ref4 + x
-			ref4 = s_
+			total2 += x
 			b()
 		}
 	}, func() {
 	}, []int32{1, 2})()
-	return ref2 + ref4 + i
+	return total + total2 + hits2
 }
 
 func drain(cell *shared.Ref[int32], n int32) {

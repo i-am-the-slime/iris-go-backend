@@ -39,6 +39,7 @@ import (
 	"github.com/i-am-the-slime/iris-go/direct"
 	"github.com/i-am-the-slime/iris-go/exception"
 	"github.com/i-am-the-slime/iris-go/prim"
+	"strconv"
 )
 
 var main_ = initializeMain_()
@@ -47,13 +48,13 @@ func initializeMain_() []string {
 	defer exception.ReportUncaught()
 	append_ := direct.Appender[string]()
 	accumulator := maybe.JustArrayString([]string{})
-	for _, element := range origin.Tags {
+	for _, tag := range origin.Tags {
 		switch accumulator.Tag {
 		case maybe.TagJust:
-			if element == "" {
+			if tag == "" {
 				accumulator = maybe.NoArrayString
 			} else {
-				accumulator = maybe.JustArrayString(append_(accumulator.Just)(element + "!"))
+				accumulator = maybe.JustArrayString(append_(accumulator.Just)(tag + "!"))
 			}
 		default:
 			accumulator = maybe.NoArrayString
@@ -66,7 +67,7 @@ func initializeMain_() []string {
 	default:
 		result = "Nothing"
 	}
-	return []string{prim.ShowInt(origin.X * 2), prim.ShowInt((shared.Point{Tags: origin.Tags, X: origin.X + 1}).X), "(Just " + prim.ShowInt(2) + ")", "Nothing", prim.ShowInt(5), result, prim.ShowInt(1), prim.ShowInt(bump(3, origin).X)}
+	return []string{strconv.Itoa(int(origin.X * 2)), strconv.Itoa(int((shared.Point{Tags: origin.Tags, X: origin.X + 1}).X)), "(Just 2)", "Nothing", "5", result, "1", strconv.Itoa(int(bump(3, origin).X))}
 }
 
 var origin shared.Point = shared.Point{X: 3, Tags: []string{"a", "b"}}

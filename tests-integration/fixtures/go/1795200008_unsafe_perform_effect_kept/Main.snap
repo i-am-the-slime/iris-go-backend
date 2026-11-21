@@ -17,27 +17,22 @@ import (
 )
 
 func main_() int32 {
-	var ref int32 = 0
-	s_ := ref + 1
-	ref = s_
-	s_2 := ref + 10
-	ref = s_2
-	s_3 := ref + 100
-	ref = s_3
+	var count int32 = 0
+	count += 1
+	count += 10
+	count += 100
 	mainGo(0, struct{}{})
-	s_4 := ref + 1000
-	ref = s_4
+	count += 1000
 	var performed bool
 	performed = false
-	s_5 := ref + 10000
-	ref = s_5
+	count += 10000
 	var result int32
 	if performed {
 		result = 1
 	} else {
 		result = 0
 	}
-	return ref + result
+	return count + result
 }
 
 func mainGo(n int32, acc struct{}) {

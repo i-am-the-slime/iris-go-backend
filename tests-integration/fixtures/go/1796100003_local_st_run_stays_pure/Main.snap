@@ -39,8 +39,7 @@ func initializeMain_() shared.MainResult {
 
 func tripled(x int32) int32 {
 	ref := x
-	s_ := ref * 3
-	ref = s_
+	ref *= 3
 	return ref
 }
 

@@ -6,25 +6,26 @@ package main
 
 import (
 	"fmt"
-	"github.com/i-am-the-slime/iris-go/array"
+	arraypkg "github.com/i-am-the-slime/iris-go/array"
 	"github.com/i-am-the-slime/iris-go/exception"
 	"github.com/i-am-the-slime/iris-go/prim"
+	"strconv"
 )
 
 var main_ = initializeMain_()
 
 func initializeMain_() []string {
 	defer exception.ReportUncaught()
-	array2 := []func(int32) int32{func(x int32) int32 {
+	array := []func(int32) int32{func(x int32) int32 {
 		return offset(2, x)
 	}, func(x int32) int32 {
 		return offset(5, x)
 	}}
-	mapped := make([]string, len(array2))
-	for index, shift := range array2 {
-		mapped[index] = prim.ShowInt(shift(1))
+	mapped := make([]string, len(array))
+	for index, shift := range array {
+		mapped[index] = strconv.Itoa(int(shift(1)))
 	}
-	return array.Append(mapped, array.Append([]string{prim.ShowInt(offset(3, 4))}, array.Map(prefixed(2), []string{"a", "b"})))
+	return arraypkg.Append(mapped, arraypkg.Append([]string{strconv.Itoa(int(offset(3, 4)))}, arraypkg.Map(prefixed(2), []string{"a", "b"})))
 }
 
 func offset(n int32, x int32) int32 {

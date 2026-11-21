@@ -11,17 +11,20 @@ func Identity(x string) string {
 // Data/Show/show.go
 package show
 
-import "github.com/i-am-the-slime/iris-go/prim"
+import (
+	"github.com/i-am-the-slime/iris-go/prim"
+	"strconv"
+)
 
-func Show(i int32) string {
-	return prim.ShowInt(i)
+func ShowInt(i int32) string {
+	return strconv.Itoa(int(i))
 }
 
 func ShowNumber(array []float64) string {
-	return prim.ShowArray(Show2, array)
+	return prim.ShowArray(ShowNumber2, array)
 }
 
-func Show2(number float64) string {
+func ShowNumber2(number float64) string {
 	return prim.ShowNumber(number)
 }
 
@@ -102,7 +105,7 @@ func initializeMain_() []string {
 	return mapped
 }
 
-var things []ExistsDescribed = []ExistsDescribed{{Tag: ExistsDescribedInt, Int: DescribedInt{First: 1, Second: show.Show, Third: func(value int32) int32 {
+var things []ExistsDescribed = []ExistsDescribed{{Tag: ExistsDescribedInt, Int: DescribedInt{First: 1, Second: show.ShowInt, Third: func(value int32) int32 {
 	return value + 1
 }}}, {Tag: ExistsDescribedString, String: DescribedString{First: "a", Second: category.Identity, Third: func(value string) string {
 	return value + "!"

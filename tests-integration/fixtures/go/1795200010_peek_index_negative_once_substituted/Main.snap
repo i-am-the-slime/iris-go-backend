@@ -19,7 +19,7 @@ func initializeMain_() []int32 {
 		return value + 1
 	}}
 	within := 1 < len(*array2)
-	var boolean bool
+	var kept bool
 	if within {
 		element := (*array2)[1]
 		var result int32
@@ -31,13 +31,13 @@ func initializeMain_() []int32 {
 		} else {
 			poked = false
 		}
-		boolean = poked
+		kept = poked
 	} else {
-		boolean = false
+		kept = false
 	}
 	array3 := array.UnsafeFreeze(array2)()
 	var result2 int32
-	if boolean {
+	if kept {
 		result2 = 1
 	} else {
 		result2 = 0

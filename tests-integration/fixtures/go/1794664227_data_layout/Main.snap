@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"github.com/i-am-the-slime/iris-go/exception"
 	"github.com/i-am-the-slime/iris-go/prim"
+	"strconv"
 )
 
 type Expr struct {
@@ -88,7 +89,7 @@ func initializeMain_() shared.MainResult {
 	exprs[4] = Expr{Tag: ExprVal, Val: 2}
 	exprs[5] = Expr{Tag: ExprVal, Val: 3}
 	exprs[6] = Expr{Tag: ExprVal, Val: 4}
-	return shared.MainResult{Expression: evaluate(&exprs[0]), Shapes: mapped, Items: mapped2, Colours: mapped3, Sample: "strue" + prim.ShowNumber(0.5) + prim.ShowInt(3)}
+	return shared.MainResult{Expression: evaluate(&exprs[0]), Shapes: mapped, Items: mapped2, Colours: mapped3, Sample: "strue" + prim.ShowNumber(0.5) + "3"}
 }
 
 func evaluate(expr *Expr) int32 {
@@ -111,21 +112,9 @@ func describe(shape Shape) string {
 	case ShapeSquare:
 		return "square " + prim.ShowNumber(shape.FieldA0)
 	case ShapeLabel:
-		var result string
-		if shape.FieldB1 {
-			result = "true"
-		} else {
-			result = "false"
-		}
-		return prim.Concat("label ", shape.FieldB0, result)
+		return "label " + shape.FieldB0 + strconv.FormatBool(shape.FieldB1)
 	case ShapeCaption:
-		var result string
-		if shape.FieldB1 {
-			result = "true"
-		} else {
-			result = "false"
-		}
-		return prim.Concat("caption ", shape.FieldB0, result)
+		return "caption " + shape.FieldB0 + strconv.FormatBool(shape.FieldB1)
 	default: // ShapePoint
 		return "point"
 	}

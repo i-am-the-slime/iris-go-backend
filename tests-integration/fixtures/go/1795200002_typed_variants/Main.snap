@@ -36,6 +36,7 @@ import (
 	"fmt"
 	"github.com/i-am-the-slime/iris-go/exception"
 	"github.com/i-am-the-slime/iris-go/prim"
+	"strconv"
 )
 
 var main_ = initializeMain_()
@@ -65,7 +66,7 @@ func initializeMain_() []string {
 	if n3 > 0 {
 		result3 = "circle " + prim.ShowNumber(1.5)
 	} else {
-		result3 = "square " + prim.ShowInt(n3)
+		result3 = "square " + strconv.Itoa(int(n3))
 	}
 	n4 := opaque(0)
 	var result4 variant.CircleLabelSquare

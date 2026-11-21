@@ -60,7 +60,7 @@ import (
 	"fmt"
 	"github.com/i-am-the-slime/iris-go/array"
 	"github.com/i-am-the-slime/iris-go/exception"
-	"github.com/i-am-the-slime/iris-go/prim"
+	"strconv"
 )
 
 var main_ = initializeMain_()
@@ -79,7 +79,7 @@ func initializeMain_() []string {
 	for index, element := range problems {
 		mapped3[index] = someLabels(element)
 	}
-	return array.Append(mapped, array.Append(mapped2, array.Append(mapped3, []string{shrunk.Name + prim.ShowInt(shrunk.Base)})))
+	return array.Append(mapped, array.Append(mapped2, array.Append(mapped3, []string{shrunk.Name + strconv.Itoa(int(shrunk.Base))})))
 }
 
 func byLabel(variant2 variant.InvalidLateMissing) string {
@@ -87,7 +87,7 @@ func byLabel(variant2 variant.InvalidLateMissing) string {
 	case variant.InvalidLateMissingInvalid:
 		return byLabelX(variant.InvalidMissing{Tag: variant.InvalidMissingInvalid, Invalid: variant2.Invalid})
 	case variant.InvalidLateMissingLate:
-		return "late " + prim.ShowInt(variant2.Late.After)
+		return "late " + strconv.Itoa(int(variant2.Late.After))
 	default: // variant.InvalidLateMissingMissing
 		return byLabelX(variant.InvalidMissing{Tag: variant.InvalidMissingMissing, Missing: variant2.Missing})
 	}
@@ -98,9 +98,9 @@ var problems []variant.InvalidLateMissing = []variant.InvalidLateMissing{{Tag: v
 func byRecord(variant2 variant.InvalidLateMissing) string {
 	switch variant2.Tag {
 	case variant.InvalidLateMissingInvalid:
-		return "bad " + prim.ShowInt(variant2.Invalid*2)
+		return "bad " + strconv.Itoa(int(variant2.Invalid*2))
 	case variant.InvalidLateMissingLate:
-		return "after " + prim.ShowInt(variant2.Late.After)
+		return "after " + strconv.Itoa(int(variant2.Late.After))
 	default: // variant.InvalidLateMissingMissing
 		return "no " + variant2.Missing
 	}
@@ -109,7 +109,7 @@ func byRecord(variant2 variant.InvalidLateMissing) string {
 func someLabels(variant2 variant.InvalidLateMissing) string {
 	switch variant2.Tag {
 	case variant.InvalidLateMissingInvalid:
-		return prim.ShowInt(variant2.Invalid + 1)
+		return strconv.Itoa(int(variant2.Invalid + 1))
 	case variant.InvalidLateMissingLate:
 		return someLabelsFallback(variant.LateMissing{Tag: variant.LateMissingLate, Late: variant2.Late})
 	default: // variant.InvalidLateMissingMissing
@@ -127,7 +127,7 @@ func initializeShrunk() shared.BaseName {
 func byLabelX(variant2 variant.InvalidMissing) string {
 	switch variant2.Tag {
 	case variant.InvalidMissingInvalid:
-		return "invalid " + prim.ShowInt(variant2.Invalid)
+		return "invalid " + strconv.Itoa(int(variant2.Invalid))
 	default: // variant.InvalidMissingMissing
 		return "missing " + variant2.Missing
 	}

@@ -46,6 +46,7 @@ mod recycling;
 mod reference_equality;
 mod reuse;
 mod scalars;
+mod standard;
 mod strings;
 mod types;
 mod updates;
@@ -1495,16 +1496,12 @@ where
         self.local_name(base.to_string())
     }
 
-    /// A fresh local that shadows no global function or type, nor an imported
-    /// package, any of which the function body may still need to refer to.
-    /// A number it needs follows a mark, so that once the local's Go scope is
-    /// known it can lose the number where nothing there clashes with it.
+    /// A fresh local that shadows no global function or type, which the function body may
+    /// still need to refer to. A name the compiler made up does not shadow an imported package
+    /// either; a name from the source keeps it, and the file imports the package under another
+    /// name. A number a local needs follows a mark, so that once the local's Go scope is known it
+    /// can lose the number where nothing there clashes with it.
     fn local_name(&mut self, base: String) -> String {
-        let taken = |emitter: &Self, candidate: &String| {
-            emitter.local_names.contains(candidate)
-                || emitter.global_names.contains(candidate)
-                || IMPORTED_PACKAGES.contains(&candidate.as_str())
-        };
         // A name that ends in the mark yields to any it clashes with once
         // settled. So does a package's name, which is free for a local where
         // the code does not use the package, as only the settled scope shows.
@@ -1515,6 +1512,11 @@ where
         let (base, soft) = match base.strip_suffix('_') {
             Some(stem) if IMPORTED_PACKAGES.contains(&stem) => (stem.to_string(), true),
             _ => (base, soft),
+        };
+        let taken = |emitter: &Self, candidate: &String| {
+            emitter.local_names.contains(candidate)
+                || emitter.global_names.contains(candidate)
+                || (soft && IMPORTED_PACKAGES.contains(&candidate.as_str()))
         };
         let mut candidate = if soft { format!("{base}{}", locals::NUMBERED) } else { base.clone() };
         let mut counter = 2;
@@ -3012,6 +3014,12 @@ where
                 self.bind_pattern_locals(&bindings, |local| local_uses(body, local), out)?;
                 self.value(body, out)?
             }
+            ExpressionKind::If { .. } | ExpressionKind::Case { .. }
+                if let Some(condition) = shown_boolean(expression) =>
+            {
+                let condition = self.value(condition, out)?;
+                self.format_boolean(condition)
+            }
             ExpressionKind::If { .. } | ExpressionKind::Case { .. } => {
                 if self.is_unit(expression.monotype) {
                     self.sink(expression, Mode::Value, Sink::Discard, out)?;
@@ -3575,6 +3583,9 @@ where
         }
         if let Foreign::Call { function, boundary, .. } = *foreign {
             let values = self.boundary_arguments(arguments, boundary, monotype, true, out)?;
+            if let Some(standard) = self.standard_call(function, &values, arguments) {
+                return Ok(standard);
+            }
             let function = self.boundary_function(function, boundary, monotype)?;
             let result = call(function, values);
             if boundary.record_result {
@@ -3913,6 +3924,45 @@ pub(super) fn is_untyped_constant(expression: &GoExpression) -> bool {
             is_untyped_constant(left) && is_untyped_constant(right)
         }
         _ => false,
+    }
+}
+
+/// The Boolean that `expression` chooses `"true"` or `"false"` on, as `show` does.
+fn shown_boolean(expression: &Expression) -> Option<&Expression> {
+    let says = |branch: &Expression, word: &str| {
+        matches!(&branch.kind, ExpressionKind::Literal(Literal::String(text)) if text == word)
+    };
+    match &expression.kind {
+        ExpressionKind::If { condition, then, otherwise }
+            if says(then, "true") && says(otherwise, "false") =>
+        {
+            Some(condition)
+        }
+        ExpressionKind::Case { scrutinees, alternatives } => {
+            let ([scrutinee], [first, second]) = (scrutinees.as_slice(), alternatives.as_slice())
+            else {
+                return None;
+            };
+            let (Some(tested), first_body) = boolean_branch(first)? else { return None };
+            let (other, second_body) = boolean_branch(second)?;
+            let word = |value: bool| if value { "true" } else { "false" };
+            let shows = says(first_body, word(tested))
+                && other.is_none_or(|other| other != tested)
+                && says(second_body, word(!tested));
+            shows.then_some(scrutinee)
+        }
+        _ => None,
+    }
+}
+
+/// The Boolean an alternative of one column matches, if it does not match any, and its body.
+fn boolean_branch(alternative: &crate::mono::Alternative) -> Option<(Option<bool>, &Expression)> {
+    match (&alternative.patterns[0].kind, &alternative.body) {
+        (PatternKind::Literal(Literal::Boolean(value)), Guarded::Unconditional(body)) => {
+            Some((Some(*value), body))
+        }
+        (PatternKind::Wildcard, Guarded::Unconditional(body)) => Some((None, body)),
+        _ => None,
     }
 }
 

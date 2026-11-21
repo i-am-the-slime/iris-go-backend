@@ -88,12 +88,12 @@ func main_() int32 {
 	direct.DeleteAt(func(payload []int32) maybe.ArrayInt {
 		return maybe.JustArrayInt(payload)
 	}, maybe.NoArrayInt, 0, []int32{})
-	var ref int32 = 0
+	var counter int32 = 0
 	elements := []int32{10, 20}
 	var result int32
-	result = elements[ref]
-	modified := shared.StateValue{State: ref + 1, Value: result}
-	ref = modified.State
+	result = elements[counter]
+	modified := shared.StateValue{State: counter + 1, Value: result}
+	counter = modified.State
 	scrutinee := either.EitherIntInt{Tag: either.EitherIntIntRight, Field0: -1}
 	var result2 int32
 	if scrutinee.Tag == either.EitherIntIntRight && scrutinee.Field0 == -1 {
@@ -111,7 +111,7 @@ func main_() int32 {
 	} else {
 		result2 = 1
 	}
-	return ref*10 + result2
+	return counter*10 + result2
 }
 
 func main() {

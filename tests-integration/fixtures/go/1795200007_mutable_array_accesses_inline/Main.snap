@@ -38,34 +38,34 @@ var main_ = initializeMain_()
 func initializeMain_() []int32 {
 	defer exception.ReportUncaught()
 	array2 := array.Thaw([]int32{1, 2, 3})()
-	i := int32(len(*array2))
+	size := int32(len(*array2))
 	elements := *array2
-	for i2 := int32(0); i2 < i; i2++ {
+	for i := int32(0); i < size; i++ {
 		var peeked maybe.Int
 		var result int32
-		peeked = maybe.Int(elements[i2])
+		peeked = maybe.Int(elements[i])
 		if peeked == maybe.NoInt {
 			result = 0
 		} else {
 			result = int32(peeked)
 		}
-		elements[i2] = 2 * result
+		elements[i] = 2 * result
 	}
-	i3 := int32(len(*array2))
-	i4 := (*array2)[i3-1]
-	(*array2)[i3-1] = i4 + 1
+	size2 := int32(len(*array2))
+	i2 := (*array2)[size2-1]
+	(*array2)[size2-1] = i2 + 1
 	var poked bool
 	poked = false
-	array3 := array.Thaw([]string{"a", "b"})()
-	within := 1 < len(*array3)
+	names := array.Thaw([]string{"a", "b"})()
+	within := 1 < len(*names)
 	var maybe2 maybe.String
 	if within {
-		element := (*array3)[1]
+		element := (*names)[1]
 		maybe2 = maybe.JustString("#" + element)
 	} else {
 		maybe2 = maybe.NoString
 	}
-	array4 := array.UnsafeFreeze(array2)()
+	array3 := array.UnsafeFreeze(array2)()
 	var result2 int32
 	if poked {
 		result2 = 1
@@ -85,7 +85,7 @@ func initializeMain_() []int32 {
 	} else {
 		result4 = 0
 	}
-	performed := array.Append(array4, []int32{i, result2, result4})
+	performed := array.Append(array3, []int32{size, result2, result4})
 	return performed
 }
 

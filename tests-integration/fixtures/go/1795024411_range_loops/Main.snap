@@ -9,42 +9,41 @@ import (
 	"fmt"
 	"github.com/i-am-the-slime/iris-go/array"
 	"github.com/i-am-the-slime/iris-go/exception"
-	"github.com/i-am-the-slime/iris-go/prim"
+	"strconv"
 )
 
 var main_ = initializeMain_()
 
 func initializeMain_() shared.MainResult {
 	defer exception.ReportUncaught()
-	var ref int32 = 4
-	ref2 := []int32{}
-	step, count := array.RangeSteps(ref, 1)
+	var bound int32 = 4
+	seen := []int32{}
+	step, count := array.RangeSteps(bound, 1)
 	for index := range count {
-		i := ref + int32(index)*step
-		s_ := array.Append(ref2, []int32{i})
-		ref2 = s_
+		i := bound + int32(index)*step
+		seen = array.Append(seen, []int32{i})
 	}
-	step2, count2 := array.RangeSteps(1, ref)
+	step2, count2 := array.RangeSteps(1, bound)
 	var accumulator int32 = 0
 	for index := range count2 {
 		value := 1 + int32(index)*step2
 		accumulator += value
 	}
-	step3, count3 := array.RangeSteps(ref, 1)
+	step3, count3 := array.RangeSteps(bound, 1)
 	accumulator2 := ""
 	for index := count3 - 1; index >= 0; index-- {
-		x := ref + int32(index)*step3
-		accumulator2 = prim.ShowInt(x) + "," + accumulator2
+		x := bound + int32(index)*step3
+		accumulator2 = strconv.Itoa(int(x)) + "," + accumulator2
 	}
-	_, count4 := array.RangeSteps(1, ref)
-	step4, count5 := array.RangeSteps(1, ref)
+	_, count4 := array.RangeSteps(1, bound)
+	step4, count5 := array.RangeSteps(1, bound)
 	mapped := make([]int32, count5)
 	for slot := range count5 {
 		x := 1 + int32(slot)*step4
 		index := int32(slot)
 		mapped[slot] = index * x
 	}
-	performed := shared.MainResult{Visited: ref2, Summed: accumulator, Listed: accumulator2, Counted: int32(count4), Indexed: mapped, Descending: descending}
+	performed := shared.MainResult{Visited: seen, Summed: accumulator, Listed: accumulator2, Counted: int32(count4), Indexed: mapped, Descending: descending}
 	return performed
 }
 

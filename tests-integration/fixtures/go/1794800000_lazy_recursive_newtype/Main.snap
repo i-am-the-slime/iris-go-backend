@@ -8,7 +8,7 @@ import (
 	"fmt"
 	"github.com/i-am-the-slime/iris-go/exception"
 	"github.com/i-am-the-slime/iris-go/lazy"
-	"github.com/i-am-the-slime/iris-go/prim"
+	"strconv"
 )
 
 type StreamInt = *lazy.Lazy[*TupleIntMaybeStreamInt]
@@ -34,13 +34,13 @@ func initializeMain_() []string {
 	var result string
 	if scrutinee2.Second != nil {
 		scrutinee3 := scrutinee2.Second.Force()
-		result = "(Just " + prim.ShowInt(scrutinee3.First) + ")"
+		result = "(Just " + strconv.Itoa(int(scrutinee3.First)) + ")"
 	} else {
 		result = "Nothing"
 	}
 	scrutinee4 := tailsInt(countdown(2)).Force()
 	scrutinee5 := scrutinee4.First.Force()
-	return []string{prim.ShowInt(scrutinee.First), result, prim.ShowInt(scrutinee5.First)}
+	return []string{strconv.Itoa(int(scrutinee.First)), result, strconv.Itoa(int(scrutinee5.First))}
 }
 
 func countdown(n int32) *lazy.Lazy[*TupleIntMaybeStreamInt] {

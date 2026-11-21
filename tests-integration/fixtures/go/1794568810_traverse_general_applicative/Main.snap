@@ -23,7 +23,7 @@ import (
 	"fmt"
 	"github.com/i-am-the-slime/iris-go/direct"
 	"github.com/i-am-the-slime/iris-go/exception"
-	"github.com/i-am-the-slime/iris-go/prim"
+	"strconv"
 )
 
 var main_ = initializeMain_()
@@ -41,7 +41,7 @@ func initializeMain_() []either.EitherStringArrayInt {
 			if element > 0 {
 				accumulator = either.EitherStringArrayInt{Tag: either.EitherStringArrayIntRight, Right: append_(accumulator.Right)(element)}
 			} else {
-				accumulator = either.EitherStringArrayInt{Tag: either.EitherStringArrayIntLeft, Left: "not positive: " + prim.ShowInt(element)}
+				accumulator = either.EitherStringArrayInt{Tag: either.EitherStringArrayIntLeft, Left: "not positive: " + strconv.Itoa(int(element))}
 			}
 		}
 	}
@@ -56,7 +56,7 @@ func initializeMain_() []either.EitherStringArrayInt {
 			if element > 0 {
 				accumulator2 = either.EitherStringArrayInt{Tag: either.EitherStringArrayIntRight, Right: append_2(accumulator2.Right)(element)}
 			} else {
-				accumulator2 = either.EitherStringArrayInt{Tag: either.EitherStringArrayIntLeft, Left: "not positive: " + prim.ShowInt(element)}
+				accumulator2 = either.EitherStringArrayInt{Tag: either.EitherStringArrayIntLeft, Left: "not positive: " + strconv.Itoa(int(element))}
 			}
 		}
 	}

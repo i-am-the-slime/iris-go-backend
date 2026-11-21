@@ -4,10 +4,10 @@ source: tests-integration/src/fixtures.rs
 // Data/Show/show.go
 package show
 
-import "github.com/i-am-the-slime/iris-go/prim"
+import "strconv"
 
 func Show(i int32) string {
-	return prim.ShowInt(i)
+	return strconv.Itoa(int(i))
 }
 
 // main.go

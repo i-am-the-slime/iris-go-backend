@@ -33,8 +33,10 @@ pub type FunctionSpellings = FxHashMap<SmolStr, FunctionSpelling>;
 /// in it with the short names it gives them.
 #[derive(Debug, Clone)]
 pub enum FunctionSpelling {
-    /// A definition's name followed by the types it is specialized at.
-    Specialized { name: SmolStr, types: Arc<[TypeId]> },
+    /// A definition's name followed by the types it is specialized at. A member's name is
+    /// followed first by the types of its instance's head, which are spelled only where they
+    /// tell apart members of the same name: `show` of `Show Int` and of `Show String`.
+    Specialized { name: SmolStr, head: Arc<[TypeId]>, types: Arc<[TypeId]> },
     /// A local function lifted out of another, named after both.
     Lifted { parent: SmolStr, local: SmolStr },
     /// The function that runs the cells of a closed function type, `run`

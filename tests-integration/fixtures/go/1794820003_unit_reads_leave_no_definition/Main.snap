@@ -43,17 +43,16 @@ import (
 )
 
 func main_() int32 {
-	var i int32 = 1
-	var ref int32 = 0
+	var same int32 = 1
+	var count int32 = 0
 	dataarray.FoldMEffectTupleUnitUnitUnit(func(_ struct{}, pair tuple.TupleUnitUnit) {
-		s_ := ref + 1
-		ref = s_
+		count += 1
 	}, struct{}{}, units)
 	var accumulator int32 = 0
 	for range units {
 		accumulator += 1
 	}
-	return i*100 + ref*10 + accumulator
+	return same*100 + count*10 + accumulator
 }
 
 var units []tuple.TupleUnitUnit = []tuple.TupleUnitUnit{{First: struct{}{}, Second: struct{}{}}, {First: struct{}{}, Second: struct{}{}}}

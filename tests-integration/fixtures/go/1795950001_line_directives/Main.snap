@@ -21,15 +21,11 @@ import (
 func main() {
 	defer exception.ReportUncaught()
 //line Main.purs:22:3
-	scrutinee := sumFrom([]int32{1, 2, 3}, 0, 0) != 6
-	if scrutinee {
-//line Main.purs:23:5
+	if sumFrom([]int32{1, 2, 3}, 0, 0) != 6 {
 		effectexception.ThrowUnit("the total is wrong")
 	}
 //line Main.purs:24:3
-	scrutinee2 := sumFrom([]int32{4}, 0, 0) != 4
-	if scrutinee2 {
-//line Main.purs:25:5
+	if sumFrom([]int32{4}, 0, 0) != 4 {
 		effectexception.ThrowUnit("the second total is wrong")
 	}
 }

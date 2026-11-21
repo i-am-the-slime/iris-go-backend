@@ -14,6 +14,7 @@ pub(super) fn substitute_aliases(declarations: &mut [GoDeclaration]) {
                 }
             }
             drop_self_assignments(block);
+            assign_directly(block);
         });
     }
 }
@@ -378,6 +379,52 @@ impl Walk for Free<'_> {
             }
             _ => walk::expression(self, value),
         }
+    }
+}
+
+/// `variable = value` for `staged := value` directly followed by `variable = staged`, where
+/// nothing else reads `staged`: `total = total + i`, which prints as `total += i`.
+fn assign_directly(block: &mut Vec<GoStatement>) {
+    let mut position = 0;
+    while position < block.len() {
+        let Some(next) = (position + 1..block.len())
+            .find(|&next| !matches!(block[next], GoStatement::Line(_)))
+        else {
+            break;
+        };
+        let staged = match (&block[position], &block[next]) {
+            (
+                GoStatement::Define { names, values: defined },
+                GoStatement::Assign { targets, values },
+            ) => {
+                match (names.as_slice(), defined.as_slice(), targets.as_slice(), &values[..]) {
+                    (
+                        [staged],
+                        [_],
+                        [GoExpression::Identifier(variable)],
+                        [GoExpression::Identifier(read)],
+                    ) if read == staged && variable != staged => Some(staged.clone()),
+                    _ => None,
+                }
+            }
+            _ => None,
+        };
+        let Some(staged) = staged else {
+            position += 1;
+            continue;
+        };
+        let read_later = block[next + 1..]
+            .iter_mut()
+            .any(|statement| !matches!(reads(statement, &staged), Read::Never));
+        if read_later {
+            position += 1;
+            continue;
+        }
+        let GoStatement::Define { values, .. } = block.remove(position) else { unreachable!() };
+        let GoStatement::Assign { values: assigned, .. } = &mut block[next - 1] else {
+            unreachable!()
+        };
+        *assigned = values;
     }
 }
 

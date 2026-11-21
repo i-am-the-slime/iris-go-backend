@@ -6,20 +6,20 @@ package eq
 
 import "github.com/i-am-the-slime/iris-go/array"
 
-func Eq(i int32, i2 int32) bool {
+func EqInt2(i int32, i2 int32) bool {
 	return i == i2
 }
 
 func EqInt(array2 []int32, array3 []int32) bool {
-	return array.Eq(Eq, array2, array3)
+	return array.Eq(EqInt2, array2, array3)
 }
 
-func Eq2(char rune, char2 rune) bool {
+func EqChar2(char rune, char2 rune) bool {
 	return char == char2
 }
 
 func EqChar(array2 []rune, array3 []rune) bool {
-	return array.Eq(Eq2, array2, array3)
+	return array.Eq(EqChar2, array2, array3)
 }
 
 // Data/Ord/ord.go

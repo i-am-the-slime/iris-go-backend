@@ -16,32 +16,32 @@ func initializeMain_() []int32 {
 	defer exception.ReportUncaught()
 	xs := []int32{4}
 	xs2 := []int32{}
-	array2 := &[]int32{}
+	pushed := &[]int32{}
 	a := array.Append(xs, []int32{5})
 	if len(a) == 0 {
-		*array2 = array.Bounded(append(*array2, 0))
+		*pushed = array.Bounded(append(*pushed, 0))
 	} else {
-		*array2 = array.Bounded(append(*array2, 1))
+		*pushed = array.Bounded(append(*pushed, 1))
 	}
 	scrutinee := mapLanes(xs)
 	if len(scrutinee) == 1 {
 		x := scrutinee[0]
-		*array2 = array.Bounded(append(*array2, x))
+		*pushed = array.Bounded(append(*pushed, x))
 	}
-	performed := array.UnsafeFreeze(array2)()
-	array3 := &[]int32{}
+	performed := array.UnsafeFreeze(pushed)()
+	pushed2 := &[]int32{}
 	a2 := array.Append(xs2, []int32{})
 	if len(a2) == 0 {
-		*array3 = array.Bounded(append(*array3, 0))
+		*pushed2 = array.Bounded(append(*pushed2, 0))
 	} else {
-		*array3 = array.Bounded(append(*array3, 1))
+		*pushed2 = array.Bounded(append(*pushed2, 1))
 	}
 	scrutinee2 := mapLanes(xs2)
 	if len(scrutinee2) == 1 {
 		x := scrutinee2[0]
-		*array3 = array.Bounded(append(*array3, x))
+		*pushed2 = array.Bounded(append(*pushed2, x))
 	}
-	performed2 := array.UnsafeFreeze(array3)()
+	performed2 := array.UnsafeFreeze(pushed2)()
 	return array.Append(performed, performed2)
 }
 

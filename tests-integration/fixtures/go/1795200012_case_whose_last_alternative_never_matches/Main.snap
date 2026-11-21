@@ -55,8 +55,7 @@ func defaultedGo(b func(int32) int32, value *list.ListUnit) func(int32) int32 {
 		if value == list.SharedListUnitNil {
 			return b
 		}
-		as := value.Cons1
-		value = as
+		value = value.Cons1
 	}
 }
 

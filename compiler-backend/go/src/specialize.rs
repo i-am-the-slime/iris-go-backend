@@ -2865,7 +2865,7 @@ where
                 let declared = module.checked.lookup_term_item_type(term);
                 let (signedness, inherited) =
                     self.key_signedness(scope, &types, &[], declared)?;
-                let name = self.specialized_name(name, &types)?;
+                let name = self.specialized_name(name, &[], &types)?;
                 let name = int64::inherited_name(name, signedness.filter(|_| inherited));
                 let key = SpecializationKey {
                     definition: Definition::Value { file_id, term },
@@ -2949,7 +2949,8 @@ where
         let head = module.checked.tree[declaration].type_id;
         let (signedness, inherited) =
             self.key_signedness(scope, &types, &instance.types, Some(head))?;
-        let name = self.specialized_name(member_name, &instance.types)?;
+        let head_types = self.instance_head_types(head, instance.types.is_empty());
+        let name = self.specialized_name(member_name, &head_types, &instance.types)?;
         let name = int64::inherited_name(name, signedness.filter(|_| inherited));
         let key = SpecializationKey {
             definition: Definition::Member { dictionary: instance, member },
@@ -3476,15 +3477,42 @@ where
         })
     }
 
+    /// The types that tell an instance's members apart from another instance's: the types its
+    /// head applies the class to, `Int` in `Show Int`, or where the head has variables, which the
+    /// instance's types fill in, the constructors of those types, `Array` in `Show (Array a)`.
+    fn instance_head_types(&mut self, head: TypeId, closed: bool) -> Vec<TypeId> {
+        let (_, mut body) = self.context.types.peel_quantifiers(head);
+        while let Type::Constrained(_, inner) = self.context.types.lookup(body).clone() {
+            body = inner;
+        }
+        let arguments = self.context.types.spine(body).1.to_vec();
+        if closed {
+            return arguments;
+        }
+        arguments
+            .into_iter()
+            .map(|argument| self.context.types.spine(argument).0)
+            .filter(|&constructor| {
+                matches!(self.context.types.lookup(constructor), Type::Constructor(..))
+            })
+            .collect()
+    }
+
     /// A definition's name followed by the types it is specialized at, which
     /// the emitter spells again once it has named their records.
-    fn specialized_name(&mut self, name: SmolStr, types: &[TypeId]) -> GoResult<SmolStr> {
+    fn specialized_name(
+        &mut self,
+        name: SmolStr,
+        head: &[TypeId],
+        types: &[TypeId],
+    ) -> GoResult<SmolStr> {
         let mut spelled = name.to_string();
-        for &type_id in types {
+        for &type_id in head.iter().chain(types) {
             self.context.type_suffix(type_id, &mut spelled)?;
         }
         let spelled = SmolStr::from(spelled);
-        let spelling = FunctionSpelling::Specialized { name, types: Arc::from(types) };
+        let spelling =
+            FunctionSpelling::Specialized { name, head: Arc::from(head), types: Arc::from(types) };
         self.monotypes.function_spellings.entry(spelled.clone()).or_insert(spelling);
         Ok(spelled)
     }

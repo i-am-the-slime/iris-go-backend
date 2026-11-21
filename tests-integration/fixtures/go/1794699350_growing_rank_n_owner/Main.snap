@@ -72,7 +72,7 @@ import (
 	"fixture/Data/Tuple"
 	"fixture/shared"
 	"fmt"
-	"github.com/i-am-the-slime/iris-go/array"
+	arraypkg "github.com/i-am-the-slime/iris-go/array"
 	"github.com/i-am-the-slime/iris-go/exception"
 )
 
@@ -85,9 +85,9 @@ func initializeMain_() []int32 {
 		for index := range questions {
 			mapped[index] = category.Identity2
 		}
-		array2 := shared.Convert(mapped)
-		mapped2 := make([]any, len(array2))
-		for index, value := range array2 {
+		array := shared.Convert(mapped)
+		mapped2 := make([]any, len(array))
+		for index, value := range array {
 			value2 := func(x int32) any {
 				return value(func(i int32) int32 {
 					return x + i
@@ -95,16 +95,16 @@ func initializeMain_() []int32 {
 			}
 			mapped2[index] = value2(1)
 		}
-		array3 := tuple.Convert2(array.Map(func(f func(int32) any) func(int32) *tuple.TupleFnIntInt {
+		array2 := tuple.Convert2(arraypkg.Map(func(f func(int32) any) func(int32) *tuple.TupleFnIntInt {
 			return func(i int32) *tuple.TupleFnIntInt {
 				return &tuple.TupleFnIntInt{First: f, Second: i}
 			}
 		}, questions))
-		mapped3 := make([]any, len(array3))
-		for index, value := range array3 {
+		mapped3 := make([]any, len(array2))
+		for index, value := range array2 {
 			mapped3[index] = value(10)
 		}
-		return array.Apply(array.Map(func(function func(int32) int32) func(*tuple.TupleFnIntInt) any {
+		return arraypkg.Apply(arraypkg.Map(func(function func(int32) int32) func(*tuple.TupleFnIntInt) any {
 			return func(tuple *tuple.TupleFnIntInt) any {
 				return tuple.First(function(tuple.Second))
 			}
@@ -114,8 +114,8 @@ func initializeMain_() []int32 {
 	}})))
 }
 
-func sampleWithIntInt(f func([]func(int32) any) []any) func([]func(int32) any) []any {
-	return f
+func sampleWithIntInt(sample func([]func(int32) any) []any) func([]func(int32) any) []any {
+	return sample
 }
 
 func main() {

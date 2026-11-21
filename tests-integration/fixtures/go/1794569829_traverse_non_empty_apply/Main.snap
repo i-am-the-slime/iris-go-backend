@@ -25,7 +25,7 @@ package main
 import (
 	"fixture/Data/Maybe"
 	"fmt"
-	"github.com/i-am-the-slime/iris-go/array"
+	arraypkg "github.com/i-am-the-slime/iris-go/array"
 	"github.com/i-am-the-slime/iris-go/direct"
 	"github.com/i-am-the-slime/iris-go/exception"
 	"github.com/i-am-the-slime/iris-go/prim"
@@ -35,7 +35,7 @@ var main_ = initializeMain_()
 
 func initializeMain_() maybe.ArrayInt {
 	defer exception.ReportUncaught()
-	array2 := array.Append([]int32{2}, []int32{4, 8})
+	array2 := arraypkg.Append([]int32{2}, []int32{4, 8})
 	append_ := direct.Appender[int32]()
 	n := array2[0]
 	var result maybe.ArrayInt
@@ -44,8 +44,8 @@ func initializeMain_() maybe.ArrayInt {
 	} else {
 		result = maybe.NoArrayInt
 	}
-	array3 := array.Slice(1, int32(len(array2)), array2)
-	for _, element := range array3 {
+	array := arraypkg.Slice(1, int32(len(array2)), array2)
+	for _, element := range array {
 		switch result.Tag {
 		case maybe.TagJust:
 			if prim.IntMod(element, 2) == 0 {

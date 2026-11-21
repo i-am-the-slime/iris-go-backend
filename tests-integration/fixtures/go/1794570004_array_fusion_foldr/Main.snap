@@ -21,7 +21,7 @@ import (
 	"fixture/Data/Maybe"
 	"fmt"
 	"github.com/i-am-the-slime/iris-go/exception"
-	"github.com/i-am-the-slime/iris-go/prim"
+	"strconv"
 )
 
 var main_ = initializeMain_()
@@ -32,7 +32,7 @@ func initializeMain_() maybe.MainResult {
 	for index := len(numbers) - 1; index >= 0; index-- {
 		value := numbers[index]
 		x := value * 2
-		accumulator = prim.ShowInt(x) + "," + accumulator
+		accumulator = strconv.Itoa(int(x)) + "," + accumulator
 	}
 	kept := []int32{}
 	for _, value := range numbers {
@@ -43,7 +43,7 @@ func initializeMain_() maybe.MainResult {
 	accumulator2 := ""
 	for index := len(kept) - 1; index >= 0; index-- {
 		x := kept[index]
-		accumulator2 = prim.ShowInt(x) + ";" + accumulator2
+		accumulator2 = strconv.Itoa(int(x)) + ";" + accumulator2
 	}
 	found := maybe.NoInt
 	for index := len(numbers) - 1; index >= 0; index-- {

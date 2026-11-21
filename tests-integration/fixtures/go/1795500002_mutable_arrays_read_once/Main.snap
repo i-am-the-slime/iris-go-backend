@@ -15,14 +15,17 @@ const (
 // Data/Show/show.go
 package show
 
-import "github.com/i-am-the-slime/iris-go/prim"
+import (
+	"github.com/i-am-the-slime/iris-go/prim"
+	"strconv"
+)
 
-func Show(number float64) string {
+func ShowNumber(number float64) string {
 	return prim.ShowNumber(number)
 }
 
-func Show2(i int32) string {
-	return prim.ShowInt(i)
+func ShowInt(i int32) string {
+	return strconv.Itoa(int(i))
 }
 
 // main.go
@@ -70,89 +73,81 @@ func initializeMain_() []string {
 	smooth(*array2, 1)
 	smooth(*array2, 2)
 	within5 := 9 < len(*array2)
-	var number float64
+	var edge float64
 	if within5 {
-		element := (*array2)[9]
-		number = element
+		edge = (*array2)[9]
 	} else {
-		number = 0.0
+		edge = 0.0
 	}
 	*array2 = array.Bounded(append(*array2, 9.0))
-	var number2 float64
-	element2 := (*array2)[0]
-	number2 = element2
+	var number float64
+	number = (*array2)[0]
 	*array2 = array.Bounded(append(*array2, 10.0))
 	i2 := int32(len(*array2))
 	i3 := i2 - 1
-	var number3 float64
-	element3 := (*array2)[i3]
-	number3 = element3
+	var number2 float64
+	number2 = (*array2)[i3]
 	array3 := array.Freeze(array2)()
-	performed := array.Append([]string{prim.ShowArray(show.Show, array3), prim.ShowNumber(number), prim.ShowNumber(number2 + number3)}, array.Append(pull, array.Append(countBefore, sortEach)))
+	performed := array.Append([]string{prim.ShowArray(show.ShowNumber, array3), prim.ShowNumber(edge), prim.ShowNumber(number + number2)}, array.Append(pull, array.Append(countBefore, sortEach)))
 	return performed
 }
 
 func smooth(array []float64, i int32) {
 	i2 := i - 1
 	within := int(i2) < len(array)
-	var number float64
+	var left float64
 	if within {
-		element := array[i2]
-		number = element
+		left = array[i2]
 	} else {
-		number = 0.0
+		left = 0.0
 	}
 	within2 := int(i) < len(array)
-	var number2 float64
+	var here float64
 	if within2 {
-		element := array[i]
-		number2 = element
+		here = array[i]
 	} else {
-		number2 = 0.0
+		here = 0.0
 	}
 	i3 := i + 1
 	within3 := int(i3) < len(array)
-	var number3 float64
+	var right float64
 	if within3 {
-		element := array[i3]
-		number3 = element
+		right = array[i3]
 	} else {
-		number3 = 0.0
+		right = 0.0
 	}
-	average := (number + number2 + number3) / 3.0
+	average := (left + here + right) / 3.0
 	i4 := i - 1
 	within4 := int(i4) < len(array)
 	if within4 {
 		element := array[i4]
-		array[i4] = element + (average-number)*0.5
+		array[i4] = element + (average-left)*0.5
 	}
 	within5 := int(i) < len(array)
 	if within5 {
 		element := array[i]
-		array[i] = element + (average-number2)*0.5
+		array[i] = element + (average-here)*0.5
 	}
 	i5 := i + 1
 	within6 := int(i5) < len(array)
 	if within6 {
 		element := array[i5]
-		array[i5] = element + (average-number3)*0.5
+		array[i5] = element + (average-right)*0.5
 	}
 	i6 := i + 2
 	within7 := int(i6) < len(array)
-	var number4 float64
+	var edge float64
 	if within7 {
-		element := array[i6]
-		number4 = element
+		edge = array[i6]
 	} else {
-		number4 = 0.0
+		edge = 0.0
 	}
-	scrutinee := !(number4 <= average)
-	if scrutinee {
+	if !(edge <= average) {
 		i7 := i + 2
 		within8 := int(i7) < len(array)
 		if within8 {
 			element := array[i7]
-			array[i7] = element + (average - number4)
+			array[i7] = element + (average - edge)
 		}
 	}
 }
@@ -174,45 +169,39 @@ func initializePull() []string {
 	for ignored := int32(0); ignored < 3; ignored++ {
 		for i := int32(0); i < 3; i++ {
 			for j := int32(0); j < 3; j++ {
-				scrutinee := i != j
-				if scrutinee {
+				if i != j {
 					within := int(j) < len(elements)
 					var number float64
 					if within {
-						element := elements[j]
-						number = element
+						number = elements[j]
 					} else {
 						number = 0.0
 					}
 					within2 := int(i) < len(elements)
 					var number2 float64
 					if within2 {
-						element := elements[i]
-						number2 = element
+						number2 = elements[i]
 					} else {
 						number2 = 0.0
 					}
 					within3 := int(j) < len(elements2)
 					var number3 float64
 					if within3 {
-						element := elements2[j]
-						number3 = element
+						number3 = elements2[j]
 					} else {
 						number3 = 0.0
 					}
 					within4 := int(i) < len(elements2)
 					var number4 float64
 					if within4 {
-						element := elements2[i]
-						number4 = element
+						number4 = elements2[i]
 					} else {
 						number4 = 0.0
 					}
 					within5 := int(j) < len(elements3)
 					var number5 float64
 					if within5 {
-						element := elements3[j]
-						number5 = element
+						number5 = elements3[j]
 					} else {
 						number5 = 0.0
 					}
@@ -233,8 +222,7 @@ func initializePull() []string {
 			within := int(i) < len(elements4)
 			var number float64
 			if within {
-				element := elements4[i]
-				number = element
+				number = elements4[i]
 			} else {
 				number = 0.0
 			}
@@ -246,8 +234,7 @@ func initializePull() []string {
 			within3 := int(i) < len(elements5)
 			var number2 float64
 			if within3 {
-				element := elements5[i]
-				number2 = element
+				number2 = elements5[i]
 			} else {
 				number2 = 0.0
 			}
@@ -260,7 +247,7 @@ func initializePull() []string {
 	}
 	array7 := array.Freeze(array2)()
 	array8 := array.Freeze(array3)()
-	performed := []string{prim.ShowArray(show.Show, array7), prim.ShowArray(show.Show, array8)}
+	performed := []string{prim.ShowArray(show.ShowNumber, array7), prim.ShowArray(show.ShowNumber, array8)}
 	return performed
 }
 
@@ -268,30 +255,27 @@ var countBefore = initializeCountBefore()
 
 func initializeCountBefore() []string {
 	defer exception.ReportUncaught()
-	array2 := array.Thaw([]string{"pear", "apple", "fig"})()
-	array3 := array.Thaw([]int32{0, 0, 0})()
-	elements := *array2
-	elements2 := *array3
+	words := array.Thaw([]string{"pear", "apple", "fig"})()
+	counts := array.Thaw([]int32{0, 0, 0})()
+	elements := *words
+	elements2 := *counts
 	for i := int32(0); i < 3; i++ {
 		for j := int32(0); j < 3; j++ {
 			within := int(i) < len(elements)
 			var s string
 			if within {
-				element := elements[i]
-				s = element
+				s = elements[i]
 			} else {
 				s = ""
 			}
 			within2 := int(j) < len(elements)
 			var s2 string
 			if within2 {
-				element := elements[j]
-				s2 = element
+				s2 = elements[j]
 			} else {
 				s2 = ""
 			}
-			scrutinee := prim.CompareString(s2, s) < 0
-			if scrutinee {
+			if prim.CompareString(s2, s) < 0 {
 				within3 := int(i) < len(elements2)
 				if within3 {
 					element := elements2[i]
@@ -300,8 +284,8 @@ func initializeCountBefore() []string {
 			}
 		}
 	}
-	array4 := array.Freeze(array3)()
-	performed := []string{prim.ShowArray(show.Show2, array4)}
+	array2 := array.Freeze(counts)()
+	performed := []string{prim.ShowArray(show.ShowInt, array2)}
 	return performed
 }
 
@@ -334,8 +318,7 @@ func initializeSortEach() []string {
 		within := 0 < len(*array2)
 		var i3 int32
 		if within {
-			element := (*array2)[0]
-			i3 = element
+			i3 = (*array2)[0]
 		} else {
 			i3 = 0
 		}
@@ -347,7 +330,7 @@ func initializeSortEach() []string {
 	}
 	array4 := array.Freeze(array2)()
 	array5 := array.Freeze(array3)()
-	performed := []string{prim.ShowArray(show.Show2, array4), prim.ShowArray(show.Show2, array5)}
+	performed := []string{prim.ShowArray(show.ShowInt, array4), prim.ShowArray(show.ShowInt, array5)}
 	return performed
 }
 

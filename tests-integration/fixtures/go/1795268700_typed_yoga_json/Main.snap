@@ -657,7 +657,7 @@ import (
 	"fixture/Foreign"
 	"fixture/shared"
 	"github.com/i-am-the-slime/iris-go/alloc"
-	"github.com/i-am-the-slime/iris-go/array"
+	arraypkg "github.com/i-am-the-slime/iris-go/array"
 	"github.com/i-am-the-slime/iris-go/foreignvalue"
 	"github.com/i-am-the-slime/iris-go/nullable"
 	"github.com/i-am-the-slime/iris-go/object"
@@ -717,7 +717,7 @@ func ReadAtIdxItem(i int32, f any) foreign.EitherNonEmptyListForeignErrorItem {
 				}
 			}))
 			len_ := int32(len(xs))
-			array2 := array.Unfoldr(func(value foreign.MaybeTupleTupleStringEitherNonEmptyListForeignErrorIntInt) bool {
+			array := arraypkg.Unfoldr(func(value foreign.MaybeTupleTupleStringEitherNonEmptyListForeignErrorIntInt) bool {
 				return value.Tag == maybe.TagNothing
 			}, func(value foreign.MaybeTupleTupleStringEitherNonEmptyListForeignErrorIntInt) foreign.TupleTupleStringEitherNonEmptyListForeignErrorIntInt {
 				return value.Just
@@ -732,17 +732,17 @@ func ReadAtIdxItem(i int32, f any) foreign.EitherNonEmptyListForeignErrorItem {
 				return foreign.NoTupleTupleStringEitherNonEmptyListForeignErrorIntInt
 			}, 0)
 			accumulator := foreign.EitherNonEmptyListForeignErrorObjectInt{Tag: foreign.EitherNonEmptyListForeignErrorObjectIntRight, Right: object.Empty[int32]()}
-			for tupleIndex := range array2 {
-				if accumulator.Tag == foreign.EitherNonEmptyListForeignErrorObjectIntLeft && array2[tupleIndex].Second.Tag == foreign.EitherNonEmptyListForeignErrorIntLeft {
-					accumulator = foreign.EitherNonEmptyListForeignErrorObjectInt{Tag: foreign.EitherNonEmptyListForeignErrorObjectIntLeft, Left: foreign.NonEmptyListForeignError{First: accumulator.Left.First, Second: MainGoReusing(&foreign.ListForeignError{Cons0: array2[tupleIndex].Second.Left.First, Cons1: array2[tupleIndex].Second.Left.Second}, MainGo(foreign.SharedListForeignErrorNil, accumulator.Left.Second))}}
-				} else if accumulator.Tag == foreign.EitherNonEmptyListForeignErrorObjectIntLeft && array2[tupleIndex].Second.Tag == foreign.EitherNonEmptyListForeignErrorIntRight {
+			for tupleIndex := range array {
+				if accumulator.Tag == foreign.EitherNonEmptyListForeignErrorObjectIntLeft && array[tupleIndex].Second.Tag == foreign.EitherNonEmptyListForeignErrorIntLeft {
+					accumulator = foreign.EitherNonEmptyListForeignErrorObjectInt{Tag: foreign.EitherNonEmptyListForeignErrorObjectIntLeft, Left: foreign.NonEmptyListForeignError{First: accumulator.Left.First, Second: MainGoReusing(&foreign.ListForeignError{Cons0: array[tupleIndex].Second.Left.First, Cons1: array[tupleIndex].Second.Left.Second}, MainGo(foreign.SharedListForeignErrorNil, accumulator.Left.Second))}}
+				} else if accumulator.Tag == foreign.EitherNonEmptyListForeignErrorObjectIntLeft && array[tupleIndex].Second.Tag == foreign.EitherNonEmptyListForeignErrorIntRight {
 					accumulator = foreign.EitherNonEmptyListForeignErrorObjectInt{Tag: foreign.EitherNonEmptyListForeignErrorObjectIntLeft, Left: accumulator.Left}
-				} else if accumulator.Tag == foreign.EitherNonEmptyListForeignErrorObjectIntRight && array2[tupleIndex].Second.Tag == foreign.EitherNonEmptyListForeignErrorIntRight {
+				} else if accumulator.Tag == foreign.EitherNonEmptyListForeignErrorObjectIntRight && array[tupleIndex].Second.Tag == foreign.EitherNonEmptyListForeignErrorIntRight {
 					object2 := object.CopyST(accumulator.Right)()
-					object.Poke(array2[tupleIndex].First, array2[tupleIndex].Second.Right, object2)()
+					object.Poke(array[tupleIndex].First, array[tupleIndex].Second.Right, object2)()
 					accumulator = foreign.EitherNonEmptyListForeignErrorObjectInt{Tag: foreign.EitherNonEmptyListForeignErrorObjectIntRight, Right: object2}
 				} else {
-					accumulator = foreign.EitherNonEmptyListForeignErrorObjectInt{Tag: foreign.EitherNonEmptyListForeignErrorObjectIntLeft, Left: array2[tupleIndex].Second.Left}
+					accumulator = foreign.EitherNonEmptyListForeignErrorObjectInt{Tag: foreign.EitherNonEmptyListForeignErrorObjectIntLeft, Left: array[tupleIndex].Second.Left}
 				}
 			}
 			result2 = accumulator
@@ -899,7 +899,7 @@ func ReadAtIdxItem(i int32, f any) foreign.EitherNonEmptyListForeignErrorItem {
 				} else if accumulator.Tag == foreign.EitherNonEmptyListForeignErrorArrayMaybeBooleanLeft && elem.Tag == foreign.EitherNonEmptyListForeignErrorMaybeBooleanRight {
 					accumulator = foreign.EitherNonEmptyListForeignErrorArrayMaybeBoolean{Tag: foreign.EitherNonEmptyListForeignErrorArrayMaybeBooleanLeft, Left: accumulator.Left}
 				} else if accumulator.Tag == foreign.EitherNonEmptyListForeignErrorArrayMaybeBooleanRight && elem.Tag == foreign.EitherNonEmptyListForeignErrorMaybeBooleanRight {
-					accumulator = foreign.EitherNonEmptyListForeignErrorArrayMaybeBoolean{Tag: foreign.EitherNonEmptyListForeignErrorArrayMaybeBooleanRight, Right: array.Bounded(append(accumulator.Right, elem.Right))}
+					accumulator = foreign.EitherNonEmptyListForeignErrorArrayMaybeBoolean{Tag: foreign.EitherNonEmptyListForeignErrorArrayMaybeBooleanRight, Right: arraypkg.Bounded(append(accumulator.Right, elem.Right))}
 				} else {
 					accumulator = foreign.EitherNonEmptyListForeignErrorArrayMaybeBoolean{Tag: foreign.EitherNonEmptyListForeignErrorArrayMaybeBooleanLeft, Left: elem.Left}
 				}
@@ -1039,7 +1039,7 @@ import (
 	"fixture/Foreign"
 	"fixture/Yoga/JSON"
 	"fmt"
-	"github.com/i-am-the-slime/iris-go/array"
+	arraypkg "github.com/i-am-the-slime/iris-go/array"
 	"github.com/i-am-the-slime/iris-go/direct"
 	"github.com/i-am-the-slime/iris-go/exception"
 	"github.com/i-am-the-slime/iris-go/foreignvalue"
@@ -1068,17 +1068,17 @@ func initializeMain_() []string {
 		default: // either.EitherErrorForeignRight
 			r := performed.Right
 			if foreignvalue.IsArray(r) {
-				array2 := r.([]any)
+				array := r.([]any)
 				accumulator := foreign.EitherNonEmptyListForeignErrorArrayItem{Tag: foreign.EitherNonEmptyListForeignErrorArrayItemRight, Right: maybe.MemptyItem}
 				accumulator.Right = slices.Clip(accumulator.Right)
-				for index, element := range array2 {
+				for index, element := range array {
 					elem := json.ReadAtIdxItem(int32(index), element)
 					if accumulator.Tag == foreign.EitherNonEmptyListForeignErrorArrayItemLeft && elem.Tag == foreign.EitherNonEmptyListForeignErrorItemLeft {
 						accumulator = foreign.EitherNonEmptyListForeignErrorArrayItem{Tag: foreign.EitherNonEmptyListForeignErrorArrayItemLeft, Left: foreign.NonEmptyListForeignError{First: accumulator.Left.First, Second: json.MainGoReusing(&foreign.ListForeignError{Cons0: elem.Left.First, Cons1: elem.Left.Second}, json.MainGo(foreign.SharedListForeignErrorNil, accumulator.Left.Second))}}
 					} else if accumulator.Tag == foreign.EitherNonEmptyListForeignErrorArrayItemLeft && elem.Tag == foreign.EitherNonEmptyListForeignErrorItemRight {
 						accumulator = foreign.EitherNonEmptyListForeignErrorArrayItem{Tag: foreign.EitherNonEmptyListForeignErrorArrayItemLeft, Left: accumulator.Left}
 					} else if accumulator.Tag == foreign.EitherNonEmptyListForeignErrorArrayItemRight && elem.Tag == foreign.EitherNonEmptyListForeignErrorItemRight {
-						accumulator = foreign.EitherNonEmptyListForeignErrorArrayItem{Tag: foreign.EitherNonEmptyListForeignErrorArrayItemRight, Right: array.Bounded(append(accumulator.Right, elem.Right))}
+						accumulator = foreign.EitherNonEmptyListForeignErrorArrayItem{Tag: foreign.EitherNonEmptyListForeignErrorArrayItemRight, Right: arraypkg.Bounded(append(accumulator.Right, elem.Right))}
 					} else {
 						accumulator = foreign.EitherNonEmptyListForeignErrorArrayItem{Tag: foreign.EitherNonEmptyListForeignErrorArrayItemLeft, Left: elem.Left}
 					}

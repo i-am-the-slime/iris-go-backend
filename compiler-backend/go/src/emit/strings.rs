@@ -25,6 +25,10 @@ where
         let mut operands = vec![];
         flatten(left, &mut operands);
         flatten(right, &mut operands);
+        let operands = joined_constants(operands);
+        if let [operand] = operands.as_slice() {
+            return operand.clone();
+        }
         if operands.windows(2).all(|join| has_whole_ends(&join[0]) || has_whole_ends(&join[1]))
         {
             return operands
@@ -66,6 +70,21 @@ fn flatten(expression: GoExpression, operands: &mut Vec<GoExpression>) {
     }
 }
 
+/// The operands with each run of string constants written as one, `"x2"` for `"x" + "2"`.
+fn joined_constants(operands: Vec<GoExpression>) -> Vec<GoExpression> {
+    let mut joined: Vec<GoExpression> = Vec::with_capacity(operands.len());
+    for operand in operands {
+        if let (Some(GoExpression::String(previous)), GoExpression::String(text)) =
+            (joined.last_mut(), &operand)
+        {
+            previous.push_str(text);
+            continue;
+        }
+        joined.push(operand);
+    }
+    joined
+}
+
 fn is_prim_append(function: &GoExpression) -> bool {
     matches!(
         function,
@@ -80,11 +99,14 @@ fn is_prim_append(function: &GoExpression) -> bool {
 fn has_whole_ends(expression: &GoExpression) -> bool {
     match expression {
         GoExpression::String(text) => !text.is_empty(),
-        GoExpression::Call { function, .. } => matches!(
-            &**function,
-            GoExpression::Qualified { package, name }
-                if package == GoPackage::Prim.name() && ASCII_ENDED.contains(&name.as_str())
-        ),
+        GoExpression::Call { function, .. } => {
+            super::standard::is_ascii_ended(function)
+                || matches!(
+                    &**function,
+                    GoExpression::Qualified { package, name }
+                        if package == GoPackage::Prim.name() && ASCII_ENDED.contains(&name.as_str())
+                )
+        }
         _ => false,
     }
 }

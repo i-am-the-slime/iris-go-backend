@@ -9,24 +9,20 @@ import (
 	"fmt"
 	"github.com/i-am-the-slime/iris-go/exception"
 	"github.com/i-am-the-slime/iris-go/prim"
+	"strconv"
 )
 
 var main_ = initializeMain_()
 
 func initializeMain_() []string {
 	defer exception.ReportUncaught()
-	return []string{"value=" + prim.ShowInt(42), "text=" + prim.ShowString("x"), "true", "different", boxedInt.Describe(7), local}
+	return []string{"value=42", "text=" + prim.ShowString("x"), "true", "different", boxedInt.Describe(7), local}
 }
 
-var local = initializeLocal()
-
-func initializeLocal() string {
-	defer exception.ReportUncaught()
-	return "local=" + prim.ShowInt(13)
-}
+var local string = "local=13"
 
 var boxedInt shared.Describe = shared.Describe{Describe: func(value int32) string {
-	return "boxed " + prim.ShowInt(value)
+	return "boxed " + strconv.Itoa(int(value))
 }}
 
 func main() {

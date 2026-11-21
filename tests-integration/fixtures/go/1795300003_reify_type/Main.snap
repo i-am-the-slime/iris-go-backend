@@ -49,10 +49,11 @@ import (
 	"fixture/Data/Show"
 	"fixture/Type/Proxy"
 	"fmt"
-	"github.com/i-am-the-slime/iris-go/array"
+	arraypkg "github.com/i-am-the-slime/iris-go/array"
 	"github.com/i-am-the-slime/iris-go/exception"
 	"github.com/i-am-the-slime/iris-go/prim"
 	"slices"
+	"strconv"
 )
 
 var main_ = initializeMain_()
@@ -62,14 +63,14 @@ func initializeMain_() []string {
 	array := []int32{1, 2, 3}
 	mapped := make([]string, len(array))
 	for index, n := range array {
-		mapped[index] = "item" + prim.ShowInt(n)
+		mapped[index] = "item" + strconv.Itoa(int(n))
 	}
 	array2 := []ordering.Ordering{ordering.OrderingLT, ordering.OrderingEQ, ordering.OrderingGT}
 	mapped2 := make([]ordering.Ordering, len(array2))
-	for index, ordering := range array2 {
-		mapped2[index] = ordering
+	for index, reified := range array2 {
+		mapped2[index] = reified
 	}
-	return []string{prim.ShowInt(42), prim.ShowInt(-8), prim.ShowInt(7), "erin!", "false", "false", "greater", prim.ShowArray(show.Show, mapped), prim.ShowArray(show.Show, reifiedEach(0, []string{})), prim.ShowArray(ordering.Show, mapped2)}
+	return []string{"42", "-8", "7", "erin!", "false", "false", "greater", prim.ShowArray(show.Show, mapped), prim.ShowArray(show.Show, reifiedEach(0, []string{})), prim.ShowArray(ordering.Show, mapped2)}
 }
 
 func reifiedEach(n int32, done []string) []string {
@@ -78,7 +79,7 @@ func reifiedEach(n int32, done []string) []string {
 		if n > 3 {
 			return done
 		}
-		n, done = n+1, array.Bounded(append(done, "n="+prim.ShowInt(reifiedEachDictionaryReflectType(n, proxy.ProxyProxy)*10+n)+"n="+prim.ShowInt(reifiedEachDictionaryReflectType(n, proxy.ProxyProxy)*10+1)))
+		n, done = n+1, arraypkg.Bounded(append(done, "n="+strconv.Itoa(int(reifiedEachDictionaryReflectType(n, proxy.ProxyProxy)*10+n))+"n="+strconv.Itoa(int(reifiedEachDictionaryReflectType(n, proxy.ProxyProxy)*10+1))))
 	}
 }
 

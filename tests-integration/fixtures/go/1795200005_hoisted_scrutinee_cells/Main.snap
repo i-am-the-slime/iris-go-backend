@@ -76,8 +76,7 @@ func main_() int32 {
 	}
 	var result int32
 	if result2.Tag == ShapeLeaf && result2.Leaf != list.SharedListIntNil {
-		n := result2.Leaf.Cons0
-		result = n
+		result = result2.Leaf.Cons0
 	} else {
 		result = 0
 	}

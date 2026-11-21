@@ -178,8 +178,16 @@ where
             return Ok(Some(parts));
         };
         Ok(Some(match spelling {
-            FunctionSpelling::Specialized { name, types } => {
+            FunctionSpelling::Specialized { name, head, types } => {
                 let mut parts = vec![NamePart::Text(name.to_string())];
+                let mut head_parts = vec![];
+                for &type_id in head.iter() {
+                    self.type_parts(type_id, &mut head_parts)?;
+                }
+                parts.extend(head_parts.into_iter().map(|part| match part {
+                    NamePart::Text(text) => NamePart::Stutter(text),
+                    part => part,
+                }));
                 for &type_id in types.iter() {
                     self.type_parts(type_id, &mut parts)?;
                 }

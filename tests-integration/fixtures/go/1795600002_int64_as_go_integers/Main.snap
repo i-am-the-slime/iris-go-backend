@@ -4,14 +4,14 @@ source: tests-integration/src/fixtures.rs
 // Data/Int64/int64.go
 package dataint64
 
-import "github.com/i-am-the-slime/iris-go/ffi/Data_Int64_Internal_ffi"
+import "strconv"
 
 func FromInt(a int32) int64 {
 	return int64(a)
 }
 
 func Show(long int64) string {
-	return Data_Int64_Internal_ffi.ToString_(long, 10) + "l"
+	return strconv.FormatInt(long, 10) + "l"
 }
 
 // Data/Maybe/maybe.go
@@ -59,8 +59,9 @@ import (
 	"fmt"
 	"github.com/i-am-the-slime/iris-go/exception"
 	"github.com/i-am-the-slime/iris-go/ffi/Data_Int64_Internal_ffi"
-	"github.com/i-am-the-slime/iris-go/nullable"
+	nullablepkg "github.com/i-am-the-slime/iris-go/nullable"
 	"github.com/i-am-the-slime/iris-go/prim"
+	"strconv"
 )
 
 var main_ = initializeMain_()
@@ -86,13 +87,6 @@ func initializeMain_() []string {
 	x2 := int64(5)
 	n := int64(3)
 	y := int64(2)
-	scrutinee := 1 < y && y&1 == 0
-	var result string
-	if scrutinee {
-		result = "true"
-	} else {
-		result = "false"
-	}
 	x3 := int64(-7)
 	y2 := int64(2)
 	var l2_ int64
@@ -101,39 +95,39 @@ func initializeMain_() []string {
 	} else {
 		l2_ = 0 - y2
 	}
-	var result2 int64
+	var result int64
 	if y2 == 0 {
-		result2 = int64(0)
+		result = int64(0)
 	} else {
-		var result3 int64
+		var result2 int64
 		if l2_ == 0 {
-			result3 = int64(0)
+			result2 = int64(0)
 		} else {
-			var result4 int64
+			var result3 int64
 			if l2_ == 0 {
-				result4 = int64(0)
+				result3 = int64(0)
 			} else {
-				result4 = Data_Int64_Internal_ffi.Modulo_(x3, l2_)
+				result3 = Data_Int64_Internal_ffi.Modulo_(x3, l2_)
 			}
-			result3 = Data_Int64_Internal_ffi.Modulo_(result4+l2_, l2_)
+			result2 = Data_Int64_Internal_ffi.Modulo_(result3+l2_, l2_)
 		}
-		result2 = Data_Int64_Internal_ffi.Divide_(x3-result3, y2)
+		result = Data_Int64_Internal_ffi.Divide_(x3-result2, y2)
 	}
-	var result5 int64
+	var result4 int64
 	if y2 == 0 {
-		result5 = int64(0)
+		result4 = int64(0)
 	} else {
-		result5 = Data_Int64_Internal_ffi.Divide_(x3, y2)
+		result4 = Data_Int64_Internal_ffi.Divide_(x3, y2)
 	}
-	nullable2 := nullable.Nullable(Data_Int64_Internal_ffi.SafeReadLong_UInt64("18446744073709551615", true, 10), maybe.NoUInt64, maybe.JustUInt64)
-	var result6 string
-	switch nullable2.Tag {
+	nullable := nullablepkg.Nullable(Data_Int64_Internal_ffi.SafeReadLong_UInt64("18446744073709551615", true, 10), maybe.NoUInt64, maybe.JustUInt64)
+	var result5 string
+	switch nullable.Tag {
 	case maybe.TagJust:
-		result6 = "(Just " + Data_Int64_Internal_ffi.ToString_(nullable2.Just, 10) + "ul)"
+		result5 = "(Just " + strconv.FormatUint(nullable.Just, 10) + "ul)"
 	default:
-		result6 = "Nothing"
+		result5 = "Nothing"
 	}
-	return []string{Data_Int64_Internal_ffi.ToString_(foldLanes(mapped, int64(0)), 10) + "l", Data_Int64_Internal_ffi.ToString_(accumulator, 10) + "ul", Data_Int64_Internal_ffi.ToString_(foldLanes2(mapped, int64(-9223372036854775808)), 10) + "l", prim.ShowArray(dataint64.Show, mapLanes(mapped, int64(1))), Data_Int64_Internal_ffi.ToString_(accumulator2, 10) + "l", Data_Int64_Internal_ffi.ToString_(x*x+3*x-1, 10) + "l", Data_Int64_Internal_ffi.ToString_(x2<<(n&63)^int64(uint64(x2)>>(n&63)), 10) + "l", Data_Int64_Internal_ffi.ToString_(uint64(18446744073709551615), 10) + "ul", result, Data_Int64_Internal_ffi.ToString_(wrapsAtCompileTime, 10) + "l", Data_Int64_Internal_ffi.ToString_(result2+result5, 10) + "l", result6, Data_Int64_Internal_ffi.ToString_(uint64(18446744073709551615), 10) + "ul"}
+	return []string{strconv.FormatInt(foldLanes(mapped, int64(0)), 10) + "l", strconv.FormatUint(accumulator, 10) + "ul", strconv.FormatInt(foldLanes2(mapped, int64(-9223372036854775808)), 10) + "l", prim.ShowArray(dataint64.Show, mapLanes(mapped, int64(1))), strconv.FormatInt(accumulator2, 10) + "l", strconv.FormatInt(x*x+3*x-1, 10) + "l", strconv.FormatInt(x2<<(n&63)^int64(uint64(x2)>>(n&63)), 10) + "l", strconv.FormatUint(uint64(18446744073709551615), 10) + "ul", strconv.FormatBool(1 < y && y&1 == 0), strconv.FormatInt(wrapsAtCompileTime, 10) + "l", strconv.FormatInt(result+result4, 10) + "l", result5, strconv.FormatUint(uint64(18446744073709551615), 10) + "ul"}
 }
 
 var wrapsAtCompileTime int64 = int64(-9223372036854775808)

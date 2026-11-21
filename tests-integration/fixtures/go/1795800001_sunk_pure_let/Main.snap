@@ -6,15 +6,15 @@ package eq
 
 import "github.com/i-am-the-slime/iris-go/array"
 
-func Eq(boolean bool, boolean2 bool) bool {
+func EqBoolean(boolean bool, boolean2 bool) bool {
 	return boolean == boolean2
 }
 
 func EqString(array2 []string, array3 []string) bool {
-	return array.Eq(Eq2, array2, array3)
+	return array.Eq(EqString2, array2, array3)
 }
 
-func Eq2(s string, s2 string) bool {
+func EqString2(s string, s2 string) bool {
 	return s == s2
 }
 
@@ -41,10 +41,10 @@ import (
 	"fixture/Data/Eq"
 	"fixture/Data/Maybe"
 	"fixture/Effect/Exception"
-	"github.com/i-am-the-slime/iris-go/array"
+	arraypkg "github.com/i-am-the-slime/iris-go/array"
 	"github.com/i-am-the-slime/iris-go/exception"
-	"github.com/i-am-the-slime/iris-go/prim"
 	"math"
+	"strconv"
 )
 
 type Problem struct {
@@ -65,9 +65,9 @@ const (
 
 func main() {
 	defer exception.ReportUncaught()
-	array2 := []float64{3.0, 2.5, -1.0}
-	mapped := make([]bool, len(array2))
-	for index, value := range array2 {
+	array := []float64{3.0, 2.5, -1.0}
+	mapped := make([]bool, len(array))
+	for index, value := range array {
 		var result EitherProblemInt
 		if value < 0.0 {
 			result = EitherProblemInt{Tag: EitherProblemIntLeft, Left: Problem{First: []string{"apples", "count"}, Second: value}}
@@ -86,24 +86,22 @@ func main() {
 		}
 		mapped[index] = isLeftProblemInt(result)
 	}
-	scrutinee := array.Eq(eq.Eq, mapped, []bool{false, true, true}) == false
-	if scrutinee {
+	if arraypkg.Eq(eq.EqBoolean, mapped, []bool{false, true, true}) == false {
 		effectexception.ThrowUnit("a count is read wrongly")
 	}
-	array3 := []int32{11, 1}
-	mapped2 := make([][]string, len(array3))
-	for index, count := range array3 {
-		shared := []string{"pears", prim.ShowInt(count)}
+	array2 := []int32{11, 1}
+	mapped2 := make([][]string, len(array2))
+	for index, count := range array2 {
+		shared := []string{"pears", strconv.Itoa(int(count))}
 		var result []string
 		if count > 10 {
-			result = array.Append(shared, shared)
+			result = arraypkg.Append(shared, shared)
 		} else {
 			result = shared
 		}
 		mapped2[index] = result
 	}
-	scrutinee2 := array.Eq(eq.EqString, mapped2, [][]string{{"pears", "11", "pears", "11"}, {"pears", "1"}}) == false
-	if scrutinee2 {
+	if arraypkg.Eq(eq.EqString, mapped2, [][]string{{"pears", "11", "pears", "11"}, {"pears", "1"}}) == false {
 		effectexception.ThrowUnit("the shared value is wrong")
 	}
 }

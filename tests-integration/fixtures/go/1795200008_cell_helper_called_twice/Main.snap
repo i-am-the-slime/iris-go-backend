@@ -29,13 +29,12 @@ var main_ = initializeMain_()
 
 func initializeMain_() shared.MainResult {
 	defer exception.ReportUncaught()
-	var ref int32 = 0
+	var total int32 = 0
 	var step class.StepIntUnit
 	if false {
 		step = class.StepIntUnit{Tag: class.StepIntUnitDone, Done: struct{}{}}
 	} else {
-		s_ := ref + 1
-		ref = s_
+		total += 1
 		step = class.StepIntUnit{Tag: class.StepIntUnitLoop, Loop: 2}
 	}
 	for {
@@ -56,15 +55,14 @@ func initializeMain_() shared.MainResult {
 			if a_ > 10 {
 				step2 = class.StepIntUnit{Tag: class.StepIntUnitDone, Done: struct{}{}}
 			} else {
-				s_ := ref + a_
-				ref = s_
+				total += a_
 				step2 = class.StepIntUnit{Tag: class.StepIntUnitLoop, Loop: a_ + 1}
 			}
 			step = step2
 		default: // class.StepIntUnitDone
 		}
 	}
-	return shared.MainResult{Total: ref, Scaled: []int32{mainScale(1), mainScale(2)}}
+	return shared.MainResult{Total: total, Scaled: []int32{mainScale(1), mainScale(2)}}
 }
 
 func mainScale(x int32) int32 {

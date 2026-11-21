@@ -33,6 +33,10 @@ where
                 continue;
             }
             let value = self.value(scrutinee, out)?;
+            if scrutinees.len() == 1 && is_tested_first_and_once(alternatives) {
+                paths.push(value);
+                continue;
+            }
             let base = super::scrutinee_name(&value);
             paths.push(self.hoist(value, &base, out));
         }
@@ -481,4 +485,22 @@ where
 
 fn never_matches(tests: &[GoExpression]) -> bool {
     tests.iter().any(|test| matches!(test, GoExpression::Boolean(false)))
+}
+
+/// Whether the first alternative tests the one scrutinee against a literal and every other
+/// matches what is left without a test, with a wildcard or, after `true`, with `false`: the case
+/// looks at it once, where it would work it out anyway, `if count > 1 {`, and needs no variable
+/// for it.
+fn is_tested_first_and_once(alternatives: &[Alternative]) -> bool {
+    let Some((first, rest)) = alternatives.split_first() else { return false };
+    let PatternKind::Literal(tested) = &first.patterns[0].kind else { return false };
+    let mut rest = rest.iter().map(|alternative| &alternative.patterns[0].kind);
+    let after = match (tested, rest.next()) {
+        (_, None | Some(PatternKind::Wildcard)) => true,
+        (Literal::Boolean(tested), Some(PatternKind::Literal(Literal::Boolean(other)))) => {
+            tested != other
+        }
+        _ => false,
+    };
+    after && rest.all(|pattern| matches!(pattern, PatternKind::Wildcard))
 }

@@ -25,23 +25,21 @@ func initializeMain_() []int32 {
 		}
 	}
 	within2 := 0 < len(*array2)
-	var i2 int32
+	var first int32
 	if within2 {
-		element := (*array2)[0]
-		i2 = element
+		first = (*array2)[0]
+	} else {
+		first = 0
+	}
+	within3 := 5 < len(*array2)
+	var i2 int32
+	if within3 {
+		i2 = (*array2)[5]
 	} else {
 		i2 = 0
 	}
-	within3 := 5 < len(*array2)
-	var i3 int32
-	if within3 {
-		element := (*array2)[5]
-		i3 = element
-	} else {
-		i3 = 0
-	}
 	array3 := array.UnsafeFreeze(array2)()
-	performed := array.Append(array3, []int32{i2, i3, -1})
+	performed := array.Append(array3, []int32{first, i2, -1})
 	return performed
 }
 

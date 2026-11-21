@@ -7,7 +7,7 @@ package main
 import (
 	"fmt"
 	"github.com/i-am-the-slime/iris-go/exception"
-	"github.com/i-am-the-slime/iris-go/prim"
+	"strconv"
 )
 
 var main_ = initializeMain_()
@@ -16,7 +16,7 @@ func initializeMain_() []string {
 	defer exception.ReportUncaught()
 	mapped := make([]string, len(names))
 	for index, value := range names {
-		mapped[index] = value + prim.ShowInt(total)
+		mapped[index] = value + strconv.Itoa(int(total))
 	}
 	return mapped
 }

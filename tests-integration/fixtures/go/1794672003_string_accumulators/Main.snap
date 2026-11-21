@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"github.com/i-am-the-slime/iris-go/exception"
 	"github.com/i-am-the-slime/iris-go/prim"
+	"strconv"
 )
 
 var main_ = initializeMain_()
@@ -17,18 +18,18 @@ func initializeMain_() shared.MainResult {
 	defer exception.ReportUncaught()
 	accumulator := []byte("start:")
 	for i := int32(1); i < 13; i++ {
-		accumulator = append(accumulator, prim.ShowInt(i)...)
+		accumulator = append(accumulator, strconv.Itoa(int(i))...)
 	}
 	built := string(accumulator)
 	accumulator2 := ""
 	for i := int32(1); i < 11; i++ {
 		if !(prim.CodeUnitLengthUpTo(6, accumulator2) > 5) {
-			accumulator2 += prim.ShowInt(i)
+			accumulator2 += strconv.Itoa(int(i))
 		}
 	}
 	accumulator3 := ""
 	for i := int32(1); i < 6; i++ {
-		accumulator3 = prim.ShowInt(i) + accumulator3
+		accumulator3 = strconv.Itoa(int(i)) + accumulator3
 	}
 	return shared.MainResult{Fold: built, Loop: mainGo(0, ""), Exit: mainGo2(0, "x"), ReadInFold: accumulator2, ReadInLoop: mainGo3(0, ""), Prepended: accumulator3}
 }
@@ -62,7 +63,7 @@ func mainGo3(i int32, acc string) string {
 		if i >= 12 {
 			return acc
 		}
-		i, acc = i+1, acc+prim.ShowInt(prim.CodeUnitLength(acc))
+		i, acc = i+1, acc+strconv.Itoa(int(prim.CodeUnitLength(acc)))
 	}
 }
 

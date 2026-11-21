@@ -7,6 +7,7 @@ package show
 import (
 	"fixture/shared"
 	"github.com/i-am-the-slime/iris-go/prim"
+	"strconv"
 )
 
 func ShowInt(array []int32) string {
@@ -18,7 +19,7 @@ func ShowParticleConsNumberConsNumberNil(record shared.Particle) string {
 }
 
 func Show(i int32) string {
-	return prim.ShowInt(i)
+	return strconv.Itoa(int(i))
 }
 
 // Data/Tuple/tuple.go

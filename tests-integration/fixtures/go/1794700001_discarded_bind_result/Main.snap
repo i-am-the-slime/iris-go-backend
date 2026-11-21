@@ -12,37 +12,35 @@ import (
 )
 
 func main_() int32 {
-	var ref int32 = 0
-	createResult := create()
-	createResult2 := create()
-	subscribe := createResult2.Subscribe
+	var total int32 = 0
+	ticks := create()
+	ticks2 := create()
+	subscribe := ticks2.Subscribe
 	subscribe(func(n int32) {
-		s_ := ref + n
-		ref = s_
+		total += n
 	})
-	var ref2 int32 = 0
+	var latest int32 = 0
 	subscribe(func(n int32) {
-		ref2 = n
+		latest = n
 	})
-	createResult.Subscribe(func(n int32) {
-		i := ref2
-		createResult2.Push(i + n)
+	ticks.Subscribe(func(n int32) {
+		previous := latest
+		ticks2.Push(previous + n)
 	})
-	createResult.Push(1)
-	createResult.Push(2)
-	return ref
+	ticks.Push(1)
+	ticks.Push(2)
+	return total
 }
 
-func create() shared.CreateResult {
-	ref := []func(int32){}
-	return shared.CreateResult{Subscribe: func(k func(int32)) func() {
-		s := ref
-		s_ := array.Append(s, []func(int32){k})
-		ref = s_
+func create() shared.Ticks {
+	subscribers := []func(int32){}
+	return shared.Ticks{Subscribe: func(k func(int32)) func() {
+		s := subscribers
+		subscribers = array.Append(s, []func(int32){k})
 		return func() {
 		}
 	}, Push: func(n int32) {
-		array := ref
+		array := subscribers
 		for _, f := range array {
 			f(n)
 		}
@@ -67,7 +65,7 @@ type StateValueOfIntInt struct {
 	Value int32
 }
 
-type CreateResult struct {
+type Ticks struct {
 	Push      func(int32)
 	Subscribe func(func(int32)) func()
 }

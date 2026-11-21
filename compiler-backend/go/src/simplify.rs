@@ -27,6 +27,9 @@ mod three_way;
 mod unpack;
 
 const INLINE_SIZE: usize = 40;
+
+/// The names simplification and specialization give the values they introduce.
+const MADE_UP_NAMES: &[&str] = &["argument", "binding", "element", "field", "scrutinee", "value"];
 const INLINE_FUEL: usize = 2_000;
 
 pub fn simplify(
@@ -63,6 +66,7 @@ pub fn simplify(
         suspension,
         unsafely_effectful_locals: FxHashSet::default(),
         thunk_parameters,
+        names: FxHashMap::default(),
     };
     for component in &components {
         for &function in component {
@@ -73,6 +77,7 @@ pub fn simplify(
             current = simplifier.eta_expand(current);
             current.body = simplifier.expression(current.body);
             current = simplifier.absorb_lambdas(current);
+            simplifier.adopt_names(&mut current);
             simplifier.sizes[function] = size(&current.body);
             simplifier.functions[function] = Some(current);
         }
@@ -117,9 +122,49 @@ struct Simplifier<'m> {
     /// The parameters of the lambdas the source writes as thunks, `\_ -> later`: what their
     /// bodies build waits for the thunk to be called, so it stays inside them unless it is free.
     thunk_parameters: FxHashSet<LocalId>,
+    /// The names that locals take over from the aliases substituted for them: `argv <- args`
+    /// binds `argv` to what `args` names after its type, `array`, and the Go variable is `argv`.
+    names: FxHashMap<LocalId, SmolStr>,
 }
 
 impl Simplifier<'_> {
+    /// Notes that `alias` is replaced by `value`: a local `value` whose name the compiler made
+    /// up takes the alias's name where that says what the value is. `argv <- args` binds `argv`
+    /// to what `args` names after its type, `array`, and the Go variable is `argv`.
+    fn substituting_alias(&mut self, alias: &Local, value: &Expression) {
+        let ExpressionKind::Local(target) = value.kind else { return };
+        let name = self.names.get(&alias.id).cloned().unwrap_or_else(|| alias.name.clone());
+        if is_vague(&name) || self.is_made_up(&name, alias.monotype) {
+            return;
+        }
+        self.names.entry(target).or_insert(name);
+    }
+
+    /// Whether a local's name is one the compiler gives a value nothing else names: after its
+    /// type, or after the part it plays.
+    fn is_made_up(&self, name: &str, monotype: MonotypeId) -> bool {
+        name == self.monotypes.value_name(monotype) || MADE_UP_NAMES.contains(&name)
+    }
+
+    /// Renames the function's locals whose names say little after the aliases that were
+    /// substituted for them.
+    fn adopt_names(&mut self, function: &mut Function) {
+        if self.names.is_empty() {
+            return;
+        }
+        let names = std::mem::take(&mut self.names);
+        let mut rename = |local: &mut Local| {
+            if let Some(name) = names.get(&local.id)
+                && self.is_made_up(&local.name, local.monotype)
+            {
+                local.name = name.clone();
+            }
+        };
+        function.parameters.iter_mut().for_each(&mut rename);
+        for_each_binder_mut(&mut function.body, &mut rename);
+        self.names = names;
+    }
+
     fn fresh(&mut self, local: &Local) -> Local {
         Local::fresh(&mut self.next_local, local.name.clone(), local.monotype)
     }
@@ -840,6 +885,8 @@ impl Simplifier<'_> {
                 || (uses.total == 1
                     && (uses.under_lambda == 0 || self.does_no_work(&binding.value)))
                 || (helper && uses.total == 2 && uses.applied == 2);
+            let named_choice = self.is_named_choice(&binding, &body);
+            let substitutable = substitutable && !named_choice;
             let built_in_place = uses.total == 1
                 && matches!(&body.kind, ExpressionKind::EffectBind { action, .. }
                     if matches!(action.kind, ExpressionKind::Local(id) if id == binding.local.id));
@@ -848,6 +895,7 @@ impl Simplifier<'_> {
                 body = self.expression(body);
             } else if substitutable && (built_in_place || !runs_effect(self, &binding.value)) {
                 if uses.total > 0 {
+                    self.substituting_alias(&binding.local, &binding.value);
                     body = substitute(body, binding.local.id, &binding.value, self.monotypes);
                     body = self.expression(body);
                 }
@@ -863,6 +911,19 @@ impl Simplifier<'_> {
         kept.reverse();
         let monotype = body.monotype;
         Expression::new(ExpressionKind::Let { bindings: kept, body: Box::new(body) }, monotype)
+    }
+
+    /// Whether a binding names an `if` or a `case` that its body uses once, other than as what
+    /// it chooses on: Go assigns the choice to a variable either way, and the binding's name
+    /// says what it holds, `discount` rather than `result`.
+    fn is_named_choice(&self, binding: &Binding, body: &Expression) -> bool {
+        let choice =
+            matches!(binding.value.kind, ExpressionKind::If { .. } | ExpressionKind::Case { .. });
+        choice
+            && !is_vague(&binding.local.name)
+            && !self.is_made_up(&binding.local.name, binding.local.monotype)
+            && !matches!(self.monotypes.get(binding.local.monotype), Monotype::Unit)
+            && !chooses_on(body, binding.local.id)
     }
 
     /// A small local function over a mutable array of its surroundings, such as a `where`
@@ -2207,6 +2268,51 @@ pub fn for_each_child_mut(expression: &mut Expression, visitor: &mut impl FnMut(
             visitor(second);
         }
     }
+}
+
+/// Whether `expression` chooses on `local`: an `if` on it, or a `case` of it.
+fn chooses_on(expression: &Expression, local: LocalId) -> bool {
+    let mut found = false;
+    visit(expression, &mut |node| match &node.kind {
+        ExpressionKind::If { condition, .. } => {
+            found |= matches!(condition.kind, ExpressionKind::Local(id) if id == local)
+        }
+        ExpressionKind::Case { scrutinees, .. } => {
+            found |= scrutinees
+                .iter()
+                .any(|scrutinee| matches!(scrutinee.kind, ExpressionKind::Local(id) if id == local))
+        }
+        _ => {}
+    });
+    found
+}
+
+/// Every local that `expression` binds, to rename them.
+fn for_each_binder_mut(expression: &mut Expression, visit: &mut impl FnMut(&mut Local)) {
+    match &mut expression.kind {
+        ExpressionKind::Lambda { parameters, .. } => parameters.iter_mut().for_each(&mut *visit),
+        ExpressionKind::Let { bindings, .. } => {
+            bindings.iter_mut().for_each(|binding| visit(&mut binding.local))
+        }
+        ExpressionKind::EffectBind { local, .. }
+        | ExpressionKind::EffectEach { element: local, .. } => visit(local),
+        ExpressionKind::Case { alternatives, .. } => {
+            for alternative in alternatives {
+                for pattern in &mut alternative.patterns {
+                    pattern.for_each_local_mut(visit);
+                }
+                if let Guarded::Guards(branches) = &mut alternative.body {
+                    for guard in branches.iter_mut().flat_map(|branch| &mut branch.guards) {
+                        if let Guard::Pattern { pattern, .. } = guard {
+                            pattern.for_each_local_mut(visit);
+                        }
+                    }
+                }
+            }
+        }
+        _ => {}
+    }
+    for_each_child_mut(expression, &mut |child| for_each_binder_mut(child, visit));
 }
 
 fn for_each_update_mut(updates: &mut [RecordUpdate], visitor: &mut impl FnMut(&mut Expression)) {

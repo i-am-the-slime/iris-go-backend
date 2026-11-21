@@ -167,7 +167,7 @@ import (
 	"fixture/shared/Data.Tuple+Data.Maybe"
 	"fmt"
 	"github.com/i-am-the-slime/iris-go/alloc"
-	"github.com/i-am-the-slime/iris-go/array"
+	arraypkg "github.com/i-am-the-slime/iris-go/array"
 	"github.com/i-am-the-slime/iris-go/direct"
 	"github.com/i-am-the-slime/iris-go/exception"
 )
@@ -176,37 +176,37 @@ var main_ = initializeMain_()
 
 func initializeMain_() []string {
 	defer exception.ReportUncaught()
-	array2 := []bool{true, false}
-	mapped := make([]tuple.TupleStringBoolean, len(array2))
-	for index, boolean := range array2 {
+	array := []bool{true, false}
+	mapped := make([]tuple.TupleStringBoolean, len(array))
+	for index, boolean := range array {
 		mapped[index] = tuple.TupleStringBoolean{First: "label", Second: boolean}
 	}
 	len_ := int32(len(mapped))
-	array3 := direct.FromFoldable(func(f func(tuple.TupleStringBoolean) func(*direct.ConsList[tuple.TupleStringBoolean]) *direct.ConsList[tuple.TupleStringBoolean]) func(*direct.ConsList[tuple.TupleStringBoolean]) func(*types.ListTupleStringBoolean) *direct.ConsList[tuple.TupleStringBoolean] {
+	array2 := direct.FromFoldable(func(f func(tuple.TupleStringBoolean) func(*direct.ConsList[tuple.TupleStringBoolean]) *direct.ConsList[tuple.TupleStringBoolean]) func(*direct.ConsList[tuple.TupleStringBoolean]) func(*types.ListTupleStringBoolean) *direct.ConsList[tuple.TupleStringBoolean] {
 		return func(b *direct.ConsList[tuple.TupleStringBoolean]) func(*types.ListTupleStringBoolean) *direct.ConsList[tuple.TupleStringBoolean] {
 			return types.Foldr(f, b)
 		}
 	}, mainGoReusing(mapped, len_, 0, types.SharedListTupleStringBooleanNil))
-	mapped2 := make([]string, len(array3))
-	for index, element := range array3 {
+	mapped2 := make([]string, len(array2))
+	for index, element := range array2 {
 		mapped2[index] = show.Show(tuple.SndStringBoolean(element))
 	}
-	array4 := []string{"kept"}
-	mapped3 := make([]tuple.TupleStringString, len(array4))
-	for index, s := range array4 {
+	array3 := []string{"kept"}
+	mapped3 := make([]tuple.TupleStringString, len(array3))
+	for index, s := range array3 {
 		mapped3[index] = tuple.TupleStringString{First: "label", Second: s}
 	}
 	len_2 := int32(len(mapped3))
-	array5 := direct.FromFoldable(func(f func(tuple.TupleStringString) func(*direct.ConsList[tuple.TupleStringString]) *direct.ConsList[tuple.TupleStringString]) func(*direct.ConsList[tuple.TupleStringString]) func(*types.ListTupleStringString) *direct.ConsList[tuple.TupleStringString] {
+	array4 := direct.FromFoldable(func(f func(tuple.TupleStringString) func(*direct.ConsList[tuple.TupleStringString]) *direct.ConsList[tuple.TupleStringString]) func(*direct.ConsList[tuple.TupleStringString]) func(*types.ListTupleStringString) *direct.ConsList[tuple.TupleStringString] {
 		return func(b *direct.ConsList[tuple.TupleStringString]) func(*types.ListTupleStringString) *direct.ConsList[tuple.TupleStringString] {
 			return types.Foldr2(f, b)
 		}
 	}, mainGoReusing2(mapped3, len_2, 0, types.SharedListTupleStringStringNil))
-	mapped4 := make([]string, len(array5))
-	for index, element := range array5 {
+	mapped4 := make([]string, len(array4))
+	for index, element := range array4 {
 		mapped4[index] = tuple.SndStringString(element)
 	}
-	return array.Append(mapped2, mapped4)
+	return arraypkg.Append(mapped2, mapped4)
 }
 
 func mainGoReusing(xs []tuple.TupleStringBoolean, len_ int32, source int32, memo *types.ListTupleStringBoolean) *types.ListTupleStringBoolean {

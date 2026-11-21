@@ -7,7 +7,7 @@ package main
 import (
 	"fixture/shared"
 	"fmt"
-	"github.com/i-am-the-slime/iris-go/array"
+	arraypkg "github.com/i-am-the-slime/iris-go/array"
 	"github.com/i-am-the-slime/iris-go/exception"
 )
 
@@ -29,7 +29,7 @@ func initializeMain_() []int32 {
 		}
 		mapped2[index] = 0 * accumulator
 	}
-	return array.Append(mapped, mapped2)
+	return arraypkg.Append(mapped, mapped2)
 }
 
 var numbers = initializeNumbers()

@@ -4,9 +4,12 @@ source: tests-integration/src/fixtures.rs
 // Data/Show/show.go
 package show
 
-import "github.com/i-am-the-slime/iris-go/prim"
+import (
+	"github.com/i-am-the-slime/iris-go/prim"
+	"strconv"
+)
 
-func Show(boolean bool) string {
+func ShowBoolean2(boolean bool) string {
 	if boolean {
 		return "true"
 	}
@@ -14,11 +17,11 @@ func Show(boolean bool) string {
 }
 
 func ShowBoolean(array []bool) string {
-	return prim.ShowArray(Show, array)
+	return prim.ShowArray(ShowBoolean2, array)
 }
 
-func Show2(i int32) string {
-	return prim.ShowInt(i)
+func ShowInt(i int32) string {
+	return strconv.Itoa(int(i))
 }
 
 // main.go
@@ -50,7 +53,7 @@ func describeArrayBoolean(showDictionary shared.Show, depths []int32, label stri
 		showDictionaryCaptured := showDictionary
 		switch depth {
 		case 0:
-			return string(labelBytes) + prim.ShowArray(show.Show2, depths) + ": " + showDictionaryCaptured.Show(value)
+			return string(labelBytes) + prim.ShowArray(show.ShowInt, depths) + ": " + showDictionaryCaptured.Show(value)
 		default:
 			showDictionary, depths, labelBytes, depth, value = shared.Show{Show: func(coerced any) string {
 				return prim.ShowArray(showDictionaryCaptured.Show, coerced.([]any))

@@ -11,13 +11,16 @@ func Add(i int32, i2 int32) int32 {
 // Data/Show/show.go
 package show
 
-import "github.com/i-am-the-slime/iris-go/prim"
+import (
+	"github.com/i-am-the-slime/iris-go/prim"
+	"strconv"
+)
 
-func Show(i int32) string {
-	return prim.ShowInt(i)
+func ShowInt(i int32) string {
+	return strconv.Itoa(int(i))
 }
 
-func Show2(s string) string {
+func ShowString(s string) string {
 	return prim.ShowString(s)
 }
 
@@ -28,9 +31,10 @@ import (
 	"fixture/Data/Semiring"
 	"fixture/Data/Show"
 	"fmt"
-	"github.com/i-am-the-slime/iris-go/array"
+	arraypkg "github.com/i-am-the-slime/iris-go/array"
 	"github.com/i-am-the-slime/iris-go/exception"
 	"github.com/i-am-the-slime/iris-go/prim"
+	"strconv"
 )
 
 var main_ = initializeMain_()
@@ -38,37 +42,37 @@ var main_ = initializeMain_()
 func initializeMain_() []string {
 	defer exception.ReportUncaught()
 	function := fromInt(4)
-	array2 := []int32{1, 2}
-	mapped := make([]string, len(array2))
-	for index, x := range array2 {
+	array := []int32{1, 2}
+	mapped := make([]string, len(array))
+	for index, x := range array {
 		a := x * x
 		partial := func(b int32) int32 {
 			return mainOp(a, b)
 		}
-		mapped[index] = prim.ShowArray(show.Show, []int32{mainOp(1, 2), partial(3), partial(4)})
+		mapped[index] = prim.ShowArray(show.ShowInt, []int32{mainOp(1, 2), partial(3), partial(4)})
 	}
-	array3 := []func(int32) func(string) string{prepared, func(a int32) func(string) string {
+	array2 := []func(int32) func(string) string{prepared, func(a int32) func(string) string {
 		return func(b string) string {
-			return prim.ShowInt(a) + b
+			return strconv.Itoa(int(a)) + b
 		}
 	}}
-	mapped2 := make([]string, len(array3))
-	for index, x := range array3 {
+	mapped2 := make([]string, len(array2))
+	for index, x := range array2 {
 		g := x(4)
-		mapped2[index] = prim.ShowArray(show.Show2, []string{x(1)("a"), g("b"), g("c")})
+		mapped2[index] = prim.ShowArray(show.ShowString, []string{x(1)("a"), g("b"), g("c")})
 	}
-	array4 := []func(int32, int32) int32{semiring.Add, func(a int32, b int32) int32 {
+	array3 := []func(int32, int32) int32{semiring.Add, func(a int32, b int32) int32 {
 		return a*b + 1
 	}}
-	mapped3 := make([]string, len(array4))
-	for index, combine := range array4 {
-		mapped3[index] = prim.ShowInt(array.Foldl(combine, int32(0), []int32{1, 2, 3}))
+	mapped3 := make([]string, len(array3))
+	for index, combine := range array3 {
+		mapped3[index] = strconv.Itoa(int(arraypkg.Foldl(combine, int32(0), []int32{1, 2, 3})))
 	}
-	return array.Append([]string{prim.ShowInt(fromInt(3)(func(i int32) int32 {
+	return arraypkg.Append([]string{strconv.Itoa(int(fromInt(3)(func(i int32) int32 {
 		return function(func(value int32) int32 {
 			return value + 1
 		}, i)
-	}, 0))}, array.Append(mapped, array.Append(mapped2, mapped3)))
+	}, 0)))}, arraypkg.Append(mapped, arraypkg.Append(mapped2, mapped3)))
 }
 
 func fromInt(n int32) func(func(int32) int32, int32) int32 {

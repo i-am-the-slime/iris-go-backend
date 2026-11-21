@@ -29,27 +29,27 @@ package main
 import (
 	"fixture/Data/Ordering"
 	"fixture/Data/Tuple"
-	"github.com/i-am-the-slime/iris-go/array"
+	arraypkg "github.com/i-am-the-slime/iris-go/array"
 	"github.com/i-am-the-slime/iris-go/direct"
 	"github.com/i-am-the-slime/iris-go/exception"
 	"os"
 )
 
 func main_() int32 {
-	array2 := []int32{1}
+	array := []int32{1}
 	accumulator2 := func(_ int32) {
 	}
-	for range array2 {
+	for range array {
 		accumulator2 = func(_ int32) {
 		}
 	}
-	return int32(len(units)) + int32(len(array.Scanl(func(_ struct{}, _ int32) struct{} {
+	return int32(len(units)) + int32(len(arraypkg.Scanl(func(_ struct{}, _ int32) struct{} {
 		return struct{}{}
-	}, array.Foldr(func(_ struct{}, accumulator struct{}) struct{} {
+	}, arraypkg.Foldr(func(_ struct{}, accumulator struct{}) struct{} {
 		return struct{}{}
-	}, struct{}{}, units), []int32{1, 2})))*10 + int32(len(array.ZipWith(func(_ int32, _ struct{}) struct{} {
+	}, struct{}{}, units), []int32{1, 2})))*10 + int32(len(arraypkg.ZipWith(func(_ int32, _ struct{}) struct{} {
 		return struct{}{}
-	}, []int32{1}, units)))*100 + int32(len(array.Map(func(i int32) struct{} {
+	}, []int32{1}, units)))*100 + int32(len(arraypkg.Map(func(i int32) struct{} {
 		accumulator2(i)
 		return struct{}{}
 	}, []int32{1, 2, 3})))*1000
@@ -59,9 +59,9 @@ var units = initializeUnits()
 
 func initializeUnits() []struct{} {
 	defer exception.ReportUncaught()
-	array2 := []struct{}{{}, {}}
-	mapped := make([]tuple.TupleIntUnit, len(array2))
-	for slot, unit := range array2 {
+	array := []struct{}{{}, {}}
+	mapped := make([]tuple.TupleIntUnit, len(array))
+	for slot, unit := range array {
 		i := int32(slot)
 		mapped[slot] = tuple.TupleIntUnit{First: i, Second: unit}
 	}
@@ -79,12 +79,12 @@ func initializeUnits() []struct{} {
 	}, mapped)
 	var result []struct{}
 	if 0 < int32(len(indexedAndSorted)) {
-		array3 := array.UnsafeThaw([]tuple.TupleIntUnit{indexedAndSorted[0]})()
+		array2 := arraypkg.UnsafeThaw([]tuple.TupleIntUnit{indexedAndSorted[0]})()
 		for range indexedAndSorted {
-			array.UnsafeFreeze(array3)()
+			arraypkg.UnsafeFreeze(array2)()
 		}
-		performed := array.UnsafeFreeze(array3)()
-		array4 := direct.SortBy(func(x tuple.TupleIntUnit, y tuple.TupleIntUnit) ordering.Ordering {
+		performed := arraypkg.UnsafeFreeze(array2)()
+		array3 := direct.SortBy(func(x tuple.TupleIntUnit, y tuple.TupleIntUnit) ordering.Ordering {
 			i := x.First
 			i2 := y.First
 			if i < i2 {
@@ -104,8 +104,8 @@ func initializeUnits() []struct{} {
 				return -1
 			}
 		}, performed)
-		mapped2 := make([]struct{}, len(array4))
-		for index, element := range array4 {
+		mapped2 := make([]struct{}, len(array3))
+		for index, element := range array3 {
 			tuple.SndIntUnit(element)
 			mapped2[index] = struct{}{}
 		}

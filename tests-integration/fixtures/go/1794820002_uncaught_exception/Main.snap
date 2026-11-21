@@ -8,11 +8,9 @@ import "github.com/i-am-the-slime/iris-go/exception"
 
 func main() {
 	defer exception.ReportUncaught()
-	var ref int32 = 0
-	s_ := ref + 1
-	ref = s_
-	scrutinee := ref > 0
-	if scrutinee {
+	var count int32 = 0
+	count += 1
+	if count > 0 {
 		panic(exception.NewError("boom"))
 	}
 }

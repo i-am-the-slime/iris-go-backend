@@ -9,7 +9,7 @@ import (
 	"github.com/i-am-the-slime/iris-go/array"
 	"github.com/i-am-the-slime/iris-go/exception"
 	"github.com/i-am-the-slime/iris-go/lazy"
-	"github.com/i-am-the-slime/iris-go/prim"
+	"strconv"
 )
 
 type Stream = *lazy.Lazy[*TupleLabelledLazyStream]
@@ -43,7 +43,7 @@ func take(n int32, stream Stream) []string {
 
 func from(n int32) *lazy.Lazy[*TupleLabelledLazyStream] {
 	return lazy.Defer(func() *TupleLabelledLazyStream {
-		return &TupleLabelledLazyStream{First: &Labelled{First: prim.ShowInt(n), Second: nil}, Second: lazy.Defer(func() Stream {
+		return &TupleLabelledLazyStream{First: &Labelled{First: strconv.Itoa(int(n)), Second: nil}, Second: lazy.Defer(func() Stream {
 			return from(n + 1)
 		})}
 	})

@@ -26,6 +26,7 @@ import (
 	"fmt"
 	"github.com/i-am-the-slime/iris-go/exception"
 	"github.com/i-am-the-slime/iris-go/prim"
+	"strconv"
 )
 
 type Light uint8
@@ -48,13 +49,13 @@ func initializeMain_() []string {
 	array2 := []int32{4, opaque(5)}
 	mapped := make([]string, len(array2))
 	for index, value := range array2 {
-		mapped[index] = prim.ShowInt(value)
+		mapped[index] = strconv.Itoa(int(value))
 	}
 	array3 := []int32{6, opaque(7)}
 	accumulator2 := ""
 	for index := len(array3) - 1; index >= 0; index-- {
 		x := array3[index]
-		accumulator2 = prim.ShowInt(x) + "," + accumulator2
+		accumulator2 = strconv.Itoa(int(x)) + "," + accumulator2
 	}
 	codeUnitCharAt := prim.CodeUnitCharAt(func(payload rune) maybe.Char {
 		return maybe.Char(payload)
@@ -97,13 +98,7 @@ func initializeMain_() []string {
 	}
 	n3 := opaque(3)
 	result5 := !(n3 > 10) && n3 <= 5
-	var result6 string
-	if result5 {
-		result6 = "true"
-	} else {
-		result6 = "false"
-	}
-	return []string{prim.ShowInt(accumulator), prim.ShowArray(show.Show, mapped), accumulator2, result, result4, result6}
+	return []string{strconv.Itoa(int(accumulator)), prim.ShowArray(show.Show, mapped), accumulator2, result, result4, strconv.FormatBool(result5)}
 }
 
 func opaque(x int32) int32 {

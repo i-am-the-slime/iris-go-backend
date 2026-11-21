@@ -39,8 +39,7 @@ func legs(value *Route) int32 {
 func endsAway(value *Route) bool {
 	for {
 		if value != sharedRouteHome && value != sharedRouteAway {
-			rest := value.Trip1
-			value = rest
+			value = value.Trip1
 			continue
 		}
 		if value == sharedRouteAway {

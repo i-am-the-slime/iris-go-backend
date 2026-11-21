@@ -8,7 +8,7 @@ import (
 	"fixture/shared"
 	"fmt"
 	"github.com/i-am-the-slime/iris-go/exception"
-	"github.com/i-am-the-slime/iris-go/prim"
+	"strconv"
 )
 
 type SayInt struct {
@@ -101,11 +101,11 @@ func initializeMain_() []string {
 func describe(r shared.VariantFRep) string {
 	if r.Type == "say" {
 		scrutinee := convert(r.Value.(*Say))
-		return scrutinee.First + " " + prim.ShowInt(scrutinee.Second)
+		return scrutinee.First + " " + strconv.Itoa(int(scrutinee.Second))
 	}
 	if r.Type == "count" {
 		scrutinee := convert2(r.Value.(*Count))
-		return "count " + prim.ShowInt(scrutinee.Count(2))
+		return "count " + strconv.Itoa(int(scrutinee.Count(2)))
 	}
 	panic("Data.Functor.Variant: pattern match failure [" + r.Type + "]")
 }
@@ -116,7 +116,7 @@ func initializeSay() shared.VariantFRep {
 	defer exception.ReportUncaught()
 	return convert4(MapTypeValueOfFnFnValueValueFnSaySaySayInt{Type: "say", Value: SayInt{First: "hello", Second: 4}, Map: func(f func(any) any) func(*Say) *Say {
 		return func(say *Say) *Say {
-			return map_(f, say)
+			return mapSay(f, say)
 		}
 	}})
 }
@@ -129,16 +129,16 @@ func initializeCount() shared.VariantFRep {
 		return value + 1
 	}}, Map: func(f func(any) any) func(*Count) *Count {
 		return func(count *Count) *Count {
-			return map_2(f, count)
+			return mapCount(f, count)
 		}
 	}})
 }
 
-func map_(f func(any) any, say *Say) *Say {
+func mapSay(f func(any) any, say *Say) *Say {
 	return &Say{First: say.First, Second: f(say.Second)}
 }
 
-func map_2(f func(any) any, count *Count) *Count {
+func mapCount(f func(any) any, count *Count) *Count {
 	return &Count{Count: func(x int32) any {
 		return f(count.Count(x))
 	}}

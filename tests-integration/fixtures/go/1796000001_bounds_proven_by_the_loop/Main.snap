@@ -15,28 +15,26 @@ var main_ = initializeMain_()
 func initializeMain_() []int32 {
 	defer exception.ReportUncaught()
 	array2 := array.Thaw([]int32{1, 2, 3})()
-	i := int32(len(*array2))
+	size := int32(len(*array2))
 	elements := *array2
-	for i2 := int32(0); i2 < i; i2++ {
-		var i3 int32
-		element := elements[i2]
-		i3 = element
-		elements[i2] = i3 * 2
+	for i := int32(0); i < size; i++ {
+		var i2 int32
+		i2 = elements[i]
+		elements[i] = i2 * 2
 	}
 	performed := array.UnsafeFreeze(array2)()
 	array3 := array.Thaw([]int32{4, 5, 6})()
-	i4 := int32(len(*array3))
+	size2 := int32(len(*array3))
 	elements2 := *array3
-	for i2 := int32(1); i2 < i4; i2++ {
-		var i3 int32
-		element := elements2[i2]
-		i3 = element
-		index := i2 - 1
-		elements2[index] = i3
+	for i := int32(1); i < size2; i++ {
+		var i2 int32
+		i2 = elements2[i]
+		index := i - 1
+		elements2[index] = i2
 	}
 	performed2 := array.UnsafeFreeze(array3)()
-	size := int32(len(performed))
-	return array.Append(performed, array.Append(performed2, []int32{mainGo(performed, size, 0, 0)}))
+	size3 := int32(len(performed))
+	return array.Append(performed, array.Append(performed2, []int32{mainGo(performed, size3, 0, 0)}))
 }
 
 func mainGo(doubled []int32, size int32, i int32, total int32) int32 {

@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"github.com/i-am-the-slime/iris-go/exception"
 	"github.com/i-am-the-slime/iris-go/prim"
+	"strconv"
 )
 
 var main_ = initializeMain_()
@@ -52,7 +53,7 @@ func aGroup(step int, n int32, s string) string {
 			if n <= 0 {
 				return s
 			}
-			step, s, n = shared.CStep, prim.ShowInt(n), n-1
+			step, s, n = shared.CStep, strconv.Itoa(int(n)), n-1
 		default: // shared.CStep
 			step, s = shared.AStep, s+"c"
 		}

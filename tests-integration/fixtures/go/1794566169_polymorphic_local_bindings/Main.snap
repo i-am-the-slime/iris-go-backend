@@ -11,13 +11,16 @@ func Identity(x int32) int32 {
 // Data/Show/show.go
 package show
 
-import "github.com/i-am-the-slime/iris-go/prim"
+import (
+	"github.com/i-am-the-slime/iris-go/prim"
+	"strconv"
+)
 
-func Show(i int32) string {
-	return prim.ShowInt(i)
+func ShowInt(i int32) string {
+	return strconv.Itoa(int(i))
 }
 
-func Show2(s string) string {
+func ShowString(s string) string {
 	return prim.ShowString(s)
 }
 
@@ -32,27 +35,28 @@ import (
 	"github.com/i-am-the-slime/iris-go/exception"
 	"github.com/i-am-the-slime/iris-go/prim"
 	"slices"
+	"strconv"
 )
 
 var main_ = initializeMain_()
 
 func initializeMain_() []string {
 	defer exception.ReportUncaught()
-	return []string{"x" + prim.ShowInt(2), pairs, joined, prim.ShowArray(show.Show2, mainGo(show.Show, 3, []string{})) + prim.ShowArray(show.Show, mainGo2(category.Identity, 3, []int32{}))}
+	return []string{"x2", pairs, joined, prim.ShowArray(show.ShowString, mainGo(show.ShowInt, 3, []string{})) + prim.ShowArray(show.ShowInt, mainGo2(category.Identity, 3, []int32{}))}
 }
 
 var pairs = initializePairs()
 
 func initializePairs() string {
 	defer exception.ReportUncaught()
-	return "true" + prim.ShowInt(pairsF(pairsF(1)))
+	return "true" + strconv.Itoa(int(pairsF(pairsF(1))))
 }
 
 var joined = initializeJoined()
 
 func initializeJoined() string {
 	defer exception.ReportUncaught()
-	return "<" + prim.ShowInt(3) + "><" + prim.ShowString("y") + ">"
+	return "<3><" + prim.ShowString("y") + ">"
 }
 
 func mainGo(f func(int32) string, n int32, accumulated []string) []string {

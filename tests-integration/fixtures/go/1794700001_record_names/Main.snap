@@ -40,6 +40,7 @@ import (
 	"fmt"
 	"github.com/i-am-the-slime/iris-go/exception"
 	"github.com/i-am-the-slime/iris-go/prim"
+	"strconv"
 )
 
 var main_ = initializeMain_()
@@ -89,7 +90,7 @@ func initializeMain_() string {
 	for pairIndex := range array7 {
 		accumulator7 = prim.Concat(accumulator7, array7[pairIndex].Left, array7[pairIndex].Right)
 	}
-	return prim.ShowArray(show.Show, []float64{3.0, accumulator, accumulator2, accumulator3, accumulator4}) + prim.ShowInt(accumulator5+accumulator6) + accumulator7
+	return prim.ShowArray(show.Show, []float64{3.0, accumulator, accumulator2, accumulator3, accumulator4}) + strconv.Itoa(int(accumulator5+accumulator6)) + accumulator7
 }
 
 func main() {

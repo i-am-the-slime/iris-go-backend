@@ -4,10 +4,13 @@ source: tests-integration/src/fixtures.rs
 // Data/Show/show.go
 package show
 
-import "github.com/i-am-the-slime/iris-go/prim"
+import (
+	"github.com/i-am-the-slime/iris-go/prim"
+	"strconv"
+)
 
 func Show(i int32) string {
-	return prim.ShowInt(i)
+	return strconv.Itoa(int(i))
 }
 
 func ShowInt(array []int32) string {
@@ -40,7 +43,7 @@ var main_ = initializeMain_()
 
 func initializeMain_() []string {
 	defer exception.ReportUncaught()
-	return []string{prim.ShowInt(1), "Nest " + showNestedArrayInt(shared.Show{Show: func(coerced any) string {
+	return []string{"1", "Nest " + showNestedArrayInt(shared.Show{Show: func(coerced any) string {
 		return show.ShowInt(shared.Convert(coerced))
 	}}, &Nested{Tag: NestedNest, Nest: &Nested{Tag: NestedFlat, Flat: shared.Convert2([][]int32{{1, 2}, {3}})}})}
 }

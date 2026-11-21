@@ -50,6 +50,7 @@ import (
 	"fmt"
 	"github.com/i-am-the-slime/iris-go/exception"
 	"github.com/i-am-the-slime/iris-go/prim"
+	"strconv"
 )
 
 type Tree struct {
@@ -116,289 +117,263 @@ func initializeMain_() []string {
 	} else {
 		result4 = false
 	}
-	var result5 string
-	if result4 {
-		result5 = "true"
-	} else {
-		result5 = "false"
-	}
 	x4 := opaque(1)
 	x5 := opaque(2)
-	var result6 maybe.Int
+	var result5 maybe.Int
 	if x4 > 0 {
-		result6 = maybe.Int(x4 + 1)
+		result5 = maybe.Int(x4 + 1)
+	} else {
+		result5 = maybe.NoInt
+	}
+	var result6 maybe.Int
+	if x5 > 0 {
+		result6 = maybe.Int(x5 + 1)
 	} else {
 		result6 = maybe.NoInt
 	}
-	var result7 maybe.Int
-	if x5 > 0 {
-		result7 = maybe.Int(x5 + 1)
-	} else {
-		result7 = maybe.NoInt
-	}
-	var result8 string
-	if result6 == maybe.NoInt && result7 == maybe.NoInt {
-		result8 = "EQ"
+	var result7 string
+	if result5 == maybe.NoInt && result6 == maybe.NoInt {
+		result7 = "EQ"
+	} else if result5 == maybe.NoInt {
+		result7 = "LT"
 	} else if result6 == maybe.NoInt {
-		result8 = "LT"
-	} else if result7 == maybe.NoInt {
-		result8 = "GT"
+		result7 = "GT"
 	} else {
-		left0 := int32(result6)
-		right0 := int32(result7)
+		left0 := int32(result5)
+		right0 := int32(result6)
 		if left0 < right0 {
-			result8 = "LT"
+			result7 = "LT"
 		} else if left0 == right0 {
-			result8 = "EQ"
+			result7 = "EQ"
 		} else {
-			result8 = "GT"
+			result7 = "GT"
 		}
 	}
-	var result9 string
+	var result8 string
 	if opaque(1) > 0 {
-		result9 = "(Just " + prim.ShowChar('c') + ")"
+		result8 = "(Just " + prim.ShowChar('c') + ")"
+	} else {
+		result8 = "Nothing"
+	}
+	x6 := opaque(7)
+	var result9 string
+	if x6 > 0 {
+		result9 = "(Just " + strconv.FormatBool(x6 > 5) + ")"
 	} else {
 		result9 = "Nothing"
 	}
-	x6 := opaque(7)
+	x7 := opaque(4)
 	var result10 string
-	if x6 > 0 {
-		scrutinee := x6 > 5
-		var result11 string
-		if scrutinee {
-			result11 = "true"
-		} else {
-			result11 = "false"
-		}
-		result10 = "(Just " + result11 + ")"
+	if x7 > 0 {
+		result10 = "(Just " + strconv.Itoa(int(sumTree(&Tree{Node0: sharedTreeLeaf, Node1: x7, Node2: sharedTreeLeaf}))) + ")"
 	} else {
 		result10 = "Nothing"
 	}
-	x7 := opaque(4)
-	var result12 string
-	if x7 > 0 {
-		result12 = "(Just " + prim.ShowInt(sumTree(&Tree{Node0: sharedTreeLeaf, Node1: x7, Node2: sharedTreeLeaf})) + ")"
-	} else {
-		result12 = "Nothing"
-	}
 	x8 := opaque(5)
-	var result13 string
+	var result11 string
 	if x8 > 0 {
-		result13 = "(Just " + prim.ShowInt(1+x8) + ")"
+		result11 = "(Just " + strconv.Itoa(int(1+x8)) + ")"
+	} else {
+		result11 = "Nothing"
+	}
+	var result12 string
+	if opaque(1) > 0 {
+		result12 = "yes"
+	} else {
+		result12 = "no"
+	}
+	x9 := opaque(2)
+	var result13 string
+	if x9 > 0 {
+		x10 := x9 - 1
+		var result14 string
+		if x10 > 0 {
+			result14 = "(Just " + strconv.Itoa(int(x10+1)) + ")"
+		} else {
+			result14 = "Nothing"
+		}
+		result13 = "(Just " + result14 + ")"
 	} else {
 		result13 = "Nothing"
 	}
-	var result14 string
-	if opaque(1) > 0 {
-		result14 = "yes"
-	} else {
-		result14 = "no"
-	}
-	x9 := opaque(2)
-	var result15 string
-	if x9 > 0 {
-		x10 := x9 - 1
-		var result11 string
-		if x10 > 0 {
-			result11 = "(Just " + prim.ShowInt(x10+1) + ")"
-		} else {
-			result11 = "Nothing"
-		}
-		result15 = "(Just " + result11 + ")"
-	} else {
-		result15 = "Nothing"
-	}
 	x11 := opaque(-7)
 	x12 := opaque(-7)
-	var result16 MaybeShape
+	var result15 MaybeShape
 	if x11 > 0 {
-		result16 = JustShape(Shape{Tag: ShapeCircle, Circle: x11})
+		result15 = JustShape(Shape{Tag: ShapeCircle, Circle: x11})
 	} else if x11 < -5 {
-		result16 = JustShape(Shape{Tag: ShapeSquare, Square0: x11, Square1: x11})
+		result15 = JustShape(Shape{Tag: ShapeSquare, Square0: x11, Square1: x11})
+	} else {
+		result15 = NoShape
+	}
+	var result16 MaybeShape
+	if x12 > 0 {
+		result16 = JustShape(Shape{Tag: ShapeCircle, Circle: x12})
+	} else if x12 < -5 {
+		result16 = JustShape(Shape{Tag: ShapeSquare, Square0: x12, Square1: x12})
 	} else {
 		result16 = NoShape
 	}
-	var result17 MaybeShape
-	if x12 > 0 {
-		result17 = JustShape(Shape{Tag: ShapeCircle, Circle: x12})
-	} else if x12 < -5 {
-		result17 = JustShape(Shape{Tag: ShapeSquare, Square0: x12, Square1: x12})
-	} else {
-		result17 = NoShape
-	}
-	var result18 bool
-	if result16.Tag == maybe.TagNothing && result17.Tag == maybe.TagNothing {
-		result18 = true
-	} else if result16.Tag == maybe.TagJust && result17.Tag == maybe.TagJust {
-		if result16.Just.Tag == ShapeCircle && result17.Just.Tag == ShapeCircle {
-			result18 = result16.Just.Circle == result17.Just.Circle
-		} else if result16.Just.Tag == ShapeSquare && result17.Just.Tag == ShapeSquare {
-			if result16.Just.Square0 == result17.Just.Square0 {
-				result18 = result16.Just.Square1 == result17.Just.Square1
+	var result17 bool
+	if result15.Tag == maybe.TagNothing && result16.Tag == maybe.TagNothing {
+		result17 = true
+	} else if result15.Tag == maybe.TagJust && result16.Tag == maybe.TagJust {
+		if result15.Just.Tag == ShapeCircle && result16.Just.Tag == ShapeCircle {
+			result17 = result15.Just.Circle == result16.Just.Circle
+		} else if result15.Just.Tag == ShapeSquare && result16.Just.Tag == ShapeSquare {
+			if result15.Just.Square0 == result16.Just.Square0 {
+				result17 = result15.Just.Square1 == result16.Just.Square1
 			} else {
-				result18 = false
+				result17 = false
 			}
 		} else {
-			result18 = false
+			result17 = false
 		}
 	} else {
-		result18 = false
-	}
-	var result19 string
-	if result18 {
-		result19 = "true"
-	} else {
-		result19 = "false"
+		result17 = false
 	}
 	x13 := opaque(7)
 	x14 := opaque(-7)
-	var result20 MaybeShape
+	var result18 MaybeShape
 	if x13 > 0 {
-		result20 = JustShape(Shape{Tag: ShapeCircle, Circle: x13})
+		result18 = JustShape(Shape{Tag: ShapeCircle, Circle: x13})
 	} else if x13 < -5 {
-		result20 = JustShape(Shape{Tag: ShapeSquare, Square0: x13, Square1: x13})
+		result18 = JustShape(Shape{Tag: ShapeSquare, Square0: x13, Square1: x13})
 	} else {
-		result20 = NoShape
+		result18 = NoShape
 	}
-	var result21 MaybeShape
+	var result19 MaybeShape
 	if x14 > 0 {
-		result21 = JustShape(Shape{Tag: ShapeCircle, Circle: x14})
+		result19 = JustShape(Shape{Tag: ShapeCircle, Circle: x14})
 	} else if x14 < -5 {
-		result21 = JustShape(Shape{Tag: ShapeSquare, Square0: x14, Square1: x14})
+		result19 = JustShape(Shape{Tag: ShapeSquare, Square0: x14, Square1: x14})
 	} else {
-		result21 = NoShape
+		result19 = NoShape
 	}
-	var result22 string
-	if result20.Tag == maybe.TagNothing && result21.Tag == maybe.TagNothing {
-		result22 = "EQ"
-	} else if result20.Tag == maybe.TagNothing {
-		result22 = "LT"
-	} else if result21.Tag == maybe.TagNothing {
-		result22 = "GT"
-	} else if result20.Just.Tag == ShapeCircle && result21.Just.Tag == ShapeCircle {
-		left0 := result20.Just.Circle
-		right0 := result21.Just.Circle
+	var result20 string
+	if result18.Tag == maybe.TagNothing && result19.Tag == maybe.TagNothing {
+		result20 = "EQ"
+	} else if result18.Tag == maybe.TagNothing {
+		result20 = "LT"
+	} else if result19.Tag == maybe.TagNothing {
+		result20 = "GT"
+	} else if result18.Just.Tag == ShapeCircle && result19.Just.Tag == ShapeCircle {
+		left0 := result18.Just.Circle
+		right0 := result19.Just.Circle
 		if left0 < right0 {
-			result22 = "LT"
+			result20 = "LT"
 		} else if left0 == right0 {
-			result22 = "EQ"
+			result20 = "EQ"
 		} else {
-			result22 = "GT"
+			result20 = "GT"
 		}
-	} else if result20.Just.Tag == ShapeCircle {
-		result22 = "LT"
-	} else if result21.Just.Tag == ShapeCircle {
-		result22 = "GT"
+	} else if result18.Just.Tag == ShapeCircle {
+		result20 = "LT"
+	} else if result19.Just.Tag == ShapeCircle {
+		result20 = "GT"
 	} else {
-		left0 := result20.Just.Square0
-		left1 := result20.Just.Square1
-		right0 := result21.Just.Square0
-		right1 := result21.Just.Square1
+		left0 := result18.Just.Square0
+		left1 := result18.Just.Square1
+		right0 := result19.Just.Square0
+		right1 := result19.Just.Square1
 		if left0 < right0 {
-			result22 = "LT"
+			result20 = "LT"
 		} else if left0 == right0 {
 			if left1 < right1 {
-				result22 = "LT"
+				result20 = "LT"
 			} else if left1 == right1 {
-				result22 = "EQ"
+				result20 = "EQ"
 			} else {
-				result22 = "GT"
+				result20 = "GT"
 			}
 		} else {
-			result22 = "GT"
+			result20 = "GT"
 		}
-	}
-	scrutinee2 := opaque(0) > 0
-	var result23 string
-	if scrutinee2 {
-		result23 = "true"
-	} else {
-		result23 = "false"
 	}
 	x15 := opaque(1)
-	var result24 maybe.Int
+	var result21 maybe.Int
 	if x15 > 0 {
-		result24 = maybe.Int(x15 + 1)
+		result21 = maybe.Int(x15 + 1)
 	} else {
-		result24 = maybe.NoInt
+		result21 = maybe.NoInt
 	}
-	elements := []maybe.Int{result24, maybe.NoInt}
-	var result25 string
-	scrutinee3 := elements[0]
-	var result26 string
-	if scrutinee3 != maybe.NoInt {
-		result26 = "(Just " + prim.ShowInt(int32(scrutinee3)) + ")"
+	elements := []maybe.Int{result21, maybe.NoInt}
+	var result22 string
+	scrutinee := elements[0]
+	var result23 string
+	if scrutinee != maybe.NoInt {
+		result23 = "(Just " + strconv.Itoa(int(int32(scrutinee))) + ")"
 	} else {
-		result26 = "Nothing"
+		result23 = "Nothing"
 	}
-	result25 = "(Just " + result26 + ")"
+	result22 = "(Just " + result23 + ")"
 	x16 := opaque(1)
-	var result27 *Tree
+	var result24 *Tree
 	if x16 > 0 {
-		result27 = &Tree{Node0: sharedTreeLeaf, Node1: x16, Node2: sharedTreeLeaf}
+		result24 = &Tree{Node0: sharedTreeLeaf, Node1: x16, Node2: sharedTreeLeaf}
 	} else {
-		result27 = nil
+		result24 = nil
 	}
-	var result28 string
-	if result27 != nil && result27 != sharedTreeLeaf {
-		result28 = prim.ShowInt(result27.Node1)
-	} else if result27 != nil && result27 == sharedTreeLeaf {
-		result28 = "leaf"
+	var result25 string
+	if result24 != nil && result24 != sharedTreeLeaf {
+		result25 = strconv.Itoa(int(result24.Node1))
+	} else if result24 != nil && result24 == sharedTreeLeaf {
+		result25 = "leaf"
 	} else {
-		result28 = "none"
+		result25 = "none"
 	}
 	x17 := opaque(2)
-	var result29 maybe.MaybeInt
+	var result26 maybe.MaybeInt
 	if x17 > 0 {
 		x10 := x17 - 1
-		var result11 maybe.Int
+		var result14 maybe.Int
 		if x10 > 0 {
-			result11 = maybe.Int(x10 + 1)
+			result14 = maybe.Int(x10 + 1)
 		} else {
-			result11 = maybe.NoInt
+			result14 = maybe.NoInt
 		}
-		result29 = maybe.JustMaybeInt(result11)
+		result26 = maybe.JustMaybeInt(result14)
 	} else {
-		result29 = maybe.NoMaybeInt
+		result26 = maybe.NoMaybeInt
 	}
-	var result30 string
-	if result29.Tag == maybe.TagJust && result29.Just != maybe.NoInt {
-		result30 = prim.ShowInt(int32(result29.Just))
-	} else if result29.Tag == maybe.TagJust && result29.Just == maybe.NoInt {
-		result30 = "just nothing"
+	var result27 string
+	if result26.Tag == maybe.TagJust && result26.Just != maybe.NoInt {
+		result27 = strconv.Itoa(int(int32(result26.Just)))
+	} else if result26.Tag == maybe.TagJust && result26.Just == maybe.NoInt {
+		result27 = "just nothing"
 	} else {
-		result30 = "nothing"
+		result27 = "nothing"
 	}
-	var result31 maybe.Char
+	var result28 maybe.Char
 	if opaque(1) > 0 {
-		result31 = maybe.Char('c')
+		result28 = maybe.Char('c')
 	} else {
-		result31 = maybe.NoChar
+		result28 = maybe.NoChar
 	}
-	var result32 string
-	if result31 != maybe.NoChar && rune(result31) == 'c' {
-		result32 = "c"
-	} else if result31 != maybe.NoChar {
-		result32 = "other"
+	var result29 string
+	if result28 != maybe.NoChar && rune(result28) == 'c' {
+		result29 = "c"
+	} else if result28 != maybe.NoChar {
+		result29 = "other"
 	} else {
-		result32 = "none"
+		result29 = "none"
 	}
 	x18 := opaque(7)
-	var result33 maybe.Boolean
+	var result30 maybe.Boolean
 	if x18 > 0 {
-		result33 = maybe.JustBoolean(x18 > 5)
+		result30 = maybe.JustBoolean(x18 > 5)
 	} else {
-		result33 = maybe.NoBoolean
+		result30 = maybe.NoBoolean
 	}
-	var result34 string
-	if result33 == maybe.True {
-		result34 = "yes"
-	} else if result33 == maybe.False {
-		result34 = "no"
+	var result31 string
+	if result30 == maybe.True {
+		result31 = "yes"
+	} else if result30 == maybe.False {
+		result31 = "no"
 	} else {
-		result34 = "none"
+		result31 = "none"
 	}
-	return []string{prim.ShowInt(result), result5, result8, result9, result10, result12, result13, result14, result15, result19, result22, result23, result25, result28, result30, result32, result34}
+	return []string{strconv.Itoa(int(result)), strconv.FormatBool(result4), result7, result8, result9, result10, result11, result12, result13, strconv.FormatBool(result17), result20, strconv.FormatBool(opaque(0) > 0), result22, result25, result27, result29, result31}
 }
 
 func opaque(x int32) int32 {

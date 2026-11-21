@@ -33,15 +33,15 @@ type SceneUnit struct {
 	StateTIntIdentity func(Interpreter) func(int32) TupleUnitInt
 }
 
-func Discard(sceneUnit SceneUnit, next func(struct{}) SceneInt) SceneInt {
+func Discard(run SceneUnit, next func(struct{}) SceneInt) SceneInt {
 	return SceneInt{Identity: func(interpreter shared.InterpreterIdentity) int32 {
-		sceneUnit.Identity(interpreter)
+		run.Identity(interpreter)
 		return next(struct{}{}).Identity(interpreter)
 	}, ST: func(interpreter shared.InterpreterST) int32 {
-		sceneUnit.ST(interpreter)
+		run.ST(interpreter)
 		return next(struct{}{}).ST(interpreter)
 	}, StateTIntIdentity: func(interpreter Interpreter) func(int32) TupleIntInt {
-		f := sceneUnit.StateTIntIdentity(interpreter)
+		f := run.StateTIntIdentity(interpreter)
 		return func(s int32) TupleIntInt {
 			scrutinee := f(s)
 			return next(scrutinee.First).StateTIntIdentity(interpreter)(scrutinee.Second)
@@ -66,14 +66,13 @@ var recorded = initializeRecorded()
 
 func initializeRecorded() int32 {
 	defer exception.ReportUncaught()
-	var ref int32 = 0
+	var total int32 = 0
 	i := program.ST(shared.InterpreterST{Emit: func(value int32) {
-		s_ := ref + value
-		ref = s_
+		total += value
 	}, Measure: func(text string) int32 {
 		return direct.CodePointLength(text)
 	}})
-	performed := ref + i
+	performed := total + i
 	return performed
 }
 

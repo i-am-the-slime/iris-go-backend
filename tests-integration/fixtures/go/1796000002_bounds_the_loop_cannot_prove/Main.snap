@@ -15,35 +15,33 @@ var main_ = initializeMain_()
 func initializeMain_() []int32 {
 	defer exception.ReportUncaught()
 	array2 := array.Thaw([]int32{1, 2, 3})()
-	i := int32(len(*array2))
-	end := i + 1
+	size := int32(len(*array2))
+	end := size + 1
 	elements := *array2
-	for i2 := int32(0); i2 < end; i2++ {
-		var i3 int32
-		if int(i2) < len(elements) {
-			element := elements[i2]
-			i3 = element
-			elements[i2] = i3 + 1
+	for i := int32(0); i < end; i++ {
+		var i2 int32
+		if int(i) < len(elements) {
+			i2 = elements[i]
+			elements[i] = i2 + 1
 		} else {
-			i3 = 0
+			i2 = 0
 		}
 	}
 	performed := array.UnsafeFreeze(array2)()
 	array3 := array.Thaw([]int32{1, 2, 3})()
-	i4 := int32(len(*array3))
+	size2 := int32(len(*array3))
 	elements2 := *array3
-	for i2 := int32(0); i2 < i4; i2++ {
-		i3 := i2 - 1
-		within := i3 >= 0
-		var i5 int32
+	for i := int32(0); i < size2; i++ {
+		i2 := i - 1
+		within := i2 >= 0
+		var previous int32
 		if within {
-			element := elements2[i3]
-			i5 = element
+			previous = elements2[i2]
 		} else {
-			i5 = 0
+			previous = 0
 		}
-		element2 := elements2[i2]
-		elements2[i2] = element2 + i5
+		element := elements2[i]
+		elements2[i] = element + previous
 	}
 	performed2 := array.UnsafeFreeze(array3)()
 	return array.Append(performed, performed2)
