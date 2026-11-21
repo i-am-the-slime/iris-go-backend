@@ -22,6 +22,7 @@ mod diverging;
 mod existential;
 mod fusion;
 mod groups;
+mod guards;
 mod headers;
 mod immediate;
 mod int64;
@@ -164,6 +165,7 @@ where
     let effects = std::mem::take(&mut emitter.effects);
     timed("headers", || headers::read_headers_once(&mut declarations, &effects));
     timed("bounds", || headers::drop_repeated_bounds_tests(&mut declarations, &effects));
+    timed("guards", || guards::guard_accesses_together(&mut declarations, &effects));
     let taken =
         |name: &str| emitter.global_names.contains(name) || IMPORTED_PACKAGES.contains(&name);
     timed("lengths", || lengths::count_lengths_up_to_comparisons(&mut declarations));

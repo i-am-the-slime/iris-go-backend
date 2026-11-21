@@ -816,7 +816,10 @@ impl Simplifier<'_> {
             let built_in_place = uses.total == 1
                 && matches!(&body.kind, ExpressionKind::EffectBind { action, .. }
                     if matches!(action.kind, ExpressionKind::Local(id) if id == binding.local.id));
-            if substitutable && (built_in_place || !runs_effect(self, &binding.value)) {
+            if self.is_small_applied_lambda(&binding, &body) {
+                body = self.inline_applied(body, &binding);
+                body = self.expression(body);
+            } else if substitutable && (built_in_place || !runs_effect(self, &binding.value)) {
                 if uses.total > 0 {
                     body = substitute(body, binding.local.id, &binding.value, self.monotypes);
                     body = self.expression(body);
@@ -833,6 +836,40 @@ impl Simplifier<'_> {
         kept.reverse();
         let monotype = body.monotype;
         Expression::new(ExpressionKind::Let { bindings: kept, body: Box::new(body) }, monotype)
+    }
+
+    /// A small local function over a mutable array of its surroundings, such as a `where`
+    /// helper that peeks with a default, is inlined at each of its calls when it is only ever
+    /// called. Its accesses are then seen where it is called, next to the caller's own, so that
+    /// accesses of the same indices share their bounds tests (emit/guards.rs). Any other helper
+    /// stays one function.
+    fn is_small_applied_lambda(&self, binding: &Binding, body: &Expression) -> bool {
+        let ExpressionKind::Lambda { parameters, .. } = &binding.value.kind else { return false };
+        self.fuel > 0
+            && is_within_size(&binding.value, INLINE_SIZE)
+            && captures_free(&binding.value, self.monotypes, |monotype| {
+                matches!(monotype, Monotype::MutableArray(_))
+            })
+            && !can_fail(&binding.value)
+            && !runs_any_effect(&binding.value)
+            && only_called(body, binding.local.id, parameters.len())
+    }
+
+    /// The body with each call of the binding's lambda given a copy of the lambda with fresh
+    /// binders.
+    fn inline_applied(&mut self, mut body: Expression, binding: &Binding) -> Expression {
+        if let ExpressionKind::Local(id) = body.kind
+            && id == binding.local.id
+        {
+            let mut copy = binding.value.clone();
+            self.rename(&mut copy, &mut FxHashMap::default());
+            return copy;
+        }
+        for_each_child_mut(&mut body, &mut |child| {
+            let taken = std::mem::replace(child, Expression::new(ExpressionKind::Unit, child.monotype));
+            *child = self.inline_applied(taken, binding);
+        });
+        body
     }
 
     /// A small lambda that reads or writes a reference cell of its
@@ -1788,9 +1825,17 @@ fn is_within_size(expression: &Expression, limit: usize) -> bool {
 
 /// Whether the lambda reads or writes a reference cell of its surroundings.
 fn captures_reference(lambda: &Expression, monotypes: &Monotypes) -> bool {
+    captures_free(lambda, monotypes, |monotype| matches!(monotype, Monotype::Reference(_)))
+}
+
+/// Whether the lambda refers to a local of its surroundings whose type is one `kind` accepts.
+fn captures_free(
+    lambda: &Expression,
+    monotypes: &Monotypes,
+    kind: impl Fn(&Monotype) -> bool,
+) -> bool {
     let is_cell = |node: &Expression| {
-        matches!(node.kind, ExpressionKind::Local(_))
-            && matches!(monotypes.get(node.monotype), Monotype::Reference(_))
+        matches!(node.kind, ExpressionKind::Local(_)) && kind(monotypes.get(node.monotype))
     };
     let mut cells = vec![];
     visit(lambda, &mut |node| {
@@ -1815,6 +1860,32 @@ struct Occurrences {
     /// Occurrences as the function of an application.
     applied: usize,
     limit: usize,
+}
+
+/// Whether the local occurs in the expression, and only as the function of calls that give it at
+/// least `arity` arguments.
+fn only_called(expression: &Expression, local: LocalId, arity: usize) -> bool {
+    fn called(expression: &Expression, local: LocalId, arity: usize, seen: &mut bool) -> bool {
+        match &expression.kind {
+            ExpressionKind::Local(id) => *id != local,
+            ExpressionKind::Apply { function, arguments }
+                if matches!(function.kind, ExpressionKind::Local(id) if id == local) =>
+            {
+                *seen = true;
+                arguments.len() >= arity
+                    && arguments.iter().all(|argument| called(argument, local, arity, seen))
+            }
+            _ => {
+                let mut all = true;
+                for_each_child(expression, &mut |child| {
+                    all = all && called(child, local, arity, seen)
+                });
+                all
+            }
+        }
+    }
+    let mut seen = false;
+    called(expression, local, arity, &mut seen) && seen
 }
 
 /// Whether the expression refers to a local one of the bindings binds.

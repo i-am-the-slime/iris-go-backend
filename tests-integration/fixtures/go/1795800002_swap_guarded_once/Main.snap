@@ -1,0 +1,98 @@
+---
+source: tests-integration/src/fixtures.rs
+assertion_line: 573
+---
+// main.go
+package main
+
+import (
+	"fmt"
+	"github.com/i-am-the-slime/iris-go/array"
+	"github.com/i-am-the-slime/iris-go/exception"
+	"github.com/i-am-the-slime/iris-go/prim"
+)
+
+var main_ = initializeMain_()
+
+func initializeMain_() []int32 {
+	defer exception.ReportUncaught()
+	array2 := array.Thaw([]int32{1, 2, 3, 4, 5})()
+	i := int32(len(*array2))
+	end := prim.IntDiv(i, 2)
+	elements := *array2
+	for i2 := int32(0); i2 < end; i2++ {
+		j := i - 1 - i2
+		var i3 int32
+		var i4 int32
+		if i2 >= 0 && int(i2) < len(elements) && j >= 0 && int(j) < len(elements) {
+			element := elements[i2]
+			i3 = element
+			element2 := elements[j]
+			i4 = element2
+			elements[i2] = i4
+			elements[j] = i3
+		} else {
+			within := i2 >= 0 && int(i2) < len(elements)
+			if within {
+				element := elements[i2]
+				i3 = element
+			} else {
+				i3 = 0
+			}
+			within2 := j >= 0 && int(j) < len(elements)
+			if within2 {
+				element := elements[j]
+				i4 = element
+			} else {
+				i4 = 0
+			}
+			if i2 >= 0 && int(i2) < len(elements) {
+				elements[i2] = i4
+			}
+			if j >= 0 && int(j) < len(elements) {
+				elements[j] = i3
+			}
+		}
+	}
+	var i5 int32
+	var i6 int32
+	if 0 < len(*array2) && i >= 0 && int(i) < len(*array2) && 1 < len(*array2) {
+		element := (*array2)[0]
+		i5 = element
+		element2 := (*array2)[i]
+		i6 = element2
+		(*array2)[0] = i6
+		(*array2)[i] = i5
+		(*array2)[1] = 0
+	} else {
+		within := 0 < len(*array2)
+		if within {
+			element := (*array2)[0]
+			i5 = element
+		} else {
+			i5 = 0
+		}
+		within2 := i >= 0 && int(i) < len(*array2)
+		if within2 {
+			element := (*array2)[i]
+			i6 = element
+		} else {
+			i6 = 0
+		}
+		if 0 < len(*array2) {
+			(*array2)[0] = i6
+		}
+		if i >= 0 && int(i) < len(*array2) {
+			(*array2)[i] = i5
+		}
+		if 1 < len(*array2) {
+			(*array2)[1] = 0
+		}
+	}
+	performed := array.UnsafeFreeze(array2)()
+	return performed
+}
+
+func main() {
+	fmt.Println(main_)
+}

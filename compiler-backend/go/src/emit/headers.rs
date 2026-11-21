@@ -58,14 +58,14 @@ pub(super) fn read_headers_once(declarations: &mut [GoDeclaration], effects: &Ef
 }
 
 /// The functions that cannot change an array's header.
-struct Keeping<'e> {
+pub(super) struct Keeping<'e> {
     functions: FxHashSet<String>,
     declared: FxHashSet<String>,
     effects: &'e Effects,
 }
 
 impl<'e> Keeping<'e> {
-    fn of(declarations: &mut [GoDeclaration], effects: &'e Effects) -> Self {
+    pub(super) fn of(declarations: &mut [GoDeclaration], effects: &'e Effects) -> Self {
         let declared: FxHashSet<String> = declarations
             .iter()
             .filter_map(|declaration| match declaration {
@@ -97,7 +97,7 @@ impl<'e> Keeping<'e> {
     }
 
     /// Whether the statements cannot change an array's header.
-    fn keeps(&self, body: &mut [GoStatement]) -> bool {
+    pub(super) fn keeps(&self, body: &mut [GoStatement]) -> bool {
         let mut keeps = !writes_through_pointer(body);
         for statement in body.iter_mut() {
             keeps &= !matches!(statement, GoStatement::Defer(_));
@@ -505,7 +505,7 @@ impl Test<'_, '_> {
 }
 
 /// `index >= 0 && int(index) < len(elements)`, or its upper half alone.
-fn is_bounds_test(test: &GoExpression) -> bool {
+pub(super) fn is_bounds_test(test: &GoExpression) -> bool {
     let below = |value: &GoExpression| {
         matches!(value, GoExpression::Binary { operator: "<", right, .. }
             if matches!(&**right, GoExpression::Call { function, .. }
@@ -598,7 +598,7 @@ fn written_names(body: &mut Vec<GoStatement>) -> FxHashSet<String> {
 
 /// The local an assignment changes: itself or one of its fields. Writing an
 /// element through a slice leaves the slice, and so its length, as it was.
-fn assigned_root(target: &GoExpression) -> Option<&str> {
+pub(super) fn assigned_root(target: &GoExpression) -> Option<&str> {
     match target {
         GoExpression::Identifier(name) => Some(name),
         GoExpression::Field { value, .. } => assigned_root(value),
@@ -606,7 +606,7 @@ fn assigned_root(target: &GoExpression) -> Option<&str> {
     }
 }
 
-fn reads(value: &GoExpression) -> FxHashSet<String> {
+pub(super) fn reads(value: &GoExpression) -> FxHashSet<String> {
     let mut found = FxHashSet::default();
     walk::each_expression_in_statement(&mut GoStatement::Expression(value.clone()), |expression| {
         if let GoExpression::Identifier(name) = expression {
@@ -692,7 +692,7 @@ fn deref(value: GoExpression) -> GoExpression {
     GoExpression::Unary { operator: "*", operand: Box::new(value) }
 }
 
-fn fresh(base: &str, names: &mut FxHashSet<String>) -> String {
+pub(super) fn fresh(base: &str, names: &mut FxHashSet<String>) -> String {
     let mut candidate = format!("{base}{NUMBERED}");
     let mut counter = 2;
     while names.contains(&candidate) {
