@@ -1,0 +1,70 @@
+---
+source: tests-integration/src/fixtures.rs
+---
+// main.go
+package main
+
+import (
+	"fixture/shared"
+	"fmt"
+	"github.com/i-am-the-slime/iris-go/exception"
+)
+
+var main_ = initializeMain_()
+
+func initializeMain_() shared.MainResult {
+	defer exception.ReportUncaught()
+	var accumulator int32 = 0
+	for _, element := range numbers {
+		value := tripled(element)
+		accumulator = accumulator + value
+	}
+	found := false
+	for _, element := range numbers {
+		value := tripled(element)
+		if value > 20 {
+			found = true
+			break
+		}
+	}
+	var accumulator2 int32 = 0
+	for _, x := range numbers {
+		ref := x
+		s_ := ref + 1
+		ref = s_
+		accumulator2 = accumulator2 + s_
+	}
+	return shared.MainResult{Sum: accumulator, Found: found, Counted: accumulator2, Ignored: 0}
+}
+
+func tripled(x int32) int32 {
+	ref := x
+	s_ := ref * 3
+	ref = s_
+	return ref
+}
+
+var numbers []int32 = []int32{3, 1, 4, 1, 5, 9, 2, 6}
+
+func main() {
+	fmt.Println(main_)
+}
+
+// shared/shared.go
+package shared
+
+type MainResult struct {
+	Counted int32
+	Ignored int32
+	Sum     int32
+	Found   bool
+}
+
+type Ref[T any] struct {
+	Value T
+}
+
+type StateValue struct {
+	State int32
+	Value int32
+}
