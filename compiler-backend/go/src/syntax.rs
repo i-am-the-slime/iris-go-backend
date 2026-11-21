@@ -7,6 +7,7 @@ use std::sync::Arc;
 use rayon::prelude::*;
 use rustc_hash::FxHashSet;
 
+use crate::foreign::LineCoverage;
 use crate::walk::{self, Walk};
 
 #[derive(Debug, Clone, Eq)]
@@ -656,14 +657,19 @@ pub struct GoImport {
 impl GoFile {
     /// The source together with a count of the `any` it contains, by cause.
     pub fn render_with_census(&self) -> (String, crate::erasure::Census) {
-        self.render_at(None)
+        self.render_at(None, LineCoverage::Sparse)
     }
 
     /// [`Self::render_with_census`] for the file at `path`, whose `//line` directives name the
     /// PureScript relative to the file's directory, and the file itself in front of a
     /// declaration that follows PureScript code and comes from none itself, so that Go
-    /// attributes that declaration to the Go file again.
-    pub fn render_at(&self, path: Option<&Path>) -> (String, crate::erasure::Census) {
+    /// attributes that declaration to the Go file again. With [`LineCoverage::Every`] every
+    /// statement and declaration names its line, the Go file's own for those from no PureScript.
+    pub fn render_at(
+        &self,
+        path: Option<&Path>,
+        coverage: LineCoverage,
+    ) -> (String, crate::erasure::Census) {
         let directory = path.map(|path| Arc::from(path.parent().unwrap_or(Path::new(""))));
         let file_name = path.and_then(Path::file_name).map(|name| name.to_string_lossy());
         let mut printer = Printer::default();
@@ -698,7 +704,9 @@ impl GoFile {
             .declarations
             .par_iter()
             .map(|declaration| {
-                let mut printer = Printer { directory: directory.clone(), ..Printer::default() };
+                let every = coverage == LineCoverage::Every && file_name.is_some();
+                let mut printer =
+                    Printer { directory: directory.clone(), every, ..Printer::default() };
                 printer.output.push('\n');
                 printer.declaration(declaration);
                 (printer.output, printer.census)
@@ -708,11 +716,14 @@ impl GoFile {
             printer.output.push_str(&output);
             printer.census.absorb(census);
         }
-        match file_name {
-            Some(file_name) => {
+        match (file_name, coverage) {
+            (Some(file_name), LineCoverage::Sparse) => {
                 (settle_line_directives(&printer.output, &file_name), printer.census)
             }
-            None => (printer.output, printer.census),
+            (Some(file_name), LineCoverage::Every) => {
+                (name_go_lines(&printer.output, &file_name), printer.census)
+            }
+            (None, _) => (printer.output, printer.census),
         }
     }
 }
@@ -729,6 +740,8 @@ struct Printer {
     placed: bool,
     /// The directory of the Go file, which directives name the PureScript relative to.
     directory: Option<Arc<Path>>,
+    /// Whether every statement and declaration names its line, as [`LineCoverage::Every`] says.
+    every: bool,
     /// Whether the statement being printed is the last one of a function that returns nothing,
     /// where a `return` says nothing.
     ends_procedure: bool,
@@ -747,6 +760,15 @@ impl Printer {
         let _ = writeln!(self.output, "//line {shown}:{line}:{column}");
     }
 
+    /// Names the line the next statement or declaration comes from, or with none the Go file's
+    /// own line, which [`name_go_lines`] fills in.
+    fn name_every_line(&mut self) {
+        match self.attribution {
+            Some(_) => self.name_attribution(),
+            None => self.output.push_str(GO_LINE_PLACEHOLDER),
+        }
+    }
+
     fn line(&mut self, text: &str) {
         for _ in 0..self.indentation {
             self.output.push('\t');
@@ -756,6 +778,16 @@ impl Printer {
     }
 
     fn declaration(&mut self, declaration: &GoDeclaration) {
+        if self.every {
+            self.attribution = match declaration {
+                GoDeclaration::Function { body, .. } => match body.first() {
+                    Some(GoStatement::Line(line)) => Some(line.clone()),
+                    _ => None,
+                },
+                _ => None,
+            };
+            self.name_every_line();
+        }
         match declaration {
             GoDeclaration::Source { name, template } => {
                 self.output.push_str(&template.replace("{name}", name));
@@ -810,7 +842,7 @@ impl Printer {
                 }
             }
             GoDeclaration::Function { name, parameters, result, body } => {
-                if let Some(GoStatement::Line(line)) = body.first() {
+                if let (false, Some(GoStatement::Line(line))) = (self.every, body.first()) {
                     self.attribution = Some(line.clone());
                     self.name_attribution();
                 }
@@ -866,7 +898,9 @@ impl Printer {
         }
         // A loop does nothing of its own: the statements in it name their lines.
         let looping = matches!(statement, GoStatement::Loop(_) | GoStatement::LabeledLoop { .. });
-        if (std::mem::take(&mut self.placed) && !looping) || statement.does_work() {
+        if self.every {
+            self.name_every_line();
+        } else if (std::mem::take(&mut self.placed) && !looping) || statement.does_work() {
             self.name_attribution();
         }
         match statement {
@@ -1022,6 +1056,9 @@ impl Printer {
                 self.line("}")
             }
             [GoStatement::If { condition, then, otherwise }] => {
+                if self.every {
+                    self.name_every_line();
+                }
                 let condition = self.expression(condition, 0);
                 self.line(&format!("}} else if {condition} {{"));
                 self.ends_procedure = ends_procedure;
@@ -1031,7 +1068,9 @@ impl Printer {
             }
             [GoStatement::Line(line), chained @ GoStatement::If { .. }] => {
                 let enclosing = self.attribution.replace(line.clone());
-                self.name_attribution();
+                if !self.every {
+                    self.name_attribution();
+                }
                 self.ends_procedure = ends_procedure;
                 self.else_chain(std::slice::from_ref(chained));
                 self.attribution = enclosing;
@@ -1486,6 +1525,25 @@ fn settle_line_directives(text: &str, file_name: &str) -> String {
         previous_blank = line.is_empty();
     }
     settled
+}
+
+/// What the printer writes for a directive that names the Go file's own next line, whose number
+/// is known only once the declarations are joined.
+const GO_LINE_PLACEHOLDER: &str = "//line \0\n";
+
+/// The file's text with each placeholder directive naming the Go file's own next line.
+fn name_go_lines(text: &str, file_name: &str) -> String {
+    let mut named = String::with_capacity(text.len());
+    let placeholder = GO_LINE_PLACEHOLDER.trim_end_matches('\n');
+    for (index, line) in text.lines().enumerate() {
+        if line == placeholder {
+            let _ = writeln!(named, "//line {file_name}:{}", index + 2);
+        } else {
+            named.push_str(line);
+            named.push('\n');
+        }
+    }
+    named
 }
 
 /// The file and line a `//line file:line[:column]` directive names.

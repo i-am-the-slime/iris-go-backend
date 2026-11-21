@@ -3,17 +3,21 @@
 //! each expression with a known position becomes, where they call a function or can fail: only
 //! such code shows up in a trace or a profile, and the passes after emission see through fewer
 //! directives. The printer leaves out the ones that repeat the line before and names the
-//! enclosing line again after a nested block that named another.
+//! enclosing line again after a nested block that named another. [`LineCoverage::Every`] names
+//! every statement instead, for tools that map each Go line to its source.
 
 use std::sync::Arc;
 
 use files::FileId;
+use std::collections::VecDeque;
+
 use rustc_hash::FxHashMap;
 
 use super::Emitter;
 use crate::error::GoResult;
+use crate::foreign::LineCoverage;
 use crate::mono::SourcePosition;
-use crate::syntax::{GoExpression, GoStatement, SourceLine};
+use crate::syntax::{GoDeclaration, GoExpression, GoStatement, SourceLine};
 use crate::walk::{self, Walk};
 
 /// The sources positions are resolved in, by file: none for a file the program's messages do not
@@ -35,17 +39,24 @@ where
     Q: checking::ExternalQueries,
 {
     /// Attributes the statements `out` gained from `start` on to where `position` is written,
-    /// unless they begin with a directive of their own.
+    /// unless they begin with a directive of their own; with [`LineCoverage::Every`], each of
+    /// them and of the blocks in them that no more specific position names already.
     pub(super) fn attribute(
         &mut self,
         position: Option<SourcePosition>,
         start: usize,
         out: &mut Vec<GoStatement>,
     ) -> GoResult<()> {
-        if self.foreign_packages.line_directives.is_none() {
+        let Some(directives) = &self.foreign_packages.line_directives else { return Ok(()) };
+        let every = directives.coverage == LineCoverage::Every;
+        let Some(position) = position else { return Ok(()) };
+        if every {
+            if let Some(line) = self.source_line(position)? {
+                attribute_every(&line, &mut out[start..]);
+                attribute_unnamed(&line, start, out);
+            }
             return Ok(());
         }
-        let Some(position) = position else { return Ok(()) };
         if out.get(start).is_none_or(|first| matches!(first, GoStatement::Line(_)))
             || !does_work(&mut out[start..])
         {
@@ -111,4 +122,184 @@ fn does_work(statements: &mut [GoStatement]) -> bool {
     let mut work = Work(false);
     statements.iter_mut().for_each(|statement| work.statement(statement));
     work.0
+}
+
+/// Names `line` in front of each statement in `statements` that no directive names, the
+/// statements of the blocks nested in them and of function literals included: what the
+/// expressions written inside an expression become names their own lines first, so the rest
+/// comes from the expression itself.
+fn attribute_every(line: &SourceLine, statements: &mut [GoStatement]) {
+    struct Blocks<'a>(&'a SourceLine);
+    impl Walk for Blocks<'_> {
+        fn block(&mut self, body: &mut Vec<GoStatement>) {
+            body.iter_mut().for_each(|statement| self.statement(statement));
+            attribute_unnamed(self.0, 0, body);
+        }
+    }
+    let mut blocks = Blocks(line);
+    statements.iter_mut().for_each(|statement| blocks.statement(statement));
+}
+
+/// Puts a directive naming `line` in front of each statement of `body` from `start` on that does
+/// not follow one.
+fn attribute_unnamed(line: &SourceLine, start: usize, body: &mut Vec<GoStatement>) {
+    let mut at = start;
+    let mut named = false;
+    while at < body.len() {
+        let is_line = matches!(body[at], GoStatement::Line(_));
+        if !is_line && !named {
+            body.insert(at, GoStatement::Line(line.clone()));
+            at += 1;
+        }
+        named = is_line;
+        at += 1;
+    }
+}
+
+/// The directives [`LineCoverage::Every`] puts in front of each statement, set aside while the
+/// passes after emission rewrite the Go, so that they see the same statements as without
+/// directives.
+#[derive(Default)]
+pub(super) struct SetAside {
+    /// Each function's statements in order, outer ones before the blocks in them, each by what
+    /// it is apart from those blocks and with the line it named.
+    statements: FxHashMap<String, Vec<(String, Option<SourceLine>)>>,
+}
+
+/// Takes the directives out of the declarations.
+pub(super) fn set_aside(declarations: &mut [GoDeclaration]) -> SetAside {
+    struct Record(Vec<(String, Option<SourceLine>)>);
+    impl Walk for Record {
+        fn block(&mut self, body: &mut Vec<GoStatement>) {
+            let mut named = None;
+            for statement in body.iter_mut() {
+                match statement {
+                    GoStatement::Line(line) => named = Some(line.clone()),
+                    statement => {
+                        self.0.push((head(statement), named.take()));
+                        walk::statement(self, statement);
+                    }
+                }
+            }
+            body.retain(|statement| !matches!(statement, GoStatement::Line(_)));
+        }
+    }
+    let mut aside = SetAside::default();
+    for declaration in declarations.iter_mut() {
+        let Some(name) = declaration.name().map(str::to_string) else { continue };
+        let mut record = Record(vec![]);
+        walk::declaration(&mut record, declaration);
+        aside.statements.insert(name, record.0);
+    }
+    aside
+}
+
+/// Puts the directives set aside back in front of the statements the passes kept, and in front
+/// of the statements a pass made in place of others the lines of those, in order; any other
+/// statement a pass made names no line, so it shows the one before it.
+pub(super) fn restore(declarations: &mut [GoDeclaration], mut aside: SetAside) {
+    struct Heads(Vec<String>);
+    impl Walk for Heads {
+        fn block(&mut self, body: &mut Vec<GoStatement>) {
+            for statement in body.iter_mut() {
+                self.0.push(head(statement));
+                walk::statement(self, statement);
+            }
+        }
+    }
+    struct Insert(std::vec::IntoIter<Option<SourceLine>>);
+    impl Walk for Insert {
+        fn block(&mut self, body: &mut Vec<GoStatement>) {
+            let statements = std::mem::take(body);
+            for mut statement in statements {
+                let line = self.0.next().flatten();
+                walk::statement(self, &mut statement);
+                body.extend(line.map(GoStatement::Line));
+                body.push(statement);
+            }
+        }
+    }
+    for declaration in declarations.iter_mut() {
+        let Some(before) = declaration.name().and_then(|name| aside.statements.remove(name)) else {
+            continue;
+        };
+        let mut heads = Heads(vec![]);
+        walk::declaration(&mut heads, declaration);
+        let lines = align(&before, &heads.0);
+        walk::declaration(&mut Insert(lines.into_iter()), declaration);
+    }
+}
+
+/// The line for each statement of `after`: the line of the same statement in `before`, matched
+/// in order, and between two matched statements the line of an unmatched one in `before` of the
+/// same kind, or of the first one.
+fn align(before: &[(String, Option<SourceLine>)], after: &[String]) -> Vec<Option<SourceLine>> {
+    let mut positions: FxHashMap<&str, VecDeque<usize>> = FxHashMap::default();
+    for (at, (head, _)) in before.iter().enumerate() {
+        positions.entry(head).or_default().push_back(at);
+    }
+    // The statement of `before` each statement of `after` is, in increasing order.
+    let mut matched: Vec<Option<usize>> = Vec::with_capacity(after.len());
+    let mut next = 0;
+    for head in after {
+        let found = positions.get_mut(head.as_str()).and_then(|queue| {
+            while queue.front().is_some_and(|&at| at < next) {
+                queue.pop_front();
+            }
+            queue.pop_front()
+        });
+        if let Some(at) = found {
+            next = at + 1;
+        }
+        matched.push(found);
+    }
+    let mut lines = Vec::with_capacity(after.len());
+    let mut gap_start = 0;
+    let mut at = 0;
+    while at < after.len() {
+        if let Some(found) = matched[at] {
+            lines.push(before[found].1.clone());
+            gap_start = found + 1;
+            at += 1;
+            continue;
+        }
+        let end = (at..after.len()).find(|&index| matched[index].is_some()).unwrap_or(after.len());
+        let gap_end = matched.get(end).copied().flatten().unwrap_or(before.len());
+        let replaced = &before[gap_start..gap_end];
+        // A statement a pass rewrote is mostly still the same kind of statement.
+        let mut cursor = 0;
+        for head in &after[at..end] {
+            let same_kind = (cursor..replaced.len())
+                .find(|&candidate| kind(&replaced[candidate].0) == kind(head));
+            let line = match same_kind {
+                Some(candidate) => {
+                    cursor = candidate + 1;
+                    replaced[candidate].1.clone()
+                }
+                None => replaced
+                    .get(cursor.min(replaced.len().saturating_sub(1)))
+                    .and_then(|(_, line)| line.clone()),
+            };
+            lines.push(line);
+        }
+        at = end;
+    }
+    lines
+}
+/// The kind of statement a [`head`] is: `If`, `Assign`, `Define` and so on.
+fn kind(head: &str) -> &str {
+    head.split(|character: char| !character.is_alphanumeric()).next().unwrap_or(head)
+}
+
+/// The statement apart from the blocks in it, function literals' bodies included.
+fn head(statement: &GoStatement) -> String {
+    struct Empty;
+    impl Walk for Empty {
+        fn block(&mut self, body: &mut Vec<GoStatement>) {
+            body.clear();
+        }
+    }
+    let mut head = statement.clone();
+    Empty.statement(&mut head);
+    format!("{head:?}")
 }

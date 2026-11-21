@@ -155,6 +155,12 @@ where
         emitter.performs(GoFunction { package: GoPackage::Aff, name: "Await" });
         await_fibers(&mut declarations);
     }
+    let every_line = emitter
+        .foreign_packages
+        .line_directives
+        .as_ref()
+        .is_some_and(|directives| directives.coverage == crate::foreign::LineCoverage::Every);
+    let lines_aside = every_line.then(|| lines::set_aside(&mut declarations));
     timed("references", || references::promote_references(&mut declarations));
     timed("composites", || composites::take_composites_apart(&mut declarations));
     timed("immediate", || immediate::reduce_immediate_calls(&mut declarations));
@@ -191,6 +197,9 @@ where
     });
     timed("divergence", || diverging::end_blocks_at_divergence(&mut declarations));
     timed("unreferenced", || unreferenced::drop_unreferenced_definitions(&mut declarations));
+    if let Some(aside) = lines_aside {
+        lines::restore(&mut declarations, aside);
+    }
     let mut homes: FxHashMap<String, ModuleIndex> = std::mem::take(&mut emitter.homes)
         .into_iter()
         .filter_map(|(name, file)| Some((name, modules.index(file)?)))

@@ -80,6 +80,19 @@ pub struct GoOptions {
     /// debuggers and profiles point at your .purs files.
     #[usage(long)]
     no_line_directives: bool,
+
+    /// Which Go lines name their .purs line: `every` puts a //line comment in front of each
+    /// statement and declaration, for tools that show each Go line next to its PureScript.
+    #[usage(long, value_enum, value_name = "WHICH", conflicts("--no-line-directives"))]
+    line_directives: Option<LineDirectiveChoice>,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq, ValueEnum)]
+pub enum LineDirectiveChoice {
+    /// The lines that call a function or can fail, which traces and profiles show.
+    Sparse,
+    /// Every statement and declaration.
+    Every,
 }
 
 /// What `iris go` makes: Go sources in a directory with a go.mod, or an executable.
@@ -98,7 +111,11 @@ impl GoOptions {
                 destination,
                 version,
                 quiet: false,
-                line_directives: !self.no_line_directives,
+                line_directives: match (self.no_line_directives, self.line_directives) {
+                    (true, _) => None,
+                    (false, Some(LineDirectiveChoice::Every)) => Some(iris_go::LineCoverage::Every),
+                    (false, _) => Some(iris_go::LineCoverage::Sparse),
+                },
             }),
             None => GoTarget::Executable(iris_go::ProgramConfig {
                 package: self.package,

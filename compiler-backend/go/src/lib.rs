@@ -31,7 +31,7 @@ mod walk;
 
 pub use error::{GoError, GoResult, UnsupportedState};
 pub use foreign::{
-    EmbedError, ForeignPackages, ForeignSource, LineDirectives, embedded_files,
+    EmbedError, ForeignPackages, ForeignSource, LineCoverage, LineDirectives, embedded_files,
     foreign_declarations, foreign_files, foreign_source, foreign_structs,
 };
 pub use timing::Work;
@@ -108,10 +108,12 @@ pub fn compile_program(
         let directives = foreign_packages.line_directives.as_ref()?;
         Some(std::path::Path::new(&directives.go_directory).join(path))
     };
+    let coverage = foreign_packages.line_directives.as_ref().map(|directives| directives.coverage);
     let mut files: Vec<(String, String)> = files
         .into_iter()
         .map(|file| {
-            let (source, _) = file.file.render_at(go_path(&file.path).as_deref());
+            let path = go_path(&file.path);
+            let (source, _) = file.file.render_at(path.as_deref(), coverage.unwrap_or_default());
             (file.path, source)
         })
         .collect();

@@ -49,6 +49,21 @@ pub struct LineDirectives {
     pub go_directory: String,
     /// The source files, absolute or relative to the same directory as `go_directory`.
     pub sources: Vec<(FileId, String)>,
+    /// Which Go lines get a directive.
+    pub coverage: LineCoverage,
+}
+
+/// Which Go lines `//line` directives name the source of.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub enum LineCoverage {
+    /// The statements that call a function or can fail, which is what a stack trace, a debugger
+    /// or a profile shows, and only where Go would not count to the line anyway.
+    #[default]
+    Sparse,
+    /// Every statement and declaration, by the most specific PureScript position known, and the
+    /// Go file itself for those from no PureScript: for tools that map each Go line to its
+    /// source, such as a side-by-side viewer.
+    Every,
 }
 
 /// The Go files next to a module's source and the names they declare at their top level, which

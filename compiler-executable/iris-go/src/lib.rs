@@ -15,6 +15,8 @@ use iris_build::{
     BuildSession, BuildSessionConfig, BuildStage, ProjectConfig, SessionSnapshot, SourceKind,
 };
 
+pub use go::LineCoverage;
+
 pub struct GoConfig {
     pub package: Option<String>,
     pub entry: String,
@@ -23,8 +25,8 @@ pub struct GoConfig {
     /// Leaves out the summary of what was written.
     pub quiet: bool,
     /// Writes `//line` directives, which make Go's stack traces, debuggers and profiles name
-    /// the PureScript the code comes from.
-    pub line_directives: bool,
+    /// the PureScript the code comes from, on the lines the coverage says; none leaves them out.
+    pub line_directives: Option<go::LineCoverage>,
 }
 
 mod program;
@@ -55,8 +57,9 @@ pub fn run(config: GoConfig) -> Result<(), String> {
     let module_path = go_module_path(&config.destination)?;
     let mut foreign_packages =
         vendor_foreign_packages(&snapshot, &config.destination, &module_path)?;
-    if config.line_directives {
-        foreign_packages.line_directives = Some(line_directives(&snapshot, &config.destination)?);
+    if let Some(coverage) = config.line_directives {
+        let directives = line_directives(&snapshot, &config.destination, coverage)?;
+        foreign_packages.line_directives = Some(directives);
     }
     let backend_started = go::Work::so_far();
     let program = go::compile_program(
@@ -185,6 +188,7 @@ fn vendor_foreign_packages(
 fn line_directives(
     snapshot: &SessionSnapshot,
     destination: &Path,
+    coverage: go::LineCoverage,
 ) -> Result<go::LineDirectives, String> {
     let absolute = |path: &Path| dunce::canonicalize(path).unwrap_or_else(|_| path.to_path_buf());
     let go_directory = absolute(destination).display().to_string();
@@ -194,7 +198,7 @@ fn line_directives(
         .filter(|(_, file)| file.kind == SourceKind::Project)
         .map(|(&file_id, file)| (file_id, absolute(&file.path).display().to_string()))
         .collect();
-    Ok(go::LineDirectives { go_directory, sources })
+    Ok(go::LineDirectives { go_directory, sources, coverage })
 }
 
 /// Copies the files the foreign file embeds with `//go:embed` into its package, at the same

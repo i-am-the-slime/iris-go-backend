@@ -12,10 +12,13 @@ Arguments:
          path.
 
 Flags:
-  -p, --package <NAME>       Workspace package to compile.
-      --entry <MODULE.NAME>  Qualified entry point. Defaults to Main.main, or without DIR to the one `iris run --go`
-                             uses.
-      --no-line-directives   Leaves out of the Go written to DIR the //line comments that make stack traces, debuggers
-                             and profiles point at your .purs files.
-  -h, --help                 Print help
+  -p, --package <NAME>           Workspace package to compile.
+      --entry <MODULE.NAME>      Qualified entry point. Defaults to Main.main, or without DIR to the one `iris run --go`
+                                 uses.
+      --no-line-directives       Leaves out of the Go written to DIR the //line comments that make stack traces,
+                                 debuggers and profiles point at your .purs files.
+      --line-directives <WHICH>  Which Go lines name their .purs line: `every` puts a //line comment in front of each
+                                 statement and declaration, for tools that show each Go line next to its PureScript.
+                                 [possible values: sparse, every]
+  -h, --help                     Print help
 --- stderr
