@@ -12,7 +12,7 @@
 //! literal where it is applied.
 
 use super::packages::Spelling;
-use super::{Emitter, identifier_expression};
+use super::{Emitter, identifier_expression, lines};
 use crate::error::GoResult;
 use crate::mono::{Expression, ExpressionKind, Local};
 use crate::monotype::{DataType, MonotypeId};
@@ -119,11 +119,14 @@ where
         let values = names.iter().map(|name| identifier_expression(name)).collect();
         let constructed = self.construct(data, constructor, values)?;
         let result = self.go_result(body.monotype)?;
+        let line = self.constructor_line(data, &constructors[constructor])?;
+        let mut statements = vec![];
+        lines::push_at(line, GoStatement::Return(Some(constructed)), &mut statements);
         self.type_declarations.push(GoDeclaration::Function {
             name: name.clone(),
             parameters: go_parameters,
             result,
-            body: vec![GoStatement::Return(Some(constructed))],
+            body: statements,
         });
         Ok(Some(name))
     }

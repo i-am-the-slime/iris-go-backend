@@ -509,8 +509,8 @@ where
                 .collect();
             let pattern = Pattern { kind: PatternKind::Closure { tag, captures }, monotype };
             let body = shape.body.run(&shape.captures, &passed, building.result, self.monotypes);
-            alternatives
-                .push(Alternative { patterns: vec![pattern], body: Guarded::Unconditional(body) });
+            let body = Guarded::Unconditional(body);
+            alternatives.push(Alternative { patterns: vec![pattern], body, position: None });
             tags.push(ClosureTag { name: shape.name, captures: shape.captures });
         }
         let scrutinee = Expression::new(ExpressionKind::Local(closure.id), monotype);
@@ -1274,7 +1274,7 @@ where
         Ok(match layout.kind {
             DataKind::Tagged if constructor.fields.is_empty() => {
                 let tag = constructor.tag.clone();
-                self.shared_nullary(&layout.name, &tag, true)
+                self.shared_nullary(&layout.name, &tag, true, None)
             }
             _ => GoExpression::Address(Box::new(self.composite(&layout, tag, values))),
         })

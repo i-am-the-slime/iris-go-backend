@@ -1,0 +1,176 @@
+---
+source: tests-integration/src/fixtures.rs
+---
+// Effect/Exception/exception.go
+package effectexception
+
+import "github.com/i-am-the-slime/iris-go/exception"
+
+//line exception.go:6
+func ThrowUnit(x string) {
+//line exception.go:8
+	panic(exception.NewError(x))
+//line exception.go:10
+}
+
+// main.go
+package main
+
+import "fixture/Effect/Exception"
+
+//line Main.purs:10:1
+type Tree struct {
+//line Main.purs:10:20
+	Node0 *Tree
+//line Main.purs:10:20
+	Node2 *Tree
+//line Main.purs:10:20
+	Node1 int32
+//line Main.purs:10:1
+}
+
+//line Main.purs:10:13
+var sharedTreeLeaf = &Tree{}
+
+//line Main.purs:12:1
+type Suit uint8
+
+//line Main.purs:12:1
+const (
+//line Main.purs:12:13
+	SuitHearts Suit = iota
+//line Main.purs:12:22
+	SuitSpades
+//line Main.purs:12:1
+)
+
+//line Main.purs:43:1
+func main() {
+//line Main.purs:44:14
+	var counter int32 = 3
+//line Main.purs:47:3
+	if size(insert(counter, insert(1, insert(5, sharedTreeLeaf)))) != 3 {
+//line Main.purs:48:5
+		effectexception.ThrowUnit("the size is wrong")
+//line Main.purs:47:3
+	}
+//line Main.purs:49:9
+	var result string
+//line Main.purs:49:18
+	if counter > 2 {
+//line Main.purs:15:17
+		result = "hearts"
+//line Main.purs:16:17
+	} else {
+//line Main.purs:16:17
+		result = "spades"
+//line Main.purs:49:18
+	}
+//line Main.purs:49:3
+	if result != "hearts" {
+//line Main.purs:50:5
+		effectexception.ThrowUnit("the suit is wrong")
+//line Main.purs:49:3
+	}
+//line Main.purs:51:9
+	var result2 string
+//line Main.purs:33:6
+	if counter < 0 {
+//line Main.purs:33:17
+		result2 = "negative"
+//line Main.purs:34:11
+	} else if counter == 0 {
+//line Main.purs:34:23
+		result2 = "zero"
+//line Main.purs:35:8
+	} else {
+//line Main.purs:35:8
+		result2 = "positive"
+//line Main.purs:34:11
+	}
+//line Main.purs:51:3
+	if result2 != "positive" {
+//line Main.purs:52:5
+		effectexception.ThrowUnit("the description is wrong")
+//line Main.purs:51:3
+	}
+//line Main.purs:53:12
+	suits := SuitSpades
+//line Main.purs:55:3
+	switch suits {
+//line Main.purs:56:5
+	case SuitHearts:
+//line Main.purs:57:7
+		effectexception.ThrowUnit("the suit is hearts")
+//line Main.purs:58:5
+	default: // SuitSpades
+//line Main.purs:59:7
+		suits = SuitHearts
+//line Main.purs:55:3
+	}
+//line Main.purs:39:5
+	if counter > 100 {
+//line Main.purs:62:7
+		effectexception.ThrowUnit( /*line Main.purs:39:20*/ "too big" /*line Main.purs:62:7*/)
+//line Main.purs:62:7
+		return
+//line Main.purs:39:5
+	}
+//line Main.purs:64:7
+	counter += 1
+//line Main.purs:43:1
+}
+
+//line Main.purs:19:1
+func insert(x int32, value *Tree) *Tree {
+//line Main.purs:20:3
+	if value == sharedTreeLeaf {
+//line Main.purs:20:11
+		return &Tree{Node0: sharedTreeLeaf, Node1: x, Node2: sharedTreeLeaf}
+//line Main.purs:20:3
+	}
+//line Main.purs:21:3
+	left := value.Node0
+//line Main.purs:21:3
+	y := value.Node1
+//line Main.purs:21:3
+	right := value.Node2
+//line Main.purs:22:7
+	if x < y {
+//line Main.purs:22:16
+		return &Tree{Node0: insert(x, left), Node1: y, Node2: right}
+//line Main.purs:22:7
+	}
+//line Main.purs:23:7
+	if x > y {
+//line Main.purs:23:16
+		return &Tree{Node0: left, Node1: y, Node2: insert(x, right)}
+//line Main.purs:23:7
+	}
+//line Main.purs:24:20
+	return value
+//line Main.purs:19:1
+}
+
+//line Main.purs:27:1
+func size(value *Tree) int32 {
+//line Main.purs:28:3
+	if value == sharedTreeLeaf {
+//line Main.purs:28:11
+		return 0
+//line Main.purs:28:3
+	}
+//line Main.purs:29:24
+	return size(value.Node0) + 1 + size(value.Node2)
+//line Main.purs:27:1
+}
+
+// shared/shared.go
+package shared
+
+//line shared.go:4
+type Ref[T any] struct {
+//line shared.go:6
+	Value T
+//line shared.go:8
+}

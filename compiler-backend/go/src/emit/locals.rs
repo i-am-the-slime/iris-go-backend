@@ -508,6 +508,7 @@ mod tests {
                 function: Box::new(GoExpression::Identifier("pair".into())),
                 arguments: vec![literal("done"), literal(&format!("done{NUMBERED}2"))],
             },
+            line: None,
         };
         let rendered = settled(&mut declaration);
         assert!(!rendered.contains("done2"), "{rendered}");

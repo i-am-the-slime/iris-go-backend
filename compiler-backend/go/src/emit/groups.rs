@@ -287,7 +287,8 @@ where
             } else if result.is_none() && !terminates(&body) {
                 body.push(GoStatement::Return(None));
             }
-            cases.push(GoCase { values: vec![identifier_expression(&steps[member])], body });
+            let values = vec![identifier_expression(&steps[member])];
+            cases.push(GoCase { values, body, line: None });
         }
         let default = GoDefault::covering(&mut cases);
         let switch = GoStatement::Switch {

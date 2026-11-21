@@ -438,6 +438,7 @@ where
             name: nothing.to_string(),
             type_: None,
             value,
+            line: None,
         });
     }
 

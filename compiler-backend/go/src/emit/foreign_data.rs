@@ -113,6 +113,7 @@ where
             layout.name.clone(),
             "ForeignFields",
         ));
-        Ok(Some(GoDeclaration::Variable { name, type_: None, value: call(register, vec![fields]) }))
+        let value = call(register, vec![fields]);
+        Ok(Some(GoDeclaration::Variable { name, type_: None, value, line: None }))
     }
 }

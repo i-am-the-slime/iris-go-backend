@@ -298,19 +298,21 @@ impl GoStatement {
 pub struct GoCase {
     pub values: Vec<GoExpression>,
     pub body: Vec<GoStatement>,
+    pub line: Option<SourceLine>,
 }
 
 #[derive(Debug, Clone)]
 pub struct GoDefault {
     pub covers: Vec<GoExpression>,
     pub body: Vec<GoStatement>,
+    pub line: Option<SourceLine>,
 }
 
 impl GoDefault {
     pub fn covering(cases: &mut Vec<GoCase>) -> GoDefault {
-        let GoCase { values, body } =
+        let GoCase { values, body, line } =
             cases.pop().expect("invariant violated: a total switch has a case");
-        GoDefault { covers: values, body }
+        GoDefault { covers: values, body, line }
     }
 }
 
@@ -356,6 +358,7 @@ pub enum GoDeclaration {
         name: String,
         type_: Option<GoType>,
         value: GoExpression,
+        line: Option<SourceLine>,
     },
     Function {
         name: String,
@@ -820,6 +823,17 @@ impl Printer {
         }
     }
 
+    fn branch_line(&mut self, text: &str, line: Option<&SourceLine>) {
+        let enclosing = self.attribution.clone();
+        if self.every
+            && let Some(line) = line
+        {
+            self.attribution = Some(line.clone());
+        }
+        self.line(text);
+        self.attribution = enclosing;
+    }
+
     fn line(&mut self, text: &str) {
         if self.every {
             return self.named_lines(text);
@@ -863,7 +877,8 @@ impl Printer {
                 },
                 GoDeclaration::Type { line, .. }
                 | GoDeclaration::Alias { line, .. }
-                | GoDeclaration::Constants { line, .. } => line.clone(),
+                | GoDeclaration::Constants { line, .. }
+                | GoDeclaration::Variable { line, .. } => line.clone(),
                 _ => None,
             };
             self.name_every_line();
@@ -922,7 +937,7 @@ impl Printer {
                     None => self.line(&format!("const {name} = {value}")),
                 }
             }
-            GoDeclaration::Variable { name, type_, value } => {
+            GoDeclaration::Variable { name, type_, value, .. } => {
                 let value = self.expression(value, 0);
                 match type_ {
                     Some(type_) => {
@@ -1074,17 +1089,18 @@ impl Printer {
                 for case in cases {
                     let values: Vec<String> =
                         case.values.iter().map(|value| self.expression(value, 0)).collect();
-                    self.line(&format!("case {}:", values.join(", ")));
+                    self.branch_line(&format!("case {}:", values.join(", ")), case.line.as_ref());
                     self.ends_procedure = ends_procedure;
                     self.block(&case.body);
                 }
-                if let Some(GoDefault { covers, body }) = default {
+                if let Some(GoDefault { covers, body, line }) = default {
                     if covers.is_empty() {
-                        self.line("default:");
+                        self.branch_line("default:", line.as_ref());
                     } else {
                         let covers: Vec<String> =
                             covers.iter().map(|value| self.expression(value, 0)).collect();
-                        self.line(&format!("default: // {}", covers.join(", ")));
+                        let text = format!("default: // {}", covers.join(", "));
+                        self.branch_line(&text, line.as_ref());
                     }
                     self.ends_procedure = ends_procedure;
                     self.block(body);
@@ -1170,7 +1186,11 @@ impl Printer {
                 self.attribution = enclosing;
             }
             _ => {
-                self.line("} else {");
+                let line = match otherwise.first() {
+                    Some(GoStatement::Line(line)) => Some(line),
+                    _ => None,
+                };
+                self.branch_line("} else {", line);
                 self.ends_procedure = ends_procedure;
                 self.block(otherwise);
                 self.line("}");

@@ -982,7 +982,8 @@ where
                     .push(Pattern { kind: PatternKind::Wildcard, monotype: parameter.monotype });
             }
             let body = self.guarded(scope, &equation.guarded_expression)?;
-            alternatives.push(Alternative { patterns, body });
+            let position = equation_position(&scope.module, equation.source);
+            alternatives.push(Alternative { patterns, body, position });
         }
         let scrutinees: Vec<Expression> = parameters.iter().map(Local::expression).collect();
         let monotype = alternatives_monotype(&alternatives);
@@ -1104,7 +1105,8 @@ where
             Guarded::Unconditional(body) => Ok(body),
             Guarded::Guards(branches) => {
                 let monotype = branches[0].body.monotype;
-                let alternative = Alternative { patterns: vec![], body: Guarded::Guards(branches) };
+                let body = Guarded::Guards(branches);
+                let alternative = Alternative { patterns: vec![], body, position: None };
                 let mut alternatives = vec![alternative];
                 if !exhaustive {
                     alternatives.push(Alternative::match_failure(&[], monotype));
@@ -1248,8 +1250,11 @@ where
                 }
                 Chunk::Pattern(pattern, value, exhaustive) => {
                     let monotype = body.monotype;
-                    let alternative =
-                        Alternative { patterns: vec![pattern], body: Guarded::Unconditional(body) };
+                    let alternative = Alternative {
+                        patterns: vec![pattern],
+                        body: Guarded::Unconditional(body),
+                        position: value.position,
+                    };
                     let scrutinees = vec![value];
                     let mut alternatives = vec![alternative];
                     if !exhaustive {
@@ -1499,7 +1504,9 @@ where
                 let body = self.expression(scope, *expression)?;
                 let monotype = body.monotype;
                 let scrutinees: Vec<Expression> = parameters.iter().map(Local::expression).collect();
-                let alternative = Alternative { patterns, body: Guarded::Unconditional(body) };
+                let body = Guarded::Unconditional(body);
+                let position = source_position(&module, id);
+                let alternative = Alternative { patterns, body, position };
                 let mut alternatives = vec![alternative];
                 if !module.checked.tree.is_exhaustive_match(tree::PatternMatch::Expression(id)) {
                     alternatives.push(Alternative::match_failure(&scrutinees, monotype));
@@ -1525,7 +1532,8 @@ where
                         patterns.push(self.pattern(scope, binder)?);
                     }
                     let body = self.guarded(scope, &alternative.guarded_expression)?;
-                    converted.push(Alternative { patterns, body });
+                    let position = case_branch_position(&module, alternative.source);
+                    converted.push(Alternative { patterns, body, position });
                 }
                 if !module.checked.tree.is_exhaustive_match(tree::PatternMatch::Expression(id)) {
                     let monotype = self.monotype(scope, node.type_id)?;
@@ -3608,6 +3616,15 @@ fn source_position(module: &ModuleData, id: tree::ExpressionId) -> Option<Source
         tree::ExpressionSource::Expression(source) => module.stabilized.syntax_ptr(source),
         tree::ExpressionSource::DoStatement(source) => module.stabilized.syntax_ptr(source),
     }?;
+    let offset = u32::from(pointer.text_range().start());
+    Some(SourcePosition { file: module.file_id, offset })
+}
+
+fn case_branch_position(
+    module: &ModuleData,
+    source: Option<lowering::CaseBranchId>,
+) -> Option<SourcePosition> {
+    let pointer = module.stabilized.syntax_ptr(source?)?;
     let offset = u32::from(pointer.text_range().start());
     Some(SourcePosition { file: module.file_id, offset })
 }

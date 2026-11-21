@@ -749,6 +749,7 @@ where
             .map(|((_, statements), from_constructor)| GoCase {
                 values: vec![identifier_expression(&from_constructor.tag)],
                 body: statements,
+                line: None,
             })
             .collect();
         let default = GoDefault::covering(&mut cases);
@@ -815,13 +816,14 @@ where
             let built = self.construct(to, index, vec![unboxed])?;
             statements.push(GoStatement::Return(Some(built)));
             let label = GoExpression::String(constructor.name.to_string());
-            cases.push(GoCase { values: vec![label], body: statements });
+            cases.push(GoCase { values: vec![label], body: statements, line: None });
         }
         if cases.is_empty() {
             body.push(super::panic_statement(NO_SUCH_LABEL));
             return Ok(());
         }
-        let default = GoDefault { covers: vec![], body: vec![super::panic_statement(NO_SUCH_LABEL)] };
+        let panics = vec![super::panic_statement(NO_SUCH_LABEL)];
+        let default = GoDefault { covers: vec![], body: panics, line: None };
         let tag = self.read_field(value, representation, "type");
         body.push(GoStatement::Switch { value: Some(tag), cases, default: Some(default) });
         Ok(())

@@ -19,9 +19,13 @@
 
 use super::{Simplifier, occurrences};
 use crate::foreign::{Comparison, Foreign, Operator};
-use crate::mono::{Alternative, Expression, ExpressionKind, Guard, Guarded, Literal, LocalId};
+use crate::mono::{
+    Alternative, Expression, ExpressionKind, Guard, Guarded, Literal, LocalId, SourcePosition,
+};
 use crate::monotype::{Monotype, MonotypeId};
 use crate::primitives::{Int64Operation, Signedness};
+
+type OutcomeBranch = (Outcomes, Expression, Option<SourcePosition>);
 
 /// A set of outcomes of a three-way comparison.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -145,7 +149,7 @@ impl Simplifier<'_> {
         monotype: MonotypeId,
     ) -> Option<Expression> {
         let (comparison, native, left, right) = self.native_comparison(condition)?;
-        let mut branches: Vec<(Outcomes, Expression)> = vec![];
+        let mut branches: Vec<OutcomeBranch> = vec![];
         let mut choices = 0;
         let mut possible = ALL;
         let mut add = |outcomes: Outcomes, body: &Expression| {
@@ -153,9 +157,9 @@ impl Simplifier<'_> {
             if outcomes == NONE {
                 return;
             }
-            match branches.iter_mut().find(|(_, existing)| existing == body) {
-                Some((joined, _)) => *joined = joined.or(outcomes),
-                None => branches.push((outcomes, body.clone())),
+            match branches.iter_mut().find(|(_, existing, _)| existing == body) {
+                Some((joined, _, _)) => *joined = joined.or(outcomes),
+                None => branches.push((outcomes, body.clone(), None)),
             }
         };
         let (mut comparison, mut then, mut otherwise, mut swapped) =
@@ -231,7 +235,7 @@ impl Simplifier<'_> {
     #[allow(clippy::too_many_arguments)]
     fn choose(
         &mut self,
-        branches: &[(Outcomes, Expression)],
+        branches: &[OutcomeBranch],
         possible: Outcomes,
         native: Native,
         left: &Expression,
@@ -240,11 +244,12 @@ impl Simplifier<'_> {
         monotype: MonotypeId,
     ) -> Expression {
         if let Some(outcome) = constant_outcome(native, left, right) {
-            let chosen = branches.iter().find(|(outcomes, _)| outcomes.and(outcome) != NONE);
-            let (_, body) = chosen.expect("invariant violated: the branches cover every outcome");
+            let chosen = branches.iter().find(|(outcomes, _, _)| outcomes.and(outcome) != NONE);
+            let (_, body, _) =
+                chosen.expect("invariant violated: the branches cover every outcome");
             return body.clone();
         }
-        let [(outcomes, body), rest @ ..] = branches else {
+        let [(outcomes, body, position), rest @ ..] = branches else {
             unreachable!("invariant violated: a three-way case has a branch")
         };
         if rest.is_empty() {
@@ -259,7 +264,7 @@ impl Simplifier<'_> {
         };
         let arguments = vec![left.clone(), right.clone()];
         let condition = ExpressionKind::Foreign { foreign: foreign.interned(), arguments };
-        let condition = Expression::new(condition, boolean);
+        let condition = Expression::new(condition, boolean).located(*position);
         let possible = possible.without(*outcomes);
         let otherwise = self.choose(rest, possible, native, left, right, boolean, monotype);
         self.plain_choice(condition, body.clone(), otherwise, monotype)
@@ -341,10 +346,13 @@ fn distinguishing(outcomes: Outcomes, possible: Outcomes) -> Comparison {
 
 /// The outcomes each body is chosen for, joined by body, when the patterns
 /// and guards test nothing but the outcome and cover all of them.
-fn outcome_branches(alternatives: &[Alternative]) -> Option<Vec<(Outcomes, Expression)>> {
+fn outcome_branches(alternatives: &[Alternative]) -> Option<Vec<OutcomeBranch>> {
     let mut remaining = ALL;
-    let mut branches: Vec<(Outcomes, Expression)> = vec![];
-    let mut catch = |outcomes: Outcomes, body: &Expression, binder: Option<LocalId>| {
+    let mut branches: Vec<OutcomeBranch> = vec![];
+    let mut catch = |outcomes: Outcomes,
+                     body: &Expression,
+                     binder: Option<LocalId>,
+                     position: Option<SourcePosition>| {
         if binder.is_some_and(|binder| occurrences(body, binder).total > 0) {
             return None;
         }
@@ -353,13 +361,14 @@ fn outcome_branches(alternatives: &[Alternative]) -> Option<Vec<(Outcomes, Expre
         if caught == NONE {
             return Some(());
         }
-        match branches.iter_mut().find(|(_, existing)| existing == body) {
-            Some((joined, _)) => *joined = joined.or(caught),
-            None => branches.push((caught, body.clone())),
+        match branches.iter_mut().find(|(_, existing, _)| existing == body) {
+            Some((joined, _, _)) => *joined = joined.or(caught),
+            None => branches.push((caught, body.clone(), position)),
         }
         Some(())
     };
     for alternative in alternatives {
+        let position = alternative.position;
         let [pattern] = alternative.patterns.as_slice() else { return None };
         let (matched, binder) = match &pattern.kind {
             crate::mono::PatternKind::Wildcard => (ALL, None),
@@ -370,7 +379,7 @@ fn outcome_branches(alternatives: &[Alternative]) -> Option<Vec<(Outcomes, Expre
             _ => return None,
         };
         match &alternative.body {
-            Guarded::Unconditional(body) => catch(matched, body, binder)?,
+            Guarded::Unconditional(body) => catch(matched, body, binder, position)?,
             Guarded::Guards(branches) => {
                 for branch in branches {
                     let mut admitted = matched;
@@ -378,7 +387,11 @@ fn outcome_branches(alternatives: &[Alternative]) -> Option<Vec<(Outcomes, Expre
                         let Guard::Boolean(condition) = guard else { return None };
                         admitted = admitted.and(guarded_outcomes(condition, binder)?);
                     }
-                    catch(admitted, &branch.body, binder)?;
+                    let position = match branch.guards.first() {
+                        Some(guard) => guard.value().position,
+                        None => position,
+                    };
+                    catch(admitted, &branch.body, binder, position)?;
                 }
             }
         }

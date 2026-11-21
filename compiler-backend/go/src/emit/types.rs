@@ -566,8 +566,10 @@ where
             });
         }
         if kind == DataKind::Sentinel {
-            for constructor in layouts.iter().filter(|constructor| constructor.fields.is_empty()) {
-                self.shared_nullary(&name, &constructor.tag, false);
+            for (constructor, line) in layouts.iter().zip(&constructor_lines) {
+                if constructor.fields.is_empty() {
+                    self.shared_nullary(&name, &constructor.tag, false, line.clone());
+                }
             }
         }
         Ok(self.data_layouts.get(data).cloned().unwrap_or(layout))

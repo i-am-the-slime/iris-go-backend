@@ -109,6 +109,23 @@ where
         self.source_line(position)
     }
 
+    pub(super) fn branch_line(
+        &mut self,
+        position: Option<SourcePosition>,
+    ) -> GoResult<Option<SourceLine>> {
+        let Some(line) = self.span_line(position)? else { return Ok(None) };
+        let enclosing = match &self.spans.enclosing {
+            Some(enclosing) => Some(enclosing.clone()),
+            None => {
+                let function = self.current.map(|id| self.program.function(id));
+                let position =
+                    function.and_then(|function| function.body.position.or(function.position));
+                self.span_line(position)?
+            }
+        };
+        Ok(enclosing.filter(|enclosing| enclosing.path == line.path).map(|_| line))
+    }
+
     pub(super) fn data_line(&mut self, data: &DataType) -> GoResult<Option<SourceLine>> {
         let Some(directives) = &self.foreign_packages.line_directives else { return Ok(None) };
         if directives.coverage != LineCoverage::Every {
@@ -127,6 +144,23 @@ where
         let Some(pointer) = pointer else { return Ok(None) };
         let offset = u32::from(pointer.text_range().start());
         self.source_line(SourcePosition { file: data.file_id, offset })
+    }
+
+    pub(super) fn nullary_line(
+        &mut self,
+        data: &DataType,
+        constructor: usize,
+    ) -> GoResult<Option<SourceLine>> {
+        let Some(directives) = &self.foreign_packages.line_directives else { return Ok(None) };
+        if directives.coverage != LineCoverage::Every {
+            return Ok(None);
+        }
+        let name = self.data_layout(data)?.name;
+        let constructors = self
+            .monotypes
+            .constructors(&mut self.context, data)
+            .map_err(|failure| failure.at(&name))?;
+        self.constructor_line(data, &constructors[constructor])
     }
 
     pub(super) fn constructor_line(
@@ -368,6 +402,44 @@ fn attribute_every(line: &SourceLine, statements: &mut [GoStatement]) {
     statements.iter_mut().for_each(|statement| blocks.statement(statement));
 }
 
+pub(super) fn attribute_branch(
+    line: Option<&SourceLine>,
+    start: usize,
+    out: &mut Vec<GoStatement>,
+) {
+    let Some(line) = line else { return };
+    attribute_every(line, &mut out[start..]);
+    attribute_unnamed(line, start, out);
+}
+
+fn open_at(line: Option<SourceLine>, block: &mut Vec<GoStatement>) {
+    let Some(line) = line else { return };
+    if let Some(GoStatement::Line(first)) = block.first()
+        && same_line(first, &line)
+    {
+        return;
+    }
+    block.insert(0, GoStatement::Line(line));
+}
+
+pub(super) fn open_otherwise_at(line: Option<SourceLine>, otherwise: &mut Vec<GoStatement>) {
+    let mut statements =
+        otherwise.iter().filter(|statement| !matches!(statement, GoStatement::Line(_)));
+    match (statements.next(), statements.next()) {
+        (None, _) | (Some(GoStatement::If { .. }), None) => {}
+        _ => open_at(line, otherwise),
+    }
+}
+
+pub(super) fn push_at(
+    line: Option<SourceLine>,
+    statement: GoStatement,
+    out: &mut Vec<GoStatement>,
+) {
+    out.extend(line.map(GoStatement::Line));
+    out.push(statement);
+}
+
 /// Puts a directive naming `line` in front of each statement of `body` from `start` on that does
 /// not follow one.
 fn attribute_unnamed(line: &SourceLine, start: usize, body: &mut Vec<GoStatement>) {
@@ -391,21 +463,21 @@ fn attribute_unnamed(line: &SourceLine, start: usize, body: &mut Vec<GoStatement
 pub(super) struct SetAside {
     /// Each function's statements in order, outer ones before the blocks in them, each by what
     /// it is apart from those blocks and with the line it named.
-    statements: FxHashMap<String, Vec<(String, Option<SourceLine>)>>,
+    statements: FxHashMap<String, Vec<(String, Vec<SourceLine>)>>,
     definitions: FxHashMap<String, SourceLine>,
 }
 
 /// Takes the directives out of the declarations.
 pub(super) fn set_aside(declarations: &mut [GoDeclaration]) -> SetAside {
-    struct Record(Vec<(String, Option<SourceLine>)>);
+    struct Record(Vec<(String, Vec<SourceLine>)>);
     impl Walk for Record {
         fn block(&mut self, body: &mut Vec<GoStatement>) {
-            let mut named = None;
+            let mut named = vec![];
             for statement in body.iter_mut() {
                 match statement {
-                    GoStatement::Line(line) => named = Some(line.clone()),
+                    GoStatement::Line(line) => named.push(line.clone()),
                     statement => {
-                        self.0.push((head(statement), named.take()));
+                        self.0.push((head(statement), std::mem::take(&mut named)));
                         walk::statement(self, statement);
                     }
                 }
@@ -442,14 +514,14 @@ pub(super) fn restore(declarations: &mut [GoDeclaration], mut aside: SetAside) {
             }
         }
     }
-    struct Insert(std::vec::IntoIter<Option<SourceLine>>);
+    struct Insert(std::vec::IntoIter<Vec<SourceLine>>);
     impl Walk for Insert {
         fn block(&mut self, body: &mut Vec<GoStatement>) {
             let statements = std::mem::take(body);
             for mut statement in statements {
-                let line = self.0.next().flatten();
+                let lines = self.0.next().unwrap_or_default();
                 walk::statement(self, &mut statement);
-                body.extend(line.map(GoStatement::Line));
+                body.extend(lines.into_iter().map(GoStatement::Line));
                 body.push(statement);
             }
         }
@@ -473,7 +545,7 @@ pub(super) fn restore(declarations: &mut [GoDeclaration], mut aside: SetAside) {
 /// The line for each statement of `after`: the line of the same statement in `before`, matched
 /// in order, and between two matched statements the line of an unmatched one in `before` of the
 /// same kind, or of the first one.
-fn align(before: &[(String, Option<SourceLine>)], after: &[String]) -> Vec<Option<SourceLine>> {
+fn align(before: &[(String, Vec<SourceLine>)], after: &[String]) -> Vec<Vec<SourceLine>> {
     let mut positions: FxHashMap<&str, VecDeque<usize>> = FxHashMap::default();
     for (at, (head, _)) in before.iter().enumerate() {
         positions.entry(head).or_default().push_back(at);
@@ -524,7 +596,8 @@ fn align(before: &[(String, Option<SourceLine>)], after: &[String]) -> Vec<Optio
                 }
                 None => replaced
                     .get(cursor.min(replaced.len().saturating_sub(1)))
-                    .and_then(|(_, line)| line.clone()),
+                    .map(|(_, lines)| lines.clone())
+                    .unwrap_or_default(),
             };
             lines.push(line);
         }

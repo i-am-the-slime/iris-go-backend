@@ -165,10 +165,26 @@ pub struct Binding {
     pub value: Expression,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone)]
 pub struct Alternative {
     pub patterns: Vec<Pattern>,
     pub body: Guarded,
+    pub position: Option<SourcePosition>,
+}
+
+impl PartialEq for Alternative {
+    fn eq(&self, other: &Alternative) -> bool {
+        self.patterns == other.patterns && self.body == other.body
+    }
+}
+
+impl Eq for Alternative {}
+
+impl std::hash::Hash for Alternative {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.patterns.hash(state);
+        self.body.hash(state);
+    }
 }
 
 pub const PATTERN_MATCH_FAILURE: &str = "Failed pattern match";
@@ -212,7 +228,7 @@ impl Alternative {
             .collect();
         let failure = ExpressionKind::Fail(SmolStr::new_static(PATTERN_MATCH_FAILURE));
         let body = Guarded::Unconditional(Expression::new(failure, result));
-        Alternative { patterns, body }
+        Alternative { patterns, body, position: None }
     }
 }
 

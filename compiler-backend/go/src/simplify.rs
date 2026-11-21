@@ -370,7 +370,11 @@ impl Simplifier<'_> {
                                     .collect(),
                             ),
                         };
-                        Alternative { patterns: alternative.patterns, body }
+                        Alternative {
+                            patterns: alternative.patterns,
+                            body,
+                            position: alternative.position,
+                        }
                     })
                     .collect();
                 ExpressionKind::Case { scrutinees, alternatives }
@@ -571,6 +575,7 @@ impl Simplifier<'_> {
                     .map(|alternative| Alternative {
                         patterns: alternative.patterns,
                         body: self.guarded(alternative.body),
+                        position: alternative.position,
                     })
                     .collect();
                 if let [scrutinee] = scrutinees.as_slice()

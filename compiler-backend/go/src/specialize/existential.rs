@@ -144,7 +144,8 @@ where
             let pattern =
                 PatternKind::Constructor { data: data.clone(), constructor: index, arguments };
             let patterns = vec![Pattern { kind: pattern, monotype: existential }];
-            alternatives.push(Alternative { patterns, body: Guarded::Unconditional(applied) });
+            let body = Guarded::Unconditional(applied);
+            alternatives.push(Alternative { patterns, body, position: None });
         }
         let scrutinees = vec![value.expression()];
         if alternatives.is_empty() {

@@ -164,6 +164,7 @@ where
                     cases.push(GoCase {
                         values: vec![GoExpression::String(field.label.to_string())],
                         body,
+                        line: None,
                     });
                     names.push((field.label.clone(), identifier_expression(&name)));
                 }
@@ -171,6 +172,7 @@ where
                 let skip = GoDefault {
                     covers: vec![],
                     body: vec![discard(method(DECODER, "Skip", vec![]))],
+                    line: None,
                 };
                 let switch = GoStatement::Switch { value: Some(key), cases, default: Some(skip) };
                 out.push(members(DECODER, "Object", "MoreMembers", vec![switch]));

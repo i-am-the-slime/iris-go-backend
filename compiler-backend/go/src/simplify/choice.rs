@@ -95,7 +95,8 @@ impl Simplifier<'_> {
                 arguments: parameters.iter().map(Local::expression).collect(),
             };
             let body = Guarded::Unconditional(Expression::new(call, monotype));
-            joined.push(Alternative { patterns: alternative.patterns.clone(), body });
+            let patterns = alternative.patterns.clone();
+            joined.push(Alternative { patterns, body, position: alternative.position });
             joins.push(Binding { local: join, value: lambda });
         }
         (joins, joined)

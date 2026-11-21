@@ -83,7 +83,7 @@ use crate::graph::{on_cycles, strongly_connected};
 use crate::simplify::{reference_graph, visit};
 use crate::walk::{self, Walk};
 use crate::syntax::{
-    DeclarationNames, GoCase, GoDeclaration, GoExpression, GoStatement, GoType, Name,
+    DeclarationNames, GoCase, GoDeclaration, GoExpression, GoStatement, GoType, Name, SourceLine,
     statements_names,
 };
 use crate::timing::timed;
@@ -557,6 +557,7 @@ struct GuardChain<'e> {
     mode: Mode,
     exit: &'e Exit,
     tested: bool,
+    line: Option<&'e SourceLine>,
 }
 
 /// The loop around a function body, or around a group's bodies, that a tail call jumps back to.
@@ -1278,8 +1279,14 @@ where
             name: "ForceWith".into(),
         };
         let force = call(force, vec![identifier_expression(&compute)]);
+        let line = self.span_line(function.position)?;
         Ok(vec![
-            GoDeclaration::Variable { name: cell, type_: None, value: call(unevaluated, vec![]) },
+            GoDeclaration::Variable {
+                name: cell,
+                type_: None,
+                value: call(unevaluated, vec![]),
+                line,
+            },
             GoDeclaration::Function {
                 name: name.into(),
                 parameters: vec![],
@@ -1301,11 +1308,13 @@ where
         let type_ = self.go_type(function.result)?;
         let mut statements = vec![];
         let value = self.value(&function.body, &mut statements)?;
+        let line = self.span_line(function.position)?;
         if statements.is_empty() && !runs_code(&value) {
             return Ok(vec![GoDeclaration::Variable {
                 name: name.into(),
                 type_: Some(type_),
                 value,
+                line,
             }]);
         }
         let initializer = self.global_name(Spelling::derived("initialize", name.into(), ""));
@@ -1318,6 +1327,7 @@ where
                 name: name.into(),
                 type_: None,
                 value: call(identifier_expression(&initializer), vec![]),
+                line,
             },
             GoDeclaration::Function {
                 name: initializer,
@@ -1604,6 +1614,8 @@ where
                 self.sink(body, mode, sink, out)
             }
             ExpressionKind::If { condition, then, otherwise } => {
+                let line = self.branch_line(condition.position)?;
+                let otherwise_line = self.branch_line(otherwise.position)?;
                 let condition = self.value(condition, out)?;
                 let sink = self.prepare_branching_sink(sink, expression, mode, out)?;
                 let mut then_statements = vec![];
@@ -1613,18 +1625,18 @@ where
                 if let Sink::Return = sink
                     && ends_in_jump(&then_statements)
                 {
-                    out.push(GoStatement::If {
-                        condition,
-                        then: then_statements,
-                        otherwise: vec![],
-                    });
+                    let branch =
+                        GoStatement::If { condition, then: then_statements, otherwise: vec![] };
+                    lines::push_at(line, branch, out);
                     out.extend(otherwise_statements);
                 } else {
-                    out.push(GoStatement::If {
+                    lines::open_otherwise_at(otherwise_line, &mut otherwise_statements);
+                    let branch = GoStatement::If {
                         condition,
                         then: then_statements,
                         otherwise: otherwise_statements,
-                    });
+                    };
+                    lines::push_at(line, branch, out);
                 }
                 Ok(())
             }
@@ -3188,10 +3200,12 @@ where
                     && !layout.erases_arguments
                     && constructor_layout.fields.is_empty() =>
             {
-                self.shared_nullary(&layout.name, &constructor_layout.tag, true)
+                let line = self.nullary_line(data, constructor)?;
+                self.shared_nullary(&layout.name, &constructor_layout.tag, true, line)
             }
             DataKind::Sentinel if constructor_layout.fields.is_empty() => {
-                self.shared_nullary(&layout.name, &constructor_layout.tag, false)
+                let line = self.nullary_line(data, constructor)?;
+                self.shared_nullary(&layout.name, &constructor_layout.tag, false, line)
             }
             DataKind::Tagged | DataKind::Product | DataKind::Sentinel => {
                 let composite = self.composite(&layout, constructor, values);
@@ -3219,7 +3233,13 @@ where
 
     /// The one cell of a nullary constructor of a boxed type. A `Sentinel` type's struct has no
     /// tag; its cells are told apart by their addresses.
-    fn shared_nullary(&mut self, type_name: &str, tag: &str, tagged: bool) -> GoExpression {
+    fn shared_nullary(
+        &mut self,
+        type_name: &str,
+        tag: &str,
+        tagged: bool,
+        line: Option<SourceLine>,
+    ) -> GoExpression {
         if let Some(name) = self.shared_nullaries.get(tag) {
             return identifier_expression(name);
         }
@@ -3234,6 +3254,7 @@ where
             name: name.clone(),
             type_: None,
             value: GoExpression::Address(Box::new(composite)),
+            line,
         });
         self.shared_nullaries.insert(tag.to_string(), name.clone());
         identifier_expression(&name)
@@ -3823,7 +3844,7 @@ where
                 values: vec![value],
             });
             let label = GoExpression::String(record_field.label.to_string());
-            cases.push(GoCase { values: vec![label], body });
+            cases.push(GoCase { values: vec![label], body, line: None });
         }
         if cases.is_empty() {
             return Err(GoError::unsupported_construct("record access through a run-time label where no field has the requested type"));

@@ -190,7 +190,8 @@ where
                 vec![Pattern { kind: PatternKind::Variable(hidden), monotype: payload }];
             let kind = PatternKind::Constructor { data: data.clone(), constructor: index, arguments };
             let patterns = vec![Pattern { kind, monotype: variant }];
-            alternatives.push(Alternative { patterns, body: Guarded::Unconditional(expression) });
+            let body = Guarded::Unconditional(expression);
+            alternatives.push(Alternative { patterns, body, position: None });
         }
         Ok(alternatives)
     }

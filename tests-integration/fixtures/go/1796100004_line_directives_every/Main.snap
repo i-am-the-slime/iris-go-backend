@@ -68,15 +68,15 @@ func main() {
 		var result float64
 //line Main.purs:38:22
 		switch shape.Tag {
-//line Main.purs:38:22
+//line Main.purs:17:3
 		case ShapeCircle:
-//line Main.purs:38:22
+//line Main.purs:17:3
 			radius := shape.Field0
 //line Main.purs:17:20
 			result = 3.0 * radius * radius
-//line Main.purs:38:22
+//line Main.purs:18:3
 		default: // ShapeSquare
-//line Main.purs:38:22
+//line Main.purs:18:3
 			side := shape.Field0
 //line Main.purs:18:18
 			result = side * side
@@ -105,11 +105,11 @@ func main() {
 func sumFrom(numbers []int32, index int32, total int32) int32 {
 //line Main.purs:22:3
 	for {
-//line Main.purs:22:3
+//line Main.purs:22:6
 		if index >= int32(len(numbers)) {
 //line Main.purs:22:35
 			return total
-//line Main.purs:22:3
+//line Main.purs:22:6
 		}
 //line Main.purs:24:5
 		index, total = index+1 /*line Main.purs:25:8*/, total+numbers[index]

@@ -37,12 +37,15 @@
 use std::collections::VecDeque;
 
 use super::iteration::{Callback, Found};
-use super::{Emitter, Mode, Sink, binary, identifier_expression, is_simple, length, uses_local};
+use super::{
+    Emitter, Mode, Sink, binary, identifier_expression, is_simple, length, lines, uses_local,
+};
 use crate::error::GoResult;
 use crate::foreign::{Boundary, Foreign, GoFunction, GoPackage, Iteration};
 use crate::mono::{Binding, Expression, ExpressionKind, Literal, Local};
 use crate::monotype::{Monotype, MonotypeId};
 use crate::naming::VALUE;
+use crate::syntax::SourceLine;
 use crate::syntax::{GoExpression, GoStatement, GoType};
 
 /// The stages between an array and the consumer that reads it.
@@ -156,7 +159,7 @@ enum Header {
     Counting { variable: String, first: i64, last: i64 },
     Backward { index: Option<String>, element: String, array: GoExpression },
     Stepping { index: Option<String>, element: String, steps: Steps, order: Order },
-    If(GoExpression),
+    If(GoExpression, Option<SourceLine>),
 }
 
 pub(super) struct Opened {
@@ -434,7 +437,12 @@ where
                         self.receive(flow, &stage.callback, 0, !downstream, body.body())?;
                     let condition =
                         self.callback_value(&stage.callback, vec![argument.clone()], body.body())?;
-                    body.frames.push(Frame { header: Header::If(condition), body: vec![] });
+                    let line = match &stage.callback {
+                        Callback::Inline { body, .. } => self.branch_line(body.position)?,
+                        Callback::Direct { .. } => None,
+                    };
+                    let header = Header::If(condition, line);
+                    body.frames.push(Frame { header, body: vec![] });
                     argument
                 }
                 StageKind::Bind => {
@@ -513,10 +521,14 @@ where
 
     /// Closes every frame of a loop into the statement that runs it.
     pub(super) fn close(&mut self, body: Loop) -> GoStatement {
-        let mut inner: Option<GoStatement> = None;
+        let mut inner: Vec<GoStatement> = vec![];
         for Frame { header, mut body } in body.frames.into_iter().rev() {
-            body.extend(inner.take());
-            inner = Some(match header {
+            body.append(&mut inner);
+            let line = match &header {
+                Header::If(_, line) => line.clone(),
+                _ => None,
+            };
+            let statement = match header {
                 Header::Range { index, element, iterable } => {
                     GoStatement::Range { index, element, iterable, body }
                 }
@@ -565,12 +577,13 @@ where
                         }
                     }
                 }
-                Header::If(condition) => {
+                Header::If(condition, _) => {
                     GoStatement::If { condition, then: body, otherwise: vec![] }
                 }
-            });
+            };
+            lines::push_at(line, statement, &mut inner);
         }
-        inner.expect("invariant violated: a loop has a frame")
+        inner.pop().expect("invariant violated: a loop has a frame")
     }
 
     /// The argument a callback takes for the element in `flow`, bound to a

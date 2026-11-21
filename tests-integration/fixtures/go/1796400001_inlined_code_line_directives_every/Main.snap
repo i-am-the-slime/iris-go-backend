@@ -184,15 +184,15 @@ func main() {
 	colours := []Colour{ColourGreen}
 //line Main.purs:49:41
 	var result Colour
-//line Main.purs:49:41
+//line Main.purs:49:44
 	if many {
 //line Main.purs:49:54
 		result = ColourRed
-//line Main.purs:49:41
+//line Main.purs:49:63
 	} else {
 //line Main.purs:49:63
 		result = ColourGreen
-//line Main.purs:49:41
+//line Main.purs:49:44
 	}
 //line Main.purs:49:3
 	colours = arraypkg.Append(colours, []Colour{result})
@@ -211,17 +211,17 @@ func main() {
 func area(value Shape) float64 {
 //line Main.purs:24:1
 	switch value.Tag {
-//line Main.purs:24:1
+//line Main.purs:25:3
 	case ShapeCircle:
-//line Main.purs:24:1
+//line Main.purs:25:3
 		radius := value.Circle
 //line Main.purs:25:20
 		return 3.0 * radius * radius
-//line Main.purs:24:1
+//line Main.purs:26:3
 	case ShapeRectangle:
 //line Main.purs:26:29
 		return value.Rectangle0 * value.Rectangle1
-//line Main.purs:24:1
+//line Main.purs:27:3
 	default: // ShapeDot
 //line Main.purs:27:10
 		return 0.0

@@ -35,6 +35,7 @@ where
             cases.push(GoCase {
                 values: vec![identifier_expression(&constructor.tag)],
                 body: statements,
+                line: None,
             });
         }
         let body = match (layout.kind, cases.as_mut_slice()) {

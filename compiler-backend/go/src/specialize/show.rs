@@ -78,8 +78,8 @@ where
             };
             let pattern = Pattern { kind, monotype: argument };
             let body = self.constructor_text(&shown.name, texts, text);
-            alternatives
-                .push(Alternative { patterns: vec![pattern], body: Guarded::Unconditional(body) });
+            let body = Guarded::Unconditional(body);
+            alternatives.push(Alternative { patterns: vec![pattern], body, position: None });
         }
         let case = ExpressionKind::Case { scrutinees: vec![value.expression()], alternatives };
         let body = Expression::new(case, text);

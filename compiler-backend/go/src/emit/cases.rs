@@ -2,13 +2,13 @@
 
 use super::{
     DataKind, DataLayout, Emitter, Exit, GuardChain, Mode, Sink, binary, breaks_to, call,
-    conjunction, ends_in_panic, field, guarded_local_uses, identifier_expression, local_uses,
-    unit_value,
+    conjunction, ends_in_panic, field, guarded_local_uses, identifier_expression, lines,
+    local_uses, unit_value,
 };
 use crate::error::GoResult;
 use crate::mono::{Alternative, Expression, Guard, Guarded, Literal, Local, Pattern, PatternKind};
 use crate::monotype::Monotype;
-use crate::syntax::{GoCase, GoDefault, GoExpression, GoStatement};
+use crate::syntax::{GoCase, GoDefault, GoExpression, GoStatement, SourceLine};
 
 impl<Q> Emitter<'_, '_, '_, Q>
 where
@@ -45,7 +45,10 @@ where
         {
             let (tests, bindings) = self.alternative_tests(&paths, &first.patterns)?;
             if tests.is_empty() {
+                let start = out.len();
                 self.bind_pattern_locals(&bindings, |local| local_uses(body, local), out)?;
+                let line = self.branch_line(first.position)?;
+                lines::attribute_branch(line.as_ref(), start, out);
                 return self.sink(body, mode, sink, out);
             }
         }
@@ -56,9 +59,10 @@ where
             return self.sequential_case(&paths, alternatives, mode, &Exit::Return, out);
         }
         let sink = self.prepare_branching_sink(sink, expression, mode, out)?;
-        let mut chain: Vec<(Option<GoExpression>, Vec<GoStatement>)> = vec![];
+        let mut chain: Vec<(Option<GoExpression>, Vec<GoStatement>, Option<SourceLine>)> = vec![];
         let mut unconditional = false;
         for alternative in alternatives {
+            let alternative_line = self.branch_line(alternative.position)?;
             let (tests, bindings) = self.alternative_tests(&paths, &alternative.patterns)?;
             let branches: Vec<(Vec<&Guard>, &Expression)> = match &alternative.body {
                 Guarded::Unconditional(body) => vec![(vec![], body)],
@@ -75,6 +79,11 @@ where
                 for (local, path) in &bindings {
                     self.locals.insert(local.id, path.clone());
                 }
+                let branch_line = match guards.first() {
+                    Some(guard) => self.branch_line(guard.value().position)?,
+                    None => None,
+                };
+                let branch_line = branch_line.or_else(|| alternative_line.clone());
                 for guard in guards {
                     let Guard::Boolean(condition) = guard else {
                         return self.labelled_case(&paths, alternatives, mode, sink, out);
@@ -90,10 +99,11 @@ where
                 }
                 let mut block = vec![];
                 self.bind_pattern_locals(&bindings, |local| local_uses(body, local), &mut block)?;
+                lines::attribute_branch(alternative_line.as_ref(), 0, &mut block);
                 self.sink(body, mode, sink.clone(), &mut block)?;
                 let condition = conjunction(conditions);
                 unconditional = condition.is_none();
-                chain.push((condition, block));
+                chain.push((condition, block, branch_line));
                 if unconditional {
                     break;
                 }
@@ -102,15 +112,22 @@ where
                 break;
             }
         }
-        if let Some((condition, _)) = chain.last_mut() {
+        if let Some((condition, _, _)) = chain.last_mut() {
             *condition = None;
         }
         let mut statements: Vec<GoStatement> = vec![];
-        for (condition, block) in chain.into_iter().rev() {
+        for (condition, block, line) in chain.into_iter().rev() {
             statements = match condition {
-                None => block,
+                None => {
+                    let mut block = block;
+                    lines::open_otherwise_at(line, &mut block);
+                    block
+                }
                 Some(condition) => {
-                    vec![GoStatement::If { condition, then: block, otherwise: statements }]
+                    let branch = GoStatement::If { condition, then: block, otherwise: statements };
+                    let mut statements = vec![];
+                    lines::push_at(line, branch, &mut statements);
+                    statements
                 }
             };
         }
@@ -181,6 +198,7 @@ where
         let count = viable.len();
         for (position, (alternative, tests, bindings)) in viable.into_iter().enumerate() {
             let last = position + 1 == count;
+            let line = self.branch_line(alternative.position)?;
             let mut block = vec![];
             self.bind_pattern_locals(
                 &bindings,
@@ -189,6 +207,7 @@ where
             )?;
             let terminates =
                 self.guarded_sequential(&alternative.body, mode, exit, last, &mut block)?;
+            lines::attribute_branch(line.as_ref(), 0, &mut block);
             let condition = if last { None } else { conjunction(tests) };
             match condition {
                 None => {
@@ -198,7 +217,8 @@ where
                     }
                 }
                 Some(condition) => {
-                    out.push(GoStatement::If { condition, then: block, otherwise: vec![] })
+                    let branch = GoStatement::If { condition, then: block, otherwise: vec![] };
+                    lines::push_at(line, branch, out);
                 }
             }
         }
@@ -222,12 +242,16 @@ where
         };
         for (position, branch) in branches.iter().enumerate() {
             let tested = !(last_alternative && position + 1 == branches.len());
+            let line = match branch.guards.first() {
+                Some(guard) => self.branch_line(guard.value().position)?,
+                None => None,
+            };
             let terminates = self.guard_chain(
                 &branch.guards,
                 vec![],
                 vec![],
                 &branch.body,
-                GuardChain { mode, exit, tested },
+                GuardChain { mode, exit, tested, line: line.as_ref() },
                 out,
             )?;
             if terminates {
@@ -246,7 +270,7 @@ where
         chain: GuardChain<'_>,
         out: &mut Vec<GoStatement>,
     ) -> GoResult<bool> {
-        let GuardChain { mode, exit, tested } = chain;
+        let GuardChain { mode, exit, tested, line } = chain;
         let Some((guard, rest)) = guards.split_first() else {
             let mut block = vec![];
             self.bind_pattern_locals(&bindings, |local| local_uses(body, local), &mut block)?;
@@ -257,7 +281,8 @@ where
                     true
                 }
                 Some(condition) => {
-                    out.push(GoStatement::If { condition, then: block, otherwise: vec![] });
+                    let branch = GoStatement::If { condition, then: block, otherwise: vec![] };
+                    lines::push_at(line.cloned(), branch, out);
                     false
                 }
             });
@@ -298,7 +323,8 @@ where
         self.guard_chain(rest, tests, bindings, body, chain, &mut block)?;
         let condition =
             conjunction(conditions).expect("invariant violated: conditions are pending");
-        out.push(GoStatement::If { condition, then: block, otherwise: vec![] });
+        let branch = GoStatement::If { condition, then: block, otherwise: vec![] };
+        lines::push_at(line.cloned(), branch, out);
         Ok(false)
     }
 
@@ -370,8 +396,10 @@ where
             let mut tests = vec![];
             let mut bindings = vec![];
             self.pattern_tests(pattern, path.clone(), &mut tests, &mut bindings)?;
+            let line = self.branch_line(alternative.position)?;
             let mut block = vec![];
             self.bind_pattern_locals(&bindings, |local| local_uses(body, local), &mut block)?;
+            lines::attribute_branch(line.as_ref(), 0, &mut block);
             self.sink(body, mode, sink.clone(), &mut block)?;
             let value = match &pattern.kind {
                 PatternKind::Constructor { data, constructor, .. } => {
@@ -386,8 +414,8 @@ where
                 _ => None,
             };
             match value {
-                Some(value) => cases.push(GoCase { values: vec![value], body: block }),
-                None => default = Some(GoDefault { covers: vec![], body: block }),
+                Some(value) => cases.push(GoCase { values: vec![value], body: block, line }),
+                None => default = Some(GoDefault { covers: vec![], body: block, line }),
             }
         }
         let default = default.unwrap_or_else(|| GoDefault::covering(&mut cases));
