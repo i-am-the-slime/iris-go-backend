@@ -381,6 +381,25 @@ second gets a number: `content_type` next to `"content-type"` is `Content_type2`
 another named record if that one has a struct too:
 `Headers []Header`.
 
+A function in a field looks just like a callback: curried, and it performs its effect when called.
+That holds inside arrays and nested records too, and for `EffectFn` fields:
+
+```purescript
+type Routes =
+  { handle :: EffectFn2 String (String -> Effect Unit) Unit
+  , add :: Int -> Int -> Int
+  , each :: Array (String -> Effect Unit)
+  }
+```
+
+```go
+type Routes struct {
+	Handle func(string) func(func(string))
+	Add    func(int32) func(int32) int32
+	Each   []func(string)
+}
+```
+
 A record without a matching struct still works, but Go only sees it as an untyped `any`.
 
 A big module can spread its Go over several files: `Stopwatch.go`, `Stopwatch.laps.go` and so on.

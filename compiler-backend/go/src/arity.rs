@@ -152,6 +152,7 @@ struct Uses<'p> {
     calls: Vec<(MonotypeId, usize)>,
     creations: Vec<&'p Expression>,
     foreign: FxHashSet<MonotypeId>,
+    crossed_as_is: FxHashSet<MonotypeId>,
     coercions: FxHashSet<(MonotypeId, MonotypeId)>,
     collapsed: FxHashMap<MonotypeId, MonotypeId>,
 }
@@ -340,7 +341,7 @@ impl<'p> Uses<'p> {
             | Monotype::Object(inner) => self.received(*inner, monotypes),
             Monotype::Record(fields) => {
                 for field in fields.iter() {
-                    self.received(field.monotype, monotypes);
+                    self.crosses_as_is(field.monotype, monotypes);
                 }
             }
             _ => {}
@@ -360,7 +361,32 @@ impl<'p> Uses<'p> {
             | Monotype::Object(inner) => self.sent(*inner, monotypes),
             Monotype::Record(fields) => {
                 for field in fields.iter() {
-                    self.sent(field.monotype, monotypes);
+                    self.crosses_as_is(field.monotype, monotypes);
+                }
+            }
+            _ => {}
+        }
+    }
+
+    fn crosses_as_is(&mut self, monotype: MonotypeId, monotypes: &Monotypes) {
+        let monotype = self.canonical(monotype);
+        if !self.crossed_as_is.insert(monotype) {
+            return;
+        }
+        match monotypes.get(monotype) {
+            Monotype::Function(argument, result) => {
+                self.foreign.insert(monotype);
+                self.crosses_as_is(*argument, monotypes);
+                self.crosses_as_is(*result, monotypes);
+            }
+            Monotype::Effect(inner)
+            | Monotype::Array(inner)
+            | Monotype::MutableArray(inner)
+            | Monotype::Nullable(inner)
+            | Monotype::Object(inner) => self.crosses_as_is(*inner, monotypes),
+            Monotype::Record(fields) => {
+                for field in fields.iter() {
+                    self.crosses_as_is(field.monotype, monotypes);
                 }
             }
             _ => {}

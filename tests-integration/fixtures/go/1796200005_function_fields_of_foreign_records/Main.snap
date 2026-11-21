@@ -1,0 +1,54 @@
+---
+source: tests-integration/src/fixtures.rs
+---
+// main.go
+package main
+
+import (
+	"fixture/Server_ffi"
+	"github.com/i-am-the-slime/iris-go/prim"
+	"strconv"
+)
+
+func main() {
+	routes.Handle("bob")("yo")(func(s string) {
+		Server_ffi.Log(s)
+	})
+	Server_ffi.Log(strconv.Itoa(int(routes.Add(3)(4))))
+	Server_ffi.Log(routes.Settings.Greeting("hi")("bob"))
+	Server_ffi.Serve(routes)
+	hooks := Server_ffi.InstallHooks()
+	hooks.Route("carol")("hey")(func(s string) {
+		Server_ffi.Log(s)
+	})
+	Server_ffi.Log(prim.ShowNumber(hooks.Fold(func(a float64) func(float64) float64 {
+		return func(b float64) float64 {
+			return a*10.0 + b
+		}
+	})))
+}
+
+var routes Server_ffi.Routes = Server_ffi.Routes{Handle: func(name string) func(string) func(func(string)) {
+	return func(body string) func(func(string)) {
+		return func(reply func(string)) {
+			Server_ffi.Log(name + ": " + body)
+			reply("thanks " + name)
+		}
+	}
+}, Add: func(a int32) func(int32) int32 {
+	return func(b int32) int32 {
+		return a*10 + b
+	}
+}, Each: []func(string) func(string){func(a string) func(string) {
+	return func(b string) {
+		Server_ffi.Log(prim.Append(a, b))
+	}
+}, func(a string) func(string) {
+	return func(b string) {
+		Server_ffi.Log(prim.Append(b, a))
+	}
+}}, Settings: Server_ffi.Settings{Greeting: func(word string) func(string) string {
+	return func(name string) string {
+		return word + ", " + name
+	}
+}}}
