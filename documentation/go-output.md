@@ -267,8 +267,8 @@ func Every(n int32, f func(int32)) {
 }
 ```
 
-Every foreign import is a Go function with its name capitalised. Call the package whatever you
-like, Iris renames it.
+Every foreign import is a Go function or variable with its name capitalised. Call the package
+whatever you like, Iris renames it.
 
 | PureScript | Go |
 | --- | --- |
@@ -293,6 +293,8 @@ like, Iris renames it.
 - **An `Int` is an `int32`, everywhere.** Where a Go API wants an `int`, convert it yourself:
   `os.Exit(int(code))`. Where a Go value might not fit 32 bits, decide what to do about it rather
   than letting `int32(…)` cut it off: a file size is better a `Number`.
+- **A value without arguments or effects is a variable.** `greeting :: String` is
+  `var Greeting string`, not a function.
 - **Values with a `forall` are generic functions.** Go has no generic variables, so
   `undefined :: forall a. UndefinedOr a` is `func Undefined[A any]() UndefinedOr[A]`.
 - **Name clashes get a `Type` suffix.** If your module has a `foreign import data Event` and a
@@ -348,15 +350,19 @@ src/Greeting.go
 src/greeting.txt
 ```
 
+```purescript
+module Greeting where
+
+foreign import greeting :: String
+```
+
 ```go
 package ffi
 
 import _ "embed"
 
 //go:embed greeting.txt
-var greeting string
-
-func Greeting() string { return greeting }
+var Greeting string
 ```
 
 Iris copies whatever the patterns match along with the `.go` file, so your program is one binary

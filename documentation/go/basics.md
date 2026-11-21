@@ -32,7 +32,8 @@ func main() {
 
 `answer`, `ratio` and `name` are gone, and so are `+`, `*` and `<>`: Iris did the sums. Small
 functions get copied into the code that calls them, so whatever depends only on constants ends up
-computed too.
+computed too. (Iris currently writes some literals with an explicit type, like `float64(1.5)`,
+even where Go doesn't need one. That's going to be tidied up.)
 
 That's why most examples on these pages start with `argv <- args` (from `Go.OS`) and use
 `length argv`. The compiler can't know how many arguments you'll pass, so the code you want to look
