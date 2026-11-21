@@ -317,14 +317,12 @@ import (
 	"fixture/Data/Set"
 	"github.com/i-am-the-slime/iris-go/console"
 	"github.com/i-am-the-slime/iris-go/direct"
-	"github.com/i-am-the-slime/iris-go/exception"
 	"github.com/i-am-the-slime/iris-go/prim"
 )
 
 var main_ = initializeMain_()
 
 func initializeMain_() int32 {
-	defer exception.ReportUncaught()
 	return int32(len(direct.FromFoldable(func(f func(int32) func(*direct.ConsList[int32]) *direct.ConsList[int32]) func(*direct.ConsList[int32]) func(*types.ListInt) *direct.ConsList[int32] {
 		return func(b *direct.ConsList[int32]) func(*types.ListInt) *direct.ConsList[int32] {
 			return types.Foldr(f, b)
@@ -347,7 +345,6 @@ var numbers *types.ListInt = &types.ListInt{Cons0: 1, Cons1: &types.ListInt{Cons
 var words = initializeWords()
 
 func initializeWords() *internal.MapStringUnit {
-	defer exception.ReportUncaught()
 	array := []string{"b", "a"}
 	accumulator := internal.SharedMapStringUnitLeaf
 	for _, a := range array {

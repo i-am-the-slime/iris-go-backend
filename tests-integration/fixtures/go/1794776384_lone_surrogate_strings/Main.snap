@@ -6,7 +6,6 @@ package main
 
 import (
 	"github.com/i-am-the-slime/iris-go/console"
-	"github.com/i-am-the-slime/iris-go/exception"
 	"github.com/i-am-the-slime/iris-go/prim"
 	"strconv"
 	"strings"
@@ -15,7 +14,6 @@ import (
 var main_ = initializeMain_()
 
 func initializeMain_() []string {
-	defer exception.ReportUncaught()
 	s := prim.CodeUnitTake(1, "𝐀")
 	var result bool
 	switch s {

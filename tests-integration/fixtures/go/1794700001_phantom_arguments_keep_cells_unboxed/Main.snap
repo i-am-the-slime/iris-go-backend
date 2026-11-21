@@ -6,7 +6,6 @@ package main
 
 import (
 	"github.com/i-am-the-slime/iris-go/console"
-	"github.com/i-am-the-slime/iris-go/exception"
 	"github.com/i-am-the-slime/iris-go/prim"
 	"strings"
 )
@@ -35,7 +34,6 @@ type Count func(func(func(struct{}) StepInt) StepInt, func(int32) StepInt) StepI
 var main_ = initializeMain_()
 
 func initializeMain_() []int32 {
-	defer exception.ReportUncaught()
 	return []int32{mainGo(countdown(10, 0)(More, Done))}
 }
 

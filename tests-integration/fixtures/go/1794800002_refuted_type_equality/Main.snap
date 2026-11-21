@@ -7,7 +7,6 @@ package main
 import (
 	"fixture/shared"
 	"github.com/i-am-the-slime/iris-go/console"
-	"github.com/i-am-the-slime/iris-go/exception"
 	"strconv"
 	"strings"
 )
@@ -49,7 +48,6 @@ const (
 var main_ = initializeMain_()
 
 func initializeMain_() []string {
-	defer exception.ReportUncaught()
 	valueInts := make([]ValueInt, 3)
 	valueInts[0] = ValueInt{Tag: ValueIntPair, Pair0: &valueInts[1], Pair1: &valueInts[2]}
 	valueInts[1] = ValueInt{Tag: ValueIntIntValue, Field0: reflTypeInt, Field1: 41}

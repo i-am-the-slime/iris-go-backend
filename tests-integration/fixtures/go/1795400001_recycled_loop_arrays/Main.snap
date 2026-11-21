@@ -40,7 +40,6 @@ import (
 	"fixture/shared"
 	"github.com/i-am-the-slime/iris-go/array"
 	"github.com/i-am-the-slime/iris-go/console"
-	"github.com/i-am-the-slime/iris-go/exception"
 	"github.com/i-am-the-slime/iris-go/prim"
 	"strings"
 )
@@ -48,7 +47,6 @@ import (
 var main_ = initializeMain_()
 
 func initializeMain_() []string {
-	defer exception.ReportUncaught()
 	return []string{prim.ShowArray(show.ShowParticleConsNumberConsNumberNil, mainGo(0, []shared.Particle{{Position: 0.0, Velocity: 0.0}, {Position: 1.0, Velocity: 0.5}, {Position: 4.0, Velocity: -0.25}})), prim.ShowArray(show.Show, mainGo2(0, []int32{1, 2, 3})), prim.ShowArray(show.Show, shrink([]int32{9, 3, 7, 5, 4})), prim.ShowArray(show.Show, mainGo3(0, []int32{0}, []int32{1, 2})), prim.ShowArray(show.ShowInt, mainGo4(0, [][]int32{{1}, {2}}))}
 }
 

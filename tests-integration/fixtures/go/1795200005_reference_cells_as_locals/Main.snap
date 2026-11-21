@@ -7,7 +7,6 @@ package main
 import (
 	"fixture/shared"
 	"github.com/i-am-the-slime/iris-go/array"
-	"github.com/i-am-the-slime/iris-go/exception"
 	"os"
 )
 
@@ -52,7 +51,6 @@ func drain(cell *shared.Ref[int32], n int32) {
 }
 
 func main() {
-	defer exception.ReportUncaught()
 	exitStatus := main_()
 	os.Exit(int(exitStatus))
 }

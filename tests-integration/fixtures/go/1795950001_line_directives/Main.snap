@@ -13,13 +13,10 @@ func ThrowUnit(x string) {
 // main.go
 package main
 
-import (
-	"fixture/Effect/Exception"
-	"github.com/i-am-the-slime/iris-go/exception"
-)
+import "fixture/Effect/Exception"
 
+//line Main.purs:22:3
 func main() {
-	defer exception.ReportUncaught()
 //line Main.purs:22:3
 	if sumFrom([]int32{1, 2, 3}, 0, 0) != 6 {
 		effectexception.ThrowUnit("the total is wrong")

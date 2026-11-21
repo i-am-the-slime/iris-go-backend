@@ -7,7 +7,6 @@ package main
 import (
 	"fixture/shared"
 	"github.com/i-am-the-slime/iris-go/alloc"
-	"github.com/i-am-the-slime/iris-go/exception"
 	"github.com/i-am-the-slime/iris-go/prim"
 )
 
@@ -40,7 +39,6 @@ var sharedIntToIntMain = &IntToInt{Tag: IntToIntMain}
 var main_ = initializeMain_()
 
 func initializeMain_() shared.MainResult {
-	defer exception.ReportUncaught()
 	return shared.MainResult{Forced: forceInt(buildThunks(1000, sharedLazyIntMain)), Continued: countDown(10, sharedIntToIntMain)}
 }
 

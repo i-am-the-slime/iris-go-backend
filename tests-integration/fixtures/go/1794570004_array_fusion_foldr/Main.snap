@@ -19,14 +19,12 @@ package main
 
 import (
 	"fixture/Data/Maybe"
-	"github.com/i-am-the-slime/iris-go/exception"
 	"strconv"
 )
 
 var main_ = initializeMain_()
 
 func initializeMain_() maybe.MainResult {
-	defer exception.ReportUncaught()
 	accumulator := ""
 	for index := len(numbers) - 1; index >= 0; index-- {
 		value := numbers[index]

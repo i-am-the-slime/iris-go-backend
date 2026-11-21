@@ -15,7 +15,6 @@ import (
 	"fixture/Data/Maybe"
 	"github.com/i-am-the-slime/iris-go/array"
 	"github.com/i-am-the-slime/iris-go/console"
-	"github.com/i-am-the-slime/iris-go/exception"
 	"github.com/i-am-the-slime/iris-go/prim"
 	"strings"
 )
@@ -23,7 +22,6 @@ import (
 var main_ = initializeMain_()
 
 func initializeMain_() []int32 {
-	defer exception.ReportUncaught()
 	array2 := array.Thaw([]int32{1, 5, 2, 7, 3})()
 	size := int32(len(*array2))
 	for i := int32(0); i < size; i++ {

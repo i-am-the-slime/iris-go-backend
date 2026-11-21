@@ -31,7 +31,6 @@ import (
 	"github.com/i-am-the-slime/iris-go/array"
 	"github.com/i-am-the-slime/iris-go/console"
 	"github.com/i-am-the-slime/iris-go/direct"
-	"github.com/i-am-the-slime/iris-go/exception"
 	"github.com/i-am-the-slime/iris-go/prim"
 	"strconv"
 	"strings"
@@ -479,7 +478,6 @@ func convert17(value *Ap) *ApFn {
 var main_ = initializeMain_()
 
 func initializeMain_() []string {
-	defer exception.ReportUncaught()
 	var result []string
 	switch person.Tag {
 	case ApPersonDone:
@@ -589,7 +587,6 @@ var person *ApPerson = &ApPerson{Tag: ApPersonApply, Apply: ExistsApplyEPerson{B
 var greeting = initializeGreeting()
 
 func initializeGreeting() ApString {
-	defer exception.ReportUncaught()
 	var function ApFnNumberString
 	switch person.Tag {
 	case ApPersonDone:

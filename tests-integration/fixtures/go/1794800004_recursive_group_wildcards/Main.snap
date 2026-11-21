@@ -15,7 +15,6 @@ package main
 import (
 	"fixture/Data/Tuple"
 	"github.com/i-am-the-slime/iris-go/console"
-	"github.com/i-am-the-slime/iris-go/exception"
 	"github.com/i-am-the-slime/iris-go/prim"
 )
 
@@ -33,7 +32,6 @@ const (
 var main_ = initializeMain_()
 
 func initializeMain_() int32 {
-	defer exception.ReportUncaught()
 	return countString([]TreeTupleStringInt{{Tag: TreeTupleStringIntLeaf, Leaf: tuple.TupleStringInt{First: "a", Second: 1}}, {Tag: TreeTupleStringIntNode, Node: []TreeTupleStringInt{{Tag: TreeTupleStringIntLeaf, Leaf: tuple.TupleStringInt{First: "b", Second: 2}}}}})
 }
 

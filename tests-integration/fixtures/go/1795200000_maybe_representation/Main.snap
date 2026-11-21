@@ -48,7 +48,6 @@ package main
 import (
 	"fixture/Data/Maybe"
 	"github.com/i-am-the-slime/iris-go/console"
-	"github.com/i-am-the-slime/iris-go/exception"
 	"github.com/i-am-the-slime/iris-go/prim"
 	"strconv"
 	"strings"
@@ -88,7 +87,6 @@ var NoShape = MaybeShape{Tag: maybe.TagNothing}
 var main_ = initializeMain_()
 
 func initializeMain_() []string {
-	defer exception.ReportUncaught()
 	x := opaque(10)
 	var result int32
 	if x > 0 {

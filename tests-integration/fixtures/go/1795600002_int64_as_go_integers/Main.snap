@@ -57,7 +57,6 @@ import (
 	"fixture/Data/Maybe"
 	"fixture/Data/UInt64"
 	"github.com/i-am-the-slime/iris-go/console"
-	"github.com/i-am-the-slime/iris-go/exception"
 	"github.com/i-am-the-slime/iris-go/ffi/Data_Int64_Internal_ffi"
 	nullablepkg "github.com/i-am-the-slime/iris-go/nullable"
 	"github.com/i-am-the-slime/iris-go/prim"
@@ -68,7 +67,6 @@ import (
 var main_ = initializeMain_()
 
 func initializeMain_() []string {
-	defer exception.ReportUncaught()
 	array := []int32{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33}
 	mapped := make([]int64, len(array))
 	for index, element := range array {

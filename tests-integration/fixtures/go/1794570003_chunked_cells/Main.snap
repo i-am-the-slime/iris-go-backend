@@ -4,10 +4,7 @@ source: tests-integration/src/fixtures.rs
 // main.go
 package main
 
-import (
-	"github.com/i-am-the-slime/iris-go/alloc"
-	"github.com/i-am-the-slime/iris-go/exception"
-)
+import "github.com/i-am-the-slime/iris-go/alloc"
 
 type ListInt struct {
 	Cons1 *ListInt
@@ -34,7 +31,6 @@ var sharedTreeLeaf = &Tree{}
 var main_ = initializeMain_()
 
 func initializeMain_() MainResult {
-	defer exception.ReportUncaught()
 	numbers := mainGo(20, sharedListIntNil)
 	return MainResult{Numbers: numbers, Largest: largestReplacesItsCell(numbers), OwnedLargest: largestReplacesItsCellReusing(mainGo(10, sharedListIntNil)), Total: total(mainGo2(5, sharedTreeLeaf))}
 }

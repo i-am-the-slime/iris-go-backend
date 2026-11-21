@@ -25,7 +25,6 @@ import (
 	list "fixture/Data/List/Types"
 	"github.com/i-am-the-slime/iris-go/alloc"
 	"github.com/i-am-the-slime/iris-go/console"
-	"github.com/i-am-the-slime/iris-go/exception"
 	"github.com/i-am-the-slime/iris-go/prim"
 	"strings"
 )
@@ -33,7 +32,6 @@ import (
 var main_ = initializeMain_()
 
 func initializeMain_() []int32 {
-	defer exception.ReportUncaught()
 	return []int32{defaulted(1.0), defaulted(2.0), defaulted(3.0)}
 }
 

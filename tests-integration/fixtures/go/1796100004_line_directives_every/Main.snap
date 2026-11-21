@@ -15,27 +15,22 @@ func ThrowUnit(x string) {
 // main.go
 package main
 
-import (
-	"fixture/Effect/Exception"
-	"github.com/i-am-the-slime/iris-go/exception"
-)
+import "fixture/Effect/Exception"
 
-//line main.go:9
+//line main.go:6
 type Shape struct {
 	Field0 float64
 	Tag    uint8
 }
 
-//line main.go:15
+//line main.go:12
 const (
 	ShapeCircle = iota
 	ShapeSquare
 )
 
-//line main.go:21
+//line Main.purs:28:15
 func main() {
-//line main.go:23
-	defer exception.ReportUncaught()
 //line Main.purs:28:15
 	total := sumFrom([]int32{1, 2, 3}, 0, 0)
 //line Main.purs:29:13

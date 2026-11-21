@@ -7,7 +7,6 @@ package main
 import (
 	"fixture/shared"
 	"github.com/i-am-the-slime/iris-go/console"
-	"github.com/i-am-the-slime/iris-go/exception"
 	"strconv"
 	"strings"
 )
@@ -91,7 +90,6 @@ func convert6(value MapTypeValueOfFnFnValueValueFnCountCountCountInt) shared.Var
 var main_ = initializeMain_()
 
 func initializeMain_() []string {
-	defer exception.ReportUncaught()
 	return []string{describe(say), describe(count), describe(shared.VariantFRep{Type: say.Type, Value: say.Map(func(coerced any) any {
 		return coerced.(int32) * 10
 	})(say.Value), Map: say.Map}), describe(shared.VariantFRep{Type: count.Type, Value: count.Map(func(coerced any) any {
@@ -114,7 +112,6 @@ func describe(r shared.VariantFRep) string {
 var say = initializeSay()
 
 func initializeSay() shared.VariantFRep {
-	defer exception.ReportUncaught()
 	return convert4(MapTypeValueOfFnFnValueValueFnSaySaySayInt{Type: "say", Value: SayInt{First: "hello", Second: 4}, Map: func(f func(any) any) func(*Say) *Say {
 		return func(say *Say) *Say {
 			return mapSay(f, say)
@@ -125,7 +122,6 @@ func initializeSay() shared.VariantFRep {
 var count = initializeCount()
 
 func initializeCount() shared.VariantFRep {
-	defer exception.ReportUncaught()
 	return convert6(MapTypeValueOfFnFnValueValueFnCountCountCountInt{Type: "count", Value: CountInt{Count: func(value int32) int32 {
 		return value + 1
 	}}, Map: func(f func(any) any) func(*Count) *Count {

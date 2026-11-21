@@ -7,7 +7,6 @@ package main
 import (
 	"github.com/i-am-the-slime/iris-go/alloc"
 	"github.com/i-am-the-slime/iris-go/direct"
-	"github.com/i-am-the-slime/iris-go/exception"
 	"os"
 )
 
@@ -56,7 +55,6 @@ func foldrGo2(f func(int32) func(*direct.ConsList[int32]) *direct.ConsList[int32
 }
 
 func main() {
-	defer exception.ReportUncaught()
 	exitStatus := main_()
 	os.Exit(int(exitStatus))
 }

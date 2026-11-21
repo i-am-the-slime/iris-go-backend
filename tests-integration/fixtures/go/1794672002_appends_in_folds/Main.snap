@@ -40,7 +40,6 @@ import (
 	"fixture/Data/Either"
 	"fixture/shared"
 	arraypkg "github.com/i-am-the-slime/iris-go/array"
-	"github.com/i-am-the-slime/iris-go/exception"
 	"github.com/i-am-the-slime/iris-go/prim"
 	"slices"
 )
@@ -48,7 +47,6 @@ import (
 var main_ = initializeMain_()
 
 func initializeMain_() either.MainResult {
-	defer exception.ReportUncaught()
 	accumulator := []int32{}
 	accumulator = slices.Clip(accumulator)
 	for x := int32(1); x < 6; x++ {

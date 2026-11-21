@@ -29,7 +29,6 @@ import (
 	"fixture/shared"
 	arraypkg "github.com/i-am-the-slime/iris-go/array"
 	"github.com/i-am-the-slime/iris-go/console"
-	"github.com/i-am-the-slime/iris-go/exception"
 	"strconv"
 	"strings"
 )
@@ -57,7 +56,6 @@ const (
 var main_ = initializeMain_()
 
 func initializeMain_() []string {
-	defer exception.ReportUncaught()
 	array := []Light{LightRed, LightAmber, LightGreen}
 	mapped := make([]string, len(array))
 	for index, element := range array {

@@ -42,7 +42,6 @@ import (
 
 func main() {
 	defer aff.Await()
-	defer exception.ReportUncaught()
 	fiber2 := aff.NewFiber(func() struct{} {
 		func() {
 			array := direct.TraverseArray(func(x int32) int32 {

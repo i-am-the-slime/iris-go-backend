@@ -89,16 +89,19 @@ They make the Go a bit noisier to read. `iris go --no-line-directives out` leave
 - `Int64` and `UInt64` from the `int64` package use Go's own 64-bit arithmetic, so
   `foldl (+) zero (map Int64.fromInt (range 1 10_000_000))` is an ordinary Go loop adding `int64`s.
   They wrap, divide, compare and `show` (`42l`, `42ul`) as the package documents.
-- An uncaught exception ends the program with exit status 1, including one thrown while the program
-  loads or inside an `Aff` fiber.
 
 ## Run-time differences
 
-### Uncaught exceptions and stacks
+### Uncaught exceptions
 
-An uncaught exception prints `Error: <message>` to standard error. Bun and Node print the source
-line and a stack trace as well. For the same reason, `Effect.Exception.stack` and `show` on an
-`Error` return only the `Error: <message>` header, with no stack frames.
+An exception nothing catches is a Go panic. Go prints `panic: <message>` and a stack trace that
+points into your `.purs` files, and exits with status 2, where Bun and Node exit with 1. That
+goes for one thrown while the program loads, too. One that escapes an `Aff` fiber ends the
+program a turn later, as in JavaScript, and its trace shows Aff's scheduler rather than the
+line that threw.
+
+`Effect.Exception.stack` and `show` on an `Error` give just the `Error: <message>` header, with
+no stack frames.
 
 ### Division of the smallest `Int` by -1
 

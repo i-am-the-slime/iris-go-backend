@@ -26,14 +26,12 @@ import (
 	"fixture/Data/Maybe"
 	arraypkg "github.com/i-am-the-slime/iris-go/array"
 	"github.com/i-am-the-slime/iris-go/direct"
-	"github.com/i-am-the-slime/iris-go/exception"
 	"github.com/i-am-the-slime/iris-go/prim"
 )
 
 var main_ = initializeMain_()
 
 func initializeMain_() maybe.ArrayInt {
-	defer exception.ReportUncaught()
 	array2 := arraypkg.Append([]int32{2}, []int32{4, 8})
 	append_ := direct.Appender[int32]()
 	n := array2[0]

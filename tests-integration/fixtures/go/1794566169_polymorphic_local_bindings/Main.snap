@@ -32,7 +32,6 @@ import (
 	"fixture/Data/Show"
 	"github.com/i-am-the-slime/iris-go/array"
 	"github.com/i-am-the-slime/iris-go/console"
-	"github.com/i-am-the-slime/iris-go/exception"
 	"github.com/i-am-the-slime/iris-go/prim"
 	"slices"
 	"strconv"
@@ -42,21 +41,18 @@ import (
 var main_ = initializeMain_()
 
 func initializeMain_() []string {
-	defer exception.ReportUncaught()
 	return []string{"x2", pairs, joined, prim.ShowArray(show.ShowString, mainGo(show.ShowInt, 3, []string{})) + prim.ShowArray(show.ShowInt, mainGo2(category.Identity, 3, []int32{}))}
 }
 
 var pairs = initializePairs()
 
 func initializePairs() string {
-	defer exception.ReportUncaught()
 	return "true" + strconv.Itoa(int(pairsF(pairsF(1))))
 }
 
 var joined = initializeJoined()
 
 func initializeJoined() string {
-	defer exception.ReportUncaught()
 	return "<3><" + prim.ShowString("y") + ">"
 }
 

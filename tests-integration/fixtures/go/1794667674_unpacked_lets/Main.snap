@@ -28,7 +28,6 @@ import (
 	"fixture/Data/Maybe"
 	"fixture/shared"
 	"github.com/i-am-the-slime/iris-go/console"
-	"github.com/i-am-the-slime/iris-go/exception"
 	"github.com/i-am-the-slime/iris-go/prim"
 	"strings"
 )
@@ -36,7 +35,6 @@ import (
 var main_ = initializeMain_()
 
 func initializeMain_() []int32 {
-	defer exception.ReportUncaught()
 	boxWidth := opaque(3)
 	point := shared.XY{X: opaque(5), Y: opaque(5)}
 	var result shared.XY

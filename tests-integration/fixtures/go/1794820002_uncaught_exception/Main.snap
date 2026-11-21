@@ -7,7 +7,6 @@ package main
 import "github.com/i-am-the-slime/iris-go/exception"
 
 func main() {
-	defer exception.ReportUncaught()
 	var count int32 = 0
 	count += 1
 	if count > 0 {

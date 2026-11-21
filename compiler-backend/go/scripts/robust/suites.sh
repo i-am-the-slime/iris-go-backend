@@ -254,8 +254,12 @@ classify() {
   if ! cmp -s "$dir/js.out" "$dir/go.out"; then
     echo "$js|OUTPUT MISMATCH|$(diff "$dir/js.out" "$dir/go.out" | grep -m4 '^[<>]' | tr '\n' ' ' | cut -c1-300)"; return
   fi
-  # An uncaught exception exits with status 1 in both, also one thrown while the program loads.
-  if [ "$(cat "$dir/js.status")" != "$(cat "$dir/go.status")" ]; then
+  # An uncaught exception, also one thrown while the program loads, exits with status 1 in JS and
+  # is a Go panic, which exits with status 2.
+  local go_status
+  go_status="$(cat "$dir/go.status")"
+  if [ "$go_status" = 2 ] && grep -q '^panic: ' "$dir/go.err"; then go_status=1; fi
+  if [ "$(cat "$dir/js.status")" != "$go_status" ]; then
     echo "$js|EXIT MISMATCH|go exit $(cat "$dir/go.status"): $(tail -2 "$dir/go.err" | tr '\n' ' ' | cut -c1-200)"; return
   fi
   echo "$js|OK|$(wc -l <"$dir/js.out" | tr -d ' ') lines"

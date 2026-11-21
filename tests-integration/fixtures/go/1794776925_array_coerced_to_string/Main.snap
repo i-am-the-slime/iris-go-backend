@@ -7,14 +7,12 @@ package main
 import (
 	"github.com/i-am-the-slime/iris-go/array"
 	"github.com/i-am-the-slime/iris-go/console"
-	"github.com/i-am-the-slime/iris-go/exception"
 	"strings"
 )
 
 var main_ = initializeMain_()
 
 func initializeMain_() string {
-	defer exception.ReportUncaught()
 	return "letters: " + strings.Join([]string{"a", "b", "c"}, ",") + "; nested: " + strings.Join(array.Map(func(element []string) string {
 		return strings.Join(element, ",")
 	}, [][]string{{"d", "e"}, {"f"}}), ",")

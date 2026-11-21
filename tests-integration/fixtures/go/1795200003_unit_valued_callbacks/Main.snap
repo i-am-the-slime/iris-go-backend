@@ -31,7 +31,6 @@ import (
 	"fixture/Data/Tuple"
 	arraypkg "github.com/i-am-the-slime/iris-go/array"
 	"github.com/i-am-the-slime/iris-go/direct"
-	"github.com/i-am-the-slime/iris-go/exception"
 	"os"
 )
 
@@ -58,7 +57,6 @@ func main_() int32 {
 var units = initializeUnits()
 
 func initializeUnits() []struct{} {
-	defer exception.ReportUncaught()
 	array := []struct{}{{}, {}}
 	mapped := make([]tuple.TupleIntUnit, len(array))
 	for slot, unit := range array {
@@ -117,7 +115,6 @@ func initializeUnits() []struct{} {
 }
 
 func main() {
-	defer exception.ReportUncaught()
 	exitStatus := main_()
 	os.Exit(int(exitStatus))
 }

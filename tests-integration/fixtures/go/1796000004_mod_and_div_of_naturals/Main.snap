@@ -6,7 +6,6 @@ package main
 
 import (
 	"github.com/i-am-the-slime/iris-go/console"
-	"github.com/i-am-the-slime/iris-go/exception"
 	"github.com/i-am-the-slime/iris-go/prim"
 	"strings"
 )
@@ -14,7 +13,6 @@ import (
 var main_ = initializeMain_()
 
 func initializeMain_() []int32 {
-	defer exception.ReportUncaught()
 	return []int32{117, 109, 65, mainGo(0, 0), -1, 3, 1}
 }
 

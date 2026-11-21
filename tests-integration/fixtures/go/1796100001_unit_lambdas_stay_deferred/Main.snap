@@ -25,11 +25,9 @@ import (
 	"fixture/Data/Eq"
 	"fixture/Effect/Exception"
 	arraypkg "github.com/i-am-the-slime/iris-go/array"
-	"github.com/i-am-the-slime/iris-go/exception"
 )
 
 func main() {
-	defer exception.ReportUncaught()
 	array := arraypkg.Map(func(n int32) func(struct{}) int32 {
 		return func(ignored struct{}) int32 {
 			return deferred(n, ignored)

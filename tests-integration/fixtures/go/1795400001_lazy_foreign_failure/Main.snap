@@ -60,7 +60,6 @@ import (
 )
 
 func main() {
-	defer exception.ReportUncaught()
 	value := direct.ForeignRecord([]string{"name"}, []any{"iris"})
 	unsafeReadPropImpl := foreignvalue.UnsafeReadPropImpl(func() foreign.EitherNonEmptyListForeignErrorForeign {
 		return foreign.EitherNonEmptyListForeignErrorForeign{Tag: foreign.EitherNonEmptyListForeignErrorForeignLeft, Left: foreign.NonEmptyListForeignError{First: &foreign.ForeignError{Tag: foreign.ForeignErrorTypeMismatch, TypeMismatch0: "object", TypeMismatch1: foreignvalue.TypeOf(value)}, Second: foreign.SharedListForeignErrorNil}}

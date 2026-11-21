@@ -39,7 +39,6 @@ import (
 	arraypkg "github.com/i-am-the-slime/iris-go/array"
 	"github.com/i-am-the-slime/iris-go/console"
 	"github.com/i-am-the-slime/iris-go/direct"
-	"github.com/i-am-the-slime/iris-go/exception"
 	"github.com/i-am-the-slime/iris-go/prim"
 	"slices"
 	"strconv"
@@ -49,7 +48,6 @@ import (
 var main_ = initializeMain_()
 
 func initializeMain_() []string {
-	defer exception.ReportUncaught()
 	text := prim.StringJoinWith(" ", []string{"a😀", "naïve 😀 banana 日本 a𝄞a"})
 	step, count := arraypkg.RangeSteps(0, prim.CodeUnitLength(text)-1)
 	mapped := make([]maybe.Char, count)

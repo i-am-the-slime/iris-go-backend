@@ -14,14 +14,12 @@ package main
 import (
 	"fixture/Control/Category"
 	"fixture/shared"
-	"github.com/i-am-the-slime/iris-go/exception"
 	"github.com/i-am-the-slime/iris-go/lazy"
 )
 
 var main_ = initializeMain_()
 
 func initializeMain_() shared.MainResult {
-	defer exception.ReportUncaught()
 	array := []func(int32) int32{chain(2, category.Identity), chain(3, category.Identity)}
 	var accumulator int32 = 0
 	for _, k := range array {

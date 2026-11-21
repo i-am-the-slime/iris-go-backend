@@ -13,14 +13,12 @@ package main
 
 import (
 	"fixture/Data/Maybe"
-	"github.com/i-am-the-slime/iris-go/exception"
 	"math"
 )
 
 var main_ = initializeMain_()
 
 func initializeMain_() []maybe.Int {
-	defer exception.ReportUncaught()
 	number := math.Copysign(0, -1)
 	var integer maybe.Int
 	if math.Trunc(number) == number && (number >= math.MinInt32 && number <= math.MaxInt32) {

@@ -7,7 +7,6 @@ package main
 import (
 	"fixture/shared"
 	"github.com/i-am-the-slime/iris-go/array"
-	"github.com/i-am-the-slime/iris-go/exception"
 	"os"
 )
 
@@ -48,7 +47,6 @@ func create() shared.Ticks {
 }
 
 func main() {
-	defer exception.ReportUncaught()
 	exitStatus := main_()
 	os.Exit(int(exitStatus))
 }

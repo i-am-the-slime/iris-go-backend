@@ -23,7 +23,6 @@ package main
 import (
 	"fixture/Control/Monad/Rec/Class"
 	"fixture/shared"
-	"github.com/i-am-the-slime/iris-go/exception"
 	"os"
 )
 
@@ -90,7 +89,6 @@ func mainGo(count *shared.Ref[int32], step class.StepAccIInt) int32 {
 }
 
 func main() {
-	defer exception.ReportUncaught()
 	exitStatus := main_()
 	os.Exit(int(exitStatus))
 }

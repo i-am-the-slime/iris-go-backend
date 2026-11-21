@@ -7,7 +7,6 @@ package main
 import (
 	"fixture/shared"
 	"github.com/i-am-the-slime/iris-go/console"
-	"github.com/i-am-the-slime/iris-go/exception"
 	"github.com/i-am-the-slime/iris-go/refeq"
 	"strconv"
 	"strings"
@@ -40,7 +39,6 @@ var sharedChainEnd = &Chain{}
 var main_ = initializeMain_()
 
 func initializeMain_() []bool {
-	defer exception.ReportUncaught()
 	left := shared.Handler{Name: "a", Run: func(n int32) int32 {
 		return n + 1
 	}}
@@ -59,7 +57,6 @@ func initializeMain_() []bool {
 var counter = initializeCounter()
 
 func initializeCounter() *shared.Ref[int32] {
-	defer exception.ReportUncaught()
 	performed := &shared.Ref[int32]{Value: 0}
 	return performed
 }

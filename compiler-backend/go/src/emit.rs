@@ -148,10 +148,6 @@ where
     if !unused.is_empty() {
         declarations.retain(|declaration| declaration.name().is_none_or(|n| !unused.contains(n)));
     }
-    if emitter.entry_performs_effects() {
-        emitter.imports.insert(GoPackage::Exception.path().into());
-        report_uncaught_exceptions(&mut declarations);
-    }
     if emitter.imports.contains(GoPackage::Aff.path()) {
         emitter.performs(GoFunction { package: GoPackage::Aff, name: "Await" });
         await_fibers(&mut declarations);
@@ -499,22 +495,6 @@ fn runs_code(expression: &GoExpression) -> bool {
     let mut calls = Calls(false);
     calls.expression(&mut expression.clone());
     calls.0
-}
-
-/// An exception that escapes `main` ends the program as it ends a JS one: its stack on stderr and
-/// exit status 1. Fibers awaited later report their own failures.
-fn report_uncaught_exceptions(declarations: &mut [GoDeclaration]) {
-    for declaration in declarations {
-        if let GoDeclaration::Function { name, body, .. } = declaration
-            && name == "main"
-        {
-            let report = GoExpression::Qualified {
-                package: "exception".into(),
-                name: "ReportUncaught".into(),
-            };
-            body.insert(0, GoStatement::Defer(call(report, vec![])));
-        }
-    }
 }
 
 fn await_fibers(declarations: &mut [GoDeclaration]) {
@@ -948,11 +928,6 @@ where
         }
     }
 
-    fn entry_performs_effects(&self) -> bool {
-        let function = self.program.function(self.program.entry);
-        function.parameters.is_empty() && self.monotypes.effect_result(function.result).is_some()
-    }
-
     fn main(&mut self) -> GoResult<Option<GoDeclaration>> {
         let entry = self.program.entry;
         let name = self.function_names[entry.0 as usize].clone();
@@ -1277,9 +1252,8 @@ where
         ])
     }
 
-    /// A top-level value. One whose evaluation runs code is computed by an initializer that
-    /// reports an exception escaping it as main does: package variables are initialized before
-    /// main runs, and a JS module that throws while it loads ends the program the same way.
+    /// A top-level value. One whose evaluation runs code is computed by an initializer, which
+    /// Go runs before main; an exception escaping it ends the program as one escaping main does.
     fn constant(&mut self, name: &str, function: &Function) -> GoResult<Vec<GoDeclaration>> {
         let type_ = self.go_type(function.result)?;
         let mut statements = vec![];
@@ -1292,10 +1266,8 @@ where
             }]);
         }
         let initializer = self.global_name(Spelling::derived("initialize", name.into(), ""));
-        let report = GoFunction { package: GoPackage::Exception, name: "ReportUncaught" };
         statements.push(GoStatement::Return(Some(value)));
         self.attribute(function.body.position, 0, &mut statements)?;
-        statements.insert(0, GoStatement::Defer(call(self.go_function(report), vec![])));
         let result = self.go_result(function.result)?;
         Ok(vec![
             GoDeclaration::Variable {

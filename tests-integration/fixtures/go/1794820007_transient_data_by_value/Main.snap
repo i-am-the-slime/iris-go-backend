@@ -6,7 +6,6 @@ package main
 
 import (
 	"fixture/shared"
-	"github.com/i-am-the-slime/iris-go/exception"
 	"github.com/i-am-the-slime/iris-go/prim"
 	"strconv"
 )
@@ -55,7 +54,6 @@ var sharedListEntryNil = &ListEntry{}
 var main_ = initializeMain_()
 
 func initializeMain_() shared.MainResult {
-	defer exception.ReportUncaught()
 	scrutinee := search(3, 0)
 	var result string
 	switch scrutinee.Tag {

@@ -32,7 +32,6 @@ import (
 	"fixture/shared"
 	"github.com/i-am-the-slime/iris-go/array"
 	"github.com/i-am-the-slime/iris-go/console"
-	"github.com/i-am-the-slime/iris-go/exception"
 	"github.com/i-am-the-slime/iris-go/prim"
 	"slices"
 	"strings"
@@ -41,7 +40,6 @@ import (
 var main_ = initializeMain_()
 
 func initializeMain_() []string {
-	defer exception.ReportUncaught()
 	return []string{describeArrayBoolean(shared.Show{Show: func(coerced any) string {
 		return show.ShowBoolean(shared.Convert(coerced))
 	}}, array.Append([]int32{}, []int32{2}), ">", 1, shared.Convert2([]bool{true}))}

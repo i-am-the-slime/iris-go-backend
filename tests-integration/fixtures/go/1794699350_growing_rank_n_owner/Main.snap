@@ -73,7 +73,6 @@ import (
 	"fixture/shared"
 	arraypkg "github.com/i-am-the-slime/iris-go/array"
 	"github.com/i-am-the-slime/iris-go/console"
-	"github.com/i-am-the-slime/iris-go/exception"
 	"github.com/i-am-the-slime/iris-go/prim"
 	"strings"
 )
@@ -81,7 +80,6 @@ import (
 var main_ = initializeMain_()
 
 func initializeMain_() []int32 {
-	defer exception.ReportUncaught()
 	return shared.Convert4(sampleWithIntInt(func(questions []func(int32) any) []any {
 		mapped := make([]func(func(int32) int32) func(int32) int32, len(questions))
 		for index := range questions {

@@ -59,7 +59,6 @@ import (
 	"fixture/shared"
 	"github.com/i-am-the-slime/iris-go/array"
 	"github.com/i-am-the-slime/iris-go/console"
-	"github.com/i-am-the-slime/iris-go/exception"
 	"strconv"
 	"strings"
 )
@@ -67,7 +66,6 @@ import (
 var main_ = initializeMain_()
 
 func initializeMain_() []string {
-	defer exception.ReportUncaught()
 	mapped := make([]string, len(problems))
 	for index, element := range problems {
 		mapped[index] = byLabel(element)
@@ -121,7 +119,6 @@ func someLabels(variant2 variant.InvalidLateMissing) string {
 var shrunk = initializeShrunk()
 
 func initializeShrunk() shared.BaseName {
-	defer exception.ReportUncaught()
 	return shrink.ShrinkBaseNameScaleBaseNameScaleConsIntConsStringNil(shared.BaseNameScale{Base: 1, Name: "context", Scale: 2})
 }
 

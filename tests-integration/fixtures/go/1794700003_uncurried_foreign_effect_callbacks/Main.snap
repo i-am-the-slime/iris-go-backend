@@ -27,7 +27,6 @@ package main
 
 import (
 	"fixture/Data/Array"
-	"github.com/i-am-the-slime/iris-go/exception"
 	"os"
 )
 
@@ -41,7 +40,6 @@ func main_() int32 {
 }
 
 func main() {
-	defer exception.ReportUncaught()
 	exitStatus := main_()
 	os.Exit(int(exitStatus))
 }

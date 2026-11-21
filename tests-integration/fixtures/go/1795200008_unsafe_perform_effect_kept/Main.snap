@@ -11,10 +11,7 @@ func Identity(x any) any {
 // main.go
 package main
 
-import (
-	"github.com/i-am-the-slime/iris-go/exception"
-	"os"
-)
+import "os"
 
 func main_() int32 {
 	var count int32 = 0
@@ -45,7 +42,6 @@ func mainGo(n int32, acc struct{}) {
 }
 
 func main() {
-	defer exception.ReportUncaught()
 	exitStatus := main_()
 	os.Exit(int(exitStatus))
 }

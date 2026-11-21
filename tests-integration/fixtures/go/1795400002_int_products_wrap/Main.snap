@@ -6,7 +6,6 @@ package main
 
 import (
 	"github.com/i-am-the-slime/iris-go/console"
-	"github.com/i-am-the-slime/iris-go/exception"
 	"github.com/i-am-the-slime/iris-go/prim"
 	"strconv"
 	"strings"
@@ -15,7 +14,6 @@ import (
 var main_ = initializeMain_()
 
 func initializeMain_() []string {
-	defer exception.ReportUncaught()
 	return []string{"-67153019/" + strconv.Itoa(int(opaque(123456789)*987654321)), "1/" + strconv.Itoa(int(opaque(2147483647)*opaque(2147483647))), "0/" + strconv.Itoa(int(opaque(65536)*65536)), "-42/" + strconv.Itoa(int(opaque(-7)*6)), strconv.Itoa(int(prim.IntPow(3, 40))) + "/" + strconv.Itoa(int(prim.IntPow(opaque(3), 40))), strconv.Itoa(int(prim.IntPow(2, 31))) + "/" + strconv.Itoa(int(prim.IntPow(opaque(2), 31))), strconv.Itoa(int(prim.IntPow(2, -1))) + "/" + strconv.Itoa(int(prim.IntPow(opaque(2), -1))), strconv.Itoa(int(prim.IntPow(-1, -3))) + "/" + strconv.Itoa(int(prim.IntPow(opaque(-1), -3)))}
 }
 

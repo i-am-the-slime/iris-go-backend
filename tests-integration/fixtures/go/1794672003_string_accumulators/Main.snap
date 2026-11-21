@@ -6,7 +6,6 @@ package main
 
 import (
 	"fixture/shared"
-	"github.com/i-am-the-slime/iris-go/exception"
 	"github.com/i-am-the-slime/iris-go/prim"
 	"strconv"
 )
@@ -14,7 +13,6 @@ import (
 var main_ = initializeMain_()
 
 func initializeMain_() shared.MainResult {
-	defer exception.ReportUncaught()
 	accumulator := []byte("start:")
 	for i := int32(1); i < 13; i++ {
 		accumulator = append(accumulator, strconv.Itoa(int(i))...)

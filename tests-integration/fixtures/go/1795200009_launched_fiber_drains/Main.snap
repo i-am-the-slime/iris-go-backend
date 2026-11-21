@@ -117,7 +117,6 @@ func mainStep(steps *shared.Ref[int32], digit int32) {
 }
 
 func main() {
-	defer exception.ReportUncaught()
 	exitStatus := main_()
 	aff.Await()
 	os.Exit(int(exitStatus))

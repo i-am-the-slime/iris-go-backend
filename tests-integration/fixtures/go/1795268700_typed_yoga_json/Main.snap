@@ -1050,7 +1050,6 @@ import (
 var main_ = initializeMain_()
 
 func initializeMain_() []string {
-	defer exception.ReportUncaught()
 	decoded, ok := foreignvalue.Decode("[{\"id\":1,\"name\":\"a\",\"label\":null,\"tags\":[true,null],\"extra\":{}}]", maybe.DecodeJSONArrayItem)
 	var read foreign.EitherNonEmptyListForeignErrorArrayItem
 	if ok {

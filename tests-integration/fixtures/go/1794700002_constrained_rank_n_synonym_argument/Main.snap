@@ -7,7 +7,6 @@ package main
 import (
 	"fixture/shared"
 	"github.com/i-am-the-slime/iris-go/console"
-	"github.com/i-am-the-slime/iris-go/exception"
 	"github.com/i-am-the-slime/iris-go/prim"
 	"strings"
 )
@@ -15,7 +14,6 @@ import (
 var main_ = initializeMain_()
 
 func initializeMain_() []int32 {
-	defer exception.ReportUncaught()
 	updated := shared.IdentityOfString{First: 1, Second: "s"}
 	updated.First = 99
 	updated2 := shared.IdentityOfUnit{First: 0, Second: struct{}{}}

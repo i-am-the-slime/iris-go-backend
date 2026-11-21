@@ -18,7 +18,6 @@ import (
 	list "fixture/Data/List/Types"
 	"fixture/shared"
 	"github.com/i-am-the-slime/iris-go/alloc"
-	"github.com/i-am-the-slime/iris-go/exception"
 	"os"
 )
 
@@ -84,7 +83,6 @@ func main_() int32 {
 }
 
 func main() {
-	defer exception.ReportUncaught()
 	exitStatus := main_()
 	os.Exit(int(exitStatus))
 }

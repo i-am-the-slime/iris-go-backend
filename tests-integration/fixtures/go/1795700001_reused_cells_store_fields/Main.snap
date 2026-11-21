@@ -4,10 +4,7 @@ source: tests-integration/src/fixtures.rs
 // main.go
 package main
 
-import (
-	"fixture/shared"
-	"github.com/i-am-the-slime/iris-go/exception"
-)
+import "fixture/shared"
 
 type Tree struct {
 	Node2 *Tree
@@ -35,7 +32,6 @@ var sharedChainEnd = &Chain{Tag: ChainEnd}
 var main_ = initializeMain_()
 
 func initializeMain_() shared.MainResult {
-	defer exception.ReportUncaught()
 	scrutinee := insertCountsReusing(3, sharedTreeLeaf)
 	var result *Tree
 	if scrutinee != sharedTreeLeaf {
@@ -69,7 +65,6 @@ func sizeOf(tree *Tree) int32 {
 var counts = initializeCounts()
 
 func initializeCounts() *Tree {
-	defer exception.ReportUncaught()
 	return insertCountsReusing(2, insertCountsReusing(1, insertCountsReusing(2, sharedTreeLeaf)))
 }
 

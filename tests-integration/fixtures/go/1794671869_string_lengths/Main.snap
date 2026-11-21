@@ -33,7 +33,6 @@ import (
 	"fixture/shared"
 	"github.com/i-am-the-slime/iris-go/console"
 	"github.com/i-am-the-slime/iris-go/direct"
-	"github.com/i-am-the-slime/iris-go/exception"
 	"github.com/i-am-the-slime/iris-go/prim"
 	"strconv"
 	"strings"
@@ -42,7 +41,6 @@ import (
 var main_ = initializeMain_()
 
 func initializeMain_() []string {
-	defer exception.ReportUncaught()
 	codeUnitLength := prim.CodeUnitLengthUpTo(3, "ab")
 	var result string
 	switch codeUnitLength {

@@ -4,15 +4,11 @@ source: tests-integration/src/fixtures.rs
 // main.go
 package main
 
-import (
-	shared2 "fixture/shared"
-	"github.com/i-am-the-slime/iris-go/exception"
-)
+import shared2 "fixture/shared"
 
 var main_ = initializeMain_()
 
 func initializeMain_() shared2.MainResult {
-	defer exception.ReportUncaught()
 	var counter int32 = 0
 	var counter2 int32 = 0
 	var fused int32 = 0

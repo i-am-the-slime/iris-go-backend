@@ -11,15 +11,11 @@ const NoInt Int = 1 << 32
 // main.go
 package main
 
-import (
-	"fixture/Data/Maybe"
-	"github.com/i-am-the-slime/iris-go/exception"
-)
+import "fixture/Data/Maybe"
 
 var main_ = initializeMain_()
 
 func initializeMain_() []maybe.Int {
-	defer exception.ReportUncaught()
 	var element maybe.Int
 	if 1 < len(numbers) {
 		element = maybe.Int(numbers[1])

@@ -36,7 +36,6 @@ import (
 	"fixture/shared"
 	arraypkg "github.com/i-am-the-slime/iris-go/array"
 	"github.com/i-am-the-slime/iris-go/console"
-	"github.com/i-am-the-slime/iris-go/exception"
 	"github.com/i-am-the-slime/iris-go/prim"
 	"strconv"
 	"strings"
@@ -45,7 +44,6 @@ import (
 var main_ = initializeMain_()
 
 func initializeMain_() []string {
-	defer exception.ReportUncaught()
 	bodies := []shared.Body{{X: 0.0, Y: 0.0, Vx: 0.0, Vy: 0.0, Mass: 1.0}, {X: 1.0, Y: 2.0, Vx: 0.5, Vy: 0.0, Mass: 0.5}, {X: -1.0, Y: 0.5, Vx: 0.0, Vy: 0.25, Mass: 2.0}}
 	mapped := make([]shared.Body, len(bodies))
 	for index := range bodies {

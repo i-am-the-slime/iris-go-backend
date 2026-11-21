@@ -34,7 +34,6 @@ package main
 import (
 	"fixture/Data/Variant"
 	"github.com/i-am-the-slime/iris-go/console"
-	"github.com/i-am-the-slime/iris-go/exception"
 	"github.com/i-am-the-slime/iris-go/prim"
 	"strconv"
 	"strings"
@@ -43,7 +42,6 @@ import (
 var main_ = initializeMain_()
 
 func initializeMain_() []string {
-	defer exception.ReportUncaught()
 	n := opaque(1)
 	var result float64
 	if n > 0 {

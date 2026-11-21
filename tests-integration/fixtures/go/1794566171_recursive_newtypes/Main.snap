@@ -8,7 +8,6 @@ import (
 	"fixture/shared"
 	"github.com/i-am-the-slime/iris-go/array"
 	"github.com/i-am-the-slime/iris-go/console"
-	"github.com/i-am-the-slime/iris-go/exception"
 	"strconv"
 	"strings"
 )
@@ -18,7 +17,6 @@ type Step func(int32) Step
 var main_ = initializeMain_()
 
 func initializeMain_() []string {
-	defer exception.ReportUncaught()
 	return array.Append(names(shared.Level{Name: "root", Minis: []shared.Level{{Name: "a", Minis: []shared.Level{}}}}), []string{strconv.Itoa(int(countSteps(func(n int32) Step {
 		if n < 3 {
 			return func(_ int32) Step {

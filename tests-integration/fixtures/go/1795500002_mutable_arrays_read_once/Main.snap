@@ -37,7 +37,6 @@ import (
 	"github.com/i-am-the-slime/iris-go/array"
 	"github.com/i-am-the-slime/iris-go/console"
 	"github.com/i-am-the-slime/iris-go/direct"
-	"github.com/i-am-the-slime/iris-go/exception"
 	"github.com/i-am-the-slime/iris-go/prim"
 	"strings"
 )
@@ -45,7 +44,6 @@ import (
 var main_ = initializeMain_()
 
 func initializeMain_() []string {
-	defer exception.ReportUncaught()
 	array2 := array.Thaw([]float64{1.0, 2.0, 3.0})()
 	elements := *array2
 	for i := int32(0); i < 3; i++ {
@@ -156,7 +154,6 @@ func smooth(array []float64, i int32) {
 var pull = initializePull()
 
 func initializePull() []string {
-	defer exception.ReportUncaught()
 	array2 := array.Thaw([]float64{0.0, 1.0, 3.0})()
 	array3 := array.Thaw([]float64{0.0, 2.0, -1.0})()
 	array4 := array.Thaw([]float64{0.0, 0.0, 0.0})()
@@ -255,7 +252,6 @@ func initializePull() []string {
 var countBefore = initializeCountBefore()
 
 func initializeCountBefore() []string {
-	defer exception.ReportUncaught()
 	words := array.Thaw([]string{"pear", "apple", "fig"})()
 	counts := array.Thaw([]int32{0, 0, 0})()
 	elements := *words
@@ -293,7 +289,6 @@ func initializeCountBefore() []string {
 var sortEach = initializeSortEach()
 
 func initializeSortEach() []string {
-	defer exception.ReportUncaught()
 	array2 := array.Thaw([]int32{3, 1, 2})()
 	array3 := array.Thaw([]int32{0, 0})()
 	for i := int32(0); i < 2; i++ {

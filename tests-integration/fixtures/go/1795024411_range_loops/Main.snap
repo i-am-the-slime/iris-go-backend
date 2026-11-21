@@ -7,14 +7,12 @@ package main
 import (
 	"fixture/shared"
 	"github.com/i-am-the-slime/iris-go/array"
-	"github.com/i-am-the-slime/iris-go/exception"
 	"strconv"
 )
 
 var main_ = initializeMain_()
 
 func initializeMain_() shared.MainResult {
-	defer exception.ReportUncaught()
 	var bound int32 = 4
 	seen := []int32{}
 	step, count := array.RangeSteps(bound, 1)
@@ -49,7 +47,6 @@ func initializeMain_() shared.MainResult {
 var descending = initializeDescending()
 
 func initializeDescending() []int32 {
-	defer exception.ReportUncaught()
 	mapped := make([]int32, 3)
 	for index := range 3 {
 		value := 3 - int32(index)

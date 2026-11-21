@@ -4,15 +4,11 @@ source: tests-integration/src/fixtures.rs
 // main.go
 package main
 
-import (
-	"fixture/shared"
-	"github.com/i-am-the-slime/iris-go/exception"
-)
+import "fixture/shared"
 
 var main_ = initializeMain_()
 
 func initializeMain_() shared.MainResult {
-	defer exception.ReportUncaught()
 	var accumulator int32 = 0
 	for _, element := range numbers {
 		value := tripled(element)

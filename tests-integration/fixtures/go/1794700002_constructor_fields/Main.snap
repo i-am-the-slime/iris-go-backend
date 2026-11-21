@@ -51,7 +51,6 @@ import (
 	"fixture/Data/Show"
 	"fixture/shared/Data.Either+Data.Tuple"
 	"github.com/i-am-the-slime/iris-go/console"
-	"github.com/i-am-the-slime/iris-go/exception"
 	"github.com/i-am-the-slime/iris-go/prim"
 	"strconv"
 )
@@ -85,7 +84,6 @@ const (
 var main_ = initializeMain_()
 
 func initializeMain_() string {
-	defer exception.ReportUncaught()
 	array := []either_tuple.TupleMaybeIntEitherStringInt{{First: maybe.Int(1), Second: either.EitherStringInt{Tag: either.EitherStringIntRight, Right: 2}}, {First: maybe.NoInt, Second: either.EitherStringInt{Tag: either.EitherStringIntLeft, Left: "x"}}}
 	var accumulator int32 = 0
 	for tupleIndex := range array {

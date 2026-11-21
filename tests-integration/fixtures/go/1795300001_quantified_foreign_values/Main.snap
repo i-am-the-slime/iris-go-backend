@@ -16,7 +16,6 @@ package main
 import (
 	"fixture/Data/Show"
 	"fixture/Optional_ffi"
-	"github.com/i-am-the-slime/iris-go/exception"
 	"github.com/i-am-the-slime/iris-go/prim"
 	"strconv"
 )
@@ -28,6 +27,5 @@ func main_() []string {
 }
 
 func main() {
-	defer exception.ReportUncaught()
 	main_()
 }

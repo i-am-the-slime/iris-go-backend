@@ -6,7 +6,6 @@ package main
 
 import (
 	"fixture/Run_ffi"
-	"github.com/i-am-the-slime/iris-go/exception"
 	"strconv"
 )
 
@@ -20,6 +19,5 @@ func main_() []string {
 var made Run_ffi.Output = Run_ffi.Output{Stdout: "made", Stderr: "", ExitCode: 3}
 
 func main() {
-	defer exception.ReportUncaught()
 	main_()
 }

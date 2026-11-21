@@ -7,7 +7,6 @@ package main
 import (
 	"github.com/i-am-the-slime/iris-go/array"
 	"github.com/i-am-the-slime/iris-go/console"
-	"github.com/i-am-the-slime/iris-go/exception"
 	"github.com/i-am-the-slime/iris-go/prim"
 	"strings"
 )
@@ -15,7 +14,6 @@ import (
 var main_ = initializeMain_()
 
 func initializeMain_() []int32 {
-	defer exception.ReportUncaught()
 	array2 := array.Thaw([]int32{10, 20, 30})()
 	elements := []func(int32) int32{func(value int32) int32 {
 		return value + 1

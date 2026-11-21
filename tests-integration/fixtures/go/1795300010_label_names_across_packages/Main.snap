@@ -100,7 +100,6 @@ import (
 	"fixture/shared"
 	"github.com/i-am-the-slime/iris-go/array"
 	"github.com/i-am-the-slime/iris-go/console"
-	"github.com/i-am-the-slime/iris-go/exception"
 	"github.com/i-am-the-slime/iris-go/prim"
 	"strconv"
 	"strings"
@@ -109,7 +108,6 @@ import (
 var main_ = initializeMain_()
 
 func initializeMain_() []string {
-	defer exception.ReportUncaught()
 	updated := shared.Odd{X_respondNow: 1, X1st: 2, Content_type: "dash", Content_type2: "underscore", X2: 2, X: 3, Über: 4}
 	updated.X_respondNow = 10
 	updated.Content_type = "changed"

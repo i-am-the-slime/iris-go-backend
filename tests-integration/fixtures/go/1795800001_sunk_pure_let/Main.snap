@@ -42,7 +42,6 @@ import (
 	"fixture/Data/Maybe"
 	"fixture/Effect/Exception"
 	arraypkg "github.com/i-am-the-slime/iris-go/array"
-	"github.com/i-am-the-slime/iris-go/exception"
 	"math"
 	"strconv"
 )
@@ -64,7 +63,6 @@ const (
 )
 
 func main() {
-	defer exception.ReportUncaught()
 	array := []float64{3.0, 2.5, -1.0}
 	mapped := make([]bool, len(array))
 	for index, value := range array {
