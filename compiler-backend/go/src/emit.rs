@@ -22,6 +22,7 @@ mod diverging;
 mod existential;
 mod fusion;
 mod groups;
+mod headers;
 mod immediate;
 mod instantiations;
 mod iteration;
@@ -156,6 +157,7 @@ where
     timed("stores", || scalars::store_fields_in_place(&mut declarations, &structs));
     timed("aliases", || aliases::substitute_aliases(&mut declarations));
     timed("ranges", || ranges::read_elements_in_place(&mut declarations));
+    timed("headers", || headers::read_headers_once(&mut declarations));
     let taken =
         |name: &str| emitter.global_names.contains(name) || IMPORTED_PACKAGES.contains(&name);
     timed("lengths", || lengths::count_lengths_up_to_comparisons(&mut declarations));

@@ -16,12 +16,13 @@ var main_ = initializeMain_()
 func initializeMain_() []int32 {
 	defer exception.ReportUncaught()
 	array2 := array.Thaw([]int32{10, 20, 30})()
+	elements := *array2
 	for i := int32(0); i < 3; i++ {
-		within := i >= 0 && int(i) < len(*array2)
+		within := i >= 0 && int(i) < len(elements)
 		if within {
-			element := (*array2)[i]
-			if i >= 0 && int(i) < len(*array2) {
-				(*array2)[i] = prim.IntMod(element, 7)
+			element := elements[i]
+			if i >= 0 && int(i) < len(elements) {
+				elements[i] = prim.IntMod(element, 7)
 			}
 		}
 	}
