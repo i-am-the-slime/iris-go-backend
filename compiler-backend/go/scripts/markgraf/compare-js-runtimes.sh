@@ -15,7 +15,7 @@
 #
 # Environment: IRIS, MARKGRAF (checkout; pinned.sh), GO_SUPPORT, MARKGRAF_GO (a Go CLI;
 # built with build-go-cli.sh when unset), WORK, TIMEOUT (seconds per run,
-# default 600), KEEP=1 keeps the work directory. Timing follows compare-svg.sh:
+# default 600), KEEP=1 keeps the work directory. Timing:
 # one warm-up run each, and an export where Go looks slower than a JavaScript
 # runtime beyond SLOWER_PERCENT% + SLOWER_MS is run again, keeping the minima.
 #

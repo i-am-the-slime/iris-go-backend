@@ -1,8 +1,7 @@
 #!/usr/bin/env bash
 #
 # Compiles the Markgraf CLI (Main.run) with `iris go` and builds it with the
-# Markgraf host and fonts, exactly as compare-svg.sh does. Prints the path of
-# the executable; the generated Go stays in OUT_DIR.
+# Markgraf host and fonts. Prints the path of the executable; the generated Go stays in OUT_DIR.
 #
 #   compiler-backend/go/scripts/markgraf/build-go-cli.sh OUT_DIR
 #

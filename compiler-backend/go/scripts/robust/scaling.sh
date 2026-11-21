@@ -74,12 +74,12 @@ matches() {
 }
 
 # The timing runs of other agents, which must not overlap ours. Shells of other agents that are
-# themselves waiting (`until ! pgrep -f compare-svg.sh ...`) mention the same names and do not
+# themselves waiting (`until ! pgrep -f measure.py ...`) mention the same names and do not
 # count; our own pathological build runs run.sh with BUILD_ONLY=1 and times nothing.
 wait_for_quiet_machine() {
   [ "${NO_WAIT:-0}" = 1 ] && return
   local waited=0
-  while ps -axo command= | grep -E 'compare-svg.sh|measure.py|benchmarks/pathological/run.sh|benchmarks/compat/run.sh' \
+  while ps -axo command= | grep -E 'measure.py|benchmarks/pathological/run.sh|benchmarks/compat/run.sh' \
     | grep -qvE 'pgrep|until |grep|BUILD_ONLY'; do
     [ "$waited" = 0 ] && echo "waiting for other timing runs to finish ..." >&2
     waited=$((waited + 5))

@@ -151,7 +151,7 @@ allocs_of() {
 }
 
 wait_for_quiet_machine() {
-  while ps -axo command= | grep -E 'compare-svg.sh|measure.py|bin/iris-go/run' | grep -qvE 'pgrep|until |grep'; do
+  while ps -axo command= | grep -E 'measure.py|bin/iris-go/run' | grep -qvE 'pgrep|until |grep'; do
     sleep 5
   done
 }

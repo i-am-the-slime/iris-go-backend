@@ -113,7 +113,7 @@ best_of() {
 # Other agents time builds on this machine; their waiting shells mention the same names, so only
 # processes that are not themselves waiting count.
 wait_for_quiet_machine() {
-  while ps -axo command= | grep -E 'compare-svg.sh|measure.py|bin/iris-go/run' | grep -qvE 'pgrep|until |grep'; do
+  while ps -axo command= | grep -E 'measure.py|bin/iris-go/run' | grep -qvE 'pgrep|until |grep'; do
     sleep 5
   done
 }
