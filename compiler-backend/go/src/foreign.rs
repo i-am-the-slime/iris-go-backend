@@ -35,6 +35,20 @@ pub struct ForeignPackages {
     pub sources: Vec<ForeignSource>,
     /// The paths of the project's source files, as messages that point into them show them.
     pub source_paths: Vec<(FileId, String)>,
+    /// Where the Go and the PureScript are, to have `//line` directives attribute the Go to the
+    /// PureScript it comes from; none leaves them out.
+    pub line_directives: Option<LineDirectives>,
+}
+
+/// The paths `//line` directives are made from. A directive names its file relative to the
+/// directory of the Go file it is in, which is where Go looks for it, so that the Go still points
+/// at the PureScript when the project moves.
+#[derive(Debug, Clone, Default)]
+pub struct LineDirectives {
+    /// The directory the Go files are written to.
+    pub go_directory: String,
+    /// The source files, absolute or relative to the same directory as `go_directory`.
+    pub sources: Vec<(FileId, String)>,
 }
 
 /// The Go files next to a module's source and the names they declare at their top level, which

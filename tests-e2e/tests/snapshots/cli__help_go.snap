@@ -5,7 +5,7 @@ status: 0
 --- stdout
 Compile a Spago workspace from an entry point to a single Go program.
 
-Usage: iris go [-p --package <NAME>] [--entry <MODULE.NAME>] [DIR]
+Usage: iris go [FLAGS] [DIR]
 
 Arguments:
   [DIR]  Directory to write main.go to. Without one, builds the executable that `iris run --go` runs and prints its
@@ -15,5 +15,7 @@ Flags:
   -p, --package <NAME>       Workspace package to compile.
       --entry <MODULE.NAME>  Qualified entry point. Defaults to Main.main, or without DIR to the one `iris run --go`
                              uses.
+      --no-line-directives   Leaves out of the Go written to DIR the //line comments that make stack traces, debuggers
+                             and profiles point at your .purs files.
   -h, --help                 Print help
 --- stderr

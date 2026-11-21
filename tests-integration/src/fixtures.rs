@@ -617,7 +617,19 @@ fn go_foreign_packages(
     structs.sort();
     sources.sort_by(|left, right| left.module.cmp(&right.module));
     let module_path = "fixture".to_string();
-    Ok(go::ForeignPackages { module_path, modules, structs, sources, source_paths })
+    // Directives would change every other fixture's Go, so only the fixtures about them have them.
+    let line_directives = folder
+        .file_name()
+        .is_some_and(|name| name.to_string_lossy().ends_with("_line_directives"))
+        .then(|| go::LineDirectives { go_directory: String::new(), sources: source_paths.clone() });
+    Ok(go::ForeignPackages {
+        module_path,
+        modules,
+        structs,
+        sources,
+        source_paths,
+        line_directives,
+    })
 }
 
 pub fn lsp(path: &Path) -> FixtureResult {

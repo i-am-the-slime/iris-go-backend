@@ -356,6 +356,11 @@ impl Simplifier<'_> {
     }
 
     fn expression(&mut self, expression: Expression) -> Expression {
+        let position = expression.position;
+        self.simplified(expression).replacing(position)
+    }
+
+    fn simplified(&mut self, expression: Expression) -> Expression {
         let monotype = expression.monotype;
         let kind = match expression.kind {
             ExpressionKind::Literal(_)
@@ -1217,7 +1222,7 @@ impl Simplifier<'_> {
                 Expression::new(ExpressionKind::Let { bindings, body: Box::new(rest) }, monotype)
             }
             kind => {
-                let action = Expression::new(kind, action.monotype);
+                let action = Expression::new(kind, action.monotype).located(action.position);
                 if let Some(chosen) = self.peek_choice(&action, &local, &body, monotype) {
                     return chosen;
                 }

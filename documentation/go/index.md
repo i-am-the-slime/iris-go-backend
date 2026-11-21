@@ -1,8 +1,9 @@
 # What your PureScript becomes in Go
 
 These pages show, by example, the Go that Iris writes for your PureScript. Each example is a small
-program next to the Go it compiles to, trimmed to the lines that correspond to it: imports and
-start-up plumbing are left out, nothing is rewritten.
+program next to the Go it compiles to, trimmed to the lines that correspond to it: imports,
+start-up plumbing and the `//line` comments that point stack traces at your PureScript are left
+out, nothing is rewritten.
 
 1. [The basics](basics.md): `Int`, `Number`, `String`, functions and currying, records, data types
    and `case`, newtypes, `Maybe` and `Either`, type classes, polymorphic functions, closures,

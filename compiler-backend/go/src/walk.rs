@@ -117,7 +117,8 @@ pub fn statement<W: Walk + ?Sized>(walk: &mut W, statement: &mut GoStatement) {
         | GoStatement::Return(None)
         | GoStatement::Continue
         | GoStatement::Break
-        | GoStatement::BreakTo(_) => {}
+        | GoStatement::BreakTo(_)
+        | GoStatement::Line(_) => {}
     }
 }
 

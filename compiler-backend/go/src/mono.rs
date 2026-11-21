@@ -81,10 +81,36 @@ impl Local {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+/// Expressions are equal when they compute the same value: where they are written does not
+/// matter, so that identical code from different places still merges.
+#[derive(Debug, Clone)]
 pub struct Expression {
     pub kind: ExpressionKind,
     pub monotype: MonotypeId,
+    /// Where the PureScript the expression comes from is written, if anywhere.
+    pub position: Option<SourcePosition>,
+}
+
+impl PartialEq for Expression {
+    fn eq(&self, other: &Expression) -> bool {
+        self.kind == other.kind && self.monotype == other.monotype
+    }
+}
+
+impl Eq for Expression {}
+
+impl std::hash::Hash for Expression {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.kind.hash(state);
+        self.monotype.hash(state);
+    }
+}
+
+/// A byte offset into a source file.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct SourcePosition {
+    pub file: FileId,
+    pub offset: u32,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -281,6 +307,19 @@ impl Pattern {
 
 impl Expression {
     pub fn new(kind: ExpressionKind, monotype: MonotypeId) -> Expression {
-        Expression { kind, monotype }
+        Expression { kind, monotype, position: None }
+    }
+
+    /// The expression, written at `position` unless it already says where it is written.
+    pub fn located(mut self, position: Option<SourcePosition>) -> Expression {
+        self.position = self.position.or(position);
+        self
+    }
+
+    /// The expression that replaces one written at `position`: written there too, wherever the
+    /// code it is made of is written.
+    pub fn replacing(mut self, position: Option<SourcePosition>) -> Expression {
+        self.position = position.or(self.position);
+        self
     }
 }

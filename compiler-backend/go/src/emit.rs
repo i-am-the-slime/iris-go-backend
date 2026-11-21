@@ -32,6 +32,7 @@ mod instantiations;
 mod iteration;
 mod layout;
 mod lengths;
+mod lines;
 mod locals;
 mod maybe;
 mod mutable;
@@ -356,6 +357,7 @@ where
             current: None,
             lazy_constants,
             arities,
+            source_lines: lines::SourceLines::default(),
         }
     }
 }
@@ -683,6 +685,7 @@ struct Emitter<'p, 'm, 'q, Q> {
     /// Go's zero value.
     uninitialized_locals: FxHashSet<LocalId>,
     arities: Arities,
+    source_lines: lines::SourceLines,
 }
 
 /// The largest data type held by value that cells and arrays copy.
@@ -1151,6 +1154,7 @@ where
         }
         self.tail_loop = None;
         self.byte_buffers.clear();
+        self.attribute(function.body.position, 0, &mut body)?;
         Ok(vec![GoDeclaration::Function { name, parameters, result, body }])
     }
 
@@ -1262,8 +1266,9 @@ where
         }
         let initializer = self.global_name(Spelling::derived("initialize", name.into(), ""));
         let report = GoFunction { package: GoPackage::Exception, name: "ReportUncaught" };
-        statements.insert(0, GoStatement::Defer(call(self.go_function(report), vec![])));
         statements.push(GoStatement::Return(Some(value)));
+        self.attribute(function.body.position, 0, &mut statements)?;
+        statements.insert(0, GoStatement::Defer(call(self.go_function(report), vec![])));
         let result = self.go_result(function.result)?;
         Ok(vec![
             GoDeclaration::Variable {
@@ -1522,6 +1527,18 @@ where
     }
 
     fn sink(
+        &mut self,
+        expression: &Expression,
+        mode: Mode,
+        sink: Sink,
+        out: &mut Vec<GoStatement>,
+    ) -> GoResult<()> {
+        let start = out.len();
+        self.sink_unattributed(expression, mode, sink, out)?;
+        self.attribute(expression.position, start, out)
+    }
+
+    fn sink_unattributed(
         &mut self,
         expression: &Expression,
         mode: Mode,
@@ -2825,10 +2842,12 @@ where
         }
         for binding in bindings {
             if self.is_unit(binding.local.monotype) {
+                let start = out.len();
                 let value = self.value(&binding.value, out)?;
                 if is_effectful_call(&value) {
                     out.push(GoStatement::Expression(value));
                 }
+                self.attribute(binding.value.position, start, out)?;
                 self.locals.insert(binding.local.id, unit_value());
                 continue;
             }

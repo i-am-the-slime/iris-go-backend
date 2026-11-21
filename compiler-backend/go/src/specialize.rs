@@ -12,7 +12,7 @@ use checking::evidence::{
 };
 use checking::tree::{self, DeclarationAbstraction, TermDeclarationKind};
 use files::FileId;
-use indexing::{IndexedTermItemKind, TermItemId};
+use indexing::{EquationSourceId, IndexedTermItemKind, TermItemId};
 use rustc_hash::FxHashMap;
 use smol_str::{SmolStr, format_smolstr};
 
@@ -25,6 +25,7 @@ use crate::foreign::{self, Accumulator, Boundary, Foreign, ForeignPackages, Sign
 use crate::mono::{
     Alternative, Binding, Expression, ExpressionKind, Function, FunctionId, FunctionSpelling,
     Guard, Guarded, GuardedBranch, Literal, Local, Pattern, PatternKind, RecordUpdate,
+    SourcePosition,
 };
 use crate::monotype::{Monotype, MonotypeId, Monotypes, supported};
 use crate::foreign::JsonCodec;
@@ -890,7 +891,22 @@ where
         monotype.map_err(|failure| failure.at(&scope.definition))
     }
 
+    /// The function the equations define, its body written where the first equation is.
     fn equations(
+        &mut self,
+        scope: &mut Scope,
+        equations: &[tree::Equation],
+    ) -> GoResult<Expression> {
+        let position =
+            equations.first().and_then(|first| equation_position(&scope.module, first.source));
+        let mut function = self.equation_function(scope, equations)?;
+        if let ExpressionKind::Lambda { body, .. } = &mut function.kind {
+            body.position = body.position.or(position);
+        }
+        Ok(function.located(position))
+    }
+
+    fn equation_function(
         &mut self,
         scope: &mut Scope,
         equations: &[tree::Equation],
@@ -1336,6 +1352,15 @@ where
     }
 
     fn translate_expression_at(
+        &mut self,
+        scope: &mut Scope,
+        id: tree::ExpressionId,
+    ) -> GoResult<Expression> {
+        let translated = self.translate_node(scope, id)?;
+        Ok(translated.located(source_position(&scope.module, id)))
+    }
+
+    fn translate_node(
         &mut self,
         scope: &mut Scope,
         id: tree::ExpressionId,
@@ -3493,4 +3518,28 @@ fn string_literal(value: &lowering::StringLiteral) -> Literal {
         Ok(text) => Literal::String(text),
         Err(_) => Literal::Utf16(Arc::from(value.as_utf16())),
     }
+}
+
+/// Where the checked expression is written: the start of its syntax, which is the whitespace in
+/// front of it.
+fn source_position(module: &ModuleData, id: tree::ExpressionId) -> Option<SourcePosition> {
+    let pointer = match module.checked.tree[id].source? {
+        tree::ExpressionSource::Expression(source) => module.stabilized.syntax_ptr(source),
+        tree::ExpressionSource::DoStatement(source) => module.stabilized.syntax_ptr(source),
+    }?;
+    let offset = u32::from(pointer.text_range().start());
+    Some(SourcePosition { file: module.file_id, offset })
+}
+
+fn equation_position(module: &ModuleData, source: tree::EquationSource) -> Option<SourcePosition> {
+    let pointer = match source {
+        tree::EquationSource::Item(EquationSourceId::Value(id)) => module.stabilized.syntax_ptr(id),
+        tree::EquationSource::Item(EquationSourceId::Instance(id)) => {
+            module.stabilized.syntax_ptr(id)
+        }
+        tree::EquationSource::Local(id) => module.stabilized.syntax_ptr(id),
+        tree::EquationSource::Generated { .. } => None,
+    }?;
+    let offset = u32::from(pointer.text_range().start());
+    Some(SourcePosition { file: module.file_id, offset })
 }

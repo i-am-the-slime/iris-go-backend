@@ -68,7 +68,11 @@ impl Immediate {
         else {
             return None;
         };
-        let [GoStatement::Return(Some(returned))] = body.as_slice() else { return None };
+        let ([GoStatement::Return(Some(returned))]
+        | [GoStatement::Line(_), GoStatement::Return(Some(returned))]) = body.as_slice()
+        else {
+            return None;
+        };
         let typed = !is_interface(result) && !is_untyped_constant(returned);
         if !typed || parameters.len() != arguments.len() {
             return None;

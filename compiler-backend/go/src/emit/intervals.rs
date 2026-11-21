@@ -1478,6 +1478,7 @@ impl<'p, 'k, 'e> Analysis<'p, 'k, 'e> {
                     frame.breaks = frame.breaks.join(&state);
                 }
             }
+            GoStatement::Line(_) => {}
         }
     }
 

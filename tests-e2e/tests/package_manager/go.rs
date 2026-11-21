@@ -241,6 +241,68 @@ fn run_go_and_go_copy_the_files_a_dependency_embeds() {
     );
 }
 
+#[test]
+fn run_go_stack_traces_name_the_purescript_lines() {
+    let workspace = TestWorkspace::empty();
+    workspace.write("spago.yaml", "workspace: {}\npackage:\n  name: crasher\n  dependencies: []\n");
+    workspace.write(
+        "src/Effect.purs",
+        "module Effect where\n\nforeign import data Effect :: Type -> Type\n",
+    );
+    workspace.write(
+        "src/Main.purs",
+        r#"module Main where
+
+import Effect (Effect)
+
+foreign import at :: Array Int -> Int -> Int
+foreign import exitWith :: Int -> Effect Int
+
+third :: Array Int -> Int
+third numbers =
+  at numbers 2
+
+main :: Effect Int
+main = exitWith (third [ 1, 2 ])
+"#,
+    );
+    workspace.write(
+        "src/Main.go",
+        "package ffi\n\nfunc At(numbers []int32, index int32) int32 {\n\treturn numbers[index]\n}\n\nfunc ExitWith(status int32) int32 {\n\treturn status\n}\n",
+    );
+
+    let output = workspace.command(&["run", "--go", "--quiet"]);
+    let stderr = workspace.normalize_output(&output.stderr);
+    assert!(stderr.contains("index out of range [2] with length 2"), "{stderr}");
+    let frame = |line: &str| {
+        let line = line.trim();
+        line == "[WORKSPACE]/src/Main.purs:13" || line.starts_with("[WORKSPACE]/src/Main.purs:13 ")
+    };
+    assert!(
+        stderr.lines().any(frame),
+        "the frame of `main`, into which `third` is inlined, names the line calling it:\n{stderr}"
+    );
+
+    workspace.write("go/go.mod", "module example.com/crasher\n\ngo 1.27.0\n");
+    let output = workspace.command(&["go", "--entry", "Main.main", "go"]);
+    assert!(output.status.success(), "{}", workspace.report(&output));
+    let generated = workspace.read("go/main.go");
+    assert!(generated.contains("\n//line ../src/Main.purs:13:8\n"), "{generated}");
+    let formatted = std::process::Command::new("gofmt")
+        .arg(workspace.path().join("go/main.go"))
+        .output()
+        .unwrap();
+    assert!(formatted.status.success(), "{}", String::from_utf8_lossy(&formatted.stderr));
+    assert!(
+        String::from_utf8_lossy(&formatted.stdout).contains("\n//line ../src/Main.purs:13:8\n"),
+        "gofmt keeps the directives at the start of their lines"
+    );
+
+    let output = workspace.command(&["go", "--entry", "Main.main", "--no-line-directives", "go"]);
+    assert!(output.status.success(), "{}", workspace.report(&output));
+    assert!(!workspace.read("go/main.go").contains("//line"));
+}
+
 /// A package whose `main` prints what `Greeting.go` makes of the files it embeds.
 fn greeting_workspace(greeting_go: &str) -> TestWorkspace {
     let workspace = TestWorkspace::empty();

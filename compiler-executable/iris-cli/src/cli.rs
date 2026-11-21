@@ -75,6 +75,11 @@ pub struct GoOptions {
     /// runs and prints its path.
     #[usage(value_name = "DIR")]
     destination: Option<PathBuf>,
+
+    /// Leaves out of the Go written to DIR the //line comments that make stack traces,
+    /// debuggers and profiles point at your .purs files.
+    #[usage(long)]
+    no_line_directives: bool,
 }
 
 /// What `iris go` makes: Go sources in a directory with a go.mod, or an executable.
@@ -93,6 +98,7 @@ impl GoOptions {
                 destination,
                 version,
                 quiet: false,
+                line_directives: !self.no_line_directives,
             }),
             None => GoTarget::Executable(iris_go::ProgramConfig {
                 package: self.package,

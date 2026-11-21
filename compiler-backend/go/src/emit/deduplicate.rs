@@ -11,7 +11,8 @@
 use rayon::prelude::*;
 use rustc_hash::{FxHashMap, FxHashSet};
 
-use crate::syntax::{GoDeclaration, GoExpression, GoType, Name};
+use crate::syntax::{GoDeclaration, GoExpression, GoStatement, GoType, Name};
+use crate::walk;
 
 /// What a declaration's own name reads as when it is compared, so that a
 /// recursive function matches its copies. No Go identifier contains it.
@@ -175,9 +176,13 @@ impl Merging {
 
 /// The declaration as Go reads it, with its locals numbered in order of
 /// appearance and its own name, wherever it refers to itself, made anonymous.
-/// Locals never shadow a declaration, so each name is one or the other.
+/// Locals never shadow a declaration, so each name is one or the other. Where
+/// the code comes from does not matter: `//line` directives are left out.
 fn comparable_text(declaration: &GoDeclaration) -> String {
     let mut declaration = declaration.clone();
+    walk::each_block_in_declaration(&mut declaration, |block| {
+        block.retain(|statement| !matches!(statement, GoStatement::Line(_)))
+    });
     let own = declaration.name().expect("invariant violated: candidate unnamed").to_string();
     let mut locals: FxHashMap<String, String> = FxHashMap::default();
     let number = |name: &mut String, locals: &mut FxHashMap<String, String>| {

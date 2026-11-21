@@ -33,10 +33,13 @@ pub struct ErasedNewtype {
 }
 
 pub struct ModuleData {
+    pub file_id: FileId,
     pub name: SmolStr,
     pub indexed: Arc<IndexedModule>,
     pub checked: Arc<CheckedModule>,
     pub lowered: Arc<lowering::LoweredModule>,
+    /// Where each lowered expression is written, for the source positions of the Go.
+    pub stabilized: Arc<stabilizing::StabilizedModule>,
 }
 
 impl<'q, Q> Context<'q, Q>
@@ -73,7 +76,8 @@ where
         let indexed = self.queries.indexed(file_id)?;
         let checked = self.queries.checked(file_id)?;
         let lowered = self.queries.lowered(file_id)?;
-        let module = Arc::new(ModuleData { name, indexed, checked, lowered });
+        let stabilized = self.queries.stabilized(file_id)?;
+        let module = Arc::new(ModuleData { file_id, name, indexed, checked, lowered, stabilized });
         self.modules.insert(file_id, Arc::clone(&module));
         Ok(module)
     }

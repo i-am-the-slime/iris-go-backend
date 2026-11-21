@@ -82,6 +82,7 @@ pub fn build_program(config: ProgramConfig) -> Result<Program, String> {
         destination: PathBuf::clone(&module),
         version: config.version,
         quiet: config.quiet,
+        line_directives: true,
     })?;
 
     let executable = cache.join("bin").join(format!("{name}{}", env::consts::EXE_SUFFIX));

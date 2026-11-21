@@ -22,6 +22,9 @@ pub struct GoConfig {
     pub version: String,
     /// Leaves out the summary of what was written.
     pub quiet: bool,
+    /// Writes `//line` directives, which make Go's stack traces, debuggers and profiles name
+    /// the PureScript the code comes from.
+    pub line_directives: bool,
 }
 
 mod program;
@@ -50,7 +53,11 @@ pub fn run(config: GoConfig) -> Result<(), String> {
 
     fs::create_dir_all(&config.destination).map_err(|error| error.to_string())?;
     let module_path = go_module_path(&config.destination)?;
-    let foreign_packages = vendor_foreign_packages(&snapshot, &config.destination, &module_path)?;
+    let mut foreign_packages =
+        vendor_foreign_packages(&snapshot, &config.destination, &module_path)?;
+    if config.line_directives {
+        foreign_packages.line_directives = Some(line_directives(&snapshot, &config.destination)?);
+    }
     let backend_started = go::Work::so_far();
     let program = go::compile_program(
         &snapshot.engine,
@@ -162,7 +169,32 @@ fn vendor_foreign_packages(
         })
         .collect();
     let module_path = module_path.to_string();
-    Ok(go::ForeignPackages { module_path, modules, structs, sources, source_paths })
+    let line_directives = None;
+    Ok(go::ForeignPackages {
+        module_path,
+        modules,
+        structs,
+        sources,
+        source_paths,
+        line_directives,
+    })
+}
+
+/// The absolute paths of the destination and of the source files, which `//line` directives
+/// name relative to each other.
+fn line_directives(
+    snapshot: &SessionSnapshot,
+    destination: &Path,
+) -> Result<go::LineDirectives, String> {
+    let absolute = |path: &Path| dunce::canonicalize(path).unwrap_or_else(|_| path.to_path_buf());
+    let go_directory = absolute(destination).display().to_string();
+    let sources = snapshot
+        .files
+        .iter()
+        .filter(|(_, file)| file.kind == SourceKind::Project)
+        .map(|(&file_id, file)| (file_id, absolute(&file.path).display().to_string()))
+        .collect();
+    Ok(go::LineDirectives { go_directory, sources })
 }
 
 /// Copies the files the foreign file embeds with `//go:embed` into its package, at the same

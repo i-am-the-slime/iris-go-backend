@@ -33,6 +33,41 @@ nothing else to set up.
 Want the Go source in a directory of your own instead? `iris go out` writes it to `out/`, which
 needs a `go.mod`.
 
+## Stack traces point at your PureScript
+
+```purescript
+module Main where
+
+import Effect (Effect)
+
+foreign import at :: Array Int -> Int -> Int    -- Main.go: return numbers[index]
+foreign import exitWith :: Int -> Effect Int
+
+main :: Effect Int
+main = exitWith (at [ 1, 2 ] 2)
+```
+
+`iris run --go` crashes with:
+
+```
+panic: runtime error: index out of range [2] with length 2 [recovered, repanicked]
+...
+iris.local/app/Main_ffi.At(...)
+	/home/you/app/.spago/go/app/module/Main_ffi/Main.go:4
+main.main_(...)
+	/home/you/app/src/Main.purs:9
+main.main()
+	/home/you/app/.spago/go/app/module/main.go:18 +0x40
+```
+
+When a Go build crashes, the trace names the lines of your `.purs` files, library code under
+`.spago` included, and so do `pprof` profiles and Delve's breakpoints (for Delve, `go build`
+the output of `iris go out` yourself: `iris run --go` builds without debug info). That's the
+`//line` comments in the generated Go. A function Iris inlines shows up as the line that calls
+it.
+
+They make the Go a bit noisier to read. `iris go --no-line-directives out` leaves them out.
+
 ## What stays the same
 
 - `Int` is a 32-bit integer and wraps on overflow, as `| 0` does in JavaScript.

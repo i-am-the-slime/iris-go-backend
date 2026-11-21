@@ -1,6 +1,7 @@
 //! A small Go syntax tree with a printer that follows `gofmt` layout.
 
 use std::fmt::Write;
+use std::path::{Component, Path, PathBuf};
 use std::sync::Arc;
 
 use rayon::prelude::*;
@@ -181,9 +182,82 @@ pub enum GoStatement {
         label: String,
         body: Vec<GoStatement>,
     },
+    /// A `//line` directive: Go attributes the code after it, up to the next one, to the
+    /// PureScript source.
+    Line(SourceLine),
+}
+
+/// A line of a PureScript source file, as a `//line` directive names it.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SourceLine {
+    pub path: Arc<str>,
+    pub line: u32,
+    pub column: u32,
+}
+
+impl GoExpression {
+    /// Whether evaluating the expression calls a function or indexes; a function literal's body
+    /// does not run where it is written.
+    fn does_work(&self) -> bool {
+        match self {
+            GoExpression::Call { .. }
+            | GoExpression::Index { .. }
+            | GoExpression::TypeAssertion { .. } => true,
+            GoExpression::Function { .. } => false,
+            GoExpression::Binary { left, right, .. } => left.does_work() || right.does_work(),
+            GoExpression::Unary { operand: value, .. }
+            | GoExpression::Field { value, .. }
+            | GoExpression::Address(value)
+            | GoExpression::Conversion { value, .. }
+            | GoExpression::Spread(value)
+            | GoExpression::Instantiation { function: value, .. } => value.does_work(),
+            GoExpression::Composite { fields, .. } => {
+                fields.iter().any(|(_, field)| field.does_work())
+            }
+            GoExpression::Identifier(_)
+            | GoExpression::Qualified { .. }
+            | GoExpression::Integer(_)
+            | GoExpression::Float(_)
+            | GoExpression::String(_)
+            | GoExpression::Utf16(_)
+            | GoExpression::Rune(_)
+            | GoExpression::Boolean(_)
+            | GoExpression::Type(_) => false,
+        }
+    }
 }
 
 impl GoStatement {
+    /// Whether running the statement itself, apart from the blocks in it, calls a function or
+    /// indexes, which can fail.
+    fn does_work(&self) -> bool {
+        match self {
+            GoStatement::Define { values, .. } => values.iter().any(GoExpression::does_work),
+            GoStatement::Assign { targets, values } => {
+                targets.iter().chain(values).any(GoExpression::does_work)
+            }
+            GoStatement::Variable { value: Some(value), .. }
+            | GoStatement::Return(Some(value))
+            | GoStatement::Expression(value)
+            | GoStatement::Defer(value)
+            | GoStatement::If { condition: value, .. }
+            | GoStatement::Switch { value: Some(value), .. }
+            | GoStatement::IfAssert { value, .. }
+            | GoStatement::Range { iterable: value, .. }
+            | GoStatement::CountingDown { start: value, .. } => value.does_work(),
+            GoStatement::Counting { start, end, .. } => start.does_work() || end.does_work(),
+            GoStatement::Variable { value: None, .. }
+            | GoStatement::Return(None)
+            | GoStatement::Switch { value: None, .. }
+            | GoStatement::Loop(_)
+            | GoStatement::Continue
+            | GoStatement::Break
+            | GoStatement::BreakTo(_)
+            | GoStatement::LabeledLoop { .. }
+            | GoStatement::Line(_) => false,
+        }
+    }
+
     /// A call of Go's `panic`, which ends the block like a `return`.
     pub fn is_panic(&self) -> bool {
         matches!(
@@ -332,8 +406,7 @@ impl GoDeclaration {
     }
 
     pub fn render(&self) -> String {
-        let mut printer =
-            Printer { output: String::new(), indentation: 0, census: Default::default() };
+        let mut printer = Printer::default();
         printer.declaration(self);
         printer.output
     }
@@ -560,8 +633,7 @@ impl<F: FnMut(Name<'_>)> Walk for Names<'_, F> {
 impl GoType {
     /// The type as Go spells it, on one line.
     pub fn render(&self) -> String {
-        let mut printer =
-            Printer { output: String::new(), indentation: 0, census: Default::default() };
+        let mut printer = Printer::default();
         printer.type_argument(self)
     }
 }
@@ -582,14 +654,19 @@ pub struct GoImport {
 }
 
 impl GoFile {
-    pub fn render(&self) -> String {
-        self.render_with_census().0
-    }
-
     /// The source together with a count of the `any` it contains, by cause.
     pub fn render_with_census(&self) -> (String, crate::erasure::Census) {
-        let mut printer =
-            Printer { output: String::new(), indentation: 0, census: Default::default() };
+        self.render_at(None)
+    }
+
+    /// [`Self::render_with_census`] for the file at `path`, whose `//line` directives name the
+    /// PureScript relative to the file's directory, and the file itself in front of a
+    /// declaration that follows PureScript code and comes from none itself, so that Go
+    /// attributes that declaration to the Go file again.
+    pub fn render_at(&self, path: Option<&Path>) -> (String, crate::erasure::Census) {
+        let directory = path.map(|path| Arc::from(path.parent().unwrap_or(Path::new(""))));
+        let file_name = path.and_then(Path::file_name).map(|name| name.to_string_lossy());
+        let mut printer = Printer::default();
         if let Some(constraint) = self.constraint {
             let _ = writeln!(printer.output, "//go:build {constraint}\n");
         }
@@ -621,8 +698,7 @@ impl GoFile {
             .declarations
             .par_iter()
             .map(|declaration| {
-                let mut printer =
-                    Printer { output: String::new(), indentation: 0, census: Default::default() };
+                let mut printer = Printer { directory: directory.clone(), ..Printer::default() };
                 printer.output.push('\n');
                 printer.declaration(declaration);
                 (printer.output, printer.census)
@@ -632,17 +708,42 @@ impl GoFile {
             printer.output.push_str(&output);
             printer.census.absorb(census);
         }
-        (printer.output, printer.census)
+        match file_name {
+            Some(file_name) => {
+                (settle_line_directives(&printer.output, &file_name), printer.census)
+            }
+            None => (printer.output, printer.census),
+        }
     }
 }
 
+#[derive(Default)]
 struct Printer {
     output: String,
     indentation: usize,
     census: crate::erasure::Census,
+    /// The PureScript line the statements being printed come from.
+    attribution: Option<SourceLine>,
+    /// Whether the emitter put the attribution in front of the next statement; any other
+    /// statement is named only where it does work, which a trace or a profile shows.
+    placed: bool,
+    /// The directory of the Go file, which directives name the PureScript relative to.
+    directory: Option<Arc<Path>>,
 }
 
 impl Printer {
+    /// Names the line the next statement comes from: [`settle_line_directives`] leaves out the
+    /// directives that name the line Go would count to anyway.
+    fn name_attribution(&mut self) {
+        let Some(SourceLine { path, line, column }) = &self.attribution else { return };
+        let shown = match &self.directory {
+            Some(directory) => relative_path(directory, Path::new(&**path)),
+            None => PathBuf::from(&**path),
+        };
+        let shown = shown.to_string_lossy().replace('\\', "/");
+        let _ = writeln!(self.output, "//line {shown}:{line}:{column}");
+    }
+
     fn line(&mut self, text: &str) {
         for _ in 0..self.indentation {
             self.output.push('\t');
@@ -706,6 +807,10 @@ impl Printer {
                 }
             }
             GoDeclaration::Function { name, parameters, result, body } => {
+                if let Some(GoStatement::Line(line)) = body.first() {
+                    self.attribution = Some(line.clone());
+                    self.name_attribution();
+                }
                 let signature = self.signature(parameters, result.as_ref());
                 self.line(&format!("func {name}{signature} {{"));
                 self.block(body);
@@ -726,15 +831,28 @@ impl Printer {
     }
 
     fn block(&mut self, statements: &[GoStatement]) {
+        let enclosing = self.attribution.clone();
         self.indentation += 1;
         for statement in statements {
             self.statement(statement);
         }
         self.indentation -= 1;
+        self.attribution = enclosing;
     }
 
     fn statement(&mut self, statement: &GoStatement) {
+        if let GoStatement::Line(line) = statement {
+            self.attribution = Some(line.clone());
+            self.placed = true;
+            return;
+        }
+        // A loop does nothing of its own: the statements in it name their lines.
+        let looping = matches!(statement, GoStatement::Loop(_) | GoStatement::LabeledLoop { .. });
+        if (std::mem::take(&mut self.placed) && !looping) || statement.does_work() {
+            self.name_attribution();
+        }
         match statement {
+            GoStatement::Line(_) => {}
             GoStatement::Define { names, values } => {
                 let values: Vec<String> =
                     values.iter().map(|value| self.expression(value, 0)).collect();
@@ -862,12 +980,22 @@ impl Printer {
 
     fn else_chain(&mut self, otherwise: &[GoStatement]) {
         match otherwise {
-            [] => self.line("}"),
+            otherwise
+                if otherwise.iter().all(|statement| matches!(statement, GoStatement::Line(_))) =>
+            {
+                self.line("}")
+            }
             [GoStatement::If { condition, then, otherwise }] => {
                 let condition = self.expression(condition, 0);
                 self.line(&format!("}} else if {condition} {{"));
                 self.block(then);
                 self.else_chain(otherwise);
+            }
+            [GoStatement::Line(line), chained @ GoStatement::If { .. }] => {
+                let enclosing = self.attribution.replace(line.clone());
+                self.name_attribution();
+                self.else_chain(std::slice::from_ref(chained));
+                self.attribution = enclosing;
             }
             _ => {
                 self.line("} else {");
@@ -1108,5 +1236,77 @@ fn go_rune(value: char) -> String {
         '\t' => "'\\t'".into(),
         character if needs_escape(character) => format!("'\\u{:04x}'", character as u32),
         character => format!("'{character}'"),
+    }
+}
+
+/// `path` as seen from `directory`, both absolute or both relative to the same directory.
+fn relative_path(directory: &Path, path: &Path) -> PathBuf {
+    let directory: Vec<Component> = directory.components().collect();
+    let path: Vec<Component> = path.components().collect();
+    let common = directory.iter().zip(&path).take_while(|(left, right)| left == right).count();
+    // Two trees that share no more than the root are named absolutely.
+    if directory
+        .first()
+        .is_some_and(|first| matches!(first, Component::RootDir | Component::Prefix(_)))
+        && common <= 1 + usize::from(matches!(directory.first(), Some(Component::Prefix(_))))
+    {
+        return path.iter().collect();
+    }
+    let mut relative = PathBuf::new();
+    for _ in common..directory.len() {
+        relative.push("..");
+    }
+    path[common..].iter().for_each(|component| relative.push(component));
+    relative
+}
+
+/// The file's text with only the `//line` directives Go needs: Go counts lines on from the last
+/// directive, so one that names the line Go counts to anyway is left out. A declaration that
+/// follows PureScript code without naming any itself is attributed to the Go file again.
+fn settle_line_directives(text: &str, file_name: &str) -> String {
+    let mut settled = String::with_capacity(text.len());
+    // The file and line Go attributes the next line to, and the next line's number in the file.
+    let mut counted: Option<(&str, u32)> = None;
+    let mut written = 1;
+    let mut previous_blank = false;
+    for line in text.lines() {
+        if let Some((path, number)) = directive(line) {
+            if counted != Some((path, number)) {
+                settled.push_str(line);
+                settled.push('\n');
+                written += 1;
+                counted = Some((path, number));
+            }
+            previous_blank = false;
+            continue;
+        }
+        let starts_declaration = previous_blank
+            && line
+                .starts_with(|first: char| !first.is_whitespace() && first != '}' && first != ')');
+        if starts_declaration
+            && let Some((path, number)) = counted
+            && (path != file_name || number != written)
+        {
+            let _ = writeln!(settled, "//line {file_name}:{}", written + 1);
+            written += 1;
+            counted = None;
+        }
+        settled.push_str(line);
+        settled.push('\n');
+        written += 1;
+        counted = counted.map(|(path, number)| (path, number + 1));
+        previous_blank = line.is_empty();
+    }
+    settled
+}
+
+/// The file and line a `//line file:line[:column]` directive names.
+fn directive(line: &str) -> Option<(&str, u32)> {
+    let named = line.strip_prefix("//line ")?;
+    let (rest, last) = named.rsplit_once(':')?;
+    let last: u32 = last.parse().ok()?;
+    match rest.rsplit_once(':') {
+        Some((path, line)) if line.parse::<u32>().is_ok() => Some((path, line.parse().ok()?)),
+        _ => Some((rest, last)),
     }
 }

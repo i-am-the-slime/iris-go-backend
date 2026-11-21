@@ -307,7 +307,8 @@ impl Kind {
             | GoStatement::Variable { .. }
             | GoStatement::Assign { .. }
             | GoStatement::Expression(_)
-            | GoStatement::If { .. } => Kind::Plain,
+            | GoStatement::If { .. }
+            | GoStatement::Line(_) => Kind::Plain,
             _ => return None,
         })
     }
