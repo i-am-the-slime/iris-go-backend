@@ -92,6 +92,46 @@ defines (`NaN`, infinities, `-0`, `pow` with a `NaN` exponent or a base of ±1) 
 program that needs one engine's exact digits can bring its own implementation through a foreign
 import.
 
+### `Foreign.Object` key order
+
+```purescript
+Object.keys (Object.fromFoldable [ "b" /\ 1, "10" /\ 2, "a" /\ 3, "2" /\ 4 ])
+-- Go:         ["b","10","a","2"]
+-- JavaScript: ["2","10","b","a"]
+```
+
+Go keeps keys in the order you inserted them. JavaScript lists keys that look like array indices
+first, in numeric order. `Foreign.Object` doesn't promise any order, and this goes for `keys`,
+`values`, folds, `toUnfoldable`, `show` and JSON objects (argonaut and yoga-json) alike. Want
+sorted keys? Use `Object.toAscUnfoldable`, or sort the keys yourself.
+
+### `replace` and `replaceAll`
+
+```purescript
+String.replace (Pattern "b") (Replacement "[$&]") "abc"
+-- Go:         "a[$&]c"
+-- JavaScript: "a[b]c"
+```
+
+The `Replacement` goes in exactly as you wrote it. JavaScript expands `$$`, `$&`, `` $` `` and `$'`
+in it. `Data.String.Regex.replace` is a regex replacement and still expands `$1` and friends.
+
+### Error messages
+
+Messages that the libraries don't spell out are Go's own:
+
+| Call | Go | JavaScript (Bun) |
+|---|---|---|
+| `jsonParser "[1,]"` (argonaut) | `Invalid JSON at offset 3` | `JSON Parse error: Unexpected comma at the end of array expression` |
+| `regex "(" noFlags` | ``Invalid regex /(/: missing closing ): `(` `` | `Invalid regular expression: missing )` |
+
+The offset counts UTF-16 code units from the start of the input. Whether something parses is the
+same in both.
+
+### `JS.BigInt.fromString` of a lone sign
+
+`fromString "-"` and `fromString "+"` are `Nothing`. Bun says `Just 0`, Node throws.
+
 ### Unused top-level effects
 
 The Go backend compiles only the definitions that `main` reaches. A top-level value that nothing
@@ -102,7 +142,8 @@ in JavaScript.
 ### Deep recursion
 
 Go stacks grow to 1 GB, so recursion that is not tail-recursive goes far deeper before it fails.
-A program that overflows the JavaScript stack with a `RangeError` may finish in Go. A Go stack
+A program that overflows the JavaScript stack with a `RangeError` may finish in Go, and so does
+`Data.BigInt.toBase 1` of a large number. A Go stack
 overflow is a fatal Go runtime error, not a PureScript exception, so `try` and `catchException`
 cannot catch it.
 
