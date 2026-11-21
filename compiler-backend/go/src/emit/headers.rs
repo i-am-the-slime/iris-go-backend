@@ -6,7 +6,8 @@
 //!
 //! Some code cannot change any array's header: it assigns nothing through a
 //! pointer (a push assigns `*array`), makes no closure, and calls only
-//! builtins that measure, the pure part of the runtime, and functions that
+//! builtins that measure, runtime functions the foreign tables describe as
+//! pure, and functions that
 //! cannot change a header either. In such code the slice `*array` is the
 //! same at every point, and an element written through one copy of it is
 //! written in the array.
@@ -28,15 +29,9 @@ use rustc_hash::{FxHashMap, FxHashSet};
 
 use super::aliases::target_root;
 use super::locals::NUMBERED;
+use crate::foreign::{self, GoPackage};
 use crate::syntax::{GoDeclaration, GoExpression, GoStatement, GoType};
 use crate::walk::{self, Walk};
-
-/// Runtime functions in `prim` that compute from their arguments alone. The
-/// others run effects they are handed, as `STFor` and `RunEffectFn2` do.
-const PURE_RUNTIME: &[&str] = &[
-    "Number", "Int", "String", "Show", "Char", "CodeUnit", "Big", "Num", "Eq", "Ord", "To",
-    "From", "Append", "Rune",
-];
 
 pub(super) fn read_headers_once(declarations: &mut [GoDeclaration]) {
     let keeping = Keeping::of(declarations);
@@ -51,6 +46,11 @@ pub(super) fn read_headers_once(declarations: &mut [GoDeclaration]) {
         }
         hoist_in_loops(body, &keeping, &sliced, &mut names);
     }
+}
+
+/// A runtime function the foreign tables describe as pure.
+fn is_pure_runtime(package: &str, name: &str) -> bool {
+    package == GoPackage::Prim.name() && foreign::is_pure_runtime_function(name)
 }
 
 /// The functions that cannot change an array's header.
@@ -108,9 +108,7 @@ impl Keeping {
             GoExpression::Identifier(name) => {
                 matches!(name.as_str(), "len" | "cap") || self.functions.contains(name.as_str())
             }
-            GoExpression::Qualified { package, name } => {
-                package == "prim" && PURE_RUNTIME.iter().any(|prefix| name.starts_with(prefix))
-            }
+            GoExpression::Qualified { package, name } => is_pure_runtime(package, name),
             _ => false,
         }
     }
@@ -621,9 +619,7 @@ fn calls_only_pure(body: &mut [GoStatement]) -> bool {
             GoExpression::Call { function, .. } => {
                 pure &= match &**function {
                     GoExpression::Identifier(name) => matches!(name.as_str(), "len" | "cap"),
-                    GoExpression::Qualified { package, name } => {
-                        package == "prim" && PURE_RUNTIME.iter().any(|prefix| name.starts_with(prefix))
-                    }
+                    GoExpression::Qualified { package, name } => is_pure_runtime(package, name),
                     _ => false,
                 };
             }
@@ -712,4 +708,64 @@ fn fresh(base: &str, names: &mut FxHashSet<String>) -> String {
     }
     names.insert(candidate.clone());
     candidate
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn identifier(name: &str) -> GoExpression {
+        GoExpression::Identifier(name.into())
+    }
+
+    fn prim_call(name: &str, argument: GoExpression) -> GoExpression {
+        let function = GoExpression::Qualified { package: "prim".into(), name: name.into() };
+        GoExpression::Call { function: Box::new(function), arguments: vec![argument] }
+    }
+
+    /// `func f(xs *[]float64) { for i := 0; i < 3; i++ { (*xs)[i] = <prim>((*xs)[i]) } }`
+    fn indexing_loop(runtime: &str) -> GoDeclaration {
+        let element = GoExpression::Index {
+            value: Box::new(deref(identifier("xs"))),
+            index: Box::new(identifier("i")),
+        };
+        let store = GoStatement::Assign {
+            targets: vec![element.clone()],
+            values: vec![prim_call(runtime, element)],
+        };
+        let counting = GoStatement::Counting {
+            variable: "i".into(),
+            start: GoExpression::Integer(0),
+            end: GoExpression::Integer(3),
+            body: vec![store],
+        };
+        GoDeclaration::Function {
+            name: "f".into(),
+            parameters: vec![(
+                "xs".into(),
+                GoType::Pointer(Box::new(GoType::Slice(Box::new(GoType::Float64)))),
+            )],
+            result: None,
+            body: vec![counting],
+        }
+    }
+
+    fn rendered(runtime: &str) -> String {
+        let mut declarations = vec![indexing_loop(runtime)];
+        read_headers_once(&mut declarations);
+        declarations[0].render()
+    }
+
+    #[test]
+    fn a_loop_calling_a_described_pure_runtime_function_reads_the_slice_once() {
+        let rendered = rendered("NumberSqrt");
+        assert!(rendered.contains("func f(xs []float64)"), "{rendered}");
+    }
+
+    #[test]
+    fn a_runtime_function_with_a_pure_looking_name_that_no_table_describes_is_not_pure() {
+        let rendered = rendered("NumberPushAll");
+        assert!(rendered.contains("func f(xs *[]float64)"), "{rendered}");
+        assert!(!rendered.contains("elements"), "{rendered}");
+    }
 }
