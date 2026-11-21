@@ -11,7 +11,7 @@
 #   compiler-backend/go/scripts/quality.sh --update SCOPE DIR...  # lower baseline
 #   compiler-backend/go/scripts/quality.sh --lint DIR...          # gofmt -s, staticcheck
 #
-# SCOPE names a row group in the baseline (e.g. examples, markgraf-cli). DIR
+# SCOPE names a row group in the baseline (e.g. examples). DIR
 # holds generated .go files, searched recursively. --update only ever lowers
 # numbers; raising one requires editing the baseline by hand in a reviewed
 # change that says why.

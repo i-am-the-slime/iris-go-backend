@@ -34,8 +34,6 @@ Work is done when every gate passes. A passing gate that was weakened to pass do
 - `compiler-backend/go/scripts/run-examples.sh` runs every example, compares its output with JS, and
   then checks generated-Go quality with `scripts/quality.sh`.
 - `compiler-backend/go/scripts/markgraf/run.sh` checks that the compactor's output equals JS.
-- The Markgraf CLI's generated Go is checked with
-  `compiler-backend/go/scripts/quality.sh markgraf-cli <generated dir>`.
 - `just integration` runs the snapshot tests.
 
 `quality-baseline.txt` holds the number of escape hatches (`any`, type assertions, `reflect`,
