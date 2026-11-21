@@ -2,7 +2,10 @@ module Main where
 
 import Prelude
 
+import Data.Array (length, (..))
 import Data.Either (Either(..))
+import Data.Foldable (foldl)
+import Data.Int (toNumber)
 import Effect (Effect)
 import Effect.Exception (throw)
 import Effect.Ref as Ref
@@ -50,6 +53,11 @@ main = do
     throw "the suit is wrong"
   when (describe total /= "positive") do
     throw "the description is wrong"
+  let prices = map toNumber (1 .. (total + 40))
+  let doubled = map (\price -> price * 2.0) prices
+  let sum = foldl (+) 0.0 doubled
+  when (sum /= 1892.0 || length doubled /= 43) do
+    throw "the total is wrong"
   suits <- Ref.new Spades
   suit <- Ref.read suits
   case suit of

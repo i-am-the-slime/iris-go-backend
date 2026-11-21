@@ -370,6 +370,7 @@ pub enum GoDeclaration {
     Written {
         name: String,
         source: String,
+        line: Option<SourceLine>,
     },
 }
 
@@ -878,7 +879,8 @@ impl Printer {
                 GoDeclaration::Type { line, .. }
                 | GoDeclaration::Alias { line, .. }
                 | GoDeclaration::Constants { line, .. }
-                | GoDeclaration::Variable { line, .. } => line.clone(),
+                | GoDeclaration::Variable { line, .. }
+                | GoDeclaration::Written { line, .. } => line.clone(),
                 _ => None,
             };
             self.name_every_line();
@@ -886,6 +888,9 @@ impl Printer {
         match declaration {
             GoDeclaration::Source { name, template } => {
                 self.output.push_str(&template.replace("{name}", name));
+            }
+            GoDeclaration::Written { source, line: Some(_), .. } if self.every => {
+                self.named_lines(source.strip_suffix('\n').unwrap_or(source))
             }
             GoDeclaration::Written { source, .. } => self.output.push_str(source),
             GoDeclaration::Type { name, type_, member_lines, .. } => {

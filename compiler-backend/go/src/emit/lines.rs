@@ -226,6 +226,10 @@ impl Spans {
         }
     }
 
+    pub(super) fn enclosing(&self) -> Option<&SourceLine> {
+        self.enclosing.as_ref()
+    }
+
     pub(super) fn leave(&mut self, enclosing: Option<SourceLine>) {
         self.enclosing = enclosing;
     }

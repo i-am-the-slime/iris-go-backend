@@ -46,7 +46,9 @@ use crate::mono::{Expression, ExpressionKind, FunctionId, Literal, Local, LocalI
 use crate::monotype::{Monotype, MonotypeId};
 use crate::primitives::{Int64Operation, Signedness};
 use crate::naming::GO_PREDECLARED;
-use crate::syntax::{GoDeclaration, GoExpression, GoFile, GoImport, GoStatement, Reference};
+use crate::syntax::{
+    GoDeclaration, GoExpression, GoFile, GoImport, GoStatement, Reference, SourceLine,
+};
 
 const NEON_CONSTRAINT: &str = "goexperiment.simd && arm64";
 const PORTABLE_CONSTRAINT: &str = "goexperiment.simd && wasm";
@@ -71,6 +73,7 @@ struct KernelSource {
     portable: String,
     scalar: String,
     imports_math: bool,
+    line: Option<SourceLine>,
 }
 
 impl<'p, 'q, Q> Emitter<'p, '_, 'q, Q>
@@ -90,7 +93,8 @@ where
             return Ok(None);
         };
         let Plan { kernel, inputs, captures, initial } = plan;
-        let name = self.kernel_name(&kernel);
+        let line = self.spans.enclosing().cloned();
+        let name = self.kernel_name(&kernel, line);
         let mut values = vec![];
         for input in inputs {
             values.push(self.value(input, out)?);
@@ -156,7 +160,7 @@ where
         Some(Plan { kernel, inputs, captures, initial })
     }
 
-    fn kernel_name(&mut self, kernel: &Kernel) -> String {
+    fn kernel_name(&mut self, kernel: &Kernel, line: Option<SourceLine>) -> String {
         let neon = kernel.vector_source(Flavor::Neon);
         let portable = kernel.vector_source(Flavor::Portable);
         let scalar = kernel.scalar_source();
@@ -178,6 +182,7 @@ where
             portable: portable.replace("{name}", &name),
             scalar: scalar.replace("{name}", &name),
             imports_math,
+            line,
         });
         name
     }
@@ -236,9 +241,10 @@ pub(super) fn attach_kernels(files: &mut Vec<GoSourceFile>, kernels: &Kernels) {
             }
             imports
         };
-        let written = |text: &str, name: &str| GoDeclaration::Written {
-            name: name.to_string(),
+        let written = |text: &str, source: &KernelSource| GoDeclaration::Written {
+            name: source.name.clone(),
             source: text.to_string(),
+            line: source.line.clone(),
         };
         added.push(GoSourceFile {
             path: format!("{stem}_neon.go"),
@@ -246,7 +252,7 @@ pub(super) fn attach_kernels(files: &mut Vec<GoSourceFile>, kernels: &Kernels) {
                 constraint: Some(NEON_CONSTRAINT),
                 package: package.clone(),
                 imports: imports("simd/archsimd"),
-                declarations: called.iter().map(|s| written(&s.neon, &s.name)).collect(),
+                declarations: called.iter().map(|s| written(&s.neon, s)).collect(),
             },
         });
         added.push(GoSourceFile {
@@ -255,7 +261,7 @@ pub(super) fn attach_kernels(files: &mut Vec<GoSourceFile>, kernels: &Kernels) {
                 constraint: Some(PORTABLE_CONSTRAINT),
                 package: package.clone(),
                 imports: imports("simd"),
-                declarations: called.iter().map(|s| written(&s.portable, &s.name)).collect(),
+                declarations: called.iter().map(|s| written(&s.portable, s)).collect(),
             },
         });
         added.push(GoSourceFile {
@@ -264,7 +270,7 @@ pub(super) fn attach_kernels(files: &mut Vec<GoSourceFile>, kernels: &Kernels) {
                 constraint: Some(SCALAR_CONSTRAINT),
                 package,
                 imports: vec![],
-                declarations: called.iter().map(|s| written(&s.scalar, &s.name)).collect(),
+                declarations: called.iter().map(|s| written(&s.scalar, s)).collect(),
             },
         });
     }

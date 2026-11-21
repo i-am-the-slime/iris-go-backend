@@ -16,153 +16,330 @@ func ThrowUnit(x string) {
 // main.go
 package main
 
-import "fixture/Effect/Exception"
-
-//line Main.purs:10:1
-type Tree struct {
-//line Main.purs:10:20
-	Node0 *Tree
-//line Main.purs:10:20
-	Node2 *Tree
-//line Main.purs:10:20
-	Node1 int32
-//line Main.purs:10:1
-}
-
-//line Main.purs:10:13
-var sharedTreeLeaf = &Tree{}
-
-//line Main.purs:12:1
-type Suit uint8
-
-//line Main.purs:12:1
-const (
-//line Main.purs:12:13
-	SuitHearts Suit = iota
-//line Main.purs:12:22
-	SuitSpades
-//line Main.purs:12:1
+import (
+	"fixture/Effect/Exception"
+	"github.com/i-am-the-slime/iris-go/array"
 )
 
-//line Main.purs:43:1
+//line Main.purs:13:1
+type Tree struct {
+//line Main.purs:13:20
+	Node0 *Tree
+//line Main.purs:13:20
+	Node2 *Tree
+//line Main.purs:13:20
+	Node1 int32
+//line Main.purs:13:1
+}
+
+//line Main.purs:13:13
+var sharedTreeLeaf = &Tree{}
+
+//line Main.purs:15:1
+type Suit uint8
+
+//line Main.purs:15:1
+const (
+//line Main.purs:15:13
+	SuitHearts Suit = iota
+//line Main.purs:15:22
+	SuitSpades
+//line Main.purs:15:1
+)
+
+//line Main.purs:46:1
 func main() {
-//line Main.purs:44:14
+//line Main.purs:47:14
 	var counter int32 = 3
-//line Main.purs:47:3
+//line Main.purs:50:3
 	if size(insert(counter, insert(1, insert(5, sharedTreeLeaf)))) != 3 {
-//line Main.purs:48:5
+//line Main.purs:51:5
 		effectexception.ThrowUnit("the size is wrong")
-//line Main.purs:47:3
+//line Main.purs:50:3
 	}
-//line Main.purs:49:9
+//line Main.purs:52:9
 	var result string
-//line Main.purs:49:18
+//line Main.purs:52:18
 	if counter > 2 {
-//line Main.purs:15:17
+//line Main.purs:18:17
 		result = "hearts"
-//line Main.purs:16:17
+//line Main.purs:19:17
 	} else {
-//line Main.purs:16:17
+//line Main.purs:19:17
 		result = "spades"
-//line Main.purs:49:18
+//line Main.purs:52:18
 	}
-//line Main.purs:49:3
+//line Main.purs:52:3
 	if result != "hearts" {
-//line Main.purs:50:5
+//line Main.purs:53:5
 		effectexception.ThrowUnit("the suit is wrong")
-//line Main.purs:49:3
+//line Main.purs:52:3
 	}
-//line Main.purs:51:9
+//line Main.purs:54:9
 	var result2 string
-//line Main.purs:33:6
+//line Main.purs:36:6
 	if counter < 0 {
-//line Main.purs:33:17
+//line Main.purs:36:17
 		result2 = "negative"
-//line Main.purs:34:11
+//line Main.purs:37:11
 	} else if counter == 0 {
-//line Main.purs:34:23
+//line Main.purs:37:23
 		result2 = "zero"
-//line Main.purs:35:8
+//line Main.purs:38:8
 	} else {
-//line Main.purs:35:8
+//line Main.purs:38:8
 		result2 = "positive"
-//line Main.purs:34:11
+//line Main.purs:37:11
 	}
-//line Main.purs:51:3
+//line Main.purs:54:3
 	if result2 != "positive" {
-//line Main.purs:52:5
+//line Main.purs:55:5
 		effectexception.ThrowUnit("the description is wrong")
-//line Main.purs:51:3
+//line Main.purs:54:3
 	}
-//line Main.purs:53:12
+//line Main.purs:57:17
+	step, count := array.RangeSteps(1, counter+40)
+//line Main.purs:57:17
+	mapped := make([]float64, count)
+//line Main.purs:57:17
+	for index := range count {
+//line Main.purs:57:17
+		i := 1 + int32(index)*step
+//line Main.purs:57:17
+		price := float64(i)
+//line Main.purs:57:17
+		mapped[index] = price * 2.0
+//line Main.purs:57:17
+	}
+//line Main.purs:59:3
+	if foldLanes(mapped, 0.0) != 1892.0 || int32(len(mapped)) != 43 {
+//line Main.purs:60:5
+		effectexception.ThrowUnit("the total is wrong")
+//line Main.purs:59:3
+	}
+//line Main.purs:61:12
 	suits := SuitSpades
-//line Main.purs:55:3
+//line Main.purs:63:3
 	switch suits {
-//line Main.purs:56:5
+//line Main.purs:64:5
 	case SuitHearts:
-//line Main.purs:57:7
+//line Main.purs:65:7
 		effectexception.ThrowUnit("the suit is hearts")
-//line Main.purs:58:5
+//line Main.purs:66:5
 	default: // SuitSpades
-//line Main.purs:59:7
+//line Main.purs:67:7
 		suits = SuitHearts
-//line Main.purs:55:3
+//line Main.purs:63:3
 	}
-//line Main.purs:39:5
+//line Main.purs:42:5
 	if counter > 100 {
-//line Main.purs:62:7
-		effectexception.ThrowUnit( /*line Main.purs:39:20*/ "too big" /*line Main.purs:62:7*/)
-//line Main.purs:62:7
+//line Main.purs:70:7
+		effectexception.ThrowUnit( /*line Main.purs:42:20*/ "too big" /*line Main.purs:70:7*/)
+//line Main.purs:70:7
 		return
-//line Main.purs:39:5
+//line Main.purs:42:5
 	}
-//line Main.purs:64:7
+//line Main.purs:72:7
 	counter += 1
-//line Main.purs:43:1
+//line Main.purs:46:1
 }
 
-//line Main.purs:19:1
+//line Main.purs:22:1
 func insert(x int32, value *Tree) *Tree {
-//line Main.purs:20:3
+//line Main.purs:23:3
 	if value == sharedTreeLeaf {
-//line Main.purs:20:11
+//line Main.purs:23:11
 		return &Tree{Node0: sharedTreeLeaf, Node1: x, Node2: sharedTreeLeaf}
-//line Main.purs:20:3
+//line Main.purs:23:3
 	}
-//line Main.purs:21:3
+//line Main.purs:24:3
 	left := value.Node0
-//line Main.purs:21:3
+//line Main.purs:24:3
 	y := value.Node1
-//line Main.purs:21:3
+//line Main.purs:24:3
 	right := value.Node2
-//line Main.purs:22:7
+//line Main.purs:25:7
 	if x < y {
-//line Main.purs:22:16
+//line Main.purs:25:16
 		return &Tree{Node0: insert(x, left), Node1: y, Node2: right}
-//line Main.purs:22:7
+//line Main.purs:25:7
 	}
-//line Main.purs:23:7
+//line Main.purs:26:7
 	if x > y {
-//line Main.purs:23:16
+//line Main.purs:26:16
 		return &Tree{Node0: left, Node1: y, Node2: insert(x, right)}
-//line Main.purs:23:7
+//line Main.purs:26:7
 	}
-//line Main.purs:24:20
+//line Main.purs:27:20
 	return value
-//line Main.purs:19:1
+//line Main.purs:22:1
 }
 
-//line Main.purs:27:1
+//line Main.purs:30:1
 func size(value *Tree) int32 {
-//line Main.purs:28:3
+//line Main.purs:31:3
 	if value == sharedTreeLeaf {
-//line Main.purs:28:11
+//line Main.purs:31:11
 		return 0
-//line Main.purs:28:3
+//line Main.purs:31:3
 	}
-//line Main.purs:29:24
+//line Main.purs:32:24
 	return size(value.Node0) + 1 + size(value.Node2)
-//line Main.purs:27:1
+//line Main.purs:30:1
+}
+
+// main_neon.go
+//go:build goexperiment.simd && arm64
+
+package main
+
+import (
+	"math"
+	"simd/archsimd"
+)
+
+//line Main.purs:58:13
+func foldLanes(xs []float64, initial float64) float64 {
+//line Main.purs:58:13
+	acc0 := archsimd.BroadcastFloat64x2(math.Copysign(0, -1))
+//line Main.purs:58:13
+	acc1, acc2, acc3 := acc0, acc0, acc0
+//line Main.purs:58:13
+	const step = 2
+//line Main.purs:58:13
+	i := 0
+//line Main.purs:58:13
+	for ; i < len(xs)-4*step+1; i += 4 * step {
+//line Main.purs:58:13
+		x0 := archsimd.LoadFloat64x2(xs[i : i+step])
+//line Main.purs:58:13
+		acc0 = acc0.Add(x0)
+//line Main.purs:58:13
+		x1 := archsimd.LoadFloat64x2(xs[i+step : i+2*step])
+//line Main.purs:58:13
+		acc1 = acc1.Add(x1)
+//line Main.purs:58:13
+		x2 := archsimd.LoadFloat64x2(xs[i+2*step : i+3*step])
+//line Main.purs:58:13
+		acc2 = acc2.Add(x2)
+//line Main.purs:58:13
+		x3 := archsimd.LoadFloat64x2(xs[i+3*step : i+4*step])
+//line Main.purs:58:13
+		acc3 = acc3.Add(x3)
+//line Main.purs:58:13
+	}
+//line Main.purs:58:13
+	acc0 = acc0.Add(acc1).Add(acc2.Add(acc3))
+//line Main.purs:58:13
+	var lanes [2]float64
+//line Main.purs:58:13
+	acc0.Store(lanes[:])
+//line Main.purs:58:13
+	accumulator := initial
+//line Main.purs:58:13
+	for _, lane := range lanes[:step] {
+//line Main.purs:58:13
+		accumulator = accumulator + lane
+//line Main.purs:58:13
+	}
+//line Main.purs:58:13
+	for ; i < len(xs); i++ {
+//line Main.purs:58:13
+		x := xs[i]
+//line Main.purs:58:13
+		accumulator = accumulator + x
+//line Main.purs:58:13
+	}
+//line Main.purs:58:13
+	return accumulator
+//line Main.purs:58:13
+}
+
+// main_scalar.go
+//go:build !(goexperiment.simd && (arm64 || wasm))
+
+package main
+
+//line Main.purs:58:13
+func foldLanes(xs []float64, initial float64) float64 {
+//line Main.purs:58:13
+	accumulator := initial
+//line Main.purs:58:13
+	for _, x := range xs {
+//line Main.purs:58:13
+		accumulator = accumulator + x
+//line Main.purs:58:13
+	}
+//line Main.purs:58:13
+	return accumulator
+//line Main.purs:58:13
+}
+
+// main_vector.go
+//go:build goexperiment.simd && wasm
+
+package main
+
+import (
+	"math"
+	"simd"
+)
+
+//line Main.purs:58:13
+func foldLanes(xs []float64, initial float64) float64 {
+//line Main.purs:58:13
+	acc0 := simd.BroadcastFloat64s(math.Copysign(0, -1))
+//line Main.purs:58:13
+	acc1, acc2, acc3 := acc0, acc0, acc0
+//line Main.purs:58:13
+	step := acc0.Len()
+//line Main.purs:58:13
+	i := 0
+//line Main.purs:58:13
+	for ; i < len(xs)-4*step+1; i += 4 * step {
+//line Main.purs:58:13
+		x0 := simd.LoadFloat64s(xs[i : i+step])
+//line Main.purs:58:13
+		acc0 = acc0.Add(x0)
+//line Main.purs:58:13
+		x1 := simd.LoadFloat64s(xs[i+step : i+2*step])
+//line Main.purs:58:13
+		acc1 = acc1.Add(x1)
+//line Main.purs:58:13
+		x2 := simd.LoadFloat64s(xs[i+2*step : i+3*step])
+//line Main.purs:58:13
+		acc2 = acc2.Add(x2)
+//line Main.purs:58:13
+		x3 := simd.LoadFloat64s(xs[i+3*step : i+4*step])
+//line Main.purs:58:13
+		acc3 = acc3.Add(x3)
+//line Main.purs:58:13
+	}
+//line Main.purs:58:13
+	acc0 = acc0.Add(acc1).Add(acc2.Add(acc3))
+//line Main.purs:58:13
+	var lanes [8]float64
+//line Main.purs:58:13
+	acc0.Store(lanes[:])
+//line Main.purs:58:13
+	accumulator := initial
+//line Main.purs:58:13
+	for _, lane := range lanes[:step] {
+//line Main.purs:58:13
+		accumulator = accumulator + lane
+//line Main.purs:58:13
+	}
+//line Main.purs:58:13
+	for ; i < len(xs); i++ {
+//line Main.purs:58:13
+		x := xs[i]
+//line Main.purs:58:13
+		accumulator = accumulator + x
+//line Main.purs:58:13
+	}
+//line Main.purs:58:13
+	return accumulator
+//line Main.purs:58:13
 }
 
 // shared/shared.go
