@@ -345,7 +345,9 @@ impl Walk {
                     self.type_(result);
                 }
             }
-            GoType::Struct(fields) => fields.iter_mut().for_each(|(_, field)| self.type_(field)),
+            GoType::Struct(fields) => {
+                fields.iter_mut().for_each(|field| self.type_(&mut field.type_))
+            }
         }
     }
 

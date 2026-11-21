@@ -235,6 +235,50 @@ the struct straight out. Neither goes through a generic JSON value. When the inp
 the decoder gives up, and `readJSON` reads it again the way `yoga-json` does in JavaScript, to
 give you the same errors. That part, left out above, is the long `else` branch.
 
+### Labels that clash in Go
+
+JSON keys aren't always nice PureScript names. Here `"A"` and `a` would both be `A` in Go, and
+`"content-type"` can't be a Go name at all:
+
+```purescript
+type Request = { "A" :: Int, a :: String, "content-type" :: String }
+
+main :: Effect Unit
+main = do
+  case readJSON """{ "A": 1, "a": "one", "content-type": "text/plain" }""" of
+    Left errors -> log ("bad JSON: " <> show errors)
+    Right (request :: Request) -> do
+      log (request.a <> " " <> show request."A" <> " " <> request."content-type")
+      log (writeJSON request { "A" = 2 })
+```
+
+```go
+type Request struct {
+	A            string
+	Content_type string `purescript:"content-type"`
+	A_           int32  `purescript:"A"`
+}
+
+func EncodeJSONRequest(e *foreignvalue.Encoder, value Request) {
+	e.Raw("{\"content-type\":")
+	e.String(value.Content_type)
+	e.Raw(",\"a\":")
+	e.String(value.A)
+	e.Raw(",\"A\":")
+	e.Int(value.A_)
+	e.Raw("}")
+}
+```
+
+```
+one 1 text/plain
+{"content-type":"text/plain","a":"one","A":2}
+```
+
+The lower-case `a` gets the plain `A`, and `"A"` gets out of its way as `A_`. Every field whose name
+isn't just its label with a capital first letter carries the label as a tag, so you can tell what
+it was when you write Go against it. The JSON keys stay the labels, whatever the fields are called.
+
 ## Foreign code is Go next to your module
 
 ```purescript

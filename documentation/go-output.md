@@ -376,10 +376,26 @@ func Report(reading Reading) string {
 Your PureScript builds, reads and updates a `Reading` as usual, and Go gets the struct as it is.
 Fields are the labels with their first letter capitalised. Characters Go doesn't allow in a name
 become `_`, and a label that doesn't start with a letter gets an `X` in front: `_respondNow` is
-`X_respondNow`, `"content-type"` is `Content_type`. If two labels end up with the same name, the
-second gets a number: `content_type` next to `"content-type"` is `Content_type2`. A field can hold
-another named record if that one has a struct too:
-`Headers []Header`.
+`X_respondNow`, `"content-type"` is `Content_type`.
+
+If two labels end up with the same name, the one starting with a lower-case letter wins, so `a` is
+always `A`. A label starting with a capital gets a `_` behind it: `"A"` next to `a` is `A_`. Anything
+else that clashes gets a number: `"content-type"` next to `content_type` is `Content_type2`. In the
+structs Iris writes, every field whose name isn't just its label with a capital first letter has
+the label as a tag, so you can look it up. `{ "A" :: Int, a :: String, "content-type" :: String,
+content_type :: String }` is:
+
+```go
+type Header struct {
+	A             string
+	Content_type2 string `purescript:"content-type"`
+	Content_type  string
+	A_            int32 `purescript:"A"`
+}
+```
+
+Tags are optional in your own structs; Iris only goes by the field names. A field can hold another
+named record if that one has a struct too: `Headers []Header`.
 
 A function in a field looks just like a callback: curried, and it performs its effect when called,
 unless it's an `EffectFn`, which takes all its arguments at once. That holds inside arrays and

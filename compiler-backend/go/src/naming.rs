@@ -225,21 +225,53 @@ fn identifier_character(character: char) -> char {
 }
 
 /// The Go names of a type's labels, in their order, all different: when labels share a
-/// [`go_field`], the first keeps it and the others take the lowest number no label has, as
-/// `"content-type"` and `content_type` are `Content_type` and `Content_type2`.
+/// [`go_field`], a label starting in lower case keeps it, one starting in upper case takes a `_`
+/// behind it, and the others take the lowest number no label has, as `a` and `"A"` are `A` and
+/// `A_`, and `content_type` and `"content-type"` are `Content_type` and `Content_type2`.
 pub fn go_fields(labels: &[&str]) -> Vec<String> {
     let bases: Vec<String> = labels.iter().map(|label| go_field(label)).collect();
-    let mut taken: rustc_hash::FxHashSet<String> = rustc_hash::FxHashSet::default();
-    bases
-        .iter()
-        .map(|base| {
-            let unavailable = |name: &str| taken.contains(name) || bases.iter().any(|b| b == name);
-            let name =
-                if taken.contains(base) { numbered(base, unavailable) } else { base.clone() };
-            taken.insert(name.clone());
-            name
-        })
-        .collect()
+    let mut claims: Vec<usize> = (0..labels.len()).collect();
+    claims.sort_by_key(|&index| (claim_rank(labels[index], &bases[index]), labels[index]));
+    let mut names: Vec<Option<String>> = vec![None; labels.len()];
+    let mut taken: FxHashSet<String> = FxHashSet::default();
+    for &index in &claims {
+        if taken.insert(bases[index].clone()) {
+            names[index] = Some(bases[index].clone());
+        }
+    }
+    for &index in &claims {
+        if names[index].is_some() {
+            continue;
+        }
+        let base = &bases[index];
+        let unavailable =
+            |name: &str| taken.contains(name) || bases.iter().any(|other| other == name);
+        let suffixed = format!("{base}_");
+        let starts_upper = labels[index].starts_with(char::is_uppercase);
+        let name = if starts_upper && !unavailable(&suffixed) {
+            suffixed
+        } else {
+            numbered(base, unavailable)
+        };
+        taken.insert(name.clone());
+        names[index] = Some(name);
+    }
+    names.into_iter().map(|name| name.expect("invariant violated: a label left unnamed")).collect()
+}
+
+fn claim_rank(label: &str, base: &str) -> u8 {
+    let starts_lower = label.starts_with(char::is_lowercase);
+    let spelled = capitalise(label) == base;
+    match (starts_lower, spelled) {
+        (true, true) => 0,
+        (true, false) => 1,
+        (false, true) => 2,
+        (false, false) => 3,
+    }
+}
+
+pub fn renamed_label(label: &str, name: &str) -> Option<String> {
+    (capitalise(label) != name).then(|| label.to_string())
 }
 
 /// The name with its first letter in upper case.
@@ -387,9 +419,45 @@ mod tests {
     #[test]
     fn labels_that_share_a_go_name_are_numbered() {
         assert_eq!(
-            go_fields(&["content-type", "content_type", "x", "X", "Content_type2"]),
-            ["Content_type", "Content_type3", "X", "X2", "Content_type2"]
+            go_fields(&["content-type", "content_type", "Content_type2"]),
+            ["Content_type3", "Content_type", "Content_type2"]
         );
+    }
+
+    #[test]
+    fn a_lower_case_label_keeps_its_plain_name() {
+        assert_eq!(go_fields(&["A", "a"]), ["A_", "A"]);
+        assert_eq!(go_fields(&["a", "A"]), ["A", "A_"]);
+        assert_eq!(go_fields(&["A", "A2", "a"]), ["A_", "A2", "A"]);
+        assert_eq!(go_fields(&["A2"]), ["A2"]);
+        assert_eq!(go_fields(&["A2", "a2"]), ["A2_", "A2"]);
+    }
+
+    #[test]
+    fn an_upper_case_label_whose_suffixed_name_is_taken_is_numbered() {
+        assert_eq!(go_fields(&["A", "a", "a_"]), ["A2", "A", "A_"]);
+        assert_eq!(go_fields(&["A", "A_", "a"]), ["A2", "A_", "A"]);
+    }
+
+    #[test]
+    fn go_names_do_not_depend_on_label_order() {
+        let labels = ["content-type", "content_type", "Content_type", "a", "A", "a_"];
+        let names = go_fields(&labels);
+        let mut reversed = labels;
+        reversed.reverse();
+        let mut reversed_names = go_fields(&reversed);
+        reversed_names.reverse();
+        assert_eq!(names, reversed_names);
+    }
+
+    #[test]
+    fn a_label_its_go_name_does_not_spell_is_kept() {
+        assert_eq!(renamed_label("title", "Title"), None);
+        assert_eq!(renamed_label("A2", "A2"), None);
+        assert_eq!(renamed_label("A", "A_").as_deref(), Some("A"));
+        assert_eq!(renamed_label("content-type", "Content_type").as_deref(), Some("content-type"));
+        assert_eq!(renamed_label("_id", "X_id").as_deref(), Some("_id"));
+        assert_eq!(renamed_label("1st", "X1st").as_deref(), Some("1st"));
     }
 
     use super::*;

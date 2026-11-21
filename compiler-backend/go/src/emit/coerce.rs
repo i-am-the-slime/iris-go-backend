@@ -908,7 +908,7 @@ where
             if let GoDeclaration::Type { type_: GoType::Struct(fields), .. } =
                 &mut self.type_declarations[*position]
             {
-                fields.retain(|(name, _)| name != "Origin");
+                fields.retain(|field| field.name != "Origin");
             }
         }
     }

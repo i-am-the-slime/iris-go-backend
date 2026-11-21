@@ -28,7 +28,7 @@ pub enum GoType {
         parameters: Vec<GoType>,
         result: Option<Box<GoType>>,
     },
-    Struct(Vec<(String, GoType)>),
+    Struct(Vec<StructField>),
     /// A generic type instantiated at type arguments, `name[arguments]`.
     Generic {
         name: String,
@@ -57,6 +57,19 @@ impl PartialEq for GoType {
             ) => left == right && left_arguments == right_arguments,
             _ => false,
         }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct StructField {
+    pub name: String,
+    pub type_: GoType,
+    pub label: Option<String>,
+}
+
+impl StructField {
+    pub fn new(name: impl Into<String>, type_: GoType) -> StructField {
+        StructField { name: name.into(), type_, label: None }
     }
 }
 
@@ -488,7 +501,7 @@ fn type_references(type_: &mut GoType, visit: &mut impl FnMut(Reference<'_>)) {
             }
         }
         GoType::Struct(fields) => {
-            fields.iter_mut().for_each(|(_, field)| type_references(field, visit));
+            fields.iter_mut().for_each(|field| type_references(&mut field.type_, visit));
         }
         GoType::Int
         | GoType::Float64
@@ -1150,13 +1163,29 @@ impl Printer {
                     return "struct{}".into();
                 }
                 let mut rendered = String::from("struct {\n");
-                let width = fields.iter().map(|(name, _)| name.chars().count()).max().unwrap_or(0);
-                for (name, field_type) in fields {
-                    let field_type = self.type_(field_type);
+                let width =
+                    fields.iter().map(|field| field.name.chars().count()).max().unwrap_or(0);
+                let field_types: Vec<String> =
+                    fields.iter().map(|field| self.type_(&field.type_)).collect();
+                let type_widths = tagged_type_widths(fields, &field_types);
+                let rows = fields.iter().zip(&field_types).zip(type_widths);
+                for ((field, field_type), type_width) in rows {
                     for _ in 0..=self.indentation {
                         rendered.push('\t');
                     }
-                    let _ = writeln!(rendered, "{name:width$} {field_type}");
+                    let name = &field.name;
+                    match &field.label {
+                        Some(label) => {
+                            let tag = struct_tag(label);
+                            let _ = writeln!(
+                                rendered,
+                                "{name:width$} {field_type:type_width$} {tag}"
+                            );
+                        }
+                        None => {
+                            let _ = writeln!(rendered, "{name:width$} {field_type}");
+                        }
+                    }
                 }
                 for _ in 0..self.indentation {
                     rendered.push('\t');
@@ -1437,6 +1466,28 @@ fn binary_precedence(operator: &str) -> u8 {
         "+" | "-" | "|" | "^" => 4,
         _ => 5,
     }
+}
+
+fn tagged_type_widths(fields: &[StructField], field_types: &[String]) -> Vec<usize> {
+    let mut widths = vec![0; fields.len()];
+    let mut start = 0;
+    while start < fields.len() {
+        if fields[start].label.is_none() {
+            start += 1;
+            continue;
+        }
+        let end = (start..fields.len()).find(|&index| fields[index].label.is_none());
+        let end = end.unwrap_or(fields.len());
+        let width = field_types[start..end].iter().map(|type_| type_.chars().count()).max();
+        widths[start..end].fill(width.unwrap_or(0));
+        start = end;
+    }
+    widths
+}
+
+fn struct_tag(label: &str) -> String {
+    let tag = format!("purescript:{}", go_string(label));
+    if tag.contains('`') { go_string(&tag) } else { format!("`{tag}`") }
 }
 
 fn go_string(value: &str) -> String {

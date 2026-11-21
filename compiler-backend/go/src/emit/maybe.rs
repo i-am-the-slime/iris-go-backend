@@ -10,7 +10,7 @@ use crate::mono::{Literal, Pattern, PatternKind};
 use crate::monotype::{DataConstructor, DataType, Failure, Monotype, MonotypeId};
 use crate::naming::identifier;
 use crate::primitives::{KnownType, known_type};
-use crate::syntax::{GoDeclaration, GoExpression, GoStatement, GoType};
+use crate::syntax::{GoDeclaration, GoExpression, GoStatement, GoType, StructField};
 use files::FileId;
 
 #[derive(Clone, Debug)]
@@ -266,8 +266,10 @@ where
         let mut fields = vec![];
         for slot in plan.slots {
             fields.push(match slot {
-                super::layout::Slot::Tag => ("Tag".to_string(), super::layout::tag_type(2)),
-                super::layout::Slot::Field { name, monotype } => (name, self.go_type(monotype)?),
+                super::layout::Slot::Tag => StructField::new("Tag", super::layout::tag_type(2)),
+                super::layout::Slot::Field { name, monotype } => {
+                    StructField::new(name, self.go_type(monotype)?)
+                }
             });
         }
         if let Some(layout) = self.data_layouts.get_mut(data) {

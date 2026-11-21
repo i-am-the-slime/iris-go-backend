@@ -33,7 +33,8 @@ pub(super) fn structs_of(declarations: &[GoDeclaration]) -> Structs {
         .iter()
         .filter_map(|declaration| match declaration {
             GoDeclaration::Type { name, type_: GoType::Struct(fields), .. } if !fields.is_empty() => {
-                Some((name.clone(), fields.clone()))
+                let fields = fields.iter().map(|field| (field.name.clone(), field.type_.clone()));
+                Some((name.clone(), fields.collect()))
             }
             _ => None,
         })

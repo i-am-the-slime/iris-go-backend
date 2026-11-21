@@ -50,7 +50,7 @@ use crate::monotype::{DataType, Failure, Monotype, MonotypeId, Monotypes};
 use crate::lift::collect_binders;
 use crate::naming::{capitalise, lower_first, numbered};
 use crate::simplify::{for_each_child, for_each_child_mut};
-use crate::syntax::{GoDeclaration, GoExpression, GoType};
+use crate::syntax::{GoDeclaration, GoExpression, GoType, StructField};
 
 /// The most shapes one function type may have and still become cells.
 const MOST_TAGS: usize = 8;
@@ -1239,8 +1239,10 @@ where
         let mut struct_fields = vec![];
         for slot in plan.slots {
             struct_fields.push(match slot {
-                layout::Slot::Tag => ("Tag".to_string(), layout::tag_type(tags.len())),
-                layout::Slot::Field { name, monotype } => (name, self.go_type(monotype)?),
+                layout::Slot::Tag => StructField::new("Tag", layout::tag_type(tags.len())),
+                layout::Slot::Field { name, monotype } => {
+                    StructField::new(name, self.go_type(monotype)?)
+                }
             });
         }
         self.type_declarations.push(GoDeclaration::Type {

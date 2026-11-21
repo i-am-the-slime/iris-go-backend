@@ -10,7 +10,7 @@ use crate::error::GoResult;
 use crate::foreign::{ForeignPackages, GoPackage};
 use crate::monotype::{DataConstructor, DataType, Failure, Monotype, MonotypeId};
 use crate::naming::{capitalise, identifier};
-use crate::syntax::{GoDeclaration, GoType};
+use crate::syntax::{GoDeclaration, GoType, StructField};
 use files::FileId;
 use rustc_hash::{FxHashMap, FxHashSet};
 
@@ -94,10 +94,10 @@ where
             Monotype::Object(element) => {
                 let values = GoType::Slice(Box::new(self.go_type(element)?));
                 GoType::Pointer(Box::new(GoType::Struct(vec![
-                    ("Index".into(), GoType::Named("map[string]int".into())),
-                    ("Ints".into(), GoType::Int),
-                    ("Keys".into(), GoType::Slice(Box::new(GoType::String))),
-                    ("Vals".into(), values),
+                    StructField::new("Index", GoType::Named("map[string]int".into())),
+                    StructField::new("Ints", GoType::Int),
+                    StructField::new("Keys", GoType::Slice(Box::new(GoType::String))),
+                    StructField::new("Vals", values),
                 ])))
             }
             Monotype::Data(data) => {
@@ -202,7 +202,7 @@ where
                 }
             }
             GoType::Struct(fields) => {
-                fields.iter_mut().for_each(|(_, field)| self.resolve_aliases(field));
+                fields.iter_mut().for_each(|field| self.resolve_aliases(&mut field.type_));
             }
             GoType::Int
             | GoType::Float64
@@ -372,7 +372,7 @@ where
         self.type_declarations.push(GoDeclaration::GenericType {
             name: "Ref".into(),
             parameter: "T".into(),
-            type_: GoType::Struct(vec![("Value".into(), GoType::Named("T".into()))]),
+            type_: GoType::Struct(vec![StructField::new("Value", GoType::Named("T".into()))]),
         });
     }
 
@@ -517,8 +517,10 @@ where
         let mut fields = vec![];
         for slot in plan.slots {
             fields.push(match slot {
-                layout::Slot::Tag => ("Tag".to_string(), layout::tag_type(constructors.len())),
-                layout::Slot::Field { name, monotype } => (name, self.go_type(monotype)?),
+                layout::Slot::Tag => StructField::new("Tag", layout::tag_type(constructors.len())),
+                layout::Slot::Field { name, monotype } => {
+                    StructField::new(name, self.go_type(monotype)?)
+                }
             });
         }
         if let Some(layout) = self.data_layouts.get_mut(data) {
@@ -648,9 +650,9 @@ where
         if let Some(position) = layout.declaration
             && let GoDeclaration::Type { type_: GoType::Struct(fields), .. } =
                 &mut self.type_declarations[position]
-            && !fields.iter().any(|(name, _)| name == "Origin")
+            && !fields.iter().any(|field| field.name == "Origin")
         {
-            fields.insert(layout.origin_position, ("Origin".to_string(), GoType::Any));
+            fields.insert(layout.origin_position, StructField::new("Origin", GoType::Any));
         }
         Ok(true)
     }
@@ -685,7 +687,7 @@ fn spell_out_arguments(
         GoType::Function { parameters, result } => {
             parameters.iter_mut().chain(result.as_deref_mut()).collect()
         }
-        GoType::Struct(fields) => fields.iter_mut().map(|(_, field)| field).collect(),
+        GoType::Struct(fields) => fields.iter_mut().map(|field| &mut field.type_).collect(),
         _ => vec![],
     };
     for type_ in inner {

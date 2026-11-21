@@ -13,7 +13,7 @@ use smol_str::SmolStr;
 use super::{Emitter, field, field_name};
 use crate::error::GoResult;
 use crate::monotype::{Monotype, MonotypeId};
-use crate::syntax::{GoExpression, GoType};
+use crate::syntax::{GoExpression, GoType, StructField};
 
 impl<Q> Emitter<'_, '_, '_, Q>
 where
@@ -54,8 +54,11 @@ where
         let mut go_fields = Vec::with_capacity(fields.len());
         for record_field in fields.iter() {
             let name = self.record_field_name(record, &record_field.label);
+            let label = crate::naming::renamed_label(&record_field.label, &name);
+            let label = label.filter(|_| !self.monotypes.is_instantiated_record(record));
             let shape = self.value_shape(record_field.monotype)?;
-            go_fields.push((shape, (name, self.go_type(record_field.monotype)?)));
+            let type_ = self.go_type(record_field.monotype)?;
+            go_fields.push((shape, StructField { name, type_, label }));
         }
         go_fields.sort_by_key(|(shape, _)| shape.declaration_rank());
         Ok(GoType::Struct(go_fields.into_iter().map(|(_, field)| field).collect()))

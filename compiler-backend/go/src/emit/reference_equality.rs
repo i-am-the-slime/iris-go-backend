@@ -17,7 +17,7 @@ use crate::blocker::{Blocker, Blockers};
 use crate::error::{GoError, GoResult, UnsupportedState};
 use crate::foreign::{GoFunction, GoPackage};
 use crate::mono::Expression;
-use crate::syntax::{GoDeclaration, GoExpression, GoStatement, GoType};
+use crate::syntax::{GoDeclaration, GoExpression, GoStatement, GoType, StructField};
 
 /// Go's predeclared comparable types that the backend names.
 pub(super) const BASIC_TYPES: &[&str] = &[
@@ -102,18 +102,19 @@ where
 
     fn same_fields(
         &mut self,
-        fields: &[(String, GoType)],
+        fields: &[StructField],
         left: GoExpression,
         right: GoExpression,
         out: &mut Vec<GoStatement>,
     ) -> GoExpression {
-        if fields.iter().all(|(_, type_)| self.comparable(type_)) {
+        if fields.iter().all(|struct_field| self.comparable(&struct_field.type_)) {
             return binary("==", left, right);
         }
         let left = self.shared(left, "left", out);
         let right = self.shared(right, "right", out);
-        let mut comparisons = fields.iter().map(|(name, type_)| {
-            (type_.clone(), field(left.clone(), name), field(right.clone(), name))
+        let mut comparisons = fields.iter().map(|struct_field| {
+            let name = &struct_field.name;
+            (struct_field.type_.clone(), field(left.clone(), name), field(right.clone(), name))
         });
         let Some((type_, first_left, first_right)) = comparisons.next() else {
             return GoExpression::Boolean(true);
@@ -145,7 +146,7 @@ where
             | GoType::Any
             | GoType::Erased(_)
             | GoType::Generic { .. } => false,
-            GoType::Struct(fields) => fields.iter().all(|(_, field)| self.comparable(field)),
+            GoType::Struct(fields) => fields.iter().all(|field| self.comparable(&field.type_)),
             GoType::Named(name) if BASIC_TYPES.contains(&name.as_str()) => true,
             GoType::Named(name) => {
                 self.declared_type(name).is_some_and(|underlying| self.comparable(&underlying))
