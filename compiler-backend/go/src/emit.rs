@@ -20,6 +20,7 @@ mod constructors;
 mod deduplicate;
 mod diverging;
 mod existential;
+mod foreign_data;
 mod fusion;
 mod groups;
 mod guards;
@@ -141,6 +142,9 @@ where
         let main = emitter.main()?;
         emitter.note_homes(main.as_slice(), entry_origin);
         declarations.extend(main);
+        // First, so that a top-level value that reads one finds it registered.
+        let registrations = emitter.foreign_data_registrations()?;
+        declarations.splice(0..0, registrations);
         GoResult::Ok(declarations)
     });
     let mut declarations = declarations?;
@@ -361,6 +365,7 @@ where
             materialized: FxHashSet::default(),
             effects: FxHashSet::default(),
             notes: vec![],
+            foreign_data: vec![],
             uninitialized_locals: FxHashSet::default(),
             current: None,
             lazy_constants,
@@ -675,6 +680,8 @@ struct Emitter<'p, 'm, 'q, Q> {
     effects: headers::Effects,
     /// What the program does differently from the JavaScript backend's, for the user.
     notes: Vec<String>,
+    /// The data types, at their erased arguments, whose values may reach a `Foreign`.
+    foreign_data: Vec<MonotypeId>,
     /// The locals of the recursive bindings being assigned, which still hold
     /// Go's zero value.
     uninitialized_locals: FxHashSet<LocalId>,

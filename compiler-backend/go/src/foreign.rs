@@ -256,6 +256,10 @@ pub struct Boundary {
     /// give the arguments' Go type. Where that order is also PureScript's, a test of the result
     /// is a comparison of the arguments themselves.
     pub three_way: bool,
+    /// The arguments the Go helper takes as a `Foreign`, an `any` in Foreign's representation,
+    /// whatever their PureScript type: `JSON.stringify` of an `Array (Array String)` reads it
+    /// as nested `[]any`.
+    pub foreign_arguments: &'static [usize],
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -358,6 +362,7 @@ const PLAIN: Boundary = Boundary {
     accumulator: None,
     lazy: &[],
     three_way: false,
+    foreign_arguments: &[],
 };
 
 const RESULT_PARAMETER: Boundary = Boundary { result_parameter: true, ..PLAIN };
@@ -1074,11 +1079,22 @@ const FOREIGN_IMPORTS: &[(&str, &str, Foreign)] = &[
         "_undefined",
         Foreign::Constant(GoFunction { package: GoPackage::ForeignValue, name: "Undefined" }),
     ),
-    ("Yoga.JSON", "_unsafeStringify", foreign_value("UnsafeStringify", 1)),
+    (
+        "Yoga.JSON",
+        "_unsafeStringify",
+        call(GoPackage::ForeignValue, "UnsafeStringify", 1, Boundary {
+            foreign_arguments: &[0],
+            ..PLAIN
+        }),
+    ),
     (
         "Yoga.JSON",
         "_unsafePrettyStringify",
-        call(GoPackage::ForeignValue, "UnsafePrettyStringify", 2, int32_parameters(&[0])),
+        call(GoPackage::ForeignValue, "UnsafePrettyStringify", 2, Boundary {
+            int32_parameters: &[0],
+            foreign_arguments: &[1],
+            ..PLAIN
+        }),
     ),
     ("Yoga.JSON", "_parseJSON", perform_in(GoPackage::ForeignValue, "ParseJSON", 1, PLAIN)),
     ("Data.Argonaut.Core", "fromBoolean", argonaut("FromBoolean", 1)),

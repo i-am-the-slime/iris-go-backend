@@ -308,6 +308,11 @@ where
                 }
                 _ if boundary.ignored.contains(&position) => identifier_expression("nil"),
                 _ if boundary.lazy.contains(&position) => self.lazy_argument(argument, out)?,
+                _ if boundary.foreign_arguments.contains(&position) => {
+                    let value = self.value(argument, out)?;
+                    let opaque = self.monotypes.intern(Monotype::Opaque);
+                    self.coerce(value, argument.monotype, opaque, out)?
+                }
                 _ if boundary.int32_parameters.contains(&position) => self.value(argument, out)?,
                 _ if boundary.is_just == Some(position) => self.is_just_function(maybe)?,
                 Some(constructors) if constructors.just == position => {

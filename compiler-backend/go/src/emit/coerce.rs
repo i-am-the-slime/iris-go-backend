@@ -129,6 +129,7 @@ where
             }
             (_, Monotype::Erased(_) | Monotype::Opaque) => {
                 let canonical = self.canonical(from)?;
+                self.note_foreign_data(canonical);
                 let value = self.coerce(value, from, canonical, out)?;
                 if is_untyped_constant(&value) {
                     let type_ = self.go_type(canonical)?;
