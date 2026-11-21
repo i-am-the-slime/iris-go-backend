@@ -29,8 +29,7 @@ where
         if let [operand] = operands.as_slice() {
             return operand.clone();
         }
-        if operands.windows(2).all(|join| has_whole_ends(&join[0]) || has_whole_ends(&join[1]))
-        {
+        if operands.windows(2).all(|join| has_whole_ends(&join[0]) || has_whole_ends(&join[1])) {
             return operands
                 .into_iter()
                 .reduce(|left, right| binary("+", left, right))

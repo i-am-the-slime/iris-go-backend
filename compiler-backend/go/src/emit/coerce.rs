@@ -2,17 +2,17 @@ use rustc_hash::FxHashSet;
 
 use super::packages::Spelling;
 use super::{
-    DataKind, Emitter, binary, call, field, identifier_expression, is_simple,
-    is_untyped_constant, length, path_root, unit_value,
+    DataKind, Emitter, binary, call, field, identifier_expression, is_simple, is_untyped_constant,
+    length, path_root, unit_value,
 };
 use crate::erasure::Erasure;
 use crate::error::{GoError, GoResult};
 use crate::foreign::{GoFunction, GoPackage};
 use crate::mono::{Expression, ExpressionKind};
 use crate::monotype::{DataType, Failure, Monotype, MonotypeId, RecordField};
-use smol_str::SmolStr;
 use crate::syntax::{GoCase, GoDeclaration, GoDefault, GoExpression, GoStatement, GoType};
 use crate::walk::each_block;
+use smol_str::SmolStr;
 
 /// The construct a coercion between types of different shapes reports.
 pub(super) const UNRELATED_TYPES: &str = "representation changes between unrelated types";
@@ -112,7 +112,8 @@ where
                 let value = GoExpression::TypeAssertion { value: Box::new(value), type_ };
                 self.coerce(value, foreign_array, to, out)
             }
-            (Monotype::Data(data), Monotype::Record(_)) | (Monotype::Record(_), Monotype::Data(data))
+            (Monotype::Data(data), Monotype::Record(_))
+            | (Monotype::Record(_), Monotype::Data(data))
                 if self.monotypes.variant_row(&data).is_some() =>
             {
                 let converter = self.converter(from, to)?;
@@ -178,22 +179,24 @@ where
             // JavaScript represents a Char as a string of one code unit, so an `unsafeCoerce`
             // from Char to String (Data.String.NonEmpty.CodeUnits.fromFoldable1) is that string.
             (Monotype::Char, Monotype::String) => {
-                let singleton =
-                    self.go_function(GoFunction { package: GoPackage::Prim, name: "CharSingleton" });
+                let singleton = self
+                    .go_function(GoFunction { package: GoPackage::Prim, name: "CharSingleton" });
                 Ok(call(singleton, vec![value]))
             }
             // JavaScript turns an array that meets a string (`"" + unsafeCoerce array`) into its
             // elements' strings joined with commas.
             (Monotype::Array(element), Monotype::String) => {
                 self.imports.insert("strings".into());
-                let join = GoExpression::Qualified { package: "strings".into(), name: "Join".into() };
+                let join =
+                    GoExpression::Qualified { package: "strings".into(), name: "Join".into() };
                 let comma = GoExpression::String(",".into());
                 if let Monotype::String = self.monotypes.get(element) {
                     return Ok(call(join, vec![value, comma]));
                 }
                 let parameter = self.temporary("element");
                 let mut body = vec![];
-                let text = self.coerce(identifier_expression(&parameter), element, to, &mut body)?;
+                let text =
+                    self.coerce(identifier_expression(&parameter), element, to, &mut body)?;
                 body.push(GoStatement::Return(Some(text)));
                 let render = GoExpression::Function {
                     parameters: vec![(parameter, self.go_type(element)?)],
@@ -271,10 +274,11 @@ where
             }
             source = rest;
         }
-        let returns_value = |monotype| {
-            self.monotypes.effect_result(monotype).is_none() && !self.is_unit(monotype)
-        };
-        Ok(returns_value(source) && returns_value(returned) && !self.crosses_interface(source, returned)?)
+        let returns_value =
+            |monotype| self.monotypes.effect_result(monotype).is_none() && !self.is_unit(monotype);
+        Ok(returns_value(source)
+            && returns_value(returned)
+            && !self.crosses_interface(source, returned)?)
     }
 
     /// Whether a coercion moves a value into or out of an interface. Only a parameter or a
@@ -577,7 +581,9 @@ where
                     let Some(from_field) =
                         from_fields.iter().find(|from_field| from_field.label == to_field.label)
                     else {
-                        return Err(GoError::unsupported_construct("a coercion between records with different fields (a rank-N value coerced to another instantiation)"));
+                        return Err(GoError::unsupported_construct(
+                            "a coercion between records with different fields (a rank-N value coerced to another instantiation)",
+                        ));
                     };
                     let field_value = self.read_field(value.clone(), from, &to_field.label);
                     let converted = self.coerce(
@@ -714,7 +720,11 @@ where
                     if let GoExpression::Composite { fields, .. } = &mut composite {
                         fields.push((Some("Origin".into()), origin.clone()));
                     }
-                    if to_layout.boxed { GoExpression::Address(Box::new(composite)) } else { composite }
+                    if to_layout.boxed {
+                        GoExpression::Address(Box::new(composite))
+                    } else {
+                        composite
+                    }
                 }
                 None => self.construct(to, constructor, values)?,
             };
@@ -729,14 +739,18 @@ where
             checks: from_remembers,
             remembers: to_remembers.then_some(to_layout.declaration).flatten(),
         });
-        let switches_on_tag =
-            from_layout.kind == DataKind::Tagged && from_layout.maybe.as_ref().is_none_or(|maybe| maybe.is_struct());
+        let switches_on_tag = from_layout.kind == DataKind::Tagged
+            && from_layout.maybe.as_ref().is_none_or(|maybe| maybe.is_struct());
         if !switches_on_tag {
             let last = arms.len() - 1;
             for (position, (test, mut statements)) in arms.into_iter().enumerate() {
                 match test {
                     Some(condition) if position < last => {
-                        body.push(GoStatement::If { condition, then: statements, otherwise: vec![] });
+                        body.push(GoStatement::If {
+                            condition,
+                            then: statements,
+                            otherwise: vec![],
+                        });
                     }
                     _ => body.append(&mut statements),
                 }
@@ -780,7 +794,8 @@ where
             let read = self.constructor_field(&layout, index, 0, value.clone());
             let boxed = self.coerce(read, constructor.fields[0], payload, &mut statements)?;
             let label = GoExpression::String(constructor.name.to_string());
-            let fields = vec![(SmolStr::new_static("type"), label), (SmolStr::new_static("value"), boxed)];
+            let fields =
+                vec![(SmolStr::new_static("type"), label), (SmolStr::new_static("value"), boxed)];
             let built = self.record_value(representation, fields)?;
             statements.push(GoStatement::Return(Some(built)));
             match self.constructor_test(&layout, index, value.clone()) {

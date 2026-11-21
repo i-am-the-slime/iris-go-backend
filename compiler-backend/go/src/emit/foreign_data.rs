@@ -90,19 +90,17 @@ where
             };
             branch.push(GoStatement::Return(Some(fields)));
             match self.constructor_test(&layout, index, value.clone()) {
-                Some(test) if index < last => body.push(GoStatement::If {
-                    condition: test,
-                    then: branch,
-                    otherwise: vec![],
-                }),
+                Some(test) if index < last => {
+                    body.push(GoStatement::If { condition: test, then: branch, otherwise: vec![] })
+                }
                 _ => {
                     body.extend(branch);
                     break;
                 }
             }
         }
-        let register = self
-            .go_function(GoFunction { package: GoPackage::ForeignValue, name: "DataFields" });
+        let register =
+            self.go_function(GoFunction { package: GoPackage::ForeignValue, name: "DataFields" });
         let fields = GoExpression::Function {
             parameters: vec![("value".into(), value_type)],
             result: Some(GoType::Slice(Box::new(GoType::Any))),

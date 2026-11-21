@@ -65,8 +65,7 @@ where
         types: &[TypeId],
         monotype: MonotypeId,
     ) -> GoResult<Option<Expression>> {
-        let Some(([proxy, handler, fallback, variant], result)) = self.arrows::<4>(monotype)
-        else {
+        let Some(([proxy, handler, fallback, variant], result)) = self.arrows::<4>(monotype) else {
             return Ok(None);
         };
         let Some(data) = self.variant_data(variant) else { return Ok(None) };
@@ -188,7 +187,8 @@ where
             let expression = body(self, constructor.name.clone(), hidden.clone())?;
             let arguments =
                 vec![Pattern { kind: PatternKind::Variable(hidden), monotype: payload }];
-            let kind = PatternKind::Constructor { data: data.clone(), constructor: index, arguments };
+            let kind =
+                PatternKind::Constructor { data: data.clone(), constructor: index, arguments };
             let patterns = vec![Pattern { kind, monotype: variant }];
             let body = Guarded::Unconditional(expression);
             alternatives.push(Alternative { patterns, body, position: None });
@@ -216,7 +216,10 @@ where
         result: MonotypeId,
     ) -> GoResult<Expression> {
         let Some((parameter, answer)) = self.monotypes.function_parts(handler.monotype) else {
-            return Ok(Expression::new(ExpressionKind::Fail(SmolStr::new_static(IMPOSSIBLE)), result));
+            return Ok(Expression::new(
+                ExpressionKind::Fail(SmolStr::new_static(IMPOSSIBLE)),
+                result,
+            ));
         };
         let argument = self.coerce(hidden.expression(), parameter);
         let kind = ExpressionKind::Apply { function: Box::new(handler), arguments: vec![argument] };
@@ -287,7 +290,9 @@ where
 
     fn variant_data(&self, monotype: MonotypeId) -> Option<DataType> {
         match self.monotypes.get(monotype) {
-            Monotype::Data(data) if self.monotypes.variant_row(data).is_some() => Some(data.clone()),
+            Monotype::Data(data) if self.monotypes.variant_row(data).is_some() => {
+                Some(data.clone())
+            }
             _ => None,
         }
     }
@@ -303,7 +308,10 @@ where
         }
     }
 
-    fn arrows<const N: usize>(&self, monotype: MonotypeId) -> Option<([MonotypeId; N], MonotypeId)> {
+    fn arrows<const N: usize>(
+        &self,
+        monotype: MonotypeId,
+    ) -> Option<([MonotypeId; N], MonotypeId)> {
         let mut parameters = [monotype; N];
         let mut rest = monotype;
         for parameter in parameters.iter_mut() {

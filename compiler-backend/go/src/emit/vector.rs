@@ -44,8 +44,8 @@ use crate::error::GoResult;
 use crate::foreign::{Boundary, Comparison, Foreign, Iteration, Operator};
 use crate::mono::{Expression, ExpressionKind, FunctionId, Literal, Local, LocalId};
 use crate::monotype::{Monotype, MonotypeId};
-use crate::primitives::{Int64Operation, Signedness};
 use crate::naming::GO_PREDECLARED;
+use crate::primitives::{Int64Operation, Signedness};
 use crate::syntax::{
     GoDeclaration, GoExpression, GoFile, GoImport, GoStatement, Reference, SourceLine,
 };
@@ -315,7 +315,6 @@ impl Element {
             Element::Number | Element::Int => None,
         }
     }
-
 }
 
 /// Which vectors a kernel's loop is written with.
@@ -396,7 +395,11 @@ enum Term {
     Bound(usize),
     Negate(Box<Term>),
     Binary(Arithmetic, Box<Term>, Box<Term>),
-    Select { condition: Condition, then: Box<Term>, otherwise: Box<Term> },
+    Select {
+        condition: Condition,
+        then: Box<Term>,
+        otherwise: Box<Term>,
+    },
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -496,7 +499,10 @@ enum Reduction {
 }
 
 enum Shape {
-    Fold { step: Term, reduction: Reduction },
+    Fold {
+        step: Term,
+        reduction: Reduction,
+    },
     /// Produces an array, the term computing each of its elements.
     Map(Term),
 }
@@ -608,12 +614,14 @@ impl<'a, 'e, E: Lookup<'e>> Analysis<'a, 'e, E> {
                 _ => None,
             };
         }
-        if self.emitter.fusible(array) || self.emitter.array_element_of(array.monotype)? != self.element
+        if self.emitter.fusible(array)
+            || self.emitter.array_element_of(array.monotype)? != self.element
         {
             return None;
         }
         // A literal array is too short for vectors to pay.
-        if matches!(&array.kind, ExpressionKind::Array(elements) if elements.len() < SHORT_LITERAL) {
+        if matches!(&array.kind, ExpressionKind::Array(elements) if elements.len() < SHORT_LITERAL)
+        {
             return None;
         }
         self.inputs.push(array);
@@ -750,7 +758,8 @@ impl<'a, 'e, E: Lookup<'e>> Analysis<'a, 'e, E> {
                     self.element.is_integer()
                         || matches!(term, Term::Constant(text) if text.parse::<f64>().is_ok_and(|n| n != 0.0))
                 };
-                if let (Condition::Compare(Ordering::Equal, left, right), false) = (&condition, negated)
+                if let (Condition::Compare(Ordering::Equal, left, right), false) =
+                    (&condition, negated)
                     && (exact(left) || exact(right))
                     && ((**left == then && **right == otherwise)
                         || (**right == then && **left == otherwise))
@@ -758,7 +767,11 @@ impl<'a, 'e, E: Lookup<'e>> Analysis<'a, 'e, E> {
                     return Some(otherwise);
                 }
                 let (then, otherwise) = if negated { (otherwise, then) } else { (then, otherwise) };
-                Some(Term::Select { condition, then: Box::new(then), otherwise: Box::new(otherwise) })
+                Some(Term::Select {
+                    condition,
+                    then: Box::new(then),
+                    otherwise: Box::new(otherwise),
+                })
             }
             ExpressionKind::Apply { function, arguments } => {
                 let ExpressionKind::Function(callee) = function.kind else { return None };
@@ -771,9 +784,10 @@ impl<'a, 'e, E: Lookup<'e>> Analysis<'a, 'e, E> {
             ExpressionKind::Foreign { foreign: Foreign::Operator(operator), arguments } => {
                 self.operator(*operator, arguments, scope, depth)
             }
-            ExpressionKind::Foreign { foreign: Foreign::Int64 { operation, signedness }, arguments }
-                if self.element.signedness() == Some(*signedness) =>
-            {
+            ExpressionKind::Foreign {
+                foreign: Foreign::Int64 { operation, signedness },
+                arguments,
+            } if self.element.signedness() == Some(*signedness) => {
                 self.int64_operation(*operation, arguments, scope, depth)
             }
             _ => None,
@@ -881,21 +895,22 @@ impl<'a, 'e, E: Lookup<'e>> Analysis<'a, 'e, E> {
         scope: &FxHashMap<LocalId, Term>,
         depth: usize,
     ) -> Option<Term> {
-        let arithmetic = match (operator, self.element) {
-            (Operator::NumberAdd, Element::Number) | (Operator::IntAdd, Element::Int) => {
-                Arithmetic::Add
-            }
-            (Operator::NumberSubtract, Element::Number)
-            | (Operator::IntSubtract, Element::Int) => Arithmetic::Subtract,
-            (Operator::NumberMultiply, Element::Number)
-            | (Operator::IntMultiply, Element::Int) => Arithmetic::Multiply,
-            (Operator::NumberDivide, Element::Number) => Arithmetic::Divide,
-            (Operator::NumberNegate, Element::Number) | (Operator::IntNegate, Element::Int) => {
-                let operand = self.term(&arguments[0], scope, depth)?;
-                return Some(Term::Negate(Box::new(operand)));
-            }
-            _ => return None,
-        };
+        let arithmetic =
+            match (operator, self.element) {
+                (Operator::NumberAdd, Element::Number) | (Operator::IntAdd, Element::Int) => {
+                    Arithmetic::Add
+                }
+                (Operator::NumberSubtract, Element::Number)
+                | (Operator::IntSubtract, Element::Int) => Arithmetic::Subtract,
+                (Operator::NumberMultiply, Element::Number)
+                | (Operator::IntMultiply, Element::Int) => Arithmetic::Multiply,
+                (Operator::NumberDivide, Element::Number) => Arithmetic::Divide,
+                (Operator::NumberNegate, Element::Number) | (Operator::IntNegate, Element::Int) => {
+                    let operand = self.term(&arguments[0], scope, depth)?;
+                    return Some(Term::Negate(Box::new(operand)));
+                }
+                _ => return None,
+            };
         let left = self.term(&arguments[0], scope, depth)?;
         let right = self.term(&arguments[1], scope, depth)?;
         Some(Term::Binary(arithmetic, Box::new(left), Box::new(right)))
@@ -943,8 +958,11 @@ impl<'a, 'e, E: Lookup<'e>> Analysis<'a, 'e, E> {
                 // By De Morgan, `not a && not b` is `not (a || b)`.
                 let conjunction = (*operator == Operator::BooleanAnd) != left_negated;
                 let (left, right) = (Box::new(left), Box::new(right));
-                let condition =
-                    if conjunction { Condition::And(left, right) } else { Condition::Or(left, right) };
+                let condition = if conjunction {
+                    Condition::And(left, right)
+                } else {
+                    Condition::Or(left, right)
+                };
                 Some((condition, left_negated))
             }
             _ => None,
@@ -985,20 +1003,28 @@ impl<'a, 'e, E: Lookup<'e>> Analysis<'a, 'e, E> {
             Term::Binary(arithmetic @ (Arithmetic::Add | Arithmetic::Multiply), left, right) => {
                 let accumulates = (**left == Term::Accumulator && element_term(right))
                     || (**right == Term::Accumulator && element_term(left));
-                let reduction =
-                    if *arithmetic == Arithmetic::Add { Reduction::Add } else { Reduction::Multiply };
+                let reduction = if *arithmetic == Arithmetic::Add {
+                    Reduction::Add
+                } else {
+                    Reduction::Multiply
+                };
                 accumulates.then_some(reduction)
             }
-            Term::Select { condition: Condition::Compare(ordering, left, right), then, otherwise } => {
-                let (chosen, kept, ordering) = match (**then == Term::Accumulator, **otherwise == Term::Accumulator) {
-                    (false, true) => (then, otherwise, *ordering),
-                    // Choosing the accumulator where the comparison holds
-                    // chooses NaN elements, unless there are none.
-                    (true, false) if self.element.is_integer() => {
-                        (otherwise, then, ordering.complement()?)
-                    }
-                    _ => return None,
-                };
+            Term::Select {
+                condition: Condition::Compare(ordering, left, right),
+                then,
+                otherwise,
+            } => {
+                let (chosen, kept, ordering) =
+                    match (**then == Term::Accumulator, **otherwise == Term::Accumulator) {
+                        (false, true) => (then, otherwise, *ordering),
+                        // Choosing the accumulator where the comparison holds
+                        // chooses NaN elements, unless there are none.
+                        (true, false) if self.element.is_integer() => {
+                            (otherwise, then, ordering.complement()?)
+                        }
+                        _ => return None,
+                    };
                 if !element_term(chosen) || **kept != Term::Accumulator {
                     return None;
                 }
@@ -1076,19 +1102,38 @@ fn parameter_names(captures: &[Capture<'_>]) -> Vec<String> {
 
 fn is_free_name(name: &str) -> bool {
     const KERNEL_NAMES: &[&str] = &[
-        "xs", "ys", "zs", "ws", "x", "y", "z", "w", "i", "n", "step", "out", "accumulator",
-        "initial", "lanes", "lane", "simd", "math",
+        "xs",
+        "ys",
+        "zs",
+        "ws",
+        "x",
+        "y",
+        "z",
+        "w",
+        "i",
+        "n",
+        "step",
+        "out",
+        "accumulator",
+        "initial",
+        "lanes",
+        "lane",
+        "simd",
+        "math",
     ];
     let numbered = |prefix: &str| {
-        name.strip_prefix(prefix)
-            .is_some_and(|rest| !rest.is_empty() && rest.bytes().all(|b| b.is_ascii_digit() || b == b'_'))
+        name.strip_prefix(prefix).is_some_and(|rest| {
+            !rest.is_empty() && rest.bytes().all(|b| b.is_ascii_digit() || b == b'_')
+        })
     };
     name.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'_')
         && name.bytes().next().is_some_and(|b| b.is_ascii_alphabetic())
         && !GO_PREDECLARED.contains(&name)
         && !KERNEL_NAMES.contains(&name)
         && !name.ends_with("Lanes")
-        && !["x", "y", "z", "w", "t", "s", "c", "k", "acc", "input", "lane"].into_iter().any(numbered)
+        && !["x", "y", "z", "w", "t", "s", "c", "k", "acc", "input", "lane"]
+            .into_iter()
+            .any(numbered)
 }
 
 /// How a spelling of the kernel's terms names what they read.
@@ -1147,8 +1192,9 @@ impl Kernel {
 
     fn signature(&self) -> String {
         let scalar = self.element.scalar();
-        let mut parameters: Vec<String> =
-            (0..self.inputs).map(|position| format!("{} []{scalar}", input_name(position))).collect();
+        let mut parameters: Vec<String> = (0..self.inputs)
+            .map(|position| format!("{} []{scalar}", input_name(position)))
+            .collect();
         parameters.extend(self.parameters.iter().map(|name| format!("{name} {scalar}")));
         let result = match self.shape {
             Shape::Fold { .. } => {
@@ -1265,7 +1311,8 @@ impl Kernel {
         let vector = flavor.vector(self.element);
         let package = flavor.package();
         let (bound, lanes) = self.reads();
-        let mut spelling = self.spelling(copy, copy.map_or("acc".into(), |copy| format!("acc{copy}")));
+        let mut spelling =
+            self.spelling(copy, copy.map_or("acc".into(), |copy| format!("acc{copy}")));
         spelling.flavor = Some(flavor);
         for lane in lanes {
             let (low, high) = match copy {
@@ -1310,7 +1357,13 @@ impl Kernel {
         let _ = writeln!(out, "\t\t{}.StorePart(out[i:])", spelling.vector(term));
     }
 
-    fn combine_vectors(&self, flavor: Flavor, reduction: Reduction, left: &str, right: &str) -> String {
+    fn combine_vectors(
+        &self,
+        flavor: Flavor,
+        reduction: Reduction,
+        left: &str,
+        right: &str,
+    ) -> String {
         let extrema = flavor.has_extrema(self.element);
         match reduction {
             Reduction::Add => format!("{left}.Add({right})"),
@@ -1338,7 +1391,11 @@ impl Kernel {
         self.scalar_prelude(&mut spelling, indentation, ranged, &mut out);
         let value = spelling.scalar(step, 0);
         for statement in std::mem::take(&mut spelling.statements) {
-            let _ = writeln!(out, "{indentation}{}", statement.replace('\n', &format!("\n{indentation}")));
+            let _ = writeln!(
+                out,
+                "{indentation}{}",
+                statement.replace('\n', &format!("\n{indentation}"))
+            );
         }
         let _ = writeln!(out, "{indentation}accumulator = {value}");
         out
@@ -1355,12 +1412,17 @@ impl Kernel {
     ) {
         let (bound, lanes) = self.reads();
         for lane in lanes.into_iter().filter(|_| !ranged) {
-            let _ = writeln!(out, "{indentation}{} := {}[i]", spelling.lane(lane), input_name(lane));
+            let _ =
+                writeln!(out, "{indentation}{} := {}[i]", spelling.lane(lane), input_name(lane));
         }
         for index in bound {
             let value = spelling.scalar(&self.bindings[index], 0);
             for statement in std::mem::take(&mut spelling.statements) {
-                let _ = writeln!(out, "{indentation}{}", statement.replace('\n', &format!("\n{indentation}")));
+                let _ = writeln!(
+                    out,
+                    "{indentation}{}",
+                    statement.replace('\n', &format!("\n{indentation}"))
+                );
             }
             let _ = writeln!(out, "{indentation}{} := {value}", spelling.bound(index));
         }
@@ -1412,14 +1474,22 @@ impl Kernel {
     }
 
     fn spelling(&self, copy: Option<usize>, accumulator: String) -> Spelling<'_> {
-        Spelling { kernel: self, copy, accumulator, statements: vec![], selections: 0, flavor: None }
+        Spelling {
+            kernel: self,
+            copy,
+            accumulator,
+            statements: vec![],
+            selections: 0,
+            flavor: None,
+        }
     }
 }
 
 impl Spelling<'_> {
     fn lane(&self, position: usize) -> String {
-        let base =
-            LANE_NAMES.get(position).map_or_else(|| format!("lane{position}_"), |name| name.to_string());
+        let base = LANE_NAMES
+            .get(position)
+            .map_or_else(|| format!("lane{position}_"), |name| name.to_string());
         match self.copy {
             Some(copy) => format!("{base}{copy}"),
             None => base,
@@ -1466,10 +1536,14 @@ impl Spelling<'_> {
             }
             // An Int comparison choosing one of the two it compares is `Max`
             // or `Min`; a Number's would treat NaN differently.
-            Term::Select { condition: Condition::Compare(ordering, left, right), then, otherwise }
-                if self.flavor.is_some_and(|flavor| flavor.has_extrema(self.kernel.element))
-                    && ordering != &Ordering::Equal
-                    && ((left == then && right == otherwise) || (left == otherwise && right == then)) =>
+            Term::Select {
+                condition: Condition::Compare(ordering, left, right),
+                then,
+                otherwise,
+            } if self.flavor.is_some_and(|flavor| flavor.has_extrema(self.kernel.element))
+                && ordering != &Ordering::Equal
+                && ((left == then && right == otherwise)
+                    || (left == otherwise && right == then)) =>
             {
                 let less = matches!(ordering, Ordering::Less | Ordering::LessEqual);
                 let method = if less == (right == then) { "Max" } else { "Min" };
@@ -1518,7 +1592,9 @@ impl Spelling<'_> {
                 let condition = self.condition(condition, 0);
                 let name = format!("s{}", self.selections);
                 self.selections += 1;
-                self.statements.push(format!("{name} := {otherwise}\nif {condition} {{\n\t{name} = {then}\n}}"));
+                self.statements.push(format!(
+                    "{name} := {otherwise}\nif {condition} {{\n\t{name} = {then}\n}}"
+                ));
                 name
             }
         }
@@ -1554,7 +1630,9 @@ fn inline_single_uses(bindings: Vec<Term>, shape: Shape) -> (Vec<Term>, Shape) {
     count_uses(root, &bindings, &mut uses, &mut seen);
     let resolve = |term: &Term| substitute(term, &bindings, &uses);
     let shape = match &shape {
-        Shape::Fold { step, reduction } => Shape::Fold { step: resolve(step), reduction: *reduction },
+        Shape::Fold { step, reduction } => {
+            Shape::Fold { step: resolve(step), reduction: *reduction }
+        }
         Shape::Map(term) => Shape::Map(resolve(term)),
     };
     let resolved = bindings.iter().map(resolve).collect();
@@ -1584,7 +1662,12 @@ fn count_uses(term: &Term, bindings: &[Term], uses: &mut [usize], seen: &mut [bo
     }
 }
 
-fn count_condition_uses(condition: &Condition, bindings: &[Term], uses: &mut [usize], seen: &mut [bool]) {
+fn count_condition_uses(
+    condition: &Condition,
+    bindings: &[Term],
+    uses: &mut [usize],
+    seen: &mut [bool],
+) {
     match condition {
         Condition::Compare(_, left, right) => {
             count_uses(left, bindings, uses, seen);
@@ -1602,7 +1685,9 @@ fn substitute(term: &Term, bindings: &[Term], uses: &[usize]) -> Term {
     match term {
         Term::Bound(index) if uses[*index] == 1 => substitute(&bindings[*index], bindings, uses),
         Term::Negate(operand) => Term::Negate(again(operand)),
-        Term::Binary(arithmetic, left, right) => Term::Binary(*arithmetic, again(left), again(right)),
+        Term::Binary(arithmetic, left, right) => {
+            Term::Binary(*arithmetic, again(left), again(right))
+        }
         Term::Select { condition, then, otherwise } => Term::Select {
             condition: substitute_condition(condition, bindings, uses),
             then: again(then),

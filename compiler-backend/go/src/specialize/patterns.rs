@@ -12,9 +12,9 @@ use smol_str::SmolStr;
 use super::Specializer;
 use crate::error::{GoError, GoResult, UnsupportedState};
 use crate::mono::{
-    Alternative, Binding, Expression, ExpressionKind, Guard, Guarded, GuardedBranch,
+    Alternative, Binding, Expression, ExpressionKind, Guard, Guarded, GuardedBranch, Pattern,
+    PatternKind,
 };
-use crate::mono::{Pattern, PatternKind};
 use crate::monotype::{DataConstructor, DataType, Failure};
 
 impl<Q> Specializer<'_, Q>

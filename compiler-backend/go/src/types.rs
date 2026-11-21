@@ -336,7 +336,9 @@ where
                 }
                 Type::Application(substituted_function, substituted_argument)
             }
-            Type::KindApplication(function, _) => return self.substitute_nodes(function, substitution),
+            Type::KindApplication(function, _) => {
+                return self.substitute_nodes(function, substitution);
+            }
             Type::Kinded(inner, _) => return self.substitute_nodes(inner, substitution),
             Type::Forall(binder, inner) => {
                 let substituted_inner = self.substitute_under_binder(binder, inner, substitution);
@@ -547,8 +549,10 @@ where
     fn function_constructor(&self) -> Option<TypeId> {
         let prim = self.queries.prim_id();
         let indexed = self.queries.indexed(prim).ok()?;
-        let (item, _) =
-            indexed.items.iter_types().find(|(_, item)| item.name.as_deref() == Some("Function"))?;
+        let (item, _) = indexed
+            .items
+            .iter_types()
+            .find(|(_, item)| item.name.as_deref() == Some("Function"))?;
         Some(self.queries.intern_type(Type::Constructor(prim, item)))
     }
 

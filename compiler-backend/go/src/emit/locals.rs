@@ -10,8 +10,8 @@
 
 use rustc_hash::FxHashMap;
 
-use crate::syntax::{GoDeclaration, GoExpression, GoStatement, GoType};
 use crate::naming::{GO_PREDECLARED, VALUE, capitalise, go_safe, numbered};
+use crate::syntax::{GoDeclaration, GoExpression, GoStatement, GoType};
 
 use crate::walk::{self, Walk as _};
 
@@ -358,9 +358,9 @@ impl Walk {
         let mut qualified = false;
         let bytes: Vec<(usize, char)> = spelled.char_indices().collect();
         for (position, &(at, character)) in bytes.iter().enumerate() {
-            let ends = bytes.get(position + 1).is_none_or(|&(_, next)| {
-                !(next.is_alphanumeric() || next == '_')
-            });
+            let ends = bytes
+                .get(position + 1)
+                .is_none_or(|&(_, next)| !(next.is_alphanumeric() || next == '_'));
             if !(character.is_alphanumeric() || character == '_') {
                 qualified = character == '.';
                 start = at + character.len_utf8();
@@ -368,8 +368,7 @@ impl Walk {
             }
             if ends {
                 let word = &spelled[start..at + character.len_utf8()];
-                let is_qualifier =
-                    bytes.get(position + 1).is_some_and(|&(_, next)| next == '.');
+                let is_qualifier = bytes.get(position + 1).is_some_and(|&(_, next)| next == '.');
                 if is_qualifier || !qualified {
                     self.free_name(word.to_string());
                 }

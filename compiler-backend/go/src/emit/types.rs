@@ -255,7 +255,9 @@ where
             match self.monotypes.get(monotype).clone() {
                 Monotype::Recursive(inner) if inner == *data => return Ok(true),
                 Monotype::Recursive(inner) => pending.push(self.unfold(&inner)?),
-                Monotype::Data(maybe) if let Some(payload) = self.maybe_pointer_payload(&maybe)? => {
+                Monotype::Data(maybe)
+                    if let Some(payload) = self.maybe_pointer_payload(&maybe)? =>
+                {
                     pending.push(payload)
                 }
                 Monotype::Function(..) if self.has_closure_set(monotype) => {}
@@ -411,10 +413,8 @@ where
     pub(super) fn data_type_global(&mut self, data: &DataType) -> GoResult<String> {
         if let Some(labels) = self.variant_labels(data)? {
             let full = format!("Variant{labels}");
-            let parts = vec![
-                names::NamePart::Stutter("Variant".into()),
-                names::NamePart::Text(labels),
-            ];
+            let parts =
+                vec![names::NamePart::Stutter("Variant".into()), names::NamePart::Text(labels)];
             return Ok(self.pending_global(identifier(&full), names::PendingSpelling::Parts(parts)));
         }
         let mut full = self.context.type_name(data.file_id, data.item)?.to_string();
@@ -433,8 +433,10 @@ where
             .monotypes
             .constructors(&mut self.context, data)
             .map_err(Failure::in_code_generation)?;
-        let labels: String =
-            constructors.iter().map(|constructor| crate::naming::go_field(&constructor.name)).collect();
+        let labels: String = constructors
+            .iter()
+            .map(|constructor| crate::naming::go_field(&constructor.name))
+            .collect();
         Ok(Some(labels))
     }
 

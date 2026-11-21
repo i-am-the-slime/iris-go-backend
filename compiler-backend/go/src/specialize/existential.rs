@@ -248,9 +248,9 @@ where
     fn grows_family(&self, family: TypeId, witness: TypeId) -> bool {
         self.constructing.iter().any(|(key, enclosing)| {
             self.monotypes.schemes.continuation_family(key) == Some(family)
-                && enclosing.first().is_some_and(|&enclosing| {
-                    self.context.types.grows(witness, enclosing)
-                })
+                && enclosing
+                    .first()
+                    .is_some_and(|&enclosing| self.context.types.grows(witness, enclosing))
         })
     }
 

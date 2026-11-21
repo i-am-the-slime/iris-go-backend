@@ -109,8 +109,8 @@ where
         &mut self,
         type_id: checking::TypeId,
     ) -> QueryResult<Option<&'static str>> {
-        use checking::core::Type;
         use crate::primitives::{KnownType, known_type};
+        use checking::core::Type;
         let Type::Application(function, argument) = self.types.lookup(type_id).clone() else {
             return Ok(None);
         };
@@ -190,7 +190,9 @@ where
         };
         let module = self.module(file_id)?;
         let name = module.indexed.items[item].name.clone().unwrap_or_default();
-        if crate::primitives::known_type(&module.name, &name) != Some(crate::primitives::KnownType::Variant) {
+        if crate::primitives::known_type(&module.name, &name)
+            != Some(crate::primitives::KnownType::Variant)
+        {
             return Ok(None);
         }
         let argument = self.types.strip_annotations(argument);

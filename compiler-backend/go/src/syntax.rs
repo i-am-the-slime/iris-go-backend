@@ -1258,10 +1258,8 @@ impl Printer {
                     match &field.label {
                         Some(label) => {
                             let tag = struct_tag(label);
-                            let _ = writeln!(
-                                rendered,
-                                "{name:width$} {field_type:type_width$} {tag}"
-                            );
+                            let _ =
+                                writeln!(rendered, "{name:width$} {field_type:type_width$} {tag}");
                         }
                         None => {
                             let _ = writeln!(rendered, "{name:width$} {field_type}");
@@ -1375,7 +1373,9 @@ impl Printer {
                 let rendered = self.type_(type_);
                 let value = self.expression_at(value, 0, depth);
                 match type_ {
-                    GoType::Pointer(_) | GoType::Function { .. } => format!("({rendered})({value})"),
+                    GoType::Pointer(_) | GoType::Function { .. } => {
+                        format!("({rendered})({value})")
+                    }
                     _ => format!("{rendered}({value})"),
                 }
             }
@@ -1513,13 +1513,11 @@ fn walk_binary(expression: &GoExpression) -> (bool, bool, u8) {
         {
             absorb(right)
         }
-        GoExpression::Unary { operator: unary, .. } => {
-            match (*operator, *unary) {
-                ("/", "*") | ("&", "&") | ("&", "^") => problem = 5,
-                ("+", "+") | ("-", "-") => problem = problem.max(4),
-                _ => {}
-            }
-        }
+        GoExpression::Unary { operator: unary, .. } => match (*operator, *unary) {
+            ("/", "*") | ("&", "&") | ("&", "^") => problem = 5,
+            ("+", "+") | ("-", "-") => problem = problem.max(4),
+            _ => {}
+        },
         GoExpression::Address(_) if *operator == "&" => problem = 5,
         _ => {}
     }

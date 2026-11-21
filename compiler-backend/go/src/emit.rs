@@ -15,8 +15,8 @@ mod closures;
 mod coerce;
 mod composites;
 mod conditions;
-mod conventions;
 mod constructors;
+mod conventions;
 mod deduplicate;
 mod diverging;
 mod existential;
@@ -25,12 +25,12 @@ mod fusion;
 mod groups;
 mod guards;
 mod headers;
-mod intervals;
 mod immediate;
-mod int64;
-mod json;
 mod instantiations;
+mod int64;
+mod intervals;
 mod iteration;
+mod json;
 mod layout;
 mod lengths;
 mod lines;
@@ -38,23 +38,23 @@ mod locals;
 mod maybe;
 mod mutable;
 mod names;
-mod ownership;
 mod overwrite;
+mod ownership;
 mod packages;
 mod printing;
 mod ranges;
-mod references;
 mod recycling;
 mod reference_equality;
+mod references;
 mod reuse;
 mod scalars;
 mod standard;
 mod strings;
 mod text;
 mod types;
+mod unreferenced;
 mod updates;
 mod vector;
-mod unreferenced;
 mod views;
 
 use std::collections::BTreeSet;
@@ -72,21 +72,21 @@ use crate::error::{GoError, GoResult};
 use crate::foreign::{
     Boundary, Comparison, Constructed, Foreign, ForeignPackages, GoFunction, GoPackage, Operator,
 };
+use crate::graph::{on_cycles, strongly_connected};
 use crate::modules::{ModuleIndex, Modules};
 use crate::mono::{
-    Binding, Expression, ExpressionKind, Function, FunctionId, Guarded,
-    Literal, Local, LocalId, Pattern, PatternKind, Program, RecordUpdate,
+    Binding, Expression, ExpressionKind, Function, FunctionId, Guarded, Literal, Local, LocalId,
+    Pattern, PatternKind, Program, RecordUpdate,
 };
 use crate::monotype::{DataType, Monotype, MonotypeId, Monotypes};
 use crate::naming::{capitalise, go_safe, identifier, is_vague, lower_first, numbered};
-use crate::graph::{on_cycles, strongly_connected};
 use crate::simplify::{reference_graph, visit};
-use crate::walk::{self, Walk};
 use crate::syntax::{
     DeclarationNames, GoCase, GoDeclaration, GoExpression, GoStatement, GoType, Name, SourceLine,
     statements_names,
 };
 use crate::timing::timed;
+use crate::walk::{self, Walk};
 
 pub(crate) use self::closures::Eliminators;
 pub use self::packages::GoSourceFile;
@@ -915,11 +915,8 @@ fn guarded_local_uses(guarded: &Guarded, local: LocalId) -> usize {
         Guarded::Guards(branches) => branches
             .iter()
             .map(|branch| {
-                let guards: usize = branch
-                    .guards
-                    .iter()
-                    .map(|guard| local_uses(guard.value(), local))
-                    .sum();
+                let guards: usize =
+                    branch.guards.iter().map(|guard| local_uses(guard.value(), local)).sum();
                 guards + local_uses(&branch.body, local)
             })
             .sum(),
@@ -3090,7 +3087,8 @@ where
                 let cell = self.value(cell, out)?;
                 let layout = self.data_layout(data)?;
                 if let GoExpression::Identifier(name) = &cell
-                    && let Some(stores) = self.reuse_stores(&layout, *constructor, name, values.clone(), out)
+                    && let Some(stores) =
+                        self.reuse_stores(&layout, *constructor, name, values.clone(), out)
                 {
                     out.extend(stores);
                     return Ok(cell);
@@ -3498,7 +3496,11 @@ where
                 let value = self.hoist(value, "pure", out);
                 let returned = (!self.is_unit(result)).then_some(GoStatement::Return(Some(value)));
                 let body = returned.into_iter().collect();
-                return Ok(GoExpression::Function { parameters: vec![], result: result_type, body });
+                return Ok(GoExpression::Function {
+                    parameters: vec![],
+                    result: result_type,
+                    body,
+                });
             }
             ExpressionKind::EffectBind { action, local, body }
                 if let ExpressionKind::EffectPure(value) = &action.kind
@@ -3640,7 +3642,8 @@ where
             return self.thunk(&expression, out);
         }
         if let Foreign::Range = foreign {
-            let range = self.go_function(GoFunction { package: GoPackage::Array, name: "RangeInt32" });
+            let range =
+                self.go_function(GoFunction { package: GoPackage::Array, name: "RangeInt32" });
             let values = self.values(arguments, out)?;
             return Ok(call(range, values));
         }
@@ -3665,7 +3668,10 @@ where
                 values.push(self.typed_constant(value, element.monotype)?);
             }
             let appended = call(identifier_expression("append"), values);
-            return Ok(call(self.go_function(GoFunction { package: GoPackage::Array, name: "Bounded" }), vec![appended]));
+            return Ok(call(
+                self.go_function(GoFunction { package: GoPackage::Array, name: "Bounded" }),
+                vec![appended],
+            ));
         }
         if let Foreign::Snoc = foreign {
             let array = self.value(&arguments[0], out)?;
@@ -3673,7 +3679,10 @@ where
             let element = self.typed_constant(element, arguments[1].monotype)?;
             if self.owned_snocs.contains(&std::ptr::from_ref(&arguments[0])) {
                 let appended = call(identifier_expression("append"), vec![array, element]);
-                return Ok(call(self.go_function(GoFunction { package: GoPackage::Array, name: "Bounded" }), vec![appended]));
+                return Ok(call(
+                    self.go_function(GoFunction { package: GoPackage::Array, name: "Bounded" }),
+                    vec![appended],
+                ));
             }
             let snoc = GoFunction { package: GoPackage::Array, name: "Snoc" };
             return Ok(call(self.go_function(snoc), vec![array, element]));
@@ -3728,10 +3737,14 @@ where
             return Ok(self.read_field(record, arguments[1].monotype, label));
         }
         if let Foreign::RecordHas = foreign {
-            return Err(GoError::unsupported_construct("a label test on a value whose record type is not closed"));
+            return Err(GoError::unsupported_construct(
+                "a label test on a value whose record type is not closed",
+            ));
         }
         if let Foreign::Record(_) = foreign {
-            return Err(GoError::unsupported_construct("record builders with labels unknown at compile time"));
+            return Err(GoError::unsupported_construct(
+                "record builders with labels unknown at compile time",
+            ));
         }
         if let Foreign::Json(codec) = *foreign {
             return self.json(codec, arguments, monotype, out);
@@ -3759,7 +3772,8 @@ where
         {
             return self.fused_length(&arguments[0], monotype, out);
         }
-        if let Foreign::Call { boundary: Boundary { iteration: Some(iteration), .. }, .. } = *foreign
+        if let Foreign::Call { boundary: Boundary { iteration: Some(iteration), .. }, .. } =
+            *foreign
             && let Some(iterated) = self.iteration(iteration, arguments, monotype, out)?
         {
             return Ok(iterated);
@@ -3821,7 +3835,9 @@ where
         out: &mut Vec<GoStatement>,
     ) -> GoResult<GoExpression> {
         let Monotype::Record(fields) = self.monotypes.get(arguments[1].monotype).clone() else {
-            return Err(GoError::unsupported_construct("record access through a run-time label into a value that is not a closed record"));
+            return Err(GoError::unsupported_construct(
+                "record access through a run-time label into a value that is not a closed record",
+            ));
         };
         let label = self.value(&arguments[0], out)?;
         let record = self.value(&arguments[1], out)?;
@@ -3847,7 +3863,9 @@ where
             cases.push(GoCase { values: vec![label], body, line: None });
         }
         if cases.is_empty() {
-            return Err(GoError::unsupported_construct("record access through a run-time label where no field has the requested type"));
+            return Err(GoError::unsupported_construct(
+                "record access through a run-time label where no field has the requested type",
+            ));
         }
         let type_ = self.go_type(monotype)?;
         out.push(GoStatement::Variable { name: chosen.clone(), type_, value: None });
@@ -4016,7 +4034,6 @@ where
         };
         binary(symbol, left, right)
     }
-
 }
 
 /// The Data.Int.Bits operators, which follow JavaScript: operands are int32 and
@@ -4112,9 +4129,7 @@ pub(super) fn is_untyped_constant(expression: &GoExpression) -> bool {
 
 /// The Boolean that `expression` chooses `"true"` or `"false"` on, as `show` does.
 fn shown_boolean(expression: &Expression) -> Option<&Expression> {
-    let says = |branch: &Expression, word: &str| {
-        matches!(&branch.kind, ExpressionKind::Literal(Literal::String(text)) if text == word)
-    };
+    let says = |branch: &Expression, word: &str| matches!(&branch.kind, ExpressionKind::Literal(Literal::String(text)) if text == word);
     match &expression.kind {
         ExpressionKind::If { condition, then, otherwise }
             if says(then, "true") && says(otherwise, "false") =>

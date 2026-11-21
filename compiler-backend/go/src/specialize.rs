@@ -7,9 +7,7 @@ use std::sync::Arc;
 
 use checking::TypeId;
 use checking::core::{Name, Type};
-use checking::evidence::{
-    EvidenceBinderId, InstanceCandidateOrigin,
-};
+use checking::evidence::{EvidenceBinderId, InstanceCandidateOrigin};
 use checking::tree::{self, DeclarationAbstraction, TermDeclarationKind};
 use files::FileId;
 use indexing::{EquationSourceId, IndexedTermItemKind, TermItemId};
@@ -21,14 +19,15 @@ use crate::context::{Context, ModuleData};
 use crate::dictionary::{Dictionary, InstanceDictionary, Reflected};
 use crate::erasure::Erasure;
 use crate::error::{GoError, GoResult, UnsupportedState};
-use crate::foreign::{self, Accumulator, Boundary, Foreign, ForeignPackages, Signature, Spelled};
+use crate::foreign::{
+    self, Accumulator, Boundary, Foreign, ForeignPackages, JsonCodec, Signature, Spelled,
+};
 use crate::mono::{
     Alternative, Binding, Expression, ExpressionKind, Function, FunctionId, FunctionSpelling,
     Guard, Guarded, GuardedBranch, Literal, Local, LocalId, Pattern, PatternKind, RecordUpdate,
     SourcePosition,
 };
 use crate::monotype::{Monotype, MonotypeId, Monotypes, supported};
-use crate::foreign::JsonCodec;
 use crate::primitives::{Primitive, Signedness};
 use crate::scheme::{
     Read, SCHEME_INSTANTIATION_LIMIT, SchemeInstantiation, SchemeKey, constrained_scheme,
@@ -862,7 +861,10 @@ where
                 self.monotypes.foreign_records.insert(record, owner)
             {
                 return Err(GoError::SharedRecordStruct {
-                    first: format!("{}.{other_struct}", ForeignPackages::package_name(&other_module)),
+                    first: format!(
+                        "{}.{other_struct}",
+                        ForeignPackages::package_name(&other_module)
+                    ),
                     second: format!("{}.{struct_name}", ForeignPackages::package_name(module_name)),
                 });
             }
@@ -1503,7 +1505,8 @@ where
                 }
                 let body = self.expression(scope, *expression)?;
                 let monotype = body.monotype;
-                let scrutinees: Vec<Expression> = parameters.iter().map(Local::expression).collect();
+                let scrutinees: Vec<Expression> =
+                    parameters.iter().map(Local::expression).collect();
                 let body = Guarded::Unconditional(body);
                 let position = source_position(&module, id);
                 let alternative = Alternative { patterns, body, position };
@@ -2905,8 +2908,7 @@ where
                     return Ok(shown);
                 }
                 let declared = module.checked.lookup_term_item_type(term);
-                let (signedness, inherited) =
-                    self.key_signedness(scope, &types, &[], declared)?;
+                let (signedness, inherited) = self.key_signedness(scope, &types, &[], declared)?;
                 let name = self.specialized_name(name, &[], &types)?;
                 let name = int64::inherited_name(name, signedness.filter(|_| inherited));
                 let key = SpecializationKey {
@@ -3355,9 +3357,7 @@ where
                 PatternKind::Named { local, pattern: Box::new(pattern) }
             }
             tree::BinderKind::Wildcard => PatternKind::Wildcard,
-            tree::BinderKind::String { value } => {
-                PatternKind::Literal(string_literal(value))
-            }
+            tree::BinderKind::String { value } => PatternKind::Literal(string_literal(value)),
             tree::BinderKind::Char { value } => PatternKind::Literal(Literal::Char(*value)),
             tree::BinderKind::Boolean { value } => PatternKind::Literal(Literal::Boolean(*value)),
             tree::BinderKind::Array { elements } => {

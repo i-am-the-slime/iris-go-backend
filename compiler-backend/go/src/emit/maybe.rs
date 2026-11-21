@@ -92,10 +92,7 @@ where
         }))
     }
 
-    pub(super) fn maybe_representation(
-        &mut self,
-        payload: MonotypeId,
-    ) -> GoResult<Representation> {
+    pub(super) fn maybe_representation(&mut self, payload: MonotypeId) -> GoResult<Representation> {
         Ok(match self.monotypes.get(payload).clone() {
             Monotype::Int => Representation::Int,
             Monotype::Char => Representation::Char,
@@ -154,10 +151,7 @@ where
         let fields_of = |constructor: &DataConstructor| -> Vec<(String, MonotypeId)> {
             constructor.fields.iter().map(|&field| ("Just".to_string(), field)).collect()
         };
-        let scalar = |emitter: &mut Self,
-                      name: String,
-                      maybe: MaybeLayout|
-         -> DataLayout {
+        let scalar = |emitter: &mut Self, name: String, maybe: MaybeLayout| -> DataLayout {
             let constructors = constructors
                 .iter()
                 .map(|constructor| ConstructorLayout {
@@ -355,12 +349,20 @@ where
                 }
             }
             MaybeLayout::Pointer { .. } => {
-                if is_just { values.remove(0) } else { identifier_expression("nil") }
+                if is_just {
+                    values.remove(0)
+                } else {
+                    identifier_expression("nil")
+                }
             }
             MaybeLayout::Struct { nothing, literal, .. } => {
                 if is_just && *literal {
                     let composite = self.composite(layout, constructor, values);
-                    if layout.boxed { GoExpression::Address(Box::new(composite)) } else { composite }
+                    if layout.boxed {
+                        GoExpression::Address(Box::new(composite))
+                    } else {
+                        composite
+                    }
                 } else if is_just {
                     let just = self.maybe_just_function(layout, maybe)?;
                     call(identifier_expression(&just), values)

@@ -109,7 +109,9 @@ impl fmt::Display for Erasure {
             Erasure::RankN => "rank-N forall (unconstrained)",
             Erasure::ArgumentVariable => "type variable in data type arguments",
             Erasure::VariableApplication => "type variable application",
-            Erasure::VariantRow => "Variant payload, VariantF row, or Variant row an unsafeCoerce narrows",
+            Erasure::VariantRow => {
+                "Variant payload, VariantF row, or Variant row an unsafeCoerce narrows"
+            }
             Erasure::Existential => "Data.Exists",
             Erasure::UnboundedWitnesses => "Data.Exists with unbounded witnesses",
             Erasure::NewtypeCycle => "newtype cycle",

@@ -146,8 +146,12 @@ pub enum Int64Operation {
     ToInt,
     ToNumber,
     /// The high or low 32 bits as a Number, read as signed or unsigned.
-    HighBits { unsigned: bool },
-    LowBits { unsigned: bool },
+    HighBits {
+        unsigned: bool,
+    },
+    LowBits {
+        unsigned: bool,
+    },
     /// `toSigned_` and `toUnsigned_`, whose Long has the definition's one Go
     /// type on both sides.
     Same,

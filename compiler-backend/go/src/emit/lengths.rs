@@ -22,8 +22,8 @@ use crate::syntax::{
     DeclarationNames, GoDeclaration, GoExpression, GoStatement, GoType, Name, statements_names,
 };
 
-use crate::walk::{self, Walk, each_expression_in_declaration, each_expression_in_statement};
 use super::views::{carried_unchanged, view_invariant_strings};
+use crate::walk::{self, Walk, each_expression_in_declaration, each_expression_in_statement};
 
 pub fn count_lengths_up_to_comparisons(declarations: &mut [GoDeclaration]) {
     for declaration in declarations {

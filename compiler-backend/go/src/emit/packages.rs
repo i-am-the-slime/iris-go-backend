@@ -16,10 +16,10 @@ use std::collections::BTreeSet;
 
 use rustc_hash::{FxHashMap, FxHashSet};
 
-use crate::graph::strongly_connected;
-use crate::naming::{RESERVED, capitalise, exported, go_safe, lower_camel, numbered, resolve};
 use crate::error::{GoError, GoResult};
+use crate::graph::strongly_connected;
 use crate::modules::{ModuleIndex, ModuleSet, Modules};
+use crate::naming::{RESERVED, capitalise, exported, go_safe, lower_camel, numbered, resolve};
 use crate::syntax::{GoDeclaration, GoExpression, GoFile, GoImport, Reference};
 
 /// How a global name was formed, so that each package can spell it anew.
@@ -193,7 +193,11 @@ impl Packaging<'_> {
     }
 
     /// The units each unit refers to.
-    fn references(&self, units: &mut [Unit], unit_of: &FxHashMap<String, usize>) -> Vec<Vec<usize>> {
+    fn references(
+        &self,
+        units: &mut [Unit],
+        unit_of: &FxHashMap<String, usize>,
+    ) -> Vec<Vec<usize>> {
         units
             .iter_mut()
             .enumerate()
@@ -529,7 +533,8 @@ impl Packaging<'_> {
                 imports.push(GoImport { path, alias });
             }
             imports.sort();
-            let file = GoFile { constraint: None, package: package.name.clone(), imports, declarations };
+            let file =
+                GoFile { constraint: None, package: package.name.clone(), imports, declarations };
             files.push(GoSourceFile { path: package.file_path(), file });
         }
         Ok(files)
@@ -924,16 +929,19 @@ impl Naming<'_> {
                     });
                 }
                 let stuttering = |keep_stutter: bool| -> Option<String> {
-                    let kept = parts.iter().zip(&spelled).enumerate().filter(|(index, (part, _))| {
-                        !matches!(part, SpelledPart::Stutter(_))
-                            || keep_stutter
-                            || (*index == 0 && !at_home)
-                    });
+                    let kept =
+                        parts.iter().zip(&spelled).enumerate().filter(|(index, (part, _))| {
+                            !matches!(part, SpelledPart::Stutter(_))
+                                || keep_stutter
+                                || (*index == 0 && !at_home)
+                        });
                     let text: String = kept.map(|(_, (_, text))| text.as_str()).collect();
                     (!text.is_empty()).then(|| super::identifier(&text))
                 };
-                let mut ladder: Vec<String> =
-                    [stuttering(false), stuttering(true), Some(full)].into_iter().flatten().collect();
+                let mut ladder: Vec<String> = [stuttering(false), stuttering(true), Some(full)]
+                    .into_iter()
+                    .flatten()
+                    .collect();
                 ladder.dedup();
                 ladder
             })

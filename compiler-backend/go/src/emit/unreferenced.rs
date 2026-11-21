@@ -22,9 +22,8 @@ pub(super) fn drop_unreferenced_definitions(declarations: &mut [GoDeclaration]) 
 fn drop_unreferenced(declaration: &mut GoDeclaration) -> bool {
     let read = read_names(declaration);
     let unread = |name: &String| name != "_" && !read.contains(name);
-    let unread_target = |target: &GoExpression| {
-        matches!(target, GoExpression::Identifier(name) if unread(name))
-    };
+    let unread_target =
+        |target: &GoExpression| matches!(target, GoExpression::Identifier(name) if unread(name));
     let mut dropped = false;
     each_block_in_declaration(declaration, |block| {
         for statement in std::mem::take(block) {

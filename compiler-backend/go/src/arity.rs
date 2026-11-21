@@ -4,10 +4,7 @@ use crate::foreign::{Foreign, Spelled};
 use crate::graph::{on_cycles, strongly_connected};
 use crate::mono::{Expression, ExpressionKind, Function, FunctionId, Program};
 use crate::monotype::{Monotype, MonotypeId, Monotypes};
-use crate::simplify::{
-    KnownFunctions, does_no_work, for_each_child,
-    reference_graph,
-};
+use crate::simplify::{KnownFunctions, does_no_work, for_each_child, reference_graph};
 
 const ROUNDS: usize = 16;
 

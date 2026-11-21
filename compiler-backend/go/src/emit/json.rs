@@ -207,7 +207,8 @@ where
                 let clip =
                     GoExpression::Qualified { package: "slices".into(), name: "Clip".into() };
                 let clipped = call(clip, vec![identifier_expression(&items)]);
-                let bounded = self.go_function(GoFunction { package: GoPackage::Array, name: "Bounded" });
+                let bounded =
+                    self.go_function(GoFunction { package: GoPackage::Array, name: "Bounded" });
                 Ok(call(bounded, vec![clipped]))
             }
             Monotype::Object(element) => {

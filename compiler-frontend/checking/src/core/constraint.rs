@@ -329,8 +329,8 @@ where
         // do does instance search get its turn (purs solves after unification is complete).
         // Constraints whose functional dependencies determine the unknown arguments are left
         // to instance search: there the instance improves the wanted, as `TypeEquals a a` does.
-        let given_may_match = !blocked.is_empty()
-            && !is_improving_constraint(state, context, constraint.key.wanted)?;
+        let given_may_match =
+            !blocked.is_empty() && !is_improving_constraint(state, context, constraint.key.wanted)?;
 
         let given = constraint.key.given.iter().copied();
         match compiler::match_compiler_instance(state, context, constraint.key.wanted, given)? {

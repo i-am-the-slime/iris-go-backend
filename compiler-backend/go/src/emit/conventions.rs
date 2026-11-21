@@ -41,7 +41,10 @@ where
                 }
                 let argument = self.convention_or_native(argument)?;
                 let returned = self.convention_result(returned)?;
-                Some(GoType::Function { parameters: vec![argument], result: returned.map(Box::new) })
+                Some(GoType::Function {
+                    parameters: vec![argument],
+                    result: returned.map(Box::new),
+                })
             }
             _ => None,
         })
@@ -136,7 +139,11 @@ where
                     targets: vec![identifier_expression(&converted)],
                     values: vec![GoExpression::Address(Box::new(inner))],
                 });
-                out.push(GoStatement::Variable { name: converted.clone(), type_: target, value: None });
+                out.push(GoStatement::Variable {
+                    name: converted.clone(),
+                    type_: target,
+                    value: None,
+                });
                 out.push(GoStatement::If {
                     condition: binary("!=", value, identifier_expression("nil")),
                     then: present,

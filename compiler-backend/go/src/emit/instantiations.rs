@@ -124,7 +124,8 @@ where
 fn instantiation_field_names(labels: &[&str]) -> Vec<String> {
     let words: Vec<Vec<&str>> = labels.iter().map(|label| label_words(label)).collect();
     let shortest = words.iter().map(Vec::len).min().unwrap_or(0);
-    let shared = (0..shortest).take_while(|&index| words.iter().all(|w| w[index] == words[0][index]));
+    let shared =
+        (0..shortest).take_while(|&index| words.iter().all(|w| w[index] == words[0][index]));
     // Every name keeps at least one word of its own.
     let shared = shared.count().min(shortest.saturating_sub(1));
     let shared = if labels.len() == 1 { 0 } else { shared };
@@ -160,17 +161,17 @@ mod tests {
 
     #[test]
     fn a_label_that_begins_another_keeps_a_word() {
-        assert_eq!(instantiation_field_names(&["StepInt", "StepIntArray"]), [
-            "ForInt",
-            "ForIntArray"
-        ]);
+        assert_eq!(
+            instantiation_field_names(&["StepInt", "StepIntArray"]),
+            ["ForInt", "ForIntArray"]
+        );
     }
 
     #[test]
     fn labels_without_shared_words_are_named_whole() {
-        assert_eq!(instantiation_field_names(&["Boolean", "StepInt"]), [
-            "ForBoolean",
-            "ForStepInt"
-        ]);
+        assert_eq!(
+            instantiation_field_names(&["Boolean", "StepInt"]),
+            ["ForBoolean", "ForStepInt"]
+        );
     }
 }

@@ -6,8 +6,6 @@
 use rustc_hash::{FxHashMap, FxHashSet};
 
 use crate::foreign::{Comparison, Foreign, GoPackage, LineCoverage, Operator};
-use crate::suspension::Suspension;
-use crate::naming::is_vague;
 use crate::graph::{on_cycles, strongly_connected};
 use crate::mono::{
     Alternative, Binding, Expression, ExpressionKind, Function, FunctionId, Guard, Guarded,
@@ -15,6 +13,8 @@ use crate::mono::{
     RecordUpdate,
 };
 use crate::monotype::{Monotype, MonotypeId, Monotypes};
+use crate::naming::is_vague;
+use crate::suspension::Suspension;
 use crate::timing::timed;
 use smol_str::SmolStr;
 
@@ -200,7 +200,8 @@ impl Simplifier<'_> {
             let Some((parameter, inner)) = self.monotypes.function_parts(result) else {
                 return argument;
             };
-            let name = if is_vague(&template.name) { "value".into() } else { template.name.clone() };
+            let name =
+                if is_vague(&template.name) { "value".into() } else { template.name.clone() };
             let template = Local { id: LocalId(0), name, monotype: parameter };
             parameters.push(self.fresh(&template));
             result = inner;
@@ -208,7 +209,10 @@ impl Simplifier<'_> {
         let function = Expression::new(ExpressionKind::Function(id), argument.monotype);
         let arguments = parameters.iter().map(Local::expression).collect();
         let body = self.apply(function, arguments, result);
-        Expression::new(ExpressionKind::Lambda { parameters, body: Box::new(body) }, argument.monotype)
+        Expression::new(
+            ExpressionKind::Lambda { parameters, body: Box::new(body) },
+            argument.monotype,
+        )
     }
 
     /// A point-free definition such as `void = map (const unit)` becomes a function
@@ -316,8 +320,7 @@ impl Simplifier<'_> {
                 unreachable!("invariant violated: only chosen lambdas take the parameter")
             };
             let first = parameters.remove(0);
-            let body =
-                substitute(*body, first.id, &parameter.expression(), simplifier.monotypes);
+            let body = substitute(*body, first.id, &parameter.expression(), simplifier.monotypes);
             if parameters.is_empty() {
                 return body;
             }
@@ -542,7 +545,9 @@ impl Simplifier<'_> {
                         // A newtype pattern may bind the wrapped representation of a
                         // recursive newtype, which the binding keeps.
                         PatternKind::Variable(local)
-                            if !self.monotypes.same_without_causes(local.monotype, value.monotype) =>
+                            if !self
+                                .monotypes
+                                .same_without_causes(local.monotype, value.monotype) =>
                         {
                             let monotype = local.monotype;
                             let value =
@@ -963,7 +968,8 @@ impl Simplifier<'_> {
             return copy;
         }
         for_each_child_mut(&mut body, &mut |child| {
-            let taken = std::mem::replace(child, Expression::new(ExpressionKind::Unit, child.monotype));
+            let taken =
+                std::mem::replace(child, Expression::new(ExpressionKind::Unit, child.monotype));
             *child = self.inline_applied(taken, binding);
         });
         body
@@ -1084,9 +1090,9 @@ impl Simplifier<'_> {
             Foreign::Perform { function, .. }
                 if function.package == GoPackage::Aff
                     && function.name == "ParApplyDirect"
-                    && arguments.iter().all(|argument| {
-                        !self.suspension.may_suspend(argument, self.monotypes)
-                    }) =>
+                    && arguments
+                        .iter()
+                        .all(|argument| !self.suspension.may_suspend(argument, self.monotypes)) =>
             {
                 self.sequential_apply(arguments, monotype)
             }
@@ -1173,9 +1179,14 @@ impl Simplifier<'_> {
             self.monotypes.effect_result(functions.monotype).unwrap_or(functions.monotype);
         let value_type = self.monotypes.effect_result(values.monotype).unwrap_or(values.monotype);
         let result = self.monotypes.effect_result(monotype).unwrap_or(monotype);
-        let template = Local { id: LocalId(0), name: SmolStr::new_static("f"), monotype: function_type };
+        let template =
+            Local { id: LocalId(0), name: SmolStr::new_static("f"), monotype: function_type };
         let function = self.fresh(&template);
-        let template = Local { id: LocalId(0), name: self.monotypes.value_name(value_type), monotype: value_type };
+        let template = Local {
+            id: LocalId(0),
+            name: self.monotypes.value_name(value_type),
+            monotype: value_type,
+        };
         let value = self.fresh(&template);
         let applied = self.apply(function.expression(), vec![value.expression()], result);
         let pure = Expression::new(ExpressionKind::EffectPure(Box::new(applied)), monotype);
@@ -1438,10 +1449,13 @@ impl Simplifier<'_> {
 fn runs_any_effect(expression: &Expression) -> bool {
     let mut runs = false;
     visit(expression, &mut |node| {
-        runs |= matches!(node.kind, ExpressionKind::Foreign {
-            foreign: Foreign::RunEffect | Foreign::UnsafePerformEffect,
-            ..
-        });
+        runs |= matches!(
+            node.kind,
+            ExpressionKind::Foreign {
+                foreign: Foreign::RunEffect | Foreign::UnsafePerformEffect,
+                ..
+            }
+        );
     });
     runs
 }
@@ -1691,14 +1705,16 @@ pub(crate) fn is_deferrable(expression: &Expression) -> bool {
     let mut deferrable = true;
     visit(expression, &mut |node| {
         deferrable &= match &node.kind {
-            ExpressionKind::Foreign { foreign, .. } => !matches!(
-                foreign,
-                Foreign::Throw
-                    | Foreign::Crash
-                    | Foreign::RunEffect
-                    | Foreign::UnsafePerformEffect
-                    | Foreign::LazyForce
-            ) && !foreign.is_effectful(),
+            ExpressionKind::Foreign { foreign, .. } => {
+                !matches!(
+                    foreign,
+                    Foreign::Throw
+                        | Foreign::Crash
+                        | Foreign::RunEffect
+                        | Foreign::UnsafePerformEffect
+                        | Foreign::LazyForce
+                ) && !foreign.is_effectful()
+            }
             ExpressionKind::Reuse { .. }
             | ExpressionKind::Update { .. }
             | ExpressionKind::EffectPure(_)
@@ -2048,8 +2064,7 @@ fn only_called(expression: &Expression, local: LocalId, arity: usize) -> bool {
     fn called(expression: &Expression, local: LocalId, arity: usize, seen: &mut bool) -> bool {
         match &expression.kind {
             ExpressionKind::Local(id) => *id != local,
-            ExpressionKind::Apply { function, arguments }
-                if matches!(function.kind, ExpressionKind::Local(id) if id == local) =>
+            ExpressionKind::Apply { function, arguments } if matches!(function.kind, ExpressionKind::Local(id) if id == local) =>
             {
                 *seen = true;
                 arguments.len() >= arity
@@ -2105,8 +2120,7 @@ fn count(expression: &Expression, local: LocalId, under_lambda: bool, result: &m
                 result.under_lambda += 1;
             }
         }
-        ExpressionKind::Apply { function, arguments }
-            if matches!(function.kind, ExpressionKind::Local(id) if id == local) =>
+        ExpressionKind::Apply { function, arguments } if matches!(function.kind, ExpressionKind::Local(id) if id == local) =>
         {
             result.applied += 1;
             count(function, local, under_lambda, result);

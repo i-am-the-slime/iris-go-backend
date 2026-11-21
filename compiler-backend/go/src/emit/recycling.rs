@@ -211,7 +211,8 @@ where
     }
 }
 
-const RECYCLE_SOURCE: &str = "func {name}[T any, N ~int | ~int32 | ~int64](buffer []T, count N) []T {
+const RECYCLE_SOURCE: &str =
+    "func {name}[T any, N ~int | ~int32 | ~int64](buffer []T, count N) []T {
 \tif cap(buffer) < int(count) {
 \t\treturn make([]T, count)
 \t}

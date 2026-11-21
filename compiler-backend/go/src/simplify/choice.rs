@@ -279,8 +279,7 @@ pub(super) fn negative_within(
     monotype: MonotypeId,
     monotypes: &mut Monotypes,
 ) -> Option<Expression> {
-    let Foreign::Perform { function: GoFunction { package: GoPackage::Array, name }, .. } =
-        foreign
+    let Foreign::Perform { function: GoFunction { package: GoPackage::Array, name }, .. } = foreign
     else {
         return None;
     };
@@ -372,11 +371,9 @@ fn select(
                 Guarded::Unconditional(body) => {
                     select(body, monotype, alternatives, selections, monotypes)
                 }
-                Guarded::Guards(branches) => branches
-                    .iter()
-                    .all(|branch| {
-                        select(&branch.body, monotype, alternatives, selections, monotypes)
-                    }),
+                Guarded::Guards(branches) => branches.iter().all(|branch| {
+                    select(&branch.body, monotype, alternatives, selections, monotypes)
+                }),
             })
         }
         ExpressionKind::Fail(_) => true,

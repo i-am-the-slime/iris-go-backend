@@ -13,9 +13,10 @@ where
     pub(super) fn grows_construction(&self, key: &SchemeKey, types: &[TypeId]) -> bool {
         self.constructing.iter().any(|(constructed, enclosing)| {
             constructed == key
-                && types.iter().zip(enclosing.iter()).any(|(&requested, &enclosing)| {
-                    self.context.types.grows(requested, enclosing)
-                })
+                && types
+                    .iter()
+                    .zip(enclosing.iter())
+                    .any(|(&requested, &enclosing)| self.context.types.grows(requested, enclosing))
         })
     }
 

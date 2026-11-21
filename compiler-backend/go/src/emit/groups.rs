@@ -9,11 +9,11 @@ use rustc_hash::FxHashSet;
 use super::{
     Emitter, LoopTarget, Mode, Sink, TailLoop, call, captures_parameters, identifier_expression,
 };
-use crate::graph::strongly_connected;
-use crate::naming::capitalise;
 use crate::error::GoResult;
+use crate::graph::strongly_connected;
 use crate::mono::{Expression, ExpressionKind, Function, FunctionId, Guarded, Program};
 use crate::monotype::Monotypes;
+use crate::naming::capitalise;
 use crate::syntax::{GoCase, GoDeclaration, GoDefault, GoExpression, GoStatement, GoType};
 
 use super::packages::Spelling;

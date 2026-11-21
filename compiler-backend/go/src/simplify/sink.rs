@@ -10,8 +10,8 @@
 use rustc_hash::FxHashMap;
 
 use super::{
-    KnownFunctions, Simplifier, for_each_child, for_each_child_mut, is_deferrable,
-    is_within_size, runs_effect,
+    KnownFunctions, Simplifier, for_each_child, for_each_child_mut, is_deferrable, is_within_size,
+    runs_effect,
 };
 use crate::mono::{Binding, Expression, ExpressionKind, Guarded, LocalId};
 
@@ -81,7 +81,8 @@ impl Simplifier<'_> {
                 return;
             }
             let monotype = expression.monotype;
-            let inner = std::mem::replace(expression, Expression::new(ExpressionKind::Unit, monotype));
+            let inner =
+                std::mem::replace(expression, Expression::new(ExpressionKind::Unit, monotype));
             *expression = Expression::new(
                 ExpressionKind::Let { bindings: vec![copy], body: Box::new(inner) },
                 monotype,
@@ -136,14 +137,15 @@ fn needed_on_every_path(known: &impl KnownFunctions, expression: &Expression, id
                     && needed_on_every_path(known, otherwise, id))
         }
         ExpressionKind::Case { scrutinees, alternatives } => {
-            scrutinees.iter().any(|scrutinee| mentions(scrutinee, id) || runs_effect(known, scrutinee))
+            scrutinees
+                .iter()
+                .any(|scrutinee| mentions(scrutinee, id) || runs_effect(known, scrutinee))
                 || alternatives.iter().any(|alternative| match &alternative.body {
                     Guarded::Unconditional(_) => false,
                     Guarded::Guards(branches) => branches.iter().any(|branch| {
-                        branch
-                            .guards
-                            .iter()
-                            .any(|guard| mentions(guard.value(), id) || runs_effect(known, guard.value()))
+                        branch.guards.iter().any(|guard| {
+                            mentions(guard.value(), id) || runs_effect(known, guard.value())
+                        })
                     }),
                 })
                 || alternatives.iter().all(|alternative| match &alternative.body {
@@ -155,9 +157,9 @@ fn needed_on_every_path(known: &impl KnownFunctions, expression: &Expression, id
         }
         ExpressionKind::Let { bindings, body } => {
             is_recursive_group(bindings)
-                || bindings
-                    .iter()
-                    .any(|binding| mentions(&binding.value, id) || runs_effect(known, &binding.value))
+                || bindings.iter().any(|binding| {
+                    mentions(&binding.value, id) || runs_effect(known, &binding.value)
+                })
                 || needed_on_every_path(known, body, id)
         }
         _ => mentions(expression, id),

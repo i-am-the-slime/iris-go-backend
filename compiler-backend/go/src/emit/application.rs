@@ -53,11 +53,7 @@ where
             function: identifier_expression(self.function_reference(id)),
             monotype,
             arity: function.parameters.len(),
-            names: function
-                .parameters
-                .iter()
-                .map(|parameter| parameter.name.to_string())
-                .collect(),
+            names: function.parameters.iter().map(|parameter| parameter.name.to_string()).collect(),
         }
     }
 
@@ -100,7 +96,9 @@ where
                 value => {
                     let (parameters, _) = self.leading_arrows(callable.monotype, position + 1);
                     let base = match parameters.get(position) {
-                        Some(&parameter) => self.argument_base(&callable.names, position, parameter),
+                        Some(&parameter) => {
+                            self.argument_base(&callable.names, position, parameter)
+                        }
                         None => UNNAMED_VALUE.into(),
                     };
                     self.shared(value, &base, out)

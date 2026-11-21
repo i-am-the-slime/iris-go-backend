@@ -223,8 +223,10 @@ impl Monotypes {
         }
         match (self.get(left), self.get(right)) {
             (Monotype::Erased(_), Monotype::Erased(_)) => true,
-            (Monotype::Function(left_argument, left_result), Monotype::Function(argument, result)) =>
-            {
+            (
+                Monotype::Function(left_argument, left_result),
+                Monotype::Function(argument, result),
+            ) => {
                 self.same_without_causes(*left_argument, *argument)
                     && self.same_without_causes(*left_result, *result)
             }
@@ -266,9 +268,7 @@ impl Monotypes {
             Monotype::Array(element) => Monotype::Array(self.without_causes(element)),
             Monotype::Effect(element) => Monotype::Effect(self.without_causes(element)),
             Monotype::Reference(element) => Monotype::Reference(self.without_causes(element)),
-            Monotype::MutableArray(element) => {
-                Monotype::MutableArray(self.without_causes(element))
-            }
+            Monotype::MutableArray(element) => Monotype::MutableArray(self.without_causes(element)),
             Monotype::Object(element) => Monotype::Object(self.without_causes(element)),
             Monotype::Nullable(element) => Monotype::Nullable(self.without_causes(element)),
             Monotype::Lazy(element) => Monotype::Lazy(self.without_causes(element)),
@@ -831,7 +831,10 @@ impl Monotypes {
                     let arguments = if regular {
                         erased_newtypes(context, arguments, expansions)?
                     } else {
-                        arguments.iter().map(|_| context.types.erased(Erasure::NonRegular)).collect()
+                        arguments
+                            .iter()
+                            .map(|_| context.types.erased(Erasure::NonRegular))
+                            .collect()
                     };
                     Monotype::Data(self.data_type(context, file_id, item, arguments)?)
                 }
@@ -1051,7 +1054,8 @@ impl Monotypes {
     /// data type `name`: the name capitalised, with `Type` added if one of the module's values
     /// takes that name.
     fn declared_go_type(&self, module: &crate::context::ModuleData, name: &str) -> Converted<()> {
-        let Some(source) = self.foreign_sources.iter().find(|source| *source.module == *module.name)
+        let Some(source) =
+            self.foreign_sources.iter().find(|source| *source.module == *module.name)
         else {
             return Ok(());
         };
@@ -2133,7 +2137,8 @@ where
         Some(KnownType::Signed) => mentions.signed = true,
         Some(KnownType::Unsigned) => mentions.unsigned = true,
         _ => {
-            let IndexedTypeItemKind::Newtype { constructors, .. } = &module.indexed.items[item].kind
+            let IndexedTypeItemKind::Newtype { constructors, .. } =
+                &module.indexed.items[item].kind
             else {
                 return Ok(());
             };
@@ -2141,7 +2146,8 @@ where
             if visited.contains(&(file_id, item)) {
                 return Ok(());
             }
-            let Some(underlying) = newtype_underlying(context, file_id, constructor, type_id)? else {
+            let Some(underlying) = newtype_underlying(context, file_id, constructor, type_id)?
+            else {
                 return Ok(());
             };
             visited.push((file_id, item));

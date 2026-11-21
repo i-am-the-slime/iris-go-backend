@@ -123,7 +123,10 @@ pub enum Foreign {
     Operator(Operator),
     /// A `Data.Int64.Internal` operation on Longs of one signedness, which
     /// Go's `int64` or `uint64` does itself.
-    Int64 { operation: crate::primitives::Int64Operation, signedness: crate::primitives::Signedness },
+    Int64 {
+        operation: crate::primitives::Int64Operation,
+        signedness: crate::primitives::Signedness,
+    },
     /// A foreign of a Go foreign package; `type_arguments` instantiate a
     /// quantified one without arguments, a generic Go function.
     Project {
@@ -133,8 +136,16 @@ pub enum Foreign {
         effectful: bool,
         type_arguments: &'static [MonotypeId],
     },
-    Call { function: GoFunction, arity: usize, boundary: Boundary },
-    Perform { function: GoFunction, arity: usize, boundary: Boundary },
+    Call {
+        function: GoFunction,
+        arity: usize,
+        boundary: Boundary,
+    },
+    Perform {
+        function: GoFunction,
+        arity: usize,
+        boundary: Boundary,
+    },
     RunEffect,
     UnsafePerformEffect,
     Constant(GoFunction),
@@ -461,9 +472,7 @@ impl GoPackage {
             GoPackage::Aff => "github.com/i-am-the-slime/iris-go/aff",
             GoPackage::EventLoop => "github.com/i-am-the-slime/iris-go/eventloop",
             GoPackage::Promise => "github.com/i-am-the-slime/iris-go/promise",
-            GoPackage::ForeignValue => {
-                "github.com/i-am-the-slime/iris-go/foreignvalue"
-            }
+            GoPackage::ForeignValue => "github.com/i-am-the-slime/iris-go/foreignvalue",
             GoPackage::Tauri => "github.com/i-am-the-slime/iris-go/tauri",
             GoPackage::Regex => "github.com/i-am-the-slime/iris-go/regex",
             GoPackage::Lazy => "github.com/i-am-the-slime/iris-go/lazy",
@@ -479,9 +488,7 @@ impl GoPackage {
             GoPackage::Console => "github.com/i-am-the-slime/iris-go/console",
             GoPackage::JsBigInt => "github.com/i-am-the-slime/iris-go/jsbigint",
             GoPackage::Int64 => "github.com/i-am-the-slime/iris-go/ffi/Data_Int64_Internal_ffi",
-            GoPackage::Exception => {
-                "github.com/i-am-the-slime/iris-go/exception"
-            }
+            GoPackage::Exception => "github.com/i-am-the-slime/iris-go/exception",
         }
     }
 
@@ -1085,19 +1092,22 @@ const FOREIGN_IMPORTS: &[(&str, &str, Foreign)] = &[
     (
         "Yoga.JSON",
         "_unsafeStringify",
-        call(GoPackage::ForeignValue, "UnsafeStringify", 1, Boundary {
-            foreign_arguments: &[0],
-            ..PLAIN
-        }),
+        call(
+            GoPackage::ForeignValue,
+            "UnsafeStringify",
+            1,
+            Boundary { foreign_arguments: &[0], ..PLAIN },
+        ),
     ),
     (
         "Yoga.JSON",
         "_unsafePrettyStringify",
-        call(GoPackage::ForeignValue, "UnsafePrettyStringify", 2, Boundary {
-            int32_parameters: &[0],
-            foreign_arguments: &[1],
-            ..PLAIN
-        }),
+        call(
+            GoPackage::ForeignValue,
+            "UnsafePrettyStringify",
+            2,
+            Boundary { int32_parameters: &[0], foreign_arguments: &[1], ..PLAIN },
+        ),
     ),
     ("Yoga.JSON", "_parseJSON", perform_in(GoPackage::ForeignValue, "ParseJSON", 1, PLAIN)),
     ("Data.Argonaut.Core", "fromBoolean", argonaut("FromBoolean", 1)),

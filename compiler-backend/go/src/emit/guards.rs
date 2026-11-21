@@ -175,7 +175,8 @@ impl Together<'_, '_, '_> {
             .into_iter()
             .enumerate()
             .partition(|(offset, _)| run.hoisted.contains(&(run.start + offset)));
-        let hoisted: Vec<GoStatement> = hoisted.into_iter().map(|(_, statement)| statement).collect();
+        let hoisted: Vec<GoStatement> =
+            hoisted.into_iter().map(|(_, statement)| statement).collect();
         let passed = self.decided(&run, &statements, true);
         let failed = match run.tests.len() {
             1 => self.decided(&run, &statements, false),

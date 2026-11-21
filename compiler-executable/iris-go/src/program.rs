@@ -4,12 +4,11 @@
 //! the iris-go runtime this release targets. The executable is `.spago/go/<package>/bin/`, and
 //! `go build` runs only when the generated Go, the `go.mod` or the build settings change.
 
-use std::env;
 use std::ffi::OsString;
-use std::fs;
 use std::io::ErrorKind;
 use std::path::{Path, PathBuf};
 use std::process::{Command, ExitStatus};
+use std::{env, fs};
 
 use iris_build::Workspace;
 use sha2::{Digest, Sha256};

@@ -45,8 +45,7 @@ use crate::foreign::{Boundary, Foreign, GoFunction, GoPackage, Iteration};
 use crate::mono::{Binding, Expression, ExpressionKind, Literal, Local};
 use crate::monotype::{Monotype, MonotypeId};
 use crate::naming::VALUE;
-use crate::syntax::SourceLine;
-use crate::syntax::{GoExpression, GoStatement, GoType};
+use crate::syntax::{GoExpression, GoStatement, GoType, SourceLine};
 
 /// The stages between an array and the consumer that reads it.
 pub(super) struct Pipeline<'e> {
@@ -329,7 +328,8 @@ where
             self.hoist(start, "first", out)
         };
         let end = self.value(last, out)?;
-        let range_steps = self.go_function(GoFunction { package: GoPackage::Array, name: "RangeSteps" });
+        let range_steps =
+            self.go_function(GoFunction { package: GoPackage::Array, name: "RangeSteps" });
         let step = if read { self.temporary("step") } else { "_".into() };
         let count = self.temporary("count");
         let steps = super::call(range_steps, vec![start.clone(), end]);

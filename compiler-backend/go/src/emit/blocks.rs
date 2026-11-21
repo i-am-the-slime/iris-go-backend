@@ -32,8 +32,8 @@
 use rustc_hash::FxHashSet;
 
 use crate::naming::{lower_first, numbered};
-use crate::walk::{self, Walk};
 use crate::syntax::{DeclarationNames, GoDeclaration, GoExpression, GoStatement, GoType};
+use crate::walk::{self, Walk};
 
 /// The fewest cells of one type in one expression that are allocated together.
 const MINIMUM_CELLS: usize = 3;
@@ -121,11 +121,7 @@ impl Walk for Function<'_> {
 impl Function<'_> {
     /// Replaces the cell `value` and the cells of `type_` nested in it with
     /// cells of one slice, built in `pending`.
-    fn allocate_together(
-        &mut self,
-        value: &mut GoExpression,
-        type_: GoType,
-    ) {
+    fn allocate_together(&mut self, value: &mut GoExpression, type_: GoType) {
         let slice = self.fresh_name(&type_);
         let mut cells = vec![];
         let root = std::mem::replace(value, GoExpression::Integer(0));
@@ -140,7 +136,8 @@ impl Function<'_> {
                 GoExpression::Integer(cells.len() as i64),
             ],
         };
-        self.pending.push(GoStatement::Define { names: vec![slice.clone()], values: vec![allocation] });
+        self.pending
+            .push(GoStatement::Define { names: vec![slice.clone()], values: vec![allocation] });
         for (index, cell) in cells.into_iter().enumerate() {
             self.pending.push(GoStatement::Assign {
                 targets: vec![element(&slice, index)],

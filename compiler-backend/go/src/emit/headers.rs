@@ -146,7 +146,9 @@ fn pass_slices(declarations: &mut [GoDeclaration], keeping: &Keeping<'_>) -> Sli
             for (position, (parameter, type_)) in parameters.iter().enumerate() {
                 let GoType::Pointer(inner) = type_ else { continue };
                 let own = Some((name.as_str(), position));
-                if matches!(**inner, GoType::Slice(_)) && only_indexed(body, parameter, &sliced, own) {
+                if matches!(**inner, GoType::Slice(_))
+                    && only_indexed(body, parameter, &sliced, own)
+                {
                     changed.push((name.clone(), position, arity));
                 }
             }
@@ -158,13 +160,11 @@ fn pass_slices(declarations: &mut [GoDeclaration], keeping: &Keeping<'_>) -> Sli
             let positions = sliced.entry(name.clone()).or_insert_with(|| vec![false; *arity]);
             positions[*position] = true;
         }
-        let newly: FxHashMap<&str, Vec<usize>> = changed.iter().fold(
-            FxHashMap::default(),
-            |mut by_name, (name, position, _)| {
+        let newly: FxHashMap<&str, Vec<usize>> =
+            changed.iter().fold(FxHashMap::default(), |mut by_name, (name, position, _)| {
                 by_name.entry(name.as_str()).or_default().push(*position);
                 by_name
-            },
-        );
+            });
         for declaration in declarations.iter_mut() {
             walk::each_expression_in_declaration(declaration, |expression| {
                 if let GoExpression::Call { function, arguments } = expression
@@ -251,7 +251,9 @@ fn only_indexed(
                 }
                 GoExpression::Call { function, arguments } => {
                     let positions = match &**function {
-                        GoExpression::Identifier(name) if matches!(name.as_str(), "len" | "cap") => {
+                        GoExpression::Identifier(name)
+                            if matches!(name.as_str(), "len" | "cap") =>
+                        {
                             Some(vec![true; arguments.len()])
                         }
                         GoExpression::Identifier(name) => self.sliced.get(name.as_str()).cloned(),
@@ -409,7 +411,9 @@ fn binds(statement: &mut GoStatement, name: &str) -> bool {
         fn statement(&mut self, statement: &mut GoStatement) {
             match statement {
                 GoStatement::Define { names, .. } => names.iter().for_each(|name| (self.0)(name)),
-                GoStatement::Variable { name, .. } | GoStatement::IfAssert { name, .. } => (self.0)(name),
+                GoStatement::Variable { name, .. } | GoStatement::IfAssert { name, .. } => {
+                    (self.0)(name)
+                }
                 GoStatement::Assign { targets, .. } => {
                     for target in targets.iter() {
                         if let GoExpression::Identifier(name) = target {
@@ -421,9 +425,8 @@ fn binds(statement: &mut GoStatement, name: &str) -> bool {
                     index.iter().for_each(|index| (self.0)(index));
                     (self.0)(element);
                 }
-                GoStatement::Counting { variable, .. } | GoStatement::CountingDown { variable, .. } => {
-                    (self.0)(variable)
-                }
+                GoStatement::Counting { variable, .. }
+                | GoStatement::CountingDown { variable, .. } => (self.0)(variable),
                 _ => {}
             }
             walk::statement(self, statement);
@@ -446,7 +449,8 @@ pub(super) fn drop_repeated_bounds_tests(declarations: &mut [GoDeclaration], eff
             .collect();
         for (name, test) in tests {
             let through_pointer = has_dereference(&test);
-            let test = Test { name, rendered: format!("{test:?}"), through_pointer, keeping: &keeping };
+            let test =
+                Test { name, rendered: format!("{test:?}"), through_pointer, keeping: &keeping };
             walk::each_block(body, |block| test.drop_repeats(block));
         }
     }
@@ -466,9 +470,7 @@ impl Test<'_, '_> {
     /// After `name := test`, in `if name { ... }`, each `if test { body }` that
     /// nothing before it in the branch could have falsified becomes `body`.
     fn drop_repeats(&self, block: &mut Vec<GoStatement>) {
-        let defines = |statement: &GoStatement| {
-            matches!(statement, GoStatement::Define { names, .. } if names.as_slice() == [self.name.clone()])
-        };
+        let defines = |statement: &GoStatement| matches!(statement, GoStatement::Define { names, .. } if names.as_slice() == [self.name.clone()]);
         let Some(definition) = block.iter().position(defines) else { return };
         for statement in &mut block[definition + 1..] {
             if let GoStatement::If { condition, then, .. } = statement

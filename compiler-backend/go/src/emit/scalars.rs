@@ -32,7 +32,9 @@ pub(super) fn structs_of(declarations: &[GoDeclaration]) -> Structs {
     declarations
         .iter()
         .filter_map(|declaration| match declaration {
-            GoDeclaration::Type { name, type_: GoType::Struct(fields), .. } if !fields.is_empty() => {
+            GoDeclaration::Type { name, type_: GoType::Struct(fields), .. }
+                if !fields.is_empty() =>
+            {
                 let fields = fields.iter().map(|field| (field.name.clone(), field.type_.clone()));
                 Some((name.clone(), fields.collect()))
             }
@@ -129,8 +131,7 @@ fn spliced(
         GoStatement::Variable { name, value, .. } if *name == split.local => {
             Some(definitions(value.as_ref()))
         }
-        GoStatement::Assign { targets, values }
-            if matches!(targets.as_slice(), [GoExpression::Identifier(name)] if *name == split.local) =>
+        GoStatement::Assign { targets, values } if matches!(targets.as_slice(), [GoExpression::Identifier(name)] if *name == split.local) =>
         {
             let parts = parts(&values[0], split);
             let targets = split.needed.iter().map(|field| identifier(&local(field))).collect();
@@ -153,7 +154,8 @@ fn parts(value: &GoExpression, split: &Split) -> FxHashMap<String, GoExpression>
             .fields
             .iter()
             .map(|(field, _)| {
-                let read = GoExpression::Field { value: Box::new(place.clone()), name: field.clone() };
+                let read =
+                    GoExpression::Field { value: Box::new(place.clone()), name: field.clone() };
                 (field.clone(), read)
             })
             .collect(),
@@ -328,7 +330,8 @@ impl<'a> Census<'a> {
         if self.refused || !self.defined || !self.written_in_loop {
             return None;
         }
-        let count = |map: &FxHashMap<String, usize>, field: &str| map.get(field).copied().unwrap_or(0);
+        let count =
+            |map: &FxHashMap<String, usize>, field: &str| map.get(field).copied().unwrap_or(0);
         let read = |field: &str| count(&self.reads, field) > count(&self.targets, field);
         // A field that is written but never read would be a Go local declared and not used.
         if self.whole == 0 && self.targets.keys().any(|field| !read(field)) {
@@ -359,7 +362,9 @@ impl<'a> Census<'a> {
     fn splits(&self, value: &GoExpression, covers: bool) -> bool {
         match value {
             GoExpression::Composite { fields, .. } => {
-                let known = |field: &Option<String>| field.as_deref().is_some_and(|field| self.is_field(field));
+                let known = |field: &Option<String>| {
+                    field.as_deref().is_some_and(|field| self.is_field(field))
+                };
                 fields.iter().all(|(field, value)| known(field) && is_pure(value))
                     && (!covers || fields.len() == self.fields.len())
             }
@@ -383,7 +388,9 @@ impl<'a> Census<'a> {
 impl Walk for Census<'_> {
     fn statement(&mut self, statement: &mut GoStatement) {
         match statement {
-            GoStatement::Define { names, values } if names.iter().any(|name| name == self.local) => {
+            GoStatement::Define { names, values }
+                if names.iter().any(|name| name == self.local) =>
+            {
                 let single = names.len() == 1 && values.len() == 1;
                 if !single || !self.splits(&values[0], false) || self.in_literal || self.defined {
                     self.refused = true;
@@ -392,7 +399,10 @@ impl Walk for Census<'_> {
                 self.defined_at = self.depth;
             }
             GoStatement::Variable { name, value, .. } if name == self.local => {
-                if value.as_ref().is_some_and(|value| !self.splits(value, false)) || self.in_literal || self.defined {
+                if value.as_ref().is_some_and(|value| !self.splits(value, false))
+                    || self.in_literal
+                    || self.defined
+                {
                     self.refused = true;
                 }
                 self.defined = true;
@@ -482,7 +492,9 @@ impl Walk for Census<'_> {
             GoExpression::Address(inner) if target_root(inner) == Some(self.local) => {
                 self.refused = true;
             }
-            GoExpression::Unary { operator: "&", operand } if target_root(operand) == Some(self.local) => {
+            GoExpression::Unary { operator: "&", operand }
+                if target_root(operand) == Some(self.local) =>
+            {
                 self.refused = true;
             }
             GoExpression::Function { parameters, body, .. } => {
@@ -602,7 +614,8 @@ impl Walk for Types<'_> {
                     self.bind(name, value, slice);
                 }
             }
-            GoStatement::Variable { name, type_, .. } | GoStatement::IfAssert { name, type_, .. } => {
+            GoStatement::Variable { name, type_, .. }
+            | GoStatement::IfAssert { name, type_, .. } => {
                 self.bind_typed(&name.clone(), &type_.clone())
             }
             GoStatement::Range { index, element, iterable, .. } => {
@@ -659,7 +672,8 @@ fn is_place(value: &GoExpression) -> bool {
         GoExpression::Identifier(name) => name != "nil",
         GoExpression::Field { value, .. } => is_place(value),
         GoExpression::Index { value, index } => {
-            is_place(value) && matches!(**index, GoExpression::Identifier(_) | GoExpression::Integer(_))
+            is_place(value)
+                && matches!(**index, GoExpression::Identifier(_) | GoExpression::Integer(_))
         }
         _ => false,
     }
@@ -719,10 +733,10 @@ fn stored_fields(statement: &GoStatement, structs: &Structs) -> Option<Vec<GoSta
     {
         return None;
     }
-    let mentioned = identifiers(&GoExpression::Index { value: elements.clone(), index: index.clone() });
-    let independent = |value: &GoExpression| {
-        is_pure(value) && identifiers(value).is_disjoint(&mentioned)
-    };
+    let mentioned =
+        identifiers(&GoExpression::Index { value: elements.clone(), index: index.clone() });
+    let independent =
+        |value: &GoExpression| is_pure(value) && identifiers(value).is_disjoint(&mentioned);
     if !fields.iter().all(|(_, value)| independent(value)) {
         return None;
     }

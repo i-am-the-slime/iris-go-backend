@@ -42,12 +42,12 @@ use crate::arity::Arities;
 use crate::context::Context;
 use crate::error::GoResult;
 use crate::foreign::Foreign;
+use crate::lift::collect_binders;
 use crate::mono::{
     Alternative, Binding, Expression, ExpressionKind, Function, FunctionId, FunctionSpelling,
     Guard, Guarded, Local, LocalId, Pattern, PatternKind, Program,
 };
 use crate::monotype::{DataType, Failure, Monotype, MonotypeId, Monotypes};
-use crate::lift::collect_binders;
 use crate::naming::{capitalise, lower_first, numbered};
 use crate::simplify::{for_each_child, for_each_child_mut};
 use crate::syntax::{GoDeclaration, GoExpression, GoType, StructField};

@@ -188,8 +188,7 @@ fn read_ascii_bytes(
     each_block(looped, |block| {
         let mut position = 0;
         while position < block.len() {
-            if let Some((char, just, nothing, index)) = char_at_definition(&block[position], view)
-            {
+            if let Some((char, just, nothing, index)) = char_at_definition(&block[position], view) {
                 let byte = GoExpression::Conversion {
                     type_: GoType::Rune,
                     value: Box::new(GoExpression::Index {
@@ -236,12 +235,14 @@ fn char_at_definition(
     view: &str,
 ) -> Option<(String, GoExpression, GoExpression, GoExpression)> {
     let GoStatement::Define { names, values } = statement else { return None };
-    let ([char], [GoExpression::Call { function, arguments }]) = (names.as_slice(), values.as_slice())
+    let ([char], [GoExpression::Call { function, arguments }]) =
+        (names.as_slice(), values.as_slice())
     else {
         return None;
     };
     let GoExpression::Field { value, name } = &**function else { return None };
-    let ([just, nothing, index], GoExpression::Identifier(viewed)) = (arguments.as_slice(), &**value)
+    let ([just, nothing, index], GoExpression::Identifier(viewed)) =
+        (arguments.as_slice(), &**value)
     else {
         return None;
     };

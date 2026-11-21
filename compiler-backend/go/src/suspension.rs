@@ -61,8 +61,10 @@ impl Suspension {
                 ExpressionKind::Foreign { foreign, .. } => foreign_suspends(foreign),
                 ExpressionKind::Function(id) => self.suspending[id.0 as usize],
                 ExpressionKind::Apply { function, .. } => {
-                    !matches!(function.kind, ExpressionKind::Function(_) | ExpressionKind::Lambda { .. })
-                        && is_effect(node.monotype, monotypes)
+                    !matches!(
+                        function.kind,
+                        ExpressionKind::Function(_) | ExpressionKind::Lambda { .. }
+                    ) && is_effect(node.monotype, monotypes)
                 }
                 ExpressionKind::Local(id) => {
                     !parameters.contains(id) && is_effect(node.monotype, monotypes)
@@ -83,8 +85,10 @@ fn suspends_directly(function: &Function, monotypes: &Monotypes) -> bool {
         found |= match &node.kind {
             ExpressionKind::Foreign { foreign, .. } => foreign_suspends(foreign),
             ExpressionKind::Apply { function, .. } => {
-                !matches!(function.kind, ExpressionKind::Function(_) | ExpressionKind::Lambda { .. })
-                    && is_effect(node.monotype, monotypes)
+                !matches!(
+                    function.kind,
+                    ExpressionKind::Function(_) | ExpressionKind::Lambda { .. }
+                ) && is_effect(node.monotype, monotypes)
             }
             ExpressionKind::Local(_)
             | ExpressionKind::Access { .. }
@@ -100,12 +104,15 @@ fn foreign_suspends(foreign: &Foreign) -> bool {
     match foreign {
         Foreign::Perform { function, .. } | Foreign::Call { function, .. } => matches!(
             function.package,
-            GoPackage::Aff | GoPackage::AVar | GoPackage::Promise | GoPackage::YogaOm | GoPackage::Tauri
+            GoPackage::Aff
+                | GoPackage::AVar
+                | GoPackage::Promise
+                | GoPackage::YogaOm
+                | GoPackage::Tauri
         ),
-        Foreign::MakeAff
-        | Foreign::ForkFiber
-        | Foreign::NewFiber
-        | Foreign::NewSupervisedFiber => true,
+        Foreign::MakeAff | Foreign::ForkFiber | Foreign::NewFiber | Foreign::NewSupervisedFiber => {
+            true
+        }
         Foreign::Project { effectful, .. } => *effectful,
         _ => false,
     }

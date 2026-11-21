@@ -41,7 +41,8 @@ pub fn lift_local_functions(
         flatten_applications(&mut function.body);
         functions[index] = Some(absorb_lambdas(function));
         for created in lifter.created.drain(..) {
-            let mut created = created.expect("invariant violated: a lifted function was reserved but never made");
+            let mut created =
+                created.expect("invariant violated: a lifted function was reserved but never made");
             flatten_applications(&mut created.body);
             functions.push(Some(created));
         }

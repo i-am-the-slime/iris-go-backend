@@ -387,8 +387,8 @@ impl Walk for Free<'_> {
 fn assign_directly(block: &mut Vec<GoStatement>) {
     let mut position = 0;
     while position < block.len() {
-        let Some(next) = (position + 1..block.len())
-            .find(|&next| !matches!(block[next], GoStatement::Line(_)))
+        let Some(next) =
+            (position + 1..block.len()).find(|&next| !matches!(block[next], GoStatement::Line(_)))
         else {
             break;
         };
@@ -396,17 +396,15 @@ fn assign_directly(block: &mut Vec<GoStatement>) {
             (
                 GoStatement::Define { names, values: defined },
                 GoStatement::Assign { targets, values },
-            ) => {
-                match (names.as_slice(), defined.as_slice(), targets.as_slice(), &values[..]) {
-                    (
-                        [staged],
-                        [_],
-                        [GoExpression::Identifier(variable)],
-                        [GoExpression::Identifier(read)],
-                    ) if read == staged && variable != staged => Some(staged.clone()),
-                    _ => None,
-                }
-            }
+            ) => match (names.as_slice(), defined.as_slice(), targets.as_slice(), &values[..]) {
+                (
+                    [staged],
+                    [_],
+                    [GoExpression::Identifier(variable)],
+                    [GoExpression::Identifier(read)],
+                ) if read == staged && variable != staged => Some(staged.clone()),
+                _ => None,
+            },
             _ => None,
         };
         let Some(staged) = staged else {
@@ -444,9 +442,9 @@ fn drop_self_assignments(block: &mut Vec<GoStatement>) {
             values.retain(|_| keep.next().unwrap_or(true));
         }
     }
-    block.retain(|statement| {
-        !matches!(statement, GoStatement::Assign { targets, .. } if targets.is_empty())
-    });
+    block.retain(
+        |statement| !matches!(statement, GoStatement::Assign { targets, .. } if targets.is_empty()),
+    );
     for statement in block {
         if let GoStatement::If { condition, then, otherwise } = statement {
             drop_self_assignments(then);

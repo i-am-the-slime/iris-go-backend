@@ -109,16 +109,16 @@ fn only_taken_apart(
                 };
             }
             for_each_alternative_child(alternatives, &mut |child| {
-                taken_apart = taken_apart
-                    && only_taken_apart(child, id, monotype, construct, monotypes)
+                taken_apart =
+                    taken_apart && only_taken_apart(child, id, monotype, construct, monotypes)
             });
             taken_apart
         }
         _ => {
             let mut taken_apart = true;
             for_each_child(expression, &mut |child| {
-                taken_apart = taken_apart
-                    && only_taken_apart(child, id, monotype, construct, monotypes)
+                taken_apart =
+                    taken_apart && only_taken_apart(child, id, monotype, construct, monotypes)
             });
             taken_apart
         }

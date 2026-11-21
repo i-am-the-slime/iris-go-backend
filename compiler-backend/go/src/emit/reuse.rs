@@ -395,7 +395,9 @@ impl<'a, C: Cells> Planner<'a, C> {
                 for_each_child(expression, &mut |child| {
                     self.expression(child, false, &mut vec![], &mut vec![]);
                 });
-                stock.retain(|spare| !spare.owners.iter().any(|&owner| uses_local(expression, owner)));
+                stock.retain(|spare| {
+                    !spare.owners.iter().any(|&owner| uses_local(expression, owner))
+                });
                 false
             }
             ExpressionKind::Let { bindings, body } => {
@@ -1141,7 +1143,10 @@ fn guarded_expressions(guarded: &Guarded) -> Vec<&Expression> {
 }
 
 fn guarded_uses(guarded: &Guarded, local: LocalId) -> usize {
-    guarded_expressions(guarded).into_iter().filter(|expression| uses_local(expression, local)).count()
+    guarded_expressions(guarded)
+        .into_iter()
+        .filter(|expression| uses_local(expression, local))
+        .count()
 }
 
 struct Emission<'p> {
