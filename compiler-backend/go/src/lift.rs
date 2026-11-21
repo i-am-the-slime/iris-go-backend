@@ -227,6 +227,7 @@ impl Lifter<'_> {
                 .collect();
             let mut value = binding.value;
             replace_references(&mut value, &targets, &parameters, &renaming);
+            let written = value.position;
             let ExpressionKind::Lambda { parameters: lambda_parameters, body } = value.kind else {
                 unreachable!("invariant violated: lifted binding is a lambda")
             };
@@ -243,6 +244,7 @@ impl Lifter<'_> {
                 parameters: all_parameters,
                 result: lifted.monotype,
                 body: lifted,
+                position: written,
             };
             self.created[first + position - self.created_base] = Some(absorb_lambdas(function));
         }

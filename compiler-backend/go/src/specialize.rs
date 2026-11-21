@@ -348,6 +348,7 @@ where
                         parameters: vec![],
                         result: erased,
                         body,
+                        position: None,
                     }
                 }
             };
@@ -727,14 +728,22 @@ where
         let (abstractions, equations) = value;
         scope.signedness = key.signedness;
         self.bind_abstractions(&mut scope, &abstractions, &key.types, &key.dictionaries)?;
+        let position =
+            equations.first().and_then(|first| definition_position(&scope.module, first.source));
         let mut body = self.equations(&mut scope, &equations)?;
         if !dictionary_parameters.is_empty() {
             body = self.lambda(dictionary_parameters, body);
         }
-        Ok(self.function(name, Some(key.definition.origin()), body))
+        Ok(self.function(name, Some(key.definition.origin()), body, position))
     }
 
-    fn function(&mut self, name: SmolStr, origin: Option<FileId>, body: Expression) -> Function {
+    fn function(
+        &mut self,
+        name: SmolStr,
+        origin: Option<FileId>,
+        body: Expression,
+        position: Option<SourcePosition>,
+    ) -> Function {
         let mut parameters = vec![];
         let mut body = body;
         while let ExpressionKind::Lambda { .. } = body.kind {
@@ -747,7 +756,7 @@ where
             body = *lambda_body;
         }
         let result = body.monotype;
-        Function { name, origin, parameters, result, body }
+        Function { name, origin, parameters, result, body, position }
     }
 
     fn bind_abstractions(
@@ -3580,6 +3589,18 @@ fn source_position(module: &ModuleData, id: tree::ExpressionId) -> Option<Source
         tree::ExpressionSource::Expression(source) => module.stabilized.syntax_ptr(source),
         tree::ExpressionSource::DoStatement(source) => module.stabilized.syntax_ptr(source),
     }?;
+    let offset = u32::from(pointer.text_range().start());
+    Some(SourcePosition { file: module.file_id, offset })
+}
+
+fn definition_position(
+    module: &ModuleData,
+    source: tree::EquationSource,
+) -> Option<SourcePosition> {
+    let tree::EquationSource::Generated { derive, .. } = source else {
+        return equation_position(module, source);
+    };
+    let pointer = module.stabilized.syntax_ptr(derive)?;
     let offset = u32::from(pointer.text_range().start());
     Some(SourcePosition { file: module.file_id, offset })
 }

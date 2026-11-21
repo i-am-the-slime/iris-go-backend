@@ -9,6 +9,7 @@
 use std::sync::Arc;
 
 use files::FileId;
+use indexing::IndexedTypeItemKind;
 use std::collections::VecDeque;
 
 use rustc_hash::FxHashMap;
@@ -17,6 +18,7 @@ use super::Emitter;
 use crate::error::GoResult;
 use crate::foreign::LineCoverage;
 use crate::mono::SourcePosition;
+use crate::monotype::DataType;
 use crate::syntax::{GoDeclaration, GoExpression, GoStatement, SourceLine};
 use crate::walk::{self, Walk};
 
@@ -66,6 +68,42 @@ where
             out.insert(start, GoStatement::Line(line));
         }
         Ok(())
+    }
+
+    pub(super) fn name_definition(
+        &mut self,
+        position: Option<SourcePosition>,
+        body: &mut Vec<GoStatement>,
+    ) -> GoResult<()> {
+        let Some(directives) = &self.foreign_packages.line_directives else { return Ok(()) };
+        if directives.coverage != LineCoverage::Every {
+            return Ok(());
+        }
+        let Some(position) = position else { return Ok(()) };
+        if let Some(line) = self.source_line(position)? {
+            body.insert(0, GoStatement::Line(line));
+        }
+        Ok(())
+    }
+
+    pub(super) fn data_line(&mut self, data: &DataType) -> GoResult<Option<SourceLine>> {
+        let Some(directives) = &self.foreign_packages.line_directives else { return Ok(None) };
+        if directives.coverage != LineCoverage::Every {
+            return Ok(None);
+        }
+        let module = self.context.module(data.file_id)?;
+        let pointer = match &module.indexed.items[data.item].kind {
+            IndexedTypeItemKind::Data { equation: Some(equation), .. } => {
+                module.stabilized.syntax_ptr(*equation)
+            }
+            IndexedTypeItemKind::Newtype { equation: Some(equation), .. } => {
+                module.stabilized.syntax_ptr(*equation)
+            }
+            _ => None,
+        };
+        let Some(pointer) = pointer else { return Ok(None) };
+        let offset = u32::from(pointer.text_range().start());
+        self.source_line(SourcePosition { file: data.file_id, offset })
     }
 
     fn source_line(&mut self, position: SourcePosition) -> GoResult<Option<SourceLine>> {
@@ -164,6 +202,7 @@ pub(super) struct SetAside {
     /// Each function's statements in order, outer ones before the blocks in them, each by what
     /// it is apart from those blocks and with the line it named.
     statements: FxHashMap<String, Vec<(String, Option<SourceLine>)>>,
+    definitions: FxHashMap<String, SourceLine>,
 }
 
 /// Takes the directives out of the declarations.
@@ -187,6 +226,12 @@ pub(super) fn set_aside(declarations: &mut [GoDeclaration]) -> SetAside {
     let mut aside = SetAside::default();
     for declaration in declarations.iter_mut() {
         let Some(name) = declaration.name().map(str::to_string) else { continue };
+        if let GoDeclaration::Function { body, .. } = declaration
+            && let [GoStatement::Line(definition), GoStatement::Line(_), ..] = body.as_slice()
+        {
+            aside.definitions.insert(name.clone(), definition.clone());
+            body.remove(0);
+        }
         let mut record = Record(vec![]);
         walk::declaration(&mut record, declaration);
         aside.statements.insert(name, record.0);
@@ -227,6 +272,11 @@ pub(super) fn restore(declarations: &mut [GoDeclaration], mut aside: SetAside) {
         walk::declaration(&mut heads, declaration);
         let lines = align(&before, &heads.0);
         walk::declaration(&mut Insert(lines.into_iter()), declaration);
+        if let GoDeclaration::Function { name, body, .. } = declaration
+            && let Some(definition) = aside.definitions.remove(name.as_str())
+        {
+            body.insert(0, GoStatement::Line(definition));
+        }
     }
 }
 

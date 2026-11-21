@@ -10,6 +10,7 @@ import "github.com/i-am-the-slime/iris-go/exception"
 func ThrowUnit(x string) {
 //line exception.go:8
 	panic(exception.NewError(x))
+//line exception.go:10
 }
 
 // main.go
@@ -17,75 +18,104 @@ package main
 
 import "fixture/Effect/Exception"
 
-//line main.go:6
+//line Main.purs:13:1
 type Shape struct {
+//line Main.purs:13:1
 	Field0 float64
+//line Main.purs:13:1
 	Tag    uint8
+//line Main.purs:13:1
 }
 
-//line main.go:12
+//line Main.purs:13:1
 const (
+//line Main.purs:13:1
 	ShapeCircle = iota
+//line Main.purs:13:1
 	ShapeSquare
+//line Main.purs:13:1
 )
 
-//line Main.purs:28:15
+//line Main.purs:28:1
 func main() {
-//line Main.purs:28:15
+//line Main.purs:29:15
 	total := sumFrom([]int32{1, 2, 3}, 0, 0)
-//line Main.purs:29:13
+//line Main.purs:30:13
 	big := total > 5
-//line Main.purs:30:3
+//line Main.purs:31:33
+	elements := []int32{total}
+//line Main.purs:31:3
+	var first int32
+//line Main.purs:31:3
+	first = elements[0]
+//line Main.purs:32:3
+	if first != 6 {
+//line Main.purs:33:5
+		effectexception.ThrowUnit("the first total is wrong")
+//line Main.purs:32:3
+	}
+//line Main.purs:34:3
 	if total != 6 {
-//line Main.purs:31:5
-		effectexception.ThrowUnit("the total is wrong")
-	}
-//line Main.purs:32:12
-	var areas float64 = 0.0
-//line Main.purs:33:3
-	for _, shape := range []Shape{{Tag: ShapeCircle, Field0: 1.0}, {Tag: ShapeSquare, Field0: 2.0}} {
-//line Main.purs:34:22
-		var result float64
-//line Main.purs:34:22
-		switch shape.Tag {
-		case ShapeCircle:
-//line Main.purs:34:22
-			radius := shape.Field0
-//line Main.purs:16:20
-			result = 3.0 * radius * radius
-		default: // ShapeSquare
-//line Main.purs:34:22
-			side := shape.Field0
-//line Main.purs:17:18
-			result = side * side
-		}
-//line Main.purs:33:45
-		areas += result
 //line Main.purs:35:5
-		if big {
-//line Main.purs:36:7
-			areas += 1.0
+		effectexception.ThrowUnit("the total is wrong")
+//line Main.purs:34:3
+	}
+//line Main.purs:36:12
+	var areas float64 = 0.0
+//line Main.purs:37:3
+	for _, shape := range []Shape{{Tag: ShapeCircle, Field0: 1.0}, {Tag: ShapeSquare, Field0: 2.0}} {
+//line Main.purs:38:22
+		var result float64
+//line Main.purs:38:22
+		switch shape.Tag {
+//line Main.purs:38:22
+		case ShapeCircle:
+//line Main.purs:38:22
+			radius := shape.Field0
+//line Main.purs:17:20
+			result = 3.0 * radius * radius
+//line Main.purs:38:22
+		default: // ShapeSquare
+//line Main.purs:38:22
+			side := shape.Field0
+//line Main.purs:18:18
+			result = side * side
+//line Main.purs:38:22
 		}
-	}
-//line Main.purs:38:3
-	if areas != 9.0 {
+//line Main.purs:38:5
+		areas += result
 //line Main.purs:39:5
-		effectexception.ThrowUnit("the areas are wrong")
+		if big {
+//line Main.purs:40:7
+			areas += 1.0
+//line Main.purs:39:5
+		}
+//line Main.purs:37:3
 	}
+//line Main.purs:42:3
+	if areas != 9.0 {
+//line Main.purs:43:5
+		effectexception.ThrowUnit("the areas are wrong")
+//line Main.purs:42:3
+	}
+//line Main.purs:28:1
 }
 
-//line Main.purs:21:3
+//line Main.purs:21:1
 func sumFrom(numbers []int32, index int32, total int32) int32 {
-//line Main.purs:21:3
+//line Main.purs:22:3
 	for {
-//line Main.purs:21:3
+//line Main.purs:22:3
 		if index >= int32(len(numbers)) {
-//line Main.purs:21:35
+//line Main.purs:22:35
 			return total
+//line Main.purs:22:3
 		}
-//line Main.purs:23:5
+//line Main.purs:24:5
 		index, total = index+1, total+numbers[index]
+//line Main.purs:22:3
 	}
+//line Main.purs:21:1
 }
 
 // shared/shared.go
@@ -93,11 +123,16 @@ package shared
 
 //line shared.go:4
 type Ref[T any] struct {
+//line shared.go:6
 	Value T
+//line shared.go:8
 }
 
-//line shared.go:9
+//line shared.go:11
 type StateValue struct {
+//line shared.go:13
 	State float64
+//line shared.go:15
 	Value float64
+//line shared.go:17
 }

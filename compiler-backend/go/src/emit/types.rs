@@ -121,18 +121,20 @@ where
         if self.unfolds_only_to_newtypes(data, unfolded)? {
             // `newtype X = X X` has no values; nothing reads the empty struct.
             let type_ = GoType::EmptyStruct;
-            self.type_declarations.push(GoDeclaration::Type { name: name.clone(), type_ });
+            let line = self.data_line(data)?;
+            self.type_declarations.push(GoDeclaration::Type { name: name.clone(), type_, line });
             return Ok(GoType::Named(name));
         }
         let type_ = self.go_type(unfolded)?;
         // A defined type would be a second Go type for the unfolding, without
         // its methods (`Force` of a `Lazy`) and unassignable to it inside
         // function types, so the newtype is an alias whenever Go allows one.
+        let line = self.data_line(data)?;
         let declaration = if self.unfolding_reaches_itself_unnamed(data, unfolded)? {
-            GoDeclaration::Type { name: name.clone(), type_ }
+            GoDeclaration::Type { name: name.clone(), type_, line }
         } else {
             self.type_aliases.insert(name.clone(), type_.clone());
-            GoDeclaration::Alias { name: name.clone(), type_ }
+            GoDeclaration::Alias { name: name.clone(), type_, line }
         };
         self.type_declarations.push(declaration);
         Ok(GoType::Named(name))
@@ -394,7 +396,7 @@ where
         let name = self.pending_global(base, names::PendingSpelling::Record(monotype));
         self.record_names.insert(monotype, name.clone());
         let type_ = self.record_declaration(monotype)?;
-        self.type_declarations.push(GoDeclaration::Type { name: name.clone(), type_ });
+        self.type_declarations.push(GoDeclaration::Type { name: name.clone(), type_, line: None });
         Ok(name)
     }
 
@@ -499,13 +501,15 @@ where
         self.data_layouts.insert(data.clone(), layout.clone());
         let names: Vec<String> =
             layouts.iter().map(|constructor| constructor.tag.clone()).collect();
+        let line = self.data_line(data)?;
         let Some(plan) = plan else {
             self.type_declarations.push(GoDeclaration::Type {
                 name: name.clone(),
                 type_: layout::tag_type(constructors.len()),
+                line: line.clone(),
             });
             if !names.is_empty() {
-                let constants = GoDeclaration::Constants { type_name: Some(name), names };
+                let constants = GoDeclaration::Constants { type_name: Some(name), names, line };
                 self.type_declarations.push(constants);
             }
             return Ok(layout);
@@ -520,10 +524,11 @@ where
         if let Some(layout) = self.data_layouts.get_mut(data) {
             layout.declaration = Some(self.type_declarations.len());
         }
-        self.type_declarations
-            .push(GoDeclaration::Type { name: name.clone(), type_: GoType::Struct(fields) });
+        let type_ = GoType::Struct(fields);
+        let declaration = GoDeclaration::Type { name: name.clone(), type_, line: line.clone() };
+        self.type_declarations.push(declaration);
         if kind == DataKind::Tagged {
-            self.type_declarations.push(GoDeclaration::Constants { type_name: None, names });
+            self.type_declarations.push(GoDeclaration::Constants { type_name: None, names, line });
         }
         if kind == DataKind::Sentinel {
             for constructor in layouts.iter().filter(|constructor| constructor.fields.is_empty()) {

@@ -151,15 +151,15 @@ where
     if !unused.is_empty() {
         declarations.retain(|declaration| declaration.name().is_none_or(|n| !unused.contains(n)));
     }
-    if emitter.imports.contains(GoPackage::Aff.path()) {
-        emitter.performs(GoFunction { package: GoPackage::Aff, name: "Await" });
-        await_fibers(&mut declarations);
-    }
     let every_line = emitter
         .foreign_packages
         .line_directives
         .as_ref()
         .is_some_and(|directives| directives.coverage == crate::foreign::LineCoverage::Every);
+    if emitter.imports.contains(GoPackage::Aff.path()) {
+        emitter.performs(GoFunction { package: GoPackage::Aff, name: "Await" });
+        await_fibers(&mut declarations, every_line);
+    }
     let lines_aside = every_line.then(|| lines::set_aside(&mut declarations));
     timed("references", || references::promote_references(&mut declarations));
     timed("composites", || composites::take_composites_apart(&mut declarations));
@@ -506,7 +506,7 @@ fn runs_code(expression: &GoExpression) -> bool {
     calls.0
 }
 
-fn await_fibers(declarations: &mut [GoDeclaration]) {
+fn await_fibers(declarations: &mut [GoDeclaration], every_line: bool) {
     for declaration in declarations {
         if let GoDeclaration::Function { name, body, .. } = declaration
             && name == "main"
@@ -522,7 +522,8 @@ fn await_fibers(declarations: &mut [GoDeclaration]) {
                 body.insert(at, GoStatement::Expression(call(await_, vec![])));
                 continue;
             }
-            body.insert(0, GoStatement::Defer(call(await_, vec![])));
+            let named = every_line && matches!(body.first(), Some(GoStatement::Line(_)));
+            body.insert(usize::from(named), GoStatement::Defer(call(await_, vec![])));
         }
     }
 }
@@ -1005,6 +1006,8 @@ where
                 values: vec![identifier_expression(&name)],
             }]
         };
+        let mut body = body;
+        self.name_definition(self.program.function(entry).position, &mut body)?;
         Ok(Some(GoDeclaration::Function {
             name: "main".into(),
             parameters: vec![],
@@ -1190,6 +1193,7 @@ where
         self.tail_loop = None;
         self.byte_buffers.clear();
         self.attribute(function.body.position, 0, &mut body)?;
+        self.name_definition(function.position, &mut body)?;
         Ok(vec![GoDeclaration::Function { name, parameters, result, body }])
     }
 
@@ -1301,6 +1305,7 @@ where
         let initializer = self.global_name(Spelling::derived("initialize", name.into(), ""));
         statements.push(GoStatement::Return(Some(value)));
         self.attribute(function.body.position, 0, &mut statements)?;
+        self.name_definition(function.position, &mut statements)?;
         let result = self.go_result(function.result)?;
         Ok(vec![
             GoDeclaration::Variable {

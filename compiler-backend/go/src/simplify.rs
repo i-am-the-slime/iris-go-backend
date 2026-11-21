@@ -5,7 +5,7 @@
 
 use rustc_hash::{FxHashMap, FxHashSet};
 
-use crate::foreign::{Comparison, Foreign, GoPackage, Operator};
+use crate::foreign::{Comparison, Foreign, GoPackage, LineCoverage, Operator};
 use crate::suspension::Suspension;
 use crate::naming::is_vague;
 use crate::graph::{on_cycles, strongly_connected};
@@ -37,6 +37,7 @@ pub fn simplify(
     monotypes: &mut Monotypes,
     next_local: u32,
     thunk_parameters: FxHashSet<LocalId>,
+    coverage: Option<LineCoverage>,
 ) -> Program {
     let suspension = Suspension::analyse(&program, monotypes);
     let Program { functions, entry } = program;
@@ -99,7 +100,10 @@ pub fn simplify(
         .map(|function| function.expect("invariant violated: function lost during simplification"))
         .collect();
     let next_local = simplifier.next_local;
-    let program = Program { functions, entry };
+    let mut program = Program { functions, entry };
+    if coverage == Some(LineCoverage::Every) {
+        crate::call_sites::attribute_inlined_code_to_call_sites(&mut program);
+    }
     let program =
         timed("lift", || crate::lift::lift_local_functions(program, monotypes, next_local));
     timed("prune", || prune(program.functions, entry))

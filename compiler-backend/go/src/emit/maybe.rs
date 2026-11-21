@@ -185,6 +185,7 @@ where
                 self.type_declarations.push(GoDeclaration::Type {
                     name: name.clone(),
                     type_: GoType::Named("int64".into()),
+                    line: None,
                 });
                 let outside_int32 =
                     binary("<<", GoExpression::Integer(1), GoExpression::Integer(32));
@@ -210,10 +211,12 @@ where
                 self.type_declarations.push(GoDeclaration::Type {
                     name: name.clone(),
                     type_: GoType::Named("uint8".into()),
+                    line: None,
                 });
                 self.type_declarations.push(GoDeclaration::Constants {
                     type_name: Some(name.clone()),
                     names: vec![false_.clone(), true_.clone(), nothing.clone()],
+                    line: None,
                 });
                 let maybe = MaybeLayout::Boolean { just, true_, false_, nothing };
                 Ok(scalar(self, name, maybe))
@@ -270,7 +273,11 @@ where
         if let Some(layout) = self.data_layouts.get_mut(data) {
             layout.declaration = Some(self.type_declarations.len());
         }
-        self.type_declarations.push(GoDeclaration::Type { name, type_: GoType::Struct(fields) });
+        self.type_declarations.push(GoDeclaration::Type {
+            name,
+            type_: GoType::Struct(fields),
+            line: None,
+        });
         Ok(self.data_layouts.get(data).cloned().unwrap_or(layout))
     }
 

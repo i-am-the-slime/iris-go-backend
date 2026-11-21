@@ -300,12 +300,14 @@ pub enum GoDeclaration {
     Type {
         name: String,
         type_: GoType,
+        line: Option<SourceLine>,
     },
     /// `type name = type_`: another spelling of the same type, for a recursive
     /// newtype whose cycle already passes through a named type.
     Alias {
         name: String,
         type_: GoType,
+        line: Option<SourceLine>,
     },
     /// `type name[parameter any] type_`.
     GenericType {
@@ -316,6 +318,7 @@ pub enum GoDeclaration {
     Constants {
         type_name: Option<String>,
         names: Vec<String>,
+        line: Option<SourceLine>,
     },
     Constant {
         name: String,
@@ -770,11 +773,37 @@ impl Printer {
     }
 
     fn line(&mut self, text: &str) {
+        if self.every {
+            return self.named_lines(text);
+        }
         for _ in 0..self.indentation {
             self.output.push('\t');
         }
         self.output.push_str(text);
         self.output.push('\n');
+    }
+
+    fn named_lines(&mut self, text: &str) {
+        for (index, segment) in text.split('\n').enumerate() {
+            if directive(segment).is_none() && segment != GO_LINE_PLACEHOLDER.trim_end() {
+                if !self.follows_directive() {
+                    self.name_every_line();
+                }
+                if index == 0 {
+                    for _ in 0..self.indentation {
+                        self.output.push('\t');
+                    }
+                }
+            }
+            self.output.push_str(segment);
+            self.output.push('\n');
+        }
+    }
+
+    fn follows_directive(&self) -> bool {
+        let Some(written) = self.output.strip_suffix('\n') else { return false };
+        let last = written.rsplit('\n').next().unwrap_or(written);
+        directive(last).is_some() || last == GO_LINE_PLACEHOLDER.trim_end()
     }
 
     fn declaration(&mut self, declaration: &GoDeclaration) {
@@ -784,6 +813,9 @@ impl Printer {
                     Some(GoStatement::Line(line)) => Some(line.clone()),
                     _ => None,
                 },
+                GoDeclaration::Type { line, .. }
+                | GoDeclaration::Alias { line, .. }
+                | GoDeclaration::Constants { line, .. } => line.clone(),
                 _ => None,
             };
             self.name_every_line();
@@ -793,11 +825,11 @@ impl Printer {
                 self.output.push_str(&template.replace("{name}", name));
             }
             GoDeclaration::Written { source, .. } => self.output.push_str(source),
-            GoDeclaration::Type { name, type_ } => {
+            GoDeclaration::Type { name, type_, .. } => {
                 let rendered = self.type_(type_);
                 self.line(&format!("type {name} {rendered}"));
             }
-            GoDeclaration::Alias { name, type_ } => {
+            GoDeclaration::Alias { name, type_, .. } => {
                 let rendered = self.type_(type_);
                 self.line(&format!("type {name} = {rendered}"));
             }
@@ -805,7 +837,7 @@ impl Printer {
                 let rendered = self.type_(type_);
                 self.line(&format!("type {name}[{parameter} any] {rendered}"));
             }
-            GoDeclaration::Constants { type_name, names } => {
+            GoDeclaration::Constants { type_name, names, .. } => {
                 self.line("const (");
                 self.indentation += 1;
                 for (position, name) in names.iter().enumerate() {

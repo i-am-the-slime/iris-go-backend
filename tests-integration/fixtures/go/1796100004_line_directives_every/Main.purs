@@ -2,8 +2,9 @@ module Main where
 
 import Prelude
 
-import Data.Array (length, unsafeIndex)
+import Data.Array (head, length, unsafeIndex)
 import Data.Foldable (for_)
+import Data.Maybe (fromMaybe)
 import Effect (Effect)
 import Effect.Exception (throw)
 import Effect.Ref as Ref
@@ -27,6 +28,9 @@ main :: Effect Unit
 main = do
   let total = sumFrom [ 1, 2, 3 ] 0 0
   let big = total > 5
+  let first = fromMaybe 0 (head [ total ])
+  when (first /= 6) do
+    throw "the first total is wrong"
   when (total /= 6) do
     throw "the total is wrong"
   areas <- Ref.new 0.0

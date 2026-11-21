@@ -60,6 +60,7 @@ pub struct Function {
     pub parameters: Vec<Local>,
     pub result: MonotypeId,
     pub body: Expression,
+    pub position: Option<SourcePosition>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]

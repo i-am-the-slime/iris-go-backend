@@ -6,6 +6,7 @@
 
 mod arity;
 mod blocker;
+mod call_sites;
 mod context;
 mod dictionary;
 mod emit;
@@ -84,7 +85,9 @@ pub fn compile_program(
     let program = mono::Program { functions, entry };
     let eliminators = emit::Eliminators::find(&program, &monotypes);
     let program = timed("simplify", || {
-        simplify::simplify(program, &mut monotypes, next_local, thunk_parameters)
+        let coverage =
+            foreign_packages.line_directives.as_ref().map(|directives| directives.coverage);
+        simplify::simplify(program, &mut monotypes, next_local, thunk_parameters, coverage)
     });
     let program =
         timed("merge", || merge::merge_identical_functions(program, &modules, &mut monotypes));

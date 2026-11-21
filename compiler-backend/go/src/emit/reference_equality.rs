@@ -155,7 +155,7 @@ where
 
     fn declared_type(&self, name: &str) -> Option<GoType> {
         self.type_declarations.iter().find_map(|declaration| match declaration {
-            GoDeclaration::Type { name: declared, type_ } if declared == name => {
+            GoDeclaration::Type { name: declared, type_, .. } if declared == name => {
                 Some(type_.clone())
             }
             _ => None,

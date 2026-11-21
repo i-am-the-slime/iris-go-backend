@@ -521,6 +521,7 @@ where
             parameters,
             result: building.result,
             body: Expression::new(case, building.result),
+            position: None,
         };
         Ok((function, ClosureSet { name, home: origin, tags }))
     }
@@ -1242,10 +1243,17 @@ where
                 layout::Slot::Field { name, monotype } => (name, self.go_type(monotype)?),
             });
         }
-        self.type_declarations
-            .push(GoDeclaration::Type { name, type_: GoType::Struct(struct_fields) });
+        self.type_declarations.push(GoDeclaration::Type {
+            name,
+            type_: GoType::Struct(struct_fields),
+            line: None,
+        });
         if kind == DataKind::Tagged {
-            self.type_declarations.push(GoDeclaration::Constants { type_name: None, names: tags });
+            self.type_declarations.push(GoDeclaration::Constants {
+                type_name: None,
+                names: tags,
+                line: None,
+            });
         }
         Ok(layout)
     }

@@ -161,7 +161,11 @@ where
         let mut declarations = vec![];
         if self.tail_groups[group].members[0] == id {
             let steps = self.tail_groups[group].steps.clone();
-            declarations.push(GoDeclaration::Constants { type_name: None, names: steps });
+            declarations.push(GoDeclaration::Constants {
+                type_name: None,
+                names: steps,
+                line: None,
+            });
             declarations.push(self.tail_group_loop(group)?);
         }
         declarations.push(self.tail_group_entry(id, group)?);
