@@ -89,6 +89,7 @@ fn builds_a_new_project_with_local_spago() {
         assert_success(&output);
         assert!(workspace.path().join("output/Main/index.js").is_file());
         fs::remove_dir_all(workspace.path().join("output")).unwrap();
+        fs::remove_file(workspace.path().join(".spago/iris-fetch-stamp")).unwrap();
     }
     insta::assert_snapshot!(workspace.spago_calls(), @r#"
     .: spago "fetch" "-p" "example"

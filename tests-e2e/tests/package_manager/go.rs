@@ -88,7 +88,9 @@ func Greet() int32 {
     hello first,second
     --- stderr
     ");
-    let executable = workspace.path().join(".spago/go/greeter/bin/greeter");
+    let executable = workspace
+        .path()
+        .join(format!(".spago/go/greeter/bin/greeter{}", std::env::consts::EXE_SUFFIX));
     let built = std::fs::metadata(&executable).unwrap().modified().unwrap();
 
     let output = workspace.command(&["run", "--go", "--quiet", "--", "again"]);
@@ -102,6 +104,7 @@ func Greet() int32 {
     assert_eq!(built, unchanged, "an unchanged program is not built again");
 }
 
+#[cfg(unix)]
 #[test]
 fn run_go_copies_the_files_foreign_go_embeds_into_the_program() {
     let workspace = greeting_workspace(
