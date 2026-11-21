@@ -23,12 +23,9 @@ func initializeMain_() []int32 {
 	} else {
 		*array2 = append(*array2, 1)
 	}
-	mapped := make([]int32, len(xs))
-	for index, value := range xs {
-		mapped[index] = value * 2
-	}
-	if len(mapped) == 1 {
-		x := mapped[0]
+	scrutinee := mapLanes(xs)
+	if len(scrutinee) == 1 {
+		x := scrutinee[0]
 		*array2 = append(*array2, x)
 	}
 	performed := array.UnsafeFreeze(array2)()
@@ -39,12 +36,9 @@ func initializeMain_() []int32 {
 	} else {
 		*array3 = append(*array3, 1)
 	}
-	mapped2 := make([]int32, len(xs2))
-	for index, value := range xs2 {
-		mapped2[index] = value * 2
-	}
-	if len(mapped2) == 1 {
-		x := mapped2[0]
+	scrutinee2 := mapLanes(xs2)
+	if len(scrutinee2) == 1 {
+		x := scrutinee2[0]
 		*array3 = append(*array3, x)
 	}
 	performed2 := array.UnsafeFreeze(array3)()
@@ -53,4 +47,63 @@ func initializeMain_() []int32 {
 
 func main() {
 	fmt.Println(main_)
+}
+
+// main_neon.go
+//go:build goexperiment.simd && arm64
+
+package main
+
+import "simd/archsimd"
+
+func mapLanes(xs []int32) []int32 {
+	c0 := archsimd.BroadcastInt32x4(2)
+	out := make([]int32, len(xs))
+	const step = 4
+	i := 0
+	for ; i < len(xs)-step+1; i += step {
+		x := archsimd.LoadInt32x4(xs[i : i+step])
+		x.Mul(c0).Store(out[i : i+step])
+	}
+	if i < len(xs) {
+		x, _ := archsimd.LoadInt32x4Part(xs[i:])
+		x.Mul(c0).StorePart(out[i:])
+	}
+	return out
+}
+
+// main_scalar.go
+//go:build !(goexperiment.simd && (arm64 || wasm))
+
+package main
+
+func mapLanes(xs []int32) []int32 {
+	out := make([]int32, len(xs))
+	for i, x := range xs {
+		out[i] = x * 2
+	}
+	return out
+}
+
+// main_vector.go
+//go:build goexperiment.simd && wasm
+
+package main
+
+import "simd"
+
+func mapLanes(xs []int32) []int32 {
+	c0 := simd.BroadcastInt32s(2)
+	out := make([]int32, len(xs))
+	step := simd.Int32s{}.Len()
+	i := 0
+	for ; i < len(xs)-step+1; i += step {
+		x := simd.LoadInt32s(xs[i : i+step])
+		x.Mul(c0).Store(out[i : i+step])
+	}
+	if i < len(xs) {
+		x, _ := simd.LoadInt32sPart(xs[i:])
+		x.Mul(c0).StorePart(out[i:])
+	}
+	return out
 }

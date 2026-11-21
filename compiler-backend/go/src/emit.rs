@@ -43,6 +43,7 @@ mod scalars;
 mod strings;
 mod types;
 mod updates;
+mod vector;
 mod unreferenced;
 mod views;
 
@@ -241,7 +242,8 @@ where
         imports: &emitter.imports,
         typed_records: &typed_records,
     };
-    let files = timed("packages", || packaging.split(all))?;
+    let mut files = timed("packages", || packaging.split(all))?;
+    vector::attach_kernels(&mut files, &emitter.vector_kernels);
     if std::env::var_os("IRIS_GO_ANY_CENSUS").is_some() {
         let mut census = crate::erasure::Census::default();
         let mut textual = 0;
@@ -325,6 +327,7 @@ where
             referenced: Default::default(),
             owned_snocs: FxHashSet::default(),
             recycled_maps: FxHashMap::default(),
+            vector_kernels: vector::Kernels::default(),
             byte_buffers: FxHashMap::default(),
             owning_variants: FxHashMap::default(),
             pending_owning_variants: vec![],
@@ -639,6 +642,7 @@ struct Emitter<'p, 'm, 'q, Q> {
     /// The maps that build a tail loop's next array in the buffers it recycles, by their
     /// callbacks.
     recycled_maps: FxHashMap<*const Expression, recycling::Recycled>,
+    vector_kernels: vector::Kernels,
     /// The string parameters of the tail loop being emitted that it builds in a `[]byte`, with
     /// the buffer's name; the parameter itself reads `string(buffer)`.
     byte_buffers: FxHashMap<LocalId, String>,

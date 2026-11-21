@@ -107,13 +107,68 @@ var things []ExistsDescribed = []ExistsDescribed{ExistsDescribed{Tag: ExistsDesc
 }}}, ExistsDescribed{Tag: ExistsDescribedString, String: DescribedString{First: "a", Second: category.Identity, Third: func(value string) string {
 	return value + "!"
 }}}, ExistsDescribed{Tag: ExistsDescribedArrayNumber, ArrayNumber: DescribedArrayNumber{First: []float64{1.5}, Second: show.ShowNumber, Third: func(array []float64) []float64 {
-	mapped := make([]float64, len(array))
-	for index, value := range array {
-		mapped[index] = value * 2.0
-	}
-	return mapped
+	return mapLanes(array)
 }}}}
 
 func main() {
 	fmt.Println(main_)
+}
+
+// main_neon.go
+//go:build goexperiment.simd && arm64
+
+package main
+
+import "simd/archsimd"
+
+func mapLanes(xs []float64) []float64 {
+	c0 := archsimd.BroadcastFloat64x2(2.0)
+	out := make([]float64, len(xs))
+	const step = 2
+	i := 0
+	for ; i < len(xs)-step+1; i += step {
+		x := archsimd.LoadFloat64x2(xs[i : i+step])
+		x.Mul(c0).Store(out[i : i+step])
+	}
+	if i < len(xs) {
+		x, _ := archsimd.LoadFloat64x2Part(xs[i:])
+		x.Mul(c0).StorePart(out[i:])
+	}
+	return out
+}
+
+// main_scalar.go
+//go:build !(goexperiment.simd && (arm64 || wasm))
+
+package main
+
+func mapLanes(xs []float64) []float64 {
+	out := make([]float64, len(xs))
+	for i, x := range xs {
+		out[i] = x * 2.0
+	}
+	return out
+}
+
+// main_vector.go
+//go:build goexperiment.simd && wasm
+
+package main
+
+import "simd"
+
+func mapLanes(xs []float64) []float64 {
+	c0 := simd.BroadcastFloat64s(2.0)
+	out := make([]float64, len(xs))
+	step := simd.Float64s{}.Len()
+	i := 0
+	for ; i < len(xs)-step+1; i += step {
+		x := simd.LoadFloat64s(xs[i : i+step])
+		x.Mul(c0).Store(out[i : i+step])
+	}
+	if i < len(xs) {
+		x, _ := simd.LoadFloat64sPart(xs[i:])
+		x.Mul(c0).StorePart(out[i:])
+	}
+	return out
 }

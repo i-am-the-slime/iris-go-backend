@@ -49,11 +49,15 @@ where
         monotype: MonotypeId,
         out: &mut Vec<GoStatement>,
     ) -> GoResult<Option<GoExpression>> {
+        if let Some(vectorised) = self.vectorised(iteration, arguments, monotype, out)? {
+            return Ok(Some(vectorised));
+        }
         let (position, arity) = match iteration {
             Iteration::FoldLeft | Iteration::FoldRight | Iteration::MapWithIndex => (0, 2),
             Iteration::Map | Iteration::Filter | Iteration::Any | Iteration::All => (0, 1),
             Iteration::Bind => (1, 1),
             Iteration::FindIndex | Iteration::FindLastIndex => (2, 1),
+            Iteration::ZipWith => return Ok(None),
         };
         let folds_unit = matches!(iteration, Iteration::FoldLeft | Iteration::FoldRight)
             && self.is_unit(monotype);
@@ -81,6 +85,7 @@ where
             Iteration::FindIndex | Iteration::FindLastIndex => {
                 self.find_index(iteration, callback, &arguments[3], monotype, out)?
             }
+            Iteration::ZipWith => unreachable!("invariant violated: zipWith has no scalar loop"),
         };
         Ok(Some(value))
     }

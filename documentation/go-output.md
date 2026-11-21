@@ -98,6 +98,22 @@ is left, and the noise differs: summing `x / 10.0 * 3.0 - 0.3 * x` for `x` from 
 Whether Go fuses depends on the CPU it compiles for: it does on arm64, and on amd64 only with
 `GOAMD64=v3` or later.
 
+### Sums over vectors
+
+On arm64 (and wasm), with `GOEXPERIMENT=simd`, which `iris run --go` sets for you, simple number
+crunching over `Array Number` and `Array Int` runs on SIMD vectors: `foldl (+) 0.0 xs`, `sum`,
+`foldl (*)`, `foldl max`, `map (_ * k)`, `zipWith (\x y -> a * x + y)`, `sum (zipWith (*) xs ys)`,
+clamping with `min`, `max` and `if`, and so on. That's several times faster than a plain Go loop.
+
+The catch: a vector adds up several elements at once and combines the partial sums at the end, so
+a `Number` sum or product is added in a different order than JavaScript does it. The result can
+differ in its last digits, the same way `[0.1, 0.2, 0.3]` gives a different last digit depending on
+which pair you add first. Maps and `Int` arithmetic come out exactly the same. A `foldl min` over
+`Number`s stays an ordinary loop, because `Data.Ord.min` lets a `NaN` win only when it comes last.
+
+Everywhere else (amd64, or without `GOEXPERIMENT=simd`) you get a plain loop that adds in
+JavaScript's order.
+
 ### Trigonometric, exponential and power functions
 
 `sin`, `cos`, `tan`, `asin`, `acos`, `atan`, `atan2`, `exp`, `log` and `pow` from `Data.Number`

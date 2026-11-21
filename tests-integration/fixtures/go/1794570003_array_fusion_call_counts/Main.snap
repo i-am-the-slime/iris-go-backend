@@ -43,11 +43,7 @@ func initializeMain_() shared.MainResult {
 		performed2 := x * 3
 		mapped[index] = performed2
 	}
-	var accumulator2 int32 = 0
-	for _, value := range mapped {
-		accumulator2 = accumulator2 + value
-	}
-	ref4 = accumulator2 + int32(len(mapped))
+	ref4 = foldLanes(mapped, 0) + int32(len(mapped))
 	modified2 := shared.StateValue{State: 0, Value: ref2}
 	ref2 = modified2.State
 	i3 := modified2.Value
@@ -84,6 +80,91 @@ var numbers []int32 = []int32{3, 1, 4, 1, 5, 9, 2, 6}
 
 func main() {
 	fmt.Println(main_)
+}
+
+// main_neon.go
+//go:build goexperiment.simd && arm64
+
+package main
+
+import "simd/archsimd"
+
+func foldLanes(xs []int32, initial int32) int32 {
+	acc0 := archsimd.BroadcastInt32x4(0)
+	acc1, acc2, acc3 := acc0, acc0, acc0
+	const step = 4
+	i := 0
+	for ; i < len(xs)-4*step+1; i += 4 * step {
+		x0 := archsimd.LoadInt32x4(xs[i : i+step])
+		acc0 = acc0.Add(x0)
+		x1 := archsimd.LoadInt32x4(xs[i+step : i+2*step])
+		acc1 = acc1.Add(x1)
+		x2 := archsimd.LoadInt32x4(xs[i+2*step : i+3*step])
+		acc2 = acc2.Add(x2)
+		x3 := archsimd.LoadInt32x4(xs[i+3*step : i+4*step])
+		acc3 = acc3.Add(x3)
+	}
+	acc0 = acc0.Add(acc1).Add(acc2.Add(acc3))
+	var lanes [4]int32
+	acc0.Store(lanes[:])
+	accumulator := initial
+	for _, lane := range lanes[:step] {
+		accumulator = accumulator + lane
+	}
+	for ; i < len(xs); i++ {
+		x := xs[i]
+		accumulator = accumulator + x
+	}
+	return accumulator
+}
+
+// main_scalar.go
+//go:build !(goexperiment.simd && (arm64 || wasm))
+
+package main
+
+func foldLanes(xs []int32, initial int32) int32 {
+	accumulator := initial
+	for _, x := range xs {
+		accumulator = accumulator + x
+	}
+	return accumulator
+}
+
+// main_vector.go
+//go:build goexperiment.simd && wasm
+
+package main
+
+import "simd"
+
+func foldLanes(xs []int32, initial int32) int32 {
+	acc0 := simd.BroadcastInt32s(0)
+	acc1, acc2, acc3 := acc0, acc0, acc0
+	step := acc0.Len()
+	i := 0
+	for ; i < len(xs)-4*step+1; i += 4 * step {
+		x0 := simd.LoadInt32s(xs[i : i+step])
+		acc0 = acc0.Add(x0)
+		x1 := simd.LoadInt32s(xs[i+step : i+2*step])
+		acc1 = acc1.Add(x1)
+		x2 := simd.LoadInt32s(xs[i+2*step : i+3*step])
+		acc2 = acc2.Add(x2)
+		x3 := simd.LoadInt32s(xs[i+3*step : i+4*step])
+		acc3 = acc3.Add(x3)
+	}
+	acc0 = acc0.Add(acc1).Add(acc2.Add(acc3))
+	var lanes [16]int32
+	acc0.Store(lanes[:])
+	accumulator := initial
+	for _, lane := range lanes[:step] {
+		accumulator = accumulator + lane
+	}
+	for ; i < len(xs); i++ {
+		x := xs[i]
+		accumulator = accumulator + x
+	}
+	return accumulator
 }
 
 // shared/shared.go

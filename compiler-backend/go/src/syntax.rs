@@ -258,6 +258,11 @@ pub enum GoDeclaration {
         result: Option<GoType>,
         body: Vec<GoStatement>,
     },
+    /// A declaration of `name` written out in full, which no pass rewrites.
+    Written {
+        name: String,
+        source: String,
+    },
 }
 
 /// A name as a declaration uses it: a reference to another declaration or a
@@ -277,6 +282,7 @@ impl GoDeclaration {
             GoDeclaration::Type { name, .. }
             | GoDeclaration::Alias { name, .. }
             | GoDeclaration::Source { name, .. }
+            | GoDeclaration::Written { name, .. }
             | GoDeclaration::GenericType { name, .. }
             | GoDeclaration::Constant { name, .. }
             | GoDeclaration::Variable { name, .. }
@@ -299,6 +305,7 @@ impl GoDeclaration {
                 statements_names(body, visit);
             }
             GoDeclaration::Source { .. }
+            | GoDeclaration::Written { .. }
             | GoDeclaration::Type { .. }
             | GoDeclaration::Alias { .. }
             | GoDeclaration::GenericType { .. }
@@ -352,7 +359,7 @@ impl GoDeclaration {
     /// the names it declares itself.
     pub fn for_each_reference_mut(&mut self, visit: &mut impl FnMut(Reference<'_>)) {
         match self {
-            GoDeclaration::Source { .. } => {}
+            GoDeclaration::Source { .. } | GoDeclaration::Written { .. } => {}
             GoDeclaration::Type { type_, .. } | GoDeclaration::Alias { type_, .. } => {
                 type_references(type_, visit)
             }
@@ -560,6 +567,8 @@ impl GoType {
 }
 
 pub struct GoFile {
+    /// The `//go:build` constraint the file builds under, if any.
+    pub constraint: Option<&'static str>,
     pub package: String,
     pub imports: Vec<GoImport>,
     pub declarations: Vec<GoDeclaration>,
@@ -581,6 +590,9 @@ impl GoFile {
     pub fn render_with_census(&self) -> (String, crate::erasure::Census) {
         let mut printer =
             Printer { output: String::new(), indentation: 0, census: Default::default() };
+        if let Some(constraint) = self.constraint {
+            let _ = writeln!(printer.output, "//go:build {constraint}\n");
+        }
         let _ = writeln!(printer.output, "package {}", self.package);
         let imports: Vec<String> = self
             .imports
@@ -644,6 +656,7 @@ impl Printer {
             GoDeclaration::Source { name, template } => {
                 self.output.push_str(&template.replace("{name}", name));
             }
+            GoDeclaration::Written { source, .. } => self.output.push_str(source),
             GoDeclaration::Type { name, type_ } => {
                 let rendered = self.type_(type_);
                 self.line(&format!("type {name} {rendered}"));

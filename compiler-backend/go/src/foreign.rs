@@ -264,6 +264,7 @@ pub enum Iteration {
     Bind,
     FindIndex,
     FindLastIndex,
+    ZipWith,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -861,7 +862,11 @@ const FOREIGN_IMPORTS: &[(&str, &str, Foreign)] = &[
     ("Data.Array", "sliceImpl", array_with("Slice", 3, int32_parameters(&[0, 1]))),
     ("Data.Array", "rangeImpl", Foreign::Range),
     ("Data.Array", "replicateImpl", array_with("Replicate", 2, int32_parameters(&[0]))),
-    ("Data.Array", "zipWithImpl", uncurried(array("ZipWith", 3), &[(0, 2)])),
+    (
+        "Data.Array",
+        "zipWithImpl",
+        uncurried(iteration(GoPackage::Array, "ZipWith", 3, Iteration::ZipWith), &[(0, 2)]),
+    ),
     ("Data.Array", "anyImpl", iteration(GoPackage::Array, "Any", 2, Iteration::Any)),
     ("Data.Array", "partitionImpl", direct_with("Partition", 2, RECORD)),
     ("Data.Array", "fromFoldableImpl", direct_with("FromFoldable", 2, CONS_LIST_ACCUMULATOR)),

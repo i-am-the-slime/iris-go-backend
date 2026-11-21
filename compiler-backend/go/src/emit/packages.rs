@@ -519,7 +519,7 @@ impl Packaging<'_> {
                 imports.push(GoImport { path, alias });
             }
             imports.sort();
-            let file = GoFile { package: package.name.clone(), imports, declarations };
+            let file = GoFile { constraint: None, package: package.name.clone(), imports, declarations };
             files.push(GoSourceFile { path: package.file_path(), file });
         }
         Ok(files)
@@ -736,6 +736,7 @@ fn rename_declared(declaration: &mut GoDeclaration, rename: &mut impl FnMut(&str
         | GoDeclaration::Alias { name, .. }
         | GoDeclaration::GenericType { name, .. }
         | GoDeclaration::Source { name, .. }
+        | GoDeclaration::Written { name, .. }
         | GoDeclaration::Constant { name, .. }
         | GoDeclaration::Variable { name, .. }
         | GoDeclaration::Function { name, .. } => *name = rename(name),
