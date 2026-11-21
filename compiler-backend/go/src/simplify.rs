@@ -22,6 +22,7 @@ mod choice;
 mod fold;
 mod object;
 mod record;
+mod sink;
 mod unpack;
 
 const INLINE_SIZE: usize = 40;
@@ -76,6 +77,7 @@ pub fn simplify(program: Program, monotypes: &mut Monotypes, next_local: u32) ->
             .take()
             .expect("invariant violated: function lost during simplification");
         simplifier.settle_records(&mut current.body);
+        simplifier.sink_lets(&mut current.body);
         simplifier.sizes[index] = size(&current.body);
         simplifier.functions[index] = Some(current);
     }

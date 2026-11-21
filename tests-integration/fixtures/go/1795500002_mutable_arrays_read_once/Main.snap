@@ -1,5 +1,6 @@
 ---
 source: tests-integration/src/fixtures.rs
+assertion_line: 573
 ---
 // Data/Ordering/ordering.go
 package ordering
@@ -156,9 +157,9 @@ func smooth(array []float64, i int32) {
 	} else {
 		number4 = 0.0
 	}
-	i7 := i + 2
 	scrutinee := !(number4 <= average)
 	if scrutinee {
+		i7 := i + 2
 		within8 := i7 >= 0 && int(i7) < len(array)
 		if within8 {
 			element := array[i7]

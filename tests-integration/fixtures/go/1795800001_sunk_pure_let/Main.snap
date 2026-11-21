@@ -1,0 +1,120 @@
+---
+source: tests-integration/src/fixtures.rs
+assertion_line: 573
+---
+// Data/Eq/eq.go
+package eq
+
+import "github.com/i-am-the-slime/iris-go/array"
+
+func Eq(boolean bool, boolean2 bool) bool {
+	return boolean == boolean2
+}
+
+func EqString(array2 []string, array3 []string) bool {
+	return array.Eq(Eq2, array2, array3)
+}
+
+func Eq2(s string, s2 string) bool {
+	return s == s2
+}
+
+// Data/Maybe/maybe.go
+package maybe
+
+type Int int64
+
+const NoInt Int = 1 << 32
+
+// Effect/Exception/exception.go
+package effectexception
+
+import "github.com/i-am-the-slime/iris-go/exception"
+
+func ThrowUnit(x string) {
+	panic(exception.NewError(x))
+}
+
+// main.go
+package main
+
+import (
+	"fixture/Data/Eq"
+	"fixture/Data/Maybe"
+	"fixture/Effect/Exception"
+	"github.com/i-am-the-slime/iris-go/array"
+	"github.com/i-am-the-slime/iris-go/exception"
+	"github.com/i-am-the-slime/iris-go/prim"
+	"math"
+)
+
+type Problem struct {
+	First  []string
+	Second float64
+}
+
+type EitherProblemInt struct {
+	Left  Problem
+	Right int32
+	Tag   uint8
+}
+
+const (
+	EitherProblemIntLeft = iota
+	EitherProblemIntRight
+)
+
+func main() {
+	defer exception.ReportUncaught()
+	array2 := []float64{3.0, 2.5, -1.0}
+	mapped := make([]bool, len(array2))
+	for index, value := range array2 {
+		var result EitherProblemInt
+		if value < 0.0 {
+			result = EitherProblemInt{Tag: EitherProblemIntLeft, Left: Problem{First: []string{"apples", "count"}, Second: value}}
+		} else {
+			var integer maybe.Int
+			if math.Trunc(value) == value && (value >= math.MinInt32 && value <= math.MaxInt32) {
+				integer = maybe.Int(int32(value))
+			} else {
+				integer = maybe.NoInt
+			}
+			if integer == maybe.NoInt {
+				result = EitherProblemInt{Tag: EitherProblemIntLeft, Left: Problem{First: []string{"apples", "count"}, Second: value}}
+			} else {
+				result = EitherProblemInt{Tag: EitherProblemIntRight, Right: int32(integer)}
+			}
+		}
+		mapped[index] = isLeftProblemInt(result)
+	}
+	scrutinee := array.Eq(eq.Eq, mapped, []bool{false, true, true}) == false
+	if scrutinee {
+		effectexception.ThrowUnit("a count is read wrongly")
+	}
+	array3 := []int32{11, 1}
+	mapped2 := make([][]string, len(array3))
+	for index, count := range array3 {
+		shared := []string{"pears", prim.ShowInt(count)}
+		var result []string
+		if count > 10 {
+			result = array.Append(shared, shared)
+		} else {
+			result = shared
+		}
+		mapped2[index] = result
+	}
+	scrutinee2 := array.Eq(eq.EqString, mapped2, [][]string{[]string{"pears", "11", "pears", "11"}, []string{"pears", "1"}}) == false
+	if scrutinee2 {
+		effectexception.ThrowUnit("the shared value is wrong")
+		return
+	}
+}
+
+func isLeftProblemInt(either EitherProblemInt) bool {
+	switch either.Tag {
+	case EitherProblemIntLeft:
+		return true
+	default: // EitherProblemIntRight
+		return false
+	}
+}
