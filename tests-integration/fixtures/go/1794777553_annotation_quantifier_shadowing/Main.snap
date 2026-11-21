@@ -114,7 +114,8 @@ func MainGoGoReusing(b *ListTupleStringString, value *ListTupleStringString) *Li
 		default: // ListTupleStringStringCons
 			a := value.Cons0
 			as := value.Cons1
-			*value = ListTupleStringString{Tag: ListTupleStringStringCons, Cons0: a, Cons1: b}
+			value.Cons0 = a
+			value.Cons1 = b
 			b, value = value, as
 			continue
 		}
@@ -129,7 +130,8 @@ func MainGoGoReusing2(b *ListTupleStringBoolean, value *ListTupleStringBoolean) 
 		default: // ListTupleStringBooleanCons
 			a := value.Cons0
 			as := value.Cons1
-			*value = ListTupleStringBoolean{Tag: ListTupleStringBooleanCons, Cons0: a, Cons1: b}
+			value.Cons0 = a
+			value.Cons1 = b
 			b, value = value, as
 			continue
 		}

@@ -34,6 +34,7 @@ mod maybe;
 mod mutable;
 mod names;
 mod ownership;
+mod overwrite;
 mod packages;
 mod ranges;
 mod references;
@@ -2888,6 +2889,12 @@ where
                 let values = self.values(arguments, out)?;
                 let cell = self.value(cell, out)?;
                 let layout = self.data_layout(data)?;
+                if let GoExpression::Identifier(name) = &cell
+                    && let Some(stores) = self.reuse_stores(&layout, *constructor, name, values.clone(), out)
+                {
+                    out.extend(stores);
+                    return Ok(cell);
+                }
                 let composite = self.composite(&layout, *constructor, values);
                 let target = GoExpression::Unary { operator: "*", operand: Box::new(cell.clone()) };
                 out.push(GoStatement::Assign { targets: vec![target], values: vec![composite] });

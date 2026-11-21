@@ -1,0 +1,168 @@
+---
+source: tests-integration/src/fixtures.rs
+---
+// main.go
+package main
+
+import (
+	"fixture/shared"
+	"fmt"
+	"github.com/i-am-the-slime/iris-go/exception"
+)
+
+type Tree struct {
+	Node2 *Tree
+	Node3 *Tree
+	Node0 int32
+	Node1 int32
+	Tag   uint8
+}
+
+const (
+	TreeLeaf = iota
+	TreeNode
+)
+
+var sharedTreeLeaf = &Tree{Tag: TreeLeaf}
+
+type Chain struct {
+	Field1 *Chain
+	Field0 int32
+	Tag    uint8
+}
+
+const (
+	ChainEnd = iota
+	ChainRed
+	ChainBlue
+)
+
+var sharedChainEnd = &Chain{Tag: ChainEnd}
+
+var main_ = initializeMain_()
+
+func initializeMain_() shared.MainResult {
+	defer exception.ReportUncaught()
+	scrutinee := insertCountsReusing(3, sharedTreeLeaf)
+	var result *Tree
+	switch scrutinee.Tag {
+	case TreeNode:
+		k := scrutinee.Node0
+		count := scrutinee.Node1
+		left := scrutinee.Node2
+		right := scrutinee.Node3
+		field := count + sizeOf(left)
+		scrutinee.Node0 = field
+		scrutinee.Node1 = k
+		scrutinee.Node2 = right
+		scrutinee.Node3 = left
+		result = scrutinee
+	default: // TreeLeaf
+		result = sharedTreeLeaf
+	}
+	chains := make([]Chain, 3)
+	chains[0] = Chain{Tag: ChainRed, Field0: 1, Field1: &chains[1]}
+	chains[1] = Chain{Tag: ChainBlue, Field0: 2, Field1: &chains[2]}
+	chains[2] = Chain{Tag: ChainRed, Field0: 3, Field1: sharedChainEnd}
+	return shared.MainResult{Size: sizeOf(counts), Swapped: sizeOf(result), Blues: blues(recolourStoresTheTagReusing(&chains[0]))}
+}
+
+func sizeOf(tree *Tree) int32 {
+	switch tree.Tag {
+	case TreeLeaf:
+		return 0
+	default: // TreeNode
+		return tree.Node1 + sizeOf(tree.Node2) + sizeOf(tree.Node3)
+	}
+}
+
+var counts = initializeCounts()
+
+func initializeCounts() *Tree {
+	defer exception.ReportUncaught()
+	return insertCountsReusing(2, insertCountsReusing(1, insertCountsReusing(2, sharedTreeLeaf)))
+}
+
+func blues(value *Chain) int32 {
+	for {
+		switch value.Tag {
+		case ChainBlue:
+			n := value.Field0
+			rest := value.Field1
+			return n + blues(rest)
+		case ChainRed:
+			rest := value.Field1
+			value = rest
+			continue
+		default: // ChainEnd
+			return 0
+		}
+	}
+}
+
+func insertCountsReusing(key int32, value *Tree) *Tree {
+	if value.Tag == TreeLeaf {
+		return &Tree{Tag: TreeNode, Node0: key, Node1: 1, Node2: sharedTreeLeaf, Node3: sharedTreeLeaf}
+	}
+	k := value.Node0
+	count := value.Node1
+	left := value.Node2
+	right := value.Node3
+	if key < k {
+		field := insertCountsReusing(key, left)
+		value.Node0 = k
+		value.Node1 = count
+		value.Node2 = field
+		value.Node3 = right
+		return value
+	}
+	if key > k {
+		field := insertCountsReusing(key, right)
+		value.Node0 = k
+		value.Node1 = count
+		value.Node2 = left
+		value.Node3 = field
+		return value
+	}
+	value.Node0 = k
+	value.Node1 = count + 1
+	value.Node2 = left
+	value.Node3 = right
+	return value
+}
+
+func recolourStoresTheTagReusing(value *Chain) *Chain {
+	switch value.Tag {
+	case ChainRed:
+		n := value.Field0
+		rest := value.Field1
+		field := recolourStoresTheTagReusing(rest)
+		value.Tag = ChainBlue
+		value.Field0 = n + 1
+		value.Field1 = field
+		return value
+	case ChainBlue:
+		n := value.Field0
+		rest := value.Field1
+		field := recolourStoresTheTagReusing(rest)
+		value.Tag = ChainRed
+		value.Field0 = n
+		value.Field1 = field
+		return value
+	default: // ChainEnd
+		return sharedChainEnd
+	}
+}
+
+func main() {
+	fmt.Println(main_)
+}
+
+// shared/shared.go
+package shared
+
+type MainResult struct {
+	Blues   int32
+	Size    int32
+	Swapped int32
+}
