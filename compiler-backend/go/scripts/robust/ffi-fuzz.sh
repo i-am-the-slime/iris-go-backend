@@ -11,11 +11,14 @@
 #   FUZZ_SEED=7 FUZZ_RANDOM=60 ...                                 # other seed, more random cases
 #   SKIP_BUILD=1 ...                                               # rerun WORK's programs
 #
-# Divergences are reported in classes: real ones; those whose input or JS output holds a lone
-# surrogate (go-support keeps strings as UTF-8, which cannot hold one; go-support prim/string.go
-# explains the seam); those where the JS result is not an Int at all (JS `-x`, `x % 0`, `>>>`);
-# those with a `__proto__` key, which a JS object literal treats as its prototype; and those where
-# Bun and Deno disagree with each other.
+# Divergences are reported in classes: real ones; documented differences, where Go keeps
+# PureScript's meaning and JS shows an engine accident (Foreign.Object's integer-like keys
+# enumerated first, `$` patterns expanded in a String replacement; see documentation/go-output.md);
+# those whose input or JS output holds a lone surrogate (go-support keeps strings as WTF-8, see
+# go-support prim/wtf8.go; reported apart so that one seam does not hide other divergences);
+# those where the JS result is not an Int at all (JS `-x`, `x % 0`, `>>>`); those with a
+# `__proto__` key, which a JS object literal treats as its prototype; and those where Bun and
+# Deno disagree with each other.
 #
 # Environment: IRIS, GO_SUPPORT, PURS_BACKEND_ES, WORK (kept), JOBS, FUZZ_SEED, FUZZ_RANDOM,
 # FUZZ_CHUNK (cases per program), FUZZ_GO_TAGS (go build tags), GOEXPERIMENT (default simd).

@@ -44,6 +44,15 @@ const surrogate = new Map<string, Divergence[]>();
 const notAnInt = new Map<string, Divergence[]>();
 const proto = new Map<string, Divergence[]>();
 const engines = new Map<string, Divergence[]>();
+const documented = new Map<string, Divergence[]>();
+
+// Differences documentation/go-output.md lists: Foreign.Object keeps insertion order where JS
+// enumerates integer-like keys first, and String.replace inserts its Replacement literally where
+// JS expands `$$`, `$&`, `` $` `` and `$'`.
+const integerLikeKey = /"(0|[1-9][0-9]{0,9})\\?"/;
+const documentedDifference = (fn: string, inputs: string[]) =>
+  (/^(Object\.|JSON\.(write|read)Object)/.test(fn) && inputs.some((input) => integerLikeKey.test(input))) ||
+  (/^Common\.replace(All)?$/.test(fn) && inputs[1].includes("$"));
 
 // A rendered Int result that no int32 can produce: JS arithmetic escaped the Int range.
 const notInt32 = (fn: string, text: string) =>
@@ -90,6 +99,7 @@ for (const module of modules) {
     const divergence = { label, inputs: info.inputs, js: jsResult, go: goResult, deno: denoResult };
     const bucket =
       info.lone || loneEscape(jsResult.replaceAll("\\u005c", "\\").replace(/\\+u/g, "\\u")) ? surrogate
+      : documentedDifference(info.fn, info.inputs) ? documented
       : denoResult !== undefined && denoResult !== jsResult ? engines
       : notInt32(info.fn, jsResult) ? notAnInt
       : info.inputs.some((input) => input.includes("__proto__")) ? proto
@@ -119,8 +129,9 @@ if (programProblems.length) {
   for (const p of programProblems) console.log(`  ${p}`);
 }
 report("divergences", real);
+report("documented differences (documentation/go-output.md)", documented);
 report("Bun and Deno disagree (no single JS answer)", engines);
 report("JS result is not an Int (JS arithmetic left the int32 range)", notAnInt);
 report("__proto__ keys (a JS object literal makes them its prototype)", proto);
-report("lone-surrogate divergences (UTF-8 strings cannot hold a lone surrogate)", surrogate);
+report("lone-surrogate divergences (an input or the JS result holds a lone surrogate)", surrogate);
 process.exit(real.size > 0 || programProblems.length > 0 ? 1 : 0);
