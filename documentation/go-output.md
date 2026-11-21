@@ -335,6 +335,10 @@ whatever you like, Iris renames it.
   `start` has no arguments, so `Start` _is_ the effect.
 - **Callbacks stay curried and perform when called.** `Int -> Effect Unit` is `func(int32)`, and
   `a -> b -> Effect c` is `func(A) func(B) C`.
+- **An `Effect` callback gets called right away.** Go calls it while your foreign runs, on the same
+  goroutine, like `Every` above or a sort's comparator. Iris puts nothing around it. Calling one
+  later, from a goroutine, is a bug: see
+  [Callbacks from goroutines](#callbacks-from-goroutines).
 - **`EffectFn` and `STFn` work the same way.** `EffectFn2 a b c` is `func(A, B) C`.
 - **An `Int` is an `int32`, everywhere.** Where a Go API wants an `int`, convert it yourself:
   `os.Exit(int(code))`. Where a Go value might not fit 32 bits, decide what to do about it rather
@@ -345,6 +349,81 @@ whatever you like, Iris renames it.
   `undefined :: forall a. UndefinedOr a` is `func Undefined[A any]() UndefinedOr[A]`.
 - **Name clashes get a `Type` suffix.** If your module has a `foreign import data Event` and a
   value `event`, the Go type is `EventType`.
+
+### Callbacks from goroutines
+
+Go code loves goroutines: `net/http` calls your handler on the request's goroutine, a timer fires
+on one of its own. PureScript runs one piece at a time, as on JavaScript's event loop, so a
+callback like that can't just go and touch a `Ref`. It's the same deal as a `Promise` in JavaScript
+FFI: its callbacks run later, not inside your call, and the types should say so.
+
+So type a callback that Go calls from a goroutine `IO`, from
+[purescript-golang](https://github.com/i-am-the-slime/purescript-golang)'s `Go.IO`. When it needs
+an `Effect`, `liftEffect` waits for its turn on the event loop and runs it there:
+
+```purescript
+module Ex.Workers where
+
+import Prelude
+
+import Data.Either (Either(..))
+import Effect (Effect)
+import Effect.Aff (Aff, launchAff_, makeAff, nonCanceler)
+import Effect.Class (liftEffect)
+import Effect.Class.Console (log)
+import Effect.Ref as Ref
+import Go.IO (IO)
+
+foreign import onWorkersImpl :: Int -> IO Unit -> Effect Unit -> Effect Unit
+
+onWorkers :: Int -> IO Unit -> Aff Unit
+onWorkers workers handler = makeAff \done -> onWorkersImpl workers handler (done (Right unit)) $> nonCanceler
+
+main :: Effect Unit
+main = launchAff_ do
+  visits <- Ref.new 0 # liftEffect
+  onWorkers 32 (Ref.modify_ (_ + 1) visits # liftEffect)
+  total <- Ref.read visits # liftEffect
+  log (show total <> " visits from 32 goroutines")
+```
+
+```go
+package ffi
+
+import (
+	"sync"
+
+	"github.com/i-am-the-slime/iris-go/eventloop"
+)
+
+func OnWorkersImpl(workers int32, handler func(), done func()) {
+	retire := eventloop.Hold()
+	go func() {
+		var running sync.WaitGroup
+		for range workers {
+			running.Go(handler)
+		}
+		running.Wait()
+		done()
+		retire()
+	}()
+}
+```
+
+```
+32 visits from 32 goroutines
+```
+
+An `IO Unit` is a plain `func()` in Go, so the Go side just calls it, from as many goroutines as it
+likes. Iris doesn't wrap anything at the crossing: `liftEffect` is the only place that waits.
+
+Two more things in there:
+
+- **What `makeAff` hands you is fine from any goroutine.** `done` only wakes up the fiber that
+  waits for it, and so do `EffectFnAff`'s callbacks. That's why `done` can stay an `Effect`.
+- **`eventloop.Hold()` keeps the program alive.** Like node, a Go program ends once nothing is
+  left to run, even with a fiber waiting on Go. `Hold` says there's more to come; call what it
+  returns once you're done.
 
 ### Records
 

@@ -67,7 +67,7 @@ main = launchAff_ do
 
 ```go
 func main() {
-	defer aff.Await()
+	defer eventloop.Await()
 	fiber4 := aff.NewFiber(func() struct{} {
 		func() {
 			fiber2 := aff.ForkFiber(true, func() int32 {
@@ -150,6 +150,14 @@ both done
 `concurrently_` starts each action on its own goroutine and waits for both. `toAff` waits for the
 whole `IO` without blocking the other fibers. `Go.IO` also has `forkIO`, `MVar`, `Chan` and the
 rest of `Async`.
+
+`log` works in `IO` because it's `liftEffect`: that waits until it's the `IO` thread's turn on the
+event loop, where `Ref`s and fibers live, runs the `Effect` there and comes back. So two threads
+can't trip over the same `Ref`. Each trip costs about 80 ns, so keep a hot loop's state in an
+`IORef`.
+
+`IO` is also what a Go callback is, when Go calls it from a goroutine of its own:
+[Callbacks from goroutines](../go-output.md#callbacks-from-goroutines) shows one.
 
 ## JSON with `yoga-json` gets a decoder for your type
 
@@ -360,6 +368,9 @@ such as `greeting :: String` is a Go variable, and the `//go:embed` file ends up
 binary. A polymorphic function is a generic Go function, called at the type you use it with:
 `Repeat(…, "hi")` lets Go infer `string`. Go has no generic variables, so a polymorphic value like
 `none :: forall a. Array a` is a generic function without arguments, `None[int32]()`.
+
+Callbacks you hand to Go come in two kinds, just like in JavaScript FFI. One Go calls right away,
+before your foreign returns, is an `Effect`. One Go calls later, from a goroutine, is an `IO`.
 
 [Foreign imports](../go-output.md#foreign-imports) has the full rules: types, effects, callbacks,
 records and libraries.
