@@ -1,0 +1,237 @@
+---
+source: tests-integration/src/fixtures.rs
+---
+// Data/Variant/variant.go
+package variant
+
+import "fixture/shared"
+
+type CountFlagNamePointRatioTags struct {
+	Name  string
+	Tags  []string
+	Ratio float64
+	Count int32
+	Point shared.X
+	Tag   uint8
+	Flag  bool
+}
+
+const (
+	CountFlagNamePointRatioTagsCount = iota
+	CountFlagNamePointRatioTagsFlag
+	CountFlagNamePointRatioTagsName
+	CountFlagNamePointRatioTagsPoint
+	CountFlagNamePointRatioTagsRatio
+	CountFlagNamePointRatioTagsTags
+)
+
+type FlagNamePointRatioTags struct {
+	Name  string
+	Tags  []string
+	Ratio float64
+	Point shared.X
+	Tag   uint8
+	Flag  bool
+}
+
+const (
+	FlagNamePointRatioTagsFlag = iota
+	FlagNamePointRatioTagsName
+	FlagNamePointRatioTagsPoint
+	FlagNamePointRatioTagsRatio
+	FlagNamePointRatioTagsTags
+)
+
+type NamePointRatioTags struct {
+	Name  string
+	Tags  []string
+	Ratio float64
+	Point shared.X
+	Tag   uint8
+}
+
+const (
+	NamePointRatioTagsName = iota
+	NamePointRatioTagsPoint
+	NamePointRatioTagsRatio
+	NamePointRatioTagsTags
+)
+
+type PointRatioTags struct {
+	Tags  []string
+	Ratio float64
+	Point shared.X
+	Tag   uint8
+}
+
+const (
+	PointRatioTagsPoint = iota
+	PointRatioTagsRatio
+	PointRatioTagsTags
+)
+
+type RatioTags struct {
+	Tags  []string
+	Ratio float64
+	Tag   uint8
+}
+
+const (
+	RatioTagsRatio = iota
+	RatioTagsTags
+)
+
+// Yoga/JSON/json.go
+package json
+
+import (
+	"fixture/Data/Variant"
+	"github.com/i-am-the-slime/iris-go/direct"
+	"github.com/i-am-the-slime/iris-go/foreignvalue"
+	"github.com/i-am-the-slime/iris-go/object"
+)
+
+func WriteJSONVariantCountFlagNamePointRatioTags(x variant.CountFlagNamePointRatioTags) string {
+	var result any
+	switch x.Tag {
+	case variant.CountFlagNamePointRatioTagsCount:
+		object2 := object.New[any]()()
+		performed := object.Poke("count", any(x.Count), object2)()
+		result = object.MapWithKey(performed, func(_ string, x2 any) any {
+			return WriteImplForeign(x2)
+		})
+	case variant.CountFlagNamePointRatioTagsFlag:
+		result = WriteJSONVariantCountFlagNamePointRatioTagsFallback(variant.FlagNamePointRatioTags{Tag: variant.FlagNamePointRatioTagsFlag, Flag: x.Flag})
+	case variant.CountFlagNamePointRatioTagsName:
+		result = WriteJSONVariantCountFlagNamePointRatioTagsFallback(variant.FlagNamePointRatioTags{Tag: variant.FlagNamePointRatioTagsName, Name: x.Name})
+	case variant.CountFlagNamePointRatioTagsPoint:
+		result = WriteJSONVariantCountFlagNamePointRatioTagsFallback(variant.FlagNamePointRatioTags{Tag: variant.FlagNamePointRatioTagsPoint, Point: x.Point})
+	case variant.CountFlagNamePointRatioTagsRatio:
+		result = WriteJSONVariantCountFlagNamePointRatioTagsFallback(variant.FlagNamePointRatioTags{Tag: variant.FlagNamePointRatioTagsRatio, Ratio: x.Ratio})
+	default: // variant.CountFlagNamePointRatioTagsTags
+		result = WriteJSONVariantCountFlagNamePointRatioTagsFallback(variant.FlagNamePointRatioTags{Tag: variant.FlagNamePointRatioTagsTags, Tags: x.Tags})
+	}
+	return foreignvalue.UnsafeStringify(result)
+}
+
+func WriteImplForeign(x any) any {
+	return x
+}
+
+func WriteImplString(s string) any {
+	return s
+}
+
+func WriteJSONVariantCountFlagNamePointRatioTagsFallback(variant2 variant.FlagNamePointRatioTags) any {
+	switch variant2.Tag {
+	case variant.FlagNamePointRatioTagsFlag:
+		object2 := object.New[any]()()
+		performed := object.Poke("flag", any(variant2.Flag), object2)()
+		return object.MapWithKey(performed, func(_ string, x any) any {
+			return WriteImplForeign(x)
+		})
+	case variant.FlagNamePointRatioTagsName:
+		return WriteJSONVariantCountFlagNamePointRatioTagsFallbackFallback(variant.NamePointRatioTags{Tag: variant.NamePointRatioTagsName, Name: variant2.Name})
+	case variant.FlagNamePointRatioTagsPoint:
+		return WriteJSONVariantCountFlagNamePointRatioTagsFallbackFallback(variant.NamePointRatioTags{Tag: variant.NamePointRatioTagsPoint, Point: variant2.Point})
+	case variant.FlagNamePointRatioTagsRatio:
+		return WriteJSONVariantCountFlagNamePointRatioTagsFallbackFallback(variant.NamePointRatioTags{Tag: variant.NamePointRatioTagsRatio, Ratio: variant2.Ratio})
+	default: // variant.FlagNamePointRatioTagsTags
+		return WriteJSONVariantCountFlagNamePointRatioTagsFallbackFallback(variant.NamePointRatioTags{Tag: variant.NamePointRatioTagsTags, Tags: variant2.Tags})
+	}
+}
+
+func WriteJSONVariantCountFlagNamePointRatioTagsFallbackFallback(variant2 variant.NamePointRatioTags) any {
+	switch variant2.Tag {
+	case variant.NamePointRatioTagsName:
+		object2 := object.New[any]()()
+		performed := object.Poke("name", any(variant2.Name), object2)()
+		return object.MapWithKey(performed, func(_ string, x any) any {
+			return WriteImplForeign(x)
+		})
+	case variant.NamePointRatioTagsPoint:
+		return WriteJSONVariantCountFlagNamePointRatioTagsFallbackFallbackFallback(variant.PointRatioTags{Tag: variant.PointRatioTagsPoint, Point: variant2.Point})
+	case variant.NamePointRatioTagsRatio:
+		return WriteJSONVariantCountFlagNamePointRatioTagsFallbackFallbackFallback(variant.PointRatioTags{Tag: variant.PointRatioTagsRatio, Ratio: variant2.Ratio})
+	default: // variant.NamePointRatioTagsTags
+		return WriteJSONVariantCountFlagNamePointRatioTagsFallbackFallbackFallback(variant.PointRatioTags{Tag: variant.PointRatioTagsTags, Tags: variant2.Tags})
+	}
+}
+
+func WriteJSONVariantCountFlagNamePointRatioTagsFallbackFallbackFallback(variant2 variant.PointRatioTags) any {
+	switch variant2.Tag {
+	case variant.PointRatioTagsPoint:
+		object2 := object.New[any]()()
+		performed := object.Poke("point", direct.ForeignRecord([]string{"x"}, []any{variant2.Point.X}), object2)()
+		return object.MapWithKey(performed, func(_ string, x any) any {
+			return WriteImplForeign(x)
+		})
+	case variant.PointRatioTagsRatio:
+		return WriteJSONVariantCountFlagNamePointRatioTagsFallbackFallbackFallbackFallback(variant.RatioTags{Tag: variant.RatioTagsRatio, Ratio: variant2.Ratio})
+	default: // variant.PointRatioTagsTags
+		return WriteJSONVariantCountFlagNamePointRatioTagsFallbackFallbackFallbackFallback(variant.RatioTags{Tag: variant.RatioTagsTags, Tags: variant2.Tags})
+	}
+}
+
+func WriteJSONVariantCountFlagNamePointRatioTagsFallbackFallbackFallbackFallback(variant2 variant.RatioTags) any {
+	switch variant2.Tag {
+	case variant.RatioTagsRatio:
+		object2 := object.New[any]()()
+		performed := object.Poke("ratio", any(variant2.Ratio), object2)()
+		return object.MapWithKey(performed, func(_ string, x any) any {
+			return WriteImplForeign(x)
+		})
+	default: // variant.RatioTagsTags
+		object2 := object.New[any]()()
+		mapped := make([]any, len(variant2.Tags))
+		for index, element := range variant2.Tags {
+			mapped[index] = WriteImplString(element)
+		}
+		performed := object.Poke("tags", any(mapped), object2)()
+		return object.MapWithKey(performed, func(_ string, x any) any {
+			return WriteImplForeign(x)
+		})
+	}
+}
+
+// main.go
+package main
+
+import (
+	"fixture/Data/Variant"
+	"fixture/Yoga/JSON"
+	shared2 "fixture/shared"
+	"github.com/i-am-the-slime/iris-go/array"
+	"github.com/i-am-the-slime/iris-go/console"
+	"github.com/i-am-the-slime/iris-go/foreignvalue"
+	"github.com/i-am-the-slime/iris-go/object"
+	"strings"
+)
+
+var main_ = initializeMain_()
+
+func initializeMain_() []string {
+	var shared any = "12"
+	mapped := make([]string, len(shapes))
+	for index, element := range shapes {
+		mapped[index] = json.WriteJSONVariantCountFlagNamePointRatioTags(element)
+	}
+	object2 := object.New[any]()()
+	performed := object.Poke("f", shared, object2)()
+	object3 := object.CopyST(performed)()
+	object.Poke("e", shared, object3)()
+	return array.Append(mapped, []string{foreignvalue.UnsafeStringify(object3)})
+}
+
+var shapes []variant.CountFlagNamePointRatioTags = []variant.CountFlagNamePointRatioTags{{Tag: variant.CountFlagNamePointRatioTagsName, Name: "a"}, {Tag: variant.CountFlagNamePointRatioTagsPoint, Point: shared2.X{X: 1}}, {Tag: variant.CountFlagNamePointRatioTagsCount, Count: 3}, {Tag: variant.CountFlagNamePointRatioTagsRatio, Ratio: 1.5}, {Tag: variant.CountFlagNamePointRatioTagsFlag, Flag: true}, {Tag: variant.CountFlagNamePointRatioTagsTags, Tags: []string{"p", "q"}}}
+
+func main() {
+	console.Print("[" + strings.Join(main_, " ") + "]")
+}
+
+// shared/shared.go
+package shared
+
+type X struct {
+	X int32
+}

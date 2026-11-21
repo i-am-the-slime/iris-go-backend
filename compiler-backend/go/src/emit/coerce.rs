@@ -8,6 +8,7 @@ use super::{
 use crate::erasure::Erasure;
 use crate::error::{GoError, GoResult};
 use crate::foreign::{GoFunction, GoPackage};
+use crate::mono::{Expression, ExpressionKind};
 use crate::monotype::{DataType, Failure, Monotype, MonotypeId, RecordField};
 use smol_str::SmolStr;
 use crate::syntax::{GoCase, GoDeclaration, GoDefault, GoExpression, GoStatement, GoType};
@@ -282,6 +283,19 @@ where
     fn crosses_interface(&mut self, from: MonotypeId, to: MonotypeId) -> GoResult<bool> {
         let interface = |type_: GoType| matches!(type_, GoType::Any | GoType::Erased(_));
         Ok(interface(self.go_type(to)?) != interface(self.go_type(from)?))
+    }
+
+    pub(super) fn coerced_into_interface(&mut self, expression: &Expression) -> GoResult<bool> {
+        let ExpressionKind::Coerce(inner) = &expression.kind else { return Ok(false) };
+        match self.monotypes.get(expression.monotype) {
+            Monotype::Opaque | Monotype::Erased(_) => {}
+            _ => return Ok(false),
+        }
+        match self.monotypes.get(inner.monotype) {
+            Monotype::Record(_) => Ok(false),
+            Monotype::Opaque | Monotype::Erased(_) => self.coerced_into_interface(inner),
+            _ => self.crosses_interface(inner.monotype, expression.monotype),
+        }
     }
 
     /// `(coerce f) x …` where [`Self::applies_through_coercion`] says it can be: `f` called with

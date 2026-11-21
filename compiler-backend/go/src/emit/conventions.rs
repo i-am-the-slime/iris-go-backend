@@ -377,7 +377,7 @@ where
                                 callback
                             }
                         }
-                        _ => self.typed_constant(value, argument.monotype)?,
+                        _ => self.typed_argument(value, argument)?,
                     }
                 }
             };

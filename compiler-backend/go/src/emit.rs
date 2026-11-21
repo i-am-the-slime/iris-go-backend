@@ -1712,16 +1712,12 @@ where
         out: &mut Vec<GoStatement>,
     ) -> GoResult<()> {
         if mode == Mode::Value {
-            let value = self.value(expression, out)?;
-            return self.deliver(value, expression.monotype, sink, out);
+            return self.deliver_expression(expression, sink, out);
         }
         let result =
             self.monotypes.effect_result(expression.monotype).unwrap_or(expression.monotype);
         match &expression.kind {
-            ExpressionKind::EffectPure(value) => {
-                let value = self.value(value, out)?;
-                self.deliver(value, result, sink, out)
-            }
+            ExpressionKind::EffectPure(value) => self.deliver_expression(value, sink, out),
             ExpressionKind::EffectBind { action, local, body } => {
                 if !uses_local(body, local.id) || self.is_unit(local.monotype) {
                     self.locals.insert(local.id, unit_value());
@@ -2034,6 +2030,7 @@ where
         let value = self.value(argument, out)?;
         let value = match self.monotypes.get(argument.monotype) {
             Monotype::Int if generic => self.typed_constant(value, argument.monotype)?,
+            _ if generic => self.typed_argument(value, argument)?,
             _ => value,
         };
         self.in_convention(value, argument.monotype, out)
@@ -2162,6 +2159,19 @@ where
             },
             _ => Ok(None),
         }
+    }
+
+    fn typed_argument(
+        &mut self,
+        value: GoExpression,
+        argument: &Expression,
+    ) -> GoResult<GoExpression> {
+        let constant = matches!(value, GoExpression::String(_) | GoExpression::Boolean(_));
+        if !constant && self.coerced_into_interface(argument)? {
+            let type_ = self.go_type(argument.monotype)?;
+            return Ok(GoExpression::Conversion { type_, value: Box::new(value) });
+        }
+        self.typed_constant(value, argument.monotype)
     }
 
     fn typed_constant(
@@ -2799,6 +2809,23 @@ where
         let name = self.temporary(base);
         out.push(GoStatement::Define { names: vec![name.clone()], values: vec![value] });
         identifier_expression(&name)
+    }
+
+    fn deliver_expression(
+        &mut self,
+        expression: &Expression,
+        sink: Sink,
+        out: &mut Vec<GoStatement>,
+    ) -> GoResult<()> {
+        let value = self.value(expression, out)?;
+        if let Sink::Define(name) = &sink
+            && self.coerced_into_interface(expression)?
+        {
+            let type_ = self.go_type(expression.monotype)?;
+            out.push(GoStatement::Variable { name: name.clone(), type_, value: Some(value) });
+            return Ok(());
+        }
+        self.deliver(value, expression.monotype, sink, out)
     }
 
     fn deliver(
