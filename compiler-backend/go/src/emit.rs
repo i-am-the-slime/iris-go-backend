@@ -3670,14 +3670,6 @@ where
             }
             _ => left,
         };
-        if let Operator::NumberMultiply = operator
-            && !(is_untyped_constant(&left) && is_untyped_constant(&right))
-        {
-            // Go may fuse `a*b + c` into one rounding (FMA on arm64); JavaScript
-            // rounds the product first. An explicit conversion forces that.
-            let product = binary("*", left, right);
-            return GoExpression::Conversion { type_: GoType::Float64, value: Box::new(product) };
-        }
         let negated_opposite = match operator {
             Operator::Compare(Comparison::GreaterThanOrUnordered) => Some("<="),
             Operator::Compare(Comparison::GreaterThanOrEqualOrUnordered) => Some("<"),

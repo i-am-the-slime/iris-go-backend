@@ -3,7 +3,8 @@
 # Idiomatic, FFI-free PureScript against hand-written Go. Builds every idiom benchmark with
 # `iris go` and with purs-backend-es, builds its hand-written Go reference from go/cmd/<name>,
 # runs the four under Go (generated), Go (hand-written), Bun (JavaScriptCore) and Deno (V8),
-# checks that all four print the same result, and prints
+# checks that all four print the same result (or one whose numbers differ only in the last
+# digits, FLOAT CLOSE within FLOAT_TOLERANCE, default 1e-12), and prints
 #
 #   benchmark | idiom | ps→go ms | hand ms | ps→go/hand | bun ms | deno ms | ps→go allocs | hand allocs
 #
@@ -191,7 +192,12 @@ echo "load average (1/5/15 min) before each benchmark: $(LC_ALL=C awk '{ sum += 
 for name in "${names[@]}"; do
   reference="$WORK/results/$name.go.out"
   for runtime in $RUNTIMES; do
-    if ! cmp -s "$reference" "$WORK/results/$name.$runtime.out"; then
+    if cmp -s "$reference" "$WORK/results/$name.$runtime.out"; then
+      continue
+    fi
+    if close="$(bun "$HERE/../../scripts/markgraf/float-close.ts" "$reference" "$WORK/results/$name.$runtime.out" "${FLOAT_TOLERANCE:-1e-12}")"; then
+      echo "FLOAT CLOSE $name ($runtime): $close"
+    else
       status=1
       echo "MISMATCH $name"
       for shown in $RUNTIMES; do

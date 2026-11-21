@@ -81,6 +81,16 @@ changes no element. In Go the index is `0`: the lookup is `Nothing`, and the pok
 element of a non-empty array and is `true`. Likewise `Array.range 0 (clamp 0 1 (div bottom
 (-1)))` is `[0,1]` in JavaScript and `[0]` in Go.
 
+### Multiply, then add
+
+Go may compute `a * b + c` as one fused multiply-add, which rounds once where JavaScript rounds the
+product and then the sum. The fused result is the more precise one, but a `Number` can differ from
+JavaScript's in its last digits. Where a computation cancels to almost nothing, only rounding noise
+is left, and the noise differs: summing `x / 10.0 * 3.0 - 0.3 * x` for `x` from 1 to 10 gives
+`4.440892098500626e-16` in JavaScript and `9.992007221626409e-16` in Go, both for an exact 0.
+Whether Go fuses depends on the CPU it compiles for: it does on arm64, and on amd64 only with
+`GOAMD64=v3` or later.
+
 ### Trigonometric, exponential and power functions
 
 `sin`, `cos`, `tan`, `asin`, `acos`, `atan`, `atan2`, `exp`, `log` and `pow` from `Data.Number`

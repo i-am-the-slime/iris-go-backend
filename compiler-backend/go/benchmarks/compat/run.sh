@@ -3,9 +3,11 @@
 # Compiles every compatibility program with purs-backend-es (run under Bun) and with `iris go`,
 # runs both, and reports per program one of
 #
-#   OK | JS FAILS | IRIS ERROR <category> | GO BUILD ERROR | RUNTIME PANIC | OUTPUT MISMATCH
+#   OK | FLOAT CLOSE | JS FAILS | IRIS ERROR <category> | GO BUILD ERROR | RUNTIME PANIC | OUTPUT MISMATCH
 #
-# followed by a summary by category. A program is a module under src/ or repro/src/ that defines
+# followed by a summary by category. FLOAT CLOSE passes: the outputs differ only in the last digits
+# of their numbers, by at most FLOAT_TOLERANCE relative (default 1e-12), as Go's fused
+# multiply-adds and its math package's rounding allow. A program is a module under src/ or repro/src/ that defines
 # `main`. `JS FAILS` means the corpus program itself is wrong.
 #
 #   compiler-backend/go/benchmarks/compat/run.sh                 # every program
@@ -26,6 +28,7 @@ PURS_BACKEND_ES="${PURS_BACKEND_ES:-/Users/mark/Developer/markgraf/npm/node_modu
 WORK="${WORK:-${TMPDIR:-/tmp}/iris-compat}"
 JOBS="${JOBS:-6}"
 TIMEOUT="${TIMEOUT:-120}"
+FLOAT_TOLERANCE="${FLOAT_TOLERANCE:-1e-12}"
 mkdir -p "$WORK/go" "$WORK/results"
 
 programs() {
@@ -131,7 +134,13 @@ classify() {
     if grep -q '^panic: \|^fatal error: ' "$result.go.err"; then echo "RUNTIME PANIC"; else echo "RUNTIME PANIC (exit $(cat "$result.go.status"))"; fi
     return
   fi
-  if cmp -s "$result.go.out" "$result.js.out"; then echo OK; else echo "OUTPUT MISMATCH"; fi
+  if cmp -s "$result.go.out" "$result.js.out"; then
+    echo OK
+  elif bun "$HERE/../../scripts/markgraf/float-close.ts" "$result.js.out" "$result.go.out" "$FLOAT_TOLERANCE" >/dev/null; then
+    echo "FLOAT CLOSE"
+  else
+    echo "OUTPUT MISMATCH"
+  fi
 }
 
 detail() {
@@ -141,6 +150,7 @@ detail() {
     "IRIS ERROR"*) grep -m1 '^cannot specialize ' "$out/compile.log" | cut -c1-240 ;;
     "GO BUILD ERROR") grep -m1 -v '^#' "$out/build.log" | cut -c1-240 ;;
     "RUNTIME PANIC"*) grep -m1 -A1 '^panic: \|^fatal error: ' "$result.go.err" | tr '\n' ' ' | cut -c1-240 ;;
+    "FLOAT CLOSE") bun "$HERE/../../scripts/markgraf/float-close.ts" "$result.js.out" "$result.go.out" "$FLOAT_TOLERANCE" ;;
     "OUTPUT MISMATCH") diff "$result.js.out" "$result.go.out" | grep -m2 '^[<>]' | tr '\n' ' ' | cut -c1-240 ;;
   esac
 }
@@ -176,4 +186,4 @@ done
 echo
 echo "summary:"
 sort "$WORK/statuses.txt" | uniq -c | sort -rn
-! grep -qv '^OK$' "$WORK/statuses.txt"
+! grep -qvE '^(OK|FLOAT CLOSE)$' "$WORK/statuses.txt"

@@ -35,21 +35,21 @@ func initializeMain_() float64 {
 	bodies := []shared.Body{shared.Body{X: 0.0, Y: 0.0, Vx: 0.0, Vy: 0.0, Mass: 1.0}, shared.Body{X: 1.0, Y: 2.0, Vx: 0.0, Vy: 0.0, Mass: 0.5}}
 	accumulator := shared.Body{X: 0.5, Y: 0.5, Vx: 0.0, Vy: 0.0, Mass: 2.0}
 	for otherIndex := range bodies {
-		accumulator.Vx = accumulator.Vx + float64((bodies[otherIndex].X - accumulator.X) * bodies[otherIndex].Mass)
-		accumulator.Vy = accumulator.Vy + float64((bodies[otherIndex].Y - accumulator.Y) * bodies[otherIndex].Mass)
+		accumulator.Vx = accumulator.Vx + (bodies[otherIndex].X - accumulator.X) * bodies[otherIndex].Mass
+		accumulator.Vy = accumulator.Vy + (bodies[otherIndex].Y - accumulator.Y) * bodies[otherIndex].Mass
 	}
 	accumulator2 := shared.Body{X: 0.5, Y: 0.5, Vx: 0.0, Vy: 0.0, Mass: 2.0}
 	for index := range bodies {
 		i := int32(index)
 		if 1 != i {
-			accumulator2.Vx = accumulator2.Vx + float64((bodies[index].X - accumulator2.X) * bodies[index].Mass)
-			accumulator2.Vy = accumulator2.Vy + float64((bodies[index].Y - accumulator2.Y) * bodies[index].Mass)
+			accumulator2.Vx = accumulator2.Vx + (bodies[index].X - accumulator2.X) * bodies[index].Mass
+			accumulator2.Vy = accumulator2.Vy + (bodies[index].Y - accumulator2.Y) * bodies[index].Mass
 		}
 	}
 	var accumulator3 float64 = 0.0
 	for index := range bodies {
 		i := int32(index)
-		accumulator3 = accumulator3 + float64(toNumber(i) * bodies[index].Mass)
+		accumulator3 = accumulator3 + toNumber(i) * bodies[index].Mass
 	}
 	array := []int32{3, 4}
 	accumulator4 := []tuple.TupleIntInt{}
