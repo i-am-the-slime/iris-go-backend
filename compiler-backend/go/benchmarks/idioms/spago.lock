@@ -23,7 +23,8 @@
             "st",
             "strings",
             "tailrec",
-            "tuples"
+            "tuples",
+            "yoga-json"
           ]
         },
         "test": {

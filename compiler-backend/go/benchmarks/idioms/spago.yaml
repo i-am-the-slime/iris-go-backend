@@ -20,6 +20,7 @@ package:
     - strings
     - tailrec
     - tuples
+    - yoga-json
 workspace:
   packageSet:
     registry: 75.9.1
