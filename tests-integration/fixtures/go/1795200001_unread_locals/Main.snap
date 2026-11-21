@@ -79,7 +79,7 @@ import (
 )
 
 func main_() int32 {
-	x := prim.NumberTrunc(float64(0.5))
+	x := prim.NumberTrunc(0.5)
 	if !prim.NumberIsFinite(x) {
 	} else if !(x < float64(int32(prim.TopInt))) {
 	} else if x <= float64(int32(prim.BottomInt)) {
@@ -87,7 +87,7 @@ func main_() int32 {
 	}
 	direct.DeleteAt(func(payload []int32) maybe.ArrayInt {
 		return maybe.JustArrayInt(payload)
-	}, maybe.NoArrayInt, int32(0), []int32{})
+	}, maybe.NoArrayInt, 0, []int32{})
 	var ref int32 = 0
 	elements := []int32{10, 20}
 	var result int32

@@ -279,6 +279,9 @@ pub struct Signature {
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum Spelled {
     Opaque,
+    /// `Int`, `Number` or `Char`, which a Go helper takes at its own Go type rather than as a
+    /// type parameter, so that a constant argument needs no conversion.
+    Scalar,
     Function(Box<Spelled>, Box<Spelled>),
     Array(Box<Spelled>),
     Effect(Box<Spelled>),

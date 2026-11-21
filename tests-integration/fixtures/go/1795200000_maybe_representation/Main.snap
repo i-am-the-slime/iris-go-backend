@@ -156,7 +156,7 @@ func initializeMain_() []string {
 	}
 	var result9 string
 	if opaque(1) > 0 {
-		result9 = "(Just " + prim.ShowChar(rune('c')) + ")"
+		result9 = "(Just " + prim.ShowChar('c') + ")"
 	} else {
 		result9 = "Nothing"
 	}

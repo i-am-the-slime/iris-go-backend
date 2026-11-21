@@ -357,11 +357,12 @@ where
                 }
                 _ => {
                     let value = self.value(argument, out)?;
-                    let declared = boundary.signature.and_then(|signature| {
-                        signature.parameters.get(position).map(Spelled::arrows)
-                    });
+                    let declared =
+                        boundary.signature.and_then(|signature| signature.parameters.get(position));
                     match declared {
-                        Some(arrows) if arrows > 0 => {
+                        Some(Spelled::Scalar) => value,
+                        Some(declared) if declared.arrows() > 0 => {
+                            let arrows = declared.arrows();
                             let callback =
                                 self.curried_callback(value, argument.monotype, arrows, out)?;
                             if self.is_unit(self.monotypes.result_after(argument.monotype, arrows))

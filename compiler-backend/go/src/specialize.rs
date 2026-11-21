@@ -3164,12 +3164,12 @@ where
         let Type::Constructor(file_id, item) = self.context.types.lookup(head).clone() else {
             return Ok(Spelled::Opaque);
         };
-        let [argument] = arguments[..] else { return Ok(Spelled::Opaque) };
         let module = self.context.module(file_id)?;
         let name = module.indexed.items[item].name.clone().unwrap_or_default();
-        Ok(match (module.name.as_str(), name.as_str()) {
-            ("Prim", "Array") => Spelled::Array(Box::new(self.spelled(argument)?)),
-            ("Effect", "Effect") => Spelled::Effect(Box::new(self.spelled(argument)?)),
+        Ok(match (module.name.as_str(), name.as_str(), &arguments[..]) {
+            ("Prim", "Int" | "Number" | "Char", []) => Spelled::Scalar,
+            ("Prim", "Array", &[argument]) => Spelled::Array(Box::new(self.spelled(argument)?)),
+            ("Effect", "Effect", &[argument]) => Spelled::Effect(Box::new(self.spelled(argument)?)),
             _ => Spelled::Opaque,
         })
     }

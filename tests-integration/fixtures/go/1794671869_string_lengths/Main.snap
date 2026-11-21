@@ -84,7 +84,7 @@ func countSpacesUnconsingCountsUpToTwo(text string, count int32) int32 {
 		switch result.Tag {
 		case maybe.TagJust:
 			var result2 int32
-			if result.Just.Head == prim.ToCharCode(rune(' ')) {
+			if result.Just.Head == prim.ToCharCode(' ') {
 				result2 = count + 1
 			} else {
 				result2 = count

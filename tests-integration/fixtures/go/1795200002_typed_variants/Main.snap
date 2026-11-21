@@ -63,7 +63,7 @@ func initializeMain_() []string {
 	n3 := opaque(3)
 	var result3 string
 	if n3 > 0 {
-		result3 = "circle " + prim.ShowNumber(float64(1.5))
+		result3 = "circle " + prim.ShowNumber(1.5)
 	} else {
 		result3 = "square " + prim.ShowInt(n3)
 	}

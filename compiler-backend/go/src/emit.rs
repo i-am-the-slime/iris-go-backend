@@ -1977,10 +1977,10 @@ where
             let instantiated = GoExpression::Instantiation { function, arguments };
             return Ok(if effectful { instantiated } else { call(instantiated, vec![]) });
         }
-        let generic = self.project_is_generic(foreign)?;
+        let generic = self.project_generic_parameters(foreign)?;
         let mut values = vec![];
-        for argument in arguments {
-            let value = self.project_argument(argument, generic, out)?;
+        for (position, argument) in arguments.iter().enumerate() {
+            let value = self.project_argument(argument, generic.contains(&position), out)?;
             values.push(value);
         }
         Ok(call(function, values))
@@ -1988,7 +1988,7 @@ where
 
     /// A foreign's argument as its Go function takes it. Go infers a generic function's type
     /// arguments from its arguments, and an untyped integer constant as an `int`, so an `Int`
-    /// constant passed to a generic foreign is typed: `int32(2)`.
+    /// constant passed for a type parameter is typed: `int32(2)`.
     fn project_argument(
         &mut self,
         argument: &Expression,
@@ -2003,15 +2003,32 @@ where
         self.in_convention(value, argument.monotype, out)
     }
 
-    /// Whether a foreign's declared type is quantified, which makes its Go function generic.
-    fn project_is_generic(&mut self, foreign: Foreign) -> GoResult<bool> {
+    /// The positions of a foreign's parameters whose declared type is one of its quantified
+    /// variables, which its Go function takes as a type parameter. A parameter declared `Int` is
+    /// an `int32` in Go, even in a generic function.
+    fn project_generic_parameters(&mut self, foreign: Foreign) -> GoResult<Vec<usize>> {
         let Foreign::Project { file_id, term, .. } = foreign else {
             unreachable!("invariant violated: the declared type of another foreign");
         };
         let module = self.context.module(file_id)?;
-        let Some(declared) = module.checked.lookup_term_item_type(term) else { return Ok(false) };
+        let Some(declared) = module.checked.lookup_term_item_type(term) else { return Ok(vec![]) };
         let declared = crate::monotype::expand_synonyms(&mut self.context, declared)?;
-        Ok(!self.context.types.peel_quantifiers(declared).0.is_empty())
+        let (variables, mut current) = self.context.types.peel_quantifiers(declared);
+        if variables.is_empty() {
+            return Ok(vec![]);
+        }
+        let mut generic = vec![];
+        let mut position = 0;
+        while let Some((parameter, result)) = self.context.types.function_parts(current) {
+            let parameter = self.context.types.strip_annotations(parameter);
+            let declared = self.context.types.lookup(parameter);
+            if !matches!(declared, checking::core::Type::Constructor(..)) {
+                generic.push(position);
+            }
+            position += 1;
+            current = result;
+        }
+        Ok(generic)
     }
 
     /// The Go function of a foreign package that implements a foreign import.
@@ -2052,10 +2069,10 @@ where
         out: &mut Vec<GoStatement>,
     ) -> GoResult<GoExpression> {
         let function = self.project_function(foreign)?;
-        let generic = self.project_is_generic(foreign)?;
+        let generic = self.project_generic_parameters(foreign)?;
         let mut bound = Vec::with_capacity(arguments.len());
-        for argument in arguments {
-            let value = self.project_argument(argument, generic, out)?;
+        for (position, argument) in arguments.iter().enumerate() {
+            let value = self.project_argument(argument, generic.contains(&position), out)?;
             let base = self.value_base(argument.monotype);
             let name = self.temporary(&base);
             out.push(GoStatement::Define { names: vec![name.clone()], values: vec![value] });
