@@ -47,7 +47,7 @@ evens :: Array Int -> Array Int
 evens = foldl (\acc n -> if n `mod` 2 == 0 then snoc acc n else acc) []
 
 digits :: Array Int -> String
-digits = foldl (\acc n -> acc <> show n) ""
+digits = foldl (\acc n -> acc <> show n <> ",") ""
 
 main :: Effect Unit
 main = do
@@ -71,7 +71,8 @@ func main() {
 	console.Print(string(show.AppendShowArrayInt(nil, accumulator)))
 	accumulator2 := []byte("")
 	for _, n := range numbers {
-		accumulator2 = append(accumulator2, strconv.Itoa(int(n))...)
+		accumulator2 = strconv.AppendInt(accumulator2, int64(n), 10)
+		accumulator2 = append(accumulator2, ","...)
 	}
 	built := string(accumulator2)
 	console.Print(built)

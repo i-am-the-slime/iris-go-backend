@@ -99,11 +99,13 @@ func initializeMain_() string {
 	}
 	text = strconv.AppendInt(text, int64(accumulator5+accumulator6), 10)
 	array7 := []shared.PairString{{Left: "a", Right: "b"}}
-	accumulator7 := ""
+	accumulator7 := []byte("")
 	for pairIndex := range array7 {
-		accumulator7 = prim.Concat(accumulator7, array7[pairIndex].Left, array7[pairIndex].Right)
+		accumulator7 = prim.AppendString(accumulator7, array7[pairIndex].Left)
+		accumulator7 = prim.AppendString(accumulator7, array7[pairIndex].Right)
 	}
-	text = prim.AppendString(text, accumulator7)
+	built := string(accumulator7)
+	text = prim.AppendString(text, built)
 	return string(text)
 }
 

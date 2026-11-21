@@ -5,30 +5,52 @@ source: tests-integration/src/fixtures.rs
 package main
 
 import (
-	"fixture/shared"
+	"github.com/i-am-the-slime/iris-go/console"
 	"github.com/i-am-the-slime/iris-go/prim"
 	"strconv"
+	"strings"
 )
 
 var main_ = initializeMain_()
 
-func initializeMain_() shared.MainResult {
+func initializeMain_() []string {
 	accumulator := []byte("start:")
 	for i := int32(1); i < 13; i++ {
-		accumulator = append(accumulator, strconv.Itoa(int(i))...)
+		accumulator = strconv.AppendInt(accumulator, int64(i), 10)
 	}
 	built := string(accumulator)
-	accumulator2 := ""
+	accumulator2 := []byte("")
+	for i := int32(1); i < 13; i++ {
+		accumulator2 = strconv.AppendInt(accumulator2, int64(i), 10)
+		accumulator2 = append(accumulator2, ","...)
+	}
+	built2 := string(accumulator2)
+	accumulator3 := []byte("")
+	for i := int32(1); i < 6; i++ {
+		accumulator3 = append(accumulator3, "<"...)
+		accumulator3 = strconv.AppendInt(accumulator3, int64(i), 10)
+		accumulator3 = append(accumulator3, ">"...)
+	}
+	built3 := string(accumulator3)
+	accumulator4 := ""
 	for i := int32(1); i < 11; i++ {
-		if !(prim.CodeUnitLengthUpTo(6, accumulator2) > 5) {
-			accumulator2 += strconv.Itoa(int(i))
+		if !(prim.CodeUnitLengthUpTo(6, accumulator4) > 5) {
+			accumulator4 += strconv.Itoa(int(i))
 		}
 	}
-	accumulator3 := ""
-	for i := int32(1); i < 6; i++ {
-		accumulator3 = strconv.Itoa(int(i)) + accumulator3
+	accumulator5 := ""
+	for value := int32(1); value < 7; value++ {
+		accumulator5 = accumulator5 + strconv.Itoa(int(prim.CodeUnitLength(accumulator5))) + ","
 	}
-	return shared.MainResult{Fold: built, Loop: mainGo(0, ""), Exit: mainGo2(0, "x"), ReadInFold: accumulator2, ReadInLoop: mainGo3(0, ""), Prepended: accumulator3}
+	accumulator6 := ""
+	for i := int32(1); i < 6; i++ {
+		accumulator6 = strconv.Itoa(int(i)) + accumulator6
+	}
+	accumulator7 := ""
+	for i := int32(1); i < 5; i++ {
+		accumulator7 = "[" + accumulator7 + strconv.Itoa(int(i)) + "]"
+	}
+	return []string{built, mainGo(0, ""), strconv.Itoa(int(mainGo2(0, "x"))), built2, mainGo3(0, ""), built3, accumulator4, mainGo4(0, ""), accumulator5, accumulator6, accumulator7}
 }
 
 func mainGo(i int32, acc string) string {
@@ -41,7 +63,8 @@ func mainGo(i int32, acc string) string {
 			i += 1
 			continue
 		}
-		i, accBytes = i+1, append(accBytes, "é"...)
+		accBytes = append(accBytes, "é"...)
+		i += 1
 	}
 }
 
@@ -51,11 +74,24 @@ func mainGo2(i int32, acc string) int32 {
 		if i >= 5 {
 			return prim.CodeUnitLength(string(accBytes))
 		}
-		i, accBytes = i+1, append(accBytes, "yz"...)
+		accBytes = append(accBytes, "yz"...)
+		i += 1
 	}
 }
 
 func mainGo3(i int32, acc string) string {
+	accBytes := []byte(acc)
+	for {
+		if i >= 12 {
+			return string(accBytes)
+		}
+		accBytes = strconv.AppendInt(accBytes, int64(i), 10)
+		accBytes = append(accBytes, ";"...)
+		i += 1
+	}
+}
+
+func mainGo4(i int32, acc string) string {
 	for {
 		if i >= 12 {
 			return acc
@@ -65,19 +101,5 @@ func mainGo3(i int32, acc string) string {
 }
 
 func main() {
-	_ = main_
+	console.Print("[" + strings.Join(main_, " ") + "]")
 }
-
-// shared/shared.go
-package shared
-
-type MainResult struct {
-	Fold       string
-	Loop       string
-	Prepended  string
-	ReadInFold string
-	ReadInLoop string
-	Exit       int32
-}
-
-// note: the entry's value of type { exit, fold, loop, prepended, readInFold, readInLoop } is not printed; use an Effect entry or a value of a printable type (Int, Number, Boolean, Char, String or an Array of them)

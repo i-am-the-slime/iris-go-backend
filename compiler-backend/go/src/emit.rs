@@ -2825,7 +2825,7 @@ where
                     if is_effectful_call(&value) {
                         out.push(discarded(value));
                     }
-                } else {
+                } else if !aliases::is_named(&value, &name) {
                     out.push(GoStatement::Assign {
                         targets: vec![identifier_expression(&name)],
                         values: vec![value],

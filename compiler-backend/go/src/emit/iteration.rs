@@ -211,7 +211,8 @@ where
         self.owned_snocs.extend(owned_nodes.iter().copied());
         let saved = self.tail_loop.take();
         let positions = (accumulator_position, element_position);
-        let outcome = self.fold_loop(&callback, pipeline, positions, &accumulator, monotype);
+        let outcome =
+            self.fold_loop(&callback, pipeline, positions, &accumulator, buffered, monotype);
         self.tail_loop = saved;
         for node in &owned_nodes {
             self.owned_snocs.remove(node);
@@ -232,9 +233,17 @@ where
         pipeline: Pipeline<'_>,
         (accumulator_position, element_position): (usize, usize),
         accumulator: &str,
+        buffered: bool,
         monotype: MonotypeId,
     ) -> GoResult<GoStatement> {
-        let parameter = self.loop_variable(callback, accumulator_position, "accumulated");
+        let parameter = match callback {
+            Callback::Inline { parameters, .. } if buffered => {
+                let buffer = identifier_expression(accumulator);
+                self.locals.insert(parameters[accumulator_position].id, buffer);
+                "_".to_string()
+            }
+            _ => self.loop_variable(callback, accumulator_position, "accumulated"),
+        };
         let need = Need::Argument { callback, position: element_position };
         let mut opened = self.open(pipeline, need, None)?;
         if parameter != "_" {

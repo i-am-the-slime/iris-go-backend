@@ -7,7 +7,7 @@
 
 use super::iteration::Callback;
 use super::ownership::{self, Carried, Place};
-use super::{Emitter, identifier_expression};
+use super::{Emitter, Mode, Sink, identifier_expression};
 use crate::error::GoResult;
 use crate::mono::{Expression, ExpressionKind, Function, FunctionId};
 use crate::monotype::{Monotype, MonotypeId};
@@ -29,6 +29,10 @@ where
             }
             _ => self.value(&arguments[0], out)?,
         };
+        if let GoExpression::Identifier(name) = &buffer {
+            self.sink(&arguments[1], Mode::Value, Sink::Write(name.clone()), out)?;
+            return Ok(buffer);
+        }
         let suffix = self.value(&arguments[1], out)?;
         Ok(self.buffer_append(buffer, suffix))
     }

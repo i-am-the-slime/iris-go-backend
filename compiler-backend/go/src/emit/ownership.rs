@@ -170,6 +170,25 @@ fn snoc_of_carried<'e>(carried: Carried<'_>, expression: &'e Expression) -> Opti
     (appends && is_carried(carried, &arguments[0])).then_some(&arguments[0])
 }
 
+fn owned_appends_of<'e>(
+    carried: Carried<'_>,
+    expression: &'e Expression,
+    owned: &mut Vec<&'e Expression>,
+) -> Option<()> {
+    if let Some(snoc) = snoc_of_carried(carried, expression) {
+        owned.push(snoc);
+        return Some(());
+    }
+    let ExpressionKind::Foreign { foreign: Foreign::Operator(Operator::StringAppend), arguments } =
+        &expression.kind
+    else {
+        return None;
+    };
+    owned_appends_of(carried, &arguments[0], owned)?;
+    owned.push(&arguments[0]);
+    Some(())
+}
+
 fn results<'e>(
     carried: Carried<'_>,
     expression: &'e Expression,
@@ -232,8 +251,7 @@ fn carried_value<'e>(
     if is_carried(carried, value) || matches!(value.kind, ExpressionKind::Array(_)) {
         return Some(());
     }
-    owned.push(snoc_of_carried(carried, value)?);
-    Some(())
+    owned_appends_of(carried, value, owned)
 }
 
 fn reads(carried: Carried<'_>, expression: &Expression) -> usize {

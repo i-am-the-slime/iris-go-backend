@@ -140,7 +140,8 @@ func unsafeCharAtLoopViewsTheText(text string, i int32, reversed string) string 
 		if i < 0 {
 			return string(reversedBytes)
 		}
-		i, reversedBytes = i-1, prim.AppendString(reversedBytes, prim.CharSingleton(textUnits.UnsafeCharAt(i)))
+		reversedBytes = prim.AppendString(reversedBytes, prim.CharSingleton(textUnits.UnsafeCharAt(i)))
+		i -= 1
 	}
 }
 
