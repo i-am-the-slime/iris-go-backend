@@ -13,7 +13,7 @@ use checking::evidence::{
 use checking::tree::{self, DeclarationAbstraction, TermDeclarationKind};
 use files::FileId;
 use indexing::{EquationSourceId, IndexedTermItemKind, TermItemId};
-use rustc_hash::FxHashMap;
+use rustc_hash::{FxHashMap, FxHashSet};
 use smol_str::{SmolStr, format_smolstr};
 
 use crate::blocker::{Blocker, Blockers};
@@ -24,7 +24,7 @@ use crate::error::{GoError, GoResult, UnsupportedState};
 use crate::foreign::{self, Accumulator, Boundary, Foreign, ForeignPackages, Signature, Spelled};
 use crate::mono::{
     Alternative, Binding, Expression, ExpressionKind, Function, FunctionId, FunctionSpelling,
-    Guard, Guarded, GuardedBranch, Literal, Local, Pattern, PatternKind, RecordUpdate,
+    Guard, Guarded, GuardedBranch, Literal, Local, LocalId, Pattern, PatternKind, RecordUpdate,
     SourcePosition,
 };
 use crate::monotype::{Monotype, MonotypeId, Monotypes, supported};
@@ -233,6 +233,8 @@ pub struct Specializer<'q, Q> {
     variant_crossings: Vec<(TypeId, TypeId)>,
     narrowed_variant_rows: Vec<TypeId>,
     int64: int64::Int64Types,
+    /// The parameters of the lambdas the source writes as thunks, `\_ -> later`.
+    thunk_parameters: FxHashSet<LocalId>,
 }
 
 struct RecordedBlocker {
@@ -280,6 +282,7 @@ where
             variant_crossings: vec![],
             narrowed_variant_rows: vec![],
             int64: int64::Int64Types::default(),
+            thunk_parameters: FxHashSet::default(),
         }
     }
 
@@ -518,7 +521,7 @@ where
         }
     }
 
-    pub fn finish(mut self) -> (Vec<Function>, Monotypes, u32) {
+    pub fn finish(mut self) -> (Vec<Function>, Monotypes, u32, FxHashSet<LocalId>) {
         let functions = std::mem::take(&mut self.functions).into_iter().map(|function| {
             function.expect("invariant violated: requested specialization was never produced")
         });
@@ -528,7 +531,7 @@ where
         for function in &mut functions {
             self.reconcile_references(&mut function.body, &signatures);
         }
-        (functions, self.monotypes, self.next_local)
+        (functions, self.monotypes, self.next_local, self.thunk_parameters)
     }
 
     fn note_reference_crossings(&mut self) {
@@ -1447,6 +1450,12 @@ where
             }
             tree::ExpressionKind::Lambda { binders, expression } => {
                 if let Some(parameters) = self.variable_parameters(scope, binders)? {
+                    if is_written_lambda(&module, node)
+                        && let [parameter] = parameters.as_slice()
+                        && matches!(self.monotypes.get(parameter.monotype), Monotype::Unit)
+                    {
+                        self.thunk_parameters.insert(parameter.id);
+                    }
                     let body = self.expression(scope, *expression)?;
                     return Ok(self.lambda(parameters, body));
                 }
@@ -3518,6 +3527,16 @@ fn string_literal(value: &lowering::StringLiteral) -> Literal {
         Ok(text) => Literal::String(text),
         Err(_) => Literal::Utf16(Arc::from(value.as_utf16())),
     }
+}
+
+/// Whether the checked lambda is one the source writes with a backslash, rather than one that
+/// desugaring a do block or a section makes.
+fn is_written_lambda(module: &ModuleData, lambda: &tree::Expression) -> bool {
+    let Some(tree::ExpressionSource::Expression(source)) = lambda.source else { return false };
+    matches!(
+        module.lowered.tree.get_expression_kind(source),
+        Some(lowering::ExpressionKind::Lambda { .. })
+    )
 }
 
 /// Where the checked expression is written: the start of its syntax, which is the whitespace in

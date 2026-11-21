@@ -76,12 +76,14 @@ pub fn compile_program(
         return Err(GoError::Blocked(blockers));
     }
     let erased_newtypes = std::mem::take(&mut specializer.context().erased_newtypes);
-    let (functions, mut monotypes, next_local) =
+    let (functions, mut monotypes, next_local, thunk_parameters) =
         timed("finish specialization", || specializer.finish());
     monotypes.erased_newtypes = erased_newtypes;
     let program = mono::Program { functions, entry };
     let eliminators = emit::Eliminators::find(&program, &monotypes);
-    let program = timed("simplify", || simplify::simplify(program, &mut monotypes, next_local));
+    let program = timed("simplify", || {
+        simplify::simplify(program, &mut monotypes, next_local, thunk_parameters)
+    });
     let program =
         timed("merge", || merge::merge_identical_functions(program, &modules, &mut monotypes));
     if std::env::var_os("IRIS_GO_DUMP").is_some() {

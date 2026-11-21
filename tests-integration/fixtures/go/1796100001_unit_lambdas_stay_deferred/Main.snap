@@ -1,0 +1,136 @@
+---
+source: tests-integration/src/fixtures.rs
+---
+// Data/Eq/eq.go
+package eq
+
+func Eq(i int32, i2 int32) bool {
+	return i == i2
+}
+
+// Effect/Exception/exception.go
+package effectexception
+
+import "github.com/i-am-the-slime/iris-go/exception"
+
+func ThrowUnit(x string) {
+	panic(exception.NewError(x))
+}
+
+// main.go
+package main
+
+import (
+	"fixture/Actions_ffi"
+	"fixture/Data/Eq"
+	"fixture/Effect/Exception"
+	"fixture/shared"
+	"github.com/i-am-the-slime/iris-go/array"
+	"github.com/i-am-the-slime/iris-go/exception"
+)
+
+func main() {
+	defer exception.ReportUncaught()
+	array2 := array.Map(func(n int32) func(struct{}) int32 {
+		return func(ignored struct{}) int32 {
+			return deferred(n, ignored)
+		}
+	}, []int32{100, 10})
+	mapped := make([]int32, len(array2))
+	for index, element := range array2 {
+		mapped[index] = forceInt(element)
+	}
+	scrutinee := array.Eq(eq.Eq, mapped, []int32{5050, 55}) == false
+	if scrutinee {
+		effectexception.ThrowUnit("the deferred values are wrong")
+	}
+	i := Actions_ffi.RunWhenAsked(func() int32 {
+		var accumulator int32 = 0
+		for value := int32(1); value < 11; value++ {
+			accumulator = accumulator + value
+		}
+		return accumulator
+	})
+	i2 := Actions_ffi.RunWhenAsked(func() int32 {
+		var accumulator int32 = 0
+		for value := int32(1); value < 21; value++ {
+			accumulator = accumulator + value
+		}
+		return accumulator
+	})
+	i3 := Actions_ffi.RunWhenAsked(answer)
+	scrutinee2 := array.Eq(eq.Eq, []int32{i, i2, i3}, []int32{55, 210, 42}) == false
+	if scrutinee2 {
+		effectexception.ThrowUnit("the continued values are wrong")
+	}
+	array3 := []int32{1, 2}
+	mapped2 := make([]int32, len(array3))
+	for index, x := range array3 {
+		var accumulator int32 = 0
+		for value := int32(1); value < 11; value++ {
+			accumulator = accumulator + value
+		}
+		mapped2[index] = x + accumulator
+	}
+	array4 := []int32{1}
+	mapped3 := make([]int32, len(array4))
+	for index, x := range array4 {
+		var accumulator int32 = 0
+		for value := int32(1); value < 5; value++ {
+			accumulator = accumulator + value
+		}
+		mapped3[index] = x + accumulator
+	}
+	scrutinee3 := array.Eq(eq.Eq, array.Append(mapped2, mapped3), []int32{56, 57, 11}) == false
+	if scrutinee3 {
+		effectexception.ThrowUnit("the shifted values are wrong")
+	}
+	for _, i4 := range []int32{1, 2} {
+		var accumulator int32 = 0
+		for value := int32(1); value < 11; value++ {
+			accumulator = accumulator + value
+		}
+		scrutinee4 := i4 + accumulator < 0
+		if scrutinee4 {
+			effectexception.ThrowUnit("negative")
+		}
+	}
+	for _, i4 := range []int32{1, 2} {
+		var accumulator int32 = 0
+		for value := int32(1); value < 5; value++ {
+			accumulator = accumulator + value
+		}
+		scrutinee4 := i4 + accumulator < 0
+		if scrutinee4 {
+			effectexception.ThrowUnit("negative")
+		}
+	}
+}
+
+func deferred(n int32, ignored struct{}) int32 {
+	step, count := shared.RangeSteps(1, n)
+	var accumulator int32 = 0
+	for index := range count {
+		value := 1 + int32(index) * step
+		accumulator = accumulator + value
+	}
+	return accumulator
+}
+
+func forceInt(f func(struct{}) int32) int32 {
+	return f(struct{}{})
+}
+
+func answer() int32 {
+	return 42
+}
+
+// shared/shared.go
+package shared
+
+func RangeSteps(start int32, end int32) (int32, int64) {
+	if start > end {
+		return -1, int64(start) - int64(end) + 1
+	}
+	return 1, int64(end) - int64(start) + 1
+}

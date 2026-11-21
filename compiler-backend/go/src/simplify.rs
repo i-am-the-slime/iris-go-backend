@@ -29,7 +29,12 @@ mod unpack;
 const INLINE_SIZE: usize = 40;
 const INLINE_FUEL: usize = 2_000;
 
-pub fn simplify(program: Program, monotypes: &mut Monotypes, next_local: u32) -> Program {
+pub fn simplify(
+    program: Program,
+    monotypes: &mut Monotypes,
+    next_local: u32,
+    thunk_parameters: FxHashSet<LocalId>,
+) -> Program {
     let suspension = Suspension::analyse(&program, monotypes);
     let Program { functions, entry } = program;
     let references = reference_graph(&functions);
@@ -57,6 +62,7 @@ pub fn simplify(program: Program, monotypes: &mut Monotypes, next_local: u32) ->
         records_settled: false,
         suspension,
         unsafely_effectful_locals: FxHashSet::default(),
+        thunk_parameters,
     };
     for component in &components {
         for &function in component {
@@ -108,6 +114,9 @@ struct Simplifier<'m> {
     records_settled: bool,
     suspension: Suspension,
     unsafely_effectful_locals: FxHashSet<LocalId>,
+    /// The parameters of the lambdas the source writes as thunks, `\_ -> later`: what their
+    /// bodies build waits for the thunk to be called, so it stays inside them unless it is free.
+    thunk_parameters: FxHashSet<LocalId>,
 }
 
 impl Simplifier<'_> {
@@ -793,6 +802,7 @@ impl Simplifier<'_> {
         }
         for binding in &bindings {
             self.remember_record_order(binding);
+            self.pass_on_thunk_parameter(binding);
         }
         let body = self.expression(body);
         let result = self.let_bindings(bindings, body);
@@ -1204,7 +1214,9 @@ impl Simplifier<'_> {
         monotype: crate::monotype::MonotypeId,
     ) -> Expression {
         match action.kind {
-            ExpressionKind::EffectPure(value) if builds_safely(&body) => {
+            ExpressionKind::EffectPure(value)
+                if builds_safely(&body) && !self.defers_work(&local, &body) =>
+            {
                 let bindings = vec![Binding { local, value: *value }];
                 self.let_bindings(bindings, body)
             }
@@ -1236,6 +1248,23 @@ impl Simplifier<'_> {
         }
     }
 
+    /// Whether binding `local` to a pure value in place of running a bind would build `body`, a
+    /// thunk's body, where the action is built rather than where it runs. A bind the source
+    /// writes as `pure unit >>= \_ -> later` says that `later` waits for the action to run.
+    fn defers_work(&self, local: &Local, body: &Expression) -> bool {
+        self.thunk_parameters.contains(&local.id) && !self.does_no_work(body)
+    }
+
+    /// A thunk applied to a local, as a bind's continuation is to the local the bind binds, makes
+    /// that local the thunk's parameter.
+    fn pass_on_thunk_parameter(&mut self, binding: &Binding) {
+        if let ExpressionKind::Local(argument) = binding.value.kind
+            && self.thunk_parameters.contains(&binding.local.id)
+        {
+            self.thunk_parameters.insert(argument);
+        }
+    }
+
     fn rename_binder(
         &mut self,
         local: &Local,
@@ -1243,6 +1272,9 @@ impl Simplifier<'_> {
     ) -> Local {
         let fresh = self.fresh(local);
         renaming.insert(local.id, fresh.id);
+        if self.thunk_parameters.contains(&local.id) {
+            self.thunk_parameters.insert(fresh.id);
+        }
         fresh
     }
 
