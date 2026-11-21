@@ -1,9 +1,10 @@
 # Go output: differences from the JavaScript backend
 
-The Go backend aims to produce a program whose standard output and exit status are byte for byte
-the same as the JavaScript build's. This guide lists the places where it does not, and the programs
-it refuses to compile. Everything not listed here is meant to behave as it does in JavaScript; a
-difference that is not listed is a bug.
+A Go build of your program does what the JavaScript build does, wherever PureScript says what
+should happen. Where JavaScript only does something by accident of how it works, such as the last
+digits of a float or an `Int` result that doesn't fit in 32 bits, Go does the natural thing
+instead. This guide lists those differences, and the programs the Go backend refuses to compile.
+A difference that isn't listed here is a bug.
 
 ## Running a program
 

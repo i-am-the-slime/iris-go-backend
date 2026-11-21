@@ -21,8 +21,11 @@ as if a careful person had written it by hand for those types.
 - No `reflect` and no `unsafe` in generated code.
 - Calls read like the PureScript they come from: `n(f, x)`, never `n.Apply(f, x)`, `Invoke`,
   `Call2` or similar plumbing names.
-- Output is identical to the JS backend, byte for byte, including float formatting and the edge
-  cases of integer arithmetic.
+- Programs keep PureScript's semantics: the same output as the JS backend for everything
+  PureScript defines, such as `show`, String's UTF-16 code units and Int's 32-bit wrapping.
+  JavaScript and engine accidents are not copied: float results may differ in the last digits
+  (Go's math, fused multiply-add), and an Int result JS leaves outside 32 bits wraps. Each such
+  difference is listed in documentation/go-output.md.
 
 ## Gates
 
