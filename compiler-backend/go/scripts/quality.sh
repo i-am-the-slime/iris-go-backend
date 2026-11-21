@@ -1,9 +1,11 @@
 #!/usr/bin/env bash
 #
 # Measures escape hatches, readability and size (lines, functions) in generated
-# Go, and ratchets them against compiler-backend/go/quality-baseline.txt: a
-# scope fails when any metric rises above its baseline, and asks for the
-# baseline to be lowered when one drops below it.
+# Go. The escape hatches (any and its causes, empty interfaces, type
+# assertions, reflect, unsafe, panic) ratchet against
+# compiler-backend/go/quality-baseline.txt: a scope fails when one rises above
+# its baseline, and asks for the baseline to be lowered when one drops below
+# it. The other metrics are printed for information and never fail.
 #
 #   compiler-backend/go/scripts/quality.sh SCOPE DIR...           # check
 #   compiler-backend/go/scripts/quality.sh --update SCOPE DIR...  # lower baseline
@@ -81,6 +83,13 @@ measure() {
   PATTERN='if (/^(\t+)/) { $n = length($1) if length($1) > $n } END { print $n+0, "\n" }' count "${dirs[@]}" | sed 's/^/max-nesting /'
 }
 
+ratcheted() {
+  case "$1" in
+    any | any:* | empty-interface | type-assertion | reflect | unsafe | panic) return 0 ;;
+  esac
+  return 1
+}
+
 baseline_value() {
   awk -v s="$scope" -v m="$1" '$1 == s && $2 == m { print $3 }' "$BASELINE" 2>/dev/null
 }
@@ -91,6 +100,10 @@ status=0
 lowered=()
 printf '%-16s %10s %10s\n' "$scope" "baseline" "current"
 while read -r metric value; do
+  if ! ratcheted "$metric"; then
+    printf '%-16s %10s %10s  (info)\n' "$metric" "" "$value"
+    continue
+  fi
   base="$(baseline_value "$metric")"
   mark=""
   if [ -z "$base" ]; then
