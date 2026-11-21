@@ -38,7 +38,7 @@ func initializeMain_() shared.MainResult {
 		for y := int32(1); y < 3; y++ {
 			var result []int32
 			if x > 4 {
-				result = []int32{prim.MultiplyInt32(x, y)}
+				result = []int32{x * y}
 			} else {
 				result = []int32{}
 			}
@@ -47,14 +47,14 @@ func initializeMain_() shared.MainResult {
 	}
 	var accumulator int32 = 0
 	for value := int32(1); value < 11; value++ {
-		value2 := prim.MultiplyInt32(value, 2)
+		value2 := value * 2
 		accumulator = accumulator + value2
 	}
 	mapped := make([]int32, len(numbers))
 	for slot, value := range numbers {
 		x := value + 1
 		i := int32(slot)
-		mapped[slot] = prim.MultiplyInt32(i, 100) + x
+		mapped[slot] = i * 100 + x
 	}
 	mapped2 := []string{}
 	for _, value := range numbers {

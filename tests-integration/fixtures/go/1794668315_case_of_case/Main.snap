@@ -45,7 +45,7 @@ func initializeMain_() []string {
 	if n > 10 {
 		result4 = mainJoin(n)
 	} else if n > 5 {
-		result4 = mainJoin(prim.MultiplyInt32(n, 2))
+		result4 = mainJoin(n * 2)
 	} else {
 		result4 = "none"
 	}
@@ -54,11 +54,11 @@ func initializeMain_() []string {
 	if n2 > 10 {
 		result5 = mainJoin2(n2)
 	} else if n2 > 5 {
-		result5 = mainJoin2(prim.MultiplyInt32(n2, 2))
+		result5 = mainJoin2(n2 * 2)
 	} else {
 		result5 = "none"
 	}
-	return []string{result, prim.ShowInt(result2), prim.ShowInt(prim.MultiplyInt32(field, field)), result3, result4, result5}
+	return []string{result, prim.ShowInt(result2), prim.ShowInt(field * field), result3, result4, result5}
 }
 
 func opaque(x int32) int32 {

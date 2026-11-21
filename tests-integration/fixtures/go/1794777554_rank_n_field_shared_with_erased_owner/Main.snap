@@ -169,7 +169,7 @@ func initializeMain_() []string {
 		a2 = v
 	}
 	vValue2 := a2.Map(func(coerced any) any {
-		return prim.MultiplyInt32(coerced.(int32), 2)
+		return coerced.(int32) * 2
 	})(a2.Value)
 	var result2 string
 	if a2.Type == "first" {

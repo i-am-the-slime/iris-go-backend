@@ -39,7 +39,6 @@ import (
 	"fixture/Data/Array"
 	"fixture/Data/Tuple"
 	"github.com/i-am-the-slime/iris-go/exception"
-	"github.com/i-am-the-slime/iris-go/prim"
 	"os"
 )
 
@@ -50,12 +49,11 @@ func main_() int32 {
 		s_ := ref + 1
 		ref = s_
 	}, struct{}{}, units)
-	i2 := ref
 	var accumulator int32 = 0
 	for range units {
 		accumulator = accumulator + 1
 	}
-	return prim.MultiplyInt32(i, 100) + prim.MultiplyInt32(i2, 10) + accumulator
+	return i * 100 + ref * 10 + accumulator
 }
 
 var units []tuple.TupleUnitUnit = []tuple.TupleUnitUnit{tuple.TupleUnitUnit{First: struct{}{}, Second: struct{}{}}, tuple.TupleUnitUnit{First: struct{}{}, Second: struct{}{}}}

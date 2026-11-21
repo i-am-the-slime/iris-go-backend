@@ -34,7 +34,6 @@ import (
 	"fmt"
 	"github.com/i-am-the-slime/iris-go/alloc"
 	"github.com/i-am-the-slime/iris-go/exception"
-	"github.com/i-am-the-slime/iris-go/prim"
 )
 
 type Sequence struct {
@@ -87,7 +86,7 @@ func initializeMain_() []int32 {
 			if accumulator.Tag == SequenceOne && accumulator.One1.Tag == SequenceOne {
 				guarded := accumulator.One0.(int32)
 				guarded2 := tuple.Convert2(accumulator.One1.One0.(*tuple.Tuple))
-				result = guarded + prim.MultiplyInt32(guarded2.First, 10) + guarded2.Second
+				result = guarded + guarded2.First * 10 + guarded2.Second
 				break matched
 			}
 			if accumulator.Tag == SequenceOne {

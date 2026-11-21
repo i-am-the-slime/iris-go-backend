@@ -327,7 +327,7 @@ fn binary<'l>(operator: Operator, left: &Value<'l>, right: &Value<'l>) -> Option
     Some(match (operator, left, right) {
         (Operator::IntAdd, Value::Int(x), Value::Int(y)) => Value::Int(x.wrapping_add(*y)),
         (Operator::IntSubtract, Value::Int(x), Value::Int(y)) => Value::Int(x.wrapping_sub(*y)),
-        (Operator::IntMultiply, Value::Int(x), Value::Int(y)) => Value::Int(multiply(*x, *y)),
+        (Operator::IntMultiply, Value::Int(x), Value::Int(y)) => Value::Int(x.wrapping_mul(*y)),
         (
             Operator::IntAnd
             | Operator::IntOr
@@ -352,14 +352,6 @@ fn binary<'l>(operator: Operator, left: &Value<'l>, right: &Value<'l>) -> Option
 }
 
 /// `x * y | 0`: the product is a double, exact up to 2^53 and rounded beyond.
-fn multiply(x: i32, y: i32) -> i32 {
-    let product = i64::from(x) * i64::from(y);
-    if product.abs() <= 1 << 53 {
-        return product as i32;
-    }
-    (f64::from(x) * f64::from(y)) as i64 as i32
-}
-
 /// The prelude's `intDiv`, Euclidean division with zero for a zero divisor.
 /// `minBound / -1` leaves the Int range in JavaScript and stays unfolded.
 fn divide(x: i32, y: i32) -> Option<i32> {

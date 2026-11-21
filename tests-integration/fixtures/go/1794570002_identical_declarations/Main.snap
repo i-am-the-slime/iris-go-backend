@@ -30,7 +30,7 @@ func initializeMain_() []string {
 }
 
 var opsForLeft shared.Ops = shared.Ops{Double: func(n int32) int32 {
-	return prim.MultiplyInt32(n, 2)
+	return n * 2
 }, Describe: func(n int32) string {
 	return "n = " + prim.ShowInt(n)
 }}

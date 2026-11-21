@@ -98,7 +98,7 @@ func evaluate(expr *Expr) int32 {
 	case ExprAdd:
 		return evaluate(expr.Field0) + evaluate(expr.Field1)
 	case ExprMul:
-		return prim.MultiplyInt32(evaluate(expr.Field0), evaluate(expr.Field1))
+		return evaluate(expr.Field0) * evaluate(expr.Field1)
 	default: // ExprSub
 		return evaluate(expr.Field0) - evaluate(expr.Field1)
 	}
@@ -138,7 +138,7 @@ func itemTotal(item Item) int32 {
 	case ItemPair:
 		return item.Field0 + item.Field1
 	default: // ItemCouple
-		return prim.MultiplyInt32(item.Field0, item.Field1)
+		return item.Field0 * item.Field1
 	}
 }
 

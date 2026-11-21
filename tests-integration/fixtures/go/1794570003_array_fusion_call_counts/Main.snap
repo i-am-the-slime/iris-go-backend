@@ -8,7 +8,6 @@ import (
 	"fixture/shared"
 	"fmt"
 	"github.com/i-am-the-slime/iris-go/exception"
-	"github.com/i-am-the-slime/iris-go/prim"
 )
 
 var main_ = initializeMain_()
@@ -28,7 +27,7 @@ func initializeMain_() shared.MainResult {
 		if performed2 {
 			s_2 := ref2 + 1
 			ref2 = s_2
-			performed3 := prim.MultiplyInt32(x, 3)
+			performed3 := x * 3
 			accumulator = accumulator + performed3
 		}
 	}
@@ -41,7 +40,7 @@ func initializeMain_() shared.MainResult {
 	for index, x := range numbers {
 		s_ := ref2 + 1
 		ref2 = s_
-		performed2 := prim.MultiplyInt32(x, 3)
+		performed2 := x * 3
 		mapped[index] = performed2
 	}
 	var accumulator2 int32 = 0
@@ -56,7 +55,7 @@ func initializeMain_() shared.MainResult {
 	for _, x := range numbers {
 		s_ := ref2 + 1
 		ref2 = s_
-		performed2 := prim.MultiplyInt32(x, 3)
+		performed2 := x * 3
 		if performed2 > 20 {
 			found = true
 			break
@@ -72,7 +71,7 @@ func initializeMain_() shared.MainResult {
 	}
 	var count int32 = 0
 	for _, value := range numbers {
-		value2 := prim.MultiplyInt32(value, 3)
+		value2 := value * 3
 		if value2 > 10 {
 			count = count + 1
 		}

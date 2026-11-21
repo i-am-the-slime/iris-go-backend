@@ -41,7 +41,7 @@ func initializeMain_() []string {
 	array2 := []int32{1, 2}
 	mapped := make([]string, len(array2))
 	for index, x := range array2 {
-		a := prim.MultiplyInt32(x, x)
+		a := x * x
 		partial := func(b int32) int32 {
 			return mainOp(a, b)
 		}
@@ -58,7 +58,7 @@ func initializeMain_() []string {
 		mapped2[index] = prim.ShowArray(show.Show2, []string{x(1)("a"), g("b"), g("c")})
 	}
 	array4 := []func(int32, int32) int32{semiring.Add, func(a int32, b int32) int32 {
-		return prim.MultiplyInt32(a, b) + 1
+		return a * b + 1
 	}}
 	mapped3 := make([]string, len(array4))
 	for index, combine := range array4 {
@@ -104,7 +104,7 @@ func repeat(n int32) string {
 }
 
 func mainOp(a int32, b int32) int32 {
-	return prim.MultiplyInt32(a, 10) + b
+	return a * 10 + b
 }
 
 func main() {

@@ -3648,8 +3648,11 @@ where
             return bitwise;
         }
         if let Operator::IntMultiply = operator {
-            let multiply = GoFunction { package: GoPackage::Prim, name: "MultiplyInt32" };
-            return call(self.go_function(multiply), vec![left, right]);
+            // int32 multiplication wraps, as PureScript's Int does.
+            if let (Some(x), Some(y)) = (int32_constant(&left), int32_constant(&right)) {
+                return GoExpression::Integer(i64::from(x.wrapping_mul(y)));
+            }
+            return binary("*", left, right);
         }
         if let Some(folded) = self.fold_number(operator, &left, &right) {
             return folded;

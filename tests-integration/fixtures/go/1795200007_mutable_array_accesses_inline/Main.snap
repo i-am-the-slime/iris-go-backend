@@ -31,7 +31,6 @@ import (
 	"fmt"
 	"github.com/i-am-the-slime/iris-go/array"
 	"github.com/i-am-the-slime/iris-go/exception"
-	"github.com/i-am-the-slime/iris-go/prim"
 )
 
 var main_ = initializeMain_()
@@ -54,7 +53,7 @@ func initializeMain_() []int32 {
 			result = int32(peeked)
 		}
 		if i2 >= 0 && int(i2) < len(*array2) {
-			(*array2)[i2] = prim.MultiplyInt32(2, result)
+			(*array2)[i2] = 2 * result
 		}
 	}
 	i3 := int32(len(*array2))

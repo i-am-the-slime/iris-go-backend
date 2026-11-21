@@ -76,7 +76,7 @@ func countSpacesUnconsingCountsUpToTwo(text string, count int32) int32 {
 			cu0 := prim.ToCharCode(prim.CharAt(0, text))
 			cu1 := prim.ToCharCode(prim.CharAt(1, text))
 			if 55296 <= cu0 && cu0 <= 56319 && (56320 <= cu1 && cu1 <= 57343) {
-				result = maybe.JustHeadTail(shared.HeadTail{Head: prim.MultiplyInt32(cu0 - 55296, 1024) + (cu1 - 56320) + 65536, Tail: prim.CodeUnitDrop(2, text)})
+				result = maybe.JustHeadTail(shared.HeadTail{Head: (cu0 - 55296) * 1024 + (cu1 - 56320) + 65536, Tail: prim.CodeUnitDrop(2, text)})
 			} else {
 				result = maybe.JustHeadTail(shared.HeadTail{Head: cu0, Tail: prim.CodeUnitDrop(1, text)})
 			}

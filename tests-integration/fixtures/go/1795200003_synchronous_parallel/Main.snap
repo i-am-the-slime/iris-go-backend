@@ -38,7 +38,6 @@ import (
 	"github.com/i-am-the-slime/iris-go/aff"
 	"github.com/i-am-the-slime/iris-go/direct"
 	"github.com/i-am-the-slime/iris-go/exception"
-	"github.com/i-am-the-slime/iris-go/prim"
 )
 
 func main() {
@@ -47,7 +46,7 @@ func main() {
 	fiber := aff.NewFiber(func() struct{} {
 		func() {
 			array := direct.TraverseArray(func(x int32) int32 {
-				return prim.MultiplyInt32(x, x)
+				return x * x
 			}, []int32{1, 2, 3})
 			array2 := aff.TraverseParArrayDirect(func(x int32) int32 {
 				aff.DelayDirect(nil, float64(1.0))

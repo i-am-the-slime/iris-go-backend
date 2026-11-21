@@ -7,7 +7,6 @@ package main
 import (
 	"fmt"
 	"github.com/i-am-the-slime/iris-go/exception"
-	"github.com/i-am-the-slime/iris-go/prim"
 )
 
 var main_ = initializeMain_()
@@ -20,7 +19,7 @@ func initializeMain_() []int32 {
 func combineWith(n int32) func(int32, int32) int32 {
 	if n > 0 {
 		return func(a int32, b int32) int32 {
-			return prim.MultiplyInt32(a, n) + b
+			return a * n + b
 		}
 	}
 	panic("a positive weight")

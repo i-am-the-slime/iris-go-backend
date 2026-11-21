@@ -70,9 +70,15 @@ Go backend keeps every `Int` a 32-bit integer instead:
 | `Int.rem 5 0` | `NaN` | `0` |
 | `Bits.zshr (-3) 0` | `4294967293` | `-3` |
 | `Bits.zshr (-1073741824) (-1073741824)` | `3221225472` | `-1073741824` |
+| `123456789 * 987654321` | `-67153024` | `-67153019` |
+| `Int.pow 3 40` | `689956864` | `689956897` |
 
 `zshr` is JavaScript's unsigned `>>>`, whose result does not fit an `Int` when the top bit stays
 set. `Int.quot`, `div` and `mod` by zero are `0` in both.
+
+`*` and `Int.pow` wrap like 32-bit integers in Go, so they keep the low 32 bits of the exact
+product. JavaScript computes the product as a double first, which drops low bits once it passes
+2^53, and then cuts it to 32 bits. Products below 2^53 are the same in both.
 
 Such a value then behaves differently wherever it is used. A `NaN` index passes JavaScript's bounds
 check, so `Array.index [] (Int.rem 5 0)` is `Just undefined`, which crashes or prints an empty

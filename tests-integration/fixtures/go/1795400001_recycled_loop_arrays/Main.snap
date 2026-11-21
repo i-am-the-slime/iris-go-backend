@@ -87,7 +87,7 @@ func mainGo2(i int32, values []int32) []int32 {
 		}
 		mapped := shared.Recycle(valuesSpare, len(values))
 		for index, value := range values {
-			mapped[index] = prim.MultiplyInt32(value, 2) + i
+			mapped[index] = value * 2 + i
 		}
 		valuesOwned, valuesSpare = mapped, valuesOwned
 		i, values = i + 1, mapped

@@ -24,7 +24,6 @@ import (
 	"fixture/shared"
 	"fmt"
 	"github.com/i-am-the-slime/iris-go/exception"
-	"github.com/i-am-the-slime/iris-go/prim"
 	"slices"
 )
 
@@ -60,7 +59,7 @@ func initializeMain_() float64 {
 	}
 	var accumulator5 int32 = 0
 	for tupleIndex := range accumulator4 {
-		accumulator5 = accumulator5 + prim.MultiplyInt32(accumulator4[tupleIndex].First, accumulator4[tupleIndex].Second)
+		accumulator5 = accumulator5 + accumulator4[tupleIndex].First * accumulator4[tupleIndex].Second
 	}
 	return accumulator.Vx + accumulator.Vy + accumulator2.Vx + accumulator3 + toNumber(accumulator5)
 }

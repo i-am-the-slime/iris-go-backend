@@ -28,7 +28,6 @@ package main
 import (
 	"fixture/Data/Array"
 	"github.com/i-am-the-slime/iris-go/exception"
-	"github.com/i-am-the-slime/iris-go/prim"
 	"os"
 )
 
@@ -39,8 +38,7 @@ func main_() int32 {
 		ref = s_
 		return acc + n
 	}, 0, []int32{1, 2, 3})
-	i2 := ref
-	return prim.MultiplyInt32(i, 10) + i2
+	return i * 10 + ref
 }
 
 func main() {

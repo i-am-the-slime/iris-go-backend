@@ -98,7 +98,7 @@ var problems []variant.InvalidLateMissing = []variant.InvalidLateMissing{variant
 func byRecord(variant2 variant.InvalidLateMissing) string {
 	switch variant2.Tag {
 	case variant.InvalidLateMissingInvalid:
-		return "bad " + prim.ShowInt(prim.MultiplyInt32(variant2.Invalid, 2))
+		return "bad " + prim.ShowInt(variant2.Invalid * 2)
 	case variant.InvalidLateMissingLate:
 		return "after " + prim.ShowInt(variant2.Late.After)
 	default: // variant.InvalidLateMissingMissing
