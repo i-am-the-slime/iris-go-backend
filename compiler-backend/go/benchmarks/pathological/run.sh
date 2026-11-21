@@ -110,14 +110,6 @@ best_of() {
   sed -n 's/^BENCH \([0-9.]*\) .*/\1/p' "$WORK/results/$1.$2.err" | tail -1
 }
 
-# Other agents time builds on this machine; their waiting shells mention the same names, so only
-# processes that are not themselves waiting count.
-wait_for_quiet_machine() {
-  while ps -axo command= | grep -E 'measure.py|bin/iris-go/run' | grep -qvE 'pgrep|until |grep'; do
-    sleep 5
-  done
-}
-
 ratio() {
   if [ -n "$1" ] && [ -n "$2" ]; then LC_ALL=C awk -v a="$1" -v b="$2" 'BEGIN { printf "%.2f", a / b }'; else echo "-"; fi
 }
@@ -134,7 +126,6 @@ fi
 
 : >"$WORK/load.txt"
 for name in "${names[@]}"; do
-  wait_for_quiet_machine
   echo "$name $(sysctl -n vm.loadavg | tr , .)" >>"$WORK/load.txt"
   for runtime in go bun deno; do run_one "$name" "$runtime"; done
 done

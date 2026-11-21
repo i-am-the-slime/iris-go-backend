@@ -38,7 +38,7 @@
 #
 # Environment: IRIS, GO_SUPPORT, PURS_BACKEND_ES, WORK (default $TMPDIR/iris-robust-scaling),
 # REPETITIONS (3), GO_RATIO, JS_RATIO, MIN_MS (5), GROW_MS, CALIBRATE_MS, TIMEOUT (180 s per run),
-# JOBS, NO_DENO=1, NO_WAIT=1 (do not wait for other agents' timing runs).
+# JOBS, NO_DENO=1.
 
 set -uo pipefail
 
@@ -71,20 +71,6 @@ matches() {
   local filter
   for filter in "${filters[@]}"; do case "$1" in *"$filter"*) return 0 ;; esac; done
   return 1
-}
-
-# The timing runs of other agents, which must not overlap ours. Shells of other agents that are
-# themselves waiting (`until ! pgrep -f measure.py ...`) mention the same names and do not
-# count; our own pathological build runs run.sh with BUILD_ONLY=1 and times nothing.
-wait_for_quiet_machine() {
-  [ "${NO_WAIT:-0}" = 1 ] && return
-  local waited=0
-  while ps -axo command= | grep -E 'measure.py|benchmarks/pathological/run.sh|benchmarks/compat/run.sh' \
-    | grep -qvE 'pgrep|until |grep|BUILD_ONLY'; do
-    [ "$waited" = 0 ] && echo "waiting for other timing runs to finish ..." >&2
-    waited=$((waited + 5))
-    sleep 5
-  done
 }
 
 load_average() { sysctl -n vm.loadavg | tr -d '{}' | tr , . | awk '{ print $1 }'; }
@@ -188,7 +174,6 @@ run_patho() {
   fi
   for name in "${names[@]}"; do
     [ -x "$WORK/patho/go/$name/program" ] || { printf 'patho\t%s\t-\t%s\tMISSING\t-\n' "$name" "$(patho_kind "$name")" >>"$ROWS"; continue; }
-    wait_for_quiet_machine
     local base kind load runtime bases=()
     base="$(patho_base "$name")" kind="$(patho_kind "$name")" load="$(load_average)"
     for runtime in $RUNTIMES; do bases+=("$(calibrate "$name" "$runtime" "$kind" "$base")"); done
@@ -294,7 +279,6 @@ run_compat() {
       printf 'compat\t%s\t-\tincrement\tMISSING (%s)\t-\n' "$module" "${why:-not built}" >>"$ROWS"
       continue
     fi
-    wait_for_quiet_machine
     local load base runtime step times=() mismatch=""
     load="$(load_average)"
     base="$(compat_entries | awk -F'|' -v m="$module" '$1 == m { print $4; exit }')"
