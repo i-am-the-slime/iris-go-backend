@@ -671,3 +671,80 @@ fn is_identifier(value: &GoExpression, name: &str) -> bool {
 fn identifier(name: &str) -> GoExpression {
     GoExpression::Identifier(name.to_string())
 }
+
+/// Go keeps a struct of more than this many fields in memory, so a composite
+/// of one assigned to an element is first built on the stack and then copied.
+const REGISTER_FIELDS: usize = 4;
+
+/// `elements[i] = T{F: a, G: b, ...}`, for a struct that Go would build on the
+/// stack first, becomes `elements[i].F = a`, `elements[i].G = b`, ...: the
+/// fields are written where they live. The composite names every field and
+/// its values neither call nor mention the element's slice or index, so no
+/// field write can change what a later one reads or where it goes.
+pub(super) fn store_fields_in_place(declarations: &mut [GoDeclaration], structs: &Structs) {
+    for declaration in declarations {
+        walk::each_block_in_declaration(declaration, |block| {
+            let mut position = 0;
+            while position < block.len() {
+                match stored_fields(&block[position], structs) {
+                    Some(statements) => {
+                        let count = statements.len();
+                        block.splice(position..=position, statements);
+                        position += count;
+                    }
+                    None => position += 1,
+                }
+            }
+        });
+    }
+}
+
+fn stored_fields(statement: &GoStatement, structs: &Structs) -> Option<Vec<GoStatement>> {
+    let GoStatement::Assign { targets, values } = statement else { return None };
+    let ([target @ GoExpression::Index { value: elements, index }], [composite]) =
+        (targets.as_slice(), values.as_slice())
+    else {
+        return None;
+    };
+    let GoExpression::Composite { type_: GoType::Named(type_name), fields } = composite else {
+        return None;
+    };
+    let declared = structs.get(type_name)?;
+    let named = |name: &str| fields.iter().any(|(field, _)| field.as_deref() == Some(name));
+    if declared.len() <= REGISTER_FIELDS
+        || fields.len() != declared.len()
+        || !declared.iter().all(|(field, _)| named(field))
+        || !is_place(target)
+    {
+        return None;
+    }
+    let mentioned = identifiers(&GoExpression::Index { value: elements.clone(), index: index.clone() });
+    let independent = |value: &GoExpression| {
+        is_pure(value) && identifiers(value).is_disjoint(&mentioned)
+    };
+    if !fields.iter().all(|(_, value)| independent(value)) {
+        return None;
+    }
+    Some(
+        fields
+            .iter()
+            .map(|(field, value)| GoStatement::Assign {
+                targets: vec![GoExpression::Field {
+                    value: Box::new(target.clone()),
+                    name: field.clone().expect("a named field"),
+                }],
+                values: vec![value.clone()],
+            })
+            .collect(),
+    )
+}
+
+fn identifiers(value: &GoExpression) -> FxHashSet<String> {
+    let mut found = FxHashSet::default();
+    walk::each_expression_in_statement(&mut GoStatement::Expression(value.clone()), |expression| {
+        if let GoExpression::Identifier(name) = expression {
+            found.insert(name.clone());
+        }
+    });
+    found
+}

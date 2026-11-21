@@ -153,6 +153,7 @@ where
     timed("updates", || updates::update_in_place(&mut declarations));
     let structs = scalars::structs_of(&emitter.type_declarations);
     timed("scalars", || scalars::split_struct_locals(&mut declarations, &structs));
+    timed("stores", || scalars::store_fields_in_place(&mut declarations, &structs));
     timed("aliases", || aliases::substitute_aliases(&mut declarations));
     timed("ranges", || ranges::read_elements_in_place(&mut declarations));
     let taken =

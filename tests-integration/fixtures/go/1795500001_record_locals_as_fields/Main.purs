@@ -10,7 +10,8 @@ type Body = { x :: Number, y :: Number, vx :: Number, vy :: Number, mass :: Numb
 
 -- | The accumulator lives as one local per field it reads or writes; the mass it never reads
 -- | has no local, and the step's position update writes into the accumulator's own locals.
--- | The array element is built from them.
+-- | Their values go into the array element field by field, as a struct of five fields would be
+-- | built on the stack and copied.
 advance :: Array Body -> Array Body
 advance bodies = map move (Array.mapWithIndex accelerate bodies)
   where

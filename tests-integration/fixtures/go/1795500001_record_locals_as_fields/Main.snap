@@ -67,7 +67,11 @@ func initializeMain_() []string {
 		}
 		accumulatorX = accumulatorX + accumulatorVx
 		accumulatorY = accumulatorY + accumulatorVy
-		mapped[index] = shared.Body{Mass: accumulatorMass, Vx: accumulatorVx, Vy: accumulatorVy, X: accumulatorX, Y: accumulatorY}
+		mapped[index].Mass = accumulatorMass
+		mapped[index].Vx = accumulatorVx
+		mapped[index].Vy = accumulatorVy
+		mapped[index].X = accumulatorX
+		mapped[index].Y = accumulatorY
 	}
 	array2 := []int32{1, 2, 3, 4}
 	accumulatorLabel := ""
