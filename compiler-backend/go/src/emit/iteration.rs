@@ -1,6 +1,7 @@
 use super::buffers::{to_bytes, to_string};
 use super::fusion::{Demand, Need, Order, Pipeline};
 use super::ownership::{Carried, Place, owned_snocs};
+use super::recycling::Recycled;
 use super::{Emitter, Mode, Sink, call, identifier_expression, unit_value, uses_local};
 use crate::error::GoResult;
 use crate::foreign::Iteration;
@@ -69,7 +70,8 @@ where
                 self.fold(iteration, callback, &arguments[1], &arguments[2], monotype, out)?
             }
             Iteration::Map | Iteration::MapWithIndex => {
-                self.map(iteration, callback, &arguments[1], monotype, out)?
+                let recycled = self.recycled_maps.get(&std::ptr::from_ref(&arguments[0])).cloned();
+                self.map(iteration, callback, &arguments[1], monotype, recycled, out)?
             }
             Iteration::Filter => self.filter(callback, &arguments[1], monotype, out)?,
             Iteration::Any | Iteration::All => {
@@ -344,6 +346,7 @@ where
         callback: Callback<'_>,
         array: &Expression,
         monotype: MonotypeId,
+        recycled: Option<Recycled>,
         out: &mut Vec<GoStatement>,
     ) -> GoResult<GoExpression> {
         let indexed = iteration == Iteration::MapWithIndex;
@@ -354,17 +357,21 @@ where
         let mapped = self.temporary("mapped");
         let positional_length = pipeline.known_length();
         let in_place = positional_length.is_some();
-        let allocation = match positional_length {
-            Some(count) => {
+        let allocation = match (&recycled, positional_length) {
+            (Some(recycled), count) => self.recycled_buffer(recycled, count),
+            (None, Some(count)) => {
                 call(identifier_expression("make"), vec![GoExpression::Type(mapped_type), count])
             }
-            None => GoExpression::Composite { type_: mapped_type, fields: vec![] },
+            (None, None) => GoExpression::Composite { type_: mapped_type, fields: vec![] },
         };
         out.push(GoStatement::Define { names: vec![mapped.clone()], values: vec![allocation] });
         let saved = self.tail_loop.take();
         let outcome = self.map_loop(indexed, &callback, pipeline, &mapped, in_place);
         self.tail_loop = saved;
         out.push(outcome?);
+        if let Some(recycled) = &recycled {
+            out.push(Self::rotate(recycled, &mapped));
+        }
         Ok(identifier_expression(&mapped))
     }
 

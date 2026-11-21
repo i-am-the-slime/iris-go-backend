@@ -1,0 +1,158 @@
+---
+source: tests-integration/src/fixtures.rs
+---
+// Data/Show/show.go
+package show
+
+import (
+	"fixture/shared"
+	"github.com/i-am-the-slime/iris-go/prim"
+)
+
+func ShowInt(array []int32) string {
+	return prim.ShowArray(Show, array)
+}
+
+func ShowParticleConsNumberConsNumberNil(record shared.Particle) string {
+	return "{ position: " + prim.ShowNumber(record.Position) + ", velocity: " + prim.ShowNumber(record.Velocity) + " }"
+}
+
+func Show(i int32) string {
+	return prim.ShowInt(i)
+}
+
+// Data/Tuple/tuple.go
+package tuple
+
+import "fixture/shared"
+
+type TupleIntParticle struct {
+	Second shared.Particle
+	First  int32
+}
+
+// main.go
+package main
+
+import (
+	"fixture/Data/Show"
+	"fixture/shared"
+	"fmt"
+	"github.com/i-am-the-slime/iris-go/array"
+	"github.com/i-am-the-slime/iris-go/exception"
+	"github.com/i-am-the-slime/iris-go/prim"
+)
+
+var main_ = initializeMain_()
+
+func initializeMain_() []string {
+	defer exception.ReportUncaught()
+	return []string{prim.ShowArray(show.ShowParticleConsNumberConsNumberNil, mainGo(0, []shared.Particle{shared.Particle{Position: 0.0, Velocity: 0.0}, shared.Particle{Position: 1.0, Velocity: 0.5}, shared.Particle{Position: 4.0, Velocity: -0.25}})), prim.ShowArray(show.Show, mainGo2(0, []int32{1, 2, 3})), prim.ShowArray(show.Show, shrink([]int32{9, 3, 7, 5, 4})), prim.ShowArray(show.Show, mainGo3(0, []int32{0}, []int32{1, 2})), prim.ShowArray(show.ShowInt, mainGo4(0, [][]int32{[]int32{1}, []int32{2}}))}
+}
+
+var shrink func([]int32) []int32 = shrinkGo
+
+func mainGo(i int32, particles []shared.Particle) []shared.Particle {
+	var particlesOwned []shared.Particle
+	var particlesSpare []shared.Particle
+	for {
+		if i >= 50 {
+			return particles
+		}
+		mapped := shared.Recycle(particlesSpare, len(particles))
+		for index, particle := range particles {
+			i2 := int32(index)
+			accumulator := particle
+			for index2 := range particles {
+				i3 := int32(index2)
+				if i2 != i3 {
+					accumulator.Velocity = accumulator.Velocity + float64((particles[index2].Position - accumulator.Position) * 0.001)
+				}
+			}
+			updated := accumulator
+			updated.Position = accumulator.Position + accumulator.Velocity
+			mapped[index] = updated
+		}
+		particlesOwned, particlesSpare = mapped, particlesOwned
+		i, particles = i + 1, mapped
+	}
+}
+
+func mainGo2(i int32, values []int32) []int32 {
+	var valuesOwned []int32
+	var valuesSpare []int32
+	for {
+		if i >= 10 {
+			return values
+		}
+		mapped := shared.Recycle(valuesSpare, len(values))
+		for index, value := range values {
+			mapped[index] = prim.MultiplyInt32(value, 2) + i
+		}
+		valuesOwned, valuesSpare = mapped, valuesOwned
+		i, values = i + 1, mapped
+	}
+}
+
+func mainGo3(i int32, previous []int32, values []int32) []int32 {
+	for {
+		if i >= 3 {
+			return array.Append(previous, values)
+		}
+		mapped := make([]int32, len(values))
+		for index, value := range values {
+			mapped[index] = value + 1
+		}
+		i, previous, values = i + 1, values, mapped
+	}
+}
+
+func mainGo4(i int32, rows [][]int32) [][]int32 {
+	for {
+		if i >= 3 {
+			return rows
+		}
+		mapped := make([][]int32, len(rows))
+		for index, row := range rows {
+			mapped[index] = array.Append(row, []int32{i})
+		}
+		i, rows = i + 1, mapped
+	}
+}
+
+func shrinkGo(values []int32) []int32 {
+	var valuesOwned []int32
+	var valuesSpare []int32
+	for {
+		if int32(len(values)) <= 1 {
+			return values
+		}
+		mapped := shared.Recycle(valuesSpare, 0)
+		for _, value := range values {
+			if value > 2 {
+				mapped = append(mapped, value - 1)
+			}
+		}
+		valuesOwned, valuesSpare = mapped, valuesOwned
+		values = mapped
+	}
+}
+
+func main() {
+	fmt.Println(main_)
+}
+
+// shared/shared.go
+package shared
+
+type Particle struct {
+	Position float64
+	Velocity float64
+}
+
+func Recycle[T any, N ~int | ~int32 | ~int64](buffer []T, count N) []T {
+	if cap(buffer) < int(count) {
+		return make([]T, count)
+	}
+	return buffer[:count]
+}

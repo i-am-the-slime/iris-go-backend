@@ -35,6 +35,7 @@ mod ownership;
 mod packages;
 mod ranges;
 mod references;
+mod recycling;
 mod reference_equality;
 mod reuse;
 mod strings;
@@ -313,6 +314,7 @@ where
             tail_group_of: FxHashMap::default(),
             referenced: Default::default(),
             owned_snocs: FxHashSet::default(),
+            recycled_maps: FxHashMap::default(),
             byte_buffers: FxHashMap::default(),
             owning_variants: FxHashMap::default(),
             pending_owning_variants: vec![],
@@ -623,6 +625,9 @@ struct Emitter<'p, 'm, 'q, Q> {
     referenced: std::cell::RefCell<FxHashSet<FunctionId>>,
     current: Option<FunctionId>,
     owned_snocs: FxHashSet<*const Expression>,
+    /// The maps that build a tail loop's next array in the buffers it recycles, by their
+    /// callbacks.
+    recycled_maps: FxHashMap<*const Expression, recycling::Recycled>,
     /// The string parameters of the tail loop being emitted that it builds in a `[]byte`, with
     /// the buffer's name; the parameter itself reads `string(buffer)`.
     byte_buffers: FxHashMap<LocalId, String>,
@@ -1059,11 +1064,30 @@ where
         owned_nodes.extend(strings.into_iter().flat_map(|(_, nodes)| nodes));
         owned_nodes.extend(owned_parameters);
         self.owned_snocs.extend(owned_nodes.iter().copied());
+        let mut recycled_buffers = vec![];
+        if loops && mode == Mode::Value {
+            for position in 0..function.parameters.len() {
+                if buffers.iter().any(|(buffered, _)| *buffered == position) {
+                    continue;
+                }
+                let Some(maps) = self.recycled_maps(id, function, position) else { continue };
+                let (parameter, type_) = &parameters[position];
+                let recycled = recycling::Recycled {
+                    owned: self.local_name(format!("{parameter}Owned")),
+                    spare: self.local_name(format!("{parameter}Spare")),
+                };
+                recycled_buffers.extend(Self::recycled_declarations(&recycled, type_));
+                for map in maps {
+                    self.recycled_maps.insert(map, recycled.clone());
+                }
+            }
+        }
         let mut body = vec![];
         let emitted = self.sink(&function.body, mode, Sink::Return, &mut body);
         for node in &owned_nodes {
             self.owned_snocs.remove(node);
         }
+        self.recycled_maps.clear();
         emitted?;
         if loops {
             if let Some(GoStatement::Continue) = body.last() {
@@ -1082,6 +1106,7 @@ where
                     values: vec![buffers::to_bytes(parameter)],
                 });
             }
+            clipped.append(&mut recycled_buffers);
             clipped.push(GoStatement::Loop(body));
             body = clipped;
         }
