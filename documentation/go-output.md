@@ -219,6 +219,11 @@ uses is not compiled, so an `unsafePerformEffect` in it never runs. In JavaScrip
 module loads. Top-level values that the program does use are evaluated when the program loads, as
 in JavaScript.
 
+### Array length
+
+An array holds at most 2147483647 elements, since its `length` is an `Int`. Growing one past that,
+or making a `range` that long, stops the program with `array longer than 2147483647 elements`.
+
 ### Deep recursion
 
 Go stacks grow to 1 GB, so recursion that is not tail-recursive goes far deeper before it fails.

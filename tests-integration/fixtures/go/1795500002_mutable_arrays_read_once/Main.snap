@@ -61,7 +61,7 @@ func initializeMain_() []string {
 		element := (*array2)[1]
 		(*array2)[1] = element + 1.0
 	}
-	*array2 = append(*array2, 0.0)
+	*array2 = array.Bounded(append(*array2, 0.0))
 	within4 := 1 < len(*array2)
 	if within4 {
 		element := (*array2)[1]
@@ -77,21 +77,16 @@ func initializeMain_() []string {
 	} else {
 		number = 0.0
 	}
-	*array2 = append(*array2, 9.0)
+	*array2 = array.Bounded(append(*array2, 9.0))
 	var number2 float64
 	element2 := (*array2)[0]
 	number2 = element2
-	*array2 = append(*array2, 10.0)
+	*array2 = array.Bounded(append(*array2, 10.0))
 	i2 := int32(len(*array2))
 	i3 := i2 - 1
-	within6 := i3 >= 0
 	var number3 float64
-	if within6 {
-		element := (*array2)[i3]
-		number3 = element
-	} else {
-		number3 = 0.0
-	}
+	element3 := (*array2)[i3]
+	number3 = element3
 	array3 := array.Freeze(array2)()
 	performed := array.Append([]string{prim.ShowArray(show.Show, array3), prim.ShowNumber(number), prim.ShowNumber(number2 + number3)}, array.Append(pull, array.Append(countBefore, sortEach)))
 	return performed

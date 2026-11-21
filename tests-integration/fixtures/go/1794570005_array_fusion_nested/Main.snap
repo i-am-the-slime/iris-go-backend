@@ -7,6 +7,7 @@ package main
 import (
 	"fixture/shared"
 	"fmt"
+	"github.com/i-am-the-slime/iris-go/array"
 	"github.com/i-am-the-slime/iris-go/exception"
 	"github.com/i-am-the-slime/iris-go/prim"
 )
@@ -63,7 +64,7 @@ func initializeMain_() shared.MainResult {
 			mapped2 = append(mapped2, prim.ShowInt(x))
 		}
 	}
-	return shared.MainResult{Pairs: bound, Below: count, Comprehension: bound2, OverRange: accumulator, Indexed: mapped, Materialised: mapped2}
+	return shared.MainResult{Pairs: array.Bounded(bound), Below: count, Comprehension: array.Bounded(bound2), OverRange: accumulator, Indexed: mapped, Materialised: mapped2}
 }
 
 var numbers []int32 = []int32{3, 1, 4, 1, 5, 9, 2, 6}

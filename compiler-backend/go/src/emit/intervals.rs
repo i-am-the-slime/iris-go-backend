@@ -25,8 +25,9 @@
 //! The analysis assumes nothing it cannot show:
 //!
 //! - Int arithmetic wraps, so `i + 1` has a range only when `i` is proven below the largest
-//!   Int. `int32(len(xs))` wraps for arrays longer than that, but it is never above
-//!   `len(xs)`, nor is `int32(len(xs)) - k` above `len(xs) - k`.
+//!   Int. An array holds at most that many elements, as its length is an Int: the runtime and
+//!   the emitted pushes refuse to grow one further (`array.Bounded`), so `int32(len(xs))` is
+//!   `len(xs)` and an index below a length can be incremented.
 //! - A length is a fact only while the array cannot change it: a local slice until it is
 //!   assigned, `*xs` until a push, a write through a pointer or a call that may change a
 //!   header (the rule of `headers`).
@@ -830,6 +831,11 @@ fn shape_of_expression(
         }
         GoExpression::Call { function, arguments } => match &**function {
             GoExpression::Identifier(name) if name == "append" => Some(Shape::Fixed),
+            GoExpression::Qualified { package, name }
+                if package == "array" && name == "Bounded" =>
+            {
+                Some(Shape::Fixed)
+            }
             GoExpression::Identifier(name) if name == "make" => match arguments.first() {
                 Some(GoExpression::Type(GoType::Slice(_))) => Some(Shape::Fixed),
                 _ => None,
@@ -1175,6 +1181,8 @@ impl<'p, 'k, 'e> Analysis<'p, 'k, 'e> {
         let through_pointer = shape == Some(Shape::Pointer);
         if let Some(length) = length {
             state.add(ZERO, length, 0);
+            // An array holds at most the largest Int's number of elements.
+            self.kinds.insert(length, Kind::Int32);
             if through_pointer {
                 self.lengths_through_pointers.insert(length);
             }
@@ -2363,6 +2371,11 @@ impl<'p, 'k, 'e> Analysis<'p, 'k, 'e> {
                 .all(|(key, _)| key.is_none())
                 .then_some(Value::constant(fields.len() as i64)),
             GoExpression::Call { function, arguments } => match &**function {
+                GoExpression::Qualified { package, name }
+                    if package == "array" && name == "Bounded" && arguments.len() == 1 =>
+                {
+                    self.length_of(&arguments[0], state)
+                }
                 // `append` panics rather than wrap a length.
                 GoExpression::Identifier(name) if name == "append" && !arguments.is_empty() => {
                     if arguments.iter().any(|argument| matches!(argument, GoExpression::Spread(_)))

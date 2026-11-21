@@ -23,6 +23,7 @@ import (
 	"fixture/Data/Tuple"
 	"fixture/shared"
 	"fmt"
+	"github.com/i-am-the-slime/iris-go/array"
 	"github.com/i-am-the-slime/iris-go/exception"
 	"slices"
 )
@@ -56,12 +57,12 @@ func initializeMain_() float64 {
 		i := int32(index)
 		accumulator = accumulator + toNumber(i) * bodies[index].Mass
 	}
-	array := []int32{3, 4}
+	array2 := []int32{3, 4}
 	accumulator2 := []tuple.TupleIntInt{}
 	accumulator2 = slices.Clip(accumulator2)
-	for index, i := range array {
+	for index, i := range array2 {
 		i2 := int32(index)
-		accumulator2 = append(accumulator2, tuple.TupleIntInt{First: i2, Second: i})
+		accumulator2 = array.Bounded(append(accumulator2, tuple.TupleIntInt{First: i2, Second: i}))
 	}
 	var accumulator3 int32 = 0
 	for tupleIndex := range accumulator2 {

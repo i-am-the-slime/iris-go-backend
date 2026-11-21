@@ -4,7 +4,7 @@ use super::ownership::{Carried, Place, owned_snocs};
 use super::recycling::Recycled;
 use super::{Emitter, Mode, Sink, call, identifier_expression, unit_value, uses_local};
 use crate::error::GoResult;
-use crate::foreign::Iteration;
+use crate::foreign::{GoFunction, GoPackage, Iteration};
 use crate::mono::{Expression, ExpressionKind, FunctionId, Local};
 use crate::monotype::{DataType, Monotype, MonotypeId};
 use crate::syntax::{GoExpression, GoStatement, GoType};
@@ -556,7 +556,9 @@ where
         };
         self.tail_loop = saved;
         out.push(outcome?);
-        Ok(identifier_expression(&bound))
+        // Each produced array is bounded, but not what they add up to.
+        let bounded = self.go_function(GoFunction { package: GoPackage::Array, name: "Bounded" });
+        Ok(call(bounded, vec![identifier_expression(&bound)]))
     }
 
     /// Appends every element a pipeline produces, one at a time.

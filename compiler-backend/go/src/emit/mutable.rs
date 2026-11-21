@@ -4,6 +4,7 @@ use crate::error::GoResult;
 use crate::mono::Expression;
 use crate::monotype::MonotypeId;
 use crate::syntax::{GoExpression, GoStatement, GoType};
+use crate::foreign::{GoFunction, GoPackage};
 use checking;
 
 pub(super) const ACCESSES: &[&str] =
@@ -38,6 +39,7 @@ where
                 let value = self.value(&arguments[0], out)?;
                 let elements = self.elements(&arguments[1], out)?;
                 let appended = call(identifier_expression("append"), vec![elements.clone(), value]);
+                let appended = call(self.go_function(GoFunction { package: GoPackage::Array, name: "Bounded" }), vec![appended]);
                 let targets = vec![elements.clone()];
                 out.push(GoStatement::Assign { targets, values: vec![appended] });
                 if let Sink::Discard = sink {

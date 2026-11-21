@@ -21,7 +21,7 @@
 //! from the bounds, since the range descends when `first > last`:
 //!
 //! ```go
-//! step, count := rangeSteps(first, last)
+//! step, count := array.RangeSteps(first, last)
 //! for index := range count {
 //!     x := first + int32(index)*step
 //!     ...
@@ -39,7 +39,7 @@ use std::collections::VecDeque;
 use super::iteration::{Callback, Found};
 use super::{Emitter, Mode, Sink, binary, identifier_expression, is_simple, length, uses_local};
 use crate::error::GoResult;
-use crate::foreign::{Boundary, Foreign, Iteration};
+use crate::foreign::{Boundary, Foreign, GoFunction, GoPackage, Iteration};
 use crate::mono::{Binding, Expression, ExpressionKind, Literal, Local};
 use crate::monotype::{Monotype, MonotypeId};
 use crate::naming::VALUE;
@@ -326,10 +326,10 @@ where
             self.hoist(start, "first", out)
         };
         let end = self.value(last, out)?;
-        let range_steps = self.support_function("rangeSteps", super::RANGE_STEPS_SOURCE);
+        let range_steps = self.go_function(GoFunction { package: GoPackage::Array, name: "RangeSteps" });
         let step = if read { self.temporary("step") } else { "_".into() };
         let count = self.temporary("count");
-        let steps = super::call(identifier_expression(&range_steps), vec![start.clone(), end]);
+        let steps = super::call(range_steps, vec![start.clone(), end]);
         out.push(GoStatement::Define {
             names: vec![step.clone(), count.clone()],
             values: vec![steps],

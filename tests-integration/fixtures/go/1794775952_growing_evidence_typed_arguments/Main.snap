@@ -54,7 +54,7 @@ func describeArrayBoolean(showDictionary shared.Show, depths []int32, label stri
 		default:
 			showDictionary, depths, labelBytes, depth, value = shared.Show{Show: func(coerced any) string {
 				return prim.ShowArray(showDictionaryCaptured.Show, coerced.([]any))
-			}}, append(depths, depth), append(labelBytes, ">"...), depth - 1, []any{value}
+			}}, array.Bounded(append(depths, depth)), append(labelBytes, ">"...), depth - 1, []any{value}
 			continue
 		}
 	}

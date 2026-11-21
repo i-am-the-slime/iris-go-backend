@@ -55,12 +55,7 @@ func initializeMain_() []int32 {
 	i4 := (*array2)[i3 - 1]
 	(*array2)[i3 - 1] = i4 + 1
 	var poked bool
-	if i3 >= 0 && int(i3) < len(*array2) {
-		(*array2)[i3] = 0
-		poked = true
-	} else {
-		poked = false
-	}
+	poked = false
 	array3 := array.Thaw([]string{"a", "b"})()
 	within := 1 < len(*array3)
 	var maybe2 maybe.String

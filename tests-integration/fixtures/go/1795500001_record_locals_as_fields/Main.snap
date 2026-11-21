@@ -117,7 +117,7 @@ func initializeMain_() []string {
 	for _, width := range array5 {
 		updated := accumulator
 		updated.Rows = accumulator.Rows + 1
-		_, count := shared.RangeSteps(1, width)
+		_, count := array.RangeSteps(1, width)
 		accumulatorCells := accumulator.Cells
 		for range count {
 			accumulatorCells = accumulatorCells + 1
@@ -160,13 +160,6 @@ type Tally struct {
 type Cells struct {
 	Cells int32
 	Rows  int32
-}
-
-func RangeSteps(start int32, end int32) (int32, int64) {
-	if start > end {
-		return -1, int64(start) - int64(end) + 1
-	}
-	return 1, int64(end) - int64(start) + 1
 }
 
 type Pair struct {

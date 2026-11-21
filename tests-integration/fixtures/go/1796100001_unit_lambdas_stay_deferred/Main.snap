@@ -24,7 +24,6 @@ import (
 	"fixture/Actions_ffi"
 	"fixture/Data/Eq"
 	"fixture/Effect/Exception"
-	"fixture/shared"
 	"github.com/i-am-the-slime/iris-go/array"
 	"github.com/i-am-the-slime/iris-go/exception"
 )
@@ -108,7 +107,7 @@ func main() {
 }
 
 func deferred(n int32, ignored struct{}) int32 {
-	step, count := shared.RangeSteps(1, n)
+	step, count := array.RangeSteps(1, n)
 	var accumulator int32 = 0
 	for index := range count {
 		value := 1 + int32(index) * step
@@ -123,14 +122,4 @@ func forceInt(f func(struct{}) int32) int32 {
 
 func answer() int32 {
 	return 42
-}
-
-// shared/shared.go
-package shared
-
-func RangeSteps(start int32, end int32) (int32, int64) {
-	if start > end {
-		return -1, int64(start) - int64(end) + 1
-	}
-	return 1, int64(end) - int64(start) + 1
 }

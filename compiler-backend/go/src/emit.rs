@@ -3432,9 +3432,9 @@ where
             return self.thunk(&expression, out);
         }
         if let Foreign::Range = foreign {
-            let range = self.support_function("rangeInt32", RANGE_SOURCE);
+            let range = self.go_function(GoFunction { package: GoPackage::Array, name: "RangeInt32" });
             let values = self.values(arguments, out)?;
-            return Ok(call(identifier_expression(&range), values));
+            return Ok(call(range, values));
         }
         if let Foreign::MaybeIndex = foreign {
             return self.maybe_index(arguments, monotype, out);
@@ -3456,14 +3456,16 @@ where
                 let value = self.value(element, out)?;
                 values.push(self.typed_constant(value, element.monotype)?);
             }
-            return Ok(call(identifier_expression("append"), values));
+            let appended = call(identifier_expression("append"), values);
+            return Ok(call(self.go_function(GoFunction { package: GoPackage::Array, name: "Bounded" }), vec![appended]));
         }
         if let Foreign::Snoc = foreign {
             let array = self.value(&arguments[0], out)?;
             let element = self.value(&arguments[1], out)?;
             let element = self.typed_constant(element, arguments[1].monotype)?;
             if self.owned_snocs.contains(&std::ptr::from_ref(&arguments[0])) {
-                return Ok(call(identifier_expression("append"), vec![array, element]));
+                let appended = call(identifier_expression("append"), vec![array, element]);
+                return Ok(call(self.go_function(GoFunction { package: GoPackage::Array, name: "Bounded" }), vec![appended]));
             }
             let snoc = GoFunction { package: GoPackage::Array, name: "Snoc" };
             return Ok(call(self.go_function(snoc), vec![array, element]));
@@ -3805,31 +3807,6 @@ where
     }
 
 }
-
-const RANGE_SOURCE: &str = "func {name}(start int32, end int32) []int32 {
-\tstep, count := int32(1), int64(end)-int64(start)+1
-\tif start > end {
-\t\tstep, count = -1, int64(start)-int64(end)+1
-\t}
-\telements := make([]int32, count)
-\tvalue := start
-\tfor index := range elements {
-\t\telements[index] = value
-\t\tvalue += step
-\t}
-\treturn elements
-}
-";
-
-/// The step and the number of elements of `start .. end`, which a loop that
-/// stands for the range counts through instead of building it.
-const RANGE_STEPS_SOURCE: &str = "func {name}(start int32, end int32) (int32, int64) {
-\tif start > end {
-\t\treturn -1, int64(start) - int64(end) + 1
-\t}
-\treturn 1, int64(end) - int64(start) + 1
-}
-";
 
 /// The Data.Int.Bits operators, which follow JavaScript: operands are int32 and
 /// shift counts are taken modulo 32. Constant operands are folded so that Go never

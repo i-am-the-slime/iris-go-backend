@@ -53,12 +53,12 @@ func initializeMain_() either.MainResult {
 	accumulator := []int32{}
 	accumulator = slices.Clip(accumulator)
 	for x := int32(1); x < 6; x++ {
-		accumulator = append(accumulator, x)
+		accumulator = array.Bounded(append(accumulator, x))
 	}
 	accumulator2 := []int32{1}
 	accumulator2 = slices.Clip(accumulator2)
 	for x := int32(1); x < 6; x++ {
-		accumulator2 = append(accumulator2, x * 2)
+		accumulator2 = array.Bounded(append(accumulator2, x * 2))
 	}
 	array2 := []either.EitherStringInt{either.EitherStringInt{Tag: either.EitherStringIntRight, Right: 1}, either.EitherStringInt{Tag: either.EitherStringIntRight, Right: 2}, either.EitherStringInt{Tag: either.EitherStringIntRight, Right: 3}}
 	accumulator3 := either.EitherStringArrayInt{Tag: either.EitherStringArrayIntRight, Right: []int32{}}
@@ -69,7 +69,7 @@ func initializeMain_() either.MainResult {
 		} else if accumulator3.Tag == either.EitherStringArrayIntLeft && array2[elementIndex].Tag == either.EitherStringIntRight {
 			accumulator3 = either.EitherStringArrayInt{Tag: either.EitherStringArrayIntLeft, Left: accumulator3.Left}
 		} else if accumulator3.Tag == either.EitherStringArrayIntRight && array2[elementIndex].Tag == either.EitherStringIntRight {
-			accumulator3 = either.EitherStringArrayInt{Tag: either.EitherStringArrayIntRight, Right: append(accumulator3.Right, array2[elementIndex].Right)}
+			accumulator3 = either.EitherStringArrayInt{Tag: either.EitherStringArrayIntRight, Right: array.Bounded(append(accumulator3.Right, array2[elementIndex].Right))}
 		} else {
 			accumulator3 = either.EitherStringArrayInt{Tag: either.EitherStringArrayIntLeft, Left: array2[elementIndex].Left}
 		}
@@ -77,7 +77,7 @@ func initializeMain_() either.MainResult {
 	accumulator4 := shared.AccSeen{Acc: []int32{}, Seen: [][]int32{}}
 	accumulator4.Seen = slices.Clip(accumulator4.Seen)
 	for x := int32(1); x < 5; x++ {
-		accumulator4 = shared.AccSeen{Acc: array.Append(accumulator4.Acc, []int32{x}), Seen: append(accumulator4.Seen, accumulator4.Acc)}
+		accumulator4 = shared.AccSeen{Acc: array.Append(accumulator4.Acc, []int32{x}), Seen: array.Bounded(append(accumulator4.Seen, accumulator4.Acc))}
 	}
 	return either.MainResult{Appended: accumulator, Snocs: accumulator2, Combined: accumulator3, Escaping: accumulator4.Seen}
 }
