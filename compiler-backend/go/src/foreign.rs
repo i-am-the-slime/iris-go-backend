@@ -1491,41 +1491,6 @@ pub fn support_data(module_name: &str, name: &str) -> Option<(GoPackage, &'stati
         .map(|(_, _, package, type_name)| (*package, *type_name))
 }
 
-/// Whether the runtime's `prim` package function `name` is pure: some table
-/// describes it as a call of a pure PureScript function, and none as one that
-/// performs an effect. A pure function cannot reach a mutable array. A `prim`
-/// function no table describes counts as one that might, whatever its name.
-pub fn is_pure_runtime_function(name: &str) -> bool {
-    static PURE: OnceLock<FxHashMap<&'static str, bool>> = OnceLock::new();
-    let pure = PURE.get_or_init(|| {
-        let tables = FOREIGN_IMPORTS
-            .iter()
-            .chain(host::HOST_IMPORTS)
-            .map(|(_, _, foreign)| *foreign)
-            .chain(INTRINSICS.iter().map(|(_, _, _, foreign)| *foreign))
-            .chain([INT_DIVIDE, INT_MODULO]);
-        purity(tables)
-    });
-    pure.get(name).copied().unwrap_or(false)
-}
-
-/// Each `prim` function the foreigns name, and whether every one of them calls it as pure.
-fn purity(foreigns: impl Iterator<Item = Foreign>) -> FxHashMap<&'static str, bool> {
-    let mut pure: FxHashMap<&'static str, bool> = FxHashMap::default();
-    for foreign in foreigns {
-        let (function, calls) = match foreign {
-            Foreign::Call { function, .. } => (function, true),
-            Foreign::Perform { function, .. } | Foreign::Constant(function) => (function, false),
-            _ => continue,
-        };
-        if function.package == GoPackage::Prim {
-            let entry = pure.entry(function.name).or_insert(true);
-            *entry &= calls;
-        }
-    }
-    pure
-}
-
 pub fn foreign_import(module_name: &str, name: &str) -> Option<&'static Foreign> {
     if let Some(identity) = uncurried_conversion(module_name, name) {
         return Some(identity);
@@ -1559,34 +1524,4 @@ fn uncurried_conversion(module_name: &str, name: &str) -> Option<&'static Foreig
     };
     let arity = name.strip_prefix(run).or_else(|| name.strip_prefix(make))?;
     arity.parse::<u8>().is_ok().then_some(&Foreign::Identity)
-}
-
-#[cfg(test)]
-mod purity_tests {
-    use super::*;
-
-    #[test]
-    fn a_described_pure_call_is_pure() {
-        assert!(is_pure_runtime_function("NumberSqrt"));
-        assert!(is_pure_runtime_function("IntMod"));
-    }
-
-    #[test]
-    fn an_undescribed_function_is_not_pure_whatever_its_name() {
-        assert!(!is_pure_runtime_function("NumberPushAll"));
-        assert!(!is_pure_runtime_function("STFor"));
-    }
-
-    #[test]
-    fn a_function_any_table_performs_is_not_pure() {
-        let performed = Foreign::Perform {
-            function: GoFunction { package: GoPackage::Prim, name: "NumberShuffle" },
-            arity: 1,
-            boundary: PLAIN,
-        };
-        let called = prim("NumberShuffle", 1);
-        let pure = purity([called, performed].into_iter());
-        assert_eq!(pure.get("NumberShuffle"), Some(&false));
-        assert_eq!(purity([called].into_iter()).get("NumberShuffle"), Some(&true));
-    }
 }

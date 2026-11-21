@@ -29,12 +29,21 @@ use rustc_hash::{FxHashMap, FxHashSet};
 
 use super::aliases::target_root;
 use super::locals::NUMBERED;
-use crate::foreign::{self, GoPackage};
 use crate::syntax::{GoDeclaration, GoExpression, GoStatement, GoType};
 use crate::walk::{self, Walk};
 
-pub(super) fn read_headers_once(declarations: &mut [GoDeclaration]) {
-    let keeping = Keeping::of(declarations);
+/// The Go functions, as `(package, name)`, that the emitted code calls to run
+/// an effect: those of performed foreigns and of effectful constructs.
+pub(super) type Effects = FxHashSet<(String, String)>;
+
+/// The builtins of the Go language: none runs an effect of the program.
+const BUILTINS: &[&str] = &[
+    "len", "cap", "append", "make", "new", "copy", "min", "max", "panic", "delete", "clear",
+    "complex", "real", "imag",
+];
+
+pub(super) fn read_headers_once(declarations: &mut [GoDeclaration], effects: &Effects) {
+    let keeping = Keeping::of(declarations, effects);
     let sliced = pass_slices(declarations, &keeping);
     for declaration in declarations.iter_mut() {
         let GoDeclaration::Function { name, .. } = declaration else { continue };
@@ -48,27 +57,25 @@ pub(super) fn read_headers_once(declarations: &mut [GoDeclaration]) {
     }
 }
 
-/// A runtime function the foreign tables describe as pure.
-fn is_pure_runtime(package: &str, name: &str) -> bool {
-    package == GoPackage::Prim.name() && foreign::is_pure_runtime_function(name)
-}
-
 /// The functions that cannot change an array's header.
-struct Keeping {
+struct Keeping<'e> {
     functions: FxHashSet<String>,
+    declared: FxHashSet<String>,
+    effects: &'e Effects,
 }
 
-impl Keeping {
-    fn of(declarations: &mut [GoDeclaration]) -> Self {
-        let mut functions: FxHashSet<String> = declarations
+impl<'e> Keeping<'e> {
+    fn of(declarations: &mut [GoDeclaration], effects: &'e Effects) -> Self {
+        let declared: FxHashSet<String> = declarations
             .iter()
             .filter_map(|declaration| match declaration {
                 GoDeclaration::Function { name, .. } => Some(name.clone()),
                 _ => None,
             })
             .collect();
+        let mut functions = declared.clone();
         loop {
-            let mut keeping = Keeping { functions };
+            let mut keeping = Keeping { functions, declared: declared.clone(), effects };
             let before = keeping.functions.len();
             let mut dropped = vec![];
             for declaration in declarations.iter_mut() {
@@ -94,21 +101,27 @@ impl Keeping {
         let mut keeps = !writes_through_pointer(body);
         for statement in body.iter_mut() {
             keeps &= !matches!(statement, GoStatement::Defer(_));
-            walk::each_expression_in_statement(statement, |expression| match expression {
-                GoExpression::Call { function, .. } => keeps &= self.keeps_call(function),
-                GoExpression::Function { .. } => keeps = false,
-                _ => {}
+            walk::each_expression_in_statement(statement, |expression| {
+                if let GoExpression::Call { function, .. } = expression {
+                    keeps &= self.keeps_call(function);
+                }
             });
         }
         keeps
     }
 
+    /// Whether a call of `function` runs no effect.
     fn keeps_call(&self, function: &GoExpression) -> bool {
         match function {
-            GoExpression::Identifier(name) => {
-                matches!(name.as_str(), "len" | "cap") || self.functions.contains(name.as_str())
+            GoExpression::Identifier(name) if self.declared.contains(name.as_str()) => {
+                self.functions.contains(name.as_str())
             }
-            GoExpression::Qualified { package, name } => is_pure_runtime(package, name),
+            GoExpression::Identifier(name) => BUILTINS.contains(&name.as_str()),
+            GoExpression::Qualified { package, name } => {
+                !self.effects.contains(&(package.clone(), name.clone()))
+            }
+            GoExpression::Instantiation { function, .. } => self.keeps_call(function),
+            // A function value: an effect thunk, or a callback that may perform one.
             _ => false,
         }
     }
@@ -117,7 +130,7 @@ impl Keeping {
 /// The parameters, by position, that each function takes as a slice.
 type Sliced = FxHashMap<String, Vec<bool>>;
 
-fn pass_slices(declarations: &mut [GoDeclaration], keeping: &Keeping) -> Sliced {
+fn pass_slices(declarations: &mut [GoDeclaration], keeping: &Keeping<'_>) -> Sliced {
     let values = used_as_values(declarations);
     let mut sliced: Sliced = FxHashMap::default();
     loop {
@@ -303,7 +316,7 @@ fn hoist_parameters(
 /// array the loop only indexes.
 fn hoist_in_loops(
     block: &mut Vec<GoStatement>,
-    keeping: &Keeping,
+    keeping: &Keeping<'_>,
     sliced: &Sliced,
     names: &mut FxHashSet<String>,
 ) {
@@ -420,8 +433,9 @@ fn binds(statement: &mut GoStatement, name: &str) -> bool {
     found
 }
 
-pub(super) fn drop_repeated_bounds_tests(declarations: &mut [GoDeclaration]) {
-    for declaration in declarations {
+pub(super) fn drop_repeated_bounds_tests(declarations: &mut [GoDeclaration], effects: &Effects) {
+    let keeping = Keeping::of(declarations, effects);
+    for declaration in declarations.iter_mut() {
         let GoDeclaration::Function { body, .. } = declaration else { continue };
         let written = written_names(body);
         let tests: Vec<(String, GoExpression)> = definitions(body)
@@ -431,7 +445,8 @@ pub(super) fn drop_repeated_bounds_tests(declarations: &mut [GoDeclaration]) {
             })
             .collect();
         for (name, test) in tests {
-            let test = Test { name, rendered: format!("{test:?}"), through_pointer: has_dereference(&test) };
+            let through_pointer = has_dereference(&test);
+            let test = Test { name, rendered: format!("{test:?}"), through_pointer, keeping: &keeping };
             walk::each_block(body, |block| test.drop_repeats(block));
         }
     }
@@ -440,13 +455,14 @@ pub(super) fn drop_repeated_bounds_tests(declarations: &mut [GoDeclaration]) {
 /// A bounds test bound to a name. Nothing assigns what it reads; when it reads
 /// a length through a pointer, a call or a write through a pointer could
 /// still change that length.
-struct Test {
+struct Test<'k, 'e> {
     name: String,
     rendered: String,
     through_pointer: bool,
+    keeping: &'k Keeping<'e>,
 }
 
-impl Test {
+impl Test<'_, '_> {
     /// After `name := test`, in `if name { ... }`, each `if test { body }` that
     /// nothing before it in the branch could have falsified becomes `body`.
     fn drop_repeats(&self, block: &mut Vec<GoStatement>) {
@@ -484,9 +500,7 @@ impl Test {
     }
 
     fn may_falsify(&self, statement: &mut GoStatement) -> bool {
-        self.through_pointer
-            && (!calls_only_pure(std::slice::from_mut(statement))
-                || writes_through_pointer(std::slice::from_mut(statement)))
+        self.through_pointer && !self.keeping.keeps(std::slice::from_mut(statement))
     }
 }
 
@@ -610,27 +624,6 @@ fn has_dereference(value: &GoExpression) -> bool {
     found
 }
 
-/// Whether every call is to a builtin that measures or to the pure runtime,
-/// none of which can reach a mutable array, and no function literal is made.
-fn calls_only_pure(body: &mut [GoStatement]) -> bool {
-    let mut pure = true;
-    for statement in body.iter_mut() {
-        walk::each_expression_in_statement(statement, |expression| match expression {
-            GoExpression::Call { function, .. } => {
-                pure &= match &**function {
-                    GoExpression::Identifier(name) => matches!(name.as_str(), "len" | "cap"),
-                    GoExpression::Qualified { package, name } => is_pure_runtime(package, name),
-                    _ => false,
-                };
-            }
-            GoExpression::Function { .. } => pure = false,
-            _ => {}
-        });
-        pure &= !matches!(statement, GoStatement::Defer(_));
-    }
-    pure
-}
-
 /// Whether the function assigns a whole pointed-to value, as a push does.
 fn writes_through_pointer(body: &mut [GoStatement]) -> bool {
     struct Writes(bool);
@@ -750,21 +743,22 @@ mod tests {
         }
     }
 
-    fn rendered(runtime: &str) -> String {
+    fn rendered(runtime: &str, effects: &Effects) -> String {
         let mut declarations = vec![indexing_loop(runtime)];
-        read_headers_once(&mut declarations);
+        read_headers_once(&mut declarations, effects);
         declarations[0].render()
     }
 
     #[test]
-    fn a_loop_calling_a_described_pure_runtime_function_reads_the_slice_once() {
-        let rendered = rendered("NumberSqrt");
+    fn a_runtime_helper_of_a_pure_operation_keeps_the_slice() {
+        let rendered = rendered("CompareString", &Effects::default());
         assert!(rendered.contains("func f(xs []float64)"), "{rendered}");
     }
 
     #[test]
-    fn a_runtime_function_with_a_pure_looking_name_that_no_table_describes_is_not_pure() {
-        let rendered = rendered("NumberPushAll");
+    fn a_performed_runtime_function_with_a_pure_looking_name_changes_the_slice() {
+        let effects = Effects::from_iter([("prim".to_string(), "NumberPushAll".to_string())]);
+        let rendered = rendered("NumberPushAll", &effects);
         assert!(rendered.contains("func f(xs *[]float64)"), "{rendered}");
         assert!(!rendered.contains("elements"), "{rendered}");
     }

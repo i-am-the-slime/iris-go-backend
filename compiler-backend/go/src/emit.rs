@@ -144,6 +144,7 @@ where
         report_uncaught_exceptions(&mut declarations);
     }
     if emitter.imports.contains(GoPackage::Aff.path()) {
+        emitter.performs(GoFunction { package: GoPackage::Aff, name: "Await" });
         await_fibers(&mut declarations);
     }
     timed("references", || references::promote_references(&mut declarations));
@@ -157,8 +158,9 @@ where
     timed("stores", || scalars::store_fields_in_place(&mut declarations, &structs));
     timed("aliases", || aliases::substitute_aliases(&mut declarations));
     timed("ranges", || ranges::read_elements_in_place(&mut declarations));
-    timed("headers", || headers::read_headers_once(&mut declarations));
-    timed("bounds", || headers::drop_repeated_bounds_tests(&mut declarations));
+    let effects = std::mem::take(&mut emitter.effects);
+    timed("headers", || headers::read_headers_once(&mut declarations, &effects));
+    timed("bounds", || headers::drop_repeated_bounds_tests(&mut declarations, &effects));
     let taken =
         |name: &str| emitter.global_names.contains(name) || IMPORTED_PACKAGES.contains(&name);
     timed("lengths", || lengths::count_lengths_up_to_comparisons(&mut declarations));
@@ -337,6 +339,7 @@ where
             erasing: FxHashMap::default(),
             erasing_layouts: FxHashMap::default(),
             materialized: FxHashSet::default(),
+            effects: FxHashSet::default(),
             uninitialized_locals: FxHashSet::default(),
             current: None,
             lazy_constants,
@@ -653,6 +656,8 @@ struct Emitter<'p, 'm, 'q, Q> {
     erasing: FxHashMap<MonotypeId, bool>,
     erasing_layouts: FxHashMap<DataType, bool>,
     materialized: FxHashSet<(FunctionId, LocalId)>,
+    /// The Go functions the emitted code calls to run an effect.
+    effects: headers::Effects,
     /// The locals of the recursive bindings being assigned, which still hold
     /// Go's zero value.
     uninitialized_locals: FxHashSet<LocalId>,
@@ -926,6 +931,7 @@ where
             // Like an embedded host running an `Effect Int`, the program's
             // result is its exit status.
             self.imports.insert("os".into());
+            self.effects.insert(("os".into(), "Exit".into()));
             let exit = GoExpression::Qualified { package: "os".into(), name: "Exit".into() };
             let status = GoExpression::Conversion {
                 type_: GoType::Int,
@@ -952,6 +958,7 @@ where
         } else {
             self.imports.insert("fmt".into());
             let value = identifier_expression(&name);
+            self.effects.insert(("fmt".into(), "Println".into()));
             let print = GoExpression::Qualified { package: "fmt".into(), name: "Println".into() };
             vec![GoStatement::Expression(call(print, vec![value]))]
         };
@@ -1735,11 +1742,11 @@ where
                     Foreign::ForkFiber => {
                         let immediate = self.value(&arguments[0], out)?;
                         let fork = GoFunction { package: GoPackage::Aff, name: "ForkFiber" };
-                        call(self.go_function(fork), vec![immediate, action])
+                        call(self.performing(fork), vec![immediate, action])
                     }
                     _ => {
                         let new = GoFunction { package: GoPackage::Aff, name: "NewFiber" };
-                        call(self.go_function(new), vec![action])
+                        call(self.performing(new), vec![action])
                     }
                 };
                 if let Sink::Discard = sink {
@@ -1758,7 +1765,7 @@ where
                 let supervisor = self.temporary("supervisor");
                 out.push(GoStatement::Define {
                     names: vec![handle.clone(), supervisor.clone()],
-                    values: vec![call(self.go_function(new), vec![action])],
+                    values: vec![call(self.performing(new), vec![action])],
                 });
                 let fiber = self.record_field_monotype(result, "fiber");
                 let fiber = self.fiber_record(identifier_expression(&handle), fiber, out)?;
@@ -1795,6 +1802,7 @@ where
             }
             Foreign::Perform { function, boundary, .. } => {
                 let values = self.boundary_arguments(arguments, boundary, result, false, out)?;
+                self.performs(function);
                 let function = self.boundary_function(function, boundary, result)?;
                 let mut performed = call(function, values);
                 if boundary.thunk {
@@ -1961,16 +1969,29 @@ where
 
     /// The Go function of a foreign package that implements a foreign import.
     fn project_function(&mut self, foreign: Foreign) -> GoResult<GoExpression> {
-        let Foreign::Project { file_id, term, .. } = foreign else {
+        let Foreign::Project { file_id, term, effectful, .. } = foreign else {
             unreachable!("invariant violated: a project function of another foreign");
         };
         let module_name = self.context.module(file_id)?.name.clone();
         let name = self.context.term_name(file_id, term)?;
         self.imports.insert(self.foreign_packages.import_path(&module_name));
-        Ok(GoExpression::Qualified {
-            package: ForeignPackages::package_name(&module_name),
-            name: capitalise(&name),
-        })
+        let package = ForeignPackages::package_name(&module_name);
+        let name = capitalise(&name);
+        if effectful {
+            self.effects.insert((package.clone(), name.clone()));
+        }
+        Ok(GoExpression::Qualified { package, name })
+    }
+
+    /// Notes that the emitted code calls `function` to run an effect.
+    fn performs(&mut self, function: GoFunction) {
+        self.effects.insert((function.package.name().into(), function.name.into()));
+    }
+
+    /// `function`, which the emitted code calls to run an effect.
+    fn performing(&mut self, function: GoFunction) -> GoExpression {
+        self.performs(function);
+        self.go_function(function)
     }
 
     /// The effect of an effectful foreign applied to its arguments, not yet performed: a
@@ -2386,7 +2407,7 @@ where
         let from_right = self.projection(either, "Right", Some(0))?;
         let register = self.value(register, out)?;
         let function =
-            self.go_function(GoFunction { package: GoPackage::Aff, name: "MakeAffDirect" });
+            self.performing(GoFunction { package: GoPackage::Aff, name: "MakeAffDirect" });
         Ok(call(function, vec![is_left, from_left, from_right, register]))
     }
 

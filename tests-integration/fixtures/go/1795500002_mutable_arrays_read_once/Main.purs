@@ -67,6 +67,33 @@ pull = run do
   ys <- STA.freeze y
   pure [ show xs, show ys ]
 
+-- | Comparing strings calls a runtime helper of a pure operation: the loop still reads the
+-- | array's slice once.
+countBefore :: Array String
+countBefore = run do
+  words <- STA.thaw [ "pear", "apple", "fig" ]
+  counts <- STA.thaw [ 0, 0, 0 ]
+  for 0 3 \i -> for 0 3 \j -> do
+    a <- fromMaybe "" <$> STA.peek i words
+    b <- fromMaybe "" <$> STA.peek j words
+    when (b < a) (void (STA.modify i (_ + 1) counts))
+  frozen <- STA.freeze counts
+  pure [ show frozen ]
+
+-- | Sorting in the loop runs an effect, which could change any array: the loop reads even the
+-- | array it only indexes through the pointer.
+sortEach :: Array String
+sortEach = run do
+  xs <- STA.thaw [ 3, 1, 2 ]
+  ys <- STA.thaw [ 0, 0 ]
+  for 0 2 \i -> do
+    _ <- STA.sortBy (\a b -> compare (b + i) a) xs
+    first <- fromMaybe 0 <$> STA.peek 0 xs
+    void (STA.modify i (_ + first) ys)
+  sorted <- STA.freeze xs
+  bumped <- STA.freeze ys
+  pure [ show sorted, show bumped ]
+
 -- | Indices out of range leave the array alone and read the default.
 main :: Array String
 main = run do
@@ -80,6 +107,6 @@ main = run do
   edge <- get xs 9
   total <- pushThenRead xs
   frozen <- STA.freeze xs
-  pure ([ show frozen, show edge, show total ] <> pull)
+  pure ([ show frozen, show edge, show total ] <> pull <> countBefore <> sortEach)
   where
   toNumber i = if i == 0 then 0.0 else 1.0 + toNumber (i - 1)

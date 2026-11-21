@@ -1,6 +1,17 @@
 ---
 source: tests-integration/src/fixtures.rs
 ---
+// Data/Ordering/ordering.go
+package ordering
+
+type Ordering uint8
+
+const (
+	OrderingLT Ordering = iota
+	OrderingGT
+	OrderingEQ
+)
+
 // Data/Show/show.go
 package show
 
@@ -10,13 +21,19 @@ func Show(number float64) string {
 	return prim.ShowNumber(number)
 }
 
+func Show2(i int32) string {
+	return prim.ShowInt(i)
+}
+
 // main.go
 package main
 
 import (
+	"fixture/Data/Ordering"
 	"fixture/Data/Show"
 	"fmt"
 	"github.com/i-am-the-slime/iris-go/array"
+	"github.com/i-am-the-slime/iris-go/direct"
 	"github.com/i-am-the-slime/iris-go/exception"
 	"github.com/i-am-the-slime/iris-go/prim"
 )
@@ -81,7 +98,7 @@ func initializeMain_() []string {
 		number3 = 0.0
 	}
 	array3 := array.Freeze(array2)()
-	performed := array.Append([]string{prim.ShowArray(show.Show, array3), prim.ShowNumber(number), prim.ShowNumber(number2 + number3)}, pull)
+	performed := array.Append([]string{prim.ShowArray(show.Show, array3), prim.ShowNumber(number), prim.ShowNumber(number2 + number3)}, array.Append(pull, array.Append(countBefore, sortEach)))
 	return performed
 }
 
@@ -255,6 +272,93 @@ func initializePull() []string {
 	array7 := array.Freeze(array2)()
 	array8 := array.Freeze(array3)()
 	performed := []string{prim.ShowArray(show.Show, array7), prim.ShowArray(show.Show, array8)}
+	return performed
+}
+
+var countBefore = initializeCountBefore()
+
+func initializeCountBefore() []string {
+	defer exception.ReportUncaught()
+	array2 := array.Thaw([]string{"pear", "apple", "fig"})()
+	array3 := array.Thaw([]int32{0, 0, 0})()
+	elements := *array2
+	elements2 := *array3
+	for i := int32(0); i < 3; i++ {
+		for j := int32(0); j < 3; j++ {
+			within := i >= 0 && int(i) < len(elements)
+			var s string
+			if within {
+				element := elements[i]
+				s = element
+			} else {
+				s = ""
+			}
+			within2 := j >= 0 && int(j) < len(elements)
+			var s2 string
+			if within2 {
+				element := elements[j]
+				s2 = element
+			} else {
+				s2 = ""
+			}
+			scrutinee := prim.CompareString(s2, s) < 0
+			if scrutinee {
+				within3 := i >= 0 && int(i) < len(elements2)
+				if within3 {
+					element := elements2[i]
+					elements2[i] = element + 1
+				}
+			}
+		}
+	}
+	array4 := array.Freeze(array3)()
+	performed := []string{prim.ShowArray(show.Show2, array4)}
+	return performed
+}
+
+var sortEach = initializeSortEach()
+
+func initializeSortEach() []string {
+	defer exception.ReportUncaught()
+	array2 := array.Thaw([]int32{3, 1, 2})()
+	array3 := array.Thaw([]int32{0, 0})()
+	for i := int32(0); i < 2; i++ {
+		direct.SortByMutable(func(a int32, b int32) ordering.Ordering {
+			i2 := b + i
+			if i2 < a {
+				return ordering.OrderingLT
+			}
+			if i2 == a {
+				return ordering.OrderingEQ
+			}
+			return ordering.OrderingGT
+		}, func(value ordering.Ordering) int32 {
+			switch value {
+			case ordering.OrderingGT:
+				return 1
+			case ordering.OrderingEQ:
+				return 0
+			default: // ordering.OrderingLT
+				return -1
+			}
+		}, array2)
+		within := 0 < len(*array2)
+		var i3 int32
+		if within {
+			element := (*array2)[0]
+			i3 = element
+		} else {
+			i3 = 0
+		}
+		within2 := i >= 0 && int(i) < len(*array3)
+		if within2 {
+			element := (*array3)[i]
+			(*array3)[i] = element + i3
+		}
+	}
+	array4 := array.Freeze(array2)()
+	array5 := array.Freeze(array3)()
+	performed := []string{prim.ShowArray(show.Show2, array4), prim.ShowArray(show.Show2, array5)}
 	return performed
 }
 
