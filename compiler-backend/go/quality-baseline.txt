@@ -1,8 +1,8 @@
-examples any 581
+examples any 584
 examples any:boxing 118
 examples any:empty-data 0
 examples any:existential 10
-examples any:foreign 55
+examples any:foreign 63
 examples any:free-value 102
 examples any:polymorphic-recursion 41
 examples any:rank-n 83
@@ -15,5 +15,5 @@ examples linked-fmt 0
 examples linked-reflect 0
 examples panic 42
 examples reflect 0
-examples type-assertion 229
+examples type-assertion 236
 examples unsafe 0
