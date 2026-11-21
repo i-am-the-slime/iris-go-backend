@@ -209,6 +209,11 @@ pub struct Boundary {
     /// them, such as the failure value of a property read: a pure argument is built there and
     /// not on every call.
     pub lazy: &'static [usize],
+    /// The foreign is a three-way comparison of its two arguments: an Int that is -1, 0 or 1 as
+    /// the first is less than, equal to or greater than the second, in the order Go's operators
+    /// give the arguments' Go type. Where that order is also PureScript's, a test of the result
+    /// is a comparison of the arguments themselves.
+    pub three_way: bool,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -307,6 +312,7 @@ const PLAIN: Boundary = Boundary {
     result_parameter: false,
     accumulator: None,
     lazy: &[],
+    three_way: false,
 };
 
 const RESULT_PARAMETER: Boundary = Boundary { result_parameter: true, ..PLAIN };
@@ -1528,13 +1534,13 @@ pub fn int64_import(
     use crate::primitives::{Int64Foreign, Signedness};
     let foreign = match crate::primitives::int64_foreign(module_name, name)? {
         Int64Foreign::Inline(operation) => Foreign::Int64 { operation, signedness },
-        Int64Foreign::Runtime { signed, unsigned, arity, effectful, ints } => {
+        Int64Foreign::Runtime { signed, unsigned, arity, effectful, ints, three_way } => {
             let name = match signedness {
                 Signedness::Signed => signed,
                 Signedness::Unsigned => unsigned,
             };
             let function = GoFunction { package: GoPackage::Int64, name };
-            let boundary = int32_parameters(ints);
+            let boundary = Boundary { three_way, ..int32_parameters(ints) };
             match effectful {
                 true => Foreign::Perform { function, arity, boundary },
                 false => Foreign::Call { function, arity, boundary },

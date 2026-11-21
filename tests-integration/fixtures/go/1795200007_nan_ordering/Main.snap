@@ -59,8 +59,6 @@ func main_() int32 {
 	var y float64
 	if 0.0 < prim.NumberNaN {
 		y = prim.NumberNaN
-	} else if 0.0 == prim.NumberNaN {
-		y = 0.0
 	} else {
 		y = 0.0
 	}

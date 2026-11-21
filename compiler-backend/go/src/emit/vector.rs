@@ -355,13 +355,13 @@ impl Flavor {
         }
     }
 
-    /// Whether the element's vectors have `Max` and `Min`, which the
-    /// portable package's 64-bit integers do not.
+    /// Whether the element's vectors have `Max` and `Min`, which 64-bit
+    /// integers have in neither package: NEON has no 64-bit `SMAX`, and the
+    /// portable package declares none. Their extrema choose by `Less`.
     fn has_extrema(self, element: Element) -> bool {
         match element {
             Element::Int => true,
-            Element::Int64 | Element::UInt64 => self == Flavor::Neon,
-            Element::Number => false,
+            Element::Int64 | Element::UInt64 | Element::Number => false,
         }
     }
 

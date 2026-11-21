@@ -10,6 +10,7 @@ use super::{Simplifier, is_discardable};
 use crate::foreign::{self, Comparison, Foreign, Operator};
 use crate::mono::{Expression, ExpressionKind, Literal};
 use crate::monotype::{Monotype, MonotypeId};
+use crate::primitives::Int64Operation;
 
 impl Simplifier<'_> {
     /// An operator application, folded when its operands are literals and
@@ -38,8 +39,23 @@ impl Simplifier<'_> {
     }
 
     /// `if c then true else false` is `c`, and with the branches swapped it is
-    /// `not c`.
+    /// `not c`; choices by comparisons of the same two values join where they
+    /// choose the same, as `joined_comparisons` says.
     pub(super) fn boolean_choice(
+        &mut self,
+        condition: Expression,
+        then: Expression,
+        otherwise: Expression,
+        monotype: MonotypeId,
+    ) -> Expression {
+        if let Some(joined) = self.joined_comparisons(&condition, &then, &otherwise, monotype) {
+            return joined;
+        }
+        self.plain_choice(condition, then, otherwise, monotype)
+    }
+
+    /// `boolean_choice` without joining choices by comparisons.
+    pub(super) fn plain_choice(
         &mut self,
         condition: Expression,
         then: Expression,
@@ -74,6 +90,16 @@ impl Simplifier<'_> {
                 arguments,
             } if let Some(negated) = self.negated(*comparison, &arguments[0]) => {
                 operation(Operator::Compare(negated), arguments, monotype)
+            }
+            // Longs are totally ordered, so every comparison of them has a negation.
+            ExpressionKind::Foreign {
+                foreign:
+                    Foreign::Int64 { operation: Int64Operation::Compare(comparison), signedness },
+                arguments,
+            } if let Some(negated) = self.negated(*comparison, &arguments[0]) => {
+                let operation = Int64Operation::Compare(negated);
+                let foreign = Foreign::Int64 { operation, signedness: *signedness }.interned();
+                Expression::new(ExpressionKind::Foreign { foreign, arguments }, monotype)
             }
             kind => {
                 let operand = Expression::new(kind, operand.monotype);

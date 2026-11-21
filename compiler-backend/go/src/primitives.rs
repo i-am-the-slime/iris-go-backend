@@ -97,6 +97,9 @@ pub enum Int64Foreign {
         effectful: bool,
         /// The arguments the function declares as Go's `int32`.
         ints: &'static [usize],
+        /// The function is a three-way comparison of its two Longs in the
+        /// order of Go's operators on their type, as `Boundary::three_way` says.
+        three_way: bool,
     },
 }
 
@@ -186,10 +189,24 @@ pub fn int64_foreign(module: &str, name: &str) -> Option<Int64Foreign> {
     }
     let inline = |operation| Some(Int64Foreign::Inline(operation));
     let generic = |name: &'static str, arity, ints| {
-        Some(Int64Foreign::Runtime { signed: name, unsigned: name, arity, effectful: false, ints })
+        Some(Int64Foreign::Runtime {
+            signed: name,
+            unsigned: name,
+            arity,
+            effectful: false,
+            ints,
+            three_way: false,
+        })
     };
     let typed = |signed: &'static str, unsigned: &'static str, arity, ints| {
-        Some(Int64Foreign::Runtime { signed, unsigned, arity, effectful: false, ints })
+        Some(Int64Foreign::Runtime {
+            signed,
+            unsigned,
+            arity,
+            effectful: false,
+            ints,
+            three_way: false,
+        })
     };
     match name {
         "zero_" | "uzero_" => inline(Operation::Constant(0)),
@@ -230,7 +247,14 @@ pub fn int64_foreign(module: &str, name: &str) -> Option<Int64Foreign> {
         "toSigned_" | "toUnsigned_" => inline(Operation::Same),
         "divide_" => generic("Divide_", 2, &[]),
         "modulo_" => generic("Modulo_", 2, &[]),
-        "compare_" => generic("Compare_", 2, &[]),
+        "compare_" => Some(Int64Foreign::Runtime {
+            signed: "Compare_",
+            unsigned: "Compare_",
+            arity: 2,
+            effectful: false,
+            ints: &[],
+            three_way: true,
+        }),
         "toString_" => generic("ToString_", 2, &[1]),
         "rotateLeft_" => generic("RotateLeft_", 2, &[]),
         "rotateRight_" => generic("RotateRight_", 2, &[]),
@@ -249,6 +273,7 @@ pub fn int64_foreign(module: &str, name: &str) -> Option<Int64Foreign> {
             arity: 3,
             effectful: true,
             ints: &[2],
+            three_way: false,
         }),
         _ => None,
     }

@@ -23,6 +23,7 @@ mod fold;
 mod object;
 mod record;
 mod sink;
+mod three_way;
 mod unpack;
 
 const INLINE_SIZE: usize = 40;
@@ -279,11 +280,20 @@ impl Simplifier<'_> {
                 let body = self.map_choices(*body, monotype, chosen);
                 ExpressionKind::Let { bindings, body: Box::new(body) }
             }
-            ExpressionKind::If { condition, then, otherwise } => ExpressionKind::If {
-                condition,
-                then: Box::new(self.map_choices(*then, monotype, chosen)),
-                otherwise: Box::new(self.map_choices(*otherwise, monotype, chosen)),
-            },
+            ExpressionKind::If { condition, then, otherwise } => {
+                let then = self.map_choices(*then, monotype, chosen);
+                let otherwise = self.map_choices(*otherwise, monotype, chosen);
+                if then == otherwise && is_discardable(&condition) {
+                    return then;
+                }
+                if let Some(joined) =
+                    self.joined_comparisons(&condition, &then, &otherwise, monotype)
+                {
+                    return joined;
+                }
+                let (then, otherwise) = (Box::new(then), Box::new(otherwise));
+                ExpressionKind::If { condition, then, otherwise }
+            }
             ExpressionKind::Case { scrutinees, alternatives } => {
                 let alternatives = alternatives
                     .into_iter()
@@ -504,6 +514,11 @@ impl Simplifier<'_> {
                         body: self.guarded(alternative.body),
                     })
                     .collect();
+                if let [scrutinee] = scrutinees.as_slice()
+                    && let Some(chosen) = self.three_way_case(scrutinee, &alternatives, monotype)
+                {
+                    return self.let_bindings(bindings, chosen);
+                }
                 let case = match alternatives.first() {
                     None => Expression::new(
                         ExpressionKind::Fail(SmolStr::new_static(PATTERN_MATCH_FAILURE)),
@@ -957,6 +972,9 @@ impl Simplifier<'_> {
             choice::negative_within(foreign, &arguments, monotype, self.monotypes)
         {
             return outside;
+        }
+        if let Some(value) = three_way::constant_comparison(foreign, &arguments) {
+            return Expression::new(ExpressionKind::Literal(Literal::Boolean(value)), monotype);
         }
         match foreign {
             Foreign::Perform { function, .. }

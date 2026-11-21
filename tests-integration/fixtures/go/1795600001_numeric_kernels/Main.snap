@@ -8,17 +8,11 @@ func MaxNumber(x float64, y float64) float64 {
 	if x < y {
 		return y
 	}
-	if x == y {
-		return x
-	}
 	return x
 }
 
 func MinInt(x int32, y int32) int32 {
-	if x < y {
-		return x
-	}
-	if x == y {
+	if x <= y {
 		return x
 	}
 	return y
@@ -282,7 +276,7 @@ func foldLanes6(xs []int32, initial int32) int32 {
 	for ; i < len(xs); i++ {
 		x := xs[i]
 		s0 := x
-		if accumulator < x {
+		if accumulator <= x {
 			s0 = accumulator
 		}
 		accumulator = s0
@@ -426,7 +420,7 @@ func foldLanes6(xs []int32, initial int32) int32 {
 	accumulator := initial
 	for _, x := range xs {
 		s0 := x
-		if accumulator < x {
+		if accumulator <= x {
 			s0 = accumulator
 		}
 		accumulator = s0
@@ -679,7 +673,7 @@ func foldLanes6(xs []int32, initial int32) int32 {
 	for ; i < len(xs); i++ {
 		x := xs[i]
 		s0 := x
-		if accumulator < x {
+		if accumulator <= x {
 			s0 = accumulator
 		}
 		accumulator = s0

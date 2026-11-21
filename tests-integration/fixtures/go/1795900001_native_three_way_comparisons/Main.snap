@@ -1,0 +1,475 @@
+---
+source: tests-integration/src/fixtures.rs
+---
+// Data/Int64/int64.go
+package dataint64
+
+import "github.com/i-am-the-slime/iris-go/ffi/Data_Int64_Internal_ffi"
+
+func FromInt(a int32) int64 {
+	return int64(a)
+}
+
+func Show(long int64) string {
+	return Data_Int64_Internal_ffi.ToString_(long, 10) + "l"
+}
+
+// Data/Ord/ord.go
+package ord
+
+func MaxInt64(x int64, y int64) int64 {
+	if x >= y {
+		return x
+	}
+	return y
+}
+
+func MinUInt64(x uint64, y uint64) uint64 {
+	if x <= y {
+		return x
+	}
+	return y
+}
+
+func MaxInt(x int32, y int32) int32 {
+	if x < y {
+		return y
+	}
+	return x
+}
+
+func MaxNumber(x float64, y float64) float64 {
+	if x < y {
+		return y
+	}
+	return x
+}
+
+// Data/Show/show.go
+package show
+
+import "github.com/i-am-the-slime/iris-go/prim"
+
+func Show(i int32) string {
+	return prim.ShowInt(i)
+}
+
+// Data/UInt64/uint64.go
+package datauint64
+
+import "github.com/i-am-the-slime/iris-go/ffi/Data_Int64_Internal_ffi"
+
+func UnsafeFromInt(a int32) uint64 {
+	return uint64(a)
+}
+
+func Show(long uint64) string {
+	return Data_Int64_Internal_ffi.ToString_(long, 10) + "ul"
+}
+
+// main.go
+package main
+
+import (
+	"fixture/Data/Int64"
+	"fixture/Data/Show"
+	"fixture/Data/UInt64"
+	"fmt"
+	"github.com/i-am-the-slime/iris-go/exception"
+	"github.com/i-am-the-slime/iris-go/ffi/Data_Int64_Internal_ffi"
+	"github.com/i-am-the-slime/iris-go/prim"
+)
+
+var main_ = initializeMain_()
+
+func initializeMain_() []string {
+	defer exception.ReportUncaught()
+	ints := []int32{3, -1, 4, 1, -5, 9, 2, 6, 5, 3, -5, 8, 9, 7, 9, 3, 2, 3, 8, 4, -6, 2, 6, 4, 3, 3, 8, 3, 2, 7, 9, 5, 0}
+	mapped := make([]int64, len(ints))
+	for index, element := range ints {
+		mapped[index] = dataint64.FromInt(element)
+	}
+	mapped2 := make([]uint64, len(ints))
+	for index, element := range ints {
+		mapped2[index] = datauint64.UnsafeFromInt(element)
+	}
+	pivot := int64(2)
+	kept := []int64{}
+	for _, x := range mapped {
+		if x < pivot {
+			kept = append(kept, x)
+		}
+	}
+	pivot2 := uint64(2)
+	kept2 := []uint64{}
+	for _, x := range mapped2 {
+		if x <= pivot2 {
+			kept2 = append(kept2, x)
+		}
+	}
+	pivot3 := int64(3)
+	mapped3 := make([]int32, len(mapped))
+	for index, x := range mapped {
+		var result int32
+		if x == pivot3 {
+			result = 2
+		} else if x > pivot3 {
+			result = 3
+		} else {
+			result = 1
+		}
+		mapped3[index] = result
+	}
+	return []string{Data_Int64_Internal_ffi.ToString_(foldLanes(mapped, int64(-9223372036854775808)), 10) + "l", Data_Int64_Internal_ffi.ToString_(foldLanes2(mapped2, uint64(18446744073709551615)), 10) + "ul", prim.ShowInt(foldLanes3(ints, int32(prim.BottomInt))), prim.ShowNumber(foldLanes4([]float64{3.5, -1.0, 4.0, 1.0, -5.0, 9.25, 2.0, 6.0, 5.0, 3.0, -5.0, 8.0, 9.0, 7.0, 9.0, 3.0, 2.0, 3.0, 8.0, 4.0, -6.0, 2.0, 6.0, 4.0, 3.0, 3.0, 8.0, 3.0, 2.0, 7.0, 9.0, 5.0, 0.0}, 0.0)), prim.ShowArray(dataint64.Show, kept), prim.ShowArray(datauint64.Show, kept2), prim.ShowArray(show.Show, mapped3), "true"}
+}
+
+func main() {
+	fmt.Println(main_)
+}
+
+// main_neon.go
+//go:build goexperiment.simd && arm64
+
+package main
+
+import "simd/archsimd"
+
+func foldLanes(xs []int64, initial int64) int64 {
+	acc0 := archsimd.BroadcastInt64x2(initial)
+	acc1, acc2, acc3 := acc0, acc0, acc0
+	const step = 2
+	i := 0
+	for ; i < len(xs)-4*step+1; i += 4 * step {
+		x0 := archsimd.LoadInt64x2(xs[i : i+step])
+		acc0 = acc0.IfElse(acc0.GreaterEqual(x0), x0)
+		x1 := archsimd.LoadInt64x2(xs[i+step : i+2*step])
+		acc1 = acc1.IfElse(acc1.GreaterEqual(x1), x1)
+		x2 := archsimd.LoadInt64x2(xs[i+2*step : i+3*step])
+		acc2 = acc2.IfElse(acc2.GreaterEqual(x2), x2)
+		x3 := archsimd.LoadInt64x2(xs[i+3*step : i+4*step])
+		acc3 = acc3.IfElse(acc3.GreaterEqual(x3), x3)
+	}
+	acc0 = acc3.IfElse(acc2.Less(acc3), acc2).IfElse(acc1.IfElse(acc0.Less(acc1), acc0).Less(acc3.IfElse(acc2.Less(acc3), acc2)), acc1.IfElse(acc0.Less(acc1), acc0))
+	var lanes [2]int64
+	acc0.Store(lanes[:])
+	accumulator := initial
+	for _, lane := range lanes[:step] {
+		if accumulator < lane {
+			accumulator = lane
+		}
+	}
+	for ; i < len(xs); i++ {
+		x := xs[i]
+		s0 := x
+		if accumulator >= x {
+			s0 = accumulator
+		}
+		accumulator = s0
+	}
+	return accumulator
+}
+
+func foldLanes2(xs []uint64, initial uint64) uint64 {
+	acc0 := archsimd.BroadcastUint64x2(initial)
+	acc1, acc2, acc3 := acc0, acc0, acc0
+	const step = 2
+	i := 0
+	for ; i < len(xs)-4*step+1; i += 4 * step {
+		x0 := archsimd.LoadUint64x2(xs[i : i+step])
+		acc0 = acc0.IfElse(acc0.LessEqual(x0), x0)
+		x1 := archsimd.LoadUint64x2(xs[i+step : i+2*step])
+		acc1 = acc1.IfElse(acc1.LessEqual(x1), x1)
+		x2 := archsimd.LoadUint64x2(xs[i+2*step : i+3*step])
+		acc2 = acc2.IfElse(acc2.LessEqual(x2), x2)
+		x3 := archsimd.LoadUint64x2(xs[i+3*step : i+4*step])
+		acc3 = acc3.IfElse(acc3.LessEqual(x3), x3)
+	}
+	acc0 = acc3.IfElse(acc3.Less(acc2), acc2).IfElse(acc3.IfElse(acc3.Less(acc2), acc2).Less(acc1.IfElse(acc1.Less(acc0), acc0)), acc1.IfElse(acc1.Less(acc0), acc0))
+	var lanes [2]uint64
+	acc0.Store(lanes[:])
+	accumulator := initial
+	for _, lane := range lanes[:step] {
+		if lane < accumulator {
+			accumulator = lane
+		}
+	}
+	for ; i < len(xs); i++ {
+		x := xs[i]
+		s0 := x
+		if accumulator <= x {
+			s0 = accumulator
+		}
+		accumulator = s0
+	}
+	return accumulator
+}
+
+func foldLanes3(xs []int32, initial int32) int32 {
+	acc0 := archsimd.BroadcastInt32x4(initial)
+	acc1, acc2, acc3 := acc0, acc0, acc0
+	const step = 4
+	i := 0
+	for ; i < len(xs)-4*step+1; i += 4 * step {
+		x0 := archsimd.LoadInt32x4(xs[i : i+step])
+		acc0 = acc0.Max(x0)
+		x1 := archsimd.LoadInt32x4(xs[i+step : i+2*step])
+		acc1 = acc1.Max(x1)
+		x2 := archsimd.LoadInt32x4(xs[i+2*step : i+3*step])
+		acc2 = acc2.Max(x2)
+		x3 := archsimd.LoadInt32x4(xs[i+3*step : i+4*step])
+		acc3 = acc3.Max(x3)
+	}
+	acc0 = acc0.Max(acc1).Max(acc2.Max(acc3))
+	var lanes [4]int32
+	acc0.Store(lanes[:])
+	accumulator := initial
+	for _, lane := range lanes[:step] {
+		if accumulator < lane {
+			accumulator = lane
+		}
+	}
+	for ; i < len(xs); i++ {
+		x := xs[i]
+		s0 := accumulator
+		if accumulator < x {
+			s0 = x
+		}
+		accumulator = s0
+	}
+	return accumulator
+}
+
+func foldLanes4(xs []float64, initial float64) float64 {
+	acc0 := archsimd.BroadcastFloat64x2(initial)
+	acc1, acc2, acc3 := acc0, acc0, acc0
+	const step = 2
+	i := 0
+	for ; i < len(xs)-4*step+1; i += 4 * step {
+		x0 := archsimd.LoadFloat64x2(xs[i : i+step])
+		acc0 = x0.IfElse(acc0.Less(x0), acc0)
+		x1 := archsimd.LoadFloat64x2(xs[i+step : i+2*step])
+		acc1 = x1.IfElse(acc1.Less(x1), acc1)
+		x2 := archsimd.LoadFloat64x2(xs[i+2*step : i+3*step])
+		acc2 = x2.IfElse(acc2.Less(x2), acc2)
+		x3 := archsimd.LoadFloat64x2(xs[i+3*step : i+4*step])
+		acc3 = x3.IfElse(acc3.Less(x3), acc3)
+	}
+	acc0 = acc3.IfElse(acc2.Less(acc3), acc2).IfElse(acc1.IfElse(acc0.Less(acc1), acc0).Less(acc3.IfElse(acc2.Less(acc3), acc2)), acc1.IfElse(acc0.Less(acc1), acc0))
+	var lanes [2]float64
+	acc0.Store(lanes[:])
+	accumulator := initial
+	for _, lane := range lanes[:step] {
+		if accumulator < lane {
+			accumulator = lane
+		}
+	}
+	for ; i < len(xs); i++ {
+		x := xs[i]
+		s0 := accumulator
+		if accumulator < x {
+			s0 = x
+		}
+		accumulator = s0
+	}
+	return accumulator
+}
+
+// main_scalar.go
+//go:build !(goexperiment.simd && (arm64 || wasm))
+
+package main
+
+func foldLanes(xs []int64, initial int64) int64 {
+	accumulator := initial
+	for _, x := range xs {
+		s0 := x
+		if accumulator >= x {
+			s0 = accumulator
+		}
+		accumulator = s0
+	}
+	return accumulator
+}
+
+func foldLanes2(xs []uint64, initial uint64) uint64 {
+	accumulator := initial
+	for _, x := range xs {
+		s0 := x
+		if accumulator <= x {
+			s0 = accumulator
+		}
+		accumulator = s0
+	}
+	return accumulator
+}
+
+func foldLanes3(xs []int32, initial int32) int32 {
+	accumulator := initial
+	for _, x := range xs {
+		s0 := accumulator
+		if accumulator < x {
+			s0 = x
+		}
+		accumulator = s0
+	}
+	return accumulator
+}
+
+func foldLanes4(xs []float64, initial float64) float64 {
+	accumulator := initial
+	for _, x := range xs {
+		s0 := accumulator
+		if accumulator < x {
+			s0 = x
+		}
+		accumulator = s0
+	}
+	return accumulator
+}
+
+// main_vector.go
+//go:build goexperiment.simd && wasm
+
+package main
+
+import "simd"
+
+func foldLanes(xs []int64, initial int64) int64 {
+	acc0 := simd.BroadcastInt64s(initial)
+	acc1, acc2, acc3 := acc0, acc0, acc0
+	step := acc0.Len()
+	i := 0
+	for ; i < len(xs)-4*step+1; i += 4 * step {
+		x0 := simd.LoadInt64s(xs[i : i+step])
+		acc0 = acc0.IfElse(acc0.GreaterEqual(x0), x0)
+		x1 := simd.LoadInt64s(xs[i+step : i+2*step])
+		acc1 = acc1.IfElse(acc1.GreaterEqual(x1), x1)
+		x2 := simd.LoadInt64s(xs[i+2*step : i+3*step])
+		acc2 = acc2.IfElse(acc2.GreaterEqual(x2), x2)
+		x3 := simd.LoadInt64s(xs[i+3*step : i+4*step])
+		acc3 = acc3.IfElse(acc3.GreaterEqual(x3), x3)
+	}
+	acc0 = acc3.IfElse(acc2.Less(acc3), acc2).IfElse(acc1.IfElse(acc0.Less(acc1), acc0).Less(acc3.IfElse(acc2.Less(acc3), acc2)), acc1.IfElse(acc0.Less(acc1), acc0))
+	var lanes [8]int64
+	acc0.Store(lanes[:])
+	accumulator := initial
+	for _, lane := range lanes[:step] {
+		if accumulator < lane {
+			accumulator = lane
+		}
+	}
+	for ; i < len(xs); i++ {
+		x := xs[i]
+		s0 := x
+		if accumulator >= x {
+			s0 = accumulator
+		}
+		accumulator = s0
+	}
+	return accumulator
+}
+
+func foldLanes2(xs []uint64, initial uint64) uint64 {
+	acc0 := simd.BroadcastUint64s(initial)
+	acc1, acc2, acc3 := acc0, acc0, acc0
+	step := acc0.Len()
+	i := 0
+	for ; i < len(xs)-4*step+1; i += 4 * step {
+		x0 := simd.LoadUint64s(xs[i : i+step])
+		acc0 = acc0.IfElse(acc0.LessEqual(x0), x0)
+		x1 := simd.LoadUint64s(xs[i+step : i+2*step])
+		acc1 = acc1.IfElse(acc1.LessEqual(x1), x1)
+		x2 := simd.LoadUint64s(xs[i+2*step : i+3*step])
+		acc2 = acc2.IfElse(acc2.LessEqual(x2), x2)
+		x3 := simd.LoadUint64s(xs[i+3*step : i+4*step])
+		acc3 = acc3.IfElse(acc3.LessEqual(x3), x3)
+	}
+	acc0 = acc3.IfElse(acc3.Less(acc2), acc2).IfElse(acc3.IfElse(acc3.Less(acc2), acc2).Less(acc1.IfElse(acc1.Less(acc0), acc0)), acc1.IfElse(acc1.Less(acc0), acc0))
+	var lanes [8]uint64
+	acc0.Store(lanes[:])
+	accumulator := initial
+	for _, lane := range lanes[:step] {
+		if lane < accumulator {
+			accumulator = lane
+		}
+	}
+	for ; i < len(xs); i++ {
+		x := xs[i]
+		s0 := x
+		if accumulator <= x {
+			s0 = accumulator
+		}
+		accumulator = s0
+	}
+	return accumulator
+}
+
+func foldLanes3(xs []int32, initial int32) int32 {
+	acc0 := simd.BroadcastInt32s(initial)
+	acc1, acc2, acc3 := acc0, acc0, acc0
+	step := acc0.Len()
+	i := 0
+	for ; i < len(xs)-4*step+1; i += 4 * step {
+		x0 := simd.LoadInt32s(xs[i : i+step])
+		acc0 = acc0.Max(x0)
+		x1 := simd.LoadInt32s(xs[i+step : i+2*step])
+		acc1 = acc1.Max(x1)
+		x2 := simd.LoadInt32s(xs[i+2*step : i+3*step])
+		acc2 = acc2.Max(x2)
+		x3 := simd.LoadInt32s(xs[i+3*step : i+4*step])
+		acc3 = acc3.Max(x3)
+	}
+	acc0 = acc0.Max(acc1).Max(acc2.Max(acc3))
+	var lanes [16]int32
+	acc0.Store(lanes[:])
+	accumulator := initial
+	for _, lane := range lanes[:step] {
+		if accumulator < lane {
+			accumulator = lane
+		}
+	}
+	for ; i < len(xs); i++ {
+		x := xs[i]
+		s0 := accumulator
+		if accumulator < x {
+			s0 = x
+		}
+		accumulator = s0
+	}
+	return accumulator
+}
+
+func foldLanes4(xs []float64, initial float64) float64 {
+	acc0 := simd.BroadcastFloat64s(initial)
+	acc1, acc2, acc3 := acc0, acc0, acc0
+	step := acc0.Len()
+	i := 0
+	for ; i < len(xs)-4*step+1; i += 4 * step {
+		x0 := simd.LoadFloat64s(xs[i : i+step])
+		acc0 = x0.IfElse(acc0.Less(x0), acc0)
+		x1 := simd.LoadFloat64s(xs[i+step : i+2*step])
+		acc1 = x1.IfElse(acc1.Less(x1), acc1)
+		x2 := simd.LoadFloat64s(xs[i+2*step : i+3*step])
+		acc2 = x2.IfElse(acc2.Less(x2), acc2)
+		x3 := simd.LoadFloat64s(xs[i+3*step : i+4*step])
+		acc3 = x3.IfElse(acc3.Less(x3), acc3)
+	}
+	acc0 = acc3.IfElse(acc2.Less(acc3), acc2).IfElse(acc1.IfElse(acc0.Less(acc1), acc0).Less(acc3.IfElse(acc2.Less(acc3), acc2)), acc1.IfElse(acc0.Less(acc1), acc0))
+	var lanes [8]float64
+	acc0.Store(lanes[:])
+	accumulator := initial
+	for _, lane := range lanes[:step] {
+		if accumulator < lane {
+			accumulator = lane
+		}
+	}
+	for ; i < len(xs); i++ {
+		x := xs[i]
+		s0 := accumulator
+		if accumulator < x {
+			s0 = x
+		}
+		accumulator = s0
+	}
+	return accumulator
+}
