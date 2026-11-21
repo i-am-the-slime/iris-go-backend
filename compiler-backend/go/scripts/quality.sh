@@ -2,7 +2,8 @@
 #
 # Measures escape hatches, readability and size (lines, functions) in generated
 # Go. The escape hatches (any and its causes, empty interfaces, type
-# assertions, reflect, unsafe, panic) ratchet against
+# assertions, reflect, unsafe, panic, and the fmt and reflect symbols linked
+# into built programs) ratchet against
 # compiler-backend/go/quality-baseline.txt: a scope fails when one rises above
 # its baseline, and asks for the baseline to be lowered when one drops below
 # it. The other metrics are printed for information and never fail.
@@ -59,6 +60,29 @@ causes() {
     | awk '$1 == "any-cause" { n[$2] += $3 } END { for (c in n) print "any:" c, n[c] }' | sort
 }
 
+# The fmt and reflect symbols linked into the built programs (a `program` binary next to the
+# generated Go), summed. A program that links math/big, which only BigInt needs, is left out:
+# math/big imports fmt and reflect, and reflect's package initializer is always linked.
+linked() {
+  local fmt=0 reflect=0 exempt=0 program symbols
+  while IFS= read -r -d '' program; do
+    # From the program's module, whose go.mod picks the toolchain that knows its GOEXPERIMENT.
+    if ! symbols="$(cd "$(dirname "$program")" && go tool nm "$program")"; then
+      echo "quality.sh: go tool nm $program failed" >&2
+      return 1
+    fi
+    if grep -qE ' math/big\.' <<< "$symbols"; then
+      exempt=$((exempt + 1))
+      continue
+    fi
+    fmt=$((fmt + $(grep -cE ' [TtDdBbRr] fmt\.' <<< "$symbols")))
+    reflect=$((reflect + $(grep -cE ' [TtDdBbRr] reflect\.' <<< "$symbols")))
+  done < <(find "$@" -name program -type f -print0)
+  echo "linked-fmt $fmt"
+  echo "linked-reflect $reflect"
+  echo "linked-exempt $exempt"
+}
+
 measure() {
   local dirs=("$@")
   # Each metric is a perl snippet that adds its matches to $n and prints at END.
@@ -81,11 +105,12 @@ measure() {
   PATTERN='$n++ if /^\s*Origin\s+any\b/; END { print $n+0, "\n" }' count "${dirs[@]}" | sed 's/^/origin-fields /'
   PATTERN='if (/^type (\w+)/) { $n = length($1) if length($1) > $n } END { print $n+0, "\n" }' count "${dirs[@]}" | sed 's/^/max-identifier /'
   PATTERN='if (/^(\t+)/) { $n = length($1) if length($1) > $n } END { print $n+0, "\n" }' count "${dirs[@]}" | sed 's/^/max-nesting /'
+  linked "${dirs[@]}"
 }
 
 ratcheted() {
   case "$1" in
-    any | any:* | empty-interface | type-assertion | reflect | unsafe | panic) return 0 ;;
+    any | any:* | empty-interface | type-assertion | reflect | unsafe | panic | linked-fmt | linked-reflect) return 0 ;;
   esac
   return 1
 }
@@ -94,7 +119,7 @@ baseline_value() {
   awk -v s="$scope" -v m="$1" '$1 == s && $2 == m { print $3 }' "$BASELINE" 2>/dev/null
 }
 
-current="$(measure "$@")"
+current="$(measure "$@")" || { echo "quality.sh: could not measure $*" >&2; exit 2; }
 
 status=0
 lowered=()

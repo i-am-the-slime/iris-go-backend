@@ -11,6 +11,8 @@ examples any:type-variable 82
 examples any:unsolved 1
 examples any:variant-row 67
 examples empty-interface 0
+examples linked-fmt 0
+examples linked-reflect 0
 examples panic 42
 examples reflect 0
 examples type-assertion 229
