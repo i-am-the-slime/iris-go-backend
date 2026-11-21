@@ -18,9 +18,15 @@
 //!   before it starts: `elements := *xs`.
 //! - A function that cannot change a header but is also used as a value, so
 //!   that its signature stays, reads each array parameter once on entry.
+//!
+//! A bounds test that repeats one already passed is dropped: in
+//! `within := i >= 0 && int(i) < len(elements)` followed by `if within { ...
+//! if i >= 0 && int(i) < len(elements) { poke } }`, the inner test holds,
+//! since nothing it reads is assigned anywhere in the function.
 
 use rustc_hash::{FxHashMap, FxHashSet};
 
+use super::aliases::target_root;
 use super::locals::NUMBERED;
 use crate::syntax::{GoDeclaration, GoExpression, GoStatement, GoType};
 use crate::walk::{self, Walk};
@@ -414,6 +420,219 @@ fn binds(statement: &mut GoStatement, name: &str) -> bool {
     }
     Binders(&mut binder).statement(statement);
     found
+}
+
+pub(super) fn drop_repeated_bounds_tests(declarations: &mut [GoDeclaration]) {
+    for declaration in declarations {
+        let GoDeclaration::Function { body, .. } = declaration else { continue };
+        let written = written_names(body);
+        let tests: Vec<(String, GoExpression)> = definitions(body)
+            .into_iter()
+            .filter(|(name, test)| {
+                !written.contains(name) && is_bounds_test(test) && reads(test).is_disjoint(&written)
+            })
+            .collect();
+        for (name, test) in tests {
+            let test = Test { name, rendered: format!("{test:?}"), through_pointer: has_dereference(&test) };
+            walk::each_block(body, |block| test.drop_repeats(block));
+        }
+    }
+}
+
+/// A bounds test bound to a name. Nothing assigns what it reads; when it reads
+/// a length through a pointer, a call or a write through a pointer could
+/// still change that length.
+struct Test {
+    name: String,
+    rendered: String,
+    through_pointer: bool,
+}
+
+impl Test {
+    /// After `name := test`, in `if name { ... }`, each `if test { body }` that
+    /// nothing before it in the branch could have falsified becomes `body`.
+    fn drop_repeats(&self, block: &mut Vec<GoStatement>) {
+        let defines = |statement: &GoStatement| {
+            matches!(statement, GoStatement::Define { names, .. } if names.as_slice() == [self.name.clone()])
+        };
+        let Some(definition) = block.iter().position(defines) else { return };
+        for statement in &mut block[definition + 1..] {
+            if let GoStatement::If { condition, then, .. } = statement
+                && matches!(condition, GoExpression::Identifier(tested) if *tested == self.name)
+            {
+                self.inline_passed(then);
+            }
+            if self.may_falsify(statement) {
+                return;
+            }
+        }
+    }
+
+    fn inline_passed(&self, block: &mut Vec<GoStatement>) {
+        let mut position = 0;
+        while position < block.len() {
+            if let GoStatement::If { condition, then, .. } = &mut block[position]
+                && format!("{condition:?}") == self.rendered
+            {
+                let then = std::mem::take(then);
+                block.splice(position..=position, then);
+                continue;
+            }
+            if self.may_falsify(&mut block[position]) {
+                return;
+            }
+            position += 1;
+        }
+    }
+
+    fn may_falsify(&self, statement: &mut GoStatement) -> bool {
+        self.through_pointer
+            && (!calls_only_pure(std::slice::from_mut(statement))
+                || writes_through_pointer(std::slice::from_mut(statement)))
+    }
+}
+
+/// `index >= 0 && int(index) < len(elements)`, or its upper half alone.
+fn is_bounds_test(test: &GoExpression) -> bool {
+    let below = |value: &GoExpression| {
+        matches!(value, GoExpression::Binary { operator: "<", right, .. }
+            if matches!(&**right, GoExpression::Call { function, .. }
+                if matches!(&**function, GoExpression::Identifier(name) if name == "len")))
+    };
+    match test {
+        GoExpression::Binary { operator: "&&", left, right } => {
+            matches!(&**left, GoExpression::Binary { operator: ">=", .. }) && below(right)
+        }
+        test => below(test),
+    }
+}
+
+/// The single-name definitions of a function's top-level and nested blocks.
+fn definitions(body: &mut Vec<GoStatement>) -> Vec<(String, GoExpression)> {
+    let mut found = vec![];
+    walk::each_block(body, |block| {
+        for statement in block.iter() {
+            if let GoStatement::Define { names, values } = statement
+                && let ([name], [value]) = (names.as_slice(), values.as_slice())
+            {
+                found.push((name.clone(), value.clone()));
+            }
+        }
+    });
+    let mut counts = rustc_hash::FxHashMap::default();
+    for (name, _) in &found {
+        *counts.entry(name.clone()).or_insert(0) += 1;
+    }
+    found.retain(|(name, _)| counts[name] == 1);
+    found
+}
+
+/// The names a function assigns, binds more than once, or takes the address
+/// of. An element written through a pointer or slice leaves the name as it
+/// was, and a loop's variable is bound once.
+fn written_names(body: &mut Vec<GoStatement>) -> FxHashSet<String> {
+    struct Written(FxHashSet<String>, FxHashSet<String>);
+    impl Written {
+        /// A second binding of a name counts as a write of it.
+        fn bind(&mut self, name: &str) {
+            if !self.1.insert(name.to_string()) {
+                self.0.insert(name.to_string());
+            }
+        }
+    }
+    impl Walk for Written {
+        fn statement(&mut self, statement: &mut GoStatement) {
+            match statement {
+                GoStatement::Assign { targets, .. } => {
+                    for target in targets.iter() {
+                        if let Some(root) = assigned_root(target) {
+                            self.0.insert(root.to_string());
+                        }
+                    }
+                }
+                GoStatement::Define { names, .. } => names.iter().for_each(|name| self.bind(name)),
+                GoStatement::Variable { name, .. }
+                | GoStatement::IfAssert { name, .. }
+                | GoStatement::Counting { variable: name, .. }
+                | GoStatement::CountingDown { variable: name, .. } => self.bind(&name.clone()),
+                GoStatement::Range { index, element, .. } => {
+                    index.iter().for_each(|index| self.bind(index));
+                    self.bind(element);
+                }
+                _ => {}
+            }
+            walk::statement(self, statement);
+        }
+
+        fn expression(&mut self, value: &mut GoExpression) {
+            match value {
+                GoExpression::Address(inner) => {
+                    if let Some(root) = target_root(inner) {
+                        self.0.insert(root.to_string());
+                    }
+                }
+                GoExpression::Function { parameters, .. } => {
+                    parameters.iter().for_each(|(name, _)| self.bind(name));
+                }
+                _ => {}
+            }
+            walk::expression(self, value);
+        }
+    }
+    let mut written = Written(FxHashSet::default(), FxHashSet::default());
+    written.block(body);
+    written.0
+}
+
+/// The local an assignment changes: itself or one of its fields. Writing an
+/// element through a slice leaves the slice, and so its length, as it was.
+fn assigned_root(target: &GoExpression) -> Option<&str> {
+    match target {
+        GoExpression::Identifier(name) => Some(name),
+        GoExpression::Field { value, .. } => assigned_root(value),
+        _ => None,
+    }
+}
+
+fn reads(value: &GoExpression) -> FxHashSet<String> {
+    let mut found = FxHashSet::default();
+    walk::each_expression_in_statement(&mut GoStatement::Expression(value.clone()), |expression| {
+        if let GoExpression::Identifier(name) = expression {
+            found.insert(name.clone());
+        }
+    });
+    found
+}
+
+fn has_dereference(value: &GoExpression) -> bool {
+    let mut found = false;
+    walk::each_expression_in_statement(&mut GoStatement::Expression(value.clone()), |expression| {
+        found |= matches!(expression, GoExpression::Unary { operator: "*", .. });
+    });
+    found
+}
+
+/// Whether every call is to a builtin that measures or to the pure runtime,
+/// none of which can reach a mutable array, and no function literal is made.
+fn calls_only_pure(body: &mut [GoStatement]) -> bool {
+    let mut pure = true;
+    for statement in body.iter_mut() {
+        walk::each_expression_in_statement(statement, |expression| match expression {
+            GoExpression::Call { function, .. } => {
+                pure &= match &**function {
+                    GoExpression::Identifier(name) => matches!(name.as_str(), "len" | "cap"),
+                    GoExpression::Qualified { package, name } => {
+                        package == "prim" && PURE_RUNTIME.iter().any(|prefix| name.starts_with(prefix))
+                    }
+                    _ => false,
+                };
+            }
+            GoExpression::Function { .. } => pure = false,
+            _ => {}
+        });
+        pure &= !matches!(statement, GoStatement::Defer(_));
+    }
+    pure
 }
 
 /// Whether the function assigns a whole pointed-to value, as a push does.

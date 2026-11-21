@@ -31,32 +31,24 @@ func initializeMain_() []string {
 		within := i >= 0 && int(i) < len(elements)
 		if within {
 			element := elements[i]
-			if i >= 0 && int(i) < len(elements) {
-				elements[i] = element + mainToNumber(i)
-			}
+			elements[i] = element + mainToNumber(i)
 		}
 	}
 	within2 := 7 < len(*array2)
 	if within2 {
 		element := (*array2)[7]
-		if 7 < len(*array2) {
-			(*array2)[7] = element + 1.0
-		}
+		(*array2)[7] = element + 1.0
 	}
 	within3 := 1 < len(*array2)
 	if within3 {
 		element := (*array2)[1]
-		if 1 < len(*array2) {
-			(*array2)[1] = element + 1.0
-		}
+		(*array2)[1] = element + 1.0
 	}
 	*array2 = append(*array2, 0.0)
 	within4 := 1 < len(*array2)
 	if within4 {
 		element := (*array2)[1]
-		if 1 < len(*array2) {
-			(*array2)[1] = element + 1.0
-		}
+		(*array2)[1] = element + 1.0
 	}
 	smooth(*array2, 1)
 	smooth(*array2, 2)
@@ -125,24 +117,18 @@ func smooth(array []float64, i int32) {
 	within4 := i4 >= 0 && int(i4) < len(array)
 	if within4 {
 		element := array[i4]
-		if i4 >= 0 && int(i4) < len(array) {
-			array[i4] = element + (average - number) * 0.5
-		}
+		array[i4] = element + (average - number) * 0.5
 	}
 	within5 := i >= 0 && int(i) < len(array)
 	if within5 {
 		element := array[i]
-		if i >= 0 && int(i) < len(array) {
-			array[i] = element + (average - number2) * 0.5
-		}
+		array[i] = element + (average - number2) * 0.5
 	}
 	i5 := i + 1
 	within6 := i5 >= 0 && int(i5) < len(array)
 	if within6 {
 		element := array[i5]
-		if i5 >= 0 && int(i5) < len(array) {
-			array[i5] = element + (average - number3) * 0.5
-		}
+		array[i5] = element + (average - number3) * 0.5
 	}
 	i6 := i + 2
 	within7 := i6 >= 0 && int(i6) < len(array)
@@ -159,9 +145,7 @@ func smooth(array []float64, i int32) {
 		within8 := i7 >= 0 && int(i7) < len(array)
 		if within8 {
 			element := array[i7]
-			if i7 >= 0 && int(i7) < len(array) {
-				array[i7] = element + (average - number4)
-			}
+			array[i7] = element + (average - number4)
 		}
 		return
 	}
@@ -229,16 +213,12 @@ func initializePull() []string {
 					within6 := i >= 0 && int(i) < len(elements4)
 					if within6 {
 						element := elements4[i]
-						if i >= 0 && int(i) < len(elements4) {
-							elements4[i] = element + (number - number2) * number5 * 0.125
-						}
+						elements4[i] = element + (number - number2) * number5 * 0.125
 					}
 					within7 := i >= 0 && int(i) < len(elements5)
 					if within7 {
 						element := elements5[i]
-						if i >= 0 && int(i) < len(elements5) {
-							elements5[i] = element + (number3 - number4) * number5 * 0.125
-						}
+						elements5[i] = element + (number3 - number4) * number5 * 0.125
 					}
 				}
 			}
@@ -255,9 +235,7 @@ func initializePull() []string {
 			within2 := i >= 0 && int(i) < len(elements)
 			if within2 {
 				element := elements[i]
-				if i >= 0 && int(i) < len(elements) {
-					elements[i] = element + 0.5 * number
-				}
+				elements[i] = element + 0.5 * number
 			}
 			within3 := i >= 0 && int(i) < len(elements5)
 			var number2 float64
@@ -270,9 +248,7 @@ func initializePull() []string {
 			within4 := i >= 0 && int(i) < len(elements2)
 			if within4 {
 				element := elements2[i]
-				if i >= 0 && int(i) < len(elements2) {
-					elements2[i] = element + 0.5 * number2
-				}
+				elements2[i] = element + 0.5 * number2
 			}
 		}
 	}

@@ -158,6 +158,7 @@ where
     timed("aliases", || aliases::substitute_aliases(&mut declarations));
     timed("ranges", || ranges::read_elements_in_place(&mut declarations));
     timed("headers", || headers::read_headers_once(&mut declarations));
+    timed("bounds", || headers::drop_repeated_bounds_tests(&mut declarations));
     let taken =
         |name: &str| emitter.global_names.contains(name) || IMPORTED_PACKAGES.contains(&name);
     timed("lengths", || lengths::count_lengths_up_to_comparisons(&mut declarations));

@@ -7,13 +7,15 @@ import Data.Array.ST (STArray)
 import Data.Array.ST as STA
 import Data.Maybe (fromMaybe)
 
+-- | Inlined into a loop, the modify tests its bound once: the write sits inside the read's test.
 bump :: forall r. STArray r Number -> Int -> Number -> ST r Unit
 bump array i by = void (STA.modify i (_ + by) array)
 
 get :: forall r. STArray r Number -> Int -> ST r Number
 get array i = fromMaybe 0.0 <$> STA.peek i array
 
--- | A helper too large to inline that only indexes its array takes the array's slice.
+-- | A helper too large to inline that only indexes its array takes the array's slice, and each
+-- | modify tests its bound once.
 smooth :: forall r. STArray r Number -> Int -> ST r Unit
 smooth array i = do
   left <- get array (i - 1)
