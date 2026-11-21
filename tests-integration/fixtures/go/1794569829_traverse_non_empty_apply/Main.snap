@@ -45,20 +45,19 @@ func initializeMain_() maybe.ArrayInt {
 		result = maybe.NoArrayInt
 	}
 	array3 := array.Slice(1, int32(len(array2)), array2)
-	accumulator := result
 	for _, element := range array3 {
-		switch accumulator.Tag {
+		switch result.Tag {
 		case maybe.TagJust:
 			if prim.IntMod(element, 2) == 0 {
-				accumulator = maybe.JustArrayInt(append_(accumulator.Just)(prim.IntDiv(element, 2)))
+				result = maybe.JustArrayInt(append_(result.Just)(prim.IntDiv(element, 2)))
 			} else {
-				accumulator = maybe.NoArrayInt
+				result = maybe.NoArrayInt
 			}
 		default:
-			accumulator = maybe.NoArrayInt
+			result = maybe.NoArrayInt
 		}
 	}
-	return accumulator
+	return result
 }
 
 func main() {

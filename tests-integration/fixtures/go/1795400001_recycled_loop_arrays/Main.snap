@@ -69,9 +69,8 @@ func mainGo(i int32, particles []shared.Particle) []shared.Particle {
 					accumulator.Velocity = accumulator.Velocity + (particles[index2].Position - accumulator.Position) * 0.001
 				}
 			}
-			updated := accumulator
-			updated.Position = accumulator.Position + accumulator.Velocity
-			mapped[index] = updated
+			accumulator.Position = accumulator.Position + accumulator.Velocity
+			mapped[index] = accumulator
 		}
 		particlesOwned, particlesSpare = mapped, particlesOwned
 		i, particles = i + 1, mapped

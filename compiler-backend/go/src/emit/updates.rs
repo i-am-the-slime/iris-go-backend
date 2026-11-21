@@ -8,7 +8,8 @@ pub(super) fn update_in_place(declarations: &mut [GoDeclaration]) {
         walk::each_block_in_declaration(declaration, |block| {
             let mut position = 0;
             while position < block.len() {
-                if !update_at(block, position, &guarded) {
+                if !update_at(block, position, &guarded) && !take_over_at(block, position, &guarded)
+                {
                     position += 1;
                 }
             }
@@ -47,6 +48,49 @@ fn update_at(block: &mut Vec<GoStatement>, position: usize, guarded: &Guarded) -
     block.remove(position);
     for statement in &mut block[position..end - 1] {
         retarget(statement, &source);
+    }
+    true
+}
+
+/// `copy := source`, where `source` is a local of the same block that is not
+/// read again but by the copy's field updates, each before its field is
+/// written, makes `source` itself the copy: updates of the copy write into the
+/// local nobody reads again.
+fn take_over_at(block: &mut Vec<GoStatement>, position: usize, guarded: &Guarded) -> bool {
+    let Some((copy, source)) = defined_copy(&block[position]) else { return false };
+    if guarded.mentioned_in_literal(&copy) || guarded.mentioned_in_literal(&source) {
+        return false;
+    }
+    let defines_source = |statement: &GoStatement| match statement {
+        GoStatement::Define { names, .. } => names.contains(&source),
+        GoStatement::Variable { name, .. } => *name == source,
+        _ => false,
+    };
+    if !block[..position].iter().any(defines_source) {
+        return false;
+    }
+    let mut written: Vec<String> = vec![];
+    let mut end = position + 1;
+    while let Some((field, value)) =
+        block.get(end).and_then(|statement| assigned_field(statement, &copy))
+    {
+        let reads = SourceReads::of(value, &source);
+        if reads.whole || reads.fields.iter().any(|read| written.contains(read)) {
+            return false;
+        }
+        written.push(field.to_string());
+        end += 1;
+    }
+    if block[end..].iter_mut().any(|statement| mentions(statement, &source)) {
+        return false;
+    }
+    block.remove(position);
+    for statement in &mut block[position..] {
+        walk::each_expression_in_statement(statement, |expression| {
+            if is_named(expression, &copy) {
+                *expression = GoExpression::Identifier(source.clone());
+            }
+        });
     }
     true
 }
