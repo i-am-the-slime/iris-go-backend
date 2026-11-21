@@ -440,6 +440,7 @@ pub enum GoPackage {
     Spec,
     RefEq,
     Console,
+    JsBigInt,
     Int64,
 }
 
@@ -469,6 +470,7 @@ impl GoPackage {
             GoPackage::Spec => "github.com/i-am-the-slime/iris-go/spec",
             GoPackage::RefEq => "github.com/i-am-the-slime/iris-go/refeq",
             GoPackage::Console => "github.com/i-am-the-slime/iris-go/console",
+            GoPackage::JsBigInt => "github.com/i-am-the-slime/iris-go/jsbigint",
             GoPackage::Int64 => "github.com/i-am-the-slime/iris-go/ffi/Data_Int64_Internal_ffi",
             GoPackage::Exception => {
                 "github.com/i-am-the-slime/iris-go/exception"
@@ -500,6 +502,7 @@ impl GoPackage {
             GoPackage::Spec => "spec",
             GoPackage::RefEq => "refeq",
             GoPackage::Console => "console",
+            GoPackage::JsBigInt => "jsbigint",
             GoPackage::Int64 => "Data_Int64_Internal_ffi",
         }
     }
@@ -714,6 +717,18 @@ const fn direct_with(name: &'static str, arity: usize, boundary: Boundary) -> Fo
     call(GoPackage::Direct, name, arity, boundary)
 }
 
+const fn js_bigint(name: &'static str, arity: usize) -> Foreign {
+    call(GoPackage::JsBigInt, name, arity, PLAIN)
+}
+
+const fn js_bigint_with(name: &'static str, arity: usize, boundary: Boundary) -> Foreign {
+    call(GoPackage::JsBigInt, name, arity, boundary)
+}
+
+const fn js_bigint_constant(name: &'static str) -> Foreign {
+    Foreign::Constant(GoFunction { package: GoPackage::JsBigInt, name })
+}
+
 pub const TRAVERSE_ARRAY: Foreign = perform("TraverseArray", 2);
 pub const SEQUENCE_ARRAY: Foreign = perform("SequenceArray", 1);
 
@@ -780,10 +795,6 @@ const AVAR_MAYBE: &[Constructed] = &[Constructed::Result("Just"), Constructed::R
 
 const fn constant(name: &'static str) -> Foreign {
     Foreign::Constant(GoFunction { package: GoPackage::Prim, name })
-}
-
-const fn direct_constant(name: &'static str) -> Foreign {
-    Foreign::Constant(GoFunction { package: GoPackage::Direct, name })
 }
 
 const fn compare(comparison: Comparison) -> Foreign {
@@ -1326,37 +1337,37 @@ const FOREIGN_IMPORTS: &[(&str, &str, Foreign)] = &[
     ("Data.Int", "quot", prim_with("IntQuot", 2, int32_parameters(&[0, 1]))),
     ("Data.Int", "rem", prim_with("IntRem", 2, int32_parameters(&[0, 1]))),
     ("Data.Int", "pow", prim_with("IntPow", 2, int32_parameters(&[0, 1]))),
-    ("JS.BigInt", "fromStringImpl", direct_with("BigIntFromString", 3, maybe(0, 1))),
+    ("JS.BigInt", "fromStringImpl", js_bigint_with("FromString", 3, maybe(0, 1))),
     (
         "JS.BigInt",
         "fromStringAsImpl",
-        direct_with("BigIntFromStringAs", 4, Boundary { int32_parameters: &[2], ..maybe(0, 1) }),
+        js_bigint_with("FromStringAs", 4, Boundary { int32_parameters: &[2], ..maybe(0, 1) }),
     ),
-    ("JS.BigInt", "fromNumberImpl", direct_with("BigIntFromNumber", 3, maybe(0, 1))),
-    ("JS.BigInt", "fromInt", direct_with("BigIntFromInt", 1, int32_parameters(&[0]))),
-    ("JS.BigInt", "fromTypeLevelInt", direct("BigIntFromTypeLevelInt", 1)),
-    ("JS.BigInt", "toNumber", direct("BigIntToNumber", 1)),
-    ("JS.BigInt", "biAdd", direct("BigIntAdd", 2)),
-    ("JS.BigInt", "biMul", direct("BigIntMul", 2)),
-    ("JS.BigInt", "biSub", direct("BigIntSub", 2)),
-    ("JS.BigInt", "biMod", direct("BigIntMod", 2)),
-    ("JS.BigInt", "biDiv", direct("BigIntDiv", 2)),
-    ("JS.BigInt", "biDegree", direct("BigIntDegree", 1)),
-    ("JS.BigInt", "biZero", direct_constant("BigIntZero")),
-    ("JS.BigInt", "biOne", direct_constant("BigIntOne")),
-    ("JS.BigInt", "pow", direct("BigIntPow", 2)),
-    ("JS.BigInt", "not", direct("BigIntNot", 1)),
-    ("JS.BigInt", "or", direct("BigIntOr", 2)),
-    ("JS.BigInt", "xor", direct("BigIntXor", 2)),
-    ("JS.BigInt", "and", direct("BigIntAnd", 2)),
-    ("JS.BigInt", "shl", direct("BigIntShl", 2)),
-    ("JS.BigInt", "shr", direct("BigIntShr", 2)),
-    ("JS.BigInt", "biEquals", direct("BigIntEquals", 2)),
-    ("JS.BigInt", "biCompare", direct("BigIntCompare", 2)),
-    ("JS.BigInt", "toString", direct("BigIntToString", 1)),
-    ("JS.BigInt", "toStringAs", direct_with("BigIntToStringAs", 2, int32_parameters(&[0]))),
-    ("JS.BigInt", "asIntN", direct_with("BigIntAsIntN", 2, int32_parameters(&[0]))),
-    ("JS.BigInt", "asUintN", direct_with("BigIntAsUintN", 2, int32_parameters(&[0]))),
+    ("JS.BigInt", "fromNumberImpl", js_bigint_with("FromNumber", 3, maybe(0, 1))),
+    ("JS.BigInt", "fromInt", js_bigint_with("FromInt", 1, int32_parameters(&[0]))),
+    ("JS.BigInt", "fromTypeLevelInt", js_bigint("FromTypeLevelInt", 1)),
+    ("JS.BigInt", "toNumber", js_bigint("ToNumber", 1)),
+    ("JS.BigInt", "biAdd", js_bigint("Add", 2)),
+    ("JS.BigInt", "biMul", js_bigint("Mul", 2)),
+    ("JS.BigInt", "biSub", js_bigint("Sub", 2)),
+    ("JS.BigInt", "biMod", js_bigint("Mod", 2)),
+    ("JS.BigInt", "biDiv", js_bigint("Div", 2)),
+    ("JS.BigInt", "biDegree", js_bigint("Degree", 1)),
+    ("JS.BigInt", "biZero", js_bigint_constant("Zero")),
+    ("JS.BigInt", "biOne", js_bigint_constant("One")),
+    ("JS.BigInt", "pow", js_bigint("Pow", 2)),
+    ("JS.BigInt", "not", js_bigint("Not", 1)),
+    ("JS.BigInt", "or", js_bigint("Or", 2)),
+    ("JS.BigInt", "xor", js_bigint("Xor", 2)),
+    ("JS.BigInt", "and", js_bigint("And", 2)),
+    ("JS.BigInt", "shl", js_bigint("Shl", 2)),
+    ("JS.BigInt", "shr", js_bigint("Shr", 2)),
+    ("JS.BigInt", "biEquals", js_bigint("Equals", 2)),
+    ("JS.BigInt", "biCompare", js_bigint("Compare", 2)),
+    ("JS.BigInt", "toString", js_bigint("ToString", 1)),
+    ("JS.BigInt", "toStringAs", js_bigint_with("ToStringAs", 2, int32_parameters(&[0]))),
+    ("JS.BigInt", "asIntN", js_bigint_with("AsIntN", 2, int32_parameters(&[0]))),
+    ("JS.BigInt", "asUintN", js_bigint_with("AsUintN", 2, int32_parameters(&[0]))),
     ("Data.BigInt", "fromTypeLevelInt", call(GoPackage::BigInts, "FromTypeLevelInt", 1, PLAIN)),
     (
         "Data.BigInt",
