@@ -45,6 +45,9 @@ needs a `go.mod`.
   and `timeEnd` to standard error. The timings themselves differ from run to run in both. Node
   differs from Bun here: it indents every line of a message in a group, and writes timings to
   standard output.
+- `Int64` and `UInt64` from the `int64` package use Go's own 64-bit arithmetic, so
+  `foldl (+) zero (map Int64.fromInt (range 1 10_000_000))` is an ordinary Go loop adding `int64`s.
+  They wrap, divide, compare and `show` (`42l`, `42ul`) as the package documents.
 - An uncaught exception ends the program with exit status 1, including one thrown while the program
   loads or inside an `Aff` fiber.
 
@@ -163,6 +166,13 @@ same in both.
 ### `JS.BigInt.fromString` of a lone sign
 
 `fromString "-"` and `fromString "+"` are `Nothing`. Bun says `Just 0`, Node throws.
+
+### `int64`'s parsing of uppercase digits
+
+`Int64.fromStringAs` and `UInt64.fromStringAs` are `Nothing` for every number out of range. In
+JavaScript, a number in a radix above 10 written in uppercase can slip past the range check and
+wrap: there, `Int64.fromStringAs (radix 36) "1Z00000000000"` is `Just -9101603100908584960l`. The internal `fromString_` throws on a character that is not a digit, where JavaScript
+reads digits up to it.
 
 ### Unused top-level effects
 
