@@ -9,7 +9,9 @@ import Effect.Unsafe (unsafePerformEffect)
 
 -- Each pipeline's result is written before its counters are read, so the
 -- counts say how often each callback ran: `filter` calls its predicate on
--- every element and the fused `map` only on the kept ones.
+-- every element and `map` only on the kept ones. A callback that runs an
+-- effect is not fused into the next stage, so `any` stopping early still
+-- leaves `map` called on every element, as in JavaScript.
 main
   :: { fused :: Int
      , predicateCalls :: Int

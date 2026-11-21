@@ -19,40 +19,48 @@ func initializeMain_() shared.MainResult {
 	var ref3 int32 = 0
 	var ref4 int32 = 0
 	ref5 := false
-	var accumulator int32 = 0
+	kept := []int32{}
 	for _, x := range numbers {
 		s_ := ref + 1
 		ref = s_
 		performed2 := x > 2
 		if performed2 {
-			s_2 := ref2 + 1
-			ref2 = s_2
-			performed3 := x * 3
-			accumulator = accumulator + performed3
+			kept = append(kept, x)
 		}
 	}
-	ref3 = accumulator
-	i := ref
-	modified := shared.StateValue{State: 0, Value: ref2}
-	ref2 = modified.State
-	i2 := modified.Value
-	mapped := make([]int32, len(numbers))
-	for index, x := range numbers {
+	mapped := make([]int32, len(kept))
+	for index, x := range kept {
 		s_ := ref2 + 1
 		ref2 = s_
 		performed2 := x * 3
 		mapped[index] = performed2
 	}
-	ref4 = foldLanes(mapped, 0) + int32(len(mapped))
-	modified2 := shared.StateValue{State: 0, Value: ref2}
-	ref2 = modified2.State
-	i3 := modified2.Value
-	found := false
-	for _, x := range numbers {
+	ref3 = foldLanes(mapped, 0)
+	i := ref
+	modified := shared.StateValue{State: 0, Value: ref2}
+	ref2 = modified.State
+	i2 := modified.Value
+	mapped2 := make([]int32, len(numbers))
+	for index, x := range numbers {
 		s_ := ref2 + 1
 		ref2 = s_
 		performed2 := x * 3
-		if performed2 > 20 {
+		mapped2[index] = performed2
+	}
+	ref4 = foldLanes(mapped2, 0) + int32(len(mapped2))
+	modified2 := shared.StateValue{State: 0, Value: ref2}
+	ref2 = modified2.State
+	i3 := modified2.Value
+	mapped3 := make([]int32, len(numbers))
+	for index, x := range numbers {
+		s_ := ref2 + 1
+		ref2 = s_
+		performed2 := x * 3
+		mapped3[index] = performed2
+	}
+	found := false
+	for _, value := range mapped3 {
+		if value > 20 {
 			found = true
 			break
 		}

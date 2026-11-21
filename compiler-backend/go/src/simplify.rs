@@ -463,11 +463,7 @@ impl Simplifier<'_> {
                     .collect();
                 for binding in &bindings {
                     self.remember_record_order(binding);
-                    if let ExpressionKind::Lambda { body, .. } = &binding.value.kind
-                        && runs_effect(self, body)
-                    {
-                        self.unsafely_effectful_locals.insert(binding.local.id);
-                    }
+                    self.remember_unsafely_effectful(binding);
                 }
                 let body = self.expression(*body);
                 return self.let_bindings(bindings, body);
@@ -802,6 +798,7 @@ impl Simplifier<'_> {
         }
         for binding in &bindings {
             self.remember_record_order(binding);
+            self.remember_unsafely_effectful(binding);
             self.pass_on_thunk_parameter(binding);
         }
         let body = self.expression(body);
@@ -1257,6 +1254,14 @@ impl Simplifier<'_> {
 
     /// A thunk applied to a local, as a bind's continuation is to the local the bind binds, makes
     /// that local the thunk's parameter.
+    /// A local bound to a function that runs an action in pure code runs it wherever it is
+    /// applied, whether a let or an inlined call binds it.
+    fn remember_unsafely_effectful(&mut self, binding: &Binding) {
+        if runs_effect_when_applied(self, &binding.value) {
+            self.unsafely_effectful_locals.insert(binding.local.id);
+        }
+    }
+
     fn pass_on_thunk_parameter(&mut self, binding: &Binding) {
         if let ExpressionKind::Local(argument) = binding.value.kind
             && self.thunk_parameters.contains(&binding.local.id)
@@ -1400,41 +1405,77 @@ fn builds_safely(expression: &Expression) -> bool {
     }
 }
 
+/// Whether evaluating the expression runs an action in pure code, in it or in a function it
+/// calls. A recursive function runs one when any of its calls does, so each function is looked
+/// into once.
 fn runs_effect(known: &impl KnownFunctions, expression: &Expression) -> bool {
-    effect_runs(known, expression, false)
+    EffectSearch { known, entered: FxHashSet::default() }.runs(expression, false)
 }
 
-fn effect_runs(known: &impl KnownFunctions, expression: &Expression, running: bool) -> bool {
-    match &expression.kind {
-        ExpressionKind::Foreign { foreign: Foreign::UnsafePerformEffect, .. } => true,
-        ExpressionKind::Foreign { foreign: Foreign::RunEffect, arguments } => {
-            arguments.iter().any(|argument| effect_runs(known, argument, true))
+/// Whether applying the function the expression evaluates to runs an action in pure code.
+fn runs_effect_when_applied(known: &impl KnownFunctions, expression: &Expression) -> bool {
+    EffectSearch { known, entered: FxHashSet::default() }.applying_runs(expression, false)
+}
+
+struct EffectSearch<'k, K> {
+    known: &'k K,
+    /// The functions whose bodies this search has entered, and whether it entered them running:
+    /// entering one again finds nothing the first entry would not.
+    entered: FxHashSet<(FunctionId, bool)>,
+}
+
+impl<K: KnownFunctions> EffectSearch<'_, K> {
+    fn runs(&mut self, expression: &Expression, running: bool) -> bool {
+        match &expression.kind {
+            ExpressionKind::Foreign { foreign: Foreign::UnsafePerformEffect, .. } => true,
+            ExpressionKind::Foreign { foreign: Foreign::RunEffect, arguments } => {
+                arguments.iter().any(|argument| self.runs(argument, true))
+            }
+            ExpressionKind::Lambda { .. } => false,
+            ExpressionKind::EffectBind { action: built, .. }
+            | ExpressionKind::EffectEach { array: built, .. }
+                if !running =>
+            {
+                self.runs(built, running)
+            }
+            ExpressionKind::Apply { function, arguments } => {
+                let callee_runs = match &function.kind {
+                    ExpressionKind::Lambda { body, .. } => self.runs(body, running),
+                    ExpressionKind::Function(id) => self.called_runs(*id, running),
+                    ExpressionKind::Local(id) => self.known.runs_effect_when_applied(*id),
+                    _ => self.runs(function, running),
+                };
+                callee_runs || arguments.iter().any(|argument| self.passed_runs(argument, running))
+            }
+            ExpressionKind::Foreign { arguments, .. } => {
+                arguments.iter().any(|argument| self.passed_runs(argument, running))
+            }
+            _ => {
+                let mut runs = false;
+                for_each_child(expression, &mut |child| runs = runs || self.runs(child, running));
+                runs
+            }
         }
-        ExpressionKind::Lambda { .. } => false,
-        ExpressionKind::EffectBind { action: built, .. }
-        | ExpressionKind::EffectEach { array: built, .. }
-            if !running =>
-        {
-            effect_runs(known, built, running)
+    }
+
+    /// A function passed to another may be applied there.
+    fn passed_runs(&mut self, argument: &Expression, running: bool) -> bool {
+        self.runs(argument, running) || self.applying_runs(argument, running)
+    }
+
+    fn applying_runs(&mut self, function: &Expression, running: bool) -> bool {
+        match &function.kind {
+            ExpressionKind::Lambda { body, .. } => self.runs(body, running),
+            ExpressionKind::Function(id) => self.called_runs(*id, running),
+            ExpressionKind::Local(id) => self.known.runs_effect_when_applied(*id),
+            _ => false,
         }
-        ExpressionKind::Apply { function, arguments } => {
-            let callee_runs = match &function.kind {
-                ExpressionKind::Lambda { body, .. } => effect_runs(known, body, running),
-                ExpressionKind::Function(id) => known.known(*id).is_some_and(|callee| {
-                    !known.is_recursive(*id) && effect_runs(known, &callee.body, running)
-                }),
-                ExpressionKind::Local(id) => known.runs_effect_when_applied(*id),
-                _ => effect_runs(known, function, running),
-            };
-            callee_runs || arguments.iter().any(|argument| effect_runs(known, argument, running))
-        }
-        _ => {
-            let mut runs = false;
-            for_each_child(expression, &mut |child| {
-                runs = runs || effect_runs(known, child, running)
-            });
-            runs
-        }
+    }
+
+    fn called_runs(&mut self, id: FunctionId, running: bool) -> bool {
+        let known = self.known;
+        let Some(callee) = known.known(id) else { return false };
+        self.entered.insert((id, running)) && self.runs(&callee.body, running)
     }
 }
 
