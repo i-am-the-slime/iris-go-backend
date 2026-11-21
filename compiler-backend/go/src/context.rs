@@ -199,6 +199,47 @@ where
         Ok(Some(row.fields.iter().map(|field| capitalise(&field.label)).collect()))
     }
 
+    pub fn effect_function_arity(
+        &mut self,
+        type_id: checking::core::TypeId,
+    ) -> QueryResult<Option<usize>> {
+        use checking::core::Type;
+        let type_id = crate::monotype::expand_synonyms(self, type_id)?;
+        let (head, _) = self.types.spine(type_id);
+        let head = self.types.strip_annotations(head);
+        let Type::Constructor(file_id, item) = self.types.lookup(head).clone() else {
+            return Ok(None);
+        };
+        let module = self.module(file_id)?;
+        let name = module.indexed.items[item].name.clone().unwrap_or_default();
+        let count = match module.name.as_str() {
+            "Effect.Uncurried" => name.strip_prefix("EffectFn"),
+            "Control.Monad.ST.Uncurried" => name.strip_prefix("STFn"),
+            _ => None,
+        };
+        Ok(count.and_then(|count| count.parse().ok()).filter(|&arity| arity > 0))
+    }
+
+    pub fn argument_groups(
+        &mut self,
+        type_id: checking::core::TypeId,
+    ) -> QueryResult<Option<Vec<usize>>> {
+        let mut groups = vec![];
+        let mut current = type_id;
+        loop {
+            if let Some(arity) = self.effect_function_arity(current)? {
+                groups.push(arity);
+                break;
+            }
+            let expanded = crate::monotype::expand_synonyms(self, current)?;
+            let (_, expanded) = self.types.peel_quantifiers(expanded);
+            let Some((_, result)) = self.types.function_parts(expanded) else { break };
+            groups.push(1);
+            current = result;
+        }
+        Ok(groups.iter().any(|&size| size > 1).then_some(groups))
+    }
+
     pub fn is_type(
         &mut self,
         file_id: FileId,

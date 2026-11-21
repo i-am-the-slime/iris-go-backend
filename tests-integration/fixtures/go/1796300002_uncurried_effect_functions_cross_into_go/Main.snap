@@ -1,0 +1,77 @@
+---
+source: tests-integration/src/fixtures.rs
+---
+// main.go
+package main
+
+import (
+	"fixture/Routes_ffi"
+	"fixture/shared"
+	"github.com/i-am-the-slime/iris-go/array"
+	"github.com/i-am-the-slime/iris-go/prim"
+)
+
+func main_() []string {
+	seen := &shared.Ref[[]string]{Value: []string{}}
+	Routes_ffi.Call(func(first string, second string, _ Routes_ffi.Reply) {
+		mainRemember(seen, prim.Append(first, second))
+	})
+	function := func(prefix string) func(string) func(Routes_ffi.Reply) {
+		return func(text string) func(Routes_ffi.Reply) {
+			return func(_ Routes_ffi.Reply) {
+				mainRemember(seen, prim.Append(prefix, text))
+			}
+		}
+	}
+	Routes_ffi.Serve(Routes_ffi.Route{Path: "/hello", Handle: func(name string, body string, _ Routes_ffi.Reply) {
+		mainRemember(seen, name+": "+body)
+	}, Done: func(path string) {
+		mainRemember(seen, "done "+path)
+	}, Prefixed: func(s string) func(string, Routes_ffi.Reply) {
+		return func(s2 string, reply Routes_ffi.Reply) {
+			function(s)(s2)(reply)
+		}
+	}})
+	Routes_ffi.BuiltIn.Handle("built", "in", Routes_ffi.NoReply)
+	updated := Routes_ffi.BuiltIn
+	updated.Handle = func(name string, _ string, _ Routes_ffi.Reply) {
+		mainRemember(seen, "updated "+name)
+	}
+	Routes_ffi.Serve(updated)
+	Routes_ffi.BuiltIn.Done(Routes_ffi.BuiltIn.Path)
+	Routes_ffi.BuiltIn.Prefixed("q")("y", Routes_ffi.NoReply)
+	Routes_ffi.BuiltIn.Prefixed("r")("z", Routes_ffi.NoReply)
+	Routes_ffi.BuiltIn.Handle("kept", "aside", Routes_ffi.NoReply)
+	scrutinee := Routes_ffi.BuiltIn
+	matched := func(s string) func(string) func(Routes_ffi.Reply) {
+		return func(s2 string) func(Routes_ffi.Reply) {
+			return func(reply Routes_ffi.Reply) {
+				scrutinee.Handle(s, s2, reply)
+			}
+		}
+	}
+	matched("matched")("too")(Routes_ffi.NoReply)
+	return seen.Value
+}
+
+func mainRemember(seen *shared.Ref[[]string], text string) {
+	s := seen.Value
+	s_ := array.Append(s, []string{text})
+	seen.Value = s_
+}
+
+func main() {
+	main_()
+}
+
+// shared/shared.go
+package shared
+
+type Ref[T any] struct {
+	Value T
+}
+
+type StateValue struct {
+	State []string
+	Value []string
+}

@@ -183,6 +183,7 @@ pub struct Monotypes {
     /// The records a foreign package's struct represents, with that package's module and the
     /// struct's name.
     pub foreign_records: FxHashMap<MonotypeId, (String, String)>,
+    pub uncurried_fields: FxHashMap<MonotypeId, Vec<(SmolStr, Arc<[usize]>)>>,
     /// What the Go files next to each module's source declare.
     pub foreign_sources: Vec<crate::foreign::ForeignSource>,
     /// Where each `unsafeCoerce` between two types was written, for a coercion Go cannot make.

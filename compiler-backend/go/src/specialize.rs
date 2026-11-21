@@ -853,6 +853,10 @@ where
             if !matches!(self.monotypes.get(record), Monotype::Record(_)) {
                 continue;
             }
+            let uncurried = self.uncurried_fields(expansion)?;
+            if !uncurried.is_empty() {
+                self.monotypes.uncurried_fields.insert(record, uncurried);
+            }
             let owner = (module_name.clone(), struct_name.clone());
             if let Some((other_module, other_struct)) =
                 self.monotypes.foreign_records.insert(record, owner)
@@ -864,6 +868,21 @@ where
             }
         }
         Ok(())
+    }
+
+    fn uncurried_fields(&mut self, record: TypeId) -> GoResult<Vec<(SmolStr, Arc<[usize]>)>> {
+        let (_, arguments) = self.context.types.spine(record);
+        let Some(&row) = arguments.first() else { return Ok(vec![]) };
+        let row = crate::monotype::expand_synonyms(&mut self.context, row)?;
+        let Type::Row(row) = self.context.types.lookup(row).clone() else { return Ok(vec![]) };
+        let row = self.context.queries.lookup_row_type(row).clone();
+        let mut uncurried = vec![];
+        for field in row.fields.iter() {
+            if let Some(groups) = self.context.argument_groups(field.id)? {
+                uncurried.push((field.label.clone(), Arc::from(groups)));
+            }
+        }
+        Ok(uncurried)
     }
 
     /// Notes where the `unsafeCoerce` from `from` to `to` is written, the first time it is met.

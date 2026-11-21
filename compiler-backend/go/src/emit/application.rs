@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use super::{Emitter, call, identifier_expression, uses_local};
 use crate::error::GoResult;
 use crate::mono::{Expression, ExpressionKind, FunctionId, Local};
@@ -295,6 +297,112 @@ where
         Ok(GoExpression::Function { parameters: go_parameters, result, body: statements })
     }
 
+    pub(super) fn argument_groups(&self, record: MonotypeId, label: &str) -> Option<Arc<[usize]>> {
+        let fields = self.monotypes.uncurried_fields.get(&record)?;
+        fields.iter().find(|(field, _)| field == label).map(|(_, groups)| Arc::clone(groups))
+    }
+
+    pub(super) fn grouped_value(
+        &mut self,
+        value: &Expression,
+        groups: &[usize],
+        out: &mut Vec<GoStatement>,
+    ) -> GoResult<GoExpression> {
+        if let [arity] = groups {
+            return self.uncurried_callback(value, *arity, true, out);
+        }
+        let function = self.value(value, out)?;
+        let function = self.shared(function, "function", out);
+        self.grouped_from_curried(function, value.monotype, groups)
+    }
+
+    fn grouped_from_curried(
+        &mut self,
+        function: GoExpression,
+        monotype: MonotypeId,
+        groups: &[usize],
+    ) -> GoResult<GoExpression> {
+        let Some((&size, rest)) = groups.split_first() else { return Ok(function) };
+        let (parameters, after) = self.fresh_parameters(monotype, size)?;
+        let mut called = function;
+        for (name, _) in &parameters {
+            called = call(called, vec![identifier_expression(name)]);
+        }
+        let (body, result) = if rest.is_empty() {
+            self.final_call(called, after)?
+        } else {
+            let inner = self.grouped_from_curried(called, after, rest)?;
+            let inner_type = function_type(&inner);
+            (vec![GoStatement::Return(Some(inner))], Some(inner_type))
+        };
+        Ok(GoExpression::Function { parameters, result, body })
+    }
+
+    pub(super) fn curried_from_groups(
+        &mut self,
+        function: GoExpression,
+        monotype: MonotypeId,
+        groups: &[usize],
+    ) -> GoResult<GoExpression> {
+        let total = groups.iter().sum();
+        let (parameters, after) = self.fresh_parameters(monotype, total)?;
+        let mut called = function;
+        let mut at = 0;
+        for &size in groups {
+            let arguments = parameters[at..at + size].iter();
+            called = call(called, arguments.map(|(name, _)| identifier_expression(name)).collect());
+            at += size;
+        }
+        let (mut body, mut result) = self.final_call(called, after)?;
+        let mut built = None;
+        for parameter in parameters.into_iter().rev() {
+            if let Some(inner) = built.take() {
+                result = Some(function_type(&inner));
+                body = vec![GoStatement::Return(Some(inner))];
+            }
+            let layer = GoExpression::Function {
+                parameters: vec![parameter],
+                result: result.clone(),
+                body: std::mem::take(&mut body),
+            };
+            built = Some(layer);
+        }
+        Ok(built.unwrap_or(GoExpression::Function { parameters: vec![], result, body }))
+    }
+
+    fn fresh_parameters(
+        &mut self,
+        monotype: MonotypeId,
+        count: usize,
+    ) -> GoResult<(Vec<(String, GoType)>, MonotypeId)> {
+        let mut parameters = Vec::with_capacity(count);
+        let mut current = monotype;
+        for _ in 0..count {
+            let (parameter, result) = self
+                .monotypes
+                .function_parts(current)
+                .expect("invariant violated: grouped arguments are the function's parameters");
+            let base = self.value_base(parameter);
+            let name = self.temporary(&base);
+            parameters.push((name, self.go_type(parameter)?));
+            current = result;
+        }
+        Ok((parameters, current))
+    }
+
+    fn final_call(
+        &mut self,
+        called: GoExpression,
+        result: MonotypeId,
+    ) -> GoResult<(Vec<GoStatement>, Option<GoType>)> {
+        let returned = self.monotypes.effect_result(result).unwrap_or(result);
+        let statement = match self.is_unit(returned) {
+            true => GoStatement::Expression(called),
+            false => GoStatement::Return(Some(called)),
+        };
+        Ok((vec![statement], self.go_result(returned)?))
+    }
+
     pub(super) fn curried_callback(
         &mut self,
         function: GoExpression,
@@ -356,5 +464,15 @@ where
             result: result_type,
             body,
         })
+    }
+}
+
+fn function_type(function: &GoExpression) -> GoType {
+    let GoExpression::Function { parameters, result, .. } = function else {
+        unreachable!("invariant violated: a grouped layer is a function")
+    };
+    GoType::Function {
+        parameters: parameters.iter().map(|(_, type_)| type_.clone()).collect(),
+        result: result.clone().map(Box::new),
     }
 }

@@ -381,8 +381,9 @@ second gets a number: `content_type` next to `"content-type"` is `Content_type2`
 another named record if that one has a struct too:
 `Headers []Header`.
 
-A function in a field looks just like a callback: curried, and it performs its effect when called.
-That holds inside arrays and nested records too, and for `EffectFn` fields:
+A function in a field looks just like a callback: curried, and it performs its effect when called,
+unless it's an `EffectFn`, which takes all its arguments at once. That holds inside arrays and
+nested records too:
 
 ```purescript
 type Routes =
@@ -394,7 +395,7 @@ type Routes =
 
 ```go
 type Routes struct {
-	Handle func(string) func(func(string))
+	Handle func(string, func(string))
 	Add    func(int32) func(int32) int32
 	Each   []func(string)
 }

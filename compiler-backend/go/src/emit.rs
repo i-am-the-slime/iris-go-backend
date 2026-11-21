@@ -2010,9 +2010,13 @@ where
             return Ok(if effectful { instantiated } else { call(instantiated, vec![]) });
         }
         let generic = self.project_generic_parameters(foreign)?;
+        let uncurried = self.project_uncurried_parameters(foreign)?;
         let mut values = vec![];
         for (position, argument) in arguments.iter().enumerate() {
-            let value = self.project_argument(argument, generic.contains(&position), out)?;
+            let value = match uncurried.get(position).cloned().flatten() {
+                Some(groups) => self.grouped_value(argument, &groups, out)?,
+                None => self.project_argument(argument, generic.contains(&position), out)?,
+            };
             values.push(value);
         }
         Ok(call(function, values))
@@ -2062,6 +2066,25 @@ where
             current = result;
         }
         Ok(generic)
+    }
+
+    fn project_uncurried_parameters(
+        &mut self,
+        foreign: Foreign,
+    ) -> GoResult<Vec<Option<Vec<usize>>>> {
+        let Foreign::Project { file_id, term, .. } = foreign else {
+            unreachable!("invariant violated: the declared type of another foreign");
+        };
+        let module = self.context.module(file_id)?;
+        let Some(declared) = module.checked.lookup_term_item_type(term) else { return Ok(vec![]) };
+        let declared = crate::monotype::expand_synonyms(&mut self.context, declared)?;
+        let (_, mut current) = self.context.types.peel_quantifiers(declared);
+        let mut uncurried = vec![];
+        while let Some((parameter, result)) = self.context.types.function_parts(current) {
+            uncurried.push(self.context.argument_groups(parameter)?);
+            current = result;
+        }
+        Ok(uncurried)
     }
 
     /// The Go function of a foreign package that implements a foreign import.
@@ -2987,13 +3010,21 @@ where
             ExpressionKind::Record(fields) => {
                 let mut values = vec![];
                 for (label, value) in fields {
-                    values.push((label.clone(), self.value(value, out)?));
+                    let value = self.field_value(expression.monotype, label, value, out)?;
+                    values.push((label.clone(), value));
                 }
                 self.record_value(expression.monotype, values)?
             }
             ExpressionKind::Access { record, label } => {
                 let value = self.value(record, out)?;
-                self.read_field(value, record.monotype, label)
+                let read = self.read_field(value, record.monotype, label);
+                match self.argument_groups(record.monotype, label) {
+                    Some(groups) => {
+                        let read = self.shared(read, "function", out);
+                        self.curried_from_groups(read, expression.monotype, &groups)?
+                    }
+                    None => read,
+                }
             }
             ExpressionKind::Update { record: source, updates }
                 if !self.monotypes.same_without_causes(source.monotype, expression.monotype) =>
@@ -3320,7 +3351,9 @@ where
             });
             let read = self.read_field(source.clone(), source_record, label);
             let value = match update {
-                Some(RecordUpdate::Leaf { value, .. }) => self.value(value, out)?,
+                Some(RecordUpdate::Leaf { value, .. }) => {
+                    self.field_value(target, label, value, out)?
+                }
                 Some(RecordUpdate::Branch { updates, .. }) => {
                     let nested = self.hoist(read, "record", out);
                     let nested_record = self.record_field_monotype(source_record, label);
@@ -3344,7 +3377,7 @@ where
         for update in updates {
             match update {
                 RecordUpdate::Leaf { label, value } => {
-                    let value = self.value(value, out)?;
+                    let value = self.field_value(record, label, value, out)?;
                     out.push(GoStatement::Assign {
                         targets: vec![self.read_field(target.clone(), record, label)],
                         values: vec![value],
@@ -3358,6 +3391,19 @@ where
             }
         }
         Ok(())
+    }
+
+    fn field_value(
+        &mut self,
+        record: MonotypeId,
+        label: &str,
+        value: &Expression,
+        out: &mut Vec<GoStatement>,
+    ) -> GoResult<GoExpression> {
+        match self.argument_groups(record, label) {
+            Some(groups) => self.grouped_value(value, &groups, out),
+            None => self.value(value, out),
+        }
     }
 
     fn literal(&mut self, literal: &Literal, monotype: MonotypeId) -> GoExpression {
@@ -3488,9 +3534,28 @@ where
             };
             values.push(value);
         }
-        let callable = match known {
-            Some(callable) => callable,
-            None => {
+        let callable = match (known, &function.kind) {
+            (Some(callable), _) => callable,
+            (None, ExpressionKind::Access { record, label })
+                if let Some(groups) = self.argument_groups(record.monotype, label) =>
+            {
+                let value = self.value(record, out)?;
+                let read = self.read_field(value, record.monotype, label);
+                if values.len() < groups.iter().sum() {
+                    let read = self.shared(read, "function", out);
+                    let curried = self.curried_from_groups(read, function.monotype, &groups)?;
+                    return Ok((self.value_callable(curried, function.monotype), values));
+                }
+                let (&last, leading) = groups.split_last().expect("invariant violated: groups");
+                let mut called = read;
+                let mut monotype = function.monotype;
+                for &size in leading {
+                    called = call(called, values.drain(..size).collect());
+                    monotype = self.monotypes.result_after(monotype, size);
+                }
+                Callable { function: called, monotype, arity: last, names: vec![] }
+            }
+            (None, _) => {
                 let value = self.value(function, out)?;
                 self.value_callable(value, function.monotype)
             }

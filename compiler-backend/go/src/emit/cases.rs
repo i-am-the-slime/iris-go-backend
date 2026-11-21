@@ -444,6 +444,12 @@ where
             PatternKind::Record(fields) => {
                 for (label, field_pattern) in fields {
                     let field_path = self.read_field(path.clone(), pattern.monotype, label);
+                    let field_path = match self.argument_groups(pattern.monotype, label) {
+                        Some(groups) => {
+                            self.curried_from_groups(field_path, field_pattern.monotype, &groups)?
+                        }
+                        None => field_path,
+                    };
                     self.pattern_tests(field_pattern, field_path, tests, bindings)?;
                 }
             }
