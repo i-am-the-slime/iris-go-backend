@@ -452,6 +452,7 @@ where
                     DataKind::Enumeration => Some(binary("==", path, tag)),
                     DataKind::Tagged => Some(binary("==", field(path, "Tag"), tag)),
                     DataKind::Product => None,
+                    DataKind::Sentinel => Some(self.sentinel_test(layout, constructor, path)),
                 };
             }
             Some(
@@ -462,6 +463,33 @@ where
             Some(MaybeLayout::Pointer { .. }) => identifier_expression("nil"),
         };
         Some(binary(if is_just { "!=" } else { "==" }, path, absent))
+    }
+
+    /// A nullary constructor of a `Sentinel` type is its shared cell; the constructor with fields
+    /// is every other cell.
+    fn sentinel_test(
+        &self,
+        layout: &DataLayout,
+        constructor: usize,
+        path: GoExpression,
+    ) -> GoExpression {
+        let shared = |tag: &str| {
+            let name = self.shared_nullaries.get(tag).unwrap_or_else(|| {
+                unreachable!("invariant violated: a Sentinel nullary has no shared cell")
+            });
+            identifier_expression(name)
+        };
+        let this = &layout.constructors[constructor];
+        if this.fields.is_empty() {
+            return binary("==", path, shared(&this.tag));
+        }
+        layout
+            .constructors
+            .iter()
+            .filter(|other| other.fields.is_empty())
+            .map(|other| binary("!=", path.clone(), shared(&other.tag)))
+            .reduce(|left, right| binary("&&", left, right))
+            .unwrap_or(GoExpression::Boolean(true))
     }
 
     pub(super) fn constructor_field(

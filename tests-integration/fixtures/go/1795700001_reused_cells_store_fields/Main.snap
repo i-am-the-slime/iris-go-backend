@@ -15,15 +15,9 @@ type Tree struct {
 	Node3 *Tree
 	Node0 int32
 	Node1 int32
-	Tag   uint8
 }
 
-const (
-	TreeLeaf = iota
-	TreeNode
-)
-
-var sharedTreeLeaf = &Tree{Tag: TreeLeaf}
+var sharedTreeLeaf = &Tree{}
 
 type Chain struct {
 	Field1 *Chain
@@ -45,8 +39,7 @@ func initializeMain_() shared.MainResult {
 	defer exception.ReportUncaught()
 	scrutinee := insertCountsReusing(3, sharedTreeLeaf)
 	var result *Tree
-	switch scrutinee.Tag {
-	case TreeNode:
+	if scrutinee != sharedTreeLeaf {
 		k := scrutinee.Node0
 		count := scrutinee.Node1
 		left := scrutinee.Node2
@@ -57,7 +50,7 @@ func initializeMain_() shared.MainResult {
 		scrutinee.Node2 = right
 		scrutinee.Node3 = left
 		result = scrutinee
-	default: // TreeLeaf
+	} else {
 		result = sharedTreeLeaf
 	}
 	chains := make([]Chain, 3)
@@ -68,12 +61,10 @@ func initializeMain_() shared.MainResult {
 }
 
 func sizeOf(tree *Tree) int32 {
-	switch tree.Tag {
-	case TreeLeaf:
+	if tree == sharedTreeLeaf {
 		return 0
-	default: // TreeNode
-		return tree.Node1 + sizeOf(tree.Node2) + sizeOf(tree.Node3)
 	}
+	return tree.Node1 + sizeOf(tree.Node2) + sizeOf(tree.Node3)
 }
 
 var counts = initializeCounts()
@@ -101,8 +92,8 @@ func blues(value *Chain) int32 {
 }
 
 func insertCountsReusing(key int32, value *Tree) *Tree {
-	if value.Tag == TreeLeaf {
-		return &Tree{Tag: TreeNode, Node0: key, Node1: 1, Node2: sharedTreeLeaf, Node3: sharedTreeLeaf}
+	if value == sharedTreeLeaf {
+		return &Tree{Node0: key, Node1: 1, Node2: sharedTreeLeaf, Node3: sharedTreeLeaf}
 	}
 	k := value.Node0
 	count := value.Node1

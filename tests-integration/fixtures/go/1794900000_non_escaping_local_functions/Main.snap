@@ -14,22 +14,16 @@ import (
 type ListInt struct {
 	Cons1 *ListInt
 	Cons0 int32
-	Tag   uint8
 }
 
-const (
-	ListIntNil = iota
-	ListIntCons
-)
-
-var sharedListIntNil = &ListInt{Tag: ListIntNil}
+var sharedListIntNil = &ListInt{}
 
 func main_() int32 {
 	return foldLanes(direct.FromFoldable(func(f func(int32) func(*direct.ConsList[int32]) *direct.ConsList[int32]) func(*direct.ConsList[int32]) func(*ListInt) *direct.ConsList[int32] {
 		return func(b *direct.ConsList[int32]) func(*ListInt) *direct.ConsList[int32] {
 			return foldr(f, b)
 		}
-	}, &ListInt{Tag: ListIntCons, Cons0: 1, Cons1: &ListInt{Tag: ListIntCons, Cons0: 2, Cons1: sharedListIntNil}}), 0)
+	}, &ListInt{Cons0: 1, Cons1: &ListInt{Cons0: 2, Cons1: sharedListIntNil}}), 0)
 }
 
 func foldr(f func(int32) func(*direct.ConsList[int32]) *direct.ConsList[int32], b *direct.ConsList[int32]) func(*ListInt) *direct.ConsList[int32] {
@@ -41,29 +35,23 @@ func foldr(f func(int32) func(*direct.ConsList[int32]) *direct.ConsList[int32], 
 func foldrGo(accumulator *ListInt, list *ListInt) *ListInt {
 	var listIntCells alloc.Cells[ListInt]
 	for {
-		switch list.Tag {
-		case ListIntNil:
+		if list == sharedListIntNil {
 			return accumulator
-		default: // ListIntCons
-			x := list.Cons0
-			xs := list.Cons1
-			accumulator, list = listIntCells.New(ListInt{Tag: ListIntCons, Cons0: x, Cons1: accumulator}), xs
-			continue
 		}
+		x := list.Cons0
+		xs := list.Cons1
+		accumulator, list = listIntCells.New(ListInt{Cons0: x, Cons1: accumulator}), xs
 	}
 }
 
 func foldrGo2(f func(int32) func(*direct.ConsList[int32]) *direct.ConsList[int32], accumulator *direct.ConsList[int32], list *ListInt) *direct.ConsList[int32] {
 	for {
-		switch list.Tag {
-		case ListIntNil:
+		if list == sharedListIntNil {
 			return accumulator
-		default: // ListIntCons
-			x := list.Cons0
-			xs := list.Cons1
-			accumulator, list = f(x)(accumulator), xs
-			continue
 		}
+		x := list.Cons0
+		xs := list.Cons1
+		accumulator, list = f(x)(accumulator), xs
 	}
 }
 

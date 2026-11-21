@@ -56,15 +56,9 @@ type Tree struct {
 	Node0 *Tree
 	Node2 *Tree
 	Node1 int32
-	Tag   uint8
 }
 
-const (
-	TreeLeaf = iota
-	TreeNode
-)
-
-var sharedTreeLeaf = &Tree{Tag: TreeLeaf}
+var sharedTreeLeaf = &Tree{}
 
 type Shape struct {
 	Circle  int32
@@ -183,7 +177,7 @@ func initializeMain_() []string {
 	x7 := opaque(4)
 	var result12 string
 	if x7 > 0 {
-		result12 = "(Just " + prim.ShowInt(sumTree(&Tree{Tag: TreeNode, Node0: sharedTreeLeaf, Node1: x7, Node2: sharedTreeLeaf})) + ")"
+		result12 = "(Just " + prim.ShowInt(sumTree(&Tree{Node0: sharedTreeLeaf, Node1: x7, Node2: sharedTreeLeaf})) + ")"
 	} else {
 		result12 = "Nothing"
 	}
@@ -345,14 +339,14 @@ func initializeMain_() []string {
 	x16 := opaque(1)
 	var result26 *Tree
 	if x16 > 0 {
-		result26 = &Tree{Tag: TreeNode, Node0: sharedTreeLeaf, Node1: x16, Node2: sharedTreeLeaf}
+		result26 = &Tree{Node0: sharedTreeLeaf, Node1: x16, Node2: sharedTreeLeaf}
 	} else {
 		result26 = nil
 	}
 	var result27 string
-	if result26 != nil && result26.Tag == TreeNode {
+	if result26 != nil && result26 != sharedTreeLeaf {
 		result27 = prim.ShowInt(result26.Node1)
-	} else if result26 != nil && result26.Tag == TreeLeaf {
+	} else if result26 != nil && result26 == sharedTreeLeaf {
 		result27 = "leaf"
 	} else {
 		result27 = "none"
@@ -421,12 +415,10 @@ func opaque(x int32) int32 {
 }
 
 func sumTree(tree *Tree) int32 {
-	switch tree.Tag {
-	case TreeLeaf:
+	if tree == sharedTreeLeaf {
 		return 0
-	default: // TreeNode
-		return sumTree(tree.Node0) + tree.Node1 + sumTree(tree.Node2)
 	}
+	return sumTree(tree.Node0) + tree.Node1 + sumTree(tree.Node2)
 }
 
 func main() {

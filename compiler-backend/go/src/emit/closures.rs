@@ -1262,7 +1262,7 @@ where
         Ok(match layout.kind {
             DataKind::Tagged if constructor.fields.is_empty() => {
                 let tag = constructor.tag.clone();
-                self.shared_nullary(&layout.name, &tag)
+                self.shared_nullary(&layout.name, &tag, true)
             }
             _ => GoExpression::Address(Box::new(self.composite(&layout, tag, values))),
         })

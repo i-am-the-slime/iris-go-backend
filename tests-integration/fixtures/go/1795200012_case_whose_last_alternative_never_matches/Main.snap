@@ -7,15 +7,9 @@ package types
 type ListUnit struct {
 	Cons0 struct{}
 	Cons1 *ListUnit
-	Tag   uint8
 }
 
-const (
-	ListUnitNil = iota
-	ListUnitCons
-)
-
-var SharedListUnitNil = &ListUnit{Tag: ListUnitNil}
+var SharedListUnitNil = &ListUnit{}
 
 // Data/Maybe/maybe.go
 package maybe
@@ -47,7 +41,7 @@ func defaulted(ignored float64) int32 {
 	var listUnitCells alloc.Cells[list.ListUnit]
 	for index := len(array) - 1; index >= 0; index-- {
 		unit := array[index]
-		accumulator = listUnitCells.New(list.ListUnit{Tag: list.ListUnitCons, Cons0: unit, Cons1: accumulator})
+		accumulator = listUnitCells.New(list.ListUnit{Cons0: unit, Cons1: accumulator})
 	}
 	var result int32
 	result = -17
@@ -58,14 +52,11 @@ func defaulted(ignored float64) int32 {
 
 func defaultedGo(b func(int32) int32, value *list.ListUnit) func(int32) int32 {
 	for {
-		switch value.Tag {
-		case list.ListUnitNil:
+		if value == list.SharedListUnitNil {
 			return b
-		default: // list.ListUnitCons
-			as := value.Cons1
-			value = as
-			continue
 		}
+		as := value.Cons1
+		value = as
 	}
 }
 

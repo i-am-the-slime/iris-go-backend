@@ -29,28 +29,16 @@ import (
 type ListInt struct {
 	Cons1 *ListInt
 	Cons0 int32
-	Tag   uint8
 }
 
-const (
-	ListIntNil = iota
-	ListIntCons
-)
-
-var SharedListIntNil = &ListInt{Tag: ListIntNil}
+var SharedListIntNil = &ListInt{}
 
 type ListString struct {
 	Cons0 string
 	Cons1 *ListString
-	Tag   uint8
 }
 
-const (
-	ListStringNil = iota
-	ListStringCons
-)
-
-var SharedListStringNil = &ListString{Tag: ListStringNil}
+var SharedListStringNil = &ListString{}
 
 func Foldr(f func(int32) func(*direct.ConsList[int32]) *direct.ConsList[int32], b *direct.ConsList[int32]) func(*ListInt) *direct.ConsList[int32] {
 	return func(x *ListInt) *direct.ConsList[int32] {
@@ -61,29 +49,23 @@ func Foldr(f func(int32) func(*direct.ConsList[int32]) *direct.ConsList[int32], 
 func FoldrGo(acc *ListInt, list *ListInt) *ListInt {
 	var listIntCells alloc.Cells[ListInt]
 	for {
-		switch list.Tag {
-		case ListIntNil:
+		if list == SharedListIntNil {
 			return acc
-		default: // ListIntCons
-			x := list.Cons0
-			xs := list.Cons1
-			acc, list = listIntCells.New(ListInt{Tag: ListIntCons, Cons0: x, Cons1: acc}), xs
-			continue
 		}
+		x := list.Cons0
+		xs := list.Cons1
+		acc, list = listIntCells.New(ListInt{Cons0: x, Cons1: acc}), xs
 	}
 }
 
 func FoldrGo2(f func(int32) func(*direct.ConsList[int32]) *direct.ConsList[int32], b *direct.ConsList[int32], value *ListInt) *direct.ConsList[int32] {
 	for {
-		switch value.Tag {
-		case ListIntNil:
+		if value == SharedListIntNil {
 			return b
-		default: // ListIntCons
-			a := value.Cons0
-			as := value.Cons1
-			b, value = f(a)(b), as
-			continue
 		}
+		a := value.Cons0
+		as := value.Cons1
+		b, value = f(a)(b), as
 	}
 }
 
@@ -99,76 +81,58 @@ type MapStringUnit struct {
 	Node5 *MapStringUnit
 	Node0 int32
 	Node1 int32
-	Tag   uint8
 }
 
-const (
-	MapStringUnitLeaf = iota
-	MapStringUnitNode
-)
-
-var SharedMapStringUnitLeaf = &MapStringUnit{Tag: MapStringUnitLeaf}
+var SharedMapStringUnitLeaf = &MapStringUnit{}
 
 func KeysStringUnit(m *MapStringUnit) *types.ListString {
 	return KeysStringUnitGo(m, types.SharedListStringNil)
 }
 
 func UnsafeNodeStringUnit(k string, v struct{}, l *MapStringUnit, r *MapStringUnit) *MapStringUnit {
-	switch l.Tag {
-	case MapStringUnitLeaf:
-		switch r.Tag {
-		case MapStringUnitLeaf:
-			return &MapStringUnit{Tag: MapStringUnitNode, Node0: 1, Node1: 1, Node2: k, Node3: v, Node4: l, Node5: r}
-		default: // MapStringUnitNode
-			return &MapStringUnit{Tag: MapStringUnitNode, Node0: 1 + r.Node0, Node1: 1 + r.Node1, Node2: k, Node3: v, Node4: l, Node5: r}
+	if l == SharedMapStringUnitLeaf {
+		if r == SharedMapStringUnitLeaf {
+			return &MapStringUnit{Node0: 1, Node1: 1, Node2: k, Node3: v, Node4: l, Node5: r}
 		}
-	default: // MapStringUnitNode
-		h1 := l.Node0
-		s1 := l.Node1
-		switch r.Tag {
-		case MapStringUnitLeaf:
-			return &MapStringUnit{Tag: MapStringUnitNode, Node0: 1 + h1, Node1: 1 + s1, Node2: k, Node3: v, Node4: l, Node5: r}
-		default: // MapStringUnitNode
-			h2 := r.Node0
-			var result int32
-			if h1 > h2 {
-				result = h1
-			} else {
-				result = h2
-			}
-			return &MapStringUnit{Tag: MapStringUnitNode, Node0: 1 + result, Node1: 1 + s1 + r.Node1, Node2: k, Node3: v, Node4: l, Node5: r}
-		}
+		return &MapStringUnit{Node0: 1 + r.Node0, Node1: 1 + r.Node1, Node2: k, Node3: v, Node4: l, Node5: r}
 	}
+	h1 := l.Node0
+	s1 := l.Node1
+	if r == SharedMapStringUnitLeaf {
+		return &MapStringUnit{Node0: 1 + h1, Node1: 1 + s1, Node2: k, Node3: v, Node4: l, Node5: r}
+	}
+	h2 := r.Node0
+	var result int32
+	if h1 > h2 {
+		result = h1
+	} else {
+		result = h2
+	}
+	return &MapStringUnit{Node0: 1 + result, Node1: 1 + s1 + r.Node1, Node2: k, Node3: v, Node4: l, Node5: r}
 }
 
 func KeysStringUnitGo(m_ *MapStringUnit, z_ *types.ListString) *types.ListString {
 	for {
-		switch m_.Tag {
-		case MapStringUnitLeaf:
+		if m_ == SharedMapStringUnitLeaf {
 			return z_
-		default: // MapStringUnitNode
-			k := m_.Node2
-			l := m_.Node4
-			r := m_.Node5
-			m_, z_ = l, &types.ListString{Tag: types.ListStringCons, Cons0: k, Cons1: KeysStringUnitGo(r, z_)}
-			continue
 		}
+		k := m_.Node2
+		l := m_.Node4
+		r := m_.Node5
+		m_, z_ = l, &types.ListString{Cons0: k, Cons1: KeysStringUnitGo(r, z_)}
 	}
 }
 
 func UnsafeBalancedNodeStringUnitHeight(value *MapStringUnit) int32 {
-	switch value.Tag {
-	case MapStringUnitLeaf:
+	if value == SharedMapStringUnitLeaf {
 		return 0
-	default: // MapStringUnitNode
-		return value.Node0
 	}
+	return value.Node0
 }
 
 func UnsafeBalancedNodeStringUnitReusing(k string, v struct{}, l *MapStringUnit, r *MapStringUnit, donor *MapStringUnit) *MapStringUnit {
-	switch l.Tag {
-	case MapStringUnitLeaf:
-		if r.Tag == MapStringUnitLeaf {
+	if l == SharedMapStringUnitLeaf {
+		if r == SharedMapStringUnitLeaf {
 			donor.Node0 = 1
 			donor.Node1 = 1
 			donor.Node2 = k
@@ -177,7 +141,7 @@ func UnsafeBalancedNodeStringUnitReusing(k string, v struct{}, l *MapStringUnit,
 			donor.Node5 = SharedMapStringUnitLeaf
 			return donor
 		}
-		if r.Tag == MapStringUnitNode {
+		if r != SharedMapStringUnitLeaf {
 			rh := r.Node0
 			rk := r.Node2
 			rl := r.Node4
@@ -187,37 +151,34 @@ func UnsafeBalancedNodeStringUnitReusing(k string, v struct{}, l *MapStringUnit,
 			}
 		}
 		return UnsafeNodeStringUnitReusing(k, v, l, r, donor)
-	default: // MapStringUnitNode
-		lh := l.Node0
-		lk := l.Node2
-		ll := l.Node4
-		lr := l.Node5
-		if r.Tag == MapStringUnitNode {
-			rh := r.Node0
-			rk := r.Node2
-			rl := r.Node4
-			rr := r.Node5
-			if rh > lh + 1 {
-				return UnsafeBalancedNodeStringUnitRotateLeftReusing(k, v, l, rk, struct{}{}, rl, rr, donor)
-			}
-			if lh > rh + 1 {
-				return UnsafeBalancedNodeStringUnitRotateRightReusing(k, v, lk, struct{}{}, ll, lr, r, donor)
-			}
-		}
-		if r.Tag == MapStringUnitLeaf {
-			if lh > 1 {
-				return UnsafeBalancedNodeStringUnitRotateRightReusing(k, v, lk, struct{}{}, ll, lr, r, donor)
-			}
-		}
-		return UnsafeNodeStringUnitReusing(k, v, l, r, donor)
 	}
+	lh := l.Node0
+	lk := l.Node2
+	ll := l.Node4
+	lr := l.Node5
+	if r != SharedMapStringUnitLeaf {
+		rh := r.Node0
+		rk := r.Node2
+		rl := r.Node4
+		rr := r.Node5
+		if rh > lh + 1 {
+			return UnsafeBalancedNodeStringUnitRotateLeftReusing(k, v, l, rk, struct{}{}, rl, rr, donor)
+		}
+		if lh > rh + 1 {
+			return UnsafeBalancedNodeStringUnitRotateRightReusing(k, v, lk, struct{}{}, ll, lr, r, donor)
+		}
+	}
+	if r == SharedMapStringUnitLeaf {
+		if lh > 1 {
+			return UnsafeBalancedNodeStringUnitRotateRightReusing(k, v, lk, struct{}{}, ll, lr, r, donor)
+		}
+	}
+	return UnsafeNodeStringUnitReusing(k, v, l, r, donor)
 }
 
 func UnsafeNodeStringUnitReusing(k string, v struct{}, l *MapStringUnit, r *MapStringUnit, donor *MapStringUnit) *MapStringUnit {
-	switch l.Tag {
-	case MapStringUnitLeaf:
-		switch r.Tag {
-		case MapStringUnitLeaf:
+	if l == SharedMapStringUnitLeaf {
+		if r == SharedMapStringUnitLeaf {
 			donor.Node0 = 1
 			donor.Node1 = 1
 			donor.Node2 = k
@@ -225,51 +186,47 @@ func UnsafeNodeStringUnitReusing(k string, v struct{}, l *MapStringUnit, r *MapS
 			donor.Node4 = l
 			donor.Node5 = r
 			return donor
-		default: // MapStringUnitNode
-			h2 := r.Node0
-			s2 := r.Node1
-			donor.Node0 = 1 + h2
-			donor.Node1 = 1 + s2
-			donor.Node2 = k
-			donor.Node3 = v
-			donor.Node4 = l
-			donor.Node5 = r
-			return donor
 		}
-	default: // MapStringUnitNode
-		h1 := l.Node0
-		s1 := l.Node1
-		switch r.Tag {
-		case MapStringUnitLeaf:
-			donor.Node0 = 1 + h1
-			donor.Node1 = 1 + s1
-			donor.Node2 = k
-			donor.Node3 = v
-			donor.Node4 = l
-			donor.Node5 = r
-			return donor
-		default: // MapStringUnitNode
-			h2 := r.Node0
-			s2 := r.Node1
-			var result int32
-			if h1 > h2 {
-				result = h1
-			} else {
-				result = h2
-			}
-			donor.Node0 = 1 + result
-			donor.Node1 = 1 + s1 + s2
-			donor.Node2 = k
-			donor.Node3 = v
-			donor.Node4 = l
-			donor.Node5 = r
-			return donor
-		}
+		h2 := r.Node0
+		s2 := r.Node1
+		donor.Node0 = 1 + h2
+		donor.Node1 = 1 + s2
+		donor.Node2 = k
+		donor.Node3 = v
+		donor.Node4 = l
+		donor.Node5 = r
+		return donor
 	}
+	h1 := l.Node0
+	s1 := l.Node1
+	if r == SharedMapStringUnitLeaf {
+		donor.Node0 = 1 + h1
+		donor.Node1 = 1 + s1
+		donor.Node2 = k
+		donor.Node3 = v
+		donor.Node4 = l
+		donor.Node5 = r
+		return donor
+	}
+	h22 := r.Node0
+	s22 := r.Node1
+	var result int32
+	if h1 > h22 {
+		result = h1
+	} else {
+		result = h22
+	}
+	donor.Node0 = 1 + result
+	donor.Node1 = 1 + s1 + s22
+	donor.Node2 = k
+	donor.Node3 = v
+	donor.Node4 = l
+	donor.Node5 = r
+	return donor
 }
 
 func UnsafeBalancedNodeStringUnitRotateLeftReusing(k string, v struct{}, l *MapStringUnit, rk string, rv struct{}, rl *MapStringUnit, rr *MapStringUnit, donor *MapStringUnit) *MapStringUnit {
-	if rl.Tag == MapStringUnitNode {
+	if rl != SharedMapStringUnitLeaf {
 		lh := rl.Node0
 		lk := rl.Node2
 		ll := rl.Node4
@@ -282,7 +239,7 @@ func UnsafeBalancedNodeStringUnitRotateLeftReusing(k string, v struct{}, l *MapS
 }
 
 func UnsafeBalancedNodeStringUnitRotateRightReusing(k string, v struct{}, lk string, lv struct{}, ll *MapStringUnit, lr *MapStringUnit, r *MapStringUnit, donor *MapStringUnit) *MapStringUnit {
-	if lr.Tag == MapStringUnitNode {
+	if lr != SharedMapStringUnitLeaf {
 		rh := lr.Node0
 		rk := lr.Node2
 		rl := lr.Node4
@@ -327,31 +284,25 @@ func Foldr(f func(string) func(*direct.ConsList[string]) *direct.ConsList[string
 
 func FoldrGo(f func(string) func(*direct.ConsList[string]) *direct.ConsList[string], b *direct.ConsList[string], value *list.ListString) *direct.ConsList[string] {
 	for {
-		switch value.Tag {
-		case list.ListStringNil:
+		if value == list.SharedListStringNil {
 			return b
-		default: // list.ListStringCons
-			a := value.Cons0
-			as := value.Cons1
-			b, value = f(a)(b), as
-			continue
 		}
+		a := value.Cons0
+		as := value.Cons1
+		b, value = f(a)(b), as
 	}
 }
 
 func FoldrGoReusing(acc *list.ListString, list2 *list.ListString) *list.ListString {
 	for {
-		switch list2.Tag {
-		case list.ListStringNil:
+		if list2 == list.SharedListStringNil {
 			return acc
-		default: // list.ListStringCons
-			x := list2.Cons0
-			xs := list2.Cons1
-			list2.Cons0 = x
-			list2.Cons1 = acc
-			acc, list2 = list2, xs
-			continue
 		}
+		x := list2.Cons0
+		xs := list2.Cons1
+		list2.Cons0 = x
+		list2.Cons1 = acc
+		acc, list2 = list2, xs
 	}
 }
 
@@ -391,7 +342,7 @@ func initializeMain_() int32 {
 	}, words)))
 }
 
-var numbers *types.ListInt = &types.ListInt{Tag: types.ListIntCons, Cons0: 1, Cons1: &types.ListInt{Tag: types.ListIntCons, Cons0: 2, Cons1: &types.ListInt{Tag: types.ListIntCons, Cons0: 3, Cons1: types.SharedListIntNil}}}
+var numbers *types.ListInt = &types.ListInt{Cons0: 1, Cons1: &types.ListInt{Cons0: 2, Cons1: &types.ListInt{Cons0: 3, Cons1: types.SharedListIntNil}}}
 
 var words = initializeWords()
 
@@ -406,28 +357,26 @@ func initializeWords() *internal.MapStringUnit {
 }
 
 func wordsGoReusing(a string, value *internal.MapStringUnit) *internal.MapStringUnit {
-	switch value.Tag {
-	case internal.MapStringUnitLeaf:
-		return &internal.MapStringUnit{Tag: internal.MapStringUnitNode, Node0: 1, Node1: 1, Node2: a, Node3: struct{}{}, Node4: internal.SharedMapStringUnitLeaf, Node5: internal.SharedMapStringUnitLeaf}
-	default: // internal.MapStringUnitNode
-		mh := value.Node0
-		ms := value.Node1
-		mk := value.Node2
-		ml := value.Node4
-		mr := value.Node5
-		if prim.CompareString(a, mk) < 0 {
-			return internal.UnsafeBalancedNodeStringUnitReusing(mk, struct{}{}, wordsGoReusing(a, ml), mr, value)
-		}
-		if a == mk {
-			value.Node0 = mh
-			value.Node1 = ms
-			value.Node2 = a
-			value.Node4 = ml
-			value.Node5 = mr
-			return value
-		}
-		return internal.UnsafeBalancedNodeStringUnitReusing(mk, struct{}{}, ml, wordsGoReusing(a, mr), value)
+	if value == internal.SharedMapStringUnitLeaf {
+		return &internal.MapStringUnit{Node0: 1, Node1: 1, Node2: a, Node3: struct{}{}, Node4: internal.SharedMapStringUnitLeaf, Node5: internal.SharedMapStringUnitLeaf}
 	}
+	mh := value.Node0
+	ms := value.Node1
+	mk := value.Node2
+	ml := value.Node4
+	mr := value.Node5
+	if prim.CompareString(a, mk) < 0 {
+		return internal.UnsafeBalancedNodeStringUnitReusing(mk, struct{}{}, wordsGoReusing(a, ml), mr, value)
+	}
+	if a == mk {
+		value.Node0 = mh
+		value.Node1 = ms
+		value.Node2 = a
+		value.Node4 = ml
+		value.Node5 = mr
+		return value
+	}
+	return internal.UnsafeBalancedNodeStringUnitReusing(mk, struct{}{}, ml, wordsGoReusing(a, mr), value)
 }
 
 func main() {

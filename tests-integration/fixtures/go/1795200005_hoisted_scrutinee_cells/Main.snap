@@ -7,15 +7,9 @@ package types
 type ListInt struct {
 	Cons1 *ListInt
 	Cons0 int32
-	Tag   uint8
 }
 
-const (
-	ListIntNil = iota
-	ListIntCons
-)
-
-var SharedListIntNil = &ListInt{Tag: ListIntNil}
+var SharedListIntNil = &ListInt{}
 
 // main.go
 package main
@@ -48,7 +42,7 @@ func main_() int32 {
 	var listIntCells alloc.Cells[list.ListInt]
 	for index := len([]int32{}) - 1; index >= 0; index-- {
 		i := []int32{}[index]
-		accumulator = listIntCells.New(list.ListInt{Tag: list.ListIntCons, Cons0: i, Cons1: accumulator})
+		accumulator = listIntCells.New(list.ListInt{Cons0: i, Cons1: accumulator})
 	}
 	scrutinee := &Shape{Tag: ShapeLeaf, Leaf: accumulator}
 	var result2 *Shape
@@ -57,16 +51,16 @@ func main_() int32 {
 		var listIntCells2 alloc.Cells[list.ListInt]
 		for index := len([]int32{}) - 1; index >= 0; index-- {
 			i := []int32{}[index]
-			accumulator2 = listIntCells2.New(list.ListInt{Tag: list.ListIntCons, Cons0: i, Cons1: accumulator2})
+			accumulator2 = listIntCells2.New(list.ListInt{Cons0: i, Cons1: accumulator2})
 		}
 		*scrutinee = Shape{Tag: ShapeLeaf, Leaf: accumulator2}
 		result2 = scrutinee
-	} else if scrutinee.Tag == ShapeLeaf && scrutinee.Leaf.Tag == list.ListIntCons {
+	} else if scrutinee.Tag == ShapeLeaf && scrutinee.Leaf != list.SharedListIntNil {
 		accumulator2 := list.SharedListIntNil
 		var listIntCells3 alloc.Cells[list.ListInt]
 		for index := len([]int32{}) - 1; index >= 0; index-- {
 			i := []int32{}[index]
-			accumulator2 = listIntCells3.New(list.ListInt{Tag: list.ListIntCons, Cons0: i, Cons1: accumulator2})
+			accumulator2 = listIntCells3.New(list.ListInt{Cons0: i, Cons1: accumulator2})
 		}
 		*scrutinee = Shape{Tag: ShapeLeaf, Leaf: accumulator2}
 		result2 = scrutinee
@@ -76,12 +70,12 @@ func main_() int32 {
 		var listIntCells4 alloc.Cells[list.ListInt]
 		for index := len(array) - 1; index >= 0; index-- {
 			i := array[index]
-			accumulator2 = listIntCells4.New(list.ListInt{Tag: list.ListIntCons, Cons0: i, Cons1: accumulator2})
+			accumulator2 = listIntCells4.New(list.ListInt{Cons0: i, Cons1: accumulator2})
 		}
 		result2 = &Shape{Tag: ShapeLeaf, Leaf: accumulator2}
 	}
 	var result int32
-	if result2.Tag == ShapeLeaf && result2.Leaf.Tag == list.ListIntCons {
+	if result2.Tag == ShapeLeaf && result2.Leaf != list.SharedListIntNil {
 		n := result2.Leaf.Cons0
 		result = n
 	} else {

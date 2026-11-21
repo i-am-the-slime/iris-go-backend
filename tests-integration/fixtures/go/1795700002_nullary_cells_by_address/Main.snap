@@ -1,0 +1,65 @@
+---
+source: tests-integration/src/fixtures.rs
+---
+// main.go
+package main
+
+import (
+	"fixture/shared"
+	"fmt"
+	"github.com/i-am-the-slime/iris-go/exception"
+)
+
+type Route struct {
+	Trip1 *Route
+	Trip0 int32
+}
+
+var sharedRouteHome = &Route{}
+
+var sharedRouteAway = &Route{}
+
+var main_ = initializeMain_()
+
+func initializeMain_() shared.MainResult {
+	defer exception.ReportUncaught()
+	return shared.MainResult{Legs: legs(&Route{Trip0: 1, Trip1: &Route{Trip0: 2, Trip1: sharedRouteAway}}), Away: endsAway(&Route{Trip0: 1, Trip1: sharedRouteAway}), First: legs(&Route{Trip0: 3, Trip1: sharedRouteHome}), Goes: true}
+}
+
+func legs(value *Route) int32 {
+	if value == sharedRouteHome {
+		return 0
+	}
+	if value == sharedRouteAway {
+		return 100
+	}
+	return value.Trip0 + legs(value.Trip1)
+}
+
+func endsAway(value *Route) bool {
+	for {
+		if value != sharedRouteHome && value != sharedRouteAway {
+			rest := value.Trip1
+			value = rest
+			continue
+		}
+		if value == sharedRouteAway {
+			return true
+		}
+		return false
+	}
+}
+
+func main() {
+	fmt.Println(main_)
+}
+
+// shared/shared.go
+package shared
+
+type MainResult struct {
+	First int32
+	Legs  int32
+	Away  bool
+	Goes  bool
+}

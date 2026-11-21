@@ -13,28 +13,16 @@ import (
 type ListTupleStringBoolean struct {
 	Cons0 tuple.TupleStringBoolean
 	Cons1 *ListTupleStringBoolean
-	Tag   uint8
 }
 
-const (
-	ListTupleStringBooleanNil = iota
-	ListTupleStringBooleanCons
-)
-
-var SharedListTupleStringBooleanNil = &ListTupleStringBoolean{Tag: ListTupleStringBooleanNil}
+var SharedListTupleStringBooleanNil = &ListTupleStringBoolean{}
 
 type ListTupleStringString struct {
 	Cons0 tuple.TupleStringString
 	Cons1 *ListTupleStringString
-	Tag   uint8
 }
 
-const (
-	ListTupleStringStringNil = iota
-	ListTupleStringStringCons
-)
-
-var SharedListTupleStringStringNil = &ListTupleStringString{Tag: ListTupleStringStringNil}
+var SharedListTupleStringStringNil = &ListTupleStringString{}
 
 func Foldr(f func(tuple.TupleStringBoolean) func(*direct.ConsList[tuple.TupleStringBoolean]) *direct.ConsList[tuple.TupleStringBoolean], b *direct.ConsList[tuple.TupleStringBoolean]) func(*ListTupleStringBoolean) *direct.ConsList[tuple.TupleStringBoolean] {
 	return func(x *ListTupleStringBoolean) *direct.ConsList[tuple.TupleStringBoolean] {
@@ -51,90 +39,72 @@ func Foldr2(f func(tuple.TupleStringString) func(*direct.ConsList[tuple.TupleStr
 func MainGoGo(b *ListTupleStringBoolean, value *ListTupleStringBoolean) *ListTupleStringBoolean {
 	var listTupleStringBooleanCells alloc.Cells[ListTupleStringBoolean]
 	for {
-		switch value.Tag {
-		case ListTupleStringBooleanNil:
+		if value == SharedListTupleStringBooleanNil {
 			return b
-		default: // ListTupleStringBooleanCons
-			a := value.Cons0
-			as := value.Cons1
-			b, value = listTupleStringBooleanCells.New(ListTupleStringBoolean{Tag: ListTupleStringBooleanCons, Cons0: a, Cons1: b}), as
-			continue
 		}
+		a := value.Cons0
+		as := value.Cons1
+		b, value = listTupleStringBooleanCells.New(ListTupleStringBoolean{Cons0: a, Cons1: b}), as
 	}
 }
 
 func MainGoGo2(b *ListTupleStringString, value *ListTupleStringString) *ListTupleStringString {
 	var listTupleStringStringCells alloc.Cells[ListTupleStringString]
 	for {
-		switch value.Tag {
-		case ListTupleStringStringNil:
+		if value == SharedListTupleStringStringNil {
 			return b
-		default: // ListTupleStringStringCons
-			a := value.Cons0
-			as := value.Cons1
-			b, value = listTupleStringStringCells.New(ListTupleStringString{Tag: ListTupleStringStringCons, Cons0: a, Cons1: b}), as
-			continue
 		}
+		a := value.Cons0
+		as := value.Cons1
+		b, value = listTupleStringStringCells.New(ListTupleStringString{Cons0: a, Cons1: b}), as
 	}
 }
 
 func FoldrGo(f func(tuple.TupleStringBoolean) func(*direct.ConsList[tuple.TupleStringBoolean]) *direct.ConsList[tuple.TupleStringBoolean], b *direct.ConsList[tuple.TupleStringBoolean], value *ListTupleStringBoolean) *direct.ConsList[tuple.TupleStringBoolean] {
 	for {
-		switch value.Tag {
-		case ListTupleStringBooleanNil:
+		if value == SharedListTupleStringBooleanNil {
 			return b
-		default: // ListTupleStringBooleanCons
-			a := value.Cons0
-			as := value.Cons1
-			b, value = f(a)(b), as
-			continue
 		}
+		a := value.Cons0
+		as := value.Cons1
+		b, value = f(a)(b), as
 	}
 }
 
 func FoldrGo2(f func(tuple.TupleStringString) func(*direct.ConsList[tuple.TupleStringString]) *direct.ConsList[tuple.TupleStringString], b *direct.ConsList[tuple.TupleStringString], value *ListTupleStringString) *direct.ConsList[tuple.TupleStringString] {
 	for {
-		switch value.Tag {
-		case ListTupleStringStringNil:
+		if value == SharedListTupleStringStringNil {
 			return b
-		default: // ListTupleStringStringCons
-			a := value.Cons0
-			as := value.Cons1
-			b, value = f(a)(b), as
-			continue
 		}
+		a := value.Cons0
+		as := value.Cons1
+		b, value = f(a)(b), as
 	}
 }
 
 func MainGoGoReusing(b *ListTupleStringString, value *ListTupleStringString) *ListTupleStringString {
 	for {
-		switch value.Tag {
-		case ListTupleStringStringNil:
+		if value == SharedListTupleStringStringNil {
 			return b
-		default: // ListTupleStringStringCons
-			a := value.Cons0
-			as := value.Cons1
-			value.Cons0 = a
-			value.Cons1 = b
-			b, value = value, as
-			continue
 		}
+		a := value.Cons0
+		as := value.Cons1
+		value.Cons0 = a
+		value.Cons1 = b
+		b, value = value, as
 	}
 }
 
 func MainGoGoReusing2(b *ListTupleStringBoolean, value *ListTupleStringBoolean) *ListTupleStringBoolean {
 	for {
-		switch value.Tag {
-		case ListTupleStringBooleanNil:
+		if value == SharedListTupleStringBooleanNil {
 			return b
-		default: // ListTupleStringBooleanCons
-			a := value.Cons0
-			as := value.Cons1
-			value.Cons0 = a
-			value.Cons1 = b
-			b, value = value, as
-			continue
 		}
+		a := value.Cons0
+		as := value.Cons1
+		value.Cons0 = a
+		value.Cons1 = b
+		b, value = value, as
 	}
 }
 
@@ -251,7 +221,7 @@ func mainGoReusing(xs []tuple.TupleStringBoolean, len_ int32, source int32, memo
 		if result.Tag == maybe.TagNothing {
 			return types.MainGoGoReusing2(types.SharedListTupleStringBooleanNil, memo)
 		}
-		source, memo = result.Just.Second, listTupleStringBooleanCells.New(types.ListTupleStringBoolean{Tag: types.ListTupleStringBooleanCons, Cons0: result.Just.First, Cons1: memo})
+		source, memo = result.Just.Second, listTupleStringBooleanCells.New(types.ListTupleStringBoolean{Cons0: result.Just.First, Cons1: memo})
 	}
 }
 
@@ -267,7 +237,7 @@ func mainGoReusing2(xs []tuple.TupleStringString, len_ int32, source int32, memo
 		if result.Tag == maybe.TagNothing {
 			return types.MainGoGoReusing(types.SharedListTupleStringStringNil, memo)
 		}
-		source, memo = result.Just.Second, listTupleStringStringCells.New(types.ListTupleStringString{Tag: types.ListTupleStringStringCons, Cons0: result.Just.First, Cons1: memo})
+		source, memo = result.Just.Second, listTupleStringStringCells.New(types.ListTupleStringString{Cons0: result.Just.First, Cons1: memo})
 	}
 }
 

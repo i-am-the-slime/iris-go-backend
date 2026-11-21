@@ -27,22 +27,16 @@ const (
 type ListInt struct {
 	Cons1 *ListInt
 	Cons0 int32
-	Tag   uint8
 }
 
-const (
-	ListIntNil = iota
-	ListIntCons
-)
-
-var sharedListIntNil = &ListInt{Tag: ListIntNil}
+var sharedListIntNil = &ListInt{}
 
 func main_(n int32) shared.MainResult {
 	n2 := -n
 	listInts := make([]ListInt, 3)
-	listInts[0] = ListInt{Tag: ListIntCons, Cons0: n, Cons1: &listInts[1]}
-	listInts[1] = ListInt{Tag: ListIntCons, Cons0: 2, Cons1: &listInts[2]}
-	listInts[2] = ListInt{Tag: ListIntCons, Cons0: 3, Cons1: sharedListIntNil}
+	listInts[0] = ListInt{Cons0: n, Cons1: &listInts[1]}
+	listInts[1] = ListInt{Cons0: 2, Cons1: &listInts[2]}
+	listInts[2] = ListInt{Cons0: 3, Cons1: sharedListIntNil}
 	return shared.MainResult{Built: evaluate(build(4)), Mirrored: evaluate(mirrorReusing(build(3))), Two: evaluate(&Expr{Tag: ExprAdd, Field0: build(2), Field1: &Expr{Tag: ExprVal, Val: 2}}), Linked: total(mainGo(5, sharedListIntNil)), Literal: total(&listInts[0]), Positive: n > 0 && evaluate(&Expr{Tag: ExprAdd, Field0: &Expr{Tag: ExprVal, Val: n}, Field1: &Expr{Tag: ExprMul, Field0: &Expr{Tag: ExprVal, Val: 2}, Field1: &Expr{Tag: ExprVal, Val: n}}}) > 5, Negative: n2 > 0 && evaluate(&Expr{Tag: ExprAdd, Field0: &Expr{Tag: ExprVal, Val: n2}, Field1: &Expr{Tag: ExprMul, Field0: &Expr{Tag: ExprVal, Val: 2}, Field1: &Expr{Tag: ExprVal, Val: n2}}}) > 5}
 }
 
@@ -75,12 +69,10 @@ func build(n int32) *Expr {
 }
 
 func total(list *ListInt) int32 {
-	switch list.Tag {
-	case ListIntNil:
+	if list == sharedListIntNil {
 		return 0
-	default: // ListIntCons
-		return list.Cons0 + total(list.Cons1)
 	}
+	return list.Cons0 + total(list.Cons1)
 }
 
 func mainGo(remaining int32, list *ListInt) *ListInt {
@@ -89,7 +81,7 @@ func mainGo(remaining int32, list *ListInt) *ListInt {
 		if remaining <= 0 {
 			return list
 		}
-		remaining, list = remaining - 1, listIntCells.New(ListInt{Tag: ListIntCons, Cons0: remaining, Cons1: listIntCells.New(ListInt{Tag: ListIntCons, Cons0: remaining * 10, Cons1: list})})
+		remaining, list = remaining - 1, listIntCells.New(ListInt{Cons0: remaining, Cons1: listIntCells.New(ListInt{Cons0: remaining * 10, Cons1: list})})
 	}
 }
 

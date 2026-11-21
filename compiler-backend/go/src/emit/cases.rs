@@ -347,7 +347,8 @@ where
                 match layout.kind {
                     DataKind::Enumeration => path.clone(),
                     DataKind::Tagged => field(path.clone(), "Tag"),
-                    DataKind::Product => return Ok(false),
+                    // Told apart by comparisons with the shared cells, in an if chain.
+                    DataKind::Product | DataKind::Sentinel => return Ok(false),
                 }
             }
             Monotype::Int | Monotype::String | Monotype::Char => path.clone(),

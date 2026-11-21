@@ -129,6 +129,23 @@ where
         self.arrange_slots(constructors.len(), named.constructors, named.fields)
     }
 
+    /// Plans the struct of a `Sentinel` type, which has one constructor with fields and no tag.
+    pub(super) fn plan_untagged_slots(
+        &mut self,
+        constructors: &[DataConstructor],
+    ) -> GoResult<SlotPlan> {
+        let plan = self.plan_slots(constructors)?;
+        let fields = plan
+            .slots
+            .into_iter()
+            .filter_map(|slot| match slot {
+                Slot::Tag => None,
+                Slot::Field { name, monotype } => Some((name, monotype)),
+            })
+            .collect();
+        self.arrange_slots(1, plan.constructors, fields)
+    }
+
     /// Orders the slots of a struct whose `tags` constructors keep their
     /// fields in the named slots.
     pub(super) fn arrange_slots(

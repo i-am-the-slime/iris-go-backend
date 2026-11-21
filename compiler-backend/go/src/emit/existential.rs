@@ -40,6 +40,20 @@ where
         let body = match (layout.kind, cases.as_mut_slice()) {
             (_, []) => vec![GoStatement::Return(Some(identifier_expression("nil")))],
             (DataKind::Product, [case]) => std::mem::take(&mut case.body),
+            (DataKind::Sentinel, _) => {
+                let last = cases.len() - 1;
+                let mut body = vec![];
+                for (index, case) in cases.iter_mut().enumerate() {
+                    let then = std::mem::take(&mut case.body);
+                    match self.constructor_test(&layout, index, parameter.clone()) {
+                        Some(condition) if index < last => {
+                            body.push(GoStatement::If { condition, then, otherwise: vec![] })
+                        }
+                        _ => body.extend(then),
+                    }
+                }
+                body
+            }
             _ => {
                 let default = GoDefault::covering(&mut cases);
                 let tag = field(parameter, "Tag");

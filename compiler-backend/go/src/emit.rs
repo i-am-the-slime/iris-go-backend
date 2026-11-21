@@ -587,6 +587,11 @@ enum DataKind {
     Enumeration,
     Tagged,
     Product,
+    /// A boxed type with one constructor that has fields, such as `Leaf | Node ...` or
+    /// `Nil | Cons ...`. Each nullary constructor is one shared cell, and a value is told apart
+    /// by whether it is one of them, so the struct needs no tag: `m == sharedMapLeaf` is a
+    /// comparison with an address, where `m.Tag == MapLeaf` loads from the cell.
+    Sentinel,
 }
 
 #[derive(Clone)]
@@ -2994,9 +2999,12 @@ where
                     && !layout.erases_arguments
                     && constructor_layout.fields.is_empty() =>
             {
-                self.shared_nullary(&layout.name, &constructor_layout.tag)
+                self.shared_nullary(&layout.name, &constructor_layout.tag, true)
             }
-            DataKind::Tagged | DataKind::Product => {
+            DataKind::Sentinel if constructor_layout.fields.is_empty() => {
+                self.shared_nullary(&layout.name, &constructor_layout.tag, false)
+            }
+            DataKind::Tagged | DataKind::Product | DataKind::Sentinel => {
                 let composite = self.composite(&layout, constructor, values);
                 if layout.boxed { GoExpression::Address(Box::new(composite)) } else { composite }
             }
@@ -3020,12 +3028,18 @@ where
         GoExpression::Composite { type_: GoType::Named(layout.name.clone()), fields }
     }
 
-    fn shared_nullary(&mut self, type_name: &str, tag: &str) -> GoExpression {
+    /// The one cell of a nullary constructor of a boxed type. A `Sentinel` type's struct has no
+    /// tag; its cells are told apart by their addresses.
+    fn shared_nullary(&mut self, type_name: &str, tag: &str, tagged: bool) -> GoExpression {
         if let Some(name) = self.shared_nullaries.get(tag) {
             return identifier_expression(name);
         }
         let name = self.global_name(Spelling::derived("shared", tag.into(), ""));
-        let fields = vec![(Some("Tag".to_string()), identifier_expression(tag))];
+        let fields = if tagged {
+            vec![(Some("Tag".to_string()), identifier_expression(tag))]
+        } else {
+            vec![]
+        };
         let composite = GoExpression::Composite { type_: GoType::Named(type_name.into()), fields };
         self.type_declarations.push(GoDeclaration::Variable {
             name: name.clone(),

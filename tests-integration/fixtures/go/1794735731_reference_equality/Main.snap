@@ -31,15 +31,9 @@ const (
 type Chain struct {
 	Link1 *Chain
 	Link0 int32
-	Tag   uint8
 }
 
-const (
-	ChainEnd = iota
-	ChainLink
-)
-
-var sharedChainEnd = &Chain{Tag: ChainEnd}
+var sharedChainEnd = &Chain{}
 
 var main_ = initializeMain_()
 
@@ -57,7 +51,7 @@ func initializeMain_() []bool {
 		return n + 2
 	}), refeq.SameFunc(func() {
 	}, func() {
-	}), refeq.SameSlice([]int32{1}, []int32{1}), counter == counter, shared.XY{X: 1, Y: 2.0} == shared.XY{X: 1, Y: 3.0}, left.Name == right.Name && refeq.SameFunc(left.Run, right.Run), Shape{Tag: ShapeCircle, Field0: 1.0} == Shape{Tag: ShapeSquare, Field0: 1.0}, &Chain{Tag: ChainLink, Link0: 1, Link1: sharedChainEnd} == sharedChainEnd}
+	}), refeq.SameSlice([]int32{1}, []int32{1}), counter == counter, shared.XY{X: 1, Y: 2.0} == shared.XY{X: 1, Y: 3.0}, left.Name == right.Name && refeq.SameFunc(left.Run, right.Run), Shape{Tag: ShapeCircle, Field0: 1.0} == Shape{Tag: ShapeSquare, Field0: 1.0}, &Chain{Link0: 1, Link1: sharedChainEnd} == sharedChainEnd}
 }
 
 var counter = initializeCounter()

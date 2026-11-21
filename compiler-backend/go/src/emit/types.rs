@@ -8,7 +8,7 @@ use super::{
 use crate::erasure::Erasure;
 use crate::error::GoResult;
 use crate::foreign::{ForeignPackages, GoPackage};
-use crate::monotype::{DataType, Failure, Monotype, MonotypeId};
+use crate::monotype::{DataConstructor, DataType, Failure, Monotype, MonotypeId};
 use crate::naming::{capitalise, identifier};
 use crate::syntax::{GoDeclaration, GoType};
 use files::FileId;
@@ -446,17 +446,28 @@ where
             .monotypes
             .constructors(&mut self.context, data)
             .map_err(|failure| failure.at(&name))?;
-        let kind = if constructors.iter().all(|constructor| constructor.fields.is_empty()) {
+        let mut kind = if constructors.iter().all(|constructor| constructor.fields.is_empty()) {
             DataKind::Enumeration
         } else if constructors.len() == 1 {
             DataKind::Product
         } else {
             DataKind::Tagged
         };
-        let plan = match kind {
+        let mut plan = match kind {
             DataKind::Enumeration => None,
-            DataKind::Tagged | DataKind::Product => Some(self.plan_slots(&constructors)?),
+            DataKind::Tagged | DataKind::Product | DataKind::Sentinel => {
+                Some(self.plan_slots(&constructors)?)
+            }
         };
+        if kind == DataKind::Tagged && self.tells_nullaries_apart_by_address(data, &constructors)? {
+            let untagged = self.plan_untagged_slots(&constructors)?;
+            // Go gives every allocation of nothing one address, so cells of an empty struct
+            // could not be told apart.
+            if untagged.shape.size() > 0 {
+                kind = DataKind::Sentinel;
+                plan = Some(untagged);
+            }
+        }
         let mut layouts = vec![];
         for (index, constructor) in constructors.iter().enumerate() {
             let tag = self.global_name(Spelling::derived(
@@ -514,7 +525,25 @@ where
         if kind == DataKind::Tagged {
             self.type_declarations.push(GoDeclaration::Constants { type_name: None, names });
         }
+        if kind == DataKind::Sentinel {
+            for constructor in layouts.iter().filter(|constructor| constructor.fields.is_empty()) {
+                self.shared_nullary(&name, &constructor.tag, false);
+            }
+        }
         Ok(self.data_layouts.get(data).cloned().unwrap_or(layout))
+    }
+
+    /// Whether a type of several constructors, only one of which has fields, can be a
+    /// `Sentinel`: its cells are boxed, and its nullary constructors are always the shared cells,
+    /// which a layout that erases arguments does not promise.
+    fn tells_nullaries_apart_by_address(
+        &mut self,
+        data: &DataType,
+        constructors: &[DataConstructor],
+    ) -> GoResult<bool> {
+        let with_fields =
+            constructors.iter().filter(|constructor| !constructor.fields.is_empty()).count();
+        Ok(with_fields == 1 && self.is_boxed(data)? && !self.erases_arguments(data)?)
     }
 
     pub(super) fn contains_itself(&mut self, data: &DataType) -> GoResult<bool> {
