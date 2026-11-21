@@ -6,6 +6,9 @@ digits of a float or an `Int` result that doesn't fit in 32 bits, Go does the na
 instead. This guide lists those differences, and the programs the Go backend refuses to compile.
 A difference that isn't listed here is a bug.
 
+To see what the Go for your PureScript looks like, read
+[What your PureScript becomes in Go](go/index.md).
+
 ## Running a program
 
 ```bash
