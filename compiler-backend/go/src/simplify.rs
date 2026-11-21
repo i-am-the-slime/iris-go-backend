@@ -1465,6 +1465,33 @@ pub(crate) fn is_discardable(expression: &Expression) -> bool {
     }
 }
 
+/// Whether evaluating the expression later, or not at all, leaves the program as it was: it
+/// performs no effect, cannot fail and reuses no cell in place. A pure argument a foreign uses on
+/// one path only can then be built on that path.
+pub(crate) fn is_deferrable(expression: &Expression) -> bool {
+    let mut deferrable = true;
+    visit(expression, &mut |node| {
+        deferrable &= match &node.kind {
+            ExpressionKind::Foreign { foreign, .. } => !matches!(
+                foreign,
+                Foreign::Throw
+                    | Foreign::Crash
+                    | Foreign::RunEffect
+                    | Foreign::UnsafePerformEffect
+                    | Foreign::LazyForce
+            ) && !foreign.is_effectful(),
+            ExpressionKind::Reuse { .. }
+            | ExpressionKind::Update { .. }
+            | ExpressionKind::EffectPure(_)
+            | ExpressionKind::EffectBind { .. }
+            | ExpressionKind::EffectEach { .. }
+            | ExpressionKind::Fail(_) => false,
+            _ => true,
+        }
+    });
+    deferrable
+}
+
 fn reachable(alternatives: Vec<Alternative>) -> Vec<Alternative> {
     let mut kept: Vec<Alternative> = Vec::with_capacity(alternatives.len());
     for alternative in alternatives {

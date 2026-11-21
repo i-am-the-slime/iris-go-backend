@@ -205,6 +205,10 @@ pub struct Boundary {
     /// arguments do not determine.
     pub result_parameter: bool,
     pub accumulator: Option<Accumulator>,
+    /// The parameters the Go helper takes as `func() T` and calls only on the path that uses
+    /// them, such as the failure value of a property read: a pure argument is built there and
+    /// not on every call.
+    pub lazy: &'static [usize],
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -302,6 +306,7 @@ const PLAIN: Boundary = Boundary {
     utility: None,
     result_parameter: false,
     accumulator: None,
+    lazy: &[],
 };
 
 const RESULT_PARAMETER: Boundary = Boundary { result_parameter: true, ..PLAIN };
@@ -989,7 +994,11 @@ const FOREIGN_IMPORTS: &[(&str, &str, Foreign)] = &[
     ("Foreign", "isNull", foreign_value("IsNull", 1)),
     ("Foreign", "isUndefined", foreign_value("IsUndefined", 1)),
     ("Foreign", "isArray", foreign_value("IsArray", 1)),
-    ("Foreign.Index", "unsafeReadPropImpl", foreign_value("UnsafeReadPropImpl", 4)),
+    (
+        "Foreign.Index",
+        "unsafeReadPropImpl",
+        call(GoPackage::ForeignValue, "UnsafeReadPropImpl", 4, Boundary { lazy: &[0], ..PLAIN }),
+    ),
     ("Foreign.Index", "unsafeHasOwnProperty", foreign_value("UnsafeHasOwnProperty", 2)),
     ("Foreign.Index", "unsafeHasProperty", foreign_value("UnsafeHasProperty", 2)),
     (

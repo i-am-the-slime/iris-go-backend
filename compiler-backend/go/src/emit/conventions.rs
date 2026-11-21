@@ -307,6 +307,7 @@ where
                     self.just_value_function(witness)?
                 }
                 _ if boundary.ignored.contains(&position) => identifier_expression("nil"),
+                _ if boundary.lazy.contains(&position) => self.lazy_argument(argument, out)?,
                 _ if boundary.int32_parameters.contains(&position) => self.value(argument, out)?,
                 _ if boundary.is_just == Some(position) => self.is_just_function(maybe)?,
                 Some(constructors) if constructors.just == position => {
@@ -377,5 +378,31 @@ where
             values.push(value);
         }
         Ok(values)
+    }
+
+    /// An argument the Go helper calls for when it needs it, `func() T { return value }`. A pure
+    /// argument is built inside, so only the path that uses it pays for it; any other is evaluated
+    /// here, in order, and the closure returns its value.
+    fn lazy_argument(
+        &mut self,
+        argument: &Expression,
+        out: &mut Vec<GoStatement>,
+    ) -> GoResult<GoExpression> {
+        let result = self.go_type(argument.monotype)?;
+        let mut body = vec![];
+        let value = match crate::simplify::is_deferrable(argument) {
+            true => {
+                let saved = self.tail_loop.take();
+                let value = self.value(argument, &mut body);
+                self.tail_loop = saved;
+                value?
+            }
+            false => {
+                let value = self.value(argument, out)?;
+                self.shared(value, "argument", out)
+            }
+        };
+        body.push(GoStatement::Return(Some(value)));
+        Ok(GoExpression::Function { parameters: vec![], result: Some(result), body })
     }
 }

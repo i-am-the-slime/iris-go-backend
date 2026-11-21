@@ -1,0 +1,74 @@
+---
+source: tests-integration/src/fixtures.rs
+---
+// Foreign/foreign.go
+package foreign
+
+type ForeignError struct {
+	ForeignError     string
+	TypeMismatch0    string
+	TypeMismatch1    string
+	ErrorAtIndex1    *ForeignError
+	ErrorAtProperty0 string
+	ErrorAtProperty1 *ForeignError
+	ErrorAtIndex0    int32
+	Tag              uint8
+}
+
+const (
+	ForeignErrorForeignError = iota
+	ForeignErrorTypeMismatch
+	ForeignErrorErrorAtIndex
+	ForeignErrorErrorAtProperty
+)
+
+type ListForeignError struct {
+	Cons0 *ForeignError
+	Cons1 *ListForeignError
+}
+
+var SharedListForeignErrorNil = &ListForeignError{}
+
+type NonEmptyListForeignError struct {
+	First  *ForeignError
+	Second *ListForeignError
+}
+
+type EitherNonEmptyListForeignErrorForeign struct {
+	Left  NonEmptyListForeignError
+	Right any
+	Tag   uint8
+}
+
+const (
+	EitherNonEmptyListForeignErrorForeignLeft = iota
+	EitherNonEmptyListForeignErrorForeignRight
+)
+
+func PureIdentityNonEmptyListForeignError(x any) EitherNonEmptyListForeignErrorForeign {
+	return EitherNonEmptyListForeignErrorForeign{Tag: EitherNonEmptyListForeignErrorForeignRight, Right: x}
+}
+
+// main.go
+package main
+
+import (
+	"fixture/Foreign"
+	"github.com/i-am-the-slime/iris-go/direct"
+	"github.com/i-am-the-slime/iris-go/exception"
+	"github.com/i-am-the-slime/iris-go/foreignvalue"
+)
+
+func main() {
+	defer exception.ReportUncaught()
+	value := direct.ForeignRecord([]string{"name"}, []any{"iris"})
+	unsafeReadPropImpl := foreignvalue.UnsafeReadPropImpl(func() foreign.EitherNonEmptyListForeignErrorForeign {
+		return foreign.EitherNonEmptyListForeignErrorForeign{Tag: foreign.EitherNonEmptyListForeignErrorForeignLeft, Left: foreign.NonEmptyListForeignError{First: &foreign.ForeignError{Tag: foreign.ForeignErrorTypeMismatch, TypeMismatch0: "object", TypeMismatch1: foreignvalue.TypeOf(value)}, Second: foreign.SharedListForeignErrorNil}}
+	}, foreign.PureIdentityNonEmptyListForeignError, "name", value)
+	switch unsafeReadPropImpl.Tag {
+	case foreign.EitherNonEmptyListForeignErrorForeignLeft:
+		panic(exception.NewError("reading a present property fails"))
+	default: // foreign.EitherNonEmptyListForeignErrorForeignRight
+		return
+	}
+}
