@@ -31,8 +31,8 @@ mod walk;
 
 pub use error::{GoError, GoResult, UnsupportedState};
 pub use foreign::{
-    ForeignPackages, ForeignSource, foreign_declarations, foreign_files, foreign_source,
-    foreign_structs,
+    EmbedError, ForeignPackages, ForeignSource, embedded_files, foreign_declarations,
+    foreign_files, foreign_source, foreign_structs,
 };
 pub use timing::Work;
 

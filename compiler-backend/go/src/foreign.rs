@@ -2,9 +2,11 @@
 //! definitions have a direct Go equivalent. The runtime functions live in the
 //! iris-go runtime module.
 
+mod embeds;
 mod host;
 mod sources;
 
+pub use embeds::{EmbedError, embedded_files};
 pub use host::is_opaque_foreign_data;
 pub use sources::{foreign_declarations, foreign_files, foreign_source, foreign_structs};
 

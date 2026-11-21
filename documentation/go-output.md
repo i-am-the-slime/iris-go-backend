@@ -335,6 +335,39 @@ A record without a matching struct still works, but Go only sees it as an untype
 A big module can spread its Go over several files: `Stopwatch.go`, `Stopwatch.laps.go` and so on.
 `_test.go` files are ignored.
 
+### Embedded files
+
+`//go:embed` works. Put the files next to your `.go` file:
+
+```
+src/Greeting.purs
+src/Greeting.go
+src/greeting.txt
+```
+
+```go
+package ffi
+
+import _ "embed"
+
+//go:embed greeting.txt
+var greeting string
+
+func Greeting() string { return greeting }
+```
+
+Iris copies whatever the patterns match along with the `.go` file, so your program is one binary
+with its fonts, templates and data baked in. Patterns work as in Go: several per line, quoted,
+globs like `fonts/*.ttf`, whole directories (minus files starting with `.` or `_`, unless you
+write `all:fonts`). Symlinks are followed, so several modules can link to one asset folder.
+
+A pattern has to stay beside or below the `.go` file, and has to match something. If it doesn't,
+Iris says so before `go build` runs:
+
+```
+src/Greeting.go: //go:embed greeting.txt: no matching files found
+```
+
 ### Libraries
 
 Libraries work the same way. If a package you install has `.go` files next to its `.js` files, Iris

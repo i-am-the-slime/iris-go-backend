@@ -145,6 +145,7 @@ fn vendor_foreign_packages(
             let Some(name) = foreign_file.file_name() else { continue };
             fs::write(package.join(name), go::foreign_source(&module, &text))
                 .map_err(|error| error.to_string())?;
+            copy_embedded_files(shown, &text, &package)?;
         }
         modules.push(module);
         sources.push(source);
@@ -162,4 +163,24 @@ fn vendor_foreign_packages(
         .collect();
     let module_path = module_path.to_string();
     Ok(go::ForeignPackages { module_path, modules, structs, sources, source_paths })
+}
+
+/// Copies the files the foreign file embeds with `//go:embed` into its package, at the same
+/// paths relative to it, so that the embed finds them there. A symbolic link is copied as the
+/// file it points to.
+fn copy_embedded_files(foreign_file: &Path, text: &str, package: &Path) -> Result<(), String> {
+    let directory = foreign_file.parent().unwrap_or(Path::new(""));
+    for relative in go::embedded_files(foreign_file, text).map_err(|error| error.to_string())? {
+        let (from, to) = (directory.join(&relative), package.join(&relative));
+        if let Some(parent) = to.parent() {
+            fs::create_dir_all(parent).map_err(|error| error.to_string())?;
+        }
+        // Read and written rather than `fs::copy`, which would keep a read-only file's mode
+        // and so fail to overwrite it on the next compilation.
+        let contents = fs::read(&from)
+            .map_err(|error| format!("could not read {}: {error}", from.display()))?;
+        fs::write(&to, contents)
+            .map_err(|error| format!("could not write {}: {error}", to.display()))?;
+    }
+    Ok(())
 }

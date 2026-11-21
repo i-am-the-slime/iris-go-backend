@@ -101,3 +101,162 @@ func Greet() int32 {
     let unchanged = std::fs::metadata(&executable).unwrap().modified().unwrap();
     assert_eq!(built, unchanged, "an unchanged program is not built again");
 }
+
+#[test]
+fn run_go_copies_the_files_foreign_go_embeds_into_the_program() {
+    let workspace = greeting_workspace(
+        r#"package ffi
+
+import (
+	"embed"
+	_ "embed"
+	"fmt"
+	"io/fs"
+)
+
+//go:embed greeting.txt
+var greeting string
+
+//go:embed fonts "styles/*.css"
+//go:embed linked/logo.svg all:config
+var assets embed.FS
+
+func Greet() int32 {
+	fmt.Print(greeting)
+	fs.WalkDir(assets, ".", func(path string, entry fs.DirEntry, err error) error {
+		if !entry.IsDir() {
+			contents, _ := assets.ReadFile(path)
+			fmt.Printf("%s: %s", path, contents)
+		}
+		return nil
+	})
+	return 0
+}
+"#,
+    );
+    workspace.write("src/greeting.txt", "Hello from an embedded file!\n");
+    workspace.write("src/fonts/Inter.ttf", "inter\n");
+    workspace.write("src/fonts/bold/Inter-Bold.ttf", "inter bold\n");
+    workspace.write("src/fonts/.DS_Store", "hidden\n");
+    workspace.write("src/fonts/_draft.ttf", "draft\n");
+    workspace.write("src/styles/main.css", "main\n");
+    workspace.write("src/config/.env", "kept by all:\n");
+    workspace.write("src/styles/notes.txt", "not a stylesheet\n");
+    workspace.write("shared/logo.svg", "<svg/>\n");
+    std::os::unix::fs::symlink(
+        workspace.path().join("shared"),
+        workspace.path().join("src/linked"),
+    )
+    .unwrap();
+
+    let output = workspace.command(&["run", "--go", "--quiet"]);
+    insta::assert_snapshot!(workspace.report(&output), @"
+    status: 0
+    --- stdout
+    Hello from an embedded file!
+    config/.env: kept by all:
+    fonts/Inter.ttf: inter
+    fonts/bold/Inter-Bold.ttf: inter bold
+    linked/logo.svg: <svg/>
+    styles/main.css: main
+    --- stderr
+    ");
+}
+
+#[test]
+fn run_go_refuses_an_embed_pattern_that_leaves_the_directory_of_the_go_file() {
+    let workspace = greeting_workspace(
+        "package ffi\n\nimport _ \"embed\"\n\n//go:embed ../shared/greeting.txt\nvar greeting string\n\nfunc Greet() int32 { return 0 }\n",
+    );
+    workspace.write("shared/greeting.txt", "Hello!\n");
+
+    let output = workspace.command(&["run", "--go", "--quiet"]);
+    insta::assert_snapshot!(workspace.report(&output), @"
+    status: 1
+    --- stdout
+    --- stderr
+    src/Greeting.go: //go:embed ../shared/greeting.txt: the pattern leaves the directory of the Go file; embed only files beside it or below it
+    ");
+}
+
+#[test]
+fn run_go_names_the_go_file_and_the_embed_pattern_that_matches_nothing() {
+    let workspace = greeting_workspace(
+        "package ffi\n\nimport _ \"embed\"\n\n//go:embed greeting.txt\nvar greeting string\n\nfunc Greet() int32 { return 0 }\n",
+    );
+
+    let output = workspace.command(&["run", "--go", "--quiet"]);
+    insta::assert_snapshot!(workspace.report(&output), @"
+    status: 1
+    --- stdout
+    --- stderr
+    src/Greeting.go: //go:embed greeting.txt: no matching files found
+    ");
+}
+
+#[test]
+fn run_go_and_go_copy_the_files_a_dependency_embeds() {
+    let workspace = TestWorkspace::empty();
+    workspace.write("spago.yaml", "workspace: {}\n");
+    workspace.write(
+        "packages/application/spago.yaml",
+        "package:\n  name: application\n  dependencies:\n    - greeting\n",
+    );
+    workspace.write(
+        "packages/application/src/Main.purs",
+        "module Main where\n\nimport Effect (Effect)\nimport Greeting (greet)\n\nmain :: Effect Int\nmain = greet\n",
+    );
+    workspace
+        .write("packages/greeting/spago.yaml", "package:\n  name: greeting\n  dependencies: []\n");
+    workspace.write(
+        "packages/greeting/src/Effect.purs",
+        "module Effect where\n\nforeign import data Effect :: Type -> Type\n",
+    );
+    workspace.write(
+        "packages/greeting/src/Greeting.purs",
+        "module Greeting where\n\nimport Effect (Effect)\n\nforeign import greet :: Effect Int\n",
+    );
+    workspace.write(
+        "packages/greeting/src/Greeting.go",
+        "package ffi\n\nimport (\n\t_ \"embed\"\n\t\"fmt\"\n)\n\n//go:embed greeting.txt\nvar greeting string\n\nfunc Greet() int32 {\n\tfmt.Print(greeting)\n\treturn 0\n}\n",
+    );
+    workspace.write("packages/greeting/src/greeting.txt", "Hello from a dependency!\n");
+    workspace
+        .write("packages/application/go/go.mod", "module example.com/application\n\ngo 1.27.0\n");
+
+    let output = workspace.command(&["run", "--go", "--quiet", "--package", "application"]);
+    insta::assert_snapshot!(workspace.report(&output), @"
+    status: 0
+    --- stdout
+    Hello from a dependency!
+    --- stderr
+    ");
+
+    let output =
+        workspace.command_in("packages/application", &["go", "--entry", "Main.main", "go"]);
+    assert!(output.status.success(), "{}", workspace.report(&output));
+    assert_eq!(
+        workspace.read("packages/application/go/Greeting_ffi/greeting.txt"),
+        "Hello from a dependency!\n"
+    );
+}
+
+/// A package whose `main` prints what `Greeting.go` makes of the files it embeds.
+fn greeting_workspace(greeting_go: &str) -> TestWorkspace {
+    let workspace = TestWorkspace::empty();
+    workspace.write("spago.yaml", "workspace: {}\npackage:\n  name: greeter\n  dependencies: []\n");
+    workspace.write(
+        "src/Effect.purs",
+        "module Effect where\n\nforeign import data Effect :: Type -> Type\n",
+    );
+    workspace.write(
+        "src/Greeting.purs",
+        "module Greeting where\n\nimport Effect (Effect)\n\nforeign import greet :: Effect Int\n",
+    );
+    workspace.write(
+        "src/Main.purs",
+        "module Main where\n\nimport Effect (Effect)\nimport Greeting (greet)\n\nmain :: Effect Int\nmain = greet\n",
+    );
+    workspace.write("src/Greeting.go", greeting_go);
+    workspace
+}
