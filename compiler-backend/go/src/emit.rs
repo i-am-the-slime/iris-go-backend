@@ -26,6 +26,7 @@ mod guards;
 mod headers;
 mod immediate;
 mod int64;
+mod json;
 mod instantiations;
 mod iteration;
 mod layout;
@@ -338,6 +339,8 @@ where
             inline_shapes: FxHashMap::default(),
             copied_by_containers: FxHashSet::default(),
             shared_nullaries: FxHashMap::default(),
+            json_decoders: FxHashMap::default(),
+            json_encoders: FxHashMap::default(),
             maybe_helpers: maybe::MaybeHelpers::new(),
             constructor_functions: FxHashMap::default(),
             cell_types: FxHashMap::default(),
@@ -662,6 +665,9 @@ struct Emitter<'p, 'm, 'q, Q> {
     /// only these keep the smaller limit on being held by value.
     copied_by_containers: FxHashSet<DataType>,
     shared_nullaries: FxHashMap<String, String>,
+    /// The typed Yoga.JSON decoder and encoder of each type, by their names.
+    json_decoders: FxHashMap<MonotypeId, String>,
+    json_encoders: FxHashMap<MonotypeId, String>,
     maybe_helpers: maybe::MaybeHelpers,
     cell_types: FxHashMap<DataType, bool>,
     reaching: FxHashMap<(DataType, DataType), bool>,
@@ -3488,6 +3494,9 @@ where
         }
         if let Foreign::Record(_) = foreign {
             return Err(GoError::unsupported_construct("record builders with labels unknown at compile time"));
+        }
+        if let Foreign::Json(codec) = *foreign {
+            return self.json(codec, arguments, monotype, out);
         }
         if let Foreign::Crash = foreign {
             let message = self.value(&arguments[0], out)?;

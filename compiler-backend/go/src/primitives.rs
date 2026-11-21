@@ -15,6 +15,12 @@ pub enum Primitive {
     /// between `int64` and `uint64`, which keeps the bits as long.js does.
     ToUnsigned,
     ToSigned,
+    /// Yoga.JSON's `readJSON` and `writeJSON` at a type whose dictionary is
+    /// Yoga.JSON's own instances throughout, which read the text straight into
+    /// the program's values and write them straight out. `readJSON_` is
+    /// `hush <<< readJSON` and takes the same path.
+    ReadJson,
+    WriteJson,
 }
 
 pub fn known(module: &str, name: &str) -> Option<Primitive> {
@@ -31,6 +37,8 @@ pub fn known(module: &str, name: &str) -> Option<Primitive> {
         ("Data.Reflectable", "reifyType") => Some(Primitive::ReifyType),
         ("Data.Int64.Internal", "signedToUnsigned") => Some(Primitive::ToUnsigned),
         ("Data.Int64.Internal", "unsignedToSigned") => Some(Primitive::ToSigned),
+        ("Yoga.JSON", "readJSON") => Some(Primitive::ReadJson),
+        ("Yoga.JSON", "writeJSON") => Some(Primitive::WriteJson),
         _ => None,
     }
 }

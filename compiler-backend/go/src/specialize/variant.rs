@@ -34,7 +34,9 @@ where
             | Primitive::RunExists
             | Primitive::ReifyType
             | Primitive::ToSigned
-            | Primitive::ToUnsigned => Ok(None),
+            | Primitive::ToUnsigned
+            | Primitive::ReadJson
+            | Primitive::WriteJson => Ok(None),
         }
     }
 

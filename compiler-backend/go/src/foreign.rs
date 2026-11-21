@@ -152,6 +152,19 @@ pub enum Foreign {
     WithMutex,
     LazyDefer,
     LazyForce,
+    /// Yoga.JSON's readJSON or writeJSON at a type whose codec is Yoga.JSON's
+    /// own instances throughout: [`JsonCodec`].
+    Json(JsonCodec),
+}
+
+/// A typed Yoga.JSON codec, which reads the text straight into the program's
+/// values or writes them straight out. A read takes Yoga.JSON's own reading
+/// of the text and the text; it evaluates the first only when the text does
+/// not decode, so that the errors are Yoga.JSON's own.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum JsonCodec {
+    Read,
+    Write,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -546,6 +559,8 @@ impl Foreign {
             Foreign::MutexNew => 0,
             Foreign::WithMutex | Foreign::ReferenceEqual => 2,
             Foreign::LazyDefer | Foreign::LazyForce => 1,
+            Foreign::Json(JsonCodec::Read) => 2,
+            Foreign::Json(JsonCodec::Write) => 1,
             Foreign::UnsafeCoerce | Foreign::Identity | Foreign::EffectPure => 1,
             Foreign::Throw | Foreign::Crash | Foreign::MakeAff | Foreign::AssocArray => 1,
             Foreign::ForkFiber | Foreign::NewFiber | Foreign::NewSupervisedFiber => 2,

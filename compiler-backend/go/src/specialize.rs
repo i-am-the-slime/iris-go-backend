@@ -27,7 +27,8 @@ use crate::mono::{
     Guard, Guarded, GuardedBranch, Literal, Local, Pattern, PatternKind, RecordUpdate,
 };
 use crate::monotype::{Monotype, MonotypeId, Monotypes, supported};
-use crate::primitives::Signedness;
+use crate::foreign::JsonCodec;
+use crate::primitives::{Primitive, Signedness};
 use crate::scheme::{
     Read, SCHEME_INSTANTIATION_LIMIT, SchemeInstantiation, SchemeKey, constrained_scheme,
     rank_n_scheme,
@@ -39,6 +40,7 @@ mod evidence;
 mod existential;
 mod growth;
 mod int64;
+mod json;
 mod patterns;
 mod reified;
 mod runtime;
@@ -2814,6 +2816,18 @@ where
                 {
                     return Ok(expression);
                 }
+                let codec = match crate::primitives::known(&module.name, &name) {
+                    Some(Primitive::ReadJson) => Some(JsonCodec::Read),
+                    Some(Primitive::WriteJson) => Some(JsonCodec::Write),
+                    _ => None,
+                };
+                let codec = match codec {
+                    Some(codec) if self.json_codec_known(codec, &dictionaries)? => Some(codec),
+                    _ => None,
+                };
+                if codec == Some(JsonCodec::Write) {
+                    return Ok(self.json_write(monotype));
+                }
                 let declared = module.checked.lookup_term_item_type(term);
                 let (signedness, inherited) =
                     self.key_signedness(scope, &types, &[], declared)?;
@@ -2825,7 +2839,11 @@ where
                     dictionaries: Arc::from(dictionaries),
                     signedness,
                 };
-                self.request_reference(scope, key, name, monotype)
+                let reference = self.request_reference(scope, key, name, monotype)?;
+                match codec {
+                    Some(_) => Ok(self.json_read(reference)),
+                    None => Ok(reference),
+                }
             }
         }
     }

@@ -1,0 +1,3 @@
+{
+  "Data.Functor.Variant": "The fixture declares the small VariantF it tests, in place of the registry's variant package that yoga-json brings into the integration packages."
+}

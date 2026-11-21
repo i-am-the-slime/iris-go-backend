@@ -1,0 +1,4 @@
+{
+  "Data.Variant": "The fixture declares the Variant it tests, in place of the registry's variant package that yoga-json brings into the integration packages.",
+  "Data.Variant.Internal": "The fixture declares the Variant internals it tests, in place of the registry's variant package that yoga-json brings into the integration packages."
+}
