@@ -490,8 +490,14 @@ fn align(before: &[(String, Option<SourceLine>)], after: &[String]) -> Vec<Optio
         // A statement a pass rewrote is mostly still the same kind of statement.
         let mut cursor = 0;
         for head in &after[at..end] {
+            let same_kind = |candidate: &usize| kind(&replaced[*candidate].0) == kind(head);
+            let same_names = |candidate: &usize| {
+                defined_names(head)
+                    .is_some_and(|names| defined_names(&replaced[*candidate].0) == Some(names))
+            };
             let same_kind = (cursor..replaced.len())
-                .find(|&candidate| kind(&replaced[candidate].0) == kind(head));
+                .find(|candidate| same_kind(candidate) && same_names(candidate))
+                .or_else(|| (cursor..replaced.len()).find(same_kind));
             let line = match same_kind {
                 Some(candidate) => {
                     cursor = candidate + 1;
@@ -507,6 +513,11 @@ fn align(before: &[(String, Option<SourceLine>)], after: &[String]) -> Vec<Optio
     }
     lines
 }
+fn defined_names(head: &str) -> Option<&str> {
+    let names = head.strip_prefix("Define { names: ")?;
+    Some(names.split_once(", values: ")?.0)
+}
+
 /// The kind of statement a [`head`] is: `If`, `Assign`, `Define` and so on.
 fn kind(head: &str) -> &str {
     head.split(|character: char| !character.is_alphanumeric()).next().unwrap_or(head)

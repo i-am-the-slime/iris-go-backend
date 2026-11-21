@@ -61,7 +61,7 @@ import (
 func main() {
 //line Main.purs:15:14
 	var counter int32 = 3
-//line Main.purs:15:14
+//line Main.purs:17:15
 	count := counter + 1
 //line Main.purs:20:3
 	if /*line Main.purs:18:18*/ (count-1) /*line Main.purs:20:3*/ * /*line Main.purs:11:23*/ 2 /*line Main.purs:20:3*/ != 6 {
@@ -85,7 +85,7 @@ func main() {
 		mapped[index2] = shared.Value{Value: index * count}
 //line Main.purs:24:18
 	}
-//line Main.purs:24:18
+//line Main.purs:25:3
 	mapped2 := make([]int32, len(mapped))
 //line Main.purs:25:3
 	for index := range mapped {
