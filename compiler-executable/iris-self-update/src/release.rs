@@ -31,6 +31,10 @@ pub enum ReleaseError {
     Invalid { version: String },
     #[error("Iris {version} predates the current release layout; use the installer from its tag")]
     Unsupported { version: String },
+    #[error(
+        "Iris {version} is the Go backend fork, which `iris self update` cannot update; run `brew upgrade i-am-the-slime/tap/iris` to update it"
+    )]
+    GoBackendFork { version: String },
 }
 
 impl Release {
@@ -38,6 +42,9 @@ impl Release {
     pub fn parse(text: &str) -> Result<Release, ReleaseError> {
         let invalid = || ReleaseError::Invalid { version: text.to_string() };
         let version = text.strip_prefix('v').unwrap_or(text);
+        if version.contains("-go.") {
+            return Err(ReleaseError::GoBackendFork { version: version.to_string() });
+        }
         let (base, revision) = match version.split_once("-dev.") {
             Some((base, revision)) => (base, Some(revision)),
             None => (version, None),
@@ -179,5 +186,13 @@ mod tests {
         ];
         let canary = latest_canary(&commits, &releases).unwrap();
         assert_eq!(canary.tag(), "v0.1.5-dev.5c8261532bc1");
+    }
+
+    #[test]
+    fn refuses_versions_of_the_go_backend_fork() {
+        for version in ["0.1.17-go.1", "v0.1.17-go.1-dev.5c8261532bc1"] {
+            let error = Release::parse(version).unwrap_err();
+            assert!(matches!(error, ReleaseError::GoBackendFork { .. }), "{version}: {error}");
+        }
     }
 }
