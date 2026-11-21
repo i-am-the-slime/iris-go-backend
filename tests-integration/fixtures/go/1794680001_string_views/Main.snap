@@ -1,5 +1,6 @@
 ---
 source: tests-integration/src/fixtures.rs
+assertion_line: 573
 ---
 // Data/Maybe/maybe.go
 package maybe
@@ -73,13 +74,19 @@ func initializeMain_() []string {
 
 func charAtLoopViewsTheText(text string, i int32, count int32) int32 {
 	textUnits := prim.UTF16(text)
+	textASCII := textUnits.ASCII()
 	for {
 		if i >= textUnits.Length() {
 			return count
 		}
-		codeUnitCharAt := textUnits.CharAt(func(payload rune) maybe.Char {
-			return maybe.Char(payload)
-		}, maybe.NoChar, i)
+		codeUnitCharAt := maybe.NoChar
+		if i >= 0 && int(i) < len(textASCII) {
+			codeUnitCharAt = maybe.Char(rune(textASCII[i]))
+		} else {
+			codeUnitCharAt = textUnits.CharAt(func(payload rune) maybe.Char {
+				return maybe.Char(payload)
+			}, maybe.NoChar, i)
+		}
 		var result2 bool
 		if codeUnitCharAt != maybe.NoChar {
 			result2 = rune(codeUnitCharAt) == 'a'

@@ -1042,6 +1042,20 @@ impl Simplifier<'_> {
             }
             Foreign::Ordering => self.ordering(arguments, monotype),
             Foreign::Operator(_) => self.operator(foreign, arguments, monotype),
+            // A string's code units are the chars it was built from, one by one, lone
+            // surrogates included: the array is its own.
+            foreign
+                if foreign.calls(crate::foreign::TO_CHAR_ARRAY)
+                    && matches!(&arguments[0].kind, ExpressionKind::Foreign { foreign, .. }
+                        if foreign.calls(crate::foreign::FROM_CHAR_ARRAY)) =>
+            {
+                let ExpressionKind::Foreign { mut arguments, .. } =
+                    arguments.pop().expect("invariant violated: toCharArray has one argument").kind
+                else {
+                    unreachable!("invariant violated: the argument was just matched as a foreign")
+                };
+                arguments.pop().expect("invariant violated: fromCharArray has one argument")
+            }
             foreign
                 if foreign.calls(crate::foreign::INT_DIVIDE)
                     || foreign.calls(crate::foreign::INT_MODULO) =>

@@ -16,7 +16,8 @@
 
 use rustc_hash::{FxHashMap, FxHashSet};
 
-use crate::syntax::{GoExpression, GoStatement, Name, statements_names};
+use super::mutable::in_bounds;
+use crate::syntax::{GoExpression, GoStatement, GoType, Name, statements_names};
 
 use crate::walk::{each_block, each_expression_in_statement};
 
@@ -145,19 +146,137 @@ pub(super) fn view_invariant_strings(
     }
     let aliases: FxHashSet<String> = aliases.into_keys().collect();
     drop_unused_aliases(looped, &aliases);
-    views
-        .into_iter()
-        .map(|((string, view), local)| {
-            let value = GoExpression::Call {
-                function: Box::new(GoExpression::Qualified {
-                    package: view.package().into(),
-                    name: view.constructor().into(),
-                }),
-                arguments: vec![GoExpression::Identifier(string)],
-            };
-            (local, value)
-        })
-        .collect()
+    let mut definitions: Vec<(String, GoExpression)> = vec![];
+    for ((string, view), local) in views {
+        let value = GoExpression::Call {
+            function: Box::new(GoExpression::Qualified {
+                package: view.package().into(),
+                name: view.constructor().into(),
+            }),
+            arguments: vec![GoExpression::Identifier(string.clone())],
+        };
+        definitions.push((local.clone(), value));
+        if view == View::CodeUnits {
+            definitions.extend(read_ascii_bytes(looped, &string, &local, fresh));
+        }
+    }
+    definitions
+}
+
+/// Each `char := textUnits.CharAt(just, nothing, i)` of the loop reads a code unit of ASCII
+/// text as its byte, where Go inlines it, and asks the view only otherwise:
+///
+/// ```go
+/// char := nothing
+/// if i >= 0 && int(i) < len(textASCII) {
+///     char = just(rune(textASCII[i]))
+/// } else {
+///     char = textUnits.CharAt(just, nothing, i)
+/// }
+/// ```
+///
+/// with `textASCII := textUnits.ASCII()` before the loop, the text when every code unit is
+/// one byte of it and "" otherwise. Returns that definition when a read uses it.
+fn read_ascii_bytes(
+    looped: &mut Vec<GoStatement>,
+    string: &str,
+    view: &str,
+    fresh: &mut dyn FnMut(String) -> String,
+) -> Option<(String, GoExpression)> {
+    let ascii = fresh(format!("{string}ASCII"));
+    let mut read = false;
+    each_block(looped, |block| {
+        let mut position = 0;
+        while position < block.len() {
+            if let Some((char, just, nothing, index)) = char_at_definition(&block[position], view)
+            {
+                let byte = GoExpression::Conversion {
+                    type_: GoType::Rune,
+                    value: Box::new(GoExpression::Index {
+                        value: Box::new(GoExpression::Identifier(ascii.clone())),
+                        index: Box::new(index.clone()),
+                    }),
+                };
+                let assign = |value| GoStatement::Assign {
+                    targets: vec![GoExpression::Identifier(char.clone())],
+                    values: vec![value],
+                };
+                let asked = block[position].clone();
+                let GoStatement::Define { values, .. } = asked else { unreachable!() };
+                let rewritten = [
+                    GoStatement::Define { names: vec![char.clone()], values: vec![nothing] },
+                    GoStatement::If {
+                        condition: in_bounds(&index, GoExpression::Identifier(ascii.clone())),
+                        then: vec![assign(applied(just, byte))],
+                        otherwise: vec![assign(values.into_iter().next().expect("one value"))],
+                    },
+                ];
+                block.splice(position..=position, rewritten);
+                read = true;
+                position += 2;
+                continue;
+            }
+            position += 1;
+        }
+    });
+    let value = GoExpression::Call {
+        function: Box::new(GoExpression::Field {
+            value: Box::new(GoExpression::Identifier(view.to_string())),
+            name: "ASCII".into(),
+        }),
+        arguments: vec![],
+    };
+    read.then_some((ascii, value))
+}
+
+/// `char := view.CharAt(just, nothing, i)`, whose `nothing` and `i` are as cheap to repeat as
+/// to read, as its name, `just`, `nothing` and `i`.
+fn char_at_definition(
+    statement: &GoStatement,
+    view: &str,
+) -> Option<(String, GoExpression, GoExpression, GoExpression)> {
+    let GoStatement::Define { names, values } = statement else { return None };
+    let ([char], [GoExpression::Call { function, arguments }]) = (names.as_slice(), values.as_slice())
+    else {
+        return None;
+    };
+    let GoExpression::Field { value, name } = &**function else { return None };
+    let ([just, nothing, index], GoExpression::Identifier(viewed)) = (arguments.as_slice(), &**value)
+    else {
+        return None;
+    };
+    (viewed == view && name == "CharAt" && is_repeatable(nothing) && is_repeatable(index))
+        .then(|| (char.clone(), just.clone(), nothing.clone(), index.clone()))
+}
+
+fn is_repeatable(value: &GoExpression) -> bool {
+    match value {
+        GoExpression::Identifier(_)
+        | GoExpression::Qualified { .. }
+        | GoExpression::Integer(_)
+        | GoExpression::Rune(_)
+        | GoExpression::Boolean(_) => true,
+        GoExpression::Conversion { value, .. } => is_repeatable(value),
+        _ => false,
+    }
+}
+
+/// `function(argument)`, with a literal `func(x T) R { return e }` applied in place as `e`.
+fn applied(function: GoExpression, argument: GoExpression) -> GoExpression {
+    if let GoExpression::Function { parameters, body, .. } = &function
+        && let ([(parameter, _)], [GoStatement::Return(Some(result))]) =
+            (parameters.as_slice(), body.as_slice())
+    {
+        let mut result = GoStatement::Expression(result.clone());
+        each_expression_in_statement(&mut result, |value| {
+            if matches!(value, GoExpression::Identifier(name) if name == parameter) {
+                *value = argument.clone();
+            }
+        });
+        let GoStatement::Expression(result) = result else { unreachable!() };
+        return result;
+    }
+    GoExpression::Call { function: Box::new(function), arguments: vec![argument] }
 }
 
 /// The variables that the loop writes only with copies of themselves, as a

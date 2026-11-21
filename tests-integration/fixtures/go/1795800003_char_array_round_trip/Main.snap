@@ -1,0 +1,68 @@
+---
+source: tests-integration/src/fixtures.rs
+assertion_line: 573
+---
+// main.go
+package main
+
+import (
+	"fmt"
+	"github.com/i-am-the-slime/iris-go/exception"
+	"github.com/i-am-the-slime/iris-go/prim"
+)
+
+var main_ = initializeMain_()
+
+func initializeMain_() []string {
+	defer exception.ReportUncaught()
+	array := []rune{'a', 'b', 'c'}
+	mapped := make([]rune, len(array))
+	for index, c := range array {
+		var c2 rune
+		if c == 'b' {
+			c2 = 'a'
+		} else {
+			c2 = c
+		}
+		var result rune
+		if c2 == 'a' {
+			result = 'A'
+		} else {
+			result = c2
+		}
+		mapped[index] = result
+	}
+	array2 := []rune{'é', 'b'}
+	mapped2 := make([]rune, len(array2))
+	for index, c := range array2 {
+		var c2 rune
+		if c == 'b' {
+			c2 = 'a'
+		} else {
+			c2 = c
+		}
+		var result rune
+		if c2 == 'a' {
+			result = 'A'
+		} else {
+			result = c2
+		}
+		mapped2[index] = result
+	}
+	array3 := prim.StringToCharArray("banana")
+	mapped3 := make([]rune, len(array3))
+	for index, c := range array3 {
+		var result rune
+		if c == 'a' {
+			result = 'A'
+		} else {
+			result = c
+		}
+		mapped3[index] = result
+	}
+	return []string{prim.CharArrayToString(mapped), prim.CharArrayToString(mapped2), prim.CharArrayToString(mapped3)}
+}
+
+func main() {
+	fmt.Println(main_)
+}

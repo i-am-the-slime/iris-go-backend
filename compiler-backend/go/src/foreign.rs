@@ -791,6 +791,10 @@ pub const ARRAY_SLICE: Foreign = array_with("Slice", 3, int32_parameters(&[0, 1]
 
 pub const FOREIGN_RECORD: Foreign = direct("ForeignRecord", 2);
 
+pub const FROM_CHAR_ARRAY: Foreign = prim("CharArrayToString", 1);
+
+pub const TO_CHAR_ARRAY: Foreign = prim("StringToCharArray", 1);
+
 pub const INT_DIVIDE: Foreign = prim_with("IntDiv", 2, int32_parameters(&[0, 1]));
 
 pub const INT_MODULO: Foreign = prim_with("IntMod", 2, int32_parameters(&[0, 1]));
@@ -1122,8 +1126,8 @@ const FOREIGN_IMPORTS: &[(&str, &str, Foreign)] = &[
     ("Data.String.Common", "replace", prim("StringReplace", 3)),
     ("Data.String.Common", "replaceAll", prim("StringReplaceAll", 3)),
     ("Data.String.CodeUnits", "singleton", prim("CharSingleton", 1)),
-    ("Data.String.CodeUnits", "fromCharArray", prim("CharArrayToString", 1)),
-    ("Data.String.CodeUnits", "toCharArray", prim("StringToCharArray", 1)),
+    ("Data.String.CodeUnits", "fromCharArray", FROM_CHAR_ARRAY),
+    ("Data.String.CodeUnits", "toCharArray", TO_CHAR_ARRAY),
     ("Data.String.CodeUnits", "length", prim_with("CodeUnitLength", 1, PLAIN)),
     ("Data.String.CodeUnits", "countPrefix", prim_with("CodeUnitCountPrefix", 2, PLAIN)),
     ("Data.String.CodeUnits", "take", prim_with("CodeUnitTake", 2, int32_parameters(&[0]))),
