@@ -36,13 +36,14 @@ Work is done when every gate passes. A passing gate that was weakened to pass do
 - `compiler-backend/go/scripts/markgraf/run.sh` checks that the compactor's output equals JS.
 - `just integration` runs the snapshot tests.
 
-`quality-baseline.txt` holds the number of escape hatches (`any`, type assertions, `reflect`,
-`unsafe`, thunks, `panic`) in each scope. It is a ratchet:
+`quality-baseline.txt` holds the number of escape hatches (`any` and its causes, type assertions,
+`reflect`, `unsafe`, `panic`) in each scope. It is a ratchet:
 
-- A rise in any metric fails the gate. Fix the cause; do not raise the number.
-- When a metric drops, lower the baseline with `quality.sh --update` in the same change.
-- Raising a number is a hand edit in a change whose description explains why no typed solution
-  exists. Expect it to be questioned.
+- A rise fails the gate. Fix the cause; do not raise the number.
+- When one drops, lower the baseline with `quality.sh --update` in the same change.
+- Raising one is a hand edit in a change whose description explains why no typed solution exists.
+
+Size and readability numbers (lines, functions, nesting) are printed for information only.
 
 ## Shortcuts that are not allowed
 
@@ -62,6 +63,4 @@ the shortcut and mention it afterwards.
 
 ## Reporting
 
-End every report with a list of every place where the work does less than the ideal described
-above, each with its reason, plus the quality numbers before and after. An empty list is a claim
-that will be checked.
+Say what changed, the gate results, and anything left undone.
