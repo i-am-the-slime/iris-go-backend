@@ -184,7 +184,7 @@ func initializeMain_() []string {
 	x8 := opaque(5)
 	var result13 string
 	if x8 > 0 {
-		result13 = "(Just " + prim.ShowInt(1 + x8) + ")"
+		result13 = "(Just " + prim.ShowInt(1+x8) + ")"
 	} else {
 		result13 = "Nothing"
 	}
@@ -200,7 +200,7 @@ func initializeMain_() []string {
 		x10 := x9 - 1
 		var result11 string
 		if x10 > 0 {
-			result11 = "(Just " + prim.ShowInt(x10 + 1) + ")"
+			result11 = "(Just " + prim.ShowInt(x10+1) + ")"
 		} else {
 			result11 = "Nothing"
 		}

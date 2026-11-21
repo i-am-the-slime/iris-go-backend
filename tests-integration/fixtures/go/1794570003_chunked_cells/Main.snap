@@ -57,7 +57,7 @@ func mainGo(current int32, accumulator *ListInt) *ListInt {
 		if current < 1 {
 			return accumulator
 		}
-		current, accumulator = current - 1, listIntCells.New(ListInt{Cons0: current, Cons1: accumulator})
+		current, accumulator = current-1, listIntCells.New(ListInt{Cons0: current, Cons1: accumulator})
 	}
 }
 
@@ -67,7 +67,7 @@ func mainGo2(remaining int32, tree *Tree) *Tree {
 		if remaining <= 0 {
 			return tree
 		}
-		remaining, tree = remaining - 1, treeCells.New(Tree{Node0: tree, Node1: remaining, Node2: treeCells.New(Tree{Node0: sharedTreeLeaf, Node1: remaining * 2, Node2: sharedTreeLeaf})})
+		remaining, tree = remaining-1, treeCells.New(Tree{Node0: tree, Node1: remaining, Node2: treeCells.New(Tree{Node0: sharedTreeLeaf, Node1: remaining * 2, Node2: sharedTreeLeaf})})
 	}
 }
 

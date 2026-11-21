@@ -193,7 +193,7 @@ func leavesIntGo(depth int32, tree *TreeInt) int32 {
 				return leavesIntGo2(depth2, tree2)
 			}
 		}
-		return original(depth + 1)(convert8(tree.Pair.Int.First)) + leavesIntGo(depth + 1, tree.Pair.Int.Second)
+		return original(depth+1)(convert8(tree.Pair.Int.First)) + leavesIntGo(depth+1, tree.Pair.Int.Second)
 	}
 }
 
@@ -208,7 +208,7 @@ func leavesIntGo2(depth int32, tree *Tree) int32 {
 				return leavesIntGo2(depth2, tree2)
 			}
 		}
-		return original(depth + 1)(convert9(scrutinee.First)) + leavesIntGo3(depth + 1, scrutinee.Second)
+		return original(depth+1)(convert9(scrutinee.First)) + leavesIntGo3(depth+1, scrutinee.Second)
 	}
 }
 
@@ -223,7 +223,7 @@ func leavesIntGo3(depth int32, tree *Tree) int32 {
 				return leavesIntGo2(depth2, tree2)
 			}
 		}
-		return original(depth + 1)(convert9(scrutinee.First)) + leavesIntGo3(depth + 1, scrutinee.Second)
+		return original(depth+1)(convert9(scrutinee.First)) + leavesIntGo3(depth+1, scrutinee.Second)
 	}
 }
 

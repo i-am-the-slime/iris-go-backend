@@ -42,7 +42,7 @@ func value(step *Step) int32 {
 	}
 }
 
-var steps []*Step = []*Step{&Step{Tag: StepDone, Done: 7}, &Step{Tag: StepDone, Done: 8}}
+var steps []*Step = []*Step{{Tag: StepDone, Done: 7}, {Tag: StepDone, Done: 8}}
 
 func absurdInt(never Never) int32 {
 	for {

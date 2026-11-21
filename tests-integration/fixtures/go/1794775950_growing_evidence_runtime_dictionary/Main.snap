@@ -42,7 +42,7 @@ func initializeMain_() []string {
 	defer exception.ReportUncaught()
 	return []string{prim.ShowInt(1), "Nest " + showNestedArrayInt(shared.Show{Show: func(coerced any) string {
 		return show.ShowInt(shared.Convert(coerced))
-	}}, &Nested{Tag: NestedNest, Nest: &Nested{Tag: NestedFlat, Flat: shared.Convert2([][]int32{[]int32{1, 2}, []int32{3}})}})}
+	}}, &Nested{Tag: NestedNest, Nest: &Nested{Tag: NestedFlat, Flat: shared.Convert2([][]int32{{1, 2}, {3}})}})}
 }
 
 func showNestedArrayInt(showDictionary shared.Show, nested *Nested) string {

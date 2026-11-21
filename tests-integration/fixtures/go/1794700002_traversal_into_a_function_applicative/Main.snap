@@ -22,7 +22,7 @@ func initializeMain_() []int32 {
 	for _, element := range array {
 		accumulator2 := accumulator
 		accumulator = func(scale int32, offset int32) []int32 {
-			return append_(accumulator2(scale, offset))(element * scale + offset)
+			return append_(accumulator2(scale, offset))(element*scale + offset)
 		}
 	}
 	return accumulator(3, 1)

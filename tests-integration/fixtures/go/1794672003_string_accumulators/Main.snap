@@ -23,7 +23,7 @@ func initializeMain_() shared.MainResult {
 	accumulator2 := ""
 	for i := int32(1); i < 11; i++ {
 		if !(prim.CodeUnitLengthUpTo(6, accumulator2) > 5) {
-			accumulator2 = accumulator2 + prim.ShowInt(i)
+			accumulator2 += prim.ShowInt(i)
 		}
 	}
 	accumulator3 := ""
@@ -39,11 +39,11 @@ func mainGo(i int32, acc string) string {
 		if i >= 10 {
 			return string(accBytes)
 		}
-		if i % 3 == 0 {
-			i = i + 1
+		if i%3 == 0 {
+			i += 1
 			continue
 		}
-		i, accBytes = i + 1, append(accBytes, "é"...)
+		i, accBytes = i+1, append(accBytes, "é"...)
 	}
 }
 
@@ -53,7 +53,7 @@ func mainGo2(i int32, acc string) int32 {
 		if i >= 5 {
 			return prim.CodeUnitLength(string(accBytes))
 		}
-		i, accBytes = i + 1, append(accBytes, "yz"...)
+		i, accBytes = i+1, append(accBytes, "yz"...)
 	}
 }
 
@@ -62,7 +62,7 @@ func mainGo3(i int32, acc string) string {
 		if i >= 12 {
 			return acc
 		}
-		i, acc = i + 1, acc + prim.ShowInt(prim.CodeUnitLength(acc))
+		i, acc = i+1, acc+prim.ShowInt(prim.CodeUnitLength(acc))
 	}
 }
 

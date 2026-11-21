@@ -1,6 +1,5 @@
 ---
 source: tests-integration/src/fixtures.rs
-assertion_line: 573
 ---
 // Data/Eq/eq.go
 package eq
@@ -103,10 +102,9 @@ func main() {
 		}
 		mapped2[index] = result
 	}
-	scrutinee2 := array.Eq(eq.EqString, mapped2, [][]string{[]string{"pears", "11", "pears", "11"}, []string{"pears", "1"}}) == false
+	scrutinee2 := array.Eq(eq.EqString, mapped2, [][]string{{"pears", "11", "pears", "11"}, {"pears", "1"}}) == false
 	if scrutinee2 {
 		effectexception.ThrowUnit("the shared value is wrong")
-		return
 	}
 }
 

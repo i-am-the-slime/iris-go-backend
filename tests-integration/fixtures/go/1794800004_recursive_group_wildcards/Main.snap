@@ -33,14 +33,14 @@ var main_ = initializeMain_()
 
 func initializeMain_() int32 {
 	defer exception.ReportUncaught()
-	return countString([]TreeTupleStringInt{TreeTupleStringInt{Tag: TreeTupleStringIntLeaf, Leaf: tuple.TupleStringInt{First: "a", Second: 1}}, TreeTupleStringInt{Tag: TreeTupleStringIntNode, Node: []TreeTupleStringInt{TreeTupleStringInt{Tag: TreeTupleStringIntLeaf, Leaf: tuple.TupleStringInt{First: "b", Second: 2}}}}})
+	return countString([]TreeTupleStringInt{{Tag: TreeTupleStringIntLeaf, Leaf: tuple.TupleStringInt{First: "a", Second: 1}}, {Tag: TreeTupleStringIntNode, Node: []TreeTupleStringInt{{Tag: TreeTupleStringIntLeaf, Leaf: tuple.TupleStringInt{First: "b", Second: 2}}}}})
 }
 
 func countString(trees []TreeTupleStringInt) int32 {
 	var accumulator int32 = 0
 	for _, element := range trees {
 		value := sizeString(element)
-		accumulator = accumulator + value
+		accumulator += value
 	}
 	return accumulator
 }

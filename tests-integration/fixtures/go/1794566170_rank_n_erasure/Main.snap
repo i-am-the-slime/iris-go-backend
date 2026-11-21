@@ -25,7 +25,7 @@ var main_ = initializeMain_()
 
 func initializeMain_() []int32 {
 	defer exception.ReportUncaught()
-	return []int32{3, 1 + depthArrayInt(&Nested{Tag: NestedDeep, Deep: &Nested{Tag: NestedFlat, Flat: shared.Convert([][]int32{[]int32{1}})}})}
+	return []int32{3, 1 + depthArrayInt(&Nested{Tag: NestedDeep, Deep: &Nested{Tag: NestedFlat, Flat: shared.Convert([][]int32{{1}})}})}
 }
 
 func depthArrayInt(value *Nested) int32 {

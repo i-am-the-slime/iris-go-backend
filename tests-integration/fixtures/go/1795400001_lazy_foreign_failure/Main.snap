@@ -69,6 +69,5 @@ func main() {
 	case foreign.EitherNonEmptyListForeignErrorForeignLeft:
 		panic(exception.NewError("reading a present property fails"))
 	default: // foreign.EitherNonEmptyListForeignErrorForeignRight
-		return
 	}
 }

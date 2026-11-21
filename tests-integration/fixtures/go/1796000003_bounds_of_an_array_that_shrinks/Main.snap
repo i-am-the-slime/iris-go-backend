@@ -56,7 +56,7 @@ func initializeMain_() []int32 {
 		} else {
 			i3 = 0
 		}
-		*array3 = array.Bounded(append(*array3, i3 + 1))
+		*array3 = array.Bounded(append(*array3, i3+1))
 	}
 	performed2 := array.UnsafeFreeze(array3)()
 	return array.Append(performed, performed2)

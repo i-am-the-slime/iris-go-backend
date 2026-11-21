@@ -18,7 +18,7 @@ var main_ = initializeMain_()
 
 func initializeMain_() []string {
 	defer exception.ReportUncaught()
-	return array.Append(names(shared.Level{Name: "root", Minis: []shared.Level{shared.Level{Name: "a", Minis: []shared.Level{}}}}), []string{prim.ShowInt(countSteps(func(n int32) Step {
+	return array.Append(names(shared.Level{Name: "root", Minis: []shared.Level{{Name: "a", Minis: []shared.Level{}}}}), []string{prim.ShowInt(countSteps(func(n int32) Step {
 		if n < 3 {
 			return func(_ int32) Step {
 				return nil
@@ -38,7 +38,7 @@ func countSteps(step Step, n int32) int32 {
 		if scrutinee == nil {
 			return n
 		}
-		step, n = scrutinee, n + 1
+		step, n = scrutinee, n+1
 	}
 }
 

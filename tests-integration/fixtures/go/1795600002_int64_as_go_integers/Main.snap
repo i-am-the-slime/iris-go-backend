@@ -76,17 +76,17 @@ func initializeMain_() []string {
 	accumulator := uint64(0)
 	for _, element := range array2 {
 		long := datauint64.UnsafeFromInt(element)
-		accumulator = accumulator + long
+		accumulator += long
 	}
 	accumulator2 := int64(1)
 	for _, long := range mapped {
-		accumulator2 = accumulator2 * long
+		accumulator2 *= long
 	}
 	x := int64(7)
 	x2 := int64(5)
 	n := int64(3)
 	y := int64(2)
-	scrutinee := 1 < y && y & 1 == 0
+	scrutinee := 1 < y && y&1 == 0
 	var result string
 	if scrutinee {
 		result = "true"
@@ -115,9 +115,9 @@ func initializeMain_() []string {
 			} else {
 				result4 = Data_Int64_Internal_ffi.Modulo_(x3, l2_)
 			}
-			result3 = Data_Int64_Internal_ffi.Modulo_(result4 + l2_, l2_)
+			result3 = Data_Int64_Internal_ffi.Modulo_(result4+l2_, l2_)
 		}
-		result2 = Data_Int64_Internal_ffi.Divide_(x3 - result3, y2)
+		result2 = Data_Int64_Internal_ffi.Divide_(x3-result3, y2)
 	}
 	var result5 int64
 	if y2 == 0 {
@@ -133,7 +133,7 @@ func initializeMain_() []string {
 	default:
 		result6 = "Nothing"
 	}
-	return []string{Data_Int64_Internal_ffi.ToString_(foldLanes(mapped, int64(0)), 10) + "l", Data_Int64_Internal_ffi.ToString_(accumulator, 10) + "ul", Data_Int64_Internal_ffi.ToString_(foldLanes2(mapped, int64(-9223372036854775808)), 10) + "l", prim.ShowArray(dataint64.Show, mapLanes(mapped, int64(1))), Data_Int64_Internal_ffi.ToString_(accumulator2, 10) + "l", Data_Int64_Internal_ffi.ToString_(x * x + 3 * x - 1, 10) + "l", Data_Int64_Internal_ffi.ToString_(x2 << (n & 63) ^ int64(uint64(x2) >> (n & 63)), 10) + "l", Data_Int64_Internal_ffi.ToString_(uint64(18446744073709551615), 10) + "ul", result, Data_Int64_Internal_ffi.ToString_(wrapsAtCompileTime, 10) + "l", Data_Int64_Internal_ffi.ToString_(result2 + result5, 10) + "l", result6, Data_Int64_Internal_ffi.ToString_(uint64(18446744073709551615), 10) + "ul"}
+	return []string{Data_Int64_Internal_ffi.ToString_(foldLanes(mapped, int64(0)), 10) + "l", Data_Int64_Internal_ffi.ToString_(accumulator, 10) + "ul", Data_Int64_Internal_ffi.ToString_(foldLanes2(mapped, int64(-9223372036854775808)), 10) + "l", prim.ShowArray(dataint64.Show, mapLanes(mapped, int64(1))), Data_Int64_Internal_ffi.ToString_(accumulator2, 10) + "l", Data_Int64_Internal_ffi.ToString_(x*x+3*x-1, 10) + "l", Data_Int64_Internal_ffi.ToString_(x2<<(n&63)^int64(uint64(x2)>>(n&63)), 10) + "l", Data_Int64_Internal_ffi.ToString_(uint64(18446744073709551615), 10) + "ul", result, Data_Int64_Internal_ffi.ToString_(wrapsAtCompileTime, 10) + "l", Data_Int64_Internal_ffi.ToString_(result2+result5, 10) + "l", result6, Data_Int64_Internal_ffi.ToString_(uint64(18446744073709551615), 10) + "ul"}
 }
 
 var wrapsAtCompileTime int64 = int64(-9223372036854775808)

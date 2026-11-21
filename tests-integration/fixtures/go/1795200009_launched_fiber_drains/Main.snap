@@ -112,7 +112,7 @@ func main_() int32 {
 
 func mainStep(ref *shared.Ref[int32], digit int32) {
 	s := ref.Value
-	s_ := s * 10 + digit
+	s_ := s*10 + digit
 	ref.Value = s_
 }
 

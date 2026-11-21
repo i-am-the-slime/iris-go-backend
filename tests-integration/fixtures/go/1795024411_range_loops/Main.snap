@@ -20,27 +20,27 @@ func initializeMain_() shared.MainResult {
 	ref2 := []int32{}
 	step, count := array.RangeSteps(ref, 1)
 	for index := range count {
-		i := ref + int32(index) * step
+		i := ref + int32(index)*step
 		s_ := array.Append(ref2, []int32{i})
 		ref2 = s_
 	}
 	step2, count2 := array.RangeSteps(1, ref)
 	var accumulator int32 = 0
 	for index := range count2 {
-		value := 1 + int32(index) * step2
-		accumulator = accumulator + value
+		value := 1 + int32(index)*step2
+		accumulator += value
 	}
 	step3, count3 := array.RangeSteps(ref, 1)
 	accumulator2 := ""
 	for index := count3 - 1; index >= 0; index-- {
-		x := ref + int32(index) * step3
+		x := ref + int32(index)*step3
 		accumulator2 = prim.ShowInt(x) + "," + accumulator2
 	}
 	_, count4 := array.RangeSteps(1, ref)
 	step4, count5 := array.RangeSteps(1, ref)
 	mapped := make([]int32, count5)
 	for slot := range count5 {
-		x := 1 + int32(slot) * step4
+		x := 1 + int32(slot)*step4
 		index := int32(slot)
 		mapped[slot] = index * x
 	}

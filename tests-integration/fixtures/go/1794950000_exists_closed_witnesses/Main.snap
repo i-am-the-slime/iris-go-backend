@@ -102,11 +102,11 @@ func initializeMain_() []string {
 	return mapped
 }
 
-var things []ExistsDescribed = []ExistsDescribed{ExistsDescribed{Tag: ExistsDescribedInt, Int: DescribedInt{First: 1, Second: show.Show, Third: func(value int32) int32 {
+var things []ExistsDescribed = []ExistsDescribed{{Tag: ExistsDescribedInt, Int: DescribedInt{First: 1, Second: show.Show, Third: func(value int32) int32 {
 	return value + 1
-}}}, ExistsDescribed{Tag: ExistsDescribedString, String: DescribedString{First: "a", Second: category.Identity, Third: func(value string) string {
+}}}, {Tag: ExistsDescribedString, String: DescribedString{First: "a", Second: category.Identity, Third: func(value string) string {
 	return value + "!"
-}}}, ExistsDescribed{Tag: ExistsDescribedArrayNumber, ArrayNumber: DescribedArrayNumber{First: []float64{1.5}, Second: show.ShowNumber, Third: func(array []float64) []float64 {
+}}}, {Tag: ExistsDescribedArrayNumber, ArrayNumber: DescribedArrayNumber{First: []float64{1.5}, Second: show.ShowNumber, Third: func(array []float64) []float64 {
 	return mapLanes(array)
 }}}}
 

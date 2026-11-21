@@ -58,7 +58,7 @@ func initializeMain_() []string {
 		mapped2[index] = prim.ShowArray(show.Show2, []string{x(1)("a"), g("b"), g("c")})
 	}
 	array4 := []func(int32, int32) int32{semiring.Add, func(a int32, b int32) int32 {
-		return a * b + 1
+		return a*b + 1
 	}}
 	mapped3 := make([]string, len(array4))
 	for index, combine := range array4 {
@@ -99,12 +99,12 @@ func repeat(n int32) string {
 	case 0:
 		return ""
 	default:
-		return "*" + repeat(n - 1)
+		return "*" + repeat(n-1)
 	}
 }
 
 func mainOp(a int32, b int32) int32 {
-	return a * 10 + b
+	return a*10 + b
 }
 
 func main() {

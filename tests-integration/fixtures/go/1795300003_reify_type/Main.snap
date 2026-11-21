@@ -78,7 +78,7 @@ func reifiedEach(n int32, done []string) []string {
 		if n > 3 {
 			return done
 		}
-		n, done = n + 1, array.Bounded(append(done, "n=" + prim.ShowInt(reifiedEachDictionaryReflectType(n, proxy.ProxyProxy) * 10 + n) + "n=" + prim.ShowInt(reifiedEachDictionaryReflectType(n, proxy.ProxyProxy) * 10 + 1)))
+		n, done = n+1, array.Bounded(append(done, "n="+prim.ShowInt(reifiedEachDictionaryReflectType(n, proxy.ProxyProxy)*10+n)+"n="+prim.ShowInt(reifiedEachDictionaryReflectType(n, proxy.ProxyProxy)*10+1)))
 	}
 }
 

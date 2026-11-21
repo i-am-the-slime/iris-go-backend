@@ -51,12 +51,12 @@ func main_() int32 {
 	}, struct{}{}, units)
 	var accumulator int32 = 0
 	for range units {
-		accumulator = accumulator + 1
+		accumulator += 1
 	}
-	return i * 100 + ref * 10 + accumulator
+	return i*100 + ref*10 + accumulator
 }
 
-var units []tuple.TupleUnitUnit = []tuple.TupleUnitUnit{tuple.TupleUnitUnit{First: struct{}{}, Second: struct{}{}}, tuple.TupleUnitUnit{First: struct{}{}, Second: struct{}{}}}
+var units []tuple.TupleUnitUnit = []tuple.TupleUnitUnit{{First: struct{}{}, Second: struct{}{}}, {First: struct{}{}, Second: struct{}{}}}
 
 func main() {
 	defer exception.ReportUncaught()

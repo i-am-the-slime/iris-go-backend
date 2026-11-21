@@ -37,7 +37,7 @@ func take(n int32, stream Stream) []string {
 		return []string{}
 	default:
 		scrutinee := stream.Force()
-		return array.Append([]string{scrutinee.First.First}, take(n - 1, scrutinee.Second.Force()))
+		return array.Append([]string{scrutinee.First.First}, take(n-1, scrutinee.Second.Force()))
 	}
 }
 

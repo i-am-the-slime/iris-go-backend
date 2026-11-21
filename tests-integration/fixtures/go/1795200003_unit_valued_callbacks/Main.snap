@@ -47,19 +47,19 @@ func main_() int32 {
 		return struct{}{}
 	}, array.Foldr(func(_ struct{}, accumulator struct{}) struct{} {
 		return struct{}{}
-	}, struct{}{}, units), []int32{1, 2}))) * 10 + int32(len(array.ZipWith(func(_ int32, _ struct{}) struct{} {
+	}, struct{}{}, units), []int32{1, 2})))*10 + int32(len(array.ZipWith(func(_ int32, _ struct{}) struct{} {
 		return struct{}{}
-	}, []int32{1}, units))) * 100 + int32(len(array.Map(func(i int32) struct{} {
+	}, []int32{1}, units)))*100 + int32(len(array.Map(func(i int32) struct{} {
 		accumulator2(i)
 		return struct{}{}
-	}, []int32{1, 2, 3}))) * 1000
+	}, []int32{1, 2, 3})))*1000
 }
 
 var units = initializeUnits()
 
 func initializeUnits() []struct{} {
 	defer exception.ReportUncaught()
-	array2 := []struct{}{struct{}{}, struct{}{}}
+	array2 := []struct{}{{}, {}}
 	mapped := make([]tuple.TupleIntUnit, len(array2))
 	for slot, unit := range array2 {
 		i := int32(slot)

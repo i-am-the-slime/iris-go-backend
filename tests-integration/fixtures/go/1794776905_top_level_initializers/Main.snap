@@ -34,7 +34,7 @@ func count(n int32) int32 {
 	if n <= 0 {
 		return 0
 	}
-	return 1 + count(n - 1)
+	return 1 + count(n-1)
 }
 
 func main() {

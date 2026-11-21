@@ -38,7 +38,7 @@ func main_() int32 {
 		ref = s_
 		return acc + n
 	}, 0, []int32{1, 2, 3})
-	return i * 10 + ref
+	return i*10 + ref
 }
 
 func main() {

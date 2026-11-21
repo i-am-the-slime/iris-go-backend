@@ -31,7 +31,6 @@ func main() {
 	if scrutinee2 {
 //line Main.purs:25:5
 		effectexception.ThrowUnit("the second total is wrong")
-		return
 	}
 }
 
@@ -43,6 +42,6 @@ func sumFrom(numbers []int32, index int32, total int32) int32 {
 			return total
 		}
 //line Main.purs:16:5
-		index, total = index + 1, total + numbers[index]
+		index, total = index+1, total+numbers[index]
 	}
 }

@@ -47,7 +47,7 @@ var main_ = initializeMain_()
 
 func initializeMain_() []string {
 	defer exception.ReportUncaught()
-	return []string{prim.ShowArray(show.ShowParticleConsNumberConsNumberNil, mainGo(0, []shared.Particle{shared.Particle{Position: 0.0, Velocity: 0.0}, shared.Particle{Position: 1.0, Velocity: 0.5}, shared.Particle{Position: 4.0, Velocity: -0.25}})), prim.ShowArray(show.Show, mainGo2(0, []int32{1, 2, 3})), prim.ShowArray(show.Show, shrink([]int32{9, 3, 7, 5, 4})), prim.ShowArray(show.Show, mainGo3(0, []int32{0}, []int32{1, 2})), prim.ShowArray(show.ShowInt, mainGo4(0, [][]int32{[]int32{1}, []int32{2}}))}
+	return []string{prim.ShowArray(show.ShowParticleConsNumberConsNumberNil, mainGo(0, []shared.Particle{{Position: 0.0, Velocity: 0.0}, {Position: 1.0, Velocity: 0.5}, {Position: 4.0, Velocity: -0.25}})), prim.ShowArray(show.Show, mainGo2(0, []int32{1, 2, 3})), prim.ShowArray(show.Show, shrink([]int32{9, 3, 7, 5, 4})), prim.ShowArray(show.Show, mainGo3(0, []int32{0}, []int32{1, 2})), prim.ShowArray(show.ShowInt, mainGo4(0, [][]int32{{1}, {2}}))}
 }
 
 var shrink func([]int32) []int32 = shrinkGo
@@ -67,14 +67,14 @@ func mainGo(i int32, particles []shared.Particle) []shared.Particle {
 			for index2 := range particles {
 				i3 := int32(index2)
 				if i2 != i3 {
-					accumulatorVelocity = accumulatorVelocity + (particles[index2].Position - accumulatorPosition) * 0.001
+					accumulatorVelocity += (particles[index2].Position - accumulatorPosition) * 0.001
 				}
 			}
-			accumulatorPosition = accumulatorPosition + accumulatorVelocity
+			accumulatorPosition += accumulatorVelocity
 			mapped[index] = shared.Particle{Position: accumulatorPosition, Velocity: accumulatorVelocity}
 		}
 		particlesOwned, particlesSpare = mapped, particlesOwned
-		i, particles = i + 1, mapped
+		i, particles = i+1, mapped
 	}
 }
 
@@ -87,10 +87,10 @@ func mainGo2(i int32, values []int32) []int32 {
 		}
 		mapped := shared.Recycle(valuesSpare, len(values))
 		for index, value := range values {
-			mapped[index] = value * 2 + i
+			mapped[index] = value*2 + i
 		}
 		valuesOwned, valuesSpare = mapped, valuesOwned
-		i, values = i + 1, mapped
+		i, values = i+1, mapped
 	}
 }
 
@@ -99,7 +99,7 @@ func mainGo3(i int32, previous []int32, values []int32) []int32 {
 		if i >= 3 {
 			return array.Append(previous, values)
 		}
-		i, previous, values = i + 1, values, mapLanes(values)
+		i, previous, values = i+1, values, mapLanes(values)
 	}
 }
 
@@ -112,7 +112,7 @@ func mainGo4(i int32, rows [][]int32) [][]int32 {
 		for index, row := range rows {
 			mapped[index] = array.Append(row, []int32{i})
 		}
-		i, rows = i + 1, mapped
+		i, rows = i+1, mapped
 	}
 }
 
@@ -126,7 +126,7 @@ func shrinkGo(values []int32) []int32 {
 		mapped := shared.Recycle(valuesSpare, 0)
 		for _, value := range values {
 			if value > 2 {
-				mapped = append(mapped, value - 1)
+				mapped = append(mapped, value-1)
 			}
 		}
 		valuesOwned, valuesSpare = mapped, valuesOwned

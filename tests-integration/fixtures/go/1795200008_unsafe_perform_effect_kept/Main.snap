@@ -45,7 +45,7 @@ func mainGo(n int32, acc struct{}) {
 		if n <= 0 {
 			return
 		}
-		n, _ = n - 1, struct{}{}
+		n, _ = n-1, struct{}{}
 	}
 }
 

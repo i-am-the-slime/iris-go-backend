@@ -60,7 +60,7 @@ func initializeMain_() []string {
 	}
 	var accumulator2 float64 = 0.0
 	for _, x := range xs {
-		accumulator2 = accumulator2 * 0.5 + x
+		accumulator2 = accumulator2*0.5 + x
 	}
 	return []string{prim.ShowNumber(foldLanes(xs, 0.0)), prim.ShowNumber(foldLanes2(xs, xs, 0.0)), prim.ShowNumber(foldLanes3(xs, 0.0)), prim.ShowNumber(foldLanes4(xs, -prim.NumberInfinity)), prim.ShowInt(foldLanes5(ints, 1)), prim.ShowInt(foldLanes6(ints, int32(prim.TopInt))), prim.ShowArray(show.Show, zipLanes(xs, xs)), prim.ShowArray(show.Show, zipLanes2(xs, xs)), prim.ShowNumber(accumulator), prim.ShowNumber(accumulator2), prim.ShowInt(literal)}
 }
@@ -72,7 +72,7 @@ func initializeLiteral() int32 {
 	array := []int32{1, 2, 3}
 	var accumulator int32 = 0
 	for _, value := range array {
-		accumulator = accumulator + value
+		accumulator += value
 	}
 	return accumulator
 }

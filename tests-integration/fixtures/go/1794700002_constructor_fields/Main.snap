@@ -85,26 +85,26 @@ var main_ = initializeMain_()
 
 func initializeMain_() string {
 	defer exception.ReportUncaught()
-	array := []either_tuple.TupleMaybeIntEitherStringInt{either_tuple.TupleMaybeIntEitherStringInt{First: maybe.Int(1), Second: either.EitherStringInt{Tag: either.EitherStringIntRight, Right: 2}}, either_tuple.TupleMaybeIntEitherStringInt{First: maybe.NoInt, Second: either.EitherStringInt{Tag: either.EitherStringIntLeft, Left: "x"}}}
+	array := []either_tuple.TupleMaybeIntEitherStringInt{{First: maybe.Int(1), Second: either.EitherStringInt{Tag: either.EitherStringIntRight, Right: 2}}, {First: maybe.NoInt, Second: either.EitherStringInt{Tag: either.EitherStringIntLeft, Left: "x"}}}
 	var accumulator int32 = 0
 	for tupleIndex := range array {
 		if array[tupleIndex].First != maybe.NoInt && array[tupleIndex].Second.Tag == either.EitherStringIntRight {
 			accumulator = accumulator + int32(array[tupleIndex].First) + array[tupleIndex].Second.Right
 		} else if array[tupleIndex].Second.Tag == either.EitherStringIntLeft {
-			accumulator = accumulator - 1
+			accumulator -= 1
 		}
 	}
-	array2 := []Labelled{Labelled{Tag: LabelledTag, Tag0: "t"}, Labelled{Tag: LabelledUntagged}}
+	array2 := []Labelled{{Tag: LabelledTag, Tag0: "t"}, {Tag: LabelledUntagged}}
 	mapped := make([]string, len(array2))
 	for index, element := range array2 {
 		mapped[index] = label(element)
 	}
-	array3 := []Entry{Entry{Tag: EntryField, Field0: 5, Field1: 1}, Entry{Tag: EntryDuo, Duo0: "a", Duo1: "b"}, Entry{Tag: EntryTrio, Trio0: "c", Trio1: "d"}}
+	array3 := []Entry{{Tag: EntryField, Field0: 5, Field1: 1}, {Tag: EntryDuo, Duo0: "a", Duo1: "b"}, {Tag: EntryTrio, Trio0: "c", Trio1: "d"}}
 	mapped2 := make([]string, len(array3))
 	for index, element := range array3 {
 		mapped2[index] = entry(element)
 	}
-	return prim.ShowInt(accumulator + mainSum(&types.ListInt{Cons0: 3, Cons1: &types.ListInt{Cons0: 4, Cons1: types.SharedListIntNil}})) + prim.ShowArray(show.Show, mapped) + prim.ShowArray(show.Show, mapped2)
+	return prim.ShowInt(accumulator+mainSum(&types.ListInt{Cons0: 3, Cons1: &types.ListInt{Cons0: 4, Cons1: types.SharedListIntNil}})) + prim.ShowArray(show.Show, mapped) + prim.ShowArray(show.Show, mapped2)
 }
 
 func label(labelled Labelled) string {

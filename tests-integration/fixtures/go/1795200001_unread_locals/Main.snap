@@ -111,7 +111,7 @@ func main_() int32 {
 	} else {
 		result2 = 1
 	}
-	return ref * 10 + result2
+	return ref*10 + result2
 }
 
 func main() {

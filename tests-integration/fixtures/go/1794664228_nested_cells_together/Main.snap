@@ -80,7 +80,7 @@ func mainGo(remaining int32, list *ListInt) *ListInt {
 		if remaining <= 0 {
 			return list
 		}
-		remaining, list = remaining - 1, listIntCells.New(ListInt{Cons0: remaining, Cons1: listIntCells.New(ListInt{Cons0: remaining * 10, Cons1: list})})
+		remaining, list = remaining-1, listIntCells.New(ListInt{Cons0: remaining, Cons1: listIntCells.New(ListInt{Cons0: remaining * 10, Cons1: list})})
 	}
 }
 

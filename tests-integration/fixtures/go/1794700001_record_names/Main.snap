@@ -57,39 +57,39 @@ func initializeMain_() string {
 		default:
 			result = 0.0
 		}
-		accumulator = accumulator + result
+		accumulator += result
 	}
-	array2 := []shared.Adjustment{shared.Adjustment{Factor: 3.0, Offset: 1.0}}
+	array2 := []shared.Adjustment{{Factor: 3.0, Offset: 1.0}}
 	var accumulator2 float64 = 2.0
 	for adjustmentIndex := range array2 {
-		accumulator2 = accumulator2 * array2[adjustmentIndex].Factor + array2[adjustmentIndex].Offset
+		accumulator2 = accumulator2*array2[adjustmentIndex].Factor + array2[adjustmentIndex].Offset
 	}
-	array3 := []shared.Margin{shared.Margin{Top: 1.0, Bottom: 2.0}}
+	array3 := []shared.Margin{{Top: 1.0, Bottom: 2.0}}
 	var accumulator3 float64 = 0.0
 	for marginIndex := range array3 {
 		accumulator3 = accumulator3 + array3[marginIndex].Top + array3[marginIndex].Bottom
 	}
-	array4 := []shared.ShapesTiming{shared.ShapesTiming{Width: 2.0, Height: 3.0, Label: "box"}}
+	array4 := []shared.ShapesTiming{{Width: 2.0, Height: 3.0, Label: "box"}}
 	var accumulator4 float64 = 0.0
 	for shapeIndex := range array4 {
-		accumulator4 = accumulator4 + array4[shapeIndex].Width * array4[shapeIndex].Height
+		accumulator4 += array4[shapeIndex].Width * array4[shapeIndex].Height
 	}
-	array5 := []shared.Span{shared.Span{From: 2, To: 7}}
+	array5 := []shared.Span{{From: 2, To: 7}}
 	var accumulator5 int32 = 0
 	for spanIndex := range array5 {
 		accumulator5 = accumulator5 + array5[spanIndex].To - array5[spanIndex].From
 	}
-	array6 := []shared.PairInt{shared.PairInt{Left: 1, Right: 2}}
+	array6 := []shared.PairInt{{Left: 1, Right: 2}}
 	var accumulator6 int32 = 0
 	for pairIndex := range array6 {
 		accumulator6 = accumulator6 + array6[pairIndex].Left + array6[pairIndex].Right
 	}
-	array7 := []shared.PairString{shared.PairString{Left: "a", Right: "b"}}
+	array7 := []shared.PairString{{Left: "a", Right: "b"}}
 	accumulator7 := ""
 	for pairIndex := range array7 {
 		accumulator7 = prim.Concat(accumulator7, array7[pairIndex].Left, array7[pairIndex].Right)
 	}
-	return prim.ShowArray(show.Show, []float64{3.0, accumulator, accumulator2, accumulator3, accumulator4}) + prim.ShowInt(accumulator5 + accumulator6) + accumulator7
+	return prim.ShowArray(show.Show, []float64{3.0, accumulator, accumulator2, accumulator3, accumulator4}) + prim.ShowInt(accumulator5+accumulator6) + accumulator7
 }
 
 func main() {

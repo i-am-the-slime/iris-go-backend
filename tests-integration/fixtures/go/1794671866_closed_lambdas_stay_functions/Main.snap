@@ -14,9 +14,9 @@ var main_ = initializeMain_()
 
 func initializeMain_() shared.MainResult {
 	defer exception.ReportUncaught()
-	scrutinee := []shared.Operation{shared.Operation{Name: "add", Run: func(x int32) int32 {
+	scrutinee := []shared.Operation{{Name: "add", Run: func(x int32) int32 {
 		return x + 3
-	}}, shared.Operation{Name: "scale", Run: func(x int32) int32 {
+	}}, {Name: "scale", Run: func(x int32) int32 {
 		return x * 3
 	}}}
 	var result int32
@@ -26,9 +26,9 @@ func initializeMain_() shared.MainResult {
 	} else {
 		result = 10
 	}
-	scrutinee2 := []shared.Operation{shared.Operation{Name: "add", Run: func(x int32) int32 {
+	scrutinee2 := []shared.Operation{{Name: "add", Run: func(x int32) int32 {
 		return x + 3
-	}}, shared.Operation{Name: "scale", Run: func(x int32) int32 {
+	}}, {Name: "scale", Run: func(x int32) int32 {
 		return x * 3
 	}}}
 	var result2 int32

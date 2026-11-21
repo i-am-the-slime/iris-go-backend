@@ -25,7 +25,7 @@ func initializeMain_() []int32 {
 		var accumulator int32 = 0
 		for range array {
 			var value int32 = 1
-			accumulator = accumulator + value
+			accumulator += value
 		}
 		mapped2[index] = 0 * accumulator
 	}

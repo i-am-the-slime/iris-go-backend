@@ -161,10 +161,10 @@ func UnsafeBalancedNodeStringUnitReusing(k string, v struct{}, l *MapStringUnit,
 		rk := r.Node2
 		rl := r.Node4
 		rr := r.Node5
-		if rh > lh + 1 {
+		if rh > lh+1 {
 			return UnsafeBalancedNodeStringUnitRotateLeftReusing(k, v, l, rk, struct{}{}, rl, rr, donor)
 		}
-		if lh > rh + 1 {
+		if lh > rh+1 {
 			return UnsafeBalancedNodeStringUnitRotateRightReusing(k, v, lk, struct{}{}, ll, lr, r, donor)
 		}
 	}

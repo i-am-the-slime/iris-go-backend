@@ -45,7 +45,7 @@ func countdown(n int32, total int32) Count {
 	}
 	return func(more func(func(struct{}) StepInt) StepInt, done func(int32) StepInt) StepInt {
 		return more(func(_ struct{}) StepInt {
-			n2 := countdown(n - 1, total + n)
+			n2 := countdown(n-1, total+n)
 			return more(func(_ struct{}) StepInt {
 				return n2(more, done)
 			})

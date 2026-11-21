@@ -124,18 +124,18 @@ func smooth(array []float64, i int32) {
 	within4 := int(i4) < len(array)
 	if within4 {
 		element := array[i4]
-		array[i4] = element + (average - number) * 0.5
+		array[i4] = element + (average-number)*0.5
 	}
 	within5 := int(i) < len(array)
 	if within5 {
 		element := array[i]
-		array[i] = element + (average - number2) * 0.5
+		array[i] = element + (average-number2)*0.5
 	}
 	i5 := i + 1
 	within6 := int(i5) < len(array)
 	if within6 {
 		element := array[i5]
-		array[i5] = element + (average - number3) * 0.5
+		array[i5] = element + (average-number3)*0.5
 	}
 	i6 := i + 2
 	within7 := int(i6) < len(array)
@@ -154,7 +154,6 @@ func smooth(array []float64, i int32) {
 			element := array[i7]
 			array[i7] = element + (average - number4)
 		}
-		return
 	}
 }
 
@@ -220,12 +219,12 @@ func initializePull() []string {
 					within6 := int(i) < len(elements4)
 					if within6 {
 						element := elements4[i]
-						elements4[i] = element + (number - number2) * number5 * 0.125
+						elements4[i] = element + (number-number2)*number5*0.125
 					}
 					within7 := int(i) < len(elements5)
 					if within7 {
 						element := elements5[i]
-						elements5[i] = element + (number3 - number4) * number5 * 0.125
+						elements5[i] = element + (number3-number4)*number5*0.125
 					}
 				}
 			}
@@ -242,7 +241,7 @@ func initializePull() []string {
 			within2 := int(i) < len(elements)
 			if within2 {
 				element := elements[i]
-				elements[i] = element + 0.5 * number
+				elements[i] = element + 0.5*number
 			}
 			within3 := int(i) < len(elements5)
 			var number2 float64
@@ -255,7 +254,7 @@ func initializePull() []string {
 			within4 := int(i) < len(elements2)
 			if within4 {
 				element := elements2[i]
-				elements2[i] = element + 0.5 * number2
+				elements2[i] = element + 0.5*number2
 			}
 		}
 	}
@@ -356,7 +355,7 @@ func mainToNumber(i int32) float64 {
 	if i == 0 {
 		return 0.0
 	}
-	return 1.0 + mainToNumber(i - 1)
+	return 1.0 + mainToNumber(i-1)
 }
 
 func main() {

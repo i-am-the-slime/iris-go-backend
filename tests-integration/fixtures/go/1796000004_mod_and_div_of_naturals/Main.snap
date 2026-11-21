@@ -21,7 +21,7 @@ func mainGo(i int32, total int32) int32 {
 		if i >= 25 {
 			return total
 		}
-		i, total = i + 1, total + i % 10 + i / 2
+		i, total = i+1, total+i%10+i/2
 	}
 }
 

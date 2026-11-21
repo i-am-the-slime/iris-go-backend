@@ -65,12 +65,12 @@ var main_ = initializeMain_()
 
 func initializeMain_() shared.MainResult {
 	defer exception.ReportUncaught()
-	array := []Shape{Shape{Tag: ShapeCircle, FieldA0: 1.0}, Shape{Tag: ShapeSquare, FieldA0: 2.0}, Shape{Tag: ShapeLabel, FieldB0: "a", FieldB1: true}, Shape{Tag: ShapeCaption, FieldB0: "b", FieldB1: false}, Shape{Tag: ShapePoint}}
+	array := []Shape{{Tag: ShapeCircle, FieldA0: 1.0}, {Tag: ShapeSquare, FieldA0: 2.0}, {Tag: ShapeLabel, FieldB0: "a", FieldB1: true}, {Tag: ShapeCaption, FieldB0: "b", FieldB1: false}, {Tag: ShapePoint}}
 	mapped := make([]string, len(array))
 	for index, element := range array {
 		mapped[index] = describe(element)
 	}
-	array2 := []Item{Item{Tag: ItemField, Field: "x"}, Item{Tag: ItemPair, Field0: 1, Field1: 2}, Item{Tag: ItemCouple, Field0: 3, Field1: 4}}
+	array2 := []Item{{Tag: ItemField, Field: "x"}, {Tag: ItemPair, Field0: 1, Field1: 2}, {Tag: ItemCouple, Field0: 3, Field1: 4}}
 	mapped2 := make([]int32, len(array2))
 	for index, element := range array2 {
 		mapped2[index] = itemTotal(element)

@@ -62,7 +62,7 @@ func initializeMain_() []string {
 	for index, element := range array2 {
 		mapped[index] = name(element)
 	}
-	array3 := []Shape{Shape{Tag: ShapeCircle, Circle: 1}, Shape{Tag: ShapeRectangle, Rectangle0: 2, Rectangle1: 3}}
+	array3 := []Shape{{Tag: ShapeCircle, Circle: 1}, {Tag: ShapeRectangle, Rectangle0: 2, Rectangle1: 3}}
 	mapped2 := make([]string, len(array3))
 	for index := range array3 {
 		var result int32
@@ -111,7 +111,7 @@ func initializeMain_() []string {
 		}
 		mapped5[index] = result
 	}
-	array7 := []shared.LeftRight{shared.LeftRight{Left: 1, Right: 2}}
+	array7 := []shared.LeftRight{{Left: 1, Right: 2}}
 	mapped6 := make([]string, len(array7))
 	for index := range array7 {
 		mapped6[index] = prim.ShowInt(array7[index].Left + array7[index].Right)

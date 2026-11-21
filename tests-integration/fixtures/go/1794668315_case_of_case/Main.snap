@@ -15,7 +15,7 @@ var main_ = initializeMain_()
 
 func initializeMain_() []string {
 	defer exception.ReportUncaught()
-	xs := []shared.Id{shared.Id{Id: "a"}}
+	xs := []shared.Id{{Id: "a"}}
 	var result string
 	result = xs[0].Id
 	xs2 := []int32{1, 2}

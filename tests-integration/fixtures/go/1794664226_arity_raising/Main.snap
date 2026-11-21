@@ -32,7 +32,7 @@ func offset(n int32, x int32) int32 {
 	case 0:
 		return x
 	default:
-		return offset(n - 1, x) + 1
+		return offset(n-1, x) + 1
 	}
 }
 
@@ -45,7 +45,7 @@ func prefixed(n int32) func(string) string {
 	default:
 		prefix := repeat(n)
 		return func(text string) string {
-			return prim.Append(prefix, prefixed(n - 1)(text))
+			return prim.Append(prefix, prefixed(n-1)(text))
 		}
 	}
 }
@@ -55,7 +55,7 @@ func repeat(n int32) string {
 	case 0:
 		return ""
 	default:
-		return "*" + repeat(n - 1)
+		return "*" + repeat(n-1)
 	}
 }
 

@@ -93,12 +93,12 @@ func byLabel(variant2 variant.InvalidLateMissing) string {
 	}
 }
 
-var problems []variant.InvalidLateMissing = []variant.InvalidLateMissing{variant.InvalidLateMissing{Tag: variant.InvalidLateMissingMissing, Missing: "user"}, variant.InvalidLateMissing{Tag: variant.InvalidLateMissingInvalid, Invalid: 3}, variant.InvalidLateMissing{Tag: variant.InvalidLateMissingLate, Late: shared.After{After: 5}}}
+var problems []variant.InvalidLateMissing = []variant.InvalidLateMissing{{Tag: variant.InvalidLateMissingMissing, Missing: "user"}, {Tag: variant.InvalidLateMissingInvalid, Invalid: 3}, {Tag: variant.InvalidLateMissingLate, Late: shared.After{After: 5}}}
 
 func byRecord(variant2 variant.InvalidLateMissing) string {
 	switch variant2.Tag {
 	case variant.InvalidLateMissingInvalid:
-		return "bad " + prim.ShowInt(variant2.Invalid * 2)
+		return "bad " + prim.ShowInt(variant2.Invalid*2)
 	case variant.InvalidLateMissingLate:
 		return "after " + prim.ShowInt(variant2.Late.After)
 	default: // variant.InvalidLateMissingMissing

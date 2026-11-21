@@ -49,7 +49,7 @@ func nested(n int32, e any) int32 {
 	if n <= 0 {
 		return 0
 	}
-	return 1 + nested(n - 1, convert3(&NestNest{Nest: e.(*Nest)}))
+	return 1 + nested(n-1, convert3(&NestNest{Nest: e.(*Nest)}))
 }
 
 func main() {

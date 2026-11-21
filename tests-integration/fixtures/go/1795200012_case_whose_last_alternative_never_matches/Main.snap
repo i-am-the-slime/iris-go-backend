@@ -36,7 +36,7 @@ func initializeMain_() []int32 {
 }
 
 func defaulted(ignored float64) int32 {
-	array := []struct{}{struct{}{}, struct{}{}, struct{}{}}
+	array := []struct{}{{}, {}, {}}
 	accumulator := list.SharedListUnitNil
 	var listUnitCells alloc.Cells[list.ListUnit]
 	for index := len(array) - 1; index >= 0; index-- {

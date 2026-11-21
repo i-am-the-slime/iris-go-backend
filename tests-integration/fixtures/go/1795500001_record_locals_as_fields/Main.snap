@@ -49,7 +49,7 @@ var main_ = initializeMain_()
 
 func initializeMain_() []string {
 	defer exception.ReportUncaught()
-	bodies := []shared.Body{shared.Body{X: 0.0, Y: 0.0, Vx: 0.0, Vy: 0.0, Mass: 1.0}, shared.Body{X: 1.0, Y: 2.0, Vx: 0.5, Vy: 0.0, Mass: 0.5}, shared.Body{X: -1.0, Y: 0.5, Vx: 0.0, Vy: 0.25, Mass: 2.0}}
+	bodies := []shared.Body{{X: 0.0, Y: 0.0, Vx: 0.0, Vy: 0.0, Mass: 1.0}, {X: 1.0, Y: 2.0, Vx: 0.5, Vy: 0.0, Mass: 0.5}, {X: -1.0, Y: 0.5, Vx: 0.0, Vy: 0.25, Mass: 2.0}}
 	mapped := make([]shared.Body, len(bodies))
 	for index := range bodies {
 		i := int32(index)
@@ -61,12 +61,12 @@ func initializeMain_() []string {
 		for index2 := range bodies {
 			i2 := int32(index2)
 			if i != i2 {
-				accumulatorVx = accumulatorVx + (bodies[index2].X - accumulatorX) * bodies[index2].Mass
-				accumulatorVy = accumulatorVy + (bodies[index2].Y - accumulatorY) * bodies[index2].Mass
+				accumulatorVx += (bodies[index2].X - accumulatorX) * bodies[index2].Mass
+				accumulatorVy += (bodies[index2].Y - accumulatorY) * bodies[index2].Mass
 			}
 		}
-		accumulatorX = accumulatorX + accumulatorVx
-		accumulatorY = accumulatorY + accumulatorVy
+		accumulatorX += accumulatorVx
+		accumulatorY += accumulatorVy
 		mapped[index].Mass = accumulatorMass
 		mapped[index].Vx = accumulatorVx
 		mapped[index].Vy = accumulatorVy
@@ -79,9 +79,9 @@ func initializeMain_() []string {
 	var accumulatorTotal int32 = 0
 	accumulatorSeen := false
 	for _, n := range array2 {
-		accumulatorCount = accumulatorCount + 1
-		accumulatorTotal = accumulatorTotal + n
-		accumulatorLabel = accumulatorLabel + prim.ShowInt(n)
+		accumulatorCount += 1
+		accumulatorTotal += n
+		accumulatorLabel += prim.ShowInt(n)
 		accumulatorSeen = accumulatorSeen || n > 2
 	}
 	var result string
@@ -96,9 +96,9 @@ func initializeMain_() []string {
 	var accumulatorTotal2 int32 = 0
 	accumulatorSeen2 := false
 	for _, n := range array3 {
-		accumulatorCount2 = accumulatorCount2 + 1
-		accumulatorTotal2 = accumulatorTotal2 + n
-		accumulatorLabel2 = accumulatorLabel2 + prim.ShowInt(n)
+		accumulatorCount2 += 1
+		accumulatorTotal2 += n
+		accumulatorLabel2 += prim.ShowInt(n)
 		accumulatorSeen2 = accumulatorSeen2 || n > 2
 	}
 	array4 := []int32{1, 2, 3}
@@ -107,9 +107,9 @@ func initializeMain_() []string {
 	var accumulatorTotal3 int32 = 0
 	accumulatorSeen3 := false
 	for _, n := range array4 {
-		accumulatorCount3 = accumulatorCount3 + 1
-		accumulatorTotal3 = accumulatorTotal3 + n
-		accumulatorLabel3 = accumulatorLabel3 + prim.ShowInt(n)
+		accumulatorCount3 += 1
+		accumulatorTotal3 += n
+		accumulatorLabel3 += prim.ShowInt(n)
 		accumulatorSeen3 = accumulatorSeen3 || n > 2
 	}
 	array5 := []int32{2, 3, 4}
@@ -120,7 +120,7 @@ func initializeMain_() []string {
 		_, count := array.RangeSteps(1, width)
 		accumulatorCells := accumulator.Cells
 		for range count {
-			accumulatorCells = accumulatorCells + 1
+			accumulatorCells += 1
 		}
 		updated.Cells = accumulatorCells
 		accumulator = updated
@@ -132,7 +132,7 @@ func initializeMain_() []string {
 		updated.Right = accumulator2.Left
 		accumulator2 = updated
 	}
-	return []string{prim.ShowArray(show.ShowBodyConsNumberConsNumberConsNumberConsNumberConsNumberNil, mapped), "{ count: " + prim.ShowInt(accumulatorCount) + ", label: " + prim.ShowString(accumulatorLabel) + ", seen: " + result + ", total: " + prim.ShowInt(accumulatorTotal) + " }", prim.ShowArray(show.ShowTallyConsIntConsStringConsBooleanConsIntNil, array.Reverse([]shared.Tally{shared.Tally{Label: accumulatorLabel2, Count: accumulatorCount2, Total: accumulatorTotal2, Seen: accumulatorSeen2}, shared.Tally{Label: accumulatorLabel3, Count: accumulatorCount3, Total: accumulatorTotal3, Seen: accumulatorSeen3}})), "{ cells: " + prim.ShowInt(accumulator.Cells) + ", rows: " + prim.ShowInt(accumulator.Rows) + " }", "{ left: " + prim.ShowInt(accumulator2.Left) + ", right: " + prim.ShowInt(accumulator2.Right) + " }"}
+	return []string{prim.ShowArray(show.ShowBodyConsNumberConsNumberConsNumberConsNumberConsNumberNil, mapped), "{ count: " + prim.ShowInt(accumulatorCount) + ", label: " + prim.ShowString(accumulatorLabel) + ", seen: " + result + ", total: " + prim.ShowInt(accumulatorTotal) + " }", prim.ShowArray(show.ShowTallyConsIntConsStringConsBooleanConsIntNil, array.Reverse([]shared.Tally{{Label: accumulatorLabel2, Count: accumulatorCount2, Total: accumulatorTotal2, Seen: accumulatorSeen2}, {Label: accumulatorLabel3, Count: accumulatorCount3, Total: accumulatorTotal3, Seen: accumulatorSeen3}})), "{ cells: " + prim.ShowInt(accumulator.Cells) + ", rows: " + prim.ShowInt(accumulator.Rows) + " }", "{ left: " + prim.ShowInt(accumulator2.Left) + ", right: " + prim.ShowInt(accumulator2.Right) + " }"}
 }
 
 func main() {

@@ -43,7 +43,7 @@ func initializeMain_() []string {
 	array := []int32{1, 2, opaque(3)}
 	var accumulator int32 = 0
 	for _, value := range array {
-		accumulator = accumulator + value
+		accumulator += value
 	}
 	array2 := []int32{4, opaque(5)}
 	mapped := make([]string, len(array2))

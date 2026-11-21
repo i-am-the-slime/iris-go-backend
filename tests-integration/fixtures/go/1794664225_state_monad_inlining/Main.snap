@@ -23,7 +23,7 @@ func countDown(n int32, state int32) shared.StateValue {
 		case 0:
 			return shared.StateValue{Value: struct{}{}, State: state}
 		default:
-			n, state = n - 1, state + 1
+			n, state = n-1, state+1
 			continue
 		}
 	}

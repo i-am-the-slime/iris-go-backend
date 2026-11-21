@@ -203,7 +203,7 @@ func relateArrayInt(ordDictionary ordering.Ord, depth int32, left any, right any
 			return func(coerced2 any) ordering.Ordering {
 				return original3(coerced2.([]any))
 			}
-		}}, depth - 1, []any{left}, []any{right, right}
+		}}, depth-1, []any{left}, []any{right, right}
 	}
 }
 

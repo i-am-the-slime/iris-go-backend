@@ -64,12 +64,12 @@ func loop(i int32, total int32) M {
 	}
 	return func(env int32, more func(func(struct{}) StepInt) StepInt, failure func(Failure) StepInt, done func(int32) StepInt) StepInt {
 		return more(func(_ struct{}) StepInt {
-			return askParse(env + i, more, failure, func(a int32) StepInt {
+			return askParse(env+i, more, failure, func(a int32) StepInt {
 				m := countdown(prim.IntMod(i, 3))
 				return more(func(_ struct{}) StepInt {
 					return more(func(_ struct{}) StepInt {
 						return m(env, more, failure, func(a2 int32) StepInt {
-							n := loop(i - 1, prim.IntMod(total + a + a2, 1000003))
+							n := loop(i-1, prim.IntMod(total+a+a2, 1000003))
 							return more(func(_ struct{}) StepInt {
 								return n(env, more, failure, done)
 							})

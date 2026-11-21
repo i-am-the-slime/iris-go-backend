@@ -1,6 +1,5 @@
 ---
 source: tests-integration/src/fixtures.rs
-assertion_line: 573
 ---
 // Data/Maybe/maybe.go
 package maybe
@@ -77,7 +76,7 @@ func countSpacesUnconsingCountsUpToTwo(text string, count int32) int32 {
 			cu0 := prim.ToCharCode(prim.CharAt(0, text))
 			cu1 := prim.ToCharCode(prim.CharAt(1, text))
 			if 55296 <= cu0 && cu0 <= 56319 && (56320 <= cu1 && cu1 <= 57343) {
-				result = maybe.JustHeadTail(shared.HeadTail{Head: (cu0 - 55296) * 1024 + (cu1 - 56320) + 65536, Tail: prim.CodeUnitDrop(2, text)})
+				result = maybe.JustHeadTail(shared.HeadTail{Head: (cu0-55296)*1024 + (cu1 - 56320) + 65536, Tail: prim.CodeUnitDrop(2, text)})
 			} else {
 				result = maybe.JustHeadTail(shared.HeadTail{Head: cu0, Tail: prim.CodeUnitDrop(1, text)})
 			}
@@ -125,7 +124,7 @@ func unchangedTextLengthIsCountedBeforeTheLoop(text string, i int32, count int32
 		} else {
 			result = count
 		}
-		i, count = i + 1, result
+		i, count = i+1, result
 	}
 }
 
@@ -134,7 +133,7 @@ func changedRestLengthIsCountedEachIteration(rest string, count int32) int32 {
 		if prim.CodeUnitLengthUpTo(4, rest) < 3 {
 			return count
 		}
-		rest, count = prim.CodeUnitDrop(prim.IntDiv(prim.CodeUnitLength(rest), 2), rest), count + 1
+		rest, count = prim.CodeUnitDrop(prim.IntDiv(prim.CodeUnitLength(rest), 2), rest), count+1
 	}
 }
 

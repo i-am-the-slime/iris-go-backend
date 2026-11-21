@@ -55,7 +55,7 @@ func initializeMain_() []int32 {
 			result2 = 0
 		}
 	}
-	return []int32{boxWidth * opaque(4) + boxWidth, opaque(4) * opaque(6), result.Y, result2}
+	return []int32{boxWidth*opaque(4) + boxWidth, opaque(4) * opaque(6), result.Y, result2}
 }
 
 func opaque(x int32) int32 {

@@ -15,7 +15,7 @@ var main_ = initializeMain_()
 
 func initializeMain_() string {
 	defer exception.ReportUncaught()
-	array := []shared.KindSpaceAfterSpaceBeforeValue{shared.KindSpaceAfterSpaceBeforeValue{SpaceBefore: false, SpaceAfter: true, Value: "a", Kind: 1}, shared.KindSpaceAfterSpaceBeforeValue{SpaceBefore: true, SpaceAfter: false, Value: "b", Kind: 2}}
+	array := []shared.KindSpaceAfterSpaceBeforeValue{{SpaceBefore: false, SpaceAfter: true, Value: "a", Kind: 1}, {SpaceBefore: true, SpaceAfter: false, Value: "b", Kind: 2}}
 	accumulator := shared.SpaceValue{Value: "", Space: false}
 	for kindSpaceAfterSpaceBeforeValueIndex := range array {
 		var result string

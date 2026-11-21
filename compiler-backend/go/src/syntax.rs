@@ -729,6 +729,9 @@ struct Printer {
     placed: bool,
     /// The directory of the Go file, which directives name the PureScript relative to.
     directory: Option<Arc<Path>>,
+    /// Whether the statement being printed is the last one of a function that returns nothing,
+    /// where a `return` says nothing.
+    ends_procedure: bool,
 }
 
 impl Printer {
@@ -813,7 +816,7 @@ impl Printer {
                 }
                 let signature = self.signature(parameters, result.as_ref());
                 self.line(&format!("func {name}{signature} {{"));
-                self.block(body);
+                self.procedure_body(body, result.is_none());
                 self.line("}");
             }
         }
@@ -830,17 +833,32 @@ impl Printer {
         }
     }
 
+    fn procedure_body(&mut self, statements: &[GoStatement], returns_nothing: bool) {
+        let enclosing = std::mem::replace(&mut self.ends_procedure, returns_nothing);
+        self.block(statements);
+        self.ends_procedure = enclosing;
+    }
+
     fn block(&mut self, statements: &[GoStatement]) {
         let enclosing = self.attribution.clone();
+        let ends_procedure = std::mem::take(&mut self.ends_procedure);
+        let last =
+            statements.iter().rposition(|statement| !matches!(statement, GoStatement::Line(_)));
         self.indentation += 1;
-        for statement in statements {
+        for (position, statement) in statements.iter().enumerate() {
+            self.ends_procedure = ends_procedure && Some(position) == last;
             self.statement(statement);
         }
+        self.ends_procedure = ends_procedure;
         self.indentation -= 1;
         self.attribution = enclosing;
     }
 
     fn statement(&mut self, statement: &GoStatement) {
+        let ends_procedure = std::mem::take(&mut self.ends_procedure);
+        if ends_procedure && matches!(statement, GoStatement::Return(None)) {
+            return;
+        }
         if let GoStatement::Line(line) = statement {
             self.attribution = Some(line.clone());
             self.placed = true;
@@ -854,8 +872,9 @@ impl Printer {
         match statement {
             GoStatement::Line(_) => {}
             GoStatement::Define { names, values } => {
+                let depth = if names.len() > 1 && values.len() > 1 { 2 } else { 1 };
                 let values: Vec<String> =
-                    values.iter().map(|value| self.expression(value, 0)).collect();
+                    values.iter().map(|value| self.expression_at(value, 0, depth)).collect();
                 self.line(&format!("{} := {}", names.join(", "), values.join(", ")));
             }
             GoStatement::Variable { name, type_, value } => {
@@ -869,10 +888,22 @@ impl Printer {
                 }
             }
             GoStatement::Assign { targets, values } => {
+                if let ([target], [GoExpression::Binary { operator, left, right }]) =
+                    (targets.as_slice(), values.as_slice())
+                    && COMPOUND_OPERATORS.contains(operator)
+                    && is_plain_place(target)
+                    && same_place(target, left)
+                {
+                    let target = self.expression(target, 0);
+                    let right = self.expression(right, 0);
+                    self.line(&format!("{target} {operator}= {right}"));
+                    return;
+                }
+                let depth = if targets.len() > 1 && values.len() > 1 { 2 } else { 1 };
                 let targets: Vec<String> =
-                    targets.iter().map(|target| self.expression(target, 0)).collect();
+                    targets.iter().map(|target| self.expression_at(target, 0, depth)).collect();
                 let values: Vec<String> =
-                    values.iter().map(|value| self.expression(value, 0)).collect();
+                    values.iter().map(|value| self.expression_at(value, 0, depth)).collect();
                 self.line(&format!("{} = {}", targets.join(", "), values.join(", ")));
             }
             GoStatement::Expression(expression) => {
@@ -891,7 +922,9 @@ impl Printer {
             GoStatement::If { condition, then, otherwise } => {
                 let condition = self.expression(condition, 0);
                 self.line(&format!("if {condition} {{"));
+                self.ends_procedure = ends_procedure;
                 self.block(then);
+                self.ends_procedure = ends_procedure;
                 self.else_chain(otherwise);
             }
             GoStatement::IfAssert { name, value, type_, then } => {
@@ -914,6 +947,7 @@ impl Printer {
                     let values: Vec<String> =
                         case.values.iter().map(|value| self.expression(value, 0)).collect();
                     self.line(&format!("case {}:", values.join(", ")));
+                    self.ends_procedure = ends_procedure;
                     self.block(&case.body);
                 }
                 if let Some(GoDefault { covers, body }) = default {
@@ -924,6 +958,7 @@ impl Printer {
                             covers.iter().map(|value| self.expression(value, 0)).collect();
                         self.line(&format!("default: // {}", covers.join(", ")));
                     }
+                    self.ends_procedure = ends_procedure;
                     self.block(body);
                 }
                 self.line("}");
@@ -979,6 +1014,7 @@ impl Printer {
     }
 
     fn else_chain(&mut self, otherwise: &[GoStatement]) {
+        let ends_procedure = std::mem::take(&mut self.ends_procedure);
         match otherwise {
             otherwise
                 if otherwise.iter().all(|statement| matches!(statement, GoStatement::Line(_))) =>
@@ -988,17 +1024,21 @@ impl Printer {
             [GoStatement::If { condition, then, otherwise }] => {
                 let condition = self.expression(condition, 0);
                 self.line(&format!("}} else if {condition} {{"));
+                self.ends_procedure = ends_procedure;
                 self.block(then);
+                self.ends_procedure = ends_procedure;
                 self.else_chain(otherwise);
             }
             [GoStatement::Line(line), chained @ GoStatement::If { .. }] => {
                 let enclosing = self.attribution.replace(line.clone());
                 self.name_attribution();
+                self.ends_procedure = ends_procedure;
                 self.else_chain(std::slice::from_ref(chained));
                 self.attribution = enclosing;
             }
             _ => {
                 self.line("} else {");
+                self.ends_procedure = ends_procedure;
                 self.block(otherwise);
                 self.line("}");
             }
@@ -1039,7 +1079,7 @@ impl Printer {
                     return "struct{}".into();
                 }
                 let mut rendered = String::from("struct {\n");
-                let width = fields.iter().map(|(name, _)| name.len()).max().unwrap_or(0);
+                let width = fields.iter().map(|(name, _)| name.chars().count()).max().unwrap_or(0);
                 for (name, field_type) in fields {
                     let field_type = self.type_(field_type);
                     for _ in 0..=self.indentation {
@@ -1072,6 +1112,17 @@ impl Printer {
     }
 
     fn expression(&mut self, expression: &GoExpression, parent_precedence: u8) -> String {
+        self.expression_at(expression, parent_precedence, 1)
+    }
+
+    /// An expression `depth` levels into the list it is part of, which decides, as it does for
+    /// `gofmt`, which binary operators get blanks around them: `f(a+b, c)` but `x := a + b`.
+    fn expression_at(
+        &mut self,
+        expression: &GoExpression,
+        parent_precedence: u8,
+        depth: usize,
+    ) -> String {
         match expression {
             GoExpression::Identifier(name) => name.clone(),
             GoExpression::Qualified { package, name } => format!("{package}.{name}"),
@@ -1082,58 +1133,66 @@ impl Printer {
             GoExpression::Rune(value) => go_rune(*value),
             GoExpression::Boolean(value) => value.to_string(),
             GoExpression::Call { function, arguments } => {
-                let function = self.expression(function, 6);
-                let arguments: Vec<String> =
-                    arguments.iter().map(|argument| self.expression(argument, 0)).collect();
+                let depth = if arguments.len() > 1 { depth + 1 } else { depth };
+                let function = self.expression_at(function, 6, depth);
+                let arguments: Vec<String> = arguments
+                    .iter()
+                    .map(|argument| self.expression_at(argument, 0, depth))
+                    .collect();
                 format!("{function}({})", arguments.join(", "))
             }
             GoExpression::Binary { operator, left, right } => {
                 let precedence = binary_precedence(operator);
-                let left = self.expression(left, precedence);
-                let right = self.expression(right, precedence + 1);
-                let rendered = format!("{left} {operator} {right}");
-                if precedence < parent_precedence { format!("({rendered})") } else { rendered }
+                let parenthesised = precedence < parent_precedence;
+                let depth = if parenthesised { depth.saturating_sub(1).max(1) } else { depth };
+                let blank = precedence < binary_cutoff(expression, depth);
+                let left_depth = match left.as_ref() {
+                    GoExpression::Binary { operator, .. }
+                        if binary_precedence(operator) == precedence =>
+                    {
+                        depth
+                    }
+                    _ => depth + 1,
+                };
+                let left = self.expression_at(left, precedence, left_depth);
+                let right = self.expression_at(right, precedence + 1, depth + 1);
+                let rendered = if blank {
+                    format!("{left} {operator} {right}")
+                } else {
+                    format!("{left}{operator}{right}")
+                };
+                if parenthesised { format!("({rendered})") } else { rendered }
             }
             GoExpression::Unary { operator, operand } => {
-                let operand = self.expression(operand, 6);
+                let operand = self.expression_at(operand, 6, depth);
                 let rendered = format!("{operator}{operand}");
                 if parent_precedence > 5 { format!("({rendered})") } else { rendered }
             }
             GoExpression::Field { value, name } => {
                 // A composite literal is ambiguous in if/for/switch headers.
                 let composite = matches!(value.as_ref(), GoExpression::Composite { .. });
-                let value = self.expression(value, 6);
+                let value = self.expression_at(value, 6, depth);
                 if composite {
                     return format!("({value}).{name}");
                 }
                 format!("{value}.{name}")
             }
             GoExpression::Index { value, index } => {
-                let value = self.expression(value, 6);
-                let index = self.expression(index, 0);
+                let value = self.expression_at(value, 6, 1);
+                let index = self.expression_at(index, 0, depth + 1);
                 format!("{value}[{index}]")
             }
             GoExpression::Composite { type_, fields } => {
-                let type_ = self.type_(type_);
-                let fields: Vec<String> = fields
-                    .iter()
-                    .map(|(name, value)| {
-                        let value = self.expression(value, 0);
-                        match name {
-                            Some(name) => format!("{name}: {value}"),
-                            None => value,
-                        }
-                    })
-                    .collect();
-                format!("{type_}{{{}}}", fields.join(", "))
+                let rendered = self.type_(type_);
+                format!("{rendered}{}", self.composite_fields(type_, fields))
             }
             GoExpression::Address(value) => {
-                let value = self.expression(value, 6);
+                let value = self.expression_at(value, 6, depth);
                 format!("&{value}")
             }
             GoExpression::Conversion { type_, value } => {
                 let rendered = self.type_(type_);
-                let value = self.expression(value, 0);
+                let value = self.expression_at(value, 0, depth);
                 match type_ {
                     GoType::Pointer(_) | GoType::Function { .. } => format!("({rendered})({value})"),
                     _ => format!("{rendered}({value})"),
@@ -1141,14 +1200,14 @@ impl Printer {
             }
             GoExpression::TypeAssertion { value, type_ } => {
                 self.census.assertions += 1;
-                let value = self.expression(value, 6);
+                let value = self.expression_at(value, 6, depth);
                 let type_ = self.type_(type_);
                 format!("{value}.({type_})")
             }
             GoExpression::Type(type_) => self.type_(type_),
-            GoExpression::Spread(value) => format!("{}...", self.expression(value, 0)),
+            GoExpression::Spread(value) => format!("{}...", self.expression_at(value, 0, depth)),
             GoExpression::Instantiation { function, arguments } => {
-                let function = self.expression(function, 6);
+                let function = self.expression_at(function, 6, depth);
                 let arguments: Vec<String> =
                     arguments.iter().map(|argument| self.type_argument(argument)).collect();
                 format!("{function}[{}]", arguments.join(", "))
@@ -1157,7 +1216,7 @@ impl Printer {
                 let signature = self.signature(parameters, result.as_ref());
                 let mut rendered = format!("func{signature} {{\n");
                 let saved = std::mem::take(&mut self.output);
-                self.block(body);
+                self.procedure_body(body, result.is_none());
                 let inner = std::mem::replace(&mut self.output, saved);
                 rendered.push_str(&inner);
                 for _ in 0..self.indentation {
@@ -1167,6 +1226,135 @@ impl Printer {
                 rendered
             }
         }
+    }
+
+    /// The braces and fields of a composite literal of `type_`. The elements of a slice leave out
+    /// the type `gofmt -s` leaves out: `[]T{{...}}` and `[]*T{{...}}` rather than `[]T{T{...}}`
+    /// and `[]*T{&T{...}}`.
+    fn composite_fields(
+        &mut self,
+        type_: &GoType,
+        fields: &[(Option<String>, GoExpression)],
+    ) -> String {
+        let element_type = match type_ {
+            GoType::Slice(element) => Some(element.as_ref()),
+            _ => None,
+        };
+        let fields: Vec<String> = fields
+            .iter()
+            .map(|(name, value)| match (name, element_type) {
+                (Some(name), _) => format!("{name}: {}", self.expression(value, 0)),
+                (None, Some(element_type)) => self.element(value, element_type),
+                (None, None) => self.expression(value, 0),
+            })
+            .collect();
+        format!("{{{}}}", fields.join(", "))
+    }
+
+    fn element(&mut self, value: &GoExpression, element_type: &GoType) -> String {
+        match (value, element_type) {
+            (GoExpression::Composite { type_, fields }, _) if type_ == element_type => {
+                self.composite_fields(type_, fields)
+            }
+            (GoExpression::Address(pointed), GoType::Pointer(pointee)) => match pointed.as_ref() {
+                GoExpression::Composite { type_, fields } if type_ == pointee.as_ref() => {
+                    self.composite_fields(type_, fields)
+                }
+                _ => self.expression(value, 0),
+            },
+            _ => self.expression(value, 0),
+        }
+    }
+}
+
+/// The lowest precedence whose operators `gofmt` prints without blanks in `expression`, a binary
+/// expression `depth` levels into its list: the operators that bind tighter than the loosest
+/// one lose their blanks, `a + b*c`, and inside an argument list every `+` and `*` does.
+fn binary_cutoff(expression: &GoExpression, depth: usize) -> u8 {
+    let (has_sums, has_products, problem) = walk_binary(expression);
+    if problem > 0 {
+        return problem + 1;
+    }
+    match (has_sums && has_products, depth == 1) {
+        (true, true) => 5,
+        (true, false) => 4,
+        (false, true) => 6,
+        (false, false) => 4,
+    }
+}
+
+/// Whether the operands of `expression` that print without parentheses use precedence 4 or 5,
+/// and the precedence below which blanks must stay to keep `a / *p` or `a - -b` from reading as
+/// a comment or a decrement.
+fn walk_binary(expression: &GoExpression) -> (bool, bool, u8) {
+    let GoExpression::Binary { operator, left, right } = expression else {
+        return (false, false, 0);
+    };
+    let precedence = binary_precedence(operator);
+    let mut has_sums = precedence == 4;
+    let mut has_products = precedence == 5;
+    let mut problem = 0;
+    let mut absorb = |operand: &GoExpression| {
+        let (sums, products, operand_problem) = walk_binary(operand);
+        has_sums |= sums;
+        has_products |= products;
+        problem = problem.max(operand_problem);
+    };
+    if let GoExpression::Binary { operator: left_operator, .. } = left.as_ref()
+        && binary_precedence(left_operator) >= precedence
+    {
+        absorb(left);
+    }
+    match right.as_ref() {
+        GoExpression::Binary { operator: right_operator, .. }
+            if binary_precedence(right_operator) > precedence =>
+        {
+            absorb(right)
+        }
+        GoExpression::Unary { operator: unary, .. } => {
+            match (*operator, *unary) {
+                ("/", "*") | ("&", "&") | ("&", "^") => problem = 5,
+                ("+", "+") | ("-", "-") => problem = problem.max(4),
+                _ => {}
+            }
+        }
+        GoExpression::Address(_) if *operator == "&" => problem = 5,
+        _ => {}
+    }
+    (has_sums, has_products, problem)
+}
+
+/// The operators Go has an assignment form of, `x += y` for `x = x + y`.
+const COMPOUND_OPERATORS: [&str; 10] = ["+", "-", "*", "/", "%", "&", "|", "^", "<<", ">>"];
+
+/// A variable, or a field or element of one at a constant or variable index: a place whose
+/// address works out the same however often Go evaluates it, so `x = x + y` and `x += y`,
+/// which evaluates it once, do the same.
+fn is_plain_place(place: &GoExpression) -> bool {
+    match place {
+        GoExpression::Identifier(_) => true,
+        GoExpression::Field { value, .. } => is_plain_place(value),
+        GoExpression::Index { value, index } => {
+            is_plain_place(value)
+                && matches!(index.as_ref(), GoExpression::Identifier(_) | GoExpression::Integer(_))
+        }
+        _ => false,
+    }
+}
+
+fn same_place(place: &GoExpression, other: &GoExpression) -> bool {
+    match (place, other) {
+        (GoExpression::Identifier(left), GoExpression::Identifier(right)) => left == right,
+        (GoExpression::Integer(left), GoExpression::Integer(right)) => left == right,
+        (
+            GoExpression::Field { value: left, name: left_name },
+            GoExpression::Field { value: right, name: right_name },
+        ) => left_name == right_name && same_place(left, right),
+        (
+            GoExpression::Index { value: left, index: left_index },
+            GoExpression::Index { value: right, index: right_index },
+        ) => same_place(left, right) && same_place(left_index, right_index),
+        _ => false,
     }
 }
 

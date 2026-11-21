@@ -52,8 +52,8 @@ func initializeMain_() []int32 {
 		elements[i2] = 2 * result
 	}
 	i3 := int32(len(*array2))
-	i4 := (*array2)[i3 - 1]
-	(*array2)[i3 - 1] = i4 + 1
+	i4 := (*array2)[i3-1]
+	(*array2)[i3-1] = i4 + 1
 	var poked bool
 	poked = false
 	array3 := array.Thaw([]string{"a", "b"})()

@@ -52,7 +52,7 @@ func buildThunks(n int32, acc *LazyInt) *LazyInt {
 		case 0:
 			return acc
 		default:
-			n, acc = n - 1, lazyIntCells.New(LazyInt{Tag: LazyIntBuildThunks, Acc: acc})
+			n, acc = n-1, lazyIntCells.New(LazyInt{Tag: LazyIntBuildThunks, Acc: acc})
 			continue
 		}
 	}
@@ -66,10 +66,10 @@ func countDown(n int32, k *IntToInt) int32 {
 		}
 		n2 := n
 		if prim.IntMod(n2, 2) == 0 {
-			n, k = n2 - 1, intToIntCells.New(IntToInt{Tag: IntToIntCountDown, K: k, N: n2})
+			n, k = n2-1, intToIntCells.New(IntToInt{Tag: IntToIntCountDown, K: k, N: n2})
 			continue
 		}
-		n, k = n2 - 1, intToIntCells.New(IntToInt{Tag: IntToIntCountDown2, K: k})
+		n, k = n2-1, intToIntCells.New(IntToInt{Tag: IntToIntCountDown2, K: k})
 	}
 }
 
@@ -90,11 +90,11 @@ func runIntToInt(function *IntToInt, x int32) int32 {
 		case IntToIntCountDown:
 			k := function.K
 			n := function.N
-			function, x = k, x + n
+			function, x = k, x+n
 			continue
 		default: // IntToIntCountDown2
 			k := function.K
-			function, x = k, x * 2
+			function, x = k, x*2
 			continue
 		}
 	}

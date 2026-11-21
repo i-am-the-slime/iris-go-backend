@@ -34,7 +34,7 @@ func run(step Step) int32 {
 		return step.Done
 	default: // StepStep
 		n := step.Step0
-		return n + run(step.Step1(n - 1))
+		return n + run(step.Step1(n-1))
 	}
 }
 

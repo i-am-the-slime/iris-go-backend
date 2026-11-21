@@ -83,7 +83,7 @@ func search(target int32, key int32) Outcome {
 		if key > 9 {
 			return Outcome{Tag: OutcomeMissing}
 		}
-		key = key + 1
+		key += 1
 	}
 }
 

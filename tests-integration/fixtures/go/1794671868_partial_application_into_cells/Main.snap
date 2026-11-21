@@ -37,7 +37,7 @@ func addAll(n int32, reader *Reader) *Reader {
 		case 0:
 			return reader
 		default:
-			n, reader = n - 1, readerCells.New(Reader{Tag: ReaderPlus, N: n, Reader: reader})
+			n, reader = n-1, readerCells.New(Reader{Tag: ReaderPlus, N: n, Reader: reader})
 			continue
 		}
 	}
@@ -46,10 +46,10 @@ func addAll(n int32, reader *Reader) *Reader {
 func plus(n int32, reader *Reader, environment int32) int32 {
 	for {
 		if n > 100 {
-			n = n - 100
+			n -= 100
 			continue
 		}
-		return runReader(environment, reader) + n * environment
+		return runReader(environment, reader) + n*environment
 	}
 }
 

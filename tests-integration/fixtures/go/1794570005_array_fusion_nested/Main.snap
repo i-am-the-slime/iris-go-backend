@@ -21,7 +21,7 @@ func initializeMain_() shared.MainResult {
 		if value < 4 {
 			for _, value2 := range numbers {
 				if value2 > value {
-					bound = append(bound, prim.ShowInt(value) + ":" + prim.ShowInt(value2))
+					bound = append(bound, prim.ShowInt(value)+":"+prim.ShowInt(value2))
 				}
 			}
 		}
@@ -30,7 +30,7 @@ func initializeMain_() shared.MainResult {
 	for _, x := range numbers {
 		for _, value := range numbers {
 			if value < x {
-				count = count + 1
+				count += 1
 			}
 		}
 	}
@@ -49,13 +49,13 @@ func initializeMain_() shared.MainResult {
 	var accumulator int32 = 0
 	for value := int32(1); value < 11; value++ {
 		value2 := value * 2
-		accumulator = accumulator + value2
+		accumulator += value2
 	}
 	mapped := make([]int32, len(numbers))
 	for slot, value := range numbers {
 		x := value + 1
 		i := int32(slot)
-		mapped[slot] = i * 100 + x
+		mapped[slot] = i*100 + x
 	}
 	mapped2 := []string{}
 	for _, value := range numbers {

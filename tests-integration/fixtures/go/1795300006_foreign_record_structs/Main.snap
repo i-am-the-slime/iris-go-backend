@@ -13,7 +13,7 @@ import (
 func main_() []string {
 	record := Run_ffi.Run("echo")
 	array := Run_ffi.RunAll([]string{"a", "b"})
-	record.Stdout = record.Stdout + "!"
+	record.Stdout += "!"
 	return []string{Run_ffi.Describe(record), Run_ffi.Describe(made), prim.ShowInt(int32(len(array))), record.Stderr + prim.ShowInt(record.ExitCode)}
 }
 

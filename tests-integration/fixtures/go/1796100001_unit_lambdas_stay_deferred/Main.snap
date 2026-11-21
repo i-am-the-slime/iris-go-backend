@@ -46,14 +46,14 @@ func main() {
 	i := Actions_ffi.RunWhenAsked(func() int32 {
 		var accumulator int32 = 0
 		for value := int32(1); value < 11; value++ {
-			accumulator = accumulator + value
+			accumulator += value
 		}
 		return accumulator
 	})
 	i2 := Actions_ffi.RunWhenAsked(func() int32 {
 		var accumulator int32 = 0
 		for value := int32(1); value < 21; value++ {
-			accumulator = accumulator + value
+			accumulator += value
 		}
 		return accumulator
 	})
@@ -67,7 +67,7 @@ func main() {
 	for index, x := range array3 {
 		var accumulator int32 = 0
 		for value := int32(1); value < 11; value++ {
-			accumulator = accumulator + value
+			accumulator += value
 		}
 		mapped2[index] = x + accumulator
 	}
@@ -76,7 +76,7 @@ func main() {
 	for index, x := range array4 {
 		var accumulator int32 = 0
 		for value := int32(1); value < 5; value++ {
-			accumulator = accumulator + value
+			accumulator += value
 		}
 		mapped3[index] = x + accumulator
 	}
@@ -87,9 +87,9 @@ func main() {
 	for _, i4 := range []int32{1, 2} {
 		var accumulator int32 = 0
 		for value := int32(1); value < 11; value++ {
-			accumulator = accumulator + value
+			accumulator += value
 		}
-		scrutinee4 := i4 + accumulator < 0
+		scrutinee4 := i4+accumulator < 0
 		if scrutinee4 {
 			effectexception.ThrowUnit("negative")
 		}
@@ -97,9 +97,9 @@ func main() {
 	for _, i4 := range []int32{1, 2} {
 		var accumulator int32 = 0
 		for value := int32(1); value < 5; value++ {
-			accumulator = accumulator + value
+			accumulator += value
 		}
-		scrutinee4 := i4 + accumulator < 0
+		scrutinee4 := i4+accumulator < 0
 		if scrutinee4 {
 			effectexception.ThrowUnit("negative")
 		}
@@ -110,8 +110,8 @@ func deferred(n int32, ignored struct{}) int32 {
 	step, count := array.RangeSteps(1, n)
 	var accumulator int32 = 0
 	for index := range count {
-		value := 1 + int32(index) * step
-		accumulator = accumulator + value
+		value := 1 + int32(index)*step
+		accumulator += value
 	}
 	return accumulator
 }

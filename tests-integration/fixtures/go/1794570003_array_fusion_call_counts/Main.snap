@@ -77,7 +77,7 @@ func initializeMain_() shared.MainResult {
 	for _, value := range numbers {
 		value2 := value * 3
 		if value2 > 10 {
-			count = count + 1
+			count += 1
 		}
 	}
 	performed := f(count)

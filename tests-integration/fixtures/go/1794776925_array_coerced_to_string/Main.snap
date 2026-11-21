@@ -17,7 +17,7 @@ func initializeMain_() string {
 	defer exception.ReportUncaught()
 	return "letters: " + strings.Join([]string{"a", "b", "c"}, ",") + "; nested: " + strings.Join(array.Map(func(element []string) string {
 		return strings.Join(element, ",")
-	}, [][]string{[]string{"d", "e"}, []string{"f"}}), ",")
+	}, [][]string{{"d", "e"}, {"f"}}), ",")
 }
 
 func main() {

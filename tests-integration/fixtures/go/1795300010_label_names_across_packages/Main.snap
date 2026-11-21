@@ -111,7 +111,7 @@ func initializeMain_() []string {
 	updated := shared.Odd{X_respondNow: 1, X1st: 2, Content_type: "dash", Content_type2: "underscore", X2: 2, X: 3, Über: 4}
 	updated.X_respondNow = 10
 	updated.Content_type = "changed"
-	replies := []variant.AX_respondNowALater{variant.AX_respondNowALater{Tag: variant.AX_respondNowALaterX_respondNow, Field0: 7}, variant.AX_respondNowALater{Tag: variant.AX_respondNowALaterA2, Field0: 1}, variant.AX_respondNowALater{Tag: variant.AX_respondNowALaterA, Field0: 2}, variant.AX_respondNowALater{Tag: variant.AX_respondNowALaterLater, Later: "soon"}}
+	replies := []variant.AX_respondNowALater{{Tag: variant.AX_respondNowALaterX_respondNow, Field0: 7}, {Tag: variant.AX_respondNowALaterA2, Field0: 1}, {Tag: variant.AX_respondNowALaterA, Field0: 2}, {Tag: variant.AX_respondNowALaterLater, Later: "soon"}}
 	mapped := make([]string, len(replies))
 	for index, element := range replies {
 		mapped[index] = labels.Describe(element)

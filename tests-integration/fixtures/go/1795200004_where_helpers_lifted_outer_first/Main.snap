@@ -22,7 +22,7 @@ func initializeMain_() []int32 {
 		var i3 int32
 		element := elements[i2]
 		i3 = element
-		mainShiftDown(elements, i3, i2 - 1)
+		mainShiftDown(elements, i3, i2-1)
 	}
 	performed := array.UnsafeFreeze(array2)()
 	return array.Append([]int32{mainGo(100, 0)}, performed)
@@ -33,7 +33,7 @@ func mainDigitSum(x int32, acc int32) int32 {
 		if x == 0 {
 			return acc
 		}
-		x, acc = prim.IntDiv(x, 10), acc + prim.IntMod(x, 10)
+		x, acc = prim.IntDiv(x, 10), acc+prim.IntMod(x, 10)
 	}
 }
 
@@ -42,7 +42,7 @@ func mainGo(i int32, acc int32) int32 {
 		if i == 0 {
 			return acc
 		}
-		i, acc = i - 1, acc + mainDigitSum(i, 0)
+		i, acc = i-1, acc+mainDigitSum(i, 0)
 	}
 }
 
@@ -58,7 +58,7 @@ func mainShiftDown(array []int32, current int32, j int32) {
 		if i > current {
 			index := j + 1
 			array[index] = i
-			j = j - 1
+			j -= 1
 			continue
 		}
 		index2 := j + 1

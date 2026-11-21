@@ -17,7 +17,7 @@ func initializeMain_() shared.MainResult {
 	var accumulator int32 = 0
 	for _, element := range numbers {
 		value := tripled(element)
-		accumulator = accumulator + value
+		accumulator += value
 	}
 	found := false
 	for _, element := range numbers {
@@ -32,7 +32,7 @@ func initializeMain_() shared.MainResult {
 		ref := x
 		s_ := ref + 1
 		ref = s_
-		accumulator2 = accumulator2 + s_
+		accumulator2 += s_
 	}
 	return shared.MainResult{Sum: accumulator, Found: found, Counted: accumulator2, Ignored: 0}
 }

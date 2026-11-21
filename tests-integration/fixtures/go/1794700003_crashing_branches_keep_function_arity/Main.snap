@@ -19,7 +19,7 @@ func initializeMain_() []int32 {
 func combineWith(n int32) func(int32, int32) int32 {
 	if n > 0 {
 		return func(a int32, b int32) int32 {
-			return a * n + b
+			return a*n + b
 		}
 	}
 	panic("a positive weight")

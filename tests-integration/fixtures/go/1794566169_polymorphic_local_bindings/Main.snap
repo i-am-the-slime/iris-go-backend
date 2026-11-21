@@ -61,7 +61,7 @@ func mainGo(f func(int32) string, n int32, accumulated []string) []string {
 		if n <= 0 {
 			return accumulated
 		}
-		n, accumulated = n - 1, array.Bounded(append(accumulated, f(n)))
+		n, accumulated = n-1, array.Bounded(append(accumulated, f(n)))
 	}
 }
 
@@ -71,7 +71,7 @@ func mainGo2(f func(int32) int32, n int32, accumulated []int32) []int32 {
 		if n <= 0 {
 			return accumulated
 		}
-		n, accumulated = n - 1, array.Bounded(append(accumulated, f(n)))
+		n, accumulated = n-1, array.Bounded(append(accumulated, f(n)))
 	}
 }
 

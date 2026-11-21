@@ -77,7 +77,7 @@ func bump(n int32, point shared.Point) shared.Point {
 		case 0:
 			return point
 		default:
-			n, point = n - 1, shared.Point{Tags: point.Tags, X: point.X + n * 2}
+			n, point = n-1, shared.Point{Tags: point.Tags, X: point.X + n*2}
 			continue
 		}
 	}
