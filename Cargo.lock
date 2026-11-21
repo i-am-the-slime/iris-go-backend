@@ -1742,8 +1742,10 @@ dependencies = [
 name = "iris-go"
 version = "0.1.0"
 dependencies = [
+ "dunce",
  "go",
  "iris-build",
+ "sha2",
  "tempfile",
 ]
 

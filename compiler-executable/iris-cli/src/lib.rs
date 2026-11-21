@@ -17,12 +17,24 @@ pub fn run() -> i32 {
     let program = cli::Program::parse_with_diagnostics();
     match program.command {
         cli::Command::Format(options) => format::run(options),
-        cli::Command::Go(options) => match iris_go::run(options.into_config()) {
-            Ok(()) => 0,
-            Err(error) => {
-                eprintln!("{error}");
-                1
-            }
+        cli::Command::Go(options) => match options.into_target() {
+            cli::GoTarget::Sources(config) => match iris_go::run(config) {
+                Ok(()) => 0,
+                Err(error) => {
+                    eprintln!("{error}");
+                    1
+                }
+            },
+            cli::GoTarget::Executable(config) => match iris_go::build_program(config) {
+                Ok(program) => {
+                    println!("{}", program.executable.display());
+                    0
+                }
+                Err(error) => {
+                    eprintln!("{error}");
+                    1
+                }
+            },
         },
         cli::Command::New(options) => match iris_package::create(options.into_config()) {
             Ok(package) => {
@@ -123,12 +135,21 @@ pub fn run() -> i32 {
                 }
             }
         }
-        cli::Command::Run { options } => match iris_build::run(options.into_config()) {
-            Ok(()) => 0,
-            Err(error) => {
-                eprintln!("{error}");
-                error.exit_code()
-            }
+        cli::Command::Run { options } => match options.into_run() {
+            cli::Run::Node(config) => match iris_build::run(config) {
+                Ok(()) => 0,
+                Err(error) => {
+                    eprintln!("{error}");
+                    error.exit_code()
+                }
+            },
+            cli::Run::Go { config, arguments } => match iris_go::run_program(config, arguments) {
+                Ok(status) => status,
+                Err(error) => {
+                    eprintln!("{error}");
+                    1
+                }
+            },
         },
         cli::Command::Test { options } => match iris_build::test(options.into_config()) {
             Ok(()) => 0,

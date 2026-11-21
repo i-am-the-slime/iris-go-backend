@@ -5,6 +5,30 @@ the same as the JavaScript build's. This guide lists the places where it does no
 it refuses to compile. Everything not listed here is meant to behave as it does in JavaScript; a
 difference that is not listed is a bug.
 
+## Running a program
+
+```bash
+iris run --go -- first second
+```
+
+That compiles your package to Go, builds it, and runs it with `first second` as its arguments. Its
+output, input and exit status are your program's. You need Go 1.27 or later on your `PATH`;
+nothing else to set up.
+
+- **Entry point**: `main` in `Main`, or in the module your `spago.yaml` names under `run.main`.
+  Pick another with `--main Some.Module` or `--entry Some.Module.value`.
+- **Arguments**: whatever follows `--`, or your `run.execArgs` when nothing does.
+- **Packages**: `-p my-app` in a workspace with several.
+- **Fast reruns**: the first run downloads the Go runtime. After that, if your program compiles to
+  the same Go, it starts right away without building again.
+- **Just the executable**: `iris go` builds it and prints its path. It lives under
+  `.spago/go/<package>/bin/`.
+- **Hacking on the runtime**: `IRIS_GO=~/code/iris-go iris run --go` builds against your checkout
+  of [iris-go](https://github.com/i-am-the-slime/iris-go) instead of the release.
+
+Want the Go source in a directory of your own instead? `iris go out` writes it to `out/`, which
+needs a `go.mod`.
+
 ## What stays the same
 
 - `Int` is a 32-bit integer and wraps on overflow, as `| 0` does in JavaScript.

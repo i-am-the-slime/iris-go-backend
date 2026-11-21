@@ -42,7 +42,7 @@ pub enum Command {
     Skills(SkillsOptions),
     /// Format a Spago workspace or explicit source files.
     Format(FormatOptions),
-    /// Build and run a Spago package with Node.js.
+    /// Build and run a Spago package with Node.js, or with Go.
     Run {
         #[usage(flatten)]
         options: RunOptions,
@@ -66,22 +66,40 @@ pub struct GoOptions {
     #[usage(short, long, value_name = "NAME")]
     package: Option<String>,
 
-    /// Qualified entry point, such as Main.main.
-    #[usage(long, value_name = "MODULE.NAME", default = "Main.main")]
-    entry: String,
+    /// Qualified entry point. Defaults to Main.main, or without DIR to the one `iris run --go`
+    /// uses.
+    #[usage(long, value_name = "MODULE.NAME")]
+    entry: Option<String>,
 
-    /// Directory to write main.go to.
+    /// Directory to write main.go to. Without one, builds the executable that `iris run --go`
+    /// runs and prints its path.
     #[usage(value_name = "DIR")]
-    destination: PathBuf,
+    destination: Option<PathBuf>,
+}
+
+/// What `iris go` makes: Go sources in a directory with a go.mod, or an executable.
+pub enum GoTarget {
+    Sources(iris_go::GoConfig),
+    Executable(iris_go::ProgramConfig),
 }
 
 impl GoOptions {
-    pub fn into_config(self) -> iris_go::GoConfig {
-        iris_go::GoConfig {
-            package: self.package,
-            entry: self.entry,
-            destination: self.destination,
-            version: crate::VERSION.to_string(),
+    pub fn into_target(self) -> GoTarget {
+        let version = crate::VERSION.to_string();
+        match self.destination {
+            Some(destination) => GoTarget::Sources(iris_go::GoConfig {
+                package: self.package,
+                entry: self.entry.unwrap_or_else(|| "Main.main".to_string()),
+                destination,
+                version,
+                quiet: false,
+            }),
+            None => GoTarget::Executable(iris_go::ProgramConfig {
+                package: self.package,
+                entry: self.entry,
+                quiet: false,
+                version,
+            }),
         }
     }
 }
@@ -231,21 +249,45 @@ pub struct RunOptions {
     #[usage(long, value_name = "MODULE")]
     main: Option<String>,
 
+    /// Compile to Go and run the executable instead of Node.js. Needs Go 1.27 or later.
+    #[usage(long, conflicts("--output"))]
+    go: bool,
+
+    /// Qualified entry point for --go, such as Main.main. Defaults to main in --main's module.
+    #[usage(long, value_name = "MODULE.NAME", requires("--go"), conflicts("--main"))]
+    entry: Option<String>,
+
     /// Arguments passed to the program.
     #[usage(double_dash = "required")]
     arguments: Vec<String>,
 }
 
+/// How `iris run` runs the package.
+pub enum Run {
+    Node(RunConfig),
+    Go { config: iris_go::ProgramConfig, arguments: Vec<String> },
+}
+
 impl RunOptions {
-    pub fn into_config(self) -> RunConfig {
+    pub fn into_run(self) -> Run {
+        if self.go {
+            let entry = self.entry.or_else(|| self.main.map(|main| format!("{main}.main")));
+            let config = iris_go::ProgramConfig {
+                package: self.build.package,
+                entry,
+                quiet: self.build.quiet,
+                version: crate::VERSION.to_string(),
+            };
+            return Run::Go { config, arguments: self.arguments };
+        }
         let (project, color) = self.build.into_project_config();
-        RunConfig {
+        Run::Node(RunConfig {
             project,
             color,
             version: crate::VERSION.to_string(),
             main: self.main,
             arguments: self.arguments,
-        }
+        })
     }
 }
 

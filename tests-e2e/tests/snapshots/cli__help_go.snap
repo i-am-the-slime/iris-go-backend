@@ -1,0 +1,19 @@
+---
+source: tests-e2e/tests/cli.rs
+---
+status: 0
+--- stdout
+Compile a Spago workspace from an entry point to a single Go program.
+
+Usage: iris go [-p --package <NAME>] [--entry <MODULE.NAME>] [DIR]
+
+Arguments:
+  [DIR]  Directory to write main.go to. Without one, builds the executable that `iris run --go` runs and prints its
+         path.
+
+Flags:
+  -p, --package <NAME>       Workspace package to compile.
+      --entry <MODULE.NAME>  Qualified entry point. Defaults to Main.main, or without DIR to the one `iris run --go`
+                             uses.
+  -h, --help                 Print help
+--- stderr

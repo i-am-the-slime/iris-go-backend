@@ -12,9 +12,10 @@ Commands:
   add     Add dependencies to a Spago package.
   build   Build a Spago workspace or package.
   format  Format a Spago workspace or explicit source files.
+  go      Compile a Spago workspace from an entry point to a single Go program.
   lsp     Run the language server over standard input and output.
   new     Create a Spago project in the current directory.
-  run     Build and run a Spago package with Node.js.
+  run     Build and run a Spago package with Node.js, or with Go.
   self    Manage this installation of Iris.
   skills  Print agent skills for using Iris, which match this version.
   test    Build and test one or more Spago packages with Node.js.

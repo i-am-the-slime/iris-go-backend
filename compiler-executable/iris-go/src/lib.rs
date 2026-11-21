@@ -20,7 +20,12 @@ pub struct GoConfig {
     pub entry: String,
     pub destination: PathBuf,
     pub version: String,
+    /// Leaves out the summary of what was written.
+    pub quiet: bool,
 }
+
+mod program;
+pub use program::{Program, ProgramConfig, RUNTIME_VERSION, build_program, run_program};
 
 pub fn run(config: GoConfig) -> Result<(), String> {
     let started = Instant::now();
@@ -71,6 +76,9 @@ pub fn run(config: GoConfig) -> Result<(), String> {
             fs::create_dir_all(directory).map_err(|error| error.to_string())?;
         }
         fs::write(&path, source).map_err(|error| error.to_string())?;
+    }
+    if config.quiet {
+        return Ok(());
     }
     eprintln!(
         "go: {} functions in {files} files -> {} (load {:.0?}, {load_work}; backend \

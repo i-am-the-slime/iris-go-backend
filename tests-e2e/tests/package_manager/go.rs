@@ -36,3 +36,68 @@ main = spansOf segment
     });
     assert!(!workspace.path().join("go/main.go").exists());
 }
+
+#[test]
+fn run_go_builds_once_and_passes_arguments_and_exit_status_through() {
+    let workspace = TestWorkspace::empty();
+    workspace.write(
+        "spago.yaml",
+        r#"workspace: {}
+package:
+  name: greeter
+  dependencies: []
+"#,
+    );
+    workspace.write(
+        "src/Effect.purs",
+        "module Effect where\n\nforeign import data Effect :: Type -> Type\n",
+    );
+    workspace.write(
+        "src/Main.purs",
+        r#"module Main where
+
+import Effect (Effect)
+
+foreign import greet :: Effect Int
+
+main :: Effect Int
+main = greet
+"#,
+    );
+    workspace.write(
+        "src/Main.go",
+        r#"package ffi
+
+import (
+	"fmt"
+	"os"
+	"strings"
+)
+
+func Greet() int32 {
+	fmt.Println("hello " + strings.Join(os.Args[1:], ","))
+	return 3
+}
+"#,
+    );
+
+    let output = workspace.command(&["run", "--go", "--quiet", "--", "first", "second"]);
+    insta::assert_snapshot!(workspace.report(&output), @"
+    status: 3
+    --- stdout
+    hello first,second
+    --- stderr
+    ");
+    let executable = workspace.path().join(".spago/go/greeter/bin/greeter");
+    let built = std::fs::metadata(&executable).unwrap().modified().unwrap();
+
+    let output = workspace.command(&["run", "--go", "--quiet", "--", "again"]);
+    insta::assert_snapshot!(workspace.report(&output), @"
+    status: 3
+    --- stdout
+    hello again
+    --- stderr
+    ");
+    let unchanged = std::fs::metadata(&executable).unwrap().modified().unwrap();
+    assert_eq!(built, unchanged, "an unchanged program is not built again");
+}
