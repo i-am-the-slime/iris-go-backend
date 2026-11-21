@@ -24,6 +24,7 @@ mod fusion;
 mod groups;
 mod headers;
 mod immediate;
+mod int64;
 mod instantiations;
 mod iteration;
 mod layout;
@@ -1330,6 +1331,8 @@ where
                 format!("{module}.{}", self.context.type_name(data.file_id, data.item)?)
             }
             Monotype::Int => "Int".into(),
+            Monotype::Int64 => "Int64".into(),
+            Monotype::UInt64 => "UInt64".into(),
             Monotype::Number => "Number".into(),
             Monotype::String => "String".into(),
             Monotype::Boolean => "Boolean".into(),
@@ -3512,6 +3515,9 @@ where
                 self.string_ordering(comparison, values)
             }
             Foreign::Operator(operator) => self.operator(operator, values),
+            Foreign::Int64 { operation, signedness } => {
+                self.int64_operation(operation, signedness, values)
+            }
             Foreign::Constant(function) => {
                 self.imports.insert(function.package.path().into());
                 let constant = GoExpression::Qualified {

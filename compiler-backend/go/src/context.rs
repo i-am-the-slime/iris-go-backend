@@ -99,6 +99,36 @@ where
     }
 
     /// A readable rendering of a closed type for use inside Go identifiers.
+    /// `Int64` for `Long' Signed` and `UInt64` for `Long' Unsigned`, the
+    /// newtypes' names for them.
+    pub fn signed_long_name(
+        &mut self,
+        type_id: checking::TypeId,
+    ) -> QueryResult<Option<&'static str>> {
+        use checking::core::Type;
+        use crate::primitives::{KnownType, known_type};
+        let Type::Application(function, argument) = self.types.lookup(type_id).clone() else {
+            return Ok(None);
+        };
+        let named = |context: &mut Self, type_id| -> QueryResult<Option<KnownType>> {
+            let type_id = context.types.strip_annotations(type_id);
+            let Type::Constructor(file_id, item) = context.types.lookup(type_id).clone() else {
+                return Ok(None);
+            };
+            let module = context.module(file_id)?;
+            let name = module.indexed.items[item].name.clone().unwrap_or_default();
+            Ok(known_type(&module.name, &name))
+        };
+        if named(self, function)? != Some(KnownType::SignedLong) {
+            return Ok(None);
+        }
+        Ok(match named(self, argument)? {
+            Some(KnownType::Signed) => Some("Int64"),
+            Some(KnownType::Unsigned) => Some("UInt64"),
+            _ => None,
+        })
+    }
+
     pub fn type_suffix(
         &mut self,
         type_id: checking::TypeId,
@@ -106,6 +136,10 @@ where
     ) -> QueryResult<()> {
         use checking::core::Type;
         let type_id = self.types.strip_annotations(type_id);
+        if let Some(spelled) = self.signed_long_name(type_id)? {
+            output.push_str(spelled);
+            return Ok(());
+        }
         match self.types.lookup(type_id).clone() {
             Type::Application(function, argument) => {
                 self.type_suffix(function, output)?;

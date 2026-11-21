@@ -90,6 +90,9 @@ impl ForeignPackages {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Foreign {
     Operator(Operator),
+    /// A `Data.Int64.Internal` operation on Longs of one signedness, which
+    /// Go's `int64` or `uint64` does itself.
+    Int64 { operation: crate::primitives::Int64Operation, signedness: crate::primitives::Signedness },
     /// A foreign of a Go foreign package; `type_arguments` instantiate a
     /// quantified one without arguments, a generic Go function.
     Project {
@@ -379,6 +382,7 @@ pub enum GoPackage {
     Spec,
     RefEq,
     Console,
+    Int64,
 }
 
 impl GoPackage {
@@ -407,6 +411,7 @@ impl GoPackage {
             GoPackage::Spec => "github.com/i-am-the-slime/iris-go/spec",
             GoPackage::RefEq => "github.com/i-am-the-slime/iris-go/refeq",
             GoPackage::Console => "github.com/i-am-the-slime/iris-go/console",
+            GoPackage::Int64 => "github.com/i-am-the-slime/iris-go/ffi/Data_Int64_Internal_ffi",
             GoPackage::Exception => {
                 "github.com/i-am-the-slime/iris-go/exception"
             }
@@ -437,6 +442,7 @@ impl GoPackage {
             GoPackage::Spec => "spec",
             GoPackage::RefEq => "refeq",
             GoPackage::Console => "console",
+            GoPackage::Int64 => "Data_Int64_Internal_ffi",
         }
     }
 }
@@ -519,6 +525,7 @@ impl Foreign {
     pub fn arity(self) -> usize {
         match self {
             Foreign::Operator(operator) => operator.arity(),
+            Foreign::Int64 { operation, .. } => operation.arity(),
             Foreign::Call { arity, .. }
             | Foreign::Perform { arity, .. }
             | Foreign::Project { arity, .. } => arity,
@@ -1494,6 +1501,32 @@ pub fn support_data(module_name: &str, name: &str) -> Option<(GoPackage, &'stati
         .iter()
         .find(|(module, item, _, _)| *module == module_name && *item == name)
         .map(|(_, _, package, type_name)| (*package, *type_name))
+}
+
+/// A `Data.Int64.Internal` foreign over `Long` at the signedness of the
+/// definition that uses it.
+pub fn int64_import(
+    module_name: &str,
+    name: &str,
+    signedness: crate::primitives::Signedness,
+) -> Option<&'static Foreign> {
+    use crate::primitives::{Int64Foreign, Signedness};
+    let foreign = match crate::primitives::int64_foreign(module_name, name)? {
+        Int64Foreign::Inline(operation) => Foreign::Int64 { operation, signedness },
+        Int64Foreign::Runtime { signed, unsigned, arity, effectful, ints } => {
+            let name = match signedness {
+                Signedness::Signed => signed,
+                Signedness::Unsigned => unsigned,
+            };
+            let function = GoFunction { package: GoPackage::Int64, name };
+            let boundary = int32_parameters(ints);
+            match effectful {
+                true => Foreign::Perform { function, arity, boundary },
+                false => Foreign::Call { function, arity, boundary },
+            }
+        }
+    };
+    Some(foreign.interned())
 }
 
 pub fn foreign_import(module_name: &str, name: &str) -> Option<&'static Foreign> {

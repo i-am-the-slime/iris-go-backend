@@ -94,6 +94,14 @@ pub enum UnsupportedState {
     ReferenceEqualityAcrossTypes { left: String, right: String },
     #[error("{construct} is not supported by the Go backend yet")]
     Construct { construct: &'static str },
+    #[error(
+        "Data.Int64.Internal's Long' is applied to {rendered}, which is neither Signed nor Unsigned; Go has an int64 for Long' Signed and a uint64 for Long' Unsigned"
+    )]
+    OpenSignedness { rendered: String },
+    #[error(
+        "a Data.Int64.Internal Long here is neither Int64's nor UInt64's: the definition's types name no single Long' Signed or Long' Unsigned for it to be"
+    )]
+    UnknownSignedness,
 }
 
 impl GoError {

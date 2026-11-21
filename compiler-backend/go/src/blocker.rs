@@ -58,9 +58,10 @@ impl UnsupportedState {
             UnsupportedState::SpecializationLimit { .. } | UnsupportedState::GrowingEvidence => {
                 BlockerKind::SpecializationLimit
             }
-            UnsupportedState::OpenType { .. } | UnsupportedState::UnsaturatedType { .. } => {
-                BlockerKind::OpenType
-            }
+            UnsupportedState::OpenType { .. }
+            | UnsupportedState::UnsaturatedType { .. }
+            | UnsupportedState::OpenSignedness { .. }
+            | UnsupportedState::UnknownSignedness => BlockerKind::OpenType,
             UnsupportedState::UninstantiatedVariable { .. } => BlockerKind::UninstantiatedVariable,
             UnsupportedState::UnsolvedEvidence
             | UnsupportedState::UnboundEvidence

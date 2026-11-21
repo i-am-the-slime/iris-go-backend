@@ -431,6 +431,8 @@ where
             | Monotype::Regex
             | Monotype::Mutex
             | Monotype::BigInt
+            | Monotype::Int64
+            | Monotype::UInt64
             | Monotype::ForeignData(_)
             | Monotype::Erased(_) => return Ok(monotype),
         };

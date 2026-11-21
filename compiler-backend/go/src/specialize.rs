@@ -27,6 +27,7 @@ use crate::mono::{
     Guard, Guarded, GuardedBranch, Literal, Local, Pattern, PatternKind, RecordUpdate,
 };
 use crate::monotype::{Monotype, MonotypeId, Monotypes, supported};
+use crate::primitives::Signedness;
 use crate::scheme::{
     Read, SCHEME_INSTANTIATION_LIMIT, SchemeInstantiation, SchemeKey, constrained_scheme,
     rank_n_scheme,
@@ -37,6 +38,7 @@ use crate::types::{Substituted, Substitution};
 mod evidence;
 mod existential;
 mod growth;
+mod int64;
 mod patterns;
 mod reified;
 mod runtime;
@@ -107,6 +109,8 @@ struct SpecializationKey {
     definition: Definition,
     types: Arc<[TypeId]>,
     dictionaries: Arc<[Dictionary]>,
+    /// The signedness of the definition's `Data.Int64.Internal` Longs.
+    signedness: Option<Signedness>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -128,6 +132,8 @@ struct Scope {
     /// The expression being specialized at one instantiation of its rank-N type.
     rank_n_body: Option<tree::ExpressionId>,
     definition: String,
+    /// What every bare `Data.Int64.Internal` Long in this definition is.
+    signedness: Option<Signedness>,
 }
 
 /// A reference to a top-level value, and the expression that makes it.
@@ -176,6 +182,7 @@ impl Scope {
             scheme_locals: FxHashMap::default(),
             rank_n_body: None,
             definition,
+            signedness: None,
         }
     }
 
@@ -222,6 +229,7 @@ pub struct Specializer<'q, Q> {
     crossings: rustc_hash::FxHashSet<(MonotypeId, MonotypeId)>,
     variant_crossings: Vec<(TypeId, TypeId)>,
     narrowed_variant_rows: Vec<TypeId>,
+    int64: int64::Int64Types,
 }
 
 struct RecordedBlocker {
@@ -268,6 +276,7 @@ where
             crossings: rustc_hash::FxHashSet::default(),
             variant_crossings: vec![],
             narrowed_variant_rows: vec![],
+            int64: int64::Int64Types::default(),
         }
     }
 
@@ -281,6 +290,7 @@ where
             definition: Definition::Value { file_id, term },
             types: Arc::from([]),
             dictionaries: Arc::from([]),
+            signedness: None,
         };
         let entry = self.request(key, name)?;
         let mut round = 0;
@@ -598,6 +608,7 @@ where
             definition: key.definition.clone(),
             types,
             dictionaries: Arc::clone(&key.dictionaries),
+            signedness: key.signedness,
         }
     }
 
@@ -707,6 +718,7 @@ where
             }
         };
         let (abstractions, equations) = value;
+        scope.signedness = key.signedness;
         self.bind_abstractions(&mut scope, &abstractions, &key.types, &key.dictionaries)?;
         let mut body = self.equations(&mut scope, &equations)?;
         if !dictionary_parameters.is_empty() {
@@ -868,6 +880,10 @@ where
     }
 
     fn closed_monotype(&mut self, scope: &Scope, closed: TypeId) -> GoResult<MonotypeId> {
+        let closed = match scope.signedness {
+            Some(signedness) => self.spelled_longs(closed, signedness)?,
+            None => closed,
+        };
         let monotype = self.monotypes.monotype(&mut self.context, closed);
         monotype.map_err(|failure| failure.at(&scope.definition))
     }
@@ -2705,6 +2721,14 @@ where
                 ))
             }
             () if is_foreign => {
+                if crate::primitives::int64_foreign(&module.name, &name).is_some() {
+                    let Some(signedness) = scope.signedness else {
+                        return Err(self.unsupported(scope, UnsupportedState::UnknownSignedness));
+                    };
+                    let foreign = foreign::int64_import(&module.name, &name, signedness)
+                        .expect("invariant violated: int64_foreign lists the foreign");
+                    return Ok(self.foreign(foreign, monotype));
+                }
                 if let Some(foreign) = foreign::foreign_import(&module.name, &name) {
                     if let Foreign::UnsafeCoerce = foreign {
                         self.link_coerced_rank_n(scope, file_id, term, instantiations)?;
@@ -2790,11 +2814,16 @@ where
                 {
                     return Ok(expression);
                 }
+                let declared = module.checked.lookup_term_item_type(term);
+                let (signedness, inherited) =
+                    self.key_signedness(scope, &types, &[], declared)?;
                 let name = self.specialized_name(name, &types)?;
+                let name = int64::inherited_name(name, signedness.filter(|_| inherited));
                 let key = SpecializationKey {
                     definition: Definition::Value { file_id, term },
                     types: Arc::from(types),
                     dictionaries: Arc::from(dictionaries),
+                    signedness,
                 };
                 self.request_reference(scope, key, name, monotype)
             }
@@ -2865,11 +2894,16 @@ where
             ));
         };
         let types = self.abstraction_types(scope, &implementation.abstractions, instantiations)?;
+        let head = module.checked.tree[declaration].type_id;
+        let (signedness, inherited) =
+            self.key_signedness(scope, &types, &instance.types, Some(head))?;
         let name = self.specialized_name(member_name, &instance.types)?;
+        let name = int64::inherited_name(name, signedness.filter(|_| inherited));
         let key = SpecializationKey {
             definition: Definition::Member { dictionary: instance, member },
             types: Arc::from(types),
             dictionaries: Arc::from(dictionaries),
+            signedness,
         };
         self.request_reference(scope, key, name, monotype)
     }

@@ -1,7 +1,8 @@
 //! Vector loops for pure numeric array code.
 //!
 //! `foldl (+) 0.0 xs`, `sum (zipWith (*) xs ys)` and `map (\x -> a * x + b) xs`
-//! over `Array Number` or `Array Int` do the same arithmetic on every element,
+//! over `Array Number`, `Array Int`, or `Array Int64` and `Array UInt64`
+//! (purescript-int64's, Go's `[]int64` and `[]uint64`) do the same arithmetic on every element,
 //! with no effects and no aliasing. Such a loop runs as a kernel: a function
 //! with a vector loop, written with `simd/archsimd`'s NEON vectors in a file
 //! that builds with `GOEXPERIMENT=simd` on arm64 and with the portable `simd`
@@ -26,9 +27,11 @@
 //! constants and captured scalars of the element type, through `let` and calls
 //! of small functions, which inline. A source is an array, a `map` of a source
 //! or a `zipWith` of two. A fold reduces with `+`, `*`, `max` or `min` (`min`
-//! only for `Int`): each vector lane folds its own share of the elements, so a
+//! only for integers): each vector lane folds its own share of the elements, so a
 //! `Number` sum is reassociated and may differ from the scalar loop in its
-//! last digits. Anything else keeps the scalar loop it had.
+//! last digits. Vectors of 64-bit integers cannot multiply, nor negate unsigned
+//! ones, so code that does keeps its scalar loop. Anything else keeps the
+//! scalar loop it had.
 
 use std::fmt::Write;
 
@@ -41,6 +44,7 @@ use crate::error::GoResult;
 use crate::foreign::{Boundary, Comparison, Foreign, Iteration, Operator};
 use crate::mono::{Expression, ExpressionKind, FunctionId, Literal, Local, LocalId};
 use crate::monotype::{Monotype, MonotypeId};
+use crate::primitives::{Int64Operation, Signedness};
 use crate::naming::GO_PREDECLARED;
 use crate::syntax::{GoDeclaration, GoExpression, GoFile, GoImport, GoStatement, Reference};
 
@@ -182,6 +186,8 @@ where
         match self.monotypes.get(monotype) {
             Monotype::Number => Some(Element::Number),
             Monotype::Int => Some(Element::Int),
+            Monotype::Int64 => Some(Element::Int64),
+            Monotype::UInt64 => Some(Element::UInt64),
             _ => None,
         }
     }
@@ -276,6 +282,8 @@ struct Plan<'e> {
 enum Element {
     Number,
     Int,
+    Int64,
+    UInt64,
 }
 
 impl Element {
@@ -283,6 +291,22 @@ impl Element {
         match self {
             Element::Number => "float64",
             Element::Int => "int32",
+            Element::Int64 => "int64",
+            Element::UInt64 => "uint64",
+        }
+    }
+
+    /// Whether comparisons are exact and total: no NaN, no signed zeros.
+    fn is_integer(self) -> bool {
+        self != Element::Number
+    }
+
+    /// The 64-bit Long an Int64 operation on this element works on.
+    fn signedness(self) -> Option<Signedness> {
+        match self {
+            Element::Int64 => Some(Signedness::Signed),
+            Element::UInt64 => Some(Signedness::Unsigned),
+            Element::Number | Element::Int => None,
         }
     }
 
@@ -311,8 +335,12 @@ impl Flavor {
         match (self, element) {
             (Flavor::Portable, Element::Number) => "Float64s",
             (Flavor::Portable, Element::Int) => "Int32s",
+            (Flavor::Portable, Element::Int64) => "Int64s",
+            (Flavor::Portable, Element::UInt64) => "Uint64s",
             (Flavor::Neon, Element::Number) => "Float64x2",
             (Flavor::Neon, Element::Int) => "Int32x4",
+            (Flavor::Neon, Element::Int64) => "Int64x2",
+            (Flavor::Neon, Element::UInt64) => "Uint64x2",
         }
     }
 
@@ -320,10 +348,20 @@ impl Flavor {
     /// portable package.
     fn widest(self, element: Element) -> usize {
         match (self, element) {
-            (Flavor::Portable, Element::Number) => 8,
+            (Flavor::Portable, Element::Number | Element::Int64 | Element::UInt64) => 8,
             (Flavor::Portable, Element::Int) => 16,
-            (Flavor::Neon, Element::Number) => 2,
+            (Flavor::Neon, Element::Number | Element::Int64 | Element::UInt64) => 2,
             (Flavor::Neon, Element::Int) => 4,
+        }
+    }
+
+    /// Whether the element's vectors have `Max` and `Min`, which the
+    /// portable package's 64-bit integers do not.
+    fn has_extrema(self, element: Element) -> bool {
+        match element {
+            Element::Int => true,
+            Element::Int64 | Element::UInt64 => self == Flavor::Neon,
+            Element::Number => false,
         }
     }
 
@@ -703,7 +741,7 @@ impl<'a, 'e, E: Lookup<'e>> Analysis<'a, 'e, E> {
                 // chooses `b`'s value, as `Data.Ord.min` and `max` do on ties;
                 // a Number could differ in the sign of a zero.
                 let exact = |term: &Term| {
-                    self.element == Element::Int
+                    self.element.is_integer()
                         || matches!(term, Term::Constant(text) if text.parse::<f64>().is_ok_and(|n| n != 0.0))
                 };
                 if let (Condition::Compare(Ordering::Equal, left, right), false) = (&condition, negated)
@@ -727,8 +765,49 @@ impl<'a, 'e, E: Lookup<'e>> Analysis<'a, 'e, E> {
             ExpressionKind::Foreign { foreign: Foreign::Operator(operator), arguments } => {
                 self.operator(*operator, arguments, scope, depth)
             }
+            ExpressionKind::Foreign { foreign: Foreign::Int64 { operation, signedness }, arguments }
+                if self.element.signedness() == Some(*signedness) =>
+            {
+                self.int64_operation(*operation, arguments, scope, depth)
+            }
             _ => None,
         }
+    }
+
+    /// The term of an Int64 or UInt64 operation of the element's Long.
+    fn int64_operation(
+        &mut self,
+        operation: Int64Operation,
+        arguments: &'e [Expression],
+        scope: &FxHashMap<LocalId, Term>,
+        depth: usize,
+    ) -> Option<Term> {
+        let unsigned = self.element == Element::UInt64;
+        let arithmetic = match operation {
+            Int64Operation::Constant(bits) if unsigned => {
+                return Some(Term::Constant((bits as u64).to_string()));
+            }
+            Int64Operation::Constant(bits) => return Some(Term::Constant(bits.to_string())),
+            Int64Operation::FromInt => match &arguments[0].kind {
+                ExpressionKind::Literal(Literal::Int(value)) => {
+                    let bits = i64::from(*value as i32);
+                    let text = if unsigned { (bits as u64).to_string() } else { bits.to_string() };
+                    return Some(Term::Constant(text));
+                }
+                _ => return None,
+            },
+            Int64Operation::Same => return self.term(&arguments[0], scope, depth),
+            Int64Operation::Negate if !unsigned => {
+                let operand = self.term(&arguments[0], scope, depth)?;
+                return Some(Term::Negate(Box::new(operand)));
+            }
+            Int64Operation::Add => Arithmetic::Add,
+            Int64Operation::Subtract => Arithmetic::Subtract,
+            _ => return None,
+        };
+        let left = self.term(&arguments[0], scope, depth)?;
+        let right = self.term(&arguments[1], scope, depth)?;
+        Some(Term::Binary(arithmetic, Box::new(left), Box::new(right)))
     }
 
     /// Whether the expression is scalar arithmetic on literals and locals
@@ -751,6 +830,17 @@ impl<'a, 'e, E: Lookup<'e>> Analysis<'a, 'e, E> {
                         | Operator::NumberDivide
                         | Operator::NumberNegate
                         | Operator::IntToNumber
+                ) && arguments.iter().all(|argument| self.closed(argument, scope))
+            }
+            ExpressionKind::Foreign { foreign: Foreign::Int64 { operation, .. }, arguments } => {
+                matches!(
+                    operation,
+                    Int64Operation::Constant(_)
+                        | Int64Operation::Add
+                        | Int64Operation::Subtract
+                        | Int64Operation::Multiply
+                        | Int64Operation::Negate
+                        | Int64Operation::Same
                 ) && arguments.iter().all(|argument| self.closed(argument, scope))
             }
             _ => false,
@@ -812,27 +902,28 @@ impl<'a, 'e, E: Lookup<'e>> Analysis<'a, 'e, E> {
         scope: &FxHashMap<LocalId, Term>,
         depth: usize,
     ) -> Option<(Condition, bool)> {
+        if let ExpressionKind::Foreign {
+            foreign: Foreign::Int64 { operation: Int64Operation::Compare(comparison), signedness },
+            arguments,
+        } = &expression.kind
+            && self.element.signedness() == Some(*signedness)
+        {
+            let compare = Foreign::Operator(Operator::Compare(*comparison));
+            return self.comparison(compare, arguments, scope, depth);
+        }
         let ExpressionKind::Foreign { foreign: Foreign::Operator(operator), arguments } =
             &expression.kind
         else {
             return None;
         };
-        match operator {
-            Operator::Compare(comparison) => {
-                let (ordering, negated) = match comparison {
-                    Comparison::Equal => (Ordering::Equal, false),
-                    Comparison::NotEqual => (Ordering::Equal, true),
-                    Comparison::LessThan => (Ordering::Less, false),
-                    Comparison::LessThanOrEqual => (Ordering::LessEqual, false),
-                    Comparison::GreaterThan => (Ordering::Greater, false),
-                    Comparison::GreaterThanOrEqual => (Ordering::GreaterEqual, false),
-                    Comparison::GreaterThanOrUnordered => (Ordering::LessEqual, true),
-                    Comparison::GreaterThanOrEqualOrUnordered => (Ordering::Less, true),
-                };
-                let left = self.term(&arguments[0], scope, depth)?;
-                let right = self.term(&arguments[1], scope, depth)?;
-                Some((Condition::Compare(ordering, Box::new(left), Box::new(right)), negated))
+        if let Operator::Compare(_) = operator {
+            // An Int comparison's operands are Ints, never 64-bit Longs.
+            if self.element.signedness().is_some() {
+                return None;
             }
+            return self.comparison(Foreign::Operator(*operator), arguments, scope, depth);
+        }
+        match operator {
             Operator::BooleanNot => {
                 let (condition, negated) = self.condition(&arguments[0], scope, depth)?;
                 Some((condition, !negated))
@@ -854,6 +945,30 @@ impl<'a, 'e, E: Lookup<'e>> Analysis<'a, 'e, E> {
         }
     }
 
+    /// A comparison of two terms, and whether it holds where the condition does not.
+    fn comparison(
+        &mut self,
+        compare: Foreign,
+        arguments: &'e [Expression],
+        scope: &FxHashMap<LocalId, Term>,
+        depth: usize,
+    ) -> Option<(Condition, bool)> {
+        let Foreign::Operator(Operator::Compare(comparison)) = compare else { return None };
+        let (ordering, negated) = match comparison {
+            Comparison::Equal => (Ordering::Equal, false),
+            Comparison::NotEqual => (Ordering::Equal, true),
+            Comparison::LessThan => (Ordering::Less, false),
+            Comparison::LessThanOrEqual => (Ordering::LessEqual, false),
+            Comparison::GreaterThan => (Ordering::Greater, false),
+            Comparison::GreaterThanOrEqual => (Ordering::GreaterEqual, false),
+            Comparison::GreaterThanOrUnordered => (Ordering::LessEqual, true),
+            Comparison::GreaterThanOrEqualOrUnordered => (Ordering::Less, true),
+        };
+        let left = self.term(&arguments[0], scope, depth)?;
+        let right = self.term(&arguments[1], scope, depth)?;
+        Some((Condition::Compare(ordering, Box::new(left), Box::new(right)), negated))
+    }
+
     /// How a fold step combines its accumulator with the element's term, when
     /// it is a reduction whose lanes may fold separately: `+` and `*`, and
     /// `max` and `min` in the form that keeps the accumulator where a
@@ -873,7 +988,7 @@ impl<'a, 'e, E: Lookup<'e>> Analysis<'a, 'e, E> {
                     (false, true) => (then, otherwise, *ordering),
                     // Choosing the accumulator where the comparison holds
                     // chooses NaN elements, unless there are none.
-                    (true, false) if self.element == Element::Int => {
+                    (true, false) if self.element.is_integer() => {
                         (otherwise, then, ordering.complement()?)
                     }
                     _ => return None,
@@ -979,6 +1094,8 @@ struct Spelling<'k> {
     /// Statements a scalar spelling needs before its expression.
     statements: Vec<String>,
     selections: usize,
+    /// The vectors a vector spelling is written with.
+    flavor: Option<Flavor>,
 }
 
 const LANE_NAMES: &[&str] = &["x", "y", "z", "w"];
@@ -1070,7 +1187,7 @@ impl Kernel {
             Shape::Fold { step, reduction } => {
                 let identity = match (reduction, self.element) {
                     (Reduction::Add, Element::Number) => "math.Copysign(0, -1)",
-                    (Reduction::Add, Element::Int) => "0",
+                    (Reduction::Add, _) => "0",
                     (Reduction::Multiply, _) => "1",
                     (Reduction::Max | Reduction::Min, _) => "initial",
                 };
@@ -1087,7 +1204,8 @@ impl Kernel {
                     });
                 }
                 out.push_str("\t}\n");
-                let pair = |left: &str, right: &str| self.combine_vectors(*reduction, left, right);
+                let pair =
+                    |left: &str, right: &str| self.combine_vectors(flavor, *reduction, left, right);
                 let _ = writeln!(
                     out,
                     "\tacc0 = {}",
@@ -1142,6 +1260,7 @@ impl Kernel {
         let package = flavor.package();
         let (bound, lanes) = self.reads();
         let mut spelling = self.spelling(copy, copy.map_or("acc".into(), |copy| format!("acc{copy}")));
+        spelling.flavor = Some(flavor);
         for lane in lanes {
             let (low, high) = match copy {
                 None | Some(0) => ("i".to_string(), "i+step".to_string()),
@@ -1169,6 +1288,7 @@ impl Kernel {
         let package = flavor.package();
         let (bound, lanes) = self.reads();
         let mut spelling = self.spelling(None, "acc".into());
+        spelling.flavor = Some(flavor);
         for lane in lanes {
             let _ = writeln!(
                 out,
@@ -1184,14 +1304,15 @@ impl Kernel {
         let _ = writeln!(out, "\t\t{}.StorePart(out[i:])", spelling.vector(term));
     }
 
-    fn combine_vectors(&self, reduction: Reduction, left: &str, right: &str) -> String {
-        match (reduction, self.element) {
-            (Reduction::Add, _) => format!("{left}.Add({right})"),
-            (Reduction::Multiply, _) => format!("{left}.Mul({right})"),
-            (Reduction::Max, Element::Int) => format!("{left}.Max({right})"),
-            (Reduction::Min, Element::Int) => format!("{left}.Min({right})"),
-            (Reduction::Max, Element::Number) => format!("{right}.IfElse({left}.Less({right}), {left})"),
-            (Reduction::Min, Element::Number) => format!("{right}.IfElse({right}.Less({left}), {left})"),
+    fn combine_vectors(&self, flavor: Flavor, reduction: Reduction, left: &str, right: &str) -> String {
+        let extrema = flavor.has_extrema(self.element);
+        match reduction {
+            Reduction::Add => format!("{left}.Add({right})"),
+            Reduction::Multiply => format!("{left}.Mul({right})"),
+            Reduction::Max if extrema => format!("{left}.Max({right})"),
+            Reduction::Min if extrema => format!("{left}.Min({right})"),
+            Reduction::Max => format!("{right}.IfElse({left}.Less({right}), {left})"),
+            Reduction::Min => format!("{right}.IfElse({right}.Less({left}), {left})"),
         }
     }
 
@@ -1285,7 +1406,7 @@ impl Kernel {
     }
 
     fn spelling(&self, copy: Option<usize>, accumulator: String) -> Spelling<'_> {
-        Spelling { kernel: self, copy, accumulator, statements: vec![], selections: 0 }
+        Spelling { kernel: self, copy, accumulator, statements: vec![], selections: 0, flavor: None }
     }
 }
 
@@ -1340,7 +1461,7 @@ impl Spelling<'_> {
             // An Int comparison choosing one of the two it compares is `Max`
             // or `Min`; a Number's would treat NaN differently.
             Term::Select { condition: Condition::Compare(ordering, left, right), then, otherwise }
-                if self.kernel.element == Element::Int
+                if self.flavor.is_some_and(|flavor| flavor.has_extrema(self.kernel.element))
                     && ordering != &Ordering::Equal
                     && ((left == then && right == otherwise) || (left == otherwise && right == then)) =>
             {

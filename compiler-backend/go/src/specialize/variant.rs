@@ -30,7 +30,11 @@ where
             Primitive::Expand => self.expand(scope, monotype),
             Primitive::Match => self.match_record(scope, monotype),
             Primitive::OnMatch => self.on_match(scope, monotype),
-            Primitive::MakeExists | Primitive::RunExists | Primitive::ReifyType => Ok(None),
+            Primitive::MakeExists
+            | Primitive::RunExists
+            | Primitive::ReifyType
+            | Primitive::ToSigned
+            | Primitive::ToUnsigned => Ok(None),
         }
     }
 

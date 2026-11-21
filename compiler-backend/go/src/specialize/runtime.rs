@@ -517,7 +517,12 @@ fn map_key(
     };
     let dictionaries = key.dictionaries.iter().map(|dictionary| map_dictionary(dictionary, visit));
     let dictionaries = dictionaries.collect();
-    SpecializationKey { definition, types: Arc::clone(&key.types), dictionaries }
+    SpecializationKey {
+        definition,
+        types: Arc::clone(&key.types),
+        dictionaries,
+        signedness: key.signedness,
+    }
 }
 
 fn map_dictionary(

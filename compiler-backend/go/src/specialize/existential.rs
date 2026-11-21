@@ -43,6 +43,7 @@ where
             (Primitive::ReifyType, _) => {
                 self.reify_type(scope, (file_id, term), instantiations, monotype)
             }
+            (Primitive::ToSigned | Primitive::ToUnsigned, _) => Ok(self.int64_conversion(monotype)),
             _ => self.variant_primitive(scope, primitive, types, monotype),
         }
     }

@@ -216,7 +216,7 @@ where
             Monotype::Unit => Shape::scalar(0),
             Monotype::Boolean => Shape::scalar(1),
             Monotype::Int | Monotype::Char => Shape::scalar(4),
-            Monotype::Number => Shape::scalar(8),
+            Monotype::Number | Monotype::Int64 | Monotype::UInt64 => Shape::scalar(8),
             // A foreign type's size is the foreign package's choice; it is
             // counted as an interface value.
             Monotype::String

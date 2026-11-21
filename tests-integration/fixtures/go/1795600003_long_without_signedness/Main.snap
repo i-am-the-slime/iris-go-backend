@@ -1,0 +1,10 @@
+---
+source: tests-integration/src/fixtures.rs
+---
+cannot specialize Main.unknown: a Data.Int64.Internal Long here is neither Int64's nor UInt64's: the definition's types name no single Long' Signed or Long' Unsigned for it to be
+  requested by: Main.main
+  reached 3 times
+
+1 blockers; no Go was written
+  types without a closed representation (1):
+    a Data.Int64.Internal Long here is neither Int64's nor UInt64's: the definition's types name no single Long' Signed or Long' Unsigned for it to be (1): Main.unknown

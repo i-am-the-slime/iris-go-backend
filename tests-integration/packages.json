@@ -6,6 +6,7 @@
     "contravariant",
     "effect",
     "foldable-traversable",
+    "int64",
     "newtype",
     "partial",
     "prelude",

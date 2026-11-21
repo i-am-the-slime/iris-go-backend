@@ -42,6 +42,7 @@ impl Monotypes {
             Monotype::Regex => "regex",
             Monotype::Mutex => "mutex",
             Monotype::BigInt => "bigInt",
+            Monotype::Int64 | Monotype::UInt64 => "long",
             Monotype::Lazy(_) => "lazy",
             Monotype::ConsList(_) => "list",
             Monotype::Data(data) | Monotype::ForeignData(data) | Monotype::Recursive(data) => {
@@ -149,6 +150,9 @@ pub const RESERVED: &[&str] = &[
     "imag",
     "int",
     "int32",
+    "int64",
+    "uint32",
+    "uint64",
     "iota",
     "len",
     "make",

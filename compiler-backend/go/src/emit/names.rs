@@ -224,6 +224,8 @@ where
         let text = |parts: &mut Vec<NamePart>, text: &str| parts.push(NamePart::Text(text.into()));
         match self.monotypes.get(monotype).clone() {
             Monotype::Int => text(parts, "Int"),
+            Monotype::Int64 => text(parts, "Int64"),
+            Monotype::UInt64 => text(parts, "UInt64"),
             Monotype::Number => text(parts, "Number"),
             Monotype::Boolean => text(parts, "Boolean"),
             Monotype::Char => text(parts, "Char"),
@@ -279,6 +281,10 @@ where
     ) -> GoResult<()> {
         use checking::core::Type;
         let type_id = self.context.types.strip_annotations(type_id);
+        if let Some(spelled) = self.context.signed_long_name(type_id)? {
+            parts.push(NamePart::Text(spelled.into()));
+            return Ok(());
+        }
         match self.context.types.lookup(type_id).clone() {
             Type::Application(function, argument) => {
                 self.type_parts(function, parts)?;
@@ -508,6 +514,8 @@ where
         };
         Ok(match self.monotypes.get(monotype).clone() {
             Monotype::Int => "Int".into(),
+            Monotype::Int64 => "Int64".into(),
+            Monotype::UInt64 => "UInt64".into(),
             Monotype::Number => "Number".into(),
             Monotype::Boolean => "Boolean".into(),
             Monotype::Char => "Char".into(),

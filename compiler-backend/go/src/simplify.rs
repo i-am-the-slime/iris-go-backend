@@ -1404,6 +1404,9 @@ fn is_cheap(expression: &Expression) -> bool {
         {
             arguments.iter().all(is_cheap)
         }
+        ExpressionKind::Foreign { foreign: Foreign::Int64 { .. }, arguments } => {
+            arguments.iter().all(is_cheap)
+        }
         ExpressionKind::Access { record, .. } => is_cheap(record),
         _ => false,
     }
@@ -1445,6 +1448,9 @@ pub(crate) fn is_discardable(expression: &Expression) -> bool {
         ExpressionKind::Foreign { foreign: Foreign::Operator(operator), arguments }
             if *operator != Operator::ArrayIndex =>
         {
+            arguments.iter().all(is_discardable)
+        }
+        ExpressionKind::Foreign { foreign: Foreign::Int64 { .. }, arguments } => {
             arguments.iter().all(is_discardable)
         }
         ExpressionKind::Construct { arguments, .. } | ExpressionKind::Array(arguments) => {

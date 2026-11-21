@@ -21,6 +21,8 @@ where
     pub(super) fn go_type(&mut self, monotype: MonotypeId) -> GoResult<GoType> {
         Ok(match self.monotypes.get(monotype).clone() {
             Monotype::Int => GoType::Named("int32".into()),
+            Monotype::Int64 => GoType::Named("int64".into()),
+            Monotype::UInt64 => GoType::Named("uint64".into()),
             Monotype::Number => GoType::Float64,
             Monotype::Boolean => GoType::Bool,
             Monotype::Char => GoType::Rune,
@@ -281,6 +283,8 @@ where
                 | Monotype::Regex
                 | Monotype::Mutex
                 | Monotype::BigInt
+                | Monotype::Int64
+                | Monotype::UInt64
                 | Monotype::Erased(_) => {}
             }
         }

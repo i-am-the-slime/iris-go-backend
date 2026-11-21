@@ -343,6 +343,8 @@ where
     fn monotype_name(&mut self, monotype: MonotypeId) -> GoResult<String> {
         Ok(match self.monotypes.get(monotype).clone() {
             Monotype::Int => "Int".into(),
+            Monotype::Int64 => "Int64".into(),
+            Monotype::UInt64 => "UInt64".into(),
             Monotype::Number => "Number".into(),
             Monotype::Boolean => "Boolean".into(),
             Monotype::Char => "Char".into(),
