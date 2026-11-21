@@ -559,6 +559,22 @@ impl ToDiagnostics for LoweringError {
                 )])
             }
 
+            LoweringError::TypeIntegerTooLarge { id } => {
+                let span = context
+                    .stabilized
+                    .syntax_ptr(*id)
+                    .and_then(|ptr| context.span_from_syntax_ptr(&ptr))
+                    .unwrap_or_else(|| context.fallback_span());
+
+                Ok(vec![Diagnostic::new(
+                    self.severity(),
+                    "TypeIntegerTooLarge",
+                    TYPE_INTEGER_TOO_LARGE,
+                    span,
+                    "lowering",
+                )])
+            }
+
             LoweringError::OverlappingBinderNames { name, duplicate, existing } => {
                 let span = |source| {
                     let ptr = match source {
@@ -1462,6 +1478,16 @@ impl ToDiagnostics for CheckingError {
                 let message = lookup_message(*message_id);
                 ("CustomFailure", message.to_string())
             }
+            ErrorKind::TypeIntegerTooLarge => {
+                ("TypeIntegerTooLarge", TYPE_INTEGER_TOO_LARGE.to_string())
+            }
+            ErrorKind::ReflectedIntegerOutOfRange { integer } => (
+                "ReflectedIntegerOutOfRange",
+                format!(
+                    "Type-level integer '{integer}' cannot be reflected as an 'Int' because it is \
+                     outside the range -2147483648 to 2147483647"
+                ),
+            ),
             ErrorKind::PropertyIsMissing { labels } => {
                 let noun = if labels.len() == 1 { "property" } else { "properties" };
                 let labels = labels.iter().map(|label| format!("'{label}'")).join(", ");
@@ -1620,6 +1646,8 @@ impl ToDiagnostics for CheckingError {
 }
 
 const MAX_HOLE_BINDINGS: usize = 5;
+
+const TYPE_INTEGER_TOO_LARGE: &str = "Type-level integer is outside the signed 128-bit range";
 
 fn attach_hole_binding_section<Q>(
     diagnostic: Diagnostic,

@@ -431,6 +431,8 @@ where
         | ErrorKind::RedundantPatterns { .. }
         | ErrorKind::MissingPatterns { .. }
         | ErrorKind::CustomFailure { .. }
+        | ErrorKind::TypeIntegerTooLarge
+        | ErrorKind::ReflectedIntegerOutOfRange { .. }
         | ErrorKind::PropertyIsMissing { .. }
         | ErrorKind::AdditionalProperty { .. }
         | ErrorKind::UnreportedUnknownType { .. }) => kind,

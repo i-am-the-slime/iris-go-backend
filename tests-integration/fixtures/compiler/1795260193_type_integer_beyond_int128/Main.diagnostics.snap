@@ -1,13 +1,29 @@
 ---
 source: tests-integration/src/fixtures.rs
 ---
-Error! · [UnreportedUnknownType] · Main.purs:7:23
+Error! · [TypeIntegerTooLarge] · Main.purs:6:30
   •
   │
-  • Unknown type '?[invalid kind]' remained unresolved without a reported error
+  • Type-level integer is outside the signed 128-bit range
   │
-  │   literalBeyondInt128 = Proxy
-  │                         ╰────
+  │   literalBeyondInt128 :: Proxy 170141183460469231731687303715884105728
+  │                                ╰──────────────────────────────────────
+  •
+
+Error! · [TypeIntegerTooLarge] · Main.purs:19:5
+  •
   │
-  • This is an internal compiler error.
+  • Type-level integer is outside the signed 128-bit range
+  │
+  │     { addBeyondInt128
+  │       ╰──────────────
+  •
+
+Error! · [TypeIntegerTooLarge] · Main.purs:20:5
+  •
+  │
+  • Type-level integer is outside the signed 128-bit range
+  │
+  │     , mulBeyondInt128
+  │       ╰──────────────
   •

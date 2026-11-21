@@ -134,20 +134,58 @@ pub struct TypeSynonymEquation {
 #[ts(export_to = "docs-schema.ts")]
 #[serde(tag = "tag", rename_all = "camelCase")]
 pub enum Type {
-    Application { function: Box<Type>, argument: Box<Type> },
-    KindApplication { function: Box<Type>, argument: Box<Type> },
-    Forall { binder: TypeBinder, body: Box<Type> },
-    Constrained { constraint: Box<Type>, body: Box<Type> },
-    Function { argument: Box<Type>, result: Box<Type> },
-    Kinded { expression: Box<Type>, kind: Box<Type> },
-    Constructor { reference: TypeReference },
-    Integer { value: i32 },
-    String { kind: StringLiteralKind, value: StringLiteralValue },
-    Row { fields: Vec<TypeRowField>, tail: Option<Box<Type>> },
-    Rigid { name: String, kind: Box<Type> },
-    Unification { id: u32 },
-    Free { name: String },
-    Unknown { name: String },
+    Application {
+        function: Box<Type>,
+        argument: Box<Type>,
+    },
+    KindApplication {
+        function: Box<Type>,
+        argument: Box<Type>,
+    },
+    Forall {
+        binder: TypeBinder,
+        body: Box<Type>,
+    },
+    Constrained {
+        constraint: Box<Type>,
+        body: Box<Type>,
+    },
+    Function {
+        argument: Box<Type>,
+        result: Box<Type>,
+    },
+    Kinded {
+        expression: Box<Type>,
+        kind: Box<Type>,
+    },
+    Constructor {
+        reference: TypeReference,
+    },
+    Integer {
+        #[ts(type = "number")]
+        value: i128,
+    },
+    String {
+        kind: StringLiteralKind,
+        value: StringLiteralValue,
+    },
+    Row {
+        fields: Vec<TypeRowField>,
+        tail: Option<Box<Type>>,
+    },
+    Rigid {
+        name: String,
+        kind: Box<Type>,
+    },
+    Unification {
+        id: u32,
+    },
+    Free {
+        name: String,
+    },
+    Unknown {
+        name: String,
+    },
 }
 
 #[derive(Serialize, Deserialize, TS)]

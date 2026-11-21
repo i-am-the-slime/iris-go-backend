@@ -275,7 +275,7 @@ pub enum Type {
     Synonym(FileId, TypeItemId),
 
     /// A type-level integer literal, `42`.
-    Integer(i32),
+    Integer(i128),
     /// A type-level string literal, `"life"`.
     String(lowering::StringKind, StringLiteralId),
     /// A row type, see [`RowType`].

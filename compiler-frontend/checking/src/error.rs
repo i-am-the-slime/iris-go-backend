@@ -187,6 +187,10 @@ pub enum ErrorKind {
     CustomFailure {
         message_id: SmolStrId,
     },
+    TypeIntegerTooLarge,
+    ReflectedIntegerOutOfRange {
+        integer: i128,
+    },
     PropertyIsMissing {
         labels: Arc<[SmolStr]>,
     },
