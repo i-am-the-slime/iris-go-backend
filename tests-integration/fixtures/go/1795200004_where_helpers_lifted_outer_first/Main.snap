@@ -1,6 +1,5 @@
 ---
 source: tests-integration/src/fixtures.rs
-assertion_line: 573
 ---
 // main.go
 package main
@@ -20,14 +19,9 @@ func initializeMain_() []int32 {
 	i := int32(len(*array2))
 	elements := *array2
 	for i2 := int32(1); i2 < i; i2++ {
-		within := i2 >= 0 && int(i2) < len(elements)
 		var i3 int32
-		if within {
-			element := elements[i2]
-			i3 = element
-		} else {
-			i3 = 0
-		}
+		element := elements[i2]
+		i3 = element
 		mainShiftDown(elements, i3, i2 - 1)
 	}
 	performed := array.UnsafeFreeze(array2)()
@@ -55,31 +49,20 @@ func mainGo(i int32, acc int32) int32 {
 func mainShiftDown(array []int32, current int32, j int32) {
 	for {
 		if j < 0 {
-			if 0 < len(array) {
-				array[0] = current
-			}
+			array[0] = current
 			return
 		}
-		within := j >= 0 && int(j) < len(array)
 		var i int32
-		if within {
-			element := array[j]
-			i = element
-		} else {
-			i = 0
-		}
+		element := array[j]
+		i = element
 		if i > current {
 			index := j + 1
-			if index >= 0 && int(index) < len(array) {
-				array[index] = i
-			}
+			array[index] = i
 			j = j - 1
 			continue
 		}
 		index2 := j + 1
-		if index2 >= 0 && int(index2) < len(array) {
-			array[index2] = current
-		}
+		array[index2] = current
 		return
 	}
 }

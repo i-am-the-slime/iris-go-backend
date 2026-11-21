@@ -23,11 +23,7 @@ func initializeMain_() []int32 {
 	if within {
 		element := (*array2)[1]
 		var result int32
-		if 0 < int32(len(elements)) {
-			result = elements[0](element)
-		} else {
-			result = element
-		}
+		result = elements[0](element)
 		var poked bool
 		if 1 < len(*array2) {
 			(*array2)[1] = result

@@ -39,7 +39,7 @@ func mainGo(i int32, acc string) string {
 		if i >= 10 {
 			return string(accBytes)
 		}
-		if prim.IntMod(i, 3) == 0 {
+		if i % 3 == 0 {
 			i = i + 1
 			continue
 		}

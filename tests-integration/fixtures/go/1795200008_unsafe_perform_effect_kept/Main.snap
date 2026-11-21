@@ -12,7 +12,6 @@ func Identity(x any) any {
 package main
 
 import (
-	"fixture/Control/Category"
 	"github.com/i-am-the-slime/iris-go/exception"
 	"os"
 )
@@ -26,21 +25,10 @@ func main_() int32 {
 	s_3 := ref + 100
 	ref = s_3
 	mainGo(0, struct{}{})
-	array := &[]any{}
 	s_4 := ref + 1000
 	ref = s_4
-	performed2 := category.Identity
-	within := 0 < len(*array)
 	var performed bool
-	if within {
-		element := (*array)[0]
-		var poked bool
-		(*array)[0] = performed2(element)
-		poked = true
-		performed = poked
-	} else {
-		performed = false
-	}
+	performed = false
 	s_5 := ref + 10000
 	ref = s_5
 	var result int32

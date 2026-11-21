@@ -18,7 +18,7 @@ func initializeMain_() []int32 {
 	array2 := array.Thaw([]int32{10, 20, 30})()
 	elements := *array2
 	for i := int32(0); i < 3; i++ {
-		within := i >= 0 && int(i) < len(elements)
+		within := int(i) < len(elements)
 		if within {
 			element := elements[i]
 			elements[i] = prim.IntMod(element, 7)

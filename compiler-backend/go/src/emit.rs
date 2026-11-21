@@ -24,6 +24,7 @@ mod fusion;
 mod groups;
 mod guards;
 mod headers;
+mod intervals;
 mod immediate;
 mod int64;
 mod json;
@@ -167,6 +168,7 @@ where
     timed("headers", || headers::read_headers_once(&mut declarations, &effects));
     timed("bounds", || headers::drop_repeated_bounds_tests(&mut declarations, &effects));
     timed("guards", || guards::guard_accesses_together(&mut declarations, &effects));
+    timed("intervals", || intervals::prove_bounds(&mut declarations, &effects));
     let taken =
         |name: &str| emitter.global_names.contains(name) || IMPORTED_PACKAGES.contains(&name);
     timed("lengths", || lengths::count_lengths_up_to_comparisons(&mut declarations));

@@ -1,0 +1,54 @@
+---
+source: tests-integration/src/fixtures.rs
+---
+// main.go
+package main
+
+import (
+	"fmt"
+	"github.com/i-am-the-slime/iris-go/array"
+	"github.com/i-am-the-slime/iris-go/exception"
+)
+
+var main_ = initializeMain_()
+
+func initializeMain_() []int32 {
+	defer exception.ReportUncaught()
+	array2 := array.Thaw([]int32{1, 2, 3})()
+	i := int32(len(*array2))
+	end := i + 1
+	elements := *array2
+	for i2 := int32(0); i2 < end; i2++ {
+		var i3 int32
+		if int(i2) < len(elements) {
+			element := elements[i2]
+			i3 = element
+			elements[i2] = i3 + 1
+		} else {
+			i3 = 0
+		}
+	}
+	performed := array.UnsafeFreeze(array2)()
+	array3 := array.Thaw([]int32{1, 2, 3})()
+	i4 := int32(len(*array3))
+	elements2 := *array3
+	for i2 := int32(0); i2 < i4; i2++ {
+		i3 := i2 - 1
+		within := i3 >= 0
+		var i5 int32
+		if within {
+			element := elements2[i3]
+			i5 = element
+		} else {
+			i5 = 0
+		}
+		element2 := elements2[i2]
+		elements2[i2] = element2 + i5
+	}
+	performed2 := array.UnsafeFreeze(array3)()
+	return array.Append(performed, performed2)
+}
+
+func main() {
+	fmt.Println(main_)
+}

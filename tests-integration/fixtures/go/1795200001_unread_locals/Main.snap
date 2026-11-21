@@ -91,11 +91,7 @@ func main_() int32 {
 	var ref int32 = 0
 	elements := []int32{10, 20}
 	var result int32
-	if ref >= 0 && ref < int32(len(elements)) {
-		result = elements[ref]
-	} else {
-		result = 0
-	}
+	result = elements[ref]
 	modified := shared.StateValue{State: ref + 1, Value: result}
 	ref = modified.State
 	scrutinee := either.EitherIntInt{Tag: either.EitherIntIntRight, Field0: -1}

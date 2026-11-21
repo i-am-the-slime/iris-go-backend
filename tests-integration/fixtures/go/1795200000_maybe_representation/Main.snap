@@ -324,35 +324,31 @@ func initializeMain_() []string {
 	}
 	elements := []maybe.Int{result24, maybe.NoInt}
 	var result25 string
-	if 0 < int32(len(elements)) {
-		scrutinee := elements[0]
-		var result11 string
-		if scrutinee != maybe.NoInt {
-			result11 = "(Just " + prim.ShowInt(int32(scrutinee)) + ")"
-		} else {
-			result11 = "Nothing"
-		}
-		result25 = "(Just " + result11 + ")"
+	scrutinee3 := elements[0]
+	var result26 string
+	if scrutinee3 != maybe.NoInt {
+		result26 = "(Just " + prim.ShowInt(int32(scrutinee3)) + ")"
 	} else {
-		result25 = "Nothing"
+		result26 = "Nothing"
 	}
+	result25 = "(Just " + result26 + ")"
 	x16 := opaque(1)
-	var result26 *Tree
+	var result27 *Tree
 	if x16 > 0 {
-		result26 = &Tree{Node0: sharedTreeLeaf, Node1: x16, Node2: sharedTreeLeaf}
+		result27 = &Tree{Node0: sharedTreeLeaf, Node1: x16, Node2: sharedTreeLeaf}
 	} else {
-		result26 = nil
+		result27 = nil
 	}
-	var result27 string
-	if result26 != nil && result26 != sharedTreeLeaf {
-		result27 = prim.ShowInt(result26.Node1)
-	} else if result26 != nil && result26 == sharedTreeLeaf {
-		result27 = "leaf"
+	var result28 string
+	if result27 != nil && result27 != sharedTreeLeaf {
+		result28 = prim.ShowInt(result27.Node1)
+	} else if result27 != nil && result27 == sharedTreeLeaf {
+		result28 = "leaf"
 	} else {
-		result27 = "none"
+		result28 = "none"
 	}
 	x17 := opaque(2)
-	var result28 maybe.MaybeInt
+	var result29 maybe.MaybeInt
 	if x17 > 0 {
 		x10 := x17 - 1
 		var result11 maybe.Int
@@ -361,48 +357,48 @@ func initializeMain_() []string {
 		} else {
 			result11 = maybe.NoInt
 		}
-		result28 = maybe.JustMaybeInt(result11)
+		result29 = maybe.JustMaybeInt(result11)
 	} else {
-		result28 = maybe.NoMaybeInt
+		result29 = maybe.NoMaybeInt
 	}
-	var result29 string
-	if result28.Tag == maybe.TagJust && result28.Just != maybe.NoInt {
-		result29 = prim.ShowInt(int32(result28.Just))
-	} else if result28.Tag == maybe.TagJust && result28.Just == maybe.NoInt {
-		result29 = "just nothing"
+	var result30 string
+	if result29.Tag == maybe.TagJust && result29.Just != maybe.NoInt {
+		result30 = prim.ShowInt(int32(result29.Just))
+	} else if result29.Tag == maybe.TagJust && result29.Just == maybe.NoInt {
+		result30 = "just nothing"
 	} else {
-		result29 = "nothing"
+		result30 = "nothing"
 	}
-	var result30 maybe.Char
+	var result31 maybe.Char
 	if opaque(1) > 0 {
-		result30 = maybe.Char('c')
+		result31 = maybe.Char('c')
 	} else {
-		result30 = maybe.NoChar
+		result31 = maybe.NoChar
 	}
-	var result31 string
-	if result30 != maybe.NoChar && rune(result30) == 'c' {
-		result31 = "c"
-	} else if result30 != maybe.NoChar {
-		result31 = "other"
+	var result32 string
+	if result31 != maybe.NoChar && rune(result31) == 'c' {
+		result32 = "c"
+	} else if result31 != maybe.NoChar {
+		result32 = "other"
 	} else {
-		result31 = "none"
+		result32 = "none"
 	}
 	x18 := opaque(7)
-	var result32 maybe.Boolean
+	var result33 maybe.Boolean
 	if x18 > 0 {
-		result32 = maybe.JustBoolean(x18 > 5)
+		result33 = maybe.JustBoolean(x18 > 5)
 	} else {
-		result32 = maybe.NoBoolean
+		result33 = maybe.NoBoolean
 	}
-	var result33 string
-	if result32 == maybe.True {
-		result33 = "yes"
-	} else if result32 == maybe.False {
-		result33 = "no"
+	var result34 string
+	if result33 == maybe.True {
+		result34 = "yes"
+	} else if result33 == maybe.False {
+		result34 = "no"
 	} else {
-		result33 = "none"
+		result34 = "none"
 	}
-	return []string{prim.ShowInt(result), result5, result8, result9, result10, result12, result13, result14, result15, result19, result22, result23, result25, result27, result29, result31, result33}
+	return []string{prim.ShowInt(result), result5, result8, result9, result10, result12, result13, result14, result15, result19, result22, result23, result25, result28, result30, result32, result34}
 }
 
 func opaque(x int32) int32 {

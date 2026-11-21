@@ -1,6 +1,5 @@
 ---
 source: tests-integration/src/fixtures.rs
-assertion_line: 573
 ---
 // Data/Maybe/maybe.go
 package maybe
@@ -44,22 +43,13 @@ func initializeMain_() []int32 {
 	for i2 := int32(0); i2 < i; i2++ {
 		var peeked maybe.Int
 		var result int32
-		if i2 >= 0 && int(i2) < len(elements) {
-			peeked = maybe.Int(elements[i2])
-			if peeked == maybe.NoInt {
-				result = 0
-			} else {
-				result = int32(peeked)
-			}
-			elements[i2] = 2 * result
+		peeked = maybe.Int(elements[i2])
+		if peeked == maybe.NoInt {
+			result = 0
 		} else {
-			peeked = maybe.NoInt
-			if peeked == maybe.NoInt {
-				result = 0
-			} else {
-				result = int32(peeked)
-			}
+			result = int32(peeked)
 		}
+		elements[i2] = 2 * result
 	}
 	i3 := int32(len(*array2))
 	i4 := (*array2)[i3 - 1]

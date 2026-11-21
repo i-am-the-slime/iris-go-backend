@@ -1,0 +1,67 @@
+---
+source: tests-integration/src/fixtures.rs
+---
+// Data/Maybe/maybe.go
+package maybe
+
+type Int int64
+
+const NoInt Int = 1 << 32
+
+// main.go
+package main
+
+import (
+	"fixture/Data/Maybe"
+	"fmt"
+	"github.com/i-am-the-slime/iris-go/array"
+	"github.com/i-am-the-slime/iris-go/exception"
+)
+
+var main_ = initializeMain_()
+
+func initializeMain_() []int32 {
+	defer exception.ReportUncaught()
+	array2 := array.Thaw([]int32{1, 5, 2, 7, 3})()
+	i := int32(len(*array2))
+	for i2 := int32(0); i2 < i; i2++ {
+		within := int(i2) < len(*array2)
+		var i3 int32
+		if within {
+			element := (*array2)[i2]
+			i3 = element
+		} else {
+			i3 = -1
+		}
+		scrutinee := i3 > 2
+		if scrutinee {
+			array.Pop(func(payload int32) maybe.Int {
+				return maybe.Int(payload)
+			}, maybe.NoInt, array2)()
+		}
+		if int(i2) < len(*array2) {
+			(*array2)[i2] = i3 * 10
+		}
+	}
+	performed := array.UnsafeFreeze(array2)()
+	array3 := array.Thaw([]int32{1, 2})()
+	i4 := int32(len(*array3))
+	end := i4 * 2
+	for i2 := int32(0); i2 < end; i2++ {
+		within := int(i2) < len(*array3)
+		var i3 int32
+		if within {
+			element := (*array3)[i2]
+			i3 = element
+		} else {
+			i3 = 0
+		}
+		*array3 = append(*array3, i3 + 1)
+	}
+	performed2 := array.UnsafeFreeze(array3)()
+	return array.Append(performed, performed2)
+}
+
+func main() {
+	fmt.Println(main_)
+}

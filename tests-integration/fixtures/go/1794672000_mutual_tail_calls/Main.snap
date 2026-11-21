@@ -34,7 +34,7 @@ func walkOrHalve(step int, steps int32, n int32, x float64) int32 {
 			if n <= 1 {
 				return steps
 			}
-			if prim.IntMod(n, 2) == 0 {
+			if n % 2 == 0 {
 				step, steps, x = shared.HalveStep, steps + 1, float64(n)
 				continue
 			}

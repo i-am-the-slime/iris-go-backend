@@ -1,6 +1,5 @@
 ---
 source: tests-integration/src/fixtures.rs
-assertion_line: 573
 ---
 // main.go
 package main
@@ -24,7 +23,7 @@ func initializeMain_() []int32 {
 		j := i - 1 - i2
 		var i3 int32
 		var i4 int32
-		if i2 >= 0 && int(i2) < len(elements) && j >= 0 && int(j) < len(elements) {
+		if int(i2) < len(elements) && j >= 0 && int(j) < len(elements) {
 			element := elements[i2]
 			i3 = element
 			element2 := elements[j]
@@ -32,7 +31,7 @@ func initializeMain_() []int32 {
 			elements[i2] = i4
 			elements[j] = i3
 		} else {
-			within := i2 >= 0 && int(i2) < len(elements)
+			within := int(i2) < len(elements)
 			if within {
 				element := elements[i2]
 				i3 = element
@@ -46,7 +45,7 @@ func initializeMain_() []int32 {
 			} else {
 				i4 = 0
 			}
-			if i2 >= 0 && int(i2) < len(elements) {
+			if int(i2) < len(elements) {
 				elements[i2] = i4
 			}
 			if j >= 0 && int(j) < len(elements) {
