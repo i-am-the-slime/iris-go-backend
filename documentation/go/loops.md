@@ -19,17 +19,17 @@ main = do
 
 ```go
 func main() {
-	array := os.Args()
-	step, count := shared.RangeSteps(1, int32(len(array)) + 20)
+	argv := os.Args()
+	step, count := array.RangeSteps(1, int32(len(argv))+20)
 	var accumulator int32 = 0
 	for index := range count {
-		i := 1 + int32(index) * step
-		value := codepoints.Length("item" + prim.ShowInt(i))
+		i := 1 + int32(index)*step
+		value := codepoints.Length("item" + strconv.Itoa(int(i)))
 		if value > 5 {
-			accumulator = accumulator + value
+			accumulator += value
 		}
 	}
-	console.Print(prim.ShowInt(accumulator))
+	console.Print(strconv.Itoa(int(accumulator)))
 }
 ```
 
@@ -59,19 +59,19 @@ main = do
 
 ```go
 func main() {
-	array := os.Args()
-	numbers := shared.RangeInt32(1, int32(len(array)) + 10)
+	argv := os.Args()
+	numbers := array.RangeInt32(1, int32(len(argv))+10)
 	accumulator := []int32{}
 	accumulator = slices.Clip(accumulator)
 	for _, n := range numbers {
 		if prim.IntMod(n, 2) == 0 {
-			accumulator = append(accumulator, n)
+			accumulator = array.Bounded(append(accumulator, n))
 		}
 	}
 	console.Print(prim.ShowArray(show.Show, accumulator))
 	accumulator2 := []byte("")
 	for _, n := range numbers {
-		accumulator2 = append(accumulator2, prim.ShowInt(n)...)
+		accumulator2 = append(accumulator2, strconv.Itoa(int(n))...)
 	}
 	built := string(accumulator2)
 	console.Print(built)
@@ -104,15 +104,15 @@ main = do
 
 ```go
 func main() {
-	array := os.Args()
-	step, count := shared.RangeSteps(1, int32(len(array)) + 100)
+	argv := os.Args()
+	step, count := array.RangeSteps(1, int32(len(argv))+100)
 	accumulator := sharedTreeLeaf
 	for index := range count {
-		i := 1 + int32(index) * step
-		a := prim.IntMod(i * 37, 101)
+		i := 1 + int32(index)*step
+		a := prim.IntMod(i*37, 101)
 		accumulator = insertReusing(a, accumulator)
 	}
-	console.Print(prim.ShowInt(size(accumulator)))
+	console.Print(strconv.Itoa(int(size(accumulator))))
 }
 
 func insertReusing(x int32, value *Tree) *Tree {
@@ -172,20 +172,20 @@ main = do
 
 ```go
 func main() {
-	array := os.Args()
-	step, count := shared.RangeSteps(1, int32(len(array)) + 1000)
+	argv := os.Args()
+	step, count := array.RangeSteps(1, int32(len(argv))+1000)
 	var accumulatorCount float64 = 0.0
 	var accumulatorSum float64 = 0.0
 	var accumulatorSumOfSquares float64 = 0.0
 	for index := range count {
-		i := 1 + int32(index) * step
+		i := 1 + int32(index)*step
 		x := float64(i)
-		accumulatorCount = accumulatorCount + 1.0
-		accumulatorSum = accumulatorSum + x
-		accumulatorSumOfSquares = accumulatorSumOfSquares + x * x
+		accumulatorCount += 1.0
+		accumulatorSum += x
+		accumulatorSumOfSquares += x * x
 	}
 	mean := accumulatorSum / accumulatorCount
-	console.Print("mean " + prim.ShowNumber(mean) + ", variance " + prim.ShowNumber(accumulatorSumOfSquares / accumulatorCount - mean * mean))
+	console.Print("mean " + prim.ShowNumber(mean) + ", variance " + prim.ShowNumber(accumulatorSumOfSquares/accumulatorCount-mean*mean))
 }
 ```
 
@@ -213,7 +213,7 @@ func simulate(steps int32, body shared.Body) shared.Body {
 		updated.X = body.X + body.Vx
 		updated.Y = body.Y + body.Vy
 		updated.Vy = body.Vy - 9.81
-		steps, body = steps - 1, updated
+		steps, body = steps-1, updated
 	}
 }
 ```
@@ -234,15 +234,15 @@ main = do
 
 ```go
 func main() {
-	array := os.Args()
-	step, count := shared.RangeSteps(1, int32(len(array)) + 1000)
+	argv := os.Args()
+	step, count := array.RangeSteps(1, int32(len(argv))+1000)
 	mapped := make([]float64, count)
 	for index := range count {
-		i := 1 + int32(index) * step
+		i := 1 + int32(index)*step
 		p := float64(i)
 		mapped[index] = p * 1.19
 	}
-	console.Print(prim.ShowInt(int32(len(mapped))) + " prices, total " + prim.ShowNumber(foldLanes(mapped, 0.0)))
+	console.Print(strconv.Itoa(len(mapped)) + " prices, total " + prim.ShowNumber(foldLanes(mapped, 0.0)))
 }
 ```
 
@@ -319,16 +319,16 @@ main = do
 
 ```go
 func main() {
-	array2 := os.Args()
-	xs := shared.RangeInt32(1, int32(len(array2)) + 7)
-	array3 := array.Thaw(xs)()
+	argv := os.Args()
+	xs := array.RangeInt32(1, int32(len(argv))+7)
+	array2 := array.Thaw(xs)()
 	n := int32(len(xs))
 	end := prim.IntDiv(n, 2)
-	elements := *array3
+	elements := *array2
 	for i := int32(0); i < end; i++ {
 		j := n - 1 - i
 		var peeked maybe.Int
-		if i >= 0 && int(i) < len(elements) {
+		if int(i) < len(elements) {
 			peeked = maybe.Int(elements[i])
 		} else {
 			peeked = maybe.NoInt
@@ -340,7 +340,7 @@ func main() {
 			peeked2 = maybe.NoInt
 		}
 		if peeked != maybe.NoInt && peeked2 != maybe.NoInt {
-			if i >= 0 && int(i) < len(elements) {
+			if int(i) < len(elements) {
 				elements[i] = int32(peeked2)
 			}
 			if j >= 0 && int(j) < len(elements) {
@@ -348,7 +348,7 @@ func main() {
 			}
 		}
 	}
-	performed := array.UnsafeFreeze(array3)()
+	performed := array.UnsafeFreeze(array2)()
 	console.Print(prim.ShowArray(show.Show, performed))
 }
 ```
@@ -378,29 +378,25 @@ reverseInPlace xs = STArray.run do
 		j := n - 1 - i
 		var i2 int32
 		var i3 int32
-		if i >= 0 && int(i) < len(elements) && j >= 0 && int(j) < len(elements) {
-			element := elements[i]
-			i2 = element
-			element2 := elements[j]
-			i3 = element2
+		if int(i) < len(elements) && j >= 0 && int(j) < len(elements) {
+			i2 = elements[i]
+			i3 = elements[j]
 			elements[i] = i3
 			elements[j] = i2
 		} else {
-			within := i >= 0 && int(i) < len(elements)
+			within := int(i) < len(elements)
 			if within {
-				element := elements[i]
-				i2 = element
+				i2 = elements[i]
 			} else {
 				i2 = 0
 			}
 			within2 := j >= 0 && int(j) < len(elements)
 			if within2 {
-				element := elements[j]
-				i3 = element
+				i3 = elements[j]
 			} else {
 				i3 = 0
 			}
-			if i >= 0 && int(i) < len(elements) {
+			if int(i) < len(elements) {
 				elements[i] = i3
 			}
 			if j >= 0 && int(j) < len(elements) {

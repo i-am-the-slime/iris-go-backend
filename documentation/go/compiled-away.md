@@ -19,15 +19,15 @@ main = do
 
 ```go
 func main() {
-	array := os.Args()
-	n := int32(len(array))
-	console.Print(prim.StringToUpper("count: " + prim.ShowInt(n)))
-	step, count := shared.RangeSteps(1, n + 6)
+	argv := os.Args()
+	n := int32(len(argv))
+	console.Print(prim.StringToUpper("count: " + strconv.Itoa(int(n))))
+	step, count := array.RangeSteps(1, n+6)
 	mapped := []int32{}
 	for index := range count {
-		i := 1 + int32(index) * step
+		i := 1 + int32(index)*step
 		if prim.IntMod(i, 3) == 0 {
-			mapped = append(mapped, i * 10)
+			mapped = append(mapped, i*10)
 		}
 	}
 	console.Print(prim.ShowArray(show.Show, mapped))
@@ -56,8 +56,8 @@ main = do
 
 ```go
 func main() {
-	array := os.Args()
-	hero := shared.Player{Name: "Ada", Stats: shared.HpXp{Hp: 10 + int32(len(array)), Xp: 0}, Items: []string{"sword", "map"}}
+	argv := os.Args()
+	hero := shared.Player{Name: "Ada", Stats: shared.HpXp{Hp: 10 + int32(len(argv)), Xp: 0}, Items: []string{"sword", "map"}}
 	x := hero.Stats
 	healed := shared.Player{Name: hero.Name, Stats: shared.HpXp{Hp: x.Hp + 5, Xp: x.Xp}, Items: hero.Items}
 	x2 := healed.Items
@@ -65,7 +65,7 @@ func main() {
 	if 0 < int32(len(x2)) {
 		updateAt := direct.UpdateAt(func(payload []string) maybe.ArrayString {
 			return maybe.JustArrayString(payload)
-		}, maybe.NoArrayString, int32(0), "better sword", x2)
+		}, maybe.NoArrayString, 0, "better sword", x2)
 		switch updateAt.Tag {
 		case maybe.TagNothing:
 			result = x2
@@ -76,7 +76,7 @@ func main() {
 		result = x2
 	}
 	upgraded := shared.Player{Name: healed.Name, Stats: healed.Stats, Items: result}
-	console.Print(prim.ShowInt(upgraded.Stats.Hp))
+	console.Print(strconv.Itoa(int(upgraded.Stats.Hp)))
 	console.Print(prim.ShowArray(show.Show, upgraded.Items))
 }
 ```
@@ -110,13 +110,13 @@ main = do
 
 ```go
 func main() {
-	array := os.Args()
-	for _, i := range []int32{0, 50 + int32(len(array)), 500} {
+	argv := os.Args()
+	for _, i := range []int32{0, 50 + int32(len(argv)), 500} {
 		var result either.EitherStringInt
 		if i < 1 {
-			result = either.EitherStringInt{Tag: either.EitherStringIntLeft, Left: "age must be between 1 and 100, got " + prim.ShowInt(i)}
+			result = either.EitherStringInt{Tag: either.EitherStringIntLeft, Left: "age must be between 1 and 100, got " + strconv.Itoa(int(i))}
 		} else if i > 100 {
-			result = either.EitherStringInt{Tag: either.EitherStringIntLeft, Left: "age must be between 1 and 100, got " + prim.ShowInt(i)}
+			result = either.EitherStringInt{Tag: either.EitherStringIntLeft, Left: "age must be between 1 and 100, got " + strconv.Itoa(int(i))}
 		} else {
 			result = either.EitherStringInt{Tag: either.EitherStringIntRight, Right: i}
 		}
@@ -124,7 +124,7 @@ func main() {
 		case either.EitherStringIntLeft:
 			console.Print(result.Left)
 		default: // either.EitherStringIntRight
-			console.Print("ok " + prim.ShowInt(result.Right))
+			console.Print("ok " + strconv.Itoa(int(result.Right)))
 		}
 	}
 }
@@ -147,7 +147,7 @@ main = do
 ```
 
 ```go
-		problem := either.EitherStringInt{Tag: either.EitherStringIntLeft, Left: "age must be between 1 and 100, got " + prim.ShowInt(i)}
+		problem := either.EitherStringInt{Tag: either.EitherStringIntLeft, Left: "age must be between 1 and 100, got " + strconv.Itoa(int(i))}
 		var result2 either.EitherStringInt
 		if i < 1 {
 			result2 = problem

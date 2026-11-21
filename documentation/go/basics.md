@@ -24,16 +24,15 @@ main = do
 
 ```go
 func main() {
-	console.Print(prim.ShowInt(43))
-	console.Print(prim.ShowNumber(float64(1.5)))
+	console.Print("43")
+	console.Print(prim.ShowNumber(1.5))
 	console.Print("Iris!")
 }
 ```
 
-`answer`, `ratio` and `name` are gone, and so are `+`, `*` and `<>`: Iris did the sums. Small
-functions get copied into the code that calls them, so whatever depends only on constants ends up
-computed too. (Iris currently writes some literals with an explicit type, like `float64(1.5)`,
-even where Go doesn't need one. That's going to be tidied up.)
+`answer`, `ratio` and `name` are gone, and so are `+`, `*` and `<>`: Iris did the sums, and
+`show 43` is just `"43"`. Small functions get copied into the code that calls them, so whatever
+depends only on constants ends up computed too.
 
 That's why most examples on these pages start with `argv <- args` (from `Go.OS`) and use
 `length argv`. The compiler can't know how many arguments you'll pass, so the code you want to look
@@ -58,29 +57,22 @@ main = do
 
 ```go
 func main() {
-	array := os.Args()
-	count := int32(len(array))
-	word := "args: " + prim.ShowInt(count)
-	console.Print(word)
-	console.Print(prim.ShowNumber(float64(count) / 2.0))
-	scrutinee := count > 1
-	var result string
-	if scrutinee {
-		result = "true"
-	} else {
-		result = "false"
-	}
-	console.Print(result)
+	argv := os.Args()
+	count := int32(len(argv))
+	word := "args: " + strconv.Itoa(int(count))
 	codeUnitCharAt := prim.CodeUnitCharAt(func(payload rune) maybe.Char {
 		return maybe.Char(payload)
 	}, maybe.NoChar, 0, word)
-	var result2 rune
+	var first rune
 	if codeUnitCharAt == maybe.NoChar {
-		result2 = '?'
+		first = '?'
 	} else {
-		result2 = rune(codeUnitCharAt)
+		first = rune(codeUnitCharAt)
 	}
-	console.Print(prim.ShowChar(result2))
+	console.Print(word)
+	console.Print(prim.ShowNumber(float64(count) / 2.0))
+	console.Print(strconv.FormatBool(count > 1))
+	console.Print(prim.ShowChar(first))
 }
 ```
 
@@ -92,8 +84,10 @@ func main() {
 | `Boolean` | `bool` |
 | `Char` | `rune` |
 
-A `let` that's used once is written where it's used, like `half` here. One that's used more than
-once becomes a Go variable, like `word`. `show` on a `Boolean` is an `if`.
+A `let` that's used once is written where it's used, like `half` and `many` here. One that's used
+more than once becomes a Go variable, like `word`, and so does an `if` or a `case`, like `first`.
+Either way the Go variable keeps your name. `show` on an `Int` is `strconv.Itoa` and on a `Boolean`
+`strconv.FormatBool`, straight from Go's standard library.
 
 ## Functions take all their arguments at once
 
@@ -116,19 +110,19 @@ main = do
 
 ```go
 func main() {
-	array := os.Args()
-	n := int32(len(array))
+	argv := os.Args()
+	n := int32(len(argv))
 	var result string
 	if n == 0 {
 		result = "no apple"
 	} else if n == 1 {
-		result = "one apple for " + prim.ShowNumber(float64(1.25))
+		result = "one apple for " + prim.ShowNumber(1.25)
 	} else {
-		result = prim.ShowInt(n) + " apples for " + prim.ShowNumber(float64(1.125))
+		result = strconv.Itoa(int(n)) + " apples for " + prim.ShowNumber(1.125)
 	}
 	console.Print(result)
-	console.Print(mainPears(n + 1, 0.8))
-	console.Print(mainPears(n + 2, 0.8))
+	console.Print(mainPears(n+1, 0.8))
+	console.Print(mainPears(n+2, 0.8))
 }
 
 func mainPears(amount int32, price float64) string {
@@ -138,7 +132,7 @@ func mainPears(amount int32, price float64) string {
 	if amount == 1 {
 		return "one pear for " + prim.ShowNumber(price)
 	}
-	return prim.ShowInt(amount) + " pears for " + prim.ShowNumber(price * 0.9)
+	return strconv.Itoa(int(amount)) + " pears for " + prim.ShowNumber(price*0.9)
 }
 ```
 
@@ -182,12 +176,12 @@ type Person struct {
 }
 
 func main() {
-	array := os.Args()
-	ada := shared.Person{Name: "Ada", Age: 36 + int32(len(array)), Address: shared.Address{Street: "St James's Square", City: "London"}}
-	console.Print(ada.Name + " (" + prim.ShowInt(ada.Age) + ") lives in " + ada.Address.City)
-	ada.Age = ada.Age + 1
+	argv := os.Args()
+	ada := shared.Person{Name: "Ada", Age: 36 + int32(len(argv)), Address: shared.Address{Street: "St James's Square", City: "London"}}
+	console.Print(ada.Name + " (" + strconv.Itoa(int(ada.Age)) + ") lives in " + ada.Address.City)
+	ada.Age += 1
 	ada.Address.City = "Paris"
-	console.Print(ada.Name + " (" + prim.ShowInt(ada.Age) + ") lives in " + ada.Address.City)
+	console.Print(ada.Name + " (" + strconv.Itoa(int(ada.Age)) + ") lives in " + ada.Address.City)
 }
 ```
 
@@ -235,8 +229,8 @@ const (
 )
 
 func main() {
-	array2 := os.Args()
-	for _, shape := range array.Append([]Shape{Shape{Tag: ShapeCircle, Circle: 1.0}, Shape{Tag: ShapeRectangle, Rectangle0: 2.0, Rectangle1: 3.0}, Shape{Tag: ShapeDot}}, array.Replicate(int32(len(array2)), Shape{Tag: ShapeDot})) {
+	argv := os.Args()
+	for _, shape := range array.Append([]Shape{{Tag: ShapeCircle, Circle: 1.0}, {Tag: ShapeRectangle, Rectangle0: 2.0, Rectangle1: 3.0}, {Tag: ShapeDot}}, array.Replicate(int32(len(argv)), Shape{Tag: ShapeDot})) {
 		var result float64
 		switch shape.Tag {
 		case ShapeCircle:
@@ -327,19 +321,19 @@ type Reading struct {
 }
 
 func main() {
-	array := os.Args()
-	step, count := shared.RangeSteps(1, int32(len(array)) + 2)
+	argv := os.Args()
+	step, count := array.RangeSteps(1, int32(len(argv))+2)
 	mapped := make([]shared.Reading, count)
 	for index := range count {
-		i := 1 + int32(index) * step
-		mapped[index] = shared.Reading{City: "City " + prim.ShowInt(i), Temperature: float64(i) * 10.0}
+		i := 1 + int32(index)*step
+		mapped[index] = shared.Reading{City: "City " + strconv.Itoa(int(i)), Temperature: float64(i) * 10.0}
 	}
 	mapped2 := make([]float64, len(mapped))
 	for index := range mapped {
-		mapped2[index] = mapped[index].Temperature * 9.0 / 5.0 + 32.0
+		mapped2[index] = mapped[index].Temperature*9.0/5.0 + 32.0
 	}
 	console.Print(prim.ShowArray(show.Show, mapped2))
-	console.Print(prim.ShowInt(int32(len(mapped))))
+	console.Print(strconv.Itoa(len(mapped)))
 }
 ```
 
@@ -381,8 +375,8 @@ type String struct {
 }
 
 func main() {
-	array := os.Args()
-	numbers := shared.RangeInt32(0, int32(len(array)) + 3)
+	argv := os.Args()
+	numbers := array.RangeInt32(0, int32(len(argv))+3)
 	mapped := make([]either.EitherStringInt, len(numbers))
 	for index, element := range numbers {
 		mapped[index] = parse(element)
@@ -392,7 +386,7 @@ func main() {
 		case either.EitherStringIntLeft:
 			console.Print(mapped[eitherIndex].Left)
 		default: // either.EitherStringIntRight
-			console.Print(prim.ShowInt(mapped[eitherIndex].Right))
+			console.Print(strconv.Itoa(int(mapped[eitherIndex].Right)))
 		}
 	}
 	mapped2 := make([]maybe.String, len(numbers))
@@ -411,7 +405,7 @@ func main() {
 
 func parse(n int32) either.EitherStringInt {
 	if n > 2 {
-		return either.EitherStringInt{Tag: either.EitherStringIntLeft, Left: "too big: " + prim.ShowInt(n)}
+		return either.EitherStringInt{Tag: either.EitherStringIntLeft, Left: "too big: " + strconv.Itoa(int(n))}
 	}
 	return either.EitherStringInt{Tag: either.EitherStringIntRight, Right: n * 10}
 }
@@ -453,8 +447,8 @@ const NoInt Int = 1 << 32
 
 ```go
 func main() {
-	array := os.Args()
-	step, count := shared.RangeSteps(0, int32(len(array)) + 2)
+	argv := os.Args()
+	step, count := array.RangeSteps(0, int32(len(argv))+2)
 	mapped := make([]int32, count)
 	for index := range count {
 		value := int32(index) * step
@@ -468,7 +462,7 @@ func main() {
 		}
 	}
 	if found != maybe.NoInt {
-		console.Print("first even: " + prim.ShowInt(mapped[int32(found)]))
+		console.Print("first even: " + strconv.Itoa(int(mapped[int32(found)])))
 		return
 	}
 	console.Print("all odd")
@@ -504,8 +498,8 @@ main = do
 
 ```go
 func main() {
-	array2 := os.Args()
-	step, count := shared.RangeSteps(0, int32(len(array2)) + 3)
+	argv := os.Args()
+	step, count := array.RangeSteps(0, int32(len(argv))+3)
 	mapped := make([]Card, count)
 	for index := range count {
 		i := int32(index) * step
@@ -545,14 +539,7 @@ func main() {
 		mapped3[index] = showCard(element)
 	}
 	console.Print(prim.ShowArray(show.Show, mapped3))
-	scrutinee := array.Eq(eqCardConsIntConsSuitNil, mapped, mapped)
-	var result2 string
-	if scrutinee {
-		result2 = "true"
-	} else {
-		result2 = "false"
-	}
-	console.Print(result2)
+	console.Print(strconv.FormatBool(array.Eq(eqCardConsIntConsSuitNil, mapped, mapped)))
 }
 
 func showCard(card Card) string {
@@ -563,7 +550,7 @@ func showCard(card Card) string {
 	default: // SuitSpades
 		result = "♠"
 	}
-	return prim.ShowInt(card.Rank) + result
+	return strconv.Itoa(int(card.Rank)) + result
 }
 
 func compare(left Suit, right Suit) ordering.Ordering {
@@ -582,8 +569,8 @@ func compare(left Suit, right Suit) ordering.Ordering {
 func eqCardConsIntConsSuitNil(ra Card, rb Card) bool {
 	scrutinee := eqCardConsIntConsSuitNilGet2(ra)
 	scrutinee2 := eqCardConsIntConsSuitNilGet2(rb)
-	result := scrutinee == SuitHearts && scrutinee2 == SuitHearts || scrutinee == SuitSpades && scrutinee2 == SuitSpades
-	return eqCardConsIntConsSuitNilGet(ra) == eqCardConsIntConsSuitNilGet(rb) && result
+	tail := scrutinee == SuitHearts && scrutinee2 == SuitHearts || scrutinee == SuitSpades && scrutinee2 == SuitSpades
+	return eqCardConsIntConsSuitNilGet(ra) == eqCardConsIntConsSuitNilGet(rb) && tail
 }
 
 func eqCardConsIntConsSuitNilGet(card Card) int32 {
@@ -606,7 +593,7 @@ true
 
 There are no dictionaries. Iris knows which instance each `show`, `compare` and `==` means, and
 writes that instance's code where it's used: `show suit` is a `switch`, `show rank` is
-`prim.ShowInt`, the derived `Ord Suit` is the function `compare`, and `==` on two arrays of cards
+`strconv.Itoa`, the derived `Ord Suit` is the function `compare`, and `==` on two arrays of cards
 gets an equality function for `Card`.
 
 ## Polymorphic functions get one copy per type
@@ -637,28 +624,14 @@ main = do
 
 ```go
 func main() {
-	array := os.Args()
-	ints := shared.RangeInt32(1, int32(len(array)) + 5)
+	argv := os.Args()
+	ints := array.RangeInt32(1, int32(len(argv))+5)
 	mapped := make([]string, len(ints))
 	for index, i := range ints {
-		mapped[index] = "w" + prim.ShowInt(i)
+		mapped[index] = "w" + strconv.Itoa(int(i))
 	}
-	scrutinee := mainGo(ints, 0, int32(len(ints)) - 1)
-	var result string
-	if scrutinee {
-		result = "true"
-	} else {
-		result = "false"
-	}
-	console.Print(result)
-	scrutinee2 := mainGo2(mapped, 0, int32(len(mapped)) - 1)
-	var result2 string
-	if scrutinee2 {
-		result2 = "true"
-	} else {
-		result2 = "false"
-	}
-	console.Print(result2)
+	console.Print(strconv.FormatBool(mainGo(ints, 0, int32(len(ints))-1)))
+	console.Print(strconv.FormatBool(mainGo2(mapped, 0, int32(len(mapped))-1)))
 }
 
 func mainGo(ints []int32, low int32, high int32) bool {
@@ -666,7 +639,7 @@ func mainGo(ints []int32, low int32, high int32) bool {
 		if low > high {
 			return false
 		}
-		mid := prim.IntDiv(low + high, 2)
+		mid := prim.IntDiv(low+high, 2)
 		y := ints[mid]
 		if 4 < y {
 			high = mid - 1
@@ -684,7 +657,7 @@ func mainGo2(words []string, low int32, high int32) bool {
 		if low > high {
 			return false
 		}
-		mid := prim.IntDiv(low + high, 2)
+		mid := prim.IntDiv(low+high, 2)
 		y := words[mid]
 		if prim.CompareString("w9", y) < 0 {
 			high = mid - 1
@@ -734,19 +707,18 @@ type Rule struct {
 }
 
 func main() {
-	array := os.Args()
-	limit := int32(len(array)) + 3
+	argv := os.Args()
+	limit := int32(len(argv)) + 3
 	for i := int32(0); i < 5; i++ {
-		for _, rule := range []shared.Rule{shared.Rule{Name: "positive", Check: func(n int32) bool {
+		for _, rule := range []shared.Rule{{Name: "positive", Check: func(n int32) bool {
 			return n > 0
-		}}, shared.Rule{Name: "small", Check: func(n int32) bool {
+		}}, {Name: "small", Check: func(n int32) bool {
 			return n < limit
-		}}, shared.Rule{Name: "even", Check: func(n int32) bool {
+		}}, {Name: "even", Check: func(n int32) bool {
 			return prim.IntMod(n, 2) == 0
 		}}} {
-			scrutinee := rule.Check(i)
-			if scrutinee {
-				console.Print(prim.ShowInt(i) + " is " + rule.Name)
+			if rule.Check(i) {
+				console.Print(strconv.Itoa(int(i)) + " is " + rule.Name)
 			}
 		}
 	}
@@ -774,12 +746,12 @@ main = do
 
 ```go
 func main() {
-	array2 := os.Args()
-	more := array.Snoc(array.Append([]int32{70, 85, 92}, shared.RangeInt32(0, int32(len(array2)))), int32(100))
-	console.Print(prim.ShowInt(int32(len(more))))
+	argv := os.Args()
+	more := array.Snoc(array.Append([]int32{70, 85, 92}, array.RangeInt32(0, int32(len(argv)))), int32(100))
+	console.Print(strconv.Itoa(len(more)))
 	console.Print(prim.ShowArray(show.Show, array.Reverse(more)))
 	if 1 < int32(len(more)) {
-		console.Print("second: " + prim.ShowInt(more[1]))
+		console.Print("second: " + strconv.Itoa(int(more[1])))
 		return
 	}
 	console.Print("too short")
@@ -828,7 +800,7 @@ func countdown(acc int32, n int32) int32 {
 		if n <= 0 {
 			return acc
 		}
-		acc, n = acc + n, n - 1
+		acc, n = acc+n, n-1
 	}
 }
 ```
@@ -857,16 +829,16 @@ main = do
 
 ```go
 func main() {
-	array := os.Args()
-	for _, i := range []int32{1, 10 + int32(len(array)), 20} {
-		subtotal := float64(i) * 2.5
-		var result float64
-		if i >= 10 {
-			result = subtotal * 0.15
+	argv := os.Args()
+	for _, quantity := range []int32{1, 10 + int32(len(argv)), 20} {
+		subtotal := float64(quantity) * 2.5
+		var discount float64
+		if quantity >= 10 {
+			discount = subtotal * 0.15
 		} else {
-			result = 0.0
+			discount = 0.0
 		}
-		console.Print("€" + prim.ShowNumber(subtotal - result))
+		console.Print("€" + prim.ShowNumber(subtotal-discount))
 	}
 }
 ```
@@ -892,19 +864,16 @@ main = do
 
 ```go
 func main() {
-	array := os.Args()
-	var ref int32 = 0
-	step, count := shared.RangeSteps(1, int32(len(array)) + 4)
+	argv := os.Args()
+	var total int32 = 0
+	step, count := array.RangeSteps(1, int32(len(argv))+4)
 	for index := range count {
-		i := 1 + int32(index) * step
-		s_ := ref + i
-		ref = s_
-		console.Print("running total: " + prim.ShowInt(ref))
+		i := 1 + int32(index)*step
+		total += i
+		console.Print("running total: " + strconv.Itoa(int(total)))
 	}
-	scrutinee := ref > 5
-	if scrutinee {
+	if total > 5 {
 		console.Print("that's a lot")
-		return
 	}
 }
 ```

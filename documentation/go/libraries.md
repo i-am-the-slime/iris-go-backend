@@ -16,8 +16,8 @@ main = do
 
 ```go
 func main() {
-	array := os.Args()
-	console.Print(Data_Int64_Internal_ffi.ToString_(factorial(int64(20 + int32(len(array)))), 10) + "l")
+	argv := os.Args()
+	console.Print(strconv.FormatInt(factorial(int64(20+int32(len(argv)))), 10) + "l")
 	long := uint64(2)
 	var result uint64
 	if long == 0 {
@@ -25,14 +25,14 @@ func main() {
 	} else {
 		result = Data_Int64_Internal_ffi.Divide_(uint64(18446744073709551615), long)
 	}
-	console.Print(Data_Int64_Internal_ffi.ToString_(result, 10) + "ul")
+	console.Print(strconv.FormatUint(result, 10) + "ul")
 }
 
 func factorial(n int64) int64 {
 	if n <= 1 {
 		return int64(1)
 	}
-	return n * factorial(n - 1)
+	return n * factorial(n-1)
 }
 ```
 
@@ -61,47 +61,47 @@ main = launchAff_ do
 ```go
 func main() {
 	defer aff.Await()
-	fiber2 := aff.NewFiber(func() struct{} {
+	fiber4 := aff.NewFiber(func() struct{} {
 		func() {
-			fiber := aff.ForkFiber(true, func() int32 {
-				aff.DelayDirect(nil, float64(100.0))
+			fiber2 := aff.ForkFiber(true, func() int32 {
+				aff.DelayDirect(nil, 100.0)
 				console.Print("background done")
 				return 42
 			})
-			isSuspended, join, kill, onComplete, run := aff.FiberFields(fiber, func(payload exception.Error) either.EitherErrorInt {
+			isSuspended, join, kill, onComplete, run := aff.FiberFields(fiber2, func(payload exception.Error) either.EitherErrorInt {
 				return either.EitherErrorInt{Tag: either.EitherErrorIntLeft, Left: payload}
 			}, func(payload int32) either.EitherErrorInt {
 				return either.EitherErrorInt{Tag: either.EitherErrorIntRight, Right: payload}
 			}, either.EitherErrorUnit{Tag: either.EitherErrorUnitRight, Right: struct{}{}}, func(value either.OnCompleteInt) func(func(either.EitherErrorInt)) {
 				return value.Handler
 			})
-			fiberInt := either.FiberInt{IsSuspended: isSuspended, Join: join, Kill: kill, OnComplete: onComplete, Run: run}
+			fiber3 := either.FiberInt{IsSuspended: isSuspended, Join: join, Kill: kill, OnComplete: onComplete, Run: run}
 			console.Print("main keeps going")
-			i := aff.MakeAffDirect(func(value either.EitherErrorInt) bool {
+			answer := aff.MakeAffDirect(func(value either.EitherErrorInt) bool {
 				return value.Tag == either.EitherErrorIntLeft
 			}, func(value either.EitherErrorInt) exception.Error {
 				return value.Left
 			}, func(value either.EitherErrorInt) int32 {
 				return value.Right
 			}, func(k func(either.EitherErrorInt)) func(exception.Error) {
-				effect := fiberInt.Join(k)
+				effect := fiber3.Join(k)
 				return func(_ exception.Error) {
 					effect()
 				}
 			})
-			console.Print("joined: " + prim.ShowInt(i))
+			console.Print("joined: " + strconv.Itoa(int(answer)))
 		}()
 		return struct{}{}
 	})
-	isSuspended2, join2, kill2, onComplete2, run2 := aff.FiberFields(fiber2, func(payload exception.Error) either.EitherErrorUnit {
+	isSuspended2, join2, kill2, onComplete2, run2 := aff.FiberFields(fiber4, func(payload exception.Error) either.EitherErrorUnit {
 		return either.EitherErrorUnit{Tag: either.EitherErrorUnitLeft, Left: payload}
 	}, func(payload struct{}) either.EitherErrorUnit {
 		return either.EitherErrorUnit{Tag: either.EitherErrorUnitRight, Right: payload}
 	}, either.EitherErrorUnit{Tag: either.EitherErrorUnitRight, Right: struct{}{}}, func(value either.OnCompleteUnit) func(func(either.EitherErrorUnit)) {
 		return value.Handler
 	})
-	fiberUnit := either.FiberUnit{IsSuspended: isSuspended2, Join: join2, Kill: kill2, OnComplete: onComplete2, Run: run2}
-	fiberUnit.Run()
+	fiber := either.FiberUnit{IsSuspended: isSuspended2, Join: join2, Kill: kill2, OnComplete: onComplete2, Run: run2}
+	fiber.Run()
 }
 ```
 
@@ -170,7 +170,6 @@ func main() {
 		updated := read.Right
 		updated.Done = true
 		console.Print(foreignvalue.Encode(shared.EncodeJSONTodo, updated))
-		return
 	}
 }
 ```
@@ -290,11 +289,11 @@ main = do
 
 ```go
 func main() {
-	stopwatch := Ex_Greeting_ffi.Start()
+	watch := Ex_Greeting_ffi.Start()
 	console.Print(Ex_Greeting_ffi.Greeting)
-	console.Print(prim.ShowArray(show.Show, Ex_Greeting_ffi.Repeat(int32(3), "hi")))
-	console.Print(prim.ShowInt(int32(len(Ex_Greeting_ffi.None[int32]()))))
-	number := Ex_Greeting_ffi.Elapsed(stopwatch)
+	console.Print(prim.ShowArray(show.Show, Ex_Greeting_ffi.Repeat(3, "hi")))
+	console.Print(strconv.Itoa(len(Ex_Greeting_ffi.None[int32]())))
+	number := Ex_Greeting_ffi.Elapsed(watch)
 	var result string
 	if number < 1000.0 {
 		result = "fast"
