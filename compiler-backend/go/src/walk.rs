@@ -54,7 +54,8 @@ pub fn expression<W: Walk + ?Sized>(walk: &mut W, value: &mut GoExpression) {
         | GoExpression::Conversion { value, .. }
         | GoExpression::TypeAssertion { value, .. }
         | GoExpression::Spread(value)
-        | GoExpression::Instantiation { function: value, .. } => walk.expression(value),
+        | GoExpression::Instantiation { function: value, .. }
+        | GoExpression::Attributed { value, .. } => walk.expression(value),
         GoExpression::Composite { fields, .. } => {
             fields.iter_mut().for_each(|(_, field)| walk.expression(field))
         }

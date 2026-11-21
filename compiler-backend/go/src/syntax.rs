@@ -134,6 +134,10 @@ pub enum GoExpression {
         function: Box<GoExpression>,
         arguments: Vec<GoType>,
     },
+    Attributed {
+        line: SourceLine,
+        value: Box<GoExpression>,
+    },
 }
 
 #[derive(Debug, Clone)]
@@ -224,7 +228,8 @@ impl GoExpression {
             | GoExpression::Address(value)
             | GoExpression::Conversion { value, .. }
             | GoExpression::Spread(value)
-            | GoExpression::Instantiation { function: value, .. } => value.does_work(),
+            | GoExpression::Instantiation { function: value, .. }
+            | GoExpression::Attributed { value, .. } => value.does_work(),
             GoExpression::Composite { fields, .. } => {
                 fields.iter().any(|(_, field)| field.does_work())
             }
@@ -237,6 +242,13 @@ impl GoExpression {
             | GoExpression::Rune(_)
             | GoExpression::Boolean(_)
             | GoExpression::Type(_) => false,
+        }
+    }
+
+    pub fn unattributed(&self) -> &GoExpression {
+        match self {
+            GoExpression::Attributed { value, .. } => value.unattributed(),
+            expression => expression,
         }
     }
 }
@@ -768,12 +780,32 @@ impl Printer {
     /// directives that name the line Go would count to anyway.
     fn name_attribution(&mut self) {
         let Some(SourceLine { path, line, column }) = &self.attribution else { return };
-        let shown = match &self.directory {
-            Some(directory) => relative_path(directory, Path::new(&**path)),
-            None => PathBuf::from(&**path),
-        };
-        let shown = shown.to_string_lossy().replace('\\', "/");
+        let shown = self.shown_path(path);
         let _ = writeln!(self.output, "//line {shown}:{line}:{column}");
+    }
+
+    fn shown_path(&self, path: &str) -> String {
+        let shown = match &self.directory {
+            Some(directory) => relative_path(directory, Path::new(path)),
+            None => PathBuf::from(path),
+        };
+        shown.to_string_lossy().replace('\\', "/")
+    }
+
+    fn inline_directive(&self, line: Option<&SourceLine>) -> String {
+        match line {
+            Some(SourceLine { path, line, column }) => {
+                format!("{INLINE_DIRECTIVE_MARK}/*line {}:{line}:{column}*/", self.shown_path(path))
+            }
+            None => format!("{INLINE_DIRECTIVE_MARK}/*line */"),
+        }
+    }
+
+    fn attributes_elsewhere(&self, line: &SourceLine) -> bool {
+        self.every
+            && self.attribution.as_ref().is_none_or(|attribution| {
+                attribution.path != line.path || attribution.line != line.line
+            })
     }
 
     /// Names the line the next statement or declaration comes from, or with none the Go file's
@@ -967,14 +999,17 @@ impl Printer {
                 }
             }
             GoStatement::Assign { targets, values } => {
-                if let ([target], [GoExpression::Binary { operator, left, right }]) =
-                    (targets.as_slice(), values.as_slice())
+                if let ([target], [value]) = (targets.as_slice(), values.as_slice())
+                    && let GoExpression::Binary { operator, left, right } = value.unattributed()
                     && COMPOUND_OPERATORS.contains(operator)
                     && is_plain_place(target)
                     && same_place(target, left)
                 {
                     let target = self.expression(target, 0);
-                    let right = self.expression(right, 0);
+                    let right = match value {
+                        GoExpression::Attributed { line, .. } => self.attributed(line, right, 0, 1),
+                        _ => self.expression(right, 0),
+                    };
                     self.line(&format!("{target} {operator}= {right}"));
                     return;
                 }
@@ -1246,7 +1281,7 @@ impl Printer {
                 let parenthesised = precedence < parent_precedence;
                 let depth = if parenthesised { depth.saturating_sub(1).max(1) } else { depth };
                 let blank = precedence < binary_cutoff(expression, depth);
-                let left_depth = match left.as_ref() {
+                let left_depth = match left.unattributed() {
                     GoExpression::Binary { operator, .. }
                         if binary_precedence(operator) == precedence =>
                     {
@@ -1270,7 +1305,7 @@ impl Printer {
             }
             GoExpression::Field { value, name } => {
                 // A composite literal is ambiguous in if/for/switch headers.
-                let composite = matches!(value.as_ref(), GoExpression::Composite { .. });
+                let composite = matches!(value.unattributed(), GoExpression::Composite { .. });
                 let value = self.expression_at(value, 6, depth);
                 if composite {
                     return format!("({value}).{name}");
@@ -1325,7 +1360,28 @@ impl Printer {
                 rendered.push('}');
                 rendered
             }
+            GoExpression::Attributed { line, value } => {
+                self.attributed(line, value, parent_precedence, depth)
+            }
         }
+    }
+
+    fn attributed(
+        &mut self,
+        line: &SourceLine,
+        value: &GoExpression,
+        parent_precedence: u8,
+        depth: usize,
+    ) -> String {
+        if !self.attributes_elsewhere(line) {
+            return self.expression_at(value, parent_precedence, depth);
+        }
+        let opening = self.inline_directive(Some(line));
+        let enclosing = self.attribution.replace(line.clone());
+        let value = self.expression_at(value, parent_precedence, depth);
+        self.attribution = enclosing;
+        let closing = self.inline_directive(self.attribution.as_ref());
+        format!("{opening}{value}{closing}")
     }
 
     /// The braces and fields of a composite literal of `type_`. The elements of a slice leave out
@@ -1387,7 +1443,7 @@ fn binary_cutoff(expression: &GoExpression, depth: usize) -> u8 {
 /// and the precedence below which blanks must stay to keep `a / *p` or `a - -b` from reading as
 /// a comment or a decrement.
 fn walk_binary(expression: &GoExpression) -> (bool, bool, u8) {
-    let GoExpression::Binary { operator, left, right } = expression else {
+    let GoExpression::Binary { operator, left, right } = expression.unattributed() else {
         return (false, false, 0);
     };
     let precedence = binary_precedence(operator);
@@ -1400,12 +1456,12 @@ fn walk_binary(expression: &GoExpression) -> (bool, bool, u8) {
         has_products |= products;
         problem = problem.max(operand_problem);
     };
-    if let GoExpression::Binary { operator: left_operator, .. } = left.as_ref()
+    if let GoExpression::Binary { operator: left_operator, .. } = left.unattributed()
         && binary_precedence(left_operator) >= precedence
     {
         absorb(left);
     }
-    match right.as_ref() {
+    match right.unattributed() {
         GoExpression::Binary { operator: right_operator, .. }
             if binary_precedence(right_operator) > precedence =>
         {
@@ -1614,6 +1670,8 @@ fn settle_line_directives(text: &str, file_name: &str) -> String {
 /// is known only once the declarations are joined.
 const GO_LINE_PLACEHOLDER: &str = "//line \0\n";
 
+const INLINE_DIRECTIVE_MARK: char = '\u{1}';
+
 /// The file's text with each placeholder directive naming the Go file's own next line.
 fn name_go_lines(text: &str, file_name: &str) -> String {
     let mut named = String::with_capacity(text.len());
@@ -1622,11 +1680,52 @@ fn name_go_lines(text: &str, file_name: &str) -> String {
         if line == placeholder {
             let _ = writeln!(named, "//line {file_name}:{}", index + 2);
         } else {
-            named.push_str(line);
+            name_inline_directives(&mut named, line, file_name, index + 1);
             named.push('\n');
         }
     }
     named
+}
+
+fn name_inline_directives(named: &mut String, line: &str, file_name: &str, number: usize) {
+    let mut pieces = line.split(INLINE_DIRECTIVE_MARK);
+    let mut written = pieces.next().unwrap_or_default().to_string();
+    for piece in pieces {
+        let Some((target, rest)) = piece.split_once("*/") else { continue };
+        if rest.is_empty() {
+            continue;
+        }
+        let directive = match target {
+            "/*line " => format!("/*line {file_name}:{number}*/"),
+            target => format!("{target}*/"),
+        };
+        place_inline_directive(&mut written, &directive, rest);
+    }
+    named.push_str(&written);
+}
+
+fn place_inline_directive(written: &mut String, directive: &str, rest: &str) {
+    let rest = match rest.strip_prefix('.') {
+        Some(selected) => {
+            written.push('.');
+            selected
+        }
+        None => rest,
+    };
+    let separated = written.ends_with(", ");
+    if separated {
+        written.truncate(written.len() - 2);
+    }
+    if !written.is_empty() && !written.ends_with(char::is_whitespace) {
+        written.push(' ');
+    }
+    written.push_str(directive);
+    if separated {
+        written.push_str(", ");
+    } else if !rest.starts_with([',', ')', ']', '}', ' ']) {
+        written.push(' ');
+    }
+    written.push_str(rest);
 }
 
 /// The file and line a `//line file:line[:column]` directive names.

@@ -112,7 +112,7 @@ func sumFrom(numbers []int32, index int32, total int32) int32 {
 //line Main.purs:22:3
 		}
 //line Main.purs:24:5
-		index, total = index+1, total+numbers[index]
+		index, total = index+1 /*line Main.purs:25:8*/, total+numbers[index]
 //line Main.purs:22:3
 	}
 //line Main.purs:21:1

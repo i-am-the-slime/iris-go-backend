@@ -1,0 +1,128 @@
+---
+source: tests-integration/src/fixtures.rs
+---
+// Data/Show/show.go
+package show
+
+import "strconv"
+
+//line show.go:6
+func Show(i int32) string {
+//line show.go:8
+	return strconv.Itoa(int(i))
+//line show.go:10
+}
+
+//line show.go:13
+func AppendShowArrayInt(buffer []byte, array []int32) []byte {
+//line show.go:15
+	buffer = append(buffer, "["...)
+//line show.go:17
+	for index, element := range array {
+//line show.go:19
+		if index > 0 {
+//line show.go:21
+			buffer = append(buffer, ","...)
+//line show.go:23
+		}
+//line show.go:25
+		buffer = strconv.AppendInt(buffer, int64(element), 10)
+//line show.go:27
+	}
+//line show.go:29
+	buffer = append(buffer, "]"...)
+//line show.go:31
+	return buffer
+//line show.go:33
+}
+
+// Effect/Exception/exception.go
+package effectexception
+
+import "github.com/i-am-the-slime/iris-go/exception"
+
+//line exception.go:6
+func ThrowUnit(x string) {
+//line exception.go:8
+	panic(exception.NewError(x))
+//line exception.go:10
+}
+
+// main.go
+package main
+
+import (
+	"fixture/Data/Show"
+	"fixture/Effect/Exception"
+	"fixture/shared"
+)
+
+//line Main.purs:14:1
+func main() {
+//line Main.purs:15:14
+	var counter int32 = 3
+//line Main.purs:15:14
+	count := counter + 1
+//line Main.purs:20:3
+	if /*line Main.purs:18:18*/ (count-1) /*line Main.purs:20:3*/ * /*line Main.purs:11:23*/ 2 /*line Main.purs:20:3*/ != 6 {
+//line Main.purs:21:5
+		effectexception.ThrowUnit("twice is wrong")
+//line Main.purs:20:3
+	}
+//line Main.purs:22:3
+	if count <= /*line Main.purs:19:22*/ 1 /*line Main.purs:22:3*/ {
+//line Main.purs:23:5
+		effectexception.ThrowUnit("many is wrong")
+//line Main.purs:22:3
+	}
+//line Main.purs:24:18
+	array := []int32{counter, count}
+//line Main.purs:24:18
+	mapped := make([]shared.Value, len(array))
+//line Main.purs:24:18
+	for index2, index := range array {
+//line Main.purs:24:18
+		mapped[index2] = shared.Value{Value: index * count}
+//line Main.purs:24:18
+	}
+//line Main.purs:24:18
+	mapped2 := make([]int32, len(mapped))
+//line Main.purs:25:3
+	for index := range mapped {
+//line Main.purs:25:3
+		mapped2[index] = mapped[index].Value * /*line Main.purs:11:23*/ 2
+//line Main.purs:25:3
+	}
+//line Main.purs:25:3
+	if string(show.AppendShowArrayInt(nil, mapped2)) != "[24,32]" {
+//line Main.purs:26:5
+		effectexception.ThrowUnit("the readings are wrong")
+//line Main.purs:25:3
+	}
+//line Main.purs:27:3
+	if int32(len(mapped)) != 2 {
+//line Main.purs:28:5
+		effectexception.ThrowUnit("the length is wrong")
+//line Main.purs:27:3
+	}
+//line Main.purs:29:3
+	counter = count * /*line Main.purs:11:23*/ 2
+//line Main.purs:14:1
+}
+
+// shared/shared.go
+package shared
+
+//line shared.go:4
+type Ref[T any] struct {
+//line shared.go:6
+	Value T
+//line shared.go:8
+}
+
+//line shared.go:11
+type Value struct {
+//line shared.go:13
+	Value int32
+//line shared.go:15
+}

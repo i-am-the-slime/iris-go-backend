@@ -206,7 +206,7 @@ where
         .collect();
     // The homes of the declarations each declaration stands for.
     let mut merged: FxHashMap<String, Vec<Option<ModuleIndex>>> = FxHashMap::default();
-    let declarations = timed("deduplicate", || {
+    let mut declarations = timed("deduplicate", || {
         deduplicate::merge_identical_declarations(declarations, &mut |from, into| {
             let from_homes = merged.remove(from).unwrap_or_else(|| vec![homes.get(from).copied()]);
             merged
@@ -221,6 +221,8 @@ where
             None => homes.remove(&name),
         };
     }
+    let spans = std::mem::take(&mut emitter.spans);
+    timed("spans", || lines::attribute_spans(&mut declarations, spans));
     let home = |declaration: &GoDeclaration| {
         let name = match declaration {
             GoDeclaration::Constants { names, .. } => names.first().map(String::as_str),
@@ -375,6 +377,7 @@ where
             lazy_constants,
             arities,
             source_lines: lines::SourceLines::default(),
+            spans: lines::Spans::default(),
         }
     }
 }
@@ -698,6 +701,7 @@ struct Emitter<'p, 'm, 'q, Q> {
     uninitialized_locals: FxHashSet<LocalId>,
     arities: Arities,
     source_lines: lines::SourceLines,
+    spans: lines::Spans,
 }
 
 /// The largest data type held by value that cells and arrays copy.
@@ -1572,7 +1576,11 @@ where
         out: &mut Vec<GoStatement>,
     ) -> GoResult<()> {
         let start = out.len();
-        self.sink_unattributed(expression, mode, sink, out)?;
+        let line = self.span_line(expression.position)?;
+        let enclosing = self.spans.enter(line);
+        let sunk = self.sink_unattributed(expression, mode, sink, out);
+        self.spans.leave(enclosing);
+        sunk?;
         self.attribute(expression.position, start, out)
     }
 
@@ -2985,6 +2993,22 @@ where
     }
 
     fn value(
+        &mut self,
+        expression: &Expression,
+        out: &mut Vec<GoStatement>,
+    ) -> GoResult<GoExpression> {
+        let line = self.span_line(expression.position)?;
+        let enclosing = self.spans.enter(line.clone());
+        let value = self.value_unattributed(expression, out);
+        self.spans.leave(enclosing);
+        let value = value?;
+        if let Some(line) = line {
+            self.spans.record(&value, line);
+        }
+        Ok(value)
+    }
+
+    fn value_unattributed(
         &mut self,
         expression: &Expression,
         out: &mut Vec<GoStatement>,

@@ -12,7 +12,7 @@ use files::FileId;
 use indexing::IndexedTypeItemKind;
 use std::collections::VecDeque;
 
-use rustc_hash::FxHashMap;
+use rustc_hash::{FxHashMap, FxHashSet};
 
 use super::Emitter;
 use crate::error::GoResult;
@@ -27,6 +27,17 @@ use crate::walk::{self, Walk};
 #[derive(Default)]
 pub(super) struct SourceLines {
     files: FxHashMap<FileId, Option<SourceFile>>,
+}
+
+#[derive(Default)]
+pub(super) struct Spans {
+    enclosing: Option<SourceLine>,
+    by_text: FxHashMap<String, Vec<Span>>,
+}
+
+struct Span {
+    enclosing: SourceLine,
+    line: SourceLine,
 }
 
 struct SourceFile {
@@ -86,6 +97,18 @@ where
         Ok(())
     }
 
+    pub(super) fn span_line(
+        &mut self,
+        position: Option<SourcePosition>,
+    ) -> GoResult<Option<SourceLine>> {
+        let Some(directives) = &self.foreign_packages.line_directives else { return Ok(None) };
+        if directives.coverage != LineCoverage::Every {
+            return Ok(None);
+        }
+        let Some(position) = position else { return Ok(None) };
+        self.source_line(position)
+    }
+
     pub(super) fn data_line(&mut self, data: &DataType) -> GoResult<Option<SourceLine>> {
         let Some(directives) = &self.foreign_packages.line_directives else { return Ok(None) };
         if directives.coverage != LineCoverage::Every {
@@ -140,6 +163,154 @@ impl SourceFile {
         let column = offset - self.line_starts[index] + 1;
         SourceLine { path: Arc::clone(&self.path), line: index as u32 + 1, column }
     }
+}
+
+impl Spans {
+    pub(super) fn enter(&mut self, line: Option<SourceLine>) -> Option<SourceLine> {
+        match line {
+            Some(line) => self.enclosing.replace(line),
+            None => self.enclosing.clone(),
+        }
+    }
+
+    pub(super) fn leave(&mut self, enclosing: Option<SourceLine>) {
+        self.enclosing = enclosing;
+    }
+
+    pub(super) fn record(&mut self, value: &GoExpression, line: SourceLine) {
+        let Some(enclosing) = &self.enclosing else { return };
+        if same_line(enclosing, &line) || contains_function(value) {
+            return;
+        }
+        let span = Span { enclosing: enclosing.clone(), line };
+        self.by_text.entry(format!("{value:?}")).or_default().push(span);
+    }
+
+    fn recorded(&self, text: &str, attribution: &SourceLine) -> usize {
+        self.by_text.get(text).map_or(0, |spans| {
+            spans.iter().filter(|span| same_line(&span.enclosing, attribution)).count()
+        })
+    }
+
+    fn take_line(&mut self, text: &str, attribution: &SourceLine) -> Option<SourceLine> {
+        let spans = self.by_text.get_mut(text)?;
+        let index = spans.iter().position(|span| same_line(&span.enclosing, attribution))?;
+        Some(spans.remove(index).line)
+    }
+}
+
+type Occurrence = (String, Arc<str>, u32);
+
+pub(super) fn attribute_spans(declarations: &mut [GoDeclaration], spans: Spans) {
+    struct Attribute {
+        spans: Spans,
+        attribution: Option<SourceLine>,
+        counting: bool,
+        occurrences: FxHashMap<Occurrence, usize>,
+        ambiguous: FxHashSet<Occurrence>,
+    }
+    impl Attribute {
+        fn line_of(&mut self, value: &GoExpression) -> Option<SourceLine> {
+            let attribution = self.attribution.as_ref()?;
+            if contains_function(value) {
+                return None;
+            }
+            let text = format!("{value:?}");
+            if !self.spans.by_text.contains_key(&text) {
+                return None;
+            }
+            let occurrence = (text, Arc::clone(&attribution.path), attribution.line);
+            if self.counting {
+                *self.occurrences.entry(occurrence).or_default() += 1;
+                return None;
+            }
+            if self.ambiguous.contains(&occurrence) {
+                return None;
+            }
+            self.spans.take_line(&occurrence.0, attribution)
+        }
+
+        fn settle_ambiguity(&mut self) {
+            let occurrences = std::mem::take(&mut self.occurrences);
+            for (occurrence, count) in occurrences {
+                let (text, path, line) = &occurrence;
+                let attribution = SourceLine { path: Arc::clone(path), line: *line, column: 0 };
+                if count > self.spans.recorded(text, &attribution) {
+                    self.ambiguous.insert(occurrence);
+                }
+            }
+            self.counting = false;
+        }
+    }
+    impl Walk for Attribute {
+        fn block(&mut self, body: &mut Vec<GoStatement>) {
+            let enclosing = self.attribution.clone();
+            for statement in body.iter_mut() {
+                match statement {
+                    GoStatement::Line(line) => self.attribution = Some(line.clone()),
+                    statement => self.statement(statement),
+                }
+            }
+            self.attribution = enclosing;
+        }
+
+        fn statement(&mut self, statement: &mut GoStatement) {
+            match statement {
+                GoStatement::Assign { values, .. } => {
+                    values.iter_mut().for_each(|value| self.expression(value))
+                }
+                statement => walk::statement(self, statement),
+            }
+        }
+
+        fn expression(&mut self, value: &mut GoExpression) {
+            let line = self.line_of(value);
+            walk::expression(self, value);
+            if let Some(line) = line {
+                let attributed = std::mem::replace(value, GoExpression::Boolean(false));
+                *value = GoExpression::Attributed { line, value: Box::new(attributed) };
+            }
+        }
+    }
+    if spans.by_text.is_empty() {
+        return;
+    }
+    let mut attribute = Attribute {
+        spans,
+        attribution: None,
+        counting: true,
+        occurrences: FxHashMap::default(),
+        ambiguous: FxHashSet::default(),
+    };
+    for counting in [true, false] {
+        if !counting {
+            attribute.settle_ambiguity();
+        }
+        for declaration in declarations.iter_mut() {
+            if let GoDeclaration::Function { body, .. } = declaration {
+                attribute.block(body);
+            }
+        }
+    }
+}
+
+fn same_line(left: &SourceLine, right: &SourceLine) -> bool {
+    left.path == right.path && left.line == right.line
+}
+
+fn contains_function(value: &GoExpression) -> bool {
+    struct Functions(bool);
+    impl Walk for Functions {
+        fn expression(&mut self, value: &mut GoExpression) {
+            match value {
+                GoExpression::Function { .. } => self.0 = true,
+                value => walk::expression(self, value),
+            }
+        }
+    }
+    let mut functions = Functions(false);
+    functions.expression(&mut value.clone());
+    functions.0
 }
 
 /// Whether running the statements calls a function or indexes, which can fail; the bodies of
