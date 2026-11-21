@@ -179,6 +179,7 @@ pub const RESERVED: &[&str] = &[
     "nullable",
     "exception",
     "aff",
+    "eventloop",
     "promise",
     "foreignvalue",
     "regex",

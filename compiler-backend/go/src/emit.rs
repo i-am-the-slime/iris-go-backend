@@ -157,8 +157,9 @@ where
         .as_ref()
         .is_some_and(|directives| directives.coverage == crate::foreign::LineCoverage::Every);
     if emitter.imports.contains(GoPackage::Aff.path()) {
-        emitter.performs(GoFunction { package: GoPackage::Aff, name: "Await" });
-        await_fibers(&mut declarations, every_line);
+        let await_ = GoFunction { package: GoPackage::EventLoop, name: "Await" };
+        let await_ = emitter.performing(await_);
+        await_fibers(&mut declarations, await_, every_line);
     }
     let lines_aside = every_line.then(|| lines::set_aside(&mut declarations));
     timed("references", || references::promote_references(&mut declarations));
@@ -509,12 +510,12 @@ fn runs_code(expression: &GoExpression) -> bool {
     calls.0
 }
 
-fn await_fibers(declarations: &mut [GoDeclaration], every_line: bool) {
+fn await_fibers(declarations: &mut [GoDeclaration], await_: GoExpression, every_line: bool) {
     for declaration in declarations {
         if let GoDeclaration::Function { name, body, .. } = declaration
             && name == "main"
         {
-            let await_ = GoExpression::Qualified { package: "aff".into(), name: "Await".into() };
+            let await_ = await_.clone();
             // os.Exit skips deferred calls, so an exiting main awaits first.
             if let Some(GoStatement::Expression(GoExpression::Call { function, .. })) = body.last()
                 && let GoExpression::Qualified { package, name } = function.as_ref()
@@ -735,6 +736,7 @@ const IMPORTED_PACKAGES: &[&str] = &[
     "nullable",
     "exception",
     "aff",
+    "eventloop",
     "promise",
     "foreignvalue",
     "tauri",

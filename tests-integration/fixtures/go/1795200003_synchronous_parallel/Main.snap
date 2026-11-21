@@ -37,11 +37,12 @@ import (
 	"fixture/Data/Either"
 	"github.com/i-am-the-slime/iris-go/aff"
 	"github.com/i-am-the-slime/iris-go/direct"
+	"github.com/i-am-the-slime/iris-go/eventloop"
 	"github.com/i-am-the-slime/iris-go/exception"
 )
 
 func main() {
-	defer aff.Await()
+	defer eventloop.Await()
 	fiber2 := aff.NewFiber(func() struct{} {
 		func() {
 			array := direct.TraverseArray(func(x int32) int32 {

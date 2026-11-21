@@ -430,6 +430,7 @@ pub enum GoPackage {
     Nullable,
     Exception,
     Aff,
+    EventLoop,
     Promise,
     ForeignValue,
     Tauri,
@@ -458,6 +459,7 @@ impl GoPackage {
             GoPackage::Object => "github.com/i-am-the-slime/iris-go/object",
             GoPackage::Nullable => "github.com/i-am-the-slime/iris-go/nullable",
             GoPackage::Aff => "github.com/i-am-the-slime/iris-go/aff",
+            GoPackage::EventLoop => "github.com/i-am-the-slime/iris-go/eventloop",
             GoPackage::Promise => "github.com/i-am-the-slime/iris-go/promise",
             GoPackage::ForeignValue => {
                 "github.com/i-am-the-slime/iris-go/foreignvalue"
@@ -492,6 +494,7 @@ impl GoPackage {
             GoPackage::Nullable => "nullable",
             GoPackage::Exception => "exception",
             GoPackage::Aff => "aff",
+            GoPackage::EventLoop => "eventloop",
             GoPackage::Promise => "promise",
             GoPackage::ForeignValue => "foreignvalue",
             GoPackage::Tauri => "tauri",
