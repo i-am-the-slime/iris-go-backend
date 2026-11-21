@@ -678,7 +678,7 @@ const GO_RUNTIME_VARIABLE: &str = "IRIS_GO";
 const GO_JOBS_VARIABLE: &str = "IRIS_GO_FIXTURE_JOBS";
 
 const GO_RUNTIME_MODULE: &str = "github.com/i-am-the-slime/iris-go";
-const GO_RUNTIME_VERSION: &str = "v0.1.1";
+const GO_RUNTIME_VERSION: &str = "v0.2.0";
 
 /// Writes the program and its foreign files into a Go module that requires the runtime checkout
 /// and vets it with `GOEXPERIMENT=simd`, as `iris run --go` builds, and again without the
