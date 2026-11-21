@@ -17,6 +17,18 @@ func Show(s string) string {
 	return prim.ShowString(s)
 }
 
+func AppendShowArrayString(buffer []byte, array []string) []byte {
+	buffer = append(buffer, "["...)
+	for index, element := range array {
+		if index > 0 {
+			buffer = append(buffer, ","...)
+		}
+		buffer = prim.AppendShowString(buffer, element)
+	}
+	buffer = append(buffer, "]"...)
+	return buffer
+}
+
 // main.go
 package main
 
@@ -97,7 +109,7 @@ func initializeMain_() []string {
 	}
 	n3 := opaque(3)
 	result5 := !(n3 > 10) && n3 <= 5
-	return []string{strconv.Itoa(int(accumulator)), prim.ShowArray(show.Show, mapped), accumulator2, result, result4, strconv.FormatBool(result5)}
+	return []string{strconv.Itoa(int(accumulator)), string(show.AppendShowArrayString(nil, mapped)), accumulator2, result, result4, strconv.FormatBool(result5)}
 }
 
 func opaque(x int32) int32 {

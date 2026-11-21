@@ -332,7 +332,7 @@ func main() {
 	for index := range mapped {
 		mapped2[index] = mapped[index].Temperature*9.0/5.0 + 32.0
 	}
-	console.Print(prim.ShowArray(show.Show, mapped2))
+	console.Print(string(show.AppendShowArrayNumber(nil, mapped2)))
 	console.Print(strconv.Itoa(len(mapped)))
 }
 ```
@@ -538,7 +538,7 @@ func main() {
 	for index, element := range mapped {
 		mapped3[index] = showCard(element)
 	}
-	console.Print(prim.ShowArray(show.Show, mapped3))
+	console.Print(string(show.AppendShowArrayString(nil, mapped3)))
 	console.Print(strconv.FormatBool(array.Eq(eqCardConsIntConsSuitNil, mapped, mapped)))
 }
 
@@ -749,7 +749,7 @@ func main() {
 	argv := os.Args()
 	more := array.Snoc(array.Append([]int32{70, 85, 92}, array.RangeInt32(0, int32(len(argv)))), int32(100))
 	console.Print(strconv.Itoa(len(more)))
-	console.Print(prim.ShowArray(show.Show, array.Reverse(more)))
+	console.Print(string(show.AppendShowArrayInt(nil, array.Reverse(more))))
 	if 1 < int32(len(more)) {
 		console.Print("second: " + strconv.Itoa(int(more[1])))
 		return

@@ -82,7 +82,7 @@ where
 
     /// The qualified names of an instance's class and of the type constructor at the head of
     /// its first argument.
-    fn instance_head(
+    pub(super) fn instance_head(
         &mut self,
         origin: InstanceCandidateOrigin,
     ) -> GoResult<Option<(String, String)>> {

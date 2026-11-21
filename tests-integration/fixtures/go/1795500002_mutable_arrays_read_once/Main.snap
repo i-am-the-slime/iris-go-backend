@@ -28,6 +28,30 @@ func ShowInt(i int32) string {
 	return strconv.Itoa(int(i))
 }
 
+func AppendShowArrayInt(buffer []byte, array []int32) []byte {
+	buffer = append(buffer, "["...)
+	for index, element := range array {
+		if index > 0 {
+			buffer = append(buffer, ","...)
+		}
+		buffer = strconv.AppendInt(buffer, int64(element), 10)
+	}
+	buffer = append(buffer, "]"...)
+	return buffer
+}
+
+func AppendShowArrayNumber(buffer []byte, array []float64) []byte {
+	buffer = append(buffer, "["...)
+	for index, element := range array {
+		if index > 0 {
+			buffer = append(buffer, ","...)
+		}
+		buffer = prim.AppendShowNumber(buffer, element)
+	}
+	buffer = append(buffer, "]"...)
+	return buffer
+}
+
 // main.go
 package main
 
@@ -87,7 +111,7 @@ func initializeMain_() []string {
 	var number2 float64
 	number2 = (*array2)[i3]
 	array3 := array.Freeze(array2)()
-	performed := array.Append([]string{prim.ShowArray(show.ShowNumber, array3), prim.ShowNumber(edge), prim.ShowNumber(number + number2)}, array.Append(pull, array.Append(countBefore, sortEach)))
+	performed := array.Append([]string{string(show.AppendShowArrayNumber(nil, array3)), prim.ShowNumber(edge), prim.ShowNumber(number + number2)}, array.Append(pull, array.Append(countBefore, sortEach)))
 	return performed
 }
 
@@ -245,7 +269,7 @@ func initializePull() []string {
 	}
 	array7 := array.Freeze(array2)()
 	array8 := array.Freeze(array3)()
-	performed := []string{prim.ShowArray(show.ShowNumber, array7), prim.ShowArray(show.ShowNumber, array8)}
+	performed := []string{string(show.AppendShowArrayNumber(nil, array7)), string(show.AppendShowArrayNumber(nil, array8))}
 	return performed
 }
 
@@ -282,7 +306,7 @@ func initializeCountBefore() []string {
 		}
 	}
 	array2 := array.Freeze(counts)()
-	performed := []string{prim.ShowArray(show.ShowInt, array2)}
+	performed := []string{string(show.AppendShowArrayInt(nil, array2))}
 	return performed
 }
 
@@ -326,7 +350,7 @@ func initializeSortEach() []string {
 	}
 	array4 := array.Freeze(array2)()
 	array5 := array.Freeze(array3)()
-	performed := []string{prim.ShowArray(show.ShowInt, array4), prim.ShowArray(show.ShowInt, array5)}
+	performed := []string{string(show.AppendShowArrayInt(nil, array4)), string(show.AppendShowArrayInt(nil, array5))}
 	return performed
 }
 

@@ -86,16 +86,23 @@ func search(target int32, key int32) Outcome {
 }
 
 func firsts(list *ListEntry) string {
-	if list == sharedListEntryNil {
-		return ""
-	}
-	if list != sharedListEntryNil && list.Cons0 != sharedEntryBlank {
-		return prim.Append(list.Cons0.Entry0, firsts(list.Cons1))
-	}
-	return "_" + firsts(list.Cons1)
+	return string(appendFirsts(nil, list))
 }
 
 var entries *ListEntry = &ListEntry{Cons0: &Entry{Entry0: "k", Entry1: "l", Entry2: "m", Entry3: "n", Entry4: "o", Entry5: "p", Entry6: "q", Entry7: "r", Entry8: "s", Entry9: "t"}, Cons1: &ListEntry{Cons0: sharedEntryBlank, Cons1: sharedListEntryNil}}
+
+func appendFirsts(buffer []byte, list *ListEntry) []byte {
+	if list != sharedListEntryNil {
+		if list != sharedListEntryNil && list.Cons0 != sharedEntryBlank {
+			buffer = prim.AppendString(buffer, list.Cons0.Entry0)
+			buffer = appendFirsts(buffer, list.Cons1)
+		} else {
+			buffer = append(buffer, "_"...)
+			buffer = appendFirsts(buffer, list.Cons1)
+		}
+	}
+	return buffer
+}
 
 func main() {
 	_ = main_

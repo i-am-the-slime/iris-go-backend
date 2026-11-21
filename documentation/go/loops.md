@@ -68,7 +68,7 @@ func main() {
 			accumulator = array.Bounded(append(accumulator, n))
 		}
 	}
-	console.Print(prim.ShowArray(show.Show, accumulator))
+	console.Print(string(show.AppendShowArrayInt(nil, accumulator)))
 	accumulator2 := []byte("")
 	for _, n := range numbers {
 		accumulator2 = append(accumulator2, strconv.Itoa(int(n))...)
@@ -349,7 +349,7 @@ func main() {
 		}
 	}
 	performed := array.UnsafeFreeze(array2)()
-	console.Print(prim.ShowArray(show.Show, performed))
+	console.Print(string(show.AppendShowArrayInt(nil, performed)))
 }
 ```
 

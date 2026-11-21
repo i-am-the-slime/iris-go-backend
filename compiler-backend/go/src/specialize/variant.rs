@@ -36,7 +36,8 @@ where
             | Primitive::ToSigned
             | Primitive::ToUnsigned
             | Primitive::ReadJson
-            | Primitive::WriteJson => Ok(None),
+            | Primitive::WriteJson
+            | Primitive::GenericShow => Ok(None),
         }
     }
 

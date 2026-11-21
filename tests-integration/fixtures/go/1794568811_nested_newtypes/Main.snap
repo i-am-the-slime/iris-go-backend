@@ -10,19 +10,32 @@ func Show(i int32) string {
 	return strconv.Itoa(int(i))
 }
 
+func AppendShowArrayInt(buffer []byte, array []int32) []byte {
+	buffer = append(buffer, "["...)
+	for index, element := range array {
+		if index > 0 {
+			buffer = append(buffer, ","...)
+		}
+		buffer = strconv.AppendInt(buffer, int64(element), 10)
+	}
+	buffer = append(buffer, "]"...)
+	return buffer
+}
+
 // main.go
 package main
 
 import (
 	"fixture/Data/Show"
 	"github.com/i-am-the-slime/iris-go/console"
-	"github.com/i-am-the-slime/iris-go/prim"
 )
 
 var main_ = initializeMain_()
 
 func initializeMain_() string {
-	return "Box Box " + prim.ShowArray(show.Show, []int32{1, 2})
+	text := []byte("Box Box ")
+	text = show.AppendShowArrayInt(text, []int32{1, 2})
+	return string(text)
 }
 
 func main() {

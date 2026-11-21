@@ -51,12 +51,17 @@ func prefixed(n int32) func(string) string {
 }
 
 func repeat(n int32) string {
+	return string(appendRepeat(nil, n))
+}
+
+func appendRepeat(buffer []byte, n int32) []byte {
 	switch n {
 	case 0:
-		return ""
 	default:
-		return "*" + repeat(n-1)
+		buffer = append(buffer, "*"...)
+		buffer = appendRepeat(buffer, n-1)
 	}
+	return buffer
 }
 
 func main() {

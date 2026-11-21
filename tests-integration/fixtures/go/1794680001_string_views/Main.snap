@@ -15,10 +15,30 @@ type Int int64
 const NoInt Int = 1 << 32
 
 func ShowChar(maybe Char) string {
-	if maybe != NoChar {
-		return "(Just " + prim.ShowChar(rune(maybe)) + ")"
+	return string(AppendShowChar(nil, maybe))
+}
+
+func AppendShowArrayMaybeChar(buffer []byte, array []Char) []byte {
+	buffer = append(buffer, "["...)
+	for index, element := range array {
+		if index > 0 {
+			buffer = append(buffer, ","...)
+		}
+		buffer = AppendShowChar(buffer, element)
 	}
-	return "Nothing"
+	buffer = append(buffer, "]"...)
+	return buffer
+}
+
+func AppendShowChar(buffer []byte, maybe Char) []byte {
+	if maybe != NoChar {
+		buffer = append(buffer, "(Just "...)
+		buffer = prim.AppendShowChar(buffer, rune(maybe))
+		buffer = append(buffer, ")"...)
+	} else {
+		buffer = append(buffer, "Nothing"...)
+	}
+	return buffer
 }
 
 // Data/Show/show.go
@@ -28,6 +48,18 @@ import "github.com/i-am-the-slime/iris-go/prim"
 
 func Show(s string) string {
 	return prim.ShowString(s)
+}
+
+func AppendShowArrayString(buffer []byte, array []string) []byte {
+	buffer = append(buffer, "["...)
+	for index, element := range array {
+		if index > 0 {
+			buffer = append(buffer, ","...)
+		}
+		buffer = prim.AppendShowString(buffer, element)
+	}
+	buffer = append(buffer, "]"...)
+	return buffer
 }
 
 // main.go
@@ -67,7 +99,7 @@ func initializeMain_() []string {
 	} else {
 		result = "Nothing"
 	}
-	return []string{strconv.Itoa(int(charAtLoopViewsTheText("naïve 😀 banana 日本 a𝄞a", 0, 0))), unsafeCharAtLoopViewsTheText("ab😀c", 4, ""), strconv.Itoa(int(indexOfLoopViewsTheText("naïve 😀 banana 日本 a𝄞a", 0, 0))), strconv.Itoa(int(lastIndexOfLoopViewsTheText("naïve 😀 banana 日本 a𝄞a", 100, 0))), prim.ShowArray(show.Show, slicesInALoopViewTheText("a😀b𝄞", 0, []string{})), strconv.Itoa(int(codePointLoopViewsTheText("naïve 😀 banana 日本 a𝄞a", 0, 0))), strconv.Itoa(int(changedTextIsWalkedEachIteration("naïve 😀 banana 日本 a𝄞a", 0))), strconv.Itoa(int(literalIndexesAloneWalkTheText("naïve 😀 banana 日本 a𝄞a", 0))), prim.ShowArray(maybe.ShowChar, closureInTheLoopReadsTheView("x😀yz", 0, []maybe.Char{})), prim.ShowArray(maybe.ShowChar, mapped), result}
+	return []string{strconv.Itoa(int(charAtLoopViewsTheText("naïve 😀 banana 日本 a𝄞a", 0, 0))), unsafeCharAtLoopViewsTheText("ab😀c", 4, ""), strconv.Itoa(int(indexOfLoopViewsTheText("naïve 😀 banana 日本 a𝄞a", 0, 0))), strconv.Itoa(int(lastIndexOfLoopViewsTheText("naïve 😀 banana 日本 a𝄞a", 100, 0))), string(show.AppendShowArrayString(nil, slicesInALoopViewTheText("a😀b𝄞", 0, []string{}))), strconv.Itoa(int(codePointLoopViewsTheText("naïve 😀 banana 日本 a𝄞a", 0, 0))), strconv.Itoa(int(changedTextIsWalkedEachIteration("naïve 😀 banana 日本 a𝄞a", 0))), strconv.Itoa(int(literalIndexesAloneWalkTheText("naïve 😀 banana 日本 a𝄞a", 0))), string(maybe.AppendShowArrayMaybeChar(nil, closureInTheLoopReadsTheView("x😀yz", 0, []maybe.Char{}))), string(maybe.AppendShowArrayMaybeChar(nil, mapped)), result}
 }
 
 func charAtLoopViewsTheText(text string, i int32, count int32) int32 {

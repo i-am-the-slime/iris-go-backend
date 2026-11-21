@@ -41,6 +41,18 @@ func Show(s string) string {
 	return prim.ShowString(s)
 }
 
+func AppendShowArrayString(buffer []byte, array []string) []byte {
+	buffer = append(buffer, "["...)
+	for index, element := range array {
+		if index > 0 {
+			buffer = append(buffer, ","...)
+		}
+		buffer = prim.AppendShowString(buffer, element)
+	}
+	buffer = append(buffer, "]"...)
+	return buffer
+}
+
 // main.go
 package main
 
@@ -84,6 +96,7 @@ const (
 var main_ = initializeMain_()
 
 func initializeMain_() string {
+	var text []byte
 	array := []either_tuple.TupleMaybeIntEitherStringInt{{First: maybe.Int(1), Second: either.EitherStringInt{Tag: either.EitherStringIntRight, Right: 2}}, {First: maybe.NoInt, Second: either.EitherStringInt{Tag: either.EitherStringIntLeft, Left: "x"}}}
 	var accumulator int32 = 0
 	for tupleIndex := range array {
@@ -93,17 +106,20 @@ func initializeMain_() string {
 			accumulator -= 1
 		}
 	}
+	text = strconv.AppendInt(text, int64(accumulator+mainSum(&types.ListInt{Cons0: 3, Cons1: &types.ListInt{Cons0: 4, Cons1: types.SharedListIntNil}})), 10)
 	array2 := []Labelled{{Tag: LabelledTag, Tag0: "t"}, {Tag: LabelledUntagged}}
 	mapped := make([]string, len(array2))
 	for index, element := range array2 {
 		mapped[index] = label(element)
 	}
+	text = show.AppendShowArrayString(text, mapped)
 	array3 := []Entry{{Tag: EntryField, Field0: 5, Field1: 1}, {Tag: EntryDuo, Duo0: "a", Duo1: "b"}, {Tag: EntryTrio, Trio0: "c", Trio1: "d"}}
 	mapped2 := make([]string, len(array3))
 	for index, element := range array3 {
 		mapped2[index] = entry(element)
 	}
-	return strconv.Itoa(int(accumulator+mainSum(&types.ListInt{Cons0: 3, Cons1: &types.ListInt{Cons0: 4, Cons1: types.SharedListIntNil}}))) + prim.ShowArray(show.Show, mapped) + prim.ShowArray(show.Show, mapped2)
+	text = show.AppendShowArrayString(text, mapped2)
+	return string(text)
 }
 
 func label(labelled Labelled) string {

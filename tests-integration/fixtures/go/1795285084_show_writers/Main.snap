@@ -1,0 +1,486 @@
+---
+source: tests-integration/src/fixtures.rs
+---
+// Data/Either/either.go
+package either
+
+import (
+	"github.com/i-am-the-slime/iris-go/prim"
+	"strconv"
+)
+
+type EitherIntString struct {
+	Right string
+	Left  int32
+	Tag   uint8
+}
+
+const (
+	EitherIntStringLeft = iota
+	EitherIntStringRight
+)
+
+func ShowIntString(either EitherIntString) string {
+	return string(AppendShowIntString(nil, either))
+}
+
+func AppendShowArrayEitherIntString(buffer []byte, array []EitherIntString) []byte {
+	buffer = append(buffer, "["...)
+	for index, element := range array {
+		if index > 0 {
+			buffer = append(buffer, ","...)
+		}
+		buffer = AppendShowIntString(buffer, element)
+	}
+	buffer = append(buffer, "]"...)
+	return buffer
+}
+
+func AppendShowIntString(buffer []byte, either EitherIntString) []byte {
+	switch either.Tag {
+	case EitherIntStringLeft:
+		buffer = append(buffer, "(Left "...)
+		buffer = strconv.AppendInt(buffer, int64(either.Left), 10)
+		buffer = append(buffer, ")"...)
+	default: // EitherIntStringRight
+		buffer = append(buffer, "(Right "...)
+		buffer = prim.AppendShowString(buffer, either.Right)
+		buffer = append(buffer, ")"...)
+	}
+	return buffer
+}
+
+// Data/Maybe/maybe.go
+package maybe
+
+import (
+	"github.com/i-am-the-slime/iris-go/prim"
+	"strconv"
+)
+
+type Int int64
+
+const NoInt Int = 1 << 32
+
+type XY struct {
+	X Int
+	Y Int
+}
+
+const TagNothing = 0
+
+const TagJust = 1
+
+type Number struct {
+	Just float64
+	Tag  uint8
+}
+
+func JustNumber(just float64) Number {
+	return Number{Tag: TagJust, Just: just}
+}
+
+func ShowXYConsMaybeIntConsMaybeIntNil(record XY) string {
+	return string(AppendShowXYConsMaybeIntConsMaybeIntNil(nil, record))
+}
+
+func ShowNumber(maybe Number) string {
+	return string(AppendShowNumber(nil, maybe))
+}
+
+func AppendShowArrayMaybeNumber(buffer []byte, array []Number) []byte {
+	buffer = append(buffer, "["...)
+	for index, element := range array {
+		if index > 0 {
+			buffer = append(buffer, ","...)
+		}
+		buffer = AppendShowNumber(buffer, element)
+	}
+	buffer = append(buffer, "]"...)
+	return buffer
+}
+
+func AppendShowNumber(buffer []byte, maybe Number) []byte {
+	switch maybe.Tag {
+	case TagJust:
+		buffer = append(buffer, "(Just "...)
+		buffer = prim.AppendShowNumber(buffer, maybe.Just)
+		buffer = append(buffer, ")"...)
+	default: // TagNothing
+		buffer = append(buffer, "Nothing"...)
+	}
+	return buffer
+}
+
+func AppendShowArrayXY(buffer []byte, array []XY) []byte {
+	buffer = append(buffer, "["...)
+	for index, element := range array {
+		if index > 0 {
+			buffer = append(buffer, ","...)
+		}
+		buffer = AppendShowXYConsMaybeIntConsMaybeIntNil(buffer, element)
+	}
+	buffer = append(buffer, "]"...)
+	return buffer
+}
+
+func AppendShowXYConsMaybeIntConsMaybeIntNil(buffer []byte, record XY) []byte {
+	buffer = append(buffer, "{ x: "...)
+	if record.X != NoInt {
+		buffer = append(buffer, "(Just "...)
+		buffer = strconv.AppendInt(buffer, int64(int32(record.X)), 10)
+		buffer = append(buffer, ")"...)
+	} else {
+		buffer = append(buffer, "Nothing"...)
+	}
+	buffer = append(buffer, ", y: "...)
+	if record.Y != NoInt {
+		buffer = append(buffer, "(Just "...)
+		buffer = strconv.AppendInt(buffer, int64(int32(record.Y)), 10)
+		buffer = append(buffer, ")"...)
+	} else {
+		buffer = append(buffer, "Nothing"...)
+	}
+	buffer = append(buffer, " }"...)
+	return buffer
+}
+
+// Data/Show/show.go
+package show
+
+import (
+	"fixture/shared"
+	"github.com/i-am-the-slime/iris-go/prim"
+	"strconv"
+)
+
+func ShowInt(array []int32) string {
+	return string(AppendShowArrayInt(nil, array))
+}
+
+func ShowInt2(i int32) string {
+	return strconv.Itoa(int(i))
+}
+
+func ShowNumber(number float64) string {
+	return prim.ShowNumber(number)
+}
+
+func ShowWrappedConsIntNil(record shared.Wrapped) string {
+	return string(AppendShowWrappedConsIntNil(nil, record))
+}
+
+func AppendShowArrayWrapped(buffer []byte, array []shared.Wrapped) []byte {
+	buffer = append(buffer, "["...)
+	for index, element := range array {
+		if index > 0 {
+			buffer = append(buffer, ","...)
+		}
+		buffer = AppendShowWrappedConsIntNil(buffer, element)
+	}
+	buffer = append(buffer, "]"...)
+	return buffer
+}
+
+func AppendShowWrappedConsIntNil(buffer []byte, record shared.Wrapped) []byte {
+	buffer = append(buffer, "{ a: "...)
+	buffer = strconv.AppendInt(buffer, int64(record.A), 10)
+	buffer = append(buffer, " }"...)
+	return buffer
+}
+
+func AppendShowArrayNumber(buffer []byte, array []float64) []byte {
+	buffer = append(buffer, "["...)
+	for index, element := range array {
+		if index > 0 {
+			buffer = append(buffer, ","...)
+		}
+		buffer = prim.AppendShowNumber(buffer, element)
+	}
+	buffer = append(buffer, "]"...)
+	return buffer
+}
+
+func AppendShowArrayArrayInt(buffer []byte, array [][]int32) []byte {
+	buffer = append(buffer, "["...)
+	for index, element := range array {
+		if index > 0 {
+			buffer = append(buffer, ","...)
+		}
+		buffer = AppendShowArrayInt(buffer, element)
+	}
+	buffer = append(buffer, "]"...)
+	return buffer
+}
+
+func AppendShowArrayInt(buffer []byte, array []int32) []byte {
+	buffer = append(buffer, "["...)
+	for index, element := range array {
+		if index > 0 {
+			buffer = append(buffer, ","...)
+		}
+		buffer = strconv.AppendInt(buffer, int64(element), 10)
+	}
+	buffer = append(buffer, "]"...)
+	return buffer
+}
+
+// main.go
+package main
+
+import (
+	"fixture/Data/Either"
+	"fixture/Data/Maybe"
+	"fixture/Data/Show"
+	"fixture/shared"
+	"fixture/shared/Data.Maybe+Data.Tuple"
+	"github.com/i-am-the-slime/iris-go/console"
+	"github.com/i-am-the-slime/iris-go/prim"
+	"strconv"
+	"strings"
+)
+
+type Shape struct {
+	Circle float64
+	Pair1  maybe.Int
+	Rect   shared.HW
+	Pair0  int32
+	Tag    uint8
+}
+
+const (
+	ShapeCircle = iota
+	ShapeRect
+	ShapeEmpty
+	ShapePair
+)
+
+type Colour struct {
+	Mixed0 *Colour
+	Mixed1 *Colour
+	Named  string
+	Tag    uint8
+}
+
+const (
+	ColourRed = iota
+	ColourMixed
+	ColourNamed
+)
+
+var sharedColourRed = &Colour{Tag: ColourRed}
+
+type Point struct {
+	First  int32
+	Second int32
+}
+
+var main_ = initializeMain_()
+
+func initializeMain_() []string {
+	record := shared.AgeBNameZ{Name: "x", Age: 3, B: true, Z: []float64{1.5}}
+	text := []byte("{ age: ")
+	text = strconv.AppendInt(text, int64(record.Age), 10)
+	text = append(text, ", b: "...)
+	text = strconv.AppendBool(text, record.B)
+	text = append(text, ", name: "...)
+	text = prim.AppendShowString(text, record.Name)
+	text = append(text, ", z: "...)
+	text = show.AppendShowArrayNumber(text, record.Z)
+	text = append(text, " }"...)
+	text2 := either.AppendShowArrayEitherIntString(nil, []either.EitherIntString{{Tag: either.EitherIntStringLeft, Left: 1}, {Tag: either.EitherIntStringRight, Right: "x"}})
+	text2 = maybe_tuple.AppendShowArrayTupleCharArrayMaybeNumber(text2, []maybe_tuple.TupleCharArrayMaybeNumber{{First: 'a', Second: []maybe.Number{maybe.JustNumber(2.5)}}})
+	text3 := appendShowArrayNumber(nil, []float64{1.0})
+	text3 = show.AppendShowArrayNumber(text3, []float64{1.0})
+	return []string{string(show.AppendShowArrayInt(nil, []int32{1, 2, 3})), string(show.AppendShowArrayInt(nil, []int32{})), string(show.AppendShowArrayArrayInt(nil, [][]int32{{1}, {}, {-2, 3}})), string(text), string(maybe.AppendShowArrayXY(nil, []maybe.XY{{X: maybe.Int(1), Y: maybe.NoInt}})), string(text2), string(appendShowArrayShape(nil, []Shape{{Tag: ShapeCircle, Circle: 1.0}, {Tag: ShapeRect, Rect: shared.HW{W: 1, H: -2}}, {Tag: ShapeEmpty}, {Tag: ShapePair, Pair0: -3, Pair1: maybe.Int(-4)}})), string(appendShowArrayColour(nil, []*Colour{sharedColourRed, {Tag: ColourMixed, Mixed0: sharedColourRed, Mixed1: &Colour{Tag: ColourNamed, Named: "x\"y"}}})), string(text3), string(show.AppendShowArrayWrapped(nil, []shared.Wrapped{{A: 1}})), string(appendShowArrayPoint(nil, []Point{{First: 1, Second: 2}}))}
+}
+
+func showShape(shape Shape) string {
+	return string(appendShowShape(nil, shape))
+}
+
+func showColour(colour *Colour) string {
+	return string(appendShowColour(nil, colour))
+}
+
+func showMeters(number float64) string {
+	return string(appendShowMeters(nil, number))
+}
+
+func showPoint(point Point) string {
+	return string(appendShowPoint(nil, point))
+}
+
+func appendShowColour(buffer []byte, colour *Colour) []byte {
+	switch colour.Tag {
+	case ColourRed:
+		buffer = append(buffer, "Red"...)
+	case ColourMixed:
+		buffer = append(buffer, "(Mixed "...)
+		buffer = appendShowColour(buffer, colour.Mixed0)
+		buffer = append(buffer, " "...)
+		buffer = appendShowColour(buffer, colour.Mixed1)
+		buffer = append(buffer, ")"...)
+	default: // ColourNamed
+		buffer = append(buffer, "(Named "...)
+		buffer = prim.AppendShowString(buffer, colour.Named)
+		buffer = append(buffer, ")"...)
+	}
+	return buffer
+}
+
+func appendShowArrayPoint(buffer []byte, array []Point) []byte {
+	buffer = append(buffer, "["...)
+	for index, element := range array {
+		if index > 0 {
+			buffer = append(buffer, ","...)
+		}
+		buffer = appendShowPoint(buffer, element)
+	}
+	buffer = append(buffer, "]"...)
+	return buffer
+}
+
+func appendShowPoint(buffer []byte, point Point) []byte {
+	buffer = append(buffer, "<"...)
+	buffer = strconv.AppendInt(buffer, int64(point.First), 10)
+	buffer = append(buffer, ","...)
+	buffer = strconv.AppendInt(buffer, int64(point.Second), 10)
+	buffer = append(buffer, ">"...)
+	return buffer
+}
+
+func appendShowArrayNumber(buffer []byte, array []float64) []byte {
+	buffer = append(buffer, "["...)
+	for index, element := range array {
+		if index > 0 {
+			buffer = append(buffer, ","...)
+		}
+		buffer = appendShowMeters(buffer, element)
+	}
+	buffer = append(buffer, "]"...)
+	return buffer
+}
+
+func appendShowMeters(buffer []byte, number float64) []byte {
+	buffer = append(buffer, "(Meters "...)
+	buffer = prim.AppendShowNumber(buffer, number)
+	buffer = append(buffer, ")"...)
+	return buffer
+}
+
+func appendShowArrayColour(buffer []byte, array []*Colour) []byte {
+	buffer = append(buffer, "["...)
+	for index, element := range array {
+		if index > 0 {
+			buffer = append(buffer, ","...)
+		}
+		buffer = appendShowColour(buffer, element)
+	}
+	buffer = append(buffer, "]"...)
+	return buffer
+}
+
+func appendShowArrayShape(buffer []byte, array []Shape) []byte {
+	buffer = append(buffer, "["...)
+	for index, element := range array {
+		if index > 0 {
+			buffer = append(buffer, ","...)
+		}
+		buffer = appendShowShape(buffer, element)
+	}
+	buffer = append(buffer, "]"...)
+	return buffer
+}
+
+func appendShowShape(buffer []byte, shape Shape) []byte {
+	switch shape.Tag {
+	case ShapeCircle:
+		buffer = append(buffer, "(Circle "...)
+		buffer = prim.AppendShowNumber(buffer, shape.Circle)
+		buffer = append(buffer, ")"...)
+	case ShapeRect:
+		hw := shape.Rect
+		buffer = append(buffer, "(Rect { h: "...)
+		buffer = strconv.AppendInt(buffer, int64(hw.H), 10)
+		buffer = append(buffer, ", w: "...)
+		buffer = strconv.AppendInt(buffer, int64(hw.W), 10)
+		buffer = append(buffer, " })"...)
+	case ShapeEmpty:
+		buffer = append(buffer, "Empty"...)
+	default: // ShapePair
+		buffer = append(buffer, "(Pair "...)
+		buffer = strconv.AppendInt(buffer, int64(shape.Pair0), 10)
+		buffer = append(buffer, " "...)
+		if shape.Pair1 != maybe.NoInt {
+			buffer = append(buffer, "(Just "...)
+			buffer = strconv.AppendInt(buffer, int64(int32(shape.Pair1)), 10)
+			buffer = append(buffer, ")"...)
+		} else {
+			buffer = append(buffer, "Nothing"...)
+		}
+		buffer = append(buffer, ")"...)
+	}
+	return buffer
+}
+
+func main() {
+	console.Print("[" + strings.Join(main_, " ") + "]")
+}
+
+// shared/Data.Maybe+Data.Tuple/maybe_tuple.go
+package maybe_tuple
+
+import (
+	"fixture/Data/Maybe"
+	"github.com/i-am-the-slime/iris-go/prim"
+)
+
+type TupleCharArrayMaybeNumber struct {
+	Second []maybe.Number
+	First  rune
+}
+
+func ShowCharArrayMaybeNumber(tuple TupleCharArrayMaybeNumber) string {
+	return string(AppendShowCharArrayMaybeNumber(nil, tuple))
+}
+
+func AppendShowArrayTupleCharArrayMaybeNumber(buffer []byte, array []TupleCharArrayMaybeNumber) []byte {
+	buffer = append(buffer, "["...)
+	for index, element := range array {
+		if index > 0 {
+			buffer = append(buffer, ","...)
+		}
+		buffer = AppendShowCharArrayMaybeNumber(buffer, element)
+	}
+	buffer = append(buffer, "]"...)
+	return buffer
+}
+
+func AppendShowCharArrayMaybeNumber(buffer []byte, tuple TupleCharArrayMaybeNumber) []byte {
+	buffer = append(buffer, "(Tuple "...)
+	buffer = prim.AppendShowChar(buffer, tuple.First)
+	buffer = append(buffer, " "...)
+	buffer = maybe.AppendShowArrayMaybeNumber(buffer, tuple.Second)
+	buffer = append(buffer, ")"...)
+	return buffer
+}
+
+// shared/shared.go
+package shared
+
+type AgeBNameZ struct {
+	Name string
+	Z    []float64
+	Age  int32
+	B    bool
+}
+
+type HW struct {
+	H int32
+	W int32
+}
+
+type Wrapped struct {
+	A int32
+}

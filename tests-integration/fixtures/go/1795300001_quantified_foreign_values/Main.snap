@@ -10,20 +10,31 @@ func Show(i int32) string {
 	return strconv.Itoa(int(i))
 }
 
+func AppendShowArrayInt(buffer []byte, array []int32) []byte {
+	buffer = append(buffer, "["...)
+	for index, element := range array {
+		if index > 0 {
+			buffer = append(buffer, ","...)
+		}
+		buffer = strconv.AppendInt(buffer, int64(element), 10)
+	}
+	buffer = append(buffer, "]"...)
+	return buffer
+}
+
 // main.go
 package main
 
 import (
 	"fixture/Data/Show"
 	"fixture/Optional_ffi"
-	"github.com/i-am-the-slime/iris-go/prim"
 	"strconv"
 )
 
 func main_() []string {
 	counter := Optional_ffi.NewCounter[int32]()
 	again := Optional_ffi.NewCounter[bool]()
-	return []string{prim.ShowArray(show.Show, []int32{Optional_ffi.WithDefault(int32(1), Optional_ffi.Absent[int32]()), Optional_ffi.WithDefault(int32(1), Optional_ffi.Present(int32(2)))}), Optional_ffi.WithDefault("fallback", Optional_ffi.Absent[string]()), strconv.Itoa(len(Optional_ffi.EmptyArray[string]())), prim.ShowArray(show.Show, []int32{Optional_ffi.PairSize(Optional_ffi.SwappedPair(int32(1), "one")), Optional_ffi.PairSize(Optional_ffi.EmptySwappedPair[int32, string]())}), strconv.Itoa(int(Optional_ffi.WithDefault(int32(3), counter))), strconv.FormatBool(Optional_ffi.WithDefault(true, again))}
+	return []string{string(show.AppendShowArrayInt(nil, []int32{Optional_ffi.WithDefault(int32(1), Optional_ffi.Absent[int32]()), Optional_ffi.WithDefault(int32(1), Optional_ffi.Present(int32(2)))})), Optional_ffi.WithDefault("fallback", Optional_ffi.Absent[string]()), strconv.Itoa(len(Optional_ffi.EmptyArray[string]())), string(show.AppendShowArrayInt(nil, []int32{Optional_ffi.PairSize(Optional_ffi.SwappedPair(int32(1), "one")), Optional_ffi.PairSize(Optional_ffi.EmptySwappedPair[int32, string]())})), strconv.Itoa(int(Optional_ffi.WithDefault(int32(3), counter))), strconv.FormatBool(Optional_ffi.WithDefault(true, again))}
 }
 
 func main() {

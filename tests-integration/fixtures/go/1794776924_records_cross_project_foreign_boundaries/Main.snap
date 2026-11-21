@@ -10,6 +10,18 @@ func Show(i int32) string {
 	return strconv.Itoa(int(i))
 }
 
+func AppendShowArrayInt(buffer []byte, array []int32) []byte {
+	buffer = append(buffer, "["...)
+	for index, element := range array {
+		if index > 0 {
+			buffer = append(buffer, ","...)
+		}
+		buffer = strconv.AppendInt(buffer, int64(element), 10)
+	}
+	buffer = append(buffer, "]"...)
+	return buffer
+}
+
 // main.go
 package main
 
@@ -21,7 +33,6 @@ import (
 	"github.com/i-am-the-slime/iris-go/console"
 	"github.com/i-am-the-slime/iris-go/direct"
 	nullablepkg "github.com/i-am-the-slime/iris-go/nullable"
-	"github.com/i-am-the-slime/iris-go/prim"
 )
 
 var main_ = initializeMain_()
@@ -44,7 +55,7 @@ func sizes(shapes []shared.Shape) string {
 	for index := range shapes {
 		mapped[index] = shapes[index].Size
 	}
-	return prim.ShowArray(show.Show, mapped)
+	return string(show.AppendShowArrayInt(nil, mapped))
 }
 
 func main() {

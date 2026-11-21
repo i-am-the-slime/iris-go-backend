@@ -11,15 +11,60 @@ import (
 )
 
 func ShowInt(array []int32) string {
-	return prim.ShowArray(Show, array)
+	return string(AppendShowArrayInt(nil, array))
 }
 
 func ShowParticleConsNumberConsNumberNil(record shared.Particle) string {
-	return "{ position: " + prim.ShowNumber(record.Position) + ", velocity: " + prim.ShowNumber(record.Velocity) + " }"
+	return string(AppendShowParticleConsNumberConsNumberNil(nil, record))
 }
 
 func Show(i int32) string {
 	return strconv.Itoa(int(i))
+}
+
+func AppendShowArrayArrayInt(buffer []byte, array [][]int32) []byte {
+	buffer = append(buffer, "["...)
+	for index, element := range array {
+		if index > 0 {
+			buffer = append(buffer, ","...)
+		}
+		buffer = AppendShowArrayInt(buffer, element)
+	}
+	buffer = append(buffer, "]"...)
+	return buffer
+}
+
+func AppendShowArrayInt(buffer []byte, array []int32) []byte {
+	buffer = append(buffer, "["...)
+	for index, element := range array {
+		if index > 0 {
+			buffer = append(buffer, ","...)
+		}
+		buffer = strconv.AppendInt(buffer, int64(element), 10)
+	}
+	buffer = append(buffer, "]"...)
+	return buffer
+}
+
+func AppendShowArrayParticle(buffer []byte, array []shared.Particle) []byte {
+	buffer = append(buffer, "["...)
+	for index, element := range array {
+		if index > 0 {
+			buffer = append(buffer, ","...)
+		}
+		buffer = AppendShowParticleConsNumberConsNumberNil(buffer, element)
+	}
+	buffer = append(buffer, "]"...)
+	return buffer
+}
+
+func AppendShowParticleConsNumberConsNumberNil(buffer []byte, record shared.Particle) []byte {
+	buffer = append(buffer, "{ position: "...)
+	buffer = prim.AppendShowNumber(buffer, record.Position)
+	buffer = append(buffer, ", velocity: "...)
+	buffer = prim.AppendShowNumber(buffer, record.Velocity)
+	buffer = append(buffer, " }"...)
+	return buffer
 }
 
 // Data/Tuple/tuple.go
@@ -40,14 +85,13 @@ import (
 	"fixture/shared"
 	"github.com/i-am-the-slime/iris-go/array"
 	"github.com/i-am-the-slime/iris-go/console"
-	"github.com/i-am-the-slime/iris-go/prim"
 	"strings"
 )
 
 var main_ = initializeMain_()
 
 func initializeMain_() []string {
-	return []string{prim.ShowArray(show.ShowParticleConsNumberConsNumberNil, mainGo(0, []shared.Particle{{Position: 0.0, Velocity: 0.0}, {Position: 1.0, Velocity: 0.5}, {Position: 4.0, Velocity: -0.25}})), prim.ShowArray(show.Show, mainGo2(0, []int32{1, 2, 3})), prim.ShowArray(show.Show, shrink([]int32{9, 3, 7, 5, 4})), prim.ShowArray(show.Show, mainGo3(0, []int32{0}, []int32{1, 2})), prim.ShowArray(show.ShowInt, mainGo4(0, [][]int32{{1}, {2}}))}
+	return []string{string(show.AppendShowArrayParticle(nil, mainGo(0, []shared.Particle{{Position: 0.0, Velocity: 0.0}, {Position: 1.0, Velocity: 0.5}, {Position: 4.0, Velocity: -0.25}}))), string(show.AppendShowArrayInt(nil, mainGo2(0, []int32{1, 2, 3}))), string(show.AppendShowArrayInt(nil, shrink([]int32{9, 3, 7, 5, 4}))), string(show.AppendShowArrayInt(nil, mainGo3(0, []int32{0}, []int32{1, 2}))), string(show.AppendShowArrayArrayInt(nil, mainGo4(0, [][]int32{{1}, {2}})))}
 }
 
 var shrink func([]int32) []int32 = shrinkGo

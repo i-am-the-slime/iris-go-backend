@@ -562,7 +562,7 @@ where
 
     /// A global named after the codec and the type it reads or writes, its records by the
     /// names packaging gives them.
-    fn json_global(&mut self, prefix: &str, monotype: MonotypeId) -> GoResult<String> {
+    pub(super) fn json_global(&mut self, prefix: &str, monotype: MonotypeId) -> GoResult<String> {
         let mut full = prefix.to_string();
         let mut parts = vec![NamePart::Text(prefix.into())];
         self.json_name_parts(monotype, &mut full, &mut parts)?;
@@ -605,6 +605,15 @@ where
                     fields.iter().map(|field| capitalise(&lower_camel(&field.label))).collect();
                 full.push_str(&labels);
                 parts.push(NamePart::Record { monotype, labels });
+            }
+            Monotype::Char => text("Char", full, parts),
+            Monotype::Unit => text("Unit", full, parts),
+            Monotype::Int64 => text("Int64", full, parts),
+            Monotype::UInt64 => text("UInt64", full, parts),
+            Monotype::BigInt => text("BigInt", full, parts),
+            Monotype::Data(data) => {
+                let layout = self.data_layout(&data)?;
+                text(&capitalise(&layout.name), full, parts);
             }
             _ => text("Value", full, parts),
         }

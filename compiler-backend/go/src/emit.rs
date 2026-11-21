@@ -50,6 +50,7 @@ mod reuse;
 mod scalars;
 mod standard;
 mod strings;
+mod text;
 mod types;
 mod updates;
 mod vector;
@@ -134,14 +135,12 @@ where
             emitter.note_homes(&emitted, program.function(id).origin);
             declarations.extend(emitted);
         }
-        while let Some((id, position)) = emitter.pending_owning_variants.pop() {
-            let emitted = emitter.owning_variant(id, position)?;
-            emitter.note_homes(&emitted, program.function(id).origin);
-            declarations.extend(emitted);
-        }
+        emitter.pending_variants(&mut declarations)?;
         let main = emitter.main()?;
         emitter.note_homes(main.as_slice(), entry_origin);
         declarations.extend(main);
+        emitter.pending_variants(&mut declarations)?;
+        emitter.delegate_to_writers(&mut declarations);
         // First, so that a top-level value that reads one finds it registered.
         let registrations = emitter.foreign_data_registrations()?;
         declarations.splice(0..0, registrations);
@@ -350,6 +349,11 @@ where
             byte_buffers: FxHashMap::default(),
             owning_variants: FxHashMap::default(),
             pending_owning_variants: vec![],
+            writers: FxHashMap::default(),
+            pending_writers: vec![],
+            writable: FxHashMap::default(),
+            array_writers: FxHashMap::default(),
+            pending_array_writers: vec![],
             inline_shapes: FxHashMap::default(),
             copied_by_containers: FxHashSet::default(),
             shared_nullaries: FxHashMap::default(),
@@ -535,6 +539,7 @@ enum Sink {
     Assign(String),
     Define(String),
     Discard,
+    Write(String),
 }
 
 enum Exit {
@@ -661,6 +666,11 @@ struct Emitter<'p, 'm, 'q, Q> {
     byte_buffers: FxHashMap<LocalId, String>,
     owning_variants: FxHashMap<(FunctionId, usize), String>,
     pending_owning_variants: Vec<(FunctionId, usize)>,
+    writers: FxHashMap<FunctionId, String>,
+    pending_writers: Vec<FunctionId>,
+    writable: FxHashMap<FunctionId, bool>,
+    array_writers: FxHashMap<FunctionId, (String, MonotypeId)>,
+    pending_array_writers: Vec<FunctionId>,
     inline_shapes: FxHashMap<DataType, Option<layout::Shape>>,
     /// The data types that a cell or an array copies whenever it is copied;
     /// only these keep the smaller limit on being held by value.
@@ -1001,6 +1011,22 @@ where
             result: None,
             body,
         }))
+    }
+
+    fn pending_variants(&mut self, declarations: &mut Vec<GoDeclaration>) -> GoResult<()> {
+        loop {
+            let (id, emitted) = if let Some((id, position)) = self.pending_owning_variants.pop() {
+                (id, self.owning_variant(id, position)?)
+            } else if let Some(id) = self.pending_writers.pop() {
+                (id, self.writer(id)?)
+            } else if let Some(id) = self.pending_array_writers.pop() {
+                (id, self.array_writer_declaration(id)?)
+            } else {
+                return Ok(());
+            };
+            self.note_homes(&emitted, self.program.function(id).origin);
+            declarations.extend(emitted);
+        }
     }
 
     fn function(&mut self, id: FunctionId) -> GoResult<Vec<GoDeclaration>> {
@@ -1552,6 +1578,11 @@ where
         sink: Sink,
         out: &mut Vec<GoStatement>,
     ) -> GoResult<()> {
+        if let Sink::Write(buffer) = &sink
+            && self.write_text(expression, buffer, out)?
+        {
+            return Ok(());
+        }
         match &expression.kind {
             ExpressionKind::Let { bindings, body } => {
                 self.bindings(bindings, out)?;
@@ -2810,6 +2841,13 @@ where
                     out.push(discarded(value));
                 }
             }
+            Sink::Write(buffer) => {
+                let appended = self.text_append(&buffer, value);
+                out.push(GoStatement::Assign {
+                    targets: vec![identifier_expression(&buffer)],
+                    values: vec![appended],
+                });
+            }
         }
         Ok(())
     }
@@ -2899,6 +2937,9 @@ where
         if self.monotypes.effect_result(expression.monotype).is_some() && is_effect_node(expression)
         {
             return self.thunk(expression, out);
+        }
+        if self.builds_text(expression) {
+            return self.buffered_text(expression, out);
         }
         Ok(match &expression.kind {
             ExpressionKind::Literal(literal) => self.literal(literal, expression.monotype),

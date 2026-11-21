@@ -11,7 +11,25 @@ func FromInt(a int32) int64 {
 }
 
 func Show(long int64) string {
-	return strconv.FormatInt(long, 10) + "l"
+	return string(AppendShow(nil, long))
+}
+
+func AppendShowArrayInt64(buffer []byte, array []int64) []byte {
+	buffer = append(buffer, "["...)
+	for index, element := range array {
+		if index > 0 {
+			buffer = append(buffer, ","...)
+		}
+		buffer = AppendShow(buffer, element)
+	}
+	buffer = append(buffer, "]"...)
+	return buffer
+}
+
+func AppendShow(buffer []byte, long int64) []byte {
+	buffer = strconv.AppendInt(buffer, long, 10)
+	buffer = append(buffer, "l"...)
+	return buffer
 }
 
 // Data/Maybe/maybe.go
@@ -59,7 +77,6 @@ import (
 	"github.com/i-am-the-slime/iris-go/console"
 	"github.com/i-am-the-slime/iris-go/ffi/Data_Int64_Internal_ffi"
 	nullablepkg "github.com/i-am-the-slime/iris-go/nullable"
-	"github.com/i-am-the-slime/iris-go/prim"
 	"strconv"
 	"strings"
 )
@@ -126,7 +143,7 @@ func initializeMain_() []string {
 	default:
 		result5 = "Nothing"
 	}
-	return []string{strconv.FormatInt(foldLanes(mapped, int64(0)), 10) + "l", strconv.FormatUint(accumulator, 10) + "ul", strconv.FormatInt(foldLanes2(mapped, int64(-9223372036854775808)), 10) + "l", prim.ShowArray(dataint64.Show, mapLanes(mapped, int64(1))), strconv.FormatInt(accumulator2, 10) + "l", strconv.FormatInt(x*x+3*x-1, 10) + "l", strconv.FormatInt(x2<<(n&63)^int64(uint64(x2)>>(n&63)), 10) + "l", strconv.FormatUint(uint64(18446744073709551615), 10) + "ul", strconv.FormatBool(1 < y && y&1 == 0), strconv.FormatInt(wrapsAtCompileTime, 10) + "l", strconv.FormatInt(result+result4, 10) + "l", result5, strconv.FormatUint(uint64(18446744073709551615), 10) + "ul"}
+	return []string{strconv.FormatInt(foldLanes(mapped, int64(0)), 10) + "l", strconv.FormatUint(accumulator, 10) + "ul", strconv.FormatInt(foldLanes2(mapped, int64(-9223372036854775808)), 10) + "l", string(dataint64.AppendShowArrayInt64(nil, mapLanes(mapped, int64(1)))), strconv.FormatInt(accumulator2, 10) + "l", strconv.FormatInt(x*x+3*x-1, 10) + "l", strconv.FormatInt(x2<<(n&63)^int64(uint64(x2)>>(n&63)), 10) + "l", strconv.FormatUint(uint64(18446744073709551615), 10) + "ul", strconv.FormatBool(1 < y && y&1 == 0), strconv.FormatInt(wrapsAtCompileTime, 10) + "l", strconv.FormatInt(result+result4, 10) + "l", result5, strconv.FormatUint(uint64(18446744073709551615), 10) + "ul"}
 }
 
 var wrapsAtCompileTime int64 = int64(-9223372036854775808)

@@ -23,20 +23,43 @@ func Show(ordering Ordering) string {
 	}
 }
 
+func AppendShowArrayOrdering(buffer []byte, array []Ordering) []byte {
+	buffer = append(buffer, "["...)
+	for index, element := range array {
+		if index > 0 {
+			buffer = append(buffer, ","...)
+		}
+		buffer = AppendShow(buffer, element)
+	}
+	buffer = append(buffer, "]"...)
+	return buffer
+}
+
+func AppendShow(buffer []byte, ordering Ordering) []byte {
+	switch ordering {
+	case OrderingLT:
+		buffer = append(buffer, "LT"...)
+	case OrderingGT:
+		buffer = append(buffer, "GT"...)
+	default: // OrderingEQ
+		buffer = append(buffer, "EQ"...)
+	}
+	return buffer
+}
+
 // main.go
 package main
 
 import (
 	"fixture/Data/Ordering"
 	"github.com/i-am-the-slime/iris-go/console"
-	"github.com/i-am-the-slime/iris-go/prim"
 	"strings"
 )
 
 var main_ = initializeMain_()
 
 func initializeMain_() []string {
-	return []string{prim.ShowArray(ordering.Show, []ordering.Ordering{ordering.OrderingLT, ordering.OrderingEQ, ordering.OrderingGT}), "GT", "true"}
+	return []string{string(ordering.AppendShowArrayOrdering(nil, []ordering.Ordering{ordering.OrderingLT, ordering.OrderingEQ, ordering.OrderingGT})), "GT", "true"}
 }
 
 func main() {

@@ -28,6 +28,18 @@ func Show(s string) string {
 	return prim.ShowString(s)
 }
 
+func AppendShowArrayString(buffer []byte, array []string) []byte {
+	buffer = append(buffer, "["...)
+	for index, element := range array {
+		if index > 0 {
+			buffer = append(buffer, ","...)
+		}
+		buffer = prim.AppendShowString(buffer, element)
+	}
+	buffer = append(buffer, "]"...)
+	return buffer
+}
+
 // main.go
 package main
 
@@ -37,7 +49,6 @@ import (
 	"fixture/shared"
 	"github.com/i-am-the-slime/iris-go/console"
 	"github.com/i-am-the-slime/iris-go/direct"
-	"github.com/i-am-the-slime/iris-go/prim"
 	"strconv"
 	"strings"
 )
@@ -62,7 +73,10 @@ func initializeMain_() []string {
 	var result string
 	switch accumulator.Tag {
 	case maybe.TagJust:
-		result = "(Just " + prim.ShowArray(show.Show, (shared.Point{Tags: accumulator.Just, X: origin.X}).Tags) + ")"
+		text := []byte("(Just ")
+		text = show.AppendShowArrayString(text, (shared.Point{Tags: accumulator.Just, X: origin.X}).Tags)
+		text = append(text, ")"...)
+		result = string(text)
 	default:
 		result = "Nothing"
 	}

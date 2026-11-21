@@ -30,7 +30,7 @@ func main() {
 			mapped = append(mapped, i*10)
 		}
 	}
-	console.Print(prim.ShowArray(show.Show, mapped))
+	console.Print(string(show.AppendShowArrayInt(nil, mapped)))
 }
 ```
 
@@ -77,7 +77,7 @@ func main() {
 	}
 	upgraded := shared.Player{Name: healed.Name, Stats: healed.Stats, Items: result}
 	console.Print(strconv.Itoa(int(upgraded.Stats.Hp)))
-	console.Print(prim.ShowArray(show.Show, upgraded.Items))
+	console.Print(string(show.AppendShowArrayString(nil, upgraded.Items)))
 }
 ```
 

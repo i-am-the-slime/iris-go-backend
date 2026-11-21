@@ -24,6 +24,30 @@ func ShowString(s string) string {
 	return prim.ShowString(s)
 }
 
+func AppendShowArrayInt(buffer []byte, array []int32) []byte {
+	buffer = append(buffer, "["...)
+	for index, element := range array {
+		if index > 0 {
+			buffer = append(buffer, ","...)
+		}
+		buffer = strconv.AppendInt(buffer, int64(element), 10)
+	}
+	buffer = append(buffer, "]"...)
+	return buffer
+}
+
+func AppendShowArrayString(buffer []byte, array []string) []byte {
+	buffer = append(buffer, "["...)
+	for index, element := range array {
+		if index > 0 {
+			buffer = append(buffer, ","...)
+		}
+		buffer = prim.AppendShowString(buffer, element)
+	}
+	buffer = append(buffer, "]"...)
+	return buffer
+}
+
 // main.go
 package main
 
@@ -41,7 +65,9 @@ import (
 var main_ = initializeMain_()
 
 func initializeMain_() []string {
-	return []string{"x2", pairs, joined, prim.ShowArray(show.ShowString, mainGo(show.ShowInt, 3, []string{})) + prim.ShowArray(show.ShowInt, mainGo2(category.Identity, 3, []int32{}))}
+	text := show.AppendShowArrayString(nil, mainGo(show.ShowInt, 3, []string{}))
+	text = show.AppendShowArrayInt(text, mainGo2(category.Identity, 3, []int32{}))
+	return []string{"x2", pairs, joined, string(text)}
 }
 
 var pairs = initializePairs()

@@ -45,6 +45,7 @@ mod json;
 mod patterns;
 mod reified;
 mod runtime;
+mod show;
 mod spine;
 mod traverse;
 mod variant;
@@ -2861,6 +2862,11 @@ where
                 };
                 if codec == Some(JsonCodec::Write) {
                     return Ok(self.json_write(monotype));
+                }
+                if crate::primitives::known(&module.name, &name) == Some(Primitive::GenericShow)
+                    && let Some(shown) = self.generic_show(scope, &dictionaries, monotype)?
+                {
+                    return Ok(shown);
                 }
                 let declared = module.checked.lookup_term_item_type(term);
                 let (signedness, inherited) =

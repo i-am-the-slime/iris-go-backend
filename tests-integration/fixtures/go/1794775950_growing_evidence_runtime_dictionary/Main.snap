@@ -4,17 +4,26 @@ source: tests-integration/src/fixtures.rs
 // Data/Show/show.go
 package show
 
-import (
-	"github.com/i-am-the-slime/iris-go/prim"
-	"strconv"
-)
+import "strconv"
 
 func Show(i int32) string {
 	return strconv.Itoa(int(i))
 }
 
 func ShowInt(array []int32) string {
-	return prim.ShowArray(Show, array)
+	return string(AppendShowArrayInt(nil, array))
+}
+
+func AppendShowArrayInt(buffer []byte, array []int32) []byte {
+	buffer = append(buffer, "["...)
+	for index, element := range array {
+		if index > 0 {
+			buffer = append(buffer, ","...)
+		}
+		buffer = strconv.AppendInt(buffer, int64(element), 10)
+	}
+	buffer = append(buffer, "]"...)
+	return buffer
 }
 
 // main.go
@@ -42,20 +51,28 @@ const (
 var main_ = initializeMain_()
 
 func initializeMain_() []string {
-	return []string{"1", "Nest " + showNestedArrayInt(shared.Show{Show: func(coerced any) string {
+	text := []byte("Nest ")
+	text = appendShowNestedArrayInt(text, shared.Show{Show: func(coerced any) string {
 		return show.ShowInt(shared.Convert(coerced))
-	}}, &Nested{Tag: NestedNest, Nest: &Nested{Tag: NestedFlat, Flat: shared.Convert2([][]int32{{1, 2}, {3}})}})}
+	}}, &Nested{Tag: NestedNest, Nest: &Nested{Tag: NestedFlat, Flat: shared.Convert2([][]int32{{1, 2}, {3}})}})
+	return []string{"1", string(text)}
 }
 
 func showNestedArrayInt(showDictionary shared.Show, nested *Nested) string {
+	return string(appendShowNestedArrayInt(nil, showDictionary, nested))
+}
+
+func appendShowNestedArrayInt(buffer []byte, showDictionary shared.Show, nested *Nested) []byte {
 	switch nested.Tag {
 	case NestedFlat:
-		return showDictionary.Show(nested.Flat)
+		buffer = prim.AppendString(buffer, showDictionary.Show(nested.Flat))
 	default: // NestedNest
-		return "Nest " + showNestedArrayInt(shared.Show{Show: func(coerced any) string {
+		buffer = append(buffer, "Nest "...)
+		buffer = appendShowNestedArrayInt(buffer, shared.Show{Show: func(coerced any) string {
 			return prim.ShowArray(showDictionary.Show, coerced.([]any))
 		}}, nested.Nest)
 	}
+	return buffer
 }
 
 func main() {

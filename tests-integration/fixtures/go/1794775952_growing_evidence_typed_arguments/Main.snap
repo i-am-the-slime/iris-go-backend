@@ -4,10 +4,7 @@ source: tests-integration/src/fixtures.rs
 // Data/Show/show.go
 package show
 
-import (
-	"github.com/i-am-the-slime/iris-go/prim"
-	"strconv"
-)
+import "strconv"
 
 func ShowBoolean2(boolean bool) string {
 	if boolean {
@@ -17,11 +14,35 @@ func ShowBoolean2(boolean bool) string {
 }
 
 func ShowBoolean(array []bool) string {
-	return prim.ShowArray(ShowBoolean2, array)
+	return string(AppendShowArrayBoolean(nil, array))
 }
 
 func ShowInt(i int32) string {
 	return strconv.Itoa(int(i))
+}
+
+func AppendShowArrayInt(buffer []byte, array []int32) []byte {
+	buffer = append(buffer, "["...)
+	for index, element := range array {
+		if index > 0 {
+			buffer = append(buffer, ","...)
+		}
+		buffer = strconv.AppendInt(buffer, int64(element), 10)
+	}
+	buffer = append(buffer, "]"...)
+	return buffer
+}
+
+func AppendShowArrayBoolean(buffer []byte, array []bool) []byte {
+	buffer = append(buffer, "["...)
+	for index, element := range array {
+		if index > 0 {
+			buffer = append(buffer, ","...)
+		}
+		buffer = strconv.AppendBool(buffer, element)
+	}
+	buffer = append(buffer, "]"...)
+	return buffer
 }
 
 // main.go
@@ -52,7 +73,11 @@ func describeArrayBoolean(showDictionary shared.Show, depths []int32, label stri
 		showDictionaryCaptured := showDictionary
 		switch depth {
 		case 0:
-			return string(labelBytes) + prim.ShowArray(show.ShowInt, depths) + ": " + showDictionaryCaptured.Show(value)
+			text := prim.AppendString(nil, string(labelBytes))
+			text = show.AppendShowArrayInt(text, depths)
+			text = append(text, ": "...)
+			text = prim.AppendString(text, showDictionaryCaptured.Show(value))
+			return string(text)
 		default:
 			showDictionary, depths, labelBytes, depth, value = shared.Show{Show: func(coerced any) string {
 				return prim.ShowArray(showDictionaryCaptured.Show, coerced.([]any))

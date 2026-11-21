@@ -298,7 +298,7 @@ main = do
 func main() {
 	watch := Ex_Greeting_ffi.Start()
 	console.Print(Ex_Greeting_ffi.Greeting)
-	console.Print(prim.ShowArray(show.Show, Ex_Greeting_ffi.Repeat(3, "hi")))
+	console.Print(string(show.AppendShowArrayString(nil, Ex_Greeting_ffi.Repeat(3, "hi"))))
 	console.Print(strconv.Itoa(len(Ex_Greeting_ffi.None[int32]())))
 	number := Ex_Greeting_ffi.Elapsed(watch)
 	var result string

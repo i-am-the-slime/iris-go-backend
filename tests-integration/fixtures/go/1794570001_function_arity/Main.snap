@@ -24,6 +24,30 @@ func ShowString(s string) string {
 	return prim.ShowString(s)
 }
 
+func AppendShowArrayString(buffer []byte, array []string) []byte {
+	buffer = append(buffer, "["...)
+	for index, element := range array {
+		if index > 0 {
+			buffer = append(buffer, ","...)
+		}
+		buffer = prim.AppendShowString(buffer, element)
+	}
+	buffer = append(buffer, "]"...)
+	return buffer
+}
+
+func AppendShowArrayInt(buffer []byte, array []int32) []byte {
+	buffer = append(buffer, "["...)
+	for index, element := range array {
+		if index > 0 {
+			buffer = append(buffer, ","...)
+		}
+		buffer = strconv.AppendInt(buffer, int64(element), 10)
+	}
+	buffer = append(buffer, "]"...)
+	return buffer
+}
+
 // main.go
 package main
 
@@ -48,7 +72,7 @@ func initializeMain_() []string {
 		partial := func(b int32) int32 {
 			return mainOp(a, b)
 		}
-		mapped[index] = prim.ShowArray(show.ShowInt, []int32{mainOp(1, 2), partial(3), partial(4)})
+		mapped[index] = string(show.AppendShowArrayInt(nil, []int32{mainOp(1, 2), partial(3), partial(4)}))
 	}
 	array2 := []func(int32) func(string) string{prepared, func(a int32) func(string) string {
 		return func(b string) string {
@@ -58,7 +82,7 @@ func initializeMain_() []string {
 	mapped2 := make([]string, len(array2))
 	for index, x := range array2 {
 		g := x(4)
-		mapped2[index] = prim.ShowArray(show.ShowString, []string{x(1)("a"), g("b"), g("c")})
+		mapped2[index] = string(show.AppendShowArrayString(nil, []string{x(1)("a"), g("b"), g("c")}))
 	}
 	array3 := []func(int32, int32) int32{semiring.Add, func(a int32, b int32) int32 {
 		return a*b + 1
@@ -98,16 +122,21 @@ func zeroCInt(ignored func(int32) int32, x int32) int32 {
 }
 
 func repeat(n int32) string {
-	switch n {
-	case 0:
-		return ""
-	default:
-		return "*" + repeat(n-1)
-	}
+	return string(appendRepeat(nil, n))
 }
 
 func mainOp(a int32, b int32) int32 {
 	return a*10 + b
+}
+
+func appendRepeat(buffer []byte, n int32) []byte {
+	switch n {
+	case 0:
+	default:
+		buffer = append(buffer, "*"...)
+		buffer = appendRepeat(buffer, n-1)
+	}
+	return buffer
 }
 
 func main() {

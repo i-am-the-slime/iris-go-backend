@@ -21,6 +21,7 @@ pub enum Primitive {
     /// `hush <<< readJSON` and takes the same path.
     ReadJson,
     WriteJson,
+    GenericShow,
 }
 
 pub fn known(module: &str, name: &str) -> Option<Primitive> {
@@ -39,6 +40,7 @@ pub fn known(module: &str, name: &str) -> Option<Primitive> {
         ("Data.Int64.Internal", "unsignedToSigned") => Some(Primitive::ToSigned),
         ("Yoga.JSON", "readJSON") => Some(Primitive::ReadJson),
         ("Yoga.JSON", "writeJSON") => Some(Primitive::WriteJson),
+        ("Data.Show.Generic", "genericShow") => Some(Primitive::GenericShow),
         _ => None,
     }
 }

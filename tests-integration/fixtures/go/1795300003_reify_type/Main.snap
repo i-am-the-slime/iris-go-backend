@@ -23,6 +23,30 @@ func Show(ordering Ordering) string {
 	}
 }
 
+func AppendShowArrayOrdering(buffer []byte, array []Ordering) []byte {
+	buffer = append(buffer, "["...)
+	for index, element := range array {
+		if index > 0 {
+			buffer = append(buffer, ","...)
+		}
+		buffer = AppendShow(buffer, element)
+	}
+	buffer = append(buffer, "]"...)
+	return buffer
+}
+
+func AppendShow(buffer []byte, ordering Ordering) []byte {
+	switch ordering {
+	case OrderingLT:
+		buffer = append(buffer, "LT"...)
+	case OrderingGT:
+		buffer = append(buffer, "GT"...)
+	default: // OrderingEQ
+		buffer = append(buffer, "EQ"...)
+	}
+	return buffer
+}
+
 // Data/Show/show.go
 package show
 
@@ -30,6 +54,18 @@ import "github.com/i-am-the-slime/iris-go/prim"
 
 func Show(s string) string {
 	return prim.ShowString(s)
+}
+
+func AppendShowArrayString(buffer []byte, array []string) []byte {
+	buffer = append(buffer, "["...)
+	for index, element := range array {
+		if index > 0 {
+			buffer = append(buffer, ","...)
+		}
+		buffer = prim.AppendShowString(buffer, element)
+	}
+	buffer = append(buffer, "]"...)
+	return buffer
 }
 
 // Type/Proxy/proxy.go
@@ -50,7 +86,6 @@ import (
 	"fixture/Type/Proxy"
 	arraypkg "github.com/i-am-the-slime/iris-go/array"
 	"github.com/i-am-the-slime/iris-go/console"
-	"github.com/i-am-the-slime/iris-go/prim"
 	"slices"
 	"strconv"
 	"strings"
@@ -69,7 +104,7 @@ func initializeMain_() []string {
 	for index, reified := range array2 {
 		mapped2[index] = reified
 	}
-	return []string{"42", "-8", "7", "erin!", "false", "false", "greater", prim.ShowArray(show.Show, mapped), prim.ShowArray(show.Show, reifiedEach(0, []string{})), prim.ShowArray(ordering.Show, mapped2)}
+	return []string{"42", "-8", "7", "erin!", "false", "false", "greater", string(show.AppendShowArrayString(nil, mapped)), string(show.AppendShowArrayString(nil, reifiedEach(0, []string{}))), string(ordering.AppendShowArrayOrdering(nil, mapped2))}
 }
 
 func reifiedEach(n int32, done []string) []string {
