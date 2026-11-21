@@ -17,9 +17,10 @@ func initializeMain_() []int32 {
 	defer exception.ReportUncaught()
 	array2 := array.Thaw([]int32{3, 1, 2})()
 	i := int32(len(*array2))
+	elements := *array2
 	for i2 := int32(1); i2 < i; i2++ {
-		i3 := mainPeekOrZero(array2, i2)
-		mainShiftDown(array2, i3, i2 - 1)
+		i3 := mainPeekOrZero(elements, i2)
+		mainShiftDown(elements, i3, i2 - 1)
 	}
 	performed := array.UnsafeFreeze(array2)()
 	return array.Append([]int32{mainGo(100, 0)}, performed)
@@ -43,35 +44,35 @@ func mainGo(i int32, acc int32) int32 {
 	}
 }
 
-func mainPeekOrZero(array *[]int32, i int32) int32 {
-	within := i >= 0 && int(i) < len(*array)
+func mainPeekOrZero(array []int32, i int32) int32 {
+	within := i >= 0 && int(i) < len(array)
 	if within {
-		element := (*array)[i]
+		element := array[i]
 		return element
 	}
 	return 0
 }
 
-func mainShiftDown(array *[]int32, current int32, j int32) {
+func mainShiftDown(array []int32, current int32, j int32) {
 	for {
 		if j < 0 {
-			if 0 < len(*array) {
-				(*array)[0] = current
+			if 0 < len(array) {
+				array[0] = current
 			}
 			return
 		}
 		i := mainPeekOrZero(array, j)
 		if i > current {
 			index := j + 1
-			if index >= 0 && int(index) < len(*array) {
-				(*array)[index] = i
+			if index >= 0 && int(index) < len(array) {
+				array[index] = i
 			}
 			j = j - 1
 			continue
 		}
 		index2 := j + 1
-		if index2 >= 0 && int(index2) < len(*array) {
-			(*array)[index2] = current
+		if index2 >= 0 && int(index2) < len(array) {
+			array[index2] = current
 		}
 		return
 	}

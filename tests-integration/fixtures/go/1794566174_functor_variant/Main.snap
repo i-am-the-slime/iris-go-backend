@@ -92,9 +92,9 @@ var main_ = initializeMain_()
 func initializeMain_() []string {
 	defer exception.ReportUncaught()
 	return []string{describe(say), describe(count), describe(shared.VariantFRep{Type: say.Type, Value: say.Map(func(coerced any) any {
-		return prim.MultiplyInt32(coerced.(int32), 10)
+		return coerced.(int32) * 10
 	})(say.Value), Map: say.Map}), describe(shared.VariantFRep{Type: count.Type, Value: count.Map(func(coerced any) any {
-		return prim.MultiplyInt32(coerced.(int32), 10)
+		return coerced.(int32) * 10
 	})(count.Value), Map: count.Map})}
 }
 

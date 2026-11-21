@@ -1,0 +1,374 @@
+---
+source: tests-integration/src/fixtures.rs
+---
+// Data/Ordering/ordering.go
+package ordering
+
+type Ordering uint8
+
+const (
+	OrderingLT Ordering = iota
+	OrderingGT
+	OrderingEQ
+)
+
+// Data/Show/show.go
+package show
+
+import "github.com/i-am-the-slime/iris-go/prim"
+
+func Show(number float64) string {
+	return prim.ShowNumber(number)
+}
+
+func Show2(i int32) string {
+	return prim.ShowInt(i)
+}
+
+// main.go
+package main
+
+import (
+	"fixture/Data/Ordering"
+	"fixture/Data/Show"
+	"fmt"
+	"github.com/i-am-the-slime/iris-go/array"
+	"github.com/i-am-the-slime/iris-go/direct"
+	"github.com/i-am-the-slime/iris-go/exception"
+	"github.com/i-am-the-slime/iris-go/prim"
+)
+
+var main_ = initializeMain_()
+
+func initializeMain_() []string {
+	defer exception.ReportUncaught()
+	array2 := array.Thaw([]float64{1.0, 2.0, 3.0})()
+	elements := *array2
+	for i := int32(0); i < 3; i++ {
+		within := i >= 0 && int(i) < len(elements)
+		if within {
+			element := elements[i]
+			elements[i] = element + mainToNumber(i)
+		}
+	}
+	within2 := 7 < len(*array2)
+	if within2 {
+		element := (*array2)[7]
+		(*array2)[7] = element + 1.0
+	}
+	within3 := 1 < len(*array2)
+	if within3 {
+		element := (*array2)[1]
+		(*array2)[1] = element + 1.0
+	}
+	*array2 = append(*array2, 0.0)
+	within4 := 1 < len(*array2)
+	if within4 {
+		element := (*array2)[1]
+		(*array2)[1] = element + 1.0
+	}
+	smooth(*array2, 1)
+	smooth(*array2, 2)
+	within5 := 9 < len(*array2)
+	var number float64
+	if within5 {
+		element := (*array2)[9]
+		number = element
+	} else {
+		number = 0.0
+	}
+	*array2 = append(*array2, 9.0)
+	within6 := 0 < len(*array2)
+	var number2 float64
+	if within6 {
+		element := (*array2)[0]
+		number2 = element
+	} else {
+		number2 = 0.0
+	}
+	*array2 = append(*array2, 10.0)
+	i2 := int32(len(*array2))
+	i3 := i2 - 1
+	within7 := i3 >= 0 && int(i3) < len(*array2)
+	var number3 float64
+	if within7 {
+		element := (*array2)[i3]
+		number3 = element
+	} else {
+		number3 = 0.0
+	}
+	array3 := array.Freeze(array2)()
+	performed := array.Append([]string{prim.ShowArray(show.Show, array3), prim.ShowNumber(number), prim.ShowNumber(number2 + number3)}, array.Append(pull, array.Append(countBefore, sortEach)))
+	return performed
+}
+
+func smooth(array []float64, i int32) {
+	i2 := i - 1
+	within := i2 >= 0 && int(i2) < len(array)
+	var number float64
+	if within {
+		element := array[i2]
+		number = element
+	} else {
+		number = 0.0
+	}
+	within2 := i >= 0 && int(i) < len(array)
+	var number2 float64
+	if within2 {
+		element := array[i]
+		number2 = element
+	} else {
+		number2 = 0.0
+	}
+	i3 := i + 1
+	within3 := i3 >= 0 && int(i3) < len(array)
+	var number3 float64
+	if within3 {
+		element := array[i3]
+		number3 = element
+	} else {
+		number3 = 0.0
+	}
+	average := (number + number2 + number3) / 3.0
+	i4 := i - 1
+	within4 := i4 >= 0 && int(i4) < len(array)
+	if within4 {
+		element := array[i4]
+		array[i4] = element + (average - number) * 0.5
+	}
+	within5 := i >= 0 && int(i) < len(array)
+	if within5 {
+		element := array[i]
+		array[i] = element + (average - number2) * 0.5
+	}
+	i5 := i + 1
+	within6 := i5 >= 0 && int(i5) < len(array)
+	if within6 {
+		element := array[i5]
+		array[i5] = element + (average - number3) * 0.5
+	}
+	i6 := i + 2
+	within7 := i6 >= 0 && int(i6) < len(array)
+	var number4 float64
+	if within7 {
+		element := array[i6]
+		number4 = element
+	} else {
+		number4 = 0.0
+	}
+	i7 := i + 2
+	scrutinee := !(number4 <= average)
+	if scrutinee {
+		within8 := i7 >= 0 && int(i7) < len(array)
+		if within8 {
+			element := array[i7]
+			array[i7] = element + (average - number4)
+		}
+		return
+	}
+}
+
+var pull = initializePull()
+
+func initializePull() []string {
+	defer exception.ReportUncaught()
+	array2 := array.Thaw([]float64{0.0, 1.0, 3.0})()
+	array3 := array.Thaw([]float64{0.0, 2.0, -1.0})()
+	array4 := array.Thaw([]float64{0.0, 0.0, 0.0})()
+	array5 := array.Thaw([]float64{0.0, 0.5, 0.0})()
+	array6 := array.Thaw([]float64{2.0, 1.0, 0.5})()
+	elements := *array2
+	elements2 := *array3
+	elements3 := *array6
+	elements4 := *array4
+	elements5 := *array5
+	for ignored := int32(0); ignored < 3; ignored++ {
+		for i := int32(0); i < 3; i++ {
+			for j := int32(0); j < 3; j++ {
+				scrutinee := i != j
+				if scrutinee {
+					within := j >= 0 && int(j) < len(elements)
+					var number float64
+					if within {
+						element := elements[j]
+						number = element
+					} else {
+						number = 0.0
+					}
+					within2 := i >= 0 && int(i) < len(elements)
+					var number2 float64
+					if within2 {
+						element := elements[i]
+						number2 = element
+					} else {
+						number2 = 0.0
+					}
+					within3 := j >= 0 && int(j) < len(elements2)
+					var number3 float64
+					if within3 {
+						element := elements2[j]
+						number3 = element
+					} else {
+						number3 = 0.0
+					}
+					within4 := i >= 0 && int(i) < len(elements2)
+					var number4 float64
+					if within4 {
+						element := elements2[i]
+						number4 = element
+					} else {
+						number4 = 0.0
+					}
+					within5 := j >= 0 && int(j) < len(elements3)
+					var number5 float64
+					if within5 {
+						element := elements3[j]
+						number5 = element
+					} else {
+						number5 = 0.0
+					}
+					within6 := i >= 0 && int(i) < len(elements4)
+					if within6 {
+						element := elements4[i]
+						elements4[i] = element + (number - number2) * number5 * 0.125
+					}
+					within7 := i >= 0 && int(i) < len(elements5)
+					if within7 {
+						element := elements5[i]
+						elements5[i] = element + (number3 - number4) * number5 * 0.125
+					}
+				}
+			}
+		}
+		for i := int32(0); i < 3; i++ {
+			within := i >= 0 && int(i) < len(elements4)
+			var number float64
+			if within {
+				element := elements4[i]
+				number = element
+			} else {
+				number = 0.0
+			}
+			within2 := i >= 0 && int(i) < len(elements)
+			if within2 {
+				element := elements[i]
+				elements[i] = element + 0.5 * number
+			}
+			within3 := i >= 0 && int(i) < len(elements5)
+			var number2 float64
+			if within3 {
+				element := elements5[i]
+				number2 = element
+			} else {
+				number2 = 0.0
+			}
+			within4 := i >= 0 && int(i) < len(elements2)
+			if within4 {
+				element := elements2[i]
+				elements2[i] = element + 0.5 * number2
+			}
+		}
+	}
+	array7 := array.Freeze(array2)()
+	array8 := array.Freeze(array3)()
+	performed := []string{prim.ShowArray(show.Show, array7), prim.ShowArray(show.Show, array8)}
+	return performed
+}
+
+var countBefore = initializeCountBefore()
+
+func initializeCountBefore() []string {
+	defer exception.ReportUncaught()
+	array2 := array.Thaw([]string{"pear", "apple", "fig"})()
+	array3 := array.Thaw([]int32{0, 0, 0})()
+	elements := *array2
+	elements2 := *array3
+	for i := int32(0); i < 3; i++ {
+		for j := int32(0); j < 3; j++ {
+			within := i >= 0 && int(i) < len(elements)
+			var s string
+			if within {
+				element := elements[i]
+				s = element
+			} else {
+				s = ""
+			}
+			within2 := j >= 0 && int(j) < len(elements)
+			var s2 string
+			if within2 {
+				element := elements[j]
+				s2 = element
+			} else {
+				s2 = ""
+			}
+			scrutinee := prim.CompareString(s2, s) < 0
+			if scrutinee {
+				within3 := i >= 0 && int(i) < len(elements2)
+				if within3 {
+					element := elements2[i]
+					elements2[i] = element + 1
+				}
+			}
+		}
+	}
+	array4 := array.Freeze(array3)()
+	performed := []string{prim.ShowArray(show.Show2, array4)}
+	return performed
+}
+
+var sortEach = initializeSortEach()
+
+func initializeSortEach() []string {
+	defer exception.ReportUncaught()
+	array2 := array.Thaw([]int32{3, 1, 2})()
+	array3 := array.Thaw([]int32{0, 0})()
+	for i := int32(0); i < 2; i++ {
+		direct.SortByMutable(func(a int32, b int32) ordering.Ordering {
+			i2 := b + i
+			if i2 < a {
+				return ordering.OrderingLT
+			}
+			if i2 == a {
+				return ordering.OrderingEQ
+			}
+			return ordering.OrderingGT
+		}, func(value ordering.Ordering) int32 {
+			switch value {
+			case ordering.OrderingGT:
+				return 1
+			case ordering.OrderingEQ:
+				return 0
+			default: // ordering.OrderingLT
+				return -1
+			}
+		}, array2)
+		within := 0 < len(*array2)
+		var i3 int32
+		if within {
+			element := (*array2)[0]
+			i3 = element
+		} else {
+			i3 = 0
+		}
+		within2 := i >= 0 && int(i) < len(*array3)
+		if within2 {
+			element := (*array3)[i]
+			(*array3)[i] = element + i3
+		}
+	}
+	array4 := array.Freeze(array2)()
+	array5 := array.Freeze(array3)()
+	performed := []string{prim.ShowArray(show.Show2, array4), prim.ShowArray(show.Show2, array5)}
+	return performed
+}
+
+func mainToNumber(i int32) float64 {
+	if i == 0 {
+		return 0.0
+	}
+	return 1.0 + mainToNumber(i - 1)
+}
+
+func main() {
+	fmt.Println(main_)
+}

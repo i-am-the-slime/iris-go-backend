@@ -8,7 +8,6 @@ import (
 	"fmt"
 	"github.com/i-am-the-slime/iris-go/alloc"
 	"github.com/i-am-the-slime/iris-go/exception"
-	"github.com/i-am-the-slime/iris-go/prim"
 )
 
 type ListInt struct {
@@ -82,7 +81,7 @@ func mainGo2(remaining int32, tree *Tree) *Tree {
 		if remaining <= 0 {
 			return tree
 		}
-		remaining, tree = remaining - 1, treeCells.New(Tree{Tag: TreeNode, Node0: tree, Node1: remaining, Node2: treeCells.New(Tree{Tag: TreeNode, Node0: sharedTreeLeaf, Node1: prim.MultiplyInt32(remaining, 2), Node2: sharedTreeLeaf})})
+		remaining, tree = remaining - 1, treeCells.New(Tree{Tag: TreeNode, Node0: tree, Node1: remaining, Node2: treeCells.New(Tree{Tag: TreeNode, Node0: sharedTreeLeaf, Node1: remaining * 2, Node2: sharedTreeLeaf})})
 	}
 }
 

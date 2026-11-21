@@ -8,7 +8,6 @@ import (
 	"fixture/shared"
 	"fmt"
 	"github.com/i-am-the-slime/iris-go/exception"
-	"github.com/i-am-the-slime/iris-go/prim"
 )
 
 var main_ = initializeMain_()
@@ -18,7 +17,7 @@ func initializeMain_() shared.MainResult {
 	scrutinee := []shared.Operation{shared.Operation{Name: "add", Run: func(x int32) int32 {
 		return x + 3
 	}}, shared.Operation{Name: "scale", Run: func(x int32) int32 {
-		return prim.MultiplyInt32(x, 3)
+		return x * 3
 	}}}
 	var result int32
 	if len(scrutinee) == 2 {
@@ -30,7 +29,7 @@ func initializeMain_() shared.MainResult {
 	scrutinee2 := []shared.Operation{shared.Operation{Name: "add", Run: func(x int32) int32 {
 		return x + 3
 	}}, shared.Operation{Name: "scale", Run: func(x int32) int32 {
-		return prim.MultiplyInt32(x, 3)
+		return x * 3
 	}}}
 	var result2 int32
 	if len(scrutinee2) == 2 {

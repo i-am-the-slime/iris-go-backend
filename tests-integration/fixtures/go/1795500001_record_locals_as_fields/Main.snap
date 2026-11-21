@@ -1,0 +1,175 @@
+---
+source: tests-integration/src/fixtures.rs
+---
+// Data/Show/show.go
+package show
+
+import (
+	"fixture/shared"
+	"github.com/i-am-the-slime/iris-go/prim"
+)
+
+func ShowTallyConsIntConsStringConsBooleanConsIntNil(record shared.Tally) string {
+	var result string
+	if record.Seen {
+		result = "true"
+	} else {
+		result = "false"
+	}
+	return "{ count: " + prim.ShowInt(record.Count) + ", label: " + prim.ShowString(record.Label) + ", seen: " + result + ", total: " + prim.ShowInt(record.Total) + " }"
+}
+
+func ShowBodyConsNumberConsNumberConsNumberConsNumberConsNumberNil(record shared.Body) string {
+	return "{ mass: " + prim.ShowNumber(record.Mass) + ", vx: " + prim.ShowNumber(record.Vx) + ", vy: " + prim.ShowNumber(record.Vy) + ", x: " + prim.ShowNumber(record.X) + ", y: " + prim.ShowNumber(record.Y) + " }"
+}
+
+// Data/Tuple/tuple.go
+package tuple
+
+import "fixture/shared"
+
+type TupleIntBody struct {
+	Second shared.Body
+	First  int32
+}
+
+// main.go
+package main
+
+import (
+	"fixture/Data/Show"
+	"fixture/shared"
+	"fmt"
+	"github.com/i-am-the-slime/iris-go/array"
+	"github.com/i-am-the-slime/iris-go/exception"
+	"github.com/i-am-the-slime/iris-go/prim"
+)
+
+var main_ = initializeMain_()
+
+func initializeMain_() []string {
+	defer exception.ReportUncaught()
+	bodies := []shared.Body{shared.Body{X: 0.0, Y: 0.0, Vx: 0.0, Vy: 0.0, Mass: 1.0}, shared.Body{X: 1.0, Y: 2.0, Vx: 0.5, Vy: 0.0, Mass: 0.5}, shared.Body{X: -1.0, Y: 0.5, Vx: 0.0, Vy: 0.25, Mass: 2.0}}
+	mapped := make([]shared.Body, len(bodies))
+	for index := range bodies {
+		i := int32(index)
+		accumulatorMass := bodies[index].Mass
+		accumulatorVx := bodies[index].Vx
+		accumulatorVy := bodies[index].Vy
+		accumulatorX := bodies[index].X
+		accumulatorY := bodies[index].Y
+		for index2 := range bodies {
+			i2 := int32(index2)
+			if i != i2 {
+				accumulatorVx = accumulatorVx + (bodies[index2].X - accumulatorX) * bodies[index2].Mass
+				accumulatorVy = accumulatorVy + (bodies[index2].Y - accumulatorY) * bodies[index2].Mass
+			}
+		}
+		accumulatorX = accumulatorX + accumulatorVx
+		accumulatorY = accumulatorY + accumulatorVy
+		mapped[index].Mass = accumulatorMass
+		mapped[index].Vx = accumulatorVx
+		mapped[index].Vy = accumulatorVy
+		mapped[index].X = accumulatorX
+		mapped[index].Y = accumulatorY
+	}
+	array2 := []int32{1, 2, 3, 4}
+	accumulatorLabel := ""
+	var accumulatorCount int32 = 0
+	var accumulatorTotal int32 = 0
+	accumulatorSeen := false
+	for _, n := range array2 {
+		accumulatorCount = accumulatorCount + 1
+		accumulatorTotal = accumulatorTotal + n
+		accumulatorLabel = accumulatorLabel + prim.ShowInt(n)
+		accumulatorSeen = accumulatorSeen || n > 2
+	}
+	var result string
+	if accumulatorSeen {
+		result = "true"
+	} else {
+		result = "false"
+	}
+	array3 := []int32{5}
+	accumulatorLabel2 := ""
+	var accumulatorCount2 int32 = 0
+	var accumulatorTotal2 int32 = 0
+	accumulatorSeen2 := false
+	for _, n := range array3 {
+		accumulatorCount2 = accumulatorCount2 + 1
+		accumulatorTotal2 = accumulatorTotal2 + n
+		accumulatorLabel2 = accumulatorLabel2 + prim.ShowInt(n)
+		accumulatorSeen2 = accumulatorSeen2 || n > 2
+	}
+	array4 := []int32{1, 2, 3}
+	accumulatorLabel3 := ""
+	var accumulatorCount3 int32 = 0
+	var accumulatorTotal3 int32 = 0
+	accumulatorSeen3 := false
+	for _, n := range array4 {
+		accumulatorCount3 = accumulatorCount3 + 1
+		accumulatorTotal3 = accumulatorTotal3 + n
+		accumulatorLabel3 = accumulatorLabel3 + prim.ShowInt(n)
+		accumulatorSeen3 = accumulatorSeen3 || n > 2
+	}
+	array5 := []int32{2, 3, 4}
+	accumulator := shared.Cells{Rows: 0, Cells: 0}
+	for _, width := range array5 {
+		updated := accumulator
+		updated.Rows = accumulator.Rows + 1
+		_, count := shared.RangeSteps(1, width)
+		accumulatorCells := accumulator.Cells
+		for range count {
+			accumulatorCells = accumulatorCells + 1
+		}
+		updated.Cells = accumulatorCells
+		accumulator = updated
+	}
+	accumulator2 := shared.Pair{Left: 1, Right: 2}
+	for i := int32(1); i < 6; i++ {
+		updated := accumulator2
+		updated.Left = accumulator2.Right + i
+		updated.Right = accumulator2.Left
+		accumulator2 = updated
+	}
+	return []string{prim.ShowArray(show.ShowBodyConsNumberConsNumberConsNumberConsNumberConsNumberNil, mapped), "{ count: " + prim.ShowInt(accumulatorCount) + ", label: " + prim.ShowString(accumulatorLabel) + ", seen: " + result + ", total: " + prim.ShowInt(accumulatorTotal) + " }", prim.ShowArray(show.ShowTallyConsIntConsStringConsBooleanConsIntNil, array.Reverse([]shared.Tally{shared.Tally{Label: accumulatorLabel2, Count: accumulatorCount2, Total: accumulatorTotal2, Seen: accumulatorSeen2}, shared.Tally{Label: accumulatorLabel3, Count: accumulatorCount3, Total: accumulatorTotal3, Seen: accumulatorSeen3}})), "{ cells: " + prim.ShowInt(accumulator.Cells) + ", rows: " + prim.ShowInt(accumulator.Rows) + " }", "{ left: " + prim.ShowInt(accumulator2.Left) + ", right: " + prim.ShowInt(accumulator2.Right) + " }"}
+}
+
+func main() {
+	fmt.Println(main_)
+}
+
+// shared/shared.go
+package shared
+
+type Body struct {
+	Mass float64
+	Vx   float64
+	Vy   float64
+	X    float64
+	Y    float64
+}
+
+type Tally struct {
+	Label string
+	Count int32
+	Total int32
+	Seen  bool
+}
+
+type Cells struct {
+	Cells int32
+	Rows  int32
+}
+
+func RangeSteps(start int32, end int32) (int32, int64) {
+	if start > end {
+		return -1, int64(start) - int64(end) + 1
+	}
+	return 1, int64(end) - int64(start) + 1
+}
+
+type Pair struct {
+	Left  int32
+	Right int32
+}

@@ -6,7 +6,6 @@ package main
 
 import (
 	"github.com/i-am-the-slime/iris-go/exception"
-	"github.com/i-am-the-slime/iris-go/prim"
 	"os"
 )
 
@@ -23,7 +22,7 @@ func main_() int32 {
 	if i > 100 {
 		panic("too large")
 	} else {
-		result = prim.MultiplyInt32(i, 2)
+		result = i * 2
 	}
 	return result
 }

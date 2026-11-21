@@ -31,7 +31,7 @@ func initializeMain_() maybe.MainResult {
 	accumulator := ""
 	for index := len(numbers) - 1; index >= 0; index-- {
 		value := numbers[index]
-		x := prim.MultiplyInt32(value, 2)
+		x := value * 2
 		accumulator = prim.ShowInt(x) + "," + accumulator
 	}
 	kept := []int32{}
@@ -48,7 +48,7 @@ func initializeMain_() maybe.MainResult {
 	found := maybe.NoInt
 	for index := len(numbers) - 1; index >= 0; index-- {
 		value := numbers[index]
-		value2 := prim.MultiplyInt32(value, 2)
+		value2 := value * 2
 		if value2 < 5 {
 			found = maybe.Int(int32(index))
 			break

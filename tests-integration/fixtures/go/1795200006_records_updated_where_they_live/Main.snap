@@ -24,7 +24,6 @@ import (
 	"fixture/shared"
 	"fmt"
 	"github.com/i-am-the-slime/iris-go/exception"
-	"github.com/i-am-the-slime/iris-go/prim"
 	"slices"
 )
 
@@ -33,36 +32,42 @@ var main_ = initializeMain_()
 func initializeMain_() float64 {
 	defer exception.ReportUncaught()
 	bodies := []shared.Body{shared.Body{X: 0.0, Y: 0.0, Vx: 0.0, Vy: 0.0, Mass: 1.0}, shared.Body{X: 1.0, Y: 2.0, Vx: 0.0, Vy: 0.0, Mass: 0.5}}
-	accumulator := shared.Body{X: 0.5, Y: 0.5, Vx: 0.0, Vy: 0.0, Mass: 2.0}
+	var accumulatorVx float64 = 0.0
+	var accumulatorVy float64 = 0.0
+	var accumulatorX float64 = 0.5
+	var accumulatorY float64 = 0.5
 	for otherIndex := range bodies {
-		accumulator.Vx = accumulator.Vx + float64((bodies[otherIndex].X - accumulator.X) * bodies[otherIndex].Mass)
-		accumulator.Vy = accumulator.Vy + float64((bodies[otherIndex].Y - accumulator.Y) * bodies[otherIndex].Mass)
+		accumulatorVx = accumulatorVx + (bodies[otherIndex].X - accumulatorX) * bodies[otherIndex].Mass
+		accumulatorVy = accumulatorVy + (bodies[otherIndex].Y - accumulatorY) * bodies[otherIndex].Mass
 	}
-	accumulator2 := shared.Body{X: 0.5, Y: 0.5, Vx: 0.0, Vy: 0.0, Mass: 2.0}
+	var accumulatorVx2 float64 = 0.0
+	var accumulatorVy2 float64 = 0.0
+	var accumulatorX2 float64 = 0.5
+	var accumulatorY2 float64 = 0.5
 	for index := range bodies {
 		i := int32(index)
 		if 1 != i {
-			accumulator2.Vx = accumulator2.Vx + float64((bodies[index].X - accumulator2.X) * bodies[index].Mass)
-			accumulator2.Vy = accumulator2.Vy + float64((bodies[index].Y - accumulator2.Y) * bodies[index].Mass)
+			accumulatorVx2 = accumulatorVx2 + (bodies[index].X - accumulatorX2) * bodies[index].Mass
+			accumulatorVy2 = accumulatorVy2 + (bodies[index].Y - accumulatorY2) * bodies[index].Mass
 		}
 	}
-	var accumulator3 float64 = 0.0
+	var accumulator float64 = 0.0
 	for index := range bodies {
 		i := int32(index)
-		accumulator3 = accumulator3 + float64(toNumber(i) * bodies[index].Mass)
+		accumulator = accumulator + toNumber(i) * bodies[index].Mass
 	}
 	array := []int32{3, 4}
-	accumulator4 := []tuple.TupleIntInt{}
-	accumulator4 = slices.Clip(accumulator4)
+	accumulator2 := []tuple.TupleIntInt{}
+	accumulator2 = slices.Clip(accumulator2)
 	for index, i := range array {
 		i2 := int32(index)
-		accumulator4 = append(accumulator4, tuple.TupleIntInt{First: i2, Second: i})
+		accumulator2 = append(accumulator2, tuple.TupleIntInt{First: i2, Second: i})
 	}
-	var accumulator5 int32 = 0
-	for tupleIndex := range accumulator4 {
-		accumulator5 = accumulator5 + prim.MultiplyInt32(accumulator4[tupleIndex].First, accumulator4[tupleIndex].Second)
+	var accumulator3 int32 = 0
+	for tupleIndex := range accumulator2 {
+		accumulator3 = accumulator3 + accumulator2[tupleIndex].First * accumulator2[tupleIndex].Second
 	}
-	return accumulator.Vx + accumulator.Vy + accumulator2.Vx + accumulator3 + toNumber(accumulator5)
+	return accumulatorVx + accumulatorVy + accumulatorVx2 + accumulator + toNumber(accumulator3)
 }
 
 func toNumber(i int32) float64 {

@@ -2,7 +2,10 @@
 #
 # Compiles iris-go's example projects with `iris go`, builds each with
 # `go build`, runs it, and compares stdout with the expectation recorded in
-# iris-go's examples/examples.txt.
+# iris-go's examples/examples.txt. Output that differs only in the last digits
+# of its numbers, by at most FLOAT_TOLERANCE relative (default 1e-12), passes
+# as FLOAT and is reported: Go may fuse a multiply and an add into one rounding,
+# and its math package rounds transcendental functions in its own way.
 #
 #   compiler-backend/go/scripts/run-examples.sh               # every example
 #   compiler-backend/go/scripts/run-examples.sh Tco01 Array01 # selected examples
@@ -23,6 +26,7 @@ GO_SUPPORT="${GO_SUPPORT:-/Users/mark/Developer/iris-go}"
 # in Go 1.27.0 (simd/archsimd) whose API may change in later releases.
 export GOEXPERIMENT="${GOEXPERIMENT:-simd}"
 JOBS="${JOBS:-8}"
+FLOAT_TOLERANCE="${FLOAT_TOLERANCE:-1e-12}"
 WORK="${WORK:-$(mktemp -d)}"
 mkdir -p "$WORK"
 
@@ -62,13 +66,20 @@ GOMOD
     return 1
   fi
   if [ "$actual" != "$expected" ]; then
+    printf '%s' "$expected" > "$out/expected.txt"
+    printf '%s' "$actual" > "$out/actual.txt"
+    local close
+    if close="$(bun "$HERE/markgraf/float-close.ts" "$out/expected.txt" "$out/actual.txt" "$FLOAT_TOLERANCE")"; then
+      printf '%-26s %-8s %6s  %s\n' "$name" "FLOAT" "$elapsed" "$close"
+      return 0
+    fi
     printf '%-26s %-8s %6s  got %s\n' "$name" "OUTPUT" "$elapsed" "$(printf '%s' "$actual" | tr '\n' '/' | cut -c1-120)"
     return 1
   fi
   printf '%-26s %-8s %6s\n' "$name" "PASS" "$elapsed"
 }
 export -f run_one
-export IRIS EXAMPLES GO_SUPPORT WORK EXAMPLE_TIMEOUT
+export IRIS EXAMPLES GO_SUPPORT WORK EXAMPLE_TIMEOUT HERE FLOAT_TOLERANCE
 
 manifest() {
   cat "$EXAMPLES/examples.txt"
@@ -89,9 +100,10 @@ started=$(perl -MTime::HiRes=time -e 'printf "%.0f", time*1000')
 seq 1 "$(wc -l < "$WORK/manifest.txt")" | xargs -P "$JOBS" -I{} bash -c 'run_numbered "$1"' _ {} | sort > "$WORK/results.txt"
 finished=$(perl -MTime::HiRes=time -e 'printf "%.0f", time*1000')
 cat "$WORK/results.txt"
-passed=$(grep -c ' PASS ' "$WORK/results.txt")
+passed=$(grep -c -E ' (PASS|FLOAT) ' "$WORK/results.txt")
+close=$(grep -c ' FLOAT ' "$WORK/results.txt")
 total=$(wc -l < "$WORK/results.txt" | tr -d ' ')
-echo "passed $passed/$total in $((finished - started)) ms (generated Go in $WORK)"
+echo "passed $passed/$total ($close float-close) in $((finished - started)) ms (generated Go in $WORK)"
 status=0
 [ "$passed" = "$total" ] || status=1
 if [ "$#" -eq 0 ]; then

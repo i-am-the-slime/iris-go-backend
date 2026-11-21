@@ -74,7 +74,6 @@ import (
 	"fmt"
 	"github.com/i-am-the-slime/iris-go/array"
 	"github.com/i-am-the-slime/iris-go/exception"
-	"github.com/i-am-the-slime/iris-go/prim"
 )
 
 var main_ = initializeMain_()
@@ -111,7 +110,7 @@ func initializeMain_() []int32 {
 			}
 		}, shared.Convert2(mapped2)), tuple.Convert4(mapped3))
 	})(shared.Convert3([]func(int32) int32{category.Identity, func(value int32) int32 {
-		return prim.MultiplyInt32(value, 2)
+		return value * 2
 	}})))
 }
 

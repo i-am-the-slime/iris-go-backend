@@ -69,9 +69,9 @@ func initializeMain_() []string {
 		switch array3[index].Tag {
 		case ShapeCircle:
 			radius := array3[index].Circle
-			result = prim.MultiplyInt32(prim.MultiplyInt32(3, radius), radius)
+			result = 3 * radius * radius
 		default: // ShapeRectangle
-			result = prim.MultiplyInt32(array3[index].Rectangle0, array3[index].Rectangle1)
+			result = array3[index].Rectangle0 * array3[index].Rectangle1
 		}
 		mapped2[index] = prim.ShowInt(result)
 	}

@@ -16,7 +16,6 @@ import (
 	"fixture/shared"
 	"fmt"
 	"github.com/i-am-the-slime/iris-go/exception"
-	"github.com/i-am-the-slime/iris-go/prim"
 )
 
 type Instruction struct {
@@ -342,7 +341,7 @@ func initializeInstructions() FreeInstructionInt {
 		return FreeInstructionUnit{Tag: FreeInstructionUnitPure, Pure: struct{}{}}
 	}}, func(_ struct{}) FreeInstructionInt {
 		return FreeInstructionInt{Tag: FreeInstructionIntBind, Bind0: convert6(InstructionInt{Tag: InstructionIntLoad, Load: func(value int32) int32 {
-			return prim.MultiplyInt32(value, 7)
+			return value * 7
 		}}), Bind1: func(value any) FreeInstructionInt {
 			return FreeInstructionInt{Tag: FreeInstructionIntPure, Pure: value.(int32)}
 		}}

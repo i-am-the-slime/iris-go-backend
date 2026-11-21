@@ -8,7 +8,6 @@ import (
 	"fmt"
 	"github.com/i-am-the-slime/iris-go/array"
 	"github.com/i-am-the-slime/iris-go/exception"
-	"github.com/i-am-the-slime/iris-go/prim"
 )
 
 var main_ = initializeMain_()
@@ -26,7 +25,7 @@ func initializeMain_() []int32 {
 	}
 	mapped := make([]int32, len(xs))
 	for index, value := range xs {
-		mapped[index] = prim.MultiplyInt32(value, 2)
+		mapped[index] = value * 2
 	}
 	if len(mapped) == 1 {
 		x := mapped[0]
@@ -42,7 +41,7 @@ func initializeMain_() []int32 {
 	}
 	mapped2 := make([]int32, len(xs2))
 	for index, value := range xs2 {
-		mapped2[index] = prim.MultiplyInt32(value, 2)
+		mapped2[index] = value * 2
 	}
 	if len(mapped2) == 1 {
 		x := mapped2[0]

@@ -38,10 +38,9 @@ func initializeMain_() shared.MainResult {
 		ref = s_
 		step = class.StepIntUnit{Tag: class.StepIntUnitLoop, Loop: 2}
 	}
-	ref2 := step
 	for {
 		var result bool
-		switch ref2.Tag {
+		switch step.Tag {
 		case class.StepIntUnitLoop:
 			result = true
 		default:
@@ -50,9 +49,9 @@ func initializeMain_() shared.MainResult {
 		if !result {
 			break
 		}
-		switch ref2.Tag {
+		switch step.Tag {
 		case class.StepIntUnitLoop:
-			a_ := ref2.Loop
+			a_ := step.Loop
 			var step2 class.StepIntUnit
 			if a_ > 10 {
 				step2 = class.StepIntUnit{Tag: class.StepIntUnitDone, Done: struct{}{}}
@@ -61,7 +60,7 @@ func initializeMain_() shared.MainResult {
 				ref = s_
 				step2 = class.StepIntUnit{Tag: class.StepIntUnitLoop, Loop: a_ + 1}
 			}
-			ref2 = step2
+			step = step2
 		default: // class.StepIntUnitDone
 		}
 	}

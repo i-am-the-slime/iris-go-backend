@@ -71,9 +71,15 @@ Go backend keeps every `Int` a 32-bit integer instead:
 | `Int.rem 5 0` | `NaN` | `0` |
 | `Bits.zshr (-3) 0` | `4294967293` | `-3` |
 | `Bits.zshr (-1073741824) (-1073741824)` | `3221225472` | `-1073741824` |
+| `123456789 * 987654321` | `-67153024` | `-67153019` |
+| `Int.pow 3 40` | `689956864` | `689956897` |
 
 `zshr` is JavaScript's unsigned `>>>`, whose result does not fit an `Int` when the top bit stays
 set. `Int.quot`, `div` and `mod` by zero are `0` in both.
+
+`*` and `Int.pow` wrap like 32-bit integers in Go, so they keep the low 32 bits of the exact
+product. JavaScript computes the product as a double first, which drops low bits once it passes
+2^53, and then cuts it to 32 bits. Products below 2^53 are the same in both.
 
 Such a value then behaves differently wherever it is used. A `NaN` index passes JavaScript's bounds
 check, so `Array.index [] (Int.rem 5 0)` is `Just undefined`, which crashes or prints an empty
@@ -81,6 +87,16 @@ element when it is shown or matched, while `STArray.poke (Int.rem 5 0) x array` 
 changes no element. In Go the index is `0`: the lookup is `Nothing`, and the poke writes the first
 element of a non-empty array and is `true`. Likewise `Array.range 0 (clamp 0 1 (div bottom
 (-1)))` is `[0,1]` in JavaScript and `[0]` in Go.
+
+### Multiply, then add
+
+Go may compute `a * b + c` as one fused multiply-add, which rounds once where JavaScript rounds the
+product and then the sum. The fused result is the more precise one, but a `Number` can differ from
+JavaScript's in its last digits. Where a computation cancels to almost nothing, only rounding noise
+is left, and the noise differs: summing `x / 10.0 * 3.0 - 0.3 * x` for `x` from 1 to 10 gives
+`4.440892098500626e-16` in JavaScript and `9.992007221626409e-16` in Go, both for an exact 0.
+Whether Go fuses depends on the CPU it compiles for: it does on arm64, and on amd64 only with
+`GOAMD64=v3` or later.
 
 ### Trigonometric, exponential and power functions
 

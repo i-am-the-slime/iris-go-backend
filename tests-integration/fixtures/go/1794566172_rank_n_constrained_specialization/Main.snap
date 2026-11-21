@@ -58,7 +58,6 @@ import (
 	"fmt"
 	"github.com/i-am-the-slime/iris-go/direct"
 	"github.com/i-am-the-slime/iris-go/exception"
-	"github.com/i-am-the-slime/iris-go/prim"
 )
 
 var main_ []int32 = []int32{recorded, counted, measured}
@@ -125,7 +124,7 @@ func programNext(width int32) tuple.SceneInt {
 	}, StateTIntIdentity: func(interpreter tuple.Interpreter) func(int32) tuple.TupleUnitInt {
 		return interpreter.Emit(width)
 	}}, func(_ struct{}) tuple.SceneInt {
-		value := prim.MultiplyInt32(width, 2)
+		value := width * 2
 		return tuple.Discard(tuple.SceneUnit{Identity: func(interpreter shared.InterpreterIdentity) {
 			interpreter.Emit(value)
 		}, ST: func(interpreter shared.InterpreterST) {

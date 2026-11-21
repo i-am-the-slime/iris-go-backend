@@ -109,7 +109,7 @@ var things []ExistsDescribed = []ExistsDescribed{ExistsDescribed{Tag: ExistsDesc
 }}}, ExistsDescribed{Tag: ExistsDescribedArrayNumber, ArrayNumber: DescribedArrayNumber{First: []float64{1.5}, Second: show.ShowNumber, Third: func(array []float64) []float64 {
 	mapped := make([]float64, len(array))
 	for index, value := range array {
-		mapped[index] = float64(value * 2.0)
+		mapped[index] = value * 2.0
 	}
 	return mapped
 }}}}

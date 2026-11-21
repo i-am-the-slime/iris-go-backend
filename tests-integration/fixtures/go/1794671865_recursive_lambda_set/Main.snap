@@ -94,7 +94,7 @@ func runIntToInt(function *IntToInt, x int32) int32 {
 			continue
 		default: // IntToIntCountDown2
 			k := function.K
-			function, x = k, prim.MultiplyInt32(x, 2)
+			function, x = k, x * 2
 			continue
 		}
 	}

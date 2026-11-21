@@ -62,7 +62,6 @@ import (
 	"fixture/shared"
 	"github.com/i-am-the-slime/iris-go/aff"
 	"github.com/i-am-the-slime/iris-go/exception"
-	"github.com/i-am-the-slime/iris-go/prim"
 	"os"
 )
 
@@ -113,7 +112,7 @@ func main_() int32 {
 
 func mainStep(ref *shared.Ref[int32], digit int32) {
 	s := ref.Value
-	s_ := prim.MultiplyInt32(s, 10) + digit
+	s_ := s * 10 + digit
 	ref.Value = s_
 }
 

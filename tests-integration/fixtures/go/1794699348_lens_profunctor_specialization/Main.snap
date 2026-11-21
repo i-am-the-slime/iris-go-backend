@@ -66,7 +66,7 @@ func initializeMain_() []string {
 	default:
 		result = "Nothing"
 	}
-	return []string{prim.ShowInt(prim.MultiplyInt32(origin.X, 2)), prim.ShowInt((shared.Point{Tags: origin.Tags, X: origin.X + 1}).X), "(Just " + prim.ShowInt(2) + ")", "Nothing", prim.ShowInt(5), result, prim.ShowInt(1), prim.ShowInt(bump(3, origin).X)}
+	return []string{prim.ShowInt(origin.X * 2), prim.ShowInt((shared.Point{Tags: origin.Tags, X: origin.X + 1}).X), "(Just " + prim.ShowInt(2) + ")", "Nothing", prim.ShowInt(5), result, prim.ShowInt(1), prim.ShowInt(bump(3, origin).X)}
 }
 
 var origin shared.Point = shared.Point{X: 3, Tags: []string{"a", "b"}}
@@ -77,7 +77,7 @@ func bump(n int32, point shared.Point) shared.Point {
 		case 0:
 			return point
 		default:
-			n, point = n - 1, shared.Point{Tags: point.Tags, X: point.X + prim.MultiplyInt32(n, 2)}
+			n, point = n - 1, shared.Point{Tags: point.Tags, X: point.X + n * 2}
 			continue
 		}
 	}

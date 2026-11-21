@@ -42,7 +42,7 @@ func initializeMain_() shared.MainResult {
 	for slot := range count5 {
 		x := 1 + int32(slot) * step4
 		index := int32(slot)
-		mapped[slot] = prim.MultiplyInt32(index, x)
+		mapped[slot] = index * x
 	}
 	performed := shared.MainResult{Visited: ref2, Summed: accumulator, Listed: accumulator2, Counted: int32(count4), Indexed: mapped, Descending: descending}
 	return performed
@@ -55,7 +55,7 @@ func initializeDescending() []int32 {
 	mapped := make([]int32, 3)
 	for index := range 3 {
 		value := 3 - int32(index)
-		mapped[index] = prim.MultiplyInt32(value, 2)
+		mapped[index] = value * 2
 	}
 	return mapped
 }

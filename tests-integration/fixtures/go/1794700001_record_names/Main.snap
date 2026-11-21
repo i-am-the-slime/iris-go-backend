@@ -62,7 +62,7 @@ func initializeMain_() string {
 	array2 := []shared.Adjustment{shared.Adjustment{Factor: 3.0, Offset: 1.0}}
 	var accumulator2 float64 = 2.0
 	for adjustmentIndex := range array2 {
-		accumulator2 = float64(accumulator2 * array2[adjustmentIndex].Factor) + array2[adjustmentIndex].Offset
+		accumulator2 = accumulator2 * array2[adjustmentIndex].Factor + array2[adjustmentIndex].Offset
 	}
 	array3 := []shared.Margin{shared.Margin{Top: 1.0, Bottom: 2.0}}
 	var accumulator3 float64 = 0.0
@@ -72,7 +72,7 @@ func initializeMain_() string {
 	array4 := []shared.ShapesTiming{shared.ShapesTiming{Width: 2.0, Height: 3.0, Label: "box"}}
 	var accumulator4 float64 = 0.0
 	for shapeIndex := range array4 {
-		accumulator4 = accumulator4 + float64(array4[shapeIndex].Width * array4[shapeIndex].Height)
+		accumulator4 = accumulator4 + array4[shapeIndex].Width * array4[shapeIndex].Height
 	}
 	array5 := []shared.Span{shared.Span{From: 2, To: 7}}
 	var accumulator5 int32 = 0
