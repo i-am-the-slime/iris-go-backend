@@ -44,6 +44,13 @@ func factorial(n int64) int64 {
 `Int64` from the `int64` package is an `int64` and `UInt64` a `uint64`, so `+`, `*`, `<=` and
 `one` are Go's own arithmetic and constants. No boxing, no pairs of 32-bit halves.
 
+PureScript has no literal syntax beyond 32-bit `Int`, but type-level `Int`s can be as big as you
+like, so they're how you write a 64-bit number at compile time: `Prim.Int`'s `ToString`,
+`Compare`, `Add` and `Mul` all work on them. Iris keeps them as 128-bit numbers. That's every
+`Int64` and `UInt64` with room to spare, but not unlimited like `purs`. A literal, sum or product
+past 128 bits is a `TypeIntegerTooLarge` error. Reflecting a type-level `Int` that doesn't fit in
+a 32-bit `Int` with `reflectType` is a `ReflectedIntegerOutOfRange` error.
+
 ## `Aff` runs on fibers
 
 ```purescript
