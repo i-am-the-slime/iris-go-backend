@@ -549,8 +549,12 @@ pub fn go(path: &Path) -> FixtureResult {
     let loaded = crate::load_fixture(folder)?;
     check_source_errors(&loaded.engine, &loaded.files, &loaded.fixture_files)?;
 
-    let foreign_packages = go_foreign_packages(&loaded, folder)?;
+    let (foreign_packages, vendored) = go_foreign_packages(&loaded, folder)?;
     let compiled = go::compile_program(&loaded.engine, &file, "main", &foreign_packages, "fixture");
+    // Built before the snapshot is compared, so that Go that does not build is never accepted.
+    if let Ok(program) = &compiled {
+        build_go_fixture(&program.files, &vendored)?;
+    }
     let output = match compiled {
         // Each package's file follows its path, in order of path.
         Ok(program) => program
@@ -576,16 +580,17 @@ pub fn go(path: &Path) -> FixtureResult {
 }
 
 /// The modules whose foreign imports a fixture's Go files next to their sources implement, as the
-/// Go backend's CLI finds them.
+/// Go backend's CLI finds them, and those files as the CLI copies them into the program's module.
 fn go_foreign_packages(
     loaded: &crate::LoadedFixture,
     folder: &Path,
-) -> Result<go::ForeignPackages, io::Error> {
+) -> Result<(go::ForeignPackages, Vec<(PathBuf, Vec<u8>)>), io::Error> {
     let root = snapshot_path(folder);
     let mut modules = vec![];
     let mut structs = vec![];
     let mut sources = vec![];
     let mut source_paths = vec![];
+    let mut vendored = vec![];
     for &file_id in &loaded.fixture_files {
         let uri = loaded.files.path(file_id);
         let Some(path) = Url::parse(&uri).ok().and_then(|url| url.to_file_path().ok()) else {
@@ -609,6 +614,7 @@ fn go_foreign_packages(
             source.types.extend(types);
             let shown = foreign_file.strip_prefix(&root).unwrap_or(&foreign_file);
             source.files.push(shown.display().to_string());
+            vendored.extend(vendored_foreign_file(&module, &foreign_file, &text)?);
         }
         modules.push(module);
         sources.push(source);
@@ -622,14 +628,182 @@ fn go_foreign_packages(
         .file_name()
         .is_some_and(|name| name.to_string_lossy().ends_with("_line_directives"))
         .then(|| go::LineDirectives { go_directory: String::new(), sources: source_paths.clone() });
-    Ok(go::ForeignPackages {
+    let packages = go::ForeignPackages {
         module_path,
         modules,
         structs,
         sources,
         source_paths,
         line_directives,
-    })
+    };
+    Ok((packages, vendored))
+}
+
+/// The foreign file renamed into its module's package, and the files it embeds beside it.
+fn vendored_foreign_file(
+    module: &str,
+    foreign_file: &Path,
+    text: &str,
+) -> Result<Vec<(PathBuf, Vec<u8>)>, io::Error> {
+    let package = PathBuf::from(go::ForeignPackages::package_name(module));
+    let name = foreign_file.file_name().ok_or_else(|| {
+        invalid_data(format!("foreign file has no name: {}", foreign_file.display()))
+    })?;
+    let mut files = vec![(package.join(name), go::foreign_source(module, text).into_bytes())];
+    let directory = foreign_file.parent().unwrap_or(Path::new(""));
+    let embedded =
+        go::embedded_files(foreign_file, text).map_err(|error| invalid_data(error.to_string()))?;
+    for relative in embedded {
+        files.push((package.join(&relative), std::fs::read(directory.join(&relative))?));
+    }
+    Ok(files)
+}
+
+/// Whether the Go fixtures build their Go: `require` fails a run that cannot, `skip` never builds,
+/// and by default a run without Go warns and only compares snapshots.
+const GO_BUILD_VARIABLE: &str = "IRIS_GO_FIXTURE_BUILD";
+
+/// The iris-go checkout the fixtures build against, by default `iris-go` beside this repository.
+const GO_RUNTIME_VARIABLE: &str = "IRIS_GO";
+
+/// How many fixtures build their Go at once, across nextest's test processes.
+const GO_JOBS_VARIABLE: &str = "IRIS_GO_FIXTURE_JOBS";
+
+const GO_RUNTIME_MODULE: &str = "github.com/i-am-the-slime/iris-go";
+const GO_RUNTIME_VERSION: &str = "v0.1.1";
+
+/// Writes the program and its foreign files into a Go module that requires the runtime checkout
+/// and vets it with `GOEXPERIMENT=simd`, as `iris run --go` builds, and again without the
+/// experiment when the program has SIMD kernels, so that their scalar fallback builds too.
+fn build_go_fixture(files: &[(String, String)], vendored: &[(PathBuf, Vec<u8>)]) -> FixtureResult {
+    let requirement = env::var(GO_BUILD_VARIABLE).unwrap_or_default();
+    if requirement == "skip" {
+        return Ok(());
+    }
+    let runtime = match go_build_prerequisites() {
+        Ok(runtime) => runtime,
+        Err(reason) if requirement == "require" => {
+            return Err(FixtureFailure(format!("{GO_BUILD_VARIABLE}=require, but {reason}")).into());
+        }
+        Err(reason) => {
+            eprintln!(
+                "warning: skipped building the fixture's Go: {reason} \
+                 (set {GO_BUILD_VARIABLE}=require to fail instead)"
+            );
+            return Ok(());
+        }
+    };
+
+    let module = tempfile::Builder::new().prefix("iris-go-fixture-").tempdir()?;
+    write_go_module(module.path(), &runtime, files, vendored)?;
+    let has_kernels = files.iter().any(|(path, _)| {
+        ["_neon.go", "_vector.go", "_scalar.go"].iter().any(|suffix| path.ends_with(suffix))
+    });
+    let experiments = if has_kernels { &[Some("simd"), None][..] } else { &[Some("simd")][..] };
+
+    let _slot = go_build_slot()?;
+    for &experiment in experiments {
+        let output = go_vet(module.path(), experiment)?;
+        if !output.status.success() {
+            let kept = module.keep();
+            let shown = experiment.map_or("without GOEXPERIMENT".to_string(), |experiment| {
+                format!("with GOEXPERIMENT={experiment}")
+            });
+            return Err(FixtureFailure(format!(
+                "the generated Go does not build {shown} (module kept at {}):\n{}{}",
+                kept.display(),
+                String::from_utf8_lossy(&output.stdout),
+                String::from_utf8_lossy(&output.stderr),
+            ))
+            .into());
+        }
+    }
+    Ok(())
+}
+
+/// The runtime checkout, once `go` is known to run.
+fn go_build_prerequisites() -> Result<PathBuf, String> {
+    match Command::new("go").arg("version").output() {
+        Ok(output) if output.status.success() => {}
+        Ok(_) => return Err("`go version` failed".to_string()),
+        Err(error) => return Err(format!("`go` could not run: {error}")),
+    }
+    let runtime = env::var_os(GO_RUNTIME_VARIABLE)
+        .filter(|path| !path.is_empty())
+        .map(PathBuf::from)
+        .unwrap_or_else(|| Path::new(env!("CARGO_MANIFEST_DIR")).join("../../iris-go"));
+    let runtime = runtime.canonicalize().map_err(|error| {
+        format!(
+            "the iris-go checkout {} is missing ({error}); set {GO_RUNTIME_VARIABLE}",
+            runtime.display()
+        )
+    })?;
+    if !runtime.join("go.mod").is_file() {
+        return Err(format!("{} is not an iris-go checkout: it has no go.mod", runtime.display()));
+    }
+    Ok(runtime)
+}
+
+fn write_go_module(
+    module: &Path,
+    runtime: &Path,
+    files: &[(String, String)],
+    vendored: &[(PathBuf, Vec<u8>)],
+) -> io::Result<()> {
+    let go_mod = format!(
+        "module fixture\n\ngo 1.27.0\n\nrequire {GO_RUNTIME_MODULE} {GO_RUNTIME_VERSION}\n\n\
+         replace {GO_RUNTIME_MODULE} => {}\n",
+        runtime.display()
+    );
+    let generated = files.iter().map(|(path, source)| (PathBuf::from(path), source.as_bytes()));
+    let vendored = vendored.iter().map(|(path, contents)| (path.clone(), contents.as_slice()));
+    let go_mod = std::iter::once((PathBuf::from("go.mod"), go_mod.as_bytes()));
+    for (path, contents) in go_mod.chain(generated).chain(vendored) {
+        let path = module.join(path);
+        if let Some(parent) = path.parent() {
+            std::fs::create_dir_all(parent)?;
+        }
+        std::fs::write(path, contents)?;
+    }
+    Ok(())
+}
+
+/// `go vet` type-checks every package as `go build` would, without linking.
+fn go_vet(module: &Path, experiment: Option<&str>) -> io::Result<std::process::Output> {
+    let mut command = Command::new("go");
+    command
+        .args(["vet", "./..."])
+        .current_dir(module)
+        .env("GOFLAGS", "-mod=mod -buildvcs=false")
+        .stdin(Stdio::null());
+    match experiment {
+        Some(experiment) => command.env("GOEXPERIMENT", experiment),
+        None => command.env_remove("GOEXPERIMENT"),
+    };
+    command.output()
+}
+
+/// One of a few lock files shared by every test process, held while a fixture builds, so that the
+/// builds do not all compete for the machine at once.
+fn go_build_slot() -> io::Result<std::fs::File> {
+    let jobs = env::var(GO_JOBS_VARIABLE)
+        .ok()
+        .and_then(|jobs| jobs.parse::<usize>().ok())
+        .filter(|&jobs| jobs > 0)
+        .unwrap_or(4);
+    let directory = env::temp_dir().join("iris-go-fixture-build-slots");
+    std::fs::create_dir_all(&directory)?;
+    loop {
+        for slot in 0..jobs {
+            let file = std::fs::File::create(directory.join(slot.to_string()))?;
+            match file.try_lock() {
+                Ok(()) => return Ok(file),
+                Err(std::fs::TryLockError::WouldBlock) => {}
+                Err(std::fs::TryLockError::Error(error)) => return Err(error),
+            }
+        }
+        std::thread::sleep(Duration::from_millis(20));
+    }
 }
 
 pub fn lsp(path: &Path) -> FixtureResult {

@@ -979,6 +979,13 @@ where
             // A `Unit -> Unit` entry (the prelude tests' `AlmostEff`) runs, as JavaScript's
             // `main()` does, instead of printing a function's address.
             vec![GoStatement::Expression(call(identifier_expression(&name), vec![unit_value()]))]
+        } else if !function.parameters.is_empty() {
+            // Nothing runs a function that takes arguments, and printing it would print only
+            // its address, so it is only kept.
+            vec![GoStatement::Assign {
+                targets: vec![identifier_expression("_")],
+                values: vec![identifier_expression(&name)],
+            }]
         } else {
             self.imports.insert("fmt".into());
             let value = identifier_expression(&name);
