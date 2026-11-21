@@ -44,6 +44,8 @@ pub struct GoProgram {
     /// order of path.
     pub files: Vec<(String, String)>,
     pub functions: usize,
+    /// Where the program behaves differently from the JavaScript backend's, and why.
+    pub notes: Vec<String>,
 }
 
 pub fn compile_program(
@@ -93,7 +95,7 @@ pub fn compile_program(
         monotypes.dump();
     }
     let functions = program.functions.len();
-    let files = timed("emit", || {
+    let (files, notes) = timed("emit", || {
         emit::emit_program(
             program,
             &mut monotypes,
@@ -118,7 +120,7 @@ pub fn compile_program(
         })
         .collect();
     files.sort();
-    Ok(GoProgram { files, functions })
+    Ok(GoProgram { files, functions, notes })
 }
 
 /// The module name a source file declares.

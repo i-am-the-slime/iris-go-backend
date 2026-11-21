@@ -1,0 +1,36 @@
+---
+source: tests-integration/src/fixtures.rs
+---
+// main.go
+package main
+
+import (
+	"github.com/i-am-the-slime/iris-go/console"
+	"github.com/i-am-the-slime/iris-go/exception"
+	"strconv"
+	"strings"
+)
+
+var main_ = initializeMain_()
+
+func initializeMain_() [][]bool {
+	defer exception.ReportUncaught()
+	array := []int32{1, 2, 3}
+	mapped := make([][]bool, len(array))
+	for index, n := range array {
+		mapped[index] = []bool{n > 1, n > 2}
+	}
+	return mapped
+}
+
+func main() {
+	texts := make([]string, 0, len(main_))
+	for _, element := range main_ {
+		texts2 := make([]string, 0, len(element))
+		for _, element2 := range element {
+			texts2 = append(texts2, strconv.FormatBool(element2))
+		}
+		texts = append(texts, "["+strings.Join(texts2, " ")+"]")
+	}
+	console.Print("[" + strings.Join(texts, " ") + "]")
+}

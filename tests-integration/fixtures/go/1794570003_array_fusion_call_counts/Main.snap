@@ -6,7 +6,6 @@ package main
 
 import (
 	shared2 "fixture/shared"
-	"fmt"
 	"github.com/i-am-the-slime/iris-go/exception"
 )
 
@@ -83,7 +82,7 @@ func initializeMain_() shared2.MainResult {
 var numbers []int32 = []int32{3, 1, 4, 1, 5, 9, 2, 6}
 
 func main() {
-	fmt.Println(main_)
+	_ = main_
 }
 
 // main_neon.go
@@ -193,3 +192,5 @@ type StateValue struct {
 	State int32
 	Value int32
 }
+
+// note: the entry's value of type { earlyExit, earlyExitMappingCalls, fused, fusedMappingCalls, keptLength, predicateCalls, shared, sharedMappingCalls } is not printed; use an Effect entry or a value of a printable type (Int, Number, Boolean, Char, String or an Array of them)

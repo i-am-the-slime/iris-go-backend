@@ -23,9 +23,11 @@ package main
 
 import (
 	list "fixture/Data/List/Types"
-	"fmt"
 	"github.com/i-am-the-slime/iris-go/alloc"
+	"github.com/i-am-the-slime/iris-go/console"
 	"github.com/i-am-the-slime/iris-go/exception"
+	"github.com/i-am-the-slime/iris-go/prim"
+	"strings"
 )
 
 var main_ = initializeMain_()
@@ -60,5 +62,9 @@ func defaultedGo(b func(int32) int32, value *list.ListUnit) func(int32) int32 {
 }
 
 func main() {
-	fmt.Println(main_)
+	texts := make([]string, 0, len(main_))
+	for _, element := range main_ {
+		texts = append(texts, prim.ShowInt(element))
+	}
+	console.Print("[" + strings.Join(texts, " ") + "]")
 }

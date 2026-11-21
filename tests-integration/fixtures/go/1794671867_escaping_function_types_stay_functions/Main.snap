@@ -14,7 +14,6 @@ package main
 import (
 	"fixture/Control/Category"
 	"fixture/shared"
-	"fmt"
 	"github.com/i-am-the-slime/iris-go/exception"
 	"github.com/i-am-the-slime/iris-go/lazy"
 )
@@ -66,7 +65,7 @@ func thunks(n int32, t func(struct{}) int32) func(struct{}) int32 {
 }
 
 func main() {
-	fmt.Println(main_)
+	_ = main_
 }
 
 // shared/shared.go
@@ -76,3 +75,5 @@ type MainResult struct {
 	Memoised int32
 	Summed   int32
 }
+
+// note: the entry's value of type { memoised, summed } is not printed; use an Effect entry or a value of a printable type (Int, Number, Boolean, Char, String or an Array of them)

@@ -94,10 +94,11 @@ import (
 	"fixture/Data/Ord"
 	"fixture/Data/Ordering"
 	"fixture/shared"
-	"fmt"
 	"github.com/i-am-the-slime/iris-go/array"
+	"github.com/i-am-the-slime/iris-go/console"
 	"github.com/i-am-the-slime/iris-go/direct"
 	"github.com/i-am-the-slime/iris-go/exception"
+	"strings"
 )
 
 var main_ = initializeMain_()
@@ -208,7 +209,7 @@ func relateArrayInt(ordDictionary ordering.Ord, depth int32, left any, right any
 }
 
 func main() {
-	fmt.Println(main_)
+	console.Print("[" + strings.Join(main_, " ") + "]")
 }
 
 // shared/shared.go

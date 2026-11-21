@@ -5,7 +5,6 @@ source: tests-integration/src/fixtures.rs
 package main
 
 import (
-	"fmt"
 	"github.com/i-am-the-slime/iris-go/alloc"
 	"github.com/i-am-the-slime/iris-go/exception"
 )
@@ -114,5 +113,7 @@ func largestReplacesItsCellGoReusing(best *ListInt, list *ListInt) *ListInt {
 }
 
 func main() {
-	fmt.Println(main_)
+	_ = main_
 }
+
+// note: the entry's value of type { largest, numbers, ownedLargest, total } is not printed; use an Effect entry or a value of a printable type (Int, Number, Boolean, Char, String or an Array of them)

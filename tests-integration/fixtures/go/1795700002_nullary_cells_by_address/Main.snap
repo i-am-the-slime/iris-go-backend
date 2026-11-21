@@ -6,7 +6,6 @@ package main
 
 import (
 	"fixture/shared"
-	"fmt"
 	"github.com/i-am-the-slime/iris-go/exception"
 )
 
@@ -50,7 +49,7 @@ func endsAway(value *Route) bool {
 }
 
 func main() {
-	fmt.Println(main_)
+	_ = main_
 }
 
 // shared/shared.go
@@ -62,3 +61,5 @@ type MainResult struct {
 	Away  bool
 	Goes  bool
 }
+
+// note: the entry's value of type { away, first, goes, legs } is not printed; use an Effect entry or a value of a printable type (Int, Number, Boolean, Char, String or an Array of them)

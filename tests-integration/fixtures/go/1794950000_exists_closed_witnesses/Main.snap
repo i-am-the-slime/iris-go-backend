@@ -34,9 +34,10 @@ package main
 import (
 	"fixture/Control/Category"
 	"fixture/Data/Show"
-	"fmt"
+	"github.com/i-am-the-slime/iris-go/console"
 	"github.com/i-am-the-slime/iris-go/exception"
 	"github.com/i-am-the-slime/iris-go/prim"
+	"strings"
 )
 
 type DescribedInt struct {
@@ -114,7 +115,7 @@ var things []ExistsDescribed = []ExistsDescribed{{Tag: ExistsDescribedInt, Int: 
 }}}}
 
 func main() {
-	fmt.Println(main_)
+	console.Print("[" + strings.Join(main_, " ") + "]")
 }
 
 // main_neon.go

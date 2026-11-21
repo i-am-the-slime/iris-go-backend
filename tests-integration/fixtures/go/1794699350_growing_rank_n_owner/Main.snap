@@ -71,9 +71,11 @@ import (
 	"fixture/Control/Category"
 	"fixture/Data/Tuple"
 	"fixture/shared"
-	"fmt"
 	arraypkg "github.com/i-am-the-slime/iris-go/array"
+	"github.com/i-am-the-slime/iris-go/console"
 	"github.com/i-am-the-slime/iris-go/exception"
+	"github.com/i-am-the-slime/iris-go/prim"
+	"strings"
 )
 
 var main_ = initializeMain_()
@@ -119,7 +121,11 @@ func sampleWithIntInt(sample func([]func(int32) any) []any) func([]func(int32) a
 }
 
 func main() {
-	fmt.Println(main_)
+	texts := make([]string, 0, len(main_))
+	for _, element := range main_ {
+		texts = append(texts, prim.ShowInt(element))
+	}
+	console.Print("[" + strings.Join(texts, " ") + "]")
 }
 
 // shared/shared.go

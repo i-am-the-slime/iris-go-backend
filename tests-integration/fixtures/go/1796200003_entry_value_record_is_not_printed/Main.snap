@@ -1,0 +1,23 @@
+---
+source: tests-integration/src/fixtures.rs
+---
+// main.go
+package main
+
+import "fixture/shared"
+
+var main_ shared.LabelTotal = shared.LabelTotal{Total: 3, Label: "sum"}
+
+func main() {
+	_ = main_
+}
+
+// shared/shared.go
+package shared
+
+type LabelTotal struct {
+	Label string
+	Total int32
+}
+
+// note: the entry's value of type { label, total } is not printed; use an Effect entry or a value of a printable type (Int, Number, Boolean, Char, String or an Array of them)

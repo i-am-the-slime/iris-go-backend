@@ -5,9 +5,10 @@ source: tests-integration/src/fixtures.rs
 package main
 
 import (
-	"fmt"
 	"github.com/i-am-the-slime/iris-go/alloc"
+	"github.com/i-am-the-slime/iris-go/console"
 	"github.com/i-am-the-slime/iris-go/exception"
+	"github.com/i-am-the-slime/iris-go/prim"
 )
 
 type Reader struct {
@@ -63,5 +64,5 @@ func runReader(environment int32, reader *Reader) int32 {
 }
 
 func main() {
-	fmt.Println(main_)
+	console.Print(prim.ShowInt(main_))
 }

@@ -6,7 +6,6 @@ package main
 
 import (
 	"fixture/shared"
-	"fmt"
 	"github.com/i-am-the-slime/iris-go/alloc"
 	"github.com/i-am-the-slime/iris-go/exception"
 	"github.com/i-am-the-slime/iris-go/prim"
@@ -101,7 +100,7 @@ func runIntToInt(function *IntToInt, x int32) int32 {
 }
 
 func main() {
-	fmt.Println(main_)
+	_ = main_
 }
 
 // shared/shared.go
@@ -111,3 +110,5 @@ type MainResult struct {
 	Continued int32
 	Forced    int32
 }
+
+// note: the entry's value of type { continued, forced } is not printed; use an Effect entry or a value of a printable type (Int, Number, Boolean, Char, String or an Array of them)

@@ -6,8 +6,10 @@ package main
 
 import (
 	"fixture/shared"
-	"fmt"
+	"github.com/i-am-the-slime/iris-go/console"
 	"github.com/i-am-the-slime/iris-go/exception"
+	"github.com/i-am-the-slime/iris-go/prim"
+	"strings"
 )
 
 type Nested struct {
@@ -38,7 +40,11 @@ func depthArrayInt(value *Nested) int32 {
 }
 
 func main() {
-	fmt.Println(main_)
+	texts := make([]string, 0, len(main_))
+	for _, element := range main_ {
+		texts = append(texts, prim.ShowInt(element))
+	}
+	console.Print("[" + strings.Join(texts, " ") + "]")
 }
 
 // shared/shared.go

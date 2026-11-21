@@ -14,7 +14,6 @@ package main
 import (
 	"fixture/Data/Maybe"
 	"fixture/shared"
-	"fmt"
 	"github.com/i-am-the-slime/iris-go/exception"
 	"github.com/i-am-the-slime/iris-go/prim"
 	"math"
@@ -102,7 +101,7 @@ func isEven(k int32) bool {
 }
 
 func main() {
-	fmt.Println(main_)
+	_ = main_
 }
 
 // shared/shared.go
@@ -123,3 +122,5 @@ const (
 	IsEvenStep = iota
 	IsOddStep
 )
+
+// note: the entry's value of type { even, halved, steps } is not printed; use an Effect entry or a value of a printable type (Int, Number, Boolean, Char, String or an Array of them)

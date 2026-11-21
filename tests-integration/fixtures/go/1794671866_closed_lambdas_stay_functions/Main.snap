@@ -6,7 +6,6 @@ package main
 
 import (
 	"fixture/shared"
-	"fmt"
 	"github.com/i-am-the-slime/iris-go/exception"
 )
 
@@ -42,7 +41,7 @@ func initializeMain_() shared.MainResult {
 }
 
 func main() {
-	fmt.Println(main_)
+	_ = main_
 }
 
 // shared/shared.go
@@ -57,3 +56,5 @@ type Operation struct {
 	Name string
 	Run  func(int32) int32
 }
+
+// note: the entry's value of type { added, scaled } is not printed; use an Effect entry or a value of a printable type (Int, Number, Boolean, Char, String or an Array of them)

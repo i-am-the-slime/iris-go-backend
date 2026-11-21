@@ -5,8 +5,8 @@ source: tests-integration/src/fixtures.rs
 package main
 
 import (
-	"fmt"
 	"github.com/i-am-the-slime/iris-go/array"
+	"github.com/i-am-the-slime/iris-go/console"
 	"github.com/i-am-the-slime/iris-go/exception"
 	"strings"
 )
@@ -21,5 +21,5 @@ func initializeMain_() string {
 }
 
 func main() {
-	fmt.Println(main_)
+	console.Print(main_)
 }

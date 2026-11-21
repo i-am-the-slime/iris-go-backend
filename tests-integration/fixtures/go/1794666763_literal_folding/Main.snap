@@ -5,11 +5,12 @@ source: tests-integration/src/fixtures.rs
 package main
 
 import (
-	"fmt"
+	"github.com/i-am-the-slime/iris-go/console"
 	"github.com/i-am-the-slime/iris-go/exception"
 	"github.com/i-am-the-slime/iris-go/prim"
 	"math"
 	"strconv"
+	"strings"
 )
 
 var main_ = initializeMain_()
@@ -47,5 +48,5 @@ func opaqueString(sentinel string, x string) string {
 }
 
 func main() {
-	fmt.Println(main_)
+	console.Print("[" + strings.Join(main_, " ") + "]")
 }

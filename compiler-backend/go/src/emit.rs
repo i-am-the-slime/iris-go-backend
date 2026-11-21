@@ -40,6 +40,7 @@ mod names;
 mod ownership;
 mod overwrite;
 mod packages;
+mod printing;
 mod ranges;
 mod references;
 mod recycling;
@@ -96,7 +97,7 @@ pub fn emit_program<Q>(
     foreign_packages: &ForeignPackages,
     modules: &Modules,
     module_path: &str,
-) -> GoResult<Vec<GoSourceFile>>
+) -> GoResult<(Vec<GoSourceFile>, Vec<String>)>
 where
     Q: checking::ExternalQueries,
 {
@@ -283,7 +284,7 @@ where
             eprintln!("any-cause {} {count}", erasure.name());
         }
     }
-    Ok(files)
+    Ok((files, emitter.notes))
 }
 
 impl<Q> Emitter<'_, '_, '_, Q>
@@ -363,6 +364,7 @@ where
             erasing_layouts: FxHashMap::default(),
             materialized: FxHashSet::default(),
             effects: FxHashSet::default(),
+            notes: vec![],
             uninitialized_locals: FxHashSet::default(),
             current: None,
             lazy_constants,
@@ -691,6 +693,8 @@ struct Emitter<'p, 'm, 'q, Q> {
     materialized: FxHashSet<(FunctionId, LocalId)>,
     /// The Go functions the emitted code calls to run an effect.
     effects: headers::Effects,
+    /// What the program does differently from the JavaScript backend's, for the user.
+    notes: Vec<String>,
     /// The locals of the recursive bindings being assigned, which still hold
     /// Go's zero value.
     uninitialized_locals: FxHashSet<LocalId>,
@@ -734,7 +738,6 @@ const IMPORTED_PACKAGES: &[&str] = &[
     "tauri",
     "regex",
     "alloc",
-    "fmt",
     "math",
     "os",
     "sync",
@@ -996,12 +999,19 @@ where
                 targets: vec![identifier_expression("_")],
                 values: vec![identifier_expression(&name)],
             }]
+        } else if let Some(printing) = self.print_entry_value(&name, function.result) {
+            printing
         } else {
-            self.imports.insert("fmt".into());
-            let value = identifier_expression(&name);
-            self.effects.insert(("fmt".into(), "Println".into()));
-            let print = GoExpression::Qualified { package: "fmt".into(), name: "Println".into() };
-            vec![GoStatement::Expression(call(print, vec![value]))]
+            // A record, a data type or a function has no text to print, so it is only kept.
+            let shown = self.purescript_type(function.result)?;
+            self.notes.push(format!(
+                "the entry's value of type {shown} is not printed; use an Effect entry or a \
+                 value of a printable type (Int, Number, Boolean, Char, String or an Array of them)"
+            ));
+            vec![GoStatement::Assign {
+                targets: vec![identifier_expression("_")],
+                values: vec![identifier_expression(&name)],
+            }]
         };
         Ok(Some(GoDeclaration::Function {
             name: "main".into(),

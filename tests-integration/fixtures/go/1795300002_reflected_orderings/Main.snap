@@ -28,9 +28,10 @@ package main
 
 import (
 	"fixture/Data/Ordering"
-	"fmt"
+	"github.com/i-am-the-slime/iris-go/console"
 	"github.com/i-am-the-slime/iris-go/exception"
 	"github.com/i-am-the-slime/iris-go/prim"
+	"strings"
 )
 
 var main_ = initializeMain_()
@@ -41,5 +42,5 @@ func initializeMain_() []string {
 }
 
 func main() {
-	fmt.Println(main_)
+	console.Print("[" + strings.Join(main_, " ") + "]")
 }

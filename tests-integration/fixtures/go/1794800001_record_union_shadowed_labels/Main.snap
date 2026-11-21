@@ -6,10 +6,11 @@ package main
 
 import (
 	"fixture/shared"
-	"fmt"
+	"github.com/i-am-the-slime/iris-go/console"
 	"github.com/i-am-the-slime/iris-go/exception"
 	"github.com/i-am-the-slime/iris-go/prim"
 	"strconv"
+	"strings"
 )
 
 var main_ = initializeMain_()
@@ -31,7 +32,7 @@ var flipped shared.Defaults = shared.Defaults{A: defaults.A, Z: defaults.Z}
 var defaults shared.Defaults = shared.Defaults{A: "shadowed", Z: 'z'}
 
 func main() {
-	fmt.Println(main_)
+	console.Print("[" + strings.Join(main_, " ") + "]")
 }
 
 // shared/shared.go

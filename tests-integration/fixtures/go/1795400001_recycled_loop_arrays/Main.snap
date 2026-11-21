@@ -38,10 +38,11 @@ package main
 import (
 	"fixture/Data/Show"
 	"fixture/shared"
-	"fmt"
 	"github.com/i-am-the-slime/iris-go/array"
+	"github.com/i-am-the-slime/iris-go/console"
 	"github.com/i-am-the-slime/iris-go/exception"
 	"github.com/i-am-the-slime/iris-go/prim"
+	"strings"
 )
 
 var main_ = initializeMain_()
@@ -136,7 +137,7 @@ func shrinkGo(values []int32) []int32 {
 }
 
 func main() {
-	fmt.Println(main_)
+	console.Print("[" + strings.Join(main_, " ") + "]")
 }
 
 // main_neon.go

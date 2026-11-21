@@ -26,9 +26,10 @@ package main
 import (
 	"fixture/Data/Either"
 	"fixture/Data/Void"
-	"fmt"
 	arraypkg "github.com/i-am-the-slime/iris-go/array"
+	"github.com/i-am-the-slime/iris-go/console"
 	"github.com/i-am-the-slime/iris-go/exception"
+	"strings"
 )
 
 var main_ = initializeMain_()
@@ -58,5 +59,5 @@ func describeSpin(void void.Void) string {
 }
 
 func main() {
-	fmt.Println(main_)
+	console.Print("[" + strings.Join(main_, " ") + "]")
 }

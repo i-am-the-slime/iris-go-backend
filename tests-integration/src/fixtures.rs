@@ -561,6 +561,7 @@ pub fn go(path: &Path) -> FixtureResult {
             .files
             .iter()
             .map(|(path, source)| format!("// {path}\n{source}"))
+            .chain(program.notes.iter().map(|note| format!("// note: {note}\n")))
             .collect::<Vec<_>>()
             .join("\n"),
         Err(go::GoError::Blocked(blockers)) => blockers.to_string(),

@@ -4,15 +4,12 @@ source: tests-integration/src/fixtures.rs
 // main.go
 package main
 
-import (
-	"fixture/shared"
-	"fmt"
-)
+import "fixture/shared"
 
 var main_ shared.MainResult = shared.MainResult{Size: 2, Tags: []string{"new"}, Name: "box"}
 
 func main() {
-	fmt.Println(main_)
+	_ = main_
 }
 
 // shared/shared.go
@@ -23,3 +20,5 @@ type MainResult struct {
 	Tags []string
 	Size int32
 }
+
+// note: the entry's value of type { name, size, tags } is not printed; use an Effect entry or a value of a printable type (Int, Number, Boolean, Char, String or an Array of them)

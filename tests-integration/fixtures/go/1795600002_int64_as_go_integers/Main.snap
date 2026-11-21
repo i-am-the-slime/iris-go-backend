@@ -56,12 +56,13 @@ import (
 	"fixture/Data/Int64"
 	"fixture/Data/Maybe"
 	"fixture/Data/UInt64"
-	"fmt"
+	"github.com/i-am-the-slime/iris-go/console"
 	"github.com/i-am-the-slime/iris-go/exception"
 	"github.com/i-am-the-slime/iris-go/ffi/Data_Int64_Internal_ffi"
 	nullablepkg "github.com/i-am-the-slime/iris-go/nullable"
 	"github.com/i-am-the-slime/iris-go/prim"
 	"strconv"
+	"strings"
 )
 
 var main_ = initializeMain_()
@@ -133,7 +134,7 @@ func initializeMain_() []string {
 var wrapsAtCompileTime int64 = int64(-9223372036854775808)
 
 func main() {
-	fmt.Println(main_)
+	console.Print("[" + strings.Join(main_, " ") + "]")
 }
 
 // main_neon.go

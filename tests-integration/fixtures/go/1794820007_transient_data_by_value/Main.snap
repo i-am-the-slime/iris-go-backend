@@ -6,7 +6,6 @@ package main
 
 import (
 	"fixture/shared"
-	"fmt"
 	"github.com/i-am-the-slime/iris-go/exception"
 	"github.com/i-am-the-slime/iris-go/prim"
 	"strconv"
@@ -101,7 +100,7 @@ func firsts(list *ListEntry) string {
 var entries *ListEntry = &ListEntry{Cons0: &Entry{Entry0: "k", Entry1: "l", Entry2: "m", Entry3: "n", Entry4: "o", Entry5: "p", Entry6: "q", Entry7: "r", Entry8: "s", Entry9: "t"}, Cons1: &ListEntry{Cons0: sharedEntryBlank, Cons1: sharedListEntryNil}}
 
 func main() {
-	fmt.Println(main_)
+	_ = main_
 }
 
 // shared/shared.go
@@ -112,3 +111,5 @@ type MainResult struct {
 	Found   string
 	Missing string
 }
+
+// note: the entry's value of type { entries, found, missing } is not printed; use an Effect entry or a value of a printable type (Int, Number, Boolean, Char, String or an Array of them)

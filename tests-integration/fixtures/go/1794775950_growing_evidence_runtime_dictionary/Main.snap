@@ -23,9 +23,10 @@ package main
 import (
 	"fixture/Data/Show"
 	"fixture/shared"
-	"fmt"
+	"github.com/i-am-the-slime/iris-go/console"
 	"github.com/i-am-the-slime/iris-go/exception"
 	"github.com/i-am-the-slime/iris-go/prim"
+	"strings"
 )
 
 type Nested struct {
@@ -60,7 +61,7 @@ func showNestedArrayInt(showDictionary shared.Show, nested *Nested) string {
 }
 
 func main() {
-	fmt.Println(main_)
+	console.Print("[" + strings.Join(main_, " ") + "]")
 }
 
 // shared/shared.go

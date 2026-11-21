@@ -6,7 +6,6 @@ package main
 
 import (
 	"fixture/shared"
-	"fmt"
 	"github.com/i-am-the-slime/iris-go/array"
 	"github.com/i-am-the-slime/iris-go/exception"
 	"strconv"
@@ -60,7 +59,7 @@ func initializeDescending() []int32 {
 }
 
 func main() {
-	fmt.Println(main_)
+	_ = main_
 }
 
 // shared/shared.go
@@ -83,3 +82,5 @@ type StateValue struct {
 	State []int32
 	Value []int32
 }
+
+// note: the entry's value of type { counted, descending, indexed, listed, summed, visited } is not printed; use an Effect entry or a value of a printable type (Int, Number, Boolean, Char, String or an Array of them)

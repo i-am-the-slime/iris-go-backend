@@ -21,6 +21,9 @@ nothing else to set up.
 
 - **Entry point**: `main` in `Main`, or in the module your `spago.yaml` names under `run.main`.
   Pick another with `--main Some.Module` or `--entry Some.Module.value`.
+- **An entry that isn't an `Effect`**: an `Int`, `Number`, `Boolean`, `Char` or `String`, or an
+  array of them, gets printed, arrays as `[1 2 3]`. Anything else (a record, a `Maybe`, a
+  function) is computed but not printed, and `iris go` says so.
 - **Arguments**: whatever follows `--`, or your `run.execArgs` when nothing does.
 - **Packages**: `-p my-app` in a workspace with several.
 - **Fast reruns**: the first run downloads the Go runtime. After that, if your program compiles to

@@ -6,7 +6,6 @@ package main
 
 import (
 	"fixture/shared"
-	"fmt"
 	"github.com/i-am-the-slime/iris-go/array"
 	"github.com/i-am-the-slime/iris-go/exception"
 	"github.com/i-am-the-slime/iris-go/prim"
@@ -71,7 +70,7 @@ func initializeMain_() shared.MainResult {
 var numbers []int32 = []int32{3, 1, 4, 1, 5, 9, 2, 6}
 
 func main() {
-	fmt.Println(main_)
+	_ = main_
 }
 
 // shared/shared.go
@@ -85,3 +84,5 @@ type MainResult struct {
 	Below         int32
 	OverRange     int32
 }
+
+// note: the entry's value of type { below, comprehension, indexed, materialised, overRange, pairs } is not printed; use an Effect entry or a value of a printable type (Int, Number, Boolean, Char, String or an Array of them)

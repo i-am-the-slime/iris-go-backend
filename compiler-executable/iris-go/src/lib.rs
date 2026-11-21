@@ -79,6 +79,9 @@ pub fn run(config: GoConfig) -> Result<(), String> {
         }
         Err(error) => return Err(error.to_string()),
     };
+    for note in &program.notes {
+        eprintln!("go: note: {note}");
+    }
     let files = program.files.len();
     for (path, source) in program.files {
         let path = config.destination.join(path);

@@ -47,10 +47,11 @@ package main
 
 import (
 	"fixture/Data/Maybe"
-	"fmt"
+	"github.com/i-am-the-slime/iris-go/console"
 	"github.com/i-am-the-slime/iris-go/exception"
 	"github.com/i-am-the-slime/iris-go/prim"
 	"strconv"
+	"strings"
 )
 
 type Tree struct {
@@ -393,5 +394,5 @@ func sumTree(tree *Tree) int32 {
 }
 
 func main() {
-	fmt.Println(main_)
+	console.Print("[" + strings.Join(main_, " ") + "]")
 }

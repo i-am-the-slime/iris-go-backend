@@ -98,11 +98,12 @@ import (
 	"fixture/Data/Variant"
 	"fixture/Labels"
 	"fixture/shared"
-	"fmt"
 	"github.com/i-am-the-slime/iris-go/array"
+	"github.com/i-am-the-slime/iris-go/console"
 	"github.com/i-am-the-slime/iris-go/exception"
 	"github.com/i-am-the-slime/iris-go/prim"
 	"strconv"
+	"strings"
 )
 
 var main_ = initializeMain_()
@@ -121,7 +122,7 @@ func initializeMain_() []string {
 }
 
 func main() {
-	fmt.Println(main_)
+	console.Print("[" + strings.Join(main_, " ") + "]")
 }
 
 // shared/shared.go

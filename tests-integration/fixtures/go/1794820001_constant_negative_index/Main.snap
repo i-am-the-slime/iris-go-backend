@@ -13,7 +13,6 @@ package main
 
 import (
 	"fixture/Data/Maybe"
-	"fmt"
 	"github.com/i-am-the-slime/iris-go/exception"
 )
 
@@ -33,5 +32,7 @@ func initializeMain_() []maybe.Int {
 var numbers []int32 = []int32{1, 2, 3}
 
 func main() {
-	fmt.Println(main_)
+	_ = main_
 }
+
+// note: the entry's value of type Array Data.Maybe.Maybe is not printed; use an Effect entry or a value of a printable type (Int, Number, Boolean, Char, String or an Array of them)

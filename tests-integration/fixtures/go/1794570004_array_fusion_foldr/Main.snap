@@ -19,7 +19,6 @@ package main
 
 import (
 	"fixture/Data/Maybe"
-	"fmt"
 	"github.com/i-am-the-slime/iris-go/exception"
 	"strconv"
 )
@@ -60,5 +59,7 @@ func initializeMain_() maybe.MainResult {
 var numbers []int32 = []int32{3, 1, 4, 1, 5, 9, 2, 6}
 
 func main() {
-	fmt.Println(main_)
+	_ = main_
 }
+
+// note: the entry's value of type { lastSmall, overFilter, overMap } is not printed; use an Effect entry or a value of a printable type (Int, Number, Boolean, Char, String or an Array of them)

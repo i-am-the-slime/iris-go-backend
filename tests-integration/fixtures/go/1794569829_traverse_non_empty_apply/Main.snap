@@ -24,7 +24,6 @@ package main
 
 import (
 	"fixture/Data/Maybe"
-	"fmt"
 	arraypkg "github.com/i-am-the-slime/iris-go/array"
 	"github.com/i-am-the-slime/iris-go/direct"
 	"github.com/i-am-the-slime/iris-go/exception"
@@ -61,5 +60,7 @@ func initializeMain_() maybe.ArrayInt {
 }
 
 func main() {
-	fmt.Println(main_)
+	_ = main_
 }
+
+// note: the entry's value of type Data.Maybe.Maybe is not printed; use an Effect entry or a value of a printable type (Int, Number, Boolean, Char, String or an Array of them)

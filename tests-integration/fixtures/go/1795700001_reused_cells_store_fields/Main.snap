@@ -6,7 +6,6 @@ package main
 
 import (
 	"fixture/shared"
-	"fmt"
 	"github.com/i-am-the-slime/iris-go/exception"
 )
 
@@ -145,7 +144,7 @@ func recolourStoresTheTagReusing(value *Chain) *Chain {
 }
 
 func main() {
-	fmt.Println(main_)
+	_ = main_
 }
 
 // shared/shared.go
@@ -156,3 +155,5 @@ type MainResult struct {
 	Size    int32
 	Swapped int32
 }
+
+// note: the entry's value of type { blues, size, swapped } is not printed; use an Effect entry or a value of a printable type (Int, Number, Boolean, Char, String or an Array of them)

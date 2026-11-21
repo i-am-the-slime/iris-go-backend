@@ -22,9 +22,10 @@ package main
 import (
 	"fixture/Data/Tuple"
 	"fixture/shared"
-	"fmt"
 	arraypkg "github.com/i-am-the-slime/iris-go/array"
+	"github.com/i-am-the-slime/iris-go/console"
 	"github.com/i-am-the-slime/iris-go/exception"
+	"github.com/i-am-the-slime/iris-go/prim"
 	"slices"
 )
 
@@ -79,7 +80,7 @@ func toNumber(i int32) float64 {
 }
 
 func main() {
-	fmt.Println(main_)
+	console.Print(prim.NumberToString(main_))
 }
 
 // shared/shared.go

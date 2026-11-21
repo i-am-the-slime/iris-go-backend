@@ -43,10 +43,11 @@ package main
 import (
 	"fixture/Data/Ord"
 	"fixture/Data/Show"
-	"fmt"
+	"github.com/i-am-the-slime/iris-go/console"
 	"github.com/i-am-the-slime/iris-go/exception"
 	"github.com/i-am-the-slime/iris-go/prim"
 	"strconv"
+	"strings"
 )
 
 var main_ = initializeMain_()
@@ -79,7 +80,7 @@ func initializeLiteral() int32 {
 }
 
 func main() {
-	fmt.Println(main_)
+	console.Print("[" + strings.Join(main_, " ") + "]")
 }
 
 // main_neon.go
