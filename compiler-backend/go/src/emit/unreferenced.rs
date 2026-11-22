@@ -9,8 +9,8 @@
 use rustc_hash::FxHashSet;
 
 use super::discarded;
+use crate::go_traversal::{self, Walk, each_block_in_declaration};
 use crate::syntax::{GoDeclaration, GoExpression, GoStatement};
-use crate::walk::{self, Walk, each_block_in_declaration};
 
 pub(super) fn drop_unreferenced_definitions(declarations: &mut [GoDeclaration]) {
     for declaration in declarations {
@@ -106,19 +106,19 @@ fn read_names(declaration: &mut GoDeclaration) -> FxHashSet<String> {
                 values.iter_mut().for_each(|value| self.expression(value));
                 return;
             }
-            walk::statement(self, statement);
+            go_traversal::statement(self, statement);
         }
 
         fn expression(&mut self, expression: &mut GoExpression) {
             if let GoExpression::Identifier(name) = expression {
                 self.0.insert(name.clone());
             }
-            walk::expression(self, expression);
+            go_traversal::expression(self, expression);
         }
     }
 
     let mut reads = Reads(FxHashSet::default());
-    walk::declaration(&mut reads, declaration);
+    go_traversal::declaration(&mut reads, declaration);
     reads.0
 }
 

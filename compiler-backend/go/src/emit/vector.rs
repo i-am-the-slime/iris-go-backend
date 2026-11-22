@@ -42,7 +42,7 @@ use super::iteration::Found;
 use super::{Emitter, GoSourceFile, call, identifier_expression, unique};
 use crate::error::GoResult;
 use crate::foreign::{Boundary, Comparison, Foreign, Iteration, Operator};
-use crate::mono::{Expression, ExpressionKind, FunctionId, Literal, Local, LocalId};
+use crate::monomorphic::{Expression, ExpressionKind, FunctionId, Literal, Local, LocalId};
 use crate::monotype::{Monotype, MonotypeId};
 use crate::naming::GO_PREDECLARED;
 use crate::primitives::{Int64Operation, Signedness};
@@ -252,7 +252,7 @@ pub(super) fn attach_kernels(files: &mut Vec<GoSourceFile>, kernels: &Kernels) {
                 constraint: Some(NEON_CONSTRAINT),
                 package: package.clone(),
                 imports: imports("simd/archsimd"),
-                declarations: called.iter().map(|s| written(&s.neon, s)).collect(),
+                declarations: called.iter().map(|source| written(&source.neon, source)).collect(),
             },
         });
         added.push(GoSourceFile {
@@ -261,7 +261,10 @@ pub(super) fn attach_kernels(files: &mut Vec<GoSourceFile>, kernels: &Kernels) {
                 constraint: Some(PORTABLE_CONSTRAINT),
                 package: package.clone(),
                 imports: imports("simd"),
-                declarations: called.iter().map(|s| written(&s.portable, s)).collect(),
+                declarations: called
+                    .iter()
+                    .map(|source| written(&source.portable, source))
+                    .collect(),
             },
         });
         added.push(GoSourceFile {
@@ -270,7 +273,7 @@ pub(super) fn attach_kernels(files: &mut Vec<GoSourceFile>, kernels: &Kernels) {
                 constraint: Some(SCALAR_CONSTRAINT),
                 package,
                 imports: vec![],
-                declarations: called.iter().map(|s| written(&s.scalar, s)).collect(),
+                declarations: called.iter().map(|source| written(&source.scalar, source)).collect(),
             },
         });
     }
@@ -568,7 +571,7 @@ where
     }
 
     fn parameters_of(&self, function: FunctionId) -> (&'e [Local], &'e Expression) {
-        let program: &'p crate::mono::Program = self.program;
+        let program: &'p crate::monomorphic::Program = self.program;
         let function = program.function(function);
         (&function.parameters, &function.body)
     }
@@ -756,7 +759,7 @@ impl<'a, 'e, E: Lookup<'e>> Analysis<'a, 'e, E> {
                 // a Number could differ in the sign of a zero.
                 let exact = |term: &Term| {
                     self.element.is_integer()
-                        || matches!(term, Term::Constant(text) if text.parse::<f64>().is_ok_and(|n| n != 0.0))
+                        || matches!(term, Term::Constant(text) if text.parse::<f64>().is_ok_and(|number| number != 0.0))
                 };
                 if let (Condition::Compare(Ordering::Equal, left, right), false) =
                     (&condition, negated)
@@ -1123,11 +1126,11 @@ fn is_free_name(name: &str) -> bool {
     ];
     let numbered = |prefix: &str| {
         name.strip_prefix(prefix).is_some_and(|rest| {
-            !rest.is_empty() && rest.bytes().all(|b| b.is_ascii_digit() || b == b'_')
+            !rest.is_empty() && rest.bytes().all(|byte| byte.is_ascii_digit() || byte == b'_')
         })
     };
-    name.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'_')
-        && name.bytes().next().is_some_and(|b| b.is_ascii_alphabetic())
+    name.bytes().all(|byte| byte.is_ascii_alphanumeric() || byte == b'_')
+        && name.bytes().next().is_some_and(|byte| byte.is_ascii_alphabetic())
         && !GO_PREDECLARED.contains(&name)
         && !KERNEL_NAMES.contains(&name)
         && !name.ends_with("Lanes")

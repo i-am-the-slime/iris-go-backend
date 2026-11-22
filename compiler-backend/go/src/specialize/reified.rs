@@ -9,7 +9,7 @@ use smol_str::SmolStr;
 use super::{Scope, Specializer};
 use crate::dictionary::{Dictionary, Reflected};
 use crate::error::{GoResult, UnsupportedState};
-use crate::mono::{Expression, ExpressionKind};
+use crate::monomorphic::{Expression, ExpressionKind};
 use crate::monotype::{Monotype, MonotypeId};
 use crate::scheme::constrained_scheme;
 use crate::types::Substitution;

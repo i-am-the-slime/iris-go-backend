@@ -11,7 +11,9 @@ use super::{
 use crate::dictionary::Dictionary;
 use crate::error::{GoResult, UnsupportedState};
 use crate::foreign::Foreign;
-use crate::mono::{Alternative, Expression, ExpressionKind, Guarded, Literal, Local, RecordUpdate};
+use crate::monomorphic::{
+    Alternative, Expression, ExpressionKind, Guarded, Literal, Local, RecordUpdate,
+};
 use crate::monotype::{Monotype, MonotypeId};
 use crate::types::Substitution;
 

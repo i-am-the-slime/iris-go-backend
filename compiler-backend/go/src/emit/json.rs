@@ -17,7 +17,7 @@ use super::names::{NamePart, PendingSpelling};
 use super::{Emitter, binary, call, identifier_expression};
 use crate::error::GoResult;
 use crate::foreign::{GoFunction, GoPackage, JsonCodec};
-use crate::mono::Expression;
+use crate::monomorphic::Expression;
 use crate::monotype::{Monotype, MonotypeId};
 use crate::naming::{capitalise, identifier, lower_camel};
 use crate::syntax::{GoCase, GoDeclaration, GoDefault, GoExpression, GoStatement, GoType};

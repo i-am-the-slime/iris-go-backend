@@ -101,7 +101,7 @@ impl SchemeInstantiations {
         self.reads.borrow_mut().push(read);
     }
 
-    pub fn reads_len(&self) -> usize {
+    pub fn read_count(&self) -> usize {
         self.reads.borrow().len()
     }
 

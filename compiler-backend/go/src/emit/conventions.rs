@@ -4,7 +4,7 @@ use super::application::Callable;
 use super::{Direction, Emitter, binary, call, identifier_expression, returning};
 use crate::error::GoResult;
 use crate::foreign::{Boundary, GoFunction, GoPackage, Spelled};
-use crate::mono::Expression;
+use crate::monomorphic::Expression;
 use crate::monotype::{Monotype, MonotypeId};
 use crate::syntax::{GoExpression, GoStatement, GoType};
 

@@ -2,8 +2,8 @@ use rustc_hash::{FxHashMap, FxHashSet};
 
 use crate::foreign::{Foreign, Spelled};
 use crate::graph::{on_cycles, strongly_connected};
-use crate::mono::walk::{for_each_child, reference_graph};
-use crate::mono::{Expression, ExpressionKind, Function, FunctionId, Program};
+use crate::monomorphic::traversal::{for_each_child, reference_graph};
+use crate::monomorphic::{Expression, ExpressionKind, Function, FunctionId, Program};
 use crate::monotype::{Monotype, MonotypeId, Monotypes};
 use crate::purity::{KnownFunctions, does_no_work};
 

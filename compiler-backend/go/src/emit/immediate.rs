@@ -14,14 +14,17 @@
 use rustc_hash::{FxHashMap, FxHashSet};
 
 use super::{is_simple, is_untyped_constant, path_root};
+use crate::go_traversal::{self, Walk};
 use crate::syntax::{GoDeclaration, GoExpression, GoStatement, GoType};
-use crate::walk::{self, Walk};
 
 pub(super) fn reduce_immediate_calls(declarations: &mut [GoDeclaration]) {
     for declaration in declarations {
         let mut changing = Changing::default();
-        walk::declaration(&mut changing, declaration);
-        walk::declaration(&mut Immediate { changing, free_variables_change: false }, declaration);
+        go_traversal::declaration(&mut changing, declaration);
+        go_traversal::declaration(
+            &mut Immediate { changing, free_variables_change: false },
+            declaration,
+        );
     }
 }
 
@@ -35,10 +38,13 @@ pub(super) fn reduce_immediate_calls_in(expression: &mut GoExpression) {
 /// Whether an immediately called literal is left in the expression.
 pub(super) fn calls_a_literal(expression: &GoExpression) -> bool {
     let mut found = false;
-    walk::each_expression_in_statement(&mut GoStatement::Expression(expression.clone()), |value| {
-        found |= matches!(value, GoExpression::Call { function, .. }
+    go_traversal::each_expression_in_statement(
+        &mut GoStatement::Expression(expression.clone()),
+        |value| {
+            found |= matches!(value, GoExpression::Call { function, .. }
             if matches!(function.as_ref(), GoExpression::Function { .. }));
-    });
+        },
+    );
     found
 }
 
@@ -49,7 +55,7 @@ struct Immediate {
 
 impl Walk for Immediate {
     fn expression(&mut self, value: &mut GoExpression) {
-        walk::expression(self, value);
+        go_traversal::expression(self, value);
         while let Some(reduced) = self.reduced(value) {
             *value = reduced;
         }
@@ -104,7 +110,7 @@ impl Immediate {
                 argument => argument.clone(),
             };
             let mut statement = GoStatement::Expression(returned);
-            walk::each_expression_in_statement(&mut statement, |value| {
+            go_traversal::each_expression_in_statement(&mut statement, |value| {
                 if is_named(value, parameter) {
                     *value = argument.clone();
                 }
@@ -127,7 +133,7 @@ fn is_named(value: &GoExpression, name: &str) -> bool {
 fn uses(expression: &GoExpression, parameter: &str) -> usize {
     let mut uses = 0;
     let mut statement = GoStatement::Expression(expression.clone());
-    walk::each_expression_in_statement(&mut statement, |value| {
+    go_traversal::each_expression_in_statement(&mut statement, |value| {
         uses += usize::from(is_named(value, parameter))
     });
     uses
@@ -218,13 +224,13 @@ impl Walk for Changing {
         match value {
             GoExpression::Address(place) => {
                 self.names.extend(written_root(place).cloned());
-                walk::expression(self, value);
+                go_traversal::expression(self, value);
             }
             GoExpression::Function { parameters, .. } => {
                 let names = parameters.iter().map(|(name, _)| name.clone()).collect();
-                self.repeating(names, |changing| walk::expression(changing, value))
+                self.repeating(names, |changing| go_traversal::expression(changing, value))
             }
-            _ => walk::expression(self, value),
+            _ => go_traversal::expression(self, value),
         }
     }
 
@@ -245,17 +251,20 @@ impl Walk for Changing {
             }
             GoStatement::Range { index, element, .. } => {
                 let names = index.iter().chain([&*element]).cloned().collect();
-                return self.repeating(names, |changing| walk::statement(changing, statement));
+                return self
+                    .repeating(names, |changing| go_traversal::statement(changing, statement));
             }
             GoStatement::Counting { variable, .. } | GoStatement::CountingDown { variable, .. } => {
                 self.names.insert(variable.clone());
-                return self.repeating(vec![], |changing| walk::statement(changing, statement));
+                return self
+                    .repeating(vec![], |changing| go_traversal::statement(changing, statement));
             }
             GoStatement::Loop(_) | GoStatement::LabeledLoop { .. } => {
-                return self.repeating(vec![], |changing| walk::statement(changing, statement));
+                return self
+                    .repeating(vec![], |changing| go_traversal::statement(changing, statement));
             }
             _ => {}
         }
-        walk::statement(self, statement)
+        go_traversal::statement(self, statement)
     }
 }

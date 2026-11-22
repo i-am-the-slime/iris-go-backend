@@ -8,7 +8,7 @@ use super::{
     equation_position,
 };
 use crate::error::{GoResult, UnsupportedState};
-use crate::mono::{
+use crate::monomorphic::{
     Alternative, Binding, Expression, ExpressionKind, Guard, Guarded, GuardedBranch, Local,
     Pattern, PatternKind,
 };

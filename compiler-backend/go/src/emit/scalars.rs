@@ -22,8 +22,8 @@ use rustc_hash::{FxHashMap, FxHashSet};
 use super::aliases::{mentions, target_root};
 use super::is_untyped_constant;
 use super::locals::NUMBERED;
+use crate::go_traversal::{self, Walk};
 use crate::syntax::{GoDeclaration, GoExpression, GoStatement, GoType};
-use crate::walk::{self, Walk};
 
 /// The fields of each named struct type, in declaration order.
 pub(super) type Structs = FxHashMap<String, Vec<(String, GoType)>>;
@@ -68,7 +68,7 @@ fn next_split(declaration: &mut GoDeclaration, structs: &Structs) -> Option<Spli
     for (local, type_name) in types.single_values() {
         let fields = &structs[&type_name];
         let mut census = Census::new(&local, fields);
-        walk::declaration(&mut census, declaration);
+        go_traversal::declaration(&mut census, declaration);
         if let Some(needed) = census.needed() {
             return Some(Split { local, type_name, fields: fields.clone(), needed });
         }
@@ -83,7 +83,7 @@ fn apply(declaration: &mut GoDeclaration, split: &Split, names: &mut FxHashSet<S
         .map(|(field, _)| (field.clone(), fresh(&split.local, field, names)))
         .collect();
     let mut introduced = vec![];
-    walk::each_block_in_declaration(declaration, |block| {
+    go_traversal::each_block_in_declaration(declaration, |block| {
         let mut position = 0;
         while position < block.len() {
             match spliced(&block[position], split, &locals) {
@@ -97,10 +97,10 @@ fn apply(declaration: &mut GoDeclaration, split: &Split, names: &mut FxHashSet<S
             }
         }
     });
-    walk::declaration(&mut Replace { split, locals: &locals }, declaration);
+    go_traversal::declaration(&mut Replace { split, locals: &locals }, declaration);
     let types: FxHashMap<&str, &GoType> =
         split.fields.iter().map(|(field, type_)| (locals[field].as_str(), type_)).collect();
-    walk::each_block_in_declaration(declaration, |block| {
+    go_traversal::each_block_in_declaration(declaration, |block| {
         for name in &introduced {
             define_at_first_write(block, name, types[name.as_str()]);
         }
@@ -246,7 +246,11 @@ fn define_at_first_write(block: &mut Vec<GoStatement>, name: &str, type_: &GoTyp
 /// declaration's names drops what it does not need.
 fn fresh(local: &str, field: &str, names: &mut FxHashSet<String>) -> String {
     let base = match local.rfind(NUMBERED) {
-        Some(mark) if local[mark + NUMBERED.len_utf8()..].chars().all(|c| c.is_ascii_digit()) => {
+        Some(mark)
+            if local[mark + NUMBERED.len_utf8()..]
+                .chars()
+                .all(|character| character.is_ascii_digit()) =>
+        {
             &local[..mark]
         }
         _ => local,
@@ -283,7 +287,7 @@ impl Walk for Replace<'_> {
                 let type_ = GoType::Named(self.split.type_name.clone());
                 *value = GoExpression::Composite { type_, fields };
             }
-            _ => walk::expression(self, value),
+            _ => go_traversal::expression(self, value),
         }
     }
 }
@@ -476,7 +480,7 @@ impl Walk for Census<'_> {
             }
             _ => {}
         }
-        walk::statement(self, statement);
+        go_traversal::statement(self, statement);
     }
 
     fn expression(&mut self, value: &mut GoExpression) {
@@ -503,7 +507,7 @@ impl Walk for Census<'_> {
                 self.block(body);
                 self.in_literal = outside;
             }
-            _ => walk::expression(self, value),
+            _ => go_traversal::expression(self, value),
         }
     }
 }
@@ -542,7 +546,7 @@ impl<'s> Types<'s> {
                 types.bind_typed(name, type_);
             }
         }
-        walk::declaration(&mut types, declaration);
+        go_traversal::declaration(&mut types, declaration);
         types
     }
 
@@ -630,7 +634,7 @@ impl Walk for Types<'_> {
             }
             _ => {}
         }
-        walk::statement(self, statement);
+        go_traversal::statement(self, statement);
     }
 
     fn expression(&mut self, value: &mut GoExpression) {
@@ -639,7 +643,7 @@ impl Walk for Types<'_> {
                 self.bind_typed(name, type_);
             }
         }
-        walk::expression(self, value);
+        go_traversal::expression(self, value);
     }
 }
 
@@ -698,7 +702,7 @@ const REGISTER_FIELDS: usize = 4;
 /// field write can change what a later one reads or where it goes.
 pub(super) fn store_fields_in_place(declarations: &mut [GoDeclaration], structs: &Structs) {
     for declaration in declarations {
-        walk::each_block_in_declaration(declaration, |block| {
+        go_traversal::each_block_in_declaration(declaration, |block| {
             let mut position = 0;
             while position < block.len() {
                 match stored_fields(&block[position], structs) {
@@ -756,10 +760,13 @@ fn stored_fields(statement: &GoStatement, structs: &Structs) -> Option<Vec<GoSta
 
 fn identifiers(value: &GoExpression) -> FxHashSet<String> {
     let mut found = FxHashSet::default();
-    walk::each_expression_in_statement(&mut GoStatement::Expression(value.clone()), |expression| {
-        if let GoExpression::Identifier(name) = expression {
-            found.insert(name.clone());
-        }
-    });
+    go_traversal::each_expression_in_statement(
+        &mut GoStatement::Expression(value.clone()),
+        |expression| {
+            if let GoExpression::Identifier(name) = expression {
+                found.insert(name.clone());
+            }
+        },
+    );
     found
 }

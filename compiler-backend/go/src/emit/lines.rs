@@ -17,10 +17,10 @@ use rustc_hash::{FxHashMap, FxHashSet};
 use super::Emitter;
 use crate::error::GoResult;
 use crate::foreign::LineCoverage;
-use crate::mono::SourcePosition;
+use crate::go_traversal::{self, Walk};
+use crate::monomorphic::SourcePosition;
 use crate::monotype::{DataConstructor, DataType};
 use crate::syntax::{GoDeclaration, GoExpression, GoStatement, SourceLine};
-use crate::walk::{self, Walk};
 
 /// The sources positions are resolved in, by file: none for a file the program's messages do not
 /// show, such as a built-in module's.
@@ -316,13 +316,13 @@ pub(super) fn attribute_spans(declarations: &mut [GoDeclaration], spans: Spans) 
                 GoStatement::Assign { values, .. } => {
                     values.iter_mut().for_each(|value| self.expression(value))
                 }
-                statement => walk::statement(self, statement),
+                statement => go_traversal::statement(self, statement),
             }
         }
 
         fn expression(&mut self, value: &mut GoExpression) {
             let line = self.line_of(value);
-            walk::expression(self, value);
+            go_traversal::expression(self, value);
             if let Some(line) = line {
                 let attributed = std::mem::replace(value, GoExpression::Boolean(false));
                 *value = GoExpression::Attributed { line, value: Box::new(attributed) };
@@ -361,7 +361,7 @@ fn contains_function(value: &GoExpression) -> bool {
         fn expression(&mut self, value: &mut GoExpression) {
             match value {
                 GoExpression::Function { .. } => self.0 = true,
-                value => walk::expression(self, value),
+                value => go_traversal::expression(self, value),
             }
         }
     }
@@ -381,7 +381,7 @@ fn does_work(statements: &mut [GoStatement]) -> bool {
                 GoExpression::Call { .. }
                 | GoExpression::Index { .. }
                 | GoExpression::TypeAssertion { .. } => self.0 = true,
-                _ => walk::expression(self, value),
+                _ => go_traversal::expression(self, value),
             }
         }
     }
@@ -482,7 +482,7 @@ pub(super) fn set_aside(declarations: &mut [GoDeclaration]) -> SetAside {
                     GoStatement::Line(line) => named.push(line.clone()),
                     statement => {
                         self.0.push((head(statement), std::mem::take(&mut named)));
-                        walk::statement(self, statement);
+                        go_traversal::statement(self, statement);
                     }
                 }
             }
@@ -499,7 +499,7 @@ pub(super) fn set_aside(declarations: &mut [GoDeclaration]) -> SetAside {
             body.remove(0);
         }
         let mut record = Record(vec![]);
-        walk::declaration(&mut record, declaration);
+        go_traversal::declaration(&mut record, declaration);
         aside.statements.insert(name, record.0);
     }
     aside
@@ -514,7 +514,7 @@ pub(super) fn restore(declarations: &mut [GoDeclaration], mut aside: SetAside) {
         fn block(&mut self, body: &mut Vec<GoStatement>) {
             for statement in body.iter_mut() {
                 self.0.push(head(statement));
-                walk::statement(self, statement);
+                go_traversal::statement(self, statement);
             }
         }
     }
@@ -524,7 +524,7 @@ pub(super) fn restore(declarations: &mut [GoDeclaration], mut aside: SetAside) {
             let statements = std::mem::take(body);
             for mut statement in statements {
                 let lines = self.0.next().unwrap_or_default();
-                walk::statement(self, &mut statement);
+                go_traversal::statement(self, &mut statement);
                 body.extend(lines.into_iter().map(GoStatement::Line));
                 body.push(statement);
             }
@@ -535,9 +535,9 @@ pub(super) fn restore(declarations: &mut [GoDeclaration], mut aside: SetAside) {
             continue;
         };
         let mut heads = Heads(vec![]);
-        walk::declaration(&mut heads, declaration);
+        go_traversal::declaration(&mut heads, declaration);
         let lines = align(&before, &heads.0);
-        walk::declaration(&mut Insert(lines.into_iter()), declaration);
+        go_traversal::declaration(&mut Insert(lines.into_iter()), declaration);
         if let GoDeclaration::Function { name, body, .. } = declaration
             && let Some(definition) = aside.definitions.remove(name.as_str())
         {

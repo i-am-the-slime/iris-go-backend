@@ -11,12 +11,12 @@
 use rustc_hash::FxHashMap;
 
 use super::{Emitter, IMPORTED_PACKAGES, identifier_expression};
-use crate::mono::Local;
+use crate::monomorphic::Local;
 use crate::monotype::{Monotype, MonotypeId};
 use crate::naming::{GO_PREDECLARED, VALUE, capitalise, go_safe, identifier, numbered};
 use crate::syntax::{GoDeclaration, GoExpression, GoStatement, GoType};
 
-use crate::walk::{self, Walk as _};
+use crate::go_traversal::{self, Walk as _};
 
 /// Follows a name that emission numbered, before the number.
 pub(super) const NUMBERED: char = 'ǂ';
@@ -240,7 +240,7 @@ impl Walk {
     }
 }
 
-impl walk::Walk for Walk {
+impl go_traversal::Walk for Walk {
     fn block(&mut self, statements: &mut Vec<GoStatement>) {
         let scope = self.enter();
         self.statements(statements);
@@ -297,9 +297,9 @@ impl walk::Walk for Walk {
             }
             GoStatement::LabeledLoop { label, .. } | GoStatement::BreakTo(label) => {
                 self.labels.push(label.clone());
-                walk::statement(self, statement);
+                go_traversal::statement(self, statement);
             }
-            statement => walk::statement(self, statement),
+            statement => go_traversal::statement(self, statement),
         }
     }
 
@@ -315,13 +315,13 @@ impl walk::Walk for Walk {
             | GoExpression::Conversion { type_, .. }
             | GoExpression::TypeAssertion { type_, .. } => {
                 self.type_(type_);
-                walk::expression(self, expression);
+                go_traversal::expression(self, expression);
             }
             GoExpression::Instantiation { function, arguments } => {
                 self.expression(function);
                 arguments.iter_mut().for_each(|argument| self.type_(argument));
             }
-            expression => walk::expression(self, expression),
+            expression => go_traversal::expression(self, expression),
         }
     }
 }
@@ -450,7 +450,7 @@ impl Apply<'_> {
     }
 }
 
-impl walk::Walk for Apply<'_> {
+impl go_traversal::Walk for Apply<'_> {
     fn statement(&mut self, statement: &mut GoStatement) {
         match statement {
             GoStatement::Define { names, .. } => names.iter_mut().for_each(|name| self.name(name)),
@@ -469,7 +469,7 @@ impl walk::Walk for Apply<'_> {
             }
             _ => {}
         }
-        walk::statement(self, statement);
+        go_traversal::statement(self, statement);
     }
 
     fn expression(&mut self, expression: &mut GoExpression) {
@@ -480,7 +480,7 @@ impl walk::Walk for Apply<'_> {
             }
             _ => {}
         }
-        walk::expression(self, expression);
+        go_traversal::expression(self, expression);
     }
 }
 

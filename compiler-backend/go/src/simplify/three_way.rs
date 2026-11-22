@@ -19,7 +19,7 @@
 
 use super::Simplifier;
 use crate::foreign::{Comparison, Foreign, Operator};
-use crate::mono::{
+use crate::monomorphic::{
     Alternative, Expression, ExpressionKind, Guard, Guarded, Literal, LocalId, SourcePosition,
 };
 use crate::monotype::{Monotype, MonotypeId};
@@ -372,9 +372,9 @@ fn outcome_branches(alternatives: &[Alternative]) -> Option<Vec<OutcomeBranch>> 
         let position = alternative.position;
         let [pattern] = alternative.patterns.as_slice() else { return None };
         let (matched, binder) = match &pattern.kind {
-            crate::mono::PatternKind::Wildcard => (ALL, None),
-            crate::mono::PatternKind::Variable(local) => (ALL, Some(local.id)),
-            crate::mono::PatternKind::Literal(Literal::Int(k)) => {
+            crate::monomorphic::PatternKind::Wildcard => (ALL, None),
+            crate::monomorphic::PatternKind::Variable(local) => (ALL, Some(local.id)),
+            crate::monomorphic::PatternKind::Literal(Literal::Int(k)) => {
                 (Outcomes::compared(Comparison::Equal, *k, true), None)
             }
             _ => return None,

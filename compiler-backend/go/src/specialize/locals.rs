@@ -13,7 +13,7 @@ use super::{
 use crate::dictionary::Dictionary;
 use crate::erasure::Erasure;
 use crate::error::{GoResult, UnsupportedState};
-use crate::mono::{Binding, Expression, ExpressionKind};
+use crate::monomorphic::{Binding, Expression, ExpressionKind};
 use crate::scheme::rank_n_scheme;
 use crate::types::Substitution;
 

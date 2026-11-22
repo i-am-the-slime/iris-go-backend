@@ -9,7 +9,7 @@ use super::iteration::Callback;
 use super::ownership::{self, Carried, Place};
 use super::{Emitter, Mode, Sink, identifier_expression};
 use crate::error::GoResult;
-use crate::mono::{Expression, ExpressionKind, Function, FunctionId};
+use crate::monomorphic::{Expression, ExpressionKind, Function, FunctionId};
 use crate::monotype::{Monotype, MonotypeId};
 use crate::syntax::{GoExpression, GoStatement, GoType};
 

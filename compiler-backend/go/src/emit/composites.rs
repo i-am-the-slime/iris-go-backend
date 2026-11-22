@@ -1,14 +1,14 @@
 use rustc_hash::{FxHashMap, FxHashSet};
 
 use super::aliases::{Guarded, calls, is_named, target_root, writes};
+use crate::go_traversal::{self, Walk};
 use crate::syntax::{GoDeclaration, GoExpression, GoStatement};
-use crate::walk::{self, Walk};
 
 pub(super) fn take_composites_apart(declarations: &mut [GoDeclaration]) {
     for declaration in declarations {
         let guarded = Guarded::of(declaration);
         let mentions = mentions_in(declaration);
-        walk::each_block_in_declaration(declaration, |block| {
+        go_traversal::each_block_in_declaration(declaration, |block| {
             let mut position = 0;
             while position < block.len() {
                 if !take_apart_at(block, position, &guarded, &mentions) {
@@ -47,7 +47,7 @@ fn take_apart_at(
         return false;
     }
     for statement in rest {
-        walk::each_expression_in_statement(statement, |expression| {
+        go_traversal::each_expression_in_statement(statement, |expression| {
             if let Some(field) = read_field(expression, &name) {
                 let (_, value) = fields.iter().find(|(name, _)| name == field).expect("read field");
                 *expression = value.clone();
@@ -115,7 +115,7 @@ fn fields_read(
 
 fn mentions_in(declaration: &mut GoDeclaration) -> FxHashMap<String, usize> {
     let mut counts = FxHashMap::default();
-    walk::each_expression_in_declaration(declaration, |expression| {
+    go_traversal::each_expression_in_declaration(declaration, |expression| {
         if let GoExpression::Identifier(name) = expression {
             *counts.entry(name.clone()).or_insert(0) += 1;
         }
@@ -142,7 +142,7 @@ impl Walk for Uses<'_> {
         {
             self.other = true;
         }
-        walk::statement(self, statement);
+        go_traversal::statement(self, statement);
     }
 
     fn expression(&mut self, value: &mut GoExpression) {
@@ -152,7 +152,7 @@ impl Walk for Uses<'_> {
             }
             Some(_) => self.other = true,
             None if is_named(value, self.name) => self.other = true,
-            None => walk::expression(self, value),
+            None => go_traversal::expression(self, value),
         }
     }
 }

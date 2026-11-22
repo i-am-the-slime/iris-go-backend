@@ -10,7 +10,7 @@ use super::{INLINE_SIZE, Simplifier};
 use crate::foreign::{
     Comparison, Foreign, GoFunction, GoPackage, MUTABLE_PEEK_UNSAFE, MUTABLE_WITHIN, Operator,
 };
-use crate::mono::{
+use crate::monomorphic::{
     Alternative, Binding, Expression, ExpressionKind, Guarded, Literal, Local, LocalId, Pattern,
 };
 use crate::monotype::{Monotype, MonotypeId, Monotypes};
@@ -403,10 +403,10 @@ fn alternative_size(alternative: &Alternative) -> usize {
 
 fn mentions_erased(alternative: &Alternative, monotypes: &Monotypes) -> bool {
     let mut erased = false;
-    crate::mono::walk::for_each_alternative_child(
+    crate::monomorphic::traversal::for_each_alternative_child(
         std::slice::from_ref(alternative),
         &mut |child| {
-            crate::mono::walk::visit(child, &mut |node| {
+            crate::monomorphic::traversal::visit(child, &mut |node| {
                 erased = erased || crate::lift::erases(monotypes, node.monotype)
             })
         },

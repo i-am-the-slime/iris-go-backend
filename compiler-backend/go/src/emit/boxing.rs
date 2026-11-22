@@ -181,7 +181,8 @@ where
     /// type or meets foreign values.
     fn canonical_crossings(&self) -> Vec<bool> {
         let boxes = &self.array_boxes;
-        let mut types: Vec<GoType> = boxes.crossings.iter().map(|c| c.go_type.clone()).collect();
+        let mut types: Vec<GoType> =
+            boxes.crossings.iter().map(|crossing| crossing.go_type.clone()).collect();
         types.iter_mut().for_each(|type_| self.resolve_aliases(type_));
         let root = |family: &[usize], mut index: usize| {
             while family[index] != index {

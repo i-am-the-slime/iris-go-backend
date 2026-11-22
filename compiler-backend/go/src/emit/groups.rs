@@ -11,7 +11,7 @@ use super::{
 };
 use crate::error::GoResult;
 use crate::graph::strongly_connected;
-use crate::mono::{Expression, ExpressionKind, Function, FunctionId, Guarded, Program};
+use crate::monomorphic::{Expression, ExpressionKind, Function, FunctionId, Guarded, Program};
 use crate::monotype::Monotypes;
 use crate::naming::capitalise;
 use crate::syntax::{GoCase, GoDeclaration, GoDefault, GoExpression, GoStatement, GoType};
@@ -180,7 +180,8 @@ where
         self.locals.clear();
         self.local_names.clear();
         let slots = self.tail_group_slots(group)?;
-        let member = self.tail_groups[group].members.iter().position(|m| *m == id).unwrap();
+        let member =
+            self.tail_groups[group].members.iter().position(|candidate| *candidate == id).unwrap();
         let mut parameters = vec![];
         for parameter in &function.parameters {
             let name = self.bind_local(parameter);

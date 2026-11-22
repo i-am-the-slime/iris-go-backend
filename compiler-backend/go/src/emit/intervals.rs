@@ -36,8 +36,8 @@
 use rustc_hash::{FxHashMap, FxHashSet};
 
 use super::headers::{Effects, Keeping};
+use crate::go_traversal::{self, Walk};
 use crate::syntax::{GoDeclaration, GoExpression, GoStatement, GoType};
-use crate::walk::{self, Walk};
 
 pub(super) fn prove_bounds(declarations: &mut [GoDeclaration], effects: &Effects) {
     let keeping = Keeping::of(declarations, effects);
@@ -164,7 +164,7 @@ impl Program {
                     }
                     _ => {}
                 }
-                walk::statement(self, statement);
+                go_traversal::statement(self, statement);
             }
 
             fn expression(&mut self, value: &mut GoExpression) {
@@ -187,12 +187,12 @@ impl Program {
                         _ => {}
                     }
                 }
-                walk::expression(self, value);
+                go_traversal::expression(self, value);
             }
         }
         let mut scan =
             Scan { program: self, rewrites: false, calls_bounded: false, callees: vec![] };
-        walk::declaration(&mut scan, declaration);
+        go_traversal::declaration(&mut scan, declaration);
         let interpret = scan.rewrites || scan.calls_bounded;
         Plan { interpret, rewrites: scan.rewrites, callees: scan.callees }
     }
@@ -324,13 +324,13 @@ fn used_as_values(declarations: &mut [GoDeclaration]) -> FxHashSet<String> {
                 GoExpression::Identifier(name) => {
                     self.0.insert(name.clone());
                 }
-                _ => walk::expression(self, value),
+                _ => go_traversal::expression(self, value),
             }
         }
     }
     let mut values = Values(FxHashSet::default());
     for declaration in declarations.iter_mut() {
-        walk::declaration(&mut values, declaration);
+        go_traversal::declaration(&mut values, declaration);
     }
     values.0
 }
@@ -765,7 +765,7 @@ fn relevant_names(body: &mut Vec<GoStatement>) -> FxHashSet<String> {
                 }
                 _ => {}
             }
-            walk::statement(self, statement);
+            go_traversal::statement(self, statement);
         }
 
         fn expression(&mut self, value: &mut GoExpression) {
@@ -777,7 +777,7 @@ fn relevant_names(body: &mut Vec<GoStatement>) -> FxHashSet<String> {
             {
                 arguments.iter().for_each(|argument| self.relevant.extend(identifiers(argument)));
             }
-            walk::expression(self, value);
+            go_traversal::expression(self, value);
         }
     }
     let mut relevance = Relevance::default();
@@ -920,7 +920,7 @@ impl Walk for Collect<'_> {
             }
             _ => {}
         }
-        walk::statement(self, statement);
+        go_traversal::statement(self, statement);
     }
 
     fn expression(&mut self, value: &mut GoExpression) {
@@ -933,7 +933,7 @@ impl Walk for Collect<'_> {
             GoExpression::Function { parameters, .. } => {
                 parameters.iter().for_each(|(name, type_)| self.bind(name, shape_of_type(type_)));
                 self.closures += 1;
-                walk::expression(self, value);
+                go_traversal::expression(self, value);
                 self.closures -= 1;
                 return;
             }
@@ -978,7 +978,7 @@ impl Walk for Collect<'_> {
             }
             _ => {}
         }
-        walk::expression(self, value);
+        go_traversal::expression(self, value);
     }
 }
 
@@ -2937,14 +2937,14 @@ fn reads_free(statement: &GoStatement, names: &FxHashSet<String>) -> bool {
         fn statement(&mut self, statement: &mut GoStatement) {
             match statement {
                 GoStatement::Define { .. } => {
-                    walk::statement(self, statement);
+                    go_traversal::statement(self, statement);
                     if let GoStatement::Define { names, .. } = statement {
                         names.clone().iter().for_each(|name| self.shadow(name));
                     }
                 }
                 GoStatement::Variable { name, .. } => {
                     let name = name.clone();
-                    walk::statement(self, statement);
+                    go_traversal::statement(self, statement);
                     self.shadow(&name);
                 }
                 GoStatement::Range { index, element, iterable, body } => {
@@ -2972,7 +2972,7 @@ fn reads_free(statement: &GoStatement, names: &FxHashSet<String>) -> bool {
                     self.block(then);
                     self.shadowed.pop();
                 }
-                _ => walk::statement(self, statement),
+                _ => go_traversal::statement(self, statement),
             }
         }
 
@@ -2984,7 +2984,7 @@ fn reads_free(statement: &GoStatement, names: &FxHashSet<String>) -> bool {
                     self.block(body);
                     self.shadowed.pop();
                 }
-                _ => walk::expression(self, value),
+                _ => go_traversal::expression(self, value),
             }
         }
     }

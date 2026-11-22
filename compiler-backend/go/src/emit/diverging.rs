@@ -4,8 +4,8 @@
 //! by a zero-valued stand-in and by the code that uses it, which can never run. A `panic`, like
 //! a `return`, `break` or `continue`, is a terminating statement in Go, so the block ends there.
 
+use crate::go_traversal::each_block_in_declaration;
 use crate::syntax::{GoDeclaration, GoStatement};
-use crate::walk::each_block_in_declaration;
 
 pub(super) fn end_blocks_at_divergence(declarations: &mut [GoDeclaration]) {
     for declaration in declarations {

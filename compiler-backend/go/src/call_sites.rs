@@ -1,7 +1,7 @@
 use files::FileId;
 
-use crate::mono::walk::for_each_child_mut;
-use crate::mono::{Expression, Program, SourcePosition};
+use crate::monomorphic::traversal::for_each_child_mut;
+use crate::monomorphic::{Expression, Program, SourcePosition};
 
 pub fn attribute_inlined_code_to_call_sites(program: &mut Program) {
     for function in &mut program.functions {

@@ -6,7 +6,9 @@ use super::{
     local_uses, unit_value,
 };
 use crate::error::GoResult;
-use crate::mono::{Alternative, Expression, Guard, Guarded, Literal, Local, Pattern, PatternKind};
+use crate::monomorphic::{
+    Alternative, Expression, Guard, Guarded, Literal, Local, Pattern, PatternKind,
+};
 use crate::monotype::Monotype;
 use crate::syntax::{GoCase, GoDefault, GoExpression, GoStatement, SourceLine};
 

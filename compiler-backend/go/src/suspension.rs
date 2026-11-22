@@ -1,6 +1,6 @@
 use crate::foreign::{Foreign, GoPackage};
-use crate::mono::walk::{reference_graph, visit};
-use crate::mono::{Expression, ExpressionKind, Function, LocalId, Program};
+use crate::monomorphic::traversal::{reference_graph, visit};
+use crate::monomorphic::{Expression, ExpressionKind, Function, LocalId, Program};
 use crate::monotype::{Monotype, Monotypes};
 
 pub struct Suspension {

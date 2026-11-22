@@ -7,7 +7,7 @@ use super::{Scope, Specializer};
 use crate::dictionary::Dictionary;
 use crate::error::GoResult;
 use crate::foreign::{Foreign, Operator};
-use crate::mono::{
+use crate::monomorphic::{
     Alternative, Expression, ExpressionKind, Guarded, Literal, Pattern, PatternKind,
 };
 use crate::monotype::{Monotype, MonotypeId};

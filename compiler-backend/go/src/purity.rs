@@ -1,8 +1,10 @@
 use rustc_hash::{FxHashMap, FxHashSet};
 
 use crate::foreign::{Foreign, Operator};
-use crate::mono::walk::{for_each_child, visit};
-use crate::mono::{Binding, Expression, ExpressionKind, Function, FunctionId, Local, LocalId};
+use crate::monomorphic::traversal::{for_each_child, visit};
+use crate::monomorphic::{
+    Binding, Expression, ExpressionKind, Function, FunctionId, Local, LocalId,
+};
 use crate::monotype::{Monotype, Monotypes};
 
 // Whether the expression runs an action in pure code anywhere inside it:

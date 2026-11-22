@@ -5,7 +5,7 @@
 
 use super::{Emitter, call, is_simple};
 use crate::foreign::{GoFunction, GoPackage};
-use crate::mono::Expression;
+use crate::monomorphic::Expression;
 use crate::monotype::Monotype;
 use crate::syntax::{GoExpression, GoType};
 

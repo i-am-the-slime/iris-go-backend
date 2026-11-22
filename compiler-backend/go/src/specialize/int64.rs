@@ -19,7 +19,7 @@ use smol_str::{SmolStr, format_smolstr};
 
 use super::{Scope, Specializer};
 use crate::error::GoResult;
-use crate::mono::{Expression, ExpressionKind};
+use crate::monomorphic::{Expression, ExpressionKind};
 use crate::monotype::{LongMentions, MonotypeId, long_mentions};
 use crate::primitives::{Int64Operation, KnownType, Signedness};
 

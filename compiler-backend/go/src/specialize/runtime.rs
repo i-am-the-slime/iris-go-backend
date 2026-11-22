@@ -11,7 +11,7 @@ use smol_str::SmolStr;
 use super::{Definition, Scope, SpecializationKey, Specializer};
 use crate::dictionary::{Dictionary, InstanceDictionary, RuntimeDictionary};
 use crate::error::{GoError, GoResult, UnsupportedState};
-use crate::mono::{Expression, ExpressionKind, Local};
+use crate::monomorphic::{Expression, ExpressionKind, Local};
 use crate::monotype::{Monotype, MonotypeId, RecordField};
 use crate::types::Substitution;
 
@@ -153,7 +153,7 @@ where
 
     fn applied_function(
         &mut self,
-        id: crate::mono::FunctionId,
+        id: crate::monomorphic::FunctionId,
         arguments: Vec<Expression>,
         monotype: MonotypeId,
     ) -> Expression {

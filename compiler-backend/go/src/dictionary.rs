@@ -4,7 +4,7 @@ use checking::TypeId;
 use checking::evidence::InstanceCandidateOrigin;
 use smol_str::SmolStr;
 
-use crate::mono::Expression;
+use crate::monomorphic::Expression;
 
 /// A type-class dictionary resolved for a closed world. Dictionaries never reach
 /// the generated program: they select which specialization a member reference

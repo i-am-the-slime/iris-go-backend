@@ -6,7 +6,7 @@ use super::{Scope, Specializer};
 use crate::dictionary::Dictionary;
 use crate::error::{GoResult, UnsupportedState};
 use crate::foreign::{self, Foreign};
-use crate::mono::{Expression, ExpressionKind};
+use crate::monomorphic::{Expression, ExpressionKind};
 use crate::monotype::MonotypeId;
 use crate::types::Substitution;
 

@@ -1,12 +1,12 @@
 use rustc_hash::FxHashSet;
 
+use crate::go_traversal::{self, Walk};
 use crate::syntax::{GoDeclaration, GoExpression, GoStatement, GoType};
-use crate::walk::{self, Walk};
 
 pub(super) fn substitute_aliases(declarations: &mut [GoDeclaration]) {
     for declaration in declarations {
         let guarded = Guarded::of(declaration);
-        walk::each_block_in_declaration(declaration, |block| {
+        go_traversal::each_block_in_declaration(declaration, |block| {
             let mut position = 0;
             while position < block.len() {
                 if !substitute_at(block, position, &guarded) {
@@ -36,7 +36,7 @@ fn substitute_at(block: &mut Vec<GoStatement>, position: usize, guarded: &Guarde
         return false;
     }
     for statement in rest {
-        walk::each_expression_in_statement(statement, |expression| {
+        go_traversal::each_expression_in_statement(statement, |expression| {
             if is_named(expression, &alias) {
                 *expression = GoExpression::Identifier(original.clone());
             }
@@ -147,17 +147,17 @@ impl Walk for Reads<'_> {
             }
             GoExpression::Function { .. } => {
                 let enclosing = std::mem::replace(&mut self.in_literal, true);
-                walk::expression(self, value);
+                go_traversal::expression(self, value);
                 self.in_literal = enclosing;
             }
-            _ => walk::expression(self, value),
+            _ => go_traversal::expression(self, value),
         }
     }
 }
 
 pub(super) fn calls(statement: &mut GoStatement) -> bool {
     let mut found = false;
-    walk::each_expression_in_statement(statement, |expression| {
+    go_traversal::each_expression_in_statement(statement, |expression| {
         found |= matches!(expression, GoExpression::Call { .. });
     });
     found
@@ -197,7 +197,7 @@ impl Walk for Writes<'_> {
         if bound.contains(&self.name) {
             self.written = true;
         }
-        walk::statement(self, statement);
+        go_traversal::statement(self, statement);
     }
 
     fn expression(&mut self, value: &mut GoExpression) {
@@ -206,7 +206,7 @@ impl Walk for Writes<'_> {
         {
             self.written = true;
         }
-        walk::expression(self, value);
+        go_traversal::expression(self, value);
     }
 }
 
@@ -228,12 +228,12 @@ impl Guarded {
     pub(super) fn of(declaration: &mut GoDeclaration) -> Self {
         let guarded = Guarded { read: default(), written: default(), bound: default() };
         let mut literals = Literals { guarded };
-        walk::declaration(&mut literals, declaration);
+        go_traversal::declaration(&mut literals, declaration);
         let mut bound = Bound { names: default() };
         if let GoDeclaration::Function { parameters, .. } = declaration {
             bound.names.extend(parameters.iter().map(|(name, _)| name.clone()));
         }
-        walk::declaration(&mut bound, declaration);
+        go_traversal::declaration(&mut bound, declaration);
         literals.guarded.bound = bound.names;
         literals.guarded
     }
@@ -274,14 +274,14 @@ impl Walk for Bound {
             }
             _ => {}
         }
-        walk::statement(self, statement);
+        go_traversal::statement(self, statement);
     }
 
     fn expression(&mut self, value: &mut GoExpression) {
         if let GoExpression::Function { parameters, .. } = value {
             self.names.extend(parameters.iter().map(|(name, _)| name.clone()));
         }
-        walk::expression(self, value);
+        go_traversal::expression(self, value);
     }
 }
 
@@ -301,9 +301,9 @@ impl Walk for Literals {
                 if let Some(root) = target_root(inner) {
                     self.guarded.written.insert(root.to_string());
                 }
-                walk::expression(self, value);
+                go_traversal::expression(self, value);
             }
-            _ => walk::expression(self, value),
+            _ => go_traversal::expression(self, value),
         }
     }
 }
@@ -356,7 +356,7 @@ impl Walk for Free<'_> {
             }
             _ => {}
         }
-        walk::statement(self, statement);
+        go_traversal::statement(self, statement);
     }
 
     fn expression(&mut self, value: &mut GoExpression) {
@@ -375,9 +375,9 @@ impl Walk for Free<'_> {
                 if let Some(root) = target_root(inner) {
                     self.written.insert(root.to_string());
                 }
-                walk::expression(self, value);
+                go_traversal::expression(self, value);
             }
-            _ => walk::expression(self, value),
+            _ => go_traversal::expression(self, value),
         }
     }
 }

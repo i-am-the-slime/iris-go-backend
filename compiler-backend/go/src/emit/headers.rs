@@ -29,8 +29,8 @@ use rustc_hash::{FxHashMap, FxHashSet};
 
 use super::aliases::target_root;
 use super::locals::NUMBERED;
+use crate::go_traversal::{self, Walk};
 use crate::syntax::{GoDeclaration, GoExpression, GoStatement, GoType};
-use crate::walk::{self, Walk};
 
 /// The Go functions, as `(package, name)`, that the emitted code calls to run
 /// an effect: those of performed foreigns and of effectful constructs.
@@ -101,7 +101,7 @@ impl<'e> Keeping<'e> {
         let mut keeps = !writes_through_pointer(body);
         for statement in body.iter_mut() {
             keeps &= !matches!(statement, GoStatement::Defer(_));
-            walk::each_expression_in_statement(statement, |expression| {
+            go_traversal::each_expression_in_statement(statement, |expression| {
                 if let GoExpression::Call { function, .. } = expression {
                     keeps &= self.keeps_call(function);
                 }
@@ -166,7 +166,7 @@ fn pass_slices(declarations: &mut [GoDeclaration], keeping: &Keeping<'_>) -> Sli
                 by_name
             });
         for declaration in declarations.iter_mut() {
-            walk::each_expression_in_declaration(declaration, |expression| {
+            go_traversal::each_expression_in_declaration(declaration, |expression| {
                 if let GoExpression::Call { function, arguments } = expression
                     && let GoExpression::Identifier(callee) = &**function
                     && let Some(positions) = newly.get(callee.as_str())
@@ -178,7 +178,7 @@ fn pass_slices(declarations: &mut [GoDeclaration], keeping: &Keeping<'_>) -> Sli
                         );
                         arguments[*position] = match argument {
                             GoExpression::Address(inner) => *inner,
-                            argument => deref(argument),
+                            argument => dereference(argument),
                         };
                     }
                 }
@@ -214,13 +214,13 @@ fn used_as_values(declarations: &mut [GoDeclaration]) -> FxHashSet<String> {
                 GoExpression::Identifier(name) => {
                     self.0.insert(name.clone());
                 }
-                _ => walk::expression(self, value),
+                _ => go_traversal::expression(self, value),
             }
         }
     }
     let mut values = Values(FxHashSet::default());
     for declaration in declarations.iter_mut() {
-        walk::declaration(&mut values, declaration);
+        go_traversal::declaration(&mut values, declaration);
     }
     values.0
 }
@@ -281,10 +281,10 @@ fn only_indexed(
                 GoExpression::Identifier(name) if name == self.array => self.other = true,
                 GoExpression::Function { .. } => {
                     let mut inner = Uses { indexed: 0, other: false, ..*self };
-                    walk::expression(&mut inner, value);
+                    go_traversal::expression(&mut inner, value);
                     self.other |= inner.other || inner.indexed > 0;
                 }
-                _ => walk::expression(self, value),
+                _ => go_traversal::expression(self, value),
             }
         }
     }
@@ -350,7 +350,7 @@ fn hoist_in_loops(
 fn hoist(body: &mut [GoStatement], array: &str, names: &mut FxHashSet<String>) -> GoStatement {
     let elements = fresh("elements", names);
     replace_dereferences(body, array, &elements);
-    let read = deref(GoExpression::Identifier(array.to_string()));
+    let read = dereference(GoExpression::Identifier(array.to_string()));
     GoStatement::Define { names: vec![elements], values: vec![read] }
 }
 
@@ -390,7 +390,7 @@ fn each_nested_block(statement: &mut GoStatement, mut visit: impl FnMut(&mut Vec
 /// The names the statement dereferences.
 fn dereferenced(statement: &mut GoStatement) -> Vec<String> {
     let mut found = vec![];
-    walk::each_expression_in_statement(statement, |expression| {
+    go_traversal::each_expression_in_statement(statement, |expression| {
         if let GoExpression::Unary { operator: "*", operand } = expression
             && let GoExpression::Identifier(name) = &**operand
             && !found.contains(name)
@@ -429,7 +429,7 @@ fn binds(statement: &mut GoStatement, name: &str) -> bool {
                 | GoStatement::CountingDown { variable, .. } => (self.0)(variable),
                 _ => {}
             }
-            walk::statement(self, statement);
+            go_traversal::statement(self, statement);
         }
     }
     Binders(&mut binder).statement(statement);
@@ -451,7 +451,7 @@ pub(super) fn drop_repeated_bounds_tests(declarations: &mut [GoDeclaration], eff
             let through_pointer = has_dereference(&test);
             let test =
                 Test { name, rendered: format!("{test:?}"), through_pointer, keeping: &keeping };
-            walk::each_block(body, |block| test.drop_repeats(block));
+            go_traversal::each_block(body, |block| test.drop_repeats(block));
         }
     }
 }
@@ -524,7 +524,7 @@ pub(super) fn is_bounds_test(test: &GoExpression) -> bool {
 /// The single-name definitions of a function's top-level and nested blocks.
 fn definitions(body: &mut Vec<GoStatement>) -> Vec<(String, GoExpression)> {
     let mut found = vec![];
-    walk::each_block(body, |block| {
+    go_traversal::each_block(body, |block| {
         for statement in block.iter() {
             if let GoStatement::Define { names, values } = statement
                 && let ([name], [value]) = (names.as_slice(), values.as_slice())
@@ -575,7 +575,7 @@ fn written_names(body: &mut Vec<GoStatement>) -> FxHashSet<String> {
                 }
                 _ => {}
             }
-            walk::statement(self, statement);
+            go_traversal::statement(self, statement);
         }
 
         fn expression(&mut self, value: &mut GoExpression) {
@@ -590,7 +590,7 @@ fn written_names(body: &mut Vec<GoStatement>) -> FxHashSet<String> {
                 }
                 _ => {}
             }
-            walk::expression(self, value);
+            go_traversal::expression(self, value);
         }
     }
     let mut written = Written(FxHashSet::default(), FxHashSet::default());
@@ -610,19 +610,25 @@ pub(super) fn assigned_root(target: &GoExpression) -> Option<&str> {
 
 pub(super) fn reads(value: &GoExpression) -> FxHashSet<String> {
     let mut found = FxHashSet::default();
-    walk::each_expression_in_statement(&mut GoStatement::Expression(value.clone()), |expression| {
-        if let GoExpression::Identifier(name) = expression {
-            found.insert(name.clone());
-        }
-    });
+    go_traversal::each_expression_in_statement(
+        &mut GoStatement::Expression(value.clone()),
+        |expression| {
+            if let GoExpression::Identifier(name) = expression {
+                found.insert(name.clone());
+            }
+        },
+    );
     found
 }
 
 fn has_dereference(value: &GoExpression) -> bool {
     let mut found = false;
-    walk::each_expression_in_statement(&mut GoStatement::Expression(value.clone()), |expression| {
-        found |= matches!(expression, GoExpression::Unary { operator: "*", .. });
-    });
+    go_traversal::each_expression_in_statement(
+        &mut GoStatement::Expression(value.clone()),
+        |expression| {
+            found |= matches!(expression, GoExpression::Unary { operator: "*", .. });
+        },
+    );
     found
 }
 
@@ -636,7 +642,7 @@ fn writes_through_pointer(body: &mut [GoStatement]) -> bool {
                     .iter()
                     .any(|target| matches!(target, GoExpression::Unary { operator: "*", .. }));
             }
-            walk::statement(self, statement);
+            go_traversal::statement(self, statement);
         }
     }
     let mut writes = Writes(false);
@@ -659,14 +665,14 @@ fn dereferences(body: &mut Vec<GoStatement>, array: &str) -> usize {
             {
                 self.other = true;
             }
-            walk::statement(self, statement);
+            go_traversal::statement(self, statement);
         }
 
         fn expression(&mut self, value: &mut GoExpression) {
             match value {
                 _ if is_dereference(value, self.array) => self.dereferences += 1,
                 GoExpression::Identifier(name) if name == self.array => self.other = true,
-                _ => walk::expression(self, value),
+                _ => go_traversal::expression(self, value),
             }
         }
     }
@@ -677,7 +683,7 @@ fn dereferences(body: &mut Vec<GoStatement>, array: &str) -> usize {
 
 fn replace_dereferences(body: &mut [GoStatement], array: &str, elements: &str) {
     for statement in body {
-        walk::each_expression_in_statement(statement, |expression| {
+        go_traversal::each_expression_in_statement(statement, |expression| {
             if is_dereference(expression, array) {
                 *expression = GoExpression::Identifier(elements.to_string());
             }
@@ -690,7 +696,7 @@ fn is_dereference(value: &GoExpression, array: &str) -> bool {
         if matches!(&**operand, GoExpression::Identifier(name) if name == array))
 }
 
-fn deref(value: GoExpression) -> GoExpression {
+fn dereference(value: GoExpression) -> GoExpression {
     GoExpression::Unary { operator: "*", operand: Box::new(value) }
 }
 
@@ -721,7 +727,7 @@ mod tests {
     /// `func f(xs *[]float64) { for i := 0; i < 3; i++ { (*xs)[i] = <prim>((*xs)[i]) } }`
     fn indexing_loop(runtime: &str) -> GoDeclaration {
         let element = GoExpression::Index {
-            value: Box::new(deref(identifier("xs"))),
+            value: Box::new(dereference(identifier("xs"))),
             index: Box::new(identifier("i")),
         };
         let store = GoStatement::Assign {

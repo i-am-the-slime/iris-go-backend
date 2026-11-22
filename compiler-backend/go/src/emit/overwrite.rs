@@ -24,8 +24,8 @@
 use rustc_hash::FxHashSet;
 
 use super::{DataKind, DataLayout, Emitter, identifier_expression};
+use crate::go_traversal::{self, Walk};
 use crate::syntax::{GoExpression, GoStatement, GoType};
-use crate::walk::{self, Walk};
 
 impl<Q> Emitter<'_, '_, '_, Q>
 where
@@ -101,7 +101,7 @@ fn independent_of(value: &mut GoExpression, cell: &str) -> bool {
                 GoExpression::Call { .. } | GoExpression::Function { .. } => {
                     self.independent = false
                 }
-                _ => walk::expression(self, value),
+                _ => go_traversal::expression(self, value),
             }
         }
     }

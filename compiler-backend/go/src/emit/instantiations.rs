@@ -124,8 +124,8 @@ where
 fn instantiation_field_names(labels: &[&str]) -> Vec<String> {
     let words: Vec<Vec<&str>> = labels.iter().map(|label| label_words(label)).collect();
     let shortest = words.iter().map(Vec::len).min().unwrap_or(0);
-    let shared =
-        (0..shortest).take_while(|&index| words.iter().all(|w| w[index] == words[0][index]));
+    let shared = (0..shortest)
+        .take_while(|&index| words.iter().all(|label| label[index] == words[0][index]));
     // Every name keeps at least one word of its own.
     let shared = shared.count().min(shortest.saturating_sub(1));
     let shared = if labels.len() == 1 { 0 } else { shared };

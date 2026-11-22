@@ -15,7 +15,7 @@ use smol_str::SmolStr;
 use crate::foreign::Foreign;
 use crate::monotype::{DataType, MonotypeId};
 
-pub(crate) mod walk;
+pub(crate) mod traversal;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct FunctionId(pub u32);

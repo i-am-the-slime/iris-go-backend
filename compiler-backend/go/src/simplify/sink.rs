@@ -10,8 +10,8 @@
 use rustc_hash::FxHashMap;
 
 use super::Simplifier;
-use crate::mono::walk::{for_each_child, for_each_child_mut};
-use crate::mono::{Binding, Expression, ExpressionKind, Guarded, LocalId};
+use crate::monomorphic::traversal::{for_each_child, for_each_child_mut};
+use crate::monomorphic::{Binding, Expression, ExpressionKind, Guarded, LocalId};
 use crate::purity::{KnownFunctions, is_deferrable, is_within_size, runs_effect};
 
 /// A value copied into more than one branch is at most this many nodes.
@@ -199,7 +199,7 @@ fn calls_only_deferrable_functions(
     depth: usize,
 ) -> bool {
     let mut deferrable = true;
-    crate::mono::walk::visit(expression, &mut |node| {
+    crate::monomorphic::traversal::visit(expression, &mut |node| {
         if let ExpressionKind::Apply { function, .. } = &node.kind {
             deferrable &= match &function.kind {
                 ExpressionKind::Lambda { .. } => true,

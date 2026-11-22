@@ -1,8 +1,8 @@
 use smol_str::SmolStr;
 
 use crate::foreign::{self, Foreign, Operator};
-use crate::mono::walk::for_each_child;
-use crate::mono::{
+use crate::monomorphic::traversal::for_each_child;
+use crate::monomorphic::{
     Expression, ExpressionKind, FunctionId, Guard, Guarded, LocalId, PatternKind, RecordUpdate,
 };
 
@@ -78,7 +78,7 @@ fn aliases(carried: Carried<'_>, expression: &Expression) -> Option<Vec<LocalId>
     };
     let mut aliases = vec![];
     let mut whole = false;
-    crate::mono::walk::visit(expression, &mut |expression| {
+    crate::monomorphic::traversal::visit(expression, &mut |expression| {
         let ExpressionKind::Case { scrutinees, alternatives } = &expression.kind else { return };
         for (position, scrutinee) in scrutinees.iter().enumerate() {
             if !is_accumulator(carried, scrutinee) {

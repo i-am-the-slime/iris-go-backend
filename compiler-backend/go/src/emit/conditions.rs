@@ -1,9 +1,9 @@
+use crate::go_traversal;
 use crate::syntax::{GoDeclaration, GoExpression, GoStatement, GoType};
-use crate::walk;
 
 pub(super) fn assign_conditions(declarations: &mut [GoDeclaration]) {
     for declaration in declarations {
-        walk::each_block_in_declaration(declaration, |block| {
+        go_traversal::each_block_in_declaration(declaration, |block| {
             let mut position = 0;
             while position + 1 < block.len() {
                 if let Some(define) = defined_condition(&block[position], &block[position + 1]) {

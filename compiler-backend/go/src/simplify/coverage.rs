@@ -1,6 +1,6 @@
 use super::{Simplifier, substitute_in_place};
-use crate::mono::walk::for_each_alternative_child;
-use crate::mono::{
+use crate::monomorphic::traversal::for_each_alternative_child;
+use crate::monomorphic::{
     Alternative, Binding, Expression, ExpressionKind, Guarded, Literal, Local, LocalId, Pattern,
     PatternKind,
 };

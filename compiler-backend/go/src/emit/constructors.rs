@@ -14,7 +14,7 @@
 use super::packages::Spelling;
 use super::{Emitter, identifier_expression, lines};
 use crate::error::GoResult;
-use crate::mono::{Expression, ExpressionKind, Local};
+use crate::monomorphic::{Expression, ExpressionKind, Local};
 use crate::monotype::{DataType, MonotypeId};
 use crate::naming::{RESERVED, identifier, lower_first};
 use crate::syntax::{GoDeclaration, GoExpression, GoStatement};

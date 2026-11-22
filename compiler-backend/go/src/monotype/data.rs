@@ -124,7 +124,7 @@ impl Monotypes {
             self.schemes.note_cached(Read::Unfolded(data.clone()));
             return Ok(unfolded);
         }
-        let reads_start = self.schemes.reads_len();
+        let reads_start = self.schemes.read_count();
         let module = context.module(data.file_id)?;
         let IndexedTypeItemKind::Newtype { constructors, .. } =
             &module.indexed.items[data.item].kind
@@ -181,7 +181,7 @@ impl Monotypes {
             self.constructors.insert(data.clone(), Arc::clone(&constructors));
             return Ok(constructors);
         }
-        let reads_start = self.schemes.reads_len();
+        let reads_start = self.schemes.read_count();
         let module = context.module(data.file_id)?;
         let terms = match &module.indexed.items[data.item].kind {
             IndexedTypeItemKind::Data { constructors, .. }

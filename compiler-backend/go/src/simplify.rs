@@ -7,10 +7,10 @@ use rustc_hash::{FxHashMap, FxHashSet};
 
 use crate::foreign::{Foreign, LineCoverage};
 use crate::graph::{on_cycles, strongly_connected};
-use crate::mono::walk::{
+use crate::monomorphic::traversal::{
     for_each_binder_mut, for_each_child_mut, prune_unreachable, reference_graph, visit,
 };
-use crate::mono::{
+use crate::monomorphic::{
     Alternative, Binding, Expression, ExpressionKind, Function, FunctionId, Guard, Guarded,
     GuardedBranch, Literal, Local, LocalId, PATTERN_MATCH_FAILURE, PatternKind, Program,
     RecordUpdate,

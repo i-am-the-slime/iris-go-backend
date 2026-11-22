@@ -197,7 +197,7 @@ pub struct Monotypes {
     pub coercion_sites: FxHashMap<(MonotypeId, MonotypeId), CoercionSite>,
     /// How the names of specialized and lifted functions were formed, which
     /// travels with the types those names spell.
-    pub function_spellings: crate::mono::FunctionSpellings,
+    pub function_spellings: crate::monomorphic::FunctionSpellings,
     /// The synonyms and newtypes, with their arguments, that each record was
     /// spelled by where a type was converted, in the order met.
     pub record_spellings: FxHashMap<MonotypeId, Vec<RecordSpelling>>,

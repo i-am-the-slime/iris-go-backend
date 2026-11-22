@@ -11,7 +11,7 @@ use super::{Definition, Reference, Scope, SpecializationKey, Specializer, int64}
 use crate::dictionary::{Dictionary, Reflected};
 use crate::error::{GoResult, UnsupportedState};
 use crate::foreign::{self, Foreign, JsonCodec};
-use crate::mono::{Expression, ExpressionKind, FunctionSpelling, Literal, Local};
+use crate::monomorphic::{Expression, ExpressionKind, FunctionSpelling, Literal, Local};
 use crate::monotype::{Monotype, MonotypeId};
 use crate::primitives::Primitive;
 use crate::types::Substitution;

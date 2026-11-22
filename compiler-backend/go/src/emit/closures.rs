@@ -43,8 +43,8 @@ use crate::context::Context;
 use crate::error::GoResult;
 use crate::foreign::Foreign;
 use crate::lift::collect_binders;
-use crate::mono::walk::{for_each_child, for_each_child_mut};
-use crate::mono::{
+use crate::monomorphic::traversal::{for_each_child, for_each_child_mut};
+use crate::monomorphic::{
     Alternative, Binding, Expression, ExpressionKind, Function, FunctionId, FunctionSpelling,
     Guard, Guarded, Local, LocalId, Pattern, PatternKind, Program,
 };
@@ -1138,7 +1138,7 @@ where
             parameters.iter().map(|parameter| parameter.id).collect();
         seen.extend(binders.keys().copied());
         let mut captures: Vec<Local> = vec![];
-        crate::mono::walk::visit(body, &mut |node| {
+        crate::monomorphic::traversal::visit(body, &mut |node| {
             if let ExpressionKind::Local(id) = node.kind
                 && seen.insert(id)
             {

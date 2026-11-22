@@ -3,10 +3,10 @@ use smol_str::SmolStr;
 
 use super::{Emitter, uses_local};
 use crate::foreign::{Boundary, Foreign, Iteration};
-use crate::mono::walk::{
+use crate::monomorphic::traversal::{
     for_each_child, for_each_child_mut, for_each_guarded_child, prune_unreachable, visit,
 };
-use crate::mono::{
+use crate::monomorphic::{
     Alternative, Binding, Expression, ExpressionKind, Function, FunctionId, Guarded, Local,
     LocalId, Pattern, PatternKind, Program,
 };

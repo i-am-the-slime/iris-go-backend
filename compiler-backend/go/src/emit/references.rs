@@ -1,10 +1,10 @@
 use super::aliases::is_named;
+use crate::go_traversal::{self, Walk};
 use crate::syntax::{GoDeclaration, GoExpression, GoStatement, GoType};
-use crate::walk::{self, Walk};
 
 pub(super) fn promote_references(declarations: &mut [GoDeclaration]) {
     for declaration in declarations {
-        walk::each_block_in_declaration(declaration, |block| {
+        go_traversal::each_block_in_declaration(declaration, |block| {
             for position in 0..block.len() {
                 promote_at(block, position);
             }
@@ -19,7 +19,7 @@ fn promote_at(block: &mut [GoStatement], position: usize) {
         return;
     }
     for statement in rest {
-        walk::each_expression_in_statement(statement, |expression| {
+        go_traversal::each_expression_in_statement(statement, |expression| {
             if is_cell_value(expression, &name) {
                 *expression = GoExpression::Identifier(name.clone());
             }
@@ -106,7 +106,7 @@ impl Walk for Uses<'_> {
         if bound.contains(&self.name) {
             self.escapes = true;
         }
-        walk::statement(self, statement);
+        go_traversal::statement(self, statement);
     }
 
     fn expression(&mut self, value: &mut GoExpression) {
@@ -118,7 +118,7 @@ impl Walk for Uses<'_> {
             {
                 self.escapes = true
             }
-            _ => walk::expression(self, value),
+            _ => go_traversal::expression(self, value),
         }
     }
 }

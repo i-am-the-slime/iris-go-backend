@@ -58,7 +58,9 @@ pub fn foreign_structs(source: &str) -> Vec<String> {
         let Some(rest) = line.strip_prefix("type ") else { continue };
         let mut words = rest.split_whitespace();
         let (Some(name), Some(kind)) = (words.next(), words.next()) else { continue };
-        if kind.starts_with("struct") && name.chars().all(|c| c.is_alphanumeric() || c == '_') {
+        if kind.starts_with("struct")
+            && name.chars().all(|character| character.is_alphanumeric() || character == '_')
+        {
             structs.push(name.to_string());
         }
     }
@@ -103,7 +105,9 @@ pub fn foreign_declarations(source: &str) -> (Vec<String>, Vec<String>) {
 
 /// The identifier a declaration starts with; a method's receiver is not one.
 fn leading_identifier(text: &str) -> Option<&str> {
-    let end = text.find(|c: char| !(c.is_alphanumeric() || c == '_')).unwrap_or(text.len());
+    let end = text
+        .find(|character: char| !(character.is_alphanumeric() || character == '_'))
+        .unwrap_or(text.len());
     (end > 0).then(|| &text[..end])
 }
 

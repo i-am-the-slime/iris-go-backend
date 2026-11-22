@@ -23,11 +23,13 @@ use crate::syntax::{
 };
 
 use super::views::{carried_unchanged, view_invariant_strings};
-use crate::walk::{self, Walk, each_expression_in_declaration, each_expression_in_statement};
+use crate::go_traversal::{
+    self, Walk, each_expression_in_declaration, each_expression_in_statement,
+};
 
 pub fn count_lengths_up_to_comparisons(declarations: &mut [GoDeclaration]) {
     for declaration in declarations {
-        walk::declaration(&mut Capped, declaration);
+        go_traversal::declaration(&mut Capped, declaration);
     }
 }
 
@@ -36,13 +38,13 @@ struct Capped;
 
 impl Walk for Capped {
     fn expression(&mut self, value: &mut GoExpression) {
-        walk::expression(self, value);
+        go_traversal::expression(self, value);
         counted_code_points(value);
         compared_length(value);
     }
 
     fn statement(&mut self, statement: &mut GoStatement) {
-        walk::statement(self, statement);
+        go_traversal::statement(self, statement);
         if let GoStatement::Switch { value: Some(value), cases, .. } = statement
             && let Some(largest) = largest_literal(cases.iter().flat_map(|case| &case.values))
         {
@@ -144,8 +146,8 @@ fn switched_lengths(body: &mut [GoStatement]) {
         };
         let mut uses = 0;
         for statement in rest.iter_mut() {
-            each_expression_in_statement(statement, |e| {
-                if matches!(e, GoExpression::Identifier(used) if used == name) {
+            each_expression_in_statement(statement, |expression| {
+                if matches!(expression, GoExpression::Identifier(used) if used == name) {
                     uses += 1;
                 }
             });
@@ -161,7 +163,7 @@ fn largest_literal<'a>(values: impl Iterator<Item = &'a GoExpression>) -> Option
     let mut largest = None;
     for value in values {
         let GoExpression::Integer(literal) = value else { return None };
-        largest = Some(largest.map_or(*literal, |l: i64| l.max(*literal)));
+        largest = Some(largest.map_or(*literal, |so_far: i64| so_far.max(*literal)));
     }
     largest
 }

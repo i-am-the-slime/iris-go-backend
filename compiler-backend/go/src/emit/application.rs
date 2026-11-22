@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use super::{Emitter, call, identifier_expression, uses_local};
 use crate::error::GoResult;
-use crate::mono::{Expression, ExpressionKind, FunctionId, Local};
+use crate::monomorphic::{Expression, ExpressionKind, FunctionId, Local};
 use crate::monotype::MonotypeId;
 use crate::naming::UNNAMED_VALUE;
 use crate::syntax::{GoExpression, GoStatement, GoType};

@@ -10,7 +10,7 @@ use smol_str::SmolStr;
 use super::{Scope, Specializer};
 use crate::error::{GoError, GoResult, UnsupportedState};
 use crate::foreign::{Accumulator, Boundary, Foreign, ForeignPackages, Signature, Spelled};
-use crate::mono::{Expression, ExpressionKind, Local};
+use crate::monomorphic::{Expression, ExpressionKind, Local};
 use crate::monotype::{Monotype, MonotypeId, supported};
 use crate::scheme::rank_n_scheme;
 use crate::types::Substitution;

@@ -2,7 +2,7 @@ use smol_str::SmolStr;
 
 use super::{Simplifier, choice, three_way};
 use crate::foreign::{Comparison, Foreign, GoPackage, Operator};
-use crate::mono::{Binding, Expression, ExpressionKind, Guarded, Literal, Local, LocalId};
+use crate::monomorphic::{Binding, Expression, ExpressionKind, Guarded, Literal, Local, LocalId};
 use crate::monotype::{Monotype, MonotypeId};
 use crate::purity::{is_discardable, is_trivial, runs_effect_when_applied};
 

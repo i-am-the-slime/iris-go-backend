@@ -1,8 +1,8 @@
 use rustc_hash::FxHashMap;
 
 use super::Simplifier;
-use crate::mono::walk::for_each_child_mut;
-use crate::mono::{Expression, ExpressionKind, Guard, Guarded, Local, LocalId, Pattern};
+use crate::monomorphic::traversal::for_each_child_mut;
+use crate::monomorphic::{Expression, ExpressionKind, Guard, Guarded, Local, LocalId, Pattern};
 
 impl Simplifier<'_> {
     pub(super) fn rename_binder(

@@ -31,9 +31,9 @@
 
 use rustc_hash::FxHashSet;
 
+use crate::go_traversal::{self, Walk};
 use crate::naming::{lower_first, numbered};
 use crate::syntax::{DeclarationNames, GoDeclaration, GoExpression, GoStatement, GoType};
-use crate::walk::{self, Walk};
 
 /// The fewest cells of one type in one expression that are allocated together.
 const MINIMUM_CELLS: usize = 3;
@@ -48,7 +48,7 @@ pub fn allocate_nested_cells_together(
     for (declaration, names) in declarations.iter_mut().zip(names) {
         let names = &mut names.names;
         let mut function = Function { names, taken, always: false, pending: vec![] };
-        walk::declaration(&mut function, declaration);
+        go_traversal::declaration(&mut function, declaration);
     }
 }
 
@@ -93,7 +93,7 @@ impl Walk for Function<'_> {
                 | GoStatement::Expression(_)
                 | GoStatement::Return(_)
         );
-        walk::statement(self, statement);
+        go_traversal::statement(self, statement);
     }
 
     /// An expression. When its statement always evaluates it, the blocks its
@@ -113,7 +113,7 @@ impl Walk for Function<'_> {
                 self.expression(right);
                 self.always = always;
             }
-            _ => walk::expression(self, value),
+            _ => go_traversal::expression(self, value),
         }
     }
 }

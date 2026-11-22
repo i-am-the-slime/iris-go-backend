@@ -21,7 +21,7 @@ use super::packages::{SpelledPart, Spelling};
 use super::{Emitter, identifier};
 use crate::error::GoResult;
 use crate::modules::Modules;
-use crate::mono::FunctionSpelling;
+use crate::monomorphic::FunctionSpelling;
 use crate::monotype::{Monotype, MonotypeId, RecordField, supported};
 use crate::naming::{capitalise, is_vague, ladder};
 

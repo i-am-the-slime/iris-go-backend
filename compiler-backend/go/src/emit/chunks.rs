@@ -29,7 +29,7 @@ use rustc_hash::{FxHashMap, FxHashSet};
 use crate::naming::{lower_first, numbered};
 use crate::syntax::{DeclarationNames, GoDeclaration, GoExpression, GoStatement, GoType};
 
-use crate::walk::{self, Walk};
+use crate::go_traversal::{self, Walk};
 
 /// Rewrites the linked cells of every loop, and tells whether it rewrote any.
 /// `taken` tells which names a new local must not shadow.
@@ -41,7 +41,7 @@ pub fn allocate_linked_cells_in_chunks(
     let mut chunked = false;
     for (declaration, names) in declarations.iter_mut().zip(names) {
         let mut function = Function { names: &mut names.names, taken, chunked: false };
-        walk::declaration(&mut function, declaration);
+        go_traversal::declaration(&mut function, declaration);
         chunked |= function.chunked;
     }
     chunked

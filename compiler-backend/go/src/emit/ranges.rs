@@ -16,12 +16,12 @@ use rustc_hash::FxHashSet;
 
 use crate::syntax::{GoDeclaration, GoExpression, GoStatement};
 
-use crate::walk::{self, Walk, each_expression_in_statement};
+use crate::go_traversal::{self, Walk, each_expression_in_statement};
 
 pub fn read_elements_in_place(declarations: &mut [GoDeclaration]) {
     for declaration in declarations {
         let names = declaration.all_names();
-        walk::declaration(&mut InPlace { names }, declaration);
+        go_traversal::declaration(&mut InPlace { names }, declaration);
     }
 }
 
@@ -32,7 +32,7 @@ struct InPlace {
 
 impl Walk for InPlace {
     fn statement(&mut self, statement: &mut GoStatement) {
-        walk::statement(self, statement);
+        go_traversal::statement(self, statement);
         let GoStatement::Range { index, element, iterable, body } = statement else { return };
         if let GoExpression::Identifier(array) = iterable
             && element != "_"
@@ -115,7 +115,7 @@ impl Walk for Check<'_> {
             }
             _ => {}
         }
-        walk::statement(self, statement);
+        go_traversal::statement(self, statement);
     }
 
     fn expression(&mut self, value: &mut GoExpression) {
@@ -147,14 +147,14 @@ impl Walk for Check<'_> {
                 if let GoExpression::Field { value: base, name } = &**function
                     && let GoExpression::Identifier(base) = &**base
                     && base == self.element
-                    && name.starts_with(|c: char| c.is_uppercase())
+                    && name.starts_with(|character: char| character.is_uppercase())
                 {
                     self.refused = true;
                 }
             }
             _ => {}
         }
-        walk::expression(self, value);
+        go_traversal::expression(self, value);
     }
 }
 

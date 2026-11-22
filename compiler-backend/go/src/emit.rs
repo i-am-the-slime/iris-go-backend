@@ -80,8 +80,8 @@ use crate::context::Context;
 use crate::error::{GoError, GoResult};
 use crate::foreign::{Constructed, ForeignPackages, GoFunction, GoPackage};
 use crate::modules::{ModuleIndex, Modules};
-use crate::mono::walk::visit;
-use crate::mono::{
+use crate::monomorphic::traversal::visit;
+use crate::monomorphic::{
     Binding, Expression, ExpressionKind, FunctionId, Guarded, Literal, Local, LocalId, Pattern,
     PatternKind, Program, RecordUpdate,
 };
@@ -154,7 +154,8 @@ where
     let mut declarations = declarations?;
     let unused = emitter.unused_tail_group_entries();
     if !unused.is_empty() {
-        declarations.retain(|declaration| declaration.name().is_none_or(|n| !unused.contains(n)));
+        declarations
+            .retain(|declaration| declaration.name().is_none_or(|name| !unused.contains(name)));
     }
     let every_line = emitter
         .foreign_packages
@@ -276,7 +277,7 @@ where
         for file in &files {
             let (source, file_census) = file.file.render_with_census();
             census.absorb(file_census);
-            let identifier = |c: char| c.is_alphanumeric() || c == '_';
+            let identifier = |character: char| character.is_alphanumeric() || character == '_';
             textual += source
                 .match_indices("any")
                 .filter(|&(at, _)| {
@@ -2086,7 +2087,9 @@ fn shown_boolean(expression: &Expression) -> Option<&Expression> {
 }
 
 /// The Boolean an alternative of one column matches, if it does not match any, and its body.
-fn boolean_branch(alternative: &crate::mono::Alternative) -> Option<(Option<bool>, &Expression)> {
+fn boolean_branch(
+    alternative: &crate::monomorphic::Alternative,
+) -> Option<(Option<bool>, &Expression)> {
     match (&alternative.patterns[0].kind, &alternative.body) {
         (PatternKind::Literal(Literal::Boolean(value)), Guarded::Unconditional(body)) => {
             Some((Some(*value), body))
@@ -2178,7 +2181,7 @@ fn captures_parameters(
         }
         _ => {
             let mut captured = false;
-            crate::mono::walk::for_each_child(expression, &mut |child| {
+            crate::monomorphic::traversal::for_each_child(expression, &mut |child| {
                 captured = captured || captures(child, Mode::Value);
             });
             captured

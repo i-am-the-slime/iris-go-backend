@@ -2,7 +2,7 @@ use smol_str::SmolStr;
 
 use super::Simplifier;
 use crate::foreign::{self, Foreign, RecordOperation};
-use crate::mono::{Binding, Expression, ExpressionKind, Literal, Local, LocalId};
+use crate::monomorphic::{Binding, Expression, ExpressionKind, Literal, Local, LocalId};
 use crate::monotype::{Monotype, MonotypeId};
 
 type Fields = Vec<(SmolStr, Expression)>;
@@ -166,7 +166,9 @@ impl Simplifier<'_> {
             }
             return;
         }
-        crate::mono::walk::for_each_child_mut(expression, &mut |child| self.settle_records(child));
+        crate::monomorphic::traversal::for_each_child_mut(expression, &mut |child| {
+            self.settle_records(child)
+        });
         let monotype = expression.monotype;
         match &mut expression.kind {
             ExpressionKind::Foreign { foreign: Foreign::Record(operation), arguments } => {

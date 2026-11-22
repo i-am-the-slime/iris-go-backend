@@ -7,7 +7,7 @@ use super::{
     is_simple,
 };
 use crate::error::GoResult;
-use crate::mono::{Literal, Pattern, PatternKind};
+use crate::monomorphic::{Literal, Pattern, PatternKind};
 use crate::monotype::{DataConstructor, DataType, Failure, Monotype, MonotypeId};
 use crate::naming::identifier;
 use crate::primitives::{KnownType, known_type};

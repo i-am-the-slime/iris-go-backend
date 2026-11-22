@@ -20,7 +20,7 @@ use crate::dictionary::{Dictionary, InstanceDictionary};
 use crate::erasure::Erasure;
 use crate::error::{GoError, GoResult, UnsupportedState};
 use crate::foreign::{Foreign, ForeignPackages, Signature};
-use crate::mono::{
+use crate::monomorphic::{
     Alternative, Expression, ExpressionKind, Function, FunctionId, Guarded, Literal, Local,
     LocalId, SourcePosition,
 };
@@ -368,10 +368,10 @@ where
     /// changed it, which must be specialized again under the schemes as they
     /// are now.
     fn stale_functions(&self) -> BTreeSet<FunctionId> {
-        let mut memo = FxHashMap::default();
+        let mut staleness = FxHashMap::default();
         let mut stale = BTreeSet::new();
         for (index, reads) in self.function_reads.iter().enumerate() {
-            if reads.iter().any(|read| self.monotypes.is_stale(read, &mut memo)) {
+            if reads.iter().any(|read| self.monotypes.is_stale(read, &mut staleness)) {
                 stale.insert(FunctionId(index as u32));
             }
         }
@@ -571,7 +571,7 @@ where
             }
             return;
         }
-        crate::mono::walk::for_each_child_mut(expression, &mut |child| {
+        crate::monomorphic::traversal::for_each_child_mut(expression, &mut |child| {
             self.reconcile_references(child, signatures)
         });
     }
@@ -843,7 +843,7 @@ fn mismatched_references(
         }
         return;
     }
-    crate::mono::walk::for_each_child(expression, &mut |child| {
+    crate::monomorphic::traversal::for_each_child(expression, &mut |child| {
         mismatched_references(child, signatures, mismatches)
     });
 }

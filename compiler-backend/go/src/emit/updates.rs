@@ -1,11 +1,11 @@
 use super::aliases::{Guarded, is_named, mentions};
+use crate::go_traversal::{self, Walk};
 use crate::syntax::{GoDeclaration, GoExpression, GoStatement};
-use crate::walk::{self, Walk};
 
 pub(super) fn update_in_place(declarations: &mut [GoDeclaration]) {
     for declaration in declarations {
         let guarded = Guarded::of(declaration);
-        walk::each_block_in_declaration(declaration, |block| {
+        go_traversal::each_block_in_declaration(declaration, |block| {
             let mut position = 0;
             while position < block.len() {
                 if !update_at(block, position, &guarded) && !take_over_at(block, position, &guarded)
@@ -86,7 +86,7 @@ fn take_over_at(block: &mut Vec<GoStatement>, position: usize, guarded: &Guarded
     }
     block.remove(position);
     for statement in &mut block[position..] {
-        walk::each_expression_in_statement(statement, |expression| {
+        go_traversal::each_expression_in_statement(statement, |expression| {
             if is_named(expression, &copy) {
                 *expression = GoExpression::Identifier(source.clone());
             }
@@ -153,7 +153,7 @@ impl Walk for SourceReads<'_> {
                 self.fields.push(name.clone());
             }
             GoExpression::Identifier(name) if name == self.source => self.whole = true,
-            _ => walk::expression(self, value),
+            _ => go_traversal::expression(self, value),
         }
     }
 }

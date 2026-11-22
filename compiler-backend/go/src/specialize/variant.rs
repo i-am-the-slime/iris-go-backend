@@ -4,7 +4,9 @@ use smol_str::SmolStr;
 
 use super::{Scope, Specializer};
 use crate::error::GoResult;
-use crate::mono::{Alternative, Expression, ExpressionKind, Guarded, Local, Pattern, PatternKind};
+use crate::monomorphic::{
+    Alternative, Expression, ExpressionKind, Guarded, Local, Pattern, PatternKind,
+};
 use crate::monotype::{DataType, Monotype, MonotypeId};
 use crate::primitives::Primitive;
 

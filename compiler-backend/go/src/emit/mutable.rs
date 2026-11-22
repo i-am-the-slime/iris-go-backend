@@ -2,7 +2,7 @@ use super::iteration::Found;
 use super::{Emitter, Mode, Sink, binary, call, identifier_expression, unit_value};
 use crate::error::GoResult;
 use crate::foreign::{GoFunction, GoPackage};
-use crate::mono::Expression;
+use crate::monomorphic::Expression;
 use crate::monotype::MonotypeId;
 use crate::syntax::{GoExpression, GoStatement, GoType};
 

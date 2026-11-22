@@ -7,7 +7,7 @@ use smol_str::SmolStr;
 use super::{Scope, Specializer};
 use crate::error::GoResult;
 use crate::foreign::{self, Foreign, Operator};
-use crate::mono::{Expression, ExpressionKind, Literal, Local};
+use crate::monomorphic::{Expression, ExpressionKind, Literal, Local};
 use crate::monotype::{Monotype, MonotypeId};
 use crate::types::Substitution;
 

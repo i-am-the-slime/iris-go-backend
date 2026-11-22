@@ -1,7 +1,7 @@
 use super::{Emitter, call, identifier_expression, returning};
 use crate::error::GoResult;
 use crate::foreign::{Foreign, ForeignPackages};
-use crate::mono::Expression;
+use crate::monomorphic::Expression;
 use crate::monotype::{Monotype, MonotypeId};
 use crate::naming::capitalise;
 use crate::syntax::{GoExpression, GoStatement};

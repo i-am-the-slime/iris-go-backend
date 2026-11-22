@@ -8,7 +8,7 @@ use smol_str::SmolStr;
 use super::{Scope, Specializer};
 use crate::erasure::Erasure;
 use crate::error::{GoResult, UnsupportedState};
-use crate::mono::{Alternative, Expression, ExpressionKind, Guarded, Pattern, PatternKind};
+use crate::monomorphic::{Alternative, Expression, ExpressionKind, Guarded, Pattern, PatternKind};
 use crate::monotype::{DataType, Monotype, MonotypeId, RecordField};
 use crate::primitives::Primitive;
 use crate::scheme::{SCHEME_INSTANTIATION_LIMIT, SchemeInstantiation, SchemeKey, rank_n_scheme};

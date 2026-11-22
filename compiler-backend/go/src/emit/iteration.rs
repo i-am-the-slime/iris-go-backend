@@ -5,7 +5,7 @@ use super::recycling::Recycled;
 use super::{Emitter, Mode, Sink, call, identifier_expression, unit_value, uses_local};
 use crate::error::GoResult;
 use crate::foreign::{GoFunction, GoPackage, Iteration};
-use crate::mono::{Expression, ExpressionKind, FunctionId, Local};
+use crate::monomorphic::{Expression, ExpressionKind, FunctionId, Local};
 use crate::monotype::{DataType, Monotype, MonotypeId};
 use crate::syntax::{GoExpression, GoStatement, GoType};
 

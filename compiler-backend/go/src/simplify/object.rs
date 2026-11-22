@@ -1,6 +1,6 @@
 use super::Simplifier;
 use crate::foreign;
-use crate::mono::{Binding, Expression, ExpressionKind, Local, LocalId};
+use crate::monomorphic::{Binding, Expression, ExpressionKind, Local, LocalId};
 use crate::monotype::{Monotype, MonotypeId};
 
 impl Simplifier<'_> {

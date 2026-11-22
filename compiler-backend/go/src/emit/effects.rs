@@ -4,7 +4,7 @@ use super::{
 };
 use crate::error::{GoError, GoResult};
 use crate::foreign::{Foreign, GoFunction, GoPackage};
-use crate::mono::{Expression, ExpressionKind};
+use crate::monomorphic::{Expression, ExpressionKind};
 use crate::monotype::MonotypeId;
 use crate::syntax::{GoExpression, GoStatement, GoType};
 

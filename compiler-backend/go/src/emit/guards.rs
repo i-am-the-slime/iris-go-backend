@@ -33,8 +33,8 @@ use rustc_hash::FxHashSet;
 
 use super::headers::{Effects, Keeping, assigned_root, fresh, is_bounds_test, reads};
 use super::locals::NUMBERED;
+use crate::go_traversal::{self, Walk};
 use crate::syntax::{GoDeclaration, GoExpression, GoStatement};
-use crate::walk::{self, Walk};
 
 /// The statements one combined test may guard, counted with the statements of their blocks:
 /// every one of them is copied.
@@ -146,7 +146,7 @@ impl Together<'_, '_, '_> {
     fn scoped(&self, block: &mut [GoStatement], mut run: Run) -> Option<Run> {
         let mut later = FxHashSet::default();
         for statement in &mut block[run.end..] {
-            walk::each_expression_in_statement(statement, |expression| {
+            go_traversal::each_expression_in_statement(statement, |expression| {
                 if let GoExpression::Identifier(name) = expression {
                     later.insert(name.clone());
                 }
@@ -223,7 +223,7 @@ impl Together<'_, '_, '_> {
             }
         }
         for statement in &mut decided {
-            walk::each_expression_in_statement(statement, |expression| {
+            go_traversal::each_expression_in_statement(statement, |expression| {
                 if let GoExpression::Identifier(name) = expression
                     && run.named.contains(name)
                 {
@@ -254,7 +254,7 @@ impl Together<'_, '_, '_> {
 fn all_used(block: &[GoStatement]) -> bool {
     let mut read = FxHashSet::default();
     for statement in &mut block.to_vec() {
-        walk::each_expression_in_statement(statement, |expression| {
+        go_traversal::each_expression_in_statement(statement, |expression| {
             if let GoExpression::Identifier(name) = expression {
                 read.insert(name.clone());
             }
@@ -344,7 +344,7 @@ fn changed_names(statement: &mut GoStatement) -> FxHashSet<String> {
                     }
                 }
             }
-            walk::statement(self, statement);
+            go_traversal::statement(self, statement);
         }
 
         fn expression(&mut self, value: &mut GoExpression) {
@@ -353,7 +353,7 @@ fn changed_names(statement: &mut GoStatement) -> FxHashSet<String> {
             {
                 self.0.insert(root.to_string());
             }
-            walk::expression(self, value);
+            go_traversal::expression(self, value);
         }
     }
     let mut changed = Changed(FxHashSet::default());
@@ -366,7 +366,7 @@ fn statement_count(statement: &mut GoStatement) -> usize {
     impl Walk for Count {
         fn statement(&mut self, statement: &mut GoStatement) {
             self.0 += 1;
-            walk::statement(self, statement);
+            go_traversal::statement(self, statement);
         }
     }
     let mut count = Count(0);
@@ -384,7 +384,7 @@ fn rename(statement: &mut GoStatement, from: &str, to: &str) {
                 GoStatement::Variable { name, .. } if name == self.0 => *name = self.1.to_string(),
                 _ => {}
             }
-            walk::statement(self, statement);
+            go_traversal::statement(self, statement);
         }
 
         fn expression(&mut self, value: &mut GoExpression) {
@@ -393,7 +393,7 @@ fn rename(statement: &mut GoStatement, from: &str, to: &str) {
             {
                 *name = self.1.to_string();
             }
-            walk::expression(self, value);
+            go_traversal::expression(self, value);
         }
     }
     Rename(from, to).statement(statement);

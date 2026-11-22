@@ -11,7 +11,7 @@ use super::Specializer;
 use crate::dictionary::Dictionary;
 use crate::error::GoResult;
 use crate::foreign::{Foreign, JsonCodec};
-use crate::mono::{Expression, ExpressionKind};
+use crate::monomorphic::{Expression, ExpressionKind};
 use crate::monotype::MonotypeId;
 
 impl<'q, Q> Specializer<'q, Q>

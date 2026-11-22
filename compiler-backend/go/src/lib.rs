@@ -13,11 +13,12 @@ mod emit;
 mod erasure;
 mod error;
 mod foreign;
+mod go_traversal;
 mod graph;
 mod lift;
 mod merge;
 mod modules;
-mod mono;
+mod monomorphic;
 mod monotype;
 mod naming;
 mod numeric;
@@ -30,7 +31,6 @@ mod suspension;
 mod syntax;
 mod timing;
 mod types;
-mod walk;
 
 pub use error::{GoError, GoResult, UnsupportedState};
 pub use foreign::{
@@ -84,7 +84,7 @@ pub fn compile_program(
     let (functions, mut monotypes, next_local, thunk_parameters) =
         timed("finish specialization", || specializer.finish());
     monotypes.erased_newtypes = erased_newtypes;
-    let program = mono::Program { functions, entry };
+    let program = monomorphic::Program { functions, entry };
     let eliminators = emit::Eliminators::find(&program, &monotypes);
     let program = timed("simplify", || {
         let coverage =

@@ -143,7 +143,8 @@ pub const GO_PREDECLARED: &[&str] = &[
 
 /// `LayoutTree` is `layoutTree`, `HTMLNode` is `htmlNode`, `URL` is `url`.
 pub fn lower_camel(name: &str) -> String {
-    let characters: Vec<char> = name.chars().filter(|c| c.is_alphanumeric() || *c == '_').collect();
+    let characters: Vec<char> =
+        name.chars().filter(|character| character.is_alphanumeric() || *character == '_').collect();
     let leading = characters.iter().take_while(|character| character.is_uppercase()).count();
     let lowered = match leading {
         0 | 1 => leading,

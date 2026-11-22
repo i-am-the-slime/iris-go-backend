@@ -8,10 +8,10 @@ use super::{
 use crate::erasure::Erasure;
 use crate::error::{GoError, GoResult, RepresentationChange};
 use crate::foreign::{GoFunction, GoPackage};
-use crate::mono::{Expression, ExpressionKind};
+use crate::go_traversal::each_block;
+use crate::monomorphic::{Expression, ExpressionKind};
 use crate::monotype::{DataType, Failure, Monotype, MonotypeId, RecordField};
 use crate::syntax::{GoCase, GoDeclaration, GoDefault, GoExpression, GoStatement, GoType};
-use crate::walk::each_block;
 use smol_str::SmolStr;
 
 /// The construct a coercion between types of different shapes reports.

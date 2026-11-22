@@ -10,8 +10,8 @@ use files::FileId;
 use rustc_hash::{FxHashMap, FxHasher};
 
 use crate::modules::Modules;
-use crate::mono::walk::{for_each_child_mut, prune_unreachable, visit};
-use crate::mono::{
+use crate::monomorphic::traversal::{for_each_child_mut, prune_unreachable, visit};
+use crate::monomorphic::{
     Expression, ExpressionKind, Function, FunctionId, Guard, Guarded, Local, LocalId, Pattern,
     PatternKind, Program,
 };

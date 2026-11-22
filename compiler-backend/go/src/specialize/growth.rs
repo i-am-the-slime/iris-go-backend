@@ -5,7 +5,7 @@ use checking::{TypeId, tree};
 use super::{PolymorphicLocal, Scope, SpecializationKey, Specializer, runtime};
 use crate::erasure::Erasure;
 use crate::error::GoResult;
-use crate::mono::Expression;
+use crate::monomorphic::Expression;
 use crate::scheme::{SchemeKey, rank_n_scheme};
 
 impl<'q, Q> Specializer<'q, Q>

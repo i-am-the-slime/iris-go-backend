@@ -1,7 +1,7 @@
 use rustc_hash::FxHashSet;
 
 use super::{GoDeclaration, GoExpression, GoStatement, GoType};
-use crate::walk::{self, Walk};
+use crate::go_traversal::{self, Walk};
 
 /// A name as a declaration uses it: a reference to another declaration or a
 /// local, or a local the declaration binds.
@@ -190,7 +190,7 @@ impl<F: FnMut(Reference<'_>)> Walk for References<'_, F> {
             }
             _ => {}
         }
-        walk::statement(self, statement);
+        go_traversal::statement(self, statement);
     }
 
     fn expression(&mut self, expression: &mut GoExpression) {
@@ -213,7 +213,7 @@ impl<F: FnMut(Reference<'_>)> Walk for References<'_, F> {
             }
             _ => {}
         }
-        walk::expression(self, expression);
+        go_traversal::expression(self, expression);
         if let GoExpression::Instantiation { arguments, .. } = expression {
             arguments.iter_mut().for_each(|argument| type_references(argument, self.0));
         }
@@ -270,7 +270,7 @@ impl<F: FnMut(Name<'_>)> Walk for Names<'_, F> {
             }
             _ => {}
         }
-        walk::statement(self, statement);
+        go_traversal::statement(self, statement);
     }
 
     fn expression(&mut self, expression: &mut GoExpression) {
@@ -281,9 +281,9 @@ impl<F: FnMut(Name<'_>)> Walk for Names<'_, F> {
                 for (parameter, _) in parameters.iter_mut() {
                     (self.0)(Name::Binder(parameter));
                 }
-                walk::expression(self, expression);
+                go_traversal::expression(self, expression);
             }
-            expression => walk::expression(self, expression),
+            expression => go_traversal::expression(self, expression),
         }
     }
 }

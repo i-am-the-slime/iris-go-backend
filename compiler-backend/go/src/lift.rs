@@ -2,8 +2,8 @@ use files::FileId;
 use rustc_hash::{FxHashMap, FxHashSet};
 use smol_str::format_smolstr;
 
-use crate::mono::walk::{for_each_child, for_each_child_mut, visit};
-use crate::mono::{
+use crate::monomorphic::traversal::{for_each_child, for_each_child_mut, visit};
+use crate::monomorphic::{
     Binding, Expression, ExpressionKind, Function, FunctionId, FunctionSpelling, Local, LocalId,
     Program,
 };

@@ -8,7 +8,7 @@ use std::cmp::Ordering;
 
 use super::Simplifier;
 use crate::foreign::{self, Comparison, Foreign, Operator};
-use crate::mono::{Expression, ExpressionKind, Literal};
+use crate::monomorphic::{Expression, ExpressionKind, Literal};
 use crate::monotype::{Monotype, MonotypeId};
 use crate::primitives::Int64Operation;
 use crate::purity::is_discardable;

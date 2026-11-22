@@ -7,13 +7,13 @@ use super::{
 };
 use crate::error::GoResult;
 use crate::foreign::GoPackage;
+use crate::go_traversal::{self, Walk};
 use crate::graph::{on_cycles, strongly_connected};
-use crate::mono::walk::reference_graph;
-use crate::mono::{Expression, Function, FunctionId, Program};
+use crate::monomorphic::traversal::reference_graph;
+use crate::monomorphic::{Expression, Function, FunctionId, Program};
 use crate::monotype::{Monotype, Monotypes};
 use crate::naming::identifier;
 use crate::syntax::{GoDeclaration, GoExpression, GoStatement, GoType};
-use crate::walk::{self, Walk};
 
 impl<'q, Q> Emitter<'_, '_, 'q, Q>
 where
@@ -458,7 +458,7 @@ fn runs_code(expression: &GoExpression) -> bool {
             match value {
                 GoExpression::Function { .. } => {}
                 GoExpression::Call { .. } => self.0 = true,
-                _ => walk::expression(self, value),
+                _ => go_traversal::expression(self, value),
             }
         }
     }

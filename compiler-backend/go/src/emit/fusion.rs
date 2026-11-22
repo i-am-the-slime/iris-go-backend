@@ -42,7 +42,7 @@ use super::{
 };
 use crate::error::GoResult;
 use crate::foreign::{Boundary, Foreign, GoFunction, GoPackage, Iteration};
-use crate::mono::{Binding, Expression, ExpressionKind, Literal, Local};
+use crate::monomorphic::{Binding, Expression, ExpressionKind, Literal, Local};
 use crate::monotype::{Monotype, MonotypeId};
 use crate::naming::VALUE;
 use crate::syntax::{GoExpression, GoStatement, GoType, SourceLine};

@@ -32,7 +32,9 @@ use rustc_hash::FxHashSet;
 
 use super::{Emitter, call, identifier_expression, uses_local};
 use crate::foreign::{Boundary, Foreign, Iteration};
-use crate::mono::{Expression, ExpressionKind, Function, FunctionId, Guard, Guarded, LocalId};
+use crate::monomorphic::{
+    Expression, ExpressionKind, Function, FunctionId, Guard, Guarded, LocalId,
+};
 use crate::monotype::{Monotype, MonotypeId};
 use crate::syntax::{GoExpression, GoStatement, GoType};
 

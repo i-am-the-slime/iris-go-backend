@@ -13,7 +13,7 @@ use smol_str::{SmolStr, format_smolstr};
 
 use super::{LocalSource, Scope, Specializer, string_literal};
 use crate::error::{GoError, GoResult, UnsupportedState};
-use crate::mono::{
+use crate::monomorphic::{
     Alternative, Binding, Expression, ExpressionKind, Guard, Guarded, GuardedBranch, Literal,
     Pattern, PatternKind,
 };
@@ -34,7 +34,7 @@ where
             }
         }
         let mut result = Ok(());
-        crate::mono::walk::for_each_child_mut(expression, &mut |child| {
+        crate::monomorphic::traversal::for_each_child_mut(expression, &mut |child| {
             if result.is_ok() {
                 result = self.match_field_representations(child);
             }
