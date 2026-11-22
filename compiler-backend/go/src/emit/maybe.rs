@@ -4,6 +4,7 @@ use super::names::{NamePart, PendingSpelling};
 use super::packages::Spelling;
 use super::{
     ConstructorLayout, DataKind, DataLayout, Emitter, binary, call, field, identifier_expression,
+    is_simple,
 };
 use crate::error::GoResult;
 use crate::mono::{Literal, Pattern, PatternKind};
@@ -531,5 +532,95 @@ where
             }
             Some(MaybeLayout::Pointer { .. }) => path,
         }
+    }
+}
+
+impl<'q, Q> Emitter<'_, '_, 'q, Q>
+where
+    Q: checking::ExternalQueries,
+{
+    pub(super) fn mentioned_maybe(&mut self, monotype: MonotypeId) -> GoResult<Option<MonotypeId>> {
+        match self.monotypes.get(monotype).clone() {
+            Monotype::Data(data) => {
+                if self.maybe_payload(&data)?.is_some() {
+                    return Ok(Some(monotype));
+                }
+                Ok(None)
+            }
+            Monotype::Array(element) => self.mentioned_maybe(element),
+            Monotype::Function(argument, result) => match self.mentioned_maybe(argument)? {
+                Some(maybe) => Ok(Some(maybe)),
+                None => self.mentioned_maybe(result),
+            },
+            _ => Ok(None),
+        }
+    }
+
+    pub(super) fn just_function(&mut self, maybe: MonotypeId) -> GoResult<GoExpression> {
+        self.constructor_function(maybe, "Just")
+    }
+
+    pub(super) fn nothing_value(&mut self, maybe: MonotypeId) -> GoResult<GoExpression> {
+        let (data, nothing) = self.constructor_named(maybe, "Nothing")?;
+        self.construct(&data, nothing, vec![])
+    }
+
+    /// The `Maybe b` of a `Maybe (Array (Maybe b))`.
+    pub(super) fn array_payload_maybe(&mut self, maybe: MonotypeId) -> GoResult<MonotypeId> {
+        let (data, just) = self.constructor_named(maybe, "Just")?;
+        let layout = self.data_layout(&data)?;
+        let [(_, payload)] = &layout.constructors[just].fields[..] else {
+            unreachable!("invariant violated: Just has one field")
+        };
+        let Monotype::Array(element) = self.monotypes.get(*payload).clone() else {
+            unreachable!("invariant violated: the Maybe holds an array")
+        };
+        Ok(element)
+    }
+
+    pub(super) fn is_just_function(&mut self, maybe: MonotypeId) -> GoResult<GoExpression> {
+        let (data, just) = self.constructor_named(maybe, "Just")?;
+        let layout = self.data_layout(&data)?;
+        let parameter = self.temporary("maybe");
+        let is_just = self
+            .constructor_test(&layout, just, identifier_expression(&parameter))
+            .expect("invariant violated: Just is one of two constructors");
+        Ok(GoExpression::Function {
+            parameters: vec![(parameter, self.go_type(maybe)?)],
+            result: Some(GoType::Bool),
+            body: vec![GoStatement::Return(Some(is_just))],
+        })
+    }
+
+    pub(super) fn just_value_function(&mut self, maybe: MonotypeId) -> GoResult<GoExpression> {
+        let (data, just) = self.constructor_named(maybe, "Just")?;
+        let layout = self.data_layout(&data)?;
+        let [(_, payload_monotype)] = layout.constructors[just].fields[..] else {
+            unreachable!("invariant violated: Just has one field")
+        };
+        let parameter = self.temporary("maybe");
+        let value = identifier_expression(&parameter);
+        let is_just = self
+            .constructor_test(&layout, just, value.clone())
+            .expect("invariant violated: Just is one of two constructors");
+        let payload = self.constructor_field(&layout, just, 0, value);
+        let mut then = vec![];
+        let addressed = if is_simple(&payload) {
+            payload
+        } else {
+            let name = self.temporary("payload");
+            then.push(GoStatement::Define { names: vec![name.clone()], values: vec![payload] });
+            identifier_expression(&name)
+        };
+        then.push(GoStatement::Return(Some(GoExpression::Address(Box::new(addressed)))));
+        let payload_type = self.go_type(payload_monotype)?;
+        Ok(GoExpression::Function {
+            parameters: vec![(parameter, self.go_type(maybe)?)],
+            result: Some(GoType::Pointer(Box::new(payload_type))),
+            body: vec![
+                GoStatement::If { condition: is_just, then, otherwise: vec![] },
+                GoStatement::Return(Some(identifier_expression("nil"))),
+            ],
+        })
     }
 }

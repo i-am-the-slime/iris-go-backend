@@ -10,7 +10,10 @@
 
 use rustc_hash::FxHashMap;
 
-use crate::naming::{GO_PREDECLARED, VALUE, capitalise, go_safe, numbered};
+use super::{Emitter, IMPORTED_PACKAGES, identifier_expression};
+use crate::mono::Local;
+use crate::monotype::{Monotype, MonotypeId};
+use crate::naming::{GO_PREDECLARED, VALUE, capitalise, go_safe, identifier, numbered};
 use crate::syntax::{GoDeclaration, GoExpression, GoStatement, GoType};
 
 use crate::walk::{self, Walk as _};
@@ -478,6 +481,84 @@ impl walk::Walk for Apply<'_> {
             _ => {}
         }
         walk::expression(self, expression);
+    }
+}
+
+impl<'q, Q> Emitter<'_, '_, 'q, Q>
+where
+    Q: checking::ExternalQueries,
+{
+    pub(super) fn bind_local(&mut self, local: &Local) -> String {
+        let base = self.local_base(&local.name, local.monotype);
+        let name = self.local_name(base);
+        self.locals.insert(local.id, identifier_expression(&name));
+        name
+    }
+
+    /// The Go spelling a local's name starts from: a record value's is a
+    /// token for its record, which the record's Go name replaces once
+    /// packaging has chosen it.
+    pub(super) fn local_base(&mut self, name: &str, monotype: MonotypeId) -> String {
+        match name.strip_prefix(crate::naming::RECORD_VALUE) {
+            Some("") => self.value_base(monotype),
+            Some(rest) => identifier(&crate::naming::lower_camel(rest)),
+            // A name from the type alone is the first to give way.
+            None if name == self.monotypes.value_name(monotype) => {
+                format!("{}{}", identifier(name), NUMBERED)
+            }
+            None => identifier(name),
+        }
+    }
+
+    /// The Go spelling of a value that only its type names.
+    pub(super) fn value_base(&mut self, monotype: MonotypeId) -> String {
+        if !matches!(self.monotypes.get(monotype), Monotype::Record(_)) {
+            return format!("{}{}", identifier(&self.monotypes.value_name(monotype)), NUMBERED);
+        }
+        let index = match self.typed_records.iter().position(|&known| known == monotype) {
+            Some(index) => index,
+            None => {
+                self.typed_records.push(monotype);
+                self.typed_records.len() - 1
+            }
+        };
+        record_token(index)
+    }
+
+    pub(super) fn temporary(&mut self, base: &str) -> String {
+        self.local_name(base.to_string())
+    }
+
+    /// A fresh local that shadows no global function or type, which the function body may
+    /// still need to refer to. A name the compiler made up does not shadow an imported package
+    /// either; a name from the source keeps it, and the file imports the package under another
+    /// name. A number a local needs follows a mark, so that once the local's Go scope is known it
+    /// can lose the number where nothing there clashes with it.
+    pub(super) fn local_name(&mut self, base: String) -> String {
+        // A name that ends in the mark yields to any it clashes with once
+        // settled. So does a package's name, which is free for a local where
+        // the code does not use the package, as only the settled scope shows.
+        let soft = base.ends_with(NUMBERED);
+        // A base taken from a call, as a hoisted scrutinee's `append` from
+        // `array.Append`, must not shadow the Go builtin the code still calls.
+        let base = go_safe(base.trim_end_matches(NUMBERED)).to_string();
+        let (base, soft) = match base.strip_suffix('_') {
+            Some(stem) if IMPORTED_PACKAGES.contains(&stem) => (stem.to_string(), true),
+            _ => (base, soft),
+        };
+        let taken = |emitter: &Self, candidate: &String| {
+            emitter.local_names.contains(candidate)
+                || emitter.global_names.contains(candidate)
+                || (soft && IMPORTED_PACKAGES.contains(&candidate.as_str()))
+        };
+        let mut candidate = if soft { format!("{base}{}", NUMBERED) } else { base.clone() };
+        let mut counter = 2;
+        while taken(self, &candidate) {
+            candidate = format!("{base}{}{counter}", NUMBERED);
+            counter += 1;
+        }
+        self.local_names.insert(candidate.clone());
+        candidate
     }
 }
 

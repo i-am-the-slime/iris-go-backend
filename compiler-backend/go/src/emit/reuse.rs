@@ -1,13 +1,13 @@
 use rustc_hash::{FxHashMap, FxHashSet};
 use smol_str::SmolStr;
 
-use super::uses_local;
+use super::{Emitter, uses_local};
 use crate::foreign::{Boundary, Foreign, Iteration};
 use crate::mono::{
     Alternative, Binding, Expression, ExpressionKind, Function, FunctionId, Guarded, Local,
     LocalId, Pattern, PatternKind, Program,
 };
-use crate::monotype::{DataType, MonotypeId};
+use crate::monotype::{DataType, Monotype, MonotypeId};
 use crate::simplify::{
     for_each_child, for_each_child_mut, for_each_guarded_child, prune_unreachable, visit,
 };
@@ -1361,4 +1361,95 @@ fn has_escape_hatches(function: &Function, cells: &mut impl Cells) -> bool {
     monotypes.sort_unstable();
     monotypes.dedup();
     monotypes.into_iter().any(|monotype| cells.erases(monotype) || cells.is_suspended(monotype))
+}
+
+impl<Q> Cells for Emitter<'_, '_, '_, Q>
+where
+    Q: checking::ExternalQueries,
+{
+    fn cell(&mut self, monotype: MonotypeId) -> Option<DataType> {
+        let Monotype::Data(data) = self.monotypes.get(monotype).clone() else { return None };
+        if let Some(&cell) = self.cell_types.get(&data) {
+            return cell.then_some(data);
+        }
+        let cell = self.is_cell(&data);
+        self.cell_types.insert(data.clone(), cell);
+        cell.then_some(data)
+    }
+
+    fn is_spine(&mut self, cell: &DataType, field: MonotypeId) -> bool {
+        let Some(child) = Cells::cell(self, field) else { return false };
+        let key = (child.clone(), cell.clone());
+        if let Some(&reaches) = self.reaching.get(&key) {
+            return reaches;
+        }
+        let reaches = self.reaches(&child, cell).unwrap_or(false);
+        self.reaching.insert(key, reaches);
+        reaches
+    }
+
+    fn is_effect(&self, monotype: MonotypeId) -> bool {
+        self.monotypes.effect_result(monotype).is_some()
+    }
+
+    fn is_suspended(&self, monotype: MonotypeId) -> bool {
+        matches!(self.monotypes.get(monotype), Monotype::Lazy(_) | Monotype::Effect(_))
+    }
+
+    fn erases(&mut self, monotype: MonotypeId) -> bool {
+        if let Some(&erases) = self.erasing.get(&monotype) {
+            return erases;
+        }
+        self.erasing.insert(monotype, false);
+        let erases = match self.monotypes.get(monotype).clone() {
+            Monotype::Erased(_) | Monotype::Recursive(_) => true,
+            Monotype::Data(data) => self.erases_arguments(&data).unwrap_or(true),
+            Monotype::Function(argument, result) => {
+                Cells::erases(self, argument) || Cells::erases(self, result)
+            }
+            Monotype::Record(fields) => {
+                fields.iter().any(|field| Cells::erases(self, field.monotype))
+            }
+            container => container.element().is_some_and(|element| Cells::erases(self, element)),
+        };
+        self.erasing.insert(monotype, erases);
+        erases
+    }
+
+    fn retains(&mut self, monotype: MonotypeId) -> bool {
+        if let Some(&retains) = self.retaining.get(&monotype) {
+            return retains;
+        }
+        self.retaining.insert(monotype, true);
+        let retains = match self.monotypes.get(monotype).clone() {
+            Monotype::Int
+            | Monotype::Number
+            | Monotype::Boolean
+            | Monotype::Char
+            | Monotype::String
+            | Monotype::Unit
+            | Monotype::BigInt
+            | Monotype::Regex => false,
+            Monotype::Array(element) => Cells::retains(self, element),
+            Monotype::Record(fields) => {
+                fields.iter().any(|field| Cells::retains(self, field.monotype))
+            }
+            Monotype::Data(data) => {
+                Cells::cell(self, monotype).is_some()
+                    || self.constructor_fields(&data).map_or(true, |fields| {
+                        fields.into_iter().any(|field| Cells::retains(self, field))
+                    })
+            }
+            _ => true,
+        };
+        self.retaining.insert(monotype, retains);
+        retains
+    }
+
+    fn function_type(&mut self, parameters: &[MonotypeId], result: MonotypeId) -> MonotypeId {
+        parameters
+            .iter()
+            .rev()
+            .fold(result, |result, &parameter| self.monotypes.function(parameter, result))
+    }
 }
