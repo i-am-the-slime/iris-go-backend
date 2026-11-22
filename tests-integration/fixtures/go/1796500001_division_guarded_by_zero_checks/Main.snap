@@ -1,0 +1,193 @@
+---
+source: tests-integration/src/fixtures.rs
+---
+// Data/Show/show.go
+package show
+
+import "strconv"
+
+func ShowInt(i int32) string {
+	return strconv.Itoa(int(i))
+}
+
+func ShowBoolean(boolean bool) string {
+	if boolean {
+		return "true"
+	}
+	return "false"
+}
+
+func AppendShowArrayBoolean(buffer []byte, array []bool) []byte {
+	buffer = append(buffer, "["...)
+	for index, element := range array {
+		if index > 0 {
+			buffer = append(buffer, ","...)
+		}
+		buffer = strconv.AppendBool(buffer, element)
+	}
+	buffer = append(buffer, "]"...)
+	return buffer
+}
+
+func AppendShowArrayInt(buffer []byte, array []int32) []byte {
+	buffer = append(buffer, "["...)
+	for index, element := range array {
+		if index > 0 {
+			buffer = append(buffer, ","...)
+		}
+		buffer = strconv.AppendInt(buffer, int64(element), 10)
+	}
+	buffer = append(buffer, "]"...)
+	return buffer
+}
+
+// main.go
+package main
+
+import (
+	"fixture/Data/Show"
+	"fixture/shared"
+	"github.com/i-am-the-slime/iris-go/array"
+	"github.com/i-am-the-slime/iris-go/prim"
+	"strconv"
+)
+
+func main() {
+	output := &shared.Ref[[]string]{Value: []string{}}
+	inputs := shared.DivisorsN{N: 17, Divisors: []int32{0, 4, 5, -3}}
+	n := inputs.N
+	n2 := n + 23
+	n3 := n + 23
+	mainLog(output, string(show.AppendShowArrayInt(nil, []int32{mainGo(n2, 0, 0), mainGo2(n3, 0, 0)})))
+	for _, i := range inputs.Divisors {
+		var result bool
+		if i == 0 {
+			result = false
+		} else if prim.IntDiv(n, i) > 3 {
+			result = true
+		} else {
+			result = prim.IntMod(n, i) == 1
+		}
+		mainLog(output, string(show.AppendShowArrayBoolean(nil, []bool{i != 0 && prim.IntDiv(n, i) > 3, i != 0 && (prim.IntMod(n, i) == 0 && prim.IntDiv(n, i) > 1), result})))
+		var result2 string
+		if i == 0 {
+			result2 = "undefined"
+		} else if prim.IntMod(n, i) == 0 {
+			result2 = "divides"
+		} else if prim.IntDiv(n, i) > 2 {
+			result2 = "large"
+		} else {
+			result2 = "small"
+		}
+		var result3 int32
+		if i != 0 && prim.IntDiv(n, i) > 3 {
+			result3 = prim.IntDiv(n, i)
+		} else {
+			result3 = -1
+		}
+		var result4 int32
+		if i == 0 {
+			result4 = 0
+		} else if prim.IntMod(n, i) > 1 {
+			result4 = prim.IntMod(n, i)
+		} else {
+			result4 = prim.IntDiv(n, i)
+		}
+		mainLog(output, result2+" "+strconv.Itoa(int(result3))+" "+strconv.Itoa(int(result4)))
+		step, count := array.RangeSteps(1, n)
+		kept := []int32{}
+		for index := range count {
+			n4 := 1 + int32(index)*step
+			if i != 0 && (prim.IntMod(n4, i) == 0 && prim.IntDiv(n4, i) > 1) {
+				kept = append(kept, n4)
+			}
+		}
+		mainLog(output, string(show.AppendShowArrayInt(nil, kept)))
+		var result5 bool
+		if n < 0 || i <= 0 {
+			result5 = false
+		} else if prim.IntDiv(n, i) > 3 {
+			result5 = true
+		} else {
+			result5 = prim.IntMod(n, i) == 1
+		}
+		mainLog(output, string(show.AppendShowArrayBoolean(nil, []bool{n >= 0 && (i > 0 && prim.IntDiv(n, i) > 3), result5})))
+		step2, count2 := array.RangeSteps(1, n)
+		kept2 := []int32{}
+		for index := range count2 {
+			n4 := 1 + int32(index)*step2
+			if i > 0 && (prim.IntMod(n4, i) == 0 && prim.IntDiv(n4, i) > 1) {
+				kept2 = append(kept2, n4)
+			}
+		}
+		mainLog(output, string(show.AppendShowArrayInt(nil, kept2)))
+		if i != 0 {
+			mainLog(output, "quotient "+strconv.Itoa(int(prim.IntDiv(n, i)))+" remainder "+strconv.Itoa(int(prim.IntMod(n, i))))
+		}
+		if i != 0 && prim.IntDiv(n, i) > 3 {
+			mainLog(output, "more than three")
+		}
+		if n >= 0 && i > 0 {
+			mainLog(output, "natural quotient "+strconv.Itoa(int(prim.IntDiv(n, i)))+" remainder "+strconv.Itoa(int(prim.IntMod(n, i))))
+		}
+	}
+}
+
+func mainLog(output *shared.Ref[[]string], line string) {
+	s := output.Value
+	s_ := array.Append(s, []string{line})
+	output.Value = s_
+}
+
+func mainGo(n int32, i int32, total int32) int32 {
+	for {
+		if i >= n {
+			return total
+		}
+		if i > 2 && prim.IntDiv(100, i-2) > 3 {
+			i, total = i+1, total+100%(i-2)
+			continue
+		}
+		i, total = i+1, total+1
+	}
+}
+
+func mainGo2(n int32, i int32, total int32) int32 {
+	for {
+		if i >= n {
+			return total
+		}
+		var result2 bool
+		if i <= 2 {
+			result2 = false
+		} else if 100/(i-2) > 3 {
+			result2 = true
+		} else {
+			result2 = 100%(i-2) == 1
+		}
+		var result int32
+		if result2 {
+			result = 1
+		} else {
+			result = 0
+		}
+		i, total = i+1, total+result
+	}
+}
+
+// shared/shared.go
+package shared
+
+type Ref[T any] struct {
+	Value T
+}
+
+type DivisorsN struct {
+	Divisors []int32
+	N        int32
+}
+
+type StateValue struct {
+	State []string
+	Value []string
+}
