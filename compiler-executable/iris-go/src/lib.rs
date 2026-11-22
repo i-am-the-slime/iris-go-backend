@@ -132,6 +132,7 @@ fn vendor_foreign_packages(
     let mut structs = vec![];
     let mut sources = vec![];
     let here = std::env::current_dir().map_err(|error| error.to_string())?;
+    let here = dunce::canonicalize(&here).unwrap_or(here);
     for (file_id, file) in snapshot.files.iter() {
         if file.kind != SourceKind::Project {
             continue;
@@ -153,12 +154,12 @@ fn vendor_foreign_packages(
             let (values, types) = go::foreign_declarations(&text);
             source.values.extend(values);
             source.types.extend(types);
-            let shown = foreign_file.strip_prefix(&here).unwrap_or(&foreign_file);
-            source.files.push(shown.display().to_string());
+            let shown = shown_path(&foreign_file, &here);
+            source.files.push(shown.clone());
             let Some(name) = foreign_file.file_name() else { continue };
             fs::write(package.join(name), go::foreign_source(&module, &text))
                 .map_err(|error| error.to_string())?;
-            copy_embedded_files(shown, &text, &package)?;
+            copy_embedded_files(Path::new(&shown), &text, &package)?;
         }
         modules.push(module);
         sources.push(source);
@@ -169,10 +170,7 @@ fn vendor_foreign_packages(
         .files
         .iter()
         .filter(|(_, file)| file.kind == SourceKind::Project)
-        .map(|(&file_id, file)| {
-            let shown = file.path.strip_prefix(&here).unwrap_or(&file.path);
-            (file_id, shown.display().to_string())
-        })
+        .map(|(&file_id, file)| (file_id, shown_path(&file.path, &here)))
         .collect();
     let module_path = module_path.to_string();
     let line_directives = None;
@@ -184,6 +182,13 @@ fn vendor_foreign_packages(
         source_paths,
         line_directives,
     })
+}
+
+/// The path as messages show it: relative to the working directory `here` when it is inside it,
+/// with `/` between its components on every platform.
+fn shown_path(path: &Path, here: &Path) -> String {
+    let relative = path.strip_prefix(here).unwrap_or(path);
+    relative.to_string_lossy().replace(std::path::MAIN_SEPARATOR, "/")
 }
 
 /// The absolute paths of the destination and of the source files, which `//line` directives

@@ -117,7 +117,7 @@ impl PatternError {
             PatternError::EmptyDirectory(pattern, directory) => EmbedError::EmptyDirectory {
                 file,
                 pattern,
-                directory: directory.display().to_string(),
+                directory: directory.to_string_lossy().replace(std::path::MAIN_SEPARATOR, "/"),
             },
             PatternError::Io(pattern, error) => EmbedError::Io { file, pattern, error },
         }
