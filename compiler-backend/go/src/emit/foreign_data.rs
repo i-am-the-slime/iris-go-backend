@@ -78,10 +78,9 @@ where
         for (index, constructor) in layout.constructors.iter().enumerate() {
             let mut branch = vec![];
             let mut fields = Vec::with_capacity(constructor.fields.len());
-            for position in 0..constructor.fields.len() {
+            for (position, (_, field_type)) in constructor.fields.iter().enumerate() {
                 let read = self.constructor_field(&layout, index, position, value.clone());
-                let field_type = constructor.fields[position].1;
-                fields.push((None, self.coerce(read, field_type, opaque, &mut branch)?));
+                fields.push((None, self.coerce(read, *field_type, opaque, &mut branch)?));
             }
             let fields = if fields.is_empty() {
                 identifier_expression("nil")
