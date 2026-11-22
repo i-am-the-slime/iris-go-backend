@@ -403,7 +403,7 @@ where
     ) -> GoResult<GoExpression> {
         let result = self.go_type(argument.monotype)?;
         let mut body = vec![];
-        let value = match crate::simplify::is_deferrable(argument) {
+        let value = match crate::purity::is_deferrable(argument) {
             true => {
                 let saved = self.tail_loop.take();
                 let value = self.value(argument, &mut body);

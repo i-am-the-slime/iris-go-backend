@@ -3,14 +3,14 @@ use smol_str::SmolStr;
 
 use super::{Emitter, uses_local};
 use crate::foreign::{Boundary, Foreign, Iteration};
+use crate::mono::walk::{
+    for_each_child, for_each_child_mut, for_each_guarded_child, prune_unreachable, visit,
+};
 use crate::mono::{
     Alternative, Binding, Expression, ExpressionKind, Function, FunctionId, Guarded, Local,
     LocalId, Pattern, PatternKind, Program,
 };
 use crate::monotype::{DataType, Monotype, MonotypeId};
-use crate::simplify::{
-    for_each_child, for_each_child_mut, for_each_guarded_child, prune_unreachable, visit,
-};
 use crate::timing::timed;
 
 /// What the name of a variant that reuses its arguments' cells adds to its

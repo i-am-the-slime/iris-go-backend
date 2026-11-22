@@ -17,13 +17,14 @@
 //! is not Go's for NaN, nor String's (UTF-16 code units, not UTF-8 bytes), so
 //! their three-way comparisons stay calls.
 
-use super::{Simplifier, occurrences};
+use super::Simplifier;
 use crate::foreign::{Comparison, Foreign, Operator};
 use crate::mono::{
     Alternative, Expression, ExpressionKind, Guard, Guarded, Literal, LocalId, SourcePosition,
 };
 use crate::monotype::{Monotype, MonotypeId};
 use crate::primitives::{Int64Operation, Signedness};
+use crate::purity::occurrences;
 
 type OutcomeBranch = (Outcomes, Expression, Option<SourcePosition>);
 

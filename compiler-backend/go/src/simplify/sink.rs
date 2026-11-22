@@ -9,11 +9,10 @@
 
 use rustc_hash::FxHashMap;
 
-use super::{
-    KnownFunctions, Simplifier, for_each_child, for_each_child_mut, is_deferrable, is_within_size,
-    runs_effect,
-};
+use super::Simplifier;
+use crate::mono::walk::{for_each_child, for_each_child_mut};
 use crate::mono::{Binding, Expression, ExpressionKind, Guarded, LocalId};
+use crate::purity::{KnownFunctions, is_deferrable, is_within_size, runs_effect};
 
 /// A value copied into more than one branch is at most this many nodes.
 const COPIED_SIZE: usize = 40;
@@ -200,7 +199,7 @@ fn calls_only_deferrable_functions(
     depth: usize,
 ) -> bool {
     let mut deferrable = true;
-    super::visit(expression, &mut |node| {
+    crate::mono::walk::visit(expression, &mut |node| {
         if let ExpressionKind::Apply { function, .. } = &node.kind {
             deferrable &= match &function.kind {
                 ExpressionKind::Lambda { .. } => true,
@@ -221,7 +220,7 @@ fn calls_only_deferrable_functions(
 
 /// A let group whose bindings refer to each other, which the simplifier keeps as written.
 fn is_recursive_group(bindings: &[Binding]) -> bool {
-    bindings.iter().any(|binding| super::mentions_any(&binding.value, bindings))
+    bindings.iter().any(|binding| crate::purity::mentions_any(&binding.value, bindings))
 }
 
 fn mentions(expression: &Expression, id: LocalId) -> bool {

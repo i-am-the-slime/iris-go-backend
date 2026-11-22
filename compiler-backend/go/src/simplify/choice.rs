@@ -5,7 +5,8 @@
 
 use rustc_hash::FxHashMap;
 
-use super::{INLINE_SIZE, Simplifier, alternatives_size, column_outcomes};
+use super::coverage::{alternatives_size, column_outcomes};
+use super::{INLINE_SIZE, Simplifier};
 use crate::foreign::{
     Comparison, Foreign, GoFunction, GoPackage, MUTABLE_PEEK_UNSAFE, MUTABLE_WITHIN, Operator,
 };
@@ -188,7 +189,7 @@ impl Simplifier<'_> {
         let [scrutinee] = scrutinees.as_slice() else { return None };
         let scrutinised = matches!(scrutinee.kind, ExpressionKind::Local(id) if id == local.id);
         if !scrutinised
-            || super::occurrences(matched, local.id).total != 1
+            || crate::purity::occurrences(matched, local.id).total != 1
             || alternatives_size(alternatives) > DUPLICATION
         {
             return None;
@@ -383,7 +384,7 @@ fn select(
             let Some(outcomes) = column_outcomes(choice, alternatives, 0) else { return false };
             // A guarded alternative may fall through to the ones after it.
             for (position, outcome) in outcomes.iter().enumerate() {
-                if let super::ColumnOutcome::Matches = outcome {
+                if let super::coverage::ColumnOutcome::Matches = outcome {
                     selections[position] += 1;
                     if let Guarded::Unconditional(_) = alternatives[position].body {
                         break;
@@ -402,11 +403,14 @@ fn alternative_size(alternative: &Alternative) -> usize {
 
 fn mentions_erased(alternative: &Alternative, monotypes: &Monotypes) -> bool {
     let mut erased = false;
-    super::for_each_alternative_child(std::slice::from_ref(alternative), &mut |child| {
-        super::visit(child, &mut |node| {
-            erased = erased || crate::lift::erases(monotypes, node.monotype)
-        })
-    });
+    crate::mono::walk::for_each_alternative_child(
+        std::slice::from_ref(alternative),
+        &mut |child| {
+            crate::mono::walk::visit(child, &mut |node| {
+                erased = erased || crate::lift::erases(monotypes, node.monotype)
+            })
+        },
+    );
     erased
 }
 

@@ -2,12 +2,13 @@ use files::FileId;
 use rustc_hash::{FxHashMap, FxHashSet};
 use smol_str::format_smolstr;
 
+use crate::mono::walk::{for_each_child, for_each_child_mut, visit};
 use crate::mono::{
     Binding, Expression, ExpressionKind, Function, FunctionId, FunctionSpelling, Local, LocalId,
     Program,
 };
 use crate::monotype::{Monotype, MonotypeId, Monotypes};
-use crate::simplify::{for_each_child, for_each_child_mut, is_trivial, visit};
+use crate::purity::is_trivial;
 
 pub fn lift_local_functions(
     program: Program,

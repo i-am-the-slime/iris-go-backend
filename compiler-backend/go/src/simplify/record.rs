@@ -40,7 +40,7 @@ impl Simplifier<'_> {
         }
         // Unit has one value, so a coerced one is it, whatever it was before.
         if let Monotype::Unit = self.monotypes.get(monotype)
-            && super::is_discardable(&value)
+            && crate::purity::is_discardable(&value)
         {
             return Expression::new(ExpressionKind::Unit, monotype);
         }
@@ -146,11 +146,11 @@ impl Simplifier<'_> {
             // A settled operation may no longer read a binding (`shrinkImpl`'s
             // keys), which then goes as any unused binding does.
             let unused = |binding: &Binding, bindings: &[Binding], body: &Expression| {
-                super::occurrences(body, binding.local.id).total == 0
-                    && bindings
-                        .iter()
-                        .all(|other| super::occurrences(&other.value, binding.local.id).total == 0)
-                    && !super::runs_effect(self, &binding.value)
+                crate::purity::occurrences(body, binding.local.id).total == 0
+                    && bindings.iter().all(|other| {
+                        crate::purity::occurrences(&other.value, binding.local.id).total == 0
+                    })
+                    && !crate::purity::runs_effect(self, &binding.value)
             };
             while let Some(position) =
                 bindings.iter().position(|binding| unused(binding, bindings, body))
@@ -166,7 +166,7 @@ impl Simplifier<'_> {
             }
             return;
         }
-        super::for_each_child_mut(expression, &mut |child| self.settle_records(child));
+        crate::mono::walk::for_each_child_mut(expression, &mut |child| self.settle_records(child));
         let monotype = expression.monotype;
         match &mut expression.kind {
             ExpressionKind::Foreign { foreign: Foreign::Record(operation), arguments } => {

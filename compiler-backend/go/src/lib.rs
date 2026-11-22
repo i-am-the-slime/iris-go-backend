@@ -22,6 +22,7 @@ mod monotype;
 mod naming;
 mod numeric;
 mod primitives;
+mod purity;
 mod scheme;
 mod simplify;
 mod specialize;

@@ -10,12 +10,12 @@ use files::FileId;
 use rustc_hash::{FxHashMap, FxHasher};
 
 use crate::modules::Modules;
+use crate::mono::walk::{for_each_child_mut, prune_unreachable, visit};
 use crate::mono::{
     Expression, ExpressionKind, Function, FunctionId, Guard, Guarded, Local, LocalId, Pattern,
     PatternKind, Program,
 };
 use crate::monotype::{MonotypeId, Monotypes};
-use crate::simplify::{for_each_child_mut, prune_unreachable, visit};
 
 /// Calls to a function are redirected to the first function with the same
 /// shape, until no two functions share one; merging two functions can make

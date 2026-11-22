@@ -1,10 +1,10 @@
 use smol_str::SmolStr;
 
 use crate::foreign::{self, Foreign, Operator};
+use crate::mono::walk::for_each_child;
 use crate::mono::{
     Expression, ExpressionKind, FunctionId, Guard, Guarded, LocalId, PatternKind, RecordUpdate,
 };
-use crate::simplify::for_each_child;
 
 /// Where an accumulator keeps the array, or the string, that a loop appends to.
 #[derive(Clone)]
@@ -78,7 +78,7 @@ fn aliases(carried: Carried<'_>, expression: &Expression) -> Option<Vec<LocalId>
     };
     let mut aliases = vec![];
     let mut whole = false;
-    crate::simplify::visit(expression, &mut |expression| {
+    crate::mono::walk::visit(expression, &mut |expression| {
         let ExpressionKind::Case { scrutinees, alternatives } = &expression.kind else { return };
         for (position, scrutinee) in scrutinees.iter().enumerate() {
             if !is_accumulator(carried, scrutinee) {

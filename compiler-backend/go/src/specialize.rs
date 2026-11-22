@@ -571,7 +571,7 @@ where
             }
             return;
         }
-        crate::simplify::for_each_child_mut(expression, &mut |child| {
+        crate::mono::walk::for_each_child_mut(expression, &mut |child| {
             self.reconcile_references(child, signatures)
         });
     }
@@ -843,7 +843,7 @@ fn mismatched_references(
         }
         return;
     }
-    crate::simplify::for_each_child(expression, &mut |child| {
+    crate::mono::walk::for_each_child(expression, &mut |child| {
         mismatched_references(child, signatures, mismatches)
     });
 }

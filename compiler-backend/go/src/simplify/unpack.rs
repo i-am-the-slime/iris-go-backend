@@ -5,9 +5,9 @@
 
 use smol_str::{SmolStr, format_smolstr};
 
-use super::{
-    Simplifier, column_outcomes, for_each_alternative_child, for_each_child, for_each_child_mut,
-};
+use super::Simplifier;
+use super::coverage::column_outcomes;
+use crate::mono::walk::{for_each_alternative_child, for_each_child, for_each_child_mut};
 use crate::mono::{Binding, Expression, ExpressionKind, Local, LocalId};
 use crate::monotype::Monotypes;
 

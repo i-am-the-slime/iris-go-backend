@@ -43,13 +43,13 @@ use crate::context::Context;
 use crate::error::GoResult;
 use crate::foreign::Foreign;
 use crate::lift::collect_binders;
+use crate::mono::walk::{for_each_child, for_each_child_mut};
 use crate::mono::{
     Alternative, Binding, Expression, ExpressionKind, Function, FunctionId, FunctionSpelling,
     Guard, Guarded, Local, LocalId, Pattern, PatternKind, Program,
 };
 use crate::monotype::{DataType, Failure, Monotype, MonotypeId, Monotypes};
 use crate::naming::{capitalise, lower_first, numbered};
-use crate::simplify::{for_each_child, for_each_child_mut};
 use crate::syntax::{GoDeclaration, GoExpression, GoType, StructField};
 
 /// The most shapes one function type may have and still become cells.
@@ -1138,7 +1138,7 @@ where
             parameters.iter().map(|parameter| parameter.id).collect();
         seen.extend(binders.keys().copied());
         let mut captures: Vec<Local> = vec![];
-        crate::simplify::visit(body, &mut |node| {
+        crate::mono::walk::visit(body, &mut |node| {
             if let ExpressionKind::Local(id) = node.kind
                 && seen.insert(id)
             {

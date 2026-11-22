@@ -80,13 +80,13 @@ use crate::context::Context;
 use crate::error::{GoError, GoResult};
 use crate::foreign::{Constructed, ForeignPackages, GoFunction, GoPackage};
 use crate::modules::{ModuleIndex, Modules};
+use crate::mono::walk::visit;
 use crate::mono::{
     Binding, Expression, ExpressionKind, FunctionId, Guarded, Literal, Local, LocalId, Pattern,
     PatternKind, Program, RecordUpdate,
 };
 use crate::monotype::{DataType, Monotype, MonotypeId, Monotypes};
 use crate::naming::identifier;
-use crate::simplify::visit;
 use crate::syntax::{
     DeclarationNames, GoDeclaration, GoExpression, GoStatement, GoType, Name, SourceLine,
     statements_names,
@@ -1955,7 +1955,7 @@ where
     }
 
     fn builds_eagerly(&self, value: &Expression) -> bool {
-        !self.is_already_a_value(value) && !crate::simplify::is_discardable(value)
+        !self.is_already_a_value(value) && !crate::purity::is_discardable(value)
     }
 
     fn deferred_thunk(
@@ -2178,7 +2178,7 @@ fn captures_parameters(
         }
         _ => {
             let mut captured = false;
-            crate::simplify::for_each_child(expression, &mut |child| {
+            crate::mono::walk::for_each_child(expression, &mut |child| {
                 captured = captured || captures(child, Mode::Value);
             });
             captured

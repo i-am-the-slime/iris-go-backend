@@ -34,7 +34,7 @@ where
             }
         }
         let mut result = Ok(());
-        crate::simplify::for_each_child_mut(expression, &mut |child| {
+        crate::mono::walk::for_each_child_mut(expression, &mut |child| {
             if result.is_ok() {
                 result = self.match_field_representations(child);
             }

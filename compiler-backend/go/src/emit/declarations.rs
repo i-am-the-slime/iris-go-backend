@@ -8,10 +8,10 @@ use super::{
 use crate::error::GoResult;
 use crate::foreign::GoPackage;
 use crate::graph::{on_cycles, strongly_connected};
+use crate::mono::walk::reference_graph;
 use crate::mono::{Expression, Function, FunctionId, Program};
 use crate::monotype::{Monotype, Monotypes};
 use crate::naming::identifier;
-use crate::simplify::reference_graph;
 use crate::syntax::{GoDeclaration, GoExpression, GoStatement, GoType};
 use crate::walk::{self, Walk};
 
