@@ -618,10 +618,10 @@ impl<'a, C: Cells> Planner<'a, C> {
         {
             target = Some((variant, None));
         }
-        if let Some((target, _)) = target {
-            if target.donor || self.facts.writes.contains(&target) {
-                self.plan.writes = true;
-            }
+        if let Some((target, _)) = target
+            && (target.donor || self.facts.writes.contains(&target))
+        {
+            self.plan.writes = true;
         }
         if let Some(target) = target {
             self.plan.calls.insert(std::ptr::from_ref(expression), target);

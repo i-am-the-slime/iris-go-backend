@@ -566,8 +566,7 @@ pub fn go(path: &Path) -> FixtureResult {
             .join("\n"),
         Err(go::GoError::Blocked(blockers)) => blockers.to_string(),
         Err(
-            error @ (go::GoError::SharedRecordStruct { .. }
-            | go::GoError::RepresentationChange { .. }),
+            error @ (go::GoError::SharedRecordStruct { .. } | go::GoError::RepresentationChange(_)),
         ) => error.to_string(),
         Err(error) => return Err(error.into()),
     };

@@ -469,7 +469,7 @@ struct Test<'k, 'e> {
 impl Test<'_, '_> {
     /// After `name := test`, in `if name { ... }`, each `if test { body }` that
     /// nothing before it in the branch could have falsified becomes `body`.
-    fn drop_repeats(&self, block: &mut Vec<GoStatement>) {
+    fn drop_repeats(&self, block: &mut [GoStatement]) {
         let defines = |statement: &GoStatement| matches!(statement, GoStatement::Define { names, .. } if names.as_slice() == [self.name.clone()]);
         let Some(definition) = block.iter().position(defines) else { return };
         for statement in &mut block[definition + 1..] {

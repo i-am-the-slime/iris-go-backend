@@ -1285,7 +1285,7 @@ where
         match monotype {
             Ok(monotype) => self.recover(result, monotype),
             Err(error) => {
-                self.record(result.err().expect("invariant violated: result is an error"))?;
+                self.record(result.expect_err("invariant violated: result is an error"))?;
                 Err(error)
             }
         }
@@ -2534,7 +2534,7 @@ where
             let active = scope
                 .polymorphic_locals
                 .get_mut(&source)
-                .map(|polymorphic| std::mem::replace(&mut polymorphic.active, Some(index)));
+                .map(|polymorphic| polymorphic.active.replace(index));
             let specialized = self
                 .bind_local_runtime_dictionaries(&scope.definition, &dictionaries)
                 .and_then(|(dictionaries, parameters)| {

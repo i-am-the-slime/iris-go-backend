@@ -554,5 +554,8 @@ jobs:
       - name: Run Clippy
         run: cargo clippy --workspace --locked
 
+      - name: Deny Clippy warnings in the Go backend
+        run: cargo clippy -p go -p iris-go --all-targets --locked -- -D warnings
+
       - name: Check WASM compilation
         run: cargo check -p iris-analysis --locked --target wasm32-unknown-unknown

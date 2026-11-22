@@ -395,6 +395,7 @@ fn modulo(x: i32, y: i32) -> i32 {
     i64::from(x).rem_euclid(i64::from(y)) as i32
 }
 
+#[allow(clippy::neg_cmp_op_on_partial_ord)]
 fn compare(comparison: Comparison, left: &Value<'_>, right: &Value<'_>) -> Option<bool> {
     if let (Value::Number(x), Value::Number(y)) = (left, right) {
         // IEEE comparisons, under which NaN is unordered and -0 equals 0.

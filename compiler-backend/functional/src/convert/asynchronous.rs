@@ -434,7 +434,7 @@ where
                 context.storage[expression].kind,
                 ExpressionKind::Let { recursive: false, .. }
             );
-            if !statement.controls && !(statement.performs && sequential) {
+            if !(statement.controls || statement.performs && sequential) {
                 if !statement.performs {
                     return Ok(context.finish_statement(expression, continuation));
                 }

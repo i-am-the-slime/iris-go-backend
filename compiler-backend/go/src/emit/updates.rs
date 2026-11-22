@@ -127,7 +127,7 @@ fn retarget(statement: &mut GoStatement, source: &str) {
     let [GoExpression::Field { value, .. }] = targets.as_mut_slice() else {
         unreachable!("invariant violated: an update assigns one field")
     };
-    *value = Box::new(GoExpression::Identifier(source.to_string()));
+    **value = GoExpression::Identifier(source.to_string());
 }
 
 struct SourceReads<'a> {

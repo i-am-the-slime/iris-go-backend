@@ -10,6 +10,8 @@ use crate::mono::{Alternative, Expression, Guard, Guarded, Literal, Local, Patte
 use crate::monotype::Monotype;
 use crate::syntax::{GoCase, GoDefault, GoExpression, GoStatement, SourceLine};
 
+type Bindings = Vec<(Local, GoExpression)>;
+
 impl<Q> Emitter<'_, '_, '_, Q>
 where
     Q: checking::ExternalQueries,
@@ -265,7 +267,7 @@ where
         &mut self,
         guards: &[Guard],
         mut conditions: Vec<GoExpression>,
-        mut bindings: Vec<(Local, GoExpression)>,
+        mut bindings: Bindings,
         body: &Expression,
         chain: GuardChain<'_>,
         out: &mut Vec<GoStatement>,
@@ -427,7 +429,7 @@ where
         &mut self,
         paths: &[GoExpression],
         patterns: &[Pattern],
-    ) -> GoResult<(Vec<GoExpression>, Vec<(Local, GoExpression)>)> {
+    ) -> GoResult<(Vec<GoExpression>, Bindings)> {
         let mut tests = vec![];
         let mut bindings = vec![];
         for (path, pattern) in paths.iter().zip(patterns) {
@@ -441,7 +443,7 @@ where
         pattern: &Pattern,
         path: GoExpression,
         tests: &mut Vec<GoExpression>,
-        bindings: &mut Vec<(Local, GoExpression)>,
+        bindings: &mut Bindings,
     ) -> GoResult<()> {
         match &pattern.kind {
             PatternKind::Wildcard => {}
@@ -500,7 +502,7 @@ where
         arguments: &[Pattern],
         path: GoExpression,
         tests: &mut Vec<GoExpression>,
-        bindings: &mut Vec<(Local, GoExpression)>,
+        bindings: &mut Bindings,
     ) -> GoResult<()> {
         if let Some(test) = self.maybe_boolean_test(layout, arguments, path.clone()) {
             tests.push(test);

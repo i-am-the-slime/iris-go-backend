@@ -447,11 +447,11 @@ pub fn resolve(ladders: &[Vec<String>], taken: &dyn Fn(&str) -> bool) -> Vec<Str
     }
     let mut chosen: FxHashSet<String> = FxHashSet::default();
     let mut names: Vec<Option<String>> = vec![None; ladders.len()];
-    for index in 0..ladders.len() {
+    for (index, slot) in names.iter_mut().enumerate() {
         let name = wanted(index);
         if wanting[name] == 1 && !taken(name) {
             chosen.insert(name.to_string());
-            names[index] = Some(name.to_string());
+            *slot = Some(name.to_string());
         }
     }
     let mut counted: Vec<usize> =

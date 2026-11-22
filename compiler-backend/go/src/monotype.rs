@@ -87,6 +87,10 @@ pub enum Failure {
 
 pub type Converted<T> = Result<T, Failure>;
 
+pub type UncurriedFields = Vec<(SmolStr, Arc<[usize]>)>;
+
+pub type RecordSpelling = (FileId, TypeItemId, Arc<[TypeId]>);
+
 /// What converted, or nothing when the backend cannot compile the type.
 pub fn supported<T>(converted: Converted<T>) -> QueryResult<Option<T>> {
     match converted {
@@ -183,7 +187,7 @@ pub struct Monotypes {
     /// The records a foreign package's struct represents, with that package's module and the
     /// struct's name.
     pub foreign_records: FxHashMap<MonotypeId, (String, String)>,
-    pub uncurried_fields: FxHashMap<MonotypeId, Vec<(SmolStr, Arc<[usize]>)>>,
+    pub uncurried_fields: FxHashMap<MonotypeId, UncurriedFields>,
     /// What the Go files next to each module's source declare.
     pub foreign_sources: Vec<crate::foreign::ForeignSource>,
     /// Where each `unsafeCoerce` between two types was written, for a coercion Go cannot make.
@@ -193,7 +197,7 @@ pub struct Monotypes {
     pub function_spellings: crate::mono::FunctionSpellings,
     /// The synonyms and newtypes, with their arguments, that each record was
     /// spelled by where a type was converted, in the order met.
-    pub record_spellings: FxHashMap<MonotypeId, Vec<(FileId, TypeItemId, Arc<[TypeId]>)>>,
+    pub record_spellings: FxHashMap<MonotypeId, Vec<RecordSpelling>>,
     /// The name of each type constructor met, which names its values.
     pub type_names: FxHashMap<(FileId, TypeItemId), SmolStr>,
     /// The newtypes specialization erased to the types they wrap.
@@ -409,14 +413,14 @@ impl Monotypes {
         let stale_unfolded: Vec<DataType> = self
             .unfolded_reads
             .keys()
+            .filter(|data| self.is_stale(&Read::Unfolded((*data).clone()), &mut memo))
             .cloned()
-            .filter(|data| self.is_stale(&Read::Unfolded(data.clone()), &mut memo))
             .collect();
         let stale_constructors: Vec<DataType> = self
             .constructors_reads
             .keys()
+            .filter(|data| self.is_stale(&Read::Constructors((*data).clone()), &mut memo))
             .cloned()
-            .filter(|data| self.is_stale(&Read::Constructors(data.clone()), &mut memo))
             .collect();
         for type_id in stale_types {
             self.converted.remove(&type_id);

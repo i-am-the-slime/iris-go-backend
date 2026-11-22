@@ -71,7 +71,7 @@ where
         } else {
             let content = self.queries.content(file_id)?;
             let (parsed, _) = self.queries.parsed(file_id)?;
-            parsed.module_name(&content).map(SmolStr::from).unwrap_or_default()
+            parsed.module_name(&content).unwrap_or_default()
         };
         let indexed = self.queries.indexed(file_id)?;
         let checked = self.queries.checked(file_id)?;

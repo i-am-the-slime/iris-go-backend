@@ -5,7 +5,6 @@ use crate::foreign::{GoFunction, GoPackage};
 use crate::mono::Expression;
 use crate::monotype::MonotypeId;
 use crate::syntax::{GoExpression, GoStatement, GoType};
-use checking;
 
 pub(super) const ACCESSES: &[&str] =
     &["Peek", "Poke", "PeekUnsafe", "PokeUnsafe", "Length", "Within", "Push"];

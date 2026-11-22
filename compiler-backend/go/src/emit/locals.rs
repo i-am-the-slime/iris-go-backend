@@ -212,7 +212,7 @@ impl Walk {
         &mut self,
         parameters: &mut [(String, GoType)],
         result: Option<&mut GoType>,
-        body: &mut Vec<GoStatement>,
+        body: &mut [GoStatement],
     ) {
         // A function's signature is in the scope around it; its parameters
         // are in scope in its body alone.
@@ -391,8 +391,8 @@ impl Walk {
                 by_name.entry(name.clone()).or_default().push(self.entities[entity].scope);
             }
         }
-        for entity in 0..self.entities.len() {
-            if names[entity].is_some() {
+        for (entity, chosen) in names.iter_mut().enumerate() {
+            if chosen.is_some() {
                 continue;
             }
             let scope = self.scopes[self.entities[entity].scope];
@@ -416,7 +416,7 @@ impl Walk {
                 counter += 1;
             }
             by_name.entry(name.clone()).or_default().push(self.entities[entity].scope);
-            names[entity] = Some(name);
+            *chosen = Some(name);
         }
         names.into_iter().map(|name| name.unwrap_or_default()).collect()
     }

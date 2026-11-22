@@ -51,11 +51,11 @@ where
             else {
                 continue;
             };
-            if let Some(registration) = self.foreign_data_registration(&data)? {
-                if registered.insert(registration.name().unwrap_or_default().to_string()) {
-                    self.note_homes(std::slice::from_ref(&registration), Some(data.file_id));
-                    registrations.push(registration);
-                }
+            if let Some(registration) = self.foreign_data_registration(&data)?
+                && registered.insert(registration.name().unwrap_or_default().to_string())
+            {
+                self.note_homes(std::slice::from_ref(&registration), Some(data.file_id));
+                registrations.push(registration);
             }
         }
         Ok(registrations)

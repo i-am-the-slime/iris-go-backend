@@ -24,18 +24,22 @@ pub enum GoError {
         "the Go structs {first} and {second} both represent records with the same fields; a record can have one Go struct"
     )]
     SharedRecordStruct { first: String, second: String },
-    #[error(
-        "{location}cannot specialize {definition}: unsafeCoerce from {from} (Go {from_go}) to {to} (Go {to_go}) changes representation"
-    )]
-    RepresentationChange {
-        /// `path:line:column: `, or empty when the coercion's source is unknown.
-        location: String,
-        definition: String,
-        from: String,
-        from_go: String,
-        to: String,
-        to_go: String,
-    },
+    #[error(transparent)]
+    RepresentationChange(Box<RepresentationChange>),
+}
+
+#[derive(Debug, Error)]
+#[error(
+    "{location}cannot specialize {definition}: unsafeCoerce from {from} (Go {from_go}) to {to} (Go {to_go}) changes representation"
+)]
+pub struct RepresentationChange {
+    /// `path:line:column: `, or empty when the coercion's source is unknown.
+    pub location: String,
+    pub definition: String,
+    pub from: String,
+    pub from_go: String,
+    pub to: String,
+    pub to_go: String,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Error)]

@@ -68,7 +68,7 @@ use self::application::Callable;
 use self::packages::Spelling;
 use crate::arity::Arities;
 use crate::context::Context;
-use crate::error::{GoError, GoResult};
+use crate::error::{GoError, GoResult, RepresentationChange};
 use crate::foreign::{
     Boundary, Comparison, Constructed, Foreign, ForeignPackages, GoFunction, GoPackage, Operator,
 };
@@ -1147,12 +1147,11 @@ where
         self.owned_snocs.extend(owned_nodes.iter().copied());
         let mut recycled_buffers = vec![];
         if loops && mode == Mode::Value {
-            for position in 0..function.parameters.len() {
+            for (position, (parameter, type_)) in parameters.iter().enumerate() {
                 if buffers.iter().any(|(buffered, _)| *buffered == position) {
                     continue;
                 }
                 let Some(maps) = self.recycled_maps(id, function, position) else { continue };
-                let (parameter, type_) = &parameters[position];
                 let recycled = recycling::Recycled {
                     owned: self.local_name(format!("{parameter}Owned")),
                     spare: self.local_name(format!("{parameter}Spare")),
@@ -1365,14 +1364,14 @@ where
             Some(site) => site.definition,
             None => self.current_definition(),
         };
-        Ok(GoError::RepresentationChange {
+        Ok(GoError::RepresentationChange(Box::new(RepresentationChange {
             location,
             definition,
             from: self.purescript_type(from)?,
             from_go: self.go_type(from)?.render(),
             to: self.purescript_type(to)?,
             to_go: self.go_type(to)?.render(),
-        })
+        })))
     }
 
     /// `path:line:column: ` of the offset in the file, with lines and columns from 1.

@@ -100,8 +100,7 @@ impl Together<'_, '_, '_> {
         let mut written = FxHashSet::default();
         let mut defined = FxHashSet::default();
         let mut size = 0;
-        for position in start..block.len() {
-            let statement = &mut block[position];
+        for (position, statement) in block.iter_mut().enumerate().skip(start) {
             size += statement_count(statement);
             if size > GUARDED_SIZE || !self.keeping.keeps(std::slice::from_mut(statement)) {
                 break;
@@ -153,8 +152,8 @@ impl Together<'_, '_, '_> {
                 }
             });
         }
-        for position in run.start..run.end {
-            match &block[position] {
+        for (position, statement) in block.iter().enumerate().take(run.end).skip(run.start) {
+            match statement {
                 GoStatement::Variable { value: None, .. } => run.hoisted.push(position),
                 statement => {
                     if defined_names(statement).iter().any(|name| later.contains(name)) {
