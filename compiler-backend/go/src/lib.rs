@@ -20,6 +20,7 @@ mod modules;
 mod mono;
 mod monotype;
 mod naming;
+mod numeric;
 mod primitives;
 mod scheme;
 mod simplify;

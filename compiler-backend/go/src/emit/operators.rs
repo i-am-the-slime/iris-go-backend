@@ -1,6 +1,7 @@
 use super::{Emitter, binary, call, identifier_expression, negated};
 use crate::foreign::{Comparison, GoPackage, Operator};
 use crate::monotype::{Monotype, MonotypeId};
+use crate::numeric::fold_bitwise;
 use crate::syntax::{GoExpression, GoType};
 
 impl<'q, Q> Emitter<'_, '_, 'q, Q>
@@ -239,18 +240,6 @@ fn int32_constant(expression: &GoExpression) -> Option<i32> {
         },
         _ => None,
     }
-}
-
-pub(crate) fn fold_bitwise(operator: Operator, x: i32, y: i32) -> i64 {
-    let count = (y & 31) as u32;
-    i64::from(match operator {
-        Operator::IntAnd => x & y,
-        Operator::IntOr => x | y,
-        Operator::IntXor => x ^ y,
-        Operator::IntShiftLeft => x.wrapping_shl(count),
-        Operator::IntShiftRight => x >> count,
-        _ => ((x as u32) >> count) as i32,
-    })
 }
 
 pub(super) fn is_untyped_constant(expression: &GoExpression) -> bool {

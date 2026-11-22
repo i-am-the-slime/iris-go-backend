@@ -94,7 +94,6 @@ use crate::syntax::{
 use crate::timing::timed;
 
 pub(crate) use self::closures::Eliminators;
-pub(crate) use self::operators::fold_bitwise;
 pub use self::packages::GoSourceFile;
 
 pub fn emit_program<Q>(

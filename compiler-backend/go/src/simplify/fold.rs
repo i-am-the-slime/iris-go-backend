@@ -363,7 +363,7 @@ fn binary<'l>(operator: Operator, left: &Value<'l>, right: &Value<'l>) -> Option
             | Operator::IntZeroFillShiftRight,
             Value::Int(x),
             Value::Int(y),
-        ) => Value::Int(i32::try_from(crate::emit::fold_bitwise(operator, *x, *y)).ok()?),
+        ) => Value::Int(i32::try_from(crate::numeric::fold_bitwise(operator, *x, *y)).ok()?),
         (Operator::NumberAdd, Value::Number(x), Value::Number(y)) => Value::Number(x + y),
         (Operator::NumberSubtract, Value::Number(x), Value::Number(y)) => Value::Number(x - y),
         (Operator::NumberMultiply, Value::Number(x), Value::Number(y)) => Value::Number(x * y),
