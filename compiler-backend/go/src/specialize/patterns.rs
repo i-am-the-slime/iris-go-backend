@@ -7,15 +7,17 @@
 
 use std::sync::Arc;
 
-use smol_str::SmolStr;
+use checking::core::Type;
+use checking::{TypeId, tree};
+use smol_str::{SmolStr, format_smolstr};
 
-use super::Specializer;
+use super::{LocalSource, Scope, Specializer, string_literal};
 use crate::error::{GoError, GoResult, UnsupportedState};
 use crate::mono::{
-    Alternative, Binding, Expression, ExpressionKind, Guard, Guarded, GuardedBranch, Pattern,
-    PatternKind,
+    Alternative, Binding, Expression, ExpressionKind, Guard, Guarded, GuardedBranch, Literal,
+    Pattern, PatternKind,
 };
-use crate::monotype::{DataConstructor, DataType, Failure};
+use crate::monotype::{DataConstructor, DataType, Failure, Monotype, MonotypeId};
 
 impl<Q> Specializer<'_, Q>
 where
@@ -228,4 +230,208 @@ fn conversions_as_bindings(converted: &[Guard]) -> Option<Vec<Binding>> {
         _ => None,
     });
     bindings.collect()
+}
+
+impl<'q, Q> Specializer<'q, Q>
+where
+    Q: checking::ExternalQueries,
+{
+    pub(super) fn pattern(
+        &mut self,
+        scope: &mut Scope,
+        binder_id: tree::BinderId,
+    ) -> GoResult<Pattern> {
+        let module = Arc::clone(&scope.module);
+        let binder = &module.checked.tree[binder_id];
+        let monotype = self.binder_monotype(scope, binder.type_id)?;
+        let kind = match &binder.kind {
+            tree::BinderKind::Typed { binder, .. } => return self.pattern(scope, *binder),
+            tree::BinderKind::Error => {
+                return Err(self.unsupported(scope, UnsupportedState::BinderError));
+            }
+            tree::BinderKind::Integer { value } => {
+                PatternKind::Literal(Literal::Int(i64::from(*value)))
+            }
+            tree::BinderKind::Number { negative, value } => {
+                let value = if *negative { format_smolstr!("-{value}") } else { value.clone() };
+                PatternKind::Literal(Literal::Number(value))
+            }
+            tree::BinderKind::Variable => {
+                let name = self.binder_name(scope, binder_id);
+                let local = self.fresh_local(name, monotype);
+                let source = self.checked_binder_source(scope, binder_id);
+                scope.locals.insert(source, local.clone());
+                self.register_scheme_local(scope, source, binder.type_id)?;
+                PatternKind::Variable(local)
+            }
+            tree::BinderKind::Named { name, binder: inner } => {
+                let local = self.fresh_local(name.clone(), monotype);
+                let source = self.checked_binder_source(scope, binder_id);
+                scope.locals.insert(source, local.clone());
+                self.register_scheme_local(scope, source, binder.type_id)?;
+                let pattern = self.pattern(scope, *inner)?;
+                PatternKind::Named { local, pattern: Box::new(pattern) }
+            }
+            tree::BinderKind::Wildcard => PatternKind::Wildcard,
+            tree::BinderKind::String { value } => PatternKind::Literal(string_literal(value)),
+            tree::BinderKind::Char { value } => PatternKind::Literal(Literal::Char(*value)),
+            tree::BinderKind::Boolean { value } => PatternKind::Literal(Literal::Boolean(*value)),
+            tree::BinderKind::Array { elements } => {
+                let mut patterns = Vec::with_capacity(elements.len());
+                for &element in elements.iter() {
+                    patterns.push(self.pattern(scope, element)?);
+                }
+                PatternKind::Array(patterns)
+            }
+            tree::BinderKind::Record { fields } => {
+                let mut patterns = Vec::with_capacity(fields.len());
+                for field in fields.iter() {
+                    match field {
+                        tree::RecordBinderField::Field { label, binder } => {
+                            patterns.push((label.clone(), self.pattern(scope, *binder)?));
+                        }
+                        tree::RecordBinderField::Pun { label } => {
+                            let Some(pun) = self.record_pun_source(scope, binder_id, label) else {
+                                return Err(self.unsupported(scope, UnsupportedState::BinderError));
+                            };
+                            let field_monotype = self.field_monotype(scope, monotype, label)?;
+                            let local = self.fresh_local(label.clone(), field_monotype);
+                            scope.locals.insert(LocalSource::RecordPun(pun), local.clone());
+                            let pattern = Pattern {
+                                kind: PatternKind::Variable(local),
+                                monotype: field_monotype,
+                            };
+                            patterns.push((label.clone(), pattern));
+                        }
+                    }
+                }
+                PatternKind::Record(patterns)
+            }
+            tree::BinderKind::Constructor { resolution, arguments } => {
+                if self.is_newtype_constructor(*resolution)? {
+                    let [argument] = arguments.as_ref() else {
+                        return Err(self.unsupported(scope, UnsupportedState::BinderError));
+                    };
+                    let mut pattern = self.pattern(scope, *argument)?;
+                    if let Monotype::Recursive(data) = self.monotypes.get(monotype).clone() {
+                        // The wrapped value has the unfolded representation, as the
+                        // declared type of a function like `step (ListT m) = m` says.
+                        let unfolded = self.monotypes.unfold_in(
+                            &mut self.context,
+                            &data,
+                            &scope.definition,
+                        )?;
+                        self.adopt_representation(scope, *argument, &mut pattern, unfolded);
+                        pattern.monotype = unfolded;
+                    } else {
+                        if !self.monotypes.same_without_causes(pattern.monotype, monotype)
+                            && self.mentions_erased(monotype)
+                        {
+                            self.adopt_representation(scope, *argument, &mut pattern, monotype);
+                        }
+                        pattern.monotype = monotype;
+                    }
+                    return Ok(pattern);
+                }
+                let Monotype::Data(data) = self.monotypes.get(monotype).clone() else {
+                    return Err(self.unsupported(scope, UnsupportedState::BinderError));
+                };
+                let constructors = self
+                    .monotypes
+                    .constructors(&mut self.context, &data)
+                    .map_err(|failure| failure.at(&scope.definition))?;
+                let Some(constructor) = constructors
+                    .iter()
+                    .position(|constructor| constructor.term == Some(resolution.1))
+                else {
+                    return Err(self.unsupported(scope, UnsupportedState::BinderError));
+                };
+                let mut patterns = Vec::with_capacity(arguments.len());
+                for &argument in arguments.iter() {
+                    patterns.push(self.pattern(scope, argument)?);
+                }
+                PatternKind::Constructor { data, constructor, arguments: patterns }
+            }
+        };
+        Ok(Pattern { kind, monotype })
+    }
+
+    fn adopt_representation(
+        &mut self,
+        scope: &mut Scope,
+        binder: tree::BinderId,
+        pattern: &mut Pattern,
+        monotype: MonotypeId,
+    ) {
+        let (binder, _) = self.unwrap_typed(scope, binder);
+        let source = self.checked_binder_source(scope, binder);
+        if let PatternKind::Variable(local) | PatternKind::Named { local, .. } = &mut pattern.kind {
+            local.monotype = monotype;
+            scope.locals.insert(source, local.clone());
+        }
+    }
+
+    /// A binder whose type is quantified, directly or through a synonym such as
+    /// profunctor-lenses' `Lens s a`, is instantiated at each of its uses.
+    fn register_scheme_local(
+        &mut self,
+        scope: &mut Scope,
+        source: LocalSource,
+        type_id: TypeId,
+    ) -> GoResult<()> {
+        let closed = self.context.types.substitute(type_id, &scope.substitution);
+        let (head, _) = self.context.types.spine(closed);
+        let closed = match self.context.types.lookup(head) {
+            Type::Synonym(..) => crate::monotype::expand_synonyms(&mut self.context, closed)?,
+            _ => closed,
+        };
+        if matches!(
+            self.context.types.lookup(self.context.types.strip_annotations(closed)),
+            Type::Forall(..)
+        ) {
+            scope.scheme_locals.insert(source, closed);
+        } else {
+            scope.scheme_locals.remove(&source);
+        }
+        Ok(())
+    }
+
+    pub(super) fn binder_name(&self, scope: &Scope, binder_id: tree::BinderId) -> SmolStr {
+        let binder = &scope.module.checked.tree[binder_id];
+        match binder.source {
+            tree::BinderSource::Binder(source) => {
+                match scope.module.lowered.tree.get_binder_kind(source) {
+                    Some(lowering::BinderKind::Variable { variable: Some(name) }) => name.clone(),
+                    Some(lowering::BinderKind::Named { named: Some(name), .. }) => name.clone(),
+                    _ => SmolStr::new_static(crate::naming::VALUE),
+                }
+            }
+            tree::BinderSource::Generated { name, .. } => {
+                SmolStr::clone(self.context.queries.lookup_smol_str(name))
+            }
+            _ => SmolStr::new_static(crate::naming::VALUE),
+        }
+    }
+
+    fn record_pun_source(
+        &self,
+        scope: &Scope,
+        binder_id: tree::BinderId,
+        label: &str,
+    ) -> Option<lowering::RecordPunId> {
+        let tree::BinderSource::Binder(source) = scope.module.checked.tree[binder_id].source else {
+            return None;
+        };
+        let lowering::BinderKind::Record { record } =
+            scope.module.lowered.tree.get_binder_kind(source)?
+        else {
+            return None;
+        };
+        record.iter().find_map(|field| {
+            let lowering::BinderRecordItem::RecordPun { id, name } = field else {
+                return None;
+            };
+            name.as_deref().filter(|name| *name == label).map(|_| *id)
+        })
+    }
 }

@@ -1,6 +1,8 @@
+use std::sync::Arc;
+
 use checking::{TypeId, tree};
 
-use super::{Scope, Specializer};
+use super::{PolymorphicLocal, Scope, SpecializationKey, Specializer, runtime};
 use crate::erasure::Erasure;
 use crate::error::GoResult;
 use crate::mono::Expression;
@@ -44,5 +46,63 @@ where
         scope.rank_n_body = enclosing;
         scope.substitution = substitution;
         value.map(Some)
+    }
+
+    /// Polymorphic recursion requests a definition at ever larger types. When a
+    /// request embeds the types of the same definition further up its chain of
+    /// requesters, the growing positions are erased so specialization terminates.
+    pub(super) fn terminate_growth(
+        &mut self,
+        mut key: SpecializationKey,
+    ) -> GoResult<(SpecializationKey, Vec<runtime::Promotion>)> {
+        let requested = Arc::clone(&key.types);
+        let mut ancestor = self.current;
+        let mut types: Vec<TypeId> = key.types.to_vec();
+        let mut changed = false;
+        let mut evidence_grows = false;
+        while let Some(id) = ancestor {
+            let ancestor_key = &self.function_keys[id.0 as usize];
+            if ancestor_key.definition == key.definition {
+                let mut grows = false;
+                for (position, ancestor_type) in ancestor_key.types.iter().enumerate() {
+                    let Some(requested) = types.get(position).copied() else { continue };
+                    if self.context.types.grows(requested, *ancestor_type) {
+                        types[position] = self.context.types.erased(Erasure::PolymorphicRecursion);
+                        grows = true;
+                    }
+                }
+                evidence_grows |= grows && ancestor_key.dictionaries != key.dictionaries;
+                changed |= grows;
+            }
+            ancestor = self.parents[id.0 as usize];
+        }
+        if changed {
+            key.types = Arc::from(types);
+        }
+        if !evidence_grows {
+            return Ok((key, vec![]));
+        }
+        let promotions = self.promote_growing_evidence(&mut key, &requested)?;
+        Ok((key, promotions))
+    }
+
+    pub(super) fn terminate_local_growth(
+        &self,
+        polymorphic: &PolymorphicLocal,
+        requested: &[TypeId],
+    ) -> Vec<TypeId> {
+        let mut types = requested.to_vec();
+        let mut ancestor = polymorphic.active;
+        while let Some(index) = ancestor {
+            let specialization = &polymorphic.specializations[index];
+            for (position, &ancestor_type) in specialization.types.iter().enumerate() {
+                let Some(&requested) = types.get(position) else { continue };
+                if self.context.types.grows(requested, ancestor_type) {
+                    types[position] = self.context.types.erased(Erasure::PolymorphicRecursion);
+                }
+            }
+            ancestor = specialization.requester;
+        }
+        types
     }
 }
