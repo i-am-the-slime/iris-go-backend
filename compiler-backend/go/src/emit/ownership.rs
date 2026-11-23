@@ -40,7 +40,7 @@ pub(super) fn owned_snocs<'e>(
 ) -> Option<Vec<&'e Expression>> {
     let aliases = aliases(carried, step)?;
     let carried = Carried { aliases: &aliases, ..carried };
-    if reads(carried, step) > 1 {
+    if spine_reads(carried, step, true) > 1 {
         return None;
     }
     let mut owned = vec![];
@@ -62,7 +62,7 @@ pub(super) fn owned_loop_snocs<'e>(
 ) -> Option<Vec<&'e Expression>> {
     let aliases = aliases(carried, body)?;
     let carried = Carried { aliases: &aliases, ..carried };
-    if reads(carried, body) > 1 {
+    if spine_reads(carried, body, true) > 1 {
         return None;
     }
     let mut owned = vec![];
@@ -160,6 +160,10 @@ fn is_carried(carried: Carried<'_>, expression: &Expression) -> bool {
 /// which an owned append extends in place.
 fn snoc_of_carried<'e>(carried: Carried<'_>, expression: &'e Expression) -> Option<&'e Expression> {
     let ExpressionKind::Foreign { foreign, arguments } = &expression.kind else { return None };
+    if let Some(position) = foreign::hash_map_write_position(foreign) {
+        let map = &arguments[position];
+        return is_carried(carried, map).then_some(map);
+    }
     let appends = match foreign {
         Foreign::Snoc | Foreign::Operator(Operator::StringAppend) => true,
         _ => {
@@ -259,6 +263,18 @@ fn reads(carried: Carried<'_>, expression: &Expression) -> usize {
         _ if is_carried(carried, expression) => 1,
         ExpressionKind::Local(id) if *id == carried.accumulator => 1,
         ExpressionKind::Access { record, .. } if is_accumulator(carried, record) => 0,
+        ExpressionKind::Foreign { foreign, arguments }
+            if let Some(position) = foreign::hash_map_write_position(foreign)
+                && is_carried(carried, &arguments[position]) =>
+        {
+            let others: usize = arguments
+                .iter()
+                .enumerate()
+                .filter(|(index, _)| *index != position)
+                .map(|(_, argument)| reads_before_write(carried, argument))
+                .sum();
+            1 + others
+        }
         ExpressionKind::Update { record, updates }
             if is_accumulator(carried, record) && overwrites(carried, updates) =>
         {
@@ -307,6 +323,107 @@ fn reads(carried: Carried<'_>, expression: &Expression) -> usize {
             total
         }
     }
+}
+
+fn spine_reads(carried: Carried<'_>, expression: &Expression, first: bool) -> usize {
+    if !borrows_carried(carried, expression) {
+        return reads(carried, expression);
+    }
+    let leading = |expression: &Expression, first: bool| match first {
+        true => reads_before_write(carried, expression),
+        false => reads(carried, expression),
+    };
+    match &expression.kind {
+        ExpressionKind::Let { bindings, body } => {
+            let mut total = 0;
+            for binding in bindings {
+                total += leading(&binding.value, first && total == 0);
+            }
+            total + spine_reads(carried, body, first && total == 0)
+        }
+        ExpressionKind::If { condition, then, otherwise } => {
+            let tested = leading(condition, first);
+            let first = first && tested == 0;
+            tested + spine_reads(carried, then, first).max(spine_reads(carried, otherwise, first))
+        }
+        ExpressionKind::Case { scrutinees, alternatives } => {
+            let destructured = |scrutinee: &Expression| {
+                matches!(carried.place, Place::Constructor { .. })
+                    && is_accumulator(carried, scrutinee)
+            };
+            let mut scrutinised = 0;
+            for scrutinee in scrutinees.iter().filter(|scrutinee| !destructured(scrutinee)) {
+                scrutinised += leading(scrutinee, first && scrutinised == 0);
+            }
+            let first = first && scrutinised == 0;
+            let branches = alternatives
+                .iter()
+                .map(|alternative| match &alternative.body {
+                    Guarded::Unconditional(body) => spine_reads(carried, body, first),
+                    guarded => guarded_reads(carried, guarded),
+                })
+                .max()
+                .unwrap_or(0);
+            scrutinised + branches
+        }
+        _ => reads(carried, expression),
+    }
+}
+
+fn reads_before_write(carried: Carried<'_>, expression: &Expression) -> usize {
+    if !borrows_carried(carried, expression) {
+        return reads(carried, expression);
+    }
+    match &expression.kind {
+        ExpressionKind::Foreign { foreign, arguments } if foreign::borrows_hash_map(foreign) => {
+            arguments
+                .iter()
+                .filter(|argument| !is_carried(carried, argument))
+                .map(|argument| reads_before_write(carried, argument))
+                .sum()
+        }
+        ExpressionKind::Lambda { .. }
+        | ExpressionKind::Closure { .. }
+        | ExpressionKind::EffectPure(_)
+        | ExpressionKind::EffectBind { .. }
+        | ExpressionKind::EffectEach { .. } => reads(carried, expression),
+        ExpressionKind::If { condition, then, otherwise } => {
+            let branches =
+                reads_before_write(carried, then).max(reads_before_write(carried, otherwise));
+            reads_before_write(carried, condition) + branches
+        }
+        ExpressionKind::Case { scrutinees, alternatives } => {
+            let scrutinised: usize =
+                scrutinees.iter().map(|scrutinee| reads_before_write(carried, scrutinee)).sum();
+            let branches = alternatives
+                .iter()
+                .map(|alternative| match &alternative.body {
+                    Guarded::Unconditional(body) => reads_before_write(carried, body),
+                    guarded => guarded_reads(carried, guarded),
+                })
+                .max()
+                .unwrap_or(0);
+            scrutinised + branches
+        }
+        _ => {
+            let mut total = 0;
+            for_each_child(expression, &mut |child| total += reads_before_write(carried, child));
+            total
+        }
+    }
+}
+
+fn borrows_carried(carried: Carried<'_>, expression: &Expression) -> bool {
+    let mut borrows = false;
+    crate::monomorphic::traversal::visit(expression, &mut |expression| {
+        if let ExpressionKind::Foreign { foreign, arguments } = &expression.kind
+            && foreign::borrows_hash_map(foreign)
+            && arguments.iter().any(|argument| is_carried(carried, argument))
+        {
+            borrows = true;
+        }
+    });
+    borrows
 }
 
 fn overwrites(carried: Carried<'_>, updates: &[RecordUpdate]) -> bool {

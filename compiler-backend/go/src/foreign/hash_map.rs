@@ -21,6 +21,50 @@ const INSTANTIATE: Boundary = Boundary { instantiate: true, ..PLAIN };
 const LOOKUP_MAYBE: Option<MaybeConstructors> =
     Some(MaybeConstructors { just: 1, nothing: 0, witness: None, elements: false });
 
+const NATIVE_LOOKUP: Foreign =
+    hash_map("NativeLookup", 6, Boundary { maybe: LOOKUP_MAYBE, ignored: &[2, 4], ..PLAIN });
+
+const NATIVE_SIZE: Foreign = hash_map("NativeSize", 1, PLAIN);
+
+const NATIVE_IS_EMPTY: Foreign = hash_map("NativeIsEmpty", 1, PLAIN);
+
+const NATIVE_INSERT: Foreign = hash_map("NativeInsert", 5, Boundary { ignored: &[0, 1], ..PLAIN });
+
+const NATIVE_INSERT_WITH: Foreign =
+    hash_map("NativeInsertWith", 6, ignoring_uncurrying(&[0, 1], &[(2, 2)]));
+
+const NATIVE_DELETE: Foreign = hash_map("NativeDelete", 4, Boundary { ignored: &[0, 2], ..PLAIN });
+
+pub const HASH_MAP_LEND: GoFunction = GoFunction { package: GoPackage::HashMap, name: "Lend" };
+
+struct OwnedWrite {
+    write: Foreign,
+    map: usize,
+    owned: &'static str,
+}
+
+const OWNED_WRITES: &[OwnedWrite] = &[
+    OwnedWrite { write: NATIVE_INSERT, map: 4, owned: "NativeInsertOwned" },
+    OwnedWrite { write: NATIVE_INSERT_WITH, map: 5, owned: "NativeInsertWithOwned" },
+    OwnedWrite { write: NATIVE_DELETE, map: 3, owned: "NativeDeleteOwned" },
+];
+
+pub fn hash_map_write_position(foreign: &Foreign) -> Option<usize> {
+    let write = OWNED_WRITES.iter().find(|write| foreign.calls(write.write))?;
+    Some(write.map)
+}
+
+pub fn owned_hash_map_write(foreign: &Foreign) -> Option<(usize, &'static Foreign)> {
+    let Foreign::Call { arity, boundary, .. } = *foreign else { return None };
+    let write = OWNED_WRITES.iter().find(|write| foreign.calls(write.write))?;
+    let function = GoFunction { package: GoPackage::HashMap, name: write.owned };
+    Some((write.map, Foreign::Call { function, arity, boundary }.interned()))
+}
+
+pub fn borrows_hash_map(foreign: &Foreign) -> bool {
+    [NATIVE_LOOKUP, NATIVE_SIZE, NATIVE_IS_EMPTY].into_iter().any(|borrow| foreign.calls(borrow))
+}
+
 struct HashMapForeign {
     name: &'static str,
     keyed: Foreign,
@@ -45,26 +89,22 @@ const HASH_MAP_FOREIGNS: &[HashMapForeign] = &[
     HashMapForeign {
         name: "lookupPurs",
         keyed: hash_map("Lookup", 6, Boundary { maybe: LOOKUP_MAYBE, ..uncurrying(&[(2, 2)]) }),
-        native: hash_map(
-            "NativeLookup",
-            6,
-            Boundary { maybe: LOOKUP_MAYBE, ignored: &[2, 4], ..PLAIN },
-        ),
+        native: NATIVE_LOOKUP,
     },
     HashMapForeign {
         name: "insertPurs",
         keyed: hash_map("Insert", 5, uncurrying(&[(0, 2)])),
-        native: hash_map("NativeInsert", 5, Boundary { ignored: &[0, 1], ..PLAIN }),
+        native: NATIVE_INSERT,
     },
     HashMapForeign {
         name: "insertWithPurs",
         keyed: hash_map("InsertWith", 6, uncurrying(&[(0, 2), (2, 2)])),
-        native: hash_map("NativeInsertWith", 6, ignoring_uncurrying(&[0, 1], &[(2, 2)])),
+        native: NATIVE_INSERT_WITH,
     },
     HashMapForeign {
         name: "deletePurs",
         keyed: hash_map("Delete", 4, uncurrying(&[(0, 2)])),
-        native: hash_map("NativeDelete", 4, Boundary { ignored: &[0, 2], ..PLAIN }),
+        native: NATIVE_DELETE,
     },
     HashMapForeign {
         name: "fromArrayPurs",
@@ -79,13 +119,9 @@ const HASH_MAP_FOREIGNS: &[HashMapForeign] = &[
     HashMapForeign {
         name: "isEmpty",
         keyed: hash_map("IsEmpty", 1, PLAIN),
-        native: hash_map("NativeIsEmpty", 1, PLAIN),
+        native: NATIVE_IS_EMPTY,
     },
-    HashMapForeign {
-        name: "size",
-        keyed: hash_map("Size", 1, PLAIN),
-        native: hash_map("NativeSize", 1, PLAIN),
-    },
+    HashMapForeign { name: "size", keyed: hash_map("Size", 1, PLAIN), native: NATIVE_SIZE },
     HashMapForeign {
         name: "unionWithPurs",
         keyed: hash_map("UnionWith", 5, uncurrying(&[(0, 2), (2, 2)])),

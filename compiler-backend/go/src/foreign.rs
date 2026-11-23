@@ -11,7 +11,9 @@ mod packages;
 mod sources;
 
 pub use embeds::{EmbedError, embedded_files};
-pub use hash_map::hash_map_import;
+pub use hash_map::{
+    HASH_MAP_LEND, borrows_hash_map, hash_map_import, hash_map_write_position, owned_hash_map_write,
+};
 pub use host::is_opaque_foreign_data;
 pub use imports::{
     APPENDER, ARRAY_ALL, ARRAY_ANY, ARRAY_APPEND, ARRAY_REPLICATE, ARRAY_SCANL, ARRAY_SLICE,
