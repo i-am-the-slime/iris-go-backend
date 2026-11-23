@@ -13,9 +13,9 @@
 //! Struct values are copied on assignment, so a field local holds exactly what
 //! the struct's field would. A local stays whole when its address is taken,
 //! when a closure mentions it (each field would be captured on its own), when
-//! a method may be called on it, when it is bound by a range, a parameter or
-//! more than once, or when its value comes from an expression that would have
-//! to be evaluated once per field.
+//! a method may be called on it, when it is bound by a range or more than
+//! once, or when its value comes from an expression that would have to be
+//! evaluated once per field.
 
 use rustc_hash::{FxHashMap, FxHashSet};
 
@@ -61,16 +61,24 @@ struct Split {
     type_name: String,
     fields: Vec<(String, GoType)>,
     needed: Vec<String>,
+    parameter: bool,
 }
 
 fn next_split(declaration: &mut GoDeclaration, structs: &Structs) -> Option<Split> {
     let types = Types::of(declaration, structs);
+    let parameters: Vec<String> = match declaration {
+        GoDeclaration::Function { parameters, .. } => {
+            parameters.iter().map(|(name, _)| name.clone()).collect()
+        }
+        _ => vec![],
+    };
     for (local, type_name) in types.single_values() {
         let fields = &structs[&type_name];
-        let mut census = Census::new(&local, fields);
+        let parameter = parameters.contains(&local);
+        let mut census = Census::new(&local, fields, parameter);
         go_traversal::declaration(&mut census, declaration);
         if let Some(needed) = census.needed() {
-            return Some(Split { local, type_name, fields: fields.clone(), needed });
+            return Some(Split { local, type_name, fields: fields.clone(), needed, parameter });
         }
     }
     None
@@ -98,6 +106,18 @@ fn apply(declaration: &mut GoDeclaration, split: &Split, names: &mut FxHashSet<S
         }
     });
     go_traversal::declaration(&mut Replace { split, locals: &locals }, declaration);
+    if split.parameter
+        && let GoDeclaration::Function { body, .. } = declaration
+    {
+        let read = |field: &String| GoStatement::Define {
+            names: vec![locals[field].clone()],
+            values: vec![GoExpression::Field {
+                value: Box::new(identifier(&split.local)),
+                name: field.clone(),
+            }],
+        };
+        body.splice(0..0, split.needed.iter().map(read));
+    }
     let types: FxHashMap<&str, &GoType> =
         split.fields.iter().map(|(field, type_)| (locals[field].as_str(), type_)).collect();
     go_traversal::each_block_in_declaration(declaration, |block| {
@@ -306,23 +326,27 @@ struct Census<'a> {
     defined_at: usize,
     /// Whether a field is written inside a loop the definition is outside of.
     written_in_loop: bool,
+    changed_in_loop: bool,
+    parameter: bool,
     refused: bool,
     in_literal: bool,
     in_header: bool,
 }
 
 impl<'a> Census<'a> {
-    fn new(local: &'a str, fields: &'a [(String, GoType)]) -> Self {
+    fn new(local: &'a str, fields: &'a [(String, GoType)], parameter: bool) -> Self {
         Census {
             local,
             fields,
             reads: FxHashMap::default(),
             targets: FxHashMap::default(),
             whole: 0,
-            defined: false,
+            defined: parameter,
             depth: 0,
             defined_at: 0,
             written_in_loop: false,
+            changed_in_loop: false,
+            parameter,
             refused: false,
             in_literal: false,
             in_header: false,
@@ -331,7 +355,10 @@ impl<'a> Census<'a> {
 
     /// The fields that need a local, when the local is to be split.
     fn needed(&self) -> Option<Vec<String>> {
-        if self.refused || !self.defined || !self.written_in_loop {
+        let kept_in_memory = self.fields.len() > REGISTER_FIELDS;
+        let carried = kept_in_memory && self.changed_in_loop;
+        let worthwhile = if self.parameter { carried } else { self.written_in_loop || carried };
+        if self.refused || !self.defined || !worthwhile {
             return None;
         }
         let count =
@@ -341,14 +368,14 @@ impl<'a> Census<'a> {
         if self.whole == 0 && self.targets.keys().any(|field| !read(field)) {
             return None;
         }
-        Some(
-            self.fields
-                .iter()
-                .map(|(field, _)| field)
-                .filter(|field| self.whole > 0 || read(field))
-                .cloned()
-                .collect(),
-        )
+        let needed: Vec<String> = self
+            .fields
+            .iter()
+            .map(|(field, _)| field)
+            .filter(|field| self.whole > 0 || read(field))
+            .cloned()
+            .collect();
+        (!needed.is_empty()).then_some(needed)
     }
 
     fn is_field(&self, name: &str) -> bool {
@@ -419,12 +446,14 @@ impl Walk for Census<'_> {
                         if !single || !self.splits(&values[0], true) {
                             self.refused = true;
                         }
+                        self.changed_in_loop |= self.depth > 0;
                         values.iter_mut().for_each(|value| self.expression(value));
                         return;
                     }
                     if let Some(field) = written_field(target, self.local) {
                         *self.targets.entry(field.to_string()).or_insert(0) += 1;
                         self.written_in_loop |= self.depth > self.defined_at;
+                        self.changed_in_loop |= self.depth > 0;
                     }
                 }
             }
