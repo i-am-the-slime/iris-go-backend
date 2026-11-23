@@ -40,6 +40,7 @@ mod rename;
 mod short_circuit;
 mod sink;
 mod tail_choices;
+mod thaw;
 mod three_way;
 mod traversals;
 mod unpack;
@@ -111,6 +112,7 @@ pub fn simplify(
         simplifier.sequence_folds(&mut current.body);
         simplifier.settle_records(&mut current.body);
         simplifier.sink_lets(&mut current.body);
+        thaw::thaw_fresh_arrays_in_place(&mut current.body, simplifier.monotypes);
         simplifier.sizes[index] = size(&current.body);
         simplifier.functions[index] = Some(current);
     }

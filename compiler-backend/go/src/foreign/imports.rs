@@ -231,6 +231,10 @@ pub const INT_DIVIDE: Foreign = prim_with("IntDiv", 2, int32_parameters(&[0, 1])
 pub const INT_MODULO: Foreign = prim_with("IntMod", 2, int32_parameters(&[0, 1]));
 
 pub const ARRAY_APPEND: Foreign = array("Append", 2);
+
+pub const ARRAY_THAW: Foreign = thunk(GoPackage::Array, "Thaw", 1, PLAIN);
+
+pub const ARRAY_THAW_OWNED: Foreign = thunk(GoPackage::Array, "ThawOwned", 1, PLAIN);
 /// Data.Array.ST.Partial's peek, read without a bounds test.
 pub const MUTABLE_PEEK_UNSAFE: Foreign =
     thunk(GoPackage::Array, "PeekUnsafe", 2, int32_parameters(&[0]));
@@ -356,7 +360,7 @@ pub(super) const FOREIGN_IMPORTS: &[(&str, &str, Foreign)] = &[
     ("Data.Array.ST", "new", Foreign::MutableArrayNew),
     ("Data.Array.ST", "unsafeFreezeImpl", thunk(GoPackage::Array, "UnsafeFreeze", 1, PLAIN)),
     ("Data.Array.ST", "unsafeThawImpl", thunk(GoPackage::Array, "UnsafeThaw", 1, PLAIN)),
-    ("Data.Array.ST", "thawImpl", thunk(GoPackage::Array, "Thaw", 1, PLAIN)),
+    ("Data.Array.ST", "thawImpl", ARRAY_THAW),
     ("Data.Array.ST", "freezeImpl", thunk(GoPackage::Array, "Freeze", 1, PLAIN)),
     ("Data.Array.ST", "cloneImpl", thunk(GoPackage::Array, "Clone", 1, PLAIN)),
     ("Data.Array.ST", "peekImpl", thunk(GoPackage::Array, "Peek", 4, int32_parameters(&[2]))),
