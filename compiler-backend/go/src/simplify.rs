@@ -26,8 +26,10 @@ use crate::suspension::Suspension;
 use crate::timing::timed;
 use smol_str::SmolStr;
 
+use self::arguments::ArgumentSpecializations;
 use self::coverage::{binds_only, reachable};
 
+mod arguments;
 mod choice;
 mod coverage;
 mod effects;
@@ -81,6 +83,7 @@ pub fn simplify(
         unsafely_effectful_locals: FxHashSet::default(),
         thunk_parameters,
         names: FxHashMap::default(),
+        argument_specializations: ArgumentSpecializations::default(),
     };
     for component in &components {
         for &function in component {
@@ -142,6 +145,7 @@ struct Simplifier<'m> {
     /// The names that locals take over from the aliases substituted for them: `argv <- args`
     /// binds `argv` to what `args` names after its type, `array`, and the Go variable is `argv`.
     names: FxHashMap<LocalId, SmolStr>,
+    argument_specializations: ArgumentSpecializations,
 }
 
 impl Simplifier<'_> {
@@ -717,6 +721,10 @@ impl Simplifier<'_> {
                         .then(|| (function.parameters.clone(), function.body.clone()))
                 });
                 let Some((parameters, body)) = inlined else {
+                    let arguments = match self.specialized_call(id, arguments, monotype) {
+                        Ok(call) => return call,
+                        Err(arguments) => arguments,
+                    };
                     let function = Expression::new(ExpressionKind::Function(id), function.monotype);
                     let kind = ExpressionKind::Apply { function: Box::new(function), arguments };
                     return Expression::new(kind, monotype);

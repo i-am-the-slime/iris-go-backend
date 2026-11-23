@@ -1,6 +1,6 @@
 use crate::foreign::{Foreign, GoPackage};
 use crate::monomorphic::traversal::{reference_graph, visit};
-use crate::monomorphic::{Expression, ExpressionKind, Function, LocalId, Program};
+use crate::monomorphic::{Expression, ExpressionKind, Function, FunctionId, LocalId, Program};
 use crate::monotype::{Monotype, Monotypes};
 
 pub struct Suspension {
@@ -27,6 +27,10 @@ impl Suspension {
                 return Suspension { suspending };
             }
         }
+    }
+
+    pub fn copy(&mut self, original: FunctionId) {
+        self.suspending.push(self.suspending[original.0 as usize]);
     }
 
     pub fn may_suspend(&self, expression: &Expression, monotypes: &Monotypes) -> bool {

@@ -1,0 +1,62 @@
+---
+source: tests-integration/src/fixtures.rs
+---
+// Data/Ring/ring.go
+package ring
+
+func Sub(i int32, i2 int32) int32 {
+	return i - i2
+}
+
+// main.go
+package main
+
+import (
+	"fixture/Data/Ring"
+	"github.com/i-am-the-slime/iris-go/console"
+	"github.com/i-am-the-slime/iris-go/prim"
+	"strings"
+)
+
+var main_ = initializeMain_()
+
+func initializeMain_() []int32 {
+	return []int32{nested(3, increment, 0), nested(2, func(value int32) int32 {
+		return value * 3
+	}, 1), alternating(3, ring.Sub, 10, 4), alternating(4, func(x int32, y int32) int32 {
+		return x*10 + y
+	}, 1, 2)}
+}
+
+func nested(depth int32, f func(int32) int32, x int32) int32 {
+	for {
+		fCaptured := f
+		if depth <= 0 {
+			return fCaptured(x)
+		}
+		depth, f = depth-1, func(x2 int32) int32 {
+			return fCaptured(fCaptured(x2))
+		}
+	}
+}
+
+func increment(x int32) int32 {
+	return x + 1
+}
+
+func alternating(depth int32, combine func(int32, int32) int32, x int32, y int32) int32 {
+	if depth <= 0 {
+		return combine(x, y)
+	}
+	return combine(alternating(depth-1, func(b int32, a int32) int32 {
+		return combine(a, b)
+	}, y, x), depth)
+}
+
+func main() {
+	texts := make([]string, 0, len(main_))
+	for _, element := range main_ {
+		texts = append(texts, prim.ShowInt(element))
+	}
+	console.Print("[" + strings.Join(texts, " ") + "]")
+}

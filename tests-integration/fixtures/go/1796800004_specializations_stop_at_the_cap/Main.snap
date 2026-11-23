@@ -1,0 +1,110 @@
+---
+source: tests-integration/src/fixtures.rs
+---
+// main.go
+package main
+
+import (
+	"github.com/i-am-the-slime/iris-go/console"
+	"github.com/i-am-the-slime/iris-go/prim"
+	"strings"
+)
+
+var main_ = initializeMain_()
+
+func initializeMain_() []int32 {
+	return []int32{iterateF(3, 0), iterateF2(3, 0), iterateF3(3, 0), iterateF4(3, 1), iterateF5(3, 1), iterateSquare(2, 3), iterateHalve(3, 100), iterateF6(3, 5), iterate(func(x int32) int32 {
+		return x + 4
+	}, 3, 0), iterate(func(x int32) int32 {
+		return x * 4
+	}, 3, 1), iterateF(5, 10)}
+}
+
+func iterate(f func(int32) int32, count int32, x int32) int32 {
+	for {
+		if count <= 0 {
+			return x
+		}
+		count, x = count-1, f(x)
+	}
+}
+
+func iterateF(count int32, x int32) int32 {
+	for {
+		if count <= 0 {
+			return x
+		}
+		count, x = count-1, x+1
+	}
+}
+
+func iterateF2(count int32, x int32) int32 {
+	for {
+		if count <= 0 {
+			return x
+		}
+		count, x = count-1, x+2
+	}
+}
+
+func iterateF3(count int32, x int32) int32 {
+	for {
+		if count <= 0 {
+			return x
+		}
+		count, x = count-1, x+3
+	}
+}
+
+func iterateF4(count int32, x int32) int32 {
+	for {
+		if count <= 0 {
+			return x
+		}
+		count, x = count-1, x*2
+	}
+}
+
+func iterateF5(count int32, x int32) int32 {
+	for {
+		if count <= 0 {
+			return x
+		}
+		count, x = count-1, x*3
+	}
+}
+
+func iterateSquare(count int32, x int32) int32 {
+	for {
+		if count <= 0 {
+			return x
+		}
+		count, x = count-1, x*x
+	}
+}
+
+func iterateHalve(count int32, x int32) int32 {
+	for {
+		if count <= 0 {
+			return x
+		}
+		count, x = count-1, x/2
+	}
+}
+
+func iterateF6(count int32, x int32) int32 {
+	for {
+		if count <= 0 {
+			return x
+		}
+		count, x = count-1, -x
+	}
+}
+
+func main() {
+	texts := make([]string, 0, len(main_))
+	for _, element := range main_ {
+		texts = append(texts, prim.ShowInt(element))
+	}
+	console.Print("[" + strings.Join(texts, " ") + "]")
+}

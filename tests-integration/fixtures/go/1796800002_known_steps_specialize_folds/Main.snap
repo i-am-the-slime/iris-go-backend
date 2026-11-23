@@ -1,0 +1,112 @@
+---
+source: tests-integration/src/fixtures.rs
+---
+// main.go
+package main
+
+import (
+	"github.com/i-am-the-slime/iris-go/console"
+	"github.com/i-am-the-slime/iris-go/prim"
+	"strings"
+)
+
+type ListInt struct {
+	Cons1 *ListInt
+	Cons0 int32
+}
+
+var sharedListIntNil = &ListInt{}
+
+var main_ = initializeMain_()
+
+func initializeMain_() []int32 {
+	var accumulator int32 = 0
+	for element := int32(1); element < 11; element++ {
+		accumulator = addSquare(accumulator, element)
+	}
+	var accumulator2 int32 = 0
+	for x := int32(1); x < 11; x++ {
+		accumulator2 += 2 * x
+	}
+	return []int32{foldListIntIntAddSquare(0, range_(1, 10)), foldListIntIntStep3(0, range_(1, 10)), foldListIntIntStep(5, 0, range_(1, 10)), foldListIntIntStep(7, 0, range_(1, 4)), foldListIntIntStep2(100, 0, range_(1, 3)), foldListIntIntMax(0, range_(3, 9)), accumulator, accumulator2}
+}
+
+func addSquare(total int32, x int32) int32 {
+	return total + x*x
+}
+
+func range_(low int32, high int32) *ListInt {
+	if low > high {
+		return sharedListIntNil
+	}
+	return &ListInt{Cons0: low, Cons1: range_(low+1, high)}
+}
+
+func foldListIntIntStep(i int32, accumulator int32, value *ListInt) int32 {
+	for {
+		if value == sharedListIntNil {
+			return accumulator
+		}
+		x := value.Cons0
+		rest := value.Cons1
+		accumulator, value = accumulator+i*x, rest
+	}
+}
+
+func foldListIntIntStep2(i int32, accumulator int32, value *ListInt) int32 {
+	for {
+		if value == sharedListIntNil {
+			return accumulator
+		}
+		x := value.Cons0
+		rest := value.Cons1
+		accumulator, value = accumulator+x+i, rest
+	}
+}
+
+func foldListIntIntAddSquare(accumulator int32, value *ListInt) int32 {
+	for {
+		if value == sharedListIntNil {
+			return accumulator
+		}
+		x := value.Cons0
+		rest := value.Cons1
+		accumulator, value = accumulator+x*x, rest
+	}
+}
+
+func foldListIntIntStep3(accumulator int32, value *ListInt) int32 {
+	for {
+		if value == sharedListIntNil {
+			return accumulator
+		}
+		x := value.Cons0
+		rest := value.Cons1
+		accumulator, value = accumulator+3*x, rest
+	}
+}
+
+func foldListIntIntMax(accumulator int32, value *ListInt) int32 {
+	for {
+		if value == sharedListIntNil {
+			return accumulator
+		}
+		x := value.Cons0
+		rest := value.Cons1
+		var result int32
+		if accumulator < x {
+			result = x
+		} else {
+			result = accumulator
+		}
+		accumulator, value = result, rest
+	}
+}
+
+func main() {
+	texts := make([]string, 0, len(main_))
+	for _, element := range main_ {
+		texts = append(texts, prim.ShowInt(element))
+	}
+	console.Print("[" + strings.Join(texts, " ") + "]")
+}

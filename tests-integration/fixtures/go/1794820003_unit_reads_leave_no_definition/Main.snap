@@ -6,10 +6,11 @@ package dataarray
 
 import (
 	"fixture/Data/Tuple"
+	"fixture/shared"
 	"github.com/i-am-the-slime/iris-go/direct"
 )
 
-func FoldMEffectTupleUnitUnitUnit(f func(struct{}, tuple.TupleUnitUnit), b struct{}, array []tuple.TupleUnitUnit) {
+func FoldMEffectTupleUnitUnitUnitF(ref *shared.Ref[int32], b struct{}, array []tuple.TupleUnitUnit) {
 	function := func(_ struct{}) {
 	}
 	direct.Uncons(func(unit struct{}) func() {
@@ -18,8 +19,10 @@ func FoldMEffectTupleUnitUnitUnit(f func(struct{}, tuple.TupleUnitUnit), b struc
 		}
 	}, func(a tuple.TupleUnitUnit, as []tuple.TupleUnitUnit) func() {
 		return func() {
-			f(b, a)
-			FoldMEffectTupleUnitUnitUnit(f, struct{}{}, as)
+			s := ref.Value
+			s_ := s + 1
+			ref.Value = s_
+			FoldMEffectTupleUnitUnitUnitF(ref, struct{}{}, as)
 		}
 	}, array)()
 }
@@ -38,20 +41,20 @@ package main
 import (
 	"fixture/Data/Array"
 	"fixture/Data/Tuple"
+	"fixture/shared"
 	"os"
 )
 
 func main_() int32 {
 	var same int32 = 1
-	var count int32 = 0
-	dataarray.FoldMEffectTupleUnitUnitUnit(func(_ struct{}, pair tuple.TupleUnitUnit) {
-		count += 1
-	}, struct{}{}, units)
+	count := &shared.Ref[int32]{Value: 0}
+	dataarray.FoldMEffectTupleUnitUnitUnitF(count, struct{}{}, units)
+	counted := count.Value
 	var accumulator int32 = 0
 	for range units {
 		accumulator += 1
 	}
-	return same*100 + count*10 + accumulator
+	return same*100 + counted*10 + accumulator
 }
 
 var units []tuple.TupleUnitUnit = []tuple.TupleUnitUnit{{First: struct{}{}, Second: struct{}{}}, {First: struct{}{}, Second: struct{}{}}}
