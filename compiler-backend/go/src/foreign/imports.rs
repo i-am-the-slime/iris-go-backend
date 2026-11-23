@@ -237,6 +237,10 @@ pub const ARRAY_THAW: Foreign = thunk(GoPackage::Array, "Thaw", 1, PLAIN);
 pub const ARRAY_THAW_OWNED: Foreign = thunk(GoPackage::Array, "ThawOwned", 1, PLAIN);
 
 pub const ARRAY_UNZIP: Foreign = array("Unzip", 1);
+
+pub const ARRAY_UNCONS: Foreign = uncurried(direct("Uncons", 3), &[(1, 2)]);
+
+pub const ARRAY_TAIL: Foreign = array("Tail", 1);
 /// Data.Array.ST.Partial's peek, read without a bounds test.
 pub const MUTABLE_PEEK_UNSAFE: Foreign =
     thunk(GoPackage::Array, "PeekUnsafe", 2, int32_parameters(&[0]));
@@ -328,7 +332,7 @@ pub(super) const FOREIGN_IMPORTS: &[(&str, &str, Foreign)] = &[
     ("Data.Array", "allImpl", ARRAY_ALL),
     ("Data.Array", "scanlImpl", ARRAY_SCANL),
     ("Data.Array", "scanrImpl", uncurried(array("Scanr", 3), &[(0, 2)])),
-    ("Data.Array", "unconsImpl", uncurried(direct("Uncons", 3), &[(1, 2)])),
+    ("Data.Array", "unconsImpl", ARRAY_UNCONS),
     ("Data.Array", "sortByImpl", ARRAY_SORT_BY),
     ("Data.Array", "findMapImpl", direct_with("FindMap", 4, maybe_search(0, 1))),
     ("Data.Array.Parallel", "parallelMap", array("ParallelMap", 2)),

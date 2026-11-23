@@ -1,0 +1,95 @@
+---
+source: tests-integration/src/fixtures.rs
+---
+// Data/Maybe/maybe.go
+package maybe
+
+import "fixture/shared"
+
+const TagNothing = 0
+
+const TagJust = 1
+
+type HeadTail struct {
+	Just shared.HeadTail
+	Tag  uint8
+}
+
+var NoHeadTail = HeadTail{Tag: TagNothing}
+
+func JustHeadTail(just shared.HeadTail) HeadTail {
+	return HeadTail{Tag: TagJust, Just: just}
+}
+
+// main.go
+package main
+
+import (
+	"fixture/Data/Maybe"
+	"fixture/shared"
+	"github.com/i-am-the-slime/iris-go/array"
+	"os"
+)
+
+func main_() int32 {
+	numbers := []int32{4, 5}
+	numbers2 := []int32{}
+	var result2 maybe.HeadTail
+	if int32(len(numbers)) == 0 {
+		result2 = maybe.NoHeadTail
+	} else {
+		result2 = maybe.JustHeadTail(shared.HeadTail{Head: numbers[0], Tail: array.Tail(numbers)})
+	}
+	var result int32
+	switch result2.Tag {
+	case maybe.TagJust:
+		result = result2.Just.Head*100 + int32(len(result2.Just.Tail))
+	default: // maybe.TagNothing
+		result = -1
+	}
+	var result3 maybe.HeadTail
+	if int32(len(numbers2)) == 0 {
+		result3 = maybe.NoHeadTail
+	} else {
+		result3 = maybe.JustHeadTail(shared.HeadTail{Head: numbers2[0], Tail: array.Tail(numbers2)})
+	}
+	var result4 int32
+	switch result3.Tag {
+	case maybe.TagJust:
+		result4 = result3.Just.Head*100 + int32(len(result3.Just.Tail))
+	default: // maybe.TagNothing
+		result4 = -1
+	}
+	return summed(0, []int32{1, 2, 3}) + result + result4
+}
+
+func summed(total int32, remaining []int32) int32 {
+	for {
+		var result maybe.HeadTail
+		if int32(len(remaining)) == 0 {
+			result = maybe.NoHeadTail
+		} else {
+			result = maybe.JustHeadTail(shared.HeadTail{Head: remaining[0], Tail: array.Tail(remaining)})
+		}
+		switch result.Tag {
+		case maybe.TagJust:
+			total, remaining = total+result.Just.Head, result.Just.Tail
+			continue
+		default: // maybe.TagNothing
+			return total
+		}
+	}
+}
+
+func main() {
+	exitStatus := main_()
+	os.Exit(int(exitStatus))
+}
+
+// shared/shared.go
+package shared
+
+type HeadTail struct {
+	Tail []int32
+	Head int32
+}

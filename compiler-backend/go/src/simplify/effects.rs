@@ -31,6 +31,10 @@ impl Simplifier<'_> {
             Ok(reduced) => return reduced,
             Err(arguments) => arguments,
         };
+        let arguments = match self.unconsed(foreign, arguments, monotype) {
+            Ok(unconsed) => return unconsed,
+            Err(arguments) => arguments,
+        };
         let mut arguments = match self.sequenced_fold(foreign, arguments, monotype) {
             Ok(looped) => return looped,
             Err(arguments) => arguments,

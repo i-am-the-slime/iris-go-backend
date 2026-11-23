@@ -44,6 +44,7 @@ mod tail_choices;
 mod thaw;
 mod three_way;
 mod traversals;
+mod uncons;
 mod unpack;
 
 const INLINE_SIZE: usize = 40;
