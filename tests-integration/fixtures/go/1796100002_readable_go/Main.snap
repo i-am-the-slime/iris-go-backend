@@ -1,13 +1,6 @@
 ---
 source: tests-integration/src/fixtures.rs
 ---
-// Data/Maybe/maybe.go
-package maybe
-
-type Int int64
-
-const NoInt Int = 1 << 32
-
 // Data/Show/show.go
 package show
 
@@ -33,7 +26,6 @@ func AppendShowArrayInt(buffer []byte, array []int32) []byte {
 package main
 
 import (
-	"fixture/Data/Maybe"
 	"fixture/Data/Show"
 	"github.com/i-am-the-slime/iris-go/array"
 	"github.com/i-am-the-slime/iris-go/console"
@@ -51,12 +43,8 @@ func initializeMain_() []string {
 	for index, element := range counts {
 		mapped[index] = describe(element)
 	}
-	codeUnitIndexOf := prim.CodeUnitIndexOf(func(payload int32) maybe.Int {
-		return maybe.Int(payload)
-	}, maybe.NoInt, "-", text)
-	result2 := codeUnitIndexOf != maybe.NoInt
 	var result []string
-	if result2 {
+	if prim.CodeUnitContains("-", text) {
 		result = strings.Split(text, "-")
 	} else {
 		result = []string{text}

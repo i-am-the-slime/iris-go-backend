@@ -882,6 +882,7 @@ pub(super) const INTRINSICS: &[(&str, &str, &[&str], Foreign)] = &[
     ("Data.Array", "groupBy", &[], uncurried(array("GroupBy", 2), &[(0, 2)])),
     ("Data.Foldable", "intercalate", &["foldableArray", "monoidString"], prim("StringJoinWith", 2)),
     ("Data.Array", "intercalate", &["monoidString"], prim("StringJoinWith", 2)),
+    ("Data.String.CodeUnits", "contains", &[], prim("CodeUnitContains", 2)),
     (
         "Data.Foldable",
         "traverse_",
