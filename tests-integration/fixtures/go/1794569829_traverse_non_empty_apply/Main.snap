@@ -24,7 +24,6 @@ package main
 
 import (
 	"fixture/Data/Maybe"
-	"fixture/shared"
 	arraypkg "github.com/i-am-the-slime/iris-go/array"
 	"github.com/i-am-the-slime/iris-go/direct"
 	"github.com/i-am-the-slime/iris-go/prim"
@@ -42,7 +41,7 @@ func initializeMain_() maybe.ArrayInt {
 	} else {
 		result = maybe.NoArrayInt
 	}
-	array := shared.SliceView(1, int32(len(array2)), array2)
+	array := arraypkg.Slice(1, int32(len(array2)), array2)
 	for _, element := range array {
 		switch result.Tag {
 		case maybe.TagJust:
@@ -60,28 +59,6 @@ func initializeMain_() maybe.ArrayInt {
 
 func main() {
 	_ = main_
-}
-
-// shared/shared.go
-package shared
-
-func SliceView[T any](start int32, end int32, xs []T) []T {
-	length := len(xs)
-	from, to := int(start), int(end)
-	if from < 0 {
-		from = max(length+from, 0)
-	} else {
-		from = min(from, length)
-	}
-	if to < 0 {
-		to = max(length+to, 0)
-	} else {
-		to = min(to, length)
-	}
-	if from >= to {
-		return nil
-	}
-	return xs[from:to:to]
 }
 
 // note: the entry's value of type Data.Maybe.Maybe is not printed; use an Effect entry or a value of a printable type (Int, Number, Boolean, Char, String or an Array of them)

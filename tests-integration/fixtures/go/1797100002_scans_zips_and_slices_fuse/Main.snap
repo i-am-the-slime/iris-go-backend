@@ -233,7 +233,7 @@ func initializeMain_() []string {
 		built7[index] = element
 	}
 	xs := []int32{1, 2, 3, 4, 5}
-	array13 := shared.SliceView(2, int32(len(xs)), xs)
+	array13 := arraypkg.Slice(2, int32(len(xs)), xs)
 	count3 := min(len(array13), 5)
 	built8 := make([]shared.XY, count3)
 	for index := range count3 {
@@ -242,7 +242,7 @@ func initializeMain_() []string {
 		element := shared.XY{X: x, Y: y}
 		built8[index] = element
 	}
-	array14 := shared.SliceView(4, 2, []int32{1, 2, 3, 4, 5})
+	array14 := arraypkg.Slice(4, 2, []int32{1, 2, 3, 4, 5})
 	array15 := []int32{1, 2}
 	count4 := min(len(array14), len(array15))
 	built9 := make([]int32, count4)
@@ -254,7 +254,7 @@ func initializeMain_() []string {
 	}
 	xs2 := []int32{1, 2, 3}
 	array16 := []int32{1, 2, 3}
-	array17 := shared.SliceView(9, int32(len(xs2)), xs2)
+	array17 := arraypkg.Slice(9, int32(len(xs2)), xs2)
 	count5 := min(len(array16), len(array17))
 	built10 := make([]int32, count5)
 	for index := range count5 {
@@ -302,7 +302,7 @@ func initializeMain_() []string {
 	}
 	xs3 := []int32{4, 5, 6}
 	array24 := []int32{1, 2, 3}
-	array25 := shared.SliceView(1, int32(len(xs3)), xs3)
+	array25 := arraypkg.Slice(1, int32(len(xs3)), xs3)
 	count10 := min(len(array24), len(array25))
 	array26 := []int32{1, 2, 3}
 	array27 := []int32{2, 3, 1}
@@ -377,19 +377,19 @@ func initializeMain_() []string {
 	var accumulator6 int32 = 0
 	for index := range count12 {
 		start := int32(index) * step
-		var view []int32
+		var result2 []int32
 		if start < 1 {
-			view = xs4
+			result2 = xs4
 		} else {
-			view = shared.SliceView(start, int32(len(xs4)), xs4)
+			result2 = arraypkg.Slice(start, int32(len(xs4)), xs4)
 		}
 		array9 := []int32{2, 1, 1}
-		count13 := min(len(view), len(array9))
+		count13 := min(len(result2), len(array9))
 		var accumulatorBefore int32 = 0
 		var accumulatorMatches int32 = 0
 		var accumulatorTotal int32 = 0
 		for index2 := range count13 {
-			value := view[index2]
+			value := result2[index2]
 			value2 := array9[index2]
 			same := value == value2
 			if same {
@@ -433,7 +433,7 @@ func initializeMain_() []string {
 func row(letters []rune, previous []int32, letter rune) []int32 {
 	first := foldLanes(arraypkg.Slice(0, 1, previous), 0) + 1
 	scanned := first
-	array := shared.SliceView(1, int32(len(previous)), previous)
+	array := arraypkg.Slice(1, int32(len(previous)), previous)
 	count := min(len(previous), len(letters))
 	count2 := min(len(array), count)
 	built := make([]int32, count2+1)
@@ -602,25 +602,6 @@ func zipLanes(xs []int32, ys []int32) []int32 {
 
 // shared/shared.go
 package shared
-
-func SliceView[T any](start int32, end int32, xs []T) []T {
-	length := len(xs)
-	from, to := int(start), int(end)
-	if from < 0 {
-		from = max(length+from, 0)
-	} else {
-		from = min(from, length)
-	}
-	if to < 0 {
-		to = max(length+to, 0)
-	} else {
-		to = min(to, length)
-	}
-	if from >= to {
-		return nil
-	}
-	return xs[from:to:to]
-}
 
 type XY struct {
 	X int32

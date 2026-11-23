@@ -42,8 +42,7 @@ use super::{
 };
 use crate::error::GoResult;
 use crate::foreign::{
-    ARRAY_APPEND, ARRAY_REPLICATE, ARRAY_SCANL, ARRAY_SLICE, Boundary, Foreign, GoFunction,
-    GoPackage, Iteration,
+    ARRAY_APPEND, ARRAY_REPLICATE, ARRAY_SCANL, Boundary, Foreign, GoFunction, GoPackage, Iteration,
 };
 use crate::monomorphic::{Binding, Expression, ExpressionKind, Literal, Local};
 use crate::monotype::{Monotype, MonotypeId};
@@ -429,7 +428,7 @@ where
                 Ok(Source::Zip(Box::new(Zip { operands, callback, produces, count })))
             }
             None => {
-                let value = self.array_view(array, out)?;
+                let value = self.value(array, out)?;
                 Ok(Source::Array(self.hoist(value, "array", out)))
             }
         }
@@ -445,44 +444,6 @@ where
         let state = self.temporary("scanned");
         out.push(self.define(state.clone(), value, produces)?);
         Ok(state)
-    }
-
-    fn array_view(
-        &mut self,
-        array: &Expression,
-        out: &mut Vec<GoStatement>,
-    ) -> GoResult<GoExpression> {
-        match &array.kind {
-            ExpressionKind::Foreign { foreign, arguments } if foreign.calls(ARRAY_SLICE) => {
-                let values = self.values(arguments, out)?;
-                let view = self.support_function("sliceView", SLICE_VIEW_SOURCE);
-                Ok(call(identifier_expression(&view), values))
-            }
-            ExpressionKind::If { condition, then, otherwise }
-                if is_sliced(then) || is_sliced(otherwise) =>
-            {
-                let condition = self.value(condition, out)?;
-                let view = self.temporary("view");
-                let type_ = self.go_type(array.monotype)?;
-                out.push(GoStatement::Variable { name: view.clone(), type_, value: None });
-                let mut branches = [vec![], vec![]];
-                for (branch, statements) in [then, otherwise].into_iter().zip(&mut branches) {
-                    let value = self.array_view(branch, statements)?;
-                    statements.push(GoStatement::Assign {
-                        targets: vec![identifier_expression(&view)],
-                        values: vec![value],
-                    });
-                }
-                let [then, otherwise] = branches;
-                out.push(GoStatement::If { condition, then, otherwise });
-                Ok(identifier_expression(&view))
-            }
-            ExpressionKind::Let { bindings, body } if is_sliced(body) => {
-                self.bindings(bindings, out)?;
-                self.array_view(body, out)
-            }
-            _ => self.value(array, out),
-        }
     }
 
     /// Works out where a range's loop starts, which way it counts and how far.
@@ -1243,35 +1204,6 @@ fn as_int(count: GoExpression) -> GoExpression {
 fn indexed(array: &str, slot: GoExpression) -> GoExpression {
     GoExpression::Index { value: Box::new(identifier_expression(array)), index: Box::new(slot) }
 }
-
-fn is_sliced(array: &Expression) -> bool {
-    match &array.kind {
-        ExpressionKind::Foreign { foreign, .. } => foreign.calls(ARRAY_SLICE),
-        ExpressionKind::If { then, otherwise, .. } => is_sliced(then) || is_sliced(otherwise),
-        ExpressionKind::Let { body, .. } => is_sliced(body),
-        _ => false,
-    }
-}
-
-const SLICE_VIEW_SOURCE: &str = "func {name}[T any](start int32, end int32, xs []T) []T {
-\tlength := len(xs)
-\tfrom, to := int(start), int(end)
-\tif from < 0 {
-\t\tfrom = max(length+from, 0)
-\t} else {
-\t\tfrom = min(from, length)
-\t}
-\tif to < 0 {
-\t\tto = max(length+to, 0)
-\t} else {
-\t\tto = min(to, length)
-\t}
-\tif from >= to {
-\t\treturn nil
-\t}
-\treturn xs[from:to:to]
-}
-";
 
 fn past_bindings(mut expression: &Expression) -> &Expression {
     while let ExpressionKind::Let { body, .. } = &expression.kind {
