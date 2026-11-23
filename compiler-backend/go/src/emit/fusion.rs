@@ -1093,9 +1093,11 @@ where
         Ok(identifier_expression(&built))
     }
 
-    /// Performs an effect for every element of a range, counting through the
-    /// range instead of building it. The effects run in the range's order.
-    pub(super) fn each_in_range(
+    /// Performs an effect for every element of a pipeline, running its stages
+    /// in the loop instead of building the arrays between them. The effects
+    /// run in the pipeline's order, and the stages' callbacks are pure, so
+    /// interleaving them with the effects is not observable.
+    pub(super) fn each_fused(
         &mut self,
         array: &Expression,
         element: &Local,
@@ -1228,11 +1230,6 @@ fn stepped_value(steps: &Steps, index: &str) -> GoExpression {
         GoExpression::Integer(0) => offset,
         _ => binary("+", steps.first.clone(), offset),
     }
-}
-
-/// Whether `array` is `first .. last`.
-pub(super) fn is_range(array: &Expression) -> bool {
-    range_bounds(array).is_some()
 }
 
 /// The bounds of `first .. last`.

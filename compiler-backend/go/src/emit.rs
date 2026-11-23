@@ -1056,9 +1056,9 @@ where
                 Ok(())
             }
             ExpressionKind::EffectEach { array, element, body, results: Results::Discarded }
-                if fusion::is_range(array) =>
+                if self.is_fusible(array, fusion::Demand::FORWARD) =>
             {
-                self.each_in_range(array, element, body, out)?;
+                self.each_fused(array, element, body, out)?;
                 self.deliver(unit_value(), result, sink, out)
             }
             ExpressionKind::EffectEach { array, element, body, results: Results::Collected } => {

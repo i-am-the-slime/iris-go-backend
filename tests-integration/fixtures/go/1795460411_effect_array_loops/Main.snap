@@ -308,13 +308,9 @@ func folds() {
 	Journal_ffi.Log("just 9")
 	Journal_ffi.Log("wrapped")
 	array := []string{"p", "q"}
-	mapped := make([]tuple.TupleIntString, len(array))
-	for slot, s := range array {
-		i := int32(slot)
-		mapped[slot] = tuple.TupleIntString{First: i, Second: s}
-	}
-	for tupleIndex := range mapped {
-		Journal_ffi.Log(mapped[tupleIndex].Second + strconv.Itoa(int(mapped[tupleIndex].First)))
+	for index, s := range array {
+		i := int32(index)
+		Journal_ffi.Log(s + strconv.Itoa(int(i)))
 	}
 	for _, i := range []int32{4, 5} {
 		Journal_ffi.Log("w" + strconv.Itoa(int(i)))
@@ -395,24 +391,22 @@ func large() {
 	}
 	Journal_ffi.Log(strconv.Itoa(len(collected)))
 	var counter int32 = 0
-	for _, i := range arraypkg.Replicate(1000000, int32(3)) {
-		counter += i
+	value2 := int32(3)
+	for range 1000000 {
+		counter += value2
 	}
 	Journal_ffi.Log(strconv.Itoa(int(counter)))
 	var accumulator int32 = 0
-	for _, i := range arraypkg.Replicate(1000000, int32(1)) {
-		accumulator += i
+	value3 := int32(1)
+	for range 1000000 {
+		accumulator += value3
 	}
 	Journal_ffi.Log(strconv.Itoa(int(accumulator)))
 	var wrappedCounter int32 = 0
-	value2 := int32(1)
-	mapped := make([]tuple.TupleIntInt, 1000000)
-	for slot := range 1000000 {
-		i := int32(slot)
-		mapped[slot] = tuple.TupleIntInt{First: i, Second: value2}
-	}
-	for tupleIndex := range mapped {
-		wrappedCounter += mapped[tupleIndex].First * mapped[tupleIndex].Second
+	value4 := int32(1)
+	for index := range 1000000 {
+		i := int32(index)
+		wrappedCounter += i * value4
 	}
 	Journal_ffi.Log(strconv.Itoa(int(wrappedCounter)))
 }
