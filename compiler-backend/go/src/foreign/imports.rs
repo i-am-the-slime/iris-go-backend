@@ -873,6 +873,11 @@ pub(super) const FOREIGN_IMPORTS: &[(&str, &str, Foreign)] = &[
 /// dictionary when they are overloaded.
 pub(super) const INTRINSICS: &[(&str, &str, &[&str], Foreign)] = &[
     ("Data.Array", "snoc", &[], Foreign::Snoc),
+    ("Data.Array", "nub", &["ordInt"], array("NubComparable", 1)),
+    ("Data.Array", "nub", &["ordChar"], array("NubComparable", 1)),
+    ("Data.Array", "nub", &["ordString"], array("NubComparable", 1)),
+    ("Data.Array", "nub", &["ordBoolean"], array("NubComparable", 1)),
+    ("Data.Array", "groupBy", &[], uncurried(array("GroupBy", 2), &[(0, 2)])),
     (
         "Data.Foldable",
         "traverse_",
