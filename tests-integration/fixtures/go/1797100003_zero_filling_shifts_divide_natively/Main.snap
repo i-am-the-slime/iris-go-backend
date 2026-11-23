@@ -1,0 +1,30 @@
+---
+source: tests-integration/src/fixtures.rs
+---
+// main.go
+package main
+
+import (
+	"github.com/i-am-the-slime/iris-go/array"
+	"github.com/i-am-the-slime/iris-go/prim"
+)
+
+func main() {
+	output := []int32{}
+	inputs := []int32{-7, 123457, -1, 0}
+	for _, i := range inputs {
+		output = array.Append(output, []int32{int32(uint32(i)>>1) % 10, int32(uint32(i)>>3) / 7, prim.IntMod(int32(uint32(i)>>0), 10)})
+	}
+}
+
+// shared/shared.go
+package shared
+
+type Ref[T any] struct {
+	Value T
+}
+
+type StateValue struct {
+	State []int32
+	Value []int32
+}

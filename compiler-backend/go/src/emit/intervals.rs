@@ -605,6 +605,15 @@ fn kind_of_type(type_: &GoType) -> Option<Kind> {
     }
 }
 
+fn zero_filling_shift(value: &GoExpression) -> Option<i64> {
+    let GoExpression::Binary { operator: ">>", left, right } = value else { return None };
+    let GoExpression::Conversion { type_: GoType::Named(source), .. } = left.as_ref() else {
+        return None;
+    };
+    let GoExpression::Integer(shift) = right.as_ref() else { return None };
+    (source == "uint32" && (1..32).contains(shift)).then_some(*shift)
+}
+
 #[derive(Clone, Copy, PartialEq, Debug)]
 enum Shape {
     /// A slice or a string: its length changes only when the local is assigned.
@@ -2086,6 +2095,15 @@ impl<'p, 'k, 'e> Analysis<'p, 'k, 'e> {
                 let symbol = self.lookup(name)?;
                 let binding = self.bindings.get(&symbol)?;
                 (binding.tracked && binding.kind.is_some()).then_some(Value::of(symbol))
+            }
+            GoExpression::Conversion { type_: GoType::Named(target), value: inner }
+                if target == "int32"
+                    && let Some(shift) = zero_filling_shift(inner) =>
+            {
+                let temporary = self.temporary(state, kind);
+                state.add(ZERO, temporary, 0);
+                state.add(temporary, ZERO, (1i128 << (32 - shift)) - 1);
+                Some(Value::of(temporary))
             }
             GoExpression::Conversion { type_, value: inner } => {
                 let target = kind_of_type(type_)?;
