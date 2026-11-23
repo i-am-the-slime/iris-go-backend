@@ -709,13 +709,13 @@ var main_ = initializeMain_()
 
 func initializeMain_() []int32 {
 	array := []int32{1, 2, 3, 42, 1234}
-	bound := []int32{}
+	bound := make([]int32, 0, 5*len(array))
 	for _, seed := range array {
 		scrutinee := mainGoReusing(redblack.SharedTreeLeaf, redblack_types.SharedListTreeNil, 0, seed, 3000)
 		trees := scrutinee.Trees
 		argument := list_redblack.LengthTree(trees)
 		argument2 := types.SumIntList(redblack_types.MapSize(trees))
-		bound = append(bound, []int32{argument, argument2, types.SumIntList(redblack_types.Map_(redblack.Checksum, trees)), list_redblack.LengthTree(mainGoReusing2(redblack_types.SharedListTreeNil, trees)), scrutinee.Folded}...)
+		bound = append(bound, argument, argument2, types.SumIntList(redblack_types.Map_(redblack.Checksum, trees)), list_redblack.LengthTree(mainGoReusing2(redblack_types.SharedListTreeNil, trees)), scrutinee.Folded)
 	}
 	return arraypkg.Bounded(bound)
 }

@@ -439,6 +439,7 @@ enum Sink {
     Define(String),
     Discard,
     Write(String),
+    Append(String),
 }
 
 enum Exit {
@@ -906,6 +907,11 @@ where
             && self.write_text(expression, buffer, out)?
         {
             return Ok(());
+        }
+        if let Sink::Append(array) = &sink
+            && let ExpressionKind::Array(elements) = &expression.kind
+        {
+            return self.append_elements(array, elements, out);
         }
         match &expression.kind {
             ExpressionKind::Let { bindings, body } => {
@@ -1506,7 +1512,37 @@ where
                     values: vec![appended],
                 });
             }
+            Sink::Append(array) => {
+                let appended = call(
+                    identifier_expression("append"),
+                    vec![identifier_expression(&array), GoExpression::Spread(Box::new(value))],
+                );
+                out.push(GoStatement::Assign {
+                    targets: vec![identifier_expression(&array)],
+                    values: vec![appended],
+                });
+            }
         }
+        Ok(())
+    }
+
+    fn append_elements(
+        &mut self,
+        array: &str,
+        elements: &[Expression],
+        out: &mut Vec<GoStatement>,
+    ) -> GoResult<()> {
+        if elements.is_empty() {
+            return Ok(());
+        }
+        let mut arguments = vec![identifier_expression(array)];
+        for element in elements {
+            arguments.push(self.value(element, out)?);
+        }
+        out.push(GoStatement::Assign {
+            targets: vec![identifier_expression(array)],
+            values: vec![call(identifier_expression("append"), arguments)],
+        });
         Ok(())
     }
 

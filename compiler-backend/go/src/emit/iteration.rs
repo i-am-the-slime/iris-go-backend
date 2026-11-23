@@ -3,10 +3,10 @@ use super::conditions::negated;
 use super::fusion::{Demand, Need, Order, Pipeline};
 use super::ownership::{Carried, Place, owned_snocs};
 use super::recycling::Recycled;
-use super::{Emitter, Mode, Sink, call, identifier_expression, unit_value, uses_local};
+use super::{Emitter, Mode, Sink, binary, call, identifier_expression, unit_value, uses_local};
 use crate::error::GoResult;
 use crate::foreign::{GoFunction, GoPackage, Iteration};
-use crate::monomorphic::{Expression, ExpressionKind, FunctionId, Local};
+use crate::monomorphic::{Expression, ExpressionKind, FunctionId, Guarded, Local};
 use crate::monotype::{DataType, Monotype, MonotypeId};
 use crate::syntax::{GoExpression, GoStatement, GoType};
 
@@ -577,10 +577,14 @@ where
         let pipeline = self.pipeline(array, Demand::FORWARD, need, out)?;
         let bound_type = self.go_type(monotype)?;
         let bound = self.temporary("bound");
-        out.push(GoStatement::Define {
-            names: vec![bound.clone()],
-            values: vec![GoExpression::Composite { type_: bound_type, fields: vec![] }],
-        });
+        let allocation = match bound_capacity(&callback, &pipeline) {
+            Some(capacity) => call(
+                identifier_expression("make"),
+                vec![GoExpression::Type(bound_type), GoExpression::Integer(0), capacity],
+            ),
+            None => GoExpression::Composite { type_: bound_type, fields: vec![] },
+        };
+        out.push(GoStatement::Define { names: vec![bound.clone()], values: vec![allocation] });
         let saved = self.tail_loop.take();
         let outcome = match self.nested_pipeline(&callback) {
             Some(_) => {
@@ -624,6 +628,11 @@ where
     ) -> GoResult<GoStatement> {
         let need = Need::Argument { callback, position: 0 };
         let mut opened = self.open(pipeline, need, None)?;
+        if let Callback::Inline { body, .. } = callback {
+            let appended = Sink::Append(bound.to_string());
+            self.sink(body, Mode::Value, appended, opened.body.body())?;
+            return Ok(self.close(opened.body));
+        }
         let produced = self.callback_value(callback, vec![opened.element], opened.body.body())?;
         let appended = call(
             identifier_expression("append"),
@@ -809,5 +818,39 @@ where
             body.pop();
         }
         Ok(GoExpression::Function { parameters, result: result_type, body })
+    }
+}
+
+fn bound_capacity(callback: &Callback<'_>, pipeline: &Pipeline<'_>) -> Option<GoExpression> {
+    let Callback::Inline { body, .. } = callback else { return None };
+    let most = most_literal_elements(body)?;
+    let known = pipeline.known_length()?;
+    Some(match (most, known) {
+        (most, GoExpression::Integer(count)) => GoExpression::Integer(count * most as i64),
+        (1, known) => known,
+        (most, known) => binary("*", GoExpression::Integer(most as i64), known),
+    })
+}
+
+fn most_literal_elements(expression: &Expression) -> Option<usize> {
+    match &expression.kind {
+        ExpressionKind::Array(elements) => Some(elements.len()),
+        ExpressionKind::Fail(_) => Some(0),
+        ExpressionKind::Let { body, .. } => most_literal_elements(body),
+        ExpressionKind::If { then, otherwise, .. } => {
+            Some(most_literal_elements(then)?.max(most_literal_elements(otherwise)?))
+        }
+        ExpressionKind::Case { alternatives, .. } => {
+            alternatives.iter().try_fold(0, |most, alternative| {
+                let produced = match &alternative.body {
+                    Guarded::Unconditional(body) => most_literal_elements(body)?,
+                    Guarded::Guards(branches) => branches.iter().try_fold(0, |most, branch| {
+                        Some(most_literal_elements(&branch.body)?.max(most))
+                    })?,
+                };
+                Some(produced.max(most))
+            })
+        }
+        _ => None,
     }
 }
