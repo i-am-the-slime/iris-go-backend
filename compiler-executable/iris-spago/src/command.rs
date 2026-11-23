@@ -11,7 +11,7 @@ use thiserror::Error;
 pub enum SpagoError {
     #[error("failed to prepare the Spago compiler compatibility shim: {0}")]
     Shim(io::Error),
-    #[error("failed to execute Spago: {0}")]
+    #[error("{}", execute_failure(.0))]
     Execute(io::Error),
     #[error("Spago {command} failed with status {status}{stderr}")]
     Failed { command: String, status: String, stderr: String },
@@ -147,6 +147,15 @@ impl SpagoCommand {
         command.args(arguments).current_dir(&self.current_directory).env("PATH", &self.path);
         command
     }
+}
+
+fn execute_failure(error: &io::Error) -> String {
+    if error.kind() == io::ErrorKind::NotFound {
+        return "`spago` was not found on PATH; Iris fetches packages with Spago, so install it \
+                with `brew install spago` or `npm install -g spago`"
+            .to_owned();
+    }
+    format!("failed to execute Spago: {error}")
 }
 
 fn add_selection(arguments: &mut Vec<String>, selected: Option<&str>) {
