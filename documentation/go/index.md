@@ -14,6 +14,8 @@ out, nothing is rewritten.
    need.
 4. [Int64, Aff, JSON and foreign code](libraries.md): 64-bit integers, fibers and threads,
    `yoga-json`, and Go files next to your modules.
+5. [Effect, Aff and IO; Ref, IORef and MVar](effects.md): which one to use when, and what's safe
+   to share between threads.
 
 ## See it for yourself
 

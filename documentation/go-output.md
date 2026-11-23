@@ -16,14 +16,17 @@ iris run --go -- first second
 ```
 
 That compiles your package to Go, builds it, and runs it with `first second` as its arguments. Its
-output, input and exit status are your program's. You need Go 1.27 or later on your `PATH`;
-nothing else to set up.
+output, input and exit status are your program's. You need Go 1.27 or later and Spago on your
+`PATH`. Iris fetches your packages with Spago, and `brew install spago` or `npm install -g spago`
+gets you one.
 
 - **Entry point**: `main` in `Main`, or in the module your `spago.yaml` names under `run.main`.
   Pick another with `--main Some.Module` or `--entry Some.Module.value`.
 - **An entry that isn't an `Effect`**: an `Int`, `Number`, `Boolean`, `Char` or `String`, or an
   array of them, gets printed, arrays as `[1 2 3]`. Anything else (a record, a `Maybe`, a
   function) is computed but not printed, and `iris go` says so.
+- **Tests**: there's no `iris test --go` yet. `iris run --go --main Test.Main` runs your test suite
+  instead, and a failing test exits with a non-zero status.
 - **Arguments**: whatever follows `--`, or your `run.execArgs` when nothing does.
 - **Packages**: `-p my-app` in a workspace with several.
 - **Fast reruns**: the first run downloads the Go runtime. After that, if your program compiles to
@@ -364,7 +367,7 @@ callback like that can't just go and touch a `Ref`. It's the same deal as a `Pro
 FFI: its callbacks run later, not inside your call, and the types should say so.
 
 So type a callback that Go calls from a goroutine `IO`, from
-[purescript-golang](https://github.com/i-am-the-slime/purescript-golang)'s `Go.IO`. When it needs
+[purescript-go](https://github.com/i-am-the-slime/purescript-go)'s `Go.IO`. When it needs
 an `Effect`, `liftEffect` waits for its turn on the event loop and runs it there:
 
 ```purescript

@@ -128,8 +128,9 @@ code at a time, so a `Ref` shared between fibers needs no locking.
 
 ## `Go.IO` runs on threads
 
-For real parallelism, [purescript-golang](https://github.com/i-am-the-slime/purescript-golang)'s
-`Go.IO` is Haskell's `IO`: its actions run on goroutines.
+For real parallelism, [purescript-go](https://github.com/i-am-the-slime/purescript-go)'s `Go.IO`
+is Haskell's `IO`: its actions run on goroutines. Not sure which one you want?
+[Effect, Aff and IO](effects.md) helps you pick.
 
 ```purescript
 main :: Effect Unit
