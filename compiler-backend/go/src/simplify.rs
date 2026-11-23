@@ -852,6 +852,7 @@ impl Simplifier<'_> {
                 if fields.iter().all(|(_, value)| is_trivial(value)));
             let substitutable = is_trivial(&binding.value)
                 || matches!(binding.value.kind, ExpressionKind::Fail(_))
+                || matches!(&binding.value.kind, ExpressionKind::EffectPure(value) if is_trivial(value))
                 || trivial_record
                 || self.is_coerced_record_read(&binding, &body)
                 || uses.total == 0

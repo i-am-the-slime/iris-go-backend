@@ -274,6 +274,9 @@ impl Simplifier<'_> {
             }
             kind => {
                 let action = Expression::new(kind, action.monotype).located(action.position);
+                if self.returns_its_unit(&action, &local, &body, monotype) {
+                    return action;
+                }
                 if let Some(chosen) = self.peek_choice(&action, &local, &body, monotype) {
                     return chosen;
                 }
@@ -285,6 +288,22 @@ impl Simplifier<'_> {
                 Expression::new(kind, monotype)
             }
         }
+    }
+
+    fn returns_its_unit(
+        &self,
+        action: &Expression,
+        local: &Local,
+        body: &Expression,
+        monotype: crate::monotype::MonotypeId,
+    ) -> bool {
+        let ExpressionKind::EffectPure(value) = &body.kind else { return false };
+        let unit = matches!(
+            value.kind,
+            ExpressionKind::Unit | ExpressionKind::Foreign { foreign: Foreign::Unit, .. }
+        );
+        unit && matches!(self.monotypes.get(local.monotype), Monotype::Unit)
+            && self.monotypes.same_without_causes(action.monotype, monotype)
     }
 
     /// Whether binding `local` to a pure value in place of running a bind would build `body`, a
