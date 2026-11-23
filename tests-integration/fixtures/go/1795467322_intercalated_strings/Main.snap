@@ -1,0 +1,68 @@
+---
+source: tests-integration/src/fixtures.rs
+---
+// Data/Monoid/monoid.go
+package monoid
+
+var MemptyInt []int32 = []int32{}
+
+// Data/Show/show.go
+package show
+
+import "strconv"
+
+func Show(i int32) string {
+	return strconv.Itoa(int(i))
+}
+
+func AppendShowArrayInt(buffer []byte, array []int32) []byte {
+	buffer = append(buffer, "["...)
+	for index, element := range array {
+		if index > 0 {
+			buffer = append(buffer, ","...)
+		}
+		buffer = strconv.AppendInt(buffer, int64(element), 10)
+	}
+	buffer = append(buffer, "]"...)
+	return buffer
+}
+
+// main.go
+package main
+
+import (
+	"fixture/Data/Monoid"
+	"fixture/Data/Show"
+	"fixture/shared"
+	arraypkg "github.com/i-am-the-slime/iris-go/array"
+	"github.com/i-am-the-slime/iris-go/console"
+	"github.com/i-am-the-slime/iris-go/prim"
+	"strings"
+)
+
+var main_ = initializeMain_()
+
+func initializeMain_() []string {
+	array := [][]int32{{1}, {2, 3}}
+	accumulator := shared.AccInit{Init: true, Acc: monoid.MemptyInt}
+	for _, x := range array {
+		if accumulator.Init {
+			accumulator = shared.AccInit{Init: false, Acc: x}
+		} else {
+			accumulator = shared.AccInit{Init: false, Acc: arraypkg.Append(accumulator.Acc, arraypkg.Append([]int32{0}, x))}
+		}
+	}
+	return []string{prim.StringJoinWith(", ", []string{"a", "b", "c"}), prim.StringJoinWith("-", []string{"x"}), string(show.AppendShowArrayInt(nil, accumulator.Acc))}
+}
+
+func main() {
+	console.Print("[" + strings.Join(main_, " ") + "]")
+}
+
+// shared/shared.go
+package shared
+
+type AccInit struct {
+	Acc  []int32
+	Init bool
+}

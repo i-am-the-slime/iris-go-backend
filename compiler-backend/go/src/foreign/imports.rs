@@ -880,6 +880,8 @@ pub(super) const INTRINSICS: &[(&str, &str, &[&str], Foreign)] = &[
     ("Data.Array", "nub", &["ordString"], array("NubComparable", 1)),
     ("Data.Array", "nub", &["ordBoolean"], array("NubComparable", 1)),
     ("Data.Array", "groupBy", &[], uncurried(array("GroupBy", 2), &[(0, 2)])),
+    ("Data.Foldable", "intercalate", &["foldableArray", "monoidString"], prim("StringJoinWith", 2)),
+    ("Data.Array", "intercalate", &["monoidString"], prim("StringJoinWith", 2)),
     (
         "Data.Foldable",
         "traverse_",
