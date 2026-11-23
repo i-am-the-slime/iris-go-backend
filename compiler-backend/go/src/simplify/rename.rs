@@ -43,7 +43,7 @@ impl Simplifier<'_> {
                 *local = self.rename_binder(local, renaming);
                 self.rename(body, renaming);
             }
-            ExpressionKind::EffectEach { array, element, body } => {
+            ExpressionKind::EffectEach { array, element, body, .. } => {
                 self.rename(array, renaming);
                 *element = self.rename_binder(element, renaming);
                 self.rename(body, renaming);

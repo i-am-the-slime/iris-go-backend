@@ -75,7 +75,7 @@ impl Simplifier<'_> {
         self.expression(folded)
     }
 
-    fn named_local(&mut self, name: &str, monotype: MonotypeId) -> Local {
+    pub(super) fn named_local(&mut self, name: &str, monotype: MonotypeId) -> Local {
         let template = Local { id: LocalId(0), name: name.into(), monotype };
         self.fresh(&template)
     }

@@ -86,7 +86,7 @@ use crate::modules::{ModuleIndex, Modules};
 use crate::monomorphic::traversal::visit;
 use crate::monomorphic::{
     Binding, Expression, ExpressionKind, FunctionId, Guarded, Literal, Local, LocalId, Pattern,
-    PatternKind, Program, RecordUpdate,
+    PatternKind, Program, RecordUpdate, Results,
 };
 use crate::monotype::{DataType, Monotype, MonotypeId, Monotypes};
 use crate::naming::identifier;
@@ -1027,11 +1027,17 @@ where
                 }
                 Ok(())
             }
-            ExpressionKind::EffectEach { array, element, body } if fusion::is_range(array) => {
+            ExpressionKind::EffectEach { array, element, body, results: Results::Discarded }
+                if fusion::is_range(array) =>
+            {
                 self.each_in_range(array, element, body, out)?;
                 self.deliver(unit_value(), result, sink, out)
             }
-            ExpressionKind::EffectEach { array, element, body } => {
+            ExpressionKind::EffectEach { array, element, body, results: Results::Collected } => {
+                let collected = self.collect_each(array, element, body, result, out)?;
+                self.deliver(collected, result, sink, out)
+            }
+            ExpressionKind::EffectEach { array, element, body, .. } => {
                 let array = self.value(array, out)?;
                 let saved = self.tail_loop.take();
                 let element_name = if uses_local(body, element.id) {

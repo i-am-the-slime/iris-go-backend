@@ -77,7 +77,6 @@ const fn js_bigint_constant(name: &'static str) -> Foreign {
     Foreign::Constant(GoFunction { package: GoPackage::JsBigInt, name })
 }
 
-pub const TRAVERSE_ARRAY: Foreign = perform("TraverseArray", 2);
 pub const SEQUENCE_ARRAY: Foreign = perform("SequenceArray", 1);
 
 const fn perform(name: &'static str, arity: usize) -> Foreign {
@@ -876,12 +875,64 @@ pub(super) const INTRINSICS: &[(&str, &str, &[&str], Foreign)] = &[
     ),
     ("Data.Foldable", "for_", &["applicativeEffect", "foldableArray"], Foreign::EffectForArray),
     (
+        "Data.Foldable",
+        "traverse_",
+        &["applicativeST", "foldableArray"],
+        Foreign::EffectTraverseArray,
+    ),
+    ("Data.Foldable", "for_", &["applicativeST", "foldableArray"], Foreign::EffectForArray),
+    (
+        "Data.FoldableWithIndex",
+        "traverseWithIndex_",
+        &["applicativeEffect", "foldableWithIndexArray"],
+        Foreign::EffectTraverseArrayWithIndex,
+    ),
+    (
+        "Data.FoldableWithIndex",
+        "forWithIndex_",
+        &["applicativeEffect", "foldableWithIndexArray"],
+        Foreign::EffectForArrayWithIndex,
+    ),
+    (
+        "Data.FoldableWithIndex",
+        "traverseWithIndex_",
+        &["applicativeST", "foldableWithIndexArray"],
+        Foreign::EffectTraverseArrayWithIndex,
+    ),
+    (
+        "Data.FoldableWithIndex",
+        "forWithIndex_",
+        &["applicativeST", "foldableWithIndexArray"],
+        Foreign::EffectForArrayWithIndex,
+    ),
+    ("Data.Foldable", "foldM", &["foldableArray", "monadEffect"], Foreign::EffectFoldArray),
+    ("Data.Foldable", "foldM", &["foldableArray", "monadST"], Foreign::EffectFoldArray),
+    ("Data.Array", "foldM", &["monadEffect"], Foreign::EffectFoldArray),
+    ("Data.Array", "foldM", &["monadST"], Foreign::EffectFoldArray),
+    (
         "Data.Traversable",
         "traverse",
         &["traversableArray", "applicativeEffect"],
-        perform("TraverseArray", 2),
+        Foreign::EffectTraverseArrayResults,
     ),
-    ("Data.Traversable", "for", &["applicativeEffect", "traversableArray"], perform("ForArray", 2)),
+    (
+        "Data.Traversable",
+        "traverse",
+        &["traversableArray", "applicativeST"],
+        Foreign::EffectTraverseArrayResults,
+    ),
+    (
+        "Data.Traversable",
+        "for",
+        &["applicativeEffect", "traversableArray"],
+        Foreign::EffectForArrayResults,
+    ),
+    (
+        "Data.Traversable",
+        "for",
+        &["applicativeST", "traversableArray"],
+        Foreign::EffectForArrayResults,
+    ),
     (
         "Data.Traversable",
         "traverse",

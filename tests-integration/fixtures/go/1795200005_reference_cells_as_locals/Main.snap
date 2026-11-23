@@ -6,7 +6,6 @@ package main
 
 import (
 	"fixture/shared"
-	"github.com/i-am-the-slime/iris-go/array"
 	"os"
 )
 
@@ -28,13 +27,9 @@ func main_() int32 {
 		total += i
 	}
 	var total2 int32 = 0
-	array.Foldr(func(x int32, b func()) func() {
-		return func() {
-			total2 += x
-			b()
-		}
-	}, func() {
-	}, []int32{1, 2})()
+	for _, i := range []int32{1, 2} {
+		total2 += i
+	}
 	return total + total2 + hits2
 }
 

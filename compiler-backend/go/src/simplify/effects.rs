@@ -2,7 +2,9 @@ use smol_str::SmolStr;
 
 use super::{Simplifier, choice, three_way};
 use crate::foreign::{Comparison, Foreign, GoPackage, Operator};
-use crate::monomorphic::{Binding, Expression, ExpressionKind, Guarded, Literal, Local, LocalId};
+use crate::monomorphic::{
+    Binding, Expression, ExpressionKind, Guarded, Literal, Local, LocalId, Results,
+};
 use crate::monotype::{Monotype, MonotypeId};
 use crate::purity::{is_discardable, is_trivial, runs_effect_when_applied};
 
@@ -21,8 +23,12 @@ impl Simplifier<'_> {
         if let Some(value) = three_way::constant_comparison(foreign, &arguments) {
             return Expression::new(ExpressionKind::Literal(Literal::Boolean(value)), monotype);
         }
-        let mut arguments = match self.short_circuit(foreign, arguments, monotype) {
+        let arguments = match self.short_circuit(foreign, arguments, monotype) {
             Ok(searched) => return searched,
+            Err(arguments) => arguments,
+        };
+        let mut arguments = match self.sequenced_fold(foreign, arguments, monotype) {
+            Ok(looped) => return looped,
             Err(arguments) => arguments,
         };
         match foreign {
@@ -35,8 +41,7 @@ impl Simplifier<'_> {
                         self.monotypes,
                     ) =>
             {
-                let foreign = &crate::foreign::TRAVERSE_ARRAY;
-                self.foreign(foreign, arguments, monotype)
+                self.foreign(&Foreign::EffectTraverseArrayResults, arguments, monotype)
             }
             Foreign::Perform { function, .. }
                 if function.package == GoPackage::Aff
@@ -68,13 +73,25 @@ impl Simplifier<'_> {
                 let (local, body) = self.open_continuation(continuation, action.monotype);
                 self.effect_bind(action, local, body, monotype)
             }
-            Foreign::EffectForEach | Foreign::EffectForArray | Foreign::EffectTraverseArray => {
+            Foreign::EffectForEach
+            | Foreign::EffectForArray
+            | Foreign::EffectTraverseArray
+            | Foreign::EffectForArrayResults
+            | Foreign::EffectTraverseArrayResults => {
                 let second =
                     arguments.pop().expect("invariant violated: foreach has two arguments");
                 let first = arguments.pop().expect("invariant violated: foreach has two arguments");
                 let (array, function) = match foreign {
-                    Foreign::EffectTraverseArray => (second, first),
+                    Foreign::EffectTraverseArray | Foreign::EffectTraverseArrayResults => {
+                        (second, first)
+                    }
                     _ => (first, second),
+                };
+                let results = match foreign {
+                    Foreign::EffectForArrayResults | Foreign::EffectTraverseArrayResults => {
+                        Results::Collected
+                    }
+                    _ => Results::Discarded,
                 };
                 let element_monotype = match self.monotypes.get(array.monotype) {
                     crate::monotype::Monotype::Array(element) => *element,
@@ -85,9 +102,14 @@ impl Simplifier<'_> {
                     array: Box::new(array),
                     element,
                     body: Box::new(body),
+                    results,
                 };
                 Expression::new(kind, monotype)
             }
+            Foreign::EffectForArrayWithIndex | Foreign::EffectTraverseArrayWithIndex => {
+                self.each_with_index(foreign, arguments, monotype)
+            }
+            Foreign::EffectFoldArray => self.fold_array(arguments, monotype),
             Foreign::EffectMap => {
                 let action = arguments.pop().expect("invariant violated: map has two arguments");
                 let function = arguments.pop().expect("invariant violated: map has two arguments");

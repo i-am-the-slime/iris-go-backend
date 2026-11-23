@@ -41,6 +41,7 @@ mod short_circuit;
 mod sink;
 mod tail_choices;
 mod three_way;
+mod traversals;
 mod unpack;
 
 const INLINE_SIZE: usize = 40;
@@ -107,6 +108,7 @@ pub fn simplify(
         let mut current = simplifier.functions[index]
             .take()
             .expect("invariant violated: function lost during simplification");
+        simplifier.sequence_folds(&mut current.body);
         simplifier.settle_records(&mut current.body);
         simplifier.sink_lets(&mut current.body);
         simplifier.sizes[index] = size(&current.body);
@@ -639,11 +641,14 @@ impl Simplifier<'_> {
                 let body = self.expression(*body);
                 return self.effect_bind(action, local, body, monotype);
             }
-            ExpressionKind::EffectEach { array, element, body } => ExpressionKind::EffectEach {
-                array: Box::new(self.expression(*array)),
-                element,
-                body: Box::new(self.expression(*body)),
-            },
+            ExpressionKind::EffectEach { array, element, body, results } => {
+                ExpressionKind::EffectEach {
+                    array: Box::new(self.expression(*array)),
+                    element,
+                    body: Box::new(self.expression(*body)),
+                    results,
+                }
+            }
         };
         Expression::new(kind, monotype)
     }

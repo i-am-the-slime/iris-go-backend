@@ -36,7 +36,6 @@ package main
 import (
 	"fixture/Data/Either"
 	"github.com/i-am-the-slime/iris-go/aff"
-	"github.com/i-am-the-slime/iris-go/direct"
 	"github.com/i-am-the-slime/iris-go/eventloop"
 	"github.com/i-am-the-slime/iris-go/exception"
 )
@@ -45,22 +44,28 @@ func main() {
 	defer eventloop.Await()
 	fiber2 := aff.NewFiber(func() struct{} {
 		func() {
-			array := direct.TraverseArray(func(x int32) int32 {
-				return x * x
-			}, []int32{1, 2, 3})
+			array := []int32{1, 2, 3}
+			collected := make([]int32, len(array))
+			for index, x := range array {
+				value := x * x
+				collected[index] = value
+			}
 			array2 := aff.TraverseParArrayDirect(func(x int32) int32 {
 				aff.DelayDirect(nil, 1.0)
 				return x + 10
 			}, []int32{1, 2})
 			var i int32 = 12
-			n := foldLanes(array, 0) + foldLanes(array2, 0) + i
-			direct.TraverseArray(func(x func() int32) int32 {
-				return x()
-			}, []func() int32{func() int32 {
+			n := foldLanes(collected, 0) + foldLanes(array2, 0) + i
+			array3 := []func() int32{func() int32 {
 				return n
 			}, func() int32 {
 				return n + 1
-			}})
+			}}
+			collected2 := make([]int32, len(array3))
+			for index, x := range array3 {
+				value := x()
+				collected2[index] = value
+			}
 		}()
 		return struct{}{}
 	})

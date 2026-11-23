@@ -14,7 +14,7 @@ pub use host::is_opaque_foreign_data;
 pub use imports::{
     APPENDER, ARRAY_ALL, ARRAY_ANY, ARRAY_APPEND, ARRAY_SLICE, FOREIGN_RECORD, FROM_CHAR_ARRAY,
     INT_DIVIDE, INT_MODULO, MUTABLE_PEEK_UNSAFE, MUTABLE_WITHIN, OBJECT_FROM_ENTRIES, OBJECT_INDEX,
-    OBJECT_KEYS, SEQUENCE_ARRAY, TO_CHAR_ARRAY, TRAVERSE_ARRAY, array_fold, effect_fold,
+    OBJECT_KEYS, SEQUENCE_ARRAY, TO_CHAR_ARRAY, array_fold, effect_fold,
 };
 pub use opacity::{Opacity, OpaqueDeclaration, foreign_opacity};
 pub use packages::{ForeignPackages, ForeignSource, LineCoverage, LineDirectives};
@@ -74,6 +74,11 @@ pub enum Foreign {
     EffectForEach,
     EffectTraverseArray,
     EffectForArray,
+    EffectTraverseArrayWithIndex,
+    EffectForArrayWithIndex,
+    EffectTraverseArrayResults,
+    EffectForArrayResults,
+    EffectFoldArray,
     EffectWhile,
     EffectUntil,
     EffectFor,
@@ -531,7 +536,9 @@ impl Foreign {
             Foreign::ReferenceNew | Foreign::ReferenceRead => 1,
             Foreign::EffectBind | Foreign::EffectMap | Foreign::EffectForEach => 2,
             Foreign::EffectTraverseArray | Foreign::EffectForArray | Foreign::EffectWhile => 2,
-            Foreign::EffectFor => 3,
+            Foreign::EffectTraverseArrayWithIndex | Foreign::EffectForArrayWithIndex => 2,
+            Foreign::EffectTraverseArrayResults | Foreign::EffectForArrayResults => 2,
+            Foreign::EffectFor | Foreign::EffectFoldArray => 3,
             Foreign::ObjectFoldM => 4,
             Foreign::MaybeIndex => 4,
             Foreign::IntFromNumber => 3,
@@ -565,6 +572,11 @@ impl Foreign {
                 | Foreign::EffectForEach
                 | Foreign::EffectTraverseArray
                 | Foreign::EffectForArray
+                | Foreign::EffectTraverseArrayWithIndex
+                | Foreign::EffectForArrayWithIndex
+                | Foreign::EffectTraverseArrayResults
+                | Foreign::EffectForArrayResults
+                | Foreign::EffectFoldArray
                 | Foreign::EffectWhile
                 | Foreign::EffectUntil
                 | Foreign::EffectFor

@@ -153,8 +153,14 @@ pub enum ExpressionKind {
     Case { scrutinees: Vec<Expression>, alternatives: Vec<Alternative> },
     EffectPure(Box<Expression>),
     EffectBind { action: Box<Expression>, local: Local, body: Box<Expression> },
-    EffectEach { array: Box<Expression>, element: Local, body: Box<Expression> },
+    EffectEach { array: Box<Expression>, element: Local, body: Box<Expression>, results: Results },
     Fail(SmolStr),
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum Results {
+    Discarded,
+    Collected,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]

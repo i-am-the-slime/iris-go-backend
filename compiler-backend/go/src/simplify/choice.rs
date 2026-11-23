@@ -414,7 +414,11 @@ fn mentions_erased(alternative: &Alternative, monotypes: &Monotypes) -> bool {
     erased
 }
 
-fn operation(operator: Operator, arguments: Vec<Expression>, monotype: MonotypeId) -> Expression {
+pub(super) fn operation(
+    operator: Operator,
+    arguments: Vec<Expression>,
+    monotype: MonotypeId,
+) -> Expression {
     let foreign = Foreign::Operator(operator).interned();
     Expression::new(ExpressionKind::Foreign { foreign, arguments }, monotype)
 }

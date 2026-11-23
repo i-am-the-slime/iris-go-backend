@@ -1,11 +1,11 @@
 use super::{
     Emitter, Mode, Sink, call, field, field_name, identifier_expression, mutable, reference_type,
-    unit_value,
+    unit_value, uses_local,
 };
 use crate::error::{GoError, GoResult};
 use crate::foreign::{Foreign, GoFunction, GoPackage};
-use crate::monomorphic::{Expression, ExpressionKind};
-use crate::monotype::MonotypeId;
+use crate::monomorphic::{Expression, ExpressionKind, Local};
+use crate::monotype::{Monotype, MonotypeId};
 use crate::syntax::{GoExpression, GoStatement, GoType};
 
 impl<'q, Q> Emitter<'_, '_, 'q, Q>
@@ -394,6 +394,56 @@ where
         };
         self.tail_loop = saved;
         outcome
+    }
+
+    pub(super) fn collect_each(
+        &mut self,
+        array: &Expression,
+        element: &Local,
+        body: &Expression,
+        collected: MonotypeId,
+        out: &mut Vec<GoStatement>,
+    ) -> GoResult<GoExpression> {
+        let Monotype::Array(value) = *self.monotypes.get(collected) else {
+            unreachable!("invariant violated: an effectful map collects an array")
+        };
+        let array = self.value(array, out)?;
+        let array = self.hoist(array, "array", out);
+        let name = self.temporary("collected");
+        let length = call(identifier_expression("len"), vec![array.clone()]);
+        let allocation = GoExpression::Type(self.go_type(collected)?);
+        let allocation = call(identifier_expression("make"), vec![allocation, length]);
+        out.push(GoStatement::Define { names: vec![name.clone()], values: vec![allocation] });
+        let element_name =
+            if uses_local(body, element.id) { self.bind_local(element) } else { "_".to_string() };
+        let saved = self.tail_loop.take();
+        let mut statements = vec![];
+        let index = if self.is_unit(value) {
+            self.sink(body, Mode::Perform, Sink::Discard, &mut statements).map(|()| None)
+        } else {
+            let performed = self.temporary("value");
+            let index = self.temporary("index");
+            let sink = Sink::Define(performed.clone());
+            self.sink(body, Mode::Perform, sink, &mut statements).map(|()| {
+                let slot = GoExpression::Index {
+                    value: Box::new(identifier_expression(&name)),
+                    index: Box::new(identifier_expression(&index)),
+                };
+                statements.push(GoStatement::Assign {
+                    targets: vec![slot],
+                    values: vec![identifier_expression(&performed)],
+                });
+                Some(index)
+            })
+        };
+        self.tail_loop = saved;
+        out.push(GoStatement::Range {
+            index: index?,
+            element: element_name,
+            iterable: array,
+            body: statements,
+        });
+        Ok(identifier_expression(&name))
     }
 
     fn effect_for(

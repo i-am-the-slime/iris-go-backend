@@ -160,7 +160,7 @@ impl Simplifier<'_> {
     }
 }
 
-fn mentions(expression: &Expression, local: LocalId) -> bool {
+pub(super) fn mentions(expression: &Expression, local: LocalId) -> bool {
     let mut mentioned = false;
     visit(expression, &mut |node| {
         mentioned |= matches!(node.kind, ExpressionKind::Local(id) if id == local);

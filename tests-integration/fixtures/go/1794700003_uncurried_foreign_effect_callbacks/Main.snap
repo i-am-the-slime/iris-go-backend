@@ -1,46 +1,19 @@
 ---
 source: tests-integration/src/fixtures.rs
 ---
-// Data/Array/array.go
-package dataarray
-
-import (
-	"fixture/shared"
-	"github.com/i-am-the-slime/iris-go/direct"
-)
-
-func FoldMEffectIntIntF(ref *shared.Ref[int32], b int32, array []int32) int32 {
-	function := func(_ struct{}) int32 {
-		return b
-	}
-	return direct.Uncons(func(unit struct{}) func() int32 {
-		return func() int32 {
-			return function(unit)
-		}
-	}, func(a int32, as []int32) func() int32 {
-		return func() int32 {
-			s := ref.Value
-			s_ := s + 1
-			ref.Value = s_
-			return FoldMEffectIntIntF(ref, b+a, as)
-		}
-	}, array)()
-}
-
 // main.go
 package main
 
-import (
-	"fixture/Data/Array"
-	"fixture/shared"
-	"os"
-)
+import "os"
 
 func main_() int32 {
-	seen := &shared.Ref[int32]{Value: 0}
-	total := dataarray.FoldMEffectIntIntF(seen, 0, []int32{1, 2, 3})
-	count := seen.Value
-	return total*10 + count
+	var seen int32 = 0
+	var accumulator int32 = 0
+	for _, i := range []int32{1, 2, 3} {
+		seen += 1
+		accumulator += i
+	}
+	return accumulator*10 + seen
 }
 
 func main() {
