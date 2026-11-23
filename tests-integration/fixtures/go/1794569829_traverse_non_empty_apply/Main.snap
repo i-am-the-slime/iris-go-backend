@@ -42,6 +42,9 @@ func initializeMain_() maybe.ArrayInt {
 	}
 	array := arraypkg.Slice(1, int32(len(array2)), array2)
 	for _, element := range array {
+		if result.Tag == maybe.TagNothing {
+			break
+		}
 		switch result.Tag {
 		case maybe.TagJust:
 			if element&1 == 0 {

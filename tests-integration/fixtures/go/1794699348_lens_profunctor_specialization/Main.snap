@@ -59,6 +59,9 @@ func initializeMain_() []string {
 	append_ := direct.Appender[string]()
 	accumulator := maybe.JustArrayString([]string{})
 	for _, tag := range origin.Tags {
+		if accumulator.Tag == maybe.TagNothing {
+			break
+		}
 		switch accumulator.Tag {
 		case maybe.TagJust:
 			if tag == "" {

@@ -3,10 +3,14 @@ use super::conditions::negated;
 use super::fusion::{Demand, Need, Order, Pipeline};
 use super::ownership::{Carried, Place, owned_snocs};
 use super::recycling::Recycled;
-use super::{Emitter, Mode, Sink, binary, call, identifier_expression, unit_value, uses_local};
+use super::{
+    Emitter, Mode, Sink, binary, call, conjunction, identifier_expression, unit_value, uses_local,
+};
 use crate::error::GoResult;
 use crate::foreign::{GoFunction, GoPackage, Iteration};
-use crate::monomorphic::{Expression, ExpressionKind, FunctionId, Guarded, Local};
+use crate::monomorphic::{
+    Expression, ExpressionKind, FunctionId, Guarded, Local, LocalId, Pattern, PatternKind,
+};
 use crate::monotype::{DataType, Monotype, MonotypeId};
 use crate::syntax::{GoExpression, GoStatement, GoType};
 
@@ -192,7 +196,8 @@ where
             _ => (1, 0, Order::Backward),
         };
         let initial = self.value(initial, out)?;
-        let demand = Demand { order, ..Demand::FORWARD };
+        let absorbing = self.absorbing_pattern(&callback, accumulator_position)?;
+        let demand = Demand { order, breaks: absorbing.is_some(), ..Demand::FORWARD };
         let need = Need::Argument { callback: &callback, position: element_position };
         let pipeline = self.pipeline(array, demand, need, out)?;
         let accumulator = self.temporary("accumulator");
@@ -217,8 +222,14 @@ where
         self.owned_snocs.extend(owned_nodes.iter().copied());
         let saved = self.tail_loop.take();
         let positions = (accumulator_position, element_position);
-        let outcome =
-            self.fold_loop(&callback, pipeline, positions, &accumulator, buffered, monotype);
+        let outcome = self.fold_loop(
+            &callback,
+            pipeline,
+            positions,
+            (&accumulator, absorbing.as_ref()),
+            buffered,
+            monotype,
+        );
         self.tail_loop = saved;
         for node in &owned_nodes {
             self.owned_snocs.remove(node);
@@ -238,7 +249,7 @@ where
         callback: &Callback<'_>,
         pipeline: Pipeline<'_>,
         (accumulator_position, element_position): (usize, usize),
-        accumulator: &str,
+        (accumulator, absorbing): (&str, Option<&Pattern>),
         buffered: bool,
         monotype: MonotypeId,
     ) -> GoResult<GoStatement> {
@@ -252,6 +263,18 @@ where
         };
         let need = Need::Argument { callback, position: element_position };
         let mut opened = self.open(pipeline, need, None)?;
+        if let Some(pattern) = absorbing.filter(|_| !buffered) {
+            let mut tests = vec![];
+            let path = identifier_expression(accumulator);
+            self.pattern_tests(pattern, path, &mut tests, &mut vec![])?;
+            if let Some(absorbed) = conjunction(tests) {
+                opened.body.body().push(GoStatement::If {
+                    condition: absorbed,
+                    then: vec![GoStatement::Break],
+                    otherwise: vec![],
+                });
+            }
+        }
         if parameter != "_" {
             opened.body.body().push(GoStatement::Define {
                 names: vec![parameter.clone()],
@@ -818,6 +841,99 @@ where
             body.pop();
         }
         Ok(GoExpression::Function { parameters, result: result_type, body })
+    }
+}
+
+impl<'q, Q> Emitter<'_, '_, 'q, Q>
+where
+    Q: checking::ExternalQueries,
+{
+    fn absorbing_pattern(
+        &mut self,
+        callback: &Callback<'_>,
+        accumulator_position: usize,
+    ) -> GoResult<Option<Pattern>> {
+        let Callback::Inline { parameters, body } = callback else { return Ok(None) };
+        let accumulator = parameters[accumulator_position].id;
+        let ExpressionKind::Case { scrutinees, alternatives } = &body.kind else {
+            return Ok(None);
+        };
+        let [scrutinee] = scrutinees.as_slice() else { return Ok(None) };
+        if !matches!(scrutinee.kind, ExpressionKind::Local(id) if id == accumulator) {
+            return Ok(None);
+        }
+        let mut earlier = vec![];
+        let mut covering = true;
+        for alternative in alternatives {
+            let [pattern] = alternative.patterns.as_slice() else { return Ok(None) };
+            let Guarded::Unconditional(result) = &alternative.body else { return Ok(None) };
+            let (constructor, fields) = match &pattern.kind {
+                PatternKind::Constructor { constructor, arguments, .. } => {
+                    (*constructor, arguments)
+                }
+                PatternKind::Wildcard if covering => {
+                    return self.remaining_nullary(result, &earlier, pattern.monotype);
+                }
+                _ => return Ok(None),
+            };
+            if earlier.contains(&constructor) {
+                return Ok(None);
+            }
+            if reproduces(result, accumulator, constructor, fields) {
+                return Ok(Some(pattern.clone()));
+            }
+            covering &= fields.iter().all(|field| {
+                matches!(field.kind, PatternKind::Wildcard | PatternKind::Variable(_))
+            });
+            earlier.push(constructor);
+        }
+        Ok(None)
+    }
+
+    fn remaining_nullary(
+        &mut self,
+        result: &Expression,
+        earlier: &[usize],
+        monotype: MonotypeId,
+    ) -> GoResult<Option<Pattern>> {
+        let ExpressionKind::Construct { data, constructor, arguments } = &result.kind else {
+            return Ok(None);
+        };
+        if !arguments.is_empty() || earlier.contains(constructor) {
+            return Ok(None);
+        }
+        let constructors = self
+            .monotypes
+            .constructors(&mut self.context, data)
+            .map_err(|failure| failure.at(&self.current_definition()))?;
+        if constructors.len() != earlier.len() + 1 {
+            return Ok(None);
+        }
+        let data = data.clone();
+        let kind = PatternKind::Constructor { data, constructor: *constructor, arguments: vec![] };
+        Ok(Some(Pattern { kind, monotype }))
+    }
+}
+
+fn reproduces(
+    result: &Expression,
+    accumulator: LocalId,
+    constructor: usize,
+    fields: &[Pattern],
+) -> bool {
+    match &result.kind {
+        ExpressionKind::Local(id) => *id == accumulator,
+        ExpressionKind::Construct { constructor: built, arguments, .. } => {
+            *built == constructor
+                && arguments.len() == fields.len()
+                && arguments.iter().zip(fields).all(|(argument, field)| {
+                    matches!(
+                        (&argument.kind, &field.kind),
+                        (ExpressionKind::Local(id), PatternKind::Variable(local)) if *id == local.id
+                    )
+                })
+        }
+        _ => false,
     }
 }
 

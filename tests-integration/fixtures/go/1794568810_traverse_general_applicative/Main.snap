@@ -31,6 +31,9 @@ func initializeMain_() []either.EitherStringArrayInt {
 	array := []int32{1, 2, 3}
 	accumulator := either.EitherStringArrayInt{Tag: either.EitherStringArrayIntRight, Right: []int32{}}
 	for _, element := range array {
+		if accumulator.Tag == either.EitherStringArrayIntLeft {
+			break
+		}
 		switch accumulator.Tag {
 		case either.EitherStringArrayIntLeft:
 			accumulator = either.EitherStringArrayInt{Tag: either.EitherStringArrayIntLeft, Left: accumulator.Left}
@@ -46,6 +49,9 @@ func initializeMain_() []either.EitherStringArrayInt {
 	array2 := []int32{1, -2, 3}
 	accumulator2 := either.EitherStringArrayInt{Tag: either.EitherStringArrayIntRight, Right: []int32{}}
 	for _, element := range array2 {
+		if accumulator2.Tag == either.EitherStringArrayIntLeft {
+			break
+		}
 		switch accumulator2.Tag {
 		case either.EitherStringArrayIntLeft:
 			accumulator2 = either.EitherStringArrayInt{Tag: either.EitherStringArrayIntLeft, Left: accumulator2.Left}
