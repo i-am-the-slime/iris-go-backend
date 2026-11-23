@@ -1,3 +1,5 @@
+use rustc_hash::FxHashMap;
+
 use super::Simplifier;
 use super::choice::operation;
 use super::short_circuit::mentions;
@@ -6,6 +8,9 @@ use crate::monomorphic::{
     Binding, Expression, ExpressionKind, Guarded, Literal, Local, LocalId, PatternKind,
 };
 use crate::monotype::{Monotype, MonotypeId};
+use crate::purity::is_within_size;
+
+const COPIED_CALLBACK_SIZE: usize = 160;
 
 struct Seeded {
     nothing: usize,
@@ -26,11 +31,110 @@ impl Simplifier<'_> {
             return self.counted(arguments, monotype);
         }
         let Foreign::Call { boundary, .. } = foreign else { return Err(arguments) };
-        match boundary.iteration {
+        if boundary.iteration.is_some_and(|iteration| iteration != Iteration::ZipWith) {
+            let arguments = match self.distributed(foreign, arguments, monotype) {
+                Ok(distributed) => return Ok(distributed),
+                Err(arguments) => arguments,
+            };
+            return self.reduced_iteration(foreign, boundary.iteration, arguments, monotype);
+        }
+        Err(arguments)
+    }
+
+    fn reduced_iteration(
+        &mut self,
+        foreign: &'static Foreign,
+        iteration: Option<Iteration>,
+        arguments: Vec<Expression>,
+        monotype: MonotypeId,
+    ) -> Result<Expression, Vec<Expression>> {
+        match iteration {
             Some(Iteration::FoldLeft) => self.seeded_choice(arguments, monotype),
             Some(Iteration::FoldRight) => self.leftward(arguments, monotype),
+            Some(Iteration::Map) => self.positional(foreign, arguments, monotype),
             _ => Err(arguments),
         }
+    }
+
+    fn distributed(
+        &mut self,
+        consumer: &'static Foreign,
+        mut arguments: Vec<Expression>,
+        monotype: MonotypeId,
+    ) -> Result<Expression, Vec<Expression>> {
+        let Some((array, rest)) = arguments.split_last() else { return Err(arguments) };
+        let copyable = rest.iter().all(|argument| is_within_size(argument, COPIED_CALLBACK_SIZE));
+        if !copyable || !is_positional_choice(array) {
+            return Err(arguments);
+        }
+        let array = arguments.pop().expect("invariant violated: the array was just matched");
+        let ExpressionKind::If { condition, then, otherwise } = array.kind else {
+            unreachable!("invariant violated: the array was just matched as a choice")
+        };
+        let mut copied = arguments.clone();
+        for argument in &mut copied {
+            self.rename(argument, &mut FxHashMap::default());
+        }
+        copied.push(*then);
+        arguments.push(*otherwise);
+        let then = self.foreign(consumer, copied, monotype);
+        let otherwise = self.foreign(consumer, arguments, monotype);
+        let chosen =
+            ExpressionKind::If { condition, then: Box::new(then), otherwise: Box::new(otherwise) };
+        Ok(Expression::new(chosen, monotype))
+    }
+
+    fn positional(
+        &mut self,
+        map: &'static Foreign,
+        arguments: Vec<Expression>,
+        monotype: MonotypeId,
+    ) -> Result<Expression, Vec<Expression>> {
+        let [callback, range] = arguments.as_slice() else { return Err(arguments) };
+        let Some(array) = positions_of(range) else { return Err(arguments) };
+        let single = matches!(&callback.kind, ExpressionKind::Lambda { parameters, .. } if parameters.len() == 1);
+        let Monotype::Array(element) = *self.monotypes.get(array.monotype) else {
+            return Err(arguments);
+        };
+        if !single || !is_within_size(callback, COPIED_CALLBACK_SIZE) {
+            return Err(arguments);
+        }
+        let array = array.clone();
+        let [callback, range] = <[Expression; 2]>::try_from(arguments)
+            .unwrap_or_else(|_| unreachable!("invariant violated: map has two arguments"));
+        let integer = self.monotypes.intern(Monotype::Int);
+        let boolean = self.monotypes.intern(Monotype::Boolean);
+        let literal = |value| {
+            let kind = ExpressionKind::Literal(Literal::Int(value));
+            Expression::new(kind, integer)
+        };
+        let mut copied = callback.clone();
+        self.rename(&mut copied, &mut FxHashMap::default());
+        let both = ExpressionKind::Array(vec![literal(0), literal(-1)]);
+        let both = Expression::new(both, range.monotype);
+        let both = ExpressionKind::Foreign { foreign: map, arguments: vec![copied, both] };
+        let ExpressionKind::Lambda { mut parameters, body } = callback.kind else {
+            unreachable!("invariant violated: the callback was just matched as a lambda")
+        };
+        let ignored = self.named_local("ignored", element);
+        let produced = body.monotype;
+        parameters.push(ignored);
+        let indexed = self.monotypes.function(element, produced);
+        let indexed = self.monotypes.function(integer, indexed);
+        let indexed = Expression::new(ExpressionKind::Lambda { parameters, body }, indexed);
+        let every = ExpressionKind::Foreign {
+            foreign: &foreign::ARRAY_MAP_WITH_INDEX,
+            arguments: vec![indexed, array.clone()],
+        };
+        let length = operation(Operator::ArrayLength, vec![array], integer);
+        let empty = vec![length, literal(0)];
+        let empty = operation(Operator::Compare(Comparison::Equal), empty, boolean);
+        let chosen = ExpressionKind::If {
+            condition: Box::new(empty),
+            then: Box::new(Expression::new(both, monotype)),
+            otherwise: Box::new(Expression::new(every, monotype)),
+        };
+        Ok(Expression::new(chosen, monotype))
     }
 
     fn seeded_choice(
@@ -168,6 +272,57 @@ impl Simplifier<'_> {
         };
         Ok(Expression::new(folded, monotype))
     }
+}
+
+fn is_positional_choice(array: &Expression) -> bool {
+    let ExpressionKind::If { condition, then, otherwise } = &array.kind else { return false };
+    let ExpressionKind::Foreign { foreign: Foreign::Operator(operator), arguments } =
+        &condition.kind
+    else {
+        return false;
+    };
+    let empty = matches!(operator, Operator::Compare(Comparison::Equal))
+        && matches!(
+            arguments.as_slice(),
+            [length, zero]
+                if matches!(length.kind, ExpressionKind::Foreign {
+                    foreign: Foreign::Operator(Operator::ArrayLength),
+                    ..
+                }) && matches!(zero.kind, ExpressionKind::Literal(Literal::Int(0)))
+        );
+    let both = matches!(&then.kind, ExpressionKind::Foreign { arguments, .. }
+        if matches!(arguments.as_slice(), [_, positions]
+            if matches!(&positions.kind, ExpressionKind::Array(elements) if elements.len() == 2)));
+    let every = matches!(&otherwise.kind, ExpressionKind::Foreign { foreign, .. }
+        if foreign.calls(foreign::ARRAY_MAP_WITH_INDEX));
+    empty && both && every
+}
+
+fn positions_of(range: &Expression) -> Option<&Expression> {
+    let ExpressionKind::Foreign { foreign: Foreign::Range, arguments } = &range.kind else {
+        return None;
+    };
+    let [first, last] = arguments.as_slice() else { return None };
+    if !matches!(first.kind, ExpressionKind::Literal(Literal::Int(0))) {
+        return None;
+    }
+    let ExpressionKind::Foreign { foreign: Foreign::Operator(operator), arguments } = &last.kind
+    else {
+        return None;
+    };
+    let [length, offset] = arguments.as_slice() else { return None };
+    let before_end = matches!(
+        (operator, &offset.kind),
+        (Operator::IntSubtract, ExpressionKind::Literal(Literal::Int(1)))
+            | (Operator::IntAdd, ExpressionKind::Literal(Literal::Int(-1)))
+    );
+    let ExpressionKind::Foreign { foreign: Foreign::Operator(Operator::ArrayLength), arguments } =
+        &length.kind
+    else {
+        return None;
+    };
+    let [array] = arguments.as_slice() else { return None };
+    (before_end && matches!(array.kind, ExpressionKind::Local(_))).then_some(array)
 }
 
 fn seeded(arguments: &[Expression]) -> Option<Seeded> {

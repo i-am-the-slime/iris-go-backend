@@ -13,7 +13,7 @@ examples any:variant-row 67
 examples empty-interface 0
 examples linked-fmt 0
 examples linked-reflect 0
-examples panic 43
+examples panic 41
 examples reflect 0
 examples type-assertion 237
 examples unsafe 0

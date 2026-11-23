@@ -373,34 +373,66 @@ func initializeMain_() []string {
 		result = arraypkg.Slice(n2, int32(len(accumulator5)), accumulator5)
 	}
 	xs4 := []int32{1, 2, 1, 1}
-	step, count12 := arraypkg.RangeSteps(0, int32(len(xs4))-1)
-	var accumulator6 int32 = 0
-	for index := range count12 {
-		start := int32(index) * step
-		var result2 []int32
-		if start < 1 {
-			result2 = xs4
-		} else {
-			result2 = arraypkg.Slice(start, int32(len(xs4)), xs4)
-		}
-		array9 := []int32{2, 1, 1}
-		count13 := min(len(result2), len(array9))
-		var accumulatorBefore int32 = 0
-		var accumulatorMatches int32 = 0
-		var accumulatorTotal int32 = 0
-		for index2 := range count13 {
-			value := result2[index2]
-			value2 := array9[index2]
-			same := value == value2
-			if same {
-				accumulatorMatches += 1
+	ys := []int32{2, 1, 1}
+	var result2 int32
+	if int32(len(xs4)) == 0 {
+		array9 := []int32{0, -1}
+		var accumulator6 int32 = 0
+		for _, start := range array9 {
+			var result3 []int32
+			if start < 1 {
+				result3 = xs4
 			} else {
-				starts := accumulatorMatches + 1
-				accumulatorBefore, accumulatorMatches = starts, 0
+				result3 = arraypkg.Slice(start, int32(len(xs4)), xs4)
 			}
-			accumulatorTotal += accumulatorBefore
+			count12 := min(len(result3), len(ys))
+			var accumulatorBefore int32 = 0
+			var accumulatorMatches int32 = 0
+			var accumulatorTotal int32 = 0
+			for index := range count12 {
+				value := result3[index]
+				value2 := ys[index]
+				same := value == value2
+				if same {
+					accumulatorMatches += 1
+				} else {
+					starts := accumulatorMatches + 1
+					accumulatorBefore, accumulatorMatches = starts, 0
+				}
+				accumulatorTotal += accumulatorBefore
+			}
+			accumulator6 += accumulatorTotal
 		}
-		accumulator6 += accumulatorTotal
+		result2 = accumulator6
+	} else {
+		var accumulator6 int32 = 0
+		for index := range xs4 {
+			start := int32(index)
+			var result3 []int32
+			if start < 1 {
+				result3 = xs4
+			} else {
+				result3 = arraypkg.Slice(start, int32(len(xs4)), xs4)
+			}
+			count12 := min(len(result3), len(ys))
+			var accumulatorBefore int32 = 0
+			var accumulatorMatches int32 = 0
+			var accumulatorTotal int32 = 0
+			for index2 := range count12 {
+				value := result3[index2]
+				value2 := ys[index2]
+				same := value == value2
+				if same {
+					accumulatorMatches += 1
+				} else {
+					starts := accumulatorMatches + 1
+					accumulatorBefore, accumulatorMatches = starts, 0
+				}
+				accumulatorTotal += accumulatorBefore
+			}
+			accumulator6 += accumulatorTotal
+		}
+		result2 = accumulator6
 	}
 	array33 := []bool{true, false, true, true, false}
 	var accumulatorBefore2 int32 = 0
@@ -427,7 +459,7 @@ func initializeMain_() []string {
 			accumulator7 = shared.Bounds{Low: accumulator7.Low - 1, High: accumulator7.High + x}
 		}
 	}
-	return []string{string(show.AppendShowArrayInt(nil, mapped)), string(show.AppendShowArrayInt(nil, mapped2)), string(show.AppendShowArrayInt(nil, mapped3)), string(show.AppendShowArrayInt(nil, built)), string(show.AppendShowArrayInt(nil, built2)), string(show.AppendShowArrayInt(nil, built3)), string(show.AppendShowArrayInt(nil, built4)), strconv.Itoa(int(accumulator)), strconv.Itoa(int(accumulator2)), strconv.Itoa(len(array4)), strconv.FormatBool(found), strconv.FormatBool(every), string(show.AppendShowArrayInt(nil, kept)), string(show.AppendShowArrayInt(nil, arraypkg.Bounded(bound))), string(show.AppendShowArrayInt(nil, built6)), string(show.AppendShowArrayInt(nil, built7)), string(show.AppendShowArrayXY(nil, built8)), string(show.AppendShowArrayInt(nil, zipLanes(arraypkg.Slice(-3, -1, []int32{1, 2, 3, 4, 5}), arraypkg.Slice(1, 100, []int32{10, 20, 30})))), string(show.AppendShowArrayInt(nil, built9)), string(show.AppendShowArrayInt(nil, built10)), strconv.Itoa(int(accumulator3)), string(show.AppendShowArrayInt(nil, built11)), string(show.AppendShowArrayInt(nil, mapped4)), strconv.Itoa(int(int32(count10))), strconv.FormatBool(every2), string(show.AppendShowArrayString(nil, mapped5)), strconv.Itoa(int(accumulator4)), string(show.AppendShowArrayInt(nil, built12)), string(show.AppendShowArrayInt(nil, built13)), string(show.AppendShowArrayInt(nil, built14)), string(show.AppendShowArrayInt(nil, built15)), string(show.AppendShowArrayInt(nil, row([]rune{'a', 'b'}, []int32{0, 1, 2}, 'b'))), strconv.Itoa(int(foldLanes(result, 0))), strconv.Itoa(int(accumulator6)), strconv.Itoa(int(accumulatorTotal2)), strconv.Itoa(int(accumulator7.High))}
+	return []string{string(show.AppendShowArrayInt(nil, mapped)), string(show.AppendShowArrayInt(nil, mapped2)), string(show.AppendShowArrayInt(nil, mapped3)), string(show.AppendShowArrayInt(nil, built)), string(show.AppendShowArrayInt(nil, built2)), string(show.AppendShowArrayInt(nil, built3)), string(show.AppendShowArrayInt(nil, built4)), strconv.Itoa(int(accumulator)), strconv.Itoa(int(accumulator2)), strconv.Itoa(len(array4)), strconv.FormatBool(found), strconv.FormatBool(every), string(show.AppendShowArrayInt(nil, kept)), string(show.AppendShowArrayInt(nil, arraypkg.Bounded(bound))), string(show.AppendShowArrayInt(nil, built6)), string(show.AppendShowArrayInt(nil, built7)), string(show.AppendShowArrayXY(nil, built8)), string(show.AppendShowArrayInt(nil, zipLanes(arraypkg.Slice(-3, -1, []int32{1, 2, 3, 4, 5}), arraypkg.Slice(1, 100, []int32{10, 20, 30})))), string(show.AppendShowArrayInt(nil, built9)), string(show.AppendShowArrayInt(nil, built10)), strconv.Itoa(int(accumulator3)), string(show.AppendShowArrayInt(nil, built11)), string(show.AppendShowArrayInt(nil, mapped4)), strconv.Itoa(int(int32(count10))), strconv.FormatBool(every2), string(show.AppendShowArrayString(nil, mapped5)), strconv.Itoa(int(accumulator4)), string(show.AppendShowArrayInt(nil, built12)), string(show.AppendShowArrayInt(nil, built13)), string(show.AppendShowArrayInt(nil, built14)), string(show.AppendShowArrayInt(nil, built15)), string(show.AppendShowArrayInt(nil, row([]rune{'a', 'b'}, []int32{0, 1, 2}, 'b'))), strconv.Itoa(int(foldLanes(result, 0))), strconv.Itoa(int(result2)), strconv.Itoa(int(accumulatorTotal2)), strconv.Itoa(int(accumulator7.High))}
 }
 
 func row(letters []rune, previous []int32, letter rune) []int32 {

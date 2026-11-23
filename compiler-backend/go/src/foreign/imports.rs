@@ -243,6 +243,9 @@ pub const ARRAY_UNCONS: Foreign = uncurried(direct("Uncons", 3), &[(1, 2)]);
 pub const ARRAY_TAIL: Foreign = array("Tail", 1);
 
 pub const ARRAY_FROM_LIST: Foreign = array("FromList", 1);
+
+pub const ARRAY_MAP_WITH_INDEX: Foreign =
+    uncurried(iteration(GoPackage::Direct, "MapWithIndex", 2, Iteration::MapWithIndex), &[(0, 2)]);
 /// Data.Array.ST.Partial's peek, read without a bounds test.
 pub const MUTABLE_PEEK_UNSAFE: Foreign =
     thunk(GoPackage::Array, "PeekUnsafe", 2, int32_parameters(&[0]));
@@ -564,14 +567,7 @@ pub(super) const FOREIGN_IMPORTS: &[(&str, &str, Foreign)] = &[
         "unsafeFreeze",
         thunk(GoPackage::Object, "UnsafeFreeze", 1, PLAIN),
     ),
-    (
-        "Data.FunctorWithIndex",
-        "mapWithIndexArray",
-        uncurried(
-            iteration(GoPackage::Direct, "MapWithIndex", 2, Iteration::MapWithIndex),
-            &[(0, 2)],
-        ),
-    ),
+    ("Data.FunctorWithIndex", "mapWithIndexArray", ARRAY_MAP_WITH_INDEX),
     ("Data.Unfoldable", "unfoldrArrayImpl", Foreign::Unfoldr),
     ("Data.Unfoldable1", "unfoldr1ArrayImpl", Foreign::Unfoldr1),
     ("Control.Bind", "arrayBind", iteration(GoPackage::Array, "Bind", 2, Iteration::Bind)),
