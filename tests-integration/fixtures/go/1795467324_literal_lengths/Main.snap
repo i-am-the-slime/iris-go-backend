@@ -1,0 +1,50 @@
+---
+source: tests-integration/src/fixtures.rs
+---
+// main.go
+package main
+
+import (
+	"github.com/i-am-the-slime/iris-go/console"
+	"github.com/i-am-the-slime/iris-go/direct"
+	"github.com/i-am-the-slime/iris-go/prim"
+	"strconv"
+	"strings"
+)
+
+var main_ = initializeMain_()
+
+func initializeMain_() []string {
+	after, before := direct.SplitAt(int32(3), "😀ab")
+	var result string
+	if before == "😀a" {
+		result = "(Just " + prim.ShowString(after) + ")"
+	} else {
+		result = "Nothing"
+	}
+	return []string{result, strconv.Itoa(int(literalCodeUnitLengthIsAConstant)), strconv.Itoa(int(literalCodePointLengthIsAConstant))}
+}
+
+var literalCodeUnitLengthIsAConstant = initializeLiteralCodeUnitLengthIsAConstant()
+
+func initializeLiteralCodeUnitLengthIsAConstant() int32 {
+	return int32(4)
+}
+
+var literalCodePointLengthIsAConstant = initializeLiteralCodePointLengthIsAConstant()
+
+func initializeLiteralCodePointLengthIsAConstant() int32 {
+	return int32(int(int32(3)))
+}
+
+func main() {
+	console.Print("[" + strings.Join(main_, " ") + "]")
+}
+
+// shared/shared.go
+package shared
+
+type AfterBefore struct {
+	After  string
+	Before string
+}

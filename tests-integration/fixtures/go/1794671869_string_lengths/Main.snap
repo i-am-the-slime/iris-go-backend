@@ -32,7 +32,6 @@ import (
 	"fixture/Data/Maybe"
 	"fixture/shared"
 	"github.com/i-am-the-slime/iris-go/console"
-	"github.com/i-am-the-slime/iris-go/direct"
 	"github.com/i-am-the-slime/iris-go/prim"
 	"strconv"
 	"strings"
@@ -41,7 +40,7 @@ import (
 var main_ = initializeMain_()
 
 func initializeMain_() []string {
-	codeUnitLength := prim.CodeUnitLengthUpTo(3, "ab")
+	codeUnitLength := int32(2)
 	var result string
 	switch codeUnitLength {
 	case 0:
@@ -53,7 +52,7 @@ func initializeMain_() []string {
 	default:
 		result = "many"
 	}
-	return []string{strconv.Itoa(int(countSpacesUnconsingCountsUpToTwo("a b c", 0))), result, strconv.FormatBool(direct.CodePointLengthUpTo(5, "word") < 4), strconv.Itoa(int(direct.CodePointLength("a😀"))), strconv.Itoa(int(unchangedTextLengthIsCountedBeforeTheLoop("banana", 0, 0))), strconv.Itoa(int(changedRestLengthIsCountedEachIteration("abcdefghij", 0)))}
+	return []string{strconv.Itoa(int(countSpacesUnconsingCountsUpToTwo("a b c", 0))), result, strconv.FormatBool(int32(int(int32(4))) < 4), strconv.Itoa(int(int32(2))), strconv.Itoa(int(unchangedTextLengthIsCountedBeforeTheLoop("banana", 0, 0))), strconv.Itoa(int(changedRestLengthIsCountedEachIteration("abcdefghij", 0)))}
 }
 
 func countSpacesUnconsingCountsUpToTwo(text string, count int32) int32 {

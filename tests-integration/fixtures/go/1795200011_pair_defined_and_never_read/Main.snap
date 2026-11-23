@@ -8,7 +8,6 @@ import (
 	"github.com/i-am-the-slime/iris-go/array"
 	"github.com/i-am-the-slime/iris-go/console"
 	"github.com/i-am-the-slime/iris-go/direct"
-	"github.com/i-am-the-slime/iris-go/prim"
 	stringspkg "strings"
 )
 
@@ -21,7 +20,7 @@ func initializeMain_() []string {
 	for _, s := range strings {
 		accumulator = s
 	}
-	direct.SplitAt(prim.CodeUnitLength(","), accumulator)
+	direct.SplitAt(int32(1), accumulator)
 	performed := array.UnsafeFreeze(array2)()
 	return performed
 }

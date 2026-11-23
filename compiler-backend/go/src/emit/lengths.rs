@@ -40,6 +40,7 @@ impl Walk for Capped {
     fn expression(&mut self, value: &mut GoExpression) {
         go_traversal::expression(self, value);
         counted_code_points(value);
+        literal_length(value);
         compared_length(value);
     }
 
@@ -87,14 +88,35 @@ fn counted_code_points(value: &mut GoExpression) {
         return;
     }
     let Some(string) = converted_arguments.pop() else { return };
-    let counted = GoExpression::Call {
+    let mut counted = GoExpression::Call {
         function: Box::new(GoExpression::Qualified {
             package: "direct".into(),
             name: "CodePointLength".into(),
         }),
         arguments: vec![string],
     };
+    literal_length(&mut counted);
     *value = GoExpression::Conversion { type_: GoType::Int, value: Box::new(counted) };
+}
+
+fn literal_length(value: &mut GoExpression) {
+    let GoExpression::Call { function, arguments } = value else { return };
+    let GoExpression::Qualified { package, name } = &**function else { return };
+    let [literal] = arguments.as_slice() else { return };
+    let length = match (package.as_str(), name.as_str(), literal) {
+        ("prim", "CodeUnitLength", GoExpression::String(text)) => text.encode_utf16().count(),
+        ("prim", "CodeUnitLength", GoExpression::Utf16(units)) => units.len(),
+        ("direct", "CodePointLength", GoExpression::String(text)) => text.chars().count(),
+        ("direct", "CodePointLength", GoExpression::Utf16(units)) => {
+            char::decode_utf16(units.iter().copied()).count()
+        }
+        _ => return,
+    };
+    let Ok(length) = i64::try_from(length) else { return };
+    *value = GoExpression::Conversion {
+        type_: GoType::Named("int32".into()),
+        value: Box::new(GoExpression::Integer(length)),
+    };
 }
 
 fn is_code_point_length(value: &GoExpression) -> bool {

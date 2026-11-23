@@ -92,7 +92,7 @@ func initializeMain_() []string {
 	}
 	codeUnitCharAt := prim.CodeUnitCharAt(func(payload rune) maybe.Char {
 		return maybe.Char(payload)
-	}, maybe.NoChar, prim.CodeUnitLength("naïve 😀 banana 日本 a𝄞a")-3, "naïve 😀 banana 日本 a𝄞a")
+	}, maybe.NoChar, int32(23)-3, "naïve 😀 banana 日本 a𝄞a")
 	var result string
 	if codeUnitCharAt != maybe.NoChar {
 		result = "(Just " + prim.ShowChar(rune(codeUnitCharAt)) + ")"
