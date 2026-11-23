@@ -1,18 +1,11 @@
 ---
 source: tests-integration/src/fixtures.rs
 ---
-// Data/Maybe/maybe.go
-package maybe
-
-type Int int64
-
-const NoInt Int = 1 << 32
-
 // main.go
 package main
 
 import (
-	"fixture/Data/Maybe"
+	"fixture/shared"
 	"github.com/i-am-the-slime/iris-go/array"
 	"github.com/i-am-the-slime/iris-go/console"
 	"github.com/i-am-the-slime/iris-go/prim"
@@ -33,9 +26,9 @@ func initializeMain_() []int32 {
 			i2 = -1
 		}
 		if i2 > 2 {
-			array.Pop(func(payload int32) maybe.Int {
-				return maybe.Int(payload)
-			}, maybe.NoInt, array2)()
+			if len(*array2) > 0 {
+				*array2 = shared.WithoutLast(*array2)
+			}
 		}
 		if int(i) < len(*array2) {
 			(*array2)[i] = i2 * 10
@@ -65,4 +58,13 @@ func main() {
 		texts = append(texts, prim.ShowInt(element))
 	}
 	console.Print("[" + strings.Join(texts, " ") + "]")
+}
+
+// shared/shared.go
+package shared
+
+func WithoutLast[T any](elements []T) []T {
+	var zero T
+	elements[len(elements)-1] = zero
+	return elements[:len(elements)-1]
 }
