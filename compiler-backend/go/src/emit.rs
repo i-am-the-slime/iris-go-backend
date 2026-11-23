@@ -67,6 +67,7 @@ mod strings;
 mod text;
 mod types;
 mod unreferenced;
+mod unzip;
 mod updates;
 mod vector;
 mod views;

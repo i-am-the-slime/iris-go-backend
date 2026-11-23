@@ -346,6 +346,11 @@ where
         {
             return Ok(iterated);
         }
+        if foreign.calls(crate::foreign::ARRAY_UNZIP)
+            && let Some(unzipped) = self.unzip(&arguments[0], monotype, out)?
+        {
+            return Ok(unzipped);
+        }
         if foreign.calls(crate::foreign::ARRAY_SORT_BY)
             && let Some(sorted) = self.primitive_sort(arguments, Placement::Copied, out)?
         {

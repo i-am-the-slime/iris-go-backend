@@ -235,6 +235,8 @@ pub const ARRAY_APPEND: Foreign = array("Append", 2);
 pub const ARRAY_THAW: Foreign = thunk(GoPackage::Array, "Thaw", 1, PLAIN);
 
 pub const ARRAY_THAW_OWNED: Foreign = thunk(GoPackage::Array, "ThawOwned", 1, PLAIN);
+
+pub const ARRAY_UNZIP: Foreign = array("Unzip", 1);
 /// Data.Array.ST.Partial's peek, read without a bounds test.
 pub const MUTABLE_PEEK_UNSAFE: Foreign =
     thunk(GoPackage::Array, "PeekUnsafe", 2, int32_parameters(&[0]));
@@ -895,6 +897,7 @@ pub(super) const INTRINSICS: &[(&str, &str, &[&str], Foreign)] = &[
     ("Data.Array", "nub", &["ordString"], array("NubComparable", 1)),
     ("Data.Array", "nub", &["ordBoolean"], array("NubComparable", 1)),
     ("Data.Array", "groupBy", &[], uncurried(array("GroupBy", 2), &[(0, 2)])),
+    ("Data.Array", "unzip", &[], ARRAY_UNZIP),
     ("Data.Foldable", "intercalate", &["foldableArray", "monoidString"], prim("StringJoinWith", 2)),
     ("Data.Array", "intercalate", &["monoidString"], prim("StringJoinWith", 2)),
     ("Data.String.CodeUnits", "contains", &[], prim("CodeUnitContains", 2)),
