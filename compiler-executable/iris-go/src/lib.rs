@@ -156,6 +156,7 @@ fn vendor_foreign_packages(
             source.values.extend(values);
             source.types.extend(types);
             source.uses_event_loop |= go::uses_event_loop(&text);
+            source.recovers |= go::recovers(&text);
             let shown = shown_path(&foreign_file, &here);
             source.files.push(shown.clone());
             let Some(name) = foreign_file.file_name() else { continue };

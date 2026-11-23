@@ -134,6 +134,10 @@ fn owned_files<'n>(stem: &str, names: &[&'n str]) -> Vec<&'n str> {
     owned
 }
 
+pub fn recovers(source: &str) -> bool {
+    source.contains("recover()")
+}
+
 pub fn uses_event_loop(source: &str) -> bool {
     let event_loop = format!("\"{}\"", GoPackage::EventLoop.path());
     source.lines().any(|line| {

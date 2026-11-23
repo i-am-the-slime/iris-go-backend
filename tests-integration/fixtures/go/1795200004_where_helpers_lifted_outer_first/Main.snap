@@ -15,15 +15,48 @@ import (
 var main_ = initializeMain_()
 
 func initializeMain_() []int32 {
-	array2 := array.Thaw([]int32{3, 1, 2})()
-	size := int32(len(*array2))
-	elements := *array2
+	array2 := *array.Thaw([]int32{3, 1, 2})()
+	size := int32(len(array2))
 	for i := int32(1); i < size; i++ {
+		within := int(i) < len(array2)
 		var current int32
-		current = elements[i]
-		mainShiftDown(elements, current, i-1)
+		if within {
+			current = array2[i]
+		} else {
+			current = 0
+		}
+		var j int32 = i - 1
+	mainShiftDown:
+		for {
+			if j < 0 {
+				if 0 < len(array2) {
+					array2[0] = current
+				}
+				break mainShiftDown
+			}
+			within2 := int(j) < len(array2)
+			var previous int32
+			if within2 {
+				previous = array2[j]
+			} else {
+				previous = 0
+			}
+			if previous > current {
+				index := j + 1
+				if int(index) < len(array2) {
+					array2[index] = previous
+				}
+				j -= 1
+				continue
+			}
+			index2 := j + 1
+			if int(index2) < len(array2) {
+				array2[index2] = current
+			}
+			break mainShiftDown
+		}
 	}
-	performed := shared.Frozen(*array2)
+	performed := shared.Frozen(array2)
 	return array.Append([]int32{mainGo(100, 0)}, performed)
 }
 
@@ -45,22 +78,36 @@ func mainGo(i int32, acc int32) int32 {
 	}
 }
 
-func mainShiftDown(array []int32, current int32, j int32) {
+func mainShiftDown(array *[]int32, current int32, j int32) {
+	array2 := *array
 	for {
 		if j < 0 {
-			array[0] = current
+			if 0 < len(array2) {
+				array2[0] = current
+			}
+			*array = array2
 			return
 		}
+		within := j >= 0 && int(j) < len(array2)
 		var previous int32
-		previous = array[j]
+		if within {
+			previous = array2[j]
+		} else {
+			previous = 0
+		}
 		if previous > current {
 			index := j + 1
-			array[index] = previous
+			if index >= 0 && int(index) < len(array2) {
+				array2[index] = previous
+			}
 			j -= 1
 			continue
 		}
 		index2 := j + 1
-		array[index2] = current
+		if index2 >= 0 && int(index2) < len(array2) {
+			array2[index2] = current
+		}
+		*array = array2
 		return
 	}
 }

@@ -36,7 +36,7 @@ pub use error::{GoError, GoResult, UnsupportedState};
 pub use foreign::{
     EmbedError, ForeignPackages, ForeignSource, LineCoverage, LineDirectives, embedded_files,
     foreign_declarations, foreign_files, foreign_opacity, foreign_source, foreign_structs,
-    uses_event_loop,
+    recovers, uses_event_loop,
 };
 pub use timing::Work;
 

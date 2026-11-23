@@ -11,6 +11,7 @@ mod boxing;
 mod buffers;
 mod build;
 mod cases;
+mod cells;
 mod chunks;
 mod closures;
 mod coerce;
@@ -32,6 +33,7 @@ mod groups;
 mod guards;
 mod headers;
 mod immediate;
+mod inlining;
 mod inspection;
 mod instantiations;
 mod int64;
@@ -188,6 +190,26 @@ where
     timed("scalars", || scalars::split_struct_locals(&mut declarations, &structs));
     timed("stores", || scalars::store_fields_in_place(&mut declarations, &structs));
     timed("aliases", || aliases::substitute_aliases(&mut declarations));
+    timed("inlining", || {
+        inlining::inline_called_cell_loops(&mut declarations, &structs);
+        inlining::inline_cell_constructors(&mut declarations);
+    });
+    timed("forwarding", || {
+        cells::forward_constructed_fields(&mut declarations);
+        cells::substitute_cell_aliases(&mut declarations);
+    });
+    timed("aliases", || aliases::substitute_aliases(&mut declarations));
+    timed("references", || references::promote_references(&mut declarations));
+    let helpers: FxHashSet<String> = emitter.support_functions.values().cloned().collect();
+    let never_recovering = emitter.foreign_packages.packages_that_never_recover();
+    timed("cells", || {
+        cells::keep_parameter_cells_in_locals(
+            &mut declarations,
+            &helpers,
+            &emitter.effects,
+            &never_recovering,
+        )
+    });
     timed("joins", || joins::join_shared_updates(&mut declarations));
     timed("ranges", || ranges::read_elements_in_place(&mut declarations));
     let effects = std::mem::take(&mut emitter.effects);

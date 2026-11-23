@@ -37,7 +37,7 @@ use crate::syntax::{GoDeclaration, GoExpression, GoStatement, GoType};
 pub(super) type Effects = FxHashSet<(String, String)>;
 
 /// The builtins of the Go language: none runs an effect of the program.
-const BUILTINS: &[&str] = &[
+pub(super) const BUILTINS: &[&str] = &[
     "len", "cap", "append", "make", "new", "copy", "min", "max", "panic", "delete", "clear",
     "complex", "real", "imag",
 ];

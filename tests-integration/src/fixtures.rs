@@ -614,6 +614,7 @@ fn go_foreign_packages(
             source.values.extend(values);
             source.types.extend(types);
             source.uses_event_loop |= go::uses_event_loop(&text);
+            source.recovers |= go::recovers(&text);
             let shown = foreign_file.strip_prefix(&root).unwrap_or(&foreign_file);
             source.files.push(shown.display().to_string());
             vendored.extend(vendored_foreign_file(&module, &foreign_file, &text)?);

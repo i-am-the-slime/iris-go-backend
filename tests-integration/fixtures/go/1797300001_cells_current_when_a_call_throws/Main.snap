@@ -1,0 +1,83 @@
+---
+source: tests-integration/src/fixtures.rs
+---
+// Data/Either/either.go
+package either
+
+import "github.com/i-am-the-slime/iris-go/exception"
+
+type EitherErrorUnit struct {
+	Right struct{}
+	Left  exception.Error
+	Tag   uint8
+}
+
+const (
+	EitherErrorUnitLeft = iota
+	EitherErrorUnitRight
+)
+
+// main.go
+package main
+
+import (
+	"fixture/Data/Either"
+	"fixture/shared"
+	"github.com/i-am-the-slime/iris-go/direct"
+	"github.com/i-am-the-slime/iris-go/exception"
+	"github.com/i-am-the-slime/iris-go/prim"
+	"os"
+)
+
+func main_() int32 {
+	total := &shared.Ref[int32]{Value: 0}
+	either2 := direct.CatchException(func(x exception.Error) either.EitherErrorUnit {
+		return either.EitherErrorUnit{Tag: either.EitherErrorUnitLeft, Left: x}
+	}, func() either.EitherErrorUnit {
+		addCodes(total, "abc", 0)
+		return either.EitherErrorUnit{Tag: either.EitherErrorUnitRight, Right: struct{}{}}
+	})
+	read := total.Value
+	var result int32
+	switch either2.Tag {
+	case either.EitherErrorUnitLeft:
+		result = 1
+	default: // either.EitherErrorUnitRight
+		result = 0
+	}
+	return read + result
+}
+
+func addCodes(total *shared.Ref[int32], text string, index int32) {
+	totalValue := total.Value
+	textUnits := prim.UTF16(text)
+	for {
+		total.Value = totalValue
+		if index > textUnits.Length() {
+			total.Value = totalValue
+			return
+		}
+		s := totalValue
+		total.Value = totalValue
+		s_ := s + prim.ToCharCode(textUnits.UnsafeCharAt(index))
+		totalValue = s_
+		index += 1
+	}
+}
+
+func main() {
+	exitStatus := main_()
+	os.Exit(int(exitStatus))
+}
+
+// shared/shared.go
+package shared
+
+type Ref[T any] struct {
+	Value T
+}
+
+type StateValue struct {
+	State int32
+	Value int32
+}

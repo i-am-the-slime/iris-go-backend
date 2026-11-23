@@ -61,6 +61,7 @@ pub struct ForeignSource {
     pub values: Vec<String>,
     pub types: Vec<String>,
     pub uses_event_loop: bool,
+    pub recovers: bool,
     pub opacity: super::Opacity,
 }
 
@@ -105,6 +106,14 @@ impl ForeignPackages {
             .iter()
             .filter(|source| source.uses_event_loop)
             .any(|source| imports.contains(&self.import_path(&source.module)))
+    }
+
+    pub fn packages_that_never_recover(&self) -> BTreeSet<String> {
+        self.sources
+            .iter()
+            .filter(|source| !source.recovers)
+            .map(|source| ForeignPackages::package_name(&source.module))
+            .collect()
     }
 
     fn copied(&self, module_name: &str) -> bool {

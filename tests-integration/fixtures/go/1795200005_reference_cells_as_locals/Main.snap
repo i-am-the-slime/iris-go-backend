@@ -34,13 +34,15 @@ func main_() int32 {
 }
 
 func drain(cell *shared.Ref[int32], n int32) {
+	cellValue := cell.Value
 	for {
 		if n <= 0 {
+			cell.Value = cellValue
 			return
 		}
-		s := cell.Value
+		s := cellValue
 		s_ := s + n
-		cell.Value = s_
+		cellValue = s_
 		n -= 1
 	}
 }
