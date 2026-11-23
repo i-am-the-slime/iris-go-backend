@@ -27,6 +27,10 @@ impl Simplifier<'_> {
             Ok(searched) => return searched,
             Err(arguments) => arguments,
         };
+        let arguments = match self.reduction(foreign, arguments, monotype) {
+            Ok(reduced) => return reduced,
+            Err(arguments) => arguments,
+        };
         let mut arguments = match self.sequenced_fold(foreign, arguments, monotype) {
             Ok(looped) => return looped,
             Err(arguments) => arguments,

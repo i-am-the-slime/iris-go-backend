@@ -36,6 +36,7 @@ mod effects;
 mod fold;
 mod object;
 mod record;
+mod reductions;
 mod rename;
 mod short_circuit;
 mod sink;
