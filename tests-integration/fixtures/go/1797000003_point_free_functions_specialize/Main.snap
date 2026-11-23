@@ -1,0 +1,141 @@
+---
+source: tests-integration/src/fixtures.rs
+---
+// Data/Maybe/maybe.go
+package maybe
+
+type Int int64
+
+const NoInt Int = 1 << 32
+
+// Data/Show/show.go
+package show
+
+import "strconv"
+
+func Show(i int32) string {
+	return strconv.Itoa(int(i))
+}
+
+func AppendShowArrayInt(buffer []byte, array []int32) []byte {
+	buffer = append(buffer, "["...)
+	for index, element := range array {
+		if index > 0 {
+			buffer = append(buffer, ","...)
+		}
+		buffer = strconv.AppendInt(buffer, int64(element), 10)
+	}
+	buffer = append(buffer, "]"...)
+	return buffer
+}
+
+// main.go
+package main
+
+import (
+	"fixture/Data/Maybe"
+	"fixture/Data/Show"
+	"github.com/i-am-the-slime/iris-go/array"
+	"github.com/i-am-the-slime/iris-go/console"
+	"strings"
+)
+
+var main_ = initializeMain_()
+
+func initializeMain_() []string {
+	return []string{string(show.AppendShowArrayInt(nil, sortByIntCompare(numbers))), string(show.AppendShowArrayInt(nil, sortByIntDescending(numbers))), string(show.AppendShowArrayInt(nil, sortByIntCompare([]int32{})))}
+}
+
+var numbers []int32 = []int32{7, 3, 9, 1, 4, 8, 2, 6, 5, 0}
+
+func sortByIntCompare(xs []int32) []int32 {
+	array2 := array.Thaw(xs)()
+	length := int32(len(*array2))
+	sortByIntCompareInsertFrom(*array2, 1, length)
+	performed := array.UnsafeFreeze(array2)()
+	return performed
+}
+
+func sortByIntDescending(xs []int32) []int32 {
+	array2 := array.Thaw(xs)()
+	length := int32(len(*array2))
+	sortByIntDescendingInsertFrom(*array2, 1, length)
+	performed := array.UnsafeFreeze(array2)()
+	return performed
+}
+
+func sortByIntCompareSink(array []int32, i int32) {
+	for {
+		if i > 0 {
+			index := i - 1
+			var peeked maybe.Int
+			peeked = maybe.Int(array[index])
+			var peeked2 maybe.Int
+			peeked2 = maybe.Int(array[i])
+			if peeked != maybe.NoInt && peeked2 != maybe.NoInt {
+				x := int32(peeked)
+				y := int32(peeked2)
+				if x > y {
+					index2 := i - 1
+					array[index2] = y
+					array[i] = x
+					i -= 1
+					continue
+				}
+			}
+			return
+		}
+		return
+	}
+}
+
+func sortByIntCompareInsertFrom(array []int32, i int32, length int32) {
+	for {
+		if i < length {
+			sortByIntCompareSink(array, i)
+			i += 1
+			continue
+		}
+		return
+	}
+}
+
+func sortByIntDescendingSink(array []int32, i int32) {
+	for {
+		if i > 0 {
+			index := i - 1
+			var peeked maybe.Int
+			peeked = maybe.Int(array[index])
+			var peeked2 maybe.Int
+			peeked2 = maybe.Int(array[i])
+			if peeked != maybe.NoInt && peeked2 != maybe.NoInt {
+				x := int32(peeked)
+				y := int32(peeked2)
+				if y > x {
+					index2 := i - 1
+					array[index2] = y
+					array[i] = x
+					i -= 1
+					continue
+				}
+			}
+			return
+		}
+		return
+	}
+}
+
+func sortByIntDescendingInsertFrom(array []int32, i int32, length int32) {
+	for {
+		if i < length {
+			sortByIntDescendingSink(array, i)
+			i += 1
+			continue
+		}
+		return
+	}
+}
+
+func main() {
+	console.Print("[" + strings.Join(main_, " ") + "]")
+}

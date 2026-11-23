@@ -1018,7 +1018,10 @@ fn chosen_lambda_parameter(expression: &Expression) -> Option<&Local> {
     match &expression.kind {
         ExpressionKind::Lambda { parameters, .. } => parameters.first(),
         ExpressionKind::Let { bindings, body } => {
-            bindings.iter().all(|binding| is_cheap(&binding.value)).then_some(())?;
+            let repeatable = |value: &Expression| {
+                is_cheap(value) || matches!(value.kind, ExpressionKind::Lambda { .. })
+            };
+            bindings.iter().all(|binding| repeatable(&binding.value)).then_some(())?;
             chosen_lambda_parameter(body)
         }
         ExpressionKind::If { condition, then, otherwise } => {

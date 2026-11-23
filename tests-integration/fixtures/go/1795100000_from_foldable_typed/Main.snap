@@ -38,8 +38,6 @@ type ListString struct {
 	Cons1 *ListString
 }
 
-var SharedListStringNil = &ListString{}
-
 func Foldr(f func(int32) func(*direct.ConsList[int32]) *direct.ConsList[int32], b *direct.ConsList[int32]) func(*ListInt) *direct.ConsList[int32] {
 	return func(x *ListInt) *direct.ConsList[int32] {
 		return FoldrGo2(f, b, FoldrGo(SharedListIntNil, x))
@@ -72,8 +70,6 @@ func FoldrGo2(f func(int32) func(*direct.ConsList[int32]) *direct.ConsList[int32
 // Data/Map/Internal/internal.go
 package internal
 
-import "fixture/Data/List/Types"
-
 type MapStringUnit struct {
 	Node3 struct{}
 	Node2 string
@@ -84,10 +80,6 @@ type MapStringUnit struct {
 }
 
 var SharedMapStringUnitLeaf = &MapStringUnit{}
-
-func KeysStringUnit(m *MapStringUnit) *types.ListString {
-	return KeysStringUnitGo(m, types.SharedListStringNil)
-}
 
 func UnsafeNodeStringUnit(k string, v struct{}, l *MapStringUnit, r *MapStringUnit) *MapStringUnit {
 	if l == SharedMapStringUnitLeaf {
@@ -109,18 +101,6 @@ func UnsafeNodeStringUnit(k string, v struct{}, l *MapStringUnit, r *MapStringUn
 		result = h2
 	}
 	return &MapStringUnit{Node0: 1 + result, Node1: 1 + s1 + r.Node1, Node2: k, Node3: v, Node4: l, Node5: r}
-}
-
-func KeysStringUnitGo(m_ *MapStringUnit, z_ *types.ListString) *types.ListString {
-	for {
-		if m_ == SharedMapStringUnitLeaf {
-			return z_
-		}
-		k := m_.Node2
-		l := m_.Node4
-		r := m_.Node5
-		m_, z_ = l, &types.ListString{Cons0: k, Cons1: KeysStringUnitGo(r, z_)}
-	}
 }
 
 func UnsafeBalancedNodeStringUnitHeight(value *MapStringUnit) int32 {
@@ -276,15 +256,17 @@ import (
 	"github.com/i-am-the-slime/iris-go/direct"
 )
 
+var SharedListStringNil = &list.ListString{}
+
 func Foldr(f func(string) func(*direct.ConsList[string]) *direct.ConsList[string], x *direct.ConsList[string]) func(*m.MapStringUnit) *direct.ConsList[string] {
 	return func(x2 *m.MapStringUnit) *direct.ConsList[string] {
-		return FoldrGo(f, x, FoldrGoReusing(list.SharedListStringNil, m.KeysStringUnit(x2)))
+		return FoldrGo(f, x, FoldrGoReusing(SharedListStringNil, FoldrGo2(x2, SharedListStringNil)))
 	}
 }
 
 func FoldrGo(f func(string) func(*direct.ConsList[string]) *direct.ConsList[string], b *direct.ConsList[string], value *list.ListString) *direct.ConsList[string] {
 	for {
-		if value == list.SharedListStringNil {
+		if value == SharedListStringNil {
 			return b
 		}
 		a := value.Cons0
@@ -293,16 +275,28 @@ func FoldrGo(f func(string) func(*direct.ConsList[string]) *direct.ConsList[stri
 	}
 }
 
-func FoldrGoReusing(acc *list.ListString, list2 *list.ListString) *list.ListString {
+func FoldrGo2(m_ *m.MapStringUnit, z_ *list.ListString) *list.ListString {
 	for {
-		if list2 == list.SharedListStringNil {
+		if m_ == m.SharedMapStringUnitLeaf {
+			return z_
+		}
+		k := m_.Node2
+		l := m_.Node4
+		r := m_.Node5
+		m_, z_ = l, &list.ListString{Cons0: k, Cons1: FoldrGo2(r, z_)}
+	}
+}
+
+func FoldrGoReusing(acc *list.ListString, list *list.ListString) *list.ListString {
+	for {
+		if list == SharedListStringNil {
 			return acc
 		}
-		x := list2.Cons0
-		xs := list2.Cons1
-		list2.Cons0 = x
-		list2.Cons1 = acc
-		acc, list2 = list2, xs
+		x := list.Cons0
+		xs := list.Cons1
+		list.Cons0 = x
+		list.Cons1 = acc
+		acc, list = list, xs
 	}
 }
 
