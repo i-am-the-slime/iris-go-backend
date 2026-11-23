@@ -37,6 +37,7 @@ mod fold;
 mod object;
 mod record;
 mod rename;
+mod short_circuit;
 mod sink;
 mod three_way;
 mod unpack;

@@ -1,0 +1,205 @@
+---
+source: tests-integration/src/fixtures.rs
+---
+// Data/Tuple/tuple.go
+package tuple
+
+type TupleIntInt struct {
+	First  int32
+	Second int32
+}
+
+// Partial/Unsafe/unsafe.go
+package partialunsafe
+
+func UnsafeCrashWithBoolean(msg string) bool {
+	panic(msg)
+}
+
+// main.go
+package main
+
+import (
+	"fixture/Partial/Unsafe"
+	"github.com/i-am-the-slime/iris-go/console"
+	"strconv"
+	"strings"
+)
+
+var main_ = initializeMain_()
+
+func initializeMain_() []bool {
+	array := []int32{1, -2, 0}
+	every := true
+	for _, element := range array {
+		if !positiveUnlessCrashing(element) {
+			every = false
+			break
+		}
+	}
+	array2 := []int32{1, -2, 0}
+	found := false
+	for _, element := range array2 {
+		if negativeUnlessCrashing(element) {
+			found = true
+			break
+		}
+	}
+	array3 := []int32{1, 2, -3, 4}
+	every2 := true
+	for _, x := range array3 {
+		if !(x > 0) {
+			every2 = false
+			break
+		}
+	}
+	array4 := []int32{1, 2, -3, 4}
+	found2 := false
+	for _, x := range array4 {
+		if x < 0 {
+			found2 = true
+			break
+		}
+	}
+	every3 := true
+	for _, x := range []int32{} {
+		if !(x > 0) {
+			every3 = false
+			break
+		}
+	}
+	found3 := false
+	for _, x := range []int32{} {
+		if x < 0 {
+			found3 = true
+			break
+		}
+	}
+	array5 := []int32{1, 2, 3, 2}
+	every4 := true
+	for index, i := range array5 {
+		i2 := int32(index)
+		if !(i > i2) {
+			every4 = false
+			break
+		}
+	}
+	array6 := []int32{1, 2, 2, 4}
+	found4 := false
+	for index, i := range array6 {
+		i2 := int32(index)
+		if i == i2 {
+			found4 = true
+			break
+		}
+	}
+	array7 := []bool{true, false, true}
+	every5 := true
+	for _, x := range array7 {
+		if !x {
+			every5 = false
+			break
+		}
+	}
+	array8 := []bool{false, true, false}
+	found5 := false
+	for _, x := range array8 {
+		if x {
+			found5 = true
+			break
+		}
+	}
+	array9 := []int32{1, 2, 3, 4}
+	found6 := false
+	for _, x := range array9 {
+		if 3 == x {
+			found6 = true
+			break
+		}
+	}
+	array10 := []int32{1, 2, 3, 4}
+	found7 := false
+	for _, x := range array10 {
+		if 5 == x {
+			found7 = true
+			break
+		}
+	}
+	array11 := []int32{1, -2, 3}
+	every6 := true
+	for _, x := range array11 {
+		if !(x > 0) {
+			every6 = false
+			break
+		}
+	}
+	array12 := []int32{1, -2, 3}
+	found8 := false
+	for _, x := range array12 {
+		if x < 0 {
+			found8 = true
+			break
+		}
+	}
+	array13 := []int32{3, 4, 1}
+	every7 := true
+	for _, x := range array13 {
+		if !(x > 2) {
+			every7 = false
+			break
+		}
+	}
+	array14 := []int32{2, 4, 1}
+	every8 := true
+	for index, i := range array14 {
+		i2 := int32(index)
+		var result int32
+		if i > 3 {
+			result = i - 3
+		} else {
+			result = 3 - i
+		}
+		if !(i != 3 && result != i2+1) {
+			every8 = false
+			break
+		}
+	}
+	array15 := []int32{2, 4, 1}
+	every9 := true
+	for index, i := range array15 {
+		i2 := int32(index)
+		var result int32
+		if i > 5 {
+			result = i - 5
+		} else {
+			result = 5 - i
+		}
+		if !(i != 5 && result != i2+1) {
+			every9 = false
+			break
+		}
+	}
+	return []bool{every, found, every2, found2, every3, found3, every4, found4, every5, found5, found6, !found7, every6, found8, every7, every8, every9}
+}
+
+func positiveUnlessCrashing(x int32) bool {
+	if x == 0 {
+		return partialunsafe.UnsafeCrashWithBoolean("evaluated past the deciding element")
+	}
+	return x > 0
+}
+
+func negativeUnlessCrashing(x int32) bool {
+	if x == 0 {
+		return partialunsafe.UnsafeCrashWithBoolean("evaluated past the deciding element")
+	}
+	return x < 0
+}
+
+func main() {
+	texts := make([]string, 0, len(main_))
+	for _, element := range main_ {
+		texts = append(texts, strconv.FormatBool(element))
+	}
+	console.Print("[" + strings.Join(texts, " ") + "]")
+}

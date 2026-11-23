@@ -1,4 +1,5 @@
 use super::buffers::{to_bytes, to_string};
+use super::conditions::negated;
 use super::fusion::{Demand, Need, Order, Pipeline};
 use super::ownership::{Carried, Place, owned_snocs};
 use super::recycling::Recycled;
@@ -513,11 +514,7 @@ where
         let need = Need::Argument { callback, position: 0 };
         let mut opened = self.open(pipeline, need, None)?;
         let condition = self.callback_value(callback, vec![opened.element], opened.body.body())?;
-        let condition = if looking_for {
-            condition
-        } else {
-            GoExpression::Unary { operator: "!", operand: Box::new(condition) }
-        };
+        let condition = if looking_for { condition } else { negated(&condition) };
         opened.body.body().push(GoStatement::If {
             condition,
             then: vec![

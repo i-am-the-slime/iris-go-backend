@@ -10,7 +10,7 @@ impl Simplifier<'_> {
     pub(super) fn foreign(
         &mut self,
         foreign: &'static Foreign,
-        mut arguments: Vec<Expression>,
+        arguments: Vec<Expression>,
         monotype: crate::monotype::MonotypeId,
     ) -> Expression {
         if let Some(outside) =
@@ -21,6 +21,10 @@ impl Simplifier<'_> {
         if let Some(value) = three_way::constant_comparison(foreign, &arguments) {
             return Expression::new(ExpressionKind::Literal(Literal::Boolean(value)), monotype);
         }
+        let mut arguments = match self.short_circuit(foreign, arguments, monotype) {
+            Ok(searched) => return searched,
+            Err(arguments) => arguments,
+        };
         match foreign {
             Foreign::Perform { function, .. }
                 if function.package == GoPackage::Aff

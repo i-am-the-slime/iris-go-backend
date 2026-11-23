@@ -152,6 +152,10 @@ const fn compare(comparison: Comparison) -> Foreign {
 pub const ARRAY_FOLD: Foreign =
     uncurried(iteration(GoPackage::Array, "Foldl", 3, Iteration::FoldLeft), &[(0, 2)]);
 
+pub const ARRAY_ANY: Foreign = iteration(GoPackage::Array, "Any", 2, Iteration::Any);
+
+pub const ARRAY_ALL: Foreign = iteration(GoPackage::Direct, "All", 2, Iteration::All);
+
 pub const EFFECT_FOLD: Foreign = direct_with(
     "FoldlEffect",
     3,
@@ -297,10 +301,10 @@ pub(super) const FOREIGN_IMPORTS: &[(&str, &str, Foreign)] = &[
         "zipWithImpl",
         uncurried(iteration(GoPackage::Array, "ZipWith", 3, Iteration::ZipWith), &[(0, 2)]),
     ),
-    ("Data.Array", "anyImpl", iteration(GoPackage::Array, "Any", 2, Iteration::Any)),
+    ("Data.Array", "anyImpl", ARRAY_ANY),
     ("Data.Array", "partitionImpl", direct_with("Partition", 2, RECORD)),
     ("Data.Array", "fromFoldableImpl", direct_with("FromFoldable", 2, CONS_LIST_ACCUMULATOR)),
-    ("Data.Array", "allImpl", iteration(GoPackage::Direct, "All", 2, Iteration::All)),
+    ("Data.Array", "allImpl", ARRAY_ALL),
     ("Data.Array", "scanlImpl", uncurried(array("Scanl", 3), &[(0, 2)])),
     ("Data.Array", "scanrImpl", uncurried(array("Scanr", 3), &[(0, 2)])),
     ("Data.Array", "unconsImpl", uncurried(direct("Uncons", 3), &[(1, 2)])),
