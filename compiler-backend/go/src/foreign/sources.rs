@@ -5,7 +5,7 @@
 use std::io;
 use std::path::{Path, PathBuf};
 
-use super::ForeignPackages;
+use super::{ForeignPackages, GoPackage};
 
 /// The Go files next to a source file, in order of name. Go test files are left out.
 pub fn foreign_files(source: &Path) -> io::Result<Vec<PathBuf>> {
@@ -134,9 +134,31 @@ fn owned_files<'n>(stem: &str, names: &[&'n str]) -> Vec<&'n str> {
     owned
 }
 
+pub fn uses_event_loop(source: &str) -> bool {
+    let event_loop = format!("\"{}\"", GoPackage::EventLoop.path());
+    source.lines().any(|line| {
+        let line = line.trim();
+        let line = line.strip_prefix("import").unwrap_or(line).trim();
+        line == event_loop || line.split_once(' ').is_some_and(|(_, path)| path == event_loop)
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_file_that_imports_the_event_loop_uses_it() {
+        let grouped = "package ffi\n\nimport (\n\t\"sync\"\n\n\t\"github.com/i-am-the-slime/iris-go/eventloop\"\n)\n";
+        let single = "package ffi\n\nimport \"github.com/i-am-the-slime/iris-go/eventloop\"\n";
+        let aliased =
+            "package ffi\n\nimport loop \"github.com/i-am-the-slime/iris-go/eventloop\"\n";
+        let other = "package ffi\n\nimport \"github.com/i-am-the-slime/iris-go/exception\"\n";
+        assert!(uses_event_loop(grouped));
+        assert!(uses_event_loop(single));
+        assert!(uses_event_loop(aliased));
+        assert!(!uses_event_loop(other));
+    }
 
     #[test]
     fn a_source_owns_its_go_file_and_its_parts() {

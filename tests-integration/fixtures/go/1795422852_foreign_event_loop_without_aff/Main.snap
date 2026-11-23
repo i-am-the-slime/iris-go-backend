@@ -1,0 +1,16 @@
+---
+source: tests-integration/src/fixtures.rs
+---
+// main.go
+package main
+
+import (
+	"fixture/Main_ffi"
+	"github.com/i-am-the-slime/iris-go/eventloop"
+)
+
+func main() {
+	defer eventloop.Await()
+	Main_ffi.OnAnotherGoroutine(func() {
+	})
+}

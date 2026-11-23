@@ -1,3 +1,5 @@
+use std::collections::BTreeSet;
+
 use files::FileId;
 
 /// The Go packages that implement foreign imports. A module's Go files next to its source
@@ -58,6 +60,7 @@ pub struct ForeignSource {
     pub files: Vec<String>,
     pub values: Vec<String>,
     pub types: Vec<String>,
+    pub uses_event_loop: bool,
 }
 
 /// The iris-go runtime's Go module.
@@ -94,6 +97,13 @@ impl ForeignPackages {
     /// What the Go files next to the module's source declare, unless iris-go provides its package.
     pub fn source(&self, module_name: &str) -> Option<&ForeignSource> {
         self.sources.iter().find(|source| source.module == module_name)
+    }
+
+    pub fn imports_event_loop(&self, imports: &BTreeSet<String>) -> bool {
+        self.sources
+            .iter()
+            .filter(|source| source.uses_event_loop)
+            .any(|source| imports.contains(&self.import_path(&source.module)))
     }
 
     fn copied(&self, module_name: &str) -> bool {

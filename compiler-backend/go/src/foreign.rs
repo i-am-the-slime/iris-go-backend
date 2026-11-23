@@ -16,7 +16,9 @@ pub use imports::{
     SEQUENCE_ARRAY, TO_CHAR_ARRAY, TRAVERSE_ARRAY, array_fold, effect_fold,
 };
 pub use packages::{ForeignPackages, ForeignSource, LineCoverage, LineDirectives};
-pub use sources::{foreign_declarations, foreign_files, foreign_source, foreign_structs};
+pub use sources::{
+    foreign_declarations, foreign_files, foreign_source, foreign_structs, uses_event_loop,
+};
 
 use std::sync::{Mutex, OnceLock};
 

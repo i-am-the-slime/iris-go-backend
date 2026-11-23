@@ -35,7 +35,7 @@ mod types;
 pub use error::{GoError, GoResult, UnsupportedState};
 pub use foreign::{
     EmbedError, ForeignPackages, ForeignSource, LineCoverage, LineDirectives, embedded_files,
-    foreign_declarations, foreign_files, foreign_source, foreign_structs,
+    foreign_declarations, foreign_files, foreign_source, foreign_structs, uses_event_loop,
 };
 pub use timing::Work;
 

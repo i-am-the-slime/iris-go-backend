@@ -162,7 +162,9 @@ where
         .line_directives
         .as_ref()
         .is_some_and(|directives| directives.coverage == crate::foreign::LineCoverage::Every);
-    if emitter.imports.contains(GoPackage::Aff.path()) {
+    if emitter.imports.contains(GoPackage::Aff.path())
+        || emitter.foreign_packages.imports_event_loop(&emitter.imports)
+    {
         let await_ = GoFunction { package: GoPackage::EventLoop, name: "Await" };
         let await_ = emitter.performing(await_);
         await_fibers(&mut declarations, await_, every_line);
