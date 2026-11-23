@@ -128,6 +128,7 @@ where
     let mut emitter = Emitter::new(program, monotypes, queries, foreign_packages, arities);
     emitter.copied_by_containers = copied_by_containers;
     emitter.materialized = reused.materialized;
+    emitter.candidates = reused.candidates;
     emitter.closure_sets = closure_sets;
     emitter.assign_function_names();
     let groups = timed("groups", || {

@@ -8,15 +8,18 @@ use crate::monomorphic::traversal::{
     for_each_child, for_each_child_mut, for_each_guarded_child, prune_unreachable, visit,
 };
 use crate::monomorphic::{
-    Alternative, Binding, Expression, ExpressionKind, Function, FunctionId, Guarded, Local,
-    LocalId, Pattern, PatternKind, Program,
+    Alternative, Binding, Edge, Expression, ExpressionKind, Function, FunctionId, Guarded, Literal,
+    Local, LocalId, Pattern, PatternKind, Program,
 };
 use crate::monotype::{DataType, Monotype, MonotypeId};
+use crate::purity::is_trivial;
 use crate::timing::timed;
 
 /// What the name of a variant that reuses its arguments' cells adds to its
 /// function's name.
 pub(super) const REUSING: &str = "Reusing";
+
+pub(super) const CHECKED: &str = "Checked";
 
 pub(super) trait Cells {
     fn cell(&mut self, monotype: MonotypeId) -> Option<DataType>;
@@ -26,11 +29,15 @@ pub(super) trait Cells {
     fn erases(&mut self, monotype: MonotypeId) -> bool;
     fn is_suspended(&self, monotype: MonotypeId) -> bool;
     fn function_type(&mut self, parameters: &[MonotypeId], result: MonotypeId) -> MonotypeId;
+    fn is_tracked(&mut self, cell: &DataType) -> bool;
+    fn tracks(&mut self, cell: &DataType, constructor: usize, field: usize) -> bool;
+    fn boolean(&mut self) -> MonotypeId;
 }
 
 pub(super) struct Reused {
     pub program: Program,
     pub materialized: FxHashSet<(FunctionId, LocalId)>,
+    pub candidates: FxHashSet<DataType>,
 }
 
 pub(super) fn reuse_cells(program: &Program, cells: &mut impl Cells) -> Reused {
@@ -44,20 +51,33 @@ pub(super) fn reuse_cells(program: &Program, cells: &mut impl Cells) -> Reused {
 
 const MASK_LIMIT: usize = 64;
 
+const USE_LIMIT: usize = 8;
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 struct Variant {
     function: FunctionId,
     owned: u64,
+    checked: u64,
     donor: bool,
 }
 
+type Ownership = (FunctionId, u64, u64);
+
 impl Variant {
     fn plain(function: FunctionId) -> Variant {
-        Variant { function, owned: 0, donor: false }
+        Variant { function, owned: 0, checked: 0, donor: false }
     }
 
     fn is_plain(self) -> bool {
-        self.owned == 0 && !self.donor
+        self.owned == 0 && self.checked == 0 && !self.donor
+    }
+
+    fn is_reusing(self) -> bool {
+        self.owned != 0 || self.donor
+    }
+
+    fn ownership(self) -> Ownership {
+        (self.function, self.owned, self.checked)
     }
 }
 
@@ -65,7 +85,8 @@ struct Facts {
     eligible: Vec<bool>,
     inspecting: Vec<bool>,
     next_local: u32,
-    unowned_results: FxHashSet<(FunctionId, u64)>,
+    unowned_results: FxHashSet<Ownership>,
+    unfresh_results: FxHashSet<Ownership>,
     donor_used: FxHashSet<Variant>,
     writes: FxHashSet<Variant>,
     demanded: Vec<Variant>,
@@ -75,7 +96,7 @@ struct Facts {
     stale: Vec<bool>,
     /// The demanded variants whose plans consulted the facts of a function at an
     /// ownership mask.
-    consulted_by: FxHashMap<(FunctionId, u64), FxHashSet<usize>>,
+    consulted_by: FxHashMap<Ownership, FxHashSet<usize>>,
 }
 
 impl Facts {
@@ -94,6 +115,7 @@ impl Facts {
             inspecting,
             next_local: first_unused_local(program),
             unowned_results: FxHashSet::default(),
+            unfresh_results: FxHashSet::default(),
             donor_used: FxHashSet::default(),
             writes: FxHashSet::default(),
             demanded: vec![],
@@ -135,9 +157,12 @@ impl Facts {
                 for ownership in consulted {
                     self.consulted_by.entry(ownership).or_default().insert(planned);
                 }
-                let ownership = (variant.function, variant.owned);
+                let ownership = variant.ownership();
                 let mut grown = false;
                 if !plan.result_owned && self.unowned_results.insert(ownership) {
+                    grown = true;
+                }
+                if !plan.result_fresh && self.unfresh_results.insert(ownership) {
                     grown = true;
                 }
                 if plan.donor_used && self.donor_used.insert(variant) {
@@ -198,7 +223,60 @@ struct Spare {
     data: DataType,
     origin: Origin,
     owners: Vec<LocalId>,
+    condition: Option<Expression>,
 }
+
+#[derive(Clone)]
+struct Token {
+    cell: LocalId,
+    condition: Option<Expression>,
+}
+
+#[derive(Clone, PartialEq)]
+enum Held {
+    Shared,
+    Owned,
+    Fresh,
+    Unique(Expression),
+}
+
+impl Held {
+    fn is_owned(&self) -> bool {
+        matches!(self, Held::Owned)
+    }
+
+    fn is_fresh(&self) -> bool {
+        match self {
+            Held::Owned | Held::Fresh => true,
+            Held::Unique(companion) => is_true(companion),
+            Held::Shared => false,
+        }
+    }
+
+    fn join(self, other: Held) -> Held {
+        match (self, other) {
+            (Held::Owned, Held::Owned) => Held::Owned,
+            (left, right) if left.is_fresh() && right.is_fresh() => Held::Fresh,
+            (Held::Unique(left), Held::Unique(right)) if left == right => Held::Unique(left),
+            _ => Held::Shared,
+        }
+    }
+}
+
+#[derive(Clone)]
+struct Dynamic {
+    companion: Expression,
+    ancestors: Vec<LocalId>,
+}
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Branch {
+    Then,
+    Otherwise,
+    Alternative(usize, Option<usize>),
+}
+
+type Forced = FxHashMap<*const Expression, Vec<Branch>>;
 
 #[derive(Clone, Copy)]
 enum Origin {
@@ -211,15 +289,20 @@ enum Origin {
 #[derive(Default, Clone)]
 struct Plan {
     result_owned: bool,
+    result_fresh: bool,
     donor_used: bool,
     writes: bool,
     donor: Option<LocalId>,
-    constructs: FxHashMap<*const Expression, LocalId>,
-    calls: FxHashMap<*const Expression, (Variant, Option<LocalId>)>,
+    companions: Vec<(usize, LocalId)>,
+    constructs: FxHashMap<*const Expression, Token>,
+    edges: FxHashMap<*const Expression, Vec<(usize, Expression)>>,
+    calls: FxHashMap<*const Expression, (Variant, Option<LocalId>, Vec<Expression>)>,
     callbacks: FxHashMap<*const Expression, Variant>,
     hoisted: FxHashMap<(*const Expression, usize), LocalId>,
     pattern_cells: FxHashMap<*const Pattern, LocalId>,
+    bindings: FxHashMap<*const Alternative, Vec<Binding>>,
     materialized: FxHashSet<LocalId>,
+    next_local: u32,
 }
 
 struct Planner<'a, C> {
@@ -228,11 +311,14 @@ struct Planner<'a, C> {
     facts: &'a mut Facts,
     variant: Variant,
     next_local: u32,
+    boolean: MonotypeId,
     owned: FxHashMap<LocalId, Vec<LocalId>>,
+    checked: FxHashMap<LocalId, Dynamic>,
+    use_companions: FxHashMap<*const Expression, Expression>,
     alternatives: Vec<Vec<LocalId>>,
     hoisted_locals: FxHashMap<(*const Expression, usize), LocalId>,
     plan: Plan,
-    consulted: Vec<(FunctionId, u64)>,
+    consulted: Vec<Ownership>,
 }
 
 impl<'a, C: Cells> Planner<'a, C> {
@@ -243,13 +329,17 @@ impl<'a, C: Cells> Planner<'a, C> {
         variant: Variant,
     ) -> Planner<'a, C> {
         let next_local = facts.next_local;
+        let boolean = cells.boolean();
         Planner {
             program,
             cells,
             facts,
             variant,
             next_local,
+            boolean,
             owned: FxHashMap::default(),
+            checked: FxHashMap::default(),
+            use_companions: FxHashMap::default(),
             alternatives: vec![],
             hoisted_locals: FxHashMap::default(),
             plan: Plan::default(),
@@ -263,18 +353,56 @@ impl<'a, C: Cells> Planner<'a, C> {
         id
     }
 
+    fn truth(&self, value: bool) -> Expression {
+        Expression::new(ExpressionKind::Literal(Literal::Boolean(value)), self.boolean)
+    }
+
+    fn is_checking(&self) -> bool {
+        self.variant.checked != 0
+    }
+
+    fn companion(&self, held: &Held) -> Option<Expression> {
+        match held {
+            Held::Owned | Held::Fresh => Some(self.truth(true)),
+            Held::Unique(companion) => Some(companion.clone()),
+            Held::Shared => None,
+        }
+    }
+
     fn plan(self, function: &Function) -> Plan {
         self.plan_consulting(function).0
     }
 
     /// The plan, with the functions and ownership masks whose facts it consulted.
-    fn plan_consulting(mut self, function: &Function) -> (Plan, Vec<(FunctionId, u64)>) {
+    fn plan_consulting(mut self, function: &Function) -> (Plan, Vec<Ownership>) {
+        let body = Scope::Expression(&function.body);
         for (position, parameter) in function.parameters.iter().enumerate() {
-            if self.variant.owned & (1 << position) != 0
+            let tracked = match self.cells.cell(parameter.monotype) {
+                Some(data) => self.cells.is_tracked(&data),
+                None => false,
+            };
+            if self.variant.checked & (1 << position) != 0 {
+                let companion = self.fresh();
+                self.plan.companions.push((position, companion));
+                let companion = Expression::new(ExpressionKind::Local(companion), self.boolean);
+                if !tracked {
+                    continue;
+                }
+                if self.is_linear(parameter.id, &[], body, &Forced::default()) {
+                    let dynamic = Dynamic { companion, ancestors: vec![] };
+                    self.checked.insert(parameter.id, dynamic);
+                } else {
+                    self.companions_at_uses(parameter.id, &companion, &[], body);
+                }
+            } else if self.variant.owned & (1 << position) != 0
                 && self.cells.cell(parameter.monotype).is_some()
-                && self.is_linear(parameter.id, &[], Scope::Expression(&function.body))
             {
-                self.owned.insert(parameter.id, vec![]);
+                if self.is_linear(parameter.id, &[], body, &Forced::default()) {
+                    self.owned.insert(parameter.id, vec![]);
+                } else if tracked {
+                    let companion = self.truth(true);
+                    self.companions_at_uses(parameter.id, &companion, &[], body);
+                }
             }
         }
         let mut stock = vec![];
@@ -283,9 +411,13 @@ impl<'a, C: Cells> Planner<'a, C> {
         {
             let local = self.fresh();
             self.plan.donor = Some(local);
-            stock.push(Spare { local, data, origin: Origin::Donor, owners: vec![] });
+            let origin = Origin::Donor;
+            stock.push(Spare { local, data, origin, owners: vec![], condition: None });
         }
-        self.plan.result_owned = self.expression(&function.body, true, &mut stock, &mut vec![]);
+        let held = self.expression(&function.body, true, &mut stock, &mut vec![]);
+        self.plan.result_owned = held.is_owned();
+        self.plan.result_fresh = held.is_fresh();
+        self.plan.next_local = self.next_local;
         (self.plan, self.consulted)
     }
 
@@ -294,16 +426,19 @@ impl<'a, C: Cells> Planner<'a, C> {
         data: &DataType,
         stock: &mut Vec<Spare>,
         after: &[&Expression],
-    ) -> Option<LocalId> {
+        conditional: bool,
+    ) -> Option<Token> {
         let position = stock.iter().position(|spare| {
             spare.data == *data
+                && (conditional || spare.condition.is_none())
                 && !spare
                     .owners
                     .iter()
                     .any(|&owner| after.iter().any(|expression| uses_local(expression, owner)))
         })?;
         let spare = stock.remove(position);
-        Some(self.used(&spare))
+        let cell = self.used(&spare);
+        Some(Token { cell, condition: spare.condition })
     }
 
     fn used(&mut self, spare: &Spare) -> LocalId {
@@ -344,35 +479,52 @@ impl<'a, C: Cells> Planner<'a, C> {
         tail: bool,
         stock: &mut Vec<Spare>,
         after: &mut Vec<&'e Expression>,
-    ) -> bool {
+    ) -> Held {
         match &expression.kind {
             ExpressionKind::Local(id) => {
                 stock.retain(|spare| !spare.owners.contains(id));
-                self.owned.contains_key(id)
+                if self.owned.contains_key(id) {
+                    return Held::Owned;
+                }
+                if let Some(dynamic) = self.checked.get(id) {
+                    return Held::Unique(dynamic.companion.clone());
+                }
+                match self.use_companions.get(&std::ptr::from_ref(expression)) {
+                    Some(companion) => Held::Unique(companion.clone()),
+                    None => Held::Shared,
+                }
             }
-            ExpressionKind::Function(id) => self.is_owned_constant(*id),
-            ExpressionKind::Fail(_) => true,
-            ExpressionKind::Construct { data, arguments, .. } => {
+            ExpressionKind::Function(id) if self.is_owned_constant(*id) => Held::Owned,
+            ExpressionKind::Function(_) => Held::Shared,
+            ExpressionKind::Fail(_) => Held::Owned,
+            ExpressionKind::Construct { data, constructor, arguments } => {
                 let cell = self.cells.cell(expression.monotype);
-                let owned = self.arguments(arguments, stock, after);
+                let held = self.arguments(arguments, stock, after);
+                let Some(cell) = cell else { return Held::Shared };
                 let mut spine_owned = true;
-                for (argument, argument_owned) in arguments.iter().zip(owned) {
-                    if let Some(cell) = &cell
-                        && self.cells.is_spine(cell, argument.monotype)
+                let mut edges = vec![];
+                for (position, (argument, held)) in arguments.iter().zip(held).enumerate() {
+                    if !self.cells.is_spine(&cell, argument.monotype) {
+                        continue;
+                    }
+                    spine_owned &= held.is_owned();
+                    if self.cells.tracks(&cell, *constructor, position)
+                        && let Some(companion) = self.companion(&held)
                     {
-                        spine_owned &= argument_owned;
+                        edges.push((position, companion));
                     }
                 }
-                if cell.is_none() {
-                    return false;
+                let key = std::ptr::from_ref(expression);
+                if self.cells.is_tracked(&cell) {
+                    self.plan.edges.insert(key, edges);
                 }
                 if !arguments.is_empty()
-                    && let Some(local) = self.take(data, stock, after)
+                    && let Some(token) = self.take(data, stock, after, true)
                 {
-                    self.plan.constructs.insert(std::ptr::from_ref(expression), local);
+                    self.plan.constructs.insert(key, token);
                     self.plan.writes = true;
                 }
-                spine_owned
+                if spine_owned { Held::Owned } else { Held::Fresh }
             }
             ExpressionKind::Apply { function, arguments } => {
                 if let ExpressionKind::Function(id) = function.kind
@@ -382,7 +534,7 @@ impl<'a, C: Cells> Planner<'a, C> {
                     return self.call(expression, id, arguments, tail, stock, after);
                 }
                 self.unordered(expression, stock, after);
-                false
+                Held::Shared
             }
             ExpressionKind::Foreign {
                 foreign:
@@ -396,7 +548,12 @@ impl<'a, C: Cells> Planner<'a, C> {
                         ..
                     },
                 arguments,
-            } if arguments.len() == 3 => self.fold(expression, *iteration, arguments, stock, after),
+            } if arguments.len() == 3 => {
+                match self.fold(expression, *iteration, arguments, stock, after) {
+                    true => Held::Owned,
+                    false => Held::Shared,
+                }
+            }
             ExpressionKind::Lambda { .. }
             | ExpressionKind::Closure { .. }
             | ExpressionKind::EffectPure(_)
@@ -408,21 +565,16 @@ impl<'a, C: Cells> Planner<'a, C> {
                 stock.retain(|spare| {
                     !spare.owners.iter().any(|&owner| uses_local(expression, owner))
                 });
-                false
+                Held::Shared
             }
             ExpressionKind::Let { bindings, body } => {
                 for (position, binding) in bindings.iter().enumerate() {
                     let mark = after.len();
                     after.extend(bindings[position + 1..].iter().map(|binding| &binding.value));
                     after.push(body);
-                    let owned = self.expression(&binding.value, false, stock, after);
+                    let held = self.expression(&binding.value, false, stock, after);
                     after.truncate(mark);
-                    if owned
-                        && self.cells.cell(binding.local.monotype).is_some()
-                        && self.is_linear(binding.local.id, &[], Scope::Expression(expression))
-                    {
-                        self.owned.insert(binding.local.id, vec![]);
-                    }
+                    self.bind(&binding.local, held, Scope::Expression(expression));
                 }
                 self.expression(body, tail, stock, after)
             }
@@ -433,22 +585,36 @@ impl<'a, C: Cells> Planner<'a, C> {
                 self.expression(condition, false, stock, after);
                 after.truncate(mark);
                 let mut then_stock = stock.clone();
-                let then_owned = self.expression(then, tail, &mut then_stock, after);
+                let then_held = self.expression(then, tail, &mut then_stock, after);
                 let mut otherwise_stock = stock.clone();
-                let otherwise_owned = self.expression(otherwise, tail, &mut otherwise_stock, after);
+                let otherwise_held = self.expression(otherwise, tail, &mut otherwise_stock, after);
                 stock.retain(|spare| {
                     then_stock.iter().any(|other| other.local == spare.local)
                         && otherwise_stock.iter().any(|other| other.local == spare.local)
                 });
-                then_owned && otherwise_owned
+                then_held.join(otherwise_held)
             }
             ExpressionKind::Case { scrutinees, alternatives } => {
                 self.case(expression, scrutinees, alternatives, tail, stock, after)
             }
             _ => {
                 self.unordered(expression, stock, after);
-                false
+                Held::Shared
             }
+        }
+    }
+
+    fn bind(&mut self, local: &Local, held: Held, scope: Scope<'_>) {
+        let Some(data) = self.cells.cell(local.monotype) else { return };
+        let Some(companion) = self.companion(&held) else { return };
+        if self.is_linear(local.id, &[], scope, &Forced::default()) {
+            if held.is_owned() {
+                self.owned.insert(local.id, vec![]);
+            } else if self.is_checking() && self.cells.is_tracked(&data) {
+                self.checked.insert(local.id, Dynamic { companion, ancestors: vec![] });
+            }
+        } else if self.cells.is_tracked(&data) {
+            self.companions_at_uses(local.id, &companion, &[], scope);
         }
     }
 
@@ -463,7 +629,7 @@ impl<'a, C: Cells> Planner<'a, C> {
         let [callback, initial, array] = arguments else { unreachable!() };
         let mark = after.len();
         after.extend([callback, array]);
-        let initial_owned = self.expression(initial, false, stock, after);
+        let initial_owned = self.expression(initial, false, stock, after).is_owned();
         after.truncate(mark);
         after.extend([callback, initial]);
         self.expression(array, false, stock, after);
@@ -500,10 +666,10 @@ impl<'a, C: Cells> Planner<'a, C> {
             for argument in leading {
                 self.expression(argument, false, &mut vec![], &mut vec![]);
             }
-            let variant = Variant { function: id, owned: 1 << position, donor: false };
+            let variant = Variant { function: id, owned: 1 << position, checked: 0, donor: false };
             self.facts.demand(variant);
-            self.consulted.push((id, variant.owned));
-            if self.facts.unowned_results.contains(&(id, variant.owned)) {
+            self.consulted.push(variant.ownership());
+            if self.facts.unowned_results.contains(&variant.ownership()) {
                 return false;
             }
             if self.facts.writes.contains(&variant) {
@@ -526,13 +692,13 @@ impl<'a, C: Cells> Planner<'a, C> {
         }
         let accumulator = parameters[accumulator];
         if self.cells.cell(accumulator.monotype).is_none()
-            || !self.is_linear(accumulator.id, &[], Scope::Expression(body))
+            || !self.is_linear(accumulator.id, &[], Scope::Expression(body), &Forced::default())
         {
             return false;
         }
         let saved = self.plan.clone();
         self.owned.insert(accumulator.id, vec![]);
-        if self.expression(body, false, &mut vec![], &mut vec![]) {
+        if self.expression(body, false, &mut vec![], &mut vec![]).is_owned() {
             return true;
         }
         self.owned.remove(&accumulator.id);
@@ -556,7 +722,7 @@ impl<'a, C: Cells> Planner<'a, C> {
         arguments: &'e [Expression],
         stock: &mut Vec<Spare>,
         after: &mut Vec<&'e Expression>,
-    ) -> Vec<bool> {
+    ) -> Vec<Held> {
         let arguments: Vec<&'e Expression> = arguments.iter().collect();
         self.arguments_of(&arguments, stock, after)
     }
@@ -566,7 +732,7 @@ impl<'a, C: Cells> Planner<'a, C> {
         arguments: &[&'e Expression],
         stock: &mut Vec<Spare>,
         after: &mut Vec<&'e Expression>,
-    ) -> Vec<bool> {
+    ) -> Vec<Held> {
         let mut owned = vec![];
         for (position, argument) in arguments.iter().enumerate() {
             let mark = after.len();
@@ -589,37 +755,54 @@ impl<'a, C: Cells> Planner<'a, C> {
         tail: bool,
         stock: &mut Vec<Spare>,
         after: &mut Vec<&'e Expression>,
-    ) -> bool {
-        let argument_owned = self.arguments(arguments, stock, after);
-        let parameters = &self.program.function(callee).parameters;
+    ) -> Held {
+        let argument_held = self.arguments(arguments, stock, after);
+        let program = self.program;
+        let parameters = &program.function(callee).parameters;
         let mut owned = 0u64;
-        for (position, (argument, argument_owned)) in
-            arguments.iter().zip(argument_owned).enumerate()
-        {
+        let mut checked = 0u64;
+        let mut companions = vec![];
+        for (position, (argument, held)) in arguments.iter().zip(argument_held).enumerate() {
             let borrowed = inspects(&self.facts.inspecting, self.cells, expression, argument);
-            if argument_owned
-                && !borrowed
-                && self.cells.cell(parameters[position].monotype).is_some()
-            {
-                owned |= 1 << position;
+            let Some(data) = self.cells.cell(parameters[position].monotype) else { continue };
+            if borrowed {
+                continue;
+            }
+            match held {
+                Held::Owned => owned |= 1 << position,
+                Held::Fresh if self.is_checking() && self.cells.is_tracked(&data) => {
+                    checked |= 1 << position;
+                    companions.push(self.truth(true));
+                }
+                Held::Unique(companion) if self.cells.is_tracked(&data) => {
+                    checked |= 1 << position;
+                    companions.push(companion);
+                }
+                _ => {}
             }
         }
-        let variant = Variant { function: callee, owned, donor: false };
+        let variant = Variant { function: callee, owned, checked, donor: false };
         self.facts.demand(variant);
-        self.consulted.push((callee, owned));
-        let result_owned = !self.facts.unowned_results.contains(&(callee, owned));
+        self.consulted.push(variant.ownership());
+        let result = if !self.facts.unowned_results.contains(&variant.ownership()) {
+            Held::Owned
+        } else if !self.facts.unfresh_results.contains(&variant.ownership()) {
+            Held::Fresh
+        } else {
+            Held::Shared
+        };
         let mut target = None;
         if tail
             && let Some(data) = self.cells.cell(expression.monotype)
-            && stock.iter().any(|spare| spare.data == data)
+            && stock.iter().any(|spare| spare.data == data && spare.condition.is_none())
         {
             let donating = Variant { donor: true, ..variant };
             self.facts.demand(donating);
             if self.facts.donor_used.contains(&donating)
                 && self.permits(donating, tail)
-                && let Some(donor) = self.take(&data, stock, after)
+                && let Some(donor) = self.take(&data, stock, after, false)
             {
-                target = Some((donating, Some(donor)));
+                target = Some((donating, Some(donor.cell)));
             }
         }
         if target.is_none()
@@ -634,10 +817,11 @@ impl<'a, C: Cells> Planner<'a, C> {
         {
             self.plan.writes = true;
         }
-        if let Some(target) = target {
-            self.plan.calls.insert(std::ptr::from_ref(expression), target);
+        if let Some((target, donor)) = target {
+            let call = (target, donor, companions);
+            self.plan.calls.insert(std::ptr::from_ref(expression), call);
         }
-        result_owned
+        result
     }
 
     fn permits(&self, target: Variant, tail: bool) -> bool {
@@ -652,36 +836,51 @@ impl<'a, C: Cells> Planner<'a, C> {
         tail: bool,
         stock: &mut Vec<Spare>,
         after: &mut Vec<&'e Expression>,
-    ) -> bool {
+    ) -> Held {
+        let case = std::ptr::from_ref(expression);
         let mut sources = vec![];
         for (position, scrutinee) in scrutinees.iter().enumerate() {
             let source = match &scrutinee.kind {
-                ExpressionKind::Local(id) => match self.owned.get(id) {
-                    Some(ancestors) => {
+                ExpressionKind::Local(id) => {
+                    if let Some(ancestors) = self.owned.get(id) {
                         let mut owners = ancestors.clone();
                         owners.push(*id);
                         Source::Owned { top: Top::Local(*id), owners }
+                    } else if let Some(dynamic) = self.checked.get(id) {
+                        let mut owners = dynamic.ancestors.clone();
+                        owners.push(*id);
+                        let companion = dynamic.companion.clone();
+                        Source::Checked { top: Top::Local(*id), owners, companion }
+                    } else {
+                        Source::Shared
                     }
-                    None => Source::Shared,
-                },
+                }
                 _ => {
                     let mark = after.len();
                     after.extend(&scrutinees[position + 1..]);
                     after.extend(alternatives.iter().flat_map(alternative_expressions));
-                    let owned = self.expression(scrutinee, false, stock, after)
-                        && self.cells.cell(scrutinee.monotype).is_some();
+                    let held = self.expression(scrutinee, false, stock, after);
                     after.truncate(mark);
-                    if owned {
-                        let top = Top::Hoisted(std::ptr::from_ref(expression), position);
-                        Source::Owned { top, owners: vec![] }
-                    } else {
-                        Source::Shared
+                    let top = Top::Hoisted(case, position);
+                    match self.cells.cell(scrutinee.monotype) {
+                        Some(_) if held.is_owned() => Source::Owned { top, owners: vec![] },
+                        Some(data) if self.is_checking() && self.cells.is_tracked(&data) => {
+                            match self.companion(&held) {
+                                Some(companion) => {
+                                    let local = self.hoisted_local(case, position);
+                                    self.plan.hoisted.insert((case, position), local);
+                                    Source::Checked { top, owners: vec![], companion }
+                                }
+                                None => Source::Shared,
+                            }
+                        }
+                        _ => Source::Shared,
                     }
                 }
             };
             sources.push(source);
         }
-        let mut owned = true;
+        let mut held: Option<Held> = None;
         let mut remaining = stock.clone();
         for alternative in alternatives {
             let index = self.alternatives.len();
@@ -691,24 +890,49 @@ impl<'a, C: Cells> Planner<'a, C> {
             }
             self.alternatives.push(bound);
             let mut alternative_stock = stock.clone();
+            let mut bindings = vec![];
             for (pattern, source) in alternative.patterns.iter().zip(&sources) {
-                let Source::Owned { top, owners } = source else { continue };
-                self.materialize(index);
-                self.pattern(
-                    pattern,
-                    Some(owners.clone()),
-                    Some(*top),
-                    index,
-                    &alternative.body,
-                    &mut alternative_stock,
-                );
+                match source {
+                    Source::Owned { top, owners } => {
+                        self.materialize(index);
+                        self.pattern(
+                            pattern,
+                            Some(owners.clone()),
+                            Some(*top),
+                            index,
+                            &alternative.body,
+                            &mut alternative_stock,
+                        );
+                    }
+                    Source::Checked { top, owners, companion }
+                        if matches!(alternative.body, Guarded::Unconditional(_)) =>
+                    {
+                        self.materialize(index);
+                        let place = Place {
+                            companion: companion.clone(),
+                            owners: owners.clone(),
+                            top: Some(*top),
+                        };
+                        let mut placing = Placing {
+                            alternative: index,
+                            body: &alternative.body,
+                            stock: &mut alternative_stock,
+                            bindings: &mut bindings,
+                        };
+                        self.checked_pattern(pattern, place, &mut placing);
+                    }
+                    Source::Checked { .. } | Source::Shared => {}
+                }
             }
-            let alternative_owned = match &alternative.body {
+            if !bindings.is_empty() {
+                self.plan.bindings.insert(std::ptr::from_ref(alternative), bindings);
+            }
+            let alternative_held = match &alternative.body {
                 Guarded::Unconditional(body) => {
                     self.expression(body, tail, &mut alternative_stock, after)
                 }
                 Guarded::Guards(branches) => {
-                    let mut all = true;
+                    let mut all: Option<Held> = None;
                     for branch in branches {
                         for guard in &branch.guards {
                             let value = guard.value();
@@ -718,20 +942,144 @@ impl<'a, C: Cells> Planner<'a, C> {
                             });
                         }
                         let mut branch_stock = alternative_stock.clone();
-                        all &= self.expression(&branch.body, tail, &mut branch_stock, after);
+                        let branch_held =
+                            self.expression(&branch.body, tail, &mut branch_stock, after);
+                        all = Some(match all {
+                            Some(all) => all.join(branch_held),
+                            None => branch_held,
+                        });
                         remaining.retain(|spare| {
                             branch_stock.iter().any(|other| other.local == spare.local)
                         });
                     }
-                    all
+                    all.unwrap_or(Held::Owned)
                 }
             };
             remaining
                 .retain(|spare| alternative_stock.iter().any(|other| other.local == spare.local));
-            owned &= alternative_owned;
+            held = Some(match held {
+                Some(held) => held.join(alternative_held),
+                None => alternative_held,
+            });
         }
         *stock = remaining;
-        owned
+        held.unwrap_or(Held::Owned)
+    }
+
+    fn hoisted_local(&mut self, case: *const Expression, position: usize) -> LocalId {
+        if let Some(&local) = self.hoisted_locals.get(&(case, position)) {
+            return local;
+        }
+        let local = self.fresh();
+        self.hoisted_locals.insert((case, position), local);
+        local
+    }
+
+    fn checked_pattern(&mut self, pattern: &Pattern, mut place: Place, placing: &mut Placing<'_>) {
+        match &pattern.kind {
+            PatternKind::Wildcard | PatternKind::Literal(_) => {}
+            PatternKind::Variable(local) => {
+                self.adopt_checked(local, place.owners, place.companion, placing.body);
+            }
+            PatternKind::Named { local, pattern: inner } => {
+                let companion = place.companion.clone();
+                self.adopt_checked(local, place.owners.clone(), companion, placing.body);
+                place.owners.push(local.id);
+                self.checked_pattern(inner, place, placing);
+            }
+            PatternKind::Array(_) | PatternKind::Record(_) | PatternKind::Closure { .. } => {
+                let (alternative, body) = (placing.alternative, placing.body);
+                self.pattern(pattern, None, None, alternative, body, placing.stock);
+            }
+            PatternKind::Constructor { data, constructor, arguments } => {
+                let alternative = placing.alternative;
+                let Some(cell) = self.cells.cell(pattern.monotype) else {
+                    self.pattern(pattern, None, None, alternative, placing.body, placing.stock);
+                    return;
+                };
+                let (local, origin) = match place.top {
+                    Some(Top::Local(id)) => (id, Origin::Scrutinee { alternative }),
+                    Some(Top::Hoisted(case, position)) => {
+                        let local = self.hoisted_local(case, position);
+                        (local, Origin::Hoisted { case, position, alternative })
+                    }
+                    None => {
+                        let local = self.fresh();
+                        self.plan.pattern_cells.insert(std::ptr::from_ref(pattern), local);
+                        self.plan.materialized.insert(local);
+                        let origin =
+                            Origin::Field { pattern: std::ptr::from_ref(pattern), alternative };
+                        (local, origin)
+                    }
+                };
+                if !arguments.is_empty() {
+                    let mut owners = place.owners.clone();
+                    if let Origin::Hoisted { .. } = origin {
+                        owners.push(local);
+                    }
+                    let usable = !owners.iter().any(|&owner| guarded_uses(placing.body, owner) > 0);
+                    if usable {
+                        let condition =
+                            (!is_true(&place.companion)).then(|| place.companion.clone());
+                        let data = data.clone();
+                        placing.stock.push(Spare { local, data, origin, owners, condition });
+                    }
+                }
+                for (position, argument) in arguments.iter().enumerate() {
+                    if !self.cells.is_spine(&cell, argument.monotype)
+                        || !self.cells.tracks(&cell, *constructor, position)
+                    {
+                        self.pattern(
+                            argument,
+                            None,
+                            None,
+                            alternative,
+                            placing.body,
+                            placing.stock,
+                        );
+                        continue;
+                    }
+                    let companion = self.fresh();
+                    let edge =
+                        Edge { data: data.clone(), constructor: *constructor, field: position };
+                    let cell = Expression::new(ExpressionKind::Local(local), pattern.monotype);
+                    let owned = Box::new(place.companion.clone());
+                    let edge = ExpressionKind::UniqueEdge { owned, cell: Box::new(cell), edge };
+                    let name = SmolStr::new(format!("{}Owned", pattern_name(argument)));
+                    let binding = Binding {
+                        local: Local { id: companion, name, monotype: self.boolean },
+                        value: Expression::new(edge, self.boolean),
+                    };
+                    placing.bindings.push(binding);
+                    self.plan.materialized.insert(companion);
+                    let place = Place {
+                        companion: Expression::new(ExpressionKind::Local(companion), self.boolean),
+                        owners: place.owners.clone(),
+                        top: None,
+                    };
+                    self.checked_pattern(argument, place, placing);
+                }
+            }
+        }
+    }
+
+    fn adopt_checked(
+        &mut self,
+        local: &Local,
+        ancestors: Vec<LocalId>,
+        companion: Expression,
+        body: &Guarded,
+    ) {
+        let Some(data) = self.cells.cell(local.monotype) else { return };
+        if !self.cells.is_tracked(&data) {
+            return;
+        }
+        let scope = Scope::Guarded(body);
+        if self.is_linear(local.id, &ancestors, scope, &Forced::default()) {
+            self.checked.insert(local.id, Dynamic { companion, ancestors });
+        } else {
+            self.companions_at_uses(local.id, &companion, &ancestors, scope);
+        }
     }
 
     fn pattern(
@@ -803,7 +1151,8 @@ impl<'a, C: Cells> Planner<'a, C> {
                     }
                     let usable = !owners.iter().any(|&owner| guarded_uses(body, owner) > 0);
                     if usable {
-                        stock.push(Spare { local, data: data.clone(), origin, owners });
+                        let data = data.clone();
+                        stock.push(Spare { local, data, origin, owners, condition: None });
                     }
                 }
                 for argument in arguments {
@@ -820,13 +1169,34 @@ impl<'a, C: Cells> Planner<'a, C> {
 
     fn adopt(&mut self, local: &Local, ancestors: Vec<LocalId>, body: &Guarded) {
         if self.cells.cell(local.monotype).is_some()
-            && self.is_linear(local.id, &ancestors, Scope::Guarded(body))
+            && self.is_linear(local.id, &ancestors, Scope::Guarded(body), &Forced::default())
         {
             self.owned.insert(local.id, ancestors);
         }
     }
 
-    fn is_linear(&mut self, target: LocalId, ancestors: &[LocalId], scope: Scope<'_>) -> bool {
+    fn is_linear(
+        &mut self,
+        target: LocalId,
+        ancestors: &[LocalId],
+        scope: Scope<'_>,
+        forced: &Forced,
+    ) -> bool {
+        let family = self.conflicts(target, ancestors, scope);
+        let counter = Counter { target, conflicts: &family, forced };
+        let paths = match scope {
+            Scope::Expression(expression) => counter.count(self, expression),
+            Scope::Guarded(guarded) => counter.guarded(self, guarded),
+        };
+        paths.all_linear()
+    }
+
+    fn conflicts(
+        &mut self,
+        target: LocalId,
+        ancestors: &[LocalId],
+        scope: Scope<'_>,
+    ) -> FxHashSet<LocalId> {
         let mut family = FxHashSet::default();
         family.insert(target);
         match scope {
@@ -839,12 +1209,7 @@ impl<'a, C: Cells> Planner<'a, C> {
         }
         family.remove(&target);
         family.extend(ancestors.iter().copied());
-        let counter = Counter { target, conflicts: &family };
-        let paths = match scope {
-            Scope::Expression(expression) => counter.count(self, expression),
-            Scope::Guarded(guarded) => counter.guarded(self, guarded),
-        };
-        paths.all_linear()
+        family
     }
 
     fn descendants(&mut self, expression: &Expression, family: &mut FxHashSet<LocalId>) {
@@ -886,6 +1251,112 @@ impl<'a, C: Cells> Planner<'a, C> {
             | PatternKind::Closure { .. } => {}
         }
     }
+
+    fn companions_at_uses(
+        &mut self,
+        target: LocalId,
+        companion: &Expression,
+        ancestors: &[LocalId],
+        scope: Scope<'_>,
+    ) {
+        let roots = scope_expressions(scope);
+        let mut search = Search { target, branches: vec![], sites: vec![] };
+        for root in &roots {
+            search.expression(root);
+        }
+        if search.sites.len() > USE_LIMIT {
+            return;
+        }
+        for site in &search.sites {
+            let mut forced = Forced::default();
+            for &(conditional, branch) in &site.branches {
+                forced.insert(conditional, vec![branch]);
+            }
+            if self.is_linear(target, ancestors, scope, &forced) {
+                self.use_companions.insert(site.expression, companion.clone());
+            }
+        }
+    }
+}
+
+struct Site {
+    expression: *const Expression,
+    branches: Vec<(*const Expression, Branch)>,
+}
+
+struct Search {
+    target: LocalId,
+    branches: Vec<(*const Expression, Branch)>,
+    sites: Vec<Site>,
+}
+
+impl Search {
+    fn expression(&mut self, expression: &Expression) {
+        let key = std::ptr::from_ref(expression);
+        match &expression.kind {
+            ExpressionKind::Local(id) if *id == self.target => {
+                let site = Site { expression: key, branches: self.branches.clone() };
+                self.sites.push(site);
+            }
+            ExpressionKind::Lambda { .. }
+            | ExpressionKind::Closure { .. }
+            | ExpressionKind::EffectPure(_)
+            | ExpressionKind::EffectBind { .. }
+            | ExpressionKind::EffectEach { .. } => {}
+            ExpressionKind::If { condition, then, otherwise } => {
+                self.expression(condition);
+                self.branch(key, Branch::Then, then);
+                self.branch(key, Branch::Otherwise, otherwise);
+            }
+            ExpressionKind::Case { scrutinees, alternatives } => {
+                for scrutinee in scrutinees {
+                    self.expression(scrutinee);
+                }
+                for (index, alternative) in alternatives.iter().enumerate() {
+                    match &alternative.body {
+                        Guarded::Unconditional(body) => {
+                            self.branch(key, Branch::Alternative(index, None), body);
+                        }
+                        Guarded::Guards(branches) => {
+                            for (position, branch) in branches.iter().enumerate() {
+                                for guard in &branch.guards {
+                                    let value = guard.value();
+                                    self.branch(key, Branch::Alternative(index, None), value);
+                                }
+                                let taken = Branch::Alternative(index, Some(position));
+                                self.branch(key, taken, &branch.body);
+                            }
+                        }
+                    }
+                }
+            }
+            _ => for_each_child(expression, &mut |child| self.expression(child)),
+        }
+    }
+
+    fn branch(&mut self, key: *const Expression, branch: Branch, expression: &Expression) {
+        self.branches.push((key, branch));
+        self.expression(expression);
+        self.branches.pop();
+    }
+}
+
+fn scope_expressions(scope: Scope<'_>) -> Vec<&Expression> {
+    match scope {
+        Scope::Expression(expression) => vec![expression],
+        Scope::Guarded(guarded) => guarded_expressions(guarded),
+    }
+}
+
+fn pattern_name(pattern: &Pattern) -> SmolStr {
+    match &pattern.kind {
+        PatternKind::Variable(local) | PatternKind::Named { local, .. } => local.name.clone(),
+        _ => SmolStr::new_static("cell"),
+    }
+}
+
+fn is_true(expression: &Expression) -> bool {
+    matches!(expression.kind, ExpressionKind::Literal(Literal::Boolean(true)))
 }
 
 #[derive(Clone, Copy)]
@@ -897,6 +1368,7 @@ enum Scope<'e> {
 #[derive(Clone)]
 enum Source {
     Owned { top: Top, owners: Vec<LocalId> },
+    Checked { top: Top, owners: Vec<LocalId>, companion: Expression },
     Shared,
 }
 
@@ -906,9 +1378,23 @@ enum Top {
     Hoisted(*const Expression, usize),
 }
 
+struct Place {
+    companion: Expression,
+    owners: Vec<LocalId>,
+    top: Option<Top>,
+}
+
+struct Placing<'p> {
+    alternative: usize,
+    body: &'p Guarded,
+    stock: &'p mut Vec<Spare>,
+    bindings: &'p mut Vec<Binding>,
+}
+
 struct Counter<'f> {
     target: LocalId,
     conflicts: &'f FxHashSet<LocalId>,
+    forced: &'f Forced,
 }
 
 impl Counter<'_> {
@@ -939,7 +1425,16 @@ impl Counter<'_> {
                 paths.then(self.count(planner, body))
             }
             ExpressionKind::If { condition, then, otherwise } => {
-                let branches = self.count(planner, then).or(self.count(planner, otherwise));
+                let allowed = self.forced.get(&std::ptr::from_ref(expression));
+                let taken =
+                    |branch: Branch| allowed.is_none_or(|allowed| allowed.contains(&branch));
+                let mut branches = Paths::nothing();
+                if taken(Branch::Then) {
+                    branches = branches.or(self.count(planner, then));
+                }
+                if taken(Branch::Otherwise) {
+                    branches = branches.or(self.count(planner, otherwise));
+                }
                 self.count(planner, condition).then(branches)
             }
             ExpressionKind::Case { scrutinees, alternatives } => {
@@ -960,20 +1455,38 @@ impl Counter<'_> {
                     };
                     paths = paths.then(scrutinised);
                 }
+                let allowed = self.forced.get(&std::ptr::from_ref(expression));
+                let taken = |index: usize, branch: Option<usize>| {
+                    allowed.is_none_or(|allowed| {
+                        allowed.iter().any(|allowed| match *allowed {
+                            Branch::Alternative(alternative, allowed_branch) => {
+                                alternative == index
+                                    && (allowed_branch.is_none()
+                                        || branch.is_none()
+                                        || allowed_branch == branch)
+                            }
+                            Branch::Then | Branch::Otherwise => false,
+                        })
+                    })
+                };
                 let mut guards = Paths::empty();
                 let mut bodies = Paths::nothing();
-                for alternative in alternatives {
+                for (index, alternative) in alternatives.iter().enumerate() {
                     match &alternative.body {
                         Guarded::Unconditional(body) => {
-                            bodies = bodies.or(self.count(planner, body));
+                            if taken(index, None) {
+                                bodies = bodies.or(self.count(planner, body));
+                            }
                         }
                         Guarded::Guards(branches) => {
-                            for branch in branches {
+                            for (position, branch) in branches.iter().enumerate() {
                                 for guard in &branch.guards {
                                     let value = guard.value();
                                     guards = guards.then(self.count(planner, value));
                                 }
-                                bodies = bodies.or(self.count(planner, &branch.body));
+                                if taken(index, Some(position)) {
+                                    bodies = bodies.or(self.count(planner, &branch.body));
+                                }
                             }
                         }
                     }
@@ -1180,13 +1693,16 @@ impl<'p> Emission<'p> {
         let demanded = self.facts.demanded.len();
         let mut functions: Vec<Option<Function>> = (0..count).map(|_| None).collect();
         let mut materialized = FxHashSet::default();
+        let boolean = cells.boolean();
         while let Some(variant) = pending.pop() {
-            let mut function = self.program.function(variant.function).clone();
+            let mut function = Box::new(self.program.function(variant.function).clone());
             let plan = Planner::new(self.program, cells, &mut self.facts, variant).plan(&function);
             let callbacks = plan.callbacks.values();
-            let targets = plan.calls.values().map(|(target, _)| target).chain(callbacks);
+            let targets = plan.calls.values().map(|(target, _, _)| target).chain(callbacks);
             let mut targets: Vec<Variant> = targets.copied().collect();
-            targets.sort_unstable_by_key(|target| (target.function, target.owned, target.donor));
+            targets.sort_unstable_by_key(|target| {
+                (target.function, target.owned, target.checked, target.donor)
+            });
             for target in targets {
                 if !self.identifiers.contains_key(&target) {
                     let next = FunctionId(self.identifiers.len() as u32);
@@ -1194,9 +1710,18 @@ impl<'p> Emission<'p> {
                     pending.push(target);
                 }
             }
-            self.rewrite(&mut function.body, &plan, cells);
-            if !variant.is_plain() {
+            let mut next_local = plan.next_local;
+            self.rewrite(&mut function.body, &plan, cells, &mut next_local);
+            if variant.is_reusing() {
                 function.name = SmolStr::new(format!("{}{REUSING}", function.name));
+            }
+            if variant.checked != 0 {
+                function.name = SmolStr::new(format!("{}{CHECKED}", function.name));
+            }
+            for &(position, companion) in &plan.companions {
+                let name = SmolStr::new(format!("{}Owned", function.parameters[position].name));
+                let local = Local { id: companion, name, monotype: boolean };
+                function.parameters.push(local);
             }
             if let Some(donor) = plan.donor {
                 let monotype = function.result;
@@ -1207,7 +1732,7 @@ impl<'p> Emission<'p> {
             if functions.len() <= id.0 as usize {
                 functions.resize_with(id.0 as usize + 1, || None);
             }
-            functions[id.0 as usize] = Some(function);
+            functions[id.0 as usize] = Some(*function);
         }
         assert_eq!(
             demanded,
@@ -1220,6 +1745,17 @@ impl<'p> Emission<'p> {
                 function.expect("invariant violated: a planned variant was not emitted")
             })
             .collect();
+        let mut candidates = FxHashSet::default();
+        for function in &functions {
+            visit(&function.body, &mut |expression| {
+                if let ExpressionKind::UniqueEdge { edge, .. } = &expression.kind {
+                    candidates.insert(edge.data.clone());
+                }
+            });
+        }
+        for function in &mut functions {
+            untrack(&mut function.body, &candidates);
+        }
         let duplicates = self.duplicates(&mut functions);
         for function in &mut functions {
             redirect(&mut function.body, &duplicates);
@@ -1229,7 +1765,7 @@ impl<'p> Emission<'p> {
             .into_iter()
             .filter_map(|(function, local)| Some((*renumbering.get(&function)?, local)))
             .collect();
-        Reused { program, materialized }
+        Reused { program, materialized, candidates }
     }
 
     /// The variants that equal an earlier variant of the same function once
@@ -1270,7 +1806,13 @@ impl<'p> Emission<'p> {
         duplicates
     }
 
-    fn rewrite(&self, expression: &mut Expression, plan: &Plan, cells: &mut impl Cells) {
+    fn rewrite(
+        &self,
+        expression: &mut Expression,
+        plan: &Plan,
+        cells: &mut impl Cells,
+        next_local: &mut u32,
+    ) {
         let key = std::ptr::from_ref(&*expression);
         if let ExpressionKind::Case { alternatives, .. } = &mut expression.kind {
             for alternative in alternatives.iter_mut() {
@@ -1279,28 +1821,99 @@ impl<'p> Emission<'p> {
                 }
             }
         }
-        for_each_child_mut(expression, &mut |child| self.rewrite(child, plan, cells));
-        if let Some(&local) = plan.constructs.get(&key) {
+        for_each_child_mut(expression, &mut |child| self.rewrite(child, plan, cells, next_local));
+        if let ExpressionKind::Case { alternatives, .. } = &mut expression.kind {
+            for alternative in alternatives.iter_mut() {
+                let Some(bindings) = plan.bindings.get(&std::ptr::from_ref(&*alternative)) else {
+                    continue;
+                };
+                match &mut alternative.body {
+                    Guarded::Unconditional(body) => bind_companions(body, bindings),
+                    Guarded::Guards(branches) => {
+                        for branch in branches {
+                            bind_companions(&mut branch.body, bindings);
+                        }
+                    }
+                }
+            }
+        }
+        let edges = plan.edges.get(&key);
+        if let Some(token) = plan.constructs.get(&key) {
             let monotype = expression.monotype;
+            let position = expression.position;
             let kind = std::mem::replace(&mut expression.kind, ExpressionKind::Unit);
             let ExpressionKind::Construct { data, constructor, arguments } = kind else {
                 unreachable!("invariant violated: a planned reuse is not a construction")
             };
-            let cell = Box::new(Expression::new(ExpressionKind::Local(local), monotype));
-            expression.kind = ExpressionKind::Reuse { cell, data, constructor, arguments };
+            let cell = Box::new(Expression::new(ExpressionKind::Local(token.cell), monotype));
+            *expression = match &token.condition {
+                None => {
+                    let reuse = ExpressionKind::Reuse { cell, data, constructor, arguments };
+                    tracked(Expression::new(reuse, monotype), edges, true)
+                }
+                Some(condition) => {
+                    let mut bindings = vec![];
+                    let mut values = vec![];
+                    for argument in arguments {
+                        if is_trivial(&argument) {
+                            values.push(argument);
+                            continue;
+                        }
+                        let local = Local::fresh(next_local, "field".into(), argument.monotype);
+                        values.push(local.expression());
+                        bindings.push(Binding { local, value: argument });
+                    }
+                    let reuse = ExpressionKind::Reuse {
+                        cell,
+                        data: data.clone(),
+                        constructor,
+                        arguments: values.clone(),
+                    };
+                    let construct =
+                        ExpressionKind::Construct { data, constructor, arguments: values };
+                    let choice = ExpressionKind::If {
+                        condition: Box::new(condition.clone()),
+                        then: Box::new(tracked(Expression::new(reuse, monotype), edges, true)),
+                        otherwise: Box::new(tracked(
+                            Expression::new(construct, monotype),
+                            edges,
+                            false,
+                        )),
+                    };
+                    let choice = Expression::new(choice, monotype);
+                    match bindings.is_empty() {
+                        true => choice,
+                        false => {
+                            let body = Box::new(choice);
+                            Expression::new(ExpressionKind::Let { bindings, body }, monotype)
+                        }
+                    }
+                }
+            };
+            expression.position = position;
+        } else if matches!(expression.kind, ExpressionKind::Construct { .. }) {
+            let construct = std::mem::replace(
+                expression,
+                Expression::new(ExpressionKind::Unit, expression.monotype),
+            );
+            *expression = tracked(construct, edges, false);
         }
         if let Some(target) = plan.callbacks.get(&key) {
             expression.kind = ExpressionKind::Function(self.identifiers[target]);
         }
-        if let Some(&(target, donor)) = plan.calls.get(&key) {
-            let id = self.identifiers[&target];
+        if let Some((target, donor, companions)) = plan.calls.get(&key) {
+            let id = self.identifiers[target];
             let ExpressionKind::Apply { function, arguments } = &mut expression.kind else {
                 unreachable!("invariant violated: a planned variant call is not an application")
             };
             let callee = self.program.function(target.function);
             let mut parameters: Vec<MonotypeId> =
                 callee.parameters.iter().map(|parameter| parameter.monotype).collect();
-            if let Some(donor) = donor {
+            for companion in companions {
+                parameters.push(companion.monotype);
+                arguments.push(companion.clone());
+            }
+            if let &Some(donor) = donor {
                 parameters.push(callee.result);
                 arguments.push(Expression::new(ExpressionKind::Local(donor), callee.result));
             }
@@ -1326,6 +1939,58 @@ impl<'p> Emission<'p> {
                 *expression = Expression::new(ExpressionKind::Let { bindings, body }, monotype);
             }
         }
+    }
+}
+
+fn tracked(
+    value: Expression,
+    edges: Option<&Vec<(usize, Expression)>>,
+    reused: bool,
+) -> Expression {
+    let Some(edges) = edges else { return value };
+    if edges.is_empty() && !reused {
+        return value;
+    }
+    let monotype = value.monotype;
+    let position = value.position;
+    let edges = edges.clone();
+    let mut marked =
+        Expression::new(ExpressionKind::UniqueEdges { value: Box::new(value), edges }, monotype);
+    marked.position = position;
+    marked
+}
+
+fn untrack(expression: &mut Expression, candidates: &FxHashSet<DataType>) {
+    for_each_child_mut(expression, &mut |child| untrack(child, candidates));
+    let ExpressionKind::UniqueEdges { value, .. } = &mut expression.kind else { return };
+    let data = match &value.kind {
+        ExpressionKind::Construct { data, .. } | ExpressionKind::Reuse { data, .. } => data,
+        _ => return,
+    };
+    if !candidates.contains(data) {
+        let monotype = value.monotype;
+        let value =
+            std::mem::replace(&mut **value, Expression::new(ExpressionKind::Unit, monotype));
+        let position = expression.position;
+        *expression = value;
+        expression.position = position;
+    }
+}
+
+fn bind_companions(body: &mut Expression, bindings: &[Binding]) {
+    let mut kept: Vec<Binding> = vec![];
+    for binding in bindings.iter().rev() {
+        let used = uses_local(body, binding.local.id)
+            || kept.iter().any(|later| uses_local(&later.value, binding.local.id));
+        if used {
+            kept.push(binding.clone());
+        }
+    }
+    let monotype = body.monotype;
+    for binding in kept {
+        let inner = std::mem::replace(body, Expression::new(ExpressionKind::Unit, monotype));
+        let bindings = vec![binding];
+        *body = Expression::new(ExpressionKind::Let { bindings, body: Box::new(inner) }, monotype);
     }
 }
 
@@ -1480,5 +2145,18 @@ where
             .iter()
             .rev()
             .fold(result, |result, &parameter| self.monotypes.function(parameter, result))
+    }
+
+    fn is_tracked(&mut self, cell: &DataType) -> bool {
+        self.edge_bits(cell).ok().flatten().is_some()
+    }
+
+    fn tracks(&mut self, cell: &DataType, constructor: usize, field: usize) -> bool {
+        let bits = self.edge_bits(cell).ok().flatten();
+        bits.is_some_and(|bits| bits.bit(constructor, field).is_some())
+    }
+
+    fn boolean(&mut self) -> MonotypeId {
+        self.monotypes.intern(Monotype::Boolean)
     }
 }
