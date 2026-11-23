@@ -5,6 +5,7 @@ source: tests-integration/src/fixtures.rs
 package main
 
 import (
+	"fixture/shared"
 	"github.com/i-am-the-slime/iris-go/array"
 	"github.com/i-am-the-slime/iris-go/console"
 	"github.com/i-am-the-slime/iris-go/prim"
@@ -14,30 +15,29 @@ import (
 var main_ = initializeMain_()
 
 func initializeMain_() []int32 {
-	array2 := array.Thaw([]int32{10, 20, 30})()
-	elements := *array2
+	array2 := *array.Thaw([]int32{10, 20, 30})()
 	for i := int32(0); i < 3; i++ {
-		within := int(i) < len(elements)
+		within := int(i) < len(array2)
 		if within {
-			element := elements[i]
-			elements[i] = prim.IntModPositive(element, 7)
+			element := array2[i]
+			array2[i] = prim.IntModPositive(element, 7)
 		}
 	}
-	within2 := 0 < len(*array2)
+	within2 := 0 < len(array2)
 	var first int32
 	if within2 {
-		first = (*array2)[0]
+		first = array2[0]
 	} else {
 		first = 0
 	}
-	within3 := 5 < len(*array2)
+	within3 := 5 < len(array2)
 	var i2 int32
 	if within3 {
-		i2 = (*array2)[5]
+		i2 = array2[5]
 	} else {
 		i2 = 0
 	}
-	array3 := array.UnsafeFreeze(array2)()
+	array3 := shared.Frozen(array2)
 	performed := array.Append(array3, []int32{first, i2, -1})
 	return performed
 }
@@ -48,4 +48,11 @@ func main() {
 		texts = append(texts, prim.ShowInt(element))
 	}
 	console.Print("[" + strings.Join(texts, " ") + "]")
+}
+
+// shared/shared.go
+package shared
+
+func Frozen[T any](elements []T) []T {
+	return elements[:len(elements):len(elements)]
 }

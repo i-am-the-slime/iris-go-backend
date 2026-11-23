@@ -35,6 +35,7 @@ package main
 import (
 	"fixture/Data/Maybe"
 	"fixture/Data/Show"
+	"fixture/shared"
 	"github.com/i-am-the-slime/iris-go/alloc"
 	"github.com/i-am-the-slime/iris-go/array"
 	"github.com/i-am-the-slime/iris-go/console"
@@ -84,28 +85,28 @@ func toArrayInt(value *ListInt) []int32 {
 func sortByIntCompare(xs []int32) []int32 {
 	array2 := array.Thaw(xs)()
 	sortByIntCompareQuicksort(*array2, 0, int32(len(xs))-1)
-	performed := array.UnsafeFreeze(array2)()
+	performed := shared.Frozen(*array2)
 	return performed
 }
 
 func sortByIntDescending(xs []int32) []int32 {
 	array2 := array.Thaw(xs)()
 	sortByIntDescendingQuicksort(*array2, 0, int32(len(xs))-1)
-	performed := array.UnsafeFreeze(array2)()
+	performed := shared.Frozen(*array2)
 	return performed
 }
 
 func sortByIntOrder(xs []int32) []int32 {
 	array2 := array.Thaw(xs)()
 	sortByIntOrderQuicksort(*array2, 0, int32(len(xs))-1)
-	performed := array.UnsafeFreeze(array2)()
+	performed := shared.Frozen(*array2)
 	return performed
 }
 
 func sortByIntOrder2(xs []int32) []int32 {
 	array2 := array.Thaw(xs)()
 	sortByIntOrderQuicksort2(*array2, 0, int32(len(xs))-1)
-	performed := array.UnsafeFreeze(array2)()
+	performed := shared.Frozen(*array2)
 	return performed
 }
 
@@ -396,4 +397,11 @@ func insertByIntCompareReusing(x int32, value *ListInt) *ListInt {
 
 func main() {
 	console.Print("[" + strings.Join(main_, " ") + "]")
+}
+
+// shared/shared.go
+package shared
+
+func Frozen[T any](elements []T) []T {
+	return elements[:len(elements):len(elements)]
 }

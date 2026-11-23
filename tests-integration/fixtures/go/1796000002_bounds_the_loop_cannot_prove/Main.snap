@@ -5,6 +5,7 @@ source: tests-integration/src/fixtures.rs
 package main
 
 import (
+	"fixture/shared"
 	"github.com/i-am-the-slime/iris-go/array"
 	"github.com/i-am-the-slime/iris-go/console"
 	"github.com/i-am-the-slime/iris-go/prim"
@@ -14,36 +15,37 @@ import (
 var main_ = initializeMain_()
 
 func initializeMain_() []int32 {
-	array2 := array.Thaw([]int32{1, 2, 3})()
-	size := int32(len(*array2))
+	array2 := *array.Thaw([]int32{1, 2, 3})()
+	size := int32(len(array2))
 	end := size + 1
-	elements := *array2
 	for i := int32(0); i < end; i++ {
 		var i2 int32
-		if int(i) < len(elements) {
-			i2 = elements[i]
-			elements[i] = i2 + 1
+		if int(i) < len(array2) {
+			i2 = array2[i]
+			array2[i] = i2 + 1
 		} else {
 			i2 = 0
 		}
 	}
-	performed := array.UnsafeFreeze(array2)()
-	array3 := array.Thaw([]int32{1, 2, 3})()
-	size2 := int32(len(*array3))
-	elements2 := *array3
+	performed := shared.Frozen(array2)
+	array3 := *array.Thaw([]int32{1, 2, 3})()
+	size2 := int32(len(array3))
 	for i := int32(0); i < size2; i++ {
 		i2 := i - 1
-		within := i2 >= 0
+		within := i2 >= 0 && int(i2) < len(array3)
 		var previous int32
 		if within {
-			previous = elements2[i2]
+			previous = array3[i2]
 		} else {
 			previous = 0
 		}
-		element := elements2[i]
-		elements2[i] = element + previous
+		within2 := int(i) < len(array3)
+		if within2 {
+			element := array3[i]
+			array3[i] = element + previous
+		}
 	}
-	performed2 := array.UnsafeFreeze(array3)()
+	performed2 := shared.Frozen(array3)
 	return array.Append(performed, performed2)
 }
 
@@ -53,4 +55,11 @@ func main() {
 		texts = append(texts, prim.ShowInt(element))
 	}
 	console.Print("[" + strings.Join(texts, " ") + "]")
+}
+
+// shared/shared.go
+package shared
+
+func Frozen[T any](elements []T) []T {
+	return elements[:len(elements):len(elements)]
 }

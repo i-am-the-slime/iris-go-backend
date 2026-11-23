@@ -5,6 +5,7 @@ source: tests-integration/src/fixtures.rs
 package main
 
 import (
+	"fixture/shared"
 	"github.com/i-am-the-slime/iris-go/array"
 	"github.com/i-am-the-slime/iris-go/console"
 	"github.com/i-am-the-slime/iris-go/prim"
@@ -16,32 +17,32 @@ var main_ = initializeMain_()
 func initializeMain_() []int32 {
 	xs := []int32{4}
 	xs2 := []int32{}
-	pushed := &[]int32{}
+	pushed := []int32{}
 	a := array.Append(xs, []int32{5})
 	if len(a) == 0 {
-		*pushed = array.Bounded(append(*pushed, 0))
+		pushed = array.Bounded(append(pushed, 0))
 	} else {
-		*pushed = array.Bounded(append(*pushed, 1))
+		pushed = array.Bounded(append(pushed, 1))
 	}
 	scrutinee := mapLanes(xs)
 	if len(scrutinee) == 1 {
 		x := scrutinee[0]
-		*pushed = array.Bounded(append(*pushed, x))
+		pushed = array.Bounded(append(pushed, x))
 	}
-	performed := array.UnsafeFreeze(pushed)()
-	pushed2 := &[]int32{}
+	performed := shared.Frozen(pushed)
+	pushed2 := []int32{}
 	a2 := array.Append(xs2, []int32{})
 	if len(a2) == 0 {
-		*pushed2 = array.Bounded(append(*pushed2, 0))
+		pushed2 = array.Bounded(append(pushed2, 0))
 	} else {
-		*pushed2 = array.Bounded(append(*pushed2, 1))
+		pushed2 = array.Bounded(append(pushed2, 1))
 	}
 	scrutinee2 := mapLanes(xs2)
 	if len(scrutinee2) == 1 {
 		x := scrutinee2[0]
-		*pushed2 = array.Bounded(append(*pushed2, x))
+		pushed2 = array.Bounded(append(pushed2, x))
 	}
-	performed2 := array.UnsafeFreeze(pushed2)()
+	performed2 := shared.Frozen(pushed2)
 	return array.Append(performed, performed2)
 }
 
@@ -110,4 +111,11 @@ func mapLanes(xs []int32) []int32 {
 		x.Mul(c0).StorePart(out[i:])
 	}
 	return out
+}
+
+// shared/shared.go
+package shared
+
+func Frozen[T any](elements []T) []T {
+	return elements[:len(elements):len(elements)]
 }

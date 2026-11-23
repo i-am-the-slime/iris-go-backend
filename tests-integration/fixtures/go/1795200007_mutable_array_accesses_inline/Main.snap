@@ -28,6 +28,7 @@ package main
 
 import (
 	"fixture/Data/Maybe"
+	"fixture/shared"
 	"github.com/i-am-the-slime/iris-go/array"
 	"github.com/i-am-the-slime/iris-go/console"
 	"github.com/i-am-the-slime/iris-go/prim"
@@ -37,35 +38,48 @@ import (
 var main_ = initializeMain_()
 
 func initializeMain_() []int32 {
-	array2 := array.Thaw([]int32{1, 2, 3})()
-	size := int32(len(*array2))
-	elements := *array2
+	array2 := *array.Thaw([]int32{1, 2, 3})()
+	size := int32(len(array2))
 	for i := int32(0); i < size; i++ {
 		var peeked maybe.Int
 		var result int32
-		peeked = maybe.Int(elements[i])
-		if peeked == maybe.NoInt {
-			result = 0
+		if int(i) < len(array2) {
+			peeked = maybe.Int(array2[i])
+			if peeked == maybe.NoInt {
+				result = 0
+			} else {
+				result = int32(peeked)
+			}
+			array2[i] = 2 * result
 		} else {
-			result = int32(peeked)
+			peeked = maybe.NoInt
+			if peeked == maybe.NoInt {
+				result = 0
+			} else {
+				result = int32(peeked)
+			}
 		}
-		elements[i] = 2 * result
 	}
-	size2 := int32(len(*array2))
-	i2 := (*array2)[size2-1]
-	(*array2)[size2-1] = i2 + 1
+	size2 := int32(len(array2))
+	i2 := array2[size2-1]
+	array2[size2-1] = i2 + 1
 	var poked bool
-	poked = false
-	names := array.Thaw([]string{"a", "b"})()
-	within := 1 < len(*names)
+	if size2 >= 0 && int(size2) < len(array2) {
+		array2[size2] = 0
+		poked = true
+	} else {
+		poked = false
+	}
+	names := *array.Thaw([]string{"a", "b"})()
+	within := 1 < len(names)
 	var maybe2 maybe.String
 	if within {
-		element := (*names)[1]
+		element := names[1]
 		maybe2 = maybe.JustString("#" + element)
 	} else {
 		maybe2 = maybe.NoString
 	}
-	array3 := array.UnsafeFreeze(array2)()
+	array3 := shared.Frozen(array2)
 	var result2 int32
 	if poked {
 		result2 = 1
@@ -95,4 +109,11 @@ func main() {
 		texts = append(texts, prim.ShowInt(element))
 	}
 	console.Print("[" + strings.Join(texts, " ") + "]")
+}
+
+// shared/shared.go
+package shared
+
+func Frozen[T any](elements []T) []T {
+	return elements[:len(elements):len(elements)]
 }

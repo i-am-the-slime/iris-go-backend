@@ -5,6 +5,7 @@ source: tests-integration/src/fixtures.rs
 package main
 
 import (
+	"fixture/shared"
 	"github.com/i-am-the-slime/iris-go/array"
 	"github.com/i-am-the-slime/iris-go/console"
 	"github.com/i-am-the-slime/iris-go/prim"
@@ -22,7 +23,7 @@ func initializeMain_() []int32 {
 		current = elements[i]
 		mainShiftDown(elements, current, i-1)
 	}
-	performed := array.UnsafeFreeze(array2)()
+	performed := shared.Frozen(*array2)
 	return array.Append([]int32{mainGo(100, 0)}, performed)
 }
 
@@ -70,4 +71,11 @@ func main() {
 		texts = append(texts, prim.ShowInt(element))
 	}
 	console.Print("[" + strings.Join(texts, " ") + "]")
+}
+
+// shared/shared.go
+package shared
+
+func Frozen[T any](elements []T) []T {
+	return elements[:len(elements):len(elements)]
 }

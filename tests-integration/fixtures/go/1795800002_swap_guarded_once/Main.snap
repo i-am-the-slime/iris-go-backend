@@ -5,6 +5,7 @@ source: tests-integration/src/fixtures.rs
 package main
 
 import (
+	"fixture/shared"
 	"github.com/i-am-the-slime/iris-go/array"
 	"github.com/i-am-the-slime/iris-go/console"
 	"github.com/i-am-the-slime/iris-go/prim"
@@ -14,34 +15,71 @@ import (
 var main_ = initializeMain_()
 
 func initializeMain_() []int32 {
-	array2 := array.Thaw([]int32{1, 2, 3, 4, 5})()
-	size := int32(len(*array2))
-	end := size / 2
-	elements := *array2
+	array2 := *array.Thaw([]int32{1, 2, 3, 4, 5})()
+	size := int32(len(array2))
+	end := size >> 1
 	for i := int32(0); i < end; i++ {
 		j := size - 1 - i
 		var i2 int32
 		var i3 int32
-		if j >= 0 {
-			i2 = elements[i]
-			i3 = elements[j]
-			elements[i] = i3
-			elements[j] = i2
+		if int(i) < len(array2) && j >= 0 && int(j) < len(array2) {
+			i2 = array2[i]
+			i3 = array2[j]
+			array2[i] = i3
+			array2[j] = i2
 		} else {
-			i2 = elements[i]
-			i3 = 0
-			elements[i] = i3
+			within := int(i) < len(array2)
+			if within {
+				i2 = array2[i]
+			} else {
+				i2 = 0
+			}
+			within2 := j >= 0 && int(j) < len(array2)
+			if within2 {
+				i3 = array2[j]
+			} else {
+				i3 = 0
+			}
+			if int(i) < len(array2) {
+				array2[i] = i3
+			}
+			if j >= 0 && int(j) < len(array2) {
+				array2[j] = i2
+			}
 		}
 	}
 	var i4 int32
-	i4 = 0
-	if 0 < len(*array2) {
-		(*array2)[0] = i4
+	var i5 int32
+	if 0 < len(array2) && size >= 0 && int(size) < len(array2) && 1 < len(array2) {
+		i4 = array2[0]
+		i5 = array2[size]
+		array2[0] = i5
+		array2[size] = i4
+		array2[1] = 0
+	} else {
+		within := 0 < len(array2)
+		if within {
+			i4 = array2[0]
+		} else {
+			i4 = 0
+		}
+		within2 := size >= 0 && int(size) < len(array2)
+		if within2 {
+			i5 = array2[size]
+		} else {
+			i5 = 0
+		}
+		if 0 < len(array2) {
+			array2[0] = i5
+		}
+		if size >= 0 && int(size) < len(array2) {
+			array2[size] = i4
+		}
+		if 1 < len(array2) {
+			array2[1] = 0
+		}
 	}
-	if 1 < len(*array2) {
-		(*array2)[1] = 0
-	}
-	performed := array.UnsafeFreeze(array2)()
+	performed := shared.Frozen(array2)
 	return performed
 }
 
@@ -51,4 +89,11 @@ func main() {
 		texts = append(texts, prim.ShowInt(element))
 	}
 	console.Print("[" + strings.Join(texts, " ") + "]")
+}
+
+// shared/shared.go
+package shared
+
+func Frozen[T any](elements []T) []T {
+	return elements[:len(elements):len(elements)]
 }

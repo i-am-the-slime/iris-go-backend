@@ -5,6 +5,7 @@ source: tests-integration/src/fixtures.rs
 package main
 
 import (
+	"fixture/shared"
 	"github.com/i-am-the-slime/iris-go/array"
 	"github.com/i-am-the-slime/iris-go/console"
 	"github.com/i-am-the-slime/iris-go/prim"
@@ -14,28 +15,24 @@ import (
 var main_ = initializeMain_()
 
 func initializeMain_() []int32 {
-	array2 := array.Thaw([]int32{10, 20, 30})()
+	array2 := *array.Thaw([]int32{10, 20, 30})()
 	elements := []func(int32) int32{func(value int32) int32 {
 		return value + 1
 	}}
-	within := 1 < len(*array2)
+	within := 1 < len(array2)
 	var kept bool
 	if within {
-		element := (*array2)[1]
+		element := array2[1]
 		var result int32
 		result = elements[0](element)
 		var poked bool
-		if 1 < len(*array2) {
-			(*array2)[1] = result
-			poked = true
-		} else {
-			poked = false
-		}
+		array2[1] = result
+		poked = true
 		kept = poked
 	} else {
 		kept = false
 	}
-	array3 := array.UnsafeFreeze(array2)()
+	array3 := shared.Frozen(array2)
 	var result2 int32
 	if kept {
 		result2 = 1
@@ -52,4 +49,11 @@ func main() {
 		texts = append(texts, prim.ShowInt(element))
 	}
 	console.Print("[" + strings.Join(texts, " ") + "]")
+}
+
+// shared/shared.go
+package shared
+
+func Frozen[T any](elements []T) []T {
+	return elements[:len(elements):len(elements)]
 }

@@ -58,6 +58,7 @@ package main
 import (
 	"fixture/Data/Ordering"
 	"fixture/Data/Show"
+	"fixture/shared"
 	"github.com/i-am-the-slime/iris-go/array"
 	"github.com/i-am-the-slime/iris-go/console"
 	"github.com/i-am-the-slime/iris-go/direct"
@@ -110,7 +111,7 @@ func initializeMain_() []string {
 	i3 := i2 - 1
 	var number2 float64
 	number2 = (*array2)[i3]
-	array3 := array.Freeze(array2)()
+	array3 := shared.Copied(*array2)
 	performed := array.Append([]string{string(show.AppendShowArrayNumber(nil, array3)), prim.ShowNumber(edge), prim.ShowNumber(number + number2)}, array.Append(pull, array.Append(countBefore, sortEach)))
 	return performed
 }
@@ -178,97 +179,92 @@ func smooth(array []float64, i int32) {
 var pull = initializePull()
 
 func initializePull() []string {
-	array2 := array.Thaw([]float64{0.0, 1.0, 3.0})()
-	array3 := array.Thaw([]float64{0.0, 2.0, -1.0})()
-	array4 := array.Thaw([]float64{0.0, 0.0, 0.0})()
-	array5 := array.Thaw([]float64{0.0, 0.5, 0.0})()
-	array6 := array.Thaw([]float64{2.0, 1.0, 0.5})()
-	elements := *array2
-	elements2 := *array3
-	elements3 := *array6
-	elements4 := *array4
-	elements5 := *array5
+	array2 := *array.Thaw([]float64{0.0, 1.0, 3.0})()
+	array3 := *array.Thaw([]float64{0.0, 2.0, -1.0})()
+	array4 := *array.Thaw([]float64{0.0, 0.0, 0.0})()
+	array5 := *array.Thaw([]float64{0.0, 0.5, 0.0})()
+	array6 := *array.Thaw([]float64{2.0, 1.0, 0.5})()
 	for ignored := int32(0); ignored < 3; ignored++ {
 		for i := int32(0); i < 3; i++ {
 			for j := int32(0); j < 3; j++ {
 				if i != j {
-					within := int(j) < len(elements)
+					within := int(j) < len(array2)
 					var number float64
 					if within {
-						number = elements[j]
+						number = array2[j]
 					} else {
 						number = 0.0
 					}
-					within2 := int(i) < len(elements)
+					within2 := int(i) < len(array2)
 					var number2 float64
 					if within2 {
-						number2 = elements[i]
+						number2 = array2[i]
 					} else {
 						number2 = 0.0
 					}
-					within3 := int(j) < len(elements2)
+					within3 := int(j) < len(array3)
 					var number3 float64
 					if within3 {
-						number3 = elements2[j]
+						number3 = array3[j]
 					} else {
 						number3 = 0.0
 					}
-					within4 := int(i) < len(elements2)
+					within4 := int(i) < len(array3)
 					var number4 float64
 					if within4 {
-						number4 = elements2[i]
+						number4 = array3[i]
 					} else {
 						number4 = 0.0
 					}
-					within5 := int(j) < len(elements3)
+					within5 := int(j) < len(array6)
 					var number5 float64
 					if within5 {
-						number5 = elements3[j]
+						number5 = array6[j]
 					} else {
 						number5 = 0.0
 					}
-					within6 := int(i) < len(elements4)
+					within6 := int(i) < len(array4)
 					if within6 {
-						element := elements4[i]
-						elements4[i] = element + (number-number2)*number5*0.125
+						element := array4[i]
+						array4[i] = element + (number-number2)*number5*0.125
 					}
-					within7 := int(i) < len(elements5)
+					within7 := int(i) < len(array5)
 					if within7 {
-						element := elements5[i]
-						elements5[i] = element + (number3-number4)*number5*0.125
+						element := array5[i]
+						array5[i] = element + (number3-number4)*number5*0.125
 					}
 				}
 			}
 		}
 		for i := int32(0); i < 3; i++ {
-			within := int(i) < len(elements4)
+			within := int(i) < len(array4)
 			var number float64
 			if within {
-				number = elements4[i]
+				number = array4[i]
 			} else {
 				number = 0.0
 			}
-			within2 := int(i) < len(elements)
+			within2 := int(i) < len(array2)
 			if within2 {
-				element := elements[i]
-				elements[i] = element + 0.5*number
+				element := array2[i]
+				array2[i] = element + 0.5*number
 			}
-			within3 := int(i) < len(elements5)
+			within3 := int(i) < len(array5)
 			var number2 float64
 			if within3 {
-				number2 = elements5[i]
+				number2 = array5[i]
 			} else {
 				number2 = 0.0
 			}
-			within4 := int(i) < len(elements2)
+			within4 := int(i) < len(array3)
 			if within4 {
-				element := elements2[i]
-				elements2[i] = element + 0.5*number2
+				element := array3[i]
+				array3[i] = element + 0.5*number2
 			}
 		}
 	}
-	array7 := array.Freeze(array2)()
-	array8 := array.Freeze(array3)()
+	array7 := shared.Copied(array2)
+	array8 := shared.Copied(array3)
 	performed := []string{string(show.AppendShowArrayNumber(nil, array7)), string(show.AppendShowArrayNumber(nil, array8))}
 	return performed
 }
@@ -276,36 +272,34 @@ func initializePull() []string {
 var countBefore = initializeCountBefore()
 
 func initializeCountBefore() []string {
-	words := array.Thaw([]string{"pear", "apple", "fig"})()
-	counts := array.Thaw([]int32{0, 0, 0})()
-	elements := *words
-	elements2 := *counts
+	words := *array.Thaw([]string{"pear", "apple", "fig"})()
+	counts := *array.Thaw([]int32{0, 0, 0})()
 	for i := int32(0); i < 3; i++ {
 		for j := int32(0); j < 3; j++ {
-			within := int(i) < len(elements)
+			within := int(i) < len(words)
 			var s string
 			if within {
-				s = elements[i]
+				s = words[i]
 			} else {
 				s = ""
 			}
-			within2 := int(j) < len(elements)
+			within2 := int(j) < len(words)
 			var s2 string
 			if within2 {
-				s2 = elements[j]
+				s2 = words[j]
 			} else {
 				s2 = ""
 			}
 			if prim.CompareString(s2, s) < 0 {
-				within3 := int(i) < len(elements2)
+				within3 := int(i) < len(counts)
 				if within3 {
-					element := elements2[i]
-					elements2[i] = element + 1
+					element := counts[i]
+					counts[i] = element + 1
 				}
 			}
 		}
 	}
-	array2 := array.Freeze(counts)()
+	array2 := shared.Copied(counts)
 	performed := []string{string(show.AppendShowArrayInt(nil, array2))}
 	return performed
 }
@@ -314,7 +308,7 @@ var sortEach = initializeSortEach()
 
 func initializeSortEach() []string {
 	array2 := array.Thaw([]int32{3, 1, 2})()
-	array3 := array.Thaw([]int32{0, 0})()
+	array3 := *array.Thaw([]int32{0, 0})()
 	for i := int32(0); i < 2; i++ {
 		direct.SortByMutable(func(a int32, b int32) ordering.Ordering {
 			i2 := b + i
@@ -342,14 +336,14 @@ func initializeSortEach() []string {
 		} else {
 			i3 = 0
 		}
-		within2 := int(i) < len(*array3)
+		within2 := int(i) < len(array3)
 		if within2 {
-			element := (*array3)[i]
-			(*array3)[i] = element + i3
+			element := array3[i]
+			array3[i] = element + i3
 		}
 	}
-	array4 := array.Freeze(array2)()
-	array5 := array.Freeze(array3)()
+	array4 := shared.Copied(*array2)
+	array5 := shared.Copied(array3)
 	performed := []string{string(show.AppendShowArrayInt(nil, array4)), string(show.AppendShowArrayInt(nil, array5))}
 	return performed
 }
@@ -363,4 +357,13 @@ func mainToNumber(i int32) float64 {
 
 func main() {
 	console.Print("[" + strings.Join(main_, " ") + "]")
+}
+
+// shared/shared.go
+package shared
+
+func Copied[T any](elements []T) []T {
+	copied := make([]T, len(elements))
+	copy(copied, elements)
+	return copied
 }

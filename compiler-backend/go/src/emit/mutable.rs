@@ -6,8 +6,31 @@ use crate::monomorphic::Expression;
 use crate::monotype::MonotypeId;
 use crate::syntax::{GoExpression, GoStatement, GoType};
 
-pub(super) const ACCESSES: &[&str] =
-    &["Peek", "Poke", "PeekUnsafe", "PokeUnsafe", "Length", "Within", "Push", "Pop", "Shift"];
+pub(super) const ACCESSES: &[&str] = &[
+    "Peek",
+    "Poke",
+    "PeekUnsafe",
+    "PokeUnsafe",
+    "Length",
+    "Within",
+    "Push",
+    "Pop",
+    "Shift",
+    "Freeze",
+    "UnsafeFreeze",
+];
+
+const FROZEN_SOURCE: &str = "func {name}[T any](elements []T) []T {
+\treturn elements[:len(elements):len(elements)]
+}
+";
+
+const COPIED_SOURCE: &str = "func {name}[T any](elements []T) []T {
+\tcopied := make([]T, len(elements))
+\tcopy(copied, elements)
+\treturn copied
+}
+";
 
 #[derive(Clone, Copy)]
 enum End {
@@ -55,6 +78,15 @@ where
             "Poke" => self.mutable_poke(arguments, result, sink, out),
             "Pop" => self.mutable_removal(End::Last, arguments, result, sink, out),
             "Shift" => self.mutable_removal(End::First, arguments, result, sink, out),
+            "Freeze" | "UnsafeFreeze" => {
+                let (base, template) = match name {
+                    "Freeze" => ("copied", COPIED_SOURCE),
+                    _ => ("frozen", FROZEN_SOURCE),
+                };
+                let function = identifier_expression(&self.support_function(base, template));
+                let elements = self.elements(&arguments[0], out)?;
+                self.deliver(call(function, vec![elements]), result, sink, out)
+            }
             "PeekUnsafe" => {
                 let index = self.value(&arguments[0], out)?;
                 let elements = self.elements(&arguments[1], out)?;

@@ -29,6 +29,7 @@ package main
 import (
 	"fixture/Data/Ordering"
 	"fixture/Data/Tuple"
+	"fixture/shared"
 	arraypkg "github.com/i-am-the-slime/iris-go/array"
 	"github.com/i-am-the-slime/iris-go/direct"
 	"os"
@@ -74,11 +75,11 @@ func initializeUnits() []struct{} {
 	}, mapped)
 	var result []struct{}
 	if 0 < int32(len(indexedAndSorted)) {
-		array2 := arraypkg.UnsafeThaw([]tuple.TupleIntUnit{indexedAndSorted[0]})()
+		array2 := *arraypkg.UnsafeThaw([]tuple.TupleIntUnit{indexedAndSorted[0]})()
 		for range indexedAndSorted {
-			arraypkg.UnsafeFreeze(array2)()
+			shared.Frozen(array2)
 		}
-		performed := arraypkg.UnsafeFreeze(array2)()
+		performed := shared.Frozen(array2)
 		array3 := direct.SortBy(func(x tuple.TupleIntUnit, y tuple.TupleIntUnit) ordering.Ordering {
 			i := x.First
 			i2 := y.First
@@ -114,4 +115,11 @@ func initializeUnits() []struct{} {
 func main() {
 	exitStatus := main_()
 	os.Exit(int(exitStatus))
+}
+
+// shared/shared.go
+package shared
+
+func Frozen[T any](elements []T) []T {
+	return elements[:len(elements):len(elements)]
 }

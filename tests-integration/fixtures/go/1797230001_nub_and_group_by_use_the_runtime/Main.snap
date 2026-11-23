@@ -203,10 +203,10 @@ func main() {
 	}, mapped)
 	var result []float64
 	if 0 < int32(len(indexedAndSorted)) {
-		array2 := arraypkg.UnsafeThaw([]tuple.TupleIntNumber{indexedAndSorted[0]})()
+		array2 := *arraypkg.UnsafeThaw([]tuple.TupleIntNumber{indexedAndSorted[0]})()
 		for _, pair := range indexedAndSorted {
 			x_ := pair.Second
-			array3 := arraypkg.UnsafeFreeze(array2)()
+			array3 := shared.Frozen(array2)
 			index := int32(len(array3)) - 1
 			var result2 tuple.TupleIntNumber
 			if index >= 0 && index < int32(len(array3)) {
@@ -217,10 +217,10 @@ func main() {
 			lst := result2.Second
 			result3 := !(lst < x_) && lst == x_
 			if result3 == false {
-				*array2 = arraypkg.Bounded(append(*array2, pair))
+				array2 = arraypkg.Bounded(append(array2, pair))
 			}
 		}
-		performed := arraypkg.UnsafeFreeze(array2)()
+		performed := shared.Frozen(array2)
 		array4 := direct.SortBy(func(x tuple.TupleIntNumber, y tuple.TupleIntNumber) ordering.Ordering {
 			i := x.First
 			i2 := y.First
@@ -270,9 +270,9 @@ func main() {
 	}, mapped3)
 	var result4 []int32
 	if 0 < int32(len(indexedAndSorted2)) {
-		array2 := arraypkg.UnsafeThaw([]tuple.TupleIntInt{indexedAndSorted2[0]})()
+		array2 := *arraypkg.UnsafeThaw([]tuple.TupleIntInt{indexedAndSorted2[0]})()
 		for _, pair := range indexedAndSorted2 {
-			array3 := arraypkg.UnsafeFreeze(array2)()
+			array3 := shared.Frozen(array2)
 			index := int32(len(array3)) - 1
 			var result2 tuple.TupleIntInt
 			if index >= 0 && index < int32(len(array3)) {
@@ -290,10 +290,10 @@ func main() {
 				result3 = false
 			}
 			if result3 == false {
-				*array2 = arraypkg.Bounded(append(*array2, pair))
+				array2 = arraypkg.Bounded(append(array2, pair))
 			}
 		}
-		performed := arraypkg.UnsafeFreeze(array2)()
+		performed := shared.Frozen(array2)
 		array4 := direct.SortBy(func(x tuple.TupleIntInt, y tuple.TupleIntInt) ordering.Ordering {
 			i := x.First
 			i2 := y.First
@@ -366,6 +366,10 @@ package shared
 
 type Ref[T any] struct {
 	Value T
+}
+
+func Frozen[T any](elements []T) []T {
+	return elements[:len(elements):len(elements)]
 }
 
 type StateValue struct {
