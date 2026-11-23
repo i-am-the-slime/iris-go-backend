@@ -1,21 +1,12 @@
 ---
 source: tests-integration/src/fixtures.rs
 ---
-// Data/Maybe/maybe.go
-package maybe
-
-type Int int64
-
-const NoInt Int = 1 << 32
-
 // main.go
 package main
 
 import (
-	"fixture/Data/Maybe"
 	"fixture/shared"
 	"github.com/i-am-the-slime/iris-go/prim"
-	"math"
 )
 
 var main_ = initializeMain_()
@@ -37,28 +28,7 @@ func walkOrHalve(step int, steps int32, n int32, x float64) int32 {
 			}
 			steps, n = steps+1, 3*n+1
 		default: // shared.HalveStep
-			x2 := prim.NumberFloor(x / 2.0)
-			var result int32
-			if !prim.NumberIsFinite(x2) {
-				result = 0
-			} else if !(x2 < float64(int32(prim.TopInt))) {
-				result = int32(prim.TopInt)
-			} else if x2 <= float64(int32(prim.BottomInt)) {
-				result = int32(prim.BottomInt)
-			} else {
-				var integer maybe.Int
-				if math.Trunc(x2) == x2 && (x2 >= math.MinInt32 && x2 <= math.MaxInt32) {
-					integer = maybe.Int(int32(x2))
-				} else {
-					integer = maybe.NoInt
-				}
-				if integer == maybe.NoInt {
-					result = 0
-				} else {
-					result = int32(integer)
-				}
-			}
-			step, n = shared.WalkStep, result
+			step, n = shared.WalkStep, prim.IntFloor(x/2.0)
 		}
 	}
 }

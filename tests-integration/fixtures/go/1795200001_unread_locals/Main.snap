@@ -17,10 +17,6 @@ const (
 // Data/Maybe/maybe.go
 package maybe
 
-type Int int64
-
-const NoInt Int = 1 << 32
-
 const TagNothing = 0
 
 const TagJust = 1
@@ -71,18 +67,12 @@ import (
 	"fixture/shared"
 	"github.com/i-am-the-slime/iris-go/direct"
 	"github.com/i-am-the-slime/iris-go/prim"
-	"math"
 	"os"
 	"slices"
 )
 
 func main_() int32 {
-	x := prim.NumberTrunc(0.5)
-	if !prim.NumberIsFinite(x) {
-	} else if !(x < float64(int32(prim.TopInt))) {
-	} else if x <= float64(int32(prim.BottomInt)) {
-	} else if math.Trunc(x) == x && (x >= math.MinInt32 && x <= math.MaxInt32) {
-	}
+	prim.IntTrunc(0.5)
 	direct.DeleteAt(func(payload []int32) maybe.ArrayInt {
 		return maybe.JustArrayInt(payload)
 	}, maybe.NoArrayInt, 0, []int32{})

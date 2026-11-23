@@ -992,6 +992,10 @@ pub(super) const INTRINSICS: &[(&str, &str, &[&str], Foreign)] = &[
     ("Data.Eq", "notEq", &["eqBoolean"], compare(Comparison::NotEqual)),
     ("Data.Ring", "negate", &["ringInt"], Foreign::Operator(Operator::IntNegate)),
     ("Data.Ring", "negate", &["ringNumber"], Foreign::Operator(Operator::NumberNegate)),
+    ("Data.Int", "floor", &[], prim("IntFloor", 1)),
+    ("Data.Int", "ceil", &[], prim("IntCeil", 1)),
+    ("Data.Int", "trunc", &[], prim("IntTrunc", 1)),
+    ("Data.Int", "round", &[], prim("IntRound", 1)),
 ];
 
 /// `foreign import data` types that a go-support package declares, as the
