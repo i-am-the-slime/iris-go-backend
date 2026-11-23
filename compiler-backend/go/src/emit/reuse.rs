@@ -509,7 +509,14 @@ impl<'a, C: Cells> Planner<'a, C> {
             ExpressionKind::Construct { data, constructor, arguments } => {
                 let cell = self.cells.cell(expression.monotype);
                 let held = self.arguments(arguments, stock, after);
-                let Some(cell) = cell else { return Held::Shared };
+                let Some(cell) = cell else {
+                    let values: Vec<&Expression> = arguments.iter().collect();
+                    return if self.owns_cells(&values, &held) {
+                        Held::Owned
+                    } else {
+                        Held::Shared
+                    };
+                };
                 let mut spine_owned = true;
                 let mut edges = vec![];
                 for (position, (argument, held)) in arguments.iter().zip(held).enumerate() {
@@ -938,6 +945,7 @@ impl<'a, C: Cells> Planner<'a, C> {
                     let top = Top::Hoisted(case, position);
                     match self.cells.cell(scrutinee.monotype) {
                         Some(_) if held.is_owned() => Source::Owned { top, owners: vec![] },
+                        None if held.is_owned() => Source::OwnedFields,
                         Some(data) if self.is_checking() && self.cells.is_tracked(&data) => {
                             match self.companion(&held) {
                                 Some(companion) => {
@@ -995,6 +1003,7 @@ impl<'a, C: Cells> Planner<'a, C> {
                         };
                         self.checked_pattern(pattern, place, &mut placing);
                     }
+                    Source::OwnedFields => self.adopt_fields(pattern, &alternative.body),
                     Source::Checked { .. } | Source::Shared => {}
                 }
             }
@@ -1237,6 +1246,15 @@ impl<'a, C: Cells> Planner<'a, C> {
                     let child = if spine { owners.clone() } else { None };
                     self.pattern(argument, child, None, alternative, body, stock);
                 }
+            }
+        }
+    }
+
+    fn adopt_fields(&mut self, pattern: &Pattern, body: &Guarded) {
+        let PatternKind::Constructor { arguments, .. } = &pattern.kind else { return };
+        for argument in arguments {
+            if let PatternKind::Variable(local) = &argument.kind {
+                self.adopt(local, vec![], body);
             }
         }
     }
@@ -1701,6 +1719,7 @@ enum Scope<'e> {
 enum Source {
     Owned { top: Top, owners: Vec<LocalId> },
     Checked { top: Top, owners: Vec<LocalId>, companion: Expression },
+    OwnedFields,
     Shared,
 }
 
