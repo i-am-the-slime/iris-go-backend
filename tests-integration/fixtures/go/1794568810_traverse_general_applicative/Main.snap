@@ -20,16 +20,17 @@ package main
 
 import (
 	"fixture/Data/Either"
-	"github.com/i-am-the-slime/iris-go/direct"
+	arraypkg "github.com/i-am-the-slime/iris-go/array"
+	"slices"
 	"strconv"
 )
 
 var main_ = initializeMain_()
 
 func initializeMain_() []either.EitherStringArrayInt {
-	append_ := direct.Appender[int32]()
 	array := []int32{1, 2, 3}
 	accumulator := either.EitherStringArrayInt{Tag: either.EitherStringArrayIntRight, Right: []int32{}}
+	accumulator.Right = slices.Clip(accumulator.Right)
 	for _, element := range array {
 		if accumulator.Tag == either.EitherStringArrayIntLeft {
 			break
@@ -39,15 +40,15 @@ func initializeMain_() []either.EitherStringArrayInt {
 			accumulator = either.EitherStringArrayInt{Tag: either.EitherStringArrayIntLeft, Left: accumulator.Left}
 		default: // either.EitherStringArrayIntRight
 			if element > 0 {
-				accumulator = either.EitherStringArrayInt{Tag: either.EitherStringArrayIntRight, Right: append_(accumulator.Right)(element)}
+				accumulator = either.EitherStringArrayInt{Tag: either.EitherStringArrayIntRight, Right: arraypkg.Bounded(append(accumulator.Right, element))}
 			} else {
 				accumulator = either.EitherStringArrayInt{Tag: either.EitherStringArrayIntLeft, Left: "not positive: " + strconv.Itoa(int(element))}
 			}
 		}
 	}
-	append_2 := direct.Appender[int32]()
 	array2 := []int32{1, -2, 3}
 	accumulator2 := either.EitherStringArrayInt{Tag: either.EitherStringArrayIntRight, Right: []int32{}}
+	accumulator2.Right = slices.Clip(accumulator2.Right)
 	for _, element := range array2 {
 		if accumulator2.Tag == either.EitherStringArrayIntLeft {
 			break
@@ -57,7 +58,7 @@ func initializeMain_() []either.EitherStringArrayInt {
 			accumulator2 = either.EitherStringArrayInt{Tag: either.EitherStringArrayIntLeft, Left: accumulator2.Left}
 		default: // either.EitherStringArrayIntRight
 			if element > 0 {
-				accumulator2 = either.EitherStringArrayInt{Tag: either.EitherStringArrayIntRight, Right: append_2(accumulator2.Right)(element)}
+				accumulator2 = either.EitherStringArrayInt{Tag: either.EitherStringArrayIntRight, Right: arraypkg.Bounded(append(accumulator2.Right, element))}
 			} else {
 				accumulator2 = either.EitherStringArrayInt{Tag: either.EitherStringArrayIntLeft, Left: "not positive: " + strconv.Itoa(int(element))}
 			}

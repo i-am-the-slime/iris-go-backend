@@ -47,8 +47,9 @@ import (
 	"fixture/Data/Maybe"
 	"fixture/Data/Show"
 	"fixture/shared"
+	"github.com/i-am-the-slime/iris-go/array"
 	"github.com/i-am-the-slime/iris-go/console"
-	"github.com/i-am-the-slime/iris-go/direct"
+	"slices"
 	"strconv"
 	"strings"
 )
@@ -56,8 +57,8 @@ import (
 var main_ = initializeMain_()
 
 func initializeMain_() []string {
-	append_ := direct.Appender[string]()
 	accumulator := maybe.JustArrayString([]string{})
+	accumulator.Just = slices.Clip(accumulator.Just)
 	for _, tag := range origin.Tags {
 		if accumulator.Tag == maybe.TagNothing {
 			break
@@ -67,7 +68,7 @@ func initializeMain_() []string {
 			if tag == "" {
 				accumulator = maybe.NoArrayString
 			} else {
-				accumulator = maybe.JustArrayString(append_(accumulator.Just)(tag + "!"))
+				accumulator = maybe.JustArrayString(array.Bounded(append(accumulator.Just, tag+"!")))
 			}
 		default:
 			accumulator = maybe.NoArrayString

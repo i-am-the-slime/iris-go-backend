@@ -113,7 +113,10 @@ where
 
         let function = self.fresh_local(SmolStr::new_static("function"), function);
         let array = self.fresh_local(SmolStr::new_static("array"), input);
-        let append = self.fresh_local(SmolStr::new_static("append"), snoc);
+        let append = match self.is_linear_applicative(accumulated)? {
+            true => None,
+            false => Some(self.fresh_local(SmolStr::new_static("append"), snoc)),
+        };
         let accumulator = self.fresh_local(SmolStr::new_static("accumulator"), accumulated);
         let current = self.fresh_local(SmolStr::new_static("element"), input_element);
 
@@ -135,8 +138,12 @@ where
                 (initial, self.array_tail(&array))
             }
         };
+        let snoc_function = match &append {
+            Some(append) => append.expression(),
+            None => self.snoc_lambda(elements, element),
+        };
         let snocs = self.monotypes.result_after(map.monotype, 2);
-        let snocs = apply_to(map, vec![append.expression(), accumulator.expression()], snocs);
+        let snocs = apply_to(map, vec![snoc_function, accumulator.expression()], snocs);
         let result = apply_to(function.expression(), vec![current.expression()], step);
         let snocced = apply_to(apply, vec![snocs, result], accumulated);
         let step = self.lambda(vec![accumulator, current], snocced);
@@ -147,6 +154,10 @@ where
         let fold =
             ExpressionKind::Foreign { foreign: fold, arguments: vec![step, initial, remaining] };
         let fold = Expression::new(fold, accumulated);
+        let Some(append) = append else {
+            let traverse = self.lambda(vec![function, array], fold);
+            return self.supplied(scope, traverse, &reference, arguments);
+        };
 
         let allocated = self.monotypes.intern(Monotype::Effect(snoc));
         let allocate = ExpressionKind::Foreign { foreign: &foreign::APPENDER, arguments: vec![] };
@@ -162,7 +173,16 @@ where
         };
         let traversed = Expression::new(traversed, accumulated);
         let traverse = self.lambda(vec![function, array], traversed);
+        self.supplied(scope, traverse, &reference, arguments)
+    }
 
+    fn supplied(
+        &mut self,
+        scope: &mut Scope,
+        traverse: Expression,
+        reference: &TraversalReference,
+        arguments: &[tree::ExpressionId],
+    ) -> GoResult<Expression> {
         let rank_two = reference.traversal.rank_two_arguments();
         let mut supplied = Vec::with_capacity(arguments.len() - rank_two);
         for &argument in &arguments[rank_two..] {
@@ -252,6 +272,26 @@ where
             result = rest;
         }
         Ok((parameters, result))
+    }
+
+    fn is_linear_applicative(&mut self, accumulated: MonotypeId) -> GoResult<bool> {
+        let Monotype::Data(data) = self.monotypes.get(accumulated).clone() else {
+            return Ok(false);
+        };
+        let (file_id, item) = (data.file_id, data.item);
+        Ok(self.context.is_type(file_id, item, "Data.Maybe", "Maybe")?
+            || self.context.is_type(file_id, item, "Data.Either", "Either")?)
+    }
+
+    fn snoc_lambda(&mut self, elements: MonotypeId, element: MonotypeId) -> Expression {
+        let init = self.fresh_local(SmolStr::new_static("init"), elements);
+        let last = self.fresh_local(SmolStr::new_static("last"), element);
+        let snocced = ExpressionKind::Foreign {
+            foreign: &Foreign::Snoc,
+            arguments: vec![init.expression(), last.expression()],
+        };
+        let snocced = self.lambda(vec![last], Expression::new(snocced, elements));
+        self.lambda(vec![init], snocced)
     }
 
     fn array_head(&mut self, array: &Local) -> Expression {

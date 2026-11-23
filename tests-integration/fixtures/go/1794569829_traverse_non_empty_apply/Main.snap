@@ -25,14 +25,13 @@ package main
 import (
 	"fixture/Data/Maybe"
 	arraypkg "github.com/i-am-the-slime/iris-go/array"
-	"github.com/i-am-the-slime/iris-go/direct"
+	"slices"
 )
 
 var main_ = initializeMain_()
 
 func initializeMain_() maybe.ArrayInt {
 	array2 := arraypkg.Append([]int32{2}, []int32{4, 8})
-	append_ := direct.Appender[int32]()
 	n := array2[0]
 	var result maybe.ArrayInt
 	if n&1 == 0 {
@@ -41,6 +40,7 @@ func initializeMain_() maybe.ArrayInt {
 		result = maybe.NoArrayInt
 	}
 	array := arraypkg.Slice(1, int32(len(array2)), array2)
+	result.Just = slices.Clip(result.Just)
 	for _, element := range array {
 		if result.Tag == maybe.TagNothing {
 			break
@@ -48,7 +48,7 @@ func initializeMain_() maybe.ArrayInt {
 		switch result.Tag {
 		case maybe.TagJust:
 			if element&1 == 0 {
-				result = maybe.JustArrayInt(append_(result.Just)(element >> 1))
+				result = maybe.JustArrayInt(arraypkg.Bounded(append(result.Just, element>>1)))
 			} else {
 				result = maybe.NoArrayInt
 			}
