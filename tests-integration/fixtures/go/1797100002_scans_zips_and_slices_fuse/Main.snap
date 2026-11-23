@@ -394,11 +394,11 @@ func initializeMain_() []string {
 			same := value == value2
 			if same {
 				accumulatorMatches += 1
-				accumulatorTotal += accumulatorBefore
 			} else {
 				starts := accumulatorMatches + 1
-				accumulatorBefore, accumulatorMatches, accumulatorTotal = starts, 0, accumulatorTotal+starts
+				accumulatorBefore, accumulatorMatches = starts, 0
 			}
+			accumulatorTotal += accumulatorBefore
 		}
 		accumulator6 += accumulatorTotal
 	}
@@ -409,11 +409,11 @@ func initializeMain_() []string {
 	for _, same := range array33 {
 		if same {
 			accumulatorMatches2 += 1
-			accumulatorTotal2 += accumulatorBefore2
 		} else {
 			starts := accumulatorMatches2 + 1
-			accumulatorBefore2, accumulatorMatches2, accumulatorTotal2 = starts, 0, accumulatorTotal2+starts
+			accumulatorBefore2, accumulatorMatches2 = starts, 0
 		}
+		accumulatorTotal2 += accumulatorBefore2
 	}
 	array34 := []int32{1, 5, 2, 7, 0}
 	accumulator7 := shared.Bounds{Low: 0, High: 0}

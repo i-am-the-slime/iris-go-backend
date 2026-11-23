@@ -35,6 +35,7 @@ mod instantiations;
 mod int64;
 mod intervals;
 mod iteration;
+mod joins;
 mod json;
 mod layout;
 mod lengths;
@@ -185,6 +186,7 @@ where
     timed("scalars", || scalars::split_struct_locals(&mut declarations, &structs));
     timed("stores", || scalars::store_fields_in_place(&mut declarations, &structs));
     timed("aliases", || aliases::substitute_aliases(&mut declarations));
+    timed("joins", || joins::join_shared_updates(&mut declarations));
     timed("ranges", || ranges::read_elements_in_place(&mut declarations));
     let effects = std::mem::take(&mut emitter.effects);
     timed("headers", || headers::read_headers_once(&mut declarations, &effects));

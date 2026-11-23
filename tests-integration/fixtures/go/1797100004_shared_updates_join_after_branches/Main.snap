@@ -1,0 +1,55 @@
+---
+source: tests-integration/src/fixtures.rs
+---
+// main.go
+package main
+
+import "fixture/shared"
+
+func main() {
+	output := &shared.Ref[[]int32]{Value: []int32{}}
+	matches := []bool{true, false, true, true, false, true}
+	numbers := []int32{1, 5, 2, 7, 0}
+	var accumulatorBefore int32 = 0
+	var accumulatorMatches int32 = 0
+	var accumulatorTotal int32 = 0
+	for _, same := range matches {
+		if same {
+			accumulatorMatches += 1
+		} else {
+			starts := accumulatorMatches + 1
+			accumulatorBefore, accumulatorMatches = starts, 0
+		}
+		accumulatorTotal += accumulatorBefore
+	}
+	accumulator := shared.Bounds{Low: 0, High: 0}
+	for _, x := range numbers {
+		if x < 3 {
+			updated := accumulator
+			updated.Low = accumulator.Low + x
+			updated.High = accumulator.High + accumulator.Low
+			accumulator = updated
+		} else {
+			accumulator = shared.Bounds{Low: accumulator.Low - 1, High: accumulator.High + accumulator.Low*2}
+		}
+	}
+	output.Value = []int32{accumulatorTotal, accumulator.High}
+}
+
+// shared/shared.go
+package shared
+
+type Ref[T any] struct {
+	Value T
+}
+
+type Run struct {
+	Before  int32
+	Matches int32
+	Total   int32
+}
+
+type Bounds struct {
+	High int32
+	Low  int32
+}
