@@ -1,0 +1,660 @@
+---
+source: tests-integration/src/fixtures.rs
+---
+// Data/Show/show.go
+package show
+
+import "strconv"
+
+func Show(i int32) string {
+	return strconv.Itoa(int(i))
+}
+
+func AppendShowArrayInt(buffer []byte, array []int32) []byte {
+	buffer = append(buffer, "["...)
+	for index, element := range array {
+		if index > 0 {
+			buffer = append(buffer, ","...)
+		}
+		buffer = strconv.AppendInt(buffer, int64(element), 10)
+	}
+	buffer = append(buffer, "]"...)
+	return buffer
+}
+
+// main.go
+package main
+
+import (
+	"fixture/Data/Show"
+	arraypkg "github.com/i-am-the-slime/iris-go/array"
+	"github.com/i-am-the-slime/iris-go/console"
+	"github.com/i-am-the-slime/iris-go/prim"
+	"strconv"
+	"strings"
+)
+
+var main_ = initializeMain_()
+
+func initializeMain_() []string {
+	array := []int32{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37}
+	mapped := make([]int32, len(array))
+	for index, i := range array {
+		mapped[index] = prim.IntMod(i*37, 11) - 5
+	}
+	numbers := mapLanes([]float64{3.0, -1.0, 4.0, 1.0, -5.0, 9.0, 2.0, 6.0, -5.0, 3.0, 5.0, 8.0, 9.0, -7.0, 9.0, 3.0, 2.0, 3.0, -8.0, 4.0, 6.0, 2.0, 6.0, 4.0, -3.0, 3.0, 8.0, 3.0, 2.0, 7.0, 9.0, 5.0, 0.0, 2.0, 8.0, 8.0, 4.0})
+	return []string{strconv.Itoa(int(foldLanes(mapped, arraypkg.Slice(1, int32(len(mapped)), mapped), 0))), prim.ShowNumber(foldLanes2(numbers, arraypkg.Slice(1, int32(len(numbers)), numbers), 0.0)), strconv.Itoa(int(foldLanes3(mapped, 0))), strconv.Itoa(int(foldLanes4(mapped, 0))), string(show.AppendShowArrayInt(nil, zipLanes(mapped, arraypkg.Slice(1, int32(len(mapped)), mapped)))), strconv.Itoa(int(foldLanes5(mapped, arraypkg.Slice(1, int32(len(mapped)), mapped), 0)))}
+}
+
+func sign(x int32) int32 {
+	if x < 0 {
+		return -1
+	}
+	if x > 0 {
+		return 1
+	}
+	return 0
+}
+
+func main() {
+	console.Print("[" + strings.Join(main_, " ") + "]")
+}
+
+// main_neon.go
+//go:build goexperiment.simd && arm64
+
+package main
+
+import (
+	"math"
+	"simd/archsimd"
+)
+
+func foldLanes(xs []int32, ys []int32, initial int32) int32 {
+	n := min(len(xs), len(ys))
+	xs, ys = xs[:n], ys[:n]
+	c0 := archsimd.BroadcastInt32x4(1)
+	c1 := archsimd.BroadcastInt32x4(0)
+	acc0 := archsimd.BroadcastInt32x4(0)
+	acc1, acc2, acc3 := acc0, acc0, acc0
+	const step = 4
+	i := 0
+	for ; i < len(xs)-4*step+1; i += 4 * step {
+		x0 := archsimd.LoadInt32x4(xs[i : i+step])
+		y0 := archsimd.LoadInt32x4(ys[i : i+step])
+		acc0 = acc0.Add(c0.IfElse(x0.Greater(y0), c1))
+		x1 := archsimd.LoadInt32x4(xs[i+step : i+2*step])
+		y1 := archsimd.LoadInt32x4(ys[i+step : i+2*step])
+		acc1 = acc1.Add(c0.IfElse(x1.Greater(y1), c1))
+		x2 := archsimd.LoadInt32x4(xs[i+2*step : i+3*step])
+		y2 := archsimd.LoadInt32x4(ys[i+2*step : i+3*step])
+		acc2 = acc2.Add(c0.IfElse(x2.Greater(y2), c1))
+		x3 := archsimd.LoadInt32x4(xs[i+3*step : i+4*step])
+		y3 := archsimd.LoadInt32x4(ys[i+3*step : i+4*step])
+		acc3 = acc3.Add(c0.IfElse(x3.Greater(y3), c1))
+	}
+	acc0 = acc0.Add(acc1).Add(acc2.Add(acc3))
+	var lanes [4]int32
+	acc0.Store(lanes[:])
+	accumulator := initial
+	for _, lane := range lanes[:step] {
+		accumulator = accumulator + lane
+	}
+	for ; i < len(xs); i++ {
+		x := xs[i]
+		y := ys[i]
+		s0 := int32(0)
+		if x > y {
+			s0 = 1
+		}
+		accumulator = accumulator + s0
+	}
+	return accumulator
+}
+
+func foldLanes2(xs []float64, ys []float64, initial float64) float64 {
+	n := min(len(xs), len(ys))
+	xs, ys = xs[:n], ys[:n]
+	c0 := archsimd.BroadcastFloat64x2(0.0)
+	c1 := archsimd.BroadcastFloat64x2(1.0)
+	acc0 := archsimd.BroadcastFloat64x2(math.Copysign(0, -1))
+	acc1, acc2, acc3 := acc0, acc0, acc0
+	const step = 2
+	i := 0
+	for ; i < len(xs)-4*step+1; i += 4 * step {
+		x0 := archsimd.LoadFloat64x2(xs[i : i+step])
+		y0 := archsimd.LoadFloat64x2(ys[i : i+step])
+		acc0 = acc0.Add(c0.IfElse(x0.LessEqual(y0), c1))
+		x1 := archsimd.LoadFloat64x2(xs[i+step : i+2*step])
+		y1 := archsimd.LoadFloat64x2(ys[i+step : i+2*step])
+		acc1 = acc1.Add(c0.IfElse(x1.LessEqual(y1), c1))
+		x2 := archsimd.LoadFloat64x2(xs[i+2*step : i+3*step])
+		y2 := archsimd.LoadFloat64x2(ys[i+2*step : i+3*step])
+		acc2 = acc2.Add(c0.IfElse(x2.LessEqual(y2), c1))
+		x3 := archsimd.LoadFloat64x2(xs[i+3*step : i+4*step])
+		y3 := archsimd.LoadFloat64x2(ys[i+3*step : i+4*step])
+		acc3 = acc3.Add(c0.IfElse(x3.LessEqual(y3), c1))
+	}
+	acc0 = acc0.Add(acc1).Add(acc2.Add(acc3))
+	var lanes [2]float64
+	acc0.Store(lanes[:])
+	accumulator := initial
+	for _, lane := range lanes[:step] {
+		accumulator = accumulator + lane
+	}
+	for ; i < len(xs); i++ {
+		x := xs[i]
+		y := ys[i]
+		s0 := 1.0
+		if x <= y {
+			s0 = 0.0
+		}
+		accumulator = accumulator + s0
+	}
+	return accumulator
+}
+
+func foldLanes3(xs []int32, initial int32) int32 {
+	c0 := archsimd.BroadcastInt32x4(0)
+	c1 := archsimd.BroadcastInt32x4(-1)
+	c2 := archsimd.BroadcastInt32x4(2)
+	acc0 := archsimd.BroadcastInt32x4(0)
+	acc1, acc2, acc3 := acc0, acc0, acc0
+	const step = 4
+	i := 0
+	for ; i < len(xs)-4*step+1; i += 4 * step {
+		x0 := archsimd.LoadInt32x4(xs[i : i+step])
+		acc0 = acc0.Add(c1.IfElse(x0.Less(c0), c2))
+		x1 := archsimd.LoadInt32x4(xs[i+step : i+2*step])
+		acc1 = acc1.Add(c1.IfElse(x1.Less(c0), c2))
+		x2 := archsimd.LoadInt32x4(xs[i+2*step : i+3*step])
+		acc2 = acc2.Add(c1.IfElse(x2.Less(c0), c2))
+		x3 := archsimd.LoadInt32x4(xs[i+3*step : i+4*step])
+		acc3 = acc3.Add(c1.IfElse(x3.Less(c0), c2))
+	}
+	acc0 = acc0.Add(acc1).Add(acc2.Add(acc3))
+	var lanes [4]int32
+	acc0.Store(lanes[:])
+	accumulator := initial
+	for _, lane := range lanes[:step] {
+		accumulator = accumulator + lane
+	}
+	for ; i < len(xs); i++ {
+		x := xs[i]
+		s0 := int32(2)
+		if x < 0 {
+			s0 = -1
+		}
+		accumulator = accumulator + s0
+	}
+	return accumulator
+}
+
+func foldLanes4(xs []int32, initial int32) int32 {
+	c0 := archsimd.BroadcastInt32x4(0)
+	c1 := archsimd.BroadcastInt32x4(-1)
+	c2 := archsimd.BroadcastInt32x4(1)
+	acc0 := archsimd.BroadcastInt32x4(0)
+	acc1, acc2, acc3 := acc0, acc0, acc0
+	const step = 4
+	i := 0
+	for ; i < len(xs)-4*step+1; i += 4 * step {
+		x0 := archsimd.LoadInt32x4(xs[i : i+step])
+		acc0 = acc0.Add(c1.IfElse(x0.Less(c0), c2.IfElse(x0.Greater(c0), c0)))
+		x1 := archsimd.LoadInt32x4(xs[i+step : i+2*step])
+		acc1 = acc1.Add(c1.IfElse(x1.Less(c0), c2.IfElse(x1.Greater(c0), c0)))
+		x2 := archsimd.LoadInt32x4(xs[i+2*step : i+3*step])
+		acc2 = acc2.Add(c1.IfElse(x2.Less(c0), c2.IfElse(x2.Greater(c0), c0)))
+		x3 := archsimd.LoadInt32x4(xs[i+3*step : i+4*step])
+		acc3 = acc3.Add(c1.IfElse(x3.Less(c0), c2.IfElse(x3.Greater(c0), c0)))
+	}
+	acc0 = acc0.Add(acc1).Add(acc2.Add(acc3))
+	var lanes [4]int32
+	acc0.Store(lanes[:])
+	accumulator := initial
+	for _, lane := range lanes[:step] {
+		accumulator = accumulator + lane
+	}
+	for ; i < len(xs); i++ {
+		x := xs[i]
+		s0 := int32(0)
+		if x > 0 {
+			s0 = 1
+		}
+		s1 := s0
+		if x < 0 {
+			s1 = -1
+		}
+		accumulator = accumulator + s1
+	}
+	return accumulator
+}
+
+func foldLanes5(xs []int32, ys []int32, initial int32) int32 {
+	n := min(len(xs), len(ys))
+	xs, ys = xs[:n], ys[:n]
+	c0 := archsimd.BroadcastInt32x4(0)
+	acc0 := archsimd.BroadcastInt32x4(0)
+	acc1, acc2, acc3 := acc0, acc0, acc0
+	const step = 4
+	i := 0
+	for ; i < len(xs)-4*step+1; i += 4 * step {
+		x0 := archsimd.LoadInt32x4(xs[i : i+step])
+		y0 := archsimd.LoadInt32x4(ys[i : i+step])
+		acc0 = acc0.Add(x0.Sub(y0).IfElse(x0.Greater(y0), c0))
+		x1 := archsimd.LoadInt32x4(xs[i+step : i+2*step])
+		y1 := archsimd.LoadInt32x4(ys[i+step : i+2*step])
+		acc1 = acc1.Add(x1.Sub(y1).IfElse(x1.Greater(y1), c0))
+		x2 := archsimd.LoadInt32x4(xs[i+2*step : i+3*step])
+		y2 := archsimd.LoadInt32x4(ys[i+2*step : i+3*step])
+		acc2 = acc2.Add(x2.Sub(y2).IfElse(x2.Greater(y2), c0))
+		x3 := archsimd.LoadInt32x4(xs[i+3*step : i+4*step])
+		y3 := archsimd.LoadInt32x4(ys[i+3*step : i+4*step])
+		acc3 = acc3.Add(x3.Sub(y3).IfElse(x3.Greater(y3), c0))
+	}
+	acc0 = acc0.Add(acc1).Add(acc2.Add(acc3))
+	var lanes [4]int32
+	acc0.Store(lanes[:])
+	accumulator := initial
+	for _, lane := range lanes[:step] {
+		accumulator = accumulator + lane
+	}
+	for ; i < len(xs); i++ {
+		x := xs[i]
+		y := ys[i]
+		s0 := int32(0)
+		if x > y {
+			s0 = x - y
+		}
+		accumulator = accumulator + s0
+	}
+	return accumulator
+}
+
+func mapLanes(xs []float64) []float64 {
+	c0 := archsimd.BroadcastFloat64x2(0.5)
+	out := make([]float64, len(xs))
+	const step = 2
+	i := 0
+	for ; i < len(xs)-step+1; i += step {
+		x := archsimd.LoadFloat64x2(xs[i : i+step])
+		c0.Mul(x).Store(out[i : i+step])
+	}
+	if i < len(xs) {
+		x, _ := archsimd.LoadFloat64x2Part(xs[i:])
+		c0.Mul(x).StorePart(out[i:])
+	}
+	return out
+}
+
+func zipLanes(xs []int32, ys []int32) []int32 {
+	n := min(len(xs), len(ys))
+	xs, ys = xs[:n], ys[:n]
+	c0 := archsimd.BroadcastInt32x4(0)
+	out := make([]int32, len(xs))
+	const step = 4
+	i := 0
+	for ; i < len(xs)-step+1; i += step {
+		x := archsimd.LoadInt32x4(xs[i : i+step])
+		y := archsimd.LoadInt32x4(ys[i : i+step])
+		x.Sub(y).IfElse(x.Greater(y), c0).Store(out[i : i+step])
+	}
+	if i < len(xs) {
+		x, _ := archsimd.LoadInt32x4Part(xs[i:])
+		y, _ := archsimd.LoadInt32x4Part(ys[i:])
+		x.Sub(y).IfElse(x.Greater(y), c0).StorePart(out[i:])
+	}
+	return out
+}
+
+// main_scalar.go
+//go:build !(goexperiment.simd && (arm64 || wasm))
+
+package main
+
+func foldLanes(xs []int32, ys []int32, initial int32) int32 {
+	n := min(len(xs), len(ys))
+	xs, ys = xs[:n], ys[:n]
+	accumulator := initial
+	for i := range len(xs) {
+		x := xs[i]
+		y := ys[i]
+		s0 := int32(0)
+		if x > y {
+			s0 = 1
+		}
+		accumulator = accumulator + s0
+	}
+	return accumulator
+}
+
+func foldLanes2(xs []float64, ys []float64, initial float64) float64 {
+	n := min(len(xs), len(ys))
+	xs, ys = xs[:n], ys[:n]
+	accumulator := initial
+	for i := range len(xs) {
+		x := xs[i]
+		y := ys[i]
+		s0 := 1.0
+		if x <= y {
+			s0 = 0.0
+		}
+		accumulator = accumulator + s0
+	}
+	return accumulator
+}
+
+func foldLanes3(xs []int32, initial int32) int32 {
+	accumulator := initial
+	for _, x := range xs {
+		s0 := int32(2)
+		if x < 0 {
+			s0 = -1
+		}
+		accumulator = accumulator + s0
+	}
+	return accumulator
+}
+
+func foldLanes4(xs []int32, initial int32) int32 {
+	accumulator := initial
+	for _, x := range xs {
+		s0 := int32(0)
+		if x > 0 {
+			s0 = 1
+		}
+		s1 := s0
+		if x < 0 {
+			s1 = -1
+		}
+		accumulator = accumulator + s1
+	}
+	return accumulator
+}
+
+func foldLanes5(xs []int32, ys []int32, initial int32) int32 {
+	n := min(len(xs), len(ys))
+	xs, ys = xs[:n], ys[:n]
+	accumulator := initial
+	for i := range len(xs) {
+		x := xs[i]
+		y := ys[i]
+		s0 := int32(0)
+		if x > y {
+			s0 = x - y
+		}
+		accumulator = accumulator + s0
+	}
+	return accumulator
+}
+
+func mapLanes(xs []float64) []float64 {
+	out := make([]float64, len(xs))
+	for i, x := range xs {
+		out[i] = 0.5 * x
+	}
+	return out
+}
+
+func zipLanes(xs []int32, ys []int32) []int32 {
+	n := min(len(xs), len(ys))
+	xs, ys = xs[:n], ys[:n]
+	out := make([]int32, len(xs))
+	for i := range out {
+		x := xs[i]
+		y := ys[i]
+		s0 := int32(0)
+		if x > y {
+			s0 = x - y
+		}
+		out[i] = s0
+	}
+	return out
+}
+
+// main_vector.go
+//go:build goexperiment.simd && wasm
+
+package main
+
+import (
+	"math"
+	"simd"
+)
+
+func foldLanes(xs []int32, ys []int32, initial int32) int32 {
+	n := min(len(xs), len(ys))
+	xs, ys = xs[:n], ys[:n]
+	c0 := simd.BroadcastInt32s(1)
+	c1 := simd.BroadcastInt32s(0)
+	acc0 := simd.BroadcastInt32s(0)
+	acc1, acc2, acc3 := acc0, acc0, acc0
+	step := acc0.Len()
+	i := 0
+	for ; i < len(xs)-4*step+1; i += 4 * step {
+		x0 := simd.LoadInt32s(xs[i : i+step])
+		y0 := simd.LoadInt32s(ys[i : i+step])
+		acc0 = acc0.Add(c0.IfElse(x0.Greater(y0), c1))
+		x1 := simd.LoadInt32s(xs[i+step : i+2*step])
+		y1 := simd.LoadInt32s(ys[i+step : i+2*step])
+		acc1 = acc1.Add(c0.IfElse(x1.Greater(y1), c1))
+		x2 := simd.LoadInt32s(xs[i+2*step : i+3*step])
+		y2 := simd.LoadInt32s(ys[i+2*step : i+3*step])
+		acc2 = acc2.Add(c0.IfElse(x2.Greater(y2), c1))
+		x3 := simd.LoadInt32s(xs[i+3*step : i+4*step])
+		y3 := simd.LoadInt32s(ys[i+3*step : i+4*step])
+		acc3 = acc3.Add(c0.IfElse(x3.Greater(y3), c1))
+	}
+	acc0 = acc0.Add(acc1).Add(acc2.Add(acc3))
+	var lanes [16]int32
+	acc0.Store(lanes[:])
+	accumulator := initial
+	for _, lane := range lanes[:step] {
+		accumulator = accumulator + lane
+	}
+	for ; i < len(xs); i++ {
+		x := xs[i]
+		y := ys[i]
+		s0 := int32(0)
+		if x > y {
+			s0 = 1
+		}
+		accumulator = accumulator + s0
+	}
+	return accumulator
+}
+
+func foldLanes2(xs []float64, ys []float64, initial float64) float64 {
+	n := min(len(xs), len(ys))
+	xs, ys = xs[:n], ys[:n]
+	c0 := simd.BroadcastFloat64s(0.0)
+	c1 := simd.BroadcastFloat64s(1.0)
+	acc0 := simd.BroadcastFloat64s(math.Copysign(0, -1))
+	acc1, acc2, acc3 := acc0, acc0, acc0
+	step := acc0.Len()
+	i := 0
+	for ; i < len(xs)-4*step+1; i += 4 * step {
+		x0 := simd.LoadFloat64s(xs[i : i+step])
+		y0 := simd.LoadFloat64s(ys[i : i+step])
+		acc0 = acc0.Add(c0.IfElse(x0.LessEqual(y0), c1))
+		x1 := simd.LoadFloat64s(xs[i+step : i+2*step])
+		y1 := simd.LoadFloat64s(ys[i+step : i+2*step])
+		acc1 = acc1.Add(c0.IfElse(x1.LessEqual(y1), c1))
+		x2 := simd.LoadFloat64s(xs[i+2*step : i+3*step])
+		y2 := simd.LoadFloat64s(ys[i+2*step : i+3*step])
+		acc2 = acc2.Add(c0.IfElse(x2.LessEqual(y2), c1))
+		x3 := simd.LoadFloat64s(xs[i+3*step : i+4*step])
+		y3 := simd.LoadFloat64s(ys[i+3*step : i+4*step])
+		acc3 = acc3.Add(c0.IfElse(x3.LessEqual(y3), c1))
+	}
+	acc0 = acc0.Add(acc1).Add(acc2.Add(acc3))
+	var lanes [8]float64
+	acc0.Store(lanes[:])
+	accumulator := initial
+	for _, lane := range lanes[:step] {
+		accumulator = accumulator + lane
+	}
+	for ; i < len(xs); i++ {
+		x := xs[i]
+		y := ys[i]
+		s0 := 1.0
+		if x <= y {
+			s0 = 0.0
+		}
+		accumulator = accumulator + s0
+	}
+	return accumulator
+}
+
+func foldLanes3(xs []int32, initial int32) int32 {
+	c0 := simd.BroadcastInt32s(0)
+	c1 := simd.BroadcastInt32s(-1)
+	c2 := simd.BroadcastInt32s(2)
+	acc0 := simd.BroadcastInt32s(0)
+	acc1, acc2, acc3 := acc0, acc0, acc0
+	step := acc0.Len()
+	i := 0
+	for ; i < len(xs)-4*step+1; i += 4 * step {
+		x0 := simd.LoadInt32s(xs[i : i+step])
+		acc0 = acc0.Add(c1.IfElse(x0.Less(c0), c2))
+		x1 := simd.LoadInt32s(xs[i+step : i+2*step])
+		acc1 = acc1.Add(c1.IfElse(x1.Less(c0), c2))
+		x2 := simd.LoadInt32s(xs[i+2*step : i+3*step])
+		acc2 = acc2.Add(c1.IfElse(x2.Less(c0), c2))
+		x3 := simd.LoadInt32s(xs[i+3*step : i+4*step])
+		acc3 = acc3.Add(c1.IfElse(x3.Less(c0), c2))
+	}
+	acc0 = acc0.Add(acc1).Add(acc2.Add(acc3))
+	var lanes [16]int32
+	acc0.Store(lanes[:])
+	accumulator := initial
+	for _, lane := range lanes[:step] {
+		accumulator = accumulator + lane
+	}
+	for ; i < len(xs); i++ {
+		x := xs[i]
+		s0 := int32(2)
+		if x < 0 {
+			s0 = -1
+		}
+		accumulator = accumulator + s0
+	}
+	return accumulator
+}
+
+func foldLanes4(xs []int32, initial int32) int32 {
+	c0 := simd.BroadcastInt32s(0)
+	c1 := simd.BroadcastInt32s(-1)
+	c2 := simd.BroadcastInt32s(1)
+	acc0 := simd.BroadcastInt32s(0)
+	acc1, acc2, acc3 := acc0, acc0, acc0
+	step := acc0.Len()
+	i := 0
+	for ; i < len(xs)-4*step+1; i += 4 * step {
+		x0 := simd.LoadInt32s(xs[i : i+step])
+		acc0 = acc0.Add(c1.IfElse(x0.Less(c0), c2.IfElse(x0.Greater(c0), c0)))
+		x1 := simd.LoadInt32s(xs[i+step : i+2*step])
+		acc1 = acc1.Add(c1.IfElse(x1.Less(c0), c2.IfElse(x1.Greater(c0), c0)))
+		x2 := simd.LoadInt32s(xs[i+2*step : i+3*step])
+		acc2 = acc2.Add(c1.IfElse(x2.Less(c0), c2.IfElse(x2.Greater(c0), c0)))
+		x3 := simd.LoadInt32s(xs[i+3*step : i+4*step])
+		acc3 = acc3.Add(c1.IfElse(x3.Less(c0), c2.IfElse(x3.Greater(c0), c0)))
+	}
+	acc0 = acc0.Add(acc1).Add(acc2.Add(acc3))
+	var lanes [16]int32
+	acc0.Store(lanes[:])
+	accumulator := initial
+	for _, lane := range lanes[:step] {
+		accumulator = accumulator + lane
+	}
+	for ; i < len(xs); i++ {
+		x := xs[i]
+		s0 := int32(0)
+		if x > 0 {
+			s0 = 1
+		}
+		s1 := s0
+		if x < 0 {
+			s1 = -1
+		}
+		accumulator = accumulator + s1
+	}
+	return accumulator
+}
+
+func foldLanes5(xs []int32, ys []int32, initial int32) int32 {
+	n := min(len(xs), len(ys))
+	xs, ys = xs[:n], ys[:n]
+	c0 := simd.BroadcastInt32s(0)
+	acc0 := simd.BroadcastInt32s(0)
+	acc1, acc2, acc3 := acc0, acc0, acc0
+	step := acc0.Len()
+	i := 0
+	for ; i < len(xs)-4*step+1; i += 4 * step {
+		x0 := simd.LoadInt32s(xs[i : i+step])
+		y0 := simd.LoadInt32s(ys[i : i+step])
+		acc0 = acc0.Add(x0.Sub(y0).IfElse(x0.Greater(y0), c0))
+		x1 := simd.LoadInt32s(xs[i+step : i+2*step])
+		y1 := simd.LoadInt32s(ys[i+step : i+2*step])
+		acc1 = acc1.Add(x1.Sub(y1).IfElse(x1.Greater(y1), c0))
+		x2 := simd.LoadInt32s(xs[i+2*step : i+3*step])
+		y2 := simd.LoadInt32s(ys[i+2*step : i+3*step])
+		acc2 = acc2.Add(x2.Sub(y2).IfElse(x2.Greater(y2), c0))
+		x3 := simd.LoadInt32s(xs[i+3*step : i+4*step])
+		y3 := simd.LoadInt32s(ys[i+3*step : i+4*step])
+		acc3 = acc3.Add(x3.Sub(y3).IfElse(x3.Greater(y3), c0))
+	}
+	acc0 = acc0.Add(acc1).Add(acc2.Add(acc3))
+	var lanes [16]int32
+	acc0.Store(lanes[:])
+	accumulator := initial
+	for _, lane := range lanes[:step] {
+		accumulator = accumulator + lane
+	}
+	for ; i < len(xs); i++ {
+		x := xs[i]
+		y := ys[i]
+		s0 := int32(0)
+		if x > y {
+			s0 = x - y
+		}
+		accumulator = accumulator + s0
+	}
+	return accumulator
+}
+
+func mapLanes(xs []float64) []float64 {
+	c0 := simd.BroadcastFloat64s(0.5)
+	out := make([]float64, len(xs))
+	step := simd.Float64s{}.Len()
+	i := 0
+	for ; i < len(xs)-step+1; i += step {
+		x := simd.LoadFloat64s(xs[i : i+step])
+		c0.Mul(x).Store(out[i : i+step])
+	}
+	if i < len(xs) {
+		x, _ := simd.LoadFloat64sPart(xs[i:])
+		c0.Mul(x).StorePart(out[i:])
+	}
+	return out
+}
+
+func zipLanes(xs []int32, ys []int32) []int32 {
+	n := min(len(xs), len(ys))
+	xs, ys = xs[:n], ys[:n]
+	c0 := simd.BroadcastInt32s(0)
+	out := make([]int32, len(xs))
+	step := simd.Int32s{}.Len()
+	i := 0
+	for ; i < len(xs)-step+1; i += step {
+		x := simd.LoadInt32s(xs[i : i+step])
+		y := simd.LoadInt32s(ys[i : i+step])
+		x.Sub(y).IfElse(x.Greater(y), c0).Store(out[i : i+step])
+	}
+	if i < len(xs) {
+		x, _ := simd.LoadInt32sPart(xs[i:])
+		y, _ := simd.LoadInt32sPart(ys[i:])
+		x.Sub(y).IfElse(x.Greater(y), c0).StorePart(out[i:])
+	}
+	return out
+}

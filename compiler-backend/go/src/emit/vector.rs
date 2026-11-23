@@ -1103,6 +1103,15 @@ fn parameter_names(captures: &[Capture<'_>]) -> Vec<String> {
     names
 }
 
+fn is_literal(term: &Term) -> bool {
+    match term {
+        Term::Constant(_) => true,
+        Term::Negate(operand) => is_literal(operand),
+        Term::Binary(_, left, right) => is_literal(left) && is_literal(right),
+        _ => false,
+    }
+}
+
 fn is_free_name(name: &str) -> bool {
     const KERNEL_NAMES: &[&str] = &[
         "xs",
@@ -1419,7 +1428,7 @@ impl Kernel {
                 writeln!(out, "{indentation}{} := {}[i]", spelling.lane(lane), input_name(lane));
         }
         for index in bound {
-            let value = spelling.scalar(&self.bindings[index], 0);
+            let value = spelling.declared(&self.bindings[index]);
             for statement in std::mem::take(&mut spelling.statements) {
                 let _ = writeln!(
                     out,
@@ -1590,7 +1599,7 @@ impl Spelling<'_> {
                 if precedence < context { format!("({text})") } else { text }
             }
             Term::Select { condition, then, otherwise } => {
-                let otherwise = self.scalar(otherwise, 0);
+                let otherwise = self.declared(otherwise);
                 let then = self.scalar(then, 0);
                 let condition = self.condition(condition, 0);
                 let name = format!("s{}", self.selections);
@@ -1601,6 +1610,14 @@ impl Spelling<'_> {
                 name
             }
         }
+    }
+
+    fn declared(&mut self, term: &Term) -> String {
+        let value = self.scalar(term, 0);
+        if self.kernel.element == Element::Number || !is_literal(term) {
+            return value;
+        }
+        format!("{}({value})", self.kernel.element.scalar())
     }
 
     fn condition(&mut self, condition: &Condition, context: u8) -> String {

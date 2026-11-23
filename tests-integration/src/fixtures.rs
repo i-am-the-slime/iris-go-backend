@@ -684,9 +684,12 @@ const GO_JOBS_VARIABLE: &str = "IRIS_GO_FIXTURE_JOBS";
 const GO_RUNTIME_MODULE: &str = "github.com/i-am-the-slime/iris-go";
 const GO_RUNTIME_VERSION: &str = "v0.3.0";
 
+const WASM: (&str, &str) = ("js", "wasm");
+
 /// Writes the program and its foreign files into a Go module that requires the runtime checkout
 /// and vets it with `GOEXPERIMENT=simd`, as `iris run --go` builds, and again without the
-/// experiment when the program has SIMD kernels, so that their scalar fallback builds too.
+/// experiment and for WebAssembly when the program has SIMD kernels, so that their scalar fallback
+/// and portable vectors build too.
 fn build_go_fixture(files: &[(String, String)], vendored: &[(PathBuf, Vec<u8>)]) -> FixtureResult {
     let requirement = env::var(GO_BUILD_VARIABLE).unwrap_or_default();
     if requirement == "skip" {
@@ -711,16 +714,23 @@ fn build_go_fixture(files: &[(String, String)], vendored: &[(PathBuf, Vec<u8>)])
     let has_kernels = files.iter().any(|(path, _)| {
         ["_neon.go", "_vector.go", "_scalar.go"].iter().any(|suffix| path.ends_with(suffix))
     });
-    let experiments = if has_kernels { &[Some("simd"), None][..] } else { &[Some("simd")][..] };
+    let builds = if has_kernels {
+        &[(Some("simd"), None), (None, None), (Some("simd"), Some(WASM))][..]
+    } else {
+        &[(Some("simd"), None)][..]
+    };
 
     let _slot = go_build_slot()?;
-    for &experiment in experiments {
-        let output = go_vet(module.path(), experiment)?;
+    for &(experiment, platform) in builds {
+        let output = go_vet(module.path(), experiment, platform)?;
         if !output.status.success() {
             let kept = module.keep();
-            let shown = experiment.map_or("without GOEXPERIMENT".to_string(), |experiment| {
+            let mut shown = experiment.map_or("without GOEXPERIMENT".to_string(), |experiment| {
                 format!("with GOEXPERIMENT={experiment}")
             });
+            if let Some((system, architecture)) = platform {
+                shown.push_str(&format!(" for {system}/{architecture}"));
+            }
             return Err(FixtureFailure(format!(
                 "the generated Go does not build {shown} (module kept at {}):\n{}{}",
                 kept.display(),
@@ -781,7 +791,11 @@ fn write_go_module(
 }
 
 /// `go vet` type-checks every package as `go build` would, without linking.
-fn go_vet(module: &Path, experiment: Option<&str>) -> io::Result<std::process::Output> {
+fn go_vet(
+    module: &Path,
+    experiment: Option<&str>,
+    platform: Option<(&str, &str)>,
+) -> io::Result<std::process::Output> {
     let mut command = Command::new("go");
     command
         .args(["vet", "./..."])
@@ -792,6 +806,9 @@ fn go_vet(module: &Path, experiment: Option<&str>) -> io::Result<std::process::O
         Some(experiment) => command.env("GOEXPERIMENT", experiment),
         None => command.env_remove("GOEXPERIMENT"),
     };
+    if let Some((system, architecture)) = platform {
+        command.env("GOOS", system).env("GOARCH", architecture);
+    }
     command.output()
 }
 
