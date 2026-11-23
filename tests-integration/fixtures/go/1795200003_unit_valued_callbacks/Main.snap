@@ -35,21 +35,18 @@ import (
 )
 
 func main_() int32 {
-	array := []int32{1}
-	accumulator2 := func(_ int32) {
+	array := []int32{1, 2}
+	array2 := []int32{1}
+	count := min(len(array2), len(units))
+	array3 := []int32{1}
+	accumulator := func(_ int32) {
 	}
-	for range array {
-		accumulator2 = func(_ int32) {
+	for range array3 {
+		accumulator = func(_ int32) {
 		}
 	}
-	return int32(len(units)) + int32(len(arraypkg.Scanl(func(_ struct{}, _ int32) struct{} {
-		return struct{}{}
-	}, arraypkg.Foldr(func(_ struct{}, accumulator struct{}) struct{} {
-		return struct{}{}
-	}, struct{}{}, units), []int32{1, 2})))*10 + int32(len(arraypkg.ZipWith(func(_ int32, _ struct{}) struct{} {
-		return struct{}{}
-	}, []int32{1}, units)))*100 + int32(len(arraypkg.Map(func(i int32) struct{} {
-		accumulator2(i)
+	return int32(len(units)) + int32(len(array))*10 + int32(count)*100 + int32(len(arraypkg.Map(func(i int32) struct{} {
+		accumulator(i)
 		return struct{}{}
 	}, []int32{1, 2, 3})))*1000
 }

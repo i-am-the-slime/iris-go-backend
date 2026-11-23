@@ -206,6 +206,10 @@ pub const ARRAY_SLICE: Foreign = array_with("Slice", 3, int32_parameters(&[0, 1]
 
 pub const ARRAY_SORT_BY: Foreign = uncurried(direct("SortBy", 3), &[(0, 2)]);
 
+pub const ARRAY_SCANL: Foreign = uncurried(array("Scanl", 3), &[(0, 2)]);
+
+pub const ARRAY_REPLICATE: Foreign = array_with("Replicate", 2, int32_parameters(&[0]));
+
 pub const FOREIGN_RECORD: Foreign = direct("ForeignRecord", 2);
 
 pub const FROM_CHAR_ARRAY: Foreign = prim("CharArrayToString", 1);
@@ -296,7 +300,7 @@ pub(super) const FOREIGN_IMPORTS: &[(&str, &str, Foreign)] = &[
     ("Data.Array", "filterImpl", iteration(GoPackage::Array, "Filter", 2, Iteration::Filter)),
     ("Data.Array", "sliceImpl", array_with("Slice", 3, int32_parameters(&[0, 1]))),
     ("Data.Array", "rangeImpl", Foreign::Range),
-    ("Data.Array", "replicateImpl", array_with("Replicate", 2, int32_parameters(&[0]))),
+    ("Data.Array", "replicateImpl", ARRAY_REPLICATE),
     (
         "Data.Array",
         "zipWithImpl",
@@ -306,7 +310,7 @@ pub(super) const FOREIGN_IMPORTS: &[(&str, &str, Foreign)] = &[
     ("Data.Array", "partitionImpl", direct_with("Partition", 2, RECORD)),
     ("Data.Array", "fromFoldableImpl", direct_with("FromFoldable", 2, CONS_LIST_ACCUMULATOR)),
     ("Data.Array", "allImpl", ARRAY_ALL),
-    ("Data.Array", "scanlImpl", uncurried(array("Scanl", 3), &[(0, 2)])),
+    ("Data.Array", "scanlImpl", ARRAY_SCANL),
     ("Data.Array", "scanrImpl", uncurried(array("Scanr", 3), &[(0, 2)])),
     ("Data.Array", "unconsImpl", uncurried(direct("Uncons", 3), &[(1, 2)])),
     ("Data.Array", "sortByImpl", ARRAY_SORT_BY),

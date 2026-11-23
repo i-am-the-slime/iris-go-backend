@@ -1659,9 +1659,10 @@ where
                     "invariant violated: unique edges mark neither a construction nor a reuse"
                 ),
             },
-            ExpressionKind::Foreign { foreign, arguments } => {
-                self.foreign_value(foreign, arguments, expression.monotype, out)?
-            }
+            ExpressionKind::Foreign { foreign, arguments } => match self.built(expression, out)? {
+                Some(built) => built,
+                None => self.foreign_value(foreign, arguments, expression.monotype, out)?,
+            },
             ExpressionKind::Apply { function, arguments } => {
                 let applied = self.application_value(function, arguments, out)?;
                 if self.is_unit(expression.monotype) && is_effectful_call(&applied) {

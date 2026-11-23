@@ -124,7 +124,12 @@ where
         }
     }
 
-    fn loop_variable(&mut self, callback: &Callback<'_>, position: usize, base: &str) -> String {
+    pub(super) fn loop_variable(
+        &mut self,
+        callback: &Callback<'_>,
+        position: usize,
+        base: &str,
+    ) -> String {
         match callback {
             Callback::Inline { parameters, body } => {
                 let parameter = parameters[position];

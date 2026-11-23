@@ -405,11 +405,11 @@ func large() {
 	}
 	Journal_ffi.Log(strconv.Itoa(int(accumulator)))
 	var wrappedCounter int32 = 0
-	array2 := arraypkg.Replicate(1000000, int32(1))
-	mapped := make([]tuple.TupleIntInt, len(array2))
-	for slot, i := range array2 {
-		i2 := int32(slot)
-		mapped[slot] = tuple.TupleIntInt{First: i2, Second: i}
+	value2 := int32(1)
+	mapped := make([]tuple.TupleIntInt, 1000000)
+	for slot := range 1000000 {
+		i := int32(slot)
+		mapped[slot] = tuple.TupleIntInt{First: i, Second: value2}
 	}
 	for tupleIndex := range mapped {
 		wrappedCounter += mapped[tupleIndex].First * mapped[tupleIndex].Second

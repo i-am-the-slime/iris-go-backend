@@ -38,10 +38,13 @@ use std::collections::VecDeque;
 
 use super::iteration::{Callback, Found};
 use super::{
-    Emitter, Mode, Sink, binary, identifier_expression, is_simple, length, lines, uses_local,
+    Emitter, Mode, Sink, binary, call, identifier_expression, is_simple, length, lines, uses_local,
 };
 use crate::error::GoResult;
-use crate::foreign::{Boundary, Foreign, GoFunction, GoPackage, Iteration};
+use crate::foreign::{
+    ARRAY_APPEND, ARRAY_REPLICATE, ARRAY_SCANL, ARRAY_SLICE, Boundary, Foreign, GoFunction,
+    GoPackage, Iteration,
+};
 use crate::monomorphic::{Binding, Expression, ExpressionKind, Literal, Local};
 use crate::monotype::{Monotype, MonotypeId};
 use crate::naming::VALUE;
@@ -49,13 +52,13 @@ use crate::syntax::{GoExpression, GoStatement, GoType, SourceLine};
 
 /// The stages between an array and the consumer that reads it.
 pub(super) struct Pipeline<'e> {
-    source: Source,
+    source: Source<'e>,
     /// Nearest the source first.
     stages: Vec<Stage<'e>>,
     order: Order,
 }
 
-enum Source {
+enum Source<'e> {
     Array(GoExpression),
     /// `first .. last` counting up.
     Range {
@@ -65,6 +68,18 @@ enum Source {
     /// `first .. last` with bounds known when the loop starts: `count`
     /// elements from `first`, `step` apart.
     Stepping(Steps),
+    Replicate {
+        count: GoExpression,
+        value: GoExpression,
+    },
+    Zip(Box<Zip<'e>>),
+}
+
+struct Zip<'e> {
+    operands: [Pipeline<'e>; 2],
+    callback: Callback<'e>,
+    produces: MonotypeId,
+    count: GoExpression,
 }
 
 struct Steps {
@@ -76,7 +91,13 @@ struct Steps {
 /// What lies between a consumer and its source, nearest the consumer first.
 enum Step<'e> {
     Bindings(&'e [Binding]),
-    Stage { kind: StageKind, callback: Found<'e>, produces: MonotypeId, runs: bool },
+    Stage {
+        kind: StageKind,
+        callback: Found<'e>,
+        initial: Option<&'e Expression>,
+        produces: MonotypeId,
+        runs: bool,
+    },
 }
 
 struct Stage<'e> {
@@ -84,19 +105,28 @@ struct Stage<'e> {
     callback: Callback<'e>,
     /// The type of the elements the stage produces.
     produces: MonotypeId,
+    state: Option<String>,
+}
+
+struct StageParts<'e> {
+    kind: StageKind,
+    callback: Found<'e>,
+    inner: &'e Expression,
+    initial: Option<&'e Expression>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum StageKind {
     Map,
     MapWithIndex,
+    Scan,
     Filter,
     Bind,
 }
 
 impl StageKind {
     fn keeps_positions(self) -> bool {
-        matches!(self, StageKind::Map | StageKind::MapWithIndex)
+        matches!(self, StageKind::Map | StageKind::MapWithIndex | StageKind::Scan)
     }
 }
 
@@ -158,6 +188,7 @@ enum Header {
     Counting { variable: String, first: i64, last: i64 },
     Backward { index: Option<String>, element: String, array: GoExpression },
     Stepping { index: Option<String>, element: String, steps: Steps, order: Order },
+    Positions { index: Option<String>, count: GoExpression },
     If(GoExpression, Option<SourceLine>),
 }
 
@@ -191,7 +222,7 @@ impl Loop {
 impl<'e> Pipeline<'e> {
     /// The pipeline followed by a `concatMap` stage.
     pub(super) fn then_bind(mut self, callback: Callback<'e>, produces: MonotypeId) -> Self {
-        self.stages.push(Stage { kind: StageKind::Bind, callback, produces });
+        self.stages.push(Stage { kind: StageKind::Bind, callback, produces, state: None });
         self
     }
 
@@ -208,6 +239,16 @@ impl<'e> Pipeline<'e> {
             Source::Array(array) => length(array.clone()),
             Source::Range { first, last } => GoExpression::Integer(last - first + 1),
             Source::Stepping(steps) => steps.count.clone(),
+            Source::Replicate { count, .. } => count.clone(),
+            Source::Zip(zip) => zip.count.clone(),
+        })
+    }
+
+    fn count(&self) -> Option<GoExpression> {
+        let known = self.known_length()?;
+        Some(match &self.source {
+            Source::Range { .. } | Source::Stepping(_) => as_int(known),
+            Source::Array(_) | Source::Replicate { .. } | Source::Zip(_) => known,
         })
     }
 }
@@ -220,7 +261,30 @@ where
     /// consumer's loop can absorb.
     pub(super) fn is_fusible(&self, array: &Expression, demand: Demand) -> bool {
         let array = past_bindings(array);
-        self.stage_parts(array, demand, false).is_some() || range_bounds(array).is_some()
+        self.stage_parts(array, demand, false).is_some()
+            || range_bounds(array).is_some()
+            || (demand.order == Order::Forward && self.generated(array).is_some())
+    }
+
+    fn generated<'e>(&self, array: &'e Expression) -> Option<Generated<'e>> {
+        let ExpressionKind::Foreign { foreign, arguments } = &array.kind else { return None };
+        if foreign.calls(ARRAY_REPLICATE)
+            && let [count, value] = arguments.as_slice()
+        {
+            return Some(Generated::Replicate { count, value });
+        }
+        let Foreign::Call {
+            boundary: Boundary { iteration: Some(Iteration::ZipWith), .. }, ..
+        } = foreign
+        else {
+            return None;
+        };
+        let [function, left, right] = arguments.as_slice() else { return None };
+        if self.effect_after(function.monotype, 2) {
+            return None;
+        }
+        let callback = self.callback(function, 2)?;
+        Some(Generated::Zip { callback, operands: [left, right] })
     }
 
     /// The pipeline a `concatMap` callback returns, which can run as a loop
@@ -260,7 +324,8 @@ where
                 current = body;
                 continue;
             }
-            let Some((kind, callback, inner)) = self.stage_parts(current, demand, positional)
+            let Some(StageParts { kind, callback, inner, initial }) =
+                self.stage_parts(current, demand, positional)
             else {
                 break;
             };
@@ -269,7 +334,7 @@ where
                 Monotype::Array(element) => *element,
                 _ => unreachable!("invariant violated: an array stage produces an array"),
             };
-            steps.push(Step::Stage { kind, callback, produces, runs: true });
+            steps.push(Step::Stage { kind, callback, initial, produces, runs: true });
             current = inner;
         }
         // Reads propagate from the consumer towards the source, the order of `steps`.
@@ -279,7 +344,7 @@ where
             let reads = callback.reads(element_position(*kind));
             *runs = !kind.keeps_positions() || read;
             read = match kind {
-                StageKind::Map | StageKind::MapWithIndex => read && reads,
+                StageKind::Map | StageKind::MapWithIndex | StageKind::Scan => read && reads,
                 StageKind::Filter => reads || read,
                 StageKind::Bind => reads,
             };
@@ -288,9 +353,13 @@ where
         for step in steps {
             match step {
                 Step::Bindings(bindings) => self.bindings(bindings, out)?,
-                Step::Stage { kind, callback, produces, runs: true } => {
+                Step::Stage { kind, callback, initial, produces, runs: true } => {
                     let callback = self.capture(callback, out)?;
-                    stages.push(Stage { kind, callback, produces });
+                    let state = match initial {
+                        Some(initial) => Some(self.scan_state(initial, produces, out)?),
+                        None => None,
+                    };
+                    stages.push(Stage { kind, callback, produces, state });
                 }
                 Step::Stage { runs: false, .. } => {}
             }
@@ -299,12 +368,121 @@ where
         let source = match (literal_range(current), range_bounds(current)) {
             (Some((first, last)), _) if !positional => Source::Range { first, last },
             (_, Some(bounds)) => Source::Stepping(self.steps(bounds, read, out)?),
-            (_, None) => {
-                let value = self.value(current, out)?;
-                Source::Array(self.hoist(value, "array", out))
-            }
+            (_, None) => self.source(current, demand, read, out)?,
         };
         Ok(Pipeline { source, stages, order: demand.order })
+    }
+
+    fn source<'e>(
+        &mut self,
+        array: &'e Expression,
+        demand: Demand,
+        read: bool,
+        out: &mut Vec<GoStatement>,
+    ) -> GoResult<Source<'e>> {
+        let generated = (demand.order == Order::Forward).then(|| self.generated(array)).flatten();
+        match generated {
+            Some(Generated::Replicate { count, value }) => {
+                let count = self.value(count, out)?;
+                let count = match count {
+                    GoExpression::Integer(count) => GoExpression::Integer(count.max(0)),
+                    count => {
+                        let count = as_int(count);
+                        let count = call(
+                            identifier_expression("max"),
+                            vec![count, GoExpression::Integer(0)],
+                        );
+                        self.hoist(count, "count", out)
+                    }
+                };
+                let replicated = self.value(value, out)?;
+                let replicated = self.typed_constant(replicated, value.monotype)?;
+                let value = self.hoist(replicated, "value", out);
+                Ok(Source::Replicate { count, value })
+            }
+            Some(Generated::Zip { callback, operands }) => {
+                let callback = self.capture(callback, out)?;
+                let produces = match self.monotypes.get(array.monotype) {
+                    Monotype::Array(element) => *element,
+                    _ => unreachable!("invariant violated: zipWith produces an array"),
+                };
+                let positional = Demand { positions: true, ..Demand::FORWARD };
+                let [left, right] = operands;
+                let left =
+                    self.pipeline_reading(left, positional, read && callback.reads(0), out)?;
+                let right =
+                    self.pipeline_reading(right, positional, read && callback.reads(1), out)?;
+                let lengths = [&left, &right].map(|pipeline| {
+                    let count = pipeline.count();
+                    count.expect("invariant violated: a positional pipeline has a length")
+                });
+                let count = match lengths {
+                    [GoExpression::Integer(left), GoExpression::Integer(right)] => {
+                        GoExpression::Integer(left.min(right))
+                    }
+                    [left, right] => {
+                        let count = call(identifier_expression("min"), vec![left, right]);
+                        self.hoist(count, "count", out)
+                    }
+                };
+                let operands = [left, right];
+                Ok(Source::Zip(Box::new(Zip { operands, callback, produces, count })))
+            }
+            None => {
+                let value = self.array_view(array, out)?;
+                Ok(Source::Array(self.hoist(value, "array", out)))
+            }
+        }
+    }
+
+    fn scan_state(
+        &mut self,
+        initial: &Expression,
+        produces: MonotypeId,
+        out: &mut Vec<GoStatement>,
+    ) -> GoResult<String> {
+        let value = self.value(initial, out)?;
+        let state = self.temporary("scanned");
+        out.push(self.define(state.clone(), value, produces)?);
+        Ok(state)
+    }
+
+    fn array_view(
+        &mut self,
+        array: &Expression,
+        out: &mut Vec<GoStatement>,
+    ) -> GoResult<GoExpression> {
+        match &array.kind {
+            ExpressionKind::Foreign { foreign, arguments } if foreign.calls(ARRAY_SLICE) => {
+                let values = self.values(arguments, out)?;
+                let view = self.support_function("sliceView", SLICE_VIEW_SOURCE);
+                Ok(call(identifier_expression(&view), values))
+            }
+            ExpressionKind::If { condition, then, otherwise }
+                if is_sliced(then) || is_sliced(otherwise) =>
+            {
+                let condition = self.value(condition, out)?;
+                let view = self.temporary("view");
+                let type_ = self.go_type(array.monotype)?;
+                out.push(GoStatement::Variable { name: view.clone(), type_, value: None });
+                let mut branches = [vec![], vec![]];
+                for (branch, statements) in [then, otherwise].into_iter().zip(&mut branches) {
+                    let value = self.array_view(branch, statements)?;
+                    statements.push(GoStatement::Assign {
+                        targets: vec![identifier_expression(&view)],
+                        values: vec![value],
+                    });
+                }
+                let [then, otherwise] = branches;
+                out.push(GoStatement::If { condition, then, otherwise });
+                Ok(identifier_expression(&view))
+            }
+            ExpressionKind::Let { bindings, body } if is_sliced(body) => {
+                self.bindings(bindings, out)?;
+                self.array_view(body, out)
+            }
+            _ => self.value(array, out),
+        }
     }
 
     /// Works out where a range's loop starts, which way it counts and how far.
@@ -346,11 +524,18 @@ where
         array: &'e Expression,
         demand: Demand,
         positional: bool,
-    ) -> Option<(StageKind, Found<'e>, &'e Expression)> {
-        let ExpressionKind::Foreign {
-            foreign: Foreign::Call { boundary: Boundary { iteration: Some(iteration), .. }, .. },
-            arguments,
-        } = &array.kind
+    ) -> Option<StageParts<'e>> {
+        let ExpressionKind::Foreign { foreign, arguments } = &array.kind else { return None };
+        if foreign.calls(ARRAY_SCANL) {
+            let [callback, initial, inner] = arguments.as_slice() else { return None };
+            if demand.order == Order::Backward || self.effect_after(callback.monotype, 2) {
+                return None;
+            }
+            let callback = self.callback(callback, 2)?;
+            let initial = Some(initial);
+            return Some(StageParts { kind: StageKind::Scan, callback, inner, initial });
+        }
+        let Foreign::Call { boundary: Boundary { iteration: Some(iteration), .. }, .. } = foreign
         else {
             return None;
         };
@@ -373,8 +558,8 @@ where
         if self.effect_after(callback.monotype, arity) {
             return None;
         }
-        let found = self.callback(callback, arity)?;
-        Some((kind, found, inner))
+        let callback = self.callback(callback, arity)?;
+        Some(StageParts { kind, callback, inner, initial: None })
     }
 
     /// Starts the loop over a pipeline's source and runs every stage, leaving
@@ -396,8 +581,8 @@ where
             None if stage_positions => Some(self.temporary("index")),
             None => None,
         };
-        let header = self.header(source, order, index.clone(), element.clone());
-        let mut body = Loop { frames: vec![Frame { header, body: vec![] }] };
+        let (header, prefix) = self.header(source, order, index.clone(), element.clone())?;
+        let mut body = Loop { frames: vec![Frame { header, body: prefix }] };
         let mut flow = identifier_expression(&element);
         let mut remaining = VecDeque::from(stages);
         while let Some(stage) = remaining.pop_front() {
@@ -471,10 +656,12 @@ where
                     } else {
                         "_".into()
                     };
-                    let header = self.header(source, Order::Forward, None, element.clone());
-                    body.frames.push(Frame { header, body: vec![] });
+                    let (header, prefix) =
+                        self.header(source, Order::Forward, None, element.clone())?;
+                    body.frames.push(Frame { header, body: prefix });
                     identifier_expression(&element)
                 }
+                StageKind::Scan => self.scan_step(&stage, flow, body.body())?,
             };
         }
         let element = match need {
@@ -494,12 +681,12 @@ where
     /// asks for it, the element's position as `index`.
     fn header(
         &mut self,
-        source: Source,
+        source: Source<'_>,
         order: Order,
         index: Option<String>,
         element: String,
-    ) -> Header {
-        match (source, order) {
+    ) -> GoResult<(Header, Vec<GoStatement>)> {
+        let header = match (source, order) {
             (Source::Array(iterable), Order::Forward) => Header::Range { index, element, iterable },
             (Source::Array(array), Order::Backward) => Header::Backward { index, element, array },
             // A consumer that stores each element at its position counts positions.
@@ -516,7 +703,124 @@ where
                 Header::Counting { variable, first, last }
             }
             (Source::Stepping(steps), order) => Header::Stepping { index, element, steps, order },
+            (Source::Replicate { count, value }, Order::Forward) => {
+                let mut prefix = vec![];
+                if element != "_" {
+                    prefix.push(GoStatement::Define { names: vec![element], values: vec![value] });
+                }
+                return Ok((Header::Positions { index, count }, prefix));
+            }
+            (Source::Zip(zip), Order::Forward) => {
+                if element == "_" {
+                    return Ok((Header::Positions { index, count: zip.count }, vec![]));
+                }
+                let index = index.unwrap_or_else(|| self.temporary("index"));
+                let mut prefix = vec![];
+                let count = zip.count.clone();
+                self.zip_element(*zip, &index, &element, &mut prefix)?;
+                return Ok((Header::Positions { index: Some(index), count }, prefix));
+            }
+            (Source::Replicate { .. } | Source::Zip(_), Order::Backward) => {
+                unreachable!("invariant violated: generated arrays are read forwards")
+            }
+        };
+        Ok((header, vec![]))
+    }
+
+    fn zip_element(
+        &mut self,
+        zip: Zip<'_>,
+        index: &str,
+        element: &str,
+        body: &mut Vec<GoStatement>,
+    ) -> GoResult<()> {
+        let Zip { operands: [left, right], callback, produces, .. } = zip;
+        let left = self.element_at(left, index, body)?;
+        let left = self.receive(left, &callback, 0, true, body)?;
+        let right = self.element_at(right, index, body)?;
+        let right = self.receive(right, &callback, 1, true, body)?;
+        let sink = Sink::Define(element.to_string());
+        self.apply_callback(&callback, vec![left, right], produces, sink, body)
+    }
+
+    fn element_at(
+        &mut self,
+        pipeline: Pipeline<'_>,
+        index: &str,
+        body: &mut Vec<GoStatement>,
+    ) -> GoResult<GoExpression> {
+        let Pipeline { source, stages, .. } = pipeline;
+        let mut flow = match source {
+            Source::Array(array) => GoExpression::Index {
+                value: Box::new(array),
+                index: Box::new(identifier_expression(index)),
+            },
+            Source::Range { first, .. } => {
+                let step = GoExpression::Integer(1);
+                let count = GoExpression::Integer(0);
+                stepped_value(&Steps { first: GoExpression::Integer(first), step, count }, index)
+            }
+            Source::Stepping(steps) => stepped_value(&steps, index),
+            Source::Replicate { value, .. } => value,
+            Source::Zip(zip) => {
+                let element = self.temporary("element");
+                self.zip_element(*zip, index, &element, body)?;
+                identifier_expression(&element)
+            }
+        };
+        for stage in stages {
+            flow = match stage.kind {
+                StageKind::Map | StageKind::MapWithIndex if self.is_unit(stage.produces) => {
+                    super::unit_value()
+                }
+                StageKind::Map | StageKind::MapWithIndex => {
+                    let mut arguments = vec![];
+                    if stage.kind == StageKind::MapWithIndex {
+                        arguments.push(self.receive_index(&stage.callback, index, body));
+                    }
+                    let position = arguments.len();
+                    arguments.push(self.receive(flow, &stage.callback, position, true, body)?);
+                    self.callback_value(&stage.callback, arguments, body)?
+                }
+                StageKind::Scan => self.scan_step(&stage, flow, body)?,
+                StageKind::Filter | StageKind::Bind => {
+                    unreachable!("invariant violated: a positional pipeline keeps positions")
+                }
+            };
         }
+        Ok(flow)
+    }
+
+    fn scan_step(
+        &mut self,
+        stage: &Stage<'_>,
+        flow: GoExpression,
+        body: &mut Vec<GoStatement>,
+    ) -> GoResult<GoExpression> {
+        let state = stage.state.clone().expect("invariant violated: a scan stage has a state");
+        let accumulated = match &stage.callback {
+            Callback::Inline { .. } => {
+                let parameter = self.loop_variable(&stage.callback, 0, "accumulated");
+                if parameter != "_" {
+                    body.push(GoStatement::Define {
+                        names: vec![parameter.clone()],
+                        values: vec![identifier_expression(&state)],
+                    });
+                }
+                identifier_expression(&parameter)
+            }
+            Callback::Direct { .. } => identifier_expression(&state),
+        };
+        let argument = self.receive(flow, &stage.callback, 1, true, body)?;
+        let sink = Sink::Assign(state.clone());
+        self.apply_callback(
+            &stage.callback,
+            vec![accumulated, argument],
+            stage.produces,
+            sink,
+            body,
+        )?;
+        Ok(identifier_expression(&state))
     }
 
     /// Closes every frame of a loop into the statement that runs it.
@@ -576,6 +880,9 @@ where
                             GoStatement::Range { index, element, iterable, body }
                         }
                     }
+                }
+                Header::Positions { index, count } => {
+                    GoStatement::Range { index, element: "_".into(), iterable: count, body }
                 }
                 Header::If(condition, _) => {
                     GoStatement::If { condition, then: body, otherwise: vec![] }
@@ -705,6 +1012,126 @@ where
         })
     }
 
+    pub(super) fn built(
+        &mut self,
+        array: &Expression,
+        out: &mut Vec<GoStatement>,
+    ) -> GoResult<Option<GoExpression>> {
+        let ExpressionKind::Foreign { foreign, arguments } = &array.kind else { return Ok(None) };
+        if !matches!(self.monotypes.get(array.monotype), Monotype::Array(_)) {
+            return Ok(None);
+        }
+        let zipped = matches!(self.generated(array), Some(Generated::Zip { .. }));
+        if zipped
+            && let Some(vectorised) =
+                self.vectorised(Iteration::ZipWith, arguments, array.monotype, out)?
+        {
+            return Ok(Some(vectorised));
+        }
+        let scanned =
+            foreign.calls(ARRAY_SCANL) && self.stage_parts(array, Demand::FORWARD, false).is_some();
+        if zipped || scanned {
+            let pipeline = self.pipeline(array, Demand::FORWARD, Need::Value, out)?;
+            return self.materialized(pipeline, vec![], array.monotype, out).map(Some);
+        }
+        if foreign.calls(ARRAY_APPEND)
+            && let [prefix, rest] = arguments.as_slice()
+            && let ExpressionKind::Array(elements) = &prefix.kind
+            && !self.owned_snocs.contains(&std::ptr::from_ref(prefix))
+            && self.is_fusible(rest, Demand::FORWARD)
+        {
+            let mut values = vec![];
+            for element in elements {
+                let value = self.value(element, out)?;
+                let value = self.typed_constant(value, element.monotype)?;
+                values.push(self.hoist(value, "first", out));
+            }
+            let pipeline = self.pipeline(rest, Demand::FORWARD, Need::Value, out)?;
+            return self.materialized(pipeline, values, array.monotype, out).map(Some);
+        }
+        Ok(None)
+    }
+
+    fn materialized(
+        &mut self,
+        pipeline: Pipeline<'_>,
+        prefix: Vec<GoExpression>,
+        monotype: MonotypeId,
+        out: &mut Vec<GoStatement>,
+    ) -> GoResult<GoExpression> {
+        let array_type = self.go_type(monotype)?;
+        let built = self.temporary("built");
+        let offset = prefix.len();
+        let known = pipeline.count();
+        let allocation = match &known {
+            Some(count) => {
+                let count = match (offset, count) {
+                    (0, count) => count.clone(),
+                    (offset, GoExpression::Integer(count)) => {
+                        GoExpression::Integer(count + offset as i64)
+                    }
+                    (offset, count) => {
+                        binary("+", count.clone(), GoExpression::Integer(offset as i64))
+                    }
+                };
+                call(identifier_expression("make"), vec![GoExpression::Type(array_type), count])
+            }
+            None => {
+                let fields = prefix.iter().map(|value| (None, value.clone())).collect();
+                GoExpression::Composite { type_: array_type, fields }
+            }
+        };
+        out.push(GoStatement::Define { names: vec![built.clone()], values: vec![allocation] });
+        if known.is_some() {
+            for (position, value) in prefix.into_iter().enumerate() {
+                let slot = GoExpression::Integer(position as i64);
+                out.push(GoStatement::Assign {
+                    targets: vec![indexed(&built, slot)],
+                    values: vec![value],
+                });
+            }
+        }
+        let saved = self.tail_loop.take();
+        let opened = self.open(pipeline, Need::Value, known.is_some().then_some("index"));
+        self.tail_loop = saved;
+        let mut opened = opened?;
+        let stored = match &opened.index {
+            Some(index) => {
+                let slot = match offset {
+                    0 => identifier_expression(index),
+                    offset => binary(
+                        "+",
+                        identifier_expression(index),
+                        GoExpression::Integer(offset as i64),
+                    ),
+                };
+                GoStatement::Assign {
+                    targets: vec![indexed(&built, slot)],
+                    values: vec![opened.element],
+                }
+            }
+            None => {
+                let element = if opened.spread {
+                    GoExpression::Spread(Box::new(opened.element))
+                } else {
+                    opened.element
+                };
+                let appended = call(
+                    identifier_expression("append"),
+                    vec![identifier_expression(&built), element],
+                );
+                GoStatement::Assign {
+                    targets: vec![identifier_expression(&built)],
+                    values: vec![appended],
+                }
+            }
+        };
+        opened.body.body().push(stored);
+        let statement = self.close(opened.body);
+        out.push(statement);
+        Ok(identifier_expression(&built))
+    }
+
     /// Performs an effect for every element of a range, counting through the
     /// range instead of building it. The effects run in the range's order.
     pub(super) fn each_in_range(
@@ -768,7 +1195,9 @@ fn needed_inputs(stages: &[Stage<'_>], need: Need<'_, '_>) -> Vec<bool> {
     for (position, stage) in stages.iter().enumerate().rev() {
         let reads = stage.callback.reads(element_position(stage.kind));
         needed[position] = match stage.kind {
-            StageKind::Map | StageKind::MapWithIndex => needed[position + 1] && reads,
+            StageKind::Map | StageKind::MapWithIndex | StageKind::Scan => {
+                needed[position + 1] && reads
+            }
             StageKind::Filter => reads || needed[position + 1],
             StageKind::Bind => reads,
         };
@@ -791,10 +1220,58 @@ fn takes_expression(downstream: &[Stage<'_>], need: Need<'_, '_>) -> bool {
 
 fn element_position(kind: StageKind) -> usize {
     match kind {
-        StageKind::MapWithIndex => 1,
+        StageKind::MapWithIndex | StageKind::Scan => 1,
         _ => 0,
     }
 }
+
+enum Generated<'e> {
+    Replicate { count: &'e Expression, value: &'e Expression },
+    Zip { callback: Found<'e>, operands: [&'e Expression; 2] },
+}
+
+fn as_int(count: GoExpression) -> GoExpression {
+    match &count {
+        GoExpression::Integer(_) => count,
+        GoExpression::Call { function, .. } if matches!(function.as_ref(), GoExpression::Identifier(name) if name == "len") => {
+            count
+        }
+        _ => GoExpression::Conversion { type_: GoType::Int, value: Box::new(count) },
+    }
+}
+
+fn indexed(array: &str, slot: GoExpression) -> GoExpression {
+    GoExpression::Index { value: Box::new(identifier_expression(array)), index: Box::new(slot) }
+}
+
+fn is_sliced(array: &Expression) -> bool {
+    match &array.kind {
+        ExpressionKind::Foreign { foreign, .. } => foreign.calls(ARRAY_SLICE),
+        ExpressionKind::If { then, otherwise, .. } => is_sliced(then) || is_sliced(otherwise),
+        ExpressionKind::Let { body, .. } => is_sliced(body),
+        _ => false,
+    }
+}
+
+const SLICE_VIEW_SOURCE: &str = "func {name}[T any](start int32, end int32, xs []T) []T {
+\tlength := len(xs)
+\tfrom, to := int(start), int(end)
+\tif from < 0 {
+\t\tfrom = max(length+from, 0)
+\t} else {
+\t\tfrom = min(from, length)
+\t}
+\tif to < 0 {
+\t\tto = max(length+to, 0)
+\t} else {
+\t\tto = min(to, length)
+\t}
+\tif from >= to {
+\t\treturn nil
+\t}
+\treturn xs[from:to:to]
+}
+";
 
 fn past_bindings(mut expression: &Expression) -> &Expression {
     while let ExpressionKind::Let { body, .. } = &expression.kind {

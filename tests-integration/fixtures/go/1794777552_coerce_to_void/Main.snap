@@ -26,7 +26,6 @@ package main
 import (
 	"fixture/Data/Either"
 	"fixture/Data/Void"
-	arraypkg "github.com/i-am-the-slime/iris-go/array"
 	"github.com/i-am-the-slime/iris-go/console"
 	"strings"
 )
@@ -35,11 +34,12 @@ var main_ = initializeMain_()
 
 func initializeMain_() []string {
 	array := []either.EitherStringVal{{Tag: either.EitherStringValLeft, Left: "no"}, {Tag: either.EitherStringValLeft, Left: "void"}}
-	mapped := make([]string, len(array))
+	built := make([]string, len(array)+1)
+	built[0] = "2"
 	for index, element := range array {
-		mapped[index] = describe(element)
+		built[index+1] = describe(element)
 	}
-	return arraypkg.Append([]string{"2"}, mapped)
+	return built
 }
 
 func describe(either2 either.EitherStringVal) string {
