@@ -6,7 +6,6 @@ package main
 
 import (
 	"fixture/shared"
-	"github.com/i-am-the-slime/iris-go/prim"
 	"strconv"
 )
 
@@ -29,7 +28,7 @@ func depthOrBranch(step int, acc int32, n int32) int32 {
 			}
 			acc, n = acc+1, n-1
 		default: // shared.BranchStep
-			step, acc, n = shared.DepthStep, acc+depth(0, prim.IntDiv(n, 4)), n-1
+			step, acc, n = shared.DepthStep, acc+depth(0, n>>2), n-1
 		}
 	}
 }

@@ -56,7 +56,7 @@ func grownReusing(limit int32, tree *Tree) *Tree {
 		if size(tree) >= limit {
 			return tree
 		}
-		argument := prim.IntMod(size(tree)*7, 13)
+		argument := prim.IntModPositive(size(tree)*7, 13)
 		tree = insertReusing(argument, tree)
 	}
 }

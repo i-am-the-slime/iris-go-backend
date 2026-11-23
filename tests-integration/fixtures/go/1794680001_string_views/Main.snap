@@ -239,9 +239,9 @@ func changedTextIsWalkedEachIteration(rest string, count int32) int32 {
 	for {
 		codeUnitCharAt := prim.CodeUnitCharAt(func(payload rune) maybe.Char {
 			return maybe.Char(payload)
-		}, maybe.NoChar, prim.IntMod(count, 2), rest)
+		}, maybe.NoChar, count&1, rest)
 		if codeUnitCharAt != maybe.NoChar {
-			rest, count = prim.CodeUnitDrop(1+prim.IntMod(count, 2), rest), count+1
+			rest, count = prim.CodeUnitDrop(1+count&1, rest), count+1
 			continue
 		}
 		return count

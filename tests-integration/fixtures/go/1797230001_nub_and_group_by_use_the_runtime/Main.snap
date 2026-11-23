@@ -346,7 +346,7 @@ func mainRecord(shown *shared.Ref[string], text string) {
 }
 
 func mainF(value int32) int32 {
-	return prim.IntMod(value, 3)
+	return prim.IntModPositive(value, 3)
 }
 
 func mainComp(x int32, y int32) ordering.Ordering {

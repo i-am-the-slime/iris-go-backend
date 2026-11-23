@@ -20,7 +20,7 @@ func initializeMain_() []int32 {
 		within := int(i) < len(elements)
 		if within {
 			element := elements[i]
-			elements[i] = prim.IntMod(element, 7)
+			elements[i] = prim.IntModPositive(element, 7)
 		}
 	}
 	within2 := 0 < len(*array2)

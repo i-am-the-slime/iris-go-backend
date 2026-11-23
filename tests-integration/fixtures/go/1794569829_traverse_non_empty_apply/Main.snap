@@ -26,7 +26,6 @@ import (
 	"fixture/Data/Maybe"
 	arraypkg "github.com/i-am-the-slime/iris-go/array"
 	"github.com/i-am-the-slime/iris-go/direct"
-	"github.com/i-am-the-slime/iris-go/prim"
 )
 
 var main_ = initializeMain_()
@@ -36,8 +35,8 @@ func initializeMain_() maybe.ArrayInt {
 	append_ := direct.Appender[int32]()
 	n := array2[0]
 	var result maybe.ArrayInt
-	if prim.IntMod(n, 2) == 0 {
-		result = maybe.JustArrayInt([]int32{prim.IntDiv(n, 2)})
+	if n&1 == 0 {
+		result = maybe.JustArrayInt([]int32{n >> 1})
 	} else {
 		result = maybe.NoArrayInt
 	}
@@ -45,8 +44,8 @@ func initializeMain_() maybe.ArrayInt {
 	for _, element := range array {
 		switch result.Tag {
 		case maybe.TagJust:
-			if prim.IntMod(element, 2) == 0 {
-				result = maybe.JustArrayInt(append_(result.Just)(prim.IntDiv(element, 2)))
+			if element&1 == 0 {
+				result = maybe.JustArrayInt(append_(result.Just)(element >> 1))
 			} else {
 				result = maybe.NoArrayInt
 			}

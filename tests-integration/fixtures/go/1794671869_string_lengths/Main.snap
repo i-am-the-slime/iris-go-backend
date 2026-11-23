@@ -126,7 +126,7 @@ func changedRestLengthIsCountedEachIteration(rest string, count int32) int32 {
 		if prim.CodeUnitLengthUpTo(4, rest) < 3 {
 			return count
 		}
-		rest, count = prim.CodeUnitDrop(prim.IntDiv(prim.CodeUnitLength(rest), 2), rest), count+1
+		rest, count = prim.CodeUnitDrop(prim.CodeUnitLength(rest)>>1, rest), count+1
 	}
 }
 

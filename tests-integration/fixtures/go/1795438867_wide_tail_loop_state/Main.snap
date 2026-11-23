@@ -107,7 +107,7 @@ func step(commands []int32, i int32, a int32, b int32, c int32, d int32, s strin
 		}
 		var result int32
 		result = commands[i]
-		intMod := prim.IntMod(result, 12)
+		intMod := prim.IntModPositive(result, 12)
 		switch intMod {
 		case 0:
 			i, state.a, state.b = i+1, state.b, state.a

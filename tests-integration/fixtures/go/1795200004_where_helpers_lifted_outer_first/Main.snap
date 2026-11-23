@@ -31,7 +31,7 @@ func mainDigitSum(x int32, acc int32) int32 {
 		if x == 0 {
 			return acc
 		}
-		x, acc = prim.IntDiv(x, 10), acc+prim.IntMod(x, 10)
+		x, acc = prim.IntDivPositive(x, 10), acc+prim.IntModPositive(x, 10)
 	}
 }
 

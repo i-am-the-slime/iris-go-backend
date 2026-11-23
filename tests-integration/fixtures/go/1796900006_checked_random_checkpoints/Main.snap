@@ -776,7 +776,7 @@ func mainGoReusing(tree *redblack.Tree, kept *redblack_types.ListTree, folded in
 	if n <= 0 {
 		return redblack_types.Run{Trees: &redblack_types.ListTree{Cons0: tree, Cons1: kept}, Folded: folded}
 	}
-	next := prim.IntMod(state*75+74, 65537)
+	next := prim.IntModPositive(state*75+74, 65537)
 	k := next % 512
 	v := next%3 == 0
 	var grown *redblack.Tree

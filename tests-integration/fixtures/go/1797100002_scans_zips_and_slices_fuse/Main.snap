@@ -199,7 +199,7 @@ func initializeMain_() []string {
 	kept := []int32{}
 	for _, element := range array7 {
 		scanned12 = semiring.Add(scanned12, element)
-		if prim.IntMod(scanned12, 2) == 0 {
+		if scanned12&1 == 0 {
 			kept = append(kept, scanned12)
 		}
 	}

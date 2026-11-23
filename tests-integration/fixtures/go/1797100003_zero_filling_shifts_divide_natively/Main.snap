@@ -13,7 +13,7 @@ func main() {
 	output := []int32{}
 	inputs := []int32{-7, 123457, -1, 0}
 	for _, i := range inputs {
-		output = array.Append(output, []int32{int32(uint32(i)>>1) % 10, int32(uint32(i)>>3) / 7, prim.IntMod(int32(uint32(i)>>0), 10)})
+		output = array.Append(output, []int32{int32(uint32(i)>>1) % 10, int32(uint32(i)>>3) / 7, prim.IntModPositive(int32(uint32(i)>>0), 10)})
 	}
 }
 

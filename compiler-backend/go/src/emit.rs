@@ -21,6 +21,7 @@ mod conventions;
 mod declarations;
 mod deduplicate;
 mod diverging;
+mod divisions;
 mod effects;
 mod existential;
 mod foreign_data;
@@ -193,6 +194,7 @@ where
     timed("bounds", || headers::drop_repeated_bounds_tests(&mut declarations, &effects));
     timed("guards", || guards::guard_accesses_together(&mut declarations, &effects));
     timed("intervals", || intervals::prove_bounds(&mut declarations, &effects));
+    timed("divisions", || divisions::reduce_constant_divisions(&mut declarations));
     let taken =
         |name: &str| emitter.global_names.contains(name) || IMPORTED_PACKAGES.contains(&name);
     timed("lengths", || lengths::count_lengths_up_to_comparisons(&mut declarations));

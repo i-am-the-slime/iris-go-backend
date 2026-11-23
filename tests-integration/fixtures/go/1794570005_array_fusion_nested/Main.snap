@@ -7,7 +7,6 @@ package main
 import (
 	"fixture/shared"
 	"github.com/i-am-the-slime/iris-go/array"
-	"github.com/i-am-the-slime/iris-go/prim"
 	"strconv"
 )
 
@@ -58,7 +57,7 @@ func initializeMain_() shared.MainResult {
 	mapped2 := []string{}
 	for _, value := range numbers {
 		x := value + 1
-		if prim.IntMod(x, 2) == 0 {
+		if x&1 == 0 {
 			mapped2 = append(mapped2, strconv.Itoa(int(x)))
 		}
 	}
