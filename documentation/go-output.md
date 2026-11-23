@@ -328,6 +328,12 @@ whatever you like, Iris renames it.
 | `forall a.` | a type parameter `[A any]` |
 | `foreign import data T` | any Go type you declare as `T` |
 
+- **Strings are WTF-8.** A JavaScript string is UTF-16 and can hold half a character, a lone
+  surrogate like `"\uD83D"`. Plain UTF-8 can't store that, so Iris uses WTF-8 ("wobbly
+  transformation format"): ordinary text is byte for byte normal UTF-8, and only a lone surrogate
+  gets the extra three-byte encoding. You'll never see it with normal text. When your Go hands a
+  string to PureScript, make it valid UTF-8; bytes from outside (files, sockets, protobuf) are
+  worth a `utf8.Valid` first, or keep them as bytes.
 - **Arguments come all at once.** `repeat :: Int -> a -> Array a` is `Repeat(n int32, x A)`, not a
   function returning a function.
 - **Calling a function performs its effect.** `elapsed :: Stopwatch -> Effect Number` is
