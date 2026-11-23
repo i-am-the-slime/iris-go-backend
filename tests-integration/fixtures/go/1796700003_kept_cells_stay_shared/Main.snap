@@ -1,0 +1,168 @@
+---
+source: tests-integration/src/fixtures.rs
+---
+// main.go
+package main
+
+import (
+	"fixture/Keeper_ffi"
+	"fixture/shared"
+	"github.com/i-am-the-slime/iris-go/console"
+	"github.com/i-am-the-slime/iris-go/prim"
+	"strings"
+)
+
+type Tree struct {
+	Node0 *Tree
+	Node2 *Tree
+	Node1 int32
+}
+
+var sharedTreeLeaf = &Tree{}
+
+type TotalTree struct {
+	Tree  *Tree
+	Total int32
+}
+
+var main_ = initializeMain_()
+
+func initializeMain_() []int32 {
+	tree := sample(3)
+	i := stashedAfter(2, tree)
+	var fromStoring int32
+	if i > 0 {
+		fromStoring = total(incremented(tree))
+	} else {
+		fromStoring = 0
+	}
+	effect := func() []int32 {
+		var fromTheRef *Tree
+		if fromStoring > 0 {
+			fromTheRef = stashed.Value
+		} else {
+			fromTheRef = sharedTreeLeaf
+		}
+		tree2 := sample(3)
+		var fromKeeping int32
+		if keptAfter(2, tree2) > 0 {
+			fromKeeping = total(incremented(tree2))
+		} else {
+			fromKeeping = 0
+		}
+		var fromTheForeign *Tree
+		if fromKeeping > 0 {
+			fromTheForeign = Keeper_ffi.Kept[*Tree]()
+		} else {
+			fromTheForeign = sharedTreeLeaf
+		}
+		tree3 := sample(3)
+		record := withTotalAfter(2, tree3)
+		var result int32
+		if record.Total > 0 {
+			result = total(incremented(tree3))*1000 + total(record.Tree)
+		} else {
+			result = 0
+		}
+		tree4 := sample(3)
+		later := totalLaterAfter(2, tree4)
+		var result2 int32
+		if later(struct{}{}) > 0 {
+			result2 = total(incremented(tree4))*1000 + later(struct{}{})
+		} else {
+			result2 = 0
+		}
+		return []int32{fromStoring, total(fromTheRef), result, result2, fromKeeping, total(fromTheForeign)}
+	}
+	performed := effect()
+	return performed
+}
+
+var stashed = initializeStashed()
+
+func initializeStashed() *shared.Ref[*Tree] {
+	performed := &shared.Ref[*Tree]{Value: sharedTreeLeaf}
+	return performed
+}
+
+func total(value *Tree) int32 {
+	if value == sharedTreeLeaf {
+		return 0
+	}
+	return total(value.Node0) + value.Node1 + total(value.Node2)
+}
+
+func sample(depth int32) *Tree {
+	if depth == 0 {
+		return sharedTreeLeaf
+	}
+	return &Tree{Node0: sample(depth - 1), Node1: depth, Node2: sample(depth - 1)}
+}
+
+func stashedAfter(countdown int32, tree *Tree) int32 {
+	for {
+		treeCaptured := tree
+		if countdown == 0 {
+			effect := func() int32 {
+				stashed.Value = treeCaptured
+				return total(treeCaptured)
+			}
+			performed := effect()
+			return performed
+		}
+		countdown, tree = countdown-1, treeCaptured
+	}
+}
+
+func incremented(value *Tree) *Tree {
+	if value == sharedTreeLeaf {
+		return sharedTreeLeaf
+	}
+	return &Tree{Node0: incremented(value.Node0), Node1: value.Node1 + 1, Node2: incremented(value.Node2)}
+}
+
+func keptAfter(countdown int32, tree *Tree) int32 {
+	for {
+		if countdown == 0 {
+			return Keeper_ffi.Keep(tree)
+		}
+		countdown -= 1
+	}
+}
+
+func withTotalAfter(countdown int32, tree *Tree) TotalTree {
+	for {
+		if countdown == 0 {
+			argument := total(tree)
+			return TotalTree{Total: argument, Tree: tree}
+		}
+		countdown -= 1
+	}
+}
+
+func totalLaterAfter(countdown int32, tree *Tree) func(struct{}) int32 {
+	for {
+		treeCaptured := tree
+		if countdown == 0 {
+			return func(_ struct{}) int32 {
+				return total(treeCaptured)
+			}
+		}
+		countdown, tree = countdown-1, treeCaptured
+	}
+}
+
+func main() {
+	texts := make([]string, 0, len(main_))
+	for _, element := range main_ {
+		texts = append(texts, prim.ShowInt(element))
+	}
+	console.Print("[" + strings.Join(texts, " ") + "]")
+}
+
+// shared/shared.go
+package shared
+
+type Ref[T any] struct {
+	Value T
+}

@@ -1,0 +1,103 @@
+---
+source: tests-integration/src/fixtures.rs
+---
+// main.go
+package main
+
+import (
+	"github.com/i-am-the-slime/iris-go/console"
+	"github.com/i-am-the-slime/iris-go/prim"
+	"strconv"
+)
+
+type Tree struct {
+	Node0 *Tree
+	Node2 *Tree
+	Node1 int32
+}
+
+var sharedTreeLeaf = &Tree{}
+
+var main_ = initializeMain_()
+
+func initializeMain_() string {
+	tree := grownReusing(10, sharedTreeLeaf)
+	argument := strconv.Itoa(int(deepest(0, tree))) + ":"
+	text := prim.AppendString(nil, argument)
+	text = appendElements(text, insertReusing(6, tree))
+	return string(text)
+}
+
+func deepest(depth int32, value *Tree) int32 {
+	if value == sharedTreeLeaf {
+		return depth
+	}
+	x := deepest(depth+1, value.Node0)
+	y := deepest(depth+1, value.Node2)
+	if x < y {
+		return y
+	}
+	return x
+}
+
+func elements(value *Tree) string {
+	return string(appendElements(nil, value))
+}
+
+func size(value *Tree) int32 {
+	if value == sharedTreeLeaf {
+		return 0
+	}
+	return size(value.Node0) + 1 + size(value.Node2)
+}
+
+func grownReusing(limit int32, tree *Tree) *Tree {
+	for {
+		if size(tree) >= limit {
+			return tree
+		}
+		argument := prim.IntMod(size(tree)*7, 13)
+		tree = insertReusing(argument, tree)
+	}
+}
+
+func insertReusing(key int32, value *Tree) *Tree {
+	if value == sharedTreeLeaf {
+		return &Tree{Node0: sharedTreeLeaf, Node1: key, Node2: sharedTreeLeaf}
+	}
+	left := value.Node0
+	value2 := value.Node1
+	right := value.Node2
+	if key < value2 {
+		field := insertReusing(key, left)
+		value.Node0 = field
+		value.Node1 = value2
+		value.Node2 = right
+		return value
+	}
+	if key > value2 {
+		field := insertReusing(key, right)
+		value.Node0 = left
+		value.Node1 = value2
+		value.Node2 = field
+		return value
+	}
+	value.Node0 = left
+	value.Node1 = value2
+	value.Node2 = right
+	return value
+}
+
+func appendElements(buffer []byte, value *Tree) []byte {
+	if value != sharedTreeLeaf {
+		buffer = appendElements(buffer, value.Node0)
+		buffer = append(buffer, " "...)
+		buffer = strconv.AppendInt(buffer, int64(value.Node1), 10)
+		buffer = appendElements(buffer, value.Node2)
+	}
+	return buffer
+}
+
+func main() {
+	console.Print(main_)
+}

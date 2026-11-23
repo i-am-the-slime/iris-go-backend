@@ -30,6 +30,7 @@ mod groups;
 mod guards;
 mod headers;
 mod immediate;
+mod inspection;
 mod instantiations;
 mod int64;
 mod intervals;
@@ -375,7 +376,7 @@ where
             constructor_functions: FxHashMap::default(),
             cell_types: FxHashMap::default(),
             reaching: FxHashMap::default(),
-            retaining: FxHashMap::default(),
+            holding: FxHashMap::default(),
             erasing: FxHashMap::default(),
             erasing_layouts: FxHashMap::default(),
             materialized: FxHashSet::default(),
@@ -548,7 +549,7 @@ struct Emitter<'p, 'm, 'q, Q> {
     maybe_helpers: maybe::MaybeHelpers,
     cell_types: FxHashMap<DataType, bool>,
     reaching: FxHashMap<(DataType, DataType), bool>,
-    retaining: FxHashMap<MonotypeId, bool>,
+    holding: FxHashMap<(MonotypeId, DataType), bool>,
     erasing: FxHashMap<MonotypeId, bool>,
     erasing_layouts: FxHashMap<DataType, bool>,
     materialized: FxHashSet<(FunctionId, LocalId)>,

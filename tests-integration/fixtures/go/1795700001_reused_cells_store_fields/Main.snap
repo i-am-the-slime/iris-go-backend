@@ -39,8 +39,8 @@ func initializeMain_() shared.MainResult {
 		count := scrutinee.Node1
 		left := scrutinee.Node2
 		right := scrutinee.Node3
-		field := count + sizeOf(left)
-		scrutinee.Node0 = field
+		argument := count + sizeOf(left)
+		scrutinee.Node0 = argument
 		scrutinee.Node1 = k
 		scrutinee.Node2 = right
 		scrutinee.Node3 = left

@@ -1,6 +1,7 @@
 use rustc_hash::{FxHashMap, FxHashSet};
 use smol_str::SmolStr;
 
+use super::inspection::{inspecting_functions, inspects, sequence_inspections};
 use super::{Emitter, uses_local};
 use crate::foreign::{Boundary, Foreign, Iteration};
 use crate::monomorphic::traversal::{
@@ -21,7 +22,7 @@ pub(super) trait Cells {
     fn cell(&mut self, monotype: MonotypeId) -> Option<DataType>;
     fn is_spine(&mut self, cell: &DataType, field: MonotypeId) -> bool;
     fn is_effect(&self, monotype: MonotypeId) -> bool;
-    fn retains(&mut self, monotype: MonotypeId) -> bool;
+    fn holds(&mut self, monotype: MonotypeId, cell: &DataType) -> bool;
     fn erases(&mut self, monotype: MonotypeId) -> bool;
     fn is_suspended(&self, monotype: MonotypeId) -> bool;
     fn function_type(&mut self, parameters: &[MonotypeId], result: MonotypeId) -> MonotypeId;
@@ -33,7 +34,10 @@ pub(super) struct Reused {
 }
 
 pub(super) fn reuse_cells(program: &Program, cells: &mut impl Cells) -> Reused {
-    let mut facts = Facts::new(program, cells);
+    let inspecting = timed("find inspecting functions", || inspecting_functions(program));
+    let sequenced = timed("sequence", || sequence_inspections(program, &inspecting, cells));
+    let program = &sequenced;
+    let mut facts = Facts::new(program, cells, inspecting);
     timed("settle ownership", || facts.settle(program, cells));
     timed("rewrite variants", || Emission::new(program, facts).finish(cells))
 }
@@ -59,6 +63,7 @@ impl Variant {
 
 struct Facts {
     eligible: Vec<bool>,
+    inspecting: Vec<bool>,
     next_local: u32,
     unowned_results: FxHashSet<(FunctionId, u64)>,
     donor_used: FxHashSet<Variant>,
@@ -74,7 +79,7 @@ struct Facts {
 }
 
 impl Facts {
-    fn new(program: &Program, cells: &mut impl Cells) -> Facts {
+    fn new(program: &Program, cells: &mut impl Cells, inspecting: Vec<bool>) -> Facts {
         let eligible = program
             .functions
             .iter()
@@ -84,18 +89,10 @@ impl Facts {
                     && !has_escape_hatches(function, cells)
             })
             .collect();
-        let mut next_local = 0;
-        for function in &program.functions {
-            for parameter in &function.parameters {
-                next_local = next_local.max(parameter.id.0 + 1);
-            }
-            visit(&function.body, &mut |expression| {
-                next_local = next_local.max(highest_local(expression) + 1);
-            });
-        }
         let mut facts = Facts {
             eligible,
-            next_local,
+            inspecting,
+            next_local: first_unused_local(program),
             unowned_results: FxHashSet::default(),
             donor_used: FxHashSet::default(),
             writes: FxHashSet::default(),
@@ -161,6 +158,19 @@ impl Facts {
             }
         }
     }
+}
+
+pub(super) fn first_unused_local(program: &Program) -> u32 {
+    let mut next_local = 0;
+    for function in &program.functions {
+        for parameter in &function.parameters {
+            next_local = next_local.max(parameter.id.0 + 1);
+        }
+        visit(&function.body, &mut |expression| {
+            next_local = next_local.max(highest_local(expression) + 1);
+        });
+    }
+    next_local
 }
 
 fn highest_local(expression: &Expression) -> u32 {
@@ -581,11 +591,12 @@ impl<'a, C: Cells> Planner<'a, C> {
         after: &mut Vec<&'e Expression>,
     ) -> bool {
         let argument_owned = self.arguments(arguments, stock, after);
-        let borrows = !self.cells.retains(expression.monotype);
         let parameters = &self.program.function(callee).parameters;
         let mut owned = 0u64;
-        for (position, argument_owned) in argument_owned.into_iter().enumerate() {
-            let borrowed = borrows && matches!(arguments[position].kind, ExpressionKind::Local(_));
+        for (position, (argument, argument_owned)) in
+            arguments.iter().zip(argument_owned).enumerate()
+        {
+            let borrowed = inspects(&self.facts.inspecting, self.cells, expression, argument);
             if argument_owned
                 && !borrowed
                 && self.cells.cell(parameters[position].monotype).is_some()
@@ -970,31 +981,12 @@ impl Counter<'_> {
                 let bodies = if alternatives.is_empty() { Paths::empty() } else { bodies };
                 paths.then(guards).then(bodies)
             }
-            ExpressionKind::Apply { function, arguments }
-                if !planner.cells.retains(expression.monotype) =>
-            {
-                let mut paths = self.count(planner, function);
-                for argument in arguments {
-                    let argument_paths = match argument.kind {
-                        ExpressionKind::Local(id) if id == self.target => Paths::event(Event::Peek),
-                        _ => self.count(planner, argument),
-                    };
-                    paths = paths.unordered(argument_paths);
-                }
-                paths
+            ExpressionKind::Apply { function, arguments } => {
+                let paths = self.count(planner, function);
+                self.call(planner, expression, arguments, paths)
             }
-            ExpressionKind::Foreign { arguments, .. }
-                if !planner.cells.retains(expression.monotype) =>
-            {
-                let mut paths = Paths::empty();
-                for argument in arguments {
-                    let argument_paths = match argument.kind {
-                        ExpressionKind::Local(id) if id == self.target => Paths::event(Event::Peek),
-                        _ => self.count(planner, argument),
-                    };
-                    paths = paths.unordered(argument_paths);
-                }
-                paths
+            ExpressionKind::Foreign { arguments, .. } => {
+                self.call(planner, expression, arguments, Paths::empty())
             }
             _ => {
                 let mut children = vec![];
@@ -1006,6 +998,23 @@ impl Counter<'_> {
                 paths
             }
         }
+    }
+
+    fn call<C: Cells>(
+        &self,
+        planner: &mut Planner<'_, C>,
+        call: &Expression,
+        arguments: &[Expression],
+        mut paths: Paths,
+    ) -> Paths {
+        for argument in arguments {
+            let inspected = matches!(argument.kind, ExpressionKind::Local(id) if id == self.target)
+                && inspects(&planner.facts.inspecting, planner.cells, call, argument);
+            let argument_paths =
+                if inspected { Paths::event(Event::Peek) } else { self.count(planner, argument) };
+            paths = paths.unordered(argument_paths);
+        }
+        paths
     }
 
     fn guarded<C: Cells>(&self, planner: &mut Planner<'_, C>, guarded: &Guarded) -> Paths {
@@ -1416,34 +1425,54 @@ where
         erases
     }
 
-    fn retains(&mut self, monotype: MonotypeId) -> bool {
-        if let Some(&retains) = self.retaining.get(&monotype) {
-            return retains;
+    fn holds(&mut self, monotype: MonotypeId, cell: &DataType) -> bool {
+        let key = (monotype, cell.clone());
+        if let Some(&holds) = self.holding.get(&key) {
+            return holds;
         }
-        self.retaining.insert(monotype, true);
-        let retains = match self.monotypes.get(monotype).clone() {
-            Monotype::Int
-            | Monotype::Number
-            | Monotype::Boolean
-            | Monotype::Char
-            | Monotype::String
-            | Monotype::Unit
-            | Monotype::BigInt
-            | Monotype::Regex => false,
-            Monotype::Array(element) => Cells::retains(self, element),
-            Monotype::Record(fields) => {
-                fields.iter().any(|field| Cells::retains(self, field.monotype))
+        let mut pending = vec![monotype];
+        let mut visited = FxHashSet::default();
+        let mut holds = false;
+        while let Some(monotype) = pending.pop() {
+            if !visited.insert(monotype) {
+                continue;
             }
-            Monotype::Data(data) => {
-                Cells::cell(self, monotype).is_some()
-                    || self.constructor_fields(&data).map_or(true, |fields| {
-                        fields.into_iter().any(|field| Cells::retains(self, field))
-                    })
+            match self.monotypes.get(monotype).clone() {
+                Monotype::Int
+                | Monotype::Number
+                | Monotype::Boolean
+                | Monotype::Char
+                | Monotype::String
+                | Monotype::Unit
+                | Monotype::BigInt
+                | Monotype::Int64
+                | Monotype::UInt64
+                | Monotype::Regex => {}
+                Monotype::Array(element)
+                | Monotype::MutableArray(element)
+                | Monotype::Nullable(element)
+                | Monotype::ConsList(element)
+                | Monotype::Object(element) => pending.push(element),
+                Monotype::Record(fields) => {
+                    pending.extend(fields.iter().map(|field| field.monotype));
+                }
+                Monotype::Data(data) | Monotype::Recursive(data) if data == *cell => {
+                    holds = true;
+                }
+                Monotype::Data(data) | Monotype::Recursive(data) => {
+                    match self.constructor_fields(&data) {
+                        Ok(fields) => pending.extend(fields),
+                        Err(_) => holds = true,
+                    }
+                }
+                _ => holds = true,
             }
-            _ => true,
-        };
-        self.retaining.insert(monotype, retains);
-        retains
+            if holds {
+                break;
+            }
+        }
+        self.holding.insert(key, holds);
+        holds
     }
 
     fn function_type(&mut self, parameters: &[MonotypeId], result: MonotypeId) -> MonotypeId {
