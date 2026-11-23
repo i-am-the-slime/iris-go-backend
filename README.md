@@ -42,6 +42,8 @@ iris run --go --main Test.Main
 - [Go output](documentation/go-output.md): running programs, foreign imports in Go, how a Go build
   differs from a JavaScript one, and the programs the Go backend rejects.
 - [What your PureScript becomes in Go](documentation/go/index.md): the Go Iris writes, by example.
+- [PureScript and Go side by side](https://i-am-the-slime.github.io/iris-go-backend/): the examples
+  and benchmarks next to the Go they compile to, with timings against hand-written Go.
 - [Effect, Aff and IO](documentation/go/effects.md): which one to use when, and how to share state
   between threads.
 
