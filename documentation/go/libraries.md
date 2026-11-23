@@ -159,6 +159,37 @@ can't trip over the same `Ref`. Each trip costs about 80 ns, so keep a hot loop'
 `IO` is also what a Go callback is, when Go calls it from a goroutine of its own:
 [Callbacks from goroutines](../go-output.md#callbacks-from-goroutines) shows one.
 
+### No `Aff`, no waiting
+
+All that waiting is only there to keep fibers happy. If your program doesn't use `Aff` at all (no
+`launchAff_`, no `AVar`, no `Promise`), there's nothing to wait for, so `liftEffect` runs the
+`Effect` right there on the thread. Your `IO` threads really run side by side, `log` included. An
+HTTP server with `IO` handlers gets every core this way.
+
+The catch: a `Ref` is now shared by threads that run at the same time, and an `Effect.Ref` isn't
+built for that. Two threads modifying one lose updates, and reading a record while another thread
+writes it can crash the program. Keep shared state in an `MVar` instead:
+
+```purescript
+main :: Effect Unit
+main = launchIO_ do
+  hits <- newMVar 0
+  forConcurrently_ (Array.range 1 1000) \_ ->
+    modifyMVar_ hits (pure <<< (_ + 1))
+  total <- readMVar hits
+  log ("counted " <> show total <> " hits")
+```
+
+```
+counted 1000 hits
+```
+
+`modifyMVar_` takes the value out, so every other thread waits until the new one is back in. Each
+hit counts. A `Ref` that only one thread ever touches is fine, it's sharing that's the problem.
+
+Use `Aff` anywhere in the program and you're back to taking turns, `Ref`s are safe again, and
+`liftEffect` waits for the event loop as above.
+
 ## JSON with `yoga-json` gets a decoder for your type
 
 ```purescript
