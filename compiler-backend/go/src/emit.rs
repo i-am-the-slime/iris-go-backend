@@ -56,6 +56,7 @@ mod reference_equality;
 mod references;
 mod reuse;
 mod scalars;
+mod sorting;
 mod standard;
 mod strings;
 mod text;

@@ -68,13 +68,12 @@ package main
 import (
 	"fixture/Data/Either"
 	"fixture/Data/Maybe"
-	"fixture/Data/Ord"
-	"fixture/Data/Ordering"
 	"fixture/shared"
 	"github.com/i-am-the-slime/iris-go/direct"
 	"github.com/i-am-the-slime/iris-go/prim"
 	"math"
 	"os"
+	"slices"
 )
 
 func main_() int32 {
@@ -96,16 +95,8 @@ func main_() int32 {
 	scrutinee := either.EitherIntInt{Tag: either.EitherIntIntRight, Field0: -1}
 	var result2 int32
 	if scrutinee.Tag == either.EitherIntIntRight && scrutinee.Field0 == -1 {
-		direct.SortBy(ord.Compare, func(value ordering.Ordering) int32 {
-			switch value {
-			case ordering.OrderingGT:
-				return 1
-			case ordering.OrderingEQ:
-				return 0
-			default: // ordering.OrderingLT
-				return -1
-			}
-		}, []rune{'b', 'a'})
+		sorted := slices.Clone([]rune{'b', 'a'})
+		slices.Sort(sorted)
 		result2 = 2
 	} else {
 		result2 = 1

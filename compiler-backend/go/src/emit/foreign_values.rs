@@ -333,6 +333,11 @@ where
         {
             return Ok(iterated);
         }
+        if foreign.calls(crate::foreign::ARRAY_SORT_BY)
+            && let Some(sorted) = self.primitive_sort(arguments, out)?
+        {
+            return Ok(sorted);
+        }
         if let Foreign::Call { function, boundary, .. } = *foreign {
             let values = self.boundary_arguments(arguments, boundary, monotype, true, out)?;
             if let Some(standard) = self.standard_call(function, &values, arguments) {

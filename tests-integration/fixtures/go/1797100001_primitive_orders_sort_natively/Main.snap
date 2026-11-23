@@ -1,0 +1,493 @@
+---
+source: tests-integration/src/fixtures.rs
+---
+// Data/Ord/ord.go
+package ord
+
+import (
+	"fixture/Data/Ordering"
+	"github.com/i-am-the-slime/iris-go/prim"
+)
+
+func CompareInt(i int32, i2 int32) ordering.Ordering {
+	if i < i2 {
+		return ordering.OrderingLT
+	}
+	if i == i2 {
+		return ordering.OrderingEQ
+	}
+	return ordering.OrderingGT
+}
+
+func CompareNumber(number float64, number2 float64) ordering.Ordering {
+	if number < number2 {
+		return ordering.OrderingLT
+	}
+	if number == number2 {
+		return ordering.OrderingEQ
+	}
+	return ordering.OrderingGT
+}
+
+func CompareChar(char rune, char2 rune) ordering.Ordering {
+	if char < char2 {
+		return ordering.OrderingLT
+	}
+	if char == char2 {
+		return ordering.OrderingEQ
+	}
+	return ordering.OrderingGT
+}
+
+func CompareString(s string, s2 string) ordering.Ordering {
+	if prim.CompareString(s, s2) < 0 {
+		return ordering.OrderingLT
+	}
+	if s == s2 {
+		return ordering.OrderingEQ
+	}
+	return ordering.OrderingGT
+}
+
+// Data/Ordering/ordering.go
+package ordering
+
+type Ordering uint8
+
+const (
+	OrderingLT Ordering = iota
+	OrderingGT
+	OrderingEQ
+)
+
+// Data/Show/show.go
+package show
+
+import (
+	"github.com/i-am-the-slime/iris-go/prim"
+	"strconv"
+)
+
+func ShowInt(i int32) string {
+	return strconv.Itoa(int(i))
+}
+
+func ShowNumber(number float64) string {
+	return prim.ShowNumber(number)
+}
+
+func ShowString(s string) string {
+	return prim.ShowString(s)
+}
+
+func ShowChar(char rune) string {
+	return prim.ShowChar(char)
+}
+
+func AppendShowArrayChar(buffer []byte, array []rune) []byte {
+	buffer = append(buffer, "["...)
+	for index, element := range array {
+		if index > 0 {
+			buffer = append(buffer, ","...)
+		}
+		buffer = prim.AppendShowChar(buffer, element)
+	}
+	buffer = append(buffer, "]"...)
+	return buffer
+}
+
+func AppendShowArrayString(buffer []byte, array []string) []byte {
+	buffer = append(buffer, "["...)
+	for index, element := range array {
+		if index > 0 {
+			buffer = append(buffer, ","...)
+		}
+		buffer = prim.AppendShowString(buffer, element)
+	}
+	buffer = append(buffer, "]"...)
+	return buffer
+}
+
+func AppendShowArrayNumber(buffer []byte, array []float64) []byte {
+	buffer = append(buffer, "["...)
+	for index, element := range array {
+		if index > 0 {
+			buffer = append(buffer, ","...)
+		}
+		buffer = prim.AppendShowNumber(buffer, element)
+	}
+	buffer = append(buffer, "]"...)
+	return buffer
+}
+
+func AppendShowArrayInt(buffer []byte, array []int32) []byte {
+	buffer = append(buffer, "["...)
+	for index, element := range array {
+		if index > 0 {
+			buffer = append(buffer, ","...)
+		}
+		buffer = strconv.AppendInt(buffer, int64(element), 10)
+	}
+	buffer = append(buffer, "]"...)
+	return buffer
+}
+
+// main.go
+package main
+
+import (
+	"fixture/Data/Ordering"
+	"fixture/Data/Show"
+	"fixture/shared"
+	"github.com/i-am-the-slime/iris-go/console"
+	"github.com/i-am-the-slime/iris-go/direct"
+	"github.com/i-am-the-slime/iris-go/prim"
+	"math"
+	"slices"
+	"strings"
+)
+
+var main_ = initializeMain_()
+
+func initializeMain_() []string {
+	sorted := slices.Clone([]int32{5, 3, -7, 3, 2147483647, -2147483648, 0})
+	slices.Sort(sorted)
+	sorted2 := slices.Clone([]int32{})
+	slices.Sort(sorted2)
+	sorted3 := slices.Clone([]int32{9, 1, 8, 2})
+	slices.Sort(sorted3)
+	sorted4 := slices.Clone([]int32{9, 1, 8, 2})
+	slices.SortStableFunc(sorted4, func(b int32, a int32) int {
+		if a < b {
+			return -1
+		}
+		if a > b {
+			return 1
+		}
+		return 0
+	})
+	array := shared.SortNumbers(signs)
+	mapped := make([]string, len(array))
+	for index, element := range array {
+		mapped[index] = signed(element)
+	}
+	var result rune
+	if 55296 >= prim.ToCharCode(prim.BottomChar) && 55296 <= prim.ToCharCode(prim.TopChar) {
+		result = prim.FromCharCode(55296)
+	} else {
+		result = 'a'
+	}
+	var result2 rune
+	if 65535 >= prim.ToCharCode(prim.BottomChar) && 65535 <= prim.ToCharCode(prim.TopChar) {
+		result2 = prim.FromCharCode(65535)
+	} else {
+		result2 = 'a'
+	}
+	sorted5 := slices.Clone([]rune{'q', 'b', 'Z', 'a', result, result2})
+	slices.Sort(sorted5)
+	sorted6 := slices.Clone([]string{"pear", "apple", "Banana", "", "apple"})
+	slices.SortFunc(sorted6, prim.CompareString)
+	sorted7 := slices.Clone(surrogates)
+	slices.SortFunc(sorted7, prim.CompareString)
+	sorted8 := slices.Clone([]int32{4, 1, 3})
+	slices.Sort(sorted8)
+	sorted9 := slices.Clone([]string{"b", "a", "c"})
+	slices.SortFunc(sorted9, prim.CompareString)
+	mapped2 := make([]string, len(sorted9))
+	for index, label := range sorted9 {
+		mapped2[index] = label
+	}
+	sorted10 := slices.Clone(entries)
+	slices.SortStableFunc(sorted10, func(x shared.Entry, y shared.Entry) int {
+		key := mainF(x)
+		key2 := mainF(y)
+		if key < key2 {
+			return -1
+		}
+		if key > key2 {
+			return 1
+		}
+		return 0
+	})
+	mapped3 := make([]string, len(sorted10))
+	for index := range sorted10 {
+		mapped3[index] = sorted10[index].Name
+	}
+	sorted11 := slices.Clone(entries)
+	slices.SortStableFunc(sorted11, func(x shared.Entry, y shared.Entry) int {
+		key := mainF(x)
+		key2 := mainF(y)
+		if key < key2 {
+			return -1
+		}
+		if key > key2 {
+			return 1
+		}
+		return 0
+	})
+	mapped4 := make([]string, len(sorted11))
+	for index := range sorted11 {
+		mapped4[index] = sorted11[index].Name
+	}
+	sorted12 := slices.Clone(entries)
+	slices.SortStableFunc(sorted12, func(x shared.Entry, y shared.Entry) int {
+		key := mainF2(x)
+		key2 := mainF2(y)
+		if key < key2 {
+			return -1
+		}
+		if key > key2 {
+			return 1
+		}
+		return 0
+	})
+	mapped5 := make([]string, len(sorted12))
+	for index := range sorted12 {
+		mapped5[index] = sorted12[index].Name
+	}
+	sorted13 := slices.Clone(entries)
+	slices.SortStableFunc(sorted13, func(x shared.Entry, y shared.Entry) int {
+		key := mainF3(x)
+		key2 := mainF3(y)
+		return prim.CompareString(key, key2)
+	})
+	mapped6 := make([]string, len(sorted13))
+	for index := range sorted13 {
+		mapped6[index] = sorted13[index].Name
+	}
+	array2 := direct.SortBy(func(x shared.Entry, y shared.Entry) ordering.Ordering {
+		number := mainF4(x)
+		number2 := mainF4(y)
+		if number < number2 {
+			return ordering.OrderingLT
+		}
+		if number == number2 {
+			return ordering.OrderingEQ
+		}
+		return ordering.OrderingGT
+	}, func(value ordering.Ordering) int32 {
+		switch value {
+		case ordering.OrderingGT:
+			return 1
+		case ordering.OrderingEQ:
+			return 0
+		default: // ordering.OrderingLT
+			return -1
+		}
+	}, entries)
+	mapped7 := make([]string, len(array2))
+	for index := range array2 {
+		mapped7[index] = array2[index].Name
+	}
+	sorted14 := slices.Clone(entries)
+	slices.SortStableFunc(sorted14, func(x shared.Entry, y shared.Entry) int {
+		key := mainF5(x)
+		key2 := mainF5(y)
+		if key < key2 {
+			return -1
+		}
+		if key > key2 {
+			return 1
+		}
+		return 0
+	})
+	mapped8 := make([]string, len(sorted14))
+	for index := range sorted14 {
+		mapped8[index] = sorted14[index].Name
+	}
+	sorted15 := slices.Clone([]string{"ccc", "a", "bb", "d", ""})
+	slices.SortStableFunc(sorted15, func(x string, y string) int {
+		key := prim.CodeUnitLength(x)
+		key2 := prim.CodeUnitLength(y)
+		if key < key2 {
+			return -1
+		}
+		if key > key2 {
+			return 1
+		}
+		return 0
+	})
+	sorted16 := slices.Clone([]int32{3, 1, 2, 1})
+	slices.SortStableFunc(sorted16, func(x int32, y int32) int {
+		key := -x
+		key2 := -y
+		if key < key2 {
+			return -1
+		}
+		if key > key2 {
+			return 1
+		}
+		return 0
+	})
+	sorted17 := slices.Clone(prim.StringToCharArray("hello"))
+	slices.Sort(sorted17)
+	return []string{string(show.AppendShowArrayInt(nil, sorted)), string(show.AppendShowArrayInt(nil, sorted2)), string(show.AppendShowArrayInt(nil, sorted3)), string(show.AppendShowArrayInt(nil, sorted4)), string(show.AppendShowArrayNumber(nil, shared.SortNumbers(numbers))), string(show.AppendShowArrayString(nil, mapped)), string(show.AppendShowArrayChar(nil, sorted5)), string(show.AppendShowArrayString(nil, sorted6)), string(show.AppendShowArrayString(nil, sorted7)), string(show.AppendShowArrayInt(nil, mapLanes(sorted8))), string(show.AppendShowArrayString(nil, mapped2)), string(show.AppendShowArrayString(nil, mapped3)), string(show.AppendShowArrayString(nil, mapped4)), string(show.AppendShowArrayString(nil, mapped5)), string(show.AppendShowArrayString(nil, mapped6)), string(show.AppendShowArrayString(nil, mapped7)), string(show.AppendShowArrayString(nil, mapped8)), string(show.AppendShowArrayString(nil, sorted15)), string(show.AppendShowArrayInt(nil, sorted16)), prim.CharArrayToString(sorted17)}
+}
+
+var numbers = initializeNumbers()
+
+func initializeNumbers() []float64 {
+	return []float64{3.0, math.Copysign(0, -1), math.NaN(), math.Inf(1), 0.0, math.Inf(-1), -2.5, math.NaN(), 0.0, math.Copysign(0, -1), 7.25}
+}
+
+func signed(n float64) string {
+	if n == 0.0 {
+		if 1.0/n < 0.0 {
+			return "-0"
+		}
+		return "+0"
+	}
+	return prim.ShowNumber(n)
+}
+
+var signs = initializeSigns()
+
+func initializeSigns() []float64 {
+	return []float64{0.0, math.Copysign(0, -1), 1.0, math.Copysign(0, -1), 0.0, -1.0}
+}
+
+var surrogates []string = []string{"｡", "😀", "b", "", "a😀", "aa", "", "\xed\xa0\xbd", "\xed\xb8\x80", "a", "😀", "￿"}
+
+var entries = initializeEntries()
+
+func initializeEntries() []shared.Entry {
+	return []shared.Entry{{Name: "delta", Rank: 2, Weight: 0.5, Initial: 'd'}, {Name: "alpha", Rank: 1, Weight: math.Copysign(0, -1), Initial: 'a'}, {Name: "echo", Rank: 2, Weight: 0.0, Initial: 'e'}, {Name: "bravo", Rank: 1, Weight: math.NaN(), Initial: 'b'}, {Name: "charlie", Rank: 3, Weight: 0.5, Initial: 'c'}, {Name: "foxtrot", Rank: 1, Weight: -1.0, Initial: 'a'}}
+}
+
+func byLength(x string, y string) ordering.Ordering {
+	i := prim.CodeUnitLength(x)
+	i2 := prim.CodeUnitLength(y)
+	if i < i2 {
+		return ordering.OrderingLT
+	}
+	if i == i2 {
+		return ordering.OrderingEQ
+	}
+	return ordering.OrderingGT
+}
+
+func mainF(value shared.Entry) int32 {
+	return value.Rank
+}
+
+func mainF2(value shared.Entry) rune {
+	return value.Initial
+}
+
+func mainF3(value shared.Entry) string {
+	return value.Name
+}
+
+func mainF4(value shared.Entry) float64 {
+	return value.Weight
+}
+
+func mainF5(entry shared.Entry) int32 {
+	return entry.Rank*10 - prim.CodeUnitLength(entry.Name)
+}
+
+func main() {
+	console.Print("[" + strings.Join(main_, " ") + "]")
+}
+
+// main_neon.go
+//go:build goexperiment.simd && arm64
+
+package main
+
+import "simd/archsimd"
+
+func mapLanes(xs []int32) []int32 {
+	out := make([]int32, len(xs))
+	const step = 4
+	i := 0
+	for ; i < len(xs)-step+1; i += step {
+		x := archsimd.LoadInt32x4(xs[i : i+step])
+		x.Store(out[i : i+step])
+	}
+	if i < len(xs) {
+		x, _ := archsimd.LoadInt32x4Part(xs[i:])
+		x.StorePart(out[i:])
+	}
+	return out
+}
+
+// main_scalar.go
+//go:build !(goexperiment.simd && (arm64 || wasm))
+
+package main
+
+func mapLanes(xs []int32) []int32 {
+	out := make([]int32, len(xs))
+	for i, x := range xs {
+		out[i] = x
+	}
+	return out
+}
+
+// main_vector.go
+//go:build goexperiment.simd && wasm
+
+package main
+
+import "simd"
+
+func mapLanes(xs []int32) []int32 {
+	out := make([]int32, len(xs))
+	step := simd.Int32s{}.Len()
+	i := 0
+	for ; i < len(xs)-step+1; i += step {
+		x := simd.LoadInt32s(xs[i : i+step])
+		x.Store(out[i : i+step])
+	}
+	if i < len(xs) {
+		x, _ := simd.LoadInt32sPart(xs[i:])
+		x.StorePart(out[i:])
+	}
+	return out
+}
+
+// shared/shared.go
+package shared
+
+func SortNumbers(xs []float64) []float64 {
+	sorted := make([]float64, len(xs))
+	copy(sorted, xs)
+	if len(xs) < 2 {
+		return sorted
+	}
+	scratch := make([]float64, len(xs))
+	copy(scratch, xs)
+	var merge func(into []float64, from []float64, low int, high int)
+	merge = func(into []float64, from []float64, low int, high int) {
+		middle := low + (high-low)>>1
+		if middle-low > 1 {
+			merge(from, into, low, middle)
+		}
+		if high-middle > 1 {
+			merge(from, into, middle, high)
+		}
+		i, j, k := low, middle, low
+		for i < middle && j < high {
+			if from[i] <= from[j] {
+				into[k] = from[i]
+				i++
+			} else {
+				into[k] = from[j]
+				j++
+			}
+			k++
+		}
+		k += copy(into[k:], from[i:middle])
+		copy(into[k:], from[j:high])
+	}
+	merge(sorted, scratch, 0, len(xs))
+	return sorted
+}
+
+type Entry struct {
+	Name    string
+	Weight  float64
+	Initial rune
+	Rank    int32
+}

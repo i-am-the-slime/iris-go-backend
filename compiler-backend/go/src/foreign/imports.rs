@@ -204,6 +204,8 @@ pub const OBJECT_FROM_ENTRIES: Foreign = object("FromEntries", 2, PLAIN);
 
 pub const ARRAY_SLICE: Foreign = array_with("Slice", 3, int32_parameters(&[0, 1]));
 
+pub const ARRAY_SORT_BY: Foreign = uncurried(direct("SortBy", 3), &[(0, 2)]);
+
 pub const FOREIGN_RECORD: Foreign = direct("ForeignRecord", 2);
 
 pub const FROM_CHAR_ARRAY: Foreign = prim("CharArrayToString", 1);
@@ -307,7 +309,7 @@ pub(super) const FOREIGN_IMPORTS: &[(&str, &str, Foreign)] = &[
     ("Data.Array", "scanlImpl", uncurried(array("Scanl", 3), &[(0, 2)])),
     ("Data.Array", "scanrImpl", uncurried(array("Scanr", 3), &[(0, 2)])),
     ("Data.Array", "unconsImpl", uncurried(direct("Uncons", 3), &[(1, 2)])),
-    ("Data.Array", "sortByImpl", uncurried(direct("SortBy", 3), &[(0, 2)])),
+    ("Data.Array", "sortByImpl", ARRAY_SORT_BY),
     ("Data.Array", "findMapImpl", direct_with("FindMap", 4, maybe_search(0, 1))),
     ("Data.Array.Parallel", "parallelMap", array("ParallelMap", 2)),
     (
