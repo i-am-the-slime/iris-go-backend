@@ -91,11 +91,25 @@ func BlackHeight(value *Tree) int32 {
 }
 
 func Ordered(low int32, high int32, value *Tree) bool {
-	if value == SharedTreeLeaf {
-		return true
+	for {
+		if value == SharedTreeLeaf {
+			return true
+		}
+		l := value.Node1
+		k := value.Node2
+		r := value.Node4
+		if low < k {
+			if k < high {
+				if Ordered(low, k, l) {
+					low, value = k, r
+					continue
+				}
+				return false
+			}
+			return false
+		}
+		return false
 	}
-	k := value.Node2
-	return low < k && (k < high && (Ordered(low, k, value.Node1) && Ordered(k, high, value.Node4)))
 }
 
 func Ins(kx int32, vx bool, value *Tree) *Tree {

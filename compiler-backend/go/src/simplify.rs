@@ -39,6 +39,7 @@ mod record;
 mod rename;
 mod short_circuit;
 mod sink;
+mod tail_choices;
 mod three_way;
 mod unpack;
 
@@ -123,7 +124,8 @@ pub fn simplify(
     }
     let program =
         timed("lift", || crate::lift::lift_local_functions(program, monotypes, next_local));
-    timed("prune", || prune(program.functions, entry))
+    let program = timed("prune", || prune(program.functions, entry));
+    tail_choices::branch_tail_calls(program)
 }
 
 struct Simplifier<'m> {

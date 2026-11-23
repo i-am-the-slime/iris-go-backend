@@ -1,0 +1,109 @@
+---
+source: tests-integration/src/fixtures.rs
+---
+// main.go
+package main
+
+import (
+	"fixture/shared"
+	"github.com/i-am-the-slime/iris-go/array"
+	"github.com/i-am-the-slime/iris-go/console"
+	"strconv"
+	"strings"
+)
+
+var main_ = initializeMain_()
+
+func initializeMain_() []bool {
+	xs := array.RangeInt32(1, 1000000)
+	xs2 := []int32{1, 3, 2}
+	return []bool{allPositiveFrom(0, array.RangeInt32(1, 1000000)), allPositiveFrom(0, []int32{1, 2, -3}), anyNegativeFrom(0, array.RangeInt32(1, 1000000)), anyNegativeFrom(0, []int32{1, 2, -3}), mainGo(xs, 1), mainGo(xs2, 1), isEven(1000000), isOdd(7)}
+}
+
+func allPositiveFrom(i int32, xs []int32) bool {
+	for {
+		if i >= int32(len(xs)) {
+			return true
+		}
+		if xs[i] > 0 {
+			i += 1
+			continue
+		}
+		return false
+	}
+}
+
+func anyNegativeFrom(i int32, xs []int32) bool {
+	for {
+		if i < int32(len(xs)) {
+			if xs[i] < 0 {
+				return true
+			}
+			i += 1
+			continue
+		}
+		return false
+	}
+}
+
+func isEvenOrIsOdd(step int, n int32) bool {
+	for {
+		switch step {
+		case shared.IsEvenStep:
+			if n == 0 {
+				return true
+			}
+			if n > 0 {
+				step, n = shared.IsOddStep, n-1
+				continue
+			}
+			return false
+		default: // shared.IsOddStep
+			if n != 0 {
+				if n > 0 {
+					step, n = shared.IsEvenStep, n-1
+					continue
+				}
+				return false
+			}
+			return false
+		}
+	}
+}
+
+func isEven(n int32) bool {
+	return isEvenOrIsOdd(shared.IsEvenStep, n)
+}
+
+func isOdd(n int32) bool {
+	return isEvenOrIsOdd(shared.IsOddStep, n)
+}
+
+func mainGo(xs []int32, i int32) bool {
+	for {
+		if i >= int32(len(xs)) {
+			return true
+		}
+		if xs[i-1] <= xs[i] {
+			i += 1
+			continue
+		}
+		return false
+	}
+}
+
+func main() {
+	texts := make([]string, 0, len(main_))
+	for _, element := range main_ {
+		texts = append(texts, strconv.FormatBool(element))
+	}
+	console.Print("[" + strings.Join(texts, " ") + "]")
+}
+
+// shared/shared.go
+package shared
+
+const (
+	IsEvenStep = iota
+	IsOddStep
+)
