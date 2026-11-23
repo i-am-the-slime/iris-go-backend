@@ -15,7 +15,7 @@ pub use imports::{
     APPENDER, ARRAY_ALL, ARRAY_ANY, ARRAY_APPEND, ARRAY_REPLICATE, ARRAY_SCANL, ARRAY_SLICE,
     ARRAY_SORT_BY, FOREIGN_RECORD, FROM_CHAR_ARRAY, INT_DIVIDE, INT_MODULO, MUTABLE_PEEK_UNSAFE,
     MUTABLE_WITHIN, OBJECT_FROM_ENTRIES, OBJECT_INDEX, OBJECT_KEYS, SEQUENCE_ARRAY, TO_CHAR_ARRAY,
-    array_fold, effect_fold,
+    WELL_FORMED_STRING, array_fold, effect_fold,
 };
 pub use opacity::{Opacity, OpaqueDeclaration, foreign_opacity};
 pub use packages::{ForeignPackages, ForeignSource, LineCoverage, LineDirectives};

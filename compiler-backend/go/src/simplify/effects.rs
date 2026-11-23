@@ -146,6 +146,21 @@ impl Simplifier<'_> {
                 arguments.pop().expect("invariant violated: fromCharArray has one argument")
             }
             foreign
+                if foreign.calls(crate::foreign::FROM_CHAR_ARRAY)
+                    && matches!(&arguments[0].kind, ExpressionKind::Foreign { foreign, .. }
+                        if foreign.calls(crate::foreign::TO_CHAR_ARRAY)) =>
+            {
+                let ExpressionKind::Foreign { arguments, .. } = arguments
+                    .pop()
+                    .expect("invariant violated: fromCharArray has one argument")
+                    .kind
+                else {
+                    unreachable!("invariant violated: the argument was just matched as a foreign")
+                };
+                let foreign = crate::foreign::WELL_FORMED_STRING.interned();
+                Expression::new(ExpressionKind::Foreign { foreign, arguments }, monotype)
+            }
+            foreign
                 if foreign.calls(crate::foreign::INT_DIVIDE)
                     || foreign.calls(crate::foreign::INT_MODULO) =>
             {

@@ -216,6 +216,8 @@ pub const FROM_CHAR_ARRAY: Foreign = prim("CharArrayToString", 1);
 
 pub const TO_CHAR_ARRAY: Foreign = prim("StringToCharArray", 1);
 
+pub const WELL_FORMED_STRING: Foreign = prim("WellFormedString", 1);
+
 pub const INT_DIVIDE: Foreign = prim_with("IntDiv", 2, int32_parameters(&[0, 1]));
 
 pub const INT_MODULO: Foreign = prim_with("IntMod", 2, int32_parameters(&[0, 1]));
