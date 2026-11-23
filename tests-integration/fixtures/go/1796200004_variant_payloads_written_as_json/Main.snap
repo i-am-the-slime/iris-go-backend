@@ -218,9 +218,7 @@ func initializeMain_() []string {
 	}
 	object2 := object.New[any]()()
 	performed := object.Poke("f", shared, object2)()
-	object3 := object.CopyST(performed)()
-	object.Poke("e", shared, object3)()
-	return array.Append(mapped, []string{foreignvalue.UnsafeStringify(object3)})
+	return array.Append(mapped, []string{foreignvalue.UnsafeStringify(object.Insert("e", shared, performed))})
 }
 
 var shapes []variant.CountFlagNamePointRatioTags = []variant.CountFlagNamePointRatioTags{{Tag: variant.CountFlagNamePointRatioTagsName, Name: "a"}, {Tag: variant.CountFlagNamePointRatioTagsPoint, Point: shared2.X{X: 1}}, {Tag: variant.CountFlagNamePointRatioTagsCount, Count: 3}, {Tag: variant.CountFlagNamePointRatioTagsRatio, Ratio: 1.5}, {Tag: variant.CountFlagNamePointRatioTagsFlag, Flag: true}, {Tag: variant.CountFlagNamePointRatioTagsTags, Tags: []string{"p", "q"}}}

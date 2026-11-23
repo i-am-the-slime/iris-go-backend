@@ -160,6 +160,10 @@ fn is_carried(carried: Carried<'_>, expression: &Expression) -> bool {
 /// which an owned append extends in place.
 fn snoc_of_carried<'e>(carried: Carried<'_>, expression: &'e Expression) -> Option<&'e Expression> {
     let ExpressionKind::Foreign { foreign, arguments } = &expression.kind else { return None };
+    if let Some(position) = object_write_position(foreign) {
+        let object = &arguments[position];
+        return is_carried(carried, object).then_some(object);
+    }
     let appends = match foreign {
         Foreign::Snoc | Foreign::Operator(Operator::StringAppend) => true,
         _ => {
@@ -168,6 +172,41 @@ fn snoc_of_carried<'e>(carried: Carried<'_>, expression: &'e Expression) -> Opti
         }
     };
     (appends && is_carried(carried, &arguments[0])).then_some(&arguments[0])
+}
+
+pub(super) fn object_write_position(foreign: &Foreign) -> Option<usize> {
+    if foreign.calls(foreign::OBJECT_INSERT) {
+        Some(2)
+    } else if foreign.calls(foreign::OBJECT_DELETE) {
+        Some(1)
+    } else {
+        None
+    }
+}
+
+fn is_borrowing(foreign: &Foreign) -> bool {
+    foreign.calls(foreign::OBJECT_LOOKUP)
+        || foreign.calls(foreign::OBJECT_SIZE)
+        || foreign.calls(foreign::OBJECT_INDEX)
+}
+
+fn reads_before_write(carried: Carried<'_>, expression: &Expression) -> usize {
+    match &expression.kind {
+        ExpressionKind::Foreign { foreign, arguments } if is_borrowing(foreign) => arguments
+            .iter()
+            .filter(|argument| !is_carried(carried, argument))
+            .map(|argument| reads_before_write(carried, argument))
+            .sum(),
+        ExpressionKind::Apply { function, arguments } => {
+            let arguments: usize =
+                arguments.iter().map(|argument| reads_before_write(carried, argument)).sum();
+            reads_before_write(carried, function) + arguments
+        }
+        ExpressionKind::Foreign { foreign: Foreign::Operator(_), arguments } => {
+            arguments.iter().map(|argument| reads_before_write(carried, argument)).sum()
+        }
+        _ => reads(carried, expression),
+    }
 }
 
 fn owned_appends_of<'e>(
@@ -259,6 +298,18 @@ fn reads(carried: Carried<'_>, expression: &Expression) -> usize {
         _ if is_carried(carried, expression) => 1,
         ExpressionKind::Local(id) if *id == carried.accumulator => 1,
         ExpressionKind::Access { record, .. } if is_accumulator(carried, record) => 0,
+        ExpressionKind::Foreign { foreign, arguments }
+            if let Some(position) = object_write_position(foreign)
+                && is_carried(carried, &arguments[position]) =>
+        {
+            let others: usize = arguments
+                .iter()
+                .enumerate()
+                .filter(|(index, _)| *index != position)
+                .map(|(_, argument)| reads_before_write(carried, argument))
+                .sum();
+            1 + others
+        }
         ExpressionKind::Update { record, updates }
             if is_accumulator(carried, record) && overwrites(carried, updates) =>
         {
@@ -280,7 +331,8 @@ fn reads(carried: Carried<'_>, expression: &Expression) -> usize {
             if total > 0 { SHARED } else { 0 }
         }
         ExpressionKind::If { condition, then, otherwise } => {
-            reads(carried, condition) + reads(carried, then).max(reads(carried, otherwise))
+            reads_before_write(carried, condition)
+                + reads(carried, then).max(reads(carried, otherwise))
         }
         ExpressionKind::Case { scrutinees, alternatives } => {
             // Matching a constructor on the accumulator reads the carried field only through
@@ -292,7 +344,7 @@ fn reads(carried: Carried<'_>, expression: &Expression) -> usize {
             let scrutinised: usize = scrutinees
                 .iter()
                 .filter(|scrutinee| !destructured(scrutinee))
-                .map(|scrutinee| reads(carried, scrutinee))
+                .map(|scrutinee| reads_before_write(carried, scrutinee))
                 .sum();
             let branches = alternatives
                 .iter()

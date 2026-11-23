@@ -288,7 +288,10 @@ where
             body = iteration_copies;
             let mut clipped: Vec<GoStatement> = owned
                 .iter()
-                .map(|(position, place, _)| self.clip(&parameters[*position].0, place))
+                .map(|(position, place, _)| {
+                    let monotype = function.parameters[*position].monotype;
+                    self.clip(&parameters[*position].0, place, monotype)
+                })
                 .collect();
             for (position, buffer) in &buffers {
                 let parameter = identifier_expression(&parameters[*position].0);

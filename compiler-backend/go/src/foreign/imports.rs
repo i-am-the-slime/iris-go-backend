@@ -202,6 +202,14 @@ pub const OBJECT_INDEX: Foreign = object("UnsafeIndex", 2, PLAIN);
 
 pub const OBJECT_FROM_ENTRIES: Foreign = object("FromEntries", 2, PLAIN);
 
+pub const OBJECT_INSERT: Foreign = object("Insert", 3, PLAIN);
+
+pub const OBJECT_DELETE: Foreign = object("Remove", 2, PLAIN);
+
+pub const OBJECT_LOOKUP: Foreign = object("Lookup", 4, PLAIN);
+
+pub const OBJECT_SIZE: Foreign = object("Size", 1, PLAIN);
+
 pub const ARRAY_SLICE: Foreign = array_with("Slice", 3, int32_parameters(&[0, 1]));
 
 pub const ARRAY_SORT_BY: Foreign = uncurried(direct("SortBy", 3), &[(0, 2)]);
@@ -530,8 +538,8 @@ pub(super) const FOREIGN_IMPORTS: &[(&str, &str, Foreign)] = &[
         ),
     ),
     ("Foreign.Object", "all", uncurried(object("All", 2, PLAIN), &[(0, 2)])),
-    ("Foreign.Object", "size", object("Size", 1, PLAIN)),
-    ("Foreign.Object", "_lookup", object("Lookup", 4, PLAIN)),
+    ("Foreign.Object", "size", OBJECT_SIZE),
+    ("Foreign.Object", "_lookup", OBJECT_LOOKUP),
     ("Foreign.Object", "_lookupST", thunk(GoPackage::Object, "LookupST", 4, PLAIN)),
     ("Foreign.Object", "toArrayWithKey", uncurried(object("ToArrayWithKey", 2, PLAIN), &[(0, 2)])),
     ("Foreign.Object", "keys", object("Keys", 1, PLAIN)),
@@ -875,6 +883,9 @@ pub(super) const FOREIGN_IMPORTS: &[(&str, &str, Foreign)] = &[
 /// dictionary when they are overloaded.
 pub(super) const INTRINSICS: &[(&str, &str, &[&str], Foreign)] = &[
     ("Data.Array", "snoc", &[], Foreign::Snoc),
+    ("Data.Array", "fromFoldable", &["foldableArray"], Foreign::Identity),
+    ("Foreign.Object", "insert", &[], OBJECT_INSERT),
+    ("Foreign.Object", "delete", &[], OBJECT_DELETE),
     ("Data.Array", "nub", &["ordInt"], array("NubComparable", 1)),
     ("Data.Array", "nub", &["ordChar"], array("NubComparable", 1)),
     ("Data.Array", "nub", &["ordString"], array("NubComparable", 1)),

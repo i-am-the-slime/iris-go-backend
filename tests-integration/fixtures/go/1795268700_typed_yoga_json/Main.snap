@@ -824,15 +824,14 @@ func ReadAtIdxItem(i int32, f any) foreign.EitherNonEmptyListForeignErrorItem {
 				return foreign.NoTupleTupleStringEitherNonEmptyListForeignErrorIntInt
 			}, 0)
 			accumulator := foreign.EitherNonEmptyListForeignErrorObjectInt{Tag: foreign.EitherNonEmptyListForeignErrorObjectIntRight, Right: object.Empty[int32]()}
+			accumulator.Right = object.Lend(accumulator.Right)
 			for tupleIndex := range array {
 				if accumulator.Tag == foreign.EitherNonEmptyListForeignErrorObjectIntLeft && array[tupleIndex].Second.Tag == foreign.EitherNonEmptyListForeignErrorIntLeft {
 					accumulator = foreign.EitherNonEmptyListForeignErrorObjectInt{Tag: foreign.EitherNonEmptyListForeignErrorObjectIntLeft, Left: foreign.NonEmptyListForeignError{First: accumulator.Left.First, Second: MainGoReusing(&foreign.ListForeignError{Cons0: array[tupleIndex].Second.Left.First, Cons1: array[tupleIndex].Second.Left.Second}, MainGo(foreign.SharedListForeignErrorNil, accumulator.Left.Second))}}
 				} else if accumulator.Tag == foreign.EitherNonEmptyListForeignErrorObjectIntLeft && array[tupleIndex].Second.Tag == foreign.EitherNonEmptyListForeignErrorIntRight {
 					accumulator = foreign.EitherNonEmptyListForeignErrorObjectInt{Tag: foreign.EitherNonEmptyListForeignErrorObjectIntLeft, Left: accumulator.Left}
 				} else if accumulator.Tag == foreign.EitherNonEmptyListForeignErrorObjectIntRight && array[tupleIndex].Second.Tag == foreign.EitherNonEmptyListForeignErrorIntRight {
-					object2 := object.CopyST(accumulator.Right)()
-					object.Poke(array[tupleIndex].First, array[tupleIndex].Second.Right, object2)()
-					accumulator = foreign.EitherNonEmptyListForeignErrorObjectInt{Tag: foreign.EitherNonEmptyListForeignErrorObjectIntRight, Right: object2}
+					accumulator = foreign.EitherNonEmptyListForeignErrorObjectInt{Tag: foreign.EitherNonEmptyListForeignErrorObjectIntRight, Right: object.InsertOwned(array[tupleIndex].First, array[tupleIndex].Second.Right, accumulator.Right)}
 				} else {
 					accumulator = foreign.EitherNonEmptyListForeignErrorObjectInt{Tag: foreign.EitherNonEmptyListForeignErrorObjectIntLeft, Left: array[tupleIndex].Second.Left}
 				}

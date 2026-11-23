@@ -207,7 +207,7 @@ where
         let callback = self.owning_callback(callback, accumulator_position, &accumulator, out);
         let owned = self.owned_arrays(&callback, accumulator_position, monotype);
         for (place, _) in &owned {
-            out.push(self.clip(&accumulator, place));
+            out.push(self.clip(&accumulator, place, monotype));
         }
         let owned_nodes: Vec<*const Expression> = owned
             .iter()
@@ -278,8 +278,9 @@ where
         if owned.is_empty() {
             return callback;
         }
+        let monotype = self.program.function(*callee).parameters[position].monotype;
         for (place, _) in &owned {
-            out.push(self.clip(accumulator, place));
+            out.push(self.clip(accumulator, place, monotype));
         }
         let Callback::Direct { callee, leading, .. } = callback else { unreachable!() };
         let function = identifier_expression(&self.owning_variant_name(callee, position));
@@ -308,10 +309,10 @@ where
     /// fields, or a field of one of its constructors when it is held by value.
     pub(super) fn carried_places(&mut self, monotype: MonotypeId) -> Vec<Place> {
         let is_array = |emitter: &Self, monotype: MonotypeId| {
-            matches!(emitter.monotypes.get(monotype), Monotype::Array(_))
+            matches!(emitter.monotypes.get(monotype), Monotype::Array(_) | Monotype::Object(_))
         };
         match self.monotypes.get(monotype).clone() {
-            Monotype::Array(_) => vec![Place::Whole],
+            Monotype::Array(_) | Monotype::Object(_) => vec![Place::Whole],
             // A rank-N value's instantiations are functions, never arrays.
             Monotype::Record(_) if self.monotypes.is_instantiated_record(monotype) => vec![],
             Monotype::Record(fields) => fields
@@ -344,7 +345,12 @@ where
         }
     }
 
-    pub(super) fn clip(&mut self, accumulator: &str, place: &Place) -> GoStatement {
+    pub(super) fn clip(
+        &mut self,
+        accumulator: &str,
+        place: &Place,
+        monotype: MonotypeId,
+    ) -> GoStatement {
         let carried = match place {
             Place::Whole => identifier_expression(accumulator),
             Place::Field(_, go_field) => super::field(identifier_expression(accumulator), go_field),
@@ -352,12 +358,33 @@ where
                 super::field(identifier_expression(accumulator), go_field)
             }
         };
-        self.imports.insert("slices".into());
-        let clip = GoExpression::Qualified { package: "slices".into(), name: "Clip".into() };
+        let clip = if self.holds_object(monotype, place) {
+            self.go_function(GoFunction { package: GoPackage::Object, name: "Lend" })
+        } else {
+            self.imports.insert("slices".into());
+            GoExpression::Qualified { package: "slices".into(), name: "Clip".into() }
+        };
         GoStatement::Assign {
             targets: vec![carried.clone()],
             values: vec![call(clip, vec![carried])],
         }
+    }
+
+    fn holds_object(&self, monotype: MonotypeId, place: &Place) -> bool {
+        let carried = match (self.monotypes.get(monotype), place) {
+            (_, Place::Whole) => Some(monotype),
+            (Monotype::Record(fields), Place::Field(label, _)) => {
+                fields.iter().find(|field| &field.label == label).map(|field| field.monotype)
+            }
+            (Monotype::Data(data), Place::Constructor { constructor, index, .. }) => self
+                .data_layouts
+                .get(data)
+                .and_then(|layout| layout.constructors.get(*constructor))
+                .and_then(|constructor| constructor.fields.get(*index))
+                .map(|(_, field)| *field),
+            _ => None,
+        };
+        carried.is_some_and(|carried| matches!(self.monotypes.get(carried), Monotype::Object(_)))
     }
 
     fn map(

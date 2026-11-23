@@ -227,6 +227,18 @@ where
                 vec![appended],
             ));
         }
+        if let Some(position) = super::ownership::object_write_position(foreign)
+            && self.owned_snocs.contains(&std::ptr::from_ref(&arguments[position]))
+        {
+            let name = if position == 2 { "InsertOwned" } else { "RemoveOwned" };
+            let mut values = vec![];
+            for argument in arguments {
+                let value = self.value(argument, out)?;
+                values.push(self.typed_constant(value, argument.monotype)?);
+            }
+            let write = GoFunction { package: GoPackage::Object, name };
+            return Ok(call(self.go_function(write), values));
+        }
         if let Foreign::Snoc = foreign {
             let array = self.value(&arguments[0], out)?;
             let element = self.value(&arguments[1], out)?;
