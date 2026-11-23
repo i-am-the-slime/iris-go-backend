@@ -507,7 +507,9 @@ impl Simplifier<'_> {
                     .collect();
                 return self.foreign(foreign, arguments, monotype);
             }
-            ExpressionKind::Reuse { .. } => {
+            ExpressionKind::Reuse { .. }
+            | ExpressionKind::UniqueEdge { .. }
+            | ExpressionKind::UniqueEdges { .. } => {
                 unreachable!("invariant violated: cells are reused only after simplification")
             }
             ExpressionKind::Apply { function, arguments } => {

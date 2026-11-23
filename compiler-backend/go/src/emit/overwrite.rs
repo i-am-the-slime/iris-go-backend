@@ -23,20 +23,125 @@
 
 use rustc_hash::FxHashSet;
 
-use super::{DataKind, DataLayout, Emitter, identifier_expression};
+use super::{DataKind, DataLayout, Emitter, call, identifier_expression};
+use crate::error::GoResult;
 use crate::go_traversal::{self, Walk};
+use crate::monomorphic::{Edge, Expression, ExpressionKind, Literal};
+use crate::monotype::DataType;
 use crate::syntax::{GoExpression, GoStatement, GoType};
 
 impl<Q> Emitter<'_, '_, '_, Q>
 where
     Q: checking::ExternalQueries,
 {
+    pub(super) fn reused(
+        &mut self,
+        cell: &Expression,
+        data: &DataType,
+        constructor: usize,
+        arguments: &[Expression],
+        edges: &[(usize, Expression)],
+        out: &mut Vec<GoStatement>,
+    ) -> GoResult<GoExpression> {
+        let values = self.values(arguments, out)?;
+        let cell = self.value(cell, out)?;
+        let layout = self.data_layout(data)?;
+        let cell_name = match &cell {
+            GoExpression::Identifier(name) => Some(name.as_str()),
+            _ => None,
+        };
+        let mask = self.unique_mask(data, constructor, edges, cell_name, out)?;
+        if let Some(name) = cell_name
+            && let Some(stores) =
+                self.reuse_stores(&layout, constructor, name, values.clone(), mask.clone(), out)
+        {
+            out.extend(stores);
+            return Ok(cell);
+        }
+        let composite = self.composite(&layout, constructor, values);
+        let composite = with_unique_mask(composite, mask);
+        let target = GoExpression::Unary { operator: "*", operand: Box::new(cell.clone()) };
+        out.push(GoStatement::Assign { targets: vec![target], values: vec![composite] });
+        Ok(cell)
+    }
+
+    pub(super) fn unique_edge(
+        &mut self,
+        owned: &Expression,
+        cell: &Expression,
+        edge: &Edge,
+        out: &mut Vec<GoStatement>,
+    ) -> GoResult<GoExpression> {
+        let layout = self.data_layout(&edge.data)?;
+        let bits = layout.edges.as_ref();
+        let Some(bit) = bits.and_then(|bits| bits.bit(edge.constructor, edge.field)) else {
+            unreachable!("invariant violated: an edge is read from a cell that does not track it")
+        };
+        let cell = self.value(cell, out)?;
+        let unique = GoExpression::Field { value: Box::new(cell), name: "Unique".into() };
+        let set = GoExpression::Binary {
+            operator: "&",
+            left: Box::new(unique),
+            right: Box::new(GoExpression::Integer(i64::from(bit))),
+        };
+        let edge = GoExpression::Binary {
+            operator: "!=",
+            left: Box::new(set),
+            right: Box::new(GoExpression::Integer(0)),
+        };
+        if is_true(owned) {
+            return Ok(edge);
+        }
+        let owned = self.value(owned, out)?;
+        Ok(GoExpression::Binary { operator: "&&", left: Box::new(owned), right: Box::new(edge) })
+    }
+
+    pub(super) fn unique_mask(
+        &mut self,
+        data: &DataType,
+        constructor: usize,
+        edges: &[(usize, Expression)],
+        cell: Option<&str>,
+        out: &mut Vec<GoStatement>,
+    ) -> GoResult<Option<GoExpression>> {
+        let Some(bits) = self.data_layout(data)?.edges else { return Ok(None) };
+        let mut constant = 0;
+        let mut terms = vec![];
+        for (field, owned) in edges {
+            let Some(bit) = bits.bit(constructor, *field) else { continue };
+            match &owned.kind {
+                ExpressionKind::Literal(Literal::Boolean(true)) => constant |= bit,
+                ExpressionKind::Literal(Literal::Boolean(false)) => {}
+                _ => {
+                    let mut owned = self.value(owned, out)?;
+                    if let Some(cell) = cell
+                        && !independent_of(&mut owned, cell)
+                    {
+                        owned = self.shared(owned, "owned", out);
+                    }
+                    let unique_bit = self.support_function("uniqueBit", UNIQUE_BIT_SOURCE);
+                    let bit = GoExpression::Integer(i64::from(bit));
+                    terms.push(call(identifier_expression(&unique_bit), vec![owned, bit]));
+                }
+            }
+        }
+        let constant =
+            (constant != 0 || terms.is_empty()).then(|| GoExpression::Integer(i64::from(constant)));
+        let mask = constant.into_iter().chain(terms).reduce(|left, right| GoExpression::Binary {
+            operator: "|",
+            left: Box::new(left),
+            right: Box::new(right),
+        });
+        Ok(mask)
+    }
+
     pub(super) fn reuse_stores(
         &mut self,
         layout: &DataLayout,
         constructor: usize,
         cell: &str,
         values: Vec<GoExpression>,
+        mask: Option<GoExpression>,
         out: &mut Vec<GoStatement>,
     ) -> Option<Vec<GoStatement>> {
         if !layout.boxed || layout.erases_arguments || layout.maybe.is_some() {
@@ -83,9 +188,43 @@ where
             }
             stores.push(GoStatement::Assign { targets: vec![field(name)], values: vec![value] });
         }
+        if let Some(mask) = mask {
+            stores.push(GoStatement::Assign { targets: vec![field("Unique")], values: vec![mask] });
+        }
         Some(stores)
     }
 }
+
+pub(super) fn with_unique_mask(
+    constructed: GoExpression,
+    mask: Option<GoExpression>,
+) -> GoExpression {
+    let Some(mask) = mask.filter(|mask| !matches!(mask, GoExpression::Integer(0))) else {
+        return constructed;
+    };
+    match constructed {
+        GoExpression::Address(composite) => {
+            GoExpression::Address(Box::new(with_unique_mask(*composite, Some(mask))))
+        }
+        GoExpression::Composite { type_, mut fields } => {
+            fields.push((Some("Unique".into()), mask));
+            GoExpression::Composite { type_, fields }
+        }
+        constructed => constructed,
+    }
+}
+
+fn is_true(expression: &Expression) -> bool {
+    matches!(expression.kind, ExpressionKind::Literal(Literal::Boolean(true)))
+}
+
+const UNIQUE_BIT_SOURCE: &str = "func {name}(owned bool, bit uint8) uint8 {
+\tif owned {
+\t\treturn bit
+\t}
+\treturn 0
+}
+";
 
 /// Whether storing into the cell's fields before computing the value leaves the value unchanged:
 /// it neither names the cell nor calls anything that might reach it.

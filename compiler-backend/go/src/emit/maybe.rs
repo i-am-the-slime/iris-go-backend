@@ -169,6 +169,7 @@ where
                 declaration: None,
                 origin_position: 0,
                 maybe: Some(maybe),
+                edges: None,
             };
             emitter.data_layouts.insert(data.clone(), layout.clone());
             layout
@@ -259,12 +260,16 @@ where
             declaration: None,
             origin_position: plan.pointer_prefix,
             maybe: Some(MaybeLayout::Struct { just, nothing, literal }),
+            edges: None,
         };
         self.data_layouts.insert(data.clone(), layout.clone());
         let mut fields = vec![];
         for slot in plan.slots {
             fields.push(match slot {
                 super::layout::Slot::Tag => StructField::new("Tag", super::layout::tag_type(2)),
+                super::layout::Slot::Unique => {
+                    StructField::new("Unique", super::layout::unique_type())
+                }
                 super::layout::Slot::Field { name, monotype } => {
                     StructField::new(name, self.go_type(monotype)?)
                 }

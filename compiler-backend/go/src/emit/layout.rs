@@ -14,7 +14,9 @@
 //! The same plan sizes a data type that is small enough to be held by value,
 //! so the size limit is applied to the struct Go actually lays out.
 
-use rustc_hash::FxHashSet;
+use std::rc::Rc;
+
+use rustc_hash::{FxHashMap, FxHashSet};
 
 use super::Emitter;
 use crate::error::GoResult;
@@ -83,6 +85,22 @@ pub(super) fn tag_type(constructors: usize) -> GoType {
     if constructors <= 256 { GoType::Named("uint8".into()) } else { GoType::Int }
 }
 
+pub(super) fn unique_type() -> GoType {
+    GoType::Named("uint8".into())
+}
+
+const EDGE_LIMIT: usize = 8;
+
+pub(super) struct EdgeBits {
+    bits: Vec<Vec<Option<u8>>>,
+}
+
+impl EdgeBits {
+    pub(super) fn bit(&self, constructor: usize, field: usize) -> Option<u8> {
+        self.bits[constructor].get(field).copied().flatten()
+    }
+}
+
 fn tag_shape(constructors: usize) -> Shape {
     if constructors <= 256 { Shape::scalar(1) } else { Shape::scalar(8) }
 }
@@ -101,6 +119,7 @@ pub(super) struct SlotPlan {
 
 pub(super) enum Slot {
     Tag,
+    Unique,
     Field { name: String, monotype: MonotypeId },
 }
 
@@ -110,40 +129,112 @@ where
 {
     /// Plans the struct of a data type whose constructors have fields.
     pub(super) fn plan_slots(&mut self, constructors: &[DataConstructor]) -> GoResult<SlotPlan> {
+        self.plan_tracked_slots(constructors, false)
+    }
+
+    pub(super) fn plan_tracked_slots(
+        &mut self,
+        constructors: &[DataConstructor],
+        tracked: bool,
+    ) -> GoResult<SlotPlan> {
+        let reserved = Reserved { tagged: constructors.len() > 1, tracked };
         let mut groups = groups_of_equal_fields(constructors, self.monotypes);
         let mut named = NamedSlots::new(constructors, &groups, Naming::Readable);
-        if !named.are_distinct(constructors.len()) {
+        if !named.are_distinct(reserved) {
             // A constructor named like another's field or the tag, such as
             // `Tag`, numbers its fields after itself.
             named = NamedSlots::new(constructors, &groups, Naming::Positional);
         }
-        if !named.are_distinct(constructors.len()) {
+        if !named.are_distinct(reserved) {
             // A constructor named like a shared slot, such as `Field`, keeps its own slots.
             groups = (0..constructors.len()).map(|index| vec![index]).collect();
             named = NamedSlots::new(constructors, &groups, Naming::Positional);
         }
-        if !named.are_distinct(constructors.len()) {
+        if !named.are_distinct(reserved) {
             // Labels with one Go spelling, such as a Variant's `a` and `A`, number their slots.
-            named.number_repeats(constructors.len());
+            named.number_repeats(reserved);
         }
-        self.arrange_slots(constructors.len(), named.constructors, named.fields)
+        self.arrange_tracked_slots(constructors.len(), named.constructors, named.fields, tracked)
+    }
+
+    pub(super) fn edge_bits(&mut self, data: &DataType) -> GoResult<Option<Rc<EdgeBits>>> {
+        if let Some(bits) = self.edge_bits.get(data) {
+            return Ok(bits.clone());
+        }
+        let bits = self.plan_edge_bits(data)?.map(Rc::new);
+        self.edge_bits.insert(data.clone(), bits.clone());
+        Ok(bits)
+    }
+
+    fn plan_edge_bits(&mut self, data: &DataType) -> GoResult<Option<EdgeBits>> {
+        if !self.has_unique_room(data)? {
+            return Ok(None);
+        }
+        let constructors = self
+            .monotypes
+            .constructors(&mut self.context, data)
+            .map_err(Failure::in_code_generation)?;
+        let (_, Some(plan)) = self.slot_plan(data, &constructors, true)? else { return Ok(None) };
+        let mut slot_bits: FxHashMap<String, u8> = FxHashMap::default();
+        for slot in &plan.slots {
+            let Slot::Field { name, monotype } = slot else { continue };
+            let Monotype::Data(target) = self.monotypes.get(*monotype).clone() else { continue };
+            if !self.reaches(&target, data)? || !self.has_unique_room(&target)? {
+                continue;
+            }
+            if slot_bits.len() == EDGE_LIMIT {
+                return Ok(None);
+            }
+            slot_bits.insert(name.clone(), 1 << slot_bits.len());
+        }
+        if slot_bits.is_empty() {
+            return Ok(None);
+        }
+        let bits = plan
+            .constructors
+            .iter()
+            .map(|slots| slots.iter().map(|slot| slot_bits.get(slot).copied()).collect())
+            .collect();
+        Ok(Some(EdgeBits { bits }))
+    }
+
+    fn has_unique_room(&mut self, data: &DataType) -> GoResult<bool> {
+        if let Some(&room) = self.unique_rooms.get(data) {
+            return Ok(room);
+        }
+        self.unique_rooms.insert(data.clone(), false);
+        let room = self.is_cell(data) && self.maybe_payload(data)?.is_none() && {
+            let constructors = self
+                .monotypes
+                .constructors(&mut self.context, data)
+                .map_err(Failure::in_code_generation)?;
+            let (_, untracked) = self.slot_plan(data, &constructors, false)?;
+            let (_, tracked) = self.slot_plan(data, &constructors, true)?;
+            match (untracked, tracked) {
+                (Some(untracked), Some(tracked)) => untracked.shape.size() == tracked.shape.size(),
+                _ => false,
+            }
+        };
+        self.unique_rooms.insert(data.clone(), room);
+        Ok(room)
     }
 
     /// Plans the struct of a `Sentinel` type, which has one constructor with fields and no tag.
     pub(super) fn plan_untagged_slots(
         &mut self,
         constructors: &[DataConstructor],
+        tracked: bool,
     ) -> GoResult<SlotPlan> {
-        let plan = self.plan_slots(constructors)?;
+        let plan = self.plan_tracked_slots(constructors, tracked)?;
         let fields = plan
             .slots
             .into_iter()
             .filter_map(|slot| match slot {
-                Slot::Tag => None,
+                Slot::Tag | Slot::Unique => None,
                 Slot::Field { name, monotype } => Some((name, monotype)),
             })
             .collect();
-        self.arrange_slots(1, plan.constructors, fields)
+        self.arrange_tracked_slots(1, plan.constructors, fields, tracked)
     }
 
     /// Orders the slots of a struct whose `tags` constructors keep their
@@ -154,6 +245,16 @@ where
         constructors: Vec<Vec<String>>,
         fields: Vec<(String, MonotypeId)>,
     ) -> GoResult<SlotPlan> {
+        self.arrange_tracked_slots(tags, constructors, fields, false)
+    }
+
+    fn arrange_tracked_slots(
+        &mut self,
+        tags: usize,
+        constructors: Vec<Vec<String>>,
+        fields: Vec<(String, MonotypeId)>,
+        tracked: bool,
+    ) -> GoResult<SlotPlan> {
         let mut slots = vec![];
         if tags > 1 {
             slots.push((Slot::Tag, tag_shape(tags)));
@@ -161,6 +262,9 @@ where
         for (name, monotype) in fields {
             let shape = self.value_shape(monotype)?;
             slots.push((Slot::Field { name, monotype }, shape));
+        }
+        if tracked {
+            slots.push((Slot::Unique, Shape::scalar(1)));
         }
         slots.sort_by_key(|(_, shape)| shape.declaration_rank());
         let shape = Shape::of_struct(slots.iter().map(|(_, shape)| *shape));
@@ -327,7 +431,7 @@ enum Naming {
 }
 
 /// Field names a data type's struct declares beside its constructors' slots.
-const RESERVED_SLOTS: &[&str] = &["Tag", "Origin"];
+const RESERVED_SLOTS: &[&str] = &["Tag", "Origin", "Unique"];
 
 const ORDINALS: &[&str] = &[
     "First", "Second", "Third", "Fourth", "Fifth", "Sixth", "Seventh", "Eighth", "Ninth", "Tenth",
@@ -361,10 +465,10 @@ impl NamedSlots {
 
     /// Gives each slot that repeats an earlier slot's name, or a name the struct declares
     /// besides, the lowest number that is free. Every constructor keeps slots of its own.
-    fn number_repeats(&mut self, constructors: usize) {
+    fn number_repeats(&mut self, reserved: Reserved) {
         let mut taken: FxHashSet<String> = RESERVED_SLOTS
             .iter()
-            .filter(|&&name| name != "Tag" || constructors > 1)
+            .filter(|&&name| reserved.contains(name))
             .map(|name| name.to_string())
             .collect();
         let mut field = 0;
@@ -382,11 +486,25 @@ impl NamedSlots {
 
     /// Whether no two slots share a name, nor a slot a name the struct
     /// declares besides, such as the tag of a type of several constructors.
-    fn are_distinct(&self, constructors: usize) -> bool {
+    fn are_distinct(&self, reserved: Reserved) -> bool {
         let mut seen = FxHashSet::default();
-        let reserved =
-            |name: &str| RESERVED_SLOTS.contains(&name) && (name != "Tag" || constructors > 1);
-        self.fields.iter().all(|(name, _)| !reserved(name) && seen.insert(name.as_str()))
+        self.fields.iter().all(|(name, _)| !reserved.contains(name) && seen.insert(name.as_str()))
+    }
+}
+
+#[derive(Clone, Copy)]
+struct Reserved {
+    tagged: bool,
+    tracked: bool,
+}
+
+impl Reserved {
+    fn contains(self, name: &str) -> bool {
+        match name {
+            "Tag" => self.tagged,
+            "Unique" => self.tracked,
+            name => RESERVED_SLOTS.contains(&name),
+        }
     }
 }
 

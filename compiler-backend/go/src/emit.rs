@@ -76,6 +76,7 @@ use self::application::Callable;
 use self::build::*;
 use self::declarations::{await_fibers, recursive_constants};
 use self::operators::is_untyped_constant;
+use self::overwrite::with_unique_mask;
 use self::packages::Spelling;
 use crate::arity::Arities;
 use crate::context::Context;
@@ -380,6 +381,9 @@ where
             erasing: FxHashMap::default(),
             erasing_layouts: FxHashMap::default(),
             materialized: FxHashSet::default(),
+            candidates: FxHashSet::default(),
+            edge_bits: FxHashMap::default(),
+            unique_rooms: FxHashMap::default(),
             effects: FxHashSet::default(),
             notes: vec![],
             foreign_data: vec![],
@@ -458,6 +462,7 @@ struct DataLayout {
     /// last that holds pointers, so the collector scans no further.
     origin_position: usize,
     maybe: Option<maybe::MaybeLayout>,
+    edges: Option<std::rc::Rc<layout::EdgeBits>>,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -553,6 +558,9 @@ struct Emitter<'p, 'm, 'q, Q> {
     erasing: FxHashMap<MonotypeId, bool>,
     erasing_layouts: FxHashMap<DataType, bool>,
     materialized: FxHashSet<(FunctionId, LocalId)>,
+    candidates: FxHashSet<DataType>,
+    edge_bits: FxHashMap<DataType, Option<std::rc::Rc<layout::EdgeBits>>>,
+    unique_rooms: FxHashMap<DataType, bool>,
     /// The Go functions the emitted code calls to run an effect.
     effects: headers::Effects,
     /// What the program does differently from the JavaScript backend's, for the user.
@@ -1624,21 +1632,25 @@ where
                 self.construct(data, *constructor, values)?
             }
             ExpressionKind::Reuse { cell, data, constructor, arguments } => {
-                let values = self.values(arguments, out)?;
-                let cell = self.value(cell, out)?;
-                let layout = self.data_layout(data)?;
-                if let GoExpression::Identifier(name) = &cell
-                    && let Some(stores) =
-                        self.reuse_stores(&layout, *constructor, name, values.clone(), out)
-                {
-                    out.extend(stores);
-                    return Ok(cell);
-                }
-                let composite = self.composite(&layout, *constructor, values);
-                let target = GoExpression::Unary { operator: "*", operand: Box::new(cell.clone()) };
-                out.push(GoStatement::Assign { targets: vec![target], values: vec![composite] });
-                cell
+                self.reused(cell, data, *constructor, arguments, &[], out)?
             }
+            ExpressionKind::UniqueEdge { owned, cell, edge } => {
+                self.unique_edge(owned, cell, edge, out)?
+            }
+            ExpressionKind::UniqueEdges { value, edges } => match &value.kind {
+                ExpressionKind::Construct { data, constructor, arguments } => {
+                    let values = self.values(arguments, out)?;
+                    let mask = self.unique_mask(data, *constructor, edges, None, out)?;
+                    let constructed = self.construct(data, *constructor, values)?;
+                    with_unique_mask(constructed, mask)
+                }
+                ExpressionKind::Reuse { cell, data, constructor, arguments } => {
+                    self.reused(cell, data, *constructor, arguments, edges, out)?
+                }
+                _ => unreachable!(
+                    "invariant violated: unique edges mark neither a construction nor a reuse"
+                ),
+            },
             ExpressionKind::Foreign { foreign, arguments } => {
                 self.foreign_value(foreign, arguments, expression.monotype, out)?
             }

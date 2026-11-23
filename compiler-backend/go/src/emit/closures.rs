@@ -1231,6 +1231,7 @@ where
             declaration: None,
             origin_position: 0,
             maybe: None,
+            edges: None,
         };
         self.closure_layouts.insert(monotype, layout.clone());
         let tags: Vec<String> =
@@ -1240,6 +1241,7 @@ where
         for slot in plan.slots {
             struct_fields.push(match slot {
                 layout::Slot::Tag => StructField::new("Tag", layout::tag_type(tags.len())),
+                layout::Slot::Unique => StructField::new("Unique", layout::unique_type()),
                 layout::Slot::Field { name, monotype } => {
                     StructField::new(name, self.go_type(monotype)?)
                 }

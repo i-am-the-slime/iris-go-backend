@@ -442,28 +442,11 @@ where
             .monotypes
             .constructors(&mut self.context, data)
             .map_err(|failure| failure.at(&name))?;
-        let mut kind = if constructors.iter().all(|constructor| constructor.fields.is_empty()) {
-            DataKind::Enumeration
-        } else if constructors.len() == 1 {
-            DataKind::Product
-        } else {
-            DataKind::Tagged
+        let edges = match self.candidates.contains(data) {
+            true => self.edge_bits(data)?,
+            false => None,
         };
-        let mut plan = match kind {
-            DataKind::Enumeration => None,
-            DataKind::Tagged | DataKind::Product | DataKind::Sentinel => {
-                Some(self.plan_slots(&constructors)?)
-            }
-        };
-        if kind == DataKind::Tagged && self.tells_nullaries_apart_by_address(data, &constructors)? {
-            let untagged = self.plan_untagged_slots(&constructors)?;
-            // Go gives every allocation of nothing one address, so cells of an empty struct
-            // could not be told apart.
-            if untagged.shape.size() > 0 {
-                kind = DataKind::Sentinel;
-                plan = Some(untagged);
-            }
-        }
+        let (kind, plan) = self.slot_plan(data, &constructors, edges.is_some())?;
         let mut layouts = vec![];
         for (index, constructor) in constructors.iter().enumerate() {
             let tag = self.global_name(Spelling::derived(
@@ -491,6 +474,7 @@ where
             declaration: None,
             origin_position: plan.as_ref().map_or(0, |plan| plan.pointer_prefix),
             maybe: None,
+            edges,
         };
         self.data_layouts.insert(data.clone(), layout.clone());
         let names: Vec<String> =
@@ -528,6 +512,7 @@ where
         for slot in plan.slots {
             fields.push(match slot {
                 layout::Slot::Tag => StructField::new("Tag", layout::tag_type(constructors.len())),
+                layout::Slot::Unique => StructField::new("Unique", layout::unique_type()),
                 layout::Slot::Field { name, monotype } => {
                     StructField::new(name, self.go_type(monotype)?)
                 }
@@ -560,6 +545,37 @@ where
             }
         }
         Ok(self.data_layouts.get(data).cloned().unwrap_or(layout))
+    }
+
+    pub(super) fn slot_plan(
+        &mut self,
+        data: &DataType,
+        constructors: &[DataConstructor],
+        tracked: bool,
+    ) -> GoResult<(DataKind, Option<layout::SlotPlan>)> {
+        let mut kind = if constructors.iter().all(|constructor| constructor.fields.is_empty()) {
+            DataKind::Enumeration
+        } else if constructors.len() == 1 {
+            DataKind::Product
+        } else {
+            DataKind::Tagged
+        };
+        let mut plan = match kind {
+            DataKind::Enumeration => None,
+            DataKind::Tagged | DataKind::Product | DataKind::Sentinel => {
+                Some(self.plan_tracked_slots(constructors, tracked)?)
+            }
+        };
+        if kind == DataKind::Tagged && self.tells_nullaries_apart_by_address(data, constructors)? {
+            let untagged = self.plan_untagged_slots(constructors, tracked)?;
+            // Go gives every allocation of nothing one address, so cells of an empty struct
+            // could not be told apart.
+            if untagged.shape.size() > 0 {
+                kind = DataKind::Sentinel;
+                plan = Some(untagged);
+            }
+        }
+        Ok((kind, plan))
     }
 
     /// Whether a type of several constructors, only one of which has fields, can be a

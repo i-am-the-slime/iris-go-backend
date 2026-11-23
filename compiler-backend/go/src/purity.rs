@@ -190,6 +190,7 @@ pub(crate) fn is_deferrable(expression: &Expression) -> bool {
                 ) && !foreign.is_effectful()
             }
             ExpressionKind::Reuse { .. }
+            | ExpressionKind::UniqueEdges { .. }
             | ExpressionKind::Update { .. }
             | ExpressionKind::EffectPure(_)
             | ExpressionKind::EffectBind { .. }

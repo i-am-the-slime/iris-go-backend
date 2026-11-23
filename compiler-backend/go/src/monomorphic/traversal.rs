@@ -62,6 +62,14 @@ pub fn for_each_child<'e>(expression: &'e Expression, visitor: &mut impl FnMut(&
             arguments.iter().for_each(&mut *visitor);
             visitor(cell);
         }
+        ExpressionKind::UniqueEdge { owned, cell, .. } => {
+            visitor(owned);
+            visitor(cell);
+        }
+        ExpressionKind::UniqueEdges { value, edges } => {
+            visitor(value);
+            edges.iter().for_each(|(_, owned)| visitor(owned));
+        }
         ExpressionKind::Apply { function, arguments } => {
             visitor(function);
             arguments.iter().for_each(visitor);
@@ -120,6 +128,14 @@ pub fn for_each_child_mut(expression: &mut Expression, visitor: &mut impl FnMut(
         ExpressionKind::Reuse { cell, arguments, .. } => {
             arguments.iter_mut().for_each(&mut *visitor);
             visitor(cell);
+        }
+        ExpressionKind::UniqueEdge { owned, cell, .. } => {
+            visitor(owned);
+            visitor(cell);
+        }
+        ExpressionKind::UniqueEdges { value, edges } => {
+            visitor(value);
+            edges.iter_mut().for_each(|(_, owned)| visitor(owned));
         }
         ExpressionKind::Apply { function, arguments } => {
             visitor(function);

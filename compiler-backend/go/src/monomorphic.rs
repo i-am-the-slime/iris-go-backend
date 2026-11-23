@@ -141,6 +141,8 @@ pub enum ExpressionKind {
     Function(FunctionId),
     Construct { data: DataType, constructor: usize, arguments: Vec<Expression> },
     Reuse { cell: Box<Expression>, data: DataType, constructor: usize, arguments: Vec<Expression> },
+    UniqueEdge { owned: Box<Expression>, cell: Box<Expression>, edge: Edge },
+    UniqueEdges { value: Box<Expression>, edges: Vec<(usize, Expression)> },
     Foreign { foreign: &'static Foreign, arguments: Vec<Expression> },
     Apply { function: Box<Expression>, arguments: Vec<Expression> },
     Lambda { parameters: Vec<Local>, body: Box<Expression> },
@@ -153,6 +155,13 @@ pub enum ExpressionKind {
     EffectBind { action: Box<Expression>, local: Local, body: Box<Expression> },
     EffectEach { array: Box<Expression>, element: Local, body: Box<Expression> },
     Fail(SmolStr),
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct Edge {
+    pub data: DataType,
+    pub constructor: usize,
+    pub field: usize,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
