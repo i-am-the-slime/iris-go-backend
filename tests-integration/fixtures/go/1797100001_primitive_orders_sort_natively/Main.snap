@@ -157,15 +157,8 @@ func initializeMain_() []string {
 	sorted3 := slices.Clone([]int32{9, 1, 8, 2})
 	slices.Sort(sorted3)
 	sorted4 := slices.Clone([]int32{9, 1, 8, 2})
-	slices.SortStableFunc(sorted4, func(b int32, a int32) int {
-		if a < b {
-			return -1
-		}
-		if a > b {
-			return 1
-		}
-		return 0
-	})
+	slices.Sort(sorted4)
+	slices.Reverse(sorted4)
 	array := shared.SortNumbers(signs)
 	mapped := make([]string, len(array))
 	for index, element := range array {

@@ -1,3 +1,4 @@
+use super::sorting::Placement;
 use super::{
     Emitter, Mode, Sink, call, field, field_name, identifier_expression, mutable, reference_type,
     unit_value, uses_local,
@@ -103,6 +104,13 @@ where
                     && mutable::ACCESSES.contains(&function.name) =>
             {
                 return self.mutable_access(function.name, arguments, result, sink, out);
+            }
+            Foreign::Perform { function, .. }
+                if function == GoFunction { package: GoPackage::Direct, name: "SortByMutable" }
+                    && let Some(sorted) =
+                        self.primitive_sort(arguments, Placement::InPlace, out)? =>
+            {
+                return self.deliver(sorted, result, sink, out);
             }
             Foreign::Perform { function, boundary, .. } => {
                 let values = self.boundary_arguments(arguments, boundary, result, false, out)?;

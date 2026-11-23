@@ -1,4 +1,5 @@
 use super::operators::float_constant;
+use super::sorting::Placement;
 use super::{
     Emitter, Mode, Sink, binary, call, coerce, field, fusion, identifier_expression, mutable,
     unit_value,
@@ -346,7 +347,7 @@ where
             return Ok(iterated);
         }
         if foreign.calls(crate::foreign::ARRAY_SORT_BY)
-            && let Some(sorted) = self.primitive_sort(arguments, out)?
+            && let Some(sorted) = self.primitive_sort(arguments, Placement::Copied, out)?
         {
             return Ok(sorted);
         }

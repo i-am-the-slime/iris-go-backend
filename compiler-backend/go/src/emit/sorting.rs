@@ -39,6 +39,18 @@ impl Ordering<'_> {
     fn is_identity(&self) -> bool {
         matches!(self.keys[0].kind, ExpressionKind::Local(id) if id == self.parameters[0].id)
     }
+
+    fn is_reversed_identity(&self) -> bool {
+        let [first, second] = self.parameters.map(|parameter| parameter.id);
+        matches!(self.keys[0].kind, ExpressionKind::Local(id) if id == second)
+            && matches!(self.keys[1].kind, ExpressionKind::Local(id) if id == first)
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(super) enum Placement {
+    Copied,
+    InPlace,
 }
 
 impl<'p, 'q, Q> Emitter<'p, '_, 'q, Q>
@@ -48,6 +60,7 @@ where
     pub(super) fn primitive_sort(
         &mut self,
         arguments: &[Expression],
+        placement: Placement,
         out: &mut Vec<GoStatement>,
     ) -> GoResult<Option<GoExpression>> {
         let [compare, from_ordering, array] = arguments else { return Ok(None) };
@@ -55,39 +68,64 @@ where
             return Ok(None);
         };
         let identity = ordering.is_identity();
+        let reversed = ordering.primitive != Primitive::Number && ordering.is_reversed_identity();
         if ordering.primitive == Primitive::Number && !identity {
             return Ok(None);
         }
-        let Monotype::Array(element) = *self.monotypes.get(array.monotype) else {
-            return Ok(None);
+        let element = match (placement, self.monotypes.get(array.monotype)) {
+            (Placement::Copied, Monotype::Array(element))
+            | (Placement::InPlace, Monotype::MutableArray(element)) => *element,
+            _ => return Ok(None),
         };
         let element_type = self.go_type(element)?;
-        let comparator =
-            if identity { None } else { Some(self.key_comparator(&ordering, &element_type)?) };
+        let comparator = match identity || reversed {
+            true => None,
+            false => Some(self.key_comparator(&ordering, &element_type)?),
+        };
         let array = self.value(array, out)?;
+        let (result, sorted_expression) = match placement {
+            Placement::Copied if ordering.primitive == Primitive::Number => {
+                let sort = self.support_function("sortNumbers", SORT_NUMBERS_SOURCE);
+                return Ok(Some(call(identifier_expression(&sort), vec![array])));
+            }
+            Placement::Copied => {
+                let sorted = self.temporary("sorted");
+                out.push(GoStatement::Define {
+                    names: vec![sorted.clone()],
+                    values: vec![self.slices("Clone", vec![array])],
+                });
+                (identifier_expression(&sorted), identifier_expression(&sorted))
+            }
+            Placement::InPlace => {
+                let array = self.hoist(array, "array", out);
+                let elements =
+                    GoExpression::Unary { operator: "*", operand: Box::new(array.clone()) };
+                (array, elements)
+            }
+        };
         if ordering.primitive == Primitive::Number {
             let sort = self.support_function("sortNumbers", SORT_NUMBERS_SOURCE);
-            return Ok(Some(call(identifier_expression(&sort), vec![array])));
+            let sorted = call(identifier_expression(&sort), vec![sorted_expression.clone()]);
+            let copied = call(identifier_expression("copy"), vec![sorted_expression, sorted]);
+            out.push(GoStatement::Expression(copied));
+            return Ok(Some(result));
         }
-        let sorted = self.temporary("sorted");
-        out.push(GoStatement::Define {
-            names: vec![sorted.clone()],
-            values: vec![self.slices("Clone", vec![array])],
-        });
-        let sorted_expression = identifier_expression(&sorted);
         let sort = match (comparator, ordering.primitive) {
             (Some(comparator), _) => {
-                self.slices("SortStableFunc", vec![sorted_expression, comparator])
+                self.slices("SortStableFunc", vec![sorted_expression.clone(), comparator])
             }
             (None, Primitive::String) => {
                 let compare = self
                     .go_function(GoFunction { package: GoPackage::Prim, name: "CompareString" });
-                self.slices("SortFunc", vec![sorted_expression, compare])
+                self.slices("SortFunc", vec![sorted_expression.clone(), compare])
             }
-            (None, _) => self.slices("Sort", vec![sorted_expression]),
+            (None, _) => self.slices("Sort", vec![sorted_expression.clone()]),
         };
         out.push(GoStatement::Expression(sort));
-        Ok(Some(identifier_expression(&sorted)))
+        if reversed {
+            out.push(GoStatement::Expression(self.slices("Reverse", vec![sorted_expression])));
+        }
+        Ok(Some(result))
     }
 
     fn slices(&mut self, name: &str, arguments: Vec<GoExpression>) -> GoExpression {
