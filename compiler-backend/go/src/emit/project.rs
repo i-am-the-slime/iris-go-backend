@@ -1,4 +1,4 @@
-use super::{Emitter, call, identifier_expression, returning};
+use super::{Crossing, Emitter, call, identifier_expression, returning};
 use crate::error::GoResult;
 use crate::foreign::{Foreign, ForeignPackages};
 use crate::monomorphic::Expression;
@@ -23,11 +23,13 @@ where
             unreachable!("invariant violated: a project call of another foreign");
         };
         let function = self.project_function(foreign)?;
+        let crossing = self.project_crossing(foreign);
         if arguments.is_empty() {
             if type_arguments.is_empty() {
                 return Ok(function);
             }
-            let types = type_arguments.iter().map(|&type_| self.convention_or_native(type_));
+            let types =
+                type_arguments.iter().map(|&type_| self.convention_or_native(type_, crossing));
             let arguments = types.collect::<GoResult<Vec<_>>>()?;
             let function = Box::new(function);
             let instantiated = GoExpression::Instantiation { function, arguments };
@@ -39,11 +41,21 @@ where
         for (position, argument) in arguments.iter().enumerate() {
             let value = match uncurried.get(position).cloned().flatten() {
                 Some(groups) => self.grouped_value(argument, &groups, out)?,
-                None => self.project_argument(argument, generic.contains(&position), out)?,
+                None => {
+                    let generic = generic.contains(&position);
+                    self.project_argument(argument, generic, crossing, out)?
+                }
             };
             values.push(value);
         }
         Ok(call(function, values))
+    }
+
+    pub(super) fn project_crossing(&self, foreign: Foreign) -> Crossing {
+        let Foreign::Project { file_id, term, .. } = foreign else {
+            unreachable!("invariant violated: the crossing of another foreign");
+        };
+        Crossing::native_when(self.monotypes.native_foreigns.contains(&(file_id, term)))
     }
 
     /// A foreign's argument as its Go function takes it. Go infers a generic function's type
@@ -53,6 +65,7 @@ where
         &mut self,
         argument: &Expression,
         generic: bool,
+        crossing: Crossing,
         out: &mut Vec<GoStatement>,
     ) -> GoResult<GoExpression> {
         let value = self.value(argument, out)?;
@@ -61,7 +74,7 @@ where
             _ if generic => self.typed_argument(value, argument)?,
             _ => value,
         };
-        self.in_convention(value, argument.monotype, out)
+        self.in_convention(value, argument.monotype, crossing, out)
     }
 
     /// The positions of a foreign's parameters whose declared type is one of its quantified
@@ -139,9 +152,11 @@ where
     ) -> GoResult<GoExpression> {
         let function = self.project_function(foreign)?;
         let generic = self.project_generic_parameters(foreign)?;
+        let crossing = self.project_crossing(foreign);
         let mut bound = Vec::with_capacity(arguments.len());
         for (position, argument) in arguments.iter().enumerate() {
-            let value = self.project_argument(argument, generic.contains(&position), out)?;
+            let generic = generic.contains(&position);
+            let value = self.project_argument(argument, generic, crossing, out)?;
             let base = self.value_base(argument.monotype);
             let name = self.temporary(&base);
             out.push(GoStatement::Define { names: vec![name.clone()], values: vec![value] });
@@ -151,9 +166,9 @@ where
             .monotypes
             .effect_result(monotype)
             .expect("invariant violated: an effectful foreign returns an effect");
-        let result = self.convention_result(inner)?;
+        let result = self.convention_result(inner, crossing)?;
         let body = vec![returning(call(function, bound), result.is_some())];
         let thunk = GoExpression::Function { parameters: vec![], result, body };
-        self.out_of_convention(thunk, monotype, out)
+        self.out_of_convention(thunk, monotype, crossing, out)
     }
 }

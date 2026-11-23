@@ -2,16 +2,15 @@
 
 use super::packages::Spelling;
 use super::{
-    ConstructorLayout, DataKind, DataLayout, Emitter, INLINE_DATA_LIMIT, TRANSIENT_DATA_LIMIT,
-    layout, names, reference_type,
+    ConstructorLayout, Crossing, DataKind, DataLayout, Emitter, INLINE_DATA_LIMIT,
+    TRANSIENT_DATA_LIMIT, layout, names, reference_type,
 };
 use crate::erasure::Erasure;
 use crate::error::GoResult;
 use crate::foreign::{ForeignPackages, GoPackage};
 use crate::monotype::{DataConstructor, DataType, Failure, Monotype, MonotypeId};
-use crate::naming::{capitalise, identifier};
+use crate::naming::identifier;
 use crate::syntax::{GoDeclaration, GoType, SourceLine, StructField};
-use files::FileId;
 use rustc_hash::{FxHashMap, FxHashSet};
 
 impl<Q> Emitter<'_, '_, '_, Q>
@@ -313,12 +312,15 @@ where
             None => {
                 self.imports.insert(self.foreign_packages.import_path(&module_name));
                 let package = ForeignPackages::package_name(&module_name);
-                format!("{package}.{}", self.foreign_type_name(data.file_id, &type_name)?)
+                let module = self.context.module(data.file_id)?;
+                format!("{package}.{}", module.foreign_type_name(&type_name))
             }
         };
         if data.arguments.is_empty() {
             return Ok(GoType::Named(name));
         }
+        let native = self.monotypes.native_foreign_data.contains(&(data.file_id, data.item));
+        let crossing = Crossing::native_when(native);
         let mut arguments = Vec::with_capacity(data.arguments.len());
         for &argument in data.arguments.iter() {
             let monotype = self
@@ -329,28 +331,11 @@ where
             // convention its functions take them in.
             let argument = match support {
                 Some(_) => self.go_type(monotype)?,
-                None => self.convention_or_native(monotype)?,
+                None => self.convention_or_native(monotype, crossing)?,
             };
             arguments.push(argument);
         }
         Ok(GoType::Generic { name, arguments })
-    }
-
-    /// The Go name of a type a project's foreign package declares: the
-    /// type's own name, capitalised, unless one of the module's values
-    /// capitalises to it too (hyrule's `objHack` builds an `ObjHack`), in which
-    /// case the type's name ends in `Type`.
-    pub(super) fn foreign_type_name(
-        &mut self,
-        file_id: FileId,
-        type_name: &str,
-    ) -> GoResult<String> {
-        let name = capitalise(type_name);
-        let module = self.context.module(file_id)?;
-        let taken = module.indexed.items.iter_terms().any(|(_, term)| {
-            term.name.as_deref().is_some_and(|term_name| capitalise(term_name) == name)
-        });
-        Ok(if taken { format!("{name}Type") } else { name })
     }
 
     pub(super) fn unfold(&mut self, data: &DataType) -> GoResult<MonotypeId> {

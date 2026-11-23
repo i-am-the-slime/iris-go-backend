@@ -24,6 +24,20 @@ pub struct Context<'q, Q> {
     pub erased_variant_rows: FxHashSet<checking::TypeId>,
 }
 
+impl ModuleData {
+    /// The Go name of a type a project's foreign package declares: the
+    /// type's own name, capitalised, unless one of the module's values
+    /// capitalises to it too (hyrule's `objHack` builds an `ObjHack`), in which
+    /// case the type's name ends in `Type`.
+    pub fn foreign_type_name(&self, type_name: &str) -> String {
+        let name = capitalise(type_name);
+        let taken = self.indexed.items.iter_terms().any(|(_, term)| {
+            term.name.as_deref().is_some_and(|term_name| capitalise(term_name) == name)
+        });
+        if taken { format!("{name}Type") } else { name }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ErasedNewtype {
     pub file_id: FileId,

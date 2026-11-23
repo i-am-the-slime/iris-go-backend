@@ -61,6 +61,7 @@ pub struct ForeignSource {
     pub values: Vec<String>,
     pub types: Vec<String>,
     pub uses_event_loop: bool,
+    pub opacity: super::Opacity,
 }
 
 /// The iris-go runtime's Go module.

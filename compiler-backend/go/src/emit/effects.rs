@@ -94,7 +94,8 @@ where
             Foreign::Project { arity, .. } => {
                 let called = self.project_call(foreign, arguments, out)?;
                 let called = if arity == 0 { call(called, vec![]) } else { called };
-                let performed = self.out_of_convention(called, result, out)?;
+                let crossing = self.project_crossing(foreign);
+                let performed = self.out_of_convention(called, result, crossing, out)?;
                 return self.deliver(performed, result, sink, out);
             }
             Foreign::Perform { function, .. }

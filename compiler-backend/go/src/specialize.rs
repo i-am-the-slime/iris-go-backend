@@ -40,6 +40,7 @@ mod instantiation;
 mod int64;
 mod json;
 mod locals;
+mod native;
 mod patterns;
 mod references;
 mod reified;

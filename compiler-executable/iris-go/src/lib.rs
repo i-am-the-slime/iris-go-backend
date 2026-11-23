@@ -146,6 +146,7 @@ fn vendor_foreign_packages(
         let mut source = go::ForeignSource { module: module.clone(), ..Default::default() };
         let package = destination.join(go::ForeignPackages::package_name(&module));
         fs::create_dir_all(&package).map_err(|error| error.to_string())?;
+        let mut texts = vec![];
         for foreign_file in foreign_files {
             let text = fs::read_to_string(&foreign_file).map_err(|error| error.to_string())?;
             for name in go::foreign_structs(&text) {
@@ -161,7 +162,10 @@ fn vendor_foreign_packages(
             fs::write(package.join(name), go::foreign_source(&module, &text))
                 .map_err(|error| error.to_string())?;
             copy_embedded_files(Path::new(&shown), &text, &package)?;
+            texts.push(text);
         }
+        let texts: Vec<&str> = texts.iter().map(String::as_str).collect();
+        source.opacity = go::foreign_opacity(&texts);
         modules.push(module);
         sources.push(source);
     }

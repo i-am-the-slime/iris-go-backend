@@ -5,6 +5,7 @@
 mod embeds;
 mod host;
 mod imports;
+mod opacity;
 mod packages;
 mod sources;
 
@@ -15,6 +16,7 @@ pub use imports::{
     MUTABLE_PEEK_UNSAFE, MUTABLE_WITHIN, OBJECT_FROM_ENTRIES, OBJECT_INDEX, OBJECT_KEYS,
     SEQUENCE_ARRAY, TO_CHAR_ARRAY, TRAVERSE_ARRAY, array_fold, effect_fold,
 };
+pub use opacity::{Opacity, OpaqueDeclaration, foreign_opacity};
 pub use packages::{ForeignPackages, ForeignSource, LineCoverage, LineDirectives};
 pub use sources::{
     foreign_declarations, foreign_files, foreign_source, foreign_structs, uses_event_loop,

@@ -629,6 +629,18 @@ enum Direction {
     FromConvention,
 }
 
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Crossing {
+    Boxed,
+    Native,
+}
+
+impl Crossing {
+    fn native_when(native: bool) -> Crossing {
+        if native { Crossing::Native } else { Crossing::Boxed }
+    }
+}
+
 fn statements_reference(statements: &mut [GoStatement], name: &str) -> bool {
     let mut found = false;
     statements_names(statements, &mut |reference| {

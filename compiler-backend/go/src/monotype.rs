@@ -190,6 +190,8 @@ pub struct Monotypes {
     /// The records a foreign package's struct represents, with that package's module and the
     /// struct's name.
     pub foreign_records: FxHashMap<MonotypeId, (String, String)>,
+    pub native_foreigns: rustc_hash::FxHashSet<(FileId, TermItemId)>,
+    pub native_foreign_data: rustc_hash::FxHashSet<(FileId, TypeItemId)>,
     pub uncurried_fields: FxHashMap<MonotypeId, UncurriedFields>,
     /// What the Go files next to each module's source declare.
     pub foreign_sources: Vec<crate::foreign::ForeignSource>,

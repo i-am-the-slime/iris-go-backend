@@ -604,6 +604,7 @@ fn go_foreign_packages(
         }
         let Some(module) = go::module_name(&loaded.engine, file_id) else { continue };
         let mut source = go::ForeignSource { module: module.clone(), ..Default::default() };
+        let mut texts = vec![];
         for foreign_file in foreign_files {
             let text = std::fs::read_to_string(&foreign_file)?;
             for name in go::foreign_structs(&text) {
@@ -616,7 +617,10 @@ fn go_foreign_packages(
             let shown = foreign_file.strip_prefix(&root).unwrap_or(&foreign_file);
             source.files.push(shown.display().to_string());
             vendored.extend(vendored_foreign_file(&module, &foreign_file, &text)?);
+            texts.push(text);
         }
+        let texts: Vec<&str> = texts.iter().map(String::as_str).collect();
+        source.opacity = go::foreign_opacity(&texts);
         modules.push(module);
         sources.push(source);
     }

@@ -35,7 +35,8 @@ mod types;
 pub use error::{GoError, GoResult, UnsupportedState};
 pub use foreign::{
     EmbedError, ForeignPackages, ForeignSource, LineCoverage, LineDirectives, embedded_files,
-    foreign_declarations, foreign_files, foreign_source, foreign_structs, uses_event_loop,
+    foreign_declarations, foreign_files, foreign_opacity, foreign_source, foreign_structs,
+    uses_event_loop,
 };
 pub use timing::Work;
 
@@ -76,6 +77,7 @@ pub fn compile_program(
     let substituted = types::Substituted::default();
     let mut specializer = Specializer::new(queries, foreign_packages, substituted);
     specializer.adopt_foreign_structs()?;
+    specializer.adopt_native_foreigns()?;
     let entry = timed("specialize", || specializer.specialize_entry(file_id, term))?;
     if let Some(blockers) = specializer.blockers()? {
         return Err(GoError::Blocked(blockers));

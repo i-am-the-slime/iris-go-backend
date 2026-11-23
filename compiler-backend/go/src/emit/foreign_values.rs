@@ -319,7 +319,8 @@ where
                 return self.project_effect(*foreign, arguments, monotype, out);
             }
             let called = self.project_call(*foreign, arguments, out)?;
-            return self.out_of_convention(called, monotype, out);
+            let crossing = self.project_crossing(*foreign);
+            return self.out_of_convention(called, monotype, crossing, out);
         }
         if let Foreign::Operator(Operator::ArrayLength) = *foreign
             && self.is_fusible(&arguments[0], fusion::Demand::FORWARD)

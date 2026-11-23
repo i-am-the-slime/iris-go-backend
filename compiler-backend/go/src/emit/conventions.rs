@@ -1,7 +1,7 @@
 //! How values cross into and out of foreign code: the conventions of Go packages' functions.
 
 use super::application::Callable;
-use super::{Direction, Emitter, binary, call, identifier_expression, returning};
+use super::{Crossing, Direction, Emitter, binary, call, identifier_expression, returning};
 use crate::error::GoResult;
 use crate::foreign::{Boundary, GoFunction, GoPackage, Spelled};
 use crate::monomorphic::Expression;
@@ -12,20 +12,25 @@ impl<Q> Emitter<'_, '_, '_, Q>
 where
     Q: checking::ExternalQueries,
 {
-    pub(super) fn convention_type(&mut self, monotype: MonotypeId) -> GoResult<Option<GoType>> {
+    pub(super) fn convention_type(
+        &mut self,
+        monotype: MonotypeId,
+        crossing: Crossing,
+    ) -> GoResult<Option<GoType>> {
         Ok(match self.monotypes.get(monotype).clone() {
-            Monotype::Array(element) => {
-                self.convention_type(element)?.map(|element| GoType::Slice(Box::new(element)))
-            }
+            Monotype::Array(element) => self
+                .convention_type(element, crossing)?
+                .map(|element| GoType::Slice(Box::new(element))),
             // A project's foreign package cannot name the struct generated for a record, so a
             // record crosses as the JavaScript object it is there: a Foreign holding an object
             // table. A record the foreign package's own struct represents crosses as it is.
             Monotype::Record(_) if self.monotypes.foreign_records.contains_key(&monotype) => None,
+            Monotype::Record(_) if crossing == Crossing::Native => None,
             Monotype::Record(_) => Some(GoType::Any),
-            Monotype::Nullable(element) => {
-                self.convention_type(element)?.map(|element| GoType::Pointer(Box::new(element)))
-            }
-            Monotype::Effect(result) => self.convention_type(result)?.map(|result| {
+            Monotype::Nullable(element) => self
+                .convention_type(element, crossing)?
+                .map(|element| GoType::Pointer(Box::new(element))),
+            Monotype::Effect(result) => self.convention_type(result, crossing)?.map(|result| {
                 GoType::Function { parameters: vec![], result: Some(Box::new(result)) }
             }),
             // A function crosses curried, one argument at a time, and a function whose result is
@@ -34,13 +39,13 @@ where
             Monotype::Function(argument, result) => {
                 let returned = self.monotypes.effect_result(result).unwrap_or(result);
                 let differs = self.arity(monotype) > 1
-                    || self.convention_type(argument)?.is_some()
-                    || self.convention_type(returned)?.is_some();
+                    || self.convention_type(argument, crossing)?.is_some()
+                    || self.convention_type(returned, crossing)?.is_some();
                 if !differs {
                     return Ok(None);
                 }
-                let argument = self.convention_or_native(argument)?;
-                let returned = self.convention_result(returned)?;
+                let argument = self.convention_or_native(argument, crossing)?;
+                let returned = self.convention_result(returned, crossing)?;
                 Some(GoType::Function {
                     parameters: vec![argument],
                     result: returned.map(Box::new),
@@ -50,36 +55,46 @@ where
         })
     }
 
-    pub(super) fn convention_or_native(&mut self, monotype: MonotypeId) -> GoResult<GoType> {
-        match self.convention_type(monotype)? {
+    pub(super) fn convention_or_native(
+        &mut self,
+        monotype: MonotypeId,
+        crossing: Crossing,
+    ) -> GoResult<GoType> {
+        match self.convention_type(monotype, crossing)? {
             Some(type_) => Ok(type_),
             None => self.go_type(monotype),
         }
     }
 
-    pub(super) fn convention_result(&mut self, monotype: MonotypeId) -> GoResult<Option<GoType>> {
+    pub(super) fn convention_result(
+        &mut self,
+        monotype: MonotypeId,
+        crossing: Crossing,
+    ) -> GoResult<Option<GoType>> {
         if self.is_unit(monotype) {
             return Ok(None);
         }
-        Ok(Some(self.convention_or_native(monotype)?))
+        Ok(Some(self.convention_or_native(monotype, crossing)?))
     }
 
     pub(super) fn in_convention(
         &mut self,
         value: GoExpression,
         monotype: MonotypeId,
+        crossing: Crossing,
         out: &mut Vec<GoStatement>,
     ) -> GoResult<GoExpression> {
-        self.convert_convention(value, monotype, Direction::ToConvention, out)
+        self.convert_convention(value, monotype, Direction::ToConvention, crossing, out)
     }
 
     pub(super) fn out_of_convention(
         &mut self,
         value: GoExpression,
         monotype: MonotypeId,
+        crossing: Crossing,
         out: &mut Vec<GoStatement>,
     ) -> GoResult<GoExpression> {
-        self.convert_convention(value, monotype, Direction::FromConvention, out)
+        self.convert_convention(value, monotype, Direction::FromConvention, crossing, out)
     }
 
     pub(super) fn convert_convention(
@@ -87,17 +102,18 @@ where
         value: GoExpression,
         monotype: MonotypeId,
         direction: Direction,
+        crossing: Crossing,
         out: &mut Vec<GoStatement>,
     ) -> GoResult<GoExpression> {
-        if self.convention_type(monotype)?.is_none() {
+        if self.convention_type(monotype, crossing)?.is_none() {
             return Ok(value);
         }
         let (source, target) = match direction {
             Direction::ToConvention => {
-                (self.go_type(monotype)?, self.convention_or_native(monotype)?)
+                (self.go_type(monotype)?, self.convention_or_native(monotype, crossing)?)
             }
             Direction::FromConvention => {
-                (self.convention_or_native(monotype)?, self.go_type(monotype)?)
+                (self.convention_or_native(monotype, crossing)?, self.go_type(monotype)?)
             }
         };
         Ok(match self.monotypes.get(monotype).clone() {
@@ -110,6 +126,7 @@ where
                     identifier_expression(&parameter),
                     element,
                     direction,
+                    crossing,
                     &mut body,
                 )?;
                 body.push(GoStatement::Return(Some(converted)));
@@ -133,7 +150,8 @@ where
                 let converted = self.temporary("converted");
                 let mut present = vec![];
                 let inner = GoExpression::Unary { operator: "*", operand: Box::new(value.clone()) };
-                let inner = self.convert_convention(inner, element, direction, &mut present)?;
+                let inner =
+                    self.convert_convention(inner, element, direction, crossing, &mut present)?;
                 let inner = self.shared(inner, "present", &mut present);
                 present.push(GoStatement::Assign {
                     targets: vec![identifier_expression(&converted)],
@@ -154,8 +172,13 @@ where
             Monotype::Effect(result) => {
                 let value = self.shared(value, "action", out);
                 let mut body = vec![];
-                let performed =
-                    self.convert_convention(call(value, vec![]), result, direction, &mut body)?;
+                let performed = self.convert_convention(
+                    call(value, vec![]),
+                    result,
+                    direction,
+                    crossing,
+                    &mut body,
+                )?;
                 body.push(GoStatement::Return(Some(performed)));
                 let GoType::Function { result: result_type, .. } = target else { unreachable!() };
                 GoExpression::Function {
@@ -177,7 +200,7 @@ where
                         1
                     }
                 };
-                self.convention_layer(callable, vec![], monotype, layers, direction)?
+                self.convention_layer(callable, vec![], monotype, layers, direction, crossing)?
             }
             _ => value,
         })
@@ -190,9 +213,10 @@ where
         monotype: MonotypeId,
         layers: usize,
         direction: Direction,
+        crossing: Crossing,
     ) -> GoResult<GoExpression> {
         let target = match direction {
-            Direction::ToConvention => self.convention_or_native(monotype)?,
+            Direction::ToConvention => self.convention_or_native(monotype, crossing)?,
             Direction::FromConvention => self.go_type(monotype)?,
         };
         let GoType::Function { parameters, result: target_result } = target else { unreachable!() };
@@ -211,11 +235,13 @@ where
             identifier_expression(&parameter),
             argument,
             reverse,
+            crossing,
             &mut body,
         )?;
         if layers > 1 {
             supplied.push(self.shared(argument, &base, &mut body));
-            let inner = self.convention_layer(callable, supplied, result, layers - 1, direction)?;
+            let inner =
+                self.convention_layer(callable, supplied, result, layers - 1, direction, crossing)?;
             body.push(GoStatement::Return(Some(inner)));
             return Ok(GoExpression::Function {
                 parameters: vec![(parameter, parameters[0].clone())],
@@ -227,7 +253,8 @@ where
         let applied = self.apply_arguments(callable, supplied, &mut body)?;
         // Applying either side performs an effectful result, so only the value converts.
         let returned = self.monotypes.effect_result(result).unwrap_or(result);
-        let converted = self.convert_convention(applied, returned, direction, &mut body)?;
+        let converted =
+            self.convert_convention(applied, returned, direction, crossing, &mut body)?;
         body.push(returning(converted, target_result.is_some()));
         Ok(GoExpression::Function {
             parameters: vec![(parameter, parameters[0].clone())],
