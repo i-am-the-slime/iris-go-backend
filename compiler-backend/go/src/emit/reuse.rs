@@ -1,6 +1,7 @@
 use rustc_hash::{FxHashMap, FxHashSet};
 use smol_str::SmolStr;
 
+use super::field_reads::hoist_field_reads;
 use super::inspection::{inspecting_functions, inspects, sequence_inspections};
 use super::{Emitter, uses_local};
 use crate::foreign::{Boundary, Foreign, GoFunction, GoPackage, Iteration, Operator};
@@ -32,6 +33,7 @@ pub(super) trait Cells {
     fn is_tracked(&mut self, cell: &DataType) -> bool;
     fn tracks(&mut self, cell: &DataType, constructor: usize, field: usize) -> bool;
     fn boolean(&mut self) -> MonotypeId;
+    fn is_record(&self, monotype: MonotypeId) -> bool;
 }
 
 pub(super) struct Reused {
@@ -42,7 +44,8 @@ pub(super) struct Reused {
 
 pub(super) fn reuse_cells(program: &Program, cells: &mut impl Cells) -> Reused {
     let inspecting = timed("find inspecting functions", || inspecting_functions(program));
-    let sequenced = timed("sequence", || sequence_inspections(program, &inspecting, cells));
+    let hoisted = timed("hoist field reads", || hoist_field_reads(program, cells));
+    let sequenced = timed("sequence", || sequence_inspections(&hoisted, &inspecting, cells));
     let program = &sequenced;
     let mut facts = Facts::new(program, cells, inspecting);
     timed("settle ownership", || facts.settle(program, cells));
@@ -317,6 +320,7 @@ struct Planner<'a, C> {
     next_local: u32,
     boolean: MonotypeId,
     owned: FxHashMap<LocalId, Vec<LocalId>>,
+    owned_records: FxHashSet<LocalId>,
     checked: FxHashMap<LocalId, Dynamic>,
     use_companions: FxHashMap<*const Expression, Expression>,
     alternatives: Vec<Vec<LocalId>>,
@@ -342,6 +346,7 @@ impl<'a, C: Cells> Planner<'a, C> {
             next_local,
             boolean,
             owned: FxHashMap::default(),
+            owned_records: FxHashSet::default(),
             checked: FxHashMap::default(),
             use_companions: FxHashMap::default(),
             alternatives: vec![],
@@ -601,6 +606,19 @@ impl<'a, C: Cells> Planner<'a, C> {
             ExpressionKind::Case { scrutinees, alternatives } => {
                 self.case(expression, scrutinees, alternatives, tail, stock, after)
             }
+            ExpressionKind::Access { record, .. }
+                if let ExpressionKind::Local(id) = record.kind
+                    && self.owned_records.contains(&id)
+                    && self.cells.cell(expression.monotype).is_some() =>
+            {
+                self.unordered(expression, stock, after);
+                Held::Owned
+            }
+            ExpressionKind::Record(fields) => {
+                let values: Vec<&'e Expression> = fields.iter().map(|(_, value)| value).collect();
+                let held = self.arguments_of(&values, stock, after);
+                if self.owns_cells(&values, &held) { Held::Owned } else { Held::Shared }
+            }
             _ => {
                 self.unordered(expression, stock, after);
                 Held::Shared
@@ -643,10 +661,9 @@ impl<'a, C: Cells> Planner<'a, C> {
             Iteration::FoldLeft => 0,
             _ => 1,
         };
-        if initial_owned
-            && self.cells.cell(expression.monotype).is_some()
-            && self.owned_callback(callback, accumulator)
-        {
+        let ownable = self.cells.cell(expression.monotype).is_some()
+            || self.cells.is_record(expression.monotype);
+        if initial_owned && ownable && self.owned_callback(callback, accumulator) {
             return true;
         }
         self.expression(callback, false, &mut vec![], &mut vec![]);
@@ -695,6 +712,9 @@ impl<'a, C: Cells> Planner<'a, C> {
             return false;
         }
         let accumulator = parameters[accumulator];
+        if self.cells.is_record(accumulator.monotype) {
+            return self.owned_record_callback(accumulator.id, body);
+        }
         if self.cells.cell(accumulator.monotype).is_none()
             || !self.is_linear(accumulator.id, &[], Scope::Expression(body), &Forced::default())
         {
@@ -708,6 +728,46 @@ impl<'a, C: Cells> Planner<'a, C> {
         self.owned.remove(&accumulator.id);
         self.plan = saved;
         false
+    }
+
+    fn owned_record_callback(&mut self, accumulator: LocalId, body: &Expression) -> bool {
+        if !reads_cell_fields_once(self.cells, body, accumulator, &mut vec![]) {
+            return false;
+        }
+        let saved = self.plan.clone();
+        self.owned_records.insert(accumulator);
+        if self.expression(body, false, &mut vec![], &mut vec![]).is_owned() {
+            return true;
+        }
+        self.owned_records.remove(&accumulator);
+        self.plan = saved;
+        false
+    }
+
+    fn owns_cells(&mut self, values: &[&Expression], held: &[Held]) -> bool {
+        let mut cells = vec![];
+        for value in values {
+            if let Some(cell) = self.cells.cell(value.monotype) {
+                cells.push(cell);
+            }
+        }
+        if cells.is_empty() {
+            return false;
+        }
+        for (value, held) in values.iter().zip(held) {
+            if self.cells.cell(value.monotype).is_some() {
+                if !held.is_owned() {
+                    return false;
+                }
+                continue;
+            }
+            for cell in &cells {
+                if self.cells.holds(value.monotype, cell) {
+                    return false;
+                }
+            }
+        }
+        true
     }
 
     fn unordered<'e>(
@@ -1493,6 +1553,40 @@ impl<'e> Search<'e> {
         self.branches.push((key, branch));
         self.expression(expression);
         self.branches.pop();
+    }
+}
+
+fn reads_cell_fields_once(
+    cells: &mut impl Cells,
+    expression: &Expression,
+    record: LocalId,
+    read: &mut Vec<SmolStr>,
+) -> bool {
+    match &expression.kind {
+        ExpressionKind::Local(id) => *id != record,
+        ExpressionKind::Access { record: accessed, label } if matches!(accessed.kind, ExpressionKind::Local(id) if id == record) =>
+        {
+            if cells.cell(expression.monotype).is_none() {
+                return true;
+            }
+            if read.contains(label) {
+                return false;
+            }
+            read.push(label.clone());
+            true
+        }
+        ExpressionKind::Lambda { .. }
+        | ExpressionKind::Closure { .. }
+        | ExpressionKind::EffectPure(_)
+        | ExpressionKind::EffectBind { .. }
+        | ExpressionKind::EffectEach { .. } => !uses_local(expression, record),
+        _ => {
+            let mut once = true;
+            for_each_child(expression, &mut |child| {
+                once = once && reads_cell_fields_once(cells, child, record, read);
+            });
+            once
+        }
     }
 }
 
@@ -2396,5 +2490,10 @@ where
 
     fn boolean(&mut self) -> MonotypeId {
         self.monotypes.intern(Monotype::Boolean)
+    }
+
+    fn is_record(&self, monotype: MonotypeId) -> bool {
+        matches!(self.monotypes.get(monotype), Monotype::Record(_))
+            && !self.monotypes.is_instantiated_record(monotype)
     }
 }

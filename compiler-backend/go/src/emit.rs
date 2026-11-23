@@ -24,6 +24,7 @@ mod diverging;
 mod divisions;
 mod effects;
 mod existential;
+mod field_reads;
 mod foreign_data;
 mod foreign_values;
 mod fusion;

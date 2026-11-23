@@ -1,0 +1,293 @@
+---
+source: tests-integration/src/fixtures.rs
+---
+// Data/Map/Internal/internal.go
+package internal
+
+type MapIntInt struct {
+	Node4 *MapIntInt
+	Node5 *MapIntInt
+	Node0 int32
+	Node1 int32
+	Node2 int32
+	Node3 int32
+}
+
+var SharedMapIntIntLeaf = &MapIntInt{}
+
+type Window struct {
+	Seen  *MapIntInt
+	Start int32
+}
+
+func UnsafeNodeIntInt(k int32, v int32, l *MapIntInt, r *MapIntInt) *MapIntInt {
+	if l == SharedMapIntIntLeaf {
+		if r == SharedMapIntIntLeaf {
+			return &MapIntInt{Node0: 1, Node1: 1, Node2: k, Node3: v, Node4: l, Node5: r}
+		}
+		return &MapIntInt{Node0: 1 + r.Node0, Node1: 1 + r.Node1, Node2: k, Node3: v, Node4: l, Node5: r}
+	}
+	h1 := l.Node0
+	s1 := l.Node1
+	if r == SharedMapIntIntLeaf {
+		return &MapIntInt{Node0: 1 + h1, Node1: 1 + s1, Node2: k, Node3: v, Node4: l, Node5: r}
+	}
+	h2 := r.Node0
+	var result int32
+	if h1 > h2 {
+		result = h1
+	} else {
+		result = h2
+	}
+	return &MapIntInt{Node0: 1 + result, Node1: 1 + s1 + r.Node1, Node2: k, Node3: v, Node4: l, Node5: r}
+}
+
+func UnsafeBalancedNodeIntIntHeight(value *MapIntInt) int32 {
+	if value == SharedMapIntIntLeaf {
+		return 0
+	}
+	return value.Node0
+}
+
+func UnsafeBalancedNodeIntIntReusing(k int32, v int32, l *MapIntInt, r *MapIntInt, donor *MapIntInt) *MapIntInt {
+	if l == SharedMapIntIntLeaf {
+		if r == SharedMapIntIntLeaf {
+			donor.Node0 = 1
+			donor.Node1 = 1
+			donor.Node2 = k
+			donor.Node3 = v
+			donor.Node4 = SharedMapIntIntLeaf
+			donor.Node5 = SharedMapIntIntLeaf
+			return donor
+		}
+		if r != SharedMapIntIntLeaf {
+			rh := r.Node0
+			rk := r.Node2
+			rv := r.Node3
+			rl := r.Node4
+			rr := r.Node5
+			if rh > 1 {
+				return UnsafeBalancedNodeIntIntRotateLeftReusing(k, v, l, rk, rv, rl, rr, donor)
+			}
+		}
+		return UnsafeNodeIntIntReusing(k, v, l, r, donor)
+	}
+	lh := l.Node0
+	lk := l.Node2
+	lv := l.Node3
+	ll := l.Node4
+	lr := l.Node5
+	if r != SharedMapIntIntLeaf {
+		rh := r.Node0
+		rk := r.Node2
+		rv := r.Node3
+		rl := r.Node4
+		rr := r.Node5
+		if rh > lh+1 {
+			return UnsafeBalancedNodeIntIntRotateLeftReusing(k, v, l, rk, rv, rl, rr, donor)
+		}
+		if lh > rh+1 {
+			return UnsafeBalancedNodeIntIntRotateRightReusing(k, v, lk, lv, ll, lr, r, donor)
+		}
+	}
+	if r == SharedMapIntIntLeaf {
+		if lh > 1 {
+			return UnsafeBalancedNodeIntIntRotateRightReusing(k, v, lk, lv, ll, lr, r, donor)
+		}
+	}
+	return UnsafeNodeIntIntReusing(k, v, l, r, donor)
+}
+
+func UnsafeNodeIntIntReusing(k int32, v int32, l *MapIntInt, r *MapIntInt, donor *MapIntInt) *MapIntInt {
+	if l == SharedMapIntIntLeaf {
+		if r == SharedMapIntIntLeaf {
+			donor.Node0 = 1
+			donor.Node1 = 1
+			donor.Node2 = k
+			donor.Node3 = v
+			donor.Node4 = l
+			donor.Node5 = r
+			return donor
+		}
+		h2 := r.Node0
+		s2 := r.Node1
+		donor.Node0 = 1 + h2
+		donor.Node1 = 1 + s2
+		donor.Node2 = k
+		donor.Node3 = v
+		donor.Node4 = l
+		donor.Node5 = r
+		return donor
+	}
+	h1 := l.Node0
+	s1 := l.Node1
+	if r == SharedMapIntIntLeaf {
+		donor.Node0 = 1 + h1
+		donor.Node1 = 1 + s1
+		donor.Node2 = k
+		donor.Node3 = v
+		donor.Node4 = l
+		donor.Node5 = r
+		return donor
+	}
+	h22 := r.Node0
+	s22 := r.Node1
+	var result int32
+	if h1 > h22 {
+		result = h1
+	} else {
+		result = h22
+	}
+	donor.Node0 = 1 + result
+	donor.Node1 = 1 + s1 + s22
+	donor.Node2 = k
+	donor.Node3 = v
+	donor.Node4 = l
+	donor.Node5 = r
+	return donor
+}
+
+func UnsafeBalancedNodeIntIntRotateLeftReusing(k int32, v int32, l *MapIntInt, rk int32, rv int32, rl *MapIntInt, rr *MapIntInt, donor *MapIntInt) *MapIntInt {
+	if rl != SharedMapIntIntLeaf {
+		lh := rl.Node0
+		lk := rl.Node2
+		lv := rl.Node3
+		ll := rl.Node4
+		lr := rl.Node5
+		if lh > UnsafeBalancedNodeIntIntHeight(rr) {
+			return UnsafeNodeIntIntReusing(lk, lv, UnsafeNodeIntInt(k, v, l, ll), UnsafeNodeIntInt(rk, rv, lr, rr), donor)
+		}
+	}
+	return UnsafeNodeIntIntReusing(rk, rv, UnsafeNodeIntInt(k, v, l, rl), rr, donor)
+}
+
+func UnsafeBalancedNodeIntIntRotateRightReusing(k int32, v int32, lk int32, lv int32, ll *MapIntInt, lr *MapIntInt, r *MapIntInt, donor *MapIntInt) *MapIntInt {
+	if lr != SharedMapIntIntLeaf {
+		rh := lr.Node0
+		rk := lr.Node2
+		rv := lr.Node3
+		rl := lr.Node4
+		rr := lr.Node5
+		if UnsafeBalancedNodeIntIntHeight(ll) <= rh {
+			return UnsafeNodeIntIntReusing(rk, rv, UnsafeNodeIntInt(lk, lv, ll, rl), UnsafeNodeIntInt(k, v, rr, r), donor)
+		}
+	}
+	return UnsafeNodeIntIntReusing(lk, lv, ll, UnsafeNodeIntInt(k, v, lr, r), donor)
+}
+
+// Data/Maybe/maybe.go
+package maybe
+
+type Int int64
+
+const NoInt Int = 1 << 32
+
+func JustInt(just int32) Int {
+	return Int(just)
+}
+
+// main.go
+package main
+
+import (
+	"fixture/Data/Map/Internal"
+	"fixture/Data/Maybe"
+	"fixture/shared"
+	"github.com/i-am-the-slime/iris-go/object"
+)
+
+func main() {
+	words := []string{"a", "b", "a"}
+	numbers := []int32{3, 1, 3, 2}
+	accumulator := internal.Window{Start: 0, Seen: internal.SharedMapIntIntLeaf}
+	for _, x := range numbers {
+		seen := accumulator.Seen
+		scrutinee := mainGo(x, seen)
+		var start int32
+		if scrutinee != maybe.NoInt {
+			at := int32(scrutinee)
+			x2 := accumulator.Start
+			if x2 < at {
+				start = at
+			} else {
+				start = x2
+			}
+		} else {
+			start = accumulator.Start
+		}
+		v := start + 1
+		accumulator = internal.Window{Start: start, Seen: mainGoReusing(x, v, seen)}
+	}
+	accumulator2 := object.Empty[int32]()
+	accumulator2 = object.Lend(accumulator2)
+	for _, word := range words {
+		lookup := object.Lookup(maybe.NoInt, maybe.JustInt, word, accumulator2)
+		var result int32
+		if lookup != maybe.NoInt {
+			result = int32(lookup) + 1
+		} else {
+			result = 1
+		}
+		accumulator2 = object.InsertOwned(word, result, accumulator2)
+	}
+	var result2 int32
+	if accumulator.Seen == internal.SharedMapIntIntLeaf {
+		result2 = 0
+	} else {
+		result2 = accumulator.Seen.Node1
+	}
+	output := &shared.Ref[int32]{Value: object.Size(accumulator2) + accumulator.Start + result2}
+	output.Value = 0
+}
+
+func mainGo(x int32, value *internal.MapIntInt) maybe.Int {
+	for {
+		if value == internal.SharedMapIntIntLeaf {
+			return maybe.NoInt
+		}
+		mk := value.Node2
+		mv := value.Node3
+		ml := value.Node4
+		mr := value.Node5
+		if x < mk {
+			value = ml
+			continue
+		}
+		if x == mk {
+			return maybe.Int(mv)
+		}
+		value = mr
+	}
+}
+
+func mainGoReusing(x int32, v int32, value *internal.MapIntInt) *internal.MapIntInt {
+	if value == internal.SharedMapIntIntLeaf {
+		return &internal.MapIntInt{Node0: 1, Node1: 1, Node2: x, Node3: v, Node4: internal.SharedMapIntIntLeaf, Node5: internal.SharedMapIntIntLeaf}
+	}
+	mh := value.Node0
+	ms := value.Node1
+	mk := value.Node2
+	mv := value.Node3
+	ml := value.Node4
+	mr := value.Node5
+	if x < mk {
+		return internal.UnsafeBalancedNodeIntIntReusing(mk, mv, mainGoReusing(x, v, ml), mr, value)
+	}
+	if x == mk {
+		value.Node0 = mh
+		value.Node1 = ms
+		value.Node2 = x
+		value.Node3 = v
+		value.Node4 = ml
+		value.Node5 = mr
+		return value
+	}
+	return internal.UnsafeBalancedNodeIntIntReusing(mk, mv, ml, mainGoReusing(x, v, mr), value)
+}
+
+// shared/shared.go
+package shared
+
+type Ref[T any] struct {
+	Value T
+}
