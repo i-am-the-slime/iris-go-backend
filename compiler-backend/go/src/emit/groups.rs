@@ -240,7 +240,7 @@ where
                 function: *id,
                 parameters: slots.assignment[member]
                     .iter()
-                    .map(|slot| slot_names[*slot].clone())
+                    .map(|slot| identifier_expression(&slot_names[*slot]))
                     .collect(),
                 step: Some(identifier_expression(&steps[member])),
             })
@@ -257,7 +257,7 @@ where
             self.current = Some(*id);
             let mut body = vec![];
             for (position, parameter) in function.parameters.iter().enumerate() {
-                let slot = &targets[member].parameters[position];
+                let slot = &slot_names[slots.assignment[member][position]];
                 self.locals.insert(parameter.id, identifier_expression(slot));
                 let captured = captures_parameters(
                     &function.body,

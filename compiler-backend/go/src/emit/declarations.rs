@@ -204,21 +204,6 @@ where
             self.byte_buffers.insert(local, buffer.clone());
             buffers.push((*position, buffer));
         }
-        if loops {
-            let mut parameter_names: Vec<String> =
-                parameters.iter().map(|(name, _)| name.clone()).collect();
-            for (position, buffer) in &buffers {
-                parameter_names[*position] = buffer.clone();
-            }
-            let target =
-                LoopTarget { function: id, parameters: parameter_names.clone(), step: None };
-            self.tail_loop = Some(TailLoop {
-                parameters: parameter_names,
-                targets: vec![target],
-                current: id,
-                step: None,
-            });
-        }
         let mut iteration_copies = vec![];
         for &position in &captured {
             let copy = self.local_name(format!("{}Captured", parameters[position].0));
@@ -241,12 +226,14 @@ where
         owned_nodes.extend(owned_parameters);
         self.owned_snocs.extend(owned_nodes.iter().copied());
         let mut recycled_buffers = vec![];
+        let mut recycled_positions = vec![];
         if loops && mode == Mode::Value {
             for (position, (parameter, type_)) in parameters.iter().enumerate() {
                 if buffers.iter().any(|(buffered, _)| *buffered == position) {
                     continue;
                 }
                 let Some(maps) = self.recycled_maps(id, function, position) else { continue };
+                recycled_positions.push(position);
                 let recycled = recycling::Recycled {
                     owned: self.local_name(format!("{parameter}Owned")),
                     spare: self.local_name(format!("{parameter}Spare")),
@@ -256,6 +243,35 @@ where
                     self.recycled_maps.insert(map, recycled.clone());
                 }
             }
+        }
+        let mut state = None;
+        if loops {
+            let mut excluded = captured.clone();
+            excluded.extend(buffers.iter().map(|(position, _)| *position));
+            excluded.extend(owned.iter().map(|(position, _, _)| *position));
+            excluded.extend(recycled_positions);
+            state = self.loop_state(id, function, mode, &parameters, &excluded);
+            let mut places: Vec<GoExpression> =
+                parameters.iter().map(|(name, _)| identifier_expression(name)).collect();
+            let mut reassigned: Vec<String> =
+                parameters.iter().map(|(name, _)| name.clone()).collect();
+            for (position, buffer) in &buffers {
+                places[*position] = identifier_expression(buffer);
+                reassigned[*position] = buffer.clone();
+            }
+            if let Some(state) = &state {
+                for position in &state.positions {
+                    places[*position] = state.place(&parameters[*position].0);
+                }
+                reassigned.push(state.name.clone());
+            }
+            let target = LoopTarget { function: id, parameters: places, step: None };
+            self.tail_loop = Some(TailLoop {
+                parameters: reassigned,
+                targets: vec![target],
+                current: id,
+                step: None,
+            });
         }
         let mut body = vec![];
         let emitted = self.sink(&function.body, mode, Sink::Return, &mut body);
@@ -282,6 +298,7 @@ where
                 });
             }
             clipped.append(&mut recycled_buffers);
+            clipped.extend(state.map(|state| state.definition));
             clipped.push(GoStatement::Loop(body));
             body = clipped;
         }

@@ -39,6 +39,7 @@ mod layout;
 mod lengths;
 mod lines;
 mod locals;
+mod loop_state;
 mod maybe;
 mod mutable;
 mod names;
@@ -434,7 +435,7 @@ struct TailLoop {
 #[derive(Clone)]
 struct LoopTarget {
     function: FunctionId,
-    parameters: Vec<String>,
+    parameters: Vec<GoExpression>,
     /// The value of the group's step variable that runs this function.
     step: Option<GoExpression>,
 }
@@ -931,7 +932,7 @@ where
 
     fn tail_call(
         &mut self,
-        parameters: &[String],
+        parameters: &[GoExpression],
         arguments: &[Expression],
         step: Option<(String, GoExpression)>,
         out: &mut Vec<GoStatement>,
@@ -944,17 +945,16 @@ where
         }
         for (parameter, argument) in parameters.iter().zip(arguments) {
             if let ExpressionKind::Local(id) = argument.kind
-                && self.byte_buffers.get(&id) == Some(parameter)
+                && let Some(buffer) = self.byte_buffers.get(&id)
+                && same_place(parameter, &identifier_expression(buffer))
             {
                 continue;
             }
             let value = self.value(argument, out)?;
-            if let GoExpression::Identifier(name) = &value
-                && name == parameter
-            {
+            if same_place(&value, parameter) {
                 continue;
             }
-            targets.push(identifier_expression(parameter));
+            targets.push(parameter.clone());
             values.push(value);
         }
         if !targets.is_empty() {
@@ -2124,27 +2124,65 @@ fn is_effect_node(expression: &Expression) -> bool {
 }
 
 fn has_tail_call(expression: &Expression, function: FunctionId, arity: usize, mode: Mode) -> bool {
-    match &expression.kind {
+    !tail_calls(expression, function, arity, mode).is_empty()
+}
+
+fn tail_calls(
+    expression: &Expression,
+    function: FunctionId,
+    arity: usize,
+    mode: Mode,
+) -> Vec<&[Expression]> {
+    let mut calls = vec![];
+    collect_tail_calls(expression, function, arity, mode, &mut calls);
+    calls
+}
+
+fn collect_tail_calls<'e>(
+    expression: &'e Expression,
+    function: FunctionId,
+    arity: usize,
+    mode: Mode,
+    calls: &mut Vec<&'e [Expression]>,
+) {
+    let bodies: Vec<&'e Expression> = match &expression.kind {
         ExpressionKind::Apply { function: callee, arguments } => {
-            matches!(callee.kind, ExpressionKind::Function(id) if id == function)
+            if matches!(callee.kind, ExpressionKind::Function(id) if id == function)
                 && arguments.len() == arity
+            {
+                calls.push(arguments);
+            }
+            vec![]
         }
-        ExpressionKind::Let { body, .. } => has_tail_call(body, function, arity, mode),
-        ExpressionKind::If { then, otherwise, .. } => {
-            has_tail_call(then, function, arity, mode)
-                || has_tail_call(otherwise, function, arity, mode)
-        }
+        ExpressionKind::Let { body, .. } => vec![body],
+        ExpressionKind::If { then, otherwise, .. } => vec![then, otherwise],
         ExpressionKind::Case { alternatives, .. } => {
-            alternatives.iter().any(|alternative| match &alternative.body {
-                Guarded::Unconditional(body) => has_tail_call(body, function, arity, mode),
-                Guarded::Guards(branches) => {
-                    branches.iter().any(|branch| has_tail_call(&branch.body, function, arity, mode))
+            let mut bodies = vec![];
+            for alternative in alternatives {
+                match &alternative.body {
+                    Guarded::Unconditional(body) => bodies.push(body),
+                    Guarded::Guards(branches) => {
+                        bodies.extend(branches.iter().map(|branch| &branch.body));
+                    }
                 }
-            })
+            }
+            bodies
         }
-        ExpressionKind::EffectBind { body, .. } if mode == Mode::Perform => {
-            has_tail_call(body, function, arity, mode)
-        }
+        ExpressionKind::EffectBind { body, .. } if mode == Mode::Perform => vec![body],
+        _ => vec![],
+    };
+    for body in bodies {
+        collect_tail_calls(body, function, arity, mode, calls);
+    }
+}
+
+fn same_place(left: &GoExpression, right: &GoExpression) -> bool {
+    match (left, right) {
+        (GoExpression::Identifier(left), GoExpression::Identifier(right)) => left == right,
+        (
+            GoExpression::Field { value: left_value, name: left_name },
+            GoExpression::Field { value: right_value, name: right_name },
+        ) => left_name == right_name && same_place(left_value, right_value),
         _ => false,
     }
 }
