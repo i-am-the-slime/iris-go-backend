@@ -64,14 +64,8 @@ func initializeMain_() shared2.MainResult {
 	f := func(value int32) shared2.MainResult {
 		return shared2.MainResult{Fused: i, Shared: i2, EarlyExit: boolean, PredicateCalls: predicateCalls, FusedMappingCalls: fusedMappingCalls, SharedMappingCalls: sharedMappingCalls, EarlyExitMappingCalls: earlyExitMappingCalls, KeptLength: value}
 	}
-	var count int32 = 0
-	for _, value := range numbers {
-		value2 := value * 3
-		if value2 > 10 {
-			count += 1
-		}
-	}
-	performed := f(count)
+	i3 := foldLanes2(numbers, 0)
+	performed := f(i3)
 	return performed
 }
 
@@ -117,6 +111,43 @@ func foldLanes(xs []int32, initial int32) int32 {
 	return accumulator
 }
 
+func foldLanes2(xs []int32, initial int32) int32 {
+	c0 := archsimd.BroadcastInt32x4(3)
+	c1 := archsimd.BroadcastInt32x4(10)
+	c2 := archsimd.BroadcastInt32x4(1)
+	c3 := archsimd.BroadcastInt32x4(0)
+	acc0 := archsimd.BroadcastInt32x4(0)
+	acc1, acc2, acc3 := acc0, acc0, acc0
+	const step = 4
+	i := 0
+	for ; i < len(xs)-4*step+1; i += 4 * step {
+		x0 := archsimd.LoadInt32x4(xs[i : i+step])
+		acc0 = acc0.Add(c2.IfElse(x0.Mul(c0).Greater(c1), c3))
+		x1 := archsimd.LoadInt32x4(xs[i+step : i+2*step])
+		acc1 = acc1.Add(c2.IfElse(x1.Mul(c0).Greater(c1), c3))
+		x2 := archsimd.LoadInt32x4(xs[i+2*step : i+3*step])
+		acc2 = acc2.Add(c2.IfElse(x2.Mul(c0).Greater(c1), c3))
+		x3 := archsimd.LoadInt32x4(xs[i+3*step : i+4*step])
+		acc3 = acc3.Add(c2.IfElse(x3.Mul(c0).Greater(c1), c3))
+	}
+	acc0 = acc0.Add(acc1).Add(acc2.Add(acc3))
+	var lanes [4]int32
+	acc0.Store(lanes[:])
+	accumulator := initial
+	for _, lane := range lanes[:step] {
+		accumulator = accumulator + lane
+	}
+	for ; i < len(xs); i++ {
+		x := xs[i]
+		s0 := int32(0)
+		if x * 3 > 10 {
+			s0 = 1
+		}
+		accumulator = accumulator + s0
+	}
+	return accumulator
+}
+
 // main_scalar.go
 //go:build !(goexperiment.simd && (arm64 || wasm))
 
@@ -126,6 +157,18 @@ func foldLanes(xs []int32, initial int32) int32 {
 	accumulator := initial
 	for _, x := range xs {
 		accumulator = accumulator + x
+	}
+	return accumulator
+}
+
+func foldLanes2(xs []int32, initial int32) int32 {
+	accumulator := initial
+	for _, x := range xs {
+		s0 := int32(0)
+		if x * 3 > 10 {
+			s0 = 1
+		}
+		accumulator = accumulator + s0
 	}
 	return accumulator
 }
@@ -162,6 +205,43 @@ func foldLanes(xs []int32, initial int32) int32 {
 	for ; i < len(xs); i++ {
 		x := xs[i]
 		accumulator = accumulator + x
+	}
+	return accumulator
+}
+
+func foldLanes2(xs []int32, initial int32) int32 {
+	c0 := simd.BroadcastInt32s(3)
+	c1 := simd.BroadcastInt32s(10)
+	c2 := simd.BroadcastInt32s(1)
+	c3 := simd.BroadcastInt32s(0)
+	acc0 := simd.BroadcastInt32s(0)
+	acc1, acc2, acc3 := acc0, acc0, acc0
+	step := acc0.Len()
+	i := 0
+	for ; i < len(xs)-4*step+1; i += 4 * step {
+		x0 := simd.LoadInt32s(xs[i : i+step])
+		acc0 = acc0.Add(c2.IfElse(x0.Mul(c0).Greater(c1), c3))
+		x1 := simd.LoadInt32s(xs[i+step : i+2*step])
+		acc1 = acc1.Add(c2.IfElse(x1.Mul(c0).Greater(c1), c3))
+		x2 := simd.LoadInt32s(xs[i+2*step : i+3*step])
+		acc2 = acc2.Add(c2.IfElse(x2.Mul(c0).Greater(c1), c3))
+		x3 := simd.LoadInt32s(xs[i+3*step : i+4*step])
+		acc3 = acc3.Add(c2.IfElse(x3.Mul(c0).Greater(c1), c3))
+	}
+	acc0 = acc0.Add(acc1).Add(acc2.Add(acc3))
+	var lanes [16]int32
+	acc0.Store(lanes[:])
+	accumulator := initial
+	for _, lane := range lanes[:step] {
+		accumulator = accumulator + lane
+	}
+	for ; i < len(xs); i++ {
+		x := xs[i]
+		s0 := int32(0)
+		if x * 3 > 10 {
+			s0 = 1
+		}
+		accumulator = accumulator + s0
 	}
 	return accumulator
 }

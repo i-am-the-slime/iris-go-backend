@@ -22,6 +22,9 @@ impl Simplifier<'_> {
         arguments: Vec<Expression>,
         monotype: MonotypeId,
     ) -> Result<Expression, Vec<Expression>> {
+        if let Foreign::Operator(Operator::ArrayLength) = foreign {
+            return self.counted(arguments, monotype);
+        }
         let Foreign::Call { boundary, .. } = foreign else { return Err(arguments) };
         match boundary.iteration {
             Some(Iteration::FoldLeft) => self.seeded_choice(arguments, monotype),
@@ -80,6 +83,59 @@ impl Simplifier<'_> {
         };
         let chosen = Expression::new(chosen, monotype);
         Ok(self.let_bindings(vec![Binding { local: array_local, value: array }], chosen))
+    }
+
+    fn counted(
+        &mut self,
+        arguments: Vec<Expression>,
+        monotype: MonotypeId,
+    ) -> Result<Expression, Vec<Expression>> {
+        let [array] = arguments.as_slice() else { return Err(arguments) };
+        let ExpressionKind::Foreign {
+            foreign: Foreign::Call { boundary, .. },
+            arguments: filtered,
+        } = &array.kind
+        else {
+            return Err(arguments);
+        };
+        let [predicate, source] = filtered.as_slice() else { return Err(arguments) };
+        let filters = boundary.iteration == Some(Iteration::Filter);
+        let counts_ints = matches!(
+            self.monotypes.get(source.monotype),
+            Monotype::Array(element) if matches!(self.monotypes.get(*element), Monotype::Int)
+        );
+        let single = matches!(&predicate.kind, ExpressionKind::Lambda { parameters, .. } if parameters.len() == 1);
+        if !(filters && counts_ints && single) {
+            return Err(arguments);
+        }
+        let [array] = <[Expression; 1]>::try_from(arguments)
+            .unwrap_or_else(|_| unreachable!("invariant violated: length has one argument"));
+        let ExpressionKind::Foreign { arguments: filtered, .. } = array.kind else {
+            unreachable!("invariant violated: the array was just matched as a filter")
+        };
+        let [predicate, source] = <[Expression; 2]>::try_from(filtered)
+            .unwrap_or_else(|_| unreachable!("invariant violated: filter has two arguments"));
+        let ExpressionKind::Lambda { mut parameters, body: condition } = predicate.kind else {
+            unreachable!("invariant violated: the predicate was just matched as a lambda")
+        };
+        let element = parameters.remove(0);
+        let count = self.named_local("count", monotype);
+        let one = Expression::new(ExpressionKind::Literal(Literal::Int(1)), monotype);
+        let zero = Expression::new(ExpressionKind::Literal(Literal::Int(0)), monotype);
+        let counted =
+            ExpressionKind::If { condition, then: Box::new(one), otherwise: Box::new(zero) };
+        let counted = Expression::new(counted, monotype);
+        let body = operation(Operator::IntAdd, vec![count.expression(), counted], monotype);
+        let step_type = self.monotypes.function(element.monotype, monotype);
+        let step_type = self.monotypes.function(monotype, step_type);
+        let step =
+            ExpressionKind::Lambda { parameters: vec![count, element], body: Box::new(body) };
+        let initial = Expression::new(ExpressionKind::Literal(Literal::Int(0)), monotype);
+        let folded = ExpressionKind::Foreign {
+            foreign: foreign::array_fold(),
+            arguments: vec![Expression::new(step, step_type), initial, source],
+        };
+        Ok(Expression::new(folded, monotype))
     }
 
     fn leftward(
