@@ -184,6 +184,18 @@ first, in numeric order. `Foreign.Object` doesn't promise any order, and this go
 `values`, folds, `toUnfoldable`, `show` and JSON objects (argonaut and yoga-json) alike. Want
 sorted keys? Use `Object.toAscUnfoldable`, or sort the keys yourself.
 
+### `Data.HashMap` and `Data.HashSet`
+
+With `Int`, `Char` or `String` keys, a `HashMap` (and a `HashSet`) is a Go map, so a lookup is one
+hash probe. `keys`, `values`, `toArrayBy`, folds and `show` still list the entries in the same order
+as JavaScript, with one exception: keys whose hashes collide (`"Aa"` and `"BB"` do) can come out in
+a different order.
+
+Old versions stay valid, they just cost more. Change a map that something else still holds and Go
+switches to JavaScript's trie from there on, which costs one pass over the whole map. Every other
+key type (records, arrays, newtypes) uses the trie throughout. `traverse` over a `HashMap` and
+`debugShow` aren't supported yet.
+
 ### `replace` and `replaceAll`
 
 ```purescript

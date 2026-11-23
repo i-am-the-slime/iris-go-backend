@@ -444,6 +444,9 @@ impl Monotypes {
             ("Control.Monad.ST.Internal", "STRef") => {
                 Monotype::Reference(unary(self, context, arguments.get(1))?)
             }
+            ("Data.HashMap", "HashMap") => {
+                self.hash_map(context, (file_id, item), &arguments, expansions)?
+            }
             _ => match &module.indexed.items[item].kind {
                 IndexedTypeItemKind::Newtype { constructors, .. } => {
                     let Some(&constructor) = constructors.first() else {

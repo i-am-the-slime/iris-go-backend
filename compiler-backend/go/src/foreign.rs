@@ -3,6 +3,7 @@
 //! iris-go runtime module.
 
 mod embeds;
+mod hash_map;
 mod host;
 mod imports;
 mod opacity;
@@ -10,6 +11,7 @@ mod packages;
 mod sources;
 
 pub use embeds::{EmbedError, embedded_files};
+pub use hash_map::hash_map_import;
 pub use host::is_opaque_foreign_data;
 pub use imports::{
     APPENDER, ARRAY_ALL, ARRAY_ANY, ARRAY_APPEND, ARRAY_REPLICATE, ARRAY_SCANL, ARRAY_SLICE,
@@ -378,6 +380,7 @@ pub enum GoPackage {
     Console,
     JsBigInt,
     Int64,
+    HashMap,
 }
 
 impl GoPackage {
@@ -407,6 +410,7 @@ impl GoPackage {
             GoPackage::Console => "github.com/i-am-the-slime/iris-go/console",
             GoPackage::JsBigInt => "github.com/i-am-the-slime/iris-go/jsbigint",
             GoPackage::Int64 => "github.com/i-am-the-slime/iris-go/ffi/Data_Int64_Internal_ffi",
+            GoPackage::HashMap => "github.com/i-am-the-slime/iris-go/ffi/Data_HashMap_ffi",
             GoPackage::Exception => "github.com/i-am-the-slime/iris-go/exception",
         }
     }
@@ -438,6 +442,7 @@ impl GoPackage {
             GoPackage::Console => "console",
             GoPackage::JsBigInt => "jsbigint",
             GoPackage::Int64 => "Data_Int64_Internal_ffi",
+            GoPackage::HashMap => "Data_HashMap_ffi",
         }
     }
 }

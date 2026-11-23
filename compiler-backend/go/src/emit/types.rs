@@ -303,7 +303,10 @@ where
     pub(super) fn foreign_data_type(&mut self, data: &DataType) -> GoResult<GoType> {
         let module_name = self.context.module(data.file_id)?.name.clone();
         let type_name = self.context.type_name(data.file_id, data.item)?;
-        let support = crate::foreign::support_data(&module_name, &type_name);
+        let support = match crate::monotype::native_hash_map(&mut self.context, data)? {
+            Some(true) => Some((GoPackage::HashMap, "Native")),
+            _ => crate::foreign::support_data(&module_name, &type_name),
+        };
         let name = match support {
             Some((package, support_name)) => {
                 self.imports.insert(package.path().into());
