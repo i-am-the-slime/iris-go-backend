@@ -21,11 +21,6 @@ func Foldr(f func(string) func(*direct.ConsList[string]) *direct.ConsList[string
 // Data/List/Types/types.go
 package types
 
-import (
-	"github.com/i-am-the-slime/iris-go/alloc"
-	"github.com/i-am-the-slime/iris-go/direct"
-)
-
 type ListInt struct {
 	Cons1 *ListInt
 	Cons0 int32
@@ -36,35 +31,6 @@ var SharedListIntNil = &ListInt{}
 type ListString struct {
 	Cons0 string
 	Cons1 *ListString
-}
-
-func Foldr(f func(int32) func(*direct.ConsList[int32]) *direct.ConsList[int32], b *direct.ConsList[int32]) func(*ListInt) *direct.ConsList[int32] {
-	return func(x *ListInt) *direct.ConsList[int32] {
-		return FoldrGo2(f, b, FoldrGo(SharedListIntNil, x))
-	}
-}
-
-func FoldrGo(acc *ListInt, list *ListInt) *ListInt {
-	var listIntCells alloc.Cells[ListInt]
-	for {
-		if list == SharedListIntNil {
-			return acc
-		}
-		x := list.Cons0
-		xs := list.Cons1
-		acc, list = listIntCells.New(ListInt{Cons0: x, Cons1: acc}), xs
-	}
-}
-
-func FoldrGo2(f func(int32) func(*direct.ConsList[int32]) *direct.ConsList[int32], b *direct.ConsList[int32], value *ListInt) *direct.ConsList[int32] {
-	for {
-		if value == SharedListIntNil {
-			return b
-		}
-		a := value.Cons0
-		as := value.Cons1
-		b, value = f(a)(b), as
-	}
 }
 
 // Data/Map/Internal/internal.go
@@ -309,6 +275,7 @@ import (
 	"fixture/Data/Map/Internal"
 	"fixture/Data/Maybe"
 	"fixture/Data/Set"
+	arraypkg "github.com/i-am-the-slime/iris-go/array"
 	"github.com/i-am-the-slime/iris-go/console"
 	"github.com/i-am-the-slime/iris-go/direct"
 	"github.com/i-am-the-slime/iris-go/prim"
@@ -317,11 +284,16 @@ import (
 var main_ = initializeMain_()
 
 func initializeMain_() int32 {
-	return int32(len(direct.FromFoldable(func(f func(int32) func(*direct.ConsList[int32]) *direct.ConsList[int32]) func(*direct.ConsList[int32]) func(*types.ListInt) *direct.ConsList[int32] {
-		return func(b *direct.ConsList[int32]) func(*types.ListInt) *direct.ConsList[int32] {
-			return types.Foldr(f, b)
+	cell := numbers
+	elements := []int32{}
+	for {
+		if cell == types.SharedListIntNil {
+			break
 		}
-	}, numbers))) + int32(len(direct.FromFoldable(func(f func(string) func(*direct.ConsList[string]) *direct.ConsList[string]) func(*direct.ConsList[string]) func(maybe.String) *direct.ConsList[string] {
+		elements = append(elements, cell.Cons0)
+		cell = cell.Cons1
+	}
+	return int32(len(arraypkg.Bounded(elements))) + int32(len(direct.FromFoldable(func(f func(string) func(*direct.ConsList[string]) *direct.ConsList[string]) func(*direct.ConsList[string]) func(maybe.String) *direct.ConsList[string] {
 		return func(z *direct.ConsList[string]) func(maybe.String) *direct.ConsList[string] {
 			return func(maybe maybe.String) *direct.ConsList[string] {
 				return foldable.Foldr(f, z, maybe)

@@ -28,6 +28,7 @@ mod existential;
 mod field_reads;
 mod foreign_data;
 mod foreign_values;
+mod from_list;
 mod fusion;
 mod groups;
 mod guards;

@@ -346,6 +346,11 @@ where
         {
             return Ok(iterated);
         }
+        if foreign.calls(crate::foreign::ARRAY_FROM_LIST)
+            && let Some(listed) = self.array_from_list(&arguments[0], monotype, out)?
+        {
+            return Ok(listed);
+        }
         if foreign.calls(crate::foreign::ARRAY_UNZIP)
             && let Some(unzipped) = self.unzip(&arguments[0], monotype, out)?
         {
