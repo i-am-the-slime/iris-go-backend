@@ -307,14 +307,37 @@ fn mentioned<'t>(tokens: &'t [Token], words: &FxHashSet<String>) -> Option<&'t s
     tokens.iter().filter_map(Token::word).find(|word| words.contains(*word))
 }
 
+/// The first type of another package the tokens name, other than one that only holds its type
+/// parameter or nothing of the caller's at all.
 fn qualified(tokens: &[Token]) -> Option<String> {
     tokens.windows(3).find_map(|window| match window {
         [Token::Word(package), dot, Token::Word(name)] if dot.is(".") => {
-            Some(format!("{package}.{name}"))
+            let spelled = format!("{package}.{name}");
+            (!PARAMETRIC_TYPES.contains(&spelled.as_str())).then_some(spelled)
         }
         _ => None,
     })
 }
+
+/// Standard library types that never look at a value of their type parameter, if they have one:
+/// `atomic.Pointer[A]` only swaps a `*A`, and a mutex guards whatever is next to it. A foreign
+/// type built from them keeps its values' Go types, `IORef[[]Book]` rather than `IORef[any]`.
+const PARAMETRIC_TYPES: &[&str] = &[
+    "atomic.Pointer",
+    "atomic.Bool",
+    "atomic.Int32",
+    "atomic.Int64",
+    "atomic.Uint32",
+    "atomic.Uint64",
+    "sync.Mutex",
+    "sync.RWMutex",
+    "sync.Once",
+    "sync.WaitGroup",
+];
+
+/// What a value of the `PARAMETRIC_TYPES` is asked to do with a value of its type parameter:
+/// keep it and hand it back, never look into it.
+const PARAMETRIC_METHODS: &[&str] = &["Load", "Store", "Swap", "CompareAndSwap"];
 
 fn spelled(tokens: &[Token]) -> String {
     let mut text = String::new();
@@ -486,7 +509,34 @@ impl Package {
             functions: &self.functions,
             methods: &self.methods,
             opaque,
+            parametric_fields: self.parametric_fields(),
         }
+    }
+
+    /// The struct fields whose type is one of the `PARAMETRIC_TYPES`, such as `value` in
+    /// `struct { value atomic.Pointer[A] }`.
+    fn parametric_fields(&self) -> FxHashSet<String> {
+        let mut fields = FxHashSet::default();
+        for declaration in &self.types {
+            let definition = declaration.definition.as_slice();
+            let [keyword, open, ..] = definition else { continue };
+            if !keyword.is_word("struct") || !open.is("{") {
+                continue;
+            }
+            let Some(end) = closing(definition, 1) else { continue };
+            // `a, b atomic.Pointer[A]`: the names, then the package, a dot and the type.
+            for field in split_top(&definition[2..end], ";") {
+                let Some(dot) = field.iter().position(|token| token.is(".")) else { continue };
+                let package = dot.checked_sub(1).and_then(|before| field[before].word());
+                let name = field.get(dot + 1).and_then(Token::word);
+                let (Some(package), Some(name)) = (package, name) else { continue };
+                if !PARAMETRIC_TYPES.contains(&format!("{package}.{name}").as_str()) {
+                    continue;
+                }
+                fields.extend(field[..dot - 1].iter().filter_map(Token::word).map(str::to_string));
+            }
+        }
+        fields
     }
 
     fn escaping_words(&self) -> FxHashSet<String> {
@@ -583,6 +633,7 @@ struct Surroundings<'p> {
     functions: &'p [Function],
     methods: &'p FxHashSet<String>,
     opaque: &'p FxHashSet<String>,
+    parametric_fields: FxHashSet<String>,
 }
 
 impl Surroundings<'_> {
@@ -650,6 +701,9 @@ struct Flow<'f> {
     tainted: FxHashSet<&'f str>,
     assignments: Vec<Assignment>,
     blocks: FxHashSet<usize>,
+    /// The function's parameters of a function type: PureScript functions, which take what Go
+    /// lets them be called with and look into nothing else.
+    callbacks: FxHashSet<&'f str>,
 }
 
 impl<'f> Flow<'f> {
@@ -667,8 +721,10 @@ impl<'f> Flow<'f> {
             tainted: [parameter].into_iter().collect(),
             assignments: vec![],
             blocks: FxHashSet::default(),
+            callbacks: FxHashSet::default(),
         };
         flow.declare_parameters(&function.parameters);
+        flow.callbacks = flow.callbacks_among(&function.parameters);
         flow.declare_parameters(result_list(&function.results));
         for (index, token) in body.iter().enumerate() {
             if token.is_word("func") && body.get(index + 1).is_some_and(|token| token.is("(")) {
@@ -702,6 +758,20 @@ impl<'f> Flow<'f> {
                 }
             }
         }
+    }
+
+    fn callbacks_among(&self, list: &'f [Token]) -> FxHashSet<&'f str> {
+        let mut callbacks = FxHashSet::default();
+        let mut pending = vec![];
+        for entry in split_top(list, ",") {
+            let Some(name) = entry.first().and_then(Token::word) else { continue };
+            pending.push(name);
+            if entry.len() > 1 {
+                let function = entry[1].is_word("func");
+                callbacks.extend(pending.drain(..).filter(|_| function));
+            }
+        }
+        callbacks
     }
 
     fn declare_literal(&mut self, keyword: usize) {
@@ -981,14 +1051,24 @@ impl<'f> Flow<'f> {
             .filter(|&dot| tokens[dot].is("."))
             .and_then(|dot| dot.checked_sub(1))
             .and_then(|root| tokens[root].word());
+        let field_access = open.checked_sub(4).is_some_and(|dot| tokens[dot].is("."));
         match qualifier {
             Some(root) if GENERIC_PACKAGES.contains(&root) && !self.locals.contains(root) => None,
+            Some(root)
+                if field_access
+                    && self.surroundings.parametric_fields.contains(root)
+                    && PARAMETRIC_METHODS.contains(&callee) =>
+            {
+                None
+            }
             Some(root) => Some(format!("passes a value to `{root}.{callee}`")),
             None if previous.is_keyword() => None,
             None if BUILTINS.contains(&callee) => self.builtin_escape(callee, open, end),
             None if callee == self.parameter
                 || self.surroundings.opaque.contains(callee)
-                || self.holds_values(callee) =>
+                || self.holds_values(callee)
+                || self.callbacks.contains(callee) =>
+
             {
                 None
             }
@@ -1182,6 +1262,42 @@ func Pairs[A any, B any](items Repeated[A], other []B) []struct{ first A; second
             ["Repeated", "Empty", "SnocImpl", "Freeze", "Length", "IndexOr", "Each", "Pairs"]
         {
             assert_eq!(escapes(REPEATED, name), Vec::<String>::new(), "{name}");
+        }
+    }
+
+    #[test]
+    fn a_cell_behind_an_atomic_pointer_only_keeps_its_values() {
+        let source = "package ffi
+
+import \"sync/atomic\"
+
+type IORef[A any] = *ioref[A]
+
+type ioref[A any] struct {
+	value atomic.Pointer[A]
+}
+
+func NewIORefImpl[A any](value A) *ioref[A] {
+	ref := &ioref[A]{}
+	ref.value.Store(&value)
+	return ref
+}
+
+func ReadIORefImpl[A any](ref *ioref[A]) A { return *ref.value.Load() }
+
+func AtomicModifyIORefImpl[A, B, T any](first func(T) A, second func(T) B, f func(A) T, ref *ioref[A]) B {
+	for {
+		old := ref.value.Load()
+		result := f(*old)
+		updated := first(result)
+		if ref.value.CompareAndSwap(old, &updated) {
+			return second(result)
+		}
+	}
+}
+";
+        for name in ["IORef", "ioref", "NewIORefImpl", "ReadIORefImpl", "AtomicModifyIORefImpl"] {
+            assert_eq!(escapes(source, name), Vec::<String>::new(), "{name}");
         }
     }
 

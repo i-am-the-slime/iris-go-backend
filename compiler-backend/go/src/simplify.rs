@@ -52,6 +52,9 @@ mod unpack;
 
 const INLINE_SIZE: usize = 40;
 
+/// The size from which a function called once stays a function (`stands_on_its_own`).
+const OWN_FUNCTION_SIZE: usize = 120;
+
 /// The size of a local helper that is copied to each of its calls whatever it works on.
 const TINY_HELPER: usize = 12;
 
@@ -221,7 +224,7 @@ impl Simplifier<'_> {
         ) {
             return None;
         }
-        let once = self.uses[id.0 as usize] == 1;
+        let once = self.uses[id.0 as usize] == 1 && !self.stands_on_its_own(id, function);
         // A copy of a failure saves no work, only adds another place to fail; a copy of a loop
         // saves only a call, and repeats the whole loop at every call.
         let small = self.sizes[id.0 as usize] <= INLINE_SIZE
@@ -229,6 +232,18 @@ impl Simplifier<'_> {
             && !runs_own_loop(&function.body);
         ((small || once) && !function.parameters.is_empty() || is_trivial(&function.body))
             .then_some(function)
+    }
+
+    /// Whether a function called once stays a function of its own, as the programmer named it:
+    /// one that is more than a few lines and works on plain values, such as `validRows` or a
+    /// message's decoder. Copied into its caller it saves only a call, and the caller grows by
+    /// the whole of it. A function that takes or returns a function is still copied, since its
+    /// caller's lambdas then become plain code.
+    fn stands_on_its_own(&self, id: FunctionId, function: &Function) -> bool {
+        let plain = |monotype: MonotypeId| self.monotypes.function_parts(monotype).is_none();
+        self.sizes[id.0 as usize] > OWN_FUNCTION_SIZE
+            && function.parameters.iter().all(|parameter| plain(parameter.monotype))
+            && plain(function.result)
     }
 
     /// A function that only looks a data type's constructor up in a table of text, as `show`
