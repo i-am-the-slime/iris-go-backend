@@ -94,6 +94,17 @@ impl Simplifier<'_> {
         if let Some(joined) = self.joined_comparisons(&condition, &then, &otherwise, monotype) {
             return joined;
         }
+        // `if a then x else if b then x else y` is `if a || b then x else y`; a boolean `x` is
+        // left to `plain_choice`, which writes the whole choice as one condition.
+        if shares_branch_with_next(&condition, &then, &otherwise)
+            && let ExpressionKind::If { condition: next, otherwise: rest, .. } = &otherwise.kind
+        {
+            let condition_monotype = condition.monotype;
+            let next = (**next).clone();
+            let either = self.binary(Operator::BooleanOr, condition, next, condition_monotype);
+            let rest = (**rest).clone();
+            return self.boolean_choice(either, then, rest, monotype);
+        }
         self.plain_choice(condition, then, otherwise, monotype)
     }
 
@@ -105,6 +116,9 @@ impl Simplifier<'_> {
         otherwise: Expression,
         monotype: MonotypeId,
     ) -> Expression {
+        if then == otherwise && is_discardable(&condition) {
+            return then;
+        }
         match (boolean(&then), boolean(&otherwise)) {
             (Some(true), Some(false)) => condition,
             (Some(false), Some(true)) => self.not(condition, monotype),
@@ -191,6 +205,19 @@ impl Simplifier<'_> {
                 _ => operation(operator, vec![left, right], monotype),
             },
             Operator::IntAdd | Operator::StringAppend => associate(operator, left, right, monotype),
+            // `b == false` is `not b`, which turns a comparison around.
+            Operator::Compare(comparison @ (Comparison::Equal | Comparison::NotEqual))
+                if let Some((known, other)) = match (boolean(&left), boolean(&right)) {
+                    (Some(known), None) => Some((known, right.clone())),
+                    (None, Some(known)) => Some((known, left.clone())),
+                    _ => None,
+                } =>
+            {
+                match known == (comparison == Comparison::Equal) {
+                    true => other,
+                    false => self.not(other, monotype),
+                }
+            }
             Operator::Compare(comparison) => {
                 match self.constructor_test(comparison, &left, &right, monotype) {
                     Some(tested) => tested,
@@ -362,6 +389,36 @@ fn long_constant(expression: &Expression) -> Option<i64> {
             ..
         } => Some(*bits),
         _ => None,
+    }
+}
+
+/// Whether a choice's `else` is a choice whose `then` is the same, so that the two conditions
+/// can join under `||`. Not for a boolean `then`, which `plain_choice` writes as one condition
+/// instead, nor for two comparisons of the same values, which say more as one comparison.
+pub(super) fn shares_branch_with_next(
+    condition: &Expression,
+    then: &Expression,
+    otherwise: &Expression,
+) -> bool {
+    let ExpressionKind::If { condition: next, then: next_then, .. } = &otherwise.kind else {
+        return false;
+    };
+    boolean(then).is_none() && **next_then == *then && !compare_same_values(condition, next)
+}
+
+fn compare_same_values(left: &Expression, right: &Expression) -> bool {
+    let operands = |expression: &Expression| match &expression.kind {
+        ExpressionKind::Foreign {
+            foreign:
+                Foreign::Operator(Operator::Compare(_))
+                | Foreign::Int64 { operation: Int64Operation::Compare(_), .. },
+            arguments,
+        } if arguments.len() == 2 => Some((arguments[0].clone(), arguments[1].clone())),
+        _ => None,
+    };
+    match (operands(left), operands(right)) {
+        (Some((a, b)), Some((c, d))) => (a == c && b == d) || (a == d && b == c),
+        _ => false,
     }
 }
 

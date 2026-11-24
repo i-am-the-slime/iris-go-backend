@@ -198,17 +198,19 @@ pub(super) fn column_outcomes(
         let outcome = match (&pattern.kind, &scrutinee.kind) {
             (PatternKind::Wildcard | PatternKind::Variable(_), _) => ColumnOutcome::Matches,
             (
-                PatternKind::Constructor { constructor, arguments, .. },
-                ExpressionKind::Construct { constructor: known, .. },
+                PatternKind::Constructor { constructor, arguments: patterns, .. },
+                ExpressionKind::Construct { constructor: known, arguments: values, .. },
             ) => {
                 if constructor != known {
                     ColumnOutcome::Fails
-                } else if arguments.iter().all(|argument| {
-                    matches!(argument.kind, PatternKind::Wildcard | PatternKind::Variable(_))
-                }) {
-                    ColumnOutcome::Matches
                 } else {
-                    return None;
+                    let binds_or_matches = |pattern: &Pattern, value: &Expression| match pattern
+                        .kind
+                    {
+                        PatternKind::Variable(_) => Some(true),
+                        _ => known_match(pattern, value),
+                    };
+                    all_of(patterns.iter().zip(values).map(|(p, v)| binds_or_matches(p, v)))?
                 }
             }
             (PatternKind::Literal(pattern), ExpressionKind::Literal(known)) => {
@@ -222,6 +224,46 @@ pub(super) fn column_outcomes(
         outcomes.push(outcome);
     }
     Some(outcomes)
+}
+
+/// Whether a pattern that binds nothing matches a value the code spells out, when the value
+/// settles it.
+fn known_match(pattern: &Pattern, value: &Expression) -> Option<bool> {
+    match (&pattern.kind, &value.kind) {
+        (PatternKind::Wildcard, _) => Some(true),
+        (PatternKind::Literal(pattern), ExpressionKind::Literal(known)) => {
+            literals_equal(pattern, known)
+        }
+        (
+            PatternKind::Constructor { constructor, arguments: patterns, .. },
+            ExpressionKind::Construct { constructor: known, arguments: values, .. },
+        ) => {
+            if constructor != known {
+                return Some(false);
+            }
+            let outcomes = patterns.iter().zip(values).map(|(p, v)| known_match(p, v));
+            match all_of(outcomes) {
+                Some(ColumnOutcome::Matches) => Some(true),
+                Some(ColumnOutcome::Fails) => Some(false),
+                None => None,
+            }
+        }
+        _ => None,
+    }
+}
+
+/// The outcome of matching every one of the parts: a part known to fail decides it even when
+/// another is unknown.
+fn all_of(parts: impl Iterator<Item = Option<bool>>) -> Option<ColumnOutcome> {
+    let mut unknown = false;
+    for part in parts {
+        match part {
+            Some(false) => return Some(ColumnOutcome::Fails),
+            Some(true) => {}
+            None => unknown = true,
+        }
+    }
+    (!unknown).then_some(ColumnOutcome::Matches)
 }
 
 fn literals_equal(left: &Literal, right: &Literal) -> Option<bool> {

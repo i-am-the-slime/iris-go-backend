@@ -207,8 +207,9 @@ func main() {
 				panic("Failed pattern match")
 			}
 			lst := result2.Second
-			result3 := !(lst < x_) && lst == x_
-			if result3 == false {
+			if lst < x_ {
+				array2 = arraypkg.Bounded(append(array2, pair))
+			} else if lst != x_ {
 				array2 = arraypkg.Bounded(append(array2, pair))
 			}
 		}
@@ -260,7 +261,7 @@ func main() {
 			return -1
 		}
 	}, mapped3)
-	var result4 []int32
+	var result3 []int32
 	if len(indexedAndSorted2) > 0 {
 		array2 := *arraypkg.UnsafeThaw([]tuple.TupleIntInt{indexedAndSorted2[0]})()
 		for _, pair := range indexedAndSorted2 {
@@ -273,7 +274,7 @@ func main() {
 				panic("Failed pattern match")
 			}
 			lst := result2.Second
-			if mainComp(lst, pair.Second) == ordering.OrderingEQ == false {
+			if mainComp(lst, pair.Second) != ordering.OrderingEQ {
 				array2 = arraypkg.Bounded(append(array2, pair))
 			}
 		}
@@ -302,11 +303,11 @@ func main() {
 		for index := range array4 {
 			mapped2[index] = array4[index].Second
 		}
-		result4 = mapped2
+		result3 = mapped2
 	} else {
-		result4 = []int32{}
+		result3 = []int32{}
 	}
-	mainRecord(shown, string(show.AppendShowArrayInt(nil, result4)))
+	mainRecord(shown, string(show.AppendShowArrayInt(nil, result3)))
 	array6 := arraypkg.GroupBy(eq.Eq, []int32{1, 1, 2, 3, 3})
 	mapped4 := make([][]int32, len(array6))
 	for index, element := range array6 {
@@ -329,13 +330,9 @@ func mainRecord(shown *shared.Ref[string], text string) {
 	shown.Value = s_
 }
 
-func mainF(value int32) int32 {
-	return prim.IntModPositive(value, 3)
-}
-
 func mainComp(x int32, y int32) ordering.Ordering {
-	i := mainF(x)
-	i2 := mainF(y)
+	i := prim.IntModPositive(x, 3)
+	i2 := prim.IntModPositive(y, 3)
 	if i < i2 {
 		return ordering.OrderingLT
 	}

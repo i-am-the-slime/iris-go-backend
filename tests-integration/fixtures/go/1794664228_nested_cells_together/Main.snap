@@ -101,17 +101,26 @@ func mirrorReusing(value *Expr) *Expr {
 	case ExprAdd:
 		left := value.Field0
 		right := value.Field1
-		*value = Expr{Tag: ExprAdd, Field0: mirrorReusing(right), Field1: mirrorReusing(left)}
+		field := mirrorReusing(right)
+		field2 := mirrorReusing(left)
+		value.Field0 = field
+		value.Field1 = field2
 		return value
 	case ExprMul:
 		left := value.Field0
 		right := value.Field1
-		*value = Expr{Tag: ExprMul, Field0: mirrorReusing(right), Field1: mirrorReusing(left)}
+		field := mirrorReusing(right)
+		field2 := mirrorReusing(left)
+		value.Field0 = field
+		value.Field1 = field2
 		return value
 	case ExprSub:
 		left := value.Field0
 		right := value.Field1
-		*value = Expr{Tag: ExprSub, Field0: mirrorReusing(right), Field1: mirrorReusing(left)}
+		field := mirrorReusing(right)
+		field2 := mirrorReusing(left)
+		value.Field0 = field
+		value.Field1 = field2
 		return value
 	default:
 		return value

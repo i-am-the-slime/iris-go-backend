@@ -196,12 +196,10 @@ func initializeMain_() []string {
 	}
 	sorted10 := slices.Clone(entries)
 	slices.SortStableFunc(sorted10, func(x shared.Entry, y shared.Entry) int {
-		key := x.Rank
-		key2 := y.Rank
-		if key < key2 {
+		if x.Rank < y.Rank {
 			return -1
 		}
-		if key > key2 {
+		if x.Rank > y.Rank {
 			return 1
 		}
 		return 0
@@ -212,12 +210,10 @@ func initializeMain_() []string {
 	}
 	sorted11 := slices.Clone(entries)
 	slices.SortStableFunc(sorted11, func(x shared.Entry, y shared.Entry) int {
-		key := x.Rank
-		key2 := y.Rank
-		if key < key2 {
+		if x.Rank < y.Rank {
 			return -1
 		}
-		if key > key2 {
+		if x.Rank > y.Rank {
 			return 1
 		}
 		return 0
@@ -228,12 +224,10 @@ func initializeMain_() []string {
 	}
 	sorted12 := slices.Clone(entries)
 	slices.SortStableFunc(sorted12, func(x shared.Entry, y shared.Entry) int {
-		key := x.Initial
-		key2 := y.Initial
-		if key < key2 {
+		if x.Initial < y.Initial {
 			return -1
 		}
-		if key > key2 {
+		if x.Initial > y.Initial {
 			return 1
 		}
 		return 0
@@ -244,9 +238,7 @@ func initializeMain_() []string {
 	}
 	sorted13 := slices.Clone(entries)
 	slices.SortStableFunc(sorted13, func(x shared.Entry, y shared.Entry) int {
-		key := x.Name
-		key2 := y.Name
-		return prim.CompareString(key, key2)
+		return prim.CompareString(x.Name, y.Name)
 	})
 	mapped7 := make([]string, len(sorted13))
 	for index := range sorted13 {
@@ -278,8 +270,8 @@ func initializeMain_() []string {
 	}
 	sorted14 := slices.Clone(entries)
 	slices.SortStableFunc(sorted14, func(x shared.Entry, y shared.Entry) int {
-		key := mainF(x)
-		key2 := mainF(y)
+		key := x.Rank*10 - prim.CodeUnitLength(x.Name)
+		key2 := y.Rank*10 - prim.CodeUnitLength(y.Name)
 		if key < key2 {
 			return -1
 		}
@@ -361,10 +353,6 @@ func byLength(x string, y string) ordering.Ordering {
 		return ordering.OrderingEQ
 	}
 	return ordering.OrderingGT
-}
-
-func mainF(entry shared.Entry) int32 {
-	return entry.Rank*10 - prim.CodeUnitLength(entry.Name)
 }
 
 func main() {

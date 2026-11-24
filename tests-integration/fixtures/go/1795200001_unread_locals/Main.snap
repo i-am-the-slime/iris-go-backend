@@ -1,23 +1,6 @@
 ---
 source: tests-integration/src/fixtures.rs
 ---
-// Data/Either/either.go
-package either
-
-type EitherIntInt struct {
-	Field0 int32
-	Tag    uint8
-}
-
-const (
-	EitherIntIntLeft = iota
-	EitherIntIntRight
-)
-
-func Right(field0 int32) EitherIntInt {
-	return EitherIntInt{Tag: EitherIntIntRight, Field0: field0}
-}
-
 // Data/Maybe/maybe.go
 package maybe
 
@@ -66,7 +49,6 @@ const (
 package main
 
 import (
-	"fixture/Data/Either"
 	"fixture/Data/Maybe"
 	"fixture/shared"
 	"github.com/i-am-the-slime/iris-go/direct"
@@ -86,16 +68,9 @@ func main_() int32 {
 	result = elements[counter]
 	modified := shared.StateValue{State: counter + 1, Value: result}
 	counter = modified.State
-	scrutinee := either.Right(-1)
-	var result2 int32
-	if scrutinee.Tag == either.EitherIntIntRight && scrutinee.Field0 == -1 {
-		sorted := slices.Clone([]rune{'b', 'a'})
-		slices.Sort(sorted)
-		result2 = 2
-	} else {
-		result2 = 1
-	}
-	return counter*10 + result2
+	sorted := slices.Clone([]rune{'b', 'a'})
+	slices.Sort(sorted)
+	return counter*10 + 2
 }
 
 func main() {

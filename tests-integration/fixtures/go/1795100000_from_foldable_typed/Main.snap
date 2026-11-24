@@ -76,13 +76,6 @@ func UnsafeNodeStringUnit(k string, v struct{}, l *MapStringUnit, r *MapStringUn
 	return Node(1+result, 1+s1+r.Node1, k, v, l, r)
 }
 
-func UnsafeBalancedNodeStringUnitHeight(value *MapStringUnit) int32 {
-	if value == SharedMapStringUnitLeaf {
-		return 0
-	}
-	return value.Node0
-}
-
 func UnsafeBalancedNodeStringUnitReusing(k string, v struct{}, l *MapStringUnit, r *MapStringUnit, donor *MapStringUnit) *MapStringUnit {
 	if l == SharedMapStringUnitLeaf {
 		if r == SharedMapStringUnitLeaf {
@@ -179,7 +172,13 @@ func UnsafeBalancedNodeStringUnitRotateLeftReusing(k string, v struct{}, l *MapS
 		lk := rl.Node2
 		ll := rl.Node4
 		lr := rl.Node5
-		if lh > UnsafeBalancedNodeStringUnitHeight(rr) {
+		var result int32
+		if rr == SharedMapStringUnitLeaf {
+			result = 0
+		} else {
+			result = rr.Node0
+		}
+		if lh > result {
 			return UnsafeNodeStringUnitReusing(lk, struct{}{}, UnsafeNodeStringUnit(k, v, l, ll), UnsafeNodeStringUnit(rk, rv, lr, rr), donor)
 		}
 	}
@@ -192,7 +191,13 @@ func UnsafeBalancedNodeStringUnitRotateRightReusing(k string, v struct{}, lk str
 		rk := lr.Node2
 		rl := lr.Node4
 		rr := lr.Node5
-		if UnsafeBalancedNodeStringUnitHeight(ll) <= rh {
+		var result int32
+		if ll == SharedMapStringUnitLeaf {
+			result = 0
+		} else {
+			result = ll.Node0
+		}
+		if result <= rh {
 			return UnsafeNodeStringUnitReusing(rk, struct{}{}, UnsafeNodeStringUnit(lk, lv, ll, rl), UnsafeNodeStringUnit(k, v, rr, r), donor)
 		}
 	}
@@ -323,8 +328,6 @@ func wordsGoReusing(a string, value *internal.MapStringUnit) *internal.MapString
 	if value == internal.SharedMapStringUnitLeaf {
 		return internal.Node(1, 1, a, struct{}{}, internal.SharedMapStringUnitLeaf, internal.SharedMapStringUnitLeaf)
 	}
-	mh := value.Node0
-	ms := value.Node1
 	mk := value.Node2
 	ml := value.Node4
 	mr := value.Node5
@@ -332,11 +335,7 @@ func wordsGoReusing(a string, value *internal.MapStringUnit) *internal.MapString
 		return internal.UnsafeBalancedNodeStringUnitReusing(mk, struct{}{}, wordsGoReusing(a, ml), mr, value)
 	}
 	if a == mk {
-		value.Node0 = mh
-		value.Node1 = ms
 		value.Node2 = a
-		value.Node4 = ml
-		value.Node5 = mr
 		return value
 	}
 	return internal.UnsafeBalancedNodeStringUnitReusing(mk, struct{}{}, ml, wordsGoReusing(a, mr), value)

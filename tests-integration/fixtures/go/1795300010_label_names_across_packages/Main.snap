@@ -50,17 +50,6 @@ const (
 	X_respondNowALaterLater
 )
 
-type X_respondNowLater struct {
-	Later        string
-	X_respondNow int32
-	Tag          uint8
-}
-
-const (
-	X_respondNowLaterX_respondNow = iota
-	X_respondNowLaterLater
-)
-
 func X_respondNowAX_respondNowALater(field0 int32) AX_respondNowALater {
 	return AX_respondNowALater{Tag: AX_respondNowALaterX_respondNow, Field0: field0}
 }
@@ -89,14 +78,6 @@ func LaterX_respondNowALater(later string) X_respondNowALater {
 	return X_respondNowALater{Tag: X_respondNowALaterLater, Later: later}
 }
 
-func X_respondNowX_respondNowLater(x_respondNow int32) X_respondNowLater {
-	return X_respondNowLater{Tag: X_respondNowLaterX_respondNow, X_respondNow: x_respondNow}
-}
-
-func LaterX_respondNowLater(later string) X_respondNowLater {
-	return X_respondNowLater{Tag: X_respondNowLaterLater, Later: later}
-}
-
 // Labels/labels.go
 package labels
 
@@ -110,31 +91,22 @@ func Describe(variant2 variant.AX_respondNowALater) string {
 	case variant.AX_respondNowALaterA:
 		return "A " + strconv.Itoa(int(variant2.Field0))
 	case variant.AX_respondNowALaterX_respondNow:
-		return DescribeX2(variant.X_respondNowX_respondNowALater(variant2.Field0))
+		return DescribeX(variant.X_respondNowX_respondNowALater(variant2.Field0))
 	case variant.AX_respondNowALaterA2:
-		return DescribeX2(variant.AX_respondNowALater2(variant2.Field0))
+		return DescribeX(variant.AX_respondNowALater2(variant2.Field0))
 	default: // variant.AX_respondNowALaterLater
-		return DescribeX2(variant.LaterX_respondNowALater(variant2.Later))
+		return DescribeX(variant.LaterX_respondNowALater(variant2.Later))
 	}
 }
 
-func DescribeX(variant2 variant.X_respondNowLater) string {
-	switch variant2.Tag {
-	case variant.X_respondNowLaterX_respondNow:
-		return "now " + strconv.Itoa(int(variant2.X_respondNow))
-	default: // variant.X_respondNowLaterLater
-		return "later " + variant2.Later
-	}
-}
-
-func DescribeX2(variant2 variant.X_respondNowALater) string {
+func DescribeX(variant2 variant.X_respondNowALater) string {
 	switch variant2.Tag {
 	case variant.X_respondNowALaterX_respondNow:
-		return DescribeX(variant.X_respondNowX_respondNowLater(variant2.Field0))
+		return "now " + strconv.Itoa(int(variant2.Field0))
 	case variant.X_respondNowALaterA:
 		return "a " + strconv.Itoa(int(variant2.Field0))
 	default: // variant.X_respondNowALaterLater
-		return DescribeX(variant.LaterX_respondNowLater(variant2.Later))
+		return "later " + variant2.Later
 	}
 }
 

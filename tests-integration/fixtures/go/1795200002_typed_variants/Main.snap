@@ -1,58 +1,10 @@
 ---
 source: tests-integration/src/fixtures.rs
 ---
-// Data/Variant/variant.go
-package variant
-
-type CircleLabelSquare struct {
-	Label  string
-	Circle float64
-	Square int32
-	Tag    uint8
-}
-
-const (
-	CircleLabelSquareCircle = iota
-	CircleLabelSquareLabel
-	CircleLabelSquareSquare
-)
-
-type CircleSquare struct {
-	Circle float64
-	Square int32
-	Tag    uint8
-}
-
-const (
-	CircleSquareCircle = iota
-	CircleSquareSquare
-)
-
-func CircleCircleLabelSquare(circle float64) CircleLabelSquare {
-	return CircleLabelSquare{Tag: CircleLabelSquareCircle, Circle: circle}
-}
-
-func SquareCircleLabelSquare(square int32) CircleLabelSquare {
-	return CircleLabelSquare{Tag: CircleLabelSquareSquare, Square: square}
-}
-
-func Label(label string) CircleLabelSquare {
-	return CircleLabelSquare{Tag: CircleLabelSquareLabel, Label: label}
-}
-
-func CircleCircleSquare(circle float64) CircleSquare {
-	return CircleSquare{Tag: CircleSquareCircle, Circle: circle}
-}
-
-func SquareCircleSquare(square int32) CircleSquare {
-	return CircleSquare{Tag: CircleSquareSquare, Square: square}
-}
-
 // main.go
 package main
 
 import (
-	"fixture/Data/Variant"
 	"github.com/i-am-the-slime/iris-go/console"
 	"github.com/i-am-the-slime/iris-go/prim"
 	"strconv"
@@ -87,14 +39,7 @@ func initializeMain_() []string {
 	} else {
 		result3 = "square " + strconv.Itoa(int(n3))
 	}
-	n4 := opaque(0)
-	var result4 variant.CircleLabelSquare
-	if n4 > 0 {
-		result4 = variant.CircleCircleLabelSquare(1.5)
-	} else {
-		result4 = variant.SquareCircleLabelSquare(n4)
-	}
-	return []string{prim.ShowNumber(result), prim.ShowNumber(result2), result3, "tag", labelOnly(result4), labelOnly(variant.Label("x"))}
+	return []string{prim.ShowNumber(result), prim.ShowNumber(result2), result3, "tag", "a shape", "label x"}
 }
 
 func opaque(x int32) int32 {
@@ -104,21 +49,6 @@ func opaque(x int32) int32 {
 		}
 		return x
 	}
-}
-
-func labelOnly(variant2 variant.CircleLabelSquare) string {
-	switch variant2.Tag {
-	case variant.CircleLabelSquareCircle:
-		return labelOnlyX(variant.CircleCircleSquare(variant2.Circle))
-	case variant.CircleLabelSquareLabel:
-		return "label " + variant2.Label
-	default: // variant.CircleLabelSquareSquare
-		return labelOnlyX(variant.SquareCircleSquare(variant2.Square))
-	}
-}
-
-func labelOnlyX(variant variant.CircleSquare) string {
-	return "a shape"
 }
 
 func main() {

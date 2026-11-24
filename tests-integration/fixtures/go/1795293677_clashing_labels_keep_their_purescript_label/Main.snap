@@ -340,10 +340,6 @@ func MapListFunction(s string, value NonEmptyListForeignError) NonEmptyListForei
 	return NonEmptyListForeignError{First: ErrorAtProperty(s, value.First), Second: MapListFunctionChunkedRevMap(s, SharedListListForeignErrorNil, value.Second)}
 }
 
-func MapListFunctionF(s string, element *ForeignError) *ForeignError {
-	return ErrorAtProperty(s, element)
-}
-
 func MapListFunctionChunkedRevMap(s string, chunksAcc *ListListForeignError, chunk *ListForeignError) *ListForeignError {
 	var listListForeignErrorCells alloc.Cells[ListListForeignError]
 	for {
@@ -354,9 +350,9 @@ func MapListFunctionChunkedRevMap(s string, chunksAcc *ListListForeignError, chu
 		}
 		var result *ListForeignError
 		if chunk != SharedListForeignErrorNil && chunk.Cons1 != SharedListForeignErrorNil && chunk.Cons1.Cons1 == SharedListForeignErrorNil {
-			result = Cons(MapListFunctionF(s, chunk.Cons0), Cons(MapListFunctionF(s, chunk.Cons1.Cons0), SharedListForeignErrorNil))
+			result = Cons(ErrorAtProperty(s, chunk.Cons0), Cons(ErrorAtProperty(s, chunk.Cons1.Cons0), SharedListForeignErrorNil))
 		} else if chunk != SharedListForeignErrorNil && chunk.Cons1 == SharedListForeignErrorNil {
-			result = Cons(MapListFunctionF(s, chunk.Cons0), SharedListForeignErrorNil)
+			result = Cons(ErrorAtProperty(s, chunk.Cons0), SharedListForeignErrorNil)
 		} else {
 			result = SharedListForeignErrorNil
 		}
@@ -365,6 +361,7 @@ func MapListFunctionChunkedRevMap(s string, chunksAcc *ListListForeignError, chu
 }
 
 func MapListFunctionChunkedRevMapReverseUnrolledMap(s string, list *ListListForeignError, acc *ListForeignError) *ListForeignError {
+	var foreignErrorCells alloc.Cells[ForeignError]
 	var listForeignErrorCells alloc.Cells[ListForeignError]
 	for {
 		if list != SharedListListForeignErrorNil && list.Cons0 != SharedListForeignErrorNil && list.Cons0.Cons1 != SharedListForeignErrorNil && list.Cons0.Cons1.Cons1 != SharedListForeignErrorNil {
@@ -372,7 +369,7 @@ func MapListFunctionChunkedRevMapReverseUnrolledMap(s string, list *ListListFore
 			x2 := list.Cons0.Cons1.Cons0
 			x3 := list.Cons0.Cons1.Cons1.Cons0
 			cs := list.Cons1
-			list, acc = cs, listForeignErrorCells.New(ListForeignError{Cons0: MapListFunctionF(s, x1), Cons1: listForeignErrorCells.New(ListForeignError{Cons0: MapListFunctionF(s, x2), Cons1: listForeignErrorCells.New(ListForeignError{Cons0: MapListFunctionF(s, x3), Cons1: acc})})})
+			list, acc = cs, listForeignErrorCells.New(ListForeignError{Cons0: foreignErrorCells.New(ForeignError{Tag: ForeignErrorErrorAtProperty, ErrorAtProperty0: s, ErrorAtProperty1: x1}), Cons1: listForeignErrorCells.New(ListForeignError{Cons0: foreignErrorCells.New(ForeignError{Tag: ForeignErrorErrorAtProperty, ErrorAtProperty0: s, ErrorAtProperty1: x2}), Cons1: listForeignErrorCells.New(ListForeignError{Cons0: foreignErrorCells.New(ForeignError{Tag: ForeignErrorErrorAtProperty, ErrorAtProperty0: s, ErrorAtProperty1: x3}), Cons1: acc})})})
 			continue
 		}
 		return acc

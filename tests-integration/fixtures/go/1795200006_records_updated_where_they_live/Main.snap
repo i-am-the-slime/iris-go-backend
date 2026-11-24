@@ -25,7 +25,6 @@ import (
 	arraypkg "github.com/i-am-the-slime/iris-go/array"
 	"github.com/i-am-the-slime/iris-go/console"
 	"github.com/i-am-the-slime/iris-go/prim"
-	"slices"
 )
 
 var main_ = initializeMain_()
@@ -58,7 +57,6 @@ func initializeMain_() float64 {
 	}
 	array := []int32{3, 4}
 	accumulator2 := []tuple.TupleIntInt{}
-	accumulator2 = slices.Clip(accumulator2)
 	for index, i := range array {
 		i2 := int32(index)
 		accumulator2 = arraypkg.Bounded(append(accumulator2, tuple.TupleIntInt{First: i2, Second: i}))

@@ -163,11 +163,7 @@ func report(ignored struct{}) []string {
 				result2 = int64(0)
 			} else {
 				var result3 int64
-				if l2_ == 0 {
-					result3 = int64(0)
-				} else {
-					result3 = Data_Int64_Internal_ffi.Modulo_(int64(-7), l2_)
-				}
+				result3 = Data_Int64_Internal_ffi.Modulo_(int64(-7), l2_)
 				result2 = Data_Int64_Internal_ffi.Modulo_(result3+l2_, l2_)
 			}
 			result = Data_Int64_Internal_ffi.Divide_(-7-result2, y)

@@ -189,7 +189,7 @@ func main() {
 //line Main.purs:46:3
 	}
 //line Main.purs:46:3
-	if arraypkg.Eq(dataeq.Eq, mapped3, []float64{27.0, 8.0, 0.0}) == false {
+	if !arraypkg.Eq(dataeq.Eq, mapped3, []float64{27.0, 8.0, 0.0}) {
 //line Main.purs:47:5
 		effectexception.ThrowUnit("the areas are wrong")
 //line Main.purs:46:3
@@ -211,7 +211,7 @@ func main() {
 //line Main.purs:49:3
 	colours = arraypkg.Append(colours, []Colour{result})
 //line Main.purs:51:3
-	if arraypkg.Eq(eq, colours, []Colour{ColourGreen, ColourRed}) == false {
+	if !arraypkg.Eq(eq, colours, []Colour{ColourGreen, ColourRed}) {
 //line Main.purs:52:5
 		effectexception.ThrowUnit("the colour is wrong")
 //line Main.purs:51:3

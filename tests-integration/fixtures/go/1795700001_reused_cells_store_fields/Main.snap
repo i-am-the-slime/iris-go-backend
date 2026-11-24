@@ -98,24 +98,15 @@ func insertCountsReusing(key int32, value *Tree) *Tree {
 	right := value.Node3
 	if key < k {
 		field := insertCountsReusing(key, left)
-		value.Node0 = k
-		value.Node1 = count
 		value.Node2 = field
-		value.Node3 = right
 		return value
 	}
 	if key > k {
 		field := insertCountsReusing(key, right)
-		value.Node0 = k
-		value.Node1 = count
-		value.Node2 = left
 		value.Node3 = field
 		return value
 	}
-	value.Node0 = k
 	value.Node1 = count + 1
-	value.Node2 = left
-	value.Node3 = right
 	return value
 }
 

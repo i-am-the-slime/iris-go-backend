@@ -289,7 +289,7 @@ func compareCardConsIntConsSuitNil(ra Card, rb Card) ordering.Ordering {
 	} else {
 		left = ordering.OrderingGT
 	}
-	if left == ordering.OrderingEQ == false {
+	if left != ordering.OrderingEQ {
 		return left
 	}
 	left2 := ra.Suit
@@ -302,7 +302,7 @@ func compareCardConsIntConsSuitNil(ra Card, rb Card) ordering.Ordering {
 	} else {
 		left3 = ordering.OrderingGT
 	}
-	if left3 == ordering.OrderingEQ == false {
+	if left3 != ordering.OrderingEQ {
 		return left3
 	}
 	return ordering.OrderingEQ

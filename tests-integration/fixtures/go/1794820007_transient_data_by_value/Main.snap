@@ -105,7 +105,7 @@ var entries *ListEntry = Cons(EntryEntry("k", "l", "m", "n", "o", "p", "q", "r",
 
 func appendFirsts(buffer []byte, list *ListEntry) []byte {
 	if list != sharedListEntryNil {
-		if list != sharedListEntryNil && list.Cons0 != sharedEntryBlank {
+		if list.Cons0 != sharedEntryBlank {
 			buffer = prim.AppendString(buffer, list.Cons0.Entry0)
 			buffer = appendFirsts(buffer, list.Cons1)
 		} else {

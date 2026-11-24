@@ -131,7 +131,7 @@ func sortByIntComparePartitionFrom(array []int32, pivot int32, high int32, i int
 			within := j >= 0 && int(j) < len(array)
 			if within {
 				element := array[j]
-				if element > pivot == false {
+				if element <= pivot {
 					sortByIntCompareSwap(array, i, j)
 					i, j = i+1, j+1
 					continue
@@ -159,7 +159,7 @@ func sortByIntCompareQuicksort(array []int32, low int32, high int32) {
 				for {
 					if j < high {
 						element2 := array[j]
-						if element2 > element == false {
+						if element2 <= element {
 							sortByIntCompareSwap(array, i2, j)
 							i2, j = i2+1, j+1
 							continue
@@ -189,7 +189,7 @@ func sortByIntDescendingPartitionFrom(array []int32, pivot int32, high int32, i 
 			within := j >= 0 && int(j) < len(array)
 			if within {
 				element := array[j]
-				if pivot > element == false {
+				if pivot <= element {
 					sortByIntCompareSwap(array, i, j)
 					i, j = i+1, j+1
 					continue
@@ -217,7 +217,7 @@ func sortByIntDescendingQuicksort(array []int32, low int32, high int32) {
 				for {
 					if j < high {
 						element2 := array[j]
-						if element > element2 == false {
+						if element <= element2 {
 							sortByIntCompareSwap(array, i2, j)
 							i2, j = i2+1, j+1
 							continue
@@ -247,9 +247,19 @@ func sortByIntOrderPartitionFrom(array []int32, pivot int32, high int32, i int32
 			within := j >= 0 && int(j) < len(array)
 			if within {
 				element := array[j]
-				i2 := sortByIntOrderPartitionFromDistance(element)
-				i3 := sortByIntOrderPartitionFromDistance(pivot)
-				if i2 > i3 == false {
+				var i2 int32
+				if element < 4 {
+					i2 = 4 - element
+				} else {
+					i2 = element - 4
+				}
+				var i3 int32
+				if pivot < 4 {
+					i3 = 4 - pivot
+				} else {
+					i3 = pivot - 4
+				}
+				if i2 <= i3 {
 					sortByIntCompareSwap(array, i, j)
 					i, j = i+1, j+1
 					continue
@@ -261,13 +271,6 @@ func sortByIntOrderPartitionFrom(array []int32, pivot int32, high int32, i int32
 		}
 		return i
 	}
-}
-
-func sortByIntOrderPartitionFromDistance(value int32) int32 {
-	if value < 4 {
-		return 4 - value
-	}
-	return value - 4
 }
 
 func sortByIntOrderQuicksort(array []int32, low int32, high int32) {
@@ -284,9 +287,19 @@ func sortByIntOrderQuicksort(array []int32, low int32, high int32) {
 				for {
 					if j < high {
 						element2 := array[j]
-						i3 := sortByIntOrderPartitionFromDistance(element2)
-						i4 := sortByIntOrderPartitionFromDistance(element)
-						if i3 > i4 == false {
+						var i3 int32
+						if element2 < 4 {
+							i3 = 4 - element2
+						} else {
+							i3 = element2 - 4
+						}
+						var i4 int32
+						if element < 4 {
+							i4 = 4 - element
+						} else {
+							i4 = element - 4
+						}
+						if i3 <= i4 {
 							sortByIntCompareSwap(array, i2, j)
 							i2, j = i2+1, j+1
 							continue
@@ -318,7 +331,7 @@ func sortByIntOrderPartitionFrom2(array []int32, pivot int32, high int32, i int3
 				element := array[j]
 				i2 := -element
 				i3 := -pivot
-				if i2 > i3 == false {
+				if i2 <= i3 {
 					sortByIntCompareSwap(array, i, j)
 					i, j = i+1, j+1
 					continue
@@ -348,7 +361,7 @@ func sortByIntOrderQuicksort2(array []int32, low int32, high int32) {
 						element2 := array[j]
 						i3 := -element2
 						i4 := -element
-						if i3 > i4 == false {
+						if i3 <= i4 {
 							sortByIntCompareSwap(array, i2, j)
 							i2, j = i2+1, j+1
 							continue
@@ -370,13 +383,6 @@ func sortByIntOrderQuicksort2(array []int32, low int32, high int32) {
 		}
 		return
 	}
-}
-
-func insertByIntOrderDistance(value int32) int32 {
-	if value < 6 {
-		return 6 - value
-	}
-	return value - 6
 }
 
 func mainGoReusing(sorted *ListInt, value *ListInt) *ListInt {
@@ -418,16 +424,23 @@ func insertByIntOrderReusing(x int32, value *ListInt) *ListInt {
 	}
 	y := value.Cons0
 	rest := value.Cons1
-	i := insertByIntOrderDistance(x)
-	i2 := insertByIntOrderDistance(y)
+	var i int32
+	if x < 6 {
+		i = 6 - x
+	} else {
+		i = x - 6
+	}
+	var i2 int32
+	if y < 6 {
+		i2 = 6 - y
+	} else {
+		i2 = y - 6
+	}
 	if i > i2 {
 		field := insertByIntOrderReusing(x, rest)
-		value.Cons0 = y
 		value.Cons1 = field
 		return value
 	}
-	value.Cons0 = y
-	value.Cons1 = rest
 	return Cons(x, value)
 }
 
@@ -439,12 +452,9 @@ func insertByIntDescendingReusing(x int32, value *ListInt) *ListInt {
 	rest := value.Cons1
 	if y > x {
 		field := insertByIntDescendingReusing(x, rest)
-		value.Cons0 = y
 		value.Cons1 = field
 		return value
 	}
-	value.Cons0 = y
-	value.Cons1 = rest
 	return Cons(x, value)
 }
 
@@ -456,12 +466,9 @@ func insertByIntCompareReusing(x int32, value *ListInt) *ListInt {
 	rest := value.Cons1
 	if x > y {
 		field := insertByIntCompareReusing(x, rest)
-		value.Cons0 = y
 		value.Cons1 = field
 		return value
 	}
-	value.Cons0 = y
-	value.Cons1 = rest
 	return Cons(x, value)
 }
 

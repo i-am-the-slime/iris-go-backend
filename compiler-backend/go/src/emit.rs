@@ -29,6 +29,7 @@ mod existential;
 mod field_reads;
 mod foreign_data;
 mod foreign_values;
+mod fresh;
 mod from_list;
 mod fusion;
 mod groups;
@@ -43,6 +44,10 @@ mod intervals;
 mod invariants;
 mod iteration;
 mod joins;
+mod kept;
+mod known;
+mod labelled;
+mod loads;
 mod json;
 mod layout;
 mod lengths;
@@ -50,6 +55,7 @@ mod lines;
 mod locals;
 mod loop_state;
 mod maybe;
+mod merging;
 mod mutable;
 mod names;
 mod operators;
@@ -190,6 +196,10 @@ where
     timed("wrappers", || wrappers::inline_wrappers(&mut declarations));
     let structs = scalars::structs_of(&emitter.type_declarations);
     timed("equality", || equality::compare_structs_whole(&mut declarations, &structs));
+    timed("labelled", || labelled::unlabel_blocks(&mut declarations));
+    timed("known", || known::drop_known_tests(&mut declarations));
+    timed("merging", || merging::merge_identical_branches(&mut declarations));
+    timed("fresh", || fresh::drop_clips_of_fresh_slices(&mut declarations));
     timed("references", || references::promote_references(&mut declarations));
     timed("composites", || composites::take_composites_apart(&mut declarations));
     timed("immediate", || immediate::reduce_immediate_calls(&mut declarations));
@@ -250,6 +260,7 @@ where
         blocks::allocate_nested_cells_together(&mut declarations, &mut names, &taken)
     });
     timed("divergence", || diverging::end_blocks_at_divergence(&mut declarations));
+    timed("field reads", || loads::reuse_field_reads(&mut declarations));
     timed("unreferenced", || unreferenced::drop_unreferenced_definitions(&mut declarations));
     // Last, so that every pass before reads the constructions' fields in their literals.
     timed("constructions", || emitter.call_constructor_functions(&mut declarations))?;
@@ -1738,9 +1749,7 @@ where
                 let values = self.values(arguments, out)?;
                 self.construct(data, *constructor, values)?
             }
-            ExpressionKind::Reuse { cell, data, constructor, arguments } => {
-                self.reused(cell, data, *constructor, arguments, &[], out)?
-            }
+            ExpressionKind::Reuse { .. } => self.reused(&expression.kind, &[], out)?,
             ExpressionKind::UniqueEdge { owned, cell, edge } => {
                 self.unique_edge(owned, cell, edge, out)?
             }
@@ -1751,9 +1760,7 @@ where
                     let constructed = self.construct(data, *constructor, values)?;
                     with_unique_mask(constructed, mask)
                 }
-                ExpressionKind::Reuse { cell, data, constructor, arguments } => {
-                    self.reused(cell, data, *constructor, arguments, edges, out)?
-                }
+                ExpressionKind::Reuse { .. } => self.reused(&value.kind, edges, out)?,
                 _ => unreachable!(
                     "invariant violated: unique edges mark neither a construction nor a reuse"
                 ),

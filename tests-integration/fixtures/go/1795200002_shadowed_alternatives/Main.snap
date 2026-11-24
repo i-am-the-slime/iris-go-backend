@@ -81,11 +81,7 @@ func main_() int32 {
 	var result bool
 	switch scrutinee.Tag {
 	case either.EitherMaybeBooleanIntLeft:
-		if scrutinee.Left == maybe.NoBoolean {
-			result = false
-		} else {
-			result = false
-		}
+		result = false
 	default:
 		result = false
 	}

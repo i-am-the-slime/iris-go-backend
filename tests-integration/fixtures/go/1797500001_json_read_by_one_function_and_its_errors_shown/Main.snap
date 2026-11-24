@@ -271,10 +271,6 @@ func MapListFunction2(s string, value NonEmptyListForeignError) NonEmptyListFore
 	return NonEmptyListForeignError{First: ErrorAtProperty(s, value.First), Second: MapListFunctionChunkedRevMap2(s, SharedListListForeignErrorNil, value.Second)}
 }
 
-func MapListFunctionF(i int32, element *ForeignError) *ForeignError {
-	return ErrorAtIndex(i, element)
-}
-
 func MapListFunctionChunkedRevMap(i int32, chunksAcc *ListListForeignError, chunk *ListForeignError) *ListForeignError {
 	var listListForeignErrorCells alloc.Cells[ListListForeignError]
 	for {
@@ -285,9 +281,9 @@ func MapListFunctionChunkedRevMap(i int32, chunksAcc *ListListForeignError, chun
 		}
 		var result *ListForeignError
 		if chunk != SharedListForeignErrorNil && chunk.Cons1 != SharedListForeignErrorNil && chunk.Cons1.Cons1 == SharedListForeignErrorNil {
-			result = Cons(MapListFunctionF(i, chunk.Cons0), Cons(MapListFunctionF(i, chunk.Cons1.Cons0), SharedListForeignErrorNil))
+			result = Cons(ErrorAtIndex(i, chunk.Cons0), Cons(ErrorAtIndex(i, chunk.Cons1.Cons0), SharedListForeignErrorNil))
 		} else if chunk != SharedListForeignErrorNil && chunk.Cons1 == SharedListForeignErrorNil {
-			result = Cons(MapListFunctionF(i, chunk.Cons0), SharedListForeignErrorNil)
+			result = Cons(ErrorAtIndex(i, chunk.Cons0), SharedListForeignErrorNil)
 		} else {
 			result = SharedListForeignErrorNil
 		}
@@ -296,6 +292,7 @@ func MapListFunctionChunkedRevMap(i int32, chunksAcc *ListListForeignError, chun
 }
 
 func MapListFunctionChunkedRevMapReverseUnrolledMap(i int32, list *ListListForeignError, acc *ListForeignError) *ListForeignError {
+	var foreignErrorCells alloc.Cells[ForeignError]
 	var listForeignErrorCells alloc.Cells[ListForeignError]
 	for {
 		if list != SharedListListForeignErrorNil && list.Cons0 != SharedListForeignErrorNil && list.Cons0.Cons1 != SharedListForeignErrorNil && list.Cons0.Cons1.Cons1 != SharedListForeignErrorNil {
@@ -303,15 +300,11 @@ func MapListFunctionChunkedRevMapReverseUnrolledMap(i int32, list *ListListForei
 			x2 := list.Cons0.Cons1.Cons0
 			x3 := list.Cons0.Cons1.Cons1.Cons0
 			cs := list.Cons1
-			list, acc = cs, listForeignErrorCells.New(ListForeignError{Cons0: MapListFunctionF(i, x1), Cons1: listForeignErrorCells.New(ListForeignError{Cons0: MapListFunctionF(i, x2), Cons1: listForeignErrorCells.New(ListForeignError{Cons0: MapListFunctionF(i, x3), Cons1: acc})})})
+			list, acc = cs, listForeignErrorCells.New(ListForeignError{Cons0: foreignErrorCells.New(ForeignError{Tag: ForeignErrorErrorAtIndex, ErrorAtIndex0: i, ErrorAtIndex1: x1}), Cons1: listForeignErrorCells.New(ListForeignError{Cons0: foreignErrorCells.New(ForeignError{Tag: ForeignErrorErrorAtIndex, ErrorAtIndex0: i, ErrorAtIndex1: x2}), Cons1: listForeignErrorCells.New(ListForeignError{Cons0: foreignErrorCells.New(ForeignError{Tag: ForeignErrorErrorAtIndex, ErrorAtIndex0: i, ErrorAtIndex1: x3}), Cons1: acc})})})
 			continue
 		}
 		return acc
 	}
-}
-
-func MapListFunctionF2(s string, element *ForeignError) *ForeignError {
-	return ErrorAtProperty(s, element)
 }
 
 func MapListFunctionChunkedRevMap2(s string, chunksAcc *ListListForeignError, chunk *ListForeignError) *ListForeignError {
@@ -324,9 +317,9 @@ func MapListFunctionChunkedRevMap2(s string, chunksAcc *ListListForeignError, ch
 		}
 		var result *ListForeignError
 		if chunk != SharedListForeignErrorNil && chunk.Cons1 != SharedListForeignErrorNil && chunk.Cons1.Cons1 == SharedListForeignErrorNil {
-			result = Cons(MapListFunctionF2(s, chunk.Cons0), Cons(MapListFunctionF2(s, chunk.Cons1.Cons0), SharedListForeignErrorNil))
+			result = Cons(ErrorAtProperty(s, chunk.Cons0), Cons(ErrorAtProperty(s, chunk.Cons1.Cons0), SharedListForeignErrorNil))
 		} else if chunk != SharedListForeignErrorNil && chunk.Cons1 == SharedListForeignErrorNil {
-			result = Cons(MapListFunctionF2(s, chunk.Cons0), SharedListForeignErrorNil)
+			result = Cons(ErrorAtProperty(s, chunk.Cons0), SharedListForeignErrorNil)
 		} else {
 			result = SharedListForeignErrorNil
 		}
@@ -335,6 +328,7 @@ func MapListFunctionChunkedRevMap2(s string, chunksAcc *ListListForeignError, ch
 }
 
 func MapListFunctionChunkedRevMapReverseUnrolledMap2(s string, list *ListListForeignError, acc *ListForeignError) *ListForeignError {
+	var foreignErrorCells alloc.Cells[ForeignError]
 	var listForeignErrorCells alloc.Cells[ListForeignError]
 	for {
 		if list != SharedListListForeignErrorNil && list.Cons0 != SharedListForeignErrorNil && list.Cons0.Cons1 != SharedListForeignErrorNil && list.Cons0.Cons1.Cons1 != SharedListForeignErrorNil {
@@ -342,7 +336,7 @@ func MapListFunctionChunkedRevMapReverseUnrolledMap2(s string, list *ListListFor
 			x2 := list.Cons0.Cons1.Cons0
 			x3 := list.Cons0.Cons1.Cons1.Cons0
 			cs := list.Cons1
-			list, acc = cs, listForeignErrorCells.New(ListForeignError{Cons0: MapListFunctionF2(s, x1), Cons1: listForeignErrorCells.New(ListForeignError{Cons0: MapListFunctionF2(s, x2), Cons1: listForeignErrorCells.New(ListForeignError{Cons0: MapListFunctionF2(s, x3), Cons1: acc})})})
+			list, acc = cs, listForeignErrorCells.New(ListForeignError{Cons0: foreignErrorCells.New(ForeignError{Tag: ForeignErrorErrorAtProperty, ErrorAtProperty0: s, ErrorAtProperty1: x1}), Cons1: listForeignErrorCells.New(ListForeignError{Cons0: foreignErrorCells.New(ForeignError{Tag: ForeignErrorErrorAtProperty, ErrorAtProperty0: s, ErrorAtProperty1: x2}), Cons1: listForeignErrorCells.New(ListForeignError{Cons0: foreignErrorCells.New(ForeignError{Tag: ForeignErrorErrorAtProperty, ErrorAtProperty0: s, ErrorAtProperty1: x3}), Cons1: acc})})})
 			continue
 		}
 		return acc

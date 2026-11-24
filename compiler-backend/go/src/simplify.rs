@@ -28,6 +28,7 @@ use smol_str::SmolStr;
 
 use self::arguments::ArgumentSpecializations;
 use self::coverage::{binds_only, decided_guards, reachable};
+use self::fold::shares_branch_with_next;
 
 mod arguments;
 mod choice;
@@ -50,6 +51,9 @@ mod uncons;
 mod unpack;
 
 const INLINE_SIZE: usize = 40;
+
+/// The size of a local helper that is copied to each of its calls whatever it works on.
+const TINY_HELPER: usize = 12;
 
 /// The names simplification and specialization give the values they introduce.
 const MADE_UP_NAMES: &[&str] = &["argument", "binding", "element", "field", "scrutinee", "value"];
@@ -437,6 +441,9 @@ impl Simplifier<'_> {
                     self.joined_comparisons(&condition, &then, &otherwise, monotype)
                 {
                     return joined;
+                }
+                if shares_branch_with_next(&condition, &then, &otherwise) {
+                    return self.boolean_choice(*condition, then, otherwise, monotype);
                 }
                 let (then, otherwise) = (Box::new(then), Box::new(otherwise));
                 ExpressionKind::If { condition, then, otherwise }
@@ -983,15 +990,23 @@ impl Simplifier<'_> {
     /// A small local function over a mutable array of its surroundings, such as a `where`
     /// helper that peeks with a default, is inlined at each of its calls when it is only ever
     /// called. Its accesses are then seen where it is called, next to the caller's own, so that
-    /// accesses of the same indices share their bounds tests (emit/guards.rs). Any other helper
-    /// stays one function.
+    /// accesses of the same indices share their bounds tests (emit/guards.rs). So is a tiny
+    /// helper, `meanOf totals = totals.sum / totals.count`, which costs less copied than called
+    /// with its arguments built for it. Any other helper stays one function.
     fn is_small_applied_lambda(&self, binding: &Binding, body: &Expression) -> bool {
         let ExpressionKind::Lambda { parameters, .. } = &binding.value.kind else { return false };
+        let mutable = |monotype: &Monotype| matches!(monotype, Monotype::MutableArray(_));
+        // The array may as well be passed, `peekOr0 index array`, when the helper only reads
+        // it: a helper that writes a passed array stays a function over its slice.
+        let passed_array =
+            parameters.iter().any(|parameter| mutable(self.monotypes.get(parameter.monotype)));
+        let over_mutable_array = captures_free(&binding.value, self.monotypes, mutable)
+            || (passed_array && only_reads_arrays(&binding.value));
+        let tiny = is_within_size(&binding.value, TINY_HELPER) && only_computes(&binding.value);
+        let worth_copying = over_mutable_array || tiny;
         self.fuel > 0
             && is_within_size(&binding.value, INLINE_SIZE)
-            && captures_free(&binding.value, self.monotypes, |monotype| {
-                matches!(monotype, Monotype::MutableArray(_))
-            })
+            && worth_copying
             && !can_fail(&binding.value)
             && !runs_any_effect(&binding.value)
             && only_called(body, binding.local.id, parameters.len())
@@ -1205,6 +1220,39 @@ fn substitute_in_place(
     for_each_child_mut(expression, &mut |child| {
         substitute_in_place(child, local, value, monotypes)
     });
+}
+
+/// Whether the expression only computes a value: it neither builds nor runs an action, nor
+/// throws, so that a copy of it adds no effect and no failure.
+fn only_computes(expression: &Expression) -> bool {
+    let mut computes = true;
+    visit(expression, &mut |node| {
+        computes &= !matches!(
+            node.kind,
+            ExpressionKind::Foreign {
+                foreign: Foreign::Throw | Foreign::Crash | Foreign::Perform { .. },
+                ..
+            } | ExpressionKind::EffectPure(_)
+                | ExpressionKind::EffectBind { .. }
+                | ExpressionKind::EffectEach { .. }
+                | ExpressionKind::Fail(_)
+        );
+    });
+    computes
+}
+
+/// Whether every action the expression performs on a mutable array reads it.
+fn only_reads_arrays(expression: &Expression) -> bool {
+    let mut reads_only = true;
+    visit(expression, &mut |node| {
+        if let ExpressionKind::Foreign { foreign: Foreign::Perform { function, .. }, .. } =
+            &node.kind
+        {
+            reads_only &= function.name.starts_with("Peek")
+                || matches!(function.name, "Within" | "Length");
+        }
+    });
+    reads_only
 }
 
 /// Whether `expression` chooses on `local`: an `if` on it, or a `case` of it.
