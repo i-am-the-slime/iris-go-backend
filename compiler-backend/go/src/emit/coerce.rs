@@ -189,6 +189,7 @@ where
                 Ok(GoExpression::Function { parameters: vec![], result, body })
             }
             (Monotype::Array(_), Monotype::Array(_))
+            | (Monotype::Object(_), Monotype::Object(_))
             | (Monotype::Nullable(_), Monotype::Nullable(_))
             | (Monotype::Record(_), Monotype::Record(_))
             | (Monotype::Data(_), Monotype::Data(_)) => {
@@ -572,6 +573,20 @@ where
         match (self.monotypes.get(from).clone(), self.monotypes.get(to).clone()) {
             (Monotype::Array(from_element), Monotype::Array(to_element)) => {
                 self.convert_elements(value, from_element, to_element, &result_type, &mut body)?;
+            }
+            (Monotype::Object(from_element), Monotype::Object(to_element)) => {
+                let mut each = vec![];
+                let element = identifier_expression("element");
+                let converted = self.coerce(element, from_element, to_element, &mut each)?;
+                each.push(GoStatement::Return(Some(converted)));
+                let convert = GoExpression::Function {
+                    parameters: vec![("element".into(), self.go_type(from_element)?)],
+                    result: Some(self.go_type(to_element)?),
+                    body: each,
+                };
+                let map = self
+                    .go_function(GoFunction { package: GoPackage::Object, name: "FmapObject" });
+                body.push(GoStatement::Return(Some(call(map, vec![value, convert]))));
             }
             (Monotype::Nullable(from_element), Monotype::Nullable(to_element)) => {
                 let absent = binary("==", value.clone(), identifier_expression("nil"));
