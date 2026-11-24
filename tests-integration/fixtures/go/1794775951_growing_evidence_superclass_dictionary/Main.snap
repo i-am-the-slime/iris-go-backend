@@ -86,6 +86,17 @@ type Ord struct {
 	Compare func(any) func(any) Ordering
 }
 
+func Show(ordering Ordering) string {
+	switch ordering {
+	case OrderingLT:
+		return "LT"
+	case OrderingGT:
+		return "GT"
+	default: // OrderingEQ
+		return "EQ"
+	}
+}
+
 // main.go
 package main
 
@@ -153,15 +164,7 @@ func relateArrayInt(ordDictionary ordering.Ord, depth int32, left any, right any
 			if ordDictionaryCaptured.Eq0.Eq(left)(right) {
 				return "equal"
 			}
-			scrutinee := ordDictionaryCaptured.Compare(left)(right)
-			switch scrutinee {
-			case ordering.OrderingLT:
-				return "LT"
-			case ordering.OrderingGT:
-				return "GT"
-			default: // ordering.OrderingEQ
-				return "EQ"
-			}
+			return ordering.Show(ordDictionaryCaptured.Compare(left)(right))
 		}
 		original := func(array2 []any) func([]any) bool {
 			return func(array3 []any) bool {

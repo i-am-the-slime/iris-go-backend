@@ -80,7 +80,7 @@ import (
 var main_ = initializeMain_()
 
 func initializeMain_() []int32 {
-	return shared.Convert4(sampleWithIntInt(func(questions []func(int32) any) []any {
+	return shared.Convert4(func(questions []func(int32) any) []any {
 		mapped := make([]func(func(int32) int32) func(int32) int32, len(questions))
 		for index := range questions {
 			mapped[index] = category.Identity2
@@ -109,13 +109,9 @@ func initializeMain_() []int32 {
 				return tuple.First(function(tuple.Second))
 			}
 		}, shared.Convert2(mapped2)), tuple.Convert4(mapped3))
-	})(shared.Convert3([]func(int32) int32{category.Identity, func(value int32) int32 {
+	}(shared.Convert3([]func(int32) int32{category.Identity, func(value int32) int32 {
 		return value * 2
 	}})))
-}
-
-func sampleWithIntInt(sample func([]func(int32) any) []any) func([]func(int32) any) []any {
-	return sample
 }
 
 func main() {

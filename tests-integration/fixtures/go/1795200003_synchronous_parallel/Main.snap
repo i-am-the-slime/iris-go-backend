@@ -30,6 +30,14 @@ type Fiber struct {
 	Run         func()
 }
 
+func Left(left exception.Error) EitherErrorUnit {
+	return EitherErrorUnit{Tag: EitherErrorUnitLeft, Left: left}
+}
+
+func Right(right struct{}) EitherErrorUnit {
+	return EitherErrorUnit{Tag: EitherErrorUnitRight, Right: right}
+}
+
 // main.go
 package main
 
@@ -42,42 +50,39 @@ import (
 
 func main() {
 	defer eventloop.Await()
-	fiber2 := aff.NewFiber(func() struct{} {
-		func() {
-			array := []int32{1, 2, 3}
-			collected := make([]int32, len(array))
-			for index, x := range array {
-				value := x * x
-				collected[index] = value
-			}
-			array2 := aff.TraverseParArrayDirect(func(x int32) int32 {
-				aff.DelayDirect(nil, 1.0)
-				return x + 10
-			}, []int32{1, 2})
-			var i int32 = 12
-			n := foldLanes(collected, 0) + foldLanes(array2, 0) + i
-			array3 := []func() int32{func() int32 {
-				return n
-			}, func() int32 {
-				return n + 1
-			}}
-			collected2 := make([]int32, len(array3))
-			for index, x := range array3 {
-				value := x()
-				collected2[index] = value
-			}
-		}()
+	fiber := aff.NewFiber(func() struct{} {
+		array := []int32{1, 2, 3}
+		collected := make([]int32, len(array))
+		for index, x := range array {
+			value := x * x
+			collected[index] = value
+		}
+		array2 := aff.TraverseParArrayDirect(func(x int32) int32 {
+			aff.DelayDirect(nil, 1.0)
+			return x + 10
+		}, []int32{1, 2})
+		var i int32 = 12
+		n := foldLanes(collected, 0) + foldLanes(array2, 0) + i
+		array3 := []func() int32{func() int32 {
+			return n
+		}, func() int32 {
+			return n + 1
+		}}
+		collected2 := make([]int32, len(array3))
+		for index, x := range array3 {
+			value := x()
+			collected2[index] = value
+		}
 		return struct{}{}
 	})
-	isSuspended, join, kill, onComplete, run := aff.FiberFields(fiber2, func(payload exception.Error) either.EitherErrorUnit {
-		return either.EitherErrorUnit{Tag: either.EitherErrorUnitLeft, Left: payload}
+	_, _, _, _, run := aff.FiberFields(fiber, func(payload exception.Error) either.EitherErrorUnit {
+		return either.Left(payload)
 	}, func(payload struct{}) either.EitherErrorUnit {
-		return either.EitherErrorUnit{Tag: either.EitherErrorUnitRight, Right: payload}
-	}, either.EitherErrorUnit{Tag: either.EitherErrorUnitRight, Right: struct{}{}}, func(value either.OnComplete) func(func(either.EitherErrorUnit)) {
+		return either.Right(payload)
+	}, either.Right(struct{}{}), func(value either.OnComplete) func(func(either.EitherErrorUnit)) {
 		return value.Handler
 	})
-	fiber := either.Fiber{IsSuspended: isSuspended, Join: join, Kill: kill, OnComplete: onComplete, Run: run}
-	fiber.Run()
+	run()
 }
 
 // main_neon.go

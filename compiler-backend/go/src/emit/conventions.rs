@@ -330,6 +330,12 @@ where
                 }
                 continue;
             }
+            if boundary.found
+                && let Some(constructors) = boundary.maybe
+                && (constructors.just == position || constructors.nothing == position)
+            {
+                continue;
+            }
             let value = match boundary.maybe {
                 _ if let Some(destructor) = boundary.maybe_destructor
                     && destructor.position == position =>

@@ -5,21 +5,21 @@
 
 use rustc_hash::{FxHashMap, FxHashSet};
 
-use crate::foreign::{Foreign, LineCoverage};
+use crate::foreign::{Boundary, Foreign, LineCoverage};
 use crate::graph::{on_cycles, strongly_connected};
 use crate::monomorphic::traversal::{
     for_each_binder_mut, for_each_child_mut, prune_unreachable, reference_graph, visit,
 };
 use crate::monomorphic::{
     Alternative, Binding, Expression, ExpressionKind, Function, FunctionId, Guard, Guarded,
-    GuardedBranch, Literal, Local, LocalId, PATTERN_MATCH_FAILURE, PatternKind, Program,
+    GuardedBranch, Literal, Local, LocalId, PATTERN_MATCH_FAILURE, Pattern, PatternKind, Program,
     RecordUpdate,
 };
 use crate::monotype::{Monotype, MonotypeId, Monotypes};
 use crate::naming::is_vague;
 use crate::purity::{
     KnownFunctions, can_fail, captures_free, captures_reference, does_no_work, is_cheap,
-    is_discardable, is_foreign_wrapper, is_trivial, is_within_size, mentions_any,
+    is_deferrable, is_discardable, is_foreign_wrapper, is_trivial, is_within_size, mentions_any,
     occurrences_up_to, only_called, runs_any_effect, runs_effect, size,
 };
 use crate::suspension::Suspension;
@@ -27,13 +27,16 @@ use crate::timing::timed;
 use smol_str::SmolStr;
 
 use self::arguments::ArgumentSpecializations;
-use self::coverage::{binds_only, reachable};
+use self::coverage::{binds_only, decided_guards, reachable};
+use self::fold::shares_branch_with_next;
 
 mod arguments;
 mod choice;
 mod coverage;
 mod effects;
+mod find;
 mod fold;
+mod lengths;
 mod object;
 mod record;
 mod reductions;
@@ -48,6 +51,14 @@ mod uncons;
 mod unpack;
 
 const INLINE_SIZE: usize = 40;
+
+const OWN_FUNCTION_SIZE: usize = 120;
+
+/// The size of a local helper that is copied to each of its calls whatever it works on.
+const TINY_HELPER: usize = 12;
+
+/// The size of a loop body a function is still inlined with at more than one call.
+const COPIED_LOOP_BODY: usize = 8;
 
 /// The names simplification and specialization give the values they introduce.
 const MADE_UP_NAMES: &[&str] = &["argument", "binding", "element", "field", "scrutinee", "value"];
@@ -204,11 +215,84 @@ impl Simplifier<'_> {
             return None;
         }
         let function = self.functions[id.0 as usize].as_ref()?;
-        let once = self.uses[id.0 as usize] == 1;
-        // A copy of a failure saves no work, only adds another place to fail.
-        let small = self.sizes[id.0 as usize] <= INLINE_SIZE && !can_fail(&function.body);
+        // A JSON reader carries Yoga.JSON's whole reader as its slow path: it is called, the
+        // way a Go program calls `json.Unmarshal`, wherever it is used.
+        if matches!(
+            function.body.kind,
+            ExpressionKind::Foreign { foreign: Foreign::Json(crate::foreign::JsonCodec::Read), .. }
+        ) {
+            return None;
+        }
+        let once = self.uses[id.0 as usize] == 1 && !self.stands_on_its_own(id, function);
+        // A copy of a failure saves no work, only adds another place to fail; a copy of a loop
+        // saves only a call, and repeats the whole loop at every call.
+        let small = self.sizes[id.0 as usize] <= INLINE_SIZE
+            && !can_fail(&function.body)
+            && !runs_own_loop(&function.body);
         ((small || once) && !function.parameters.is_empty() || is_trivial(&function.body))
             .then_some(function)
+    }
+
+    /// Whether a function called once stays a function of its own, as the programmer named it:
+    /// one that is more than a few lines and works on plain values, such as `validRows` or a
+    /// message's decoder. Copied into its caller it saves only a call, and the caller grows by
+    /// the whole of it. A function that takes or returns a function is still copied, since its
+    /// caller's lambdas then become plain code.
+    fn stands_on_its_own(&self, id: FunctionId, function: &Function) -> bool {
+        let plain = |monotype: MonotypeId| !self.monotypes.holds_function(monotype);
+        self.sizes[id.0 as usize] > OWN_FUNCTION_SIZE
+            && function.parameters.iter().all(|parameter| plain(parameter.monotype))
+            && plain(function.result)
+    }
+
+    /// A function that only looks a data type's constructor up in a table of text, as `show`
+    /// of an enumeration does, called more than once with an argument whose constructor
+    /// the call cannot tell, not even by choosing it: one function reads better than a copy of
+    /// the table at every call, and Go inlines it itself.
+    fn keeps_table_call(
+        &self,
+        id: FunctionId,
+        function: &Function,
+        arguments: &[Expression],
+    ) -> bool {
+        if self.uses[id.0 as usize] < 2 {
+            return false;
+        }
+        let ExpressionKind::Case { scrutinees, alternatives } = &function.body.kind else {
+            return false;
+        };
+        let [scrutinee] = scrutinees.as_slice() else { return false };
+        let ExpressionKind::Local(looked_up) = scrutinee.kind else { return false };
+        let Some(position) =
+            function.parameters.iter().position(|parameter| parameter.id == looked_up)
+        else {
+            return false;
+        };
+        let text = |expression: &Expression| {
+            matches!(expression.kind, ExpressionKind::Literal(Literal::String(_)))
+        };
+        let enumeration = match self.monotypes.get(scrutinee.monotype) {
+            Monotype::Data(data) => self.monotypes.enumeration_size(data).is_some(),
+            _ => false,
+        };
+        // Only text: a table of numbers or constructors, as `fromEnum`, is often looked up by
+        // code that inlining goes on to decide.
+        let table = alternatives.len() > 1
+            && enumeration
+            && alternatives.iter().all(|alternative| {
+                matches!(&alternative.body, Guarded::Unconditional(body) if text(body))
+            });
+        let unknown = |argument: &Expression| {
+            !matches!(
+                argument.kind,
+                ExpressionKind::Literal(_)
+                    | ExpressionKind::Construct { .. }
+                    | ExpressionKind::If { .. }
+                    | ExpressionKind::Case { .. }
+                    | ExpressionKind::Let { .. }
+            )
+        };
+        table && arguments.get(position).is_some_and(unknown)
     }
 
     fn saturated_callback(&mut self, argument: Expression) -> Expression {
@@ -320,7 +404,8 @@ impl Simplifier<'_> {
                 function.parameters.extend(parameters);
                 function.body = *body;
             } else if !function.parameters.is_empty()
-                && let Some(template) = chosen_lambda_parameter(&function.body).cloned()
+                && let Some(template) =
+                    chosen_lambda_parameter(&function.body, self.monotypes).cloned()
             {
                 let parameter = self.fresh(&template);
                 let body = std::mem::replace(
@@ -377,6 +462,9 @@ impl Simplifier<'_> {
                     self.joined_comparisons(&condition, &then, &otherwise, monotype)
                 {
                     return joined;
+                }
+                if shares_branch_with_next(&condition, &then, &otherwise) {
+                    return self.boolean_choice(*condition, then, otherwise, monotype);
                 }
                 let (then, otherwise) = (Box::new(then), Box::new(otherwise));
                 ExpressionKind::If { condition, then, otherwise }
@@ -481,11 +569,7 @@ impl Simplifier<'_> {
             ),
             ExpressionKind::Access { record, label } => {
                 let record = self.expression(*record);
-                let record = match self.read_through_coercion(record, &label, monotype) {
-                    Ok(read) => return read,
-                    Err(record) => record,
-                };
-                return project(record, label, monotype);
+                return self.field_of(record, label, monotype);
             }
             ExpressionKind::Update { record, updates } => ExpressionKind::Update {
                 record: Box::new(self.expression(*record)),
@@ -527,8 +611,27 @@ impl Simplifier<'_> {
                     arguments.into_iter().map(|argument| self.expression(argument)).collect();
                 return self.apply(function, arguments, monotype);
             }
-            ExpressionKind::Lambda { parameters, body } => {
-                ExpressionKind::Lambda { parameters, body: Box::new(self.expression(*body)) }
+            ExpressionKind::Lambda { mut parameters, body } => {
+                let mut body = self.expression(*body);
+                while !matches!(body.kind, ExpressionKind::Lambda { .. })
+                    && awaits_action(body.monotype, self.monotypes)
+                    && let Some(template) = chosen_lambda_parameter(&body, self.monotypes).cloned()
+                {
+                    let parameter = self.fresh(&template);
+                    body = self.apply_chosen_lambdas(body, &parameter);
+                    parameters.push(parameter);
+                }
+                if matches!(body.kind, ExpressionKind::Apply { .. })
+                    && awaits_action(body.monotype, self.monotypes)
+                    && is_deferrable(&body)
+                    && let Some((argument, result)) = self.monotypes.function_parts(body.monotype)
+                {
+                    let name = self.monotypes.value_name(argument);
+                    let parameter = self.fresh(&Local { id: LocalId(0), name, monotype: argument });
+                    body = self.apply(body, vec![parameter.expression()], result);
+                    parameters.push(parameter);
+                }
+                ExpressionKind::Lambda { parameters, body: Box::new(body) }
             }
             ExpressionKind::Coerce(value) => {
                 let mut value = self.expression(*value);
@@ -557,8 +660,12 @@ impl Simplifier<'_> {
                 if let ExpressionKind::Literal(Literal::Boolean(value)) = condition.kind {
                     return self.expression(if value { *then } else { *otherwise });
                 }
-                let then = self.expression(*then);
-                let otherwise = self.expression(*otherwise);
+                let mut then = self.expression(*then);
+                let mut otherwise = self.expression(*otherwise);
+                if is_discardable(&condition) {
+                    settle(&mut then, &condition, true);
+                    settle(&mut otherwise, &condition, false);
+                }
                 return self.boolean_choice(condition, then, otherwise, monotype);
             }
             ExpressionKind::Case { scrutinees, alternatives } if binds_only(&alternatives) => {
@@ -601,6 +708,31 @@ impl Simplifier<'_> {
                 {
                     return distributed;
                 }
+                if let [scrutinee] = scrutinees.as_slice()
+                    && self.is_constant_path(scrutinee)
+                    && let Some(fields) = destructured_fields(&alternatives)
+                {
+                    let bindings = fields
+                        .into_iter()
+                        .map(|(label, local)| Binding {
+                            value: Expression::new(
+                                ExpressionKind::Access {
+                                    record: Box::new(scrutinee.clone()),
+                                    label,
+                                },
+                                local.monotype,
+                            ),
+                            local,
+                        })
+                        .collect();
+                    let Some(Alternative { body: Guarded::Unconditional(body), .. }) =
+                        alternatives.into_iter().next()
+                    else {
+                        unreachable!("invariant violated: the one alternative was just matched")
+                    };
+                    let kind = ExpressionKind::Let { bindings, body: Box::new(body) };
+                    return self.expression(Expression::new(kind, monotype));
+                }
                 let (bindings, scrutinees, alternatives) =
                     self.eliminate_columns(scrutinees, alternatives);
                 let alternatives: Vec<Alternative> = reachable(alternatives)
@@ -611,9 +743,17 @@ impl Simplifier<'_> {
                         position: alternative.position,
                     })
                     .collect();
+                // Guards decided by folding may leave an alternative that shadows the rest.
+                let alternatives = reachable(alternatives);
                 if let [scrutinee] = scrutinees.as_slice()
                     && let Some(chosen) = self.three_way_case(scrutinee, &alternatives, monotype)
                 {
+                    return self.let_bindings(bindings, chosen);
+                }
+                if let Some(found) = self.found_element(&scrutinees, &alternatives, monotype) {
+                    return self.let_bindings(bindings, found);
+                }
+                if let Some(chosen) = self.enumeration_case(&scrutinees, &alternatives, monotype) {
                     return self.let_bindings(bindings, chosen);
                 }
                 let case = match alternatives.first() {
@@ -674,8 +814,8 @@ impl Simplifier<'_> {
     fn guarded(&mut self, guarded: Guarded) -> Guarded {
         match guarded {
             Guarded::Unconditional(body) => Guarded::Unconditional(self.expression(body)),
-            Guarded::Guards(branches) => Guarded::Guards(
-                branches
+            Guarded::Guards(branches) => {
+                let branches = branches
                     .into_iter()
                     .map(|branch| GuardedBranch {
                         guards: branch
@@ -692,8 +832,9 @@ impl Simplifier<'_> {
                             .collect(),
                         body: self.expression(branch.body),
                     })
-                    .collect(),
-            ),
+                    .collect();
+                decided_guards(branches)
+            }
         }
     }
 
@@ -731,8 +872,9 @@ impl Simplifier<'_> {
                 // A partial application inlines too: `beta` binds the given
                 // arguments outside the lambda over the missing parameters.
                 let inlined = self.inlinable(id).and_then(|function| {
-                    (!function.parameters.is_empty())
-                        .then(|| (function.parameters.clone(), function.body.clone()))
+                    (!function.parameters.is_empty()
+                        && !self.keeps_table_call(id, function, &arguments))
+                    .then(|| (function.parameters.clone(), function.body.clone()))
                 });
                 let Some((parameters, body)) = inlined else {
                     let arguments = match self.specialized_call(id, arguments, monotype) {
@@ -854,6 +996,7 @@ impl Simplifier<'_> {
         for binding in bindings.into_iter().rev() {
             // A cell helper's two uses are told from more.
             let helper = self.is_cell_helper(&binding.value);
+            body = self.count_lengths_at_source(&binding, body);
             let uses = occurrences_up_to(&body, binding.local.id, if helper { 3 } else { 2 });
             // A record of trivial fields, such as a rank-N value's
             // specializations, is copied so that its field accesses resolve.
@@ -863,6 +1006,7 @@ impl Simplifier<'_> {
                 || matches!(binding.value.kind, ExpressionKind::Fail(_))
                 || matches!(&binding.value.kind, ExpressionKind::EffectPure(value) if is_trivial(value))
                 || trivial_record
+                || self.is_constant_path(&binding.value)
                 || self.is_coerced_record_read(&binding, &body)
                 || uses.total == 0
                 || (uses.total == 1
@@ -896,6 +1040,63 @@ impl Simplifier<'_> {
         Expression::new(ExpressionKind::Let { bindings: kept, body: Box::new(body) }, monotype)
     }
 
+    fn field_of(&mut self, record: Expression, label: SmolStr, monotype: MonotypeId) -> Expression {
+        if let Some(value) = self.constant_field(&record, &label)
+            && (value.monotype == monotype || self.monotypes.function_parts(monotype).is_none())
+        {
+            return self.coerce(value, monotype);
+        }
+        let record = match self.read_through_coercion(record, &label, monotype) {
+            Ok(read) => return read,
+            Err(record) => record,
+        };
+        project(record, label, monotype)
+    }
+
+    fn constant_field(&self, record: &Expression, label: &str) -> Option<Expression> {
+        let ExpressionKind::Record(fields) = &self.constant_value(record)?.kind else {
+            return None;
+        };
+        let (_, value) = fields.iter().find(|(field, _)| field == label)?;
+        let value = self.constant_value(value)?;
+        is_trivial(value).then(|| value.clone())
+    }
+
+    fn constant_value<'e>(&'e self, expression: &'e Expression) -> Option<&'e Expression> {
+        match &expression.kind {
+            ExpressionKind::Function(id) => {
+                let function = self.functions[id.0 as usize].as_ref()?;
+                if !function.parameters.is_empty() || self.recursive[id.0 as usize] {
+                    return Some(expression);
+                }
+                self.constant_value(&function.body).or(Some(expression))
+            }
+            ExpressionKind::Coerce(value) => self.constant_value(value),
+            ExpressionKind::Access { record, label } => {
+                let ExpressionKind::Record(fields) = &self.constant_value(record)?.kind else {
+                    return None;
+                };
+                let (_, value) = fields.iter().find(|(field, _)| field == label)?;
+                self.constant_value(value)
+            }
+            ExpressionKind::Record(_) => Some(expression),
+            _ if is_trivial(expression) => Some(expression),
+            _ => None,
+        }
+    }
+
+    fn is_constant_path(&self, expression: &Expression) -> bool {
+        match &expression.kind {
+            ExpressionKind::Access { record, .. } | ExpressionKind::Coerce(record) => {
+                self.is_constant_path(record)
+            }
+            ExpressionKind::Function(id) => self.functions[id.0 as usize]
+                .as_ref()
+                .is_some_and(|function| function.parameters.is_empty()),
+            _ => false,
+        }
+    }
+
     /// Whether a binding names an `if` or a `case` that its body uses once, other than as what
     /// it chooses on: Go assigns the choice to a variable either way, and the binding's name
     /// says what it holds, `discount` rather than `result`.
@@ -912,15 +1113,23 @@ impl Simplifier<'_> {
     /// A small local function over a mutable array of its surroundings, such as a `where`
     /// helper that peeks with a default, is inlined at each of its calls when it is only ever
     /// called. Its accesses are then seen where it is called, next to the caller's own, so that
-    /// accesses of the same indices share their bounds tests (emit/guards.rs). Any other helper
-    /// stays one function.
+    /// accesses of the same indices share their bounds tests (emit/guards.rs). So is a tiny
+    /// helper, `meanOf totals = totals.sum / totals.count`, which costs less copied than called
+    /// with its arguments built for it. Any other helper stays one function.
     fn is_small_applied_lambda(&self, binding: &Binding, body: &Expression) -> bool {
         let ExpressionKind::Lambda { parameters, .. } = &binding.value.kind else { return false };
+        let mutable = |monotype: &Monotype| matches!(monotype, Monotype::MutableArray(_));
+        // The array may as well be passed, `peekOr0 index array`, when the helper only reads
+        // it: a helper that writes a passed array stays a function over its slice.
+        let passed_array =
+            parameters.iter().any(|parameter| mutable(self.monotypes.get(parameter.monotype)));
+        let over_mutable_array = captures_free(&binding.value, self.monotypes, mutable)
+            || (passed_array && only_reads_arrays(&binding.value));
+        let tiny = is_within_size(&binding.value, TINY_HELPER) && only_computes(&binding.value);
+        let worth_copying = over_mutable_array || tiny;
         self.fuel > 0
             && is_within_size(&binding.value, INLINE_SIZE)
-            && captures_free(&binding.value, self.monotypes, |monotype| {
-                matches!(monotype, Monotype::MutableArray(_))
-            })
+            && worth_copying
             && !can_fail(&binding.value)
             && !runs_any_effect(&binding.value)
             && only_called(body, binding.local.id, parameters.len())
@@ -1024,20 +1233,26 @@ impl Simplifier<'_> {
 /// it does nothing else: its conditions, scrutinees and bindings are cheap and
 /// cannot fail, so every application may repeat them instead of sharing the
 /// chosen lambda.
-fn chosen_lambda_parameter(expression: &Expression) -> Option<&Local> {
+fn chosen_lambda_parameter<'e>(
+    expression: &'e Expression,
+    monotypes: &Monotypes,
+) -> Option<&'e Local> {
     match &expression.kind {
         ExpressionKind::Lambda { parameters, .. } => parameters.first(),
         ExpressionKind::Let { bindings, body } => {
+            let one_shot = awaits_action(expression.monotype, monotypes);
             let repeatable = |value: &Expression| {
-                is_cheap(value) || matches!(value.kind, ExpressionKind::Lambda { .. })
+                is_cheap(value)
+                    || matches!(value.kind, ExpressionKind::Lambda { .. })
+                    || (one_shot && (is_deferrable(value) || builds_action(value, monotypes)))
             };
             bindings.iter().all(|binding| repeatable(&binding.value)).then_some(())?;
-            chosen_lambda_parameter(body)
+            chosen_lambda_parameter(body, monotypes)
         }
         ExpressionKind::If { condition, then, otherwise } => {
             is_cheap(condition).then_some(())?;
-            chosen_lambda_parameter(otherwise)?;
-            chosen_lambda_parameter(then)
+            chosen_lambda_parameter(otherwise, monotypes)?;
+            chosen_lambda_parameter(then, monotypes)
         }
         ExpressionKind::Case { scrutinees, alternatives } => {
             scrutinees.iter().all(is_cheap).then_some(())?;
@@ -1045,13 +1260,14 @@ fn chosen_lambda_parameter(expression: &Expression) -> Option<&Local> {
             for alternative in alternatives {
                 match &alternative.body {
                     Guarded::Unconditional(body) => {
-                        chosen = chosen.or(Some(chosen_lambda_parameter(body)?));
+                        chosen = chosen.or(Some(chosen_lambda_parameter(body, monotypes)?));
                     }
                     Guarded::Guards(branches) => {
                         for branch in branches {
                             let cheap = branch.guards.iter().all(|guard| is_cheap(guard.value()));
                             cheap.then_some(())?;
-                            chosen = chosen.or(Some(chosen_lambda_parameter(&branch.body)?));
+                            let lambda = chosen_lambda_parameter(&branch.body, monotypes)?;
+                            chosen = chosen.or(Some(lambda));
                         }
                     }
                 }
@@ -1060,6 +1276,34 @@ fn chosen_lambda_parameter(expression: &Expression) -> Option<&Local> {
         }
         _ => None,
     }
+}
+
+fn destructured_fields(alternatives: &[Alternative]) -> Option<Vec<(SmolStr, Local)>> {
+    let [Alternative { patterns, body: Guarded::Unconditional(_), .. }] = alternatives else {
+        return None;
+    };
+    let [Pattern { kind: PatternKind::Record(fields), .. }] = patterns.as_slice() else {
+        return None;
+    };
+    let mut bound = vec![];
+    for (label, pattern) in fields {
+        match &pattern.kind {
+            PatternKind::Variable(local) => bound.push((label.clone(), local.clone())),
+            PatternKind::Wildcard => {}
+            _ => return None,
+        }
+    }
+    Some(bound)
+}
+
+fn builds_action(value: &Expression, monotypes: &Monotypes) -> bool {
+    matches!(monotypes.get(value.monotype), Monotype::Effect(_)) && !runs_any_effect(value)
+}
+
+fn awaits_action(monotype: MonotypeId, monotypes: &Monotypes) -> bool {
+    monotypes
+        .function_parts(monotype)
+        .is_some_and(|(_, result)| matches!(monotypes.get(result), Monotype::Effect(_)))
 }
 
 /// A field of a record that was just built is the field's value, once the
@@ -1136,6 +1380,60 @@ fn substitute_in_place(
     });
 }
 
+/// Whether the expression only computes a value: it neither builds nor runs an action, nor
+/// throws, so that a copy of it adds no effect and no failure.
+fn only_computes(expression: &Expression) -> bool {
+    let mut computes = true;
+    visit(expression, &mut |node| {
+        computes &= !matches!(
+            node.kind,
+            ExpressionKind::Foreign {
+                foreign: Foreign::Throw | Foreign::Crash | Foreign::Perform { .. },
+                ..
+            } | ExpressionKind::EffectPure(_)
+                | ExpressionKind::EffectBind { .. }
+                | ExpressionKind::EffectEach { .. }
+                | ExpressionKind::Fail(_)
+        );
+    });
+    computes
+}
+
+/// Whether the expression runs a loop whose body it holds, more than `sum`'s `+` or `elem`'s
+/// `==`: a copy of it repeats that body at every call. A loop over a callback it is passed or a
+/// known function, or with a body of a few nodes, is copied so that it fuses where it is used.
+fn runs_own_loop(expression: &Expression) -> bool {
+    let holds_body = |body: &Expression| !is_within_size(body, COPIED_LOOP_BODY);
+    let mut loops = false;
+    visit(expression, &mut |node| {
+        loops |= match &node.kind {
+            ExpressionKind::Foreign {
+                foreign: Foreign::Call { boundary: Boundary { iteration: Some(_), .. }, .. },
+                arguments,
+            } => arguments.first().is_some_and(|callback| {
+                matches!(&callback.kind, ExpressionKind::Lambda { body, .. } if holds_body(body))
+            }),
+            ExpressionKind::EffectEach { body, .. } => holds_body(body),
+            _ => false,
+        };
+    });
+    loops
+}
+
+/// Whether every action the expression performs on a mutable array reads it.
+fn only_reads_arrays(expression: &Expression) -> bool {
+    let mut reads_only = true;
+    visit(expression, &mut |node| {
+        if let ExpressionKind::Foreign { foreign: Foreign::Perform { function, .. }, .. } =
+            &node.kind
+        {
+            reads_only &=
+                function.name.starts_with("Peek") || matches!(function.name, "Within" | "Length");
+        }
+    });
+    reads_only
+}
+
 /// Whether `expression` chooses on `local`: an `if` on it, or a `case` of it.
 fn chooses_on(expression: &Expression, local: LocalId) -> bool {
     let mut found = false;
@@ -1148,9 +1446,36 @@ fn chooses_on(expression: &Expression, local: LocalId) -> bool {
                 .iter()
                 .any(|scrutinee| matches!(scrutinee.kind, ExpressionKind::Local(id) if id == local))
         }
+        // An enumeration's value compared with a constructor, as its derived `eq` is.
+        ExpressionKind::Foreign {
+            foreign:
+                Foreign::Operator(crate::foreign::Operator::Compare(
+                    crate::foreign::Comparison::Equal | crate::foreign::Comparison::NotEqual,
+                )),
+            arguments,
+        } => {
+            let is_local = |argument: &Expression| matches!(argument.kind, ExpressionKind::Local(id) if id == local);
+            let is_constructor = |argument: &Expression| matches!(&argument.kind, ExpressionKind::Construct { arguments, .. } if arguments.is_empty());
+            found |= matches!(arguments.as_slice(), [left, right]
+                if is_local(left) && is_constructor(right) || is_constructor(left) && is_local(right));
+        }
         _ => {}
     });
     found
+}
+
+/// Each test of `condition` within a branch that `condition` being `truth` leads to, as the
+/// branch that `truth` takes: a discardable condition reads values that never change.
+fn settle(expression: &mut Expression, condition: &Expression, truth: bool) {
+    if let ExpressionKind::If { condition: tested, then, otherwise } = &mut expression.kind
+        && **tested == *condition
+    {
+        let chosen = if truth { then } else { otherwise };
+        let unit = Expression::new(ExpressionKind::Unit, chosen.monotype);
+        *expression = std::mem::replace(chosen.as_mut(), unit);
+        return settle(expression, condition, truth);
+    }
+    for_each_child_mut(expression, &mut |child| settle(child, condition, truth));
 }
 
 fn prune(functions: Vec<Function>, entry: FunctionId) -> Program {

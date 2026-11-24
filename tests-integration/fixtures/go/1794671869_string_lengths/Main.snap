@@ -52,7 +52,7 @@ func initializeMain_() []string {
 	default:
 		result = "many"
 	}
-	return []string{strconv.Itoa(int(countSpacesUnconsingCountsUpToTwo("a b c", 0))), result, strconv.FormatBool(int32(int(int32(4))) < 4), strconv.Itoa(int(int32(2))), strconv.Itoa(int(unchangedTextLengthIsCountedBeforeTheLoop("banana", 0, 0))), strconv.Itoa(int(changedRestLengthIsCountedEachIteration("abcdefghij", 0)))}
+	return []string{strconv.Itoa(int(countSpacesUnconsingCountsUpToTwo("a b c", 0))), result, strconv.FormatBool(int(int32(4)) < 4), strconv.Itoa(int(int32(2))), strconv.Itoa(int(unchangedTextLengthIsCountedBeforeTheLoop("banana", 0, 0))), strconv.Itoa(int(changedRestLengthIsCountedEachIteration("abcdefghij", 0)))}
 }
 
 func countSpacesUnconsingCountsUpToTwo(text string, count int32) int32 {
@@ -96,19 +96,16 @@ func unchangedTextLengthIsCountedBeforeTheLoop(text string, i int32, count int32
 		if i >= textUnits.Length() {
 			return count
 		}
-		codeUnitCharAt := maybe.NoChar
-		if i >= 0 && int(i) < len(textASCII) {
-			codeUnitCharAt = maybe.Char(rune(textASCII[i]))
-		} else {
-			codeUnitCharAt = textUnits.CharAt(func(payload rune) maybe.Char {
-				return maybe.Char(payload)
-			}, maybe.NoChar, i)
-		}
 		var result2 bool
-		if codeUnitCharAt != maybe.NoChar {
-			result2 = rune(codeUnitCharAt) == 'a'
+		if i >= 0 && int(i) < len(textASCII) {
+			result2 = rune(textASCII[i]) == 'a'
 		} else {
-			result2 = false
+			left0, found := textUnits.CharAt(i)
+			if found {
+				result2 = left0 == 'a'
+			} else {
+				result2 = false
+			}
 		}
 		var result int32
 		if result2 {

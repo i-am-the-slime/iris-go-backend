@@ -260,7 +260,7 @@ where
 
             let pattern_match =
                 tree::PatternMatch::Equations(tree::EquationSource::Local(*equation_source));
-            let exhaustive = exhaustive::guarded_always_matches(context, Some(guarded));
+            let exhaustive = exhaustive::guarded_always_matches(state, context, Some(guarded))?;
             state.record_exhaustiveness(pattern_match, exhaustive);
 
             let declaration = tree::LocalDeclaration::nullary(

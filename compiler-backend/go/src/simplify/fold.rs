@@ -8,9 +8,11 @@ use std::cmp::Ordering;
 
 use super::Simplifier;
 use crate::foreign::{self, Comparison, Foreign, Operator};
-use crate::monomorphic::{Expression, ExpressionKind, Literal};
+use crate::monomorphic::{
+    Alternative, Expression, ExpressionKind, Guarded, Literal, Pattern, PatternKind,
+};
 use crate::monotype::{Monotype, MonotypeId};
-use crate::primitives::Int64Operation;
+use crate::primitives::{Int64Operation, Int64Value};
 use crate::purity::is_discardable;
 
 impl Simplifier<'_> {
@@ -39,6 +41,46 @@ impl Simplifier<'_> {
         }
     }
 
+    /// A Long operation, worked out when its operands are constants, so that
+    /// a `let` of one inlines and the zero test of a constant divisor goes.
+    pub(super) fn int64_operation(
+        &mut self,
+        foreign: &'static Foreign,
+        arguments: Vec<Expression>,
+        monotype: MonotypeId,
+    ) -> Expression {
+        let Foreign::Int64 { operation, signedness } = *foreign else {
+            unreachable!("invariant violated: a Long operation is an Int64 foreign")
+        };
+        let operands: Option<Vec<i64>> = match (operation, arguments.as_slice()) {
+            // `fromInt_ i flag`'s flag is the signedness the foreign already has.
+            (Int64Operation::FromInt, [integer, flags @ ..]) => match integer.kind {
+                ExpressionKind::Literal(Literal::Int(value))
+                    if flags.iter().all(is_discardable) =>
+                {
+                    Some(vec![value])
+                }
+                _ => None,
+            },
+            _ => arguments.iter().map(long_constant).collect(),
+        };
+        let value = operands.and_then(|operands| operation.evaluate(signedness, &operands));
+        let kind = match value {
+            Some(Int64Value::Long(bits)) => {
+                let operation = Int64Operation::Constant(bits);
+                let foreign = Foreign::Int64 { operation, signedness }.interned();
+                ExpressionKind::Foreign { foreign, arguments: vec![] }
+            }
+            Some(Int64Value::Boolean(value)) => ExpressionKind::Literal(Literal::Boolean(value)),
+            Some(Int64Value::Int(value)) => ExpressionKind::Literal(Literal::Int(i64::from(value))),
+            Some(Int64Value::Number(value)) => {
+                ExpressionKind::Literal(Literal::Number(format!("{value:?}").into()))
+            }
+            None => ExpressionKind::Foreign { foreign, arguments },
+        };
+        Expression::new(kind, monotype)
+    }
+
     /// `if c then true else false` is `c`, and with the branches swapped it is
     /// `not c`; choices by comparisons of the same two values join where they
     /// choose the same, as `joined_comparisons` says.
@@ -52,6 +94,17 @@ impl Simplifier<'_> {
         if let Some(joined) = self.joined_comparisons(&condition, &then, &otherwise, monotype) {
             return joined;
         }
+        // `if a then x else if b then x else y` is `if a || b then x else y`; a boolean `x` is
+        // left to `plain_choice`, which writes the whole choice as one condition.
+        if shares_branch_with_next(&condition, &then, &otherwise)
+            && let ExpressionKind::If { condition: next, otherwise: rest, .. } = &otherwise.kind
+        {
+            let condition_monotype = condition.monotype;
+            let next = (**next).clone();
+            let either = self.binary(Operator::BooleanOr, condition, next, condition_monotype);
+            let rest = (**rest).clone();
+            return self.boolean_choice(either, then, rest, monotype);
+        }
         self.plain_choice(condition, then, otherwise, monotype)
     }
 
@@ -63,6 +116,9 @@ impl Simplifier<'_> {
         otherwise: Expression,
         monotype: MonotypeId,
     ) -> Expression {
+        if then == otherwise && is_discardable(&condition) {
+            return then;
+        }
         match (boolean(&then), boolean(&otherwise)) {
             (Some(true), Some(false)) => condition,
             (Some(false), Some(true)) => self.not(condition, monotype),
@@ -149,8 +205,90 @@ impl Simplifier<'_> {
                 _ => operation(operator, vec![left, right], monotype),
             },
             Operator::IntAdd | Operator::StringAppend => associate(operator, left, right, monotype),
+            // `b == false` is `not b`, which turns a comparison around.
+            Operator::Compare(comparison @ (Comparison::Equal | Comparison::NotEqual))
+                if let Some((known, other)) = match (boolean(&left), boolean(&right)) {
+                    (Some(known), None) => Some((known, right.clone())),
+                    (None, Some(known)) => Some((known, left.clone())),
+                    _ => None,
+                } =>
+            {
+                match known == (comparison == Comparison::Equal) {
+                    true => other,
+                    false => self.not(other, monotype),
+                }
+            }
+            Operator::Compare(comparison) => {
+                match self.constructor_test(comparison, &left, &right, monotype) {
+                    Some(tested) => tested,
+                    None => operation(operator, vec![left, right], monotype),
+                }
+            }
             _ => operation(operator, vec![left, right], monotype),
         }
+    }
+
+    /// A value of an enumeration compared with a constructor, as `enumeration_case` writes
+    /// `eq` once inlined: two constructors fold, and a choice of constructors is a case of it,
+    /// whose alternatives then choose by what chose the constructor: `compare x y == GT` is
+    /// `x > y`.
+    fn constructor_test(
+        &mut self,
+        comparison: Comparison,
+        left: &Expression,
+        right: &Expression,
+        monotype: MonotypeId,
+    ) -> Option<Expression> {
+        let equal = comparison == Comparison::Equal;
+        let constructor = |expression: &Expression| match &expression.kind {
+            ExpressionKind::Construct { data, constructor, arguments } if arguments.is_empty() => {
+                Some((data.clone(), *constructor))
+            }
+            _ => None,
+        };
+        let is_choice = |expression: &Expression| {
+            matches!(
+                expression.kind,
+                ExpressionKind::If { .. }
+                    | ExpressionKind::Case { .. }
+                    | ExpressionKind::Let { .. }
+            )
+        };
+        let (chosen, (data, index)) = match (constructor(left), constructor(right)) {
+            (Some((_, first)), Some((_, second))) => {
+                let ordering = first.cmp(&second);
+                let holds = match comparison {
+                    Comparison::Equal => ordering.is_eq(),
+                    Comparison::NotEqual => ordering.is_ne(),
+                    Comparison::LessThan => ordering.is_lt(),
+                    Comparison::LessThanOrEqual => ordering.is_le(),
+                    Comparison::GreaterThan | Comparison::GreaterThanOrUnordered => {
+                        ordering.is_gt()
+                    }
+                    Comparison::GreaterThanOrEqual | Comparison::GreaterThanOrEqualOrUnordered => {
+                        ordering.is_ge()
+                    }
+                };
+                return Some(boolean_literal(holds, monotype));
+            }
+            _ if !matches!(comparison, Comparison::Equal | Comparison::NotEqual) => return None,
+            (None, Some(tested)) if is_choice(left) => (left.clone(), tested),
+            (Some(tested), None) if is_choice(right) => (right.clone(), tested),
+            _ => return None,
+        };
+        let pattern = |kind| Pattern { kind, monotype: chosen.monotype };
+        let tested = PatternKind::Constructor { data, constructor: index, arguments: vec![] };
+        let alternative = |pattern, outcome| Alternative {
+            patterns: vec![pattern],
+            body: Guarded::Unconditional(boolean_literal(outcome, monotype)),
+            position: None,
+        };
+        let alternatives = vec![
+            alternative(pattern(tested), equal),
+            alternative(pattern(PatternKind::Wildcard), !equal),
+        ];
+        let kind = ExpressionKind::Case { scrutinees: vec![chosen], alternatives };
+        Some(self.expression(Expression::new(kind, monotype)))
     }
 }
 
@@ -243,6 +381,47 @@ fn operation(operator: Operator, arguments: Vec<Expression>, monotype: MonotypeI
     Expression::new(ExpressionKind::Foreign { foreign, arguments }, monotype)
 }
 
+/// The bits of a constant Long.
+fn long_constant(expression: &Expression) -> Option<i64> {
+    match &expression.kind {
+        ExpressionKind::Foreign {
+            foreign: Foreign::Int64 { operation: Int64Operation::Constant(bits), .. },
+            ..
+        } => Some(*bits),
+        _ => None,
+    }
+}
+
+/// Whether a choice's `else` is a choice whose `then` is the same, so that the two conditions
+/// can join under `||`. Not for a boolean `then`, which `plain_choice` writes as one condition
+/// instead, nor for two comparisons of the same values, which say more as one comparison.
+pub(super) fn shares_branch_with_next(
+    condition: &Expression,
+    then: &Expression,
+    otherwise: &Expression,
+) -> bool {
+    let ExpressionKind::If { condition: next, then: next_then, .. } = &otherwise.kind else {
+        return false;
+    };
+    boolean(then).is_none() && **next_then == *then && !compare_same_values(condition, next)
+}
+
+fn compare_same_values(left: &Expression, right: &Expression) -> bool {
+    let operands = |expression: &Expression| match &expression.kind {
+        ExpressionKind::Foreign {
+            foreign:
+                Foreign::Operator(Operator::Compare(_))
+                | Foreign::Int64 { operation: Int64Operation::Compare(_), .. },
+            arguments,
+        } if arguments.len() == 2 => Some((arguments[0].clone(), arguments[1].clone())),
+        _ => None,
+    };
+    match (operands(left), operands(right)) {
+        (Some((a, b)), Some((c, d))) => (a == c && b == d) || (a == d && b == c),
+        _ => false,
+    }
+}
+
 fn boolean(expression: &Expression) -> Option<bool> {
     match expression.kind {
         ExpressionKind::Literal(Literal::Boolean(value)) => Some(value),
@@ -280,6 +459,9 @@ fn evaluate(foreign: Foreign, arguments: &[Expression]) -> Option<Literal> {
         }
         (foreign, [Value::Int(x), Value::Int(y)]) if foreign.calls(foreign::INT_MODULO) => {
             Value::Int(modulo(*x, *y))
+        }
+        (foreign, [Value::Number(x)]) if foreign.calls(foreign::SHOW_NUMBER) => {
+            Value::Owned(show_number(*x))
         }
         (Foreign::Operator(operator), [operand]) => unary(operator, operand)?,
         (Foreign::Operator(Operator::Compare(comparison)), [left, right]) => {
@@ -396,6 +578,42 @@ fn modulo(x: i32, y: i32) -> i32 {
     i64::from(x).rem_euclid(i64::from(y)) as i32
 }
 
+/// `show` of a Number: JavaScript's `toString`, with `.0` after a whole number it writes
+/// without an exponent, as purescript-prelude's `showNumberImpl` does.
+fn show_number(value: f64) -> String {
+    if value.is_nan() {
+        return "NaN".into();
+    }
+    if value.is_infinite() {
+        return if value < 0.0 { "-Infinity".into() } else { "Infinity".into() };
+    }
+    if value == 0.0 {
+        return "0.0".into();
+    }
+    let sign = if value < 0.0 { "-" } else { "" };
+    // Rust's exponent form spells the shortest digits that read back as the same double.
+    let scientific = format!("{:e}", value.abs());
+    let (mantissa, exponent) = scientific.split_once('e').expect("an exponent");
+    let digits: String = mantissa.chars().filter(char::is_ascii_digit).collect();
+    let point = exponent.parse::<i32>().expect("a decimal exponent") + 1;
+    let count = digits.len() as i32;
+    let written = if count <= point && point <= 21 {
+        format!("{digits}{}.0", "0".repeat((point - count) as usize))
+    } else if 0 < point && point <= 21 {
+        let (whole, fraction) = digits.split_at(point as usize);
+        format!("{whole}.{fraction}")
+    } else if -6 < point && point <= 0 {
+        format!("0.{}{digits}", "0".repeat((-point) as usize))
+    } else {
+        let (first, rest) = digits.split_at(1);
+        let rest = if rest.is_empty() { String::new() } else { format!(".{rest}") };
+        let exponent = point - 1;
+        let exponent_sign = if exponent < 0 { '-' } else { '+' };
+        format!("{first}{rest}e{exponent_sign}{}", exponent.abs())
+    };
+    format!("{sign}{written}")
+}
+
 #[allow(clippy::neg_cmp_op_on_partial_ord)]
 fn compare(comparison: Comparison, left: &Value<'_>, right: &Value<'_>) -> Option<bool> {
     if let (Value::Number(x), Value::Number(y)) = (left, right) {
@@ -433,4 +651,26 @@ fn compare(comparison: Comparison, left: &Value<'_>, right: &Value<'_>) -> Optio
 
 fn utf16_order(left: &str, right: &str) -> Ordering {
     left.encode_utf16().cmp(right.encode_utf16())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::show_number;
+
+    #[test]
+    fn numbers_show_as_javascript_writes_them() {
+        assert_eq!(show_number(1.5), "1.5");
+        assert_eq!(show_number(-2.0), "-2.0");
+        assert_eq!(show_number(-0.0), "0.0");
+        assert_eq!(show_number(100.0), "100.0");
+        assert_eq!(show_number(0.1 + 0.2), "0.30000000000000004");
+        assert_eq!(show_number(0.000001), "0.000001");
+        assert_eq!(show_number(1.5e-7), "1.5e-7");
+        assert_eq!(show_number(123456789012345680000.0), "123456789012345680000.0");
+        assert_eq!(show_number(1e21), "1e+21");
+        assert_eq!(show_number(-1.25e300), "-1.25e+300");
+        assert_eq!(show_number(f64::INFINITY), "Infinity");
+        assert_eq!(show_number(f64::NEG_INFINITY), "-Infinity");
+        assert_eq!(show_number(f64::NAN), "NaN");
+    }
 }

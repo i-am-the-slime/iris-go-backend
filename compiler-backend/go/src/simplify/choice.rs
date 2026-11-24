@@ -6,14 +6,15 @@
 use rustc_hash::FxHashMap;
 
 use super::coverage::{alternatives_size, column_outcomes};
-use super::{INLINE_SIZE, Simplifier};
+use super::{INLINE_SIZE, Simplifier, substitute};
 use crate::foreign::{
     Comparison, Foreign, GoFunction, GoPackage, MUTABLE_PEEK_UNSAFE, MUTABLE_WITHIN, Operator,
 };
 use crate::monomorphic::{
     Alternative, Binding, Expression, ExpressionKind, Guarded, Literal, Local, LocalId, Pattern,
 };
-use crate::monotype::{Monotype, MonotypeId, Monotypes};
+use crate::monotype::{DataType, Monotype, MonotypeId, Monotypes};
+use crate::purity::{is_trivial, mentions_any};
 
 /// How many more nodes distributing may copy than the case has: alternatives
 /// that several chosen values select are copied once for each.
@@ -39,12 +40,22 @@ impl Simplifier<'_> {
                 let placements = plan(&choice, alternatives, self.monotypes)?;
                 (choice, placements)
             }
+            ExpressionKind::Foreign { foreign: Foreign::UpdateAt, arguments } => {
+                let choice = self.update_choice(arguments.clone(), scrutinee.monotype)?;
+                let placements = plan(&choice, alternatives, self.monotypes)?;
+                (choice, placements)
+            }
             ExpressionKind::If { .. }
             | ExpressionKind::Let { .. }
             | ExpressionKind::Case { .. } => {
-                let placements = plan(scrutinee, alternatives, self.monotypes)?;
-                let unit = Expression::new(ExpressionKind::Unit, scrutinee.monotype);
-                (std::mem::replace(scrutinee, unit), placements)
+                if let Some(placements) = plan(scrutinee, alternatives, self.monotypes) {
+                    let unit = Expression::new(ExpressionKind::Unit, scrutinee.monotype);
+                    (std::mem::replace(scrutinee, unit), placements)
+                } else {
+                    let exposed = self.constructions_exposed(scrutinee)?;
+                    let placements = plan(&exposed, alternatives, self.monotypes)?;
+                    (exposed, placements)
+                }
             }
             _ => return None,
         };
@@ -59,6 +70,52 @@ impl Simplifier<'_> {
             simplifier.expression(case)
         });
         Some(self.let_bindings(joins, distributed))
+    }
+
+    /// The choice with each constructor its lets bind written where the local is used, its fields
+    /// bound to locals instead, `let problem = Left (f n) in if c then problem else Right n` as
+    /// `let field = f n in if c then Left field else Right n`: the constructors are then what the
+    /// choice chooses between. `None` when the choice binds no constructor.
+    fn constructions_exposed(&mut self, choice: &Expression) -> Option<Expression> {
+        let ExpressionKind::Let { bindings, body } = &choice.kind else { return None };
+        if bindings.iter().any(|binding| mentions_any(&binding.value, bindings)) {
+            return None;
+        }
+        let mut kept = vec![];
+        let mut constructions: Vec<(LocalId, Expression)> = vec![];
+        for binding in bindings {
+            let mut value = binding.value.clone();
+            for (local, construction) in &constructions {
+                value = substitute(value, *local, construction, self.monotypes);
+            }
+            let ExpressionKind::Construct { data, constructor, arguments } = value.kind else {
+                kept.push(Binding { local: binding.local.clone(), value });
+                continue;
+            };
+            let mut fields = Vec::with_capacity(arguments.len());
+            for argument in arguments {
+                if is_trivial(&argument) {
+                    fields.push(argument);
+                    continue;
+                }
+                let template =
+                    Local { id: LocalId(0), name: "field".into(), monotype: argument.monotype };
+                let field = self.fresh(&template);
+                fields.push(field.expression());
+                kept.push(Binding { local: field, value: argument });
+            }
+            let kind = ExpressionKind::Construct { data, constructor, arguments: fields };
+            constructions.push((binding.local.id, Expression::new(kind, value.monotype)));
+        }
+        if constructions.is_empty() {
+            return None;
+        }
+        let mut body = (**body).clone();
+        for (local, construction) in &constructions {
+            body = substitute(body, *local, construction, self.monotypes);
+        }
+        let kind = ExpressionKind::Let { bindings: kept, body: Box::new(body) };
+        Some(Expression::new(kind, choice.monotype))
     }
 
     /// Each joined alternative's body as a local function of the alternative's
@@ -122,7 +179,53 @@ impl Simplifier<'_> {
         let placeholder = Expression::new(ExpressionKind::Unit, element);
         let just = constructor(&self.apply(just, vec![placeholder], monotype))?;
         let nothing = constructor(&nothing)?;
+        let maybe = MaybeChoice { data, just, nothing, monotype };
+        Some(self.bounds_choice(maybe, elements, index, |elements, index| {
+            operation(Operator::ArrayIndex, vec![elements, index], element)
+        }))
+    }
 
+    /// `updateAt i x xs` as the choice the foreign makes: `Just` a copy of
+    /// `xs` with `x` at `i` when `i` is within the array, and `Nothing`
+    /// otherwise.
+    fn update_choice(
+        &mut self,
+        arguments: Vec<Expression>,
+        monotype: MonotypeId,
+    ) -> Option<Expression> {
+        let [just, nothing, index, value, elements]: [Expression; 5] =
+            arguments.try_into().expect("invariant violated: updateAt has five arguments");
+        let Monotype::Data(data) = self.monotypes.get(monotype).clone() else { return None };
+        let placeholder = Expression::new(ExpressionKind::Unit, elements.monotype);
+        let just = constructor(&self.apply(just, vec![placeholder], monotype))?;
+        let nothing = constructor(&nothing)?;
+        let maybe = MaybeChoice { data, just, nothing, monotype };
+        let mut bindings = vec![];
+        let value = self.shared_operand(value, "value", &mut bindings);
+        let array = elements.monotype;
+        let choice = self.bounds_choice(maybe, elements, index, |elements, index| {
+            let kind = ExpressionKind::Foreign {
+                foreign: &Foreign::ArrayUpdated,
+                arguments: vec![index, value, elements],
+            };
+            Expression::new(kind, array)
+        });
+        if bindings.is_empty() {
+            return Some(choice);
+        }
+        Some(Expression::new(ExpressionKind::Let { bindings, body: Box::new(choice) }, monotype))
+    }
+
+    /// `Just (found elements index)` when `index` is within `elements`, and
+    /// `Nothing` otherwise.
+    fn bounds_choice(
+        &mut self,
+        maybe: MaybeChoice,
+        elements: Expression,
+        index: Expression,
+        found: impl FnOnce(Expression, Expression) -> Expression,
+    ) -> Expression {
+        let MaybeChoice { data, just, nothing, monotype } = maybe;
         let mut bindings = vec![];
         let elements = self.shared_operand(elements, "elements", &mut bindings);
         let index = self.shared_operand(index, "index", &mut bindings);
@@ -145,7 +248,7 @@ impl Simplifier<'_> {
             vec![non_negative, below_length],
             boolean,
         );
-        let found = operation(Operator::ArrayIndex, vec![elements, index], element);
+        let found = found(elements, index);
         let construct = |constructor, arguments| {
             let kind = ExpressionKind::Construct { data: data.clone(), constructor, arguments };
             Expression::new(kind, monotype)
@@ -157,10 +260,18 @@ impl Simplifier<'_> {
         };
         let choice = Expression::new(kind, monotype);
         if bindings.is_empty() {
-            return Some(choice);
+            return choice;
         }
-        Some(Expression::new(ExpressionKind::Let { bindings, body: Box::new(choice) }, monotype))
+        Expression::new(ExpressionKind::Let { bindings, body: Box::new(choice) }, monotype)
     }
+}
+
+/// The Maybe a bounds test chooses between.
+struct MaybeChoice {
+    data: DataType,
+    just: usize,
+    nothing: usize,
+    monotype: MonotypeId,
 }
 
 impl Simplifier<'_> {
@@ -295,6 +406,15 @@ pub(super) fn negative_within(
         monotypes.intern(Monotype::Boolean),
     );
     Some(Expression::new(ExpressionKind::EffectPure(Box::new(outside)), monotype))
+}
+
+/// The copy that an `updateAt` whose index turned out to be a constant below zero
+/// makes where its bounds test passes, which it never does: the array itself, as
+/// Go rejects the constant negative index even where it cannot run.
+pub(super) fn negative_update(foreign: &Foreign, arguments: &[Expression]) -> Option<Expression> {
+    let (Foreign::ArrayUpdated, [index, _, elements]) = (foreign, arguments) else { return None };
+    let ExpressionKind::Literal(Literal::Int(index)) = index.kind else { return None };
+    (index < 0).then(|| elements.clone())
 }
 
 /// Data.Array.ST's peek.

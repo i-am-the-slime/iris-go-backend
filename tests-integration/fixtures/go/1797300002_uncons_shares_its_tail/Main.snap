@@ -35,7 +35,7 @@ func main_() int32 {
 	numbers := []int32{4, 5}
 	numbers2 := []int32{}
 	var result2 maybe.HeadTail
-	if int32(len(numbers)) == 0 {
+	if len(numbers) == 0 {
 		result2 = maybe.NoHeadTail
 	} else {
 		result2 = maybe.JustHeadTail(shared.HeadTail{Head: numbers[0], Tail: array.Tail(numbers)})
@@ -48,7 +48,7 @@ func main_() int32 {
 		result = -1
 	}
 	var result3 maybe.HeadTail
-	if int32(len(numbers2)) == 0 {
+	if len(numbers2) == 0 {
 		result3 = maybe.NoHeadTail
 	} else {
 		result3 = maybe.JustHeadTail(shared.HeadTail{Head: numbers2[0], Tail: array.Tail(numbers2)})
@@ -66,7 +66,7 @@ func main_() int32 {
 func summed(total int32, remaining []int32) int32 {
 	for {
 		var result maybe.HeadTail
-		if int32(len(remaining)) == 0 {
+		if len(remaining) == 0 {
 			result = maybe.NoHeadTail
 		} else {
 			result = maybe.JustHeadTail(shared.HeadTail{Head: remaining[0], Tail: array.Tail(remaining)})

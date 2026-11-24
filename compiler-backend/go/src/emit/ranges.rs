@@ -60,17 +60,22 @@ impl InPlace {
 }
 
 /// Whether `element` only has its fields read in `body`, outside closures, and
-/// `array` is neither rebound nor reassigned there.
+/// `array` is neither rebound nor reassigned there. A body reading more than a couple of the
+/// element's fields keeps its copy, which reads better than `array[index]` at each of them.
 fn reads_in_place(body: &mut Vec<GoStatement>, element: &str, array: &str) -> bool {
-    let mut check = Check { element, array, reads: 0, refused: false, closure: false };
+    let mut check =
+        Check { element, array, fields: FxHashSet::default(), refused: false, closure: false };
     check.block(body);
-    !check.refused && check.reads > 0
+    !check.refused && !check.fields.is_empty() && check.fields.len() <= FIELDS_READ_IN_PLACE
 }
+
+/// The most distinct fields of an element a loop reads in place.
+const FIELDS_READ_IN_PLACE: usize = 2;
 
 struct Check<'a> {
     element: &'a str,
     array: &'a str,
-    reads: usize,
+    fields: FxHashSet<String>,
     refused: bool,
     /// Whether the code visited is inside a function literal.
     closure: bool,
@@ -120,10 +125,10 @@ impl Walk for Check<'_> {
 
     fn expression(&mut self, value: &mut GoExpression) {
         match value {
-            GoExpression::Field { value: base, .. } if matches!(&**base, GoExpression::Identifier(name) if name == self.element) =>
+            GoExpression::Field { value: base, name: field } if matches!(&**base, GoExpression::Identifier(name) if name == self.element) =>
             {
                 self.refused |= self.closure;
-                self.reads += 1;
+                self.fields.insert(field.clone());
                 return;
             }
             GoExpression::Identifier(name) => self.refused |= name == self.element,

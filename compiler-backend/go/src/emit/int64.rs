@@ -6,8 +6,8 @@
 //! is worked out here, with wrapping, and written as one constant.
 
 use super::{Emitter, binary, negated};
-use crate::foreign::Comparison;
-use crate::primitives::{Int64Operation, Signedness};
+use crate::foreign::{Comparison, GoFunction, GoPackage};
+use crate::primitives::{Int64Operation, Int64Value, Signedness};
 use crate::syntax::{GoExpression, GoType};
 
 impl<'p, Q> Emitter<'p, '_, '_, Q>
@@ -49,6 +49,7 @@ where
             Operation::Add => arithmetic("+", values),
             Operation::Subtract => arithmetic("-", values),
             Operation::Multiply => arithmetic("*", values),
+            Operation::Quotient | Operation::Remainder => self.division(operation, values),
             Operation::And => arithmetic("&", values),
             Operation::Or => arithmetic("|", values),
             Operation::Xor => arithmetic("^", values),
@@ -113,67 +114,34 @@ where
         }
     }
 
-    /// The operation on constant operands, worked out as Go would at run time.
+    /// The operation on constant operands, worked out as long.js would at run time.
     fn folded(
         &mut self,
         operation: Int64Operation,
         signedness: Signedness,
         constants: &[i64],
     ) -> Option<GoExpression> {
-        use Int64Operation as Operation;
-        let unsigned = signedness == Signedness::Unsigned;
-        let long = |bits: i64| Some(long_literal(bits, signedness));
-        let compare = |comparison: Comparison, x: i64, y: i64| {
-            let ordering = if unsigned { (x as u64).cmp(&(y as u64)) } else { x.cmp(&y) };
-            GoExpression::Boolean(match comparison {
-                Comparison::Equal => ordering.is_eq(),
-                Comparison::NotEqual => ordering.is_ne(),
-                Comparison::LessThan => ordering.is_lt(),
-                Comparison::LessThanOrEqual => ordering.is_le(),
-                Comparison::GreaterThan | Comparison::GreaterThanOrUnordered => ordering.is_gt(),
-                Comparison::GreaterThanOrEqual | Comparison::GreaterThanOrEqualOrUnordered => {
-                    ordering.is_ge()
-                }
-            })
+        Some(match operation.evaluate(signedness, constants)? {
+            Int64Value::Long(bits) => long_literal(bits, signedness),
+            Int64Value::Boolean(value) => GoExpression::Boolean(value),
+            Int64Value::Int(value) => GoExpression::Integer(i64::from(value)),
+            Int64Value::Number(value) => self.number_constant(value),
+        })
+    }
+
+    /// `divide_` or `modulo_`: Go's own operator where the divisor is a
+    /// constant other than zero, and otherwise the runtime's, which throws
+    /// for zero as long.js does.
+    fn division(&mut self, operation: Int64Operation, values: Vec<GoExpression>) -> GoExpression {
+        let (operator, runtime) = match operation {
+            Int64Operation::Quotient => ("/", "Divide_"),
+            _ => ("%", "Modulo_"),
         };
-        match (operation, constants) {
-            (Operation::Constant(bits), []) => long(bits),
-            (Operation::Convert | Operation::Same, [x]) => long(*x),
-            (Operation::Add, [x, y]) => long(x.wrapping_add(*y)),
-            (Operation::Subtract, [x, y]) => long(x.wrapping_sub(*y)),
-            (Operation::Multiply, [x, y]) => long(x.wrapping_mul(*y)),
-            (Operation::And, [x, y]) => long(x & y),
-            (Operation::Or, [x, y]) => long(x | y),
-            (Operation::Xor, [x, y]) => long(x ^ y),
-            (Operation::Negate, [x]) => long(x.wrapping_neg()),
-            (Operation::Not, [x]) => long(!x),
-            (Operation::ShiftLeft, [x, y]) => long(x.wrapping_shl((y & 63) as u32)),
-            (Operation::ShiftRight, [x, y]) => long(x >> (y & 63)),
-            (Operation::ShiftRightUnsigned, [x, y]) => long(((*x as u64) >> (y & 63)) as i64),
-            (Operation::Compare(comparison), [x, y]) => Some(compare(comparison, *x, *y)),
-            (Operation::IsZero, [x]) => Some(GoExpression::Boolean(*x == 0)),
-            (Operation::IsEven, [x]) => Some(GoExpression::Boolean(x & 1 == 0)),
-            (Operation::IsOdd, [x]) => Some(GoExpression::Boolean(x & 1 == 1)),
-            (Operation::IsNegative, [x]) => Some(GoExpression::Boolean(!unsigned && *x < 0)),
-            (Operation::IsPositive, [x]) => Some(GoExpression::Boolean(unsigned || *x >= 0)),
-            (Operation::IsUnsigned, [_]) => Some(GoExpression::Boolean(unsigned)),
-            (Operation::ToInt, [x]) => Some(GoExpression::Integer(i64::from(*x as i32))),
-            (Operation::ToNumber, [x]) => {
-                let value = if unsigned { *x as u64 as f64 } else { *x as f64 };
-                Some(self.number_constant(value))
-            }
-            (Operation::HighBits { unsigned }, [x]) => {
-                let high = (x >> 32) as i32;
-                let value = if unsigned { f64::from(high as u32) } else { f64::from(high) };
-                Some(self.number_constant(value))
-            }
-            (Operation::LowBits { unsigned }, [x]) => {
-                let low = *x as i32;
-                let value = if unsigned { f64::from(low as u32) } else { f64::from(low) };
-                Some(self.number_constant(value))
-            }
-            _ => None,
+        if long_constant(&values[1]).is_some_and(|divisor| divisor != 0) {
+            return arithmetic(operator, values);
         }
+        let function = self.go_function(GoFunction { package: GoPackage::Int64, name: runtime });
+        GoExpression::Call { function: Box::new(function), arguments: values }
     }
 }
 

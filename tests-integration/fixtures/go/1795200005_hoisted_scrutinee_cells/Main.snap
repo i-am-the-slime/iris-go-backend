@@ -36,6 +36,10 @@ const (
 	ShapeWrap
 )
 
+func Leaf(leaf *list.ListInt) *Shape {
+	return &Shape{Tag: ShapeLeaf, Leaf: leaf}
+}
+
 func main_() int32 {
 	accumulator := list.SharedListIntNil
 	var listIntCells alloc.Cells[list.ListInt]
@@ -43,7 +47,7 @@ func main_() int32 {
 		i := []int32{}[index]
 		accumulator = listIntCells.New(list.ListInt{Cons0: i, Cons1: accumulator})
 	}
-	scrutinee := &Shape{Tag: ShapeLeaf, Leaf: accumulator}
+	scrutinee := Leaf(accumulator)
 	var result2 *Shape
 	if scrutinee.Tag == ShapeBranch && scrutinee.Branch0.Tag == ShapeWrap && scrutinee.Branch2.Tag == ShapeBranch {
 		accumulator2 := list.SharedListIntNil
@@ -61,7 +65,7 @@ func main_() int32 {
 			i := []int32{}[index]
 			accumulator2 = listIntCells3.New(list.ListInt{Cons0: i, Cons1: accumulator2})
 		}
-		*scrutinee = Shape{Tag: ShapeLeaf, Leaf: accumulator2}
+		scrutinee.Leaf = accumulator2
 		result2 = scrutinee
 	} else {
 		array := []int32{1}
@@ -71,7 +75,7 @@ func main_() int32 {
 			i := array[index]
 			accumulator2 = listIntCells4.New(list.ListInt{Cons0: i, Cons1: accumulator2})
 		}
-		result2 = &Shape{Tag: ShapeLeaf, Leaf: accumulator2}
+		result2 = Leaf(accumulator2)
 	}
 	var result int32
 	if result2.Tag == ShapeLeaf && result2.Leaf != list.SharedListIntNil {

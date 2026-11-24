@@ -29,27 +29,35 @@ func ShowInt(i int32) string {
 }
 
 func AppendShowArrayInt(buffer []byte, array []int32) []byte {
-	buffer = append(buffer, "["...)
+	buffer = append(buffer, '[')
 	for index, element := range array {
 		if index > 0 {
-			buffer = append(buffer, ","...)
+			buffer = append(buffer, ',')
 		}
 		buffer = strconv.AppendInt(buffer, int64(element), 10)
 	}
-	buffer = append(buffer, "]"...)
+	buffer = append(buffer, ']')
 	return buffer
 }
 
 func AppendShowArrayNumber(buffer []byte, array []float64) []byte {
-	buffer = append(buffer, "["...)
+	buffer = append(buffer, '[')
 	for index, element := range array {
 		if index > 0 {
-			buffer = append(buffer, ","...)
+			buffer = append(buffer, ',')
 		}
 		buffer = prim.AppendShowNumber(buffer, element)
 	}
-	buffer = append(buffer, "]"...)
+	buffer = append(buffer, ']')
 	return buffer
+}
+
+func ArrayInt(array []int32) string {
+	return string(AppendShowArrayInt(nil, array))
+}
+
+func ArrayNumber(array []float64) string {
+	return string(AppendShowArrayNumber(nil, array))
 }
 
 // main.go
@@ -69,7 +77,7 @@ import (
 var main_ = initializeMain_()
 
 func initializeMain_() []string {
-	array2 := array.Thaw([]float64{1.0, 2.0, 3.0})()
+	array2 := array.Thaw([]float64{1.0, 2.0, 3.0})
 	elements := *array2
 	for i := int32(0); i < 3; i++ {
 		within := int(i) < len(elements)
@@ -112,7 +120,7 @@ func initializeMain_() []string {
 	var number2 float64
 	number2 = (*array2)[i3]
 	array3 := shared.Copied(*array2)
-	performed := array.Append([]string{string(show.AppendShowArrayNumber(nil, array3)), prim.ShowNumber(edge), prim.ShowNumber(number + number2)}, array.Append(pull, array.Append(countBefore, sortEach)))
+	performed := array.Append([]string{show.ArrayNumber(array3), prim.ShowNumber(edge), prim.ShowNumber(number + number2)}, array.Append(pull, array.Append(countBefore, sortEach)))
 	return performed
 }
 
@@ -179,11 +187,11 @@ func smooth(array []float64, i int32) {
 var pull = initializePull()
 
 func initializePull() []string {
-	array2 := *array.Thaw([]float64{0.0, 1.0, 3.0})()
-	array3 := *array.Thaw([]float64{0.0, 2.0, -1.0})()
-	array4 := *array.Thaw([]float64{0.0, 0.0, 0.0})()
-	array5 := *array.Thaw([]float64{0.0, 0.5, 0.0})()
-	array6 := *array.Thaw([]float64{2.0, 1.0, 0.5})()
+	array2 := *array.Thaw([]float64{0.0, 1.0, 3.0})
+	array3 := *array.Thaw([]float64{0.0, 2.0, -1.0})
+	array4 := *array.Thaw([]float64{0.0, 0.0, 0.0})
+	array5 := *array.Thaw([]float64{0.0, 0.5, 0.0})
+	array6 := *array.Thaw([]float64{2.0, 1.0, 0.5})
 	for ignored := int32(0); ignored < 3; ignored++ {
 		for i := int32(0); i < 3; i++ {
 			for j := int32(0); j < 3; j++ {
@@ -265,15 +273,15 @@ func initializePull() []string {
 	}
 	array7 := shared.Copied(array2)
 	array8 := shared.Copied(array3)
-	performed := []string{string(show.AppendShowArrayNumber(nil, array7)), string(show.AppendShowArrayNumber(nil, array8))}
+	performed := []string{show.ArrayNumber(array7), show.ArrayNumber(array8)}
 	return performed
 }
 
 var countBefore = initializeCountBefore()
 
 func initializeCountBefore() []string {
-	words := *array.Thaw([]string{"pear", "apple", "fig"})()
-	counts := *array.Thaw([]int32{0, 0, 0})()
+	words := *array.Thaw([]string{"pear", "apple", "fig"})
+	counts := *array.Thaw([]int32{0, 0, 0})
 	for i := int32(0); i < 3; i++ {
 		for j := int32(0); j < 3; j++ {
 			within := int(i) < len(words)
@@ -300,35 +308,34 @@ func initializeCountBefore() []string {
 		}
 	}
 	array2 := shared.Copied(counts)
-	performed := []string{string(show.AppendShowArrayInt(nil, array2))}
+	performed := []string{show.ArrayInt(array2)}
 	return performed
 }
 
 var sortEach = initializeSortEach()
 
 func initializeSortEach() []string {
-	array2 := array.Thaw([]int32{3, 1, 2})()
-	array3 := *array.Thaw([]int32{0, 0})()
+	array2 := array.Thaw([]int32{3, 1, 2})
+	array3 := *array.Thaw([]int32{0, 0})
 	for i := int32(0); i < 2; i++ {
-		direct.SortByMutable(func(a int32, b int32) ordering.Ordering {
+		direct.SortByMutable(array2, func(a int32, b int32) int {
 			i2 := b + i
+			var result ordering.Ordering
 			if i2 < a {
-				return ordering.OrderingLT
+				result = ordering.OrderingLT
+			} else if i2 == a {
+				result = ordering.OrderingEQ
+			} else {
+				result = ordering.OrderingGT
 			}
-			if i2 == a {
-				return ordering.OrderingEQ
-			}
-			return ordering.OrderingGT
-		}, func(value ordering.Ordering) int32 {
-			switch value {
+			switch result {
+			case ordering.OrderingLT:
+				return -1
 			case ordering.OrderingGT:
 				return 1
-			case ordering.OrderingEQ:
-				return 0
-			default: // ordering.OrderingLT
-				return -1
 			}
-		}, array2)
+			return 0
+		})
 		within := 0 < len(*array2)
 		var i3 int32
 		if within {
@@ -344,7 +351,7 @@ func initializeSortEach() []string {
 	}
 	array4 := shared.Copied(*array2)
 	array5 := shared.Copied(array3)
-	performed := []string{string(show.AppendShowArrayInt(nil, array4)), string(show.AppendShowArrayInt(nil, array5))}
+	performed := []string{show.ArrayInt(array4), show.ArrayInt(array5)}
 	return performed
 }
 

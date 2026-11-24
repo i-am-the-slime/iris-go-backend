@@ -24,14 +24,14 @@ func Show(ordering Ordering) string {
 }
 
 func AppendShowArrayOrdering(buffer []byte, array []Ordering) []byte {
-	buffer = append(buffer, "["...)
+	buffer = append(buffer, '[')
 	for index, element := range array {
 		if index > 0 {
-			buffer = append(buffer, ","...)
+			buffer = append(buffer, ',')
 		}
 		buffer = AppendShow(buffer, element)
 	}
-	buffer = append(buffer, "]"...)
+	buffer = append(buffer, ']')
 	return buffer
 }
 
@@ -47,6 +47,10 @@ func AppendShow(buffer []byte, ordering Ordering) []byte {
 	return buffer
 }
 
+func ArrayOrdering(array []Ordering) string {
+	return string(AppendShowArrayOrdering(nil, array))
+}
+
 // Data/Show/show.go
 package show
 
@@ -57,25 +61,20 @@ func Show(s string) string {
 }
 
 func AppendShowArrayString(buffer []byte, array []string) []byte {
-	buffer = append(buffer, "["...)
+	buffer = append(buffer, '[')
 	for index, element := range array {
 		if index > 0 {
-			buffer = append(buffer, ","...)
+			buffer = append(buffer, ',')
 		}
 		buffer = prim.AppendShowString(buffer, element)
 	}
-	buffer = append(buffer, "]"...)
+	buffer = append(buffer, ']')
 	return buffer
 }
 
-// Type/Proxy/proxy.go
-package proxy
-
-type Proxy uint8
-
-const (
-	ProxyProxy Proxy = iota
-)
+func ArrayString(array []string) string {
+	return string(AppendShowArrayString(nil, array))
+}
 
 // main.go
 package main
@@ -83,7 +82,6 @@ package main
 import (
 	"fixture/Data/Ordering"
 	"fixture/Data/Show"
-	"fixture/Type/Proxy"
 	arraypkg "github.com/i-am-the-slime/iris-go/array"
 	"github.com/i-am-the-slime/iris-go/console"
 	"slices"
@@ -104,7 +102,7 @@ func initializeMain_() []string {
 	for index, reified := range array2 {
 		mapped2[index] = reified
 	}
-	return []string{"42", "-8", "7", "erin!", "false", "false", "greater", string(show.AppendShowArrayString(nil, mapped)), string(show.AppendShowArrayString(nil, reifiedEach(0, []string{}))), string(ordering.AppendShowArrayOrdering(nil, mapped2))}
+	return []string{"42", "-8", "7", "erin!", "false", "false", "greater", show.ArrayString(mapped), show.ArrayString(reifiedEach(0, []string{})), ordering.ArrayOrdering(mapped2)}
 }
 
 func reifiedEach(n int32, done []string) []string {
@@ -113,12 +111,8 @@ func reifiedEach(n int32, done []string) []string {
 		if n > 3 {
 			return done
 		}
-		n, done = n+1, arraypkg.Bounded(append(done, "n="+strconv.Itoa(int(reifiedEachDictionaryReflectType(n, proxy.ProxyProxy)*10+n))+"n="+strconv.Itoa(int(reifiedEachDictionaryReflectType(n, proxy.ProxyProxy)*10+1))))
+		n, done = n+1, arraypkg.Bounded(append(done, "n="+strconv.Itoa(int(n*10+n))+"n="+strconv.Itoa(int(n*10+1))))
 	}
-}
-
-func reifiedEachDictionaryReflectType(n int32, proxy proxy.Proxy) int32 {
-	return n
 }
 
 func main() {

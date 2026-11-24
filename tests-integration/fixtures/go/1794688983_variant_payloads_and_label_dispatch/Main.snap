@@ -19,27 +19,17 @@ const (
 	InvalidLateMissingMissing
 )
 
-type InvalidMissing struct {
-	Missing string
-	Invalid int32
-	Tag     uint8
+func Missing(missing string) InvalidLateMissing {
+	return InvalidLateMissing{Tag: InvalidLateMissingMissing, Missing: missing}
 }
 
-const (
-	InvalidMissingInvalid = iota
-	InvalidMissingMissing
-)
-
-type LateMissing struct {
-	Missing string
-	Late    shared.After
-	Tag     uint8
+func Invalid(invalid int32) InvalidLateMissing {
+	return InvalidLateMissing{Tag: InvalidLateMissingInvalid, Invalid: invalid}
 }
 
-const (
-	LateMissingLate = iota
-	LateMissingMissing
-)
+func Late(late shared.After) InvalidLateMissing {
+	return InvalidLateMissing{Tag: InvalidLateMissingLate, Late: late}
+}
 
 // Record/Studio/Shrink/shrink.go
 package shrink
@@ -84,15 +74,15 @@ func initializeMain_() []string {
 func byLabel(variant2 variant.InvalidLateMissing) string {
 	switch variant2.Tag {
 	case variant.InvalidLateMissingInvalid:
-		return byLabelX(variant.InvalidMissing{Tag: variant.InvalidMissingInvalid, Invalid: variant2.Invalid})
+		return "invalid " + strconv.Itoa(int(variant2.Invalid))
 	case variant.InvalidLateMissingLate:
 		return "late " + strconv.Itoa(int(variant2.Late.After))
 	default: // variant.InvalidLateMissingMissing
-		return byLabelX(variant.InvalidMissing{Tag: variant.InvalidMissingMissing, Missing: variant2.Missing})
+		return "missing " + variant2.Missing
 	}
 }
 
-var problems []variant.InvalidLateMissing = []variant.InvalidLateMissing{{Tag: variant.InvalidLateMissingMissing, Missing: "user"}, {Tag: variant.InvalidLateMissingInvalid, Invalid: 3}, {Tag: variant.InvalidLateMissingLate, Late: shared.After{After: 5}}}
+var problems []variant.InvalidLateMissing = []variant.InvalidLateMissing{variant.Missing("user"), variant.Invalid(3), variant.Late(shared.After{After: 5})}
 
 func byRecord(variant2 variant.InvalidLateMissing) string {
 	switch variant2.Tag {
@@ -110,9 +100,9 @@ func someLabels(variant2 variant.InvalidLateMissing) string {
 	case variant.InvalidLateMissingInvalid:
 		return strconv.Itoa(int(variant2.Invalid + 1))
 	case variant.InvalidLateMissingLate:
-		return someLabelsFallback(variant.LateMissing{Tag: variant.LateMissingLate, Late: variant2.Late})
+		return "unhandled"
 	default: // variant.InvalidLateMissingMissing
-		return someLabelsFallback(variant.LateMissing{Tag: variant.LateMissingMissing, Missing: variant2.Missing})
+		return "unhandled"
 	}
 }
 
@@ -120,19 +110,6 @@ var shrunk = initializeShrunk()
 
 func initializeShrunk() shared.BaseName {
 	return shrink.ShrinkBaseNameScaleBaseNameScaleConsIntConsStringNil(shared.BaseNameScale{Base: 1, Name: "context", Scale: 2})
-}
-
-func byLabelX(variant2 variant.InvalidMissing) string {
-	switch variant2.Tag {
-	case variant.InvalidMissingInvalid:
-		return "invalid " + strconv.Itoa(int(variant2.Invalid))
-	default: // variant.InvalidMissingMissing
-		return "missing " + variant2.Missing
-	}
-}
-
-func someLabelsFallback(variant variant.LateMissing) string {
-	return "unhandled"
 }
 
 func main() {

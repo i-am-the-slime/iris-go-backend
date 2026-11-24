@@ -18,15 +18,19 @@ func Show(s string) string {
 }
 
 func AppendShowArrayString(buffer []byte, array []string) []byte {
-	buffer = append(buffer, "["...)
+	buffer = append(buffer, '[')
 	for index, element := range array {
 		if index > 0 {
-			buffer = append(buffer, ","...)
+			buffer = append(buffer, ',')
 		}
 		buffer = prim.AppendShowString(buffer, element)
 	}
-	buffer = append(buffer, "]"...)
+	buffer = append(buffer, ']')
 	return buffer
+}
+
+func ArrayString(array []string) string {
+	return string(AppendShowArrayString(nil, array))
 }
 
 // main.go
@@ -68,9 +72,13 @@ func initializeMain_() []string {
 		x := array3[index]
 		accumulator2 = strconv.Itoa(int(x)) + "," + accumulator2
 	}
-	codeUnitCharAt := prim.CodeUnitCharAt(func(payload rune) maybe.Char {
-		return maybe.Char(payload)
-	}, maybe.NoChar, 0, "abc")
+	value2, found := prim.CodeUnitCharAt(0, "abc")
+	var codeUnitCharAt maybe.Char
+	if found {
+		codeUnitCharAt = maybe.Char(value2)
+	} else {
+		codeUnitCharAt = maybe.NoChar
+	}
 	var result string
 	if codeUnitCharAt != maybe.NoChar && rune(codeUnitCharAt) == 'a' {
 		result = "starts with a"
@@ -80,36 +88,26 @@ func initializeMain_() []string {
 		result = "empty"
 	}
 	n := opaque(7)
-	n2 := opaque(12)
-	var result2 Light
+	var left Light
 	if n > 10 {
-		result2 = LightRed
+		left = LightRed
 	} else if n > 5 {
-		result2 = LightAmber
+		left = LightAmber
 	} else {
-		result2 = LightGreen
+		left = LightGreen
 	}
-	var result3 Light
+	n2 := opaque(12)
+	var right Light
 	if n2 > 10 {
-		result3 = LightRed
+		right = LightRed
 	} else if n2 > 5 {
-		result3 = LightAmber
+		right = LightAmber
 	} else {
-		result3 = LightGreen
-	}
-	var result4 string
-	if result2 == LightRed && result3 == LightRed {
-		result4 = "true"
-	} else if result2 == LightAmber && result3 == LightAmber {
-		result4 = "true"
-	} else if result2 == LightGreen && result3 == LightGreen {
-		result4 = "true"
-	} else {
-		result4 = "false"
+		right = LightGreen
 	}
 	n3 := opaque(3)
-	result5 := !(n3 > 10) && n3 <= 5
-	return []string{strconv.Itoa(int(accumulator)), string(show.AppendShowArrayString(nil, mapped)), accumulator2, result, result4, strconv.FormatBool(result5)}
+	result2 := !(n3 > 10) && n3 <= 5
+	return []string{strconv.Itoa(int(accumulator)), show.ArrayString(mapped), accumulator2, result, strconv.FormatBool(left == right), strconv.FormatBool(result2)}
 }
 
 func opaque(x int32) int32 {

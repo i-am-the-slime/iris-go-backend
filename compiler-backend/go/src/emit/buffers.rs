@@ -88,6 +88,11 @@ pub(super) fn byte_slice() -> GoType {
 
 /// `[]byte(value)`: a buffer of its own, whatever shares the string.
 pub(super) fn to_bytes(value: GoExpression) -> GoExpression {
+    // An empty buffer is nil, which `append` grows as it would any other.
+    if matches!(&value, GoExpression::String(text) if text.is_empty()) {
+        let nil = GoExpression::Identifier("nil".into());
+        return GoExpression::Conversion { type_: byte_slice(), value: Box::new(nil) };
+    }
     GoExpression::Conversion { type_: byte_slice(), value: Box::new(value) }
 }
 

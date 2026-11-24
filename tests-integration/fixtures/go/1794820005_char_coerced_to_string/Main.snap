@@ -1,13 +1,6 @@
 ---
 source: tests-integration/src/fixtures.rs
 ---
-// Control/Category/category.go
-package category
-
-func Identity(x string) string {
-	return x
-}
-
 // Data/Semigroup/semigroup.go
 package semigroup
 
@@ -21,7 +14,6 @@ func Append_(s string, s2 string) string {
 package main
 
 import (
-	"fixture/Control/Category"
 	"fixture/Data/Semigroup"
 	"fixture/shared"
 	arraypkg "github.com/i-am-the-slime/iris-go/array"
@@ -34,7 +26,7 @@ func initializeMain_() string {
 	array := shared.Convert(arraypkg.Append([]rune{'a'}, []rune{'b', 'c'}))
 	mapped := make([]string, len(array))
 	for index, element := range array {
-		mapped[index] = category.Identity(element)
+		mapped[index] = element
 	}
 	return arraypkg.Foldl1(semigroup.Append_, mapped)
 }

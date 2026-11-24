@@ -58,7 +58,7 @@ func appendRepeat(buffer []byte, n int32) []byte {
 	switch n {
 	case 0:
 	default:
-		buffer = append(buffer, "*"...)
+		buffer = append(buffer, '*')
 		buffer = appendRepeat(buffer, n-1)
 	}
 	return buffer

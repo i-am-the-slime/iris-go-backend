@@ -15,10 +15,14 @@ var sharedRouteHome = &Route{}
 
 var sharedRouteAway = &Route{}
 
+func Trip(trip0 int32, trip1 *Route) *Route {
+	return &Route{Trip0: trip0, Trip1: trip1}
+}
+
 var main_ = initializeMain_()
 
 func initializeMain_() shared.MainResult {
-	return shared.MainResult{Legs: legs(&Route{Trip0: 1, Trip1: &Route{Trip0: 2, Trip1: sharedRouteAway}}), Away: endsAway(&Route{Trip0: 1, Trip1: sharedRouteAway}), First: legs(&Route{Trip0: 3, Trip1: sharedRouteHome}), Goes: true}
+	return shared.MainResult{Legs: legs(Trip(1, Trip(2, sharedRouteAway))), Away: endsAway(Trip(1, sharedRouteAway)), First: legs(Trip(3, sharedRouteHome)), Goes: true}
 }
 
 func legs(value *Route) int32 {

@@ -62,6 +62,13 @@ where
         comparison: Comparison,
         values: Vec<GoExpression>,
     ) -> GoExpression {
+        // Go orders strings by their UTF-8 bytes, which is the order of code points; PureScript
+        // by UTF-16 code units, which agrees but between a character past U+FFFF and one from
+        // U+E000. Text below U+D800 has neither, so each order meets it the same way.
+        let below_surrogates = |value: &GoExpression| matches!(value, GoExpression::String(text) if text.chars().all(|character| character <= '\u{D7FF}'));
+        if values.iter().any(below_surrogates) {
+            return self.operator(Operator::Compare(comparison), values);
+        }
         let package = GoPackage::Prim;
         self.imports.insert(package.path().into());
         let function = GoExpression::Qualified {

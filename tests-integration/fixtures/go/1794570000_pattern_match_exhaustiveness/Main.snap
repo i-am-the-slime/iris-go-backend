@@ -53,6 +53,14 @@ const (
 	ShapeRectangle
 )
 
+func Circle(circle int32) Shape {
+	return Shape{Tag: ShapeCircle, Circle: circle}
+}
+
+func Rectangle(rectangle0 int32, rectangle1 int32) Shape {
+	return Shape{Tag: ShapeRectangle, Rectangle0: rectangle0, Rectangle1: rectangle1}
+}
+
 var main_ = initializeMain_()
 
 func initializeMain_() []string {
@@ -61,16 +69,16 @@ func initializeMain_() []string {
 	for index, element := range array {
 		mapped[index] = name(element)
 	}
-	array2 := []Shape{{Tag: ShapeCircle, Circle: 1}, {Tag: ShapeRectangle, Rectangle0: 2, Rectangle1: 3}}
+	array2 := []Shape{Circle(1), Rectangle(2, 3)}
 	mapped2 := make([]string, len(array2))
-	for index := range array2 {
+	for index, x := range array2 {
 		var result int32
-		switch array2[index].Tag {
+		switch x.Tag {
 		case ShapeCircle:
-			radius := array2[index].Circle
+			radius := x.Circle
 			result = 3 * radius * radius
 		default: // ShapeRectangle
-			result = array2[index].Rectangle0 * array2[index].Rectangle1
+			result = x.Rectangle0 * x.Rectangle1
 		}
 		mapped2[index] = strconv.Itoa(int(result))
 	}

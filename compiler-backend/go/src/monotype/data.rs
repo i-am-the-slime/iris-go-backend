@@ -228,6 +228,27 @@ impl Monotypes {
         Ok(constructors)
     }
 
+    /// How many constructors a data type has, when every one of them is
+    /// known and has no fields: values of it are told apart, and ordered, by
+    /// their constructor alone, as Go's constants of an enumeration are.
+    pub fn enumeration_size(&self, data: &DataType) -> Option<usize> {
+        let constructors = self.constructors.get(data)?;
+        let nullary = constructors.iter().all(|constructor| constructor.fields.is_empty());
+        (nullary && self.variant_row(data).is_none()).then_some(constructors.len())
+    }
+
+    pub fn holds_function(&self, id: MonotypeId) -> bool {
+        match self.get(id) {
+            Monotype::Function(..) => true,
+            Monotype::Data(data) => self.constructors.get(data).is_some_and(|constructors| {
+                constructors.iter().any(|constructor| {
+                    constructor.fields.iter().any(|&field| self.function_parts(field).is_some())
+                })
+            }),
+            _ => false,
+        }
+    }
+
     /// A data type at its arguments, with the argument of each phantom parameter
     /// replaced by one stand-in and each erasure at one cause. No field of
     /// `Free f a` holds an `a`, so `Free f Unit` and `Free f Int` are one

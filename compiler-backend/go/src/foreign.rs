@@ -3,6 +3,7 @@
 //! iris-go runtime module.
 
 mod embeds;
+mod hash_map;
 mod host;
 mod imports;
 mod opacity;
@@ -10,6 +11,9 @@ mod packages;
 mod sources;
 
 pub use embeds::{EmbedError, embedded_files};
+pub use hash_map::{
+    HASH_MAP_LEND, borrows_hash_map, hash_map_import, hash_map_write_position, owned_hash_map_write,
+};
 pub use host::is_opaque_foreign_data;
 pub use imports::{
     APPENDER, ARRAY_ALL, ARRAY_ANY, ARRAY_APPEND, ARRAY_FROM_LIST, ARRAY_MAP_WITH_INDEX,
@@ -17,7 +21,7 @@ pub use imports::{
     ARRAY_THAW_OWNED, ARRAY_UNCONS, ARRAY_UNZIP, FOREIGN_RECORD, FROM_CHAR_ARRAY, INT_DIVIDE,
     INT_MODULO, MUTABLE_PEEK_UNSAFE, MUTABLE_WITHIN, OBJECT_DELETE, OBJECT_FROM_ENTRIES,
     OBJECT_INDEX, OBJECT_INSERT, OBJECT_KEYS, OBJECT_LOOKUP, OBJECT_SIZE, SEQUENCE_ARRAY,
-    TO_CHAR_ARRAY, WELL_FORMED_STRING, array_fold, effect_fold,
+    SHOW_NUMBER, TO_CHAR_ARRAY, WELL_FORMED_STRING, array_fold, effect_fold,
 };
 pub use opacity::{Opacity, OpaqueDeclaration, foreign_opacity};
 pub use packages::{ForeignPackages, ForeignSource, LineCoverage, LineDirectives};
@@ -86,6 +90,11 @@ pub enum Foreign {
     EffectUntil,
     EffectFor,
     MaybeIndex,
+    /// `Data.Array._updateAt just nothing index value array`.
+    UpdateAt,
+    /// A copy of an array with the element at an index known to be within it replaced:
+    /// `index`, `value` and `array`.
+    ArrayUpdated,
     IntFromNumber,
     Range,
     Snoc,
@@ -116,6 +125,10 @@ pub enum Foreign {
     /// Yoga.JSON's readJSON or writeJSON at a type whose codec is Yoga.JSON's
     /// own instances throughout: [`JsonCodec`].
     Json(JsonCodec),
+    /// `show` of the `NonEmptyList ForeignError` a Yoga.JSON read fails with. It takes the
+    /// `show` of one ForeignError and the errors, and shows them with go-support's
+    /// `foreignvalue.ShowErrors`.
+    ShowForeignErrors,
 }
 
 /// A typed Yoga.JSON codec, which reads the text straight into the program's
@@ -157,7 +170,9 @@ pub struct Boundary {
     pub int32_parameters: &'static [usize],
     pub ignored: &'static [usize],
     pub maybe: Option<MaybeConstructors>,
-    pub thunk: bool,
+    /// The Go helper takes none of `maybe`'s constructors and returns its `Just`'s field and
+    /// whether there is one, `(T, bool)`, as Go's own lookups do.
+    pub found: bool,
     pub record_result: bool,
     pub instantiate: bool,
     pub unit_values: bool,
@@ -259,6 +274,8 @@ pub enum Iteration {
     Bind,
     FindIndex,
     FindLastIndex,
+    /// `find`, which the arrays library defines by `findIndex`.
+    Find,
     ZipWith,
 }
 
@@ -277,7 +294,7 @@ const PLAIN: Boundary = Boundary {
     int32_parameters: &[],
     ignored: &[],
     maybe: None,
-    thunk: false,
+    found: false,
     record_result: false,
     instantiate: false,
     unit_values: false,
@@ -319,6 +336,11 @@ const CONS_LIST_ACCUMULATOR: Boundary =
 const fn maybe(just: usize, nothing: usize) -> Boundary {
     let constructors = MaybeConstructors { just, nothing, witness: None, elements: false };
     Boundary { maybe: Some(constructors), ..PLAIN }
+}
+
+/// A Maybe whose Go helper returns `(T, bool)`: [`Boundary::found`].
+const fn found(just: usize, nothing: usize) -> Boundary {
+    Boundary { found: true, ..maybe(just, nothing) }
 }
 
 const fn maybe_witnessed(just: usize, nothing: usize, witness: usize) -> Boundary {
@@ -380,6 +402,7 @@ pub enum GoPackage {
     Console,
     JsBigInt,
     Int64,
+    HashMap,
 }
 
 impl GoPackage {
@@ -409,6 +432,7 @@ impl GoPackage {
             GoPackage::Console => "github.com/i-am-the-slime/iris-go/console",
             GoPackage::JsBigInt => "github.com/i-am-the-slime/iris-go/jsbigint",
             GoPackage::Int64 => "github.com/i-am-the-slime/iris-go/ffi/Data_Int64_Internal_ffi",
+            GoPackage::HashMap => "github.com/i-am-the-slime/iris-go/ffi/Data_HashMap_ffi",
             GoPackage::Exception => "github.com/i-am-the-slime/iris-go/exception",
         }
     }
@@ -440,6 +464,7 @@ impl GoPackage {
             GoPackage::Console => "console",
             GoPackage::JsBigInt => "jsbigint",
             GoPackage::Int64 => "Data_Int64_Internal_ffi",
+            GoPackage::HashMap => "Data_HashMap_ffi",
         }
     }
 }
@@ -532,6 +557,7 @@ impl Foreign {
             Foreign::LazyDefer | Foreign::LazyForce => 1,
             Foreign::Json(JsonCodec::Read) => 2,
             Foreign::Json(JsonCodec::Write) => 1,
+            Foreign::ShowForeignErrors => 2,
             Foreign::UnsafeCoerce | Foreign::Identity | Foreign::EffectPure => 1,
             Foreign::Throw | Foreign::Crash | Foreign::MakeAff | Foreign::AssocArray => 1,
             Foreign::ForkFiber | Foreign::NewFiber | Foreign::NewSupervisedFiber => 2,
@@ -544,6 +570,8 @@ impl Foreign {
             Foreign::EffectFor | Foreign::EffectFoldArray => 3,
             Foreign::ObjectFoldM => 4,
             Foreign::MaybeIndex => 4,
+            Foreign::UpdateAt => 5,
+            Foreign::ArrayUpdated => 3,
             Foreign::IntFromNumber => 3,
             Foreign::Ordering => 5,
             Foreign::Range | Foreign::Snoc | Foreign::RecordGet | Foreign::RecordHas => 2,

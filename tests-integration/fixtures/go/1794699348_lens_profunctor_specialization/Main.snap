@@ -29,14 +29,14 @@ func Show(s string) string {
 }
 
 func AppendShowArrayString(buffer []byte, array []string) []byte {
-	buffer = append(buffer, "["...)
+	buffer = append(buffer, '[')
 	for index, element := range array {
 		if index > 0 {
-			buffer = append(buffer, ","...)
+			buffer = append(buffer, ',')
 		}
 		buffer = prim.AppendShowString(buffer, element)
 	}
-	buffer = append(buffer, "]"...)
+	buffer = append(buffer, ']')
 	return buffer
 }
 
@@ -78,13 +78,13 @@ func initializeMain_() []string {
 	switch accumulator.Tag {
 	case maybe.TagJust:
 		text := []byte("(Just ")
-		text = show.AppendShowArrayString(text, (shared.Point{Tags: accumulator.Just, X: origin.X}).Tags)
-		text = append(text, ")"...)
+		text = show.AppendShowArrayString(text, accumulator.Just)
+		text = append(text, ')')
 		result = string(text)
 	default:
 		result = "Nothing"
 	}
-	return []string{strconv.Itoa(int(origin.X * 2)), strconv.Itoa(int((shared.Point{Tags: origin.Tags, X: origin.X + 1}).X)), "(Just 2)", "Nothing", "5", result, "1", strconv.Itoa(int(bump(3, origin).X))}
+	return []string{"6", "4", "(Just 2)", "Nothing", "5", result, "1", strconv.Itoa(int(bump(3, origin).X))}
 }
 
 var origin shared.Point = shared.Point{X: 3, Tags: []string{"a", "b"}}

@@ -573,12 +573,15 @@ pub fn go(path: &Path) -> FixtureResult {
     Ok(())
 }
 
+/// Files copied into a generated Go module, by their path inside it.
+type VendoredFiles = Vec<(PathBuf, Vec<u8>)>;
+
 /// The modules whose foreign imports a fixture's Go files next to their sources implement, as the
 /// Go backend's CLI finds them, and those files as the CLI copies them into the program's module.
 fn go_foreign_packages(
     loaded: &crate::LoadedFixture,
     folder: &Path,
-) -> Result<(go::ForeignPackages, Vec<(PathBuf, Vec<u8>)>), io::Error> {
+) -> Result<(go::ForeignPackages, VendoredFiles), io::Error> {
     let root = snapshot_path(folder);
     let mut modules = vec![];
     let mut structs = vec![];

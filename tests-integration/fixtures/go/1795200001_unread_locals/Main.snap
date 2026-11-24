@@ -1,19 +1,6 @@
 ---
 source: tests-integration/src/fixtures.rs
 ---
-// Data/Either/either.go
-package either
-
-type EitherIntInt struct {
-	Field0 int32
-	Tag    uint8
-}
-
-const (
-	EitherIntIntLeft = iota
-	EitherIntIntRight
-)
-
 // Data/Maybe/maybe.go
 package maybe
 
@@ -25,12 +12,6 @@ type ArrayInt struct {
 	Just []int32
 	Tag  uint8
 }
-
-func JustArrayInt(just []int32) ArrayInt {
-	return ArrayInt{Tag: TagJust, Just: just}
-}
-
-var NoArrayInt = ArrayInt{Tag: TagNothing}
 
 // Data/Ord/ord.go
 package ord
@@ -62,9 +43,6 @@ const (
 package main
 
 import (
-	"fixture/Data/Either"
-	"fixture/Data/Maybe"
-	"fixture/shared"
 	"github.com/i-am-the-slime/iris-go/direct"
 	"github.com/i-am-the-slime/iris-go/prim"
 	"os"
@@ -73,25 +51,12 @@ import (
 
 func main_() int32 {
 	prim.IntTrunc(0.5)
-	direct.DeleteAt(func(payload []int32) maybe.ArrayInt {
-		return maybe.JustArrayInt(payload)
-	}, maybe.NoArrayInt, 0, []int32{})
+	direct.DeleteAt(0, []int32{})
 	var counter int32 = 0
-	elements := []int32{10, 20}
-	var result int32
-	result = elements[counter]
-	modified := shared.StateValue{State: counter + 1, Value: result}
-	counter = modified.State
-	scrutinee := either.EitherIntInt{Tag: either.EitherIntIntRight, Field0: -1}
-	var result2 int32
-	if scrutinee.Tag == either.EitherIntIntRight && scrutinee.Field0 == -1 {
-		sorted := slices.Clone([]rune{'b', 'a'})
-		slices.Sort(sorted)
-		result2 = 2
-	} else {
-		result2 = 1
-	}
-	return counter*10 + result2
+	counter += 1
+	sorted := slices.Clone([]rune{'b', 'a'})
+	slices.Sort(sorted)
+	return counter*10 + 2
 }
 
 func main() {

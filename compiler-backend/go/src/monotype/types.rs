@@ -545,6 +545,29 @@ where
     Ok(Some(context.types.substitute(underlying, &bindings)))
 }
 
+/// The type a non-recursive newtype wraps, its arguments substituted: `Effect a` for an
+/// `IO a` whose `newtype IO a = IO (Effect a)`. None for any other type.
+pub fn newtype_unwrapped<Q>(
+    context: &mut Context<'_, Q>,
+    type_id: TypeId,
+) -> QueryResult<Option<TypeId>>
+where
+    Q: checking::ExternalQueries,
+{
+    let type_id = context.types.strip_annotations(type_id);
+    let (head, _) = context.types.spine(type_id);
+    let Type::Constructor(file_id, item) = *context.types.lookup(head) else { return Ok(None) };
+    if is_recursive_newtype(context, file_id, item)? {
+        return Ok(None);
+    }
+    let module = context.module(file_id)?;
+    let IndexedTypeItemKind::Newtype { constructors, .. } = &module.indexed.items[item].kind else {
+        return Ok(None);
+    };
+    let Some(&constructor) = constructors.first() else { return Ok(None) };
+    newtype_underlying(context, file_id, constructor, type_id)
+}
+
 pub fn expand_synonym<Q>(
     context: &mut Context<'_, Q>,
     file_id: FileId,

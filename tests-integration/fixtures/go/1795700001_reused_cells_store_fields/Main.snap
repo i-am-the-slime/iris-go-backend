@@ -29,6 +29,10 @@ const (
 
 var sharedChainEnd = &Chain{Tag: ChainEnd}
 
+func Node(node0 int32, node1 int32, node2 *Tree, node3 *Tree) *Tree {
+	return &Tree{Node0: node0, Node1: node1, Node2: node2, Node3: node3}
+}
+
 var main_ = initializeMain_()
 
 func initializeMain_() shared.MainResult {
@@ -86,7 +90,7 @@ func blues(value *Chain) int32 {
 
 func insertCountsReusing(key int32, value *Tree) *Tree {
 	if value == sharedTreeLeaf {
-		return &Tree{Node0: key, Node1: 1, Node2: sharedTreeLeaf, Node3: sharedTreeLeaf}
+		return Node(key, 1, sharedTreeLeaf, sharedTreeLeaf)
 	}
 	k := value.Node0
 	count := value.Node1
@@ -94,24 +98,15 @@ func insertCountsReusing(key int32, value *Tree) *Tree {
 	right := value.Node3
 	if key < k {
 		field := insertCountsReusing(key, left)
-		value.Node0 = k
-		value.Node1 = count
 		value.Node2 = field
-		value.Node3 = right
 		return value
 	}
 	if key > k {
 		field := insertCountsReusing(key, right)
-		value.Node0 = k
-		value.Node1 = count
-		value.Node2 = left
 		value.Node3 = field
 		return value
 	}
-	value.Node0 = k
 	value.Node1 = count + 1
-	value.Node2 = left
-	value.Node3 = right
 	return value
 }
 
@@ -126,11 +121,9 @@ func recolourStoresTheTagReusing(value *Chain) *Chain {
 		value.Field1 = field
 		return value
 	case ChainBlue:
-		n := value.Field0
 		rest := value.Field1
 		field := recolourStoresTheTagReusing(rest)
 		value.Tag = ChainRed
-		value.Field0 = n
 		value.Field1 = field
 		return value
 	default: // ChainEnd

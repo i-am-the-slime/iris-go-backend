@@ -135,26 +135,95 @@ pub enum ExpressionKind {
     Unit,
     Array(Vec<Expression>),
     Record(Vec<(SmolStr, Expression)>),
-    Access { record: Box<Expression>, label: SmolStr },
-    Update { record: Box<Expression>, updates: Vec<RecordUpdate> },
+    Access {
+        record: Box<Expression>,
+        label: SmolStr,
+    },
+    Update {
+        record: Box<Expression>,
+        updates: Vec<RecordUpdate>,
+    },
     Local(LocalId),
     Function(FunctionId),
-    Construct { data: DataType, constructor: usize, arguments: Vec<Expression> },
-    Reuse { cell: Box<Expression>, data: DataType, constructor: usize, arguments: Vec<Expression> },
-    UniqueEdge { owned: Box<Expression>, cell: Box<Expression>, edge: Edge },
-    UniqueEdges { value: Box<Expression>, edges: Vec<(usize, Expression)> },
-    Foreign { foreign: &'static Foreign, arguments: Vec<Expression> },
-    Apply { function: Box<Expression>, arguments: Vec<Expression> },
-    Lambda { parameters: Vec<Local>, body: Box<Expression> },
-    Closure { tag: usize, captures: Vec<Expression> },
+    Construct {
+        data: DataType,
+        constructor: usize,
+        arguments: Vec<Expression>,
+    },
+    Reuse {
+        cell: Box<Expression>,
+        data: DataType,
+        constructor: usize,
+        arguments: Vec<Expression>,
+        kept: Kept,
+    },
+    UniqueEdge {
+        owned: Box<Expression>,
+        cell: Box<Expression>,
+        edge: Edge,
+    },
+    UniqueEdges {
+        value: Box<Expression>,
+        edges: Vec<(usize, Expression)>,
+    },
+    Foreign {
+        foreign: &'static Foreign,
+        arguments: Vec<Expression>,
+    },
+    Apply {
+        function: Box<Expression>,
+        arguments: Vec<Expression>,
+    },
+    Lambda {
+        parameters: Vec<Local>,
+        body: Box<Expression>,
+    },
+    Closure {
+        tag: usize,
+        captures: Vec<Expression>,
+    },
     Coerce(Box<Expression>),
-    Let { bindings: Vec<Binding>, body: Box<Expression> },
-    If { condition: Box<Expression>, then: Box<Expression>, otherwise: Box<Expression> },
-    Case { scrutinees: Vec<Expression>, alternatives: Vec<Alternative> },
+    Let {
+        bindings: Vec<Binding>,
+        body: Box<Expression>,
+    },
+    If {
+        condition: Box<Expression>,
+        then: Box<Expression>,
+        otherwise: Box<Expression>,
+    },
+    Case {
+        scrutinees: Vec<Expression>,
+        alternatives: Vec<Alternative>,
+    },
     EffectPure(Box<Expression>),
-    EffectBind { action: Box<Expression>, local: Local, body: Box<Expression> },
-    EffectEach { array: Box<Expression>, element: Local, body: Box<Expression>, results: Results },
+    EffectBind {
+        action: Box<Expression>,
+        local: Local,
+        body: Box<Expression>,
+    },
+    EffectEach {
+        array: Box<Expression>,
+        element: Local,
+        body: Box<Expression>,
+        results: Results,
+    },
     Fail(SmolStr),
+}
+
+/// What a reused cell already holds of the construction that overwrites it.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Hash)]
+pub struct Kept {
+    /// The cell holds the constructor already.
+    pub constructor: bool,
+    /// Bit `i` is set when the cell's field `i` already holds argument `i`.
+    pub fields: u64,
+}
+
+impl Kept {
+    pub fn field(&self, position: usize) -> bool {
+        position < u64::BITS as usize && self.fields & (1 << position) != 0
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]

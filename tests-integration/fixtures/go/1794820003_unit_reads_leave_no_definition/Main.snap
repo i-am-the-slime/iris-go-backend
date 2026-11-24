@@ -18,7 +18,6 @@ import (
 )
 
 func main_() int32 {
-	var same int32 = 1
 	var count int32 = 0
 	for range units {
 		count += 1
@@ -27,7 +26,7 @@ func main_() int32 {
 	for range units {
 		accumulator += 1
 	}
-	return same*100 + count*10 + accumulator
+	return 100 + count*10 + accumulator
 }
 
 var units []tuple.TupleUnitUnit = []tuple.TupleUnitUnit{{First: struct{}{}, Second: struct{}{}}, {First: struct{}{}, Second: struct{}{}}}
@@ -40,11 +39,6 @@ func main() {
 // shared/shared.go
 package shared
 
-type ActualExpected struct {
-	Actual   struct{}
-	Expected struct{}
-}
-
 type Ref[T any] struct {
 	Value T
 }
@@ -52,4 +46,9 @@ type Ref[T any] struct {
 type StateValue struct {
 	State int32
 	Value int32
+}
+
+type ActualExpected struct {
+	Actual   struct{}
+	Expected struct{}
 }

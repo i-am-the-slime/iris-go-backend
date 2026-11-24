@@ -11,15 +11,19 @@ func Show(i int32) string {
 }
 
 func AppendShowArrayInt(buffer []byte, array []int32) []byte {
-	buffer = append(buffer, "["...)
+	buffer = append(buffer, '[')
 	for index, element := range array {
 		if index > 0 {
-			buffer = append(buffer, ","...)
+			buffer = append(buffer, ',')
 		}
 		buffer = strconv.AppendInt(buffer, int64(element), 10)
 	}
-	buffer = append(buffer, "]"...)
+	buffer = append(buffer, ']')
 	return buffer
+}
+
+func ArrayInt(array []int32) string {
+	return string(AppendShowArrayInt(nil, array))
 }
 
 // Data/Variant/variant.go
@@ -50,16 +54,33 @@ const (
 	X_respondNowALaterLater
 )
 
-type X_respondNowLater struct {
-	Later        string
-	X_respondNow int32
-	Tag          uint8
+func X_respondNowAX_respondNowALater(field0 int32) AX_respondNowALater {
+	return AX_respondNowALater{Tag: AX_respondNowALaterX_respondNow, Field0: field0}
 }
 
-const (
-	X_respondNowLaterX_respondNow = iota
-	X_respondNowLaterLater
-)
+func AAX_respondNowALater(field0 int32) AX_respondNowALater {
+	return AX_respondNowALater{Tag: AX_respondNowALaterA2, Field0: field0}
+}
+
+func AAX_respondNowALater2(field0 int32) AX_respondNowALater {
+	return AX_respondNowALater{Tag: AX_respondNowALaterA, Field0: field0}
+}
+
+func LaterAX_respondNowALater(later string) AX_respondNowALater {
+	return AX_respondNowALater{Tag: AX_respondNowALaterLater, Later: later}
+}
+
+func X_respondNowX_respondNowALater(field0 int32) X_respondNowALater {
+	return X_respondNowALater{Tag: X_respondNowALaterX_respondNow, Field0: field0}
+}
+
+func AX_respondNowALater2(field0 int32) X_respondNowALater {
+	return X_respondNowALater{Tag: X_respondNowALaterA, Field0: field0}
+}
+
+func LaterX_respondNowALater(later string) X_respondNowALater {
+	return X_respondNowALater{Tag: X_respondNowALaterLater, Later: later}
+}
 
 // Labels/labels.go
 package labels
@@ -74,31 +95,22 @@ func Describe(variant2 variant.AX_respondNowALater) string {
 	case variant.AX_respondNowALaterA:
 		return "A " + strconv.Itoa(int(variant2.Field0))
 	case variant.AX_respondNowALaterX_respondNow:
-		return DescribeX2(variant.X_respondNowALater{Tag: variant.X_respondNowALaterX_respondNow, Field0: variant2.Field0})
+		return DescribeX(variant.X_respondNowX_respondNowALater(variant2.Field0))
 	case variant.AX_respondNowALaterA2:
-		return DescribeX2(variant.X_respondNowALater{Tag: variant.X_respondNowALaterA, Field0: variant2.Field0})
+		return DescribeX(variant.AX_respondNowALater2(variant2.Field0))
 	default: // variant.AX_respondNowALaterLater
-		return DescribeX2(variant.X_respondNowALater{Tag: variant.X_respondNowALaterLater, Later: variant2.Later})
+		return DescribeX(variant.LaterX_respondNowALater(variant2.Later))
 	}
 }
 
-func DescribeX(variant2 variant.X_respondNowLater) string {
-	switch variant2.Tag {
-	case variant.X_respondNowLaterX_respondNow:
-		return "now " + strconv.Itoa(int(variant2.X_respondNow))
-	default: // variant.X_respondNowLaterLater
-		return "later " + variant2.Later
-	}
-}
-
-func DescribeX2(variant2 variant.X_respondNowALater) string {
+func DescribeX(variant2 variant.X_respondNowALater) string {
 	switch variant2.Tag {
 	case variant.X_respondNowALaterX_respondNow:
-		return DescribeX(variant.X_respondNowLater{Tag: variant.X_respondNowLaterX_respondNow, X_respondNow: variant2.Field0})
+		return "now " + strconv.Itoa(int(variant2.Field0))
 	case variant.X_respondNowALaterA:
 		return "a " + strconv.Itoa(int(variant2.Field0))
 	default: // variant.X_respondNowALaterLater
-		return DescribeX(variant.X_respondNowLater{Tag: variant.X_respondNowLaterLater, Later: variant2.Later})
+		return "later " + variant2.Later
 	}
 }
 
@@ -122,12 +134,12 @@ func initializeMain_() []string {
 	updated := shared.Odd{X_respondNow: 1, X1st: 2, Content_type2: "dash", Content_type: "underscore", X: 2, X_: 3, Über: 4}
 	updated.X_respondNow = 10
 	updated.Content_type2 = "changed"
-	replies := []variant.AX_respondNowALater{{Tag: variant.AX_respondNowALaterX_respondNow, Field0: 7}, {Tag: variant.AX_respondNowALaterA2, Field0: 1}, {Tag: variant.AX_respondNowALaterA, Field0: 2}, {Tag: variant.AX_respondNowALaterLater, Later: "soon"}}
+	replies := []variant.AX_respondNowALater{variant.X_respondNowAX_respondNowALater(7), variant.AAX_respondNowALater(1), variant.AAX_respondNowALater2(2), variant.LaterAX_respondNowALater("soon")}
 	mapped := make([]string, len(replies))
 	for index, element := range replies {
 		mapped[index] = labels.Describe(element)
 	}
-	return array.Append(mapped, []string{string(show.AppendShowArrayInt(nil, []int32{updated.X_respondNow, updated.X1st, updated.X, updated.X_, updated.Über})), updated.Content_type2 + " " + updated.Content_type, strconv.Itoa(len(replies))})
+	return array.Append(mapped, []string{show.ArrayInt([]int32{updated.X_respondNow, updated.X1st, updated.X, updated.X_, updated.Über}), updated.Content_type2 + " " + updated.Content_type, strconv.Itoa(len(replies))})
 }
 
 func main() {

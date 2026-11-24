@@ -62,12 +62,9 @@ func initializeMain_() []string {
 func evaluateInt(value *ValueInt) int32 {
 	for {
 		switch value.Tag {
-		case ValueIntIntValue:
+		case ValueIntIntValue, ValueIntAgeValue:
 			n := value.Field1
 			return n
-		case ValueIntAgeValue:
-			age := value.Field1
-			return age
 		default: // ValueIntPair
 			value = value.Pair0
 			continue

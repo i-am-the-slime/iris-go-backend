@@ -61,45 +61,35 @@ func initializeUnits() []struct{} {
 		i := int32(slot)
 		mapped[slot] = tuple.TupleIntUnit{First: i, Second: unit}
 	}
-	indexedAndSorted := direct.SortBy(func(_ tuple.TupleIntUnit, _ tuple.TupleIntUnit) ordering.Ordering {
-		return ordering.OrderingEQ
-	}, func(value ordering.Ordering) int32 {
-		switch value {
-		case ordering.OrderingGT:
-			return 1
-		case ordering.OrderingEQ:
-			return 0
-		default: // ordering.OrderingLT
-			return -1
-		}
-	}, mapped)
+	indexedAndSorted := direct.SortBy(mapped, func(_ tuple.TupleIntUnit, _ tuple.TupleIntUnit) int {
+		return 0
+	})
 	var result []struct{}
-	if 0 < int32(len(indexedAndSorted)) {
-		array2 := *arraypkg.UnsafeThaw([]tuple.TupleIntUnit{indexedAndSorted[0]})()
+	if len(indexedAndSorted) > 0 {
+		array2 := *arraypkg.UnsafeThaw([]tuple.TupleIntUnit{indexedAndSorted[0]})
 		for range indexedAndSorted {
 			shared.Frozen(array2)
 		}
 		performed := shared.Frozen(array2)
-		array3 := direct.SortBy(func(x tuple.TupleIntUnit, y tuple.TupleIntUnit) ordering.Ordering {
+		array3 := direct.SortBy(performed, func(x tuple.TupleIntUnit, y tuple.TupleIntUnit) int {
 			i := x.First
 			i2 := y.First
+			var result2 ordering.Ordering
 			if i < i2 {
-				return ordering.OrderingLT
+				result2 = ordering.OrderingLT
+			} else if i == i2 {
+				result2 = ordering.OrderingEQ
+			} else {
+				result2 = ordering.OrderingGT
 			}
-			if i == i2 {
-				return ordering.OrderingEQ
-			}
-			return ordering.OrderingGT
-		}, func(value ordering.Ordering) int32 {
-			switch value {
+			switch result2 {
+			case ordering.OrderingLT:
+				return -1
 			case ordering.OrderingGT:
 				return 1
-			case ordering.OrderingEQ:
-				return 0
-			default: // ordering.OrderingLT
-				return -1
 			}
-		}, performed)
+			return 0
+		})
 		mapped2 := make([]struct{}, len(array3))
 		for index, element := range array3 {
 			tuple.SndIntUnit(element)

@@ -1,7 +1,7 @@
 use rustc_hash::{FxHashMap, FxHashSet};
 
 use super::iteration::Found;
-use super::{Emitter, binary, call, identifier_expression};
+use super::{Emitter, binary, call, identifier_expression, uses_local};
 use crate::error::GoResult;
 use crate::foreign::{Comparison, Foreign, GoFunction, GoPackage, Operator};
 use crate::lift::collect_binders;
@@ -11,7 +11,7 @@ use crate::monomorphic::{
 };
 use crate::monotype::Monotype;
 use crate::purity::is_trivial;
-use crate::syntax::{GoExpression, GoStatement, GoType};
+use crate::syntax::{GoCase, GoExpression, GoStatement, GoType};
 
 const INLINING_DEPTH: usize = 4;
 
@@ -128,6 +128,104 @@ where
         Ok(Some(result))
     }
 
+    /// `sortBy compare xs` with a comparison the backend cannot read as primitive keys: the
+    /// runtime's merge sort, whose comparator turns `compare`'s Ordering into an int at once.
+    pub(super) fn ordering_sort(
+        &mut self,
+        arguments: &[Expression],
+        placement: Placement,
+        out: &mut Vec<GoStatement>,
+    ) -> GoResult<GoExpression> {
+        let [compare, from_ordering, array] = arguments else {
+            unreachable!("invariant violated: sortBy has three arguments")
+        };
+        let (Monotype::Array(element) | Monotype::MutableArray(element)) =
+            *self.monotypes.get(array.monotype)
+        else {
+            unreachable!("invariant violated: sortBy sorts an array")
+        };
+        let element_type = self.go_type(element)?;
+        let comparator = self.ordering_comparator(compare, from_ordering, element_type, out)?;
+        let array = self.value(array, out)?;
+        let name = match placement {
+            Placement::Copied => "SortBy",
+            Placement::InPlace => "SortByMutable",
+        };
+        let sort = self.go_function(GoFunction { package: GoPackage::Direct, name });
+        Ok(call(sort, vec![array, comparator]))
+    }
+
+    /// `func(left, right T) int`: the sign of `fromOrdering (compare left right)`.
+    fn ordering_comparator(
+        &mut self,
+        compare: &Expression,
+        from_ordering: &Expression,
+        element_type: GoType,
+        out: &mut Vec<GoStatement>,
+    ) -> GoResult<GoExpression> {
+        let ordering = self.monotypes.result_after(compare.monotype, 2);
+        let mut body = vec![];
+        let (left, right, ordered) = match self.callback(compare, 2) {
+            Some(Found::Inline { parameters, body: compared }) => {
+                let saved = self.tail_loop.take();
+                let [left, right] =
+                    [parameters[0], parameters[1]].map(|parameter| {
+                        match uses_local(compared, parameter.id) {
+                            true => self.bind_local(parameter),
+                            false => "_".to_string(),
+                        }
+                    });
+                let ordered = self.value(compared, &mut body);
+                self.tail_loop = saved;
+                (left, right, ordered?)
+            }
+            _ => {
+                let compared = self.uncurried_callback(compare, 2, false, out)?;
+                let compared = self.shared(compared, "compare", out);
+                let left = self.temporary("left");
+                let right = self.temporary("right");
+                let arguments = vec![identifier_expression(&left), identifier_expression(&right)];
+                (left, right, call(compared, arguments))
+            }
+        };
+        let signs: Option<Vec<i64>> =
+            (0..3).map(|constructor| sign(from_ordering, constructor)).collect();
+        let decided = match (self.monotypes.get(ordering).clone(), signs) {
+            (Monotype::Data(data), Some(signs)) => {
+                let mut cases = vec![];
+                let mut constant = None;
+                for (constructor, sign) in signs.into_iter().enumerate() {
+                    let value = self.construct(&data, constructor, vec![])?;
+                    if is_same_constant(&ordered, &value) {
+                        constant = Some(sign);
+                    }
+                    if sign == 0 {
+                        continue;
+                    }
+                    let body = vec![GoStatement::Return(Some(GoExpression::Integer(sign)))];
+                    cases.push(GoCase { values: vec![value], body, line: None });
+                }
+                match constant {
+                    Some(sign) => vec![GoStatement::Return(Some(GoExpression::Integer(sign)))],
+                    None => vec![
+                        GoStatement::Switch { value: Some(ordered), cases, default: None },
+                        GoStatement::Return(Some(GoExpression::Integer(0))),
+                    ],
+                }
+            }
+            _ => {
+                let converted = self.uncurried_callback(from_ordering, 1, false, out)?;
+                let signed = call(converted, vec![ordered]);
+                let signed =
+                    GoExpression::Conversion { type_: GoType::Int, value: Box::new(signed) };
+                vec![GoStatement::Return(Some(signed))]
+            }
+        };
+        body.extend(decided);
+        let parameters = vec![(left, element_type.clone()), (right, element_type)];
+        Ok(GoExpression::Function { parameters, result: Some(GoType::Int), body })
+    }
+
     fn slices(&mut self, name: &str, arguments: Vec<GoExpression>) -> GoExpression {
         self.imports.insert("slices".into());
         let function = GoExpression::Qualified { package: "slices".into(), name: name.into() };
@@ -213,6 +311,10 @@ where
             Monotype::Char => Primitive::Char,
             Monotype::String => Primitive::String,
             Monotype::Number => Primitive::Number,
+            // Go's constants of an enumeration count up in the order of its constructors.
+            Monotype::Data(data) if self.monotypes.enumeration_size(data).is_some() => {
+                Primitive::Int
+            }
             _ => return None,
         };
         let keys = [substituted(left, &aliases), substituted(right, &aliases)];
@@ -266,23 +368,46 @@ where
                 self.three_way(&callee.body, aliases, hidden, depth - 1)
             }
             ExpressionKind::If { condition, then, otherwise } => {
-                let [left, right] = compared(condition, Comparison::LessThan)?;
-                let ExpressionKind::If { condition: equal, then: same, otherwise: greater } =
+                let ExpressionKind::If { condition: inner, then: second, otherwise: greater } =
                     &otherwise.kind
                 else {
                     return None;
                 };
-                let [equal_left, equal_right] = compared(equal, Comparison::Equal)?;
-                let operands = [left, right, equal_left, equal_right]
+                // `if a < b then LT else if a == b then EQ else GT`, or the derived enumeration
+                // order `if a == b then EQ else if a < b then LT else GT`.
+                let (less_than, equal, less, same) = match compared(condition, Comparison::LessThan)
+                {
+                    Some(less_than) => {
+                        (less_than, compared(inner, Comparison::Equal)?, then, second)
+                    }
+                    None => (
+                        compared(inner, Comparison::LessThan)?,
+                        compared(condition, Comparison::Equal)?,
+                        second,
+                        then,
+                    ),
+                };
+                let operands = [less_than[0], less_than[1], equal[0], equal[1]]
                     .map(|operand| resolved(operand, aliases));
                 if operands[0] != operands[2] || operands[1] != operands[3] {
                     return None;
                 }
-                let constructors = [constructor(then)?, constructor(same)?, constructor(greater)?];
+                let constructors = [constructor(less)?, constructor(same)?, constructor(greater)?];
                 Some(ThreeWay { left: operands[0], right: operands[1], constructors })
             }
             _ => None,
         }
+    }
+}
+
+fn is_same_constant(value: &GoExpression, constant: &GoExpression) -> bool {
+    match (value, constant) {
+        (GoExpression::Identifier(value), GoExpression::Identifier(constant)) => value == constant,
+        (
+            GoExpression::Qualified { package, name },
+            GoExpression::Qualified { package: constant_package, name: constant_name },
+        ) => package == constant_package && name == constant_name,
+        _ => false,
     }
 }
 

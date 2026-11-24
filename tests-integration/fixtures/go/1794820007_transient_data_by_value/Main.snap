@@ -51,6 +51,18 @@ type ListEntry struct {
 
 var sharedListEntryNil = &ListEntry{}
 
+func Found(found0 string, found1 string, found2 string, found3 string, found4 string, found5 string, found6 string, found7 string, found8 string, found9 string) Outcome {
+	return Outcome{Tag: OutcomeFound, Found0: found0, Found1: found1, Found2: found2, Found3: found3, Found4: found4, Found5: found5, Found6: found6, Found7: found7, Found8: found8, Found9: found9}
+}
+
+func EntryEntry(entry0 string, entry1 string, entry2 string, entry3 string, entry4 string, entry5 string, entry6 string, entry7 string, entry8 string, entry9 string) *Entry {
+	return &Entry{Entry0: entry0, Entry1: entry1, Entry2: entry2, Entry3: entry3, Entry4: entry4, Entry5: entry5, Entry6: entry6, Entry7: entry7, Entry8: entry8, Entry9: entry9}
+}
+
+func Cons(cons0 *Entry, cons1 *ListEntry) *ListEntry {
+	return &ListEntry{Cons0: cons0, Cons1: cons1}
+}
+
 var main_ = initializeMain_()
 
 func initializeMain_() shared.MainResult {
@@ -76,7 +88,7 @@ func initializeMain_() shared.MainResult {
 func search(target int32, key int32) Outcome {
 	for {
 		if key == target {
-			return Outcome{Tag: OutcomeFound, Found0: strconv.Itoa(int(key)), Found1: "b", Found2: "c", Found3: "d", Found4: "e", Found5: "f", Found6: "g", Found7: "h", Found8: "i", Found9: "j"}
+			return Found(strconv.Itoa(int(key)), "b", "c", "d", "e", "f", "g", "h", "i", "j")
 		}
 		if key > 9 {
 			return Outcome{Tag: OutcomeMissing}
@@ -89,15 +101,15 @@ func firsts(list *ListEntry) string {
 	return string(appendFirsts(nil, list))
 }
 
-var entries *ListEntry = &ListEntry{Cons0: &Entry{Entry0: "k", Entry1: "l", Entry2: "m", Entry3: "n", Entry4: "o", Entry5: "p", Entry6: "q", Entry7: "r", Entry8: "s", Entry9: "t"}, Cons1: &ListEntry{Cons0: sharedEntryBlank, Cons1: sharedListEntryNil}}
+var entries *ListEntry = Cons(EntryEntry("k", "l", "m", "n", "o", "p", "q", "r", "s", "t"), Cons(sharedEntryBlank, sharedListEntryNil))
 
 func appendFirsts(buffer []byte, list *ListEntry) []byte {
 	if list != sharedListEntryNil {
-		if list != sharedListEntryNil && list.Cons0 != sharedEntryBlank {
+		if list.Cons0 != sharedEntryBlank {
 			buffer = prim.AppendString(buffer, list.Cons0.Entry0)
 			buffer = appendFirsts(buffer, list.Cons1)
 		} else {
-			buffer = append(buffer, "_"...)
+			buffer = append(buffer, '_')
 			buffer = appendFirsts(buffer, list.Cons1)
 		}
 	}

@@ -1,0 +1,107 @@
+---
+source: tests-integration/src/fixtures.rs
+---
+// Data/Ordering/ordering.go
+package ordering
+
+type Ordering uint8
+
+const (
+	OrderingLT Ordering = iota
+	OrderingGT
+	OrderingEQ
+)
+
+// main.go
+package main
+
+import (
+	"fixture/Data/Ordering"
+	"fixture/shared"
+	arraypkg "github.com/i-am-the-slime/iris-go/array"
+	"github.com/i-am-the-slime/iris-go/console"
+	"slices"
+	"strings"
+)
+
+type Suit uint8
+
+const (
+	SuitHearts Suit = iota
+	SuitSpades
+	SuitClubs
+)
+
+var main_ = initializeMain_()
+
+func initializeMain_() []string {
+	sorted := slices.Clone([]Suit{SuitClubs, SuitHearts, SuitSpades, SuitHearts})
+	slices.Sort(sorted)
+	sorted2 := slices.Clone([]Suit{SuitClubs, SuitHearts, SuitSpades})
+	slices.Sort(sorted2)
+	slices.Reverse(sorted2)
+	array2 := *arraypkg.Thaw([]Suit{SuitSpades, SuitClubs, SuitHearts})
+	slices.Sort(array2)
+	performed := shared.Frozen(array2)
+	return []string{arraySuit(sorted), arraySuit(sorted2), arraySuit(performed)}
+}
+
+func show(suit Suit) string {
+	switch suit {
+	case SuitHearts:
+		return "hearts"
+	case SuitSpades:
+		return "spades"
+	default: // SuitClubs
+		return "clubs"
+	}
+}
+
+func compare(left Suit, right Suit) ordering.Ordering {
+	if left == right {
+		return ordering.OrderingEQ
+	}
+	if left < right {
+		return ordering.OrderingLT
+	}
+	return ordering.OrderingGT
+}
+
+func appendShowArraySuit(buffer []byte, array []Suit) []byte {
+	buffer = append(buffer, '[')
+	for index, element := range array {
+		if index > 0 {
+			buffer = append(buffer, ',')
+		}
+		buffer = appendShow(buffer, element)
+	}
+	buffer = append(buffer, ']')
+	return buffer
+}
+
+func appendShow(buffer []byte, suit Suit) []byte {
+	switch suit {
+	case SuitHearts:
+		buffer = append(buffer, "hearts"...)
+	case SuitSpades:
+		buffer = append(buffer, "spades"...)
+	default: // SuitClubs
+		buffer = append(buffer, "clubs"...)
+	}
+	return buffer
+}
+
+func arraySuit(array []Suit) string {
+	return string(appendShowArraySuit(nil, array))
+}
+
+func main() {
+	console.Print("[" + strings.Join(main_, " ") + "]")
+}
+
+// shared/shared.go
+package shared
+
+func Frozen[T any](elements []T) []T {
+	return elements[:len(elements):len(elements)]
+}

@@ -6,15 +6,11 @@ package show
 
 import "strconv"
 
-func ShowBoolean2(boolean bool) string {
+func ShowBoolean(boolean bool) string {
 	if boolean {
 		return "true"
 	}
 	return "false"
-}
-
-func ShowBoolean(array []bool) string {
-	return string(AppendShowArrayBoolean(nil, array))
 }
 
 func ShowInt(i int32) string {
@@ -22,27 +18,31 @@ func ShowInt(i int32) string {
 }
 
 func AppendShowArrayInt(buffer []byte, array []int32) []byte {
-	buffer = append(buffer, "["...)
+	buffer = append(buffer, '[')
 	for index, element := range array {
 		if index > 0 {
-			buffer = append(buffer, ","...)
+			buffer = append(buffer, ',')
 		}
 		buffer = strconv.AppendInt(buffer, int64(element), 10)
 	}
-	buffer = append(buffer, "]"...)
+	buffer = append(buffer, ']')
 	return buffer
 }
 
 func AppendShowArrayBoolean(buffer []byte, array []bool) []byte {
-	buffer = append(buffer, "["...)
+	buffer = append(buffer, '[')
 	for index, element := range array {
 		if index > 0 {
-			buffer = append(buffer, ","...)
+			buffer = append(buffer, ',')
 		}
 		buffer = strconv.AppendBool(buffer, element)
 	}
-	buffer = append(buffer, "]"...)
+	buffer = append(buffer, ']')
 	return buffer
+}
+
+func ArrayBoolean(array []bool) string {
+	return string(AppendShowArrayBoolean(nil, array))
 }
 
 // main.go
@@ -62,7 +62,7 @@ var main_ = initializeMain_()
 
 func initializeMain_() []string {
 	return []string{describeArrayBoolean(shared.Show{Show: func(coerced any) string {
-		return show.ShowBoolean(shared.Convert(coerced))
+		return show.ArrayBoolean(shared.Convert(coerced))
 	}}, array.Append([]int32{}, []int32{2}), ">", 1, shared.Convert2([]bool{true}))}
 }
 
@@ -79,7 +79,7 @@ func describeArrayBoolean(showDictionary shared.Show, depths []int32, label stri
 			text = prim.AppendString(text, showDictionaryCaptured.Show(value))
 			return string(text)
 		default:
-			labelBytes = append(labelBytes, ">"...)
+			labelBytes = append(labelBytes, '>')
 			showDictionary, depths, depth, value = shared.Show{Show: func(coerced any) string {
 				return prim.ShowArray(showDictionaryCaptured.Show, coerced.([]any))
 			}}, array.Bounded(append(depths, depth)), depth-1, []any{value}

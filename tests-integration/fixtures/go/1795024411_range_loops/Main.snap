@@ -26,21 +26,18 @@ func initializeMain_() shared.MainResult {
 		value := 1 + int32(index)*step2
 		accumulator += value
 	}
-	step3, count3 := array.RangeSteps(bound, 1)
 	accumulator2 := ""
-	for index := count3 - 1; index >= 0; index-- {
-		x := bound + int32(index)*step3
+	for index := count - 1; index >= 0; index-- {
+		x := bound + int32(index)*step
 		accumulator2 = strconv.Itoa(int(x)) + "," + accumulator2
 	}
-	_, count4 := array.RangeSteps(1, bound)
-	step4, count5 := array.RangeSteps(1, bound)
-	mapped := make([]int32, count5)
-	for slot := range count5 {
-		x := 1 + int32(slot)*step4
+	mapped := make([]int32, count2)
+	for slot := range count2 {
+		x := 1 + int32(slot)*step2
 		index := int32(slot)
 		mapped[slot] = index * x
 	}
-	performed := shared.MainResult{Visited: seen, Summed: accumulator, Listed: accumulator2, Counted: int32(count4), Indexed: mapped, Descending: descending}
+	performed := shared.MainResult{Visited: seen, Summed: accumulator, Listed: accumulator2, Counted: int32(count2), Indexed: mapped, Descending: descending}
 	return performed
 }
 

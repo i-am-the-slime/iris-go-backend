@@ -23,6 +23,18 @@ const (
 	ExprVal
 )
 
+func Val(val int32) *Expr {
+	return &Expr{Tag: ExprVal, Val: val}
+}
+
+func Add(field0 *Expr, field1 *Expr) *Expr {
+	return &Expr{Tag: ExprAdd, Field0: field0, Field1: field1}
+}
+
+func Mul(field0 *Expr, field1 *Expr) *Expr {
+	return &Expr{Tag: ExprMul, Field0: field0, Field1: field1}
+}
+
 var main_ = initializeMain_()
 
 func initializeMain_() []string {
@@ -37,7 +49,7 @@ func initializeMain_() []string {
 
 func expression(depth int32) *Expr {
 	if depth == 0 {
-		return &Expr{Tag: ExprVal, Val: 1}
+		return Val(1)
 	}
 	exprs := make([]Expr, 3)
 	exprs[0] = Expr{Tag: ExprAdd, Field0: expression(depth - 1), Field1: &exprs[1]}
@@ -60,25 +72,23 @@ func evaluate(value *Expr) int32 {
 func doubled(value *Expr) *Expr {
 	switch value.Tag {
 	case ExprVal:
-		return &Expr{Tag: ExprVal, Val: value.Val * 2}
+		return Val(value.Val * 2)
 	case ExprAdd:
-		return &Expr{Tag: ExprAdd, Field0: doubled(value.Field0), Field1: doubled(value.Field1)}
+		return Add(doubled(value.Field0), doubled(value.Field1))
 	default: // ExprMul
-		return &Expr{Tag: ExprMul, Field0: doubled(value.Field0), Field1: doubled(value.Field1)}
+		return Mul(doubled(value.Field0), doubled(value.Field1))
 	}
 }
 
 func swappedReusing(value *Expr) *Expr {
 	switch value.Tag {
-	case ExprAdd:
+	case ExprAdd, ExprMul:
 		left := value.Field0
 		right := value.Field1
-		*value = Expr{Tag: ExprAdd, Field0: swappedReusing(right), Field1: swappedReusing(left)}
-		return value
-	case ExprMul:
-		left := value.Field0
-		right := value.Field1
-		*value = Expr{Tag: ExprMul, Field0: swappedReusing(right), Field1: swappedReusing(left)}
+		field := swappedReusing(right)
+		field2 := swappedReusing(left)
+		value.Field0 = field
+		value.Field1 = field2
 		return value
 	default:
 		return value
@@ -89,17 +99,23 @@ func doubledReusing(value *Expr) *Expr {
 	switch value.Tag {
 	case ExprVal:
 		value2 := value.Val
-		*value = Expr{Tag: ExprVal, Val: value2 * 2}
+		value.Val = value2 * 2
 		return value
 	case ExprAdd:
 		left := value.Field0
 		right := value.Field1
-		*value = Expr{Tag: ExprAdd, Field0: doubledReusing(left), Field1: doubledReusing(right)}
+		field := doubledReusing(left)
+		field2 := doubledReusing(right)
+		value.Field0 = field
+		value.Field1 = field2
 		return value
 	default: // ExprMul
 		left := value.Field0
 		right := value.Field1
-		*value = Expr{Tag: ExprMul, Field0: doubledReusing(left), Field1: doubledReusing(right)}
+		field := doubledReusing(left)
+		field2 := doubledReusing(right)
+		value.Field0 = field
+		value.Field1 = field2
 		return value
 	}
 }

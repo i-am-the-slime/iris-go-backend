@@ -1,0 +1,176 @@
+---
+source: tests-integration/src/fixtures.rs
+---
+// Data/Eq/eq.go
+package eq
+
+import "fixture/shared"
+
+func EqPointConsIntConsIntNil(ra shared.Point, rb shared.Point) bool {
+	return ra == rb
+}
+
+// Data/Hashable/hashable.go
+package hashable
+
+import "fixture/shared"
+
+func HashPointConsIntConsIntNil(record shared.Point) int32 {
+	return record.X*31 + record.Y*31
+}
+
+// Data/Maybe/maybe.go
+package maybe
+
+type Int int64
+
+const NoInt Int = 1 << 32
+
+// Data/Semiring/semiring.go
+package semiring
+
+func Add(i int32, i2 int32) int32 {
+	return i + i2
+}
+
+// Data/Tuple/tuple.go
+package tuple
+
+import (
+	"github.com/i-am-the-slime/iris-go/ffi/Data_HashMap_ffi"
+	"github.com/i-am-the-slime/iris-go/prim"
+	"strconv"
+)
+
+type TupleStringInt struct {
+	First  string
+	Second int32
+}
+
+type TupleHashMapIntIntInt struct {
+	First  Data_HashMap_ffi.Native[int32, int32]
+	Second int32
+}
+
+func ShowStringInt(tuple TupleStringInt) string {
+	return string(AppendShowStringInt(nil, tuple))
+}
+
+func AppendShowArrayTupleStringInt(buffer []byte, array []TupleStringInt) []byte {
+	buffer = append(buffer, '[')
+	for index, element := range array {
+		if index > 0 {
+			buffer = append(buffer, ',')
+		}
+		buffer = AppendShowStringInt(buffer, element)
+	}
+	buffer = append(buffer, ']')
+	return buffer
+}
+
+func AppendShowStringInt(buffer []byte, tuple TupleStringInt) []byte {
+	buffer = append(buffer, "(Tuple "...)
+	buffer = prim.AppendShowString(buffer, tuple.First)
+	buffer = append(buffer, ' ')
+	buffer = strconv.AppendInt(buffer, int64(tuple.Second), 10)
+	buffer = append(buffer, ')')
+	return buffer
+}
+
+func ArrayTupleStringInt(array []TupleStringInt) string {
+	return string(AppendShowArrayTupleStringInt(nil, array))
+}
+
+// main.go
+package main
+
+import (
+	"fixture/Data/Eq"
+	"fixture/Data/Hashable"
+	"fixture/Data/Maybe"
+	"fixture/Data/Semiring"
+	"fixture/Data/Tuple"
+	"fixture/shared"
+	"github.com/i-am-the-slime/iris-go/console"
+	"github.com/i-am-the-slime/iris-go/ffi/Data_HashMap_ffi"
+	"github.com/i-am-the-slime/iris-go/object"
+	"strconv"
+	"strings"
+)
+
+var main_ = initializeMain_()
+
+func initializeMain_() []string {
+	array := []string{"a", "b", "a", ""}
+	accumulator := shared.Tally{ByWord: Data_HashMap_ffi.NativeEmpty[string, int32](), ByFirst: object.Empty[int32](), Lengths: Data_HashMap_ffi.NativeEmpty[int32, int32]()}
+	accumulator.ByFirst = object.Lend(accumulator.ByFirst)
+	accumulator.ByWord = Data_HashMap_ffi.Lend(accumulator.ByWord)
+	accumulator.Lengths = Data_HashMap_ffi.Lend(accumulator.Lengths)
+	for _, word := range array {
+		nativeLookup := Data_HashMap_ffi.NativeLookup(maybe.NoInt, func(payload int32) maybe.Int {
+			return maybe.Int(payload)
+		}, nil, word, nil, accumulator.ByWord)
+		var seen int32
+		if nativeLookup == maybe.NoInt {
+			seen = 0
+		} else {
+			seen = int32(nativeLookup)
+		}
+		var result int32
+		if word == "" {
+			result = 0
+		} else {
+			result = 1
+		}
+		accumulator = shared.Tally{ByWord: Data_HashMap_ffi.NativeInsertOwned(nil, nil, word, seen+1, accumulator.ByWord), ByFirst: object.InsertOwned(word, seen+1, accumulator.ByFirst), Lengths: Data_HashMap_ffi.NativeInsertWithOwned(nil, nil, semiring.Add, result, int32(1), accumulator.Lengths)}
+	}
+	nativeLookup2 := Data_HashMap_ffi.NativeLookup(maybe.NoInt, func(payload int32) maybe.Int {
+		return maybe.Int(payload)
+	}, nil, int32(1), nil, accumulator.Lengths)
+	var result2 string
+	if nativeLookup2 != maybe.NoInt {
+		result2 = "(Just " + strconv.Itoa(int(int32(nativeLookup2))) + ")"
+	} else {
+		result2 = "Nothing"
+	}
+	array2 := []int32{1, 2, 3, 4}
+	accumulator2 := Data_HashMap_ffi.Empty[shared.Point, int32]()
+	for _, n := range array2 {
+		k := shared.Point{X: n - 1, Y: 1 - n}
+		accumulator2 = Data_HashMap_ffi.Insert(eq.EqPointConsIntConsIntNil, hashable.HashPointConsIntConsIntNil, shared.Point{X: n, Y: -n}, n, Data_HashMap_ffi.Delete(eq.EqPointConsIntConsIntNil, k, k.X*31+k.Y*31, accumulator2))
+	}
+	array3 := []int32{1, 2, 3}
+	accumulator3 := tuple.TupleHashMapIntIntInt{First: Data_HashMap_ffi.NativeEmpty[int32, int32](), Second: 0}
+	for _, n := range array3 {
+		table := accumulator3.First
+		accumulator3 = tuple.TupleHashMapIntIntInt{First: Data_HashMap_ffi.NativeInsert(nil, nil, n, n, table), Second: Data_HashMap_ffi.NativeSize(table)}
+	}
+	return []string{tuple.ArrayTupleStringInt(Data_HashMap_ffi.NativeToArrayBy(func(s string, i int32) tuple.TupleStringInt {
+		return tuple.TupleStringInt{First: s, Second: i}
+	}, accumulator.ByWord)), strconv.Itoa(int(object.Size(accumulator.ByFirst))), result2, strconv.Itoa(int(Data_HashMap_ffi.Size(accumulator2))), "(Tuple " + strconv.Itoa(int(Data_HashMap_ffi.NativeSize(accumulator3.First))) + " " + strconv.Itoa(int(accumulator3.Second)) + ")"}
+}
+
+func main() {
+	console.Print("[" + strings.Join(main_, " ") + "]")
+}
+
+// shared/shared.go
+package shared
+
+import "github.com/i-am-the-slime/iris-go/ffi/Data_HashMap_ffi"
+
+type Tally struct {
+	ByFirst *struct {
+	Index map[string]int
+	Ints  int
+	Keys  []string
+	Vals  []int32
+}
+	ByWord  Data_HashMap_ffi.Native[string, int32]
+	Lengths Data_HashMap_ffi.Native[int32, int32]
+}
+
+type Point struct {
+	X int32
+	Y int32
+}

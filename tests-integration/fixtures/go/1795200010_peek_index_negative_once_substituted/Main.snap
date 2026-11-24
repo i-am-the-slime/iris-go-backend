@@ -15,7 +15,7 @@ import (
 var main_ = initializeMain_()
 
 func initializeMain_() []int32 {
-	array2 := *array.Thaw([]int32{10, 20, 30})()
+	array2 := *array.Thaw([]int32{10, 20, 30})
 	elements := []func(int32) int32{func(value int32) int32 {
 		return value + 1
 	}}

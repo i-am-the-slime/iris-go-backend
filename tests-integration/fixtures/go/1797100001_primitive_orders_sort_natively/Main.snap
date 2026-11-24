@@ -85,51 +85,67 @@ func ShowChar(char rune) string {
 }
 
 func AppendShowArrayChar(buffer []byte, array []rune) []byte {
-	buffer = append(buffer, "["...)
+	buffer = append(buffer, '[')
 	for index, element := range array {
 		if index > 0 {
-			buffer = append(buffer, ","...)
+			buffer = append(buffer, ',')
 		}
 		buffer = prim.AppendShowChar(buffer, element)
 	}
-	buffer = append(buffer, "]"...)
+	buffer = append(buffer, ']')
 	return buffer
 }
 
 func AppendShowArrayString(buffer []byte, array []string) []byte {
-	buffer = append(buffer, "["...)
+	buffer = append(buffer, '[')
 	for index, element := range array {
 		if index > 0 {
-			buffer = append(buffer, ","...)
+			buffer = append(buffer, ',')
 		}
 		buffer = prim.AppendShowString(buffer, element)
 	}
-	buffer = append(buffer, "]"...)
+	buffer = append(buffer, ']')
 	return buffer
 }
 
 func AppendShowArrayNumber(buffer []byte, array []float64) []byte {
-	buffer = append(buffer, "["...)
+	buffer = append(buffer, '[')
 	for index, element := range array {
 		if index > 0 {
-			buffer = append(buffer, ","...)
+			buffer = append(buffer, ',')
 		}
 		buffer = prim.AppendShowNumber(buffer, element)
 	}
-	buffer = append(buffer, "]"...)
+	buffer = append(buffer, ']')
 	return buffer
 }
 
 func AppendShowArrayInt(buffer []byte, array []int32) []byte {
-	buffer = append(buffer, "["...)
+	buffer = append(buffer, '[')
 	for index, element := range array {
 		if index > 0 {
-			buffer = append(buffer, ","...)
+			buffer = append(buffer, ',')
 		}
 		buffer = strconv.AppendInt(buffer, int64(element), 10)
 	}
-	buffer = append(buffer, "]"...)
+	buffer = append(buffer, ']')
 	return buffer
+}
+
+func ArrayChar(array []rune) string {
+	return string(AppendShowArrayChar(nil, array))
+}
+
+func ArrayString(array []string) string {
+	return string(AppendShowArrayString(nil, array))
+}
+
+func ArrayNumber(array []float64) string {
+	return string(AppendShowArrayNumber(nil, array))
+}
+
+func ArrayInt(array []int32) string {
+	return string(AppendShowArrayInt(nil, array))
 }
 
 // main.go
@@ -184,98 +200,93 @@ func initializeMain_() []string {
 	slices.SortFunc(sorted7, prim.CompareString)
 	sorted8 := slices.Clone([]int32{4, 1, 3})
 	slices.Sort(sorted8)
+	mapped2 := make([]int32, len(sorted8))
+	for index, score := range sorted8 {
+		mapped2[index] = score
+	}
 	sorted9 := slices.Clone([]string{"b", "a", "c"})
 	slices.SortFunc(sorted9, prim.CompareString)
-	mapped2 := make([]string, len(sorted9))
+	mapped3 := make([]string, len(sorted9))
 	for index, label := range sorted9 {
-		mapped2[index] = label
+		mapped3[index] = label
 	}
 	sorted10 := slices.Clone(entries)
 	slices.SortStableFunc(sorted10, func(x shared.Entry, y shared.Entry) int {
-		key := mainF(x)
-		key2 := mainF(y)
-		if key < key2 {
+		if x.Rank < y.Rank {
 			return -1
 		}
-		if key > key2 {
+		if x.Rank > y.Rank {
 			return 1
 		}
 		return 0
 	})
-	mapped3 := make([]string, len(sorted10))
+	mapped4 := make([]string, len(sorted10))
 	for index := range sorted10 {
-		mapped3[index] = sorted10[index].Name
+		mapped4[index] = sorted10[index].Name
 	}
 	sorted11 := slices.Clone(entries)
 	slices.SortStableFunc(sorted11, func(x shared.Entry, y shared.Entry) int {
-		key := mainF(x)
-		key2 := mainF(y)
-		if key < key2 {
+		if x.Rank < y.Rank {
 			return -1
 		}
-		if key > key2 {
+		if x.Rank > y.Rank {
 			return 1
 		}
 		return 0
 	})
-	mapped4 := make([]string, len(sorted11))
+	mapped5 := make([]string, len(sorted11))
 	for index := range sorted11 {
-		mapped4[index] = sorted11[index].Name
+		mapped5[index] = sorted11[index].Name
 	}
 	sorted12 := slices.Clone(entries)
 	slices.SortStableFunc(sorted12, func(x shared.Entry, y shared.Entry) int {
-		key := mainF2(x)
-		key2 := mainF2(y)
-		if key < key2 {
+		if x.Initial < y.Initial {
 			return -1
 		}
-		if key > key2 {
+		if x.Initial > y.Initial {
 			return 1
 		}
 		return 0
 	})
-	mapped5 := make([]string, len(sorted12))
+	mapped6 := make([]string, len(sorted12))
 	for index := range sorted12 {
-		mapped5[index] = sorted12[index].Name
+		mapped6[index] = sorted12[index].Name
 	}
 	sorted13 := slices.Clone(entries)
 	slices.SortStableFunc(sorted13, func(x shared.Entry, y shared.Entry) int {
-		key := mainF3(x)
-		key2 := mainF3(y)
-		return prim.CompareString(key, key2)
+		return prim.CompareString(x.Name, y.Name)
 	})
-	mapped6 := make([]string, len(sorted13))
+	mapped7 := make([]string, len(sorted13))
 	for index := range sorted13 {
-		mapped6[index] = sorted13[index].Name
+		mapped7[index] = sorted13[index].Name
 	}
-	array2 := direct.SortBy(func(x shared.Entry, y shared.Entry) ordering.Ordering {
-		number := mainF4(x)
-		number2 := mainF4(y)
+	array2 := direct.SortBy(entries, func(x shared.Entry, y shared.Entry) int {
+		number := x.Weight
+		number2 := y.Weight
+		var result3 ordering.Ordering
 		if number < number2 {
-			return ordering.OrderingLT
+			result3 = ordering.OrderingLT
+		} else if number == number2 {
+			result3 = ordering.OrderingEQ
+		} else {
+			result3 = ordering.OrderingGT
 		}
-		if number == number2 {
-			return ordering.OrderingEQ
-		}
-		return ordering.OrderingGT
-	}, func(value ordering.Ordering) int32 {
-		switch value {
+		switch result3 {
+		case ordering.OrderingLT:
+			return -1
 		case ordering.OrderingGT:
 			return 1
-		case ordering.OrderingEQ:
-			return 0
-		default: // ordering.OrderingLT
-			return -1
 		}
-	}, entries)
-	mapped7 := make([]string, len(array2))
+		return 0
+	})
+	mapped8 := make([]string, len(array2))
 	for index := range array2 {
-		mapped7[index] = array2[index].Name
+		mapped8[index] = array2[index].Name
 	}
 	sorted14 := slices.Clone(entries)
 	slices.SortStableFunc(sorted14, func(x shared.Entry, y shared.Entry) int {
-		key := mainF5(x)
-		key2 := mainF5(y)
+		key := x.Rank*10 - prim.CodeUnitLength(x.Name)
+		key2 := y.Rank*10 - prim.CodeUnitLength(y.Name)
 		if key < key2 {
 			return -1
 		}
@@ -284,9 +295,9 @@ func initializeMain_() []string {
 		}
 		return 0
 	})
-	mapped8 := make([]string, len(sorted14))
+	mapped9 := make([]string, len(sorted14))
 	for index := range sorted14 {
-		mapped8[index] = sorted14[index].Name
+		mapped9[index] = sorted14[index].Name
 	}
 	sorted15 := slices.Clone([]string{"ccc", "a", "bb", "d", ""})
 	slices.SortStableFunc(sorted15, func(x string, y string) int {
@@ -314,7 +325,7 @@ func initializeMain_() []string {
 	})
 	sorted17 := slices.Clone(prim.StringToCharArray("hello"))
 	slices.Sort(sorted17)
-	return []string{string(show.AppendShowArrayInt(nil, sorted)), string(show.AppendShowArrayInt(nil, sorted2)), string(show.AppendShowArrayInt(nil, sorted3)), string(show.AppendShowArrayInt(nil, sorted4)), string(show.AppendShowArrayNumber(nil, shared.SortNumbers(numbers))), string(show.AppendShowArrayString(nil, mapped)), string(show.AppendShowArrayChar(nil, sorted5)), string(show.AppendShowArrayString(nil, sorted6)), string(show.AppendShowArrayString(nil, sorted7)), string(show.AppendShowArrayInt(nil, mapLanes(sorted8))), string(show.AppendShowArrayString(nil, mapped2)), string(show.AppendShowArrayString(nil, mapped3)), string(show.AppendShowArrayString(nil, mapped4)), string(show.AppendShowArrayString(nil, mapped5)), string(show.AppendShowArrayString(nil, mapped6)), string(show.AppendShowArrayString(nil, mapped7)), string(show.AppendShowArrayString(nil, mapped8)), string(show.AppendShowArrayString(nil, sorted15)), string(show.AppendShowArrayInt(nil, sorted16)), prim.CharArrayToString(sorted17)}
+	return []string{show.ArrayInt(sorted), show.ArrayInt(sorted2), show.ArrayInt(sorted3), show.ArrayInt(sorted4), show.ArrayNumber(shared.SortNumbers(numbers)), show.ArrayString(mapped), show.ArrayChar(sorted5), show.ArrayString(sorted6), show.ArrayString(sorted7), show.ArrayInt(mapped2), show.ArrayString(mapped3), show.ArrayString(mapped4), show.ArrayString(mapped5), show.ArrayString(mapped6), show.ArrayString(mapped7), show.ArrayString(mapped8), show.ArrayString(mapped9), show.ArrayString(sorted15), show.ArrayInt(sorted16), prim.CharArrayToString(sorted17)}
 }
 
 var numbers = initializeNumbers()
@@ -359,85 +370,8 @@ func byLength(x string, y string) ordering.Ordering {
 	return ordering.OrderingGT
 }
 
-func mainF(value shared.Entry) int32 {
-	return value.Rank
-}
-
-func mainF2(value shared.Entry) rune {
-	return value.Initial
-}
-
-func mainF3(value shared.Entry) string {
-	return value.Name
-}
-
-func mainF4(value shared.Entry) float64 {
-	return value.Weight
-}
-
-func mainF5(entry shared.Entry) int32 {
-	return entry.Rank*10 - prim.CodeUnitLength(entry.Name)
-}
-
 func main() {
 	console.Print("[" + strings.Join(main_, " ") + "]")
-}
-
-// main_neon.go
-//go:build goexperiment.simd && arm64
-
-package main
-
-import "simd/archsimd"
-
-func mapLanes(xs []int32) []int32 {
-	out := make([]int32, len(xs))
-	const step = 4
-	i := 0
-	for ; i < len(xs)-step+1; i += step {
-		x := archsimd.LoadInt32x4(xs[i : i+step])
-		x.Store(out[i : i+step])
-	}
-	if i < len(xs) {
-		x, _ := archsimd.LoadInt32x4Part(xs[i:])
-		x.StorePart(out[i:])
-	}
-	return out
-}
-
-// main_scalar.go
-//go:build !(goexperiment.simd && (arm64 || wasm))
-
-package main
-
-func mapLanes(xs []int32) []int32 {
-	out := make([]int32, len(xs))
-	for i, x := range xs {
-		out[i] = x
-	}
-	return out
-}
-
-// main_vector.go
-//go:build goexperiment.simd && wasm
-
-package main
-
-import "simd"
-
-func mapLanes(xs []int32) []int32 {
-	out := make([]int32, len(xs))
-	step := simd.Int32s{}.Len()
-	i := 0
-	for ; i < len(xs)-step+1; i += step {
-		x := simd.LoadInt32s(xs[i : i+step])
-		x.Store(out[i : i+step])
-	}
-	if i < len(xs) {
-		x, _ := simd.LoadInt32sPart(xs[i:])
-		x.StorePart(out[i:])
-	}
-	return out
 }
 
 // shared/shared.go

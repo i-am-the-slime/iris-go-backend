@@ -43,6 +43,8 @@ struct Traversal {
     map_snoc: TypeId,
     map_singleton: TypeId,
     pure: Option<TypeId>,
+    /// The applicative traversed in, as the source names it: `V`, not the `Either` it erases to.
+    applicative: TypeId,
 }
 
 impl<'q, Q> Specializer<'q, Q>
@@ -113,7 +115,7 @@ where
 
         let function = self.fresh_local(SmolStr::new_static("function"), function);
         let array = self.fresh_local(SmolStr::new_static("array"), input);
-        let append = match self.is_linear_applicative(accumulated)? {
+        let append = match self.is_linear_applicative(traversal.applicative, accumulated)? {
             true => None,
             false => Some(self.fresh_local(SmolStr::new_static("append"), snoc)),
         };
@@ -214,7 +216,7 @@ where
         let (rank_two, [function, input]) = parameters.split_at(arity - 2) else {
             unreachable!("invariant violated: an array traversal takes a function and an array")
         };
-        let Type::Application(_, elements) = *self.context.types.lookup(result) else {
+        let Type::Application(applicative, elements) = *self.context.types.lookup(result) else {
             unreachable!("invariant violated: an array traversal returns an applicative")
         };
         let Type::Application(_, element) = *self.context.types.lookup(elements) else {
@@ -238,6 +240,7 @@ where
             map_snoc: self.instantiate_rank_two(rank_two[1], &[elements, snocced]),
             map_singleton: self.instantiate_rank_two(rank_two[1], &[element, elements]),
             pure,
+            applicative,
         })
     }
 
@@ -274,11 +277,20 @@ where
         Ok((parameters, result))
     }
 
-    fn is_linear_applicative(&mut self, accumulated: MonotypeId) -> GoResult<bool> {
-        let Monotype::Data(data) = self.monotypes.get(accumulated).clone() else {
+    /// Whether the applicative's `apply` resolves the snocing function of a `Right` or `Just`
+    /// where it is built, so that the array is appended to in place. A newtype over `Either` with
+    /// an `apply` of its own, such as `V`, which also looks at both sides, appends to an
+    /// appender instead: through its function the array would be copied at every element.
+    fn is_linear_applicative(
+        &mut self,
+        applicative: TypeId,
+        accumulated: MonotypeId,
+    ) -> GoResult<bool> {
+        let Monotype::Data(_) = self.monotypes.get(accumulated) else { return Ok(false) };
+        let (head, _) = self.context.types.spine(applicative);
+        let Type::Constructor(file_id, item) = *self.context.types.lookup(head) else {
             return Ok(false);
         };
-        let (file_id, item) = (data.file_id, data.item);
         Ok(self.context.is_type(file_id, item, "Data.Maybe", "Maybe")?
             || self.context.is_type(file_id, item, "Data.Either", "Either")?)
     }

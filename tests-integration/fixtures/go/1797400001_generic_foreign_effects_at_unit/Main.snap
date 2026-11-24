@@ -1,0 +1,88 @@
+---
+source: tests-integration/src/fixtures.rs
+---
+// main.go
+package main
+
+import (
+	"fixture/Lifted_ffi"
+	"fixture/shared"
+	"github.com/i-am-the-slime/iris-go/prim"
+	"strconv"
+)
+
+func main_() []string {
+	seen := &shared.Ref[string]{Value: ""}
+	Lifted_ffi.PerformImpl(func() struct{} {
+		mainRecord(seen, "performed ")
+		return struct{}{}
+	})
+	Lifted_ffi.GuardedImpl(func(_ string) struct{} {
+		mainRecord(seen, "handled ")
+		return struct{}{}
+	}, func() struct{} {
+		mainRecord(seen, "guarded ")
+		return struct{}{}
+	})
+	Lifted_ffi.CombineImpl(func(unit struct{}) func(struct{}) struct{} {
+		function := func(_ struct{}) func(struct{}) {
+			return func(_ struct{}) {
+			}
+		}(unit)
+		return func(unit2 struct{}) struct{} {
+			function(unit2)
+			return struct{}{}
+		}
+	}, func() struct{} {
+		mainRecord(seen, "left ")
+		return struct{}{}
+	}, func() struct{} {
+		mainRecord(seen, "right ")
+		return struct{}{}
+	})
+	Lifted_ffi.CombineImpl(func(f func(struct{})) func(struct{}) struct{} {
+		function := f
+		return func(unit struct{}) struct{} {
+			function(unit)
+			return struct{}{}
+		}
+	}, func() func(struct{}) {
+		return func(_ struct{}) {
+		}
+	}, func() struct{} {
+		mainRecord(seen, "argument ")
+		return struct{}{}
+	})
+	Lifted_ffi.ModifyImpl(func(n int32) int32 {
+		return n + 1
+	}, func(_ int32) struct{} {
+		return struct{}{}
+	})
+	counted := Lifted_ffi.PerformImpl(func() int32 {
+		return 7
+	})
+	log := seen.Value
+	return []string{log, strconv.Itoa(int(counted))}
+}
+
+func mainRecord(seen *shared.Ref[string], label string) {
+	s := seen.Value
+	s_ := prim.Append(s, label)
+	seen.Value = s_
+}
+
+func main() {
+	main_()
+}
+
+// shared/shared.go
+package shared
+
+type Ref[T any] struct {
+	Value T
+}
+
+type StateValue struct {
+	State string
+	Value string
+}

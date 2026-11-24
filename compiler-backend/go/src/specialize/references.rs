@@ -55,6 +55,10 @@ where
                         .expect("invariant violated: int64_foreign lists the foreign");
                     return Ok(self.foreign(foreign, monotype));
                 }
+                if let Some(foreign) = self.hash_map_foreign(&module.name, &name, monotype)? {
+                    let foreign = self.with_callback_arities(file_id, term, foreign)?;
+                    return Ok(self.foreign(foreign, monotype));
+                }
                 if let Some(foreign) = foreign::foreign_import(&module.name, &name) {
                     if let Foreign::UnsafeCoerce = foreign {
                         self.link_coerced_rank_n(scope, file_id, term, instantiations)?;
@@ -140,16 +144,11 @@ where
                 {
                     return Ok(expression);
                 }
-                let codec = match crate::primitives::known(&module.name, &name) {
-                    Some(Primitive::ReadJson) => Some(JsonCodec::Read),
-                    Some(Primitive::WriteJson) => Some(JsonCodec::Write),
-                    _ => None,
-                };
-                let codec = match codec {
-                    Some(codec) if self.json_codec_known(codec, &dictionaries)? => Some(codec),
-                    _ => None,
-                };
-                if codec == Some(JsonCodec::Write) {
+                // readJSON reads straight into the value inside its own specialization
+                // (`specialize::json`), so that every reading of one type shares it.
+                if crate::primitives::known(&module.name, &name) == Some(Primitive::WriteJson)
+                    && self.json_codec_known(JsonCodec::Write, &dictionaries)?
+                {
                     return Ok(self.json_write(monotype));
                 }
                 if crate::primitives::known(&module.name, &name) == Some(Primitive::GenericShow)
@@ -167,11 +166,7 @@ where
                     dictionaries: Arc::from(dictionaries),
                     signedness,
                 };
-                let reference = self.request_reference(scope, key, name, monotype)?;
-                match codec {
-                    Some(_) => Ok(self.json_read(reference)),
-                    None => Ok(reference),
-                }
+                self.request_reference(scope, key, name, monotype)
             }
         }
     }
@@ -218,6 +213,16 @@ where
                 return self.runtime_member(scope, runtime, member_name, monotype);
             }
         };
+        let module_name = member_module.name.clone();
+        if let Some(shown) = self.show_foreign_errors(
+            scope,
+            member,
+            (&module_name, &member_name),
+            &instance,
+            monotype,
+        )? {
+            return Ok(shown);
+        }
         let mut instance_names = vec![self.instance_name(instance.origin)?];
         instance_names.extend(self.dictionary_names(&dictionaries)?);
         let instances: Vec<&str> = instance_names.iter().map(SmolStr::as_str).collect();

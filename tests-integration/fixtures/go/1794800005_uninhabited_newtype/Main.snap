@@ -23,6 +23,10 @@ const (
 	StepImpossible
 )
 
+func Done(done int32) *Step {
+	return &Step{Tag: StepDone, Done: done}
+}
+
 var main_ = initializeMain_()
 
 func initializeMain_() []int32 {
@@ -42,7 +46,7 @@ func value(step *Step) int32 {
 	}
 }
 
-var steps []*Step = []*Step{{Tag: StepDone, Done: 7}, {Tag: StepDone, Done: 8}}
+var steps []*Step = []*Step{Done(7), Done(8)}
 
 func absurdInt(never Never) int32 {
 	for {

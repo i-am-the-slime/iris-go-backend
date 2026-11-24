@@ -1,0 +1,71 @@
+---
+source: tests-integration/src/fixtures.rs
+---
+// Data/Int64/int64.go
+package dataint64
+
+import "strconv"
+
+func Show(long int64) string {
+	return string(AppendShow(nil, long))
+}
+
+func AppendShowArrayInt64(buffer []byte, array []int64) []byte {
+	buffer = append(buffer, '[')
+	for index, element := range array {
+		if index > 0 {
+			buffer = append(buffer, ',')
+		}
+		buffer = AppendShow(buffer, element)
+	}
+	buffer = append(buffer, ']')
+	return buffer
+}
+
+func AppendShow(buffer []byte, long int64) []byte {
+	buffer = strconv.AppendInt(buffer, long, 10)
+	buffer = append(buffer, 'l')
+	return buffer
+}
+
+func ArrayInt64(array []int64) string {
+	return string(AppendShowArrayInt64(nil, array))
+}
+
+// main.go
+package main
+
+import (
+	"fixture/Data/Int64"
+	"github.com/i-am-the-slime/iris-go/console"
+	"strconv"
+	"strings"
+)
+
+var main_ = initializeMain_()
+
+func initializeMain_() []string {
+	array := []int64{int64(-7), int64(7)}
+	mapped := make([]int64, len(array))
+	for index, element := range array {
+		mapped[index] = halved(element)
+	}
+	array2 := []int64{int64(-7), int64(7)}
+	mapped2 := make([]int64, len(array2))
+	for index, element := range array2 {
+		mapped2[index] = euclidean(element)
+	}
+	return []string{dataint64.ArrayInt64(mapped), dataint64.ArrayInt64(mapped2), strconv.FormatInt(int64(-9223372036854775808), 10) + "l", strconv.FormatUint(uint64(4), 10) + "ul", strconv.FormatInt(int64(0), 10) + "l", strconv.FormatUint(uint64(9223372036854775807), 10) + "ul"}
+}
+
+func halved(x int64) int64 {
+	return x/2*10 + x%2
+}
+
+func euclidean(x int64) int64 {
+	return (x-(x%2+2)%2)/2*10 + (x%2+2)%2
+}
+
+func main() {
+	console.Print("[" + strings.Join(main_, " ") + "]")
+}

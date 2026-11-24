@@ -15,6 +15,7 @@
     "safe-coerce",
     "strings",
     "tailrec",
+    "unordered-collections",
     "yoga-json"
   ]
 }

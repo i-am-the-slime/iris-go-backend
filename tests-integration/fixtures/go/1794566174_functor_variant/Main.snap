@@ -90,9 +90,9 @@ func convert6(value MapTypeValueOfFnFnValueValueFnCountCountCountInt) shared.Var
 var main_ = initializeMain_()
 
 func initializeMain_() []string {
-	return []string{describe(say), describe(count), describe(shared.VariantFRep{Type: say.Type, Value: say.Map(func(coerced any) any {
+	return []string{describe(say), describe(count), describe(shared.VariantFRep{Type: "say", Value: say.Map(func(coerced any) any {
 		return coerced.(int32) * 10
-	})(say.Value), Map: say.Map}), describe(shared.VariantFRep{Type: count.Type, Value: count.Map(func(coerced any) any {
+	})(say.Value), Map: say.Map}), describe(shared.VariantFRep{Type: "count", Value: count.Map(func(coerced any) any {
 		return coerced.(int32) * 10
 	})(count.Value), Map: count.Map})}
 }

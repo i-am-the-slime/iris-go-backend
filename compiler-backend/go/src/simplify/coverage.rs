@@ -1,11 +1,11 @@
 use super::{Simplifier, substitute_in_place};
 use crate::monomorphic::traversal::for_each_alternative_child;
 use crate::monomorphic::{
-    Alternative, Binding, Expression, ExpressionKind, Guarded, Literal, Local, LocalId, Pattern,
-    PatternKind,
+    Alternative, Binding, Expression, ExpressionKind, Guard, Guarded, GuardedBranch, Literal,
+    Local, LocalId, Pattern, PatternKind,
 };
 use crate::monotype::Monotypes;
-use crate::purity::size;
+use crate::purity::{can_fail, size};
 
 impl Simplifier<'_> {
     pub(super) fn eliminate_columns(
@@ -94,6 +94,55 @@ pub(super) fn reachable(alternatives: Vec<Alternative>) -> Vec<Alternative> {
     kept
 }
 
+/// Guards whose conditions folded to literals decided: a `true` condition
+/// always holds, a branch with a `false` one is never taken, and the branches
+/// after one that always holds are never reached. Guards that cannot fail
+/// may be skipped; a branch whose guards might fail first is kept.
+pub(super) fn decided_guards(branches: Vec<GuardedBranch>) -> Guarded {
+    let mut kept: Vec<GuardedBranch> = Vec::with_capacity(branches.len());
+    let mut dropped = None;
+    for mut branch in branches {
+        let never_taken =
+            branch.guards.iter().position(|guard| literal_guard(guard) == Some(false));
+        if let Some(position) = never_taken
+            && branch.guards[..position].iter().all(|guard| !can_fail(guard_value(guard)))
+        {
+            dropped = Some(branch);
+            continue;
+        }
+        branch.guards.retain(|guard| literal_guard(guard) != Some(true));
+        let always_taken = branch.guards.is_empty();
+        kept.push(branch);
+        if always_taken {
+            break;
+        }
+    }
+    match kept.as_slice() {
+        [only] if only.guards.is_empty() => {
+            Guarded::Unconditional(kept.pop().expect("one branch").body)
+        }
+        // An alternative keeps a branch, so that it still reads as one that never matches.
+        [] => Guarded::Guards(dropped.into_iter().collect()),
+        _ => Guarded::Guards(kept),
+    }
+}
+
+fn literal_guard(guard: &Guard) -> Option<bool> {
+    match guard {
+        Guard::Boolean(Expression {
+            kind: ExpressionKind::Literal(Literal::Boolean(value)),
+            ..
+        }) => Some(*value),
+        _ => None,
+    }
+}
+
+fn guard_value(guard: &Guard) -> &Expression {
+    match guard {
+        Guard::Boolean(value) | Guard::Pattern { value, .. } => value,
+    }
+}
+
 fn irrefutable(pattern: &Pattern) -> bool {
     match &pattern.kind {
         PatternKind::Wildcard | PatternKind::Variable(_) => true,
@@ -149,17 +198,18 @@ pub(super) fn column_outcomes(
         let outcome = match (&pattern.kind, &scrutinee.kind) {
             (PatternKind::Wildcard | PatternKind::Variable(_), _) => ColumnOutcome::Matches,
             (
-                PatternKind::Constructor { constructor, arguments, .. },
-                ExpressionKind::Construct { constructor: known, .. },
+                PatternKind::Constructor { constructor, arguments: patterns, .. },
+                ExpressionKind::Construct { constructor: known, arguments: values, .. },
             ) => {
                 if constructor != known {
                     ColumnOutcome::Fails
-                } else if arguments.iter().all(|argument| {
-                    matches!(argument.kind, PatternKind::Wildcard | PatternKind::Variable(_))
-                }) {
-                    ColumnOutcome::Matches
                 } else {
-                    return None;
+                    let binds_or_matches =
+                        |pattern: &Pattern, value: &Expression| match pattern.kind {
+                            PatternKind::Variable(_) => Some(true),
+                            _ => known_match(pattern, value),
+                        };
+                    all_of(patterns.iter().zip(values).map(|(p, v)| binds_or_matches(p, v)))?
                 }
             }
             (PatternKind::Literal(pattern), ExpressionKind::Literal(known)) => {
@@ -173,6 +223,46 @@ pub(super) fn column_outcomes(
         outcomes.push(outcome);
     }
     Some(outcomes)
+}
+
+/// Whether a pattern that binds nothing matches a value the code spells out, when the value
+/// settles it.
+fn known_match(pattern: &Pattern, value: &Expression) -> Option<bool> {
+    match (&pattern.kind, &value.kind) {
+        (PatternKind::Wildcard, _) => Some(true),
+        (PatternKind::Literal(pattern), ExpressionKind::Literal(known)) => {
+            literals_equal(pattern, known)
+        }
+        (
+            PatternKind::Constructor { constructor, arguments: patterns, .. },
+            ExpressionKind::Construct { constructor: known, arguments: values, .. },
+        ) => {
+            if constructor != known {
+                return Some(false);
+            }
+            let outcomes = patterns.iter().zip(values).map(|(p, v)| known_match(p, v));
+            match all_of(outcomes) {
+                Some(ColumnOutcome::Matches) => Some(true),
+                Some(ColumnOutcome::Fails) => Some(false),
+                None => None,
+            }
+        }
+        _ => None,
+    }
+}
+
+/// The outcome of matching every one of the parts: a part known to fail decides it even when
+/// another is unknown.
+fn all_of(parts: impl Iterator<Item = Option<bool>>) -> Option<ColumnOutcome> {
+    let mut unknown = false;
+    for part in parts {
+        match part {
+            Some(false) => return Some(ColumnOutcome::Fails),
+            Some(true) => {}
+            None => unknown = true,
+        }
+    }
+    (!unknown).then_some(ColumnOutcome::Matches)
 }
 
 fn literals_equal(left: &Literal, right: &Literal) -> Option<bool> {

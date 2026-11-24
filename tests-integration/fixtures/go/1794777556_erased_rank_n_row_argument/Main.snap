@@ -1,18 +1,10 @@
 ---
 source: tests-integration/src/fixtures.rs
 ---
-// Control/Category/category.go
-package category
-
-func Identity(x int32) int32 {
-	return x
-}
-
 // main.go
 package main
 
 import (
-	"fixture/Control/Category"
 	"github.com/i-am-the-slime/iris-go/console"
 	"strconv"
 	"strings"
@@ -25,7 +17,7 @@ func initializeMain_() []string {
 	mapped := make([]string, len(array))
 	for index, x := range array {
 		mapped[index] = strconv.Itoa(int(func(coerced any) int32 {
-			return category.Identity(coerced.(int32))
+			return coerced.(int32)
 		}(x + 1)))
 	}
 	return mapped

@@ -28,6 +28,10 @@ type Tree struct {
 
 var sharedTreeLeaf = &Tree{}
 
+func Cons(cons0 int32, cons1 *ListInt) *ListInt {
+	return &ListInt{Cons0: cons0, Cons1: cons1}
+}
+
 var main_ = initializeMain_()
 
 func initializeMain_() MainResult {
@@ -80,7 +84,7 @@ func largestReplacesItsCellGo(best *ListInt, list *ListInt) *ListInt {
 				continue
 			}
 		}
-		best, list = &ListInt{Cons0: value, Cons1: sharedListIntNil}, rest
+		best, list = Cons(value, sharedListIntNil), rest
 	}
 }
 
@@ -102,7 +106,6 @@ func largestReplacesItsCellGoReusing(best *ListInt, list *ListInt) *ListInt {
 				continue
 			}
 		}
-		list.Cons0 = value
 		list.Cons1 = sharedListIntNil
 		best, list = list, rest
 	}

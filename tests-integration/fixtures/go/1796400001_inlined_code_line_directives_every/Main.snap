@@ -26,13 +26,13 @@ func Show(i int32) string {
 //line show.go:13
 func AppendShowArrayInt(buffer []byte, array []int32) []byte {
 //line show.go:15
-	buffer = append(buffer, "["...)
+	buffer = append(buffer, '[')
 //line show.go:17
 	for index, element := range array {
 //line show.go:19
 		if index > 0 {
 //line show.go:21
-			buffer = append(buffer, ","...)
+			buffer = append(buffer, ',')
 //line show.go:23
 		}
 //line show.go:25
@@ -40,10 +40,17 @@ func AppendShowArrayInt(buffer []byte, array []int32) []byte {
 //line show.go:27
 	}
 //line show.go:29
-	buffer = append(buffer, "]"...)
+	buffer = append(buffer, ']')
 //line show.go:31
 	return buffer
 //line show.go:33
+}
+
+//line show.go:36
+func ArrayInt(array []int32) string {
+//line show.go:38
+	return string(AppendShowArrayInt(nil, array))
+//line show.go:40
 }
 
 // Effect/Exception/exception.go
@@ -114,6 +121,20 @@ type StateValue struct {
 //line main.go:54
 }
 
+//line Main.purs:12:5
+func Circle(circle float64) Shape {
+//line Main.purs:12:5
+	return Shape{Tag: ShapeCircle, Circle: circle}
+//line Main.purs:12:5
+}
+
+//line Main.purs:13:5
+func Rectangle(rectangle0 float64, rectangle1 float64) Shape {
+//line Main.purs:13:5
+	return Shape{Tag: ShapeRectangle, Rectangle0: rectangle0, Rectangle1: rectangle1}
+//line Main.purs:13:5
+}
+
 //line Main.purs:30:1
 func main() {
 //line Main.purs:31:14
@@ -153,19 +174,19 @@ func main() {
 //line Main.purs:41:3
 	}
 //line Main.purs:41:3
-	if string(show.AppendShowArrayInt(nil, mapped2)) != "[24,32]" {
+	if show.ArrayInt(mapped2) != "[24,32]" {
 //line Main.purs:42:5
 		effectexception.ThrowUnit("the readings are wrong")
 //line Main.purs:41:3
 	}
 //line Main.purs:43:3
-	if int32(len(mapped)) != 2 {
+	if len(mapped) != 2 {
 //line Main.purs:44:5
 		effectexception.ThrowUnit("the length is wrong")
 //line Main.purs:43:3
 	}
 //line Main.purs:46:3
-	array2 := []Shape{{Tag: ShapeCircle, Circle: float64(counter)}, {Tag: ShapeRectangle, Rectangle0: 2.0, Rectangle1: float64(count)}, {Tag: ShapeDot}}
+	array2 := []Shape{Circle(float64(counter)), Rectangle(2.0, float64(count)), {Tag: ShapeDot}}
 //line Main.purs:46:3
 	mapped3 := make([]float64, len(array2))
 //line Main.purs:46:3
@@ -175,7 +196,7 @@ func main() {
 //line Main.purs:46:3
 	}
 //line Main.purs:46:3
-	if arraypkg.Eq(dataeq.Eq, mapped3, []float64{27.0, 8.0, 0.0}) == false {
+	if !arraypkg.Eq(dataeq.Eq, mapped3, []float64{27.0, 8.0, 0.0}) {
 //line Main.purs:47:5
 		effectexception.ThrowUnit("the areas are wrong")
 //line Main.purs:46:3
@@ -197,7 +218,7 @@ func main() {
 //line Main.purs:49:3
 	colours = arraypkg.Append(colours, []Colour{result})
 //line Main.purs:51:3
-	if arraypkg.Eq(eq, colours, []Colour{ColourGreen, ColourRed}) == false {
+	if !arraypkg.Eq(eq, colours, []Colour{ColourGreen, ColourRed}) {
 //line Main.purs:52:5
 		effectexception.ThrowUnit("the colour is wrong")
 //line Main.purs:51:3
@@ -233,19 +254,7 @@ func area(value Shape) float64 {
 //line Main.purs:18:1
 func eq(left Colour, right Colour) bool {
 //line Main.purs:18:1
-	if left == ColourRed && right == ColourRed {
-//line Main.purs:18:1
-		return true
-//line Main.purs:18:1
-	}
-//line Main.purs:18:1
-	if left == ColourGreen && right == ColourGreen {
-//line Main.purs:18:1
-		return true
-//line Main.purs:18:1
-	}
-//line Main.purs:18:1
-	return false
+	return left == right
 //line Main.purs:18:1
 }
 

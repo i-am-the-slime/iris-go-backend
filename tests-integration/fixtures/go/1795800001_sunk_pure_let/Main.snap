@@ -62,13 +62,21 @@ const (
 	EitherProblemIntRight
 )
 
+func Left(left Problem) EitherProblemInt {
+	return EitherProblemInt{Tag: EitherProblemIntLeft, Left: left}
+}
+
+func Right(right int32) EitherProblemInt {
+	return EitherProblemInt{Tag: EitherProblemIntRight, Right: right}
+}
+
 func main() {
 	array := []float64{3.0, 2.5, -1.0}
 	mapped := make([]bool, len(array))
 	for index, value := range array {
 		var result EitherProblemInt
 		if value < 0.0 {
-			result = EitherProblemInt{Tag: EitherProblemIntLeft, Left: Problem{First: []string{"apples", "count"}, Second: value}}
+			result = Left(Problem{First: []string{"apples", "count"}, Second: value})
 		} else {
 			var integer maybe.Int
 			if math.Trunc(value) == value && (value >= math.MinInt32 && value <= math.MaxInt32) {
@@ -77,14 +85,14 @@ func main() {
 				integer = maybe.NoInt
 			}
 			if integer == maybe.NoInt {
-				result = EitherProblemInt{Tag: EitherProblemIntLeft, Left: Problem{First: []string{"apples", "count"}, Second: value}}
+				result = Left(Problem{First: []string{"apples", "count"}, Second: value})
 			} else {
-				result = EitherProblemInt{Tag: EitherProblemIntRight, Right: int32(integer)}
+				result = Right(int32(integer))
 			}
 		}
 		mapped[index] = isLeftProblemInt(result)
 	}
-	if arraypkg.Eq(eq.EqBoolean, mapped, []bool{false, true, true}) == false {
+	if !arraypkg.Eq(eq.EqBoolean, mapped, []bool{false, true, true}) {
 		effectexception.ThrowUnit("a count is read wrongly")
 	}
 	array2 := []int32{11, 1}
@@ -99,7 +107,7 @@ func main() {
 		}
 		mapped2[index] = result
 	}
-	if arraypkg.Eq(eq.EqString, mapped2, [][]string{{"pears", "11", "pears", "11"}, {"pears", "1"}}) == false {
+	if !arraypkg.Eq(eq.EqString, mapped2, [][]string{{"pears", "11", "pears", "11"}, {"pears", "1"}}) {
 		effectexception.ThrowUnit("the shared value is wrong")
 	}
 }

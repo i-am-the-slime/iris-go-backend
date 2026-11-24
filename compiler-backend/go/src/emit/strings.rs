@@ -45,6 +45,13 @@ where
         buffer: GoExpression,
         suffix: GoExpression,
     ) -> GoExpression {
+        if let GoExpression::String(text) = &suffix
+            && let [byte] = text.as_bytes()
+            && byte.is_ascii()
+        {
+            let byte = GoExpression::Rune(char::from(*byte));
+            return call(identifier_expression("append"), vec![buffer, byte]);
+        }
         if has_whole_ends(&suffix) {
             let spread = GoExpression::Spread(Box::new(suffix));
             return call(identifier_expression("append"), vec![buffer, spread]);
@@ -108,6 +115,19 @@ fn has_whole_ends(expression: &GoExpression) -> bool {
         }
         _ => false,
     }
+}
+
+/// Whether a call of the function only joins or shows values as text: it has no effect and
+/// cannot fail, so a call whose text goes unread can be left out.
+pub(super) fn only_writes_text(function: &GoExpression) -> bool {
+    super::standard::is_ascii_ended(function)
+        || is_prim_append(function)
+        || matches!(
+            function,
+            GoExpression::Qualified { package, name }
+                if package == GoPackage::Prim.name()
+                    && matches!(name.as_str(), "ShowInt" | "ShowNumber" | "ShowString" | "ShowChar")
+        )
 }
 
 /// The go-support prim functions whose result is never empty and begins and ends in ASCII.

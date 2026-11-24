@@ -19,8 +19,31 @@ pub(super) fn identifier_expression(name: &str) -> GoExpression {
     GoExpression::Identifier(name.to_string())
 }
 
+/// `value.name`, or the field's own value when `value` is a struct built right there whose other
+/// fields cost nothing to leave out: `InvoiceLine{Sku: x.Sku, Cents: q * p}.Cents` is `q * p`.
 pub(super) fn field(value: GoExpression, name: &str) -> GoExpression {
+    if let GoExpression::Composite { fields, .. } = &value
+        && fields.iter().all(|(label, value)| label.is_some() && costs_nothing(value))
+        && let Some((_, chosen)) = fields.iter().find(|(label, _)| label.as_deref() == Some(name))
+    {
+        return chosen.clone();
+    }
     GoExpression::Field { value: Box::new(value), name: name.to_string() }
+}
+
+/// An expression that can't panic, call anything or allocate where anyone sees it.
+fn costs_nothing(expression: &GoExpression) -> bool {
+    match expression {
+        GoExpression::Binary { operator, left, right } => {
+            !matches!(*operator, "/" | "%" | "<<" | ">>")
+                && costs_nothing(left)
+                && costs_nothing(right)
+        }
+        GoExpression::Unary { operator, operand } => *operator != "*" && costs_nothing(operand),
+        GoExpression::Field { value, .. } => is_simple(value),
+        GoExpression::Qualified { .. } => true,
+        expression => is_simple(expression),
+    }
 }
 
 pub(super) fn binary(

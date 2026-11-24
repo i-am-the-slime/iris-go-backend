@@ -17,12 +17,16 @@ type ListInt struct {
 
 var sharedListIntNil = &ListInt{}
 
+func Cons(cons0 int32, cons1 *ListInt) *ListInt {
+	return &ListInt{Cons0: cons0, Cons1: cons1}
+}
+
 func main_() int32 {
 	return foldLanes(direct.FromFoldable(func(f func(int32) func(*direct.ConsList[int32]) *direct.ConsList[int32]) func(*direct.ConsList[int32]) func(*ListInt) *direct.ConsList[int32] {
 		return func(b *direct.ConsList[int32]) func(*ListInt) *direct.ConsList[int32] {
 			return foldr(f, b)
 		}
-	}, &ListInt{Cons0: 1, Cons1: &ListInt{Cons0: 2, Cons1: sharedListIntNil}}), 0)
+	}, Cons(1, Cons(2, sharedListIntNil))), 0)
 }
 
 func foldr(f func(int32) func(*direct.ConsList[int32]) *direct.ConsList[int32], b *direct.ConsList[int32]) func(*ListInt) *direct.ConsList[int32] {

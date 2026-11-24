@@ -20,6 +20,9 @@ impl Simplifier<'_> {
         {
             return outside;
         }
+        if let Some(elements) = choice::negative_update(foreign, &arguments) {
+            return elements;
+        }
         if let Some(value) = three_way::constant_comparison(foreign, &arguments) {
             return Expression::new(ExpressionKind::Literal(Literal::Boolean(value)), monotype);
         }
@@ -130,6 +133,14 @@ impl Simplifier<'_> {
             Foreign::Identity => {
                 arguments.pop().expect("invariant violated: identity has one argument")
             }
+            Foreign::RecordGet if has_literal_label(&arguments) => {
+                let record = arguments.pop().expect("invariant violated: get has two arguments");
+                let label = arguments.pop().expect("invariant violated: get has two arguments");
+                let ExpressionKind::Literal(Literal::String(label)) = label.kind else {
+                    unreachable!("invariant violated: the label was just matched as a string")
+                };
+                self.field_of(record, SmolStr::from(label), monotype)
+            }
             Foreign::Record(operation) => self.record_operation(*operation, arguments, monotype),
             Foreign::RecordHas => self.record_has(arguments, monotype),
             Foreign::ObjectFoldM => self.object_fold(arguments, monotype),
@@ -139,6 +150,7 @@ impl Simplifier<'_> {
             }
             Foreign::Ordering => self.ordering(arguments, monotype),
             Foreign::Operator(_) => self.operator(foreign, arguments, monotype),
+            Foreign::Int64 { .. } => self.int64_operation(foreign, arguments, monotype),
             // A string's code units are the chars it was built from, one by one, lone
             // surrogates included: the array is its own.
             foreign
@@ -170,7 +182,8 @@ impl Simplifier<'_> {
             }
             foreign
                 if foreign.calls(crate::foreign::INT_DIVIDE)
-                    || foreign.calls(crate::foreign::INT_MODULO) =>
+                    || foreign.calls(crate::foreign::INT_MODULO)
+                    || foreign.calls(crate::foreign::SHOW_NUMBER) =>
             {
                 self.operator(foreign, arguments, monotype)
             }
@@ -297,6 +310,15 @@ impl Simplifier<'_> {
         body: Expression,
         monotype: crate::monotype::MonotypeId,
     ) -> Expression {
+        if let ExpressionKind::EffectPure(value) = &action.kind
+            && is_known_construction(value)
+            && cases_on(&body, local.id)
+        {
+            let value = (**value).clone();
+            self.substituting_alias(&local, &value);
+            let body = super::substitute(body, local.id, &value, self.monotypes);
+            return self.expression(body);
+        }
         match action.kind {
             ExpressionKind::EffectPure(value)
                 if builds_safely(&body) && !self.defers_work(&local, &body) =>
@@ -316,6 +338,21 @@ impl Simplifier<'_> {
             ExpressionKind::Let { bindings, body: inner } => {
                 let rest = self.effect_bind(*inner, local, body, monotype);
                 Expression::new(ExpressionKind::Let { bindings, body: Box::new(rest) }, monotype)
+            }
+            ExpressionKind::If { .. } | ExpressionKind::Case { .. }
+                if chooses_only_pure(&action)
+                    && builds_safely(&body)
+                    && !self.defers_work(&local, &body) =>
+            {
+                let value_monotype =
+                    self.monotypes.effect_result(action.monotype).unwrap_or(local.monotype);
+                let value = self.map_choices(action, value_monotype, &mut |_, chosen| {
+                    let ExpressionKind::EffectPure(value) = chosen.kind else {
+                        unreachable!("invariant violated: every choice was checked to be pure")
+                    };
+                    *value
+                });
+                self.let_bindings(vec![Binding { local, value }], body)
             }
             kind => {
                 let action = Expression::new(kind, action.monotype).located(action.position);
@@ -377,6 +414,27 @@ impl Simplifier<'_> {
     }
 }
 
+/// A constructor applied to values that are already there, such as the `Right x` that `liftIO`
+/// wraps a result in. A bind of its `pure` to a local that a `case` then looks at decides that
+/// `case` here, which runs nothing earlier than the bind would: it only picks the alternative.
+fn is_known_construction(value: &Expression) -> bool {
+    matches!(&value.kind, ExpressionKind::Construct { arguments, .. } if arguments.iter().all(is_trivial))
+}
+
+/// Whether the expression starts with a `case` of the local, maybe as the first action it runs.
+fn cases_on(expression: &Expression, local: LocalId) -> bool {
+    match &expression.kind {
+        ExpressionKind::Case { scrutinees, .. } => scrutinees
+            .iter()
+            .any(|scrutinee| matches!(scrutinee.kind, ExpressionKind::Local(id) if id == local)),
+        ExpressionKind::EffectBind { action, .. } => cases_on(action, local),
+        ExpressionKind::EffectPure(value) | ExpressionKind::Let { body: value, .. } => {
+            cases_on(value, local)
+        }
+        _ => false,
+    }
+}
+
 fn builds_safely(expression: &Expression) -> bool {
     match &expression.kind {
         ExpressionKind::EffectPure(value) => is_discardable(value),
@@ -404,4 +462,30 @@ fn builds_safely(expression: &Expression) -> bool {
         | ExpressionKind::Function(_) => true,
         _ => false,
     }
+}
+
+fn chooses_only_pure(expression: &Expression) -> bool {
+    match &expression.kind {
+        ExpressionKind::EffectPure(_) => true,
+        ExpressionKind::Let { body, .. } => chooses_only_pure(body),
+        ExpressionKind::If { condition, then, otherwise } => {
+            is_discardable(condition) && chooses_only_pure(then) && chooses_only_pure(otherwise)
+        }
+        ExpressionKind::Case { scrutinees, alternatives } => {
+            scrutinees.iter().all(is_discardable)
+                && alternatives.iter().all(|alternative| match &alternative.body {
+                    Guarded::Unconditional(body) => chooses_only_pure(body),
+                    Guarded::Guards(branches) => branches.iter().all(|branch| {
+                        branch.guards.iter().all(|guard| is_discardable(guard.value()))
+                            && chooses_only_pure(&branch.body)
+                    }),
+                })
+        }
+        _ => false,
+    }
+}
+
+fn has_literal_label(arguments: &[Expression]) -> bool {
+    let [label, _] = arguments else { return false };
+    matches!(label.kind, ExpressionKind::Literal(Literal::String(_)))
 }

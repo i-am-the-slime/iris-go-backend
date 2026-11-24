@@ -1,7 +1,7 @@
 use std::fmt;
 use std::ops::Range;
 
-use rustc_hash::FxHashSet;
+use rustc_hash::{FxHashMap, FxHashSet};
 
 #[derive(Debug, Clone, Default)]
 pub struct Opacity {
@@ -130,8 +130,10 @@ const ASSIGNMENTS: &[&str] =
 
 const ESCAPING_WORDS: &[&str] = &["any", "interface", "reflect", "unsafe"];
 
+const OPAQUE_GENERIC_PACKAGES: &[&str] = &["atomic", "iter", "unique", "weak"];
+
 const BUILTINS: &[&str] =
-    &["append", "cap", "clear", "copy", "delete", "len", "make", "max", "min", "new"];
+    &["append", "cap", "clear", "close", "copy", "delete", "len", "make", "max", "min", "new"];
 
 const COUNTING_BUILTINS: &[&str] = &["len", "cap"];
 
@@ -307,9 +309,45 @@ fn mentioned<'t>(tokens: &'t [Token], words: &FxHashSet<String>) -> Option<&'t s
     tokens.iter().filter_map(Token::word).find(|word| words.contains(*word))
 }
 
+/// The first type of another package the tokens name, other than one that only holds its type
+/// parameter or nothing of the caller's at all.
 fn qualified(tokens: &[Token]) -> Option<String> {
     tokens.windows(3).find_map(|window| match window {
         [Token::Word(package), dot, Token::Word(name)] if dot.is(".") => {
+            let spelled = format!("{package}.{name}");
+            (!PARAMETRIC_TYPES.contains(&spelled.as_str())).then_some(spelled)
+        }
+        _ => None,
+    })
+}
+
+/// Standard library types that never look at a value of their type parameter, if they have one:
+/// `atomic.Pointer[A]` only swaps a `*A`, and a mutex guards whatever is next to it. A foreign
+/// type built from them keeps its values' Go types, `IORef[[]Book]` rather than `IORef[any]`.
+const PARAMETRIC_TYPES: &[&str] = &[
+    "atomic.Pointer",
+    "atomic.Bool",
+    "atomic.Int32",
+    "atomic.Int64",
+    "atomic.Uint32",
+    "atomic.Uint64",
+    "sync.Mutex",
+    "sync.RWMutex",
+    "sync.Once",
+    "sync.WaitGroup",
+];
+
+/// What a value of the `PARAMETRIC_TYPES` is asked to do with a value of its type parameter:
+/// keep it and hand it back, never look into it.
+const PARAMETRIC_METHODS: &[&str] = &["Load", "Store", "Swap", "CompareAndSwap"];
+
+fn qualified_instantiation(tokens: &[Token]) -> Option<String> {
+    tokens.windows(4).find_map(|window| match window {
+        [Token::Word(package), dot, Token::Word(name), open]
+            if dot.is(".")
+                && open.is("[")
+                && !OPAQUE_GENERIC_PACKAGES.contains(&package.as_str()) =>
+        {
             Some(format!("{package}.{name}"))
         }
         _ => None,
@@ -484,9 +522,37 @@ impl Package {
             escaping,
             signature_escaping,
             functions: &self.functions,
+            types: &self.types,
             methods: &self.methods,
             opaque,
+            parametric_fields: self.parametric_fields(),
         }
+    }
+
+    /// The struct fields whose type is one of the `PARAMETRIC_TYPES`, such as `value` in
+    /// `struct { value atomic.Pointer[A] }`.
+    fn parametric_fields(&self) -> FxHashSet<String> {
+        let mut fields = FxHashSet::default();
+        for declaration in &self.types {
+            let definition = declaration.definition.as_slice();
+            let [keyword, open, ..] = definition else { continue };
+            if !keyword.is_word("struct") || !open.is("{") {
+                continue;
+            }
+            let Some(end) = closing(definition, 1) else { continue };
+            // `a, b atomic.Pointer[A]`: the names, then the package, a dot and the type.
+            for field in split_top(&definition[2..end], ";") {
+                let Some(dot) = field.iter().position(|token| token.is(".")) else { continue };
+                let package = dot.checked_sub(1).and_then(|before| field[before].word());
+                let name = field.get(dot + 1).and_then(Token::word);
+                let (Some(package), Some(name)) = (package, name) else { continue };
+                if !PARAMETRIC_TYPES.contains(&format!("{package}.{name}").as_str()) {
+                    continue;
+                }
+                fields.extend(field[..dot - 1].iter().filter_map(Token::word).map(str::to_string));
+            }
+        }
+        fields
     }
 
     fn escaping_words(&self) -> FxHashSet<String> {
@@ -496,7 +562,9 @@ impl Package {
             let before = escaping.len();
             for declaration in &self.types {
                 let definition = &declaration.definition;
-                if mentioned(definition, &escaping).is_some() || qualified(definition).is_some() {
+                if mentioned(definition, &escaping).is_some()
+                    || qualified_instantiation(definition).is_some()
+                {
                     escaping.insert(declaration.name.clone());
                 }
             }
@@ -545,7 +613,7 @@ fn type_escapes(declaration: &TypeDeclaration, escaping: &FxHashSet<String>) -> 
     let mut escapes = constraint_escapes(&declaration.type_parameters);
     if let Some(word) = mentioned(&declaration.definition, escaping) {
         escapes.push(whole(format!("mentions `{word}`")));
-    } else if let Some(name) = qualified(&declaration.definition) {
+    } else if let Some(name) = qualified_instantiation(&declaration.definition) {
         escapes.push(whole(format!("names `{name}`")));
     }
     escapes
@@ -556,14 +624,16 @@ fn signature_escape(function: &Function, escaping: &FxHashSet<String>) -> Option
     if let Some(word) = mentioned(&signature, escaping) {
         return Some(format!("mentions `{word}` in its signature"));
     }
-    qualified(&signature).map(|name| format!("names `{name}` in its signature"))
+    qualified_instantiation(&signature).map(|name| format!("names `{name}` in its signature"))
 }
 
 fn literal_signature(tokens: &[Token], start: usize) -> &[Token] {
     let mut depth = 0usize;
     for (index, token) in tokens.iter().enumerate().skip(start) {
         if token.is_opening() {
-            if depth == 0 && token.is("{") {
+            let type_literal = index > 0
+                && ["struct", "interface"].iter().any(|word| tokens[index - 1].is_word(word));
+            if depth == 0 && token.is("{") && !type_literal {
                 return &tokens[start..index];
             }
             depth += 1;
@@ -581,11 +651,46 @@ struct Surroundings<'p> {
     escaping: &'p FxHashSet<String>,
     signature_escaping: &'p FxHashSet<String>,
     functions: &'p [Function],
+    types: &'p [TypeDeclaration],
     methods: &'p FxHashSet<String>,
     opaque: &'p FxHashSet<String>,
+    parametric_fields: FxHashSet<String>,
 }
 
 impl Surroundings<'_> {
+    /// The type of the field of a struct the package declares, through pointers and aliases.
+    fn field_type(&self, holder: &[Token], field: &str) -> Option<Vec<Token>> {
+        let definition = self.struct_definition(holder)?;
+        let body = &definition[2..closing(&definition, 1)?];
+        split_top(body, ";").into_iter().find_map(|entry| {
+            let names = split_top(entry, ",");
+            let (last, others) = names.split_last()?;
+            let named = last.len() > 1 && others.iter().all(|other| other.len() == 1);
+            let declares = others.iter().chain([last]).any(|name| name[0].is_word(field));
+            (named && declares).then(|| last[1..].to_vec())
+        })
+    }
+
+    fn struct_definition(&self, holder: &[Token]) -> Option<Vec<Token>> {
+        let mut current = holder.to_vec();
+        for _ in 0..self.types.len() + 1 {
+            let unpointed = current.iter().position(|token| !token.is("*"))?;
+            current.drain(..unpointed);
+            if current.first()?.is_word("struct") && current.get(1)?.is("{") {
+                return Some(current);
+            }
+            let name = current.first()?.word()?;
+            if current.get(1).is_some_and(|token| token.is(".")) {
+                return None;
+            }
+            let declaration = self.types.iter().find(|declaration| declaration.name == name)?;
+            let definition = &declaration.definition;
+            let aliased = definition.first().is_some_and(|token| token.is("="));
+            current = definition[usize::from(aliased)..].to_vec();
+        }
+        None
+    }
+
     fn escapes(&self, function: &Function) -> Vec<Escape> {
         let mut escapes = constraint_escapes(&function.type_parameters);
         let Some(body) = &function.body else {
@@ -648,8 +753,12 @@ struct Flow<'f> {
     parameter: &'f str,
     locals: FxHashSet<&'f str>,
     tainted: FxHashSet<&'f str>,
+    declared: FxHashMap<&'f str, &'f [Token]>,
     assignments: Vec<Assignment>,
     blocks: FxHashSet<usize>,
+    /// The function's parameters of a function type: PureScript functions, which take what Go
+    /// lets them be called with and look into nothing else.
+    callbacks: FxHashSet<&'f str>,
 }
 
 impl<'f> Flow<'f> {
@@ -665,10 +774,13 @@ impl<'f> Flow<'f> {
             parameter,
             locals: FxHashSet::default(),
             tainted: [parameter].into_iter().collect(),
+            declared: FxHashMap::default(),
             assignments: vec![],
             blocks: FxHashSet::default(),
+            callbacks: FxHashSet::default(),
         };
         flow.declare_parameters(&function.parameters);
+        flow.callbacks = flow.callbacks_among(&function.parameters);
         flow.declare_parameters(result_list(&function.results));
         for (index, token) in body.iter().enumerate() {
             if token.is_word("func") && body.get(index + 1).is_some_and(|token| token.is("(")) {
@@ -696,12 +808,27 @@ impl<'f> Flow<'f> {
                 let typed = mentions(&entry[1..], self.parameter);
                 for name in pending.drain(..) {
                     self.locals.insert(name);
+                    self.declared.insert(name, &entry[1..]);
                     if typed {
                         self.tainted.insert(name);
                     }
                 }
             }
         }
+    }
+
+    fn callbacks_among(&self, list: &'f [Token]) -> FxHashSet<&'f str> {
+        let mut callbacks = FxHashSet::default();
+        let mut pending = vec![];
+        for entry in split_top(list, ",") {
+            let Some(name) = entry.first().and_then(Token::word) else { continue };
+            pending.push(name);
+            if entry.len() > 1 {
+                let function = entry[1].is_word("func");
+                callbacks.extend(pending.drain(..).filter(|_| function));
+            }
+        }
+        callbacks
     }
 
     fn declare_literal(&mut self, keyword: usize) {
@@ -766,6 +893,12 @@ impl<'f> Flow<'f> {
                 }
             }
             let right = index + 1..self.right_end(index, header);
+            if let ([name], Some(constructed)) =
+                (self.names(start..index).as_slice(), self.constructed_type(right.clone()))
+                && defines
+            {
+                self.declared.insert(name, constructed);
+            }
             assignments.push(Assignment {
                 left: start..index,
                 right,
@@ -798,6 +931,11 @@ impl<'f> Flow<'f> {
         let equals = (position..specification.end).find(|&index| tokens[index].is("="));
         let declared_type = position..equals.unwrap_or(specification.end);
         let declared_type = (!declared_type.is_empty()).then_some(declared_type);
+        if let Some(declared_type) = declared_type.clone() {
+            for name in self.names(left.clone()) {
+                self.declared.insert(name, &tokens[declared_type.clone()]);
+            }
+        }
         let right = match equals {
             Some(equals) => {
                 declared_equals.insert(equals);
@@ -806,6 +944,32 @@ impl<'f> Flow<'f> {
             None => specification.end..specification.end,
         };
         Some(Assignment { left, right, defines: true, declared_type })
+    }
+
+    /// The type an expression spells out as it builds a value: `&T{…}`, `T{…}`, `new(T)` or
+    /// `make(T, …)`.
+    fn constructed_type(&self, expression: Range<usize>) -> Option<&'f [Token]> {
+        let tokens = self.tokens;
+        let expression = &tokens[expression];
+        let unreferenced = expression.strip_prefix(&[Token::Symbol("&")][..]).unwrap_or(expression);
+        match unreferenced {
+            [Token::Word(builtin), open, ..] if builtin == "new" || builtin == "make" => {
+                let arguments = &unreferenced[2..closing(unreferenced, 1)?];
+                (open.is("(") && closing(unreferenced, 1)? + 1 == unreferenced.len())
+                    .then(|| split_top(arguments, ",").into_iter().next())
+                    .flatten()
+            }
+            [.., last] if last.is("}") => {
+                let open = opening(unreferenced, unreferenced.len() - 1)?;
+                let built = &unreferenced[..open];
+                let simple = built.iter().all(|token| {
+                    token.word().is_some_and(|word| !word.eq("func"))
+                        || [".", "[", "]", ","].iter().any(|symbol| token.is(symbol))
+                });
+                (simple && !built.is_empty()).then_some(built)
+            }
+            _ => None,
+        }
     }
 
     fn names(&self, range: Range<usize>) -> Vec<&'f str> {
@@ -878,6 +1042,13 @@ impl<'f> Flow<'f> {
         let tokens = self.tokens;
         let mut index = range.start;
         while index < range.end {
+            if let Some((body_open, body_close)) = self.function_literal(index) {
+                if self.is_tainted(index + 1..body_open) {
+                    return true;
+                }
+                index = body_close + 1;
+                continue;
+            }
             if let Some(word) = tokens[index].word() {
                 let selected = index > 0 && tokens[index - 1].is(".");
                 let counted = !selected
@@ -896,8 +1067,77 @@ impl<'f> Flow<'f> {
         false
     }
 
+    /// The braces around the body of the function literal starting at the `func` keyword. A
+    /// literal hands on values only through what its signature names: whatever its body does with
+    /// the values it captures is part of the surrounding body, and looked at there.
+    fn function_literal(&self, keyword: usize) -> Option<(usize, usize)> {
+        let tokens = self.tokens;
+        if !tokens[keyword].is_word("func") || !tokens.get(keyword + 1)?.is("(") {
+            return None;
+        }
+        let mut results = closing(tokens, keyword + 1)? + 1;
+        if tokens.get(results)?.is("(") {
+            results = closing(tokens, results)? + 1;
+        }
+        let body_open = results + literal_signature(tokens, results).len();
+        if !tokens.get(body_open)?.is("{") {
+            return None;
+        }
+        Some((body_open, closing(tokens, body_open)?))
+    }
+
+    /// Whether the call at `callee` goes through fields of a local to a function the package
+    /// typed, or to a method of a type that only stores the value, such as `atomic.Pointer[A]`'s
+    /// `Store`. A value of type `A` only shows what it is once converted to an interface, and the
+    /// parameters of a function type the package spells out are no interfaces: those would
+    /// mention `any` or `interface`.
+    fn calls_through_held_value(&self, callee: usize) -> bool {
+        let tokens = self.tokens;
+        let mut selectors = vec![];
+        let mut index = callee;
+        while index >= 2 && tokens[index - 1].is(".") {
+            let Some(word) = tokens[index - 2].word() else { return false };
+            selectors.push(word);
+            index -= 2;
+        }
+        let Some(root) = selectors.pop() else { return false };
+        let Some(callee) = tokens[callee].word() else { return false };
+        if !self.locals.contains(root) || self.surroundings.methods.contains(callee) {
+            return false;
+        }
+        let Some(declared) = self.declared.get(root) else { return false };
+        let mut receiver = declared.to_vec();
+        for field in selectors.into_iter().rev() {
+            let Some(field_type) = self.surroundings.field_type(&receiver, field) else {
+                return false;
+            };
+            receiver = field_type;
+        }
+        if let Some(field_type) = self.surroundings.field_type(&receiver, callee) {
+            return field_type.first().is_some_and(|token| token.is_word("func"));
+        }
+        let unpointed: Vec<&Token> = receiver.iter().skip_while(|token| token.is("*")).collect();
+        match unpointed.as_slice() {
+            [Token::Word(package), dot, Token::Word(_), open, ..] => {
+                dot.is(".") && open.is("[") && OPAQUE_GENERIC_PACKAGES.contains(&package.as_str())
+            }
+            _ => false,
+        }
+    }
+
     fn holds_values(&self, name: &str) -> bool {
         self.locals.contains(name) && self.tainted.contains(name)
+    }
+
+    /// A local whose type the function spells out, as a parameter, a `var`, or by building it.
+    fn is_typed_local(&self, name: &str) -> bool {
+        self.locals.contains(name) && self.declared.contains_key(name)
+    }
+
+    /// A local of a function type the function spells out, such as a callback parameter.
+    fn is_typed_function(&self, name: &str) -> bool {
+        let declared = self.declared.get(name).filter(|_| self.locals.contains(name));
+        declared.and_then(|declared| declared.first()).is_some_and(|token| token.is_word("func"))
     }
 
     fn escape(&self) -> Option<String> {
@@ -972,7 +1212,10 @@ impl<'f> Flow<'f> {
             let after_func =
                 parenthesis.checked_sub(1).is_some_and(|before| tokens[before].is_word("func"));
             let converts = mentions(&tokens[parenthesis..open], self.parameter);
-            return (!after_func && !converts)
+            let curried = parenthesis.checked_sub(1).and_then(|before| tokens[before].word());
+            let curried = curried
+                .is_some_and(|callee| self.holds_values(callee) || self.is_typed_function(callee));
+            return (!after_func && !converts && !curried)
                 .then(|| "passes a value to the result of an expression".to_string());
         }
         let callee = previous.word()?;
@@ -981,14 +1224,25 @@ impl<'f> Flow<'f> {
             .filter(|&dot| tokens[dot].is("."))
             .and_then(|dot| dot.checked_sub(1))
             .and_then(|root| tokens[root].word());
+        let field_access = open.checked_sub(4).is_some_and(|dot| tokens[dot].is("."));
         match qualifier {
             Some(root) if GENERIC_PACKAGES.contains(&root) && !self.locals.contains(root) => None,
+            Some(root)
+                if field_access
+                    && self.surroundings.parametric_fields.contains(root)
+                    && PARAMETRIC_METHODS.contains(&callee) =>
+            {
+                None
+            }
+            Some(_) if self.calls_through_held_value(open - 1) => None,
             Some(root) => Some(format!("passes a value to `{root}.{callee}`")),
             None if previous.is_keyword() => None,
             None if BUILTINS.contains(&callee) => self.builtin_escape(callee, open, end),
             None if callee == self.parameter
                 || self.surroundings.opaque.contains(callee)
-                || self.holds_values(callee) =>
+                || self.holds_values(callee)
+                || self.callbacks.contains(callee)
+                || self.is_typed_function(callee) =>
             {
                 None
             }
@@ -1081,7 +1335,9 @@ impl<'f> Flow<'f> {
         let mut index = end;
         while let Some(previous) = index.checked_sub(1) {
             let token = &tokens[previous];
-            if let Some(word) = token.word() {
+            if token.is_keyword() {
+                break;
+            } else if let Some(word) = token.word() {
                 root = Some(word);
                 index = previous;
             } else if token.is(".") {
@@ -1105,7 +1361,8 @@ impl<'f> Flow<'f> {
             return None;
         }
         let root = self.chain_root(arrow)?;
-        (!self.holds_values(root)).then(|| format!("sends a value on `{root}`"))
+        let local_channel = self.holds_values(root) || self.is_typed_local(root);
+        (!local_channel).then(|| format!("sends a value on `{root}`"))
     }
 }
 
@@ -1186,6 +1443,42 @@ func Pairs[A any, B any](items Repeated[A], other []B) []struct{ first A; second
     }
 
     #[test]
+    fn a_cell_behind_an_atomic_pointer_only_keeps_its_values() {
+        let source = "package ffi
+
+import \"sync/atomic\"
+
+type IORef[A any] = *ioref[A]
+
+type ioref[A any] struct {
+	value atomic.Pointer[A]
+}
+
+func NewIORefImpl[A any](value A) *ioref[A] {
+	ref := &ioref[A]{}
+	ref.value.Store(&value)
+	return ref
+}
+
+func ReadIORefImpl[A any](ref *ioref[A]) A { return *ref.value.Load() }
+
+func AtomicModifyIORefImpl[A, B, T any](first func(T) A, second func(T) B, f func(A) T, ref *ioref[A]) B {
+	for {
+		old := ref.value.Load()
+		result := f(*old)
+		updated := first(result)
+		if ref.value.CompareAndSwap(old, &updated) {
+			return second(result)
+		}
+	}
+}
+";
+        for name in ["IORef", "ioref", "NewIORefImpl", "ReadIORefImpl", "AtomicModifyIORefImpl"] {
+            assert_eq!(escapes(source, name), Vec::<String>::new(), "{name}");
+        }
+    }
+
+    #[test]
     fn a_conversion_to_an_interface_looks_into_the_value() {
         let source = "package ffi
 
@@ -1259,6 +1552,44 @@ func Wrap[A any](value A) Cell[A] { return Cell[A]{value: value} }
     }
 
     #[test]
+    fn a_type_of_another_package_holds_the_value_only_when_instantiated_with_it() {
+        let source = "package ffi
+
+import (
+	\"context\"
+	\"sync\"
+	\"sync/atomic\"
+
+	\"example.com/other\"
+)
+
+type cell[A any] struct {
+	lock  sync.Mutex
+	value atomic.Pointer[A]
+}
+
+type Cell[A any] = *cell[A]
+
+func Read[A any](cell *cell[A]) A { return *cell.value.Load() }
+
+func Offer[A any](ctx context.Context, channel chan A, value A) bool {
+	select {
+	case channel <- value:
+		return true
+	case <-ctx.Done():
+		return false
+	}
+}
+
+func Wrap[A any](value A) other.Box[A] { return other.Box[A]{} }
+";
+        assert_eq!(escapes(source, "cell"), Vec::<String>::new());
+        assert_eq!(escapes(source, "Read"), Vec::<String>::new());
+        assert_eq!(escapes(source, "Offer"), Vec::<String>::new());
+        assert_eq!(escapes(source, "Wrap"), ["it names `other.Box` in its signature"]);
+    }
+
+    #[test]
     fn a_helper_that_is_opaque_keeps_its_caller_opaque() {
         let source = "package ffi
 
@@ -1272,6 +1603,139 @@ func leak[A any](value A) []any { return []any{value} }
 ";
         assert_eq!(escapes(source, "Outer"), Vec::<String>::new());
         assert_eq!(escapes(source, "Leaky"), ["it mentions `any` in its signature"]);
+    }
+
+    #[test]
+    fn a_call_through_a_field_of_a_held_value_keeps_the_value_opaque() {
+        let source = "package ffi
+
+import (
+	\"container/list\"
+	\"sync/atomic\"
+)
+
+type Case[A, R any] struct {
+	receiving <-chan A
+	received  func(A, bool) R
+	sending   chan<- A
+	value     A
+}
+
+func Select[A, R any](first Case[A, R], fallback R) R {
+	select {
+	case value, open := <-first.receiving:
+		return first.received(value, open)
+	case first.sending <- first.value:
+		return fallback
+	}
+}
+
+type ioref[A any] struct{ value atomic.Pointer[A] }
+
+func Write[A any](ref *ioref[A], value A) { ref.value.Store(&value) }
+
+type queue[A any] struct{ items list.List }
+
+func Push[A any](queue *queue[A], value A) { queue.items.PushBack(value) }
+
+func Close[A any](channel chan A) { close(channel) }
+";
+        assert_eq!(escapes(source, "Select"), Vec::<String>::new());
+        assert_eq!(escapes(source, "Write"), Vec::<String>::new());
+        assert_eq!(
+            escapes(source, "Push"),
+            ["type parameter A passes a value to `items.PushBack`"]
+        );
+        assert_eq!(escapes(source, "Close"), Vec::<String>::new());
+    }
+
+    #[test]
+    fn a_function_literal_hands_on_only_what_its_signature_names() {
+        let source = "package ffi
+
+import (
+	\"fmt\"
+
+	\"example.com/loop\"
+)
+
+func Turn[A any](effect func() A) A {
+	var value A
+	loop.Turn(func() { value = effect() })
+	return value
+}
+
+func Later[A any](value A) { loop.Run(func() A { return value }) }
+
+func Print[A any](value A) { loop.Turn(func() { fmt.Println(value) }) }
+
+func Results[A, B any](f func(A) B, element A) []B {
+	results := make([]B, 1)
+	result := run(func() B { return f(element) })
+	results[0] = result
+	return results
+}
+
+func run[B any](action func() B) B { return action() }
+";
+        assert_eq!(escapes(source, "Turn"), Vec::<String>::new());
+        assert_eq!(escapes(source, "Later"), ["type parameter A passes a value to `loop.Run`"]);
+        assert_eq!(escapes(source, "Print"), ["type parameter A passes a value to `fmt.Println`"]);
+        assert_eq!(escapes(source, "Results"), Vec::<String>::new());
+    }
+
+    #[test]
+    fn a_name_reused_for_another_type_keeps_the_value_opaque() {
+        let source = "package ffi
+
+import \"example.com/failure\"
+
+type Case[A, R any] struct {
+	receiving <-chan A
+	received  func(A, bool) R
+}
+
+func Select2[A, B, R any](first Case[A, R], second Case[B, R]) R {
+	select {
+	case value, open := <-first.receiving:
+		return first.received(value, open)
+	case value, open := <-second.receiving:
+		return second.received(value, open)
+	}
+}
+
+func Both[A, B, C any](combine func(A) func(B) C, left A, right B) C {
+	return combine(left)(right)
+}
+
+func Launch[A any](action func() A, succeeded func(A), failed func(failure.Error)) {
+	value, problem, didFail := attempt(action)
+	failures := make(chan *failure.Error, 1)
+	failures <- &problem
+	if didFail {
+		failed(problem)
+	} else {
+		succeeded(value)
+	}
+}
+
+func Each[A any](elements []A, f func(A)) {
+	for _, element := range elements {
+		run(func() struct{} {
+			f(element)
+			return struct{}{}
+		})
+	}
+}
+
+func attempt[A any](action func() A) (A, failure.Error, bool) { return action(), failure.Error{}, false }
+
+func run[B any](action func() B) B { return action() }
+";
+        assert_eq!(escapes(source, "Select2"), Vec::<String>::new());
+        assert_eq!(escapes(source, "Both"), Vec::<String>::new());
+        assert_eq!(escapes(source, "Launch"), Vec::<String>::new());
+        assert_eq!(escapes(source, "Each"), Vec::<String>::new());
     }
 
     #[test]

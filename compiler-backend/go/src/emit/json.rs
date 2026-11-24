@@ -14,10 +14,10 @@
 use smol_str::SmolStr;
 
 use super::names::{NamePart, PendingSpelling};
-use super::{Emitter, binary, call, identifier_expression};
+use super::{Emitter, Mode, Sink, binary, call, identifier_expression};
 use crate::error::GoResult;
 use crate::foreign::{GoFunction, GoPackage, JsonCodec};
-use crate::monomorphic::Expression;
+use crate::monomorphic::{Expression, Local, LocalId, Pattern, PatternKind};
 use crate::monotype::{Monotype, MonotypeId};
 use crate::naming::{capitalise, identifier, lower_camel};
 use crate::syntax::{GoCase, GoDeclaration, GoDefault, GoExpression, GoStatement, GoType};
@@ -45,7 +45,12 @@ where
     ) -> GoResult<GoExpression> {
         self.imports.insert(GoPackage::ForeignValue.path().into());
         match codec {
-            JsonCodec::Read => self.json_read(&arguments[0], &arguments[1], monotype, out),
+            JsonCodec::Read => {
+                let name = self.temporary("read");
+                let sink = Sink::Define(name.clone());
+                self.json_read(&arguments[0], &arguments[1], monotype, sink, out)?;
+                Ok(identifier_expression(&name))
+            }
             JsonCodec::Write => {
                 let value = self.value(&arguments[0], out)?;
                 let encoder = self.json_encoder(arguments[0].monotype)?;
@@ -55,15 +60,19 @@ where
         }
     }
 
-    /// `decoded, ok := foreignvalue.Decode(text, ReadJSON…)`, the decoded value as the
-    /// result's success when it is ok, and else Yoga.JSON's own `slow` reading of the text.
-    fn json_read(
+    /// `decoded, ok := foreignvalue.Decode(text, DecodeJSON…)`, the decoded value as the
+    /// result's success when it is ok, and else Yoga.JSON's own `slow` reading of the text,
+    /// both delivered to the sink. A reader's body returns the decoded value early, so that
+    /// the slow path reads as what follows when the text does not decode.
+    pub(super) fn json_read(
         &mut self,
         slow: &Expression,
         text: &Expression,
         result: MonotypeId,
+        sink: Sink,
         out: &mut Vec<GoStatement>,
-    ) -> GoResult<GoExpression> {
+    ) -> GoResult<()> {
+        self.imports.insert(GoPackage::ForeignValue.path().into());
         let text = self.value(text, out)?;
         let text = self.hoist(text, "text", out);
         let success = match self.monotypes.get(result).clone() {
@@ -84,21 +93,158 @@ where
         let (data, constructor) = self.constructor_named(result, success)?;
         let succeeded =
             self.construct(&data, constructor, vec![identifier_expression(&decoded)])?;
-        let name = self.temporary("read");
-        out.push(GoStatement::Variable {
-            name: name.clone(),
-            type_: self.go_type(result)?,
-            value: None,
-        });
+        let sink = match sink {
+            Sink::Define(name) => {
+                let type_ = self.go_type(result)?;
+                out.push(GoStatement::Variable { name: name.clone(), type_, value: None });
+                Sink::Assign(name)
+            }
+            sink => sink,
+        };
+        let mut then = vec![];
+        self.deliver(succeeded, result, sink.clone(), &mut then)?;
         let mut otherwise = vec![];
-        let reread = self.value(slow, &mut otherwise)?;
-        otherwise.push(assign(&name, reread));
-        out.push(GoStatement::If {
-            condition: identifier_expression(&ok),
-            then: vec![assign(&name, succeeded)],
-            otherwise,
+        self.sink(slow, Mode::Value, sink.clone(), &mut otherwise)?;
+        let condition = identifier_expression(&ok);
+        if matches!(sink, Sink::Return) {
+            out.push(GoStatement::If { condition, then, otherwise: vec![] });
+            out.extend(otherwise);
+        } else {
+            out.push(GoStatement::If { condition, then, otherwise });
+        }
+        Ok(())
+    }
+
+    /// `show` of the errors a Yoga.JSON read fails with: a call of
+    /// `func ShowNonEmptyListForeignError(errors) string`, declared on first use, which shows
+    /// each error by Foreign's `show` and the list around them with `foreignvalue.ShowErrors`.
+    pub(super) fn show_foreign_errors(
+        &mut self,
+        arguments: &[Expression],
+        out: &mut Vec<GoStatement>,
+    ) -> GoResult<GoExpression> {
+        let [show, errors] = arguments else {
+            unreachable!("invariant violated: showing errors takes a show and the errors")
+        };
+        let mut computed = vec![];
+        let show = self.value(show, &mut computed)?;
+        let global = computed.is_empty()
+            && matches!(show, GoExpression::Identifier(_) | GoExpression::Qualified { .. });
+        if !global {
+            out.extend(computed);
+            let value = self.value(errors, out)?;
+            let names =
+                ShownErrors { shown: self.temporary("shown"), cell: self.temporary("cell") };
+            return self.shown_errors(show, value, errors.monotype, &names, out);
+        }
+        let name = match self.foreign_error_shows.get(&errors.monotype) {
+            Some(name) => name.clone(),
+            None => {
+                let name = self.json_global("Show", errors.monotype)?;
+                self.foreign_error_shows.insert(errors.monotype, name.clone());
+                let names = ShownErrors { shown: "shown".into(), cell: "cell".into() };
+                let mut body = vec![];
+                let parameter = identifier_expression("errors");
+                let shown =
+                    self.shown_errors(show, parameter, errors.monotype, &names, &mut body)?;
+                body.push(GoStatement::Return(Some(shown)));
+                let type_ = self.go_type(errors.monotype)?;
+                self.type_declarations.push(GoDeclaration::Function {
+                    name: name.clone(),
+                    parameters: vec![("errors".into(), type_)],
+                    result: Some(GoType::String),
+                    body,
+                });
+                name
+            }
+        };
+        let value = self.value(errors, out)?;
+        Ok(call(identifier_expression(&name), vec![value]))
+    }
+
+    /// `shown := []string{show(first)}`, each error of the rest appended in a walk over its
+    /// cells, and the list of them shown.
+    fn shown_errors(
+        &mut self,
+        show: GoExpression,
+        errors: GoExpression,
+        monotype: MonotypeId,
+        names: &ShownErrors,
+        out: &mut Vec<GoStatement>,
+    ) -> GoResult<GoExpression> {
+        let unsupported = || {
+            crate::error::GoError::unsupported_construct(
+                "showing errors that are not a NonEmpty of a List",
+            )
+        };
+        let Monotype::Data(data) = self.monotypes.get(monotype).clone() else {
+            return Err(unsupported());
+        };
+        let constructors = self
+            .monotypes
+            .constructors(&mut self.context, &data)
+            .map_err(|failure| failure.at(&self.current_definition()))?;
+        let [non_empty] = &constructors[..] else { return Err(unsupported()) };
+        let [first, rest] = non_empty.fields[..] else { return Err(unsupported()) };
+        let Monotype::Data(list) = self.monotypes.get(rest).clone() else {
+            return Err(unsupported());
+        };
+        let [first, rest] = self.constructor_bindings(&data, 0, [first, rest], errors)?.1;
+        let cells = self
+            .monotypes
+            .constructors(&mut self.context, &list)
+            .map_err(|failure| failure.at(&self.current_definition()))?;
+        let Some(cons) = cells.iter().position(|constructor| constructor.name == "Cons") else {
+            return Err(unsupported());
+        };
+        let [head, tail] = cells[cons].fields[..] else { return Err(unsupported()) };
+        out.push(GoStatement::Define {
+            names: vec![names.shown.clone()],
+            values: vec![GoExpression::Composite {
+                type_: GoType::Slice(Box::new(GoType::String)),
+                fields: vec![(None, call(show.clone(), vec![first]))],
+            }],
         });
-        Ok(identifier_expression(&name))
+        out.push(GoStatement::Define { names: vec![names.cell.clone()], values: vec![rest] });
+        let cell = identifier_expression(&names.cell);
+        let (tests, [head, tail]) = self.constructor_bindings(&list, cons, [head, tail], cell)?;
+        let is_cons = super::conjunction(tests).ok_or_else(unsupported)?;
+        out.push(GoStatement::Loop(vec![
+            GoStatement::If {
+                condition: super::conditions::negated(&is_cons),
+                then: vec![GoStatement::Break],
+                otherwise: vec![],
+            },
+            append(&names.shown, call(show, vec![head])),
+            assign(&names.cell, tail),
+        ]));
+        Ok(call(foreign_value("ShowErrors"), vec![identifier_expression(&names.shown)]))
+    }
+
+    /// The tests that a value is built by the constructor, and its two fields.
+    fn constructor_bindings(
+        &mut self,
+        data: &crate::monotype::DataType,
+        constructor: usize,
+        fields: [MonotypeId; 2],
+        value: GoExpression,
+    ) -> GoResult<(Vec<GoExpression>, [GoExpression; 2])> {
+        let patterns = fields.map(|monotype| Pattern {
+            kind: PatternKind::Variable(Local { id: LocalId(0), name: "field".into(), monotype }),
+            monotype,
+        });
+        let monotype = self.monotypes.intern(Monotype::Data(data.clone()));
+        let kind = PatternKind::Constructor {
+            data: data.clone(),
+            constructor,
+            arguments: patterns.into(),
+        };
+        let mut tests = vec![];
+        let mut bindings = vec![];
+        self.pattern_tests(&Pattern { kind, monotype }, value, &mut tests, &mut bindings)?;
+        let [(_, first), (_, second)] = <[_; 2]>::try_from(bindings)
+            .unwrap_or_else(|_| unreachable!("invariant violated: a pattern of two fields"));
+        Ok((tests, [first, second]))
     }
 
     /// The name of `func ReadJSON…(d *foreignvalue.Decoder) T`, declared on first use.
@@ -491,8 +637,56 @@ where
                 });
                 raw(out, "}");
             }
+            Monotype::Data(data) if self.monotypes.variant_row(&data).is_some() => {
+                self.json_encode_variant(&data, value, locals, out)?
+            }
             _ => self.json_encode(monotype, value, locals, out)?,
         }
+        Ok(())
+    }
+
+    /// A variant as Yoga.JSON writes it, an object of its one label: `{"label":payload}`, by a
+    /// switch over its tag.
+    fn json_encode_variant(
+        &mut self,
+        data: &crate::monotype::DataType,
+        value: GoExpression,
+        locals: &mut Locals,
+        out: &mut Vec<GoStatement>,
+    ) -> GoResult<()> {
+        let constructors = self
+            .monotypes
+            .constructors(&mut self.context, data)
+            .map_err(|failure| failure.at(&self.current_definition()))?;
+        let layout = self.data_layout(data)?;
+        let mut cases = vec![];
+        for (index, constructor) in constructors.iter().enumerate() {
+            let [payload] = constructor.fields[..] else {
+                return Err(crate::error::GoError::unsupported_construct(
+                    "a variant label without one payload",
+                ));
+            };
+            let mut body = vec![];
+            raw(&mut body, &format!("{{{}:", json_string(&constructor.name)));
+            let field = self.constructor_field(&layout, index, 0, value.clone());
+            self.json_encode(payload, field, locals, &mut body)?;
+            raw(&mut body, "}");
+            cases.push((index, body));
+        }
+        if let [(_, body)] = cases.as_mut_slice() {
+            out.append(body);
+            return Ok(());
+        }
+        let cases = cases
+            .into_iter()
+            .map(|(index, body)| GoCase {
+                values: vec![identifier_expression(&layout.constructors[index].tag)],
+                body,
+                line: None,
+            })
+            .collect();
+        let tag = super::field(value, "Tag");
+        out.push(GoStatement::Switch { value: Some(tag), cases, default: None });
         Ok(())
     }
 
@@ -572,7 +766,7 @@ where
         Ok(self.pending_global(identifier(&full), PendingSpelling::Parts(parts)))
     }
 
-    fn json_name_parts(
+    pub(super) fn json_name_parts(
         &mut self,
         monotype: MonotypeId,
         full: &mut String,
@@ -622,6 +816,12 @@ where
         }
         Ok(())
     }
+}
+
+/// The locals that showing errors writes: the errors shown so far and the cell of the rest.
+struct ShownErrors {
+    shown: String,
+    cell: String,
 }
 
 /// The locals of one decoder or encoder.

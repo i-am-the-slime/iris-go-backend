@@ -33,6 +33,18 @@ const (
 	EitherStringIntRight
 )
 
+func RightEitherStringInt(right int32) EitherStringInt {
+	return EitherStringInt{Tag: EitherStringIntRight, Right: right}
+}
+
+func RightEitherStringArrayInt(right []int32) EitherStringArrayInt {
+	return EitherStringArrayInt{Tag: EitherStringArrayIntRight, Right: right}
+}
+
+func Left(left string) EitherStringArrayInt {
+	return EitherStringArrayInt{Tag: EitherStringArrayIntLeft, Left: left}
+}
+
 // main.go
 package main
 
@@ -48,7 +60,6 @@ var main_ = initializeMain_()
 
 func initializeMain_() either.MainResult {
 	accumulator := []int32{}
-	accumulator = slices.Clip(accumulator)
 	for x := int32(1); x < 6; x++ {
 		accumulator = arraypkg.Bounded(append(accumulator, x))
 	}
@@ -57,18 +68,18 @@ func initializeMain_() either.MainResult {
 	for x := int32(1); x < 6; x++ {
 		accumulator2 = arraypkg.Bounded(append(accumulator2, x*2))
 	}
-	array := []either.EitherStringInt{{Tag: either.EitherStringIntRight, Right: 1}, {Tag: either.EitherStringIntRight, Right: 2}, {Tag: either.EitherStringIntRight, Right: 3}}
-	accumulator3 := either.EitherStringArrayInt{Tag: either.EitherStringArrayIntRight, Right: []int32{}}
+	array := []either.EitherStringInt{either.RightEitherStringInt(1), either.RightEitherStringInt(2), either.RightEitherStringInt(3)}
+	accumulator3 := either.RightEitherStringArrayInt([]int32{})
 	accumulator3.Right = slices.Clip(accumulator3.Right)
-	for elementIndex := range array {
-		if accumulator3.Tag == either.EitherStringArrayIntLeft && array[elementIndex].Tag == either.EitherStringIntLeft {
-			accumulator3 = either.EitherStringArrayInt{Tag: either.EitherStringArrayIntLeft, Left: prim.Append(accumulator3.Left, array[elementIndex].Left)}
-		} else if accumulator3.Tag == either.EitherStringArrayIntLeft && array[elementIndex].Tag == either.EitherStringIntRight {
-			accumulator3 = either.EitherStringArrayInt{Tag: either.EitherStringArrayIntLeft, Left: accumulator3.Left}
-		} else if accumulator3.Tag == either.EitherStringArrayIntRight && array[elementIndex].Tag == either.EitherStringIntRight {
-			accumulator3 = either.EitherStringArrayInt{Tag: either.EitherStringArrayIntRight, Right: arraypkg.Bounded(append(accumulator3.Right, array[elementIndex].Right))}
+	for _, element := range array {
+		if accumulator3.Tag == either.EitherStringArrayIntLeft && element.Tag == either.EitherStringIntLeft {
+			accumulator3 = either.Left(prim.Append(accumulator3.Left, element.Left))
+		} else if accumulator3.Tag == either.EitherStringArrayIntLeft && element.Tag == either.EitherStringIntRight {
+			accumulator3 = either.Left(accumulator3.Left)
+		} else if accumulator3.Tag == either.EitherStringArrayIntRight && element.Tag == either.EitherStringIntRight {
+			accumulator3 = either.RightEitherStringArrayInt(arraypkg.Bounded(append(accumulator3.Right, element.Right)))
 		} else {
-			accumulator3 = either.EitherStringArrayInt{Tag: either.EitherStringArrayIntLeft, Left: array[elementIndex].Left}
+			accumulator3 = either.Left(element.Left)
 		}
 	}
 	accumulator4 := shared.AccSeen{Acc: []int32{}, Seen: [][]int32{}}

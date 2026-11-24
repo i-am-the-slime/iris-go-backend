@@ -60,14 +60,6 @@ type TupleTupleStringStringInt struct {
 	Second int32
 }
 
-func SndStringBoolean(tuple TupleStringBoolean) bool {
-	return tuple.Second
-}
-
-func SndStringString(tuple TupleStringString) string {
-	return tuple.Second
-}
-
 // main.go
 package main
 
@@ -86,12 +78,13 @@ import (
 var main_ = initializeMain_()
 
 func initializeMain_() []string {
-	array := []bool{true, false}
-	mapped := make([]tuple.TupleStringBoolean, len(array))
-	for index, boolean := range array {
+	x := []bool{true, false}
+	x2 := []string{"kept"}
+	mapped := make([]tuple.TupleStringBoolean, len(x))
+	for index, boolean := range x {
 		mapped[index] = tuple.TupleStringBoolean{First: "label", Second: boolean}
 	}
-	len_ := int32(len(mapped))
+	len_ := int32(len(x))
 	cell := mainGoReusing(mapped, len_, 0, types.SharedListTupleStringBooleanNil)
 	elements := []tuple.TupleStringBoolean{}
 	for {
@@ -101,17 +94,16 @@ func initializeMain_() []string {
 		elements = append(elements, cell.Cons0)
 		cell = cell.Cons1
 	}
-	array2 := arraypkg.Bounded(elements)
-	mapped2 := make([]string, len(array2))
-	for index, element := range array2 {
-		mapped2[index] = show.Show(tuple.SndStringBoolean(element))
+	array := arraypkg.Bounded(elements)
+	mapped2 := make([]string, len(array))
+	for index := range array {
+		mapped2[index] = show.Show(array[index].Second)
 	}
-	array3 := []string{"kept"}
-	mapped3 := make([]tuple.TupleStringString, len(array3))
-	for index, s := range array3 {
+	mapped3 := make([]tuple.TupleStringString, len(x2))
+	for index, s := range x2 {
 		mapped3[index] = tuple.TupleStringString{First: "label", Second: s}
 	}
-	len_2 := int32(len(mapped3))
+	len_2 := int32(len(x2))
 	cell2 := mainGoReusing2(mapped3, len_2, 0, types.SharedListTupleStringStringNil)
 	elements2 := []tuple.TupleStringString{}
 	for {
@@ -121,10 +113,10 @@ func initializeMain_() []string {
 		elements2 = append(elements2, cell2.Cons0)
 		cell2 = cell2.Cons1
 	}
-	array4 := arraypkg.Bounded(elements2)
-	mapped4 := make([]string, len(array4))
-	for index, element := range array4 {
-		mapped4[index] = tuple.SndStringString(element)
+	array2 := arraypkg.Bounded(elements2)
+	mapped4 := make([]string, len(array2))
+	for index := range array2 {
+		mapped4[index] = array2[index].Second
 	}
 	return arraypkg.Append(mapped2, mapped4)
 }
@@ -166,9 +158,7 @@ func mainGoGoReusing(b *types.ListTupleStringString, value *types.ListTupleStrin
 		if value == types.SharedListTupleStringStringNil {
 			return b
 		}
-		a := value.Cons0
 		as := value.Cons1
-		value.Cons0 = a
 		value.Cons1 = b
 		b, value = value, as
 	}
@@ -179,9 +169,7 @@ func mainGoGoReusing2(b *types.ListTupleStringBoolean, value *types.ListTupleStr
 		if value == types.SharedListTupleStringBooleanNil {
 			return b
 		}
-		a := value.Cons0
 		as := value.Cons1
-		value.Cons0 = a
 		value.Cons1 = b
 		b, value = value, as
 	}

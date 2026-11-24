@@ -135,7 +135,9 @@ pub(crate) fn is_cheap(expression: &Expression) -> bool {
         {
             arguments.iter().all(is_cheap)
         }
-        ExpressionKind::Foreign { foreign: Foreign::Int64 { .. }, arguments } => {
+        ExpressionKind::Foreign { foreign: Foreign::Int64 { operation, .. }, arguments }
+            if !operation.can_fail() =>
+        {
             arguments.iter().all(is_cheap)
         }
         ExpressionKind::Access { record, .. } => is_cheap(record),
@@ -157,7 +159,9 @@ pub(crate) fn is_discardable(expression: &Expression) -> bool {
         {
             arguments.iter().all(is_discardable)
         }
-        ExpressionKind::Foreign { foreign: Foreign::Int64 { .. }, arguments } => {
+        ExpressionKind::Foreign { foreign: Foreign::Int64 { operation, .. }, arguments }
+            if !operation.can_fail() =>
+        {
             arguments.iter().all(is_discardable)
         }
         ExpressionKind::Construct { arguments, .. } | ExpressionKind::Array(arguments) => {

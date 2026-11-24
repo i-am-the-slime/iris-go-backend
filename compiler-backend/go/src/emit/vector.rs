@@ -35,14 +35,17 @@
 
 use std::fmt::Write;
 
-use rustc_hash::FxHashMap;
+use rustc_hash::{FxHashMap, FxHashSet};
 
 use super::fusion::Demand;
 use super::iteration::Found;
 use super::{Emitter, GoSourceFile, call, identifier_expression, unique};
 use crate::error::GoResult;
-use crate::foreign::{Boundary, Comparison, Foreign, Iteration, Operator};
-use crate::monomorphic::{Expression, ExpressionKind, FunctionId, Literal, Local, LocalId};
+use crate::foreign::{Boundary, Comparison, Foreign, GoFunction, GoPackage, Iteration, Operator};
+use crate::monomorphic::traversal::visit;
+use crate::monomorphic::{
+    Expression, ExpressionKind, FunctionId, Literal, Local, LocalId, Program,
+};
 use crate::monotype::{Monotype, MonotypeId};
 use crate::naming::GO_PREDECLARED;
 use crate::primitives::{Int64Operation, Signedness};
@@ -54,8 +57,20 @@ const NEON_CONSTRAINT: &str = "goexperiment.simd && arm64";
 const PORTABLE_CONSTRAINT: &str = "goexperiment.simd && wasm";
 const SCALAR_CONSTRAINT: &str = "!(goexperiment.simd && (arm64 || wasm))";
 
-/// Array literals shorter than this keep their scalar loops.
-const SHORT_LITERAL: usize = 32;
+/// What the kernel files beside a package file `<stem>.go` add to its stem.
+pub const KERNEL_FILE_SUFFIXES: [&str; 3] = ["_neon.go", "_vector.go", "_scalar.go"];
+
+/// Whether the Go source is a kernel file, by the build constraint it starts with.
+pub fn is_kernel_file(source: &str) -> bool {
+    let first_line = source.lines().next().unwrap_or_default();
+    [NEON_CONSTRAINT, PORTABLE_CONSTRAINT, SCALAR_CONSTRAINT]
+        .iter()
+        .any(|constraint| first_line.strip_prefix("//go:build ") == Some(*constraint))
+}
+
+/// Arrays known to be shorter than this keep their scalar loops: their vector loops would
+/// barely run, and cost three build variants of code.
+const SHORT_ARRAY: usize = 32;
 
 /// How far a callback may call into other functions.
 const INLINE_DEPTH: usize = 6;
@@ -65,6 +80,77 @@ const INLINE_DEPTH: usize = 6;
 pub(super) struct Kernels {
     names: FxHashMap<String, String>,
     sources: Vec<KernelSource>,
+    /// The locals bound to arrays known to be short. How often a loop runs is not known, nor
+    /// how long an array read from the program's input is, so only a short length keeps a
+    /// loop scalar.
+    short_locals: FxHashSet<LocalId>,
+}
+
+impl Kernels {
+    pub(super) fn new(program: &Program) -> Kernels {
+        let mut short_locals = FxHashSet::default();
+        for function in &program.functions {
+            visit(&function.body, &mut |expression| {
+                let ExpressionKind::Let { bindings, .. } = &expression.kind else { return };
+                for binding in bindings {
+                    if is_short(&binding.value, &short_locals) {
+                        short_locals.insert(binding.local.id);
+                    }
+                }
+            });
+        }
+        Kernels { short_locals, ..Kernels::default() }
+    }
+}
+
+/// Whether the array is known to be shorter than `SHORT_ARRAY`: a literal, a range between
+/// literals, or a `map`, `filter`, `zipWith`, slice or tail of such.
+fn is_short(array: &Expression, short_locals: &FxHashSet<LocalId>) -> bool {
+    match &array.kind {
+        ExpressionKind::Array(elements) => elements.len() < SHORT_ARRAY,
+        ExpressionKind::Local(local) => short_locals.contains(local),
+        ExpressionKind::Coerce(inner) => is_short(inner, short_locals),
+        ExpressionKind::Foreign {
+            foreign: Foreign::Call { function: GoFunction { package: GoPackage::Array, name }, .. },
+            arguments,
+        } if matches!(*name, "Slice" | "Tail") => {
+            let short_bounds = match arguments.as_slice() {
+                [start, end, _] => match (&start.kind, &end.kind) {
+                    (
+                        ExpressionKind::Literal(Literal::Int(start)),
+                        ExpressionKind::Literal(Literal::Int(end)),
+                    ) => *start >= 0 && *end - *start < SHORT_ARRAY as i64,
+                    _ => false,
+                },
+                _ => false,
+            };
+            short_bounds || arguments.last().is_some_and(|sliced| is_short(sliced, short_locals))
+        }
+        ExpressionKind::Foreign { foreign: Foreign::Range, arguments } => {
+            let [first, last] = arguments.as_slice() else { return false };
+            let (
+                ExpressionKind::Literal(Literal::Int(first)),
+                ExpressionKind::Literal(Literal::Int(last)),
+            ) = (&first.kind, &last.kind)
+            else {
+                return false;
+            };
+            first.abs_diff(*last) < SHORT_ARRAY as u64
+        }
+        ExpressionKind::Foreign {
+            foreign: Foreign::Call { boundary: Boundary { iteration: Some(iteration), .. }, .. },
+            arguments,
+        } => match iteration {
+            Iteration::Map | Iteration::MapWithIndex | Iteration::Filter => {
+                is_short(&arguments[1], short_locals)
+            }
+            Iteration::ZipWith => {
+                is_short(&arguments[1], short_locals) || is_short(&arguments[2], short_locals)
+            }
+            _ => false,
+        },
+        _ => false,
+    }
 }
 
 struct KernelSource {
@@ -129,24 +215,10 @@ where
             _ => return None,
         };
         let callback = self.callback(&arguments[0], arity)?;
-        let mut analysis = Analysis::new(self, result_element);
-        let shape = match iteration {
-            Iteration::FoldLeft => {
-                let element = analysis.source(&arguments[2])?;
-                let step = analysis.apply(&callback, vec![Term::Accumulator, element], 0)?;
-                let reduction = analysis.reduction(&step)?;
-                Shape::Fold { step, reduction }
-            }
-            Iteration::Map => {
-                let element = analysis.source(&arguments[1])?;
-                Shape::Map(analysis.apply(&callback, vec![element], 0)?)
-            }
-            _ => {
-                let left = analysis.source(&arguments[1])?;
-                let right = analysis.source(&arguments[2])?;
-                Shape::Map(analysis.apply(&callback, vec![left, right], 0)?)
-            }
-        };
+        // A fused loop stays scalar: building its array to fold it in a kernel pays only for
+        // long arrays, and a fused range's length is rarely known.
+        let (analysis, shape) =
+            self.vector_shape(iteration, &callback, arguments, result_element)?;
         let initial = matches!(iteration, Iteration::FoldLeft).then(|| &arguments[1]);
         if let Some(initial) = initial
             && self.element(initial.monotype) != Some(result_element)
@@ -154,10 +226,46 @@ where
             return None;
         }
         let Analysis { inputs, captures, bindings, element, .. } = analysis;
+        let copies = matches!(shape, Shape::Map(Term::Lane(_)));
+        if copies || inputs.iter().any(|input| is_short(input, &self.vector_kernels.short_locals)) {
+            return None;
+        }
         let parameters = parameter_names(&captures);
         let (bindings, shape) = inline_single_uses(bindings, shape);
         let kernel = Kernel { element, inputs: inputs.len(), parameters, bindings, shape };
         Some(Plan { kernel, inputs, captures, initial })
+    }
+
+    /// What the kernel computes of each element.
+    fn vector_shape<'a, 'e>(
+        &'a self,
+        iteration: Iteration,
+        callback: &Found<'e>,
+        arguments: &'e [Expression],
+        result_element: Element,
+    ) -> Option<(Analysis<'a, 'e, Self>, Shape)>
+    where
+        'p: 'e,
+    {
+        let mut analysis = Analysis::new(self, result_element);
+        let shape = match iteration {
+            Iteration::FoldLeft => {
+                let element = analysis.source(&arguments[2])?;
+                let step = analysis.apply(callback, vec![Term::Accumulator, element], 0)?;
+                let reduction = analysis.reduction(&step)?;
+                Shape::Fold { step, reduction }
+            }
+            Iteration::Map => {
+                let element = analysis.source(&arguments[1])?;
+                Shape::Map(analysis.apply(callback, vec![element], 0)?)
+            }
+            _ => {
+                let left = analysis.source(&arguments[1])?;
+                let right = analysis.source(&arguments[2])?;
+                Shape::Map(analysis.apply(callback, vec![left, right], 0)?)
+            }
+        };
+        Some((analysis, shape))
     }
 
     fn kernel_name(&mut self, kernel: &Kernel, line: Option<SourceLine>) -> String {
@@ -617,14 +725,15 @@ impl<'a, 'e, E: Lookup<'e>> Analysis<'a, 'e, E> {
                 _ => None,
             };
         }
-        if self.emitter.fusible(array)
-            || self.emitter.array_element_of(array.monotype)? != self.element
-        {
+        if self.emitter.fusible(array) {
             return None;
         }
-        // A literal array is too short for vectors to pay.
-        if matches!(&array.kind, ExpressionKind::Array(elements) if elements.len() < SHORT_LITERAL)
-        {
+        self.built(array)
+    }
+
+    /// The element of an array the kernel is passed as it is, built first if it is a loop.
+    fn built(&mut self, array: &'e Expression) -> Option<Term> {
+        if self.emitter.array_element_of(array.monotype)? != self.element {
             return None;
         }
         self.inputs.push(array);
@@ -1101,6 +1210,65 @@ fn parameter_names(captures: &[Capture<'_>]) -> Vec<String> {
         names.push(name);
     }
     names
+}
+
+/// `if a < b then a else b` and its kin, as the Go builtin it computes and the two it compares.
+fn extremum(term: &Term) -> Option<(&'static str, &Term, &Term)> {
+    let Term::Select { condition: Condition::Compare(ordering, left, right), then, otherwise } =
+        term
+    else {
+        return None;
+    };
+    let chooses_compared =
+        (left == then && right == otherwise) || (left == otherwise && right == then);
+    if *ordering == Ordering::Equal || !chooses_compared {
+        return None;
+    }
+    let less = matches!(ordering, Ordering::Less | Ordering::LessEqual);
+    let extremum = if less == (right == then) { "max" } else { "min" };
+    Some((extremum, left, right))
+}
+
+struct Clamp<'t> {
+    value: &'t Term,
+    lower: i128,
+    upper: i128,
+}
+
+/// `if x < lower then lower else min x upper`, in any of its spellings, with constant bounds
+/// in order: a clamp, which `min(max(x, lower), upper)` computes only when `lower <= upper`.
+fn clamp(term: &Term) -> Option<Clamp<'_>> {
+    let Term::Select { condition: Condition::Compare(ordering, left, right), then, otherwise } =
+        term
+    else {
+        return None;
+    };
+    let (value, bound, bound_is_lower) = match ordering {
+        Ordering::Equal => return None,
+        Ordering::Less | Ordering::LessEqual if right == then => (left, right, true),
+        Ordering::Greater | Ordering::GreaterEqual if right == then => (left, right, false),
+        Ordering::Less | Ordering::LessEqual if left == then => (right, left, false),
+        Ordering::Greater | Ordering::GreaterEqual if left == then => (right, left, true),
+        _ => return None,
+    };
+    let (inner, inner_left, inner_right) = extremum(otherwise)?;
+    let inner_bound = match () {
+        _ if inner_left == &**value => inner_right,
+        _ if inner_right == &**value => inner_left,
+        _ => return None,
+    };
+    if (inner == "min") != bound_is_lower {
+        return None;
+    }
+    let bound = constant_value(bound)?;
+    let inner_bound = constant_value(inner_bound)?;
+    let (lower, upper) = if bound_is_lower { (bound, inner_bound) } else { (inner_bound, bound) };
+    (lower <= upper).then_some(Clamp { value, lower, upper })
+}
+
+fn constant_value(term: &Term) -> Option<i128> {
+    let Term::Constant(text) = term else { return None };
+    text.parse().ok()
 }
 
 fn is_literal(term: &Term) -> bool {
@@ -1598,6 +1766,13 @@ impl Spelling<'_> {
                 let text = format!("{left} {} {right}", arithmetic.symbol());
                 if precedence < context { format!("({text})") } else { text }
             }
+            // Go's `min` and `max` treat NaN and signed zeros unlike a Number comparison.
+            Term::Select { .. }
+                if self.kernel.element != Element::Number
+                    && let Some(chosen) = self.scalar_extremum(term) =>
+            {
+                chosen
+            }
             Term::Select { condition, then, otherwise } => {
                 let otherwise = self.declared(otherwise);
                 let then = self.scalar(then, 0);
@@ -1610,6 +1785,21 @@ impl Spelling<'_> {
                 name
             }
         }
+    }
+
+    /// A choice between two values by comparing them as Go's `min` or `max`, and a clamp
+    /// between two constants as both.
+    fn scalar_extremum(&mut self, term: &Term) -> Option<String> {
+        if let Some((extremum, left, right)) = extremum(term) {
+            return Some(format!(
+                "{extremum}({}, {})",
+                self.scalar(left, 0),
+                self.scalar(right, 0)
+            ));
+        }
+        let Clamp { value, lower, upper } = clamp(term)?;
+        let value = self.scalar(value, 0);
+        Some(format!("min(max({value}, {lower}), {upper})"))
     }
 
     fn declared(&mut self, term: &Term) -> String {

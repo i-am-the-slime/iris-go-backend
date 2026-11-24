@@ -24,10 +24,13 @@ mod deduplicate;
 mod diverging;
 mod divisions;
 mod effects;
+mod equality;
 mod existential;
 mod field_reads;
 mod foreign_data;
 mod foreign_values;
+mod found;
+mod fresh;
 mod from_list;
 mod fusion;
 mod groups;
@@ -39,15 +42,21 @@ mod inspection;
 mod instantiations;
 mod int64;
 mod intervals;
+mod invariants;
 mod iteration;
 mod joins;
 mod json;
+mod kept;
+mod known;
+mod labelled;
 mod layout;
 mod lengths;
 mod lines;
+mod loads;
 mod locals;
 mod loop_state;
 mod maybe;
+mod merging;
 mod mutable;
 mod names;
 mod operators;
@@ -62,9 +71,11 @@ mod reference_equality;
 mod references;
 mod reuse;
 mod scalars;
+mod shorthands;
 mod sorting;
 mod standard;
 mod strings;
+mod swaps;
 mod text;
 mod types;
 mod unreferenced;
@@ -72,6 +83,7 @@ mod unzip;
 mod updates;
 mod vector;
 mod views;
+mod wrappers;
 
 use std::collections::BTreeSet;
 use std::sync::Arc;
@@ -106,6 +118,7 @@ use crate::timing::timed;
 
 pub(crate) use self::closures::Eliminators;
 pub use self::packages::GoSourceFile;
+pub use self::vector::{KERNEL_FILE_SUFFIXES, is_kernel_file};
 
 pub fn emit_program<Q>(
     mut program: Program,
@@ -138,6 +151,7 @@ where
     emitter.materialized = reused.materialized;
     emitter.candidates = reused.candidates;
     emitter.closure_sets = closure_sets;
+    emitter.vector_kernels = vector::Kernels::new(program);
     emitter.assign_function_names();
     let groups = timed("groups", || {
         groups::tail_call_groups(program, emitter.monotypes, &emitter.lazy_constants)
@@ -182,13 +196,19 @@ where
         await_fibers(&mut declarations, await_, every_line);
     }
     let lines_aside = every_line.then(|| lines::set_aside(&mut declarations));
+    timed("wrappers", || wrappers::inline_wrappers(&mut declarations));
+    let structs = scalars::structs_of(&emitter.type_declarations);
+    timed("equality", || equality::compare_structs_whole(&mut declarations, &structs));
+    timed("labelled", || labelled::unlabel_blocks(&mut declarations));
+    timed("known", || known::drop_known_tests(&mut declarations));
+    timed("merging", || merging::merge_identical_branches(&mut declarations));
+    timed("fresh", || fresh::drop_clips_of_fresh_slices(&mut declarations));
     timed("references", || references::promote_references(&mut declarations));
     timed("composites", || composites::take_composites_apart(&mut declarations));
     timed("immediate", || immediate::reduce_immediate_calls(&mut declarations));
     timed("conditions", || conditions::assign_conditions(&mut declarations));
     timed("aliases", || aliases::substitute_aliases(&mut declarations));
     timed("updates", || updates::update_in_place(&mut declarations));
-    let structs = scalars::structs_of(&emitter.type_declarations);
     timed("scalars", || scalars::split_struct_locals(&mut declarations, &structs));
     timed("stores", || scalars::store_fields_in_place(&mut declarations, &structs));
     timed("aliases", || aliases::substitute_aliases(&mut declarations));
@@ -214,12 +234,14 @@ where
     });
     timed("joins", || joins::join_shared_updates(&mut declarations));
     timed("ranges", || ranges::read_elements_in_place(&mut declarations));
+    timed("swaps", || swaps::swap_crosswise_pokes(&mut declarations));
     let effects = std::mem::take(&mut emitter.effects);
     timed("headers", || headers::read_headers_once(&mut declarations, &effects));
     timed("bounds", || headers::drop_repeated_bounds_tests(&mut declarations, &effects));
     timed("guards", || guards::guard_accesses_together(&mut declarations, &effects));
     timed("intervals", || intervals::prove_bounds(&mut declarations, &effects));
     timed("divisions", || divisions::reduce_constant_divisions(&mut declarations));
+    timed("shorthands", || shorthands::use_shorthands(&mut declarations));
     let taken =
         |name: &str| emitter.global_names.contains(name) || IMPORTED_PACKAGES.contains(&name);
     timed("lengths", || lengths::count_lengths_up_to_comparisons(&mut declarations));
@@ -228,6 +250,9 @@ where
     });
     timed("invariant lengths", || {
         lengths::hoist_loop_invariant_lengths(&mut declarations, &mut names, &taken)
+    });
+    timed("invariants", || {
+        invariants::hoist_loop_invariants(&mut declarations, &mut names, &taken)
     });
     let chunked = timed("chunks", || {
         chunks::allocate_linked_cells_in_chunks(&mut declarations, &mut names, &taken)
@@ -239,7 +264,10 @@ where
         blocks::allocate_nested_cells_together(&mut declarations, &mut names, &taken)
     });
     timed("divergence", || diverging::end_blocks_at_divergence(&mut declarations));
+    timed("field reads", || loads::reuse_field_reads(&mut declarations));
     timed("unreferenced", || unreferenced::drop_unreferenced_definitions(&mut declarations));
+    // Last, so that every pass before reads the constructions' fields in their literals.
+    timed("constructions", || emitter.call_constructor_functions(&mut declarations))?;
     if let Some(aside) = lines_aside {
         lines::restore(&mut declarations, aside);
     }
@@ -399,13 +427,18 @@ where
             writable: FxHashMap::default(),
             array_writers: FxHashMap::default(),
             pending_array_writers: vec![],
+            array_shows: FxHashMap::default(),
+            pending_array_shows: vec![],
             inline_shapes: FxHashMap::default(),
             copied_by_containers: FxHashSet::default(),
             shared_nullaries: FxHashMap::default(),
             json_decoders: FxHashMap::default(),
             json_encoders: FxHashMap::default(),
+            foreign_error_shows: FxHashMap::default(),
             maybe_helpers: maybe::MaybeHelpers::new(),
             constructor_functions: FxHashMap::default(),
+            named_constructions: FxHashMap::default(),
+            construction_functions: FxHashMap::default(),
             cell_types: FxHashMap::default(),
             reaching: FxHashMap::default(),
             holding: FxHashMap::default(),
@@ -534,6 +567,12 @@ struct Emitter<'p, 'm, 'q, Q> {
     converters: FxHashMap<(MonotypeId, MonotypeId), String>,
     /// The function each constructor used as a value at a function type is.
     constructor_functions: FxHashMap<(DataType, usize, MonotypeId), String>,
+    /// The constructions of sum types that a constructor function may build, by the Go struct
+    /// and tag their composite literals carry.
+    named_constructions: FxHashMap<constructors::ConstructionKey, (DataType, usize)>,
+    /// The constructor function of each such construction, shared with the constructors
+    /// used as values.
+    construction_functions: FxHashMap<constructors::ConstructionKey, String>,
     round_trips: Vec<coerce::RoundTrip>,
     array_boxes: boxing::ArrayBoxes,
     recursive_names: FxHashMap<DataType, String>,
@@ -575,6 +614,9 @@ struct Emitter<'p, 'm, 'q, Q> {
     writable: FxHashMap<FunctionId, bool>,
     array_writers: FxHashMap<FunctionId, (String, MonotypeId)>,
     pending_array_writers: Vec<FunctionId>,
+    /// The function that shows a whole array as a string through its array writer.
+    array_shows: FxHashMap<FunctionId, String>,
+    pending_array_shows: Vec<FunctionId>,
     inline_shapes: FxHashMap<DataType, Option<layout::Shape>>,
     /// The data types that a cell or an array copies whenever it is copied;
     /// only these keep the smaller limit on being held by value.
@@ -583,6 +625,8 @@ struct Emitter<'p, 'm, 'q, Q> {
     /// The typed Yoga.JSON decoder and encoder of each type, by their names.
     json_decoders: FxHashMap<MonotypeId, String>,
     json_encoders: FxHashMap<MonotypeId, String>,
+    /// The function that shows a Yoga.JSON read's errors, by the type of the errors.
+    foreign_error_shows: FxHashMap<MonotypeId, String>,
     maybe_helpers: maybe::MaybeHelpers,
     cell_types: FxHashMap<DataType, bool>,
     reaching: FxHashMap<(DataType, DataType), bool>,
@@ -954,6 +998,12 @@ where
                 out.push(panic_statement(message));
                 Ok(())
             }
+            ExpressionKind::Foreign {
+                foreign: crate::foreign::Foreign::Json(crate::foreign::JsonCodec::Read),
+                arguments,
+            } if mode == Mode::Value && !matches!(sink, Sink::Write(_) | Sink::Append(_)) => {
+                self.json_read(&arguments[0], &arguments[1], expression.monotype, sink, out)
+            }
             ExpressionKind::Apply { function, arguments } if matches!(sink, Sink::Return) => {
                 if let ExpressionKind::Function(id) = function.kind
                     && let Some(tail_loop) = &self.tail_loop
@@ -1276,19 +1326,23 @@ where
         })
     }
 
-    fn has_unit_result(&self, monotype: MonotypeId) -> bool {
-        if !matches!(self.monotypes.get(monotype), Monotype::Function(..) | Monotype::Effect(_)) {
+    /// Whether a function or effect returns Unit within `layers` applications or performances.
+    fn has_unit_result(&self, monotype: MonotypeId, layers: usize) -> bool {
+        if layers == 0
+            || !matches!(self.monotypes.get(monotype), Monotype::Function(..) | Monotype::Effect(_))
+        {
             return false;
         }
         let (_, result) = self.callable_parts(monotype);
-        self.is_unit(result) || self.has_unit_result(result)
+        self.is_unit(result) || self.has_unit_result(result, layers - 1)
     }
 
-    fn unit_valued_type(&mut self, monotype: MonotypeId) -> GoResult<GoType> {
+    /// The Go type of a value whose Unit results within `layers` are Unit's value, `struct{}`.
+    fn unit_valued_type(&mut self, monotype: MonotypeId, layers: usize) -> GoResult<GoType> {
         if self.is_unit(monotype) {
             return Ok(GoType::EmptyStruct);
         }
-        if !self.has_unit_result(monotype) {
+        if !self.has_unit_result(monotype, layers) {
             return self.go_type(monotype);
         }
         let (parameter, result) = self.callable_parts(monotype);
@@ -1296,7 +1350,7 @@ where
             Some(parameter) => vec![self.go_type(parameter)?],
             None => vec![],
         };
-        let result = self.unit_valued_type(result)?;
+        let result = self.unit_valued_type(result, layers - 1)?;
         Ok(GoType::Function { parameters, result: Some(Box::new(result)) })
     }
 
@@ -1704,9 +1758,7 @@ where
                 let values = self.values(arguments, out)?;
                 self.construct(data, *constructor, values)?
             }
-            ExpressionKind::Reuse { cell, data, constructor, arguments } => {
-                self.reused(cell, data, *constructor, arguments, &[], out)?
-            }
+            ExpressionKind::Reuse { .. } => self.reused(&expression.kind, &[], out)?,
             ExpressionKind::UniqueEdge { owned, cell, edge } => {
                 self.unique_edge(owned, cell, edge, out)?
             }
@@ -1717,9 +1769,7 @@ where
                     let constructed = self.construct(data, *constructor, values)?;
                     with_unique_mask(constructed, mask)
                 }
-                ExpressionKind::Reuse { cell, data, constructor, arguments } => {
-                    self.reused(cell, data, *constructor, arguments, edges, out)?
-                }
+                ExpressionKind::Reuse { .. } => self.reused(&value.kind, edges, out)?,
                 _ => unreachable!(
                     "invariant violated: unique edges mark neither a construction nor a reuse"
                 ),
@@ -1833,6 +1883,9 @@ where
                 self.shared_nullary(&layout.name, &constructor_layout.tag, false, line)
             }
             DataKind::Tagged | DataKind::Product | DataKind::Sentinel => {
+                if let Some(key) = self.construction_key(&layout, constructor)? {
+                    self.named_constructions.insert(key, (data.clone(), constructor));
+                }
                 let composite = self.composite(&layout, constructor, values);
                 if layout.boxed { GoExpression::Address(Box::new(composite)) } else { composite }
             }

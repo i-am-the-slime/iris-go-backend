@@ -15,14 +15,14 @@ func ShowInt(maybe Int) string {
 }
 
 func AppendShowArrayMaybeInt(buffer []byte, array []Int) []byte {
-	buffer = append(buffer, "["...)
+	buffer = append(buffer, '[')
 	for index, element := range array {
 		if index > 0 {
-			buffer = append(buffer, ","...)
+			buffer = append(buffer, ',')
 		}
 		buffer = AppendShowInt(buffer, element)
 	}
-	buffer = append(buffer, "]"...)
+	buffer = append(buffer, ']')
 	return buffer
 }
 
@@ -30,11 +30,15 @@ func AppendShowInt(buffer []byte, maybe Int) []byte {
 	if maybe != NoInt {
 		buffer = append(buffer, "(Just "...)
 		buffer = strconv.AppendInt(buffer, int64(int32(maybe)), 10)
-		buffer = append(buffer, ")"...)
+		buffer = append(buffer, ')')
 	} else {
 		buffer = append(buffer, "Nothing"...)
 	}
 	return buffer
+}
+
+func ArrayMaybeInt(array []Int) string {
+	return string(AppendShowArrayMaybeInt(nil, array))
 }
 
 // Data/Show/show.go
@@ -47,15 +51,19 @@ func Show(i int32) string {
 }
 
 func AppendShowArrayInt(buffer []byte, array []int32) []byte {
-	buffer = append(buffer, "["...)
+	buffer = append(buffer, '[')
 	for index, element := range array {
 		if index > 0 {
-			buffer = append(buffer, ","...)
+			buffer = append(buffer, ',')
 		}
 		buffer = strconv.AppendInt(buffer, int64(element), 10)
 	}
-	buffer = append(buffer, "]"...)
+	buffer = append(buffer, ']')
 	return buffer
+}
+
+func ArrayInt(array []int32) string {
+	return string(AppendShowArrayInt(nil, array))
 }
 
 // main.go
@@ -103,7 +111,7 @@ func step(commands []int32, i int32, a int32, b int32, c int32, d int32, s strin
 		if i >= int32(len(commands)) {
 			text := show.AppendShowArrayInt(nil, state.xs)
 			text = show.AppendShowArrayInt(text, state.ys)
-			return []string{string(show.AppendShowArrayInt(nil, []int32{state.a, state.b, state.c, state.d, state.e, state.f, state.g, state.k, state.h, state.w})), state.sǂ + "|" + state.t + "|" + state.u + "|" + state.p + "|" + state.q, string(maybe.AppendShowArrayMaybeInt(nil, []maybe.Int{state.m, state.n})), string(text), strconv.Itoa(int(state.r.Count)) + state.r.Label, strconv.FormatBool(state.flag)}
+			return []string{show.ArrayInt([]int32{state.a, state.b, state.c, state.d, state.e, state.f, state.g, state.k, state.h, state.w}), state.sǂ + "|" + state.t + "|" + state.u + "|" + state.p + "|" + state.q, maybe.ArrayMaybeInt([]maybe.Int{state.m, state.n}), string(text), strconv.Itoa(int(state.r.Count)) + state.r.Label, strconv.FormatBool(state.flag)}
 		}
 		var result int32
 		result = commands[i]

@@ -17,6 +17,14 @@ const (
 	EitherErrorUnitRight
 )
 
+func Left(left exception.Error) EitherErrorUnit {
+	return EitherErrorUnit{Tag: EitherErrorUnitLeft, Left: left}
+}
+
+func Right(right struct{}) EitherErrorUnit {
+	return EitherErrorUnit{Tag: EitherErrorUnitRight, Right: right}
+}
+
 // main.go
 package main
 
@@ -32,10 +40,10 @@ import (
 func main_() int32 {
 	total := &shared.Ref[int32]{Value: 0}
 	either2 := direct.CatchException(func(x exception.Error) either.EitherErrorUnit {
-		return either.EitherErrorUnit{Tag: either.EitherErrorUnitLeft, Left: x}
+		return either.Left(x)
 	}, func() either.EitherErrorUnit {
 		addCodes(total, "abc", 0)
-		return either.EitherErrorUnit{Tag: either.EitherErrorUnitRight, Right: struct{}{}}
+		return either.Right(struct{}{})
 	})
 	read := total.Value
 	var result int32

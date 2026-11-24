@@ -11,15 +11,19 @@ func Show(i int32) string {
 }
 
 func AppendShowArrayInt(buffer []byte, array []int32) []byte {
-	buffer = append(buffer, "["...)
+	buffer = append(buffer, '[')
 	for index, element := range array {
 		if index > 0 {
-			buffer = append(buffer, ","...)
+			buffer = append(buffer, ',')
 		}
 		buffer = strconv.AppendInt(buffer, int64(element), 10)
 	}
-	buffer = append(buffer, "]"...)
+	buffer = append(buffer, ']')
 	return buffer
+}
+
+func ArrayInt(array []int32) string {
+	return string(AppendShowArrayInt(nil, array))
 }
 
 // main.go
@@ -55,7 +59,7 @@ func sizes(shapes []shared.Shape) string {
 	for index := range shapes {
 		mapped[index] = shapes[index].Size
 	}
-	return string(show.AppendShowArrayInt(nil, mapped))
+	return show.ArrayInt(mapped)
 }
 
 func main() {

@@ -32,6 +32,7 @@ mod syntax;
 mod timing;
 mod types;
 
+pub use emit::{KERNEL_FILE_SUFFIXES, is_kernel_file};
 pub use error::{GoError, GoResult, UnsupportedState};
 pub use foreign::{
     EmbedError, ForeignPackages, ForeignSource, LineCoverage, LineDirectives, embedded_files,

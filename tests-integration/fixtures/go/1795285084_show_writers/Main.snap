@@ -20,19 +20,27 @@ const (
 	EitherIntStringRight
 )
 
+func Left(left int32) EitherIntString {
+	return EitherIntString{Tag: EitherIntStringLeft, Left: left}
+}
+
+func Right(right string) EitherIntString {
+	return EitherIntString{Tag: EitherIntStringRight, Right: right}
+}
+
 func ShowIntString(either EitherIntString) string {
 	return string(AppendShowIntString(nil, either))
 }
 
 func AppendShowArrayEitherIntString(buffer []byte, array []EitherIntString) []byte {
-	buffer = append(buffer, "["...)
+	buffer = append(buffer, '[')
 	for index, element := range array {
 		if index > 0 {
-			buffer = append(buffer, ","...)
+			buffer = append(buffer, ',')
 		}
 		buffer = AppendShowIntString(buffer, element)
 	}
-	buffer = append(buffer, "]"...)
+	buffer = append(buffer, ']')
 	return buffer
 }
 
@@ -41,11 +49,11 @@ func AppendShowIntString(buffer []byte, either EitherIntString) []byte {
 	case EitherIntStringLeft:
 		buffer = append(buffer, "(Left "...)
 		buffer = strconv.AppendInt(buffer, int64(either.Left), 10)
-		buffer = append(buffer, ")"...)
+		buffer = append(buffer, ')')
 	default: // EitherIntStringRight
 		buffer = append(buffer, "(Right "...)
 		buffer = prim.AppendShowString(buffer, either.Right)
-		buffer = append(buffer, ")"...)
+		buffer = append(buffer, ')')
 	}
 	return buffer
 }
@@ -89,14 +97,14 @@ func ShowNumber(maybe Number) string {
 }
 
 func AppendShowArrayMaybeNumber(buffer []byte, array []Number) []byte {
-	buffer = append(buffer, "["...)
+	buffer = append(buffer, '[')
 	for index, element := range array {
 		if index > 0 {
-			buffer = append(buffer, ","...)
+			buffer = append(buffer, ',')
 		}
 		buffer = AppendShowNumber(buffer, element)
 	}
-	buffer = append(buffer, "]"...)
+	buffer = append(buffer, ']')
 	return buffer
 }
 
@@ -105,7 +113,7 @@ func AppendShowNumber(buffer []byte, maybe Number) []byte {
 	case TagJust:
 		buffer = append(buffer, "(Just "...)
 		buffer = prim.AppendShowNumber(buffer, maybe.Just)
-		buffer = append(buffer, ")"...)
+		buffer = append(buffer, ')')
 	default: // TagNothing
 		buffer = append(buffer, "Nothing"...)
 	}
@@ -113,14 +121,14 @@ func AppendShowNumber(buffer []byte, maybe Number) []byte {
 }
 
 func AppendShowArrayXY(buffer []byte, array []XY) []byte {
-	buffer = append(buffer, "["...)
+	buffer = append(buffer, '[')
 	for index, element := range array {
 		if index > 0 {
-			buffer = append(buffer, ","...)
+			buffer = append(buffer, ',')
 		}
 		buffer = AppendShowXYConsMaybeIntConsMaybeIntNil(buffer, element)
 	}
-	buffer = append(buffer, "]"...)
+	buffer = append(buffer, ']')
 	return buffer
 }
 
@@ -129,7 +137,7 @@ func AppendShowXYConsMaybeIntConsMaybeIntNil(buffer []byte, record XY) []byte {
 	if record.X != NoInt {
 		buffer = append(buffer, "(Just "...)
 		buffer = strconv.AppendInt(buffer, int64(int32(record.X)), 10)
-		buffer = append(buffer, ")"...)
+		buffer = append(buffer, ')')
 	} else {
 		buffer = append(buffer, "Nothing"...)
 	}
@@ -137,12 +145,16 @@ func AppendShowXYConsMaybeIntConsMaybeIntNil(buffer []byte, record XY) []byte {
 	if record.Y != NoInt {
 		buffer = append(buffer, "(Just "...)
 		buffer = strconv.AppendInt(buffer, int64(int32(record.Y)), 10)
-		buffer = append(buffer, ")"...)
+		buffer = append(buffer, ')')
 	} else {
 		buffer = append(buffer, "Nothing"...)
 	}
 	buffer = append(buffer, " }"...)
 	return buffer
+}
+
+func ArrayXY(array []XY) string {
+	return string(AppendShowArrayXY(nil, array))
 }
 
 // Data/Show/show.go
@@ -154,11 +166,7 @@ import (
 	"strconv"
 )
 
-func ShowInt(array []int32) string {
-	return string(AppendShowArrayInt(nil, array))
-}
-
-func ShowInt2(i int32) string {
+func ShowInt(i int32) string {
 	return strconv.Itoa(int(i))
 }
 
@@ -171,14 +179,14 @@ func ShowWrappedConsIntNil(record shared.Wrapped) string {
 }
 
 func AppendShowArrayWrapped(buffer []byte, array []shared.Wrapped) []byte {
-	buffer = append(buffer, "["...)
+	buffer = append(buffer, '[')
 	for index, element := range array {
 		if index > 0 {
-			buffer = append(buffer, ","...)
+			buffer = append(buffer, ',')
 		}
 		buffer = AppendShowWrappedConsIntNil(buffer, element)
 	}
-	buffer = append(buffer, "]"...)
+	buffer = append(buffer, ']')
 	return buffer
 }
 
@@ -190,39 +198,51 @@ func AppendShowWrappedConsIntNil(buffer []byte, record shared.Wrapped) []byte {
 }
 
 func AppendShowArrayNumber(buffer []byte, array []float64) []byte {
-	buffer = append(buffer, "["...)
+	buffer = append(buffer, '[')
 	for index, element := range array {
 		if index > 0 {
-			buffer = append(buffer, ","...)
+			buffer = append(buffer, ',')
 		}
 		buffer = prim.AppendShowNumber(buffer, element)
 	}
-	buffer = append(buffer, "]"...)
+	buffer = append(buffer, ']')
 	return buffer
 }
 
 func AppendShowArrayArrayInt(buffer []byte, array [][]int32) []byte {
-	buffer = append(buffer, "["...)
+	buffer = append(buffer, '[')
 	for index, element := range array {
 		if index > 0 {
-			buffer = append(buffer, ","...)
+			buffer = append(buffer, ',')
 		}
 		buffer = AppendShowArrayInt(buffer, element)
 	}
-	buffer = append(buffer, "]"...)
+	buffer = append(buffer, ']')
 	return buffer
 }
 
 func AppendShowArrayInt(buffer []byte, array []int32) []byte {
-	buffer = append(buffer, "["...)
+	buffer = append(buffer, '[')
 	for index, element := range array {
 		if index > 0 {
-			buffer = append(buffer, ","...)
+			buffer = append(buffer, ',')
 		}
 		buffer = strconv.AppendInt(buffer, int64(element), 10)
 	}
-	buffer = append(buffer, "]"...)
+	buffer = append(buffer, ']')
 	return buffer
+}
+
+func ArrayWrapped(array []shared.Wrapped) string {
+	return string(AppendShowArrayWrapped(nil, array))
+}
+
+func ArrayArrayInt(array [][]int32) string {
+	return string(AppendShowArrayArrayInt(nil, array))
+}
+
+func ArrayInt(array []int32) string {
+	return string(AppendShowArrayInt(nil, array))
 }
 
 // main.go
@@ -275,24 +295,41 @@ type Point struct {
 	Second int32
 }
 
+func Circle(circle float64) Shape {
+	return Shape{Tag: ShapeCircle, Circle: circle}
+}
+
+func Rect(rect shared.HW) Shape {
+	return Shape{Tag: ShapeRect, Rect: rect}
+}
+
+func Pair(pair0 int32, pair1 maybe.Int) Shape {
+	return Shape{Tag: ShapePair, Pair0: pair0, Pair1: pair1}
+}
+
+func Named(named string) *Colour {
+	return &Colour{Tag: ColourNamed, Named: named}
+}
+
+func Mixed(mixed0 *Colour, mixed1 *Colour) *Colour {
+	return &Colour{Tag: ColourMixed, Mixed0: mixed0, Mixed1: mixed1}
+}
+
 var main_ = initializeMain_()
 
 func initializeMain_() []string {
-	record := shared.AgeBNameZ{Name: "x", Age: 3, B: true, Z: []float64{1.5}}
 	text := []byte("{ age: ")
-	text = strconv.AppendInt(text, int64(record.Age), 10)
-	text = append(text, ", b: "...)
-	text = strconv.AppendBool(text, record.B)
-	text = append(text, ", name: "...)
-	text = prim.AppendShowString(text, record.Name)
+	text = strconv.AppendInt(text, int64(3), 10)
+	text = append(text, ", b: true, name: "...)
+	text = prim.AppendShowString(text, "x")
 	text = append(text, ", z: "...)
-	text = show.AppendShowArrayNumber(text, record.Z)
+	text = show.AppendShowArrayNumber(text, []float64{1.5})
 	text = append(text, " }"...)
-	text2 := either.AppendShowArrayEitherIntString(nil, []either.EitherIntString{{Tag: either.EitherIntStringLeft, Left: 1}, {Tag: either.EitherIntStringRight, Right: "x"}})
+	text2 := either.AppendShowArrayEitherIntString(nil, []either.EitherIntString{either.Left(1), either.Right("x")})
 	text2 = maybe_tuple.AppendShowArrayTupleCharArrayMaybeNumber(text2, []maybe_tuple.TupleCharArrayMaybeNumber{{First: 'a', Second: []maybe.Number{maybe.JustNumber(2.5)}}})
 	text3 := appendShowArrayNumber(nil, []float64{1.0})
 	text3 = show.AppendShowArrayNumber(text3, []float64{1.0})
-	return []string{string(show.AppendShowArrayInt(nil, []int32{1, 2, 3})), string(show.AppendShowArrayInt(nil, []int32{})), string(show.AppendShowArrayArrayInt(nil, [][]int32{{1}, {}, {-2, 3}})), string(text), string(maybe.AppendShowArrayXY(nil, []maybe.XY{{X: maybe.Int(1), Y: maybe.NoInt}})), string(text2), string(appendShowArrayShape(nil, []Shape{{Tag: ShapeCircle, Circle: 1.0}, {Tag: ShapeRect, Rect: shared.HW{W: 1, H: -2}}, {Tag: ShapeEmpty}, {Tag: ShapePair, Pair0: -3, Pair1: maybe.Int(-4)}})), string(appendShowArrayColour(nil, []*Colour{sharedColourRed, {Tag: ColourMixed, Mixed0: sharedColourRed, Mixed1: &Colour{Tag: ColourNamed, Named: "x\"y"}}})), string(text3), string(show.AppendShowArrayWrapped(nil, []shared.Wrapped{{A: 1}})), string(appendShowArrayPoint(nil, []Point{{First: 1, Second: 2}}))}
+	return []string{show.ArrayInt([]int32{1, 2, 3}), show.ArrayInt([]int32{}), show.ArrayArrayInt([][]int32{{1}, {}, {-2, 3}}), string(text), maybe.ArrayXY([]maybe.XY{{X: maybe.Int(1), Y: maybe.NoInt}}), string(text2), arrayShape([]Shape{Circle(1.0), Rect(shared.HW{W: 1, H: -2}), {Tag: ShapeEmpty}, Pair(-3, maybe.Int(-4))}), arrayColour([]*Colour{sharedColourRed, Mixed(sharedColourRed, Named("x\"y"))}), string(text3), show.ArrayWrapped([]shared.Wrapped{{A: 1}}), arrayPoint([]Point{{First: 1, Second: 2}})}
 }
 
 func showShape(shape Shape) string {
@@ -318,78 +355,78 @@ func appendShowColour(buffer []byte, colour *Colour) []byte {
 	case ColourMixed:
 		buffer = append(buffer, "(Mixed "...)
 		buffer = appendShowColour(buffer, colour.Mixed0)
-		buffer = append(buffer, " "...)
+		buffer = append(buffer, ' ')
 		buffer = appendShowColour(buffer, colour.Mixed1)
-		buffer = append(buffer, ")"...)
+		buffer = append(buffer, ')')
 	default: // ColourNamed
 		buffer = append(buffer, "(Named "...)
 		buffer = prim.AppendShowString(buffer, colour.Named)
-		buffer = append(buffer, ")"...)
+		buffer = append(buffer, ')')
 	}
 	return buffer
 }
 
 func appendShowArrayPoint(buffer []byte, array []Point) []byte {
-	buffer = append(buffer, "["...)
+	buffer = append(buffer, '[')
 	for index, element := range array {
 		if index > 0 {
-			buffer = append(buffer, ","...)
+			buffer = append(buffer, ',')
 		}
 		buffer = appendShowPoint(buffer, element)
 	}
-	buffer = append(buffer, "]"...)
+	buffer = append(buffer, ']')
 	return buffer
 }
 
 func appendShowPoint(buffer []byte, point Point) []byte {
-	buffer = append(buffer, "<"...)
+	buffer = append(buffer, '<')
 	buffer = strconv.AppendInt(buffer, int64(point.First), 10)
-	buffer = append(buffer, ","...)
+	buffer = append(buffer, ',')
 	buffer = strconv.AppendInt(buffer, int64(point.Second), 10)
-	buffer = append(buffer, ">"...)
+	buffer = append(buffer, '>')
 	return buffer
 }
 
 func appendShowArrayNumber(buffer []byte, array []float64) []byte {
-	buffer = append(buffer, "["...)
+	buffer = append(buffer, '[')
 	for index, element := range array {
 		if index > 0 {
-			buffer = append(buffer, ","...)
+			buffer = append(buffer, ',')
 		}
 		buffer = appendShowMeters(buffer, element)
 	}
-	buffer = append(buffer, "]"...)
+	buffer = append(buffer, ']')
 	return buffer
 }
 
 func appendShowMeters(buffer []byte, number float64) []byte {
 	buffer = append(buffer, "(Meters "...)
 	buffer = prim.AppendShowNumber(buffer, number)
-	buffer = append(buffer, ")"...)
+	buffer = append(buffer, ')')
 	return buffer
 }
 
 func appendShowArrayColour(buffer []byte, array []*Colour) []byte {
-	buffer = append(buffer, "["...)
+	buffer = append(buffer, '[')
 	for index, element := range array {
 		if index > 0 {
-			buffer = append(buffer, ","...)
+			buffer = append(buffer, ',')
 		}
 		buffer = appendShowColour(buffer, element)
 	}
-	buffer = append(buffer, "]"...)
+	buffer = append(buffer, ']')
 	return buffer
 }
 
 func appendShowArrayShape(buffer []byte, array []Shape) []byte {
-	buffer = append(buffer, "["...)
+	buffer = append(buffer, '[')
 	for index, element := range array {
 		if index > 0 {
-			buffer = append(buffer, ","...)
+			buffer = append(buffer, ',')
 		}
 		buffer = appendShowShape(buffer, element)
 	}
-	buffer = append(buffer, "]"...)
+	buffer = append(buffer, ']')
 	return buffer
 }
 
@@ -398,7 +435,7 @@ func appendShowShape(buffer []byte, shape Shape) []byte {
 	case ShapeCircle:
 		buffer = append(buffer, "(Circle "...)
 		buffer = prim.AppendShowNumber(buffer, shape.Circle)
-		buffer = append(buffer, ")"...)
+		buffer = append(buffer, ')')
 	case ShapeRect:
 		hw := shape.Rect
 		buffer = append(buffer, "(Rect { h: "...)
@@ -411,17 +448,29 @@ func appendShowShape(buffer []byte, shape Shape) []byte {
 	default: // ShapePair
 		buffer = append(buffer, "(Pair "...)
 		buffer = strconv.AppendInt(buffer, int64(shape.Pair0), 10)
-		buffer = append(buffer, " "...)
+		buffer = append(buffer, ' ')
 		if shape.Pair1 != maybe.NoInt {
 			buffer = append(buffer, "(Just "...)
 			buffer = strconv.AppendInt(buffer, int64(int32(shape.Pair1)), 10)
-			buffer = append(buffer, ")"...)
+			buffer = append(buffer, ')')
 		} else {
 			buffer = append(buffer, "Nothing"...)
 		}
-		buffer = append(buffer, ")"...)
+		buffer = append(buffer, ')')
 	}
 	return buffer
+}
+
+func arrayPoint(array []Point) string {
+	return string(appendShowArrayPoint(nil, array))
+}
+
+func arrayColour(array []*Colour) string {
+	return string(appendShowArrayColour(nil, array))
+}
+
+func arrayShape(array []Shape) string {
+	return string(appendShowArrayShape(nil, array))
 }
 
 func main() {
@@ -446,35 +495,28 @@ func ShowCharArrayMaybeNumber(tuple TupleCharArrayMaybeNumber) string {
 }
 
 func AppendShowArrayTupleCharArrayMaybeNumber(buffer []byte, array []TupleCharArrayMaybeNumber) []byte {
-	buffer = append(buffer, "["...)
+	buffer = append(buffer, '[')
 	for index, element := range array {
 		if index > 0 {
-			buffer = append(buffer, ","...)
+			buffer = append(buffer, ',')
 		}
 		buffer = AppendShowCharArrayMaybeNumber(buffer, element)
 	}
-	buffer = append(buffer, "]"...)
+	buffer = append(buffer, ']')
 	return buffer
 }
 
 func AppendShowCharArrayMaybeNumber(buffer []byte, tuple TupleCharArrayMaybeNumber) []byte {
 	buffer = append(buffer, "(Tuple "...)
 	buffer = prim.AppendShowChar(buffer, tuple.First)
-	buffer = append(buffer, " "...)
+	buffer = append(buffer, ' ')
 	buffer = maybe.AppendShowArrayMaybeNumber(buffer, tuple.Second)
-	buffer = append(buffer, ")"...)
+	buffer = append(buffer, ')')
 	return buffer
 }
 
 // shared/shared.go
 package shared
-
-type AgeBNameZ struct {
-	Name string
-	Z    []float64
-	Age  int32
-	B    bool
-}
 
 type HW struct {
 	H int32

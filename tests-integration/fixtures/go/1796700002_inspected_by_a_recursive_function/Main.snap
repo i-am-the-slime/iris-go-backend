@@ -18,6 +18,10 @@ type Tree struct {
 
 var sharedTreeLeaf = &Tree{}
 
+func Node(node0 *Tree, node1 int32, node2 *Tree) *Tree {
+	return &Tree{Node0: node0, Node1: node1, Node2: node2}
+}
+
 var main_ = initializeMain_()
 
 func initializeMain_() string {
@@ -63,7 +67,7 @@ func grownReusing(limit int32, tree *Tree) *Tree {
 
 func insertReusing(key int32, value *Tree) *Tree {
 	if value == sharedTreeLeaf {
-		return &Tree{Node0: sharedTreeLeaf, Node1: key, Node2: sharedTreeLeaf}
+		return Node(sharedTreeLeaf, key, sharedTreeLeaf)
 	}
 	left := value.Node0
 	value2 := value.Node1
@@ -71,27 +75,20 @@ func insertReusing(key int32, value *Tree) *Tree {
 	if key < value2 {
 		field := insertReusing(key, left)
 		value.Node0 = field
-		value.Node1 = value2
-		value.Node2 = right
 		return value
 	}
 	if key > value2 {
 		field := insertReusing(key, right)
-		value.Node0 = left
-		value.Node1 = value2
 		value.Node2 = field
 		return value
 	}
-	value.Node0 = left
-	value.Node1 = value2
-	value.Node2 = right
 	return value
 }
 
 func appendElements(buffer []byte, value *Tree) []byte {
 	if value != sharedTreeLeaf {
 		buffer = appendElements(buffer, value.Node0)
-		buffer = append(buffer, " "...)
+		buffer = append(buffer, ' ')
 		buffer = strconv.AppendInt(buffer, int64(value.Node1), 10)
 		buffer = appendElements(buffer, value.Node2)
 	}

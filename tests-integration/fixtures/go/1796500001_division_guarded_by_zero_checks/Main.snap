@@ -18,27 +18,35 @@ func ShowBoolean(boolean bool) string {
 }
 
 func AppendShowArrayBoolean(buffer []byte, array []bool) []byte {
-	buffer = append(buffer, "["...)
+	buffer = append(buffer, '[')
 	for index, element := range array {
 		if index > 0 {
-			buffer = append(buffer, ","...)
+			buffer = append(buffer, ',')
 		}
 		buffer = strconv.AppendBool(buffer, element)
 	}
-	buffer = append(buffer, "]"...)
+	buffer = append(buffer, ']')
 	return buffer
 }
 
 func AppendShowArrayInt(buffer []byte, array []int32) []byte {
-	buffer = append(buffer, "["...)
+	buffer = append(buffer, '[')
 	for index, element := range array {
 		if index > 0 {
-			buffer = append(buffer, ","...)
+			buffer = append(buffer, ',')
 		}
 		buffer = strconv.AppendInt(buffer, int64(element), 10)
 	}
-	buffer = append(buffer, "]"...)
+	buffer = append(buffer, ']')
 	return buffer
+}
+
+func ArrayBoolean(array []bool) string {
+	return string(AppendShowArrayBoolean(nil, array))
+}
+
+func ArrayInt(array []int32) string {
+	return string(AppendShowArrayInt(nil, array))
 }
 
 // main.go
@@ -58,7 +66,8 @@ func main() {
 	n := inputs.N
 	n2 := n + 23
 	n3 := n + 23
-	mainLog(output, string(show.AppendShowArrayInt(nil, []int32{mainGo(n2, 0, 0), mainGo2(n3, 0, 0)})))
+	mainLog(output, show.ArrayInt([]int32{mainGo(n2, 0, 0), mainGo2(n3, 0, 0)}))
+	step, count := array.RangeSteps(1, n)
 	for _, i := range inputs.Divisors {
 		var result bool
 		if i == 0 {
@@ -68,7 +77,7 @@ func main() {
 		} else {
 			result = prim.IntMod(n, i) == 1
 		}
-		mainLog(output, string(show.AppendShowArrayBoolean(nil, []bool{i != 0 && prim.IntDiv(n, i) > 3, i != 0 && (prim.IntMod(n, i) == 0 && prim.IntDiv(n, i) > 1), result})))
+		mainLog(output, show.ArrayBoolean([]bool{i != 0 && prim.IntDiv(n, i) > 3, i != 0 && (prim.IntMod(n, i) == 0 && prim.IntDiv(n, i) > 1), result}))
 		var result2 string
 		if i == 0 {
 			result2 = "undefined"
@@ -94,7 +103,6 @@ func main() {
 			result4 = prim.IntDiv(n, i)
 		}
 		mainLog(output, result2+" "+strconv.Itoa(int(result3))+" "+strconv.Itoa(int(result4)))
-		step, count := array.RangeSteps(1, n)
 		kept := []int32{}
 		for index := range count {
 			n4 := 1 + int32(index)*step
@@ -102,7 +110,7 @@ func main() {
 				kept = append(kept, n4)
 			}
 		}
-		mainLog(output, string(show.AppendShowArrayInt(nil, kept)))
+		mainLog(output, show.ArrayInt(kept))
 		var result5 bool
 		if n < 0 || i <= 0 {
 			result5 = false
@@ -111,16 +119,15 @@ func main() {
 		} else {
 			result5 = prim.IntMod(n, i) == 1
 		}
-		mainLog(output, string(show.AppendShowArrayBoolean(nil, []bool{n >= 0 && (i > 0 && prim.IntDiv(n, i) > 3), result5})))
-		step2, count2 := array.RangeSteps(1, n)
+		mainLog(output, show.ArrayBoolean([]bool{n >= 0 && (i > 0 && prim.IntDiv(n, i) > 3), result5}))
 		kept2 := []int32{}
-		for index := range count2 {
-			n4 := 1 + int32(index)*step2
+		for index := range count {
+			n4 := 1 + int32(index)*step
 			if i > 0 && (prim.IntMod(n4, i) == 0 && prim.IntDiv(n4, i) > 1) {
 				kept2 = append(kept2, n4)
 			}
 		}
-		mainLog(output, string(show.AppendShowArrayInt(nil, kept2)))
+		mainLog(output, show.ArrayInt(kept2))
 		if i != 0 {
 			mainLog(output, "quotient "+strconv.Itoa(int(prim.IntDiv(n, i)))+" remainder "+strconv.Itoa(int(prim.IntMod(n, i))))
 		}

@@ -18,15 +18,19 @@ func Show(i int32) string {
 }
 
 func AppendShowArrayInt(buffer []byte, array []int32) []byte {
-	buffer = append(buffer, "["...)
+	buffer = append(buffer, '[')
 	for index, element := range array {
 		if index > 0 {
-			buffer = append(buffer, ","...)
+			buffer = append(buffer, ',')
 		}
 		buffer = strconv.AppendInt(buffer, int64(element), 10)
 	}
-	buffer = append(buffer, "]"...)
+	buffer = append(buffer, ']')
 	return buffer
+}
+
+func ArrayInt(array []int32) string {
+	return string(AppendShowArrayInt(nil, array))
 }
 
 // main.go
@@ -44,65 +48,25 @@ import (
 var main_ = initializeMain_()
 
 func initializeMain_() []string {
-	return []string{string(show.AppendShowArrayInt(nil, sortByIntCompare(numbers))), string(show.AppendShowArrayInt(nil, sortByIntDescending(numbers))), string(show.AppendShowArrayInt(nil, sortByIntCompare([]int32{})))}
+	return []string{show.ArrayInt(sortByIntCompare(numbers)), show.ArrayInt(sortByIntDescending(numbers)), show.ArrayInt(sortByIntCompare([]int32{}))}
 }
 
 var numbers []int32 = []int32{7, 3, 9, 1, 4, 8, 2, 6, 5, 0}
 
 func sortByIntCompare(xs []int32) []int32 {
-	array2 := array.Thaw(xs)()
-	length := int32(len(*array2))
-	sortByIntCompareInsertFrom(array2, 1, length)
+	array2 := array.Thaw(xs)
+	i := int32(len(*array2))
+	sortByIntCompareInsertFrom(array2, 1, i)
 	performed := shared.Frozen(*array2)
 	return performed
 }
 
 func sortByIntDescending(xs []int32) []int32 {
-	array2 := array.Thaw(xs)()
-	length := int32(len(*array2))
-	sortByIntDescendingInsertFrom(array2, 1, length)
+	array2 := array.Thaw(xs)
+	i := int32(len(*array2))
+	sortByIntDescendingInsertFrom(array2, 1, i)
 	performed := shared.Frozen(*array2)
 	return performed
-}
-
-func sortByIntCompareSink(array *[]int32, i int32) {
-	array2 := *array
-	for {
-		if i > 0 {
-			index := i - 1
-			var peeked maybe.Int
-			if index >= 0 && int(index) < len(array2) {
-				peeked = maybe.Int(array2[index])
-			} else {
-				peeked = maybe.NoInt
-			}
-			var peeked2 maybe.Int
-			if i >= 0 && int(i) < len(array2) {
-				peeked2 = maybe.Int(array2[i])
-			} else {
-				peeked2 = maybe.NoInt
-			}
-			if peeked != maybe.NoInt && peeked2 != maybe.NoInt {
-				x := int32(peeked)
-				y := int32(peeked2)
-				if x > y {
-					index2 := i - 1
-					if index2 >= 0 && int(index2) < len(array2) {
-						array2[index2] = y
-					}
-					if i >= 0 && int(i) < len(array2) {
-						array2[i] = x
-					}
-					i -= 1
-					continue
-				}
-			}
-			*array = array2
-			return
-		}
-		*array = array2
-		return
-	}
 }
 
 func sortByIntCompareInsertFrom(array *[]int32, i int32, length int32) {
@@ -135,46 +99,6 @@ func sortByIntCompareInsertFrom(array *[]int32, i int32, length int32) {
 			}
 			i += 1
 			continue
-		}
-		*array = array2
-		return
-	}
-}
-
-func sortByIntDescendingSink(array *[]int32, i int32) {
-	array2 := *array
-	for {
-		if i > 0 {
-			index := i - 1
-			var peeked maybe.Int
-			if index >= 0 && int(index) < len(array2) {
-				peeked = maybe.Int(array2[index])
-			} else {
-				peeked = maybe.NoInt
-			}
-			var peeked2 maybe.Int
-			if i >= 0 && int(i) < len(array2) {
-				peeked2 = maybe.Int(array2[i])
-			} else {
-				peeked2 = maybe.NoInt
-			}
-			if peeked != maybe.NoInt && peeked2 != maybe.NoInt {
-				x := int32(peeked)
-				y := int32(peeked2)
-				if y > x {
-					index2 := i - 1
-					if index2 >= 0 && int(index2) < len(array2) {
-						array2[index2] = y
-					}
-					if i >= 0 && int(i) < len(array2) {
-						array2[i] = x
-					}
-					i -= 1
-					continue
-				}
-			}
-			*array = array2
-			return
 		}
 		*array = array2
 		return

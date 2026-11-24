@@ -15,56 +15,57 @@ const (
 	EitherStringArrayIntRight
 )
 
-// main.go
-package main
+func Right(right []int32) EitherStringArrayInt {
+	return EitherStringArrayInt{Tag: EitherStringArrayIntRight, Right: right}
+}
+
+func Left(left string) EitherStringArrayInt {
+	return EitherStringArrayInt{Tag: EitherStringArrayIntLeft, Left: left}
+}
+
+// Data/Traversable/traversable.go
+package traversable
 
 import (
 	"fixture/Data/Either"
-	arraypkg "github.com/i-am-the-slime/iris-go/array"
+	"github.com/i-am-the-slime/iris-go/array"
 	"slices"
 	"strconv"
 )
 
-var main_ = initializeMain_()
-
-func initializeMain_() []either.EitherStringArrayInt {
-	array := []int32{1, 2, 3}
-	accumulator := either.EitherStringArrayInt{Tag: either.EitherStringArrayIntRight, Right: []int32{}}
+func TraversePositive(array2 []int32) either.EitherStringArrayInt {
+	accumulator := either.Right([]int32{})
 	accumulator.Right = slices.Clip(accumulator.Right)
-	for _, element := range array {
+	for _, element := range array2 {
 		if accumulator.Tag == either.EitherStringArrayIntLeft {
 			break
 		}
 		switch accumulator.Tag {
 		case either.EitherStringArrayIntLeft:
-			accumulator = either.EitherStringArrayInt{Tag: either.EitherStringArrayIntLeft, Left: accumulator.Left}
+			accumulator = either.Left(accumulator.Left)
 		default: // either.EitherStringArrayIntRight
 			if element > 0 {
-				accumulator = either.EitherStringArrayInt{Tag: either.EitherStringArrayIntRight, Right: arraypkg.Bounded(append(accumulator.Right, element))}
+				accumulator = either.Right(array.Bounded(append(accumulator.Right, element)))
 			} else {
-				accumulator = either.EitherStringArrayInt{Tag: either.EitherStringArrayIntLeft, Left: "not positive: " + strconv.Itoa(int(element))}
+				accumulator = either.Left("not positive: " + strconv.Itoa(int(element)))
 			}
 		}
 	}
-	array2 := []int32{1, -2, 3}
-	accumulator2 := either.EitherStringArrayInt{Tag: either.EitherStringArrayIntRight, Right: []int32{}}
-	accumulator2.Right = slices.Clip(accumulator2.Right)
-	for _, element := range array2 {
-		if accumulator2.Tag == either.EitherStringArrayIntLeft {
-			break
-		}
-		switch accumulator2.Tag {
-		case either.EitherStringArrayIntLeft:
-			accumulator2 = either.EitherStringArrayInt{Tag: either.EitherStringArrayIntLeft, Left: accumulator2.Left}
-		default: // either.EitherStringArrayIntRight
-			if element > 0 {
-				accumulator2 = either.EitherStringArrayInt{Tag: either.EitherStringArrayIntRight, Right: arraypkg.Bounded(append(accumulator2.Right, element))}
-			} else {
-				accumulator2 = either.EitherStringArrayInt{Tag: either.EitherStringArrayIntLeft, Left: "not positive: " + strconv.Itoa(int(element))}
-			}
-		}
-	}
-	return []either.EitherStringArrayInt{accumulator, accumulator2}
+	return accumulator
+}
+
+// main.go
+package main
+
+import (
+	"fixture/Data/Either"
+	"fixture/Data/Traversable"
+)
+
+var main_ = initializeMain_()
+
+func initializeMain_() []either.EitherStringArrayInt {
+	return []either.EitherStringArrayInt{traversable.TraversePositive([]int32{1, 2, 3}), traversable.TraversePositive([]int32{1, -2, 3})}
 }
 
 func main() {
