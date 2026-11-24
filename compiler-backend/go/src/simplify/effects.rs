@@ -310,6 +310,15 @@ impl Simplifier<'_> {
         body: Expression,
         monotype: crate::monotype::MonotypeId,
     ) -> Expression {
+        if let ExpressionKind::EffectPure(value) = &action.kind
+            && is_known_construction(value)
+            && cases_on(&body, local.id)
+        {
+            let value = (**value).clone();
+            self.substituting_alias(&local, &value);
+            let body = super::substitute(body, local.id, &value, self.monotypes);
+            return self.expression(body);
+        }
         match action.kind {
             ExpressionKind::EffectPure(value)
                 if builds_safely(&body) && !self.defers_work(&local, &body) =>
@@ -402,6 +411,27 @@ impl Simplifier<'_> {
         {
             self.thunk_parameters.insert(argument);
         }
+    }
+}
+
+/// A constructor applied to values that are already there, such as the `Right x` that `liftIO`
+/// wraps a result in. A bind of its `pure` to a local that a `case` then looks at decides that
+/// `case` here, which runs nothing earlier than the bind would: it only picks the alternative.
+fn is_known_construction(value: &Expression) -> bool {
+    matches!(&value.kind, ExpressionKind::Construct { arguments, .. } if arguments.iter().all(is_trivial))
+}
+
+/// Whether the expression starts with a `case` of the local, maybe as the first action it runs.
+fn cases_on(expression: &Expression, local: LocalId) -> bool {
+    match &expression.kind {
+        ExpressionKind::Case { scrutinees, .. } => scrutinees
+            .iter()
+            .any(|scrutinee| matches!(scrutinee.kind, ExpressionKind::Local(id) if id == local)),
+        ExpressionKind::EffectBind { action, .. } => cases_on(action, local),
+        ExpressionKind::EffectPure(value) | ExpressionKind::Let { body: value, .. } => {
+            cases_on(value, local)
+        }
+        _ => false,
     }
 }
 
