@@ -1,6 +1,6 @@
 use super::conditions::{is_pure, negated};
 use crate::go_traversal::{self, Walk, each_expression_in_statement};
-use crate::syntax::{GoDeclaration, GoExpression, GoStatement};
+use crate::syntax::{GoCase, GoDeclaration, GoDefault, GoExpression, GoStatement};
 
 pub(super) fn simplify_branches(declarations: &mut [GoDeclaration]) {
     for declaration in declarations {
@@ -13,6 +13,11 @@ struct Branches;
 impl Walk for Branches {
     fn block(&mut self, body: &mut Vec<GoStatement>) {
         sink_calls_into_branches(body);
+        for statement in body.iter_mut() {
+            if let Some(switch) = switch_of_chain(statement) {
+                *statement = switch;
+            }
+        }
         body.iter_mut().for_each(|statement| self.statement(statement));
         let alone = body.iter().filter(|statement| !matches!(statement, GoStatement::Line(_))).count() == 1;
         let statements = std::mem::take(body);
@@ -172,6 +177,70 @@ fn called_literal_body(call: &GoExpression, alone: bool) -> Option<Vec<GoStateme
         .iter()
         .any(|statement| matches!(statement, GoStatement::Define { .. } | GoStatement::Variable { .. }));
     (unnamed && !returns(body) && (alone || !declares)).then(|| body.clone())
+}
+
+fn switch_of_chain(statement: &GoStatement) -> Option<GoStatement> {
+    let GoStatement::If { condition, .. } = statement else { return None };
+    let (subject, _) = compared(condition)?;
+    if !matches!(subject, GoExpression::Identifier(_)) {
+        return None;
+    }
+    let mut cases: Vec<GoCase> = vec![];
+    let mut lines: Vec<GoStatement> = vec![];
+    let mut current = statement;
+    let default = loop {
+        let GoStatement::If { condition, then, otherwise } = current else { unreachable!() };
+        let (compared_subject, value) = compared(condition)?;
+        let constant = matches!(
+            value,
+            GoExpression::Qualified { .. }
+                | GoExpression::Integer(_)
+                | GoExpression::String(_)
+                | GoExpression::Rune(_)
+        );
+        if compared_subject != subject || !constant || breaks(then) {
+            return None;
+        }
+        if cases.iter().any(|case| case.values.first() == Some(value)) {
+            return None;
+        }
+        let mut body = std::mem::take(&mut lines);
+        body.extend(then.iter().cloned());
+        cases.push(GoCase { values: vec![value.clone()], body, line: None });
+        let effective: Vec<&GoStatement> =
+            otherwise.iter().filter(|statement| !matches!(statement, GoStatement::Line(_))).collect();
+        match effective.as_slice() {
+            [next @ GoStatement::If { condition, .. }] if compared(condition).is_some() => {
+                lines.extend(
+                    otherwise.iter().filter(|statement| matches!(statement, GoStatement::Line(_))).cloned(),
+                );
+                current = next;
+            }
+            _ => break otherwise,
+        }
+    };
+    if cases.len() < 3 || breaks(default) {
+        return None;
+    }
+    let default = (!default.is_empty())
+        .then(|| GoDefault { covers: vec![], body: default.clone(), line: None });
+    Some(GoStatement::Switch { value: Some(subject.clone()), cases, default })
+}
+
+fn compared(condition: &GoExpression) -> Option<(&GoExpression, &GoExpression)> {
+    let GoExpression::Binary { operator: "==", left, right } = condition.unattributed() else {
+        return None;
+    };
+    Some((left.unattributed(), right.unattributed()))
+}
+
+fn breaks(body: &[GoStatement]) -> bool {
+    body.iter().any(|statement| match statement {
+        GoStatement::Break => true,
+        GoStatement::If { then, otherwise, .. } => breaks(then) || breaks(otherwise),
+        GoStatement::IfAssert { then, .. } => breaks(then),
+        _ => false,
+    })
 }
 
 fn returns(body: &[GoStatement]) -> bool {
