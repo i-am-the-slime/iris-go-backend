@@ -939,7 +939,8 @@ impl Simplifier<'_> {
             parameters.iter().any(|parameter| mutable(self.monotypes.get(parameter.monotype)));
         let over_mutable_array = captures_free(&binding.value, self.monotypes, mutable)
             || (passed_array && only_reads_arrays(&binding.value));
-        let worth_copying = over_mutable_array || is_within_size(&binding.value, TINY_HELPER);
+        let tiny = is_within_size(&binding.value, TINY_HELPER) && only_computes(&binding.value);
+        let worth_copying = over_mutable_array || tiny;
         self.fuel > 0
             && is_within_size(&binding.value, INLINE_SIZE)
             && worth_copying
@@ -1156,6 +1157,25 @@ fn substitute_in_place(
     for_each_child_mut(expression, &mut |child| {
         substitute_in_place(child, local, value, monotypes)
     });
+}
+
+/// Whether the expression only computes a value: it neither builds nor runs an action, nor
+/// throws, so that a copy of it adds no effect and no failure.
+fn only_computes(expression: &Expression) -> bool {
+    let mut computes = true;
+    visit(expression, &mut |node| {
+        computes &= !matches!(
+            node.kind,
+            ExpressionKind::Foreign {
+                foreign: Foreign::Throw | Foreign::Crash | Foreign::Perform { .. },
+                ..
+            } | ExpressionKind::EffectPure(_)
+                | ExpressionKind::EffectBind { .. }
+                | ExpressionKind::EffectEach { .. }
+                | ExpressionKind::Fail(_)
+        );
+    });
+    computes
 }
 
 /// Whether every action the expression performs on a mutable array reads it.
