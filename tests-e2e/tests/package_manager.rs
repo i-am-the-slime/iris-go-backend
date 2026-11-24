@@ -4,6 +4,8 @@ mod add;
 mod build;
 #[path = "package_manager/go.rs"]
 mod go;
+#[path = "package_manager/mcp.rs"]
+mod mcp;
 #[path = "package_manager/new.rs"]
 mod new;
 #[path = "package_manager/run.rs"]

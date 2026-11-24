@@ -1,5 +1,7 @@
 //! Recognition and lowering for the virtual StyleX modules.
 
+use std::sync::Arc;
+
 use building_types::QueryResult;
 use files::FileId;
 use indexing::TermItemId;
@@ -21,9 +23,46 @@ use crate::tree::{
 
 use super::{Context, ConversionResult, term_declaration};
 
+#[derive(Debug, PartialEq, Eq)]
+pub(super) struct IrisStyleXCore {
+    modules: StyleXModules,
+    intrinsics: FxHashMap<(FileId, TermItemId), StyleXIntrinsic>,
+}
+
+impl IrisStyleXCore {
+    pub(super) fn collect(queries: &impl checking::ExternalQueries) -> QueryResult<IrisStyleXCore> {
+        let modules = StyleXModules {
+            root: queries.module_file("Iris.StyleX"),
+            when: queries.module_file("Iris.StyleX.When"),
+            types: queries.module_file("Iris.StyleX.Types"),
+        };
+        let mut intrinsics = FxHashMap::default();
+        for (file_id, module) in [
+            (modules.root, StyleXModule::Root),
+            (modules.when, StyleXModule::When),
+            (modules.types, StyleXModule::Types),
+        ] {
+            let Some(file_id) = file_id else { continue };
+            let indexed = queries.indexed(file_id)?;
+            for (term_id, item) in indexed.items.iter_terms() {
+                let Some(name) = item.name.as_deref() else { continue };
+                let intrinsic = match module {
+                    StyleXModule::Root => stylex_root_intrinsic(name).map(StyleXIntrinsic::Root),
+                    StyleXModule::When => stylex_when_intrinsic(name),
+                    StyleXModule::Types => stylex_type_intrinsic(name).map(StyleXIntrinsic::Types),
+                };
+                if let Some(intrinsic) = intrinsic {
+                    intrinsics.insert((file_id, term_id), intrinsic);
+                }
+            }
+        }
+        Ok(IrisStyleXCore { modules, intrinsics })
+    }
+}
+
 /// Files of the virtual StyleX modules, which have no runtime representation.
-#[derive(Debug, Clone, Copy)]
-pub(super) struct StyleXModules {
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct StyleXModules {
     root: Option<FileId>,
     when: Option<FileId>,
     types: Option<FileId>,
@@ -37,17 +76,9 @@ enum StyleXModule {
 }
 
 impl StyleXModules {
-    fn module(&self, file_id: FileId) -> Option<StyleXModule> {
+    fn contains(&self, file_id: FileId) -> bool {
         let file_id = Some(file_id);
-        if file_id == self.root {
-            Some(StyleXModule::Root)
-        } else if file_id == self.when {
-            Some(StyleXModule::When)
-        } else if file_id == self.types {
-            Some(StyleXModule::Types)
-        } else {
-            None
-        }
+        file_id == self.root || file_id == self.when || file_id == self.types
     }
 }
 
@@ -84,7 +115,7 @@ where
             return Ok(None);
         };
         let GlobalId::Term(file_id, term_id) = global.id else { return Ok(None) };
-        let Some(intrinsic) = self.stylex_intrinsic_identity(file_id, term_id)? else {
+        let Some(intrinsic) = self.stylex_intrinsic_identity(file_id, term_id) else {
             return Ok(None);
         };
         let expression = match (intrinsic, arguments) {
@@ -192,7 +223,7 @@ where
         file_id: FileId,
         term_id: TermItemId,
     ) -> ConversionResult<Option<ExpressionId>> {
-        let Some(intrinsic) = self.stylex_intrinsic_identity(file_id, term_id)? else {
+        let Some(intrinsic) = self.stylex_intrinsic_identity(file_id, term_id) else {
             return Ok(None);
         };
         self.referenced_stylex_modules.insert(file_id);
@@ -281,20 +312,8 @@ where
         &self,
         file_id: FileId,
         term_id: TermItemId,
-    ) -> QueryResult<Option<StyleXIntrinsic>> {
-        let Some(module) = self.stylex_modules().module(file_id) else {
-            return Ok(None);
-        };
-        let indexed = self.indexed_module(file_id)?;
-        let Some(name) = indexed.items[term_id].name.as_deref() else {
-            return Ok(None);
-        };
-        let intrinsic = match module {
-            StyleXModule::Root => stylex_root_intrinsic(name).map(StyleXIntrinsic::Root),
-            StyleXModule::When => stylex_when_intrinsic(name),
-            StyleXModule::Types => stylex_type_intrinsic(name).map(StyleXIntrinsic::Types),
-        };
-        Ok(intrinsic)
+    ) -> Option<StyleXIntrinsic> {
+        self.functional_core.iris_stylex.intrinsics.get(&(file_id, term_id)).copied()
     }
 
     /// Returns the imported theme values that StyleX evaluates statically in this module.
@@ -349,8 +368,7 @@ where
         match &self.storage[expression].kind {
             ExpressionKind::Global { global }
                 if let GlobalId::Term(file_id, term_id) = global.id
-                    && let Some(intrinsic) =
-                        self.stylex_intrinsic_identity(file_id, term_id)? =>
+                    && let Some(intrinsic) = self.stylex_intrinsic_identity(file_id, term_id) =>
             {
                 let state = UnsupportedState::InvalidStyleXUse {
                     function: intrinsic.qualified_name(),
@@ -394,6 +412,7 @@ where
                                 return Err(self.invalid_stylex_context(
                                     StyleXIntrinsic::Root(StyleXRootIntrinsic::Call(*call)),
                                     "requires a record literal after inlining",
+                                    None,
                                     declaration.global.id,
                                 ));
                             }
@@ -432,7 +451,8 @@ where
                         ) {
                             return Err(self.invalid_stylex_context(
                                 StyleXIntrinsic::Types(*call),
-                                "must be used inside defineVars or createTheme",
+                                "must be used inside 'defineVars' or 'createTheme'",
+                                None,
                                 declaration.global.id,
                             ));
                         }
@@ -441,7 +461,8 @@ where
                     StyleXExpression::ConditionalCase(case) => {
                         return Err(self.invalid_stylex_context(
                             case.intrinsic(),
-                            "must be used directly in a conditionalValue case array",
+                            "must be used directly in a 'conditionalValue' case array",
+                            None,
                             declaration.global.id,
                         ));
                     }
@@ -449,7 +470,8 @@ where
                         if context != StyleXStaticContext::Create {
                             return Err(self.invalid_stylex_context(
                                 StyleXIntrinsic::Root(StyleXRootIntrinsic::ConditionalValue),
-                                "must be used inside create",
+                                "must be used inside 'create'",
+                                None,
                                 declaration.global.id,
                             ));
                         }
@@ -477,10 +499,10 @@ where
         visiting: &mut FxHashSet<ExpressionId>,
     ) -> ConversionResult<()> {
         let invalid = || {
-            let requirement = "requires statically evaluable arguments; runtime parameters, \
-                functions, and ordinary function calls are not supported";
+            let requirement = "requires statically evaluable arguments";
+            let hint = "Avoid runtime parameters, lambdas, and ordinary function calls here.";
             let intrinsic = StyleXIntrinsic::Root(StyleXRootIntrinsic::Call(call));
-            self.invalid_stylex_context(intrinsic, requirement, declaration.global.id)
+            self.invalid_stylex_context(intrinsic, requirement, Some(hint), declaration.global.id)
         };
         if !visiting.insert(expression) {
             return Err(invalid());
@@ -529,18 +551,23 @@ where
                     if !static_import {
                         let module = self.source_module_name(file_id)?;
                         let name = &global.item_name;
-                        let requirement = if call == StyleXRootCall::DefineConsts {
-                            format!(
-                                "cannot use imported value '{module}.{name}'; defineConsts arguments must use same-module static values"
+                        let (requirement, hint) = if call == StyleXRootCall::DefineConsts {
+                            (
+                                format!("cannot use imported value '{module}.{name}'"),
+                                "Use a static value defined in this module instead.",
                             )
                         } else {
-                            format!(
-                                "cannot statically evaluate imported value '{module}.{name}'; use a same-module static value or an exported defineVars, defineConsts, or defineMarker definition"
+                            (
+                                format!(
+                                    "cannot statically evaluate imported value '{module}.{name}'"
+                                ),
+                                "Use a same-module static value or an exported 'defineVars', 'defineConsts', or 'defineMarker' definition.",
                             )
                         };
                         return Err(self.invalid_stylex_context(
                             StyleXIntrinsic::Root(StyleXRootIntrinsic::Call(call)),
                             &requirement,
+                            Some(hint),
                             declaration.global.id,
                         ));
                     }
@@ -608,17 +635,21 @@ where
                 visiting,
             );
         };
-        let invalid = |requirement: &str| {
+        let invalid = |requirement: &str, hint: Option<&str>| {
             let intrinsic =
                 StyleXIntrinsic::Root(StyleXRootIntrinsic::Call(StyleXRootCall::Create));
-            self.invalid_stylex_context(intrinsic, requirement, declaration.global.id)
+            self.invalid_stylex_context(intrinsic, requirement, hint, declaration.global.id)
         };
         let [pattern] = parameters.as_ref() else {
             return Err(invalid(
-                "requires dynamic namespaces to take exactly one parameter; group several values in a record",
+                "requires dynamic style namespaces to take exactly 1 parameter",
+                Some("Group multiple values into a single record parameter."),
             ));
         };
-        let unused = "requires dynamic namespaces to use their parameter; write a namespace that ignores it as a record";
+        let unused = (
+            "requires dynamic style namespaces to use their parameter",
+            Some("Write a namespace that does not need a parameter as a plain record instead."),
+        );
         let parameter = match &self.storage[*pattern].kind {
             PatternKind::Variable(parameter) => parameter,
             // Annotated wildcards lower to a generated name over a wildcard.
@@ -627,15 +658,19 @@ where
             {
                 parameter
             }
-            PatternKind::Wildcard => return Err(invalid(unused)),
+            PatternKind::Wildcard => return Err(invalid(unused.0, unused.1)),
             _ => {
                 return Err(invalid(
-                    "requires dynamic namespaces to take a named parameter; read its fields in the body instead of destructuring it",
+                    "requires dynamic style namespaces to take a named parameter",
+                    Some("Read fields from the parameter in the body instead of destructuring it."),
                 ));
             }
         };
         if !matches!(self.storage[*body].kind, ExpressionKind::Record { .. }) {
-            return Err(invalid("requires dynamic namespaces to return a record literal"));
+            return Err(invalid(
+                "requires dynamic style namespaces to return a record literal",
+                None,
+            ));
         }
         let mut used = false;
         self.validate_stylex_dynamic_expression(
@@ -647,7 +682,7 @@ where
             visiting,
         )?;
         if !used {
-            return Err(invalid(unused));
+            return Err(invalid(unused.0, unused.1));
         }
         Ok(())
     }
@@ -717,10 +752,16 @@ where
             | ExpressionKind::LetPattern { .. }
             | ExpressionKind::Effect { .. } => {
                 let intrinsic = StyleXIntrinsic::Root(StyleXRootIntrinsic::Call(call));
-                let requirement = "requires dynamic namespace values to be built from the parameter, \
-                    its fields, literals, records, arrays, and operators; compute other values in the \
-                    caller and pass them through the parameter";
-                Err(self.invalid_stylex_context(intrinsic, requirement, declaration.global.id))
+                let requirement = "only supports literals, records, arrays, operators, and \
+                    parameter fields inside dynamic style namespaces";
+                let hint =
+                    "Compute other values in the caller and pass them through the parameter.";
+                Err(self.invalid_stylex_context(
+                    intrinsic,
+                    requirement,
+                    Some(hint),
+                    declaration.global.id,
+                ))
             }
             ExpressionKind::Literal { .. }
             | ExpressionKind::Array { .. }
@@ -757,7 +798,7 @@ where
         // commonJS resolution hashes the imported export name; it does not read its value.
         // Following an ordinary alias here would authorize a hash with no matching definition.
         // Lower only this declaration, without querying or validating its functional module.
-        let mut context = Context::new(self.queries, file_id)?;
+        let mut context = Context::new(self.queries, file_id, Arc::clone(&self.functional_core))?;
         let Some(declaration) = term_declaration(&mut context, term_id, true)? else {
             return Ok(false);
         };
@@ -812,7 +853,8 @@ where
         {
             return Err(self.invalid_stylex_context(
                 StyleXIntrinsic::Root(StyleXRootIntrinsic::Call(call)),
-                "must directly initialize a non-recursive value or be used inside create, defineVars, createTheme, or viewTransitionClass",
+                "must directly initialise a non-recursive value or be used inside 'create', 'defineVars', 'createTheme', or 'viewTransitionClass'",
+                None,
                 declaration.global.id,
             ));
         }
@@ -820,6 +862,7 @@ where
             return Err(self.invalid_stylex_context(
                 StyleXIntrinsic::Root(StyleXRootIntrinsic::Call(call)),
                 "cannot be used inside another static StyleX call",
+                None,
                 declaration.global.id,
             ));
         }
@@ -835,7 +878,8 @@ where
         if requires_direct_initializer && !direct_initializer {
             return Err(self.invalid_stylex_context(
                 StyleXIntrinsic::Root(StyleXRootIntrinsic::Call(call)),
-                "must directly initialize a non-recursive top-level value",
+                "must directly initialise a non-recursive top-level value",
+                None,
                 declaration.global.id,
             ));
         }
@@ -848,7 +892,8 @@ where
         {
             return Err(self.invalid_stylex_context(
                 StyleXIntrinsic::Root(StyleXRootIntrinsic::Call(call)),
-                "must initialize an exported top-level value",
+                "must initialise an exported top-level value",
+                None,
                 declaration.global.id,
             ));
         }
@@ -863,7 +908,8 @@ where
         {
             return Err(self.invalid_stylex_context(
                 StyleXIntrinsic::Root(StyleXRootIntrinsic::Call(call)),
-                "must be used inside create, keyframes, positionTry, or viewTransitionClass",
+                "must be used inside 'create', 'keyframes', 'positionTry', or 'viewTransitionClass'",
+                None,
                 declaration.global.id,
             ));
         }
@@ -874,25 +920,19 @@ where
         &self,
         intrinsic: StyleXIntrinsic,
         requirement: &str,
+        hint: Option<&str>,
         declaration: GlobalId,
     ) -> super::ConversionError {
         self.unsupported(UnsupportedState::InvalidStyleXContext {
             function: intrinsic.qualified_name(),
             requirement: requirement.to_owned(),
+            hint: hint.map(str::to_owned),
             declaration,
         })
     }
 
-    fn stylex_modules(&self) -> StyleXModules {
-        *self.stylex_modules.get_or_init(|| StyleXModules {
-            root: self.queries.module_file("Iris.StyleX"),
-            when: self.queries.module_file("Iris.StyleX.When"),
-            types: self.queries.module_file("Iris.StyleX.Types"),
-        })
-    }
-
     pub(super) fn module_is_virtual(&self, file_id: FileId) -> bool {
-        self.stylex_modules().module(file_id).is_some()
+        self.functional_core.iris_stylex.modules.contains(file_id)
     }
 
     pub(super) fn validate_runtime_reference(

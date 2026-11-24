@@ -108,9 +108,9 @@ pub fn report_resolved(engine: &QueryEngine, id: FileId, name: &str, path: &str)
     let mut collected = collect_diagnostics(engine, &[id]).unwrap();
     let collected = collected.pop().unwrap();
     let diagnostics = collected
-        .checking_diagnostics()
+        .frontend_diagnostics()
         .iter()
-        .filter(|diagnostic| diagnostic.source == "resolving");
+        .filter(|diagnostic| matches!(diagnostic.source, "indexing" | "resolving"));
     let diagnostics: Vec<_> = diagnostics.cloned().collect();
     if !diagnostics.is_empty() {
         heading(&mut out, "Diagnostics");

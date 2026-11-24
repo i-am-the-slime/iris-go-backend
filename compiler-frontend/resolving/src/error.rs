@@ -1,3 +1,4 @@
+use building_types::Severity;
 use files::FileId;
 use indexing::{
     ImportId, ImportItemId, InstanceSourceItemId, OrderedTermItemId, TermItemId, TypeItemId,
@@ -29,15 +30,6 @@ pub enum ResolvingError {
         duplicate: (FileId, TypeItemId, ExportSource),
     },
 
-    ExistingTerm {
-        existing: (FileId, TermItemId),
-        duplicate: (FileId, TermItemId),
-    },
-    ExistingType {
-        existing: (FileId, TypeItemId),
-        duplicate: (FileId, TypeItemId),
-    },
-
     InvalidImportStatement {
         id: ImportId,
     },
@@ -45,4 +37,10 @@ pub enum ResolvingError {
     InvalidImportItem {
         id: ImportItemId,
     },
+}
+
+impl ResolvingError {
+    pub fn severity(&self) -> Severity {
+        Severity::Error
+    }
 }

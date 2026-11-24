@@ -1,0 +1,114 @@
+---
+source: tests-integration/src/fixtures.rs
+---
+module Main
+
+Unqualified Imports:
+
+Terms:
+  - library is Implicit
+
+Types:
+
+Classes:
+
+Qualified Imports:
+
+Exported Terms:
+  - value
+  - Second
+  - First
+  - Left
+  - library
+  - Right
+  - Pair
+
+Exported Types:
+  - Choice
+  - Split
+  - Pair
+
+Exported Classes:
+
+Local Terms:
+  - value
+  - Second
+  - First
+  - Left
+  - Right
+  - Pair
+
+Local Types:
+  - Choice
+  - Split
+  - Pair
+
+Local Classes:
+
+Class Members:
+
+Diagnostics
+Warning! · [DuplicateExport] · Main.purs:3:5
+  •
+  │
+  • 'value' is exported more than once
+  │
+  │     , value
+  │       ╰────
+  │
+  • First exported here
+  │
+  │     ( value
+  │       ╰────
+  •
+
+Warning! · [DuplicateExport] · Main.purs:5:5
+  •
+  │
+  • 'Choice(First)' is exported more than once
+  │
+  │     , Choice(First)
+  │       ╰────────────
+  │
+  • First exported here
+  │
+  │     , Choice(..)
+  │       ╰─────────
+  •
+
+Warning! · [DuplicateExport] · Main.purs:6:5
+  •
+  │
+  • 'Pair(Pair, Pair)' is exported more than once
+  │
+  │     , Pair(Pair, Pair)
+  │       ╰───────────────
+  •
+
+Warning! · [DuplicateExport] · Main.purs:8:5
+  •
+  │
+  • 'Split(Right)' is exported more than once
+  │
+  │     , Split(Right)
+  │       ╰───────────
+  │
+  • First exported here
+  │
+  │     , Split(Left)
+  │       ╰──────────
+  •
+
+Warning! · [DuplicateExport] · Main.purs:10:5
+  •
+  │
+  • 'module Library' is exported more than once
+  │
+  │     , module Library
+  │       ╰─────────────
+  │
+  • First exported here
+  │
+  │     , module Library
+  │       ╰─────────────
+  •

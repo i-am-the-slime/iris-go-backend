@@ -29,6 +29,7 @@ pub enum QueryKey {
     CheckedCore,
     Checked(FileId),
     Documented(FileId),
+    FunctionalCore,
     Functional(FileId),
     JavaScript(FileId),
     SourceMap(FileId),
@@ -48,6 +49,22 @@ pub enum QueryError {
 
 pub type QueryResult<T> = Result<T, QueryError>;
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Severity {
+    Error,
+    Warning,
+}
+
+impl Severity {
+    pub fn is_error(self) -> bool {
+        matches!(self, Severity::Error)
+    }
+
+    pub fn is_warning(self) -> bool {
+        matches!(self, Severity::Warning)
+    }
+}
+
 pub trait QueryProxy {
     type LineIndex;
     type Parsed;
@@ -62,6 +79,7 @@ pub trait QueryProxy {
     type CheckedCore;
     type Checked;
     type Documented;
+    type FunctionalCore;
 
     fn content(&self, id: FileId) -> QueryResult<Arc<str>>;
 
@@ -90,6 +108,8 @@ pub trait QueryProxy {
     fn checked(&self, id: FileId) -> QueryResult<Self::Checked>;
 
     fn documented(&self, id: FileId) -> QueryResult<Self::Documented>;
+
+    fn functional_core(&self) -> QueryResult<Self::FunctionalCore>;
 
     fn prim_id(&self) -> FileId;
 

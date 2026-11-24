@@ -30,3 +30,69 @@ Local Types:
 Local Classes:
 
 Class Members:
+
+Diagnostics
+Warning! · [DuplicateImport] · Main.purs:5:5
+  •
+  │
+  • 'value' is imported more than once
+  │
+  │     , value
+  │       ╰────
+  │
+  • First imported here
+  │
+  │     ( value
+  │       ╰────
+  •
+
+Warning! · [DuplicateImport] · Main.purs:7:5
+  •
+  │
+  • 'Choice(Second)' is imported more than once
+  │
+  │     , Choice(Second)
+  │       ╰─────────────
+  │
+  • First imported here
+  │
+  │     , Choice(First)
+  │       ╰────────────
+  •
+
+Warning! · [DuplicateImport] · Main.purs:8:5
+  •
+  │
+  • 'Choice(..)' is imported more than once
+  │
+  │     , Choice(..)
+  │       ╰─────────
+  │
+  • First imported here
+  │
+  │     , Choice(First)
+  │       ╰────────────
+  •
+
+Warning! · [DuplicateImport] · Main.purs:9:5
+  •
+  │
+  • 'Choice(First, First)' is imported more than once
+  │
+  │     , Choice(First, First)
+  │       ╰───────────────────
+  •
+
+Warning! · [DuplicateImport] · Main.purs:9:5
+  •
+  │
+  • 'Choice(First, First)' is imported more than once
+  │
+  │     , Choice(First, First)
+  │       ╰───────────────────
+  │
+  • First imported here
+  │
+  │     , Choice(First)
+  │       ╰────────────
+  •

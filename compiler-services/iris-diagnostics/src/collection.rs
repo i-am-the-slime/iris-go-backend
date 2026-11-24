@@ -1,45 +1,36 @@
 use std::sync::Arc;
 
 use building_types::QueryResult;
+use checking::FrontendErrorCounts;
 use files::FileId;
 use foreign_javascript::{ForeignQueries, ForeignValidation};
+use itertools::Itertools;
+use sugar::OperatorChainError;
 
 use crate::{Diagnostic, DiagnosticsContext, ExternalQueries, Severity, ToDiagnostics};
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct ErrorCounts {
-    pub parse: usize,
-    pub indexing: usize,
-    pub resolving: usize,
-    pub lowering: usize,
-    pub cycle: usize,
-    pub checking: usize,
+    pub frontend: FrontendErrorCounts,
     pub foreign: usize,
     pub codegen: usize,
 }
 
 impl ErrorCounts {
-    pub fn has_frontend_errors(self) -> bool {
-        self.parse > 0
-            || self.indexing > 0
-            || self.resolving > 0
-            || self.lowering > 0
-            || self.cycle > 0
-            || self.checking > 0
-    }
-
     pub fn is_empty(self) -> bool {
-        !self.has_frontend_errors() && self.foreign == 0 && self.codegen == 0
+        !self.frontend.has_errors() && self.foreign == 0 && self.codegen == 0
     }
 
     pub fn summary(self) -> Option<String> {
+        let FrontendErrorCounts { source, checking } = self.frontend;
         let stages = [
-            ("parse", self.parse),
-            ("indexing", self.indexing),
-            ("resolving", self.resolving),
-            ("lowering", self.lowering),
-            ("cycle", self.cycle),
-            ("checking", self.checking),
+            ("parse", source.parse),
+            ("indexing", source.indexing),
+            ("resolving", source.resolving),
+            ("lowering", source.lowering),
+            ("cycle", source.cycle),
+            ("bracketing", source.bracketing),
+            ("checking", checking),
             ("foreign", self.foreign),
             ("codegen", self.codegen),
         ];
@@ -56,39 +47,25 @@ pub fn count_errors<Q>(queries: &Q, file_id: FileId) -> QueryResult<ErrorCounts>
 where
     Q: ExternalQueries + ForeignQueries + javascript::ModuleQueries,
 {
-    let (_, parse_errors) = queries.parsed(file_id)?;
-    let indexed = queries.indexed(file_id)?;
-    let resolved = queries.resolved(file_id)?;
-    let lowered = queries.lowered(file_id)?;
-    let grouped = queries.grouped(file_id)?;
-    let checked = queries.checked(file_id)?;
+    let frontend = checking::count_frontend_errors(queries, file_id)?;
     let foreign_validation = queries.foreign_validation(file_id)?;
+    let foreign =
+        foreign_validation.errors.iter().filter(|error| error.severity().is_error()).count();
 
-    let mut counts = ErrorCounts {
-        parse: count_severity_errors(parse_errors.iter()),
-        indexing: count_severity_errors(indexed.errors.iter()),
-        resolving: count_severity_errors(resolved.errors.iter()),
-        lowering: count_severity_errors(lowered.errors.iter()),
-        cycle: count_severity_errors(grouped.cycle_errors.iter()),
-        checking: count_severity_errors(checked.errors.iter()),
-        foreign: count_severity_errors(foreign_validation.errors.iter()),
-        codegen: 0,
+    let codegen = if frontend.has_errors() {
+        0
+    } else {
+        match queries.javascript(file_id)? {
+            Ok(module) => module
+                .diagnostics()
+                .iter()
+                .filter(|diagnostic| diagnostic.severity().is_error())
+                .count(),
+            Err(error) => usize::from(error.severity().is_some_and(Severity::is_error)),
+        }
     };
 
-    if !counts.has_frontend_errors() {
-        counts.codegen = match queries.javascript(file_id)? {
-            Ok(module) => count_severity_errors(module.diagnostics().iter()),
-            Err(error) => usize::from(error.severity() == Severity::Error),
-        };
-    }
-
-    Ok(counts)
-}
-
-fn count_severity_errors<'a, E: ToDiagnostics + 'a>(
-    entries: impl IntoIterator<Item = &'a E>,
-) -> usize {
-    entries.into_iter().filter(|entry| entry.severity() == Severity::Error).count()
+    Ok(ErrorCounts { frontend, foreign, codegen })
 }
 
 pub struct DiagnosticCollection {
@@ -104,7 +81,7 @@ impl DiagnosticCollection {
         &self.diagnostics
     }
 
-    pub fn checking_diagnostics(&self) -> &[Diagnostic] {
+    pub fn frontend_diagnostics(&self) -> &[Diagnostic] {
         &self.diagnostics[..self.foreign_start]
     }
 
@@ -166,6 +143,7 @@ where
     let resolved = queries.resolved(file_id)?;
     let lowered = queries.lowered(file_id)?;
     let grouped = queries.grouped(file_id)?;
+    let bracketed = queries.bracketed(file_id)?;
     let checked = queries.checked(file_id)?;
 
     let context = DiagnosticsContext::new(
@@ -189,6 +167,13 @@ where
         diagnostics.extend(error.to_diagnostics(&context)?);
     }
     for error in &grouped.cycle_errors {
+        diagnostics.extend(error.to_diagnostics(&context)?);
+    }
+    let bracketing_errors = bracketed.errors().sorted_by_key(|error| match error {
+        OperatorChainError::Term(error) => error.operator.id.into_raw(),
+        OperatorChainError::Type(error) => error.operator.id.into_raw(),
+    });
+    for error in bracketing_errors {
         diagnostics.extend(error.to_diagnostics(&context)?);
     }
     for error in &resolved.errors {

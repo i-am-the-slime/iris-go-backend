@@ -4,19 +4,25 @@ source: tests-integration/src/fixtures.rs
 Error! · [ReflectedIntegerOutOfRange] · Main.purs:13:16
   •
   │
-  • The type-level integer '2147483648' cannot be reflected to an Int; it is outside the signed 32-
-  │ bit range (-2147483648 to 2147483647).
+  • Type-level integer '2147483648' cannot be reflected as an 'Int'
   │
   │   aboveMaximum = reflectType (Proxy :: Proxy 2147483648)
   │                  ╰──────────────────────────────────────
+  │
+  • 'Int' is a signed 32-bit integer
+  │
+  • Hint: Use a type-level integer between -2147483648 and 2147483647.
   •
 
 Error! · [ReflectedIntegerOutOfRange] · Main.purs:16:15
   •
   │
-  • The type-level integer '99999999999999999999' cannot be reflected to an Int; it is outside the
-  │ signed 32-bit range (-2147483648 to 2147483647).
+  • Type-level integer '99999999999999999999' cannot be reflected as an 'Int'
   │
   │   beyondInt64 = reflectType (Proxy :: Proxy 99999999999999999999)
   │                 ╰────────────────────────────────────────────────
+  │
+  • 'Int' is a signed 32-bit integer
+  │
+  • Hint: Use a type-level integer between -2147483648 and 2147483647.
   •

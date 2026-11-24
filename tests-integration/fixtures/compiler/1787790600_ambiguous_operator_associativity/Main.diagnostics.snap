@@ -1,13 +1,34 @@
 ---
 source: tests-integration/src/fixtures.rs
 ---
-Error! · [FunctionalCodegen] · Main.purs:11:27
+Error! · [NonAssociative] · Main.purs:11:35
   •
   │
-  • Cannot generate JavaScript for module 'Main'.
-  │
-  │ An expression contains an error.
+  • Non-associative operator '<=>' cannot be chained
   │
   │   ambiguousNonAssociative = 1 <=> 2 <=> 3
-  │                             ╰────────────
+  │                                     ╰──
+  │
+  • Previous operator here
+  │
+  │   ambiguousNonAssociative = 1 <=> 2 <=> 3
+  │                               ╰──
+  │
+  • Hint: Add parentheses to clarify the grouping.
+  •
+
+Error! · [MixedAssociativity] · Main.purs:31:39
+  •
+  │
+  • Cannot mix '<+>' ('infixl 6') with '<*>' ('infixr 6')
+  │
+  │   ambiguousMixedAssociativity = 1 <+> 2 <*> 3
+  │                                         ╰──
+  │
+  • Previous operator here
+  │
+  │   ambiguousMixedAssociativity = 1 <+> 2 <*> 3
+  │                                   ╰──
+  │
+  • Hint: Add parentheses to clarify the grouping.
   •

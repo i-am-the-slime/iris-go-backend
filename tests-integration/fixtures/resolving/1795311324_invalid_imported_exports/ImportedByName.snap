@@ -1,0 +1,115 @@
+---
+source: tests-integration/src/fixtures.rs
+---
+module ImportedByName
+
+Unqualified Imports:
+
+Terms:
+  - + is Explicit
+  - ByteCount is Explicit
+  - helper is Explicit
+
+Types:
+  - ByteCount is Explicit
+  - :+ is Explicit
+
+Classes:
+  - Helper is Explicit
+
+Qualified Imports:
+
+Exported Terms:
+
+Exported Types:
+
+Exported Classes:
+
+Local Terms:
+
+Local Types:
+
+Local Classes:
+
+Class Members:
+
+Diagnostics
+Error! · [InvalidExportItem] · ImportedByName.purs:1:24
+  •
+  │
+  • Cannot export imported item 'ByteCount(..)' directly
+  │
+  │   module ImportedByName (ByteCount(..), helper, class Helper, (+), type (:+)) where
+  │                          ╰────────────
+  │
+  • Imported here
+  │
+  │   import Library (ByteCount(..), helper, class Helper, (+), type (:+))
+  │                   ╰────────────
+  │
+  • Hint: Re-export 'module Library' instead.
+  •
+
+Error! · [InvalidExportItem] · ImportedByName.purs:1:39
+  •
+  │
+  • Cannot export imported item 'helper' directly
+  │
+  │   module ImportedByName (ByteCount(..), helper, class Helper, (+), type (:+)) where
+  │                                         ╰─────
+  │
+  • Imported here
+  │
+  │   import Library (ByteCount(..), helper, class Helper, (+), type (:+))
+  │                                  ╰─────
+  │
+  • Hint: Re-export 'module Library' instead.
+  •
+
+Error! · [InvalidExportItem] · ImportedByName.purs:1:47
+  •
+  │
+  • Cannot export imported item 'class Helper' directly
+  │
+  │   module ImportedByName (ByteCount(..), helper, class Helper, (+), type (:+)) where
+  │                                                 ╰───────────
+  │
+  • Imported here
+  │
+  │   import Library (ByteCount(..), helper, class Helper, (+), type (:+))
+  │                                          ╰───────────
+  │
+  • Hint: Re-export 'module Library' instead.
+  •
+
+Error! · [InvalidExportItem] · ImportedByName.purs:1:61
+  •
+  │
+  • Cannot export imported item '(+)' directly
+  │
+  │   module ImportedByName (ByteCount(..), helper, class Helper, (+), type (:+)) where
+  │                                                               ╰──
+  │
+  • Imported here
+  │
+  │   import Library (ByteCount(..), helper, class Helper, (+), type (:+))
+  │                                                        ╰──
+  │
+  • Hint: Re-export 'module Library' instead.
+  •
+
+Error! · [InvalidExportItem] · ImportedByName.purs:1:66
+  •
+  │
+  • Cannot export imported item 'type (:+)' directly
+  │
+  │   module ImportedByName (ByteCount(..), helper, class Helper, (+), type (:+)) where
+  │                                                                    ╰────────
+  │
+  • Imported here
+  │
+  │   import Library (ByteCount(..), helper, class Helper, (+), type (:+))
+  │                                                             ╰────────
+  │
+  • Hint: Re-export 'module Library' instead.
+  •

@@ -7,13 +7,12 @@ status: 1
 Error! · [CannotUnify] · src/Main.purs:12:16
   •
   │
-  • Cannot unify '( source :: Int, startT :: Number )' with '( startT :: Number )'
+  • Could not match '( source :: Int, startT :: Number )' with '( startT :: Number )'
   │
   │   main = spansOf segment
   │                  ╰──────
-  • while
   │
-  │   matching 'Segment' with '{ spans :: Array { startT :: Number } | ?10 }'
+  • While matching 'Segment' with '{ spans :: Array { startT :: Number } | ?10 }'
   •
 
 cannot compile modules with source or checking errors: Main

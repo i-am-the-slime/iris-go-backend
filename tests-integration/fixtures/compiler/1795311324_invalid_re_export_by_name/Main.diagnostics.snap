@@ -1,0 +1,36 @@
+---
+source: tests-integration/src/fixtures.rs
+---
+Error! · [InvalidExportItem] · Files.purs:1:15
+  •
+  │
+  • Cannot export imported item 'ByteCount(..)' directly
+  │
+  │   module Files (ByteCount(..), fileSize) where
+  │                 ╰────────────
+  │
+  • Imported here
+  │
+  │   import Size (ByteCount(..))
+  │                ╰────────────
+  │
+  • Hint: Re-export 'module Size' instead.
+  •
+
+Error! · [NotInScope] · Main.purs:7:3
+  •
+  │
+  • Unknown data constructor 'ByteCount'
+  │
+  │     ByteCount n -> n
+  │     ╰────────
+  •
+
+Error! · [InvalidImportItem] · Main.purs:3:15
+  •
+  │
+  • Cannot import 'ByteCount(..)'
+  │
+  │   import Files (ByteCount(..), fileSize)
+  │                 ╰────────────
+  •

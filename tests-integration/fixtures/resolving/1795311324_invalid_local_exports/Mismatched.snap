@@ -1,0 +1,63 @@
+---
+source: tests-integration/src/fixtures.rs
+---
+module Mismatched
+
+Unqualified Imports:
+
+Qualified Imports:
+
+Exported Terms:
+
+Exported Types:
+  - LocalData
+
+Exported Classes:
+
+Local Terms:
+  - Constructor
+
+Local Types:
+  - LocalData
+
+Local Classes:
+  - LocalClass
+
+Class Members:
+
+Diagnostics
+Error! · [InvalidExportItem] · Mismatched.purs:1:20
+  •
+  │
+  • Cannot export 'LocalClass'
+  │
+  │   module Mismatched (LocalClass, class LocalData, LocalData(MissingConstructor), Constructor) where
+  │                      ╰─────────
+  •
+
+Error! · [InvalidExportItem] · Mismatched.purs:1:32
+  •
+  │
+  • Cannot export 'class LocalData'
+  │
+  │   module Mismatched (LocalClass, class LocalData, LocalData(MissingConstructor), Constructor) where
+  │                                  ╰──────────────
+  •
+
+Error! · [InvalidExportItem] · Mismatched.purs:1:49
+  •
+  │
+  • Cannot export 'LocalData(MissingConstructor)'
+  │
+  │   module Mismatched (LocalClass, class LocalData, LocalData(MissingConstructor), Constructor) where
+  │                                                   ╰────────────────────────────
+  •
+
+Error! · [InvalidExportItem] · Mismatched.purs:1:80
+  •
+  │
+  • Cannot export 'Constructor'
+  │
+  │   module Mismatched (LocalClass, class LocalData, LocalData(MissingConstructor), Constructor) where
+  │                                                                                  ╰──────────
+  •

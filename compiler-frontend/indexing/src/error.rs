@@ -1,3 +1,5 @@
+use building_types::Severity;
+
 use crate::source::*;
 use crate::{TermItemId, TypeItemId};
 
@@ -7,18 +9,12 @@ pub enum ItemKind {
     DataEquation(DataEquationId),
     NewtypeSignature(NewtypeSignatureId),
     NewtypeEquation(NewtypeEquationId),
-    Constructor(DataConstructorId),
     SynonymSignature(TypeSignatureId),
     SynonymEquation(TypeEquationId),
     ClassSignature(ClassSignatureId),
     ClassDeclaration(ClassDeclarationId),
-    ClassMember(ClassMemberId),
     ValueSignature(ValueSignatureId),
     ValueEquation(ValueEquationId),
-    ForeignData(ForeignDataId),
-    ForeignValue(ForeignValueId),
-    Operator(InfixId),
-    Role(TypeRoleId),
     Term(TermItemId),
     Type(TypeItemId),
 }
@@ -29,6 +25,12 @@ pub enum ExistingKind {
     Type(TypeItemId),
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum InvalidExportHint {
+    AliasedModule { import: ImportId },
+    ImportedItem { import: ImportId, item: ImportItemId },
+}
+
 #[derive(Debug, PartialEq, Eq)]
 pub enum IndexingError {
     DuplicateItem { kind: ItemKind, existing: ExistingKind },
@@ -36,13 +38,23 @@ pub enum IndexingError {
     OrphanRole { id: TypeRoleId },
     DuplicateRole { id: TypeRoleId, existing: TypeRoleId },
     UnsupportedRole { id: TypeRoleId },
-    InvalidExport { id: ExportItemId },
+    InvalidExport { id: ExportItemId, hint: Option<InvalidExportHint> },
     DuplicateExport { id: ExportItemId, existing: ExportItemId },
     DuplicateImport { duplicate: ImportItemId, existing: ImportItemId },
 }
 
 impl IndexingError {
-    pub fn is_warning(&self) -> bool {
-        matches!(self, IndexingError::DuplicateImport { .. })
+    pub fn severity(&self) -> Severity {
+        match self {
+            IndexingError::DuplicateImport { .. } | IndexingError::DuplicateExport { .. } => {
+                Severity::Warning
+            }
+            IndexingError::DuplicateItem { .. }
+            | IndexingError::MismatchedItem { .. }
+            | IndexingError::OrphanRole { .. }
+            | IndexingError::DuplicateRole { .. }
+            | IndexingError::UnsupportedRole { .. }
+            | IndexingError::InvalidExport { .. } => Severity::Error,
+        }
     }
 }
