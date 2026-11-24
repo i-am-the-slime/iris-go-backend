@@ -1,6 +1,90 @@
 ---
 source: tests-integration/src/fixtures.rs
 ---
+// Data/Array/array.go
+package dataarray
+
+import (
+	"fixture/Data/Ordering"
+	"fixture/Data/Tuple"
+	"fixture/shared"
+	arraypkg "github.com/i-am-the-slime/iris-go/array"
+	"github.com/i-am-the-slime/iris-go/direct"
+)
+
+func NubNumber(xs []float64) []float64 {
+	mapped := make([]tuple.TupleIntNumber, len(xs))
+	for slot, number := range xs {
+		i := int32(slot)
+		mapped[slot] = tuple.TupleIntNumber{First: i, Second: number}
+	}
+	indexedAndSorted := direct.SortBy(mapped, func(x tuple.TupleIntNumber, y tuple.TupleIntNumber) int {
+		number := x.Second
+		number2 := y.Second
+		var result ordering.Ordering
+		if number < number2 {
+			result = ordering.OrderingLT
+		} else if number == number2 {
+			result = ordering.OrderingEQ
+		} else {
+			result = ordering.OrderingGT
+		}
+		switch result {
+		case ordering.OrderingLT:
+			return -1
+		case ordering.OrderingGT:
+			return 1
+		}
+		return 0
+	})
+	if len(indexedAndSorted) > 0 {
+		array2 := *arraypkg.UnsafeThaw([]tuple.TupleIntNumber{indexedAndSorted[0]})
+		for _, pair := range indexedAndSorted {
+			x_ := pair.Second
+			array3 := shared.Frozen(array2)
+			index := int32(len(array3)) - 1
+			var result tuple.TupleIntNumber
+			if index >= 0 && index < int32(len(array3)) {
+				result = array3[index]
+			} else {
+				panic("Failed pattern match")
+			}
+			lst := result.Second
+			if lst < x_ {
+				array2 = arraypkg.Bounded(append(array2, pair))
+			} else if lst != x_ {
+				array2 = arraypkg.Bounded(append(array2, pair))
+			}
+		}
+		performed := shared.Frozen(array2)
+		array := direct.SortBy(performed, func(x tuple.TupleIntNumber, y tuple.TupleIntNumber) int {
+			i := x.First
+			i2 := y.First
+			var result ordering.Ordering
+			if i < i2 {
+				result = ordering.OrderingLT
+			} else if i == i2 {
+				result = ordering.OrderingEQ
+			} else {
+				result = ordering.OrderingGT
+			}
+			switch result {
+			case ordering.OrderingLT:
+				return -1
+			case ordering.OrderingGT:
+				return 1
+			}
+			return 0
+		})
+		mapped2 := make([]float64, len(array))
+		for index := range array {
+			mapped2[index] = array[index].Second
+		}
+		return mapped2
+	}
+	return []float64{}
+}
+
 // Data/Eq/eq.go
 package eq
 
@@ -149,20 +233,21 @@ func ArrayInt(array []int32) string {
 // Data/Tuple/tuple.go
 package tuple
 
-type TupleIntNumber struct {
-	Second float64
-	First  int32
-}
-
 type TupleIntInt struct {
 	First  int32
 	Second int32
+}
+
+type TupleIntNumber struct {
+	Second float64
+	First  int32
 }
 
 // main.go
 package main
 
 import (
+	"fixture/Data/Array"
 	"fixture/Data/Eq"
 	"fixture/Data/Ordering"
 	"fixture/Data/Show"
@@ -179,87 +264,14 @@ func main() {
 	mainRecord(shown, show.ArrayString(arraypkg.NubComparable([]string{"b", "a", "b"})))
 	mainRecord(shown, show.ArrayChar(arraypkg.NubComparable([]rune{'x', 'y', 'x'})))
 	mainRecord(shown, show.ArrayBoolean(arraypkg.NubComparable([]bool{true, false, true})))
-	array := []float64{1.5, 0.5, 1.5}
-	mapped := make([]tuple.TupleIntNumber, len(array))
-	for slot, number := range array {
-		i := int32(slot)
-		mapped[slot] = tuple.TupleIntNumber{First: i, Second: number}
-	}
-	indexedAndSorted := direct.SortBy(mapped, func(x tuple.TupleIntNumber, y tuple.TupleIntNumber) int {
-		number := x.Second
-		number2 := y.Second
-		var result ordering.Ordering
-		if number < number2 {
-			result = ordering.OrderingLT
-		} else if number == number2 {
-			result = ordering.OrderingEQ
-		} else {
-			result = ordering.OrderingGT
-		}
-		switch result {
-		case ordering.OrderingLT:
-			return -1
-		case ordering.OrderingGT:
-			return 1
-		}
-		return 0
-	})
-	var result2 []float64
-	if len(indexedAndSorted) > 0 {
-		array2 := *arraypkg.UnsafeThaw([]tuple.TupleIntNumber{indexedAndSorted[0]})
-		for _, pair := range indexedAndSorted {
-			x_ := pair.Second
-			array3 := shared.Frozen(array2)
-			index := int32(len(array3)) - 1
-			var result tuple.TupleIntNumber
-			if index >= 0 && index < int32(len(array3)) {
-				result = array3[index]
-			} else {
-				panic("Failed pattern match")
-			}
-			lst := result.Second
-			if lst < x_ {
-				array2 = arraypkg.Bounded(append(array2, pair))
-			} else if lst != x_ {
-				array2 = arraypkg.Bounded(append(array2, pair))
-			}
-		}
-		performed := shared.Frozen(array2)
-		array4 := direct.SortBy(performed, func(x tuple.TupleIntNumber, y tuple.TupleIntNumber) int {
-			i := x.First
-			i2 := y.First
-			var result ordering.Ordering
-			if i < i2 {
-				result = ordering.OrderingLT
-			} else if i == i2 {
-				result = ordering.OrderingEQ
-			} else {
-				result = ordering.OrderingGT
-			}
-			switch result {
-			case ordering.OrderingLT:
-				return -1
-			case ordering.OrderingGT:
-				return 1
-			}
-			return 0
-		})
-		mapped2 := make([]float64, len(array4))
-		for index := range array4 {
-			mapped2[index] = array4[index].Second
-		}
-		result2 = mapped2
-	} else {
-		result2 = []float64{}
-	}
-	mainRecord(shown, show.ArrayNumber(result2))
-	array5 := []int32{1, 4, 2, 5, 3}
-	mapped3 := make([]tuple.TupleIntInt, len(array5))
-	for slot, i := range array5 {
+	mainRecord(shown, show.ArrayNumber(dataarray.NubNumber([]float64{1.5, 0.5, 1.5})))
+	array := []int32{1, 4, 2, 5, 3}
+	mapped := make([]tuple.TupleIntInt, len(array))
+	for slot, i := range array {
 		i2 := int32(slot)
-		mapped3[slot] = tuple.TupleIntInt{First: i2, Second: i}
+		mapped[slot] = tuple.TupleIntInt{First: i2, Second: i}
 	}
-	indexedAndSorted2 := direct.SortBy(mapped3, func(x tuple.TupleIntInt, y tuple.TupleIntInt) int {
+	indexedAndSorted := direct.SortBy(mapped, func(x tuple.TupleIntInt, y tuple.TupleIntInt) int {
 		switch mainComp(x.Second, y.Second) {
 		case ordering.OrderingLT:
 			return -1
@@ -268,19 +280,19 @@ func main() {
 		}
 		return 0
 	})
-	var result3 []int32
-	if len(indexedAndSorted2) > 0 {
-		array2 := *arraypkg.UnsafeThaw([]tuple.TupleIntInt{indexedAndSorted2[0]})
-		for _, pair := range indexedAndSorted2 {
+	var result []int32
+	if len(indexedAndSorted) > 0 {
+		array2 := *arraypkg.UnsafeThaw([]tuple.TupleIntInt{indexedAndSorted[0]})
+		for _, pair := range indexedAndSorted {
 			array3 := shared.Frozen(array2)
 			index := int32(len(array3)) - 1
-			var result tuple.TupleIntInt
+			var result2 tuple.TupleIntInt
 			if index >= 0 && index < int32(len(array3)) {
-				result = array3[index]
+				result2 = array3[index]
 			} else {
 				panic("Failed pattern match")
 			}
-			lst := result.Second
+			lst := result2.Second
 			if mainComp(lst, pair.Second) != ordering.OrderingEQ {
 				array2 = arraypkg.Bounded(append(array2, pair))
 			}
@@ -289,15 +301,15 @@ func main() {
 		array4 := direct.SortBy(performed, func(x tuple.TupleIntInt, y tuple.TupleIntInt) int {
 			i := x.First
 			i2 := y.First
-			var result ordering.Ordering
+			var result2 ordering.Ordering
 			if i < i2 {
-				result = ordering.OrderingLT
+				result2 = ordering.OrderingLT
 			} else if i == i2 {
-				result = ordering.OrderingEQ
+				result2 = ordering.OrderingEQ
 			} else {
-				result = ordering.OrderingGT
+				result2 = ordering.OrderingGT
 			}
-			switch result {
+			switch result2 {
 			case ordering.OrderingLT:
 				return -1
 			case ordering.OrderingGT:
@@ -309,25 +321,25 @@ func main() {
 		for index := range array4 {
 			mapped2[index] = array4[index].Second
 		}
-		result3 = mapped2
+		result = mapped2
 	} else {
-		result3 = []int32{}
+		result = []int32{}
 	}
-	mainRecord(shown, show.ArrayInt(result3))
-	array6 := arraypkg.GroupBy(eq.Eq, []int32{1, 1, 2, 3, 3})
+	mainRecord(shown, show.ArrayInt(result))
+	array5 := arraypkg.GroupBy(eq.Eq, []int32{1, 1, 2, 3, 3})
+	mapped3 := make([][]int32, len(array5))
+	for index, element := range array5 {
+		mapped3[index] = element
+	}
+	mainRecord(shown, show.ArrayArrayInt(mapped3))
+	array6 := arraypkg.GroupBy(func(first int32, x int32) bool {
+		return x-first < 2
+	}, []int32{1, 2, 3, 4, 7})
 	mapped4 := make([][]int32, len(array6))
 	for index, element := range array6 {
 		mapped4[index] = element
 	}
 	mainRecord(shown, show.ArrayArrayInt(mapped4))
-	array7 := arraypkg.GroupBy(func(first int32, x int32) bool {
-		return x-first < 2
-	}, []int32{1, 2, 3, 4, 7})
-	mapped5 := make([][]int32, len(array7))
-	for index, element := range array7 {
-		mapped5[index] = element
-	}
-	mainRecord(shown, show.ArrayArrayInt(mapped5))
 }
 
 func mainRecord(shown *shared.Ref[string], text string) {

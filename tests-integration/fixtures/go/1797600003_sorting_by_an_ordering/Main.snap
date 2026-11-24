@@ -20,7 +20,7 @@ import (
 	"fixture/shared"
 	arraypkg "github.com/i-am-the-slime/iris-go/array"
 	"github.com/i-am-the-slime/iris-go/console"
-	"github.com/i-am-the-slime/iris-go/direct"
+	"slices"
 	"strings"
 )
 
@@ -35,42 +35,15 @@ const (
 var main_ = initializeMain_()
 
 func initializeMain_() []string {
-	array2 := arraypkg.Thaw([]Suit{SuitSpades, SuitClubs, SuitHearts})
-	direct.SortByMutable(array2, func(left Suit, right Suit) int {
-		switch compare(left, right) {
-		case ordering.OrderingLT:
-			return -1
-		case ordering.OrderingGT:
-			return 1
-		}
-		return 0
-	})
-	performed := shared.Frozen(*array2)
-	return []string{arraySuit(direct.SortBy([]Suit{SuitClubs, SuitHearts, SuitSpades, SuitHearts}, func(left Suit, right Suit) int {
-		switch compare(left, right) {
-		case ordering.OrderingLT:
-			return -1
-		case ordering.OrderingGT:
-			return 1
-		}
-		return 0
-	})), arraySuit(direct.SortBy([]Suit{SuitClubs, SuitHearts, SuitSpades}, func(a Suit, b Suit) int {
-		var result ordering.Ordering
-		if a == b {
-			result = ordering.OrderingEQ
-		} else if a < b {
-			result = ordering.OrderingGT
-		} else {
-			result = ordering.OrderingLT
-		}
-		switch result {
-		case ordering.OrderingLT:
-			return -1
-		case ordering.OrderingGT:
-			return 1
-		}
-		return 0
-	})), arraySuit(performed)}
+	sorted := slices.Clone([]Suit{SuitClubs, SuitHearts, SuitSpades, SuitHearts})
+	slices.Sort(sorted)
+	sorted2 := slices.Clone([]Suit{SuitClubs, SuitHearts, SuitSpades})
+	slices.Sort(sorted2)
+	slices.Reverse(sorted2)
+	array2 := *arraypkg.Thaw([]Suit{SuitSpades, SuitClubs, SuitHearts})
+	slices.Sort(array2)
+	performed := shared.Frozen(array2)
+	return []string{arraySuit(sorted), arraySuit(sorted2), arraySuit(performed)}
 }
 
 func show(suit Suit) string {

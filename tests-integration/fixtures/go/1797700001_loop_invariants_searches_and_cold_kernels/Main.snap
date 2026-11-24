@@ -119,12 +119,12 @@ func initializeMain_() []string {
 	default: // maybe.TagNothing
 		result2 = "Nothing"
 	}
-	mapped := make([]float64, 41)
-	for index := range 41 {
-		x := 1 + int32(index)
-		mapped[index] = float64(x) * 0.5
+	accumulator := 0.0
+	for x := int32(1); x < 42; x++ {
+		number := float64(x) * 0.5
+		accumulator += number
 	}
-	first := prim.ShowNumber(foldLanes(mapped, 0.0) / float64(41))
+	first := prim.ShowNumber(accumulator / float64(41))
 	first2 := show.ArrayInt(clamped(numbers))
 	bound := []string{}
 	array := []shared.Rule{{Name: "positive", Check: func(n int32) bool {
@@ -169,39 +169,7 @@ func main() {
 
 package main
 
-import (
-	"math"
-	"simd/archsimd"
-)
-
-func foldLanes(xs []float64, initial float64) float64 {
-	acc0 := archsimd.BroadcastFloat64x2(math.Copysign(0, -1))
-	acc1, acc2, acc3 := acc0, acc0, acc0
-	const step = 2
-	i := 0
-	for ; i < len(xs)-4*step+1; i += 4 * step {
-		x0 := archsimd.LoadFloat64x2(xs[i : i+step])
-		acc0 = acc0.Add(x0)
-		x1 := archsimd.LoadFloat64x2(xs[i+step : i+2*step])
-		acc1 = acc1.Add(x1)
-		x2 := archsimd.LoadFloat64x2(xs[i+2*step : i+3*step])
-		acc2 = acc2.Add(x2)
-		x3 := archsimd.LoadFloat64x2(xs[i+3*step : i+4*step])
-		acc3 = acc3.Add(x3)
-	}
-	acc0 = acc0.Add(acc1).Add(acc2.Add(acc3))
-	var lanes [2]float64
-	acc0.Store(lanes[:])
-	accumulator := initial
-	for _, lane := range lanes[:step] {
-		accumulator = accumulator + lane
-	}
-	for ; i < len(xs); i++ {
-		x := xs[i]
-		accumulator = accumulator + x
-	}
-	return accumulator
-}
+import "simd/archsimd"
 
 func mapLanes(xs []int32, round int32) []int32 {
 	roundLanes := archsimd.BroadcastInt32x4(round)
@@ -257,14 +225,6 @@ func mapLanes3(xs []int32) []int32 {
 
 package main
 
-func foldLanes(xs []float64, initial float64) float64 {
-	accumulator := initial
-	for _, x := range xs {
-		accumulator = accumulator + x
-	}
-	return accumulator
-}
-
 func mapLanes(xs []int32, round int32) []int32 {
 	out := make([]int32, len(xs))
 	for i, x := range xs {
@@ -294,39 +254,7 @@ func mapLanes3(xs []int32) []int32 {
 
 package main
 
-import (
-	"math"
-	"simd"
-)
-
-func foldLanes(xs []float64, initial float64) float64 {
-	acc0 := simd.BroadcastFloat64s(math.Copysign(0, -1))
-	acc1, acc2, acc3 := acc0, acc0, acc0
-	step := acc0.Len()
-	i := 0
-	for ; i < len(xs)-4*step+1; i += 4 * step {
-		x0 := simd.LoadFloat64s(xs[i : i+step])
-		acc0 = acc0.Add(x0)
-		x1 := simd.LoadFloat64s(xs[i+step : i+2*step])
-		acc1 = acc1.Add(x1)
-		x2 := simd.LoadFloat64s(xs[i+2*step : i+3*step])
-		acc2 = acc2.Add(x2)
-		x3 := simd.LoadFloat64s(xs[i+3*step : i+4*step])
-		acc3 = acc3.Add(x3)
-	}
-	acc0 = acc0.Add(acc1).Add(acc2.Add(acc3))
-	var lanes [8]float64
-	acc0.Store(lanes[:])
-	accumulator := initial
-	for _, lane := range lanes[:step] {
-		accumulator = accumulator + lane
-	}
-	for ; i < len(xs); i++ {
-		x := xs[i]
-		accumulator = accumulator + x
-	}
-	return accumulator
-}
+import "simd"
 
 func mapLanes(xs []int32, round int32) []int32 {
 	roundLanes := simd.BroadcastInt32s(round)

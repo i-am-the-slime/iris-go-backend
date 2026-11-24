@@ -107,19 +107,21 @@ func main() {
 //line Main.purs:59:3
 	step, count := array.RangeSteps(1, counter+40)
 //line Main.purs:59:3
-	mapped := make([]float64, count)
+	accumulator := 0.0
 //line Main.purs:59:3
 	for index := range count {
 //line Main.purs:59:3
 		i := 1 + int32(index)*step
 //line Main.purs:59:3
 		price := float64(i)
-//line Main.purs:59:3
-		mapped[index] = price * 2.0
+//line Main.purs:57:32
+		number := price * 2.0
+//line Main.purs:58:13
+		accumulator += number
 //line Main.purs:59:3
 	}
 //line Main.purs:59:3
-	if /*line Main.purs:58:13*/ foldLanes(mapped, 0.0) /*line Main.purs:59:3*/ != 1892.0 || int32(count) != 43 {
+	if /*line Main.purs:58:13*/ accumulator /*line Main.purs:59:3*/ != 1892.0 || int32(count) != 43 {
 //line Main.purs:60:5
 		effectexception.ThrowUnit("the total is wrong")
 //line Main.purs:59:3
@@ -193,160 +195,6 @@ func size(value *Tree) int32 {
 //line Main.purs:32:24
 	return size(value.Node0) + 1 + size(value.Node2)
 //line Main.purs:30:1
-}
-
-// main_neon.go
-//go:build goexperiment.simd && arm64
-
-package main
-
-import (
-	"math"
-	"simd/archsimd"
-)
-
-//line Main.purs:58:13
-func foldLanes(xs []float64, initial float64) float64 {
-//line Main.purs:58:13
-	acc0 := archsimd.BroadcastFloat64x2(math.Copysign(0, -1))
-//line Main.purs:58:13
-	acc1, acc2, acc3 := acc0, acc0, acc0
-//line Main.purs:58:13
-	const step = 2
-//line Main.purs:58:13
-	i := 0
-//line Main.purs:58:13
-	for ; i < len(xs)-4*step+1; i += 4 * step {
-//line Main.purs:58:13
-		x0 := archsimd.LoadFloat64x2(xs[i : i+step])
-//line Main.purs:58:13
-		acc0 = acc0.Add(x0)
-//line Main.purs:58:13
-		x1 := archsimd.LoadFloat64x2(xs[i+step : i+2*step])
-//line Main.purs:58:13
-		acc1 = acc1.Add(x1)
-//line Main.purs:58:13
-		x2 := archsimd.LoadFloat64x2(xs[i+2*step : i+3*step])
-//line Main.purs:58:13
-		acc2 = acc2.Add(x2)
-//line Main.purs:58:13
-		x3 := archsimd.LoadFloat64x2(xs[i+3*step : i+4*step])
-//line Main.purs:58:13
-		acc3 = acc3.Add(x3)
-//line Main.purs:58:13
-	}
-//line Main.purs:58:13
-	acc0 = acc0.Add(acc1).Add(acc2.Add(acc3))
-//line Main.purs:58:13
-	var lanes [2]float64
-//line Main.purs:58:13
-	acc0.Store(lanes[:])
-//line Main.purs:58:13
-	accumulator := initial
-//line Main.purs:58:13
-	for _, lane := range lanes[:step] {
-//line Main.purs:58:13
-		accumulator = accumulator + lane
-//line Main.purs:58:13
-	}
-//line Main.purs:58:13
-	for ; i < len(xs); i++ {
-//line Main.purs:58:13
-		x := xs[i]
-//line Main.purs:58:13
-		accumulator = accumulator + x
-//line Main.purs:58:13
-	}
-//line Main.purs:58:13
-	return accumulator
-//line Main.purs:58:13
-}
-
-// main_scalar.go
-//go:build !(goexperiment.simd && (arm64 || wasm))
-
-package main
-
-//line Main.purs:58:13
-func foldLanes(xs []float64, initial float64) float64 {
-//line Main.purs:58:13
-	accumulator := initial
-//line Main.purs:58:13
-	for _, x := range xs {
-//line Main.purs:58:13
-		accumulator = accumulator + x
-//line Main.purs:58:13
-	}
-//line Main.purs:58:13
-	return accumulator
-//line Main.purs:58:13
-}
-
-// main_vector.go
-//go:build goexperiment.simd && wasm
-
-package main
-
-import (
-	"math"
-	"simd"
-)
-
-//line Main.purs:58:13
-func foldLanes(xs []float64, initial float64) float64 {
-//line Main.purs:58:13
-	acc0 := simd.BroadcastFloat64s(math.Copysign(0, -1))
-//line Main.purs:58:13
-	acc1, acc2, acc3 := acc0, acc0, acc0
-//line Main.purs:58:13
-	step := acc0.Len()
-//line Main.purs:58:13
-	i := 0
-//line Main.purs:58:13
-	for ; i < len(xs)-4*step+1; i += 4 * step {
-//line Main.purs:58:13
-		x0 := simd.LoadFloat64s(xs[i : i+step])
-//line Main.purs:58:13
-		acc0 = acc0.Add(x0)
-//line Main.purs:58:13
-		x1 := simd.LoadFloat64s(xs[i+step : i+2*step])
-//line Main.purs:58:13
-		acc1 = acc1.Add(x1)
-//line Main.purs:58:13
-		x2 := simd.LoadFloat64s(xs[i+2*step : i+3*step])
-//line Main.purs:58:13
-		acc2 = acc2.Add(x2)
-//line Main.purs:58:13
-		x3 := simd.LoadFloat64s(xs[i+3*step : i+4*step])
-//line Main.purs:58:13
-		acc3 = acc3.Add(x3)
-//line Main.purs:58:13
-	}
-//line Main.purs:58:13
-	acc0 = acc0.Add(acc1).Add(acc2.Add(acc3))
-//line Main.purs:58:13
-	var lanes [8]float64
-//line Main.purs:58:13
-	acc0.Store(lanes[:])
-//line Main.purs:58:13
-	accumulator := initial
-//line Main.purs:58:13
-	for _, lane := range lanes[:step] {
-//line Main.purs:58:13
-		accumulator = accumulator + lane
-//line Main.purs:58:13
-	}
-//line Main.purs:58:13
-	for ; i < len(xs); i++ {
-//line Main.purs:58:13
-		x := xs[i]
-//line Main.purs:58:13
-		accumulator = accumulator + x
-//line Main.purs:58:13
-	}
-//line Main.purs:58:13
-	return accumulator
-//line Main.purs:58:13
 }
 
 // shared/shared.go

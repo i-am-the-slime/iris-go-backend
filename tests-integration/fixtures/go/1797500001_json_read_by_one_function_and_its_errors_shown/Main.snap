@@ -113,15 +113,15 @@ const (
 	EitherNonEmptyListForeignErrorFnTagsTitleTodoRight
 )
 
-type EitherNonEmptyListForeignErrorFnTitleTagsTitle struct {
+type EitherNonEmptyListForeignErrorFnEmptyTagsTitle struct {
 	Left  NonEmptyListForeignError
-	Right func(shared.Title) shared.TagsTitle
+	Right func(shared.Empty) shared.TagsTitle
 	Tag   uint8
 }
 
 const (
-	EitherNonEmptyListForeignErrorFnTitleTagsTitleLeft = iota
-	EitherNonEmptyListForeignErrorFnTitleTagsTitleRight
+	EitherNonEmptyListForeignErrorFnEmptyTagsTitleLeft = iota
+	EitherNonEmptyListForeignErrorFnEmptyTagsTitleRight
 )
 
 type EitherNonEmptyListForeignErrorArrayString struct {
@@ -146,6 +146,17 @@ const (
 	EitherNonEmptyListForeignErrorStringRight
 )
 
+type EitherNonEmptyListForeignErrorFnTitleTagsTitle struct {
+	Left  NonEmptyListForeignError
+	Right func(shared.Title) shared.TagsTitle
+	Tag   uint8
+}
+
+const (
+	EitherNonEmptyListForeignErrorFnTitleTagsTitleLeft = iota
+	EitherNonEmptyListForeignErrorFnTitleTagsTitleRight
+)
+
 type EitherNonEmptyListForeignErrorFnEmptyTitle struct {
 	Left  NonEmptyListForeignError
 	Right func(shared.Empty) shared.Title
@@ -155,17 +166,6 @@ type EitherNonEmptyListForeignErrorFnEmptyTitle struct {
 const (
 	EitherNonEmptyListForeignErrorFnEmptyTitleLeft = iota
 	EitherNonEmptyListForeignErrorFnEmptyTitleRight
-)
-
-type EitherNonEmptyListForeignErrorFnEmptyTagsTitle struct {
-	Left  NonEmptyListForeignError
-	Right func(shared.Empty) shared.TagsTitle
-	Tag   uint8
-}
-
-const (
-	EitherNonEmptyListForeignErrorFnEmptyTagsTitleLeft = iota
-	EitherNonEmptyListForeignErrorFnEmptyTagsTitleRight
 )
 
 type ListListForeignError struct {
@@ -203,16 +203,16 @@ func RightEitherNonEmptyListForeignErrorFnTagsTitleTodo(right func(shared.TagsTi
 	return EitherNonEmptyListForeignErrorFnTagsTitleTodo{Tag: EitherNonEmptyListForeignErrorFnTagsTitleTodoRight, Right: right}
 }
 
+func Cons(cons0 *ForeignError, cons1 *ListForeignError) *ListForeignError {
+	return &ListForeignError{Cons0: cons0, Cons1: cons1}
+}
+
 func LeftEitherNonEmptyListForeignErrorArrayString(left NonEmptyListForeignError) EitherNonEmptyListForeignErrorArrayString {
 	return EitherNonEmptyListForeignErrorArrayString{Tag: EitherNonEmptyListForeignErrorArrayStringLeft, Left: left}
 }
 
 func RightEitherNonEmptyListForeignErrorArrayString(right []string) EitherNonEmptyListForeignErrorArrayString {
 	return EitherNonEmptyListForeignErrorArrayString{Tag: EitherNonEmptyListForeignErrorArrayStringRight, Right: right}
-}
-
-func Cons(cons0 *ForeignError, cons1 *ListForeignError) *ListForeignError {
-	return &ListForeignError{Cons0: cons0, Cons1: cons1}
 }
 
 func RightEitherNonEmptyListForeignErrorFnTitleTagsTitle(right func(shared.Title) shared.TagsTitle) EitherNonEmptyListForeignErrorFnTitleTagsTitle {
@@ -371,6 +371,15 @@ func AppendShow(buffer []byte, foreignError *ForeignError) []byte {
 	return buffer
 }
 
+// Type/Proxy/proxy.go
+package proxy
+
+type Proxy uint8
+
+const (
+	ProxyProxy Proxy = iota
+)
+
 // Yoga/JSON/json.go
 package json
 
@@ -378,6 +387,7 @@ import (
 	"fixture/Data/Either"
 	"fixture/Data/Monoid"
 	"fixture/Foreign"
+	"fixture/Type/Proxy"
 	"fixture/shared"
 	"github.com/i-am-the-slime/iris-go/alloc"
 	arraypkg "github.com/i-am-the-slime/iris-go/array"
@@ -466,85 +476,89 @@ func ReadJSONTodo(text string) foreign.EitherNonEmptyListForeignErrorTodo {
 				result = foreign.LeftEitherNonEmptyListForeignErrorFnTagsTitleTodo(foreign.MapListFunction2("done", foreign.NonEmptyListForeignError{First: foreign.TypeMismatch("Boolean", foreignvalue.TagOf(b)), Second: foreign.SharedListForeignErrorNil}))
 			}
 		}
-		unsafeReadPropImpl2 := foreignvalue.UnsafeReadPropImpl(func() foreign.EitherNonEmptyListForeignErrorForeign {
-			return foreign.LeftEitherNonEmptyListForeignErrorForeign(foreign.NonEmptyListForeignError{First: foreign.TypeMismatch("object", foreignvalue.TypeOf(r)), Second: foreign.SharedListForeignErrorNil})
-		}, foreign.PureIdentityNonEmptyListForeignError, "tags", r)
-		var result2 foreign.EitherNonEmptyListForeignErrorArrayString
-		switch unsafeReadPropImpl2.Tag {
-		case foreign.EitherNonEmptyListForeignErrorForeignLeft:
-			result2 = foreign.LeftEitherNonEmptyListForeignErrorArrayString(unsafeReadPropImpl2.Left)
-		default: // foreign.EitherNonEmptyListForeignErrorForeignRight
-			b := unsafeReadPropImpl2.Right
-			if foreignvalue.IsArray(b) {
-				array := b.([]any)
-				accumulator := foreign.RightEitherNonEmptyListForeignErrorArrayString(monoid.MemptyString)
-				accumulator.Right = slices.Clip(accumulator.Right)
-				for index, element := range array {
-					elem := ReadAtIdxString(int32(index), element)
-					if accumulator.Tag == foreign.EitherNonEmptyListForeignErrorArrayStringLeft && elem.Tag == foreign.EitherNonEmptyListForeignErrorStringLeft {
-						accumulator = foreign.LeftEitherNonEmptyListForeignErrorArrayString(foreign.NonEmptyListForeignError{First: accumulator.Left.First, Second: ReadJSONTodoGoReusing(foreign.Cons(elem.Left.First, elem.Left.Second), ReadJSONTodoGo(foreign.SharedListForeignErrorNil, accumulator.Left.Second))})
-					} else if accumulator.Tag == foreign.EitherNonEmptyListForeignErrorArrayStringLeft && elem.Tag == foreign.EitherNonEmptyListForeignErrorStringRight {
-						accumulator = foreign.LeftEitherNonEmptyListForeignErrorArrayString(accumulator.Left)
-					} else if accumulator.Tag == foreign.EitherNonEmptyListForeignErrorArrayStringRight && elem.Tag == foreign.EitherNonEmptyListForeignErrorStringRight {
-						accumulator = foreign.RightEitherNonEmptyListForeignErrorArrayString(arraypkg.Bounded(append(accumulator.Right, elem.Right)))
-					} else {
-						accumulator = foreign.LeftEitherNonEmptyListForeignErrorArrayString(elem.Left)
-					}
-				}
-				result2 = accumulator
-			} else {
-				result2 = foreign.LeftEitherNonEmptyListForeignErrorArrayString(foreign.NonEmptyListForeignError{First: foreign.TypeMismatch("array", foreignvalue.TagOf(b)), Second: foreign.SharedListForeignErrorNil})
-			}
+		scrutinee := GetFieldsArrayStringConsStringNilEmptyTitleTagsTitle(proxy.ProxyProxy, r)
+		if result.Tag == foreign.EitherNonEmptyListForeignErrorFnTagsTitleTodoRight && scrutinee.Tag == foreign.EitherNonEmptyListForeignErrorFnEmptyTagsTitleRight {
+			return foreign.RightEitherNonEmptyListForeignErrorTodo(result.Right(scrutinee.Right(shared.Empty{})))
 		}
-		var result3 foreign.EitherNonEmptyListForeignErrorFnTitleTagsTitle
-		switch result2.Tag {
-		case foreign.EitherNonEmptyListForeignErrorArrayStringRight:
-			result3 = foreign.RightEitherNonEmptyListForeignErrorFnTitleTagsTitle(func(r1 shared.Title) shared.TagsTitle {
-				return shared.TagsTitle{Title: r1.Title, Tags: result2.Right}
-			})
-		default: // foreign.EitherNonEmptyListForeignErrorArrayStringLeft
-			result3 = foreign.LeftEitherNonEmptyListForeignErrorFnTitleTagsTitle(foreign.MapListFunction2("tags", result2.Left))
+		if result.Tag == foreign.EitherNonEmptyListForeignErrorFnTagsTitleTodoLeft && scrutinee.Tag == foreign.EitherNonEmptyListForeignErrorFnEmptyTagsTitleLeft {
+			return foreign.LeftEitherNonEmptyListForeignErrorTodo(foreign.NonEmptyListForeignError{First: result.Left.First, Second: ReadJSONTodoGoReusing(foreign.Cons(scrutinee.Left.First, scrutinee.Left.Second), ReadJSONTodoGo(foreign.SharedListForeignErrorNil, result.Left.Second))})
 		}
-		unsafeReadPropImpl3 := foreignvalue.UnsafeReadPropImpl(func() foreign.EitherNonEmptyListForeignErrorForeign {
-			return foreign.LeftEitherNonEmptyListForeignErrorForeign(foreign.NonEmptyListForeignError{First: foreign.TypeMismatch("object", foreignvalue.TypeOf(r)), Second: foreign.SharedListForeignErrorNil})
-		}, foreign.PureIdentityNonEmptyListForeignError, "title", r)
-		var result4 foreign.EitherNonEmptyListForeignErrorFnEmptyTitle
-		switch unsafeReadPropImpl3.Tag {
-		case foreign.EitherNonEmptyListForeignErrorForeignLeft:
-			result4 = foreign.LeftEitherNonEmptyListForeignErrorFnEmptyTitle(foreign.MapListFunction2("title", unsafeReadPropImpl3.Left))
-		default: // foreign.EitherNonEmptyListForeignErrorForeignRight
-			b := unsafeReadPropImpl3.Right
-			if foreignvalue.TagOf(b) == "String" {
-				result4 = foreign.RightEitherNonEmptyListForeignErrorFnEmptyTitle(func(_ shared.Empty) shared.Title {
-					return shared.Title{Title: b.(string)}
-				})
-			} else {
-				result4 = foreign.LeftEitherNonEmptyListForeignErrorFnEmptyTitle(foreign.MapListFunction2("title", foreign.NonEmptyListForeignError{First: foreign.TypeMismatch("String", foreignvalue.TagOf(b)), Second: foreign.SharedListForeignErrorNil}))
-			}
-		}
-		var result5 foreign.EitherNonEmptyListForeignErrorFnEmptyTagsTitle
-		if result3.Tag == foreign.EitherNonEmptyListForeignErrorFnTitleTagsTitleRight && result4.Tag == foreign.EitherNonEmptyListForeignErrorFnEmptyTitleRight {
-			result5 = foreign.RightEitherNonEmptyListForeignErrorFnEmptyTagsTitle(func(x shared.Empty) shared.TagsTitle {
-				return result3.Right(result4.Right(x))
-			})
-		} else if result3.Tag == foreign.EitherNonEmptyListForeignErrorFnTitleTagsTitleLeft && result4.Tag == foreign.EitherNonEmptyListForeignErrorFnEmptyTitleLeft {
-			result5 = foreign.LeftEitherNonEmptyListForeignErrorFnEmptyTagsTitle(foreign.NonEmptyListForeignError{First: result3.Left.First, Second: ReadJSONTodoGoReusing(foreign.Cons(result4.Left.First, result4.Left.Second), ReadJSONTodoGo(foreign.SharedListForeignErrorNil, result3.Left.Second))})
-		} else if result3.Tag == foreign.EitherNonEmptyListForeignErrorFnTitleTagsTitleRight && result4.Tag == foreign.EitherNonEmptyListForeignErrorFnEmptyTitleLeft {
-			result5 = foreign.LeftEitherNonEmptyListForeignErrorFnEmptyTagsTitle(result4.Left)
-		} else {
-			result5 = foreign.LeftEitherNonEmptyListForeignErrorFnEmptyTagsTitle(result3.Left)
-		}
-		if result.Tag == foreign.EitherNonEmptyListForeignErrorFnTagsTitleTodoRight && result5.Tag == foreign.EitherNonEmptyListForeignErrorFnEmptyTagsTitleRight {
-			return foreign.RightEitherNonEmptyListForeignErrorTodo(result.Right(result5.Right(shared.Empty{})))
-		}
-		if result.Tag == foreign.EitherNonEmptyListForeignErrorFnTagsTitleTodoLeft && result5.Tag == foreign.EitherNonEmptyListForeignErrorFnEmptyTagsTitleLeft {
-			return foreign.LeftEitherNonEmptyListForeignErrorTodo(foreign.NonEmptyListForeignError{First: result.Left.First, Second: ReadJSONTodoGoReusing(foreign.Cons(result5.Left.First, result5.Left.Second), ReadJSONTodoGo(foreign.SharedListForeignErrorNil, result.Left.Second))})
-		}
-		if result.Tag == foreign.EitherNonEmptyListForeignErrorFnTagsTitleTodoRight && result5.Tag == foreign.EitherNonEmptyListForeignErrorFnEmptyTagsTitleLeft {
-			return foreign.LeftEitherNonEmptyListForeignErrorTodo(result5.Left)
+		if result.Tag == foreign.EitherNonEmptyListForeignErrorFnTagsTitleTodoRight && scrutinee.Tag == foreign.EitherNonEmptyListForeignErrorFnEmptyTagsTitleLeft {
+			return foreign.LeftEitherNonEmptyListForeignErrorTodo(scrutinee.Left)
 		}
 		return foreign.LeftEitherNonEmptyListForeignErrorTodo(result.Left)
 	}
+}
+
+func GetFieldsArrayStringConsStringNilEmptyTitleTagsTitle(ignored proxy.Proxy, obj any) foreign.EitherNonEmptyListForeignErrorFnEmptyTagsTitle {
+	unsafeReadPropImpl := foreignvalue.UnsafeReadPropImpl(func() foreign.EitherNonEmptyListForeignErrorForeign {
+		return foreign.LeftEitherNonEmptyListForeignErrorForeign(foreign.NonEmptyListForeignError{First: foreign.TypeMismatch("object", foreignvalue.TypeOf(obj)), Second: foreign.SharedListForeignErrorNil})
+	}, foreign.PureIdentityNonEmptyListForeignError, "tags", obj)
+	var result2 foreign.EitherNonEmptyListForeignErrorArrayString
+	switch unsafeReadPropImpl.Tag {
+	case foreign.EitherNonEmptyListForeignErrorForeignLeft:
+		result2 = foreign.LeftEitherNonEmptyListForeignErrorArrayString(unsafeReadPropImpl.Left)
+	default: // foreign.EitherNonEmptyListForeignErrorForeignRight
+		b := unsafeReadPropImpl.Right
+		if foreignvalue.IsArray(b) {
+			array := b.([]any)
+			accumulator := foreign.RightEitherNonEmptyListForeignErrorArrayString(monoid.MemptyString)
+			accumulator.Right = slices.Clip(accumulator.Right)
+			for index, element := range array {
+				elem := ReadAtIdxString(int32(index), element)
+				if accumulator.Tag == foreign.EitherNonEmptyListForeignErrorArrayStringLeft && elem.Tag == foreign.EitherNonEmptyListForeignErrorStringLeft {
+					accumulator = foreign.LeftEitherNonEmptyListForeignErrorArrayString(foreign.NonEmptyListForeignError{First: accumulator.Left.First, Second: ReadJSONTodoGoReusing(foreign.Cons(elem.Left.First, elem.Left.Second), ReadJSONTodoGo(foreign.SharedListForeignErrorNil, accumulator.Left.Second))})
+				} else if accumulator.Tag == foreign.EitherNonEmptyListForeignErrorArrayStringLeft && elem.Tag == foreign.EitherNonEmptyListForeignErrorStringRight {
+					accumulator = foreign.LeftEitherNonEmptyListForeignErrorArrayString(accumulator.Left)
+				} else if accumulator.Tag == foreign.EitherNonEmptyListForeignErrorArrayStringRight && elem.Tag == foreign.EitherNonEmptyListForeignErrorStringRight {
+					accumulator = foreign.RightEitherNonEmptyListForeignErrorArrayString(arraypkg.Bounded(append(accumulator.Right, elem.Right)))
+				} else {
+					accumulator = foreign.LeftEitherNonEmptyListForeignErrorArrayString(elem.Left)
+				}
+			}
+			result2 = accumulator
+		} else {
+			result2 = foreign.LeftEitherNonEmptyListForeignErrorArrayString(foreign.NonEmptyListForeignError{First: foreign.TypeMismatch("array", foreignvalue.TagOf(b)), Second: foreign.SharedListForeignErrorNil})
+		}
+	}
+	var result foreign.EitherNonEmptyListForeignErrorFnTitleTagsTitle
+	switch result2.Tag {
+	case foreign.EitherNonEmptyListForeignErrorArrayStringRight:
+		result = foreign.RightEitherNonEmptyListForeignErrorFnTitleTagsTitle(func(r1 shared.Title) shared.TagsTitle {
+			return shared.TagsTitle{Title: r1.Title, Tags: result2.Right}
+		})
+	default: // foreign.EitherNonEmptyListForeignErrorArrayStringLeft
+		result = foreign.LeftEitherNonEmptyListForeignErrorFnTitleTagsTitle(foreign.MapListFunction2("tags", result2.Left))
+	}
+	unsafeReadPropImpl2 := foreignvalue.UnsafeReadPropImpl(func() foreign.EitherNonEmptyListForeignErrorForeign {
+		return foreign.LeftEitherNonEmptyListForeignErrorForeign(foreign.NonEmptyListForeignError{First: foreign.TypeMismatch("object", foreignvalue.TypeOf(obj)), Second: foreign.SharedListForeignErrorNil})
+	}, foreign.PureIdentityNonEmptyListForeignError, "title", obj)
+	var result3 foreign.EitherNonEmptyListForeignErrorFnEmptyTitle
+	switch unsafeReadPropImpl2.Tag {
+	case foreign.EitherNonEmptyListForeignErrorForeignLeft:
+		result3 = foreign.LeftEitherNonEmptyListForeignErrorFnEmptyTitle(foreign.MapListFunction2("title", unsafeReadPropImpl2.Left))
+	default: // foreign.EitherNonEmptyListForeignErrorForeignRight
+		b := unsafeReadPropImpl2.Right
+		if foreignvalue.TagOf(b) == "String" {
+			result3 = foreign.RightEitherNonEmptyListForeignErrorFnEmptyTitle(func(_ shared.Empty) shared.Title {
+				return shared.Title{Title: b.(string)}
+			})
+		} else {
+			result3 = foreign.LeftEitherNonEmptyListForeignErrorFnEmptyTitle(foreign.MapListFunction2("title", foreign.NonEmptyListForeignError{First: foreign.TypeMismatch("String", foreignvalue.TagOf(b)), Second: foreign.SharedListForeignErrorNil}))
+		}
+	}
+	if result.Tag == foreign.EitherNonEmptyListForeignErrorFnTitleTagsTitleRight && result3.Tag == foreign.EitherNonEmptyListForeignErrorFnEmptyTitleRight {
+		return foreign.RightEitherNonEmptyListForeignErrorFnEmptyTagsTitle(func(x shared.Empty) shared.TagsTitle {
+			return result.Right(result3.Right(x))
+		})
+	}
+	if result.Tag == foreign.EitherNonEmptyListForeignErrorFnTitleTagsTitleLeft && result3.Tag == foreign.EitherNonEmptyListForeignErrorFnEmptyTitleLeft {
+		return foreign.LeftEitherNonEmptyListForeignErrorFnEmptyTagsTitle(foreign.NonEmptyListForeignError{First: result.Left.First, Second: ReadJSONTodoGoReusing(foreign.Cons(result3.Left.First, result3.Left.Second), ReadJSONTodoGo(foreign.SharedListForeignErrorNil, result.Left.Second))})
+	}
+	if result.Tag == foreign.EitherNonEmptyListForeignErrorFnTitleTagsTitleRight && result3.Tag == foreign.EitherNonEmptyListForeignErrorFnEmptyTitleLeft {
+		return foreign.LeftEitherNonEmptyListForeignErrorFnEmptyTagsTitle(result3.Left)
+	}
+	return foreign.LeftEitherNonEmptyListForeignErrorFnEmptyTagsTitle(result.Left)
 }
 
 func ReadAtIdxString(i int32, f any) foreign.EitherNonEmptyListForeignErrorString {
@@ -639,8 +653,8 @@ type TagsTitle struct {
 	Title string
 }
 
+type Empty struct{}
+
 type Title struct {
 	Title string
 }
-
-type Empty struct{}

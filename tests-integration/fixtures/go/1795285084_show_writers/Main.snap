@@ -318,15 +318,12 @@ func Mixed(mixed0 *Colour, mixed1 *Colour) *Colour {
 var main_ = initializeMain_()
 
 func initializeMain_() []string {
-	record := shared.AgeBNameZ{Name: "x", Age: 3, B: true, Z: []float64{1.5}}
 	text := []byte("{ age: ")
-	text = strconv.AppendInt(text, int64(record.Age), 10)
-	text = append(text, ", b: "...)
-	text = strconv.AppendBool(text, record.B)
-	text = append(text, ", name: "...)
-	text = prim.AppendShowString(text, record.Name)
+	text = strconv.AppendInt(text, int64(3), 10)
+	text = append(text, ", b: true, name: "...)
+	text = prim.AppendShowString(text, "x")
 	text = append(text, ", z: "...)
-	text = show.AppendShowArrayNumber(text, record.Z)
+	text = show.AppendShowArrayNumber(text, []float64{1.5})
 	text = append(text, " }"...)
 	text2 := either.AppendShowArrayEitherIntString(nil, []either.EitherIntString{either.Left(1), either.Right("x")})
 	text2 = maybe_tuple.AppendShowArrayTupleCharArrayMaybeNumber(text2, []maybe_tuple.TupleCharArrayMaybeNumber{{First: 'a', Second: []maybe.Number{maybe.JustNumber(2.5)}}})
@@ -520,13 +517,6 @@ func AppendShowCharArrayMaybeNumber(buffer []byte, tuple TupleCharArrayMaybeNumb
 
 // shared/shared.go
 package shared
-
-type AgeBNameZ struct {
-	Name string
-	Z    []float64
-	Age  int32
-	B    bool
-}
 
 type HW struct {
 	H int32

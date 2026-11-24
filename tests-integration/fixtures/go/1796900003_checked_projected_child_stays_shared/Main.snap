@@ -505,15 +505,19 @@ import (
 var main_ = initializeMain_()
 
 func initializeMain_() []int32 {
-	result := mainGoReusing(redblack.SharedTreeLeaf, redblack_types.SharedListTreeNil, 0, 1000)
-	return []int32{result.Probed, list_redblack.LengthTree(result.Trees), types.SumIntList(redblack_types.MapSize(result.Trees)), types.SumIntList(redblack_types.Map_(redblack.Checksum, result.Trees)), list_redblack.LengthTree(mainGoReusing2(redblack_types.SharedListTreeNil, result.Trees))}
+	result := projectedChild(1000)
+	return []int32{result.Probed, list_redblack.LengthTree(result.Trees), types.SumIntList(redblack_types.MapSize(result.Trees)), types.SumIntList(redblack_types.Map_(redblack.Checksum, result.Trees)), list_redblack.LengthTree(mainGoReusing(redblack_types.SharedListTreeNil, result.Trees))}
 }
 
-func mainGoOrMainGoChecked(step int, tree *redblack.Tree, kept *redblack_types.ListTree, probed int32, n int32, treeOwned bool) redblack_types.ProbedTrees {
+func projectedChild(steps int32) redblack_types.ProbedTrees {
+	return projectedChildGoReusing(redblack.SharedTreeLeaf, redblack_types.SharedListTreeNil, 0, steps)
+}
+
+func projectedChildGoOrProjectedChildGoChecked(step int, tree *redblack.Tree, kept *redblack_types.ListTree, probed int32, n int32, treeOwned bool) redblack_types.ProbedTrees {
 	var listTreeCells alloc.Cells[redblack_types.ListTree]
 	for {
 		switch step {
-		case shared.MainGoStep:
+		case shared.ProjectedChildGoStep:
 			if n <= 0 {
 				return redblack_types.ProbedTrees{Probed: probed, Trees: redblack_types.Cons(tree, kept)}
 			}
@@ -570,8 +574,8 @@ func mainGoOrMainGoChecked(step int, tree *redblack.Tree, kept *redblack_types.L
 			} else {
 				result = kept
 			}
-			step, tree, kept, n, treeOwned = shared.MainGoCheckedStep, next, result, n-1, !(n%7 == 0)
-		default: // shared.MainGoCheckedStep
+			step, tree, kept, n, treeOwned = shared.ProjectedChildGoCheckedStep, next, result, n-1, !(n%7 == 0)
+		default: // shared.ProjectedChildGoCheckedStep
 			if n <= 0 {
 				return redblack_types.ProbedTrees{Probed: probed, Trees: redblack_types.Cons(tree, kept)}
 			}
@@ -614,7 +618,7 @@ func mainGoOrMainGoChecked(step int, tree *redblack.Tree, kept *redblack_types.L
 				} else {
 					probedTreesGrown = redblack.Ins(key, true, tree2)
 				}
-				step, kept, probed, n = shared.MainGoStep, listTreeCells.New(redblack_types.ListTree{Cons0: probedTreesGrown, Cons1: kept}), probed+redblack.Checksum(child), n-1
+				step, kept, probed, n = shared.ProjectedChildGoStep, listTreeCells.New(redblack_types.ListTree{Cons0: probedTreesGrown, Cons1: kept}), probed+redblack.Checksum(child), n-1
 				continue
 			}
 			k2 := n * 2
@@ -645,15 +649,15 @@ func mainGoOrMainGoChecked(step int, tree *redblack.Tree, kept *redblack_types.L
 	}
 }
 
-func mainGo(tree *redblack.Tree, kept *redblack_types.ListTree, probed int32, n int32) redblack_types.ProbedTrees {
-	return mainGoOrMainGoChecked(shared.MainGoStep, tree, kept, probed, n, false)
+func projectedChildGo(tree *redblack.Tree, kept *redblack_types.ListTree, probed int32, n int32) redblack_types.ProbedTrees {
+	return projectedChildGoOrProjectedChildGoChecked(shared.ProjectedChildGoStep, tree, kept, probed, n, false)
 }
 
-func mainGoChecked(tree *redblack.Tree, kept *redblack_types.ListTree, probed int32, n int32, treeOwned bool) redblack_types.ProbedTrees {
-	return mainGoOrMainGoChecked(shared.MainGoCheckedStep, tree, kept, probed, n, treeOwned)
+func projectedChildGoChecked(tree *redblack.Tree, kept *redblack_types.ListTree, probed int32, n int32, treeOwned bool) redblack_types.ProbedTrees {
+	return projectedChildGoOrProjectedChildGoChecked(shared.ProjectedChildGoCheckedStep, tree, kept, probed, n, treeOwned)
 }
 
-func mainGoReusing(tree *redblack.Tree, kept *redblack_types.ListTree, probed int32, n int32) redblack_types.ProbedTrees {
+func projectedChildGoReusing(tree *redblack.Tree, kept *redblack_types.ListTree, probed int32, n int32) redblack_types.ProbedTrees {
 	if n <= 0 {
 		return redblack_types.ProbedTrees{Probed: probed, Trees: redblack_types.Cons(tree, kept)}
 	}
@@ -688,7 +692,7 @@ func mainGoReusing(tree *redblack.Tree, kept *redblack_types.ListTree, probed in
 		} else {
 			probedTreesGrown = redblack.Ins(key, true, tree2)
 		}
-		return mainGo(tree, redblack_types.Cons(probedTreesGrown, kept), probed+redblack.Checksum(child), n-1)
+		return projectedChildGo(tree, redblack_types.Cons(probedTreesGrown, kept), probed+redblack.Checksum(child), n-1)
 	}
 	k2 := n * 2
 	v := n%3 == 0
@@ -709,10 +713,10 @@ func mainGoReusing(tree *redblack.Tree, kept *redblack_types.ListTree, probed in
 	} else {
 		result = kept
 	}
-	return mainGoChecked(next, result, probed, n-1, !(n%7 == 0))
+	return projectedChildGoChecked(next, result, probed, n-1, !(n%7 == 0))
 }
 
-func mainGoReusing2(acc *redblack_types.ListTree, list *redblack_types.ListTree) *redblack_types.ListTree {
+func mainGoReusing(acc *redblack_types.ListTree, list *redblack_types.ListTree) *redblack_types.ListTree {
 	var listTreeCells alloc.Cells[redblack_types.ListTree]
 	for {
 		if list == redblack_types.SharedListTreeNil {
@@ -786,17 +790,17 @@ type ListTree struct {
 
 var SharedListTreeNil = &ListTree{}
 
+type ProbedTrees struct {
+	Trees  *ListTree
+	Probed int32
+}
+
 type ListListTree struct {
 	Cons0 *ListTree
 	Cons1 *ListListTree
 }
 
 var SharedListListTreeNil = &ListListTree{}
-
-type ProbedTrees struct {
-	Trees  *ListTree
-	Probed int32
-}
 
 func Cons(cons0 *redblack.Tree, cons1 *ListTree) *ListTree {
 	return &ListTree{Cons0: cons0, Cons1: cons1}
@@ -891,6 +895,6 @@ func UniqueBit(owned bool, bit uint8) uint8 {
 }
 
 const (
-	MainGoStep = iota
-	MainGoCheckedStep
+	ProjectedChildGoStep = iota
+	ProjectedChildGoCheckedStep
 )

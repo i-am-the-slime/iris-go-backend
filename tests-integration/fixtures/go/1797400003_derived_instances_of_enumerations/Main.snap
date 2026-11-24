@@ -130,6 +130,7 @@ import (
 	datashow "fixture/Data/Show"
 	"github.com/i-am-the-slime/iris-go/console"
 	"github.com/i-am-the-slime/iris-go/direct"
+	"slices"
 	"strconv"
 	"strings"
 )
@@ -181,41 +182,27 @@ func initializeMain_() []string {
 		element := sameCard(cards[index], array[index])
 		built[index] = element
 	}
-	array2 := direct.SortBy(suits, func(left Suit, right Suit) int {
-		switch ordered(left, right) {
-		case ordering.OrderingLT:
-			return -1
-		case ordering.OrderingGT:
-			return 1
-		}
-		return 0
-	})
-	mapped2 := make([]string, len(array2))
-	for index, element := range array2 {
+	sorted := slices.Clone(suits)
+	slices.Sort(sorted)
+	mapped2 := make([]string, len(sorted))
+	for index, element := range sorted {
 		mapped2[index] = show(element)
 	}
-	array3 := direct.SortBy(suits, func(left Suit, right Suit) int {
-		switch ordered(left, right) {
-		case ordering.OrderingLT:
-			return -1
-		case ordering.OrderingGT:
-			return 1
-		}
-		return 0
-	})
-	count2 := min(len(suits), len(array3))
+	sorted2 := slices.Clone(suits)
+	slices.Sort(sorted2)
+	count2 := min(len(suits), len(sorted2))
 	built2 := make([]ordering.Ordering, count2)
 	for index := range count2 {
-		element := ordered(suits[index], array3[index])
+		element := ordered(suits[index], sorted2[index])
 		built2[index] = element
 	}
-	array4 := []int32{3, 1}
-	array5 := []int32{2, 2}
-	count3 := min(len(array4), len(array5))
+	array2 := []int32{3, 1}
+	array3 := []int32{2, 2}
+	count3 := min(len(array2), len(array3))
 	built3 := make([]bool, count3)
 	for index := range count3 {
-		value := array4[index]
-		value2 := array5[index]
+		value := array2[index]
+		value2 := array3[index]
 		element := value > value2
 		built3[index] = element
 	}
@@ -225,9 +212,9 @@ func initializeMain_() []string {
 	expressions[2] = Expression{Tag: ExpressionAdd, Add0: &expressions[3], Add1: &expressions[4]}
 	expressions[3] = Expression{Tag: ExpressionLeaf, Leaf: 2}
 	expressions[4] = Expression{Tag: ExpressionLeaf, Leaf: 3}
-	array6 := []*Expression{&expressions[0]}
-	mapped3 := make([]int32, len(array6))
-	for index, element := range array6 {
+	array4 := []*Expression{&expressions[0]}
+	mapped3 := make([]int32, len(array4))
+	for index, element := range array4 {
 		mapped3[index] = scaled(3, element)
 	}
 	mapped4 := make([]bool, len(suits))
