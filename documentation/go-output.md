@@ -134,7 +134,10 @@ set. `Int.quot`, `div` and `mod` by zero are `0` in both.
 
 `*` and `Int.pow` wrap like 32-bit integers in Go, so they keep the low 32 bits of the exact
 product. JavaScript computes the product as a double first, which drops low bits once it passes
-2^53, and then cuts it to 32 bits. Products below 2^53 are the same in both.
+2^53, and then cuts it to 32 bits. Products below 2^53 are the same in both. A hash that multiplies
+by a large constant, such as FNV's `* 16777619`, passes 2^53 on almost every step, so the hashes come
+out different. Go's are the true 32-bit ones. To get the same hash in both, split the multiplication
+so every product stays below 2^53, as `Math.imul` does.
 
 Such a value then behaves differently wherever it is used. A `NaN` index passes JavaScript's bounds
 check, so `Array.index [] (Int.rem 5 0)` is `Just undefined`, which crashes or prints an empty
@@ -160,10 +163,22 @@ crunching over `Array Number` and `Array Int` runs on SIMD vectors: `foldl (+) 0
 `foldl (*)`, `foldl max`, `map (_ * k)`, `zipWith (\x y -> a * x + y)`, `sum (zipWith (*) xs ys)`,
 clamping with `min`, `max` and `if`, and so on. That's several times faster than a plain Go loop.
 
-The catch: a vector adds up several elements at once and combines the partial sums at the end, so
-a `Number` sum or product is added in a different order than JavaScript does it. The result can
-differ in its last digits, the same way `[0.1, 0.2, 0.3]` gives a different last digit depending on
-which pair you add first. Maps and `Int` arithmetic come out exactly the same. A `foldl min` over
+The catch: Go may reassociate a fold over `Number`s. A vector keeps one partial sum (or product) per
+lane, adds every lane's next element at once, and combines the lanes at the end, so the elements are
+added in a different order than JavaScript adds them. That goes for any fold the backend
+recognises, whether you write `sum`, `foldl (+) 0.0` or your own `foldWith (\a b -> a + b)` over
+`Array.foldl`. The result can differ in its last digits, the same way `[0.1, 0.2, 0.3]` gives a
+different last digit depending on which pair you add first:
+
+```purescript
+Array.foldl (+) 0.0 (Array.range 0 4095 <#> \i -> toNumber (i `mod` 1000) * 0.5 * 1.19)
+-- Go:         1191523.2
+-- JavaScript: 1191523.1999999997
+```
+
+Like fused multiply-adds and Go's `math` functions, this is a difference in rounding only: `Number`
+results aren't promised to be bit-identical to JavaScript's, so compare them with a tolerance. Maps
+and `Int` arithmetic come out exactly the same. A `foldl min` over
 `Number`s stays an ordinary loop, because `Data.Ord.min` lets a `NaN` win only when it comes last.
 
 Everywhere else (amd64, or without `GOEXPERIMENT=simd`) you get a plain loop that adds in
