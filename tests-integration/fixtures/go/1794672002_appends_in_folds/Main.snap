@@ -48,7 +48,6 @@ var main_ = initializeMain_()
 
 func initializeMain_() either.MainResult {
 	accumulator := []int32{}
-	accumulator = slices.Clip(accumulator)
 	for x := int32(1); x < 6; x++ {
 		accumulator = arraypkg.Bounded(append(accumulator, x))
 	}

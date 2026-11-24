@@ -28,6 +28,7 @@ mod existential;
 mod field_reads;
 mod foreign_data;
 mod foreign_values;
+mod fresh;
 mod from_list;
 mod fusion;
 mod groups;
@@ -190,6 +191,7 @@ where
     timed("labelled", || labelled::unlabel_blocks(&mut declarations));
     timed("known", || known::drop_known_tests(&mut declarations));
     timed("merging", || merging::merge_identical_branches(&mut declarations));
+    timed("fresh", || fresh::drop_clips_of_fresh_slices(&mut declarations));
     timed("references", || references::promote_references(&mut declarations));
     timed("composites", || composites::take_composites_apart(&mut declarations));
     timed("immediate", || immediate::reduce_immediate_calls(&mut declarations));

@@ -134,9 +134,10 @@ fn forget_changed(statement: &mut GoStatement, facts: &mut Vec<GoExpression>) {
         }
     });
     let touches_memory = writes_memory(statement);
-    facts.retain(|fact| {
-        !mentions_any(fact, &written) && !(touches_memory && reads_memory(fact))
-    });
+    let changed = |fact: &GoExpression| {
+        mentions_any(fact, &written) || (touches_memory && reads_memory(fact))
+    };
+    facts.retain(|fact| !changed(fact));
 }
 
 /// What holds after the statement: the opposite of a test whose branch always leaves the block.
