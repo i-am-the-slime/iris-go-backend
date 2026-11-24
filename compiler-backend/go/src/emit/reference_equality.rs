@@ -83,7 +83,7 @@ where
             | GoType::Pointer(_) => binary("==", left, right),
             GoType::Function { .. } => self.support("SameFunc", left, right),
             GoType::Slice(_) => self.support("SameSlice", left, right),
-            GoType::Any | GoType::Erased(_) | GoType::Generic { .. } => {
+            GoType::Any | GoType::Erased(_) | GoType::Generic { .. } | GoType::Results(_) => {
                 self.support("SameAny", left, right)
             }
             GoType::Struct(fields) => self.same_fields(fields, left, right, out),
@@ -145,7 +145,8 @@ where
             | GoType::Slice(_)
             | GoType::Any
             | GoType::Erased(_)
-            | GoType::Generic { .. } => false,
+            | GoType::Generic { .. }
+            | GoType::Results(_) => false,
             GoType::Struct(fields) => fields.iter().all(|field| self.comparable(&field.type_)),
             GoType::Named(name) if BASIC_TYPES.contains(&name.as_str()) => true,
             GoType::Named(name) => {

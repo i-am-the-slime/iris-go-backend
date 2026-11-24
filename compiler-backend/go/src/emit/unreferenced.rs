@@ -139,6 +139,7 @@ fn effects(value: GoExpression, out: &mut Vec<GoStatement>) {
         GoExpression::Composite { fields, .. } => {
             fields.into_iter().for_each(|(_, field)| effects(field, out));
         }
+        GoExpression::Results(values) => values.into_iter().for_each(|value| effects(value, out)),
         GoExpression::Binary { left, right, .. } => {
             effects(*left, out);
             effects(*right, out);
@@ -184,6 +185,7 @@ fn is_inert(value: &GoExpression) -> bool {
         | GoExpression::Conversion { value, .. }
         | GoExpression::Attributed { value, .. } => is_inert(value),
         GoExpression::Composite { fields, .. } => fields.iter().all(|(_, value)| is_inert(value)),
+        GoExpression::Results(values) => values.iter().all(is_inert),
         // Integer division by zero panics, and so does dereferencing nil.
         GoExpression::Binary { operator, left, right } => {
             !matches!(*operator, "/" | "%") && is_inert(left) && is_inert(right)

@@ -334,6 +334,7 @@ impl Walk {
                 self.type_name(name.clone());
                 arguments.iter_mut().for_each(|argument| self.type_(argument));
             }
+            GoType::Results(results) => results.iter_mut().for_each(|result| self.type_(result)),
             GoType::Int => self.free_name("int".into()),
             GoType::Float64 => self.free_name("float64".into()),
             GoType::Bool => self.free_name("bool".into()),
