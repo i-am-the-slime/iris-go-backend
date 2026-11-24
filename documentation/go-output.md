@@ -82,6 +82,8 @@ They make the Go a bit noisier to read. `iris go --no-line-directives out` leave
   surrogate, and joining the two halves of a surrogate pair gives back the original character.
 - `Data.String.Regex` follows JavaScript `RegExp` semantics, including the `g`, `i`, `m`, `s`, `u`
   and `y` flags and `lastIndex`.
+- `String.replace` and `replaceAll` expand `$$`, `$&`, `` $` `` and `$'` in the `Replacement`, as
+  JavaScript does: `String.replace (Pattern "b") (Replacement "[$&]") "abc"` is `"a[b]c"`.
 - `Foreign.Object` lists its keys in JavaScript's order: keys that are array indices (`"0"`, `"2"`,
   `"10"`) first, in numeric order, then the rest in the order you inserted them. That goes for
   `keys`, `values`, folds, `toUnfoldable`, `show` and JSON objects alike.
@@ -188,17 +190,6 @@ Old versions stay valid, they just cost more. Change a map that something else s
 switches to JavaScript's trie from there on, which costs one pass over the whole map. Every other
 key type (records, arrays, newtypes) uses the trie throughout. `traverse` over a `HashMap` and
 `debugShow` aren't supported yet.
-
-### `replace` and `replaceAll`
-
-```purescript
-String.replace (Pattern "b") (Replacement "[$&]") "abc"
--- Go:         "a[$&]c"
--- JavaScript: "a[b]c"
-```
-
-The `Replacement` goes in exactly as you wrote it. JavaScript expands `$$`, `$&`, `` $` `` and `$'`
-in it. `Data.String.Regex.replace` is a regex replacement and still expands `$1` and friends.
 
 ### Error messages
 
