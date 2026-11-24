@@ -10,8 +10,10 @@ use super::{INLINE_SIZE, Simplifier, substitute};
 use crate::foreign::{
     Comparison, Foreign, GoFunction, GoPackage, MUTABLE_PEEK_UNSAFE, MUTABLE_WITHIN, Operator,
 };
+use crate::monomorphic::traversal::visit;
 use crate::monomorphic::{
     Alternative, Binding, Expression, ExpressionKind, Guarded, Literal, Local, LocalId, Pattern,
+    PatternKind,
 };
 use crate::monotype::{DataType, Monotype, MonotypeId, Monotypes};
 use crate::purity::{is_trivial, mentions_any};
@@ -59,6 +61,9 @@ impl Simplifier<'_> {
             }
             _ => return None,
         };
+        if let Some(bound) = self.bind_only_field(&scrutinee, alternatives, &placements) {
+            return Some(bound);
+        }
         let (joins, alternatives) = self.join_points(alternatives, &placements, monotype);
         let distributed = self.map_choices(scrutinee, monotype, &mut |simplifier, chosen| {
             let case = ExpressionKind::Case {
@@ -116,6 +121,42 @@ impl Simplifier<'_> {
         }
         let kind = ExpressionKind::Let { bindings: kept, body: Box::new(body) };
         Some(Expression::new(kind, choice.monotype))
+    }
+
+    fn bind_only_field(
+        &mut self,
+        choice: &Expression,
+        alternatives: &[Alternative],
+        placements: &[Placement],
+    ) -> Option<Expression> {
+        let ([alternative], [Placement::Joined]) = (alternatives, placements) else { return None };
+        let ([pattern], Guarded::Unconditional(body)) = (&alternative.patterns[..], &alternative.body)
+        else {
+            return None;
+        };
+        let PatternKind::Constructor { arguments, .. } = &pattern.kind else { return None };
+        let [Pattern { kind: PatternKind::Variable(field), .. }] = &arguments[..] else {
+            return None;
+        };
+        let only_constructions = self.map_choices(choice.clone(), field.monotype, &mut |_, chosen| {
+            match chosen.kind {
+                ExpressionKind::Construct { mut arguments, .. } if arguments.len() == 1 => {
+                    arguments.remove(0)
+                }
+                _ => Expression::new(ExpressionKind::Fail("not a construction".into()), field.monotype),
+            }
+        });
+        let mut all_constructions = true;
+        visit(&only_constructions, &mut |node| {
+            if matches!(node.kind, ExpressionKind::Fail(_)) {
+                all_constructions = false;
+            }
+        });
+        if !all_constructions {
+            return None;
+        }
+        let binding = Binding { local: field.clone(), value: only_constructions };
+        Some(self.let_bindings(vec![binding], body.clone()))
     }
 
     /// Each joined alternative's body as a local function of the alternative's

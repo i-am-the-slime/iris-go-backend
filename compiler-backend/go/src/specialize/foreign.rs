@@ -89,10 +89,7 @@ where
                 DeclarationAbstraction::Type { binder, .. } => {
                     let binder = self.context.queries.lookup_forall_binder(*binder);
                     let Some(&argument) = instantiations.get(&binder.name) else {
-                        let variable = match scope.module.checked.lookup_name(binder.name) {
-                            Some(text) => self.context.queries.lookup_smol_str(text).to_string(),
-                            None => binder.name.as_text().to_string(),
-                        };
+                        let variable = self.variable_text(binder.name)?;
                         return Err(self.unsupported(
                             scope,
                             UnsupportedState::UninstantiatedVariable { variable },
@@ -291,7 +288,7 @@ where
         if let Some(declared) = declared.filter(|_| instantiated) {
             for quantifier in self.context.types.peel_quantifiers(declared).0 {
                 let Some(&argument) = instantiations.get(&quantifier) else {
-                    let variable = format!("{quantifier:?}");
+                    let variable = self.variable_text(quantifier)?;
                     let state = UnsupportedState::UninstantiatedVariable { variable };
                     return Err(self.unsupported(scope, state));
                 };

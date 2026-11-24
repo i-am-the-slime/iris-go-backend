@@ -1,0 +1,20 @@
+---
+source: tests-integration/src/fixtures.rs
+---
+Terms
+Tuple :: forall @a @b. a -> b -> Main.Tuple a b
+describe :: forall @a. Main.Describe a => a -> Prim.String
+
+Types
+Tuple :: Prim.Type -> Prim.Type -> Prim.Type
+Describe :: Prim.Type -> Prim.Constraint
+
+Classes
+class forall (a :: Prim.Type). Main.Describe a
+  describe :: forall @a. Main.Describe a => a -> Prim.String
+
+Instances
+instance forall a. Main.Describe a => Main.Describe ?[invalid operator chain]
+
+Roles
+Tuple = [Representational, Representational]

@@ -364,6 +364,7 @@ where
     Q: ExternalQueries,
 {
     let record = super::infer_expression(state, context, record)?;
+    let record = super::application::instantiate_expression(state, context, record)?;
     let mut current_type = record.type_id;
     let mut checked_labels = Vec::with_capacity(labels.len());
 

@@ -336,8 +336,14 @@ where
                     vec![appended],
                 ));
             }
-            let snoc = GoFunction { package: GoPackage::Array, name: "Snoc" };
-            return Ok(call(self.go_function(snoc), vec![array, element]));
+            let snoc = self.go_function(GoFunction { package: GoPackage::Array, name: "Snoc" });
+            let element_type = self.go_type(arguments[1].monotype)?;
+            if matches!(element_type, GoType::Any | GoType::Erased(_)) {
+                let function = Box::new(snoc);
+                let snoc = GoExpression::Instantiation { function, arguments: vec![element_type] };
+                return Ok(call(snoc, vec![array, element]));
+            }
+            return Ok(call(snoc, vec![array, element]));
         }
         if let Foreign::LazyDefer = foreign {
             if let ExpressionKind::Lambda { parameters, body } = &arguments[0].kind
@@ -492,7 +498,8 @@ where
             }
             Foreign::Unit => unit_value(),
             Foreign::UnsafeCoerce => {
-                self.coerce_at(values.remove(0), arguments[0].monotype, monotype, out)?
+                let position = arguments[0].position;
+                self.coerce_at(values.remove(0), arguments[0].monotype, monotype, position, out)?
             }
             Foreign::Identity => values.remove(0),
             _ => unreachable!("invariant violated: effectful foreign reached value conversion"),

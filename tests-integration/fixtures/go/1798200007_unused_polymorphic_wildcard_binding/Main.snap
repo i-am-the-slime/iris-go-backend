@@ -1,0 +1,16 @@
+---
+source: tests-integration/src/fixtures.rs
+---
+// main.go
+package main
+
+import (
+	"github.com/i-am-the-slime/iris-go/console"
+	"strings"
+)
+
+var main_ []string = []string{"hello", "1"}
+
+func main() {
+	console.Print("[" + strings.Join(main_, " ") + "]")
+}

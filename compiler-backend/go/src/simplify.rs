@@ -3,6 +3,8 @@
 //! members and foreign imports); inlining them exposes the effect primitives and
 //! operators that code generation turns into plain Go.
 
+use std::collections::hash_map::Entry;
+
 use rustc_hash::{FxHashMap, FxHashSet};
 
 use crate::foreign::{Boundary, Foreign, LineCoverage};
@@ -16,7 +18,7 @@ use crate::monomorphic::{
     RecordUpdate,
 };
 use crate::monotype::{Monotype, MonotypeId, Monotypes};
-use crate::naming::is_vague;
+use crate::naming::{is_vague, is_vaguely_spelled};
 use crate::purity::{
     KnownFunctions, can_fail, captures_free, captures_reference, does_no_work, is_cheap,
     is_deferrable, is_discardable, is_foreign_wrapper, is_trivial, is_within_size, mentions_any,
@@ -100,6 +102,8 @@ pub fn simplify(
         unsafely_effectful_locals: FxHashSet::default(),
         thunk_parameters,
         names: FxHashMap::default(),
+        copies: FxHashSet::default(),
+        forwarded: FxHashMap::default(),
         argument_specializations: ArgumentSpecializations::default(),
     };
     for component in &components {
@@ -164,8 +168,16 @@ struct Simplifier<'m> {
     thunk_parameters: FxHashSet<LocalId>,
     /// The names that locals take over from the aliases substituted for them: `argv <- args`
     /// binds `argv` to what `args` names after its type, `array`, and the Go variable is `argv`.
-    names: FxHashMap<LocalId, SmolStr>,
+    names: FxHashMap<LocalId, AdoptedName>,
+    copies: FxHashSet<LocalId>,
+    forwarded: FxHashMap<LocalId, LocalId>,
     argument_specializations: ArgumentSpecializations,
+}
+
+#[derive(Debug, Clone)]
+struct AdoptedName {
+    name: SmolStr,
+    written_here: bool,
 }
 
 impl Simplifier<'_> {
@@ -173,18 +185,47 @@ impl Simplifier<'_> {
     /// up takes the alias's name where that says what the value is. `argv <- args` binds `argv`
     /// to what `args` names after its type, `array`, and the Go variable is `argv`.
     fn substituting_alias(&mut self, alias: &Local, value: &Expression) {
-        let ExpressionKind::Local(target) = value.kind else { return };
-        let name = self.names.get(&alias.id).cloned().unwrap_or_else(|| alias.name.clone());
-        if is_vague(&name) || self.is_made_up(&name, alias.monotype) {
+        let ExpressionKind::Local(mut target) = value.kind else { return };
+        while let Some(&next) = self.forwarded.get(&target) {
+            target = next;
+        }
+        self.forwarded.insert(alias.id, target);
+        let own = AdoptedName {
+            name: alias.name.clone(),
+            written_here: !self.copies.contains(&alias.id),
+        };
+        let adopted = match self.names.get(&alias.id) {
+            Some(_) if own.written_here && self.says_what_it_is(&own, alias.monotype) => own,
+            Some(adopted) => adopted.clone(),
+            None => own,
+        };
+        if !self.says_what_it_is(&adopted, alias.monotype) {
             return;
         }
-        self.names.entry(target).or_insert(name);
+        match self.names.entry(target) {
+            Entry::Vacant(entry) => {
+                entry.insert(adopted);
+            }
+            Entry::Occupied(mut entry) => {
+                if adopted.written_here && !entry.get().written_here {
+                    entry.insert(adopted);
+                }
+            }
+        }
     }
 
     /// Whether a local's name is one the compiler gives a value nothing else names: after its
     /// type, or after the part it plays.
     fn is_made_up(&self, name: &str, monotype: MonotypeId) -> bool {
         name == self.monotypes.value_name(monotype) || MADE_UP_NAMES.contains(&name)
+    }
+
+    fn says_what_it_is(&self, adopted: &AdoptedName, monotype: MonotypeId) -> bool {
+        let vague = match adopted.written_here {
+            true => is_vaguely_spelled(&adopted.name),
+            false => is_vague(&adopted.name),
+        };
+        !vague && !self.is_made_up(&adopted.name, monotype)
     }
 
     /// Renames the function's locals whose names say little after the aliases that were
@@ -195,10 +236,10 @@ impl Simplifier<'_> {
         }
         let names = std::mem::take(&mut self.names);
         let mut rename = |local: &mut Local| {
-            if let Some(name) = names.get(&local.id)
-                && self.is_made_up(&local.name, local.monotype)
-            {
-                local.name = name.clone();
+            let Some(adopted) = names.get(&local.id) else { return };
+            let copied = self.copies.contains(&local.id);
+            if self.is_made_up(&local.name, local.monotype) || (adopted.written_here && copied) {
+                local.name = adopted.name.clone();
             }
         };
         function.parameters.iter_mut().for_each(&mut rename);

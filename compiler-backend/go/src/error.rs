@@ -30,7 +30,7 @@ pub enum GoError {
 
 #[derive(Debug, Error)]
 #[error(
-    "{location}cannot specialize {definition}: unsafeCoerce from {from} (Go {from_go}) to {to} (Go {to_go}) changes representation"
+    "{location}cannot specialize {definition}: unsafeCoerce from {from} (Go {from_go}) to {to} (Go {to_go}) changes representation{reason}"
 )]
 pub struct RepresentationChange {
     /// `path:line:column: `, or empty when the coercion's source is unknown.
@@ -40,6 +40,7 @@ pub struct RepresentationChange {
     pub from_go: String,
     pub to: String,
     pub to_go: String,
+    pub reason: String,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Error)]
@@ -98,6 +99,14 @@ pub enum UnsupportedState {
     ReferenceEqualityAcrossTypes { left: String, right: String },
     #[error("{construct} is not supported by the Go backend yet")]
     Construct { construct: &'static str },
+    #[error(
+        "the record {to} has fields that {from} lacks ({missing}); a Go struct holds only the fields its type names, so a coercion cannot widen a record"
+    )]
+    MissingRecordFields { from: String, to: String, missing: String },
+    #[error(
+        "a rank-N value is used at instantiations ({missing}) that the value it is coerced from was never specialized at; the Go backend specializes a rank-N value only at the instantiations requested of its own type"
+    )]
+    MissingInstantiations { missing: String },
     #[error(
         "Data.Int64.Internal's Long' is applied to {rendered}, which is neither Signed nor Unsigned; Go has an int64 for Long' Signed and a uint64 for Long' Unsigned"
     )]

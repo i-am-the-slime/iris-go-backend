@@ -1,0 +1,38 @@
+---
+source: tests-integration/src/fixtures.rs
+---
+data Proxy :: forall k. k -> Prim.Type
+data Proxy @a
+  | Proxy :: Main.Proxy a
+
+data Variant :: Prim.Row Prim.Type -> Prim.Type
+data Variant @row
+  | Variant :: Main.Variant row
+
+overOne :: forall label a b rest input output.
+  Prim.Row.Cons @Prim.Type label a rest input =>
+  Prim.Row.Cons @Prim.Type label b rest output =>
+  Main.Proxy @Prim.Symbol label ->
+  (a -> b) ->
+  (Main.Variant rest -> Main.Variant output) ->
+  Main.Variant input ->
+  Main.Variant output
+overOne = \{consDict} -> \{consDict1} -> \_ -> \_ -> \_ -> \_ -> Variant
+
+identity :: forall a. a -> a
+identity = \a -> a
+
+variant :: Main.Variant ( a :: Prim.String, b :: Prim.Int )
+variant = Variant
+
+main :: Prim.Int
+main =
+  let
+    unused :: Prim.Int
+    unused = 0
+  in
+    let
+      changed :: Main.Variant ( b :: Prim.Int )
+      changed = overOne {trivial} {trivial} Proxy (\value -> value) identity variant
+    in
+      unused

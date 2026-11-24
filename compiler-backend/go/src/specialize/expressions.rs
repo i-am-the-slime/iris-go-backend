@@ -231,6 +231,11 @@ where
                     scope.givens.insert(*binder, Dictionary::Trivial);
                     return self.expression(scope, *expression);
                 }
+                let closed = self.context.types.substitute(constraint, &scope.substitution);
+                if let Some(dictionary) = self.floating_dictionary(closed) {
+                    scope.givens.insert(*binder, dictionary);
+                    return self.expression(scope, *expression);
+                }
                 return self.scheme_construction(scope, id);
             }
             tree::ExpressionKind::Lambda { binders, expression } => {
@@ -345,17 +350,32 @@ where
         scope: &mut Scope,
         id: tree::ExpressionId,
     ) -> GoResult<Expression> {
+        self.with_floating_scope(|specializer| specializer.floated_application(scope, id))
+    }
+
+    fn floated_application(
+        &mut self,
+        scope: &mut Scope,
+        id: tree::ExpressionId,
+    ) -> GoResult<Expression> {
         let module = Arc::clone(&scope.module);
         let spine::ApplicationSpine { head, arguments, trailing: evidence, instantiations } =
             self.application_spine(scope, id);
         let mut result_instantiations = instantiations;
         self.context.types.close(&mut result_instantiations);
+        let trailing = self.trailing_dictionaries(scope, &evidence)?;
+        let head_instantiations = self.recorded_instantiations(scope, head);
+        let (evidence, trailing) = self.float_instantiated_evidence(
+            scope,
+            (&mut result_instantiations, &head_instantiations),
+            evidence,
+            trailing,
+        )?;
         let monotype = self.instantiated_result_monotype(
             scope,
             module.checked.tree[id].type_id,
             &result_instantiations,
         )?;
-        let trailing = self.trailing_dictionaries(scope, &evidence)?;
         if let tree::ExpressionKind::Constructor { resolution } = module.checked.tree[head].kind
             && trailing.is_empty()
             && self.is_newtype_constructor(resolution)?

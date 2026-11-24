@@ -610,6 +610,7 @@ fn go_foreign_packages(
             let (values, types) = go::foreign_declarations(&text);
             source.values.extend(values);
             source.types.extend(types);
+            source.forwarders.extend(go::foreign_forwarders(&text));
             source.uses_event_loop |= go::uses_event_loop(&text);
             source.recovers |= go::recovers(&text);
             let shown = foreign_file.strip_prefix(&root).unwrap_or(&foreign_file);
@@ -680,7 +681,7 @@ const GO_RUNTIME_VARIABLE: &str = "IRIS_GO";
 const GO_JOBS_VARIABLE: &str = "IRIS_GO_FIXTURE_JOBS";
 
 const GO_RUNTIME_MODULE: &str = "github.com/i-am-the-slime/iris-go";
-const GO_RUNTIME_VERSION: &str = "v0.4.0";
+const GO_RUNTIME_VERSION: &str = "v0.5.0";
 
 const WASM: (&str, &str) = ("js", "wasm");
 

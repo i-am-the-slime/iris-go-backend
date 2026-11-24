@@ -24,7 +24,10 @@ func Left(left exception.Error) EitherErrorForeign {
 // Data/Maybe/maybe.go
 package maybe
 
-import "github.com/i-am-the-slime/iris-go/foreignvalue"
+import (
+	"github.com/i-am-the-slime/iris-go/foreignvalue"
+	"github.com/i-am-the-slime/iris-go/object"
+)
 
 const TagNothing = 0
 
@@ -79,8 +82,7 @@ func EncodeJSONObjectInt(e *foreignvalue.Encoder, value *struct {
 	Vals  []int32
 }) {
 	e.Raw("{")
-	for index, key := range value.Keys {
-		member := value.Vals[index]
+	for key, member := range object.Entries(value) {
 		e.Key(key)
 		e.Int(member)
 	}

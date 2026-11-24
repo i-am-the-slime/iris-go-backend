@@ -161,6 +161,10 @@ where
         placeholder
     }
 
+    pub fn is_placeholder(&self, type_id: TypeId) -> bool {
+        self.placeholders.borrow().contains(&self.strip_annotations(type_id))
+    }
+
     fn stand_in(&self, unique: u32) -> TypeId {
         let name = Name { file: self.queries.prim_id(), unique, scoped: false };
         let kind = self.queries.intern_type(Type::Unification(u32::MAX));
@@ -632,6 +636,19 @@ where
                 self.match_row(pattern_row, target_row, variables, bindings)
             }
             (Type::Constructor(..), Type::Constructor(..)) => false,
+            (
+                Type::Constrained(pattern_constraint, pattern_inner),
+                Type::Constrained(target_constraint, target_inner),
+            ) => {
+                let (pattern_inner, target_inner) = (*pattern_inner, *target_inner);
+                self.match_type(*pattern_constraint, *target_constraint, variables, bindings)
+                    && self.match_type(pattern_inner, target_inner, variables, bindings)
+            }
+            // A result whose evidence an enclosing application discharges:
+            // `Monad m => Policy m` against `Policy Effect`.
+            (Type::Constrained(_, pattern_inner), _) => {
+                self.match_type(*pattern_inner, target, variables, bindings)
+            }
             (Type::Forall(binder, pattern_inner), Type::Forall(_, target_inner)) => {
                 let bound = self.queries.lookup_forall_binder(*binder).name;
                 if !variables.contains(&bound) {

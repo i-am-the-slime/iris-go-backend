@@ -6,10 +6,10 @@ use super::{
     length, path_root, unit_value,
 };
 use crate::erasure::Erasure;
-use crate::error::{GoError, GoResult, RepresentationChange};
+use crate::error::{GoError, GoResult, RepresentationChange, UnsupportedState};
 use crate::foreign::{GoFunction, GoPackage};
 use crate::go_traversal::each_block;
-use crate::monomorphic::{Expression, ExpressionKind};
+use crate::monomorphic::{Expression, ExpressionKind, SourcePosition};
 use crate::monotype::{DataType, Failure, Monotype, MonotypeId, RecordField};
 use crate::syntax::{GoCase, GoDeclaration, GoDefault, GoExpression, GoStatement, GoType};
 use smol_str::SmolStr;
@@ -53,6 +53,25 @@ where
             (_, Monotype::Recursive(data)) if !self.is_uninhabited(&data)? => {
                 let unfolded = self.unfold(&data)?;
                 self.coerce(value, from, unfolded, out)
+            }
+            (Monotype::Char, Monotype::Opaque) => {
+                let singleton = self
+                    .go_function(GoFunction { package: GoPackage::Prim, name: "CharSingleton" });
+                Ok(call(singleton, vec![value]))
+            }
+            (Monotype::Opaque, Monotype::Char | Monotype::Int | Monotype::Number) => {
+                let name = match self.monotypes.get(to) {
+                    Monotype::Char => "Char",
+                    Monotype::Int => "Int",
+                    _ => "Number",
+                };
+                let read = self.go_function(GoFunction { package: GoPackage::ForeignValue, name });
+                Ok(call(read, vec![value]))
+            }
+            (Monotype::Nullable(_), Monotype::Opaque)
+            | (Monotype::Opaque, Monotype::Nullable(_)) => {
+                let converter = self.converter(from, to)?;
+                Ok(call(identifier_expression(&converter), vec![value]))
             }
             (Monotype::Record(fields), Monotype::Opaque) => {
                 let record = self.shared(value, "original", out);
@@ -170,6 +189,7 @@ where
                 Ok(GoExpression::Function { parameters: vec![], result, body })
             }
             (Monotype::Array(_), Monotype::Array(_))
+            | (Monotype::Object(_), Monotype::Object(_))
             | (Monotype::Nullable(_), Monotype::Nullable(_))
             | (Monotype::Record(_), Monotype::Record(_))
             | (Monotype::Data(_), Monotype::Data(_)) => {
@@ -572,6 +592,20 @@ where
             (Monotype::Array(from_element), Monotype::Array(to_element)) => {
                 self.convert_elements(value, from_element, to_element, &result_type, &mut body)?;
             }
+            (Monotype::Object(from_element), Monotype::Object(to_element)) => {
+                let mut each = vec![];
+                let element = identifier_expression("element");
+                let converted = self.coerce(element, from_element, to_element, &mut each)?;
+                each.push(GoStatement::Return(Some(converted)));
+                let convert = GoExpression::Function {
+                    parameters: vec![("element".into(), self.go_type(from_element)?)],
+                    result: Some(self.go_type(to_element)?),
+                    body: each,
+                };
+                let map =
+                    self.go_function(GoFunction { package: GoPackage::Object, name: "FmapObject" });
+                body.push(GoStatement::Return(Some(call(map, vec![value, convert]))));
+            }
             (Monotype::Nullable(from_element), Monotype::Nullable(to_element)) => {
                 let absent = binary("==", value.clone(), identifier_expression("nil"));
                 body.push(GoStatement::If {
@@ -590,19 +624,69 @@ where
                 let converted = GoExpression::Address(Box::new(identifier_expression("converted")));
                 body.push(GoStatement::Return(Some(converted)));
             }
+            (Monotype::Nullable(from_element), Monotype::Opaque) => {
+                let absent = binary("==", value.clone(), identifier_expression("nil"));
+                body.push(GoStatement::If {
+                    condition: absent,
+                    then: vec![GoStatement::Return(Some(identifier_expression("nil")))],
+                    otherwise: vec![],
+                });
+                let present = GoExpression::Unary { operator: "*", operand: Box::new(value) };
+                let element = self.coerce(present, from_element, to, &mut body)?;
+                body.push(GoStatement::Return(Some(element)));
+            }
+            (Monotype::Opaque, Monotype::Nullable(to_element)) => {
+                let absent = binary("==", value.clone(), identifier_expression("nil"));
+                body.push(GoStatement::If {
+                    condition: absent,
+                    then: vec![GoStatement::Return(Some(identifier_expression("nil")))],
+                    otherwise: vec![],
+                });
+                let element = self.coerce(value, from, to_element, &mut body)?;
+                let type_ = self.go_type(to_element)?;
+                body.push(GoStatement::Variable {
+                    name: "converted".into(),
+                    type_,
+                    value: Some(element),
+                });
+                let converted = GoExpression::Address(Box::new(identifier_expression("converted")));
+                body.push(GoStatement::Return(Some(converted)));
+            }
             (Monotype::Record(from_fields), Monotype::Record(to_fields)) => {
                 // Records of one row differ only in their fields' representations. Rows that
                 // differ arise from a rank-N value whose instantiations at one type were never
                 // requested before an `unsafeCoerce` to another (Yoga.Om's `expandErr`).
+                let missing: Vec<&str> = to_fields
+                    .iter()
+                    .filter(|to_field| {
+                        from_fields.iter().all(|from_field| from_field.label != to_field.label)
+                    })
+                    .map(|to_field| to_field.label.as_str())
+                    .collect();
+                if !missing.is_empty() {
+                    let missing = missing.join(", ");
+                    let state = if self.monotypes.is_instantiated_record(to) {
+                        UnsupportedState::MissingInstantiations { missing }
+                    } else {
+                        UnsupportedState::MissingRecordFields {
+                            from: self.purescript_type(from)?,
+                            to: self.purescript_type(to)?,
+                            missing,
+                        }
+                    };
+                    return Err(GoError::Unsupported {
+                        definition: self.current_definition(),
+                        state,
+                    });
+                }
                 let mut fields = vec![];
                 for to_field in to_fields.iter() {
-                    let Some(from_field) =
-                        from_fields.iter().find(|from_field| from_field.label == to_field.label)
-                    else {
-                        return Err(GoError::unsupported_construct(
-                            "a coercion between records with different fields (a rank-N value coerced to another instantiation)",
-                        ));
-                    };
+                    let from_field = from_fields
+                        .iter()
+                        .find(|from_field| from_field.label == to_field.label)
+                        .expect(
+                            "invariant violated: every field the target names is in the source",
+                        );
                     let field_value = self.read_field(value.clone(), from, &to_field.label);
                     let converted = self.coerce(
                         field_value,
@@ -986,22 +1070,51 @@ where
         value: GoExpression,
         from: MonotypeId,
         to: MonotypeId,
+        position: Option<SourcePosition>,
         out: &mut Vec<GoStatement>,
     ) -> GoResult<GoExpression> {
         match self.coerce(value, from, to, out) {
             Err(GoError::Unsupported {
-                state: crate::error::UnsupportedState::Construct { construct },
+                state: UnsupportedState::Construct { construct }, ..
+            }) if construct == UNRELATED_TYPES => {
+                let reason = match (
+                    self.monotypes.effect_result(from),
+                    self.monotypes.effect_result(to),
+                ) {
+                    (Some(from_result), Some(to_result))
+                        if self.is_unit(from_result) && !self.is_unit(to_result) =>
+                    {
+                        let promised = self.purescript_type(to_result)?;
+                        format!(
+                            ": the action returns Unit, which has no value to give as the {promised} its new type promises; make the action return a value of type {promised} instead of coercing it"
+                        )
+                    }
+                    _ => String::new(),
+                };
+                Err(self.representation_change(from, to, position, reason)?)
+            }
+            Err(GoError::Unsupported {
+                state:
+                    state @ (UnsupportedState::MissingRecordFields { .. }
+                    | UnsupportedState::MissingInstantiations { .. }),
                 ..
-            }) if construct == UNRELATED_TYPES => Err(self.representation_change(from, to)?),
+            }) => Err(self.representation_change(from, to, position, format!(": {state}"))?),
             result => result,
         }
     }
 
-    fn representation_change(&mut self, from: MonotypeId, to: MonotypeId) -> GoResult<GoError> {
+    fn representation_change(
+        &mut self,
+        from: MonotypeId,
+        to: MonotypeId,
+        position: Option<SourcePosition>,
+        reason: String,
+    ) -> GoResult<GoError> {
         let site = self.monotypes.coercion_sites.get(&(from, to)).cloned();
-        let location = match &site {
-            Some(site) => self.location(site.file_id, site.offset)?,
-            None => String::new(),
+        let location = match (&site, position.or(self.enclosing_position)) {
+            (Some(site), _) => self.location(site.file_id, site.offset)?,
+            (None, Some(position)) => self.location(position.file, Some(position.offset))?,
+            (None, None) => String::new(),
         };
         let definition = match site {
             Some(site) => site.definition,
@@ -1014,6 +1127,7 @@ where
             from_go: self.go_type(from)?.render(),
             to: self.purescript_type(to)?,
             to_go: self.go_type(to)?.render(),
+            reason,
         })))
     }
 }

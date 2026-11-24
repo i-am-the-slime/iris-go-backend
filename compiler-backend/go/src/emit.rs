@@ -8,6 +8,7 @@ mod aliases;
 mod application;
 mod blocks;
 mod boxing;
+mod branches;
 mod buffers;
 mod build;
 mod cases;
@@ -29,6 +30,7 @@ mod existential;
 mod field_reads;
 mod foreign_data;
 mod foreign_values;
+mod forwarders;
 mod found;
 mod fresh;
 mod from_list;
@@ -71,6 +73,7 @@ mod reference_equality;
 mod references;
 mod reuse;
 mod scalars;
+mod sharing;
 mod shorthands;
 mod sorting;
 mod standard;
@@ -106,7 +109,7 @@ use crate::modules::{ModuleIndex, Modules};
 use crate::monomorphic::traversal::visit;
 use crate::monomorphic::{
     Binding, Expression, ExpressionKind, FunctionId, Guarded, Literal, Local, LocalId, Pattern,
-    PatternKind, Program, RecordUpdate, Results,
+    PatternKind, Program, RecordUpdate, Results, SourcePosition,
 };
 use crate::monotype::{DataType, Monotype, MonotypeId, Monotypes};
 use crate::naming::identifier;
@@ -265,6 +268,16 @@ where
     });
     timed("divergence", || diverging::end_blocks_at_divergence(&mut declarations));
     timed("field reads", || loads::reuse_field_reads(&mut declarations));
+    timed("branches", || branches::simplify_branches(&mut declarations));
+    let mut record_value_name = |type_name: &str| {
+        let (&monotype, _) = emitter.record_names.iter().find(|(_, name)| *name == type_name)?;
+        Some(emitter.value_base(monotype))
+    };
+    timed("sharing", || {
+        sharing::share_repeated_constructions(&mut declarations, &mut record_value_name)
+    });
+    let forwarders = forwarders::Forwarders::new(emitter.foreign_packages);
+    timed("forwarders", || forwarders.call_methods(&mut declarations));
     timed("unreferenced", || unreferenced::drop_unreferenced_definitions(&mut declarations));
     // Last, so that every pass before reads the constructions' fields in their literals.
     timed("constructions", || emitter.call_constructor_functions(&mut declarations))?;
@@ -457,6 +470,7 @@ where
             arities,
             source_lines: lines::SourceLines::default(),
             spans: lines::Spans::default(),
+            enclosing_position: None,
         }
     }
 }
@@ -649,6 +663,7 @@ struct Emitter<'p, 'm, 'q, Q> {
     arities: Arities,
     source_lines: lines::SourceLines,
     spans: lines::Spans,
+    enclosing_position: Option<SourcePosition>,
 }
 
 /// The largest data type held by value that cells and arrays copy.
@@ -718,6 +733,7 @@ enum Direction {
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum Crossing {
     Boxed,
+    BoxedWithoutRows,
     Native,
 }
 
@@ -836,6 +852,9 @@ where
             Monotype::Char => "Char".into(),
             Monotype::Unit => "Unit".into(),
             Monotype::Array(element) => format!("Array {}", self.purescript_type(element)?),
+            Monotype::Effect(result) => {
+                format!("an Effect or Aff of {}", self.purescript_type(result)?)
+            }
             Monotype::Record(fields) => {
                 let labels: Vec<&str> = fields.iter().map(|field| field.label.as_str()).collect();
                 format!("{{ {} }}", labels.join(", "))
@@ -1686,7 +1705,10 @@ where
     ) -> GoResult<GoExpression> {
         let line = self.span_line(expression.position)?;
         let enclosing = self.spans.enter(line.clone());
+        let enclosing_position = self.enclosing_position;
+        self.enclosing_position = expression.position.or(enclosing_position);
         let value = self.value_unattributed(expression, out);
+        self.enclosing_position = enclosing_position;
         self.spans.leave(enclosing);
         let value = value?;
         if let Some(line) = line {
@@ -1801,7 +1823,8 @@ where
             }
             ExpressionKind::Coerce(value) => {
                 let coerced = self.value(value, out)?;
-                self.coerce_at(coerced, value.monotype, expression.monotype, out)?
+                let position = expression.position.or(value.position);
+                self.coerce_at(coerced, value.monotype, expression.monotype, position, out)?
             }
             ExpressionKind::Let { bindings, body } => {
                 self.bindings(bindings, out)?;

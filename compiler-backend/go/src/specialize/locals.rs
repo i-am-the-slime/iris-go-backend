@@ -5,6 +5,7 @@ use checking::core::{Name, Type};
 use checking::tree::{self, DeclarationAbstraction};
 use files::FileId;
 use indexing::TermItemId;
+use smol_str::SmolStr;
 
 use super::{
     LOCAL_SPECIALIZATION_LIMIT, LocalForm, LocalSource, LocalSpecialization, Reference, Scope,
@@ -109,6 +110,22 @@ where
                 {
                     return self.application(scope, id);
                 }
+                tree::ExpressionKind::RecordAccess { record, labels } => {
+                    let closed = self.accessed_field_scheme(scope, current, *record, labels)?;
+                    let closed = closed.map(|(closed, accessed)| {
+                        instantiations.extend(accessed);
+                        closed
+                    });
+                    let value = self.expression(scope, current)?;
+                    dictionaries.extend(trailing);
+                    return self.instantiated_scheme_value(
+                        scope,
+                        value,
+                        closed,
+                        &instantiations,
+                        dictionaries,
+                    );
+                }
                 _ => {
                     if dictionaries.is_empty() && trailing.is_empty() {
                         return self.expression(scope, current);
@@ -168,12 +185,60 @@ where
                     term,
                     &mut instantiations,
                 )?;
+                self.add_floating_dictionaries(
+                    (file_id, term),
+                    &instantiations,
+                    &mut dictionaries,
+                )?;
                 let monotype =
                     self.instantiated_monotype(scope, current, file_id, term, &instantiations)?;
                 let reference = Reference { file_id, term, expression: id };
                 self.global_reference(scope, reference, &instantiations, dictionaries, monotype)
             }
         }
+    }
+
+    fn accessed_field_scheme(
+        &mut self,
+        scope: &Scope,
+        access: tree::ExpressionId,
+        record: tree::ExpressionId,
+        labels: &[SmolStr],
+    ) -> GoResult<Option<(TypeId, Substitution)>> {
+        let tree = &scope.module.checked.tree;
+        let mut field = self.context.types.substitute(tree[record].type_id, &scope.substitution);
+        for label in labels {
+            let record = crate::monotype::expand_synonyms(&mut self.context, field)?;
+            let Some(found) = self.record_field_type(record, label) else {
+                return Ok(None);
+            };
+            field = found;
+        }
+        let Some(closed) = self.scheme_type(scope, field)? else {
+            return Ok(None);
+        };
+        let (names, body) = self.context.types.peel_quantifiers(closed);
+        let (_, body) = self.context.types.peel_constraints(body);
+        let accessed = self.context.types.substitute(tree[access].type_id, &scope.substitution);
+        let (_, accessed) = self.context.types.peel_constraints(accessed);
+        let mut instantiations = Substitution::default();
+        if !self.context.types.match_type(body, accessed, &names, &mut instantiations) {
+            return Ok(None);
+        }
+        Ok(Some((closed, instantiations)))
+    }
+
+    fn record_field_type(&self, record: TypeId, label: &str) -> Option<TypeId> {
+        let (_, arguments) = self.context.types.spine(record);
+        let [row] = arguments[..] else {
+            return None;
+        };
+        let row = self.context.types.strip_annotations(row);
+        let Type::Row(row) = self.context.types.lookup(row) else {
+            return None;
+        };
+        let row = self.context.queries.lookup_row_type(*row);
+        row.fields.iter().find(|field| field.label == label).map(|field| field.id)
     }
 
     pub(super) fn evidence_redex(

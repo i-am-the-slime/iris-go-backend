@@ -444,7 +444,7 @@ where
             entry.source_id == superclass.source_id && entry.member == superclass.member
         });
         let Some(position) = position else {
-            let superclass = format!("{superclass:?}");
+            let superclass = self.superclass_text(superclass)?;
             return Err(GoError::Unsupported {
                 definition: definition.to_string(),
                 state: UnsupportedState::MissingSuperclass { superclass },

@@ -245,7 +245,13 @@ pub const MUTABLE_PEEK_UNSAFE: Foreign =
 /// the simplifier makes explicit (simplify/choice.rs) and the emitter writes in place.
 pub const MUTABLE_WITHIN: Foreign =
     perform_in(GoPackage::Array, "Within", 2, int32_parameters(&[0]));
-pub const APPENDER: Foreign = perform_in(GoPackage::Direct, "Appender", 0, INSTANTIATE);
+pub const TRAVERSE_BALANCED: Foreign = direct_with(
+    "TraverseBalanced",
+    7,
+    Boundary { uncurried: &[(3, 2), (4, 3), (6, 2)], lazy: &[1], ..PLAIN },
+);
+
+pub const APPENDER: Foreign =perform_in(GoPackage::Direct, "Appender", 0, INSTANTIATE);
 
 pub(super) const FOREIGN_IMPORTS: &[(&str, &str, Foreign)] = &[
     ("Data.Semiring", "intAdd", Foreign::Operator(Operator::IntAdd)),

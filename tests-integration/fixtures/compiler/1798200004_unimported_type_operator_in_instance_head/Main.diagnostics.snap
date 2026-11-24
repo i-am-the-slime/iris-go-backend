@@ -1,0 +1,11 @@
+---
+source: tests-integration/src/fixtures.rs
+---
+Error! · [NotInScope] · Main.purs:8:36
+  •
+  │
+  • Unknown type operator '/\'
+  │
+  │   instance Describe a => Describe (a /\ b) where
+  │                                      ╰─
+  •

@@ -1,6 +1,6 @@
 use rustc_hash::FxHashMap;
 
-use super::Simplifier;
+use super::{AdoptedName, Simplifier};
 use crate::monomorphic::traversal::for_each_child_mut;
 use crate::monomorphic::{Expression, ExpressionKind, Guard, Guarded, Local, LocalId, Pattern};
 
@@ -11,9 +11,14 @@ impl Simplifier<'_> {
         renaming: &mut FxHashMap<LocalId, LocalId>,
     ) -> Local {
         let fresh = self.fresh(local);
+        self.copies.insert(fresh.id);
         renaming.insert(local.id, fresh.id);
         if self.thunk_parameters.contains(&local.id) {
             self.thunk_parameters.insert(fresh.id);
+        }
+        if let Some(adopted) = self.names.get(&local.id) {
+            let copied = AdoptedName { name: adopted.name.clone(), written_here: false };
+            self.names.insert(fresh.id, copied);
         }
         fresh
     }

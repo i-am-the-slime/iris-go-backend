@@ -34,6 +34,7 @@ mod equations;
 mod evidence;
 mod existential;
 mod expressions;
+mod floating;
 mod foreign;
 mod growth;
 mod hash_map;
@@ -239,6 +240,11 @@ pub struct Specializer<'q, Q> {
     thunk_parameters: FxHashSet<LocalId>,
     /// The definitions that take a dictionary at run time instead of being specialized.
     runtime_dictionary_notes: Vec<String>,
+    /// Evidence an application passes to its result where a polymorphic
+    /// function (`$`, `<<<`, `const`) was instantiated at a constrained type,
+    /// `Monad Effect => Policy Effect`: each closed constraint with the
+    /// dictionary the references inside its arguments are specialized with.
+    floating: Vec<(TypeId, Dictionary)>,
 }
 
 struct RecordedBlocker {
@@ -288,6 +294,7 @@ where
             int64: int64::Int64Types::default(),
             thunk_parameters: FxHashSet::default(),
             runtime_dictionary_notes: vec![],
+            floating: vec![],
         }
     }
 

@@ -36,8 +36,8 @@ pub use emit::{KERNEL_FILE_SUFFIXES, is_kernel_file};
 pub use error::{GoError, GoResult, UnsupportedState};
 pub use foreign::{
     EmbedError, ForeignPackages, ForeignSource, LineCoverage, LineDirectives, embedded_files,
-    foreign_declarations, foreign_files, foreign_opacity, foreign_source, foreign_structs,
-    recovers, uses_event_loop,
+    foreign_declarations, foreign_files, foreign_forwarders, foreign_opacity, foreign_source,
+    foreign_structs, recovers, uses_event_loop,
 };
 pub use timing::Work;
 
@@ -64,16 +64,17 @@ pub fn compile_program(
     let file_id = queries
         .module_file(entry_module)
         .ok_or_else(|| GoError::MissingEntry(qualified.clone()))?;
+
+    let mut context = context::Context::new(queries);
+    let modules = modules::Modules::collect(&mut context, file_id)?;
+    reject_source_errors(queries, &modules)?;
+
     let indexed = queries.indexed(file_id)?;
     let (term, _) = indexed
         .items
         .iter_terms()
         .find(|(_, item)| item.name.as_deref() == Some(entry_name))
         .ok_or_else(|| GoError::MissingEntry(qualified.clone()))?;
-
-    let mut context = context::Context::new(queries);
-    let modules = modules::Modules::collect(&mut context, file_id)?;
-    reject_source_errors(queries, &modules)?;
 
     let substituted = types::Substituted::default();
     let mut specializer = Specializer::new(queries, foreign_packages, substituted);

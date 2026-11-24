@@ -21,12 +21,13 @@ pub use imports::{
     ARRAY_THAW_OWNED, ARRAY_UNCONS, ARRAY_UNZIP, FOREIGN_RECORD, FROM_CHAR_ARRAY, INT_DIVIDE,
     INT_MODULO, MUTABLE_PEEK_UNSAFE, MUTABLE_WITHIN, OBJECT_DELETE, OBJECT_FROM_ENTRIES,
     OBJECT_INDEX, OBJECT_INSERT, OBJECT_KEYS, OBJECT_LOOKUP, OBJECT_SIZE, SEQUENCE_ARRAY,
-    SHOW_NUMBER, TO_CHAR_ARRAY, WELL_FORMED_STRING, array_fold, effect_fold,
+    SHOW_NUMBER, TO_CHAR_ARRAY, TRAVERSE_BALANCED, WELL_FORMED_STRING, array_fold, effect_fold,
 };
 pub use opacity::{Opacity, OpaqueDeclaration, foreign_opacity};
 pub use packages::{ForeignPackages, ForeignSource, LineCoverage, LineDirectives};
 pub use sources::{
-    foreign_declarations, foreign_files, foreign_source, foreign_structs, recovers, uses_event_loop,
+    foreign_declarations, foreign_files, foreign_forwarders, foreign_source, foreign_structs,
+    recovers, uses_event_loop,
 };
 
 use std::sync::{Mutex, OnceLock};

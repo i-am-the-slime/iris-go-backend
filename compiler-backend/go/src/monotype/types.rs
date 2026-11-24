@@ -264,7 +264,7 @@ where
     let (head, arguments) = context.types.spine(type_id);
     match context.types.lookup(head).clone() {
         Type::Rigid(..) | Type::Unification(_) if erase && arguments.is_empty() => {
-            if context.types.erasure(head).is_some() {
+            if context.types.erasure(head).is_some() || context.types.is_placeholder(head) {
                 return Ok(head);
             }
             Ok(context.types.erased(Erasure::ArgumentVariable))
