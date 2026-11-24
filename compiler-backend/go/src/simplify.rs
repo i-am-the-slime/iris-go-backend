@@ -12,14 +12,14 @@ use crate::monomorphic::traversal::{
 };
 use crate::monomorphic::{
     Alternative, Binding, Expression, ExpressionKind, Function, FunctionId, Guard, Guarded,
-    GuardedBranch, Literal, Local, LocalId, PATTERN_MATCH_FAILURE, PatternKind, Program,
+    GuardedBranch, Literal, Local, LocalId, PATTERN_MATCH_FAILURE, Pattern, PatternKind, Program,
     RecordUpdate,
 };
 use crate::monotype::{Monotype, MonotypeId, Monotypes};
 use crate::naming::is_vague;
 use crate::purity::{
     KnownFunctions, can_fail, captures_free, captures_reference, does_no_work, is_cheap,
-    is_discardable, is_foreign_wrapper, is_trivial, is_within_size, mentions_any,
+    is_deferrable, is_discardable, is_foreign_wrapper, is_trivial, is_within_size, mentions_any,
     occurrences_up_to, only_called, runs_any_effect, runs_effect, size,
 };
 use crate::suspension::Suspension;
@@ -390,7 +390,8 @@ impl Simplifier<'_> {
                 function.parameters.extend(parameters);
                 function.body = *body;
             } else if !function.parameters.is_empty()
-                && let Some(template) = chosen_lambda_parameter(&function.body).cloned()
+                && let Some(template) =
+                    chosen_lambda_parameter(&function.body, self.monotypes).cloned()
             {
                 let parameter = self.fresh(&template);
                 let body = std::mem::replace(
@@ -554,11 +555,7 @@ impl Simplifier<'_> {
             ),
             ExpressionKind::Access { record, label } => {
                 let record = self.expression(*record);
-                let record = match self.read_through_coercion(record, &label, monotype) {
-                    Ok(read) => return read,
-                    Err(record) => record,
-                };
-                return project(record, label, monotype);
+                return self.field_of(record, label, monotype);
             }
             ExpressionKind::Update { record, updates } => ExpressionKind::Update {
                 record: Box::new(self.expression(*record)),
@@ -600,8 +597,27 @@ impl Simplifier<'_> {
                     arguments.into_iter().map(|argument| self.expression(argument)).collect();
                 return self.apply(function, arguments, monotype);
             }
-            ExpressionKind::Lambda { parameters, body } => {
-                ExpressionKind::Lambda { parameters, body: Box::new(self.expression(*body)) }
+            ExpressionKind::Lambda { mut parameters, body } => {
+                let mut body = self.expression(*body);
+                while !matches!(body.kind, ExpressionKind::Lambda { .. })
+                    && awaits_action(body.monotype, self.monotypes)
+                    && let Some(template) = chosen_lambda_parameter(&body, self.monotypes).cloned()
+                {
+                    let parameter = self.fresh(&template);
+                    body = self.apply_chosen_lambdas(body, &parameter);
+                    parameters.push(parameter);
+                }
+                if matches!(body.kind, ExpressionKind::Apply { .. })
+                    && awaits_action(body.monotype, self.monotypes)
+                    && is_deferrable(&body)
+                    && let Some((argument, result)) = self.monotypes.function_parts(body.monotype)
+                {
+                    let name = self.monotypes.value_name(argument);
+                    let parameter = self.fresh(&Local { id: LocalId(0), name, monotype: argument });
+                    body = self.apply(body, vec![parameter.expression()], result);
+                    parameters.push(parameter);
+                }
+                ExpressionKind::Lambda { parameters, body: Box::new(body) }
             }
             ExpressionKind::Coerce(value) => {
                 let mut value = self.expression(*value);
@@ -677,6 +693,31 @@ impl Simplifier<'_> {
                     && let Some(distributed) = self.distribute(scrutinee, &alternatives, monotype)
                 {
                     return distributed;
+                }
+                if let [scrutinee] = scrutinees.as_slice()
+                    && self.is_constant_path(scrutinee)
+                    && let Some(fields) = destructured_fields(&alternatives)
+                {
+                    let bindings = fields
+                        .into_iter()
+                        .map(|(label, local)| Binding {
+                            value: Expression::new(
+                                ExpressionKind::Access {
+                                    record: Box::new(scrutinee.clone()),
+                                    label,
+                                },
+                                local.monotype,
+                            ),
+                            local,
+                        })
+                        .collect();
+                    let Some(Alternative { body: Guarded::Unconditional(body), .. }) =
+                        alternatives.into_iter().next()
+                    else {
+                        unreachable!("invariant violated: the one alternative was just matched")
+                    };
+                    let kind = ExpressionKind::Let { bindings, body: Box::new(body) };
+                    return self.expression(Expression::new(kind, monotype));
                 }
                 let (bindings, scrutinees, alternatives) =
                     self.eliminate_columns(scrutinees, alternatives);
@@ -951,6 +992,7 @@ impl Simplifier<'_> {
                 || matches!(binding.value.kind, ExpressionKind::Fail(_))
                 || matches!(&binding.value.kind, ExpressionKind::EffectPure(value) if is_trivial(value))
                 || trivial_record
+                || self.is_constant_path(&binding.value)
                 || self.is_coerced_record_read(&binding, &body)
                 || uses.total == 0
                 || (uses.total == 1
@@ -982,6 +1024,61 @@ impl Simplifier<'_> {
         kept.reverse();
         let monotype = body.monotype;
         Expression::new(ExpressionKind::Let { bindings: kept, body: Box::new(body) }, monotype)
+    }
+
+    fn field_of(&mut self, record: Expression, label: SmolStr, monotype: MonotypeId) -> Expression {
+        if let Some(value) = self.constant_field(&record, &label) {
+            return self.coerce(value, monotype);
+        }
+        let record = match self.read_through_coercion(record, &label, monotype) {
+            Ok(read) => return read,
+            Err(record) => record,
+        };
+        project(record, label, monotype)
+    }
+
+    fn constant_field(&self, record: &Expression, label: &str) -> Option<Expression> {
+        let ExpressionKind::Record(fields) = &self.constant_value(record)?.kind else {
+            return None;
+        };
+        let (_, value) = fields.iter().find(|(field, _)| field == label)?;
+        let value = self.constant_value(value)?;
+        is_trivial(value).then(|| value.clone())
+    }
+
+    fn constant_value<'e>(&'e self, expression: &'e Expression) -> Option<&'e Expression> {
+        match &expression.kind {
+            ExpressionKind::Function(id) => {
+                let function = self.functions[id.0 as usize].as_ref()?;
+                if !function.parameters.is_empty() || self.recursive[id.0 as usize] {
+                    return Some(expression);
+                }
+                self.constant_value(&function.body).or(Some(expression))
+            }
+            ExpressionKind::Coerce(value) => self.constant_value(value),
+            ExpressionKind::Access { record, label } => {
+                let ExpressionKind::Record(fields) = &self.constant_value(record)?.kind else {
+                    return None;
+                };
+                let (_, value) = fields.iter().find(|(field, _)| field == label)?;
+                self.constant_value(value)
+            }
+            ExpressionKind::Record(_) => Some(expression),
+            _ if is_trivial(expression) => Some(expression),
+            _ => None,
+        }
+    }
+
+    fn is_constant_path(&self, expression: &Expression) -> bool {
+        match &expression.kind {
+            ExpressionKind::Access { record, .. } | ExpressionKind::Coerce(record) => {
+                self.is_constant_path(record)
+            }
+            ExpressionKind::Function(id) => self.functions[id.0 as usize]
+                .as_ref()
+                .is_some_and(|function| function.parameters.is_empty()),
+            _ => false,
+        }
     }
 
     /// Whether a binding names an `if` or a `case` that its body uses once, other than as what
@@ -1120,20 +1217,26 @@ impl Simplifier<'_> {
 /// it does nothing else: its conditions, scrutinees and bindings are cheap and
 /// cannot fail, so every application may repeat them instead of sharing the
 /// chosen lambda.
-fn chosen_lambda_parameter(expression: &Expression) -> Option<&Local> {
+fn chosen_lambda_parameter<'e>(
+    expression: &'e Expression,
+    monotypes: &Monotypes,
+) -> Option<&'e Local> {
     match &expression.kind {
         ExpressionKind::Lambda { parameters, .. } => parameters.first(),
         ExpressionKind::Let { bindings, body } => {
+            let one_shot = awaits_action(expression.monotype, monotypes);
             let repeatable = |value: &Expression| {
-                is_cheap(value) || matches!(value.kind, ExpressionKind::Lambda { .. })
+                is_cheap(value)
+                    || matches!(value.kind, ExpressionKind::Lambda { .. })
+                    || (one_shot && (is_deferrable(value) || builds_action(value, monotypes)))
             };
             bindings.iter().all(|binding| repeatable(&binding.value)).then_some(())?;
-            chosen_lambda_parameter(body)
+            chosen_lambda_parameter(body, monotypes)
         }
         ExpressionKind::If { condition, then, otherwise } => {
             is_cheap(condition).then_some(())?;
-            chosen_lambda_parameter(otherwise)?;
-            chosen_lambda_parameter(then)
+            chosen_lambda_parameter(otherwise, monotypes)?;
+            chosen_lambda_parameter(then, monotypes)
         }
         ExpressionKind::Case { scrutinees, alternatives } => {
             scrutinees.iter().all(is_cheap).then_some(())?;
@@ -1141,13 +1244,14 @@ fn chosen_lambda_parameter(expression: &Expression) -> Option<&Local> {
             for alternative in alternatives {
                 match &alternative.body {
                     Guarded::Unconditional(body) => {
-                        chosen = chosen.or(Some(chosen_lambda_parameter(body)?));
+                        chosen = chosen.or(Some(chosen_lambda_parameter(body, monotypes)?));
                     }
                     Guarded::Guards(branches) => {
                         for branch in branches {
                             let cheap = branch.guards.iter().all(|guard| is_cheap(guard.value()));
                             cheap.then_some(())?;
-                            chosen = chosen.or(Some(chosen_lambda_parameter(&branch.body)?));
+                            let lambda = chosen_lambda_parameter(&branch.body, monotypes)?;
+                            chosen = chosen.or(Some(lambda));
                         }
                     }
                 }
@@ -1156,6 +1260,34 @@ fn chosen_lambda_parameter(expression: &Expression) -> Option<&Local> {
         }
         _ => None,
     }
+}
+
+fn destructured_fields(alternatives: &[Alternative]) -> Option<Vec<(SmolStr, Local)>> {
+    let [Alternative { patterns, body: Guarded::Unconditional(_), .. }] = alternatives else {
+        return None;
+    };
+    let [Pattern { kind: PatternKind::Record(fields), .. }] = patterns.as_slice() else {
+        return None;
+    };
+    let mut bound = vec![];
+    for (label, pattern) in fields {
+        match &pattern.kind {
+            PatternKind::Variable(local) => bound.push((label.clone(), local.clone())),
+            PatternKind::Wildcard => {}
+            _ => return None,
+        }
+    }
+    Some(bound)
+}
+
+fn builds_action(value: &Expression, monotypes: &Monotypes) -> bool {
+    matches!(monotypes.get(value.monotype), Monotype::Effect(_)) && !runs_any_effect(value)
+}
+
+fn awaits_action(monotype: MonotypeId, monotypes: &Monotypes) -> bool {
+    monotypes
+        .function_parts(monotype)
+        .is_some_and(|(_, result)| matches!(monotypes.get(result), Monotype::Effect(_)))
 }
 
 /// A field of a record that was just built is the field's value, once the
