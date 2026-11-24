@@ -11,6 +11,6 @@ source: tests-integration/src/fixtures.rs
 
 @export accessAfterApplication = (described describeInt 1).label
 
-@export accessAfterTypeApplication = defaulted.name
+@export accessAfterTypeApplication = (defaulted describeInt).name
 
 @export accessNested = { outer: defaulted describeInt }.outer.name

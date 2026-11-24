@@ -9,5 +9,5 @@ export function defaulted(describeADict) {
 }
 export const describeInt = { describe: ($int) => "Int" };
 export const accessAfterApplication = (/* @__PURE__ */ described(describeInt)(1 | 0)).label;
-export const accessAfterTypeApplication = defaulted.name;
+export const accessAfterTypeApplication = (/* @__PURE__ */ defaulted(describeInt)).name;
 export const accessNested = { outer: /* @__PURE__ */ defaulted(describeInt) }.outer.name;

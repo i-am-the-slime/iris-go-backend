@@ -19,7 +19,7 @@ accessAfterApplication :: Prim.String
 accessAfterApplication = (described {describeInt} 1).label
 
 accessAfterTypeApplication :: Prim.String
-accessAfterTypeApplication = defaulted.name
+accessAfterTypeApplication = (defaulted {describeInt}).name
 
 accessNested :: Prim.String
 accessNested = { outer: defaulted {describeInt} }.outer.name
