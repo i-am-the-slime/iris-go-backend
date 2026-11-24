@@ -1281,6 +1281,10 @@ impl ToDiagnostics for CheckingError {
                 "DeriveMissingFunctor",
                 "Deriving 'Functor' requires 'Data.Functor' to be imported".to_owned(),
             ),
+            ErrorKind::DeriveNewtypeCycle => (
+                "CycleInDeclaration",
+                "This newtype instance needs its own dictionary to be defined".to_owned(),
+            ),
             ErrorKind::EmptyAdoBlock => {
                 ("EmptyAdoBlock", "An 'ado' block cannot be empty".to_owned())
             }
@@ -1554,6 +1558,11 @@ impl ToDiagnostics for CheckingError {
             ErrorKind::InstanceHeadLabeledRow { .. } => {
                 diagnostic = diagnostic.with_context(
                     "This parameter is not determined by a functional dependency, so only a row variable like '( | r )' is allowed",
+                );
+            }
+            ErrorKind::DeriveNewtypeCycle => {
+                diagnostic = diagnostic.with_context(
+                    "The wrapped type's instance refers back to this instance, so the dictionary would be used before it is defined",
                 );
             }
             ErrorKind::InvalidNewtypeDeriveSkolemArguments => {
