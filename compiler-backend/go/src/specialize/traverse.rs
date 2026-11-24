@@ -103,11 +103,17 @@ where
         let traversal = self.traversal(scope, &reference)?;
         let applied = self.closed_monotype(scope, traversal.apply)?;
         let accumulated = self.monotypes.result_after(applied, 2);
-        if reference.traversal == ArrayTraversal::Applicative
-            && !matches!(self.monotypes.get(accumulated), Monotype::Effect(_))
+        if !matches!(self.monotypes.get(accumulated), Monotype::Effect(_))
             && self.is_parallel_applicative(traversal.applicative)?
         {
-            return self.balanced_traversal(scope, &reference, &traversal, arguments, accumulated);
+            return match reference.traversal {
+                ArrayTraversal::Applicative => {
+                    self.balanced_traversal(scope, &reference, &traversal, arguments, accumulated)
+                }
+                ArrayTraversal::Apply => {
+                    self.rightward_traversal(scope, &reference, &traversal, arguments, accumulated)
+                }
+            };
         }
         let apply = self.rank_two_argument(scope, arguments[0], traversal.apply)?;
         let map = self.rank_two_argument(scope, arguments[1], traversal.map_snoc)?;
@@ -250,6 +256,70 @@ where
         };
         let balanced = Expression::new(balanced, accumulated);
         let traverse = self.lambda(vec![function, array], balanced);
+        self.supplied(scope, traverse, reference, arguments)
+    }
+
+    /// JavaScript's `traverse1Impl`: `f` on the last element first, then each one before it
+    /// applied onto what follows, `apply (map cons (f x0)) (apply (map cons (f x1)) …)`.
+    fn rightward_traversal(
+        &mut self,
+        scope: &mut Scope,
+        reference: &TraversalReference,
+        traversal: &Traversal,
+        arguments: &[tree::ExpressionId],
+        accumulated: MonotypeId,
+    ) -> GoResult<Expression> {
+        let function = self.closed_monotype(scope, traversal.function)?;
+        let input = self.closed_monotype(scope, traversal.input)?;
+        let element = self.closed_monotype(scope, traversal.element)?;
+        let elements = self.closed_monotype(scope, traversal.elements)?;
+        let Monotype::Array(input_element) = *self.monotypes.get(input) else {
+            unreachable!("invariant violated: an array traversal traverses an array")
+        };
+        let step = self.monotypes.result_after(function, 1);
+        let function = self.fresh_local(SmolStr::new_static("function"), function);
+        let array = self.fresh_local(SmolStr::new_static("array"), input);
+
+        let map_singleton = self.rank_two_argument(scope, arguments[1], traversal.map_singleton)?;
+        let only = self.fresh_local(SmolStr::new_static("last"), element);
+        let singleton = Expression::new(ExpressionKind::Array(vec![only.expression()]), elements);
+        let singleton = self.lambda(vec![only], singleton);
+        let last = self.array_last(&array);
+        let last = apply_to(function.expression(), vec![last], step);
+        let initial = apply_to(map_singleton, vec![singleton, last], accumulated);
+
+        let elements_type = traversal.elements;
+        let prepends =
+            self.context.queries.intern_type(Type::Function(elements_type, elements_type));
+        let map_cons =
+            self.instantiate_rank_two(traversal.map_scheme, &[traversal.element, prepends]);
+        let map_cons = self.rank_two_argument(scope, arguments[1], map_cons)?;
+        let head = self.fresh_local(SmolStr::new_static("head"), element);
+        let tail = self.fresh_local(SmolStr::new_static("tail"), elements);
+        let headed = Expression::new(ExpressionKind::Array(vec![head.expression()]), elements);
+        let prepended = ExpressionKind::Foreign {
+            foreign: &foreign::ARRAY_APPEND,
+            arguments: vec![headed, tail.expression()],
+        };
+        let cons = self.lambda(vec![head, tail], Expression::new(prepended, elements));
+
+        let apply_cons =
+            self.instantiate_rank_two(traversal.apply_scheme, &[elements_type, elements_type]);
+        let apply_cons = self.rank_two_argument(scope, arguments[0], apply_cons)?;
+        let current = self.fresh_local(SmolStr::new_static("element"), input_element);
+        let rest = self.fresh_local(SmolStr::new_static("rest"), accumulated);
+        let result = apply_to(function.expression(), vec![current.expression()], step);
+        let mapped = self.monotypes.result_after(map_cons.monotype, 2);
+        let mapped = apply_to(map_cons, vec![cons, result], mapped);
+        let applied = apply_to(apply_cons, vec![mapped, rest.expression()], accumulated);
+        let onto_rest = self.lambda(vec![current, rest], applied);
+
+        let fold = ExpressionKind::Foreign {
+            foreign: foreign::array_fold_right(),
+            arguments: vec![onto_rest, initial, self.array_init(&array)],
+        };
+        let fold = Expression::new(fold, accumulated);
+        let traverse = self.lambda(vec![function, array], fold);
         self.supplied(scope, traverse, reference, arguments)
     }
 
@@ -454,6 +524,41 @@ where
             arguments: vec![array.expression(), first],
         };
         Expression::new(index, element)
+    }
+
+    fn array_last(&mut self, array: &Local) -> Expression {
+        let Monotype::Array(element) = *self.monotypes.get(array.monotype) else {
+            unreachable!("invariant violated: a traversed array is an array")
+        };
+        let index = ExpressionKind::Foreign {
+            foreign: &Foreign::Operator(Operator::ArrayIndex),
+            arguments: vec![array.expression(), self.last_index(array)],
+        };
+        Expression::new(index, element)
+    }
+
+    fn array_init(&mut self, array: &Local) -> Expression {
+        let integer = self.monotypes.intern(Monotype::Int);
+        let first = Expression::new(ExpressionKind::Literal(Literal::Int(0)), integer);
+        let init = ExpressionKind::Foreign {
+            foreign: &foreign::ARRAY_SLICE,
+            arguments: vec![first, self.last_index(array), array.expression()],
+        };
+        Expression::new(init, array.monotype)
+    }
+
+    fn last_index(&mut self, array: &Local) -> Expression {
+        let integer = self.monotypes.intern(Monotype::Int);
+        let length = ExpressionKind::Foreign {
+            foreign: &Foreign::Operator(Operator::ArrayLength),
+            arguments: vec![array.expression()],
+        };
+        let one = Expression::new(ExpressionKind::Literal(Literal::Int(1)), integer);
+        let last = ExpressionKind::Foreign {
+            foreign: &Foreign::Operator(Operator::IntSubtract),
+            arguments: vec![Expression::new(length, integer), one],
+        };
+        Expression::new(last, integer)
     }
 
     fn array_tail(&mut self, array: &Local) -> Expression {

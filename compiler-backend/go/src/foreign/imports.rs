@@ -159,6 +159,17 @@ pub fn array_fold() -> &'static Foreign {
     })
 }
 
+pub const ARRAY_FOLD_RIGHT: Foreign =
+    uncurried(iteration(GoPackage::Array, "Foldr", 3, Iteration::FoldRight), &[(0, 2)]);
+
+pub fn array_fold_right() -> &'static Foreign {
+    static FOLD: OnceLock<Foreign> = OnceLock::new();
+    static SIGNATURE: OnceLock<Signature> = OnceLock::new();
+    FOLD.get_or_init(|| {
+        with_signature(ARRAY_FOLD_RIGHT, SIGNATURE.get_or_init(|| fold_signature(Spelled::Opaque)))
+    })
+}
+
 pub fn effect_fold() -> &'static Foreign {
     static FOLD: OnceLock<Foreign> = OnceLock::new();
     static SIGNATURE: OnceLock<Signature> = OnceLock::new();
@@ -310,11 +321,7 @@ pub(super) const FOREIGN_IMPORTS: &[(&str, &str, Foreign)] = &[
     ("Data.Bounded", "bottomNumber", constant("BottomNumber")),
     ("Data.Bounded", "topChar", constant("TopChar")),
     ("Data.Bounded", "bottomChar", constant("BottomChar")),
-    (
-        "Data.Foldable",
-        "foldrArray",
-        uncurried(iteration(GoPackage::Array, "Foldr", 3, Iteration::FoldRight), &[(0, 2)]),
-    ),
+    ("Data.Foldable", "foldrArray", ARRAY_FOLD_RIGHT),
     ("Data.Foldable", "foldlArray", ARRAY_FOLD),
     ("Data.Array", "length", Foreign::Operator(Operator::ArrayLength)),
     ("Data.Array", "reverse", array("Reverse", 1)),
