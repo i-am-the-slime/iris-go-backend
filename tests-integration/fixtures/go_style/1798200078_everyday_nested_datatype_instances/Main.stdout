@@ -1,0 +1,6 @@
+Nest (Nest (Flat [[1,2],[3]]))
+true false
+GT
+Nest (Nest (Flat [[10,20],[30]]))
+6 123 94
+(Just Nest (Nest (Flat [[2,3],[4]])))

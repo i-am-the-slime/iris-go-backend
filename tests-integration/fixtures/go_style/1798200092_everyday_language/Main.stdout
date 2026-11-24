@@ -1,0 +1,38 @@
+a-b-c
+4
+truefalse
+degenerate circle
+huge circle
+circle 2.5
+square 2.0
+rect 2.0x3.0
+empty polygon
+point
+segment (Tuple 1.0 1.0)(Tuple 2.0 2.0)
+polygon from origin with 3
+polygon with 3
+a:5,b:big,c:missing
+(Tuple [3,2,1] ["y","x"])
+(Tuple [1] ["x"])
+(Tuple 1 "one")
+(Tuple [1] [])
+array [1,2]
+maybe (Just 3)
+42
+exactly 3
+three [1,2,3]
+other (Just 9)
+other Nothing
+{ age: 42, name: "ann!" }
+{ outer: { inner: 42, keep: "k" } }
+["negative","zero","odd","even","big even"]
+["small","medium","big"]
+["letter a","newline","other"]
+[1,2,0,-1]
+["zero","one and a half","something","zero"]
+["both","first","second","neither"]
+[1,2,3]
+0
+3
+(Tuple "s" 1)
+big right

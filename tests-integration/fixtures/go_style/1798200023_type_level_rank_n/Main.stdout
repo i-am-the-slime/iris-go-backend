@@ -1,0 +1,17 @@
+["1","\"two\"","[true]","(Just 2.5)"]
+(Just 1)(Just "x")Nothing
+(Just 2)(Just "x")Nothing
+8080
+localhost
+["a","b"]
+unit
+[true,false,true,false,true]
+LT
+GT
+EQ
+42
+-10
+LT
+-12
+120
+<3> & <"x">

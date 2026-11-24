@@ -1,0 +1,11 @@
+{ depth: 10, height: -8, width: 6 }
+{ depth: "5", height: "-4", width: "3" }
+{ depth: true, height: false, width: true }
+(Just { a: 1, b: "x", c: [1.5] })
+Nothing
+(Left "bad")
+[{ xs: 1, ys: "a" },{ xs: 1, ys: "b" },{ xs: 2, ys: "a" },{ xs: 2, ys: "b" }]
+{ a: (Just 1), b: (Just "z"), c: Nothing }
+["depth","height","width"][]["M","a","z"]
+{ a: 1, c: 3.0 }
+{ a: 1, b: "override", c: true }

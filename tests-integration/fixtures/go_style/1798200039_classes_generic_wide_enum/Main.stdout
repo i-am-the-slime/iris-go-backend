@@ -1,0 +1,5 @@
+40[C00,C01,C02](Just C39)
+true
+[(P00 2 "a"),(P20 0 "a"),(P20 0 "m"),(P39 1 "z")]
+{ field00: 0, field01: 1, field02: 2, field03: 3, field04: 4, field05: 5, field06: 6, field07: 7, field08: 8, field09: 9, field10: 10, field11: 11, field12: 12, field13: 13, field14: 14, field15: 15, field16: 16, field17: 17, field18: 18, field19: 19, field20: 20, field21: 21, field22: 22, field23: 23, field24: 24, field25: 25, field26: 26, field27: 27, field28: 28, field29: 29, field30: -1, field31: 31, field32: 32, field33: 33, field34: 34, field35: 35, field36: 36, field37: 37, field38: 38, field39: 39, field40: 40, field41: 41, field42: 42, field43: 43, field44: 44, field45: 45, field46: 46, field47: 47, field48: 48, field49: 49, field50: 50, field51: 51, field52: 52, field53: 53, field54: 54, field55: 55, field56: 56, field57: 57, field58: 58, field59: 99 }
+trueGT

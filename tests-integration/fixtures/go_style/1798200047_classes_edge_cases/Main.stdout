@@ -1,0 +1,14 @@
+[Wrap(Nothing,5),Wrap((Just 1),9),Wrap((Just 2),1)]true
+5.53.50.25-1.0
+Pair 2 "2"Pair "1" 'c'Pair "a" 8
+"50"
+[-1.0,0.0,2.0,NaN,NaN,3.0]
+GTGTNaN1.0falsetrue
+(fromFoldable [(Tuple NaN "a"),(Tuple 1.0 "b"),(Tuple NaN "c")])
+2Nothing
+(fromFoldable [0.0,1.0])(fromFoldable [(Tuple 0.0 "pos")])
+[NaN,NaN,1.0]false[0.0,NaN,1.0,NaN]
+(Just { key: 1, value: "a" })(Just { key: 7, value: "b" })
+(fromFoldable [(Tuple 1 "ab"),(Tuple 2 "c")])(fromFoldable [0,1])
+(Just (NonEmptyList (NonEmpty 1 (2 : Nil))))(NonEmpty 1 [2,3])'x'
+NothingInfinityfalseNaN

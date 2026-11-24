@@ -1,0 +1,10 @@
+{ name: "Ann" }
+{ age: 30, name: "Ann" }
+true
+(inj @"a" 1)
+true
+false
+[{ name: "Ann" },{ name: "Bo" }]
+2
+"a@x"
+{ age: 31 }

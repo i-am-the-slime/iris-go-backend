@@ -1,0 +1,40 @@
+(Right [1,2,3])
+(Left "bad: x")
+(Right [1,2,3])
+(Right [1,2,3])
+(Just [1,2])
+Nothing
+[(Just 2),Nothing,(Just 3),Nothing]
+[(Just 2),Nothing,(Just 3),Nothing]
+[(Just 2),Nothing,(Just 3),Nothing]
+[(Just 2),Nothing,(Just 3),Nothing]
+[(Just 2),Nothing,(Just 3),Nothing]
+[(Just 1),(Just 2),Nothing]
+"123"
+6
+"123"
+"321"
+94
+-98
+(Just 6)
+Nothing
+"a, b, c"
+(Just 3)
+(Just 3)
+(Just 12)
+[(Tuple 1 "a"),(Tuple 1 "b"),(Tuple 2 "a"),(Tuple 2 "b")]
+(Left ["not positive: -2"])
+(Left ["not positive: -2","not positive: -3"])
+(Right [1,2,3])
+(Left ["not positive: 0","not positive: -1"])
+(Left ["not positive: 0","not positive: -7"])
+[13,16]
+[13,16]
+[13,16]
+[13,16]
+16
+220
+[221,223,226]
+[227,229,232]
+[1,232,3]
+706

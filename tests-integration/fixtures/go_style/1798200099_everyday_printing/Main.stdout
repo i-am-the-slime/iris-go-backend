@@ -1,0 +1,111 @@
+-- numbers
+1.0
+0.0
+0.0
+1.5
+-1.5
+100.0
+1e+21
+100000000000000000000.0
+1e-7
+123456789012345680000.0
+1e+100
+0.1
+3.14159
+0.00002
+1.23e-10
+9007199254740992.0
+4.35
+Infinity
+NaN
+Infinity
+-Infinity
+-- number arithmetic
+0.30000000000000004
+0.3333333333333333
+0.6666666666666666
+14.285714285714286
+1e+21
+123456789000000000000.0
+Infinity
+-Infinity
+NaN
+0.0
+0.0
+1.4142135623730951
+7.0
+-7.0
+5e-324
+1.7976931348623157e+308
+1e-7
+0.000001
+1234560000000.0
+false
+GT
+1.0
+-- rounding
+2.5 round=3 floor=2 ceil=3 from=Nothing
+-2.5 round=-2 floor=-3 ceil=-2 from=Nothing
+0.5 round=1 floor=0 ceil=1 from=Nothing
+-0.5 round=0 floor=-1 ceil=0 from=Nothing
+1.5 round=2 floor=1 ceil=2 from=Nothing
+3.7 round=4 floor=3 ceil=4 from=Nothing
+-3.7 round=-4 floor=-4 ceil=-3 from=Nothing
+10000000000.0 round=2147483647 floor=2147483647 ceil=2147483647 from=Nothing
+-10000000000.0 round=-2147483648 floor=-2147483648 ceil=-2147483648 from=Nothing
+100000000000000000000.0 round=2147483647 floor=2147483647 ceil=2147483647 from=Nothing
+NaN round=0 floor=0 ceil=0 from=Nothing
+Infinity round=0 floor=0 ceil=0 from=Nothing
+-- ints
+2147483647
+-2147483648
+-2147483648
+2147483647
+-2
+-2147479015
+-2147483648
+7 2 div=3 mod=1 quot=3 rem=1
+-7 2 div=-4 mod=1 quot=-3 rem=-1
+7 -2 div=-3 mod=1 quot=-3 rem=1
+-7 -2 div=4 mod=1 quot=3 rem=-1
+-2147483648
+1024
+0
+ff
+-ff
+1010
+2n9c
+(Just 255)
+(Just -255)
+-- strings
+"" len=0 cps=0
+"plain" len=5 cps=5
+"quote\"s" len=7 cps=7
+"back\\slash" len=10 cps=10
+"tab\there" len=8 cps=8
+"new\nline" len=8 cps=8
+"cr\rx" len=4 cps=4
+"nul\0x" len=5 cps=5
+"del\127" len=4 cps=4
+"é" len=1 cps=1
+"日本語" len=3 cps=3
+"😀" len=1 cps=1
+"mixed 😀 é \t" len=11 cps=11
+"\27[0m" len=4 cps=4
+"�" len=1 cps=1
+"a󿿻" len=2 cps=2
+"\1\31" len=2 cps=2
+"line sep" len=8 cps=8
+['h','é','l','l','o']
+"ab\n"
+['a','\'','"','\\','\t','\0','\127','é','￿']
+65
+Nothing
+(Just 'é')
+"z"
+STRASSE FI
+i̇stanbul
+[(CodePoint 0x61),(CodePoint 0x1F600),(CodePoint 0x62)]
+"😀😀"
+truetruetrue
+LT

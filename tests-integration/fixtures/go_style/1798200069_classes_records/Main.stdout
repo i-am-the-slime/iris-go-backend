@@ -1,0 +1,28 @@
+hi Adahi Bobhi Cathi Dee
+Ada@36Bob@41
+{ age: 41, email: "b@x", name: "renamed" }{ age: 36, name: "renamed" }
+["Ada@99","Ada@99","Z@99"]
+["Ada","b"]
+{ lives: 8, name: "Cat", owner: { address: { city: "Bergen", zip: 1 }, name: "Eve" } }
+{ lives: 9, name: "Cat", owner: { address: { city: "Oslo", zip: 1 }, name: "Dee" } }
+{ age: 36, email: "a@x", name: "Ada" }
+{ age: 36, id: 7, name: "Ada" }{ age: 36, id: 7, name: "Ada" }
+{ email: "b@x", name: "Bob" }{ email: "b@x", name: "Bob" }
+"b@x""b@x"
+{ age: "old", name: "Ada" }{ age: "old", name: "Ada" }
+{ age: 72, name: "Ada" }{ age: "36", name: "Ada" }
+{ age: 36, title: "Ada" }{ age: 36, title: "Ada" }
+true
+{ name: "Ada!", x: 1, y: 2.5 }
+{ only: true }
+{}{ one: 1 }{ quoted key: 1, with"quote: 2 }
+{ a: 0, f01: 1, f02: 2, f03: "three", f04: 4.0, f05: true, f06: 6, f07: 7, f08: "eight", f09: 9.5, f10: false, f11: 11, f12: 12, f13: "thirteen", f14: 14.25, f15: true, f16: 16, f17: 17, f18: "eighteen", f19: -19.0, f20: false, f21: [21], f22: (Just 22), z: 26 }
+truetrueGT
+(fromFoldable [(Tuple { x: 0, y: 5 } "b"),(Tuple { x: 1, y: -1 } "c"),(Tuple { x: 1, y: 2 } "a")])
+(Just "c")
+(fromFoldable [(Tuple "k0" { age: 0, name: "Ada" }),(Tuple "k1" { age: 36, name: "Ada" })])
+(fromFoldable [{ a: 1 },{ a: 2 }])
+truetrueGT
+[{ age: -5, name: "Neg" },{ age: 36, name: "Ada" },{ age: 41, name: "Bob" }]
+{ h: Infinity, i: -0.5, j: 123456789.0, k: 1e-10, m: 0.30000000000000004, n: 1.0 }
+[{ nested: [{ deep: (Just { deeper: [1] }) }] }]

@@ -82,6 +82,10 @@ name = "go"
 harness = false
 
 [[test]]
+name = "go_style"
+harness = false
+
+[[test]]
 name = "library"
 harness = false
 

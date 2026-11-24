@@ -1,0 +1,9 @@
+{ alpha: 1, b: "x", c: true, d: [1] }
+{ a: 1 }
+{ n: 32 }
+99
+{ a: 99, z: "z" }
+{ a: 1, z: "z" }
+{ a: 1, extra: true }
+{ only: 1 }
+{ s: "42", t: 1 }

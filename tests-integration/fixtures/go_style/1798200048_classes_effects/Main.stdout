@@ -1,0 +1,26 @@
+{ hits: 3, log: ["a","b","c"] }
+1
+2
+forE 0
+forE 1
+forE 2
+3
+6[1,2,3,999]
+boom
+caught bad
+[2,4]
+4243
+3628800
+(Just (NonEmptyArray [(Just "1"),(Just "22"),(Just "333")])) a<1>b<22>c<333> ["a","b","c",""] true
+(Just (NonEmptyArray [(Just "foo@bar"),(Just "foo"),(Just "bar")])) x <foo@bar> y ["x ","foo","bar"," y"] true
+(Just (NonEmptyArray [(Just "b"),(Just "b")])) a
+<b>
+<b>b ["a\n","\n","b"] true
+(Just (NonEmptyArray [(Just "hello")])) <hello> Hello [""," ",""] true
+(Just (NonEmptyArray [(Just "a"),(Just "a")])) <a>b ac <a>b ["","b ac ","b"] true
+(Just (NonEmptyArray [(Just "aa")])) <aa> ab ["","a"," ab"] true
+(Just (NonEmptyArray [(Just "😀"),(Just "x")])) <😀><x> ["","",""] true
+(Just (NonEmptyArray [(Just "2024"),(Just "2024")])) in <2024> ["in ","2024",""] true
+ERR
+(Just (NonEmptyArray [(Just "cat"),(Just "cat")])) <cat> concat <cat>. [""," concat ","."] true
+(Just (NonEmptyArray [(Just ""),(Just "xx"),(Just ""),(Just "")])) <>a<xx><>b<> ["a","b"] true

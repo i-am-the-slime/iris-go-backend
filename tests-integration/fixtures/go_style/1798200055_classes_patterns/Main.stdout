@@ -1,0 +1,12 @@
+zero
+negative special
+x 1.5 'b'
+y big 5
+z first='q'
+nothing-empty
+other (Tuple 5 (Tuple "v" (Tuple (Just 2.0) [])))
+["A only admin 30","B senior","roles 2"]
+(Right 3)(Left "missing c")(Left "missing d")
+n[1,2]1two
+[true,false,false]
+["lower","upper","other"]

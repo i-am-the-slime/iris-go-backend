@@ -1,0 +1,20 @@
+ok: ann spends 5 of 10
+nf: notFound user 2
+big: tooBig 50
+fatal: exception boom
+thrownVariant: tooBig 99
+recovered nf: Right "recovered notFound user 3"
+recovered big: Right "recovered tooBig 11"
+recovered ok: Right "ann spends 1 of 10"
+onError: Right "onError user 5"
+onError ok: Right "ann spends 1 of 10"
+mapError: Left <error>
+mapError ok: Right "ann spends 2 of 10"
+handleErrors': Right "handled generically"
+widened: Left <error>
+note: Left <error>
+note ok: Right 3
+liftEffect: Right 7
+tapped 5
+tap: Right 5
+too large: 3

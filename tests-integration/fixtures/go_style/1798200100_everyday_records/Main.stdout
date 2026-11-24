@@ -1,0 +1,23 @@
+alice (30)bob (41)carol (25)
+{ age: 31, email: "a@x", name: "alice" }{ age: 42, name: "bob" }{ admin: true, age: 26, email: "c@x", name: "carol" }
+[{ age: 30, email: "a@x", name: "alice!" },{ age: 30, email: "a@x", name: "al!" }]
+(Just 99)
+[1,41,42]
+{ age: 30, name: "alice" }
+{ age: 41, fullName: "bob" }
+{ admin: true, age: 50, email: "c@x", name: "carol" }
+{ age: 41, extra: [1], name: "bob" }
+{ age: 41, extra: 'x', name: "bob" }
+{ age: 1, name: "bob" }
+{ age: "now a string", name: "bob" }
+truefalseLT
+[(Tuple { age: 41, name: "aaa" } "a"),(Tuple { age: 41, name: "bob" } "b"),(Tuple { age: 42, name: "bob" } "b+")]
+{ a: 2, b: 4, c: 6 }
+{ a: "1", b: "\"two\"", c: "(Just 3.0)" }
+{ list: [{ k: 1 },{ k: 2 }], outer: { inner: { deepest: 2 } } }
+[2,3]
+3
+x (1)
+[41,82,141]
+[{ index: 1, label: "1", square: 1 },{ index: 2, label: "2", square: 4 },{ index: 3, label: "3", square: 9 }]
+{ a: { b: { c: [{ d: unit }] } } }

@@ -1,0 +1,6 @@
+["badRequest","created","noContent","notFound","ok"]
+["created","noContent","ok"]
+["badRequest","notFound"]
+notFound user 7
+badRequest ["x","y"]
+["a","z"]

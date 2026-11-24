@@ -25,6 +25,7 @@ coverage-html:
 [doc("Prepare locked registry sources for integration tests")]
 @integration-prepare:
   cargo run -q -p tests-support -- prepare tests-integration/packages.json target/integration-packages
+  cargo run -q -p tests-support -- prepare tests-integration/go-style-packages.json target/integration-packages
 
 @integration *args="": integration-prepare
   cargo nextest run -p tests-integration "$@" --status-level=fail --final-status-level=fail --failure-output=final
@@ -38,7 +39,7 @@ coverage-html:
 @e2e *args="":
   cargo nextest run -p tests-e2e -j 1 "$@"
 
-[doc("Run integration tests and update expectations in place: compiler (c)|lowering (l)|resolving (r)|lsp|docs|formatting|sourcemap|library|refactor|go")]
+[doc("Run integration tests and update expectations in place: compiler (c)|lowering (l)|resolving (r)|lsp|docs|formatting|sourcemap|library|refactor|go|go_style")]
 t category *filters: integration-prepare
   #!/usr/bin/env bash
   set -uo pipefail
@@ -47,8 +48,8 @@ t category *filters: integration-prepare
     c|compiler) targets=(--test compiler) ;;
     l|lowering) targets=(--test lowering --test lowering_unit) ;;
     r|resolving) targets=(--test resolving) ;;
-    lsp|docs|formatting|sourcemap|library|refactor|go) targets=(--test "{{category}}") ;;
-    *) echo "unknown category '{{category}}', expected: compiler (c)|lowering (l)|resolving (r)|lsp|docs|formatting|sourcemap|library|refactor|go" >&2; exit 2 ;;
+    lsp|docs|formatting|sourcemap|library|refactor|go|go_style) targets=(--test "{{category}}") ;;
+    *) echo "unknown category '{{category}}', expected: compiler (c)|lowering (l)|resolving (r)|lsp|docs|formatting|sourcemap|library|refactor|go|go_style" >&2; exit 2 ;;
   esac
   INSTA_UPDATE=always cargo nextest run -p tests-integration "${targets[@]}" "$@" \
     --status-level=fail --final-status-level=fail --failure-output=final

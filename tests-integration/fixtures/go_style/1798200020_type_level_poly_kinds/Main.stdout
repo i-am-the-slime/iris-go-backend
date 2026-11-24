@@ -1,0 +1,15 @@
+Int
+(Maybe Int)
+((Either String) (Maybe Int))
+Either
+(Either String)
+the symbol sym
+?
+forty-two
+?
+(? the symbol sym)
+the symbol sym:5
+Maybe:"x"
+3
+{ a: 1, b: "two" }
+{ a: 1, b: "left", c: true }

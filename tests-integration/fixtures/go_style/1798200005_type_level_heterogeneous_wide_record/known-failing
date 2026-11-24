@@ -1,0 +1,1 @@
+found by this suite: a show writer starts its buffer with `append(nil, …)`, which Go rejects

@@ -1,0 +1,32 @@
+[Clubs,Diamonds,Hearts,Spades]
+ClubsSpades(Just Spades)NothingNothing
+[Diamonds,Hearts,Spades][Hearts,Spades]
+3(Just Hearts)Nothing
+[(Card -2 Spades),(Card 3 Hearts),(Card 10 Clubs),(Card 10 Hearts),Joker]
+(Just Joker)(Just (Card -2 Spades))
+GT(Card 1 Spades)
+[(Card 10 Hearts),(Card 10 Clubs),(Card 3 Hearts),Joker,(Card -2 Spades)]
+(Many [(Add (Lit 10) (Neg (Lit -20))),(Pair 30 40),(Labelled { label: "x", value: 50 })])
+(Many [(Add (Lit "1") (Neg (Lit "-2"))),(Pair "3" "4"),(Labelled { label: "x", value: "5" })])
+truetruefalse
+LTLT
+[(Lit -1),(Lit 3),(Neg (Lit 1)),(Pair 0 0),(Labelled { label: "a", value: 2 }),(Labelled { label: "b", value: 1 })]
+23true01
+"ab""xy"
+[5,-1,3]
+[1,2]
+{ a: 1, b: ["n"] }
+910"u"7
+3
+(Wrapper { name: "w", score: 1 })trueLT
+[{ name: "cy", ratio: 0.1, score: -10 },{ name: "bo", ratio: -0.5, score: 3 },{ name: "al", ratio: 1e+21, score: 3 }]
+[{ name: "al", ratio: 1e+21, score: 3 },{ name: "bo", ratio: -0.5, score: 3 },{ name: "cy", ratio: 0.1, score: -10 }]
+[{ name: "al", ratio: 1e+21, score: 3 },{ name: "bo", ratio: -0.5, score: 3 },{ name: "cy", ratio: 0.1, score: -10 }]
+[{ name: "cy", ratio: 0.1, score: -10 },{ name: "al", ratio: 1e+21, score: 3 },{ name: "bo", ratio: -0.5, score: 3 }]
+(Additive -4)(Multiplicative -90)
+First ((Just "bo"))(Last (Just "cy"))
+{ names: ["bo","al","cy"], total: (Additive -4) }
+{ a: [1,2], b: "xy" }{ a: [], b: "" }
+[-1e+300,-3.5,0.0,0.0,1e-7,2.0]
+["","B","Z","a","b","ä"]
+GTGT"abd"

@@ -1,0 +1,81 @@
+4 3
+['a','�','�','b']
+(Just '�')(Just '�')(Just 'b')
+"a�""�b"
+a😀b
+(Just 3)(Just 2)
+true
+{ after: "�b", before: "a�" }
+{ after: "b", before: "a😀" }
+true
+[233,128512]
+(Just 5)(Just 3)
+["a","b","","c",""]["a","b","c"]["a","�","�"]
+"bonana"
+"-a-b-c-"
+"padded""x"
+(Just "c")(Just "a")
+truetrueLT
+Nothing(Just { head: '�', tail: "�x" })
+(Just { head: (CodePoint 0x1F600), tail: "x" })
+"b""a😀"
+['a','b','c','d','e']'￿''\0'
+-- int parsing
+"12" -> (Just 12)
+" 12" -> Nothing
+"12 " -> Nothing
+"+5" -> (Just 5)
+"-0" -> (Just 0)
+"0x10" -> Nothing
+"1e3" -> Nothing
+"2147483647" -> (Just 2147483647)
+"2147483648" -> Nothing
+"-2147483648" -> (Just -2147483648)
+"-2147483649" -> Nothing
+"" -> Nothing
+"1.0" -> Nothing
+"007" -> (Just 7)
+"１２" -> Nothing
+-- number parsing
+"1.5" -> (Just 1.5)
+" 1.5 " -> (Just 1.5)
+"1e3" -> (Just 1000.0)
+"1E-2" -> (Just 0.01)
+".5" -> (Just 0.5)
+"5." -> (Just 5.0)
+"Infinity" -> Nothing
+"-Infinity" -> Nothing
+"NaN" -> Nothing
+"0x10" -> (Just 0.0)
+"1.5abc" -> (Just 1.5)
+"abc" -> Nothing
+"" -> Nothing
+"+2" -> (Just 2.0)
+"1_000" -> (Just 1.0)
+"-0" -> (Just 0.0)
+"1e400" -> Nothing
+-- number functions
+0.0 2.75 1.5 -1.5
+1.4142135623730951 2.356194490192345 2.718281828459045 2.302585092994046
+0.8414709848078965 0.5403023058681398  -2.0 3.0
+-2.0-1.00.0-1.00.0
+falsetrue1.0
+Infinity30
+"0"falsetruetrue
+-- regex
+a+ true
+(\w+)@(\w+) true
+^b true
+B true
+. true
+(?<year>\d{4}) true
+a(?=b) true
+(a)\1 true
+(Just (NonEmptyArray [(Just "x@y"),(Just "p@q")]))
+y at x and q at p
+["1 ","x","y"," 2 ","p","q"," 3"]
+(Just 2)
+(Just (NonEmptyArray [(Just "o"),(Just "o"),Nothing]))
+-b--n--n--
+["","a","b","c",""]
+axbx

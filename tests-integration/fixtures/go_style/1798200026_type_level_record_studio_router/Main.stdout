@@ -1,0 +1,17 @@
+{ a: 2, b: 4, c: 6 }
+(Just { a: 1, b: "x" })
+Nothing
+[{ a: 1, b: "x" },{ a: 1, b: "y" },{ a: 2, b: "x" },{ a: 2, b: "y" }]
+{ a: (Just 1), b: (Just "s"), c: Nothing }
+["alpha","zed"]
+{ a: 1, c: true }
+{ a: "1", b: "2" }
+{ a: 1, b: "override", c: true }
+onlyField
+home
+user #7
+search cats p2
+maybe (Just 1)
+either (Left "bad")
+array [2,3,4]
+either (Right 40)

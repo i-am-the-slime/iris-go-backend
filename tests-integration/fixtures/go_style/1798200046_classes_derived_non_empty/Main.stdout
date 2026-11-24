@@ -1,0 +1,18 @@
+clicked { payload: "30", x: 1, y: -2 }
+typed ab40
+batch[nothing;opt (Just "50");opt Nothing]
+timed 60
+pairs [(Tuple 1 "80"),(Tuple 2 "90")]
+[(Box 1 []),(Box 3 [0]),(Box 3 [1,2]),Empty][6,0,1,3][3,0,1,2]
+[(Box "3" ["1","2"]),Empty,(Box "1" []),(Box "3" ["0"])]Nothing
+[1,2,3][2]11
+(fromFoldable [(Tuple -1 "neg"),(Tuple 3 "c"),(Tuple 10 "ten")])(Just "ten")
+(fromFoldable [(Tuple 1 5)])
+[-1,3,10]
+[Active,(Banned { days: 3, reason: "spam" }),(Banned { days: 30, reason: "abuse" }),(Pending 2 "a"),(Pending 2 "b")]
+[(Pending 2 "b"),(Banned { days: 3, reason: "spam" }),Active,(Pending 2 "a"),(Banned { days: 30, reason: "abuse" })]true
+(Wrapped { inner: [(Just Active),Nothing,(Just (Pending -1 "\"q\""))] })
+(Max 9)(Min -2)
+{ biggest: (Max 9), smallest: (Min -2), total: [4,-2,9] }
+(Conj true)(Disj false)
+6["c","b","a"]

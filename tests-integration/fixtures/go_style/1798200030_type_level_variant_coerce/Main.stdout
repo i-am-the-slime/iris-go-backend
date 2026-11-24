@@ -1,0 +1,16 @@
+a1
+["a1","a2"]
+["a1","a2"]
+[(inj @"a" 1),(inj @"a" 2)]
+a1
+click 1,2
+key k
+(Just [1])
+(inj @"x" "s")
+(inj @"x" (Just 1.5))
+(Just "a1")
+a5
+9
+(inj @"a" 7)
+false
+[(inj @"a" 1),(inj @"a" 9)]

@@ -1,0 +1,41 @@
+(fromFoldable [(Tuple "a" 3),(Tuple "b" 2),(Tuple "c" 1)])
+(fromFoldable [(Tuple "a" 103),(Tuple "b" 2),(Tuple "c" 1),(Tuple "z" 1)])
+(fromFoldable [(Tuple "a" 30),(Tuple "b" 2),(Tuple "c" 1)])(fromFoldable [(Tuple "a" 3),(Tuple "b" 2),(Tuple "c" 1),(Tuple "q" 0)])(fromFoldable [(Tuple "a" 3),(Tuple "c" 1)])
+[(Tuple "a" 3),(Tuple "b" 2),(Tuple "c" 1)]
+((Tuple "a" 3) : (Tuple "b" 2) : (Tuple "c" 1) : Nil)
+(fromFoldable ["a","b","c"])[3,2,1]
+(Just 1)Nothing
+a3b2c1
+a3b2c1
+(fromFoldable [(Tuple "b" 2),(Tuple "c" 1)])
+(fromFoldable [(Tuple -10 "m10"),(Tuple -5 "m5"),(Tuple 0 "z"),(Tuple 3 "p3")])(Just { key: -10, value: "m10" })(Just { key: 3, value: "p3" })
+[(Tuple (Tuple 0 "z") 2),(Tuple (Tuple 1 "a") 3),(Tuple (Tuple 1 "b") 1)]
+(fromFoldable [(Tuple "2" 4),(Tuple "10" 2),(Tuple "4294967294" 9),(Tuple "zeta" 1),(Tuple "alpha" 3),(Tuple "-1" 5),(Tuple "01" 6),(Tuple "1.5" 7),(Tuple "4294967295" 8)])
+[(Tuple "2" 4),(Tuple "10" 2),(Tuple "4294967294" 9),(Tuple "zeta" 1),(Tuple "alpha" 3),(Tuple "-1" 5),(Tuple "01" 6),(Tuple "1.5" 7),(Tuple "4294967295" 8)]
+["2","10","4294967294","zeta","alpha","-1","01","1.5","4294967295"][4,2,9,1,3,5,6,7,8]
+[(Tuple "-1" 5),(Tuple "01" 6),(Tuple "1.5" 7),(Tuple "10" 2),(Tuple "2" 4),(Tuple "4294967294" 9),(Tuple "4294967295" 8),(Tuple "alpha" 3),(Tuple "zeta" 1)]
+2=4;10=2;4294967294=9;zeta=1;alpha=3;-1=5;01=6;1.5=7;4294967295=8;
+(Just 3)9true
+(fromFoldable [(Tuple "0" 11),(Tuple "2" 4),(Tuple "10" 2),(Tuple "4294967294" 9),(Tuple "alpha" 4),(Tuple "-1" 5),(Tuple "01" 6),(Tuple "1.5" 7),(Tuple "4294967295" 8),(Tuple "beta" 10)])
+(fromFoldable [(Tuple "0" 11),(Tuple "2" 4),(Tuple "10" 2),(Tuple "4294967294" 9),(Tuple "zeta" 99),(Tuple "alpha" 4),(Tuple "-1" 5),(Tuple "01" 6),(Tuple "1.5" 7),(Tuple "4294967295" 8),(Tuple "beta" 10)])
+(fromFoldable [(Tuple "2" 4),(Tuple "10" 2),(Tuple "4294967294" 9),(Tuple "alpha" 4),(Tuple "1.5" 7),(Tuple "4294967295" 8),(Tuple "beta" 10)])
+["0:22","2:8","10:4","4294967294:18","alpha:8","-1:10","01:12","1.5:14","4294967295:16","beta:20"]
+(fromFoldable [(Tuple "3" 3),(Tuple "b" 1),(Tuple "a" 2)])
+(Just 3)2["x","y"]
+[(Tuple "x" 3),(Tuple "y" 42)]
+3true
+(fromFoldable [-1,2,3,5,7])true[-1,2,3,5,7]
+(fromFoldable [-1,2,3,5,7,100])(fromFoldable [-1,3,5,7])(fromFoldable [3,5])
+(fromFoldable [0,1,2])
+(NonEmptyArray [3,1,2])32
+(NonEmptyArray [0,9,8])[6,2,4]
+"312"(NonEmptyArray [1,2,3])3
+[(NonEmptyArray [1,3]),(NonEmptyArray [2,4]),(NonEmptyArray [5])]
+Nothing
+(1 : 2 : 3 : Nil)(3 : 2 : 1 : Nil)[1,2,3](4 : 5 : Nil)
+(-1 : 2 : 3 : Nil)6
+1two3.0['f']
+(Tuple 1 (Tuple "two" (Tuple 3.0 ['f'])))
+["a","2"]
+(fromFoldable [(Tuple "outer" (fromFoldable [(Tuple 1 []),(Tuple 2 ["x"])]))])
+["x"]

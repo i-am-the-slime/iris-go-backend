@@ -1,0 +1,9 @@
+[6.75,6.0,0.0,0.1875]
+["circle 1.5","rect { h: 3, w: 2 }","point","circle -0.25"]
+[true,false,false,true]
+(inj @"circle" 1.5) | (inj @"rect" { h: 3, w: 2 }) | (inj @"point" unit) | (inj @"circle" -0.25)
+true[(inj @"circle" -0.25),(inj @"circle" 1.5),(inj @"point" unit),(inj @"rect" { h: 3, w: 2 })]LT
+[Nothing,(Just { h: 3, w: 2 }),Nothing,Nothing]
+["circle 1.5","rect { h: 3, w: 2 }","point","circle -0.25","label hi"]
+helloünï cödé
+(Just 1.5)

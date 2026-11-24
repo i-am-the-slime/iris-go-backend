@@ -1,0 +1,49 @@
+-- array
+[2,3,4]
+[2,3,4]
+[2,3,4]
+[2,3,4]
+["4!4!","6!6!","8!8!"]
+["4!4!","6!6!","8!8!"]
+["4!4!","6!6!","8!8!"]
+["4!4!","6!6!","8!8!"]
+["44?","66?","88?"]
+-- maybe
+(Just "8")
+(Just "8")
+Nothing
+(Just "8")
+-- either
+(Right "8")
+(Left "nope")
+(Right "8")
+-- newtype functors
+box=(Just "22!")
+box=(Just "22!")
+box=(Just 22)
+Pair["4","6","8"]
+Pair["4","6","8"]
+(Wrapped (Just "12"))
+(Just 6)
+Chained["4.","6.","8."]
+-- functor of functor
+[(Just 4),Nothing,(Just 8)]
+[(Just "2"),Nothing,(Just "4")]
+[(Just "2"),Nothing,(Just "4")]
+(Compose [(Just "20"),Nothing,(Just "40")])
+(Compose [(Just "2"),Nothing,(Just "4")])
+-- <@> $> <$ void
+[11,20,7]
+[11,20,7]
+(Just "x")
+(Just "y")
+["z","z","z"]
+[unit,unit,unit]
+(Just unit)
+Nothing
+15
+15
+15
+unit
+side
+s
