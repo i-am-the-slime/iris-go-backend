@@ -374,6 +374,7 @@ where
             self.imports.insert(self.foreign_packages.import_path(module_name));
             return Ok(format!("{package}.{struct_name}"));
         }
+        let monotype = self.monotypes.without_causes(monotype);
         if let Some(name) = self.record_names.get(&monotype) {
             return Ok(name.clone());
         }
