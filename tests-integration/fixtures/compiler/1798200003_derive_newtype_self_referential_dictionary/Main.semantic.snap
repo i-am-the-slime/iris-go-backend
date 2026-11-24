@@ -1,0 +1,39 @@
+---
+source: tests-integration/src/fixtures.rs
+---
+interface Describe :: Prim.Type -> Prim.Constraint
+interface Describe a where
+  describe :: a -> Prim.String
+
+newtype Tree :: Prim.Type
+newtype Tree
+  | Tree :: Prim.Array Main.Tree -> Main.Tree
+
+newtype Leaves :: Prim.Type
+newtype Leaves
+  | Leaves :: Prim.Array Prim.Int -> Main.Leaves
+
+newtype Wrapped :: Prim.Type -> Prim.Type
+newtype Wrapped @a
+  | Wrapped :: Prim.Array a -> Main.Wrapped a
+
+dictionary describeInt :: Main.Describe Prim.Int where
+  describe :: Prim.Int -> Prim.String
+  describe = \_ -> "int"
+
+dictionary describeArray ::
+  forall a.
+  { describeDict :: Main.Describe a } =>
+  Main.Describe (Prim.Array a)
+  where
+  describe :: Prim.Array a -> Prim.String
+  describe = \_ -> "array"
+
+dictionary describeTree :: Main.Describe Main.Tree = describeArray {describeTree}
+
+dictionary describeLeaves :: Main.Describe Main.Leaves = describeArray {describeInt}
+
+dictionary describeWrapped ::
+  forall a.
+  { describeDict :: Main.Describe a } =>
+  Main.Describe (Main.Wrapped a) = describeArray {describeDict}

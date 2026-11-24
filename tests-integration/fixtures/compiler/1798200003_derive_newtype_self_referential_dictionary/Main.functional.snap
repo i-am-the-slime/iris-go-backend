@@ -1,0 +1,14 @@
+---
+source: tests-integration/src/fixtures.rs
+---
+@export describe = \dictionary%0 -> dictionary%0.describe
+
+@export instance describeInt = { describe: \$int%1@(_) -> "int" }
+
+@export instance describeArray = \describeADict%2 -> { describe: \$array%3@(_) -> "array" }
+
+@export instance describeTree = describeArray describeTree
+
+@export instance describeLeaves = describeArray describeInt
+
+@export instance describeWrapped = \describeADict%4 -> describeArray describeADict%4

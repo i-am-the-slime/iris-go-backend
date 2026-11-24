@@ -1,0 +1,32 @@
+---
+source: tests-integration/src/fixtures.rs
+---
+Terms
+describe :: forall @a. Main.Describe a => a -> Prim.String
+Tree :: Prim.Array Main.Tree -> Main.Tree
+Leaves :: Prim.Array Prim.Int -> Main.Leaves
+Wrapped :: forall @a. Prim.Array a -> Main.Wrapped a
+
+Types
+Describe :: Prim.Type -> Prim.Constraint
+Tree :: Prim.Type
+Leaves :: Prim.Type
+Wrapped :: Prim.Type -> Prim.Type
+
+Classes
+class forall (a :: Prim.Type). Main.Describe a
+  describe :: forall @a. Main.Describe a => a -> Prim.String
+
+Instances
+instance Main.Describe Prim.Int
+instance forall a. Main.Describe a => Main.Describe (Prim.Array a)
+
+Derived
+derive Main.Describe Main.Tree
+derive Main.Describe Main.Leaves
+derive forall a. Main.Describe a => Main.Describe (Main.Wrapped a)
+
+Roles
+Tree = []
+Leaves = []
+Wrapped = [Representational]
