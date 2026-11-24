@@ -16,7 +16,7 @@ use sha2::{Digest, Sha256};
 use crate::GoConfig;
 
 /// The release of github.com/i-am-the-slime/iris-go the generated Go is written against.
-pub const RUNTIME_VERSION: &str = "v0.5.0";
+pub const RUNTIME_VERSION: &str = "v0.6.0";
 
 /// The Go module path of the runtime.
 const RUNTIME_MODULE: &str = "github.com/i-am-the-slime/iris-go";
