@@ -258,9 +258,7 @@ func FoldrGoReusing(acc *list.ListString, list *list.ListString) *list.ListStrin
 		if list == SharedListStringNil {
 			return acc
 		}
-		x := list.Cons0
 		xs := list.Cons1
-		list.Cons0 = x
 		list.Cons1 = acc
 		acc, list = list, xs
 	}

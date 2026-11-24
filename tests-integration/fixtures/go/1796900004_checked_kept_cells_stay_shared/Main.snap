@@ -786,17 +786,9 @@ func mainGoChecked(tree *redblack.Tree, trail *redblack_types.ListTree, total in
 			if result {
 				scrutinee := redblack.InsChecked(n, true, tree, treeOwned)
 				if scrutinee != redblack.SharedTreeLeaf {
-					l := scrutinee.Node1
-					k := scrutinee.Node2
-					v := scrutinee.Node3
-					r := scrutinee.Node4
 					lOwned := scrutinee.Unique&1 != 0
 					rOwned := scrutinee.Unique&2 != 0
 					scrutinee.Node0 = redblack.ColorBlack
-					scrutinee.Node1 = l
-					scrutinee.Node2 = k
-					scrutinee.Node3 = v
-					scrutinee.Node4 = r
 					scrutinee.Unique = shared.UniqueBit(lOwned, 1) | shared.UniqueBit(rOwned, 2)
 					next = scrutinee
 				} else {
@@ -835,17 +827,9 @@ func mainGoChecked2(tree *redblack.Tree, trail *redblack_types.ListTree, later f
 			if result {
 				scrutinee := redblack.InsChecked(n, true, tree, treeOwned)
 				if scrutinee != redblack.SharedTreeLeaf {
-					l := scrutinee.Node1
-					k := scrutinee.Node2
-					v := scrutinee.Node3
-					r := scrutinee.Node4
 					lOwned := scrutinee.Unique&1 != 0
 					rOwned := scrutinee.Unique&2 != 0
 					scrutinee.Node0 = redblack.ColorBlack
-					scrutinee.Node1 = l
-					scrutinee.Node2 = k
-					scrutinee.Node3 = v
-					scrutinee.Node4 = r
 					scrutinee.Unique = shared.UniqueBit(lOwned, 1) | shared.UniqueBit(rOwned, 2)
 					next = scrutinee
 				} else {
@@ -888,17 +872,9 @@ func mainGoChecked3(tree *redblack.Tree, trail *redblack_types.ListTree, record 
 			if result {
 				scrutinee := redblack.InsChecked(n, true, tree, treeOwned)
 				if scrutinee != redblack.SharedTreeLeaf {
-					l := scrutinee.Node1
-					k := scrutinee.Node2
-					v := scrutinee.Node3
-					r := scrutinee.Node4
 					lOwned := scrutinee.Unique&1 != 0
 					rOwned := scrutinee.Unique&2 != 0
 					scrutinee.Node0 = redblack.ColorBlack
-					scrutinee.Node1 = l
-					scrutinee.Node2 = k
-					scrutinee.Node3 = v
-					scrutinee.Node4 = r
 					scrutinee.Unique = shared.UniqueBit(lOwned, 1) | shared.UniqueBit(rOwned, 2)
 					next = scrutinee
 				} else {
@@ -940,15 +916,7 @@ matched:
 		if result {
 			scrutinee := redblack.InsReusing(n, true, tree)
 			if scrutinee != redblack.SharedTreeLeaf {
-				l := scrutinee.Node1
-				k := scrutinee.Node2
-				v := scrutinee.Node3
-				r := scrutinee.Node4
 				scrutinee.Node0 = redblack.ColorBlack
-				scrutinee.Node1 = l
-				scrutinee.Node2 = k
-				scrutinee.Node3 = v
-				scrutinee.Node4 = r
 				scrutinee.Unique = 3
 				next = scrutinee
 			} else {
@@ -987,15 +955,7 @@ matched:
 		if result {
 			scrutinee := redblack.InsReusing(n, true, tree)
 			if scrutinee != redblack.SharedTreeLeaf {
-				l := scrutinee.Node1
-				k := scrutinee.Node2
-				v := scrutinee.Node3
-				r := scrutinee.Node4
 				scrutinee.Node0 = redblack.ColorBlack
-				scrutinee.Node1 = l
-				scrutinee.Node2 = k
-				scrutinee.Node3 = v
-				scrutinee.Node4 = r
 				scrutinee.Unique = 3
 				next = scrutinee
 			} else {
@@ -1034,15 +994,7 @@ matched:
 		if result {
 			scrutinee := redblack.InsReusing(n, true, tree)
 			if scrutinee != redblack.SharedTreeLeaf {
-				l := scrutinee.Node1
-				k := scrutinee.Node2
-				v := scrutinee.Node3
-				r := scrutinee.Node4
 				scrutinee.Node0 = redblack.ColorBlack
-				scrutinee.Node1 = l
-				scrutinee.Node2 = k
-				scrutinee.Node3 = v
-				scrutinee.Node4 = r
 				scrutinee.Unique = 3
 				next = scrutinee
 			} else {

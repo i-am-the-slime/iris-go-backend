@@ -735,17 +735,9 @@ func mainGoChecked(tree *redblack.Tree, kept *redblack_types.ListTree, folded in
 			if result {
 				scrutinee := redblack.InsChecked(k, v, tree, treeOwned)
 				if scrutinee != redblack.SharedTreeLeaf {
-					l := scrutinee.Node1
-					k2 := scrutinee.Node2
-					v2 := scrutinee.Node3
-					r := scrutinee.Node4
 					lOwned := scrutinee.Unique&1 != 0
 					rOwned := scrutinee.Unique&2 != 0
 					scrutinee.Node0 = redblack.ColorBlack
-					scrutinee.Node1 = l
-					scrutinee.Node2 = k2
-					scrutinee.Node3 = v2
-					scrutinee.Node4 = r
 					scrutinee.Unique = shared.UniqueBit(lOwned, 1) | shared.UniqueBit(rOwned, 2)
 					grown = scrutinee
 				} else {
@@ -786,15 +778,7 @@ matched:
 		if result {
 			scrutinee := redblack.InsReusing(k, v, tree)
 			if scrutinee != redblack.SharedTreeLeaf {
-				l := scrutinee.Node1
-				k2 := scrutinee.Node2
-				v2 := scrutinee.Node3
-				r := scrutinee.Node4
 				scrutinee.Node0 = redblack.ColorBlack
-				scrutinee.Node1 = l
-				scrutinee.Node2 = k2
-				scrutinee.Node3 = v2
-				scrutinee.Node4 = r
 				scrutinee.Unique = 3
 				grown = scrutinee
 			} else {
@@ -894,9 +878,7 @@ func ReverseTreeGoReusing(acc *redblack_types.ListTree, list *redblack_types.Lis
 		if list == redblack_types.SharedListTreeNil {
 			return acc
 		}
-		x := list.Cons0
 		xs := list.Cons1
-		list.Cons0 = x
 		list.Cons1 = acc
 		acc, list = list, xs
 	}

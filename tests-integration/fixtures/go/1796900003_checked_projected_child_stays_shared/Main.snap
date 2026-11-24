@@ -642,17 +642,9 @@ func mainGoOrMainGoChecked(step int, tree *redblack.Tree, kept *redblack_types.L
 					if result {
 						scrutinee := redblack.Ins(k, true, tree)
 						if scrutinee != redblack.SharedTreeLeaf {
-							l := scrutinee.Node1
-							k2 := scrutinee.Node2
-							v := scrutinee.Node3
-							r := scrutinee.Node4
 							lOwned := scrutinee.Unique&1 != 0
 							rOwned := scrutinee.Unique&2 != 0
 							scrutinee.Node0 = redblack.ColorBlack
-							scrutinee.Node1 = l
-							scrutinee.Node2 = k2
-							scrutinee.Node3 = v
-							scrutinee.Node4 = r
 							scrutinee.Unique = shared.UniqueBit(lOwned, 1) | shared.UniqueBit(rOwned, 2)
 							tree2 = scrutinee
 						} else {
@@ -676,17 +668,9 @@ func mainGoOrMainGoChecked(step int, tree *redblack.Tree, kept *redblack_types.L
 					if result {
 						scrutinee := redblack.Ins(key, true, tree2)
 						if scrutinee != redblack.SharedTreeLeaf {
-							l := scrutinee.Node1
-							k2 := scrutinee.Node2
-							v := scrutinee.Node3
-							r := scrutinee.Node4
 							lOwned := scrutinee.Unique&1 != 0
 							rOwned := scrutinee.Unique&2 != 0
 							scrutinee.Node0 = redblack.ColorBlack
-							scrutinee.Node1 = l
-							scrutinee.Node2 = k2
-							scrutinee.Node3 = v
-							scrutinee.Node4 = r
 							scrutinee.Unique = shared.UniqueBit(lOwned, 1) | shared.UniqueBit(rOwned, 2)
 							probedTreesGrown = scrutinee
 						} else {
@@ -700,26 +684,18 @@ func mainGoOrMainGoChecked(step int, tree *redblack.Tree, kept *redblack_types.L
 				step, kept, probed, n = shared.MainGoStep, listTreeCells.New(redblack_types.ListTree{Cons0: probedTreesGrown, Cons1: kept}), probed+redblack.Checksum(child), n-1
 				continue
 			}
-			k3 := n * 2
-			v2 := n%3 == 0
+			k2 := n * 2
+			v := n%3 == 0
 			var next *redblack.Tree
 		matched6:
 			for {
 				result := tree != redblack.SharedTreeLeaf && tree.Node0 == redblack.ColorRed
 				if result {
-					scrutinee := redblack.InsChecked(k3, v2, tree, treeOwned)
+					scrutinee := redblack.InsChecked(k2, v, tree, treeOwned)
 					if scrutinee != redblack.SharedTreeLeaf {
-						l := scrutinee.Node1
-						k := scrutinee.Node2
-						v := scrutinee.Node3
-						r := scrutinee.Node4
 						lOwned := scrutinee.Unique&1 != 0
 						rOwned := scrutinee.Unique&2 != 0
 						scrutinee.Node0 = redblack.ColorBlack
-						scrutinee.Node1 = l
-						scrutinee.Node2 = k
-						scrutinee.Node3 = v
-						scrutinee.Node4 = r
 						scrutinee.Unique = shared.UniqueBit(lOwned, 1) | shared.UniqueBit(rOwned, 2)
 						next = scrutinee
 					} else {
@@ -727,7 +703,7 @@ func mainGoOrMainGoChecked(step int, tree *redblack.Tree, kept *redblack_types.L
 					}
 					break matched6
 				}
-				next = redblack.InsChecked(k3, v2, tree, treeOwned)
+				next = redblack.InsChecked(k2, v, tree, treeOwned)
 				break matched6
 			}
 			var result2 *redblack_types.ListTree
@@ -875,9 +851,7 @@ func ReverseTreeGoReusing(acc *redblack_types.ListTree, list *redblack_types.Lis
 		if list == redblack_types.SharedListTreeNil {
 			return acc
 		}
-		x := list.Cons0
 		xs := list.Cons1
-		list.Cons0 = x
 		list.Cons1 = acc
 		acc, list = list, xs
 	}

@@ -166,9 +166,7 @@ func mainGoGoReusing(b *types.ListTupleStringString, value *types.ListTupleStrin
 		if value == types.SharedListTupleStringStringNil {
 			return b
 		}
-		a := value.Cons0
 		as := value.Cons1
-		value.Cons0 = a
 		value.Cons1 = b
 		b, value = value, as
 	}
@@ -179,9 +177,7 @@ func mainGoGoReusing2(b *types.ListTupleStringBoolean, value *types.ListTupleStr
 		if value == types.SharedListTupleStringBooleanNil {
 			return b
 		}
-		a := value.Cons0
 		as := value.Cons1
-		value.Cons0 = a
 		value.Cons1 = b
 		b, value = value, as
 	}

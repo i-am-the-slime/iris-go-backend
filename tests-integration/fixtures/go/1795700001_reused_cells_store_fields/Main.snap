@@ -126,11 +126,9 @@ func recolourStoresTheTagReusing(value *Chain) *Chain {
 		value.Field1 = field
 		return value
 	case ChainBlue:
-		n := value.Field0
 		rest := value.Field1
 		field := recolourStoresTheTagReusing(rest)
 		value.Tag = ChainRed
-		value.Field0 = n
 		value.Field1 = field
 		return value
 	default: // ChainEnd
