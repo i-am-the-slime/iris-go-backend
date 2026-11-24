@@ -75,6 +75,7 @@ mod shorthands;
 mod sorting;
 mod standard;
 mod strings;
+mod swaps;
 mod text;
 mod types;
 mod unreferenced;
@@ -233,6 +234,7 @@ where
     });
     timed("joins", || joins::join_shared_updates(&mut declarations));
     timed("ranges", || ranges::read_elements_in_place(&mut declarations));
+    timed("swaps", || swaps::swap_crosswise_pokes(&mut declarations));
     let effects = std::mem::take(&mut emitter.effects);
     timed("headers", || headers::read_headers_once(&mut declarations, &effects));
     timed("bounds", || headers::drop_repeated_bounds_tests(&mut declarations, &effects));
