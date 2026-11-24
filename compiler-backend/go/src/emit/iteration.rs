@@ -332,21 +332,25 @@ where
     /// The places of an accumulator of this type that hold an array: itself, its record's
     /// fields, or a field of one of its constructors when it is held by value.
     pub(super) fn carried_places(&mut self, monotype: MonotypeId) -> Vec<Place> {
-        let is_array = |emitter: &Self, monotype: MonotypeId| {
+        let is_array = |emitter: &mut Self, monotype: MonotypeId| {
             matches!(emitter.monotypes.get(monotype), Monotype::Array(_) | Monotype::Object(_))
+                || emitter.is_native_hash_map(monotype)
         };
         match self.monotypes.get(monotype).clone() {
             Monotype::Array(_) | Monotype::Object(_) => vec![Place::Whole],
+            Monotype::ForeignData(_) if self.is_native_hash_map(monotype) => vec![Place::Whole],
             // A rank-N value's instantiations are functions, never arrays.
             Monotype::Record(_) if self.monotypes.is_instantiated_record(monotype) => vec![],
-            Monotype::Record(fields) => fields
-                .iter()
-                .filter(|field| is_array(self, field.monotype))
-                .map(|field| {
-                    let go_field = self.record_field_name(monotype, &field.label);
-                    Place::Field(field.label.clone(), go_field)
-                })
-                .collect(),
+            Monotype::Record(fields) => {
+                let mut places = vec![];
+                for field in fields.iter() {
+                    if is_array(self, field.monotype) {
+                        let go_field = self.record_field_name(monotype, &field.label);
+                        places.push(Place::Field(field.label.clone(), go_field));
+                    }
+                }
+                places
+            }
             Monotype::Data(data) => {
                 // Laying a type out declares it where the declarations stand, so only a type
                 // the emitted code has already laid out, as the accumulator's, is considered.
@@ -382,11 +386,17 @@ where
                 super::field(identifier_expression(accumulator), go_field)
             }
         };
-        let clip = if self.holds_object(monotype, place) {
-            self.go_function(GoFunction { package: GoPackage::Object, name: "Lend" })
-        } else {
-            self.imports.insert("slices".into());
-            GoExpression::Qualified { package: "slices".into(), name: "Clip".into() }
+        let clip = match self.carried_monotype(monotype, place) {
+            Some(carried) if matches!(self.monotypes.get(carried), Monotype::Object(_)) => {
+                self.go_function(GoFunction { package: GoPackage::Object, name: "Lend" })
+            }
+            Some(carried) if self.is_native_hash_map(carried) => {
+                self.go_function(crate::foreign::HASH_MAP_LEND)
+            }
+            _ => {
+                self.imports.insert("slices".into());
+                GoExpression::Qualified { package: "slices".into(), name: "Clip".into() }
+            }
         };
         GoStatement::Assign {
             targets: vec![carried.clone()],
@@ -394,8 +404,8 @@ where
         }
     }
 
-    fn holds_object(&self, monotype: MonotypeId, place: &Place) -> bool {
-        let carried = match (self.monotypes.get(monotype), place) {
+    fn carried_monotype(&self, monotype: MonotypeId, place: &Place) -> Option<MonotypeId> {
+        match (self.monotypes.get(monotype), place) {
             (_, Place::Whole) => Some(monotype),
             (Monotype::Record(fields), Place::Field(label, _)) => {
                 fields.iter().find(|field| &field.label == label).map(|field| field.monotype)
@@ -407,8 +417,14 @@ where
                 .and_then(|constructor| constructor.fields.get(*index))
                 .map(|(_, field)| *field),
             _ => None,
+        }
+    }
+
+    fn is_native_hash_map(&mut self, monotype: MonotypeId) -> bool {
+        let Monotype::ForeignData(data) = self.monotypes.get(monotype).clone() else {
+            return false;
         };
-        carried.is_some_and(|carried| matches!(self.monotypes.get(carried), Monotype::Object(_)))
+        matches!(crate::monotype::native_hash_map(&mut self.context, &data), Ok(Some(true)))
     }
 
     fn map(

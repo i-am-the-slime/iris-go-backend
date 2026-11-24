@@ -36,6 +36,7 @@ mod existential;
 mod expressions;
 mod foreign;
 mod growth;
+mod hash_map;
 mod instantiation;
 mod int64;
 mod json;

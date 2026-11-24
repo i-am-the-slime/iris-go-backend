@@ -12,12 +12,12 @@ use indexing::TermItemId;
 
 use super::{Definition, Scope, SpecializationKey, Specializer};
 use crate::dictionary::{Dictionary, InstanceDictionary};
-use crate::types::Substitution;
-use crate::primitives::Primitive;
 use crate::error::GoResult;
 use crate::foreign::{Foreign, JsonCodec};
 use crate::monomorphic::{Expression, ExpressionKind};
 use crate::monotype::MonotypeId;
+use crate::primitives::Primitive;
+use crate::types::Substitution;
 
 impl<'q, Q> Specializer<'q, Q>
 where

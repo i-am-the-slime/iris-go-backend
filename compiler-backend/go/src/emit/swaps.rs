@@ -56,9 +56,10 @@ fn swap_at(block: &mut [GoStatement], code: &[usize], end: usize) -> Option<GoSt
     let first_place = poke(poke_first, &first, &second.name)?;
     let second_place = poke(poke_second, &second, &first.name)?;
     let rest = &mut block[end..];
-    if rest.iter_mut().any(|statement| {
-        mentions(statement, &first.name) || mentions(statement, &second.name)
-    }) {
+    if rest
+        .iter_mut()
+        .any(|statement| mentions(statement, &first.name) || mentions(statement, &second.name))
+    {
         return None;
     }
     let condition = GoExpression::Binary {
@@ -104,7 +105,6 @@ fn assigned(body: &[GoStatement], name: &str) -> Option<GoExpression> {
     (target == name).then(|| value.unattributed().clone())
 }
 
-/// `first != nothing && second != nothing`.
 fn tests_both_found(condition: &GoExpression, first: &Peek, second: &Peek) -> bool {
     let GoExpression::Binary { operator: "&&", left, right } = condition else { return false };
     is_found(left, first) && is_found(right, second)
@@ -142,7 +142,6 @@ fn contains(expression: &GoExpression, part: &GoExpression) -> bool {
     found
 }
 
-/// Whether the value reads nothing but the named peek, through conversions and fields.
 fn unwraps(value: &GoExpression, name: &str) -> bool {
     match value {
         GoExpression::Identifier(read) => read == name,

@@ -279,8 +279,16 @@ where
         // taking its quantifiers' instantiations in declared order.
         let mut type_arguments = vec![];
         let declared = self.context.module(file_id)?.checked.lookup_term_item_type(term);
-        if let Some(declared) = declared.filter(|_| arity == 0) {
-            let declared = crate::monotype::expand_synonyms(&mut self.context, declared)?;
+        let declared = match declared {
+            Some(declared) => Some(crate::monotype::expand_synonyms(&mut self.context, declared)?),
+            None => None,
+        };
+        let instantiated = match declared {
+            Some(_) if arity == 0 => true,
+            Some(declared) => self.result_alone_mentions_a_quantifier(declared)?,
+            None => false,
+        };
+        if let Some(declared) = declared.filter(|_| instantiated) {
             for quantifier in self.context.types.peel_quantifiers(declared).0 {
                 let Some(&argument) = instantiations.get(&quantifier) else {
                     let variable = format!("{quantifier:?}");
@@ -292,6 +300,60 @@ where
         }
         let type_arguments = Box::leak(type_arguments.into_boxed_slice());
         Ok(Foreign::Project { file_id, term, arity, effectful, type_arguments })
+    }
+
+    fn result_alone_mentions_a_quantifier(&mut self, declared: TypeId) -> GoResult<bool> {
+        let (quantifiers, mut current) = self.context.types.peel_quantifiers(declared);
+        if quantifiers.is_empty() {
+            return Ok(false);
+        }
+        let mut parameters = vec![];
+        while let Some((parameter, result)) = self.context.types.function_parts(current) {
+            parameters.push(parameter);
+            current = result;
+        }
+        let mut result = current;
+        if let Some(arity) = self.context.effect_function_arity(current)? {
+            let (_, arguments) = self.context.types.spine(current);
+            if let Some((&last, uncurried)) = arguments.split_last() {
+                parameters.extend(uncurried.iter().take(arity));
+                result = last;
+            }
+        }
+        let mut mentioned_by_parameters = vec![];
+        for parameter in parameters {
+            self.collect_rigid_names(parameter, &mut mentioned_by_parameters);
+        }
+        let mut mentioned_by_result = vec![];
+        self.collect_rigid_names(result, &mut mentioned_by_result);
+        Ok(quantifiers.iter().any(|quantifier| {
+            mentioned_by_result.contains(quantifier)
+                && !mentioned_by_parameters.contains(quantifier)
+        }))
+    }
+
+    fn collect_rigid_names(&self, type_id: TypeId, names: &mut Vec<checking::core::Name>) {
+        let type_id = self.context.types.strip_annotations(type_id);
+        match self.context.types.lookup(type_id).clone() {
+            Type::Rigid(name, _, _) => names.push(name),
+            Type::Application(function, argument) | Type::Function(function, argument) => {
+                self.collect_rigid_names(function, names);
+                self.collect_rigid_names(argument, names);
+            }
+            Type::Forall(_, inner) | Type::Constrained(_, inner) => {
+                self.collect_rigid_names(inner, names);
+            }
+            Type::Row(row) => {
+                let row = self.context.queries.lookup_row_type(row).clone();
+                for field in row.fields.iter() {
+                    self.collect_rigid_names(field.id, names);
+                }
+                if let Some(tail) = row.tail {
+                    self.collect_rigid_names(tail, names);
+                }
+            }
+            _ => {}
+        }
     }
 
     pub(super) fn foreign(

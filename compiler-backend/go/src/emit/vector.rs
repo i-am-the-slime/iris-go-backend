@@ -217,7 +217,8 @@ where
         let callback = self.callback(&arguments[0], arity)?;
         // A fused loop stays scalar: building its array to fold it in a kernel pays only for
         // long arrays, and a fused range's length is rarely known.
-        let (analysis, shape) = self.vector_shape(iteration, &callback, arguments, result_element)?;
+        let (analysis, shape) =
+            self.vector_shape(iteration, &callback, arguments, result_element)?;
         let initial = matches!(iteration, Iteration::FoldLeft).then(|| &arguments[1]);
         if let Some(initial) = initial
             && self.element(initial.monotype) != Some(result_element)

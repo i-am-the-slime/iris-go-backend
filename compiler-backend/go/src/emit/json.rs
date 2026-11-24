@@ -133,10 +133,8 @@ where
         if !global {
             out.extend(computed);
             let value = self.value(errors, out)?;
-            let names = ShownErrors {
-                shown: self.temporary("shown"),
-                cell: self.temporary("cell"),
-            };
+            let names =
+                ShownErrors { shown: self.temporary("shown"), cell: self.temporary("cell") };
             return self.shown_errors(show, value, errors.monotype, &names, out);
         }
         let name = match self.foreign_error_shows.get(&errors.monotype) {

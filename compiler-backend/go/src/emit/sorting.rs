@@ -377,7 +377,9 @@ where
                 // order `if a == b then EQ else if a < b then LT else GT`.
                 let (less_than, equal, less, same) = match compared(condition, Comparison::LessThan)
                 {
-                    Some(less_than) => (less_than, compared(inner, Comparison::Equal)?, then, second),
+                    Some(less_than) => {
+                        (less_than, compared(inner, Comparison::Equal)?, then, second)
+                    }
                     None => (
                         compared(inner, Comparison::LessThan)?,
                         compared(condition, Comparison::Equal)?,

@@ -281,6 +281,11 @@ where
         {
             return self.append_to_buffer(arguments, out);
         }
+        if let Some((position, owned)) = crate::foreign::owned_hash_map_write(foreign)
+            && self.owned_snocs.contains(&std::ptr::from_ref(&arguments[position]))
+        {
+            return self.foreign_value(owned, arguments, monotype, out);
+        }
         if foreign.calls(crate::foreign::ARRAY_APPEND)
             && self.owned_snocs.contains(&std::ptr::from_ref(&arguments[0]))
             && let ExpressionKind::Array(elements) = &arguments[1].kind

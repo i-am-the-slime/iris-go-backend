@@ -895,6 +895,9 @@ pub(super) const INTRINSICS: &[(&str, &str, &[&str], Foreign)] = &[
     ("Data.Array", "nub", &["ordChar"], array("NubComparable", 1)),
     ("Data.Array", "nub", &["ordString"], array("NubComparable", 1)),
     ("Data.Array", "nub", &["ordBoolean"], array("NubComparable", 1)),
+    ("Data.HashMap", "nubHash", &["hashableInt"], array("NubComparable", 1)),
+    ("Data.HashMap", "nubHash", &["hashableChar"], array("NubComparable", 1)),
+    ("Data.HashMap", "nubHash", &["hashableString"], array("NubComparable", 1)),
     ("Data.Array", "groupBy", &[], uncurried(array("GroupBy", 2), &[(0, 2)])),
     ("Data.Array", "unzip", &[], ARRAY_UNZIP),
     ("Data.Array", "fromFoldable", &["foldableList"], ARRAY_FROM_LIST),
@@ -1028,4 +1031,5 @@ pub(super) const SUPPORT_DATA: &[(&str, &str, GoPackage, &str)] = &[
     ("Data.Argonaut.Core", "JNull", GoPackage::Argonaut, "JNull"),
     ("Effect.AVar", "AVar", GoPackage::AVar, "AVar"),
     ("Effect.Aff", "Supervisor", GoPackage::Aff, "Supervisor"),
+    ("Data.HashMap", "HashMap", GoPackage::HashMap, "HashMap"),
 ];

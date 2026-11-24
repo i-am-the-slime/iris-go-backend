@@ -7,7 +7,6 @@ use rustc_hash::FxHashMap;
 
 use super::coverage::{alternatives_size, column_outcomes};
 use super::{INLINE_SIZE, Simplifier, substitute};
-use crate::purity::{is_trivial, mentions_any};
 use crate::foreign::{
     Comparison, Foreign, GoFunction, GoPackage, MUTABLE_PEEK_UNSAFE, MUTABLE_WITHIN, Operator,
 };
@@ -15,6 +14,7 @@ use crate::monomorphic::{
     Alternative, Binding, Expression, ExpressionKind, Guarded, Literal, Local, LocalId, Pattern,
 };
 use crate::monotype::{DataType, Monotype, MonotypeId, Monotypes};
+use crate::purity::{is_trivial, mentions_any};
 
 /// How many more nodes distributing may copy than the case has: alternatives
 /// that several chosen values select are copied once for each.

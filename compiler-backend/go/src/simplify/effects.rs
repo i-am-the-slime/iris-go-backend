@@ -133,6 +133,14 @@ impl Simplifier<'_> {
             Foreign::Identity => {
                 arguments.pop().expect("invariant violated: identity has one argument")
             }
+            Foreign::RecordGet if has_literal_label(&arguments) => {
+                let record = arguments.pop().expect("invariant violated: get has two arguments");
+                let label = arguments.pop().expect("invariant violated: get has two arguments");
+                let ExpressionKind::Literal(Literal::String(label)) = label.kind else {
+                    unreachable!("invariant violated: the label was just matched as a string")
+                };
+                self.field_of(record, SmolStr::from(label), monotype)
+            }
             Foreign::Record(operation) => self.record_operation(*operation, arguments, monotype),
             Foreign::RecordHas => self.record_has(arguments, monotype),
             Foreign::ObjectFoldM => self.object_fold(arguments, monotype),
@@ -322,6 +330,21 @@ impl Simplifier<'_> {
                 let rest = self.effect_bind(*inner, local, body, monotype);
                 Expression::new(ExpressionKind::Let { bindings, body: Box::new(rest) }, monotype)
             }
+            ExpressionKind::If { .. } | ExpressionKind::Case { .. }
+                if chooses_only_pure(&action)
+                    && builds_safely(&body)
+                    && !self.defers_work(&local, &body) =>
+            {
+                let value_monotype =
+                    self.monotypes.effect_result(action.monotype).unwrap_or(local.monotype);
+                let value = self.map_choices(action, value_monotype, &mut |_, chosen| {
+                    let ExpressionKind::EffectPure(value) = chosen.kind else {
+                        unreachable!("invariant violated: every choice was checked to be pure")
+                    };
+                    *value
+                });
+                self.let_bindings(vec![Binding { local, value }], body)
+            }
             kind => {
                 let action = Expression::new(kind, action.monotype).located(action.position);
                 if self.returns_its_unit(&action, &local, &body, monotype) {
@@ -409,4 +432,30 @@ fn builds_safely(expression: &Expression) -> bool {
         | ExpressionKind::Function(_) => true,
         _ => false,
     }
+}
+
+fn chooses_only_pure(expression: &Expression) -> bool {
+    match &expression.kind {
+        ExpressionKind::EffectPure(_) => true,
+        ExpressionKind::Let { body, .. } => chooses_only_pure(body),
+        ExpressionKind::If { condition, then, otherwise } => {
+            is_discardable(condition) && chooses_only_pure(then) && chooses_only_pure(otherwise)
+        }
+        ExpressionKind::Case { scrutinees, alternatives } => {
+            scrutinees.iter().all(is_discardable)
+                && alternatives.iter().all(|alternative| match &alternative.body {
+                    Guarded::Unconditional(body) => chooses_only_pure(body),
+                    Guarded::Guards(branches) => branches.iter().all(|branch| {
+                        branch.guards.iter().all(|guard| is_discardable(guard.value()))
+                            && chooses_only_pure(&branch.body)
+                    }),
+                })
+        }
+        _ => false,
+    }
+}
+
+fn has_literal_label(arguments: &[Expression]) -> bool {
+    let [label, _] = arguments else { return false };
+    matches!(label.kind, ExpressionKind::Literal(Literal::String(_)))
 }

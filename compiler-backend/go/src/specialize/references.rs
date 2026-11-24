@@ -55,6 +55,10 @@ where
                         .expect("invariant violated: int64_foreign lists the foreign");
                     return Ok(self.foreign(foreign, monotype));
                 }
+                if let Some(foreign) = self.hash_map_foreign(&module.name, &name, monotype)? {
+                    let foreign = self.with_callback_arities(file_id, term, foreign)?;
+                    return Ok(self.foreign(foreign, monotype));
+                }
                 if let Some(foreign) = foreign::foreign_import(&module.name, &name) {
                     if let Foreign::UnsafeCoerce = foreign {
                         self.link_coerced_rank_n(scope, file_id, term, instantiations)?;
@@ -210,9 +214,13 @@ where
             }
         };
         let module_name = member_module.name.clone();
-        if let Some(shown) =
-            self.show_foreign_errors(scope, member, (&module_name, &member_name), &instance, monotype)?
-        {
+        if let Some(shown) = self.show_foreign_errors(
+            scope,
+            member,
+            (&module_name, &member_name),
+            &instance,
+            monotype,
+        )? {
             return Ok(shown);
         }
         let mut instance_names = vec![self.instance_name(instance.origin)?];

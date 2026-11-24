@@ -204,12 +204,11 @@ pub(super) fn column_outcomes(
                 if constructor != known {
                     ColumnOutcome::Fails
                 } else {
-                    let binds_or_matches = |pattern: &Pattern, value: &Expression| match pattern
-                        .kind
-                    {
-                        PatternKind::Variable(_) => Some(true),
-                        _ => known_match(pattern, value),
-                    };
+                    let binds_or_matches =
+                        |pattern: &Pattern, value: &Expression| match pattern.kind {
+                            PatternKind::Variable(_) => Some(true),
+                            _ => known_match(pattern, value),
+                        };
                     all_of(patterns.iter().zip(values).map(|(p, v)| binds_or_matches(p, v)))?
                 }
             }

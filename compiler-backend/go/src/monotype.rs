@@ -11,11 +11,13 @@ use crate::erasure::Erasure;
 use crate::error::{GoError, UnsupportedState};
 use crate::scheme::{Read, SchemeInstantiations};
 
+pub use self::hash_map::native_hash_map;
 pub use self::longs::{LongMentions, long_mentions, spell_longs};
 pub use self::types::{data_argument, expand_synonyms, is_partial, newtype_unwrapped};
 
 mod convert;
 mod data;
+mod hash_map;
 mod longs;
 mod types;
 
