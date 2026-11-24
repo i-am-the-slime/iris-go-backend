@@ -227,6 +227,14 @@ jobs:
       - name: Build and run the Go fixtures and the style suite
         run: cargo nextest run -p tests-integration --test go --test go_style --locked --failure-output=final
 
+      # Spago fetches that run at the same time into a cold registry cache fail at random, so the
+      # examples' packages are fetched one project at a time before they build in parallel.
+      - name: Fetch the examples' packages
+        run: |
+          for manifest in iris-go-runtime/examples/*/spago.yaml; do
+            (cd "$(dirname "$manifest")" && spago fetch --quiet)
+          done
+
       - name: Build and run iris-go's examples
         env:
           IRIS: ${{ github.workspace }}/target/debug/iris
