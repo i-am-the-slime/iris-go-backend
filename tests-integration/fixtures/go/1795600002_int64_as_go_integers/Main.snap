@@ -60,6 +60,30 @@ func MaxInt64(x int64, y int64) int64 {
 	return y
 }
 
+// Data/Show/show.go
+package show
+
+import "strconv"
+
+func Show(boolean bool) string {
+	if boolean {
+		return "true"
+	}
+	return "false"
+}
+
+func AppendShowArrayBoolean(buffer []byte, array []bool) []byte {
+	buffer = append(buffer, "["...)
+	for index, element := range array {
+		if index > 0 {
+			buffer = append(buffer, ","...)
+		}
+		buffer = strconv.AppendBool(buffer, element)
+	}
+	buffer = append(buffer, "]"...)
+	return buffer
+}
+
 // Data/UInt64/uint64.go
 package datauint64
 
@@ -73,6 +97,7 @@ package main
 import (
 	"fixture/Data/Int64"
 	"fixture/Data/Maybe"
+	"fixture/Data/Show"
 	"fixture/Data/UInt64"
 	"github.com/i-am-the-slime/iris-go/console"
 	"github.com/i-am-the-slime/iris-go/ffi/Data_Int64_Internal_ffi"
@@ -99,41 +124,51 @@ func initializeMain_() []string {
 	for _, long := range mapped {
 		accumulator2 *= long
 	}
-	x := int64(7)
-	x2 := int64(5)
-	n := int64(3)
-	y := int64(2)
-	x3 := int64(-7)
-	y2 := int64(2)
-	var l2_ int64
-	if y2 >= 0 {
-		l2_ = y2
-	} else {
-		l2_ = 0 - y2
+	mapped2 := make([]int64, len(mapped))
+	for index, element := range mapped {
+		mapped2[index] = polynomial(element)
 	}
-	var result int64
-	if y2 == 0 {
-		result = int64(0)
-	} else {
-		var result2 int64
-		if l2_ == 0 {
-			result2 = int64(0)
+	mapped3 := make([]int64, len(mapped))
+	for index, x := range mapped {
+		mapped3[index] = x<<(x&63) ^ int64(uint64(x)>>(x&63))
+	}
+	mapped4 := make([]bool, len(mapped))
+	for index, y := range mapped {
+		mapped4[index] = 1 < y && y&1 == 0
+	}
+	mapped5 := make([]int64, len(mapped))
+	for index, y := range mapped {
+		var l2_ int64
+		if y >= 0 {
+			l2_ = y
 		} else {
-			var result3 int64
-			if l2_ == 0 {
-				result3 = int64(0)
-			} else {
-				result3 = Data_Int64_Internal_ffi.Modulo_(x3, l2_)
-			}
-			result2 = Data_Int64_Internal_ffi.Modulo_(result3+l2_, l2_)
+			l2_ = 0 - y
 		}
-		result = Data_Int64_Internal_ffi.Divide_(x3-result2, y2)
-	}
-	var result4 int64
-	if y2 == 0 {
-		result4 = int64(0)
-	} else {
-		result4 = Data_Int64_Internal_ffi.Divide_(x3, y2)
+		var result int64
+		if y == 0 {
+			result = int64(0)
+		} else {
+			var result2 int64
+			if l2_ == 0 {
+				result2 = int64(0)
+			} else {
+				var result3 int64
+				if l2_ == 0 {
+					result3 = int64(0)
+				} else {
+					result3 = Data_Int64_Internal_ffi.Modulo_(int64(-7), l2_)
+				}
+				result2 = Data_Int64_Internal_ffi.Modulo_(result3+l2_, l2_)
+			}
+			result = Data_Int64_Internal_ffi.Divide_(-7-result2, y)
+		}
+		var result4 int64
+		if y == 0 {
+			result4 = int64(0)
+		} else {
+			result4 = Data_Int64_Internal_ffi.Divide_(int64(-7), y)
+		}
+		mapped5[index] = result + result4
 	}
 	nullable := nullablepkg.Nullable(Data_Int64_Internal_ffi.SafeReadLong_UInt64("18446744073709551615", true, 10), maybe.NoUInt64, maybe.JustUInt64)
 	var result5 string
@@ -143,10 +178,12 @@ func initializeMain_() []string {
 	default:
 		result5 = "Nothing"
 	}
-	return []string{strconv.FormatInt(foldLanes(mapped, int64(0)), 10) + "l", strconv.FormatUint(accumulator, 10) + "ul", strconv.FormatInt(foldLanes2(mapped, int64(-9223372036854775808)), 10) + "l", string(dataint64.AppendShowArrayInt64(nil, mapLanes(mapped, int64(1)))), strconv.FormatInt(accumulator2, 10) + "l", strconv.FormatInt(x*x+3*x-1, 10) + "l", strconv.FormatInt(x2<<(n&63)^int64(uint64(x2)>>(n&63)), 10) + "l", strconv.FormatUint(uint64(18446744073709551615), 10) + "ul", strconv.FormatBool(1 < y && y&1 == 0), strconv.FormatInt(wrapsAtCompileTime, 10) + "l", strconv.FormatInt(result+result4, 10) + "l", result5, strconv.FormatUint(uint64(18446744073709551615), 10) + "ul"}
+	return []string{strconv.FormatInt(foldLanes(mapped, int64(0)), 10) + "l", strconv.FormatUint(accumulator, 10) + "ul", strconv.FormatInt(foldLanes2(mapped, int64(-9223372036854775808)), 10) + "l", string(dataint64.AppendShowArrayInt64(nil, mapLanes(mapped, int64(1)))), strconv.FormatInt(accumulator2, 10) + "l", string(dataint64.AppendShowArrayInt64(nil, mapped2)), string(dataint64.AppendShowArrayInt64(nil, mapped3)), strconv.FormatUint(uint64(18446744073709551615), 10) + "ul", string(show.AppendShowArrayBoolean(nil, mapped4)), strconv.FormatInt(int64(-9223372036854775808), 10) + "l", string(dataint64.AppendShowArrayInt64(nil, mapped5)), result5, strconv.FormatUint(uint64(18446744073709551615), 10) + "ul"}
 }
 
-var wrapsAtCompileTime int64 = int64(-9223372036854775808)
+func polynomial(x int64) int64 {
+	return x*x + 3*x - 1
+}
 
 func main() {
 	console.Print("[" + strings.Join(main_, " ") + "]")

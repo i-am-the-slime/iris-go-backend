@@ -125,6 +125,11 @@ pub enum Int64Operation {
     Add,
     Subtract,
     Multiply,
+    /// `divide_` and `modulo_`: truncated, as long.js's `div` and `mod`, and
+    /// Go's `/` and `%`, which also wrap the most negative Long divided by -1.
+    /// A zero divisor throws.
+    Quotient,
+    Remainder,
     Negate,
     And,
     Or,
@@ -167,6 +172,8 @@ impl Int64Operation {
             | Int64Operation::Add
             | Int64Operation::Subtract
             | Int64Operation::Multiply
+            | Int64Operation::Quotient
+            | Int64Operation::Remainder
             | Int64Operation::And
             | Int64Operation::Or
             | Int64Operation::Xor
@@ -190,6 +197,97 @@ impl Int64Operation {
             | Int64Operation::Convert => 1,
         }
     }
+
+    /// Whether the operation throws for some operands, so that it is neither
+    /// skipped nor counted cheap.
+    pub fn can_fail(self) -> bool {
+        matches!(self, Int64Operation::Quotient | Int64Operation::Remainder)
+    }
+
+    /// The operation on constant operands, as long.js works it out at run
+    /// time; `FromInt`'s operand is its Int. `None` where it would throw or
+    /// the result has no constant form.
+    pub fn evaluate(self, signedness: Signedness, operands: &[i64]) -> Option<Int64Value> {
+        use Int64Operation as Operation;
+        let unsigned = signedness == Signedness::Unsigned;
+        let long = |bits: i64| Some(Int64Value::Long(bits));
+        let boolean = |value: bool| Some(Int64Value::Boolean(value));
+        let ordering = |x: i64, y: i64| match signedness {
+            Signedness::Signed => x.cmp(&y),
+            Signedness::Unsigned => (x as u64).cmp(&(y as u64)),
+        };
+        match (self, operands) {
+            (Operation::Constant(bits), []) => long(bits),
+            (Operation::FromInt, [x]) => long(i64::from(*x as i32)),
+            (Operation::Convert | Operation::Same, [x]) => long(*x),
+            (Operation::Add, [x, y]) => long(x.wrapping_add(*y)),
+            (Operation::Subtract, [x, y]) => long(x.wrapping_sub(*y)),
+            (Operation::Multiply, [x, y]) => long(x.wrapping_mul(*y)),
+            (Operation::Quotient | Operation::Remainder, [_, 0]) => None,
+            (Operation::Quotient, [x, y]) if unsigned => long(((*x as u64) / (*y as u64)) as i64),
+            (Operation::Quotient, [x, y]) => long(x.wrapping_div(*y)),
+            (Operation::Remainder, [x, y]) if unsigned => long(((*x as u64) % (*y as u64)) as i64),
+            (Operation::Remainder, [x, y]) => long(x.wrapping_rem(*y)),
+            (Operation::And, [x, y]) => long(x & y),
+            (Operation::Or, [x, y]) => long(x | y),
+            (Operation::Xor, [x, y]) => long(x ^ y),
+            (Operation::Negate, [x]) => long(x.wrapping_neg()),
+            (Operation::Not, [x]) => long(!x),
+            (Operation::ShiftLeft, [x, y]) => long(x.wrapping_shl((y & 63) as u32)),
+            (Operation::ShiftRight, [x, y]) => long(x >> (y & 63)),
+            (Operation::ShiftRightUnsigned, [x, y]) => long(((*x as u64) >> (y & 63)) as i64),
+            (Operation::Compare(comparison), [x, y]) => {
+                let ordering = ordering(*x, *y);
+                boolean(match comparison {
+                    crate::foreign::Comparison::Equal => ordering.is_eq(),
+                    crate::foreign::Comparison::NotEqual => ordering.is_ne(),
+                    crate::foreign::Comparison::LessThan => ordering.is_lt(),
+                    crate::foreign::Comparison::LessThanOrEqual => ordering.is_le(),
+                    crate::foreign::Comparison::GreaterThan
+                    | crate::foreign::Comparison::GreaterThanOrUnordered => ordering.is_gt(),
+                    crate::foreign::Comparison::GreaterThanOrEqual
+                    | crate::foreign::Comparison::GreaterThanOrEqualOrUnordered => ordering.is_ge(),
+                })
+            }
+            (Operation::IsZero, [x]) => boolean(*x == 0),
+            (Operation::IsEven, [x]) => boolean(x & 1 == 0),
+            (Operation::IsOdd, [x]) => boolean(x & 1 == 1),
+            (Operation::IsNegative, [x]) => boolean(!unsigned && *x < 0),
+            (Operation::IsPositive, [x]) => boolean(unsigned || *x >= 0),
+            (Operation::IsUnsigned, [_]) => boolean(unsigned),
+            (Operation::ToInt, [x]) => Some(Int64Value::Int(*x as i32)),
+            (Operation::ToNumber, [x]) => {
+                Some(Int64Value::Number(if unsigned { *x as u64 as f64 } else { *x as f64 }))
+            }
+            (Operation::HighBits { unsigned }, [x]) => {
+                let high = (x >> 32) as i32;
+                Some(Int64Value::Number(if unsigned {
+                    f64::from(high as u32)
+                } else {
+                    f64::from(high)
+                }))
+            }
+            (Operation::LowBits { unsigned }, [x]) => {
+                let low = *x as i32;
+                Some(Int64Value::Number(if unsigned {
+                    f64::from(low as u32)
+                } else {
+                    f64::from(low)
+                }))
+            }
+            _ => None,
+        }
+    }
+}
+
+/// The constant a Long operation on constant operands evaluates to.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum Int64Value {
+    /// The bits of a Long of the operation's signedness.
+    Long(i64),
+    Boolean(bool),
+    Int(i32),
+    Number(f64),
 }
 
 /// purescript-int64 3.0.0's `Data.Int64.Internal` foreigns over `Long`. The
@@ -259,8 +357,8 @@ pub fn int64_foreign(module: &str, name: &str) -> Option<Int64Foreign> {
         "getLowBits_" => inline(Operation::LowBits { unsigned: false }),
         "getLowBitsUnsigned_" => inline(Operation::LowBits { unsigned: true }),
         "toSigned_" | "toUnsigned_" => inline(Operation::Same),
-        "divide_" => generic("Divide_", 2, &[]),
-        "modulo_" => generic("Modulo_", 2, &[]),
+        "divide_" => inline(Operation::Quotient),
+        "modulo_" => inline(Operation::Remainder),
         "compare_" => Some(Int64Foreign::Runtime {
             signed: "Compare_",
             unsigned: "Compare_",

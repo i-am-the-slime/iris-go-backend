@@ -140,27 +140,24 @@ func initializeMain_() []string {
 	for index, element := range ints {
 		mapped2[index] = datauint64.UnsafeFromInt(element)
 	}
-	pivot := int64(2)
 	kept := []int64{}
 	for _, x := range mapped {
-		if x < pivot {
+		if x < 2 {
 			kept = append(kept, x)
 		}
 	}
-	pivot2 := uint64(2)
 	kept2 := []uint64{}
 	for _, x := range mapped2 {
-		if x <= pivot2 {
+		if x <= 2 {
 			kept2 = append(kept2, x)
 		}
 	}
-	pivot3 := int64(3)
 	mapped3 := make([]int32, len(mapped))
 	for index, x := range mapped {
 		var result int32
-		if x == pivot3 {
+		if x == 3 {
 			result = 2
-		} else if x > pivot3 {
+		} else if x > 3 {
 			result = 3
 		} else {
 			result = 1

@@ -27,16 +27,11 @@ var main_ = initializeMain_()
 
 func initializeMain_() shared.MainResult {
 	var total int32 = 0
-	var step class.StepIntUnit
-	if false {
-		step = class.StepIntUnit{Tag: class.StepIntUnitDone, Done: struct{}{}}
-	} else {
-		total += 1
-		step = class.StepIntUnit{Tag: class.StepIntUnitLoop, Loop: 2}
-	}
+	total += 1
+	ref := class.StepIntUnit{Tag: class.StepIntUnitLoop, Loop: 2}
 	for {
 		var result bool
-		switch step.Tag {
+		switch ref.Tag {
 		case class.StepIntUnitLoop:
 			result = true
 		default:
@@ -45,17 +40,17 @@ func initializeMain_() shared.MainResult {
 		if !result {
 			break
 		}
-		switch step.Tag {
+		switch ref.Tag {
 		case class.StepIntUnitLoop:
-			a_ := step.Loop
-			var step2 class.StepIntUnit
+			a_ := ref.Loop
+			var step class.StepIntUnit
 			if a_ > 10 {
-				step2 = class.StepIntUnit{Tag: class.StepIntUnitDone, Done: struct{}{}}
+				step = class.StepIntUnit{Tag: class.StepIntUnitDone, Done: struct{}{}}
 			} else {
 				total += a_
-				step2 = class.StepIntUnit{Tag: class.StepIntUnitLoop, Loop: a_ + 1}
+				step = class.StepIntUnit{Tag: class.StepIntUnitLoop, Loop: a_ + 1}
 			}
-			step = step2
+			ref = step
 		default: // class.StepIntUnitDone
 		}
 	}

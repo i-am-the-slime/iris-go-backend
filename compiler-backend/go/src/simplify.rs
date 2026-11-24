@@ -27,7 +27,7 @@ use crate::timing::timed;
 use smol_str::SmolStr;
 
 use self::arguments::ArgumentSpecializations;
-use self::coverage::{binds_only, reachable};
+use self::coverage::{binds_only, decided_guards, reachable};
 
 mod arguments;
 mod choice;
@@ -611,6 +611,8 @@ impl Simplifier<'_> {
                         position: alternative.position,
                     })
                     .collect();
+                // Guards decided by folding may leave an alternative that shadows the rest.
+                let alternatives = reachable(alternatives);
                 if let [scrutinee] = scrutinees.as_slice()
                     && let Some(chosen) = self.three_way_case(scrutinee, &alternatives, monotype)
                 {
@@ -674,8 +676,8 @@ impl Simplifier<'_> {
     fn guarded(&mut self, guarded: Guarded) -> Guarded {
         match guarded {
             Guarded::Unconditional(body) => Guarded::Unconditional(self.expression(body)),
-            Guarded::Guards(branches) => Guarded::Guards(
-                branches
+            Guarded::Guards(branches) => {
+                let branches = branches
                     .into_iter()
                     .map(|branch| GuardedBranch {
                         guards: branch
@@ -692,8 +694,9 @@ impl Simplifier<'_> {
                             .collect(),
                         body: self.expression(branch.body),
                     })
-                    .collect(),
-            ),
+                    .collect();
+                decided_guards(branches)
+            }
         }
     }
 

@@ -17,14 +17,14 @@ func main_() int32 {
 	} else {
 		result = 0
 	}
-	result3 := !false && 0.5 <= prim.NumberNaN
+	result3 := 0.5 <= prim.NumberNaN
 	var result4 int32
 	if result3 {
 		result4 = 2
 	} else {
 		result4 = 0
 	}
-	result5 := !(0.5 < prim.NumberNaN) && !false
+	result5 := !(0.5 < prim.NumberNaN)
 	var result6 int32
 	if result5 {
 		result6 = 4
