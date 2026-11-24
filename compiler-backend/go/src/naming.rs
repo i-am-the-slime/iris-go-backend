@@ -384,11 +384,14 @@ const VAGUE_NAMES: &[&str] = &[
 
 /// Whether an identifier is too vague to say what its value is.
 pub fn is_vague(name: &str) -> bool {
+    is_vaguely_spelled(name) || VAGUE_NAMES.contains(&name)
+}
+
+pub fn is_vaguely_spelled(name: &str) -> bool {
     name.len() < 3
         || !name.starts_with(|character: char| character.is_ascii_alphabetic())
         || name.ends_with(|character: char| character.is_ascii_digit())
         || name.contains('_')
-        || VAGUE_NAMES.contains(&name)
 }
 
 /// `base`, else `base2`, `base3` and so on, the first that is not `taken`.
