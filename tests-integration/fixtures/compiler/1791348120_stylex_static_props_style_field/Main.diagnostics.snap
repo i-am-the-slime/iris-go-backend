@@ -1,13 +1,13 @@
 ---
 source: tests-integration/src/fixtures.rs
 ---
-Error! · [CannotUnify] · Main.purs:7:1
+Error! · [CannotUnify] · Main.purs:7:14
   •
   │
   • Could not match '( style :: t0 | ?22 )' with '( className :: String )'
   │
   │   baseStyle = (StyleX.props styles.base).style
-  │   ╰───────────────────────────────────────────
+  │                ╰───────────────────────
   │
   • While matching '{ style :: t0 | ?22 }' with 'Props'
   •

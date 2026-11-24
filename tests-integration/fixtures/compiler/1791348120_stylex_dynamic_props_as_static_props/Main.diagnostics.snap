@@ -1,13 +1,13 @@
 ---
 source: tests-integration/src/fixtures.rs
 ---
-Error! · [CannotUnify] · Main.purs:7:1
+Error! · [CannotUnify] · Main.purs:8:14
   •
   │
   • Could not match '( className :: String )' with '( className :: String, style :: InlineStyle )'
   │
-  │   sizedProps :: StyleX.Props
-  │   ╰─────────────────────────
+  │   sizedProps = StyleX.props (styles.sized 4)
+  │                ╰────────────────────────────
   │
   • While matching '{ className :: String }' with 'DynamicProps'
   •

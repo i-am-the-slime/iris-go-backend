@@ -1,24 +1,24 @@
 ---
 source: tests-integration/src/fixtures.rs
 ---
-Error! · [CannotUnify] · Main.purs:15:1
+Error! · [CannotUnify] · Main.purs:16:5
   •
   │
   • Could not match 'String' with 'Int'
   │
-  │   forceSolve =
-  │   ╰───────────
+  │     { unionTypeMismatch
+  │       ╰────────────────
   │
   • While matching '( b :: String )' with '( b :: Int )'
   •
 
-Error! · [CannotUnify] · Main.purs:15:1
+Error! · [CannotUnify] · Main.purs:17:5
   •
   │
   • Could not match '( a :: Int, b :: String )' with '( missing :: Int | (t0 :: Row Type) )'
   │
-  │   forceSolve =
-  │   ╰───────────
+  │     , consMissingLabel
+  │       ╰───────────────
   •
 
 Error! · [NoInstanceFound] · Main.purs:18:5

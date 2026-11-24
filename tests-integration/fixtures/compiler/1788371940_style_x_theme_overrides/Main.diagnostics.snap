@@ -1,26 +1,26 @@
 ---
 source: tests-integration/src/fixtures.rs
 ---
-Error! · [CannotUnify] · Main.purs:14:1
+Error! · [CannotUnify] · Main.purs:14:13
   •
   │
   • Could not match 'Color' with 'Length'
   │
   │   wrongType = StyleX.createTheme variables
-  │   ╰───────────────────────────────────────
+  │               ╰───────────────────────────
   │
   • While matching '( accent :: Variable (TypedValue Color String), spacing :: Variable (TypedValue
   │ Length String) )' with '( accent :: Variable (TypedValue Length String) | ?44 )'
   •
 
-Error! · [CannotUnify] · Main.purs:17:1
+Error! · [CannotUnify] · Main.purs:17:11
   •
   │
   • Could not match '( accent :: Variable (TypedValue Color String), spacing :: Variable (TypedValue
   │ Length String) )' with '( missing :: Variable (TypedValue Color String) | ?58 )'
   │
   │   unknown = StyleX.createTheme variables
-  │   ╰─────────────────────────────────────
+  │             ╰───────────────────────────
   •
 
 Error! · [NoInstanceFound] · Main.purs:20:45

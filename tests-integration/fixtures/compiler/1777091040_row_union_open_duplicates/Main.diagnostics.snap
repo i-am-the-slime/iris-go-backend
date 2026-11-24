@@ -1,13 +1,13 @@
 ---
 source: tests-integration/src/fixtures.rs
 ---
-Error! · [CannotUnify] · Main.purs:17:1
+Error! · [CannotUnify] · Main.purs:19:5
   •
   │
   • Could not match 'String' with 'Int'
   │
-  │   forceSolve =
-  │   ╰───────────
+  │     , leftmostDuplicateMismatch
+  │       ╰────────────────────────
   │
   • While matching '( a :: String )' with '( a :: Int )'
   •
