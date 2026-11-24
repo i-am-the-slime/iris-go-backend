@@ -195,7 +195,7 @@ where
                     self.resolve_aliases(type_);
                 }
             }
-            GoType::Generic { arguments, .. } => {
+            GoType::Generic { arguments, .. } | GoType::Results(arguments) => {
                 arguments.iter_mut().for_each(|argument| self.resolve_aliases(argument));
             }
             GoType::Slice(element) | GoType::Pointer(element) => self.resolve_aliases(element),

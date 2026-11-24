@@ -123,18 +123,26 @@ pub struct LoadedFixture {
     pub prim_directory: TempDir,
 }
 
-fn uses_registry_packages(folder: &Path) -> bool {
-    folder.starts_with("fixtures/compiler/")
+/// The package manifest whose registry packages a fixture category compiles against.
+fn registry_packages(folder: &Path) -> Option<&'static str> {
+    if folder.starts_with("fixtures/go_style/") {
+        Some("go-style-packages.json")
+    } else if folder.starts_with("fixtures/compiler/")
         || folder.starts_with("fixtures/sourcemap/")
         || folder.starts_with("fixtures/go/")
         || folder.starts_with("../library/")
+    {
+        Some("packages.json")
+    } else {
+        None
+    }
 }
 
 pub fn load_fixture(folder: &Path) -> FixtureResult<LoadedFixture> {
     let manifest = Path::new(env!("CARGO_MANIFEST_DIR"));
-    let packages = if uses_registry_packages(folder) {
+    let packages = if let Some(packages) = registry_packages(folder) {
         tests_support::prepared_sources(
-            manifest.join("packages.json"),
+            manifest.join(packages),
             manifest.join("../target/integration-packages"),
         )
         .map_err(|error| {

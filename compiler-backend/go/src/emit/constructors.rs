@@ -264,7 +264,9 @@ fn mentions_any(type_: &GoType) -> bool {
             parameters.iter().any(mentions_any) || result.as_deref().is_some_and(mentions_any)
         }
         GoType::Struct(fields) => fields.iter().any(|field| mentions_any(&field.type_)),
-        GoType::Generic { arguments, .. } => arguments.iter().any(mentions_any),
+        GoType::Generic { arguments, .. } | GoType::Results(arguments) => {
+            arguments.iter().any(mentions_any)
+        }
         GoType::Named(_)
         | GoType::Int
         | GoType::Float64

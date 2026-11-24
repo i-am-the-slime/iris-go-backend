@@ -1,0 +1,21 @@
+{ debug: true, host: "localhost", port: 3000 }
+(Just { a: 1, b: "two" })
+Nothing
+["alpha","mid","zeta"]
+[]
+square s=4
+circle r=1.5
+label hello
+other
+matched circle 1.5
+m square 4
+(inj @"square" 4)
+(inj @"square" 4)
+(inj @"label" "x")
+true
+false
+true
+(Just 4)
+Nothing
+GT
+["m square 4","m circle 1.5"]

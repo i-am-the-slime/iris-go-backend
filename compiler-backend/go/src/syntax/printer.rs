@@ -630,6 +630,11 @@ impl Printer {
                     arguments.iter().map(|argument| self.type_argument(argument)).collect();
                 format!("{name}[{}]", arguments.join(", "))
             }
+            GoType::Results(results) => {
+                let results: Vec<String> =
+                    results.iter().map(|result| self.type_(result)).collect();
+                format!("({})", results.join(", "))
+            }
         }
     }
 
@@ -761,6 +766,12 @@ impl Printer {
             }
             GoExpression::Attributed { line, value } => {
                 self.attributed(line, value, parent_precedence, depth)
+            }
+            GoExpression::Results(values) => {
+                let depth = if values.len() > 1 { depth + 1 } else { depth };
+                let values: Vec<String> =
+                    values.iter().map(|value| self.expression_at(value, 0, depth)).collect();
+                values.join(", ")
             }
         }
     }

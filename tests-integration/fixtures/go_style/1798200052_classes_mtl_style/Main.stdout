@@ -1,0 +1,7 @@
+midway
+(Right (Tuple (Tuple "doubled 14" 7) ["added 3 -> 3","added 4 -> 7"]))
+(Left "over limit at 7")
+via own class
+(Compose [(Just 2),Nothing,(Just 6)])
+6
+[1,1,2,2]

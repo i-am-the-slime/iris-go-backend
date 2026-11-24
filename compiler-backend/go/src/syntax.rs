@@ -33,6 +33,9 @@ pub enum GoType {
         name: String,
         arguments: Vec<GoType>,
     },
+    /// The results of a function that returns several values, `(A, B)`: only ever a function's
+    /// result.
+    Results(Vec<GoType>),
 }
 
 /// Types compare as Go sees them: every flavour of `any` is the same type.
@@ -54,6 +57,7 @@ impl PartialEq for GoType {
                 Generic { name: left, arguments: left_arguments },
                 Generic { name: right, arguments: right_arguments },
             ) => left == right && left_arguments == right_arguments,
+            (Results(left), Results(right)) => left == right,
             _ => false,
         }
     }
@@ -137,6 +141,9 @@ pub enum GoExpression {
         line: SourceLine,
         value: Box<GoExpression>,
     },
+    /// The values a function with several results returns together, `a, b`: only ever the value
+    /// of a `return`.
+    Results(Vec<GoExpression>),
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -232,6 +239,7 @@ impl GoExpression {
             GoExpression::Composite { fields, .. } => {
                 fields.iter().any(|(_, field)| field.does_work())
             }
+            GoExpression::Results(values) => values.iter().any(GoExpression::does_work),
             GoExpression::Identifier(_)
             | GoExpression::Qualified { .. }
             | GoExpression::Integer(_)

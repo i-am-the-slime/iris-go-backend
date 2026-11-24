@@ -1,0 +1,19 @@
+(Just 6.75)
+Nothing
+(Just 12.0)
+unknown
+circle 1.5
+square 9
+(inj @"circle" 3.0)
+(inj @"square" 6)
+(inj @"label" "hi")
+(inj @"circle" 3.0)
+(inj @"label" "hi!")
+(Just (inj @"circle" 1.5))
+Nothing
+(Just (inj @"circle" 1.5))
+Nothing
+(Just (inj @"square" 3))
+[(inj @"square" 3),(inj @"square" 4)]
+(Just "hi")
+(inj @"a" 1)

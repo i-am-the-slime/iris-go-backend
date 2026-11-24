@@ -1,0 +1,18 @@
+5
+1.5
+7
+1/"s"
+2.5/true
+["a","b"]
+{ first: "x", second: "" }
+then
+matched
+0
+["mapped","mapped"]
+["z"]
+true
+{ len: 1, name: "abc" }
+0
+recordOf
+["m1","m2"]
+(Just "in Just")

@@ -1,0 +1,19 @@
+ok is2xx=true
+created is2xx=true
+noContent is2xx=true
+notFound is2xx=false
+ is2xx=false
+false
+Int
+Array of Array of String
+something else
+Array of something else
+"hi"
+42
+[1,2]
+ok
+notFound
+created
+success
+error
+["\"a\"","\"b\""]

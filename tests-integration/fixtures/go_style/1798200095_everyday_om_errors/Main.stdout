@@ -1,0 +1,8 @@
+["\"cfg:user1\"","\"cfg:user2\"","\"cfg:user3\"","userMissing 4","userMissing 5","overLimit 6>5"]
+["\"cfg:user1\"","\"cfg:user2\"","\"cfg:user3\"","\"missing 4\"","\"missing 5\"","overLimit 6>5"]
+["\"cfg:user1\"","\"cfg:user2\"","\"cfg:user3\"","userMissing 4","userMissing 5","tooBig value 6"]
+["8","empty"]
+tapped
+9
+exception fatal?
+userMissing 4

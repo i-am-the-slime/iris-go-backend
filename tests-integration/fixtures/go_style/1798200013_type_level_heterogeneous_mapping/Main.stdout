@@ -1,0 +1,12 @@
+{ age: "33", name: "\"Ann\"", score: "1.5", tall: "true" }
+{ age: (Just 33), name: (Just "Ann"), score: (Just 1.5), tall: (Just true) }
+{ age: "age=33", name: "name=\"Ann\"", score: "score=1.5", tall: "tall=true" }
+4
+[age:33][name:"Ann"][score:1.5][tall:true]
+42
+{ a: 11, b: "x", c: 51 }
+true
+false
+(Tuple "1" "\"two\"")
+{ x: "[1,2]" }
+0

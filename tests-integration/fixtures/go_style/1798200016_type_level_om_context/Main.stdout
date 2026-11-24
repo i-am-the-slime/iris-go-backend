@@ -1,0 +1,9 @@
+srv:80
+extra!
+700
+["a","b","par"]
+fast
+-7
+{ name: "rec", port: 1 }
+{ n: "rec2", p: 2 }
+left

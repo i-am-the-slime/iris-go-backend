@@ -1,0 +1,18 @@
+{ : 12, 123: 7, NAME: "three", Name: 2, String: 17, XY: 15, _: 8, a"quote: 10, back\slash: 11, func: "five", len: 19, map: 16, name: 1, nil: 18, type: 4, with space: true, xY: 14, x_y: 13, ünï: 9 }
+["","123","NAME","Name","String","XY","_","a\"quote","back\\slash","func","len","map","name","nil","type","with space","xY","x_y","ünï"]
+12three
+{ : 12, 123: 7, NAME: "three", Name: 200, String: 17, XY: 15, _: 8, a"quote: 10, back\slash: 11, func: "five", len: 19, map: 16, name: 100, nil: 18, type: 4, with space: true, xY: 14, x_y: 13, ünï: 9 }
+42
+2
+true
+false
+{ : 12, 123: 7, NAME: "three", Name: 2, String: 17, XY: 15, _: 8, a"quote: 10, back\slash: 11, func: "five", len: 19, map: 16, name: 1, nil: 18, type: 4, with space: true, xY: 99, x_y: 13, ünï: 9 }
+Ok 1
+ok 2
+OK 3
+type
+empty 5
+(inj @"OK" "s")
+false
+true
+false

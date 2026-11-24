@@ -138,7 +138,7 @@ const NEVER_RECOVERING: &[&str] = &[
     "unsafe",
 ];
 
-fn caught_functions(
+pub(super) fn caught_functions(
     declarations: &mut [GoDeclaration],
     declared: &FxHashSet<String>,
     never_recovering: &BTreeSet<String>,
@@ -486,9 +486,9 @@ fn keep_in_local(
     body.insert(0, read);
 }
 
-struct WriteBack<'a> {
-    statement: &'a GoStatement,
-    caught: bool,
+pub(super) struct WriteBack<'a> {
+    pub(super) statement: &'a GoStatement,
+    pub(super) caught: bool,
 }
 
 impl Walk for WriteBack<'_> {
@@ -560,7 +560,7 @@ impl Walk for ThrowingCalls {
     }
 }
 
-fn terminates(statements: &[GoStatement]) -> bool {
+pub(super) fn terminates(statements: &[GoStatement]) -> bool {
     let last = statements.iter().rev().find(|statement| !matches!(statement, GoStatement::Line(_)));
     match last {
         Some(GoStatement::Return(_) | GoStatement::Continue) => true,
@@ -585,7 +585,7 @@ fn breaks(statements: &[GoStatement]) -> bool {
     })
 }
 
-fn loops(body: &mut Vec<GoStatement>) -> bool {
+pub(super) fn loops(body: &mut Vec<GoStatement>) -> bool {
     let mut found = false;
     go_traversal::each_block(body, |block| {
         found |= block.iter().any(|statement| {
@@ -602,10 +602,10 @@ fn loops(body: &mut Vec<GoStatement>) -> bool {
     found
 }
 
-struct Calls<'a> {
-    declared: &'a FxHashSet<String>,
-    helpers: &'a FxHashSet<String>,
-    effects: &'a Effects,
+pub(super) struct Calls<'a> {
+    pub(super) declared: &'a FxHashSet<String>,
+    pub(super) helpers: &'a FxHashSet<String>,
+    pub(super) effects: &'a Effects,
 }
 
 impl Calls<'_> {
@@ -633,7 +633,7 @@ impl Calls<'_> {
         keeps
     }
 
-    fn keeps_cells(&self, function: &GoExpression) -> bool {
+    pub(super) fn keeps_cells(&self, function: &GoExpression) -> bool {
         match function {
             GoExpression::Identifier(name) if self.declared.contains(name.as_str()) => false,
             GoExpression::Identifier(name) if name == "panic" => false,

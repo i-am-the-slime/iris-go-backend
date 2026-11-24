@@ -1,0 +1,12 @@
+CAT: cat named Tom ~cat named Tom~
+SHAPE(circle r=1.5): circle r=1.5 *
+SHAPE(square s=-3): square s=-3 *
+NEG: int -7 !!!!!
+POS|NEG|POS: [int 1, int -2, int 3] !!!!!!
+SHAPE(circle r=0.1)|SHAPE(blob): [circle r=0.1, blob] **
+CAT|CAT|CAT: [[cat named a], [cat named b, cat named c]] ~cat named a~~cat named b~~cat named c~
+["SHAPE(blob): blob *"]
+["POS: int 42 !!!!!"]
+just [int 1, int 2] & nothing
+Cat Array Array Shape Int
+["CAT: cat named z ~cat named z~","POS: int 1 !","SHAPE(blob): blob *"]

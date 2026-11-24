@@ -10,7 +10,7 @@ use super::{Scope, Specializer};
 use crate::dictionary::Dictionary;
 use crate::error::GoResult;
 use crate::monomorphic::{
-    Alternative, Expression, ExpressionKind, Guarded, Local, Pattern, PatternKind,
+    Alternative, Expression, ExpressionKind, Guarded, Literal, Local, Pattern, PatternKind,
 };
 use crate::monotype::{DataType, Monotype, MonotypeId};
 use crate::primitives::Primitive;
@@ -190,14 +190,18 @@ where
         monotype: MonotypeId,
     ) -> GoResult<Option<Expression>> {
         let Some(([variant], unvariant)) = self.arrows::<1>(monotype) else { return Ok(None) };
-        let Some(data) = self.variant_data(variant) else { return Ok(None) };
         let Some(continuation) = self.unvariant_continuation(declaration, instantiations)? else {
             return Ok(None);
         };
-        let Some(continuations) = self.label_continuations(scope, &continuation, &data)? else {
-            self.note_pending();
-            let pending = ExpressionKind::Fail(SmolStr::new_static(PENDING));
-            return Ok(Some(Expression::new(pending, monotype)));
+        let Some(data) = self.variant_data(variant) else {
+            let Some(labels) = self.unvariant_row_labels(declaration, instantiations)? else {
+                return Ok(None);
+            };
+            return self.unvariant_representation(scope, &continuation, &labels, monotype);
+        };
+        let labels = self.constructor_labels(scope, &data)?;
+        let Some(continuations) = self.label_continuations(scope, &continuation, &labels)? else {
+            return Ok(Some(self.pending_unvariant(monotype)));
         };
         let value = self.fresh_local(self.monotypes.value_name(variant), variant);
         let alternatives = self.alternatives(scope, &data, variant, |this, name, hidden| {
@@ -212,6 +216,88 @@ where
         })?;
         let body = self.case(value.expression(), alternatives, unvariant);
         Ok(Some(self.lambda(vec![value], body)))
+    }
+
+    /// `unvariant v` of a Variant whose row was erased, as a narrowed one is: its `VariantRep`
+    /// still holds the label, so each label of the row the specialization knows is a branch on it.
+    fn unvariant_representation(
+        &mut self,
+        scope: &Scope,
+        continuation: &ConstrainedScheme,
+        labels: &[SmolStr],
+        monotype: MonotypeId,
+    ) -> GoResult<Option<Expression>> {
+        let Some(([variant], unvariant)) = self.arrows::<1>(monotype) else { return Ok(None) };
+        let Monotype::Record(fields) = self.monotypes.get(variant).clone() else { return Ok(None) };
+        let field = |label: &str| fields.iter().find(|field| field.label == label).cloned();
+        let (Some(tag), Some(payload)) = (field("type"), field("value")) else { return Ok(None) };
+        let Some(continuations) = self.label_continuations(scope, continuation, labels)? else {
+            return Ok(Some(self.pending_unvariant(monotype)));
+        };
+        let value = self.fresh_local(self.monotypes.value_name(variant), variant);
+        let mut alternatives = Vec::with_capacity(continuations.len() + 1);
+        for (label, field) in &continuations {
+            let hidden =
+                self.fresh_local(self.monotypes.value_name(payload.monotype), payload.monotype);
+            let body = self.run_continuation(unvariant, field, &hidden);
+            let tag = Pattern {
+                kind: PatternKind::Literal(Literal::String(label.to_string())),
+                monotype: tag.monotype,
+            };
+            let payload =
+                Pattern { kind: PatternKind::Variable(hidden), monotype: payload.monotype };
+            let kind = PatternKind::Record(vec![
+                (SmolStr::new_static("type"), tag),
+                (SmolStr::new_static("value"), payload),
+            ]);
+            alternatives.push(Alternative {
+                patterns: vec![Pattern { kind, monotype: variant }],
+                body: Guarded::Unconditional(body),
+                position: None,
+            });
+        }
+        let scrutinee = value.expression();
+        alternatives.push(Alternative::match_failure(std::slice::from_ref(&scrutinee), unvariant));
+        let body = self.case(scrutinee, alternatives, unvariant);
+        Ok(Some(self.lambda(vec![value], body)))
+    }
+
+    fn pending_unvariant(&mut self, monotype: MonotypeId) -> Expression {
+        self.note_pending();
+        Expression::new(ExpressionKind::Fail(SmolStr::new_static(PENDING)), monotype)
+    }
+
+    fn constructor_labels(&mut self, scope: &Scope, data: &DataType) -> GoResult<Vec<SmolStr>> {
+        let constructors = self
+            .monotypes
+            .constructors(&mut self.context, data)
+            .map_err(|failure| failure.at(&scope.definition))?;
+        Ok(constructors.iter().map(|constructor| constructor.name.clone()).collect())
+    }
+
+    /// The labels of the closed row `r` that `unvariant :: Variant r -> Unvariant r` is
+    /// specialized at.
+    fn unvariant_row_labels(
+        &mut self,
+        (file_id, term): (FileId, TermItemId),
+        instantiations: &Substitution,
+    ) -> GoResult<Option<Vec<SmolStr>>> {
+        let module = self.context.module(file_id)?;
+        let Some(declared) = module.checked.lookup_term_item_type(term) else { return Ok(None) };
+        let declared = self.outer_body(declared, &mut vec![]);
+        let declared = self.context.types.substitute(declared, instantiations);
+        let Some((variant, _)) = self.context.types.function_parts(declared) else {
+            return Ok(None);
+        };
+        let (_, arguments) = self.context.types.spine(variant);
+        let Some(&row) = arguments.first() else { return Ok(None) };
+        let row = self.context.types.strip_annotations(row);
+        let Type::Row(row) = *self.context.types.lookup(row) else { return Ok(None) };
+        let row = self.context.queries.lookup_row_type(row).clone();
+        if row.tail.is_some() {
+            return Ok(None);
+        }
+        Ok(Some(row.fields.iter().map(|field| field.label.clone()).collect()))
     }
 
     /// The scheme of `Unvariant' r x`, the continuation an `Unvariant r` runs.
@@ -246,22 +332,16 @@ where
         &mut self,
         scope: &Scope,
         continuation: &ConstrainedScheme,
-        data: &DataType,
+        labels: &[SmolStr],
     ) -> GoResult<Option<Vec<(SmolStr, SmolStr)>>> {
-        let constructors = self
-            .monotypes
-            .constructors(&mut self.context, data)
-            .map_err(|failure| failure.at(&scope.definition))?;
-        let mut fields = Vec::with_capacity(constructors.len());
+        let mut fields = Vec::with_capacity(labels.len());
         let mut discovered = false;
-        for constructor in constructors.iter() {
-            let Some((types, dictionaries)) =
-                self.label_instantiation(continuation, &constructor.name)?
-            else {
+        for label in labels {
+            let Some((types, dictionaries)) = self.label_instantiation(continuation, label)? else {
                 return Ok(None);
             };
             match self.monotypes.schemes.find(&continuation.key, &types) {
-                Some(known) => fields.push((constructor.name.clone(), known.label.clone())),
+                Some(known) => fields.push((label.clone(), known.label.clone())),
                 None => {
                     let key = continuation.key.clone();
                     self.discover_labelled(scope, key, types, dictionaries, None)?;

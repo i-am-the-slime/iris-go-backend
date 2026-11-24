@@ -1,0 +1,5 @@
+200 Response { body: { name: "hi user 1" }, status: 0 }
+400 Response { body: ["zero id"], status: 0 }
+201 Response { body: 13, status: 0 }
+404 Response { body: "no user 101", status: 0 }
+200 Response { body: { name: "hi user 7" }, status: 0 }

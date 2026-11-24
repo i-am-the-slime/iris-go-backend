@@ -1,0 +1,8 @@
+-4
+(inj @"add" { left: (inj @"lit" 1), right: (inj @"neg" (inj @"add" { left: (inj @"lit" 2), right: (inj @"lit" 3) })) })
+true
+false
+-7
+5
+-x
+42

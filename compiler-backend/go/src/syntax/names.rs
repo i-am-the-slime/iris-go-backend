@@ -144,6 +144,9 @@ fn type_references(type_: &mut GoType, visit: &mut impl FnMut(Reference<'_>)) {
         GoType::Struct(fields) => {
             fields.iter_mut().for_each(|field| type_references(&mut field.type_, visit));
         }
+        GoType::Results(results) => {
+            results.iter_mut().for_each(|result| type_references(result, visit));
+        }
         GoType::Int
         | GoType::Float64
         | GoType::Bool

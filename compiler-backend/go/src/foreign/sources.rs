@@ -134,22 +134,48 @@ fn owned_files<'n>(stem: &str, names: &[&'n str]) -> Vec<&'n str> {
     owned
 }
 
-pub fn foreign_forwarders(source: &str) -> Vec<(String, String)> {
-    let value_receivers = value_receiver_methods(source);
-    source.lines().filter_map(|line| forwarder(line.trim_end(), &value_receivers)).collect()
+/// What a foreign that only hands its parameters on is called as.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Forward {
+    /// `p0.Method(p1, …)`: a method of its first parameter.
+    Method(String),
+    /// `Function(p0, p1, …)`: another function of its package, of the same signature.
+    Function(String),
 }
 
-fn forwarder(line: &str, value_receivers: &[&str]) -> Option<(String, String)> {
+/// The foreigns of a file that only forward to a method or a function, which the generated code
+/// calls in their place: `func ReadIORefImpl[A any](ref *ioref[A]) A { return ref.Load() }`,
+/// `func NewIORefImpl[A any](value A) *ioref[A] { return New(value) }`, and the method expression
+/// `var ValueImpl = TextInput.Value` of a type the file declares.
+pub fn foreign_forwarders(source: &str) -> Vec<(String, Forward)> {
+    let value_receivers = value_receiver_methods(source);
+    let (_, types) = foreign_declarations(source);
+    let headers: Vec<Header> = source.lines().filter_map(|line| header(line.trim_end())).collect();
+    let calls = headers.iter().filter_map(|function| {
+        let forward = method_forwarder(function, &value_receivers)
+            .or_else(|| function_forwarder(function, &headers))?;
+        Some((function.name.to_string(), forward))
+    });
+    let method_expressions = source.lines().filter_map(|line| method_expression(line, &types));
+    calls.chain(method_expressions).collect()
+}
+
+struct Header<'s> {
+    name: &'s str,
+    type_parameters: &'s str,
+    parameters: Vec<(&'s str, &'s str)>,
+    results: &'s str,
+    body: Option<&'s str>,
+}
+
+fn header(line: &str) -> Option<Header<'_>> {
     let rest = line.strip_prefix("func ")?;
     let name = leading_identifier(rest)?;
     let mut rest = &rest[name.len()..];
-    let mut type_parameters = vec![];
+    let mut type_parameters = "";
     if rest.starts_with('[') {
         let end = matching(rest, '[', ']')?;
-        type_parameters = rest[1..end]
-            .split(',')
-            .filter_map(|entry| leading_identifier(entry.trim_start()))
-            .collect();
+        type_parameters = &rest[1..end];
         rest = &rest[end + 1..];
     }
     if !rest.starts_with('(') {
@@ -162,19 +188,79 @@ fn forwarder(line: &str, value_receivers: &[&str]) -> Option<(String, String)> {
     if rest[..open].contains(['}', '(']) {
         return None;
     }
-    let body = rest[open + 1..].strip_suffix('}')?.trim();
-    let call = body.strip_prefix("return ").unwrap_or(body);
-    let ((receiver, receiver_type), others) = parameters.split_first()?;
-    let call = call.strip_prefix(*receiver)?.strip_prefix('.')?;
+    let body = rest[open + 1..].strip_suffix('}').map(str::trim);
+    Some(Header { name, type_parameters, parameters, results: rest[..open].trim(), body })
+}
+
+fn method_forwarder(function: &Header, value_receivers: &[&str]) -> Option<Forward> {
+    let ((receiver, receiver_type), others) = function.parameters.split_first()?;
+    let call = forwarded_call(function)?.strip_prefix(*receiver)?.strip_prefix('.')?;
     let method = leading_identifier(call)?;
-    let arguments = call[method.len()..].strip_prefix('(')?.strip_suffix(')')?;
-    let arguments: Vec<&str> =
-        arguments.split(',').map(str::trim).filter(|argument| !argument.is_empty()).collect();
-    let forwarded = others.iter().map(|(name, _)| *name).eq(arguments.iter().copied());
-    let typed_by_receiver =
-        type_parameters.iter().all(|parameter| mentions_word(receiver_type, parameter));
+    let forwarded = forwards_parameters(&call[method.len()..], others);
+    let typed_by_receiver = function
+        .type_parameters
+        .split(',')
+        .filter_map(|entry| leading_identifier(entry.trim_start()))
+        .all(|parameter| mentions_word(receiver_type, parameter));
     let addressable = receiver_type.starts_with('*') || value_receivers.contains(&method);
-    (forwarded && typed_by_receiver && addressable).then(|| (name.to_string(), method.to_string()))
+    (forwarded && typed_by_receiver && addressable).then(|| Forward::Method(method.to_string()))
+}
+
+fn function_forwarder(function: &Header, headers: &[Header]) -> Option<Forward> {
+    let call = forwarded_call(function)?;
+    let callee = leading_identifier(call)?;
+    let exported = callee.starts_with(|character: char| character.is_uppercase());
+    let arguments = strip_own_type_arguments(&call[callee.len()..], function.type_parameters);
+    let forwarded = forwards_parameters(arguments, &function.parameters);
+    let same_signature = |other: &&Header| {
+        other.name == callee
+            && other.type_parameters == function.type_parameters
+            && other.results == function.results
+            && other
+                .parameters
+                .iter()
+                .map(|(_, type_)| type_)
+                .eq(function.parameters.iter().map(|(_, type_)| type_))
+    };
+    let declared = headers.iter().any(|other| same_signature(&other));
+    (exported && callee != function.name && forwarded && declared)
+        .then(|| Forward::Function(callee.to_string()))
+}
+
+/// `[A, B](…)` to `(…)` when the type arguments are the function's own type parameters, in order,
+/// as a call that can't infer them spells them.
+fn strip_own_type_arguments<'s>(call: &'s str, type_parameters: &str) -> &'s str {
+    let Some(end) = call.starts_with('[').then(|| matching(call, '[', ']')).flatten() else {
+        return call;
+    };
+    let names = type_parameters.split(',').filter_map(|entry| leading_identifier(entry.trim()));
+    let own = call[1..end].split(',').map(str::trim).eq(names);
+    if own { &call[end + 1..] } else { call }
+}
+
+fn forwarded_call<'s>(function: &Header<'s>) -> Option<&'s str> {
+    let body = function.body?;
+    Some(body.strip_prefix("return ").unwrap_or(body))
+}
+
+fn forwards_parameters(arguments: &str, parameters: &[(&str, &str)]) -> bool {
+    let Some(arguments) = arguments.strip_prefix('(').and_then(|rest| rest.strip_suffix(')'))
+    else {
+        return false;
+    };
+    let arguments = arguments.split(',').map(str::trim).filter(|argument| !argument.is_empty());
+    parameters.iter().map(|(name, _)| *name).eq(arguments)
+}
+
+/// `var ValueImpl = TextInput.Value`: a method expression of a type the file declares takes its
+/// receiver first, and Go only allows it for a method that a value of the type has, so the
+/// generated code can call the method on any value of the type.
+fn method_expression(line: &str, types: &[String]) -> Option<(String, Forward)> {
+    let (name, value) = line.strip_prefix("var ")?.split_once(" = ")?;
+    let (type_, method) = value.trim().split_once('.')?;
+    let identifier = |text: &str| leading_identifier(text) == Some(text);
+    (identifier(name) && types.iter().any(|declared| declared == type_) && identifier(method))
+        .then(|| (name.to_string(), Forward::Method(method.to_string())))
 }
 
 fn parameters(list: &str) -> Option<Vec<(&str, &str)>> {
@@ -334,10 +420,65 @@ func Longer[A any](ref *ioref[A]) A {
         assert_eq!(
             foreign_forwarders(source),
             [
-                ("ReadIORefImpl".to_string(), "Load".to_string()),
-                ("WriteIORefImpl".to_string(), "Store".to_string()),
-                ("SizeImpl".to_string(), "Size".to_string()),
+                ("ReadIORefImpl".to_string(), Forward::Method("Load".to_string())),
+                ("WriteIORefImpl".to_string(), Forward::Method("Store".to_string())),
+                ("SizeImpl".to_string(), Forward::Method("Size".to_string())),
             ]
+        );
+    }
+
+    #[test]
+    fn a_foreign_that_calls_a_function_of_the_same_signature_forwards_to_it() {
+        let source = "package ffi
+
+func New[A any](value A) *ioref[A] {
+	ref := &ioref[A]{}
+	ref.value.Store(&value)
+	return ref
+}
+
+func NewIORefImpl[A any](value A) *ioref[A] { return New(value) }
+
+func Wider[A any](value A) IORef[A] { return New(value) }
+
+func Hidden[A any](value A) *ioref[A] { return newIORef(value) }
+
+func newIORef[A any](value A) *ioref[A] { return &ioref[A]{} }
+
+func Imported(text string) string { return Upper(text) }
+
+func Fresh[A, B any]() *pair[A, B] { return &pair[A, B]{} }
+
+func FreshImpl[A, B any]() *pair[A, B] { return Fresh[A, B]() }
+
+func SwappedImpl[A, B any]() *pair[A, B] { return Fresh[B, A]() }
+";
+        assert_eq!(
+            foreign_forwarders(source),
+            [
+                ("NewIORefImpl".to_string(), Forward::Function("New".to_string())),
+                ("FreshImpl".to_string(), Forward::Function("Fresh".to_string())),
+            ]
+        );
+    }
+
+    #[test]
+    fn a_method_expression_of_a_declared_type_forwards_to_the_method() {
+        let source = "package ffi
+
+type TextInput = textinput.Model
+
+var ValueImpl = TextInput.Value
+
+var BlinkImpl tea.Cmd = textinput.Blink
+
+var ViewImpl = textinput.Model.View
+
+var Upper = strings.ToUpper
+";
+        assert_eq!(
+            foreign_forwarders(source),
+            [("ValueImpl".to_string(), Forward::Method("Value".to_string()))]
         );
     }
 

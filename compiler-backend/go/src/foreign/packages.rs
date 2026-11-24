@@ -1,6 +1,7 @@
 use std::collections::BTreeSet;
 
 use files::FileId;
+use rustc_hash::FxHashMap;
 
 /// The Go packages that implement foreign imports. A module's Go files next to its source
 /// (`Foo.go` beside `Foo.purs`) are copied into a package of the program's own Go module;
@@ -60,7 +61,7 @@ pub struct ForeignSource {
     pub files: Vec<String>,
     pub values: Vec<String>,
     pub types: Vec<String>,
-    pub forwarders: Vec<(String, String)>,
+    pub forwarders: Vec<(String, super::Forward)>,
     pub uses_event_loop: bool,
     pub recovers: bool,
     pub opacity: super::Opacity,
@@ -115,6 +116,19 @@ impl ForeignPackages {
             .filter(|source| !source.recovers)
             .map(|source| ForeignPackages::package_name(&source.module))
             .collect()
+    }
+
+    /// The arguments each foreign function only calls on the goroutine that calls it, before it
+    /// returns, by package and function.
+    pub fn arguments_called_in_place(&self) -> FxHashMap<(String, String), Vec<usize>> {
+        let mut called = FxHashMap::default();
+        for source in &self.sources {
+            let package = ForeignPackages::package_name(&source.module);
+            for (function, positions) in &source.opacity.called_in_place {
+                called.insert((package.clone(), function.clone()), positions.clone());
+            }
+        }
+        called
     }
 
     fn copied(&self, module_name: &str) -> bool {

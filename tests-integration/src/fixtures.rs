@@ -834,6 +834,198 @@ fn go_build_slot() -> io::Result<std::fs::File> {
     }
 }
 
+/// Builds a style-suite program with the Go backend, runs it, and compares what it prints with
+/// `Main.stdout`, the output of the same program compiled to JavaScript. A fixture with a
+/// `crashes` file expects the program to exit unsuccessfully. A fixture with a `known-failing` file
+/// names the bug that makes it fail: it passes while the bug remains and fails once the program
+/// prints the expected output, so that the marker is deleted and the program becomes required.
+pub fn go_style(path: &Path) -> FixtureResult {
+    let folder = fixture_folder(path)?;
+    let Some(runtime) = go_style_runtime()? else { return Ok(()) };
+    let root = snapshot_path(folder);
+    let expectation = StyleExpectation {
+        stdout: std::fs::read_to_string(root.join("Main.stdout"))?,
+        crashes: root.join("crashes").is_file(),
+    };
+    let known_failing = match std::fs::read_to_string(root.join("known-failing")) {
+        Ok(bug) => Some(bug.trim().to_string()),
+        Err(error) if error.kind() == io::ErrorKind::NotFound => None,
+        Err(error) => return Err(error.into()),
+    };
+    let outcome = compile_style_program(folder.to_path_buf())
+        .and_then(|program| run_style_program(&runtime, &program))
+        .and_then(|output| expectation.check(&output));
+    match (outcome, known_failing) {
+        (Ok(()), None) => Ok(()),
+        (Err(failure), None) => Err(FixtureFailure(failure).into()),
+        (Err(failure), Some(bug)) => {
+            eprintln!("known failing, {bug}:\n{failure}");
+            Ok(())
+        }
+        (Ok(()), Some(bug)) => Err(FixtureFailure(format!(
+            "the program now prints the expected output, so its known failure is gone ({bug}); \
+             delete {} to make it required",
+            root.join("known-failing").display()
+        ))
+        .into()),
+    }
+}
+
+/// How long compiling one style program may take; a compiler that loops counts as failing.
+const GO_STYLE_COMPILE_TIMEOUT: Duration = Duration::from_secs(20);
+
+/// How long a built style program may run.
+const GO_STYLE_RUN_TIMEOUT: Duration = Duration::from_secs(60);
+
+struct StyleExpectation {
+    stdout: String,
+    crashes: bool,
+}
+
+struct StyleProgram {
+    files: Vec<(String, String)>,
+    vendored: VendoredFiles,
+}
+
+struct StyleOutput {
+    succeeded: bool,
+    stdout: String,
+    stderr: String,
+}
+
+impl StyleExpectation {
+    fn check(&self, output: &StyleOutput) -> Result<(), String> {
+        let stderr = output.stderr.lines().take(20).join("\n");
+        if output.succeeded == self.crashes {
+            let expected = if self.crashes { "fail" } else { "succeed" };
+            return Err(format!("the program should {expected}; its error output:\n{stderr}"));
+        }
+        if output.stdout == self.stdout {
+            return Ok(());
+        }
+        let diff = similar::TextDiff::from_lines(&self.stdout, &output.stdout);
+        let mut unified = diff.unified_diff();
+        unified.context_radius(2);
+        unified.header("expected (JavaScript)", "Go");
+        Err(format!("the program prints something else:\n{unified}{stderr}"))
+    }
+}
+
+/// The runtime checkout to build against, or `None` when the suite is skipped.
+fn go_style_runtime() -> FixtureResult<Option<PathBuf>> {
+    let requirement = env::var(GO_BUILD_VARIABLE).unwrap_or_default();
+    if requirement == "skip" {
+        return Ok(None);
+    }
+    match go_build_prerequisites() {
+        Ok(runtime) => Ok(Some(runtime)),
+        Err(reason) if requirement == "require" => {
+            Err(FixtureFailure(format!("{GO_BUILD_VARIABLE}=require, but {reason}")).into())
+        }
+        Err(reason) => {
+            eprintln!(
+                "warning: skipped the style program: {reason} \
+                 (set {GO_BUILD_VARIABLE}=require to fail instead)"
+            );
+            Ok(None)
+        }
+    }
+}
+
+/// Compiles on its own thread, so that a compiler that loops is reported rather than waited for.
+fn compile_style_program(folder: PathBuf) -> Result<StyleProgram, String> {
+    let (sender, receiver) = std::sync::mpsc::channel();
+    std::thread::Builder::new()
+        .stack_size(256 * 1024 * 1024)
+        .spawn(move || {
+            let _ = sender.send(compile_style_program_here(&folder));
+        })
+        .map_err(|error| format!("could not start the compiler thread: {error}"))?;
+    receiver.recv_timeout(GO_STYLE_COMPILE_TIMEOUT).unwrap_or_else(|_| {
+        Err(format!(
+            "compiling did not finish within {} seconds",
+            GO_STYLE_COMPILE_TIMEOUT.as_secs()
+        ))
+    })
+}
+
+fn compile_style_program_here(folder: &Path) -> Result<StyleProgram, String> {
+    let loaded = crate::load_fixture(folder).map_err(|error| error.to_string())?;
+    check_source_errors(&loaded.engine, &loaded.files, &loaded.fixture_files)
+        .map_err(|error| error.to_string())?;
+    let (foreign_packages, vendored) =
+        go_foreign_packages(&loaded, folder).map_err(|error| error.to_string())?;
+    let entry = entry_module(&loaded, folder)?;
+    let program = go::compile_program(&loaded.engine, &entry, "main", &foreign_packages, "fixture")
+        .map_err(|error| format!("the Go backend rejects the program:\n{error}"))?;
+    Ok(StyleProgram { files: program.files, vendored })
+}
+
+/// The module `Main.purs` declares, which keeps the name it had where the program was written.
+fn entry_module(loaded: &crate::LoadedFixture, folder: &Path) -> Result<String, String> {
+    let entry = snapshot_path(folder).join("Main.purs");
+    loaded
+        .fixture_files
+        .iter()
+        .find(|&&file_id| {
+            Url::parse(&loaded.files.path(file_id))
+                .ok()
+                .and_then(|url| url.to_file_path().ok())
+                .is_some_and(|path| path == entry)
+        })
+        .and_then(|&file_id| go::module_name(&loaded.engine, file_id))
+        .ok_or_else(|| format!("no module is declared in {}", entry.display()))
+}
+
+fn run_style_program(runtime: &Path, program: &StyleProgram) -> Result<StyleOutput, String> {
+    let module = tempfile::Builder::new()
+        .prefix("iris-go-style-")
+        .tempdir()
+        .map_err(|error| error.to_string())?;
+    write_go_module(module.path(), runtime, &program.files, &program.vendored)
+        .map_err(|error| error.to_string())?;
+    let built = {
+        let _slot = go_build_slot().map_err(|error| error.to_string())?;
+        Command::new("go")
+            .args(["build", "-o", "program", "."])
+            .current_dir(module.path())
+            .env("GOFLAGS", "-mod=mod -buildvcs=false")
+            .env("GOEXPERIMENT", "simd")
+            .stdin(Stdio::null())
+            .output()
+            .map_err(|error| format!("`go build` could not run: {error}"))?
+    };
+    if !built.status.success() {
+        let kept = module.keep();
+        return Err(format!(
+            "the generated Go does not build (module kept at {}):\n{}",
+            kept.display(),
+            String::from_utf8_lossy(&built.stderr)
+        ));
+    }
+    let running = Command::new(module.path().join("program"))
+        .current_dir(module.path())
+        .stdin(Stdio::null())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .map_err(|error| format!("the built program could not start: {error}"))?;
+    let output = running
+        .controlled_with_output()
+        .time_limit(GO_STYLE_RUN_TIMEOUT)
+        .terminate_for_timeout()
+        .wait()
+        .map_err(|error| error.to_string())?
+        .ok_or_else(|| {
+            format!("the program did not finish within {} seconds", GO_STYLE_RUN_TIMEOUT.as_secs())
+        })?;
+    Ok(StyleOutput {
+        succeeded: output.status.success(),
+        stdout: String::from_utf8_lossy(&output.stdout).into_owned(),
+        stderr: String::from_utf8_lossy(&output.stderr).into_owned(),
+    })
+}
+
 pub fn lsp(path: &Path) -> FixtureResult {
     let folder = fixture_folder(path)?;
     let file = module_name(path)?;

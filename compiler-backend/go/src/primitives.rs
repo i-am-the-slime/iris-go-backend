@@ -50,6 +50,22 @@ pub fn known(module: &str, name: &str) -> Option<Primitive> {
     }
 }
 
+pub struct SharedCell {
+    pub module: &'static str,
+    pub new: &'static str,
+    pub read: &'static str,
+    pub write: &'static str,
+    pub modify: &'static str,
+}
+
+pub const SHARED_CELLS: &[SharedCell] = &[SharedCell {
+    module: "Go.IO.IORef",
+    new: "newIORefImpl",
+    read: "readIORefImpl",
+    write: "writeIORefImpl",
+    modify: "atomicModifyIORefImpl",
+}];
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum KnownType {
     Maybe,

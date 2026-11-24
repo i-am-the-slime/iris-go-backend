@@ -1,0 +1,15 @@
+'hi'
+#3
+<yes no>
+<'a' 'b'>
+(#1 , 'two')
+{age=#36; name='Ada'; nested={n=-; ok=yes}; tags=<'x'>}
+show:2.5
+<show:'c' show:'d'>
+show:(Left 1)
+6
+["ab","abab"]
+[1]["m"][true]
+1,2 "q" none
+Node "root" Forest [Node "a" Forest [],Node "b" Forest [Node "c" Forest []]]
+12 x!!

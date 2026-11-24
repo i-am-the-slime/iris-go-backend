@@ -292,6 +292,11 @@ string, shows a different shape: three elements are `((pure <*> 1) <*> 2) <*> 3`
 applicatives such as `ParOm` and `ParIO`, where the nesting decides what runs or combines first,
 use JavaScript's balanced tree in Go too. `ParAff` has its own parallel traversal.
 
+`traverse1` over a `NonEmptyArray` works the same way. Go calls the function on the first element
+first and nests the applies to the left, `(1 <*> 2) <*> 3`. JavaScript calls it on the last element
+first and nests them to the right, `1 <*> (2 <*> 3)`. A lawful applicative gives the same result
+either way, and the left fold is faster. `ParOm` gets JavaScript's order in Go too.
+
 ## Foreign imports
 
 Your `.js` files don't come along to Go. Put a `.go` file right next to them instead:

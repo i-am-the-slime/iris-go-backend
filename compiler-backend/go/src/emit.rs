@@ -18,6 +18,7 @@ mod closures;
 mod coerce;
 mod composites;
 mod conditions;
+mod confined;
 mod constructors;
 mod conventions;
 mod declarations;
@@ -27,6 +28,7 @@ mod divisions;
 mod effects;
 mod equality;
 mod existential;
+mod fallible;
 mod field_reads;
 mod foreign_data;
 mod foreign_values;
@@ -235,6 +237,15 @@ where
             &never_recovering,
         )
     });
+    timed("confined", || {
+        confined::keep_confined_cells_in_locals(
+            &mut declarations,
+            emitter.foreign_packages,
+            &helpers,
+            &emitter.effects,
+            &never_recovering,
+        )
+    });
     timed("joins", || joins::join_shared_updates(&mut declarations));
     timed("ranges", || ranges::read_elements_in_place(&mut declarations));
     timed("swaps", || swaps::swap_crosswise_pokes(&mut declarations));
@@ -277,8 +288,9 @@ where
         sharing::share_repeated_constructions(&mut declarations, &mut record_value_name)
     });
     let forwarders = forwarders::Forwarders::new(emitter.foreign_packages);
-    timed("forwarders", || forwarders.call_methods(&mut declarations));
+    timed("forwarders", || forwarders.call_forwarded(&mut declarations));
     timed("unreferenced", || unreferenced::drop_unreferenced_definitions(&mut declarations));
+    timed("fallible", || emitter.return_failures_apart(&mut declarations))?;
     // Last, so that every pass before reads the constructions' fields in their literals.
     timed("constructions", || emitter.call_constructor_functions(&mut declarations))?;
     if let Some(aside) = lines_aside {
