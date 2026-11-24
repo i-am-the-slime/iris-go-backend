@@ -17,6 +17,10 @@ const (
 	EitherErrorForeignRight
 )
 
+func Left(left exception.Error) EitherErrorForeign {
+	return EitherErrorForeign{Tag: EitherErrorForeignLeft, Left: left}
+}
+
 // Data/Maybe/maybe.go
 package maybe
 
@@ -44,7 +48,7 @@ type ForeignError struct {
 }
 
 const (
-	ForeignErrorForeignError = iota
+	ForeignErrorForeignError2 = iota
 	ForeignErrorTypeMismatch
 	ForeignErrorErrorAtIndex
 	ForeignErrorErrorAtProperty
@@ -212,16 +216,132 @@ type ListListForeignError struct {
 
 var SharedListListForeignErrorNil = &ListListForeignError{}
 
+func RightEitherNonEmptyListForeignErrorPair(right shared.Pair) EitherNonEmptyListForeignErrorPair {
+	return EitherNonEmptyListForeignErrorPair{Tag: EitherNonEmptyListForeignErrorPairRight, Right: right}
+}
+
+func ForeignErrorForeignError(foreignError string) *ForeignError {
+	return &ForeignError{Tag: ForeignErrorForeignError2, ForeignError: foreignError}
+}
+
+func LeftEitherNonEmptyListForeignErrorPair(left NonEmptyListForeignError) EitherNonEmptyListForeignErrorPair {
+	return EitherNonEmptyListForeignErrorPair{Tag: EitherNonEmptyListForeignErrorPairLeft, Left: left}
+}
+
+func TypeMismatch(typeMismatch0 string, typeMismatch1 string) *ForeignError {
+	return &ForeignError{Tag: ForeignErrorTypeMismatch, TypeMismatch0: typeMismatch0, TypeMismatch1: typeMismatch1}
+}
+
+func LeftEitherNonEmptyListForeignErrorForeign(left NonEmptyListForeignError) EitherNonEmptyListForeignErrorForeign {
+	return EitherNonEmptyListForeignErrorForeign{Tag: EitherNonEmptyListForeignErrorForeignLeft, Left: left}
+}
+
+func LeftEitherNonEmptyListForeignErrorInt(left NonEmptyListForeignError) EitherNonEmptyListForeignErrorInt {
+	return EitherNonEmptyListForeignErrorInt{Tag: EitherNonEmptyListForeignErrorIntLeft, Left: left}
+}
+
+func RightEitherNonEmptyListForeignErrorInt(right int32) EitherNonEmptyListForeignErrorInt {
+	return EitherNonEmptyListForeignErrorInt{Tag: EitherNonEmptyListForeignErrorIntRight, Right: right}
+}
+
+func RightEitherNonEmptyListForeignErrorFnAOfIntPair(right func(shared.AOfInt) shared.Pair) EitherNonEmptyListForeignErrorFnAOfIntPair {
+	return EitherNonEmptyListForeignErrorFnAOfIntPair{Tag: EitherNonEmptyListForeignErrorFnAOfIntPairRight, Right: right}
+}
+
+func LeftEitherNonEmptyListForeignErrorFnAOfIntPair(left NonEmptyListForeignError) EitherNonEmptyListForeignErrorFnAOfIntPair {
+	return EitherNonEmptyListForeignErrorFnAOfIntPair{Tag: EitherNonEmptyListForeignErrorFnAOfIntPairLeft, Left: left}
+}
+
+func RightEitherNonEmptyListForeignErrorFnEmptyAOfInt(right func(shared.Empty) shared.AOfInt) EitherNonEmptyListForeignErrorFnEmptyAOfInt {
+	return EitherNonEmptyListForeignErrorFnEmptyAOfInt{Tag: EitherNonEmptyListForeignErrorFnEmptyAOfIntRight, Right: right}
+}
+
+func LeftEitherNonEmptyListForeignErrorFnEmptyAOfInt(left NonEmptyListForeignError) EitherNonEmptyListForeignErrorFnEmptyAOfInt {
+	return EitherNonEmptyListForeignErrorFnEmptyAOfInt{Tag: EitherNonEmptyListForeignErrorFnEmptyAOfIntLeft, Left: left}
+}
+
+func Cons(cons0 *ForeignError, cons1 *ListForeignError) *ListForeignError {
+	return &ListForeignError{Cons0: cons0, Cons1: cons1}
+}
+
+func RightEitherNonEmptyListForeignErrorTriple(right shared.Triple) EitherNonEmptyListForeignErrorTriple {
+	return EitherNonEmptyListForeignErrorTriple{Tag: EitherNonEmptyListForeignErrorTripleRight, Right: right}
+}
+
+func LeftEitherNonEmptyListForeignErrorTriple(left NonEmptyListForeignError) EitherNonEmptyListForeignErrorTriple {
+	return EitherNonEmptyListForeignErrorTriple{Tag: EitherNonEmptyListForeignErrorTripleLeft, Left: left}
+}
+
+func RightEitherNonEmptyListForeignErrorFnA2ATriple(right func(shared.A2A) shared.Triple) EitherNonEmptyListForeignErrorFnA2ATriple {
+	return EitherNonEmptyListForeignErrorFnA2ATriple{Tag: EitherNonEmptyListForeignErrorFnA2ATripleRight, Right: right}
+}
+
+func LeftEitherNonEmptyListForeignErrorFnA2ATriple(left NonEmptyListForeignError) EitherNonEmptyListForeignErrorFnA2ATriple {
+	return EitherNonEmptyListForeignErrorFnA2ATriple{Tag: EitherNonEmptyListForeignErrorFnA2ATripleLeft, Left: left}
+}
+
+func LeftEitherNonEmptyListForeignErrorFnAOfStringA2A(left NonEmptyListForeignError) EitherNonEmptyListForeignErrorFnAOfStringA2A {
+	return EitherNonEmptyListForeignErrorFnAOfStringA2A{Tag: EitherNonEmptyListForeignErrorFnAOfStringA2ALeft, Left: left}
+}
+
+func RightEitherNonEmptyListForeignErrorFnAOfStringA2A(right func(shared.AOfString) shared.A2A) EitherNonEmptyListForeignErrorFnAOfStringA2A {
+	return EitherNonEmptyListForeignErrorFnAOfStringA2A{Tag: EitherNonEmptyListForeignErrorFnAOfStringA2ARight, Right: right}
+}
+
+func LeftEitherNonEmptyListForeignErrorFnEmptyAOfString(left NonEmptyListForeignError) EitherNonEmptyListForeignErrorFnEmptyAOfString {
+	return EitherNonEmptyListForeignErrorFnEmptyAOfString{Tag: EitherNonEmptyListForeignErrorFnEmptyAOfStringLeft, Left: left}
+}
+
+func RightEitherNonEmptyListForeignErrorFnEmptyAOfString(right func(shared.Empty) shared.AOfString) EitherNonEmptyListForeignErrorFnEmptyAOfString {
+	return EitherNonEmptyListForeignErrorFnEmptyAOfString{Tag: EitherNonEmptyListForeignErrorFnEmptyAOfStringRight, Right: right}
+}
+
+func RightEitherNonEmptyListForeignErrorFnEmptyA2A(right func(shared.Empty) shared.A2A) EitherNonEmptyListForeignErrorFnEmptyA2A {
+	return EitherNonEmptyListForeignErrorFnEmptyA2A{Tag: EitherNonEmptyListForeignErrorFnEmptyA2ARight, Right: right}
+}
+
+func LeftEitherNonEmptyListForeignErrorFnEmptyA2A(left NonEmptyListForeignError) EitherNonEmptyListForeignErrorFnEmptyA2A {
+	return EitherNonEmptyListForeignErrorFnEmptyA2A{Tag: EitherNonEmptyListForeignErrorFnEmptyA2ALeft, Left: left}
+}
+
+func RightEitherNonEmptyListForeignErrorHeader(right shared.Header) EitherNonEmptyListForeignErrorHeader {
+	return EitherNonEmptyListForeignErrorHeader{Tag: EitherNonEmptyListForeignErrorHeaderRight, Right: right}
+}
+
+func LeftEitherNonEmptyListForeignErrorHeader(left NonEmptyListForeignError) EitherNonEmptyListForeignErrorHeader {
+	return EitherNonEmptyListForeignErrorHeader{Tag: EitherNonEmptyListForeignErrorHeaderLeft, Left: left}
+}
+
+func LeftEitherNonEmptyListForeignErrorFnContent_typeHeader(left NonEmptyListForeignError) EitherNonEmptyListForeignErrorFnContent_typeHeader {
+	return EitherNonEmptyListForeignErrorFnContent_typeHeader{Tag: EitherNonEmptyListForeignErrorFnContent_typeHeaderLeft, Left: left}
+}
+
+func RightEitherNonEmptyListForeignErrorFnContent_typeHeader(right func(shared.Content_type) shared.Header) EitherNonEmptyListForeignErrorFnContent_typeHeader {
+	return EitherNonEmptyListForeignErrorFnContent_typeHeader{Tag: EitherNonEmptyListForeignErrorFnContent_typeHeaderRight, Right: right}
+}
+
+func LeftEitherNonEmptyListForeignErrorFnEmptyContent_type(left NonEmptyListForeignError) EitherNonEmptyListForeignErrorFnEmptyContent_type {
+	return EitherNonEmptyListForeignErrorFnEmptyContent_type{Tag: EitherNonEmptyListForeignErrorFnEmptyContent_typeLeft, Left: left}
+}
+
+func RightEitherNonEmptyListForeignErrorFnEmptyContent_type(right func(shared.Empty) shared.Content_type) EitherNonEmptyListForeignErrorFnEmptyContent_type {
+	return EitherNonEmptyListForeignErrorFnEmptyContent_type{Tag: EitherNonEmptyListForeignErrorFnEmptyContent_typeRight, Right: right}
+}
+
+func ErrorAtProperty(errorAtProperty0 string, errorAtProperty1 *ForeignError) *ForeignError {
+	return &ForeignError{Tag: ForeignErrorErrorAtProperty, ErrorAtProperty0: errorAtProperty0, ErrorAtProperty1: errorAtProperty1}
+}
+
 func PureIdentityNonEmptyListForeignError(x any) EitherNonEmptyListForeignErrorForeign {
 	return EitherNonEmptyListForeignErrorForeign{Tag: EitherNonEmptyListForeignErrorForeignRight, Right: x}
 }
 
 func MapListFunction(s string, value NonEmptyListForeignError) NonEmptyListForeignError {
-	return NonEmptyListForeignError{First: &ForeignError{Tag: ForeignErrorErrorAtProperty, ErrorAtProperty0: s, ErrorAtProperty1: value.First}, Second: MapListFunctionChunkedRevMap(s, SharedListListForeignErrorNil, value.Second)}
+	return NonEmptyListForeignError{First: ErrorAtProperty(s, value.First), Second: MapListFunctionChunkedRevMap(s, SharedListListForeignErrorNil, value.Second)}
 }
 
 func MapListFunctionF(s string, element *ForeignError) *ForeignError {
-	return &ForeignError{Tag: ForeignErrorErrorAtProperty, ErrorAtProperty0: s, ErrorAtProperty1: element}
+	return ErrorAtProperty(s, element)
 }
 
 func MapListFunctionChunkedRevMap(s string, chunksAcc *ListListForeignError, chunk *ListForeignError) *ListForeignError {
@@ -234,9 +354,9 @@ func MapListFunctionChunkedRevMap(s string, chunksAcc *ListListForeignError, chu
 		}
 		var result *ListForeignError
 		if chunk != SharedListForeignErrorNil && chunk.Cons1 != SharedListForeignErrorNil && chunk.Cons1.Cons1 == SharedListForeignErrorNil {
-			result = &ListForeignError{Cons0: MapListFunctionF(s, chunk.Cons0), Cons1: &ListForeignError{Cons0: MapListFunctionF(s, chunk.Cons1.Cons0), Cons1: SharedListForeignErrorNil}}
+			result = Cons(MapListFunctionF(s, chunk.Cons0), Cons(MapListFunctionF(s, chunk.Cons1.Cons0), SharedListForeignErrorNil))
 		} else if chunk != SharedListForeignErrorNil && chunk.Cons1 == SharedListForeignErrorNil {
-			result = &ListForeignError{Cons0: MapListFunctionF(s, chunk.Cons0), Cons1: SharedListForeignErrorNil}
+			result = Cons(MapListFunctionF(s, chunk.Cons0), SharedListForeignErrorNil)
 		} else {
 			result = SharedListForeignErrorNil
 		}
@@ -285,10 +405,10 @@ func initializeMain_() []string {
 	decoded, ok := foreignvalue.Decode(s, shared.DecodeJSONPair)
 	var read foreign.EitherNonEmptyListForeignErrorPair
 	if ok {
-		read = foreign.EitherNonEmptyListForeignErrorPair{Tag: foreign.EitherNonEmptyListForeignErrorPairRight, Right: decoded}
+		read = foreign.RightEitherNonEmptyListForeignErrorPair(decoded)
 	} else {
 		performed := direct.CatchException(func(x exception.Error) either.EitherErrorForeign {
-			return either.EitherErrorForeign{Tag: either.EitherErrorForeignLeft, Left: x}
+			return either.Left(x)
 		}, func() either.EitherErrorForeign {
 			argument := foreignvalue.ParseJSON(s)
 			return either.EitherErrorForeign{Tag: either.EitherErrorForeignRight, Right: argument}
@@ -296,16 +416,16 @@ func initializeMain_() []string {
 		var result2 foreign.EitherNonEmptyListForeignErrorPair
 		switch performed.Tag {
 		case either.EitherErrorForeignLeft:
-			result2 = foreign.EitherNonEmptyListForeignErrorPair{Tag: foreign.EitherNonEmptyListForeignErrorPairLeft, Left: foreign.NonEmptyListForeignError{First: &foreign.ForeignError{Tag: foreign.ForeignErrorForeignError, ForeignError: exception.Message(performed.Left)}, Second: foreign.SharedListForeignErrorNil}}
+			result2 = foreign.LeftEitherNonEmptyListForeignErrorPair(foreign.NonEmptyListForeignError{First: foreign.ForeignErrorForeignError(exception.Message(performed.Left)), Second: foreign.SharedListForeignErrorNil})
 		default: // either.EitherErrorForeignRight
 			r := performed.Right
 			unsafeReadPropImpl := foreignvalue.UnsafeReadPropImpl(func() foreign.EitherNonEmptyListForeignErrorForeign {
-				return foreign.EitherNonEmptyListForeignErrorForeign{Tag: foreign.EitherNonEmptyListForeignErrorForeignLeft, Left: foreign.NonEmptyListForeignError{First: &foreign.ForeignError{Tag: foreign.ForeignErrorTypeMismatch, TypeMismatch0: "object", TypeMismatch1: foreignvalue.TypeOf(r)}, Second: foreign.SharedListForeignErrorNil}}
+				return foreign.LeftEitherNonEmptyListForeignErrorForeign(foreign.NonEmptyListForeignError{First: foreign.TypeMismatch("object", foreignvalue.TypeOf(r)), Second: foreign.SharedListForeignErrorNil})
 			}, foreign.PureIdentityNonEmptyListForeignError, "A", r)
 			var result3 foreign.EitherNonEmptyListForeignErrorInt
 			switch unsafeReadPropImpl.Tag {
 			case foreign.EitherNonEmptyListForeignErrorForeignLeft:
-				result3 = foreign.EitherNonEmptyListForeignErrorInt{Tag: foreign.EitherNonEmptyListForeignErrorIntLeft, Left: unsafeReadPropImpl.Left}
+				result3 = foreign.LeftEitherNonEmptyListForeignErrorInt(unsafeReadPropImpl.Left)
 			default: // foreign.EitherNonEmptyListForeignErrorForeignRight
 				b := unsafeReadPropImpl.Right
 				if foreignvalue.TagOf(b) == "Number" {
@@ -317,30 +437,30 @@ func initializeMain_() []string {
 						integer = maybe.NoInt
 					}
 					if integer == maybe.NoInt {
-						result3 = foreign.EitherNonEmptyListForeignErrorInt{Tag: foreign.EitherNonEmptyListForeignErrorIntLeft, Left: foreign.NonEmptyListForeignError{First: &foreign.ForeignError{Tag: foreign.ForeignErrorTypeMismatch, TypeMismatch0: "Int", TypeMismatch1: foreignvalue.TagOf(b)}, Second: foreign.SharedListForeignErrorNil}}
+						result3 = foreign.LeftEitherNonEmptyListForeignErrorInt(foreign.NonEmptyListForeignError{First: foreign.TypeMismatch("Int", foreignvalue.TagOf(b)), Second: foreign.SharedListForeignErrorNil})
 					} else {
-						result3 = foreign.EitherNonEmptyListForeignErrorInt{Tag: foreign.EitherNonEmptyListForeignErrorIntRight, Right: int32(integer)}
+						result3 = foreign.RightEitherNonEmptyListForeignErrorInt(int32(integer))
 					}
 				} else {
-					result3 = foreign.EitherNonEmptyListForeignErrorInt{Tag: foreign.EitherNonEmptyListForeignErrorIntLeft, Left: foreign.NonEmptyListForeignError{First: &foreign.ForeignError{Tag: foreign.ForeignErrorTypeMismatch, TypeMismatch0: "Int", TypeMismatch1: foreignvalue.TagOf(b)}, Second: foreign.SharedListForeignErrorNil}}
+					result3 = foreign.LeftEitherNonEmptyListForeignErrorInt(foreign.NonEmptyListForeignError{First: foreign.TypeMismatch("Int", foreignvalue.TagOf(b)), Second: foreign.SharedListForeignErrorNil})
 				}
 			}
 			var result4 foreign.EitherNonEmptyListForeignErrorFnAOfIntPair
 			switch result3.Tag {
 			case foreign.EitherNonEmptyListForeignErrorIntRight:
-				result4 = foreign.EitherNonEmptyListForeignErrorFnAOfIntPair{Tag: foreign.EitherNonEmptyListForeignErrorFnAOfIntPairRight, Right: func(r1 shared.AOfInt) shared.Pair {
+				result4 = foreign.RightEitherNonEmptyListForeignErrorFnAOfIntPair(func(r1 shared.AOfInt) shared.Pair {
 					return shared.Pair{A: r1.A, A_: result3.Right}
-				}}
+				})
 			default: // foreign.EitherNonEmptyListForeignErrorIntLeft
-				result4 = foreign.EitherNonEmptyListForeignErrorFnAOfIntPair{Tag: foreign.EitherNonEmptyListForeignErrorFnAOfIntPairLeft, Left: foreign.MapListFunction("A", result3.Left)}
+				result4 = foreign.LeftEitherNonEmptyListForeignErrorFnAOfIntPair(foreign.MapListFunction("A", result3.Left))
 			}
 			unsafeReadPropImpl2 := foreignvalue.UnsafeReadPropImpl(func() foreign.EitherNonEmptyListForeignErrorForeign {
-				return foreign.EitherNonEmptyListForeignErrorForeign{Tag: foreign.EitherNonEmptyListForeignErrorForeignLeft, Left: foreign.NonEmptyListForeignError{First: &foreign.ForeignError{Tag: foreign.ForeignErrorTypeMismatch, TypeMismatch0: "object", TypeMismatch1: foreignvalue.TypeOf(r)}, Second: foreign.SharedListForeignErrorNil}}
+				return foreign.LeftEitherNonEmptyListForeignErrorForeign(foreign.NonEmptyListForeignError{First: foreign.TypeMismatch("object", foreignvalue.TypeOf(r)), Second: foreign.SharedListForeignErrorNil})
 			}, foreign.PureIdentityNonEmptyListForeignError, "a", r)
 			var result5 foreign.EitherNonEmptyListForeignErrorInt
 			switch unsafeReadPropImpl2.Tag {
 			case foreign.EitherNonEmptyListForeignErrorForeignLeft:
-				result5 = foreign.EitherNonEmptyListForeignErrorInt{Tag: foreign.EitherNonEmptyListForeignErrorIntLeft, Left: unsafeReadPropImpl2.Left}
+				result5 = foreign.LeftEitherNonEmptyListForeignErrorInt(unsafeReadPropImpl2.Left)
 			default: // foreign.EitherNonEmptyListForeignErrorForeignRight
 				b := unsafeReadPropImpl2.Right
 				if foreignvalue.TagOf(b) == "Number" {
@@ -352,31 +472,31 @@ func initializeMain_() []string {
 						integer = maybe.NoInt
 					}
 					if integer == maybe.NoInt {
-						result5 = foreign.EitherNonEmptyListForeignErrorInt{Tag: foreign.EitherNonEmptyListForeignErrorIntLeft, Left: foreign.NonEmptyListForeignError{First: &foreign.ForeignError{Tag: foreign.ForeignErrorTypeMismatch, TypeMismatch0: "Int", TypeMismatch1: foreignvalue.TagOf(b)}, Second: foreign.SharedListForeignErrorNil}}
+						result5 = foreign.LeftEitherNonEmptyListForeignErrorInt(foreign.NonEmptyListForeignError{First: foreign.TypeMismatch("Int", foreignvalue.TagOf(b)), Second: foreign.SharedListForeignErrorNil})
 					} else {
-						result5 = foreign.EitherNonEmptyListForeignErrorInt{Tag: foreign.EitherNonEmptyListForeignErrorIntRight, Right: int32(integer)}
+						result5 = foreign.RightEitherNonEmptyListForeignErrorInt(int32(integer))
 					}
 				} else {
-					result5 = foreign.EitherNonEmptyListForeignErrorInt{Tag: foreign.EitherNonEmptyListForeignErrorIntLeft, Left: foreign.NonEmptyListForeignError{First: &foreign.ForeignError{Tag: foreign.ForeignErrorTypeMismatch, TypeMismatch0: "Int", TypeMismatch1: foreignvalue.TagOf(b)}, Second: foreign.SharedListForeignErrorNil}}
+					result5 = foreign.LeftEitherNonEmptyListForeignErrorInt(foreign.NonEmptyListForeignError{First: foreign.TypeMismatch("Int", foreignvalue.TagOf(b)), Second: foreign.SharedListForeignErrorNil})
 				}
 			}
 			var result6 foreign.EitherNonEmptyListForeignErrorFnEmptyAOfInt
 			switch result5.Tag {
 			case foreign.EitherNonEmptyListForeignErrorIntRight:
-				result6 = foreign.EitherNonEmptyListForeignErrorFnEmptyAOfInt{Tag: foreign.EitherNonEmptyListForeignErrorFnEmptyAOfIntRight, Right: func(_ shared.Empty) shared.AOfInt {
+				result6 = foreign.RightEitherNonEmptyListForeignErrorFnEmptyAOfInt(func(_ shared.Empty) shared.AOfInt {
 					return shared.AOfInt{A: result5.Right}
-				}}
+				})
 			default: // foreign.EitherNonEmptyListForeignErrorIntLeft
-				result6 = foreign.EitherNonEmptyListForeignErrorFnEmptyAOfInt{Tag: foreign.EitherNonEmptyListForeignErrorFnEmptyAOfIntLeft, Left: foreign.MapListFunction("a", result5.Left)}
+				result6 = foreign.LeftEitherNonEmptyListForeignErrorFnEmptyAOfInt(foreign.MapListFunction("a", result5.Left))
 			}
 			if result4.Tag == foreign.EitherNonEmptyListForeignErrorFnAOfIntPairRight && result6.Tag == foreign.EitherNonEmptyListForeignErrorFnEmptyAOfIntRight {
-				result2 = foreign.EitherNonEmptyListForeignErrorPair{Tag: foreign.EitherNonEmptyListForeignErrorPairRight, Right: result4.Right(result6.Right(shared.Empty{}))}
+				result2 = foreign.RightEitherNonEmptyListForeignErrorPair(result4.Right(result6.Right(shared.Empty{})))
 			} else if result4.Tag == foreign.EitherNonEmptyListForeignErrorFnAOfIntPairLeft && result6.Tag == foreign.EitherNonEmptyListForeignErrorFnEmptyAOfIntLeft {
-				result2 = foreign.EitherNonEmptyListForeignErrorPair{Tag: foreign.EitherNonEmptyListForeignErrorPairLeft, Left: foreign.NonEmptyListForeignError{First: result4.Left.First, Second: mainGoReusing(&foreign.ListForeignError{Cons0: result6.Left.First, Cons1: result6.Left.Second}, mainGo(foreign.SharedListForeignErrorNil, result4.Left.Second))}}
+				result2 = foreign.LeftEitherNonEmptyListForeignErrorPair(foreign.NonEmptyListForeignError{First: result4.Left.First, Second: mainGoReusing(foreign.Cons(result6.Left.First, result6.Left.Second), mainGo(foreign.SharedListForeignErrorNil, result4.Left.Second))})
 			} else if result4.Tag == foreign.EitherNonEmptyListForeignErrorFnAOfIntPairRight && result6.Tag == foreign.EitherNonEmptyListForeignErrorFnEmptyAOfIntLeft {
-				result2 = foreign.EitherNonEmptyListForeignErrorPair{Tag: foreign.EitherNonEmptyListForeignErrorPairLeft, Left: result6.Left}
+				result2 = foreign.LeftEitherNonEmptyListForeignErrorPair(result6.Left)
 			} else {
-				result2 = foreign.EitherNonEmptyListForeignErrorPair{Tag: foreign.EitherNonEmptyListForeignErrorPairLeft, Left: result4.Left}
+				result2 = foreign.LeftEitherNonEmptyListForeignErrorPair(result4.Left)
 			}
 		}
 		read = result2
@@ -393,10 +513,10 @@ func initializeMain_() []string {
 	decoded2, ok2 := foreignvalue.Decode(s2, shared.DecodeJSONTriple)
 	var read3 foreign.EitherNonEmptyListForeignErrorTriple
 	if ok2 {
-		read3 = foreign.EitherNonEmptyListForeignErrorTriple{Tag: foreign.EitherNonEmptyListForeignErrorTripleRight, Right: decoded2}
+		read3 = foreign.RightEitherNonEmptyListForeignErrorTriple(decoded2)
 	} else {
 		performed := direct.CatchException(func(x exception.Error) either.EitherErrorForeign {
-			return either.EitherErrorForeign{Tag: either.EitherErrorForeignLeft, Left: x}
+			return either.Left(x)
 		}, func() either.EitherErrorForeign {
 			argument := foreignvalue.ParseJSON(s2)
 			return either.EitherErrorForeign{Tag: either.EitherErrorForeignRight, Right: argument}
@@ -404,16 +524,16 @@ func initializeMain_() []string {
 		var result2 foreign.EitherNonEmptyListForeignErrorTriple
 		switch performed.Tag {
 		case either.EitherErrorForeignLeft:
-			result2 = foreign.EitherNonEmptyListForeignErrorTriple{Tag: foreign.EitherNonEmptyListForeignErrorTripleLeft, Left: foreign.NonEmptyListForeignError{First: &foreign.ForeignError{Tag: foreign.ForeignErrorForeignError, ForeignError: exception.Message(performed.Left)}, Second: foreign.SharedListForeignErrorNil}}
+			result2 = foreign.LeftEitherNonEmptyListForeignErrorTriple(foreign.NonEmptyListForeignError{First: foreign.ForeignErrorForeignError(exception.Message(performed.Left)), Second: foreign.SharedListForeignErrorNil})
 		default: // either.EitherErrorForeignRight
 			r := performed.Right
 			unsafeReadPropImpl := foreignvalue.UnsafeReadPropImpl(func() foreign.EitherNonEmptyListForeignErrorForeign {
-				return foreign.EitherNonEmptyListForeignErrorForeign{Tag: foreign.EitherNonEmptyListForeignErrorForeignLeft, Left: foreign.NonEmptyListForeignError{First: &foreign.ForeignError{Tag: foreign.ForeignErrorTypeMismatch, TypeMismatch0: "object", TypeMismatch1: foreignvalue.TypeOf(r)}, Second: foreign.SharedListForeignErrorNil}}
+				return foreign.LeftEitherNonEmptyListForeignErrorForeign(foreign.NonEmptyListForeignError{First: foreign.TypeMismatch("object", foreignvalue.TypeOf(r)), Second: foreign.SharedListForeignErrorNil})
 			}, foreign.PureIdentityNonEmptyListForeignError, "A", r)
 			var result3 foreign.EitherNonEmptyListForeignErrorInt
 			switch unsafeReadPropImpl.Tag {
 			case foreign.EitherNonEmptyListForeignErrorForeignLeft:
-				result3 = foreign.EitherNonEmptyListForeignErrorInt{Tag: foreign.EitherNonEmptyListForeignErrorIntLeft, Left: unsafeReadPropImpl.Left}
+				result3 = foreign.LeftEitherNonEmptyListForeignErrorInt(unsafeReadPropImpl.Left)
 			default: // foreign.EitherNonEmptyListForeignErrorForeignRight
 				b := unsafeReadPropImpl.Right
 				if foreignvalue.TagOf(b) == "Number" {
@@ -425,77 +545,77 @@ func initializeMain_() []string {
 						integer = maybe.NoInt
 					}
 					if integer == maybe.NoInt {
-						result3 = foreign.EitherNonEmptyListForeignErrorInt{Tag: foreign.EitherNonEmptyListForeignErrorIntLeft, Left: foreign.NonEmptyListForeignError{First: &foreign.ForeignError{Tag: foreign.ForeignErrorTypeMismatch, TypeMismatch0: "Int", TypeMismatch1: foreignvalue.TagOf(b)}, Second: foreign.SharedListForeignErrorNil}}
+						result3 = foreign.LeftEitherNonEmptyListForeignErrorInt(foreign.NonEmptyListForeignError{First: foreign.TypeMismatch("Int", foreignvalue.TagOf(b)), Second: foreign.SharedListForeignErrorNil})
 					} else {
-						result3 = foreign.EitherNonEmptyListForeignErrorInt{Tag: foreign.EitherNonEmptyListForeignErrorIntRight, Right: int32(integer)}
+						result3 = foreign.RightEitherNonEmptyListForeignErrorInt(int32(integer))
 					}
 				} else {
-					result3 = foreign.EitherNonEmptyListForeignErrorInt{Tag: foreign.EitherNonEmptyListForeignErrorIntLeft, Left: foreign.NonEmptyListForeignError{First: &foreign.ForeignError{Tag: foreign.ForeignErrorTypeMismatch, TypeMismatch0: "Int", TypeMismatch1: foreignvalue.TagOf(b)}, Second: foreign.SharedListForeignErrorNil}}
+					result3 = foreign.LeftEitherNonEmptyListForeignErrorInt(foreign.NonEmptyListForeignError{First: foreign.TypeMismatch("Int", foreignvalue.TagOf(b)), Second: foreign.SharedListForeignErrorNil})
 				}
 			}
 			var result4 foreign.EitherNonEmptyListForeignErrorFnA2ATriple
 			switch result3.Tag {
 			case foreign.EitherNonEmptyListForeignErrorIntRight:
-				result4 = foreign.EitherNonEmptyListForeignErrorFnA2ATriple{Tag: foreign.EitherNonEmptyListForeignErrorFnA2ATripleRight, Right: func(r1 shared.A2A) shared.Triple {
+				result4 = foreign.RightEitherNonEmptyListForeignErrorFnA2ATriple(func(r1 shared.A2A) shared.Triple {
 					return shared.Triple{A2: r1.A2, A: r1.A, A_: result3.Right}
-				}}
+				})
 			default: // foreign.EitherNonEmptyListForeignErrorIntLeft
-				result4 = foreign.EitherNonEmptyListForeignErrorFnA2ATriple{Tag: foreign.EitherNonEmptyListForeignErrorFnA2ATripleLeft, Left: foreign.MapListFunction("A", result3.Left)}
+				result4 = foreign.LeftEitherNonEmptyListForeignErrorFnA2ATriple(foreign.MapListFunction("A", result3.Left))
 			}
 			unsafeReadPropImpl2 := foreignvalue.UnsafeReadPropImpl(func() foreign.EitherNonEmptyListForeignErrorForeign {
-				return foreign.EitherNonEmptyListForeignErrorForeign{Tag: foreign.EitherNonEmptyListForeignErrorForeignLeft, Left: foreign.NonEmptyListForeignError{First: &foreign.ForeignError{Tag: foreign.ForeignErrorTypeMismatch, TypeMismatch0: "object", TypeMismatch1: foreignvalue.TypeOf(r)}, Second: foreign.SharedListForeignErrorNil}}
+				return foreign.LeftEitherNonEmptyListForeignErrorForeign(foreign.NonEmptyListForeignError{First: foreign.TypeMismatch("object", foreignvalue.TypeOf(r)), Second: foreign.SharedListForeignErrorNil})
 			}, foreign.PureIdentityNonEmptyListForeignError, "A2", r)
 			var result5 foreign.EitherNonEmptyListForeignErrorFnAOfStringA2A
 			switch unsafeReadPropImpl2.Tag {
 			case foreign.EitherNonEmptyListForeignErrorForeignLeft:
-				result5 = foreign.EitherNonEmptyListForeignErrorFnAOfStringA2A{Tag: foreign.EitherNonEmptyListForeignErrorFnAOfStringA2ALeft, Left: foreign.MapListFunction("A2", unsafeReadPropImpl2.Left)}
+				result5 = foreign.LeftEitherNonEmptyListForeignErrorFnAOfStringA2A(foreign.MapListFunction("A2", unsafeReadPropImpl2.Left))
 			default: // foreign.EitherNonEmptyListForeignErrorForeignRight
 				b := unsafeReadPropImpl2.Right
 				if foreignvalue.TagOf(b) == "Number" {
-					result5 = foreign.EitherNonEmptyListForeignErrorFnAOfStringA2A{Tag: foreign.EitherNonEmptyListForeignErrorFnAOfStringA2ARight, Right: func(r1 shared.AOfString) shared.A2A {
+					result5 = foreign.RightEitherNonEmptyListForeignErrorFnAOfStringA2A(func(r1 shared.AOfString) shared.A2A {
 						return shared.A2A{A: r1.A, A2: b.(float64)}
-					}}
+					})
 				} else {
-					result5 = foreign.EitherNonEmptyListForeignErrorFnAOfStringA2A{Tag: foreign.EitherNonEmptyListForeignErrorFnAOfStringA2ALeft, Left: foreign.MapListFunction("A2", foreign.NonEmptyListForeignError{First: &foreign.ForeignError{Tag: foreign.ForeignErrorTypeMismatch, TypeMismatch0: "Number", TypeMismatch1: foreignvalue.TagOf(b)}, Second: foreign.SharedListForeignErrorNil})}
+					result5 = foreign.LeftEitherNonEmptyListForeignErrorFnAOfStringA2A(foreign.MapListFunction("A2", foreign.NonEmptyListForeignError{First: foreign.TypeMismatch("Number", foreignvalue.TagOf(b)), Second: foreign.SharedListForeignErrorNil}))
 				}
 			}
 			unsafeReadPropImpl3 := foreignvalue.UnsafeReadPropImpl(func() foreign.EitherNonEmptyListForeignErrorForeign {
-				return foreign.EitherNonEmptyListForeignErrorForeign{Tag: foreign.EitherNonEmptyListForeignErrorForeignLeft, Left: foreign.NonEmptyListForeignError{First: &foreign.ForeignError{Tag: foreign.ForeignErrorTypeMismatch, TypeMismatch0: "object", TypeMismatch1: foreignvalue.TypeOf(r)}, Second: foreign.SharedListForeignErrorNil}}
+				return foreign.LeftEitherNonEmptyListForeignErrorForeign(foreign.NonEmptyListForeignError{First: foreign.TypeMismatch("object", foreignvalue.TypeOf(r)), Second: foreign.SharedListForeignErrorNil})
 			}, foreign.PureIdentityNonEmptyListForeignError, "a", r)
 			var result6 foreign.EitherNonEmptyListForeignErrorFnEmptyAOfString
 			switch unsafeReadPropImpl3.Tag {
 			case foreign.EitherNonEmptyListForeignErrorForeignLeft:
-				result6 = foreign.EitherNonEmptyListForeignErrorFnEmptyAOfString{Tag: foreign.EitherNonEmptyListForeignErrorFnEmptyAOfStringLeft, Left: foreign.MapListFunction("a", unsafeReadPropImpl3.Left)}
+				result6 = foreign.LeftEitherNonEmptyListForeignErrorFnEmptyAOfString(foreign.MapListFunction("a", unsafeReadPropImpl3.Left))
 			default: // foreign.EitherNonEmptyListForeignErrorForeignRight
 				b := unsafeReadPropImpl3.Right
 				if foreignvalue.TagOf(b) == "String" {
-					result6 = foreign.EitherNonEmptyListForeignErrorFnEmptyAOfString{Tag: foreign.EitherNonEmptyListForeignErrorFnEmptyAOfStringRight, Right: func(_ shared.Empty) shared.AOfString {
+					result6 = foreign.RightEitherNonEmptyListForeignErrorFnEmptyAOfString(func(_ shared.Empty) shared.AOfString {
 						return shared.AOfString{A: b.(string)}
-					}}
+					})
 				} else {
-					result6 = foreign.EitherNonEmptyListForeignErrorFnEmptyAOfString{Tag: foreign.EitherNonEmptyListForeignErrorFnEmptyAOfStringLeft, Left: foreign.MapListFunction("a", foreign.NonEmptyListForeignError{First: &foreign.ForeignError{Tag: foreign.ForeignErrorTypeMismatch, TypeMismatch0: "String", TypeMismatch1: foreignvalue.TagOf(b)}, Second: foreign.SharedListForeignErrorNil})}
+					result6 = foreign.LeftEitherNonEmptyListForeignErrorFnEmptyAOfString(foreign.MapListFunction("a", foreign.NonEmptyListForeignError{First: foreign.TypeMismatch("String", foreignvalue.TagOf(b)), Second: foreign.SharedListForeignErrorNil}))
 				}
 			}
 			var result7 foreign.EitherNonEmptyListForeignErrorFnEmptyA2A
 			if result5.Tag == foreign.EitherNonEmptyListForeignErrorFnAOfStringA2ARight && result6.Tag == foreign.EitherNonEmptyListForeignErrorFnEmptyAOfStringRight {
-				result7 = foreign.EitherNonEmptyListForeignErrorFnEmptyA2A{Tag: foreign.EitherNonEmptyListForeignErrorFnEmptyA2ARight, Right: func(x shared.Empty) shared.A2A {
+				result7 = foreign.RightEitherNonEmptyListForeignErrorFnEmptyA2A(func(x shared.Empty) shared.A2A {
 					return result5.Right(result6.Right(x))
-				}}
+				})
 			} else if result5.Tag == foreign.EitherNonEmptyListForeignErrorFnAOfStringA2ALeft && result6.Tag == foreign.EitherNonEmptyListForeignErrorFnEmptyAOfStringLeft {
-				result7 = foreign.EitherNonEmptyListForeignErrorFnEmptyA2A{Tag: foreign.EitherNonEmptyListForeignErrorFnEmptyA2ALeft, Left: foreign.NonEmptyListForeignError{First: result5.Left.First, Second: mainGoReusing(&foreign.ListForeignError{Cons0: result6.Left.First, Cons1: result6.Left.Second}, mainGo(foreign.SharedListForeignErrorNil, result5.Left.Second))}}
+				result7 = foreign.LeftEitherNonEmptyListForeignErrorFnEmptyA2A(foreign.NonEmptyListForeignError{First: result5.Left.First, Second: mainGoReusing(foreign.Cons(result6.Left.First, result6.Left.Second), mainGo(foreign.SharedListForeignErrorNil, result5.Left.Second))})
 			} else if result5.Tag == foreign.EitherNonEmptyListForeignErrorFnAOfStringA2ARight && result6.Tag == foreign.EitherNonEmptyListForeignErrorFnEmptyAOfStringLeft {
-				result7 = foreign.EitherNonEmptyListForeignErrorFnEmptyA2A{Tag: foreign.EitherNonEmptyListForeignErrorFnEmptyA2ALeft, Left: result6.Left}
+				result7 = foreign.LeftEitherNonEmptyListForeignErrorFnEmptyA2A(result6.Left)
 			} else {
-				result7 = foreign.EitherNonEmptyListForeignErrorFnEmptyA2A{Tag: foreign.EitherNonEmptyListForeignErrorFnEmptyA2ALeft, Left: result5.Left}
+				result7 = foreign.LeftEitherNonEmptyListForeignErrorFnEmptyA2A(result5.Left)
 			}
 			if result4.Tag == foreign.EitherNonEmptyListForeignErrorFnA2ATripleRight && result7.Tag == foreign.EitherNonEmptyListForeignErrorFnEmptyA2ARight {
-				result2 = foreign.EitherNonEmptyListForeignErrorTriple{Tag: foreign.EitherNonEmptyListForeignErrorTripleRight, Right: result4.Right(result7.Right(shared.Empty{}))}
+				result2 = foreign.RightEitherNonEmptyListForeignErrorTriple(result4.Right(result7.Right(shared.Empty{})))
 			} else if result4.Tag == foreign.EitherNonEmptyListForeignErrorFnA2ATripleLeft && result7.Tag == foreign.EitherNonEmptyListForeignErrorFnEmptyA2ALeft {
-				result2 = foreign.EitherNonEmptyListForeignErrorTriple{Tag: foreign.EitherNonEmptyListForeignErrorTripleLeft, Left: foreign.NonEmptyListForeignError{First: result4.Left.First, Second: mainGoReusing(&foreign.ListForeignError{Cons0: result7.Left.First, Cons1: result7.Left.Second}, mainGo(foreign.SharedListForeignErrorNil, result4.Left.Second))}}
+				result2 = foreign.LeftEitherNonEmptyListForeignErrorTriple(foreign.NonEmptyListForeignError{First: result4.Left.First, Second: mainGoReusing(foreign.Cons(result7.Left.First, result7.Left.Second), mainGo(foreign.SharedListForeignErrorNil, result4.Left.Second))})
 			} else if result4.Tag == foreign.EitherNonEmptyListForeignErrorFnA2ATripleRight && result7.Tag == foreign.EitherNonEmptyListForeignErrorFnEmptyA2ALeft {
-				result2 = foreign.EitherNonEmptyListForeignErrorTriple{Tag: foreign.EitherNonEmptyListForeignErrorTripleLeft, Left: result7.Left}
+				result2 = foreign.LeftEitherNonEmptyListForeignErrorTriple(result7.Left)
 			} else {
-				result2 = foreign.EitherNonEmptyListForeignErrorTriple{Tag: foreign.EitherNonEmptyListForeignErrorTripleLeft, Left: result4.Left}
+				result2 = foreign.LeftEitherNonEmptyListForeignErrorTriple(result4.Left)
 			}
 		}
 		read3 = result2
@@ -512,10 +632,10 @@ func initializeMain_() []string {
 	decoded3, ok3 := foreignvalue.Decode(s3, shared.DecodeJSONHeader)
 	var read4 foreign.EitherNonEmptyListForeignErrorHeader
 	if ok3 {
-		read4 = foreign.EitherNonEmptyListForeignErrorHeader{Tag: foreign.EitherNonEmptyListForeignErrorHeaderRight, Right: decoded3}
+		read4 = foreign.RightEitherNonEmptyListForeignErrorHeader(decoded3)
 	} else {
 		performed := direct.CatchException(func(x exception.Error) either.EitherErrorForeign {
-			return either.EitherErrorForeign{Tag: either.EitherErrorForeignLeft, Left: x}
+			return either.Left(x)
 		}, func() either.EitherErrorForeign {
 			argument := foreignvalue.ParseJSON(s3)
 			return either.EitherErrorForeign{Tag: either.EitherErrorForeignRight, Right: argument}
@@ -523,51 +643,51 @@ func initializeMain_() []string {
 		var result2 foreign.EitherNonEmptyListForeignErrorHeader
 		switch performed.Tag {
 		case either.EitherErrorForeignLeft:
-			result2 = foreign.EitherNonEmptyListForeignErrorHeader{Tag: foreign.EitherNonEmptyListForeignErrorHeaderLeft, Left: foreign.NonEmptyListForeignError{First: &foreign.ForeignError{Tag: foreign.ForeignErrorForeignError, ForeignError: exception.Message(performed.Left)}, Second: foreign.SharedListForeignErrorNil}}
+			result2 = foreign.LeftEitherNonEmptyListForeignErrorHeader(foreign.NonEmptyListForeignError{First: foreign.ForeignErrorForeignError(exception.Message(performed.Left)), Second: foreign.SharedListForeignErrorNil})
 		default: // either.EitherErrorForeignRight
 			r := performed.Right
 			unsafeReadPropImpl := foreignvalue.UnsafeReadPropImpl(func() foreign.EitherNonEmptyListForeignErrorForeign {
-				return foreign.EitherNonEmptyListForeignErrorForeign{Tag: foreign.EitherNonEmptyListForeignErrorForeignLeft, Left: foreign.NonEmptyListForeignError{First: &foreign.ForeignError{Tag: foreign.ForeignErrorTypeMismatch, TypeMismatch0: "object", TypeMismatch1: foreignvalue.TypeOf(r)}, Second: foreign.SharedListForeignErrorNil}}
+				return foreign.LeftEitherNonEmptyListForeignErrorForeign(foreign.NonEmptyListForeignError{First: foreign.TypeMismatch("object", foreignvalue.TypeOf(r)), Second: foreign.SharedListForeignErrorNil})
 			}, foreign.PureIdentityNonEmptyListForeignError, "content-type", r)
 			var result3 foreign.EitherNonEmptyListForeignErrorFnContent_typeHeader
 			switch unsafeReadPropImpl.Tag {
 			case foreign.EitherNonEmptyListForeignErrorForeignLeft:
-				result3 = foreign.EitherNonEmptyListForeignErrorFnContent_typeHeader{Tag: foreign.EitherNonEmptyListForeignErrorFnContent_typeHeaderLeft, Left: foreign.MapListFunction("content-type", unsafeReadPropImpl.Left)}
+				result3 = foreign.LeftEitherNonEmptyListForeignErrorFnContent_typeHeader(foreign.MapListFunction("content-type", unsafeReadPropImpl.Left))
 			default: // foreign.EitherNonEmptyListForeignErrorForeignRight
 				b := unsafeReadPropImpl.Right
 				if foreignvalue.TagOf(b) == "String" {
-					result3 = foreign.EitherNonEmptyListForeignErrorFnContent_typeHeader{Tag: foreign.EitherNonEmptyListForeignErrorFnContent_typeHeaderRight, Right: func(r1 shared.Content_type) shared.Header {
+					result3 = foreign.RightEitherNonEmptyListForeignErrorFnContent_typeHeader(func(r1 shared.Content_type) shared.Header {
 						return shared.Header{Content_type: r1.Content_type, Content_type2: b.(string)}
-					}}
+					})
 				} else {
-					result3 = foreign.EitherNonEmptyListForeignErrorFnContent_typeHeader{Tag: foreign.EitherNonEmptyListForeignErrorFnContent_typeHeaderLeft, Left: foreign.MapListFunction("content-type", foreign.NonEmptyListForeignError{First: &foreign.ForeignError{Tag: foreign.ForeignErrorTypeMismatch, TypeMismatch0: "String", TypeMismatch1: foreignvalue.TagOf(b)}, Second: foreign.SharedListForeignErrorNil})}
+					result3 = foreign.LeftEitherNonEmptyListForeignErrorFnContent_typeHeader(foreign.MapListFunction("content-type", foreign.NonEmptyListForeignError{First: foreign.TypeMismatch("String", foreignvalue.TagOf(b)), Second: foreign.SharedListForeignErrorNil}))
 				}
 			}
 			unsafeReadPropImpl2 := foreignvalue.UnsafeReadPropImpl(func() foreign.EitherNonEmptyListForeignErrorForeign {
-				return foreign.EitherNonEmptyListForeignErrorForeign{Tag: foreign.EitherNonEmptyListForeignErrorForeignLeft, Left: foreign.NonEmptyListForeignError{First: &foreign.ForeignError{Tag: foreign.ForeignErrorTypeMismatch, TypeMismatch0: "object", TypeMismatch1: foreignvalue.TypeOf(r)}, Second: foreign.SharedListForeignErrorNil}}
+				return foreign.LeftEitherNonEmptyListForeignErrorForeign(foreign.NonEmptyListForeignError{First: foreign.TypeMismatch("object", foreignvalue.TypeOf(r)), Second: foreign.SharedListForeignErrorNil})
 			}, foreign.PureIdentityNonEmptyListForeignError, "content_type", r)
 			var result4 foreign.EitherNonEmptyListForeignErrorFnEmptyContent_type
 			switch unsafeReadPropImpl2.Tag {
 			case foreign.EitherNonEmptyListForeignErrorForeignLeft:
-				result4 = foreign.EitherNonEmptyListForeignErrorFnEmptyContent_type{Tag: foreign.EitherNonEmptyListForeignErrorFnEmptyContent_typeLeft, Left: foreign.MapListFunction("content_type", unsafeReadPropImpl2.Left)}
+				result4 = foreign.LeftEitherNonEmptyListForeignErrorFnEmptyContent_type(foreign.MapListFunction("content_type", unsafeReadPropImpl2.Left))
 			default: // foreign.EitherNonEmptyListForeignErrorForeignRight
 				b := unsafeReadPropImpl2.Right
 				if foreignvalue.TagOf(b) == "String" {
-					result4 = foreign.EitherNonEmptyListForeignErrorFnEmptyContent_type{Tag: foreign.EitherNonEmptyListForeignErrorFnEmptyContent_typeRight, Right: func(_ shared.Empty) shared.Content_type {
+					result4 = foreign.RightEitherNonEmptyListForeignErrorFnEmptyContent_type(func(_ shared.Empty) shared.Content_type {
 						return shared.Content_type{Content_type: b.(string)}
-					}}
+					})
 				} else {
-					result4 = foreign.EitherNonEmptyListForeignErrorFnEmptyContent_type{Tag: foreign.EitherNonEmptyListForeignErrorFnEmptyContent_typeLeft, Left: foreign.MapListFunction("content_type", foreign.NonEmptyListForeignError{First: &foreign.ForeignError{Tag: foreign.ForeignErrorTypeMismatch, TypeMismatch0: "String", TypeMismatch1: foreignvalue.TagOf(b)}, Second: foreign.SharedListForeignErrorNil})}
+					result4 = foreign.LeftEitherNonEmptyListForeignErrorFnEmptyContent_type(foreign.MapListFunction("content_type", foreign.NonEmptyListForeignError{First: foreign.TypeMismatch("String", foreignvalue.TagOf(b)), Second: foreign.SharedListForeignErrorNil}))
 				}
 			}
 			if result3.Tag == foreign.EitherNonEmptyListForeignErrorFnContent_typeHeaderRight && result4.Tag == foreign.EitherNonEmptyListForeignErrorFnEmptyContent_typeRight {
-				result2 = foreign.EitherNonEmptyListForeignErrorHeader{Tag: foreign.EitherNonEmptyListForeignErrorHeaderRight, Right: result3.Right(result4.Right(shared.Empty{}))}
+				result2 = foreign.RightEitherNonEmptyListForeignErrorHeader(result3.Right(result4.Right(shared.Empty{})))
 			} else if result3.Tag == foreign.EitherNonEmptyListForeignErrorFnContent_typeHeaderLeft && result4.Tag == foreign.EitherNonEmptyListForeignErrorFnEmptyContent_typeLeft {
-				result2 = foreign.EitherNonEmptyListForeignErrorHeader{Tag: foreign.EitherNonEmptyListForeignErrorHeaderLeft, Left: foreign.NonEmptyListForeignError{First: result3.Left.First, Second: mainGoReusing(&foreign.ListForeignError{Cons0: result4.Left.First, Cons1: result4.Left.Second}, mainGo(foreign.SharedListForeignErrorNil, result3.Left.Second))}}
+				result2 = foreign.LeftEitherNonEmptyListForeignErrorHeader(foreign.NonEmptyListForeignError{First: result3.Left.First, Second: mainGoReusing(foreign.Cons(result4.Left.First, result4.Left.Second), mainGo(foreign.SharedListForeignErrorNil, result3.Left.Second))})
 			} else if result3.Tag == foreign.EitherNonEmptyListForeignErrorFnContent_typeHeaderRight && result4.Tag == foreign.EitherNonEmptyListForeignErrorFnEmptyContent_typeLeft {
-				result2 = foreign.EitherNonEmptyListForeignErrorHeader{Tag: foreign.EitherNonEmptyListForeignErrorHeaderLeft, Left: result4.Left}
+				result2 = foreign.LeftEitherNonEmptyListForeignErrorHeader(result4.Left)
 			} else {
-				result2 = foreign.EitherNonEmptyListForeignErrorHeader{Tag: foreign.EitherNonEmptyListForeignErrorHeaderLeft, Left: result3.Left}
+				result2 = foreign.LeftEitherNonEmptyListForeignErrorHeader(result3.Left)
 			}
 		}
 		read4 = result2

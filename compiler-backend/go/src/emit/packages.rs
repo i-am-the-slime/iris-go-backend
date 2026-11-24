@@ -40,6 +40,12 @@ pub(crate) enum Spelling {
         parent: String,
         suffix: String,
     },
+    /// A constructor function: its constructor's name, else that name followed by its type's.
+    /// Named after every other name of its place, so that it never takes a type's name.
+    Constructor {
+        constructor: String,
+        data_type: String,
+    },
 }
 
 #[derive(Debug, Clone)]
@@ -68,6 +74,7 @@ impl Spelling {
             Spelling::Derived { prefix, parent, suffix } => {
                 format!("{prefix}{}{suffix}", capitalise(parent))
             }
+            Spelling::Constructor { constructor, .. } => constructor.clone(),
         }
     }
 }
@@ -889,12 +896,16 @@ impl Naming<'_> {
 
     /// Names the globals of a place that are not formed from another's: first
     /// those spelled on their own, then those that spell records, by the names
-    /// the records got.
+    /// the records got, and last the constructor functions, by their types' names.
     fn name_place(&mut self, place: Place) {
         if !self.named.insert(place) {
             return;
         }
         let members = self.members.get(&place).cloned().unwrap_or_default();
+        let (constructors, members): (Vec<String>, Vec<String>) =
+            members.into_iter().partition(|global| {
+                matches!(self.spellings.get(global), Some(Spelling::Constructor { .. }))
+            });
         let (composed, simple): (Vec<String>, Vec<String>) = members
             .into_iter()
             .filter(|global| !matches!(self.spellings.get(global), Some(Spelling::Derived { .. })))
@@ -947,6 +958,21 @@ impl Naming<'_> {
             })
             .collect();
         self.choose(place, composed, composed_ladders);
+        let mut constructor_ladders = Vec::with_capacity(constructors.len());
+        for global in &constructors {
+            let Some(Spelling::Constructor { constructor, data_type }) = self.spellings.get(global)
+            else {
+                unreachable!("invariant violated: a constructor function lost its spelling")
+            };
+            let (constructor, data_type) = (constructor.clone(), data_type.clone());
+            let data_type_place = match self.unit_of.get(data_type.as_str()) {
+                Some(&unit) => self.placements[unit],
+                None => place,
+            };
+            let qualified = format!("{constructor}{}", self.name(&data_type, data_type_place));
+            constructor_ladders.push(vec![constructor, qualified]);
+        }
+        self.choose(place, constructors, constructor_ladders);
     }
 
     fn is_home(&self, global: &str, place: Place) -> bool {

@@ -240,6 +240,8 @@ where
     });
     timed("divergence", || diverging::end_blocks_at_divergence(&mut declarations));
     timed("unreferenced", || unreferenced::drop_unreferenced_definitions(&mut declarations));
+    // Last, so that every pass before reads the constructions' fields in their literals.
+    timed("constructions", || emitter.call_constructor_functions(&mut declarations))?;
     if let Some(aside) = lines_aside {
         lines::restore(&mut declarations, aside);
     }
@@ -406,6 +408,8 @@ where
             json_encoders: FxHashMap::default(),
             maybe_helpers: maybe::MaybeHelpers::new(),
             constructor_functions: FxHashMap::default(),
+            named_constructions: FxHashMap::default(),
+            construction_functions: FxHashMap::default(),
             cell_types: FxHashMap::default(),
             reaching: FxHashMap::default(),
             holding: FxHashMap::default(),
@@ -534,6 +538,12 @@ struct Emitter<'p, 'm, 'q, Q> {
     converters: FxHashMap<(MonotypeId, MonotypeId), String>,
     /// The function each constructor used as a value at a function type is.
     constructor_functions: FxHashMap<(DataType, usize, MonotypeId), String>,
+    /// The constructions of sum types that a constructor function may build, by the Go struct
+    /// and tag their composite literals carry.
+    named_constructions: FxHashMap<constructors::ConstructionKey, (DataType, usize)>,
+    /// The constructor function of each such construction, shared with the constructors
+    /// used as values.
+    construction_functions: FxHashMap<constructors::ConstructionKey, String>,
     round_trips: Vec<coerce::RoundTrip>,
     array_boxes: boxing::ArrayBoxes,
     recursive_names: FxHashMap<DataType, String>,
@@ -1833,6 +1843,9 @@ where
                 self.shared_nullary(&layout.name, &constructor_layout.tag, false, line)
             }
             DataKind::Tagged | DataKind::Product | DataKind::Sentinel => {
+                if let Some(key) = self.construction_key(&layout, constructor)? {
+                    self.named_constructions.insert(key, (data.clone(), constructor));
+                }
                 let composite = self.composite(&layout, constructor, values);
                 if layout.boxed { GoExpression::Address(Box::new(composite)) } else { composite }
             }

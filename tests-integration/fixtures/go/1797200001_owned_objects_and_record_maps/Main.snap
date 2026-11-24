@@ -20,17 +20,21 @@ type Window struct {
 	Start int32
 }
 
+func Node(node0 int32, node1 int32, node2 int32, node3 int32, node4 *MapIntInt, node5 *MapIntInt) *MapIntInt {
+	return &MapIntInt{Node0: node0, Node1: node1, Node2: node2, Node3: node3, Node4: node4, Node5: node5}
+}
+
 func UnsafeNodeIntInt(k int32, v int32, l *MapIntInt, r *MapIntInt) *MapIntInt {
 	if l == SharedMapIntIntLeaf {
 		if r == SharedMapIntIntLeaf {
-			return &MapIntInt{Node0: 1, Node1: 1, Node2: k, Node3: v, Node4: l, Node5: r}
+			return Node(1, 1, k, v, l, r)
 		}
-		return &MapIntInt{Node0: 1 + r.Node0, Node1: 1 + r.Node1, Node2: k, Node3: v, Node4: l, Node5: r}
+		return Node(1+r.Node0, 1+r.Node1, k, v, l, r)
 	}
 	h1 := l.Node0
 	s1 := l.Node1
 	if r == SharedMapIntIntLeaf {
-		return &MapIntInt{Node0: 1 + h1, Node1: 1 + s1, Node2: k, Node3: v, Node4: l, Node5: r}
+		return Node(1+h1, 1+s1, k, v, l, r)
 	}
 	h2 := r.Node0
 	var result int32
@@ -39,7 +43,7 @@ func UnsafeNodeIntInt(k int32, v int32, l *MapIntInt, r *MapIntInt) *MapIntInt {
 	} else {
 		result = h2
 	}
-	return &MapIntInt{Node0: 1 + result, Node1: 1 + s1 + r.Node1, Node2: k, Node3: v, Node4: l, Node5: r}
+	return Node(1+result, 1+s1+r.Node1, k, v, l, r)
 }
 
 func UnsafeBalancedNodeIntIntHeight(value *MapIntInt) int32 {
@@ -262,7 +266,7 @@ func mainGo(x int32, value *internal.MapIntInt) maybe.Int {
 
 func mainGoReusing(x int32, v int32, value *internal.MapIntInt) *internal.MapIntInt {
 	if value == internal.SharedMapIntIntLeaf {
-		return &internal.MapIntInt{Node0: 1, Node1: 1, Node2: x, Node3: v, Node4: internal.SharedMapIntIntLeaf, Node5: internal.SharedMapIntIntLeaf}
+		return internal.Node(1, 1, x, v, internal.SharedMapIntIntLeaf, internal.SharedMapIntIntLeaf)
 	}
 	mh := value.Node0
 	ms := value.Node1

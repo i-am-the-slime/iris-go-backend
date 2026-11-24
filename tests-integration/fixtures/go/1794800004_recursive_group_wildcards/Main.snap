@@ -29,10 +29,18 @@ const (
 	TreeTupleStringIntNode
 )
 
+func Leaf(leaf tuple.TupleStringInt) TreeTupleStringInt {
+	return TreeTupleStringInt{Tag: TreeTupleStringIntLeaf, Leaf: leaf}
+}
+
+func Node(node []TreeTupleStringInt) TreeTupleStringInt {
+	return TreeTupleStringInt{Tag: TreeTupleStringIntNode, Node: node}
+}
+
 var main_ = initializeMain_()
 
 func initializeMain_() int32 {
-	return countString([]TreeTupleStringInt{{Tag: TreeTupleStringIntLeaf, Leaf: tuple.TupleStringInt{First: "a", Second: 1}}, {Tag: TreeTupleStringIntNode, Node: []TreeTupleStringInt{{Tag: TreeTupleStringIntLeaf, Leaf: tuple.TupleStringInt{First: "b", Second: 2}}}}})
+	return countString([]TreeTupleStringInt{Leaf(tuple.TupleStringInt{First: "a", Second: 1}), Node([]TreeTupleStringInt{Leaf(tuple.TupleStringInt{First: "b", Second: 2})})})
 }
 
 func countString(trees []TreeTupleStringInt) int32 {

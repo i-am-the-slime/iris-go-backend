@@ -81,6 +81,86 @@ const (
 	RatioTagsTags
 )
 
+func FlagFlagNamePointRatioTags(flag bool) FlagNamePointRatioTags {
+	return FlagNamePointRatioTags{Tag: FlagNamePointRatioTagsFlag, Flag: flag}
+}
+
+func NameFlagNamePointRatioTags(name string) FlagNamePointRatioTags {
+	return FlagNamePointRatioTags{Tag: FlagNamePointRatioTagsName, Name: name}
+}
+
+func PointFlagNamePointRatioTags(point shared.X) FlagNamePointRatioTags {
+	return FlagNamePointRatioTags{Tag: FlagNamePointRatioTagsPoint, Point: point}
+}
+
+func RatioFlagNamePointRatioTags(ratio float64) FlagNamePointRatioTags {
+	return FlagNamePointRatioTags{Tag: FlagNamePointRatioTagsRatio, Ratio: ratio}
+}
+
+func TagsFlagNamePointRatioTags(tags []string) FlagNamePointRatioTags {
+	return FlagNamePointRatioTags{Tag: FlagNamePointRatioTagsTags, Tags: tags}
+}
+
+func NameCountFlagNamePointRatioTags(name string) CountFlagNamePointRatioTags {
+	return CountFlagNamePointRatioTags{Tag: CountFlagNamePointRatioTagsName, Name: name}
+}
+
+func PointCountFlagNamePointRatioTags(point shared.X) CountFlagNamePointRatioTags {
+	return CountFlagNamePointRatioTags{Tag: CountFlagNamePointRatioTagsPoint, Point: point}
+}
+
+func Count(count int32) CountFlagNamePointRatioTags {
+	return CountFlagNamePointRatioTags{Tag: CountFlagNamePointRatioTagsCount, Count: count}
+}
+
+func RatioCountFlagNamePointRatioTags(ratio float64) CountFlagNamePointRatioTags {
+	return CountFlagNamePointRatioTags{Tag: CountFlagNamePointRatioTagsRatio, Ratio: ratio}
+}
+
+func FlagCountFlagNamePointRatioTags(flag bool) CountFlagNamePointRatioTags {
+	return CountFlagNamePointRatioTags{Tag: CountFlagNamePointRatioTagsFlag, Flag: flag}
+}
+
+func TagsCountFlagNamePointRatioTags(tags []string) CountFlagNamePointRatioTags {
+	return CountFlagNamePointRatioTags{Tag: CountFlagNamePointRatioTagsTags, Tags: tags}
+}
+
+func NameNamePointRatioTags(name string) NamePointRatioTags {
+	return NamePointRatioTags{Tag: NamePointRatioTagsName, Name: name}
+}
+
+func PointNamePointRatioTags(point shared.X) NamePointRatioTags {
+	return NamePointRatioTags{Tag: NamePointRatioTagsPoint, Point: point}
+}
+
+func RatioNamePointRatioTags(ratio float64) NamePointRatioTags {
+	return NamePointRatioTags{Tag: NamePointRatioTagsRatio, Ratio: ratio}
+}
+
+func TagsNamePointRatioTags(tags []string) NamePointRatioTags {
+	return NamePointRatioTags{Tag: NamePointRatioTagsTags, Tags: tags}
+}
+
+func PointPointRatioTags(point shared.X) PointRatioTags {
+	return PointRatioTags{Tag: PointRatioTagsPoint, Point: point}
+}
+
+func RatioPointRatioTags(ratio float64) PointRatioTags {
+	return PointRatioTags{Tag: PointRatioTagsRatio, Ratio: ratio}
+}
+
+func TagsPointRatioTags(tags []string) PointRatioTags {
+	return PointRatioTags{Tag: PointRatioTagsTags, Tags: tags}
+}
+
+func RatioRatioTags(ratio float64) RatioTags {
+	return RatioTags{Tag: RatioTagsRatio, Ratio: ratio}
+}
+
+func TagsRatioTags(tags []string) RatioTags {
+	return RatioTags{Tag: RatioTagsTags, Tags: tags}
+}
+
 // Yoga/JSON/json.go
 package json
 
@@ -101,15 +181,15 @@ func WriteJSONVariantCountFlagNamePointRatioTags(x variant.CountFlagNamePointRat
 			return WriteImplForeign(x2)
 		})
 	case variant.CountFlagNamePointRatioTagsFlag:
-		result = WriteJSONVariantCountFlagNamePointRatioTagsFallback(variant.FlagNamePointRatioTags{Tag: variant.FlagNamePointRatioTagsFlag, Flag: x.Flag})
+		result = WriteJSONVariantCountFlagNamePointRatioTagsFallback(variant.FlagFlagNamePointRatioTags(x.Flag))
 	case variant.CountFlagNamePointRatioTagsName:
-		result = WriteJSONVariantCountFlagNamePointRatioTagsFallback(variant.FlagNamePointRatioTags{Tag: variant.FlagNamePointRatioTagsName, Name: x.Name})
+		result = WriteJSONVariantCountFlagNamePointRatioTagsFallback(variant.NameFlagNamePointRatioTags(x.Name))
 	case variant.CountFlagNamePointRatioTagsPoint:
-		result = WriteJSONVariantCountFlagNamePointRatioTagsFallback(variant.FlagNamePointRatioTags{Tag: variant.FlagNamePointRatioTagsPoint, Point: x.Point})
+		result = WriteJSONVariantCountFlagNamePointRatioTagsFallback(variant.PointFlagNamePointRatioTags(x.Point))
 	case variant.CountFlagNamePointRatioTagsRatio:
-		result = WriteJSONVariantCountFlagNamePointRatioTagsFallback(variant.FlagNamePointRatioTags{Tag: variant.FlagNamePointRatioTagsRatio, Ratio: x.Ratio})
+		result = WriteJSONVariantCountFlagNamePointRatioTagsFallback(variant.RatioFlagNamePointRatioTags(x.Ratio))
 	default: // variant.CountFlagNamePointRatioTagsTags
-		result = WriteJSONVariantCountFlagNamePointRatioTagsFallback(variant.FlagNamePointRatioTags{Tag: variant.FlagNamePointRatioTagsTags, Tags: x.Tags})
+		result = WriteJSONVariantCountFlagNamePointRatioTagsFallback(variant.TagsFlagNamePointRatioTags(x.Tags))
 	}
 	return foreignvalue.UnsafeStringify(result)
 }
@@ -131,13 +211,13 @@ func WriteJSONVariantCountFlagNamePointRatioTagsFallback(variant2 variant.FlagNa
 			return WriteImplForeign(x)
 		})
 	case variant.FlagNamePointRatioTagsName:
-		return WriteJSONVariantCountFlagNamePointRatioTagsFallbackFallback(variant.NamePointRatioTags{Tag: variant.NamePointRatioTagsName, Name: variant2.Name})
+		return WriteJSONVariantCountFlagNamePointRatioTagsFallbackFallback(variant.NameNamePointRatioTags(variant2.Name))
 	case variant.FlagNamePointRatioTagsPoint:
-		return WriteJSONVariantCountFlagNamePointRatioTagsFallbackFallback(variant.NamePointRatioTags{Tag: variant.NamePointRatioTagsPoint, Point: variant2.Point})
+		return WriteJSONVariantCountFlagNamePointRatioTagsFallbackFallback(variant.PointNamePointRatioTags(variant2.Point))
 	case variant.FlagNamePointRatioTagsRatio:
-		return WriteJSONVariantCountFlagNamePointRatioTagsFallbackFallback(variant.NamePointRatioTags{Tag: variant.NamePointRatioTagsRatio, Ratio: variant2.Ratio})
+		return WriteJSONVariantCountFlagNamePointRatioTagsFallbackFallback(variant.RatioNamePointRatioTags(variant2.Ratio))
 	default: // variant.FlagNamePointRatioTagsTags
-		return WriteJSONVariantCountFlagNamePointRatioTagsFallbackFallback(variant.NamePointRatioTags{Tag: variant.NamePointRatioTagsTags, Tags: variant2.Tags})
+		return WriteJSONVariantCountFlagNamePointRatioTagsFallbackFallback(variant.TagsNamePointRatioTags(variant2.Tags))
 	}
 }
 
@@ -150,11 +230,11 @@ func WriteJSONVariantCountFlagNamePointRatioTagsFallbackFallback(variant2 varian
 			return WriteImplForeign(x)
 		})
 	case variant.NamePointRatioTagsPoint:
-		return WriteJSONVariantCountFlagNamePointRatioTagsFallbackFallbackFallback(variant.PointRatioTags{Tag: variant.PointRatioTagsPoint, Point: variant2.Point})
+		return WriteJSONVariantCountFlagNamePointRatioTagsFallbackFallbackFallback(variant.PointPointRatioTags(variant2.Point))
 	case variant.NamePointRatioTagsRatio:
-		return WriteJSONVariantCountFlagNamePointRatioTagsFallbackFallbackFallback(variant.PointRatioTags{Tag: variant.PointRatioTagsRatio, Ratio: variant2.Ratio})
+		return WriteJSONVariantCountFlagNamePointRatioTagsFallbackFallbackFallback(variant.RatioPointRatioTags(variant2.Ratio))
 	default: // variant.NamePointRatioTagsTags
-		return WriteJSONVariantCountFlagNamePointRatioTagsFallbackFallbackFallback(variant.PointRatioTags{Tag: variant.PointRatioTagsTags, Tags: variant2.Tags})
+		return WriteJSONVariantCountFlagNamePointRatioTagsFallbackFallbackFallback(variant.TagsPointRatioTags(variant2.Tags))
 	}
 }
 
@@ -167,9 +247,9 @@ func WriteJSONVariantCountFlagNamePointRatioTagsFallbackFallbackFallback(variant
 			return WriteImplForeign(x)
 		})
 	case variant.PointRatioTagsRatio:
-		return WriteJSONVariantCountFlagNamePointRatioTagsFallbackFallbackFallbackFallback(variant.RatioTags{Tag: variant.RatioTagsRatio, Ratio: variant2.Ratio})
+		return WriteJSONVariantCountFlagNamePointRatioTagsFallbackFallbackFallbackFallback(variant.RatioRatioTags(variant2.Ratio))
 	default: // variant.PointRatioTagsTags
-		return WriteJSONVariantCountFlagNamePointRatioTagsFallbackFallbackFallbackFallback(variant.RatioTags{Tag: variant.RatioTagsTags, Tags: variant2.Tags})
+		return WriteJSONVariantCountFlagNamePointRatioTagsFallbackFallbackFallbackFallback(variant.TagsRatioTags(variant2.Tags))
 	}
 }
 
@@ -221,7 +301,7 @@ func initializeMain_() []string {
 	return array.Append(mapped, []string{foreignvalue.UnsafeStringify(object.Insert("e", shared, performed))})
 }
 
-var shapes []variant.CountFlagNamePointRatioTags = []variant.CountFlagNamePointRatioTags{{Tag: variant.CountFlagNamePointRatioTagsName, Name: "a"}, {Tag: variant.CountFlagNamePointRatioTagsPoint, Point: shared2.X{X: 1}}, {Tag: variant.CountFlagNamePointRatioTagsCount, Count: 3}, {Tag: variant.CountFlagNamePointRatioTagsRatio, Ratio: 1.5}, {Tag: variant.CountFlagNamePointRatioTagsFlag, Flag: true}, {Tag: variant.CountFlagNamePointRatioTagsTags, Tags: []string{"p", "q"}}}
+var shapes []variant.CountFlagNamePointRatioTags = []variant.CountFlagNamePointRatioTags{variant.NameCountFlagNamePointRatioTags("a"), variant.PointCountFlagNamePointRatioTags(shared2.X{X: 1}), variant.Count(3), variant.RatioCountFlagNamePointRatioTags(1.5), variant.FlagCountFlagNamePointRatioTags(true), variant.TagsCountFlagNamePointRatioTags([]string{"p", "q"})}
 
 func main() {
 	console.Print("[" + strings.Join(main_, " ") + "]")

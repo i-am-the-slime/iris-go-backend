@@ -54,6 +54,22 @@ type FiberUnit struct {
 	Run         func()
 }
 
+func LeftEitherErrorInt(left exception.Error) EitherErrorInt {
+	return EitherErrorInt{Tag: EitherErrorIntLeft, Left: left}
+}
+
+func RightEitherErrorInt(right int32) EitherErrorInt {
+	return EitherErrorInt{Tag: EitherErrorIntRight, Right: right}
+}
+
+func RightEitherErrorUnit(right struct{}) EitherErrorUnit {
+	return EitherErrorUnit{Tag: EitherErrorUnitRight, Right: right}
+}
+
+func LeftEitherErrorUnit(left exception.Error) EitherErrorUnit {
+	return EitherErrorUnit{Tag: EitherErrorUnitLeft, Left: left}
+}
+
 // main.go
 package main
 
@@ -75,10 +91,10 @@ func main_() int32 {
 				return 2
 			})
 			isSuspended, join, kill, onComplete, run := aff.FiberFields(fiber2, func(payload exception.Error) either.EitherErrorInt {
-				return either.EitherErrorInt{Tag: either.EitherErrorIntLeft, Left: payload}
+				return either.LeftEitherErrorInt(payload)
 			}, func(payload int32) either.EitherErrorInt {
-				return either.EitherErrorInt{Tag: either.EitherErrorIntRight, Right: payload}
-			}, either.EitherErrorUnit{Tag: either.EitherErrorUnitRight, Right: struct{}{}}, func(value either.OnCompleteInt) func(func(either.EitherErrorInt)) {
+				return either.RightEitherErrorInt(payload)
+			}, either.RightEitherErrorUnit(struct{}{}), func(value either.OnCompleteInt) func(func(either.EitherErrorInt)) {
 				return value.Handler
 			})
 			fiber3 := either.FiberInt{IsSuspended: isSuspended, Join: join, Kill: kill, OnComplete: onComplete, Run: run}
@@ -99,10 +115,10 @@ func main_() int32 {
 		return struct{}{}
 	})
 	isSuspended2, join2, kill2, onComplete2, run2 := aff.FiberFields(fiber4, func(payload exception.Error) either.EitherErrorUnit {
-		return either.EitherErrorUnit{Tag: either.EitherErrorUnitLeft, Left: payload}
+		return either.LeftEitherErrorUnit(payload)
 	}, func(payload struct{}) either.EitherErrorUnit {
-		return either.EitherErrorUnit{Tag: either.EitherErrorUnitRight, Right: payload}
-	}, either.EitherErrorUnit{Tag: either.EitherErrorUnitRight, Right: struct{}{}}, func(value either.OnCompleteUnit) func(func(either.EitherErrorUnit)) {
+		return either.RightEitherErrorUnit(payload)
+	}, either.RightEitherErrorUnit(struct{}{}), func(value either.OnCompleteUnit) func(func(either.EitherErrorUnit)) {
 		return value.Handler
 	})
 	fiber := either.FiberUnit{IsSuspended: isSuspended2, Join: join2, Kill: kill2, OnComplete: onComplete2, Run: run2}

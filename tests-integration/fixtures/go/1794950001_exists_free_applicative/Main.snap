@@ -475,6 +475,42 @@ func convert17(value *Ap) *ApFn {
 	}
 }
 
+func FieldApFnIntFnBooleanPerson(field0 string, field1 func(int32) func(bool) shared.Person) ApFnIntFnBooleanPerson {
+	return ApFnIntFnBooleanPerson{Tag: ApFnIntFnBooleanPersonField, Field0: field0, Field1: field1}
+}
+
+func FieldApInt(field0 string, field1 int32) ApInt {
+	return ApInt{Tag: ApIntField, Field0: field0, Field1: field1}
+}
+
+func ApplyApFnBooleanPerson(apply ExistsApplyEFnBooleanPerson) ApFnBooleanPerson {
+	return ApFnBooleanPerson{Tag: ApFnBooleanPersonApply, Apply: apply}
+}
+
+func FieldApBoolean(field0 string, field1 bool) ApBoolean {
+	return ApBoolean{Tag: ApBooleanField, Field0: field0, Field1: field1}
+}
+
+func ApplyApPerson(apply ExistsApplyEPerson) *ApPerson {
+	return &ApPerson{Tag: ApPersonApply, Apply: apply}
+}
+
+func Done(done func(float64) string) ApFnNumberString {
+	return ApFnNumberString{Tag: ApFnNumberStringDone, Done: done}
+}
+
+func FieldApFnNumberString(field0 string, field1 func(float64) string) ApFnNumberString {
+	return ApFnNumberString{Tag: ApFnNumberStringField, Field0: field0, Field1: field1}
+}
+
+func FieldApNumber(field0 string, field1 float64) ApNumber {
+	return ApNumber{Tag: ApNumberField, Field0: field0, Field1: field1}
+}
+
+func ApplyApString(apply ExistsApplyEString) ApString {
+	return ApString{Tag: ApStringApply, Apply: apply}
+}
+
 var main_ = initializeMain_()
 
 func initializeMain_() []string {
@@ -578,11 +614,11 @@ func initializeMain_() []string {
 	return []string{prim.StringJoinWith(",", result), "{ admin: " + strconv.FormatBool(record.Admin) + ", age: " + strconv.Itoa(int(record.Age)) + ", name: " + prim.ShowString(record.Name) + " }", result3, strconv.Itoa(int(direct.CodePointLength(result4)))}
 }
 
-var person *ApPerson = &ApPerson{Tag: ApPersonApply, Apply: ExistsApplyEPerson{Boolean: ApplyEPersonBoolean{First: ApFnBooleanPerson{Tag: ApFnBooleanPersonApply, Apply: ExistsApplyEFnBooleanPerson{Int: ApplyEFnBooleanPersonInt{First: ApFnIntFnBooleanPerson{Tag: ApFnIntFnBooleanPersonField, Field0: "name", Field1: func(value int32) func(bool) shared.Person {
+var person *ApPerson = ApplyApPerson(ExistsApplyEPerson{Boolean: ApplyEPersonBoolean{First: ApplyApFnBooleanPerson(ExistsApplyEFnBooleanPerson{Int: ApplyEFnBooleanPersonInt{First: FieldApFnIntFnBooleanPerson("name", func(value int32) func(bool) shared.Person {
 	return func(value2 bool) shared.Person {
 		return shared.Person{Name: "ada", Age: value, Admin: value2}
 	}
-}}, Second: ApInt{Tag: ApIntField, Field0: "age", Field1: 36}}}}, Second: ApBoolean{Tag: ApBooleanField, Field0: "admin", Field1: true}}}}
+}), Second: FieldApInt("age", 36)}}), Second: FieldApBoolean("admin", true)}})
 
 var greeting = initializeGreeting()
 
@@ -590,13 +626,13 @@ func initializeGreeting() ApString {
 	var function ApFnNumberString
 	switch person.Tag {
 	case ApPersonDone:
-		function = ApFnNumberString{Tag: ApFnNumberStringDone, Done: func(n float64) string {
+		function = Done(func(n float64) string {
 			return greetingF(person.Done, n)
-		}}
+		})
 	case ApPersonField:
-		function = ApFnNumberString{Tag: ApFnNumberStringField, Field0: person.Field0, Field1: func(n float64) string {
+		function = FieldApFnNumberString(person.Field0, func(n float64) string {
 			return greetingF(person.Field1, n)
-		}}
+		})
 	default: // ApPersonApply
 		original := func(f func(any) any) func(*Ap) *Ap {
 			return func(value *Ap) *Ap {
@@ -624,7 +660,7 @@ func initializeGreeting() ApString {
 			}
 		})(convert9(person.Apply.Boolean.First))), Second: person.Apply.Boolean.Second})}
 	}
-	return ApString{Tag: ApStringApply, Apply: ExistsApplyEString{Number: ApplyEStringNumber{First: function, Second: ApNumber{Tag: ApNumberField, Field0: "count", Field1: 3.5}}}}
+	return ApplyApString(ExistsApplyEString{Number: ApplyEStringNumber{First: function, Second: FieldApNumber("count", 3.5)}})
 }
 
 func map_(f func(any) any, value *Ap) *Ap {

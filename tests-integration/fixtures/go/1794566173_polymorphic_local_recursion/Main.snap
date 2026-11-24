@@ -167,16 +167,36 @@ func convert9(value *TreeFn) *Tree {
 	}
 }
 
+func LeafTreeInt(leaf int32) *TreeInt {
+	return &TreeInt{Tag: TreeIntLeaf, Leaf: leaf}
+}
+
+func LeafTreeFnIntInt(leaf func(int32) int32) *TreeFnIntInt {
+	return &TreeFnIntInt{Tag: TreeFnIntIntLeaf, Leaf: leaf}
+}
+
+func PairTreeInt(pair *ExistsPairEInt) *TreeInt {
+	return &TreeInt{Tag: TreeIntPair, Pair: pair}
+}
+
+func LeafTreeFnIntFnIntInt(leaf func(int32) func(int32) int32) TreeFnIntFnIntInt {
+	return TreeFnIntFnIntInt{Tag: TreeFnIntFnIntIntLeaf, Leaf: leaf}
+}
+
+func PairTreeFnIntInt(pair *ExistsPairEFnIntInt) *TreeFnIntInt {
+	return &TreeFnIntInt{Tag: TreeFnIntIntPair, Pair: pair}
+}
+
 var main_ = initializeMain_()
 
 func initializeMain_() []int32 {
-	return []int32{leavesInt(&TreeInt{Tag: TreeIntLeaf, Leaf: 1}), leavesInt(&TreeInt{Tag: TreeIntPair, Pair: &ExistsPairEInt{Int: &PairEIntInt{First: &TreeFnIntInt{Tag: TreeFnIntIntLeaf, Leaf: func(value int32) int32 {
+	return []int32{leavesInt(LeafTreeInt(1)), leavesInt(PairTreeInt(&ExistsPairEInt{Int: &PairEIntInt{First: LeafTreeFnIntInt(func(value int32) int32 {
 		return value + 1
-	}}, Second: &TreeInt{Tag: TreeIntLeaf, Leaf: 1}}}}), leavesInt(&TreeInt{Tag: TreeIntPair, Pair: &ExistsPairEInt{Int: &PairEIntInt{First: &TreeFnIntInt{Tag: TreeFnIntIntPair, Pair: &ExistsPairEFnIntInt{Int: &PairEFnIntIntInt{First: TreeFnIntFnIntInt{Tag: TreeFnIntFnIntIntLeaf, Leaf: func(x int32) func(int32) int32 {
+	}), Second: LeafTreeInt(1)}})), leavesInt(PairTreeInt(&ExistsPairEInt{Int: &PairEIntInt{First: PairTreeFnIntInt(&ExistsPairEFnIntInt{Int: &PairEFnIntIntInt{First: LeafTreeFnIntFnIntInt(func(x int32) func(int32) int32 {
 		return func(y int32) int32 {
 			return x + y
 		}
-	}}, Second: &TreeInt{Tag: TreeIntLeaf, Leaf: 1}}}}, Second: &TreeInt{Tag: TreeIntLeaf, Leaf: 2}}}})}
+	}), Second: LeafTreeInt(1)}}), Second: LeafTreeInt(2)}}))}
 }
 
 func leavesInt(tree *TreeInt) int32 {

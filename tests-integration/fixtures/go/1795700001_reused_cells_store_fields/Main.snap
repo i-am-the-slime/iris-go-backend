@@ -29,6 +29,10 @@ const (
 
 var sharedChainEnd = &Chain{Tag: ChainEnd}
 
+func Node(node0 int32, node1 int32, node2 *Tree, node3 *Tree) *Tree {
+	return &Tree{Node0: node0, Node1: node1, Node2: node2, Node3: node3}
+}
+
 var main_ = initializeMain_()
 
 func initializeMain_() shared.MainResult {
@@ -86,7 +90,7 @@ func blues(value *Chain) int32 {
 
 func insertCountsReusing(key int32, value *Tree) *Tree {
 	if value == sharedTreeLeaf {
-		return &Tree{Node0: key, Node1: 1, Node2: sharedTreeLeaf, Node3: sharedTreeLeaf}
+		return Node(key, 1, sharedTreeLeaf, sharedTreeLeaf)
 	}
 	k := value.Node0
 	count := value.Node1

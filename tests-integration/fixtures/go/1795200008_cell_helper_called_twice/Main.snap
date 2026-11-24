@@ -15,6 +15,14 @@ const (
 	StepIntUnitDone
 )
 
+func Done(done struct{}) StepIntUnit {
+	return StepIntUnit{Tag: StepIntUnitDone, Done: done}
+}
+
+func Loop(loop int32) StepIntUnit {
+	return StepIntUnit{Tag: StepIntUnitLoop, Loop: loop}
+}
+
 // main.go
 package main
 
@@ -29,10 +37,10 @@ func initializeMain_() shared.MainResult {
 	var total int32 = 0
 	var step class.StepIntUnit
 	if false {
-		step = class.StepIntUnit{Tag: class.StepIntUnitDone, Done: struct{}{}}
+		step = class.Done(struct{}{})
 	} else {
 		total += 1
-		step = class.StepIntUnit{Tag: class.StepIntUnitLoop, Loop: 2}
+		step = class.Loop(2)
 	}
 	for {
 		var result bool
@@ -50,10 +58,10 @@ func initializeMain_() shared.MainResult {
 			a_ := step.Loop
 			var step2 class.StepIntUnit
 			if a_ > 10 {
-				step2 = class.StepIntUnit{Tag: class.StepIntUnitDone, Done: struct{}{}}
+				step2 = class.Done(struct{}{})
 			} else {
 				total += a_
-				step2 = class.StepIntUnit{Tag: class.StepIntUnitLoop, Loop: a_ + 1}
+				step2 = class.Loop(a_ + 1)
 			}
 			step = step2
 		default: // class.StepIntUnitDone

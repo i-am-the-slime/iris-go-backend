@@ -17,6 +17,10 @@ type ListInt struct {
 
 var sharedListIntNil = &ListInt{}
 
+func Cons(cons0 int32, cons1 *ListInt) *ListInt {
+	return &ListInt{Cons0: cons0, Cons1: cons1}
+}
+
 var main_ = initializeMain_()
 
 func initializeMain_() []int32 {
@@ -39,7 +43,7 @@ func range_(low int32, high int32) *ListInt {
 	if low > high {
 		return sharedListIntNil
 	}
-	return &ListInt{Cons0: low, Cons1: range_(low+1, high)}
+	return Cons(low, range_(low+1, high))
 }
 
 func foldListIntIntStep(i int32, accumulator int32, value *ListInt) int32 {

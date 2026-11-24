@@ -45,6 +45,14 @@ const (
 	EitherNonEmptyListForeignErrorForeignRight
 )
 
+func TypeMismatch(typeMismatch0 string, typeMismatch1 string) *ForeignError {
+	return &ForeignError{Tag: ForeignErrorTypeMismatch, TypeMismatch0: typeMismatch0, TypeMismatch1: typeMismatch1}
+}
+
+func Left(left NonEmptyListForeignError) EitherNonEmptyListForeignErrorForeign {
+	return EitherNonEmptyListForeignErrorForeign{Tag: EitherNonEmptyListForeignErrorForeignLeft, Left: left}
+}
+
 func PureIdentityNonEmptyListForeignError(x any) EitherNonEmptyListForeignErrorForeign {
 	return EitherNonEmptyListForeignErrorForeign{Tag: EitherNonEmptyListForeignErrorForeignRight, Right: x}
 }
@@ -62,7 +70,7 @@ import (
 func main() {
 	value := direct.ForeignRecord([]string{"name"}, []any{"iris"})
 	unsafeReadPropImpl := foreignvalue.UnsafeReadPropImpl(func() foreign.EitherNonEmptyListForeignErrorForeign {
-		return foreign.EitherNonEmptyListForeignErrorForeign{Tag: foreign.EitherNonEmptyListForeignErrorForeignLeft, Left: foreign.NonEmptyListForeignError{First: &foreign.ForeignError{Tag: foreign.ForeignErrorTypeMismatch, TypeMismatch0: "object", TypeMismatch1: foreignvalue.TypeOf(value)}, Second: foreign.SharedListForeignErrorNil}}
+		return foreign.Left(foreign.NonEmptyListForeignError{First: foreign.TypeMismatch("object", foreignvalue.TypeOf(value)), Second: foreign.SharedListForeignErrorNil})
 	}, foreign.PureIdentityNonEmptyListForeignError, "name", value)
 	switch unsafeReadPropImpl.Tag {
 	case foreign.EitherNonEmptyListForeignErrorForeignLeft:

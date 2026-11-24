@@ -20,6 +20,14 @@ const (
 	EitherIntStringRight
 )
 
+func Left(left int32) EitherIntString {
+	return EitherIntString{Tag: EitherIntStringLeft, Left: left}
+}
+
+func Right(right string) EitherIntString {
+	return EitherIntString{Tag: EitherIntStringRight, Right: right}
+}
+
 func ShowIntString(either EitherIntString) string {
 	return string(AppendShowIntString(nil, either))
 }
@@ -275,6 +283,26 @@ type Point struct {
 	Second int32
 }
 
+func Circle(circle float64) Shape {
+	return Shape{Tag: ShapeCircle, Circle: circle}
+}
+
+func Rect(rect shared.HW) Shape {
+	return Shape{Tag: ShapeRect, Rect: rect}
+}
+
+func Pair(pair0 int32, pair1 maybe.Int) Shape {
+	return Shape{Tag: ShapePair, Pair0: pair0, Pair1: pair1}
+}
+
+func Named(named string) *Colour {
+	return &Colour{Tag: ColourNamed, Named: named}
+}
+
+func Mixed(mixed0 *Colour, mixed1 *Colour) *Colour {
+	return &Colour{Tag: ColourMixed, Mixed0: mixed0, Mixed1: mixed1}
+}
+
 var main_ = initializeMain_()
 
 func initializeMain_() []string {
@@ -288,11 +316,11 @@ func initializeMain_() []string {
 	text = append(text, ", z: "...)
 	text = show.AppendShowArrayNumber(text, record.Z)
 	text = append(text, " }"...)
-	text2 := either.AppendShowArrayEitherIntString(nil, []either.EitherIntString{{Tag: either.EitherIntStringLeft, Left: 1}, {Tag: either.EitherIntStringRight, Right: "x"}})
+	text2 := either.AppendShowArrayEitherIntString(nil, []either.EitherIntString{either.Left(1), either.Right("x")})
 	text2 = maybe_tuple.AppendShowArrayTupleCharArrayMaybeNumber(text2, []maybe_tuple.TupleCharArrayMaybeNumber{{First: 'a', Second: []maybe.Number{maybe.JustNumber(2.5)}}})
 	text3 := appendShowArrayNumber(nil, []float64{1.0})
 	text3 = show.AppendShowArrayNumber(text3, []float64{1.0})
-	return []string{string(show.AppendShowArrayInt(nil, []int32{1, 2, 3})), string(show.AppendShowArrayInt(nil, []int32{})), string(show.AppendShowArrayArrayInt(nil, [][]int32{{1}, {}, {-2, 3}})), string(text), string(maybe.AppendShowArrayXY(nil, []maybe.XY{{X: maybe.Int(1), Y: maybe.NoInt}})), string(text2), string(appendShowArrayShape(nil, []Shape{{Tag: ShapeCircle, Circle: 1.0}, {Tag: ShapeRect, Rect: shared.HW{W: 1, H: -2}}, {Tag: ShapeEmpty}, {Tag: ShapePair, Pair0: -3, Pair1: maybe.Int(-4)}})), string(appendShowArrayColour(nil, []*Colour{sharedColourRed, {Tag: ColourMixed, Mixed0: sharedColourRed, Mixed1: &Colour{Tag: ColourNamed, Named: "x\"y"}}})), string(text3), string(show.AppendShowArrayWrapped(nil, []shared.Wrapped{{A: 1}})), string(appendShowArrayPoint(nil, []Point{{First: 1, Second: 2}}))}
+	return []string{string(show.AppendShowArrayInt(nil, []int32{1, 2, 3})), string(show.AppendShowArrayInt(nil, []int32{})), string(show.AppendShowArrayArrayInt(nil, [][]int32{{1}, {}, {-2, 3}})), string(text), string(maybe.AppendShowArrayXY(nil, []maybe.XY{{X: maybe.Int(1), Y: maybe.NoInt}})), string(text2), string(appendShowArrayShape(nil, []Shape{Circle(1.0), Rect(shared.HW{W: 1, H: -2}), {Tag: ShapeEmpty}, Pair(-3, maybe.Int(-4))})), string(appendShowArrayColour(nil, []*Colour{sharedColourRed, Mixed(sharedColourRed, Named("x\"y"))})), string(text3), string(show.AppendShowArrayWrapped(nil, []shared.Wrapped{{A: 1}})), string(appendShowArrayPoint(nil, []Point{{First: 1, Second: 2}}))}
 }
 
 func showShape(shape Shape) string {

@@ -114,6 +114,20 @@ type StateValue struct {
 //line main.go:54
 }
 
+//line Main.purs:12:5
+func Circle(circle float64) Shape {
+//line Main.purs:12:5
+	return Shape{Tag: ShapeCircle, Circle: circle}
+//line Main.purs:12:5
+}
+
+//line Main.purs:13:5
+func Rectangle(rectangle0 float64, rectangle1 float64) Shape {
+//line Main.purs:13:5
+	return Shape{Tag: ShapeRectangle, Rectangle0: rectangle0, Rectangle1: rectangle1}
+//line Main.purs:13:5
+}
+
 //line Main.purs:30:1
 func main() {
 //line Main.purs:31:14
@@ -165,7 +179,7 @@ func main() {
 //line Main.purs:43:3
 	}
 //line Main.purs:46:3
-	array2 := []Shape{{Tag: ShapeCircle, Circle: float64(counter)}, {Tag: ShapeRectangle, Rectangle0: 2.0, Rectangle1: float64(count)}, {Tag: ShapeDot}}
+	array2 := []Shape{Circle(float64(counter)), Rectangle(2.0, float64(count)), {Tag: ShapeDot}}
 //line Main.purs:46:3
 	mapped3 := make([]float64, len(array2))
 //line Main.purs:46:3

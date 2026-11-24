@@ -47,6 +47,13 @@ const (
 //line Main.purs:15:1
 )
 
+//line Main.purs:13:20
+func Node(node0 *Tree, node1 int32, node2 *Tree) *Tree {
+//line Main.purs:13:20
+	return &Tree{Node0: node0, Node1: node1, Node2: node2}
+//line Main.purs:13:20
+}
+
 //line Main.purs:46:1
 func main() {
 //line Main.purs:47:14
@@ -149,7 +156,7 @@ func insert(x int32, value *Tree) *Tree {
 //line Main.purs:23:3
 	if value == sharedTreeLeaf {
 //line Main.purs:23:11
-		return &Tree{Node0: sharedTreeLeaf, Node1: x, Node2: sharedTreeLeaf}
+		return Node(sharedTreeLeaf, x, sharedTreeLeaf)
 //line Main.purs:23:3
 	}
 //line Main.purs:24:3
@@ -161,13 +168,13 @@ func insert(x int32, value *Tree) *Tree {
 //line Main.purs:25:7
 	if x < y {
 //line Main.purs:25:16
-		return &Tree{Node0: insert(x, left), Node1: y, Node2: right}
+		return Node(insert(x, left), y, right)
 //line Main.purs:25:7
 	}
 //line Main.purs:26:7
 	if x > y {
 //line Main.purs:26:16
-		return &Tree{Node0: left, Node1: y, Node2: insert(x, right)}
+		return Node(left, y, insert(x, right))
 //line Main.purs:26:7
 	}
 //line Main.purs:27:20

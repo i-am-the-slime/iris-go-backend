@@ -25,6 +25,10 @@ type TotalTree struct {
 	Total int32
 }
 
+func Node(node0 *Tree, node1 int32, node2 *Tree) *Tree {
+	return &Tree{Node0: node0, Node1: node1, Node2: node2}
+}
+
 var main_ = initializeMain_()
 
 func initializeMain_() []int32 {
@@ -96,7 +100,7 @@ func sample(depth int32) *Tree {
 	if depth == 0 {
 		return sharedTreeLeaf
 	}
-	return &Tree{Node0: sample(depth - 1), Node1: depth, Node2: sample(depth - 1)}
+	return Node(sample(depth-1), depth, sample(depth-1))
 }
 
 func stashedAfter(countdown int32, tree *Tree) int32 {
@@ -118,7 +122,7 @@ func incremented(value *Tree) *Tree {
 	if value == sharedTreeLeaf {
 		return sharedTreeLeaf
 	}
-	return &Tree{Node0: incremented(value.Node0), Node1: value.Node1 + 1, Node2: incremented(value.Node2)}
+	return Node(incremented(value.Node0), value.Node1+1, incremented(value.Node2))
 }
 
 func keptAfter(countdown int32, tree *Tree) int32 {

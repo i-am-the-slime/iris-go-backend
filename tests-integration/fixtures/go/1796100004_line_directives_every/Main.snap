@@ -36,6 +36,20 @@ const (
 //line Main.purs:13:1
 )
 
+//line Main.purs:13:14
+func Circle(field0 float64) Shape {
+//line Main.purs:13:14
+	return Shape{Tag: ShapeCircle, Field0: field0}
+//line Main.purs:13:14
+}
+
+//line Main.purs:13:30
+func Square(field0 float64) Shape {
+//line Main.purs:13:30
+	return Shape{Tag: ShapeSquare, Field0: field0}
+//line Main.purs:13:30
+}
+
 //line Main.purs:28:1
 func main() {
 //line Main.purs:29:15
@@ -63,7 +77,7 @@ func main() {
 //line Main.purs:36:12
 	var areas float64 = 0.0
 //line Main.purs:37:3
-	for _, shape := range []Shape{{Tag: ShapeCircle, Field0: 1.0}, {Tag: ShapeSquare, Field0: 2.0}} {
+	for _, shape := range []Shape{Circle(1.0), Square(2.0)} {
 //line Main.purs:38:22
 		var result float64
 //line Main.purs:38:22

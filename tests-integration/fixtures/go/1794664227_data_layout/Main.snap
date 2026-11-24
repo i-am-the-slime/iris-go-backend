@@ -60,15 +60,43 @@ const (
 	ColourBlue
 )
 
+func Circle(fieldA0 float64) Shape {
+	return Shape{Tag: ShapeCircle, FieldA0: fieldA0}
+}
+
+func Square(fieldA0 float64) Shape {
+	return Shape{Tag: ShapeSquare, FieldA0: fieldA0}
+}
+
+func Label(fieldB0 string, fieldB1 bool) Shape {
+	return Shape{Tag: ShapeLabel, FieldB0: fieldB0, FieldB1: fieldB1}
+}
+
+func Caption(fieldB0 string, fieldB1 bool) Shape {
+	return Shape{Tag: ShapeCaption, FieldB0: fieldB0, FieldB1: fieldB1}
+}
+
+func Field(field string) Item {
+	return Item{Tag: ItemField, Field: field}
+}
+
+func Pair(field0 int32, field1 int32) Item {
+	return Item{Tag: ItemPair, Field0: field0, Field1: field1}
+}
+
+func Couple(field0 int32, field1 int32) Item {
+	return Item{Tag: ItemCouple, Field0: field0, Field1: field1}
+}
+
 var main_ = initializeMain_()
 
 func initializeMain_() shared.MainResult {
-	array := []Shape{{Tag: ShapeCircle, FieldA0: 1.0}, {Tag: ShapeSquare, FieldA0: 2.0}, {Tag: ShapeLabel, FieldB0: "a", FieldB1: true}, {Tag: ShapeCaption, FieldB0: "b", FieldB1: false}, {Tag: ShapePoint}}
+	array := []Shape{Circle(1.0), Square(2.0), Label("a", true), Caption("b", false), {Tag: ShapePoint}}
 	mapped := make([]string, len(array))
 	for index, element := range array {
 		mapped[index] = describe(element)
 	}
-	array2 := []Item{{Tag: ItemField, Field: "x"}, {Tag: ItemPair, Field0: 1, Field1: 2}, {Tag: ItemCouple, Field0: 3, Field1: 4}}
+	array2 := []Item{Field("x"), Pair(1, 2), Couple(3, 4)}
 	mapped2 := make([]int32, len(array2))
 	for index, element := range array2 {
 		mapped2[index] = itemTotal(element)

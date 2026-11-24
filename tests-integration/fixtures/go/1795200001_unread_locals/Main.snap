@@ -14,6 +14,10 @@ const (
 	EitherIntIntRight
 )
 
+func Right(field0 int32) EitherIntInt {
+	return EitherIntInt{Tag: EitherIntIntRight, Field0: field0}
+}
+
 // Data/Maybe/maybe.go
 package maybe
 
@@ -82,7 +86,7 @@ func main_() int32 {
 	result = elements[counter]
 	modified := shared.StateValue{State: counter + 1, Value: result}
 	counter = modified.State
-	scrutinee := either.EitherIntInt{Tag: either.EitherIntIntRight, Field0: -1}
+	scrutinee := either.Right(-1)
 	var result2 int32
 	if scrutinee.Tag == either.EitherIntIntRight && scrutinee.Field0 == -1 {
 		sorted := slices.Clone([]rune{'b', 'a'})

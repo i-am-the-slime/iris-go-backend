@@ -28,6 +28,26 @@ const (
 	CircleSquareSquare
 )
 
+func CircleCircleLabelSquare(circle float64) CircleLabelSquare {
+	return CircleLabelSquare{Tag: CircleLabelSquareCircle, Circle: circle}
+}
+
+func SquareCircleLabelSquare(square int32) CircleLabelSquare {
+	return CircleLabelSquare{Tag: CircleLabelSquareSquare, Square: square}
+}
+
+func Label(label string) CircleLabelSquare {
+	return CircleLabelSquare{Tag: CircleLabelSquareLabel, Label: label}
+}
+
+func CircleCircleSquare(circle float64) CircleSquare {
+	return CircleSquare{Tag: CircleSquareCircle, Circle: circle}
+}
+
+func SquareCircleSquare(square int32) CircleSquare {
+	return CircleSquare{Tag: CircleSquareSquare, Square: square}
+}
+
 // main.go
 package main
 
@@ -70,11 +90,11 @@ func initializeMain_() []string {
 	n4 := opaque(0)
 	var result4 variant.CircleLabelSquare
 	if n4 > 0 {
-		result4 = variant.CircleLabelSquare{Tag: variant.CircleLabelSquareCircle, Circle: 1.5}
+		result4 = variant.CircleCircleLabelSquare(1.5)
 	} else {
-		result4 = variant.CircleLabelSquare{Tag: variant.CircleLabelSquareSquare, Square: n4}
+		result4 = variant.SquareCircleLabelSquare(n4)
 	}
-	return []string{prim.ShowNumber(result), prim.ShowNumber(result2), result3, "tag", labelOnly(result4), labelOnly(variant.CircleLabelSquare{Tag: variant.CircleLabelSquareLabel, Label: "x"})}
+	return []string{prim.ShowNumber(result), prim.ShowNumber(result2), result3, "tag", labelOnly(result4), labelOnly(variant.Label("x"))}
 }
 
 func opaque(x int32) int32 {
@@ -89,11 +109,11 @@ func opaque(x int32) int32 {
 func labelOnly(variant2 variant.CircleLabelSquare) string {
 	switch variant2.Tag {
 	case variant.CircleLabelSquareCircle:
-		return labelOnlyX(variant.CircleSquare{Tag: variant.CircleSquareCircle, Circle: variant2.Circle})
+		return labelOnlyX(variant.CircleCircleSquare(variant2.Circle))
 	case variant.CircleLabelSquareLabel:
 		return "label " + variant2.Label
 	default: // variant.CircleLabelSquareSquare
-		return labelOnlyX(variant.CircleSquare{Tag: variant.CircleSquareSquare, Square: variant2.Square})
+		return labelOnlyX(variant.SquareCircleSquare(variant2.Square))
 	}
 }
 

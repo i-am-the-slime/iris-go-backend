@@ -37,11 +37,15 @@ func Done(done int32) StepInt {
 
 type M func(int32, func(func(struct{}) StepInt) StepInt, func(Failure) StepInt, func(int32) StepInt) StepInt
 
+func Stop(stop string) StepInt {
+	return StepInt{Tag: StepIntStop, Stop: stop}
+}
+
 var main_ = initializeMain_()
 
 func initializeMain_() []int32 {
 	scrutinee := mainGo(loop(30, 0)(0, More, func(failure Failure) StepInt {
-		return StepInt{Tag: StepIntStop, Stop: failure.Failure}
+		return Stop(failure.Failure)
 	}, Done))
 	var result int32
 	switch scrutinee.Tag {

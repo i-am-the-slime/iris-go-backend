@@ -82,6 +82,18 @@ const (
 	ExistsDescribedArrayNumber
 )
 
+func Int(int_ DescribedInt) ExistsDescribed {
+	return ExistsDescribed{Tag: ExistsDescribedInt, Int: int_}
+}
+
+func String(string_ DescribedString) ExistsDescribed {
+	return ExistsDescribed{Tag: ExistsDescribedString, String: string_}
+}
+
+func ArrayNumber(arrayNumber DescribedArrayNumber) ExistsDescribed {
+	return ExistsDescribed{Tag: ExistsDescribedArrayNumber, ArrayNumber: arrayNumber}
+}
+
 var main_ = initializeMain_()
 
 func initializeMain_() []string {
@@ -116,13 +128,13 @@ func initializeMain_() []string {
 	return mapped
 }
 
-var things []ExistsDescribed = []ExistsDescribed{{Tag: ExistsDescribedInt, Int: DescribedInt{First: 1, Second: show.ShowInt, Third: func(value int32) int32 {
+var things []ExistsDescribed = []ExistsDescribed{Int(DescribedInt{First: 1, Second: show.ShowInt, Third: func(value int32) int32 {
 	return value + 1
-}}}, {Tag: ExistsDescribedString, String: DescribedString{First: "a", Second: category.Identity, Third: func(value string) string {
+}}), String(DescribedString{First: "a", Second: category.Identity, Third: func(value string) string {
 	return value + "!"
-}}}, {Tag: ExistsDescribedArrayNumber, ArrayNumber: DescribedArrayNumber{First: []float64{1.5}, Second: show.ShowNumber, Third: func(array []float64) []float64 {
+}}), ArrayNumber(DescribedArrayNumber{First: []float64{1.5}, Second: show.ShowNumber, Third: func(array []float64) []float64 {
 	return mapLanes(array)
-}}}}
+}})}
 
 func main() {
 	console.Print("[" + strings.Join(main_, " ") + "]")

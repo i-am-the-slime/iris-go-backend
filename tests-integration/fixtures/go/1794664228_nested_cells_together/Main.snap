@@ -30,13 +30,25 @@ type ListInt struct {
 
 var sharedListIntNil = &ListInt{}
 
+func Val(val int32) *Expr {
+	return &Expr{Tag: ExprVal, Val: val}
+}
+
+func Add(field0 *Expr, field1 *Expr) *Expr {
+	return &Expr{Tag: ExprAdd, Field0: field0, Field1: field1}
+}
+
+func Mul(field0 *Expr, field1 *Expr) *Expr {
+	return &Expr{Tag: ExprMul, Field0: field0, Field1: field1}
+}
+
 func main_(n int32) shared.MainResult {
 	n2 := -n
 	listInts := make([]ListInt, 3)
 	listInts[0] = ListInt{Cons0: n, Cons1: &listInts[1]}
 	listInts[1] = ListInt{Cons0: 2, Cons1: &listInts[2]}
 	listInts[2] = ListInt{Cons0: 3, Cons1: sharedListIntNil}
-	return shared.MainResult{Built: evaluate(build(4)), Mirrored: evaluate(mirrorReusing(build(3))), Two: evaluate(&Expr{Tag: ExprAdd, Field0: build(2), Field1: &Expr{Tag: ExprVal, Val: 2}}), Linked: total(mainGo(5, sharedListIntNil)), Literal: total(&listInts[0]), Positive: n > 0 && evaluate(&Expr{Tag: ExprAdd, Field0: &Expr{Tag: ExprVal, Val: n}, Field1: &Expr{Tag: ExprMul, Field0: &Expr{Tag: ExprVal, Val: 2}, Field1: &Expr{Tag: ExprVal, Val: n}}}) > 5, Negative: n2 > 0 && evaluate(&Expr{Tag: ExprAdd, Field0: &Expr{Tag: ExprVal, Val: n2}, Field1: &Expr{Tag: ExprMul, Field0: &Expr{Tag: ExprVal, Val: 2}, Field1: &Expr{Tag: ExprVal, Val: n2}}}) > 5}
+	return shared.MainResult{Built: evaluate(build(4)), Mirrored: evaluate(mirrorReusing(build(3))), Two: evaluate(Add(build(2), Val(2))), Linked: total(mainGo(5, sharedListIntNil)), Literal: total(&listInts[0]), Positive: n > 0 && evaluate(Add(Val(n), Mul(Val(2), Val(n)))) > 5, Negative: n2 > 0 && evaluate(Add(Val(n2), Mul(Val(2), Val(n2)))) > 5}
 }
 
 func evaluate(expr *Expr) int32 {
@@ -55,7 +67,7 @@ func evaluate(expr *Expr) int32 {
 func build(n int32) *Expr {
 	switch n {
 	case 0:
-		return &Expr{Tag: ExprVal, Val: 1}
+		return Val(1)
 	default:
 		exprs := make([]Expr, 5)
 		exprs[0] = Expr{Tag: ExprAdd, Field0: &exprs[1], Field1: &exprs[3]}

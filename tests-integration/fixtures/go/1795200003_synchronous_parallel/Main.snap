@@ -30,6 +30,14 @@ type Fiber struct {
 	Run         func()
 }
 
+func Left(left exception.Error) EitherErrorUnit {
+	return EitherErrorUnit{Tag: EitherErrorUnitLeft, Left: left}
+}
+
+func Right(right struct{}) EitherErrorUnit {
+	return EitherErrorUnit{Tag: EitherErrorUnitRight, Right: right}
+}
+
 // main.go
 package main
 
@@ -70,10 +78,10 @@ func main() {
 		return struct{}{}
 	})
 	isSuspended, join, kill, onComplete, run := aff.FiberFields(fiber2, func(payload exception.Error) either.EitherErrorUnit {
-		return either.EitherErrorUnit{Tag: either.EitherErrorUnitLeft, Left: payload}
+		return either.Left(payload)
 	}, func(payload struct{}) either.EitherErrorUnit {
-		return either.EitherErrorUnit{Tag: either.EitherErrorUnitRight, Right: payload}
-	}, either.EitherErrorUnit{Tag: either.EitherErrorUnitRight, Right: struct{}{}}, func(value either.OnComplete) func(func(either.EitherErrorUnit)) {
+		return either.Right(payload)
+	}, either.Right(struct{}{}), func(value either.OnComplete) func(func(either.EitherErrorUnit)) {
 		return value.Handler
 	})
 	fiber := either.Fiber{IsSuspended: isSuspended, Join: join, Kill: kill, OnComplete: onComplete, Run: run}
