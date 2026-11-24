@@ -5,6 +5,7 @@ use crate::monomorphic::{
     Local, LocalId, Pattern, PatternKind,
 };
 use crate::monotype::Monotypes;
+use crate::naming::is_vague;
 use crate::purity::{can_fail, size};
 
 impl Simplifier<'_> {
@@ -19,8 +20,18 @@ impl Simplifier<'_> {
                 continue;
             };
             let scrutinee = scrutinees.remove(column);
-            let template =
-                Local { id: LocalId(0), name: "scrutinee".into(), monotype: scrutinee.monotype };
+            let name = alternatives
+                .iter()
+                .find_map(|alternative| match &alternative.patterns[column].kind {
+                    PatternKind::Variable(local) | PatternKind::Named { local, .. }
+                        if !is_vague(&local.name) =>
+                    {
+                        Some(local.name.clone())
+                    }
+                    _ => None,
+                })
+                .unwrap_or_else(|| "scrutinee".into());
+            let template = Local { id: LocalId(0), name, monotype: scrutinee.monotype };
             let whole = self.fresh(&template);
             let fields: Vec<Local> = match &scrutinee.kind {
                 ExpressionKind::Construct { arguments, .. } => arguments

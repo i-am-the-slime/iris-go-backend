@@ -10,6 +10,7 @@ use crate::monomorphic::{
     Alternative, Expression, Guard, Guarded, Literal, Local, Pattern, PatternKind,
 };
 use crate::monotype::Monotype;
+use crate::naming::is_vague;
 use crate::syntax::{GoCase, GoDefault, GoExpression, GoStatement, SourceLine};
 
 type Bindings = Vec<(Local, GoExpression)>;
@@ -44,7 +45,8 @@ where
                 paths.push(value);
                 continue;
             }
-            let base = super::scrutinee_name(&value);
+            let base = bound_name(alternatives, position)
+                .unwrap_or_else(|| super::scrutinee_name(&value));
             paths.push(self.hoist(value, &base, out));
         }
         if let Some(first) = alternatives.first()
@@ -522,6 +524,17 @@ where
         }
         Ok(())
     }
+}
+
+fn bound_name(alternatives: &[Alternative], position: usize) -> Option<String> {
+    alternatives.iter().find_map(|alternative| match &alternative.patterns[position].kind {
+        PatternKind::Variable(local) | PatternKind::Named { local, .. }
+            if !is_vague(&local.name) =>
+        {
+            Some(local.name.to_string())
+        }
+        _ => None,
+    })
 }
 
 fn never_matches(tests: &[GoExpression]) -> bool {
