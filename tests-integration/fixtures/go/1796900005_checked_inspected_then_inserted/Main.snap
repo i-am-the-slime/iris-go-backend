@@ -777,7 +777,7 @@ func mainGoReusing(tree *redblack.Tree, kept *redblack_types.ListTree, inspected
 	} else {
 		result2 = 0
 	}
-	return mainGoReusingChecked(next, result, inspected+result2, n-1, !(n%9 == 0) && !(n%3 == 0))
+	return mainGoReusingChecked(next, result, inspected+result2, n-1, n%9 != 0 && n%3 != 0)
 }
 
 func mainGoReusing2(acc *redblack_types.ListTree, list *redblack_types.ListTree) *redblack_types.ListTree {

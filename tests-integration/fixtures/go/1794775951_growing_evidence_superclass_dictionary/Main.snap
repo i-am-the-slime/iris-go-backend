@@ -81,7 +81,7 @@ const (
 	OrderingEQ
 )
 
-type Ord struct {
+type Eq0Compare struct {
 	Eq0     shared.Eq
 	Compare func(any) func(any) Ordering
 }
@@ -134,7 +134,7 @@ func initializeMain_() []string {
 			return ord.CompareChar(xs, ys)
 		}
 	}
-	return []string{relateArrayInt(ordering.Ord{Eq0: shared.Eq{Eq: func(coerced any) func(any) bool {
+	return []string{relateArrayInt(ordering.Eq0Compare{Eq0: shared.Eq{Eq: func(coerced any) func(any) bool {
 		original5 := original(shared.Convert(coerced))
 		return func(coerced2 any) bool {
 			return original5(shared.Convert(coerced2))
@@ -144,7 +144,7 @@ func initializeMain_() []string {
 		return func(coerced2 any) ordering.Ordering {
 			return original5(shared.Convert(coerced2))
 		}
-	}}, 1, shared.Convert2([]int32{1}), shared.Convert2([]int32{1, 1})), relateArrayInt(ordering.Ord{Eq0: shared.Eq{Eq: func(coerced any) func(any) bool {
+	}}, 1, shared.Convert2([]int32{1}), shared.Convert2([]int32{1, 1})), relateArrayInt(ordering.Eq0Compare{Eq0: shared.Eq{Eq: func(coerced any) func(any) bool {
 		original5 := original3(shared.Convert3(coerced))
 		return func(coerced2 any) bool {
 			return original5(shared.Convert3(coerced2))
@@ -157,7 +157,7 @@ func initializeMain_() []string {
 	}}, 1, shared.Convert4([]rune{'a'}), shared.Convert4([]rune{'b', 'b'}))}
 }
 
-func relateArrayInt(ordDictionary ordering.Ord, depth int32, left any, right any) string {
+func relateArrayInt(ordDictionary ordering.Eq0Compare, depth int32, left any, right any) string {
 	for {
 		ordDictionaryCaptured := ordDictionary
 		if depth == 0 {
@@ -195,7 +195,7 @@ func relateArrayInt(ordDictionary ordering.Ord, depth int32, left any, right any
 				return ordering.OrderingGT
 			}
 		}
-		ordDictionary, depth, left, right = ordering.Ord{Eq0: shared.Eq{Eq: func(coerced any) func(any) bool {
+		ordDictionary, depth, left, right = ordering.Eq0Compare{Eq0: shared.Eq{Eq: func(coerced any) func(any) bool {
 			original3 := original(coerced.([]any))
 			return func(coerced2 any) bool {
 				return original3(coerced2.([]any))
@@ -253,3 +253,5 @@ func Convert4(value []rune) any {
 	}
 	return converted
 }
+
+// note: Main.relate takes its Ord dictionary at run time, because polymorphic recursion reaches it at ever larger types; only this definition is slower

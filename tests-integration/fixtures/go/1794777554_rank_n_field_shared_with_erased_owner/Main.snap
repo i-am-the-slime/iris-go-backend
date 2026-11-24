@@ -75,8 +75,8 @@ func convert(value BoxInt) *Box {
 	return &Box{Box: value.Box, Origin: value}
 }
 
-func convert2(value MapTypeValueOfFnFnValueValueFnBoxBoxBoxInt) shared.VariantFRep {
-	return shared.VariantFRep{Map: func(coerced func(any) any) func(any) any {
+func convert2(value MapTypeValueOfFnFnValueValueFnBoxBoxBoxInt) shared.MapTypeValue {
+	return shared.MapTypeValue{Map: func(coerced func(any) any) func(any) any {
 		original := value.Map(coerced)
 		return func(coerced2 any) any {
 			return original(coerced2.(*Box))
@@ -119,8 +119,8 @@ func convert5(value PairInt) *Pair {
 	return &Pair{First: value.First, Second: value.Second, Origin: value}
 }
 
-func convert6(value MapTypeValueOfFnFnValueValueFnPairPairPairInt) shared.VariantFRep {
-	return shared.VariantFRep{Map: func(coerced func(any) any) func(any) any {
+func convert6(value MapTypeValueOfFnFnValueValueFnPairPairPairInt) shared.MapTypeValue {
+	return shared.MapTypeValue{Map: func(coerced func(any) any) func(any) any {
 		original := value.Map(coerced)
 		return func(coerced2 any) any {
 			return original(coerced2.(*Pair))
@@ -152,10 +152,10 @@ func initializeMain_() []string {
 			return mapPair(function, value)
 		}
 	}})
-	var a2 shared.VariantFRep
+	var a2 shared.MapTypeValue
 	if v.Type == "second" {
 		scrutinee := convert4(v.Value.(*Pair))
-		a2 = shared.VariantFRep{Type: v.Type, Map: variant.LookupMapperCase(v.Type, types.Cons("first", types.Cons("second", types.SharedListStringNil)), &types.List{Cons0: mapperBox, Cons1: &types.List{Cons0: mapperPair, Cons1: types.SharedListNil}}), Value: convert5(PairInt{First: scrutinee.Second, Second: scrutinee.First})}
+		a2 = shared.MapTypeValue{Type: v.Type, Map: variant.LookupMapperCase(v.Type, types.Cons("first", types.Cons("second", types.SharedListStringNil)), &types.List{Cons0: mapperBox, Cons1: &types.List{Cons0: mapperPair, Cons1: types.SharedListNil}}), Value: convert5(PairInt{First: scrutinee.Second, Second: scrutinee.First})}
 	} else {
 		a2 = v
 	}
@@ -206,7 +206,7 @@ func main() {
 // shared/shared.go
 package shared
 
-type VariantFRep struct {
+type MapTypeValue struct {
 	Map   func(func(any) any) func(any) any
 	Type  string
 	Value any

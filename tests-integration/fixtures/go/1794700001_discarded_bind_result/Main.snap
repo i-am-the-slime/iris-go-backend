@@ -14,17 +14,17 @@ func main_() int32 {
 	var total int32 = 0
 	ticks := create()
 	ticks2 := create()
-	subscribe := ticks2.Subscribe
-	subscribe(func(n int32) {
+	previous := ticks2.Subscribe
+	previous(func(n int32) {
 		total += n
 	})
 	var latest int32 = 0
-	subscribe(func(n int32) {
+	previous(func(n int32) {
 		latest = n
 	})
 	ticks.Subscribe(func(n int32) {
-		previous := latest
-		ticks2.Push(previous + n)
+		previous2 := latest
+		ticks2.Push(previous2 + n)
 	})
 	ticks.Push(1)
 	ticks.Push(2)

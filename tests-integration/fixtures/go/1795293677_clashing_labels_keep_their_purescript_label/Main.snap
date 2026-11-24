@@ -548,7 +548,7 @@ func ReadImplPairConsIntConsIntNil(o any) foreign.EitherNonEmptyListForeignError
 	default: // foreign.EitherNonEmptyListForeignErrorForeignRight
 		b := unsafeReadPropImpl.Right
 		if foreignvalue.TagOf(b) == "Number" {
-			number := b.(float64)
+			number := foreignvalue.Number(b)
 			var integer maybe.Int
 			if math.Trunc(number) == number && (number >= math.MinInt32 && number <= math.MaxInt32) {
 				integer = maybe.Int(int32(number))
@@ -583,7 +583,7 @@ func ReadImplPairConsIntConsIntNil(o any) foreign.EitherNonEmptyListForeignError
 	default: // foreign.EitherNonEmptyListForeignErrorForeignRight
 		b := unsafeReadPropImpl2.Right
 		if foreignvalue.TagOf(b) == "Number" {
-			number := b.(float64)
+			number := foreignvalue.Number(b)
 			var integer maybe.Int
 			if math.Trunc(number) == number && (number >= math.MinInt32 && number <= math.MaxInt32) {
 				integer = maybe.Int(int32(number))
@@ -631,7 +631,7 @@ func ReadImplTripleConsIntConsNumberConsStringNil(o any) foreign.EitherNonEmptyL
 	default: // foreign.EitherNonEmptyListForeignErrorForeignRight
 		b := unsafeReadPropImpl.Right
 		if foreignvalue.TagOf(b) == "Number" {
-			number := b.(float64)
+			number := foreignvalue.Number(b)
 			var integer maybe.Int
 			if math.Trunc(number) == number && (number >= math.MinInt32 && number <= math.MaxInt32) {
 				integer = maybe.Int(int32(number))
@@ -667,7 +667,7 @@ func ReadImplTripleConsIntConsNumberConsStringNil(o any) foreign.EitherNonEmptyL
 		b := unsafeReadPropImpl2.Right
 		if foreignvalue.TagOf(b) == "Number" {
 			result3 = foreign.RightEitherNonEmptyListForeignErrorFnAOfStringA2A(func(r1 shared.AOfString) shared.A2A {
-				return shared.A2A{A: r1.A, A2: b.(float64)}
+				return shared.A2A{A: r1.A, A2: foreignvalue.Number(b)}
 			})
 		} else {
 			result3 = foreign.LeftEitherNonEmptyListForeignErrorFnAOfStringA2A(foreign.MapListFunction("A2", foreign.NonEmptyListForeignError{First: foreign.TypeMismatch("Number", foreignvalue.TagOf(b)), Second: foreign.SharedListForeignErrorNil}))

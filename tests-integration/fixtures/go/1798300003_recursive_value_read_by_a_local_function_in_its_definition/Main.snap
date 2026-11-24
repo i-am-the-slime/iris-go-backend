@@ -1,0 +1,80 @@
+---
+source: tests-integration/src/fixtures.rs
+---
+// Data/Show/show.go
+package show
+
+import "strconv"
+
+func Show(i int32) string {
+	return strconv.Itoa(int(i))
+}
+
+func AppendShowArrayInt(buffer []byte, array []int32) []byte {
+	buffer = append(buffer, '[')
+	for index, element := range array {
+		if index > 0 {
+			buffer = append(buffer, ',')
+		}
+		buffer = strconv.AppendInt(buffer, int64(element), 10)
+	}
+	buffer = append(buffer, ']')
+	return buffer
+}
+
+func ArrayInt(array []int32) string {
+	return string(AppendShowArrayInt(nil, array))
+}
+
+// main.go
+package main
+
+import (
+	"fixture/Data/Show"
+	journal "fixture/Journal_ffi"
+	"github.com/i-am-the-slime/iris-go/array"
+)
+
+type Step struct {
+	Emit1 func(struct{}) Step
+	Emit0 int32
+	Tag   uint8
+}
+
+const (
+	StepEmit = iota
+	StepStop
+)
+
+func Emit(emit0 int32, emit1 func(struct{}) Step) Step {
+	return Step{Tag: StepEmit, Emit0: emit0, Emit1: emit1}
+}
+
+func main() {
+	var ones Step
+	var go_ func(Step) Step
+	go_ = func(step Step) Step {
+		switch step.Tag {
+		case StepEmit:
+			return Emit(step.Emit0, func(_ struct{}) Step {
+				return go_(step.Emit1(struct{}{}))
+			})
+		default: // StepStop
+			return ones
+		}
+	}
+	ones = go_(Emit(1, func(_ struct{}) Step {
+		return Step{Tag: StepStop}
+	}))
+	journal.Log(show.ArrayInt(take(5, ones)))
+}
+
+func take(count int32, step Step) []int32 {
+	if count == 0 {
+		return []int32{}
+	}
+	if step.Tag == StepStop {
+		return []int32{}
+	}
+	return array.Append([]int32{step.Emit0}, take(count-1, step.Emit1(struct{}{})))
+}

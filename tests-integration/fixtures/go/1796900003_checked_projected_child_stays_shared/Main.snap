@@ -535,11 +535,11 @@ func projectedChildGoOrProjectedChildGoChecked(step int, tree *redblack.Tree, ke
 				} else {
 					tree2 = redblack.Ins(k, true, tree)
 				}
-				var child *redblack.Tree
+				var probedTreesChild *redblack.Tree
 				if tree2 != redblack.SharedTreeLeaf {
-					child = tree2.Node1
+					probedTreesChild = tree2.Node1
 				} else {
-					child = redblack.SharedTreeLeaf
+					probedTreesChild = redblack.SharedTreeLeaf
 				}
 				var probedTreesGrown *redblack.Tree
 				if tree2 != redblack.SharedTreeLeaf && tree2.Node0 == redblack.ColorRed {
@@ -552,7 +552,7 @@ func projectedChildGoOrProjectedChildGoChecked(step int, tree *redblack.Tree, ke
 				} else {
 					probedTreesGrown = redblack.Ins(key, true, tree2)
 				}
-				kept, probed, n = listTreeCells.New(redblack_types.ListTree{Cons0: probedTreesGrown, Cons1: kept}), probed+redblack.Checksum(child), n-1
+				kept, probed, n = listTreeCells.New(redblack_types.ListTree{Cons0: probedTreesGrown, Cons1: kept}), probed+redblack.Checksum(probedTreesChild), n-1
 				continue
 			}
 			k2 := n * 2
@@ -574,7 +574,7 @@ func projectedChildGoOrProjectedChildGoChecked(step int, tree *redblack.Tree, ke
 			} else {
 				result = kept
 			}
-			step, tree, kept, n, treeOwned = shared.ProjectedChildGoCheckedStep, next, result, n-1, !(n%7 == 0)
+			step, tree, kept, n, treeOwned = shared.ProjectedChildGoCheckedStep, next, result, n-1, n%7 != 0
 		default: // shared.ProjectedChildGoCheckedStep
 			if n <= 0 {
 				return redblack_types.ProbedTrees{Probed: probed, Trees: redblack_types.Cons(tree, kept)}
@@ -597,11 +597,11 @@ func projectedChildGoOrProjectedChildGoChecked(step int, tree *redblack.Tree, ke
 				} else {
 					tree2 = redblack.Ins(k, true, tree)
 				}
-				var child *redblack.Tree
+				var probedTreesChild *redblack.Tree
 				if tree2 != redblack.SharedTreeLeaf {
-					child = tree2.Node1
+					probedTreesChild = tree2.Node1
 				} else {
-					child = redblack.SharedTreeLeaf
+					probedTreesChild = redblack.SharedTreeLeaf
 				}
 				var probedTreesGrown *redblack.Tree
 				if tree2 != redblack.SharedTreeLeaf && tree2.Node0 == redblack.ColorRed {
@@ -618,7 +618,7 @@ func projectedChildGoOrProjectedChildGoChecked(step int, tree *redblack.Tree, ke
 				} else {
 					probedTreesGrown = redblack.Ins(key, true, tree2)
 				}
-				step, kept, probed, n = shared.ProjectedChildGoStep, listTreeCells.New(redblack_types.ListTree{Cons0: probedTreesGrown, Cons1: kept}), probed+redblack.Checksum(child), n-1
+				step, kept, probed, n = shared.ProjectedChildGoStep, listTreeCells.New(redblack_types.ListTree{Cons0: probedTreesGrown, Cons1: kept}), probed+redblack.Checksum(probedTreesChild), n-1
 				continue
 			}
 			k2 := n * 2
@@ -644,7 +644,7 @@ func projectedChildGoOrProjectedChildGoChecked(step int, tree *redblack.Tree, ke
 			} else {
 				result = kept
 			}
-			tree, kept, n, treeOwned = next, result, n-1, !(n%7 == 0)
+			tree, kept, n, treeOwned = next, result, n-1, n%7 != 0
 		}
 	}
 }
@@ -675,11 +675,11 @@ func projectedChildGoReusing(tree *redblack.Tree, kept *redblack_types.ListTree,
 		} else {
 			tree2 = redblack.Ins(k, true, tree)
 		}
-		var child *redblack.Tree
+		var probedTreesChild *redblack.Tree
 		if tree2 != redblack.SharedTreeLeaf {
-			child = tree2.Node1
+			probedTreesChild = tree2.Node1
 		} else {
-			child = redblack.SharedTreeLeaf
+			probedTreesChild = redblack.SharedTreeLeaf
 		}
 		var probedTreesGrown *redblack.Tree
 		if tree2 != redblack.SharedTreeLeaf && tree2.Node0 == redblack.ColorRed {
@@ -692,7 +692,7 @@ func projectedChildGoReusing(tree *redblack.Tree, kept *redblack_types.ListTree,
 		} else {
 			probedTreesGrown = redblack.Ins(key, true, tree2)
 		}
-		return projectedChildGo(tree, redblack_types.Cons(probedTreesGrown, kept), probed+redblack.Checksum(child), n-1)
+		return projectedChildGo(tree, redblack_types.Cons(probedTreesGrown, kept), probed+redblack.Checksum(probedTreesChild), n-1)
 	}
 	k2 := n * 2
 	v := n%3 == 0
@@ -713,7 +713,7 @@ func projectedChildGoReusing(tree *redblack.Tree, kept *redblack_types.ListTree,
 	} else {
 		result = kept
 	}
-	return projectedChildGoChecked(next, result, probed, n-1, !(n%7 == 0))
+	return projectedChildGoChecked(next, result, probed, n-1, n%7 != 0)
 }
 
 func mainGoReusing(acc *redblack_types.ListTree, list *redblack_types.ListTree) *redblack_types.ListTree {

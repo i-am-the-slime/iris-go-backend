@@ -1032,7 +1032,7 @@ func ReadImplItemConsObjectIntConsIntConsNullableNumberConsStringConsMaybeString
 	default: // foreign.EitherNonEmptyListForeignErrorForeignRight
 		b := unsafeReadPropImpl2.Right
 		if foreignvalue.TagOf(b) == "Number" {
-			number := b.(float64)
+			number := foreignvalue.Number(b)
 			var integer maybe.Int
 			if math.Trunc(number) == number && (number >= math.MinInt32 && number <= math.MaxInt32) {
 				integer = maybe.Int(int32(number))
@@ -1231,7 +1231,7 @@ func ReadImplInt(a any) foreign.EitherNonEmptyListForeignErrorObjectInt {
 			error_ := foreign.LeftEitherNonEmptyListForeignErrorInt(foreign.NonEmptyListForeignError{First: foreign.TypeMismatch("Int", foreignvalue.TagOf(value)), Second: foreign.SharedListForeignErrorNil})
 			var result foreign.EitherNonEmptyListForeignErrorInt
 			if foreignvalue.TagOf(value) == "Number" {
-				number := value.(float64)
+				number := foreignvalue.Number(value)
 				var integer maybe.Int
 				if math.Trunc(number) == number && (number >= math.MinInt32 && number <= math.MaxInt32) {
 					integer = maybe.Int(int32(number))
@@ -1315,7 +1315,7 @@ func ReadImplItemConsObjectIntConsIntConsNullableNumberConsStringConsMaybeString
 	default: // maybe.TagJust
 		x2 := x.Just
 		if foreignvalue.TagOf(x2) == "Number" {
-			return foreign.RightEitherNonEmptyListForeignErrorNullableNumber(nullable.NotNull(x2.(float64)))
+			return foreign.RightEitherNonEmptyListForeignErrorNullableNumber(nullable.NotNull(foreignvalue.Number(x2)))
 		}
 		return foreign.LeftEitherNonEmptyListForeignErrorNullableNumber(foreign.NonEmptyListForeignError{First: foreign.TypeMismatch("Number", foreignvalue.TagOf(x2)), Second: foreign.SharedListForeignErrorNil})
 	}

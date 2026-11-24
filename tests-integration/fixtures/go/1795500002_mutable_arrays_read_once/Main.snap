@@ -119,8 +119,8 @@ func initializeMain_() []string {
 	i3 := i2 - 1
 	var number2 float64
 	number2 = (*array2)[i3]
-	array3 := shared.Copied(*array2)
-	performed := array.Append([]string{show.ArrayNumber(array3), prim.ShowNumber(edge), prim.ShowNumber(number + number2)}, array.Append(pull, array.Append(countBefore, sortEach)))
+	frozen := shared.Copied(*array2)
+	performed := array.Append([]string{show.ArrayNumber(frozen), prim.ShowNumber(edge), prim.ShowNumber(number + number2)}, array.Append(pull, array.Append(countBefore, sortEach)))
 	return performed
 }
 
@@ -307,8 +307,8 @@ func initializeCountBefore() []string {
 			}
 		}
 	}
-	array2 := shared.Copied(counts)
-	performed := []string{show.ArrayInt(array2)}
+	frozen := shared.Copied(counts)
+	performed := []string{show.ArrayInt(frozen)}
 	return performed
 }
 
@@ -337,21 +337,21 @@ func initializeSortEach() []string {
 			return 0
 		})
 		within := 0 < len(*array2)
-		var i3 int32
+		var first int32
 		if within {
-			i3 = (*array2)[0]
+			first = (*array2)[0]
 		} else {
-			i3 = 0
+			first = 0
 		}
 		within2 := int(i) < len(array3)
 		if within2 {
 			element := array3[i]
-			array3[i] = element + i3
+			array3[i] = element + first
 		}
 	}
-	array4 := shared.Copied(*array2)
-	array5 := shared.Copied(array3)
-	performed := []string{show.ArrayInt(array4), show.ArrayInt(array5)}
+	sorted := shared.Copied(*array2)
+	bumped := shared.Copied(array3)
+	performed := []string{show.ArrayInt(sorted), show.ArrayInt(bumped)}
 	return performed
 }
 

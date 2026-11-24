@@ -5,31 +5,31 @@ source: tests-integration/src/fixtures.rs
 package main
 
 import (
-	"fixture/Server_ffi"
+	server "fixture/Server_ffi"
 	"github.com/i-am-the-slime/iris-go/prim"
 	"strconv"
 )
 
 func main() {
 	routes.Handle("bob", "yo", func(s string) {
-		Server_ffi.Log(s)
+		server.Log(s)
 	})
-	Server_ffi.Log(strconv.Itoa(int(routes.Add(3)(4))))
-	Server_ffi.Log(routes.Settings.Greeting("hi")("bob"))
-	Server_ffi.Serve(routes)
-	hooks := Server_ffi.InstallHooks()
+	server.Log(strconv.Itoa(int(routes.Add(3)(4))))
+	server.Log(routes.Settings.Greeting("hi")("bob"))
+	server.Serve(routes)
+	hooks := server.InstallHooks()
 	hooks.Route("carol")("hey", func(s string) {
-		Server_ffi.Log(s)
+		server.Log(s)
 	})
-	Server_ffi.Log(prim.ShowNumber(hooks.Fold(func(a float64) func(float64) float64 {
+	server.Log(prim.ShowNumber(hooks.Fold(func(a float64) func(float64) float64 {
 		return func(b float64) float64 {
 			return a*10.0 + b
 		}
 	})))
 }
 
-var routes Server_ffi.Routes = Server_ffi.Routes{Handle: func(name string, body string, reply func(string)) {
-	Server_ffi.Log(name + ": " + body)
+var routes server.Routes = server.Routes{Handle: func(name string, body string, reply func(string)) {
+	server.Log(name + ": " + body)
 	reply("thanks " + name)
 }, Add: func(a int32) func(int32) int32 {
 	return func(b int32) int32 {
@@ -37,13 +37,13 @@ var routes Server_ffi.Routes = Server_ffi.Routes{Handle: func(name string, body 
 	}
 }, Each: []func(string) func(string){func(a string) func(string) {
 	return func(b string) {
-		Server_ffi.Log(prim.Append(a, b))
+		server.Log(prim.Append(a, b))
 	}
 }, func(a string) func(string) {
 	return func(b string) {
-		Server_ffi.Log(prim.Append(b, a))
+		server.Log(prim.Append(b, a))
 	}
-}}, Settings: Server_ffi.Settings{Greeting: func(word string) func(string) string {
+}}, Settings: server.Settings{Greeting: func(word string) func(string) string {
 	return func(name string) string {
 		return word + ", " + name
 	}

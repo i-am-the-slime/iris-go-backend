@@ -91,26 +91,25 @@ package main
 import (
 	"fixture/Data/Maybe"
 	"fixture/Data/Show"
-	"fixture/Repeated_ffi"
+	repeated "fixture/Repeated_ffi"
 	"fixture/shared"
-	"github.com/i-am-the-slime/iris-go/direct"
 	"github.com/i-am-the-slime/iris-go/prim"
 	"strconv"
 )
 
 func main_() []string {
 	array := []shared.Inner{{A: 1, B: "one"}, {A: 2, B: "two"}}
-	accumulator := Repeated_ffi.Empty[shared.Inner]()
+	accumulator := repeated.Empty[shared.Inner]()
 	for _, inner := range array {
-		accumulator = Repeated_ffi.SnocImpl(accumulator, inner)
+		accumulator = repeated.SnocImpl(accumulator, inner)
 	}
-	array2 := []shared.Outer{{Name: "outer", Inner: shared.Inner{A: 3, B: "three"}, Tags: Repeated_ffi.Freeze(accumulator)}}
-	accumulator2 := Repeated_ffi.Empty[shared.Outer]()
+	array2 := []shared.Outer{{Name: "outer", Inner: shared.Inner{A: 3, B: "three"}, Tags: repeated.Freeze(accumulator)}}
+	accumulator2 := repeated.Empty[shared.Outer]()
 	for _, outer2 := range array2 {
-		accumulator2 = Repeated_ffi.SnocImpl(accumulator2, outer2)
+		accumulator2 = repeated.SnocImpl(accumulator2, outer2)
 	}
-	outer := Repeated_ffi.IndexOrImpl(shared.Outer{Name: "none", Inner: shared.Inner{A: 0, B: ""}, Tags: []shared.Inner{}}, 0, accumulator2)
-	array3 := Repeated_ffi.Freeze(accumulator)
+	outer := repeated.IndexOrImpl(shared.Outer{Name: "none", Inner: shared.Inner{A: 0, B: ""}, Tags: []shared.Inner{}}, 0, accumulator2)
+	array3 := repeated.Freeze(accumulator)
 	mapped := make([]int32, len(array3))
 	for index := range array3 {
 		mapped[index] = array3[index].A
@@ -123,11 +122,11 @@ func main_() []string {
 	}
 	text = show.AppendShowArrayInt(text, mapped2)
 	array4 := [][]shared.Inner{{{A: 4, B: "four"}}, {}}
-	accumulator3 := Repeated_ffi.Empty[[]shared.Inner]()
+	accumulator3 := repeated.Empty[[]shared.Inner]()
 	for _, array5 := range array4 {
-		accumulator3 = Repeated_ffi.SnocImpl(accumulator3, array5)
+		accumulator3 = repeated.SnocImpl(accumulator3, array5)
 	}
-	array6 := Repeated_ffi.Freeze(accumulator3)
+	array6 := repeated.Freeze(accumulator3)
 	mapped3 := make([][]int32, len(array6))
 	for index, array5 := range array6 {
 		mapped4 := make([]int32, len(array5))
@@ -137,11 +136,11 @@ func main_() []string {
 		mapped3[index] = mapped4
 	}
 	array7 := []maybe.Inner{maybe.JustInner(shared.Inner{A: 5, B: "five"}), maybe.NoInner}
-	accumulator4 := Repeated_ffi.Empty[maybe.Inner]()
+	accumulator4 := repeated.Empty[maybe.Inner]()
 	for _, maybe := range array7 {
-		accumulator4 = Repeated_ffi.SnocImpl(accumulator4, maybe)
+		accumulator4 = repeated.SnocImpl(accumulator4, maybe)
 	}
-	array8 := Repeated_ffi.Freeze(accumulator4)
+	array8 := repeated.Freeze(accumulator4)
 	mapped5 := make([]string, len(array8))
 	for index := range array8 {
 		var result string
@@ -153,8 +152,7 @@ func main_() []string {
 		}
 		mapped5[index] = result
 	}
-	original := Repeated_ffi.IndexOrImpl(shared.Inner{A: 0, B: ""}, 1, accumulator)
-	return []string{show.ArrayInt(mapped), strconv.Itoa(int(Repeated_ffi.Length(accumulator2))), string(text), show.ArrayArrayInt(mapped3), show.ArrayString(mapped5), Repeated_ffi.Describe(direct.ForeignRecord([]string{"a", "b"}, []any{original.A, original.B})), Repeated_ffi.Describe(int32(7))}
+	return []string{show.ArrayInt(mapped), strconv.Itoa(int(repeated.Length(accumulator2))), string(text), show.ArrayArrayInt(mapped3), show.ArrayString(mapped5), repeated.Describe(any(repeated.IndexOrImpl(shared.Inner{A: 0, B: ""}, 1, accumulator))), repeated.Describe(int32(7))}
 }
 
 func main() {

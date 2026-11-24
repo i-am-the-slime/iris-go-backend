@@ -5,7 +5,7 @@ source: tests-integration/src/fixtures.rs
 package main
 
 import (
-	"fixture/Lifted_ffi"
+	lifted "fixture/Lifted_ffi"
 	"fixture/shared"
 	"github.com/i-am-the-slime/iris-go/prim"
 	"strconv"
@@ -13,18 +13,18 @@ import (
 
 func main_() []string {
 	seen := &shared.Ref[string]{Value: ""}
-	Lifted_ffi.PerformImpl(func() struct{} {
+	lifted.PerformImpl(func() struct{} {
 		mainRecord(seen, "performed ")
 		return struct{}{}
 	})
-	Lifted_ffi.GuardedImpl(func(_ string) struct{} {
+	lifted.GuardedImpl(func(_ string) struct{} {
 		mainRecord(seen, "handled ")
 		return struct{}{}
 	}, func() struct{} {
 		mainRecord(seen, "guarded ")
 		return struct{}{}
 	})
-	Lifted_ffi.CombineImpl(func(unit struct{}) func(struct{}) struct{} {
+	lifted.CombineImpl(func(unit struct{}) func(struct{}) struct{} {
 		function := func(_ struct{}) func(struct{}) {
 			return func(_ struct{}) {
 			}
@@ -40,7 +40,7 @@ func main_() []string {
 		mainRecord(seen, "right ")
 		return struct{}{}
 	})
-	Lifted_ffi.CombineImpl(func(f func(struct{})) func(struct{}) struct{} {
+	lifted.CombineImpl(func(f func(struct{})) func(struct{}) struct{} {
 		function := f
 		return func(unit struct{}) struct{} {
 			function(unit)
@@ -53,12 +53,12 @@ func main_() []string {
 		mainRecord(seen, "argument ")
 		return struct{}{}
 	})
-	Lifted_ffi.ModifyImpl(func(n int32) int32 {
+	lifted.ModifyImpl(func(n int32) int32 {
 		return n + 1
 	}, func(_ int32) struct{} {
 		return struct{}{}
 	})
-	counted := Lifted_ffi.PerformImpl(func() int32 {
+	counted := lifted.PerformImpl(func() int32 {
 		return 7
 	})
 	log := seen.Value

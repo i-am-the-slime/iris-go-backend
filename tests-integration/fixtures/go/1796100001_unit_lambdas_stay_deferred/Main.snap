@@ -21,7 +21,7 @@ func ThrowUnit(x string) {
 package main
 
 import (
-	"fixture/Actions_ffi"
+	actions "fixture/Actions_ffi"
 	"fixture/Data/Eq"
 	"fixture/Effect/Exception"
 	arraypkg "github.com/i-am-the-slime/iris-go/array"
@@ -40,21 +40,21 @@ func main() {
 	if !arraypkg.Eq(eq.Eq, mapped, []int32{5050, 55}) {
 		effectexception.ThrowUnit("the deferred values are wrong")
 	}
-	bound := Actions_ffi.RunWhenAsked(func() int32 {
+	bound := actions.RunWhenAsked(func() int32 {
 		var accumulator int32 = 0
 		for value := int32(1); value < 11; value++ {
 			accumulator += value
 		}
 		return accumulator
 	})
-	mapped2 := Actions_ffi.RunWhenAsked(func() int32 {
+	mapped2 := actions.RunWhenAsked(func() int32 {
 		var accumulator int32 = 0
 		for value := int32(1); value < 21; value++ {
 			accumulator += value
 		}
 		return accumulator
 	})
-	free := Actions_ffi.RunWhenAsked(answer)
+	free := actions.RunWhenAsked(answer)
 	if !arraypkg.Eq(eq.Eq, []int32{bound, mapped2, free}, []int32{55, 210, 42}) {
 		effectexception.ThrowUnit("the continued values are wrong")
 	}
@@ -83,10 +83,10 @@ func answer() int32 {
 	return 42
 }
 
-func shifted(n int32, array2 []int32) []int32 {
-	mapped := make([]int32, len(array2))
+func shifted(n int32, array []int32) []int32 {
+	mapped := make([]int32, len(array))
 	step, count := arraypkg.RangeSteps(1, n)
-	for index, x := range array2 {
+	for index, x := range array {
 		var accumulator int32 = 0
 		for index2 := range count {
 			value := 1 + int32(index2)*step

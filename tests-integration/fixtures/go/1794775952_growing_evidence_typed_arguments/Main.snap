@@ -115,3 +115,5 @@ func Convert2(value []bool) any {
 	}
 	return converted
 }
+
+// note: Main.describe takes its Show dictionary at run time, because polymorphic recursion reaches it at ever larger types; only this definition is slower

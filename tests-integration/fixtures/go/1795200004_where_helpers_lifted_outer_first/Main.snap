@@ -15,13 +15,13 @@ import (
 var main_ = initializeMain_()
 
 func initializeMain_() []int32 {
-	array2 := *array.Thaw([]int32{3, 1, 2})
-	size := int32(len(array2))
+	result := *array.Thaw([]int32{3, 1, 2})
+	size := int32(len(result))
 	for i := int32(1); i < size; i++ {
-		within := int(i) < len(array2)
+		within := int(i) < len(result)
 		var current int32
 		if within {
-			current = array2[i]
+			current = result[i]
 		} else {
 			current = 0
 		}
@@ -29,34 +29,34 @@ func initializeMain_() []int32 {
 	mainShiftDown:
 		for {
 			if j < 0 {
-				if 0 < len(array2) {
-					array2[0] = current
+				if 0 < len(result) {
+					result[0] = current
 				}
 				break mainShiftDown
 			}
-			within2 := int(j) < len(array2)
+			within2 := int(j) < len(result)
 			var previous int32
 			if within2 {
-				previous = array2[j]
+				previous = result[j]
 			} else {
 				previous = 0
 			}
 			if previous > current {
 				index := j + 1
-				if int(index) < len(array2) {
-					array2[index] = previous
+				if int(index) < len(result) {
+					result[index] = previous
 				}
 				j -= 1
 				continue
 			}
 			index2 := j + 1
-			if int(index2) < len(array2) {
-				array2[index2] = current
+			if int(index2) < len(result) {
+				result[index2] = current
 			}
 			break mainShiftDown
 		}
 	}
-	performed := shared.Frozen(array2)
+	performed := shared.Frozen(result)
 	return array.Append([]int32{mainGo(100, 0)}, performed)
 }
 

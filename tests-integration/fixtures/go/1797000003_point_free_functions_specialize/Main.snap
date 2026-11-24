@@ -54,18 +54,18 @@ func initializeMain_() []string {
 var numbers []int32 = []int32{7, 3, 9, 1, 4, 8, 2, 6, 5, 0}
 
 func sortByIntCompare(xs []int32) []int32 {
-	array2 := array.Thaw(xs)
-	i := int32(len(*array2))
-	sortByIntCompareInsertFrom(array2, 1, i)
-	performed := shared.Frozen(*array2)
+	result := array.Thaw(xs)
+	length := int32(len(*result))
+	sortByIntCompareInsertFrom(result, 1, length)
+	performed := shared.Frozen(*result)
 	return performed
 }
 
 func sortByIntDescending(xs []int32) []int32 {
-	array2 := array.Thaw(xs)
-	i := int32(len(*array2))
-	sortByIntDescendingInsertFrom(array2, 1, i)
-	performed := shared.Frozen(*array2)
+	result := array.Thaw(xs)
+	length := int32(len(*result))
+	sortByIntDescendingInsertFrom(result, 1, length)
+	performed := shared.Frozen(*result)
 	return performed
 }
 

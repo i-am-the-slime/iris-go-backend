@@ -1,0 +1,818 @@
+---
+source: tests-integration/src/fixtures.rs
+---
+// Data/Eq/eq.go
+package eq
+
+import "github.com/i-am-the-slime/iris-go/array"
+
+func Eq(i int32, i2 int32) bool {
+	return i == i2
+}
+
+func EqInt(array2 []int32, array3 []int32) bool {
+	return array.Eq(Eq, array2, array3)
+}
+
+// Data/Maybe/maybe.go
+package maybe
+
+import "fixture/shared"
+
+const TagNothing = 0
+
+const TagJust = 1
+
+type Maybe struct {
+	Just any
+	Tag  uint8
+}
+
+type ArrayInt struct {
+	Just []int32
+	Tag  uint8
+}
+
+func JustArrayInt(just []int32) ArrayInt {
+	return ArrayInt{Tag: TagJust, Just: just}
+}
+
+var NoArrayInt = ArrayInt{Tag: TagNothing}
+
+func Convert(value ArrayInt) *Maybe {
+	switch value.Tag {
+	case TagNothing:
+		return &Maybe{Tag: TagNothing}
+	default: // TagJust
+		return &Maybe{Tag: TagJust, Just: shared.Convert2(value.Just)}
+	}
+}
+
+type Array struct {
+	Just   []any
+	Origin any
+	Tag    uint8
+}
+
+var NoArray = &Array{Tag: TagNothing}
+
+func Convert2(value *Array) *Maybe {
+	switch value.Tag {
+	case TagNothing:
+		return &Maybe{Tag: TagNothing}
+	default: // TagJust
+		return &Maybe{Tag: TagJust, Just: value.Just}
+	}
+}
+
+// Data/Ord/ord.go
+package ord
+
+import (
+	"fixture/Data/Ordering"
+	"github.com/i-am-the-slime/iris-go/direct"
+)
+
+func CompareInt(xs []int32, ys []int32) ordering.Ordering {
+	i := direct.CompareArray(func(x int32, y int32) int32 {
+		if x < y {
+			return 1
+		}
+		if x == y {
+			return 0
+		}
+		return -1
+	}, xs, ys)
+	if 0 < i {
+		return ordering.OrderingLT
+	}
+	if 0 == i {
+		return ordering.OrderingEQ
+	}
+	return ordering.OrderingGT
+}
+
+// Data/Ordering/ordering.go
+package ordering
+
+import "fixture/shared"
+
+type Ordering uint8
+
+const (
+	OrderingLT Ordering = iota
+	OrderingGT
+	OrderingEQ
+)
+
+type Eq0Compare struct {
+	Eq0     shared.Eq
+	Compare func(any) func(any) Ordering
+}
+
+// Data/Show/show.go
+package show
+
+import "strconv"
+
+func Show(i int32) string {
+	return strconv.Itoa(int(i))
+}
+
+func AppendShowArrayInt(buffer []byte, array []int32) []byte {
+	buffer = append(buffer, '[')
+	for index, element := range array {
+		if index > 0 {
+			buffer = append(buffer, ',')
+		}
+		buffer = strconv.AppendInt(buffer, int64(element), 10)
+	}
+	buffer = append(buffer, ']')
+	return buffer
+}
+
+func ArrayInt(array []int32) string {
+	return string(AppendShowArrayInt(nil, array))
+}
+
+// main.go
+package main
+
+import (
+	"fixture/Data/Eq"
+	"fixture/Data/Maybe"
+	"fixture/Data/Ord"
+	dataordering "fixture/Data/Ordering"
+	"fixture/Data/Show"
+	"fixture/shared"
+	"github.com/i-am-the-slime/iris-go/array"
+	"github.com/i-am-the-slime/iris-go/console"
+	"github.com/i-am-the-slime/iris-go/direct"
+	"github.com/i-am-the-slime/iris-go/prim"
+	"slices"
+	"strconv"
+	"strings"
+)
+
+type Nested struct {
+	Flat any
+	Nest *Nested
+	Tag  uint8
+}
+
+const (
+	NestedFlat = iota
+	NestedNest
+)
+
+var main_ = initializeMain_()
+
+func initializeMain_() []string {
+	var result string
+	switch deep.Tag {
+	case NestedFlat:
+		result = "Flat " + strconv.Itoa(int(deep.Flat.(int32)))
+	default: // NestedNest
+		text := []byte("Nest (")
+		text = appendShowArrayInt(text, shared.Show{Show: func(coerced any) string {
+			return show.ArrayInt(shared.Convert(coerced))
+		}}, deep.Nest)
+		text = append(text, ')')
+		result = string(text)
+	}
+	var result2 bool
+	if deep.Tag == NestedFlat {
+		result2 = deep.Flat.(int32) == deep.Flat.(int32)
+	} else if deep.Tag == NestedNest {
+		original := func(array []int32) func([]int32) bool {
+			return func(array2 []int32) bool {
+				return eq.EqInt(array, array2)
+			}
+		}
+		result2 = eqArrayInt(shared.Eq{Eq: func(coerced any) func(any) bool {
+			original2 := original(shared.Convert(coerced))
+			return func(coerced2 any) bool {
+				return original2(shared.Convert(coerced2))
+			}
+		}}, deep.Nest, deep.Nest)
+	} else {
+		result2 = false
+	}
+	var result3 bool
+	switch deep.Tag {
+	case NestedNest:
+		original := func(array []int32) func([]int32) bool {
+			return func(array2 []int32) bool {
+				return eq.EqInt(array, array2)
+			}
+		}
+		result3 = eqArrayInt(shared.Eq{Eq: func(coerced any) func(any) bool {
+			original2 := original(shared.Convert(coerced))
+			return func(coerced2 any) bool {
+				return original2(shared.Convert(coerced2))
+			}
+		}}, deep.Nest, &Nested{Tag: NestedFlat, Flat: shared.Convert2([]int32{1})})
+	default:
+		result3 = false
+	}
+	var result4 dataordering.Ordering
+	switch deep.Tag {
+	case NestedFlat:
+		result4 = dataordering.OrderingLT
+	default: // NestedNest
+		original := func(array []int32) func([]int32) bool {
+			return func(array2 []int32) bool {
+				return eq.EqInt(array, array2)
+			}
+		}
+		original2 := func(xs []int32) func([]int32) dataordering.Ordering {
+			return func(ys []int32) dataordering.Ordering {
+				return ord.CompareInt(xs, ys)
+			}
+		}
+		ordering := compareArrayInt(dataordering.Eq0Compare{Eq0: shared.Eq{Eq: func(coerced any) func(any) bool {
+			original3 := original(shared.Convert(coerced))
+			return func(coerced2 any) bool {
+				return original3(shared.Convert(coerced2))
+			}
+		}}, Compare: func(coerced any) func(any) dataordering.Ordering {
+			original3 := original2(shared.Convert(coerced))
+			return func(coerced2 any) dataordering.Ordering {
+				return original3(shared.Convert(coerced2))
+			}
+		}}, deep.Nest, &Nested{Tag: NestedFlat, Flat: shared.Convert2([]int32{1})})
+		switch ordering {
+		case dataordering.OrderingEQ:
+			result4 = dataordering.OrderingEQ
+		default:
+			result4 = ordering
+		}
+	}
+	var result5 string
+	switch result4 {
+	case dataordering.OrderingLT:
+		result5 = "LT"
+	case dataordering.OrderingGT:
+		result5 = "GT"
+	default: // dataordering.OrderingEQ
+		result5 = "EQ"
+	}
+	var result6 string
+	switch deep.Tag {
+	case NestedFlat:
+		result6 = "Flat " + strconv.Itoa(int(mainChange(deep.Flat.(int32))))
+	default: // NestedNest
+		text := []byte("Nest (")
+		original := func(fa *Nested) func(func(any) any) *Nested {
+			return func(f func(any) any) *Nested {
+				return mapFlippedNestedArrayIntArrayInt(fa, f)
+			}
+		}
+		text = appendShowArrayInt(text, shared.Show{Show: func(coerced any) string {
+			return show.ArrayInt(shared.Convert(coerced))
+		}}, original(deep.Nest)(func(coerced any) any {
+			return shared.Convert2(mapLanes(shared.Convert(coerced)))
+		}))
+		text = append(text, ')')
+		result6 = string(text)
+	}
+	var result7 int32
+	switch deep.Tag {
+	case NestedFlat:
+		result7 = deep.Flat.(int32)
+	default: // NestedNest
+		original := func(step func(int32) func(any) int32) func(int32, *Nested) int32 {
+			return func(initial int32, nested *Nested) int32 {
+				return foldl(step, initial, nested)
+			}
+		}
+		result7 = original(func(coerced int32) func(any) int32 {
+			original2 := func(values []int32) int32 {
+				return foldLanes(values, coerced)
+			}
+			return func(coerced2 any) int32 {
+				return original2(shared.Convert(coerced2))
+			}
+		})(0, deep.Nest)
+	}
+	var result8 string
+	switch deep.Tag {
+	case NestedFlat:
+		result8 = strconv.Itoa(int(deep.Flat.(int32)))
+	default: // NestedNest
+		original := func(visit func(any) string) func(*Nested) string {
+			return func(nested *Nested) string {
+				return foldMap(visit, nested)
+			}
+		}
+		original2 := func(array []int32) string {
+			accumulator := ""
+			for index := len(array) - 1; index >= 0; index-- {
+				x := array[index]
+				accumulator = strconv.Itoa(int(x)) + accumulator
+			}
+			return accumulator
+		}
+		result8 = original(func(coerced any) string {
+			return original2(shared.Convert(coerced))
+		})(deep.Nest)
+	}
+	var result9 int32
+	switch deep.Tag {
+	case NestedFlat:
+		result9 = 100 - deep.Flat.(int32)
+	default: // NestedNest
+		original := func(step func(int32) func(any) int32) func(int32, *Nested) int32 {
+			return func(initial int32, nested *Nested) int32 {
+				return foldl(step, initial, nested)
+			}
+		}
+		result9 = original(func(coerced int32) func(any) int32 {
+			original2 := func(values []int32) int32 {
+				accumulator := coerced
+				for _, value := range values {
+					accumulator -= value
+				}
+				return accumulator
+			}
+			return func(coerced2 any) int32 {
+				return original2(shared.Convert(coerced2))
+			}
+		})(100, deep.Nest)
+	}
+	var result10 *Nested
+	switch deep.Tag {
+	case NestedFlat:
+		n := deep.Flat.(int32)
+		if n > 0 {
+			result10 = &Nested{Tag: NestedFlat, Flat: n + 1}
+		} else {
+			result10 = nil
+		}
+	default: // NestedNest
+		original := func(visit func(any) *maybe.Maybe) func(*Nested) *Nested {
+			return func(nested *Nested) *Nested {
+				return traverse(visit, nested)
+			}
+		}
+		original2 := func(array2 []int32) maybe.ArrayInt {
+			accumulator := maybe.JustArrayInt([]int32{})
+			accumulator.Just = slices.Clip(accumulator.Just)
+			for _, element := range array2 {
+				if accumulator.Tag == maybe.TagNothing {
+					break
+				}
+				switch accumulator.Tag {
+				case maybe.TagJust:
+					if element > 0 {
+						accumulator = maybe.JustArrayInt(array.Bounded(append(accumulator.Just, element+1)))
+					} else {
+						accumulator = maybe.NoArrayInt
+					}
+				default:
+					accumulator = maybe.NoArrayInt
+				}
+			}
+			return accumulator
+		}
+		scrutinee := original(func(coerced any) *maybe.Maybe {
+			return maybe.Convert(original2(shared.Convert(coerced)))
+		})(deep.Nest)
+		if scrutinee != nil {
+			result10 = &Nested{Tag: NestedNest, Nest: scrutinee}
+		} else {
+			result10 = nil
+		}
+	}
+	var result11 string
+	if result10 != nil {
+		var result12 string
+		switch result10.Tag {
+		case NestedFlat:
+			result12 = "Flat " + strconv.Itoa(int(result10.Flat.(int32)))
+		default: // NestedNest
+			text := []byte("Nest (")
+			text = appendShowArrayInt(text, shared.Show{Show: func(coerced any) string {
+				return show.ArrayInt(shared.Convert(coerced))
+			}}, result10.Nest)
+			text = append(text, ')')
+			result12 = string(text)
+		}
+		result11 = "(Just " + result12 + ")"
+	} else {
+		result11 = "Nothing"
+	}
+	return []string{result, strconv.FormatBool(result2) + " " + strconv.FormatBool(result3), result5, result6, strconv.Itoa(int(result7)) + " " + result8 + " " + strconv.Itoa(int(result9)), result11}
+}
+
+var deep = initializeDeep()
+
+func initializeDeep() *Nested {
+	nesteds := make([]Nested, 3)
+	nesteds[0] = Nested{Tag: NestedNest, Nest: &nesteds[1]}
+	nesteds[1] = Nested{Tag: NestedNest, Nest: &nesteds[2]}
+	nesteds[2] = Nested{Tag: NestedFlat, Flat: shared.Convert3([][]int32{{1, 2}, {3}})}
+	return &nesteds[0]
+}
+
+func showArrayInt(showDictionary shared.Show, nested *Nested) string {
+	return string(appendShowArrayInt(nil, showDictionary, nested))
+}
+
+func eqArrayInt(eqDictionary shared.Eq, left *Nested, right *Nested) bool {
+	for {
+		eqDictionaryCaptured := eqDictionary
+		if left.Tag == NestedFlat && right.Tag == NestedFlat {
+			left0 := left.Flat
+			right0 := right.Flat
+			return eqDictionaryCaptured.Eq(left0)(right0)
+		}
+		if left.Tag == NestedNest && right.Tag == NestedNest {
+			left0 := left.Nest
+			right0 := right.Nest
+			original := func(array2 []any) func([]any) bool {
+				return func(array3 []any) bool {
+					return array.Eq(func(argument any, argument2 any) bool {
+						return eqDictionaryCaptured.Eq(argument)(argument2)
+					}, array2, array3)
+				}
+			}
+			eqDictionary, left, right = shared.Eq{Eq: func(coerced any) func(any) bool {
+				original2 := original(coerced.([]any))
+				return func(coerced2 any) bool {
+					return original2(coerced2.([]any))
+				}
+			}}, left0, right0
+			continue
+		}
+		return false
+	}
+}
+
+func compareArrayInt(ordDictionary dataordering.Eq0Compare, left *Nested, right *Nested) dataordering.Ordering {
+	if left.Tag == NestedFlat && right.Tag == NestedFlat {
+		ordering := ordDictionary.Compare(left.Flat)(right.Flat)
+		switch ordering {
+		case dataordering.OrderingEQ:
+			return dataordering.OrderingEQ
+		default:
+			return ordering
+		}
+	}
+	if left.Tag == NestedFlat {
+		return dataordering.OrderingLT
+	}
+	if right.Tag == NestedFlat {
+		return dataordering.OrderingGT
+	}
+	original := func(array2 []any) func([]any) bool {
+		return func(array3 []any) bool {
+			return array.Eq(func(argument any, argument2 any) bool {
+				return ordDictionary.Eq0.Eq(argument)(argument2)
+			}, array2, array3)
+		}
+	}
+	original2 := func(xs []any) func([]any) dataordering.Ordering {
+		return func(ys []any) dataordering.Ordering {
+			i := direct.CompareArray(func(x any, y any) int32 {
+				scrutinee := ordDictionary.Compare(x)(y)
+				switch scrutinee {
+				case dataordering.OrderingEQ:
+					return 0
+				case dataordering.OrderingLT:
+					return 1
+				default: // dataordering.OrderingGT
+					return -1
+				}
+			}, xs, ys)
+			if 0 < i {
+				return dataordering.OrderingLT
+			}
+			if 0 == i {
+				return dataordering.OrderingEQ
+			}
+			return dataordering.OrderingGT
+		}
+	}
+	ordering2 := compareArrayInt(dataordering.Eq0Compare{Eq0: shared.Eq{Eq: func(coerced any) func(any) bool {
+		original3 := original(coerced.([]any))
+		return func(coerced2 any) bool {
+			return original3(coerced2.([]any))
+		}
+	}}, Compare: func(coerced any) func(any) dataordering.Ordering {
+		original3 := original2(coerced.([]any))
+		return func(coerced2 any) dataordering.Ordering {
+			return original3(coerced2.([]any))
+		}
+	}}, left.Nest, right.Nest)
+	switch ordering2 {
+	case dataordering.OrderingEQ:
+		return dataordering.OrderingEQ
+	default:
+		return ordering2
+	}
+}
+
+func foldMap(visit func(any) string, nested *Nested) string {
+	switch nested.Tag {
+	case NestedFlat:
+		return visit(nested.Flat)
+	default: // NestedNest
+		original := func(visit2 func(any) string) func(*Nested) string {
+			return func(nested2 *Nested) string {
+				return foldMap(visit2, nested2)
+			}
+		}
+		original2 := func(array []any) string {
+			accumulator := ""
+			for index := len(array) - 1; index >= 0; index-- {
+				x := array[index]
+				accumulator = prim.Append(visit(x), accumulator)
+			}
+			return accumulator
+		}
+		return original(func(coerced any) string {
+			return original2(coerced.([]any))
+		})(nested.Nest)
+	}
+}
+
+func foldl(step func(int32) func(any) int32, initial int32, nested *Nested) int32 {
+	switch nested.Tag {
+	case NestedFlat:
+		return step(initial)(nested.Flat)
+	default: // NestedNest
+		original := func(step2 func(int32) func(any) int32) func(int32, *Nested) int32 {
+			return func(initial2 int32, nested2 *Nested) int32 {
+				return foldl(step2, initial2, nested2)
+			}
+		}
+		return original(func(coerced int32) func(any) int32 {
+			original2 := func(values []any) int32 {
+				return array.Foldl(func(i int32, argument any) int32 {
+					return step(i)(argument)
+				}, coerced, values)
+			}
+			return func(coerced2 any) int32 {
+				return original2(coerced2.([]any))
+			}
+		})(initial, nested.Nest)
+	}
+}
+
+func traverse(visit func(any) *maybe.Maybe, nested *Nested) *Nested {
+	switch nested.Tag {
+	case NestedFlat:
+		scrutinee := visit(nested.Flat)
+		switch scrutinee.Tag {
+		case maybe.TagJust:
+			return &Nested{Tag: NestedFlat, Flat: scrutinee.Just}
+		default:
+			return nil
+		}
+	default: // NestedNest
+		original := func(visit2 func(any) *maybe.Maybe) func(*Nested) *Nested {
+			return func(nested2 *Nested) *Nested {
+				return traverse(visit2, nested2)
+			}
+		}
+		original2 := func(array2 []any) *maybe.Array {
+			accumulator := &maybe.Array{Tag: maybe.TagJust, Just: []any{}}
+			for _, element := range array2 {
+				if accumulator.Tag == maybe.TagNothing {
+					break
+				}
+				switch accumulator.Tag {
+				case maybe.TagJust:
+					scrutinee := visit(element)
+					switch scrutinee.Tag {
+					case maybe.TagJust:
+						accumulator = &maybe.Array{Tag: maybe.TagJust, Just: array.Snoc[any](accumulator.Just, scrutinee.Just)}
+					default:
+						accumulator = maybe.NoArray
+					}
+				default:
+					accumulator = maybe.NoArray
+				}
+			}
+			return accumulator
+		}
+		scrutinee2 := original(func(coerced any) *maybe.Maybe {
+			return maybe.Convert2(original2(coerced.([]any)))
+		})(nested.Nest)
+		if scrutinee2 != nil {
+			return &Nested{Tag: NestedNest, Nest: scrutinee2}
+		}
+		return nil
+	}
+}
+
+func mapFlippedNestedArrayIntArrayInt(fa *Nested, f func(any) any) *Nested {
+	return map_(f, fa)
+}
+
+func map_(change func(any) any, nested *Nested) *Nested {
+	switch nested.Tag {
+	case NestedFlat:
+		return &Nested{Tag: NestedFlat, Flat: change(nested.Flat)}
+	default: // NestedNest
+		original := func(fa *Nested) func(func(any) any) *Nested {
+			return func(f func(any) any) *Nested {
+				return mapFlippedNestedArrayIntArrayInt(fa, f)
+			}
+		}
+		return &Nested{Tag: NestedNest, Nest: original(nested.Nest)(func(coerced any) any {
+			return array.Map(change, coerced.([]any))
+		})}
+	}
+}
+
+func mainChange(value int32) int32 {
+	return value * 10
+}
+
+func appendShowArrayInt(buffer []byte, showDictionary shared.Show, nested *Nested) []byte {
+	switch nested.Tag {
+	case NestedFlat:
+		buffer = append(buffer, "Flat "...)
+		buffer = prim.AppendString(buffer, showDictionary.Show(nested.Flat))
+	default: // NestedNest
+		buffer = append(buffer, "Nest ("...)
+		buffer = appendShowArrayInt(buffer, shared.Show{Show: func(coerced any) string {
+			return prim.ShowArray(showDictionary.Show, coerced.([]any))
+		}}, nested.Nest)
+		buffer = append(buffer, ')')
+	}
+	return buffer
+}
+
+func main() {
+	console.Print("[" + strings.Join(main_, " ") + "]")
+}
+
+// main_neon.go
+//go:build goexperiment.simd && arm64
+
+package main
+
+import "simd/archsimd"
+
+func foldLanes(xs []int32, initial int32) int32 {
+	acc0 := archsimd.BroadcastInt32x4(0)
+	acc1, acc2, acc3 := acc0, acc0, acc0
+	const step = 4
+	i := 0
+	for ; i < len(xs)-4*step+1; i += 4 * step {
+		x0 := archsimd.LoadInt32x4(xs[i : i+step])
+		acc0 = acc0.Add(x0)
+		x1 := archsimd.LoadInt32x4(xs[i+step : i+2*step])
+		acc1 = acc1.Add(x1)
+		x2 := archsimd.LoadInt32x4(xs[i+2*step : i+3*step])
+		acc2 = acc2.Add(x2)
+		x3 := archsimd.LoadInt32x4(xs[i+3*step : i+4*step])
+		acc3 = acc3.Add(x3)
+	}
+	acc0 = acc0.Add(acc1).Add(acc2.Add(acc3))
+	var lanes [4]int32
+	acc0.Store(lanes[:])
+	accumulator := initial
+	for _, lane := range lanes[:step] {
+		accumulator = accumulator + lane
+	}
+	for ; i < len(xs); i++ {
+		x := xs[i]
+		accumulator = accumulator + x
+	}
+	return accumulator
+}
+
+func mapLanes(xs []int32) []int32 {
+	c0 := archsimd.BroadcastInt32x4(10)
+	out := make([]int32, len(xs))
+	const step = 4
+	i := 0
+	for ; i < len(xs)-step+1; i += step {
+		x := archsimd.LoadInt32x4(xs[i : i+step])
+		x.Mul(c0).Store(out[i : i+step])
+	}
+	if i < len(xs) {
+		x, _ := archsimd.LoadInt32x4Part(xs[i:])
+		x.Mul(c0).StorePart(out[i:])
+	}
+	return out
+}
+
+// main_scalar.go
+//go:build !(goexperiment.simd && (arm64 || wasm))
+
+package main
+
+func foldLanes(xs []int32, initial int32) int32 {
+	accumulator := initial
+	for _, x := range xs {
+		accumulator = accumulator + x
+	}
+	return accumulator
+}
+
+func mapLanes(xs []int32) []int32 {
+	out := make([]int32, len(xs))
+	for i, x := range xs {
+		out[i] = x * 10
+	}
+	return out
+}
+
+// main_vector.go
+//go:build goexperiment.simd && wasm
+
+package main
+
+import "simd"
+
+func foldLanes(xs []int32, initial int32) int32 {
+	acc0 := simd.BroadcastInt32s(0)
+	acc1, acc2, acc3 := acc0, acc0, acc0
+	step := acc0.Len()
+	i := 0
+	for ; i < len(xs)-4*step+1; i += 4 * step {
+		x0 := simd.LoadInt32s(xs[i : i+step])
+		acc0 = acc0.Add(x0)
+		x1 := simd.LoadInt32s(xs[i+step : i+2*step])
+		acc1 = acc1.Add(x1)
+		x2 := simd.LoadInt32s(xs[i+2*step : i+3*step])
+		acc2 = acc2.Add(x2)
+		x3 := simd.LoadInt32s(xs[i+3*step : i+4*step])
+		acc3 = acc3.Add(x3)
+	}
+	acc0 = acc0.Add(acc1).Add(acc2.Add(acc3))
+	var lanes [16]int32
+	acc0.Store(lanes[:])
+	accumulator := initial
+	for _, lane := range lanes[:step] {
+		accumulator = accumulator + lane
+	}
+	for ; i < len(xs); i++ {
+		x := xs[i]
+		accumulator = accumulator + x
+	}
+	return accumulator
+}
+
+func mapLanes(xs []int32) []int32 {
+	c0 := simd.BroadcastInt32s(10)
+	out := make([]int32, len(xs))
+	step := simd.Int32s{}.Len()
+	i := 0
+	for ; i < len(xs)-step+1; i += step {
+		x := simd.LoadInt32s(xs[i : i+step])
+		x.Mul(c0).Store(out[i : i+step])
+	}
+	if i < len(xs) {
+		x, _ := simd.LoadInt32sPart(xs[i:])
+		x.Mul(c0).StorePart(out[i:])
+	}
+	return out
+}
+
+// shared/shared.go
+package shared
+
+func Convert(value any) []int32 {
+	array := value.([]any)
+	converted := make([]int32, len(array))
+	for index, element := range array {
+		converted[index] = element.(int32)
+	}
+	return converted
+}
+
+type Show struct {
+	Show func(any) string
+}
+
+type Eq struct {
+	Eq func(any) func(any) bool
+}
+
+func Convert2(value []int32) any {
+	converted := make([]any, len(value))
+	for index, element := range value {
+		converted[index] = element
+	}
+	return converted
+}
+
+func Convert3(value [][]int32) any {
+	converted := make([]any, len(value))
+	for index, element := range value {
+		converted[index] = Convert2(element)
+	}
+	return converted
+}
+
+// note: Data.Show.show of instance Show (Nested a) takes its Show dictionary at run time, because polymorphic recursion reaches it at ever larger types; only this definition is slower
+
+// note: Data.Eq.eq of instance Eq (Nested a) takes its Eq dictionary at run time, because polymorphic recursion reaches it at ever larger types; only this definition is slower
+
+// note: Data.Ord.compare of instance Ord (Nested a) takes its Ord dictionary at run time, because polymorphic recursion reaches it at ever larger types; only this definition is slower

@@ -91,30 +91,30 @@ func toArrayInt(value *ListInt) []int32 {
 }
 
 func sortByIntCompare(xs []int32) []int32 {
-	array2 := array.Thaw(xs)
-	sortByIntCompareQuicksort(*array2, 0, int32(len(xs))-1)
-	performed := shared.Frozen(*array2)
+	result := array.Thaw(xs)
+	sortByIntCompareQuicksort(*result, 0, int32(len(xs))-1)
+	performed := shared.Frozen(*result)
 	return performed
 }
 
 func sortByIntDescending(xs []int32) []int32 {
-	array2 := array.Thaw(xs)
-	sortByIntDescendingQuicksort(*array2, 0, int32(len(xs))-1)
-	performed := shared.Frozen(*array2)
+	result := array.Thaw(xs)
+	sortByIntDescendingQuicksort(*result, 0, int32(len(xs))-1)
+	performed := shared.Frozen(*result)
 	return performed
 }
 
 func sortByIntOrder(xs []int32) []int32 {
-	array2 := array.Thaw(xs)
-	sortByIntOrderQuicksort(*array2, 0, int32(len(xs))-1)
-	performed := shared.Frozen(*array2)
+	result := array.Thaw(xs)
+	sortByIntOrderQuicksort(*result, 0, int32(len(xs))-1)
+	performed := shared.Frozen(*result)
 	return performed
 }
 
 func sortByIntOrder2(xs []int32) []int32 {
-	array2 := array.Thaw(xs)
-	sortByIntOrderQuicksort2(*array2, 0, int32(len(xs))-1)
-	performed := shared.Frozen(*array2)
+	result := array.Thaw(xs)
+	sortByIntOrderQuicksort2(*result, 0, int32(len(xs))-1)
+	performed := shared.Frozen(*result)
 	return performed
 }
 
@@ -136,26 +136,26 @@ func sortByIntCompareQuicksort(array []int32, low int32, high int32) {
 			var pivotIndex int32
 			if within {
 				element := array[high]
-				var i int32
-				var i2 int32 = low
+				var pivotIndex2 int32
+				var i int32 = low
 				var j int32 = low
 			sortByIntComparePartitionFrom:
 				for {
 					if j < high {
 						element2 := array[j]
 						if element2 <= element {
-							sortByIntCompareSwap(array, i2, j)
-							i2, j = i2+1, j+1
+							sortByIntCompareSwap(array, i, j)
+							i, j = i+1, j+1
 							continue
 						}
 						j += 1
 						continue
 					}
-					i = i2
+					pivotIndex2 = i
 					break sortByIntComparePartitionFrom
 				}
-				sortByIntCompareSwap(array, i, high)
-				pivotIndex = i
+				sortByIntCompareSwap(array, pivotIndex2, high)
+				pivotIndex = pivotIndex2
 			} else {
 				pivotIndex = low
 			}
@@ -174,26 +174,26 @@ func sortByIntDescendingQuicksort(array []int32, low int32, high int32) {
 			var pivotIndex int32
 			if within {
 				element := array[high]
-				var i int32
-				var i2 int32 = low
+				var pivotIndex2 int32
+				var i int32 = low
 				var j int32 = low
 			sortByIntDescendingPartitionFrom:
 				for {
 					if j < high {
 						element2 := array[j]
 						if element <= element2 {
-							sortByIntCompareSwap(array, i2, j)
-							i2, j = i2+1, j+1
+							sortByIntCompareSwap(array, i, j)
+							i, j = i+1, j+1
 							continue
 						}
 						j += 1
 						continue
 					}
-					i = i2
+					pivotIndex2 = i
 					break sortByIntDescendingPartitionFrom
 				}
-				sortByIntCompareSwap(array, i, high)
-				pivotIndex = i
+				sortByIntCompareSwap(array, pivotIndex2, high)
+				pivotIndex = pivotIndex2
 			} else {
 				pivotIndex = low
 			}
@@ -212,38 +212,38 @@ func sortByIntOrderQuicksort(array []int32, low int32, high int32) {
 			var pivotIndex int32
 			if within {
 				element := array[high]
-				var i int32
-				var i2 int32 = low
+				var pivotIndex2 int32
+				var i int32 = low
 				var j int32 = low
 			sortByIntOrderPartitionFrom:
 				for {
 					if j < high {
 						element2 := array[j]
-						var i3 int32
+						var i2 int32
 						if element2 < 4 {
-							i3 = 4 - element2
+							i2 = 4 - element2
 						} else {
-							i3 = element2 - 4
+							i2 = element2 - 4
 						}
-						var i4 int32
+						var i3 int32
 						if element < 4 {
-							i4 = 4 - element
+							i3 = 4 - element
 						} else {
-							i4 = element - 4
+							i3 = element - 4
 						}
-						if i3 <= i4 {
-							sortByIntCompareSwap(array, i2, j)
-							i2, j = i2+1, j+1
+						if i2 <= i3 {
+							sortByIntCompareSwap(array, i, j)
+							i, j = i+1, j+1
 							continue
 						}
 						j += 1
 						continue
 					}
-					i = i2
+					pivotIndex2 = i
 					break sortByIntOrderPartitionFrom
 				}
-				sortByIntCompareSwap(array, i, high)
-				pivotIndex = i
+				sortByIntCompareSwap(array, pivotIndex2, high)
+				pivotIndex = pivotIndex2
 			} else {
 				pivotIndex = low
 			}
@@ -262,28 +262,28 @@ func sortByIntOrderQuicksort2(array []int32, low int32, high int32) {
 			var pivotIndex int32
 			if within {
 				element := array[high]
-				var i int32
-				var i2 int32 = low
+				var pivotIndex2 int32
+				var i int32 = low
 				var j int32 = low
 			sortByIntOrderPartitionFrom2:
 				for {
 					if j < high {
 						element2 := array[j]
-						i3 := -element2
-						i4 := -element
-						if i3 <= i4 {
-							sortByIntCompareSwap(array, i2, j)
-							i2, j = i2+1, j+1
+						i2 := -element2
+						i3 := -element
+						if i2 <= i3 {
+							sortByIntCompareSwap(array, i, j)
+							i, j = i+1, j+1
 							continue
 						}
 						j += 1
 						continue
 					}
-					i = i2
+					pivotIndex2 = i
 					break sortByIntOrderPartitionFrom2
 				}
-				sortByIntCompareSwap(array, i, high)
-				pivotIndex = i
+				sortByIntCompareSwap(array, pivotIndex2, high)
+				pivotIndex = pivotIndex2
 			} else {
 				pivotIndex = low
 			}

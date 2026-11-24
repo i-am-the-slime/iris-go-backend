@@ -1,0 +1,70 @@
+---
+source: tests-integration/src/fixtures.rs
+---
+// main.go
+package main
+
+import (
+	journal "fixture/Journal_ffi"
+	"fixture/shared"
+	"github.com/i-am-the-slime/iris-go/array"
+)
+
+type Env struct {
+	Listeners *shared.Ref[[]ActionUnit]
+}
+
+type ActionUnit func(Env)
+
+type StateValue struct {
+	State []ActionUnit
+	Value []ActionUnit
+}
+
+func main() {
+	listeners := &shared.Ref[[]ActionUnit]{Value: []ActionUnit{}}
+	original := func(text string) func(Env) {
+		return func(ignored Env) {
+			say(text, ignored)
+		}
+	}
+	original2 := func(listener ActionUnit) func(Env) {
+		return func(env Env) {
+			listen(listener, env)
+		}
+	}
+	env2 := Env{Listeners: listeners}
+	original2(original("first"))(env2)
+	original3 := func(text string) func(Env) {
+		return func(ignored Env) {
+			say(text, ignored)
+		}
+	}
+	original4 := func(listener ActionUnit) func(Env) {
+		return func(env Env) {
+			listen(listener, env)
+		}
+	}
+	original4(original3("second"))(env2)
+	heard := listeners.Value
+	for _, action := range heard {
+		action(env2)
+	}
+}
+
+func listen(listener ActionUnit, env Env) {
+	s := env.Listeners.Value
+	s_ := array.Append(s, []ActionUnit{listener})
+	env.Listeners.Value = s_
+}
+
+func say(text string, ignored Env) {
+	journal.Log(text)
+}
+
+// shared/shared.go
+package shared
+
+type Ref[T any] struct {
+	Value T
+}

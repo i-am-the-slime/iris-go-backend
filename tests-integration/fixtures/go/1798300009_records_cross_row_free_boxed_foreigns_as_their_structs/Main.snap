@@ -1,0 +1,31 @@
+---
+source: tests-integration/src/fixtures.rs
+---
+// main.go
+package main
+
+import (
+	box "fixture/Box_ffi"
+	journal "fixture/Journal_ffi"
+	"fixture/shared"
+	"strconv"
+)
+
+func main() {
+	model := box.ReadBox(box.NewBox(any(shared.Model{Count: 1, Name: "first", Size: shared.Size{Width: 80, Height: 24}}))).(shared.Model)
+	journal.Log(model.Name + " " + strconv.Itoa(int(model.Count)) + " " + strconv.Itoa(int(model.Size.Width)))
+}
+
+// shared/shared.go
+package shared
+
+type Size struct {
+	Height int32
+	Width  int32
+}
+
+type Model struct {
+	Name  string
+	Count int32
+	Size  Size
+}

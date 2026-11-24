@@ -1,0 +1,169 @@
+---
+source: tests-integration/src/fixtures.rs
+---
+// Control/Category/category.go
+package category
+
+func Identity(x any) any {
+	return x
+}
+
+// Data/Show/show.go
+package show
+
+import "github.com/i-am-the-slime/iris-go/prim"
+
+func Show(s string) string {
+	return prim.ShowString(s)
+}
+
+func AppendShowArrayString(buffer []byte, array []string) []byte {
+	buffer = append(buffer, '[')
+	for index, element := range array {
+		if index > 0 {
+			buffer = append(buffer, ',')
+		}
+		buffer = prim.AppendShowString(buffer, element)
+	}
+	buffer = append(buffer, ']')
+	return buffer
+}
+
+func ArrayString(array []string) string {
+	return string(AppendShowArrayString(nil, array))
+}
+
+// Data/Tuple/tuple.go
+package tuple
+
+type Tuple struct {
+	First  any
+	Second any
+	Origin any
+}
+
+// main.go
+package main
+
+import (
+	"fixture/Control/Category"
+	"fixture/Data/Show"
+	"fixture/Data/Tuple"
+	journal "fixture/Journal_ffi"
+	"github.com/i-am-the-slime/iris-go/prim"
+	"strconv"
+)
+
+type TreeInt struct {
+	Leaf0 string
+	Leaf1 func(int32) int32
+	Node0 string
+	Node1 []TreeInt
+	Tag   uint8
+}
+
+const (
+	TreeIntLeaf = iota
+	TreeIntNode
+)
+
+type TupleUnitArrayTreeInt struct {
+	First  struct{}
+	Second []TreeInt
+}
+
+func convert(value []TreeInt) any {
+	return value
+}
+
+func convert2(value TupleUnitArrayTreeInt) *tuple.Tuple {
+	return &tuple.Tuple{First: value.First, Second: convert(value.Second), Origin: value}
+}
+
+func convert3(value any) []TreeInt {
+	return value.([]TreeInt)
+}
+
+func convert4(value *tuple.Tuple) TupleUnitArrayTreeInt {
+	if original, ok := value.Origin.(TupleUnitArrayTreeInt); ok {
+		return original
+	}
+	return TupleUnitArrayTreeInt{First: value.First.(struct{}), Second: convert3(value.Second)}
+}
+
+type TreeString struct {
+	Leaf0 string
+	Leaf1 func(int32) string
+	Node0 string
+	Node1 []TreeString
+	Tag   uint8
+}
+
+const (
+	TreeStringLeaf = iota
+	TreeStringNode
+)
+
+func LeafTreeInt(leaf0 string, leaf1 func(int32) int32) TreeInt {
+	return TreeInt{Tag: TreeIntLeaf, Leaf0: leaf0, Leaf1: leaf1}
+}
+
+func NodeTreeInt(node0 string, node1 []TreeInt) TreeInt {
+	return TreeInt{Tag: TreeIntNode, Node0: node0, Node1: node1}
+}
+
+func LeafTreeString(leaf0 string, leaf1 func(int32) string) TreeString {
+	return TreeString{Tag: TreeStringLeaf, Leaf0: leaf0, Leaf1: leaf1}
+}
+
+func NodeTreeString(node0 string, node1 []TreeString) TreeString {
+	return TreeString{Tag: TreeStringNode, Node0: node0, Node1: node1}
+}
+
+func main() {
+	scrutinee := convert4(category.Identity(convert2(collected)).(*tuple.Tuple))
+	mapped := make([]TreeString, len(scrutinee.Second))
+	for index, element := range scrutinee.Second {
+		mapped[index] = mapShow(element)
+	}
+	mapped2 := make([]string, len(mapped))
+	for index, element := range mapped {
+		mapped2[index] = mainRun(element)
+	}
+	journal.Log(show.ArrayString(mapped2))
+}
+
+var collected TupleUnitArrayTreeInt = TupleUnitArrayTreeInt{First: struct{}{}, Second: []TreeInt{NodeTreeInt("around", []TreeInt{LeafTreeInt("fixture", func(value int32) int32 {
+	return value + 1
+})})}}
+
+func mapShow(tree TreeInt) TreeString {
+	switch tree.Tag {
+	case TreeIntLeaf:
+		return LeafTreeString(tree.Leaf0, func(x int32) string {
+			return strconv.Itoa(int(tree.Leaf1(x)))
+		})
+	default: // TreeIntNode
+		mapped := make([]TreeString, len(tree.Node1))
+		for index, element := range tree.Node1 {
+			mapped[index] = mapShow(element)
+		}
+		return NodeTreeString(tree.Node0, mapped)
+	}
+}
+
+func mainRun(tree TreeString) string {
+	switch tree.Tag {
+	case TreeStringLeaf:
+		return tree.Leaf0 + " " + tree.Leaf1(41)
+	default: // TreeStringNode
+		text := prim.AppendString(nil, tree.Node0)
+		text = append(text, ' ')
+		mapped := make([]string, len(tree.Node1))
+		for index, element := range tree.Node1 {
+			mapped[index] = mainRun(element)
+		}
+		text = show.AppendShowArrayString(text, mapped)
+		return string(text)
+	}
+}

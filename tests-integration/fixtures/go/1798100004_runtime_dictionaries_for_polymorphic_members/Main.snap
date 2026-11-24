@@ -1,0 +1,1205 @@
+---
+source: tests-integration/src/fixtures.rs
+---
+// Control/Category/category.go
+package category
+
+func PureEffect(x any) any {
+	return x
+}
+
+// Data/Maybe/maybe.go
+package maybe
+
+type Int int64
+
+const NoInt Int = 1 << 32
+
+const TagNothing = 0
+
+const TagJust = 1
+
+type Maybe struct {
+	Just   any
+	Origin any
+	Tag    uint8
+}
+
+func Convert(value *Maybe) func(any) any {
+	switch value.Tag {
+	case TagNothing:
+		return nil
+	default: // TagJust
+		return value.Just.(func(any) any)
+	}
+}
+
+func Convert2(value Int) *Maybe {
+	if value == NoInt {
+		return &Maybe{Tag: TagNothing, Origin: value}
+	}
+	return &Maybe{Tag: TagJust, Just: int32(value), Origin: value}
+}
+
+func Convert3(value *Maybe) Int {
+	if original, ok := value.Origin.(Int); ok {
+		return original
+	}
+	switch value.Tag {
+	case TagNothing:
+		return NoInt
+	default: // TagJust
+		return Int(value.Just.(int32))
+	}
+}
+
+type ArrayInt struct {
+	Just []int32
+	Tag  uint8
+}
+
+func JustArrayInt(just []int32) ArrayInt {
+	return ArrayInt{Tag: TagJust, Just: just}
+}
+
+var NoArrayInt = ArrayInt{Tag: TagNothing}
+
+type Int2 struct {
+	Just any
+	Tag  uint8
+}
+
+func Convert4(value *Maybe) *Int2 {
+	switch value.Tag {
+	case TagNothing:
+		return &Int2{Tag: TagNothing}
+	default: // TagJust
+		return &Int2{Tag: TagJust, Just: value.Just}
+	}
+}
+
+var No = &Maybe{Tag: TagNothing}
+
+func PureMaybe(x any) *Maybe {
+	return &Maybe{Tag: TagJust, Just: x}
+}
+
+func ApplyMaybe(change func(any) any, inner *Maybe) *Maybe {
+	if change != nil {
+		switch inner.Tag {
+		case TagJust:
+			return &Maybe{Tag: TagJust, Just: change(inner.Just)}
+		default:
+			return No
+		}
+	}
+	return No
+}
+
+func MapMaybe(change func(any) any, inner *Maybe) *Maybe {
+	switch inner.Tag {
+	case TagJust:
+		return &Maybe{Tag: TagJust, Just: change(inner.Just)}
+	default:
+		return No
+	}
+}
+
+// Data/Semigroup/semigroup.go
+package semigroup
+
+import "github.com/i-am-the-slime/iris-go/prim"
+
+func Append_(s string, s2 string) string {
+	return prim.Append(s, s2)
+}
+
+// Data/Semiring/semiring.go
+package semiring
+
+func Add(i int32, i2 int32) int32 {
+	return i + i2
+}
+
+// Data/Show/show.go
+package show
+
+import "strconv"
+
+func Show(i int32) string {
+	return strconv.Itoa(int(i))
+}
+
+// main.go
+package main
+
+import (
+	"fixture/Control/Category"
+	"fixture/Data/Maybe"
+	"fixture/Data/Semigroup"
+	"fixture/Data/Semiring"
+	"fixture/Data/Show"
+	"fixture/shared"
+	"github.com/i-am-the-slime/iris-go/array"
+	"github.com/i-am-the-slime/iris-go/console"
+	"github.com/i-am-the-slime/iris-go/direct"
+	"slices"
+	"strconv"
+	"strings"
+)
+
+type WrappedArray struct {
+	Wrapped []any
+	Origin  any
+}
+
+type Wrapped struct {
+	Wrapped any
+	Origin  any
+}
+
+func convert(value *Wrapped) *WrappedArray {
+	if original, ok := value.Origin.(*WrappedArray); ok {
+		return original
+	}
+	return &WrappedArray{Wrapped: value.Wrapped.([]any), Origin: value}
+}
+
+type WrappedArrayInt struct {
+	Wrapped []int32
+}
+
+func convert2(value WrappedArrayInt) *Wrapped {
+	return &Wrapped{Wrapped: shared.Convert(value.Wrapped)}
+}
+
+func convert3(value *WrappedArray) *Wrapped {
+	if original, ok := value.Origin.(*Wrapped); ok {
+		return original
+	}
+	return &Wrapped{Wrapped: value.Wrapped, Origin: value}
+}
+
+type WrappedArray2 struct {
+	Wrapped []any
+}
+
+func WrappedWrappedArray(wrapped []any) *WrappedArray {
+	return &WrappedArray{Wrapped: wrapped}
+}
+
+func convert4(value *Wrapped) *WrappedArray2 {
+	return &WrappedArray2{Wrapped: value.Wrapped.([]any)}
+}
+
+type WrappedInt struct {
+	Wrapped any
+	Origin  any
+}
+
+func convert5(value *WrappedInt) *Wrapped {
+	return &Wrapped{Wrapped: value.Wrapped}
+}
+
+type Wrapped2 struct {
+	Wrapped any
+}
+
+func WrappedWrapped(wrapped any) *Wrapped {
+	return &Wrapped{Wrapped: wrapped}
+}
+
+func convert6(value *Wrapped) *Wrapped2 {
+	return &Wrapped2{Wrapped: value.Wrapped}
+}
+
+var main_ = initializeMain_()
+
+func initializeMain_() []string {
+	values := []int32{4, 5, 6}
+	scrutinee := checkedArray(2, []int32{1, 2})
+	var result string
+	if scrutinee != maybe.NoInt {
+		result = "(Just " + strconv.Itoa(int(int32(scrutinee))) + ")"
+	} else {
+		result = "Nothing"
+	}
+	scrutinee2 := checkedArray(2, []int32{1, 0})
+	var result2 string
+	if scrutinee2 != maybe.NoInt {
+		result2 = "(Just " + strconv.Itoa(int(int32(scrutinee2))) + ")"
+	} else {
+		result2 = "Nothing"
+	}
+	original2 := func(change func() func(any) any) func(func() any) any {
+		return func(inner func() any) any {
+			return applyEffect(change, inner)
+		}
+	}
+	original3 := func(change func() func(any) any) func(func() any) any {
+		return func(inner func() any) any {
+			return applyEffect(change, inner)
+		}
+	}
+	original4 := func(inner func() any) func(func(any) any) any {
+		return func(next func(any) any) any {
+			return bindEffect(inner, next)
+		}
+	}
+	original5 := func() int32 {
+		return 4
+	}
+	original7 := steppedLiftEffect(shared.Applicative0Bind1{Applicative0: shared.Apply0Pure{Apply0: shared.Functor0Apply{Functor0: shared.Map{Map: func(coerced func(any) any) func(any) any {
+		original := func(inner func() any) any {
+			return mapEffect(coerced, inner)
+		}
+		return func(coerced2 any) any {
+			return func() any {
+				return original(coerced2.(func() any))
+			}
+		}
+	}}, Apply: func(coerced any) func(any) any {
+		original := coerced.(func() any)
+		original6 := original2(func() func(any) any {
+			return original().(func(any) any)
+		})
+		return func(coerced2 any) any {
+			return func() any {
+				return original6(coerced2.(func() any))
+			}
+		}
+	}}, Pure: func(coerced any) any {
+		return func() any {
+			return category.PureEffect(coerced)
+		}
+	}}, Bind1: shared.Apply0Bind{Apply0: shared.Functor0Apply{Functor0: shared.Map{Map: func(coerced func(any) any) func(any) any {
+		original := func(inner func() any) any {
+			return mapEffect(coerced, inner)
+		}
+		return func(coerced2 any) any {
+			return func() any {
+				return original(coerced2.(func() any))
+			}
+		}
+	}}, Apply: func(coerced any) func(any) any {
+		original := coerced.(func() any)
+		original6 := original3(func() func(any) any {
+			return original().(func(any) any)
+		})
+		return func(coerced2 any) any {
+			return func() any {
+				return original6(coerced2.(func() any))
+			}
+		}
+	}}, Bind: func(coerced any) func(func(any) any) any {
+		original := original4(coerced.(func() any))
+		return func(coerced2 func(any) any) any {
+			return func() any {
+				return original(func(coerced3 any) any {
+					return coerced2(coerced3).(func() any)()
+				})
+			}
+		}
+	}}}, 2, func() any {
+		return original5()
+	}).(func() any)
+	performed := original7().(int32)
+	original8 := func(change func(any) any) func(*maybe.Maybe) *maybe.Maybe {
+		return func(inner *maybe.Maybe) *maybe.Maybe {
+			return maybe.ApplyMaybe(change, inner)
+		}
+	}
+	original9 := func(change func(any) any) func(*maybe.Maybe) *maybe.Maybe {
+		return func(inner *maybe.Maybe) *maybe.Maybe {
+			return maybe.ApplyMaybe(change, inner)
+		}
+	}
+	original10 := func(inner *maybe.Maybe) func(func(any) *maybe.Maybe) *maybe.Maybe {
+		return func(next func(any) *maybe.Maybe) *maybe.Maybe {
+			return bindMaybe(inner, next)
+		}
+	}
+	scrutinee3 := maybe.Convert3(steppedLiftEffect(shared.Applicative0Bind1{Applicative0: shared.Apply0Pure{Apply0: shared.Functor0Apply{Functor0: shared.Map{Map: func(coerced func(any) any) func(any) any {
+		original := func(inner *maybe.Maybe) *maybe.Maybe {
+			return maybe.MapMaybe(coerced, inner)
+		}
+		return func(coerced2 any) any {
+			return original(coerced2.(*maybe.Maybe))
+		}
+	}}, Apply: func(coerced any) func(any) any {
+		original := original8(maybe.Convert(coerced.(*maybe.Maybe)))
+		return func(coerced2 any) any {
+			return original(coerced2.(*maybe.Maybe))
+		}
+	}}, Pure: func(coerced any) any {
+		return maybe.PureMaybe(coerced)
+	}}, Bind1: shared.Apply0Bind{Apply0: shared.Functor0Apply{Functor0: shared.Map{Map: func(coerced func(any) any) func(any) any {
+		original := func(inner *maybe.Maybe) *maybe.Maybe {
+			return maybe.MapMaybe(coerced, inner)
+		}
+		return func(coerced2 any) any {
+			return original(coerced2.(*maybe.Maybe))
+		}
+	}}, Apply: func(coerced any) func(any) any {
+		original := original9(maybe.Convert(coerced.(*maybe.Maybe)))
+		return func(coerced2 any) any {
+			return original(coerced2.(*maybe.Maybe))
+		}
+	}}, Bind: func(coerced any) func(func(any) any) any {
+		original := original10(coerced.(*maybe.Maybe))
+		return func(coerced2 func(any) any) any {
+			return original(func(coerced3 any) *maybe.Maybe {
+				return coerced2(coerced3).(*maybe.Maybe)
+			})
+		}
+	}}}, 1, maybe.Convert2(maybe.Int(5))).(*maybe.Maybe))
+	var result3 string
+	if scrutinee3 != maybe.NoInt {
+		result3 = "(Just " + strconv.Itoa(int(int32(scrutinee3))) + ")"
+	} else {
+		result3 = "Nothing"
+	}
+	return []string{strconv.Itoa(int(countedWrappedArray(shared.FoldMapFoldlFoldr{FoldMap: func(coerced shared.Semigroup0Mempty) func(func(any) any) func(any) any {
+		original := func(visit func(any) any) func(*WrappedArray) any {
+			return func(wrapped *WrappedArray) any {
+				accumulator := coerced.Mempty
+				for index := len(wrapped.Wrapped) - 1; index >= 0; index-- {
+					x := wrapped.Wrapped[index]
+					accumulator = coerced.Semigroup0.Append(visit(x))(accumulator)
+				}
+				return accumulator
+			}
+		}
+		return func(coerced2 func(any) any) func(any) any {
+			original6 := original(coerced2)
+			return func(coerced3 any) any {
+				return original6(convert(coerced3.(*Wrapped)))
+			}
+		}
+	}, Foldl: func(coerced func(any) func(any) any) func(any) func(any) any {
+		original := func(initial any) func(*WrappedArray) any {
+			return func(wrapped *WrappedArray) any {
+				return foldlArray(coerced, initial, wrapped)
+			}
+		}
+		return func(coerced2 any) func(any) any {
+			original6 := original(coerced2)
+			return func(coerced3 any) any {
+				return original6(convert(coerced3.(*Wrapped)))
+			}
+		}
+	}, Foldr: func(coerced func(any) func(any) any) func(any) func(any) any {
+		original := func(initial any) func(*WrappedArray) any {
+			return func(wrapped *WrappedArray) any {
+				return foldrArray(coerced, initial, wrapped)
+			}
+		}
+		return func(coerced2 any) func(any) any {
+			original6 := original(coerced2)
+			return func(coerced3 any) any {
+				return original6(convert(coerced3.(*Wrapped)))
+			}
+		}
+	}}, 2, convert2(WrappedArrayInt{Wrapped: []int32{1, 2}})))), describedWrappedArray(shared.FoldMapFoldlFoldr{FoldMap: func(coerced shared.Semigroup0Mempty) func(func(any) any) func(any) any {
+		original := func(visit func(any) any) func(*WrappedArray) any {
+			return func(wrapped *WrappedArray) any {
+				accumulator := coerced.Mempty
+				for index := len(wrapped.Wrapped) - 1; index >= 0; index-- {
+					x := wrapped.Wrapped[index]
+					accumulator = coerced.Semigroup0.Append(visit(x))(accumulator)
+				}
+				return accumulator
+			}
+		}
+		return func(coerced2 func(any) any) func(any) any {
+			original6 := original(coerced2)
+			return func(coerced3 any) any {
+				return original6(convert(coerced3.(*Wrapped)))
+			}
+		}
+	}, Foldl: func(coerced func(any) func(any) any) func(any) func(any) any {
+		original := func(initial any) func(*WrappedArray) any {
+			return func(wrapped *WrappedArray) any {
+				return foldlArray(coerced, initial, wrapped)
+			}
+		}
+		return func(coerced2 any) func(any) any {
+			original6 := original(coerced2)
+			return func(coerced3 any) any {
+				return original6(convert(coerced3.(*Wrapped)))
+			}
+		}
+	}, Foldr: func(coerced func(any) func(any) any) func(any) func(any) any {
+		original := func(initial any) func(*WrappedArray) any {
+			return func(wrapped *WrappedArray) any {
+				return foldrArray(coerced, initial, wrapped)
+			}
+		}
+		return func(coerced2 any) func(any) any {
+			original6 := original(coerced2)
+			return func(coerced3 any) any {
+				return original6(convert(coerced3.(*Wrapped)))
+			}
+		}
+	}}, 1, convert2(WrappedArrayInt{Wrapped: values})), strconv.Itoa(int(doubledWrappedArray(shared.Map{Map: func(coerced func(any) any) func(any) any {
+		original := func(wrapped *WrappedArray) *WrappedArray {
+			return mapArray(coerced, wrapped)
+		}
+		return func(coerced2 any) any {
+			return convert3(original(convert(coerced2.(*Wrapped))))
+		}
+	}}, shared.FoldMapFoldlFoldr{FoldMap: func(coerced shared.Semigroup0Mempty) func(func(any) any) func(any) any {
+		original := func(visit func(any) any) func(*WrappedArray) any {
+			return func(wrapped *WrappedArray) any {
+				accumulator := coerced.Mempty
+				for index := len(wrapped.Wrapped) - 1; index >= 0; index-- {
+					x := wrapped.Wrapped[index]
+					accumulator = coerced.Semigroup0.Append(visit(x))(accumulator)
+				}
+				return accumulator
+			}
+		}
+		return func(coerced2 func(any) any) func(any) any {
+			original6 := original(coerced2)
+			return func(coerced3 any) any {
+				return original6(convert(coerced3.(*Wrapped)))
+			}
+		}
+	}, Foldl: func(coerced func(any) func(any) any) func(any) func(any) any {
+		original := func(initial any) func(*WrappedArray) any {
+			return func(wrapped *WrappedArray) any {
+				return foldlArray(coerced, initial, wrapped)
+			}
+		}
+		return func(coerced2 any) func(any) any {
+			original6 := original(coerced2)
+			return func(coerced3 any) any {
+				return original6(convert(coerced3.(*Wrapped)))
+			}
+		}
+	}, Foldr: func(coerced func(any) func(any) any) func(any) func(any) any {
+		original := func(initial any) func(*WrappedArray) any {
+			return func(wrapped *WrappedArray) any {
+				return foldrArray(coerced, initial, wrapped)
+			}
+		}
+		return func(coerced2 any) func(any) any {
+			original6 := original(coerced2)
+			return func(coerced3 any) any {
+				return original6(convert(coerced3.(*Wrapped)))
+			}
+		}
+	}}, 3, convert2(WrappedArrayInt{Wrapped: []int32{1, 2, 3}})))), result + " " + result2, strconv.Itoa(int(performed)), result3}
+}
+
+func checkedArray(depth int32, values []int32) maybe.Int {
+	switch depth {
+	case 0:
+		accumulator := maybe.JustArrayInt([]int32{})
+		accumulator.Just = slices.Clip(accumulator.Just)
+		for _, element := range values {
+			if accumulator.Tag == maybe.TagNothing {
+				break
+			}
+			switch accumulator.Tag {
+			case maybe.TagJust:
+				if element > 0 {
+					accumulator = maybe.JustArrayInt(array.Bounded(append(accumulator.Just, element)))
+				} else {
+					accumulator = maybe.NoArrayInt
+				}
+			default:
+				accumulator = maybe.NoArrayInt
+			}
+		}
+		switch accumulator.Tag {
+		case maybe.TagJust:
+			return maybe.Int(foldLanes(accumulator.Just, 0))
+		default:
+			return maybe.NoInt
+		}
+	default:
+		original2 := func(dictionary shared.Apply0Pure) func(*WrappedArray2) any {
+			return func(wrapped *WrappedArray2) any {
+				append_ := direct.Appender[any]()
+				accumulator := func(coerced []any) any {
+					return dictionary.Pure(coerced)
+				}([]any{})
+				for _, element := range wrapped.Wrapped {
+					accumulator = dictionary.Apply0.Apply(dictionary.Apply0.Functor0.Map(func(coerced any) any {
+						original := append_(coerced.([]any))
+						return func(coerced2 any) any {
+							return original(coerced2)
+						}
+					})(accumulator))(element)
+				}
+				return dictionary.Apply0.Functor0.Map(func(coerced any) any {
+					return convert3(WrappedWrappedArray(coerced.([]any)))
+				})(accumulator)
+			}
+		}
+		original3 := func(dictionary shared.Apply0Pure) func(func(any) any) func(*WrappedArray) any {
+			return func(visit func(any) any) func(*WrappedArray) any {
+				return func(wrapped *WrappedArray) any {
+					append_ := direct.Appender[any]()
+					accumulator := func(coerced []any) any {
+						return dictionary.Pure(coerced)
+					}([]any{})
+					for _, element := range wrapped.Wrapped {
+						accumulator = dictionary.Apply0.Apply(dictionary.Apply0.Functor0.Map(func(coerced any) any {
+							original := append_(coerced.([]any))
+							return func(coerced2 any) any {
+								return original(coerced2)
+							}
+						})(accumulator))(visit(element))
+					}
+					return dictionary.Apply0.Functor0.Map(func(coerced any) any {
+						return convert3(WrappedWrappedArray(coerced.([]any)))
+					})(accumulator)
+				}
+			}
+		}
+		return checkedWrappedArray(shared.Foldable1Functor0SequenceTraverse{Foldable1: shared.FoldMapFoldlFoldr{FoldMap: func(coerced shared.Semigroup0Mempty) func(func(any) any) func(any) any {
+			original := func(visit func(any) any) func(*WrappedArray) any {
+				return func(wrapped *WrappedArray) any {
+					accumulator := coerced.Mempty
+					for index := len(wrapped.Wrapped) - 1; index >= 0; index-- {
+						x := wrapped.Wrapped[index]
+						accumulator = coerced.Semigroup0.Append(visit(x))(accumulator)
+					}
+					return accumulator
+				}
+			}
+			return func(coerced2 func(any) any) func(any) any {
+				original4 := original(coerced2)
+				return func(coerced3 any) any {
+					return original4(convert(coerced3.(*Wrapped)))
+				}
+			}
+		}, Foldl: func(coerced func(any) func(any) any) func(any) func(any) any {
+			original := func(initial any) func(*WrappedArray) any {
+				return func(wrapped *WrappedArray) any {
+					return foldlArray(coerced, initial, wrapped)
+				}
+			}
+			return func(coerced2 any) func(any) any {
+				original4 := original(coerced2)
+				return func(coerced3 any) any {
+					return original4(convert(coerced3.(*Wrapped)))
+				}
+			}
+		}, Foldr: func(coerced func(any) func(any) any) func(any) func(any) any {
+			original := func(initial any) func(*WrappedArray) any {
+				return func(wrapped *WrappedArray) any {
+					return foldrArray(coerced, initial, wrapped)
+				}
+			}
+			return func(coerced2 any) func(any) any {
+				original4 := original(coerced2)
+				return func(coerced3 any) any {
+					return original4(convert(coerced3.(*Wrapped)))
+				}
+			}
+		}}, Functor0: shared.Map{Map: func(coerced func(any) any) func(any) any {
+			original := func(wrapped *WrappedArray) *WrappedArray {
+				return mapArray(coerced, wrapped)
+			}
+			return func(coerced2 any) any {
+				return convert3(original(convert(coerced2.(*Wrapped))))
+			}
+		}}, Sequence: func(coerced shared.Apply0Pure) func(any) any {
+			original := original2(coerced)
+			return func(coerced2 any) any {
+				return original(convert4(coerced2.(*Wrapped)))
+			}
+		}, Traverse: func(coerced shared.Apply0Pure) func(func(any) any) func(any) any {
+			original := original3(coerced)
+			return func(coerced2 func(any) any) func(any) any {
+				original4 := original(coerced2)
+				return func(coerced3 any) any {
+					return original4(convert(coerced3.(*Wrapped)))
+				}
+			}
+		}}, depth-1, convert2(WrappedArrayInt{Wrapped: values}))
+	}
+}
+
+func foldrArray(step func(any) func(any) any, initial any, wrapped *WrappedArray) any {
+	return array.Foldr(func(argument any, argument2 any) any {
+		return step(argument)(argument2)
+	}, initial, wrapped.Wrapped)
+}
+
+func foldlArray(step func(any) func(any) any, initial any, wrapped *WrappedArray) any {
+	return array.Foldl(func(argument any, argument2 any) any {
+		return step(argument)(argument2)
+	}, initial, wrapped.Wrapped)
+}
+
+func countedWrappedArray(foldableDictionary shared.FoldMapFoldlFoldr, depth int32, values any) int32 {
+	for {
+		foldableDictionaryCaptured := foldableDictionary
+		switch depth {
+		case 0:
+			original := foldableDictionaryCaptured.Foldl(func(coerced any) func(any) any {
+				function := func(c int32, _ int32) int32 {
+					return 1 + c
+				}
+				i := coerced.(int32)
+				return func(coerced2 any) any {
+					return function(i, coerced2.(int32))
+				}
+			})
+			original2 := foldableDictionaryCaptured.Foldl(func(coerced any) func(any) any {
+				i := coerced.(int32)
+				return func(coerced2 any) any {
+					return semiring.Add(i, coerced2.(int32))
+				}
+			})
+			return func(coerced int32) func(any) int32 {
+				original3 := original(coerced)
+				return func(coerced2 any) int32 {
+					return original3(coerced2).(int32)
+				}
+			}(0)(values) + func(coerced int32) func(any) int32 {
+				original3 := original2(coerced)
+				return func(coerced2 any) int32 {
+					return original3(coerced2).(int32)
+				}
+			}(0)(values)
+		default:
+			foldableDictionary, depth, values = shared.FoldMapFoldlFoldr{FoldMap: func(coerced shared.Semigroup0Mempty) func(func(any) any) func(any) any {
+				original := func(visit func(any) any) func(*Wrapped) any {
+					return func(wrapped *Wrapped) any {
+						return foldableDictionaryCaptured.FoldMap(coerced)(visit)(wrapped.Wrapped)
+					}
+				}
+				return func(coerced2 func(any) any) func(any) any {
+					original2 := original(coerced2)
+					return func(coerced3 any) any {
+						return original2(coerced3.(*Wrapped))
+					}
+				}
+			}, Foldl: func(coerced func(any) func(any) any) func(any) func(any) any {
+				original := func(initial any) func(*Wrapped) any {
+					return func(wrapped *Wrapped) any {
+						return foldableDictionaryCaptured.Foldl(coerced)(initial)(wrapped.Wrapped)
+					}
+				}
+				return func(coerced2 any) func(any) any {
+					original2 := original(coerced2)
+					return func(coerced3 any) any {
+						return original2(coerced3.(*Wrapped))
+					}
+				}
+			}, Foldr: func(coerced func(any) func(any) any) func(any) func(any) any {
+				original := func(initial any) func(*Wrapped) any {
+					return func(wrapped *Wrapped) any {
+						return foldableDictionaryCaptured.Foldr(coerced)(initial)(wrapped.Wrapped)
+					}
+				}
+				return func(coerced2 any) func(any) any {
+					original2 := original(coerced2)
+					return func(coerced3 any) any {
+						return original2(coerced3.(*Wrapped))
+					}
+				}
+			}}, depth-1, convert5(&WrappedInt{Wrapped: values})
+			continue
+		}
+	}
+}
+
+func describedWrappedArray(foldableDictionary shared.FoldMapFoldlFoldr, depth int32, values any) string {
+	for {
+		foldableDictionaryCaptured := foldableDictionary
+		switch depth {
+		case 0:
+			original := func(s string) func(string) string {
+				return func(s2 string) string {
+					return semigroup.Append_(s, s2)
+				}
+			}
+			original3 := foldableDictionaryCaptured.FoldMap(shared.Semigroup0Mempty{Semigroup0: shared.Append{Append: func(coerced any) func(any) any {
+				original2 := original(coerced.(string))
+				return func(coerced2 any) any {
+					return original2(coerced2.(string))
+				}
+			}}, Mempty: ""})(func(coerced any) any {
+				return show.Show(coerced.(int32))
+			})
+			return func(coerced any) string {
+				return original3(coerced).(string)
+			}(values)
+		default:
+			foldableDictionary, depth, values = shared.FoldMapFoldlFoldr{FoldMap: func(coerced shared.Semigroup0Mempty) func(func(any) any) func(any) any {
+				original := func(visit func(any) any) func(*Wrapped) any {
+					return func(wrapped *Wrapped) any {
+						return foldableDictionaryCaptured.FoldMap(coerced)(visit)(wrapped.Wrapped)
+					}
+				}
+				return func(coerced2 func(any) any) func(any) any {
+					original2 := original(coerced2)
+					return func(coerced3 any) any {
+						return original2(coerced3.(*Wrapped))
+					}
+				}
+			}, Foldl: func(coerced func(any) func(any) any) func(any) func(any) any {
+				original := func(initial any) func(*Wrapped) any {
+					return func(wrapped *Wrapped) any {
+						return foldableDictionaryCaptured.Foldl(coerced)(initial)(wrapped.Wrapped)
+					}
+				}
+				return func(coerced2 any) func(any) any {
+					original2 := original(coerced2)
+					return func(coerced3 any) any {
+						return original2(coerced3.(*Wrapped))
+					}
+				}
+			}, Foldr: func(coerced func(any) func(any) any) func(any) func(any) any {
+				original := func(initial any) func(*Wrapped) any {
+					return func(wrapped *Wrapped) any {
+						return foldableDictionaryCaptured.Foldr(coerced)(initial)(wrapped.Wrapped)
+					}
+				}
+				return func(coerced2 any) func(any) any {
+					original2 := original(coerced2)
+					return func(coerced3 any) any {
+						return original2(coerced3.(*Wrapped))
+					}
+				}
+			}}, depth-1, convert5(&WrappedInt{Wrapped: values})
+			continue
+		}
+	}
+}
+
+func mapArray(change func(any) any, wrapped *WrappedArray) *WrappedArray {
+	return &WrappedArray{Wrapped: array.Map(change, wrapped.Wrapped)}
+}
+
+func doubledWrappedArray(functorDictionary shared.Map, foldableDictionary shared.FoldMapFoldlFoldr, depth int32, values any) int32 {
+	for {
+		functorDictionaryCaptured := functorDictionary
+		foldableDictionaryCaptured := foldableDictionary
+		switch depth {
+		case 0:
+			original := foldableDictionaryCaptured.Foldl(func(coerced any) func(any) any {
+				i := coerced.(int32)
+				return func(coerced2 any) any {
+					return semiring.Add(i, coerced2.(int32))
+				}
+			})
+			return func(coerced int32) func(any) int32 {
+				original2 := original(coerced)
+				return func(coerced2 any) int32 {
+					return original2(coerced2).(int32)
+				}
+			}(0)(functorDictionaryCaptured.Map(func(coerced any) any {
+				return coerced.(int32) * 2
+			})(values))
+		default:
+			functorDictionary, foldableDictionary, depth, values = shared.Map{Map: func(coerced func(any) any) func(any) any {
+				original := func(wrapped *Wrapped) *Wrapped {
+					return &Wrapped{Wrapped: functorDictionaryCaptured.Map(coerced)(wrapped.Wrapped)}
+				}
+				return func(coerced2 any) any {
+					return original(coerced2.(*Wrapped))
+				}
+			}}, shared.FoldMapFoldlFoldr{FoldMap: func(coerced shared.Semigroup0Mempty) func(func(any) any) func(any) any {
+				original := func(visit func(any) any) func(*Wrapped) any {
+					return func(wrapped *Wrapped) any {
+						return foldableDictionaryCaptured.FoldMap(coerced)(visit)(wrapped.Wrapped)
+					}
+				}
+				return func(coerced2 func(any) any) func(any) any {
+					original2 := original(coerced2)
+					return func(coerced3 any) any {
+						return original2(coerced3.(*Wrapped))
+					}
+				}
+			}, Foldl: func(coerced func(any) func(any) any) func(any) func(any) any {
+				original := func(initial any) func(*Wrapped) any {
+					return func(wrapped *Wrapped) any {
+						return foldableDictionaryCaptured.Foldl(coerced)(initial)(wrapped.Wrapped)
+					}
+				}
+				return func(coerced2 any) func(any) any {
+					original2 := original(coerced2)
+					return func(coerced3 any) any {
+						return original2(coerced3.(*Wrapped))
+					}
+				}
+			}, Foldr: func(coerced func(any) func(any) any) func(any) func(any) any {
+				original := func(initial any) func(*Wrapped) any {
+					return func(wrapped *Wrapped) any {
+						return foldableDictionaryCaptured.Foldr(coerced)(initial)(wrapped.Wrapped)
+					}
+				}
+				return func(coerced2 any) func(any) any {
+					original2 := original(coerced2)
+					return func(coerced3 any) any {
+						return original2(coerced3.(*Wrapped))
+					}
+				}
+			}}, depth-1, convert5(&WrappedInt{Wrapped: values})
+			continue
+		}
+	}
+}
+
+func checkedWrappedArray(traversableDictionary shared.Foldable1Functor0SequenceTraverse, depth int32, values any) maybe.Int {
+	for {
+		traversableDictionaryCaptured := traversableDictionary
+		switch depth {
+		case 0:
+			original2 := func(change func(any) any) func(*maybe.Maybe) *maybe.Maybe {
+				return func(inner *maybe.Maybe) *maybe.Maybe {
+					return maybe.ApplyMaybe(change, inner)
+				}
+			}
+			original3 := func(n int32) maybe.Int {
+				if n > 0 {
+					return maybe.Int(n)
+				}
+				return maybe.NoInt
+			}
+			original4 := traversableDictionaryCaptured.Traverse(shared.Apply0Pure{Apply0: shared.Functor0Apply{Functor0: shared.Map{Map: func(coerced func(any) any) func(any) any {
+				original := func(inner *maybe.Maybe) *maybe.Maybe {
+					return maybe.MapMaybe(coerced, inner)
+				}
+				return func(coerced2 any) any {
+					return original(coerced2.(*maybe.Maybe))
+				}
+			}}, Apply: func(coerced any) func(any) any {
+				original := original2(maybe.Convert(coerced.(*maybe.Maybe)))
+				return func(coerced2 any) any {
+					return original(coerced2.(*maybe.Maybe))
+				}
+			}}, Pure: func(coerced any) any {
+				return maybe.PureMaybe(coerced)
+			}})(func(coerced any) any {
+				return maybe.Convert2(original3(coerced.(int32)))
+			})
+			scrutinee := func(coerced any) *maybe.Int2 {
+				return maybe.Convert4(original4(coerced).(*maybe.Maybe))
+			}(values)
+			switch scrutinee.Tag {
+			case maybe.TagJust:
+				original := traversableDictionaryCaptured.Foldable1.Foldl(func(coerced any) func(any) any {
+					i := coerced.(int32)
+					return func(coerced2 any) any {
+						return semiring.Add(i, coerced2.(int32))
+					}
+				})
+				return maybe.Int(func(coerced int32) func(any) int32 {
+					original5 := original(coerced)
+					return func(coerced2 any) int32 {
+						return original5(coerced2).(int32)
+					}
+				}(0)(scrutinee.Just))
+			default:
+				return maybe.NoInt
+			}
+		default:
+			traversableDictionary, depth, values = shared.Foldable1Functor0SequenceTraverse{Foldable1: shared.FoldMapFoldlFoldr{FoldMap: func(coerced shared.Semigroup0Mempty) func(func(any) any) func(any) any {
+				original := func(visit func(any) any) func(*Wrapped) any {
+					return func(wrapped *Wrapped) any {
+						return traversableDictionaryCaptured.Foldable1.FoldMap(coerced)(visit)(wrapped.Wrapped)
+					}
+				}
+				return func(coerced2 func(any) any) func(any) any {
+					original2 := original(coerced2)
+					return func(coerced3 any) any {
+						return original2(coerced3.(*Wrapped))
+					}
+				}
+			}, Foldl: func(coerced func(any) func(any) any) func(any) func(any) any {
+				original := func(initial any) func(*Wrapped) any {
+					return func(wrapped *Wrapped) any {
+						return traversableDictionaryCaptured.Foldable1.Foldl(coerced)(initial)(wrapped.Wrapped)
+					}
+				}
+				return func(coerced2 any) func(any) any {
+					original2 := original(coerced2)
+					return func(coerced3 any) any {
+						return original2(coerced3.(*Wrapped))
+					}
+				}
+			}, Foldr: func(coerced func(any) func(any) any) func(any) func(any) any {
+				original := func(initial any) func(*Wrapped) any {
+					return func(wrapped *Wrapped) any {
+						return traversableDictionaryCaptured.Foldable1.Foldr(coerced)(initial)(wrapped.Wrapped)
+					}
+				}
+				return func(coerced2 any) func(any) any {
+					original2 := original(coerced2)
+					return func(coerced3 any) any {
+						return original2(coerced3.(*Wrapped))
+					}
+				}
+			}}, Functor0: shared.Map{Map: func(coerced func(any) any) func(any) any {
+				original := func(wrapped *Wrapped) *Wrapped {
+					return &Wrapped{Wrapped: traversableDictionaryCaptured.Functor0.Map(coerced)(wrapped.Wrapped)}
+				}
+				return func(coerced2 any) any {
+					return original(coerced2.(*Wrapped))
+				}
+			}}, Sequence: func(coerced shared.Apply0Pure) func(any) any {
+				original := func(wrapped *Wrapped2) any {
+					return coerced.Apply0.Functor0.Map(func(coerced2 any) any {
+						return WrappedWrapped(coerced2)
+					})(traversableDictionaryCaptured.Traverse(coerced)(category.PureEffect)(wrapped.Wrapped))
+				}
+				return func(coerced2 any) any {
+					return original(convert6(coerced2.(*Wrapped)))
+				}
+			}, Traverse: func(coerced shared.Apply0Pure) func(func(any) any) func(any) any {
+				original := func(visit func(any) any) func(*Wrapped) any {
+					return func(wrapped *Wrapped) any {
+						return coerced.Apply0.Functor0.Map(func(coerced2 any) any {
+							return WrappedWrapped(coerced2)
+						})(traversableDictionaryCaptured.Traverse(coerced)(visit)(wrapped.Wrapped))
+					}
+				}
+				return func(coerced2 func(any) any) func(any) any {
+					original2 := original(coerced2)
+					return func(coerced3 any) any {
+						return original2(coerced3.(*Wrapped))
+					}
+				}
+			}}, depth-1, convert5(&WrappedInt{Wrapped: values})
+			continue
+		}
+	}
+}
+
+func applyEffect(change func() func(any) any, inner func() any) any {
+	f := change()
+	argument := inner()
+	return f(argument)
+}
+
+func mapEffect(change func(any) any, inner func() any) any {
+	argument := inner()
+	return change(argument)
+}
+
+func bindEffect(inner func() any, next func(any) any) any {
+	argument := inner()
+	return next(argument)
+}
+
+func steppedLiftEffect(monadDictionary shared.Applicative0Bind1, depth int32, action any) any {
+	for {
+		monadDictionaryCaptured := monadDictionary
+		switch depth {
+		case 0:
+			original2 := func(n int32) any {
+				original := func(m int32) any {
+					return func(coerced int32) any {
+						return monadDictionaryCaptured.Applicative0.Pure(coerced)
+					}(m + 1)
+				}
+				return monadDictionaryCaptured.Bind1.Bind(func(coerced int32) any {
+					return monadDictionaryCaptured.Applicative0.Pure(coerced)
+				}(n * 10))(func(coerced any) any {
+					return original(coerced.(int32))
+				})
+			}
+			return monadDictionaryCaptured.Bind1.Bind(action)(func(coerced any) any {
+				return original2(coerced.(int32))
+			})
+		default:
+			monadDictionary, depth = shared.Applicative0Bind1{Applicative0: shared.Apply0Pure{Apply0: shared.Functor0Apply{Functor0: shared.Map{Map: func(change func(any) any) func(any) any {
+				return func(inner any) any {
+					return monadDictionaryCaptured.Applicative0.Apply0.Functor0.Map(change)(inner)
+				}
+			}}, Apply: func(change any) func(any) any {
+				return func(inner any) any {
+					return monadDictionaryCaptured.Applicative0.Apply0.Apply(change)(inner)
+				}
+			}}, Pure: monadDictionaryCaptured.Applicative0.Pure}, Bind1: shared.Apply0Bind{Apply0: shared.Functor0Apply{Functor0: shared.Map{Map: func(change func(any) any) func(any) any {
+				return func(inner any) any {
+					return monadDictionaryCaptured.Bind1.Apply0.Functor0.Map(change)(inner)
+				}
+			}}, Apply: func(change any) func(any) any {
+				return func(inner any) any {
+					return monadDictionaryCaptured.Bind1.Apply0.Apply(change)(inner)
+				}
+			}}, Bind: func(inner any) func(func(any) any) any {
+				return func(next func(any) any) any {
+					return monadDictionaryCaptured.Bind1.Bind(inner)(next)
+				}
+			}}}, depth-1
+			continue
+		}
+	}
+}
+
+func bindMaybe(inner *maybe.Maybe, next func(any) *maybe.Maybe) *maybe.Maybe {
+	switch inner.Tag {
+	case maybe.TagJust:
+		return next(inner.Just)
+	default: // maybe.TagNothing
+		return maybe.No
+	}
+}
+
+func main() {
+	console.Print("[" + strings.Join(main_, " ") + "]")
+}
+
+// main_neon.go
+//go:build goexperiment.simd && arm64
+
+package main
+
+import "simd/archsimd"
+
+func foldLanes(xs []int32, initial int32) int32 {
+	acc0 := archsimd.BroadcastInt32x4(0)
+	acc1, acc2, acc3 := acc0, acc0, acc0
+	const step = 4
+	i := 0
+	for ; i < len(xs)-4*step+1; i += 4 * step {
+		x0 := archsimd.LoadInt32x4(xs[i : i+step])
+		acc0 = acc0.Add(x0)
+		x1 := archsimd.LoadInt32x4(xs[i+step : i+2*step])
+		acc1 = acc1.Add(x1)
+		x2 := archsimd.LoadInt32x4(xs[i+2*step : i+3*step])
+		acc2 = acc2.Add(x2)
+		x3 := archsimd.LoadInt32x4(xs[i+3*step : i+4*step])
+		acc3 = acc3.Add(x3)
+	}
+	acc0 = acc0.Add(acc1).Add(acc2.Add(acc3))
+	var lanes [4]int32
+	acc0.Store(lanes[:])
+	accumulator := initial
+	for _, lane := range lanes[:step] {
+		accumulator = accumulator + lane
+	}
+	for ; i < len(xs); i++ {
+		x := xs[i]
+		accumulator = accumulator + x
+	}
+	return accumulator
+}
+
+// main_scalar.go
+//go:build !(goexperiment.simd && (arm64 || wasm))
+
+package main
+
+func foldLanes(xs []int32, initial int32) int32 {
+	accumulator := initial
+	for _, x := range xs {
+		accumulator = accumulator + x
+	}
+	return accumulator
+}
+
+// main_vector.go
+//go:build goexperiment.simd && wasm
+
+package main
+
+import "simd"
+
+func foldLanes(xs []int32, initial int32) int32 {
+	acc0 := simd.BroadcastInt32s(0)
+	acc1, acc2, acc3 := acc0, acc0, acc0
+	step := acc0.Len()
+	i := 0
+	for ; i < len(xs)-4*step+1; i += 4 * step {
+		x0 := simd.LoadInt32s(xs[i : i+step])
+		acc0 = acc0.Add(x0)
+		x1 := simd.LoadInt32s(xs[i+step : i+2*step])
+		acc1 = acc1.Add(x1)
+		x2 := simd.LoadInt32s(xs[i+2*step : i+3*step])
+		acc2 = acc2.Add(x2)
+		x3 := simd.LoadInt32s(xs[i+3*step : i+4*step])
+		acc3 = acc3.Add(x3)
+	}
+	acc0 = acc0.Add(acc1).Add(acc2.Add(acc3))
+	var lanes [16]int32
+	acc0.Store(lanes[:])
+	accumulator := initial
+	for _, lane := range lanes[:step] {
+		accumulator = accumulator + lane
+	}
+	for ; i < len(xs); i++ {
+		x := xs[i]
+		accumulator = accumulator + x
+	}
+	return accumulator
+}
+
+// shared/shared.go
+package shared
+
+type Append struct {
+	Append func(any) func(any) any
+}
+
+type Semigroup0Mempty struct {
+	Semigroup0 Append
+	Mempty     any
+}
+
+type FoldMapFoldlFoldr struct {
+	FoldMap func(Semigroup0Mempty) func(func(any) any) func(any) any
+	Foldl   func(func(any) func(any) any) func(any) func(any) any
+	Foldr   func(func(any) func(any) any) func(any) func(any) any
+}
+
+func Convert(value []int32) any {
+	converted := make([]any, len(value))
+	for index, element := range value {
+		converted[index] = element
+	}
+	return converted
+}
+
+type Map struct {
+	Map func(func(any) any) func(any) any
+}
+
+type Functor0Apply struct {
+	Functor0 Map
+	Apply    func(any) func(any) any
+}
+
+type Apply0Pure struct {
+	Apply0 Functor0Apply
+	Pure   func(any) any
+}
+
+type Apply0Bind struct {
+	Apply0 Functor0Apply
+	Bind   func(any) func(func(any) any) any
+}
+
+type Applicative0Bind1 struct {
+	Applicative0 Apply0Pure
+	Bind1        Apply0Bind
+}
+
+type Foldable1Functor0SequenceTraverse struct {
+	Foldable1 FoldMapFoldlFoldr
+	Functor0  Map
+	Sequence  func(Apply0Pure) func(any) any
+	Traverse  func(Apply0Pure) func(func(any) any) func(any) any
+}
+
+// note: Main.counted takes its Foldable dictionary at run time, because polymorphic recursion reaches it at ever larger types; only this definition is slower
+
+// note: Main.described takes its Foldable dictionary at run time, because polymorphic recursion reaches it at ever larger types; only this definition is slower
+
+// note: Main.doubled takes its Functor dictionary at run time, because polymorphic recursion reaches it at ever larger types; only this definition is slower
+
+// note: Main.doubled takes its Foldable dictionary at run time, because polymorphic recursion reaches it at ever larger types; only this definition is slower
+
+// note: Main.checked takes its Traversable dictionary at run time, because polymorphic recursion reaches it at ever larger types; only this definition is slower
+
+// note: Main.stepped takes its Monad dictionary at run time, because polymorphic recursion reaches it at ever larger types; only this definition is slower

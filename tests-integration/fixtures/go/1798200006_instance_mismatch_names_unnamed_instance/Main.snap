@@ -1,8 +1,16 @@
 ---
 source: tests-integration/src/fixtures.rs
 ---
-cannot specialize Main.main: instance head does not match the constraint Labelled { tag :: Int | ?10 } (Box ?10) against the instance Labelled { tag :: Int | (row :: Row Type) } (Box (row :: Row Type))
+// main.go
+package main
 
-1 blockers; no Go was written
-  unresolved type class evidence (1):
-    instance head does not match the constraint Labelled { tag :: Int | ?10 } (Box ?10) against the instance Labelled { tag :: Int | (row :: Row Type) } (Box (row :: Row Type)) (1): Main.main
+import (
+	"github.com/i-am-the-slime/iris-go/console"
+	"strings"
+)
+
+var main_ []string = []string{"box"}
+
+func main() {
+	console.Print("[" + strings.Join(main_, " ") + "]")
+}

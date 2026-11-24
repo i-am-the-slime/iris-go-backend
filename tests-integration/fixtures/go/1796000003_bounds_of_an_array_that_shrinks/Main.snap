@@ -15,40 +15,40 @@ import (
 var main_ = initializeMain_()
 
 func initializeMain_() []int32 {
-	array2 := *array.Thaw([]int32{1, 5, 2, 7, 3})
-	size := int32(len(array2))
+	result := *array.Thaw([]int32{1, 5, 2, 7, 3})
+	size := int32(len(result))
 	for i := int32(0); i < size; i++ {
-		within := int(i) < len(array2)
+		within := int(i) < len(result)
 		var i2 int32
 		if within {
-			i2 = array2[i]
+			i2 = result[i]
 		} else {
 			i2 = -1
 		}
 		if i2 > 2 {
-			if len(array2) > 0 {
-				array2 = shared.WithoutLast(array2)
+			if len(result) > 0 {
+				result = shared.WithoutLast(result)
 			}
 		}
-		if int(i) < len(array2) {
-			array2[i] = i2 * 10
+		if int(i) < len(result) {
+			result[i] = i2 * 10
 		}
 	}
-	performed := shared.Frozen(array2)
-	array3 := *array.Thaw([]int32{1, 2})
-	size2 := int32(len(array3))
+	performed := shared.Frozen(result)
+	result2 := *array.Thaw([]int32{1, 2})
+	size2 := int32(len(result2))
 	end := size2 * 2
 	for i := int32(0); i < end; i++ {
-		within := int(i) < len(array3)
+		within := int(i) < len(result2)
 		var i2 int32
 		if within {
-			i2 = array3[i]
+			i2 = result2[i]
 		} else {
 			i2 = 0
 		}
-		array3 = array.Bounded(append(array3, i2+1))
+		result2 = array.Bounded(append(result2, i2+1))
 	}
-	performed2 := shared.Frozen(array3)
+	performed2 := shared.Frozen(result2)
 	return array.Append(performed, performed2)
 }
 

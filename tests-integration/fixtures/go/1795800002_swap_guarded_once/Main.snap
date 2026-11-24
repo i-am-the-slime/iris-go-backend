@@ -15,9 +15,9 @@ import (
 var main_ = initializeMain_()
 
 func initializeMain_() []int32 {
-	array2 := array.Thaw([]int32{1, 2, 3, 4, 5})
-	reversed(array2)
-	performed := shared.Frozen(*array2)
+	result := array.Thaw([]int32{1, 2, 3, 4, 5})
+	reversed(result)
+	performed := shared.Frozen(*result)
 	return performed
 }
 

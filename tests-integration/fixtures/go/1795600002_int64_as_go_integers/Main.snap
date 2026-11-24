@@ -108,7 +108,7 @@ import (
 	"fixture/Data/Show"
 	"fixture/Data/UInt64"
 	"github.com/i-am-the-slime/iris-go/console"
-	"github.com/i-am-the-slime/iris-go/ffi/Data_Int64_Internal_ffi"
+	internal "github.com/i-am-the-slime/iris-go/ffi/Data_Int64_Internal_ffi"
 	nullablepkg "github.com/i-am-the-slime/iris-go/nullable"
 	"strconv"
 	"strings"
@@ -161,20 +161,20 @@ func initializeMain_() []string {
 				result2 = int64(0)
 			} else {
 				var result3 int64
-				result3 = Data_Int64_Internal_ffi.Modulo_(int64(-7), l2_)
-				result2 = Data_Int64_Internal_ffi.Modulo_(result3+l2_, l2_)
+				result3 = internal.Modulo_(int64(-7), l2_)
+				result2 = internal.Modulo_(result3+l2_, l2_)
 			}
-			result = Data_Int64_Internal_ffi.Divide_(-7-result2, y)
+			result = internal.Divide_(-7-result2, y)
 		}
 		var result4 int64
 		if y == 0 {
 			result4 = int64(0)
 		} else {
-			result4 = Data_Int64_Internal_ffi.Divide_(int64(-7), y)
+			result4 = internal.Divide_(int64(-7), y)
 		}
 		mapped5[index] = result + result4
 	}
-	nullable := nullablepkg.Nullable(Data_Int64_Internal_ffi.SafeReadLong_UInt64("18446744073709551615", true, 10), maybe.NoUInt64, maybe.JustUInt64)
+	nullable := nullablepkg.Nullable(internal.SafeReadLong_UInt64("18446744073709551615", true, 10), maybe.NoUInt64, maybe.JustUInt64)
 	var result5 string
 	switch nullable.Tag {
 	case maybe.TagJust:

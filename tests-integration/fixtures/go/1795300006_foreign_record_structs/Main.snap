@@ -5,18 +5,18 @@ source: tests-integration/src/fixtures.rs
 package main
 
 import (
-	"fixture/Run_ffi"
+	run "fixture/Run_ffi"
 	"strconv"
 )
 
 func main_() []string {
-	output := Run_ffi.Run("echo")
-	outputs := Run_ffi.RunAll([]string{"a", "b"})
+	output := run.Run("echo")
+	outputs := run.RunAll([]string{"a", "b"})
 	output.Stdout += "!"
-	return []string{Run_ffi.Describe(output), Run_ffi.Describe(made), strconv.Itoa(len(outputs)), output.Stderr + strconv.Itoa(int(output.ExitCode))}
+	return []string{run.Describe(output), run.Describe(made), strconv.Itoa(len(outputs)), output.Stderr + strconv.Itoa(int(output.ExitCode))}
 }
 
-var made Run_ffi.Output = Run_ffi.Output{Stdout: "made", Stderr: "", ExitCode: 3}
+var made run.Output = run.Output{Stdout: "made", Stderr: "", ExitCode: 3}
 
 func main() {
 	main_()

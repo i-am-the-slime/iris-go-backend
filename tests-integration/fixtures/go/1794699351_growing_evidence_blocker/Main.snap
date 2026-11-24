@@ -2,10 +2,7 @@
 source: tests-integration/src/fixtures.rs
 ---
 cannot specialize Main.main: foreign imports with constraints is not supported by the Go backend yet
-cannot specialize Main.count: growing evidence of classes with polymorphic members is not supported by the Go backend yet
-  requested by: Main.main
 
-2 blockers; no Go was written
-  unsupported constructs (2):
+1 blockers; no Go was written
+  unsupported constructs (1):
     foreign imports with constraints (1): Main.main
-    growing evidence of classes with polymorphic members (1): Main.count

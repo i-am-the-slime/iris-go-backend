@@ -57,8 +57,8 @@ func convert3(value SayInt) *Say {
 	return &Say{First: value.First, Second: value.Second, Origin: value}
 }
 
-func convert4(value MapTypeValueOfFnFnValueValueFnSaySaySayInt) shared.VariantFRep {
-	return shared.VariantFRep{Map: func(coerced func(any) any) func(any) any {
+func convert4(value MapTypeValueOfFnFnValueValueFnSaySaySayInt) shared.MapTypeValue {
+	return shared.MapTypeValue{Map: func(coerced func(any) any) func(any) any {
 		original := value.Map(coerced)
 		return func(coerced2 any) any {
 			return original(coerced2.(*Say))
@@ -78,8 +78,8 @@ func convert5(value CountInt) *Count {
 	}, Origin: value}
 }
 
-func convert6(value MapTypeValueOfFnFnValueValueFnCountCountCountInt) shared.VariantFRep {
-	return shared.VariantFRep{Map: func(coerced func(any) any) func(any) any {
+func convert6(value MapTypeValueOfFnFnValueValueFnCountCountCountInt) shared.MapTypeValue {
+	return shared.MapTypeValue{Map: func(coerced func(any) any) func(any) any {
 		original := value.Map(coerced)
 		return func(coerced2 any) any {
 			return original(coerced2.(*Count))
@@ -90,14 +90,14 @@ func convert6(value MapTypeValueOfFnFnValueValueFnCountCountCountInt) shared.Var
 var main_ = initializeMain_()
 
 func initializeMain_() []string {
-	return []string{describe(say), describe(count), describe(shared.VariantFRep{Type: "say", Value: say.Map(func(coerced any) any {
+	return []string{describe(say), describe(count), describe(shared.MapTypeValue{Type: "say", Value: say.Map(func(coerced any) any {
 		return coerced.(int32) * 10
-	})(say.Value), Map: say.Map}), describe(shared.VariantFRep{Type: "count", Value: count.Map(func(coerced any) any {
+	})(say.Value), Map: say.Map}), describe(shared.MapTypeValue{Type: "count", Value: count.Map(func(coerced any) any {
 		return coerced.(int32) * 10
 	})(count.Value), Map: count.Map})}
 }
 
-func describe(r shared.VariantFRep) string {
+func describe(r shared.MapTypeValue) string {
 	if r.Type == "say" {
 		scrutinee := convert(r.Value.(*Say))
 		return scrutinee.First + " " + strconv.Itoa(int(scrutinee.Second))
@@ -111,7 +111,7 @@ func describe(r shared.VariantFRep) string {
 
 var say = initializeSay()
 
-func initializeSay() shared.VariantFRep {
+func initializeSay() shared.MapTypeValue {
 	return convert4(MapTypeValueOfFnFnValueValueFnSaySaySayInt{Type: "say", Value: SayInt{First: "hello", Second: 4}, Map: func(f func(any) any) func(*Say) *Say {
 		return func(say *Say) *Say {
 			return mapSay(f, say)
@@ -121,7 +121,7 @@ func initializeSay() shared.VariantFRep {
 
 var count = initializeCount()
 
-func initializeCount() shared.VariantFRep {
+func initializeCount() shared.MapTypeValue {
 	return convert6(MapTypeValueOfFnFnValueValueFnCountCountCountInt{Type: "count", Value: CountInt{Count: func(value int32) int32 {
 		return value + 1
 	}}, Map: func(f func(any) any) func(*Count) *Count {
@@ -148,7 +148,7 @@ func main() {
 // shared/shared.go
 package shared
 
-type VariantFRep struct {
+type MapTypeValue struct {
 	Map   func(func(any) any) func(any) any
 	Type  string
 	Value any

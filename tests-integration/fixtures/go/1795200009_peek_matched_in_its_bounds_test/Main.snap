@@ -31,14 +31,14 @@ func initializeMain_() []int32 {
 		first = 0
 	}
 	within3 := 5 < len(array2)
-	var i2 int32
+	var missing int32
 	if within3 {
-		i2 = array2[5]
+		missing = array2[5]
 	} else {
-		i2 = 0
+		missing = 0
 	}
-	array3 := shared.Frozen(array2)
-	performed := array.Append(array3, []int32{first, i2, -1})
+	elements := shared.Frozen(array2)
+	performed := array.Append(elements, []int32{first, missing, -1})
 	return performed
 }
 

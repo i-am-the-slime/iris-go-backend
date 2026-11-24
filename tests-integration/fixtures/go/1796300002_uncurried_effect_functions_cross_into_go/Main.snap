@@ -5,7 +5,7 @@ source: tests-integration/src/fixtures.rs
 package main
 
 import (
-	"fixture/Routes_ffi"
+	routes "fixture/Routes_ffi"
 	"fixture/shared"
 	"github.com/i-am-the-slime/iris-go/array"
 	"github.com/i-am-the-slime/iris-go/prim"
@@ -13,44 +13,44 @@ import (
 
 func main_() []string {
 	seen := &shared.Ref[[]string]{Value: []string{}}
-	Routes_ffi.Call(func(first string, second string, _ Routes_ffi.Reply) {
+	routes.Call(func(first string, second string, _ routes.Reply) {
 		mainRemember(seen, prim.Append(first, second))
 	})
-	function := func(prefix string) func(string) func(Routes_ffi.Reply) {
-		return func(text string) func(Routes_ffi.Reply) {
-			return func(_ Routes_ffi.Reply) {
+	function := func(prefix string) func(string) func(routes.Reply) {
+		return func(text string) func(routes.Reply) {
+			return func(_ routes.Reply) {
 				mainRemember(seen, prim.Append(prefix, text))
 			}
 		}
 	}
-	Routes_ffi.Serve(Routes_ffi.Route{Path: "/hello", Handle: func(name string, body string, _ Routes_ffi.Reply) {
+	routes.Serve(routes.Route{Path: "/hello", Handle: func(name string, body string, _ routes.Reply) {
 		mainRemember(seen, name+": "+body)
 	}, Done: func(path string) {
 		mainRemember(seen, "done "+path)
-	}, Prefixed: func(s string) func(string, Routes_ffi.Reply) {
-		return func(s2 string, reply Routes_ffi.Reply) {
+	}, Prefixed: func(s string) func(string, routes.Reply) {
+		return func(s2 string, reply routes.Reply) {
 			function(s)(s2)(reply)
 		}
 	}})
-	Routes_ffi.BuiltIn.Handle("built", "in", Routes_ffi.NoReply)
-	updated := Routes_ffi.BuiltIn
-	updated.Handle = func(name string, _ string, _ Routes_ffi.Reply) {
+	routes.BuiltIn.Handle("built", "in", routes.NoReply)
+	updated := routes.BuiltIn
+	updated.Handle = func(name string, _ string, _ routes.Reply) {
 		mainRemember(seen, "updated "+name)
 	}
-	Routes_ffi.Serve(updated)
-	Routes_ffi.BuiltIn.Done(Routes_ffi.BuiltIn.Path)
-	Routes_ffi.BuiltIn.Prefixed("q")("y", Routes_ffi.NoReply)
-	Routes_ffi.BuiltIn.Prefixed("r")("z", Routes_ffi.NoReply)
-	Routes_ffi.BuiltIn.Handle("kept", "aside", Routes_ffi.NoReply)
-	scrutinee := Routes_ffi.BuiltIn
-	matched := func(s string) func(string) func(Routes_ffi.Reply) {
-		return func(s2 string) func(Routes_ffi.Reply) {
-			return func(reply Routes_ffi.Reply) {
+	routes.Serve(updated)
+	routes.BuiltIn.Done(routes.BuiltIn.Path)
+	routes.BuiltIn.Prefixed("q")("y", routes.NoReply)
+	routes.BuiltIn.Prefixed("r")("z", routes.NoReply)
+	routes.BuiltIn.Handle("kept", "aside", routes.NoReply)
+	scrutinee := routes.BuiltIn
+	matched := func(s string) func(string) func(routes.Reply) {
+		return func(s2 string) func(routes.Reply) {
+			return func(reply routes.Reply) {
 				scrutinee.Handle(s, s2, reply)
 			}
 		}
 	}
-	matched("matched")("too")(Routes_ffi.NoReply)
+	matched("matched")("too")(routes.NoReply)
 	return seen.Value
 }
 

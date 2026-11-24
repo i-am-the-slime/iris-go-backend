@@ -589,7 +589,7 @@ func InsReusing(kx int32, vx bool, value *Tree) *Tree {
 package main
 
 import (
-	"fixture/Keeper_ffi"
+	keeper "fixture/Keeper_ffi"
 	"fixture/RedBlack"
 	"fixture/shared"
 	"fixture/shared/RedBlack+Data.List.Types"
@@ -616,7 +616,7 @@ func initializeMain_() []int32 {
 		fromKeeping := mainGoReusing3(redblack.SharedTreeLeaf, redblack_types.SharedListTreeNil, 0, 40)
 		var fromTheForeign *redblack.Tree
 		if fromKeeping > 0 {
-			fromTheForeign = Keeper_ffi.Kept[*redblack.Tree]()
+			fromTheForeign = keeper.Kept[*redblack.Tree]()
 		} else {
 			fromTheForeign = redblack.SharedTreeLeaf
 		}
@@ -698,11 +698,11 @@ func mainGoChecked(tree *redblack.Tree, trail *redblack_types.ListTree, total in
 		}
 		var result2 int32
 		if n == 7 {
-			result2 = total + Keeper_ffi.Keep(next)
+			result2 = total + keeper.Keep(next)
 		} else {
 			result2 = total
 		}
-		tree, trail, total, n, treeOwned = next, result, result2, n-1, !(n%4 == 0) && !(n == 7)
+		tree, trail, total, n, treeOwned = next, result, result2, n-1, n%4 != 0 && n != 7
 	}
 }
 
@@ -740,7 +740,7 @@ func mainGoChecked2(tree *redblack.Tree, trail *redblack_types.ListTree, later f
 		} else {
 			result2 = later
 		}
-		tree, trail, later, n, treeOwned = next, result, result2, n-1, !(n%4 == 0) && !(n == 7)
+		tree, trail, later, n, treeOwned = next, result, result2, n-1, n%4 != 0 && n != 7
 	}
 }
 
@@ -780,7 +780,7 @@ func mainGoChecked3(tree *redblack.Tree, trail *redblack_types.ListTree, record 
 		} else {
 			result2 = record
 		}
-		tree, trail, record, n, treeOwned = next, result, result2, n-1, !(n%4 == 0) && !(n == 7)
+		tree, trail, record, n, treeOwned = next, result, result2, n-1, n%4 != 0 && n != 7
 	}
 }
 
@@ -817,7 +817,7 @@ func mainGoReusing(tree *redblack.Tree, trail *redblack_types.ListTree, record r
 	} else {
 		result2 = record
 	}
-	return mainGoChecked3(next, result, result2, n-1, !(n%4 == 0) && !(n == 7))
+	return mainGoChecked3(next, result, result2, n-1, n%4 != 0 && n != 7)
 }
 
 func mainGoReusing2(tree *redblack.Tree, trail *redblack_types.ListTree, later func(struct{}) int32, n int32) shared.Closure {
@@ -851,7 +851,7 @@ func mainGoReusing2(tree *redblack.Tree, trail *redblack_types.ListTree, later f
 	} else {
 		result2 = later
 	}
-	return mainGoChecked2(next, result, result2, n-1, !(n%4 == 0) && !(n == 7))
+	return mainGoChecked2(next, result, result2, n-1, n%4 != 0 && n != 7)
 }
 
 func mainGoReusing3(tree *redblack.Tree, trail *redblack_types.ListTree, total int32, n int32) int32 {
@@ -879,11 +879,11 @@ func mainGoReusing3(tree *redblack.Tree, trail *redblack_types.ListTree, total i
 	}
 	var result2 int32
 	if n == 7 {
-		result2 = total + Keeper_ffi.Keep(next)
+		result2 = total + keeper.Keep(next)
 	} else {
 		result2 = total
 	}
-	return mainGoChecked(next, result, result2, n-1, !(n%4 == 0) && !(n == 7))
+	return mainGoChecked(next, result, result2, n-1, n%4 != 0 && n != 7)
 }
 
 func main() {

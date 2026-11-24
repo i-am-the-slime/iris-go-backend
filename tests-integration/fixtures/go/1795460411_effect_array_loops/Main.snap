@@ -134,7 +134,7 @@ import (
 	"fixture/Data/Show"
 	"fixture/Data/Tuple"
 	"fixture/Effect/Exception"
-	"fixture/Journal_ffi"
+	journal "fixture/Journal_ffi"
 	arraypkg "github.com/i-am-the-slime/iris-go/array"
 	"github.com/i-am-the-slime/iris-go/direct"
 	"github.com/i-am-the-slime/iris-go/exception"
@@ -147,7 +147,7 @@ func main() {
 	traversals()
 	failures()
 	folds()
-	Journal_ffi.Log("st")
+	journal.Log("st")
 	values := []int32{3, 1, 2}
 	seen := []int32{}
 	for _, i := range values {
@@ -156,7 +156,7 @@ func main() {
 	for _, i := range values {
 		seen = arraypkg.Append(seen, []int32{i * 100})
 	}
-	Journal_ffi.Log(show.ArrayInt(seen))
+	journal.Log(show.ArrayInt(seen))
 	values2 := []int32{10, 20, 30}
 	seen2 := []int32{}
 	end := int32(len(values2))
@@ -164,7 +164,7 @@ func main() {
 		x := values2[index]
 		seen2 = arraypkg.Append(seen2, []int32{index + x})
 	}
-	Journal_ffi.Log(show.ArrayInt(seen2))
+	journal.Log(show.ArrayInt(seen2))
 	var counter int32 = 0
 	array := []int32{1, 2, 3}
 	collected := make([]string, len(array))
@@ -174,98 +174,98 @@ func main() {
 		value := strconv.Itoa(int(s_)) + ":" + strconv.Itoa(int(i))
 		collected[index] = value
 	}
-	Journal_ffi.Log(show.ArrayString(collected))
+	journal.Log(show.ArrayString(collected))
 	var accumulator int32 = 1
 	for _, i := range []int32{1, 2, 3} {
 		accumulator = accumulator*2 + i
 	}
-	Journal_ffi.Log(strconv.Itoa(int(accumulator)))
+	journal.Log(strconv.Itoa(int(accumulator)))
 	large()
 }
 
 func traversals() {
-	Journal_ffi.Log("for_ effect")
+	journal.Log("for_ effect")
 	for _, i := range []int32{1, 2, 3} {
-		Journal_ffi.Log(strconv.Itoa(int(i)))
+		journal.Log(strconv.Itoa(int(i)))
 	}
-	Journal_ffi.Log("traverse_ effect")
+	journal.Log("traverse_ effect")
 	for _, s := range []string{"a", "b"} {
-		Journal_ffi.Log("t" + prim.ShowString(s))
+		journal.Log("t" + prim.ShowString(s))
 	}
-	Journal_ffi.Log("forWithIndex_ effect")
+	journal.Log("forWithIndex_ effect")
 	array2 := []string{"x", "y", "z"}
 	end := int32(len(array2))
 	for index := int32(0); index < end; index++ {
-		Journal_ffi.Log(strconv.Itoa(int(index)) + array2[index])
+		journal.Log(strconv.Itoa(int(index)) + array2[index])
 	}
-	Journal_ffi.Log("traverseWithIndex_ effect")
+	journal.Log("traverseWithIndex_ effect")
 	array3 := []int32{5, 6}
 	end2 := int32(len(array3))
 	for index := int32(0); index < end2; index++ {
-		Journal_ffi.Log(strconv.Itoa(int(index * array3[index])))
+		journal.Log(strconv.Itoa(int(index * array3[index])))
 	}
-	Journal_ffi.Log("for effect")
+	journal.Log("for effect")
 	array := []int32{1, 2, 3}
 	collected := make([]int32, len(array))
 	for index, i := range array {
-		Journal_ffi.Log("visit " + strconv.Itoa(int(i)))
+		journal.Log("visit " + strconv.Itoa(int(i)))
 		value := i * 2
 		collected[index] = value
 	}
-	Journal_ffi.Log(show.ArrayInt(collected))
-	Journal_ffi.Log("traverse effect")
+	journal.Log(show.ArrayInt(collected))
+	journal.Log("traverse effect")
 	array4 := []int32{7, 8}
 	collected2 := make([]string, len(array4))
 	for index, i := range array4 {
-		Journal_ffi.Log("see " + strconv.Itoa(int(i)))
+		journal.Log("see " + strconv.Itoa(int(i)))
 		value := strconv.Itoa(int(i))
 		collected2[index] = value
 	}
-	Journal_ffi.Log(show.ArrayString(collected2))
-	Journal_ffi.Log("foldM effect")
+	journal.Log(show.ArrayString(collected2))
+	journal.Log("foldM effect")
 	var accumulator int32 = 0
 	for _, i := range []int32{1, 2, 3, 4} {
-		Journal_ffi.Log("add " + strconv.Itoa(int(i)))
+		journal.Log("add " + strconv.Itoa(int(i)))
 		accumulator += i
 	}
-	Journal_ffi.Log(strconv.Itoa(int(accumulator)))
+	journal.Log(strconv.Itoa(int(accumulator)))
 	var accumulator2 int32 = 0
 	for _, i := range []int32{4, 2} {
-		Journal_ffi.Log("digit " + strconv.Itoa(int(i)))
+		journal.Log("digit " + strconv.Itoa(int(i)))
 		accumulator2 = accumulator2*10 + i
 	}
-	Journal_ffi.Log(strconv.Itoa(int(accumulator2)))
-	Journal_ffi.Log("sequence_ effect")
+	journal.Log(strconv.Itoa(int(accumulator2)))
+	journal.Log("sequence_ effect")
 	for _, effect := range []func(){func() {
-		Journal_ffi.Log("first")
+		journal.Log("first")
 	}, func() {
-		Journal_ffi.Log("second")
+		journal.Log("second")
 	}, func() {
-		Journal_ffi.Log("third")
+		journal.Log("third")
 	}} {
 		effect()
 	}
-	Journal_ffi.Log("nested")
+	journal.Log("nested")
 	inners := []string{"a", "b"}
 	for _, outer := range []int32{1, 2} {
 		for _, inner := range inners {
-			Journal_ffi.Log(strconv.Itoa(int(outer)) + inner)
+			journal.Log(strconv.Itoa(int(outer)) + inner)
 		}
 	}
-	Journal_ffi.Log("empty")
+	journal.Log("empty")
 	for _, i := range []int32{} {
-		Journal_ffi.Log(strconv.Itoa(int(i)))
+		journal.Log(strconv.Itoa(int(i)))
 	}
 	collected3 := make([]int32, len([]int32{}))
 	for index, i := range []int32{} {
 		value := i + 1
 		collected3[index] = value
 	}
-	Journal_ffi.Log(show.ArrayInt(collected3))
+	journal.Log(show.ArrayInt(collected3))
 }
 
 func failures() {
-	Journal_ffi.Log("throws midway")
+	journal.Log("throws midway")
 	visited := []int32{}
 	outcome := direct.CatchException(func(x exception.Error) either.EitherErrorUnit {
 		return either.LeftEitherErrorUnit(x)
@@ -289,7 +289,7 @@ func failures() {
 	}
 	text = append(text, " after "...)
 	text = show.AppendShowArrayInt(text, seen)
-	Journal_ffi.Log(string(text))
+	journal.Log(string(text))
 	traversed := []int32{}
 	traverseOutcome := direct.CatchException(func(x exception.Error) either.EitherErrorArrayInt {
 		return either.LeftEitherErrorArrayInt(x)
@@ -316,57 +316,57 @@ func failures() {
 	}
 	text2 = append(text2, " after "...)
 	text2 = show.AppendShowArrayInt(text2, traversedSeen)
-	Journal_ffi.Log(string(text2))
+	journal.Log(string(text2))
 }
 
 func folds() {
-	Journal_ffi.Log("range")
+	journal.Log("range")
 	for i := int32(1); i < 5; i++ {
-		Journal_ffi.Log("r" + strconv.Itoa(int(i)))
+		journal.Log("r" + strconv.Itoa(int(i)))
 	}
-	Journal_ffi.Log("maybe")
-	Journal_ffi.Log("just 9")
-	Journal_ffi.Log("wrapped")
+	journal.Log("maybe")
+	journal.Log("just 9")
+	journal.Log("wrapped")
 	array := []string{"p", "q"}
 	for index, s := range array {
 		i := int32(index)
-		Journal_ffi.Log(s + strconv.Itoa(int(i)))
+		journal.Log(s + strconv.Itoa(int(i)))
 	}
 	for _, i := range []int32{4, 5} {
-		Journal_ffi.Log("w" + strconv.Itoa(int(i)))
+		journal.Log("w" + strconv.Itoa(int(i)))
 	}
 	var accumulator int32 = 100
 	for _, i := range []int32{1, 10} {
-		Journal_ffi.Log("minus " + strconv.Itoa(int(i)))
+		journal.Log("minus " + strconv.Itoa(int(i)))
 		accumulator -= i
 	}
-	Journal_ffi.Log(strconv.Itoa(int(accumulator)))
-	Journal_ffi.Log("stops early")
+	journal.Log(strconv.Itoa(int(accumulator)))
+	journal.Log("stops early")
 	arraypkg.Foldr(func(x int32, rest func()) func() {
 		if x == 3 {
 			return func() {
 			}
 		}
 		return func() {
-			Journal_ffi.Log("upto " + strconv.Itoa(int(x)))
+			journal.Log("upto " + strconv.Itoa(int(x)))
 			rest()
 		}
 	}, func() {
 	}, []int32{1, 2, 3, 4, 5})()
-	Journal_ffi.Log("reversed")
+	journal.Log("reversed")
 	arraypkg.Foldr(func(x int32, rest func()) func() {
 		return func() {
 			rest()
-			Journal_ffi.Log("back " + strconv.Itoa(int(x)))
+			journal.Log("back " + strconv.Itoa(int(x)))
 		}
 	}, func() {
 	}, []int32{1, 2, 3})()
-	Journal_ffi.Log("left fold")
-	Journal_ffi.Log("seed")
+	journal.Log("left fold")
+	journal.Log("seed")
 	for _, x := range []int32{1, 2} {
-		Journal_ffi.Log("left " + strconv.Itoa(int(x)))
+		journal.Log("left " + strconv.Itoa(int(x)))
 	}
-	Journal_ffi.Log("object")
+	journal.Log("object")
 	object2 := object.New[int32]()
 	for _, tuple := range []tuple.TupleStringInt{{First: "a", Second: 1}, {First: "b", Second: 2}, {First: "a", Second: 30}} {
 		k := tuple.First
@@ -387,11 +387,11 @@ func folds() {
 	} else {
 		result = "Nothing"
 	}
-	Journal_ffi.Log(result)
+	journal.Log(result)
 }
 
 func large() {
-	Journal_ffi.Log("large")
+	journal.Log("large")
 	values := arraypkg.Replicate(1000000, int32(1))
 	var total int32 = 0
 	for _, i := range values {
@@ -406,33 +406,33 @@ func large() {
 	}, values) {
 		effect()
 	}
-	Journal_ffi.Log(strconv.Itoa(int(total)))
+	journal.Log(strconv.Itoa(int(total)))
 	array := arraypkg.Replicate(1000000, int32(2))
 	collected := make([]int32, len(array))
 	for index, i := range array {
 		value := i + 1
 		collected[index] = value
 	}
-	Journal_ffi.Log(strconv.Itoa(len(collected)))
+	journal.Log(strconv.Itoa(len(collected)))
 	var counter int32 = 0
 	value2 := int32(3)
 	for range 1000000 {
 		counter += value2
 	}
-	Journal_ffi.Log(strconv.Itoa(int(counter)))
+	journal.Log(strconv.Itoa(int(counter)))
 	var accumulator int32 = 0
 	value3 := int32(1)
 	for range 1000000 {
 		accumulator += value3
 	}
-	Journal_ffi.Log(strconv.Itoa(int(accumulator)))
+	journal.Log(strconv.Itoa(int(accumulator)))
 	var wrappedCounter int32 = 0
 	value4 := int32(1)
 	for index := range 1000000 {
 		i := int32(index)
 		wrappedCounter += i * value4
 	}
-	Journal_ffi.Log(strconv.Itoa(int(wrappedCounter)))
+	journal.Log(strconv.Itoa(int(wrappedCounter)))
 }
 
 // shared/shared.go

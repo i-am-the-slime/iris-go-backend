@@ -40,9 +40,9 @@ func initializeMain_() []string {
 	sorted2 := slices.Clone([]Suit{SuitClubs, SuitHearts, SuitSpades})
 	slices.Sort(sorted2)
 	slices.Reverse(sorted2)
-	array2 := *arraypkg.Thaw([]Suit{SuitSpades, SuitClubs, SuitHearts})
-	slices.Sort(array2)
-	performed := shared.Frozen(array2)
+	array := *arraypkg.Thaw([]Suit{SuitSpades, SuitClubs, SuitHearts})
+	slices.Sort(array)
+	performed := shared.Frozen(array)
 	return []string{arraySuit(sorted), arraySuit(sorted2), arraySuit(performed)}
 }
 

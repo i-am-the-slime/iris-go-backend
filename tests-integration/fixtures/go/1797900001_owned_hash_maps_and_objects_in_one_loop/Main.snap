@@ -37,7 +37,7 @@ func Add(i int32, i2 int32) int32 {
 package tuple
 
 import (
-	"github.com/i-am-the-slime/iris-go/ffi/Data_HashMap_ffi"
+	hashmap "github.com/i-am-the-slime/iris-go/ffi/Data_HashMap_ffi"
 	"github.com/i-am-the-slime/iris-go/prim"
 	"strconv"
 )
@@ -48,7 +48,7 @@ type TupleStringInt struct {
 }
 
 type TupleHashMapIntIntInt struct {
-	First  Data_HashMap_ffi.Native[int32, int32]
+	First  hashmap.Native[int32, int32]
 	Second int32
 }
 
@@ -92,7 +92,7 @@ import (
 	"fixture/Data/Tuple"
 	"fixture/shared"
 	"github.com/i-am-the-slime/iris-go/console"
-	"github.com/i-am-the-slime/iris-go/ffi/Data_HashMap_ffi"
+	hashmap "github.com/i-am-the-slime/iris-go/ffi/Data_HashMap_ffi"
 	"github.com/i-am-the-slime/iris-go/object"
 	"strconv"
 	"strings"
@@ -102,12 +102,12 @@ var main_ = initializeMain_()
 
 func initializeMain_() []string {
 	array := []string{"a", "b", "a", ""}
-	accumulator := shared.Tally{ByWord: Data_HashMap_ffi.NativeEmpty[string, int32](), ByFirst: object.Empty[int32](), Lengths: Data_HashMap_ffi.NativeEmpty[int32, int32]()}
+	accumulator := shared.Tally{ByWord: hashmap.NativeEmpty[string, int32](), ByFirst: object.Empty[int32](), Lengths: hashmap.NativeEmpty[int32, int32]()}
 	accumulator.ByFirst = object.Lend(accumulator.ByFirst)
-	accumulator.ByWord = Data_HashMap_ffi.Lend(accumulator.ByWord)
-	accumulator.Lengths = Data_HashMap_ffi.Lend(accumulator.Lengths)
+	accumulator.ByWord = hashmap.Lend(accumulator.ByWord)
+	accumulator.Lengths = hashmap.Lend(accumulator.Lengths)
 	for _, word := range array {
-		nativeLookup := Data_HashMap_ffi.NativeLookup(maybe.NoInt, func(payload int32) maybe.Int {
+		nativeLookup := hashmap.NativeLookup(maybe.NoInt, func(payload int32) maybe.Int {
 			return maybe.Int(payload)
 		}, nil, word, nil, accumulator.ByWord)
 		var seen int32
@@ -122,9 +122,9 @@ func initializeMain_() []string {
 		} else {
 			result = 1
 		}
-		accumulator = shared.Tally{ByWord: Data_HashMap_ffi.NativeInsertOwned(nil, nil, word, seen+1, accumulator.ByWord), ByFirst: object.InsertOwned(word, seen+1, accumulator.ByFirst), Lengths: Data_HashMap_ffi.NativeInsertWithOwned(nil, nil, semiring.Add, result, int32(1), accumulator.Lengths)}
+		accumulator = shared.Tally{ByWord: hashmap.NativeInsertOwned(nil, nil, word, seen+1, accumulator.ByWord), ByFirst: object.InsertOwned(word, seen+1, accumulator.ByFirst), Lengths: hashmap.NativeInsertWithOwned(nil, nil, semiring.Add, result, int32(1), accumulator.Lengths)}
 	}
-	nativeLookup2 := Data_HashMap_ffi.NativeLookup(maybe.NoInt, func(payload int32) maybe.Int {
+	nativeLookup2 := hashmap.NativeLookup(maybe.NoInt, func(payload int32) maybe.Int {
 		return maybe.Int(payload)
 	}, nil, int32(1), nil, accumulator.Lengths)
 	var result2 string
@@ -134,20 +134,20 @@ func initializeMain_() []string {
 		result2 = "Nothing"
 	}
 	array2 := []int32{1, 2, 3, 4}
-	accumulator2 := Data_HashMap_ffi.Empty[shared.Point, int32]()
+	accumulator2 := hashmap.Empty[shared.Point, int32]()
 	for _, n := range array2 {
 		k := shared.Point{X: n - 1, Y: 1 - n}
-		accumulator2 = Data_HashMap_ffi.Insert(eq.EqPointConsIntConsIntNil, hashable.HashPointConsIntConsIntNil, shared.Point{X: n, Y: -n}, n, Data_HashMap_ffi.Delete(eq.EqPointConsIntConsIntNil, k, k.X*31+k.Y*31, accumulator2))
+		accumulator2 = hashmap.Insert(eq.EqPointConsIntConsIntNil, hashable.HashPointConsIntConsIntNil, shared.Point{X: n, Y: -n}, n, hashmap.Delete(eq.EqPointConsIntConsIntNil, k, k.X*31+k.Y*31, accumulator2))
 	}
 	array3 := []int32{1, 2, 3}
-	accumulator3 := tuple.TupleHashMapIntIntInt{First: Data_HashMap_ffi.NativeEmpty[int32, int32](), Second: 0}
+	accumulator3 := tuple.TupleHashMapIntIntInt{First: hashmap.NativeEmpty[int32, int32](), Second: 0}
 	for _, n := range array3 {
 		table := accumulator3.First
-		accumulator3 = tuple.TupleHashMapIntIntInt{First: Data_HashMap_ffi.NativeInsert(nil, nil, n, n, table), Second: Data_HashMap_ffi.NativeSize(table)}
+		accumulator3 = tuple.TupleHashMapIntIntInt{First: hashmap.NativeInsert(nil, nil, n, n, table), Second: hashmap.NativeSize(table)}
 	}
-	return []string{tuple.ArrayTupleStringInt(Data_HashMap_ffi.NativeToArrayBy(func(s string, i int32) tuple.TupleStringInt {
+	return []string{tuple.ArrayTupleStringInt(hashmap.NativeToArrayBy(func(s string, i int32) tuple.TupleStringInt {
 		return tuple.TupleStringInt{First: s, Second: i}
-	}, accumulator.ByWord)), strconv.Itoa(int(object.Size(accumulator.ByFirst))), result2, strconv.Itoa(int(Data_HashMap_ffi.Size(accumulator2))), "(Tuple " + strconv.Itoa(int(Data_HashMap_ffi.NativeSize(accumulator3.First))) + " " + strconv.Itoa(int(accumulator3.Second)) + ")"}
+	}, accumulator.ByWord)), strconv.Itoa(int(object.Size(accumulator.ByFirst))), result2, strconv.Itoa(int(hashmap.Size(accumulator2))), "(Tuple " + strconv.Itoa(int(hashmap.NativeSize(accumulator3.First))) + " " + strconv.Itoa(int(accumulator3.Second)) + ")"}
 }
 
 func main() {
@@ -157,7 +157,7 @@ func main() {
 // shared/shared.go
 package shared
 
-import "github.com/i-am-the-slime/iris-go/ffi/Data_HashMap_ffi"
+import hashmap "github.com/i-am-the-slime/iris-go/ffi/Data_HashMap_ffi"
 
 type Tally struct {
 	ByFirst *struct {
@@ -166,8 +166,8 @@ type Tally struct {
 	Keys  []string
 	Vals  []int32
 }
-	ByWord  Data_HashMap_ffi.Native[string, int32]
-	Lengths Data_HashMap_ffi.Native[int32, int32]
+	ByWord  hashmap.Native[string, int32]
+	Lengths hashmap.Native[int32, int32]
 }
 
 type Point struct {

@@ -30,12 +30,12 @@ func initializeMain_() []string {
 	return take(3, from(1))
 }
 
-func take(n int32, stream Stream) []string {
+func take(n int32, cell Stream) []string {
 	switch n {
 	case 0:
 		return []string{}
 	default:
-		scrutinee := stream.Force()
+		scrutinee := cell.Force()
 		return array.Append([]string{scrutinee.First.First}, take(n-1, scrutinee.Second.Force()))
 	}
 }

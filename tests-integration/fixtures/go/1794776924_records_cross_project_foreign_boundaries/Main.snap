@@ -31,11 +31,12 @@ package main
 
 import (
 	"fixture/Data/Show"
-	"fixture/Shapes_ffi"
+	shapesffi "fixture/Shapes_ffi"
 	"fixture/shared"
 	"github.com/i-am-the-slime/iris-go/array"
 	"github.com/i-am-the-slime/iris-go/console"
 	"github.com/i-am-the-slime/iris-go/direct"
+	"github.com/i-am-the-slime/iris-go/foreignvalue"
 	nullablepkg "github.com/i-am-the-slime/iris-go/nullable"
 )
 
@@ -43,15 +44,15 @@ var main_ = initializeMain_()
 
 func initializeMain_() string {
 	original := shared.NameSides{Name: "square", Sides: 4}
-	nullable := Shapes_ffi.Measure("square")
+	nullable := shapesffi.Measure("square")
 	var converted *[]shared.Shape
 	if nullable != nil {
 		present := array.Map(func(element any) shared.Shape {
-			return shared.Shape{Kind: direct.ForeignField(element, "kind").(string), Size: direct.ForeignField(element, "size").(int32)}
+			return shared.Shape{Kind: direct.ForeignField(element, "kind").(string), Size: foreignvalue.Int(direct.ForeignField(element, "size"))}
 		}, *nullable)
 		converted = &present
 	}
-	return Shapes_ffi.Describe(direct.ForeignRecord([]string{"name", "sides"}, []any{original.Name, original.Sides})) + ": " + nullablepkg.Nullable(converted, "unknown", sizes)
+	return shapesffi.Describe(direct.ForeignRecord([]string{"name", "sides"}, []any{original.Name, original.Sides})) + ": " + nullablepkg.Nullable(converted, "unknown", sizes)
 }
 
 func sizes(shapes []shared.Shape) string {

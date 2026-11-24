@@ -643,7 +643,7 @@ func mainGoChecked(tree *redblack.Tree, kept *redblack_types.ListTree, n int32, 
 		} else {
 			result = kept
 		}
-		tree, kept, n, treeOwned = next, result, n-1, !(n%5 == 0)
+		tree, kept, n, treeOwned = next, result, n-1, n%5 != 0
 	}
 }
 
@@ -671,7 +671,7 @@ func mainGoReusing(tree *redblack.Tree, kept *redblack_types.ListTree, n int32) 
 	} else {
 		result = kept
 	}
-	return mainGoChecked(next, result, n-1, !(n%5 == 0))
+	return mainGoChecked(next, result, n-1, n%5 != 0)
 }
 
 func mainGoReusing2(acc *redblack_types.ListTree, list *redblack_types.ListTree) *redblack_types.ListTree {

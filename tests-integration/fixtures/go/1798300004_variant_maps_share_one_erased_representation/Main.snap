@@ -1,0 +1,166 @@
+---
+source: tests-integration/src/fixtures.rs
+---
+// Data/Maybe/maybe.go
+package maybe
+
+import "fixture/shared"
+
+const TagNothing = 0
+
+const TagJust = 1
+
+type VariantCircleSquare struct {
+	Just shared.TypeValue
+	Tag  uint8
+}
+
+type Int int64
+
+const NoInt Int = 1 << 32
+
+type Circle struct {
+	Circle func(int32) Int
+}
+
+type Maybe struct {
+	Just any
+	Tag  uint8
+}
+
+func Convert(value Int) *Maybe {
+	if value == NoInt {
+		return &Maybe{Tag: TagNothing}
+	}
+	return &Maybe{Tag: TagJust, Just: int32(value)}
+}
+
+func JustVariantCircleSquare(just shared.TypeValue) VariantCircleSquare {
+	return VariantCircleSquare{Tag: TagJust, Just: just}
+}
+
+var NoVariantCircleSquare = VariantCircleSquare{Tag: TagNothing}
+
+// main.go
+package main
+
+import (
+	"fixture/Data/Maybe"
+	journal "fixture/Journal_ffi"
+	"fixture/shared"
+	"github.com/i-am-the-slime/iris-go/prim"
+	"strconv"
+)
+
+func main() {
+	circle := shared.Convert(shared.VariantRepInt{Type: "circle", Value: 21})
+	square := shared.Convert2(shared.VariantRepNumber{Type: "square", Value: 1.5})
+	var result shared.TypeValue
+	if circle.Type == "circle" {
+		record := shared.Circle{Circle: func(value int32) int32 {
+			return value * 2
+		}}
+		var field func(any) any
+		switch circle.Type {
+		case "circle":
+			field = func(coerced any) any {
+				return record.Circle(coerced.(int32))
+			}
+		}
+		result = shared.TypeValue{Type: circle.Type, Value: field(circle.Value)}
+	} else {
+		result = circle
+	}
+	journal.Log(describe(result))
+	var result2 shared.TypeValue
+	if square.Type == "square" {
+		record := shared.Square{Square: func(value float64) float64 {
+			return value * 2.0
+		}}
+		var field func(any) any
+		switch square.Type {
+		case "square":
+			field = func(coerced any) any {
+				return record.Square(coerced.(float64))
+			}
+		}
+		result2 = shared.TypeValue{Type: square.Type, Value: field(square.Value)}
+	} else {
+		result2 = square
+	}
+	journal.Log(describe(result2))
+	var result3 maybe.VariantCircleSquare
+	if circle.Type == "circle" {
+		record := maybe.Circle{Circle: func(radius int32) maybe.Int {
+			return maybe.Int(radius + 1)
+		}}
+		var field func(any) *maybe.Maybe
+		switch circle.Type {
+		case "circle":
+			field = func(coerced any) *maybe.Maybe {
+				return maybe.Convert(record.Circle(coerced.(int32)))
+			}
+		}
+		scrutinee := field(circle.Value)
+		switch scrutinee.Tag {
+		case maybe.TagJust:
+			result3 = maybe.JustVariantCircleSquare(shared.TypeValue{Type: circle.Type, Value: scrutinee.Just})
+		default:
+			result3 = maybe.NoVariantCircleSquare
+		}
+	} else {
+		result3 = maybe.JustVariantCircleSquare(circle)
+	}
+	var result4 string
+	switch result3.Tag {
+	case maybe.TagJust:
+		result4 = "(Just " + prim.ShowString(describe(result3.Just)) + ")"
+	default:
+		result4 = "Nothing"
+	}
+	journal.Log(result4)
+}
+
+func describe(r shared.TypeValue) string {
+	if r.Type == "square" {
+		return "square " + prim.ShowNumber(r.Value.(float64))
+	}
+	if r.Type == "circle" {
+		return "circle " + strconv.Itoa(int(r.Value.(int32)))
+	}
+	panic("Data.Variant: pattern match failure")
+}
+
+// shared/shared.go
+package shared
+
+type VariantRepInt struct {
+	Type  string
+	Value int32
+}
+
+type TypeValue struct {
+	Type  string
+	Value any
+}
+
+func Convert(value VariantRepInt) TypeValue {
+	return TypeValue{Type: value.Type, Value: value.Value}
+}
+
+type VariantRepNumber struct {
+	Type  string
+	Value float64
+}
+
+func Convert2(value VariantRepNumber) TypeValue {
+	return TypeValue{Type: value.Type, Value: value.Value}
+}
+
+type Circle struct {
+	Circle func(int32) int32
+}
+
+type Square struct {
+	Square func(float64) float64
+}

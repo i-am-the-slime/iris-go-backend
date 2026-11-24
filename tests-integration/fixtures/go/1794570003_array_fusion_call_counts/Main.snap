@@ -9,14 +9,14 @@ import shared2 "fixture/shared"
 var main_ = initializeMain_()
 
 func initializeMain_() shared2.MainResult {
-	var counter int32 = 0
-	var counter2 int32 = 0
+	var predicates int32 = 0
+	var mappings int32 = 0
 	var fused int32 = 0
 	var shared int32 = 0
 	earlyExit := false
 	kept := []int32{}
 	for _, x := range numbers {
-		counter += 1
+		predicates += 1
 		performed2 := x > 2
 		if performed2 {
 			kept = append(kept, x)
@@ -24,28 +24,28 @@ func initializeMain_() shared2.MainResult {
 	}
 	mapped := make([]int32, len(kept))
 	for index, x := range kept {
-		counter2 += 1
+		mappings += 1
 		performed2 := x * 3
 		mapped[index] = performed2
 	}
 	fused = foldLanes(mapped, 0)
-	predicateCalls := counter
-	modified := shared2.StateValue{State: 0, Value: counter2}
-	counter2 = modified.State
+	predicateCalls := predicates
+	modified := shared2.StateValue{State: 0, Value: mappings}
+	mappings = modified.State
 	fusedMappingCalls := modified.Value
 	mapped2 := make([]int32, len(numbers))
 	for index, x := range numbers {
-		counter2 += 1
+		mappings += 1
 		performed2 := x * 3
 		mapped2[index] = performed2
 	}
 	shared = foldLanes(mapped2, 0) + int32(len(mapped2))
-	modified2 := shared2.StateValue{State: 0, Value: counter2}
-	counter2 = modified2.State
+	modified2 := shared2.StateValue{State: 0, Value: mappings}
+	mappings = modified2.State
 	sharedMappingCalls := modified2.Value
 	mapped3 := make([]int32, len(numbers))
 	for index, x := range numbers {
-		counter2 += 1
+		mappings += 1
 		performed2 := x * 3
 		mapped3[index] = performed2
 	}
@@ -57,7 +57,7 @@ func initializeMain_() shared2.MainResult {
 		}
 	}
 	earlyExit = found
-	earlyExitMappingCalls := counter2
+	earlyExitMappingCalls := mappings
 	i := fused
 	i2 := shared
 	boolean := earlyExit

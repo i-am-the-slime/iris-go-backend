@@ -1,0 +1,89 @@
+---
+source: tests-integration/src/fixtures.rs
+---
+// Data/Maybe/maybe.go
+package maybe
+
+type Int int64
+
+const NoInt Int = 1 << 32
+
+// Data/Tuple/tuple.go
+package tuple
+
+type TupleStringInt struct {
+	First  string
+	Second int32
+}
+
+// main.go
+package main
+
+import (
+	"fixture/Data/Tuple"
+	journal "fixture/Journal_ffi"
+	"fixture/shared"
+	"github.com/i-am-the-slime/iris-go/foreignvalue"
+	"github.com/i-am-the-slime/iris-go/object"
+	"strconv"
+)
+
+func main() {
+	object2 := object.New[int32]()
+	for _, tuple := range []tuple.TupleStringInt{{First: "bearerAuth", Second: 1}, {First: "apiKey", Second: 2}} {
+		object.Poke(tuple.First, tuple.Second, object2)
+	}
+	var schemes any = shared.Convert(object2)
+	journal.Log(foreignvalue.TypeOf(schemes))
+	journal.Log(foreignvalue.UnsafeStringify(schemes))
+	x, found := object.Lookup("apiKey", shared.Convert2(schemes.(*struct {
+		Index map[string]int
+		Ints  int
+		Keys  []string
+		Vals  []any
+	})))
+	var result string
+	if found {
+		result = "(Just " + strconv.Itoa(int(x)) + ")"
+	} else {
+		result = "Nothing"
+	}
+	journal.Log(result)
+}
+
+// shared/shared.go
+package shared
+
+import "github.com/i-am-the-slime/iris-go/object"
+
+func Convert(value *struct {
+	Index map[string]int
+	Ints  int
+	Keys  []string
+	Vals  []int32
+}) *struct {
+	Index map[string]int
+	Ints  int
+	Keys  []string
+	Vals  []any
+} {
+	return object.FmapObject(value, func(element int32) any {
+		return element
+	})
+}
+
+func Convert2(value *struct {
+	Index map[string]int
+	Ints  int
+	Keys  []string
+	Vals  []any
+}) *struct {
+	Index map[string]int
+	Ints  int
+	Keys  []string
+	Vals  []int32
+} {
+	return object.FmapObject(value, func(element any) int32 {
+		return element.(int32)
+	})
+}

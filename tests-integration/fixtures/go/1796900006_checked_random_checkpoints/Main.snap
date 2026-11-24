@@ -658,7 +658,7 @@ func mainGoChecked(tree *redblack.Tree, kept *redblack_types.ListTree, folded in
 		} else {
 			result2 = folded
 		}
-		tree, kept, folded, state, n, treeOwned = grown, result, result2, next, n-1, !(next%7 == 0)
+		tree, kept, folded, state, n, treeOwned = grown, result, result2, next, n-1, next%7 != 0
 	}
 }
 
@@ -694,7 +694,7 @@ func mainGoReusing(tree *redblack.Tree, kept *redblack_types.ListTree, folded in
 	} else {
 		result2 = folded
 	}
-	return mainGoChecked(grown, result, result2, next, n-1, !(next%7 == 0))
+	return mainGoChecked(grown, result, result2, next, n-1, next%7 != 0)
 }
 
 func mainGoReusing2(acc *redblack_types.ListTree, list *redblack_types.ListTree) *redblack_types.ListTree {

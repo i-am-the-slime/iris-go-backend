@@ -95,15 +95,15 @@ func Describe(variant2 variant.AX_respondNowALater) string {
 	case variant.AX_respondNowALaterA:
 		return "A " + strconv.Itoa(int(variant2.Field0))
 	case variant.AX_respondNowALaterX_respondNow:
-		return DescribeX(variant.X_respondNowX_respondNowALater(variant2.Field0))
+		return DescribeFallback(variant.X_respondNowX_respondNowALater(variant2.Field0))
 	case variant.AX_respondNowALaterA2:
-		return DescribeX(variant.AX_respondNowALater2(variant2.Field0))
+		return DescribeFallback(variant.AX_respondNowALater2(variant2.Field0))
 	default: // variant.AX_respondNowALaterLater
-		return DescribeX(variant.LaterX_respondNowALater(variant2.Later))
+		return DescribeFallback(variant.LaterX_respondNowALater(variant2.Later))
 	}
 }
 
-func DescribeX(variant2 variant.X_respondNowALater) string {
+func DescribeFallback(variant2 variant.X_respondNowALater) string {
 	switch variant2.Tag {
 	case variant.X_respondNowALaterX_respondNow:
 		return "now " + strconv.Itoa(int(variant2.Field0))

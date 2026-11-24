@@ -68,12 +68,12 @@ var recorded = initializeRecorded()
 
 func initializeRecorded() int32 {
 	var total int32 = 0
-	i := program.ST(shared.InterpreterST{Emit: func(value int32) {
+	result := program.ST(shared.InterpreterST{Emit: func(value int32) {
 		total += value
 	}, Measure: func(text string) int32 {
 		return direct.CodePointLength(text)
 	}})
-	performed := total + i
+	performed := total + result
 	return performed
 }
 

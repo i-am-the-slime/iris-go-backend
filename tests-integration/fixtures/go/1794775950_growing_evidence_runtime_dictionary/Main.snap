@@ -110,3 +110,5 @@ func Convert3(value []int32) any {
 	}
 	return converted
 }
+
+// note: Main.showNested takes its Show dictionary at run time, because polymorphic recursion reaches it at ever larger types; only this definition is slower

@@ -1,0 +1,115 @@
+---
+source: tests-integration/src/fixtures.rs
+---
+// main.go
+package main
+
+import (
+	"fixture/shared"
+	"github.com/i-am-the-slime/iris-go/array"
+	"github.com/i-am-the-slime/iris-go/console"
+	"github.com/i-am-the-slime/iris-go/prim"
+	"strconv"
+	"strings"
+)
+
+type TodoMessage uint8
+
+const (
+	TodoMessageToggle TodoMessage = iota
+	TodoMessageDelete
+)
+
+type Self struct {
+	Emit  func(TodoMessage)
+	Props func() shared.SelectedTodo
+}
+
+var main_ = initializeMain_()
+
+func initializeMain_() []string {
+	performed := mounted()
+	return array.Append([]string{"box"}, performed)
+}
+
+func mounted() []string {
+	var toggles int32 = 0
+	scrutinee := Self{Props: func() shared.SelectedTodo {
+		return shared.SelectedTodo{Todo: shared.Todo{Title: "write tests", Done: false}, Selected: true}
+	}, Emit: func(value TodoMessage) {
+		switch value {
+		case TodoMessageToggle:
+			toggles += 1
+		default: // TodoMessageDelete
+		}
+	}}
+	selectedTodo := scrutinee.Props()
+	todo := selectedTodo.Todo
+	scrutinee.Emit(TodoMessageToggle)
+	var result string
+	if todo.Done {
+		result = " [x]"
+	} else {
+		result = " [ ]"
+	}
+	item := prim.Append(todo.Title, result)
+	scrutinee2 := shared.EmitProps{Props: func() shared.Count {
+		return shared.Count{Count: 3}
+	}, Emit: func(_ shared.TypeValue) {
+	}}
+	count2 := scrutinee2.Props()
+	count := count2.Count
+	scrutinee2.Emit(shared.Convert(shared.VariantRep{Type: "clicked", Value: count}))
+	clicks := "clicked " + strconv.Itoa(int(count))
+	toggled := toggles
+	return []string{item, clicks, strconv.Itoa(int(toggled))}
+}
+
+func main() {
+	console.Print("[" + strings.Join(main_, " ") + "]")
+}
+
+// shared/shared.go
+package shared
+
+type Ref[T any] struct {
+	Value T
+}
+
+type Todo struct {
+	Title string
+	Done  bool
+}
+
+type SelectedTodo struct {
+	Todo     Todo
+	Selected bool
+}
+
+type StateValue struct {
+	State int32
+	Value int32
+}
+
+type Count struct {
+	Count int32
+}
+
+type TypeValue struct {
+	Type  string
+	Value any
+}
+
+type EmitProps struct {
+	Emit  func(TypeValue)
+	Props func() Count
+}
+
+type VariantRep struct {
+	Type  string
+	Value int32
+}
+
+func Convert(value VariantRep) TypeValue {
+	return TypeValue{Type: value.Type, Value: value.Value}
+}
