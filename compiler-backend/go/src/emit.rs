@@ -24,6 +24,7 @@ mod deduplicate;
 mod diverging;
 mod divisions;
 mod effects;
+mod equality;
 mod existential;
 mod field_reads;
 mod foreign_data;
@@ -72,6 +73,7 @@ mod unzip;
 mod updates;
 mod vector;
 mod views;
+mod wrappers;
 
 use std::collections::BTreeSet;
 use std::sync::Arc;
@@ -182,13 +184,15 @@ where
         await_fibers(&mut declarations, await_, every_line);
     }
     let lines_aside = every_line.then(|| lines::set_aside(&mut declarations));
+    timed("wrappers", || wrappers::inline_wrappers(&mut declarations));
+    let structs = scalars::structs_of(&emitter.type_declarations);
+    timed("equality", || equality::compare_structs_whole(&mut declarations, &structs));
     timed("references", || references::promote_references(&mut declarations));
     timed("composites", || composites::take_composites_apart(&mut declarations));
     timed("immediate", || immediate::reduce_immediate_calls(&mut declarations));
     timed("conditions", || conditions::assign_conditions(&mut declarations));
     timed("aliases", || aliases::substitute_aliases(&mut declarations));
     timed("updates", || updates::update_in_place(&mut declarations));
-    let structs = scalars::structs_of(&emitter.type_declarations);
     timed("scalars", || scalars::split_struct_locals(&mut declarations, &structs));
     timed("stores", || scalars::store_fields_in_place(&mut declarations, &structs));
     timed("aliases", || aliases::substitute_aliases(&mut declarations));

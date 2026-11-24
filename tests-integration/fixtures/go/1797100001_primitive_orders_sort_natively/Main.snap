@@ -192,8 +192,8 @@ func initializeMain_() []string {
 	}
 	sorted10 := slices.Clone(entries)
 	slices.SortStableFunc(sorted10, func(x shared.Entry, y shared.Entry) int {
-		key := mainF(x)
-		key2 := mainF(y)
+		key := x.Rank
+		key2 := y.Rank
 		if key < key2 {
 			return -1
 		}
@@ -208,8 +208,8 @@ func initializeMain_() []string {
 	}
 	sorted11 := slices.Clone(entries)
 	slices.SortStableFunc(sorted11, func(x shared.Entry, y shared.Entry) int {
-		key := mainF(x)
-		key2 := mainF(y)
+		key := x.Rank
+		key2 := y.Rank
 		if key < key2 {
 			return -1
 		}
@@ -224,8 +224,8 @@ func initializeMain_() []string {
 	}
 	sorted12 := slices.Clone(entries)
 	slices.SortStableFunc(sorted12, func(x shared.Entry, y shared.Entry) int {
-		key := mainF2(x)
-		key2 := mainF2(y)
+		key := x.Initial
+		key2 := y.Initial
 		if key < key2 {
 			return -1
 		}
@@ -240,8 +240,8 @@ func initializeMain_() []string {
 	}
 	sorted13 := slices.Clone(entries)
 	slices.SortStableFunc(sorted13, func(x shared.Entry, y shared.Entry) int {
-		key := mainF3(x)
-		key2 := mainF3(y)
+		key := x.Name
+		key2 := y.Name
 		return prim.CompareString(key, key2)
 	})
 	mapped6 := make([]string, len(sorted13))
@@ -249,8 +249,8 @@ func initializeMain_() []string {
 		mapped6[index] = sorted13[index].Name
 	}
 	array2 := direct.SortBy(func(x shared.Entry, y shared.Entry) ordering.Ordering {
-		number := mainF4(x)
-		number2 := mainF4(y)
+		number := x.Weight
+		number2 := y.Weight
 		if number < number2 {
 			return ordering.OrderingLT
 		}
@@ -274,8 +274,8 @@ func initializeMain_() []string {
 	}
 	sorted14 := slices.Clone(entries)
 	slices.SortStableFunc(sorted14, func(x shared.Entry, y shared.Entry) int {
-		key := mainF5(x)
-		key2 := mainF5(y)
+		key := mainF(x)
+		key2 := mainF(y)
 		if key < key2 {
 			return -1
 		}
@@ -359,23 +359,7 @@ func byLength(x string, y string) ordering.Ordering {
 	return ordering.OrderingGT
 }
 
-func mainF(value shared.Entry) int32 {
-	return value.Rank
-}
-
-func mainF2(value shared.Entry) rune {
-	return value.Initial
-}
-
-func mainF3(value shared.Entry) string {
-	return value.Name
-}
-
-func mainF4(value shared.Entry) float64 {
-	return value.Weight
-}
-
-func mainF5(entry shared.Entry) int32 {
+func mainF(entry shared.Entry) int32 {
 	return entry.Rank*10 - prim.CodeUnitLength(entry.Name)
 }
 

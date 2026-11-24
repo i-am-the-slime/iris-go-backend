@@ -146,14 +146,6 @@ type TupleIntInt struct {
 	Second int32
 }
 
-func SndIntInt(tuple TupleIntInt) int32 {
-	return tuple.Second
-}
-
-func SndIntNumber(tuple TupleIntNumber) float64 {
-	return tuple.Second
-}
-
 // main.go
 package main
 
@@ -242,8 +234,8 @@ func main() {
 			}
 		}, performed)
 		mapped2 := make([]float64, len(array4))
-		for index, element := range array4 {
-			mapped2[index] = tuple.SndIntNumber(element)
+		for index := range array4 {
+			mapped2[index] = array4[index].Second
 		}
 		result = mapped2
 	} else {
@@ -281,15 +273,7 @@ func main() {
 				panic("Failed pattern match")
 			}
 			lst := result2.Second
-			scrutinee := mainComp(lst, pair.Second)
-			var result3 bool
-			switch scrutinee {
-			case ordering.OrderingEQ:
-				result3 = true
-			default:
-				result3 = false
-			}
-			if result3 == false {
+			if mainComp(lst, pair.Second) == ordering.OrderingEQ == false {
 				array2 = arraypkg.Bounded(append(array2, pair))
 			}
 		}
@@ -315,8 +299,8 @@ func main() {
 			}
 		}, performed)
 		mapped2 := make([]int32, len(array4))
-		for index, element := range array4 {
-			mapped2[index] = tuple.SndIntInt(element)
+		for index := range array4 {
+			mapped2[index] = array4[index].Second
 		}
 		result4 = mapped2
 	} else {

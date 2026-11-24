@@ -211,6 +211,56 @@ impl Simplifier<'_> {
             .then_some(function)
     }
 
+    /// A function that only looks a data type's constructor up in a table of text, as `show`
+    /// of an enumeration does, called more than once with an argument whose constructor
+    /// the call cannot tell, not even by choosing it: one function reads better than a copy of
+    /// the table at every call, and Go inlines it itself.
+    fn keeps_table_call(
+        &self,
+        id: FunctionId,
+        function: &Function,
+        arguments: &[Expression],
+    ) -> bool {
+        if self.uses[id.0 as usize] < 2 {
+            return false;
+        }
+        let ExpressionKind::Case { scrutinees, alternatives } = &function.body.kind else {
+            return false;
+        };
+        let [scrutinee] = scrutinees.as_slice() else { return false };
+        let ExpressionKind::Local(looked_up) = scrutinee.kind else { return false };
+        let Some(position) =
+            function.parameters.iter().position(|parameter| parameter.id == looked_up)
+        else {
+            return false;
+        };
+        let text = |expression: &Expression| {
+            matches!(expression.kind, ExpressionKind::Literal(Literal::String(_)))
+        };
+        let enumeration = match self.monotypes.get(scrutinee.monotype) {
+            Monotype::Data(data) => self.monotypes.enumeration_size(data).is_some(),
+            _ => false,
+        };
+        // Only text: a table of numbers or constructors, as `fromEnum`, is often looked up by
+        // code that inlining goes on to decide.
+        let table = alternatives.len() > 1
+            && enumeration
+            && alternatives.iter().all(|alternative| {
+                matches!(&alternative.body, Guarded::Unconditional(body) if text(body))
+            });
+        let unknown = |argument: &Expression| {
+            !matches!(
+                argument.kind,
+                ExpressionKind::Literal(_)
+                    | ExpressionKind::Construct { .. }
+                    | ExpressionKind::If { .. }
+                    | ExpressionKind::Case { .. }
+                    | ExpressionKind::Let { .. }
+            )
+        };
+        table && arguments.get(position).is_some_and(unknown)
+    }
+
     fn saturated_callback(&mut self, argument: Expression) -> Expression {
         let ExpressionKind::Function(id) = argument.kind else { return argument };
         let Some(function) = self.inlinable(id) else { return argument };
@@ -618,6 +668,9 @@ impl Simplifier<'_> {
                 {
                     return self.let_bindings(bindings, chosen);
                 }
+                if let Some(chosen) = self.enumeration_case(&scrutinees, &alternatives, monotype) {
+                    return self.let_bindings(bindings, chosen);
+                }
                 let case = match alternatives.first() {
                     None => Expression::new(
                         ExpressionKind::Fail(SmolStr::new_static(PATTERN_MATCH_FAILURE)),
@@ -734,8 +787,9 @@ impl Simplifier<'_> {
                 // A partial application inlines too: `beta` binds the given
                 // arguments outside the lambda over the missing parameters.
                 let inlined = self.inlinable(id).and_then(|function| {
-                    (!function.parameters.is_empty())
-                        .then(|| (function.parameters.clone(), function.body.clone()))
+                    (!function.parameters.is_empty()
+                        && !self.keeps_table_call(id, function, &arguments))
+                    .then(|| (function.parameters.clone(), function.body.clone()))
                 });
                 let Some((parameters, body)) = inlined else {
                     let arguments = match self.specialized_call(id, arguments, monotype) {
@@ -1150,6 +1204,19 @@ fn chooses_on(expression: &Expression, local: LocalId) -> bool {
             found |= scrutinees
                 .iter()
                 .any(|scrutinee| matches!(scrutinee.kind, ExpressionKind::Local(id) if id == local))
+        }
+        // An enumeration's value compared with a constructor, as its derived `eq` is.
+        ExpressionKind::Foreign {
+            foreign:
+                Foreign::Operator(crate::foreign::Operator::Compare(
+                    crate::foreign::Comparison::Equal | crate::foreign::Comparison::NotEqual,
+                )),
+            arguments,
+        } => {
+            let is_local = |argument: &Expression| matches!(argument.kind, ExpressionKind::Local(id) if id == local);
+            let is_constructor = |argument: &Expression| matches!(&argument.kind, ExpressionKind::Construct { arguments, .. } if arguments.is_empty());
+            found |= matches!(arguments.as_slice(), [left, right]
+                if is_local(left) && is_constructor(right) || is_constructor(left) && is_local(right));
         }
         _ => {}
     });

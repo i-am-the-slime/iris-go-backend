@@ -233,19 +233,7 @@ func area(value Shape) float64 {
 //line Main.purs:18:1
 func eq(left Colour, right Colour) bool {
 //line Main.purs:18:1
-	if left == ColourRed && right == ColourRed {
-//line Main.purs:18:1
-		return true
-//line Main.purs:18:1
-	}
-//line Main.purs:18:1
-	if left == ColourGreen && right == ColourGreen {
-//line Main.purs:18:1
-		return true
-//line Main.purs:18:1
-	}
-//line Main.purs:18:1
-	return false
+	return left == right
 //line Main.purs:18:1
 }
 

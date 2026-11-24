@@ -1,0 +1,313 @@
+---
+source: tests-integration/src/fixtures.rs
+---
+// Data/Ordering/ordering.go
+package ordering
+
+type Ordering uint8
+
+const (
+	OrderingLT Ordering = iota
+	OrderingGT
+	OrderingEQ
+)
+
+func Show(ordering Ordering) string {
+	switch ordering {
+	case OrderingLT:
+		return "LT"
+	case OrderingGT:
+		return "GT"
+	default: // OrderingEQ
+		return "EQ"
+	}
+}
+
+func AppendShowArrayOrdering(buffer []byte, array []Ordering) []byte {
+	buffer = append(buffer, "["...)
+	for index, element := range array {
+		if index > 0 {
+			buffer = append(buffer, ","...)
+		}
+		buffer = AppendShow(buffer, element)
+	}
+	buffer = append(buffer, "]"...)
+	return buffer
+}
+
+func AppendShow(buffer []byte, ordering Ordering) []byte {
+	switch ordering {
+	case OrderingLT:
+		buffer = append(buffer, "LT"...)
+	case OrderingGT:
+		buffer = append(buffer, "GT"...)
+	default: // OrderingEQ
+		buffer = append(buffer, "EQ"...)
+	}
+	return buffer
+}
+
+// Data/Show/show.go
+package show
+
+import (
+	"github.com/i-am-the-slime/iris-go/prim"
+	"strconv"
+)
+
+func ShowString(s string) string {
+	return prim.ShowString(s)
+}
+
+func ShowInt(i int32) string {
+	return strconv.Itoa(int(i))
+}
+
+func ShowBoolean(boolean bool) string {
+	if boolean {
+		return "true"
+	}
+	return "false"
+}
+
+func AppendShowArrayInt(buffer []byte, array []int32) []byte {
+	buffer = append(buffer, "["...)
+	for index, element := range array {
+		if index > 0 {
+			buffer = append(buffer, ","...)
+		}
+		buffer = strconv.AppendInt(buffer, int64(element), 10)
+	}
+	buffer = append(buffer, "]"...)
+	return buffer
+}
+
+func AppendShowArrayBoolean(buffer []byte, array []bool) []byte {
+	buffer = append(buffer, "["...)
+	for index, element := range array {
+		if index > 0 {
+			buffer = append(buffer, ","...)
+		}
+		buffer = strconv.AppendBool(buffer, element)
+	}
+	buffer = append(buffer, "]"...)
+	return buffer
+}
+
+func AppendShowArrayString(buffer []byte, array []string) []byte {
+	buffer = append(buffer, "["...)
+	for index, element := range array {
+		if index > 0 {
+			buffer = append(buffer, ","...)
+		}
+		buffer = prim.AppendShowString(buffer, element)
+	}
+	buffer = append(buffer, "]"...)
+	return buffer
+}
+
+// main.go
+package main
+
+import (
+	"fixture/Data/Ordering"
+	datashow "fixture/Data/Show"
+	"github.com/i-am-the-slime/iris-go/console"
+	"github.com/i-am-the-slime/iris-go/direct"
+	"strconv"
+	"strings"
+)
+
+type Suit uint8
+
+const (
+	SuitHearts Suit = iota
+	SuitSpades
+	SuitClubs
+)
+
+type Card struct {
+	Rank int32
+	Suit Suit
+}
+
+type Expression struct {
+	Add0 *Expression
+	Add1 *Expression
+	Leaf int32
+	Tag  uint8
+}
+
+const (
+	ExpressionLeaf = iota
+	ExpressionAdd
+)
+
+var main_ = initializeMain_()
+
+func initializeMain_() []string {
+	mapped := make([]string, len(cards))
+	for index, element := range cards {
+		mapped[index] = describe(element)
+	}
+	array := direct.SortBy(compareCardConsIntConsSuitNil, func(value ordering.Ordering) int32 {
+		switch value {
+		case ordering.OrderingGT:
+			return 1
+		case ordering.OrderingEQ:
+			return 0
+		default: // ordering.OrderingLT
+			return -1
+		}
+	}, cards)
+	count := min(len(cards), len(array))
+	built := make([]bool, count)
+	for index := range count {
+		element := sameCard(cards[index], array[index])
+		built[index] = element
+	}
+	array2 := direct.SortBy(ordered, func(value ordering.Ordering) int32 {
+		switch value {
+		case ordering.OrderingGT:
+			return 1
+		case ordering.OrderingEQ:
+			return 0
+		default: // ordering.OrderingLT
+			return -1
+		}
+	}, suits)
+	mapped2 := make([]string, len(array2))
+	for index, element := range array2 {
+		mapped2[index] = show(element)
+	}
+	array3 := direct.SortBy(ordered, func(value ordering.Ordering) int32 {
+		switch value {
+		case ordering.OrderingGT:
+			return 1
+		case ordering.OrderingEQ:
+			return 0
+		default: // ordering.OrderingLT
+			return -1
+		}
+	}, suits)
+	count2 := min(len(suits), len(array3))
+	built2 := make([]ordering.Ordering, count2)
+	for index := range count2 {
+		element := ordered(suits[index], array3[index])
+		built2[index] = element
+	}
+	array4 := []int32{3, 1}
+	array5 := []int32{2, 2}
+	count3 := min(len(array4), len(array5))
+	built3 := make([]bool, count3)
+	for index := range count3 {
+		value := array4[index]
+		value2 := array5[index]
+		element := value > value2
+		built3[index] = element
+	}
+	expressions := make([]Expression, 5)
+	expressions[0] = Expression{Tag: ExpressionAdd, Add0: &expressions[1], Add1: &expressions[2]}
+	expressions[1] = Expression{Tag: ExpressionLeaf, Leaf: 1}
+	expressions[2] = Expression{Tag: ExpressionAdd, Add0: &expressions[3], Add1: &expressions[4]}
+	expressions[3] = Expression{Tag: ExpressionLeaf, Leaf: 2}
+	expressions[4] = Expression{Tag: ExpressionLeaf, Leaf: 3}
+	array6 := []*Expression{&expressions[0]}
+	mapped3 := make([]int32, len(array6))
+	for index, element := range array6 {
+		mapped3[index] = scaled(3, element)
+	}
+	mapped4 := make([]bool, len(suits))
+	for index, element := range suits {
+		mapped4[index] = isSpades(element)
+	}
+	return []string{string(datashow.AppendShowArrayString(nil, mapped)), string(datashow.AppendShowArrayBoolean(nil, built)), string(datashow.AppendShowArrayString(nil, mapped2)), string(ordering.AppendShowArrayOrdering(nil, built2)), string(datashow.AppendShowArrayBoolean(nil, built3)), string(datashow.AppendShowArrayInt(nil, mapped3)), string(datashow.AppendShowArrayBoolean(nil, mapped4))}
+}
+
+func describe(card Card) string {
+	return strconv.Itoa(int(card.Rank)) + " of " + show(card.Suit)
+}
+
+var cards = initializeCards()
+
+func initializeCards() []Card {
+	mapped := make([]Card, len(suits))
+	for index, suit := range suits {
+		mapped[index] = Card{Rank: 7, Suit: suit}
+	}
+	return mapped
+}
+
+func sameCard(a Card, b Card) bool {
+	return a == b
+}
+
+func show(suit Suit) string {
+	switch suit {
+	case SuitHearts:
+		return "hearts"
+	case SuitSpades:
+		return "spades"
+	default: // SuitClubs
+		return "clubs"
+	}
+}
+
+var suits []Suit = []Suit{SuitClubs, SuitHearts, SuitSpades}
+
+func ordered(left Suit, right Suit) ordering.Ordering {
+	if left == right {
+		return ordering.OrderingEQ
+	}
+	if left < right {
+		return ordering.OrderingLT
+	}
+	return ordering.OrderingGT
+}
+
+func scaled(factor int32, value *Expression) int32 {
+	switch value.Tag {
+	case ExpressionLeaf:
+		return value.Leaf * factor
+	default: // ExpressionAdd
+		return scaled(factor, value.Add0) + scaled(factor, value.Add1)
+	}
+}
+
+func isSpades(left Suit) bool {
+	return left == SuitSpades
+}
+
+func compareCardConsIntConsSuitNil(ra Card, rb Card) ordering.Ordering {
+	i := ra.Rank
+	i2 := rb.Rank
+	var left ordering.Ordering
+	if i < i2 {
+		left = ordering.OrderingLT
+	} else if i == i2 {
+		left = ordering.OrderingEQ
+	} else {
+		left = ordering.OrderingGT
+	}
+	if left == ordering.OrderingEQ == false {
+		return left
+	}
+	left2 := ra.Suit
+	right := rb.Suit
+	var left3 ordering.Ordering
+	if left2 == right {
+		left3 = ordering.OrderingEQ
+	} else if left2 < right {
+		left3 = ordering.OrderingLT
+	} else {
+		left3 = ordering.OrderingGT
+	}
+	if left3 == ordering.OrderingEQ == false {
+		return left3
+	}
+	return ordering.OrderingEQ
+}
+
+func main() {
+	console.Print("[" + strings.Join(main_, " ") + "]")
+}

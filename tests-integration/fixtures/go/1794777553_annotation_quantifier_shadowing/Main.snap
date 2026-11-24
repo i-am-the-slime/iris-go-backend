@@ -60,14 +60,6 @@ type TupleTupleStringStringInt struct {
 	Second int32
 }
 
-func SndStringBoolean(tuple TupleStringBoolean) bool {
-	return tuple.Second
-}
-
-func SndStringString(tuple TupleStringString) string {
-	return tuple.Second
-}
-
 // main.go
 package main
 
@@ -103,8 +95,8 @@ func initializeMain_() []string {
 	}
 	array2 := arraypkg.Bounded(elements)
 	mapped2 := make([]string, len(array2))
-	for index, element := range array2 {
-		mapped2[index] = show.Show(tuple.SndStringBoolean(element))
+	for index := range array2 {
+		mapped2[index] = show.Show(array2[index].Second)
 	}
 	array3 := []string{"kept"}
 	mapped3 := make([]tuple.TupleStringString, len(array3))
@@ -123,8 +115,8 @@ func initializeMain_() []string {
 	}
 	array4 := arraypkg.Bounded(elements2)
 	mapped4 := make([]string, len(array4))
-	for index, element := range array4 {
-		mapped4[index] = tuple.SndStringString(element)
+	for index := range array4 {
+		mapped4[index] = array4[index].Second
 	}
 	return arraypkg.Append(mapped2, mapped4)
 }

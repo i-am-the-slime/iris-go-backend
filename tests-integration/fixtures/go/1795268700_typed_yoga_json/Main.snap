@@ -324,14 +324,6 @@ type Tuple struct {
 	Second any
 }
 
-func Fst(tuple *Tuple) any {
-	return tuple.First
-}
-
-func Snd(tuple *Tuple) any {
-	return tuple.Second
-}
-
 // Foreign/foreign.go
 package foreign
 

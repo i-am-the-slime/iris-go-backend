@@ -20,7 +20,8 @@
 use super::Simplifier;
 use crate::foreign::{Comparison, Foreign, Operator};
 use crate::monomorphic::{
-    Alternative, Expression, ExpressionKind, Guard, Guarded, Literal, LocalId, SourcePosition,
+    Alternative, Expression, ExpressionKind, Guard, Guarded, Literal, LocalId, PatternKind,
+    SourcePosition,
 };
 use crate::monotype::{Monotype, MonotypeId};
 use crate::primitives::{Int64Operation, Signedness};
@@ -133,6 +134,81 @@ impl Simplifier<'_> {
         let right = self.shared_operand(right, "compared", &mut bindings);
         let boolean = self.monotypes.intern(Monotype::Boolean);
         let chosen = self.choose(&branches, ALL, native, &left, &right, boolean, monotype);
+        if bindings.is_empty() {
+            return Some(chosen);
+        }
+        Some(Expression::new(ExpressionKind::Let { bindings, body: Box::new(chosen) }, monotype))
+    }
+
+    /// A case of two values of an enumeration whose every alternative only
+    /// tells the constructors' order apart, as derived `eq` and `compare`
+    /// are, as choices by comparisons of the two: `a == b`, or `if a < b then
+    /// LT else if a == b then EQ else GT`. Go's constants of an enumeration
+    /// count up in the order of the constructors.
+    pub(super) fn enumeration_case(
+        &mut self,
+        scrutinees: &[Expression],
+        alternatives: &[Alternative],
+        monotype: MonotypeId,
+    ) -> Option<Expression> {
+        let [left, right] = scrutinees else { return None };
+        let Monotype::Data(data) = self.monotypes.get(left.monotype) else { return None };
+        // A constructor the case already knows, or a choice of constructors, lets the
+        // alternatives choose by it instead: `compare x y == GT` is `x > y`.
+        let undecided = |scrutinee: &Expression| {
+            !matches!(
+                scrutinee.kind,
+                ExpressionKind::Construct { .. }
+                    | ExpressionKind::If { .. }
+                    | ExpressionKind::Case { .. }
+                    | ExpressionKind::Let { .. }
+            )
+        };
+        if left.monotype != right.monotype || !undecided(left) || !undecided(right) {
+            return None;
+        }
+        let size = self.monotypes.enumeration_size(data)?;
+        let only_constructors = alternatives
+            .iter()
+            .flat_map(|alternative| &alternative.patterns)
+            .all(|pattern| match &pattern.kind {
+                PatternKind::Wildcard => true,
+                PatternKind::Constructor { arguments, .. } => arguments.is_empty(),
+                _ => false,
+            });
+        if !only_constructors {
+            return None;
+        }
+        let mut branches: Vec<OutcomeBranch> = vec![];
+        for first in 0..size {
+            for second in 0..size {
+                let chosen = alternatives
+                    .iter()
+                    .find(|alternative| matches_constructors(alternative, [first, second]))?;
+                let Guarded::Unconditional(body) = &chosen.body else { return None };
+                let outcome = match first.cmp(&second) {
+                    std::cmp::Ordering::Less => LESS,
+                    std::cmp::Ordering::Equal => EQUAL,
+                    std::cmp::Ordering::Greater => GREATER,
+                };
+                match branches.iter_mut().find(|(outcomes, _, _)| outcomes.and(outcome) != NONE) {
+                    Some((_, existing, _)) if existing != body => return None,
+                    Some(_) => {}
+                    None => match branches.iter_mut().find(|(_, existing, _)| existing == body) {
+                        Some((joined, _, _)) => *joined = joined.or(outcome),
+                        None => branches.push((outcome, body.clone(), chosen.position)),
+                    },
+                }
+            }
+        }
+        let possible =
+            branches.iter().fold(NONE, |possible, (outcomes, _, _)| possible.or(*outcomes));
+        let mut bindings = vec![];
+        let left = self.shared_operand(left.clone(), "compared", &mut bindings);
+        let right = self.shared_operand(right.clone(), "compared", &mut bindings);
+        let boolean = self.monotypes.intern(Monotype::Boolean);
+        let chosen =
+            self.choose(&branches, possible, Native::Operator, &left, &right, boolean, monotype);
         if bindings.is_empty() {
             return Some(chosen);
         }
@@ -295,6 +371,11 @@ fn constant_outcome(native: Native, left: &Expression, right: &Expression) -> Op
                 ExpressionKind::Literal(Literal::Char(x)),
                 ExpressionKind::Literal(Literal::Char(y)),
             ) => x.cmp(y),
+            // Constructors of an enumeration, which only `enumeration_case` compares.
+            (
+                ExpressionKind::Construct { constructor: x, arguments: no_fields, .. },
+                ExpressionKind::Construct { constructor: y, arguments: none_either, .. },
+            ) if no_fields.is_empty() && none_either.is_empty() => x.cmp(y),
             _ => return None,
         },
         Native::Long(signedness) => {
@@ -309,6 +390,15 @@ fn constant_outcome(native: Native, left: &Expression, right: &Expression) -> Op
         std::cmp::Ordering::Less => LESS,
         std::cmp::Ordering::Equal => EQUAL,
         std::cmp::Ordering::Greater => GREATER,
+    })
+}
+
+/// Whether an alternative of nullary constructor patterns and wildcards
+/// matches these constructors.
+fn matches_constructors(alternative: &Alternative, constructors: [usize; 2]) -> bool {
+    alternative.patterns.iter().zip(constructors).all(|(pattern, index)| match &pattern.kind {
+        PatternKind::Constructor { constructor, .. } => *constructor == index,
+        _ => true,
     })
 }
 

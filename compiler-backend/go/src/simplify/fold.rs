@@ -8,7 +8,9 @@ use std::cmp::Ordering;
 
 use super::Simplifier;
 use crate::foreign::{self, Comparison, Foreign, Operator};
-use crate::monomorphic::{Expression, ExpressionKind, Literal};
+use crate::monomorphic::{
+    Alternative, Expression, ExpressionKind, Guarded, Literal, Pattern, PatternKind,
+};
 use crate::monotype::{Monotype, MonotypeId};
 use crate::primitives::{Int64Operation, Int64Value};
 use crate::purity::is_discardable;
@@ -189,8 +191,77 @@ impl Simplifier<'_> {
                 _ => operation(operator, vec![left, right], monotype),
             },
             Operator::IntAdd | Operator::StringAppend => associate(operator, left, right, monotype),
+            Operator::Compare(comparison) => {
+                match self.constructor_test(comparison, &left, &right, monotype) {
+                    Some(tested) => tested,
+                    None => operation(operator, vec![left, right], monotype),
+                }
+            }
             _ => operation(operator, vec![left, right], monotype),
         }
+    }
+
+    /// A value of an enumeration compared with a constructor, as `enumeration_case` writes
+    /// `eq` once inlined: two constructors fold, and a choice of constructors is a case of it,
+    /// whose alternatives then choose by what chose the constructor: `compare x y == GT` is
+    /// `x > y`.
+    fn constructor_test(
+        &mut self,
+        comparison: Comparison,
+        left: &Expression,
+        right: &Expression,
+        monotype: MonotypeId,
+    ) -> Option<Expression> {
+        let equal = comparison == Comparison::Equal;
+        let constructor = |expression: &Expression| match &expression.kind {
+            ExpressionKind::Construct { data, constructor, arguments } if arguments.is_empty() => {
+                Some((data.clone(), *constructor))
+            }
+            _ => None,
+        };
+        let is_choice = |expression: &Expression| {
+            matches!(
+                expression.kind,
+                ExpressionKind::If { .. }
+                    | ExpressionKind::Case { .. }
+                    | ExpressionKind::Let { .. }
+            )
+        };
+        let (chosen, (data, index)) = match (constructor(left), constructor(right)) {
+            (Some((_, first)), Some((_, second))) => {
+                let ordering = first.cmp(&second);
+                let holds = match comparison {
+                    Comparison::Equal => ordering.is_eq(),
+                    Comparison::NotEqual => ordering.is_ne(),
+                    Comparison::LessThan => ordering.is_lt(),
+                    Comparison::LessThanOrEqual => ordering.is_le(),
+                    Comparison::GreaterThan | Comparison::GreaterThanOrUnordered => {
+                        ordering.is_gt()
+                    }
+                    Comparison::GreaterThanOrEqual | Comparison::GreaterThanOrEqualOrUnordered => {
+                        ordering.is_ge()
+                    }
+                };
+                return Some(boolean_literal(holds, monotype));
+            }
+            _ if !matches!(comparison, Comparison::Equal | Comparison::NotEqual) => return None,
+            (None, Some(tested)) if is_choice(left) => (left.clone(), tested),
+            (Some(tested), None) if is_choice(right) => (right.clone(), tested),
+            _ => return None,
+        };
+        let pattern = |kind| Pattern { kind, monotype: chosen.monotype };
+        let tested = PatternKind::Constructor { data, constructor: index, arguments: vec![] };
+        let alternative = |pattern, outcome| Alternative {
+            patterns: vec![pattern],
+            body: Guarded::Unconditional(boolean_literal(outcome, monotype)),
+            position: None,
+        };
+        let alternatives = vec![
+            alternative(pattern(tested), equal),
+            alternative(pattern(PatternKind::Wildcard), !equal),
+        ];
+        let kind = ExpressionKind::Case { scrutinees: vec![chosen], alternatives };
+        Some(self.expression(Expression::new(kind, monotype)))
     }
 }
 
