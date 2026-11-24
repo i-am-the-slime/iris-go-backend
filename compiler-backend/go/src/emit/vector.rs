@@ -165,11 +165,11 @@ where
     where
         'p: 'e,
     {
+        if self.vector_kernels.run_once.contains(&std::ptr::from_ref(&arguments[0])) {
+            return None;
+        }
         let (arity, result_element) = match iteration {
             Iteration::FoldLeft => (2, self.element(monotype)?),
-            _ if self.vector_kernels.run_once.contains(&std::ptr::from_ref(&arguments[0])) => {
-                return None;
-            }
             Iteration::Map => {
                 if self.recycled_maps.contains_key(&std::ptr::from_ref(&arguments[0])) {
                     return None;

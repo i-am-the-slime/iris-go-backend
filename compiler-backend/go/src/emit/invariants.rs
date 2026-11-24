@@ -12,7 +12,7 @@
 use rustc_hash::{FxHashMap, FxHashSet};
 
 use super::lengths::written_by_literals;
-use crate::go_traversal::{Walk, each_expression_in_declaration};
+use crate::go_traversal::{self, Walk, each_expression_in_declaration};
 use crate::naming::numbered;
 use crate::syntax::{
     DeclarationNames, GoDeclaration, GoExpression, GoStatement, GoType, Name, statements_names,
@@ -82,9 +82,19 @@ impl Function<'_> {
                 hoisted.push(body.remove(at));
                 continue;
             }
+            let (current, rest) = body[at..].split_at_mut(1);
+            if let GoStatement::Define { names: defined, values } = &current[0]
+                && let ([defined], [value]) = (defined.as_slice(), values.as_slice())
+                && is_iterable_literal(value)
+                && names.bound_once(defined)
+                && is_invariant(value, &names)
+                && is_only_iterated(rest, defined)
+            {
+                hoisted.push(body.remove(at));
+                continue;
+            }
             if let GoStatement::Range { element, iterable, body: inner, .. } = &mut body[at]
-                && matches!(iterable, GoExpression::Composite { type_: GoType::Slice(_), .. })
-                && is_built_without_calls(iterable)
+                && is_iterable_literal(iterable)
                 && is_invariant(iterable, &names)
                 && !writes(inner, element)
             {
@@ -168,6 +178,45 @@ fn is_invariant(value: &GoExpression, loop_names: &LoopNames) -> bool {
     own && references
         .iter()
         .all(|name| bindings.contains_key(name) || !loop_names.changed.contains(name))
+}
+
+fn is_iterable_literal(value: &GoExpression) -> bool {
+    matches!(value, GoExpression::Composite { type_: GoType::Slice(_), .. })
+        && is_built_without_calls(value)
+}
+
+/// Whether the statements read the slice only by ranging over it, so that no iteration can
+/// change what the next one sees.
+fn is_only_iterated(statements: &mut [GoStatement], slice: &str) -> bool {
+    let mut references = 0;
+    statements_names(statements, &mut |name| {
+        if let Name::Reference(name) | Name::Written(name) = name {
+            references += usize::from(name == slice);
+        }
+    });
+    let mut iterations = Iterations { slice, count: 0, written_element: false };
+    statements.iter_mut().for_each(|statement| iterations.statement(statement));
+    references == iterations.count && !iterations.written_element
+}
+
+struct Iterations<'s> {
+    slice: &'s str,
+    count: usize,
+    written_element: bool,
+}
+
+impl Walk for Iterations<'_> {
+    fn statement(&mut self, statement: &mut GoStatement) {
+        if let GoStatement::Range { element, iterable, body, .. } = statement
+            && matches!(iterable, GoExpression::Identifier(name) if name == self.slice)
+        {
+            self.count += 1;
+            self.written_element |= writes(body, element);
+        }
+        go_traversal::statement(self, statement);
+    }
+
+    fn expression(&mut self, _: &mut GoExpression) {}
 }
 
 /// Whether building the value calls nothing, which could run an effect; a function literal in

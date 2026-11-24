@@ -227,8 +227,9 @@ func traversals() {
 		effect()
 	}
 	Journal_ffi.Log("nested")
+	inners := []string{"a", "b"}
 	for _, outer := range []int32{1, 2} {
-		for _, inner := range []string{"a", "b"} {
+		for _, inner := range inners {
 			Journal_ffi.Log(strconv.Itoa(int(outer)) + inner)
 		}
 	}
