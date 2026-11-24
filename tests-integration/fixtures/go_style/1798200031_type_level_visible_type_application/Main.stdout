@@ -12,7 +12,7 @@ matched
 ["z"]
 true
 { len: 1, name: "abc" }
-0
-recordOf
+2
+chained
 ["m1","m2"]
 (Just "in Just")
