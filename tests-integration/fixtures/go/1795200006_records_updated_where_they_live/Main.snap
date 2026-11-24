@@ -35,19 +35,19 @@ func initializeMain_() float64 {
 	accumulatorVy := 0.0
 	accumulatorX := 0.5
 	accumulatorY := 0.5
-	for otherIndex := range bodies {
-		accumulatorVx += (bodies[otherIndex].X - accumulatorX) * bodies[otherIndex].Mass
-		accumulatorVy += (bodies[otherIndex].Y - accumulatorY) * bodies[otherIndex].Mass
+	for _, other := range bodies {
+		accumulatorVx += (other.X - accumulatorX) * other.Mass
+		accumulatorVy += (other.Y - accumulatorY) * other.Mass
 	}
 	accumulatorVx2 := 0.0
 	accumulatorVy2 := 0.0
 	accumulatorX2 := 0.5
 	accumulatorY2 := 0.5
-	for index := range bodies {
+	for index, body := range bodies {
 		i := int32(index)
 		if 1 != i {
-			accumulatorVx2 += (bodies[index].X - accumulatorX2) * bodies[index].Mass
-			accumulatorVy2 += (bodies[index].Y - accumulatorY2) * bodies[index].Mass
+			accumulatorVx2 += (body.X - accumulatorX2) * body.Mass
+			accumulatorVy2 += (body.Y - accumulatorY2) * body.Mass
 		}
 	}
 	accumulator := 0.0

@@ -98,18 +98,18 @@ var main_ = initializeMain_()
 func initializeMain_() []string {
 	bodies := []shared.Body{{X: 0.0, Y: 0.0, Vx: 0.0, Vy: 0.0, Mass: 1.0}, {X: 1.0, Y: 2.0, Vx: 0.5, Vy: 0.0, Mass: 0.5}, {X: -1.0, Y: 0.5, Vx: 0.0, Vy: 0.25, Mass: 2.0}}
 	mapped := make([]shared.Body, len(bodies))
-	for index := range bodies {
+	for index, body := range bodies {
 		i := int32(index)
-		accumulatorMass := bodies[index].Mass
-		accumulatorVx := bodies[index].Vx
-		accumulatorVy := bodies[index].Vy
-		accumulatorX := bodies[index].X
-		accumulatorY := bodies[index].Y
-		for index2 := range bodies {
+		accumulatorMass := body.Mass
+		accumulatorVx := body.Vx
+		accumulatorVy := body.Vy
+		accumulatorX := body.X
+		accumulatorY := body.Y
+		for index2, body2 := range bodies {
 			i2 := int32(index2)
 			if i != i2 {
-				accumulatorVx += (bodies[index2].X - accumulatorX) * bodies[index2].Mass
-				accumulatorVy += (bodies[index2].Y - accumulatorY) * bodies[index2].Mass
+				accumulatorVx += (body2.X - accumulatorX) * body2.Mass
+				accumulatorVy += (body2.Y - accumulatorY) * body2.Mass
 			}
 		}
 		accumulatorX += accumulatorVx

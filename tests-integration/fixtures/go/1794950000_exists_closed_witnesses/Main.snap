@@ -98,30 +98,30 @@ var main_ = initializeMain_()
 
 func initializeMain_() []string {
 	mapped := make([]string, len(things))
-	for index := range things {
+	for index, thing := range things {
 		var result string
-		switch things[index].Tag {
+		switch thing.Tag {
 		case ExistsDescribedInt:
-			result = things[index].Int.Second(things[index].Int.Third(things[index].Int.First))
+			result = thing.Int.Second(thing.Int.Third(thing.Int.First))
 		case ExistsDescribedString:
-			result = things[index].String.Second(things[index].String.Third(things[index].String.First))
+			result = thing.String.Second(thing.String.Third(thing.String.First))
 		default: // ExistsDescribedArrayNumber
-			result = things[index].ArrayNumber.Second(things[index].ArrayNumber.Third(things[index].ArrayNumber.First))
+			result = thing.ArrayNumber.Second(thing.ArrayNumber.Third(thing.ArrayNumber.First))
 		}
 		var result2 string
-		switch things[index].Tag {
+		switch thing.Tag {
 		case ExistsDescribedInt:
-			value := things[index].Int.First
-			describe := things[index].Int.Second
-			result2 = prim.Append(describe(value), describe(things[index].Int.Third(value)))
+			value := thing.Int.First
+			describe := thing.Int.Second
+			result2 = prim.Append(describe(value), describe(thing.Int.Third(value)))
 		case ExistsDescribedString:
-			value := things[index].String.First
-			describe := things[index].String.Second
-			result2 = prim.Append(describe(value), describe(things[index].String.Third(value)))
+			value := thing.String.First
+			describe := thing.String.Second
+			result2 = prim.Append(describe(value), describe(thing.String.Third(value)))
 		default: // ExistsDescribedArrayNumber
-			value := things[index].ArrayNumber.First
-			describe := things[index].ArrayNumber.Second
-			result2 = prim.Append(describe(value), describe(things[index].ArrayNumber.Third(value)))
+			value := thing.ArrayNumber.First
+			describe := thing.ArrayNumber.Second
+			result2 = prim.Append(describe(value), describe(thing.ArrayNumber.Third(value)))
 		}
 		mapped[index] = prim.Append(result, result2)
 	}

@@ -49,6 +49,9 @@ use crate::monotype::{Monotype, MonotypeId};
 use crate::naming::VALUE;
 use crate::syntax::{GoExpression, GoStatement, GoType, SourceLine};
 
+/// The most elements of a literal prefix stored in one assignment.
+const PREFIX_ON_ONE_LINE: usize = 4;
+
 /// The stages between an array and the consumer that reads it.
 pub(super) struct Pipeline<'e> {
     source: Source<'e>,
@@ -385,14 +388,16 @@ where
                 let count = self.value(count, out)?;
                 let count = match count {
                     GoExpression::Integer(count) => GoExpression::Integer(count.max(0)),
-                    count => {
-                        let count = as_int(count);
-                        let count = call(
-                            identifier_expression("max"),
-                            vec![count, GoExpression::Integer(0)],
-                        );
-                        self.hoist(count, "count", out)
-                    }
+                    count => match as_int(count) {
+                        count if is_go_length(&count) => count,
+                        count => {
+                            let count = call(
+                                identifier_expression("max"),
+                                vec![count, GoExpression::Integer(0)],
+                            );
+                            self.hoist(count, "count", out)
+                        }
+                    },
                 };
                 let replicated = self.value(value, out)?;
                 let replicated = self.typed_constant(replicated, value.monotype)?;
@@ -978,6 +983,17 @@ where
         array: &Expression,
         out: &mut Vec<GoStatement>,
     ) -> GoResult<Option<GoExpression>> {
+        Ok(self.built_with_spare(array, 0, out)?.map(|(built, _)| built))
+    }
+
+    /// The array a zip, a scan or a literal prefix of a fused pipeline builds, with room for
+    /// `spare` more elements when its length is known, which the boolean then says.
+    pub(super) fn built_with_spare(
+        &mut self,
+        array: &Expression,
+        spare: usize,
+        out: &mut Vec<GoStatement>,
+    ) -> GoResult<Option<(GoExpression, bool)>> {
         let ExpressionKind::Foreign { foreign, arguments } = &array.kind else { return Ok(None) };
         if !matches!(self.monotypes.get(array.monotype), Monotype::Array(_)) {
             return Ok(None);
@@ -987,13 +1003,13 @@ where
             && let Some(vectorised) =
                 self.vectorised(Iteration::ZipWith, arguments, array.monotype, out)?
         {
-            return Ok(Some(vectorised));
+            return Ok(Some((vectorised, false)));
         }
         let scanned =
             foreign.calls(ARRAY_SCANL) && self.stage_parts(array, Demand::FORWARD, false).is_some();
         if zipped || scanned {
             let pipeline = self.pipeline(array, Demand::FORWARD, Need::Value, out)?;
-            return self.materialized(pipeline, vec![], array.monotype, out).map(Some);
+            return self.materialized(pipeline, vec![], spare, array.monotype, out).map(Some);
         }
         if foreign.calls(ARRAY_APPEND)
             && let [prefix, rest] = arguments.as_slice()
@@ -1004,11 +1020,17 @@ where
             let mut values = vec![];
             for element in elements {
                 let value = self.value(element, out)?;
-                let value = self.typed_constant(value, element.monotype)?;
-                values.push(self.hoist(value, "first", out));
+                // A slot of the built array gives a constant its type.
+                let value = if is_settled(&value) {
+                    value
+                } else {
+                    let value = self.typed_constant(value, element.monotype)?;
+                    self.hoist(value, "first", out)
+                };
+                values.push(value);
             }
             let pipeline = self.pipeline(rest, Demand::FORWARD, Need::Value, out)?;
-            return self.materialized(pipeline, values, array.monotype, out).map(Some);
+            return self.materialized(pipeline, values, spare, array.monotype, out).map(Some);
         }
         Ok(None)
     }
@@ -1017,25 +1039,26 @@ where
         &mut self,
         pipeline: Pipeline<'_>,
         prefix: Vec<GoExpression>,
+        spare: usize,
         monotype: MonotypeId,
         out: &mut Vec<GoStatement>,
-    ) -> GoResult<GoExpression> {
+    ) -> GoResult<(GoExpression, bool)> {
         let array_type = self.go_type(monotype)?;
         let built = self.temporary("built");
         let offset = prefix.len();
         let known = pipeline.count();
+        let plus = |count: &GoExpression, more: usize| match (more, count) {
+            (0, count) => count.clone(),
+            (more, GoExpression::Integer(count)) => GoExpression::Integer(count + more as i64),
+            (more, count) => binary("+", count.clone(), GoExpression::Integer(more as i64)),
+        };
         let allocation = match &known {
             Some(count) => {
-                let count = match (offset, count) {
-                    (0, count) => count.clone(),
-                    (offset, GoExpression::Integer(count)) => {
-                        GoExpression::Integer(count + offset as i64)
-                    }
-                    (offset, count) => {
-                        binary("+", count.clone(), GoExpression::Integer(offset as i64))
-                    }
-                };
-                call(identifier_expression("make"), vec![GoExpression::Type(array_type), count])
+                let mut arguments = vec![GoExpression::Type(array_type), plus(count, offset)];
+                if spare > 0 {
+                    arguments.push(plus(count, offset + spare));
+                }
+                call(identifier_expression("make"), arguments)
             }
             None => {
                 let fields = prefix.iter().map(|value| (None, value.clone())).collect();
@@ -1044,12 +1067,19 @@ where
         };
         out.push(GoStatement::Define { names: vec![built.clone()], values: vec![allocation] });
         if known.is_some() {
-            for (position, value) in prefix.into_iter().enumerate() {
-                let slot = GoExpression::Integer(position as i64);
-                out.push(GoStatement::Assign {
-                    targets: vec![indexed(&built, slot)],
-                    values: vec![value],
-                });
+            let slot = |position: usize| indexed(&built, GoExpression::Integer(position as i64));
+            if prefix.len() <= PREFIX_ON_ONE_LINE {
+                let targets = (0..prefix.len()).map(slot).collect();
+                if !prefix.is_empty() {
+                    out.push(GoStatement::Assign { targets, values: prefix });
+                }
+            } else {
+                for (position, value) in prefix.into_iter().enumerate() {
+                    out.push(GoStatement::Assign {
+                        targets: vec![slot(position)],
+                        values: vec![value],
+                    });
+                }
             }
         }
         let saved = self.tail_loop.take();
@@ -1090,7 +1120,7 @@ where
         opened.body.body().push(stored);
         let statement = self.close(opened.body);
         out.push(statement);
-        Ok(identifier_expression(&built))
+        Ok((identifier_expression(&built), known.is_some()))
     }
 
     /// Performs an effect for every element of a pipeline, running its stages
@@ -1229,6 +1259,34 @@ fn stepped_value(steps: &Steps, index: &str) -> GoExpression {
     match steps.first {
         GoExpression::Integer(0) => offset,
         _ => binary("+", steps.first.clone(), offset),
+    }
+}
+
+/// Whether the value is Go's `len` of something, converted or not, which is never negative.
+fn is_go_length(value: &GoExpression) -> bool {
+    match value {
+        GoExpression::Conversion { value, .. } => is_go_length(value),
+        GoExpression::Call { function, .. } => {
+            matches!(&**function, GoExpression::Identifier(name) if name == "len")
+        }
+        _ => false,
+    }
+}
+
+/// Whether the value is a constant, a local, or a composite of them, which reads the same
+/// wherever it is written.
+fn is_settled(value: &GoExpression) -> bool {
+    match value {
+        GoExpression::Identifier(_)
+        | GoExpression::Qualified { .. }
+        | GoExpression::Integer(_)
+        | GoExpression::Float(_)
+        | GoExpression::String(_)
+        | GoExpression::Rune(_)
+        | GoExpression::Boolean(_) => true,
+        GoExpression::Unary { operator: "-", operand } => is_settled(operand),
+        GoExpression::Composite { fields, .. } => fields.iter().all(|(_, field)| is_settled(field)),
+        _ => false,
     }
 }
 

@@ -240,6 +240,18 @@ where
             let write = GoFunction { package: GoPackage::Object, name };
             return Ok(call(self.go_function(write), values));
         }
+        if let Foreign::Snoc = foreign
+            && let Some((built, exact)) = self.built_with_spare(&arguments[0], 1, out)?
+        {
+            // The slice gives an appended constant its type.
+            let element = self.value(&arguments[1], out)?;
+            let appended = call(identifier_expression("append"), vec![built, element]);
+            if exact {
+                return Ok(appended);
+            }
+            let bounded = GoFunction { package: GoPackage::Array, name: "Bounded" };
+            return Ok(call(self.go_function(bounded), vec![appended]));
+        }
         if let Foreign::Snoc = foreign {
             let array = self.value(&arguments[0], out)?;
             let element = self.value(&arguments[1], out)?;

@@ -337,35 +337,29 @@ func initializeMain_() []string {
 	for range 4 {
 		accumulator4 += value5
 	}
-	first := int32(0)
 	var scanned15 int32 = 1
 	array30 := []int32{1, 2, 3}
 	built13 := make([]int32, len(array30)+1)
-	built13[0] = first
+	built13[0] = 0
 	for index, element := range array30 {
 		scanned15 = semiring.Add(scanned15, element)
 		built13[index+1] = scanned15
 	}
-	first2 := int32(0)
 	array31 := []int32{1, 2, 3}
-	built14 := []int32{first2}
+	built14 := []int32{0}
 	for _, value := range array31 {
 		if value > 1 {
 			built14 = append(built14, value)
 		}
 	}
-	first3 := int32(7)
-	first4 := int32(8)
 	array32 := []int32{1, 2}
 	built15 := make([]int32, len(array32)+2)
-	built15[0] = first3
-	built15[1] = first4
+	built15[0], built15[1] = 7, 8
 	for index, value := range array32 {
 		built15[index+2] = value * 3
 	}
-	first5 := int32(0)
 	array33 := []int32{1, 2}
-	built16 := []int32{first5}
+	built16 := []int32{0}
 	for _, x := range array33 {
 		built16 = append(built16, []int32{x, x}...)
 	}
