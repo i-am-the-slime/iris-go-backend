@@ -4,7 +4,7 @@ import Prelude
 
 import Box (newBox, readBox)
 import Effect (Effect)
-import Effect.Console (log)
+import Journal (log)
 
 main :: Effect Unit
 main = do

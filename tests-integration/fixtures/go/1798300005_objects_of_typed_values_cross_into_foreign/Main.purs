@@ -4,10 +4,10 @@ import Prelude
 
 import Data.Tuple.Nested ((/\))
 import Effect (Effect)
-import Effect.Console (log)
 import Foreign (Foreign, typeOf, unsafeFromForeign, unsafeToForeign)
 import Foreign.Object (Object)
 import Foreign.Object as Object
+import Journal (log)
 import Yoga.JSON (unsafeStringify)
 
 main :: Effect Unit

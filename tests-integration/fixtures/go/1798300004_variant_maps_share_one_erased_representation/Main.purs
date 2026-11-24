@@ -5,7 +5,7 @@ import Prelude
 import Data.Maybe (Maybe(..))
 import Data.Variant (Variant, case_, expand, inj, on, over, overSome, traverse)
 import Effect (Effect)
-import Effect.Console (log)
+import Journal (log)
 import Type.Proxy (Proxy(..))
 
 type Shape = Variant (circle :: Int, square :: Number)

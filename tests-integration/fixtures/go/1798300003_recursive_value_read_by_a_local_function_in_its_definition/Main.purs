@@ -3,7 +3,7 @@ module Main where
 import Prelude
 
 import Effect (Effect)
-import Effect.Console (log)
+import Journal (log)
 
 data Step = Emit Int (Unit -> Step) | Stop
 

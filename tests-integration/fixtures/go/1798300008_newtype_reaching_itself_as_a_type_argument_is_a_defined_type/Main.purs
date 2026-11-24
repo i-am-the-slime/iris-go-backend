@@ -4,9 +4,9 @@ import Prelude
 
 import Data.Foldable (for_)
 import Effect (Effect)
-import Effect.Console (log)
 import Effect.Ref (Ref)
 import Effect.Ref as Ref
+import Journal (log)
 
 newtype Action a = Action (Env -> Effect a)
 

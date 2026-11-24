@@ -6,7 +6,7 @@ import Data.Identity (Identity(..))
 import Data.Newtype (un)
 import Data.Tuple (Tuple(..), snd)
 import Effect (Effect)
-import Effect.Console (log)
+import Journal (log)
 
 data Tree a = Leaf String (Int -> a) | Node String (Array (Tree a))
 
