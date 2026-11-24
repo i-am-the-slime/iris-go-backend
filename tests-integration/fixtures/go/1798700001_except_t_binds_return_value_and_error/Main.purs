@@ -8,7 +8,7 @@ import Data.Either (Either(..))
 import Data.Variant (Variant, inj, match)
 import Effect (Effect)
 import Effect.Class (liftEffect)
-import Effect.Console (log)
+import Journal (log)
 import Effect.Ref (Ref)
 import Effect.Ref as Ref
 import Type.Proxy (Proxy(..))

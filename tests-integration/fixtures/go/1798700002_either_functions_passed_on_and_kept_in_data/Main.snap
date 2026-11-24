@@ -1,0 +1,242 @@
+---
+source: tests-integration/src/fixtures.rs
+---
+// Data/Either/either.go
+package either
+
+import "github.com/i-am-the-slime/iris-go/exception"
+
+type EitherStringInt struct {
+	Left  string
+	Right int32
+	Tag   uint8
+}
+
+const (
+	EitherStringIntLeft = iota
+	EitherStringIntRight
+)
+
+type EitherErrorInt struct {
+	Left  exception.Error
+	Right int32
+	Tag   uint8
+}
+
+const (
+	EitherErrorIntLeft = iota
+	EitherErrorIntRight
+)
+
+func LeftEitherErrorInt(left exception.Error) EitherErrorInt {
+	return EitherErrorInt{Tag: EitherErrorIntLeft, Left: left}
+}
+
+func RightEitherErrorInt(right int32) EitherErrorInt {
+	return EitherErrorInt{Tag: EitherErrorIntRight, Right: right}
+}
+
+func LeftEitherStringInt(left string) EitherStringInt {
+	return EitherStringInt{Tag: EitherStringIntLeft, Left: left}
+}
+
+func RightEitherStringInt(right int32) EitherStringInt {
+	return EitherStringInt{Tag: EitherStringIntRight, Right: right}
+}
+
+func EitherStringIntResults(either EitherStringInt) (int32, *string) {
+	if either.Tag == EitherStringIntLeft {
+		return 0, new(either.Left)
+	}
+	return either.Right, nil
+}
+
+// main.go
+package main
+
+import (
+	"fixture/Data/Either"
+	journal "fixture/Journal_ffi"
+	"fixture/shared"
+	"github.com/i-am-the-slime/iris-go/direct"
+	"github.com/i-am-the-slime/iris-go/exception"
+	"github.com/i-am-the-slime/iris-go/prim"
+	"strconv"
+)
+
+func main() {
+	counter := &shared.Ref[int32]{Value: 0}
+	journal.Log("(Right 2)")
+	journal.Log("(Left " + prim.ShowString("odd 3") + ")")
+	i, err := mainStep(7)
+	var i2 int32
+	var err2 *string
+	if err != nil {
+		err2 = err
+	} else {
+		i2, err2 = mainStep(i)
+	}
+	var result string
+	if err2 != nil {
+		result = "(Left " + prim.ShowString(*err2) + ")"
+	} else {
+		result = "(Right " + strconv.Itoa(int(i2)) + ")"
+	}
+	journal.Log(result)
+	i3, err := retrying(3, func(n int32) (int32, *string) {
+		return mainCounted(counter, n)
+	}, 5)
+	var result2 string
+	if err != nil {
+		result2 = "(Left " + prim.ShowString(*err) + ")"
+	} else {
+		result2 = "(Right " + strconv.Itoa(int(i3)) + ")"
+	}
+	journal.Log(result2)
+	i4, err := retrying(2, func(n int32) (int32, *string) {
+		return mainCounted(counter, n)
+	}, 1)
+	var result3 string
+	if err != nil {
+		result3 = "(Left " + prim.ShowString(*err) + ")"
+	} else {
+		result3 = "(Right " + strconv.Itoa(int(i4)) + ")"
+	}
+	journal.Log(result3)
+	calls := counter.Value
+	journal.Log(strconv.Itoa(int(calls)))
+	i5, err := runAll(3)
+	var result4 string
+	if err != nil {
+		result4 = "(Left " + prim.ShowString(*err) + ")"
+	} else {
+		result4 = "(Right " + strconv.Itoa(int(i5)) + ")"
+	}
+	journal.Log(result4)
+	i6, err := runAll(4)
+	var result5 string
+	if err != nil {
+		result5 = "(Left " + prim.ShowString(*err) + ")"
+	} else {
+		result5 = "(Right " + strconv.Itoa(int(i6)) + ")"
+	}
+	journal.Log(result5)
+	either2 := direct.CatchException(func(x exception.Error) either.EitherErrorInt {
+		return either.LeftEitherErrorInt(x)
+	}, func() either.EitherErrorInt {
+		panic(exception.NewError("no"))
+	})
+	var result6 string
+	switch either2.Tag {
+	case either.EitherErrorIntLeft:
+		result6 = "(Left " + prim.ShowString("thrown") + ")"
+	default: // either.EitherErrorIntRight
+		result6 = "(Right " + strconv.Itoa(int(either2.Right)) + ")"
+	}
+	journal.Log(result6)
+	either3 := direct.CatchException(func(x exception.Error) either.EitherErrorInt {
+		return either.LeftEitherErrorInt(x)
+	}, func() either.EitherErrorInt {
+		return either.RightEitherErrorInt(5)
+	})
+	var result7 either.EitherStringInt
+	switch either3.Tag {
+	case either.EitherErrorIntLeft:
+		result7 = either.LeftEitherStringInt("thrown")
+	default: // either.EitherErrorIntRight
+		result7 = either.RightEitherStringInt(either3.Right)
+	}
+	var either4 either.EitherStringInt
+	switch result7.Tag {
+	case either.EitherStringIntLeft:
+		either4 = either.LeftEitherStringInt(result7.Left)
+	default: // either.EitherStringIntRight
+		b := result7.Right
+		if b&1 == 0 {
+			either4 = either.RightEitherStringInt(b >> 1)
+		} else {
+			either4 = either.LeftEitherStringInt("odd " + strconv.Itoa(int(b)))
+		}
+	}
+	var result8 string
+	switch either4.Tag {
+	case either.EitherStringIntLeft:
+		result8 = "(Left " + prim.ShowString(either4.Left) + ")"
+	default: // either.EitherStringIntRight
+		result8 = "(Right " + strconv.Itoa(int(either4.Right)) + ")"
+	}
+	journal.Log(result8)
+	journal.Log(strconv.Itoa(len(pipeline)))
+}
+
+func halve(n int32) either.EitherStringInt {
+	if n&1 == 0 {
+		return either.RightEitherStringInt(n >> 1)
+	}
+	return either.LeftEitherStringInt("odd " + strconv.Itoa(int(n)))
+}
+
+func retrying(attempts int32, step func(int32) (int32, *string), n int32) (int32, *string) {
+	for {
+		i, err := step(n)
+		if err == nil {
+			return i, nil
+		}
+		if attempts <= 1 {
+			return 0, err
+		}
+		attempts, n = attempts-1, n+1
+	}
+}
+
+func runAll(start int32) (int32, *string) {
+	accumulator := either.RightEitherStringInt(start)
+	for _, a := range pipeline {
+		var next either.EitherStringInt
+		switch accumulator.Tag {
+		case either.EitherStringIntLeft:
+			next = either.LeftEitherStringInt(accumulator.Left)
+		default: // either.EitherStringIntRight
+			next = a(accumulator.Right)
+		}
+		accumulator = next
+	}
+	return either.EitherStringIntResults(accumulator)
+}
+
+var pipeline []func(int32) either.EitherStringInt = []func(int32) either.EitherStringInt{addOne, halve, func(n int32) either.EitherStringInt {
+	return either.RightEitherStringInt(n + 2)
+}}
+
+func addOne(n int32) either.EitherStringInt {
+	return either.RightEitherStringInt(n + 1)
+}
+
+func mainCounted(counter *shared.Ref[int32], n int32) (int32, *string) {
+	s := counter.Value
+	s_ := s + 1
+	counter.Value = s_
+	if n&1 == 0 {
+		return n>>1, nil
+	}
+	return 0, new("odd "+strconv.Itoa(int(n)))
+}
+
+func mainStep(n int32) (int32, *string) {
+	if n > 100 {
+		return 0, new("big")
+	}
+	return n*10, nil
+}
+
+// shared/shared.go
+package shared
+
+type Ref[T any] struct {
+	Value T
+}
+
+type StateValue struct {
+	State int32
+	Value int32
+}

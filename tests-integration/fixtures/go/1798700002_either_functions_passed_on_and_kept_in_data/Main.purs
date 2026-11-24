@@ -9,7 +9,7 @@ import Data.Either (Either(..), either)
 import Data.Foldable (foldM)
 import Effect (Effect)
 import Effect.Class (liftEffect)
-import Effect.Console (log)
+import Journal (log)
 import Effect.Exception (throw)
 import Effect.Ref as Ref
 
