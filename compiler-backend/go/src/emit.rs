@@ -17,6 +17,7 @@ mod closures;
 mod coerce;
 mod composites;
 mod conditions;
+mod confined;
 mod constructors;
 mod conventions;
 mod declarations;
@@ -227,6 +228,15 @@ where
     timed("cells", || {
         cells::keep_parameter_cells_in_locals(
             &mut declarations,
+            &helpers,
+            &emitter.effects,
+            &never_recovering,
+        )
+    });
+    timed("confined", || {
+        confined::keep_confined_cells_in_locals(
+            &mut declarations,
+            emitter.foreign_packages,
             &helpers,
             &emitter.effects,
             &never_recovering,

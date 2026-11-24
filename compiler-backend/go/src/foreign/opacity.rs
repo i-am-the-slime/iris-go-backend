@@ -8,6 +8,7 @@ pub struct Opacity {
     pub functions: Vec<OpaqueDeclaration>,
     pub types: Vec<OpaqueDeclaration>,
     pub unreadable: Option<String>,
+    pub called_in_place: FxHashMap<String, Vec<usize>>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -509,7 +510,84 @@ impl Package {
             parameters: parameter_names(&declaration.type_parameters),
             escapes: type_escapes(declaration, &escaping),
         });
-        Opacity { functions: functions.collect(), types: types.collect(), unreadable: None }
+        Opacity {
+            functions: functions.collect(),
+            types: types.collect(),
+            unreadable: None,
+            called_in_place: self.called_in_place(),
+        }
+    }
+
+    fn called_in_place(&self) -> FxHashMap<String, Vec<usize>> {
+        let mut in_place: FxHashMap<String, Vec<usize>> = FxHashMap::default();
+        loop {
+            let mut grown = false;
+            for function in &self.functions {
+                let Some(body) = &function.body else { continue };
+                if mentions(body, "go") {
+                    continue;
+                }
+                for (position, parameter) in
+                    value_parameter_names(&function.parameters).iter().enumerate()
+                {
+                    let known = in_place
+                        .get(&function.name)
+                        .is_some_and(|positions| positions.contains(&position));
+                    if known || !self.only_called_in_place(body, parameter, &in_place) {
+                        continue;
+                    }
+                    in_place.entry(function.name.clone()).or_default().push(position);
+                    grown = true;
+                }
+            }
+            if !grown {
+                return in_place;
+            }
+        }
+    }
+
+    fn only_called_in_place(
+        &self,
+        body: &[Token],
+        parameter: &str,
+        in_place: &FxHashMap<String, Vec<usize>>,
+    ) -> bool {
+        let literals = function_literal_bodies(body);
+        body.iter().enumerate().all(|(index, token)| {
+            if !token.is_word(parameter)
+                || index.checked_sub(1).is_some_and(|before| body[before].is("."))
+            {
+                return true;
+            }
+            if literals.iter().any(|literal| literal.contains(&index)) {
+                return false;
+            }
+            if body.get(index + 1).is_some_and(|next| next.is("(")) {
+                return true;
+            }
+            self.forwarded_in_place(body, index, in_place)
+        })
+    }
+
+    fn forwarded_in_place(
+        &self,
+        body: &[Token],
+        index: usize,
+        in_place: &FxHashMap<String, Vec<usize>>,
+    ) -> bool {
+        let whole_argument =
+            index.checked_sub(1).is_some_and(|before| body[before].is("(") || body[before].is(","))
+                && body.get(index + 1).is_some_and(|next| next.is(")") || next.is(","));
+        if !whole_argument {
+            return false;
+        }
+        let Some(open) = enclosing_parenthesis(body, index) else { return false };
+        let Some(callee) = called_name(body, open) else { return false };
+        if !self.functions.iter().any(|function| function.name == callee) {
+            return false;
+        }
+        let position = split_top(&body[open + 1..index], ",").len();
+        in_place.get(callee).is_some_and(|positions| positions.contains(&position))
     }
 
     fn surroundings<'p>(
@@ -594,6 +672,55 @@ fn read_type_parameters(tokens: &[Token]) -> Vec<TypeParameter> {
 
 fn parameter_names(parameters: &[TypeParameter]) -> Vec<String> {
     parameters.iter().map(|parameter| parameter.name.clone()).collect()
+}
+
+fn value_parameter_names(parameters: &[Token]) -> Vec<&str> {
+    split_top(parameters, ",")
+        .into_iter()
+        .map(|parameter| parameter.first().and_then(Token::word).unwrap_or_default())
+        .collect()
+}
+
+fn function_literal_bodies(body: &[Token]) -> Vec<Range<usize>> {
+    let mut literals = vec![];
+    for (index, token) in body.iter().enumerate() {
+        if !token.is_word("func") {
+            continue;
+        }
+        let open = index + 1 + literal_signature(body, index + 1).len();
+        if let Some(close) = body.get(open).filter(|token| token.is("{")).and(closing(body, open)) {
+            literals.push(open..close);
+        }
+    }
+    literals
+}
+
+fn enclosing_parenthesis(tokens: &[Token], index: usize) -> Option<usize> {
+    let mut depth = 0usize;
+    for position in (0..index).rev() {
+        let token = &tokens[position];
+        if token.is_closing() {
+            depth += 1;
+        } else if token.is_opening() {
+            if depth == 0 {
+                return token.is("(").then_some(position);
+            }
+            depth -= 1;
+        }
+    }
+    None
+}
+
+fn called_name(tokens: &[Token], open: usize) -> Option<&str> {
+    let mut end = open.checked_sub(1)?;
+    if tokens[end].is("]") {
+        end = opening(tokens, end)?.checked_sub(1)?;
+    }
+    let qualified = end.checked_sub(1).is_some_and(|before| tokens[before].is("."));
+    if qualified {
+        return None;
+    }
+    tokens[end].word().filter(|_| !tokens[end].is_keyword())
 }
 
 fn constraint_escapes(parameters: &[TypeParameter]) -> Vec<Escape> {
@@ -1397,6 +1524,63 @@ mod tests {
         let function = opacity.function(name).or_else(|| opacity.data_type(name));
         let function = function.unwrap_or_else(|| panic!("{name} is declared"));
         function.escapes.iter().map(Escape::to_string).collect()
+    }
+
+    fn called_in_place(source: &str, name: &str) -> Vec<usize> {
+        let opacity = foreign_opacity(&[source]);
+        let mut positions = opacity.called_in_place.get(name).cloned().unwrap_or_default();
+        positions.sort();
+        positions
+    }
+
+    const RUNNERS: &str = "package ffi
+
+func CatchImpl[A any](handler func(error) A, action func() A) A {
+	result, failure, failed := attempt(action)
+	if failed {
+		return handler(failure)
+	}
+	return result
+}
+
+func attempt[A any](action func() A) (result A, failure error, failed bool) {
+	defer recoverInto(&failure, &failed)
+	return action(), nil, false
+}
+
+func ForkImpl(action func()) {
+	go action()
+}
+
+func LaterImpl(action func()) func() {
+	return action
+}
+
+func DeferredImpl(action func()) {
+	run(func() { action() })
+}
+
+func run(action func()) {
+	action()
+}
+
+func StoredImpl(actions []func(), action func()) {
+	actions[0] = action
+}
+";
+
+    #[test]
+    fn a_function_argument_called_before_returning_is_called_in_place() {
+        assert_eq!(called_in_place(RUNNERS, "CatchImpl"), vec![0, 1]);
+        assert_eq!(called_in_place(RUNNERS, "attempt"), vec![0]);
+        assert_eq!(called_in_place(RUNNERS, "run"), vec![0]);
+    }
+
+    #[test]
+    fn a_function_argument_started_returned_wrapped_or_stored_is_not_called_in_place() {
+        for name in ["ForkImpl", "LaterImpl", "DeferredImpl", "StoredImpl"] {
+            assert_eq!(called_in_place(RUNNERS, name), Vec::<usize>::new(), "{name}");
+        }
     }
 
     const REPEATED: &str = "package ffi
