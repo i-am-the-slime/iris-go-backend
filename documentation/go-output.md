@@ -247,8 +247,13 @@ bundle, and characters are weighed one at a time. Results can differ:
 ### Regular expressions
 
 Most patterns are translated to Go's RE2 engine. A pattern with backreferences or lookaround uses a
-vendored backtracking engine (regexp2, in its ECMAScript mode) instead. Rare edge cases in patterns
-without the `u` flag can match differently from JavaScript.
+vendored backtracking engine (regexp2, in its ECMAScript mode) instead.
+
+Without the `u` flag, `.` and character classes match a whole emoji or other character outside the
+Basic Multilingual Plane on Go, but each of its UTF-16 halves on JavaScript:
+`Regex.split (unsafeRegex "." global) "😀x"` is `["","",""]` on Go and `["","","",""]` on
+JavaScript. Use the `u` flag to get the same behaviour on both. Other rare edge cases in patterns
+without the `u` flag can also match differently from JavaScript.
 
 ### Parallel arrays
 
