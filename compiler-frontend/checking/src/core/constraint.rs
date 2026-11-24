@@ -48,7 +48,7 @@ where
 }
 
 pub struct Work {
-    unifications: Vec<(TypeId, TypeId)>,
+    unifications: Vec<(TypeId, TypeId, Arc<[ErrorCrumb]>)>,
     unclassified: VecDeque<ConstraintInScope>,
     constraints: VecDeque<ConstraintInScope>,
 }
@@ -61,11 +61,13 @@ impl Work {
     fn extend_from_parts<Unifications, Constraints>(
         &mut self,
         unifications: Unifications,
+        crumbs: &Arc<[ErrorCrumb]>,
         constraints: Constraints,
     ) where
         Unifications: IntoIterator<Item = (TypeId, TypeId)>,
         Constraints: IntoIterator<Item = ConstraintInScope>,
     {
+        let unifications = unifications.into_iter().map(|(t1, t2)| (t1, t2, Arc::clone(crumbs)));
         self.unifications.extend(unifications);
         self.extend_constraints(constraints);
     }
@@ -213,7 +215,7 @@ where
     for argument in determined_arguments(state, context, constraint.key.wanted)? {
         for id in generalise::unsolved_unifications(state, context, argument)? {
             let unification = context.queries.intern_type(Type::Unification(id));
-            work.unifications.push((unification, unknown));
+            work.unifications.push((unification, unknown, Arc::clone(&constraint.evidence.crumbs)));
         }
     }
 
@@ -277,8 +279,11 @@ where
 
     'work: loop {
         let mut has_unification = false;
-        for (t1, t2) in mem::take(&mut work.unifications) {
-            has_unification |= unification::unify(state, context, t1, t2)?;
+        for (t1, t2, crumbs) in mem::take(&mut work.unifications) {
+            let outer_crumbs = mem::replace(&mut state.crumbs, crumbs.to_vec());
+            let unified = unification::unify(state, context, t1, t2);
+            state.crumbs = outer_crumbs;
+            has_unification |= unified?;
         }
 
         if has_unification {
@@ -313,7 +318,7 @@ where
                     state.checked.evidence.solve(constraint.evidence.wanted, provided_evidence);
                     let constraints =
                         fresh_scoped_constraints(state, context, &constraint, constraints);
-                    work.extend_from_parts(unifications, constraints);
+                    work.extend_from_parts(unifications, &constraint.evidence.crumbs, constraints);
                     continue 'work;
                 }
                 matching::MatchInstance::Stuck { stuck, skolem } => {
@@ -367,7 +372,7 @@ where
 
                 let constraints =
                     fresh_scoped_constraints(state, context, &constraint, constraints);
-                work.extend_from_parts(unifications, constraints);
+                work.extend_from_parts(unifications, &constraint.evidence.crumbs, constraints);
                 continue 'work;
             }
             Some(compiler::CompilerMatch::Stuck { stuck, skolem }) => {
@@ -398,7 +403,11 @@ where
                             .evidence
                             .allocate(Evidence::Instance { origin: candidate.origin, subgoals });
                         state.checked.evidence.solve(constraint.evidence.wanted, evidence);
-                        work.extend_from_parts(unifications, constraints);
+                        work.extend_from_parts(
+                            unifications,
+                            &constraint.evidence.crumbs,
+                            constraints,
+                        );
                         continue 'work;
                     }
                     matching::MatchInstance::Stuck { stuck, skolem } => {

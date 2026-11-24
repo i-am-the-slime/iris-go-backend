@@ -1,0 +1,35 @@
+---
+source: tests-integration/src/fixtures.rs
+---
+Terms
+Proxy :: forall k (@a :: k). Main.Proxy @k (a :: k)
+Variant :: forall (@row :: Prim.Row Prim.Type). Main.Variant (row :: Prim.Row Prim.Type)
+overOne ::
+  forall (label :: Prim.Symbol) a b (rest :: Prim.Row Prim.Type) (input :: Prim.Row Prim.Type)
+    (output :: Prim.Row Prim.Type).
+    Prim.Row.Cons @Prim.Type
+      (label :: Prim.Symbol)
+      a
+      (rest :: Prim.Row Prim.Type)
+      (input :: Prim.Row Prim.Type) =>
+    Prim.Row.Cons @Prim.Type
+      (label :: Prim.Symbol)
+      b
+      (rest :: Prim.Row Prim.Type)
+      (output :: Prim.Row Prim.Type) =>
+    Main.Proxy @Prim.Symbol (label :: Prim.Symbol) ->
+    (a -> b) ->
+    (Main.Variant (rest :: Prim.Row Prim.Type) -> Main.Variant (output :: Prim.Row Prim.Type)) ->
+    Main.Variant (input :: Prim.Row Prim.Type) ->
+    Main.Variant (output :: Prim.Row Prim.Type)
+identity :: forall a. a -> a
+variant :: Main.Variant ( a :: Prim.String, b :: Prim.Int )
+main :: Prim.Int
+
+Types
+Proxy :: forall k. k -> Prim.Type
+Variant :: Prim.Row Prim.Type -> Prim.Type
+
+Roles
+Proxy = [Phantom]
+Variant = [Phantom]

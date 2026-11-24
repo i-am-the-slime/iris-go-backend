@@ -1,0 +1,11 @@
+---
+source: tests-integration/src/fixtures.rs
+---
+Error! · [CannotUnify] · Main.purs:31:17
+  •
+  │
+  • Could not match '( b :: Int )' with '( a :: String, b :: Int )'
+  │
+  │     let changed = overOne (Proxy :: Proxy "a") (\value -> value) identity variant
+  │                   ╰──────────────────────────────────────────────────────────────
+  •
