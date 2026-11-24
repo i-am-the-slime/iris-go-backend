@@ -277,6 +277,18 @@ pure, so the result is the same. A function that hides an effect with `unsafePer
 its effects in an unpredictable order. If several elements throw, the program rethrows the first
 element's exception, as JavaScript's sequential map does.
 
+### `traverse` over an `Array`
+
+Go builds the applies of an `Array` `traverse` (and `sequence`, `for`) left to right, one element
+after the other. JavaScript splits the array in halves and builds a balanced tree of applies. For a
+lawful applicative, such as `Effect`, `Maybe`, `Either`, `V`, `State` or a `Writer`, both give the
+same result, and the left fold is faster.
+
+An applicative that lets you see how its applies are nested, like one that records them as a
+string, shows a different shape: three elements are `((pure <*> 1) <*> 2) <*> 3` in Go. Parallel
+applicatives such as `ParOm` and `ParIO`, where the nesting decides what runs or combines first,
+use JavaScript's balanced tree in Go too. `ParAff` has its own parallel traversal.
+
 ## Foreign imports
 
 Your `.js` files don't come along to Go. Put a `.go` file right next to them instead:
