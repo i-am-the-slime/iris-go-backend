@@ -54,6 +54,25 @@ where
                 let unfolded = self.unfold(&data)?;
                 self.coerce(value, from, unfolded, out)
             }
+            (Monotype::Char, Monotype::Opaque) => {
+                let singleton = self
+                    .go_function(GoFunction { package: GoPackage::Prim, name: "CharSingleton" });
+                Ok(call(singleton, vec![value]))
+            }
+            (Monotype::Opaque, Monotype::Char | Monotype::Int | Monotype::Number) => {
+                let name = match self.monotypes.get(to) {
+                    Monotype::Char => "Char",
+                    Monotype::Int => "Int",
+                    _ => "Number",
+                };
+                let read = self.go_function(GoFunction { package: GoPackage::ForeignValue, name });
+                Ok(call(read, vec![value]))
+            }
+            (Monotype::Nullable(_), Monotype::Opaque)
+            | (Monotype::Opaque, Monotype::Nullable(_)) => {
+                let converter = self.converter(from, to)?;
+                Ok(call(identifier_expression(&converter), vec![value]))
+            }
             (Monotype::Record(fields), Monotype::Opaque) => {
                 let record = self.shared(value, "original", out);
                 let mut entries = Vec::with_capacity(fields.len());
@@ -563,6 +582,34 @@ where
                 });
                 let present = GoExpression::Unary { operator: "*", operand: Box::new(value) };
                 let element = self.coerce(present, from_element, to_element, &mut body)?;
+                let type_ = self.go_type(to_element)?;
+                body.push(GoStatement::Variable {
+                    name: "converted".into(),
+                    type_,
+                    value: Some(element),
+                });
+                let converted = GoExpression::Address(Box::new(identifier_expression("converted")));
+                body.push(GoStatement::Return(Some(converted)));
+            }
+            (Monotype::Nullable(from_element), Monotype::Opaque) => {
+                let absent = binary("==", value.clone(), identifier_expression("nil"));
+                body.push(GoStatement::If {
+                    condition: absent,
+                    then: vec![GoStatement::Return(Some(identifier_expression("nil")))],
+                    otherwise: vec![],
+                });
+                let present = GoExpression::Unary { operator: "*", operand: Box::new(value) };
+                let element = self.coerce(present, from_element, to, &mut body)?;
+                body.push(GoStatement::Return(Some(element)));
+            }
+            (Monotype::Opaque, Monotype::Nullable(to_element)) => {
+                let absent = binary("==", value.clone(), identifier_expression("nil"));
+                body.push(GoStatement::If {
+                    condition: absent,
+                    then: vec![GoStatement::Return(Some(identifier_expression("nil")))],
+                    otherwise: vec![],
+                });
+                let element = self.coerce(value, from, to_element, &mut body)?;
                 let type_ = self.go_type(to_element)?;
                 body.push(GoStatement::Variable {
                     name: "converted".into(),
