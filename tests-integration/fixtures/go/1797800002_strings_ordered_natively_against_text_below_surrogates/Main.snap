@@ -1,0 +1,44 @@
+---
+source: tests-integration/src/fixtures.rs
+---
+// main.go
+package main
+
+import (
+	"github.com/i-am-the-slime/iris-go/console"
+	"github.com/i-am-the-slime/iris-go/prim"
+	"strings"
+)
+
+var main_ = initializeMain_()
+
+func initializeMain_() [][]string {
+	words := []string{"w1", "w2", "w3", "", "😀", "", "é", "z"}
+	kept := []string{}
+	for _, value := range words {
+		if value < "w2" {
+			kept = append(kept, value)
+		}
+	}
+	kept2 := []string{}
+	for _, value := range words {
+		if "é" < value {
+			kept2 = append(kept2, value)
+		}
+	}
+	kept3 := []string{}
+	for _, value := range words {
+		if prim.CompareString(value, "") < 0 {
+			kept3 = append(kept3, value)
+		}
+	}
+	return [][]string{kept, kept2, kept3}
+}
+
+func main() {
+	texts := make([]string, 0, len(main_))
+	for _, element := range main_ {
+		texts = append(texts, "["+strings.Join(element, " ")+"]")
+	}
+	console.Print("[" + strings.Join(texts, " ") + "]")
+}

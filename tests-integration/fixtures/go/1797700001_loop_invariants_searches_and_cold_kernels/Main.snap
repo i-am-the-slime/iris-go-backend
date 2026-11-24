@@ -99,7 +99,7 @@ func initializeMain_() []string {
 	for _, value := range numbers {
 		value2 := strconv.Itoa(int(value))
 		word := value2 + "!"
-		if prim.CompareString(word, "w5") > 0 {
+		if word > "w5" {
 			found2 = maybe.JustString(word)
 			break
 		}
