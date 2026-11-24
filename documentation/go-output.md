@@ -82,6 +82,9 @@ They make the Go a bit noisier to read. `iris go --no-line-directives out` leave
   surrogate, and joining the two halves of a surrogate pair gives back the original character.
 - `Data.String.Regex` follows JavaScript `RegExp` semantics, including the `g`, `i`, `m`, `s`, `u`
   and `y` flags and `lastIndex`.
+- `Foreign.Object` lists its keys in JavaScript's order: keys that are array indices (`"0"`, `"2"`,
+  `"10"`) first, in numeric order, then the rest in the order you inserted them. That goes for
+  `keys`, `values`, folds, `toUnfoldable`, `show` and JSON objects alike.
 - `toUpper` and `toLower` use JavaScript's full case mappings, including one-to-many mappings such
   as `ß` to `SS` and the final form of sigma.
 - `Effect.Console` writes what Bun's console writes: `log`, `info` and `debug` to standard output,
@@ -173,19 +176,6 @@ already disagree with each other, so a result can differ from JavaScript's in th
 defines (`NaN`, infinities, `-0`, `pow` with a `NaN` exponent or a base of ±1) are the same. A
 program that needs one engine's exact digits can bring its own implementation through a foreign
 import.
-
-### `Foreign.Object` key order
-
-```purescript
-Object.keys (Object.fromFoldable [ "b" /\ 1, "10" /\ 2, "a" /\ 3, "2" /\ 4 ])
--- Go:         ["b","10","a","2"]
--- JavaScript: ["2","10","b","a"]
-```
-
-Go keeps keys in the order you inserted them. JavaScript lists keys that look like array indices
-first, in numeric order. `Foreign.Object` doesn't promise any order, and this goes for `keys`,
-`values`, folds, `toUnfoldable`, `show` and JSON objects (argonaut and yoga-json) alike. Want
-sorted keys? Use `Object.toAscUnfoldable`, or sort the keys yourself.
 
 ### `Data.HashMap` and `Data.HashSet`
 
