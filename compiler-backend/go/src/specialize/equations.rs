@@ -244,6 +244,8 @@ where
         let mut shadowed = vec![];
         for chunk in bindings.chunks.iter() {
             match chunk {
+                tree::LetBindingChunk::Pattern { binder, .. }
+                    if let tree::BinderKind::Wildcard = module.checked.tree[*binder].kind => {}
                 tree::LetBindingChunk::Pattern { binder, where_expression, .. } => {
                     let value = self.where_expression(scope, where_expression)?;
                     let pattern = self.pattern(scope, *binder)?;
