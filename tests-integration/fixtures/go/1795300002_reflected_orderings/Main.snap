@@ -47,6 +47,10 @@ func AppendShow(buffer []byte, ordering Ordering) []byte {
 	return buffer
 }
 
+func ArrayOrdering(array []Ordering) string {
+	return string(AppendShowArrayOrdering(nil, array))
+}
+
 // main.go
 package main
 
@@ -59,7 +63,7 @@ import (
 var main_ = initializeMain_()
 
 func initializeMain_() []string {
-	return []string{string(ordering.AppendShowArrayOrdering(nil, []ordering.Ordering{ordering.OrderingLT, ordering.OrderingEQ, ordering.OrderingGT})), "GT", "true"}
+	return []string{ordering.ArrayOrdering([]ordering.Ordering{ordering.OrderingLT, ordering.OrderingEQ, ordering.OrderingGT}), "GT", "true"}
 }
 
 func main() {

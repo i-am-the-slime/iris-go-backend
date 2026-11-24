@@ -1,0 +1,134 @@
+---
+source: tests-integration/src/fixtures.rs
+---
+// Data/Ordering/ordering.go
+package ordering
+
+type Ordering uint8
+
+const (
+	OrderingLT Ordering = iota
+	OrderingGT
+	OrderingEQ
+)
+
+// main.go
+package main
+
+import (
+	"fixture/Data/Ordering"
+	"fixture/shared"
+	arraypkg "github.com/i-am-the-slime/iris-go/array"
+	"github.com/i-am-the-slime/iris-go/console"
+	"github.com/i-am-the-slime/iris-go/direct"
+	"strings"
+)
+
+type Suit uint8
+
+const (
+	SuitHearts Suit = iota
+	SuitSpades
+	SuitClubs
+)
+
+var main_ = initializeMain_()
+
+func initializeMain_() []string {
+	array2 := arraypkg.Thaw([]Suit{SuitSpades, SuitClubs, SuitHearts})
+	direct.SortByMutable(array2, func(left Suit, right Suit) int {
+		switch compare(left, right) {
+		case ordering.OrderingLT:
+			return -1
+		case ordering.OrderingGT:
+			return 1
+		}
+		return 0
+	})
+	performed := shared.Frozen(*array2)
+	return []string{arraySuit(direct.SortBy([]Suit{SuitClubs, SuitHearts, SuitSpades, SuitHearts}, func(left Suit, right Suit) int {
+		switch compare(left, right) {
+		case ordering.OrderingLT:
+			return -1
+		case ordering.OrderingGT:
+			return 1
+		}
+		return 0
+	})), arraySuit(direct.SortBy([]Suit{SuitClubs, SuitHearts, SuitSpades}, func(a Suit, b Suit) int {
+		var result ordering.Ordering
+		if a == b {
+			result = ordering.OrderingEQ
+		} else if a < b {
+			result = ordering.OrderingGT
+		} else {
+			result = ordering.OrderingLT
+		}
+		switch result {
+		case ordering.OrderingLT:
+			return -1
+		case ordering.OrderingGT:
+			return 1
+		}
+		return 0
+	})), arraySuit(performed)}
+}
+
+func show(suit Suit) string {
+	switch suit {
+	case SuitHearts:
+		return "hearts"
+	case SuitSpades:
+		return "spades"
+	default: // SuitClubs
+		return "clubs"
+	}
+}
+
+func compare(left Suit, right Suit) ordering.Ordering {
+	if left == right {
+		return ordering.OrderingEQ
+	}
+	if left < right {
+		return ordering.OrderingLT
+	}
+	return ordering.OrderingGT
+}
+
+func appendShowArraySuit(buffer []byte, array []Suit) []byte {
+	buffer = append(buffer, "["...)
+	for index, element := range array {
+		if index > 0 {
+			buffer = append(buffer, ","...)
+		}
+		buffer = appendShow(buffer, element)
+	}
+	buffer = append(buffer, "]"...)
+	return buffer
+}
+
+func appendShow(buffer []byte, suit Suit) []byte {
+	switch suit {
+	case SuitHearts:
+		buffer = append(buffer, "hearts"...)
+	case SuitSpades:
+		buffer = append(buffer, "spades"...)
+	default: // SuitClubs
+		buffer = append(buffer, "clubs"...)
+	}
+	return buffer
+}
+
+func arraySuit(array []Suit) string {
+	return string(appendShowArraySuit(nil, array))
+}
+
+func main() {
+	console.Print("[" + strings.Join(main_, " ") + "]")
+}
+
+// shared/shared.go
+package shared
+
+func Frozen[T any](elements []T) []T {
+	return elements[:len(elements):len(elements)]
+}

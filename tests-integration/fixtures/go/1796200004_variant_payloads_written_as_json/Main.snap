@@ -95,8 +95,8 @@ func WriteJSONVariantCountFlagNamePointRatioTags(x variant.CountFlagNamePointRat
 	var result any
 	switch x.Tag {
 	case variant.CountFlagNamePointRatioTagsCount:
-		object2 := object.New[any]()()
-		performed := object.Poke("count", any(x.Count), object2)()
+		object2 := object.New[any]()
+		performed := object.Poke("count", any(x.Count), object2)
 		result = object.MapWithKey(performed, func(_ string, x2 any) any {
 			return WriteImplForeign(x2)
 		})
@@ -125,8 +125,8 @@ func WriteImplString(s string) any {
 func WriteJSONVariantCountFlagNamePointRatioTagsFallback(variant2 variant.FlagNamePointRatioTags) any {
 	switch variant2.Tag {
 	case variant.FlagNamePointRatioTagsFlag:
-		object2 := object.New[any]()()
-		performed := object.Poke("flag", any(variant2.Flag), object2)()
+		object2 := object.New[any]()
+		performed := object.Poke("flag", any(variant2.Flag), object2)
 		return object.MapWithKey(performed, func(_ string, x any) any {
 			return WriteImplForeign(x)
 		})
@@ -144,8 +144,8 @@ func WriteJSONVariantCountFlagNamePointRatioTagsFallback(variant2 variant.FlagNa
 func WriteJSONVariantCountFlagNamePointRatioTagsFallbackFallback(variant2 variant.NamePointRatioTags) any {
 	switch variant2.Tag {
 	case variant.NamePointRatioTagsName:
-		object2 := object.New[any]()()
-		performed := object.Poke("name", any(variant2.Name), object2)()
+		object2 := object.New[any]()
+		performed := object.Poke("name", any(variant2.Name), object2)
 		return object.MapWithKey(performed, func(_ string, x any) any {
 			return WriteImplForeign(x)
 		})
@@ -161,8 +161,8 @@ func WriteJSONVariantCountFlagNamePointRatioTagsFallbackFallback(variant2 varian
 func WriteJSONVariantCountFlagNamePointRatioTagsFallbackFallbackFallback(variant2 variant.PointRatioTags) any {
 	switch variant2.Tag {
 	case variant.PointRatioTagsPoint:
-		object2 := object.New[any]()()
-		performed := object.Poke("point", direct.ForeignRecord([]string{"x"}, []any{variant2.Point.X}), object2)()
+		object2 := object.New[any]()
+		performed := object.Poke("point", direct.ForeignRecord([]string{"x"}, []any{variant2.Point.X}), object2)
 		return object.MapWithKey(performed, func(_ string, x any) any {
 			return WriteImplForeign(x)
 		})
@@ -176,18 +176,18 @@ func WriteJSONVariantCountFlagNamePointRatioTagsFallbackFallbackFallback(variant
 func WriteJSONVariantCountFlagNamePointRatioTagsFallbackFallbackFallbackFallback(variant2 variant.RatioTags) any {
 	switch variant2.Tag {
 	case variant.RatioTagsRatio:
-		object2 := object.New[any]()()
-		performed := object.Poke("ratio", any(variant2.Ratio), object2)()
+		object2 := object.New[any]()
+		performed := object.Poke("ratio", any(variant2.Ratio), object2)
 		return object.MapWithKey(performed, func(_ string, x any) any {
 			return WriteImplForeign(x)
 		})
 	default: // variant.RatioTagsTags
-		object2 := object.New[any]()()
+		object2 := object.New[any]()
 		mapped := make([]any, len(variant2.Tags))
 		for index, element := range variant2.Tags {
 			mapped[index] = WriteImplString(element)
 		}
-		performed := object.Poke("tags", any(mapped), object2)()
+		performed := object.Poke("tags", any(mapped), object2)
 		return object.MapWithKey(performed, func(_ string, x any) any {
 			return WriteImplForeign(x)
 		})
@@ -216,8 +216,8 @@ func initializeMain_() []string {
 	for index, element := range shapes {
 		mapped[index] = json.WriteJSONVariantCountFlagNamePointRatioTags(element)
 	}
-	object2 := object.New[any]()()
-	performed := object.Poke("f", shared, object2)()
+	object2 := object.New[any]()
+	performed := object.Poke("f", shared, object2)
 	return array.Append(mapped, []string{foreignvalue.UnsafeStringify(object.Insert("e", shared, performed))})
 }
 

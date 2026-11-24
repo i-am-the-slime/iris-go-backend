@@ -58,10 +58,9 @@ fn defined_cell(statement: &GoStatement) -> Option<(String, Cell)> {
 }
 
 fn is_fresh_array(value: &GoExpression) -> bool {
-    let GoExpression::Call { function, arguments } = value else { return false };
-    let GoExpression::Call { function, .. } = function.as_ref() else { return false };
+    let GoExpression::Call { function, .. } = value else { return false };
     let GoExpression::Qualified { package, name } = function.as_ref() else { return false };
-    arguments.is_empty() && package == "array" && matches!(name.as_str(), "Thaw" | "UnsafeThaw")
+    package == "array" && matches!(name.as_str(), "Thaw" | "UnsafeThaw")
 }
 
 fn local(statement: GoStatement) -> GoStatement {

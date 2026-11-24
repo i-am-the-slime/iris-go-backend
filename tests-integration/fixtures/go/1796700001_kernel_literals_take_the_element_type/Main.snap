@@ -22,6 +22,10 @@ func AppendShowArrayInt(buffer []byte, array []int32) []byte {
 	return buffer
 }
 
+func ArrayInt(array []int32) string {
+	return string(AppendShowArrayInt(nil, array))
+}
+
 // main.go
 package main
 
@@ -43,7 +47,7 @@ func initializeMain_() []string {
 		mapped[index] = prim.IntModPositive(i*37, 11) - 5
 	}
 	numbers := mapLanes([]float64{3.0, -1.0, 4.0, 1.0, -5.0, 9.0, 2.0, 6.0, -5.0, 3.0, 5.0, 8.0, 9.0, -7.0, 9.0, 3.0, 2.0, 3.0, -8.0, 4.0, 6.0, 2.0, 6.0, 4.0, -3.0, 3.0, 8.0, 3.0, 2.0, 7.0, 9.0, 5.0, 0.0, 2.0, 8.0, 8.0, 4.0})
-	return []string{strconv.Itoa(int(foldLanes(mapped, arraypkg.Slice(1, int32(len(mapped)), mapped), 0))), prim.ShowNumber(foldLanes2(numbers, arraypkg.Slice(1, int32(len(numbers)), numbers), 0.0)), strconv.Itoa(int(foldLanes3(mapped, 0))), strconv.Itoa(int(foldLanes4(mapped, 0))), string(show.AppendShowArrayInt(nil, zipLanes(mapped, arraypkg.Slice(1, int32(len(mapped)), mapped)))), strconv.Itoa(int(foldLanes5(mapped, arraypkg.Slice(1, int32(len(mapped)), mapped), 0)))}
+	return []string{strconv.Itoa(int(foldLanes(mapped, arraypkg.Slice(1, int32(len(mapped)), mapped), 0))), prim.ShowNumber(foldLanes2(numbers, arraypkg.Slice(1, int32(len(numbers)), numbers), 0.0)), strconv.Itoa(int(foldLanes3(mapped, 0))), strconv.Itoa(int(foldLanes4(mapped, 0))), show.ArrayInt(zipLanes(mapped, arraypkg.Slice(1, int32(len(mapped)), mapped))), strconv.Itoa(int(foldLanes5(mapped, arraypkg.Slice(1, int32(len(mapped)), mapped), 0)))}
 }
 
 func sign(x int32) int32 {

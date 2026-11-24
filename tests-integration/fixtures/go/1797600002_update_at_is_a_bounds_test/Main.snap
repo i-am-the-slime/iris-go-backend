@@ -1,0 +1,110 @@
+---
+source: tests-integration/src/fixtures.rs
+---
+// Data/Show/show.go
+package show
+
+import (
+	"github.com/i-am-the-slime/iris-go/prim"
+	"strconv"
+)
+
+func ShowInt(i int32) string {
+	return strconv.Itoa(int(i))
+}
+
+func ShowString(s string) string {
+	return prim.ShowString(s)
+}
+
+func AppendShowArrayInt(buffer []byte, array []int32) []byte {
+	buffer = append(buffer, "["...)
+	for index, element := range array {
+		if index > 0 {
+			buffer = append(buffer, ","...)
+		}
+		buffer = strconv.AppendInt(buffer, int64(element), 10)
+	}
+	buffer = append(buffer, "]"...)
+	return buffer
+}
+
+func AppendShowArrayString(buffer []byte, array []string) []byte {
+	buffer = append(buffer, "["...)
+	for index, element := range array {
+		if index > 0 {
+			buffer = append(buffer, ","...)
+		}
+		buffer = prim.AppendShowString(buffer, element)
+	}
+	buffer = append(buffer, "]"...)
+	return buffer
+}
+
+func ArrayInt(array []int32) string {
+	return string(AppendShowArrayInt(nil, array))
+}
+
+func ArrayString(array []string) string {
+	return string(AppendShowArrayString(nil, array))
+}
+
+// main.go
+package main
+
+import (
+	"fixture/Data/Show"
+	"github.com/i-am-the-slime/iris-go/console"
+	"slices"
+	"strconv"
+	"strings"
+)
+
+var main_ = initializeMain_()
+
+func initializeMain_() []string {
+	items := []string{"sword", "map"}
+	var result []string
+	updated := slices.Clone(items)
+	updated[0] = "better sword"
+	result = updated
+	items2 := []string{}
+	var result2 []string
+	result2 = items2
+	numbers := []int32{1, 2, 3}
+	var result3 []int32
+	updated2 := slices.Clone(numbers)
+	updated2[1] = 0
+	result3 = updated2
+	numbers2 := []int32{1, 2, 3}
+	var result4 []int32
+	result4 = numbers2
+	elements := []int32{1}
+	var result5 string
+	text := []byte("(Just ")
+	updated3 := slices.Clone(elements)
+	updated3[0] = 9
+	text = show.AppendShowArrayInt(text, updated3)
+	text = append(text, ")"...)
+	result5 = string(text)
+	var result6 string
+	if false {
+		elements2 := []int32{1}
+		text2 := []byte("(Just ")
+		text2 = show.AppendShowArrayInt(text2, elements2)
+		text2 = append(text2, ")"...)
+		result6 = string(text2)
+	} else {
+		result6 = "Nothing"
+	}
+	numbers3 := []int32{1, 2}
+	var result7 int32
+	result7 = numbers3[1] + numbers3[1]
+	var result8 int32
+	result8 = -1
+	return []string{show.ArrayString(result), show.ArrayString(result2), show.ArrayInt(result3), show.ArrayInt(result4), result5, result6, strconv.Itoa(int(result7)), strconv.Itoa(int(result8))}
+}
+
+func main() {
+	console.Print("[" + strings.Join(main_, " ") + "]")
+}

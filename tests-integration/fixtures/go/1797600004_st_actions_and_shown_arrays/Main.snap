@@ -1,0 +1,119 @@
+---
+source: tests-integration/src/fixtures.rs
+---
+// Data/Show/show.go
+package show
+
+import (
+	"github.com/i-am-the-slime/iris-go/prim"
+	"strconv"
+)
+
+func ShowInt(i int32) string {
+	return strconv.Itoa(int(i))
+}
+
+func ShowString(s string) string {
+	return prim.ShowString(s)
+}
+
+func ShowBoolean(boolean bool) string {
+	if boolean {
+		return "true"
+	}
+	return "false"
+}
+
+func AppendShowArrayBoolean(buffer []byte, array []bool) []byte {
+	buffer = append(buffer, "["...)
+	for index, element := range array {
+		if index > 0 {
+			buffer = append(buffer, ","...)
+		}
+		buffer = strconv.AppendBool(buffer, element)
+	}
+	buffer = append(buffer, "]"...)
+	return buffer
+}
+
+func AppendShowArrayString(buffer []byte, array []string) []byte {
+	buffer = append(buffer, "["...)
+	for index, element := range array {
+		if index > 0 {
+			buffer = append(buffer, ","...)
+		}
+		buffer = prim.AppendShowString(buffer, element)
+	}
+	buffer = append(buffer, "]"...)
+	return buffer
+}
+
+func AppendShowArrayInt(buffer []byte, array []int32) []byte {
+	buffer = append(buffer, "["...)
+	for index, element := range array {
+		if index > 0 {
+			buffer = append(buffer, ","...)
+		}
+		buffer = strconv.AppendInt(buffer, int64(element), 10)
+	}
+	buffer = append(buffer, "]"...)
+	return buffer
+}
+
+func ArrayBoolean(array []bool) string {
+	return string(AppendShowArrayBoolean(nil, array))
+}
+
+func ArrayString(array []string) string {
+	return string(AppendShowArrayString(nil, array))
+}
+
+func ArrayInt(array []int32) string {
+	return string(AppendShowArrayInt(nil, array))
+}
+
+// main.go
+package main
+
+import (
+	"fixture/Data/Show"
+	"fixture/shared"
+	"github.com/i-am-the-slime/iris-go/array"
+	"github.com/i-am-the-slime/iris-go/console"
+	"github.com/i-am-the-slime/iris-go/object"
+	"strings"
+)
+
+var main_ = initializeMain_()
+
+func initializeMain_() []string {
+	array2 := *array.Thaw([]int32{1, 2})
+	array2 = array.Bounded(append(array2, 0))
+	performed := shared.Frozen(array2)
+	return []string{show.ArrayInt(performed), show.ArrayString(object.Keys(counts)), show.ArrayBoolean([]bool{true, false})}
+}
+
+var counts = initializeCounts()
+
+func initializeCounts() *struct {
+	Index map[string]int
+	Ints  int
+	Keys  []string
+	Vals  []int32
+} {
+	table := object.New[int32]()
+	object.Poke("a", int32(1), table)
+	object.Poke("b", int32(2), table)
+	return table
+}
+
+func main() {
+	console.Print("[" + strings.Join(main_, " ") + "]")
+}
+
+// shared/shared.go
+package shared
+
+func Frozen[T any](elements []T) []T {
+	return elements[:len(elements):len(elements)]
+}

@@ -84,6 +84,18 @@ func AppendShowArrayInt(buffer []byte, array []int32) []byte {
 	return buffer
 }
 
+func ArrayString(array []string) string {
+	return string(AppendShowArrayString(nil, array))
+}
+
+func ArrayXY(array []shared.XY) string {
+	return string(AppendShowArrayXY(nil, array))
+}
+
+func ArrayInt(array []int32) string {
+	return string(AppendShowArrayInt(nil, array))
+}
+
 // main.go
 package main
 
@@ -459,7 +471,7 @@ func initializeMain_() []string {
 			accumulator7 = shared.Bounds{Low: accumulator7.Low - 1, High: accumulator7.High + x}
 		}
 	}
-	return []string{string(show.AppendShowArrayInt(nil, mapped)), string(show.AppendShowArrayInt(nil, mapped2)), string(show.AppendShowArrayInt(nil, mapped3)), string(show.AppendShowArrayInt(nil, built)), string(show.AppendShowArrayInt(nil, built2)), string(show.AppendShowArrayInt(nil, built3)), string(show.AppendShowArrayInt(nil, built4)), strconv.Itoa(int(accumulator)), strconv.Itoa(int(accumulator2)), strconv.Itoa(len(array4)), strconv.FormatBool(found), strconv.FormatBool(every), string(show.AppendShowArrayInt(nil, kept)), string(show.AppendShowArrayInt(nil, arraypkg.Bounded(bound))), string(show.AppendShowArrayInt(nil, built6)), string(show.AppendShowArrayInt(nil, built7)), string(show.AppendShowArrayXY(nil, built8)), string(show.AppendShowArrayInt(nil, zipLanes(arraypkg.Slice(-3, -1, []int32{1, 2, 3, 4, 5}), arraypkg.Slice(1, 100, []int32{10, 20, 30})))), string(show.AppendShowArrayInt(nil, built9)), string(show.AppendShowArrayInt(nil, built10)), strconv.Itoa(int(accumulator3)), string(show.AppendShowArrayInt(nil, built11)), string(show.AppendShowArrayInt(nil, mapped4)), strconv.Itoa(int(int32(count10))), strconv.FormatBool(every2), string(show.AppendShowArrayString(nil, mapped5)), strconv.Itoa(int(accumulator4)), string(show.AppendShowArrayInt(nil, built12)), string(show.AppendShowArrayInt(nil, built13)), string(show.AppendShowArrayInt(nil, built14)), string(show.AppendShowArrayInt(nil, built15)), string(show.AppendShowArrayInt(nil, row([]rune{'a', 'b'}, []int32{0, 1, 2}, 'b'))), strconv.Itoa(int(foldLanes(result, 0))), strconv.Itoa(int(result2)), strconv.Itoa(int(accumulatorTotal2)), strconv.Itoa(int(accumulator7.High))}
+	return []string{show.ArrayInt(mapped), show.ArrayInt(mapped2), show.ArrayInt(mapped3), show.ArrayInt(built), show.ArrayInt(built2), show.ArrayInt(built3), show.ArrayInt(built4), strconv.Itoa(int(accumulator)), strconv.Itoa(int(accumulator2)), strconv.Itoa(len(array4)), strconv.FormatBool(found), strconv.FormatBool(every), show.ArrayInt(kept), show.ArrayInt(arraypkg.Bounded(bound)), show.ArrayInt(built6), show.ArrayInt(built7), show.ArrayXY(built8), show.ArrayInt(zipLanes(arraypkg.Slice(-3, -1, []int32{1, 2, 3, 4, 5}), arraypkg.Slice(1, 100, []int32{10, 20, 30}))), show.ArrayInt(built9), show.ArrayInt(built10), strconv.Itoa(int(accumulator3)), show.ArrayInt(built11), show.ArrayInt(mapped4), strconv.Itoa(int(int32(count10))), strconv.FormatBool(every2), show.ArrayString(mapped5), strconv.Itoa(int(accumulator4)), show.ArrayInt(built12), show.ArrayInt(built13), show.ArrayInt(built14), show.ArrayInt(built15), show.ArrayInt(row([]rune{'a', 'b'}, []int32{0, 1, 2}, 'b')), strconv.Itoa(int(foldLanes(result, 0))), strconv.Itoa(int(result2)), strconv.Itoa(int(accumulatorTotal2)), strconv.Itoa(int(accumulator7.High))}
 }
 
 func row(letters []rune, previous []int32, letter rune) []int32 {

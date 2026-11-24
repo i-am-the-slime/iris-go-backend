@@ -46,6 +46,13 @@ func AppendShowArrayInt(buffer []byte, array []int32) []byte {
 //line show.go:33
 }
 
+//line show.go:36
+func ArrayInt(array []int32) string {
+//line show.go:38
+	return string(AppendShowArrayInt(nil, array))
+//line show.go:40
+}
+
 // Effect/Exception/exception.go
 package effectexception
 
@@ -153,7 +160,7 @@ func main() {
 //line Main.purs:41:3
 	}
 //line Main.purs:41:3
-	if string(show.AppendShowArrayInt(nil, mapped2)) != "[24,32]" {
+	if show.ArrayInt(mapped2) != "[24,32]" {
 //line Main.purs:42:5
 		effectexception.ThrowUnit("the readings are wrong")
 //line Main.purs:41:3

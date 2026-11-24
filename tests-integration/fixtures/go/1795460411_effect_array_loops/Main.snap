@@ -35,10 +35,6 @@ type Int int64
 
 const NoInt Int = 1 << 32
 
-func JustInt(just int32) Int {
-	return Int(just)
-}
-
 // Data/Show/show.go
 package show
 
@@ -79,6 +75,14 @@ func AppendShowArrayInt(buffer []byte, array []int32) []byte {
 	return buffer
 }
 
+func ArrayString(array []string) string {
+	return string(AppendShowArrayString(nil, array))
+}
+
+func ArrayInt(array []int32) string {
+	return string(AppendShowArrayInt(nil, array))
+}
+
 // Data/Tuple/tuple.go
 package tuple
 
@@ -111,7 +115,6 @@ package main
 
 import (
 	"fixture/Data/Either"
-	"fixture/Data/Maybe"
 	"fixture/Data/Show"
 	"fixture/Data/Tuple"
 	"fixture/Effect/Exception"
@@ -137,7 +140,7 @@ func main() {
 	for _, i := range values {
 		seen = arraypkg.Append(seen, []int32{i * 100})
 	}
-	Journal_ffi.Log(string(show.AppendShowArrayInt(nil, seen)))
+	Journal_ffi.Log(show.ArrayInt(seen))
 	values2 := []int32{10, 20, 30}
 	seen2 := []int32{}
 	end := int32(len(values2))
@@ -145,7 +148,7 @@ func main() {
 		x := values2[index]
 		seen2 = arraypkg.Append(seen2, []int32{index + x})
 	}
-	Journal_ffi.Log(string(show.AppendShowArrayInt(nil, seen2)))
+	Journal_ffi.Log(show.ArrayInt(seen2))
 	var counter int32 = 0
 	array := []int32{1, 2, 3}
 	collected := make([]string, len(array))
@@ -155,7 +158,7 @@ func main() {
 		value := strconv.Itoa(int(s_)) + ":" + strconv.Itoa(int(i))
 		collected[index] = value
 	}
-	Journal_ffi.Log(string(show.AppendShowArrayString(nil, collected)))
+	Journal_ffi.Log(show.ArrayString(collected))
 	var accumulator int32 = 1
 	for _, i := range []int32{1, 2, 3} {
 		accumulator = accumulator*2 + i
@@ -193,7 +196,7 @@ func traversals() {
 		value := i * 2
 		collected[index] = value
 	}
-	Journal_ffi.Log(string(show.AppendShowArrayInt(nil, collected)))
+	Journal_ffi.Log(show.ArrayInt(collected))
 	Journal_ffi.Log("traverse effect")
 	array4 := []int32{7, 8}
 	collected2 := make([]string, len(array4))
@@ -202,7 +205,7 @@ func traversals() {
 		value := strconv.Itoa(int(i))
 		collected2[index] = value
 	}
-	Journal_ffi.Log(string(show.AppendShowArrayString(nil, collected2)))
+	Journal_ffi.Log(show.ArrayString(collected2))
 	Journal_ffi.Log("foldM effect")
 	var accumulator int32 = 0
 	for _, i := range []int32{1, 2, 3, 4} {
@@ -241,7 +244,7 @@ func traversals() {
 		value := i + 1
 		collected3[index] = value
 	}
-	Journal_ffi.Log(string(show.AppendShowArrayInt(nil, collected3)))
+	Journal_ffi.Log(show.ArrayInt(collected3))
 }
 
 func failures() {
@@ -347,19 +350,23 @@ func folds() {
 		Journal_ffi.Log("left " + strconv.Itoa(int(x)))
 	}
 	Journal_ffi.Log("object")
-	object2 := object.New[int32]()()
+	object2 := object.New[int32]()
 	for _, tuple := range []tuple.TupleStringInt{{First: "a", Second: 1}, {First: "b", Second: 2}, {First: "a", Second: 30}} {
 		k := tuple.First
 		v := tuple.Second
-		i2 := object.LookupST(v, func(i int32) int32 {
-			return v + i
-		}, k, object2)()
-		object.Poke(k, i2, object2)()
+		value, found := object.LookupST(k, object2)
+		var lookupST int32
+		if found {
+			lookupST = v + value
+		} else {
+			lookupST = v
+		}
+		object.Poke(k, lookupST, object2)
 	}
-	lookup := object.Lookup(maybe.NoInt, maybe.JustInt, "a", object2)
+	x2, found2 := object.Lookup("a", object2)
 	var result string
-	if lookup != maybe.NoInt {
-		result = "(Just " + strconv.Itoa(int(int32(lookup))) + ")"
+	if found2 {
+		result = "(Just " + strconv.Itoa(int(x2)) + ")"
 	} else {
 		result = "Nothing"
 	}

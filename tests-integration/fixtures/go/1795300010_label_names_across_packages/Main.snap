@@ -22,6 +22,10 @@ func AppendShowArrayInt(buffer []byte, array []int32) []byte {
 	return buffer
 }
 
+func ArrayInt(array []int32) string {
+	return string(AppendShowArrayInt(nil, array))
+}
+
 // Data/Variant/variant.go
 package variant
 
@@ -127,7 +131,7 @@ func initializeMain_() []string {
 	for index, element := range replies {
 		mapped[index] = labels.Describe(element)
 	}
-	return array.Append(mapped, []string{string(show.AppendShowArrayInt(nil, []int32{updated.X_respondNow, updated.X1st, updated.X, updated.X_, updated.Über})), updated.Content_type2 + " " + updated.Content_type, strconv.Itoa(len(replies))})
+	return array.Append(mapped, []string{show.ArrayInt([]int32{updated.X_respondNow, updated.X1st, updated.X, updated.X_, updated.Über}), updated.Content_type2 + " " + updated.Content_type, strconv.Itoa(len(replies))})
 }
 
 func main() {

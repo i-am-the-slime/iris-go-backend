@@ -132,6 +132,22 @@ func AppendShowArrayInt(buffer []byte, array []int32) []byte {
 	return buffer
 }
 
+func ArrayChar(array []rune) string {
+	return string(AppendShowArrayChar(nil, array))
+}
+
+func ArrayString(array []string) string {
+	return string(AppendShowArrayString(nil, array))
+}
+
+func ArrayNumber(array []float64) string {
+	return string(AppendShowArrayNumber(nil, array))
+}
+
+func ArrayInt(array []int32) string {
+	return string(AppendShowArrayInt(nil, array))
+}
+
 // main.go
 package main
 
@@ -248,26 +264,25 @@ func initializeMain_() []string {
 	for index := range sorted13 {
 		mapped6[index] = sorted13[index].Name
 	}
-	array2 := direct.SortBy(func(x shared.Entry, y shared.Entry) ordering.Ordering {
+	array2 := direct.SortBy(entries, func(x shared.Entry, y shared.Entry) int {
 		number := x.Weight
 		number2 := y.Weight
+		var result3 ordering.Ordering
 		if number < number2 {
-			return ordering.OrderingLT
+			result3 = ordering.OrderingLT
+		} else if number == number2 {
+			result3 = ordering.OrderingEQ
+		} else {
+			result3 = ordering.OrderingGT
 		}
-		if number == number2 {
-			return ordering.OrderingEQ
-		}
-		return ordering.OrderingGT
-	}, func(value ordering.Ordering) int32 {
-		switch value {
+		switch result3 {
+		case ordering.OrderingLT:
+			return -1
 		case ordering.OrderingGT:
 			return 1
-		case ordering.OrderingEQ:
-			return 0
-		default: // ordering.OrderingLT
-			return -1
 		}
-	}, entries)
+		return 0
+	})
 	mapped7 := make([]string, len(array2))
 	for index := range array2 {
 		mapped7[index] = array2[index].Name
@@ -314,7 +329,7 @@ func initializeMain_() []string {
 	})
 	sorted17 := slices.Clone(prim.StringToCharArray("hello"))
 	slices.Sort(sorted17)
-	return []string{string(show.AppendShowArrayInt(nil, sorted)), string(show.AppendShowArrayInt(nil, sorted2)), string(show.AppendShowArrayInt(nil, sorted3)), string(show.AppendShowArrayInt(nil, sorted4)), string(show.AppendShowArrayNumber(nil, shared.SortNumbers(numbers))), string(show.AppendShowArrayString(nil, mapped)), string(show.AppendShowArrayChar(nil, sorted5)), string(show.AppendShowArrayString(nil, sorted6)), string(show.AppendShowArrayString(nil, sorted7)), string(show.AppendShowArrayInt(nil, mapLanes(sorted8))), string(show.AppendShowArrayString(nil, mapped2)), string(show.AppendShowArrayString(nil, mapped3)), string(show.AppendShowArrayString(nil, mapped4)), string(show.AppendShowArrayString(nil, mapped5)), string(show.AppendShowArrayString(nil, mapped6)), string(show.AppendShowArrayString(nil, mapped7)), string(show.AppendShowArrayString(nil, mapped8)), string(show.AppendShowArrayString(nil, sorted15)), string(show.AppendShowArrayInt(nil, sorted16)), prim.CharArrayToString(sorted17)}
+	return []string{show.ArrayInt(sorted), show.ArrayInt(sorted2), show.ArrayInt(sorted3), show.ArrayInt(sorted4), show.ArrayNumber(shared.SortNumbers(numbers)), show.ArrayString(mapped), show.ArrayChar(sorted5), show.ArrayString(sorted6), show.ArrayString(sorted7), show.ArrayInt(mapLanes(sorted8)), show.ArrayString(mapped2), show.ArrayString(mapped3), show.ArrayString(mapped4), show.ArrayString(mapped5), show.ArrayString(mapped6), show.ArrayString(mapped7), show.ArrayString(mapped8), show.ArrayString(sorted15), show.ArrayInt(sorted16), prim.CharArrayToString(sorted17)}
 }
 
 var numbers = initializeNumbers()

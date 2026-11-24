@@ -27,6 +27,10 @@ func AppendShowArrayInt(buffer []byte, array []int32) []byte {
 	return buffer
 }
 
+func ArrayInt(array []int32) string {
+	return string(AppendShowArrayInt(nil, array))
+}
+
 // main.go
 package main
 
@@ -52,7 +56,7 @@ func initializeMain_() []string {
 			accumulator = shared.AccInit{Init: false, Acc: arraypkg.Append(accumulator.Acc, arraypkg.Append([]int32{0}, x))}
 		}
 	}
-	return []string{prim.StringJoinWith(", ", []string{"a", "b", "c"}), prim.StringJoinWith("-", []string{"x"}), string(show.AppendShowArrayInt(nil, accumulator.Acc))}
+	return []string{prim.StringJoinWith(", ", []string{"a", "b", "c"}), prim.StringJoinWith("-", []string{"x"}), show.ArrayInt(accumulator.Acc)}
 }
 
 func main() {

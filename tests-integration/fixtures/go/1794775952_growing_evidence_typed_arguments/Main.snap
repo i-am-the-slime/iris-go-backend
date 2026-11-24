@@ -6,15 +6,11 @@ package show
 
 import "strconv"
 
-func ShowBoolean2(boolean bool) string {
+func ShowBoolean(boolean bool) string {
 	if boolean {
 		return "true"
 	}
 	return "false"
-}
-
-func ShowBoolean(array []bool) string {
-	return string(AppendShowArrayBoolean(nil, array))
 }
 
 func ShowInt(i int32) string {
@@ -45,6 +41,10 @@ func AppendShowArrayBoolean(buffer []byte, array []bool) []byte {
 	return buffer
 }
 
+func ArrayBoolean(array []bool) string {
+	return string(AppendShowArrayBoolean(nil, array))
+}
+
 // main.go
 package main
 
@@ -62,7 +62,7 @@ var main_ = initializeMain_()
 
 func initializeMain_() []string {
 	return []string{describeArrayBoolean(shared.Show{Show: func(coerced any) string {
-		return show.ShowBoolean(shared.Convert(coerced))
+		return show.ArrayBoolean(shared.Convert(coerced))
 	}}, array.Append([]int32{}, []int32{2}), ">", 1, shared.Convert2([]bool{true}))}
 }
 

@@ -572,7 +572,7 @@ where
         Ok(self.pending_global(identifier(&full), PendingSpelling::Parts(parts)))
     }
 
-    fn json_name_parts(
+    pub(super) fn json_name_parts(
         &mut self,
         monotype: MonotypeId,
         full: &mut String,

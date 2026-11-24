@@ -172,10 +172,6 @@ type Int int64
 
 const NoInt Int = 1 << 32
 
-func JustInt(just int32) Int {
-	return Int(just)
-}
-
 // main.go
 package main
 
@@ -211,10 +207,10 @@ func main() {
 	accumulator2 := object.Empty[int32]()
 	accumulator2 = object.Lend(accumulator2)
 	for _, word := range words {
-		lookup := object.Lookup(maybe.NoInt, maybe.JustInt, word, accumulator2)
+		value, found := object.Lookup(word, accumulator2)
 		var result int32
-		if lookup != maybe.NoInt {
-			result = int32(lookup) + 1
+		if found {
+			result = value + 1
 		} else {
 			result = 1
 		}

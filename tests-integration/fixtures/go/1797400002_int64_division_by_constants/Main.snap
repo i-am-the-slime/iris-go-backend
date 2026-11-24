@@ -28,6 +28,10 @@ func AppendShow(buffer []byte, long int64) []byte {
 	return buffer
 }
 
+func ArrayInt64(array []int64) string {
+	return string(AppendShowArrayInt64(nil, array))
+}
+
 // main.go
 package main
 
@@ -51,7 +55,7 @@ func initializeMain_() []string {
 	for index, element := range array2 {
 		mapped2[index] = euclidean(element)
 	}
-	return []string{string(dataint64.AppendShowArrayInt64(nil, mapped)), string(dataint64.AppendShowArrayInt64(nil, mapped2)), strconv.FormatInt(int64(-9223372036854775808), 10) + "l", strconv.FormatUint(uint64(4), 10) + "ul", strconv.FormatInt(int64(0), 10) + "l", strconv.FormatUint(uint64(9223372036854775807), 10) + "ul"}
+	return []string{dataint64.ArrayInt64(mapped), dataint64.ArrayInt64(mapped2), strconv.FormatInt(int64(-9223372036854775808), 10) + "l", strconv.FormatUint(uint64(4), 10) + "ul", strconv.FormatInt(int64(0), 10) + "l", strconv.FormatUint(uint64(9223372036854775807), 10) + "ul"}
 }
 
 func halved(x int64) int64 {
