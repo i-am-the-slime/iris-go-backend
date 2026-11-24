@@ -1,0 +1,16 @@
+---
+source: tests-integration/src/fixtures.rs
+---
+@export describe = \dictionary%0 -> dictionary%0.describe
+
+@export instance describeInt = { describe: \$int%1@(_) -> "Int" }
+
+@export described = \describeADict%2 -> \value%3 -> { label: describe describeADict%2 value%3 }
+
+@export defaulted = \describeADict%4 -> { name: "defaulted" }
+
+@export accessAfterApplication = (described describeInt 1).label
+
+@export accessAfterTypeApplication = defaulted.name
+
+@export accessNested = { outer: defaulted describeInt }.outer.name
