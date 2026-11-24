@@ -582,10 +582,13 @@ fn starting_value(statement: &GoStatement, buffer: &str) -> Option<GoExpression>
     }
     if let GoExpression::Identifier(append) = &**function
         && append == "append"
-        && let [_, GoExpression::Spread(constant)] = arguments.as_slice()
-        && let GoExpression::String(_) = &**constant
     {
-        return Some(GoExpression::Conversion { type_: byte_slice(), value: constant.clone() });
+        let text = match arguments.as_slice() {
+            [_, GoExpression::Spread(text)] => (**text).clone(),
+            [_, GoExpression::Rune(byte)] => GoExpression::String(byte.to_string()),
+            _ => return None,
+        };
+        return Some(GoExpression::Conversion { type_: byte_slice(), value: Box::new(text) });
     }
     let mut arguments = arguments.clone();
     arguments[0] = identifier_expression("nil");
