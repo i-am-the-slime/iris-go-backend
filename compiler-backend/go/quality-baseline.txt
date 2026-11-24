@@ -1,8 +1,8 @@
-examples any 567
+examples any 580
 examples any:boxing 118
 examples any:empty-data 0
 examples any:existential 10
-examples any:foreign 66
+examples any:foreign 79
 examples any:free-value 102
 examples any:polymorphic-recursion 35
 examples any:rank-n 69
