@@ -1,0 +1,241 @@
+---
+source: tests-integration/src/fixtures.rs
+---
+// Data/Show/show.go
+package show
+
+import "strconv"
+
+func Show(i int32) string {
+	return strconv.Itoa(int(i))
+}
+
+func AppendShowArrayInt(buffer []byte, array []int32) []byte {
+	buffer = append(buffer, "["...)
+	for index, element := range array {
+		if index > 0 {
+			buffer = append(buffer, ","...)
+		}
+		buffer = strconv.AppendInt(buffer, int64(element), 10)
+	}
+	buffer = append(buffer, "]"...)
+	return buffer
+}
+
+// main.go
+package main
+
+import (
+	"fixture/Data/Show"
+	arraypkg "github.com/i-am-the-slime/iris-go/array"
+	"github.com/i-am-the-slime/iris-go/console"
+	"github.com/i-am-the-slime/iris-go/prim"
+	"strconv"
+	"strings"
+)
+
+var main_ = initializeMain_()
+
+func initializeMain_() []string {
+	kept := []int32{}
+	for value := int32(1); value < 101; value++ {
+		value2 := value - 5
+		if value2 > 0 {
+			kept = append(kept, value2)
+		}
+	}
+	step, count := arraypkg.RangeSteps(1, int32(len(kept)))
+	mapped := make([]float64, count)
+	for index := range count {
+		i := 1 + int32(index)*step
+		price := float64(i)
+		mapped[index] = price * 1.19
+	}
+	return []string{strconv.Itoa(int(shortLiteralStaysScalar)), string(show.AppendShowArrayInt(nil, shortRangeStaysScalar)), strconv.Itoa(int(foldLanes(kept, 0))), prim.ShowNumber(foldLanes2(mapped, 0.0))}
+}
+
+var shortLiteralStaysScalar = initializeShortLiteralStaysScalar()
+
+func initializeShortLiteralStaysScalar() int32 {
+	array := []int32{1, 2, 3}
+	var accumulator int32 = 0
+	for _, value := range array {
+		value2 := value * 2
+		accumulator += value2
+	}
+	return accumulator
+}
+
+var shortRangeStaysScalar = initializeShortRangeStaysScalar()
+
+func initializeShortRangeStaysScalar() []int32 {
+	mapped := make([]int32, 20)
+	for index := range 20 {
+		value := 1 + int32(index)
+		mapped[index] = value * 3
+	}
+	return mapped
+}
+
+func main() {
+	console.Print("[" + strings.Join(main_, " ") + "]")
+}
+
+// main_neon.go
+//go:build goexperiment.simd && arm64
+
+package main
+
+import (
+	"math"
+	"simd/archsimd"
+)
+
+func foldLanes(xs []int32, initial int32) int32 {
+	c0 := archsimd.BroadcastInt32x4(2)
+	acc0 := archsimd.BroadcastInt32x4(0)
+	acc1, acc2, acc3 := acc0, acc0, acc0
+	const step = 4
+	i := 0
+	for ; i < len(xs)-4*step+1; i += 4 * step {
+		x0 := archsimd.LoadInt32x4(xs[i : i+step])
+		acc0 = acc0.Add(x0.Mul(c0))
+		x1 := archsimd.LoadInt32x4(xs[i+step : i+2*step])
+		acc1 = acc1.Add(x1.Mul(c0))
+		x2 := archsimd.LoadInt32x4(xs[i+2*step : i+3*step])
+		acc2 = acc2.Add(x2.Mul(c0))
+		x3 := archsimd.LoadInt32x4(xs[i+3*step : i+4*step])
+		acc3 = acc3.Add(x3.Mul(c0))
+	}
+	acc0 = acc0.Add(acc1).Add(acc2.Add(acc3))
+	var lanes [4]int32
+	acc0.Store(lanes[:])
+	accumulator := initial
+	for _, lane := range lanes[:step] {
+		accumulator = accumulator + lane
+	}
+	for ; i < len(xs); i++ {
+		x := xs[i]
+		accumulator = accumulator + x * 2
+	}
+	return accumulator
+}
+
+func foldLanes2(xs []float64, initial float64) float64 {
+	acc0 := archsimd.BroadcastFloat64x2(math.Copysign(0, -1))
+	acc1, acc2, acc3 := acc0, acc0, acc0
+	const step = 2
+	i := 0
+	for ; i < len(xs)-4*step+1; i += 4 * step {
+		x0 := archsimd.LoadFloat64x2(xs[i : i+step])
+		acc0 = acc0.Add(x0)
+		x1 := archsimd.LoadFloat64x2(xs[i+step : i+2*step])
+		acc1 = acc1.Add(x1)
+		x2 := archsimd.LoadFloat64x2(xs[i+2*step : i+3*step])
+		acc2 = acc2.Add(x2)
+		x3 := archsimd.LoadFloat64x2(xs[i+3*step : i+4*step])
+		acc3 = acc3.Add(x3)
+	}
+	acc0 = acc0.Add(acc1).Add(acc2.Add(acc3))
+	var lanes [2]float64
+	acc0.Store(lanes[:])
+	accumulator := initial
+	for _, lane := range lanes[:step] {
+		accumulator = accumulator + lane
+	}
+	for ; i < len(xs); i++ {
+		x := xs[i]
+		accumulator = accumulator + x
+	}
+	return accumulator
+}
+
+// main_scalar.go
+//go:build !(goexperiment.simd && (arm64 || wasm))
+
+package main
+
+func foldLanes(xs []int32, initial int32) int32 {
+	accumulator := initial
+	for _, x := range xs {
+		accumulator = accumulator + x * 2
+	}
+	return accumulator
+}
+
+func foldLanes2(xs []float64, initial float64) float64 {
+	accumulator := initial
+	for _, x := range xs {
+		accumulator = accumulator + x
+	}
+	return accumulator
+}
+
+// main_vector.go
+//go:build goexperiment.simd && wasm
+
+package main
+
+import (
+	"math"
+	"simd"
+)
+
+func foldLanes(xs []int32, initial int32) int32 {
+	c0 := simd.BroadcastInt32s(2)
+	acc0 := simd.BroadcastInt32s(0)
+	acc1, acc2, acc3 := acc0, acc0, acc0
+	step := acc0.Len()
+	i := 0
+	for ; i < len(xs)-4*step+1; i += 4 * step {
+		x0 := simd.LoadInt32s(xs[i : i+step])
+		acc0 = acc0.Add(x0.Mul(c0))
+		x1 := simd.LoadInt32s(xs[i+step : i+2*step])
+		acc1 = acc1.Add(x1.Mul(c0))
+		x2 := simd.LoadInt32s(xs[i+2*step : i+3*step])
+		acc2 = acc2.Add(x2.Mul(c0))
+		x3 := simd.LoadInt32s(xs[i+3*step : i+4*step])
+		acc3 = acc3.Add(x3.Mul(c0))
+	}
+	acc0 = acc0.Add(acc1).Add(acc2.Add(acc3))
+	var lanes [16]int32
+	acc0.Store(lanes[:])
+	accumulator := initial
+	for _, lane := range lanes[:step] {
+		accumulator = accumulator + lane
+	}
+	for ; i < len(xs); i++ {
+		x := xs[i]
+		accumulator = accumulator + x * 2
+	}
+	return accumulator
+}
+
+func foldLanes2(xs []float64, initial float64) float64 {
+	acc0 := simd.BroadcastFloat64s(math.Copysign(0, -1))
+	acc1, acc2, acc3 := acc0, acc0, acc0
+	step := acc0.Len()
+	i := 0
+	for ; i < len(xs)-4*step+1; i += 4 * step {
+		x0 := simd.LoadFloat64s(xs[i : i+step])
+		acc0 = acc0.Add(x0)
+		x1 := simd.LoadFloat64s(xs[i+step : i+2*step])
+		acc1 = acc1.Add(x1)
+		x2 := simd.LoadFloat64s(xs[i+2*step : i+3*step])
+		acc2 = acc2.Add(x2)
+		x3 := simd.LoadFloat64s(xs[i+3*step : i+4*step])
+		acc3 = acc3.Add(x3)
+	}
+	acc0 = acc0.Add(acc1).Add(acc2.Add(acc3))
+	var lanes [8]float64
+	acc0.Store(lanes[:])
+	accumulator := initial
+	for _, lane := range lanes[:step] {
+		accumulator = accumulator + lane
+	}
+	for ; i < len(xs); i++ {
+		x := xs[i]
+		accumulator = accumulator + x
+	}
+	return accumulator
+}

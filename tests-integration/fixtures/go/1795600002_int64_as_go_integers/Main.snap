@@ -99,7 +99,6 @@ import (
 	"fixture/Data/Maybe"
 	"fixture/Data/Show"
 	"fixture/Data/UInt64"
-	arraypkg "github.com/i-am-the-slime/iris-go/array"
 	"github.com/i-am-the-slime/iris-go/console"
 	"github.com/i-am-the-slime/iris-go/ffi/Data_Int64_Internal_ffi"
 	nullablepkg "github.com/i-am-the-slime/iris-go/nullable"
@@ -110,15 +109,6 @@ import (
 var main_ = initializeMain_()
 
 func initializeMain_() []string {
-	array := []struct{}{{}}
-	bound := []string{}
-	for _, element := range array {
-		bound = append(bound, report(element)...)
-	}
-	return arraypkg.Bounded(bound)
-}
-
-func report(ignored struct{}) []string {
 	array := []int32{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33}
 	mapped := make([]int64, len(array))
 	for index, element := range array {

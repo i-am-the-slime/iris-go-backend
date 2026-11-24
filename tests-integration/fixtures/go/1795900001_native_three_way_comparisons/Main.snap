@@ -122,7 +122,6 @@ import (
 	"fixture/Data/Int64"
 	"fixture/Data/Show"
 	"fixture/Data/UInt64"
-	arraypkg "github.com/i-am-the-slime/iris-go/array"
 	"github.com/i-am-the-slime/iris-go/console"
 	"github.com/i-am-the-slime/iris-go/prim"
 	"strconv"
@@ -132,15 +131,6 @@ import (
 var main_ = initializeMain_()
 
 func initializeMain_() []string {
-	array := []struct{}{{}}
-	bound := []string{}
-	for _, element := range array {
-		bound = append(bound, report(element)...)
-	}
-	return arraypkg.Bounded(bound)
-}
-
-func report(ignored struct{}) []string {
 	ints := []int32{3, -1, 4, 1, -5, 9, 2, 6, 5, 3, -5, 8, 9, 7, 9, 3, 2, 3, 8, 4, -6, 2, 6, 4, 3, 3, 8, 3, 2, 7, 9, 5, 0}
 	mapped := make([]int64, len(ints))
 	for index, element := range ints {

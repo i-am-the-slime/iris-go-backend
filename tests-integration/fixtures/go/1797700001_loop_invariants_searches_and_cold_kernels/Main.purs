@@ -42,7 +42,6 @@ checks limit = concatMap (\n -> map _.name (filter (\rule -> rule.check n) rules
 placements :: Int -> Array (Array Int) -> Array (Array Int)
 placements size placed = concatMap (\queens -> map (\row -> [ row ] <> queens) (1 .. size)) placed
 
--- | A program runs its `main` once, where vectors would not pay.
 main :: Array String
 main = do
   let numbers = 0 .. 40

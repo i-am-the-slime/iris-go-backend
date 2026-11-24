@@ -41,12 +41,12 @@ use super::fusion::Demand;
 use super::iteration::Found;
 use super::{Emitter, GoSourceFile, call, identifier_expression, unique};
 use crate::error::GoResult;
-use crate::foreign::{Boundary, Comparison, Foreign, Iteration, Operator};
-use crate::monomorphic::traversal::for_each_child;
+use crate::foreign::{Boundary, Comparison, Foreign, GoFunction, GoPackage, Iteration, Operator};
+use crate::monomorphic::traversal::visit;
 use crate::monomorphic::{
     Expression, ExpressionKind, FunctionId, Literal, Local, LocalId, Program,
 };
-use crate::monotype::{Monotype, MonotypeId, Monotypes};
+use crate::monotype::{Monotype, MonotypeId};
 use crate::naming::GO_PREDECLARED;
 use crate::primitives::{Int64Operation, Signedness};
 use crate::syntax::{
@@ -57,8 +57,20 @@ const NEON_CONSTRAINT: &str = "goexperiment.simd && arm64";
 const PORTABLE_CONSTRAINT: &str = "goexperiment.simd && wasm";
 const SCALAR_CONSTRAINT: &str = "!(goexperiment.simd && (arm64 || wasm))";
 
-/// Array literals shorter than this keep their scalar loops.
-const SHORT_LITERAL: usize = 32;
+/// What the kernel files beside a package file `<stem>.go` add to its stem.
+pub const KERNEL_FILE_SUFFIXES: [&str; 3] = ["_neon.go", "_vector.go", "_scalar.go"];
+
+/// Whether the Go source is a kernel file, by the build constraint it starts with.
+pub fn is_kernel_file(source: &str) -> bool {
+    let first_line = source.lines().next().unwrap_or_default();
+    [NEON_CONSTRAINT, PORTABLE_CONSTRAINT, SCALAR_CONSTRAINT]
+        .iter()
+        .any(|constraint| first_line.strip_prefix("//go:build ") == Some(*constraint))
+}
+
+/// Arrays known to be shorter than this keep their scalar loops: their vector loops would
+/// barely run, and cost three build variants of code.
+const SHORT_ARRAY: usize = 32;
 
 /// How far a callback may call into other functions.
 const INLINE_DEPTH: usize = 6;
@@ -68,50 +80,76 @@ const INLINE_DEPTH: usize = 6;
 pub(super) struct Kernels {
     names: FxHashMap<String, String>,
     sources: Vec<KernelSource>,
-    /// The iterations the program runs once, by their callbacks: a vector loop pays for its
-    /// three build variants only in code that may run often.
-    run_once: FxHashSet<*const Expression>,
+    /// The locals bound to arrays known to be short. How often a loop runs is not known, nor
+    /// how long an array read from the program's input is, so only a short length keeps a
+    /// loop scalar.
+    short_locals: FxHashSet<LocalId>,
 }
 
 impl Kernels {
-    pub(super) fn new(program: &Program, monotypes: &Monotypes) -> Kernels {
-        let mut run_once = FxHashSet::default();
-        mark_run_once(&program.function(program.entry).body, monotypes, &mut run_once);
-        Kernels { run_once, ..Kernels::default() }
+    pub(super) fn new(program: &Program) -> Kernels {
+        let mut short_locals = FxHashSet::default();
+        for function in &program.functions {
+            visit(&function.body, &mut |expression| {
+                let ExpressionKind::Let { bindings, .. } = &expression.kind else { return };
+                for binding in bindings {
+                    if is_short(&binding.value, &short_locals) {
+                        short_locals.insert(binding.local.id);
+                    }
+                }
+            });
+        }
+        Kernels { short_locals, ..Kernels::default() }
     }
 }
 
-/// Every iteration that runs once each time `expression` does: what a lambda, an effect passed
-/// along or a loop's body hold may run any number of times.
-fn mark_run_once(
-    expression: &Expression,
-    monotypes: &Monotypes,
-    run_once: &mut FxHashSet<*const Expression>,
-) {
-    let passed_along = |argument: &Expression| {
-        matches!(
-            monotypes.get(argument.monotype),
-            Monotype::Effect(_) | Monotype::Function(..) | Monotype::Lazy(_)
-        )
-    };
-    match &expression.kind {
-        ExpressionKind::Lambda { .. } | ExpressionKind::EffectEach { .. } => {}
-        ExpressionKind::Foreign { foreign, arguments } => {
-            if let Foreign::Call { boundary: Boundary { iteration: Some(_), .. }, .. } = foreign
-                && let Some(callback) = arguments.first()
-            {
-                run_once.insert(std::ptr::from_ref(callback));
-            }
-            for argument in arguments.iter().filter(|argument| !passed_along(argument)) {
-                mark_run_once(argument, monotypes, run_once);
-            }
+/// Whether the array is known to be shorter than `SHORT_ARRAY`: a literal, a range between
+/// literals, or a `map`, `filter`, `zipWith`, slice or tail of such.
+fn is_short(array: &Expression, short_locals: &FxHashSet<LocalId>) -> bool {
+    match &array.kind {
+        ExpressionKind::Array(elements) => elements.len() < SHORT_ARRAY,
+        ExpressionKind::Local(local) => short_locals.contains(local),
+        ExpressionKind::Coerce(inner) => is_short(inner, short_locals),
+        ExpressionKind::Foreign {
+            foreign: Foreign::Call { function: GoFunction { package: GoPackage::Array, name }, .. },
+            arguments,
+        } if matches!(*name, "Slice" | "Tail") => {
+            let short_bounds = match arguments.as_slice() {
+                [start, end, _] => match (&start.kind, &end.kind) {
+                    (
+                        ExpressionKind::Literal(Literal::Int(start)),
+                        ExpressionKind::Literal(Literal::Int(end)),
+                    ) => *start >= 0 && *end - *start < SHORT_ARRAY as i64,
+                    _ => false,
+                },
+                _ => false,
+            };
+            short_bounds || arguments.last().is_some_and(|sliced| is_short(sliced, short_locals))
         }
-        ExpressionKind::Apply { arguments, .. } => {
-            for argument in arguments.iter().filter(|argument| !passed_along(argument)) {
-                mark_run_once(argument, monotypes, run_once);
-            }
+        ExpressionKind::Foreign { foreign: Foreign::Range, arguments } => {
+            let [first, last] = arguments.as_slice() else { return false };
+            let (
+                ExpressionKind::Literal(Literal::Int(first)),
+                ExpressionKind::Literal(Literal::Int(last)),
+            ) = (&first.kind, &last.kind)
+            else {
+                return false;
+            };
+            first.abs_diff(*last) < SHORT_ARRAY as u64
         }
-        _ => for_each_child(expression, &mut |child| mark_run_once(child, monotypes, run_once)),
+        ExpressionKind::Foreign {
+            foreign: Foreign::Call { boundary: Boundary { iteration: Some(iteration), .. }, .. },
+            arguments,
+        } => match iteration {
+            Iteration::Map | Iteration::MapWithIndex | Iteration::Filter => {
+                is_short(&arguments[1], short_locals)
+            }
+            Iteration::ZipWith => {
+                is_short(&arguments[1], short_locals) || is_short(&arguments[2], short_locals)
+            }
+            _ => false,
+        },
+        _ => false,
     }
 }
 
@@ -165,9 +203,6 @@ where
     where
         'p: 'e,
     {
-        if self.vector_kernels.run_once.contains(&std::ptr::from_ref(&arguments[0])) {
-            return None;
-        }
         let (arity, result_element) = match iteration {
             Iteration::FoldLeft => (2, self.element(monotype)?),
             Iteration::Map => {
@@ -180,24 +215,19 @@ where
             _ => return None,
         };
         let callback = self.callback(&arguments[0], arity)?;
-        let mut analysis = Analysis::new(self, result_element);
-        let shape = match iteration {
-            Iteration::FoldLeft => {
-                let element = analysis.source(&arguments[2])?;
-                let step = analysis.apply(&callback, vec![Term::Accumulator, element], 0)?;
-                let reduction = analysis.reduction(&step)?;
-                Shape::Fold { step, reduction }
-            }
-            Iteration::Map => {
-                let element = analysis.source(&arguments[1])?;
-                Shape::Map(analysis.apply(&callback, vec![element], 0)?)
-            }
-            _ => {
-                let left = analysis.source(&arguments[1])?;
-                let right = analysis.source(&arguments[2])?;
-                Shape::Map(analysis.apply(&callback, vec![left, right], 0)?)
-            }
-        };
+        // A scalar `Number` fold waits for each addition before the next, where a kernel keeps
+        // several accumulators: building the array a fused loop would have folded pays.
+        let builds_folded_array =
+            iteration == Iteration::FoldLeft && result_element == Element::Number;
+        let (analysis, shape) = self
+            .vector_shape(iteration, &callback, arguments, result_element, false)
+            .or_else(|| {
+                builds_folded_array
+                    .then(|| {
+                        self.vector_shape(iteration, &callback, arguments, result_element, true)
+                    })
+                    .flatten()
+            })?;
         let initial = matches!(iteration, Iteration::FoldLeft).then(|| &arguments[1]);
         if let Some(initial) = initial
             && self.element(initial.monotype) != Some(result_element)
@@ -205,10 +235,52 @@ where
             return None;
         }
         let Analysis { inputs, captures, bindings, element, .. } = analysis;
+        let copies = matches!(shape, Shape::Map(Term::Lane(_)));
+        if copies || inputs.iter().any(|input| is_short(input, &self.vector_kernels.short_locals)) {
+            return None;
+        }
         let parameters = parameter_names(&captures);
         let (bindings, shape) = inline_single_uses(bindings, shape);
         let kernel = Kernel { element, inputs: inputs.len(), parameters, bindings, shape };
         Some(Plan { kernel, inputs, captures, initial })
+    }
+
+    /// What the kernel computes of each element, with the folded array built as it is when
+    /// `built_source`, rather than computed in the kernel's loop.
+    fn vector_shape<'a, 'e>(
+        &'a self,
+        iteration: Iteration,
+        callback: &Found<'e>,
+        arguments: &'e [Expression],
+        result_element: Element,
+        built_source: bool,
+    ) -> Option<(Analysis<'a, 'e, Self>, Shape)>
+    where
+        'p: 'e,
+    {
+        let mut analysis = Analysis::new(self, result_element);
+        let shape = match iteration {
+            Iteration::FoldLeft => {
+                let element = if built_source {
+                    analysis.built(&arguments[2])?
+                } else {
+                    analysis.source(&arguments[2])?
+                };
+                let step = analysis.apply(callback, vec![Term::Accumulator, element], 0)?;
+                let reduction = analysis.reduction(&step)?;
+                Shape::Fold { step, reduction }
+            }
+            Iteration::Map => {
+                let element = analysis.source(&arguments[1])?;
+                Shape::Map(analysis.apply(callback, vec![element], 0)?)
+            }
+            _ => {
+                let left = analysis.source(&arguments[1])?;
+                let right = analysis.source(&arguments[2])?;
+                Shape::Map(analysis.apply(callback, vec![left, right], 0)?)
+            }
+        };
+        Some((analysis, shape))
     }
 
     fn kernel_name(&mut self, kernel: &Kernel, line: Option<SourceLine>) -> String {
@@ -668,14 +740,15 @@ impl<'a, 'e, E: Lookup<'e>> Analysis<'a, 'e, E> {
                 _ => None,
             };
         }
-        if self.emitter.fusible(array)
-            || self.emitter.array_element_of(array.monotype)? != self.element
-        {
+        if self.emitter.fusible(array) {
             return None;
         }
-        // A literal array is too short for vectors to pay.
-        if matches!(&array.kind, ExpressionKind::Array(elements) if elements.len() < SHORT_LITERAL)
-        {
+        self.built(array)
+    }
+
+    /// The element of an array the kernel is passed as it is, built first if it is a loop.
+    fn built(&mut self, array: &'e Expression) -> Option<Term> {
+        if self.emitter.array_element_of(array.monotype)? != self.element {
             return None;
         }
         self.inputs.push(array);

@@ -116,6 +116,7 @@ use crate::timing::timed;
 
 pub(crate) use self::closures::Eliminators;
 pub use self::packages::GoSourceFile;
+pub use self::vector::{KERNEL_FILE_SUFFIXES, is_kernel_file};
 
 pub fn emit_program<Q>(
     mut program: Program,
@@ -148,7 +149,7 @@ where
     emitter.materialized = reused.materialized;
     emitter.candidates = reused.candidates;
     emitter.closure_sets = closure_sets;
-    emitter.vector_kernels = vector::Kernels::new(program, emitter.monotypes);
+    emitter.vector_kernels = vector::Kernels::new(program);
     emitter.assign_function_names();
     let groups = timed("groups", || {
         groups::tail_call_groups(program, emitter.monotypes, &emitter.lazy_constants)

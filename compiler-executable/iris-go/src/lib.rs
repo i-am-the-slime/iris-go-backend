@@ -83,6 +83,7 @@ pub fn run(config: GoConfig) -> Result<(), String> {
         eprintln!("go: note: {note}");
     }
     let files = program.files.len();
+    remove_stale_kernel_files(&config.destination, &program.files)?;
     for (path, source) in program.files {
         let path = config.destination.join(path);
         if let Some(directory) = path.parent() {
@@ -102,6 +103,26 @@ pub fn run(config: GoConfig) -> Result<(), String> {
         started.elapsed(),
         go::Work::so_far().since(work_started)
     );
+    Ok(())
+}
+
+/// Removes the vector kernel files an earlier compilation wrote beside a package file this one
+/// writes without them, which would otherwise build into the package unused.
+fn remove_stale_kernel_files(destination: &Path, files: &[(String, String)]) -> Result<(), String> {
+    let written: Vec<&str> = files.iter().map(|(path, _)| path.as_str()).collect();
+    for path in &written {
+        let Some(stem) = path.strip_suffix(".go") else { continue };
+        for variant in go::KERNEL_FILE_SUFFIXES {
+            let kernel = format!("{stem}{variant}");
+            if written.contains(&kernel.as_str()) {
+                continue;
+            }
+            let kernel = destination.join(kernel);
+            if fs::read_to_string(&kernel).is_ok_and(|source| go::is_kernel_file(&source)) {
+                fs::remove_file(&kernel).map_err(|error| error.to_string())?;
+            }
+        }
+    }
     Ok(())
 }
 
