@@ -9,6 +9,10 @@ pub enum Primitive {
     Expand,
     Match,
     OnMatch,
+    /// `Data.Variant.unvariant`, whose library body coerces the continuation
+    /// to pass a hand-built IsSymbol dictionary: Go's Variant knows its label
+    /// in each branch, so each runs the continuation's instantiation at it.
+    Unvariant,
     ReifyType,
     /// `Data.Int64.Internal.signedToUnsigned` and `unsignedToSigned`, whose
     /// bodies would need a Long of each signedness at once: Go's conversion
@@ -35,6 +39,7 @@ pub fn known(module: &str, name: &str) -> Option<Primitive> {
         ("Data.Variant", "expand") => Some(Primitive::Expand),
         ("Data.Variant", "match") => Some(Primitive::Match),
         ("Data.Variant", "onMatch") => Some(Primitive::OnMatch),
+        ("Data.Variant", "unvariant") => Some(Primitive::Unvariant),
         ("Data.Reflectable", "reifyType") => Some(Primitive::ReifyType),
         ("Data.Int64.Internal", "signedToUnsigned") => Some(Primitive::ToUnsigned),
         ("Data.Int64.Internal", "unsignedToSigned") => Some(Primitive::ToSigned),
