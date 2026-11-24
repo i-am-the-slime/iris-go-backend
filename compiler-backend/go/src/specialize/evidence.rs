@@ -60,6 +60,14 @@ where
     }
 
     pub(super) fn instance_name(&mut self, origin: InstanceCandidateOrigin) -> GoResult<SmolStr> {
+        let name = self.declared_instance_name(origin)?;
+        Ok(name.unwrap_or_else(|| SmolStr::new_static("instance")))
+    }
+
+    fn declared_instance_name(
+        &mut self,
+        origin: InstanceCandidateOrigin,
+    ) -> GoResult<Option<SmolStr>> {
         let name = match origin {
             InstanceCandidateOrigin::Instance(file_id, instance) => {
                 let module = self.context.module(file_id)?;
@@ -72,7 +80,7 @@ where
                 item.and_then(|item| module.indexed.items[item].name.clone())
             }
         };
-        Ok(name.unwrap_or_else(|| SmolStr::new_static("instance")))
+        Ok(name)
     }
 
     pub(super) fn dictionary_names(
@@ -165,7 +173,7 @@ where
                         self.runtime_superclass(scope.definition, parent, superclass)
                     }
                     _ => {
-                        let superclass = format!("{superclass:?}");
+                        let superclass = self.superclass_text(superclass)?;
                         Err(scope.unsupported(UnsupportedState::MissingSuperclass { superclass }))
                     }
                 }
@@ -221,11 +229,13 @@ where
             if !self.context.types.match_type(head, constraint, &names, &mut bindings) {
                 let pretty =
                     checking::core::pretty::Pretty::new(self.context.queries, &module.checked);
+                let instance = match self.declared_instance_name(origin)? {
+                    Some(name) => name,
+                    None => pretty.render(head).ok().unwrap_or_default(),
+                };
                 let constraint = match pretty.render(constraint) {
-                    Ok(rendered) => {
-                        format!("{rendered} against instance {}", self.instance_name(origin)?)
-                    }
-                    Err(_) => format!("{constraint:?}"),
+                    Ok(rendered) => format!("{rendered} against the instance {instance}"),
+                    Err(_) => format!("against the instance {instance}"),
                 };
                 return Err(scope.unsupported(UnsupportedState::InstanceMismatch { constraint }));
             }
@@ -298,7 +308,7 @@ where
             return Err(scope.unsupported(UnsupportedState::MissingDeclaration));
         };
         let Some(entry) = instance.superclasses.iter().find(|entry| entry.id == superclass) else {
-            let superclass = format!("{superclass:?}");
+            let superclass = self.superclass_text(superclass)?;
             return Err(scope.unsupported(UnsupportedState::MissingSuperclass { superclass }));
         };
         let entry = *entry;

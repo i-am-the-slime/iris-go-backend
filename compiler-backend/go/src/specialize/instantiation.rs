@@ -20,6 +20,24 @@ impl<'q, Q> Specializer<'q, Q>
 where
     Q: checking::ExternalQueries,
 {
+    pub(super) fn variable_text(&mut self, name: Name) -> GoResult<String> {
+        let module = self.context.module(name.file)?;
+        let text = match module.checked.lookup_name(name) {
+            Some(text) => self.context.queries.lookup_smol_str(text).to_string(),
+            None => name.as_text().to_string(),
+        };
+        Ok(text)
+    }
+
+    pub(super) fn superclass_text(
+        &mut self,
+        superclass: checking::evidence::SuperclassId,
+    ) -> GoResult<String> {
+        let module = self.context.module(superclass.file_id)?;
+        let class = module.indexed.items[superclass.type_id].name.clone().unwrap_or_default();
+        Ok(format!("superclass {} of {class}", superclass.member + 1))
+    }
+
     pub(super) fn is_continuation(&mut self, scope: &Scope, expected: TypeId) -> GoResult<bool> {
         let closed = self.context.types.substitute(expected, &scope.substitution);
         let Some(scheme) = crate::scheme::rank_n_scheme(&mut self.context, closed)? else {
@@ -268,10 +286,7 @@ where
             if passed_whole {
                 return Ok(local);
             }
-            let variable = match scope.module.checked.lookup_name(name) {
-                Some(text) => self.context.queries.lookup_smol_str(text).to_string(),
-                None => name.as_text().to_string(),
-            };
+            let variable = self.variable_text(name)?;
             return Err(
                 self.unsupported(scope, UnsupportedState::UninstantiatedVariable { variable })
             );
@@ -579,7 +594,7 @@ where
         }
         for name in &names {
             if !instantiations.contains_key(name) {
-                let variable = format!("{name:?}");
+                let variable = self.variable_text(*name)?;
                 return Err(
                     self.unsupported(scope, UnsupportedState::UninstantiatedVariable { variable })
                 );
