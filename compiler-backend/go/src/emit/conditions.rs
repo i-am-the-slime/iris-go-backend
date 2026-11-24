@@ -8,10 +8,36 @@ pub(super) fn assign_conditions(declarations: &mut [GoDeclaration]) {
             while position + 1 < block.len() {
                 if let Some(define) = defined_condition(&block[position], &block[position + 1]) {
                     block.splice(position..position + 2, [define]);
+                    test_in_place(block, position);
                 }
                 position += 1;
             }
         });
+    }
+}
+
+/// `result := c; if result {` is `if c {` when nothing else reads `result`.
+fn test_in_place(block: &mut Vec<GoStatement>, position: usize) {
+    let GoStatement::Define { names, .. } = &block[position] else { return };
+    let [name] = names.as_slice() else { return };
+    let Some(GoStatement::If { condition: GoExpression::Identifier(tested), .. }) =
+        block.get(position + 1)
+    else {
+        return;
+    };
+    if tested != name {
+        return;
+    }
+    let mut rest = block[position + 1..].to_vec();
+    if let GoStatement::If { condition, .. } = &mut rest[0] {
+        *condition = GoExpression::Boolean(true);
+    }
+    if super::statements_reference(&mut rest, name) {
+        return;
+    }
+    let GoStatement::Define { mut values, .. } = block.remove(position) else { unreachable!() };
+    if let GoStatement::If { condition, .. } = &mut block[position] {
+        *condition = values.pop().expect("a condition is defined with one value");
     }
 }
 
