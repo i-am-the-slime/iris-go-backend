@@ -28,6 +28,7 @@ use smol_str::SmolStr;
 
 use self::arguments::ArgumentSpecializations;
 use self::coverage::{binds_only, reachable};
+use self::fold::shares_branch_with_next;
 
 mod arguments;
 mod choice;
@@ -385,6 +386,9 @@ impl Simplifier<'_> {
                     self.joined_comparisons(&condition, &then, &otherwise, monotype)
                 {
                     return joined;
+                }
+                if shares_branch_with_next(&condition, &then, &otherwise) {
+                    return self.boolean_choice(*condition, then, otherwise, monotype);
                 }
                 let (then, otherwise) = (Box::new(then), Box::new(otherwise));
                 ExpressionKind::If { condition, then, otherwise }

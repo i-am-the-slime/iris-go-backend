@@ -38,9 +38,9 @@ fn defined_condition(variable: &GoStatement, chain: &GoStatement) -> Option<GoSt
         value = match (literal, value) {
             (true, GoExpression::Boolean(false)) => condition.clone(),
             (false, GoExpression::Boolean(true)) => negated(condition),
-            (true, GoExpression::Boolean(true)) | (false, GoExpression::Boolean(false)) => {
-                return None;
-            }
+            // The test is pure, so a branch that gives what the rest gives can go.
+            (true, GoExpression::Boolean(true)) => GoExpression::Boolean(true),
+            (false, GoExpression::Boolean(false)) => GoExpression::Boolean(false),
             (true, rest) => chained("||", condition.clone(), rest),
             (false, rest) => chained("&&", negated(condition), rest),
         };
@@ -55,7 +55,7 @@ fn assigned_boolean(name: &str, block: &[GoStatement]) -> Option<GoExpression> {
     (target == name && is_pure(value)).then(|| value.clone())
 }
 
-fn is_pure(expression: &GoExpression) -> bool {
+pub(super) fn is_pure(expression: &GoExpression) -> bool {
     match expression {
         GoExpression::Identifier(_)
         | GoExpression::Qualified { .. }

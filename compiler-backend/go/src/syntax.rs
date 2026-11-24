@@ -72,7 +72,7 @@ impl StructField {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum GoExpression {
     Identifier(String),
     Qualified {
@@ -139,7 +139,7 @@ pub enum GoExpression {
     },
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum GoStatement {
     Define {
         names: Vec<String>,
@@ -293,14 +293,14 @@ impl GoStatement {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct GoCase {
     pub values: Vec<GoExpression>,
     pub body: Vec<GoStatement>,
     pub line: Option<SourceLine>,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct GoDefault {
     pub covers: Vec<GoExpression>,
     pub body: Vec<GoStatement>,

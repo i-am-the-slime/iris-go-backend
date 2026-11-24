@@ -41,6 +41,9 @@ mod int64;
 mod intervals;
 mod iteration;
 mod joins;
+mod kept;
+mod known;
+mod labelled;
 mod json;
 mod layout;
 mod lengths;
@@ -48,6 +51,7 @@ mod lines;
 mod locals;
 mod loop_state;
 mod maybe;
+mod merging;
 mod mutable;
 mod names;
 mod operators;
@@ -182,6 +186,9 @@ where
         await_fibers(&mut declarations, await_, every_line);
     }
     let lines_aside = every_line.then(|| lines::set_aside(&mut declarations));
+    timed("labelled", || labelled::unlabel_blocks(&mut declarations));
+    timed("known", || known::drop_known_tests(&mut declarations));
+    timed("merging", || merging::merge_identical_branches(&mut declarations));
     timed("references", || references::promote_references(&mut declarations));
     timed("composites", || composites::take_composites_apart(&mut declarations));
     timed("immediate", || immediate::reduce_immediate_calls(&mut declarations));
@@ -1713,9 +1720,7 @@ where
                 let values = self.values(arguments, out)?;
                 self.construct(data, *constructor, values)?
             }
-            ExpressionKind::Reuse { cell, data, constructor, arguments } => {
-                self.reused(cell, data, *constructor, arguments, &[], out)?
-            }
+            ExpressionKind::Reuse { .. } => self.reused(&expression.kind, &[], out)?,
             ExpressionKind::UniqueEdge { owned, cell, edge } => {
                 self.unique_edge(owned, cell, edge, out)?
             }
@@ -1726,9 +1731,7 @@ where
                     let constructed = self.construct(data, *constructor, values)?;
                     with_unique_mask(constructed, mask)
                 }
-                ExpressionKind::Reuse { cell, data, constructor, arguments } => {
-                    self.reused(cell, data, *constructor, arguments, edges, out)?
-                }
+                ExpressionKind::Reuse { .. } => self.reused(&value.kind, edges, out)?,
                 _ => unreachable!(
                     "invariant violated: unique edges mark neither a construction nor a reuse"
                 ),

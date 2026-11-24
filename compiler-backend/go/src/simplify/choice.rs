@@ -6,7 +6,8 @@
 use rustc_hash::FxHashMap;
 
 use super::coverage::{alternatives_size, column_outcomes};
-use super::{INLINE_SIZE, Simplifier};
+use super::{INLINE_SIZE, Simplifier, substitute};
+use crate::purity::{is_trivial, mentions_any};
 use crate::foreign::{
     Comparison, Foreign, GoFunction, GoPackage, MUTABLE_PEEK_UNSAFE, MUTABLE_WITHIN, Operator,
 };
@@ -42,9 +43,14 @@ impl Simplifier<'_> {
             ExpressionKind::If { .. }
             | ExpressionKind::Let { .. }
             | ExpressionKind::Case { .. } => {
-                let placements = plan(scrutinee, alternatives, self.monotypes)?;
-                let unit = Expression::new(ExpressionKind::Unit, scrutinee.monotype);
-                (std::mem::replace(scrutinee, unit), placements)
+                if let Some(placements) = plan(scrutinee, alternatives, self.monotypes) {
+                    let unit = Expression::new(ExpressionKind::Unit, scrutinee.monotype);
+                    (std::mem::replace(scrutinee, unit), placements)
+                } else {
+                    let exposed = self.constructions_exposed(scrutinee)?;
+                    let placements = plan(&exposed, alternatives, self.monotypes)?;
+                    (exposed, placements)
+                }
             }
             _ => return None,
         };
@@ -59,6 +65,52 @@ impl Simplifier<'_> {
             simplifier.expression(case)
         });
         Some(self.let_bindings(joins, distributed))
+    }
+
+    /// The choice with each constructor its lets bind written where the local is used, its fields
+    /// bound to locals instead, `let problem = Left (f n) in if c then problem else Right n` as
+    /// `let field = f n in if c then Left field else Right n`: the constructors are then what the
+    /// choice chooses between. `None` when the choice binds no constructor.
+    fn constructions_exposed(&mut self, choice: &Expression) -> Option<Expression> {
+        let ExpressionKind::Let { bindings, body } = &choice.kind else { return None };
+        if bindings.iter().any(|binding| mentions_any(&binding.value, bindings)) {
+            return None;
+        }
+        let mut kept = vec![];
+        let mut constructions: Vec<(LocalId, Expression)> = vec![];
+        for binding in bindings {
+            let mut value = binding.value.clone();
+            for (local, construction) in &constructions {
+                value = substitute(value, *local, construction, self.monotypes);
+            }
+            let ExpressionKind::Construct { data, constructor, arguments } = value.kind else {
+                kept.push(Binding { local: binding.local.clone(), value });
+                continue;
+            };
+            let mut fields = Vec::with_capacity(arguments.len());
+            for argument in arguments {
+                if is_trivial(&argument) {
+                    fields.push(argument);
+                    continue;
+                }
+                let template =
+                    Local { id: LocalId(0), name: "field".into(), monotype: argument.monotype };
+                let field = self.fresh(&template);
+                fields.push(field.expression());
+                kept.push(Binding { local: field, value: argument });
+            }
+            let kind = ExpressionKind::Construct { data, constructor, arguments: fields };
+            constructions.push((binding.local.id, Expression::new(kind, value.monotype)));
+        }
+        if constructions.is_empty() {
+            return None;
+        }
+        let mut body = (**body).clone();
+        for (local, construction) in &constructions {
+            body = substitute(body, *local, construction, self.monotypes);
+        }
+        let kind = ExpressionKind::Let { bindings: kept, body: Box::new(body) };
+        Some(Expression::new(kind, choice.monotype))
     }
 
     /// Each joined alternative's body as a local function of the alternative's

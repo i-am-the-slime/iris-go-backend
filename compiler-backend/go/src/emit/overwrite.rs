@@ -26,7 +26,7 @@ use rustc_hash::FxHashSet;
 use super::{DataKind, DataLayout, Emitter, call, identifier_expression};
 use crate::error::GoResult;
 use crate::go_traversal::{self, Walk};
-use crate::monomorphic::{Edge, Expression, ExpressionKind, Literal};
+use crate::monomorphic::{Edge, Expression, ExpressionKind, Kept, Literal};
 use crate::monotype::DataType;
 use crate::syntax::{GoExpression, GoStatement, GoType};
 
@@ -36,13 +36,14 @@ where
 {
     pub(super) fn reused(
         &mut self,
-        cell: &Expression,
-        data: &DataType,
-        constructor: usize,
-        arguments: &[Expression],
+        reuse: &ExpressionKind,
         edges: &[(usize, Expression)],
         out: &mut Vec<GoStatement>,
     ) -> GoResult<GoExpression> {
+        let ExpressionKind::Reuse { cell, data, constructor, arguments, kept } = reuse else {
+            unreachable!("invariant violated: a reused cell is emitted from a reuse")
+        };
+        let constructor = *constructor;
         let values = self.values(arguments, out)?;
         let cell = self.value(cell, out)?;
         let layout = self.data_layout(data)?;
@@ -52,8 +53,14 @@ where
         };
         let mask = self.unique_mask(data, constructor, edges, cell_name, out)?;
         if let Some(name) = cell_name
-            && let Some(stores) =
-                self.reuse_stores(&layout, constructor, name, values.clone(), mask.clone(), out)
+            && let Some(stores) = self.reuse_stores(
+                &layout,
+                constructor,
+                name,
+                Stored { values: values.clone(), kept: *kept },
+                mask.clone(),
+                out,
+            )
         {
             out.extend(stores);
             return Ok(cell);
@@ -140,10 +147,11 @@ where
         layout: &DataLayout,
         constructor: usize,
         cell: &str,
-        values: Vec<GoExpression>,
+        stored: Stored,
         mask: Option<GoExpression>,
         out: &mut Vec<GoStatement>,
     ) -> Option<Vec<GoStatement>> {
+        let Stored { values, kept } = stored;
         if !layout.boxed || layout.erases_arguments || layout.maybe.is_some() {
             return None;
         }
@@ -163,7 +171,8 @@ where
         let covered = others_with_fields
             .iter()
             .all(|other| other.fields.iter().all(|(name, _)| slots.contains(name.as_str())));
-        if !covered {
+        // A cell that holds this constructor already holds nothing in the other slots.
+        if !covered && !kept.constructor {
             return None;
         }
         let field = |name: &str| GoExpression::Field {
@@ -171,16 +180,21 @@ where
             name: name.to_string(),
         };
         let mut stores = vec![];
-        if layout.kind == DataKind::Tagged && !others_with_fields.is_empty() {
+        if layout.kind == DataKind::Tagged && !others_with_fields.is_empty() && !kept.constructor {
             stores.push(GoStatement::Assign {
                 targets: vec![field("Tag")],
                 values: vec![identifier_expression(&constructor_layout.tag)],
             });
         }
-        for ((name, _), mut value) in constructor_layout.fields.iter().zip(values) {
+        for (position, ((name, _), mut value)) in
+            constructor_layout.fields.iter().zip(values).enumerate()
+        {
             if matches!(&value, GoExpression::Composite { type_: GoType::EmptyStruct, .. })
                 || holds_field(out, cell, name, &value)
             {
+                continue;
+            }
+            if kept.field(position) {
                 continue;
             }
             if !independent_of(&mut value, cell) {
@@ -195,6 +209,12 @@ where
         }
         Some(stores)
     }
+}
+
+/// The values a reuse stores in its cell's fields, and which of them the fields already hold.
+pub(super) struct Stored {
+    pub values: Vec<GoExpression>,
+    pub kept: Kept,
 }
 
 pub(super) fn with_unique_mask(

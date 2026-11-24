@@ -3,14 +3,15 @@ use smol_str::SmolStr;
 
 use super::field_reads::hoist_field_reads;
 use super::inspection::{inspecting_functions, inspects, sequence_inspections};
+use super::kept::mark_kept_fields;
 use super::{Emitter, uses_local};
 use crate::foreign::{Boundary, Foreign, GoFunction, GoPackage, Iteration, Operator};
 use crate::monomorphic::traversal::{
     for_each_child, for_each_child_mut, for_each_guarded_child, prune_unreachable, visit,
 };
 use crate::monomorphic::{
-    Alternative, Binding, Edge, Expression, ExpressionKind, Function, FunctionId, Guarded, Literal,
-    Local, LocalId, Pattern, PatternKind, Program,
+    Alternative, Binding, Edge, Expression, ExpressionKind, Function, FunctionId, Guarded, Kept,
+    Literal, Local, LocalId, Pattern, PatternKind, Program,
 };
 use crate::monotype::{DataType, Monotype, MonotypeId};
 use crate::purity::{can_fail, is_deferrable, is_trivial, is_within_size};
@@ -2063,6 +2064,7 @@ impl<'p> Emission<'p> {
             }
             let mut next_local = plan.next_local;
             self.rewrite(&mut function.body, &plan, cells, &mut next_local);
+            mark_kept_fields(&mut function.body);
             if variant.is_reusing() {
                 function.name = SmolStr::new(format!("{}{REUSING}", function.name));
             }
@@ -2199,7 +2201,8 @@ impl<'p> Emission<'p> {
             let cell = Box::new(Expression::new(ExpressionKind::Local(token.cell), monotype));
             *expression = match &token.condition {
                 None => {
-                    let reuse = ExpressionKind::Reuse { cell, data, constructor, arguments };
+                    let kept = Kept::default();
+                    let reuse = ExpressionKind::Reuse { cell, data, constructor, arguments, kept };
                     tracked(Expression::new(reuse, monotype), edges, true)
                 }
                 Some(condition) => {
@@ -2219,6 +2222,7 @@ impl<'p> Emission<'p> {
                         data: data.clone(),
                         constructor,
                         arguments: values.clone(),
+                        kept: Kept::default(),
                     };
                     let construct =
                         ExpressionKind::Construct { data, constructor, arguments: values };
