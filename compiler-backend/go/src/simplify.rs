@@ -1041,7 +1041,9 @@ impl Simplifier<'_> {
     }
 
     fn field_of(&mut self, record: Expression, label: SmolStr, monotype: MonotypeId) -> Expression {
-        if let Some(value) = self.constant_field(&record, &label) {
+        if let Some(value) = self.constant_field(&record, &label)
+            && (value.monotype == monotype || self.monotypes.function_parts(monotype).is_none())
+        {
             return self.coerce(value, monotype);
         }
         let record = match self.read_through_coercion(record, &label, monotype) {
