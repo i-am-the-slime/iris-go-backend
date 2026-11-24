@@ -130,6 +130,8 @@ const ASSIGNMENTS: &[&str] =
 
 const ESCAPING_WORDS: &[&str] = &["any", "interface", "reflect", "unsafe"];
 
+const OPAQUE_GENERIC_PACKAGES: &[&str] = &["atomic", "iter", "unique", "weak"];
+
 const BUILTINS: &[&str] =
     &["append", "cap", "clear", "copy", "delete", "len", "make", "max", "min", "new"];
 
@@ -316,6 +318,17 @@ fn qualified(tokens: &[Token]) -> Option<String> {
     })
 }
 
+fn qualified_instantiation(tokens: &[Token]) -> Option<String> {
+    tokens.windows(4).find_map(|window| match window {
+        [Token::Word(package), dot, Token::Word(name), open]
+            if dot.is(".") && open.is("[") && !OPAQUE_GENERIC_PACKAGES.contains(&package.as_str()) =>
+        {
+            Some(format!("{package}.{name}"))
+        }
+        _ => None,
+    })
+}
+
 fn spelled(tokens: &[Token]) -> String {
     let mut text = String::new();
     for token in tokens {
@@ -496,7 +509,9 @@ impl Package {
             let before = escaping.len();
             for declaration in &self.types {
                 let definition = &declaration.definition;
-                if mentioned(definition, &escaping).is_some() || qualified(definition).is_some() {
+                if mentioned(definition, &escaping).is_some()
+                    || qualified_instantiation(definition).is_some()
+                {
                     escaping.insert(declaration.name.clone());
                 }
             }
@@ -545,7 +560,7 @@ fn type_escapes(declaration: &TypeDeclaration, escaping: &FxHashSet<String>) -> 
     let mut escapes = constraint_escapes(&declaration.type_parameters);
     if let Some(word) = mentioned(&declaration.definition, escaping) {
         escapes.push(whole(format!("mentions `{word}`")));
-    } else if let Some(name) = qualified(&declaration.definition) {
+    } else if let Some(name) = qualified_instantiation(&declaration.definition) {
         escapes.push(whole(format!("names `{name}`")));
     }
     escapes
@@ -556,7 +571,7 @@ fn signature_escape(function: &Function, escaping: &FxHashSet<String>) -> Option
     if let Some(word) = mentioned(&signature, escaping) {
         return Some(format!("mentions `{word}` in its signature"));
     }
-    qualified(&signature).map(|name| format!("names `{name}` in its signature"))
+    qualified_instantiation(&signature).map(|name| format!("names `{name}` in its signature"))
 }
 
 fn literal_signature(tokens: &[Token], start: usize) -> &[Token] {
@@ -1081,7 +1096,9 @@ impl<'f> Flow<'f> {
         let mut index = end;
         while let Some(previous) = index.checked_sub(1) {
             let token = &tokens[previous];
-            if let Some(word) = token.word() {
+            if token.is_keyword() {
+                break;
+            } else if let Some(word) = token.word() {
                 root = Some(word);
                 index = previous;
             } else if token.is(".") {
@@ -1256,6 +1273,44 @@ func Wrap[A any](value A) Cell[A] { return Cell[A]{value: value} }
 ";
         assert_eq!(escapes(source, "Reset"), ["type parameter A uses the method `Reset`"]);
         assert_eq!(escapes(source, "Wrap"), Vec::<String>::new());
+    }
+
+    #[test]
+    fn a_type_of_another_package_holds_the_value_only_when_instantiated_with_it() {
+        let source = "package ffi
+
+import (
+	\"context\"
+	\"sync\"
+	\"sync/atomic\"
+
+	\"example.com/other\"
+)
+
+type cell[A any] struct {
+	lock  sync.Mutex
+	value atomic.Pointer[A]
+}
+
+type Cell[A any] = *cell[A]
+
+func Read[A any](cell *cell[A]) A { return *cell.value.Load() }
+
+func Offer[A any](ctx context.Context, channel chan A, value A) bool {
+	select {
+	case channel <- value:
+		return true
+	case <-ctx.Done():
+		return false
+	}
+}
+
+func Wrap[A any](value A) other.Box[A] { return other.Box[A]{} }
+";
+        assert_eq!(escapes(source, "cell"), Vec::<String>::new());
+        assert_eq!(escapes(source, "Read"), Vec::<String>::new());
+        assert_eq!(escapes(source, "Offer"), Vec::<String>::new());
+        assert_eq!(escapes(source, "Wrap"), ["it names `other.Box` in its signature"]);
     }
 
     #[test]
