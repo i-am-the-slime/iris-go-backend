@@ -14,11 +14,7 @@ where
 {
     pub(super) fn grows_construction(&self, key: &SchemeKey, types: &[TypeId]) -> bool {
         self.constructing.iter().any(|(constructed, enclosing)| {
-            constructed == key
-                && types
-                    .iter()
-                    .zip(enclosing.iter())
-                    .any(|(&requested, &enclosing)| self.context.types.grows(requested, enclosing))
+            constructed == key && self.context.types.grows_all(types, enclosing)
         })
     }
 
@@ -62,7 +58,9 @@ where
         let mut evidence_grows = false;
         while let Some(id) = ancestor {
             let ancestor_key = &self.function_keys[id.0 as usize];
-            if ancestor_key.definition == key.definition {
+            if ancestor_key.definition == key.definition
+                && self.context.types.grows_all(&requested, &ancestor_key.types)
+            {
                 let mut grows = false;
                 for (position, ancestor_type) in ancestor_key.types.iter().enumerate() {
                     let Some(requested) = types.get(position).copied() else { continue };
@@ -95,6 +93,10 @@ where
         let mut ancestor = polymorphic.active;
         while let Some(index) = ancestor {
             let specialization = &polymorphic.specializations[index];
+            if !self.context.types.grows_all(requested, &specialization.types) {
+                ancestor = specialization.requester;
+                continue;
+            }
             for (position, &ancestor_type) in specialization.types.iter().enumerate() {
                 let Some(&requested) = types.get(position) else { continue };
                 if self.context.types.grows(requested, ancestor_type) {

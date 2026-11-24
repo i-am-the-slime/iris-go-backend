@@ -230,6 +230,17 @@ where
         requested != enclosing && self.contains(requested, enclosing)
     }
 
+    /// Whether a request at `requested` repeats one at `enclosing` with larger
+    /// types: each type equals or contains the enclosing one, and one is
+    /// strictly larger. Calls at unrelated types, such as `map` at one functor
+    /// reaching `map` at another, are a chain, not recursion.
+    pub fn grows_all(&self, requested: &[TypeId], enclosing: &[TypeId]) -> bool {
+        let pairs = || requested.iter().zip(enclosing.iter());
+        pairs().all(|(&requested, &enclosing)| {
+            self.contains(self.without_causes(requested), self.without_causes(enclosing))
+        }) && pairs().any(|(&requested, &enclosing)| self.grows(requested, enclosing))
+    }
+
     pub fn contains(&self, outer: TypeId, inner: TypeId) -> bool {
         let outer = self.strip_annotations(outer);
         if outer == self.strip_annotations(inner) {
