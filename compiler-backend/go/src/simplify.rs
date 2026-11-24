@@ -33,7 +33,9 @@ mod arguments;
 mod choice;
 mod coverage;
 mod effects;
+mod find;
 mod fold;
+mod lengths;
 mod object;
 mod record;
 mod reductions;
@@ -616,6 +618,9 @@ impl Simplifier<'_> {
                 {
                     return self.let_bindings(bindings, chosen);
                 }
+                if let Some(found) = self.found_element(&scrutinees, &alternatives, monotype) {
+                    return self.let_bindings(bindings, found);
+                }
                 let case = match alternatives.first() {
                     None => Expression::new(
                         ExpressionKind::Fail(SmolStr::new_static(PATTERN_MATCH_FAILURE)),
@@ -854,6 +859,7 @@ impl Simplifier<'_> {
         for binding in bindings.into_iter().rev() {
             // A cell helper's two uses are told from more.
             let helper = self.is_cell_helper(&binding.value);
+            body = self.count_lengths_at_source(&binding, body);
             let uses = occurrences_up_to(&body, binding.local.id, if helper { 3 } else { 2 });
             // A record of trivial fields, such as a rank-N value's
             // specializations, is copied so that its field accesses resolve.

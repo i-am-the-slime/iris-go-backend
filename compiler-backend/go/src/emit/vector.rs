@@ -35,15 +35,18 @@
 
 use std::fmt::Write;
 
-use rustc_hash::FxHashMap;
+use rustc_hash::{FxHashMap, FxHashSet};
 
 use super::fusion::Demand;
 use super::iteration::Found;
 use super::{Emitter, GoSourceFile, call, identifier_expression, unique};
 use crate::error::GoResult;
 use crate::foreign::{Boundary, Comparison, Foreign, Iteration, Operator};
-use crate::monomorphic::{Expression, ExpressionKind, FunctionId, Literal, Local, LocalId};
-use crate::monotype::{Monotype, MonotypeId};
+use crate::monomorphic::traversal::for_each_child;
+use crate::monomorphic::{
+    Expression, ExpressionKind, FunctionId, Literal, Local, LocalId, Program,
+};
+use crate::monotype::{Monotype, MonotypeId, Monotypes};
 use crate::naming::GO_PREDECLARED;
 use crate::primitives::{Int64Operation, Signedness};
 use crate::syntax::{
@@ -65,6 +68,51 @@ const INLINE_DEPTH: usize = 6;
 pub(super) struct Kernels {
     names: FxHashMap<String, String>,
     sources: Vec<KernelSource>,
+    /// The iterations the program runs once, by their callbacks: a vector loop pays for its
+    /// three build variants only in code that may run often.
+    run_once: FxHashSet<*const Expression>,
+}
+
+impl Kernels {
+    pub(super) fn new(program: &Program, monotypes: &Monotypes) -> Kernels {
+        let mut run_once = FxHashSet::default();
+        mark_run_once(&program.function(program.entry).body, monotypes, &mut run_once);
+        Kernels { run_once, ..Kernels::default() }
+    }
+}
+
+/// Every iteration that runs once each time `expression` does: what a lambda, an effect passed
+/// along or a loop's body hold may run any number of times.
+fn mark_run_once(
+    expression: &Expression,
+    monotypes: &Monotypes,
+    run_once: &mut FxHashSet<*const Expression>,
+) {
+    let passed_along = |argument: &Expression| {
+        matches!(
+            monotypes.get(argument.monotype),
+            Monotype::Effect(_) | Monotype::Function(..) | Monotype::Lazy(_)
+        )
+    };
+    match &expression.kind {
+        ExpressionKind::Lambda { .. } | ExpressionKind::EffectEach { .. } => {}
+        ExpressionKind::Foreign { foreign, arguments } => {
+            if let Foreign::Call { boundary: Boundary { iteration: Some(_), .. }, .. } = foreign
+                && let Some(callback) = arguments.first()
+            {
+                run_once.insert(std::ptr::from_ref(callback));
+            }
+            for argument in arguments.iter().filter(|argument| !passed_along(argument)) {
+                mark_run_once(argument, monotypes, run_once);
+            }
+        }
+        ExpressionKind::Apply { arguments, .. } => {
+            for argument in arguments.iter().filter(|argument| !passed_along(argument)) {
+                mark_run_once(argument, monotypes, run_once);
+            }
+        }
+        _ => for_each_child(expression, &mut |child| mark_run_once(child, monotypes, run_once)),
+    }
 }
 
 struct KernelSource {
@@ -119,6 +167,9 @@ where
     {
         let (arity, result_element) = match iteration {
             Iteration::FoldLeft => (2, self.element(monotype)?),
+            _ if self.vector_kernels.run_once.contains(&std::ptr::from_ref(&arguments[0])) => {
+                return None;
+            }
             Iteration::Map => {
                 if self.recycled_maps.contains_key(&std::ptr::from_ref(&arguments[0])) {
                     return None;
@@ -1103,6 +1154,65 @@ fn parameter_names(captures: &[Capture<'_>]) -> Vec<String> {
     names
 }
 
+/// `if a < b then a else b` and its kin, as the Go builtin it computes and the two it compares.
+fn extremum(term: &Term) -> Option<(&'static str, &Term, &Term)> {
+    let Term::Select { condition: Condition::Compare(ordering, left, right), then, otherwise } =
+        term
+    else {
+        return None;
+    };
+    let chooses_compared =
+        (left == then && right == otherwise) || (left == otherwise && right == then);
+    if *ordering == Ordering::Equal || !chooses_compared {
+        return None;
+    }
+    let less = matches!(ordering, Ordering::Less | Ordering::LessEqual);
+    let extremum = if less == (right == then) { "max" } else { "min" };
+    Some((extremum, left, right))
+}
+
+struct Clamp<'t> {
+    value: &'t Term,
+    lower: i128,
+    upper: i128,
+}
+
+/// `if x < lower then lower else min x upper`, in any of its spellings, with constant bounds
+/// in order: a clamp, which `min(max(x, lower), upper)` computes only when `lower <= upper`.
+fn clamp(term: &Term) -> Option<Clamp<'_>> {
+    let Term::Select { condition: Condition::Compare(ordering, left, right), then, otherwise } =
+        term
+    else {
+        return None;
+    };
+    let (value, bound, bound_is_lower) = match ordering {
+        Ordering::Equal => return None,
+        Ordering::Less | Ordering::LessEqual if right == then => (left, right, true),
+        Ordering::Greater | Ordering::GreaterEqual if right == then => (left, right, false),
+        Ordering::Less | Ordering::LessEqual if left == then => (right, left, false),
+        Ordering::Greater | Ordering::GreaterEqual if left == then => (right, left, true),
+        _ => return None,
+    };
+    let (inner, inner_left, inner_right) = extremum(otherwise)?;
+    let inner_bound = match () {
+        _ if inner_left == &**value => inner_right,
+        _ if inner_right == &**value => inner_left,
+        _ => return None,
+    };
+    if (inner == "min") != bound_is_lower {
+        return None;
+    }
+    let bound = constant_value(bound)?;
+    let inner_bound = constant_value(inner_bound)?;
+    let (lower, upper) = if bound_is_lower { (bound, inner_bound) } else { (inner_bound, bound) };
+    (lower <= upper).then_some(Clamp { value, lower, upper })
+}
+
+fn constant_value(term: &Term) -> Option<i128> {
+    let Term::Constant(text) = term else { return None };
+    text.parse().ok()
+}
+
 fn is_literal(term: &Term) -> bool {
     match term {
         Term::Constant(_) => true,
@@ -1598,6 +1708,13 @@ impl Spelling<'_> {
                 let text = format!("{left} {} {right}", arithmetic.symbol());
                 if precedence < context { format!("({text})") } else { text }
             }
+            // Go's `min` and `max` treat NaN and signed zeros unlike a Number comparison.
+            Term::Select { .. }
+                if self.kernel.element != Element::Number
+                    && let Some(chosen) = self.scalar_extremum(term) =>
+            {
+                chosen
+            }
             Term::Select { condition, then, otherwise } => {
                 let otherwise = self.declared(otherwise);
                 let then = self.scalar(then, 0);
@@ -1610,6 +1727,21 @@ impl Spelling<'_> {
                 name
             }
         }
+    }
+
+    /// A choice between two values by comparing them as Go's `min` or `max`, and a clamp
+    /// between two constants as both.
+    fn scalar_extremum(&mut self, term: &Term) -> Option<String> {
+        if let Some((extremum, left, right)) = extremum(term) {
+            return Some(format!(
+                "{extremum}({}, {})",
+                self.scalar(left, 0),
+                self.scalar(right, 0)
+            ));
+        }
+        let Clamp { value, lower, upper } = clamp(term)?;
+        let value = self.scalar(value, 0);
+        Some(format!("min(max({value}, {lower}), {upper})"))
     }
 
     fn declared(&mut self, term: &Term) -> String {

@@ -39,6 +39,7 @@ mod inspection;
 mod instantiations;
 mod int64;
 mod intervals;
+mod invariants;
 mod iteration;
 mod joins;
 mod json;
@@ -138,6 +139,7 @@ where
     emitter.materialized = reused.materialized;
     emitter.candidates = reused.candidates;
     emitter.closure_sets = closure_sets;
+    emitter.vector_kernels = vector::Kernels::new(program, emitter.monotypes);
     emitter.assign_function_names();
     let groups = timed("groups", || {
         groups::tail_call_groups(program, emitter.monotypes, &emitter.lazy_constants)
@@ -228,6 +230,9 @@ where
     });
     timed("invariant lengths", || {
         lengths::hoist_loop_invariant_lengths(&mut declarations, &mut names, &taken)
+    });
+    timed("invariants", || {
+        invariants::hoist_loop_invariants(&mut declarations, &mut names, &taken)
     });
     let chunked = timed("chunks", || {
         chunks::allocate_linked_cells_in_chunks(&mut declarations, &mut names, &taken)

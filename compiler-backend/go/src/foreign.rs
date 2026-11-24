@@ -259,6 +259,8 @@ pub enum Iteration {
     Bind,
     FindIndex,
     FindLastIndex,
+    /// `find`, which the arrays library defines by `findIndex`.
+    Find,
     ZipWith,
 }
 
