@@ -31,10 +31,6 @@ const (
 	EitherIntBVRight
 )
 
-func Left(left maybe.Boolean) EitherMaybeBooleanInt {
-	return EitherMaybeBooleanInt{Tag: EitherMaybeBooleanIntLeft, Left: left}
-}
-
 func Right(right ordering.BV) EitherIntBV {
 	return EitherIntBV{Tag: EitherIntBVRight, Right: right}
 }
@@ -71,15 +67,14 @@ package main
 
 import (
 	"fixture/Data/Either"
-	"fixture/Data/Maybe"
 	"fixture/Data/Ordering"
 	"os"
 )
 
 func main_() int32 {
-	scrutinee := either.Left(maybe.NoBoolean)
+	scrutineeTag := either.EitherMaybeBooleanIntLeft
 	var result bool
-	switch scrutinee.Tag {
+	switch scrutineeTag {
 	case either.EitherMaybeBooleanIntLeft:
 		result = false
 	default:
@@ -91,11 +86,11 @@ func main_() int32 {
 	} else {
 		first = 0
 	}
-	scrutinee2 := either.Right(ordering.BV{B: ordering.OrderingEQ, V: 1000})
+	scrutinee := either.Right(ordering.BV{B: ordering.OrderingEQ, V: 1000})
 	var result2 int32
-	switch scrutinee2.Tag {
+	switch scrutinee.Tag {
 	case either.EitherIntBVRight:
-		result2 = scrutinee2.Right.V
+		result2 = scrutinee.Right.V
 	default:
 		result2 = 3
 	}

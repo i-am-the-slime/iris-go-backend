@@ -84,19 +84,19 @@ import (
 
 func main_() int32 {
 	steps := &shared.Ref[int32]{Value: 0}
-	fiber4 := aff.NewFiber(func() struct{} {
+	fiber3 := aff.NewFiber(func() struct{} {
 		mainStep(steps, 1)
-		fiber2 := aff.ForkFiber(true, func() int32 {
+		fiber := aff.ForkFiber(true, func() int32 {
 			return 2
 		})
-		isSuspended, join, kill, onComplete, run := aff.FiberFields(fiber2, func(payload exception.Error) either.EitherErrorInt {
+		isSuspended, join, kill, onComplete, run := aff.FiberFields(fiber, func(payload exception.Error) either.EitherErrorInt {
 			return either.LeftEitherErrorInt(payload)
 		}, func(payload int32) either.EitherErrorInt {
 			return either.RightEitherErrorInt(payload)
 		}, either.RightEitherErrorUnit(struct{}{}), func(value either.OnCompleteInt) func(func(either.EitherErrorInt)) {
 			return value.Handler
 		})
-		fiber3 := either.FiberInt{IsSuspended: isSuspended, Join: join, Kill: kill, OnComplete: onComplete, Run: run}
+		fiber2 := either.FiberInt{IsSuspended: isSuspended, Join: join, Kill: kill, OnComplete: onComplete, Run: run}
 		joined := aff.MakeAffDirect(func(value either.EitherErrorInt) bool {
 			return value.Tag == either.EitherErrorIntLeft
 		}, func(value either.EitherErrorInt) exception.Error {
@@ -104,7 +104,7 @@ func main_() int32 {
 		}, func(value either.EitherErrorInt) int32 {
 			return value.Right
 		}, func(k func(either.EitherErrorInt)) func(exception.Error) {
-			effect := fiber3.Join(k)
+			effect := fiber2.Join(k)
 			return func(_ exception.Error) {
 				effect()
 			}
@@ -112,15 +112,14 @@ func main_() int32 {
 		mainStep(steps, joined)
 		return struct{}{}
 	})
-	isSuspended2, join2, kill2, onComplete2, run2 := aff.FiberFields(fiber4, func(payload exception.Error) either.EitherErrorUnit {
+	_, _, _, _, run2 := aff.FiberFields(fiber3, func(payload exception.Error) either.EitherErrorUnit {
 		return either.LeftEitherErrorUnit(payload)
 	}, func(payload struct{}) either.EitherErrorUnit {
 		return either.RightEitherErrorUnit(payload)
 	}, either.RightEitherErrorUnit(struct{}{}), func(value either.OnCompleteUnit) func(func(either.EitherErrorUnit)) {
 		return value.Handler
 	})
-	fiber := either.FiberUnit{IsSuspended: isSuspended2, Join: join2, Kill: kill2, OnComplete: onComplete2, Run: run2}
-	fiber.Run()
+	run2()
 	mainStep(steps, 3)
 	return steps.Value
 }

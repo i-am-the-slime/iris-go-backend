@@ -22,6 +22,7 @@ use rustc_hash::{FxHashMap, FxHashSet};
 use super::aliases::{mentions, target_root};
 use super::is_untyped_constant;
 use super::locals::NUMBERED;
+use super::strings::only_writes_text;
 use crate::go_traversal::{self, Walk};
 use crate::syntax::{GoDeclaration, GoExpression, GoStatement, GoType};
 
@@ -209,7 +210,7 @@ fn definition(
         Some(GoExpression::Identifier(nil)) if nil == "nil" => {
             GoStatement::Variable { name, type_: type_.clone(), value: None }
         }
-        Some(value) if exact || basic && !is_untyped_constant(value) => {
+        Some(value) if exact || basic && !is_untyped_constant(value) || is_place(value) => {
             GoStatement::Define { names: vec![name], values: vec![value.clone()] }
         }
         value => GoStatement::Variable { name, type_: type_.clone(), value: value.cloned() },
@@ -331,6 +332,8 @@ struct Census<'a> {
     refused: bool,
     in_literal: bool,
     in_header: bool,
+    /// The fields the definition's composite gives a value.
+    defined_fields: Vec<String>,
 }
 
 impl<'a> Census<'a> {
@@ -350,20 +353,26 @@ impl<'a> Census<'a> {
             refused: false,
             in_literal: false,
             in_header: false,
+            defined_fields: vec![],
         }
     }
 
     /// The fields that need a local, when the local is to be split.
     fn needed(&self) -> Option<Vec<String>> {
-        let kept_in_memory = self.fields.len() > REGISTER_FIELDS;
-        let carried = kept_in_memory && self.changed_in_loop;
-        let worthwhile = if self.parameter { carried } else { self.written_in_loop || carried };
-        if self.refused || !self.defined || !worthwhile {
-            return None;
-        }
         let count =
             |map: &FxHashMap<String, usize>, field: &str| map.get(field).copied().unwrap_or(0);
         let read = |field: &str| count(&self.reads, field) > count(&self.targets, field);
+        let kept_in_memory = self.fields.len() > REGISTER_FIELDS;
+        let carried = kept_in_memory && self.changed_in_loop;
+        // A record built only to read some of its fields leaves out the work of the others.
+        let builds_unread = self.whole == 0
+            && self.targets.is_empty()
+            && self.defined_fields.iter().any(|field| !read(field));
+        let worthwhile =
+            if self.parameter { carried } else { self.written_in_loop || carried || builds_unread };
+        if self.refused || !self.defined || !worthwhile {
+            return None;
+        }
         // A field that is written but never read would be a Go local declared and not used.
         if self.whole == 0 && self.targets.keys().any(|field| !read(field)) {
             return None;
@@ -425,6 +434,10 @@ impl Walk for Census<'_> {
                 let single = names.len() == 1 && values.len() == 1;
                 if !single || !self.splits(&values[0], false) || self.in_literal || self.defined {
                     self.refused = true;
+                }
+                if let Some(GoExpression::Composite { fields, .. }) = values.first() {
+                    self.defined_fields =
+                        fields.iter().filter_map(|(field, _)| field.clone()).collect();
                 }
                 self.defined = true;
                 self.defined_at = self.depth;
@@ -677,7 +690,8 @@ impl Walk for Types<'_> {
 }
 
 /// An expression that can be evaluated again, or not at all, with no difference:
-/// it neither calls, nor panics, nor reads anything a field local could change.
+/// it calls only what writes values as text, does not panic, and reads nothing a field local
+/// could change.
 fn is_pure(value: &GoExpression) -> bool {
     match value {
         GoExpression::Identifier(_)
@@ -688,6 +702,14 @@ fn is_pure(value: &GoExpression) -> bool {
         | GoExpression::Rune(_)
         | GoExpression::Boolean(_) => true,
         GoExpression::Field { value, .. } => is_pure(value),
+        GoExpression::Conversion { type_, value } => {
+            let numeric = matches!(type_, GoType::Int | GoType::Float64)
+                || matches!(type_, GoType::Named(name) if PREDECLARED.contains(&name.as_str()));
+            numeric && is_pure(value)
+        }
+        GoExpression::Call { function, arguments } => {
+            only_writes_text(function) && arguments.iter().all(is_pure)
+        }
         GoExpression::Binary { operator, left, right } => {
             !matches!(*operator, "/" | "%") && is_pure(left) && is_pure(right)
         }

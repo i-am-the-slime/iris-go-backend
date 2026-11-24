@@ -110,6 +110,19 @@ fn has_whole_ends(expression: &GoExpression) -> bool {
     }
 }
 
+/// Whether a call of the function only joins or shows values as text: it has no effect and
+/// cannot fail, so a call whose text goes unread can be left out.
+pub(super) fn only_writes_text(function: &GoExpression) -> bool {
+    super::standard::is_ascii_ended(function)
+        || is_prim_append(function)
+        || matches!(
+            function,
+            GoExpression::Qualified { package, name }
+                if package == GoPackage::Prim.name()
+                    && matches!(name.as_str(), "ShowInt" | "ShowNumber" | "ShowString" | "ShowChar")
+        )
+}
+
 /// The go-support prim functions whose result is never empty and begins and ends in ASCII.
 const ASCII_ENDED: &[&str] = &[
     "ShowInt",

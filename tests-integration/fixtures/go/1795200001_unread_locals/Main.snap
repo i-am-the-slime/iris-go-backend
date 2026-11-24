@@ -50,7 +50,6 @@ package main
 
 import (
 	"fixture/Data/Maybe"
-	"fixture/shared"
 	"github.com/i-am-the-slime/iris-go/direct"
 	"github.com/i-am-the-slime/iris-go/prim"
 	"os"
@@ -63,11 +62,7 @@ func main_() int32 {
 		return maybe.JustArrayInt(payload)
 	}, maybe.NoArrayInt, 0, []int32{})
 	var counter int32 = 0
-	elements := []int32{10, 20}
-	var result int32
-	result = elements[counter]
-	modified := shared.StateValue{State: counter + 1, Value: result}
-	counter = modified.State
+	counter += 1
 	sorted := slices.Clone([]rune{'b', 'a'})
 	slices.Sort(sorted)
 	return counter*10 + 2
