@@ -26,6 +26,7 @@ pub fn lift_local_functions(
         monotypes,
         next_local,
         binders: FxHashMap::default(),
+        initializing: FxHashSet::default(),
     };
     for index in 0..original {
         let mut function =
@@ -171,6 +172,7 @@ struct Lifter<'m> {
     monotypes: &'m mut Monotypes,
     next_local: u32,
     binders: FxHashMap<LocalId, Local>,
+    initializing: FxHashSet<LocalId>,
 }
 
 impl Lifter<'_> {
@@ -178,9 +180,40 @@ impl Lifter<'_> {
         Local::fresh(&mut self.next_local, local.name.clone(), local.monotype)
     }
 
+    fn captures_initializing(&self, bindings: &[Binding]) -> bool {
+        let mut captured = FxHashSet::default();
+        for binding in bindings {
+            free_locals(&binding.value, &mut captured);
+        }
+        captured.iter().any(|id| self.initializing.contains(id))
+    }
+
     fn expression(&mut self, mut expression: Expression, base: &str) -> Expression {
         let lifts = matches!(&expression.kind, ExpressionKind::Let { bindings, .. }
-            if bindings.iter().all(|binding| matches!(binding.value.kind, ExpressionKind::Lambda { .. })));
+            if bindings.iter().all(|binding| matches!(binding.value.kind, ExpressionKind::Lambda { .. }))
+                && !self.captures_initializing(bindings));
+        if let ExpressionKind::Let { bindings, body } = &mut expression.kind
+            && !lifts
+            && evaluates_itself(bindings)
+        {
+            let group: Vec<LocalId> = bindings
+                .iter()
+                .map(|binding| binding.local.id)
+                .filter(|id| self.initializing.insert(*id))
+                .collect();
+            for binding in bindings.iter_mut() {
+                let placeholder = Expression::new(ExpressionKind::Unit, binding.value.monotype);
+                let value = std::mem::replace(&mut binding.value, placeholder);
+                binding.value = self.expression(value, base);
+            }
+            for id in group {
+                self.initializing.remove(&id);
+            }
+            let placeholder = Expression::new(ExpressionKind::Unit, body.monotype);
+            let taken = std::mem::replace(body.as_mut(), placeholder);
+            **body = self.expression(taken, base);
+            return expression;
+        }
         if !lifts {
             for_each_child_mut(&mut expression, &mut |child| {
                 let taken =
@@ -254,6 +287,16 @@ impl Lifter<'_> {
         replace_references(&mut body, &targets, &captured, &FxHashMap::default());
         self.expression(body, base)
     }
+}
+
+fn evaluates_itself(bindings: &[Binding]) -> bool {
+    let group: FxHashSet<LocalId> = bindings.iter().map(|binding| binding.local.id).collect();
+    bindings.iter().any(|binding| {
+        let mut used = FxHashSet::default();
+        free_locals(&binding.value, &mut used);
+        !matches!(binding.value.kind, ExpressionKind::Lambda { .. })
+            && used.iter().any(|id| group.contains(id))
+    })
 }
 
 fn absorb_lambdas(mut function: Function) -> Function {
