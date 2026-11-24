@@ -6,15 +6,21 @@
 //! `||`, `if a { x } else if b { x }` is `if a || b { x }`, and a last test whose branch does
 //! what the `else` does is dropped when evaluating it has no effect.
 
+use rustc_hash::FxHashMap;
+
 use super::conditions::is_pure;
+use super::inlining::Rename;
 use crate::go_traversal::{self, Walk, each_block_in_declaration};
-use crate::syntax::{GoDeclaration, GoExpression, GoStatement};
+use crate::syntax::{GoCase, GoDeclaration, GoExpression, GoStatement};
 
 pub(super) fn merge_identical_branches(declarations: &mut [GoDeclaration]) {
     for declaration in declarations {
         each_block_in_declaration(declaration, |block| {
             let mut position = 0;
             while position < block.len() {
+                if let GoStatement::Switch { cases, .. } = &mut block[position] {
+                    merge_identical_cases(cases);
+                }
                 if let GoStatement::If { .. } = &block[position]
                     && let Some(merged) = merged(&block[position])
                 {
@@ -27,6 +33,57 @@ pub(super) fn merge_identical_branches(declarations: &mut [GoDeclaration]) {
             }
         });
     }
+}
+
+/// Cases of a switch that run the same code, apart from the names of the locals they define,
+/// as `Add l r -> leafCount l + leafCount r` and `Pow base exponent -> leafCount base + ...`,
+/// become one case listing their values. The cases of a switch exclude each other, so where a
+/// case stands does not change what it matches.
+fn merge_identical_cases(cases: &mut Vec<GoCase>) {
+    let mut merged: Vec<(GoCase, Vec<GoStatement>)> = vec![];
+    for case in std::mem::take(cases) {
+        let canonical = canonical(&case.body);
+        match merged.iter_mut().find(|(_, known)| *known == canonical) {
+            Some((first, _)) => first.values.extend(case.values),
+            None => merged.push((case, canonical)),
+        }
+    }
+    *cases = merged.into_iter().map(|(case, _)| case).collect();
+}
+
+/// The code of a block without its lines, its locals named by the order they are defined in.
+fn canonical(body: &[GoStatement]) -> Vec<GoStatement> {
+    struct Defined(Vec<String>);
+    impl Walk for Defined {
+        fn statement(&mut self, statement: &mut GoStatement) {
+            match statement {
+                GoStatement::Define { names, .. } => self.0.extend(names.iter().cloned()),
+                GoStatement::Variable { name, .. } | GoStatement::IfAssert { name, .. } => {
+                    self.0.push(name.clone())
+                }
+                GoStatement::Range { index, element, .. } => {
+                    self.0.extend(index.iter().cloned());
+                    self.0.push(element.clone());
+                }
+                GoStatement::Counting { variable, .. }
+                | GoStatement::CountingDown { variable, .. } => self.0.push(variable.clone()),
+                _ => {}
+            }
+            go_traversal::statement(self, statement);
+        }
+    }
+    let mut statements = without_lines(body);
+    let mut defined = Defined(vec![]);
+    defined.block(&mut statements);
+    let renamed: FxHashMap<String, String> = defined
+        .0
+        .into_iter()
+        .filter(|name| name != "_")
+        .enumerate()
+        .map(|(position, name)| (name, format!("\0{position}")))
+        .collect();
+    Rename { renamed: &renamed }.block(&mut statements);
+    statements
 }
 
 /// The statements that replace an `if` chain whose branches can be merged.

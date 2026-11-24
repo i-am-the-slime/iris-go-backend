@@ -26,13 +26,13 @@ func Show(i int32) string {
 //line show.go:13
 func AppendShowArrayInt(buffer []byte, array []int32) []byte {
 //line show.go:15
-	buffer = append(buffer, "["...)
+	buffer = append(buffer, '[')
 //line show.go:17
 	for index, element := range array {
 //line show.go:19
 		if index > 0 {
 //line show.go:21
-			buffer = append(buffer, ","...)
+			buffer = append(buffer, ',')
 //line show.go:23
 		}
 //line show.go:25
@@ -40,7 +40,7 @@ func AppendShowArrayInt(buffer []byte, array []int32) []byte {
 //line show.go:27
 	}
 //line show.go:29
-	buffer = append(buffer, "]"...)
+	buffer = append(buffer, ']')
 //line show.go:31
 	return buffer
 //line show.go:33

@@ -29,14 +29,14 @@ func ShowNumber2(number float64) string {
 }
 
 func AppendShowArrayNumber(buffer []byte, array []float64) []byte {
-	buffer = append(buffer, "["...)
+	buffer = append(buffer, '[')
 	for index, element := range array {
 		if index > 0 {
-			buffer = append(buffer, ","...)
+			buffer = append(buffer, ',')
 		}
 		buffer = prim.AppendShowNumber(buffer, element)
 	}
-	buffer = append(buffer, "]"...)
+	buffer = append(buffer, ']')
 	return buffer
 }
 

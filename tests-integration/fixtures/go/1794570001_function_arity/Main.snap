@@ -25,26 +25,26 @@ func ShowString(s string) string {
 }
 
 func AppendShowArrayString(buffer []byte, array []string) []byte {
-	buffer = append(buffer, "["...)
+	buffer = append(buffer, '[')
 	for index, element := range array {
 		if index > 0 {
-			buffer = append(buffer, ","...)
+			buffer = append(buffer, ',')
 		}
 		buffer = prim.AppendShowString(buffer, element)
 	}
-	buffer = append(buffer, "]"...)
+	buffer = append(buffer, ']')
 	return buffer
 }
 
 func AppendShowArrayInt(buffer []byte, array []int32) []byte {
-	buffer = append(buffer, "["...)
+	buffer = append(buffer, '[')
 	for index, element := range array {
 		if index > 0 {
-			buffer = append(buffer, ","...)
+			buffer = append(buffer, ',')
 		}
 		buffer = strconv.AppendInt(buffer, int64(element), 10)
 	}
-	buffer = append(buffer, "]"...)
+	buffer = append(buffer, ']')
 	return buffer
 }
 
@@ -133,7 +133,7 @@ func appendRepeat(buffer []byte, n int32) []byte {
 	switch n {
 	case 0:
 	default:
-		buffer = append(buffer, "*"...)
+		buffer = append(buffer, '*')
 		buffer = appendRepeat(buffer, n-1)
 	}
 	return buffer

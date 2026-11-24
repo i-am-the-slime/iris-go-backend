@@ -45,6 +45,13 @@ where
         buffer: GoExpression,
         suffix: GoExpression,
     ) -> GoExpression {
+        if let GoExpression::String(text) = &suffix
+            && let [byte] = text.as_bytes()
+            && byte.is_ascii()
+        {
+            let byte = GoExpression::Rune(char::from(*byte));
+            return call(identifier_expression("append"), vec![buffer, byte]);
+        }
         if has_whole_ends(&suffix) {
             let spread = GoExpression::Spread(Box::new(suffix));
             return call(identifier_expression("append"), vec![buffer, spread]);

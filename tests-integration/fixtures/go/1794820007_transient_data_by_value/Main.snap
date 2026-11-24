@@ -109,7 +109,7 @@ func appendFirsts(buffer []byte, list *ListEntry) []byte {
 			buffer = prim.AppendString(buffer, list.Cons0.Entry0)
 			buffer = appendFirsts(buffer, list.Cons1)
 		} else {
-			buffer = append(buffer, "_"...)
+			buffer = append(buffer, '_')
 			buffer = appendFirsts(buffer, list.Cons1)
 		}
 	}

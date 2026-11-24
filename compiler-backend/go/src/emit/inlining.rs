@@ -417,8 +417,8 @@ fn written_names(
     written.written
 }
 
-struct Rename<'a> {
-    renamed: &'a FxHashMap<String, String>,
+pub(super) struct Rename<'a> {
+    pub(super) renamed: &'a FxHashMap<String, String>,
 }
 
 impl Rename<'_> {

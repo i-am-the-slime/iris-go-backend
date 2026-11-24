@@ -29,14 +29,14 @@ func Show(s string) string {
 }
 
 func AppendShowArrayString(buffer []byte, array []string) []byte {
-	buffer = append(buffer, "["...)
+	buffer = append(buffer, '[')
 	for index, element := range array {
 		if index > 0 {
-			buffer = append(buffer, ","...)
+			buffer = append(buffer, ',')
 		}
 		buffer = prim.AppendShowString(buffer, element)
 	}
-	buffer = append(buffer, "]"...)
+	buffer = append(buffer, ']')
 	return buffer
 }
 
@@ -79,7 +79,7 @@ func initializeMain_() []string {
 	case maybe.TagJust:
 		text := []byte("(Just ")
 		text = show.AppendShowArrayString(text, (shared.Point{Tags: accumulator.Just, X: origin.X}).Tags)
-		text = append(text, ")"...)
+		text = append(text, ')')
 		result = string(text)
 	default:
 		result = "Nothing"

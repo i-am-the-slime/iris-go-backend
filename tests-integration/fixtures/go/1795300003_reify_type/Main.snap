@@ -24,14 +24,14 @@ func Show(ordering Ordering) string {
 }
 
 func AppendShowArrayOrdering(buffer []byte, array []Ordering) []byte {
-	buffer = append(buffer, "["...)
+	buffer = append(buffer, '[')
 	for index, element := range array {
 		if index > 0 {
-			buffer = append(buffer, ","...)
+			buffer = append(buffer, ',')
 		}
 		buffer = AppendShow(buffer, element)
 	}
-	buffer = append(buffer, "]"...)
+	buffer = append(buffer, ']')
 	return buffer
 }
 
@@ -57,14 +57,14 @@ func Show(s string) string {
 }
 
 func AppendShowArrayString(buffer []byte, array []string) []byte {
-	buffer = append(buffer, "["...)
+	buffer = append(buffer, '[')
 	for index, element := range array {
 		if index > 0 {
-			buffer = append(buffer, ","...)
+			buffer = append(buffer, ',')
 		}
 		buffer = prim.AppendShowString(buffer, element)
 	}
-	buffer = append(buffer, "]"...)
+	buffer = append(buffer, ']')
 	return buffer
 }
 

@@ -19,14 +19,14 @@ func ShowBodyConsNumberConsNumberConsNumberConsNumberConsNumberNil(record shared
 }
 
 func AppendShowArrayTally(buffer []byte, array []shared.Tally) []byte {
-	buffer = append(buffer, "["...)
+	buffer = append(buffer, '[')
 	for index, element := range array {
 		if index > 0 {
-			buffer = append(buffer, ","...)
+			buffer = append(buffer, ',')
 		}
 		buffer = AppendShowTallyConsIntConsStringConsBooleanConsIntNil(buffer, element)
 	}
-	buffer = append(buffer, "]"...)
+	buffer = append(buffer, ']')
 	return buffer
 }
 
@@ -44,14 +44,14 @@ func AppendShowTallyConsIntConsStringConsBooleanConsIntNil(buffer []byte, record
 }
 
 func AppendShowArrayBody(buffer []byte, array []shared.Body) []byte {
-	buffer = append(buffer, "["...)
+	buffer = append(buffer, '[')
 	for index, element := range array {
 		if index > 0 {
-			buffer = append(buffer, ","...)
+			buffer = append(buffer, ',')
 		}
 		buffer = AppendShowBodyConsNumberConsNumberConsNumberConsNumberConsNumberNil(buffer, element)
 	}
-	buffer = append(buffer, "]"...)
+	buffer = append(buffer, ']')
 	return buffer
 }
 

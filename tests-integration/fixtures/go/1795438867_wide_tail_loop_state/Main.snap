@@ -15,14 +15,14 @@ func ShowInt(maybe Int) string {
 }
 
 func AppendShowArrayMaybeInt(buffer []byte, array []Int) []byte {
-	buffer = append(buffer, "["...)
+	buffer = append(buffer, '[')
 	for index, element := range array {
 		if index > 0 {
-			buffer = append(buffer, ","...)
+			buffer = append(buffer, ',')
 		}
 		buffer = AppendShowInt(buffer, element)
 	}
-	buffer = append(buffer, "]"...)
+	buffer = append(buffer, ']')
 	return buffer
 }
 
@@ -30,7 +30,7 @@ func AppendShowInt(buffer []byte, maybe Int) []byte {
 	if maybe != NoInt {
 		buffer = append(buffer, "(Just "...)
 		buffer = strconv.AppendInt(buffer, int64(int32(maybe)), 10)
-		buffer = append(buffer, ")"...)
+		buffer = append(buffer, ')')
 	} else {
 		buffer = append(buffer, "Nothing"...)
 	}
@@ -47,14 +47,14 @@ func Show(i int32) string {
 }
 
 func AppendShowArrayInt(buffer []byte, array []int32) []byte {
-	buffer = append(buffer, "["...)
+	buffer = append(buffer, '[')
 	for index, element := range array {
 		if index > 0 {
-			buffer = append(buffer, ","...)
+			buffer = append(buffer, ',')
 		}
 		buffer = strconv.AppendInt(buffer, int64(element), 10)
 	}
-	buffer = append(buffer, "]"...)
+	buffer = append(buffer, ']')
 	return buffer
 }
 

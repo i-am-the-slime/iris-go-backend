@@ -15,20 +15,20 @@ func Show(long int64) string {
 }
 
 func AppendShowArrayInt64(buffer []byte, array []int64) []byte {
-	buffer = append(buffer, "["...)
+	buffer = append(buffer, '[')
 	for index, element := range array {
 		if index > 0 {
-			buffer = append(buffer, ","...)
+			buffer = append(buffer, ',')
 		}
 		buffer = AppendShow(buffer, element)
 	}
-	buffer = append(buffer, "]"...)
+	buffer = append(buffer, ']')
 	return buffer
 }
 
 func AppendShow(buffer []byte, long int64) []byte {
 	buffer = strconv.AppendInt(buffer, long, 10)
-	buffer = append(buffer, "l"...)
+	buffer = append(buffer, 'l')
 	return buffer
 }
 
@@ -73,14 +73,14 @@ func Show(boolean bool) string {
 }
 
 func AppendShowArrayBoolean(buffer []byte, array []bool) []byte {
-	buffer = append(buffer, "["...)
+	buffer = append(buffer, '[')
 	for index, element := range array {
 		if index > 0 {
-			buffer = append(buffer, ","...)
+			buffer = append(buffer, ',')
 		}
 		buffer = strconv.AppendBool(buffer, element)
 	}
-	buffer = append(buffer, "]"...)
+	buffer = append(buffer, ']')
 	return buffer
 }
 

@@ -31,14 +31,14 @@ func Show(number float64) string {
 }
 
 func AppendShowArrayNumber(buffer []byte, array []float64) []byte {
-	buffer = append(buffer, "["...)
+	buffer = append(buffer, '[')
 	for index, element := range array {
 		if index > 0 {
-			buffer = append(buffer, ","...)
+			buffer = append(buffer, ',')
 		}
 		buffer = prim.AppendShowNumber(buffer, element)
 	}
-	buffer = append(buffer, "]"...)
+	buffer = append(buffer, ']')
 	return buffer
 }
 
@@ -99,7 +99,7 @@ func initializeMain_() string {
 	}
 	text = strconv.AppendInt(text, int64(accumulator5+accumulator6), 10)
 	array7 := []shared.PairString{{Left: "a", Right: "b"}}
-	accumulator7 := []byte("")
+	accumulator7 := []byte(nil)
 	for pairIndex := range array7 {
 		accumulator7 = prim.AppendString(accumulator7, array7[pairIndex].Left)
 		accumulator7 = prim.AppendString(accumulator7, array7[pairIndex].Right)

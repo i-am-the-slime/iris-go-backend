@@ -6,19 +6,77 @@
 //!   a Number, `float64(int32(len(xs)))`, is `float64(len(xs))`, and back as Go's `int` it is
 //!   `len(xs)`: an array holds at most as many
 //!   elements as an Int counts (`array.Bounded`), and a string JavaScript can hold has fewer
-//!   UTF-8 bytes than that, so the conversion never wraps;
+//!   UTF-8 bytes than that, so the conversion never wraps; so is a range's count of elements,
+//!   which is the length of the array the range is;
 //! - a Number variable given a constant, `var x float64 = 0.0`, is `x := 0.0`.
+
+use rustc_hash::FxHashSet;
 
 use crate::go_traversal::{self, Walk};
 use crate::syntax::{GoDeclaration, GoExpression, GoStatement, GoType};
 
 pub(super) fn use_shorthands(declarations: &mut [GoDeclaration]) {
     for declaration in declarations {
-        go_traversal::declaration(&mut Shorthands, declaration);
+        let mut counts = RangeCounts::default();
+        go_traversal::declaration(&mut counts, declaration);
+        go_traversal::declaration(&mut Shorthands { counts: counts.names }, declaration);
+        if let GoDeclaration::Function { result: Some(result), body, .. } = declaration {
+            ReturnedConstants { result }.block(body);
+        }
     }
 }
 
-struct Shorthands;
+/// `return int64(1)` from a function whose result is an `int64` is `return 1`: the result gives
+/// the constant its type.
+struct ReturnedConstants<'a> {
+    result: &'a GoType,
+}
+
+impl Walk for ReturnedConstants<'_> {
+    fn statement(&mut self, statement: &mut GoStatement) {
+        if let GoStatement::Return(Some(GoExpression::Conversion { type_, value })) = statement
+            && type_ == self.result
+            && is_integer(type_)
+            && matches!(**value, GoExpression::Integer(_))
+        {
+            let constant = std::mem::replace(&mut **value, GoExpression::Integer(0));
+            *statement = GoStatement::Return(Some(constant));
+            return;
+        }
+        go_traversal::statement(self, statement);
+    }
+
+    // A function literal returns its own result.
+    fn expression(&mut self, value: &mut GoExpression) {
+        if !matches!(value, GoExpression::Function { .. }) {
+            go_traversal::expression(self, value);
+        }
+    }
+}
+
+struct Shorthands {
+    /// The counts of elements of ranges, `_, count := array.RangeSteps(first, last)`, which
+    /// as Go's `int` read as an array's length does.
+    counts: FxHashSet<String>,
+}
+
+#[derive(Default)]
+struct RangeCounts {
+    names: FxHashSet<String>,
+}
+
+impl Walk for RangeCounts {
+    fn statement(&mut self, statement: &mut GoStatement) {
+        if let GoStatement::Define { names, values } = statement
+            && let [_, count] = names.as_slice()
+            && let [GoExpression::Call { function, .. }] = values.as_slice()
+            && matches!(&**function, GoExpression::Qualified { name, .. } if name == "RangeSteps")
+        {
+            self.names.insert(count.clone());
+        }
+        go_traversal::statement(self, statement);
+    }
+}
 
 impl Walk for Shorthands {
     fn block(&mut self, body: &mut Vec<GoStatement>) {
@@ -53,6 +111,12 @@ impl Walk for Shorthands {
             GoExpression::Conversion { type_: GoType::Int, value: converted } => {
                 if let Some(length) = int32_length(converted) {
                     *value = length;
+                } else if let GoExpression::Conversion { type_: GoType::Named(type_), value: count } =
+                    &**converted
+                    && type_ == "int32"
+                    && matches!(&**count, GoExpression::Identifier(name) if self.counts.contains(name))
+                {
+                    *value = (**count).clone();
                 }
             }
             GoExpression::Binary { operator, left, right } => {

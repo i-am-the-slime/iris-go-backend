@@ -348,25 +348,25 @@ func AppendShow(buffer []byte, foreignError *ForeignError) []byte {
 	case ForeignErrorForeignError2:
 		buffer = append(buffer, "(ForeignError "...)
 		buffer = prim.AppendShowString(buffer, foreignError.ForeignError)
-		buffer = append(buffer, ")"...)
+		buffer = append(buffer, ')')
 	case ForeignErrorErrorAtIndex:
 		buffer = append(buffer, "(ErrorAtIndex "...)
 		buffer = strconv.AppendInt(buffer, int64(foreignError.ErrorAtIndex0), 10)
-		buffer = append(buffer, " "...)
+		buffer = append(buffer, ' ')
 		buffer = AppendShow(buffer, foreignError.ErrorAtIndex1)
-		buffer = append(buffer, ")"...)
+		buffer = append(buffer, ')')
 	case ForeignErrorErrorAtProperty:
 		buffer = append(buffer, "(ErrorAtProperty "...)
 		buffer = prim.AppendShowString(buffer, foreignError.ErrorAtProperty0)
-		buffer = append(buffer, " "...)
+		buffer = append(buffer, ' ')
 		buffer = AppendShow(buffer, foreignError.ErrorAtProperty1)
-		buffer = append(buffer, ")"...)
+		buffer = append(buffer, ')')
 	default: // ForeignErrorTypeMismatch
 		buffer = append(buffer, "(TypeMismatch "...)
 		buffer = prim.AppendShowString(buffer, foreignError.TypeMismatch0)
-		buffer = append(buffer, " "...)
+		buffer = append(buffer, ' ')
 		buffer = prim.AppendShowString(buffer, foreignError.TypeMismatch1)
-		buffer = append(buffer, ")"...)
+		buffer = append(buffer, ')')
 	}
 	return buffer
 }

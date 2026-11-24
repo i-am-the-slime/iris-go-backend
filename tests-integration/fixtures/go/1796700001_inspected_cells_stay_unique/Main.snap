@@ -82,15 +82,7 @@ func doubled(value *Expr) *Expr {
 
 func swappedReusing(value *Expr) *Expr {
 	switch value.Tag {
-	case ExprAdd:
-		left := value.Field0
-		right := value.Field1
-		field := swappedReusing(right)
-		field2 := swappedReusing(left)
-		value.Field0 = field
-		value.Field1 = field2
-		return value
-	case ExprMul:
+	case ExprAdd, ExprMul:
 		left := value.Field0
 		right := value.Field1
 		field := swappedReusing(right)

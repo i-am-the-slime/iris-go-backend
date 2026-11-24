@@ -19,14 +19,14 @@ func ShowChar(maybe Char) string {
 }
 
 func AppendShowArrayMaybeChar(buffer []byte, array []Char) []byte {
-	buffer = append(buffer, "["...)
+	buffer = append(buffer, '[')
 	for index, element := range array {
 		if index > 0 {
-			buffer = append(buffer, ","...)
+			buffer = append(buffer, ',')
 		}
 		buffer = AppendShowChar(buffer, element)
 	}
-	buffer = append(buffer, "]"...)
+	buffer = append(buffer, ']')
 	return buffer
 }
 
@@ -34,7 +34,7 @@ func AppendShowChar(buffer []byte, maybe Char) []byte {
 	if maybe != NoChar {
 		buffer = append(buffer, "(Just "...)
 		buffer = prim.AppendShowChar(buffer, rune(maybe))
-		buffer = append(buffer, ")"...)
+		buffer = append(buffer, ')')
 	} else {
 		buffer = append(buffer, "Nothing"...)
 	}
@@ -51,14 +51,14 @@ func Show(s string) string {
 }
 
 func AppendShowArrayString(buffer []byte, array []string) []byte {
-	buffer = append(buffer, "["...)
+	buffer = append(buffer, '[')
 	for index, element := range array {
 		if index > 0 {
-			buffer = append(buffer, ","...)
+			buffer = append(buffer, ',')
 		}
 		buffer = prim.AppendShowString(buffer, element)
 	}
-	buffer = append(buffer, "]"...)
+	buffer = append(buffer, ']')
 	return buffer
 }
 
