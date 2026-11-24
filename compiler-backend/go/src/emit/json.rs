@@ -639,8 +639,56 @@ where
                 });
                 raw(out, "}");
             }
+            Monotype::Data(data) if self.monotypes.variant_row(&data).is_some() => {
+                self.json_encode_variant(&data, value, locals, out)?
+            }
             _ => self.json_encode(monotype, value, locals, out)?,
         }
+        Ok(())
+    }
+
+    /// A variant as Yoga.JSON writes it, an object of its one label: `{"label":payload}`, by a
+    /// switch over its tag.
+    fn json_encode_variant(
+        &mut self,
+        data: &crate::monotype::DataType,
+        value: GoExpression,
+        locals: &mut Locals,
+        out: &mut Vec<GoStatement>,
+    ) -> GoResult<()> {
+        let constructors = self
+            .monotypes
+            .constructors(&mut self.context, data)
+            .map_err(|failure| failure.at(&self.current_definition()))?;
+        let layout = self.data_layout(data)?;
+        let mut cases = vec![];
+        for (index, constructor) in constructors.iter().enumerate() {
+            let [payload] = constructor.fields[..] else {
+                return Err(crate::error::GoError::unsupported_construct(
+                    "a variant label without one payload",
+                ));
+            };
+            let mut body = vec![];
+            raw(&mut body, &format!("{{{}:", json_string(&constructor.name)));
+            let field = self.constructor_field(&layout, index, 0, value.clone());
+            self.json_encode(payload, field, locals, &mut body)?;
+            raw(&mut body, "}");
+            cases.push((index, body));
+        }
+        if let [(_, body)] = cases.as_mut_slice() {
+            out.append(body);
+            return Ok(());
+        }
+        let cases = cases
+            .into_iter()
+            .map(|(index, body)| GoCase {
+                values: vec![identifier_expression(&layout.constructors[index].tag)],
+                body,
+                line: None,
+            })
+            .collect();
+        let tag = super::field(value, "Tag");
+        out.push(GoStatement::Switch { value: Some(tag), cases, default: None });
         Ok(())
     }
 

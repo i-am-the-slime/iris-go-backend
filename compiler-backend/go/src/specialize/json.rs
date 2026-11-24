@@ -46,6 +46,10 @@ where
         };
         let Some((class, head)) = self.instance_head(instance.origin)? else { return Ok(false) };
         let known = match (class.as_str(), head.as_str()) {
+            // A variant is written as an object of its one label; reading one tries every
+            // label in turn, which the typed codec does not do.
+            ("Yoga.JSON.WriteForeign", "Data.Variant.Variant") => true,
+            ("Yoga.JSON.WriteForeignVariant", "Prim.RowList.Cons" | "Prim.RowList.Nil") => true,
             ("Yoga.JSON.ReadForeign" | "Yoga.JSON.WriteForeign", head) => match head {
                 "Prim.Int"
                 | "Prim.Number"
@@ -60,7 +64,7 @@ where
                 "Data.Maybe.Maybe" => match position {
                     Position::Root => codec == JsonCodec::Read,
                     Position::Inner => true,
-                    Position::Optional => false,
+                    Position::Optional | Position::Payload => false,
                 },
                 _ => false,
             },
@@ -73,8 +77,10 @@ where
         if !known {
             return Ok(false);
         }
-        let inner = match head.as_str() {
-            "Data.Maybe.Maybe" | "Data.Nullable.Nullable" => Position::Optional,
+        let inner = match (class.as_str(), head.as_str()) {
+            (_, "Data.Maybe.Maybe" | "Data.Nullable.Nullable") => Position::Optional,
+            // A variant's payload is its object's one member, which a Nothing would leave out.
+            ("Yoga.JSON.WriteForeignVariant", _) => Position::Payload,
             _ => Position::Inner,
         };
         for context in instance.context.iter() {
@@ -222,4 +228,6 @@ enum Position {
     Inner,
     /// The payload of a Maybe or Nullable.
     Optional,
+    /// The payload of a variant.
+    Payload,
 }
