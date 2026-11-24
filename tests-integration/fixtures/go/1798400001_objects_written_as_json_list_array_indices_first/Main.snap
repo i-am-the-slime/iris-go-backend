@@ -1,0 +1,93 @@
+---
+source: tests-integration/src/fixtures.rs
+---
+// Data/Show/show.go
+package show
+
+import "github.com/i-am-the-slime/iris-go/prim"
+
+func Show(s string) string {
+	return prim.ShowString(s)
+}
+
+func AppendShowArrayString(buffer []byte, array []string) []byte {
+	buffer = append(buffer, '[')
+	for index, element := range array {
+		if index > 0 {
+			buffer = append(buffer, ',')
+		}
+		buffer = prim.AppendShowString(buffer, element)
+	}
+	buffer = append(buffer, ']')
+	return buffer
+}
+
+func ArrayString(array []string) string {
+	return string(AppendShowArrayString(nil, array))
+}
+
+// Data/Tuple/tuple.go
+package tuple
+
+type TupleStringInt struct {
+	First  string
+	Second int32
+}
+
+// main.go
+package main
+
+import (
+	"fixture/Data/Show"
+	"fixture/Data/Tuple"
+	"fixture/shared"
+	"github.com/i-am-the-slime/iris-go/console"
+	"github.com/i-am-the-slime/iris-go/foreignvalue"
+	"github.com/i-am-the-slime/iris-go/object"
+	"strings"
+)
+
+var main_ = initializeMain_()
+
+func initializeMain_() []string {
+	return []string{foreignvalue.Encode(shared.EncodeJSONObjectInt, scores), show.ArrayString(object.Keys(scores))}
+}
+
+var scores = initializeScores()
+
+func initializeScores() *struct {
+	Index map[string]int
+	Ints  int
+	Keys  []string
+	Vals  []int32
+} {
+	object2 := object.New[int32]()
+	for _, tuple := range []tuple.TupleStringInt{{First: "b", Second: 1}, {First: "10", Second: 2}, {First: "2", Second: 3}} {
+		object.Poke(tuple.First, tuple.Second, object2)
+	}
+	return object2
+}
+
+func main() {
+	console.Print("[" + strings.Join(main_, " ") + "]")
+}
+
+// shared/shared.go
+package shared
+
+import "github.com/i-am-the-slime/iris-go/foreignvalue"
+
+func EncodeJSONObjectInt(e *foreignvalue.Encoder, value *struct {
+	Index map[string]int
+	Ints  int
+	Keys  []string
+	Vals  []int32
+}) {
+	e.Raw("{")
+	for index, key := range value.Keys {
+		member := value.Vals[index]
+		e.Key(key)
+		e.Int(member)
+	}
+	e.Raw("}")
+}
