@@ -239,7 +239,7 @@ impl Simplifier<'_> {
     /// the whole of it. A function that takes or returns a function is still copied, since its
     /// caller's lambdas then become plain code.
     fn stands_on_its_own(&self, id: FunctionId, function: &Function) -> bool {
-        let plain = |monotype: MonotypeId| self.monotypes.function_parts(monotype).is_none();
+        let plain = |monotype: MonotypeId| !self.monotypes.holds_function(monotype);
         self.sizes[id.0 as usize] > OWN_FUNCTION_SIZE
             && function.parameters.iter().all(|parameter| plain(parameter.monotype))
             && plain(function.result)

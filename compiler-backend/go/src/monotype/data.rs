@@ -237,6 +237,18 @@ impl Monotypes {
         (nullary && self.variant_row(data).is_none()).then_some(constructors.len())
     }
 
+    pub fn holds_function(&self, id: MonotypeId) -> bool {
+        match self.get(id) {
+            Monotype::Function(..) => true,
+            Monotype::Data(data) => self.constructors.get(data).is_some_and(|constructors| {
+                constructors.iter().any(|constructor| {
+                    constructor.fields.iter().any(|&field| self.function_parts(field).is_some())
+                })
+            }),
+            _ => false,
+        }
+    }
+
     /// A data type at its arguments, with the argument of each phantom parameter
     /// replaced by one stand-in and each erasure at one cause. No field of
     /// `Free f a` holds an `a`, so `Free f Unit` and `Free f Int` are one
