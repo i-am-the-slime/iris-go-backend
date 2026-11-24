@@ -103,6 +103,9 @@ goes for one thrown while the program loads, too. One that escapes an `Aff` fibe
 program a turn later, as in JavaScript, and its trace shows Aff's scheduler rather than the
 line that threw.
 
+So if a script or CI step checks for exit code 1 to spot a crash, have it check for anything
+non-zero instead.
+
 `Effect.Exception.stack` and `show` on an `Error` give just the `Error: <message>` header, with
 no stack frames.
 
