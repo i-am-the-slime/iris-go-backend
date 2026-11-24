@@ -58,7 +58,6 @@ import (
 	"github.com/i-am-the-slime/iris-go/console"
 	"github.com/i-am-the-slime/iris-go/prim"
 	"slices"
-	"strconv"
 	"strings"
 )
 
@@ -70,11 +69,7 @@ func initializeMain_() []string {
 	return []string{"x2", pairs, joined, string(text)}
 }
 
-var pairs = initializePairs()
-
-func initializePairs() string {
-	return "true" + strconv.Itoa(int(pairsF(pairsF(1))))
-}
+var pairs string = "true3"
 
 var joined = initializeJoined()
 
@@ -100,10 +95,6 @@ func mainGo2(f func(int32) int32, n int32, accumulated []int32) []int32 {
 		}
 		n, accumulated = n-1, array.Bounded(append(accumulated, f(n)))
 	}
-}
-
-func pairsF(value int32) int32 {
-	return value + 1
 }
 
 func main() {

@@ -37,7 +37,7 @@ func main() {
 	for index, element := range array {
 		mapped[index] = forceInt(element)
 	}
-	if arraypkg.Eq(eq.Eq, mapped, []int32{5050, 55}) == false {
+	if !arraypkg.Eq(eq.Eq, mapped, []int32{5050, 55}) {
 		effectexception.ThrowUnit("the deferred values are wrong")
 	}
 	bound := Actions_ffi.RunWhenAsked(func() int32 {
@@ -55,7 +55,7 @@ func main() {
 		return accumulator
 	})
 	free := Actions_ffi.RunWhenAsked(answer)
-	if arraypkg.Eq(eq.Eq, []int32{bound, mapped2, free}, []int32{55, 210, 42}) == false {
+	if !arraypkg.Eq(eq.Eq, []int32{bound, mapped2, free}, []int32{55, 210, 42}) {
 		effectexception.ThrowUnit("the continued values are wrong")
 	}
 	array2 := []int32{1, 2}
@@ -76,7 +76,7 @@ func main() {
 		}
 		mapped4[index] = x + accumulator
 	}
-	if arraypkg.Eq(eq.Eq, arraypkg.Append(mapped3, mapped4), []int32{56, 57, 11}) == false {
+	if !arraypkg.Eq(eq.Eq, arraypkg.Append(mapped3, mapped4), []int32{56, 57, 11}) {
 		effectexception.ThrowUnit("the shifted values are wrong")
 	}
 	for _, i := range []int32{1, 2} {

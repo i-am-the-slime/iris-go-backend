@@ -42,13 +42,6 @@ func UnsafeNodeIntInt(k int32, v int32, l *MapIntInt, r *MapIntInt) *MapIntInt {
 	return &MapIntInt{Node0: 1 + result, Node1: 1 + s1 + r.Node1, Node2: k, Node3: v, Node4: l, Node5: r}
 }
 
-func UnsafeBalancedNodeIntIntHeight(value *MapIntInt) int32 {
-	if value == SharedMapIntIntLeaf {
-		return 0
-	}
-	return value.Node0
-}
-
 func UnsafeBalancedNodeIntIntReusing(k int32, v int32, l *MapIntInt, r *MapIntInt, donor *MapIntInt) *MapIntInt {
 	if l == SharedMapIntIntLeaf {
 		if r == SharedMapIntIntLeaf {
@@ -154,7 +147,13 @@ func UnsafeBalancedNodeIntIntRotateLeftReusing(k int32, v int32, l *MapIntInt, r
 		lv := rl.Node3
 		ll := rl.Node4
 		lr := rl.Node5
-		if lh > UnsafeBalancedNodeIntIntHeight(rr) {
+		var result int32
+		if rr == SharedMapIntIntLeaf {
+			result = 0
+		} else {
+			result = rr.Node0
+		}
+		if lh > result {
 			return UnsafeNodeIntIntReusing(lk, lv, UnsafeNodeIntInt(k, v, l, ll), UnsafeNodeIntInt(rk, rv, lr, rr), donor)
 		}
 	}
@@ -168,7 +167,13 @@ func UnsafeBalancedNodeIntIntRotateRightReusing(k int32, v int32, lk int32, lv i
 		rv := lr.Node3
 		rl := lr.Node4
 		rr := lr.Node5
-		if UnsafeBalancedNodeIntIntHeight(ll) <= rh {
+		var result int32
+		if ll == SharedMapIntIntLeaf {
+			result = 0
+		} else {
+			result = ll.Node0
+		}
+		if result <= rh {
 			return UnsafeNodeIntIntReusing(rk, rv, UnsafeNodeIntInt(lk, lv, ll, rl), UnsafeNodeIntInt(k, v, rr, r), donor)
 		}
 	}
@@ -264,8 +269,6 @@ func mainGoReusing(x int32, v int32, value *internal.MapIntInt) *internal.MapInt
 	if value == internal.SharedMapIntIntLeaf {
 		return &internal.MapIntInt{Node0: 1, Node1: 1, Node2: x, Node3: v, Node4: internal.SharedMapIntIntLeaf, Node5: internal.SharedMapIntIntLeaf}
 	}
-	mh := value.Node0
-	ms := value.Node1
 	mk := value.Node2
 	mv := value.Node3
 	ml := value.Node4
@@ -274,12 +277,8 @@ func mainGoReusing(x int32, v int32, value *internal.MapIntInt) *internal.MapInt
 		return internal.UnsafeBalancedNodeIntIntReusing(mk, mv, mainGoReusing(x, v, ml), mr, value)
 	}
 	if x == mk {
-		value.Node0 = mh
-		value.Node1 = ms
 		value.Node2 = x
 		value.Node3 = v
-		value.Node4 = ml
-		value.Node5 = mr
 		return value
 	}
 	return internal.UnsafeBalancedNodeIntIntReusing(mk, mv, ml, mainGoReusing(x, v, mr), value)

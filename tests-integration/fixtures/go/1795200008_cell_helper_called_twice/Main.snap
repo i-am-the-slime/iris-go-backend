@@ -59,11 +59,7 @@ func initializeMain_() shared.MainResult {
 		default: // class.StepIntUnitDone
 		}
 	}
-	return shared.MainResult{Total: total, Scaled: []int32{mainScale(1), mainScale(2)}}
-}
-
-func mainScale(x int32) int32 {
-	return 40 + x
+	return shared.MainResult{Total: total, Scaled: []int32{41, 42}}
 }
 
 func main() {

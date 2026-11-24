@@ -197,9 +197,7 @@ func codePointLoopViewsTheText(text string, i int32, count int32) int32 {
 			return count
 		}
 		var result2 maybe.Int
-		if i < 0 {
-			result2 = maybe.NoInt
-		} else if i == 0 && text == "" {
+		if i < 0 || i == 0 && text == "" {
 			result2 = maybe.NoInt
 		} else if i == 0 {
 			result2 = maybe.Int(direct.CodePointAt0(nil, text))
@@ -210,9 +208,7 @@ func codePointLoopViewsTheText(text string, i int32, count int32) int32 {
 		}
 		codePointTake := textPoints.Take(i + 1)
 		var result3 maybe.Int
-		if false {
-			result3 = maybe.NoInt
-		} else if codePointTake == "" {
+		if codePointTake == "" {
 			result3 = maybe.NoInt
 		} else {
 			result3 = maybe.Int(direct.CodePointAt0(nil, codePointTake))

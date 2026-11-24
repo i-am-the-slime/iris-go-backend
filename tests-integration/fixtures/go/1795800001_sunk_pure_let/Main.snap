@@ -84,7 +84,7 @@ func main() {
 		}
 		mapped[index] = isLeftProblemInt(result)
 	}
-	if arraypkg.Eq(eq.EqBoolean, mapped, []bool{false, true, true}) == false {
+	if !arraypkg.Eq(eq.EqBoolean, mapped, []bool{false, true, true}) {
 		effectexception.ThrowUnit("a count is read wrongly")
 	}
 	array2 := []int32{11, 1}
@@ -99,7 +99,7 @@ func main() {
 		}
 		mapped2[index] = result
 	}
-	if arraypkg.Eq(eq.EqString, mapped2, [][]string{{"pears", "11", "pears", "11"}, {"pears", "1"}}) == false {
+	if !arraypkg.Eq(eq.EqString, mapped2, [][]string{{"pears", "11", "pears", "11"}, {"pears", "1"}}) {
 		effectexception.ThrowUnit("the shared value is wrong")
 	}
 }

@@ -98,11 +98,7 @@ func initializeMain_() []string {
 		result3 = LightGreen
 	}
 	var result4 string
-	if result2 == LightRed && result3 == LightRed {
-		result4 = "true"
-	} else if result2 == LightAmber && result3 == LightAmber {
-		result4 = "true"
-	} else if result2 == LightGreen && result3 == LightGreen {
+	if result2 == LightRed && result3 == LightRed || result2 == LightAmber && result3 == LightAmber || result2 == LightGreen && result3 == LightGreen {
 		result4 = "true"
 	} else {
 		result4 = "false"

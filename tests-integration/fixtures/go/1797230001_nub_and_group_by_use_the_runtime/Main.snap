@@ -216,7 +216,7 @@ func main() {
 			}
 			lst := result2.Second
 			result3 := !(lst < x_) && lst == x_
-			if result3 == false {
+			if !result3 {
 				array2 = arraypkg.Bounded(append(array2, pair))
 			}
 		}
@@ -289,7 +289,7 @@ func main() {
 			default:
 				result3 = false
 			}
-			if result3 == false {
+			if !result3 {
 				array2 = arraypkg.Bounded(append(array2, pair))
 			}
 		}
@@ -345,13 +345,9 @@ func mainRecord(shown *shared.Ref[string], text string) {
 	shown.Value = s_
 }
 
-func mainF(value int32) int32 {
-	return prim.IntModPositive(value, 3)
-}
-
 func mainComp(x int32, y int32) ordering.Ordering {
-	i := mainF(x)
-	i2 := mainF(y)
+	i := prim.IntModPositive(x, 3)
+	i2 := prim.IntModPositive(y, 3)
 	if i < i2 {
 		return ordering.OrderingLT
 	}

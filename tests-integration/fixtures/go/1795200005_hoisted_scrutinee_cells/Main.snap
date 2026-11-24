@@ -61,7 +61,7 @@ func main_() int32 {
 			i := []int32{}[index]
 			accumulator2 = listIntCells3.New(list.ListInt{Cons0: i, Cons1: accumulator2})
 		}
-		*scrutinee = Shape{Tag: ShapeLeaf, Leaf: accumulator2}
+		scrutinee.Leaf = accumulator2
 		result2 = scrutinee
 	} else {
 		array := []int32{1}

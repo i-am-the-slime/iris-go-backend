@@ -23,10 +23,6 @@ func JustMaybeInt(just Int) MaybeInt {
 
 var NoMaybeInt = MaybeInt{Tag: TagNothing}
 
-type Char int64
-
-const NoChar Char = 1 << 32
-
 type Boolean uint8
 
 const (
@@ -343,36 +339,28 @@ func initializeMain_() []string {
 	} else {
 		result27 = "nothing"
 	}
-	var result28 maybe.Char
+	var result28 string
 	if opaque(1) > 0 {
-		result28 = maybe.Char('c')
+		result28 = "c"
 	} else {
-		result28 = maybe.NoChar
-	}
-	var result29 string
-	if result28 != maybe.NoChar && rune(result28) == 'c' {
-		result29 = "c"
-	} else if result28 != maybe.NoChar {
-		result29 = "other"
-	} else {
-		result29 = "none"
+		result28 = "none"
 	}
 	x18 := opaque(7)
-	var result30 maybe.Boolean
+	var result29 maybe.Boolean
 	if x18 > 0 {
-		result30 = maybe.JustBoolean(x18 > 5)
+		result29 = maybe.JustBoolean(x18 > 5)
 	} else {
-		result30 = maybe.NoBoolean
+		result29 = maybe.NoBoolean
 	}
-	var result31 string
-	if result30 == maybe.True {
-		result31 = "yes"
-	} else if result30 == maybe.False {
-		result31 = "no"
+	var result30 string
+	if result29 == maybe.True {
+		result30 = "yes"
+	} else if result29 == maybe.False {
+		result30 = "no"
 	} else {
-		result31 = "none"
+		result30 = "none"
 	}
-	return []string{strconv.Itoa(int(result)), strconv.FormatBool(result4), result7, result8, result9, result10, result11, result12, result13, strconv.FormatBool(result17), result20, strconv.FormatBool(opaque(0) > 0), result22, result25, result27, result29, result31}
+	return []string{strconv.Itoa(int(result)), strconv.FormatBool(result4), result7, result8, result9, result10, result11, result12, result13, strconv.FormatBool(result17), result20, strconv.FormatBool(opaque(0) > 0), result22, result25, result27, result28, result30}
 }
 
 func opaque(x int32) int32 {

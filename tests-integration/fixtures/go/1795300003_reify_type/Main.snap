@@ -68,22 +68,12 @@ func AppendShowArrayString(buffer []byte, array []string) []byte {
 	return buffer
 }
 
-// Type/Proxy/proxy.go
-package proxy
-
-type Proxy uint8
-
-const (
-	ProxyProxy Proxy = iota
-)
-
 // main.go
 package main
 
 import (
 	"fixture/Data/Ordering"
 	"fixture/Data/Show"
-	"fixture/Type/Proxy"
 	arraypkg "github.com/i-am-the-slime/iris-go/array"
 	"github.com/i-am-the-slime/iris-go/console"
 	"slices"
@@ -113,12 +103,8 @@ func reifiedEach(n int32, done []string) []string {
 		if n > 3 {
 			return done
 		}
-		n, done = n+1, arraypkg.Bounded(append(done, "n="+strconv.Itoa(int(reifiedEachDictionaryReflectType(n, proxy.ProxyProxy)*10+n))+"n="+strconv.Itoa(int(reifiedEachDictionaryReflectType(n, proxy.ProxyProxy)*10+1))))
+		n, done = n+1, arraypkg.Bounded(append(done, "n="+strconv.Itoa(int(n*10+n))+"n="+strconv.Itoa(int(n*10+1))))
 	}
-}
-
-func reifiedEachDictionaryReflectType(n int32, proxy proxy.Proxy) int32 {
-	return n
 }
 
 func main() {

@@ -102,7 +102,6 @@ func largestReplacesItsCellGoReusing(best *ListInt, list *ListInt) *ListInt {
 				continue
 			}
 		}
-		list.Cons0 = value
 		list.Cons1 = sharedListIntNil
 		best, list = list, rest
 	}

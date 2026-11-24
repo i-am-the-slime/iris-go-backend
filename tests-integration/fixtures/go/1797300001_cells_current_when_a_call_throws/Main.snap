@@ -37,7 +37,7 @@ func main_() int32 {
 		addCodes(total, "abc", 0)
 		return either.EitherErrorUnit{Tag: either.EitherErrorUnitRight, Right: struct{}{}}
 	})
-	read := total.Value
+	i := total.Value
 	var result int32
 	switch either2.Tag {
 	case either.EitherErrorUnitLeft:
@@ -45,7 +45,7 @@ func main_() int32 {
 	default: // either.EitherErrorUnitRight
 		result = 0
 	}
-	return read + result
+	return i + result
 }
 
 func addCodes(total *shared.Ref[int32], text string, index int32) {

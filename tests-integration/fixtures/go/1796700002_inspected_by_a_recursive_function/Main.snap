@@ -71,20 +71,13 @@ func insertReusing(key int32, value *Tree) *Tree {
 	if key < value2 {
 		field := insertReusing(key, left)
 		value.Node0 = field
-		value.Node1 = value2
-		value.Node2 = right
 		return value
 	}
 	if key > value2 {
 		field := insertReusing(key, right)
-		value.Node0 = left
-		value.Node1 = value2
 		value.Node2 = field
 		return value
 	}
-	value.Node0 = left
-	value.Node1 = value2
-	value.Node2 = right
 	return value
 }
 

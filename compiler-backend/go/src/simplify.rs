@@ -933,9 +933,12 @@ impl Simplifier<'_> {
     fn is_small_applied_lambda(&self, binding: &Binding, body: &Expression) -> bool {
         let ExpressionKind::Lambda { parameters, .. } = &binding.value.kind else { return false };
         let mutable = |monotype: &Monotype| matches!(monotype, Monotype::MutableArray(_));
-        // The array may as well be passed: `peekOr0 index array`.
+        // The array may as well be passed, `peekOr0 index array`, when the helper only reads
+        // it: a helper that writes a passed array stays a function over its slice.
+        let passed_array =
+            parameters.iter().any(|parameter| mutable(self.monotypes.get(parameter.monotype)));
         let over_mutable_array = captures_free(&binding.value, self.monotypes, mutable)
-            || parameters.iter().any(|parameter| mutable(self.monotypes.get(parameter.monotype)));
+            || (passed_array && only_reads_arrays(&binding.value));
         let worth_copying = over_mutable_array || is_within_size(&binding.value, TINY_HELPER);
         self.fuel > 0
             && is_within_size(&binding.value, INLINE_SIZE)
@@ -1153,6 +1156,20 @@ fn substitute_in_place(
     for_each_child_mut(expression, &mut |child| {
         substitute_in_place(child, local, value, monotypes)
     });
+}
+
+/// Whether every action the expression performs on a mutable array reads it.
+fn only_reads_arrays(expression: &Expression) -> bool {
+    let mut reads_only = true;
+    visit(expression, &mut |node| {
+        if let ExpressionKind::Foreign { foreign: Foreign::Perform { function, .. }, .. } =
+            &node.kind
+        {
+            reads_only &= function.name.starts_with("Peek")
+                || matches!(function.name, "Within" | "Length");
+        }
+    });
+    reads_only
 }
 
 /// Whether `expression` chooses on `local`: an `if` on it, or a `case` of it.
