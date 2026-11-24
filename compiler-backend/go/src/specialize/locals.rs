@@ -168,6 +168,11 @@ where
                     term,
                     &mut instantiations,
                 )?;
+                self.add_floating_dictionaries(
+                    (file_id, term),
+                    &instantiations,
+                    &mut dictionaries,
+                )?;
                 let monotype =
                     self.instantiated_monotype(scope, current, file_id, term, &instantiations)?;
                 let reference = Reference { file_id, term, expression: id };

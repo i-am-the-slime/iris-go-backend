@@ -34,6 +34,7 @@ mod equations;
 mod evidence;
 mod existential;
 mod expressions;
+mod floating;
 mod foreign;
 mod growth;
 mod hash_map;
@@ -237,6 +238,11 @@ pub struct Specializer<'q, Q> {
     int64: int64::Int64Types,
     /// The parameters of the lambdas the source writes as thunks, `\_ -> later`.
     thunk_parameters: FxHashSet<LocalId>,
+    /// Evidence an application passes to its result where a polymorphic
+    /// function (`$`, `<<<`, `const`) was instantiated at a constrained type,
+    /// `Monad Effect => Policy Effect`: each closed constraint with the
+    /// dictionary the references inside its arguments are specialized with.
+    floating: Vec<(TypeId, Dictionary)>,
 }
 
 struct RecordedBlocker {
@@ -285,6 +291,7 @@ where
             narrowed_variant_rows: vec![],
             int64: int64::Int64Types::default(),
             thunk_parameters: FxHashSet::default(),
+            floating: vec![],
         }
     }
 

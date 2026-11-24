@@ -43,7 +43,8 @@ where
         self.context.types.close(&mut substitution);
         let node_type = self.outer_body(tree[node].type_id, &mut vec![]);
         let node_type = self.context.types.substitute(node_type, &substitution);
-        self.context.types.substitute(node_type, &scope.substitution)
+        let node_type = self.context.types.substitute(node_type, &scope.substitution);
+        self.without_floating_constraints(node_type)
     }
 
     /// The instantiations recorded at a reference and its evidence applications.
@@ -79,7 +80,8 @@ where
     ) -> Substitution {
         self.context.types.close(&mut recorded);
         for argument in recorded.values_mut() {
-            *argument = self.context.types.substitute(*argument, &scope.substitution);
+            let closed = self.context.types.substitute(*argument, &scope.substitution);
+            *argument = self.without_floating_constraints(closed);
         }
         recorded
     }
@@ -90,6 +92,13 @@ where
         type_id: TypeId,
         result_instantiations: &Substitution,
     ) -> GoResult<MonotypeId> {
+        let type_id = match self.floating.is_empty() {
+            true => type_id,
+            false => {
+                let closed = self.context.types.substitute(type_id, &scope.substitution);
+                self.without_floating_constraints(closed)
+            }
+        };
         if result_instantiations.is_empty() {
             return self.monotype(scope, type_id);
         }
