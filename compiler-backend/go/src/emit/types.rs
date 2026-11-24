@@ -131,7 +131,10 @@ where
         // its methods (`Force` of a `Lazy`) and unassignable to it inside
         // function types, so the newtype is an alias whenever Go allows one.
         let line = self.data_line(data)?;
-        let declaration = if self.unfolding_reaches_itself_unnamed(data, unfolded)? {
+        let defined = self.unfolding_reaches_itself_unnamed(data, unfolded)?
+            || (!is_generic_instantiation(&type_)
+                && self.unfolding_reaches_itself_as_type_argument(data, unfolded)?);
+        let declaration = if defined {
             GoDeclaration::Type { name: name.clone(), type_, line, member_lines: vec![] }
         } else {
             self.type_aliases.insert(name.clone(), type_.clone());
@@ -278,6 +281,73 @@ where
                 Monotype::Record(_)
                 | Monotype::Data(_)
                 | Monotype::Int
+                | Monotype::Number
+                | Monotype::Boolean
+                | Monotype::Char
+                | Monotype::String
+                | Monotype::Unit
+                | Monotype::Error
+                | Monotype::Opaque
+                | Monotype::Regex
+                | Monotype::Mutex
+                | Monotype::BigInt
+                | Monotype::Int64
+                | Monotype::UInt64
+                | Monotype::Erased(_) => {}
+            }
+        }
+        Ok(false)
+    }
+
+    pub(super) fn unfolding_reaches_itself_as_type_argument(
+        &mut self,
+        data: &DataType,
+        unfolded: MonotypeId,
+    ) -> GoResult<bool> {
+        let mut pending = vec![(unfolded, false)];
+        let mut visited: FxHashSet<(MonotypeId, bool)> = FxHashSet::default();
+        while let Some((monotype, argument)) = pending.pop() {
+            if !visited.insert((monotype, argument)) {
+                continue;
+            }
+            match self.monotypes.get(monotype).clone() {
+                Monotype::Recursive(inner) if inner == *data => {
+                    if argument {
+                        return Ok(true);
+                    }
+                }
+                Monotype::Recursive(inner) => pending.push((self.unfold(&inner)?, argument)),
+                Monotype::Record(fields) => {
+                    pending.extend(fields.iter().map(|field| (field.monotype, argument)));
+                }
+                Monotype::Data(inner) => {
+                    let constructors = self
+                        .monotypes
+                        .constructors(&mut self.context, &inner)
+                        .map_err(Failure::in_code_generation)?;
+                    for constructor in constructors.iter() {
+                        pending.extend(constructor.fields.iter().map(|&field| (field, argument)));
+                    }
+                }
+                Monotype::Function(argument_type, result) => {
+                    pending.extend([(argument_type, argument), (result, argument)]);
+                }
+                Monotype::Array(inner)
+                | Monotype::Effect(inner)
+                | Monotype::MutableArray(inner)
+                | Monotype::Object(inner)
+                | Monotype::Nullable(inner) => pending.push((inner, argument)),
+                Monotype::Reference(inner) | Monotype::Lazy(inner) | Monotype::ConsList(inner) => {
+                    pending.push((inner, true))
+                }
+                Monotype::ForeignData(foreign) => {
+                    for &type_argument in foreign.arguments.iter() {
+                        let type_argument =
+                            self.monotypes.monotype(&mut self.context, type_argument);
+                        pending.push((type_argument.map_err(Failure::in_code_generation)?, true));
+                    }
+                }
+                Monotype::Int
                 | Monotype::Number
                 | Monotype::Boolean
                 | Monotype::Char
