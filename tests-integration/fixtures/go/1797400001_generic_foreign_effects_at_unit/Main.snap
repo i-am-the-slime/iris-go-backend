@@ -1,18 +1,10 @@
 ---
 source: tests-integration/src/fixtures.rs
 ---
-// Control/Category/category.go
-package category
-
-func Identity(x func(struct{})) func(struct{}) {
-	return x
-}
-
 // main.go
 package main
 
 import (
-	"fixture/Control/Category"
 	"fixture/Lifted_ffi"
 	"fixture/shared"
 	"github.com/i-am-the-slime/iris-go/prim"
@@ -49,7 +41,7 @@ func main_() []string {
 		return struct{}{}
 	})
 	Lifted_ffi.CombineImpl(func(f func(struct{})) func(struct{}) struct{} {
-		function := category.Identity(f)
+		function := f
 		return func(unit struct{}) struct{} {
 			function(unit)
 			return struct{}{}

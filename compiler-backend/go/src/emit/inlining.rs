@@ -15,7 +15,7 @@ struct Callee {
     body: Vec<GoStatement>,
 }
 
-pub(super) fn inline_called_cell_loops(declarations: &mut [GoDeclaration], structs: &Structs) {
+pub(super) fn inline_called_cell_loops(declarations: &mut Vec<GoDeclaration>, structs: &Structs) {
     let callees: FxHashMap<String, Callee> =
         declarations.iter().filter_map(|declaration| callee(declaration, structs)).collect();
     if callees.is_empty() {
@@ -30,6 +30,34 @@ pub(super) fn inline_called_cell_loops(declarations: &mut [GoDeclaration], struc
             Inliner { callees: &callees, caller: &caller, names: &mut names, depth: 0 };
         inliner.block(body);
     }
+    drop_inlined_everywhere(declarations, &callees);
+}
+
+/// Removes the callees no other function calls any more, now that their callers hold them.
+fn drop_inlined_everywhere(
+    declarations: &mut Vec<GoDeclaration>,
+    callees: &FxHashMap<String, Callee>,
+) {
+    let mut referenced = FxHashSet::default();
+    for declaration in declarations.iter_mut() {
+        let own = match declaration {
+            GoDeclaration::Function { name, .. } => Some(name.clone()),
+            _ => None,
+        };
+        let names = declaration.declared_names();
+        referenced.extend(
+            names
+                .names
+                .into_iter()
+                .filter(|name| !names.locals.contains(name) && Some(name) != own.as_ref()),
+        );
+    }
+    declarations.retain(|declaration| match declaration {
+        GoDeclaration::Function { name, .. } if callees.contains_key(name) => {
+            referenced.contains(name)
+        }
+        _ => true,
+    });
 }
 
 pub(super) fn inline_cell_constructors(declarations: &mut [GoDeclaration]) {

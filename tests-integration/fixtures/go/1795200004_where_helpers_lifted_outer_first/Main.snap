@@ -78,40 +78,6 @@ func mainGo(i int32, acc int32) int32 {
 	}
 }
 
-func mainShiftDown(array *[]int32, current int32, j int32) {
-	array2 := *array
-	for {
-		if j < 0 {
-			if 0 < len(array2) {
-				array2[0] = current
-			}
-			*array = array2
-			return
-		}
-		within := j >= 0 && int(j) < len(array2)
-		var previous int32
-		if within {
-			previous = array2[j]
-		} else {
-			previous = 0
-		}
-		if previous > current {
-			index := j + 1
-			if index >= 0 && int(index) < len(array2) {
-				array2[index] = previous
-			}
-			j -= 1
-			continue
-		}
-		index2 := j + 1
-		if index2 >= 0 && int(index2) < len(array2) {
-			array2[index2] = current
-		}
-		*array = array2
-		return
-	}
-}
-
 func main() {
 	texts := make([]string, 0, len(main_))
 	for _, element := range main_ {

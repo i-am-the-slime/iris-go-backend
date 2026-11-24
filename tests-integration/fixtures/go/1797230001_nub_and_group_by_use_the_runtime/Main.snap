@@ -1,13 +1,6 @@
 ---
 source: tests-integration/src/fixtures.rs
 ---
-// Data/Array/NonEmpty/nonempty.go
-package nonempty
-
-func ToArrayInt(array []int32) []int32 {
-	return array
-}
-
 // Data/Eq/eq.go
 package eq
 
@@ -150,7 +143,6 @@ type TupleIntInt struct {
 package main
 
 import (
-	nonemptyarray "fixture/Data/Array/NonEmpty"
 	"fixture/Data/Eq"
 	"fixture/Data/Ordering"
 	"fixture/Data/Show"
@@ -311,7 +303,7 @@ func main() {
 	array6 := arraypkg.GroupBy(eq.Eq, []int32{1, 1, 2, 3, 3})
 	mapped4 := make([][]int32, len(array6))
 	for index, element := range array6 {
-		mapped4[index] = nonemptyarray.ToArrayInt(element)
+		mapped4[index] = element
 	}
 	mainRecord(shown, string(show.AppendShowArrayArrayInt(nil, mapped4)))
 	array7 := arraypkg.GroupBy(func(first int32, x int32) bool {
@@ -319,7 +311,7 @@ func main() {
 	}, []int32{1, 2, 3, 4, 7})
 	mapped5 := make([][]int32, len(array7))
 	for index, element := range array7 {
-		mapped5[index] = nonemptyarray.ToArrayInt(element)
+		mapped5[index] = element
 	}
 	mainRecord(shown, string(show.AppendShowArrayArrayInt(nil, mapped5)))
 }

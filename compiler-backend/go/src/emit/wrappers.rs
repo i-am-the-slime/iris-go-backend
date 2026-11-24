@@ -5,13 +5,14 @@
 //! - a forwarding function, `func f(a A, b B) R { return g(a, b) }`, whose parameters and result
 //!   are `g`'s, is another name for `g`;
 //! - a call of a field reader, `func f(r R) T { return r.Field }`, is the read, `x.Field`, which
-//!   evaluates `x` once as the call did.
+//!   evaluates `x` once as the call did, and a call of an identity, `return r`, is `x`.
 //!
 //! A function that then has no reference left goes. A declaration whose locals take a wrapper's
 //! name keeps reading the local.
 
 use rustc_hash::{FxHashMap, FxHashSet};
 
+use super::operators::is_untyped_constant;
 use crate::go_traversal::{self, Walk};
 use crate::syntax::{GoDeclaration, GoExpression, GoStatement, GoType};
 
@@ -142,8 +143,7 @@ fn field_read(returned: &GoExpression, parameters: &[(String, GoType)]) -> Optio
         value = inner;
     }
     fields.reverse();
-    let read =
-        !fields.is_empty() && matches!(value, GoExpression::Identifier(name) if name == parameter);
+    let read = matches!(value, GoExpression::Identifier(name) if name == parameter);
     read.then_some(fields)
 }
 
@@ -167,6 +167,10 @@ impl Walk for Rewrite<'_> {
                     return;
                 }
                 let Some(fields) = self.wrappers.readers.get(name) else { return };
+                // An untyped constant would lose the type the identity's parameter gave it.
+                if fields.is_empty() && is_untyped_constant(&arguments[0]) {
+                    return;
+                }
                 let mut read = arguments.pop().expect("one argument");
                 for field in fields {
                     read = GoExpression::Field { value: Box::new(read), name: field.clone() };

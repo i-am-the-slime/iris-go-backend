@@ -125,26 +125,6 @@ func sortByIntCompareSwap(array []int32, i int32, j int32) {
 	}
 }
 
-func sortByIntComparePartitionFrom(array []int32, pivot int32, high int32, i int32, j int32) int32 {
-	for {
-		if j < high {
-			within := j >= 0 && int(j) < len(array)
-			if within {
-				element := array[j]
-				if element <= pivot {
-					sortByIntCompareSwap(array, i, j)
-					i, j = i+1, j+1
-					continue
-				}
-				j += 1
-				continue
-			}
-			return i
-		}
-		return i
-	}
-}
-
 func sortByIntCompareQuicksort(array []int32, low int32, high int32) {
 	for {
 		if low < high {
@@ -183,26 +163,6 @@ func sortByIntCompareQuicksort(array []int32, low int32, high int32) {
 	}
 }
 
-func sortByIntDescendingPartitionFrom(array []int32, pivot int32, high int32, i int32, j int32) int32 {
-	for {
-		if j < high {
-			within := j >= 0 && int(j) < len(array)
-			if within {
-				element := array[j]
-				if pivot <= element {
-					sortByIntCompareSwap(array, i, j)
-					i, j = i+1, j+1
-					continue
-				}
-				j += 1
-				continue
-			}
-			return i
-		}
-		return i
-	}
-}
-
 func sortByIntDescendingQuicksort(array []int32, low int32, high int32) {
 	for {
 		if low < high {
@@ -238,38 +198,6 @@ func sortByIntDescendingQuicksort(array []int32, low int32, high int32) {
 			continue
 		}
 		return
-	}
-}
-
-func sortByIntOrderPartitionFrom(array []int32, pivot int32, high int32, i int32, j int32) int32 {
-	for {
-		if j < high {
-			within := j >= 0 && int(j) < len(array)
-			if within {
-				element := array[j]
-				var i2 int32
-				if element < 4 {
-					i2 = 4 - element
-				} else {
-					i2 = element - 4
-				}
-				var i3 int32
-				if pivot < 4 {
-					i3 = 4 - pivot
-				} else {
-					i3 = pivot - 4
-				}
-				if i2 <= i3 {
-					sortByIntCompareSwap(array, i, j)
-					i, j = i+1, j+1
-					continue
-				}
-				j += 1
-				continue
-			}
-			return i
-		}
-		return i
 	}
 }
 
@@ -320,28 +248,6 @@ func sortByIntOrderQuicksort(array []int32, low int32, high int32) {
 			continue
 		}
 		return
-	}
-}
-
-func sortByIntOrderPartitionFrom2(array []int32, pivot int32, high int32, i int32, j int32) int32 {
-	for {
-		if j < high {
-			within := j >= 0 && int(j) < len(array)
-			if within {
-				element := array[j]
-				i2 := -element
-				i3 := -pivot
-				if i2 <= i3 {
-					sortByIntCompareSwap(array, i, j)
-					i, j = i+1, j+1
-					continue
-				}
-				j += 1
-				continue
-			}
-			return i
-		}
-		return i
 	}
 }
 
