@@ -116,6 +116,10 @@ pub enum Foreign {
     /// Yoga.JSON's readJSON or writeJSON at a type whose codec is Yoga.JSON's
     /// own instances throughout: [`JsonCodec`].
     Json(JsonCodec),
+    /// `show` of the `NonEmptyList ForeignError` a Yoga.JSON read fails with. It takes the
+    /// `show` of one ForeignError and the errors, and shows them with go-support's
+    /// `foreignvalue.ShowErrors`.
+    ShowForeignErrors,
 }
 
 /// A typed Yoga.JSON codec, which reads the text straight into the program's
@@ -532,6 +536,7 @@ impl Foreign {
             Foreign::LazyDefer | Foreign::LazyForce => 1,
             Foreign::Json(JsonCodec::Read) => 2,
             Foreign::Json(JsonCodec::Write) => 1,
+            Foreign::ShowForeignErrors => 2,
             Foreign::UnsafeCoerce | Foreign::Identity | Foreign::EffectPure => 1,
             Foreign::Throw | Foreign::Crash | Foreign::MakeAff | Foreign::AssocArray => 1,
             Foreign::ForkFiber | Foreign::NewFiber | Foreign::NewSupervisedFiber => 2,

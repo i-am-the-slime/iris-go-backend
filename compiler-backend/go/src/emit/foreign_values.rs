@@ -316,6 +316,9 @@ where
         if let Foreign::Json(codec) = *foreign {
             return self.json(codec, arguments, monotype, out);
         }
+        if let Foreign::ShowForeignErrors = foreign {
+            return self.show_foreign_errors(arguments, out);
+        }
         if let Foreign::Crash = foreign {
             let message = self.value(&arguments[0], out)?;
             out.push(GoStatement::Expression(call(identifier_expression("panic"), vec![message])));

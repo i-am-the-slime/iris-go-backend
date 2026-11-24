@@ -204,6 +204,14 @@ impl Simplifier<'_> {
             return None;
         }
         let function = self.functions[id.0 as usize].as_ref()?;
+        // A JSON reader carries Yoga.JSON's whole reader as its slow path: it is called, the
+        // way a Go program calls `json.Unmarshal`, wherever it is used.
+        if matches!(
+            function.body.kind,
+            ExpressionKind::Foreign { foreign: Foreign::Json(crate::foreign::JsonCodec::Read), .. }
+        ) {
+            return None;
+        }
         let once = self.uses[id.0 as usize] == 1;
         // A copy of a failure saves no work, only adds another place to fail.
         let small = self.sizes[id.0 as usize] <= INLINE_SIZE && !can_fail(&function.body);

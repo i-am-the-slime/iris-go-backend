@@ -404,6 +404,7 @@ where
             shared_nullaries: FxHashMap::default(),
             json_decoders: FxHashMap::default(),
             json_encoders: FxHashMap::default(),
+            foreign_error_shows: FxHashMap::default(),
             maybe_helpers: maybe::MaybeHelpers::new(),
             constructor_functions: FxHashMap::default(),
             cell_types: FxHashMap::default(),
@@ -583,6 +584,8 @@ struct Emitter<'p, 'm, 'q, Q> {
     /// The typed Yoga.JSON decoder and encoder of each type, by their names.
     json_decoders: FxHashMap<MonotypeId, String>,
     json_encoders: FxHashMap<MonotypeId, String>,
+    /// The function that shows a Yoga.JSON read's errors, by the type of the errors.
+    foreign_error_shows: FxHashMap<MonotypeId, String>,
     maybe_helpers: maybe::MaybeHelpers,
     cell_types: FxHashMap<DataType, bool>,
     reaching: FxHashMap<(DataType, DataType), bool>,
@@ -953,6 +956,12 @@ where
             ExpressionKind::Fail(message) => {
                 out.push(panic_statement(message));
                 Ok(())
+            }
+            ExpressionKind::Foreign {
+                foreign: crate::foreign::Foreign::Json(crate::foreign::JsonCodec::Read),
+                arguments,
+            } if mode == Mode::Value && !matches!(sink, Sink::Write(_) | Sink::Append(_)) => {
+                self.json_read(&arguments[0], &arguments[1], expression.monotype, sink, out)
             }
             ExpressionKind::Apply { function, arguments } if matches!(sink, Sink::Return) => {
                 if let ExpressionKind::Function(id) = function.kind
