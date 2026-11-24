@@ -49,6 +49,7 @@ where
             return Ok((evidence, trailing));
         }
         let floated = self.floating.len();
+        let unfloated = (evidence.clone(), trailing.clone());
         while let Some(&(_, applied)) = evidence.last()
             && let Some(dictionary) = trailing.last()
         {
@@ -59,6 +60,10 @@ where
             self.floating.push((applied, dictionary.clone()));
             evidence.pop();
             trailing.pop();
+        }
+        if !self.floats_every_constraint(&constraints, floated) {
+            self.floating.truncate(floated);
+            return Ok(unfloated);
         }
         if self.floating[floated..].iter().any(|&(constraint, _)| !self.is_closed(constraint)) {
             return Err(self.unsupported(
@@ -174,6 +179,16 @@ where
             }
             _ => {}
         }
+    }
+
+    /// Whether the evidence after the application discharges every constraint
+    /// the instantiations hold. A constraint it leaves, `Show b` of the
+    /// `forall b. Show b => …` that `unsafeCoerce` relabels, belongs to a
+    /// polymorphic value passed as it is, so nothing floats.
+    fn floats_every_constraint(&self, constraints: &[TypeId], floated: usize) -> bool {
+        constraints.iter().all(|&constraint| {
+            self.floating[floated..].iter().any(|&(applied, _)| self.same_type(constraint, applied))
+        })
     }
 
     fn is_closed(&self, type_id: TypeId) -> bool {
