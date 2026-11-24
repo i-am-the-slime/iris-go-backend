@@ -20,6 +20,9 @@ impl Simplifier<'_> {
         {
             return outside;
         }
+        if let Some(elements) = choice::negative_update(foreign, &arguments) {
+            return elements;
+        }
         if let Some(value) = three_way::constant_comparison(foreign, &arguments) {
             return Expression::new(ExpressionKind::Literal(Literal::Boolean(value)), monotype);
         }

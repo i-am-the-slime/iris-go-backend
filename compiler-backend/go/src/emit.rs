@@ -29,6 +29,7 @@ mod existential;
 mod field_reads;
 mod foreign_data;
 mod foreign_values;
+mod found;
 mod fresh;
 mod from_list;
 mod fusion;
@@ -424,6 +425,8 @@ where
             writable: FxHashMap::default(),
             array_writers: FxHashMap::default(),
             pending_array_writers: vec![],
+            array_shows: FxHashMap::default(),
+            pending_array_shows: vec![],
             inline_shapes: FxHashMap::default(),
             copied_by_containers: FxHashSet::default(),
             shared_nullaries: FxHashMap::default(),
@@ -609,6 +612,9 @@ struct Emitter<'p, 'm, 'q, Q> {
     writable: FxHashMap<FunctionId, bool>,
     array_writers: FxHashMap<FunctionId, (String, MonotypeId)>,
     pending_array_writers: Vec<FunctionId>,
+    /// The function that shows a whole array as a string through its array writer.
+    array_shows: FxHashMap<FunctionId, String>,
+    pending_array_shows: Vec<FunctionId>,
     inline_shapes: FxHashMap<DataType, Option<layout::Shape>>,
     /// The data types that a cell or an array copies whenever it is copied;
     /// only these keep the smaller limit on being held by value.

@@ -65,15 +65,15 @@ struct Operation {
 
 const OPERATIONS: &[Operation] = &[
     units("CodeUnitLength", "Length", &[]),
-    units("CodeUnitCharAt", "CharAt", &[2]),
+    units("CodeUnitCharAt", "CharAt", &[0]),
     units("CharAt", "UnsafeCharAt", &[0]),
-    units("CodeUnitIndexOfStartingAt", "IndexOfStartingAt", &[3]),
-    units("CodeUnitLastIndexOfStartingAt", "LastIndexOfStartingAt", &[3]),
+    units("CodeUnitIndexOfStartingAt", "IndexOfStartingAt", &[1]),
+    units("CodeUnitLastIndexOfStartingAt", "LastIndexOfStartingAt", &[1]),
     units("CodeUnitTake", "Take", &[0]),
     units("CodeUnitDrop", "Drop", &[0]),
     units("CodeUnitSlice", "Slice", &[0, 1]),
     points("CodePointLength", "Length", &[], &[]),
-    points("CodePointAt", "CodePointAt", &[4], &[0, 3]),
+    points("CodePointAt", "CodePointAt", &[2], &[0, 1]),
     points("CodePointTake", "Take", &[1], &[0]),
 ];
 
@@ -163,15 +163,16 @@ pub(super) fn view_invariant_strings(
     definitions
 }
 
-/// Each `char := textUnits.CharAt(just, nothing, i)` of the loop reads a code unit of ASCII
-/// text as its byte, where Go inlines it, and asks the view only otherwise:
+/// Each `char, found := textUnits.CharAt(i)` of the loop reads a code unit of ASCII text as its
+/// byte, where Go inlines it, and asks the view only otherwise:
 ///
 /// ```go
-/// char := nothing
-/// if i >= 0 && int(i) < len(textASCII) {
-///     char = just(rune(textASCII[i]))
+/// var char rune
+/// found := i >= 0 && int(i) < len(textASCII)
+/// if found {
+///     char = rune(textASCII[i])
 /// } else {
-///     char = textUnits.CharAt(just, nothing, i)
+///     char, found = textUnits.CharAt(i)
 /// }
 /// ```
 ///
@@ -185,10 +186,14 @@ fn read_ascii_bytes(
 ) -> Option<(String, GoExpression)> {
     let ascii = fresh(format!("{string}ASCII"));
     let mut read = false;
+    // A read moved behind the ASCII test is visited again in its new block.
+    let mut moved: FxHashSet<String> = FxHashSet::default();
     each_block(looped, |block| {
         let mut position = 0;
         while position < block.len() {
-            if let Some((char, just, nothing, index)) = char_at_definition(&block[position], view) {
+            if let Some((char, found, index)) = char_at_definition(&block[position], view)
+                && !moved.contains(&found)
+            {
                 let byte = GoExpression::Conversion {
                     type_: GoType::Rune,
                     value: Box::new(GoExpression::Index {
@@ -196,23 +201,57 @@ fn read_ascii_bytes(
                         index: Box::new(index.clone()),
                     }),
                 };
-                let assign = |value| GoStatement::Assign {
-                    targets: vec![GoExpression::Identifier(char.clone())],
-                    values: vec![value],
-                };
+                if let Some(built) = built_from_char(block, position, &char, &found, &byte) {
+                    moved.insert(found.clone());
+                    let asked = block.drain(position + 1..position + 3).collect::<Vec<_>>();
+                    let defined = std::mem::replace(&mut block[position], built.variable);
+                    block.insert(
+                        position + 1,
+                        GoStatement::If {
+                            condition: in_bounds(&index, GoExpression::Identifier(ascii.clone())),
+                            then: vec![built.from_byte],
+                            otherwise: [vec![defined], asked[1..].to_vec()].concat(),
+                        },
+                    );
+                    read = true;
+                    position += 2;
+                    continue;
+                }
                 let asked = block[position].clone();
                 let GoStatement::Define { values, .. } = asked else { unreachable!() };
-                let rewritten = [
-                    GoStatement::Define { names: vec![char.clone()], values: vec![nothing] },
-                    GoStatement::If {
-                        condition: in_bounds(&index, GoExpression::Identifier(ascii.clone())),
-                        then: vec![assign(applied(just, byte))],
-                        otherwise: vec![assign(values.into_iter().next().expect("one value"))],
+                let targets =
+                    [&char, &found].map(|name| GoExpression::Identifier(name.clone())).to_vec();
+                let mut rewritten = vec![];
+                let mut then = vec![];
+                if char != "_" {
+                    rewritten.push(GoStatement::Variable {
+                        name: char.clone(),
+                        type_: GoType::Rune,
+                        value: None,
+                    });
+                    then.push(GoStatement::Assign {
+                        targets: vec![GoExpression::Identifier(char.clone())],
+                        values: vec![byte],
+                    });
+                }
+                rewritten.push(GoStatement::Define {
+                    names: vec![found.clone()],
+                    values: vec![in_bounds(&index, GoExpression::Identifier(ascii.clone()))],
+                });
+                let asked = vec![GoStatement::Assign { targets, values }];
+                let found = GoExpression::Identifier(found);
+                rewritten.push(match then.is_empty() {
+                    true => GoStatement::If {
+                        condition: GoExpression::Unary { operator: "!", operand: Box::new(found) },
+                        then: asked,
+                        otherwise: vec![],
                     },
-                ];
+                    false => GoStatement::If { condition: found, then, otherwise: asked },
+                });
+                let added = rewritten.len();
                 block.splice(position..=position, rewritten);
                 read = true;
-                position += 2;
+                position += added;
                 continue;
             }
             position += 1;
@@ -228,26 +267,74 @@ fn read_ascii_bytes(
     read.then_some((ascii, value))
 }
 
-/// `char := view.CharAt(just, nothing, i)`, whose `nothing` and `i` are as cheap to repeat as
-/// to read, as its name, `just`, `nothing` and `i`.
+/// The Maybe that `var maybe T; if found { maybe = just(char) } else { maybe = nothing }` builds
+/// right after `char, found := view.CharAt(i)`, where nothing later reads `char` or `found`.
+struct BuiltFromChar {
+    variable: GoStatement,
+    /// `maybe = just(byte)`.
+    from_byte: GoStatement,
+}
+
+fn built_from_char(
+    block: &mut [GoStatement],
+    position: usize,
+    char: &str,
+    found: &str,
+    byte: &GoExpression,
+) -> Option<BuiltFromChar> {
+    let [
+        variable @ GoStatement::Variable { name, value: None, .. },
+        GoStatement::If { condition: GoExpression::Identifier(tested), then, otherwise },
+    ] = block.get(position + 1..position + 3)?
+    else {
+        return None;
+    };
+    let [GoStatement::Assign { targets, values }] = then.as_slice() else { return None };
+    let ([GoExpression::Identifier(target)], [GoStatement::Assign { .. }]) =
+        (targets.as_slice(), otherwise.as_slice())
+    else {
+        return None;
+    };
+    if tested != found || target != name {
+        return None;
+    }
+    let variable = variable.clone();
+    let mut from_byte = GoStatement::Assign { targets: targets.clone(), values: values.clone() };
+    let mut read_later = false;
+    statements_names(&mut block[position + 3..], &mut |name| {
+        if let Name::Reference(name) | Name::Written(name) = name {
+            read_later |= name == char || name == found;
+        }
+    });
+    if read_later {
+        return None;
+    }
+    each_expression_in_statement(&mut from_byte, |value| {
+        if matches!(value, GoExpression::Identifier(name) if name == char) {
+            *value = byte.clone();
+        }
+    });
+    Some(BuiltFromChar { variable, from_byte })
+}
+
+/// `char, found := view.CharAt(i)`, whose `i` is as cheap to repeat as to read, as its two
+/// names and `i`.
 fn char_at_definition(
     statement: &GoStatement,
     view: &str,
-) -> Option<(String, GoExpression, GoExpression, GoExpression)> {
+) -> Option<(String, String, GoExpression)> {
     let GoStatement::Define { names, values } = statement else { return None };
-    let ([char], [GoExpression::Call { function, arguments }]) =
+    let ([char, found], [GoExpression::Call { function, arguments }]) =
         (names.as_slice(), values.as_slice())
     else {
         return None;
     };
     let GoExpression::Field { value, name } = &**function else { return None };
-    let ([just, nothing, index], GoExpression::Identifier(viewed)) =
-        (arguments.as_slice(), &**value)
-    else {
+    let ([index], GoExpression::Identifier(viewed)) = (arguments.as_slice(), &**value) else {
         return None;
     };
-    (viewed == view && name == "CharAt" && is_repeatable(nothing) && is_repeatable(index))
-        .then(|| (char.clone(), just.clone(), nothing.clone(), index.clone()))
+    (viewed == view && name == "CharAt" && found != "_" && is_repeatable(index))
+        .then(|| (char.clone(), found.clone(), index.clone()))
 }
 
 fn is_repeatable(value: &GoExpression) -> bool {
@@ -260,24 +347,6 @@ fn is_repeatable(value: &GoExpression) -> bool {
         GoExpression::Conversion { value, .. } => is_repeatable(value),
         _ => false,
     }
-}
-
-/// `function(argument)`, with a literal `func(x T) R { return e }` applied in place as `e`.
-fn applied(function: GoExpression, argument: GoExpression) -> GoExpression {
-    if let GoExpression::Function { parameters, body, .. } = &function
-        && let ([(parameter, _)], [GoStatement::Return(Some(result))]) =
-            (parameters.as_slice(), body.as_slice())
-    {
-        let mut result = GoStatement::Expression(result.clone());
-        each_expression_in_statement(&mut result, |value| {
-            if matches!(value, GoExpression::Identifier(name) if name == parameter) {
-                *value = argument.clone();
-            }
-        });
-        let GoStatement::Expression(result) = result else { unreachable!() };
-        return result;
-    }
-    GoExpression::Call { function: Box::new(function), arguments: vec![argument] }
 }
 
 /// The variables that the loop writes only with copies of themselves, as a

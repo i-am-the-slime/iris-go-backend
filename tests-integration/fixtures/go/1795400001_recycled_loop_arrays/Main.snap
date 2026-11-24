@@ -10,10 +10,6 @@ import (
 	"strconv"
 )
 
-func ShowInt(array []int32) string {
-	return string(AppendShowArrayInt(nil, array))
-}
-
 func ShowParticleConsNumberConsNumberNil(record shared.Particle) string {
 	return string(AppendShowParticleConsNumberConsNumberNil(nil, record))
 }
@@ -67,6 +63,18 @@ func AppendShowParticleConsNumberConsNumberNil(buffer []byte, record shared.Part
 	return buffer
 }
 
+func ArrayArrayInt(array [][]int32) string {
+	return string(AppendShowArrayArrayInt(nil, array))
+}
+
+func ArrayInt(array []int32) string {
+	return string(AppendShowArrayInt(nil, array))
+}
+
+func ArrayParticle(array []shared.Particle) string {
+	return string(AppendShowArrayParticle(nil, array))
+}
+
 // Data/Tuple/tuple.go
 package tuple
 
@@ -91,7 +99,7 @@ import (
 var main_ = initializeMain_()
 
 func initializeMain_() []string {
-	return []string{string(show.AppendShowArrayParticle(nil, mainGo(0, []shared.Particle{{Position: 0.0, Velocity: 0.0}, {Position: 1.0, Velocity: 0.5}, {Position: 4.0, Velocity: -0.25}}))), string(show.AppendShowArrayInt(nil, mainGo2(0, []int32{1, 2, 3}))), string(show.AppendShowArrayInt(nil, shrink([]int32{9, 3, 7, 5, 4}))), string(show.AppendShowArrayInt(nil, mainGo3(0, []int32{0}, []int32{1, 2}))), string(show.AppendShowArrayArrayInt(nil, mainGo4(0, [][]int32{{1}, {2}})))}
+	return []string{show.ArrayParticle(mainGo(0, []shared.Particle{{Position: 0.0, Velocity: 0.0}, {Position: 1.0, Velocity: 0.5}, {Position: 4.0, Velocity: -0.25}})), show.ArrayInt(mainGo2(0, []int32{1, 2, 3})), show.ArrayInt(shrink([]int32{9, 3, 7, 5, 4})), show.ArrayInt(mainGo3(0, []int32{0}, []int32{1, 2})), show.ArrayArrayInt(mainGo4(0, [][]int32{{1}, {2}}))}
 }
 
 var shrink func([]int32) []int32 = shrinkGo

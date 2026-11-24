@@ -3,7 +3,7 @@ use std::sync::OnceLock;
 use super::{
     Boundary, CONS_LIST_ACCUMULATOR, Comparison, Constructed, Foreign, GoFunction, GoPackage,
     INSTANTIATE, Iteration, MaybeDestructor, Operator, PLAIN, RECORD, RESULT_PARAMETER,
-    RecordOperation, Signature, Spelled, UNIT_VALUES, Utility, ignoring, int32_parameters, maybe,
+    RecordOperation, Signature, Spelled, UNIT_VALUES, Utility, found, ignoring, int32_parameters,
     maybe_of_maybes, maybe_search, maybe_witnessed,
 };
 
@@ -82,16 +82,6 @@ pub const SEQUENCE_ARRAY: Foreign = perform("SequenceArray", 1);
 const fn perform(name: &'static str, arity: usize) -> Foreign {
     let function = GoFunction { package: GoPackage::Direct, name };
     Foreign::Perform { function, arity, boundary: PLAIN }
-}
-
-const fn thunk(
-    package: GoPackage,
-    name: &'static str,
-    arity: usize,
-    boundary: Boundary,
-) -> Foreign {
-    let function = GoFunction { package, name };
-    Foreign::Perform { function, arity, boundary: Boundary { thunk: true, ..boundary } }
 }
 
 const fn perform_in(
@@ -206,7 +196,7 @@ pub const OBJECT_INSERT: Foreign = object("Insert", 3, PLAIN);
 
 pub const OBJECT_DELETE: Foreign = object("Remove", 2, PLAIN);
 
-pub const OBJECT_LOOKUP: Foreign = object("Lookup", 4, PLAIN);
+pub const OBJECT_LOOKUP: Foreign = object("Lookup", 4, found(1, 0));
 
 pub const OBJECT_SIZE: Foreign = object("Size", 1, PLAIN);
 
@@ -234,9 +224,9 @@ pub const SHOW_NUMBER: Foreign = prim("ShowNumber", 1);
 
 pub const ARRAY_APPEND: Foreign = array("Append", 2);
 
-pub const ARRAY_THAW: Foreign = thunk(GoPackage::Array, "Thaw", 1, PLAIN);
+pub const ARRAY_THAW: Foreign = perform_in(GoPackage::Array, "Thaw", 1, PLAIN);
 
-pub const ARRAY_THAW_OWNED: Foreign = thunk(GoPackage::Array, "ThawOwned", 1, PLAIN);
+pub const ARRAY_THAW_OWNED: Foreign = perform_in(GoPackage::Array, "ThawOwned", 1, PLAIN);
 
 pub const ARRAY_UNZIP: Foreign = array("Unzip", 1);
 
@@ -250,10 +240,11 @@ pub const ARRAY_MAP_WITH_INDEX: Foreign =
     uncurried(iteration(GoPackage::Direct, "MapWithIndex", 2, Iteration::MapWithIndex), &[(0, 2)]);
 /// Data.Array.ST.Partial's peek, read without a bounds test.
 pub const MUTABLE_PEEK_UNSAFE: Foreign =
-    thunk(GoPackage::Array, "PeekUnsafe", 2, int32_parameters(&[0]));
+    perform_in(GoPackage::Array, "PeekUnsafe", 2, int32_parameters(&[0]));
 /// Whether an index is within a mutable array: the bounds test of Data.Array.ST's peek, which
 /// the simplifier makes explicit (simplify/choice.rs) and the emitter writes in place.
-pub const MUTABLE_WITHIN: Foreign = thunk(GoPackage::Array, "Within", 2, int32_parameters(&[0]));
+pub const MUTABLE_WITHIN: Foreign =
+    perform_in(GoPackage::Array, "Within", 2, int32_parameters(&[0]));
 pub const APPENDER: Foreign = perform_in(GoPackage::Direct, "Appender", 0, INSTANTIATE);
 
 pub(super) const FOREIGN_IMPORTS: &[(&str, &str, Foreign)] = &[
@@ -349,7 +340,7 @@ pub(super) const FOREIGN_IMPORTS: &[(&str, &str, Foreign)] = &[
         array_with(
             "FindIndex",
             4,
-            Boundary { iteration: Some(Iteration::FindIndex), ..maybe(0, 1) },
+            Boundary { iteration: Some(Iteration::FindIndex), ..found(0, 1) },
         ),
     ),
     (
@@ -358,36 +349,40 @@ pub(super) const FOREIGN_IMPORTS: &[(&str, &str, Foreign)] = &[
         array_with(
             "FindLastIndex",
             4,
-            Boundary { iteration: Some(Iteration::FindLastIndex), ..maybe(0, 1) },
+            Boundary { iteration: Some(Iteration::FindLastIndex), ..found(0, 1) },
         ),
     ),
     (
         "Data.Array",
         "_insertAt",
-        array_with("InsertAt", 5, Boundary { int32_parameters: &[2], ..maybe(0, 1) }),
+        array_with("InsertAt", 5, Boundary { int32_parameters: &[2], ..found(0, 1) }),
     ),
-    ("Data.Array", "_deleteAt", direct_with("DeleteAt", 4, maybe(0, 1))),
-    ("Data.Array", "_updateAt", direct_with("UpdateAt", 5, maybe(0, 1))),
+    ("Data.Array", "_deleteAt", direct_with("DeleteAt", 4, found(0, 1))),
+    ("Data.Array", "_updateAt", Foreign::UpdateAt),
     ("Data.Array.NonEmpty.Internal", "foldr1Impl", uncurried(array("Foldr1", 2), &[(0, 2)])),
     ("Data.Array.NonEmpty.Internal", "foldl1Impl", uncurried(array("Foldl1", 2), &[(0, 2)])),
     ("Data.Array.ST", "new", Foreign::MutableArrayNew),
-    ("Data.Array.ST", "unsafeFreezeImpl", thunk(GoPackage::Array, "UnsafeFreeze", 1, PLAIN)),
-    ("Data.Array.ST", "unsafeThawImpl", thunk(GoPackage::Array, "UnsafeThaw", 1, PLAIN)),
+    ("Data.Array.ST", "unsafeFreezeImpl", perform_in(GoPackage::Array, "UnsafeFreeze", 1, PLAIN)),
+    ("Data.Array.ST", "unsafeThawImpl", perform_in(GoPackage::Array, "UnsafeThaw", 1, PLAIN)),
     ("Data.Array.ST", "thawImpl", ARRAY_THAW),
-    ("Data.Array.ST", "freezeImpl", thunk(GoPackage::Array, "Freeze", 1, PLAIN)),
-    ("Data.Array.ST", "cloneImpl", thunk(GoPackage::Array, "Clone", 1, PLAIN)),
-    ("Data.Array.ST", "peekImpl", thunk(GoPackage::Array, "Peek", 4, int32_parameters(&[2]))),
-    ("Data.Array.ST", "pokeImpl", thunk(GoPackage::Array, "Poke", 3, int32_parameters(&[0]))),
-    ("Data.Array.ST", "lengthImpl", thunk(GoPackage::Array, "Length", 1, PLAIN)),
-    ("Data.Array.ST", "popImpl", thunk(GoPackage::Array, "Pop", 3, maybe(0, 1))),
-    ("Data.Array.ST", "shiftImpl", thunk(GoPackage::Array, "Shift", 3, maybe(0, 1))),
-    ("Data.Array.ST", "pushImpl", thunk(GoPackage::Array, "Push", 2, PLAIN)),
-    ("Data.Array.ST", "pushAllImpl", thunk(GoPackage::Array, "PushAll", 2, PLAIN)),
-    ("Data.Array.ST", "unshiftAllImpl", thunk(GoPackage::Array, "UnshiftAll", 2, PLAIN)),
+    ("Data.Array.ST", "freezeImpl", perform_in(GoPackage::Array, "Freeze", 1, PLAIN)),
+    ("Data.Array.ST", "cloneImpl", perform_in(GoPackage::Array, "Clone", 1, PLAIN)),
+    (
+        "Data.Array.ST",
+        "peekImpl",
+        perform_in(GoPackage::Array, "Peek", 4, Boundary { int32_parameters: &[2], ..found(0, 1) }),
+    ),
+    ("Data.Array.ST", "pokeImpl", perform_in(GoPackage::Array, "Poke", 3, int32_parameters(&[0]))),
+    ("Data.Array.ST", "lengthImpl", perform_in(GoPackage::Array, "Length", 1, PLAIN)),
+    ("Data.Array.ST", "popImpl", perform_in(GoPackage::Array, "Pop", 3, found(0, 1))),
+    ("Data.Array.ST", "shiftImpl", perform_in(GoPackage::Array, "Shift", 3, found(0, 1))),
+    ("Data.Array.ST", "pushImpl", perform_in(GoPackage::Array, "Push", 2, PLAIN)),
+    ("Data.Array.ST", "pushAllImpl", perform_in(GoPackage::Array, "PushAll", 2, PLAIN)),
+    ("Data.Array.ST", "unshiftAllImpl", perform_in(GoPackage::Array, "UnshiftAll", 2, PLAIN)),
     (
         "Data.Array.ST",
         "spliceImpl",
-        thunk(GoPackage::Array, "Splice", 4, int32_parameters(&[0, 1])),
+        perform_in(GoPackage::Array, "Splice", 4, int32_parameters(&[0, 1])),
     ),
     ("Data.Array.ST", "sortByImpl", uncurried(perform("SortByMutable", 3), &[(0, 2)])),
     ("Data.Array.ST", "toAssocArrayImpl", Foreign::AssocArray),
@@ -395,7 +390,7 @@ pub(super) const FOREIGN_IMPORTS: &[(&str, &str, Foreign)] = &[
     (
         "Data.Array.ST.Partial",
         "pokeImpl",
-        thunk(GoPackage::Array, "PokeUnsafe", 3, int32_parameters(&[0])),
+        perform_in(GoPackage::Array, "PokeUnsafe", 3, int32_parameters(&[0])),
     ),
     ("Effect.Exception", "showErrorImpl", exception("ShowErrorImpl", 1, PLAIN)),
     ("Effect.Exception", "error", exception("NewError", 1, PLAIN)),
@@ -403,7 +398,7 @@ pub(super) const FOREIGN_IMPORTS: &[(&str, &str, Foreign)] = &[
     ("Effect.Exception", "errorWithName", exception("ErrorWithName", 2, PLAIN)),
     ("Effect.Exception", "message", exception("Message", 1, PLAIN)),
     ("Effect.Exception", "name", exception("Name", 1, PLAIN)),
-    ("Effect.Exception", "stackImpl", exception("StackImpl", 3, maybe(0, 1))),
+    ("Effect.Exception", "stackImpl", exception("StackImpl", 3, found(0, 1))),
     ("Effect.Exception", "throwException", Foreign::Throw),
     ("Effect.Exception", "catchException", perform_with("CatchException", 2, UNIT_VALUES)),
     ("Effect.Aff", "_pure", Foreign::EffectPure),
@@ -440,7 +435,7 @@ pub(super) const FOREIGN_IMPORTS: &[(&str, &str, Foreign)] = &[
     ("Promise.Internal", "all", perform_in(GoPackage::Promise, "All", 1, PLAIN)),
     ("Promise.Internal", "race", perform_in(GoPackage::Promise, "Race", 1, PLAIN)),
     ("Promise.Rejection", "fromError", call(GoPackage::Promise, "FromError", 1, PLAIN)),
-    ("Promise.Rejection", "_toError", call(GoPackage::Promise, "ToError", 3, maybe(0, 1))),
+    ("Promise.Rejection", "_toError", call(GoPackage::Promise, "ToError", 3, found(0, 1))),
     ("Foreign", "typeOf", foreign_value("TypeOf", 1)),
     ("Foreign", "tagOf", foreign_value("TagOf", 1)),
     ("Foreign", "isNull", foreign_value("IsNull", 1)),
@@ -529,13 +524,13 @@ pub(super) const FOREIGN_IMPORTS: &[(&str, &str, Foreign)] = &[
     (
         "Yoga.Om.Error",
         "toParallelErrorImpl",
-        call(GoPackage::YogaOm, "ToParallelErrorImpl", 3, maybe(0, 1)),
+        call(GoPackage::YogaOm, "ToParallelErrorImpl", 3, found(0, 1)),
     ),
     ("Data.Nullable", "null", call(GoPackage::Nullable, "Null", 0, INSTANTIATE)),
     ("Data.Nullable", "notNull", call(GoPackage::Nullable, "NotNull", 1, PLAIN)),
     ("Data.Nullable", "nullable", call(GoPackage::Nullable, "Nullable", 3, PLAIN)),
     ("Foreign.Object", "empty", object("Empty", 0, INSTANTIATE)),
-    ("Foreign.Object", "_copyST", thunk(GoPackage::Object, "CopyST", 1, PLAIN)),
+    ("Foreign.Object", "_copyST", perform_in(GoPackage::Object, "CopyST", 1, PLAIN)),
     ("Foreign.Object", "runST", Foreign::RunEffect),
     ("Foreign.Object", "_fmapObject", object("FmapObject", 2, PLAIN)),
     ("Foreign.Object", "_mapWithKey", uncurried(object("MapWithKey", 2, PLAIN), &[(1, 2)])),
@@ -557,17 +552,17 @@ pub(super) const FOREIGN_IMPORTS: &[(&str, &str, Foreign)] = &[
     ("Foreign.Object", "all", uncurried(object("All", 2, PLAIN), &[(0, 2)])),
     ("Foreign.Object", "size", OBJECT_SIZE),
     ("Foreign.Object", "_lookup", OBJECT_LOOKUP),
-    ("Foreign.Object", "_lookupST", thunk(GoPackage::Object, "LookupST", 4, PLAIN)),
+    ("Foreign.Object", "_lookupST", perform_in(GoPackage::Object, "LookupST", 4, found(1, 0))),
     ("Foreign.Object", "toArrayWithKey", uncurried(object("ToArrayWithKey", 2, PLAIN), &[(0, 2)])),
     ("Foreign.Object", "keys", object("Keys", 1, PLAIN)),
-    ("Foreign.Object.ST", "new", thunk(GoPackage::Object, "New", 0, INSTANTIATE)),
-    ("Foreign.Object.ST", "peekImpl", thunk(GoPackage::Object, "PeekImpl", 4, PLAIN)),
-    ("Foreign.Object.ST", "poke", thunk(GoPackage::Object, "Poke", 3, PLAIN)),
-    ("Foreign.Object.ST", "delete", thunk(GoPackage::Object, "Delete", 2, PLAIN)),
+    ("Foreign.Object.ST", "new", perform_in(GoPackage::Object, "New", 0, INSTANTIATE)),
+    ("Foreign.Object.ST", "peekImpl", perform_in(GoPackage::Object, "PeekImpl", 4, found(0, 1))),
+    ("Foreign.Object.ST", "poke", perform_in(GoPackage::Object, "Poke", 3, PLAIN)),
+    ("Foreign.Object.ST", "delete", perform_in(GoPackage::Object, "Delete", 2, PLAIN)),
     (
         "Foreign.Object.ST.Unsafe",
         "unsafeFreeze",
-        thunk(GoPackage::Object, "UnsafeFreeze", 1, PLAIN),
+        perform_in(GoPackage::Object, "UnsafeFreeze", 1, PLAIN),
     ),
     ("Data.FunctorWithIndex", "mapWithIndexArray", ARRAY_MAP_WITH_INDEX),
     ("Data.Unfoldable", "unfoldrArrayImpl", Foreign::Unfoldr),
@@ -596,27 +591,27 @@ pub(super) const FOREIGN_IMPORTS: &[(&str, &str, Foreign)] = &[
     (
         "Data.String.CodeUnits",
         "_charAt",
-        prim_with("CodeUnitCharAt", 4, Boundary { int32_parameters: &[2], ..maybe(0, 1) }),
+        prim_with("CodeUnitCharAt", 4, Boundary { int32_parameters: &[2], ..found(0, 1) }),
     ),
-    ("Data.String.CodeUnits", "_toChar", prim_with("CodeUnitToChar", 3, maybe(0, 1))),
-    ("Data.String.CodeUnits", "_indexOf", prim_with("CodeUnitIndexOf", 4, maybe(0, 1))),
+    ("Data.String.CodeUnits", "_toChar", prim_with("CodeUnitToChar", 3, found(0, 1))),
+    ("Data.String.CodeUnits", "_indexOf", prim_with("CodeUnitIndexOf", 4, found(0, 1))),
     (
         "Data.String.CodeUnits",
         "_indexOfStartingAt",
         prim_with(
             "CodeUnitIndexOfStartingAt",
             5,
-            Boundary { int32_parameters: &[3], ..maybe(0, 1) },
+            Boundary { int32_parameters: &[3], ..found(0, 1) },
         ),
     ),
-    ("Data.String.CodeUnits", "_lastIndexOf", prim_with("CodeUnitLastIndexOf", 4, maybe(0, 1))),
+    ("Data.String.CodeUnits", "_lastIndexOf", prim_with("CodeUnitLastIndexOf", 4, found(0, 1))),
     (
         "Data.String.CodeUnits",
         "_lastIndexOfStartingAt",
         prim_with(
             "CodeUnitLastIndexOfStartingAt",
             5,
-            Boundary { int32_parameters: &[3], ..maybe(0, 1) },
+            Boundary { int32_parameters: &[3], ..found(0, 1) },
         ),
     ),
     (
@@ -640,7 +635,7 @@ pub(super) const FOREIGN_IMPORTS: &[(&str, &str, Foreign)] = &[
         direct_with(
             "CodePointAt",
             6,
-            Boundary { ignored: &[0, 3], int32_parameters: &[4], ..maybe(1, 2) },
+            Boundary { ignored: &[0, 3], int32_parameters: &[4], ..found(1, 2) },
         ),
     ),
     (
@@ -664,7 +659,7 @@ pub(super) const FOREIGN_IMPORTS: &[(&str, &str, Foreign)] = &[
     ("Data.Number", "infinity", constant("NumberInfinity")),
     ("Data.Number", "isNaN", prim("NumberIsNaN", 1)),
     ("Data.Number", "isFinite", prim("NumberIsFinite", 1)),
-    ("Data.Number", "fromStringImpl", prim_with("NumberFromString", 4, maybe(2, 3))),
+    ("Data.Number", "fromStringImpl", prim_with("NumberFromString", 4, found(2, 3))),
     ("Data.Number", "abs", prim("NumberAbs", 1)),
     ("Data.Number", "acos", prim("NumberAcos", 1)),
     ("Data.Number", "asin", prim("NumberAsin", 1)),
@@ -701,7 +696,7 @@ pub(super) const FOREIGN_IMPORTS: &[(&str, &str, Foreign)] = &[
     (
         "Data.Int",
         "fromStringAsImpl",
-        prim_with("IntFromStringAs", 4, Boundary { int32_parameters: &[2], ..maybe(0, 1) }),
+        prim_with("IntFromStringAs", 4, Boundary { int32_parameters: &[2], ..found(0, 1) }),
     ),
     ("Data.Int", "toStringAs", prim_with("IntToStringAs", 2, int32_parameters(&[0, 1]))),
     ("Data.Int.Bits", "and", Foreign::Operator(Operator::IntAnd)),
@@ -723,18 +718,18 @@ pub(super) const FOREIGN_IMPORTS: &[(&str, &str, Foreign)] = &[
     ("Data.String.Regex", "replace", regex("Replace", 3, PLAIN)),
     ("Data.String.Regex", "split", regex("Split", 2, PLAIN)),
     ("Data.String.Regex", "_replaceBy", regex("ReplaceBy", 5, maybe_witnessed(0, 1, 3))),
-    ("Data.String.Regex", "_search", regex("Search", 4, maybe(0, 1))),
+    ("Data.String.Regex", "_search", regex("Search", 4, found(0, 1))),
     ("Data.Int", "toNumber", Foreign::Operator(Operator::IntToNumber)),
     ("Data.Int", "quot", prim_with("IntQuot", 2, int32_parameters(&[0, 1]))),
     ("Data.Int", "rem", prim_with("IntRem", 2, int32_parameters(&[0, 1]))),
     ("Data.Int", "pow", prim_with("IntPow", 2, int32_parameters(&[0, 1]))),
-    ("JS.BigInt", "fromStringImpl", js_bigint_with("FromString", 3, maybe(0, 1))),
+    ("JS.BigInt", "fromStringImpl", js_bigint_with("FromString", 3, found(0, 1))),
     (
         "JS.BigInt",
         "fromStringAsImpl",
-        js_bigint_with("FromStringAs", 4, Boundary { int32_parameters: &[2], ..maybe(0, 1) }),
+        js_bigint_with("FromStringAs", 4, Boundary { int32_parameters: &[2], ..found(0, 1) }),
     ),
-    ("JS.BigInt", "fromNumberImpl", js_bigint_with("FromNumber", 3, maybe(0, 1))),
+    ("JS.BigInt", "fromNumberImpl", js_bigint_with("FromNumber", 3, found(0, 1))),
     ("JS.BigInt", "fromInt", js_bigint_with("FromInt", 1, int32_parameters(&[0]))),
     ("JS.BigInt", "fromTypeLevelInt", js_bigint("FromTypeLevelInt", 1)),
     ("JS.BigInt", "toNumber", js_bigint("ToNumber", 1)),
@@ -767,11 +762,11 @@ pub(super) const FOREIGN_IMPORTS: &[(&str, &str, Foreign)] = &[
             GoPackage::BigInts,
             "FromBaseImpl",
             4,
-            Boundary { int32_parameters: &[2], ..maybe(0, 1) },
+            Boundary { int32_parameters: &[2], ..found(0, 1) },
         ),
     ),
     ("Data.BigInt", "fromInt", call(GoPackage::BigInts, "FromInt", 1, int32_parameters(&[0]))),
-    ("Data.BigInt", "fromNumberImpl", call(GoPackage::BigInts, "FromNumberImpl", 3, maybe(0, 1))),
+    ("Data.BigInt", "fromNumberImpl", call(GoPackage::BigInts, "FromNumberImpl", 3, found(0, 1))),
     ("Data.BigInt", "toNumber", call(GoPackage::BigInts, "ToNumber", 1, PLAIN)),
     ("Data.BigInt", "pow", call(GoPackage::BigInts, "Pow", 2, PLAIN)),
     ("Data.BigInt", "abs", call(GoPackage::BigInts, "Abs", 1, PLAIN)),

@@ -119,8 +119,8 @@ func initializeMain_() []string {
 	for index, variant2 := range shapes {
 		mapped[index] = foreignvalue.Encode(variant.EncodeJSONVariantCountFlagNamePointRatioTags, variant2)
 	}
-	object2 := object.New[any]()()
-	performed := object.Poke("f", shared, object2)()
+	object2 := object.New[any]()
+	performed := object.Poke("f", shared, object2)
 	return array.Append(mapped, []string{foreignvalue.UnsafeStringify(object.Insert("e", shared, performed))})
 }
 

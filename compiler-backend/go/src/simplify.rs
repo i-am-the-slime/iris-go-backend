@@ -630,8 +630,12 @@ impl Simplifier<'_> {
                 if let ExpressionKind::Literal(Literal::Boolean(value)) = condition.kind {
                     return self.expression(if value { *then } else { *otherwise });
                 }
-                let then = self.expression(*then);
-                let otherwise = self.expression(*otherwise);
+                let mut then = self.expression(*then);
+                let mut otherwise = self.expression(*otherwise);
+                if is_discardable(&condition) {
+                    settle(&mut then, &condition, true);
+                    settle(&mut otherwise, &condition, false);
+                }
                 return self.boolean_choice(condition, then, otherwise, monotype);
             }
             ExpressionKind::Case { scrutinees, alternatives } if binds_only(&alternatives) => {
@@ -1310,6 +1314,20 @@ fn chooses_on(expression: &Expression, local: LocalId) -> bool {
         _ => {}
     });
     found
+}
+
+/// Each test of `condition` within a branch that `condition` being `truth` leads to, as the
+/// branch that `truth` takes: a discardable condition reads values that never change.
+fn settle(expression: &mut Expression, condition: &Expression, truth: bool) {
+    if let ExpressionKind::If { condition: tested, then, otherwise } = &mut expression.kind
+        && **tested == *condition
+    {
+        let chosen = if truth { then } else { otherwise };
+        let unit = Expression::new(ExpressionKind::Unit, chosen.monotype);
+        *expression = std::mem::replace(chosen.as_mut(), unit);
+        return settle(expression, condition, truth);
+    }
+    for_each_child_mut(expression, &mut |child| settle(child, condition, truth));
 }
 
 fn prune(functions: Vec<Function>, entry: FunctionId) -> Program {

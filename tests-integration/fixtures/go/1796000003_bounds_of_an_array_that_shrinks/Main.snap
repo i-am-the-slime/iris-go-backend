@@ -15,7 +15,7 @@ import (
 var main_ = initializeMain_()
 
 func initializeMain_() []int32 {
-	array2 := *array.Thaw([]int32{1, 5, 2, 7, 3})()
+	array2 := *array.Thaw([]int32{1, 5, 2, 7, 3})
 	size := int32(len(array2))
 	for i := int32(0); i < size; i++ {
 		within := int(i) < len(array2)
@@ -35,7 +35,7 @@ func initializeMain_() []int32 {
 		}
 	}
 	performed := shared.Frozen(array2)
-	array3 := *array.Thaw([]int32{1, 2})()
+	array3 := *array.Thaw([]int32{1, 2})
 	size2 := int32(len(array3))
 	end := size2 * 2
 	for i := int32(0); i < end; i++ {

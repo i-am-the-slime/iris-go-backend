@@ -123,6 +123,8 @@ where
                 (id, self.writer(id)?)
             } else if let Some(id) = self.pending_array_writers.pop() {
                 (id, self.array_writer_declaration(id)?)
+            } else if let Some(id) = self.pending_array_shows.pop() {
+                (id, vec![self.array_show_declaration(id)?])
             } else {
                 return Ok(());
             };

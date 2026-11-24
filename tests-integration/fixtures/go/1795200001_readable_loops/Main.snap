@@ -29,6 +29,10 @@ func AppendShowArrayString(buffer []byte, array []string) []byte {
 	return buffer
 }
 
+func ArrayString(array []string) string {
+	return string(AppendShowArrayString(nil, array))
+}
+
 // main.go
 package main
 
@@ -68,9 +72,13 @@ func initializeMain_() []string {
 		x := array3[index]
 		accumulator2 = strconv.Itoa(int(x)) + "," + accumulator2
 	}
-	codeUnitCharAt := prim.CodeUnitCharAt(func(payload rune) maybe.Char {
-		return maybe.Char(payload)
-	}, maybe.NoChar, 0, "abc")
+	value2, found := prim.CodeUnitCharAt(0, "abc")
+	var codeUnitCharAt maybe.Char
+	if found {
+		codeUnitCharAt = maybe.Char(value2)
+	} else {
+		codeUnitCharAt = maybe.NoChar
+	}
 	var result string
 	if codeUnitCharAt != maybe.NoChar && rune(codeUnitCharAt) == 'a' {
 		result = "starts with a"
@@ -99,7 +107,7 @@ func initializeMain_() []string {
 	}
 	n3 := opaque(3)
 	result2 := !(n3 > 10) && n3 <= 5
-	return []string{strconv.Itoa(int(accumulator)), string(show.AppendShowArrayString(nil, mapped)), accumulator2, result, strconv.FormatBool(left == right), strconv.FormatBool(result2)}
+	return []string{strconv.Itoa(int(accumulator)), show.ArrayString(mapped), accumulator2, result, strconv.FormatBool(left == right), strconv.FormatBool(result2)}
 }
 
 func opaque(x int32) int32 {

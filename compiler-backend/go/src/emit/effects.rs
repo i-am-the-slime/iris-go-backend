@@ -105,20 +105,27 @@ where
             {
                 return self.mutable_access(function.name, arguments, result, sink, out);
             }
-            Foreign::Perform { function, .. }
-                if function == GoFunction { package: GoPackage::Direct, name: "SortByMutable" }
-                    && let Some(sorted) =
-                        self.primitive_sort(arguments, Placement::InPlace, out)? =>
-            {
+            Foreign::Perform {
+                function: GoFunction { package: GoPackage::Direct, name: "SortByMutable" },
+                ..
+            } => {
+                let sorted = match self.primitive_sort(arguments, Placement::InPlace, out)? {
+                    Some(sorted) => sorted,
+                    None => self.ordering_sort(arguments, Placement::InPlace, out)?,
+                };
                 return self.deliver(sorted, result, sink, out);
             }
             Foreign::Perform { function, boundary, .. } => {
                 let values = self.boundary_arguments(arguments, boundary, result, false, out)?;
                 self.performs(function);
                 let function = self.boundary_function(function, boundary, result)?;
-                let mut performed = call(function, values);
-                if boundary.thunk {
-                    performed = call(performed, vec![]);
+                let performed = call(function, values);
+                if boundary.found
+                    && let Some(constructors) = boundary.maybe
+                {
+                    let answered =
+                        self.found_maybe(performed, arguments, constructors, result, out)?;
+                    return self.deliver(answered, result, sink, out);
                 }
                 if boundary.record_result {
                     let record = self.record_from_results(performed, result, out)?;

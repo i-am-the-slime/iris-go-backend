@@ -70,6 +70,14 @@ func AppendShowBodyConsNumberConsNumberConsNumberConsNumberConsNumberNil(buffer 
 	return buffer
 }
 
+func ArrayTally(array []shared.Tally) string {
+	return string(AppendShowArrayTally(nil, array))
+}
+
+func ArrayBody(array []shared.Body) string {
+	return string(AppendShowArrayBody(nil, array))
+}
+
 // Data/Tuple/tuple.go
 package tuple
 
@@ -141,7 +149,7 @@ func initializeMain_() []string {
 		updated.Right = accumulator2.Left
 		accumulator2 = updated
 	}
-	return []string{string(show.AppendShowArrayBody(nil, mapped)), "{ count: " + strconv.Itoa(int(record.Count)) + ", label: " + prim.ShowString(record.Label) + ", seen: " + strconv.FormatBool(record.Seen) + ", total: " + strconv.Itoa(int(record.Total)) + " }", string(show.AppendShowArrayTally(nil, arraypkg.Reverse([]shared.Tally{tally([]int32{5}), tally([]int32{1, 2, 3})}))), "{ cells: " + strconv.Itoa(int(accumulator.Cells)) + ", rows: " + strconv.Itoa(int(accumulator.Rows)) + " }", "{ left: " + strconv.Itoa(int(accumulator2.Left)) + ", right: " + strconv.Itoa(int(accumulator2.Right)) + " }"}
+	return []string{show.ArrayBody(mapped), "{ count: " + strconv.Itoa(int(record.Count)) + ", label: " + prim.ShowString(record.Label) + ", seen: " + strconv.FormatBool(record.Seen) + ", total: " + strconv.Itoa(int(record.Total)) + " }", show.ArrayTally(arraypkg.Reverse([]shared.Tally{tally([]int32{5}), tally([]int32{1, 2, 3})})), "{ cells: " + strconv.Itoa(int(accumulator.Cells)) + ", rows: " + strconv.Itoa(int(accumulator.Rows)) + " }", "{ left: " + strconv.Itoa(int(accumulator2.Left)) + ", right: " + strconv.Itoa(int(accumulator2.Right)) + " }"}
 }
 
 func tally(array []int32) shared.Tally {

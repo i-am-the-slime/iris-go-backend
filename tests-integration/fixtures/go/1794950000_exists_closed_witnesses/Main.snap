@@ -20,11 +20,7 @@ func ShowInt(i int32) string {
 	return strconv.Itoa(int(i))
 }
 
-func ShowNumber(array []float64) string {
-	return string(AppendShowArrayNumber(nil, array))
-}
-
-func ShowNumber2(number float64) string {
+func ShowNumber(number float64) string {
 	return prim.ShowNumber(number)
 }
 
@@ -38,6 +34,10 @@ func AppendShowArrayNumber(buffer []byte, array []float64) []byte {
 	}
 	buffer = append(buffer, ']')
 	return buffer
+}
+
+func ArrayNumber(array []float64) string {
+	return string(AppendShowArrayNumber(nil, array))
 }
 
 // main.go
@@ -132,7 +132,7 @@ var things []ExistsDescribed = []ExistsDescribed{Int(DescribedInt{First: 1, Seco
 	return value + 1
 }}), String(DescribedString{First: "a", Second: category.Identity, Third: func(value string) string {
 	return value + "!"
-}}), ArrayNumber(DescribedArrayNumber{First: []float64{1.5}, Second: show.ShowNumber, Third: func(array []float64) []float64 {
+}}), ArrayNumber(DescribedArrayNumber{First: []float64{1.5}, Second: show.ArrayNumber, Third: func(array []float64) []float64 {
 	return mapLanes(array)
 }})}
 

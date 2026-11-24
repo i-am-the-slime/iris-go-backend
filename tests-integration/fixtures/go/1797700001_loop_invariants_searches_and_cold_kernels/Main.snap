@@ -63,6 +63,14 @@ func AppendShowArrayInt(buffer []byte, array []int32) []byte {
 	return buffer
 }
 
+func ArrayString(array []string) string {
+	return string(AppendShowArrayString(nil, array))
+}
+
+func ArrayInt(array []int32) string {
+	return string(AppendShowArrayInt(nil, array))
+}
+
 // main.go
 package main
 
@@ -117,7 +125,7 @@ func initializeMain_() []string {
 		mapped[index] = float64(x) * 0.5
 	}
 	first := prim.ShowNumber(foldLanes(mapped, 0.0) / float64(41))
-	first2 := string(show.AppendShowArrayInt(nil, clamped(numbers)))
+	first2 := show.ArrayInt(clamped(numbers))
 	bound := []string{}
 	array := []shared.Rule{{Name: "positive", Check: func(n int32) bool {
 		return n > 0
@@ -131,7 +139,7 @@ func initializeMain_() []string {
 			}
 		}
 	}
-	first3 := string(show.AppendShowArrayString(nil, arraypkg.Bounded(bound)))
+	first3 := show.ArrayString(arraypkg.Bounded(bound))
 	array2 := [][]int32{{1}, {2}}
 	var count int32 = 0
 	for range array2 {
@@ -143,7 +151,7 @@ func initializeMain_() []string {
 	array3 := []int32{1, 2}
 	built := []string{result, result2, first, first2, first3, first4}
 	for _, round := range array3 {
-		built = append(built, []string{string(show.AppendShowArrayInt(nil, clamped(mapLanes(numbers, round)))), string(show.AppendShowArrayInt(nil, mapLanes2(numbers)))}...)
+		built = append(built, []string{show.ArrayInt(clamped(mapLanes(numbers, round))), show.ArrayInt(mapLanes2(numbers))}...)
 	}
 	return built
 }

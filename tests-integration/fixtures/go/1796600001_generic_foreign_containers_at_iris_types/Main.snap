@@ -29,11 +29,7 @@ import (
 	"strconv"
 )
 
-func ShowInt(array []int32) string {
-	return string(AppendShowArrayInt(nil, array))
-}
-
-func ShowInt2(i int32) string {
+func ShowInt(i int32) string {
 	return strconv.Itoa(int(i))
 }
 
@@ -75,6 +71,18 @@ func AppendShowArrayInt(buffer []byte, array []int32) []byte {
 	}
 	buffer = append(buffer, ']')
 	return buffer
+}
+
+func ArrayString(array []string) string {
+	return string(AppendShowArrayString(nil, array))
+}
+
+func ArrayArrayInt(array [][]int32) string {
+	return string(AppendShowArrayArrayInt(nil, array))
+}
+
+func ArrayInt(array []int32) string {
+	return string(AppendShowArrayInt(nil, array))
 }
 
 // main.go
@@ -146,7 +154,7 @@ func main_() []string {
 		mapped5[index] = result
 	}
 	original := Repeated_ffi.IndexOrImpl(shared.Inner{A: 0, B: ""}, 1, accumulator)
-	return []string{string(show.AppendShowArrayInt(nil, mapped)), strconv.Itoa(int(Repeated_ffi.Length(accumulator2))), string(text), string(show.AppendShowArrayArrayInt(nil, mapped3)), string(show.AppendShowArrayString(nil, mapped5)), Repeated_ffi.Describe(direct.ForeignRecord([]string{"a", "b"}, []any{original.A, original.B})), Repeated_ffi.Describe(int32(7))}
+	return []string{show.ArrayInt(mapped), strconv.Itoa(int(Repeated_ffi.Length(accumulator2))), string(text), show.ArrayArrayInt(mapped3), show.ArrayString(mapped5), Repeated_ffi.Describe(direct.ForeignRecord([]string{"a", "b"}, []any{original.A, original.B})), Repeated_ffi.Describe(int32(7))}
 }
 
 func main() {

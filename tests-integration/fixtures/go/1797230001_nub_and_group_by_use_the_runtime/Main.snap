@@ -27,11 +27,7 @@ import (
 	"strconv"
 )
 
-func ShowInt(array []int32) string {
-	return string(AppendShowArrayInt(nil, array))
-}
-
-func ShowInt2(i int32) string {
+func ShowInt(i int32) string {
 	return strconv.Itoa(int(i))
 }
 
@@ -126,6 +122,30 @@ func AppendShowArrayInt(buffer []byte, array []int32) []byte {
 	return buffer
 }
 
+func ArrayArrayInt(array [][]int32) string {
+	return string(AppendShowArrayArrayInt(nil, array))
+}
+
+func ArrayNumber(array []float64) string {
+	return string(AppendShowArrayNumber(nil, array))
+}
+
+func ArrayBoolean(array []bool) string {
+	return string(AppendShowArrayBoolean(nil, array))
+}
+
+func ArrayChar(array []rune) string {
+	return string(AppendShowArrayChar(nil, array))
+}
+
+func ArrayString(array []string) string {
+	return string(AppendShowArrayString(nil, array))
+}
+
+func ArrayInt(array []int32) string {
+	return string(AppendShowArrayInt(nil, array))
+}
+
 // Data/Tuple/tuple.go
 package tuple
 
@@ -155,50 +175,49 @@ import (
 
 func main() {
 	shown := &shared.Ref[string]{Value: ""}
-	mainRecord(shown, string(show.AppendShowArrayInt(nil, arraypkg.NubComparable([]int32{3, 1, 3, 2, 1}))))
-	mainRecord(shown, string(show.AppendShowArrayString(nil, arraypkg.NubComparable([]string{"b", "a", "b"}))))
-	mainRecord(shown, string(show.AppendShowArrayChar(nil, arraypkg.NubComparable([]rune{'x', 'y', 'x'}))))
-	mainRecord(shown, string(show.AppendShowArrayBoolean(nil, arraypkg.NubComparable([]bool{true, false, true}))))
+	mainRecord(shown, show.ArrayInt(arraypkg.NubComparable([]int32{3, 1, 3, 2, 1})))
+	mainRecord(shown, show.ArrayString(arraypkg.NubComparable([]string{"b", "a", "b"})))
+	mainRecord(shown, show.ArrayChar(arraypkg.NubComparable([]rune{'x', 'y', 'x'})))
+	mainRecord(shown, show.ArrayBoolean(arraypkg.NubComparable([]bool{true, false, true})))
 	array := []float64{1.5, 0.5, 1.5}
 	mapped := make([]tuple.TupleIntNumber, len(array))
 	for slot, number := range array {
 		i := int32(slot)
 		mapped[slot] = tuple.TupleIntNumber{First: i, Second: number}
 	}
-	indexedAndSorted := direct.SortBy(func(x tuple.TupleIntNumber, y tuple.TupleIntNumber) ordering.Ordering {
+	indexedAndSorted := direct.SortBy(mapped, func(x tuple.TupleIntNumber, y tuple.TupleIntNumber) int {
 		number := x.Second
 		number2 := y.Second
+		var result ordering.Ordering
 		if number < number2 {
-			return ordering.OrderingLT
+			result = ordering.OrderingLT
+		} else if number == number2 {
+			result = ordering.OrderingEQ
+		} else {
+			result = ordering.OrderingGT
 		}
-		if number == number2 {
-			return ordering.OrderingEQ
-		}
-		return ordering.OrderingGT
-	}, func(value ordering.Ordering) int32 {
-		switch value {
+		switch result {
+		case ordering.OrderingLT:
+			return -1
 		case ordering.OrderingGT:
 			return 1
-		case ordering.OrderingEQ:
-			return 0
-		default: // ordering.OrderingLT
-			return -1
 		}
-	}, mapped)
-	var result []float64
+		return 0
+	})
+	var result2 []float64
 	if len(indexedAndSorted) > 0 {
-		array2 := *arraypkg.UnsafeThaw([]tuple.TupleIntNumber{indexedAndSorted[0]})()
+		array2 := *arraypkg.UnsafeThaw([]tuple.TupleIntNumber{indexedAndSorted[0]})
 		for _, pair := range indexedAndSorted {
 			x_ := pair.Second
 			array3 := shared.Frozen(array2)
 			index := int32(len(array3)) - 1
-			var result2 tuple.TupleIntNumber
+			var result tuple.TupleIntNumber
 			if index >= 0 && index < int32(len(array3)) {
-				result2 = array3[index]
+				result = array3[index]
 			} else {
 				panic("Failed pattern match")
 			}
-			lst := result2.Second
+			lst := result.Second
 			if lst < x_ {
 				array2 = arraypkg.Bounded(append(array2, pair))
 			} else if lst != x_ {
@@ -206,91 +225,86 @@ func main() {
 			}
 		}
 		performed := shared.Frozen(array2)
-		array4 := direct.SortBy(func(x tuple.TupleIntNumber, y tuple.TupleIntNumber) ordering.Ordering {
+		array4 := direct.SortBy(performed, func(x tuple.TupleIntNumber, y tuple.TupleIntNumber) int {
 			i := x.First
 			i2 := y.First
+			var result ordering.Ordering
 			if i < i2 {
-				return ordering.OrderingLT
+				result = ordering.OrderingLT
+			} else if i == i2 {
+				result = ordering.OrderingEQ
+			} else {
+				result = ordering.OrderingGT
 			}
-			if i == i2 {
-				return ordering.OrderingEQ
-			}
-			return ordering.OrderingGT
-		}, func(value ordering.Ordering) int32 {
-			switch value {
+			switch result {
+			case ordering.OrderingLT:
+				return -1
 			case ordering.OrderingGT:
 				return 1
-			case ordering.OrderingEQ:
-				return 0
-			default: // ordering.OrderingLT
-				return -1
 			}
-		}, performed)
+			return 0
+		})
 		mapped2 := make([]float64, len(array4))
 		for index := range array4 {
 			mapped2[index] = array4[index].Second
 		}
-		result = mapped2
+		result2 = mapped2
 	} else {
-		result = []float64{}
+		result2 = []float64{}
 	}
-	mainRecord(shown, string(show.AppendShowArrayNumber(nil, result)))
+	mainRecord(shown, show.ArrayNumber(result2))
 	array5 := []int32{1, 4, 2, 5, 3}
 	mapped3 := make([]tuple.TupleIntInt, len(array5))
 	for slot, i := range array5 {
 		i2 := int32(slot)
 		mapped3[slot] = tuple.TupleIntInt{First: i2, Second: i}
 	}
-	indexedAndSorted2 := direct.SortBy(func(x tuple.TupleIntInt, y tuple.TupleIntInt) ordering.Ordering {
-		return mainComp(x.Second, y.Second)
-	}, func(value ordering.Ordering) int32 {
-		switch value {
+	indexedAndSorted2 := direct.SortBy(mapped3, func(x tuple.TupleIntInt, y tuple.TupleIntInt) int {
+		switch mainComp(x.Second, y.Second) {
+		case ordering.OrderingLT:
+			return -1
 		case ordering.OrderingGT:
 			return 1
-		case ordering.OrderingEQ:
-			return 0
-		default: // ordering.OrderingLT
-			return -1
 		}
-	}, mapped3)
+		return 0
+	})
 	var result3 []int32
 	if len(indexedAndSorted2) > 0 {
-		array2 := *arraypkg.UnsafeThaw([]tuple.TupleIntInt{indexedAndSorted2[0]})()
+		array2 := *arraypkg.UnsafeThaw([]tuple.TupleIntInt{indexedAndSorted2[0]})
 		for _, pair := range indexedAndSorted2 {
 			array3 := shared.Frozen(array2)
 			index := int32(len(array3)) - 1
-			var result2 tuple.TupleIntInt
+			var result tuple.TupleIntInt
 			if index >= 0 && index < int32(len(array3)) {
-				result2 = array3[index]
+				result = array3[index]
 			} else {
 				panic("Failed pattern match")
 			}
-			lst := result2.Second
+			lst := result.Second
 			if mainComp(lst, pair.Second) != ordering.OrderingEQ {
 				array2 = arraypkg.Bounded(append(array2, pair))
 			}
 		}
 		performed := shared.Frozen(array2)
-		array4 := direct.SortBy(func(x tuple.TupleIntInt, y tuple.TupleIntInt) ordering.Ordering {
+		array4 := direct.SortBy(performed, func(x tuple.TupleIntInt, y tuple.TupleIntInt) int {
 			i := x.First
 			i2 := y.First
+			var result ordering.Ordering
 			if i < i2 {
-				return ordering.OrderingLT
+				result = ordering.OrderingLT
+			} else if i == i2 {
+				result = ordering.OrderingEQ
+			} else {
+				result = ordering.OrderingGT
 			}
-			if i == i2 {
-				return ordering.OrderingEQ
-			}
-			return ordering.OrderingGT
-		}, func(value ordering.Ordering) int32 {
-			switch value {
+			switch result {
+			case ordering.OrderingLT:
+				return -1
 			case ordering.OrderingGT:
 				return 1
-			case ordering.OrderingEQ:
-				return 0
-			default: // ordering.OrderingLT
-				return -1
 			}
-		}, performed)
+			return 0
+		})
 		mapped2 := make([]int32, len(array4))
 		for index := range array4 {
 			mapped2[index] = array4[index].Second
@@ -299,13 +313,13 @@ func main() {
 	} else {
 		result3 = []int32{}
 	}
-	mainRecord(shown, string(show.AppendShowArrayInt(nil, result3)))
+	mainRecord(shown, show.ArrayInt(result3))
 	array6 := arraypkg.GroupBy(eq.Eq, []int32{1, 1, 2, 3, 3})
 	mapped4 := make([][]int32, len(array6))
 	for index, element := range array6 {
 		mapped4[index] = element
 	}
-	mainRecord(shown, string(show.AppendShowArrayArrayInt(nil, mapped4)))
+	mainRecord(shown, show.ArrayArrayInt(mapped4))
 	array7 := arraypkg.GroupBy(func(first int32, x int32) bool {
 		return x-first < 2
 	}, []int32{1, 2, 3, 4, 7})
@@ -313,7 +327,7 @@ func main() {
 	for index, element := range array7 {
 		mapped5[index] = element
 	}
-	mainRecord(shown, string(show.AppendShowArrayArrayInt(nil, mapped5)))
+	mainRecord(shown, show.ArrayArrayInt(mapped5))
 }
 
 func mainRecord(shown *shared.Ref[string], text string) {

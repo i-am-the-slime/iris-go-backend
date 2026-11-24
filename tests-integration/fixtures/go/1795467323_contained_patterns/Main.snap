@@ -12,7 +12,6 @@ const NoInt Int = 1 << 32
 package main
 
 import (
-	"fixture/Data/Maybe"
 	"github.com/i-am-the-slime/iris-go/console"
 	"github.com/i-am-the-slime/iris-go/prim"
 	"strconv"
@@ -22,11 +21,9 @@ import (
 var main_ = initializeMain_()
 
 func initializeMain_() []string {
-	codeUnitIndexOf := prim.CodeUnitIndexOf(func(payload int32) maybe.Int {
-		return maybe.Int(payload)
-	}, maybe.NoInt, "ab", "ba")
+	_, found := prim.CodeUnitIndexOf("ab", "ba")
 	var result string
-	if codeUnitIndexOf != maybe.NoInt {
+	if found {
 		result = "true"
 	} else {
 		result = "false"

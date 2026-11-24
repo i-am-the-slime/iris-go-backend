@@ -32,6 +32,10 @@ func AppendShow(buffer []byte, long int64) []byte {
 	return buffer
 }
 
+func ArrayInt64(array []int64) string {
+	return string(AppendShowArrayInt64(nil, array))
+}
+
 // Data/Maybe/maybe.go
 package maybe
 
@@ -82,6 +86,10 @@ func AppendShowArrayBoolean(buffer []byte, array []bool) []byte {
 	}
 	buffer = append(buffer, ']')
 	return buffer
+}
+
+func ArrayBoolean(array []bool) string {
+	return string(AppendShowArrayBoolean(nil, array))
 }
 
 // Data/UInt64/uint64.go
@@ -174,7 +182,7 @@ func initializeMain_() []string {
 	default:
 		result5 = "Nothing"
 	}
-	return []string{strconv.FormatInt(foldLanes(mapped, int64(0)), 10) + "l", strconv.FormatUint(accumulator, 10) + "ul", strconv.FormatInt(foldLanes2(mapped, int64(-9223372036854775808)), 10) + "l", string(dataint64.AppendShowArrayInt64(nil, mapLanes(mapped, int64(1)))), strconv.FormatInt(accumulator2, 10) + "l", string(dataint64.AppendShowArrayInt64(nil, mapped2)), string(dataint64.AppendShowArrayInt64(nil, mapped3)), strconv.FormatUint(uint64(18446744073709551615), 10) + "ul", string(show.AppendShowArrayBoolean(nil, mapped4)), strconv.FormatInt(int64(-9223372036854775808), 10) + "l", string(dataint64.AppendShowArrayInt64(nil, mapped5)), result5, strconv.FormatUint(uint64(18446744073709551615), 10) + "ul"}
+	return []string{strconv.FormatInt(foldLanes(mapped, int64(0)), 10) + "l", strconv.FormatUint(accumulator, 10) + "ul", strconv.FormatInt(foldLanes2(mapped, int64(-9223372036854775808)), 10) + "l", dataint64.ArrayInt64(mapLanes(mapped, int64(1))), strconv.FormatInt(accumulator2, 10) + "l", dataint64.ArrayInt64(mapped2), dataint64.ArrayInt64(mapped3), strconv.FormatUint(uint64(18446744073709551615), 10) + "ul", show.ArrayBoolean(mapped4), strconv.FormatInt(int64(-9223372036854775808), 10) + "l", dataint64.ArrayInt64(mapped5), result5, strconv.FormatUint(uint64(18446744073709551615), 10) + "ul"}
 }
 
 func polynomial(x int64) int64 {

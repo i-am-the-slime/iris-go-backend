@@ -47,6 +47,10 @@ func AppendShow(buffer []byte, ordering Ordering) []byte {
 	return buffer
 }
 
+func ArrayOrdering(array []Ordering) string {
+	return string(AppendShowArrayOrdering(nil, array))
+}
+
 // Data/Show/show.go
 package show
 
@@ -66,6 +70,10 @@ func AppendShowArrayString(buffer []byte, array []string) []byte {
 	}
 	buffer = append(buffer, ']')
 	return buffer
+}
+
+func ArrayString(array []string) string {
+	return string(AppendShowArrayString(nil, array))
 }
 
 // main.go
@@ -94,7 +102,7 @@ func initializeMain_() []string {
 	for index, reified := range array2 {
 		mapped2[index] = reified
 	}
-	return []string{"42", "-8", "7", "erin!", "false", "false", "greater", string(show.AppendShowArrayString(nil, mapped)), string(show.AppendShowArrayString(nil, reifiedEach(0, []string{}))), string(ordering.AppendShowArrayOrdering(nil, mapped2))}
+	return []string{"42", "-8", "7", "erin!", "false", "false", "greater", show.ArrayString(mapped), show.ArrayString(reifiedEach(0, []string{})), ordering.ArrayOrdering(mapped2)}
 }
 
 func reifiedEach(n int32, done []string) []string {

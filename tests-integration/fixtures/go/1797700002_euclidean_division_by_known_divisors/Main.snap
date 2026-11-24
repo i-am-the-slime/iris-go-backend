@@ -41,6 +41,14 @@ func AppendShowArrayBoolean(buffer []byte, array []bool) []byte {
 	return buffer
 }
 
+func ArrayInt(array []int32) string {
+	return string(AppendShowArrayInt(nil, array))
+}
+
+func ArrayBoolean(array []bool) string {
+	return string(AppendShowArrayBoolean(nil, array))
+}
+
 // main.go
 package main
 
@@ -84,7 +92,7 @@ func initializeMain_() []string {
 	for index, element := range array6 {
 		mapped6[index] = minusTenOver(element)
 	}
-	return []string{string(show.AppendShowArrayBoolean(nil, mapped)), string(show.AppendShowArrayBoolean(nil, mapped2)), string(show.AppendShowArrayInt(nil, mapped3)), string(show.AppendShowArrayInt(nil, mapped4)), string(show.AppendShowArrayInt(nil, mapped5)), string(show.AppendShowArrayInt(nil, mapped6))}
+	return []string{show.ArrayBoolean(mapped), show.ArrayBoolean(mapped2), show.ArrayInt(mapped3), show.ArrayInt(mapped4), show.ArrayInt(mapped5), show.ArrayInt(mapped6)}
 }
 
 func divisibleByThree(n int32) bool {

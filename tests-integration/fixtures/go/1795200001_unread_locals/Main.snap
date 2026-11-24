@@ -13,12 +13,6 @@ type ArrayInt struct {
 	Tag  uint8
 }
 
-func JustArrayInt(just []int32) ArrayInt {
-	return ArrayInt{Tag: TagJust, Just: just}
-}
-
-var NoArrayInt = ArrayInt{Tag: TagNothing}
-
 // Data/Ord/ord.go
 package ord
 
@@ -49,7 +43,6 @@ const (
 package main
 
 import (
-	"fixture/Data/Maybe"
 	"github.com/i-am-the-slime/iris-go/direct"
 	"github.com/i-am-the-slime/iris-go/prim"
 	"os"
@@ -58,9 +51,7 @@ import (
 
 func main_() int32 {
 	prim.IntTrunc(0.5)
-	direct.DeleteAt(func(payload []int32) maybe.ArrayInt {
-		return maybe.JustArrayInt(payload)
-	}, maybe.NoArrayInt, 0, []int32{})
+	direct.DeleteAt(0, []int32{})
 	var counter int32 = 0
 	counter += 1
 	sorted := slices.Clone([]rune{'b', 'a'})

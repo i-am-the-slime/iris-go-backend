@@ -48,6 +48,14 @@ func AppendShowArrayInt(buffer []byte, array []int32) []byte {
 	return buffer
 }
 
+func ArrayString(array []string) string {
+	return string(AppendShowArrayString(nil, array))
+}
+
+func ArrayInt(array []int32) string {
+	return string(AppendShowArrayInt(nil, array))
+}
+
 // main.go
 package main
 
@@ -72,7 +80,7 @@ func initializeMain_() []string {
 		partial := func(b int32) int32 {
 			return mainOp(a, b)
 		}
-		mapped[index] = string(show.AppendShowArrayInt(nil, []int32{mainOp(1, 2), partial(3), partial(4)}))
+		mapped[index] = show.ArrayInt([]int32{mainOp(1, 2), partial(3), partial(4)})
 	}
 	array2 := []func(int32) func(string) string{prepared, func(a int32) func(string) string {
 		return func(b string) string {
@@ -82,7 +90,7 @@ func initializeMain_() []string {
 	mapped2 := make([]string, len(array2))
 	for index, x := range array2 {
 		g := x(4)
-		mapped2[index] = string(show.AppendShowArrayString(nil, []string{x(1)("a"), g("b"), g("c")}))
+		mapped2[index] = show.ArrayString([]string{x(1)("a"), g("b"), g("c")})
 	}
 	array3 := []func(int32, int32) int32{semiring.Add, func(a int32, b int32) int32 {
 		return a*b + 1

@@ -29,6 +29,10 @@ func AppendShowArrayInt(buffer []byte, array []int32) []byte {
 	return buffer
 }
 
+func ArrayInt(array []int32) string {
+	return string(AppendShowArrayInt(nil, array))
+}
+
 // main.go
 package main
 
@@ -44,13 +48,13 @@ import (
 var main_ = initializeMain_()
 
 func initializeMain_() []string {
-	return []string{string(show.AppendShowArrayInt(nil, sortByIntCompare(numbers))), string(show.AppendShowArrayInt(nil, sortByIntDescending(numbers))), string(show.AppendShowArrayInt(nil, sortByIntCompare([]int32{})))}
+	return []string{show.ArrayInt(sortByIntCompare(numbers)), show.ArrayInt(sortByIntDescending(numbers)), show.ArrayInt(sortByIntCompare([]int32{}))}
 }
 
 var numbers []int32 = []int32{7, 3, 9, 1, 4, 8, 2, 6, 5, 0}
 
 func sortByIntCompare(xs []int32) []int32 {
-	array2 := array.Thaw(xs)()
+	array2 := array.Thaw(xs)
 	i := int32(len(*array2))
 	sortByIntCompareInsertFrom(array2, 1, i)
 	performed := shared.Frozen(*array2)
@@ -58,7 +62,7 @@ func sortByIntCompare(xs []int32) []int32 {
 }
 
 func sortByIntDescending(xs []int32) []int32 {
-	array2 := array.Thaw(xs)()
+	array2 := array.Thaw(xs)
 	i := int32(len(*array2))
 	sortByIntDescendingInsertFrom(array2, 1, i)
 	performed := shared.Frozen(*array2)

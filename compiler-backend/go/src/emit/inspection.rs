@@ -235,9 +235,7 @@ fn is_strict(foreign: &Foreign) -> bool {
             !matches!(operator, Operator::BooleanAnd | Operator::BooleanOr)
         }
         Foreign::Int64 { .. } => true,
-        Foreign::Call { boundary, .. } => {
-            boundary.lazy.is_empty() && !boundary.thunk && boundary.iteration.is_none()
-        }
+        Foreign::Call { boundary, .. } => boundary.lazy.is_empty() && boundary.iteration.is_none(),
         _ => false,
     }
 }

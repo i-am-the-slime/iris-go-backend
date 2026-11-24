@@ -22,6 +22,10 @@ func AppendShowArrayInt(buffer []byte, array []int32) []byte {
 	return buffer
 }
 
+func ArrayInt(array []int32) string {
+	return string(AppendShowArrayInt(nil, array))
+}
+
 // main.go
 package main
 
@@ -55,7 +59,7 @@ func sizes(shapes []shared.Shape) string {
 	for index := range shapes {
 		mapped[index] = shapes[index].Size
 	}
-	return string(show.AppendShowArrayInt(nil, mapped))
+	return show.ArrayInt(mapped)
 }
 
 func main() {

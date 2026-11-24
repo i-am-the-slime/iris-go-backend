@@ -86,6 +86,11 @@ pub enum Foreign {
     EffectUntil,
     EffectFor,
     MaybeIndex,
+    /// `Data.Array._updateAt just nothing index value array`.
+    UpdateAt,
+    /// A copy of an array with the element at an index known to be within it replaced:
+    /// `index`, `value` and `array`.
+    ArrayUpdated,
     IntFromNumber,
     Range,
     Snoc,
@@ -161,7 +166,9 @@ pub struct Boundary {
     pub int32_parameters: &'static [usize],
     pub ignored: &'static [usize],
     pub maybe: Option<MaybeConstructors>,
-    pub thunk: bool,
+    /// The Go helper takes none of `maybe`'s constructors and returns its `Just`'s field and
+    /// whether there is one, `(T, bool)`, as Go's own lookups do.
+    pub found: bool,
     pub record_result: bool,
     pub instantiate: bool,
     pub unit_values: bool,
@@ -283,7 +290,7 @@ const PLAIN: Boundary = Boundary {
     int32_parameters: &[],
     ignored: &[],
     maybe: None,
-    thunk: false,
+    found: false,
     record_result: false,
     instantiate: false,
     unit_values: false,
@@ -325,6 +332,11 @@ const CONS_LIST_ACCUMULATOR: Boundary =
 const fn maybe(just: usize, nothing: usize) -> Boundary {
     let constructors = MaybeConstructors { just, nothing, witness: None, elements: false };
     Boundary { maybe: Some(constructors), ..PLAIN }
+}
+
+/// A Maybe whose Go helper returns `(T, bool)`: [`Boundary::found`].
+const fn found(just: usize, nothing: usize) -> Boundary {
+    Boundary { found: true, ..maybe(just, nothing) }
 }
 
 const fn maybe_witnessed(just: usize, nothing: usize, witness: usize) -> Boundary {
@@ -551,6 +563,8 @@ impl Foreign {
             Foreign::EffectFor | Foreign::EffectFoldArray => 3,
             Foreign::ObjectFoldM => 4,
             Foreign::MaybeIndex => 4,
+            Foreign::UpdateAt => 5,
+            Foreign::ArrayUpdated => 3,
             Foreign::IntFromNumber => 3,
             Foreign::Ordering => 5,
             Foreign::Range | Foreign::Snoc | Foreign::RecordGet | Foreign::RecordHas => 2,

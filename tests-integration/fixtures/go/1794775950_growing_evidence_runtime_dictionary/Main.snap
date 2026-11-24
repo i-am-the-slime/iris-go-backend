@@ -10,10 +10,6 @@ func Show(i int32) string {
 	return strconv.Itoa(int(i))
 }
 
-func ShowInt(array []int32) string {
-	return string(AppendShowArrayInt(nil, array))
-}
-
 func AppendShowArrayInt(buffer []byte, array []int32) []byte {
 	buffer = append(buffer, '[')
 	for index, element := range array {
@@ -24,6 +20,10 @@ func AppendShowArrayInt(buffer []byte, array []int32) []byte {
 	}
 	buffer = append(buffer, ']')
 	return buffer
+}
+
+func ArrayInt(array []int32) string {
+	return string(AppendShowArrayInt(nil, array))
 }
 
 // main.go
@@ -53,7 +53,7 @@ var main_ = initializeMain_()
 func initializeMain_() []string {
 	text := []byte("Nest ")
 	text = appendShowNestedArrayInt(text, shared.Show{Show: func(coerced any) string {
-		return show.ShowInt(shared.Convert(coerced))
+		return show.ArrayInt(shared.Convert(coerced))
 	}}, &Nested{Tag: NestedNest, Nest: &Nested{Tag: NestedFlat, Flat: shared.Convert2([][]int32{{1, 2}, {3}})}})
 	return []string{"1", string(text)}
 }

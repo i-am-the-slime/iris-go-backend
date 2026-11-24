@@ -153,6 +153,10 @@ func AppendShowXYConsMaybeIntConsMaybeIntNil(buffer []byte, record XY) []byte {
 	return buffer
 }
 
+func ArrayXY(array []XY) string {
+	return string(AppendShowArrayXY(nil, array))
+}
+
 // Data/Show/show.go
 package show
 
@@ -162,11 +166,7 @@ import (
 	"strconv"
 )
 
-func ShowInt(array []int32) string {
-	return string(AppendShowArrayInt(nil, array))
-}
-
-func ShowInt2(i int32) string {
+func ShowInt(i int32) string {
 	return strconv.Itoa(int(i))
 }
 
@@ -231,6 +231,18 @@ func AppendShowArrayInt(buffer []byte, array []int32) []byte {
 	}
 	buffer = append(buffer, ']')
 	return buffer
+}
+
+func ArrayWrapped(array []shared.Wrapped) string {
+	return string(AppendShowArrayWrapped(nil, array))
+}
+
+func ArrayArrayInt(array [][]int32) string {
+	return string(AppendShowArrayArrayInt(nil, array))
+}
+
+func ArrayInt(array []int32) string {
+	return string(AppendShowArrayInt(nil, array))
 }
 
 // main.go
@@ -320,7 +332,7 @@ func initializeMain_() []string {
 	text2 = maybe_tuple.AppendShowArrayTupleCharArrayMaybeNumber(text2, []maybe_tuple.TupleCharArrayMaybeNumber{{First: 'a', Second: []maybe.Number{maybe.JustNumber(2.5)}}})
 	text3 := appendShowArrayNumber(nil, []float64{1.0})
 	text3 = show.AppendShowArrayNumber(text3, []float64{1.0})
-	return []string{string(show.AppendShowArrayInt(nil, []int32{1, 2, 3})), string(show.AppendShowArrayInt(nil, []int32{})), string(show.AppendShowArrayArrayInt(nil, [][]int32{{1}, {}, {-2, 3}})), string(text), string(maybe.AppendShowArrayXY(nil, []maybe.XY{{X: maybe.Int(1), Y: maybe.NoInt}})), string(text2), string(appendShowArrayShape(nil, []Shape{Circle(1.0), Rect(shared.HW{W: 1, H: -2}), {Tag: ShapeEmpty}, Pair(-3, maybe.Int(-4))})), string(appendShowArrayColour(nil, []*Colour{sharedColourRed, Mixed(sharedColourRed, Named("x\"y"))})), string(text3), string(show.AppendShowArrayWrapped(nil, []shared.Wrapped{{A: 1}})), string(appendShowArrayPoint(nil, []Point{{First: 1, Second: 2}}))}
+	return []string{show.ArrayInt([]int32{1, 2, 3}), show.ArrayInt([]int32{}), show.ArrayArrayInt([][]int32{{1}, {}, {-2, 3}}), string(text), maybe.ArrayXY([]maybe.XY{{X: maybe.Int(1), Y: maybe.NoInt}}), string(text2), arrayShape([]Shape{Circle(1.0), Rect(shared.HW{W: 1, H: -2}), {Tag: ShapeEmpty}, Pair(-3, maybe.Int(-4))}), arrayColour([]*Colour{sharedColourRed, Mixed(sharedColourRed, Named("x\"y"))}), string(text3), show.ArrayWrapped([]shared.Wrapped{{A: 1}}), arrayPoint([]Point{{First: 1, Second: 2}})}
 }
 
 func showShape(shape Shape) string {
@@ -450,6 +462,18 @@ func appendShowShape(buffer []byte, shape Shape) []byte {
 		buffer = append(buffer, ')')
 	}
 	return buffer
+}
+
+func arrayPoint(array []Point) string {
+	return string(appendShowArrayPoint(nil, array))
+}
+
+func arrayColour(array []*Colour) string {
+	return string(appendShowArrayColour(nil, array))
+}
+
+func arrayShape(array []Shape) string {
+	return string(appendShowArrayShape(nil, array))
 }
 
 func main() {

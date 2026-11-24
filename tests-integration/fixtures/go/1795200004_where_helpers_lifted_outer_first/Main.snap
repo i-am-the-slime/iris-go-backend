@@ -15,7 +15,7 @@ import (
 var main_ = initializeMain_()
 
 func initializeMain_() []int32 {
-	array2 := *array.Thaw([]int32{3, 1, 2})()
+	array2 := *array.Thaw([]int32{3, 1, 2})
 	size := int32(len(array2))
 	for i := int32(1); i < size; i++ {
 		within := int(i) < len(array2)

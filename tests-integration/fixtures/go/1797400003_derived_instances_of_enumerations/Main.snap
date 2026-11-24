@@ -47,6 +47,10 @@ func AppendShow(buffer []byte, ordering Ordering) []byte {
 	return buffer
 }
 
+func ArrayOrdering(array []Ordering) string {
+	return string(AppendShowArrayOrdering(nil, array))
+}
+
 // Data/Show/show.go
 package show
 
@@ -106,6 +110,18 @@ func AppendShowArrayString(buffer []byte, array []string) []byte {
 	return buffer
 }
 
+func ArrayInt(array []int32) string {
+	return string(AppendShowArrayInt(nil, array))
+}
+
+func ArrayBoolean(array []bool) string {
+	return string(AppendShowArrayBoolean(nil, array))
+}
+
+func ArrayString(array []string) string {
+	return string(AppendShowArrayString(nil, array))
+}
+
 // main.go
 package main
 
@@ -150,46 +166,43 @@ func initializeMain_() []string {
 	for index, element := range cards {
 		mapped[index] = describe(element)
 	}
-	array := direct.SortBy(compareCardConsIntConsSuitNil, func(value ordering.Ordering) int32 {
-		switch value {
+	array := direct.SortBy(cards, func(left Card, right Card) int {
+		switch compareCardConsIntConsSuitNil(left, right) {
+		case ordering.OrderingLT:
+			return -1
 		case ordering.OrderingGT:
 			return 1
-		case ordering.OrderingEQ:
-			return 0
-		default: // ordering.OrderingLT
-			return -1
 		}
-	}, cards)
+		return 0
+	})
 	count := min(len(cards), len(array))
 	built := make([]bool, count)
 	for index := range count {
 		element := sameCard(cards[index], array[index])
 		built[index] = element
 	}
-	array2 := direct.SortBy(ordered, func(value ordering.Ordering) int32 {
-		switch value {
+	array2 := direct.SortBy(suits, func(left Suit, right Suit) int {
+		switch ordered(left, right) {
+		case ordering.OrderingLT:
+			return -1
 		case ordering.OrderingGT:
 			return 1
-		case ordering.OrderingEQ:
-			return 0
-		default: // ordering.OrderingLT
-			return -1
 		}
-	}, suits)
+		return 0
+	})
 	mapped2 := make([]string, len(array2))
 	for index, element := range array2 {
 		mapped2[index] = show(element)
 	}
-	array3 := direct.SortBy(ordered, func(value ordering.Ordering) int32 {
-		switch value {
+	array3 := direct.SortBy(suits, func(left Suit, right Suit) int {
+		switch ordered(left, right) {
+		case ordering.OrderingLT:
+			return -1
 		case ordering.OrderingGT:
 			return 1
-		case ordering.OrderingEQ:
-			return 0
-		default: // ordering.OrderingLT
-			return -1
 		}
-	}, suits)
+		return 0
+	})
 	count2 := min(len(suits), len(array3))
 	built2 := make([]ordering.Ordering, count2)
 	for index := range count2 {
@@ -221,7 +234,7 @@ func initializeMain_() []string {
 	for index, element := range suits {
 		mapped4[index] = isSpades(element)
 	}
-	return []string{string(datashow.AppendShowArrayString(nil, mapped)), string(datashow.AppendShowArrayBoolean(nil, built)), string(datashow.AppendShowArrayString(nil, mapped2)), string(ordering.AppendShowArrayOrdering(nil, built2)), string(datashow.AppendShowArrayBoolean(nil, built3)), string(datashow.AppendShowArrayInt(nil, mapped3)), string(datashow.AppendShowArrayBoolean(nil, mapped4))}
+	return []string{datashow.ArrayString(mapped), datashow.ArrayBoolean(built), datashow.ArrayString(mapped2), ordering.ArrayOrdering(built2), datashow.ArrayBoolean(built3), datashow.ArrayInt(mapped3), datashow.ArrayBoolean(mapped4)}
 }
 
 func describe(card Card) string {

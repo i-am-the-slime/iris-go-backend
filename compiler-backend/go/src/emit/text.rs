@@ -1,6 +1,7 @@
 use rustc_hash::FxHashMap;
 
 use super::buffers::{byte_slice, to_string};
+use super::names::{NamePart, PendingSpelling};
 use super::packages::Spelling;
 use super::{
     Emitter, Mode, Sink, binary, call, has_tail_call, identifier_expression, shown_boolean,
@@ -42,11 +43,9 @@ where
             && let [show, array] = arguments.as_slice()
             && let ExpressionKind::Function(id) = show.kind
         {
-            let writer = self.array_writer(id, array.monotype)?;
+            let shower = self.array_show(id, array.monotype)?;
             let array = self.value(array, out)?;
-            let written =
-                call(identifier_expression(&writer), vec![identifier_expression("nil"), array]);
-            return Ok(to_string(written));
+            return Ok(call(identifier_expression(&shower), vec![array]));
         }
         let buffer = self.temporary("text");
         let declaration = out.len();
@@ -195,6 +194,49 @@ where
         self.array_writers.insert(show, (name.clone(), array));
         self.pending_array_writers.push(show);
         Ok(name)
+    }
+
+    /// `func ArrayInt(array []int32) string`, the array shown by its writer.
+    fn array_show(&mut self, show: FunctionId, array: MonotypeId) -> GoResult<String> {
+        if let Some(name) = self.array_shows.get(&show) {
+            return Ok(name.clone());
+        }
+        self.array_writer(show, array)?;
+        let mut full = String::new();
+        let mut parts = vec![];
+        let name = match self.json_name_parts(array, &mut full, &mut parts) {
+            Ok(()) => {
+                if let Some(NamePart::Text(first)) = parts.first_mut() {
+                    *first = crate::naming::lower_first(first);
+                }
+                let full = crate::naming::lower_first(&full);
+                self.pending_global(full, PendingSpelling::Parts(parts))
+            }
+            Err(_) => {
+                let function_name = self.function_names[show.0 as usize].clone();
+                self.global_name(Spelling::derived("showArray", function_name, ""))
+            }
+        };
+        self.array_shows.insert(show, name.clone());
+        self.pending_array_shows.push(show);
+        Ok(name)
+    }
+
+    pub(super) fn array_show_declaration(&mut self, show: FunctionId) -> GoResult<GoDeclaration> {
+        let name = self.array_shows[&show].clone();
+        let (writer, array) = self.array_writers[&show].clone();
+        self.current = Some(show);
+        self.locals.clear();
+        self.local_names.clear();
+        self.tail_loop = None;
+        let array_name = self.local_name("array".into());
+        let written = call(
+            identifier_expression(&writer),
+            vec![identifier_expression("nil"), identifier_expression(&array_name)],
+        );
+        let body = vec![GoStatement::Return(Some(to_string(written)))];
+        let parameters = vec![(array_name, self.go_type(array)?)];
+        Ok(GoDeclaration::Function { name, parameters, result: Some(GoType::String), body })
     }
 
     pub(super) fn array_writer_declaration(

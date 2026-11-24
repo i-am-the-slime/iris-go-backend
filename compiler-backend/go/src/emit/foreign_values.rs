@@ -131,6 +131,65 @@ where
         Ok(identifier_expression(&name))
     }
 
+    /// `updateAt i x xs` as a bounds check around a copy of `xs` with `x` at `i`.
+    fn update_at(
+        &mut self,
+        arguments: &[Expression],
+        monotype: MonotypeId,
+        out: &mut Vec<GoStatement>,
+    ) -> GoResult<GoExpression> {
+        let (data, just) = self.constructor_named(monotype, "Just")?;
+        let (_, nothing) = self.constructor_named(monotype, "Nothing")?;
+        let index = self.value(&arguments[2], out)?;
+        if let GoExpression::Integer(constant) = index
+            && constant < 0
+        {
+            return self.construct(&data, nothing, vec![]);
+        }
+        let index = self.hoist(index, "index", out);
+        let value = self.value(&arguments[3], out)?;
+        let value = self.hoist(value, "value", out);
+        let elements = self.value(&arguments[4], out)?;
+        let elements = self.hoist(elements, "elements", out);
+        let name = self.temporary("updateAt");
+        let type_ = self.go_type(monotype)?;
+        out.push(GoStatement::Variable { name: name.clone(), type_, value: None });
+        let mut within = vec![];
+        let updated = self.updated_array(elements.clone(), index.clone(), value, &mut within);
+        let found = self.construct(&data, just, vec![updated])?;
+        let missing = self.construct(&data, nothing, vec![])?;
+        let target = vec![identifier_expression(&name)];
+        within.push(GoStatement::Assign { targets: target.clone(), values: vec![found] });
+        out.push(GoStatement::If {
+            condition: mutable::in_bounds(&index, elements),
+            then: within,
+            otherwise: vec![GoStatement::Assign { targets: target, values: vec![missing] }],
+        });
+        Ok(identifier_expression(&name))
+    }
+
+    /// A copy of `elements` with `value` at `index`, which is within it.
+    fn updated_array(
+        &mut self,
+        elements: GoExpression,
+        index: GoExpression,
+        value: GoExpression,
+        out: &mut Vec<GoStatement>,
+    ) -> GoExpression {
+        self.imports.insert("slices".into());
+        let clone = GoExpression::Qualified { package: "slices".into(), name: "Clone".into() };
+        let name = self.temporary("updated");
+        let updated = identifier_expression(&name);
+        out.push(GoStatement::Define {
+            names: vec![name],
+            values: vec![call(clone, vec![elements])],
+        });
+        let element =
+            GoExpression::Index { value: Box::new(updated.clone()), index: Box::new(index) };
+        out.push(GoStatement::Assign { targets: vec![element], values: vec![value] });
+        updated
+    }
+
     fn int_from_number(
         &mut self,
         number: &Expression,
@@ -204,6 +263,15 @@ where
         }
         if let Foreign::MaybeIndex = foreign {
             return self.maybe_index(arguments, monotype, out);
+        }
+        if let Foreign::UpdateAt = foreign {
+            return self.update_at(arguments, monotype, out);
+        }
+        if let Foreign::ArrayUpdated = foreign {
+            let index = self.value(&arguments[0], out)?;
+            let value = self.value(&arguments[1], out)?;
+            let elements = self.value(&arguments[2], out)?;
+            return Ok(self.updated_array(elements, index, value, out));
         }
         if let Foreign::IntFromNumber = foreign {
             return self.int_from_number(&arguments[2], monotype, out);
@@ -371,10 +439,11 @@ where
         {
             return Ok(unzipped);
         }
-        if foreign.calls(crate::foreign::ARRAY_SORT_BY)
-            && let Some(sorted) = self.primitive_sort(arguments, Placement::Copied, out)?
-        {
-            return Ok(sorted);
+        if foreign.calls(crate::foreign::ARRAY_SORT_BY) {
+            if let Some(sorted) = self.primitive_sort(arguments, Placement::Copied, out)? {
+                return Ok(sorted);
+            }
+            return self.ordering_sort(arguments, Placement::Copied, out);
         }
         if let Foreign::Call { function, boundary, .. } = *foreign {
             let values = self.boundary_arguments(arguments, boundary, monotype, true, out)?;
@@ -383,6 +452,11 @@ where
             }
             let function = self.boundary_function(function, boundary, monotype)?;
             let result = call(function, values);
+            if boundary.found
+                && let Some(constructors) = boundary.maybe
+            {
+                return self.found_maybe(result, arguments, constructors, monotype, out);
+            }
             if boundary.record_result {
                 return self.record_from_results(result, monotype, out);
             }

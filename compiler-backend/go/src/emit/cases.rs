@@ -27,6 +27,9 @@ where
         sink: Sink,
         out: &mut Vec<GoStatement>,
     ) -> GoResult<()> {
+        if self.found_case(expression, scrutinees, alternatives, mode, sink.clone(), out)? {
+            return Ok(());
+        }
         let mut paths = vec![];
         for (position, scrutinee) in scrutinees.iter().enumerate() {
             let inspected = alternatives.iter().any(|alternative| {

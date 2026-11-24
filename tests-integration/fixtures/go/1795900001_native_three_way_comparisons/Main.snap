@@ -32,6 +32,10 @@ func AppendShow(buffer []byte, long int64) []byte {
 	return buffer
 }
 
+func ArrayInt64(array []int64) string {
+	return string(AppendShowArrayInt64(nil, array))
+}
+
 // Data/Ord/ord.go
 package ord
 
@@ -84,6 +88,10 @@ func AppendShowArrayInt(buffer []byte, array []int32) []byte {
 	return buffer
 }
 
+func ArrayInt(array []int32) string {
+	return string(AppendShowArrayInt(nil, array))
+}
+
 // Data/UInt64/uint64.go
 package datauint64
 
@@ -113,6 +121,10 @@ func AppendShow(buffer []byte, long uint64) []byte {
 	buffer = strconv.AppendUint(buffer, long, 10)
 	buffer = append(buffer, "ul"...)
 	return buffer
+}
+
+func ArrayUInt64(array []uint64) string {
+	return string(AppendShowArrayUInt64(nil, array))
 }
 
 // main.go
@@ -164,7 +176,7 @@ func initializeMain_() []string {
 		}
 		mapped3[index] = result
 	}
-	return []string{strconv.FormatInt(foldLanes(mapped, int64(-9223372036854775808)), 10) + "l", strconv.FormatUint(foldLanes2(mapped2, uint64(18446744073709551615)), 10) + "ul", strconv.Itoa(int(foldLanes3(ints, int32(prim.BottomInt)))), prim.ShowNumber(foldLanes4([]float64{3.5, -1.0, 4.0, 1.0, -5.0, 9.25, 2.0, 6.0, 5.0, 3.0, -5.0, 8.0, 9.0, 7.0, 9.0, 3.0, 2.0, 3.0, 8.0, 4.0, -6.0, 2.0, 6.0, 4.0, 3.0, 3.0, 8.0, 3.0, 2.0, 7.0, 9.0, 5.0, 0.0}, 0.0)), string(dataint64.AppendShowArrayInt64(nil, kept)), string(datauint64.AppendShowArrayUInt64(nil, kept2)), string(show.AppendShowArrayInt(nil, mapped3)), "true"}
+	return []string{strconv.FormatInt(foldLanes(mapped, int64(-9223372036854775808)), 10) + "l", strconv.FormatUint(foldLanes2(mapped2, uint64(18446744073709551615)), 10) + "ul", strconv.Itoa(int(foldLanes3(ints, int32(prim.BottomInt)))), prim.ShowNumber(foldLanes4([]float64{3.5, -1.0, 4.0, 1.0, -5.0, 9.25, 2.0, 6.0, 5.0, 3.0, -5.0, 8.0, 9.0, 7.0, 9.0, 3.0, 2.0, 3.0, 8.0, 4.0, -6.0, 2.0, 6.0, 4.0, 3.0, 3.0, 8.0, 3.0, 2.0, 7.0, 9.0, 5.0, 0.0}, 0.0)), dataint64.ArrayInt64(kept), datauint64.ArrayUInt64(kept2), show.ArrayInt(mapped3), "true"}
 }
 
 func main() {
