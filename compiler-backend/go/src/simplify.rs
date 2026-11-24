@@ -5,7 +5,7 @@
 
 use rustc_hash::{FxHashMap, FxHashSet};
 
-use crate::foreign::{Foreign, LineCoverage};
+use crate::foreign::{Boundary, Foreign, LineCoverage};
 use crate::graph::{on_cycles, strongly_connected};
 use crate::monomorphic::traversal::{
     for_each_binder_mut, for_each_child_mut, prune_unreachable, reference_graph, visit,
@@ -54,6 +54,9 @@ const INLINE_SIZE: usize = 40;
 
 /// The size of a local helper that is copied to each of its calls whatever it works on.
 const TINY_HELPER: usize = 12;
+
+/// The size of a loop body a function is still inlined with at more than one call.
+const COPIED_LOOP_BODY: usize = 8;
 
 /// The names simplification and specialization give the values they introduce.
 const MADE_UP_NAMES: &[&str] = &["argument", "binding", "element", "field", "scrutinee", "value"];
@@ -219,8 +222,11 @@ impl Simplifier<'_> {
             return None;
         }
         let once = self.uses[id.0 as usize] == 1;
-        // A copy of a failure saves no work, only adds another place to fail.
-        let small = self.sizes[id.0 as usize] <= INLINE_SIZE && !can_fail(&function.body);
+        // A copy of a failure saves no work, only adds another place to fail; a copy of a loop
+        // saves only a call, and repeats the whole loop at every call.
+        let small = self.sizes[id.0 as usize] <= INLINE_SIZE
+            && !can_fail(&function.body)
+            && !runs_own_loop(&function.body);
         ((small || once) && !function.parameters.is_empty() || is_trivial(&function.body))
             .then_some(function)
     }
@@ -1239,6 +1245,27 @@ fn only_computes(expression: &Expression) -> bool {
         );
     });
     computes
+}
+
+/// Whether the expression runs a loop whose body it holds, more than `sum`'s `+` or `elem`'s
+/// `==`: a copy of it repeats that body at every call. A loop over a callback it is passed or a
+/// known function, or with a body of a few nodes, is copied so that it fuses where it is used.
+fn runs_own_loop(expression: &Expression) -> bool {
+    let holds_body = |body: &Expression| !is_within_size(body, COPIED_LOOP_BODY);
+    let mut loops = false;
+    visit(expression, &mut |node| {
+        loops |= match &node.kind {
+            ExpressionKind::Foreign {
+                foreign: Foreign::Call { boundary: Boundary { iteration: Some(_), .. }, .. },
+                arguments,
+            } => arguments.first().is_some_and(|callback| {
+                matches!(&callback.kind, ExpressionKind::Lambda { body, .. } if holds_body(body))
+            }),
+            ExpressionKind::EffectEach { body, .. } => holds_body(body),
+            _ => false,
+        };
+    });
+    loops
 }
 
 /// Whether every action the expression performs on a mutable array reads it.

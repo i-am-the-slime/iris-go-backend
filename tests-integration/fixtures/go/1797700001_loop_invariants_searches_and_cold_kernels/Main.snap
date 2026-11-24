@@ -117,7 +117,7 @@ func initializeMain_() []string {
 		mapped[index] = float64(x) * 0.5
 	}
 	first := prim.ShowNumber(foldLanes(mapped, 0.0) / float64(41))
-	first2 := string(show.AppendShowArrayInt(nil, mapLanes(numbers)))
+	first2 := string(show.AppendShowArrayInt(nil, clamped(numbers)))
 	bound := []string{}
 	array := []shared.Rule{{Name: "positive", Check: func(n int32) bool {
 		return n > 0
@@ -143,9 +143,13 @@ func initializeMain_() []string {
 	array3 := []int32{1, 2}
 	built := []string{result, result2, first, first2, first3, first4}
 	for _, round := range array3 {
-		built = append(built, []string{string(show.AppendShowArrayInt(nil, mapLanes2(numbers, round))), string(show.AppendShowArrayInt(nil, mapLanes3(numbers)))}...)
+		built = append(built, []string{string(show.AppendShowArrayInt(nil, clamped(mapLanes(numbers, round)))), string(show.AppendShowArrayInt(nil, mapLanes2(numbers)))}...)
 	}
 	return built
+}
+
+func clamped(array []int32) []int32 {
+	return mapLanes3(array)
 }
 
 func main() {
@@ -191,7 +195,39 @@ func foldLanes(xs []float64, initial float64) float64 {
 	return accumulator
 }
 
-func mapLanes(xs []int32) []int32 {
+func mapLanes(xs []int32, round int32) []int32 {
+	roundLanes := archsimd.BroadcastInt32x4(round)
+	out := make([]int32, len(xs))
+	const step = 4
+	i := 0
+	for ; i < len(xs)-step+1; i += step {
+		x := archsimd.LoadInt32x4(xs[i : i+step])
+		x.Mul(roundLanes).Store(out[i : i+step])
+	}
+	if i < len(xs) {
+		x, _ := archsimd.LoadInt32x4Part(xs[i:])
+		x.Mul(roundLanes).StorePart(out[i:])
+	}
+	return out
+}
+
+func mapLanes2(xs []int32) []int32 {
+	c0 := archsimd.BroadcastInt32x4(7)
+	out := make([]int32, len(xs))
+	const step = 4
+	i := 0
+	for ; i < len(xs)-step+1; i += step {
+		x := archsimd.LoadInt32x4(xs[i : i+step])
+		x.Max(c0).Store(out[i : i+step])
+	}
+	if i < len(xs) {
+		x, _ := archsimd.LoadInt32x4Part(xs[i:])
+		x.Max(c0).StorePart(out[i:])
+	}
+	return out
+}
+
+func mapLanes3(xs []int32) []int32 {
 	c0 := archsimd.BroadcastInt32x4(2)
 	c1 := archsimd.BroadcastInt32x4(40)
 	out := make([]int32, len(xs))
@@ -204,42 +240,6 @@ func mapLanes(xs []int32) []int32 {
 	if i < len(xs) {
 		x, _ := archsimd.LoadInt32x4Part(xs[i:])
 		c0.IfElse(x.Less(c0), x.Min(c1)).StorePart(out[i:])
-	}
-	return out
-}
-
-func mapLanes2(xs []int32, round int32) []int32 {
-	roundLanes := archsimd.BroadcastInt32x4(round)
-	c0 := archsimd.BroadcastInt32x4(2)
-	c1 := archsimd.BroadcastInt32x4(40)
-	out := make([]int32, len(xs))
-	const step = 4
-	i := 0
-	for ; i < len(xs)-step+1; i += step {
-		x := archsimd.LoadInt32x4(xs[i : i+step])
-		t0 := x.Mul(roundLanes)
-		c0.IfElse(t0.Less(c0), t0.Min(c1)).Store(out[i : i+step])
-	}
-	if i < len(xs) {
-		x, _ := archsimd.LoadInt32x4Part(xs[i:])
-		t0 := x.Mul(roundLanes)
-		c0.IfElse(t0.Less(c0), t0.Min(c1)).StorePart(out[i:])
-	}
-	return out
-}
-
-func mapLanes3(xs []int32) []int32 {
-	c0 := archsimd.BroadcastInt32x4(7)
-	out := make([]int32, len(xs))
-	const step = 4
-	i := 0
-	for ; i < len(xs)-step+1; i += step {
-		x := archsimd.LoadInt32x4(xs[i : i+step])
-		x.Max(c0).Store(out[i : i+step])
-	}
-	if i < len(xs) {
-		x, _ := archsimd.LoadInt32x4Part(xs[i:])
-		x.Max(c0).StorePart(out[i:])
 	}
 	return out
 }
@@ -257,19 +257,18 @@ func foldLanes(xs []float64, initial float64) float64 {
 	return accumulator
 }
 
-func mapLanes(xs []int32) []int32 {
+func mapLanes(xs []int32, round int32) []int32 {
 	out := make([]int32, len(xs))
 	for i, x := range xs {
-		out[i] = min(max(x, 2), 40)
+		out[i] = x * round
 	}
 	return out
 }
 
-func mapLanes2(xs []int32, round int32) []int32 {
+func mapLanes2(xs []int32) []int32 {
 	out := make([]int32, len(xs))
 	for i, x := range xs {
-		t0 := x * round
-		out[i] = min(max(t0, 2), 40)
+		out[i] = max(x, 7)
 	}
 	return out
 }
@@ -277,7 +276,7 @@ func mapLanes2(xs []int32, round int32) []int32 {
 func mapLanes3(xs []int32) []int32 {
 	out := make([]int32, len(xs))
 	for i, x := range xs {
-		out[i] = max(x, 7)
+		out[i] = min(max(x, 2), 40)
 	}
 	return out
 }
@@ -321,7 +320,39 @@ func foldLanes(xs []float64, initial float64) float64 {
 	return accumulator
 }
 
-func mapLanes(xs []int32) []int32 {
+func mapLanes(xs []int32, round int32) []int32 {
+	roundLanes := simd.BroadcastInt32s(round)
+	out := make([]int32, len(xs))
+	step := simd.Int32s{}.Len()
+	i := 0
+	for ; i < len(xs)-step+1; i += step {
+		x := simd.LoadInt32s(xs[i : i+step])
+		x.Mul(roundLanes).Store(out[i : i+step])
+	}
+	if i < len(xs) {
+		x, _ := simd.LoadInt32sPart(xs[i:])
+		x.Mul(roundLanes).StorePart(out[i:])
+	}
+	return out
+}
+
+func mapLanes2(xs []int32) []int32 {
+	c0 := simd.BroadcastInt32s(7)
+	out := make([]int32, len(xs))
+	step := simd.Int32s{}.Len()
+	i := 0
+	for ; i < len(xs)-step+1; i += step {
+		x := simd.LoadInt32s(xs[i : i+step])
+		x.Max(c0).Store(out[i : i+step])
+	}
+	if i < len(xs) {
+		x, _ := simd.LoadInt32sPart(xs[i:])
+		x.Max(c0).StorePart(out[i:])
+	}
+	return out
+}
+
+func mapLanes3(xs []int32) []int32 {
 	c0 := simd.BroadcastInt32s(2)
 	c1 := simd.BroadcastInt32s(40)
 	out := make([]int32, len(xs))
@@ -334,42 +365,6 @@ func mapLanes(xs []int32) []int32 {
 	if i < len(xs) {
 		x, _ := simd.LoadInt32sPart(xs[i:])
 		c0.IfElse(x.Less(c0), x.Min(c1)).StorePart(out[i:])
-	}
-	return out
-}
-
-func mapLanes2(xs []int32, round int32) []int32 {
-	roundLanes := simd.BroadcastInt32s(round)
-	c0 := simd.BroadcastInt32s(2)
-	c1 := simd.BroadcastInt32s(40)
-	out := make([]int32, len(xs))
-	step := simd.Int32s{}.Len()
-	i := 0
-	for ; i < len(xs)-step+1; i += step {
-		x := simd.LoadInt32s(xs[i : i+step])
-		t0 := x.Mul(roundLanes)
-		c0.IfElse(t0.Less(c0), t0.Min(c1)).Store(out[i : i+step])
-	}
-	if i < len(xs) {
-		x, _ := simd.LoadInt32sPart(xs[i:])
-		t0 := x.Mul(roundLanes)
-		c0.IfElse(t0.Less(c0), t0.Min(c1)).StorePart(out[i:])
-	}
-	return out
-}
-
-func mapLanes3(xs []int32) []int32 {
-	c0 := simd.BroadcastInt32s(7)
-	out := make([]int32, len(xs))
-	step := simd.Int32s{}.Len()
-	i := 0
-	for ; i < len(xs)-step+1; i += step {
-		x := simd.LoadInt32s(xs[i : i+step])
-		x.Max(c0).Store(out[i : i+step])
-	}
-	if i < len(xs) {
-		x, _ := simd.LoadInt32sPart(xs[i:])
-		x.Max(c0).StorePart(out[i:])
 	}
 	return out
 }

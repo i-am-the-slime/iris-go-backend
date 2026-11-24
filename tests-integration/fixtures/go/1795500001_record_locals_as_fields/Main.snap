@@ -120,42 +120,10 @@ func initializeMain_() []string {
 		mapped[index].X = accumulatorX
 		mapped[index].Y = accumulatorY
 	}
-	array := []int32{1, 2, 3, 4}
-	accumulatorLabel := ""
-	var accumulatorCount int32 = 0
-	var accumulatorTotal int32 = 0
-	accumulatorSeen := false
-	for _, n := range array {
-		accumulatorCount += 1
-		accumulatorTotal += n
-		accumulatorLabel += strconv.Itoa(int(n))
-		accumulatorSeen = accumulatorSeen || n > 2
-	}
-	array2 := []int32{5}
-	accumulatorLabel2 := ""
-	var accumulatorCount2 int32 = 0
-	var accumulatorTotal2 int32 = 0
-	accumulatorSeen2 := false
-	for _, n := range array2 {
-		accumulatorCount2 += 1
-		accumulatorTotal2 += n
-		accumulatorLabel2 += strconv.Itoa(int(n))
-		accumulatorSeen2 = accumulatorSeen2 || n > 2
-	}
-	array3 := []int32{1, 2, 3}
-	accumulatorLabel3 := ""
-	var accumulatorCount3 int32 = 0
-	var accumulatorTotal3 int32 = 0
-	accumulatorSeen3 := false
-	for _, n := range array3 {
-		accumulatorCount3 += 1
-		accumulatorTotal3 += n
-		accumulatorLabel3 += strconv.Itoa(int(n))
-		accumulatorSeen3 = accumulatorSeen3 || n > 2
-	}
-	array4 := []int32{2, 3, 4}
+	record := tally([]int32{1, 2, 3, 4})
+	array := []int32{2, 3, 4}
 	accumulator := shared.Cells{Rows: 0, Cells: 0}
-	for _, width := range array4 {
+	for _, width := range array {
 		updated := accumulator
 		updated.Rows = accumulator.Rows + 1
 		_, count := arraypkg.RangeSteps(1, width)
@@ -173,7 +141,21 @@ func initializeMain_() []string {
 		updated.Right = accumulator2.Left
 		accumulator2 = updated
 	}
-	return []string{string(show.AppendShowArrayBody(nil, mapped)), "{ count: " + strconv.Itoa(int(accumulatorCount)) + ", label: " + prim.ShowString(accumulatorLabel) + ", seen: " + strconv.FormatBool(accumulatorSeen) + ", total: " + strconv.Itoa(int(accumulatorTotal)) + " }", string(show.AppendShowArrayTally(nil, arraypkg.Reverse([]shared.Tally{{Label: accumulatorLabel2, Count: accumulatorCount2, Total: accumulatorTotal2, Seen: accumulatorSeen2}, {Label: accumulatorLabel3, Count: accumulatorCount3, Total: accumulatorTotal3, Seen: accumulatorSeen3}}))), "{ cells: " + strconv.Itoa(int(accumulator.Cells)) + ", rows: " + strconv.Itoa(int(accumulator.Rows)) + " }", "{ left: " + strconv.Itoa(int(accumulator2.Left)) + ", right: " + strconv.Itoa(int(accumulator2.Right)) + " }"}
+	return []string{string(show.AppendShowArrayBody(nil, mapped)), "{ count: " + strconv.Itoa(int(record.Count)) + ", label: " + prim.ShowString(record.Label) + ", seen: " + strconv.FormatBool(record.Seen) + ", total: " + strconv.Itoa(int(record.Total)) + " }", string(show.AppendShowArrayTally(nil, arraypkg.Reverse([]shared.Tally{tally([]int32{5}), tally([]int32{1, 2, 3})}))), "{ cells: " + strconv.Itoa(int(accumulator.Cells)) + ", rows: " + strconv.Itoa(int(accumulator.Rows)) + " }", "{ left: " + strconv.Itoa(int(accumulator2.Left)) + ", right: " + strconv.Itoa(int(accumulator2.Right)) + " }"}
+}
+
+func tally(array []int32) shared.Tally {
+	accumulatorLabel := ""
+	var accumulatorCount int32 = 0
+	var accumulatorTotal int32 = 0
+	accumulatorSeen := false
+	for _, n := range array {
+		accumulatorCount += 1
+		accumulatorTotal += n
+		accumulatorLabel += strconv.Itoa(int(n))
+		accumulatorSeen = accumulatorSeen || n > 2
+	}
+	return shared.Tally{Label: accumulatorLabel, Count: accumulatorCount, Total: accumulatorTotal, Seen: accumulatorSeen}
 }
 
 func main() {
