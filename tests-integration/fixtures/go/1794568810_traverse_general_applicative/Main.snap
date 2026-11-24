@@ -15,6 +15,14 @@ const (
 	EitherStringArrayIntRight
 )
 
+func Right(right []int32) EitherStringArrayInt {
+	return EitherStringArrayInt{Tag: EitherStringArrayIntRight, Right: right}
+}
+
+func Left(left string) EitherStringArrayInt {
+	return EitherStringArrayInt{Tag: EitherStringArrayIntLeft, Left: left}
+}
+
 // main.go
 package main
 
@@ -29,7 +37,7 @@ var main_ = initializeMain_()
 
 func initializeMain_() []either.EitherStringArrayInt {
 	array := []int32{1, 2, 3}
-	accumulator := either.EitherStringArrayInt{Tag: either.EitherStringArrayIntRight, Right: []int32{}}
+	accumulator := either.Right([]int32{})
 	accumulator.Right = slices.Clip(accumulator.Right)
 	for _, element := range array {
 		if accumulator.Tag == either.EitherStringArrayIntLeft {
@@ -37,17 +45,17 @@ func initializeMain_() []either.EitherStringArrayInt {
 		}
 		switch accumulator.Tag {
 		case either.EitherStringArrayIntLeft:
-			accumulator = either.EitherStringArrayInt{Tag: either.EitherStringArrayIntLeft, Left: accumulator.Left}
+			accumulator = either.Left(accumulator.Left)
 		default: // either.EitherStringArrayIntRight
 			if element > 0 {
-				accumulator = either.EitherStringArrayInt{Tag: either.EitherStringArrayIntRight, Right: arraypkg.Bounded(append(accumulator.Right, element))}
+				accumulator = either.Right(arraypkg.Bounded(append(accumulator.Right, element)))
 			} else {
-				accumulator = either.EitherStringArrayInt{Tag: either.EitherStringArrayIntLeft, Left: "not positive: " + strconv.Itoa(int(element))}
+				accumulator = either.Left("not positive: " + strconv.Itoa(int(element)))
 			}
 		}
 	}
 	array2 := []int32{1, -2, 3}
-	accumulator2 := either.EitherStringArrayInt{Tag: either.EitherStringArrayIntRight, Right: []int32{}}
+	accumulator2 := either.Right([]int32{})
 	accumulator2.Right = slices.Clip(accumulator2.Right)
 	for _, element := range array2 {
 		if accumulator2.Tag == either.EitherStringArrayIntLeft {
@@ -55,12 +63,12 @@ func initializeMain_() []either.EitherStringArrayInt {
 		}
 		switch accumulator2.Tag {
 		case either.EitherStringArrayIntLeft:
-			accumulator2 = either.EitherStringArrayInt{Tag: either.EitherStringArrayIntLeft, Left: accumulator2.Left}
+			accumulator2 = either.Left(accumulator2.Left)
 		default: // either.EitherStringArrayIntRight
 			if element > 0 {
-				accumulator2 = either.EitherStringArrayInt{Tag: either.EitherStringArrayIntRight, Right: arraypkg.Bounded(append(accumulator2.Right, element))}
+				accumulator2 = either.Right(arraypkg.Bounded(append(accumulator2.Right, element)))
 			} else {
-				accumulator2 = either.EitherStringArrayInt{Tag: either.EitherStringArrayIntLeft, Left: "not positive: " + strconv.Itoa(int(element))}
+				accumulator2 = either.Left("not positive: " + strconv.Itoa(int(element)))
 			}
 		}
 	}

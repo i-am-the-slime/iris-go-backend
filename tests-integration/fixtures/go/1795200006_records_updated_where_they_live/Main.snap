@@ -32,18 +32,18 @@ var main_ = initializeMain_()
 
 func initializeMain_() float64 {
 	bodies := []shared.Body{{X: 0.0, Y: 0.0, Vx: 0.0, Vy: 0.0, Mass: 1.0}, {X: 1.0, Y: 2.0, Vx: 0.0, Vy: 0.0, Mass: 0.5}}
-	var accumulatorVx float64 = 0.0
-	var accumulatorVy float64 = 0.0
-	var accumulatorX float64 = 0.5
-	var accumulatorY float64 = 0.5
+	accumulatorVx := 0.0
+	accumulatorVy := 0.0
+	accumulatorX := 0.5
+	accumulatorY := 0.5
 	for otherIndex := range bodies {
 		accumulatorVx += (bodies[otherIndex].X - accumulatorX) * bodies[otherIndex].Mass
 		accumulatorVy += (bodies[otherIndex].Y - accumulatorY) * bodies[otherIndex].Mass
 	}
-	var accumulatorVx2 float64 = 0.0
-	var accumulatorVy2 float64 = 0.0
-	var accumulatorX2 float64 = 0.5
-	var accumulatorY2 float64 = 0.5
+	accumulatorVx2 := 0.0
+	accumulatorVy2 := 0.0
+	accumulatorX2 := 0.5
+	accumulatorY2 := 0.5
 	for index := range bodies {
 		i := int32(index)
 		if 1 != i {
@@ -51,7 +51,7 @@ func initializeMain_() float64 {
 			accumulatorVy2 += (bodies[index].Y - accumulatorY2) * bodies[index].Mass
 		}
 	}
-	var accumulator float64 = 0.0
+	accumulator := 0.0
 	for index := range bodies {
 		i := int32(index)
 		accumulator += toNumber(i) * bodies[index].Mass

@@ -693,6 +693,9 @@ where
         let position =
             equations.first().and_then(|first| definition_position(&scope.module, first.source));
         let mut body = self.equations(&mut scope, &equations)?;
+        if self.reads_json_directly(key)? {
+            body = self.json_read(body);
+        }
         if !dictionary_parameters.is_empty() {
             body = self.lambda(dictionary_parameters, body);
         }

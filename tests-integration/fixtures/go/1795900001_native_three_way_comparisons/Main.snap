@@ -122,6 +122,7 @@ import (
 	"fixture/Data/Int64"
 	"fixture/Data/Show"
 	"fixture/Data/UInt64"
+	arraypkg "github.com/i-am-the-slime/iris-go/array"
 	"github.com/i-am-the-slime/iris-go/console"
 	"github.com/i-am-the-slime/iris-go/prim"
 	"strconv"
@@ -131,6 +132,15 @@ import (
 var main_ = initializeMain_()
 
 func initializeMain_() []string {
+	array := []struct{}{{}}
+	bound := []string{}
+	for _, element := range array {
+		bound = append(bound, report(element)...)
+	}
+	return arraypkg.Bounded(bound)
+}
+
+func report(ignored struct{}) []string {
 	ints := []int32{3, -1, 4, 1, -5, 9, 2, 6, 5, 3, -5, 8, 9, 7, 9, 3, 2, 3, 8, 4, -6, 2, 6, 4, 3, 3, 8, 3, 2, 7, 9, 5, 0}
 	mapped := make([]int64, len(ints))
 	for index, element := range ints {
@@ -140,27 +150,24 @@ func initializeMain_() []string {
 	for index, element := range ints {
 		mapped2[index] = datauint64.UnsafeFromInt(element)
 	}
-	pivot := int64(2)
 	kept := []int64{}
 	for _, x := range mapped {
-		if x < pivot {
+		if x < 2 {
 			kept = append(kept, x)
 		}
 	}
-	pivot2 := uint64(2)
 	kept2 := []uint64{}
 	for _, x := range mapped2 {
-		if x <= pivot2 {
+		if x <= 2 {
 			kept2 = append(kept2, x)
 		}
 	}
-	pivot3 := int64(3)
 	mapped3 := make([]int32, len(mapped))
 	for index, x := range mapped {
 		var result int32
-		if x == pivot3 {
+		if x == 3 {
 			result = 2
-		} else if x > pivot3 {
+		} else if x > 3 {
 			result = 3
 		} else {
 			result = 1
@@ -207,11 +214,7 @@ func foldLanes(xs []int64, initial int64) int64 {
 	}
 	for ; i < len(xs); i++ {
 		x := xs[i]
-		s0 := x
-		if accumulator >= x {
-			s0 = accumulator
-		}
-		accumulator = s0
+		accumulator = max(accumulator, x)
 	}
 	return accumulator
 }
@@ -242,11 +245,7 @@ func foldLanes2(xs []uint64, initial uint64) uint64 {
 	}
 	for ; i < len(xs); i++ {
 		x := xs[i]
-		s0 := x
-		if accumulator <= x {
-			s0 = accumulator
-		}
-		accumulator = s0
+		accumulator = min(accumulator, x)
 	}
 	return accumulator
 }
@@ -277,11 +276,7 @@ func foldLanes3(xs []int32, initial int32) int32 {
 	}
 	for ; i < len(xs); i++ {
 		x := xs[i]
-		s0 := accumulator
-		if accumulator < x {
-			s0 = x
-		}
-		accumulator = s0
+		accumulator = max(accumulator, x)
 	}
 	return accumulator
 }
@@ -329,11 +324,7 @@ package main
 func foldLanes(xs []int64, initial int64) int64 {
 	accumulator := initial
 	for _, x := range xs {
-		s0 := x
-		if accumulator >= x {
-			s0 = accumulator
-		}
-		accumulator = s0
+		accumulator = max(accumulator, x)
 	}
 	return accumulator
 }
@@ -341,11 +332,7 @@ func foldLanes(xs []int64, initial int64) int64 {
 func foldLanes2(xs []uint64, initial uint64) uint64 {
 	accumulator := initial
 	for _, x := range xs {
-		s0 := x
-		if accumulator <= x {
-			s0 = accumulator
-		}
-		accumulator = s0
+		accumulator = min(accumulator, x)
 	}
 	return accumulator
 }
@@ -353,11 +340,7 @@ func foldLanes2(xs []uint64, initial uint64) uint64 {
 func foldLanes3(xs []int32, initial int32) int32 {
 	accumulator := initial
 	for _, x := range xs {
-		s0 := accumulator
-		if accumulator < x {
-			s0 = x
-		}
-		accumulator = s0
+		accumulator = max(accumulator, x)
 	}
 	return accumulator
 }
@@ -407,11 +390,7 @@ func foldLanes(xs []int64, initial int64) int64 {
 	}
 	for ; i < len(xs); i++ {
 		x := xs[i]
-		s0 := x
-		if accumulator >= x {
-			s0 = accumulator
-		}
-		accumulator = s0
+		accumulator = max(accumulator, x)
 	}
 	return accumulator
 }
@@ -442,11 +421,7 @@ func foldLanes2(xs []uint64, initial uint64) uint64 {
 	}
 	for ; i < len(xs); i++ {
 		x := xs[i]
-		s0 := x
-		if accumulator <= x {
-			s0 = accumulator
-		}
-		accumulator = s0
+		accumulator = min(accumulator, x)
 	}
 	return accumulator
 }
@@ -477,11 +452,7 @@ func foldLanes3(xs []int32, initial int32) int32 {
 	}
 	for ; i < len(xs); i++ {
 		x := xs[i]
-		s0 := accumulator
-		if accumulator < x {
-			s0 = x
-		}
-		accumulator = s0
+		accumulator = max(accumulator, x)
 	}
 	return accumulator
 }

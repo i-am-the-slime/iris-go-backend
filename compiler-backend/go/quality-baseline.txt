@@ -1,11 +1,11 @@
-examples any 583
+examples any 569
 examples any:boxing 118
 examples any:empty-data 0
 examples any:existential 10
 examples any:foreign 62
 examples any:free-value 102
 examples any:polymorphic-recursion 41
-examples any:rank-n 83
+examples any:rank-n 69
 examples any:runtime 18
 examples any:type-variable 82
 examples any:unsolved 1

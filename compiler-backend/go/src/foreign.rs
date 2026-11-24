@@ -17,7 +17,7 @@ pub use imports::{
     ARRAY_THAW_OWNED, ARRAY_UNCONS, ARRAY_UNZIP, FOREIGN_RECORD, FROM_CHAR_ARRAY, INT_DIVIDE,
     INT_MODULO, MUTABLE_PEEK_UNSAFE, MUTABLE_WITHIN, OBJECT_DELETE, OBJECT_FROM_ENTRIES,
     OBJECT_INDEX, OBJECT_INSERT, OBJECT_KEYS, OBJECT_LOOKUP, OBJECT_SIZE, SEQUENCE_ARRAY,
-    TO_CHAR_ARRAY, WELL_FORMED_STRING, array_fold, effect_fold,
+    SHOW_NUMBER, TO_CHAR_ARRAY, WELL_FORMED_STRING, array_fold, effect_fold,
 };
 pub use opacity::{Opacity, OpaqueDeclaration, foreign_opacity};
 pub use packages::{ForeignPackages, ForeignSource, LineCoverage, LineDirectives};
@@ -116,6 +116,10 @@ pub enum Foreign {
     /// Yoga.JSON's readJSON or writeJSON at a type whose codec is Yoga.JSON's
     /// own instances throughout: [`JsonCodec`].
     Json(JsonCodec),
+    /// `show` of the `NonEmptyList ForeignError` a Yoga.JSON read fails with. It takes the
+    /// `show` of one ForeignError and the errors, and shows them with go-support's
+    /// `foreignvalue.ShowErrors`.
+    ShowForeignErrors,
 }
 
 /// A typed Yoga.JSON codec, which reads the text straight into the program's
@@ -259,6 +263,8 @@ pub enum Iteration {
     Bind,
     FindIndex,
     FindLastIndex,
+    /// `find`, which the arrays library defines by `findIndex`.
+    Find,
     ZipWith,
 }
 
@@ -532,6 +538,7 @@ impl Foreign {
             Foreign::LazyDefer | Foreign::LazyForce => 1,
             Foreign::Json(JsonCodec::Read) => 2,
             Foreign::Json(JsonCodec::Write) => 1,
+            Foreign::ShowForeignErrors => 2,
             Foreign::UnsafeCoerce | Foreign::Identity | Foreign::EffectPure => 1,
             Foreign::Throw | Foreign::Crash | Foreign::MakeAff | Foreign::AssocArray => 1,
             Foreign::ForkFiber | Foreign::NewFiber | Foreign::NewSupervisedFiber => 2,

@@ -358,7 +358,7 @@ impl Function<'_> {
 }
 
 /// The variables written inside the declaration's function literals.
-fn written_by_literals(declaration: &mut GoDeclaration) -> FxHashSet<String> {
+pub(super) fn written_by_literals(declaration: &mut GoDeclaration) -> FxHashSet<String> {
     let mut written = FxHashSet::default();
     each_expression_in_declaration(declaration, |value| {
         let GoExpression::Function { body, .. } = value else { return };

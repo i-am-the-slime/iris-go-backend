@@ -17,6 +17,14 @@ const (
 	StepAccIIntDone
 )
 
+func Done(done int32) StepAccIInt {
+	return StepAccIInt{Tag: StepAccIIntDone, Done: done}
+}
+
+func Loop(loop shared.AccI) StepAccIInt {
+	return StepAccIInt{Tag: StepAccIIntLoop, Loop: loop}
+}
+
 // main.go
 package main
 
@@ -63,14 +71,14 @@ func iterateF(ref *shared.Ref[int32], n int32, x int32) int32 {
 
 func mainF(count *shared.Ref[int32], st shared.AccI) class.StepAccIInt {
 	if st.I >= 1 {
-		return class.StepAccIInt{Tag: class.StepAccIIntDone, Done: st.Acc}
+		return class.Done(st.Acc)
 	}
 	s := count.Value
 	s_ := s + 1
 	count.Value = s_
 	performed := st.Acc
 	accI := shared.AccI{Acc: performed, I: st.I + 1}
-	return class.StepAccIInt{Tag: class.StepAccIIntLoop, Loop: accI}
+	return class.Loop(accI)
 }
 
 func mainGo(count *shared.Ref[int32], step class.StepAccIInt) int32 {

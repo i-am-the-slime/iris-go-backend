@@ -11,6 +11,10 @@ type ListInt struct {
 
 var SharedListIntNil = &ListInt{}
 
+func Cons(cons0 int32, cons1 *ListInt) *ListInt {
+	return &ListInt{Cons0: cons0, Cons1: cons1}
+}
+
 func SumIntList(value *ListInt) int32 {
 	return SumIntListGo(0, value)
 }
@@ -716,7 +720,7 @@ func initializeMain_() []int32 {
 func mainGoChecked(tree *redblack.Tree, kept *redblack_types.ListTree, n int32, treeOwned bool) *redblack_types.ListTree {
 	for {
 		if n <= 0 {
-			return &redblack_types.ListTree{Cons0: tree, Cons1: kept}
+			return redblack_types.Cons(tree, kept)
 		}
 		var key int32
 		if n%2 == 0 {
@@ -732,17 +736,9 @@ func mainGoChecked(tree *redblack.Tree, kept *redblack_types.ListTree, n int32, 
 			if result {
 				scrutinee := redblack.InsChecked(key, v, tree, treeOwned)
 				if scrutinee != redblack.SharedTreeLeaf {
-					l := scrutinee.Node1
-					k := scrutinee.Node2
-					v2 := scrutinee.Node3
-					r := scrutinee.Node4
 					lOwned := scrutinee.Unique&1 != 0
 					rOwned := scrutinee.Unique&2 != 0
 					scrutinee.Node0 = redblack.ColorBlack
-					scrutinee.Node1 = l
-					scrutinee.Node2 = k
-					scrutinee.Node3 = v2
-					scrutinee.Node4 = r
 					scrutinee.Unique = shared.UniqueBit(lOwned, 1) | shared.UniqueBit(rOwned, 2)
 					next = scrutinee
 				} else {
@@ -755,7 +751,7 @@ func mainGoChecked(tree *redblack.Tree, kept *redblack_types.ListTree, n int32, 
 		}
 		var result2 *redblack_types.ListTree
 		if n%8 == 0 {
-			result2 = &redblack_types.ListTree{Cons0: next, Cons1: kept}
+			result2 = redblack_types.Cons(next, kept)
 		} else {
 			result2 = kept
 		}
@@ -765,7 +761,7 @@ func mainGoChecked(tree *redblack.Tree, kept *redblack_types.ListTree, n int32, 
 
 func mainGoReusing(tree *redblack.Tree, kept *redblack_types.ListTree, n int32) *redblack_types.ListTree {
 	if n <= 0 {
-		return &redblack_types.ListTree{Cons0: tree, Cons1: kept}
+		return redblack_types.Cons(tree, kept)
 	}
 	var key int32
 	if n%2 == 0 {
@@ -781,15 +777,7 @@ matched:
 		if result {
 			scrutinee := redblack.InsReusing(key, v, tree)
 			if scrutinee != redblack.SharedTreeLeaf {
-				l := scrutinee.Node1
-				k := scrutinee.Node2
-				v2 := scrutinee.Node3
-				r := scrutinee.Node4
 				scrutinee.Node0 = redblack.ColorBlack
-				scrutinee.Node1 = l
-				scrutinee.Node2 = k
-				scrutinee.Node3 = v2
-				scrutinee.Node4 = r
 				scrutinee.Unique = 3
 				next = scrutinee
 			} else {
@@ -802,7 +790,7 @@ matched:
 	}
 	var result2 *redblack_types.ListTree
 	if n%8 == 0 {
-		result2 = &redblack_types.ListTree{Cons0: next, Cons1: kept}
+		result2 = redblack_types.Cons(next, kept)
 	} else {
 		result2 = kept
 	}
@@ -822,15 +810,7 @@ func mainGoReusing2(tree *redblack.Tree, n int32) *redblack.Tree {
 			if result2 {
 				scrutinee := redblack.InsReusing(k, false, tree)
 				if scrutinee != redblack.SharedTreeLeaf {
-					l := scrutinee.Node1
-					k2 := scrutinee.Node2
-					v := scrutinee.Node3
-					r := scrutinee.Node4
 					scrutinee.Node0 = redblack.ColorBlack
-					scrutinee.Node1 = l
-					scrutinee.Node2 = k2
-					scrutinee.Node3 = v
-					scrutinee.Node4 = r
 					scrutinee.Unique = 3
 					result = scrutinee
 				} else {
@@ -897,9 +877,7 @@ func ReverseTreeGoReusing(acc *redblack_types.ListTree, list *redblack_types.Lis
 		if list == redblack_types.SharedListTreeNil {
 			return acc
 		}
-		x := list.Cons0
 		xs := list.Cons1
-		list.Cons0 = x
 		list.Cons1 = acc
 		acc, list = list, xs
 	}
@@ -928,6 +906,10 @@ type ListListTree struct {
 
 var SharedListListTreeNil = &ListListTree{}
 
+func Cons(cons0 *redblack.Tree, cons1 *ListTree) *ListTree {
+	return &ListTree{Cons0: cons0, Cons1: cons1}
+}
+
 func Map_(f func(*redblack.Tree) int32, list *ListTree) *types.ListInt {
 	return MapChunkedRevMap(f, SharedListListTreeNil, list)
 }
@@ -946,9 +928,9 @@ func MapChunkedRevMap(f func(*redblack.Tree) int32, chunksAcc *ListListTree, chu
 		}
 		var result *types.ListInt
 		if chunk != SharedListTreeNil && chunk.Cons1 != SharedListTreeNil && chunk.Cons1.Cons1 == SharedListTreeNil {
-			result = &types.ListInt{Cons0: f(chunk.Cons0), Cons1: &types.ListInt{Cons0: f(chunk.Cons1.Cons0), Cons1: types.SharedListIntNil}}
+			result = types.Cons(f(chunk.Cons0), types.Cons(f(chunk.Cons1.Cons0), types.SharedListIntNil))
 		} else if chunk != SharedListTreeNil && chunk.Cons1 == SharedListTreeNil {
-			result = &types.ListInt{Cons0: f(chunk.Cons0), Cons1: types.SharedListIntNil}
+			result = types.Cons(f(chunk.Cons0), types.SharedListIntNil)
 		} else {
 			result = types.SharedListIntNil
 		}
@@ -981,9 +963,9 @@ func MapSizeChunkedRevMap(chunksAcc *ListListTree, chunk *ListTree) *types.ListI
 		}
 		var result *types.ListInt
 		if chunk != SharedListTreeNil && chunk.Cons1 != SharedListTreeNil && chunk.Cons1.Cons1 == SharedListTreeNil {
-			result = &types.ListInt{Cons0: redblack.Size(chunk.Cons0), Cons1: &types.ListInt{Cons0: redblack.Size(chunk.Cons1.Cons0), Cons1: types.SharedListIntNil}}
+			result = types.Cons(redblack.Size(chunk.Cons0), types.Cons(redblack.Size(chunk.Cons1.Cons0), types.SharedListIntNil))
 		} else if chunk != SharedListTreeNil && chunk.Cons1 == SharedListTreeNil {
-			result = &types.ListInt{Cons0: redblack.Size(chunk.Cons0), Cons1: types.SharedListIntNil}
+			result = types.Cons(redblack.Size(chunk.Cons0), types.SharedListIntNil)
 		} else {
 			result = types.SharedListIntNil
 		}

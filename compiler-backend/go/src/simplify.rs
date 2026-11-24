@@ -27,13 +27,15 @@ use crate::timing::timed;
 use smol_str::SmolStr;
 
 use self::arguments::ArgumentSpecializations;
-use self::coverage::{binds_only, reachable};
+use self::coverage::{binds_only, decided_guards, reachable};
 
 mod arguments;
 mod choice;
 mod coverage;
 mod effects;
+mod find;
 mod fold;
+mod lengths;
 mod object;
 mod record;
 mod reductions;
@@ -204,11 +206,69 @@ impl Simplifier<'_> {
             return None;
         }
         let function = self.functions[id.0 as usize].as_ref()?;
+        // A JSON reader carries Yoga.JSON's whole reader as its slow path: it is called, the
+        // way a Go program calls `json.Unmarshal`, wherever it is used.
+        if matches!(
+            function.body.kind,
+            ExpressionKind::Foreign { foreign: Foreign::Json(crate::foreign::JsonCodec::Read), .. }
+        ) {
+            return None;
+        }
         let once = self.uses[id.0 as usize] == 1;
         // A copy of a failure saves no work, only adds another place to fail.
         let small = self.sizes[id.0 as usize] <= INLINE_SIZE && !can_fail(&function.body);
         ((small || once) && !function.parameters.is_empty() || is_trivial(&function.body))
             .then_some(function)
+    }
+
+    /// A function that only looks a data type's constructor up in a table of text, as `show`
+    /// of an enumeration does, called more than once with an argument whose constructor
+    /// the call cannot tell, not even by choosing it: one function reads better than a copy of
+    /// the table at every call, and Go inlines it itself.
+    fn keeps_table_call(
+        &self,
+        id: FunctionId,
+        function: &Function,
+        arguments: &[Expression],
+    ) -> bool {
+        if self.uses[id.0 as usize] < 2 {
+            return false;
+        }
+        let ExpressionKind::Case { scrutinees, alternatives } = &function.body.kind else {
+            return false;
+        };
+        let [scrutinee] = scrutinees.as_slice() else { return false };
+        let ExpressionKind::Local(looked_up) = scrutinee.kind else { return false };
+        let Some(position) =
+            function.parameters.iter().position(|parameter| parameter.id == looked_up)
+        else {
+            return false;
+        };
+        let text = |expression: &Expression| {
+            matches!(expression.kind, ExpressionKind::Literal(Literal::String(_)))
+        };
+        let enumeration = match self.monotypes.get(scrutinee.monotype) {
+            Monotype::Data(data) => self.monotypes.enumeration_size(data).is_some(),
+            _ => false,
+        };
+        // Only text: a table of numbers or constructors, as `fromEnum`, is often looked up by
+        // code that inlining goes on to decide.
+        let table = alternatives.len() > 1
+            && enumeration
+            && alternatives.iter().all(|alternative| {
+                matches!(&alternative.body, Guarded::Unconditional(body) if text(body))
+            });
+        let unknown = |argument: &Expression| {
+            !matches!(
+                argument.kind,
+                ExpressionKind::Literal(_)
+                    | ExpressionKind::Construct { .. }
+                    | ExpressionKind::If { .. }
+                    | ExpressionKind::Case { .. }
+                    | ExpressionKind::Let { .. }
+            )
+        };
+        table && arguments.get(position).is_some_and(unknown)
     }
 
     fn saturated_callback(&mut self, argument: Expression) -> Expression {
@@ -611,9 +671,17 @@ impl Simplifier<'_> {
                         position: alternative.position,
                     })
                     .collect();
+                // Guards decided by folding may leave an alternative that shadows the rest.
+                let alternatives = reachable(alternatives);
                 if let [scrutinee] = scrutinees.as_slice()
                     && let Some(chosen) = self.three_way_case(scrutinee, &alternatives, monotype)
                 {
+                    return self.let_bindings(bindings, chosen);
+                }
+                if let Some(found) = self.found_element(&scrutinees, &alternatives, monotype) {
+                    return self.let_bindings(bindings, found);
+                }
+                if let Some(chosen) = self.enumeration_case(&scrutinees, &alternatives, monotype) {
                     return self.let_bindings(bindings, chosen);
                 }
                 let case = match alternatives.first() {
@@ -674,8 +742,8 @@ impl Simplifier<'_> {
     fn guarded(&mut self, guarded: Guarded) -> Guarded {
         match guarded {
             Guarded::Unconditional(body) => Guarded::Unconditional(self.expression(body)),
-            Guarded::Guards(branches) => Guarded::Guards(
-                branches
+            Guarded::Guards(branches) => {
+                let branches = branches
                     .into_iter()
                     .map(|branch| GuardedBranch {
                         guards: branch
@@ -692,8 +760,9 @@ impl Simplifier<'_> {
                             .collect(),
                         body: self.expression(branch.body),
                     })
-                    .collect(),
-            ),
+                    .collect();
+                decided_guards(branches)
+            }
         }
     }
 
@@ -731,8 +800,9 @@ impl Simplifier<'_> {
                 // A partial application inlines too: `beta` binds the given
                 // arguments outside the lambda over the missing parameters.
                 let inlined = self.inlinable(id).and_then(|function| {
-                    (!function.parameters.is_empty())
-                        .then(|| (function.parameters.clone(), function.body.clone()))
+                    (!function.parameters.is_empty()
+                        && !self.keeps_table_call(id, function, &arguments))
+                    .then(|| (function.parameters.clone(), function.body.clone()))
                 });
                 let Some((parameters, body)) = inlined else {
                     let arguments = match self.specialized_call(id, arguments, monotype) {
@@ -854,6 +924,7 @@ impl Simplifier<'_> {
         for binding in bindings.into_iter().rev() {
             // A cell helper's two uses are told from more.
             let helper = self.is_cell_helper(&binding.value);
+            body = self.count_lengths_at_source(&binding, body);
             let uses = occurrences_up_to(&body, binding.local.id, if helper { 3 } else { 2 });
             // A record of trivial fields, such as a rank-N value's
             // specializations, is copied so that its field accesses resolve.
@@ -1147,6 +1218,19 @@ fn chooses_on(expression: &Expression, local: LocalId) -> bool {
             found |= scrutinees
                 .iter()
                 .any(|scrutinee| matches!(scrutinee.kind, ExpressionKind::Local(id) if id == local))
+        }
+        // An enumeration's value compared with a constructor, as its derived `eq` is.
+        ExpressionKind::Foreign {
+            foreign:
+                Foreign::Operator(crate::foreign::Operator::Compare(
+                    crate::foreign::Comparison::Equal | crate::foreign::Comparison::NotEqual,
+                )),
+            arguments,
+        } => {
+            let is_local = |argument: &Expression| matches!(argument.kind, ExpressionKind::Local(id) if id == local);
+            let is_constructor = |argument: &Expression| matches!(&argument.kind, ExpressionKind::Construct { arguments, .. } if arguments.is_empty());
+            found |= matches!(arguments.as_slice(), [left, right]
+                if is_local(left) && is_constructor(right) || is_constructor(left) && is_local(right));
         }
         _ => {}
     });

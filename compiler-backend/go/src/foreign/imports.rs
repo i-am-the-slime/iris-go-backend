@@ -230,6 +230,8 @@ pub const INT_DIVIDE: Foreign = prim_with("IntDiv", 2, int32_parameters(&[0, 1])
 
 pub const INT_MODULO: Foreign = prim_with("IntMod", 2, int32_parameters(&[0, 1]));
 
+pub const SHOW_NUMBER: Foreign = prim("ShowNumber", 1);
+
 pub const ARRAY_APPEND: Foreign = array("Append", 2);
 
 pub const ARRAY_THAW: Foreign = thunk(GoPackage::Array, "Thaw", 1, PLAIN);
@@ -299,7 +301,7 @@ pub(super) const FOREIGN_IMPORTS: &[(&str, &str, Foreign)] = &[
     ("Data.Semigroup", "concatString", Foreign::Operator(Operator::StringAppend)),
     ("Data.Semigroup", "concatArray", ARRAY_APPEND),
     ("Data.Show", "showIntImpl", prim_with("ShowInt", 1, int32_parameters(&[0]))),
-    ("Data.Show", "showNumberImpl", prim("ShowNumber", 1)),
+    ("Data.Show", "showNumberImpl", SHOW_NUMBER),
     ("Data.Show", "showCharImpl", prim("ShowChar", 1)),
     ("Data.Show", "showStringImpl", prim("ShowString", 1)),
     ("Data.Show", "showArrayImpl", prim("ShowArray", 2)),

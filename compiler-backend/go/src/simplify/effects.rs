@@ -139,6 +139,7 @@ impl Simplifier<'_> {
             }
             Foreign::Ordering => self.ordering(arguments, monotype),
             Foreign::Operator(_) => self.operator(foreign, arguments, monotype),
+            Foreign::Int64 { .. } => self.int64_operation(foreign, arguments, monotype),
             // A string's code units are the chars it was built from, one by one, lone
             // surrogates included: the array is its own.
             foreign
@@ -170,7 +171,8 @@ impl Simplifier<'_> {
             }
             foreign
                 if foreign.calls(crate::foreign::INT_DIVIDE)
-                    || foreign.calls(crate::foreign::INT_MODULO) =>
+                    || foreign.calls(crate::foreign::INT_MODULO)
+                    || foreign.calls(crate::foreign::SHOW_NUMBER) =>
             {
                 self.operator(foreign, arguments, monotype)
             }

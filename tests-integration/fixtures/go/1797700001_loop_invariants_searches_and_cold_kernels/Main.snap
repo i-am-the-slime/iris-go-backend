@@ -1,0 +1,281 @@
+---
+source: tests-integration/src/fixtures.rs
+---
+// Data/Maybe/maybe.go
+package maybe
+
+type Int int64
+
+const NoInt Int = 1 << 32
+
+const TagNothing = 0
+
+const TagJust = 1
+
+type String struct {
+	Just string
+	Tag  uint8
+}
+
+var NoString = String{Tag: TagNothing}
+
+func JustString(just string) String {
+	return String{Tag: TagJust, Just: just}
+}
+
+// Data/Show/show.go
+package show
+
+import (
+	"github.com/i-am-the-slime/iris-go/prim"
+	"strconv"
+)
+
+func ShowInt(i int32) string {
+	return strconv.Itoa(int(i))
+}
+
+func ShowString(s string) string {
+	return prim.ShowString(s)
+}
+
+func AppendShowArrayString(buffer []byte, array []string) []byte {
+	buffer = append(buffer, "["...)
+	for index, element := range array {
+		if index > 0 {
+			buffer = append(buffer, ","...)
+		}
+		buffer = prim.AppendShowString(buffer, element)
+	}
+	buffer = append(buffer, "]"...)
+	return buffer
+}
+
+func AppendShowArrayInt(buffer []byte, array []int32) []byte {
+	buffer = append(buffer, "["...)
+	for index, element := range array {
+		if index > 0 {
+			buffer = append(buffer, ","...)
+		}
+		buffer = strconv.AppendInt(buffer, int64(element), 10)
+	}
+	buffer = append(buffer, "]"...)
+	return buffer
+}
+
+// main.go
+package main
+
+import (
+	"fixture/Data/Maybe"
+	"fixture/Data/Show"
+	"fixture/shared"
+	arraypkg "github.com/i-am-the-slime/iris-go/array"
+	"github.com/i-am-the-slime/iris-go/console"
+	"github.com/i-am-the-slime/iris-go/prim"
+	"strconv"
+	"strings"
+)
+
+var main_ = initializeMain_()
+
+func initializeMain_() []string {
+	numbers := arraypkg.RangeInt32(0, 40)
+	found := maybe.NoInt
+	for _, value := range numbers {
+		n := value + 1
+		if n&1 == 0 {
+			found = maybe.Int(n)
+			break
+		}
+	}
+	var result string
+	if found != maybe.NoInt {
+		result = "(Just " + strconv.Itoa(int(int32(found))) + ")"
+	} else {
+		result = "Nothing"
+	}
+	found2 := maybe.NoString
+	for _, value := range numbers {
+		value2 := strconv.Itoa(int(value))
+		word := value2 + "!"
+		if prim.CompareString(word, "w5") > 0 {
+			found2 = maybe.JustString(word)
+			break
+		}
+	}
+	var result2 string
+	switch found2.Tag {
+	case maybe.TagJust:
+		result2 = "(Just " + prim.ShowString(found2.Just) + ")"
+	default: // maybe.TagNothing
+		result2 = "Nothing"
+	}
+	accumulator := 0.0
+	for x := int32(1); x < 42; x++ {
+		number := float64(x) * 0.5
+		accumulator += number
+	}
+	first := prim.ShowNumber(accumulator / float64(41))
+	mapped := make([]int32, len(numbers))
+	for index, x := range numbers {
+		var result3 int32
+		if x < 2 {
+			result3 = 2
+		} else if x > 40 {
+			result3 = 40
+		} else {
+			result3 = x
+		}
+		mapped[index] = result3
+	}
+	first2 := string(show.AppendShowArrayInt(nil, mapped))
+	bound := []string{}
+	array := []shared.Rule{{Name: "positive", Check: func(n int32) bool {
+		return n > 0
+	}}, {Name: "small", Check: func(n int32) bool {
+		return n < 3
+	}}}
+	for n := int32(0); n < 5; n++ {
+		for _, rule := range array {
+			if rule.Check(n) {
+				bound = append(bound, rule.Name)
+			}
+		}
+	}
+	first3 := string(show.AppendShowArrayString(nil, arraypkg.Bounded(bound)))
+	array2 := [][]int32{{1}, {2}}
+	var count int32 = 0
+	for range array2 {
+		for value := int32(1); value < 4; value++ {
+			count += 1
+		}
+	}
+	first4 := strconv.Itoa(int(count))
+	array3 := []int32{1, 2}
+	built := []string{result, result2, first, first2, first3, first4}
+	for _, round := range array3 {
+		built = append(built, []string{string(show.AppendShowArrayInt(nil, mapLanes(numbers, round))), string(show.AppendShowArrayInt(nil, mapLanes2(numbers)))}...)
+	}
+	return built
+}
+
+func main() {
+	console.Print("[" + strings.Join(main_, " ") + "]")
+}
+
+// main_neon.go
+//go:build goexperiment.simd && arm64
+
+package main
+
+import "simd/archsimd"
+
+func mapLanes(xs []int32, round int32) []int32 {
+	roundLanes := archsimd.BroadcastInt32x4(round)
+	c0 := archsimd.BroadcastInt32x4(2)
+	c1 := archsimd.BroadcastInt32x4(40)
+	out := make([]int32, len(xs))
+	const step = 4
+	i := 0
+	for ; i < len(xs)-step+1; i += step {
+		x := archsimd.LoadInt32x4(xs[i : i+step])
+		t0 := x.Mul(roundLanes)
+		c0.IfElse(t0.Less(c0), t0.Min(c1)).Store(out[i : i+step])
+	}
+	if i < len(xs) {
+		x, _ := archsimd.LoadInt32x4Part(xs[i:])
+		t0 := x.Mul(roundLanes)
+		c0.IfElse(t0.Less(c0), t0.Min(c1)).StorePart(out[i:])
+	}
+	return out
+}
+
+func mapLanes2(xs []int32) []int32 {
+	c0 := archsimd.BroadcastInt32x4(7)
+	out := make([]int32, len(xs))
+	const step = 4
+	i := 0
+	for ; i < len(xs)-step+1; i += step {
+		x := archsimd.LoadInt32x4(xs[i : i+step])
+		x.Max(c0).Store(out[i : i+step])
+	}
+	if i < len(xs) {
+		x, _ := archsimd.LoadInt32x4Part(xs[i:])
+		x.Max(c0).StorePart(out[i:])
+	}
+	return out
+}
+
+// main_scalar.go
+//go:build !(goexperiment.simd && (arm64 || wasm))
+
+package main
+
+func mapLanes(xs []int32, round int32) []int32 {
+	out := make([]int32, len(xs))
+	for i, x := range xs {
+		t0 := x * round
+		out[i] = min(max(t0, 2), 40)
+	}
+	return out
+}
+
+func mapLanes2(xs []int32) []int32 {
+	out := make([]int32, len(xs))
+	for i, x := range xs {
+		out[i] = max(x, 7)
+	}
+	return out
+}
+
+// main_vector.go
+//go:build goexperiment.simd && wasm
+
+package main
+
+import "simd"
+
+func mapLanes(xs []int32, round int32) []int32 {
+	roundLanes := simd.BroadcastInt32s(round)
+	c0 := simd.BroadcastInt32s(2)
+	c1 := simd.BroadcastInt32s(40)
+	out := make([]int32, len(xs))
+	step := simd.Int32s{}.Len()
+	i := 0
+	for ; i < len(xs)-step+1; i += step {
+		x := simd.LoadInt32s(xs[i : i+step])
+		t0 := x.Mul(roundLanes)
+		c0.IfElse(t0.Less(c0), t0.Min(c1)).Store(out[i : i+step])
+	}
+	if i < len(xs) {
+		x, _ := simd.LoadInt32sPart(xs[i:])
+		t0 := x.Mul(roundLanes)
+		c0.IfElse(t0.Less(c0), t0.Min(c1)).StorePart(out[i:])
+	}
+	return out
+}
+
+func mapLanes2(xs []int32) []int32 {
+	c0 := simd.BroadcastInt32s(7)
+	out := make([]int32, len(xs))
+	step := simd.Int32s{}.Len()
+	i := 0
+	for ; i < len(xs)-step+1; i += step {
+		x := simd.LoadInt32s(xs[i : i+step])
+		x.Max(c0).Store(out[i : i+step])
+	}
+	if i < len(xs) {
+		x, _ := simd.LoadInt32sPart(xs[i:])
+		x.Max(c0).StorePart(out[i:])
+	}
+	return out
+}
+
+// shared/shared.go
+package shared
+
+type Rule struct {
+	Check func(int32) bool
+	Name  string
+}

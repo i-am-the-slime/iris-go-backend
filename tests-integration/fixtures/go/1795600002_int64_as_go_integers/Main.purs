@@ -55,12 +55,16 @@ parsed = UInt64.fromString
 converted :: Int64 -> UInt64
 converted = Int64.toUnsigned
 
+-- | A program runs its `main` once, where vectors would not pay; each report may run often.
 main :: Array String
-main = do
+main = [ unit ] >>= report
+
+report :: Unit -> Array String
+report _ = do
   let xs = map Int64.fromInt [ 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33 ]
   let us = map UInt64.unsafeFromInt [ 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33 ]
   [ show (total xs), show (totalUnsigned us), show (largest xs), show (offsets one xs), show (product xs)
-  , show (polynomial (Int64.fromInt 7)), show (mixed (Int64.fromInt 5) (Int64.fromInt 3)), show (wrapped zero)
-  , show (ordered one (Int64.fromInt 2)), show wrapsAtCompileTime, show (quotients (Int64.fromInt (-7)) (Int64.fromInt 2))
+  , show (map polynomial xs), show (map (\x -> mixed x x) xs), show (wrapped zero)
+  , show (map (ordered one) xs), show wrapsAtCompileTime, show (map (quotients (Int64.fromInt (-7))) xs)
   , show (parsed "18446744073709551615"), show (converted (negate one))
   ]

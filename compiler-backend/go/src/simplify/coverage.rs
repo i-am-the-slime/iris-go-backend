@@ -1,11 +1,11 @@
 use super::{Simplifier, substitute_in_place};
 use crate::monomorphic::traversal::for_each_alternative_child;
 use crate::monomorphic::{
-    Alternative, Binding, Expression, ExpressionKind, Guarded, Literal, Local, LocalId, Pattern,
-    PatternKind,
+    Alternative, Binding, Expression, ExpressionKind, Guard, Guarded, GuardedBranch, Literal,
+    Local, LocalId, Pattern, PatternKind,
 };
 use crate::monotype::Monotypes;
-use crate::purity::size;
+use crate::purity::{can_fail, size};
 
 impl Simplifier<'_> {
     pub(super) fn eliminate_columns(
@@ -92,6 +92,55 @@ pub(super) fn reachable(alternatives: Vec<Alternative>) -> Vec<Alternative> {
         }
     }
     kept
+}
+
+/// Guards whose conditions folded to literals decided: a `true` condition
+/// always holds, a branch with a `false` one is never taken, and the branches
+/// after one that always holds are never reached. Guards that cannot fail
+/// may be skipped; a branch whose guards might fail first is kept.
+pub(super) fn decided_guards(branches: Vec<GuardedBranch>) -> Guarded {
+    let mut kept: Vec<GuardedBranch> = Vec::with_capacity(branches.len());
+    let mut dropped = None;
+    for mut branch in branches {
+        let never_taken =
+            branch.guards.iter().position(|guard| literal_guard(guard) == Some(false));
+        if let Some(position) = never_taken
+            && branch.guards[..position].iter().all(|guard| !can_fail(guard_value(guard)))
+        {
+            dropped = Some(branch);
+            continue;
+        }
+        branch.guards.retain(|guard| literal_guard(guard) != Some(true));
+        let always_taken = branch.guards.is_empty();
+        kept.push(branch);
+        if always_taken {
+            break;
+        }
+    }
+    match kept.as_slice() {
+        [only] if only.guards.is_empty() => {
+            Guarded::Unconditional(kept.pop().expect("one branch").body)
+        }
+        // An alternative keeps a branch, so that it still reads as one that never matches.
+        [] => Guarded::Guards(dropped.into_iter().collect()),
+        _ => Guarded::Guards(kept),
+    }
+}
+
+fn literal_guard(guard: &Guard) -> Option<bool> {
+    match guard {
+        Guard::Boolean(Expression {
+            kind: ExpressionKind::Literal(Literal::Boolean(value)),
+            ..
+        }) => Some(*value),
+        _ => None,
+    }
+}
+
+fn guard_value(guard: &Guard) -> &Expression {
+    match guard {
+        Guard::Boolean(value) | Guard::Pattern { value, .. } => value,
+    }
 }
 
 fn irrefutable(pattern: &Pattern) -> bool {

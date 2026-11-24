@@ -18,9 +18,17 @@ type Step struct {
 }
 
 const (
-	StepStep = iota
+	StepStep2 = iota
 	StepDone
 )
+
+func Done(done int32) Step {
+	return Step{Tag: StepDone, Done: done}
+}
+
+func StepStep(step0 int32, step1 func(int32) Step) Step {
+	return Step{Tag: StepStep2, Step0: step0, Step1: step1}
+}
 
 var main_ = initializeMain_()
 
@@ -32,7 +40,7 @@ func run(step Step) int32 {
 	switch step.Tag {
 	case StepDone:
 		return step.Done
-	default: // StepStep
+	default: // StepStep2
 		n := step.Step0
 		return n + run(step.Step1(n-1))
 	}
@@ -41,9 +49,9 @@ func run(step Step) int32 {
 func countdown(n int32) Step {
 	switch n {
 	case 0:
-		return Step{Tag: StepDone, Done: 0}
+		return Done(0)
 	default:
-		return Step{Tag: StepStep, Step0: n, Step1: countdown}
+		return StepStep(n, countdown)
 	}
 }
 

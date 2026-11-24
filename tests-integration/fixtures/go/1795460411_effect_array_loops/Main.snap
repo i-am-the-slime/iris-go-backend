@@ -28,6 +28,22 @@ const (
 	EitherErrorArrayIntRight
 )
 
+func LeftEitherErrorUnit(left exception.Error) EitherErrorUnit {
+	return EitherErrorUnit{Tag: EitherErrorUnitLeft, Left: left}
+}
+
+func RightEitherErrorUnit(right struct{}) EitherErrorUnit {
+	return EitherErrorUnit{Tag: EitherErrorUnitRight, Right: right}
+}
+
+func LeftEitherErrorArrayInt(left exception.Error) EitherErrorArrayInt {
+	return EitherErrorArrayInt{Tag: EitherErrorArrayIntLeft, Left: left}
+}
+
+func RightEitherErrorArrayInt(right []int32) EitherErrorArrayInt {
+	return EitherErrorArrayInt{Tag: EitherErrorArrayIntRight, Right: right}
+}
+
 // Data/Maybe/maybe.go
 package maybe
 
@@ -227,8 +243,9 @@ func traversals() {
 		effect()
 	}
 	Journal_ffi.Log("nested")
+	inners := []string{"a", "b"}
 	for _, outer := range []int32{1, 2} {
-		for _, inner := range []string{"a", "b"} {
+		for _, inner := range inners {
 			Journal_ffi.Log(strconv.Itoa(int(outer)) + inner)
 		}
 	}
@@ -248,7 +265,7 @@ func failures() {
 	Journal_ffi.Log("throws midway")
 	visited := []int32{}
 	outcome := direct.CatchException(func(x exception.Error) either.EitherErrorUnit {
-		return either.EitherErrorUnit{Tag: either.EitherErrorUnitLeft, Left: x}
+		return either.LeftEitherErrorUnit(x)
 	}, func() either.EitherErrorUnit {
 		for _, i := range []int32{1, 2, 3, 4} {
 			s := visited
@@ -257,7 +274,7 @@ func failures() {
 				effectexception.ThrowUnit("three")
 			}
 		}
-		return either.EitherErrorUnit{Tag: either.EitherErrorUnitRight, Right: struct{}{}}
+		return either.RightEitherErrorUnit(struct{}{})
 	})
 	seen := visited
 	var text []byte
@@ -272,7 +289,7 @@ func failures() {
 	Journal_ffi.Log(string(text))
 	traversed := []int32{}
 	traverseOutcome := direct.CatchException(func(x exception.Error) either.EitherErrorArrayInt {
-		return either.EitherErrorArrayInt{Tag: either.EitherErrorArrayIntLeft, Left: x}
+		return either.LeftEitherErrorArrayInt(x)
 	}, func() either.EitherErrorArrayInt {
 		array := []int32{1, 2, 3}
 		collected := make([]int32, len(array))
@@ -284,7 +301,7 @@ func failures() {
 			}
 			collected[index] = i
 		}
-		return either.EitherErrorArrayInt{Tag: either.EitherErrorArrayIntRight, Right: collected}
+		return either.RightEitherErrorArrayInt(collected)
 	})
 	traversedSeen := traversed
 	var text2 []byte

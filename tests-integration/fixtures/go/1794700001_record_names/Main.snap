@@ -59,7 +59,7 @@ var main_ = initializeMain_()
 func initializeMain_() string {
 	var text []byte
 	array := []maybe.MainTiming{maybe.JustMainTiming(shared.MainTiming{Start: 2.0, End: 3.0}), maybe.NoMainTiming}
-	var accumulator float64 = 0.0
+	accumulator := 0.0
 	for timingIndex := range array {
 		var result float64
 		switch array[timingIndex].Tag {
@@ -72,17 +72,17 @@ func initializeMain_() string {
 		accumulator += result
 	}
 	array2 := []shared.Adjustment{{Factor: 3.0, Offset: 1.0}}
-	var accumulator2 float64 = 2.0
+	accumulator2 := 2.0
 	for adjustmentIndex := range array2 {
 		accumulator2 = accumulator2*array2[adjustmentIndex].Factor + array2[adjustmentIndex].Offset
 	}
 	array3 := []shared.Margin{{Top: 1.0, Bottom: 2.0}}
-	var accumulator3 float64 = 0.0
+	accumulator3 := 0.0
 	for marginIndex := range array3 {
 		accumulator3 = accumulator3 + array3[marginIndex].Top + array3[marginIndex].Bottom
 	}
 	array4 := []shared.ShapesTiming{{Width: 2.0, Height: 3.0, Label: "box"}}
-	var accumulator4 float64 = 0.0
+	accumulator4 := 0.0
 	for shapeIndex := range array4 {
 		accumulator4 += array4[shapeIndex].Width * array4[shapeIndex].Height
 	}

@@ -59,6 +59,7 @@ func main() {
 	n2 := n + 23
 	n3 := n + 23
 	mainLog(output, string(show.AppendShowArrayInt(nil, []int32{mainGo(n2, 0, 0), mainGo2(n3, 0, 0)})))
+	step, count := array.RangeSteps(1, n)
 	for _, i := range inputs.Divisors {
 		var result bool
 		if i == 0 {
@@ -94,7 +95,6 @@ func main() {
 			result4 = prim.IntDiv(n, i)
 		}
 		mainLog(output, result2+" "+strconv.Itoa(int(result3))+" "+strconv.Itoa(int(result4)))
-		step, count := array.RangeSteps(1, n)
 		kept := []int32{}
 		for index := range count {
 			n4 := 1 + int32(index)*step
@@ -112,10 +112,9 @@ func main() {
 			result5 = prim.IntMod(n, i) == 1
 		}
 		mainLog(output, string(show.AppendShowArrayBoolean(nil, []bool{n >= 0 && (i > 0 && prim.IntDiv(n, i) > 3), result5})))
-		step2, count2 := array.RangeSteps(1, n)
 		kept2 := []int32{}
-		for index := range count2 {
-			n4 := 1 + int32(index)*step2
+		for index := range count {
+			n4 := 1 + int32(index)*step
 			if i > 0 && (prim.IntMod(n4, i) == 0 && prim.IntDiv(n4, i) > 1) {
 				kept2 = append(kept2, n4)
 			}

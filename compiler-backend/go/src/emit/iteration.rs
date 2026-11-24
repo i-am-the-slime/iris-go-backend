@@ -61,7 +61,7 @@ where
             Iteration::FoldLeft | Iteration::FoldRight | Iteration::MapWithIndex => (0, 2),
             Iteration::Map | Iteration::Filter | Iteration::Any | Iteration::All => (0, 1),
             Iteration::Bind => (1, 1),
-            Iteration::FindIndex | Iteration::FindLastIndex => (2, 1),
+            Iteration::FindIndex | Iteration::FindLastIndex | Iteration::Find => (2, 1),
             Iteration::ZipWith => return Ok(None),
         };
         let folds_unit = matches!(iteration, Iteration::FoldLeft | Iteration::FoldRight)
@@ -90,6 +90,7 @@ where
             Iteration::FindIndex | Iteration::FindLastIndex => {
                 self.find_index(iteration, callback, &arguments[3], monotype, out)?
             }
+            Iteration::Find => self.find_element(callback, &arguments[3], monotype, out)?,
             Iteration::ZipWith => unreachable!("invariant violated: zipWith has no scalar loop"),
         };
         Ok(Some(value))
@@ -693,6 +694,54 @@ where
         self.tail_loop = saved;
         out.push(outcome?);
         Ok(identifier_expression(&found))
+    }
+
+    fn find_element(
+        &mut self,
+        callback: Callback<'_>,
+        array: &Expression,
+        monotype: MonotypeId,
+        out: &mut Vec<GoStatement>,
+    ) -> GoResult<GoExpression> {
+        let demand = Demand { breaks: true, ..Demand::FORWARD };
+        let need = Need::Variable { callback: &callback, position: 0 };
+        let pipeline = self.pipeline(array, demand, need, out)?;
+        let (data, nothing) = self.constructor_named(monotype, "Nothing")?;
+        let (_, just) = self.constructor_named(monotype, "Just")?;
+        let found = self.temporary("found");
+        let absent = self.construct(&data, nothing, vec![])?;
+        out.push(GoStatement::Define { names: vec![found.clone()], values: vec![absent] });
+        let saved = self.tail_loop.take();
+        let outcome = self.find_element_loop(&callback, pipeline, (&data, just), &found);
+        self.tail_loop = saved;
+        out.push(outcome?);
+        Ok(identifier_expression(&found))
+    }
+
+    fn find_element_loop(
+        &mut self,
+        callback: &Callback<'_>,
+        pipeline: Pipeline<'_>,
+        (data, just): (&DataType, usize),
+        found: &str,
+    ) -> GoResult<GoStatement> {
+        let need = Need::Variable { callback, position: 0 };
+        let mut opened = self.open(pipeline, need, None)?;
+        let element = opened.element.clone();
+        let condition = self.callback_value(callback, vec![element.clone()], opened.body.body())?;
+        let present = self.construct(data, just, vec![element])?;
+        opened.body.body().push(GoStatement::If {
+            condition,
+            then: vec![
+                GoStatement::Assign {
+                    targets: vec![identifier_expression(found)],
+                    values: vec![present],
+                },
+                GoStatement::Break,
+            ],
+            otherwise: vec![],
+        });
+        Ok(self.close(opened.body))
     }
 
     fn find_loop(

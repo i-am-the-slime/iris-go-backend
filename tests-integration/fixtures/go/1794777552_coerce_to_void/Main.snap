@@ -15,6 +15,10 @@ const (
 	EitherStringValRight
 )
 
+func Left(left string) EitherStringVal {
+	return EitherStringVal{Tag: EitherStringValLeft, Left: left}
+}
+
 // Data/Void/void.go
 package void
 
@@ -33,7 +37,7 @@ import (
 var main_ = initializeMain_()
 
 func initializeMain_() []string {
-	array := []either.EitherStringVal{{Tag: either.EitherStringValLeft, Left: "no"}, {Tag: either.EitherStringValLeft, Left: "void"}}
+	array := []either.EitherStringVal{either.Left("no"), either.Left("void")}
 	built := make([]string, len(array)+1)
 	built[0] = "2"
 	for index, element := range array {

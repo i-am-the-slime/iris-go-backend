@@ -36,6 +36,18 @@ type Chain struct {
 
 var sharedChainEnd = &Chain{}
 
+func Circle(field0 float64) Shape {
+	return Shape{Tag: ShapeCircle, Field0: field0}
+}
+
+func Square(field0 float64) Shape {
+	return Shape{Tag: ShapeSquare, Field0: field0}
+}
+
+func Link(link0 int32, link1 *Chain) *Chain {
+	return &Chain{Link0: link0, Link1: link1}
+}
+
 var main_ = initializeMain_()
 
 func initializeMain_() []bool {
@@ -51,7 +63,7 @@ func initializeMain_() []bool {
 		return n + 2
 	}), refeq.SameFunc(func() {
 	}, func() {
-	}), refeq.SameSlice([]int32{1}, []int32{1}), counter == counter, shared.XY{X: 1, Y: 2.0} == shared.XY{X: 1, Y: 3.0}, left.Name == right.Name && refeq.SameFunc(left.Run, right.Run), Shape{Tag: ShapeCircle, Field0: 1.0} == Shape{Tag: ShapeSquare, Field0: 1.0}, &Chain{Link0: 1, Link1: sharedChainEnd} == sharedChainEnd}
+	}), refeq.SameSlice([]int32{1}, []int32{1}), counter == counter, shared.XY{X: 1, Y: 2.0} == shared.XY{X: 1, Y: 3.0}, left.Name == right.Name && refeq.SameFunc(left.Run, right.Run), Circle(1.0) == Square(1.0), Link(1, sharedChainEnd) == sharedChainEnd}
 }
 
 var counter = initializeCounter()

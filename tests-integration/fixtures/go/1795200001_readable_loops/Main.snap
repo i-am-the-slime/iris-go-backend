@@ -80,36 +80,26 @@ func initializeMain_() []string {
 		result = "empty"
 	}
 	n := opaque(7)
-	n2 := opaque(12)
-	var result2 Light
+	var left Light
 	if n > 10 {
-		result2 = LightRed
+		left = LightRed
 	} else if n > 5 {
-		result2 = LightAmber
+		left = LightAmber
 	} else {
-		result2 = LightGreen
+		left = LightGreen
 	}
-	var result3 Light
+	n2 := opaque(12)
+	var right Light
 	if n2 > 10 {
-		result3 = LightRed
+		right = LightRed
 	} else if n2 > 5 {
-		result3 = LightAmber
+		right = LightAmber
 	} else {
-		result3 = LightGreen
-	}
-	var result4 string
-	if result2 == LightRed && result3 == LightRed {
-		result4 = "true"
-	} else if result2 == LightAmber && result3 == LightAmber {
-		result4 = "true"
-	} else if result2 == LightGreen && result3 == LightGreen {
-		result4 = "true"
-	} else {
-		result4 = "false"
+		right = LightGreen
 	}
 	n3 := opaque(3)
-	result5 := !(n3 > 10) && n3 <= 5
-	return []string{strconv.Itoa(int(accumulator)), string(show.AppendShowArrayString(nil, mapped)), accumulator2, result, result4, strconv.FormatBool(result5)}
+	result2 := !(n3 > 10) && n3 <= 5
+	return []string{strconv.Itoa(int(accumulator)), string(show.AppendShowArrayString(nil, mapped)), accumulator2, result, strconv.FormatBool(left == right), strconv.FormatBool(result2)}
 }
 
 func opaque(x int32) int32 {

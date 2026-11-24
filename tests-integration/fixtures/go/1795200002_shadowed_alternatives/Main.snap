@@ -31,6 +31,14 @@ const (
 	EitherIntBVRight
 )
 
+func Left(left maybe.Boolean) EitherMaybeBooleanInt {
+	return EitherMaybeBooleanInt{Tag: EitherMaybeBooleanIntLeft, Left: left}
+}
+
+func Right(right ordering.BV) EitherIntBV {
+	return EitherIntBV{Tag: EitherIntBVRight, Right: right}
+}
+
 // Data/Maybe/maybe.go
 package maybe
 
@@ -69,7 +77,7 @@ import (
 )
 
 func main_() int32 {
-	scrutinee := either.EitherMaybeBooleanInt{Tag: either.EitherMaybeBooleanIntLeft, Left: maybe.NoBoolean}
+	scrutinee := either.Left(maybe.NoBoolean)
 	var result bool
 	switch scrutinee.Tag {
 	case either.EitherMaybeBooleanIntLeft:
@@ -87,7 +95,7 @@ func main_() int32 {
 	} else {
 		first = 0
 	}
-	scrutinee2 := either.EitherIntBV{Tag: either.EitherIntBVRight, Right: ordering.BV{B: ordering.OrderingEQ, V: 1000}}
+	scrutinee2 := either.Right(ordering.BV{B: ordering.OrderingEQ, V: 1000})
 	var result2 int32
 	switch scrutinee2.Tag {
 	case either.EitherIntBVRight:

@@ -371,9 +371,13 @@ where
             ExpressionKind::Foreign { foreign, arguments } if is_shown_array(foreign) => {
                 matches!(arguments.as_slice(), [show, _] if self.writes_elements(show))
             }
+            // A function that returns one of its constants hands back text it never builds:
+            // appending what it returns copies as much as writing it would.
             ExpressionKind::Apply { function, arguments } => match function.kind {
                 ExpressionKind::Function(id) => {
-                    self.program.function(id).parameters.len() == arguments.len()
+                    let function = self.program.function(id);
+                    function.parameters.len() == arguments.len()
+                        && !only_constants(&function.body)
                         && self.is_writable(id)
                 }
                 _ => false,

@@ -84,6 +84,18 @@ func JustShape(just Shape) MaybeShape {
 
 var NoShape = MaybeShape{Tag: maybe.TagNothing}
 
+func Node(node0 *Tree, node1 int32, node2 *Tree) *Tree {
+	return &Tree{Node0: node0, Node1: node1, Node2: node2}
+}
+
+func Circle(circle int32) Shape {
+	return Shape{Tag: ShapeCircle, Circle: circle}
+}
+
+func Square(square0 int32, square1 int32) Shape {
+	return Shape{Tag: ShapeSquare, Square0: square0, Square1: square1}
+}
+
 var main_ = initializeMain_()
 
 func initializeMain_() []string {
@@ -164,7 +176,7 @@ func initializeMain_() []string {
 	x7 := opaque(4)
 	var result10 string
 	if x7 > 0 {
-		result10 = "(Just " + strconv.Itoa(int(sumTree(&Tree{Node0: sharedTreeLeaf, Node1: x7, Node2: sharedTreeLeaf}))) + ")"
+		result10 = "(Just " + strconv.Itoa(int(sumTree(Node(sharedTreeLeaf, x7, sharedTreeLeaf)))) + ")"
 	} else {
 		result10 = "Nothing"
 	}
@@ -199,17 +211,17 @@ func initializeMain_() []string {
 	x12 := opaque(-7)
 	var result15 MaybeShape
 	if x11 > 0 {
-		result15 = JustShape(Shape{Tag: ShapeCircle, Circle: x11})
+		result15 = JustShape(Circle(x11))
 	} else if x11 < -5 {
-		result15 = JustShape(Shape{Tag: ShapeSquare, Square0: x11, Square1: x11})
+		result15 = JustShape(Square(x11, x11))
 	} else {
 		result15 = NoShape
 	}
 	var result16 MaybeShape
 	if x12 > 0 {
-		result16 = JustShape(Shape{Tag: ShapeCircle, Circle: x12})
+		result16 = JustShape(Circle(x12))
 	} else if x12 < -5 {
-		result16 = JustShape(Shape{Tag: ShapeSquare, Square0: x12, Square1: x12})
+		result16 = JustShape(Square(x12, x12))
 	} else {
 		result16 = NoShape
 	}
@@ -235,17 +247,17 @@ func initializeMain_() []string {
 	x14 := opaque(-7)
 	var result18 MaybeShape
 	if x13 > 0 {
-		result18 = JustShape(Shape{Tag: ShapeCircle, Circle: x13})
+		result18 = JustShape(Circle(x13))
 	} else if x13 < -5 {
-		result18 = JustShape(Shape{Tag: ShapeSquare, Square0: x13, Square1: x13})
+		result18 = JustShape(Square(x13, x13))
 	} else {
 		result18 = NoShape
 	}
 	var result19 MaybeShape
 	if x14 > 0 {
-		result19 = JustShape(Shape{Tag: ShapeCircle, Circle: x14})
+		result19 = JustShape(Circle(x14))
 	} else if x14 < -5 {
-		result19 = JustShape(Shape{Tag: ShapeSquare, Square0: x14, Square1: x14})
+		result19 = JustShape(Square(x14, x14))
 	} else {
 		result19 = NoShape
 	}
@@ -309,7 +321,7 @@ func initializeMain_() []string {
 	x16 := opaque(1)
 	var result24 *Tree
 	if x16 > 0 {
-		result24 = &Tree{Node0: sharedTreeLeaf, Node1: x16, Node2: sharedTreeLeaf}
+		result24 = Node(sharedTreeLeaf, x16, sharedTreeLeaf)
 	} else {
 		result24 = nil
 	}

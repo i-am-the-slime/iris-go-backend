@@ -32,7 +32,7 @@ var missing = initializeMissing()
 
 func initializeMissing() maybe.Int {
 	var result maybe.Int
-	if 0 < int32(len([]any{})) {
+	if len([]any{}) > 0 {
 		result = maybe.NoInt
 	} else {
 		result = maybe.NoInt

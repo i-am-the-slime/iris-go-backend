@@ -178,7 +178,9 @@ where
             });
         }
         for ((name, _), mut value) in constructor_layout.fields.iter().zip(values) {
-            if matches!(&value, GoExpression::Composite { type_: GoType::EmptyStruct, .. }) {
+            if matches!(&value, GoExpression::Composite { type_: GoType::EmptyStruct, .. })
+                || holds_field(out, cell, name, &value)
+            {
                 continue;
             }
             if !independent_of(&mut value, cell) {
@@ -225,6 +227,48 @@ const UNIQUE_BIT_SOURCE: &str = "func {name}(owned bool, bit uint8) uint8 {
 \treturn 0
 }
 ";
+
+/// Whether the value is a local that the statements before the store define as the cell's own
+/// field, `x := cell.Name`, with only definitions that call nothing in between: storing it back
+/// would change nothing.
+fn holds_field(before: &[GoStatement], cell: &str, name: &str, value: &GoExpression) -> bool {
+    let GoExpression::Identifier(local) = value else { return false };
+    for statement in before.iter().rev() {
+        match statement {
+            GoStatement::Line(_) => {}
+            GoStatement::Define { names, values } if names.len() == values.len() => {
+                let mut values = values.clone();
+                if let Some(position) = names.iter().position(|defined| defined == local) {
+                    return matches!(&values[position], GoExpression::Field { value, name: read }
+                        if read == name
+                            && matches!(value.as_ref(), GoExpression::Identifier(read_cell) if read_cell == cell));
+                }
+                if !values.iter_mut().all(calls_nothing) {
+                    return false;
+                }
+            }
+            _ => return false,
+        }
+    }
+    false
+}
+
+fn calls_nothing(value: &mut GoExpression) -> bool {
+    struct Search {
+        calls: bool,
+    }
+    impl Walk for Search {
+        fn expression(&mut self, value: &mut GoExpression) {
+            match value {
+                GoExpression::Call { .. } | GoExpression::Function { .. } => self.calls = true,
+                _ => go_traversal::expression(self, value),
+            }
+        }
+    }
+    let mut search = Search { calls: false };
+    search.expression(value);
+    !search.calls
+}
 
 /// Whether storing into the cell's fields before computing the value leaves the value unchanged:
 /// it neither names the cell nor calls anything that might reach it.

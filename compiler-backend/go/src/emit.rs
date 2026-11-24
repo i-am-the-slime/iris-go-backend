@@ -24,6 +24,7 @@ mod deduplicate;
 mod diverging;
 mod divisions;
 mod effects;
+mod equality;
 mod existential;
 mod field_reads;
 mod foreign_data;
@@ -39,6 +40,7 @@ mod inspection;
 mod instantiations;
 mod int64;
 mod intervals;
+mod invariants;
 mod iteration;
 mod joins;
 mod json;
@@ -62,6 +64,7 @@ mod reference_equality;
 mod references;
 mod reuse;
 mod scalars;
+mod shorthands;
 mod sorting;
 mod standard;
 mod strings;
@@ -72,6 +75,7 @@ mod unzip;
 mod updates;
 mod vector;
 mod views;
+mod wrappers;
 
 use std::collections::BTreeSet;
 use std::sync::Arc;
@@ -138,6 +142,7 @@ where
     emitter.materialized = reused.materialized;
     emitter.candidates = reused.candidates;
     emitter.closure_sets = closure_sets;
+    emitter.vector_kernels = vector::Kernels::new(program, emitter.monotypes);
     emitter.assign_function_names();
     let groups = timed("groups", || {
         groups::tail_call_groups(program, emitter.monotypes, &emitter.lazy_constants)
@@ -182,13 +187,15 @@ where
         await_fibers(&mut declarations, await_, every_line);
     }
     let lines_aside = every_line.then(|| lines::set_aside(&mut declarations));
+    timed("wrappers", || wrappers::inline_wrappers(&mut declarations));
+    let structs = scalars::structs_of(&emitter.type_declarations);
+    timed("equality", || equality::compare_structs_whole(&mut declarations, &structs));
     timed("references", || references::promote_references(&mut declarations));
     timed("composites", || composites::take_composites_apart(&mut declarations));
     timed("immediate", || immediate::reduce_immediate_calls(&mut declarations));
     timed("conditions", || conditions::assign_conditions(&mut declarations));
     timed("aliases", || aliases::substitute_aliases(&mut declarations));
     timed("updates", || updates::update_in_place(&mut declarations));
-    let structs = scalars::structs_of(&emitter.type_declarations);
     timed("scalars", || scalars::split_struct_locals(&mut declarations, &structs));
     timed("stores", || scalars::store_fields_in_place(&mut declarations, &structs));
     timed("aliases", || aliases::substitute_aliases(&mut declarations));
@@ -220,6 +227,7 @@ where
     timed("guards", || guards::guard_accesses_together(&mut declarations, &effects));
     timed("intervals", || intervals::prove_bounds(&mut declarations, &effects));
     timed("divisions", || divisions::reduce_constant_divisions(&mut declarations));
+    timed("shorthands", || shorthands::use_shorthands(&mut declarations));
     let taken =
         |name: &str| emitter.global_names.contains(name) || IMPORTED_PACKAGES.contains(&name);
     timed("lengths", || lengths::count_lengths_up_to_comparisons(&mut declarations));
@@ -228,6 +236,9 @@ where
     });
     timed("invariant lengths", || {
         lengths::hoist_loop_invariant_lengths(&mut declarations, &mut names, &taken)
+    });
+    timed("invariants", || {
+        invariants::hoist_loop_invariants(&mut declarations, &mut names, &taken)
     });
     let chunked = timed("chunks", || {
         chunks::allocate_linked_cells_in_chunks(&mut declarations, &mut names, &taken)
@@ -240,6 +251,8 @@ where
     });
     timed("divergence", || diverging::end_blocks_at_divergence(&mut declarations));
     timed("unreferenced", || unreferenced::drop_unreferenced_definitions(&mut declarations));
+    // Last, so that every pass before reads the constructions' fields in their literals.
+    timed("constructions", || emitter.call_constructor_functions(&mut declarations))?;
     if let Some(aside) = lines_aside {
         lines::restore(&mut declarations, aside);
     }
@@ -404,8 +417,11 @@ where
             shared_nullaries: FxHashMap::default(),
             json_decoders: FxHashMap::default(),
             json_encoders: FxHashMap::default(),
+            foreign_error_shows: FxHashMap::default(),
             maybe_helpers: maybe::MaybeHelpers::new(),
             constructor_functions: FxHashMap::default(),
+            named_constructions: FxHashMap::default(),
+            construction_functions: FxHashMap::default(),
             cell_types: FxHashMap::default(),
             reaching: FxHashMap::default(),
             holding: FxHashMap::default(),
@@ -534,6 +550,12 @@ struct Emitter<'p, 'm, 'q, Q> {
     converters: FxHashMap<(MonotypeId, MonotypeId), String>,
     /// The function each constructor used as a value at a function type is.
     constructor_functions: FxHashMap<(DataType, usize, MonotypeId), String>,
+    /// The constructions of sum types that a constructor function may build, by the Go struct
+    /// and tag their composite literals carry.
+    named_constructions: FxHashMap<constructors::ConstructionKey, (DataType, usize)>,
+    /// The constructor function of each such construction, shared with the constructors
+    /// used as values.
+    construction_functions: FxHashMap<constructors::ConstructionKey, String>,
     round_trips: Vec<coerce::RoundTrip>,
     array_boxes: boxing::ArrayBoxes,
     recursive_names: FxHashMap<DataType, String>,
@@ -583,6 +605,8 @@ struct Emitter<'p, 'm, 'q, Q> {
     /// The typed Yoga.JSON decoder and encoder of each type, by their names.
     json_decoders: FxHashMap<MonotypeId, String>,
     json_encoders: FxHashMap<MonotypeId, String>,
+    /// The function that shows a Yoga.JSON read's errors, by the type of the errors.
+    foreign_error_shows: FxHashMap<MonotypeId, String>,
     maybe_helpers: maybe::MaybeHelpers,
     cell_types: FxHashMap<DataType, bool>,
     reaching: FxHashMap<(DataType, DataType), bool>,
@@ -953,6 +977,12 @@ where
             ExpressionKind::Fail(message) => {
                 out.push(panic_statement(message));
                 Ok(())
+            }
+            ExpressionKind::Foreign {
+                foreign: crate::foreign::Foreign::Json(crate::foreign::JsonCodec::Read),
+                arguments,
+            } if mode == Mode::Value && !matches!(sink, Sink::Write(_) | Sink::Append(_)) => {
+                self.json_read(&arguments[0], &arguments[1], expression.monotype, sink, out)
             }
             ExpressionKind::Apply { function, arguments } if matches!(sink, Sink::Return) => {
                 if let ExpressionKind::Function(id) = function.kind
@@ -1837,6 +1867,9 @@ where
                 self.shared_nullary(&layout.name, &constructor_layout.tag, false, line)
             }
             DataKind::Tagged | DataKind::Product | DataKind::Sentinel => {
+                if let Some(key) = self.construction_key(&layout, constructor)? {
+                    self.named_constructions.insert(key, (data.clone(), constructor));
+                }
                 let composite = self.composite(&layout, constructor, values);
                 if layout.boxed { GoExpression::Address(Box::new(composite)) } else { composite }
             }

@@ -43,8 +43,12 @@ orderings pivot xs = map ordering xs
 constant :: Boolean
 constant = Int64.fromInt 1 < Int64.fromInt 2 && UInt64.unsafeFromInt (-1) > UInt64.unsafeFromInt 1
 
+-- | A program runs its `main` once, where vectors would not pay; each report may run often.
 main :: Array String
-main = do
+main = [ unit ] >>= report
+
+report :: Unit -> Array String
+report _ = do
   let ints = [ 3, -1, 4, 1, -5, 9, 2, 6, 5, 3, -5, 8, 9, 7, 9, 3, 2, 3, 8, 4, -6, 2, 6, 4, 3, 3, 8, 3, 2, 7, 9, 5, 0 ]
   let xs = map Int64.fromInt ints
   let us = map UInt64.unsafeFromInt ints

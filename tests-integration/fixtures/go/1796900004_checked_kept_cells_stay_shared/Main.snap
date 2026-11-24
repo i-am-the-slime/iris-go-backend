@@ -29,6 +29,10 @@ type KeptTotal struct {
 	Total int32
 }
 
+func Node(node0 Color, node1 *Tree, node2 int32, node3 bool, node4 *Tree) *Tree {
+	return &Tree{Node0: node0, Node1: node1, Node2: node2, Node3: node3, Node4: node4}
+}
+
 func Checksum(value *Tree) int32 {
 	return ChecksumGo(0, value)
 }
@@ -46,7 +50,7 @@ func Ins(kx int32, vx bool, value *Tree) *Tree {
 			return &Tree{Node0: ColorRed, Node1: Ins(kx, vx, a), Node2: ky, Node3: vy, Node4: b, Unique: 1}
 		}
 		if kx == ky {
-			return &Tree{Node0: ColorRed, Node1: a, Node2: kx, Node3: vx, Node4: b}
+			return Node(ColorRed, a, kx, vx, b)
 		}
 		return &Tree{Node0: ColorRed, Node1: a, Node2: ky, Node3: vy, Node4: Ins(kx, vx, b), Unique: 2}
 	}
@@ -73,14 +77,14 @@ func Ins(kx int32, vx bool, value *Tree) *Tree {
 				return &trees2[0]
 			}
 			if scrutinee != SharedTreeLeaf {
-				return &Tree{Node0: ColorBlack, Node1: &Tree{Node0: ColorRed, Node1: scrutinee.Node1, Node2: scrutinee.Node2, Node3: scrutinee.Node3, Node4: scrutinee.Node4}, Node2: ky2, Node3: vy2, Node4: b2, Unique: 1}
+				return &Tree{Node0: ColorBlack, Node1: Node(ColorRed, scrutinee.Node1, scrutinee.Node2, scrutinee.Node3, scrutinee.Node4), Node2: ky2, Node3: vy2, Node4: b2, Unique: 1}
 			}
 			return SharedTreeLeaf
 		}
 		return &Tree{Node0: ColorBlack, Node1: Ins(kx, vx, a2), Node2: ky2, Node3: vy2, Node4: b2, Unique: 1}
 	}
 	if kx == ky2 {
-		return &Tree{Node0: ColorBlack, Node1: a2, Node2: kx, Node3: vx, Node4: b2}
+		return Node(ColorBlack, a2, kx, vx, b2)
 	}
 	result2 := b2 != SharedTreeLeaf && b2.Node0 == ColorRed
 	if result2 {
@@ -100,7 +104,7 @@ func Ins(kx int32, vx bool, value *Tree) *Tree {
 			return &trees4[0]
 		}
 		if scrutinee != SharedTreeLeaf {
-			return &Tree{Node0: ColorBlack, Node1: a2, Node2: ky2, Node3: vy2, Node4: &Tree{Node0: ColorRed, Node1: scrutinee.Node1, Node2: scrutinee.Node2, Node3: scrutinee.Node3, Node4: scrutinee.Node4}, Unique: 2}
+			return &Tree{Node0: ColorBlack, Node1: a2, Node2: ky2, Node3: vy2, Node4: Node(ColorRed, scrutinee.Node1, scrutinee.Node2, scrutinee.Node3, scrutinee.Node4), Unique: 2}
 		}
 		return SharedTreeLeaf
 	}
@@ -744,7 +748,7 @@ func mainGo(tree *redblack.Tree, trail *redblack_types.ListTree, total int32, n 
 			if result {
 				scrutinee := redblack.Ins(n, true, tree)
 				if scrutinee != redblack.SharedTreeLeaf {
-					next = &redblack.Tree{Node0: redblack.ColorBlack, Node1: scrutinee.Node1, Node2: scrutinee.Node2, Node3: scrutinee.Node3, Node4: scrutinee.Node4}
+					next = redblack.Node(redblack.ColorBlack, scrutinee.Node1, scrutinee.Node2, scrutinee.Node3, scrutinee.Node4)
 				} else {
 					next = redblack.SharedTreeLeaf
 				}
@@ -755,7 +759,7 @@ func mainGo(tree *redblack.Tree, trail *redblack_types.ListTree, total int32, n 
 		}
 		var result2 *redblack_types.ListTree
 		if n%4 == 0 {
-			result2 = &redblack_types.ListTree{Cons0: next, Cons1: trail}
+			result2 = redblack_types.Cons(next, trail)
 		} else {
 			result2 = trail
 		}
@@ -786,17 +790,9 @@ func mainGoChecked(tree *redblack.Tree, trail *redblack_types.ListTree, total in
 			if result {
 				scrutinee := redblack.InsChecked(n, true, tree, treeOwned)
 				if scrutinee != redblack.SharedTreeLeaf {
-					l := scrutinee.Node1
-					k := scrutinee.Node2
-					v := scrutinee.Node3
-					r := scrutinee.Node4
 					lOwned := scrutinee.Unique&1 != 0
 					rOwned := scrutinee.Unique&2 != 0
 					scrutinee.Node0 = redblack.ColorBlack
-					scrutinee.Node1 = l
-					scrutinee.Node2 = k
-					scrutinee.Node3 = v
-					scrutinee.Node4 = r
 					scrutinee.Unique = shared.UniqueBit(lOwned, 1) | shared.UniqueBit(rOwned, 2)
 					next = scrutinee
 				} else {
@@ -809,7 +805,7 @@ func mainGoChecked(tree *redblack.Tree, trail *redblack_types.ListTree, total in
 		}
 		var result2 *redblack_types.ListTree
 		if n%4 == 0 {
-			result2 = &redblack_types.ListTree{Cons0: next, Cons1: trail}
+			result2 = redblack_types.Cons(next, trail)
 		} else {
 			result2 = trail
 		}
@@ -835,17 +831,9 @@ func mainGoChecked2(tree *redblack.Tree, trail *redblack_types.ListTree, later f
 			if result {
 				scrutinee := redblack.InsChecked(n, true, tree, treeOwned)
 				if scrutinee != redblack.SharedTreeLeaf {
-					l := scrutinee.Node1
-					k := scrutinee.Node2
-					v := scrutinee.Node3
-					r := scrutinee.Node4
 					lOwned := scrutinee.Unique&1 != 0
 					rOwned := scrutinee.Unique&2 != 0
 					scrutinee.Node0 = redblack.ColorBlack
-					scrutinee.Node1 = l
-					scrutinee.Node2 = k
-					scrutinee.Node3 = v
-					scrutinee.Node4 = r
 					scrutinee.Unique = shared.UniqueBit(lOwned, 1) | shared.UniqueBit(rOwned, 2)
 					next = scrutinee
 				} else {
@@ -858,7 +846,7 @@ func mainGoChecked2(tree *redblack.Tree, trail *redblack_types.ListTree, later f
 		}
 		var result2 *redblack_types.ListTree
 		if n%4 == 0 {
-			result2 = &redblack_types.ListTree{Cons0: next, Cons1: trail}
+			result2 = redblack_types.Cons(next, trail)
 		} else {
 			result2 = trail
 		}
@@ -888,17 +876,9 @@ func mainGoChecked3(tree *redblack.Tree, trail *redblack_types.ListTree, record 
 			if result {
 				scrutinee := redblack.InsChecked(n, true, tree, treeOwned)
 				if scrutinee != redblack.SharedTreeLeaf {
-					l := scrutinee.Node1
-					k := scrutinee.Node2
-					v := scrutinee.Node3
-					r := scrutinee.Node4
 					lOwned := scrutinee.Unique&1 != 0
 					rOwned := scrutinee.Unique&2 != 0
 					scrutinee.Node0 = redblack.ColorBlack
-					scrutinee.Node1 = l
-					scrutinee.Node2 = k
-					scrutinee.Node3 = v
-					scrutinee.Node4 = r
 					scrutinee.Unique = shared.UniqueBit(lOwned, 1) | shared.UniqueBit(rOwned, 2)
 					next = scrutinee
 				} else {
@@ -911,7 +891,7 @@ func mainGoChecked3(tree *redblack.Tree, trail *redblack_types.ListTree, record 
 		}
 		var result2 *redblack_types.ListTree
 		if n%4 == 0 {
-			result2 = &redblack_types.ListTree{Cons0: next, Cons1: trail}
+			result2 = redblack_types.Cons(next, trail)
 		} else {
 			result2 = trail
 		}
@@ -940,15 +920,7 @@ matched:
 		if result {
 			scrutinee := redblack.InsReusing(n, true, tree)
 			if scrutinee != redblack.SharedTreeLeaf {
-				l := scrutinee.Node1
-				k := scrutinee.Node2
-				v := scrutinee.Node3
-				r := scrutinee.Node4
 				scrutinee.Node0 = redblack.ColorBlack
-				scrutinee.Node1 = l
-				scrutinee.Node2 = k
-				scrutinee.Node3 = v
-				scrutinee.Node4 = r
 				scrutinee.Unique = 3
 				next = scrutinee
 			} else {
@@ -961,7 +933,7 @@ matched:
 	}
 	var result2 *redblack_types.ListTree
 	if n%4 == 0 {
-		result2 = &redblack_types.ListTree{Cons0: next, Cons1: trail}
+		result2 = redblack_types.Cons(next, trail)
 	} else {
 		result2 = trail
 	}
@@ -987,15 +959,7 @@ matched:
 		if result {
 			scrutinee := redblack.InsReusing(n, true, tree)
 			if scrutinee != redblack.SharedTreeLeaf {
-				l := scrutinee.Node1
-				k := scrutinee.Node2
-				v := scrutinee.Node3
-				r := scrutinee.Node4
 				scrutinee.Node0 = redblack.ColorBlack
-				scrutinee.Node1 = l
-				scrutinee.Node2 = k
-				scrutinee.Node3 = v
-				scrutinee.Node4 = r
 				scrutinee.Unique = 3
 				next = scrutinee
 			} else {
@@ -1008,7 +972,7 @@ matched:
 	}
 	var result2 *redblack_types.ListTree
 	if n%4 == 0 {
-		result2 = &redblack_types.ListTree{Cons0: next, Cons1: trail}
+		result2 = redblack_types.Cons(next, trail)
 	} else {
 		result2 = trail
 	}
@@ -1034,15 +998,7 @@ matched:
 		if result {
 			scrutinee := redblack.InsReusing(n, true, tree)
 			if scrutinee != redblack.SharedTreeLeaf {
-				l := scrutinee.Node1
-				k := scrutinee.Node2
-				v := scrutinee.Node3
-				r := scrutinee.Node4
 				scrutinee.Node0 = redblack.ColorBlack
-				scrutinee.Node1 = l
-				scrutinee.Node2 = k
-				scrutinee.Node3 = v
-				scrutinee.Node4 = r
 				scrutinee.Unique = 3
 				next = scrutinee
 			} else {
@@ -1055,7 +1011,7 @@ matched:
 	}
 	var result2 *redblack_types.ListTree
 	if n%4 == 0 {
-		result2 = &redblack_types.ListTree{Cons0: next, Cons1: trail}
+		result2 = redblack_types.Cons(next, trail)
 	} else {
 		result2 = trail
 	}
@@ -1087,6 +1043,10 @@ type ListTree struct {
 }
 
 var SharedListTreeNil = &ListTree{}
+
+func Cons(cons0 *redblack.Tree, cons1 *ListTree) *ListTree {
+	return &ListTree{Cons0: cons0, Cons1: cons1}
+}
 
 // shared/shared.go
 package shared

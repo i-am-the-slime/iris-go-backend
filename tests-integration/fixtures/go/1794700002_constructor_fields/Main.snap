@@ -15,6 +15,14 @@ const (
 	EitherStringIntRight
 )
 
+func Right(right int32) EitherStringInt {
+	return EitherStringInt{Tag: EitherStringIntRight, Right: right}
+}
+
+func Left(left string) EitherStringInt {
+	return EitherStringInt{Tag: EitherStringIntLeft, Left: left}
+}
+
 // Data/List/Types/types.go
 package types
 
@@ -24,6 +32,10 @@ type ListInt struct {
 }
 
 var SharedListIntNil = &ListInt{}
+
+func Cons(cons0 int32, cons1 *ListInt) *ListInt {
+	return &ListInt{Cons0: cons0, Cons1: cons1}
+}
 
 // Data/Maybe/maybe.go
 package maybe
@@ -93,11 +105,27 @@ const (
 	EntryTrio
 )
 
+func Tag(tag0 string) Labelled {
+	return Labelled{Tag: LabelledTag, Tag0: tag0}
+}
+
+func Field(field0 int32, field1 int32) Entry {
+	return Entry{Tag: EntryField, Field0: field0, Field1: field1}
+}
+
+func Duo(duo0 string, duo1 string) Entry {
+	return Entry{Tag: EntryDuo, Duo0: duo0, Duo1: duo1}
+}
+
+func Trio(trio0 string, trio1 string) Entry {
+	return Entry{Tag: EntryTrio, Trio0: trio0, Trio1: trio1}
+}
+
 var main_ = initializeMain_()
 
 func initializeMain_() string {
 	var text []byte
-	array := []either_tuple.TupleMaybeIntEitherStringInt{{First: maybe.Int(1), Second: either.EitherStringInt{Tag: either.EitherStringIntRight, Right: 2}}, {First: maybe.NoInt, Second: either.EitherStringInt{Tag: either.EitherStringIntLeft, Left: "x"}}}
+	array := []either_tuple.TupleMaybeIntEitherStringInt{{First: maybe.Int(1), Second: either.Right(2)}, {First: maybe.NoInt, Second: either.Left("x")}}
 	var accumulator int32 = 0
 	for tupleIndex := range array {
 		if array[tupleIndex].First != maybe.NoInt && array[tupleIndex].Second.Tag == either.EitherStringIntRight {
@@ -106,14 +134,14 @@ func initializeMain_() string {
 			accumulator -= 1
 		}
 	}
-	text = strconv.AppendInt(text, int64(accumulator+mainSum(&types.ListInt{Cons0: 3, Cons1: &types.ListInt{Cons0: 4, Cons1: types.SharedListIntNil}})), 10)
-	array2 := []Labelled{{Tag: LabelledTag, Tag0: "t"}, {Tag: LabelledUntagged}}
+	text = strconv.AppendInt(text, int64(accumulator+mainSum(types.Cons(3, types.Cons(4, types.SharedListIntNil)))), 10)
+	array2 := []Labelled{Tag("t"), {Tag: LabelledUntagged}}
 	mapped := make([]string, len(array2))
 	for index, element := range array2 {
 		mapped[index] = label(element)
 	}
 	text = show.AppendShowArrayString(text, mapped)
-	array3 := []Entry{{Tag: EntryField, Field0: 5, Field1: 1}, {Tag: EntryDuo, Duo0: "a", Duo1: "b"}, {Tag: EntryTrio, Trio0: "c", Trio1: "d"}}
+	array3 := []Entry{Field(5, 1), Duo("a", "b"), Trio("c", "d")}
 	mapped2 := make([]string, len(array3))
 	for index, element := range array3 {
 		mapped2[index] = entry(element)
