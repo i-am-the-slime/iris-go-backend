@@ -288,6 +288,9 @@ impl Monotypes {
             monotype => monotype,
         };
         let collapsed = self.intern(collapsed);
+        if self.instantiated_records.contains(&id) {
+            self.instantiated_records.insert(collapsed);
+        }
         self.collapsed.insert(id, collapsed);
         collapsed
     }
