@@ -408,10 +408,12 @@ where
         .enumerate()
         .map(|(position, &name)| (name, context.types.placeholder(position)))
         .collect();
-    // The key is the body in a canonical spelling, so that every occurrence of
-    // the same rank-N type finds the same instantiations.
+    // The key is the body in its data argument spelling, newtypes unwrapped as a
+    // data type's fields see them, so that every occurrence of the same rank-N
+    // type finds the same instantiations: `Om { scope :: Scope }` held by a
+    // constructor of `Layer (scope :: Scope)` is spelled `Om { scope :: Int }`.
     let keyed = context.types.substitute(body, &placeholders);
-    let keyed = crate::monotype::expand_synonyms(context, keyed)?;
+    let keyed = crate::monotype::data_argument(context, keyed)?;
     let keyed = context.types.without_causes(keyed);
     let key = SchemeKey(Arc::from([keyed]));
     Ok(Some(ConstrainedScheme { names, constraints: vec![], body, key }))

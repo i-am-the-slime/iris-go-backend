@@ -161,6 +161,10 @@ where
         placeholder
     }
 
+    pub fn is_placeholder(&self, type_id: TypeId) -> bool {
+        self.placeholders.borrow().contains(&self.strip_annotations(type_id))
+    }
+
     fn stand_in(&self, unique: u32) -> TypeId {
         let name = Name { file: self.queries.prim_id(), unique, scoped: false };
         let kind = self.queries.intern_type(Type::Unification(u32::MAX));
