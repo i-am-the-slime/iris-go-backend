@@ -210,7 +210,14 @@ where
                 ));
             }
             Dictionary::Runtime(runtime) => {
-                return self.runtime_member(scope, runtime, member_name, monotype);
+                return self.runtime_member(
+                    scope,
+                    runtime,
+                    (member, member_name),
+                    instantiations,
+                    dictionaries,
+                    monotype,
+                );
             }
         };
         let module_name = member_module.name.clone();

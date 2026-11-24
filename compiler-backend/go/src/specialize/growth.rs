@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use checking::{TypeId, tree};
 
-use super::{PolymorphicLocal, Scope, SpecializationKey, Specializer, runtime};
+use super::{Definition, PolymorphicLocal, Scope, SpecializationKey, Specializer, runtime};
 use crate::erasure::Erasure;
 use crate::error::GoResult;
 use crate::monomorphic::Expression;
@@ -48,6 +48,57 @@ where
     /// request embeds the types of the same definition further up its chain of
     /// requesters, the growing positions are erased so specialization terminates.
     pub(super) fn terminate_growth(
+        &mut self,
+        key: SpecializationKey,
+    ) -> GoResult<(SpecializationKey, Vec<runtime::Promotion>)> {
+        let (key, mut promotions) = self.terminate_instance_growth(key)?;
+        let (key, own) = self.terminate_definition_growth(key)?;
+        promotions.extend(own);
+        Ok((key, promotions))
+    }
+
+    /// An instance's members can reach the same instance at larger types, as
+    /// `Show (Nested a)` shows a `Nested (Array a)`: the instance's growing
+    /// types are erased, and the context dictionaries that mention them are
+    /// passed at run time.
+    fn terminate_instance_growth(
+        &mut self,
+        mut key: SpecializationKey,
+    ) -> GoResult<(SpecializationKey, Vec<runtime::Promotion>)> {
+        let Definition::Member { dictionary, member } = &key.definition else {
+            return Ok((key, vec![]));
+        };
+        let requested = Arc::clone(&dictionary.types);
+        let mut types: Vec<TypeId> = requested.to_vec();
+        let mut grows = false;
+        let mut ancestor = self.current;
+        while let Some(id) = ancestor {
+            if let Definition::Member { dictionary: enclosing, .. } =
+                &self.function_keys[id.0 as usize].definition
+                && enclosing.origin == dictionary.origin
+                && self.context.types.grows_all(&requested, &enclosing.types)
+            {
+                for (position, &enclosing_type) in enclosing.types.iter().enumerate() {
+                    let Some(&requested_type) = types.get(position) else { continue };
+                    if self.context.types.grows(requested_type, enclosing_type) {
+                        types[position] = self.context.types.erased(Erasure::PolymorphicRecursion);
+                        grows = true;
+                    }
+                }
+            }
+            ancestor = self.parents[id.0 as usize];
+        }
+        if !grows {
+            return Ok((key, vec![]));
+        }
+        let member = *member;
+        let (dictionary, promotions) =
+            self.promote_growing_context(&key.definition, dictionary, &types)?;
+        key.definition = Definition::Member { dictionary, member };
+        Ok((key, promotions))
+    }
+
+    fn terminate_definition_growth(
         &mut self,
         mut key: SpecializationKey,
     ) -> GoResult<(SpecializationKey, Vec<runtime::Promotion>)> {

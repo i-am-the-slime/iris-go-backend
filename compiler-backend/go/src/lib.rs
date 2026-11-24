@@ -83,6 +83,7 @@ pub fn compile_program(
     if let Some(blockers) = specializer.blockers()? {
         return Err(GoError::Blocked(blockers));
     }
+    let runtime_dictionary_notes = specializer.take_runtime_dictionary_notes();
     let erased_newtypes = std::mem::take(&mut specializer.context().erased_newtypes);
     let (functions, mut monotypes, next_local, thunk_parameters) =
         timed("finish specialization", || specializer.finish());
@@ -128,6 +129,7 @@ pub fn compile_program(
         })
         .collect();
     files.sort();
+    let notes = runtime_dictionary_notes.into_iter().chain(notes).collect();
     Ok(GoProgram { files, functions, notes })
 }
 

@@ -237,6 +237,8 @@ pub struct Specializer<'q, Q> {
     int64: int64::Int64Types,
     /// The parameters of the lambdas the source writes as thunks, `\_ -> later`.
     thunk_parameters: FxHashSet<LocalId>,
+    /// The definitions that take a dictionary at run time instead of being specialized.
+    runtime_dictionary_notes: Vec<String>,
 }
 
 struct RecordedBlocker {
@@ -285,11 +287,16 @@ where
             narrowed_variant_rows: vec![],
             int64: int64::Int64Types::default(),
             thunk_parameters: FxHashSet::default(),
+            runtime_dictionary_notes: vec![],
         }
     }
 
     pub fn context(&mut self) -> &mut Context<'q, Q> {
         &mut self.context
+    }
+
+    pub fn take_runtime_dictionary_notes(&mut self) -> Vec<String> {
+        std::mem::take(&mut self.runtime_dictionary_notes)
     }
 
     pub fn specialize_entry(&mut self, file_id: FileId, term: TermItemId) -> GoResult<FunctionId> {

@@ -665,6 +665,9 @@ where
         }
         match pattern.tail {
             Some(tail) => {
+                if let (true, Some(target_tail)) = (remaining.is_empty(), target.tail) {
+                    return self.match_type(tail, target_tail, variables, bindings);
+                }
                 let rest = RowType { fields: Arc::from(remaining), tail: target.tail };
                 let rest = self.queries.intern_row_type(rest);
                 let rest = self.queries.intern_type(Type::Row(rest));
