@@ -72,6 +72,7 @@ mod reference_equality;
 mod references;
 mod reuse;
 mod scalars;
+mod sharing;
 mod shorthands;
 mod sorting;
 mod standard;
@@ -266,6 +267,13 @@ where
     });
     timed("divergence", || diverging::end_blocks_at_divergence(&mut declarations));
     timed("field reads", || loads::reuse_field_reads(&mut declarations));
+    let mut record_value_name = |type_name: &str| {
+        let (&monotype, _) = emitter.record_names.iter().find(|(_, name)| *name == type_name)?;
+        Some(emitter.value_base(monotype))
+    };
+    timed("sharing", || {
+        sharing::share_repeated_constructions(&mut declarations, &mut record_value_name)
+    });
     let forwarders = forwarders::Forwarders::new(emitter.foreign_packages);
     timed("forwarders", || forwarders.call_methods(&mut declarations));
     timed("unreferenced", || unreferenced::drop_unreferenced_definitions(&mut declarations));
