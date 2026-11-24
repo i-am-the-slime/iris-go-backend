@@ -134,6 +134,119 @@ fn owned_files<'n>(stem: &str, names: &[&'n str]) -> Vec<&'n str> {
     owned
 }
 
+pub fn foreign_forwarders(source: &str) -> Vec<(String, String)> {
+    let value_receivers = value_receiver_methods(source);
+    source
+        .lines()
+        .filter_map(|line| forwarder(line.trim_end(), &value_receivers))
+        .collect()
+}
+
+fn forwarder(line: &str, value_receivers: &[&str]) -> Option<(String, String)> {
+    let rest = line.strip_prefix("func ")?;
+    let name = leading_identifier(rest)?;
+    let mut rest = &rest[name.len()..];
+    let mut type_parameters = vec![];
+    if rest.starts_with('[') {
+        let end = matching(rest, '[', ']')?;
+        type_parameters = rest[1..end]
+            .split(',')
+            .filter_map(|entry| leading_identifier(entry.trim_start()))
+            .collect();
+        rest = &rest[end + 1..];
+    }
+    if !rest.starts_with('(') {
+        return None;
+    }
+    let end = matching(rest, '(', ')')?;
+    let parameters = parameters(&rest[1..end])?;
+    let rest = &rest[end + 1..];
+    let open = rest.find('{')?;
+    if rest[..open].contains(['}', '(']) {
+        return None;
+    }
+    let body = rest[open + 1..].strip_suffix('}')?.trim();
+    let call = body.strip_prefix("return ").unwrap_or(body);
+    let ((receiver, receiver_type), others) = parameters.split_first()?;
+    let call = call.strip_prefix(*receiver)?.strip_prefix('.')?;
+    let method = leading_identifier(call)?;
+    let arguments = call[method.len()..].strip_prefix('(')?.strip_suffix(')')?;
+    let arguments: Vec<&str> =
+        arguments.split(',').map(str::trim).filter(|argument| !argument.is_empty()).collect();
+    let forwarded = others.iter().map(|(name, _)| *name).eq(arguments.iter().copied());
+    let typed_by_receiver = type_parameters
+        .iter()
+        .all(|parameter| mentions_word(receiver_type, parameter));
+    let addressable = receiver_type.starts_with('*') || value_receivers.contains(&method);
+    (forwarded && typed_by_receiver && addressable)
+        .then(|| (name.to_string(), method.to_string()))
+}
+
+fn parameters(list: &str) -> Option<Vec<(&str, &str)>> {
+    let mut parameters = vec![];
+    let mut pending = vec![];
+    let mut depth = 0;
+    let mut start = 0;
+    let mut entries = vec![];
+    for (at, character) in list.char_indices() {
+        match character {
+            '(' | '[' | '{' => depth += 1,
+            ')' | ']' | '}' => depth -= 1,
+            ',' if depth == 0 => {
+                entries.push(list[start..at].trim());
+                start = at + 1;
+            }
+            _ => {}
+        }
+    }
+    entries.push(list[start..].trim());
+    for entry in entries.into_iter().filter(|entry| !entry.is_empty()) {
+        match entry.split_once(' ') {
+            Some((name, type_)) => {
+                for pending in pending.drain(..) {
+                    parameters.push((pending, type_.trim()));
+                }
+                parameters.push((name, type_.trim()));
+            }
+            None => pending.push(entry),
+        }
+    }
+    pending.is_empty().then_some(parameters)
+}
+
+fn value_receiver_methods(source: &str) -> Vec<&str> {
+    source
+        .lines()
+        .filter_map(|line| {
+            let receiver = line.strip_prefix("func (")?;
+            let (receiver, rest) = receiver.split_once(')')?;
+            let (_, type_) = receiver.trim().split_once(' ')?;
+            (!type_.trim_start().starts_with('*')).then_some(())?;
+            leading_identifier(rest.trim_start())
+        })
+        .collect()
+}
+
+fn matching(text: &str, open: char, close: char) -> Option<usize> {
+    let mut depth = 0;
+    for (at, character) in text.char_indices() {
+        if character == open {
+            depth += 1;
+        } else if character == close {
+            depth -= 1;
+            if depth == 0 {
+                return Some(at);
+            }
+        }
+    }
+    None
+}
+
+fn mentions_word(text: &str, word: &str) -> bool {
+    text.split(|character: char| !(character.is_alphanumeric() || character == '_'))
+        .any(|part| part == word)
+}
+
 pub fn recovers(source: &str) -> bool {
     source.contains("recover()")
 }
@@ -197,6 +310,40 @@ mod tests {
         let (values, types) = foreign_declarations(source);
         assert_eq!(values, ["Start", "Repeat", "Seed", "Limit", "other"]);
         assert_eq!(types, ["Stopwatch", "GoError"]);
+    }
+
+    #[test]
+    fn a_foreign_that_calls_a_method_of_its_first_parameter_forwards_to_it() {
+        let source = "package ffi
+
+func (ref *ioref[A]) Load() A { return *ref.value.Load() }
+
+func (box Box) Size() int32 { return 1 }
+
+func ReadIORefImpl[A any](ref *ioref[A]) A { return ref.Load() }
+
+func WriteIORefImpl[A any](ref *ioref[A], value A) { ref.Store(value) }
+
+func SizeImpl(box Box) int32 { return box.Size() }
+
+func ByPointer(box Box) int32 { return box.Grow() }
+
+func Swapped[A any](ref *ioref[A], a, b A) { ref.Swap(b, a) }
+
+func Mapped[A, B any](ref *ioref[A], f func(A) B) B { return ref.Map(f) }
+
+func Longer[A any](ref *ioref[A]) A {
+	return ref.Load()
+}
+";
+        assert_eq!(
+            foreign_forwarders(source),
+            [
+                ("ReadIORefImpl".to_string(), "Load".to_string()),
+                ("WriteIORefImpl".to_string(), "Store".to_string()),
+                ("SizeImpl".to_string(), "Size".to_string()),
+            ]
+        );
     }
 
     #[test]

@@ -26,7 +26,8 @@ pub use imports::{
 pub use opacity::{Opacity, OpaqueDeclaration, foreign_opacity};
 pub use packages::{ForeignPackages, ForeignSource, LineCoverage, LineDirectives};
 pub use sources::{
-    foreign_declarations, foreign_files, foreign_source, foreign_structs, recovers, uses_event_loop,
+    foreign_declarations, foreign_files, foreign_forwarders, foreign_source, foreign_structs,
+    recovers, uses_event_loop,
 };
 
 use std::sync::{Mutex, OnceLock};

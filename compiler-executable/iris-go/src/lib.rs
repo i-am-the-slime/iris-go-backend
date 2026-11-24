@@ -176,6 +176,7 @@ fn vendor_foreign_packages(
             let (values, types) = go::foreign_declarations(&text);
             source.values.extend(values);
             source.types.extend(types);
+            source.forwarders.extend(go::foreign_forwarders(&text));
             source.uses_event_loop |= go::uses_event_loop(&text);
             source.recovers |= go::recovers(&text);
             let shown = shown_path(&foreign_file, &here);

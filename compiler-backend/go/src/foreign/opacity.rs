@@ -407,6 +407,7 @@ struct Package {
     functions: Vec<Function>,
     types: Vec<TypeDeclaration>,
     methods: FxHashSet<String>,
+    method_functions: Vec<Function>,
 }
 
 impl Package {
@@ -428,10 +429,7 @@ impl Package {
 
     fn read_function(&mut self, declaration: &[Token]) {
         if declaration.first().is_some_and(|token| token.is("(")) {
-            let name = closing(declaration, 0).and_then(|end| declaration.get(end + 1));
-            if let Some(name) = name.and_then(Token::word) {
-                self.methods.insert(name.to_string());
-            }
+            self.read_method(declaration);
             return;
         }
         let Some(name) = declaration.first().and_then(Token::word) else { return };
@@ -442,23 +440,33 @@ impl Package {
             type_parameters = read_type_parameters(&declaration[2..end]);
             position = end + 1;
         }
-        let last = declaration.len() - 1;
-        let body_start = match declaration.last() {
-            Some(token) if token.is("}") => opening(declaration, last),
-            _ => None,
+        if let Some(function) = read_signature(name, type_parameters, vec![], &declaration[position..])
+        {
+            self.functions.push(function);
+        }
+    }
+
+    fn read_method(&mut self, declaration: &[Token]) {
+        let Some(receiver_end) = closing(declaration, 0) else { return };
+        let Some(name) = declaration.get(receiver_end + 1).and_then(Token::word) else { return };
+        self.methods.insert(name.to_string());
+        let receiver = &declaration[1..receiver_end];
+        let type_parameters = match receiver.iter().position(|token| token.is("[")) {
+            Some(open) => {
+                let Some(close) = closing(receiver, open) else { return };
+                let names = receiver[open + 1..close].iter().filter_map(Token::word);
+                let unconstrained = |name: &str| TypeParameter {
+                    name: name.to_string(),
+                    constraint: vec![Token::Word("any".to_string())],
+                };
+                names.map(unconstrained).collect()
+            }
+            None => vec![],
         };
-        let signature = &declaration[position..body_start.unwrap_or(declaration.len())];
-        let Some(end) = signature.first().filter(|token| token.is("(")).and(closing(signature, 0))
-        else {
-            return;
-        };
-        self.functions.push(Function {
-            name: name.to_string(),
-            type_parameters,
-            parameters: signature[1..end].to_vec(),
-            results: signature[end + 1..].to_vec(),
-            body: body_start.map(|start| declaration[start + 1..last].to_vec()),
-        });
+        let rest = &declaration[receiver_end + 2..];
+        if let Some(method) = read_signature(name, type_parameters, receiver.to_vec(), rest) {
+            self.method_functions.push(method);
+        }
     }
 
     fn read_type(&mut self, specification: &[Token]) {
@@ -485,20 +493,35 @@ impl Package {
             .collect();
         let mut opaque: FxHashSet<String> =
             self.functions.iter().map(|function| function.name.clone()).collect();
+        let mut opaque_methods: FxHashSet<String> = self.methods.clone();
         loop {
-            let surroundings = self.surroundings(&escaping, &signature_escaping, &opaque);
+            let surroundings =
+                self.surroundings(&escaping, &signature_escaping, &opaque, &opaque_methods);
             let next: FxHashSet<String> = self
                 .functions
                 .iter()
                 .filter(|function| surroundings.escapes(function).is_empty())
                 .map(|function| function.name.clone())
                 .collect();
-            if next == opaque {
+            let next_methods: FxHashSet<String> = self
+                .methods
+                .iter()
+                .filter(|name| {
+                    let mut definitions =
+                        self.method_functions.iter().filter(|method| &method.name == *name);
+                    definitions.all(|method| surroundings.escapes(method).is_empty())
+                        && self.method_functions.iter().any(|method| &method.name == *name)
+                })
+                .cloned()
+                .collect();
+            if next == opaque && next_methods == opaque_methods {
                 break;
             }
             opaque = next;
+            opaque_methods = next_methods;
         }
-        let surroundings = self.surroundings(&escaping, &signature_escaping, &opaque);
+        let surroundings =
+            self.surroundings(&escaping, &signature_escaping, &opaque, &opaque_methods);
         let functions = self.functions.iter().map(|function| OpaqueDeclaration {
             name: function.name.clone(),
             parameters: parameter_names(&function.type_parameters),
@@ -517,6 +540,7 @@ impl Package {
         escaping: &'p FxHashSet<String>,
         signature_escaping: &'p FxHashSet<String>,
         opaque: &'p FxHashSet<String>,
+        opaque_methods: &'p FxHashSet<String>,
     ) -> Surroundings<'p> {
         Surroundings {
             escaping,
@@ -525,6 +549,7 @@ impl Package {
             types: &self.types,
             methods: &self.methods,
             opaque,
+            opaque_methods,
             parametric_fields: self.parametric_fields(),
         }
     }
@@ -573,6 +598,33 @@ impl Package {
             }
         }
     }
+}
+
+fn read_signature(
+    name: &str,
+    type_parameters: Vec<TypeParameter>,
+    receiver: Vec<Token>,
+    declaration: &[Token],
+) -> Option<Function> {
+    let last = declaration.len().checked_sub(1)?;
+    let body_start = match declaration.last() {
+        Some(token) if token.is("}") => opening(declaration, last),
+        _ => None,
+    };
+    let signature = &declaration[..body_start.unwrap_or(declaration.len())];
+    let end = signature.first().filter(|token| token.is("(")).and(closing(signature, 0))?;
+    let mut parameters = receiver;
+    if !parameters.is_empty() && end > 1 {
+        parameters.push(Token::Symbol(","));
+    }
+    parameters.extend_from_slice(&signature[1..end]);
+    Some(Function {
+        name: name.to_string(),
+        type_parameters,
+        parameters,
+        results: signature[end + 1..].to_vec(),
+        body: body_start.map(|start| declaration[start + 1..last].to_vec()),
+    })
 }
 
 fn read_type_parameters(tokens: &[Token]) -> Vec<TypeParameter> {
@@ -654,6 +706,7 @@ struct Surroundings<'p> {
     types: &'p [TypeDeclaration],
     methods: &'p FxHashSet<String>,
     opaque: &'p FxHashSet<String>,
+    opaque_methods: &'p FxHashSet<String>,
     parametric_fields: FxHashSet<String>,
 }
 
@@ -1235,6 +1288,12 @@ impl<'f> Flow<'f> {
                 None
             }
             Some(_) if self.calls_through_held_value(open - 1) => None,
+            Some(root)
+                if self.locals.contains(root)
+                    && self.surroundings.opaque_methods.contains(callee) =>
+            {
+                None
+            }
             Some(root) => Some(format!("passes a value to `{root}.{callee}`")),
             None if previous.is_keyword() => None,
             None if BUILTINS.contains(&callee) => self.builtin_escape(callee, open, end),
@@ -1322,7 +1381,9 @@ impl<'f> Flow<'f> {
     fn method_escape(&self, dot: usize) -> Option<String> {
         let tokens = self.tokens;
         let name = tokens.get(dot + 1)?.word()?;
-        if !self.surroundings.methods.contains(name) {
+        if !self.surroundings.methods.contains(name)
+            || self.surroundings.opaque_methods.contains(name)
+        {
             return None;
         }
         let root = self.chain_root(dot)?;
@@ -1541,7 +1602,9 @@ func Peek[A any](box Box[A]) { box.Peek() }
 
 type Cell[A any] struct{ value A }
 
-func (cell Cell[A]) Reset() {}
+func (cell Cell[A]) Reset() { show(cell.value) }
+
+func show(value any) {}
 
 func Reset[A any](cell Cell[A]) { cell.Reset() }
 
@@ -1549,6 +1612,30 @@ func Wrap[A any](value A) Cell[A] { return Cell[A]{value: value} }
 ";
         assert_eq!(escapes(source, "Reset"), ["type parameter A uses the method `Reset`"]);
         assert_eq!(escapes(source, "Wrap"), Vec::<String>::new());
+    }
+
+    #[test]
+    fn a_method_of_the_package_that_only_holds_the_value_keeps_it_opaque() {
+        let source = "package ffi
+
+import \"sync/atomic\"
+
+type IORef[A any] = *ioref[A]
+
+type ioref[A any] struct {
+	value atomic.Pointer[A]
+}
+
+func (ref *ioref[A]) Load() A { return *ref.value.Load() }
+
+func (ref *ioref[A]) Store(value A) { ref.value.Store(&value) }
+
+func ReadIORefImpl[A any](ref *ioref[A]) A { return ref.Load() }
+
+func WriteIORefImpl[A any](ref *ioref[A], value A) { ref.Store(value) }
+";
+        assert_eq!(escapes(source, "ReadIORefImpl"), Vec::<String>::new());
+        assert_eq!(escapes(source, "WriteIORefImpl"), Vec::<String>::new());
     }
 
     #[test]

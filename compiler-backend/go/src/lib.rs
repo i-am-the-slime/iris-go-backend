@@ -36,8 +36,8 @@ pub use emit::{KERNEL_FILE_SUFFIXES, is_kernel_file};
 pub use error::{GoError, GoResult, UnsupportedState};
 pub use foreign::{
     EmbedError, ForeignPackages, ForeignSource, LineCoverage, LineDirectives, embedded_files,
-    foreign_declarations, foreign_files, foreign_opacity, foreign_source, foreign_structs,
-    recovers, uses_event_loop,
+    foreign_declarations, foreign_files, foreign_forwarders, foreign_opacity, foreign_source,
+    foreign_structs, recovers, uses_event_loop,
 };
 pub use timing::Work;
 
