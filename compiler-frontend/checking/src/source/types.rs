@@ -254,8 +254,16 @@ where
             Ok((t, k))
         }
 
-        lowering::TypeKind::OperatorChain { .. } => {
-            operator::infer_operator_chain(state, context, id)
+        lowering::TypeKind::OperatorChain { head, tail } => {
+            if let Some(Ok(_)) = context.bracketed.types.get(&id) {
+                return operator::infer_operator_chain(state, context, id);
+            }
+            let operands = head.iter().chain(tail.iter().filter_map(|pair| pair.element.as_ref()));
+            for &operand in operands {
+                infer_kind(state, context, operand)?;
+            }
+            let unknown = context.unknown("invalid operator chain");
+            Ok((unknown, unknown))
         }
 
         lowering::TypeKind::String { kind, value } => {
