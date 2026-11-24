@@ -230,20 +230,41 @@ where
         self.go_function(function)
     }
 
+    /// A function or effect whose Unit results, `func()` in Iris's Go, return Unit's value
+    /// instead, `func() struct{}`, for Go code generic in what they return.
     pub(super) fn unit_valued(
         &mut self,
         value: GoExpression,
         monotype: MonotypeId,
         out: &mut Vec<GoStatement>,
     ) -> GoResult<GoExpression> {
-        if !self.has_unit_result(monotype) {
+        self.unit_valued_within(value, monotype, usize::MAX, out)
+    }
+
+    /// `unit_valued` for the first `layers` applications or performances only: past them, a
+    /// result keeps Iris's own Go type.
+    pub(super) fn unit_valued_within(
+        &mut self,
+        value: GoExpression,
+        monotype: MonotypeId,
+        layers: usize,
+        out: &mut Vec<GoStatement>,
+    ) -> GoResult<GoExpression> {
+        if !self.has_unit_result(monotype, layers) {
             return Ok(value);
         }
+        let (parameter, result) = self.callable_parts(monotype);
+        let value = match self.is_unit(result) {
+            true => match returning_unit_value(value, usize::from(parameter.is_some())) {
+                Ok(literal) => return Ok(literal),
+                Err(value) => value,
+            },
+            false => value,
+        };
         let value = match value {
             GoExpression::Function { .. } => value,
             value => self.shared(value, "function", out),
         };
-        let (parameter, result) = self.callable_parts(monotype);
         let mut parameters = vec![];
         let mut arguments = vec![];
         if let Some(parameter) = parameter {
@@ -264,10 +285,10 @@ where
             body.push(GoStatement::Expression(applied));
             body.push(GoStatement::Return(Some(unit_value())));
         } else {
-            let adapted = self.unit_valued(applied, result, &mut body)?;
+            let adapted = self.unit_valued_within(applied, result, layers - 1, &mut body)?;
             body.push(GoStatement::Return(Some(adapted)));
         }
-        let result = self.unit_valued_type(result)?;
+        let result = self.unit_valued_type(result, layers - 1)?;
         Ok(GoExpression::Function { parameters, result: Some(result), body })
     }
 
@@ -487,4 +508,22 @@ where
         out.push(GoStatement::Counting { variable, start, end, body });
         self.deliver(unit_value(), result, sink, out)
     }
+}
+
+/// A function literal of `arity` parameters that returns nothing, returning Unit's value instead:
+/// `func() { … }` as `func() struct{} { …; return struct{}{} }`. A literal that some `return`
+/// leaves early, or of another shape, comes back as it was.
+fn returning_unit_value(value: GoExpression, arity: usize) -> Result<GoExpression, GoExpression> {
+    let GoExpression::Function { parameters, result: None, mut body } = value else {
+        return Err(value);
+    };
+    let mut returns_early = false;
+    crate::go_traversal::each_block(&mut body, |block| {
+        returns_early |= block.iter().any(|statement| matches!(statement, GoStatement::Return(_)));
+    });
+    if returns_early || parameters.len() != arity {
+        return Err(GoExpression::Function { parameters, result: None, body });
+    }
+    body.push(GoStatement::Return(Some(unit_value())));
+    Ok(GoExpression::Function { parameters, result: Some(GoType::EmptyStruct), body })
 }

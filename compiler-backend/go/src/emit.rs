@@ -1276,19 +1276,23 @@ where
         })
     }
 
-    fn has_unit_result(&self, monotype: MonotypeId) -> bool {
-        if !matches!(self.monotypes.get(monotype), Monotype::Function(..) | Monotype::Effect(_)) {
+    /// Whether a function or effect returns Unit within `layers` applications or performances.
+    fn has_unit_result(&self, monotype: MonotypeId, layers: usize) -> bool {
+        if layers == 0
+            || !matches!(self.monotypes.get(monotype), Monotype::Function(..) | Monotype::Effect(_))
+        {
             return false;
         }
         let (_, result) = self.callable_parts(monotype);
-        self.is_unit(result) || self.has_unit_result(result)
+        self.is_unit(result) || self.has_unit_result(result, layers - 1)
     }
 
-    fn unit_valued_type(&mut self, monotype: MonotypeId) -> GoResult<GoType> {
+    /// The Go type of a value whose Unit results within `layers` are Unit's value, `struct{}`.
+    fn unit_valued_type(&mut self, monotype: MonotypeId, layers: usize) -> GoResult<GoType> {
         if self.is_unit(monotype) {
             return Ok(GoType::EmptyStruct);
         }
-        if !self.has_unit_result(monotype) {
+        if !self.has_unit_result(monotype, layers) {
             return self.go_type(monotype);
         }
         let (parameter, result) = self.callable_parts(monotype);
@@ -1296,7 +1300,7 @@ where
             Some(parameter) => vec![self.go_type(parameter)?],
             None => vec![],
         };
-        let result = self.unit_valued_type(result)?;
+        let result = self.unit_valued_type(result, layers - 1)?;
         Ok(GoType::Function { parameters, result: Some(Box::new(result)) })
     }
 
