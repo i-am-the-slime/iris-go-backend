@@ -269,8 +269,20 @@ where
         dictionaries: Vec<Dictionary>,
     ) -> GoResult<Expression> {
         let local = self.local_reference(scope, source)?;
-        let scheme = match scope.scheme_locals.get(&source) {
-            Some(&closed) => self.monotypes.scheme_for(&mut self.context, closed)?,
+        let closed = scope.scheme_locals.get(&source).copied();
+        self.instantiated_scheme_value(scope, local, closed, instantiations, dictionaries)
+    }
+
+    pub(super) fn instantiated_scheme_value(
+        &mut self,
+        scope: &mut Scope,
+        local: Expression,
+        closed: Option<TypeId>,
+        instantiations: &Substitution,
+        dictionaries: Vec<Dictionary>,
+    ) -> GoResult<Expression> {
+        let scheme = match closed {
+            Some(closed) => self.monotypes.scheme_for(&mut self.context, closed)?,
             None => None,
         };
         let Some(scheme) = scheme else {

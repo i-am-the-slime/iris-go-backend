@@ -1,0 +1,41 @@
+---
+source: tests-integration/src/fixtures.rs
+---
+// main.go
+package main
+
+import (
+	"fixture/shared"
+	"github.com/i-am-the-slime/iris-go/console"
+	"github.com/i-am-the-slime/iris-go/prim"
+	"strconv"
+	"strings"
+)
+
+var main_ = initializeMain_()
+
+func initializeMain_() []string {
+	return []string{prim.Append(bracketed.Render.Int(1), bracketed.Render.String("two")), prim.Append(bracketed.Render.Int(1), bracketed.Render.String("two"))}
+}
+
+var bracketed shared.Renderer = shared.Renderer{Render: shared.Render{Int: func(a int32) string {
+	return "[" + strconv.Itoa(int(a)) + "]"
+}, String: func(a string) string {
+	return "[" + prim.ShowString(a) + "]"
+}}}
+
+func main() {
+	console.Print("[" + strings.Join(main_, " ") + "]")
+}
+
+// shared/shared.go
+package shared
+
+type Render struct {
+	Int    func(int32) string
+	String func(string) string
+}
+
+type Renderer struct {
+	Render Render
+}

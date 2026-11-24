@@ -296,7 +296,12 @@ where
                             };
                             let field_monotype = self.field_monotype(scope, monotype, label)?;
                             let local = self.fresh_local(label.clone(), field_monotype);
-                            scope.locals.insert(LocalSource::RecordPun(pun), local.clone());
+                            let source = LocalSource::RecordPun(pun);
+                            scope.locals.insert(source, local.clone());
+                            if let Some(&pun_type) = scope.module.checked.node_types.puns.get(&pun)
+                            {
+                                self.register_scheme_local(scope, source, pun_type)?;
+                            }
                             let pattern = Pattern {
                                 kind: PatternKind::Variable(local),
                                 monotype: field_monotype,
@@ -379,21 +384,29 @@ where
         source: LocalSource,
         type_id: TypeId,
     ) -> GoResult<()> {
+        match self.scheme_type(scope, type_id)? {
+            Some(closed) => scope.scheme_locals.insert(source, closed),
+            None => scope.scheme_locals.remove(&source),
+        };
+        Ok(())
+    }
+
+    pub(super) fn scheme_type(
+        &mut self,
+        scope: &Scope,
+        type_id: TypeId,
+    ) -> GoResult<Option<TypeId>> {
         let closed = self.context.types.substitute(type_id, &scope.substitution);
         let (head, _) = self.context.types.spine(closed);
         let closed = match self.context.types.lookup(head) {
             Type::Synonym(..) => crate::monotype::expand_synonyms(&mut self.context, closed)?,
             _ => closed,
         };
-        if matches!(
+        let quantified = matches!(
             self.context.types.lookup(self.context.types.strip_annotations(closed)),
             Type::Forall(..)
-        ) {
-            scope.scheme_locals.insert(source, closed);
-        } else {
-            scope.scheme_locals.remove(&source);
-        }
-        Ok(())
+        );
+        Ok(quantified.then_some(closed))
     }
 
     pub(super) fn binder_name(&self, scope: &Scope, binder_id: tree::BinderId) -> SmolStr {
