@@ -1,10 +1,11 @@
+use super::build::unit_value;
 use super::{Crossing, Emitter, call, identifier_expression, returning};
 use crate::error::GoResult;
 use crate::foreign::{Foreign, ForeignPackages};
 use crate::monomorphic::Expression;
 use crate::monotype::{Monotype, MonotypeId};
 use crate::naming::capitalise;
-use crate::syntax::{GoExpression, GoStatement};
+use crate::syntax::{GoExpression, GoStatement, GoType};
 use checking::TypeId;
 use checking::core::{Name, Type};
 use rustc_hash::FxHashMap;
@@ -45,10 +46,19 @@ where
         let generic = self.project_generic_parameters(foreign)?;
         let variable_results = self.project_variable_results(foreign)?;
         let uncurried = self.project_uncurried_parameters(foreign)?;
+        let variable_effect_functions = self.project_variable_effect_functions(foreign)?;
         let mut values = vec![];
         for (position, argument) in arguments.iter().enumerate() {
             let value = match uncurried.get(position).cloned().flatten() {
-                Some(groups) => self.grouped_value(argument, &groups, out)?,
+                Some(groups) => {
+                    let value = self.grouped_value(argument, &groups, out)?;
+                    match variable_effect_functions.get(&position) {
+                        Some(&arity) if self.returns_unit_after(argument.monotype, arity) => {
+                            self.unit_valued_uncurried(value, argument.monotype, arity, out)?
+                        }
+                        _ => value,
+                    }
+                }
                 None => {
                     let generic = generic.contains(&position);
                     let value = self.project_argument(argument, generic, crossing, out)?;
@@ -205,6 +215,74 @@ where
             }
         }
         Ok(None)
+    }
+
+    /// The parameters of a foreign declared `EffectFnN … r` for one of its quantified variables
+    /// `r`, by position, with their arity. Go spells such a parameter `func(…) R`, and an
+    /// `EffectFnN` of Iris's that returns Unit is a `func(…)`, which Go can't instantiate `R`
+    /// from, so at `Unit` the argument returns Unit's value, `struct{}{}`.
+    fn project_variable_effect_functions(
+        &mut self,
+        foreign: Foreign,
+    ) -> GoResult<FxHashMap<usize, usize>> {
+        let Foreign::Project { file_id, term, .. } = foreign else {
+            unreachable!("invariant violated: the declared type of another foreign");
+        };
+        let module = self.context.module(file_id)?;
+        let Some(declared) = module.checked.lookup_term_item_type(term) else {
+            return Ok(FxHashMap::default());
+        };
+        let declared = crate::monotype::expand_synonyms(&mut self.context, declared)?;
+        let (variables, mut current) = self.context.types.peel_quantifiers(declared);
+        let mut arities = FxHashMap::default();
+        let mut position = 0;
+        while let Some((parameter, result)) = self.context.types.function_parts(current) {
+            if let Some(arity) = self.context.effect_function_arity(parameter)? {
+                let (_, arguments) = self.context.types.spine(parameter);
+                let returned = arguments.last().map(|&returned| {
+                    let returned = self.context.types.strip_annotations(returned);
+                    self.context.types.lookup(returned).clone()
+                });
+                if let Some(Type::Rigid(name, _, _)) = returned
+                    && variables.contains(&name)
+                {
+                    arities.insert(position, arity);
+                }
+            }
+            position += 1;
+            current = result;
+        }
+        Ok(arities)
+    }
+
+    fn returns_unit_after(&self, monotype: MonotypeId, arity: usize) -> bool {
+        let mut current = monotype;
+        for _ in 0..arity {
+            let Some((_, result)) = self.monotypes.function_parts(current) else { return false };
+            current = result;
+        }
+        self.is_unit(self.monotypes.effect_result(current).unwrap_or(current))
+    }
+
+    /// The uncurried callback, returning Unit's value after it performs.
+    fn unit_valued_uncurried(
+        &mut self,
+        callback: GoExpression,
+        monotype: MonotypeId,
+        arity: usize,
+        out: &mut Vec<GoStatement>,
+    ) -> GoResult<GoExpression> {
+        let callback = self.shared(callback, "function", out);
+        let (parameters, _) = self.fresh_parameters(monotype, arity)?;
+        let arguments = parameters.iter().map(|(name, _)| identifier_expression(name)).collect();
+        Ok(GoExpression::Function {
+            parameters,
+            result: Some(GoType::EmptyStruct),
+            body: vec![
+                GoStatement::Expression(call(callback, arguments)),
+                GoStatement::Return(Some(unit_value())),
+            ],
+        })
     }
 
     fn project_uncurried_parameters(

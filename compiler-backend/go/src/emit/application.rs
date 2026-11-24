@@ -368,7 +368,7 @@ where
         Ok(built.unwrap_or(GoExpression::Function { parameters: vec![], result, body }))
     }
 
-    fn fresh_parameters(
+    pub(super) fn fresh_parameters(
         &mut self,
         monotype: MonotypeId,
         count: usize,
