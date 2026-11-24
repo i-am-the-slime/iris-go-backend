@@ -42,7 +42,7 @@ where
             (Monotype::Erased(_), Monotype::Opaque) => self.array_boxes.erased_values_leave = true,
             _ => {}
         }
-        if from == to || self.same_go_type(from, to)? {
+        if from == to || (self.same_go_type(from, to)? && !self.performs_differently(from, to)) {
             return Ok(value);
         }
         match (self.monotypes.get(from).clone(), self.monotypes.get(to).clone()) {
@@ -207,6 +207,24 @@ where
                 Ok(call(join, vec![call(map, vec![render, value]), comma]))
             }
             _ => Err(GoError::unsupported_construct(UNRELATED_TYPES)),
+        }
+    }
+
+    /// A Go function that returns an Effect performs it when called, so it shares its Go type
+    /// with one returning the action at an erased type, `func(any) any`, but not its meaning:
+    /// `pure` on Effect seen as a run-time dictionary's `pure`.
+    fn performs_differently(&self, from: MonotypeId, to: MonotypeId) -> bool {
+        match (self.monotypes.get(from), self.monotypes.get(to)) {
+            (
+                &Monotype::Function(from_argument, from_result),
+                &Monotype::Function(to_argument, to_result),
+            ) => {
+                self.performs_differently(to_argument, from_argument)
+                    || self.monotypes.effect_result(from_result).is_some()
+                        != self.monotypes.effect_result(to_result).is_some()
+                    || self.performs_differently(from_result, to_result)
+            }
+            _ => false,
         }
     }
 
