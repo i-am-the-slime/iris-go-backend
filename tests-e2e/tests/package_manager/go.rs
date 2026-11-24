@@ -38,6 +38,70 @@ main = spansOf segment
 }
 
 #[test]
+fn go_reports_a_parse_error_that_hides_the_entry_point() {
+    let workspace = TestWorkspace::empty();
+    workspace.write(
+        "spago.yaml",
+        r#"workspace: {}
+package:
+  name: application
+  dependencies: []
+"#,
+    );
+    workspace.write(
+        "src/Main.purs",
+        r#"module Main where
+
+import Data.Unit (Unit
+
+main :: Int
+main = 1
+"#,
+    );
+    workspace.write("go/go.mod", "module example.com/application\n\ngo 1.27.0\n");
+
+    let output = workspace.command(&["go", "--entry", "Main.main", "go"]);
+
+    insta::with_settings!({omit_expression => true}, {
+        insta::assert_snapshot!("go_parse_error_diagnostics", workspace.report(&output));
+    });
+}
+
+#[test]
+fn go_reports_custom_warnings_of_a_program_it_compiles() {
+    let workspace = TestWorkspace::empty();
+    workspace.write(
+        "spago.yaml",
+        r#"workspace: {}
+package:
+  name: application
+  dependencies: []
+"#,
+    );
+    workspace.write(
+        "src/Main.purs",
+        r#"module Main where
+
+import Prim.TypeError (class Warn, Text)
+
+deprecated :: Warn (Text "deprecated is deprecated") => Int -> Int
+deprecated n = n
+
+main :: Int
+main = deprecated 1
+"#,
+    );
+    workspace.write("go/go.mod", "module example.com/application\n\ngo 1.27.0\n");
+
+    let output = workspace.command(&["go", "--entry", "Main.main", "go"]);
+
+    insta::with_settings!({omit_expression => true}, {
+        insta::assert_snapshot!("go_custom_warning_diagnostics", workspace.report(&output));
+    });
+    assert!(workspace.path().join("go/main.go").exists());
+}
+
+#[test]
 fn run_go_builds_once_and_passes_arguments_and_exit_status_through() {
     let workspace = TestWorkspace::empty();
     workspace.write(

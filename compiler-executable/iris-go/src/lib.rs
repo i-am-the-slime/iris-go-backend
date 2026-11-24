@@ -79,6 +79,9 @@ pub fn run(config: GoConfig) -> Result<(), String> {
         }
         Err(error) => return Err(error.to_string()),
     };
+    let editable_files = snapshot.files.iter().filter(|(_, file)| file.editable);
+    let editable_files: Vec<_> = editable_files.map(|(&file_id, _)| file_id).collect();
+    session.report_diagnostics(&editable_files).map_err(|error| error.to_string())?;
     for note in &program.notes {
         eprintln!("go: note: {note}");
     }
