@@ -277,7 +277,7 @@ where
         sharing::share_repeated_constructions(&mut declarations, &mut record_value_name)
     });
     let forwarders = forwarders::Forwarders::new(emitter.foreign_packages);
-    timed("forwarders", || forwarders.call_methods(&mut declarations));
+    timed("forwarders", || forwarders.call_forwarded(&mut declarations));
     timed("unreferenced", || unreferenced::drop_unreferenced_definitions(&mut declarations));
     // Last, so that every pass before reads the constructions' fields in their literals.
     timed("constructions", || emitter.call_constructor_functions(&mut declarations))?;

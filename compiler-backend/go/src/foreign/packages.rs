@@ -60,7 +60,7 @@ pub struct ForeignSource {
     pub files: Vec<String>,
     pub values: Vec<String>,
     pub types: Vec<String>,
-    pub forwarders: Vec<(String, String)>,
+    pub forwarders: Vec<(String, super::Forward)>,
     pub uses_event_loop: bool,
     pub recovers: bool,
     pub opacity: super::Opacity,
