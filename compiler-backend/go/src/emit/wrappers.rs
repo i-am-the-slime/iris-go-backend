@@ -135,7 +135,7 @@ fn forwarded_to(returned: &GoExpression, parameters: &[(String, GoType)]) -> Opt
 
 /// The fields of `return r.A.B` where `r` is the one parameter.
 fn field_read(returned: &GoExpression, parameters: &[(String, GoType)]) -> Option<Vec<String>> {
-    let [(parameter, _)] = parameters else { return None };
+    let [(parameter, parameter_type)] = parameters else { return None };
     let mut fields = vec![];
     let mut value = returned;
     while let GoExpression::Field { value: inner, name } = value {
@@ -144,7 +144,8 @@ fn field_read(returned: &GoExpression, parameters: &[(String, GoType)]) -> Optio
     }
     fields.reverse();
     let read = matches!(value, GoExpression::Identifier(name) if name == parameter);
-    read.then_some(fields)
+    let boxes = fields.is_empty() && matches!(parameter_type, GoType::Any | GoType::Erased(_));
+    (read && !boxes).then_some(fields)
 }
 
 struct Rewrite<'w> {
