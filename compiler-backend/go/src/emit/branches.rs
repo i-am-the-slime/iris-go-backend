@@ -19,7 +19,8 @@ impl Walk for Branches {
             }
         }
         body.iter_mut().for_each(|statement| self.statement(statement));
-        let alone = body.iter().filter(|statement| !matches!(statement, GoStatement::Line(_))).count() == 1;
+        let alone =
+            body.iter().filter(|statement| !matches!(statement, GoStatement::Line(_))).count() == 1;
         let statements = std::mem::take(body);
         for statement in statements {
             body.extend(simplified(statement, alone));
@@ -49,9 +50,7 @@ fn sink_calls_into_branches(body: &mut Vec<GoStatement>) {
                 GoExpression::Field { name, .. } => Some(name),
                 _ => None,
             };
-            let GoStatement::If { then, otherwise, .. } = &mut body[choice] else {
-                unreachable!()
-            };
+            let GoStatement::If { then, otherwise, .. } = &mut body[choice] else { unreachable!() };
             for branch in [then, otherwise] {
                 let last = last_effective(branch).expect("invariant violated: no assignment");
                 let GoStatement::Assign { mut values, .. } = branch.remove(last) else {
@@ -64,8 +63,10 @@ fn sink_calls_into_branches(body: &mut Vec<GoStatement>) {
                     }
                     None => chosen,
                 };
-                let called =
-                    GoExpression::Call { function: Box::new(function), arguments: arguments.clone() };
+                let called = GoExpression::Call {
+                    function: Box::new(function),
+                    arguments: arguments.clone(),
+                };
                 branch.insert(last, GoStatement::Expression(called));
             }
             body.remove(index);
@@ -95,10 +96,8 @@ fn chosen_then_called(body: &mut [GoStatement], index: usize) -> Option<(usize, 
     if !receives || !arguments.iter().all(is_pure) {
         return None;
     }
-    let uses: usize = body[index + 1..]
-        .iter_mut()
-        .map(|statement| mentions(statement, &name))
-        .sum();
+    let uses: usize =
+        body[index + 1..].iter_mut().map(|statement| mentions(statement, &name)).sum();
     (uses == 3).then_some((choice, call))
 }
 
@@ -173,9 +172,9 @@ fn called_literal_body(call: &GoExpression, alone: bool) -> Option<Vec<GoStateme
     };
     let GoExpression::Function { parameters, result: None, body } = literal else { return None };
     let unnamed = parameters.iter().all(|(name, _)| name == "_");
-    let declares = body
-        .iter()
-        .any(|statement| matches!(statement, GoStatement::Define { .. } | GoStatement::Variable { .. }));
+    let declares = body.iter().any(|statement| {
+        matches!(statement, GoStatement::Define { .. } | GoStatement::Variable { .. })
+    });
     (unnamed && !returns(body) && (alone || !declares)).then(|| body.clone())
 }
 
@@ -207,12 +206,17 @@ fn switch_of_chain(statement: &GoStatement) -> Option<GoStatement> {
         let mut body = std::mem::take(&mut lines);
         body.extend(then.iter().cloned());
         cases.push(GoCase { values: vec![value.clone()], body, line: None });
-        let effective: Vec<&GoStatement> =
-            otherwise.iter().filter(|statement| !matches!(statement, GoStatement::Line(_))).collect();
+        let effective: Vec<&GoStatement> = otherwise
+            .iter()
+            .filter(|statement| !matches!(statement, GoStatement::Line(_)))
+            .collect();
         match effective.as_slice() {
             [next @ GoStatement::If { condition, .. }] if compared(condition).is_some() => {
                 lines.extend(
-                    otherwise.iter().filter(|statement| matches!(statement, GoStatement::Line(_))).cloned(),
+                    otherwise
+                        .iter()
+                        .filter(|statement| matches!(statement, GoStatement::Line(_)))
+                        .cloned(),
                 );
                 current = next;
             }
@@ -222,8 +226,11 @@ fn switch_of_chain(statement: &GoStatement) -> Option<GoStatement> {
     if cases.len() < 3 || breaks(default) {
         return None;
     }
-    let default = (!default.is_empty())
-        .then(|| GoDefault { covers: vec![], body: default.clone(), line: None });
+    let default = (!default.is_empty()).then(|| GoDefault {
+        covers: vec![],
+        body: default.clone(),
+        line: None,
+    });
     Some(GoStatement::Switch { value: Some(subject.clone()), cases, default })
 }
 

@@ -45,8 +45,8 @@ where
                 paths.push(value);
                 continue;
             }
-            let base = bound_name(alternatives, position)
-                .unwrap_or_else(|| super::scrutinee_name(&value));
+            let base =
+                bound_name(alternatives, position).unwrap_or_else(|| super::scrutinee_name(&value));
             paths.push(self.hoist(value, &base, out));
         }
         if let Some(first) = alternatives.first()

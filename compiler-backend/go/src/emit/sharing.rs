@@ -57,11 +57,9 @@ fn repeated_construction(
 
 fn is_pure_construction(expression: &GoExpression) -> bool {
     let GoExpression::Composite { type_, fields } = expression else { return false };
-    let is_struct =
-        matches!(type_, GoType::Named(_) | GoType::Generic { .. } | GoType::Struct(_));
-    let reads_locals = fields
-        .iter()
-        .any(|(_, value)| matches!(value.unattributed(), GoExpression::Identifier(_)));
+    let is_struct = matches!(type_, GoType::Named(_) | GoType::Generic { .. } | GoType::Struct(_));
+    let reads_locals =
+        fields.iter().any(|(_, value)| matches!(value.unattributed(), GoExpression::Identifier(_)));
     let only_names = fields.iter().all(|(label, value)| {
         label.is_some()
             && matches!(
@@ -152,11 +150,8 @@ impl Walk for Placement<'_> {
             self.placed = true;
             return;
         }
-        let bound_here: Vec<String> = body
-            .iter()
-            .flat_map(defined_names)
-            .filter(|name| self.wanted.contains(name))
-            .collect();
+        let bound_here: Vec<String> =
+            body.iter().flat_map(defined_names).filter(|name| self.wanted.contains(name)).collect();
         let before = self.bound_outside.clone();
         self.bound_outside.extend(bound_here);
         body.iter_mut().for_each(|statement| self.statement(statement));
@@ -184,10 +179,8 @@ impl Placement<'_> {
         if !self.wanted.iter().all(|name| bound.contains(name)) {
             return None;
         }
-        let counts: Vec<usize> = body
-            .iter_mut()
-            .map(|statement| occurrences_in(statement, self.construction))
-            .collect();
+        let counts: Vec<usize> =
+            body.iter_mut().map(|statement| occurrences_in(statement, self.construction)).collect();
         let first = counts.iter().position(|&count| count > 0)?;
         let found: usize = counts[first..].iter().sum();
         (first >= after && found == self.total).then_some(first)

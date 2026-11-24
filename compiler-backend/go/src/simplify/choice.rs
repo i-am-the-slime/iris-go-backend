@@ -130,7 +130,8 @@ impl Simplifier<'_> {
         placements: &[Placement],
     ) -> Option<Expression> {
         let ([alternative], [Placement::Joined]) = (alternatives, placements) else { return None };
-        let ([pattern], Guarded::Unconditional(body)) = (&alternative.patterns[..], &alternative.body)
+        let ([pattern], Guarded::Unconditional(body)) =
+            (&alternative.patterns[..], &alternative.body)
         else {
             return None;
         };
@@ -138,14 +139,16 @@ impl Simplifier<'_> {
         let [Pattern { kind: PatternKind::Variable(field), .. }] = &arguments[..] else {
             return None;
         };
-        let only_constructions = self.map_choices(choice.clone(), field.monotype, &mut |_, chosen| {
-            match chosen.kind {
+        let only_constructions =
+            self.map_choices(choice.clone(), field.monotype, &mut |_, chosen| match chosen.kind {
                 ExpressionKind::Construct { mut arguments, .. } if arguments.len() == 1 => {
                     arguments.remove(0)
                 }
-                _ => Expression::new(ExpressionKind::Fail("not a construction".into()), field.monotype),
-            }
-        });
+                _ => Expression::new(
+                    ExpressionKind::Fail("not a construction".into()),
+                    field.monotype,
+                ),
+            });
         let mut all_constructions = true;
         visit(&only_constructions, &mut |node| {
             if matches!(node.kind, ExpressionKind::Fail(_)) {

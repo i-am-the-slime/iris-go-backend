@@ -396,9 +396,8 @@ where
         dictionaries: Vec<Dictionary>,
         monotype: MonotypeId,
     ) -> GoResult<Expression> {
-        let missing = |name: &SmolStr| UnsupportedState::MissingInstanceMember {
-            member: name.to_string(),
-        };
+        let missing =
+            |name: &SmolStr| UnsupportedState::MissingInstanceMember { member: name.to_string() };
         let constraint = runtime.constraint;
         let value = runtime.value.expect("invariant violated: a run-time dictionary has no value");
         let Some(field) = self.record_field(*value, &name) else {
@@ -408,9 +407,12 @@ where
             return Ok(self.coerce(field, monotype));
         }
         let class = self.class_environment(&scope.definition, constraint)?;
-        let Some(declared) = class.class.members.iter().find(|declared| {
-            class.file_id == member.0 && declared.item_id == member.1
-        }) else {
+        let Some(declared) = class
+            .class
+            .members
+            .iter()
+            .find(|declared| class.file_id == member.0 && declared.item_id == member.1)
+        else {
             return Err(self.unsupported(scope, missing(&name)));
         };
         let field_type = declared.field_type;
@@ -495,7 +497,8 @@ where
         let mut fields = vec![];
         for member in &class.class.members {
             let label = self.context.term_name(class.file_id, member.item_id)?;
-            let erased_member = self.erased_member(&class, member.field_type, &Substitution::default());
+            let erased_member =
+                self.erased_member(&class, member.field_type, &Substitution::default());
             let member_monotype = self.closed_monotype(scope, erased_member.body)?;
             let field = record.iter().find(|field| field.label == label);
             let field = field.expect("invariant violated: a member is not in its dictionary");

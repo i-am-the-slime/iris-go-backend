@@ -440,7 +440,8 @@ impl Package {
             type_parameters = read_type_parameters(&declaration[2..end]);
             position = end + 1;
         }
-        if let Some(function) = read_signature(name, type_parameters, vec![], &declaration[position..])
+        if let Some(function) =
+            read_signature(name, type_parameters, vec![], &declaration[position..])
         {
             self.functions.push(function);
         }

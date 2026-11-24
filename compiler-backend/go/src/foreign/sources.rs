@@ -136,10 +136,7 @@ fn owned_files<'n>(stem: &str, names: &[&'n str]) -> Vec<&'n str> {
 
 pub fn foreign_forwarders(source: &str) -> Vec<(String, String)> {
     let value_receivers = value_receiver_methods(source);
-    source
-        .lines()
-        .filter_map(|line| forwarder(line.trim_end(), &value_receivers))
-        .collect()
+    source.lines().filter_map(|line| forwarder(line.trim_end(), &value_receivers)).collect()
 }
 
 fn forwarder(line: &str, value_receivers: &[&str]) -> Option<(String, String)> {
@@ -174,12 +171,10 @@ fn forwarder(line: &str, value_receivers: &[&str]) -> Option<(String, String)> {
     let arguments: Vec<&str> =
         arguments.split(',').map(str::trim).filter(|argument| !argument.is_empty()).collect();
     let forwarded = others.iter().map(|(name, _)| *name).eq(arguments.iter().copied());
-    let typed_by_receiver = type_parameters
-        .iter()
-        .all(|parameter| mentions_word(receiver_type, parameter));
+    let typed_by_receiver =
+        type_parameters.iter().all(|parameter| mentions_word(receiver_type, parameter));
     let addressable = receiver_type.starts_with('*') || value_receivers.contains(&method);
-    (forwarded && typed_by_receiver && addressable)
-        .then(|| (name.to_string(), method.to_string()))
+    (forwarded && typed_by_receiver && addressable).then(|| (name.to_string(), method.to_string()))
 }
 
 fn parameters(list: &str) -> Option<Vec<(&str, &str)>> {

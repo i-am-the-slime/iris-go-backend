@@ -220,7 +220,8 @@ where
             .unwrap_or_else(|_| unreachable!("invariant violated: three leaf traversals"));
 
         let elements_type = traversal.elements;
-        let concatenated = self.context.queries.intern_type(Type::Function(elements_type, elements_type));
+        let concatenated =
+            self.context.queries.intern_type(Type::Function(elements_type, elements_type));
         let map_concat =
             self.instantiate_rank_two(traversal.map_scheme, &[elements_type, concatenated]);
         let map_concat = self.rank_two_argument(scope, arguments[1], map_concat)?;
@@ -236,7 +237,8 @@ where
         let mapped_half = apply_to(map_concat, vec![concat, half.expression()], mapped);
         let map_half = self.lambda(vec![half], mapped_half);
 
-        let apply_concat = self.instantiate_rank_two(traversal.apply_scheme, &[elements_type, elements_type]);
+        let apply_concat =
+            self.instantiate_rank_two(traversal.apply_scheme, &[elements_type, elements_type]);
         let apply_concat = self.rank_two_argument(scope, arguments[0], apply_concat)?;
         let first = self.fresh_local(SmolStr::new_static("first"), mapped);
         let second = self.fresh_local(SmolStr::new_static("second"), accumulated);
@@ -264,7 +266,8 @@ where
         let mut remaining = vec![traversal.elements];
         for _ in 1..inputs.len() {
             let last = *remaining.last().expect("invariant violated: remaining is not empty");
-            remaining.push(self.context.queries.intern_type(Type::Function(traversal.element, last)));
+            remaining
+                .push(self.context.queries.intern_type(Type::Function(traversal.element, last)));
         }
         remaining.reverse();
 
@@ -286,12 +289,14 @@ where
         let mut results = results.into_iter();
         let first = results.next().expect("invariant violated: a leaf traverses an element");
 
-        let map = self.instantiate_rank_two(traversal.map_scheme, &[traversal.element, remaining[0]]);
+        let map =
+            self.instantiate_rank_two(traversal.map_scheme, &[traversal.element, remaining[0]]);
         let map = self.rank_two_argument(scope, arguments[1], map)?;
         let mapped = self.monotypes.result_after(map.monotype, 2);
         let mut combined = apply_to(map, vec![collect, first], mapped);
         for (result, &after) in results.zip(&remaining[1..]) {
-            let apply = self.instantiate_rank_two(traversal.apply_scheme, &[traversal.element, after]);
+            let apply =
+                self.instantiate_rank_two(traversal.apply_scheme, &[traversal.element, after]);
             let apply = self.rank_two_argument(scope, arguments[0], apply)?;
             let applied = self.monotypes.result_after(apply.monotype, 2);
             combined = apply_to(apply, vec![combined, result], applied);

@@ -251,7 +251,7 @@ pub const TRAVERSE_BALANCED: Foreign = direct_with(
     Boundary { uncurried: &[(3, 2), (4, 3), (6, 2)], lazy: &[1], ..PLAIN },
 );
 
-pub const APPENDER: Foreign =perform_in(GoPackage::Direct, "Appender", 0, INSTANTIATE);
+pub const APPENDER: Foreign = perform_in(GoPackage::Direct, "Appender", 0, INSTANTIATE);
 
 pub(super) const FOREIGN_IMPORTS: &[(&str, &str, Foreign)] = &[
     ("Data.Semiring", "intAdd", Foreign::Operator(Operator::IntAdd)),
