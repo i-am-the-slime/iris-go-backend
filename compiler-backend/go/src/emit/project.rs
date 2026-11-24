@@ -41,6 +41,7 @@ where
             let instantiated = GoExpression::Instantiation { function, arguments };
             return Ok(if effectful { instantiated } else { call(instantiated, vec![]) });
         }
+        let function = self.instantiated(function, type_arguments, crossing)?;
         let generic = self.project_generic_parameters(foreign)?;
         let variable_results = self.project_variable_results(foreign)?;
         let uncurried = self.project_uncurried_parameters(foreign)?;
@@ -62,6 +63,20 @@ where
             values.push(value);
         }
         Ok(call(function, values))
+    }
+
+    fn instantiated(
+        &mut self,
+        function: GoExpression,
+        type_arguments: &[MonotypeId],
+        crossing: Crossing,
+    ) -> GoResult<GoExpression> {
+        if type_arguments.is_empty() {
+            return Ok(function);
+        }
+        let types = type_arguments.iter().map(|&type_| self.convention_or_native(type_, crossing));
+        let arguments = types.collect::<GoResult<Vec<_>>>()?;
+        Ok(GoExpression::Instantiation { function: Box::new(function), arguments })
     }
 
     pub(super) fn project_crossing(&self, foreign: Foreign) -> Crossing {
@@ -237,9 +252,13 @@ where
         monotype: MonotypeId,
         out: &mut Vec<GoStatement>,
     ) -> GoResult<GoExpression> {
-        let function = self.project_function(foreign)?;
-        let generic = self.project_generic_parameters(foreign)?;
+        let Foreign::Project { type_arguments, .. } = foreign else {
+            unreachable!("invariant violated: a project effect of another foreign");
+        };
         let crossing = self.project_crossing(foreign);
+        let function = self.project_function(foreign)?;
+        let function = self.instantiated(function, type_arguments, crossing)?;
+        let generic = self.project_generic_parameters(foreign)?;
         let mut bound = Vec::with_capacity(arguments.len());
         for (position, argument) in arguments.iter().enumerate() {
             let generic = generic.contains(&position);
