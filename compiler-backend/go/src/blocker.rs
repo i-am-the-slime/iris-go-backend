@@ -54,6 +54,8 @@ impl UnsupportedState {
                 BlockerKind::ForeignData
             }
             UnsupportedState::Construct { .. }
+            | UnsupportedState::MissingRecordFields { .. }
+            | UnsupportedState::MissingInstantiations { .. }
             | UnsupportedState::ReferenceEqualityAcrossTypes { .. } => BlockerKind::Construct,
             UnsupportedState::SpecializationLimit { .. } | UnsupportedState::GrowingEvidence => {
                 BlockerKind::SpecializationLimit

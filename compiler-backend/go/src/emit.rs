@@ -106,7 +106,7 @@ use crate::modules::{ModuleIndex, Modules};
 use crate::monomorphic::traversal::visit;
 use crate::monomorphic::{
     Binding, Expression, ExpressionKind, FunctionId, Guarded, Literal, Local, LocalId, Pattern,
-    PatternKind, Program, RecordUpdate, Results,
+    PatternKind, Program, RecordUpdate, Results, SourcePosition,
 };
 use crate::monotype::{DataType, Monotype, MonotypeId, Monotypes};
 use crate::naming::identifier;
@@ -457,6 +457,7 @@ where
             arities,
             source_lines: lines::SourceLines::default(),
             spans: lines::Spans::default(),
+            enclosing_position: None,
         }
     }
 }
@@ -649,6 +650,7 @@ struct Emitter<'p, 'm, 'q, Q> {
     arities: Arities,
     source_lines: lines::SourceLines,
     spans: lines::Spans,
+    enclosing_position: Option<SourcePosition>,
 }
 
 /// The largest data type held by value that cells and arrays copy.
@@ -836,6 +838,9 @@ where
             Monotype::Char => "Char".into(),
             Monotype::Unit => "Unit".into(),
             Monotype::Array(element) => format!("Array {}", self.purescript_type(element)?),
+            Monotype::Effect(result) => {
+                format!("an Effect or Aff of {}", self.purescript_type(result)?)
+            }
             Monotype::Record(fields) => {
                 let labels: Vec<&str> = fields.iter().map(|field| field.label.as_str()).collect();
                 format!("{{ {} }}", labels.join(", "))
@@ -1686,7 +1691,10 @@ where
     ) -> GoResult<GoExpression> {
         let line = self.span_line(expression.position)?;
         let enclosing = self.spans.enter(line.clone());
+        let enclosing_position = self.enclosing_position;
+        self.enclosing_position = expression.position.or(enclosing_position);
         let value = self.value_unattributed(expression, out);
+        self.enclosing_position = enclosing_position;
         self.spans.leave(enclosing);
         let value = value?;
         if let Some(line) = line {
@@ -1801,7 +1809,8 @@ where
             }
             ExpressionKind::Coerce(value) => {
                 let coerced = self.value(value, out)?;
-                self.coerce_at(coerced, value.monotype, expression.monotype, out)?
+                let position = expression.position.or(value.position);
+                self.coerce_at(coerced, value.monotype, expression.monotype, position, out)?
             }
             ExpressionKind::Let { bindings, body } => {
                 self.bindings(bindings, out)?;

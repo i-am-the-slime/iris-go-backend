@@ -498,7 +498,8 @@ where
             }
             Foreign::Unit => unit_value(),
             Foreign::UnsafeCoerce => {
-                self.coerce_at(values.remove(0), arguments[0].monotype, monotype, out)?
+                let position = arguments[0].position;
+                self.coerce_at(values.remove(0), arguments[0].monotype, monotype, position, out)?
             }
             Foreign::Identity => values.remove(0),
             _ => unreachable!("invariant violated: effectful foreign reached value conversion"),
