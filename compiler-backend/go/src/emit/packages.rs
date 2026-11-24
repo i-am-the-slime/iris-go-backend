@@ -488,8 +488,15 @@ impl Packaging<'_> {
                     .collect(),
                 _ => FxHashMap::default(),
             };
-            let support_aliases = alias_shadowed_support(&support_imports, &support, &mut avoided);
+            let mut support_aliases =
+                alias_shadowed_support(&support_imports, &support, &mut avoided);
             let aliases = choose_aliases(&referenced, packages, &qualifiers, &avoided, &support);
+            support_aliases.extend(alias_foreign_packages(
+                &support_imports,
+                &support,
+                &avoided,
+                aliases.values(),
+            ));
             for declaration in &mut declarations {
                 rename_declared(declaration, &mut |name| naming.name(name, place));
                 declaration.for_each_reference_mut(&mut |reference| match reference {
@@ -519,8 +526,8 @@ impl Packaging<'_> {
                     }
                     Reference::Binder(_) => {}
                 });
-                super::locals::settle(declaration, &record_values);
                 requalify_support(declaration, &support_aliases);
+                super::locals::settle(declaration, &record_values);
             }
             let mut imports: Vec<GoImport> = support_imports
                 .into_iter()
@@ -729,6 +736,42 @@ fn alias_shadowed_support(
         aliases.insert(name.clone(), alias);
     }
     aliases
+}
+
+fn alias_foreign_packages<'a>(
+    imports: &BTreeSet<String>,
+    support: &FxHashMap<String, String>,
+    avoided: &FxHashSet<String>,
+    module_aliases: impl Iterator<Item = &'a String>,
+) -> FxHashMap<String, String> {
+    let mut taken: FxHashSet<String> = avoided.clone();
+    taken.extend(support.keys().filter(|name| !is_foreign_package(name)).cloned());
+    taken.extend(module_aliases.cloned());
+    let mut foreign: Vec<&String> = support
+        .iter()
+        .filter(|(name, path)| is_foreign_package(name) && imports.contains(*path))
+        .map(|(name, _)| name)
+        .collect();
+    foreign.sort();
+    let mut aliases = FxHashMap::default();
+    for name in foreign {
+        let last = name.trim_end_matches("_ffi").rsplit('_').next().unwrap_or(name);
+        let base = lowercase(last);
+        let candidates = [base.clone(), format!("{base}ffi")];
+        let free = candidates
+            .into_iter()
+            .find(|candidate| is_package_name(candidate) && !taken.contains(candidate));
+        let alias = free.unwrap_or_else(|| {
+            numbered(&format!("{base}ffi"), |candidate| taken.contains(candidate))
+        });
+        taken.insert(alias.clone());
+        aliases.insert(name.clone(), alias);
+    }
+    aliases
+}
+
+fn is_foreign_package(name: &str) -> bool {
+    name.ends_with("_ffi")
 }
 
 /// The declaration with its references to shadowed support packages under their aliases.
