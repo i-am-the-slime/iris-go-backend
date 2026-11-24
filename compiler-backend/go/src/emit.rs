@@ -44,6 +44,7 @@ mod joins;
 mod kept;
 mod known;
 mod labelled;
+mod loads;
 mod json;
 mod layout;
 mod lengths;
@@ -246,6 +247,7 @@ where
         blocks::allocate_nested_cells_together(&mut declarations, &mut names, &taken)
     });
     timed("divergence", || diverging::end_blocks_at_divergence(&mut declarations));
+    timed("field reads", || loads::reuse_field_reads(&mut declarations));
     timed("unreferenced", || unreferenced::drop_unreferenced_definitions(&mut declarations));
     if let Some(aside) = lines_aside {
         lines::restore(&mut declarations, aside);

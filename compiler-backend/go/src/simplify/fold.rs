@@ -163,6 +163,19 @@ impl Simplifier<'_> {
                 _ => operation(operator, vec![left, right], monotype),
             },
             Operator::IntAdd | Operator::StringAppend => associate(operator, left, right, monotype),
+            // `b == false` is `not b`, which turns a comparison around.
+            Operator::Compare(comparison @ (Comparison::Equal | Comparison::NotEqual))
+                if let Some((known, other)) = match (boolean(&left), boolean(&right)) {
+                    (Some(known), None) => Some((known, right.clone())),
+                    (None, Some(known)) => Some((known, left.clone())),
+                    _ => None,
+                } =>
+            {
+                match known == (comparison == Comparison::Equal) {
+                    true => other,
+                    false => self.not(other, monotype),
+                }
+            }
             _ => operation(operator, vec![left, right], monotype),
         }
     }
