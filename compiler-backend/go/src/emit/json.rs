@@ -587,16 +587,9 @@ where
             }
             Monotype::Object(element) => {
                 raw(out, "{");
-                let index = locals.fresh("index");
                 let key = locals.fresh("key");
                 let member = locals.fresh("member");
-                let mut body = vec![GoStatement::Define {
-                    names: vec![member.clone()],
-                    values: vec![GoExpression::Index {
-                        value: Box::new(super::field(value.clone(), "Vals")),
-                        index: Box::new(identifier_expression(&index)),
-                    }],
-                }];
+                let mut body = vec![];
                 let mut written =
                     vec![discard(method(ENCODER, "Key", vec![identifier_expression(&key)]))];
                 let maybe = match self.monotypes.get(element).clone() {
@@ -629,10 +622,13 @@ where
                         body.extend(written);
                     }
                 }
+                self.imports.insert(GoPackage::Object.path().into());
+                let entries =
+                    GoExpression::Qualified { package: "object".into(), name: "Entries".into() };
                 out.push(GoStatement::Range {
-                    index: Some(index),
-                    element: key,
-                    iterable: super::field(value, "Keys"),
+                    index: Some(key),
+                    element: member,
+                    iterable: call(entries, vec![value]),
                     body,
                 });
                 raw(out, "}");

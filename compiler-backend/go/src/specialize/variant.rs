@@ -1,16 +1,24 @@
+use std::sync::Arc;
+
 use checking::TypeId;
-use checking::core::Type;
+use checking::core::{RowField, RowType, Type};
+use files::FileId;
+use indexing::TermItemId;
 use smol_str::SmolStr;
 
 use super::{Scope, Specializer};
+use crate::dictionary::Dictionary;
 use crate::error::GoResult;
 use crate::monomorphic::{
     Alternative, Expression, ExpressionKind, Guarded, Local, Pattern, PatternKind,
 };
 use crate::monotype::{DataType, Monotype, MonotypeId};
 use crate::primitives::Primitive;
+use crate::scheme::ConstrainedScheme;
+use crate::types::Substitution;
 
 const IMPOSSIBLE: &str = "Data.Variant: pattern match failure";
+const PENDING: &str = "continuation instantiation discovered in this pass";
 const UNHANDLED: &str = "Data.Variant: a label without a handler";
 
 impl<'q, Q> Specializer<'q, Q>
@@ -34,6 +42,7 @@ where
             Primitive::OnMatch => self.on_match(scope, monotype),
             Primitive::MakeExists
             | Primitive::RunExists
+            | Primitive::Unvariant
             | Primitive::ReifyType
             | Primitive::ToSigned
             | Primitive::ToUnsigned
@@ -169,6 +178,221 @@ where
         })?;
         let body = self.case(value.expression(), alternatives, result);
         Ok(Some(self.lambda(vec![handlers, fallback, value], body)))
+    }
+
+    /// `unvariant v` as one branch per label of the Variant, each the Unvariant
+    /// that runs the continuation's instantiation at that label on the payload.
+    pub(super) fn unvariant(
+        &mut self,
+        scope: &Scope,
+        declaration: (FileId, TermItemId),
+        instantiations: &Substitution,
+        monotype: MonotypeId,
+    ) -> GoResult<Option<Expression>> {
+        let Some(([variant], unvariant)) = self.arrows::<1>(monotype) else { return Ok(None) };
+        let Some(data) = self.variant_data(variant) else { return Ok(None) };
+        let Some(continuation) = self.unvariant_continuation(declaration, instantiations)? else {
+            return Ok(None);
+        };
+        let Some(continuations) = self.label_continuations(scope, &continuation, &data)? else {
+            self.note_pending();
+            let pending = ExpressionKind::Fail(SmolStr::new_static(PENDING));
+            return Ok(Some(Expression::new(pending, monotype)));
+        };
+        let value = self.fresh_local(self.monotypes.value_name(variant), variant);
+        let alternatives = self.alternatives(scope, &data, variant, |this, name, hidden| {
+            let label = continuations.iter().find(|(label, _)| *label == name);
+            match label {
+                Some((_, field)) => Ok(this.run_continuation(unvariant, field, &hidden)),
+                None => Ok(Expression::new(
+                    ExpressionKind::Fail(SmolStr::new_static(IMPOSSIBLE)),
+                    unvariant,
+                )),
+            }
+        })?;
+        let body = self.case(value.expression(), alternatives, unvariant);
+        Ok(Some(self.lambda(vec![value], body)))
+    }
+
+    /// The scheme of `Unvariant' r x`, the continuation an `Unvariant r` runs.
+    fn unvariant_continuation(
+        &mut self,
+        (file_id, term): (FileId, TermItemId),
+        instantiations: &Substitution,
+    ) -> GoResult<Option<ConstrainedScheme>> {
+        let module = self.context.module(file_id)?;
+        let Some(declared) = module.checked.lookup_term_item_type(term) else { return Ok(None) };
+        let declared = self.outer_body(declared, &mut vec![]);
+        let declared = self.context.types.substitute(declared, instantiations);
+        let Some((_, unvariant)) = self.context.types.function_parts(declared) else {
+            return Ok(None);
+        };
+        let Some(unwrapped) = crate::monotype::newtype_unwrapped(&mut self.context, unvariant)?
+        else {
+            return Ok(None);
+        };
+        let unwrapped = crate::monotype::expand_synonyms(&mut self.context, unwrapped)?;
+        let (_, runner) = self.context.types.peel_quantifiers(unwrapped);
+        let Some((continuation, _)) = self.context.types.function_parts(runner) else {
+            return Ok(None);
+        };
+        let continuation = crate::monotype::expand_synonyms(&mut self.context, continuation)?;
+        Ok(crate::scheme::constrained_scheme(&mut self.context, continuation)?)
+    }
+
+    /// Each label of the Variant with the continuation's field for it, or None
+    /// when some label's instantiation is discovered in this pass.
+    fn label_continuations(
+        &mut self,
+        scope: &Scope,
+        continuation: &ConstrainedScheme,
+        data: &DataType,
+    ) -> GoResult<Option<Vec<(SmolStr, SmolStr)>>> {
+        let constructors = self
+            .monotypes
+            .constructors(&mut self.context, data)
+            .map_err(|failure| failure.at(&scope.definition))?;
+        let mut fields = Vec::with_capacity(constructors.len());
+        let mut discovered = false;
+        for constructor in constructors.iter() {
+            let Some((types, dictionaries)) =
+                self.label_instantiation(continuation, &constructor.name)?
+            else {
+                return Ok(None);
+            };
+            match self.monotypes.schemes.find(&continuation.key, &types) {
+                Some(known) => fields.push((constructor.name.clone(), known.label.clone())),
+                None => {
+                    let key = continuation.key.clone();
+                    self.discover_labelled(scope, key, types, dictionaries, None)?;
+                    discovered = true;
+                }
+            }
+        }
+        Ok((!discovered).then_some(fields))
+    }
+
+    /// The types and dictionaries of the continuation's instantiation at one
+    /// label: its `Cons s t o r` solved by the label, its payload and the rest
+    /// of the row, and `IsSymbol s` by the label itself.
+    fn label_instantiation(
+        &mut self,
+        continuation: &ConstrainedScheme,
+        label: &SmolStr,
+    ) -> GoResult<Option<(Vec<TypeId>, Vec<Dictionary>)>> {
+        let mut solved = Substitution::default();
+        let mut dictionaries = Vec::with_capacity(continuation.constraints.len());
+        for &constraint in &continuation.constraints {
+            let (head, arguments) = self.context.types.spine(constraint);
+            let Type::Constructor(file_id, item) = *self.context.types.lookup(head) else {
+                return Ok(None);
+            };
+            if self.context.is_type(file_id, item, "Data.Symbol", "IsSymbol")? {
+                dictionaries.push(Dictionary::Symbol(label.clone()));
+                continue;
+            }
+            if !self.context.is_type(file_id, item, "Prim.Row", "Cons")? {
+                return Ok(None);
+            }
+            let [symbol, payload, rest, row] = arguments[..] else { return Ok(None) };
+            let Some((field, remaining)) = self.row_without(row, label) else { return Ok(None) };
+            for (variable, solution) in
+                [(symbol, self.symbol_type(label)), (payload, field), (rest, remaining)]
+            {
+                let Type::Rigid(name, ..) = *self.context.types.lookup(variable) else {
+                    return Ok(None);
+                };
+                solved.insert(name, solution);
+            }
+            dictionaries.push(Dictionary::Trivial);
+        }
+        let types: Option<Vec<TypeId>> =
+            continuation.names.iter().map(|name| solved.get(name).copied()).collect();
+        Ok(types.map(|types| (types, dictionaries)))
+    }
+
+    /// The type of the row's field `label` and the row without it.
+    fn row_without(&mut self, row: TypeId, label: &str) -> Option<(TypeId, TypeId)> {
+        let row = self.context.types.strip_annotations(row);
+        let Type::Row(row) = *self.context.types.lookup(row) else { return None };
+        let row = self.context.queries.lookup_row_type(row).clone();
+        let field = row.fields.iter().find(|field| field.label == label)?.id;
+        let remaining: Vec<RowField> =
+            row.fields.iter().filter(|field| field.label != label).cloned().collect();
+        let remaining = RowType { fields: Arc::from(remaining), tail: row.tail };
+        let remaining = self.context.queries.intern_row_type(remaining);
+        Some((field, self.context.queries.intern_type(Type::Row(remaining))))
+    }
+
+    fn symbol_type(&mut self, label: &str) -> TypeId {
+        let text: Vec<u16> = label.encode_utf16().collect();
+        let literal = lowering::StringLiteral::from_utf16(text);
+        let literal = self.context.queries.intern_string_literal(literal);
+        self.context.queries.intern_type(Type::String(lowering::StringKind::String, literal))
+    }
+
+    /// The Unvariant of one label: a function of the continuation, or one per
+    /// answer type the Unvariant is run at, that applies the continuation's
+    /// field for the label to a Proxy and the payload.
+    fn run_continuation(
+        &mut self,
+        unvariant: MonotypeId,
+        field: &str,
+        hidden: &Local,
+    ) -> Expression {
+        let impossible = |monotype| {
+            Expression::new(ExpressionKind::Fail(SmolStr::new_static(IMPOSSIBLE)), monotype)
+        };
+        match self.monotypes.get(unvariant).clone() {
+            Monotype::Record(answers) => {
+                let fields = answers
+                    .iter()
+                    .map(|answer| {
+                        (
+                            answer.label.clone(),
+                            self.run_continuation(answer.monotype, field, hidden),
+                        )
+                    })
+                    .collect();
+                Expression::new(ExpressionKind::Record(fields), unvariant)
+            }
+            Monotype::Function(continuation, answer) => {
+                let Monotype::Record(handlers) = self.monotypes.get(continuation).clone() else {
+                    return impossible(unvariant);
+                };
+                let Some(handler) = handlers.iter().find(|handler| handler.label == field) else {
+                    return impossible(unvariant);
+                };
+                let Some((proxy, rest)) = self.monotypes.function_parts(handler.monotype) else {
+                    return impossible(unvariant);
+                };
+                let Some((payload, result)) = self.monotypes.function_parts(rest) else {
+                    return impossible(unvariant);
+                };
+                let Monotype::Data(proxy_data) = self.monotypes.get(proxy).clone() else {
+                    return impossible(unvariant);
+                };
+                let parameter = self.fresh_local(SmolStr::new_static("continuation"), continuation);
+                let kind = ExpressionKind::Access {
+                    record: Box::new(parameter.expression()),
+                    label: handler.label.clone(),
+                };
+                let function = Expression::new(kind, handler.monotype);
+                let proxy_value = ExpressionKind::Construct {
+                    data: proxy_data,
+                    constructor: 0,
+                    arguments: vec![],
+                };
+                let arguments = vec![
+                    Expression::new(proxy_value, proxy),
+                    self.coerce(hidden.expression(), payload),
+                ];
+                let kind = ExpressionKind::Apply { function: Box::new(function), arguments };
+                let applied = self.coerce(Expression::new(kind, result), answer);
+                self.lambda(vec![parameter], applied)
+            }
+            _ => impossible(unvariant),
+        }
     }
 
     fn alternatives(

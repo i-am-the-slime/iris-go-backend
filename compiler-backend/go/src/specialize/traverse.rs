@@ -45,6 +45,8 @@ struct Traversal {
     pure: Option<TypeId>,
     /// The applicative traversed in, as the source names it: `V`, not the `Either` it erases to.
     applicative: TypeId,
+    apply_scheme: TypeId,
+    map_scheme: TypeId,
 }
 
 impl<'q, Q> Specializer<'q, Q>
@@ -99,6 +101,14 @@ where
     ) -> GoResult<Expression> {
         let arguments = &arguments[reference.arguments..];
         let traversal = self.traversal(scope, &reference)?;
+        let applied = self.closed_monotype(scope, traversal.apply)?;
+        let accumulated = self.monotypes.result_after(applied, 2);
+        if reference.traversal == ArrayTraversal::Applicative
+            && !matches!(self.monotypes.get(accumulated), Monotype::Effect(_))
+            && self.is_parallel_applicative(traversal.applicative)?
+        {
+            return self.balanced_traversal(scope, &reference, &traversal, arguments, accumulated);
+        }
         let apply = self.rank_two_argument(scope, arguments[0], traversal.apply)?;
         let map = self.rank_two_argument(scope, arguments[1], traversal.map_snoc)?;
 
@@ -110,7 +120,6 @@ where
         let Monotype::Array(input_element) = *self.monotypes.get(input) else {
             unreachable!("invariant violated: an array traversal traverses an array")
         };
-        let accumulated = self.monotypes.result_after(apply.monotype, 2);
         let step = self.monotypes.result_after(function, 1);
 
         let function = self.fresh_local(SmolStr::new_static("function"), function);
@@ -178,6 +187,118 @@ where
         self.supplied(scope, traverse, &reference, arguments)
     }
 
+    fn balanced_traversal(
+        &mut self,
+        scope: &mut Scope,
+        reference: &TraversalReference,
+        traversal: &Traversal,
+        arguments: &[tree::ExpressionId],
+        accumulated: MonotypeId,
+    ) -> GoResult<Expression> {
+        let function = self.closed_monotype(scope, traversal.function)?;
+        let input = self.closed_monotype(scope, traversal.input)?;
+        let elements = self.closed_monotype(scope, traversal.elements)?;
+        let Monotype::Array(input_element) = *self.monotypes.get(input) else {
+            unreachable!("invariant violated: an array traversal traverses an array")
+        };
+        let function = self.fresh_local(SmolStr::new_static("function"), function);
+        let array = self.fresh_local(SmolStr::new_static("array"), input);
+
+        let pure = traversal.pure.expect("invariant violated: an applicative traversal has pure");
+        let pure = self.rank_two_argument(scope, arguments[2], pure)?;
+        let empty = Expression::new(ExpressionKind::Array(vec![]), elements);
+        let none = apply_to(pure, vec![empty], accumulated);
+
+        let mut gathered = Vec::with_capacity(3);
+        for count in 1..=3 {
+            let inputs = (0..count)
+                .map(|_| self.fresh_local(SmolStr::new_static("element"), input_element))
+                .collect();
+            gathered.push(self.gathered(scope, traversal, arguments, &function, inputs)?);
+        }
+        let [one, two, three] = <[Expression; 3]>::try_from(gathered)
+            .unwrap_or_else(|_| unreachable!("invariant violated: three leaf traversals"));
+
+        let elements_type = traversal.elements;
+        let concatenated = self.context.queries.intern_type(Type::Function(elements_type, elements_type));
+        let map_concat =
+            self.instantiate_rank_two(traversal.map_scheme, &[elements_type, concatenated]);
+        let map_concat = self.rank_two_argument(scope, arguments[1], map_concat)?;
+        let left = self.fresh_local(SmolStr::new_static("init"), elements);
+        let right = self.fresh_local(SmolStr::new_static("rest"), elements);
+        let appended = ExpressionKind::Foreign {
+            foreign: &foreign::ARRAY_APPEND,
+            arguments: vec![left.expression(), right.expression()],
+        };
+        let concat = self.lambda(vec![left, right], Expression::new(appended, elements));
+        let half = self.fresh_local(SmolStr::new_static("half"), accumulated);
+        let mapped = self.monotypes.result_after(map_concat.monotype, 2);
+        let mapped_half = apply_to(map_concat, vec![concat, half.expression()], mapped);
+        let map_half = self.lambda(vec![half], mapped_half);
+
+        let apply_concat = self.instantiate_rank_two(traversal.apply_scheme, &[elements_type, elements_type]);
+        let apply_concat = self.rank_two_argument(scope, arguments[0], apply_concat)?;
+        let first = self.fresh_local(SmolStr::new_static("first"), mapped);
+        let second = self.fresh_local(SmolStr::new_static("second"), accumulated);
+        let joined =
+            apply_to(apply_concat, vec![first.expression(), second.expression()], accumulated);
+        let join_halves = self.lambda(vec![first, second], joined);
+
+        let balanced = ExpressionKind::Foreign {
+            foreign: &foreign::TRAVERSE_BALANCED,
+            arguments: vec![array.expression(), none, one, two, three, map_half, join_halves],
+        };
+        let balanced = Expression::new(balanced, accumulated);
+        let traverse = self.lambda(vec![function, array], balanced);
+        self.supplied(scope, traverse, reference, arguments)
+    }
+
+    fn gathered(
+        &mut self,
+        scope: &mut Scope,
+        traversal: &Traversal,
+        arguments: &[tree::ExpressionId],
+        function: &Local,
+        inputs: Vec<Local>,
+    ) -> GoResult<Expression> {
+        let mut remaining = vec![traversal.elements];
+        for _ in 1..inputs.len() {
+            let last = *remaining.last().expect("invariant violated: remaining is not empty");
+            remaining.push(self.context.queries.intern_type(Type::Function(traversal.element, last)));
+        }
+        remaining.reverse();
+
+        let elements = self.closed_monotype(scope, traversal.elements)?;
+        let element = self.closed_monotype(scope, traversal.element)?;
+        let gathered: Vec<Local> = inputs
+            .iter()
+            .map(|_| self.fresh_local(SmolStr::new_static("result"), element))
+            .collect();
+        let array = gathered.iter().map(Local::expression).collect();
+        let array = Expression::new(ExpressionKind::Array(array), elements);
+        let collect = self.lambda(gathered, array);
+
+        let step = self.monotypes.result_after(function.monotype, 1);
+        let results: Vec<Expression> = inputs
+            .iter()
+            .map(|input| apply_to(function.expression(), vec![input.expression()], step))
+            .collect();
+        let mut results = results.into_iter();
+        let first = results.next().expect("invariant violated: a leaf traverses an element");
+
+        let map = self.instantiate_rank_two(traversal.map_scheme, &[traversal.element, remaining[0]]);
+        let map = self.rank_two_argument(scope, arguments[1], map)?;
+        let mapped = self.monotypes.result_after(map.monotype, 2);
+        let mut combined = apply_to(map, vec![collect, first], mapped);
+        for (result, &after) in results.zip(&remaining[1..]) {
+            let apply = self.instantiate_rank_two(traversal.apply_scheme, &[traversal.element, after]);
+            let apply = self.rank_two_argument(scope, arguments[0], apply)?;
+            let applied = self.monotypes.result_after(apply.monotype, 2);
+            combined = apply_to(apply, vec![combined, result], applied);
+        }
+        Ok(self.lambda(inputs, combined))
+    }
+
     fn supplied(
         &mut self,
         scope: &mut Scope,
@@ -241,6 +362,8 @@ where
             map_singleton: self.instantiate_rank_two(rank_two[1], &[element, elements]),
             pure,
             applicative,
+            apply_scheme: rank_two[0],
+            map_scheme: rank_two[1],
         })
     }
 
@@ -293,6 +416,20 @@ where
         };
         Ok(self.context.is_type(file_id, item, "Data.Maybe", "Maybe")?
             || self.context.is_type(file_id, item, "Data.Either", "Either")?)
+    }
+
+    /// A parallel applicative runs or combines its applies in an order a
+    /// program can observe, so it is traversed in JavaScript's balanced tree.
+    /// Every other applicative is lawful enough that the tree's shape cannot
+    /// be seen, and keeps the left fold. ParAff, an effect here, has its own
+    /// parallel traversal (aff.TraverseParArrayDirect).
+    fn is_parallel_applicative(&mut self, applicative: TypeId) -> GoResult<bool> {
+        let (head, _) = self.context.types.spine(applicative);
+        let Type::Constructor(file_id, item) = *self.context.types.lookup(head) else {
+            return Ok(false);
+        };
+        Ok(self.context.is_type(file_id, item, "Yoga.Om", "ParOm")?
+            || self.context.is_type(file_id, item, "Go.IO.Internal", "ParIO")?)
     }
 
     fn snoc_lambda(&mut self, elements: MonotypeId, element: MonotypeId) -> Expression {
