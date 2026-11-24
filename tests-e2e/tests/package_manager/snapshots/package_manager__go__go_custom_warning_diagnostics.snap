@@ -1,0 +1,16 @@
+---
+source: tests-e2e/tests/package_manager/go.rs
+---
+status: 0
+--- stdout
+--- stderr
+Warning! · [CustomWarning] · src/Main.purs:9:8
+  •
+  │
+  • deprecated is deprecated
+  │
+  │   main = deprecated 1
+  │          ╰───────────
+  •
+
+go: 1 functions in 1 files -> go ([timings])

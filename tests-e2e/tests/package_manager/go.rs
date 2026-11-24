@@ -95,7 +95,8 @@ main = deprecated 1
 
     let output = workspace.command(&["go", "--entry", "Main.main", "go"]);
 
-    insta::with_settings!({omit_expression => true}, {
+    let timings = (r"(?m)\(load .*\)$", "([timings])");
+    insta::with_settings!({omit_expression => true, filters => vec![timings]}, {
         insta::assert_snapshot!("go_custom_warning_diagnostics", workspace.report(&output));
     });
     assert!(workspace.path().join("go/main.go").exists());
