@@ -412,6 +412,7 @@ where
         kind @ (ErrorKind::CannotDeriveClass { .. }
         | ErrorKind::DeriveInvalidArity { .. }
         | ErrorKind::DeriveMissingFunctor
+        | ErrorKind::DeriveNewtypeCycle
         | ErrorKind::EmptyAdoBlock
         | ErrorKind::EmptyDoBlock
         | ErrorKind::TermHole { .. }

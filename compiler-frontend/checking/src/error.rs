@@ -90,6 +90,7 @@ pub enum ErrorKind {
         actual: usize,
     },
     DeriveMissingFunctor,
+    DeriveNewtypeCycle,
     EmptyAdoBlock,
     EmptyDoBlock,
     EscapedSkolem {

@@ -1,4 +1,14 @@
 ---
 source: tests-integration/src/fixtures.rs
 ---
-
+Error! · [CycleInDeclaration] · Main.purs:14:1
+  •
+  │
+  • This newtype instance needs its own dictionary to be defined
+  │
+  │   derive newtype instance Describe Tree
+  │   ╰────────────────────────────────────
+  │
+  • The wrapped type's instance refers back to this instance, so the dictionary would be used before
+  │ it is defined
+  •
