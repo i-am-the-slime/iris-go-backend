@@ -73,7 +73,13 @@ pub(super) fn panic_statement(message: &str) -> GoStatement {
 }
 
 pub(super) fn conjunction(tests: Vec<GoExpression>) -> Option<GoExpression> {
-    tests.into_iter().reduce(|left, right| binary("&&", left, right))
+    let mut distinct: Vec<GoExpression> = Vec::with_capacity(tests.len());
+    for test in tests {
+        if !distinct.contains(&test) {
+            distinct.push(test);
+        }
+    }
+    distinct.into_iter().reduce(|left, right| binary("&&", left, right))
 }
 
 pub(super) fn is_simple(expression: &GoExpression) -> bool {
