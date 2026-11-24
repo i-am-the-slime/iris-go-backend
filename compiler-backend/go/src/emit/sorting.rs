@@ -311,6 +311,10 @@ where
             Monotype::Char => Primitive::Char,
             Monotype::String => Primitive::String,
             Monotype::Number => Primitive::Number,
+            // Go's constants of an enumeration count up in the order of its constructors.
+            Monotype::Data(data) if self.monotypes.enumeration_size(data).is_some() => {
+                Primitive::Int
+            }
             _ => return None,
         };
         let keys = [substituted(left, &aliases), substituted(right, &aliases)];
@@ -364,19 +368,29 @@ where
                 self.three_way(&callee.body, aliases, hidden, depth - 1)
             }
             ExpressionKind::If { condition, then, otherwise } => {
-                let [left, right] = compared(condition, Comparison::LessThan)?;
-                let ExpressionKind::If { condition: equal, then: same, otherwise: greater } =
+                let ExpressionKind::If { condition: inner, then: second, otherwise: greater } =
                     &otherwise.kind
                 else {
                     return None;
                 };
-                let [equal_left, equal_right] = compared(equal, Comparison::Equal)?;
-                let operands = [left, right, equal_left, equal_right]
+                // `if a < b then LT else if a == b then EQ else GT`, or the derived enumeration
+                // order `if a == b then EQ else if a < b then LT else GT`.
+                let (less_than, equal, less, same) = match compared(condition, Comparison::LessThan)
+                {
+                    Some(less_than) => (less_than, compared(inner, Comparison::Equal)?, then, second),
+                    None => (
+                        compared(inner, Comparison::LessThan)?,
+                        compared(condition, Comparison::Equal)?,
+                        second,
+                        then,
+                    ),
+                };
+                let operands = [less_than[0], less_than[1], equal[0], equal[1]]
                     .map(|operand| resolved(operand, aliases));
                 if operands[0] != operands[2] || operands[1] != operands[3] {
                     return None;
                 }
-                let constructors = [constructor(then)?, constructor(same)?, constructor(greater)?];
+                let constructors = [constructor(less)?, constructor(same)?, constructor(greater)?];
                 Some(ThreeWay { left: operands[0], right: operands[1], constructors })
             }
             _ => None,
