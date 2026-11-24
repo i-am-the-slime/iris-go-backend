@@ -50,6 +50,9 @@ mod unpack;
 
 const INLINE_SIZE: usize = 40;
 
+/// The size of a local helper that is copied to each of its calls whatever it works on.
+const TINY_HELPER: usize = 12;
+
 /// The names simplification and specialization give the values they introduce.
 const MADE_UP_NAMES: &[&str] = &["argument", "binding", "element", "field", "scrutinee", "value"];
 const INLINE_FUEL: usize = 2_000;
@@ -924,15 +927,19 @@ impl Simplifier<'_> {
     /// A small local function over a mutable array of its surroundings, such as a `where`
     /// helper that peeks with a default, is inlined at each of its calls when it is only ever
     /// called. Its accesses are then seen where it is called, next to the caller's own, so that
-    /// accesses of the same indices share their bounds tests (emit/guards.rs). Any other helper
-    /// stays one function.
+    /// accesses of the same indices share their bounds tests (emit/guards.rs). So is a tiny
+    /// helper, `meanOf totals = totals.sum / totals.count`, which costs less copied than called
+    /// with its arguments built for it. Any other helper stays one function.
     fn is_small_applied_lambda(&self, binding: &Binding, body: &Expression) -> bool {
         let ExpressionKind::Lambda { parameters, .. } = &binding.value.kind else { return false };
+        let mutable = |monotype: &Monotype| matches!(monotype, Monotype::MutableArray(_));
+        // The array may as well be passed: `peekOr0 index array`.
+        let over_mutable_array = captures_free(&binding.value, self.monotypes, mutable)
+            || parameters.iter().any(|parameter| mutable(self.monotypes.get(parameter.monotype)));
+        let worth_copying = over_mutable_array || is_within_size(&binding.value, TINY_HELPER);
         self.fuel > 0
             && is_within_size(&binding.value, INLINE_SIZE)
-            && captures_free(&binding.value, self.monotypes, |monotype| {
-                matches!(monotype, Monotype::MutableArray(_))
-            })
+            && worth_copying
             && !can_fail(&binding.value)
             && !runs_any_effect(&binding.value)
             && only_called(body, binding.local.id, parameters.len())
