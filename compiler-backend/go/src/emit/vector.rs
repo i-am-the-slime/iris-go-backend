@@ -215,19 +215,9 @@ where
             _ => return None,
         };
         let callback = self.callback(&arguments[0], arity)?;
-        // A scalar `Number` fold waits for each addition before the next, where a kernel keeps
-        // several accumulators: building the array a fused loop would have folded pays.
-        let builds_folded_array =
-            iteration == Iteration::FoldLeft && result_element == Element::Number;
-        let (analysis, shape) = self
-            .vector_shape(iteration, &callback, arguments, result_element, false)
-            .or_else(|| {
-                builds_folded_array
-                    .then(|| {
-                        self.vector_shape(iteration, &callback, arguments, result_element, true)
-                    })
-                    .flatten()
-            })?;
+        // A fused loop stays scalar: building its array to fold it in a kernel pays only for
+        // long arrays, and a fused range's length is rarely known.
+        let (analysis, shape) = self.vector_shape(iteration, &callback, arguments, result_element)?;
         let initial = matches!(iteration, Iteration::FoldLeft).then(|| &arguments[1]);
         if let Some(initial) = initial
             && self.element(initial.monotype) != Some(result_element)
@@ -245,15 +235,13 @@ where
         Some(Plan { kernel, inputs, captures, initial })
     }
 
-    /// What the kernel computes of each element, with the folded array built as it is when
-    /// `built_source`, rather than computed in the kernel's loop.
+    /// What the kernel computes of each element.
     fn vector_shape<'a, 'e>(
         &'a self,
         iteration: Iteration,
         callback: &Found<'e>,
         arguments: &'e [Expression],
         result_element: Element,
-        built_source: bool,
     ) -> Option<(Analysis<'a, 'e, Self>, Shape)>
     where
         'p: 'e,
@@ -261,11 +249,7 @@ where
         let mut analysis = Analysis::new(self, result_element);
         let shape = match iteration {
             Iteration::FoldLeft => {
-                let element = if built_source {
-                    analysis.built(&arguments[2])?
-                } else {
-                    analysis.source(&arguments[2])?
-                };
+                let element = analysis.source(&arguments[2])?;
                 let step = analysis.apply(callback, vec![Term::Accumulator, element], 0)?;
                 let reduction = analysis.reduction(&step)?;
                 Shape::Fold { step, reduction }
