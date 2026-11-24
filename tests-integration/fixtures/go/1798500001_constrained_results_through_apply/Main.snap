@@ -1,0 +1,32 @@
+---
+source: tests-integration/src/fixtures.rs
+---
+// Data/Maybe/maybe.go
+package maybe
+
+type Int int64
+
+const NoInt Int = 1 << 32
+
+// main.go
+package main
+
+import (
+	"fixture/Data/Maybe"
+	"strconv"
+)
+
+func main_() []string {
+	flipped := maybe.Int(20)
+	var result string
+	if flipped != maybe.NoInt {
+		result = "(Just " + strconv.Itoa(int(int32(flipped))) + ")"
+	} else {
+		result = "Nothing"
+	}
+	return []string{"(Just 1)", "Nothing", result, "(Just (Just 1))"}
+}
+
+func main() {
+	main_()
+}

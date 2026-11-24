@@ -1,0 +1,82 @@
+---
+source: tests-integration/src/fixtures.rs
+---
+// main.go
+package main
+
+import (
+	"fixture/shared"
+	"github.com/i-am-the-slime/iris-go/prim"
+	"strconv"
+)
+
+func main_() []string {
+	attempts := &shared.Ref[int32]{Value: 0}
+	recovered := mainGo(attempts, shared.RetryStatus{IterNumber: 0, CumulativeDelay: 0.0})
+	exhausted := mainGo2(shared.RetryStatus{IterNumber: 0, CumulativeDelay: 0.0})
+	delayed := mainGo3(shared.RetryStatus{IterNumber: 0, CumulativeDelay: 0.0})
+	return []string{"stopped after " + strconv.Itoa(int(recovered.IterNumber)) + " retries, waiting " + prim.ShowNumber(recovered.CumulativeDelay), "stopped after " + strconv.Itoa(int(exhausted.IterNumber)) + " retries, waiting " + prim.ShowNumber(exhausted.CumulativeDelay), "stopped after " + strconv.Itoa(int(delayed.IterNumber)) + " retries, waiting " + prim.ShowNumber(delayed.CumulativeDelay)}
+}
+
+func mainGo(attempts *shared.Ref[int32], status shared.RetryStatus) shared.RetryStatus {
+	attemptsValue := attempts.Value
+	for {
+		cumulativeDelay := status.CumulativeDelay
+		iterNumber := status.IterNumber
+		s := attemptsValue
+		s_ := s + 1
+		attemptsValue = s_
+		if s_ >= 3 {
+			attempts.Value = attemptsValue
+			return status
+		}
+		if status.IterNumber >= 5 {
+			attempts.Value = attemptsValue
+			return status
+		}
+		status = shared.RetryStatus{IterNumber: iterNumber + 1, CumulativeDelay: cumulativeDelay + 50.0}
+	}
+}
+
+func mainGo2(status shared.RetryStatus) shared.RetryStatus {
+	for {
+		cumulativeDelay := status.CumulativeDelay
+		iterNumber := status.IterNumber
+		if status.IterNumber >= 2 {
+			return status
+		}
+		status = shared.RetryStatus{IterNumber: iterNumber + 1, CumulativeDelay: cumulativeDelay + 0.0}
+	}
+}
+
+func mainGo3(status shared.RetryStatus) shared.RetryStatus {
+	for {
+		cumulativeDelay := status.CumulativeDelay
+		iterNumber := status.IterNumber
+		if status.IterNumber >= 4 {
+			return status
+		}
+		status = shared.RetryStatus{IterNumber: iterNumber + 1, CumulativeDelay: cumulativeDelay + 10.0}
+	}
+}
+
+func main() {
+	main_()
+}
+
+// shared/shared.go
+package shared
+
+type Ref[T any] struct {
+	Value T
+}
+
+type RetryStatus struct {
+	CumulativeDelay float64
+	IterNumber      int32
+}
+
+type StateValue struct {
+	State int32
+	Value int32
+}
