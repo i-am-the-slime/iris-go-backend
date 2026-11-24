@@ -313,7 +313,7 @@ where
             current = result;
         }
         let mut result = current;
-        if let Some(arity) = self.context.effect_function_arity(current)? {
+        if let Some(arity) = self.context.uncurried_function_arity(current)? {
             let (_, arguments) = self.context.types.spine(current);
             if let Some((&last, uncurried)) = arguments.split_last() {
                 parameters.extend(uncurried.iter().take(arity));

@@ -219,6 +219,21 @@ where
         &mut self,
         type_id: checking::core::TypeId,
     ) -> QueryResult<Option<usize>> {
+        self.uncurried_arity(type_id, false)
+    }
+
+    pub fn uncurried_function_arity(
+        &mut self,
+        type_id: checking::core::TypeId,
+    ) -> QueryResult<Option<usize>> {
+        self.uncurried_arity(type_id, true)
+    }
+
+    fn uncurried_arity(
+        &mut self,
+        type_id: checking::core::TypeId,
+        pure: bool,
+    ) -> QueryResult<Option<usize>> {
         use checking::core::Type;
         let type_id = crate::monotype::expand_synonyms(self, type_id)?;
         let (head, _) = self.types.spine(type_id);
@@ -231,6 +246,7 @@ where
         let count = match module.name.as_str() {
             "Effect.Uncurried" => name.strip_prefix("EffectFn"),
             "Control.Monad.ST.Uncurried" => name.strip_prefix("STFn"),
+            "Data.Function.Uncurried" if pure => name.strip_prefix("Fn"),
             _ => None,
         };
         Ok(count.and_then(|count| count.parse().ok()).filter(|&arity| arity > 0))
