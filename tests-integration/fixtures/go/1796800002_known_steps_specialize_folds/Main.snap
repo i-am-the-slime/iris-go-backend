@@ -93,12 +93,7 @@ func foldListIntIntMax(accumulator int32, value *ListInt) int32 {
 		}
 		x := value.Cons0
 		rest := value.Cons1
-		var result int32
-		if accumulator < x {
-			result = x
-		} else {
-			result = accumulator
-		}
+		result := max(accumulator, x)
 		accumulator, value = result, rest
 	}
 }

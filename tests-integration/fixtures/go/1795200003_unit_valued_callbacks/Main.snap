@@ -74,7 +74,7 @@ func initializeUnits() []struct{} {
 		}
 	}, mapped)
 	var result []struct{}
-	if 0 < int32(len(indexedAndSorted)) {
+	if len(indexedAndSorted) > 0 {
 		array2 := *arraypkg.UnsafeThaw([]tuple.TupleIntUnit{indexedAndSorted[0]})()
 		for range indexedAndSorted {
 			shared.Frozen(array2)

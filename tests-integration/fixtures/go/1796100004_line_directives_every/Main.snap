@@ -61,7 +61,7 @@ func main() {
 //line Main.purs:34:3
 	}
 //line Main.purs:36:12
-	var areas float64 = 0.0
+	areas := 0.0
 //line Main.purs:37:3
 	for _, shape := range []Shape{{Tag: ShapeCircle, Field0: 1.0}, {Tag: ShapeSquare, Field0: 2.0}} {
 //line Main.purs:38:22

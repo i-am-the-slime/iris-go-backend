@@ -403,6 +403,9 @@ fn evaluate(foreign: Foreign, arguments: &[Expression]) -> Option<Literal> {
         (foreign, [Value::Int(x), Value::Int(y)]) if foreign.calls(foreign::INT_MODULO) => {
             Value::Int(modulo(*x, *y))
         }
+        (foreign, [Value::Number(x)]) if foreign.calls(foreign::SHOW_NUMBER) => {
+            Value::Owned(show_number(*x))
+        }
         (Foreign::Operator(operator), [operand]) => unary(operator, operand)?,
         (Foreign::Operator(Operator::Compare(comparison)), [left, right]) => {
             Value::Boolean(compare(comparison, left, right)?)
@@ -518,6 +521,42 @@ fn modulo(x: i32, y: i32) -> i32 {
     i64::from(x).rem_euclid(i64::from(y)) as i32
 }
 
+/// `show` of a Number: JavaScript's `toString`, with `.0` after a whole number it writes
+/// without an exponent, as purescript-prelude's `showNumberImpl` does.
+fn show_number(value: f64) -> String {
+    if value.is_nan() {
+        return "NaN".into();
+    }
+    if value.is_infinite() {
+        return if value < 0.0 { "-Infinity".into() } else { "Infinity".into() };
+    }
+    if value == 0.0 {
+        return "0.0".into();
+    }
+    let sign = if value < 0.0 { "-" } else { "" };
+    // Rust's exponent form spells the shortest digits that read back as the same double.
+    let scientific = format!("{:e}", value.abs());
+    let (mantissa, exponent) = scientific.split_once('e').expect("an exponent");
+    let digits: String = mantissa.chars().filter(char::is_ascii_digit).collect();
+    let point = exponent.parse::<i32>().expect("a decimal exponent") + 1;
+    let count = digits.len() as i32;
+    let written = if count <= point && point <= 21 {
+        format!("{digits}{}.0", "0".repeat((point - count) as usize))
+    } else if 0 < point && point <= 21 {
+        let (whole, fraction) = digits.split_at(point as usize);
+        format!("{whole}.{fraction}")
+    } else if -6 < point && point <= 0 {
+        format!("0.{}{digits}", "0".repeat((-point) as usize))
+    } else {
+        let (first, rest) = digits.split_at(1);
+        let rest = if rest.is_empty() { String::new() } else { format!(".{rest}") };
+        let exponent = point - 1;
+        let exponent_sign = if exponent < 0 { '-' } else { '+' };
+        format!("{first}{rest}e{exponent_sign}{}", exponent.abs())
+    };
+    format!("{sign}{written}")
+}
+
 #[allow(clippy::neg_cmp_op_on_partial_ord)]
 fn compare(comparison: Comparison, left: &Value<'_>, right: &Value<'_>) -> Option<bool> {
     if let (Value::Number(x), Value::Number(y)) = (left, right) {
@@ -555,4 +594,26 @@ fn compare(comparison: Comparison, left: &Value<'_>, right: &Value<'_>) -> Optio
 
 fn utf16_order(left: &str, right: &str) -> Ordering {
     left.encode_utf16().cmp(right.encode_utf16())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::show_number;
+
+    #[test]
+    fn numbers_show_as_javascript_writes_them() {
+        assert_eq!(show_number(1.5), "1.5");
+        assert_eq!(show_number(-2.0), "-2.0");
+        assert_eq!(show_number(-0.0), "0.0");
+        assert_eq!(show_number(100.0), "100.0");
+        assert_eq!(show_number(0.1 + 0.2), "0.30000000000000004");
+        assert_eq!(show_number(0.000001), "0.000001");
+        assert_eq!(show_number(1.5e-7), "1.5e-7");
+        assert_eq!(show_number(123456789012345680000.0), "123456789012345680000.0");
+        assert_eq!(show_number(1e21), "1e+21");
+        assert_eq!(show_number(-1.25e300), "-1.25e+300");
+        assert_eq!(show_number(f64::INFINITY), "Infinity");
+        assert_eq!(show_number(f64::NEG_INFINITY), "-Infinity");
+        assert_eq!(show_number(f64::NAN), "NaN");
+    }
 }

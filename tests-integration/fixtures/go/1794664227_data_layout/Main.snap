@@ -86,7 +86,7 @@ func initializeMain_() shared.MainResult {
 	exprs[4] = Expr{Tag: ExprVal, Val: 2}
 	exprs[5] = Expr{Tag: ExprVal, Val: 3}
 	exprs[6] = Expr{Tag: ExprVal, Val: 4}
-	return shared.MainResult{Expression: evaluate(&exprs[0]), Shapes: mapped, Items: mapped2, Colours: mapped3, Sample: "strue" + prim.ShowNumber(0.5) + "3"}
+	return shared.MainResult{Expression: evaluate(&exprs[0]), Shapes: mapped, Items: mapped2, Colours: mapped3, Sample: "strue0.53"}
 }
 
 func evaluate(expr *Expr) int32 {

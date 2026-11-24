@@ -164,7 +164,7 @@ func shrinkGo(values []int32) []int32 {
 	var valuesOwned []int32
 	var valuesSpare []int32
 	for {
-		if int32(len(values)) <= 1 {
+		if len(values) <= 1 {
 			return values
 		}
 		mapped := shared.Recycle(valuesSpare, 0)

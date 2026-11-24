@@ -194,7 +194,7 @@ func main() {
 		}
 	}, mapped)
 	var result []float64
-	if 0 < int32(len(indexedAndSorted)) {
+	if len(indexedAndSorted) > 0 {
 		array2 := *arraypkg.UnsafeThaw([]tuple.TupleIntNumber{indexedAndSorted[0]})()
 		for _, pair := range indexedAndSorted {
 			x_ := pair.Second
@@ -261,7 +261,7 @@ func main() {
 		}
 	}, mapped3)
 	var result4 []int32
-	if 0 < int32(len(indexedAndSorted2)) {
+	if len(indexedAndSorted2) > 0 {
 		array2 := *arraypkg.UnsafeThaw([]tuple.TupleIntInt{indexedAndSorted2[0]})()
 		for _, pair := range indexedAndSorted2 {
 			array3 := shared.Frozen(array2)

@@ -112,7 +112,7 @@ func main() {
 //line Main.purs:57:17
 	}
 //line Main.purs:59:3
-	if foldLanes(mapped, 0.0) != 1892.0 || int32(len(mapped)) != 43 {
+	if foldLanes(mapped, 0.0) != 1892.0 || len(mapped) != 43 {
 //line Main.purs:60:5
 		effectexception.ThrowUnit("the total is wrong")
 //line Main.purs:59:3

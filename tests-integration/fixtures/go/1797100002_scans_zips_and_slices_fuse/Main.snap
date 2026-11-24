@@ -375,7 +375,7 @@ func initializeMain_() []string {
 	xs4 := []int32{1, 2, 1, 1}
 	ys := []int32{2, 1, 1}
 	var result2 int32
-	if int32(len(xs4)) == 0 {
+	if len(xs4) == 0 {
 		array9 := []int32{0, -1}
 		var accumulator6 int32 = 0
 		for _, start := range array9 {

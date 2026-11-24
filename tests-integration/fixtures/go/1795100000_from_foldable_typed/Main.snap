@@ -60,12 +60,7 @@ func UnsafeNodeStringUnit(k string, v struct{}, l *MapStringUnit, r *MapStringUn
 		return &MapStringUnit{Node0: 1 + h1, Node1: 1 + s1, Node2: k, Node3: v, Node4: l, Node5: r}
 	}
 	h2 := r.Node0
-	var result int32
-	if h1 > h2 {
-		result = h1
-	} else {
-		result = h2
-	}
+	result := max(h1, h2)
 	return &MapStringUnit{Node0: 1 + result, Node1: 1 + s1 + r.Node1, Node2: k, Node3: v, Node4: l, Node5: r}
 }
 
@@ -156,12 +151,7 @@ func UnsafeNodeStringUnitReusing(k string, v struct{}, l *MapStringUnit, r *MapS
 	}
 	h22 := r.Node0
 	s22 := r.Node1
-	var result int32
-	if h1 > h22 {
-		result = h1
-	} else {
-		result = h22
-	}
+	result := max(h1, h22)
 	donor.Node0 = 1 + result
 	donor.Node1 = 1 + s1 + s22
 	donor.Node2 = k

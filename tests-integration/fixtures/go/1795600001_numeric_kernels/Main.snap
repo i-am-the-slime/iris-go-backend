@@ -70,7 +70,7 @@ func initializeMain_() []string {
 	for _, element := range xs {
 		accumulator = ord.MinNumber(accumulator, element)
 	}
-	var accumulator2 float64 = 0.0
+	accumulator2 := 0.0
 	for _, x := range xs {
 		accumulator2 = accumulator2*0.5 + x
 	}
