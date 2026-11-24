@@ -1,0 +1,25 @@
+---
+source: tests-integration/src/fixtures.rs
+---
+interface Describe :: Prim.Type -> Prim.Constraint
+interface Describe a where
+  describe :: a -> Prim.String
+
+dictionary describeInt :: Main.Describe Prim.Int where
+  describe :: Prim.Int -> Prim.String
+  describe = \_ -> "Int"
+
+described :: forall @a. Main.Describe a => a -> { label :: Prim.String }
+described = \{describeDict} -> \value -> { label: describe {describeDict} value }
+
+defaulted :: forall @a. Main.Describe a => { name :: Prim.String }
+defaulted = \{describeDict} -> { name: "defaulted" }
+
+accessAfterApplication :: Prim.String
+accessAfterApplication = (described {describeInt} 1).label
+
+accessAfterTypeApplication :: Prim.String
+accessAfterTypeApplication = (defaulted {describeInt}).name
+
+accessNested :: Prim.String
+accessNested = { outer: defaulted {describeInt} }.outer.name

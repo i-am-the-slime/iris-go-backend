@@ -1,0 +1,20 @@
+---
+source: tests-integration/src/fixtures.rs
+---
+Terms
+describe :: forall @a. Main.Describe a => a -> Prim.String
+described :: forall @a. Main.Describe a => a -> { label :: Prim.String }
+defaulted :: forall @a. Main.Describe a => { name :: Prim.String }
+accessAfterApplication :: Prim.String
+accessAfterTypeApplication :: Prim.String
+accessNested :: Prim.String
+
+Types
+Describe :: Prim.Type -> Prim.Constraint
+
+Classes
+class forall (a :: Prim.Type). Main.Describe a
+  describe :: forall @a. Main.Describe a => a -> Prim.String
+
+Instances
+instance Main.Describe Prim.Int
