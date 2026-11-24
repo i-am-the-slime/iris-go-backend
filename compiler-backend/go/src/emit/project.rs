@@ -93,7 +93,13 @@ where
         let Foreign::Project { file_id, term, .. } = foreign else {
             unreachable!("invariant violated: the crossing of another foreign");
         };
-        Crossing::native_when(self.monotypes.native_foreigns.contains(&(file_id, term)))
+        if self.monotypes.native_foreigns.contains(&(file_id, term)) {
+            return Crossing::Native;
+        }
+        if self.monotypes.row_free_foreigns.contains(&(file_id, term)) {
+            return Crossing::BoxedWithoutRows;
+        }
+        Crossing::Boxed
     }
 
     /// A foreign's argument as its Go function takes it. Go infers a generic function's type

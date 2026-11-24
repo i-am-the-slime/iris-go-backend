@@ -720,6 +720,7 @@ enum Direction {
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum Crossing {
     Boxed,
+    BoxedWithoutRows,
     Native,
 }
 

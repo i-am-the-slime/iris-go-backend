@@ -138,6 +138,14 @@ where
                 let map = self.go_function(GoFunction { package: GoPackage::Array, name: "Map" });
                 call(map, vec![function, value])
             }
+            Monotype::Record(_) if crossing == Crossing::BoxedWithoutRows => match direction {
+                Direction::ToConvention => {
+                    GoExpression::Conversion { type_: target, value: Box::new(value) }
+                }
+                Direction::FromConvention => {
+                    GoExpression::TypeAssertion { value: Box::new(value), type_: target }
+                }
+            },
             Monotype::Record(_) => {
                 let foreign = self.monotypes.intern(Monotype::Opaque);
                 match direction {

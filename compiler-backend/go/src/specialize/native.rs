@@ -15,6 +15,7 @@ struct ForeignFunction {
     generic: bool,
     boxed: Option<String>,
     mentioned: Vec<(FileId, TypeItemId)>,
+    names_a_row: bool,
 }
 
 struct ForeignData {
@@ -64,6 +65,11 @@ where
         if std::env::var_os("IRIS_GO_FOREIGN_BOXING").is_some() {
             report_boxing(&functions, &data, &native_functions, &native_data);
         }
+        self.monotypes.row_free_foreigns = functions
+            .iter()
+            .filter(|function| !function.names_a_row)
+            .map(|function| function.key)
+            .collect();
         self.monotypes.native_foreigns = native_functions;
         self.monotypes.native_foreign_data = native_data;
         Ok(())
@@ -107,12 +113,14 @@ where
             let go_name = capitalise(name);
             let declaration = source.opacity.function(&go_name);
             let boxed = boxed_reason(source, declaration, &go_name, Some(quantifiers));
+            let names_a_row = self.names_a_row(declared)?;
             functions.push(ForeignFunction {
                 key: (file_id, term),
                 name: format!("{}.{name}", module.name),
                 generic: quantifiers > 0,
                 boxed,
                 mentioned,
+                names_a_row,
             });
         }
         Ok(functions)
@@ -177,6 +185,29 @@ where
             _ => {}
         }
         Ok(())
+    }
+
+    fn names_a_row(&mut self, type_id: TypeId) -> GoResult<bool> {
+        Ok(match self.context.types.lookup(type_id).clone() {
+            Type::Row(_) => true,
+            Type::Application(function, argument)
+            | Type::Function(function, argument)
+            | Type::Constrained(function, argument) => {
+                self.names_a_row(function)? || self.names_a_row(argument)?
+            }
+            Type::KindApplication(inner, _)
+            | Type::Kinded(inner, _)
+            | Type::ConstraintOrigin(inner, _)
+            | Type::Forall(_, inner) => self.names_a_row(inner)?,
+            Type::Synonym(file_id, item) => {
+                let module = self.context.module(file_id)?;
+                match module.checked.lookup_synonym(item) {
+                    Some(synonym) => self.names_a_row(synonym.expansion)?,
+                    None => true,
+                }
+            }
+            _ => false,
+        })
     }
 }
 
