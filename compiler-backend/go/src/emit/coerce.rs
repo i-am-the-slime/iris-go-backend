@@ -226,6 +226,10 @@ where
                 let map = self.go_function(GoFunction { package: GoPackage::Array, name: "Map" });
                 Ok(call(join, vec![call(map, vec![render, value]), comma]))
             }
+            (Monotype::Nullable(_), _) | (_, Monotype::Nullable(_)) => {
+                let converter = self.converter(from, to)?;
+                Ok(call(identifier_expression(&converter), vec![value]))
+            }
             _ => Err(GoError::unsupported_construct(UNRELATED_TYPES)),
         }
     }
@@ -642,6 +646,32 @@ where
                     then: vec![GoStatement::Return(Some(identifier_expression("nil")))],
                     otherwise: vec![],
                 });
+                let element = self.coerce(value, from, to_element, &mut body)?;
+                let type_ = self.go_type(to_element)?;
+                body.push(GoStatement::Variable {
+                    name: "converted".into(),
+                    type_,
+                    value: Some(element),
+                });
+                let converted = GoExpression::Address(Box::new(identifier_expression("converted")));
+                body.push(GoStatement::Return(Some(converted)));
+            }
+            (Monotype::Nullable(from_element), _) => {
+                let absent = binary("==", value.clone(), identifier_expression("nil"));
+                let type_ = self.go_type(to)?;
+                body.push(GoStatement::If {
+                    condition: absent,
+                    then: vec![
+                        GoStatement::Variable { name: "absent".into(), type_, value: None },
+                        GoStatement::Return(Some(identifier_expression("absent"))),
+                    ],
+                    otherwise: vec![],
+                });
+                let present = GoExpression::Unary { operator: "*", operand: Box::new(value) };
+                let element = self.coerce(present, from_element, to, &mut body)?;
+                body.push(GoStatement::Return(Some(element)));
+            }
+            (_, Monotype::Nullable(to_element)) => {
                 let element = self.coerce(value, from, to_element, &mut body)?;
                 let type_ = self.go_type(to_element)?;
                 body.push(GoStatement::Variable {
