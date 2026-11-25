@@ -1028,6 +1028,7 @@ impl Simplifier<'_> {
             return self.float_let(bindings, position, body);
         }
         if recursive {
+            let (bindings, body) = self.specialize_local_calls(bindings, body);
             let monotype = body.monotype;
             return Expression::new(
                 ExpressionKind::Let { bindings, body: Box::new(body) },
