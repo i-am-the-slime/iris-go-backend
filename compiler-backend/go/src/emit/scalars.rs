@@ -210,7 +210,11 @@ fn definition(
         Some(GoExpression::Identifier(nil)) if nil == "nil" => {
             GoStatement::Variable { name, type_: type_.clone(), value: None }
         }
-        Some(value) if exact || basic && !is_untyped_constant(value) || is_place(value) => {
+        Some(value)
+            if exact
+                || basic && !is_untyped_constant(value) && !may_name_constant(value)
+                || is_place(value) && !may_name_constant(value) =>
+        {
             GoStatement::Define { names: vec![name], values: vec![value.clone()] }
         }
         value => GoStatement::Variable { name, type_: type_.clone(), value: value.cloned() },
@@ -722,6 +726,18 @@ fn is_pure(value: &GoExpression) -> bool {
 
 /// A place whose fields can be read one by one: a local, or a field or an
 /// element of one at a plain index.
+/// Whether a value may be a package's constant, as a tag `DistanceNone` is, which Go types as an
+/// `int` where a local is defined by it.
+fn may_name_constant(value: &GoExpression) -> bool {
+    match value {
+        GoExpression::Qualified { .. } => true,
+        GoExpression::Identifier(name) => {
+            name.starts_with(|character: char| character.is_uppercase())
+        }
+        _ => false,
+    }
+}
+
 fn is_place(value: &GoExpression) -> bool {
     match value {
         GoExpression::Identifier(name) => name != "nil",

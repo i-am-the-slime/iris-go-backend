@@ -1,0 +1,146 @@
+---
+source: tests-integration/src/fixtures.rs
+---
+// Data/Show/show.go
+package show
+
+import "strconv"
+
+func Show(i int32) string {
+	return strconv.Itoa(int(i))
+}
+
+func AppendShowArrayInt(buffer []byte, array []int32) []byte {
+	buffer = append(buffer, '[')
+	for index, element := range array {
+		if index > 0 {
+			buffer = append(buffer, ',')
+		}
+		buffer = strconv.AppendInt(buffer, int64(element), 10)
+	}
+	buffer = append(buffer, ']')
+	return buffer
+}
+
+// Distances/distances.go
+package distances
+
+type Distance struct {
+	Distance0 int32
+	Distance1 int32
+	Distance2 int32
+	Distance3 int32
+	Distance4 int32
+	Distance5 int32
+	Tag       uint8
+}
+
+const (
+	DistanceNone = iota
+	DistanceDistance2
+)
+
+func DistanceDistance(distance0 int32, distance1 int32, distance2 int32, distance3 int32, distance4 int32, distance5 int32) Distance {
+	return Distance{Tag: DistanceDistance2, Distance0: distance0, Distance1: distance1, Distance2: distance2, Distance3: distance3, Distance4: distance4, Distance5: distance5}
+}
+
+// main.go
+package main
+
+import (
+	"fixture/Data/Show"
+	"fixture/Distances"
+	journal "fixture/Journal_ffi"
+)
+
+func main() {
+	scrutinee := farthest([]int32{3, -1, 5, 2})
+	var result string
+	switch scrutinee.Tag {
+	case distances.DistanceNone:
+		result = "None"
+	default: // distances.DistanceDistance2
+		text := []byte("Distance ")
+		text = show.AppendShowArrayInt(text, []int32{scrutinee.Distance0, scrutinee.Distance1, scrutinee.Distance2, scrutinee.Distance3, scrutinee.Distance4, scrutinee.Distance5})
+		result = string(text)
+	}
+	journal.Log(result)
+	scrutinee2 := farthest([]int32{-1})
+	var result2 string
+	switch scrutinee2.Tag {
+	case distances.DistanceNone:
+		result2 = "None"
+	default: // distances.DistanceDistance2
+		text := []byte("Distance ")
+		text = show.AppendShowArrayInt(text, []int32{scrutinee2.Distance0, scrutinee2.Distance1, scrutinee2.Distance2, scrutinee2.Distance3, scrutinee2.Distance4, scrutinee2.Distance5})
+		result2 = string(text)
+	}
+	journal.Log(result2)
+}
+
+func farthest(array []int32) distances.Distance {
+	var accumulatorDistance0 int32
+	var accumulatorDistance1 int32
+	var accumulatorDistance2 int32
+	var accumulatorDistance3 int32
+	var accumulatorDistance4 int32
+	var accumulatorDistance5 int32
+	var accumulatorTag uint8 = distances.DistanceNone
+	for _, n := range array {
+		var d distances.Distance
+		if n < 0 {
+			d = distances.Distance{Tag: distances.DistanceNone}
+		} else {
+			d = distances.DistanceDistance(n, n*2, 0, 1, n, 3)
+		}
+		var result bool
+		if d.Tag == distances.DistanceNone && accumulatorTag == distances.DistanceNone {
+			result = false
+		} else if d.Tag == distances.DistanceNone {
+			result = false
+		} else if accumulatorTag == distances.DistanceNone {
+			result = true
+		} else {
+			left0 := d.Distance0
+			left1 := d.Distance1
+			left2 := d.Distance2
+			left3 := d.Distance3
+			left4 := d.Distance4
+			if left0 < accumulatorDistance0 {
+				result = false
+			} else if left0 == accumulatorDistance0 {
+				if left1 < accumulatorDistance1 {
+					result = false
+				} else if left1 == accumulatorDistance1 {
+					if left2 < accumulatorDistance2 {
+						result = false
+					} else if left2 == accumulatorDistance2 {
+						if left3 < accumulatorDistance3 {
+							result = false
+						} else if left3 == accumulatorDistance3 {
+							if left4 < accumulatorDistance4 {
+								result = false
+							} else if left4 == accumulatorDistance4 {
+								result = d.Distance5 > accumulatorDistance5
+							} else {
+								result = true
+							}
+						} else {
+							result = true
+						}
+					} else {
+						result = true
+					}
+				} else {
+					result = true
+				}
+			} else {
+				result = true
+			}
+		}
+		if result {
+			accumulatorDistance0, accumulatorDistance1, accumulatorDistance2, accumulatorDistance3, accumulatorDistance4, accumulatorDistance5, accumulatorTag = d.Distance0, d.Distance1, d.Distance2, d.Distance3, d.Distance4, d.Distance5, d.Tag
+		}
+	}
+	return distances.Distance{Distance0: accumulatorDistance0, Distance1: accumulatorDistance1, Distance2: accumulatorDistance2, Distance3: accumulatorDistance3, Distance4: accumulatorDistance4, Distance5: accumulatorDistance5, Tag: accumulatorTag}
+}
