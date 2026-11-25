@@ -53,6 +53,11 @@ impl EitherShape {
         GoType::Results(vec![self.right.clone(), self.failure_type()])
     }
 
+    /// Whether both sides keep their value in one field, as `Either Int Int` does.
+    fn shares_field(&self) -> bool {
+        self.left_field == self.right_field
+    }
+
     fn failure_type(&self) -> GoType {
         GoType::Named(self.failure.clone())
     }
@@ -96,6 +101,17 @@ impl EitherShape {
 enum Conversion {
     FromResults,
     Results,
+    Failure,
+}
+
+impl Conversion {
+    fn suffix(self) -> &'static str {
+        match self {
+            Conversion::FromResults => "FromResults",
+            Conversion::Results => "Results",
+            Conversion::Failure => "Failure",
+        }
+    }
 }
 
 const FAILED: &str = "Failed";
@@ -287,11 +303,8 @@ where
         declarations: &mut Vec<GoDeclaration>,
     ) -> GoResult<String> {
         let layout = self.data_layout(&shape.data)?;
-        let suffix = match conversion {
-            Conversion::FromResults => "FromResults",
-            Conversion::Results => "Results",
-        };
-        let name = self.global_name(Spelling::derived("", layout.name.clone(), suffix));
+        let name =
+            self.global_name(Spelling::derived("", layout.name.clone(), conversion.suffix()));
         self.homes.insert(name.clone(), shape.data.file_id);
         let either = GoType::Named(layout.name.clone());
         let declaration = match conversion {
@@ -349,6 +362,29 @@ where
                     ],
                 }
             }
+            Conversion::Failure => {
+                let either_value = identifier_expression("either");
+                let side = |field: &str| GoExpression::Field {
+                    value: Box::new(either_value.clone()),
+                    name: field.to_string(),
+                };
+                let is_left = binary("==", side("Tag"), identifier_expression(&shape.left_tag));
+                GoDeclaration::Function {
+                    name: name.clone(),
+                    parameters: vec![("either".into(), either)],
+                    result: Some(shape.failure_type()),
+                    body: vec![
+                        GoStatement::If {
+                            condition: is_left,
+                            then: vec![GoStatement::Return(Some(
+                                shape.failed_with(side(&shape.left_field)),
+                            ))],
+                            otherwise: vec![],
+                        },
+                        GoStatement::Return(Some(shape.no_failure())),
+                    ],
+                }
+            }
         };
         declarations.push(declaration);
         Ok(name)
@@ -376,6 +412,10 @@ struct Conventions {
     parameters: FxHashMap<String, FxHashMap<usize, String>>,
     /// For each declaration, by its position, its locals.
     locals: Vec<FxHashMap<String, String>>,
+    /// The `Either` parameters of top-level functions that take the value and the failure apart,
+    /// by function and position: the function is only ever called, each call passes a
+    /// construction or a local, and its body only asks the parameter for its tag and fields.
+    split_parameters: FxHashMap<String, FxHashMap<usize, String>>,
 }
 
 impl Conventions {
@@ -493,11 +533,85 @@ impl Conventions {
                 break;
             }
         }
+        conventions.split_parameters = conventions.choose_split_parameters(declarations, shapes);
         conventions
+    }
+
+    fn choose_split_parameters(
+        &self,
+        declarations: &mut [GoDeclaration],
+        shapes: &FxHashMap<String, EitherShape>,
+    ) -> FxHashMap<String, FxHashMap<usize, String>> {
+        let mut chosen: FxHashMap<String, FxHashMap<usize, String>> = FxHashMap::default();
+        for declaration in declarations.iter() {
+            let GoDeclaration::Function { name, parameters, .. } = declaration else { continue };
+            let slots: FxHashMap<usize, String> = parameters
+                .iter()
+                .enumerate()
+                .filter_map(|(index, (_, type_))| match type_ {
+                    GoType::Named(shape)
+                        if shapes.get(shape).is_some_and(|shape| !shape.shares_field()) =>
+                    {
+                        Some((index, shape.clone()))
+                    }
+                    _ => None,
+                })
+                .collect();
+            if !slots.is_empty() {
+                chosen.insert(name.clone(), slots);
+            }
+        }
+        if chosen.is_empty() {
+            return chosen;
+        }
+        let mut calls = SplitCalls { chosen: &mut chosen, shapes };
+        for declaration in declarations.iter_mut() {
+            if let GoDeclaration::Written { source, .. } = declaration {
+                calls.chosen.retain(|name, _| !source.contains(name.as_str()));
+            }
+            go_traversal::declaration(&mut calls, declaration);
+        }
+        let passed = chosen.clone();
+        for (position, declaration) in declarations.iter_mut().enumerate() {
+            let callable = self.callable(position, declaration);
+            let GoDeclaration::Function { name, parameters, body, .. } = declaration else {
+                continue;
+            };
+            let Some(slots) = chosen.get_mut(name.as_str()) else { continue };
+            let mut binders: FxHashMap<String, usize> = FxHashMap::default();
+            crate::syntax::statements_names(body, &mut |name| {
+                if let Name::Binder(name) = name {
+                    *binders.entry(name.clone()).or_default() += 1;
+                }
+            });
+            let own = self.functions.get(name.as_str()).cloned();
+            let mut survey = Survey {
+                shapes,
+                callable: &callable,
+                parameters: &self.parameters,
+                split_parameters: &passed,
+                binders: &binders,
+                candidates: FxHashMap::default(),
+                facts: vec![],
+            };
+            for (index, shape) in slots.iter() {
+                let parameter = &parameters[*index].0;
+                if !binders.contains_key(parameter) {
+                    survey.candidates.insert(parameter.clone(), Candidate::parameter(shape));
+                }
+            }
+            survey.block(body, own.as_deref());
+            slots.retain(|index, _| {
+                survey.candidates.get(&parameters[*index].0).is_some_and(Candidate::splits)
+            });
+        }
+        chosen.retain(|_, slots| !slots.is_empty());
+        chosen
     }
 
     fn is_empty(&self) -> bool {
         self.functions.is_empty()
+            && self.split_parameters.is_empty()
             && self.parameters.is_empty()
             && self.locals.iter().all(FxHashMap::is_empty)
     }
@@ -516,6 +630,50 @@ impl Conventions {
             self.locals[position].iter().map(|(name, shape)| (name.clone(), shape.clone())),
         );
         callable
+    }
+}
+
+/// Drops the split parameters of functions the code uses other than by calling them, and those
+/// that a call passes something other than a construction or a local.
+struct SplitCalls<'c> {
+    chosen: &'c mut FxHashMap<String, FxHashMap<usize, String>>,
+    shapes: &'c FxHashMap<String, EitherShape>,
+}
+
+impl Walk for SplitCalls<'_> {
+    fn expression(&mut self, value: &mut GoExpression) {
+        match value {
+            GoExpression::Call { function, arguments }
+                if let GoExpression::Identifier(head) = function.unattributed()
+                    && self.chosen.contains_key(head) =>
+            {
+                let head = head.clone();
+                for (index, argument) in arguments.iter_mut().enumerate() {
+                    if let Some(shape) = self.chosen[&head].get(&index)
+                        && !passable(argument, &self.shapes[shape])
+                        && let Some(slots) = self.chosen.get_mut(&head)
+                    {
+                        slots.remove(&index);
+                    }
+                    self.expression(argument);
+                }
+                if self.chosen[&head].is_empty() {
+                    self.chosen.remove(&head);
+                }
+            }
+            GoExpression::Identifier(name) => {
+                self.chosen.remove(name.as_str());
+            }
+            value => go_traversal::expression(self, value),
+        }
+    }
+}
+
+/// Whether a call can pass the value to a split parameter: a construction or a local.
+fn passable(argument: &GoExpression, shape: &EitherShape) -> bool {
+    match argument.unattributed() {
+        GoExpression::Identifier(_) => true,
+        value => shape.construction(value).is_some(),
     }
 }
 
@@ -792,6 +950,18 @@ struct Candidate {
 }
 
 impl Candidate {
+    /// A parameter, which the calls store into as branches store into a joining local.
+    fn parameter(shape: &str) -> Candidate {
+        Candidate {
+            shape: shape.to_string(),
+            calls: 0,
+            reassigned: false,
+            read_after_early_return: false,
+            joins: true,
+            escapes: false,
+        }
+    }
+
     /// Whether the local becomes two: it holds a call's two results, or it joins branches.
     fn splits(&self) -> bool {
         let stays_known = !(self.reassigned && self.read_after_early_return);
@@ -824,9 +994,33 @@ impl Rewrite<'_> {
         match declaration {
             GoDeclaration::Function { name, parameters, result, body } => {
                 let own = self.conventions.functions.get(name.as_str()).cloned();
-                self.choose_splits(body, own.as_deref());
+                let mut split_parameters: Vec<(usize, String, String)> = self
+                    .conventions
+                    .split_parameters
+                    .get(name.as_str())
+                    .into_iter()
+                    .flatten()
+                    .map(|(index, shape)| (*index, parameters[*index].0.clone(), shape.clone()))
+                    .collect();
+                split_parameters.sort();
+                let surveyed: Vec<(String, String)> = split_parameters
+                    .iter()
+                    .map(|(_, parameter, shape)| (parameter.clone(), shape.clone()))
+                    .collect();
+                self.choose_splits(body, own.as_deref(), &surveyed);
                 self.locals.extend(parameters.iter().map(|(parameter, _)| parameter.clone()));
                 *body = self.block(std::mem::take(body), own.as_deref());
+                for (index, parameter, shape) in split_parameters.into_iter().rev() {
+                    let split = self.parameter_split(&parameter, &shape, body);
+                    let shape = &self.shapes[&shape];
+                    parameters.splice(
+                        index..=index,
+                        [
+                            (split.value, shape.right.clone()),
+                            (split.failure, shape.failure_type()),
+                        ],
+                    );
+                }
                 if let Some(own) = &own {
                     *result = Some(self.shapes[own].results());
                 }
@@ -847,8 +1041,40 @@ impl Rewrite<'_> {
         }
     }
 
+    /// The two parameters a split parameter becomes. Where the body still wants the `Either`, it
+    /// builds it from them first.
+    fn parameter_split(
+        &mut self,
+        parameter: &str,
+        shape: &str,
+        body: &mut Vec<GoStatement>,
+    ) -> Split {
+        if let Some(split) = self.splits.get(parameter) {
+            return split.clone();
+        }
+        let value = super::inlining::fresh(&self.shapes[shape].value_name, &mut self.names);
+        let failure = super::inlining::fresh(&format!("err{NUMBERED}"), &mut self.names);
+        let converter = self.converter(shape, Conversion::FromResults);
+        body.insert(
+            0,
+            GoStatement::Define {
+                names: vec![parameter.to_string()],
+                values: vec![call(
+                    identifier_expression(&converter),
+                    vec![identifier_expression(&value), identifier_expression(&failure)],
+                )],
+            },
+        );
+        Split { shape: shape.to_string(), value, failure }
+    }
+
     /// Picks the locals of a function body that become two locals.
-    fn choose_splits(&mut self, body: &mut [GoStatement], own: Option<&str>) {
+    fn choose_splits(
+        &mut self,
+        body: &mut [GoStatement],
+        own: Option<&str>,
+        split_parameters: &[(String, String)],
+    ) {
         let mut binders: FxHashMap<String, usize> = FxHashMap::default();
         let mut count = |name: Name<'_>| {
             if let Name::Binder(name) = name {
@@ -861,10 +1087,14 @@ impl Rewrite<'_> {
             shapes: self.shapes,
             callable: &self.callable,
             parameters: &self.conventions.parameters,
+            split_parameters: &self.conventions.split_parameters,
             binders: &binders,
             candidates: FxHashMap::default(),
             facts: vec![],
         };
+        for (parameter, shape) in split_parameters {
+            survey.candidates.insert(parameter.clone(), Candidate::parameter(shape));
+        }
         survey.block(body, own);
         let mut chosen: Vec<(String, Candidate)> =
             survey.candidates.into_iter().filter(|(_, candidate)| candidate.splits()).collect();
@@ -1236,16 +1466,57 @@ impl Rewrite<'_> {
             _ => None,
         };
         let slots = slots.cloned().unwrap_or_default();
-        arguments
-            .into_iter()
-            .enumerate()
-            .map(|(index, argument)| match slots.get(&index) {
-                Some(shape) if matches!(argument.unattributed(), GoExpression::Function { .. }) => {
-                    self.converted_literal(argument, shape)
+        let split = match function.unattributed() {
+            GoExpression::Identifier(name) => self.conventions.split_parameters.get(name),
+            _ => None,
+        };
+        let split = split.cloned().unwrap_or_default();
+        let mut out = Vec::with_capacity(arguments.len());
+        for (index, argument) in arguments.into_iter().enumerate() {
+            match (slots.get(&index), split.get(&index)) {
+                (Some(shape), _)
+                    if matches!(argument.unattributed(), GoExpression::Function { .. }) =>
+                {
+                    out.push(self.converted_literal(argument, shape));
                 }
-                _ => self.expression(argument),
-            })
-            .collect()
+                (_, Some(shape)) => {
+                    let (value, failure) = self.passed_apart(argument, shape);
+                    out.push(value);
+                    out.push(failure);
+                }
+                _ => out.push(self.expression(argument)),
+            }
+        }
+        out
+    }
+
+    /// An `Either` passed to a split parameter, as its value and its failure.
+    fn passed_apart(&mut self, argument: GoExpression, shape: &str) -> (GoExpression, GoExpression) {
+        let either = &self.shapes[shape];
+        if let GoExpression::Identifier(local) = argument.unattributed() {
+            if let Some(split) = self.splits.get(local) {
+                return (identifier_expression(&split.value), identifier_expression(&split.failure));
+            }
+            let right = GoExpression::Field {
+                value: Box::new(argument.clone()),
+                name: either.right_field.clone(),
+            };
+            let converter = self.converter(shape, Conversion::Failure);
+            return (right, call(identifier_expression(&converter), vec![argument]));
+        }
+        let (left, field) = either
+            .construction(&argument)
+            .expect("invariant violated: a split parameter is passed a local or a construction");
+        let side = if left { &either.left } else { &either.right };
+        let field = match field {
+            Some(field) => self.expression(field),
+            None => self.zeros.zero(side),
+        };
+        let either = &self.shapes[shape];
+        match left {
+            true => (self.zeros.zero(&either.right), self.failure(field, either)),
+            false => (field, either.no_failure()),
+        }
     }
 
     /// A function literal returning an `Either`, returning its two results instead.
@@ -1286,11 +1557,7 @@ impl Rewrite<'_> {
         if let Some(name) = self.converters.get(&key) {
             return name.clone();
         }
-        let suffix = match conversion {
-            Conversion::FromResults => "FromResults",
-            Conversion::Results => "Results",
-        };
-        let placeholder = format!("\u{0}{shape}{suffix}");
+        let placeholder = format!("\u{0}{shape}{}", conversion.suffix());
         self.converters.insert(key, placeholder.clone());
         placeholder
     }
@@ -1383,6 +1650,12 @@ impl Rewrite<'_> {
         if self.splits.is_empty() {
             return;
         }
+        let pairs: FxHashMap<String, String> = self
+            .splits
+            .values()
+            .map(|split| (split.failure.clone(), split.value.clone()))
+            .collect();
+        every_block(body, &mut |block| pass_split_once(block, &pairs));
         every_block(body, &mut |block| return_early(block, &self.failure_names));
         let values: FxHashSet<String> =
             self.splits.values().map(|split| split.value.clone()).collect();
@@ -1414,6 +1687,89 @@ impl Rewrite<'_> {
             }
         });
     }
+}
+
+/// `if err.Failed { return j(…, zero, err) } else { return j(…, value, F{}) }` as `return j(…,
+/// value, err)`: a split parameter's value is not read where there is a failure. The two calls
+/// differ only there.
+fn pass_split_once(block: &mut [GoStatement], pairs: &FxHashMap<String, String>) {
+    for statement in block.iter_mut() {
+        let GoStatement::If { condition, then, otherwise } = &*statement else { continue };
+        let failures: FxHashSet<String> = pairs.keys().cloned().collect();
+        let Some((failure, true)) = tested_failure(condition, &failures) else { continue };
+        let value = &pairs[failure];
+        let (Some(failed), Some(succeeded)) = (only_call(then), only_call(otherwise)) else {
+            continue;
+        };
+        let Some(merged) = merged_call(failed, succeeded, failure, value) else { continue };
+        *statement = merged;
+    }
+}
+
+/// The one statement of a branch, when it returns or runs a call.
+fn only_call(statements: &[GoStatement]) -> Option<&GoStatement> {
+    let mut rest = statements.iter().filter(|statement| !matches!(statement, GoStatement::Line(_)));
+    let (Some(statement), None) = (rest.next(), rest.next()) else { return None };
+    let call = match statement {
+        GoStatement::Return(Some(value)) | GoStatement::Expression(value) => value,
+        _ => return None,
+    };
+    matches!(call.unattributed(), GoExpression::Call { .. }).then_some(statement)
+}
+
+fn merged_call(
+    failed: &GoStatement,
+    succeeded: &GoStatement,
+    failure: &str,
+    value: &str,
+) -> Option<GoStatement> {
+    let arguments = |statement: &GoStatement| match statement {
+        GoStatement::Return(Some(call)) | GoStatement::Expression(call) => {
+            match call.unattributed() {
+                GoExpression::Call { function, arguments } => Some((function.clone(), arguments.clone())),
+                _ => None,
+            }
+        }
+        _ => None,
+    };
+    let (failed_function, failed_arguments) = arguments(failed)?;
+    let (function, mut merged) = arguments(succeeded)?;
+    if failed_function.unattributed() != function.unattributed()
+        || failed_arguments.len() != merged.len()
+        || std::mem::discriminant(failed) != std::mem::discriminant(succeeded)
+    {
+        return None;
+    }
+    let is = |argument: &GoExpression, name: &str| {
+        matches!(argument.unattributed(), GoExpression::Identifier(found) if found == name)
+    };
+    let mut index = 0;
+    let mut passed = false;
+    while index < merged.len() {
+        if failed_arguments[index].unattributed() == merged[index].unattributed() {
+            index += 1;
+            continue;
+        }
+        let pair = index + 1 < merged.len()
+            && is_plain(&failed_arguments[index])
+            && is(&merged[index], value)
+            && is(&failed_arguments[index + 1], failure)
+            && is_no_failure(&merged[index + 1]);
+        if !pair || passed {
+            return None;
+        }
+        merged[index + 1] = identifier_expression(failure);
+        passed = true;
+        index += 2;
+    }
+    if !passed {
+        return None;
+    }
+    let call = GoExpression::Call { function, arguments: merged };
+    Some(match succeeded {
+        GoStatement::Return(_) => GoStatement::Return(Some(call)),
+        _ => GoStatement::Expression(call),
+    })
 }
 
 /// The body after a directive naming the line, when there is one.
@@ -1832,6 +2188,7 @@ struct Survey<'s> {
     shapes: &'s FxHashMap<String, EitherShape>,
     callable: &'s FxHashMap<String, String>,
     parameters: &'s FxHashMap<String, FxHashMap<usize, String>>,
+    split_parameters: &'s FxHashMap<String, FxHashMap<usize, String>>,
     binders: &'s FxHashMap<String, usize>,
     candidates: FxHashMap<String, Candidate>,
     /// The candidates known to hold a `Left` (`true`) or a `Right` where the code is, and whether
@@ -2100,12 +2457,25 @@ impl Survey<'_> {
             GoExpression::Function { body, .. } => self.block(body, None),
             GoExpression::Call { function, arguments }
                 if let GoExpression::Identifier(head) = function.unattributed()
-                    && let Some(slots) = self.parameters.get(head) =>
+                    && (self.parameters.contains_key(head)
+                        || self.split_parameters.contains_key(head)) =>
             {
+                let empty = FxHashMap::default();
+                let slots = self.parameters.get(head).unwrap_or(&empty);
+                let split = self.split_parameters.get(head).unwrap_or(&empty);
                 for (index, argument) in arguments.iter_mut().enumerate() {
-                    match slots.get(&index) {
-                        Some(shape) => self.converted_literal(argument, shape),
-                        None => self.expression(argument),
+                    match (slots.get(&index), split.get(&index)) {
+                        (Some(shape), _) => self.converted_literal(argument, shape),
+                        (None, Some(shape)) => match argument {
+                            GoExpression::Identifier(local)
+                                if self
+                                    .candidates
+                                    .get(local.as_str())
+                                    .is_some_and(|candidate| candidate.shape == *shape) => {}
+                            GoExpression::Attributed { value, .. } => self.children(value),
+                            argument => self.children(argument),
+                        },
+                        (None, None) => self.expression(argument),
                     }
                 }
             }
