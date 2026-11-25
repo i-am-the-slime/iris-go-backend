@@ -233,12 +233,12 @@ jobs:
       - name: Fetch the examples' packages
         run: |
           for manifest in iris-go-runtime/examples/*/spago.yaml; do
-            (cd "$(dirname "$manifest")" && "$GITHUB_WORKSPACE/target/debug/iris" build --quiet >/dev/null 2>&1) || true
+            (cd "$(dirname "$manifest")" && "$GITHUB_WORKSPACE/target/debug/googoo" build --quiet >/dev/null 2>&1) || true
           done
 
       - name: Build and run iris-go's examples
         env:
-          IRIS: ${{ github.workspace }}/target/debug/iris
+          IRIS: ${{ github.workspace }}/target/debug/googoo
           EXAMPLES: ${{ github.workspace }}/iris-go-runtime/examples
           GO_SUPPORT: ${{ github.workspace }}/iris-go-runtime
           JOBS: "4"

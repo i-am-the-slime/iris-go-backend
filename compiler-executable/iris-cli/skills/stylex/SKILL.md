@@ -22,8 +22,8 @@ use this skill to express its advice in PureScript.
 `Iris.StyleX`, `Iris.StyleX.When`, and `Iris.StyleX.Types` are built into Iris; do not add a
 Spago dependency for them. `purs` cannot build a project that imports them. Iris compiles each
 call to a direct `@stylexjs/stylex` call in `output/`, which the StyleX bundler plugin compiles to
-CSS. With `iris watch` running, `iris watch query module Iris.StyleX` lists exact signatures and
-`iris watch query javascript Main` shows what the plugin receives; see `iris skills get watch`.
+CSS. With `googoo watch` running, `googoo watch query module Iris.StyleX` lists exact signatures and
+`googoo watch query javascript Main` shows what the plugin receives; see `googoo skills get watch`.
 
 ## Translate StyleX JavaScript
 
@@ -142,7 +142,7 @@ requires them to be statically known:
   and pass it in. Condition keys inside it stay static.
 
 `createTheme` overrides are type-checked against the `defineVars` fields of the same name, and
-`Types` functions against their argument types; see their signatures with `iris watch query`.
+`Types` functions against their argument types; see their signatures with `googoo watch query`.
 
 ## What only the StyleX plugin checks
 
@@ -167,7 +167,7 @@ Follow StyleX's installation guide for the bundler, then add what Iris output ne
 - When calling the Babel plugin yourself, also transform each `index.stylex.js` and pass real
   file paths: the plugin resolves imports through symlinks, so a symlinked filename gives a
   variable a different hash in the module that imports it.
-- Run `iris watch` beside the dev server, with the same `--output` the bundler imports from.
+- Run `googoo watch` beside the dev server, with the same `--output` the bundler imports from.
 - Vite may miss `@stylexjs/stylex` in its first scan of generated modules; add it to
   `optimizeDeps.include` if the dev server reloads on first navigation.
 

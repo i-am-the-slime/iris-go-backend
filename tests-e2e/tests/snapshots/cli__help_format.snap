@@ -5,7 +5,7 @@ status: 0
 --- stdout
 Format a Spago workspace or explicit source files.
 
-Usage: iris format [FLAGS]
+Usage: googoo format [FLAGS]
 
 Flags:
       --write            Replace files with formatted output. This is the default for workspaces.

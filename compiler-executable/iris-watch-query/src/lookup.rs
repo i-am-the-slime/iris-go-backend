@@ -210,7 +210,7 @@ pub(crate) fn javascript(
     };
     if let Some(reason) = reason {
         return Err(QueryFailure::Failed(format!(
-            "the latest rebuild did not write output/ because {reason}; see `iris watch query wait`"
+            "the latest rebuild did not write output/ because {reason}; see `googoo watch query wait`"
         )));
     }
     match context.engine.javascript(file_id)? {

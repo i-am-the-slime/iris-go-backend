@@ -7,7 +7,7 @@ status: 2
 --- stderr
 error: the argument '--check' cannot be used with '--write'
 
-Usage: iris format [FLAGS]
+Usage: googoo format [FLAGS]
 
 For more information, try '--help'.
 $ iris format --write --file -
@@ -21,7 +21,7 @@ status: 2
 --- stderr
 error: unexpected argument 'src/Main.purs' found
 
-Usage: iris format [FLAGS]
+Usage: googoo format [FLAGS]
 
 For more information, try '--help'.
 $ iris format --file src/Main.purs --file src/Other.purs

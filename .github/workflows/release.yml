@@ -61,11 +61,12 @@ jobs:
         id: release
         uses: taiki-e/upload-rust-binary-action@v1
         with:
-          # Installed binaries download archives by this name and layout; see the contract in
-          # .agents/skills/cutting-releases/SKILL.md before changing either.
-          bin: iris
+          # The Go backend fork ships as googoo, with `iris` as a small alias that warns and runs
+          # the googoo beside it. Upstream's `iris self update` contract does not apply to these
+          # archives: the fork refuses to self-update and is installed with Homebrew.
+          bin: googoo,iris
           package: iris-cli
-          archive: iris-$target
+          archive: googoo-$target
           include: README.md,LICENSE,ACKNOWLEDGEMENTS.md,THIRDPARTY.toml
           leading-dir: true
           locked: true

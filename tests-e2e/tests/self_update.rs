@@ -25,7 +25,7 @@ fn version(executable: &Path) -> String {
     let output = run(executable, &["--version"]);
     assert_success(&output);
     let output = String::from_utf8(output.stdout).unwrap();
-    output.trim_end().strip_prefix("iris ").unwrap().to_owned()
+    output.trim_end().strip_prefix("googoo ").unwrap().to_owned()
 }
 
 fn update_report(arguments: &[&str]) -> String {
@@ -45,7 +45,7 @@ fn refers_the_go_backend_fork_to_homebrew_instead_of_installing_a_release() {
     status: 1
     --- stdout
     --- stderr
-    Iris [CURRENT] is the Go backend fork, which `iris self update` cannot update; run `brew upgrade i-am-the-slime/tap/iris` to update it
+    googoo [CURRENT] is the Go backend fork of Iris, which `googoo self update` cannot update; run `brew upgrade i-am-the-slime/tap/googoo` to update it
     ");
 }
 
@@ -55,7 +55,7 @@ fn refers_the_go_backend_fork_to_homebrew_instead_of_installing_the_latest_relea
     status: 1
     --- stdout
     --- stderr
-    Iris [CURRENT] is the Go backend fork, which `iris self update` cannot update; run `brew upgrade i-am-the-slime/tap/iris` to update it
+    googoo [CURRENT] is the Go backend fork of Iris, which `googoo self update` cannot update; run `brew upgrade i-am-the-slime/tap/googoo` to update it
     ");
 }
 
@@ -65,6 +65,6 @@ fn refers_the_go_backend_fork_to_homebrew_instead_of_checking_for_a_canary() {
     status: 1
     --- stdout
     --- stderr
-    Iris [CURRENT] is the Go backend fork, which `iris self update` cannot update; run `brew upgrade i-am-the-slime/tap/iris` to update it
+    googoo [CURRENT] is the Go backend fork of Iris, which `googoo self update` cannot update; run `brew upgrade i-am-the-slime/tap/googoo` to update it
     ");
 }

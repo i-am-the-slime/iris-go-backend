@@ -5,7 +5,7 @@ status: 0
 --- stdout
 Print agent skills for using Iris, which match this version.
 
-Usage: iris skills [SUBCOMMAND]
+Usage: googoo skills [SUBCOMMAND]
 
 Commands:
   get   Print a skill.

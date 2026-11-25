@@ -35,7 +35,7 @@ impl Discovery {
             return None;
         }
         let executable = self.executable.as_ref().map_or_else(
-            || "the watcher's `iris`".to_string(),
+            || "the watcher's `googoo`".to_string(),
             |executable| executable.display().to_string(),
         );
         Some(format!(
@@ -48,7 +48,7 @@ impl Discovery {
 #[derive(Debug, Error)]
 pub enum DiscoveryError {
     #[error(
-        "another `iris watch`{} is already writing to {}",
+        "another `googoo watch`{} is already writing to {}",
         .pid.map(|pid| format!(" (process {pid})")).unwrap_or_default(),
         .output.display()
     )]

@@ -5,7 +5,7 @@ status: 0
 --- stdout
 Replace this Iris with a published release.
 
-Usage: iris self update [FLAGS] [VERSION]
+Usage: googoo self update [FLAGS] [VERSION]
 
 Arguments:
   [VERSION]  Release to install, such as v0.1.6. Defaults to the latest release on this Iris's channel.

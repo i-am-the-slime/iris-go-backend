@@ -5,7 +5,7 @@ status: 0
 --- stdout
 Build a Spago workspace or package.
 
-Usage: iris build [FLAGS]
+Usage: googoo build [FLAGS]
 
 Flags:
   -p, --package <NAME>  Workspace package to build.

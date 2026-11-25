@@ -5,7 +5,7 @@ status: 0
 --- stdout
 Serve the queries and refactorings as MCP tools over standard input and output.
 
-Usage: iris watch mcp [-o --output <DIR>]
+Usage: googoo watch mcp [-o --output <DIR>]
 
 Flags:
   -o, --output <DIR>  Output directory of the watcher. Defaults to output in the workspace root.

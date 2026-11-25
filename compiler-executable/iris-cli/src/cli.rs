@@ -15,7 +15,7 @@ use crate::logging::LoggingFilters;
 
 #[derive(Debug, usage::Cli)]
 #[usage(
-    bin = "iris",
+    bin = "googoo",
     about = env!("CARGO_PKG_DESCRIPTION"),
     version = crate::VERSION,
     unknown_flags = "error",
@@ -66,12 +66,12 @@ pub struct GoOptions {
     #[usage(short, long, value_name = "NAME")]
     package: Option<String>,
 
-    /// Qualified entry point. Defaults to Main.main, or without DIR to the one `iris run --go`
+    /// Qualified entry point. Defaults to Main.main, or without DIR to the one `googoo run --go`
     /// uses.
     #[usage(long, value_name = "MODULE.NAME")]
     entry: Option<String>,
 
-    /// Directory to write main.go to. Without one, builds the executable that `iris run --go`
+    /// Directory to write main.go to. Without one, builds the executable that `googoo run --go`
     /// runs and prints its path.
     #[usage(value_name = "DIR")]
     destination: Option<PathBuf>,
@@ -95,7 +95,7 @@ pub enum LineDirectiveChoice {
     Every,
 }
 
-/// What `iris go` makes: Go sources in a directory with a go.mod, or an executable.
+/// What `googoo go` makes: Go sources in a directory with a go.mod, or an executable.
 pub enum GoTarget {
     Sources(iris_go::GoConfig),
     Executable(iris_go::ProgramConfig),
@@ -285,7 +285,7 @@ pub struct RunOptions {
     arguments: Vec<String>,
 }
 
-/// How `iris run` runs the package.
+/// How `googoo run` runs the package.
 pub enum Run {
     Node(RunConfig),
     Go { config: iris_go::ProgramConfig, arguments: Vec<String> },
@@ -371,9 +371,9 @@ pub struct WatchOptions {
 
 #[derive(Debug, Subcommands)]
 pub enum WatchCommand {
-    /// Ask a running `iris watch` about the project.
+    /// Ask a running `googoo watch` about the project.
     Query(QueryOptions),
-    #[usage(help = "Run a type-aware refactoring against a running `iris watch`.")]
+    #[usage(help = "Run a type-aware refactoring against a running `googoo watch`.")]
     Refactor(RefactorOptions),
     #[usage(
         help = "Serve the queries and refactorings as MCP tools over standard input and output."
@@ -589,8 +589,8 @@ impl ItemQuery {
 }
 
 impl WatchOptions {
-    /// Takes `iris watch query`'s options. A query without its own `--output` reads the one given
-    /// to `iris watch`, so a watcher's command line still finds it with `query` appended.
+    /// Takes `googoo watch query`'s options. A query without its own `--output` reads the one given
+    /// to `googoo watch`, so a watcher's command line still finds it with `query` appended.
     pub fn take_command(&mut self) -> Option<WatchCommand> {
         let mut command = self.command.take()?;
         let inherited_output = self.output.take();
@@ -643,7 +643,7 @@ pub enum SkillsCommand {
 #[derive(Debug, Args)]
 #[usage(args_override_self = false)]
 pub struct SkillName {
-    /// Skill name, as listed by `iris skills list`.
+    /// Skill name, as listed by `googoo skills list`.
     #[usage(value_name = "NAME")]
     pub name: String,
 }
@@ -773,7 +773,7 @@ impl Program {
                 std::process::exit(0);
             }
             Err(usage::Error::Version { .. }) => {
-                println!("iris {}", crate::VERSION);
+                println!("googoo {}", crate::VERSION);
                 std::process::exit(0);
             }
             Err(error) => {
@@ -795,7 +795,7 @@ mod tests {
 
     #[test]
     fn maps_build_options_to_configuration() {
-        let arguments = ["iris", "build", "--quiet", "--no-diagnostics"];
+        let arguments = ["googoo", "build", "--quiet", "--no-diagnostics"];
         let arguments = arguments.iter().map(OsStr::new).collect_vec();
         let program = Program::try_parse_from(&arguments).unwrap();
         let Command::Build(options) = program.command else {

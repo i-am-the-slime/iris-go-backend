@@ -40,7 +40,7 @@ pub fn run() -> i32 {
         cli::Command::New(options) => match iris_package::create(options.into_config()) {
             Ok(package) => {
                 println!(
-                    "Created package `{}` with package set {}.\nRun `iris build` to get started.",
+                    "Created package `{}` with package set {}.\nRun `googoo build` to get started.",
                     package.name, package.package_set
                 );
                 0
@@ -198,7 +198,7 @@ fn self_update(options: cli::UpdateOptions) -> i32 {
                 "Replaced Iris {VERSION} with Iris {release} at {}.",
                 installed.executable.display()
             );
-            println!("Restart `iris watch` and editor language servers to use Iris {release}.");
+            println!("Restart `googoo watch` and editor language servers to use Iris {release}.");
             if !installed.has_self_update {
                 eprintln!(
                     "warning: Iris {release} cannot update itself; run the installer to update it."

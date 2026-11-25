@@ -5,7 +5,7 @@ status: 0
 --- stdout
 Manage this installation of Iris.
 
-Usage: iris self <SUBCOMMAND>
+Usage: googoo self <SUBCOMMAND>
 
 Commands:
   update  Replace this Iris with a published release.

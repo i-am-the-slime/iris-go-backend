@@ -13,7 +13,7 @@ fn creates_a_spago_project_with_the_latest_supported_package_set() {
     status: 0
     --- stdout
     Created package `example` with package set 82.1.1.
-    Run `iris build` to get started.
+    Run `googoo build` to get started.
     --- stderr
     ");
     insta::assert_snapshot!(workspace.spago_calls(), @r#".: spago "registry" "package-sets" "--latest" "--json" "--quiet""#);
