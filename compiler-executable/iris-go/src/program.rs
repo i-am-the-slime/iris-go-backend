@@ -133,7 +133,7 @@ fn clear_generated(module: &Path) -> Result<(), String> {
 
 /// The `go.mod` of the package's Go module, which requires the runtime release, or replaces it
 /// with the checkout `IRIS_GO` names.
-fn go_mod(package: &str) -> Result<String, String> {
+pub(crate) fn go_mod(package: &str) -> Result<String, String> {
     let mut go_mod = format!(
         "module iris.local/{package}\n\ngo {MINIMUM_GO}.0\n\nrequire {RUNTIME_MODULE} \
          {RUNTIME_VERSION}\n"

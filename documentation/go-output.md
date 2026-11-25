@@ -36,8 +36,9 @@ gets you one.
 - **Hacking on the runtime**: `IRIS_GO=~/code/iris-go iris run --go` builds against your checkout
   of [iris-go](https://github.com/i-am-the-slime/iris-go) instead of the release.
 
-Want the Go source in a directory of your own instead? `iris go out` writes it to `out/`, which
-needs a `go.mod`.
+Want the Go source in a directory of your own instead? `iris go out` writes it to `out/`. If
+`out/` has no `go.mod` yet, you get one naming the module `iris.local/<package>`; change the
+`module` line whenever you like, and the next `iris go out` uses your name.
 
 ## Stack traces point at your PureScript
 

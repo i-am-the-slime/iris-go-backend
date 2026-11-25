@@ -42,7 +42,7 @@ pub fn run(config: GoConfig) -> Result<(), String> {
 
     let scratch = tempfile::tempdir().map_err(|error| error.to_string())?;
     let output = Some(scratch.path().join("output"));
-    let project = ProjectConfig { package: config.package, output, quiet: true };
+    let project = ProjectConfig { package: config.package.clone(), output, quiet: true };
     let project = iris_build::prepare_project(project).map_err(|error| error.to_string())?;
     let project = iris_build::initialize_project(project, BuildStage::Checked)
         .map_err(|error| error.to_string())?;
@@ -54,7 +54,7 @@ pub fn run(config: GoConfig) -> Result<(), String> {
     let load_work = go::Work::so_far().since(work_started);
 
     fs::create_dir_all(&config.destination).map_err(|error| error.to_string())?;
-    let module_path = go_module_path(&config.destination)?;
+    let module_path = go_module_path(&config.destination, config.package.as_deref(), config.quiet)?;
     let mut foreign_packages =
         vendor_foreign_packages(&snapshot, &config.destination, &module_path)?;
     if let Some(coverage) = config.line_directives {
@@ -129,20 +129,56 @@ fn remove_stale_kernel_files(destination: &Path, files: &[(String, String)]) -> 
     Ok(())
 }
 
-/// The Go module path the destination's `go.mod` declares.
-fn go_module_path(destination: &Path) -> Result<String, String> {
+/// The Go module path the destination's `go.mod` declares. A destination without one gets the
+/// `go.mod` that `iris run --go` writes, named after the package.
+fn go_module_path(
+    destination: &Path,
+    package: Option<&str>,
+    quiet: bool,
+) -> Result<String, String> {
     let go_mod = destination.join("go.mod");
-    let declaration = fs::read_to_string(&go_mod).map_err(|_| {
-        format!(
-            "{} must exist to name the Go module the generated packages share",
-            go_mod.display()
-        )
-    })?;
+    let declaration = match fs::read_to_string(&go_mod) {
+        Ok(declaration) => declaration,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+            let declaration = new_go_mod(&go_mod, package)?;
+            if !quiet {
+                eprintln!("go: wrote {}", go_mod.display());
+            }
+            declaration
+        }
+        Err(error) => return Err(format!("could not read {}: {error}", go_mod.display())),
+    };
     declaration
         .lines()
         .find_map(|line| line.trim().strip_prefix("module "))
         .map(|module| module.trim().to_string())
-        .ok_or_else(|| format!("{} does not declare a module", go_mod.display()))
+        .ok_or_else(|| {
+            format!(
+                "{} does not declare a module; add a line like `module example.com/app` naming \
+                 the Go module the generated packages share",
+                go_mod.display()
+            )
+        })
+}
+
+/// Writes the `go.mod` of the selected package's module, or says what to write when no single
+/// package is selected.
+fn new_go_mod(go_mod: &Path, package: Option<&str>) -> Result<String, String> {
+    let current_directory = std::env::current_dir().map_err(|error| error.to_string())?;
+    let workspace = iris_build::Workspace::discover(&current_directory, package)
+        .map_err(|error| error.to_string())?;
+    let Some(name) = workspace.selected else {
+        return Err(format!(
+            "{} is missing, and it names the Go module the generated packages share; pick a \
+             package with -p so Iris can write it, or write one yourself:\n\n{}",
+            go_mod.display(),
+            program::go_mod("my-app")?
+        ));
+    };
+    let declaration = program::go_mod(&name)?;
+    fs::write(go_mod, &declaration)
+        .map_err(|error| format!("could not write {}: {error}", go_mod.display()))?;
+    Ok(declaration)
 }
 
 /// Copies the Go files next to each source file into a package of the program, named after its
