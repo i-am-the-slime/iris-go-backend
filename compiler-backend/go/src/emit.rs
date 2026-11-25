@@ -84,6 +84,7 @@ mod swaps;
 mod text;
 mod types;
 mod unreferenced;
+mod unit_apply;
 mod unzip;
 mod updates;
 mod vector;

@@ -241,6 +241,8 @@ pub const ARRAY_THAW_OWNED: Foreign = perform_in(GoPackage::Array, "ThawOwned", 
 
 pub const ARRAY_UNZIP: Foreign = array("Unzip", 1);
 
+pub const ARRAY_APPLY: Foreign = array("Apply", 2);
+
 pub const ARRAY_UNCONS: Foreign = uncurried(direct("Uncons", 3), &[(1, 2)]);
 
 pub const ARRAY_TAIL: Foreign = array("Tail", 1);
@@ -289,7 +291,7 @@ pub(super) const FOREIGN_IMPORTS: &[(&str, &str, Foreign)] = &[
     ("Data.Ord", "ordArrayImpl", uncurried(direct("CompareArray", 3), &[(0, 2)])),
     ("Data.Show", "intercalate", prim("StringJoinWith", 2)),
     ("Data.Show.Generic", "intercalate", prim("StringJoinWith", 2)),
-    ("Control.Apply", "arrayApply", array("Apply", 2)),
+    ("Control.Apply", "arrayApply", ARRAY_APPLY),
     ("Record.Unsafe", "unsafeGet", Foreign::RecordGet),
     // Whether a record has a field of a label; `Data.Variant` asks it before
     // reading a handler with `unsafeGet`.

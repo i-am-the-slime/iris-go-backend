@@ -537,6 +537,11 @@ where
         {
             return Ok(unzipped);
         }
+        if foreign.calls(crate::foreign::ARRAY_APPLY)
+            && let Some(applied) = self.unit_apply(arguments, monotype, out)?
+        {
+            return Ok(applied);
+        }
         if foreign.calls(crate::foreign::ARRAY_SORT_BY) {
             if let Some(sorted) = self.primitive_sort(arguments, Placement::Copied, out)? {
                 return Ok(sorted);
