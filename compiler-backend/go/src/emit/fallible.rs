@@ -1975,7 +1975,10 @@ impl NestedResults<'_> {
             {
                 *changed = true;
                 let (kept, failure) = (defined[0].clone(), defined[1].clone());
-                let (value, inner_failure) = self.fresh(&inner, names);
+                let (value, inner_failure) = match kept.as_str() {
+                    "_" => ("_".to_string(), "_".to_string()),
+                    _ => self.fresh(&inner, names),
+                };
                 out.push(GoStatement::Define {
                     names: vec![value.clone(), inner_failure.clone(), failure],
                     values,
@@ -1994,7 +1997,10 @@ impl NestedResults<'_> {
                     GoExpression::Identifier(kept) => kept.clone(),
                     _ => unreachable!("invariant violated: a call's results go to locals"),
                 };
-                let (value, inner_failure) = self.fresh(&inner, names);
+                let (value, inner_failure) = match kept.as_str() {
+                    "_" => ("_".to_string(), "_".to_string()),
+                    _ => self.fresh(&inner, names),
+                };
                 let shape = &self.shapes[&inner];
                 if kept != "_" {
                     out.push(GoStatement::Variable {

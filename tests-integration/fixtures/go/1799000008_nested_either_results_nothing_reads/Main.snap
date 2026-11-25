@@ -1,0 +1,90 @@
+---
+source: tests-integration/src/fixtures.rs
+---
+// Data/Either/either.go
+package either
+
+type EitherInt struct {
+	Field0 int32
+	Tag    uint8
+}
+
+const (
+	EitherIntLeft = iota
+	EitherIntRight
+)
+
+type EitherString struct {
+	Left  string
+	Right EitherInt
+	Tag   uint8
+}
+
+const (
+	EitherStringLeft = iota
+	EitherStringRight
+)
+
+type IntFailure struct {
+	Failed bool
+	Left   int32
+}
+
+type StringFailure struct {
+	Failed bool
+	Left   string
+}
+
+// Data/Maybe/maybe.go
+package maybe
+
+type Int int64
+
+const NoInt Int = 1 << 32
+
+// main.go
+package main
+
+import (
+	"fixture/Data/Either"
+	journal "fixture/Journal_ffi"
+	"github.com/i-am-the-slime/iris-go/prim"
+)
+
+func main() {
+	for _, text := range []string{"4", "2001", "-3", "x"} {
+		n, found := prim.IntFromStringAs(10, text)
+		var err either.StringFailure
+		if found {
+			_, _, err = readSide(n)
+		} else {
+			err = either.StringFailure{Failed: true, Left: "not a number: " + text}
+		}
+		if err.Failed {
+			journal.Log("failed: " + err.Left)
+		}
+		x, found2 := prim.IntFromStringAs(10, text)
+		if found2 {
+			_, _, err2 := readSide(x)
+			if err2.Failed {
+				journal.Log("failed: " + err2.Left)
+			}
+		}
+	}
+}
+
+func readSide(n int32) (int32, either.IntFailure, either.StringFailure) {
+	for {
+		if n > 1000 {
+			n -= 1000
+			continue
+		}
+		if n < 0 {
+			return 0, either.IntFailure{}, either.StringFailure{Failed: true, Left: "negative"}
+		}
+		if n%2 == 0 {
+			return 0, either.IntFailure{Failed: true, Left: n / 2}, either.StringFailure{}
+		}
+		return n, either.IntFailure{}, either.StringFailure{}
+	}
+}
