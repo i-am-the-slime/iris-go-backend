@@ -54,16 +54,17 @@ jobs:
           path: ${{ env.CORPUS_DIR }}
           key: v1-go-sweep-corpus-${{ env.PACKAGE_SET }}-${{ hashFiles('tests-compatibility/purescript-*.txt') }}
 
+      # `prepare` clones the registry only into its default directories under target/compatibility,
+      # so the corpus is prepared there and moved out of the build cache's way.
       - name: Prepare the corpus
         if: steps.corpus.outputs.cache-hit != 'true'
         run: |
+          rm -rf target/compatibility
           target/release/tests-compatibility prepare \
             --preset core \
             --preset acme \
-            --package-set "$PACKAGE_SET" \
-            --registry-dir "$CORPUS_DIR/registry" \
-            --index-dir "$CORPUS_DIR/registry-index" \
-            --cache-dir "$CORPUS_DIR"
+            --package-set "$PACKAGE_SET"
+          mv target/compatibility "$CORPUS_DIR"
 
       - name: Save the corpus
         if: steps.corpus.outputs.cache-hit != 'true'
