@@ -1,0 +1,146 @@
+---
+source: tests-integration/src/fixtures.rs
+---
+// Data/Show/show.go
+package show
+
+import "github.com/i-am-the-slime/iris-go/prim"
+
+func Show(s string) string {
+	return prim.ShowString(s)
+}
+
+func AppendShowArrayString(buffer []byte, array []string) []byte {
+	buffer = append(buffer, '[')
+	for index, element := range array {
+		if index > 0 {
+			buffer = append(buffer, ',')
+		}
+		buffer = prim.AppendShowString(buffer, element)
+	}
+	buffer = append(buffer, ']')
+	return buffer
+}
+
+func ArrayString(array []string) string {
+	return string(AppendShowArrayString(nil, array))
+}
+
+// main.go
+package main
+
+import (
+	"fixture/Data/Show"
+	journal "fixture/Journal_ffi"
+	"github.com/i-am-the-slime/iris-go/array"
+)
+
+type ReadError struct {
+	Unknown string
+	Tag     uint8
+}
+
+const (
+	ReadErrorUnknown = iota
+	ReadErrorEmpty
+)
+
+type EitherInt struct {
+	Left  ReadError
+	Right int32
+	Tag   uint8
+}
+
+const (
+	EitherIntLeft = iota
+	EitherIntRight
+)
+
+type ReaderInt struct {
+	Name string
+	Read func(string) (int32, ReadErrorFailure)
+}
+
+type ParserInt struct {
+	Option ReaderInt
+	Both0  *ParserInt
+	Both1  *ParserInt
+	Done   int32
+	Tag    uint8
+}
+
+const (
+	ParserIntOption = iota
+	ParserIntDone
+	ParserIntBoth
+)
+
+type EitherString struct {
+	Left  ReadError
+	Right string
+	Tag   uint8
+}
+
+const (
+	EitherStringLeft = iota
+	EitherStringRight
+)
+
+type ReaderString struct {
+	Name string
+	Read func(string) (string, ReadErrorFailure)
+}
+
+type ParserString struct {
+	Option ReaderString
+	Done   string
+	Both0  *ParserString
+	Both1  *ParserString
+	Tag    uint8
+}
+
+const (
+	ParserStringOption = iota
+	ParserStringDone
+	ParserStringBoth
+)
+
+type ReadErrorFailure struct {
+	Failed bool
+	Left   ReadError
+}
+
+func Done(done string) *ParserString {
+	return &ParserString{Tag: ParserStringDone, Done: done}
+}
+
+func main() {
+	parserInts := make([]ParserInt, 3)
+	parserInts[0] = ParserInt{Tag: ParserIntBoth, Both0: &parserInts[1], Both1: &parserInts[2]}
+	parserInts[1] = ParserInt{Tag: ParserIntDone, Done: 1}
+	parserInts[2] = ParserInt{Tag: ParserIntDone, Done: 2}
+	journal.Log(show.ArrayString(namesInt(&parserInts[0])))
+	journal.Log(show.ArrayString(namesString(Done("a"))))
+}
+
+func namesInt(value *ParserInt) []string {
+	switch value.Tag {
+	case ParserIntOption:
+		return []string{value.Option.Name}
+	case ParserIntDone:
+		return []string{}
+	default: // ParserIntBoth
+		return array.Append(namesInt(value.Both0), namesInt(value.Both1))
+	}
+}
+
+func namesString(value *ParserString) []string {
+	switch value.Tag {
+	case ParserStringOption:
+		return []string{value.Option.Name}
+	case ParserStringDone:
+		return []string{}
+	default: // ParserStringBoth
+		return array.Append(namesString(value.Both0), namesString(value.Both1))
+	}
+}

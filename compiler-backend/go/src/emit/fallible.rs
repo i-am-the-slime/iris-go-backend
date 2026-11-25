@@ -174,6 +174,7 @@ where
         if shapes.is_empty() {
             return Ok(());
         }
+        let support = SupportFunctions::take(&mut self.type_declarations, declarations);
         self.lowered_function_types = values::lower_function_values(
             declarations,
             &mut self.type_declarations,
@@ -192,7 +193,7 @@ where
                 .collect(),
             false => FxHashMap::default(),
         };
-        let conventions = Conventions::choose(declarations, &shapes, marks);
+        let conventions = Conventions::choose(declarations, &shapes, marks, &support.names);
         let zeros = Zeros::new(&self.type_declarations);
         let mut converters: FxHashMap<(String, Conversion), String> = FxHashMap::default();
         for (position, declaration) in declarations.iter_mut().enumerate() {
@@ -227,6 +228,7 @@ where
             let name = self.declare_converter(shape, conversion, &zeros, declarations)?;
             rename_global(declarations, &placeholder, &name);
         }
+        support.restore(&mut self.type_declarations, declarations);
         self.declare_failures(&shapes, declarations);
         Ok(())
     }
@@ -238,7 +240,7 @@ where
         declarations: &mut [GoDeclaration],
     ) {
         let mut referred: FxHashSet<String> = FxHashSet::default();
-        for declaration in declarations.iter_mut() {
+        for declaration in declarations.iter_mut().chain(self.type_declarations.iter_mut()) {
             declaration.for_each_reference_mut(&mut |reference| {
                 if let Reference::Type(name) = reference {
                     referred.insert(name.clone());
@@ -432,6 +434,60 @@ where
     }
 }
 
+struct SupportFunctions {
+    names: FxHashSet<String>,
+    positions: Vec<usize>,
+}
+
+impl SupportFunctions {
+    fn take(
+        type_declarations: &mut Vec<GoDeclaration>,
+        declarations: &mut Vec<GoDeclaration>,
+    ) -> SupportFunctions {
+        let mut names = FxHashSet::default();
+        let mut positions = vec![];
+        let mut kept = vec![];
+        for (position, declaration) in std::mem::take(type_declarations).into_iter().enumerate() {
+            match &declaration {
+                GoDeclaration::Function { name, .. } => {
+                    names.insert(name.clone());
+                    positions.push(position);
+                    declarations.push(declaration);
+                }
+                _ => kept.push(declaration),
+            }
+        }
+        *type_declarations = kept;
+        SupportFunctions { names, positions }
+    }
+
+    fn restore(
+        self,
+        type_declarations: &mut Vec<GoDeclaration>,
+        declarations: &mut Vec<GoDeclaration>,
+    ) {
+        let is_support = |declaration: &GoDeclaration| match declaration {
+            GoDeclaration::Function { name, .. } => self.names.contains(name),
+            _ => false,
+        };
+        let (support, program): (Vec<GoDeclaration>, Vec<GoDeclaration>) =
+            std::mem::take(declarations).into_iter().partition(is_support);
+        *declarations = program;
+        let mut support = self.positions.iter().copied().zip(support).peekable();
+        let mut restored = Vec::with_capacity(type_declarations.len() + self.positions.len());
+        for declaration in std::mem::take(type_declarations) {
+            while let Some((_, function)) =
+                support.next_if(|(position, _)| *position == restored.len())
+            {
+                restored.push(function);
+            }
+            restored.push(declaration);
+        }
+        restored.extend(support.map(|(_, function)| function));
+        *type_declarations = restored;
+    }
+}
+
 /// The `Either` type of the results of a function of the type, when it returns one.
 fn fallible_result(type_: &GoType, shapes: &FxHashMap<String, EitherShape>) -> Option<String> {
     match type_ {
@@ -466,6 +522,7 @@ impl Conventions {
         declarations: &mut [GoDeclaration],
         shapes: &FxHashMap<String, EitherShape>,
         marks: FxHashMap<String, String>,
+        fixed_signatures: &FxHashSet<String>,
     ) -> Conventions {
         let mut conventions = Conventions { marks, ..Conventions::default() };
         let mut binders: Vec<FxHashMap<String, usize>> = vec![];
@@ -476,7 +533,9 @@ impl Conventions {
                     *counts.entry(name.clone()).or_default() += 1;
                 }
             });
-            if let GoDeclaration::Function { name, parameters, result, .. } = declaration {
+            if let GoDeclaration::Function { name, parameters, result, .. } = declaration
+                && !fixed_signatures.contains(name)
+            {
                 if let Some(GoType::Named(result)) = result
                     && shapes.contains_key(result)
                 {
@@ -577,7 +636,8 @@ impl Conventions {
                 break;
             }
         }
-        conventions.split_parameters = conventions.choose_split_parameters(declarations, shapes);
+        conventions.split_parameters =
+            conventions.choose_split_parameters(declarations, shapes, fixed_signatures);
         conventions
     }
 
@@ -585,10 +645,14 @@ impl Conventions {
         &self,
         declarations: &mut [GoDeclaration],
         shapes: &FxHashMap<String, EitherShape>,
+        fixed_signatures: &FxHashSet<String>,
     ) -> FxHashMap<String, FxHashMap<usize, String>> {
         let mut chosen: FxHashMap<String, FxHashMap<usize, String>> = FxHashMap::default();
         for declaration in declarations.iter() {
             let GoDeclaration::Function { name, parameters, .. } = declaration else { continue };
+            if fixed_signatures.contains(name) {
+                continue;
+            }
             let slots: FxHashMap<usize, String> = parameters
                 .iter()
                 .enumerate()
