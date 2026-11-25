@@ -1,0 +1,40 @@
+---
+source: tests-integration/src/fixtures.rs
+---
+// main.go
+package main
+
+import (
+	journal "fixture/Journal_ffi"
+	"fixture/shared"
+	"strconv"
+)
+
+func main() {
+	i := acquired.ForInt(func(x int32) int32 {
+		return x + 1
+	})
+	journal.Log(strconv.Itoa(int(i)))
+	acquired.ForUnit(func(x int32) {
+		journal.Log(strconv.Itoa(int(x)))
+	})
+}
+
+var acquired shared.Resource = shared.Resource{ForInt: func(use func(int32) int32) int32 {
+	journal.Log("acquire")
+	result := use(41)
+	journal.Log("release")
+	return result
+}, ForUnit: func(use func(int32)) {
+	journal.Log("acquire")
+	use(41)
+	journal.Log("release")
+}}
+
+// shared/shared.go
+package shared
+
+type Resource struct {
+	ForInt  func(func(int32) int32) int32
+	ForUnit func(func(int32))
+}
