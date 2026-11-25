@@ -326,6 +326,11 @@ where
         Ok(shapes)
     }
 
+    /// A converter's parameter, named so that no global it would shadow is renamed in its body.
+    fn parameter_name(&self, base: &str) -> String {
+        crate::naming::numbered(base, |name| self.global_names.contains(name))
+    }
+
     /// The function converting between an `Either` struct and a call's two results.
     fn declare_converter(
         &mut self,
@@ -341,21 +346,23 @@ where
         let either = GoType::Named(layout.name.clone());
         let declaration = match conversion {
             Conversion::FromResults => {
-                let value = identifier_expression("value");
+                let value_name = self.parameter_name("value");
+                let err_name = self.parameter_name("err");
+                let value = identifier_expression(&value_name);
                 let left = GoExpression::Field {
-                    value: Box::new(identifier_expression("err")),
+                    value: Box::new(identifier_expression(&err_name)),
                     name: LEFT.into(),
                 };
                 GoDeclaration::Function {
                     name: name.clone(),
                     parameters: vec![
-                        ("value".into(), shape.right.clone()),
-                        ("err".into(), shape.failure_type()),
+                        (value_name, shape.right.clone()),
+                        (err_name.clone(), shape.failure_type()),
                     ],
                     result: Some(either),
                     body: vec![
                         GoStatement::If {
-                            condition: failure_test_of("err", true),
+                            condition: failure_test_of(&err_name, true),
                             then: vec![GoStatement::Return(Some(self.composite(
                                 &layout,
                                 0,
@@ -368,7 +375,8 @@ where
                 }
             }
             Conversion::Results => {
-                let either_value = identifier_expression("either");
+                let either_name = self.parameter_name("either");
+                let either_value = identifier_expression(&either_name);
                 let side = |field: &str| GoExpression::Field {
                     value: Box::new(either_value.clone()),
                     name: field.to_string(),
@@ -376,7 +384,7 @@ where
                 let is_left = binary("==", side("Tag"), identifier_expression(&shape.left_tag));
                 GoDeclaration::Function {
                     name: name.clone(),
-                    parameters: vec![("either".into(), either)],
+                    parameters: vec![(either_name, either)],
                     result: Some(shape.results()),
                     body: vec![
                         GoStatement::If {
@@ -395,7 +403,8 @@ where
                 }
             }
             Conversion::Failure => {
-                let either_value = identifier_expression("either");
+                let either_name = self.parameter_name("either");
+                let either_value = identifier_expression(&either_name);
                 let side = |field: &str| GoExpression::Field {
                     value: Box::new(either_value.clone()),
                     name: field.to_string(),
@@ -403,7 +412,7 @@ where
                 let is_left = binary("==", side("Tag"), identifier_expression(&shape.left_tag));
                 GoDeclaration::Function {
                     name: name.clone(),
-                    parameters: vec![("either".into(), either)],
+                    parameters: vec![(either_name, either)],
                     result: Some(shape.failure_type()),
                     body: vec![
                         GoStatement::If {

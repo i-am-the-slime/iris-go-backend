@@ -218,6 +218,7 @@ where
             append(&names.shown, call(show, vec![head])),
             assign(&names.cell, tail),
         ]));
+        self.imports.insert(GoPackage::ForeignValue.path().into());
         Ok(call(foreign_value("ShowErrors"), vec![identifier_expression(&names.shown)]))
     }
 

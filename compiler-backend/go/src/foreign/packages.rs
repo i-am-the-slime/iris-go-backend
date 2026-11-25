@@ -105,7 +105,18 @@ const RUNTIME_MODULE: &str = "github.com/i-am-the-slime/iris-go";
 /// The modules whose foreign imports iris-go implements in a package `ffi/<Module_ffi>`, for
 /// libraries without Go files of their own. Go files next to a module's source take precedence.
 const LIBRARY_FOREIGNS: &[&str] =
-    &["Data.Int64.Internal", "Dhall.Parser", "FRP.Event", "Test.Assert", "Test.QuickCheck.Gen"];
+    &[
+        "Data.Int64.Internal",
+        "Dhall.Parser",
+        "FRP.Event",
+        "JSON",
+        "JSON.Array",
+        "JSON.Internal",
+        "JSON.Object",
+        "Performance.Minibench",
+        "Test.Assert",
+        "Test.QuickCheck.Gen",
+    ];
 
 impl ForeignPackages {
     pub fn provides(&self, module_name: &str) -> bool {

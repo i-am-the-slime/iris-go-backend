@@ -1,0 +1,128 @@
+---
+source: tests-integration/src/fixtures.rs
+---
+// Data/Maybe/maybe.go
+package maybe
+
+const TagNothing = 0
+
+const TagJust = 1
+
+type Maybe struct {
+	Just any
+	Tag  uint8
+}
+
+type Unit struct {
+	Just struct{}
+	Tag  uint8
+}
+
+var NoUnit = Unit{Tag: TagNothing}
+
+func IsNothing(maybe *Maybe) bool {
+	switch maybe.Tag {
+	case TagNothing:
+		return true
+	default: // TagJust
+		return false
+	}
+}
+
+func FromJust(maybe *Maybe) any {
+	switch maybe.Tag {
+	case TagJust:
+		return maybe.Just
+	default:
+		panic("Failed pattern match")
+	}
+}
+
+// Data/Show/show.go
+package show
+
+import "strconv"
+
+func Show(i int32) string {
+	return strconv.Itoa(int(i))
+}
+
+func AppendShowArrayInt(buffer []byte, array []int32) []byte {
+	buffer = append(buffer, '[')
+	for index, element := range array {
+		if index > 0 {
+			buffer = append(buffer, ',')
+		}
+		buffer = strconv.AppendInt(buffer, int64(element), 10)
+	}
+	buffer = append(buffer, ']')
+	return buffer
+}
+
+func ArrayInt(array []int32) string {
+	return string(AppendShowArrayInt(nil, array))
+}
+
+// Data/Tuple/tuple.go
+package tuple
+
+type Tuple struct {
+	First  any
+	Second any
+}
+
+// main.go
+package main
+
+import (
+	"fixture/Data/Maybe"
+	"fixture/Data/Show"
+	journal "fixture/Journal_ffi"
+	"fixture/shared/Data.Maybe+Data.Tuple"
+	"github.com/i-am-the-slime/iris-go/array"
+)
+
+func main() {
+	original := func(_ struct{}) maybe_tuple.TupleMaybeUnit {
+		return maybe_tuple.TupleMaybeUnit{First: 9, Second: maybe.NoUnit}
+	}
+	journal.Log(show.ArrayInt(array.Unfoldr1(func(value *maybe.Maybe) bool {
+		return value.Tag == maybe.TagNothing
+	}, func(value *maybe.Maybe) any {
+		return value.Just
+	}, func(value *maybe_tuple.TupleMaybe) int32 {
+		return value.First
+	}, func(value *maybe_tuple.TupleMaybe) *maybe.Maybe {
+		return value.Second
+	}, func(coerced any) *maybe_tuple.TupleMaybe {
+		return maybe_tuple.Convert2(original(coerced.(struct{})))
+	}, any(struct{}{}))))
+}
+
+// shared/Data.Maybe+Data.Tuple/maybe_tuple.go
+package maybe_tuple
+
+import "fixture/Data/Maybe"
+
+type TupleMaybe struct {
+	Second *maybe.Maybe
+	First  int32
+}
+
+type TupleMaybeUnit struct {
+	First  int32
+	Second maybe.Unit
+}
+
+func Convert(value maybe.Unit) *maybe.Maybe {
+	switch value.Tag {
+	case maybe.TagNothing:
+		return &maybe.Maybe{Tag: maybe.TagNothing}
+	default: // maybe.TagJust
+		return &maybe.Maybe{Tag: maybe.TagJust, Just: value.Just}
+	}
+}
+
+func Convert2(value TupleMaybeUnit) *TupleMaybe {
+	return &TupleMaybe{First: value.First, Second: Convert(value.Second)}
+}

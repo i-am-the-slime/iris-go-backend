@@ -646,6 +646,7 @@ impl Monotypes {
     where
         Q: checking::ExternalQueries,
     {
+        let field = expand_synonyms(context, field)?;
         if constrained_scheme(context, field)?.is_some() {
             return Ok(());
         }

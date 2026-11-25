@@ -83,6 +83,8 @@ mod strings;
 mod swaps;
 mod text;
 mod types;
+mod unit_apply;
+mod unit_effect_fold;
 mod unreferenced;
 mod unzip;
 mod updates;
@@ -2250,7 +2252,10 @@ where
         if let Some(name) = self.support_functions.get(base) {
             return name.clone();
         }
-        let name = self.global_name(Spelling::Base(base.into()));
+        let name = crate::naming::numbered(base, |name| {
+            self.local_names.contains(name) || self.global_names.contains(name)
+        });
+        let name = self.global_name(Spelling::Base(name));
         self.type_declarations.push(GoDeclaration::Source { name: name.clone(), template });
         self.support_functions.insert(base, name.clone());
         name

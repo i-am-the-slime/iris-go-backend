@@ -81,7 +81,7 @@ where
                     return Ok(self.foreign(foreign, monotype));
                 }
                 if let Some(source) = self.foreign_packages.source(&module.name) {
-                    let function = crate::naming::capitalise(&name);
+                    let function = crate::naming::exported(&name);
                     if !source.values.contains(&function) {
                         let state = UnsupportedState::MissingGoFunction {
                             name: format!("{}.{name}", module.name),

@@ -1,0 +1,116 @@
+---
+source: tests-integration/src/fixtures.rs
+---
+// Checks/checks.go
+package checks
+
+import "fixture/Data/Either"
+
+func Value(n int32) (int32, either.StringFailure) {
+	for {
+		if n > 100 {
+			return 0, either.StringFailure{Failed: true, Left: "too big"}
+		}
+		if n > 0 {
+			return n, either.StringFailure{}
+		}
+		n += 10
+	}
+}
+
+// Data/Either/either.go
+package either
+
+import (
+	"github.com/i-am-the-slime/iris-go/prim"
+	"strconv"
+)
+
+type Either struct {
+	Left  string
+	Right int32
+	Tag   uint8
+}
+
+const (
+	EitherLeft = iota
+	EitherRight
+)
+
+type StringFailure struct {
+	Failed bool
+	Left   string
+}
+
+func Left(left string) Either {
+	return Either{Tag: EitherLeft, Left: left}
+}
+
+func Right(right int32) Either {
+	return Either{Tag: EitherRight, Right: right}
+}
+
+func Show(i int32, err StringFailure) string {
+	return string(AppendShow(nil, i, err))
+}
+
+func AppendShowArrayEitherStringInt(buffer []byte, array []Either) []byte {
+	buffer = append(buffer, '[')
+	for index, element := range array {
+		if index > 0 {
+			buffer = append(buffer, ',')
+		}
+		buffer = AppendShow(buffer, element.Right, EitherFailure(element))
+	}
+	buffer = append(buffer, ']')
+	return buffer
+}
+
+func AppendShow(buffer []byte, i int32, err StringFailure) []byte {
+	if err.Failed {
+		buffer = append(buffer, "(Left "...)
+		buffer = prim.AppendShowString(buffer, err.Left)
+		buffer = append(buffer, ')')
+	} else {
+		buffer = append(buffer, "(Right "...)
+		buffer = strconv.AppendInt(buffer, int64(i), 10)
+		buffer = append(buffer, ')')
+	}
+	return buffer
+}
+
+func ArrayEitherStringInt(array []Either) string {
+	return string(AppendShowArrayEitherStringInt(nil, array))
+}
+
+func EitherFailure(either Either) StringFailure {
+	if either.Tag == EitherLeft {
+		return StringFailure{Failed: true, Left: either.Left}
+	}
+	return StringFailure{}
+}
+
+func EitherFromResults(value2 int32, err StringFailure) Either {
+	if err.Failed {
+		return Left(err.Left)
+	}
+	return Right(value2)
+}
+
+// main.go
+package main
+
+import (
+	"fixture/Checks"
+	"fixture/Data/Either"
+	journal "fixture/Journal_ffi"
+)
+
+func main() {
+	array := []int32{5, -3, 200}
+	mapped := make([]either.Either, len(array))
+	for index, element := range array {
+		mapped[index] = either.EitherFromResults(checks.Value(element))
+	}
+	journal.Log(either.ArrayEitherStringInt(mapped))
+}

@@ -13,7 +13,9 @@ use rustc_hash::FxHashMap;
 use super::{Emitter, IMPORTED_PACKAGES, identifier_expression};
 use crate::monomorphic::Local;
 use crate::monotype::{Monotype, MonotypeId};
-use crate::naming::{GO_PREDECLARED, VALUE, capitalise, go_safe, identifier, numbered};
+use crate::naming::{
+    GO_PREDECLARED, VALUE, capitalise, go_safe, identifier, identifier_characters, numbered,
+};
 use crate::syntax::{GoDeclaration, GoExpression, GoStatement, GoType};
 
 use crate::go_traversal::{self, Walk as _};
@@ -542,7 +544,7 @@ where
         let soft = base.ends_with(NUMBERED);
         // A base taken from a call, as a hoisted scrutinee's `append` from
         // `array.Append`, must not shadow the Go builtin the code still calls.
-        let base = go_safe(base.trim_end_matches(NUMBERED)).to_string();
+        let base = go_safe(&identifier_characters(base.trim_end_matches(NUMBERED))).to_string();
         let (base, soft) = match base.strip_suffix('_') {
             Some(stem) if IMPORTED_PACKAGES.contains(&stem) => (stem.to_string(), true),
             _ => (base, soft),

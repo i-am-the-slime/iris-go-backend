@@ -241,6 +241,8 @@ pub const ARRAY_THAW_OWNED: Foreign = perform_in(GoPackage::Array, "ThawOwned", 
 
 pub const ARRAY_UNZIP: Foreign = array("Unzip", 1);
 
+pub const ARRAY_APPLY: Foreign = array("Apply", 2);
+
 pub const ARRAY_UNCONS: Foreign = uncurried(direct("Uncons", 3), &[(1, 2)]);
 
 pub const ARRAY_TAIL: Foreign = array("Tail", 1);
@@ -289,7 +291,7 @@ pub(super) const FOREIGN_IMPORTS: &[(&str, &str, Foreign)] = &[
     ("Data.Ord", "ordArrayImpl", uncurried(direct("CompareArray", 3), &[(0, 2)])),
     ("Data.Show", "intercalate", prim("StringJoinWith", 2)),
     ("Data.Show.Generic", "intercalate", prim("StringJoinWith", 2)),
-    ("Control.Apply", "arrayApply", array("Apply", 2)),
+    ("Control.Apply", "arrayApply", ARRAY_APPLY),
     ("Record.Unsafe", "unsafeGet", Foreign::RecordGet),
     // Whether a record has a field of a label; `Data.Variant` asks it before
     // reading a handler with `unsafeGet`.
@@ -568,6 +570,11 @@ pub(super) const FOREIGN_IMPORTS: &[(&str, &str, Foreign)] = &[
     ("Foreign.Object", "_lookupST", perform_in(GoPackage::Object, "LookupST", 4, found(1, 0))),
     ("Foreign.Object", "toArrayWithKey", uncurried(object("ToArrayWithKey", 2, PLAIN), &[(0, 2)])),
     ("Foreign.Object", "keys", object("Keys", 1, PLAIN)),
+    ("Foreign.Object.Unsafe", "unsafeIndex", OBJECT_INDEX),
+    ("Foreign.Keys", "unsafeKeys", foreign_value("Keys", 1)),
+    ("Control.Extend", "arrayExtend", array("Extend", 2)),
+    ("Effect.Random", "random", perform_in(GoPackage::Random, "Random", 0, PLAIN)),
+    ("Effect.Ref", "newWithSelf", Foreign::ReferenceNewWithSelf),
     ("Foreign.Object.ST", "new", perform_in(GoPackage::Object, "New", 0, INSTANTIATE)),
     ("Foreign.Object.ST", "peekImpl", perform_in(GoPackage::Object, "PeekImpl", 4, found(0, 1))),
     ("Foreign.Object.ST", "poke", perform_in(GoPackage::Object, "Poke", 3, PLAIN)),
@@ -1035,6 +1042,9 @@ pub(super) const INTRINSICS: &[(&str, &str, &[&str], Foreign)] = &[
     ("Data.Int", "ceil", &[], prim("IntCeil", 1)),
     ("Data.Int", "trunc", &[], prim("IntTrunc", 1)),
     ("Data.Int", "round", &[], prim("IntRound", 1)),
+    ("Data.String.Utils", "trimStart", &[], prim("StringTrimStart", 1)),
+    ("Data.String.Utils", "trimEnd", &[], prim("StringTrimEnd", 1)),
+    ("Motsunabe", "trimRight", &[], prim("StringTrimEnd", 1)),
 ];
 
 /// `foreign import data` types that a go-support package declares, as the

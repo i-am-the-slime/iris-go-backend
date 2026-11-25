@@ -53,6 +53,7 @@ where
         let second = self.projection(tuple, "Tuple", Some(1))?;
         let producer = self.value(producer, out)?;
         let seed = self.value(&arguments[5], out)?;
+        let seed = self.typed_argument(seed, &arguments[5])?;
         let name = match foreign {
             Foreign::Unfoldr => "Unfoldr",
             _ => "Unfoldr1",
@@ -513,8 +514,7 @@ where
                 return self.project_effect(*foreign, arguments, monotype, out);
             }
             let called = self.project_call(*foreign, arguments, out)?;
-            let crossing = self.project_crossing(*foreign);
-            return self.out_of_convention(called, monotype, crossing, out);
+            return self.project_result(*foreign, called, monotype, out);
         }
         if let Foreign::Operator(Operator::ArrayLength) = *foreign
             && self.is_fusible(&arguments[0], fusion::Demand::FORWARD)
@@ -536,6 +536,16 @@ where
             && let Some(unzipped) = self.unzip(&arguments[0], monotype, out)?
         {
             return Ok(unzipped);
+        }
+        if foreign.calls(crate::foreign::ARRAY_APPLY)
+            && let Some(applied) = self.unit_apply(arguments, monotype, out)?
+        {
+            return Ok(applied);
+        }
+        if foreign.calls(crate::foreign::EFFECT_FOLD)
+            && let Some(folded) = self.unit_effect_fold(arguments, monotype, out)?
+        {
+            return Ok(folded);
         }
         if foreign.calls(crate::foreign::ARRAY_SORT_BY) {
             if let Some(sorted) = self.primitive_sort(arguments, Placement::Copied, out)? {

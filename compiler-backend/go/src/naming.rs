@@ -255,14 +255,7 @@ pub const RESERVED: &[&str] = &[
 /// A name as a Go identifier: other characters become `_`, a digit start gets a
 /// `_` in front and a reserved word one behind.
 pub fn identifier(name: &str) -> String {
-    let mut sanitized: String = name
-        .chars()
-        .map(
-            |character| {
-                if character.is_alphanumeric() || character == '_' { character } else { '_' }
-            },
-        )
-        .collect();
+    let mut sanitized = identifier_characters(name);
     if sanitized.is_empty() || sanitized.starts_with(|character: char| character.is_ascii_digit()) {
         sanitized.insert(0, '_');
     }
@@ -270,6 +263,17 @@ pub fn identifier(name: &str) -> String {
         sanitized.push('_');
     }
     sanitized
+}
+
+/// A name with each character a Go identifier cannot hold, as the prime of `xs'`, made `_`.
+pub fn identifier_characters(name: &str) -> String {
+    name.chars()
+        .map(
+            |character| {
+                if character.is_alphanumeric() || character == '_' { character } else { '_' }
+            },
+        )
+        .collect()
 }
 
 /// A label's or constructor's Go name, exported so that code in any package can use it: the

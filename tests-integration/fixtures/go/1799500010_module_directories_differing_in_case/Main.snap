@@ -1,0 +1,43 @@
+---
+source: tests-integration/src/fixtures.rs
+---
+// Lib/JSON/json.go
+package json
+
+func Doubled(total int32, n int32) int32 {
+	for {
+		if n <= 0 {
+			return total
+		}
+		total, n = total+2, n-1
+	}
+}
+
+// Lib/Json_/Extra/extra.go
+package extra
+
+import "fixture/Lib/JSON"
+
+func Tripled(total int32, n int32) int32 {
+	for {
+		if n <= 0 {
+			return total
+		}
+		total, n = total+json.Doubled(0, 1)+1, n-1
+	}
+}
+
+// main.go
+package main
+
+import (
+	journal "fixture/Journal_ffi"
+	"fixture/Lib/JSON"
+	"fixture/Lib/Json_/Extra"
+	"strconv"
+)
+
+func main() {
+	journal.Log(strconv.Itoa(int(json.Doubled(0, 5))))
+	journal.Log(strconv.Itoa(int(extra.Tripled(0, 5))))
+}

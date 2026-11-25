@@ -16,12 +16,12 @@ pub use hash_map::{
 };
 pub use host::is_opaque_foreign_data;
 pub use imports::{
-    APPENDER, ARRAY_ALL, ARRAY_ANY, ARRAY_APPEND, ARRAY_FROM_LIST, ARRAY_MAP_WITH_INDEX,
-    ARRAY_REPLICATE, ARRAY_SCANL, ARRAY_SLICE, ARRAY_SORT_BY, ARRAY_TAIL, ARRAY_THAW,
-    ARRAY_THAW_OWNED, ARRAY_UNCONS, ARRAY_UNZIP, FOREIGN_RECORD, FROM_CHAR_ARRAY, INT_DIVIDE,
-    INT_MODULO, MUTABLE_PEEK_UNSAFE, MUTABLE_WITHIN, OBJECT_DELETE, OBJECT_FROM_ENTRIES,
-    OBJECT_INDEX, OBJECT_INSERT, OBJECT_KEYS, OBJECT_LOOKUP, OBJECT_SIZE, SEQUENCE_ARRAY,
-    SHOW_NUMBER, TO_CHAR_ARRAY, TRAVERSE_BALANCED, WELL_FORMED_STRING, array_fold,
+    APPENDER, ARRAY_ALL, ARRAY_ANY, ARRAY_APPEND, ARRAY_APPLY, ARRAY_FROM_LIST,
+    ARRAY_MAP_WITH_INDEX, ARRAY_REPLICATE, ARRAY_SCANL, ARRAY_SLICE, ARRAY_SORT_BY, ARRAY_TAIL,
+    ARRAY_THAW, ARRAY_THAW_OWNED, ARRAY_UNCONS, ARRAY_UNZIP, EFFECT_FOLD, FOREIGN_RECORD,
+    FROM_CHAR_ARRAY, INT_DIVIDE, INT_MODULO, MUTABLE_PEEK_UNSAFE, MUTABLE_WITHIN, OBJECT_DELETE,
+    OBJECT_FROM_ENTRIES, OBJECT_INDEX, OBJECT_INSERT, OBJECT_KEYS, OBJECT_LOOKUP, OBJECT_SIZE,
+    SEQUENCE_ARRAY, SHOW_NUMBER, TO_CHAR_ARRAY, TRAVERSE_BALANCED, WELL_FORMED_STRING, array_fold,
     array_fold_right, effect_fold,
 };
 pub use opacity::{ForeignShape, ForeignSignature, Opacity, OpaqueDeclaration, foreign_opacity};
@@ -109,6 +109,7 @@ pub enum Foreign {
     Unfoldr,
     Unfoldr1,
     ReferenceNew,
+    ReferenceNewWithSelf,
     ReferenceRead,
     ReferenceWrite,
     ReferenceWriteThrough,
@@ -405,6 +406,7 @@ pub enum GoPackage {
     JsBigInt,
     Int64,
     HashMap,
+    Random,
 }
 
 impl GoPackage {
@@ -435,6 +437,7 @@ impl GoPackage {
             GoPackage::JsBigInt => "github.com/i-am-the-slime/iris-go/jsbigint",
             GoPackage::Int64 => "github.com/i-am-the-slime/iris-go/ffi/Data_Int64_Internal_ffi",
             GoPackage::HashMap => "github.com/i-am-the-slime/iris-go/ffi/Data_HashMap_ffi",
+            GoPackage::Random => "github.com/i-am-the-slime/iris-go/random",
             GoPackage::Exception => "github.com/i-am-the-slime/iris-go/exception",
         }
     }
@@ -467,6 +470,7 @@ impl GoPackage {
             GoPackage::JsBigInt => "jsbigint",
             GoPackage::Int64 => "Data_Int64_Internal_ffi",
             GoPackage::HashMap => "Data_HashMap_ffi",
+            GoPackage::Random => "random",
         }
     }
 }
@@ -564,7 +568,7 @@ impl Foreign {
             Foreign::Throw | Foreign::Crash | Foreign::MakeAff | Foreign::AssocArray => 1,
             Foreign::ForkFiber | Foreign::NewFiber | Foreign::NewSupervisedFiber => 2,
             Foreign::RunEffect | Foreign::UnsafePerformEffect | Foreign::EffectUntil => 1,
-            Foreign::ReferenceNew | Foreign::ReferenceRead => 1,
+            Foreign::ReferenceNew | Foreign::ReferenceNewWithSelf | Foreign::ReferenceRead => 1,
             Foreign::EffectBind | Foreign::EffectMap | Foreign::EffectForEach => 2,
             Foreign::EffectTraverseArray | Foreign::EffectForArray | Foreign::EffectWhile => 2,
             Foreign::EffectTraverseArrayWithIndex | Foreign::EffectForArrayWithIndex => 2,
@@ -615,6 +619,7 @@ impl Foreign {
                 | Foreign::EffectFor
                 | Foreign::Perform { .. }
                 | Foreign::ReferenceNew
+                | Foreign::ReferenceNewWithSelf
                 | Foreign::ReferenceRead
                 | Foreign::ReferenceWrite
                 | Foreign::ReferenceWriteThrough

@@ -306,6 +306,22 @@ where
         }
     }
 
+    pub fn quantifies_within(&self, type_id: TypeId) -> bool {
+        match self.lookup(type_id) {
+            Type::Forall(..) => true,
+            Type::Application(function, argument) | Type::Function(function, argument) => {
+                self.quantifies_within(*function) || self.quantifies_within(*argument)
+            }
+            Type::Constrained(constraint, inner) => {
+                self.quantifies_within(*constraint) || self.quantifies_within(*inner)
+            }
+            Type::Kinded(inner, _)
+            | Type::ConstraintOrigin(inner, _)
+            | Type::KindApplication(inner, _) => self.quantifies_within(*inner),
+            _ => false,
+        }
+    }
+
     pub fn lookup(&self, type_id: TypeId) -> &'q Type {
         self.queries.lookup_type(type_id)
     }

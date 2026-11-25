@@ -1,0 +1,67 @@
+---
+source: tests-integration/src/fixtures.rs
+---
+// main.go
+package main
+
+import (
+	journal "fixture/Journal_ffi"
+	"fixture/shared"
+	"github.com/i-am-the-slime/iris-go/array"
+	"strconv"
+)
+
+func main() {
+	xs_ := array.RangeInt32(1, 3)
+	bound := make([]int32, 0, 2*len(xs_))
+	for _, x := range xs_ {
+		bound = append(bound, x, x)
+	}
+	xs_2 := array.Bounded(bound)
+	var result int32
+	if len(xs_2) == 1 {
+		result = xs_2[0]
+	} else {
+		result = int32(len(xs_2))
+	}
+	journal.Log(strconv.Itoa(int(result)))
+	var accumulator int32 = 0
+	for _, a_ := range xs_ {
+		value := a_ * 2
+		accumulator += value
+	}
+	var accumulator2 int32 = 0
+	for _, v_ := range xs_ {
+		var result2 int32
+		if v_ > 1 {
+			result2 = 1
+		} else {
+			result2 = 0
+		}
+		accumulator2 += result2
+	}
+	journal.Log(strconv.Itoa(int(accumulator + accumulator2)))
+	scrutinee := shared.X_Y{X_: 1, Y: 2}
+	journal.Log(strconv.Itoa(int(scrutinee.X_ + scrutinee.Y)))
+	journal.Log(strconv.Itoa(int(mainGo_(4, 0))))
+}
+
+func mainGo_(k int32, total_ int32) int32 {
+	for {
+		switch k {
+		case 0:
+			return total_
+		default:
+			k, total_ = k-1, total_+k
+			continue
+		}
+	}
+}
+
+// shared/shared.go
+package shared
+
+type X_Y struct {
+	X_ int32 `purescript:"x'"`
+	Y  int32
+}
