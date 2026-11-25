@@ -44,6 +44,9 @@ impl Simplifier<'_> {
         {
             return Expression::new(ExpressionKind::Unit, monotype);
         }
+        if let Some(widened) = self.widened_record(&value, monotype) {
+            return widened;
+        }
         if let Monotype::Record(_) = self.monotypes.get(value.monotype)
             && let Monotype::Opaque = self.monotypes.get(monotype)
         {
@@ -57,7 +60,65 @@ impl Simplifier<'_> {
         Expression::new(ExpressionKind::Coerce(Box::new(value)), monotype)
     }
 
+    /// A record narrowed by a coercion, updated, and coerced back to a type with more fields:
+    /// a Go struct of the narrow type has no room for the fields it lost, so the update is made
+    /// to the record before it was narrowed, which still holds them, as JavaScript's copy does.
+    fn widened_record(&mut self, value: &Expression, wide: MonotypeId) -> Option<Expression> {
+        let Monotype::Record(wide_fields) = self.monotypes.get(wide).clone() else { return None };
+        let Monotype::Record(narrow_fields) = self.monotypes.get(value.monotype).clone() else {
+            return None;
+        };
+        let holds = |fields: &[crate::monotype::RecordField]| {
+            wide_fields.iter().all(|wide| fields.iter().any(|field| field.label == wide.label))
+        };
+        if holds(&narrow_fields) {
+            return None;
+        }
+        match &value.kind {
+            ExpressionKind::Coerce(before) => {
+                let Monotype::Record(before_fields) = self.monotypes.get(before.monotype).clone()
+                else {
+                    return None;
+                };
+                holds(&before_fields).then(|| self.coerce((**before).clone(), wide))
+            }
+            ExpressionKind::Update { record, updates } => {
+                let keeps_types = updates.iter().all(|update| {
+                    let label = match update {
+                        crate::monomorphic::RecordUpdate::Leaf { label, .. }
+                        | crate::monomorphic::RecordUpdate::Branch { label, .. } => label,
+                    };
+                    let narrow = narrow_fields.iter().find(|field| field.label == *label);
+                    let wide = wide_fields.iter().find(|field| field.label == *label);
+                    matches!((narrow, wide), (Some(narrow), Some(wide))
+                        if self.monotypes.same_without_causes(narrow.monotype, wide.monotype))
+                });
+                if !keeps_types {
+                    return None;
+                }
+                let record = self.widened_record(record, wide)?;
+                let kind = ExpressionKind::Update { record: Box::new(record), updates: updates.clone() };
+                Some(Expression::new(kind, wide).replacing(value.position))
+            }
+            ExpressionKind::Let { bindings, body } => {
+                let body = self.widened_record(body, wide)?;
+                let kind = ExpressionKind::Let { bindings: bindings.clone(), body: Box::new(body) };
+                Some(Expression::new(kind, wide).replacing(value.position))
+            }
+            ExpressionKind::Local(id) => {
+                let bound = self.narrowed_records.get(id)?.clone();
+                self.widened_record(&bound, wide)
+            }
+            _ => None,
+        }
+    }
+
     pub(super) fn remember_record_order(&mut self, binding: &Binding) {
+        if matches!(binding.value.kind, ExpressionKind::Update { .. } | ExpressionKind::Coerce(_))
+            && let Monotype::Record(_) = self.monotypes.get(binding.value.monotype)
+        {
+            self.narrowed_records.insert(binding.local.id, binding.value.clone());
+        }
         if let Some(order) = self.record_order(&binding.value) {
             self.record_orders.insert(binding.local.id, order);
         }

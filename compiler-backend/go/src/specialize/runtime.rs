@@ -273,6 +273,25 @@ where
         Ok(())
     }
 
+    pub(super) fn note_floating_at_run_time(
+        &mut self,
+        scope: &Scope,
+        constraint: TypeId,
+    ) -> GoResult<()> {
+        let (file_id, item) = self.class_head(&scope.definition, constraint)?;
+        let class = self.context.type_name(file_id, item)?;
+        let note = format!(
+            "{} takes a {class} dictionary at run time, because a polymorphic function is \
+             instantiated there at a constrained type whose constraint stays polymorphic; only \
+             this definition is slower",
+            scope.definition
+        );
+        if !self.runtime_dictionary_notes.contains(&note) {
+            self.runtime_dictionary_notes.push(note);
+        }
+        Ok(())
+    }
+
     /// An instance as its declaration writes its head, `Show (Nested a)`, which names it even
     /// when the source gives it no name.
     fn instance_head_text(&mut self, origin: InstanceCandidateOrigin) -> GoResult<String> {
@@ -463,7 +482,7 @@ where
         Ok(Dictionary::Runtime(RuntimeDictionary { constraint, value: Some(Box::new(value)) }))
     }
 
-    fn runtime_value(
+    pub(super) fn runtime_value(
         &mut self,
         scope: &mut Scope,
         dictionary: Dictionary,

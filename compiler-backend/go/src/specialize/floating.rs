@@ -5,8 +5,9 @@ use files::FileId;
 use indexing::TermItemId;
 
 use super::{Scope, Specializer};
-use crate::dictionary::Dictionary;
-use crate::error::{GoResult, UnsupportedState};
+use crate::dictionary::{Dictionary, RuntimeDictionary};
+use crate::erasure::Erasure;
+use crate::error::GoResult;
 use crate::types::Substitution;
 
 type AppliedEvidence = (EvidenceVarId, TypeId);
@@ -36,7 +37,7 @@ where
     /// out of the application, and drops the constraint from the instantiations.
     pub(super) fn float_instantiated_evidence(
         &mut self,
-        scope: &Scope,
+        scope: &mut Scope,
         (instantiations, head_instantiations): (&mut Substitution, &Substitution),
         mut evidence: Vec<AppliedEvidence>,
         mut trailing: Vec<Dictionary>,
@@ -65,18 +66,55 @@ where
             self.floating.truncate(floated);
             return Ok(unfloated);
         }
-        if self.floating[floated..].iter().any(|&(constraint, _)| !self.is_closed(constraint)) {
-            return Err(self.unsupported(
-                scope,
-                UnsupportedState::Construct {
-                    construct: "polymorphic functions instantiated at a constrained type whose constraint stays polymorphic",
-                },
-            ));
+        let open = self.open_names(&self.floating[floated..]);
+        if !open.is_empty() {
+            self.pass_floating_at_run_time(scope, floated, &open)?;
         }
         for value in instantiations.values_mut() {
-            *value = self.without_floating_constraints(*value);
+            let value_without = self.without_floating_constraints(*value);
+            *value = self.context.types.substitute(value_without, &open);
         }
         Ok((evidence, trailing))
+    }
+
+    /// The type variables of floated constraints that nothing instantiates, each erased.
+    fn open_names(&self, floated: &[(TypeId, Dictionary)]) -> Substitution {
+        let erased = self.context.types.erased(Erasure::PolymorphicRecursion);
+        let mut names = vec![];
+        for &(constraint, _) in floated {
+            self.context.types.rigid_names(constraint, &mut names);
+        }
+        names
+            .into_iter()
+            .filter(|&name| self.context.types.name_erasure(name).is_none())
+            .map(|name| (name, erased))
+            .collect()
+    }
+
+    /// A floated constraint that stays polymorphic takes its dictionary at run time, as
+    /// polymorphic recursion does: the instantiations erase its open type variables, and the
+    /// references that read it get the dictionary's members from a record.
+    fn pass_floating_at_run_time(
+        &mut self,
+        scope: &mut Scope,
+        floated: usize,
+        open: &Substitution,
+    ) -> GoResult<()> {
+        let floating = self.floating.len();
+        for position in floated..floating {
+            let (constraint, dictionary) = self.floating[position].clone();
+            let erased = self.context.types.substitute(constraint, open);
+            if erased == constraint {
+                continue;
+            }
+            let value = self.runtime_value(scope, dictionary, constraint, erased)?;
+            let runtime = RuntimeDictionary { constraint: erased, value: Some(Box::new(value)) };
+            let runtime = Dictionary::Runtime(runtime);
+            self.floating[position] = (constraint, runtime.clone());
+            self.floating.push((erased, runtime));
+            self.note_floating_at_run_time(scope, erased)?;
+        }
+        Ok(())
     }
 
     /// A type without the constraints whose evidence an enclosing application
@@ -189,12 +227,6 @@ where
         constraints.iter().all(|&constraint| {
             self.floating[floated..].iter().any(|&(applied, _)| self.same_type(constraint, applied))
         })
-    }
-
-    fn is_closed(&self, type_id: TypeId) -> bool {
-        let mut names = vec![];
-        self.context.types.rigid_names(type_id, &mut names);
-        names.into_iter().all(|name| self.context.types.name_erasure(name).is_some())
     }
 
     /// Whether two closed types are the same up to kind annotations, which the

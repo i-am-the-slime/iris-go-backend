@@ -503,8 +503,7 @@ where
         let Type::Constructor(file_id, item) = *self.context.types.lookup(head) else {
             return Ok(false);
         };
-        Ok(self.context.is_type(file_id, item, "Yoga.Om", "ParOm")?
-            || self.context.is_type(file_id, item, "Go.IO.Internal", "ParIO")?)
+        Ok(self.context.is_type(file_id, item, "Yoga.Om", "ParOm")?)
     }
 
     fn snoc_lambda(&mut self, elements: MonotypeId, element: MonotypeId) -> Expression {

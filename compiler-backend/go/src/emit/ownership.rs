@@ -24,11 +24,16 @@ pub(super) struct Carried<'a> {
     pub place: &'a Place,
     /// The locals that patterns bind to the carried constructor field.
     aliases: &'a [LocalId],
+    updates: bool,
 }
 
 impl<'a> Carried<'a> {
     pub(super) fn new(accumulator: LocalId, place: &'a Place) -> Carried<'a> {
-        Carried { accumulator, place, aliases: &[] }
+        Carried { accumulator, place, aliases: &[], updates: false }
+    }
+
+    pub(super) fn updating(accumulator: LocalId, place: &'a Place) -> Carried<'a> {
+        Carried { accumulator, place, aliases: &[], updates: true }
     }
 }
 
@@ -160,7 +165,7 @@ fn is_carried(carried: Carried<'_>, expression: &Expression) -> bool {
 /// which an owned append extends in place.
 fn snoc_of_carried<'e>(carried: Carried<'_>, expression: &'e Expression) -> Option<&'e Expression> {
     let ExpressionKind::Foreign { foreign, arguments } = &expression.kind else { return None };
-    if let Some(position) = map_write_position(foreign) {
+    if let Some(position) = write_position(carried, foreign) {
         let map = &arguments[position];
         return is_carried(carried, map).then_some(map);
     }
@@ -188,8 +193,16 @@ fn map_write_position(foreign: &Foreign) -> Option<usize> {
     object_write_position(foreign).or_else(|| foreign::hash_map_write_position(foreign))
 }
 
+fn write_position(carried: Carried<'_>, foreign: &Foreign) -> Option<usize> {
+    match foreign {
+        Foreign::ArrayUpdated if carried.updates => Some(2),
+        _ => map_write_position(foreign),
+    }
+}
+
 fn is_borrowing(foreign: &Foreign) -> bool {
-    foreign.calls(foreign::OBJECT_LOOKUP)
+    matches!(foreign, Foreign::Operator(Operator::ArrayLength | Operator::ArrayIndex))
+        || foreign.calls(foreign::OBJECT_LOOKUP)
         || foreign.calls(foreign::OBJECT_SIZE)
         || foreign.calls(foreign::OBJECT_INDEX)
         || foreign::borrows_hash_map(foreign)
@@ -285,7 +298,7 @@ fn reads(carried: Carried<'_>, expression: &Expression) -> usize {
         ExpressionKind::Local(id) if *id == carried.accumulator => 1,
         ExpressionKind::Access { record, .. } if is_accumulator(carried, record) => 0,
         ExpressionKind::Foreign { foreign, arguments }
-            if let Some(position) = map_write_position(foreign)
+            if let Some(position) = write_position(carried, foreign)
                 && is_carried(carried, &arguments[position]) =>
         {
             let others: usize = arguments

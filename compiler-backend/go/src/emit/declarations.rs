@@ -227,6 +227,9 @@ where
         owned_nodes.extend(strings.into_iter().flat_map(|(_, nodes)| nodes));
         owned_nodes.extend(owned_parameters);
         self.owned_snocs.extend(owned_nodes.iter().copied());
+        let owned_places: Vec<Vec<*const Expression>> =
+            owned.iter().map(|(_, _, nodes)| nodes.clone()).collect();
+        let flags = self.own_updates(&function.body, &owned_places);
         let mut recycled_buffers = vec![];
         let mut recycled_positions = vec![];
         if loops && mode == Mode::Value {
@@ -281,6 +284,7 @@ where
             self.owned_snocs.remove(node);
         }
         self.recycled_maps.clear();
+        let mut flags = self.release_updates(&owned_places, flags);
         emitted?;
         if loops {
             if let Some(GoStatement::Continue) = body.last() {
@@ -303,6 +307,7 @@ where
                 });
             }
             clipped.append(&mut recycled_buffers);
+            clipped.append(&mut flags);
             clipped.extend(state.map(|state| state.definition));
             clipped.push(GoStatement::Loop(body));
             body = clipped;
@@ -354,7 +359,7 @@ where
         for (position, parameter) in function.parameters.iter().enumerate() {
             let tail_call = ownership::TailCall { function: id, arity, position };
             for place in self.carried_places(parameter.monotype) {
-                let carried = ownership::Carried::new(parameter.id, &place);
+                let carried = ownership::Carried::updating(parameter.id, &place);
                 let Some(nodes) = ownership::owned_loop_snocs(carried, &function.body, tail_call)
                 else {
                     continue;
