@@ -1,0 +1,92 @@
+---
+source: tests-integration/src/fixtures.rs
+---
+// Data/Either/either.go
+package either
+
+import "strconv"
+
+type Either struct {
+	Field0 int32
+	Tag    uint8
+}
+
+const (
+	EitherLeft = iota
+	EitherRight
+)
+
+type IntFailure struct {
+	Failed bool
+	Left   int32
+}
+
+func Left(field0 int32) Either {
+	return Either{Tag: EitherLeft, Field0: field0}
+}
+
+func Right(field0 int32) Either {
+	return Either{Tag: EitherRight, Field0: field0}
+}
+
+func Show(i int32, err IntFailure) string {
+	return string(AppendShow(nil, i, err))
+}
+
+func AppendShowArrayEitherIntInt(buffer []byte, array []Either) []byte {
+	buffer = append(buffer, '[')
+	for index, element := range array {
+		if index > 0 {
+			buffer = append(buffer, ',')
+		}
+		buffer = AppendShow(buffer, element.Field0, EitherFailure(element))
+	}
+	buffer = append(buffer, ']')
+	return buffer
+}
+
+func AppendShow(buffer []byte, i int32, err IntFailure) []byte {
+	if err.Failed {
+		buffer = append(buffer, "(Left "...)
+		buffer = strconv.AppendInt(buffer, int64(err.Left), 10)
+		buffer = append(buffer, ')')
+	} else {
+		buffer = append(buffer, "(Right "...)
+		buffer = strconv.AppendInt(buffer, int64(i), 10)
+		buffer = append(buffer, ')')
+	}
+	return buffer
+}
+
+func ArrayEitherIntInt(array []Either) string {
+	return string(AppendShowArrayEitherIntInt(nil, array))
+}
+
+func EitherFailure(either Either) IntFailure {
+	if either.Tag == EitherLeft {
+		return IntFailure{Failed: true, Left: either.Field0}
+	}
+	return IntFailure{}
+}
+
+// main.go
+package main
+
+import (
+	"fixture/Data/Either"
+	journal "fixture/Journal_ffi"
+	"github.com/i-am-the-slime/iris-go/array"
+)
+
+func main() {
+	journal.Log(either.ArrayEitherIntInt(array.Apply([]func(int32) either.Either{tenfoldAboveOne, func(x int32) either.Either {
+		return either.Left(x + 100)
+	}}, []int32{1, 2, 3})))
+}
+
+func tenfoldAboveOne(x int32) either.Either {
+	if x > 1 {
+		return either.Right(x * 10)
+	}
+	return either.Left(x)
+}

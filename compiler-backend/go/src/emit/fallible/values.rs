@@ -1087,7 +1087,6 @@ impl<'t> Typer<'t> {
             if let Ty::Known(type_) = &ty
                 && shape == ForeignShape::Other
                 && self.lowered(type_).is_none()
-                && matches!(self.program.underlying(type_), GoType::Function { .. })
             {
                 for index in self.contained(type_) {
                     self.remove(index);
