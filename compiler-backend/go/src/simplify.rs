@@ -665,6 +665,7 @@ impl Simplifier<'_> {
 
     fn simplified(&mut self, expression: Expression) -> Expression {
         let monotype = expression.monotype;
+        let position = expression.position;
         let kind = match expression.kind {
             ExpressionKind::Literal(_)
             | ExpressionKind::Unit
@@ -830,7 +831,7 @@ impl Simplifier<'_> {
                 if let [scrutinee] = scrutinees.as_mut_slice()
                     && let Some(distributed) = self.distribute(scrutinee, &alternatives, monotype)
                 {
-                    return distributed;
+                    return choice_at_case(distributed, position);
                 }
                 if let [scrutinee] = scrutinees.as_slice()
                     && self.is_constant_path(scrutinee)
@@ -1605,4 +1606,16 @@ fn settle(expression: &mut Expression, condition: &Expression, truth: bool) {
 
 fn prune(functions: Vec<Function>, entry: FunctionId) -> Program {
     prune_unreachable(functions, entry).0
+}
+
+/// The case distributed into its scrutinee's choice, the choice under the lets the distribution
+/// binds written where the case is, as the lets are: `index xs (length xs - 1)`'s bounds test is the
+/// test of `case Array.last xs of`.
+fn choice_at_case(mut distributed: Expression, position: Option<SourcePosition>) -> Expression {
+    let mut choice = &mut distributed;
+    while let ExpressionKind::Let { body, .. } = &mut choice.kind {
+        choice = body;
+    }
+    choice.position = choice.position.or(position);
+    distributed
 }

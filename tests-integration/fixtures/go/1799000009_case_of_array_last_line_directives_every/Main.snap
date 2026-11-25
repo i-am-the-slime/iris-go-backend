@@ -1,0 +1,76 @@
+---
+source: tests-integration/src/fixtures.rs
+---
+// main.go
+package main
+
+import (
+	journal "fixture/Journal_ffi"
+	"github.com/i-am-the-slime/iris-go/array"
+	"slices"
+	"strconv"
+)
+
+//line Main.purs:12:1
+func main() {
+//line Main.purs:13:12
+	var ref int32 = 3
+//line Main.purs:19:28
+	xs := mainCountdown(ref, 0, []int32{})
+//line Main.purs:14:3
+	index := int32(len(xs)) - 1
+//line Main.purs:14:3
+	if index >= 0 {
+//line Main.purs:15:20
+		journal.Log(strconv.Itoa(int(xs[index] * 2)))
+//line Main.purs:15:20
+		return
+//line Main.purs:14:3
+	}
+//line Main.purs:16:16
+	journal.Log("empty")
+//line Main.purs:12:1
+}
+
+//line Main.purs:21:3
+func mainCountdown(n int32, total int32, kept []int32) []int32 {
+//line Main.purs:21:3
+	kept = slices.Clip(kept)
+//line Main.purs:21:3
+	for {
+//line Main.purs:22:7
+		if n <= 0 {
+//line Main.purs:22:16
+			return array.Snoc(kept, total)
+//line Main.purs:22:7
+		}
+//line Main.purs:24:20
+		next := total + n
+//line Main.purs:25:33
+		var result []int32
+//line Main.purs:28:7
+		if n% /*line Main.purs:14:30*/ 2 /*line Main.purs:28:7*/ == 0 {
+//line Main.purs:28:31
+			result = array.Bounded(append(kept, next))
+//line Main.purs:25:33
+		} else {
+//line Main.purs:25:33
+			result = kept
+//line Main.purs:28:7
+		}
+//line Main.purs:25:9
+		n, total, kept = n-1, next, result
+//line Main.purs:21:3
+	}
+//line Main.purs:21:3
+}
+
+// shared/shared.go
+package shared
+
+//line shared.go:4
+type Ref[T any] struct {
+//line shared.go:6
+	Value T
+//line shared.go:8
+}
