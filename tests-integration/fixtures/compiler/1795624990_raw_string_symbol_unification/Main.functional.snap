@@ -1,4 +1,14 @@
 ---
 source: tests-integration/src/fixtures.rs
 ---
-Module Main rejected; see Main.diagnostics.snap
+@export name = \dictionary%0 -> dictionary%0.name
+
+@export instance named = { name: \$proxy%1@(_) -> "a box" }
+
+@export rawName = name named "Proxy"
+
+@export rawAsPlain = "Proxy"
+
+@export plainAsRaw = "Proxy"
+
+@export multilineAsEscaped = "Proxy"
