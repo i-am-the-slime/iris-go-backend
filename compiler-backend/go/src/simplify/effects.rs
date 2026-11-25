@@ -327,9 +327,10 @@ impl Simplifier<'_> {
                 self.let_bindings(bindings, body)
             }
             ExpressionKind::EffectBind { action: inner, local: inner_local, body: inner_body } => {
+                let inner = self.keeping_ranked_position(*inner, action.position);
                 let rest = self.effect_bind(*inner_body, local, body, monotype);
                 let kind = ExpressionKind::EffectBind {
-                    action: inner,
+                    action: Box::new(inner),
                     local: inner_local,
                     body: Box::new(rest),
                 };

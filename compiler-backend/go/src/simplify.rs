@@ -15,7 +15,7 @@ use crate::monomorphic::traversal::{
 use crate::monomorphic::{
     Alternative, Binding, Expression, ExpressionKind, Function, FunctionId, Guard, Guarded,
     GuardedBranch, Literal, Local, LocalId, PATTERN_MATCH_FAILURE, Pattern, PatternKind, Program,
-    RecordUpdate,
+    RecordUpdate, SourcePosition,
 };
 use crate::monotype::{Monotype, MonotypeId, Monotypes};
 use crate::naming::{is_vague, is_vaguely_spelled};
@@ -75,6 +75,8 @@ pub fn simplify(
 ) -> Program {
     let suspension = Suspension::analyse(&program, monotypes);
     let Program { functions, entry } = program;
+    let entry_file = functions[entry.0 as usize].origin;
+    let entry_file = entry_file.filter(|_| coverage == Some(LineCoverage::Every));
     let references = reference_graph(&functions);
     let components = strongly_connected(&references);
     let recursive = on_cycles(&references, &components);
@@ -105,12 +107,14 @@ pub fn simplify(
         copies: FxHashSet::default(),
         forwarded: FxHashMap::default(),
         argument_specializations: ArgumentSpecializations::default(),
+        source_ranks: SourceRanks { entry: entry_file, home: None },
     };
     for component in &components {
         for &function in component {
             let mut current = simplifier.functions[function]
                 .take()
                 .expect("invariant violated: function simplified twice");
+            simplifier.source_ranks.home = current.origin.filter(|_| entry_file.is_some());
             simplifier.fuel = INLINE_FUEL;
             current = simplifier.eta_expand(current);
             current.body = simplifier.expression(current.body);
@@ -172,6 +176,33 @@ struct Simplifier<'m> {
     copies: FxHashSet<LocalId>,
     forwarded: FxHashMap<LocalId, LocalId>,
     argument_specializations: ArgumentSpecializations,
+    source_ranks: SourceRanks,
+}
+
+struct SourceRanks {
+    entry: Option<files::FileId>,
+    home: Option<files::FileId>,
+}
+
+impl SourceRanks {
+    fn rank(&self, position: Option<SourcePosition>) -> u8 {
+        let Some(position) = position else { return 0 };
+        if Some(position.file) == self.entry {
+            2
+        } else if Some(position.file) == self.home {
+            1
+        } else {
+            0
+        }
+    }
+
+    fn outranks(&self, position: Option<SourcePosition>, other: Option<SourcePosition>) -> bool {
+        self.rank(position) > self.rank(other)
+    }
+
+    fn ranks_any(&self) -> bool {
+        self.entry.is_some()
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -577,7 +608,55 @@ impl Simplifier<'_> {
 
     fn expression(&mut self, expression: Expression) -> Expression {
         let position = expression.position;
-        self.simplified(expression).replacing(position)
+        let binds = matches!(expression.kind, ExpressionKind::Let { .. });
+        let mut simplified = self.simplified(expression);
+        if self.is_action(&simplified) && self.keeps_own_position(&simplified, position, binds) {
+            return simplified;
+        }
+        self.locate_action_body(&mut simplified, position);
+        simplified.replacing(position)
+    }
+
+    fn keeps_own_position(
+        &self,
+        simplified: &Expression,
+        position: Option<SourcePosition>,
+        binds: bool,
+    ) -> bool {
+        let ranks = &self.source_ranks;
+        let continues = binds
+            && simplified.position.is_some()
+            && ranks.rank(simplified.position) >= ranks.rank(position);
+        ranks.outranks(simplified.position, position) || (continues && ranks.ranks_any())
+    }
+
+    fn locate_action_body(&self, expression: &mut Expression, position: Option<SourcePosition>) {
+        match &mut expression.kind {
+            ExpressionKind::Lambda { body, .. }
+                if self.is_action(body) && self.source_ranks.outranks(position, body.position) =>
+            {
+                body.position = position;
+            }
+            ExpressionKind::Coerce(inner) | ExpressionKind::Let { body: inner, .. } => {
+                self.locate_action_body(inner, position)
+            }
+            _ => {}
+        }
+    }
+
+    fn is_action(&self, expression: &Expression) -> bool {
+        self.monotypes.effect_result(expression.monotype).is_some()
+    }
+
+    fn keeping_ranked_position(
+        &self,
+        mut action: Expression,
+        position: Option<SourcePosition>,
+    ) -> Expression {
+        if self.source_ranks.outranks(position, action.position) {
+            action.position = position;
+        }
+        action
     }
 
     fn simplified(&mut self, expression: Expression) -> Expression {
