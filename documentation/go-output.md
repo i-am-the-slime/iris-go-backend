@@ -288,9 +288,10 @@ lawful applicative, such as `Effect`, `Maybe`, `Either`, `V`, `State` or a `Writ
 same result, and the left fold is faster.
 
 An applicative that lets you see how its applies are nested, like one that records them as a
-string, shows a different shape: three elements are `((pure <*> 1) <*> 2) <*> 3` in Go. Parallel
-applicatives such as `ParOm` and `ParIO`, where the nesting decides what runs or combines first,
-use JavaScript's balanced tree in Go too. `ParAff` has its own parallel traversal.
+string, shows a different shape: three elements are `((pure <*> 1) <*> 2) <*> 3` in Go. `ParOm`,
+where the nesting decides what runs or combines first, uses JavaScript's balanced tree in Go too.
+`ParIO` uses the left fold: its applies run their two sides on goroutines, so the order they start
+in isn't fixed by the shape anyway. `ParAff` has its own parallel traversal.
 
 `traverse1` over a `NonEmptyArray` works the same way. Go calls the function on the first element
 first and nests the applies to the left, `(1 <*> 2) <*> 3`. JavaScript calls it on the last element
