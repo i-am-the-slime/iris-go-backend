@@ -1,0 +1,59 @@
+---
+source: tests-integration/src/fixtures.rs
+---
+// Data/Show/show.go
+package show
+
+import "strconv"
+
+func Show(i int32) string {
+	return strconv.Itoa(int(i))
+}
+
+func AppendShowArrayInt(buffer []byte, array []int32) []byte {
+	buffer = append(buffer, '[')
+	for index, element := range array {
+		if index > 0 {
+			buffer = append(buffer, ',')
+		}
+		buffer = strconv.AppendInt(buffer, int64(element), 10)
+	}
+	buffer = append(buffer, ']')
+	return buffer
+}
+
+// main.go
+package main
+
+import (
+	"fixture/Data/Show"
+	journal "fixture/Journal_ffi"
+	"fixture/shared"
+	"github.com/i-am-the-slime/iris-go/array"
+	"strconv"
+)
+
+func main() {
+	array2 := []int32{}
+	for i := int32(1); i < 5; i++ {
+		array2 = array.Bounded(append(array2, i*i))
+	}
+	frozen := shared.Frozen2(array2)
+	performed := shared.SizeValues{Values: frozen, Size: int32(len(frozen))}
+	text := show.AppendShowArrayInt(nil, performed.Values)
+	text = append(text, ' ')
+	text = strconv.AppendInt(text, int64(performed.Size), 10)
+	journal.Log(string(text))
+}
+
+// shared/shared.go
+package shared
+
+func Frozen2[T any](elements []T) []T {
+	return elements[:len(elements):len(elements)]
+}
+
+type SizeValues struct {
+	Values []int32
+	Size   int32
+}
