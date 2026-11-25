@@ -11,6 +11,7 @@ mod boxing;
 mod branches;
 mod buffers;
 mod build;
+mod builders;
 mod cases;
 mod cells;
 mod chunks;
@@ -273,12 +274,21 @@ where
     let chunked = timed("chunks", || {
         chunks::allocate_linked_cells_in_chunks(&mut declarations, &mut names, &taken)
     });
-    if chunked {
+    let workers = timed("builders", || {
+        builders::allocate_built_cells_in_chunks(&mut declarations, &mut names, &taken)
+    });
+    if chunked || !workers.is_empty() {
         emitter.imports.insert(GoPackage::Alloc.path().into());
     }
     timed("blocks", || {
         blocks::allocate_nested_cells_together(&mut declarations, &mut names, &taken)
     });
+    for worker in workers {
+        if let Some(&home) = emitter.homes.get(&worker.builder) {
+            emitter.homes.insert(worker.name.clone(), home);
+        }
+        emitter.global_names.insert(worker.name);
+    }
     timed("divergence", || diverging::end_blocks_at_divergence(&mut declarations));
     timed("field reads", || loads::reuse_field_reads(&mut declarations));
     timed("branches", || branches::simplify_branches(&mut declarations));
