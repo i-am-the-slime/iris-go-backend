@@ -97,7 +97,8 @@ impl Simplifier<'_> {
                     return None;
                 }
                 let record = self.widened_record(record, wide)?;
-                let kind = ExpressionKind::Update { record: Box::new(record), updates: updates.clone() };
+                let kind =
+                    ExpressionKind::Update { record: Box::new(record), updates: updates.clone() };
                 Some(Expression::new(kind, wide).replacing(value.position))
             }
             ExpressionKind::Let { bindings, body } => {

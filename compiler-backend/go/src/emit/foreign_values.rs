@@ -213,7 +213,10 @@ where
                     targets: vec![updated.clone()],
                     values: vec![call(clone, vec![updated.clone()])],
                 },
-                GoStatement::Assign { targets: vec![flag], values: vec![GoExpression::Boolean(true)] },
+                GoStatement::Assign {
+                    targets: vec![flag],
+                    values: vec![GoExpression::Boolean(true)],
+                },
             ],
             otherwise: vec![],
         });

@@ -127,24 +127,25 @@ impl Simplifier<'_> {
 
     fn foreign_choices_exposed(&mut self, choice: &Expression) -> Option<Expression> {
         let mut exposed = false;
-        let choice = self.map_choices(choice.clone(), choice.monotype, &mut |simplifier, chosen| {
-            let foreign_choice = match &chosen.kind {
-                ExpressionKind::Foreign { foreign: Foreign::MaybeIndex, arguments } => {
-                    simplifier.index_choice(arguments.clone(), chosen.monotype)
+        let choice =
+            self.map_choices(choice.clone(), choice.monotype, &mut |simplifier, chosen| {
+                let foreign_choice = match &chosen.kind {
+                    ExpressionKind::Foreign { foreign: Foreign::MaybeIndex, arguments } => {
+                        simplifier.index_choice(arguments.clone(), chosen.monotype)
+                    }
+                    ExpressionKind::Foreign { foreign: Foreign::UpdateAt, arguments } => {
+                        simplifier.update_choice(arguments.clone(), chosen.monotype)
+                    }
+                    _ => None,
+                };
+                match foreign_choice {
+                    Some(foreign_choice) => {
+                        exposed = true;
+                        foreign_choice
+                    }
+                    None => chosen,
                 }
-                ExpressionKind::Foreign { foreign: Foreign::UpdateAt, arguments } => {
-                    simplifier.update_choice(arguments.clone(), chosen.monotype)
-                }
-                _ => None,
-            };
-            match foreign_choice {
-                Some(foreign_choice) => {
-                    exposed = true;
-                    foreign_choice
-                }
-                None => chosen,
-            }
-        });
+            });
         exposed.then_some(choice)
     }
 

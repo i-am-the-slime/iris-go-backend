@@ -399,8 +399,9 @@ impl Simplifier<'_> {
         let mut body = *body;
         redirect_local_calls(&mut body, original.local.id, index, &|_| Some(local.clone()));
         self.substitute_copies(&mut body, parameter.id, argument);
-        let value = Expression::new(ExpressionKind::Lambda { parameters, body: Box::new(body) }, monotype)
-            .replacing(original.value.position);
+        let value =
+            Expression::new(ExpressionKind::Lambda { parameters, body: Box::new(body) }, monotype)
+                .replacing(original.value.position);
         let fuel = std::mem::replace(&mut self.fuel, INLINE_FUEL);
         let value = self.expression(value);
         self.fuel = fuel;
@@ -450,8 +451,7 @@ fn local_call_arguments(
 ) -> bool {
     match &expression.kind {
         ExpressionKind::Local(id) => *id != local,
-        ExpressionKind::Apply { function, arguments: given }
-            if matches!(function.kind, ExpressionKind::Local(id) if id == local) =>
+        ExpressionKind::Apply { function, arguments: given } if matches!(function.kind, ExpressionKind::Local(id) if id == local) =>
         {
             let Some(argument) = given.get(index) else { return false };
             arguments.push(argument.clone());

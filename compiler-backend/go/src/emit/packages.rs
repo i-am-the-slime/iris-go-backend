@@ -928,10 +928,8 @@ fn generic_candidates(spellings: &[Option<GenericSpelling>]) -> Vec<Vec<String>>
                     .filter(|position| !positions.contains(position))
                     .map(|position| {
                         let own = argument(index, position);
-                        let told = alike
-                            .iter()
-                            .filter(|&&other| argument(other, position) != own)
-                            .count();
+                        let told =
+                            alike.iter().filter(|&&other| argument(other, position) != own).count();
                         (told, position)
                     })
                     .max_by(|left, right| left.0.cmp(&right.0).then(right.1.cmp(&left.1)));
@@ -967,10 +965,11 @@ fn generic_candidates(spellings: &[Option<GenericSpelling>]) -> Vec<Vec<String>>
         for (member, &index) in indices.iter().enumerate() {
             let spelling = spellings[index].as_ref().expect("invariant violated: grouped by base");
             let distinguished = spelled(member, &chosen[member]);
-            candidates[index] = [spelling.base.clone(), format!("{}{distinguished}", spelling.base)]
-                .iter()
-                .map(|candidate| super::identifier(candidate))
-                .collect();
+            candidates[index] =
+                [spelling.base.clone(), format!("{}{distinguished}", spelling.base)]
+                    .iter()
+                    .map(|candidate| super::identifier(candidate))
+                    .collect();
         }
     }
     candidates
