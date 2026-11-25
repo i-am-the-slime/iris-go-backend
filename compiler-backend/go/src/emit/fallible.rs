@@ -1,14 +1,15 @@
-//! Functions that return an `Either` return Go's `(A, *E)` instead.
+//! Functions that return an `Either` return Go's `(A, EFailure)` instead.
 //!
 //! `ExceptT`'s bind cases on the `Either` an action returns and hands a `Left` straight back. A
 //! top-level function whose Go result is an `Either` struct, and which the program only ever
-//! calls, returns the `Right` value and a pointer to the `Left` value, nil when there is none.
-//! A local that keeps such a call's result, and that the code only asks for its tag and its
-//! fields, becomes the two results, so a bind reads as Go's own error handling:
+//! calls, returns the `Right` value and a failure: a struct of the `Left` value and whether there
+//! is one, whose zero value means there is none. A failure is returned by value, so failing
+//! allocates nothing. A local that keeps such a call's result, and that the code only asks for
+//! its tag and its fields, becomes the two results, so a bind reads as Go's own error handling:
 //!
 //! ```go
 //! scope2, err := stromscope.Adopt(scope, child, r)
-//! if err != nil {
+//! if err.Failed {
 //!     return nil, err
 //! }
 //! ```
@@ -26,7 +27,10 @@ use super::{DataKind, Emitter, binary, call, identifier_expression};
 use crate::error::GoResult;
 use crate::go_traversal::{self, Walk};
 use crate::monotype::DataType;
-use crate::syntax::{GoCase, GoDeclaration, GoDefault, GoExpression, GoStatement, GoType, Name};
+use crate::syntax::{
+    GoCase, GoDeclaration, GoDefault, GoExpression, GoStatement, GoType, Name, Reference,
+    StructField,
+};
 
 /// The Go struct of one `Either` type.
 #[derive(Clone)]
@@ -40,11 +44,32 @@ pub(super) struct EitherShape {
     right: GoType,
     /// A name for a local holding the `Right` value, marked for numbering.
     value_name: String,
+    /// The struct holding a `Left` value and whether there is one, by value.
+    failure: String,
 }
 
 impl EitherShape {
     fn results(&self) -> GoType {
-        GoType::Results(vec![self.right.clone(), failure_type(&self.left)])
+        GoType::Results(vec![self.right.clone(), self.failure_type()])
+    }
+
+    fn failure_type(&self) -> GoType {
+        GoType::Named(self.failure.clone())
+    }
+
+    /// The failure that says there is none: the zero value.
+    fn no_failure(&self) -> GoExpression {
+        GoExpression::Composite { type_: self.failure_type(), fields: vec![] }
+    }
+
+    fn failed_with(&self, left: GoExpression) -> GoExpression {
+        GoExpression::Composite {
+            type_: self.failure_type(),
+            fields: vec![
+                (Some(FAILED.into()), GoExpression::Boolean(true)),
+                (Some(LEFT.into()), left),
+            ],
+        }
     }
 
     /// Which constructor a tag names: `Some(true)` for `Left`.
@@ -73,12 +98,46 @@ enum Conversion {
     Results,
 }
 
-fn failure_type(left: &GoType) -> GoType {
-    GoType::Pointer(Box::new(left.clone()))
-}
+const FAILED: &str = "Failed";
+const LEFT: &str = "Left";
 
 fn nil() -> GoExpression {
     identifier_expression("nil")
+}
+
+/// `err.Failed`, or `!err.Failed` for a test that there is no failure.
+fn failure_test_of(failure: &str, failed: bool) -> GoExpression {
+    let test = GoExpression::Field {
+        value: Box::new(identifier_expression(failure)),
+        name: FAILED.into(),
+    };
+    match failed {
+        true => test,
+        false => GoExpression::Unary { operator: "!", operand: Box::new(test) },
+    }
+}
+
+/// The failure local a condition tests, and whether it holds when there is a failure.
+fn tested_failure<'e>(
+    condition: &'e GoExpression,
+    failures: &FxHashSet<String>,
+) -> Option<(&'e str, bool)> {
+    match condition.unattributed() {
+        GoExpression::Field { value, name } if name == FAILED => match value.unattributed() {
+            GoExpression::Identifier(local) if failures.contains(local) => Some((local, true)),
+            _ => None,
+        },
+        GoExpression::Unary { operator: "!", operand } => {
+            let (local, failed) = tested_failure(operand, failures)?;
+            Some((local, !failed))
+        }
+        _ => None,
+    }
+}
+
+/// Whether the value is a failure struct's zero value.
+fn is_no_failure(value: &GoExpression) -> bool {
+    matches!(value.unattributed(), GoExpression::Composite { fields, .. } if fields.is_empty())
 }
 
 impl<Q> Emitter<'_, '_, '_, Q>
@@ -100,15 +159,6 @@ where
             return Ok(());
         }
         let zeros = Zeros::new(&self.type_declarations);
-        let globals: FxHashSet<String> = self
-            .type_declarations
-            .iter()
-            .chain(declarations.iter())
-            .filter_map(|declaration| match declaration {
-                GoDeclaration::Variable { name, .. } => Some(name.clone()),
-                _ => None,
-            })
-            .collect();
         let mut converters: FxHashMap<(String, Conversion), String> = FxHashMap::default();
         for (position, declaration) in declarations.iter_mut().enumerate() {
             let mut rewrite = Rewrite {
@@ -116,13 +166,13 @@ where
                 conventions: &conventions,
                 callable: conventions.callable(position, declaration),
                 zeros: &zeros,
-                globals: &globals,
                 locals: FxHashSet::default(),
                 converters: &mut converters,
                 names: declaration.all_names(),
                 splits: FxHashMap::default(),
                 reusable_failures: FxHashMap::default(),
                 failure_names: FxHashSet::default(),
+                failure_types: FxHashMap::default(),
             };
             rewrite.declaration(declaration);
         }
@@ -133,14 +183,51 @@ where
             let name = self.declare_converter(shape, conversion, &zeros, declarations)?;
             rename_global(declarations, &placeholder, &name);
         }
+        self.declare_failures(&shapes, declarations);
         Ok(())
+    }
+
+    /// The failure structs the rewritten code refers to.
+    fn declare_failures(
+        &mut self,
+        shapes: &FxHashMap<String, EitherShape>,
+        declarations: &mut [GoDeclaration],
+    ) {
+        let mut referred: FxHashSet<String> = FxHashSet::default();
+        for declaration in declarations.iter_mut() {
+            declaration.for_each_reference_mut(&mut |reference| {
+                if let Reference::Type(name) = reference {
+                    referred.insert(name.clone());
+                }
+            });
+        }
+        let mut declared: FxHashSet<String> = FxHashSet::default();
+        let mut sorted: Vec<&EitherShape> = shapes.values().collect();
+        sorted.sort_by(|left, right| left.failure.cmp(&right.failure));
+        for shape in sorted {
+            if !referred.contains(&shape.failure) || !declared.insert(shape.failure.clone()) {
+                continue;
+            }
+            self.homes.insert(shape.failure.clone(), shape.data.file_id);
+            self.type_declarations.push(GoDeclaration::Type {
+                name: shape.failure.clone(),
+                type_: GoType::Struct(vec![
+                    StructField::new(FAILED, GoType::Bool),
+                    StructField::new(LEFT, shape.left.clone()),
+                ]),
+                line: None,
+                member_lines: vec![],
+            });
+        }
     }
 
     /// The `Either` types whose Go struct has a tag and one field for each side.
     fn either_shapes(&mut self) -> GoResult<FxHashMap<String, EitherShape>> {
-        let layouts: Vec<(DataType, super::DataLayout)> =
+        let mut layouts: Vec<(DataType, super::DataLayout)> =
             self.data_layouts.iter().map(|(data, layout)| (data.clone(), layout.clone())).collect();
+        layouts.sort_by(|left, right| left.1.name.cmp(&right.1.name));
         let mut shapes = FxHashMap::default();
+        let mut failures: FxHashMap<String, String> = FxHashMap::default();
         for (data, layout) in layouts {
             if !self.context.is_type(data.file_id, data.item, "Data.Either", "Either")?
                 || layout.kind != DataKind::Tagged
@@ -157,15 +244,34 @@ where
                 continue;
             };
             let value_name = self.value_base(*right_type);
+            let left_go = self.go_type(*left_type)?;
+            let failure = match failures.get(&format!("{left_go:?}")) {
+                Some(failure) => failure.clone(),
+                None => {
+                    let base = match &left_go {
+                        GoType::Named(name) => name.rsplit('.').next().unwrap_or(name).to_string(),
+                        GoType::String => "String".into(),
+                        GoType::Int => "Int".into(),
+                        GoType::Float64 => "Number".into(),
+                        GoType::Bool => "Boolean".into(),
+                        GoType::Rune => "Char".into(),
+                        _ => format!("{}Left", layout.name),
+                    };
+                    let failure = self.global_name(Spelling::derived("", base, "Failure"));
+                    failures.insert(format!("{left_go:?}"), failure.clone());
+                    failure
+                }
+            };
             let shape = EitherShape {
                 data: data.clone(),
                 left_tag: left.tag.clone(),
                 right_tag: right.tag.clone(),
                 left_field: left_field.clone(),
                 right_field: right_field.clone(),
-                left: self.go_type(*left_type)?,
+                left: left_go,
                 right: self.go_type(*right_type)?,
                 value_name,
+                failure,
             };
             shapes.insert(layout.name.clone(), shape);
         }
@@ -191,23 +297,24 @@ where
         let declaration = match conversion {
             Conversion::FromResults => {
                 let value = identifier_expression("value");
-                let failure = identifier_expression("err");
-                let dereferenced =
-                    GoExpression::Unary { operator: "*", operand: Box::new(failure.clone()) };
+                let left = GoExpression::Field {
+                    value: Box::new(identifier_expression("err")),
+                    name: LEFT.into(),
+                };
                 GoDeclaration::Function {
                     name: name.clone(),
                     parameters: vec![
                         ("value".into(), shape.right.clone()),
-                        ("err".into(), failure_type(&shape.left)),
+                        ("err".into(), shape.failure_type()),
                     ],
                     result: Some(either),
                     body: vec![
                         GoStatement::If {
-                            condition: binary("!=", failure, nil()),
+                            condition: failure_test_of("err", true),
                             then: vec![GoStatement::Return(Some(self.composite(
                                 &layout,
                                 0,
-                                vec![dereferenced],
+                                vec![left],
                             )))],
                             otherwise: vec![],
                         },
@@ -231,13 +338,13 @@ where
                             condition: is_left,
                             then: vec![GoStatement::Return(Some(GoExpression::Results(vec![
                                 zeros.zero(&shape.right),
-                                allocated(side(&shape.left_field), &shape.left),
+                                shape.failed_with(side(&shape.left_field)),
                             ])))],
                             otherwise: vec![],
                         },
                         GoStatement::Return(Some(GoExpression::Results(vec![
                             side(&shape.right_field),
-                            nil(),
+                            shape.no_failure(),
                         ]))),
                     ],
                 }
@@ -660,25 +767,6 @@ impl Zeros {
     }
 }
 
-/// `new(value)`, a pointer to a copy of the value of the type, or the pointer a dereference reads.
-fn allocated(value: GoExpression, type_: &GoType) -> GoExpression {
-    match value {
-        GoExpression::Unary { operator: "*", operand } => *operand,
-        GoExpression::Attributed { line, value } => {
-            GoExpression::Attributed { line, value: Box::new(allocated(*value, type_)) }
-        }
-        value => call(identifier_expression("new"), vec![typed(value, type_)]),
-    }
-}
-
-/// The value as a value of the type, where Go would give an untyped constant its default type.
-fn typed(value: GoExpression, type_: &GoType) -> GoExpression {
-    match super::operators::is_untyped_constant(value.unattributed()) {
-        true => GoExpression::Conversion { type_: type_.clone(), value: Box::new(value) },
-        false => value,
-    }
-}
-
 /// A local holding an `Either` that lives on as two locals.
 #[derive(Clone)]
 struct Split {
@@ -697,10 +785,6 @@ struct Candidate {
     /// Whether it reads the `Left` where only an `if` that returned before tells it is one, which
     /// holds as long as nothing assigns it again.
     read_after_early_return: bool,
-    /// Whether a function returning two results defines it.
-    in_fallible: bool,
-    /// Whether it holds a `Left` built from a value that splitting would have to copy to the heap.
-    allocates: bool,
     /// Whether a `var` declares it for the branches that follow to store into.
     joins: bool,
     /// Whether it is used in a way the two locals can't stand for.
@@ -708,11 +792,10 @@ struct Candidate {
 }
 
 impl Candidate {
-    /// Whether the local becomes two: it holds a call's two results, or it joins branches where
-    /// a failure costs nothing more as a pointer.
+    /// Whether the local becomes two: it holds a call's two results, or it joins branches.
     fn splits(&self) -> bool {
         let stays_known = !(self.reassigned && self.read_after_early_return);
-        let worth_it = self.calls > 0 || (self.joins && (self.in_fallible || !self.allocates));
+        let worth_it = self.calls > 0 || self.joins;
         !self.escapes && stays_known && worth_it
     }
 }
@@ -723,8 +806,6 @@ struct Rewrite<'r> {
     /// What calls in the declaration return two results, by name, with their `Either` type.
     callable: FxHashMap<String, String>,
     zeros: &'r Zeros,
-    /// The program's top-level variables, which a failure can point at rather than copy.
-    globals: &'r FxHashSet<String>,
     /// The names the declaration binds.
     locals: FxHashSet<String>,
     converters: &'r mut FxHashMap<(String, Conversion), String>,
@@ -734,6 +815,8 @@ struct Rewrite<'r> {
     /// them may take over the name of an earlier one of the type that nothing reads any more.
     reusable_failures: FxHashMap<String, String>,
     failure_names: FxHashSet<String>,
+    /// The failure struct of each failure local.
+    failure_types: FxHashMap<String, String>,
 }
 
 impl Rewrite<'_> {
@@ -794,6 +877,7 @@ impl Rewrite<'_> {
                 self.reusable_failures.insert(failure.clone(), format!("{:?}", shape.left));
             }
             self.failure_names.insert(failure.clone());
+            self.failure_types.insert(failure.clone(), shape.failure.clone());
             self.splits.insert(local, Split { shape: candidate.shape, value, failure });
         }
     }
@@ -830,7 +914,7 @@ impl Rewrite<'_> {
                         });
                         out.push(GoStatement::Variable {
                             name: split.failure.clone(),
-                            type_: failure_type(&shape.left),
+                            type_: shape.failure_type(),
                             value: None,
                         });
                     }
@@ -992,7 +1076,7 @@ impl Rewrite<'_> {
             Some(field) => self.expression(field),
             None => self.zeros.zero(side),
         };
-        let (right_type, left_type) = (shape.right.clone(), failure_type(&shape.left));
+        let (right_type, left_type) = (shape.right.clone(), shape.failure_type());
         match (left, declare) {
             (false, true) => {
                 out.push(match super::operators::is_untyped_constant(field.unattributed()) {
@@ -1020,30 +1104,30 @@ impl Rewrite<'_> {
                 });
                 out.push(GoStatement::Define {
                     names: vec![split.failure.clone()],
-                    values: vec![self.failure(field, &shape.left)],
+                    values: vec![self.failure(field, shape)],
                 });
             }
             (false, false) => out.push(GoStatement::Assign {
                 targets: vec![value, failure],
-                values: vec![field, nil()],
+                values: vec![field, shape.no_failure()],
             }),
             (true, false) => out.push(GoStatement::Assign {
                 targets: vec![failure],
-                values: vec![self.failure(field, &shape.left)],
+                values: vec![self.failure(field, shape)],
             }),
         }
     }
 
-    /// The pointer to a `Left` value: the address of a top-level variable holding it, else a copy.
-    fn failure(&self, value: GoExpression, type_: &GoType) -> GoExpression {
-        match value.unattributed() {
-            GoExpression::Identifier(name)
-                if self.globals.contains(name) && !self.locals.contains(name) =>
-            {
-                GoExpression::Address(Box::new(value))
-            }
-            _ => allocated(value, type_),
+    /// The failure of a `Left` value: the failure it was read from, when it is one, else a new one.
+    fn failure(&self, value: GoExpression, shape: &EitherShape) -> GoExpression {
+        if let GoExpression::Field { value: from, name } = value.unattributed()
+            && name == LEFT
+            && let GoExpression::Identifier(from) = from.unattributed()
+            && self.failure_types.get(from) == Some(&shape.failure)
+        {
+            return identifier_expression(from);
         }
+        shape.failed_with(value)
     }
 
     /// The `return` of a fallible function, returning its two results.
@@ -1067,8 +1151,8 @@ impl Rewrite<'_> {
                 None => self.zeros.zero(side),
             };
             let results = match left {
-                true => vec![self.zeros.zero(&shape.right), self.failure(field, &shape.left)],
-                false => vec![field, nil()],
+                true => vec![self.zeros.zero(&shape.right), self.failure(field, shape)],
+                false => vec![field, shape.no_failure()],
             };
             return GoStatement::Return(Some(GoExpression::Results(results)));
         }
@@ -1114,7 +1198,7 @@ impl Rewrite<'_> {
             out.push(moved);
             return;
         }
-        let failed = binary("!=", identifier_expression(&split.failure), nil());
+        let failed = failure_test_of(&split.failure, true);
         if breaks_out(&left) || breaks_out(&right) {
             out.push(GoStatement::Switch {
                 value: None,
@@ -1222,21 +1306,13 @@ impl Rewrite<'_> {
                         return identifier_expression(&split.value);
                     }
                     if name == shape.left_field {
-                        return GoExpression::Unary {
-                            operator: "*",
-                            operand: Box::new(identifier_expression(&split.failure)),
+                        return GoExpression::Field {
+                            value: Box::new(identifier_expression(&split.failure)),
+                            name: LEFT.into(),
                         };
                     }
                 }
-                match self.expression(*value) {
-                    GoExpression::Unary { operator: "*", operand }
-                        if matches!(operand.as_ref(), GoExpression::Identifier(pointer)
-                            if self.failure_names.contains(pointer)) =>
-                    {
-                        GoExpression::Field { value: operand, name }
-                    }
-                    value => GoExpression::Field { value: Box::new(value), name },
-                }
+                GoExpression::Field { value: Box::new(self.expression(*value)), name }
             }
             GoExpression::Binary { operator, left, right } if matches!(operator, "==" | "!=") => {
                 if let Some(test) = self.failure_test(operator, &left, &right) {
@@ -1297,7 +1373,7 @@ impl Rewrite<'_> {
         let shape = &self.shapes[&field.shape];
         let is_left = shape.is_left_tag(tag)?;
         let failed = (operator == "==") == is_left;
-        Some(binary(if failed { "!=" } else { "==" }, identifier_expression(&field.failure), nil()))
+        Some(failure_test_of(&field.failure, failed))
     }
 
     /// Settles the split locals' declarations once the body is rewritten: a failure branch that
@@ -1329,10 +1405,10 @@ impl Rewrite<'_> {
             for statement in block.iter_mut() {
                 if let GoStatement::If { condition, then, otherwise } = statement
                     && then.iter().all(|statement| matches!(statement, GoStatement::Line(_)))
-                    && let GoExpression::Binary { operator: operator @ "!=", left, .. } = condition
-                    && matches!(left.as_ref(), GoExpression::Identifier(name) if self.failure_names.contains(name))
+                    && let Some((failure, failed)) = tested_failure(condition, &self.failure_names)
+                        .map(|(failure, failed)| (failure.to_string(), failed))
                 {
-                    *operator = "==";
+                    *condition = failure_test_of(&failure, !failed);
                     *then = std::mem::take(otherwise);
                 }
             }
@@ -1346,7 +1422,7 @@ fn with_line(line: Option<crate::syntax::SourceLine>, body: Vec<GoStatement>) ->
 }
 
 /// `value, err = v, e` for the branches of a `switch` on the split `v, e` that store a `Left`'s
-/// failure and a `Right`'s value unchanged: `err = e` and `value, err = v, nil`.
+/// failure and a `Right`'s value unchanged: `err = e` and `value, err = v, F{}`.
 fn moved_results(left: &[GoStatement], right: &[GoStatement], from: &Split) -> Option<GoStatement> {
     let only = |statements: &[GoStatement]| -> Option<(Vec<GoExpression>, Vec<GoExpression>)> {
         let mut rest =
@@ -1370,7 +1446,7 @@ fn moved_results(left: &[GoStatement], right: &[GoStatement], from: &Split) -> O
     };
     (is(failure, &from.failure)
         && is(value, &from.value)
-        && is(nothing, "nil")
+        && is_no_failure(nothing)
         && failure_target == other_failure_target)
         .then(|| GoStatement::Assign {
             targets: vec![value_target.clone(), failure_target.clone()],
@@ -1448,11 +1524,7 @@ fn return_early(block: &mut Vec<GoStatement>, failures: &FxHashSet<String>) {
             index += 1;
             continue;
         };
-        let tests_failure = matches!(
-            condition,
-            GoExpression::Binary { operator: "!=", left, .. }
-                if matches!(left.as_ref(), GoExpression::Identifier(name) if failures.contains(name))
-        );
+        let tests_failure = matches!(tested_failure(condition, failures), Some((_, true)));
         if !tests_failure || otherwise.is_empty() || !terminates(then) {
             index += 1;
             continue;
@@ -1799,7 +1871,7 @@ impl Survey<'_> {
         }
     }
 
-    fn consider(&mut self, local: &str, shape: String, own: Option<&str>, joins: bool) {
+    fn consider(&mut self, local: &str, shape: String, joins: bool) {
         let shares_field = self.shapes[&shape].left_field == self.shapes[&shape].right_field;
         if self.binders.get(local) != Some(&1) || shares_field {
             return;
@@ -1811,8 +1883,6 @@ impl Survey<'_> {
                 calls: 0,
                 reassigned: false,
                 read_after_early_return: false,
-                in_fallible: own.is_some(),
-                allocates: false,
                 joins,
                 escapes: false,
             },
@@ -1842,18 +1912,7 @@ impl Survey<'_> {
             false => None,
         };
         let is_construction = construction.is_some();
-        let allocates = match &construction {
-            Some((true, Some(field))) => match field.unattributed() {
-                GoExpression::Unary { operator: "*", .. } => false,
-                GoExpression::Field { value, name } => !matches!(value.unattributed(),
-                    GoExpression::Identifier(other) if self.candidates.get(other).is_some_and(|other| self.shapes[&other.shape].left_field == *name)),
-                _ => true,
-            },
-            Some((true, None)) => true,
-            _ => false,
-        };
         let candidate = self.candidates.get_mut(local).expect("invariant violated: a candidate");
-        candidate.allocates |= allocates;
         if is_call {
             candidate.calls += 1;
             self.expression(value);
@@ -1892,7 +1951,7 @@ impl Survey<'_> {
             }
             GoStatement::Define { names, values } if names.len() == 1 && values.len() == 1 => {
                 if let Some(shape) = self.source_shape(&values[0]) {
-                    self.consider(&names[0], shape, own, false);
+                    self.consider(&names[0], shape, false);
                 }
                 let name = names[0].clone();
                 self.source(&name, &mut values[0]);
@@ -1901,7 +1960,7 @@ impl Survey<'_> {
                 if let GoType::Named(shape) = type_
                     && self.shapes.contains_key(shape)
                 {
-                    self.consider(name, shape.clone(), own, true);
+                    self.consider(name, shape.clone(), true);
                 }
                 let name = name.clone();
                 if let Some(value) = value {
