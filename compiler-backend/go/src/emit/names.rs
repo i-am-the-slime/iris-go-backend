@@ -35,6 +35,13 @@ pub(super) enum NamePart {
         labels: String,
     },
     Stutter(String),
+    /// Where a type argument of the name's definition starts: the parts before the first
+    /// are the definition's own name, and an argument that tells nothing apart is left out.
+    Argument,
+}
+
+fn without_arguments(parts: Vec<NamePart>) -> impl Iterator<Item = NamePart> {
+    parts.into_iter().filter(|part| !matches!(part, NamePart::Argument))
 }
 
 /// How a global is to be spelled once every record has its name.
@@ -153,6 +160,7 @@ fn spell_parts(parts: &[NamePart], short: &FxHashMap<MonotypeId, String>) -> Str
         .map(|part| match part {
             NamePart::Text(text) | NamePart::Stutter(text) => text.as_str(),
             NamePart::Record { monotype, labels } => short.get(monotype).unwrap_or(labels).as_str(),
+            NamePart::Argument => "",
         })
         .collect();
     identifier(&spelled)
@@ -180,15 +188,17 @@ where
         Ok(Some(match spelling {
             FunctionSpelling::Specialized { name, head, types } => {
                 let mut parts = vec![NamePart::Text(name.to_string())];
-                let mut head_parts = vec![];
                 for &type_id in head.iter() {
+                    let mut head_parts = vec![];
                     self.type_parts(type_id, &mut head_parts)?;
+                    parts.push(NamePart::Argument);
+                    parts.extend(head_parts.into_iter().map(|part| match part {
+                        NamePart::Text(text) => NamePart::Stutter(text),
+                        part => part,
+                    }));
                 }
-                parts.extend(head_parts.into_iter().map(|part| match part {
-                    NamePart::Text(text) => NamePart::Stutter(text),
-                    part => part,
-                }));
                 for &type_id in types.iter() {
+                    parts.push(NamePart::Argument);
                     self.type_parts(type_id, &mut parts)?;
                 }
                 parts
@@ -203,7 +213,11 @@ where
                     Some(parts) => parts,
                     None => vec![NamePart::Text(parent.to_string())],
                 };
-                parts.push(NamePart::Text(capitalise(&local)));
+                let base = parts
+                    .iter()
+                    .position(|part| matches!(part, NamePart::Argument))
+                    .unwrap_or(parts.len());
+                parts.insert(base, NamePart::Text(capitalise(&local)));
                 parts
             }
         }))
@@ -213,7 +227,7 @@ where
     /// its newtype's, or its arrows' (`Int -> String` is `IntToString`).
     pub(super) fn closure_parts(&mut self, monotype: MonotypeId) -> GoResult<Vec<NamePart>> {
         if let Some(newtype) = self.monotypes.function_newtype(monotype).cloned() {
-            return self.data_parts(&newtype);
+            return Ok(without_arguments(self.data_parts(&newtype)?).collect());
         }
         let arity = self.arity(monotype);
         let (arguments, result) = self.leading_arrows(monotype, arity);
@@ -259,7 +273,7 @@ where
                 parts.push(NamePart::Record { monotype, labels: labels_name(&fields) });
             }
             Monotype::Data(data) | Monotype::Recursive(data) => {
-                parts.extend(self.data_parts(&data)?)
+                parts.extend(without_arguments(self.data_parts(&data)?))
             }
             Monotype::Function(..) => text(parts, "Function"),
             _ => text(parts, "Value"),
@@ -275,6 +289,7 @@ where
         let name = self.context.type_name(data.file_id, data.item)?.to_string();
         let mut parts = vec![NamePart::Text(name)];
         for &argument in data.arguments.iter() {
+            parts.push(NamePart::Argument);
             self.type_parts(argument, &mut parts)?;
         }
         Ok(parts)
@@ -345,7 +360,7 @@ where
                 PendingSpelling::Parts(parts) => {
                     records.extend(parts.iter().filter_map(|part| match part {
                         NamePart::Record { monotype, .. } => Some(*monotype),
-                        NamePart::Text(_) | NamePart::Stutter(_) => None,
+                        NamePart::Text(_) | NamePart::Stutter(_) | NamePart::Argument => None,
                     }));
                 }
             }
@@ -365,6 +380,7 @@ where
                         .map(|part| match part {
                             NamePart::Text(text) => SpelledPart::Text(text),
                             NamePart::Stutter(text) => SpelledPart::Stutter(text),
+                            NamePart::Argument => SpelledPart::Argument,
                             NamePart::Record { monotype, .. } => SpelledPart::Record {
                                 global: self.record_names.get(&monotype).cloned(),
                                 name: record_ladders[&monotype][0].clone(),

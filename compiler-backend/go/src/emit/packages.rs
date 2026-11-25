@@ -12,7 +12,7 @@
 //! the modules it needs meet. Placement never copies a declaration, so every
 //! type keeps one identity.
 
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 
 use rustc_hash::{FxHashMap, FxHashSet};
 
@@ -57,6 +57,8 @@ pub(crate) enum SpelledPart {
         name: String,
     },
     Stutter(String),
+    /// Where a type argument of the name's definition starts.
+    Argument,
 }
 
 impl Spelling {
@@ -869,6 +871,111 @@ fn rename_declared(declaration: &mut GoDeclaration, rename: &mut impl FnMut(&str
     }
 }
 
+/// A name that spells its definition's type arguments, split into the definition's own name
+/// and each argument's spelling.
+struct GenericSpelling {
+    base: String,
+    arguments: Vec<String>,
+}
+
+impl GenericSpelling {
+    fn of(parts: &[SpelledPart], spelled: &[String]) -> Option<GenericSpelling> {
+        if !parts.iter().any(|part| matches!(part, SpelledPart::Argument)) {
+            return None;
+        }
+        let mut base = String::new();
+        let mut arguments: Vec<String> = vec![];
+        for (part, text) in parts.iter().zip(spelled) {
+            match (part, arguments.last_mut()) {
+                (SpelledPart::Argument, _) => arguments.push(String::new()),
+                (_, Some(argument)) => argument.push_str(text),
+                (_, None) => base.push_str(text),
+            }
+        }
+        Some(GenericSpelling { base, arguments })
+    }
+}
+
+/// The short candidates of names that spell type arguments, as Go's generics read: the
+/// definition's own name, then that name followed by only the arguments that tell apart the
+/// names of the place wanting it, the argument that tells most of them apart first.
+fn generic_candidates(spellings: &[Option<GenericSpelling>]) -> Vec<Vec<String>> {
+    let mut wanting: BTreeMap<&str, Vec<usize>> = BTreeMap::new();
+    for (index, spelling) in spellings.iter().enumerate() {
+        if let Some(spelling) = spelling {
+            wanting.entry(spelling.base.as_str()).or_default().push(index);
+        }
+    }
+    let mut candidates = vec![vec![]; spellings.len()];
+    for indices in wanting.values() {
+        let argument = |index: usize, position: usize| -> &str {
+            let spelling = spellings[index].as_ref().expect("invariant violated: grouped by base");
+            spelling.arguments.get(position).map_or("", String::as_str)
+        };
+        let longest = indices
+            .iter()
+            .filter_map(|&index| spellings[index].as_ref())
+            .map(|spelling| spelling.arguments.len())
+            .max()
+            .unwrap_or(0);
+        let mut chosen: Vec<Vec<usize>> = vec![];
+        for &index in indices {
+            let mut alike: Vec<usize> =
+                indices.iter().copied().filter(|&other| other != index).collect();
+            let mut positions: Vec<usize> = vec![];
+            while !alike.is_empty() {
+                let best = (0..longest)
+                    .filter(|position| !positions.contains(position))
+                    .map(|position| {
+                        let own = argument(index, position);
+                        let told = alike
+                            .iter()
+                            .filter(|&&other| argument(other, position) != own)
+                            .count();
+                        (told, position)
+                    })
+                    .max_by(|left, right| left.0.cmp(&right.0).then(right.1.cmp(&left.1)));
+                let Some((_, position)) = best.filter(|&(told, _)| told > 0) else { break };
+                let own = argument(index, position);
+                alike.retain(|&other| argument(other, position) == own);
+                positions.push(position);
+            }
+            chosen.push(positions);
+        }
+        let spelled = |member: usize, positions: &[usize]| -> String {
+            let mut positions = positions.to_vec();
+            positions.sort_unstable();
+            positions.iter().map(|&position| argument(indices[member], position)).collect()
+        };
+        loop {
+            let names: Vec<String> =
+                (0..indices.len()).map(|member| spelled(member, &chosen[member])).collect();
+            let mut widened = false;
+            for member in 0..indices.len() {
+                let clashes = (0..indices.len())
+                    .any(|other| other != member && names[other] == names[member]);
+                let next = (0..longest).find(|position| !chosen[member].contains(position));
+                if clashes && let Some(position) = next {
+                    chosen[member].push(position);
+                    widened = true;
+                }
+            }
+            if !widened {
+                break;
+            }
+        }
+        for (member, &index) in indices.iter().enumerate() {
+            let spelling = spellings[index].as_ref().expect("invariant violated: grouped by base");
+            let distinguished = spelled(member, &chosen[member]);
+            candidates[index] = [spelling.base.clone(), format!("{}{distinguished}", spelling.base)]
+                .iter()
+                .map(|candidate| super::identifier(candidate))
+                .collect();
+        }
+    }
+    candidates
+}
+
 /// Groups declarations into units: each type keeps its tags' constants.
 fn units(declarations: Vec<(GoDeclaration, Option<ModuleIndex>)>) -> Vec<Unit> {
     let mut units: Vec<Unit> = vec![];
@@ -964,7 +1071,8 @@ impl Naming<'_> {
             })
             .collect();
         self.choose(place, simple, simple_ladders);
-        let composed_ladders: Vec<Vec<String>> = composed
+        let mut generic_spellings = vec![];
+        let mut composed_ladders: Vec<Vec<String>> = composed
             .iter()
             .map(|global| {
                 let Some(Spelling::Composed { parts, full }) = self.spellings.get(global) else {
@@ -980,8 +1088,10 @@ impl Naming<'_> {
                             self.record_name(global, place).unwrap_or_else(|| name.clone())
                         }
                         SpelledPart::Record { global: None, name } => name.clone(),
+                        SpelledPart::Argument => String::new(),
                     });
                 }
+                generic_spellings.push(GenericSpelling::of(&parts, &spelled));
                 let stuttering = |keep_stutter: bool| -> Option<String> {
                     let kept =
                         parts.iter().zip(&spelled).enumerate().filter(|(index, (part, _))| {
@@ -1000,6 +1110,11 @@ impl Naming<'_> {
                 ladder
             })
             .collect();
+        let generic_ladders = generic_candidates(&generic_spellings);
+        for (ladder, generic) in composed_ladders.iter_mut().zip(generic_ladders) {
+            let rest = std::mem::take(ladder);
+            *ladder = crate::naming::ladder(generic.into_iter().chain(rest));
+        }
         self.choose(place, composed, composed_ladders);
         let mut constructor_ladders = Vec::with_capacity(constructors.len());
         for global in &constructors {
