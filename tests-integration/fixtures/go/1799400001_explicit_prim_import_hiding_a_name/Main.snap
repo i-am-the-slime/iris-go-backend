@@ -1,0 +1,11 @@
+---
+source: tests-integration/src/fixtures.rs
+---
+// main.go
+package main
+
+import journal "fixture/Journal_ffi"
+
+func main() {
+	journal.Log("row 1")
+}

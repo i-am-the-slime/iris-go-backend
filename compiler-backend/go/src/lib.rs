@@ -154,6 +154,9 @@ fn reject_source_errors(
     let mut module_names = vec![];
     for index in modules.indices() {
         let file = modules.file(index);
+        if file == queries.prim_id() {
+            continue;
+        }
         if checking::has_frontend_errors(queries, file)? {
             files.push(file);
             module_names.push(modules.name(index).to_string());
