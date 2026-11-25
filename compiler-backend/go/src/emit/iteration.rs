@@ -215,12 +215,21 @@ where
         for (place, _) in &owned {
             out.push(self.clip(&accumulator, place, monotype));
         }
-        let owned_nodes: Vec<*const Expression> = owned
+        let owned_places: Vec<Vec<*const Expression>> = owned
             .iter()
-            .flat_map(|(_, nodes)| nodes.iter().map(|node| std::ptr::from_ref(*node)))
+            .map(|(_, nodes)| nodes.iter().map(|node| std::ptr::from_ref(*node)).collect())
+            .collect();
+        let owned_nodes: Vec<*const Expression> = owned_places
+            .iter()
+            .flatten()
+            .copied()
             .chain(string_appends.into_iter().map(std::ptr::from_ref))
             .collect();
         self.owned_snocs.extend(owned_nodes.iter().copied());
+        let flags = match &callback {
+            Callback::Inline { body, .. } => self.own_updates(body, &owned_places),
+            Callback::Direct { .. } => vec![],
+        };
         let saved = self.tail_loop.take();
         let positions = (accumulator_position, element_position);
         let outcome = self.fold_loop(
@@ -235,6 +244,8 @@ where
         for node in &owned_nodes {
             self.owned_snocs.remove(node);
         }
+        let flags = self.release_updates(&owned_places, flags);
+        out.extend(flags);
         out.push(outcome?);
         if buffered {
             let built = self.temporary("built");
@@ -323,7 +334,7 @@ where
         self.carried_places(monotype)
             .into_iter()
             .filter_map(|place| {
-                let nodes = owned_snocs(Carried::new(accumulator, &place), body)?;
+                let nodes = owned_snocs(Carried::updating(accumulator, &place), body)?;
                 (!nodes.is_empty()).then_some((place, nodes))
             })
             .collect()

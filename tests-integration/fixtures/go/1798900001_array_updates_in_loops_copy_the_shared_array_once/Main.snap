@@ -1,0 +1,132 @@
+---
+source: tests-integration/src/fixtures.rs
+---
+// Data/Show/show.go
+package show
+
+import "strconv"
+
+func Show(i int32) string {
+	return strconv.Itoa(int(i))
+}
+
+func AppendShowArrayArrayInt(buffer []byte, array [][]int32) []byte {
+	buffer = append(buffer, '[')
+	for index, element := range array {
+		if index > 0 {
+			buffer = append(buffer, ',')
+		}
+		buffer = AppendShowArrayInt(buffer, element)
+	}
+	buffer = append(buffer, ']')
+	return buffer
+}
+
+func AppendShowArrayInt(buffer []byte, array []int32) []byte {
+	buffer = append(buffer, '[')
+	for index, element := range array {
+		if index > 0 {
+			buffer = append(buffer, ',')
+		}
+		buffer = strconv.AppendInt(buffer, int64(element), 10)
+	}
+	buffer = append(buffer, ']')
+	return buffer
+}
+
+func ArrayInt(array []int32) string {
+	return string(AppendShowArrayInt(nil, array))
+}
+
+// Data/Tuple/tuple.go
+package tuple
+
+type TupleArrayIntArrayArrayInt struct {
+	First  []int32
+	Second [][]int32
+}
+
+// main.go
+package main
+
+import (
+	"fixture/Data/Show"
+	"fixture/Data/Tuple"
+	"github.com/i-am-the-slime/iris-go/array"
+	"github.com/i-am-the-slime/iris-go/console"
+	"slices"
+	"strings"
+)
+
+var main_ = initializeMain_()
+
+func initializeMain_() []string {
+	shared := array.Replicate(6, int32(0))
+	accumulator := shared
+	accumulator = slices.Clip(accumulator)
+	copied := false
+	for position := int32(0); position < 10; position++ {
+		if position < int32(len(accumulator)) {
+			value := accumulator[position] + 1
+			updated := accumulator
+			if !copied {
+				updated = slices.Clone(updated)
+				copied = true
+			}
+			updated[position] = value
+			accumulator = updated
+		}
+	}
+	accumulator2 := shared
+	accumulator2 = slices.Clip(accumulator2)
+	copied2 := false
+	for position := int32(0); position < 5; position++ {
+		if position < int32(len(accumulator2)) {
+			value := position * 3
+			updated := accumulator2
+			if !copied2 {
+				updated = slices.Clone(updated)
+				copied2 = true
+			}
+			updated[position] = value
+			accumulator2 = updated
+		}
+	}
+	accumulator3 := tuple.TupleArrayIntArrayArrayInt{First: shared, Second: [][]int32{}}
+	accumulator3.Second = slices.Clip(accumulator3.Second)
+	for position := int32(0); position < 3; position++ {
+		current := accumulator3.First
+		var result []int32
+		if position < int32(len(current)) {
+			updated := slices.Clone(current)
+			updated[position] = 7
+			result = updated
+		} else {
+			result = current
+		}
+		accumulator3 = tuple.TupleArrayIntArrayArrayInt{First: result, Second: array.Bounded(append(accumulator3.Second, current))}
+	}
+	text := []byte("(Tuple ")
+	text = show.AppendShowArrayInt(text, accumulator3.First)
+	text = append(text, ' ')
+	text = show.AppendShowArrayArrayInt(text, accumulator3.Second)
+	text = append(text, ')')
+	return []string{show.ArrayInt(accumulator), show.ArrayInt(accumulator2), show.ArrayInt(countedUp(0, shared)), string(text), show.ArrayInt(shared)}
+}
+
+func countedUp(position int32, values []int32) []int32 {
+	for {
+		if position >= int32(len(values)) {
+			return values
+		}
+		var result []int32
+		updated := slices.Clone(values)
+		updated[position] = position
+		result = updated
+		position, values = position+1, result
+	}
+}
+
+func main() {
+	console.Print("[" + strings.Join(main_, " ") + "]")
+}

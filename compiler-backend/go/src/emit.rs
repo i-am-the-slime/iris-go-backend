@@ -442,6 +442,8 @@ where
             tail_group_of: FxHashMap::default(),
             referenced: Default::default(),
             owned_snocs: FxHashSet::default(),
+            owned_updates: FxHashMap::default(),
+            copied_flags: FxHashSet::default(),
             recycled_maps: FxHashMap::default(),
             vector_kernels: vector::Kernels::default(),
             byte_buffers: FxHashMap::default(),
@@ -626,6 +628,8 @@ struct Emitter<'p, 'm, 'q, Q> {
     referenced: std::cell::RefCell<FxHashSet<FunctionId>>,
     current: Option<FunctionId>,
     owned_snocs: FxHashSet<*const Expression>,
+    owned_updates: FxHashMap<*const Expression, String>,
+    copied_flags: FxHashSet<String>,
     /// The maps that build a tail loop's next array in the buffers it recycles, by their
     /// callbacks.
     recycled_maps: FxHashMap<*const Expression, recycling::Recycled>,

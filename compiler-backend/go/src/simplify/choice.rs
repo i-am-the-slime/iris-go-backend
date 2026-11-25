@@ -54,7 +54,9 @@ impl Simplifier<'_> {
                     let unit = Expression::new(ExpressionKind::Unit, scrutinee.monotype);
                     (std::mem::replace(scrutinee, unit), placements)
                 } else {
-                    let exposed = self.constructions_exposed(scrutinee)?;
+                    let exposed = self
+                        .constructions_exposed(scrutinee)
+                        .or_else(|| self.foreign_choices_exposed(scrutinee))?;
                     let placements = plan(&exposed, alternatives, self.monotypes)?;
                     (exposed, placements)
                 }
@@ -121,6 +123,29 @@ impl Simplifier<'_> {
         }
         let kind = ExpressionKind::Let { bindings: kept, body: Box::new(body) };
         Some(Expression::new(kind, choice.monotype))
+    }
+
+    fn foreign_choices_exposed(&mut self, choice: &Expression) -> Option<Expression> {
+        let mut exposed = false;
+        let choice = self.map_choices(choice.clone(), choice.monotype, &mut |simplifier, chosen| {
+            let foreign_choice = match &chosen.kind {
+                ExpressionKind::Foreign { foreign: Foreign::MaybeIndex, arguments } => {
+                    simplifier.index_choice(arguments.clone(), chosen.monotype)
+                }
+                ExpressionKind::Foreign { foreign: Foreign::UpdateAt, arguments } => {
+                    simplifier.update_choice(arguments.clone(), chosen.monotype)
+                }
+                _ => None,
+            };
+            match foreign_choice {
+                Some(foreign_choice) => {
+                    exposed = true;
+                    foreign_choice
+                }
+                None => chosen,
+            }
+        });
+        exposed.then_some(choice)
     }
 
     fn bind_only_field(
