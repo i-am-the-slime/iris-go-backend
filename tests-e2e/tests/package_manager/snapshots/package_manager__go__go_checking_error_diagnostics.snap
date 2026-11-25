@@ -15,4 +15,4 @@ Error! · [CannotUnify] · src/Main.purs:12:16
   • While matching 'Segment' with '{ spans :: Array { startT :: Number } | ?10 }'
   •
 
-cannot compile modules with source or checking errors: Main
+compilation failed

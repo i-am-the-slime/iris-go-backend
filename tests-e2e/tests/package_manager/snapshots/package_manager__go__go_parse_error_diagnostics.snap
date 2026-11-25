@@ -85,4 +85,4 @@ Error! · [InvalidImportStatement] · src/Main.purs:3:1
   │   ╰─────────────────────
   •
 
-cannot compile modules with source or checking errors: Main
+compilation failed
