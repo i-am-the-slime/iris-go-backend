@@ -19,7 +19,9 @@ use super::{
 use crate::context::Context;
 use crate::erasure::Erasure;
 use crate::error::UnsupportedState;
-use crate::scheme::{ConstrainedScheme, Read, constrained_scheme, rank_n_scheme};
+use crate::scheme::{
+    ConstrainedScheme, Read, ReifiedValue, constrained_scheme, rank_n_scheme, reified_value,
+};
 
 impl Monotypes {
     pub fn monotype<Q>(
@@ -722,10 +724,13 @@ impl Monotypes {
             let instantiated = scheme.instantiate(context, &instantiation.types);
             let mut monotype = self.convert(context, instantiated, expansions)?;
             for reified in scheme.reified_constraints(context, &instantiation).into_iter().rev() {
-                let Some(&reflected) = context.types.spine(reified).1.last() else {
-                    return Err(UnsupportedState::UnboundEvidence.into());
+                let reified = match reified_value(context, reified)? {
+                    Some(ReifiedValue::Symbol) => self.intern(Monotype::String),
+                    Some(ReifiedValue::Reflected(reflected)) => {
+                        self.convert(context, reflected, expansions)?
+                    }
+                    None => return Err(UnsupportedState::UnboundEvidence.into()),
                 };
-                let reified = self.convert(context, reflected, expansions)?;
                 monotype = self.intern(Monotype::Function(reified, monotype));
             }
             fields.push(RecordField { label: instantiation.label, monotype });

@@ -41,6 +41,7 @@ pub fn known(module: &str, name: &str) -> Option<Primitive> {
         ("Data.Variant", "onMatch") => Some(Primitive::OnMatch),
         ("Data.Variant", "unvariant") => Some(Primitive::Unvariant),
         ("Data.Reflectable", "reifyType") => Some(Primitive::ReifyType),
+        ("Data.Symbol", "reifySymbol") => Some(Primitive::ReifyType),
         ("Data.Int64.Internal", "signedToUnsigned") => Some(Primitive::ToUnsigned),
         ("Data.Int64.Internal", "unsignedToSigned") => Some(Primitive::ToSigned),
         ("Yoga.JSON", "readJSON") => Some(Primitive::ReadJson),

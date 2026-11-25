@@ -12,7 +12,8 @@ use crate::error::{GoResult, UnsupportedState};
 use crate::monomorphic::{Expression, ExpressionKind, Local};
 use crate::monotype::{Monotype, MonotypeId, supported};
 use crate::scheme::{
-    SCHEME_INSTANTIATION_LIMIT, SchemeInstantiation, SchemeKey, constrained_scheme,
+    ReifiedValue, SCHEME_INSTANTIATION_LIMIT, SchemeInstantiation, SchemeKey, constrained_scheme,
+    reified_value,
 };
 use crate::types::Substitution;
 
@@ -345,10 +346,13 @@ where
             let Some(constraint) = reified.next() else {
                 return Err(self.unsupported(scope, UnsupportedState::UnboundEvidence));
             };
-            let Some(&reflected) = self.context.types.spine(constraint).1.last() else {
-                return Err(self.unsupported(scope, UnsupportedState::UnboundEvidence));
+            let monotype = match reified_value(&mut self.context, constraint)? {
+                Some(ReifiedValue::Symbol) => self.monotypes.intern(Monotype::String),
+                Some(ReifiedValue::Reflected(reflected)) => {
+                    self.closed_monotype(scope, reflected)?
+                }
+                None => return Err(self.unsupported(scope, UnsupportedState::UnboundEvidence)),
             };
-            let monotype = self.closed_monotype(scope, reflected)?;
             let parameter = self.fresh_local(SmolStr::new_static("reified"), monotype);
             let value = parameter.expression();
             dictionaries.push(self.reified_dictionary(&scope.definition, constraint, value)?);

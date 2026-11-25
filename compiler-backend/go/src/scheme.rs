@@ -345,6 +345,27 @@ impl ConstrainedScheme {
     }
 }
 
+pub enum ReifiedValue {
+    Symbol,
+    Reflected(TypeId),
+}
+
+pub fn reified_value<Q>(
+    context: &mut Context<'_, Q>,
+    constraint: TypeId,
+) -> QueryResult<Option<ReifiedValue>>
+where
+    Q: checking::ExternalQueries,
+{
+    let (head, arguments) = context.types.spine(constraint);
+    if let Type::Constructor(file_id, item) = *context.types.lookup(head)
+        && context.is_type(file_id, item, "Data.Symbol", "IsSymbol")?
+    {
+        return Ok(Some(ReifiedValue::Symbol));
+    }
+    Ok(arguments.last().map(|&reflected| ReifiedValue::Reflected(reflected)))
+}
+
 pub fn constrained_scheme<Q>(
     context: &mut Context<'_, Q>,
     type_id: TypeId,

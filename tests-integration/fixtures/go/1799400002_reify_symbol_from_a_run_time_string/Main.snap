@@ -1,0 +1,14 @@
+---
+source: tests-integration/src/fixtures.rs
+---
+// main.go
+package main
+
+import journal "fixture/Journal_ffi"
+
+func main() {
+	for _, name := range []string{"world", "there"} {
+		journal.Log("hello " + name)
+		journal.Log("hello " + name + "!known")
+	}
+}
