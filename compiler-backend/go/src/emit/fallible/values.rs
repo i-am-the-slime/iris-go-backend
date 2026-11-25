@@ -376,6 +376,19 @@ impl Program {
                 _ => {}
             }
         }
+        for declaration in declarations {
+            let GoDeclaration::Variable { name, type_: None, value, .. } = declaration else {
+                continue;
+            };
+            let GoExpression::Call { function, .. } = value.unattributed() else { continue };
+            let GoExpression::Identifier(function) = function.unattributed() else { continue };
+            if let Some(GoType::Function { result: Some(result), .. }) =
+                program.functions.get(function)
+            {
+                let result = result.as_ref().clone();
+                program.variables.insert(name.clone(), result);
+            }
+        }
         program
     }
 

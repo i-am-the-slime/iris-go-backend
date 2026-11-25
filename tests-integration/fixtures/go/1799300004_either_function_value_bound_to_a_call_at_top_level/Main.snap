@@ -1,0 +1,252 @@
+---
+source: tests-integration/src/fixtures.rs
+---
+// Data/Either/either.go
+package either
+
+type Either struct {
+	Left  string
+	Right int32
+	Tag   uint8
+}
+
+const (
+	EitherLeft = iota
+	EitherRight
+)
+
+type StringFailure struct {
+	Failed bool
+	Left   string
+}
+
+func Right(right int32) Either {
+	return Either{Tag: EitherRight, Right: right}
+}
+
+func Left(left string) Either {
+	return Either{Tag: EitherLeft, Left: left}
+}
+
+// Data/List/Types/types.go
+package types
+
+import (
+	dataeither "fixture/Data/Either"
+	"github.com/i-am-the-slime/iris-go/alloc"
+	"github.com/i-am-the-slime/iris-go/prim"
+	"strconv"
+)
+
+type ListEitherStringInt struct {
+	Cons0 dataeither.Either
+	Cons1 *ListEitherStringInt
+}
+
+var SharedListEitherStringIntNil = &ListEitherStringInt{}
+
+type ListInt struct {
+	Cons1 *ListInt
+	Cons0 int32
+}
+
+var SharedListIntNil = &ListInt{}
+
+type Either struct {
+	Left  string
+	Right *ListInt
+	Tag   uint8
+}
+
+const (
+	EitherLeft = iota
+	EitherRight
+)
+
+type AccInit struct {
+	Acc  string
+	Init bool
+}
+
+type ListListInt struct {
+	Cons0 *ListInt
+	Cons1 *ListListInt
+}
+
+var SharedListListIntNil = &ListListInt{}
+
+type ListString struct {
+	Cons0 string
+	Cons1 *ListString
+}
+
+var SharedListStringNil = &ListString{}
+
+func ConsListEitherStringInt(cons0 dataeither.Either, cons1 *ListEitherStringInt) *ListEitherStringInt {
+	return &ListEitherStringInt{Cons0: cons0, Cons1: cons1}
+}
+
+func Right(right *ListInt) Either {
+	return Either{Tag: EitherRight, Right: right}
+}
+
+func ConsListString(cons0 string, cons1 *ListString) *ListString {
+	return &ListString{Cons0: cons0, Cons1: cons1}
+}
+
+func Left(left string) Either {
+	return Either{Tag: EitherLeft, Left: left}
+}
+
+func ConsListInt(cons0 int32, cons1 *ListInt) *ListInt {
+	return &ListInt{Cons0: cons0, Cons1: cons1}
+}
+
+func Show(either Either) string {
+	switch either.Tag {
+	case EitherLeft:
+		return "(Left " + prim.ShowString(either.Left) + ")"
+	default: // EitherRight
+		var result string
+		if either.Right == SharedListIntNil {
+			result = "Nil"
+		} else {
+			result = "(" + ShowGo(AccInit{Init: true, Acc: ""}, ShowChunkedRevMap(SharedListListIntNil, either.Right)).Acc + " : Nil)"
+		}
+		return "(Right " + result + ")"
+	}
+}
+
+var Sequence = InitializeSequence()
+
+func InitializeSequence() func(*ListEitherStringInt) (*ListInt, dataeither.StringFailure) {
+	acc := Right(SharedListIntNil)
+	g := func(value *ListEitherStringInt) (*ListInt, dataeither.StringFailure) {
+		return SequenceGo2(acc, value)
+	}
+	return func(x *ListEitherStringInt) (*ListInt, dataeither.StringFailure) {
+		list, err := g(x)
+		if err.Failed {
+			return nil, err
+		}
+		return SequenceGo(SharedListIntNil, list), dataeither.StringFailure{}
+	}
+}
+
+func ShowChunkedRevMap(chunksAcc *ListListInt, chunk *ListInt) *ListString {
+	var listListIntCells alloc.Cells[ListListInt]
+	for {
+		if chunk != SharedListIntNil && chunk.Cons1 != SharedListIntNil && chunk.Cons1.Cons1 != SharedListIntNil {
+			xs := chunk.Cons1.Cons1.Cons1
+			chunksAcc, chunk = listListIntCells.New(ListListInt{Cons0: chunk, Cons1: chunksAcc}), xs
+			continue
+		}
+		var result *ListString
+		if chunk != SharedListIntNil && chunk.Cons1 != SharedListIntNil && chunk.Cons1.Cons1 == SharedListIntNil {
+			result = ConsListString(strconv.Itoa(int(chunk.Cons0)), ConsListString(strconv.Itoa(int(chunk.Cons1.Cons0)), SharedListStringNil))
+		} else if chunk != SharedListIntNil && chunk.Cons1 == SharedListIntNil {
+			result = ConsListString(strconv.Itoa(int(chunk.Cons0)), SharedListStringNil)
+		} else {
+			result = SharedListStringNil
+		}
+		return ShowChunkedRevMapReverseUnrolledMap(chunksAcc, result)
+	}
+}
+
+func ShowChunkedRevMapReverseUnrolledMap(list *ListListInt, acc *ListString) *ListString {
+	var listStringCells alloc.Cells[ListString]
+	for {
+		if list != SharedListListIntNil && list.Cons0 != SharedListIntNil && list.Cons0.Cons1 != SharedListIntNil && list.Cons0.Cons1.Cons1 != SharedListIntNil {
+			x1 := list.Cons0.Cons0
+			x2 := list.Cons0.Cons1.Cons0
+			x3 := list.Cons0.Cons1.Cons1.Cons0
+			cs := list.Cons1
+			list, acc = cs, listStringCells.New(ListString{Cons0: strconv.Itoa(int(x1)), Cons1: listStringCells.New(ListString{Cons0: strconv.Itoa(int(x2)), Cons1: listStringCells.New(ListString{Cons0: strconv.Itoa(int(x3)), Cons1: acc})})})
+			continue
+		}
+		return acc
+	}
+}
+
+func ShowGo(b AccInit, value *ListString) AccInit {
+	for {
+		if value == SharedListStringNil {
+			return b
+		}
+		a := value.Cons0
+		as := value.Cons1
+		var result AccInit
+		if b.Init {
+			result = AccInit{Init: false, Acc: a}
+		} else {
+			acc := b.Acc
+			result = AccInit{Init: false, Acc: acc + " : " + a}
+		}
+		b, value = result, as
+	}
+}
+
+func SequenceGo(b *ListInt, value *ListInt) *ListInt {
+	var listIntCells alloc.Cells[ListInt]
+	for {
+		if value == SharedListIntNil {
+			return b
+		}
+		a := value.Cons0
+		as := value.Cons1
+		b, value = listIntCells.New(ListInt{Cons0: a, Cons1: b}), as
+	}
+}
+
+func SequenceGo2(acc Either, value *ListEitherStringInt) (*ListInt, dataeither.StringFailure) {
+	for {
+		if value == SharedListEitherStringIntNil {
+			return EitherResults(acc)
+		}
+		a := value.Cons0
+		as := value.Cons1
+		var result Either
+		switch acc.Tag {
+		case EitherLeft:
+			field0 := acc.Left
+			result = Left(field0)
+		default: // EitherRight
+			field0 := acc.Right
+			switch a.Tag {
+			case dataeither.EitherLeft:
+				result = Left(a.Left)
+			default: // dataeither.EitherRight
+				result = Right(ConsListInt(a.Right, field0))
+			}
+		}
+		acc, value = result, as
+	}
+}
+
+func EitherFromResults(value *ListInt, err dataeither.StringFailure) Either {
+	if err.Failed {
+		return Left(err.Left)
+	}
+	return Right(value)
+}
+
+func EitherResults(either Either) (*ListInt, dataeither.StringFailure) {
+	if either.Tag == EitherLeft {
+		return nil, dataeither.StringFailure{Failed: true, Left: either.Left}
+	}
+	return either.Right, dataeither.StringFailure{}
+}
+
+// main.go
+package main
+
+import (
+	"fixture/Data/Either"
+	"fixture/Data/List/Types"
+	journal "fixture/Journal_ffi"
+)
+
+func main() {
+	journal.Log(types.Show(types.EitherFromResults(types.Sequence(types.ConsListEitherStringInt(either.Right(1), types.ConsListEitherStringInt(either.Left("x"), types.SharedListEitherStringIntNil))))))
+	journal.Log(types.Show(types.EitherFromResults(types.Sequence(types.ConsListEitherStringInt(either.Right(1), types.ConsListEitherStringInt(either.Right(2), types.SharedListEitherStringIntNil))))))
+}
