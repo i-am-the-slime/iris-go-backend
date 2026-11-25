@@ -61,6 +61,13 @@ pub fn run(config: GoConfig) -> Result<(), String> {
         let directives = line_directives(&snapshot, &config.destination, coverage)?;
         foreign_packages.line_directives = Some(directives);
     }
+    let editable_files = snapshot.files.iter().filter(|(_, file)| file.editable);
+    let editable_files: Vec<_> = editable_files.map(|(&file_id, _)| file_id).collect();
+    let has_errors =
+        session.report_diagnostics(&editable_files).map_err(|error| error.to_string())?;
+    if has_errors {
+        return Err("compilation failed".to_string());
+    }
     let backend_started = go::Work::so_far();
     let program = go::compile_program(
         &snapshot.engine,
@@ -79,9 +86,6 @@ pub fn run(config: GoConfig) -> Result<(), String> {
         }
         Err(error) => return Err(error.to_string()),
     };
-    let editable_files = snapshot.files.iter().filter(|(_, file)| file.editable);
-    let editable_files: Vec<_> = editable_files.map(|(&file_id, _)| file_id).collect();
-    session.report_diagnostics(&editable_files).map_err(|error| error.to_string())?;
     for note in &program.notes {
         eprintln!("go: note: {note}");
     }

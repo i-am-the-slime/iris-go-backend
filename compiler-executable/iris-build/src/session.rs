@@ -177,7 +177,7 @@ impl BuildSession {
 
     /// Prints the diagnostics of some source files, for a consumer of the
     /// session that found them erroneous, as a build prints them.
-    pub fn report_diagnostics(&self, files: &[FileId]) -> Result<(), SessionError> {
+    pub fn report_diagnostics(&self, files: &[FileId]) -> Result<bool, SessionError> {
         let stage = self.stage;
         compile::report_file_diagnostics(&self.compilation, files, &self.root, self.color, stage)
             .map_err(|error| SessionError(error.into()))

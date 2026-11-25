@@ -425,10 +425,10 @@ pub(crate) fn report_file_diagnostics(
     root: &Path,
     color: bool,
     stage: BuildStage,
-) -> Result<(), CompileError> {
-    let (diagnostics, _) = collect_diagnostics(compilation, files, stage)?;
+) -> Result<bool, CompileError> {
+    let (diagnostics, has_errors) = collect_diagnostics(compilation, files, stage)?;
     report_diagnostics(compilation, diagnostics, root, color);
-    Ok(())
+    Ok(has_errors)
 }
 
 fn report_diagnostics(
