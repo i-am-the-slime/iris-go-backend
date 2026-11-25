@@ -30,7 +30,7 @@ pub struct GoConfig {
 }
 
 mod program;
-pub use program::{Program, ProgramConfig, RUNTIME_VERSION, build_program, run_program};
+pub use program::{Pgo, Program, ProgramConfig, RUNTIME_VERSION, build_program, run_program};
 
 pub fn run(config: GoConfig) -> Result<(), String> {
     let started = Instant::now();

@@ -85,6 +85,41 @@ pub struct GoOptions {
     /// statement and declaration, for tools that show each Go line next to its PureScript.
     #[usage(long, value_enum, value_name = "WHICH", conflicts("--no-line-directives"))]
     line_directives: Option<LineDirectiveChoice>,
+
+    #[usage(flatten)]
+    optimisation: ProfileGuidedOptions,
+
+    /// Arguments for the --profile run. Defaults to run.execArgs.
+    #[usage(double_dash = "required", requires("--profile"))]
+    arguments: Vec<String>,
+}
+
+#[derive(Debug, Args)]
+#[usage(args_override_self = false)]
+pub struct ProfileGuidedOptions {
+    /// Optimise the executable for this CPU profile (go build -pgo), or `off` to leave out the
+    /// one --profile recorded.
+    #[usage(long, value_name = "PROFILE")]
+    pgo: Option<PathBuf>,
+
+    /// Run the program once while recording a CPU profile, keep it in .spago/go/<package>/
+    /// default.pgo and build again optimised for it. Later builds use it until --pgo off.
+    #[usage(long, conflicts("--pgo"))]
+    profile: bool,
+}
+
+impl ProfileGuidedOptions {
+    fn pgo(&self) -> iris_go::Pgo {
+        match &self.pgo {
+            None => iris_go::Pgo::Recorded,
+            Some(profile) if profile.as_os_str() == "off" => iris_go::Pgo::Off,
+            Some(profile) => iris_go::Pgo::File(profile.clone()),
+        }
+    }
+
+    fn chosen(&self) -> bool {
+        self.pgo.is_some() || self.profile
+    }
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq, ValueEnum)]
@@ -102,9 +137,14 @@ pub enum GoTarget {
 }
 
 impl GoOptions {
-    pub fn into_target(self) -> GoTarget {
+    pub fn into_target(self) -> Result<GoTarget, String> {
         let version = crate::VERSION.to_string();
-        match self.destination {
+        if self.destination.is_some() && self.optimisation.chosen() {
+            return Err("--pgo and --profile build the executable, so they take no DIR; build \
+                        the Go in DIR with `go build -pgo` yourself"
+                .to_string());
+        }
+        Ok(match self.destination {
             Some(destination) => GoTarget::Sources(iris_go::GoConfig {
                 package: self.package,
                 entry: self.entry.unwrap_or_else(|| "Main.main".to_string()),
@@ -122,8 +162,10 @@ impl GoOptions {
                 entry: self.entry,
                 quiet: false,
                 version,
+                pgo: self.optimisation.pgo(),
+                profile: self.optimisation.profile.then_some(self.arguments),
             }),
-        }
+        })
     }
 }
 
@@ -280,6 +322,9 @@ pub struct RunOptions {
     #[usage(long, value_name = "MODULE.NAME", requires("--go"), conflicts("--main"))]
     entry: Option<String>,
 
+    #[usage(flatten)]
+    optimisation: ProfileGuidedOptions,
+
     /// Arguments passed to the program.
     #[usage(double_dash = "required")]
     arguments: Vec<String>,
@@ -292,7 +337,7 @@ pub enum Run {
 }
 
 impl RunOptions {
-    pub fn into_run(self) -> Run {
+    pub fn into_run(self) -> Result<Run, String> {
         if self.go {
             let entry = self.entry.or_else(|| self.main.map(|main| format!("{main}.main")));
             let config = iris_go::ProgramConfig {
@@ -300,17 +345,22 @@ impl RunOptions {
                 entry,
                 quiet: self.build.quiet,
                 version: crate::VERSION.to_string(),
+                pgo: self.optimisation.pgo(),
+                profile: self.optimisation.profile.then(|| self.arguments.clone()),
             };
-            return Run::Go { config, arguments: self.arguments };
+            return Ok(Run::Go { config, arguments: self.arguments });
+        }
+        if self.optimisation.chosen() {
+            return Err("--pgo and --profile need --go".to_string());
         }
         let (project, color) = self.build.into_project_config();
-        Run::Node(RunConfig {
+        Ok(Run::Node(RunConfig {
             project,
             color,
             version: crate::VERSION.to_string(),
             main: self.main,
             arguments: self.arguments,
-        })
+        }))
     }
 }
 
