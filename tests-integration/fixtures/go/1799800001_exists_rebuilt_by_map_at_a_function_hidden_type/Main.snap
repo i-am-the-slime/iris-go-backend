@@ -1,0 +1,748 @@
+---
+source: tests-integration/src/fixtures.rs
+---
+// Data/Either/either.go
+package either
+
+type EitherString struct {
+	Left   string
+	Right  any
+	Origin any
+	Tag    uint8
+}
+
+const (
+	EitherStringLeft = iota
+	EitherStringRight
+)
+
+type EitherFn struct {
+	Left   string
+	Right  func(any) any
+	Origin any
+	Tag    uint8
+}
+
+const (
+	EitherFnLeft = iota
+	EitherFnRight
+)
+
+func Convert(value *EitherFn) *EitherString {
+	if original, ok := value.Origin.(*EitherString); ok {
+		return original
+	}
+	switch value.Tag {
+	case EitherFnLeft:
+		return &EitherString{Tag: EitherStringLeft, Left: value.Left, Origin: value}
+	default: // EitherFnRight
+		return &EitherString{Tag: EitherStringRight, Right: value.Right, Origin: value}
+	}
+}
+
+func Convert2(value *EitherString) *EitherFn {
+	if original, ok := value.Origin.(*EitherFn); ok {
+		return original
+	}
+	switch value.Tag {
+	case EitherStringLeft:
+		return &EitherFn{Tag: EitherFnLeft, Left: value.Left, Origin: value}
+	default: // EitherStringRight
+		return &EitherFn{Tag: EitherFnRight, Right: value.Right.(func(any) any), Origin: value}
+	}
+}
+
+type StringFailure struct {
+	Failed bool
+	Left   string
+}
+
+// main.go
+package main
+
+import (
+	dataeither "fixture/Data/Either"
+	journal "fixture/Journal_ffi"
+	"github.com/i-am-the-slime/iris-go/prim"
+)
+
+type Command uint8
+
+const (
+	CommandHello Command = iota
+	CommandBye
+)
+
+type EitherCommand struct {
+	Left  string
+	Tag   uint8
+	Right Command
+}
+
+const (
+	EitherCommandLeft = iota
+	EitherCommandRight
+)
+
+type EitherFnCommandCommand struct {
+	Left  string
+	Right func(Command) Command
+	Tag   uint8
+}
+
+const (
+	EitherFnCommandCommandLeft = iota
+	EitherFnCommandCommandRight
+)
+
+type EitherFnFnCommandCommandFnCommandCommand struct {
+	Left  string
+	Right func(func(Command) Command) func(Command) Command
+	Tag   uint8
+}
+
+const (
+	EitherFnFnCommandCommandFnCommandCommandLeft = iota
+	EitherFnFnCommandCommandFnCommandCommandRight
+)
+
+type EitherFnFnCommandCommandFnFnCommandCommandFnCommandCommand struct {
+	Left  string
+	Right func(func(Command) Command) func(func(Command) Command) func(Command) Command
+	Tag   uint8
+}
+
+const (
+	EitherFnFnCommandCommandFnFnCommandCommandFnCommandCommandLeft = iota
+	EitherFnFnCommandCommandFnFnCommandCommandFnCommandCommandRight
+)
+
+type ParserFnFnCommandCommandFnFnCommandCommandFnCommandCommand struct {
+	Option func(string) (func(func(Command) Command) func(func(Command) Command) func(Command) Command, dataeither.StringFailure)
+	Done   func(func(Command) Command) func(func(Command) Command) func(Command) Command
+	Apply  any
+	Tag    uint8
+}
+
+const (
+	ParserFnFnCommandCommandFnFnCommandCommandFnCommandCommandOption = iota
+	ParserFnFnCommandCommandFnFnCommandCommandFnCommandCommandDone
+	ParserFnFnCommandCommandFnFnCommandCommandFnCommandCommandApply
+)
+
+type AppliedFnFnCommandCommandFnCommandCommand struct {
+	First  ParserFnFnCommandCommandFnFnCommandCommandFnCommandCommand
+	Second *ParserFnCommandCommand
+}
+
+type ExistsAppliedFnFnCommandCommandFnCommandCommand struct {
+	FnCommandCommand *AppliedFnFnCommandCommandFnCommandCommand
+}
+
+type ParserFnFnCommandCommandFnCommandCommand struct {
+	Option func(string) (func(func(Command) Command) func(Command) Command, dataeither.StringFailure)
+	Done   func(func(Command) Command) func(Command) Command
+	Apply  *ExistsAppliedFnFnCommandCommandFnCommandCommand
+	Tag    uint8
+}
+
+const (
+	ParserFnFnCommandCommandFnCommandCommandOption = iota
+	ParserFnFnCommandCommandFnCommandCommandDone
+	ParserFnFnCommandCommandFnCommandCommandApply
+)
+
+type AppliedFnCommandCommand struct {
+	First  *ParserFnFnCommandCommandFnCommandCommand
+	Second *ParserFnCommandCommand
+}
+
+type ExistsAppliedFnCommandCommand struct {
+	FnCommandCommand *AppliedFnCommandCommand
+}
+
+type ParserFnCommandCommand struct {
+	Option func(string) (func(Command) Command, dataeither.StringFailure)
+	Done   func(Command) Command
+	Apply  *ExistsAppliedFnCommandCommand
+	Tag    uint8
+}
+
+const (
+	ParserFnCommandCommandOption = iota
+	ParserFnCommandCommandDone
+	ParserFnCommandCommandApply
+)
+
+type Parser struct {
+	Option func(string) *dataeither.EitherString
+	Field0 any
+	Origin any
+	Tag    uint8
+}
+
+const (
+	ParserOption = iota
+	ParserDone
+	ParserApply
+)
+
+func convert(value EitherFnFnCommandCommandFnCommandCommand) *dataeither.EitherString {
+	switch value.Tag {
+	case EitherFnFnCommandCommandFnCommandCommandLeft:
+		return &dataeither.EitherString{Tag: dataeither.EitherStringLeft, Left: value.Left}
+	default: // EitherFnFnCommandCommandFnCommandCommandRight
+		return &dataeither.EitherString{Tag: dataeither.EitherStringRight, Right: func(coerced any) any {
+			original := coerced.(func(any) any)
+			original2 := value.Right(func(coerced2 Command) Command {
+				return original(coerced2).(Command)
+			})
+			return func(coerced2 any) any {
+				return original2(coerced2.(Command))
+			}
+		}}
+	}
+}
+
+type ParserFn struct {
+	Option func(string) *dataeither.EitherFn
+	Done   func(any) any
+	Apply  any
+	Origin any
+	Tag    uint8
+}
+
+const (
+	ParserFnOption = iota
+	ParserFnDone
+	ParserFnApply
+)
+
+type Applied struct {
+	First  *ParserFn
+	Second *Parser
+}
+
+func convert2(value EitherFnFnCommandCommandFnFnCommandCommandFnCommandCommand) *dataeither.EitherFn {
+	switch value.Tag {
+	case EitherFnFnCommandCommandFnFnCommandCommandFnCommandCommandLeft:
+		return &dataeither.EitherFn{Tag: dataeither.EitherFnLeft, Left: value.Left}
+	default: // EitherFnFnCommandCommandFnFnCommandCommandFnCommandCommandRight
+		return &dataeither.EitherFn{Tag: dataeither.EitherFnRight, Right: func(coerced any) any {
+			original := coerced.(func(any) any)
+			original2 := value.Right(func(coerced2 Command) Command {
+				return original(coerced2).(Command)
+			})
+			return func(coerced2 any) any {
+				original3 := coerced2.(func(any) any)
+				original4 := original2(func(coerced3 Command) Command {
+					return original3(coerced3).(Command)
+				})
+				return func(coerced3 any) any {
+					return original4(coerced3.(Command))
+				}
+			}
+		}}
+	}
+}
+
+func convert3(value ParserFnFnCommandCommandFnFnCommandCommandFnCommandCommand) *ParserFn {
+	switch value.Tag {
+	case ParserFnFnCommandCommandFnFnCommandCommandFnCommandCommandOption:
+		return &ParserFn{Tag: ParserFnOption, Option: func(coerced string) *dataeither.EitherFn {
+			return convert2(EitherFnFnCommandCommandFnFnCommandCommandFnCommandCommandFromResults(value.Option(coerced)))
+		}}
+	case ParserFnFnCommandCommandFnFnCommandCommandFnCommandCommandDone:
+		return &ParserFn{Tag: ParserFnDone, Done: func(coerced any) any {
+			original := coerced.(func(any) any)
+			original2 := value.Done(func(coerced2 Command) Command {
+				return original(coerced2).(Command)
+			})
+			return func(coerced2 any) any {
+				original3 := coerced2.(func(any) any)
+				original4 := original2(func(coerced3 Command) Command {
+					return original3(coerced3).(Command)
+				})
+				return func(coerced3 any) any {
+					return original4(coerced3.(Command))
+				}
+			}
+		}}
+	default: // ParserFnFnCommandCommandFnFnCommandCommandFnCommandCommandApply
+		return &ParserFn{Tag: ParserFnApply, Apply: value.Apply}
+	}
+}
+
+func convert4(value EitherFnCommandCommand) *dataeither.EitherString {
+	switch value.Tag {
+	case EitherFnCommandCommandLeft:
+		return &dataeither.EitherString{Tag: dataeither.EitherStringLeft, Left: value.Left, Origin: value}
+	default: // EitherFnCommandCommandRight
+		return &dataeither.EitherString{Tag: dataeither.EitherStringRight, Right: func(coerced any) any {
+			return value.Right(coerced.(Command))
+		}, Origin: value}
+	}
+}
+
+func convert5(value EitherFnFnCommandCommandFnCommandCommand) *dataeither.EitherFn {
+	switch value.Tag {
+	case EitherFnFnCommandCommandFnCommandCommandLeft:
+		return &dataeither.EitherFn{Tag: dataeither.EitherFnLeft, Left: value.Left}
+	default: // EitherFnFnCommandCommandFnCommandCommandRight
+		return &dataeither.EitherFn{Tag: dataeither.EitherFnRight, Right: func(coerced any) any {
+			original := coerced.(func(any) any)
+			original2 := value.Right(func(coerced2 Command) Command {
+				return original(coerced2).(Command)
+			})
+			return func(coerced2 any) any {
+				return original2(coerced2.(Command))
+			}
+		}}
+	}
+}
+
+func convert6(value *ParserFnFnCommandCommandFnCommandCommand) *ParserFn {
+	switch value.Tag {
+	case ParserFnFnCommandCommandFnCommandCommandOption:
+		return &ParserFn{Tag: ParserFnOption, Option: func(coerced string) *dataeither.EitherFn {
+			return convert5(EitherFnFnCommandCommandFnCommandCommandFromResults(value.Option(coerced)))
+		}}
+	case ParserFnFnCommandCommandFnCommandCommandDone:
+		return &ParserFn{Tag: ParserFnDone, Done: func(coerced any) any {
+			original := coerced.(func(any) any)
+			original2 := value.Done(func(coerced2 Command) Command {
+				return original(coerced2).(Command)
+			})
+			return func(coerced2 any) any {
+				return original2(coerced2.(Command))
+			}
+		}}
+	default: // ParserFnFnCommandCommandFnCommandCommandApply
+		return &ParserFn{Tag: ParserFnApply, Apply: convert11(value.Apply)}
+	}
+}
+
+func convert7(value *AppliedFnCommandCommand) *Applied {
+	return &Applied{First: convert6(value.First), Second: convert9(value.Second)}
+}
+
+func convert8(value *ExistsAppliedFnCommandCommand) any {
+	return convert7(value.FnCommandCommand)
+}
+
+func convert9(value *ParserFnCommandCommand) *Parser {
+	switch value.Tag {
+	case ParserFnCommandCommandOption:
+		return &Parser{Tag: ParserOption, Option: func(coerced string) *dataeither.EitherString {
+			return convert4(EitherFnCommandCommandFromResults(value.Option(coerced)))
+		}}
+	case ParserFnCommandCommandDone:
+		return &Parser{Tag: ParserDone, Field0: func(coerced any) any {
+			return value.Done(coerced.(Command))
+		}}
+	default: // ParserFnCommandCommandApply
+		return &Parser{Tag: ParserApply, Field0: convert8(value.Apply)}
+	}
+}
+
+func convert10(value *AppliedFnFnCommandCommandFnCommandCommand) *Applied {
+	return &Applied{First: convert3(value.First), Second: convert9(value.Second)}
+}
+
+func convert11(value *ExistsAppliedFnFnCommandCommandFnCommandCommand) any {
+	return convert10(value.FnCommandCommand)
+}
+
+func convert12(value *ParserFnFnCommandCommandFnCommandCommand) *Parser {
+	switch value.Tag {
+	case ParserFnFnCommandCommandFnCommandCommandOption:
+		return &Parser{Tag: ParserOption, Option: func(coerced string) *dataeither.EitherString {
+			return convert(EitherFnFnCommandCommandFnCommandCommandFromResults(value.Option(coerced)))
+		}}
+	case ParserFnFnCommandCommandFnCommandCommandDone:
+		return &Parser{Tag: ParserDone, Field0: func(coerced any) any {
+			original := coerced.(func(any) any)
+			original2 := value.Done(func(coerced2 Command) Command {
+				return original(coerced2).(Command)
+			})
+			return func(coerced2 any) any {
+				return original2(coerced2.(Command))
+			}
+		}}
+	default: // ParserFnFnCommandCommandFnCommandCommandApply
+		return &Parser{Tag: ParserApply, Field0: convert11(value.Apply)}
+	}
+}
+
+func convert13(value *dataeither.EitherString) EitherFnFnCommandCommandFnFnCommandCommandFnCommandCommand {
+	switch value.Tag {
+	case dataeither.EitherStringLeft:
+		return EitherFnFnCommandCommandFnFnCommandCommandFnCommandCommand{Tag: EitherFnFnCommandCommandFnFnCommandCommandFnCommandCommandLeft, Left: value.Left}
+	default: // dataeither.EitherStringRight
+		original := value.Right.(func(any) any)
+		return EitherFnFnCommandCommandFnFnCommandCommandFnCommandCommand{Tag: EitherFnFnCommandCommandFnFnCommandCommandFnCommandCommandRight, Right: func(coerced func(Command) Command) func(func(Command) Command) func(Command) Command {
+			original2 := original(func(coerced2 any) any {
+				return coerced(coerced2.(Command))
+			}).(func(any) any)
+			return func(coerced2 func(Command) Command) func(Command) Command {
+				original3 := original2(func(coerced3 any) any {
+					return coerced2(coerced3.(Command))
+				}).(func(any) any)
+				return func(coerced3 Command) Command {
+					return original3(coerced3).(Command)
+				}
+			}
+		}}
+	}
+}
+
+func convert14(value *Parser) ParserFnFnCommandCommandFnFnCommandCommandFnCommandCommand {
+	switch value.Tag {
+	case ParserOption:
+		return ParserFnFnCommandCommandFnFnCommandCommandFnCommandCommand{Tag: ParserFnFnCommandCommandFnFnCommandCommandFnCommandCommandOption, Option: func(coerced string) (func(func(Command) Command) func(func(Command) Command) func(Command) Command, dataeither.StringFailure) {
+			return EitherFnFnCommandCommandFnFnCommandCommandFnCommandCommandResults(convert13(value.Option(coerced)))
+		}}
+	case ParserDone:
+		original := value.Field0.(func(any) any)
+		return ParserFnFnCommandCommandFnFnCommandCommandFnCommandCommand{Tag: ParserFnFnCommandCommandFnFnCommandCommandFnCommandCommandDone, Done: func(coerced func(Command) Command) func(func(Command) Command) func(Command) Command {
+			original2 := original(func(coerced2 any) any {
+				return coerced(coerced2.(Command))
+			}).(func(any) any)
+			return func(coerced2 func(Command) Command) func(Command) Command {
+				original3 := original2(func(coerced3 any) any {
+					return coerced2(coerced3.(Command))
+				}).(func(any) any)
+				return func(coerced3 Command) Command {
+					return original3(coerced3).(Command)
+				}
+			}
+		}}
+	default: // ParserApply
+		return ParserFnFnCommandCommandFnFnCommandCommandFnCommandCommand{Tag: ParserFnFnCommandCommandFnFnCommandCommandFnCommandCommandApply, Apply: value.Field0}
+	}
+}
+
+type AppliedCommand struct {
+	First  *ParserFnCommandCommand
+	Second *ParserCommand
+}
+
+type ExistsAppliedCommand struct {
+	Command *AppliedCommand
+}
+
+type ParserCommand struct {
+	Option func(string) (Command, dataeither.StringFailure)
+	Apply  *ExistsAppliedCommand
+	Tag    uint8
+	Done   Command
+}
+
+const (
+	ParserCommandOption = iota
+	ParserCommandDone
+	ParserCommandApply
+)
+
+func convert15(value *dataeither.EitherString) EitherFnCommandCommand {
+	if original, ok := value.Origin.(EitherFnCommandCommand); ok {
+		return original
+	}
+	switch value.Tag {
+	case dataeither.EitherStringLeft:
+		return EitherFnCommandCommand{Tag: EitherFnCommandCommandLeft, Left: value.Left}
+	default: // dataeither.EitherStringRight
+		original := value.Right.(func(any) any)
+		return EitherFnCommandCommand{Tag: EitherFnCommandCommandRight, Right: func(coerced Command) Command {
+			return original(coerced).(Command)
+		}}
+	}
+}
+
+func convert16(value *ParserFn) *Parser {
+	if original, ok := value.Origin.(*Parser); ok {
+		return original
+	}
+	switch value.Tag {
+	case ParserFnOption:
+		return &Parser{Tag: ParserOption, Option: func(coerced string) *dataeither.EitherString {
+			return dataeither.Convert(value.Option(coerced))
+		}, Origin: value}
+	case ParserFnDone:
+		return &Parser{Tag: ParserDone, Field0: value.Done, Origin: value}
+	default: // ParserFnApply
+		return &Parser{Tag: ParserApply, Field0: value.Apply, Origin: value}
+	}
+}
+
+func convert17(value *Parser) *ParserFn {
+	if original, ok := value.Origin.(*ParserFn); ok {
+		return original
+	}
+	switch value.Tag {
+	case ParserOption:
+		return &ParserFn{Tag: ParserFnOption, Option: func(coerced string) *dataeither.EitherFn {
+			return dataeither.Convert2(value.Option(coerced))
+		}, Origin: value}
+	case ParserDone:
+		return &ParserFn{Tag: ParserFnDone, Done: value.Field0.(func(any) any), Origin: value}
+	default: // ParserApply
+		return &ParserFn{Tag: ParserFnApply, Apply: value.Field0, Origin: value}
+	}
+}
+
+func OptionParserFnFnCommandCommandFnCommandCommand(option func(string) (func(func(Command) Command) func(Command) Command, dataeither.StringFailure)) *ParserFnFnCommandCommandFnCommandCommand {
+	return &ParserFnFnCommandCommandFnCommandCommand{Tag: ParserFnFnCommandCommandFnCommandCommandOption, Option: option}
+}
+
+func DoneParserFnFnCommandCommandFnCommandCommand(done func(func(Command) Command) func(Command) Command) *ParserFnFnCommandCommandFnCommandCommand {
+	return &ParserFnFnCommandCommandFnCommandCommand{Tag: ParserFnFnCommandCommandFnCommandCommandDone, Done: done}
+}
+
+func ApplyParserFnFnCommandCommandFnCommandCommand(apply *ExistsAppliedFnFnCommandCommandFnCommandCommand) *ParserFnFnCommandCommandFnCommandCommand {
+	return &ParserFnFnCommandCommandFnCommandCommand{Tag: ParserFnFnCommandCommandFnCommandCommandApply, Apply: apply}
+}
+
+func ApplyParserFnCommandCommand(apply *ExistsAppliedFnCommandCommand) *ParserFnCommandCommand {
+	return &ParserFnCommandCommand{Tag: ParserFnCommandCommandApply, Apply: apply}
+}
+
+func DoneParserCommand(done Command) *ParserCommand {
+	return &ParserCommand{Tag: ParserCommandDone, Done: done}
+}
+
+func ApplyParserCommand(apply *ExistsAppliedCommand) *ParserCommand {
+	return &ParserCommand{Tag: ParserCommandApply, Apply: apply}
+}
+
+func OptionParserFnCommandCommand(option func(string) (func(Command) Command, dataeither.StringFailure)) *ParserFnCommandCommand {
+	return &ParserFnCommandCommand{Tag: ParserFnCommandCommandOption, Option: option}
+}
+
+func LeftEitherFnCommandCommand(left string) EitherFnCommandCommand {
+	return EitherFnCommandCommand{Tag: EitherFnCommandCommandLeft, Left: left}
+}
+
+func RightEitherFnCommandCommand(right func(Command) Command) EitherFnCommandCommand {
+	return EitherFnCommandCommand{Tag: EitherFnCommandCommandRight, Right: right}
+}
+
+func LeftEitherFnFnCommandCommandFnCommandCommand(left string) EitherFnFnCommandCommandFnCommandCommand {
+	return EitherFnFnCommandCommandFnCommandCommand{Tag: EitherFnFnCommandCommandFnCommandCommandLeft, Left: left}
+}
+
+func RightEitherFnFnCommandCommandFnCommandCommand(right func(func(Command) Command) func(Command) Command) EitherFnFnCommandCommandFnCommandCommand {
+	return EitherFnFnCommandCommandFnCommandCommand{Tag: EitherFnFnCommandCommandFnCommandCommandRight, Right: right}
+}
+
+func LeftEitherFnFnCommandCommandFnFnCommandCommandFnCommandCommand(left string) EitherFnFnCommandCommandFnFnCommandCommandFnCommandCommand {
+	return EitherFnFnCommandCommandFnFnCommandCommandFnCommandCommand{Tag: EitherFnFnCommandCommandFnFnCommandCommandFnCommandCommandLeft, Left: left}
+}
+
+func RightEitherFnFnCommandCommandFnFnCommandCommandFnCommandCommand(right func(func(Command) Command) func(func(Command) Command) func(Command) Command) EitherFnFnCommandCommandFnFnCommandCommandFnCommandCommand {
+	return EitherFnFnCommandCommandFnFnCommandCommandFnCommandCommand{Tag: EitherFnFnCommandCommandFnFnCommandCommandFnCommandCommandRight, Right: right}
+}
+
+func main() {
+	var function *ParserFnFnCommandCommandFnCommandCommand
+	switch modifier.Tag {
+	case ParserFnCommandCommandOption:
+		function = OptionParserFnFnCommandCommandFnCommandCommand(func(x string) (func(func(Command) Command) func(Command) Command, dataeither.StringFailure) {
+			f, err := modifier.Option(x)
+			if err.Failed {
+				return nil, err
+			}
+			return func(g func(Command) Command) func(Command) Command {
+				return func(x2 Command) Command {
+					return g(f(x2))
+				}
+			}, dataeither.StringFailure{}
+		})
+	case ParserFnCommandCommandDone:
+		function = DoneParserFnFnCommandCommandFnCommandCommand(func(g func(Command) Command) func(Command) Command {
+			return func(x Command) Command {
+				return g(modifier.Done(x))
+			}
+		})
+	default: // ParserFnCommandCommandApply
+		original := func(function2 func(any) any) func(*Parser) *Parser {
+			return func(value *Parser) *Parser {
+				return map_(function2, value)
+			}
+		}
+		original2 := func(value func(func(Command) Command) func(Command) Command) func(func(Command) Command) func(func(Command) Command) func(Command) Command {
+			return func(x func(Command) Command) func(func(Command) Command) func(Command) Command {
+				f := value(x)
+				return func(g func(Command) Command) func(Command) Command {
+					return func(x2 Command) Command {
+						return g(f(x2))
+					}
+				}
+			}
+		}
+		function = ApplyParserFnFnCommandCommandFnCommandCommand(&ExistsAppliedFnFnCommandCommandFnCommandCommand{FnCommandCommand: &AppliedFnFnCommandCommandFnCommandCommand{First: convert14(original(func(coerced any) any {
+			original3 := coerced.(func(any) any)
+			original5 := original2(func(coerced2 func(Command) Command) func(Command) Command {
+				original4 := original3(func(coerced3 any) any {
+					return coerced2(coerced3.(Command))
+				}).(func(any) any)
+				return func(coerced3 Command) Command {
+					return original4(coerced3).(Command)
+				}
+			})
+			return func(coerced2 any) any {
+				original4 := coerced2.(func(any) any)
+				original6 := original5(func(coerced3 Command) Command {
+					return original4(coerced3).(Command)
+				})
+				return func(coerced3 any) any {
+					original7 := coerced3.(func(any) any)
+					original8 := original6(func(coerced4 Command) Command {
+						return original7(coerced4).(Command)
+					})
+					return func(coerced4 any) any {
+						return original8(coerced4.(Command))
+					}
+				}
+			}
+		})(convert12(modifier.Apply.FnCommandCommand.First))), Second: modifier.Apply.FnCommandCommand.Second}})
+	}
+	command, err2 := parseCommand(ApplyParserCommand(&ExistsAppliedCommand{Command: &AppliedCommand{First: ApplyParserFnCommandCommand(&ExistsAppliedFnCommandCommand{FnCommandCommand: &AppliedFnCommandCommand{First: function, Second: modifier}}), Second: DoneParserCommand(CommandBye)}}), "x")
+	var result string
+	if err2.Failed {
+		result = "(Left " + prim.ShowString(err2.Left) + ")"
+	} else {
+		var result2 string
+		switch command {
+		case CommandHello:
+			result2 = "hello"
+		default: // CommandBye
+			result2 = "bye"
+		}
+		result = "(Right " + result2 + ")"
+	}
+	journal.Log(result)
+}
+
+func parseCommand(parser *ParserCommand, word string) (Command, dataeither.StringFailure) {
+	switch parser.Tag {
+	case ParserCommandOption:
+		return parser.Option(word)
+	case ParserCommandDone:
+		return parser.Done, dataeither.StringFailure{}
+	default: // ParserCommandApply
+		original := func(parser2 *Parser) func(string) *dataeither.EitherString {
+			return func(word2 string) *dataeither.EitherString {
+				return parseFnCommandCommand(parser2, word2)
+			}
+		}
+		scrutinee := convert15(original(convert9(parser.Apply.Command.First))(word))
+		switch scrutinee.Tag {
+		case EitherFnCommandCommandLeft:
+			return 0, dataeither.StringFailure{Failed: true, Left: scrutinee.Left}
+		default: // EitherFnCommandCommandRight
+			command, err := parseCommand(parser.Apply.Command.Second, word)
+			if err.Failed {
+				return 0, err
+			}
+			return scrutinee.Right(command), dataeither.StringFailure{}
+		}
+	}
+}
+
+var modifier *ParserFnCommandCommand = OptionParserFnCommandCommand(func(_ string) (func(Command) Command, dataeither.StringFailure) {
+	return identity, dataeither.StringFailure{}
+})
+
+func map_(function func(any) any, value *Parser) *Parser {
+	switch value.Tag {
+	case ParserOption:
+		return &Parser{Tag: ParserOption, Option: func(x string) *dataeither.EitherString {
+			scrutinee := value.Option(x)
+			switch scrutinee.Tag {
+			case dataeither.EitherStringLeft:
+				return &dataeither.EitherString{Tag: dataeither.EitherStringLeft, Left: scrutinee.Left}
+			default: // dataeither.EitherStringRight
+				return &dataeither.EitherString{Tag: dataeither.EitherStringRight, Right: function(scrutinee.Right)}
+			}
+		}}
+	case ParserDone:
+		return &Parser{Tag: ParserDone, Field0: function(value.Field0)}
+	default: // ParserApply
+		scrutinee := value.Field0.(*Applied)
+		original := func(function2 func(any) any) func(*Parser) *Parser {
+			return func(value2 *Parser) *Parser {
+				return map_(function2, value2)
+			}
+		}
+		original2 := func(value2 func(any) any) func(any) any {
+			return func(x any) any {
+				return function(value2(x))
+			}
+		}
+		return &Parser{Tag: ParserApply, Field0: &Applied{First: convert17(original(func(coerced any) any {
+			return original2(coerced.(func(any) any))
+		})(convert16(scrutinee.First))), Second: scrutinee.Second}}
+	}
+}
+
+func identity(x Command) Command {
+	return x
+}
+
+func parseFnCommandCommand(parser *Parser, word string) *dataeither.EitherString {
+	switch parser.Tag {
+	case ParserOption:
+		return parser.Option(word)
+	case ParserDone:
+		return &dataeither.EitherString{Tag: dataeither.EitherStringRight, Right: parser.Field0}
+	default: // ParserApply
+		scrutinee := parser.Field0.(*Applied)
+		original := func(parser2 *Parser) func(string) *dataeither.EitherString {
+			return func(word2 string) *dataeither.EitherString {
+				return parseFnCommandCommand(parser2, word2)
+			}
+		}
+		scrutinee2 := dataeither.Convert2(original(convert16(scrutinee.First))(word))
+		switch scrutinee2.Tag {
+		case dataeither.EitherFnLeft:
+			return &dataeither.EitherString{Tag: dataeither.EitherStringLeft, Left: scrutinee2.Left}
+		default: // dataeither.EitherFnRight
+			scrutinee3 := parseFnCommandCommand(scrutinee.Second, word)
+			switch scrutinee3.Tag {
+			case dataeither.EitherStringLeft:
+				return &dataeither.EitherString{Tag: dataeither.EitherStringLeft, Left: scrutinee3.Left}
+			default: // dataeither.EitherStringRight
+				return &dataeither.EitherString{Tag: dataeither.EitherStringRight, Right: scrutinee2.Right(scrutinee3.Right)}
+			}
+		}
+	}
+}
+
+func EitherFnCommandCommandFromResults(value func(Command) Command, err dataeither.StringFailure) EitherFnCommandCommand {
+	if err.Failed {
+		return LeftEitherFnCommandCommand(err.Left)
+	}
+	return RightEitherFnCommandCommand(value)
+}
+
+func EitherFnFnCommandCommandFnCommandCommandFromResults(value func(func(Command) Command) func(Command) Command, err dataeither.StringFailure) EitherFnFnCommandCommandFnCommandCommand {
+	if err.Failed {
+		return LeftEitherFnFnCommandCommandFnCommandCommand(err.Left)
+	}
+	return RightEitherFnFnCommandCommandFnCommandCommand(value)
+}
+
+func EitherFnFnCommandCommandFnFnCommandCommandFnCommandCommandFromResults(value func(func(Command) Command) func(func(Command) Command) func(Command) Command, err dataeither.StringFailure) EitherFnFnCommandCommandFnFnCommandCommandFnCommandCommand {
+	if err.Failed {
+		return LeftEitherFnFnCommandCommandFnFnCommandCommandFnCommandCommand(err.Left)
+	}
+	return RightEitherFnFnCommandCommandFnFnCommandCommandFnCommandCommand(value)
+}
+
+func EitherFnFnCommandCommandFnFnCommandCommandFnCommandCommandResults(either EitherFnFnCommandCommandFnFnCommandCommandFnCommandCommand) (func(func(Command) Command) func(func(Command) Command) func(Command) Command, dataeither.StringFailure) {
+	if either.Tag == EitherFnFnCommandCommandFnFnCommandCommandFnCommandCommandLeft {
+		return nil, dataeither.StringFailure{Failed: true, Left: either.Left}
+	}
+	return either.Right, dataeither.StringFailure{}
+}

@@ -331,10 +331,10 @@ where
             }
             let mut stale = self.stale_functions();
             stale.append(&mut self.pending_functions);
+            self.monotypes.forget_stale_conversions();
             if stale.is_empty() {
                 break;
             }
-            self.monotypes.forget_stale_conversions();
             self.stale.extend(stale);
             round += 1;
         }
