@@ -151,10 +151,8 @@ where
                 };
                 let value_type = self.go_type(value)?;
                 self.declare_reference();
-                let empty = GoExpression::Composite {
-                    type_: reference_type(value_type),
-                    fields: vec![],
-                };
+                let empty =
+                    GoExpression::Composite { type_: reference_type(value_type), fields: vec![] };
                 let reference = self.temporary("reference");
                 out.push(GoStatement::Define {
                     names: vec![reference.clone()],
