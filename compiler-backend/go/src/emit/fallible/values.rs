@@ -1084,6 +1084,15 @@ impl<'t> Typer<'t> {
                     self.remove(index);
                 }
             }
+            if let Ty::Known(type_) = &ty
+                && shape == ForeignShape::Other
+                && self.lowered(type_).is_none()
+                && matches!(self.program.underlying(type_), GoType::Function { .. })
+            {
+                for index in self.contained(type_) {
+                    self.remove(index);
+                }
+            }
             all.extend(self.ty_contained(&ty));
             if let Ty::Unknown { either: held, .. } = &ty {
                 either.extend(held.iter().copied());

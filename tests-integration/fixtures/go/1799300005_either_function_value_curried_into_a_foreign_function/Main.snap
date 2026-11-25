@@ -1,0 +1,68 @@
+---
+source: tests-integration/src/fixtures.rs
+---
+// Data/Either/either.go
+package either
+
+type Either struct {
+	Left  string
+	Right int32
+	Tag   uint8
+}
+
+const (
+	EitherLeft = iota
+	EitherRight
+)
+
+func Right(right int32) Either {
+	return Either{Tag: EitherRight, Right: right}
+}
+
+func Left(left string) Either {
+	return Either{Tag: EitherLeft, Left: left}
+}
+
+// main.go
+package main
+
+import (
+	"fixture/Data/Either"
+	journal "fixture/Journal_ffi"
+	outcome "fixture/Outcome_ffi"
+	"github.com/i-am-the-slime/iris-go/prim"
+	"strconv"
+)
+
+func main() {
+	finished := outcome.OutcomeImpl(func(code int32) func(string) either.Either {
+		return func(message string) either.Either {
+			return failedWith(code, message)
+		}
+	}, either.Right(1), true)
+	var result string
+	switch finished.Tag {
+	case either.EitherLeft:
+		result = "(Left " + prim.ShowString(finished.Left) + ")"
+	default: // either.EitherRight
+		result = "(Right " + strconv.Itoa(int(finished.Right)) + ")"
+	}
+	journal.Log(result)
+	broken := outcome.OutcomeImpl(func(code int32) func(string) either.Either {
+		return func(message string) either.Either {
+			return failedWith(code, message)
+		}
+	}, either.Right(1), false)
+	var result2 string
+	switch broken.Tag {
+	case either.EitherLeft:
+		result2 = "(Left " + prim.ShowString(broken.Left) + ")"
+	default: // either.EitherRight
+		result2 = "(Right " + strconv.Itoa(int(broken.Right)) + ")"
+	}
+	journal.Log(result2)
+}
+
+func failedWith(code int32, message string) either.Either {
+	return either.Left(message + " (code " + strconv.Itoa(int(code)) + ")")
+}
