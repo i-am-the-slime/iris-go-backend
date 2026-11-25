@@ -46,6 +46,7 @@ where
         let variable_results = self.project_variable_results(foreign)?;
         let uncurried = self.project_uncurried_parameters(foreign)?;
         let variable_effect_functions = self.project_variable_effect_functions(foreign)?;
+        let erased = self.project_erased_arguments(foreign, arguments)?;
         let mut values = vec![];
         for (position, argument) in arguments.iter().enumerate() {
             let value = match uncurried.get(position).cloned().flatten() {
@@ -60,7 +61,8 @@ where
                 }
                 None => {
                     let generic = generic.contains(&position);
-                    let value = self.project_argument(argument, generic, crossing, out)?;
+                    let erased = erased.get(&position).copied();
+                    let value = self.project_argument(argument, generic, erased, crossing, out)?;
                     match variable_results.get(&position) {
                         Some(&layers) => {
                             self.unit_valued_within(value, argument.monotype, layers, out)?
@@ -108,10 +110,15 @@ where
         &mut self,
         argument: &Expression,
         generic: bool,
+        erased: Option<MonotypeId>,
         crossing: Crossing,
         out: &mut Vec<GoStatement>,
     ) -> GoResult<GoExpression> {
         let value = self.value(argument, out)?;
+        if let Some(erased) = erased {
+            let value = self.coerce(value, argument.monotype, erased, out)?;
+            return self.in_convention(value, erased, crossing, out);
+        }
         let value = match self.monotypes.get(argument.monotype) {
             Monotype::Int if generic => self.typed_constant(value, argument.monotype)?,
             _ if generic => self.typed_argument(value, argument)?,
@@ -322,6 +329,118 @@ where
         self.coerce(value, erased, monotype, out)
     }
 
+    fn project_erased_arguments(
+        &mut self,
+        foreign: Foreign,
+        arguments: &[Expression],
+    ) -> GoResult<FxHashMap<usize, MonotypeId>> {
+        let Foreign::Project { file_id, term, .. } = foreign else {
+            unreachable!("invariant violated: the declared type of another foreign");
+        };
+        let mut erased = FxHashMap::default();
+        let module = self.context.module(file_id)?;
+        let Some(declared) = module.checked.lookup_term_item_type(term) else { return Ok(erased) };
+        let declared = crate::monotype::expand_synonyms(&mut self.context, declared)?;
+        let (variables, inner) = self.context.types.peel_quantifiers(declared);
+        let parameters = self.declared_parameters(inner)?;
+        if variables.is_empty() || parameters.len() != arguments.len() {
+            return Ok(erased);
+        }
+        let (polymorphic, monomorphic): (Vec<_>, Vec<_>) = parameters
+            .into_iter()
+            .zip(arguments)
+            .enumerate()
+            .partition(|(_, (parameter, _))| self.context.types.quantifies_within(*parameter));
+        let mut shared = vec![];
+        for (_, (parameter, _)) in polymorphic {
+            self.applied_variables(parameter, &variables, &mut shared);
+        }
+        if shared.is_empty() {
+            return Ok(erased);
+        }
+        for (position, (parameter, argument)) in monomorphic {
+            let monotype = self.erased_where_shared(parameter, argument.monotype, &shared)?;
+            if monotype != argument.monotype {
+                erased.insert(position, monotype);
+            }
+        }
+        Ok(erased)
+    }
+
+    fn declared_parameters(&mut self, mut current: TypeId) -> GoResult<Vec<TypeId>> {
+        let mut parameters = vec![];
+        loop {
+            if let Some(arity) = self.context.uncurried_function_arity(current)? {
+                let (_, arguments) = self.context.types.spine(current);
+                parameters.extend(arguments.into_iter().take(arity));
+                return Ok(parameters);
+            }
+            let Some((parameter, result)) = self.context.types.function_parts(current) else {
+                return Ok(parameters);
+            };
+            parameters.push(parameter);
+            current = result;
+        }
+    }
+
+    fn applied_variables(&self, type_id: TypeId, variables: &[Name], found: &mut Vec<Name>) {
+        let type_id = self.context.types.strip_annotations(type_id);
+        match *self.context.types.lookup(type_id) {
+            Type::Application(function, argument) => {
+                let (head, _) = self.context.types.spine(type_id);
+                if let Type::Rigid(name, _, _) = *self.context.types.lookup(head)
+                    && variables.contains(&name)
+                    && !found.contains(&name)
+                {
+                    found.push(name);
+                }
+                self.applied_variables(function, variables, found);
+                self.applied_variables(argument, variables, found);
+            }
+            Type::Function(parameter, result) => {
+                self.applied_variables(parameter, variables, found);
+                self.applied_variables(result, variables, found);
+            }
+            Type::Forall(_, inner) | Type::Constrained(_, inner) => {
+                self.applied_variables(inner, variables, found);
+            }
+            _ => {}
+        }
+    }
+
+    fn erased_where_shared(
+        &mut self,
+        declared: TypeId,
+        monotype: MonotypeId,
+        shared: &[Name],
+    ) -> GoResult<MonotypeId> {
+        let (head, arguments) = self.context.types.spine(declared);
+        if let Type::Rigid(name, _, _) = *self.context.types.lookup(head)
+            && shared.contains(&name)
+            && !arguments.is_empty()
+        {
+            return match self.monotypes.get(monotype) {
+                Monotype::Data(_) | Monotype::Recursive(_) => self.canonical(monotype),
+                _ => Ok(monotype),
+            };
+        }
+        match (self.monotypes.get(monotype).clone(), &arguments[..]) {
+            (Monotype::Function(from, to), _) => {
+                let Some((parameter, result)) = self.context.types.function_parts(declared) else {
+                    return Ok(monotype);
+                };
+                let from = self.erased_where_shared(parameter, from, shared)?;
+                let to = self.erased_where_shared(result, to, shared)?;
+                Ok(self.monotypes.intern(Monotype::Function(from, to)))
+            }
+            (Monotype::Array(element), &[declared_element]) => {
+                let element = self.erased_where_shared(declared_element, element, shared)?;
+                Ok(self.monotypes.intern(Monotype::Array(element)))
+            }
+            _ => Ok(monotype),
+        }
+    }
+
     fn project_uncurried_parameters(
         &mut self,
         foreign: Foreign,
@@ -374,10 +493,12 @@ where
         let function = self.project_function(foreign)?;
         let function = self.instantiated(function, type_arguments, crossing)?;
         let generic = self.project_generic_parameters(foreign)?;
+        let erased = self.project_erased_arguments(foreign, arguments)?;
         let mut bound = Vec::with_capacity(arguments.len());
         for (position, argument) in arguments.iter().enumerate() {
             let generic = generic.contains(&position);
-            let value = self.project_argument(argument, generic, crossing, out)?;
+            let erased = erased.get(&position).copied();
+            let value = self.project_argument(argument, generic, erased, crossing, out)?;
             let base = self.value_base(argument.monotype);
             let name = self.temporary(&base);
             out.push(GoStatement::Define { names: vec![name.clone()], values: vec![value] });

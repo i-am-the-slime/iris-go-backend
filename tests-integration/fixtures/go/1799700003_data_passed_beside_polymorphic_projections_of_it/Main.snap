@@ -1,0 +1,44 @@
+---
+source: tests-integration/src/fixtures.rs
+---
+// main.go
+package main
+
+import (
+	entries "fixture/Entries_ffi"
+	journal "fixture/Journal_ffi"
+)
+
+type EntryString struct {
+	First  string
+	Second int32
+}
+
+type Entry struct {
+	First  any
+	Second any
+}
+
+func convert(value EntryString) *Entry {
+	return &Entry{First: value.First, Second: value.Second}
+}
+
+func convert2(value []EntryString) []*Entry {
+	converted := make([]*Entry, len(value))
+	for index, element := range value {
+		converted[index] = convert(element)
+	}
+	return converted
+}
+
+func main() {
+	journal.Log(entries.JoinEntriesImpl(entryKey, entryCount, convert2([]EntryString{{First: "apples", Second: 3}, {First: "pears", Second: 5}})))
+}
+
+func entryKey(entry *Entry) any {
+	return entry.First
+}
+
+func entryCount(entry *Entry) any {
+	return entry.Second
+}
