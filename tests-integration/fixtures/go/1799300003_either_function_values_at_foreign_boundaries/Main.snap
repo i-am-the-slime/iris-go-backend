@@ -1,0 +1,141 @@
+---
+source: tests-integration/src/fixtures.rs
+---
+// Data/Either/either.go
+package either
+
+import (
+	"github.com/i-am-the-slime/iris-go/prim"
+	"strconv"
+)
+
+type Either struct {
+	Left  string
+	Right int32
+	Tag   uint8
+}
+
+const (
+	EitherLeft = iota
+	EitherRight
+)
+
+type StringFailure struct {
+	Failed bool
+	Left   string
+}
+
+func Left(left string) Either {
+	return Either{Tag: EitherLeft, Left: left}
+}
+
+func Right(right int32) Either {
+	return Either{Tag: EitherRight, Right: right}
+}
+
+func Show(i int32, err StringFailure) string {
+	return string(AppendShow(nil, i, err))
+}
+
+func AppendShowArrayEitherStringInt(buffer []byte, array []Either) []byte {
+	buffer = append(buffer, '[')
+	for index, element := range array {
+		if index > 0 {
+			buffer = append(buffer, ',')
+		}
+		buffer = AppendShow(buffer, element.Right, EitherFailure(element))
+	}
+	buffer = append(buffer, ']')
+	return buffer
+}
+
+func AppendShow(buffer []byte, i int32, err StringFailure) []byte {
+	if err.Failed {
+		buffer = append(buffer, "(Left "...)
+		buffer = prim.AppendShowString(buffer, err.Left)
+		buffer = append(buffer, ')')
+	} else {
+		buffer = append(buffer, "(Right "...)
+		buffer = strconv.AppendInt(buffer, int64(i), 10)
+		buffer = append(buffer, ')')
+	}
+	return buffer
+}
+
+func ArrayEitherStringInt(array []Either) string {
+	return string(AppendShowArrayEitherStringInt(nil, array))
+}
+
+func EitherFailure(either Either) StringFailure {
+	if either.Tag == EitherLeft {
+		return StringFailure{Failed: true, Left: either.Left}
+	}
+	return StringFailure{}
+}
+
+// main.go
+package main
+
+import (
+	boundary "fixture/Boundary_ffi"
+	"fixture/Data/Either"
+	journal "fixture/Journal_ffi"
+	"github.com/i-am-the-slime/iris-go/prim"
+	"strconv"
+)
+
+func main() {
+	var calls int32 = 0
+	repeated := boundary.RepeatImpl(4, func() either.Either {
+		s_ := calls + 1
+		calls = s_
+		if s_ > 2 {
+			return either.Left("too many: " + strconv.Itoa(int(s_)))
+		}
+		return either.Right(s_ * 10)
+	})
+	journal.Log(either.ArrayEitherStringInt(repeated))
+	handler := boundary.KeepImpl(check)
+	i, err := handler(1)
+	var i2 int32
+	var err2 either.StringFailure
+	if err.Failed {
+		err2 = err
+	} else {
+		i2, err2 = handler(i - 9)
+	}
+	var result string
+	if err2.Failed {
+		result = "(Left " + prim.ShowString(err2.Left) + ")"
+	} else {
+		result = "(Right " + strconv.Itoa(int(i2)) + ")"
+	}
+	journal.Log(result)
+	i3, err := handler(5)
+	var result2 string
+	if err.Failed {
+		result2 = "(Left " + prim.ShowString(err.Left) + ")"
+	} else {
+		result2 = "(Right " + strconv.Itoa(int(i3)) + ")"
+	}
+	journal.Log(result2)
+}
+
+func check(n int32) (int32, either.StringFailure) {
+	if n > 2 {
+		return 0, either.StringFailure{Failed: true, Left: "too many: " + strconv.Itoa(int(n))}
+	}
+	return n*10, either.StringFailure{}
+}
+
+// shared/shared.go
+package shared
+
+type Ref[T any] struct {
+	Value T
+}
+
+type StateValue struct {
+	State int32
+	Value int32
+}

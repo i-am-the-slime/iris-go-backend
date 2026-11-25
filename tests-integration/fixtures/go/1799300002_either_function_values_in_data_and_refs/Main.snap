@@ -1,0 +1,138 @@
+---
+source: tests-integration/src/fixtures.rs
+---
+// Data/Either/either.go
+package either
+
+type Either struct {
+	Left  string
+	Right int32
+	Tag   uint8
+}
+
+const (
+	EitherLeft = iota
+	EitherRight
+)
+
+type StringFailure struct {
+	Failed bool
+	Left   string
+}
+
+// main.go
+package main
+
+import (
+	"fixture/Data/Either"
+	journal "fixture/Journal_ffi"
+	"github.com/i-am-the-slime/iris-go/prim"
+	"strconv"
+)
+
+type Step struct {
+	Emit int32
+	Tag  uint8
+}
+
+const (
+	StepEmit = iota
+	StepDone
+)
+
+type Either struct {
+	Left  string
+	Right Step
+	Tag   uint8
+}
+
+const (
+	EitherLeft = iota
+	EitherRight
+)
+
+type Source struct {
+	Name string
+	Pull func(struct{}) (Step, either.StringFailure)
+}
+
+func Emit(emit int32) Step {
+	return Step{Tag: StepEmit, Emit: emit}
+}
+
+func main() {
+	var next int32 = 0
+	short := taking(4, Source{Name: "counter 10", Pull: func(_ struct{}) (Step, either.StringFailure) {
+		i := next
+		next = i + 1
+		if i == 10 {
+			return Step{}, either.StringFailure{Failed: true, Left: "past 10"}
+		}
+		return Emit(i), either.StringFailure{}
+	}})
+	i2, err := mainGo(short, 0)
+	var result string
+	if err.Failed {
+		result = "(Left " + prim.ShowString(err.Left) + ")"
+	} else {
+		result = "(Right " + strconv.Itoa(int(i2)) + ")"
+	}
+	journal.Log(short.Name + ": " + result)
+	var next2 int32 = 0
+	long := taking(10, Source{Name: "counter 3", Pull: func(_ struct{}) (Step, either.StringFailure) {
+		i := next2
+		next2 = i + 1
+		if i == 3 {
+			return Step{}, either.StringFailure{Failed: true, Left: "past 3"}
+		}
+		return Emit(i), either.StringFailure{}
+	}})
+	i3, err := mainGo(long, 0)
+	var result2 string
+	if err.Failed {
+		result2 = "(Left " + prim.ShowString(err.Left) + ")"
+	} else {
+		result2 = "(Right " + strconv.Itoa(int(i3)) + ")"
+	}
+	journal.Log(long.Name + ": " + result2)
+}
+
+func taking(n int32, upstream Source) Source {
+	left := n
+	current := upstream.Pull
+	return Source{Name: upstream.Name + " taking " + strconv.Itoa(int(n)), Pull: func(_ struct{}) (Step, either.StringFailure) {
+		i := left
+		if i <= 0 {
+			return Step{Tag: StepDone}, either.StringFailure{}
+		}
+		step, err := current(struct{}{})
+		if err.Failed {
+			return Step{}, err
+		}
+		left = i - 1
+		return step, either.StringFailure{}
+	}}
+}
+
+func mainGo(short Source, total int32) (int32, either.StringFailure) {
+	for {
+		step, err := short.Pull(struct{}{})
+		if err.Failed {
+			return 0, err
+		}
+		switch step.Tag {
+		case StepEmit:
+			total += step.Emit
+			continue
+		default: // StepDone
+			return total, either.StringFailure{}
+		}
+	}
+}
+
+// shared/shared.go
+package shared
+
+type Ref[T any] struct {
+	Value T
+}

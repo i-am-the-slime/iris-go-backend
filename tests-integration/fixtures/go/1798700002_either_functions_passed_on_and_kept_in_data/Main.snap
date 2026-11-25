@@ -49,6 +49,13 @@ func LeftEitherString(left string) EitherString {
 	return EitherString{Tag: EitherStringLeft, Left: left}
 }
 
+func EitherStringFromResults(value int32, err StringFailure) EitherString {
+	if err.Failed {
+		return LeftEitherString(err.Left)
+	}
+	return RightEitherString(value)
+}
+
 func EitherStringResults(either EitherString) (int32, StringFailure) {
 	if either.Tag == EitherStringLeft {
 		return 0, StringFailure{Failed: true, Left: either.Left}
@@ -174,11 +181,11 @@ func main() {
 	journal.Log(strconv.Itoa(len(pipeline)))
 }
 
-func halve(n int32) either.EitherString {
+func halve(n int32) (int32, either.StringFailure) {
 	if n&1 == 0 {
-		return either.RightEitherString(n >> 1)
+		return n>>1, either.StringFailure{}
 	}
-	return either.LeftEitherString("odd " + strconv.Itoa(int(n)))
+	return 0, either.StringFailure{Failed: true, Left: "odd " + strconv.Itoa(int(n))}
 }
 
 func retrying(attempts int32, step func(int32) (int32, either.StringFailure), n int32) (int32, either.StringFailure) {
@@ -202,19 +209,19 @@ func runAll(start int32) (int32, either.StringFailure) {
 		case either.EitherStringLeft:
 			next = either.LeftEitherString(accumulator.Left)
 		default: // either.EitherStringRight
-			next = a(accumulator.Right)
+			next = either.EitherStringFromResults(a(accumulator.Right))
 		}
 		accumulator = next
 	}
 	return either.EitherStringResults(accumulator)
 }
 
-var pipeline []func(int32) either.EitherString = []func(int32) either.EitherString{addOne, halve, func(n int32) either.EitherString {
-	return either.RightEitherString(n + 2)
+var pipeline []func(int32) (int32, either.StringFailure) = []func(int32) (int32, either.StringFailure){addOne, halve, func(n int32) (int32, either.StringFailure) {
+	return n+2, either.StringFailure{}
 }}
 
-func addOne(n int32) either.EitherString {
-	return either.RightEitherString(n + 1)
+func addOne(n int32) (int32, either.StringFailure) {
+	return n+1, either.StringFailure{}
 }
 
 func mainCounted(counter *shared.Ref[int32], n int32) (int32, either.StringFailure) {

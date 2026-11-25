@@ -1,0 +1,109 @@
+---
+source: tests-integration/src/fixtures.rs
+---
+// main.go
+package main
+
+import (
+	journal "fixture/Journal_ffi"
+	"strconv"
+)
+
+type Problem struct {
+	Field0 int32
+	Tag    uint8
+}
+
+const (
+	ProblemNegative = iota
+	ProblemTooLarge
+)
+
+type Either struct {
+	Left  Problem
+	Right int32
+	Tag   uint8
+}
+
+const (
+	EitherLeft = iota
+	EitherRight
+)
+
+type Routes struct {
+	Fallback func(int32) (int32, ProblemFailure)
+	Handlers []func(int32) (int32, ProblemFailure)
+}
+
+type ProblemFailure struct {
+	Failed bool
+	Left   Problem
+}
+
+func Negative(field0 int32) Problem {
+	return Problem{Tag: ProblemNegative, Field0: field0}
+}
+
+func TooLarge(field0 int32) Problem {
+	return Problem{Tag: ProblemTooLarge, Field0: field0}
+}
+
+func main() {
+	is := []int32{-5, 7, 80}
+	for _, index := range []int32{0, 1, 2, 3} {
+		for _, i := range is {
+			var handler func(int32) (int32, ProblemFailure)
+			if index >= 0 && index < int32(len(routes.Handlers)) {
+				handler = routes.Handlers[index]
+			} else {
+				handler = routes.Fallback
+			}
+			b, err := handler(i)
+			var i2 int32
+			var err2 ProblemFailure
+			if err.Failed {
+				err2 = err
+			} else {
+				i3, err3 := handler(b + 1)
+				if err3.Failed {
+					err2 = err3
+				} else {
+					i2, err2 = b+i3, ProblemFailure{}
+				}
+			}
+			var result string
+			if err2.Failed {
+				var result2 string
+				switch err2.Left.Tag {
+				case ProblemNegative:
+					result2 = "Negative " + strconv.Itoa(int(err2.Left.Field0))
+				default: // ProblemTooLarge
+					result2 = "TooLarge " + strconv.Itoa(int(err2.Left.Field0))
+				}
+				result = "(Left " + result2 + ")"
+			} else {
+				result = "(Right " + strconv.Itoa(int(i2)) + ")"
+			}
+			journal.Log(strconv.Itoa(int(index)) + " " + strconv.Itoa(int(i)) + ": " + result)
+		}
+	}
+}
+
+var routes Routes = Routes{Handlers: []func(int32) (int32, ProblemFailure){func(n int32) (int32, ProblemFailure) {
+	if n < 0 {
+		return 0, ProblemFailure{Failed: true, Left: Negative(n)}
+	}
+	return n+1, ProblemFailure{}
+}, double, func(n int32) (int32, ProblemFailure) {
+	journal.Log("third sees " + strconv.Itoa(int(n)))
+	return n-1, ProblemFailure{}
+}}, Fallback: func(n int32) (int32, ProblemFailure) {
+	return n, ProblemFailure{}
+}}
+
+func double(n int32) (int32, ProblemFailure) {
+	if n > 100 {
+		return 0, ProblemFailure{Failed: true, Left: TooLarge(n)}
+	}
+	return n*2, ProblemFailure{}
+}

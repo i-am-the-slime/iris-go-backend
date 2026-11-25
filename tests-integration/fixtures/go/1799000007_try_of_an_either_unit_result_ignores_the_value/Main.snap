@@ -33,7 +33,7 @@ const (
 )
 
 type Client struct {
-	SendAll func(int32, int32) EitherInt
+	SendAll func(int32, int32) (int32, FailureFailure)
 }
 
 type EitherUnit struct {
@@ -63,16 +63,16 @@ type FailureFailure struct {
 	Left   Failure
 }
 
+func Broken(broken string) Failure {
+	return Failure{Tag: FailureBroken, Broken: broken}
+}
+
 func Left(left Failure) EitherInt {
 	return EitherInt{Tag: EitherIntLeft, Left: left}
 }
 
 func Right(right int32) EitherInt {
 	return EitherInt{Tag: EitherIntRight, Right: right}
-}
-
-func Broken(broken string) Failure {
-	return Failure{Tag: FailureBroken, Broken: broken}
 }
 
 func main() {
@@ -82,7 +82,7 @@ func main() {
 		array2 := []int32{2, 5, -1}
 		collected2 := make([]EitherInt, len(array2))
 		for index2, i := range array2 {
-			value := client.SendAll(i, 3)
+			value := EitherIntFromResults(client.SendAll(i, 3))
 			collected2[index2] = value
 		}
 		collected[index] = collected2
@@ -91,7 +91,7 @@ func main() {
 }
 
 func client(offset int32) Client {
-	return Client{SendAll: func(n int32, r int32) EitherInt {
+	return Client{SendAll: func(n int32, r int32) (int32, FailureFailure) {
 		_, err := send(n, r)
 		var err2 FailureFailure
 		var err3 FailureFailure
@@ -103,7 +103,7 @@ func client(offset int32) Client {
 			err3 = FailureFailure{}
 		}
 		if err3.Failed {
-			return Left(err3.Left)
+			return 0, err3
 		}
 		var err4 FailureFailure
 	matched:
@@ -128,13 +128,13 @@ func client(offset int32) Client {
 			break matched
 		}
 		if err4.Failed {
-			return Left(err4.Left)
+			return 0, err4
 		}
 		journal.Log("receiving " + strconv.Itoa(int(n)))
 		if n > 4 {
-			return Left(Failure{Tag: FailureNoReply})
+			return 0, FailureFailure{Failed: true, Left: Failure{Tag: FailureNoReply}}
 		}
-		return Right((n+1)*2 + offset)
+		return (n+1)*2+offset, FailureFailure{}
 	}}
 }
 
@@ -216,4 +216,11 @@ func EitherIntFailure(either EitherInt) FailureFailure {
 		return FailureFailure{Failed: true, Left: either.Left}
 	}
 	return FailureFailure{}
+}
+
+func EitherIntFromResults(value int32, err FailureFailure) EitherInt {
+	if err.Failed {
+		return Left(err.Left)
+	}
+	return Right(value)
 }
