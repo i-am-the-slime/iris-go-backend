@@ -1,0 +1,58 @@
+---
+source: tests-integration/src/fixtures.rs
+---
+// main.go
+package main
+
+import (
+	journal "fixture/Journal_ffi"
+	"github.com/i-am-the-slime/iris-go/object"
+)
+
+func main() {
+	object2 := object.New[func()]()
+	performed := object.Poke("a", func() {
+		journal.Log("cancel a")
+	}, object2)
+	performed = object.Insert("b", func() {
+		journal.Log("cancel b")
+	}, performed)
+	object3 := performed
+	step := func(accumulator func(), key string) {
+		accumulator()
+		object.UnsafeIndex(object3, key)()
+	}
+	elements := object.Keys(object3)
+	accumulator2 := func() {
+	}
+	for _, element := range elements {
+		previous := accumulator2
+		accumulator2 = func() {
+			step(previous, element)
+		}
+	}
+	accumulator2()
+	journal.Log("done")
+}
+
+// shared/shared.go
+package shared
+
+type Ref[T any] struct {
+	Value T
+}
+
+type StateValue struct {
+	State *struct {
+	Index map[string]int
+	Ints  int
+	Keys  []string
+	Vals  []func()
+}
+	Value *struct {
+	Index map[string]int
+	Ints  int
+	Keys  []string
+	Vals  []func()
+}
+}

@@ -543,6 +543,11 @@ where
         {
             return Ok(applied);
         }
+        if foreign.calls(crate::foreign::EFFECT_FOLD)
+            && let Some(folded) = self.unit_effect_fold(arguments, monotype, out)?
+        {
+            return Ok(folded);
+        }
         if foreign.calls(crate::foreign::ARRAY_SORT_BY) {
             if let Some(sorted) = self.primitive_sort(arguments, Placement::Copied, out)? {
                 return Ok(sorted);
