@@ -568,6 +568,11 @@ pub(super) const FOREIGN_IMPORTS: &[(&str, &str, Foreign)] = &[
     ("Foreign.Object", "_lookupST", perform_in(GoPackage::Object, "LookupST", 4, found(1, 0))),
     ("Foreign.Object", "toArrayWithKey", uncurried(object("ToArrayWithKey", 2, PLAIN), &[(0, 2)])),
     ("Foreign.Object", "keys", object("Keys", 1, PLAIN)),
+    ("Foreign.Object.Unsafe", "unsafeIndex", OBJECT_INDEX),
+    ("Foreign.Keys", "unsafeKeys", foreign_value("Keys", 1)),
+    ("Control.Extend", "arrayExtend", array("Extend", 2)),
+    ("Effect.Random", "random", perform_in(GoPackage::Random, "Random", 0, PLAIN)),
+    ("Effect.Ref", "newWithSelf", Foreign::ReferenceNewWithSelf),
     ("Foreign.Object.ST", "new", perform_in(GoPackage::Object, "New", 0, INSTANTIATE)),
     ("Foreign.Object.ST", "peekImpl", perform_in(GoPackage::Object, "PeekImpl", 4, found(0, 1))),
     ("Foreign.Object.ST", "poke", perform_in(GoPackage::Object, "Poke", 3, PLAIN)),
@@ -1035,6 +1040,9 @@ pub(super) const INTRINSICS: &[(&str, &str, &[&str], Foreign)] = &[
     ("Data.Int", "ceil", &[], prim("IntCeil", 1)),
     ("Data.Int", "trunc", &[], prim("IntTrunc", 1)),
     ("Data.Int", "round", &[], prim("IntRound", 1)),
+    ("Data.String.Utils", "trimStart", &[], prim("StringTrimStart", 1)),
+    ("Data.String.Utils", "trimEnd", &[], prim("StringTrimEnd", 1)),
+    ("Motsunabe", "trimRight", &[], prim("StringTrimEnd", 1)),
 ];
 
 /// `foreign import data` types that a go-support package declares, as the

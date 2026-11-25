@@ -146,6 +146,28 @@ where
                 }));
                 self.deliver(reference, result, sink, out)
             }
+            Foreign::ReferenceNewWithSelf => {
+                let Monotype::Reference(value) = *self.monotypes.get(result) else {
+                    unreachable!("invariant violated: newWithSelf makes a reference")
+                };
+                let value_type = self.go_type(value)?;
+                self.declare_reference();
+                let empty = GoExpression::Composite {
+                    type_: reference_type(value_type),
+                    fields: vec![],
+                };
+                let reference = self.temporary("reference");
+                out.push(GoStatement::Define {
+                    names: vec![reference.clone()],
+                    values: vec![GoExpression::Address(Box::new(empty))],
+                });
+                let initial = call(values.remove(0), vec![identifier_expression(&reference)]);
+                out.push(GoStatement::Assign {
+                    targets: vec![field(identifier_expression(&reference), "Value")],
+                    values: vec![initial],
+                });
+                self.deliver(identifier_expression(&reference), result, sink, out)
+            }
             Foreign::ReferenceRead => {
                 let value = field(values.remove(0), "Value");
                 self.deliver(value, result, sink, out)

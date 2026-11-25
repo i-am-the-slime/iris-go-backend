@@ -42,6 +42,8 @@ where
             (Monotype::Erased(_), Monotype::Opaque) => self.array_boxes.erased_values_leave = true,
             _ => {}
         }
+        let from = self.opaque_when_uninhabited(from)?;
+        let to = self.opaque_when_uninhabited(to)?;
         if from == to || (self.same_go_type(from, to)? && !self.performs_differently(from, to)) {
             return Ok(value);
         }
@@ -451,11 +453,19 @@ where
     }
 
     /// Whether a recursive newtype unfolds through newtypes alone back to
-    /// itself, as `Data.Void` does. Unfolding it never reaches another
-    /// representation, so a coercion stops at its named empty struct.
+    /// itself, as `Data.Void` does.
     fn is_uninhabited(&mut self, data: &DataType) -> GoResult<bool> {
         let unfolded = self.unfold(data)?;
         self.unfolds_only_to_newtypes(data, unfolded)
+    }
+
+    fn opaque_when_uninhabited(&mut self, monotype: MonotypeId) -> GoResult<MonotypeId> {
+        match self.monotypes.get(monotype).clone() {
+            Monotype::Recursive(data) if self.is_uninhabited(&data)? => {
+                Ok(self.monotypes.intern(Monotype::Opaque))
+            }
+            _ => Ok(monotype),
+        }
     }
 
     pub(super) fn canonical(&mut self, monotype: MonotypeId) -> GoResult<MonotypeId> {
@@ -1104,6 +1114,13 @@ where
         out: &mut Vec<GoStatement>,
     ) -> GoResult<GoExpression> {
         match self.coerce(value, from, to, out) {
+            Err(GoError::Unsupported {
+                state: UnsupportedState::Construct { construct }, ..
+            }) if construct == UNRELATED_TYPES && self.is_unit(from) => {
+                let type_ = self.go_type(to)?;
+                let allocated = call(identifier_expression("new"), vec![GoExpression::Type(type_)]);
+                Ok(GoExpression::Unary { operator: "*", operand: Box::new(allocated) })
+            }
             Err(GoError::Unsupported {
                 state: UnsupportedState::Construct { construct }, ..
             }) if construct == UNRELATED_TYPES => {

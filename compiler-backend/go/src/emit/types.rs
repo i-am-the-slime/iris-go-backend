@@ -128,8 +128,7 @@ where
         self.homes.insert(name.clone(), data.file_id);
         self.recursive_names.insert(data.clone(), name.clone());
         if self.unfolds_only_to_newtypes(data, unfolded)? {
-            // `newtype X = X X` has no values; nothing reads the empty struct.
-            let type_ = GoType::EmptyStruct;
+            let type_ = GoType::Any;
             let line = self.data_line(data)?;
             let member_lines = vec![];
             let declaration = GoDeclaration::Type { name: name.clone(), type_, line, member_lines };
