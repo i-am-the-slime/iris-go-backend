@@ -575,9 +575,7 @@ where
             Unified::Success
         }
 
-        (Type::String(t1_kind, t1_value), Type::String(t2_kind, t2_value))
-            if t1_kind == t2_kind && t1_value == t2_value =>
-        {
+        (Type::String(_, t1_value), Type::String(_, t2_value)) if t1_value == t2_value => {
             Unified::Success
         }
 
