@@ -139,6 +139,7 @@ fn owned_files<'n>(stem: &str, names: &[&'n str]) -> Vec<&'n str> {
 pub enum Forward {
     /// `p0.Method(p1, …)`: a method of its first parameter.
     Method(String),
+    MethodOfCopy(String),
     /// `Function(p0, p1, …)`: another function of its package, of the same signature.
     Function(String),
 }
@@ -202,8 +203,13 @@ fn method_forwarder(function: &Header, value_receivers: &[&str]) -> Option<Forwa
         .split(',')
         .filter_map(|entry| leading_identifier(entry.trim_start()))
         .all(|parameter| mentions_word(receiver_type, parameter));
-    let addressable = receiver_type.starts_with('*') || value_receivers.contains(&method);
-    (forwarded && typed_by_receiver && addressable).then(|| Forward::Method(method.to_string()))
+    if !(forwarded && typed_by_receiver) {
+        return None;
+    }
+    match receiver_type.starts_with('*') || value_receivers.contains(&method) {
+        true => Some(Forward::Method(method.to_string())),
+        false => Some(Forward::MethodOfCopy(method.to_string())),
+    }
 }
 
 fn function_forwarder(function: &Header, headers: &[Header]) -> Option<Forward> {
@@ -423,6 +429,7 @@ func Longer[A any](ref *ioref[A]) A {
                 ("ReadIORefImpl".to_string(), Forward::Method("Load".to_string())),
                 ("WriteIORefImpl".to_string(), Forward::Method("Store".to_string())),
                 ("SizeImpl".to_string(), Forward::Method("Size".to_string())),
+                ("ByPointer".to_string(), Forward::MethodOfCopy("Grow".to_string())),
             ]
         );
     }
