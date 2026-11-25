@@ -192,6 +192,13 @@ where
             };
             rewrite.declaration(declaration);
         }
+        NestedResults {
+            shapes: &shapes,
+            zeros: &zeros,
+            converters: &mut converters,
+            functions: FxHashMap::default(),
+        }
+        .flatten(declarations, &conventions);
         let mut wanted: Vec<((String, Conversion), String)> = converters.into_iter().collect();
         wanted.sort_by(|left, right| left.1.cmp(&right.1));
         for ((shape, conversion), placeholder) in wanted {
@@ -265,7 +272,11 @@ where
                 Some(failure) => failure.clone(),
                 None => {
                     let base = match &left_go {
-                        GoType::Named(name) => name.rsplit('.').next().unwrap_or(name).to_string(),
+                        GoType::Named(name) if name == "int32" => "Int".into(),
+                        GoType::Named(name) if name == "float64" => "Number".into(),
+                        GoType::Named(name) => {
+                            crate::naming::capitalise(name.rsplit('.').next().unwrap_or(name))
+                        }
                         GoType::String => "String".into(),
                         GoType::Int => "Int".into(),
                         GoType::Float64 => "Number".into(),
@@ -549,9 +560,7 @@ impl Conventions {
                 .iter()
                 .enumerate()
                 .filter_map(|(index, (_, type_))| match type_ {
-                    GoType::Named(shape)
-                        if shapes.get(shape).is_some_and(|shape| !shape.shares_field()) =>
-                    {
+                    GoType::Named(shape) if shapes.contains_key(shape) => {
                         Some((index, shape.clone()))
                     }
                     _ => None,
@@ -604,6 +613,7 @@ impl Conventions {
             slots.retain(|index, _| {
                 survey.candidates.get(&parameters[*index].0).is_some_and(Candidate::splits)
             });
+            unmark_sides(body, &|_| false);
         }
         chosen.retain(|_, slots| !slots.is_empty());
         chosen
@@ -947,6 +957,8 @@ struct Candidate {
     joins: bool,
     /// Whether it is used in a way the two locals can't stand for.
     escapes: bool,
+    /// The two locals of the last `EFromResults(value, err)` it holds.
+    results: Option<(String, String)>,
 }
 
 impl Candidate {
@@ -959,13 +971,15 @@ impl Candidate {
             read_after_early_return: false,
             joins: true,
             escapes: false,
+            results: None,
         }
     }
 
-    /// Whether the local becomes two: it holds a call's two results, or it joins branches.
+    /// Whether the local becomes two: it holds a call's two results, joins branches or changes,
+    /// as a fold's accumulator does.
     fn splits(&self) -> bool {
         let stays_known = !(self.reassigned && self.read_after_early_return);
-        let worth_it = self.calls > 0 || self.joins;
+        let worth_it = self.calls > 0 || self.joins || self.reassigned;
         !self.escapes && stays_known && worth_it
     }
 }
@@ -1010,17 +1024,6 @@ impl Rewrite<'_> {
                 self.choose_splits(body, own.as_deref(), &surveyed);
                 self.locals.extend(parameters.iter().map(|(parameter, _)| parameter.clone()));
                 *body = self.block(std::mem::take(body), own.as_deref());
-                for (index, parameter, shape) in split_parameters.into_iter().rev() {
-                    let split = self.parameter_split(&parameter, &shape, body);
-                    let shape = &self.shapes[&shape];
-                    parameters.splice(
-                        index..=index,
-                        [
-                            (split.value, shape.right.clone()),
-                            (split.failure, shape.failure_type()),
-                        ],
-                    );
-                }
                 if let Some(own) = &own {
                     *result = Some(self.shapes[own].results());
                 }
@@ -1031,7 +1034,16 @@ impl Rewrite<'_> {
                         }
                     }
                 }
+                for (index, parameter, shape) in split_parameters.into_iter().rev() {
+                    let split = self.parameter_split(&parameter, &shape, body);
+                    let shape = &self.shapes[&shape];
+                    parameters.splice(
+                        index..=index,
+                        [(split.value, shape.right.clone()), (split.failure, shape.failure_type())],
+                    );
+                }
                 self.tidy(body);
+                self.split_nested(body);
             }
             GoDeclaration::Variable { value, .. } => {
                 let taken = std::mem::replace(value, nil());
@@ -1039,6 +1051,18 @@ impl Rewrite<'_> {
             }
             _ => {}
         }
+    }
+
+    /// Splits again the value locals that hold an `Either` themselves, for `Either e1 (Either e2
+    /// a)`, until none is left.
+    fn split_nested(&mut self, body: &mut Vec<GoStatement>) {
+        if self.splits.values().any(|split| self.holds_either(split)) {
+            split_locals_again(body, self.shapes, self.zeros, self.converters, &mut self.names);
+        }
+    }
+
+    fn holds_either(&self, split: &Split) -> bool {
+        matches!(&self.shapes[&split.shape].right, GoType::Named(name) if self.shapes.contains_key(name))
     }
 
     /// The two parameters a split parameter becomes. Where the body still wants the `Either`, it
@@ -1101,8 +1125,13 @@ impl Rewrite<'_> {
         chosen.sort_by(|left, right| left.0.cmp(&right.0));
         for (local, candidate) in chosen {
             let shape = &self.shapes[&candidate.shape];
-            let value = super::inlining::fresh(&shape.value_name, &mut self.names);
-            let failure = super::inlining::fresh(&format!("err{NUMBERED}"), &mut self.names);
+            let (value, failure) = match &candidate.results {
+                Some(results) if candidate.calls == 1 && !candidate.reassigned => results.clone(),
+                _ => (
+                    super::inlining::fresh(&shape.value_name, &mut self.names),
+                    super::inlining::fresh(&format!("err{NUMBERED}"), &mut self.names),
+                ),
+            };
             if !candidate.reassigned {
                 self.reusable_failures.insert(failure.clone(), format!("{:?}", shape.left));
             }
@@ -1110,6 +1139,8 @@ impl Rewrite<'_> {
             self.failure_types.insert(failure.clone(), shape.failure.clone());
             self.splits.insert(local, Split { shape: candidate.shape, value, failure });
         }
+        let splits = &self.splits;
+        unmark_sides(body, &|local| splits.contains_key(local));
     }
 
     fn block(&mut self, statements: Vec<GoStatement>, own: Option<&str>) -> Vec<GoStatement> {
@@ -1158,6 +1189,27 @@ impl Rewrite<'_> {
             {
                 let source = values.pop().expect("invariant violated: one value");
                 self.store(&split, source, false, out);
+            }
+            GoStatement::Assign { targets, values }
+                if targets.len() == values.len()
+                    && targets.len() > 1
+                    && targets.iter().any(|target| self.split_target(target).is_some()) =>
+            {
+                let mut stored_targets = Vec::with_capacity(targets.len() + 1);
+                let mut stored_values = Vec::with_capacity(values.len() + 1);
+                for (target, value) in targets.into_iter().zip(values) {
+                    let Some(split) = self.split_target(&target) else {
+                        stored_targets.push(self.expression(target));
+                        stored_values.push(self.expression(value));
+                        continue;
+                    };
+                    let (value, failure) = self.passed_apart(value, &split.shape);
+                    stored_targets.push(identifier_expression(&split.value));
+                    stored_targets.push(identifier_expression(&split.failure));
+                    stored_values.push(value);
+                    stored_values.push(failure);
+                }
+                out.push(GoStatement::Assign { targets: stored_targets, values: stored_values });
             }
             GoStatement::Return(Some(value)) if let Some(own) = own => {
                 let returned = self.returned(value, own);
@@ -1286,6 +1338,22 @@ impl Rewrite<'_> {
         let shape = &self.shapes[&split.shape];
         let value = identifier_expression(&split.value);
         let failure = identifier_expression(&split.failure);
+        if let Some((_, joined_value, joined_failure)) = joined_results(&source) {
+            if (&joined_value, &joined_failure) != (&split.value, &split.failure) {
+                let values = vec![
+                    identifier_expression(&joined_value),
+                    identifier_expression(&joined_failure),
+                ];
+                out.push(match declare {
+                    true => GoStatement::Define {
+                        names: vec![split.value.clone(), split.failure.clone()],
+                        values,
+                    },
+                    false => GoStatement::Assign { targets: vec![value, failure], values },
+                });
+            }
+            return;
+        }
         if let Some(source) = self.fallible_call(source.clone()) {
             out.push(match declare {
                 true => GoStatement::Define {
@@ -1337,14 +1405,23 @@ impl Rewrite<'_> {
                     values: vec![self.failure(field, shape)],
                 });
             }
+            (false, false) if self.holds_either(split) => {
+                out.push(GoStatement::Assign { targets: vec![value], values: vec![field] });
+                out.push(GoStatement::Assign {
+                    targets: vec![failure],
+                    values: vec![shape.no_failure()],
+                });
+            }
             (false, false) => out.push(GoStatement::Assign {
                 targets: vec![value, failure],
                 values: vec![field, shape.no_failure()],
             }),
-            (true, false) => out.push(GoStatement::Assign {
-                targets: vec![failure],
-                values: vec![self.failure(field, shape)],
-            }),
+            (true, false) => {
+                let stored = self.failure(field, shape);
+                if stored != failure {
+                    out.push(GoStatement::Assign { targets: vec![failure], values: vec![stored] });
+                }
+            }
         }
     }
 
@@ -1490,12 +1567,26 @@ impl Rewrite<'_> {
         out
     }
 
+    fn split_target(&self, target: &GoExpression) -> Option<Split> {
+        match target.unattributed() {
+            GoExpression::Identifier(local) => self.splits.get(local).cloned(),
+            _ => None,
+        }
+    }
+
     /// An `Either` passed to a split parameter, as its value and its failure.
-    fn passed_apart(&mut self, argument: GoExpression, shape: &str) -> (GoExpression, GoExpression) {
+    fn passed_apart(
+        &mut self,
+        argument: GoExpression,
+        shape: &str,
+    ) -> (GoExpression, GoExpression) {
         let either = &self.shapes[shape];
         if let GoExpression::Identifier(local) = argument.unattributed() {
             if let Some(split) = self.splits.get(local) {
-                return (identifier_expression(&split.value), identifier_expression(&split.failure));
+                return (
+                    identifier_expression(&split.value),
+                    identifier_expression(&split.failure),
+                );
             }
             let right = GoExpression::Field {
                 value: Box::new(argument.clone()),
@@ -1553,13 +1644,7 @@ impl Rewrite<'_> {
     }
 
     fn converter(&mut self, shape: &str, conversion: Conversion) -> String {
-        let key = (shape.to_string(), conversion);
-        if let Some(name) = self.converters.get(&key) {
-            return name.clone();
-        }
-        let placeholder = format!("\u{0}{shape}{}", conversion.suffix());
-        self.converters.insert(key, placeholder.clone());
-        placeholder
+        converter(self.converters, shape, conversion)
     }
 
     fn expression(&mut self, value: GoExpression) -> GoExpression {
@@ -1569,10 +1654,17 @@ impl Rewrite<'_> {
                     && let Some(split) = self.splits.get(local)
                 {
                     let shape = &self.shapes[&split.shape];
-                    if name == shape.right_field {
+                    let side = match read_side(&name) {
+                        Some((left, _)) => Some(left),
+                        None if shape.shares_field() => None,
+                        None if name == shape.right_field => Some(false),
+                        None if name == shape.left_field => Some(true),
+                        None => None,
+                    };
+                    if side == Some(false) {
                         return identifier_expression(&split.value);
                     }
-                    if name == shape.left_field {
+                    if side == Some(true) {
                         return GoExpression::Field {
                             value: Box::new(identifier_expression(&split.failure)),
                             name: LEFT.into(),
@@ -1726,7 +1818,9 @@ fn merged_call(
     let arguments = |statement: &GoStatement| match statement {
         GoStatement::Return(Some(call)) | GoStatement::Expression(call) => {
             match call.unattributed() {
-                GoExpression::Call { function, arguments } => Some((function.clone(), arguments.clone())),
+                GoExpression::Call { function, arguments } => {
+                    Some((function.clone(), arguments.clone()))
+                }
                 _ => None,
             }
         }
@@ -1740,9 +1834,7 @@ fn merged_call(
     {
         return None;
     }
-    let is = |argument: &GoExpression, name: &str| {
-        matches!(argument.unattributed(), GoExpression::Identifier(found) if found == name)
-    };
+    let is = |argument: &GoExpression, name: &str| matches!(argument.unattributed(), GoExpression::Identifier(found) if found == name);
     let mut index = 0;
     let mut passed = false;
     while index < merged.len() {
@@ -1770,6 +1862,452 @@ fn merged_call(
         GoStatement::Return(_) => GoStatement::Return(Some(call)),
         _ => GoStatement::Expression(call),
     })
+}
+
+/// The name a converter is called by until it is declared.
+fn converter(
+    converters: &mut FxHashMap<(String, Conversion), String>,
+    shape: &str,
+    conversion: Conversion,
+) -> String {
+    converters
+        .entry((shape.to_string(), conversion))
+        .or_insert_with(|| format!("\u{0}{shape}{}", conversion.suffix()))
+        .clone()
+}
+
+/// The functions returning `Either e1 (Either e2 a)` return `(A, E2Failure, E1Failure)`, and the
+/// calls that keep both results take the three apart, so that the inner `Either` can be split as
+/// the outer one is.
+struct NestedResults<'n> {
+    shapes: &'n FxHashMap<String, EitherShape>,
+    zeros: &'n Zeros,
+    converters: &'n mut FxHashMap<(String, Conversion), String>,
+    /// By function, its outer and inner `Either` types.
+    functions: FxHashMap<String, (String, String)>,
+}
+
+impl NestedResults<'_> {
+    fn flatten(&mut self, declarations: &mut [GoDeclaration], conventions: &Conventions) {
+        for (function, outer) in &conventions.functions {
+            if let GoType::Named(inner) = &self.shapes[outer].right
+                && self.shapes.contains_key(inner)
+            {
+                self.functions.insert(function.clone(), (outer.clone(), inner.clone()));
+            }
+        }
+        loop {
+            let mut uses =
+                NestedUses { functions: &mut self.functions, owner: None, changed: false };
+            for declaration in declarations.iter_mut() {
+                if let GoDeclaration::Written { source, .. } = declaration {
+                    let written: Vec<String> = uses
+                        .functions
+                        .keys()
+                        .filter(|name| source.contains(name.as_str()))
+                        .cloned()
+                        .collect();
+                    for name in written {
+                        uses.functions.remove(&name);
+                        uses.changed = true;
+                    }
+                }
+                uses.owner = match declaration {
+                    GoDeclaration::Function { name, .. } => Some(name.clone()),
+                    _ => None,
+                };
+                go_traversal::declaration(&mut uses, declaration);
+            }
+            if !uses.changed {
+                break;
+            }
+        }
+        if self.functions.is_empty() {
+            return;
+        }
+        for declaration in declarations.iter_mut() {
+            let mut names = declaration.all_names();
+            let GoDeclaration::Function { name, result, body, .. } = declaration else { continue };
+            let own = self.functions.get(name.as_str()).cloned();
+            if let Some((outer, inner)) = &own {
+                let (outer, inner) = (&self.shapes[outer], &self.shapes[inner]);
+                *result = Some(GoType::Results(vec![
+                    inner.right.clone(),
+                    inner.failure_type(),
+                    outer.failure_type(),
+                ]));
+            }
+            let mut changed = false;
+            *body = self.block(std::mem::take(body), own.as_ref(), &mut names, &mut changed);
+            if changed {
+                split_locals_again(body, self.shapes, self.zeros, self.converters, &mut names);
+            }
+        }
+    }
+
+    fn block(
+        &mut self,
+        statements: Vec<GoStatement>,
+        own: Option<&(String, String)>,
+        names: &mut FxHashSet<String>,
+        changed: &mut bool,
+    ) -> Vec<GoStatement> {
+        let mut out = Vec::with_capacity(statements.len());
+        for statement in statements {
+            self.statement(statement, own, names, changed, &mut out);
+        }
+        out
+    }
+
+    fn statement(
+        &mut self,
+        statement: GoStatement,
+        own: Option<&(String, String)>,
+        names: &mut FxHashSet<String>,
+        changed: &mut bool,
+        out: &mut Vec<GoStatement>,
+    ) {
+        match statement {
+            GoStatement::Define { names: defined, values }
+                if defined.len() == 2
+                    && let Some((_, inner)) = self.called(&values) =>
+            {
+                *changed = true;
+                let (kept, failure) = (defined[0].clone(), defined[1].clone());
+                let (value, inner_failure) = self.fresh(&inner, names);
+                out.push(GoStatement::Define {
+                    names: vec![value.clone(), inner_failure.clone(), failure],
+                    values,
+                });
+                if kept != "_" {
+                    let joined = self.joined(&inner, &value, &inner_failure);
+                    out.push(GoStatement::Define { names: vec![kept], values: vec![joined] });
+                }
+            }
+            GoStatement::Assign { targets, values }
+                if targets.len() == 2
+                    && let Some((_, inner)) = self.called(&values) =>
+            {
+                *changed = true;
+                let kept = match targets[0].unattributed() {
+                    GoExpression::Identifier(kept) => kept.clone(),
+                    _ => unreachable!("invariant violated: a call's results go to locals"),
+                };
+                let (value, inner_failure) = self.fresh(&inner, names);
+                let shape = &self.shapes[&inner];
+                if kept != "_" {
+                    out.push(GoStatement::Variable {
+                        name: value.clone(),
+                        type_: shape.right.clone(),
+                        value: None,
+                    });
+                    out.push(GoStatement::Variable {
+                        name: inner_failure.clone(),
+                        type_: shape.failure_type(),
+                        value: None,
+                    });
+                }
+                let failure = targets[1].clone();
+                out.push(GoStatement::Assign {
+                    targets: vec![
+                        identifier_expression(&value),
+                        identifier_expression(&inner_failure),
+                        failure,
+                    ],
+                    values,
+                });
+                if kept != "_" {
+                    let joined = self.joined(&inner, &value, &inner_failure);
+                    out.push(GoStatement::Assign {
+                        targets: vec![identifier_expression(&kept)],
+                        values: vec![joined],
+                    });
+                }
+            }
+            GoStatement::Return(Some(value)) if let Some((outer, inner)) = own => {
+                let (outer, inner) = (outer.clone(), inner.clone());
+                self.returned(value, &outer, &inner, names, out);
+            }
+            GoStatement::If { condition, then, otherwise } => out.push(GoStatement::If {
+                condition,
+                then: self.block(then, own, names, changed),
+                otherwise: self.block(otherwise, own, names, changed),
+            }),
+            GoStatement::Switch { value, cases, default } => out.push(GoStatement::Switch {
+                value,
+                cases: cases
+                    .into_iter()
+                    .map(|case| GoCase {
+                        values: case.values,
+                        body: self.block(case.body, own, names, changed),
+                        line: case.line,
+                    })
+                    .collect(),
+                default: default.map(|default| GoDefault {
+                    covers: default.covers,
+                    body: self.block(default.body, own, names, changed),
+                    line: default.line,
+                }),
+            }),
+            GoStatement::IfAssert { name, value, type_, then } => out.push(GoStatement::IfAssert {
+                name,
+                value,
+                type_,
+                then: self.block(then, own, names, changed),
+            }),
+            GoStatement::Loop(body) => {
+                out.push(GoStatement::Loop(self.block(body, own, names, changed)))
+            }
+            GoStatement::LabeledLoop { label, body } => out.push(GoStatement::LabeledLoop {
+                label,
+                body: self.block(body, own, names, changed),
+            }),
+            GoStatement::Range { index, element, iterable, body } => out.push(GoStatement::Range {
+                index,
+                element,
+                iterable,
+                body: self.block(body, own, names, changed),
+            }),
+            GoStatement::Counting { variable, start, end, body } => {
+                out.push(GoStatement::Counting {
+                    variable,
+                    start,
+                    end,
+                    body: self.block(body, own, names, changed),
+                })
+            }
+            GoStatement::CountingDown { variable, start, body } => {
+                out.push(GoStatement::CountingDown {
+                    variable,
+                    start,
+                    body: self.block(body, own, names, changed),
+                })
+            }
+            statement => out.push(statement),
+        }
+    }
+
+    /// The `return` of a function returning a nested `Either`, returning its three results.
+    fn returned(
+        &mut self,
+        value: GoExpression,
+        outer: &str,
+        inner: &str,
+        names: &mut FxHashSet<String>,
+        out: &mut Vec<GoStatement>,
+    ) {
+        if self.called(std::slice::from_ref(&value)).is_some_and(|(called, _)| called == outer) {
+            out.push(GoStatement::Return(Some(value)));
+            return;
+        }
+        let (kept, failure) = match value {
+            GoExpression::Results(results) if results.len() == 2 => {
+                let mut results = results.into_iter();
+                let kept = results.next().expect("invariant violated: two results");
+                (kept, results.next().expect("invariant violated: two results"))
+            }
+            value => {
+                let (kept, failure) = self.fresh(outer, names);
+                out.push(GoStatement::Define {
+                    names: vec![kept.clone(), failure.clone()],
+                    values: vec![value],
+                });
+                (identifier_expression(&kept), identifier_expression(&failure))
+            }
+        };
+        let shape = &self.shapes[inner];
+        let apart = match kept.unattributed() {
+            GoExpression::Composite { fields, .. } if fields.is_empty() => {
+                Some((self.zeros.zero(&shape.right), shape.no_failure()))
+            }
+            value => shape.construction(value).map(|(left, field)| {
+                let side = if left { &shape.left } else { &shape.right };
+                let field = field.unwrap_or_else(|| self.zeros.zero(side));
+                match left {
+                    true => (self.zeros.zero(&shape.right), shape.failed_with(field)),
+                    false => (field, shape.no_failure()),
+                }
+            }),
+        };
+        let (value, inner_failure) = match apart {
+            Some(apart) => apart,
+            None => {
+                let (value, inner_failure) = self.fresh(inner, names);
+                let results = converter(self.converters, inner, Conversion::Results);
+                out.push(GoStatement::Define {
+                    names: vec![value.clone(), inner_failure.clone()],
+                    values: vec![call(identifier_expression(&results), vec![kept])],
+                });
+                (identifier_expression(&value), identifier_expression(&inner_failure))
+            }
+        };
+        out.push(GoStatement::Return(Some(GoExpression::Results(vec![
+            value,
+            inner_failure,
+            failure,
+        ]))));
+    }
+
+    /// The function returning a nested `Either` that the one value calls, with its inner type.
+    fn called(&self, values: &[GoExpression]) -> Option<(String, String)> {
+        let [GoExpression::Call { function, .. }] = values else {
+            let [value] = values else { return None };
+            let GoExpression::Attributed { value, .. } = value else { return None };
+            return self.called(std::slice::from_ref(value.as_ref()));
+        };
+        let GoExpression::Identifier(name) = function.unattributed() else { return None };
+        self.functions.get(name).cloned()
+    }
+
+    /// Names for the value and failure of an `Either` of the type.
+    fn fresh(&self, shape: &str, names: &mut FxHashSet<String>) -> (String, String) {
+        let value = super::inlining::fresh(&self.shapes[shape].value_name, names);
+        let failure = super::inlining::fresh(&format!("err{NUMBERED}"), names);
+        (value, failure)
+    }
+
+    fn joined(&mut self, shape: &str, value: &str, failure: &str) -> GoExpression {
+        let from_results = converter(self.converters, shape, Conversion::FromResults);
+        call(
+            identifier_expression(&from_results),
+            vec![identifier_expression(value), identifier_expression(failure)],
+        )
+    }
+}
+
+/// Drops the functions returning a nested `Either` that the code uses other than by calling them
+/// and keeping both results, or returning them from another such function.
+struct NestedUses<'n> {
+    functions: &'n mut FxHashMap<String, (String, String)>,
+    /// The top-level function whose own body the code is in, outside function literals.
+    owner: Option<String>,
+    changed: bool,
+}
+
+impl NestedUses<'_> {
+    fn arguments(&mut self, value: &mut GoExpression) {
+        match value {
+            GoExpression::Attributed { value, .. } => self.arguments(value),
+            GoExpression::Call { arguments, .. } => {
+                arguments.iter_mut().for_each(|argument| self.expression(argument))
+            }
+            value => self.expression(value),
+        }
+    }
+
+    fn called(&self, value: &GoExpression) -> Option<String> {
+        let GoExpression::Call { function, .. } = value.unattributed() else { return None };
+        let GoExpression::Identifier(name) = function.unattributed() else { return None };
+        self.functions.contains_key(name).then(|| name.clone())
+    }
+}
+
+impl Walk for NestedUses<'_> {
+    fn statement(&mut self, statement: &mut GoStatement) {
+        match statement {
+            GoStatement::Define { names, values }
+                if self.owner.is_some()
+                    && names.len() == 2
+                    && values.len() == 1
+                    && self.called(&values[0]).is_some() =>
+            {
+                self.arguments(&mut values[0]);
+            }
+            GoStatement::Assign { targets, values }
+                if self.owner.is_some()
+                    && targets.len() == 2
+                    && values.len() == 1
+                    && matches!(targets[0].unattributed(), GoExpression::Identifier(_))
+                    && self.called(&values[0]).is_some() =>
+            {
+                self.arguments(&mut values[0]);
+            }
+            GoStatement::Expression(value) if self.called(value).is_some() => {
+                self.arguments(value);
+            }
+            GoStatement::Return(Some(value)) if let Some(called) = self.called(value) => {
+                let outer = &self.functions[&called].0;
+                let returned_as_is = self
+                    .owner
+                    .as_ref()
+                    .and_then(|owner| self.functions.get(owner))
+                    .is_some_and(|(owner_outer, _)| owner_outer == outer);
+                if !returned_as_is {
+                    self.functions.remove(&called);
+                    self.changed = true;
+                }
+                self.arguments(value);
+            }
+            statement => go_traversal::statement(self, statement),
+        }
+    }
+
+    fn expression(&mut self, value: &mut GoExpression) {
+        match value {
+            GoExpression::Function { .. } => {
+                let owner = self.owner.take();
+                go_traversal::expression(self, value);
+                self.owner = owner;
+            }
+            GoExpression::Identifier(name) => {
+                if self.functions.remove(name.as_str()).is_some() {
+                    self.changed = true;
+                }
+            }
+            value => go_traversal::expression(self, value),
+        }
+    }
+}
+
+/// Splits the locals of a rewritten body that still hold an `Either`, again while the value
+/// locals that brings hold one themselves.
+fn split_locals_again(
+    body: &mut Vec<GoStatement>,
+    shapes: &FxHashMap<String, EitherShape>,
+    zeros: &Zeros,
+    converters: &mut FxHashMap<(String, Conversion), String>,
+    names: &mut FxHashSet<String>,
+) {
+    let none = Conventions::default();
+    for _ in 0..4 {
+        let mut inner = Rewrite {
+            shapes,
+            conventions: &none,
+            callable: FxHashMap::default(),
+            zeros,
+            locals: FxHashSet::default(),
+            converters: &mut *converters,
+            names: std::mem::take(names),
+            splits: FxHashMap::default(),
+            reusable_failures: FxHashMap::default(),
+            failure_names: FxHashSet::default(),
+            failure_types: FxHashMap::default(),
+        };
+        inner.choose_splits(body, None, &[]);
+        if !inner.splits.is_empty() {
+            *body = inner.block(std::mem::take(body), None);
+            inner.tidy(body);
+        }
+        let nested = inner.splits.values().any(|split| inner.holds_either(split));
+        *names = std::mem::take(&mut inner.names);
+        if !nested {
+            break;
+        }
+    }
+}
+
+/// `EFromResults(value, err)` of two locals, with the `Either` type it builds.
+fn joined_results(value: &GoExpression) -> Option<(String, String, String)> {
+    let GoExpression::Call { function, arguments } = value.unattributed() else { return None };
+    let GoExpression::Identifier(converter) = function.unattributed() else { return None };
+    let shape = converter.strip_prefix('\u{0}')?.strip_suffix(Conversion::FromResults.suffix())?;
+    let [value, failure] = arguments.as_slice() else { return None };
+    let (GoExpression::Identifier(value), GoExpression::Identifier(failure)) =
+        (value.unattributed(), failure.unattributed())
+    else {
+        return None;
+    };
+    Some((shape.to_string(), value.clone(), failure.clone()))
 }
 
 /// The body after a directive naming the line, when there is one.
@@ -2191,9 +2729,90 @@ struct Survey<'s> {
     split_parameters: &'s FxHashMap<String, FxHashMap<usize, String>>,
     binders: &'s FxHashMap<String, usize>,
     candidates: FxHashMap<String, Candidate>,
-    /// The candidates known to hold a `Left` (`true`) or a `Right` where the code is, and whether
-    /// an `if` that returned before tells.
-    facts: Vec<(String, bool, bool)>,
+    /// What the code knows about the candidates where it is.
+    facts: Vec<Fact>,
+}
+
+/// That a candidate holds a `Left` or a `Right` where the code is.
+struct Fact {
+    local: String,
+    left: bool,
+    /// Whether an `if` that returned before tells.
+    early: bool,
+    /// Whether a statement since assigned the candidate, so that it no longer holds.
+    stale: bool,
+}
+
+/// Marks a read of the field both sides of an `Either Int Int` share as one of the `Left` or the
+/// `Right`, for the rewrite.
+const SIDE_MARK: char = '\u{1}';
+
+fn marked_side(field: &str, left: bool) -> String {
+    format!("{SIDE_MARK}{}{field}", if left { 'L' } else { 'R' })
+}
+
+/// The side a marked field read reads, `true` for the `Left`, and the field.
+fn read_side(field: &str) -> Option<(bool, &str)> {
+    let rest = field.strip_prefix(SIDE_MARK)?;
+    Some((rest.starts_with('L'), &rest[1..]))
+}
+
+/// Unmarks the shared field reads of the locals that stay `Either` structs.
+fn unmark_sides(body: &mut [GoStatement], kept: &impl Fn(&str) -> bool) {
+    for statement in body.iter_mut() {
+        go_traversal::each_expression_in_statement(statement, |expression| {
+            if let GoExpression::Field { value, name } = expression
+                && let Some((_, field)) = read_side(name)
+                && let GoExpression::Identifier(local) = value.unattributed()
+                && !kept(local)
+            {
+                *name = field.to_string();
+            }
+        });
+    }
+}
+
+/// The branches of one statement: each starts from what held before it, and after the statement
+/// a fact holds only if no branch assigned its candidate.
+struct Branches {
+    before: Vec<bool>,
+    after: Vec<bool>,
+}
+
+impl Branches {
+    fn start(survey: &Survey<'_>) -> Branches {
+        let before: Vec<bool> = survey.facts.iter().map(|fact| fact.stale).collect();
+        Branches { after: before.clone(), before }
+    }
+
+    fn enter(&self, survey: &mut Survey<'_>) {
+        for (fact, stale) in survey.facts.iter_mut().zip(&self.before) {
+            fact.stale = *stale;
+        }
+    }
+
+    fn leave(&mut self, survey: &Survey<'_>) {
+        for (stale, fact) in self.after.iter_mut().zip(&survey.facts) {
+            *stale |= fact.stale;
+        }
+    }
+
+    fn end(self, survey: &mut Survey<'_>) {
+        for (fact, stale) in survey.facts.iter_mut().zip(&self.after) {
+            fact.stale = *stale;
+        }
+    }
+}
+
+/// The locals the statements assign to, in loops and branches too.
+fn assigned_in(body: &mut [GoStatement]) -> FxHashSet<String> {
+    let mut assigned = FxHashSet::default();
+    crate::syntax::statements_names(body, &mut |name| {
+        if let Name::Written(name) = name {
+            assigned.insert(name.clone());
+        }
+    });
+    assigned
 }
 
 impl Survey<'_> {
@@ -2206,14 +2825,42 @@ impl Survey<'_> {
                 && terminates(then)
                 && let Some((local, left)) = self.tag_test(condition)
             {
-                self.facts.push((local, !left, true));
+                self.facts.push(Fact { local, left: !left, early: true, stale: false });
             }
         }
         self.facts.truncate(known);
     }
 
+    fn candidate_target(&self, target: &GoExpression) -> Option<String> {
+        match target.unattributed() {
+            GoExpression::Identifier(local) if self.candidates.contains_key(local) => {
+                Some(local.clone())
+            }
+            _ => None,
+        }
+    }
+
+    /// The tag test a condition starts with, `local.Tag == tag && …`, which holds wherever the
+    /// whole condition does.
+    fn leading_tag_test(&self, condition: &GoExpression) -> Option<(String, bool)> {
+        match condition.unattributed() {
+            GoExpression::Binary { operator: "&&", left, .. } => self.leading_tag_test(left),
+            condition => self.tag_test(condition),
+        }
+    }
+
+    /// Forgets what the code knew about the candidate.
+    fn assigned(&mut self, local: &str) {
+        for fact in self.facts.iter_mut().filter(|fact| fact.local == local) {
+            fact.stale = true;
+        }
+    }
+
     /// The `Either` type of a value a local is defined as, when it can be split.
     fn source_shape(&self, value: &GoExpression) -> Option<String> {
+        if let Some((shape, _, _)) = joined_results(value) {
+            return self.shapes.contains_key(&shape).then_some(shape);
+        }
         match value.unattributed() {
             GoExpression::Call { function, .. } => match function.unattributed() {
                 GoExpression::Identifier(name) => self.callable.get(name).cloned(),
@@ -2229,8 +2876,7 @@ impl Survey<'_> {
     }
 
     fn consider(&mut self, local: &str, shape: String, joins: bool) {
-        let shares_field = self.shapes[&shape].left_field == self.shapes[&shape].right_field;
-        if self.binders.get(local) != Some(&1) || shares_field {
+        if self.binders.get(local) != Some(&1) {
             return;
         }
         self.candidates.insert(
@@ -2242,6 +2888,7 @@ impl Survey<'_> {
                 read_after_early_return: false,
                 joins,
                 escapes: false,
+                results: None,
             },
         );
     }
@@ -2269,9 +2916,11 @@ impl Survey<'_> {
             false => None,
         };
         let is_construction = construction.is_some();
+        let joined = joined_results(value);
         let candidate = self.candidates.get_mut(local).expect("invariant violated: a candidate");
         if is_call {
             candidate.calls += 1;
+            candidate.results = joined.map(|(_, value, failure)| (value, failure));
             self.expression(value);
             return;
         } else if !is_construction {
@@ -2335,6 +2984,32 @@ impl Survey<'_> {
                     candidate.reassigned = true;
                 }
                 self.source(&target, &mut values[0]);
+                self.assigned(&target);
+            }
+            GoStatement::Assign { targets, values }
+                if targets.len() == values.len()
+                    && targets.len() > 1
+                    && targets.iter().any(|target| self.candidate_target(target).is_some()) =>
+            {
+                let mut stored = vec![];
+                for (target, value) in targets.iter_mut().zip(values.iter_mut()) {
+                    let Some(local) = self.candidate_target(target) else {
+                        self.expression(target);
+                        self.expression(value);
+                        continue;
+                    };
+                    let shape = self.candidates[&local].shape.clone();
+                    let constructs = self.shapes[&shape].construction(value).is_some();
+                    let candidate =
+                        self.candidates.get_mut(&local).expect("invariant violated: a candidate");
+                    candidate.reassigned = true;
+                    candidate.escapes |= !constructs;
+                    self.source(&local, value);
+                    stored.push(local);
+                }
+                for local in stored {
+                    self.assigned(&local);
+                }
             }
             GoStatement::Return(Some(value))
                 if let GoExpression::Identifier(local) = value.unattributed()
@@ -2366,48 +3041,94 @@ impl Survey<'_> {
                     candidate.escapes = true;
                 }
                 let mut seen_left = false;
+                let mut branches = Branches::start(self);
                 for (case, side) in cases.iter_mut().zip(&sides) {
                     let side = side.unwrap_or(false);
                     seen_left |= side;
+                    branches.enter(self);
                     self.with_fact(&local, side, |survey| survey.block(&mut case.body, own));
+                    branches.leave(self);
                 }
                 if let Some(default) = default {
+                    branches.enter(self);
                     self.with_fact(&local, !seen_left, |survey| {
                         survey.block(&mut default.body, own)
                     });
+                    branches.leave(self);
                 }
+                branches.end(self);
             }
             GoStatement::If { condition, then, otherwise }
                 if let Some((local, left)) = self.tag_test(condition) =>
             {
+                let mut branches = Branches::start(self);
+                branches.enter(self);
                 self.with_fact(&local, left, |survey| survey.block(then, own));
+                branches.leave(self);
+                branches.enter(self);
                 self.with_fact(&local, !left, |survey| survey.block(otherwise, own));
+                branches.leave(self);
+                branches.end(self);
+            }
+            GoStatement::If { condition, then, otherwise }
+                if let Some((local, left)) = self.leading_tag_test(condition) =>
+            {
+                self.expression(condition);
+                let mut branches = Branches::start(self);
+                branches.enter(self);
+                self.with_fact(&local, left, |survey| survey.block(then, own));
+                branches.leave(self);
+                branches.enter(self);
+                self.block(otherwise, own);
+                branches.leave(self);
+                branches.end(self);
             }
             statement => {
-                struct Inner<'a, 's>(&'a mut Survey<'s>, Option<&'a str>);
+                struct Inner<'a, 's> {
+                    survey: &'a mut Survey<'s>,
+                    own: Option<&'a str>,
+                    branches: Branches,
+                }
                 impl Walk for Inner<'_, '_> {
                     fn expression(&mut self, value: &mut GoExpression) {
-                        self.0.expression(value);
+                        self.survey.expression(value);
                     }
                     fn block(&mut self, body: &mut Vec<GoStatement>) {
-                        self.0.block(body, self.1);
+                        self.branches.enter(self.survey);
+                        self.survey.block(body, self.own);
+                        self.branches.leave(self.survey);
                     }
                 }
-                go_traversal::statement(&mut Inner(self, own), statement);
+                if let GoStatement::Loop(body)
+                | GoStatement::LabeledLoop { body, .. }
+                | GoStatement::Range { body, .. }
+                | GoStatement::Counting { body, .. }
+                | GoStatement::CountingDown { body, .. } = &mut *statement
+                {
+                    for local in assigned_in(body) {
+                        self.assigned(&local);
+                    }
+                }
+                let branches = Branches::start(self);
+                let mut inner = Inner { survey: self, own, branches };
+                go_traversal::statement(&mut inner, statement);
+                let Inner { branches, .. } = inner;
+                branches.end(self);
             }
         }
     }
 
     fn with_fact(&mut self, local: &str, left: bool, visit: impl FnOnce(&mut Self)) {
-        self.facts.push((local.to_string(), left, false));
+        self.facts.push(Fact { local: local.to_string(), left, early: false, stale: false });
         visit(self);
         self.facts.pop();
     }
 
-    /// Whether the local holds a `Left` where the code is, and whether an early return tells.
-    fn known_left(&self, local: &str) -> Option<bool> {
-        let (_, left, early) = self.facts.iter().rev().find(|(name, _, _)| name == local)?;
-        left.then_some(*early)
+    /// Whether the local holds a `Left` (`true`) or a `Right` where the code is, and whether an
+    /// early return tells.
+    fn known_side(&self, local: &str) -> Option<(bool, bool)> {
+        let fact = self.facts.iter().rev().find(|fact| fact.local == local)?;
+        (!fact.stale).then_some((fact.left, fact.early))
     }
 
     /// The candidate whose tag the value reads.
@@ -2446,11 +3167,20 @@ impl Survey<'_> {
             {
                 let local = local.clone();
                 let shape = &self.shapes[&self.candidates[&local].shape];
-                let left_read = (*name == shape.left_field).then(|| self.known_left(&local));
+                let known = self.known_side(&local);
+                let shared = shape.shares_field() && *name == shape.left_field;
+                let left_read = *name == shape.left_field;
+                let right_read = *name == shape.right_field;
                 let Some(candidate) = self.candidates.get_mut(&local) else { return };
-                match left_read {
-                    None if *name == shape.right_field => {}
-                    Some(Some(early)) => candidate.read_after_early_return |= early,
+                match known {
+                    Some((true, early)) if left_read => {
+                        candidate.read_after_early_return |= early;
+                        if shared {
+                            *name = marked_side(name, true);
+                        }
+                    }
+                    Some((false, _)) if right_read && shared => *name = marked_side(name, false),
+                    _ if right_read && !shared => {}
                     _ => candidate.escapes = true,
                 }
             }
@@ -2478,6 +3208,12 @@ impl Survey<'_> {
                         (None, None) => self.expression(argument),
                     }
                 }
+            }
+            GoExpression::Binary { operator: "&&", left, right }
+                if let Some((local, side)) = self.leading_tag_test(left) =>
+            {
+                self.expression(left);
+                self.with_fact(&local, side, |survey| survey.expression(right));
             }
             value if self.tag_test(value).is_some() => {}
             value => self.children(value),
