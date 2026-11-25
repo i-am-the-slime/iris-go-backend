@@ -172,6 +172,9 @@ where
             }
             (Monotype::Erased(_) | Monotype::Opaque, _) => {
                 let canonical = self.canonical(to)?;
+                if self.converts_to(&value, canonical) {
+                    return self.coerce(value, canonical, to, out);
+                }
                 let type_ = self.go_type(canonical)?;
                 let value = GoExpression::TypeAssertion { value: Box::new(value), type_ };
                 self.coerce(value, canonical, to, out)
@@ -600,6 +603,12 @@ where
             }
         }
         Ok(())
+    }
+
+    fn converts_to(&self, value: &GoExpression, to: MonotypeId) -> bool {
+        let GoExpression::Call { function, .. } = value.unattributed() else { return false };
+        let GoExpression::Identifier(name) = function.unattributed() else { return false };
+        self.converters.iter().any(|((_, result), converter)| *result == to && converter == name)
     }
 
     fn converter(&mut self, from: MonotypeId, to: MonotypeId) -> GoResult<String> {

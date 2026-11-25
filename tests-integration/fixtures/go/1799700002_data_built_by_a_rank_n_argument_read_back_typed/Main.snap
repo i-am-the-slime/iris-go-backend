@@ -1,0 +1,80 @@
+---
+source: tests-integration/src/fixtures.rs
+---
+// main.go
+package main
+
+import journal "fixture/Journal_ffi"
+
+type PairInt struct {
+	Second string
+	First  int32
+}
+
+type Await struct {
+	Await func(int32) any
+}
+
+type Emit struct {
+	Second any
+	First  int32
+}
+
+type AwaitInt struct {
+	Await func(int32) int32
+}
+
+func convert(value AwaitInt) *Await {
+	return &Await{Await: func(coerced int32) any {
+		return value.Await(coerced)
+	}}
+}
+
+type EmitString struct {
+	Second string
+	First  int32
+}
+
+func convert2(value EmitString) *Emit {
+	return &Emit{First: value.First, Second: value.Second}
+}
+
+type Pair struct {
+	First  any
+	Second any
+	Origin any
+}
+
+func convert3(value PairInt) *Pair {
+	return &Pair{First: value.First, Second: value.Second, Origin: value}
+}
+
+func convert4(value *Pair) PairInt {
+	if original, ok := value.Origin.(PairInt); ok {
+		return original
+	}
+	return PairInt{First: value.First.(int32), Second: value.Second.(string)}
+}
+
+func main() {
+	times := journal.Count()
+	journal.Log(mainGo(PairInt{First: times, Second: "apples"})(struct{}{}))
+}
+
+func mainGo(pair PairInt) func(struct{}) string {
+	times := pair.First
+	name := pair.Second
+	if times > 0 {
+		scrutinee := convert(AwaitInt{Await: func(value int32) int32 {
+			return value - 1
+		}})
+		scrutinee2 := convert2(EmitString{First: times, Second: name + "!"})
+		pair2 := convert4(convert3(PairInt{First: scrutinee.Await(scrutinee2.First).(int32), Second: scrutinee2.Second.(string)}))
+		return func(_ struct{}) string {
+			return mainGo(pair2)(struct{}{})
+		}
+	}
+	return func(_ struct{}) string {
+		return name
+	}
+}
