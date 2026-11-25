@@ -17,7 +17,17 @@ impl<Q> Emitter<'_, '_, '_, Q>
 where
     Q: checking::ExternalQueries,
 {
+    /// The Go type of a monotype, with the function types that return two results doing so once
+    /// the program has chosen them.
     pub(super) fn go_type(&mut self, monotype: MonotypeId) -> GoResult<GoType> {
+        let mut type_ = self.spelled_go_type(monotype)?;
+        if !self.lowered_function_types.is_empty() {
+            super::fallible::lower_type(&mut type_, &self.lowered_function_types);
+        }
+        Ok(type_)
+    }
+
+    fn spelled_go_type(&mut self, monotype: MonotypeId) -> GoResult<GoType> {
         Ok(match self.monotypes.get(monotype).clone() {
             Monotype::Int => GoType::Named("int32".into()),
             Monotype::Int64 => GoType::Named("int64".into()),

@@ -1,6 +1,7 @@
 use std::sync::Arc;
 
 use checking::core::Type;
+use checking::evidence::EvidenceVarId;
 use checking::{TypeId, tree};
 use smol_str::{SmolStr, format_smolstr};
 
@@ -350,17 +351,28 @@ where
         scope: &mut Scope,
         id: tree::ExpressionId,
     ) -> GoResult<Expression> {
-        self.with_floating_scope(|specializer| specializer.floated_application(scope, id))
+        self.evidenced_application(scope, id, vec![])
+    }
+
+    pub(super) fn evidenced_application(
+        &mut self,
+        scope: &mut Scope,
+        id: tree::ExpressionId,
+        applied: Vec<(EvidenceVarId, TypeId)>,
+    ) -> GoResult<Expression> {
+        self.with_floating_scope(|specializer| specializer.floated_application(scope, id, applied))
     }
 
     fn floated_application(
         &mut self,
         scope: &mut Scope,
         id: tree::ExpressionId,
+        applied: Vec<(EvidenceVarId, TypeId)>,
     ) -> GoResult<Expression> {
         let module = Arc::clone(&scope.module);
-        let spine::ApplicationSpine { head, arguments, trailing: evidence, instantiations } =
+        let spine::ApplicationSpine { head, arguments, trailing: mut evidence, instantiations } =
             self.application_spine(scope, id);
+        evidence.extend(applied);
         let mut result_instantiations = instantiations;
         self.context.types.close(&mut result_instantiations);
         let trailing = self.trailing_dictionaries(scope, &evidence)?;

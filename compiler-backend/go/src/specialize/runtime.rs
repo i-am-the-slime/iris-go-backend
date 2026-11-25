@@ -260,17 +260,82 @@ where
             Definition::Value { .. } => self.describe_definition(key.definition.clone())?,
         };
         for promotion in promotions {
-            let (file_id, item) = self.class_head(&definition, promotion.constraint)?;
-            let class = self.context.type_name(file_id, item)?;
-            let note = format!(
-                "{definition} takes its {class} dictionary at run time, because polymorphic \
-                 recursion reaches it at ever larger types; only this definition is slower"
-            );
-            if !self.runtime_dictionary_notes.contains(&note) {
-                self.runtime_dictionary_notes.push(note);
-            }
+            self.note_growing_evidence(&definition, promotion.constraint)?;
         }
         Ok(())
+    }
+
+    fn note_growing_evidence(&mut self, definition: &str, constraint: TypeId) -> GoResult<()> {
+        let (file_id, item) = self.class_head(definition, constraint)?;
+        let class = self.context.type_name(file_id, item)?;
+        let note = format!(
+            "{definition} takes its {class} dictionary at run time, because polymorphic \
+             recursion reaches it at ever larger types; only this definition is slower"
+        );
+        if !self.runtime_dictionary_notes.contains(&note) {
+            self.runtime_dictionary_notes.push(note);
+        }
+        Ok(())
+    }
+
+    pub(super) fn promote_growing_local_evidence(
+        &mut self,
+        scope: &mut Scope,
+        local: &str,
+        abstractions: &[DeclarationAbstraction],
+        (requested, terminated): (&[TypeId], &[TypeId]),
+        mut dictionaries: Vec<Dictionary>,
+    ) -> GoResult<Vec<Dictionary>> {
+        let mut grown = Substitution::default();
+        let mut erased = scope.substitution.clone();
+        let mut instantiated = scope.substitution.clone();
+        let mut constraints = vec![];
+        let mut types = requested.iter().zip(terminated.iter());
+        for abstraction in abstractions {
+            match abstraction {
+                DeclarationAbstraction::Type { binder, rigid } => {
+                    let Some((&requested_type, &terminated_type)) = types.next() else { break };
+                    let mut names = vec![self.context.queries.lookup_forall_binder(*binder).name];
+                    if let Type::Rigid(name, _, _) = self.context.types.lookup(*rigid) {
+                        names.push(*name);
+                    }
+                    for name in names {
+                        if requested_type != terminated_type {
+                            grown.insert(name, terminated_type);
+                        }
+                        erased.insert(name, terminated_type);
+                        instantiated.insert(name, requested_type);
+                    }
+                }
+                DeclarationAbstraction::Evidence { constraint, .. } => {
+                    constraints.push(*constraint)
+                }
+                DeclarationAbstraction::Argument => {}
+            }
+        }
+        if grown.is_empty() {
+            return Ok(dictionaries);
+        }
+        let definition = format!("the local {local} of {}", scope.definition);
+        for (position, &constraint) in constraints.iter().enumerate() {
+            let grown_constraint = self.context.types.substitute(constraint, &grown);
+            if !self.context.types.contains_erased(grown_constraint) {
+                continue;
+            }
+            let Some(slot) = dictionaries.get_mut(position) else {
+                return Err(self.unsupported(scope, UnsupportedState::GrowingEvidence));
+            };
+            let erased_constraint = self.context.types.substitute(constraint, &erased);
+            let runtime = RuntimeDictionary { constraint: erased_constraint, value: None };
+            let dictionary = std::mem::replace(slot, Dictionary::Runtime(runtime));
+            let constraint = self.context.types.substitute(constraint, &instantiated);
+            let value = self.runtime_value(scope, dictionary, constraint, erased_constraint)?;
+            let value = Some(Box::new(value));
+            dictionaries[position] =
+                Dictionary::Runtime(RuntimeDictionary { constraint: erased_constraint, value });
+            self.note_growing_evidence(&definition, constraint)?;
+        }
+        Ok(dictionaries)
     }
 
     pub(super) fn note_floating_at_run_time(

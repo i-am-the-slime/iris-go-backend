@@ -14,12 +14,16 @@
 //! }
 //! ```
 //!
-//! Function literals, foreign functions and the values data structures keep go on passing
-//! `Either` structs. Where one meets the other, a function for each `Either` type converts:
+//! Function values do the same where only generated code makes and calls them, as `values`
+//! says. Foreign functions and the function types they fix go on passing `Either` structs.
+//! Where one meets the other, a function for each `Either` type converts:
 //! `EitherTFromResults(f(x))` builds the struct from a call's results, and `EitherTResults(e)`
 //! takes a struct apart for a `return`.
 
+mod values;
+
 use rustc_hash::{FxHashMap, FxHashSet};
+pub(super) use values::lower_type;
 
 use super::locals::NUMBERED;
 use super::packages::Spelling;
@@ -166,14 +170,29 @@ where
         &mut self,
         declarations: &mut Vec<GoDeclaration>,
     ) -> GoResult<()> {
-        let shapes = self.either_shapes()?;
+        let mut shapes = self.either_shapes()?;
         if shapes.is_empty() {
             return Ok(());
         }
-        let conventions = Conventions::choose(declarations, &shapes);
-        if conventions.is_empty() {
-            return Ok(());
+        self.lowered_function_types = values::lower_function_values(
+            declarations,
+            &mut self.type_declarations,
+            &shapes,
+            self.foreign_packages,
+        );
+        let lowered = !self.lowered_function_types.is_empty();
+        for shape in shapes.values_mut() {
+            lower_type(&mut shape.left, &self.lowered_function_types);
+            lower_type(&mut shape.right, &self.lowered_function_types);
         }
+        let marks: FxHashMap<String, String> = match lowered {
+            true => shapes
+                .keys()
+                .map(|shape| (format!("{}{shape}", values::CALL_MARK), shape.clone()))
+                .collect(),
+            false => FxHashMap::default(),
+        };
+        let conventions = Conventions::choose(declarations, &shapes, marks);
         let zeros = Zeros::new(&self.type_declarations);
         let mut converters: FxHashMap<(String, Conversion), String> = FxHashMap::default();
         for (position, declaration) in declarations.iter_mut().enumerate() {
@@ -189,6 +208,7 @@ where
                 reusable_failures: FxHashMap::default(),
                 failure_names: FxHashSet::default(),
                 failure_types: FxHashMap::default(),
+                constructions: FxHashMap::default(),
             };
             rewrite.declaration(declaration);
         }
@@ -199,6 +219,7 @@ where
             functions: FxHashMap::default(),
         }
         .flatten(declarations, &conventions);
+        values::unmark(declarations);
         let mut wanted: Vec<((String, Conversion), String)> = converters.into_iter().collect();
         wanted.sort_by(|left, right| left.1.cmp(&right.1));
         for ((shape, conversion), placeholder) in wanted {
@@ -427,14 +448,17 @@ struct Conventions {
     /// by function and position: the function is only ever called, each call passes a
     /// construction or a local, and its body only asks the parameter for its tag and fields.
     split_parameters: FxHashMap<String, FxHashMap<usize, String>>,
+    /// The marks of calls of function values that return two results, with their `Either` type.
+    marks: FxHashMap<String, String>,
 }
 
 impl Conventions {
     fn choose(
         declarations: &mut [GoDeclaration],
         shapes: &FxHashMap<String, EitherShape>,
+        marks: FxHashMap<String, String>,
     ) -> Conventions {
-        let mut conventions = Conventions::default();
+        let mut conventions = Conventions { marks, ..Conventions::default() };
         let mut binders: Vec<FxHashMap<String, usize>> = vec![];
         for declaration in declarations.iter_mut() {
             let mut counts: FxHashMap<String, usize> = FxHashMap::default();
@@ -619,16 +643,10 @@ impl Conventions {
         chosen
     }
 
-    fn is_empty(&self) -> bool {
-        self.functions.is_empty()
-            && self.split_parameters.is_empty()
-            && self.parameters.is_empty()
-            && self.locals.iter().all(FxHashMap::is_empty)
-    }
-
     /// What calls in the declaration at the position return two results, by name.
     fn callable(&self, position: usize, declaration: &GoDeclaration) -> FxHashMap<String, String> {
         let mut callable = self.functions.clone();
+        callable.extend(self.marks.iter().map(|(mark, shape)| (mark.clone(), shape.clone())));
         if let GoDeclaration::Function { name, parameters, .. } = declaration
             && let Some(slots) = self.parameters.get(name)
         {
@@ -785,6 +803,15 @@ impl Walk for Check<'_> {
                 self.block(body);
                 self.returning_results.pop();
             }
+            GoExpression::Call { function, arguments }
+                if let GoExpression::Identifier(head) = function.unattributed()
+                    && head.starts_with(values::LITERAL_MARK) =>
+            {
+                for argument in arguments.iter_mut() {
+                    self.literal_returns_results = true;
+                    self.expression(argument);
+                }
+            }
             GoExpression::Call { function, arguments } => {
                 let head = match function.unattributed() {
                     GoExpression::Identifier(name) => Some(name.clone()),
@@ -848,6 +875,69 @@ impl Walk for Check<'_> {
             value => go_traversal::expression(self, value),
         }
     }
+}
+
+/// The locals of a declaration that one `:=` defines as a construction of an `Either` and nothing
+/// assigns, whose field is a constant or such a local itself.
+fn unchanging_constructions(
+    declaration: &mut GoDeclaration,
+    shapes: &FxHashMap<String, EitherShape>,
+) -> FxHashMap<String, GoExpression> {
+    let mut binders: FxHashMap<String, usize> = FxHashMap::default();
+    let mut written: FxHashSet<String> = FxHashSet::default();
+    declaration.for_each_name_mut(&mut |name| match name {
+        Name::Binder(name) => *binders.entry(name.clone()).or_default() += 1,
+        Name::Written(name) => {
+            written.insert(name.clone());
+        }
+        Name::Reference(_) => {}
+    });
+    let unchanging = |name: &str| binders.get(name) == Some(&1) && !written.contains(name);
+    let mut constructions = FxHashMap::default();
+    let GoDeclaration::Function { body, .. } = declaration else { return constructions };
+    every_block(body, &mut |block| {
+        for statement in block.iter() {
+            let GoStatement::Define { names, values } = statement else { continue };
+            let ([local], [value]) = (names.as_slice(), values.as_slice()) else { continue };
+            let GoExpression::Composite { type_: GoType::Named(either), .. } = value.unattributed()
+            else {
+                continue;
+            };
+            let Some((_, field)) = shapes.get(either).and_then(|shape| shape.construction(value))
+            else {
+                continue;
+            };
+            let constant = match field.as_ref().map(GoExpression::unattributed) {
+                None => true,
+                Some(GoExpression::Identifier(name)) => unchanging(name),
+                Some(field) => is_constant(field),
+            };
+            if constant && unchanging(local) {
+                constructions.insert(local.clone(), value.clone());
+            }
+        }
+    });
+    constructions
+}
+
+/// A literal, or a struct of literals.
+fn is_constant(value: &GoExpression) -> bool {
+    match value.unattributed() {
+        GoExpression::Integer(_)
+        | GoExpression::Float(_)
+        | GoExpression::String(_)
+        | GoExpression::Rune(_)
+        | GoExpression::Boolean(_) => true,
+        GoExpression::Composite { fields, .. } => fields.iter().all(|(label, field)| {
+            is_constant(field) || (label.as_deref() == Some("Tag") && is_tag(field))
+        }),
+        _ => false,
+    }
+}
+
+/// A constant naming a constructor, such as `StepIntEnd`, which no code assigns.
+fn is_tag(value: &GoExpression) -> bool {
+    matches!(value.unattributed(), GoExpression::Identifier(_) | GoExpression::Qualified { .. })
 }
 
 /// Renames every reference to a global.
@@ -1001,10 +1091,14 @@ struct Rewrite<'r> {
     failure_names: FxHashSet<String>,
     /// The failure struct of each failure local.
     failure_types: FxHashMap<String, String>,
+    /// The locals that hold one construction of an `Either` of a value that never changes, such
+    /// as a stream's shared `Right(End)`, with the construction.
+    constructions: FxHashMap<String, GoExpression>,
 }
 
 impl Rewrite<'_> {
     fn declaration(&mut self, declaration: &mut GoDeclaration) {
+        self.constructions = unchanging_constructions(declaration, self.shapes);
         match declaration {
             GoDeclaration::Function { name, parameters, result, body } => {
                 let own = self.conventions.functions.get(name.as_str()).cloned();
@@ -1044,12 +1138,51 @@ impl Rewrite<'_> {
                 }
                 self.tidy(body);
                 self.split_nested(body);
+                self.drop_unread_constructions(body);
             }
             GoDeclaration::Variable { value, .. } => {
                 let taken = std::mem::replace(value, nil());
                 *value = self.expression(taken);
             }
             _ => {}
+        }
+    }
+
+    /// Leaves out the unchanging constructions that the returns they stood for no longer read,
+    /// and the locals that only they read.
+    fn drop_unread_constructions(&self, body: &mut Vec<GoStatement>) {
+        let mut names: FxHashSet<String> = FxHashSet::default();
+        for (local, built) in &self.constructions {
+            names.insert(local.clone());
+            if let GoExpression::Composite { fields, .. } = built.unattributed() {
+                for (_, field) in fields {
+                    if let GoExpression::Identifier(name) = field.unattributed() {
+                        names.insert(name.clone());
+                    }
+                }
+            }
+        }
+        loop {
+            let read = reads(body, &names);
+            let unread: FxHashSet<String> =
+                names.iter().filter(|name| !read.contains_key(*name)).cloned().collect();
+            let mut dropped = false;
+            every_block(body, &mut |block| {
+                block.retain(|statement| match statement {
+                    GoStatement::Define { names, values }
+                        if let ([local], [value]) = (names.as_slice(), values.as_slice())
+                            && unread.contains(local)
+                            && is_plain(value) =>
+                    {
+                        dropped = true;
+                        false
+                    }
+                    _ => true,
+                });
+            });
+            if !dropped {
+                return;
+            }
         }
     }
 
@@ -1451,6 +1584,15 @@ impl Rewrite<'_> {
         if let Some(call) = self.fallible_call(value.clone()) {
             return GoStatement::Return(Some(call));
         }
+        let value = match value.unattributed() {
+            GoExpression::Identifier(local)
+                if let Some(built) = self.constructions.get(local)
+                    && shape.construction(built).is_some() =>
+            {
+                built.clone()
+            }
+            _ => value,
+        };
         if let Some((left, field)) = shape.construction(&value) {
             let side = if left { &shape.left } else { &shape.right };
             let field = match field {
@@ -1682,6 +1824,18 @@ impl Rewrite<'_> {
                     left: Box::new(self.expression(*left)),
                     right: Box::new(self.expression(*right)),
                 }
+            }
+            GoExpression::Call { function, mut arguments }
+                if let GoExpression::Identifier(head) = function.unattributed()
+                    && head.starts_with(values::LITERAL_MARK)
+                    && arguments.len() == 1 =>
+            {
+                let GoExpression::Identifier(head) = function.unattributed() else {
+                    unreachable!("invariant violated: a mark")
+                };
+                let shape = head[values::LITERAL_MARK.len()..].to_string();
+                let literal = arguments.pop().expect("invariant violated: one literal");
+                self.converted_literal(literal, &shape)
             }
             GoExpression::Call { function, arguments }
                 if let Some(shape) = self.fallible_call_name(&function) =>
@@ -2289,6 +2443,7 @@ fn split_locals_again(
             reusable_failures: FxHashMap::default(),
             failure_names: FxHashSet::default(),
             failure_types: FxHashMap::default(),
+            constructions: FxHashMap::default(),
         };
         inner.choose_splits(body, None, &[]);
         if !inner.splits.is_empty() {
@@ -3208,6 +3363,15 @@ impl Survey<'_> {
                 }
             }
             GoExpression::Function { body, .. } => self.block(body, None),
+            GoExpression::Call { function, arguments }
+                if let GoExpression::Identifier(head) = function.unattributed()
+                    && let Some(shape) = head.strip_prefix(values::LITERAL_MARK) =>
+            {
+                let shape = shape.to_string();
+                for argument in arguments.iter_mut() {
+                    self.converted_literal(argument, &shape);
+                }
+            }
             GoExpression::Call { function, arguments }
                 if let GoExpression::Identifier(head) = function.unattributed()
                     && (self.parameters.contains_key(head)

@@ -1,0 +1,43 @@
+---
+source: tests-integration/src/fixtures.rs
+---
+// Data/Maybe/maybe.go
+package maybe
+
+import "strconv"
+
+type Int int64
+
+const NoInt Int = 1 << 32
+
+func Show(maybe Int) string {
+	if maybe != NoInt {
+		return "(Just " + strconv.Itoa(int(int32(maybe))) + ")"
+	}
+	return "Nothing"
+}
+
+// main.go
+package main
+
+import (
+	"fixture/Data/Maybe"
+	arraypkg "github.com/i-am-the-slime/iris-go/array"
+	"github.com/i-am-the-slime/iris-go/console"
+	"strings"
+)
+
+var main_ = initializeMain_()
+
+func initializeMain_() []string {
+	array := arraypkg.Append([]maybe.Int{maybe.NoInt}, []maybe.Int{maybe.Int(20)})
+	mapped := make([]string, len(array))
+	for index, element := range array {
+		mapped[index] = maybe.Show(element)
+	}
+	return mapped
+}
+
+func main() {
+	console.Print("[" + strings.Join(main_, " ") + "]")
+}
