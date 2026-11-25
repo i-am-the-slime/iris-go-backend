@@ -55,7 +55,7 @@ pub fn run(config: GoConfig) -> Result<(), String> {
 
     fs::create_dir_all(&config.destination).map_err(|error| error.to_string())?;
     let module_path = go_module_path(&config.destination)?;
-    let mut foreign_packages =
+    let (mut foreign_packages, vendored) =
         vendor_foreign_packages(&snapshot, &config.destination, &module_path)?;
     if let Some(coverage) = config.line_directives {
         let directives = line_directives(&snapshot, &config.destination, coverage)?;
@@ -87,6 +87,7 @@ pub fn run(config: GoConfig) -> Result<(), String> {
     }
     let files = program.files.len();
     remove_stale_kernel_files(&config.destination, &program.files)?;
+    write_imported_packages(vendored, &program.files)?;
     for (path, source) in program.files {
         let path = config.destination.join(path);
         if let Some(directory) = path.parent() {
@@ -145,13 +146,59 @@ fn go_module_path(destination: &Path) -> Result<String, String> {
         .ok_or_else(|| format!("{} does not declare a module", go_mod.display()))
 }
 
+struct VendoredPackage {
+    directory: PathBuf,
+    import_path: String,
+    files: Vec<VendoredFile>,
+}
+
+struct VendoredFile {
+    name: std::ffi::OsString,
+    shown: String,
+    original: String,
+    source: String,
+}
+
+fn write_imported_packages(
+    vendored: Vec<VendoredPackage>,
+    files: &[(String, String)],
+) -> Result<(), String> {
+    let mut imported = vec![false; vendored.len()];
+    let mut importers: Vec<&str> = files.iter().map(|(_, source)| source.as_str()).collect();
+    while let Some(importer) = importers.pop() {
+        for (index, package) in vendored.iter().enumerate() {
+            if imported[index] || !importer.contains(&format!("\"{}\"", package.import_path)) {
+                continue;
+            }
+            imported[index] = true;
+            importers.extend(package.files.iter().map(|file| file.source.as_str()));
+        }
+    }
+    for (package, imported) in vendored.into_iter().zip(imported) {
+        if !imported {
+            if package.directory.is_dir() {
+                fs::remove_dir_all(&package.directory).map_err(|error| error.to_string())?;
+            }
+            continue;
+        }
+        fs::create_dir_all(&package.directory).map_err(|error| error.to_string())?;
+        for file in package.files {
+            fs::write(package.directory.join(&file.name), &file.source)
+                .map_err(|error| error.to_string())?;
+            copy_embedded_files(Path::new(&file.shown), &file.original, &package.directory)?;
+        }
+    }
+    Ok(())
+}
+
 /// Copies the Go files next to each source file into a package of the program, named after its
 /// module, as the JavaScript backend copies `Foo.js` beside `Foo.purs`.
 fn vendor_foreign_packages(
     snapshot: &SessionSnapshot,
     destination: &Path,
     module_path: &str,
-) -> Result<go::ForeignPackages, String> {
+) -> Result<(go::ForeignPackages, Vec<VendoredPackage>), String> {
+    let mut vendored = vec![];
     let mut modules = vec![];
     let mut structs = vec![];
     let mut sources = vec![];
@@ -168,8 +215,12 @@ fn vendor_foreign_packages(
         let module = go::module_name(&snapshot.engine, *file_id)
             .ok_or_else(|| format!("{} does not declare a module", file.path.display()))?;
         let mut source = go::ForeignSource { module: module.clone(), ..Default::default() };
-        let package = destination.join(go::ForeignPackages::package_name(&module));
-        fs::create_dir_all(&package).map_err(|error| error.to_string())?;
+        let package_name = go::ForeignPackages::package_name(&module);
+        let mut package = VendoredPackage {
+            directory: destination.join(&package_name),
+            import_path: format!("{module_path}/{package_name}"),
+            files: vec![],
+        };
         let mut texts = vec![];
         for foreign_file in foreign_files {
             let text = fs::read_to_string(&foreign_file).map_err(|error| error.to_string())?;
@@ -185,13 +236,17 @@ fn vendor_foreign_packages(
             let shown = shown_path(&foreign_file, &here);
             source.files.push(shown.clone());
             let Some(name) = foreign_file.file_name() else { continue };
-            fs::write(package.join(name), go::foreign_source(&module, &text))
-                .map_err(|error| error.to_string())?;
-            copy_embedded_files(Path::new(&shown), &text, &package)?;
+            package.files.push(VendoredFile {
+                name: name.to_os_string(),
+                shown,
+                source: go::foreign_source(&module, &text),
+                original: text.clone(),
+            });
             texts.push(text);
         }
         let texts: Vec<&str> = texts.iter().map(String::as_str).collect();
         source.opacity = go::foreign_opacity(&texts);
+        vendored.push(package);
         modules.push(module);
         sources.push(source);
     }
@@ -205,14 +260,15 @@ fn vendor_foreign_packages(
         .collect();
     let module_path = module_path.to_string();
     let line_directives = None;
-    Ok(go::ForeignPackages {
+    let foreign_packages = go::ForeignPackages {
         module_path,
         modules,
         structs,
         sources,
         source_paths,
         line_directives,
-    })
+    };
+    Ok((foreign_packages, vendored))
 }
 
 /// The path as messages show it: relative to the working directory `here` when it is inside it,
