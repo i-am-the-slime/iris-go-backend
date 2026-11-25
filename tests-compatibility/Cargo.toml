@@ -7,6 +7,7 @@ publish = false
 
 [dependencies]
 anyhow = "1"
+go = { version = "0.1.0", path = "../compiler-backend/go" }
 building = { version = "0.1.0", path = "../compiler-core/building" }
 checking = { version = "0.1.0", path = "../compiler-frontend/checking" }
 clap = { version = "4", features = ["derive"] }
