@@ -1,0 +1,212 @@
+name: Go registry sweep
+
+# Compiles every exported value of the core and Acme packages of package set 82.1.1 with the Go
+# backend and go-builds the programs. The run fails when a package or entry that passed in
+# tests-compatibility/go-sweep-baseline.tsv does not pass now. Improvements are only reported;
+# to keep them, regenerate the baseline from the run's artifacts with
+# `go_sweep classify --out <shard>... --write-baseline tests-compatibility/go-sweep-baseline.tsv`
+# and commit it.
+on:
+  schedule:
+    - cron: "17 2 * * *"
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  CARGO_TERM_COLOR: always
+  PACKAGE_SET: "82.1.1"
+  CORPUS_DIR: go-sweep-corpus
+
+jobs:
+  harness:
+    name: Build the sweep and prepare the corpus
+    permissions:
+      contents: read
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Install Rust toolchain
+        run: rustup update stable && rustup default stable
+
+      - name: Cache build artifacts
+        uses: Swatinem/rust-cache@v2.9.3
+        with:
+          cache-bin: "false"
+          prefix-key: "v1-go-sweep"
+          save-if: ${{ github.ref == 'refs/heads/main' }}
+
+      - name: Build the sweep
+        run: cargo build --release --locked -p tests-compatibility --features go-sweep --bins
+
+      - name: Restore the corpus
+        id: corpus
+        uses: actions/cache/restore@v6
+        with:
+          path: ${{ env.CORPUS_DIR }}
+          key: v1-go-sweep-corpus-${{ env.PACKAGE_SET }}-${{ hashFiles('tests-compatibility/purescript-*.txt') }}
+
+      - name: Prepare the corpus
+        if: steps.corpus.outputs.cache-hit != 'true'
+        run: |
+          target/release/tests-compatibility prepare \
+            --preset core \
+            --preset acme \
+            --package-set "$PACKAGE_SET" \
+            --registry-dir "$CORPUS_DIR/registry" \
+            --index-dir "$CORPUS_DIR/registry-index" \
+            --cache-dir "$CORPUS_DIR"
+
+      - name: Save the corpus
+        if: steps.corpus.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v6
+        with:
+          path: ${{ env.CORPUS_DIR }}
+          key: ${{ steps.corpus.outputs.cache-primary-key }}
+
+      - name: Upload the sweep
+        uses: actions/upload-artifact@v7
+        with:
+          name: go-sweep-binary
+          path: target/release/go_sweep
+          retention-days: 3
+
+  sweep:
+    name: Sweep shard ${{ matrix.shard }}/4
+    needs: harness
+    permissions:
+      contents: read
+    runs-on: ubuntu-latest
+    timeout-minutes: 300
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3, 4]
+    env:
+      IRIS_GO: ${{ github.workspace }}/iris-go-runtime
+      GOEXPERIMENT: simd
+      GOFLAGS: -buildvcs=false
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Checkout the iris-go runtime
+        uses: actions/checkout@v7
+        with:
+          repository: i-am-the-slime/iris-go
+          ref: main
+          path: iris-go-runtime
+          persist-credentials: false
+
+      - name: Install Go
+        uses: actions/setup-go@v6
+        with:
+          go-version: "1.27"
+          cache: false
+
+      - name: Download the sweep
+        uses: actions/download-artifact@v8
+        with:
+          name: go-sweep-binary
+          path: go-sweep-bin
+
+      - name: Restore the corpus
+        uses: actions/cache/restore@v6
+        with:
+          path: ${{ env.CORPUS_DIR }}
+          key: v1-go-sweep-corpus-${{ env.PACKAGE_SET }}-${{ hashFiles('tests-compatibility/purescript-*.txt') }}
+          fail-on-cache-miss: true
+
+      # The skip list names instantiations whose checking does not finish (see the list's
+      # entries); a fresh sweep would otherwise rediscover each after the check timeout.
+      - name: Compile the entries
+        run: |
+          chmod +x go-sweep-bin/go_sweep
+          mkdir -p sweep
+          cp tests-compatibility/go-sweep-skip.txt sweep/skip.txt
+          go-sweep-bin/go_sweep drive \
+            --cache "$CORPUS_DIR" \
+            --package-set "$PACKAGE_SET" \
+            --out sweep \
+            --instantiate \
+            --jobs 4 \
+            --shard "${{ matrix.shard }}/4" \
+            --timeout 600 \
+            --check-timeout 300
+
+      - name: Build the programs
+        run: go-sweep-bin/go_sweep build --out sweep --jobs 1
+
+      - name: Upload the outcomes
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: go-sweep-shard-${{ matrix.shard }}
+          path: |
+            sweep/outcomes.jsonl
+            sweep/builds.jsonl
+            sweep/skip.txt
+            sweep/go
+          if-no-files-found: warn
+          retention-days: 14
+
+  compare:
+    name: Compare with the baseline
+    needs: [harness, sweep]
+    if: always() && needs.harness.result == 'success'
+    permissions:
+      contents: read
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Download the sweep
+        uses: actions/download-artifact@v8
+        with:
+          name: go-sweep-binary
+          path: go-sweep-bin
+
+      - name: Download the outcomes
+        uses: actions/download-artifact@v8
+        with:
+          pattern: go-sweep-shard-*
+          path: shards
+
+      - name: Compare with the baseline
+        run: |
+          chmod +x go-sweep-bin/go_sweep
+          mkdir -p report
+          outs=()
+          for shard in shards/*/; do
+            outs+=(--out "$shard")
+          done
+          set -o pipefail
+          go-sweep-bin/go_sweep compare "${outs[@]}" \
+            --baseline tests-compatibility/go-sweep-baseline.tsv \
+            --report report \
+            | tee report/summary.md "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload the report
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: go-sweep-report
+          path: report
+          if-no-files-found: warn
+          retention-days: 30

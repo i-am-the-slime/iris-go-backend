@@ -6,10 +6,15 @@
 //! types (Int, Array, the empty row) where its constraints then resolve. Every program that
 //! compiles is written as a Go module and built by `go-sweep build`.
 //!
-//!   go-sweep drive  --cache <compat cache> --out <dir> [--packages a,b] [--instantiate]
-//!   go-sweep build  --out <dir> [--jobs 3]
+//!   go-sweep drive    --cache <compat cache> --out <dir> [--packages a,b | --shard k/n] [--instantiate]
+//!   go-sweep build    --out <dir> [--jobs 3]
+//!   go-sweep classify --out <dir>... [--report <dir>] [--write-baseline <file>]
+//!   go-sweep compare  --out <dir>... --baseline <file> [--report <dir>]
 //!
 //! `drive` reruns its worker after a hang or a crash, recording the entry that caused it.
+//! `compare` exits with 1 when a package or entry that passed in the baseline does not now.
+
+mod report;
 
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 use std::fs;
@@ -20,10 +25,10 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
-use anyhow::{Context as _, Result, bail};
+use anyhow::{Context as _, Result};
 use building::{QueryEngine, prim};
+use checking::core::Type;
 use checking::core::pretty::{Pretty, PrettyQueries};
-use checking::core::{ForallBinder, Type};
 use clap::{Parser, Subcommand};
 use files::{FileId, Files, ForeignFiles, ForeignSourceKind};
 use rayon::prelude::*;
@@ -42,6 +47,34 @@ enum Commands {
     Drive(WorkerArgs),
     Worker(WorkerArgs),
     Build(BuildArgs),
+    Classify(ClassifyArgs),
+    Compare(CompareArgs),
+}
+
+#[derive(clap::Args)]
+struct ResultsArgs {
+    /// Sweep output directories, one per shard.
+    #[arg(long, required = true)]
+    out: Vec<PathBuf>,
+    /// Where to write `classified.tsv` and `package-status.tsv`.
+    #[arg(long)]
+    report: Option<PathBuf>,
+}
+
+#[derive(clap::Args)]
+struct ClassifyArgs {
+    #[command(flatten)]
+    results: ResultsArgs,
+    #[arg(long)]
+    write_baseline: Option<PathBuf>,
+}
+
+#[derive(clap::Args)]
+struct CompareArgs {
+    #[command(flatten)]
+    results: ResultsArgs,
+    #[arg(long)]
+    baseline: PathBuf,
 }
 
 #[derive(clap::Args, Clone)]
@@ -55,10 +88,16 @@ struct WorkerArgs {
     /// Comma-separated packages whose modules are swept; all by default.
     #[arg(long)]
     packages: Option<String>,
+    /// `k/n`: only every n-th batch of 25 packages, starting at the k-th.
+    #[arg(long, conflicts_with = "packages", value_parser = parse_shard)]
+    shard: Option<(usize, usize)>,
     #[arg(long, default_value_t = 4)]
     jobs: usize,
     #[arg(long, default_value_t = 120)]
     timeout: u64,
+    /// Seconds one module may take to check before its instantiations are skipped.
+    #[arg(long, default_value_t = 60)]
+    check_timeout: u64,
     /// Also instantiate polymorphic values at simple types in generated modules.
     #[arg(long)]
     instantiate: bool,
@@ -107,7 +146,57 @@ fn main() -> Result<()> {
         Commands::Drive(args) => drive(args),
         Commands::Worker(args) => worker(args),
         Commands::Build(args) => build(args),
+        Commands::Classify(args) => classify(args),
+        Commands::Compare(args) => compare(args),
     }
+}
+
+fn parse_shard(value: &str) -> Result<(usize, usize), String> {
+    let parsed = value.split_once('/').and_then(|(index, count)| {
+        Some((index.parse::<usize>().ok()?, count.parse::<usize>().ok()?))
+    });
+    match parsed {
+        Some((index, count)) if 1 <= index && index <= count => Ok((index, count)),
+        _ => Err(format!("expected k/n with 1 <= k <= n, got {value}")),
+    }
+}
+
+fn classify(args: ClassifyArgs) -> Result<()> {
+    let results = classified_results(&args.results)?;
+    if let Some(path) = &args.write_baseline {
+        report::Baseline::of(&results).write(path)?;
+    }
+    for (status, count) in package_counts(&results) {
+        println!("{status}\t{count}");
+    }
+    Ok(())
+}
+
+fn compare(args: CompareArgs) -> Result<()> {
+    let results = classified_results(&args.results)?;
+    let baseline = report::Baseline::read(&args.baseline)?;
+    let comparison = report::compare(&baseline, &results);
+    print!("{}", comparison.text);
+    if comparison.regressed {
+        std::process::exit(1);
+    }
+    Ok(())
+}
+
+fn classified_results(args: &ResultsArgs) -> Result<report::Results> {
+    let results = report::load_results(&args.out)?;
+    if let Some(directory) = &args.report {
+        report::write_report(&results, directory)?;
+    }
+    Ok(results)
+}
+
+fn package_counts(results: &report::Results) -> BTreeMap<String, usize> {
+    let mut counts = BTreeMap::new();
+    for status in results.packages.values() {
+        *counts.entry(status.label().to_string()).or_default() += 1;
+    }
+    counts
 }
 
 /// Runs the worker until every entry has an outcome, isolating the entry that hangs or crashes it.
@@ -116,20 +205,32 @@ fn drive(args: WorkerArgs) -> Result<()> {
     if args.packages.is_some() {
         return drive_batch(&args);
     }
-    let set_path = args.cache.join("registry/package-sets").join(format!("{}.json", args.package_set));
+    let set_path =
+        args.cache.join("registry/package-sets").join(format!("{}.json", args.package_set));
     let set: serde_json::Value = serde_json::from_str(&fs::read_to_string(&set_path)?)?;
     let mut packages: Vec<String> = set["packages"]
         .as_object()
         .context("package set has no packages")?
         .iter()
         .filter(|(package, version)| {
-            args.cache.join("sources").join(package).join(version.as_str().unwrap_or_default()).join("src").is_dir()
+            args.cache
+                .join("sources")
+                .join(package)
+                .join(version.as_str().unwrap_or_default())
+                .join("src")
+                .is_dir()
         })
         .map(|(package, _)| package.clone())
         .collect();
     packages.sort();
-    let done: HashSet<String> = fs::read_to_string(args.out.join("batches.txt")).unwrap_or_default().lines().map(str::to_string).collect();
-    for batch in packages.chunks(25) {
+    let done: HashSet<String> = fs::read_to_string(args.out.join("batches.txt"))
+        .unwrap_or_default()
+        .lines()
+        .map(str::to_string)
+        .collect();
+    let (shard, shards) = args.shard.unwrap_or((1, 1));
+    let batches = packages.chunks(25).enumerate().filter(|(index, _)| index % shards == shard - 1);
+    for (_, batch) in batches {
         let batch = batch.join(",");
         if done.contains(&batch) {
             continue;
@@ -138,7 +239,8 @@ fn drive(args: WorkerArgs) -> Result<()> {
         let mut batch_args = args.clone();
         batch_args.packages = Some(batch.clone());
         drive_batch(&batch_args)?;
-        let mut file = fs::OpenOptions::new().create(true).append(true).open(args.out.join("batches.txt"))?;
+        let mut file =
+            fs::OpenOptions::new().create(true).append(true).open(args.out.join("batches.txt"))?;
         writeln!(file, "{batch}")?;
     }
     Ok(())
@@ -149,7 +251,10 @@ fn drive_batch(args: &WorkerArgs) -> Result<()> {
     let exe = std::env::current_exe()?;
     loop {
         let mut command = Command::new(&exe);
-        command.arg("worker").args(worker_arguments(&args)).env("RAYON_NUM_THREADS", args.jobs.to_string());
+        command
+            .arg("worker")
+            .args(worker_arguments(&args))
+            .env("RAYON_NUM_THREADS", args.jobs.to_string());
         let status = command.status()?;
         if status.success() {
             return Ok(());
@@ -158,7 +263,8 @@ fn drive_batch(args: &WorkerArgs) -> Result<()> {
         eprintln!("go-sweep: worker exited with {status}; {} unfinished entries", started.len());
         let stuck = fs::read_to_string(args.out.join("stuck.txt")).unwrap_or_default();
         if status.code() == Some(4) && !stuck.is_empty() {
-            let mut file = fs::OpenOptions::new().create(true).append(true).open(args.out.join("skip.txt"))?;
+            let mut file =
+                fs::OpenOptions::new().create(true).append(true).open(args.out.join("skip.txt"))?;
             write!(file, "{stuck}")?;
             for line in stuck.lines() {
                 if let Some(rest) = line.strip_prefix("check ") {
@@ -179,7 +285,12 @@ fn drive_batch(args: &WorkerArgs) -> Result<()> {
             let only = args.out.join("only.txt");
             fs::write(&only, format!("{entry}\n"))?;
             let mut command = Command::new(&exe);
-            command.arg("worker").args(worker_arguments(&args)).env("RAYON_NUM_THREADS", "2").arg("--only").arg(&only);
+            command
+                .arg("worker")
+                .args(worker_arguments(&args))
+                .env("RAYON_NUM_THREADS", "2")
+                .arg("--only")
+                .arg(&only);
             command.args(["--jobs", "1"]);
             let status = command.status()?;
             if !status.success() && unfinished_entries(&args.out)?.contains(&entry) {
@@ -215,6 +326,8 @@ fn worker_arguments(args: &WorkerArgs) -> Vec<String> {
         args.jobs.to_string(),
         "--timeout".into(),
         args.timeout.to_string(),
+        "--check-timeout".into(),
+        args.check_timeout.to_string(),
     ];
     if let Some(packages) = &args.packages {
         arguments.extend(["--packages".into(), packages.clone()]);
@@ -303,10 +416,20 @@ fn worker(args: WorkerArgs) -> Result<()> {
         None => None,
     };
     let done = finished_entries(&args.out)?;
-    let skipped = if only.is_some() { HashSet::new() } else { unfinished_entries(&args.out)? .into_iter().collect() };
+    let skipped = if only.is_some() {
+        HashSet::new()
+    } else {
+        unfinished_entries(&args.out)?.into_iter().collect()
+    };
 
-    *SKIPPED.lock().unwrap() = Some(fs::read_to_string(args.out.join("skip.txt")).unwrap_or_default().lines().map(str::to_string).collect());
-    watch_phases(args.out.clone());
+    *SKIPPED.lock().unwrap() = Some(
+        fs::read_to_string(args.out.join("skip.txt"))
+            .unwrap_or_default()
+            .lines()
+            .map(str::to_string)
+            .collect(),
+    );
+    watch_phases(args.out.clone(), Duration::from_secs(args.check_timeout));
     let mut loaded = loaded;
     let entries = entries(&mut loaded, selected.as_ref(), args.instantiate)?;
     let entries: Vec<Entry> = entries
@@ -373,7 +496,7 @@ fn worker(args: WorkerArgs) -> Result<()> {
             running.lock().unwrap().remove(&key);
             journal(&args.out, &format!("end {key}"));
             let n = count.fetch_add(1, Ordering::Relaxed) + 1;
-            if n % 500 == 0 {
+            if n.is_multiple_of(500) {
                 eprintln!("go-sweep: {n}/{total}");
             }
         });
@@ -463,7 +586,8 @@ fn write_program(directory: &Path, files: &[(String, String)]) -> Result<()> {
         fs::remove_dir_all(directory)?;
     }
     fs::create_dir_all(directory)?;
-    let runtime = std::env::var("IRIS_GO").unwrap_or_else(|_| "/Users/mark/Developer/iris-go".into());
+    let runtime =
+        std::env::var("IRIS_GO").unwrap_or_else(|_| "/Users/mark/Developer/iris-go".into());
     fs::write(
         directory.join("go.mod"),
         format!(
@@ -560,16 +684,23 @@ fn phase_end(key: &str) {
     PHASES.lock().unwrap().get_or_insert_default().remove(key);
 }
 
-/// Exits with 4 when checking one module takes longer than a minute, naming it in `stuck.txt`.
-fn watch_phases(out: PathBuf) {
-    std::thread::spawn(move || loop {
-        std::thread::sleep(Duration::from_secs(2));
-        let phases = PHASES.lock().unwrap();
-        let stuck: Vec<&String> = phases.iter().flatten().filter(|(_, started)| started.elapsed() > Duration::from_secs(60)).map(|(key, _)| key).collect();
-        if !stuck.is_empty() {
-            let text: String = stuck.iter().map(|key| format!("{key}\n")).collect();
-            let _ = fs::write(out.join("stuck.txt"), text);
-            std::process::exit(4);
+/// Exits with 4 when checking one module takes longer than `limit`, naming it in `stuck.txt`.
+fn watch_phases(out: PathBuf, limit: Duration) {
+    std::thread::spawn(move || {
+        loop {
+            std::thread::sleep(Duration::from_secs(2));
+            let phases = PHASES.lock().unwrap();
+            let stuck: Vec<&String> = phases
+                .iter()
+                .flatten()
+                .filter(|(_, started)| started.elapsed() > limit)
+                .map(|(key, _)| key)
+                .collect();
+            if !stuck.is_empty() {
+                let text: String = stuck.iter().map(|key| format!("{key}\n")).collect();
+                let _ = fs::write(out.join("stuck.txt"), text);
+                std::process::exit(4);
+            }
         }
     });
 }
@@ -596,7 +727,7 @@ fn entries(
                     return vec![];
                 }
                 phase_start(&key);
-                let found =                 module_candidates(&engine, package, *file_id, module, instantiate)
+                let found = module_candidates(&engine, package, *file_id, module, instantiate)
                     .unwrap_or_else(|error| {
                         eprintln!("go-sweep: {module}: {error}");
                         vec![]
@@ -622,9 +753,9 @@ fn entries(
             }
             let reference = format!("{}.{}", candidate.module, identifier(&candidate.name));
             match annotation {
-                Some(annotation) => source.push_str(&format!(
-                    "\nsweep :: {annotation}\nsweep = {reference}\n"
-                )),
+                Some(annotation) => {
+                    source.push_str(&format!("\nsweep :: {annotation}\nsweep = {reference}\n"))
+                }
                 None => source.push_str(&format!("\nsweep = {reference}\n")),
             }
             let uri = format!("file:///sweep/{}.purs", name.replace('.', "/"));
@@ -641,7 +772,11 @@ fn entries(
         .map(|&(index, variant, file_id)| {
             let candidate = &candidates[index];
             let key = format!("check {} {} {variant}", candidate.module, candidate.name);
-            if SKIPPED.lock().unwrap().as_ref().is_some_and(|skipped| skipped.contains(&key)) || SKIPPED.lock().unwrap().as_ref().is_some_and(|skipped| skipped.contains(&format!("checkmodule {}", candidate.module))) {
+            if SKIPPED.lock().unwrap().as_ref().is_some_and(|skipped| skipped.contains(&key))
+                || SKIPPED.lock().unwrap().as_ref().is_some_and(|skipped| {
+                    skipped.contains(&format!("checkmodule {}", candidate.module))
+                })
+            {
                 return (index, variant, file_id, false);
             }
             let engine = engine.snapshot();
@@ -665,7 +800,10 @@ fn entries(
     }
     for index in rejected {
         let candidate = &candidates[index];
-        eprintln!("go-sweep: monomorphic {}.{} does not check when referenced", candidate.module, candidate.name);
+        eprintln!(
+            "go-sweep: monomorphic {}.{} does not check when referenced",
+            candidate.module, candidate.name
+        );
     }
     let entries = chosen
         .into_iter()
@@ -683,7 +821,8 @@ fn entries(
             }
         })
         .collect();
-    let instantiable = candidates.iter().filter(|c| c.variants.iter().any(|v| v.0.is_some())).count();
+    let instantiable =
+        candidates.iter().filter(|c| c.variants.iter().any(|v| v.0.is_some())).count();
     eprintln!(
         "go-sweep: {} exported values, {} instantiable, {} uninstantiable",
         candidates.len(),
@@ -715,7 +854,12 @@ struct Candidate {
 /// The simple types a variant instantiates variables at, by kind.
 const VARIANTS: [[(&str, &str); 4]; 2] = [
     [("Type", "Int"), ("Type -> Type", "Array"), ("Row Type", "()"), ("Symbol", "\"a\"")],
-    [("Type", "String"), ("Type -> Type", "Effect.Effect"), ("Row Type", "()"), ("Symbol", "\"a\"")],
+    [
+        ("Type", "String"),
+        ("Type -> Type", "Effect.Effect"),
+        ("Row Type", "()"),
+        ("Symbol", "\"a\""),
+    ],
 ];
 
 fn module_candidates(
@@ -800,7 +944,13 @@ struct Renderer<'a> {
 
 impl<'a> Renderer<'a> {
     fn new(engine: &'a QueryEngine, variant: usize) -> Renderer<'a> {
-        Renderer { engine, variant, substitution: HashMap::new(), imports: BTreeSet::new(), depth: 0 }
+        Renderer {
+            engine,
+            variant,
+            substitution: HashMap::new(),
+            imports: BTreeSet::new(),
+            depth: 0,
+        }
     }
 
     /// Whether a type has no quantifier, constraint or variable once its synonyms are expanded.
@@ -811,9 +961,9 @@ impl<'a> Renderer<'a> {
     ) -> bool {
         let engine = self.engine;
         match engine.lookup_type(type_id).clone() {
-            Type::Application(function, argument)
-            | Type::Function(function, argument) => {
-                self.is_monomorphic(function, parameters) && self.is_monomorphic(argument, parameters)
+            Type::Application(function, argument) | Type::Function(function, argument) => {
+                self.is_monomorphic(function, parameters)
+                    && self.is_monomorphic(argument, parameters)
             }
             Type::KindApplication(function, _) | Type::Kinded(function, _) => {
                 self.is_monomorphic(function, parameters)
@@ -851,7 +1001,12 @@ impl<'a> Renderer<'a> {
 
     /// `precedence` 0 is a function's result or the whole type, 1 a function's argument, 2 an
     /// application's argument. `instantiable` says whether quantifiers here are instantiated.
-    fn render(&mut self, type_id: checking::TypeId, precedence: u8, instantiable: bool) -> Option<String> {
+    fn render(
+        &mut self,
+        type_id: checking::TypeId,
+        precedence: u8,
+        instantiable: bool,
+    ) -> Option<String> {
         self.depth += 1;
         if self.depth > 200 {
             return None;
@@ -861,9 +1016,15 @@ impl<'a> Renderer<'a> {
         rendered
     }
 
-    fn render_inner(&mut self, type_id: checking::TypeId, precedence: u8, instantiable: bool) -> Option<String> {
+    fn render_inner(
+        &mut self,
+        type_id: checking::TypeId,
+        precedence: u8,
+        instantiable: bool,
+    ) -> Option<String> {
         let engine = self.engine;
-        let parenthesise = |text: String, needed: bool| if needed { format!("({text})") } else { text };
+        let parenthesise =
+            |text: String, needed: bool| if needed { format!("({text})") } else { text };
         match engine.lookup_type(type_id).clone() {
             Type::Application(..) | Type::Synonym(..) => {
                 let (head, arguments) = spine(engine, type_id);
@@ -950,7 +1111,9 @@ impl<'a> Renderer<'a> {
                 self.imports.insert(module.clone());
                 Some(format!("{module}.{name}"))
             }
-            Type::Integer(value) => Some(if value < 0 { format!("({value})") } else { value.to_string() }),
+            Type::Integer(value) => {
+                Some(if value < 0 { format!("({value})") } else { value.to_string() })
+            }
             Type::String(_, literal) => {
                 let literal = engine.lookup_string_literal(literal);
                 Some(format!("{:?}", literal.to_utf8().ok()?))
@@ -959,7 +1122,11 @@ impl<'a> Renderer<'a> {
                 let row = engine.lookup_row_type(row).clone();
                 let mut fields = vec![];
                 for field in row.fields.iter() {
-                    fields.push(format!("{} :: {}", label(&field.label), self.render(field.id, 0, false)?));
+                    fields.push(format!(
+                        "{} :: {}",
+                        label(&field.label),
+                        self.render(field.id, 0, false)?
+                    ));
                 }
                 let tail = match row.tail {
                     Some(tail) => format!(" | {}", self.render(tail, 0, false)?),
@@ -1008,7 +1175,10 @@ fn hides_quantifier(engine: &QueryEngine, type_id: checking::TypeId) -> bool {
     }
 }
 
-fn spine(engine: &QueryEngine, type_id: checking::TypeId) -> (checking::TypeId, Vec<checking::TypeId>) {
+fn spine(
+    engine: &QueryEngine,
+    type_id: checking::TypeId,
+) -> (checking::TypeId, Vec<checking::TypeId>) {
     let mut arguments = vec![];
     let mut current = type_id;
     loop {

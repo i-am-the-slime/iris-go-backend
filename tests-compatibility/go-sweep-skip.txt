@@ -1,0 +1,25 @@
+check Droplet.Language.Internal.Syntax returning 0
+check Droplet.Language.Internal.Syntax table 0
+check Droplet.Language.Internal.Syntax returning 1
+check Droplet.Language.Internal.Syntax table 1
+check Pipes.Node.Stream fromReadable 0
+check Node.Stream.Object awaitFinished 0
+check Node.Stream.Object errorH 0
+check Node.Stream.Object awaitFinished 1
+check Node.Stream.Object errorH 1
+check Pipes.Node.Stream fromReadable 1
+check Pipes.Node.Stream fromWritable 0
+check Node.Stream.Object finishH 0
+check Node.Stream.Object awaitReadableOrClosed 0
+check Node.Stream.Object finishH 1
+check Node.Stream.Object awaitReadableOrClosed 1
+check Pipes.Node.Stream fromWritable 1
+check Node.Stream.Object readableH 0
+check Node.Stream.Object awaitWritableOrClosed 0
+check Node.Stream.Object readableH 1
+check Node.Stream.Object awaitWritableOrClosed 1
+check Node.Stream.Object closeH 0
+check Node.Stream.Object withErrorST 0
+checkmodule Droplet.Language.Internal.Syntax
+checkmodule Pipes.Node.Stream
+checkmodule Node.Stream.Object
