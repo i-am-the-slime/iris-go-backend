@@ -1265,7 +1265,7 @@ func ReadImplObject(a any) (*struct {
 				return foreign.JustTupleTupleStringEitherNonEmptyListForeignErrorIntInt(foreign.TupleTupleStringEitherNonEmptyListForeignErrorInt{First: xs[i], Second: i + 1})
 			}
 			return foreign.NoTupleTupleStringEitherNonEmptyListForeignErrorIntInt
-		}, 0)
+		}, int32(0))
 		object_ := object.Empty[int32]()
 		var err foreign.NonEmptyFailure
 		object_ = object.Lend(object_)

@@ -10,7 +10,7 @@ import (
 	"strings"
 )
 
-type Never struct{}
+type Never any
 
 type Step struct {
 	Impossible Never

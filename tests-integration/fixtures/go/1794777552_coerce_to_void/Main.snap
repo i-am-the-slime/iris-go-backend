@@ -34,7 +34,7 @@ func EitherFailure(either Either) StringFailure {
 // Data/Void/void.go
 package void
 
-type Void struct{}
+type Void any
 
 // main.go
 package main
@@ -62,7 +62,7 @@ func describe(argument any, err either.StringFailure) string {
 	if err.Failed {
 		return err.Left
 	}
-	return describeSpin(argument.(void.Void))
+	return describeSpin(argument)
 }
 
 func describeSpin(void void.Void) string {
