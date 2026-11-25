@@ -97,6 +97,7 @@ pub fn simplify(
         fuel: 0,
         monotypes,
         record_orders: FxHashMap::default(),
+        narrowed_records: FxHashMap::default(),
         records_settled: false,
         suspension,
         unsafely_effectful_locals: FxHashSet::default(),
@@ -160,6 +161,9 @@ struct Simplifier<'m> {
     fuel: usize,
     monotypes: &'m mut Monotypes,
     record_orders: FxHashMap<LocalId, Vec<SmolStr>>,
+    /// Records bound by an update or a coercion, which a coercion that widens them again
+    /// reads through.
+    narrowed_records: FxHashMap<LocalId, Expression>,
     records_settled: bool,
     suspension: Suspension,
     unsafely_effectful_locals: FxHashSet<LocalId>,

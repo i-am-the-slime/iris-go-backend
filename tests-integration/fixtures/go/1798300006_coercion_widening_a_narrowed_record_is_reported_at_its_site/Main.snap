@@ -1,4 +1,4 @@
 ---
 source: tests-integration/src/fixtures.rs
 ---
-Main.purs:13:14: cannot specialize Main.main: unsafeCoerce from { age } (Go Age) to { age, name } (Go AgeName) changes representation: the record { age, name } has fields that { age } lacks (name); a Go struct holds only the fields its type names, so a coercion cannot widen a record
+Main.purs:15:30: cannot specialize Main.main: unsafeCoerce from { age } (Go Age) to { age, name } (Go AgeName) changes representation: the record { age, name } has fields that { age } lacks (name); a Go struct holds only the fields its type names, so a coercion cannot widen a record
