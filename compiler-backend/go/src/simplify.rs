@@ -53,6 +53,7 @@ mod three_way;
 mod traversals;
 mod uncons;
 mod unpack;
+mod views;
 
 const INLINE_SIZE: usize = 40;
 
@@ -1163,6 +1164,8 @@ impl Simplifier<'_> {
                 }
             } else if unpack::unpackable(&binding, &body, self.monotypes) {
                 body = self.unpack(binding, body);
+            } else if views::viewable(&binding, &body) {
+                body = self.view(binding, body);
             } else {
                 kept.push(binding);
             }

@@ -1,0 +1,125 @@
+---
+source: tests-integration/src/fixtures.rs
+assertion_line: 571
+---
+// Data/Either/either.go
+package either
+
+type Either struct {
+	Right struct{}
+	Left  string
+	Tag   uint8
+}
+
+const (
+	EitherLeft = iota
+	EitherRight
+)
+
+type StringFailure struct {
+	Failed bool
+	Left   string
+}
+
+// main.go
+package main
+
+import (
+	"fixture/Data/Either"
+	journal "fixture/Journal_ffi"
+	"fixture/shared"
+	"strconv"
+)
+
+func main() {
+	sent := &shared.Ref[int32]{Value: 0}
+	ref := &shared.Ref[int32]{Value: 0}
+	ref2 := &shared.Ref[int32]{Value: 500}
+	foldPulledFPull2(sent, ref2, ref, 1000, struct{}{})
+	total := sent.Value
+	journal.Log(strconv.Itoa(int(total)))
+	sent2 := &shared.Ref[int32]{Value: 0}
+	foldPulledFPull(sent2, struct{}{})
+	none := sent2.Value
+	journal.Log(strconv.Itoa(int(none)))
+}
+
+func foldPulledFPull(ref *shared.Ref[int32], context struct{}) (struct{}, either.StringFailure) {
+	return struct{}{}, either.StringFailure{}
+}
+
+func foldPulledFPull2(ref *shared.Ref[int32], ref2 *shared.Ref[int32], ref3 *shared.Ref[int32], i int32, context struct{}) (struct{}, either.StringFailure) {
+	for {
+		i2 := ref2.Value
+		if i2 <= 0 {
+			return struct{}{}, either.StringFailure{}
+		}
+		i3 := ref3.Value
+		if i3 >= i {
+			return struct{}{}, either.StringFailure{}
+		}
+		y := i3 + 64
+		stop := min(i, y)
+		ref3.Value = stop
+		var length int32
+		if i2 < 1 {
+			length = 0
+		} else {
+			var whole int32
+			if i3 <= stop-1 {
+				whole = stop - 1 - i3 + 1
+			} else {
+				whole = i3 - (stop - 1) + 1
+			}
+			if i2 < 0 {
+				if whole+i2 < 0 {
+					length = 0
+				} else {
+					length = whole + i2
+				}
+			} else if i2 < whole {
+				length = i2
+			} else {
+				length = whole
+			}
+		}
+		var step int32
+		if i3 <= stop-1 {
+			step = 1
+		} else {
+			step = -1
+		}
+		ref2.Value = i2 - length
+		var err either.StringFailure
+		var index int32 = 0
+	foldPulledFPullFrom:
+		for {
+			if index >= 0 && index < length {
+				tripled := (i3 + index*step) * 3
+				s := ref.Value
+				s_ := s + tripled
+				ref.Value = s_
+				index += 1
+				continue
+			}
+			err = either.StringFailure{}
+			break foldPulledFPullFrom
+		}
+		if err.Failed {
+			return struct{}{}, err
+		}
+		continue
+	}
+}
+
+// shared/shared.go
+package shared
+
+type Ref[T any] struct {
+	Value T
+}
+
+type StateValue struct {
+	State int32
+	Value int32
+}

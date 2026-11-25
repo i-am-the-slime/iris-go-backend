@@ -3,10 +3,14 @@ use smol_str::SmolStr;
 use super::{Simplifier, choice, three_way};
 use crate::foreign::{Comparison, Foreign, GoPackage, Operator};
 use crate::monomorphic::{
-    Binding, Expression, ExpressionKind, Guarded, Literal, Local, LocalId, Results,
+    Alternative, Binding, Expression, ExpressionKind, Guarded, Literal, Local, LocalId, Results,
 };
 use crate::monotype::{Monotype, MonotypeId};
-use crate::purity::{is_discardable, is_trivial, runs_effect_when_applied};
+use crate::purity::{is_discardable, is_trivial, runs_effect_when_applied, size};
+
+const PUSHED_CONTINUATION_SIZE: usize = 80;
+
+const VIEWING_CONTINUATION_SIZE: usize = 320;
 
 impl Simplifier<'_> {
     pub(super) fn foreign(
@@ -311,13 +315,10 @@ impl Simplifier<'_> {
         monotype: crate::monotype::MonotypeId,
     ) -> Expression {
         if let ExpressionKind::EffectPure(value) = &action.kind
-            && is_known_construction(value)
+            && matches!(value.kind, ExpressionKind::Construct { .. })
             && cases_on(&body, local.id)
         {
-            let value = (**value).clone();
-            self.substituting_alias(&local, &value);
-            let body = super::substitute(body, local.id, &value, self.monotypes);
-            return self.expression(body);
+            return self.bind_chosen(action, local, body, monotype);
         }
         match action.kind {
             ExpressionKind::EffectPure(value)
@@ -338,7 +339,7 @@ impl Simplifier<'_> {
             }
             ExpressionKind::Let { bindings, body: inner } => {
                 let rest = self.effect_bind(*inner, local, body, monotype);
-                Expression::new(ExpressionKind::Let { bindings, body: Box::new(rest) }, monotype)
+                self.let_bindings(bindings, rest)
             }
             ExpressionKind::If { .. } | ExpressionKind::Case { .. }
                 if chooses_only_pure(&action)
@@ -354,6 +355,21 @@ impl Simplifier<'_> {
                     *value
                 });
                 self.let_bindings(vec![Binding { local, value }], body)
+            }
+            ExpressionKind::If { .. } | ExpressionKind::Case { .. }
+                if PushedContinuation::measure(&action, &body, local.id)
+                    .is_some_and(|pushed| pushed.fits()) =>
+            {
+                let mut original = Some((local, body));
+                let copied =
+                    original.clone().expect("invariant violated: the continuation is there");
+                self.push_into_choices(action, monotype, &mut |simplifier, chosen| {
+                    let (local, body) = match original.take() {
+                        Some(kept) => kept,
+                        None => simplifier.renamed_continuation(&copied),
+                    };
+                    simplifier.bind_chosen(chosen, local, body, monotype)
+                })
             }
             kind => {
                 let action = Expression::new(kind, action.monotype).located(action.position);
@@ -371,6 +387,90 @@ impl Simplifier<'_> {
                 Expression::new(kind, monotype)
             }
         }
+    }
+
+    /// `map_choices` for a continuation pushed into the choices: the lets on the way are
+    /// settled again, since the continuation may take apart what they bind.
+    fn push_into_choices(
+        &mut self,
+        expression: Expression,
+        monotype: MonotypeId,
+        chosen: &mut impl FnMut(&mut Self, Expression) -> Expression,
+    ) -> Expression {
+        match expression.kind {
+            ExpressionKind::Let { bindings, body } => {
+                let body = self.push_into_choices(*body, monotype, chosen);
+                self.let_bindings(bindings, body)
+            }
+            ExpressionKind::If { condition, then, otherwise } => {
+                let then = self.push_into_choices(*then, monotype, chosen);
+                let otherwise = self.push_into_choices(*otherwise, monotype, chosen);
+                let kind = ExpressionKind::If {
+                    condition,
+                    then: Box::new(then),
+                    otherwise: Box::new(otherwise),
+                };
+                Expression::new(kind, monotype)
+            }
+            ExpressionKind::Case { .. } => {
+                self.map_choices(expression, monotype, &mut |simplifier, leaf| {
+                    simplifier.push_into_choices(leaf, monotype, chosen)
+                })
+            }
+            ExpressionKind::Fail(message) => {
+                Expression::new(ExpressionKind::Fail(message), monotype)
+            }
+            kind => chosen(self, Expression::new(kind, expression.monotype)),
+        }
+    }
+
+    fn renamed_continuation(&mut self, continuation: &(Local, Expression)) -> (Local, Expression) {
+        let (local, body) = continuation;
+        let mut renaming = rustc_hash::FxHashMap::default();
+        let local = self.rename_binder(local, &mut renaming);
+        let mut body = body.clone();
+        self.rename(&mut body, &mut renaming);
+        (local, body)
+    }
+
+    /// The continuation of a bind run after one of the choices of its action: a constructor
+    /// the choice returns is matched where the continuation looks at it, with its fields bound
+    /// once beforehand.
+    fn bind_chosen(
+        &mut self,
+        chosen: Expression,
+        local: Local,
+        body: Expression,
+        monotype: MonotypeId,
+    ) -> Expression {
+        let ExpressionKind::EffectPure(value) = chosen.kind else {
+            return self.effect_bind(chosen, local, body, monotype);
+        };
+        if !matches!(value.kind, ExpressionKind::Construct { .. }) {
+            let action = Expression::new(ExpressionKind::EffectPure(value), chosen.monotype);
+            return self.effect_bind(action, local, body, monotype);
+        }
+        let mut bindings = vec![];
+        let built = self.shared_construction(*value, &mut bindings);
+        self.substituting_alias(&local, &built);
+        let body = super::substitute(body, local.id, &built, self.monotypes);
+        let body = self.expression(body);
+        self.let_bindings(bindings, body)
+    }
+
+    fn shared_construction(
+        &mut self,
+        value: Expression,
+        bindings: &mut Vec<Binding>,
+    ) -> Expression {
+        let ExpressionKind::Construct { data, constructor, arguments } = value.kind else {
+            return self.shared_operand(value, "field", bindings);
+        };
+        let arguments = arguments
+            .into_iter()
+            .map(|argument| self.shared_construction(argument, bindings))
+            .collect();
+        Expression::new(ExpressionKind::Construct { data, constructor, arguments }, value.monotype)
     }
 
     fn returns_its_unit(
@@ -415,13 +515,6 @@ impl Simplifier<'_> {
     }
 }
 
-/// A constructor applied to values that are already there, such as the `Right x` that `liftIO`
-/// wraps a result in. A bind of its `pure` to a local that a `case` then looks at decides that
-/// `case` here, which runs nothing earlier than the bind would: it only picks the alternative.
-fn is_known_construction(value: &Expression) -> bool {
-    matches!(&value.kind, ExpressionKind::Construct { arguments, .. } if arguments.iter().all(is_trivial))
-}
-
 /// Whether the expression starts with a `case` of the local, maybe as the first action it runs.
 fn cases_on(expression: &Expression, local: LocalId) -> bool {
     match &expression.kind {
@@ -433,6 +526,124 @@ fn cases_on(expression: &Expression, local: LocalId) -> bool {
             cases_on(value, local)
         }
         _ => false,
+    }
+}
+
+/// What running a bind's continuation after each choice of its action adds to the code, when the
+/// continuation starts by matching the local and that match decides every constructor a choice
+/// returns: such a choice keeps only the alternative it picks. A choice that does more keeps the
+/// whole continuation, and the largest copy is the one that would be there anyway. A choice that
+/// returns an array combinators build, `Emit (take n (map f chunk))`, lets the alternative read
+/// it without storing it, which is worth more copies.
+struct PushedContinuation<'e> {
+    alternatives: &'e [Alternative],
+    column: usize,
+    whole: usize,
+    copies: Vec<usize>,
+    constructions: usize,
+    viewed: bool,
+    bound: Vec<(LocalId, &'e Expression)>,
+}
+
+impl<'e> PushedContinuation<'e> {
+    fn measure(
+        action: &'e Expression,
+        body: &'e Expression,
+        local: LocalId,
+    ) -> Option<PushedContinuation<'e>> {
+        let (alternatives, column) = first_match(body, local)?;
+        let mut pushed = PushedContinuation {
+            alternatives,
+            column,
+            whole: size(body),
+            copies: vec![],
+            constructions: 0,
+            viewed: false,
+            bound: vec![],
+        };
+        pushed.choice(action, false)?;
+        (pushed.constructions > 0).then_some(pushed)
+    }
+
+    fn fits(&self) -> bool {
+        let largest = self.copies.iter().copied().max().unwrap_or(0);
+        let added = self.copies.iter().sum::<usize>() - largest;
+        let budget = if self.viewed { VIEWING_CONTINUATION_SIZE } else { PUSHED_CONTINUATION_SIZE };
+        added <= budget
+    }
+
+    fn choice(&mut self, expression: &'e Expression, returned: bool) -> Option<()> {
+        match &expression.kind {
+            ExpressionKind::EffectPure(value) if !returned => self.choice(value, true)?,
+            ExpressionKind::Construct { .. } if returned => {
+                let outcomes =
+                    super::coverage::column_outcomes(expression, self.alternatives, self.column)?;
+                let chosen = outcomes.iter().position(|outcome| {
+                    matches!(outcome, super::coverage::ColumnOutcome::Matches)
+                })?;
+                self.constructions += 1;
+                self.viewed |= self.builds_view(expression);
+                self.copies
+                    .push(super::coverage::alternatives_size(&self.alternatives[chosen..=chosen]));
+            }
+            ExpressionKind::Fail(_) => {}
+            ExpressionKind::Let { bindings, body } => {
+                self.bound
+                    .extend(bindings.iter().map(|binding| (binding.local.id, &binding.value)));
+                self.choice(body, returned)?
+            }
+            ExpressionKind::EffectBind { body, .. } if !returned => self.choice(body, false)?,
+            ExpressionKind::If { then, otherwise, .. } => {
+                self.choice(then, returned)?;
+                self.choice(otherwise, returned)?;
+            }
+            ExpressionKind::Case { alternatives, .. } => {
+                for alternative in alternatives {
+                    match &alternative.body {
+                        Guarded::Unconditional(body) => self.choice(body, returned)?,
+                        Guarded::Guards(branches) => {
+                            for branch in branches {
+                                self.choice(&branch.body, returned)?
+                            }
+                        }
+                    }
+                }
+            }
+            _ => self.copies.push(self.whole),
+        }
+        Some(())
+    }
+
+    fn builds_view(&self, construction: &Expression) -> bool {
+        let ExpressionKind::Construct { arguments, .. } = &construction.kind else {
+            return match &construction.kind {
+                ExpressionKind::Local(id) => self
+                    .bound
+                    .iter()
+                    .any(|(bound, value)| bound == id && super::views::builds_view(value)),
+                _ => super::views::builds_view(construction),
+            };
+        };
+        arguments.iter().any(|argument| self.builds_view(argument))
+    }
+}
+
+fn first_match(
+    expression: &Expression,
+    local: LocalId,
+) -> Option<(&[crate::monomorphic::Alternative], usize)> {
+    match &expression.kind {
+        ExpressionKind::Case { scrutinees, alternatives } => {
+            let column = scrutinees.iter().position(
+                |scrutinee| matches!(scrutinee.kind, ExpressionKind::Local(id) if id == local),
+            )?;
+            Some((alternatives, column))
+        }
+        ExpressionKind::Let { body, .. } | ExpressionKind::EffectPure(body) => {
+            first_match(body, local)
+        }
+        ExpressionKind::EffectBind { action, .. } => first_match(action, local),
+        _ => None,
     }
 }
 

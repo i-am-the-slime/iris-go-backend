@@ -2309,6 +2309,36 @@ fn is_effect_node(expression: &Expression) -> bool {
             | ExpressionKind::EffectEach { .. }
     ) || matches!(&expression.kind, ExpressionKind::Foreign { foreign, .. } if foreign.is_effectful())
         || matches!(&expression.kind, ExpressionKind::Apply { .. })
+        || chooses_between_effects(expression)
+}
+
+/// A choice whose every choice runs something: one closure that chooses when it runs, not a
+/// closure for each choice.
+fn chooses_between_effects(expression: &Expression) -> bool {
+    let mut leaves = 0;
+    let mut effects = 0;
+    let mut count = |leaf: &Expression| {
+        leaves += 1;
+        effects += usize::from(is_effect_node(leaf));
+    };
+    match &expression.kind {
+        ExpressionKind::If { then, otherwise, .. } => {
+            count(then);
+            count(otherwise);
+        }
+        ExpressionKind::Case { alternatives, .. } => {
+            for alternative in alternatives {
+                match &alternative.body {
+                    Guarded::Unconditional(body) => count(body),
+                    Guarded::Guards(branches) => {
+                        branches.iter().for_each(|branch| count(&branch.body))
+                    }
+                }
+            }
+        }
+        _ => return false,
+    }
+    leaves > 0 && leaves == effects
 }
 
 fn has_tail_call(expression: &Expression, function: FunctionId, arity: usize, mode: Mode) -> bool {

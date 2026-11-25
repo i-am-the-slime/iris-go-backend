@@ -32,12 +32,14 @@ struct Specialization {
 enum KnownFunction {
     Defined,
     Built,
+    Moved,
 }
 
 struct ParameterUses {
     occurs: bool,
     only_called: bool,
     passed_on_unchanged: bool,
+    occurrences: usize,
 }
 
 impl Simplifier<'_> {
@@ -95,6 +97,9 @@ impl Simplifier<'_> {
                 let used = match known {
                     KnownFunction::Defined => uses.occurs,
                     KnownFunction::Built => uses.occurs && uses.only_called,
+                    KnownFunction::Moved => {
+                        uses.occurs && uses.only_called && uses.occurrences == 1
+                    }
                 };
                 (used && uses.passed_on_unchanged).then(|| template(argument, parameter.monotype))
             })
@@ -125,8 +130,11 @@ impl Simplifier<'_> {
                     takes_more(id, arguments.len()) && arguments.iter().all(is_constant_or_local);
                 built.then_some(KnownFunction::Built)
             }
+            ExpressionKind::Lambda { .. } if is_within_size(argument, INLINE_SIZE) => {
+                Some(KnownFunction::Built)
+            }
             ExpressionKind::Lambda { .. } => {
-                is_within_size(argument, INLINE_SIZE).then_some(KnownFunction::Built)
+                is_within_size(argument, SPECIALIZED_SIZE).then_some(KnownFunction::Moved)
             }
             _ => None,
         }
@@ -330,7 +338,7 @@ impl Simplifier<'_> {
                     let used = match known {
                         Some(KnownFunction::Defined) => true,
                         Some(KnownFunction::Built) => uses.only_called,
-                        None => false,
+                        Some(KnownFunction::Moved) | None => false,
                     };
                     let in_scope = free_locals(argument).iter().all(|free| {
                         !matches!(free.kind, ExpressionKind::Local(id) if bound.contains_key(&id))
@@ -532,10 +540,12 @@ fn parameter_uses(
             ExpressionKind::Local(id) if *id == parameter => {
                 uses.occurs = true;
                 uses.only_called = false;
+                uses.occurrences += 1;
             }
             _ if callee.is(expression) => uses.passed_on_unchanged = false,
             ExpressionKind::Apply { function, arguments } if is_parameter(function) => {
                 uses.occurs = true;
+                uses.occurrences += 1;
                 for argument in arguments {
                     walk(argument, callee, index, parameter, uses);
                 }
@@ -559,7 +569,12 @@ fn parameter_uses(
             }
         }
     }
-    let mut uses = ParameterUses { occurs: false, only_called: true, passed_on_unchanged: true };
+    let mut uses = ParameterUses {
+        occurs: false,
+        only_called: true,
+        passed_on_unchanged: true,
+        occurrences: 0,
+    };
     walk(body, callee, index, parameter, &mut uses);
     uses
 }
