@@ -1,0 +1,126 @@
+---
+source: tests-integration/src/fixtures.rs
+---
+// Data/Maybe/maybe.go
+package maybe
+
+type Int int64
+
+const NoInt Int = 1 << 32
+
+const TagNothing = 0
+
+const TagJust = 1
+
+type String struct {
+	Just string
+	Tag  uint8
+}
+
+func JustString(just string) String {
+	return String{Tag: TagJust, Just: just}
+}
+
+var NoString = String{Tag: TagNothing}
+
+// Data/Show/show.go
+package show
+
+import (
+	"github.com/i-am-the-slime/iris-go/prim"
+	"strconv"
+)
+
+func ShowInt(i int32) string {
+	return strconv.Itoa(int(i))
+}
+
+func ShowString(s string) string {
+	return prim.ShowString(s)
+}
+
+func AppendShowArrayString(buffer []byte, array []string) []byte {
+	buffer = append(buffer, '[')
+	for index, element := range array {
+		if index > 0 {
+			buffer = append(buffer, ',')
+		}
+		buffer = prim.AppendShowString(buffer, element)
+	}
+	buffer = append(buffer, ']')
+	return buffer
+}
+
+func AppendShowArrayInt(buffer []byte, array []int32) []byte {
+	buffer = append(buffer, '[')
+	for index, element := range array {
+		if index > 0 {
+			buffer = append(buffer, ',')
+		}
+		buffer = strconv.AppendInt(buffer, int64(element), 10)
+	}
+	buffer = append(buffer, ']')
+	return buffer
+}
+
+func ArrayString(array []string) string {
+	return string(AppendShowArrayString(nil, array))
+}
+
+func ArrayInt(array []int32) string {
+	return string(AppendShowArrayInt(nil, array))
+}
+
+// main.go
+package main
+
+import (
+	"fixture/Data/Maybe"
+	"fixture/Data/Show"
+	journal "fixture/Journal_ffi"
+	"fixture/shared"
+	arraypkg "github.com/i-am-the-slime/iris-go/array"
+	"strconv"
+)
+
+func main() {
+	array := []maybe.Int{maybe.Int(1), maybe.NoInt, maybe.Int(3)}
+	bound := make([]int32, 0, len(array))
+	for _, x := range array {
+		if x != maybe.NoInt {
+			bound = append(bound, int32(x))
+		}
+	}
+	journal.Log(show.ArrayInt(arraypkg.Bounded(bound)))
+	array2 := []maybe.String{maybe.JustString("a"), maybe.NoString}
+	bound2 := make([]string, 0, len(array2))
+	for xIndex := range array2 {
+		switch array2[xIndex].Tag {
+		case maybe.TagNothing:
+		default: // maybe.TagJust
+			bound2 = append(bound2, array2[xIndex].Just)
+		}
+	}
+	journal.Log(show.ArrayString(arraypkg.Bounded(bound2)))
+	array3 := []int32{1, 2}
+	mapped := []string{}
+	for _, left := range array3 {
+		array4 := []string{"x"}
+		mapped2 := make([]shared.LeftRight, len(array4))
+		for index, value := range array4 {
+			mapped2[index] = shared.LeftRight{Left: left, Right: value}
+		}
+		for leftRightIndex := range mapped2 {
+			mapped = append(mapped, strconv.Itoa(int(mapped2[leftRightIndex].Left))+mapped2[leftRightIndex].Right)
+		}
+	}
+	journal.Log(show.ArrayString(mapped))
+}
+
+// shared/shared.go
+package shared
+
+type LeftRight struct {
+	Right string
+	Left  int32
+}

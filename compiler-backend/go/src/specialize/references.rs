@@ -251,7 +251,12 @@ where
                 UnsupportedState::MissingInstanceMember { member: member_name.to_string() },
             ));
         };
-        let types = self.abstraction_types(scope, &implementation.abstractions, instantiations)?;
+        let instantiations = self.member_signature_instantiations(
+            member,
+            &implementation.abstractions,
+            instantiations,
+        )?;
+        let types = self.abstraction_types(scope, &implementation.abstractions, &instantiations)?;
         let head = module.checked.tree[declaration].type_id;
         let (signedness, inherited) =
             self.key_signedness(scope, &types, &instance.types, Some(head))?;
@@ -265,6 +270,42 @@ where
             signedness,
         };
         self.request_reference(scope, key, name, monotype)
+    }
+
+    fn member_signature_instantiations(
+        &mut self,
+        (file_id, term): (FileId, TermItemId),
+        abstractions: &[tree::DeclarationAbstraction],
+        instantiations: &Substitution,
+    ) -> GoResult<Substitution> {
+        let mut aligned = instantiations.clone();
+        let binders: Vec<_> = abstractions
+            .iter()
+            .filter_map(|abstraction| match abstraction {
+                tree::DeclarationAbstraction::Type { binder, .. } => {
+                    Some(self.context.queries.lookup_forall_binder(*binder).name)
+                }
+                _ => None,
+            })
+            .collect();
+        if binders.iter().all(|binder| instantiations.contains_key(binder)) {
+            return Ok(aligned);
+        }
+        let module = self.context.module(file_id)?;
+        let Some(declared) = module.checked.lookup_term_item_type(term) else {
+            return Ok(aligned);
+        };
+        let (_, inner) = self.context.types.peel_quantifiers(declared);
+        let (_, inner) = self.context.types.peel_constraints(inner);
+        let (own, _) = self.context.types.peel_quantifiers(inner);
+        for (binder, quantifier) in binders.iter().rev().zip(own.iter().rev()) {
+            if !aligned.contains_key(binder)
+                && let Some(&instantiation) = instantiations.get(quantifier)
+            {
+                aligned.insert(*binder, instantiation);
+            }
+        }
+        Ok(aligned)
     }
 
     /// A reflected type-level `Ordering` is the term-level constructor of the same name.
