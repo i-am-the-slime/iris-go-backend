@@ -40,6 +40,45 @@ Want the Go source in a directory of your own instead? `iris go out` writes it t
 `out/` has no `go.mod` yet, you get one naming the module `iris.local/<package>`; change the
 `module` line whenever you like, and the next `iris go out` uses your name.
 
+### Profile-guided optimisation
+
+```bash
+iris run --go --profile -- 4200000
+```
+
+That runs your program once while recording where it spends its time, keeps the profile in
+`.spago/go/<package>/default.pgo`, and builds it again with Go's
+[profile-guided optimisation](https://go.dev/doc/pgo). Every later `iris run --go` and `iris go`
+builds with that profile, until you record a new one. `iris go --profile -- 4200000` does the same
+without running the program a second time, and runs it with your `run.execArgs` when nothing
+follows `--`.
+
+- **Your own profile**: `--pgo cpu.pprof` builds with a profile you recorded yourself, say with
+  `runtime/pprof` in a server.
+- **Without it**: `--pgo off` leaves the recorded profile out.
+- **Profile a typical run**: Go optimises for what the profile saw, so run it on input like the real
+  thing. A run that ends in `os.Exit`, such as `Node.Process.exit`, leaves no profile.
+- **What to expect**: on our benchmarks, half of the programs that build and rebuild trees got
+  9 to 50 % faster, and the rest, loops over arrays among them, a few percent at most. On macOS a
+  CPU profile catches fewer of your own functions than on Linux, so a profile recorded on Linux can
+  help more.
+
+### Garbage collector settings
+
+A Go build of a PureScript program allocates more than handwritten Go does, so the garbage collector
+runs often. Go's defaults favour memory over speed: `GOGC=100` collects whenever the heap has
+doubled. Setting it higher trades memory for speed:
+
+```bash
+GOGC=400 iris run --go
+```
+
+On the benchmarks we measured, `GOGC=400` made allocation-heavy programs up to 30 % faster, and
+peak memory grew by up to 1.6 times. A program with a large heap that it keeps around, such as a
+server, can grow up to 2.5 times bigger, which is why Iris leaves `GOGC` alone. To bound it, set
+`GOMEMLIMIT` as well, say `GOGC=400 GOMEMLIMIT=2GiB`: Go then collects more often as the heap gets
+close to 2 GiB.
+
 ## Stack traces point at your PureScript
 
 ```purescript
