@@ -429,6 +429,7 @@ where
             recursive_names: FxHashMap::default(),
             type_aliases: FxHashMap::default(),
             type_declarations: vec![],
+            lowered_function_types: vec![],
             reference_declared: false,
             support_functions: FxHashMap::default(),
             homes: FxHashMap::default(),
@@ -607,6 +608,9 @@ struct Emitter<'p, 'm, 'q, Q> {
     /// The type each recursive newtype's alias spells.
     type_aliases: FxHashMap<String, GoType>,
     type_declarations: Vec<GoDeclaration>,
+    /// The function types returning an `Either` that return two results instead, with what they
+    /// become.
+    lowered_function_types: Vec<(GoType, GoType)>,
     reference_declared: bool,
     /// The name of each support function declared so far, by the base of its name.
     support_functions: FxHashMap<&'static str, String>,

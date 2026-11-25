@@ -9,6 +9,26 @@ pub struct Opacity {
     pub types: Vec<OpaqueDeclaration>,
     pub unreadable: Option<String>,
     pub called_in_place: FxHashMap<String, Vec<usize>>,
+    /// The shapes of each function's value parameters and of its one result.
+    pub signatures: FxHashMap<String, ForeignSignature>,
+}
+
+/// What a foreign function's signature says about its values, in terms of its type parameters.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ForeignSignature {
+    pub parameters: Vec<ForeignShape>,
+    pub result: ForeignShape,
+}
+
+/// The shape of a type in a foreign signature.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ForeignShape {
+    /// A type parameter itself, `A`.
+    Parameter(String),
+    /// A type that holds values of one type parameter and nothing else of the caller's:
+    /// `*ioref[A]`, `[]A`, `chan A`.
+    Holder(String),
+    Other,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -539,6 +559,11 @@ impl Package {
             types: types.collect(),
             unreadable: None,
             called_in_place: self.called_in_place(),
+            signatures: self
+                .functions
+                .iter()
+                .map(|function| (function.name.clone(), signature_shapes(function)))
+                .collect(),
         }
     }
 
@@ -721,6 +746,46 @@ fn read_type_parameters(tokens: &[Token]) -> Vec<TypeParameter> {
     let unconstrained = pending.into_iter().map(|name| TypeParameter { name, constraint: vec![] });
     parameters.extend(unconstrained);
     parameters
+}
+
+fn signature_shapes(function: &Function) -> ForeignSignature {
+    let type_parameters: FxHashSet<String> =
+        function.type_parameters.iter().map(|parameter| parameter.name.clone()).collect();
+    let entries = split_top(&function.parameters, ",");
+    let mut parameters = Vec::with_capacity(entries.len());
+    for (position, entry) in entries.iter().enumerate() {
+        let typed = entries[position..].iter().find(|entry| entry.len() > 1);
+        let shape = match typed {
+            Some(typed) => shape_of(&typed[1..], &type_parameters),
+            None => ForeignShape::Other,
+        };
+        parameters.push(match entry.len() {
+            1 if typed.is_none() => ForeignShape::Other,
+            _ => shape,
+        });
+    }
+    ForeignSignature { parameters, result: shape_of(&function.results, &type_parameters) }
+}
+
+fn shape_of(tokens: &[Token], type_parameters: &FxHashSet<String>) -> ForeignShape {
+    if let [Token::Word(word)] = tokens
+        && type_parameters.contains(word)
+    {
+        return ForeignShape::Parameter(word.clone());
+    }
+    if tokens.iter().any(|token| token.is_word("func") || token.is("(")) {
+        return ForeignShape::Other;
+    }
+    let mut held =
+        tokens.iter().filter_map(Token::word).filter(|word| type_parameters.contains(*word));
+    match (held.next(), held.next()) {
+        (Some(word), None)
+            if tokens.last().is_some_and(|last| last.is_word(word) || last.is("]")) =>
+        {
+            ForeignShape::Holder(word.to_string())
+        }
+        _ => ForeignShape::Other,
+    }
 }
 
 fn parameter_names(parameters: &[TypeParameter]) -> Vec<String> {

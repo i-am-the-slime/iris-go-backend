@@ -24,7 +24,7 @@ pub use imports::{
     SHOW_NUMBER, TO_CHAR_ARRAY, TRAVERSE_BALANCED, WELL_FORMED_STRING, array_fold,
     array_fold_right, effect_fold,
 };
-pub use opacity::{Opacity, OpaqueDeclaration, foreign_opacity};
+pub use opacity::{ForeignShape, ForeignSignature, Opacity, OpaqueDeclaration, foreign_opacity};
 pub use packages::{ForeignPackages, ForeignSource, LineCoverage, LineDirectives};
 pub use sources::{
     Forward, foreign_declarations, foreign_files, foreign_forwarders, foreign_source,

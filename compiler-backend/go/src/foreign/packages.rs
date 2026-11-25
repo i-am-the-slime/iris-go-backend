@@ -67,6 +67,38 @@ pub struct ForeignSource {
     pub opacity: super::Opacity,
 }
 
+/// The signatures of the iris-go runtime's generic functions that hand back a value of a type
+/// parameter, by package: the program's Go code calls them, but their source is not at hand.
+const RUNTIME_SIGNATURES: &[(&str, &str)] = &[
+    (
+        "array",
+        "func Foldl[A, B any](f func(B, A) B, init B, xs []A) B {}
+         func Foldr[A, B any](f func(A, B) B, init B, xs []A) B {}
+         func Uncons[A, B any](none B, some func(A, []A) B, xs []A) B {}",
+    ),
+    (
+        "direct",
+        "func Uncons[A, B any](empty func(struct{}) B, nonEmpty func(A, []A) B, xs []A) B {}
+         func PeekUnsafe[A any](i int32, arr *[]A) A {}
+         func CatchException[A any](handler func(exception.Error) A, action func() A) A {}
+         func FindMap[A, M any](nothing M, isJust func(M) bool, f func(A) M, xs []A) M {}",
+    ),
+];
+
+fn runtime_signatures() -> &'static FxHashMap<(String, String), super::ForeignSignature> {
+    static SIGNATURES: std::sync::OnceLock<FxHashMap<(String, String), super::ForeignSignature>> =
+        std::sync::OnceLock::new();
+    SIGNATURES.get_or_init(|| {
+        let mut signatures = FxHashMap::default();
+        for (package, source) in RUNTIME_SIGNATURES {
+            for (name, signature) in super::foreign_opacity(&[source]).signatures {
+                signatures.insert((package.to_string(), name), signature);
+            }
+        }
+        signatures
+    })
+}
+
 /// The iris-go runtime's Go module.
 const RUNTIME_MODULE: &str = "github.com/i-am-the-slime/iris-go";
 
@@ -129,6 +161,21 @@ impl ForeignPackages {
             }
         }
         called
+    }
+
+    /// The signature of a foreign function, by its package and name.
+    pub fn signature(&self, package: &str, function: &str) -> Option<&super::ForeignSignature> {
+        if let Some(signature) =
+            runtime_signatures().get(&(package.to_string(), function.to_string()))
+        {
+            return Some(signature);
+        }
+        self.sources
+            .iter()
+            .find(|source| ForeignPackages::package_name(&source.module) == package)?
+            .opacity
+            .signatures
+            .get(function)
     }
 
     fn copied(&self, module_name: &str) -> bool {
