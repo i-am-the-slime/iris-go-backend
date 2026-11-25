@@ -7,7 +7,6 @@ use rustc_hash::{FxHashMap, FxHashSet};
 use super::Specializer;
 use crate::error::GoResult;
 use crate::foreign::{ForeignSource, OpaqueDeclaration};
-use crate::naming::capitalise;
 
 struct ForeignFunction {
     key: (FileId, TermItemId),
@@ -110,7 +109,7 @@ where
             let quantifiers = self.context.types.peel_quantifiers(declared).0.len();
             let mut mentioned = vec![];
             self.mentioned_foreign_data(declared, &mut mentioned, &mut FxHashSet::default())?;
-            let go_name = capitalise(name);
+            let go_name = crate::naming::exported(name);
             let declaration = source.opacity.function(&go_name);
             let boxed = boxed_reason(source, declaration, &go_name, Some(quantifiers));
             let names_a_row = self.names_a_row(declared)?;

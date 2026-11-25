@@ -160,6 +160,16 @@ where
                 }
                 Ok(value)
             }
+            (Monotype::Erased(_) | Monotype::Opaque, Monotype::ForeignData(_)) => {
+                let type_ = self.go_type(to)?;
+                let read = self
+                    .go_function(GoFunction { package: GoPackage::Direct, name: "ForeignData" });
+                let read = GoExpression::Instantiation {
+                    function: Box::new(read),
+                    arguments: vec![type_],
+                };
+                Ok(call(read, vec![value]))
+            }
             (Monotype::Erased(_) | Monotype::Opaque, _) => {
                 let canonical = self.canonical(to)?;
                 let type_ = self.go_type(canonical)?;

@@ -4,7 +4,6 @@ use crate::error::GoResult;
 use crate::foreign::{Foreign, ForeignPackages};
 use crate::monomorphic::Expression;
 use crate::monotype::{Monotype, MonotypeId};
-use crate::naming::capitalise;
 use crate::syntax::{GoExpression, GoStatement, GoType};
 use checking::TypeId;
 use checking::core::{Name, Type};
@@ -291,6 +290,38 @@ where
         })
     }
 
+    pub(super) fn project_takes_polymorphic_arguments(
+        &mut self,
+        foreign: Foreign,
+    ) -> GoResult<bool> {
+        let Foreign::Project { file_id, term, .. } = foreign else {
+            unreachable!("invariant violated: the declared type of another foreign");
+        };
+        let module = self.context.module(file_id)?;
+        let Some(declared) = module.checked.lookup_term_item_type(term) else { return Ok(false) };
+        let declared = crate::monotype::expand_synonyms(&mut self.context, declared)?;
+        let (_, inner) = self.context.types.peel_quantifiers(declared);
+        Ok(self.context.types.quantifies_within(inner))
+    }
+
+    pub(super) fn project_result(
+        &mut self,
+        foreign: Foreign,
+        called: GoExpression,
+        monotype: MonotypeId,
+        out: &mut Vec<GoStatement>,
+    ) -> GoResult<GoExpression> {
+        let crossing = self.project_crossing(foreign);
+        let value = self.out_of_convention(called, monotype, crossing, out)?;
+        if !matches!(self.monotypes.get(monotype), Monotype::Data(_))
+            || !self.project_takes_polymorphic_arguments(foreign)?
+        {
+            return Ok(value);
+        }
+        let erased = self.canonical(monotype)?;
+        self.coerce(value, erased, monotype, out)
+    }
+
     fn project_uncurried_parameters(
         &mut self,
         foreign: Foreign,
@@ -319,7 +350,7 @@ where
         let name = self.context.term_name(file_id, term)?;
         self.imports.insert(self.foreign_packages.import_path(&module_name));
         let package = ForeignPackages::package_name(&module_name);
-        let name = capitalise(&name);
+        let name = crate::naming::exported(&name);
         if effectful {
             self.effects.insert((package.clone(), name.clone()));
         }
