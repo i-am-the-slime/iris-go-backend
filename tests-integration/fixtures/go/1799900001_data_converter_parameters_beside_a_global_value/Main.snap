@@ -1,0 +1,121 @@
+---
+source: tests-integration/src/fixtures.rs
+---
+// main.go
+package main
+
+import (
+	"github.com/i-am-the-slime/iris-go/alloc"
+	"github.com/i-am-the-slime/iris-go/console"
+	"github.com/i-am-the-slime/iris-go/prim"
+	"strings"
+)
+
+type Sequence struct {
+	Zero *Sequence
+	One0 any
+	One1 *Sequence
+	Tag  uint8
+}
+
+const (
+	SequenceEmpty = iota
+	SequenceZero
+	SequenceOne
+)
+
+type PairInt struct {
+	First  int32
+	Second int32
+}
+
+type Pair struct {
+	First  any
+	Second any
+	Origin any
+}
+
+func convert(value2 PairInt) *Pair {
+	return &Pair{First: value2.First, Second: value2.Second, Origin: value2}
+}
+
+func convert2(value2 *Pair) PairInt {
+	if original, ok := value2.Origin.(PairInt); ok {
+		return original
+	}
+	return PairInt{First: value2.First.(int32), Second: value2.Second.(int32)}
+}
+
+var main_ = initializeMain_()
+
+func initializeMain_() []int32 {
+	array := [][]int32{{1}, {1, 2, 3}, {4, 5, 6}, {9, 3}, {}}
+	mapped := make([]int32, len(array))
+	var sequenceCells alloc.Cells[Sequence]
+	for index, x := range array {
+		accumulator := &Sequence{Tag: SequenceEmpty}
+		for _, a := range x {
+			switch accumulator.Tag {
+			case SequenceEmpty:
+				accumulator = &Sequence{Tag: SequenceOne, One0: a, One1: &Sequence{Tag: SequenceEmpty}}
+			case SequenceZero:
+				accumulator = sequenceCells.New(Sequence{Tag: SequenceOne, One0: a, One1: accumulator.Zero})
+			default: // SequenceOne
+				original := func(x2 any) func(*Sequence) *Sequence {
+					return func(value *Sequence) *Sequence {
+						return cons(x2, value)
+					}
+				}
+				accumulator = &Sequence{Tag: SequenceZero, Zero: original(convert(PairInt{First: a, Second: accumulator.One0.(int32)}))(accumulator.One1)}
+			}
+		}
+		var result int32
+		if accumulator.Tag == SequenceOne && accumulator.One1.Tag == SequenceOne {
+			result = accumulator.One0.(int32) + value(convert2(accumulator.One1.One0.(*Pair)))
+		} else if accumulator.Tag == SequenceZero && accumulator.Zero.Tag == SequenceOne {
+			result = value(convert2(accumulator.Zero.One0.(*Pair)))
+		} else if accumulator.Tag == SequenceOne {
+			result = accumulator.One0.(int32)
+		} else {
+			result = 0
+		}
+		mapped[index] = result
+	}
+	return mapped
+}
+
+func value(pair PairInt) int32 {
+	for {
+		first := pair.First
+		second := pair.Second
+		if first > 100 {
+			pair = PairInt{First: first - 100, Second: second}
+			continue
+		}
+		return first*10 + second
+	}
+}
+
+func cons(x any, value *Sequence) *Sequence {
+	switch value.Tag {
+	case SequenceEmpty:
+		return &Sequence{Tag: SequenceOne, One0: x, One1: &Sequence{Tag: SequenceEmpty}}
+	case SequenceZero:
+		return &Sequence{Tag: SequenceOne, One0: x, One1: value.Zero}
+	default: // SequenceOne
+		original := func(x2 any) func(*Sequence) *Sequence {
+			return func(value2 *Sequence) *Sequence {
+				return cons(x2, value2)
+			}
+		}
+		return &Sequence{Tag: SequenceZero, Zero: original(&Pair{First: x, Second: value.One0})(value.One1)}
+	}
+}
+
+func main() {
+	texts := make([]string, 0, len(main_))
+	for _, element := range main_ {
+		texts = append(texts, prim.ShowInt(element))
+	}
+	console.Print("[" + strings.Join(texts, " ") + "]")
+}

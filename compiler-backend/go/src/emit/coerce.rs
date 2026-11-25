@@ -619,7 +619,8 @@ where
         self.converters.insert((from, to), name.clone());
         let parameter_type = self.go_type(from)?;
         let result_type = self.go_type(to)?;
-        let value = identifier_expression("value");
+        let value_name = self.parameter_name("value");
+        let value = identifier_expression(&value_name);
         let mut body = vec![];
         match (self.monotypes.get(from).clone(), self.monotypes.get(to).clone()) {
             (Monotype::Array(from_element), Monotype::Array(to_element)) => {
@@ -785,7 +786,7 @@ where
         }
         self.type_declarations.push(GoDeclaration::Function {
             name: name.clone(),
-            parameters: vec![("value".into(), parameter_type)],
+            parameters: vec![(value_name, parameter_type)],
             result: Some(result_type),
             body,
         });

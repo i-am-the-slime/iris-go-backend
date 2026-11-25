@@ -329,7 +329,7 @@ where
     }
 
     /// A converter's parameter, named so that no global it would shadow is renamed in its body.
-    fn parameter_name(&self, base: &str) -> String {
+    pub(super) fn parameter_name(&self, base: &str) -> String {
         crate::naming::numbered(base, |name| self.global_names.contains(name))
     }
 
