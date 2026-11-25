@@ -59,6 +59,7 @@ where
         let module = Arc::clone(&scope.module);
         let tree = &module.checked.tree;
         let mut dictionaries = vec![];
+        let mut applied = vec![];
         let mut current = id;
         let mut through_alias = false;
         let resolution = loop {
@@ -83,6 +84,7 @@ where
             instantiations.extend(self.closed_instantiations(scope, recorded));
             self.context.types.close(&mut instantiations);
             evidences.reverse();
+            applied.extend(evidences.iter().copied());
             for (evidence, constraint) in evidences {
                 let constraint = self.context.types.substitute(constraint, &scope.substitution);
                 dictionaries.push(self.resolve_evidence(
@@ -109,6 +111,11 @@ where
                     if !through_alias && !dictionaries.is_empty() && trailing.is_empty() =>
                 {
                     return self.application(scope, id);
+                }
+                tree::ExpressionKind::TermApplication { .. }
+                    if through_alias && !dictionaries.is_empty() && trailing.is_empty() =>
+                {
+                    return self.evidenced_application(scope, current, applied);
                 }
                 tree::ExpressionKind::RecordAccess { record, labels } => {
                     let closed = self.accessed_field_scheme(scope, current, *record, labels)?;
