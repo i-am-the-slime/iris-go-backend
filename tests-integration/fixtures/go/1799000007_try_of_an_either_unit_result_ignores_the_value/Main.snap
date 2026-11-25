@@ -1,0 +1,219 @@
+---
+source: tests-integration/src/fixtures.rs
+---
+// main.go
+package main
+
+import (
+	journal "fixture/Journal_ffi"
+	"github.com/i-am-the-slime/iris-go/prim"
+	"strconv"
+)
+
+type Failure struct {
+	Broken string
+	Tag    uint8
+}
+
+const (
+	FailureInterrupted = iota
+	FailureBroken
+	FailureNoReply
+)
+
+type EitherInt struct {
+	Left  Failure
+	Right int32
+	Tag   uint8
+}
+
+const (
+	EitherIntLeft = iota
+	EitherIntRight
+)
+
+type Client struct {
+	SendAll func(int32, int32) EitherInt
+}
+
+type EitherUnit struct {
+	Right struct{}
+	Left  Failure
+	Tag   uint8
+}
+
+const (
+	EitherUnitLeft = iota
+	EitherUnitRight
+)
+
+type EitherEitherFailureUnit struct {
+	Left  Failure
+	Right EitherUnit
+	Tag   uint8
+}
+
+const (
+	EitherEitherFailureUnitLeft = iota
+	EitherEitherFailureUnitRight
+)
+
+type FailureFailure struct {
+	Failed bool
+	Left   Failure
+}
+
+func Left(left Failure) EitherInt {
+	return EitherInt{Tag: EitherIntLeft, Left: left}
+}
+
+func Right(right int32) EitherInt {
+	return EitherInt{Tag: EitherIntRight, Right: right}
+}
+
+func Broken(broken string) Failure {
+	return Failure{Tag: FailureBroken, Broken: broken}
+}
+
+func main() {
+	array := []Client{client(100), client(200)}
+	collected := make([][]EitherInt, len(array))
+	for index, client := range array {
+		array2 := []int32{2, 5, -1}
+		collected2 := make([]EitherInt, len(array2))
+		for index2, i := range array2 {
+			value := client.SendAll(i, 3)
+			collected2[index2] = value
+		}
+		collected[index] = collected2
+	}
+	journal.Log(arrayArrayEitherFailureInt(collected))
+}
+
+func client(offset int32) Client {
+	return Client{SendAll: func(n int32, r int32) EitherInt {
+		_, err := send(n, r)
+		var err2 FailureFailure
+		var err3 FailureFailure
+		if err.Failed {
+			err2 = FailureFailure{Failed: true, Left: err.Left}
+			err3 = FailureFailure{}
+		} else {
+			err2 = FailureFailure{}
+			err3 = FailureFailure{}
+		}
+		if err3.Failed {
+			return Left(err3.Left)
+		}
+		var err4 FailureFailure
+	matched:
+		for {
+			if err2.Failed {
+				failure := err2.Left
+				var result bool
+				switch failure.Tag {
+				case FailureInterrupted:
+					result = true
+				case FailureBroken:
+					result = failure.Broken == "interrupted"
+				default: // FailureNoReply
+					result = false
+				}
+				if !result {
+					err4 = FailureFailure{Failed: true, Left: failure}
+					break matched
+				}
+			}
+			err4 = FailureFailure{}
+			break matched
+		}
+		if err4.Failed {
+			return Left(err4.Left)
+		}
+		journal.Log("receiving " + strconv.Itoa(int(n)))
+		if n > 4 {
+			return Left(Failure{Tag: FailureNoReply})
+		}
+		return Right((n+1)*2 + offset)
+	}}
+}
+
+func send(n int32, r int32) (struct{}, FailureFailure) {
+	for {
+		if n > r {
+			return struct{}{}, FailureFailure{Failed: true, Left: Failure{Tag: FailureInterrupted}}
+		}
+		if n < 0 {
+			return struct{}{}, FailureFailure{Failed: true, Left: Broken("below zero")}
+		}
+		if n == 0 {
+			return struct{}{}, FailureFailure{}
+		}
+		journal.Log("sent " + strconv.Itoa(int(n)))
+		n -= 1
+	}
+}
+
+func show(i int32, err FailureFailure) string {
+	return string(appendShow(nil, i, err))
+}
+
+func appendShowArrayEitherFailureInt(buffer []byte, array []EitherInt) []byte {
+	buffer = append(buffer, '[')
+	for index, element := range array {
+		if index > 0 {
+			buffer = append(buffer, ',')
+		}
+		buffer = appendShow(buffer, element.Right, EitherIntFailure(element))
+	}
+	buffer = append(buffer, ']')
+	return buffer
+}
+
+func appendShow(buffer []byte, i int32, err FailureFailure) []byte {
+	if err.Failed {
+		buffer = append(buffer, "(Left "...)
+		switch err.Left.Tag {
+		case FailureInterrupted:
+			buffer = append(buffer, "Interrupted"...)
+		case FailureBroken:
+			buffer = append(buffer, "Broken "...)
+			buffer = prim.AppendShowString(buffer, err.Left.Broken)
+		default: // FailureNoReply
+			buffer = append(buffer, "NoReply"...)
+		}
+		buffer = append(buffer, ')')
+	} else {
+		buffer = append(buffer, "(Right "...)
+		buffer = strconv.AppendInt(buffer, int64(i), 10)
+		buffer = append(buffer, ')')
+	}
+	return buffer
+}
+
+func appendShowArrayArrayEitherFailureInt(buffer []byte, array [][]EitherInt) []byte {
+	buffer = append(buffer, '[')
+	for index, element := range array {
+		if index > 0 {
+			buffer = append(buffer, ',')
+		}
+		buffer = appendShowArrayEitherFailureInt(buffer, element)
+	}
+	buffer = append(buffer, ']')
+	return buffer
+}
+
+func arrayEitherFailureInt(array []EitherInt) string {
+	return string(appendShowArrayEitherFailureInt(nil, array))
+}
+
+func arrayArrayEitherFailureInt(array [][]EitherInt) string {
+	return string(appendShowArrayArrayEitherFailureInt(nil, array))
+}
+
+func EitherIntFailure(either EitherInt) FailureFailure {
+	if either.Tag == EitherIntLeft {
+		return FailureFailure{Failed: true, Left: either.Left}
+	}
+	return FailureFailure{}
+}

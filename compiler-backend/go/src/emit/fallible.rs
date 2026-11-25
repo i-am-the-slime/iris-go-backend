@@ -1756,6 +1756,7 @@ impl Rewrite<'_> {
             values.into_iter().map(|value| adopted.get(&value).cloned().unwrap_or(value)).collect();
         split_names.extend(self.failure_names.iter().cloned());
         forward_moves(body, &split_names);
+        split_names.extend(call_results(body));
         loop {
             let read = reads(body, &split_names);
             let before = body.clone();
@@ -2346,6 +2347,22 @@ fn moved_results(left: &[GoStatement], right: &[GoStatement], from: &Split) -> O
             targets: vec![value_target.clone(), failure_target.clone()],
             values: vec![identifier_expression(&from.value), identifier_expression(&from.failure)],
         })
+}
+
+/// The locals `a, err := f()` binds, whose reads dropping an unread split local can remove.
+fn call_results(body: &mut Vec<GoStatement>) -> FxHashSet<String> {
+    let mut results = FxHashSet::default();
+    every_block(body, &mut |block| {
+        for statement in block.iter() {
+            if let GoStatement::Define { names, values } = statement
+                && names.len() > 1
+                && values.len() == 1
+            {
+                results.extend(names.iter().filter(|name| *name != "_").cloned());
+            }
+        }
+    });
+    results
 }
 
 /// `a, b := f(); c, d = a, b` as `c, d = f()`, when nothing else reads `a` and `b`.
