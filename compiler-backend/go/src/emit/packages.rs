@@ -361,6 +361,7 @@ impl Packaging<'_> {
             };
             packages.insert(place, package);
         }
+        case_distinct_directories(&mut packages);
         Ok(packages)
     }
 
@@ -655,6 +656,49 @@ fn suffix_names(segments: &[&str]) -> Vec<String> {
         }
     }
     names
+}
+
+/// Directories that a case-insensitive file system, as macOS's and Windows' are, still tells
+/// apart: a directory spelled as one already taken but in other case takes a `_` behind it, so
+/// that `Yoga.Json.Extra` beside `Yoga.JSON` is in `Yoga/Json_/Extra`. Directories are settled in
+/// order of their spelling, and a renamed directory renames the directories inside it.
+fn case_distinct_directories(packages: &mut FxHashMap<Place, Package>) {
+    let mut directories: Vec<String> =
+        packages.values().map(|package| package.directory.clone()).collect();
+    directories.sort();
+    directories.dedup();
+    let mut settled: FxHashMap<String, String> = FxHashMap::default();
+    let mut taken: FxHashSet<String> = FxHashSet::default();
+    for directory in directories.iter().filter(|directory| !directory.is_empty()) {
+        let mut spelled = String::new();
+        let mut settled_parent = String::new();
+        for segment in directory.split('/') {
+            spelled = if spelled.is_empty() {
+                segment.to_string()
+            } else {
+                format!("{spelled}/{segment}")
+            };
+            if let Some(known) = settled.get(&spelled) {
+                settled_parent = known.clone();
+                continue;
+            }
+            let mut candidate = if settled_parent.is_empty() {
+                segment.to_string()
+            } else {
+                format!("{settled_parent}/{segment}")
+            };
+            while !taken.insert(candidate.to_lowercase()) {
+                candidate.push('_');
+            }
+            settled.insert(spelled.clone(), candidate.clone());
+            settled_parent = candidate;
+        }
+    }
+    for package in packages.values_mut() {
+        if let Some(directory) = settled.get(&package.directory) {
+            package.directory = directory.clone();
+        }
+    }
 }
 
 /// A module name segment as a directory: Go ignores directories starting
