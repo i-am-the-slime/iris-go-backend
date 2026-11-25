@@ -4,7 +4,7 @@ source: tests-integration/src/fixtures.rs
 // Data/Tuple/tuple.go
 package tuple
 
-type TupleIntInt struct {
+type TupleInt struct {
 	First  int32
 	Second int32
 }
@@ -15,15 +15,15 @@ type Tuple struct {
 	Origin any
 }
 
-func Convert(value TupleIntInt) *Tuple {
+func Convert(value TupleInt) *Tuple {
 	return &Tuple{First: value.First, Second: value.Second, Origin: value}
 }
 
-func Convert2(value *Tuple) TupleIntInt {
-	if original, ok := value.Origin.(TupleIntInt); ok {
+func Convert2(value *Tuple) TupleInt {
+	if original, ok := value.Origin.(TupleInt); ok {
 		return original
 	}
-	return TupleIntInt{First: value.First.(int32), Second: value.Second.(int32)}
+	return TupleInt{First: value.First.(int32), Second: value.Second.(int32)}
 }
 
 // main.go
@@ -67,10 +67,10 @@ func initializeMain_() []int32 {
 			default: // SequenceOne
 				original := func(x2 any) func(*Sequence) *Sequence {
 					return func(value *Sequence) *Sequence {
-						return consTupleIntInt(x2, value)
+						return cons(x2, value)
 					}
 				}
-				accumulator = &Sequence{Tag: SequenceZero, Zero: original(tuple.Convert(tuple.TupleIntInt{First: a, Second: accumulator.One0.(int32)}))(accumulator.One1)}
+				accumulator = &Sequence{Tag: SequenceZero, Zero: original(tuple.Convert(tuple.TupleInt{First: a, Second: accumulator.One0.(int32)}))(accumulator.One1)}
 			}
 		}
 		var result int32
@@ -106,7 +106,7 @@ func initializeMain_() []int32 {
 	return mapped
 }
 
-func consTupleIntInt(x any, value *Sequence) *Sequence {
+func cons(x any, value *Sequence) *Sequence {
 	switch value.Tag {
 	case SequenceEmpty:
 		return &Sequence{Tag: SequenceOne, One0: x, One1: &Sequence{Tag: SequenceEmpty}}
@@ -115,7 +115,7 @@ func consTupleIntInt(x any, value *Sequence) *Sequence {
 	default: // SequenceOne
 		original := func(x2 any) func(*Sequence) *Sequence {
 			return func(value2 *Sequence) *Sequence {
-				return consTupleIntInt(x2, value2)
+				return cons(x2, value2)
 			}
 		}
 		return &Sequence{Tag: SequenceZero, Zero: original(&tuple.Tuple{First: x, Second: value.One0})(value.One1)}

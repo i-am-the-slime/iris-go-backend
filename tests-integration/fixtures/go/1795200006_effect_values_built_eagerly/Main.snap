@@ -6,15 +6,15 @@ package either
 
 import "github.com/i-am-the-slime/iris-go/exception"
 
-type EitherErrorInt struct {
+type Either struct {
 	Left  exception.Error
 	Right int32
 	Tag   uint8
 }
 
 const (
-	EitherErrorIntLeft = iota
-	EitherErrorIntRight
+	EitherLeft = iota
+	EitherRight
 )
 
 // main.go

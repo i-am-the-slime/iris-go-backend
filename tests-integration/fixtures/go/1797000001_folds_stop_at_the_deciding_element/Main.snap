@@ -4,7 +4,7 @@ source: tests-integration/src/fixtures.rs
 // Data/Tuple/tuple.go
 package tuple
 
-type TupleIntInt struct {
+type Tuple struct {
 	First  int32
 	Second int32
 }
@@ -12,7 +12,7 @@ type TupleIntInt struct {
 // Partial/Unsafe/unsafe.go
 package partialunsafe
 
-func UnsafeCrashWithBoolean(msg string) bool {
+func UnsafeCrashWith(msg string) bool {
 	panic(msg)
 }
 
@@ -154,14 +154,14 @@ func initializeMain_() []bool {
 
 func positiveUnlessCrashing(x int32) bool {
 	if x == 0 {
-		return partialunsafe.UnsafeCrashWithBoolean("evaluated past the deciding element")
+		return partialunsafe.UnsafeCrashWith("evaluated past the deciding element")
 	}
 	return x > 0
 }
 
 func negativeUnlessCrashing(x int32) bool {
 	if x == 0 {
-		return partialunsafe.UnsafeCrashWithBoolean("evaluated past the deciding element")
+		return partialunsafe.UnsafeCrashWith("evaluated past the deciding element")
 	}
 	return x < 0
 }

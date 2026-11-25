@@ -1,0 +1,54 @@
+---
+source: tests-integration/src/fixtures.rs
+---
+// main.go
+package main
+
+import (
+	"fixture/shared"
+	"github.com/i-am-the-slime/iris-go/exception"
+)
+
+//line Main.purs:11:1
+func main() {
+//line Main.purs:13:14
+	var count int32 = 0
+//line Main.purs:14:14
+	label := &shared.Ref[string]{Value: "start"}
+//line Main.purs:18:7
+	count += 1
+//line Main.purs:19:7
+	label.Value = "moved"
+//line Main.purs:20:5
+	count += 10
+//line Main.purs:22:14
+	final := &shared.Ref[struct{}]{Value: struct{}{}}
+//line Main.purs:25:7
+	if count != 11 {
+//line Main.purs:26:9
+		panic(exception.NewError("the count is wrong"))
+//line Main.purs:25:7
+	}
+//line Main.purs:27:7
+	final.Value = struct{}{}
+//line Main.purs:11:1
+}
+
+// shared/shared.go
+package shared
+
+//line shared.go:4
+type Ref[T any] struct {
+//line shared.go:6
+	Value T
+//line shared.go:8
+}
+
+//line shared.go:11
+type StateValue struct {
+//line shared.go:13
+	State int32
+//line shared.go:15
+	Value int32
+//line shared.go:17
+}

@@ -4,7 +4,7 @@ source: tests-integration/src/fixtures.rs
 // Data/Ord/ord.go
 package ord
 
-func MinInt(x int32, y int32) int32 {
+func Min_(x int32, y int32) int32 {
 	if x <= y {
 		return x
 	}
@@ -475,7 +475,7 @@ func row(letters []rune, previous []int32, letter rune) []int32 {
 			result = 1
 		}
 		element := diagonal + result
-		cheapest := ord.MinInt(value+1, element)
+		cheapest := ord.Min_(value+1, element)
 		x := scanned + 1
 		if x <= cheapest {
 			scanned = x

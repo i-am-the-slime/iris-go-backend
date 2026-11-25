@@ -29,7 +29,7 @@ func ArrayString(array []string) string {
 // Data/Tuple/tuple.go
 package tuple
 
-type TupleStringInt struct {
+type Tuple struct {
 	First  string
 	Second int32
 }
@@ -62,7 +62,7 @@ func initializeScores() *struct {
 	Vals  []int32
 } {
 	object2 := object.New[int32]()
-	for _, tuple := range []tuple.TupleStringInt{{First: "b", Second: 1}, {First: "10", Second: 2}, {First: "2", Second: 3}} {
+	for _, tuple := range []tuple.Tuple{{First: "b", Second: 1}, {First: "10", Second: 2}, {First: "2", Second: 3}} {
 		object.Poke(tuple.First, tuple.Second, object2)
 	}
 	return object2

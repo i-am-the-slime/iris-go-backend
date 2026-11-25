@@ -4,7 +4,7 @@ source: tests-integration/src/fixtures.rs
 // Data/Monoid/Endo/endo.go
 package endo
 
-func MemptyFnInt(x int32) int32 {
+func Mempty(x int32) int32 {
 	return x
 }
 
@@ -21,7 +21,7 @@ var main_ = initializeMain_()
 
 func initializeMain_() int32 {
 	array := []int32{1, 2, 3}
-	accumulator := endo.MemptyFnInt
+	accumulator := endo.Mempty
 	for index := len(array) - 1; index >= 0; index-- {
 		x := array[index]
 		acc := accumulator

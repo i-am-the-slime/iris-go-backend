@@ -9,53 +9,64 @@ import (
 	"strconv"
 )
 
-type EitherIntString struct {
+type Either struct {
 	Right string
 	Left  int32
 	Tag   uint8
 }
 
 const (
-	EitherIntStringLeft = iota
-	EitherIntStringRight
+	EitherLeft = iota
+	EitherRight
 )
 
-func Left(left int32) EitherIntString {
-	return EitherIntString{Tag: EitherIntStringLeft, Left: left}
+type IntFailure struct {
+	Failed bool
+	Left   int32
 }
 
-func Right(right string) EitherIntString {
-	return EitherIntString{Tag: EitherIntStringRight, Right: right}
+func Left(left int32) Either {
+	return Either{Tag: EitherLeft, Left: left}
 }
 
-func ShowIntString(either EitherIntString) string {
-	return string(AppendShowIntString(nil, either))
+func Right(right string) Either {
+	return Either{Tag: EitherRight, Right: right}
 }
 
-func AppendShowArrayEitherIntString(buffer []byte, array []EitherIntString) []byte {
+func Show(s string, err IntFailure) string {
+	return string(AppendShow(nil, s, err))
+}
+
+func AppendShowArrayEitherIntString(buffer []byte, array []Either) []byte {
 	buffer = append(buffer, '[')
 	for index, element := range array {
 		if index > 0 {
 			buffer = append(buffer, ',')
 		}
-		buffer = AppendShowIntString(buffer, element)
+		buffer = AppendShow(buffer, element.Right, EitherFailure(element))
 	}
 	buffer = append(buffer, ']')
 	return buffer
 }
 
-func AppendShowIntString(buffer []byte, either EitherIntString) []byte {
-	switch either.Tag {
-	case EitherIntStringLeft:
+func AppendShow(buffer []byte, s string, err IntFailure) []byte {
+	if err.Failed {
 		buffer = append(buffer, "(Left "...)
-		buffer = strconv.AppendInt(buffer, int64(either.Left), 10)
+		buffer = strconv.AppendInt(buffer, int64(err.Left), 10)
 		buffer = append(buffer, ')')
-	default: // EitherIntStringRight
+	} else {
 		buffer = append(buffer, "(Right "...)
-		buffer = prim.AppendShowString(buffer, either.Right)
+		buffer = prim.AppendShowString(buffer, s)
 		buffer = append(buffer, ')')
 	}
 	return buffer
+}
+
+func EitherFailure(either Either) IntFailure {
+	if either.Tag == EitherLeft {
+		return IntFailure{Failed: true, Left: either.Left}
+	}
+	return IntFailure{}
 }
 
 // Data/Maybe/maybe.go
@@ -92,8 +103,8 @@ func ShowXYConsMaybeIntConsMaybeIntNil(record XY) string {
 	return string(AppendShowXYConsMaybeIntConsMaybeIntNil(nil, record))
 }
 
-func ShowNumber(maybe Number) string {
-	return string(AppendShowNumber(nil, maybe))
+func ShowMaybe(maybe Number) string {
+	return string(AppendShowMaybe(nil, maybe))
 }
 
 func AppendShowArrayMaybeNumber(buffer []byte, array []Number) []byte {
@@ -102,13 +113,13 @@ func AppendShowArrayMaybeNumber(buffer []byte, array []Number) []byte {
 		if index > 0 {
 			buffer = append(buffer, ',')
 		}
-		buffer = AppendShowNumber(buffer, element)
+		buffer = AppendShowMaybe(buffer, element)
 	}
 	buffer = append(buffer, ']')
 	return buffer
 }
 
-func AppendShowNumber(buffer []byte, maybe Number) []byte {
+func AppendShowMaybe(buffer []byte, maybe Number) []byte {
 	switch maybe.Tag {
 	case TagJust:
 		buffer = append(buffer, "(Just "...)
@@ -325,8 +336,8 @@ func initializeMain_() []string {
 	text = append(text, ", z: "...)
 	text = show.AppendShowArrayNumber(text, []float64{1.5})
 	text = append(text, " }"...)
-	text2 := either.AppendShowArrayEitherIntString(nil, []either.EitherIntString{either.Left(1), either.Right("x")})
-	text2 = maybe_tuple.AppendShowArrayTupleCharArrayMaybeNumber(text2, []maybe_tuple.TupleCharArrayMaybeNumber{{First: 'a', Second: []maybe.Number{maybe.JustNumber(2.5)}}})
+	text2 := either.AppendShowArrayEitherIntString(nil, []either.Either{either.Left(1), either.Right("x")})
+	text2 = maybe_tuple.AppendShowArrayTupleCharArrayMaybeNumber(text2, []maybe_tuple.Tuple{{First: 'a', Second: []maybe.Number{maybe.JustNumber(2.5)}}})
 	text3 := appendShowArrayNumber(nil, []float64{1.0})
 	text3 = show.AppendShowArrayNumber(text3, []float64{1.0})
 	return []string{show.ArrayInt([]int32{1, 2, 3}), show.ArrayInt([]int32{}), show.ArrayArrayInt([][]int32{{1}, {}, {-2, 3}}), string(text), maybe.ArrayXY([]maybe.XY{{X: maybe.Int(1), Y: maybe.NoInt}}), string(text2), arrayShape([]Shape{Circle(1.0), Rect(shared.HW{W: 1, H: -2}), {Tag: ShapeEmpty}, Pair(-3, maybe.Int(-4))}), arrayColour([]*Colour{sharedColourRed, Mixed(sharedColourRed, Named("x\"y"))}), string(text3), show.ArrayWrapped([]shared.Wrapped{{A: 1}}), arrayPoint([]Point{{First: 1, Second: 2}})}
@@ -485,28 +496,28 @@ import (
 	"github.com/i-am-the-slime/iris-go/prim"
 )
 
-type TupleCharArrayMaybeNumber struct {
+type Tuple struct {
 	Second []maybe.Number
 	First  rune
 }
 
-func ShowCharArrayMaybeNumber(tuple TupleCharArrayMaybeNumber) string {
-	return string(AppendShowCharArrayMaybeNumber(nil, tuple))
+func Show(tuple Tuple) string {
+	return string(AppendShow(nil, tuple))
 }
 
-func AppendShowArrayTupleCharArrayMaybeNumber(buffer []byte, array []TupleCharArrayMaybeNumber) []byte {
+func AppendShowArrayTupleCharArrayMaybeNumber(buffer []byte, array []Tuple) []byte {
 	buffer = append(buffer, '[')
 	for index, element := range array {
 		if index > 0 {
 			buffer = append(buffer, ',')
 		}
-		buffer = AppendShowCharArrayMaybeNumber(buffer, element)
+		buffer = AppendShow(buffer, element)
 	}
 	buffer = append(buffer, ']')
 	return buffer
 }
 
-func AppendShowCharArrayMaybeNumber(buffer []byte, tuple TupleCharArrayMaybeNumber) []byte {
+func AppendShow(buffer []byte, tuple Tuple) []byte {
 	buffer = append(buffer, "(Tuple "...)
 	buffer = prim.AppendShowChar(buffer, tuple.First)
 	buffer = append(buffer, ' ')

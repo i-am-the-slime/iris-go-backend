@@ -4,45 +4,45 @@ source: tests-integration/src/fixtures.rs
 // Data/Either/either.go
 package either
 
-type EitherStringArrayInt struct {
+type EitherArrayInt struct {
 	Left  string
 	Right []int32
 	Tag   uint8
 }
 
 const (
-	EitherStringArrayIntLeft = iota
-	EitherStringArrayIntRight
+	EitherArrayIntLeft = iota
+	EitherArrayIntRight
 )
 
 type MainResult struct {
 	Appended []int32
-	Combined EitherStringArrayInt
+	Combined EitherArrayInt
 	Escaping [][]int32
 	Snocs    []int32
 }
 
-type EitherStringInt struct {
+type EitherInt struct {
 	Left  string
 	Right int32
 	Tag   uint8
 }
 
 const (
-	EitherStringIntLeft = iota
-	EitherStringIntRight
+	EitherIntLeft = iota
+	EitherIntRight
 )
 
-func RightEitherStringInt(right int32) EitherStringInt {
-	return EitherStringInt{Tag: EitherStringIntRight, Right: right}
+func RightEitherInt(right int32) EitherInt {
+	return EitherInt{Tag: EitherIntRight, Right: right}
 }
 
-func RightEitherStringArrayInt(right []int32) EitherStringArrayInt {
-	return EitherStringArrayInt{Tag: EitherStringArrayIntRight, Right: right}
+func RightEitherArrayInt(right []int32) EitherArrayInt {
+	return EitherArrayInt{Tag: EitherArrayIntRight, Right: right}
 }
 
-func Left(left string) EitherStringArrayInt {
-	return EitherStringArrayInt{Tag: EitherStringArrayIntLeft, Left: left}
+func Left(left string) EitherArrayInt {
+	return EitherArrayInt{Tag: EitherArrayIntLeft, Left: left}
 }
 
 // main.go
@@ -68,16 +68,16 @@ func initializeMain_() either.MainResult {
 	for x := int32(1); x < 6; x++ {
 		accumulator2 = arraypkg.Bounded(append(accumulator2, x*2))
 	}
-	array := []either.EitherStringInt{either.RightEitherStringInt(1), either.RightEitherStringInt(2), either.RightEitherStringInt(3)}
-	accumulator3 := either.RightEitherStringArrayInt([]int32{})
+	array := []either.EitherInt{either.RightEitherInt(1), either.RightEitherInt(2), either.RightEitherInt(3)}
+	accumulator3 := either.RightEitherArrayInt([]int32{})
 	accumulator3.Right = slices.Clip(accumulator3.Right)
 	for _, element := range array {
-		if accumulator3.Tag == either.EitherStringArrayIntLeft && element.Tag == either.EitherStringIntLeft {
+		if accumulator3.Tag == either.EitherArrayIntLeft && element.Tag == either.EitherIntLeft {
 			accumulator3 = either.Left(prim.Append(accumulator3.Left, element.Left))
-		} else if accumulator3.Tag == either.EitherStringArrayIntLeft && element.Tag == either.EitherStringIntRight {
+		} else if accumulator3.Tag == either.EitherArrayIntLeft && element.Tag == either.EitherIntRight {
 			accumulator3 = either.Left(accumulator3.Left)
-		} else if accumulator3.Tag == either.EitherStringArrayIntRight && element.Tag == either.EitherStringIntRight {
-			accumulator3 = either.RightEitherStringArrayInt(arraypkg.Bounded(append(accumulator3.Right, element.Right)))
+		} else if accumulator3.Tag == either.EitherArrayIntRight && element.Tag == either.EitherIntRight {
+			accumulator3 = either.RightEitherArrayInt(arraypkg.Bounded(append(accumulator3.Right, element.Right)))
 		} else {
 			accumulator3 = either.Left(element.Left)
 		}

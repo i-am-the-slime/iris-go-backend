@@ -4,19 +4,31 @@ source: tests-integration/src/fixtures.rs
 // Data/Either/either.go
 package either
 
-type EitherStringVal struct {
+type Either struct {
 	Left  string
 	Right any
 	Tag   uint8
 }
 
 const (
-	EitherStringValLeft = iota
-	EitherStringValRight
+	EitherLeft = iota
+	EitherRight
 )
 
-func Left(left string) EitherStringVal {
-	return EitherStringVal{Tag: EitherStringValLeft, Left: left}
+type StringFailure struct {
+	Failed bool
+	Left   string
+}
+
+func Left(left string) Either {
+	return Either{Tag: EitherLeft, Left: left}
+}
+
+func EitherFailure(either Either) StringFailure {
+	if either.Tag == EitherLeft {
+		return StringFailure{Failed: true, Left: either.Left}
+	}
+	return StringFailure{}
 }
 
 // Data/Void/void.go
@@ -37,22 +49,20 @@ import (
 var main_ = initializeMain_()
 
 func initializeMain_() []string {
-	array := []either.EitherStringVal{either.Left("no"), either.Left("void")}
+	array := []either.Either{either.Left("no"), either.Left("void")}
 	built := make([]string, len(array)+1)
 	built[0] = "2"
 	for index, element := range array {
-		built[index+1] = describe(element)
+		built[index+1] = describe(element.Right, either.EitherFailure(element))
 	}
 	return built
 }
 
-func describe(either2 either.EitherStringVal) string {
-	switch either2.Tag {
-	case either.EitherStringValLeft:
-		return either2.Left
-	default: // either.EitherStringValRight
-		return describeSpin(either2.Right.(void.Void))
+func describe(argument any, err either.StringFailure) string {
+	if err.Failed {
+		return err.Left
 	}
+	return describeSpin(argument.(void.Void))
 }
 
 func describeSpin(void void.Void) string {

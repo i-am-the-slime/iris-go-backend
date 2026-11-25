@@ -1,0 +1,126 @@
+---
+source: tests-integration/src/fixtures.rs
+---
+// main.go
+package main
+
+import (
+	journal "fixture/Journal_ffi"
+	"strconv"
+)
+
+type Problem struct {
+	Field0 int32
+	Tag    uint8
+}
+
+const (
+	ProblemNegative = iota
+	ProblemTooLarge
+)
+
+type Either struct {
+	Left  Problem
+	Right int32
+	Tag   uint8
+}
+
+const (
+	EitherLeft = iota
+	EitherRight
+)
+
+type ProblemFailure struct {
+	Failed bool
+	Left   Problem
+}
+
+func Negative(field0 int32) Problem {
+	return Problem{Tag: ProblemNegative, Field0: field0}
+}
+
+func TooLarge(field0 int32) Problem {
+	return Problem{Tag: ProblemTooLarge, Field0: field0}
+}
+
+func main() {
+	s := settle("run 5", 15, ProblemFailure{})
+	journal.Log(s)
+	s2 := settle("run -2", 0, ProblemFailure{Failed: true, Left: Negative(-2)})
+	journal.Log(s2)
+	s3 := settle("run 2000", 0, ProblemFailure{Failed: true, Left: TooLarge(2000)})
+	journal.Log(s3)
+	s4 := settle("run 40", 120, ProblemFailure{})
+	journal.Log(s4)
+	i, err := kept(30)
+	if err.Failed {
+		s5 := settle("kept", 0, err)
+		journal.Log(s5)
+	} else {
+		s5 := settle("kept", i, ProblemFailure{})
+		journal.Log(s5)
+	}
+	i2, err := kept(2)
+	var result string
+	if err.Failed {
+		var result2 string
+		switch err.Left.Tag {
+		case ProblemNegative:
+			result2 = "Negative " + strconv.Itoa(int(err.Left.Field0))
+		default: // ProblemTooLarge
+			result2 = "TooLarge " + strconv.Itoa(int(err.Left.Field0))
+		}
+		result = "(Left " + result2 + ")"
+	} else {
+		result = "(Right " + strconv.Itoa(int(i2)) + ")"
+	}
+	journal.Log(result)
+}
+
+func kept(n int32) (int32, ProblemFailure) {
+	if n < 0 {
+		return 0, ProblemFailure{Failed: true, Left: Negative(n)}
+	}
+	if n > 1000 {
+		return 0, ProblemFailure{Failed: true, Left: TooLarge(n)}
+	}
+	field := n * 3
+	journal.Log("checked " + strconv.Itoa(int(field)))
+	n2 := field - 50
+	if n2 < 0 {
+		return 0, ProblemFailure{Failed: true, Left: Negative(n2)}
+	}
+	if n2 > 1000 {
+		return 0, ProblemFailure{Failed: true, Left: TooLarge(n2)}
+	}
+	return field+n2*3, ProblemFailure{}
+}
+
+func settle(label string, i int32, err ProblemFailure) string {
+	for {
+		if err.Failed && err.Left.Tag == ProblemNegative {
+			n := err.Left.Field0
+			journal.Log(label + ": below zero by " + strconv.Itoa(int(-n)))
+			return "negative"
+		}
+		if err.Failed {
+			problem := err.Left
+			var result string
+			switch problem.Tag {
+			case ProblemNegative:
+				result = "Negative " + strconv.Itoa(int(problem.Field0))
+			default: // ProblemTooLarge
+				result = "TooLarge " + strconv.Itoa(int(problem.Field0))
+			}
+			journal.Log(label + ": " + result)
+			return "failed"
+		}
+		value := i
+		if value > 100 {
+			label, i, err = label+" again", 0, ProblemFailure{Failed: true, Left: TooLarge(value)}
+			continue
+		}
+		journal.Log(label + ": " + strconv.Itoa(int(value)))
+		return "ok"
+	}
+}

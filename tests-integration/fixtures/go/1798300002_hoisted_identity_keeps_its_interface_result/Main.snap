@@ -67,7 +67,7 @@ const (
 	TreeIntNode
 )
 
-type TupleUnitArrayTreeInt struct {
+type Tuple struct {
 	First  struct{}
 	Second []TreeInt
 }
@@ -76,7 +76,7 @@ func convert(value []TreeInt) any {
 	return value
 }
 
-func convert2(value TupleUnitArrayTreeInt) *tuple.Tuple {
+func convert2(value Tuple) *tuple.Tuple {
 	return &tuple.Tuple{First: value.First, Second: convert(value.Second), Origin: value}
 }
 
@@ -84,11 +84,11 @@ func convert3(value any) []TreeInt {
 	return value.([]TreeInt)
 }
 
-func convert4(value *tuple.Tuple) TupleUnitArrayTreeInt {
-	if original, ok := value.Origin.(TupleUnitArrayTreeInt); ok {
+func convert4(value *tuple.Tuple) Tuple {
+	if original, ok := value.Origin.(Tuple); ok {
 		return original
 	}
-	return TupleUnitArrayTreeInt{First: value.First.(struct{}), Second: convert3(value.Second)}
+	return Tuple{First: value.First.(struct{}), Second: convert3(value.Second)}
 }
 
 type TreeString struct {
@@ -133,7 +133,7 @@ func main() {
 	journal.Log(show.ArrayString(mapped2))
 }
 
-var collected TupleUnitArrayTreeInt = TupleUnitArrayTreeInt{First: struct{}{}, Second: []TreeInt{NodeTreeInt("around", []TreeInt{LeafTreeInt("fixture", func(value int32) int32 {
+var collected Tuple = Tuple{First: struct{}{}, Second: []TreeInt{NodeTreeInt("around", []TreeInt{LeafTreeInt("fixture", func(value int32) int32 {
 	return value + 1
 })})}}
 

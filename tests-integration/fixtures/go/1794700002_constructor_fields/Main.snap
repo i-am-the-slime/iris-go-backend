@@ -4,37 +4,37 @@ source: tests-integration/src/fixtures.rs
 // Data/Either/either.go
 package either
 
-type EitherStringInt struct {
+type Either struct {
 	Left  string
 	Right int32
 	Tag   uint8
 }
 
 const (
-	EitherStringIntLeft = iota
-	EitherStringIntRight
+	EitherLeft = iota
+	EitherRight
 )
 
-func Right(right int32) EitherStringInt {
-	return EitherStringInt{Tag: EitherStringIntRight, Right: right}
+func Right(right int32) Either {
+	return Either{Tag: EitherRight, Right: right}
 }
 
-func Left(left string) EitherStringInt {
-	return EitherStringInt{Tag: EitherStringIntLeft, Left: left}
+func Left(left string) Either {
+	return Either{Tag: EitherLeft, Left: left}
 }
 
 // Data/List/Types/types.go
 package types
 
-type ListInt struct {
-	Cons1 *ListInt
+type List struct {
+	Cons1 *List
 	Cons0 int32
 }
 
-var SharedListIntNil = &ListInt{}
+var SharedListNil = &List{}
 
-func Cons(cons0 int32, cons1 *ListInt) *ListInt {
-	return &ListInt{Cons0: cons0, Cons1: cons1}
+func Cons(cons0 int32, cons1 *List) *List {
+	return &List{Cons0: cons0, Cons1: cons1}
 }
 
 // Data/Maybe/maybe.go
@@ -125,16 +125,16 @@ var main_ = initializeMain_()
 
 func initializeMain_() string {
 	var text []byte
-	array := []either_tuple.TupleMaybeIntEitherStringInt{{First: maybe.Int(1), Second: either.Right(2)}, {First: maybe.NoInt, Second: either.Left("x")}}
+	array := []either_tuple.Tuple{{First: maybe.Int(1), Second: either.Right(2)}, {First: maybe.NoInt, Second: either.Left("x")}}
 	var accumulator int32 = 0
 	for tupleIndex := range array {
-		if array[tupleIndex].First != maybe.NoInt && array[tupleIndex].Second.Tag == either.EitherStringIntRight {
+		if array[tupleIndex].First != maybe.NoInt && array[tupleIndex].Second.Tag == either.EitherRight {
 			accumulator = accumulator + int32(array[tupleIndex].First) + array[tupleIndex].Second.Right
-		} else if array[tupleIndex].Second.Tag == either.EitherStringIntLeft {
+		} else if array[tupleIndex].Second.Tag == either.EitherLeft {
 			accumulator -= 1
 		}
 	}
-	text = strconv.AppendInt(text, int64(accumulator+mainSum(types.Cons(3, types.Cons(4, types.SharedListIntNil)))), 10)
+	text = strconv.AppendInt(text, int64(accumulator+mainSum(types.Cons(3, types.Cons(4, types.SharedListNil)))), 10)
 	array2 := []Labelled{Tag("t"), {Tag: LabelledUntagged}}
 	mapped := make([]string, len(array2))
 	for index, element := range array2 {
@@ -170,8 +170,8 @@ func entry(entry Entry) string {
 	}
 }
 
-func mainSum(list *types.ListInt) int32 {
-	if list == types.SharedListIntNil {
+func mainSum(list *types.List) int32 {
+	if list == types.SharedListNil {
 		return 0
 	}
 	return list.Cons0 + mainSum(list.Cons1)
@@ -189,7 +189,7 @@ import (
 	"fixture/Data/Maybe"
 )
 
-type TupleMaybeIntEitherStringInt struct {
-	Second either.EitherStringInt
+type Tuple struct {
+	Second either.Either
 	First  maybe.Int
 }

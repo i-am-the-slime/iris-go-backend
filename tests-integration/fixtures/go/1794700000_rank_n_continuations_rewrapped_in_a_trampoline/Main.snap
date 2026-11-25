@@ -10,50 +10,50 @@ import (
 	"strings"
 )
 
-type StepInt struct {
-	More func(struct{}) StepInt
+type Step struct {
+	More func(struct{}) Step
 	Stop string
 	Done int32
 	Tag  uint8
 }
 
 const (
-	StepIntMore = iota
-	StepIntStop
-	StepIntDone
+	StepMore = iota
+	StepStop
+	StepDone
 )
 
-func More(more func(struct{}) StepInt) StepInt {
-	return StepInt{Tag: StepIntMore, More: more}
+func More(more func(struct{}) Step) Step {
+	return Step{Tag: StepMore, More: more}
 }
 
 type Failure struct {
 	Failure string
 }
 
-func Done(done int32) StepInt {
-	return StepInt{Tag: StepIntDone, Done: done}
+func Done(done int32) Step {
+	return Step{Tag: StepDone, Done: done}
 }
 
-type M func(int32, func(func(struct{}) StepInt) StepInt, func(Failure) StepInt, func(int32) StepInt) StepInt
+type M func(int32, func(func(struct{}) Step) Step, func(Failure) Step, func(int32) Step) Step
 
-func Stop(stop string) StepInt {
-	return StepInt{Tag: StepIntStop, Stop: stop}
+func Stop(stop string) Step {
+	return Step{Tag: StepStop, Stop: stop}
 }
 
 var main_ = initializeMain_()
 
 func initializeMain_() []int32 {
-	scrutinee := mainGo(loop(30, 0)(0, More, func(failure Failure) StepInt {
+	scrutinee := mainGo(loop(30, 0)(0, More, func(failure Failure) Step {
 		return Stop(failure.Failure)
 	}, Done))
 	var result int32
 	switch scrutinee.Tag {
-	case StepIntDone:
+	case StepDone:
 		result = scrutinee.Done
-	case StepIntStop:
+	case StepStop:
 		result = -1
-	default: // StepIntMore
+	default: // StepMore
 		result = -2
 	}
 	return []int32{result}
@@ -61,19 +61,19 @@ func initializeMain_() []int32 {
 
 func loop(i int32, total int32) M {
 	if i <= 0 {
-		return func(_ int32, _ func(func(struct{}) StepInt) StepInt, _ func(Failure) StepInt, done func(int32) StepInt) StepInt {
+		return func(_ int32, _ func(func(struct{}) Step) Step, _ func(Failure) Step, done func(int32) Step) Step {
 			return done(total)
 		}
 	}
-	return func(env int32, more func(func(struct{}) StepInt) StepInt, failure func(Failure) StepInt, done func(int32) StepInt) StepInt {
-		return more(func(_ struct{}) StepInt {
-			return askParse(env+i, more, failure, func(shifted int32) StepInt {
+	return func(env int32, more func(func(struct{}) Step) Step, failure func(Failure) Step, done func(int32) Step) Step {
+		return more(func(_ struct{}) Step {
+			return ask(env+i, more, failure, func(shifted int32) Step {
 				m := countdown(prim.IntModPositive(i, 3))
-				return more(func(_ struct{}) StepInt {
-					return more(func(_ struct{}) StepInt {
-						return m(env, more, failure, func(counted int32) StepInt {
+				return more(func(_ struct{}) Step {
+					return more(func(_ struct{}) Step {
+						return m(env, more, failure, func(counted int32) Step {
 							n := loop(i-1, prim.IntModPositive(total+shifted+counted, 1000003))
-							return more(func(_ struct{}) StepInt {
+							return more(func(_ struct{}) Step {
 								return n(env, more, failure, done)
 							})
 						})
@@ -84,19 +84,19 @@ func loop(i int32, total int32) M {
 	}
 }
 
-var askParse M = func(env int32, _ func(func(struct{}) StepInt) StepInt, _ func(Failure) StepInt, done func(int32) StepInt) StepInt {
+var ask M = func(env int32, _ func(func(struct{}) Step) Step, _ func(Failure) Step, done func(int32) Step) Step {
 	return done(env)
 }
 
 func countdown(n int32) M {
 	if n <= 0 {
-		return askParse
+		return ask
 	}
-	return func(env int32, more func(func(struct{}) StepInt) StepInt, failure func(Failure) StepInt, done func(int32) StepInt) StepInt {
-		return more(func(_ struct{}) StepInt {
-			return askParse(env, more, failure, func(_ int32) StepInt {
+	return func(env int32, more func(func(struct{}) Step) Step, failure func(Failure) Step, done func(int32) Step) Step {
+		return more(func(_ struct{}) Step {
+			return ask(env, more, failure, func(_ int32) Step {
 				n2 := countdown(n - 1)
-				return more(func(_ struct{}) StepInt {
+				return more(func(_ struct{}) Step {
 					return n2(env, more, failure, done)
 				})
 			})
@@ -104,10 +104,10 @@ func countdown(n int32) M {
 	}
 }
 
-func mainGo(value StepInt) StepInt {
+func mainGo(value Step) Step {
 	for {
 		switch value.Tag {
-		case StepIntMore:
+		case StepMore:
 			next := value.More
 			value = next(struct{}{})
 			continue

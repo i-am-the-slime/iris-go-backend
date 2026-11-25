@@ -46,7 +46,7 @@ func MaxInt64(x int64, y int64) int64 {
 	return y
 }
 
-func MinUInt64(x uint64, y uint64) uint64 {
+func Min_(x uint64, y uint64) uint64 {
 	if x <= y {
 		return x
 	}

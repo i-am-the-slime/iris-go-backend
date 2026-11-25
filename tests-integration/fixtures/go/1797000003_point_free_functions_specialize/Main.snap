@@ -48,28 +48,28 @@ import (
 var main_ = initializeMain_()
 
 func initializeMain_() []string {
-	return []string{show.ArrayInt(sortByIntCompare(numbers)), show.ArrayInt(sortByIntDescending(numbers)), show.ArrayInt(sortByIntCompare([]int32{}))}
+	return []string{show.ArrayInt(sortByCompare(numbers)), show.ArrayInt(sortByDescending(numbers)), show.ArrayInt(sortByCompare([]int32{}))}
 }
 
 var numbers []int32 = []int32{7, 3, 9, 1, 4, 8, 2, 6, 5, 0}
 
-func sortByIntCompare(xs []int32) []int32 {
+func sortByCompare(xs []int32) []int32 {
 	result := array.Thaw(xs)
 	length := int32(len(*result))
-	sortByIntCompareInsertFrom(result, 1, length)
+	sortByCompareInsertFrom(result, 1, length)
 	performed := shared.Frozen(*result)
 	return performed
 }
 
-func sortByIntDescending(xs []int32) []int32 {
+func sortByDescending(xs []int32) []int32 {
 	result := array.Thaw(xs)
 	length := int32(len(*result))
-	sortByIntDescendingInsertFrom(result, 1, length)
+	sortByDescendingInsertFrom(result, 1, length)
 	performed := shared.Frozen(*result)
 	return performed
 }
 
-func sortByIntCompareInsertFrom(array *[]int32, i int32, length int32) {
+func sortByCompareInsertFrom(array *[]int32, i int32, length int32) {
 	array2 := *array
 	for {
 		if i < length {
@@ -105,7 +105,7 @@ func sortByIntCompareInsertFrom(array *[]int32, i int32, length int32) {
 	}
 }
 
-func sortByIntDescendingInsertFrom(array *[]int32, i int32, length int32) {
+func sortByDescendingInsertFrom(array *[]int32, i int32, length int32) {
 	array2 := *array
 	for {
 		if i < length {

@@ -4,12 +4,12 @@ source: tests-integration/src/fixtures.rs
 // Data/List/Types/types.go
 package types
 
-type ListUnit struct {
+type List struct {
 	Cons0 struct{}
-	Cons1 *ListUnit
+	Cons1 *List
 }
 
-var SharedListUnitNil = &ListUnit{}
+var SharedListNil = &List{}
 
 // Data/Maybe/maybe.go
 package maybe
@@ -37,11 +37,11 @@ func initializeMain_() []int32 {
 
 func defaulted(ignored float64) int32 {
 	array := []struct{}{{}, {}, {}}
-	accumulator := list.SharedListUnitNil
-	var listUnitCells alloc.Cells[list.ListUnit]
+	accumulator := list.SharedListNil
+	var listUnitCells alloc.Cells[list.List]
 	for index := len(array) - 1; index >= 0; index-- {
 		unit := array[index]
-		accumulator = listUnitCells.New(list.ListUnit{Cons0: unit, Cons1: accumulator})
+		accumulator = listUnitCells.New(list.List{Cons0: unit, Cons1: accumulator})
 	}
 	var result int32
 	result = -17
@@ -50,9 +50,9 @@ func defaulted(ignored float64) int32 {
 	}, accumulator)(result)
 }
 
-func defaultedGo(b func(int32) int32, value *list.ListUnit) func(int32) int32 {
+func defaultedGo(b func(int32) int32, value *list.List) func(int32) int32 {
 	for {
-		if value == list.SharedListUnitNil {
+		if value == list.SharedListNil {
 			return b
 		}
 		value = value.Cons1

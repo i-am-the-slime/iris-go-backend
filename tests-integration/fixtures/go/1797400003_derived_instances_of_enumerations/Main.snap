@@ -168,7 +168,7 @@ func initializeMain_() []string {
 		mapped[index] = describe(element)
 	}
 	array := direct.SortBy(cards, func(left Card, right Card) int {
-		switch compareCardConsIntConsSuitNil(left, right) {
+		switch compare(left, right) {
 		case ordering.OrderingLT:
 			return -1
 		case ordering.OrderingGT:
@@ -278,7 +278,7 @@ func isSpades(left Suit) bool {
 	return left == SuitSpades
 }
 
-func compareCardConsIntConsSuitNil(ra Card, rb Card) ordering.Ordering {
+func compare(ra Card, rb Card) ordering.Ordering {
 	i := ra.Rank
 	i2 := rb.Rank
 	var left ordering.Ordering

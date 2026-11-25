@@ -1,0 +1,80 @@
+---
+source: tests-integration/src/fixtures.rs
+---
+// Data/Either/either.go
+package either
+
+type Either struct {
+	Field0 int32
+	Tag    uint8
+}
+
+const (
+	EitherLeft = iota
+	EitherRight
+)
+
+type IntFailure struct {
+	Failed bool
+	Left   int32
+}
+
+// main.go
+package main
+
+import (
+	"fixture/Data/Either"
+	journal "fixture/Journal_ffi"
+	"strconv"
+)
+
+func main() {
+	journal.Log("(Right 19)")
+	journal.Log("(Right 501)")
+	journal.Log("value 100")
+	i, err := sumUntilNegative([]int32{1, 2, 3})
+	var result string
+	if err.Failed {
+		result = "(Left " + strconv.Itoa(int(err.Left)) + ")"
+	} else {
+		result = "(Right " + strconv.Itoa(int(i)) + ")"
+	}
+	journal.Log(result)
+	i2, err := sumUntilNegative([]int32{1, -2, 3})
+	var result2 string
+	if err.Failed {
+		result2 = "(Left " + strconv.Itoa(int(err.Left)) + ")"
+	} else {
+		result2 = "(Right " + strconv.Itoa(int(i2)) + ")"
+	}
+	journal.Log(result2)
+	i3, err := sumUntilNegative([]int32{})
+	var result3 string
+	if err.Failed {
+		result3 = "(Left " + strconv.Itoa(int(err.Left)) + ")"
+	} else {
+		result3 = "(Right " + strconv.Itoa(int(i3)) + ")"
+	}
+	journal.Log(result3)
+	journal.Log("(Right 103)")
+	journal.Log("(Left 7)")
+	journal.Log("(Left 40)")
+}
+
+func sumUntilNegative(array []int32) (int32, either.IntFailure) {
+	var i int32 = 0
+	var err either.IntFailure
+	for _, x := range array {
+		if err.Failed {
+			break
+		}
+		if !err.Failed {
+			if !err.Failed && x < 0 {
+				err = either.IntFailure{Failed: true, Left: x}
+			} else {
+				i, err = i+x, either.IntFailure{}
+			}
+		}
+	}
+	return i, err
+}

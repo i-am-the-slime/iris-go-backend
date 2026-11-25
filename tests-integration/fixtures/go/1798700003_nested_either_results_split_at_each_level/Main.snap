@@ -1,0 +1,227 @@
+---
+source: tests-integration/src/fixtures.rs
+---
+// Data/Either/either.go
+package either
+
+type EitherInt struct {
+	Field0 int32
+	Tag    uint8
+}
+
+const (
+	EitherIntLeft = iota
+	EitherIntRight
+)
+
+type EitherEitherIntInt struct {
+	Left  string
+	Right EitherInt
+	Tag   uint8
+}
+
+const (
+	EitherEitherIntIntLeft = iota
+	EitherEitherIntIntRight
+)
+
+type EitherStringInt struct {
+	Left  string
+	Right int32
+	Tag   uint8
+}
+
+const (
+	EitherStringIntLeft = iota
+	EitherStringIntRight
+)
+
+type IntFailure struct {
+	Failed bool
+	Left   int32
+}
+
+type StringFailure struct {
+	Failed bool
+	Left   string
+}
+
+func Left(field0 int32) EitherInt {
+	return EitherInt{Tag: EitherIntLeft, Field0: field0}
+}
+
+func Right(field0 int32) EitherInt {
+	return EitherInt{Tag: EitherIntRight, Field0: field0}
+}
+
+func EitherIntFromResults(value int32, err IntFailure) EitherInt {
+	if err.Failed {
+		return Left(err.Left)
+	}
+	return Right(value)
+}
+
+// main.go
+package main
+
+import (
+	"fixture/Data/Either"
+	journal "fixture/Journal_ffi"
+	"github.com/i-am-the-slime/iris-go/prim"
+	"strconv"
+)
+
+func main() {
+	i, err, err2 := classify(304)
+	var i2 int32
+	var err3 either.StringFailure
+	if err2.Failed {
+		err3 = err2
+	} else {
+		journal.Log("classified 304")
+		if err.Failed {
+			i2, err3 = err.Left, either.StringFailure{}
+		} else {
+			i2, err3 = i+1, either.StringFailure{}
+		}
+	}
+	var result string
+	if err3.Failed {
+		result = "(Left " + prim.ShowString(err3.Left) + ")"
+	} else {
+		result = "(Right " + strconv.Itoa(int(i2)) + ")"
+	}
+	journal.Log(result)
+	i3, err, err2 := classify(207)
+	var i4 int32
+	var err4 either.StringFailure
+	if err2.Failed {
+		err4 = err2
+	} else {
+		journal.Log("classified 207")
+		if err.Failed {
+			i4, err4 = err.Left, either.StringFailure{}
+		} else {
+			i4, err4 = i3+1, either.StringFailure{}
+		}
+	}
+	var result2 string
+	if err4.Failed {
+		result2 = "(Left " + prim.ShowString(err4.Left) + ")"
+	} else {
+		result2 = "(Right " + strconv.Itoa(int(i4)) + ")"
+	}
+	journal.Log(result2)
+	i5, err, err2 := classify(-5)
+	var i6 int32
+	var err5 either.StringFailure
+	if err2.Failed {
+		err5 = err2
+	} else {
+		journal.Log("classified -5")
+		if err.Failed {
+			i6, err5 = err.Left, either.StringFailure{}
+		} else {
+			i6, err5 = i5+1, either.StringFailure{}
+		}
+	}
+	var result3 string
+	if err5.Failed {
+		result3 = "(Left " + prim.ShowString(err5.Left) + ")"
+	} else {
+		result3 = "(Right " + strconv.Itoa(int(i6)) + ")"
+	}
+	journal.Log(result3)
+	i7, err2 := stepInline(8)
+	var result4 string
+	if err2.Failed {
+		result4 = "(Left " + prim.ShowString(err2.Left) + ")"
+	} else {
+		result4 = "(Right " + strconv.Itoa(int(i7)) + ")"
+	}
+	journal.Log(result4)
+	i8, err2 := stepInline(9)
+	var result5 string
+	if err2.Failed {
+		result5 = "(Left " + prim.ShowString(err2.Left) + ")"
+	} else {
+		result5 = "(Right " + strconv.Itoa(int(i8)) + ")"
+	}
+	journal.Log(result5)
+	i9, err2 := stepInline(-1)
+	var result6 string
+	if err2.Failed {
+		result6 = "(Left " + prim.ShowString(err2.Left) + ")"
+	} else {
+		result6 = "(Right " + strconv.Itoa(int(i9)) + ")"
+	}
+	journal.Log(result6)
+	journal.Log("passing on 41")
+	i10, err, err2 := classify(42)
+	var result7 string
+	if err2.Failed {
+		result7 = "(Left " + prim.ShowString(err2.Left) + ")"
+	} else {
+		var result8 string
+		if err.Failed {
+			result8 = "(Left " + strconv.Itoa(int(err.Left)) + ")"
+		} else {
+			result8 = "(Right " + strconv.Itoa(int(i10)) + ")"
+		}
+		result7 = "(Right " + result8 + ")"
+	}
+	journal.Log(result7)
+	journal.Log("passing on -3")
+	i11, err, err2 := classify(-2)
+	var result9 string
+	if err2.Failed {
+		result9 = "(Left " + prim.ShowString(err2.Left) + ")"
+	} else {
+		var result8 string
+		if err.Failed {
+			result8 = "(Left " + strconv.Itoa(int(err.Left)) + ")"
+		} else {
+			result8 = "(Right " + strconv.Itoa(int(i11)) + ")"
+		}
+		result9 = "(Right " + result8 + ")"
+	}
+	journal.Log(result9)
+}
+
+func stepInline(n int32) (int32, either.StringFailure) {
+	var i int32
+	var err either.IntFailure
+	var err2 either.StringFailure
+	if n < 0 {
+		err2 = either.StringFailure{Failed: true, Left: "negative " + strconv.Itoa(int(n))}
+	} else if n%2 == 0 {
+		err = either.IntFailure{Failed: true, Left: n / 2}
+		err2 = either.StringFailure{}
+	} else {
+		i, err = n*3+1, either.IntFailure{}
+		err2 = either.StringFailure{}
+	}
+	if err2.Failed {
+		return 0, err2
+	}
+	if err.Failed {
+		return err.Left-1, either.StringFailure{}
+	}
+	return i*2, either.StringFailure{}
+}
+
+func classify(n int32) (int32, either.IntFailure, either.StringFailure) {
+	for {
+		if n < 0 {
+			return 0, either.IntFailure{}, either.StringFailure{Failed: true, Left: "negative " + strconv.Itoa(int(n))}
+		}
+		if n > 100 {
+			n -= 100
+			continue
+		}
+		if n%2 == 0 {
+			return 0, either.IntFailure{Failed: true, Left: n / 2}, either.StringFailure{}
+		}
+		return n*3+1, either.IntFailure{}, either.StringFailure{}
+	}
+}

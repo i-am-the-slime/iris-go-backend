@@ -15,12 +15,12 @@ const (
 // Data/Tuple/tuple.go
 package tuple
 
-type TupleIntUnit struct {
+type Tuple struct {
 	Second struct{}
 	First  int32
 }
 
-func SndIntUnit(tuple TupleIntUnit) {
+func Snd(tuple Tuple) {
 }
 
 // main.go
@@ -56,22 +56,22 @@ var units = initializeUnits()
 
 func initializeUnits() []struct{} {
 	array := []struct{}{{}, {}}
-	mapped := make([]tuple.TupleIntUnit, len(array))
+	mapped := make([]tuple.Tuple, len(array))
 	for slot, unit := range array {
 		i := int32(slot)
-		mapped[slot] = tuple.TupleIntUnit{First: i, Second: unit}
+		mapped[slot] = tuple.Tuple{First: i, Second: unit}
 	}
-	indexedAndSorted := direct.SortBy(mapped, func(_ tuple.TupleIntUnit, _ tuple.TupleIntUnit) int {
+	indexedAndSorted := direct.SortBy(mapped, func(_ tuple.Tuple, _ tuple.Tuple) int {
 		return 0
 	})
 	var result []struct{}
 	if len(indexedAndSorted) > 0 {
-		array2 := *arraypkg.UnsafeThaw([]tuple.TupleIntUnit{indexedAndSorted[0]})
+		array2 := *arraypkg.UnsafeThaw([]tuple.Tuple{indexedAndSorted[0]})
 		for range indexedAndSorted {
 			shared.Frozen(array2)
 		}
 		performed := shared.Frozen(array2)
-		array3 := direct.SortBy(performed, func(x tuple.TupleIntUnit, y tuple.TupleIntUnit) int {
+		array3 := direct.SortBy(performed, func(x tuple.Tuple, y tuple.Tuple) int {
 			i := x.First
 			i2 := y.First
 			var result2 ordering.Ordering
@@ -92,7 +92,7 @@ func initializeUnits() []struct{} {
 		})
 		mapped2 := make([]struct{}, len(array3))
 		for index, element := range array3 {
-			tuple.SndIntUnit(element)
+			tuple.Snd(element)
 			mapped2[index] = struct{}{}
 		}
 		result = mapped2

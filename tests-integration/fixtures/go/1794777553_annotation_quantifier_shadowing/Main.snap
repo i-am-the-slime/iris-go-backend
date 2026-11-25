@@ -7,14 +7,14 @@ package types
 import "fixture/Data/Tuple"
 
 type ListTupleStringBoolean struct {
-	Cons0 tuple.TupleStringBoolean
+	Cons0 tuple.TupleBoolean
 	Cons1 *ListTupleStringBoolean
 }
 
 var SharedListTupleStringBooleanNil = &ListTupleStringBoolean{}
 
 type ListTupleStringString struct {
-	Cons0 tuple.TupleStringString
+	Cons0 tuple.TupleString
 	Cons1 *ListTupleStringString
 }
 
@@ -40,23 +40,23 @@ func Show(boolean bool) string {
 // Data/Tuple/tuple.go
 package tuple
 
-type TupleStringBoolean struct {
+type TupleBoolean struct {
 	First  string
 	Second bool
 }
 
-type TupleStringString struct {
+type TupleString struct {
 	First  string
 	Second string
 }
 
-type TupleTupleStringBooleanInt struct {
-	First  TupleStringBoolean
+type TupleTupleStringBoolean struct {
+	First  TupleBoolean
 	Second int32
 }
 
-type TupleTupleStringStringInt struct {
-	First  TupleStringString
+type TupleTupleStringString struct {
+	First  TupleString
 	Second int32
 }
 
@@ -80,13 +80,13 @@ var main_ = initializeMain_()
 func initializeMain_() []string {
 	x := []bool{true, false}
 	x2 := []string{"kept"}
-	mapped := make([]tuple.TupleStringBoolean, len(x))
+	mapped := make([]tuple.TupleBoolean, len(x))
 	for index, boolean := range x {
-		mapped[index] = tuple.TupleStringBoolean{First: "label", Second: boolean}
+		mapped[index] = tuple.TupleBoolean{First: "label", Second: boolean}
 	}
 	len_ := int32(len(x))
 	cell := mainGoReusing(mapped, len_, 0, types.SharedListTupleStringBooleanNil)
-	elements := []tuple.TupleStringBoolean{}
+	elements := []tuple.TupleBoolean{}
 	for {
 		if cell == types.SharedListTupleStringBooleanNil {
 			break
@@ -99,13 +99,13 @@ func initializeMain_() []string {
 	for index := range array {
 		mapped2[index] = show.Show(array[index].Second)
 	}
-	mapped3 := make([]tuple.TupleStringString, len(x2))
+	mapped3 := make([]tuple.TupleString, len(x2))
 	for index, s := range x2 {
-		mapped3[index] = tuple.TupleStringString{First: "label", Second: s}
+		mapped3[index] = tuple.TupleString{First: "label", Second: s}
 	}
 	len_2 := int32(len(x2))
 	cell2 := mainGoReusing2(mapped3, len_2, 0, types.SharedListTupleStringStringNil)
-	elements2 := []tuple.TupleStringString{}
+	elements2 := []tuple.TupleString{}
 	for {
 		if cell2 == types.SharedListTupleStringStringNil {
 			break
@@ -121,12 +121,12 @@ func initializeMain_() []string {
 	return arraypkg.Append(mapped2, mapped4)
 }
 
-func mainGoReusing(xs []tuple.TupleStringBoolean, len_ int32, source int32, memo *types.ListTupleStringBoolean) *types.ListTupleStringBoolean {
+func mainGoReusing(xs []tuple.TupleBoolean, len_ int32, source int32, memo *types.ListTupleStringBoolean) *types.ListTupleStringBoolean {
 	var listTupleStringBooleanCells alloc.Cells[types.ListTupleStringBoolean]
 	for {
 		var result tuple_maybe.MaybeTupleTupleStringBooleanInt
 		if source < len_ {
-			result = tuple_maybe.JustTupleTupleStringBooleanInt(tuple.TupleTupleStringBooleanInt{First: xs[source], Second: source + 1})
+			result = tuple_maybe.JustTupleTupleStringBooleanInt(tuple.TupleTupleStringBoolean{First: xs[source], Second: source + 1})
 		} else {
 			result = tuple_maybe.NoTupleTupleStringBooleanInt
 		}
@@ -137,12 +137,12 @@ func mainGoReusing(xs []tuple.TupleStringBoolean, len_ int32, source int32, memo
 	}
 }
 
-func mainGoReusing2(xs []tuple.TupleStringString, len_ int32, source int32, memo *types.ListTupleStringString) *types.ListTupleStringString {
+func mainGoReusing2(xs []tuple.TupleString, len_ int32, source int32, memo *types.ListTupleStringString) *types.ListTupleStringString {
 	var listTupleStringStringCells alloc.Cells[types.ListTupleStringString]
 	for {
 		var result tuple_maybe.MaybeTupleTupleStringStringInt
 		if source < len_ {
-			result = tuple_maybe.JustTupleTupleStringStringInt(tuple.TupleTupleStringStringInt{First: xs[source], Second: source + 1})
+			result = tuple_maybe.JustTupleTupleStringStringInt(tuple.TupleTupleStringString{First: xs[source], Second: source + 1})
 		} else {
 			result = tuple_maybe.NoTupleTupleStringStringInt
 		}
@@ -188,22 +188,22 @@ import (
 )
 
 type MaybeTupleTupleStringBooleanInt struct {
-	Just tuple.TupleTupleStringBooleanInt
+	Just tuple.TupleTupleStringBoolean
 	Tag  uint8
 }
 
-func JustTupleTupleStringBooleanInt(just tuple.TupleTupleStringBooleanInt) MaybeTupleTupleStringBooleanInt {
+func JustTupleTupleStringBooleanInt(just tuple.TupleTupleStringBoolean) MaybeTupleTupleStringBooleanInt {
 	return MaybeTupleTupleStringBooleanInt{Tag: maybe.TagJust, Just: just}
 }
 
 var NoTupleTupleStringBooleanInt = MaybeTupleTupleStringBooleanInt{Tag: maybe.TagNothing}
 
 type MaybeTupleTupleStringStringInt struct {
-	Just tuple.TupleTupleStringStringInt
+	Just tuple.TupleTupleStringString
 	Tag  uint8
 }
 
-func JustTupleTupleStringStringInt(just tuple.TupleTupleStringStringInt) MaybeTupleTupleStringStringInt {
+func JustTupleTupleStringStringInt(just tuple.TupleTupleStringString) MaybeTupleTupleStringStringInt {
 	return MaybeTupleTupleStringStringInt{Tag: maybe.TagJust, Just: just}
 }
 

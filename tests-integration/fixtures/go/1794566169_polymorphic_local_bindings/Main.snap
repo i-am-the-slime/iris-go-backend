@@ -1,13 +1,6 @@
 ---
 source: tests-integration/src/fixtures.rs
 ---
-// Control/Category/category.go
-package category
-
-func Identity(x int32) int32 {
-	return x
-}
-
 // Data/Show/show.go
 package show
 
@@ -52,20 +45,20 @@ func AppendShowArrayString(buffer []byte, array []string) []byte {
 package main
 
 import (
-	"fixture/Control/Category"
 	"fixture/Data/Show"
 	"github.com/i-am-the-slime/iris-go/array"
 	"github.com/i-am-the-slime/iris-go/console"
 	"github.com/i-am-the-slime/iris-go/prim"
 	"slices"
+	"strconv"
 	"strings"
 )
 
 var main_ = initializeMain_()
 
 func initializeMain_() []string {
-	text := show.AppendShowArrayString(nil, mainGo(show.ShowInt, 3, []string{}))
-	text = show.AppendShowArrayInt(text, mainGo2(category.Identity, 3, []int32{}))
+	text := show.AppendShowArrayString(nil, mainGo(3, []string{}))
+	text = show.AppendShowArrayInt(text, mainGo2(3, []int32{}))
 	return []string{"x2", pairs, joined, string(text)}
 }
 
@@ -77,23 +70,23 @@ func initializeJoined() string {
 	return "<3><" + prim.ShowString("y") + ">"
 }
 
-func mainGo(f func(int32) string, n int32, accumulated []string) []string {
+func mainGo(n int32, accumulated []string) []string {
 	accumulated = slices.Clip(accumulated)
 	for {
 		if n <= 0 {
 			return accumulated
 		}
-		n, accumulated = n-1, array.Bounded(append(accumulated, f(n)))
+		n, accumulated = n-1, array.Bounded(append(accumulated, strconv.Itoa(int(n))))
 	}
 }
 
-func mainGo2(f func(int32) int32, n int32, accumulated []int32) []int32 {
+func mainGo2(n int32, accumulated []int32) []int32 {
 	accumulated = slices.Clip(accumulated)
 	for {
 		if n <= 0 {
 			return accumulated
 		}
-		n, accumulated = n-1, array.Bounded(append(accumulated, f(n)))
+		n, accumulated = n-1, array.Bounded(append(accumulated, n))
 	}
 }
 

@@ -60,23 +60,23 @@ func EmitStepString(emit0 []string, emit1 func(struct{}) StepString) StepString 
 var main_ = initializeMain_()
 
 func initializeMain_() []string {
-	return []string{prim.ShowNumber(foldNumberNumberAdd(0.0, func(ignored2 struct{}) StepNumber {
-		return mapChunksNumberNumberChange(func(value float64) float64 {
+	return []string{prim.ShowNumber(foldAdd(0.0, func(ignored2 struct{}) StepNumber {
+		return mapChunksChangeNumber(func(value float64) float64 {
 			return value * 1.5
 		}, func(ignored3 struct{}) StepNumber {
-			return mapChunksIntNumberChange(func(i int32) float64 {
+			return mapChunksChangeInt(func(i int32) float64 {
 				return float64(i)
 			}, func(ignored struct{}) StepInt {
 				return range_(0, 10, ignored)
 			}, ignored3)
 		}, ignored2)
-	})), foldStringString(func(text string, tick string) string {
+	})), fold(func(text string, tick string) string {
 		return prim.Concat(text, tick, ";")
 	}, "", func(ignored struct{}) StepString {
-		return mapChunksStringStringChange(func(value string) string {
+		return mapChunksChangeString(func(value string) string {
 			return "tick " + value
 		}, func(ignored2 struct{}) StepString {
-			return mapChunksIntStringChangeShow(func(ignored3 struct{}) StepInt {
+			return mapChunksChangeShow(func(ignored3 struct{}) StepInt {
 				return range_(0, 4, ignored3)
 			}, ignored2)
 		}, ignored)
@@ -93,7 +93,7 @@ func range_(from int32, to int32, ignored struct{}) StepInt {
 	})
 }
 
-func foldStringString(step func(string, string) string, initial string, run func(struct{}) StepString) string {
+func fold(step func(string, string) string, initial string, run func(struct{}) StepString) string {
 	for {
 		scrutinee := run(struct{}{})
 		switch scrutinee.Tag {
@@ -106,43 +106,43 @@ func foldStringString(step func(string, string) string, initial string, run func
 	}
 }
 
-func mapChunksNumberNumberChange(f func(float64) float64, pull func(struct{}) StepNumber, ignored struct{}) StepNumber {
+func mapChunksChangeNumber(f func(float64) float64, pull func(struct{}) StepNumber, ignored struct{}) StepNumber {
 	scrutinee := pull(struct{}{})
 	switch scrutinee.Tag {
 	case StepNumberDone:
 		return StepNumber{Tag: StepNumberDone}
 	default: // StepNumberEmit
 		return EmitStepNumber(array.Map(f, scrutinee.Emit0), func(ignored2 struct{}) StepNumber {
-			return mapChunksNumberNumberChange(f, scrutinee.Emit1, ignored2)
+			return mapChunksChangeNumber(f, scrutinee.Emit1, ignored2)
 		})
 	}
 }
 
-func mapChunksIntNumberChange(f func(int32) float64, pull func(struct{}) StepInt, ignored struct{}) StepNumber {
+func mapChunksChangeInt(f func(int32) float64, pull func(struct{}) StepInt, ignored struct{}) StepNumber {
 	scrutinee := pull(struct{}{})
 	switch scrutinee.Tag {
 	case StepIntDone:
 		return StepNumber{Tag: StepNumberDone}
 	default: // StepIntEmit
 		return EmitStepNumber(array.Map(f, scrutinee.Emit0), func(ignored2 struct{}) StepNumber {
-			return mapChunksIntNumberChange(f, scrutinee.Emit1, ignored2)
+			return mapChunksChangeInt(f, scrutinee.Emit1, ignored2)
 		})
 	}
 }
 
-func mapChunksStringStringChange(f func(string) string, pull func(struct{}) StepString, ignored struct{}) StepString {
+func mapChunksChangeString(f func(string) string, pull func(struct{}) StepString, ignored struct{}) StepString {
 	scrutinee := pull(struct{}{})
 	switch scrutinee.Tag {
 	case StepStringDone:
 		return StepString{Tag: StepStringDone}
 	default: // StepStringEmit
 		return EmitStepString(array.Map(f, scrutinee.Emit0), func(ignored2 struct{}) StepString {
-			return mapChunksStringStringChange(f, scrutinee.Emit1, ignored2)
+			return mapChunksChangeString(f, scrutinee.Emit1, ignored2)
 		})
 	}
 }
 
-func foldNumberNumberAdd(initial float64, run func(struct{}) StepNumber) float64 {
+func foldAdd(initial float64, run func(struct{}) StepNumber) float64 {
 	for {
 		scrutinee := run(struct{}{})
 		switch scrutinee.Tag {
@@ -155,7 +155,7 @@ func foldNumberNumberAdd(initial float64, run func(struct{}) StepNumber) float64
 	}
 }
 
-func mapChunksIntStringChangeShow(pull func(struct{}) StepInt, ignored struct{}) StepString {
+func mapChunksChangeShow(pull func(struct{}) StepInt, ignored struct{}) StepString {
 	scrutinee := pull(struct{}{})
 	switch scrutinee.Tag {
 	case StepIntDone:
@@ -166,7 +166,7 @@ func mapChunksIntStringChangeShow(pull func(struct{}) StepInt, ignored struct{})
 			mapped[index] = strconv.Itoa(int(value))
 		}
 		return EmitStepString(mapped, func(ignored2 struct{}) StepString {
-			return mapChunksIntStringChangeShow(scrutinee.Emit1, ignored2)
+			return mapChunksChangeShow(scrutinee.Emit1, ignored2)
 		})
 	}
 }

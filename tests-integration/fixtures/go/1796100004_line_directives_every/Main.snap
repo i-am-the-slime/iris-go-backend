@@ -7,7 +7,7 @@ package effectexception
 import "github.com/i-am-the-slime/iris-go/exception"
 
 //line exception.go:6
-func ThrowUnit(x string) {
+func Throw(x string) {
 //line exception.go:8
 	panic(exception.NewError(x))
 //line exception.go:10
@@ -65,13 +65,13 @@ func main() {
 //line Main.purs:32:3
 	if first != 6 {
 //line Main.purs:33:5
-		effectexception.ThrowUnit("the first total is wrong")
+		effectexception.Throw("the first total is wrong")
 //line Main.purs:32:3
 	}
 //line Main.purs:34:3
 	if total != 6 {
 //line Main.purs:35:5
-		effectexception.ThrowUnit("the total is wrong")
+		effectexception.Throw("the total is wrong")
 //line Main.purs:34:3
 	}
 //line Main.purs:36:12
@@ -109,7 +109,7 @@ func main() {
 //line Main.purs:42:3
 	if areas != 9.0 {
 //line Main.purs:43:5
-		effectexception.ThrowUnit("the areas are wrong")
+		effectexception.Throw("the areas are wrong")
 //line Main.purs:42:3
 	}
 //line Main.purs:28:1

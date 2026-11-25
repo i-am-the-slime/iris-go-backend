@@ -21,28 +21,28 @@ import (
 	"strings"
 )
 
-type RoseInt struct {
-	Second []RoseInt
+type Rose struct {
+	Second []Rose
 	First  int32
 }
 
 type MaybeRoseInt struct {
-	Just RoseInt
+	Just Rose
 	Tag  uint8
 }
 
 type MaybeArrayRoseInt struct {
-	Just []RoseInt
+	Just []Rose
 	Tag  uint8
 }
 
-func JustArrayRoseInt(just []RoseInt) MaybeArrayRoseInt {
+func JustArrayRoseInt(just []Rose) MaybeArrayRoseInt {
 	return MaybeArrayRoseInt{Tag: maybe.TagJust, Just: just}
 }
 
 var NoArrayRoseInt = MaybeArrayRoseInt{Tag: maybe.TagNothing}
 
-func JustRoseInt(just RoseInt) MaybeRoseInt {
+func JustRoseInt(just Rose) MaybeRoseInt {
 	return MaybeRoseInt{Tag: maybe.TagJust, Just: just}
 }
 
@@ -63,10 +63,10 @@ func initializeMain_() []string {
 	return []string{result, foldMapVisit(mapChange(tree)), strconv.Itoa(int(performed))}
 }
 
-var tree RoseInt = RoseInt{First: 1, Second: []RoseInt{{First: 2, Second: []RoseInt{}}, {First: 3, Second: []RoseInt{{First: 4, Second: []RoseInt{}}}}}}
+var tree Rose = Rose{First: 1, Second: []Rose{{First: 2, Second: []Rose{}}, {First: 3, Second: []Rose{{First: 4, Second: []Rose{}}}}}}
 
-func traverseVisit(rose RoseInt) MaybeRoseInt {
-	accumulator := JustArrayRoseInt([]RoseInt{})
+func traverseVisit(rose Rose) MaybeRoseInt {
+	accumulator := JustArrayRoseInt([]Rose{})
 	accumulator.Just = slices.Clip(accumulator.Just)
 	for _, element := range rose.Second {
 		if accumulator.Tag == maybe.TagNothing {
@@ -87,13 +87,13 @@ func traverseVisit(rose RoseInt) MaybeRoseInt {
 	}
 	switch accumulator.Tag {
 	case maybe.TagJust:
-		return JustRoseInt(RoseInt{First: rose.First, Second: accumulator.Just})
+		return JustRoseInt(Rose{First: rose.First, Second: accumulator.Just})
 	default:
 		return NoRoseInt
 	}
 }
 
-func foldlAdd(initial int32, rose RoseInt) int32 {
+func foldlAdd(initial int32, rose Rose) int32 {
 	accumulator := initial + rose.First
 	for _, kid := range rose.Second {
 		accumulator = foldlAdd(accumulator, kid)
@@ -101,19 +101,19 @@ func foldlAdd(initial int32, rose RoseInt) int32 {
 	return accumulator
 }
 
-func mapChange(rose RoseInt) RoseInt {
-	mapped := make([]RoseInt, len(rose.Second))
+func mapChange(rose Rose) Rose {
+	mapped := make([]Rose, len(rose.Second))
 	for index, element := range rose.Second {
 		mapped[index] = mapChange(element)
 	}
-	return RoseInt{First: rose.First * 10, Second: mapped}
+	return Rose{First: rose.First * 10, Second: mapped}
 }
 
-func foldMapVisit(rose RoseInt) string {
+func foldMapVisit(rose Rose) string {
 	return string(appendFoldMapVisit(nil, rose))
 }
 
-func appendFoldMapVisit(buffer []byte, rose RoseInt) []byte {
+func appendFoldMapVisit(buffer []byte, rose Rose) []byte {
 	buffer = strconv.AppendInt(buffer, int64(rose.First), 10)
 	buffer = append(buffer, ';')
 	accumulator := ""

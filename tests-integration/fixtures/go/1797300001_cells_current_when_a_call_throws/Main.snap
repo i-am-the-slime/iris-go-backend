@@ -6,23 +6,23 @@ package either
 
 import "github.com/i-am-the-slime/iris-go/exception"
 
-type EitherErrorUnit struct {
+type Either struct {
 	Right struct{}
 	Left  exception.Error
 	Tag   uint8
 }
 
 const (
-	EitherErrorUnitLeft = iota
-	EitherErrorUnitRight
+	EitherLeft = iota
+	EitherRight
 )
 
-func Left(left exception.Error) EitherErrorUnit {
-	return EitherErrorUnit{Tag: EitherErrorUnitLeft, Left: left}
+func Left(left exception.Error) Either {
+	return Either{Tag: EitherLeft, Left: left}
 }
 
-func Right(right struct{}) EitherErrorUnit {
-	return EitherErrorUnit{Tag: EitherErrorUnitRight, Right: right}
+func Right(right struct{}) Either {
+	return Either{Tag: EitherRight, Right: right}
 }
 
 // main.go
@@ -39,18 +39,18 @@ import (
 
 func main_() int32 {
 	total := &shared.Ref[int32]{Value: 0}
-	either2 := direct.CatchException(func(x exception.Error) either.EitherErrorUnit {
+	either2 := direct.CatchException(func(x exception.Error) either.Either {
 		return either.Left(x)
-	}, func() either.EitherErrorUnit {
+	}, func() either.Either {
 		addCodes(total, "abc", 0)
 		return either.Right(struct{}{})
 	})
 	read := total.Value
 	var result int32
 	switch either2.Tag {
-	case either.EitherErrorUnitLeft:
+	case either.EitherLeft:
 		result = 1
-	default: // either.EitherErrorUnitRight
+	default: // either.EitherRight
 		result = 0
 	}
 	return read + result

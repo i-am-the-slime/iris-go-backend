@@ -6,7 +6,7 @@ package eq
 
 import "fixture/shared"
 
-func EqPointConsIntConsIntNil(ra shared.Point, rb shared.Point) bool {
+func Eq(ra shared.Point, rb shared.Point) bool {
 	return ra == rb
 }
 
@@ -15,7 +15,7 @@ package hashable
 
 import "fixture/shared"
 
-func HashPointConsIntConsIntNil(record shared.Point) int32 {
+func Hash(record shared.Point) int32 {
 	return record.X*31 + record.Y*31
 }
 
@@ -42,33 +42,33 @@ import (
 	"strconv"
 )
 
-type TupleStringInt struct {
+type TupleString struct {
 	First  string
 	Second int32
 }
 
-type TupleHashMapIntIntInt struct {
+type TupleHashMapIntInt struct {
 	First  hashmap.Native[int32, int32]
 	Second int32
 }
 
-func ShowStringInt(tuple TupleStringInt) string {
-	return string(AppendShowStringInt(nil, tuple))
+func Show(tuple TupleString) string {
+	return string(AppendShow(nil, tuple))
 }
 
-func AppendShowArrayTupleStringInt(buffer []byte, array []TupleStringInt) []byte {
+func AppendShowArrayTupleStringInt(buffer []byte, array []TupleString) []byte {
 	buffer = append(buffer, '[')
 	for index, element := range array {
 		if index > 0 {
 			buffer = append(buffer, ',')
 		}
-		buffer = AppendShowStringInt(buffer, element)
+		buffer = AppendShow(buffer, element)
 	}
 	buffer = append(buffer, ']')
 	return buffer
 }
 
-func AppendShowStringInt(buffer []byte, tuple TupleStringInt) []byte {
+func AppendShow(buffer []byte, tuple TupleString) []byte {
 	buffer = append(buffer, "(Tuple "...)
 	buffer = prim.AppendShowString(buffer, tuple.First)
 	buffer = append(buffer, ' ')
@@ -77,7 +77,7 @@ func AppendShowStringInt(buffer []byte, tuple TupleStringInt) []byte {
 	return buffer
 }
 
-func ArrayTupleStringInt(array []TupleStringInt) string {
+func ArrayTupleStringInt(array []TupleString) string {
 	return string(AppendShowArrayTupleStringInt(nil, array))
 }
 
@@ -137,16 +137,16 @@ func initializeMain_() []string {
 	accumulator2 := hashmap.Empty[shared.Point, int32]()
 	for _, n := range array2 {
 		k := shared.Point{X: n - 1, Y: 1 - n}
-		accumulator2 = hashmap.Insert(eq.EqPointConsIntConsIntNil, hashable.HashPointConsIntConsIntNil, shared.Point{X: n, Y: -n}, n, hashmap.Delete(eq.EqPointConsIntConsIntNil, k, k.X*31+k.Y*31, accumulator2))
+		accumulator2 = hashmap.Insert(eq.Eq, hashable.Hash, shared.Point{X: n, Y: -n}, n, hashmap.Delete(eq.Eq, k, k.X*31+k.Y*31, accumulator2))
 	}
 	array3 := []int32{1, 2, 3}
-	accumulator3 := tuple.TupleHashMapIntIntInt{First: hashmap.NativeEmpty[int32, int32](), Second: 0}
+	accumulator3 := tuple.TupleHashMapIntInt{First: hashmap.NativeEmpty[int32, int32](), Second: 0}
 	for _, n := range array3 {
 		table := accumulator3.First
-		accumulator3 = tuple.TupleHashMapIntIntInt{First: hashmap.NativeInsert(nil, nil, n, n, table), Second: hashmap.NativeSize(table)}
+		accumulator3 = tuple.TupleHashMapIntInt{First: hashmap.NativeInsert(nil, nil, n, n, table), Second: hashmap.NativeSize(table)}
 	}
-	return []string{tuple.ArrayTupleStringInt(hashmap.NativeToArrayBy(func(s string, i int32) tuple.TupleStringInt {
-		return tuple.TupleStringInt{First: s, Second: i}
+	return []string{tuple.ArrayTupleStringInt(hashmap.NativeToArrayBy(func(s string, i int32) tuple.TupleString {
+		return tuple.TupleString{First: s, Second: i}
 	}, accumulator.ByWord)), strconv.Itoa(int(object.Size(accumulator.ByFirst))), result2, strconv.Itoa(int(hashmap.Size(accumulator2))), "(Tuple " + strconv.Itoa(int(hashmap.NativeSize(accumulator3.First))) + " " + strconv.Itoa(int(accumulator3.Second)) + ")"}
 }
 

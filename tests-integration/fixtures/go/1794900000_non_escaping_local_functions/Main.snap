@@ -10,46 +10,46 @@ import (
 	"os"
 )
 
-type ListInt struct {
-	Cons1 *ListInt
+type List struct {
+	Cons1 *List
 	Cons0 int32
 }
 
-var sharedListIntNil = &ListInt{}
+var sharedListNil = &List{}
 
-func Cons(cons0 int32, cons1 *ListInt) *ListInt {
-	return &ListInt{Cons0: cons0, Cons1: cons1}
+func Cons(cons0 int32, cons1 *List) *List {
+	return &List{Cons0: cons0, Cons1: cons1}
 }
 
 func main_() int32 {
-	return foldLanes(direct.FromFoldable(func(f func(int32) func(*direct.ConsList[int32]) *direct.ConsList[int32]) func(*direct.ConsList[int32]) func(*ListInt) *direct.ConsList[int32] {
-		return func(b *direct.ConsList[int32]) func(*ListInt) *direct.ConsList[int32] {
+	return foldLanes(direct.FromFoldable(func(f func(int32) func(*direct.ConsList[int32]) *direct.ConsList[int32]) func(*direct.ConsList[int32]) func(*List) *direct.ConsList[int32] {
+		return func(b *direct.ConsList[int32]) func(*List) *direct.ConsList[int32] {
 			return foldr(f, b)
 		}
-	}, Cons(1, Cons(2, sharedListIntNil))), 0)
+	}, Cons(1, Cons(2, sharedListNil))), 0)
 }
 
-func foldr(f func(int32) func(*direct.ConsList[int32]) *direct.ConsList[int32], b *direct.ConsList[int32]) func(*ListInt) *direct.ConsList[int32] {
-	return func(x *ListInt) *direct.ConsList[int32] {
-		return foldrGo2(f, b, foldrGo(sharedListIntNil, x))
+func foldr(f func(int32) func(*direct.ConsList[int32]) *direct.ConsList[int32], b *direct.ConsList[int32]) func(*List) *direct.ConsList[int32] {
+	return func(x *List) *direct.ConsList[int32] {
+		return foldrGo2(f, b, foldrGo(sharedListNil, x))
 	}
 }
 
-func foldrGo(accumulator *ListInt, list *ListInt) *ListInt {
-	var listIntCells alloc.Cells[ListInt]
+func foldrGo(accumulator *List, list *List) *List {
+	var listIntCells alloc.Cells[List]
 	for {
-		if list == sharedListIntNil {
+		if list == sharedListNil {
 			return accumulator
 		}
 		x := list.Cons0
 		xs := list.Cons1
-		accumulator, list = listIntCells.New(ListInt{Cons0: x, Cons1: accumulator}), xs
+		accumulator, list = listIntCells.New(List{Cons0: x, Cons1: accumulator}), xs
 	}
 }
 
-func foldrGo2(f func(int32) func(*direct.ConsList[int32]) *direct.ConsList[int32], accumulator *direct.ConsList[int32], list *ListInt) *direct.ConsList[int32] {
+func foldrGo2(f func(int32) func(*direct.ConsList[int32]) *direct.ConsList[int32], accumulator *direct.ConsList[int32], list *List) *direct.ConsList[int32] {
 	for {
-		if list == sharedListIntNil {
+		if list == sharedListNil {
 			return accumulator
 		}
 		x := list.Cons0

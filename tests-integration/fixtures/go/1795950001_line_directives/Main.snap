@@ -6,7 +6,7 @@ package effectexception
 
 import "github.com/i-am-the-slime/iris-go/exception"
 
-func ThrowUnit(x string) {
+func Throw(x string) {
 	panic(exception.NewError(x))
 }
 
@@ -19,11 +19,11 @@ import "fixture/Effect/Exception"
 func main() {
 //line Main.purs:22:3
 	if sumFrom([]int32{1, 2, 3}, 0, 0) != 6 {
-		effectexception.ThrowUnit("the total is wrong")
+		effectexception.Throw("the total is wrong")
 	}
 //line Main.purs:24:3
 	if sumFrom([]int32{4}, 0, 0) != 4 {
-		effectexception.ThrowUnit("the second total is wrong")
+		effectexception.Throw("the second total is wrong")
 	}
 }
 

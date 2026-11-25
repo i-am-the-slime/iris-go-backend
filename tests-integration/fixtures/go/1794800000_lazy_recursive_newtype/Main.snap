@@ -11,16 +11,16 @@ import (
 	"strings"
 )
 
-type StreamInt = *lazy.Lazy[*TupleIntMaybeStreamInt]
+type StreamInt = *lazy.Lazy[*TupleInt]
 
-type TupleIntMaybeStreamInt struct {
+type TupleInt struct {
 	Second StreamInt
 	First  int32
 }
 
-type StreamStreamInt = *lazy.Lazy[*TupleStreamIntMaybeStreamStreamInt]
+type StreamStreamInt = *lazy.Lazy[*TupleStreamInt]
 
-type TupleStreamIntMaybeStreamStreamInt struct {
+type TupleStreamInt struct {
 	First  StreamInt
 	Second StreamStreamInt
 }
@@ -37,33 +37,33 @@ func initializeMain_() []string {
 	} else {
 		result = "Nothing"
 	}
-	scrutinee4 := tailsInt(countdown(2)).Force()
+	scrutinee4 := tails(countdown(2)).Force()
 	scrutinee5 := scrutinee4.First.Force()
 	return []string{strconv.Itoa(int(scrutinee.First)), result, strconv.Itoa(int(scrutinee5.First))}
 }
 
-func countdown(n int32) *lazy.Lazy[*TupleIntMaybeStreamInt] {
-	return lazy.Defer(func() *TupleIntMaybeStreamInt {
+func countdown(n int32) *lazy.Lazy[*TupleInt] {
+	return lazy.Defer(func() *TupleInt {
 		var result StreamInt
 		if n <= 0 {
 			result = nil
 		} else {
 			result = countdown(n - 1)
 		}
-		return &TupleIntMaybeStreamInt{First: n, Second: result}
+		return &TupleInt{First: n, Second: result}
 	})
 }
 
-func tailsInt(stream StreamInt) *lazy.Lazy[*TupleStreamIntMaybeStreamStreamInt] {
-	return lazy.Defer(func() *TupleStreamIntMaybeStreamStreamInt {
+func tails(stream StreamInt) *lazy.Lazy[*TupleStreamInt] {
+	return lazy.Defer(func() *TupleStreamInt {
 		scrutinee := stream.Force()
 		var result StreamStreamInt
 		if scrutinee.Second != nil {
-			result = tailsInt(scrutinee.Second)
+			result = tails(scrutinee.Second)
 		} else {
 			result = nil
 		}
-		return &TupleStreamIntMaybeStreamStreamInt{First: stream, Second: result}
+		return &TupleStreamInt{First: stream, Second: result}
 	})
 }
 

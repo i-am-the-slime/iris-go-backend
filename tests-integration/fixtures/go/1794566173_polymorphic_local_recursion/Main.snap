@@ -4,9 +4,9 @@ source: tests-integration/src/fixtures.rs
 // Data/Exists/exists.go
 package exists
 
-type ExistsPairEFnIntFnIntInt uint8
+type Exists uint8
 
-func Convert(value ExistsPairEFnIntFnIntInt) any {
+func Convert(value Exists) any {
 	return nil
 }
 
@@ -23,7 +23,7 @@ import (
 type TreeFnIntFnIntInt struct {
 	Leaf func(int32) func(int32) int32
 	Tag  uint8
-	Pair exists.ExistsPairEFnIntFnIntInt
+	Pair exists.Exists
 }
 
 const (
@@ -31,13 +31,13 @@ const (
 	TreeFnIntFnIntIntPair
 )
 
-type PairEFnIntIntInt struct {
+type PairEFnIntInt struct {
 	First  TreeFnIntFnIntInt
 	Second *TreeInt
 }
 
 type ExistsPairEFnIntInt struct {
-	Int *PairEFnIntIntInt
+	Int *PairEFnIntInt
 }
 
 type TreeFnIntInt struct {
@@ -51,13 +51,13 @@ const (
 	TreeFnIntIntPair
 )
 
-type PairEIntInt struct {
+type PairEInt struct {
 	First  *TreeFnIntInt
 	Second *TreeInt
 }
 
 type ExistsPairEInt struct {
-	Int *PairEIntInt
+	Int *PairEInt
 }
 
 type TreeInt struct {
@@ -122,7 +122,7 @@ func convert2(value *TreeFnIntInt) *TreeFn {
 	}
 }
 
-func convert3(value *PairEIntInt) *PairE {
+func convert3(value *PairEInt) *PairE {
 	return &PairE{First: convert2(value.First), Second: convert5(value.Second)}
 }
 
@@ -139,7 +139,7 @@ func convert5(value *TreeInt) *Tree {
 	}
 }
 
-func convert6(value *PairEFnIntIntInt) *PairE {
+func convert6(value *PairEFnIntInt) *PairE {
 	return &PairE{First: convert(value.First), Second: convert5(value.Second)}
 }
 
@@ -190,34 +190,34 @@ func PairTreeFnIntInt(pair *ExistsPairEFnIntInt) *TreeFnIntInt {
 var main_ = initializeMain_()
 
 func initializeMain_() []int32 {
-	return []int32{leavesInt(LeafTreeInt(1)), leavesInt(PairTreeInt(&ExistsPairEInt{Int: &PairEIntInt{First: LeafTreeFnIntInt(func(value int32) int32 {
+	return []int32{leaves(LeafTreeInt(1)), leaves(PairTreeInt(&ExistsPairEInt{Int: &PairEInt{First: LeafTreeFnIntInt(func(value int32) int32 {
 		return value + 1
-	}), Second: LeafTreeInt(1)}})), leavesInt(PairTreeInt(&ExistsPairEInt{Int: &PairEIntInt{First: PairTreeFnIntInt(&ExistsPairEFnIntInt{Int: &PairEFnIntIntInt{First: LeafTreeFnIntFnIntInt(func(x int32) func(int32) int32 {
+	}), Second: LeafTreeInt(1)}})), leaves(PairTreeInt(&ExistsPairEInt{Int: &PairEInt{First: PairTreeFnIntInt(&ExistsPairEFnIntInt{Int: &PairEFnIntInt{First: LeafTreeFnIntFnIntInt(func(x int32) func(int32) int32 {
 		return func(y int32) int32 {
 			return x + y
 		}
 	}), Second: LeafTreeInt(1)}}), Second: LeafTreeInt(2)}}))}
 }
 
-func leavesInt(tree *TreeInt) int32 {
-	return leavesIntGo(0, tree)
+func leaves(tree *TreeInt) int32 {
+	return leavesGo(0, tree)
 }
 
-func leavesIntGo(depth int32, tree *TreeInt) int32 {
+func leavesGo(depth int32, tree *TreeInt) int32 {
 	switch tree.Tag {
 	case TreeIntLeaf:
 		return depth + 1
 	default: // TreeIntPair
 		original := func(depth2 int32) func(*Tree) int32 {
 			return func(tree2 *Tree) int32 {
-				return leavesIntGo2(depth2, tree2)
+				return leavesGo2(depth2, tree2)
 			}
 		}
-		return original(depth+1)(convert8(tree.Pair.Int.First)) + leavesIntGo(depth+1, tree.Pair.Int.Second)
+		return original(depth+1)(convert8(tree.Pair.Int.First)) + leavesGo(depth+1, tree.Pair.Int.Second)
 	}
 }
 
-func leavesIntGo2(depth int32, tree *Tree) int32 {
+func leavesGo2(depth int32, tree *Tree) int32 {
 	switch tree.Tag {
 	case TreeLeaf:
 		return depth + 1
@@ -225,14 +225,14 @@ func leavesIntGo2(depth int32, tree *Tree) int32 {
 		scrutinee := tree.Field0.(*PairE)
 		original := func(depth2 int32) func(*Tree) int32 {
 			return func(tree2 *Tree) int32 {
-				return leavesIntGo2(depth2, tree2)
+				return leavesGo2(depth2, tree2)
 			}
 		}
-		return original(depth+1)(convert9(scrutinee.First)) + leavesIntGo3(depth+1, scrutinee.Second)
+		return original(depth+1)(convert9(scrutinee.First)) + leavesGo3(depth+1, scrutinee.Second)
 	}
 }
 
-func leavesIntGo3(depth int32, tree *Tree) int32 {
+func leavesGo3(depth int32, tree *Tree) int32 {
 	switch tree.Tag {
 	case TreeLeaf:
 		return depth + 1
@@ -240,10 +240,10 @@ func leavesIntGo3(depth int32, tree *Tree) int32 {
 		scrutinee := tree.Field0.(*PairE)
 		original := func(depth2 int32) func(*Tree) int32 {
 			return func(tree2 *Tree) int32 {
-				return leavesIntGo2(depth2, tree2)
+				return leavesGo2(depth2, tree2)
 			}
 		}
-		return original(depth+1)(convert9(scrutinee.First)) + leavesIntGo3(depth+1, scrutinee.Second)
+		return original(depth+1)(convert9(scrutinee.First)) + leavesGo3(depth+1, scrutinee.Second)
 	}
 }
 

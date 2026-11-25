@@ -4,7 +4,7 @@ source: tests-integration/src/fixtures.rs
 // Data/Tuple/tuple.go
 package tuple
 
-type TupleStringInt struct {
+type Tuple struct {
 	First  string
 	Second int32
 }
@@ -18,45 +18,45 @@ import (
 	"github.com/i-am-the-slime/iris-go/prim"
 )
 
-type TreeTupleStringInt struct {
-	Leaf tuple.TupleStringInt
-	Node []TreeTupleStringInt
+type Tree struct {
+	Leaf tuple.Tuple
+	Node []Tree
 	Tag  uint8
 }
 
 const (
-	TreeTupleStringIntLeaf = iota
-	TreeTupleStringIntNode
+	TreeLeaf = iota
+	TreeNode
 )
 
-func Leaf(leaf tuple.TupleStringInt) TreeTupleStringInt {
-	return TreeTupleStringInt{Tag: TreeTupleStringIntLeaf, Leaf: leaf}
+func Leaf(leaf tuple.Tuple) Tree {
+	return Tree{Tag: TreeLeaf, Leaf: leaf}
 }
 
-func Node(node []TreeTupleStringInt) TreeTupleStringInt {
-	return TreeTupleStringInt{Tag: TreeTupleStringIntNode, Node: node}
+func Node(node []Tree) Tree {
+	return Tree{Tag: TreeNode, Node: node}
 }
 
 var main_ = initializeMain_()
 
 func initializeMain_() int32 {
-	return countString([]TreeTupleStringInt{Leaf(tuple.TupleStringInt{First: "a", Second: 1}), Node([]TreeTupleStringInt{Leaf(tuple.TupleStringInt{First: "b", Second: 2})})})
+	return count([]Tree{Leaf(tuple.Tuple{First: "a", Second: 1}), Node([]Tree{Leaf(tuple.Tuple{First: "b", Second: 2})})})
 }
 
-func countString(trees []TreeTupleStringInt) int32 {
+func count(trees []Tree) int32 {
 	var accumulator int32 = 0
 	for _, element := range trees {
-		value := sizeString(element)
+		value := size(element)
 		accumulator += value
 	}
 	return accumulator
 }
 
-func sizeString(tree TreeTupleStringInt) int32 {
-	if tree.Tag == TreeTupleStringIntLeaf {
+func size(tree Tree) int32 {
+	if tree.Tag == TreeLeaf {
 		return tree.Leaf.Second
 	}
-	return countString(tree.Node)
+	return count(tree.Node)
 }
 
 func main() {

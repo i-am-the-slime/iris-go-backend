@@ -6,23 +6,23 @@ package class
 
 import "fixture/shared"
 
-type StepAccIInt struct {
+type Step struct {
 	Loop shared.AccI
 	Done int32
 	Tag  uint8
 }
 
 const (
-	StepAccIIntLoop = iota
-	StepAccIIntDone
+	StepLoop = iota
+	StepDone
 )
 
-func Done(done int32) StepAccIInt {
-	return StepAccIInt{Tag: StepAccIIntDone, Done: done}
+func Done(done int32) Step {
+	return Step{Tag: StepDone, Done: done}
 }
 
-func Loop(loop shared.AccI) StepAccIInt {
-	return StepAccIInt{Tag: StepAccIIntLoop, Loop: loop}
+func Loop(loop shared.AccI) Step {
+	return Step{Tag: StepLoop, Loop: loop}
 }
 
 // main.go
@@ -69,7 +69,7 @@ func iterateF(ref *shared.Ref[int32], n int32, x int32) int32 {
 	}
 }
 
-func mainF(count *shared.Ref[int32], st shared.AccI) class.StepAccIInt {
+func mainF(count *shared.Ref[int32], st shared.AccI) class.Step {
 	if st.I >= 1 {
 		return class.Done(st.Acc)
 	}
@@ -81,14 +81,14 @@ func mainF(count *shared.Ref[int32], st shared.AccI) class.StepAccIInt {
 	return class.Loop(accI)
 }
 
-func mainGo(count *shared.Ref[int32], step class.StepAccIInt) int32 {
+func mainGo(count *shared.Ref[int32], step class.Step) int32 {
 	for {
 		switch step.Tag {
-		case class.StepAccIIntLoop:
+		case class.StepLoop:
 			a := step.Loop
 			step = mainF(count, a)
 			continue
-		default: // class.StepAccIIntDone
+		default: // class.StepDone
 			b := step.Done
 			return b
 		}

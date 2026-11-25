@@ -193,16 +193,16 @@ const (
 	FreeInstructionUnitBind
 )
 
-type FreeCommandVal struct {
+type FreeVal struct {
 	Pure  any
 	Bind0 CommandVal
-	Bind1 func(any) FreeCommandVal
+	Bind1 func(any) FreeVal
 	Tag   uint8
 }
 
 const (
-	FreeCommandValPure = iota
-	FreeCommandValBind
+	FreeValPure = iota
+	FreeValBind
 )
 
 func convert4(value InstructionVal) *Instruction {
@@ -214,13 +214,13 @@ func convert4(value InstructionVal) *Instruction {
 	}
 }
 
-func convert5(value *FreeCommand) FreeCommandVal {
+func convert5(value *FreeCommand) FreeVal {
 	switch value.Tag {
 	case FreeCommandPure:
-		return FreeCommandVal{Tag: FreeCommandValPure, Pure: value.Pure}
+		return FreeVal{Tag: FreeValPure, Pure: value.Pure}
 	default: // FreeCommandBind
 		original := value.Bind1
-		return FreeCommandVal{Tag: FreeCommandValBind, Bind0: value.Bind0, Bind1: func(coerced any) FreeCommandVal {
+		return FreeVal{Tag: FreeValBind, Bind0: value.Bind0, Bind1: func(coerced any) FreeVal {
 			return convert5(original(coerced))
 		}}
 	}
@@ -316,7 +316,7 @@ func PureFreeInstructionInt(pure int32) FreeInstructionInt {
 var main_ = initializeMain_()
 
 func initializeMain_() []int32 {
-	return []int32{foldFreeCommandIntIntIntoState(program, 0).Value + 1, foldFreeCommandIntIntIntoState(substFreeInstructionCommandInt(func(x *Instruction) *FreeCommand {
+	return []int32{foldFreeIntoState(program, 0).Value + 1, foldFreeIntoState(substFree(func(x *Instruction) *FreeCommand {
 		var result *Command
 		switch x.Tag {
 		case InstructionStore:
@@ -331,7 +331,7 @@ func initializeMain_() []int32 {
 var program = initializeProgram()
 
 func initializeProgram() FreeCommandInt {
-	return andThenCommandUnitIntNext(FreeCommandUnit{Tag: FreeCommandUnitBind, Bind0: convert2(Push(41, struct{}{})), Bind1: func(_ any) FreeCommandUnit {
+	return andThenNextCommandUnit(FreeCommandUnit{Tag: FreeCommandUnitBind, Bind0: convert2(Push(41, struct{}{})), Bind1: func(_ any) FreeCommandUnit {
 		return PureFreeCommandUnit(struct{}{})
 	}})
 }
@@ -339,15 +339,15 @@ func initializeProgram() FreeCommandInt {
 var instructions = initializeInstructions()
 
 func initializeInstructions() FreeInstructionInt {
-	return andThenInstructionUnitIntNext(FreeInstructionUnit{Tag: FreeInstructionUnitBind, Bind0: convert3(Store(6, struct{}{})), Bind1: func(_ any) FreeInstructionUnit {
+	return andThenNextInstruction(FreeInstructionUnit{Tag: FreeInstructionUnitBind, Bind0: convert3(Store(6, struct{}{})), Bind1: func(_ any) FreeInstructionUnit {
 		return PureFreeInstructionUnit(struct{}{})
 	}})
 }
 
-func substFreeInstructionCommandIntOrAndThenCommandValIntNext(step int, k func(*Instruction) *FreeCommand, value FreeInstructionInt, program FreeCommandVal, f func(any) FreeInstructionInt) FreeCommandInt {
+func substFreeOrAndThenCommandValIntNext(step int, k func(*Instruction) *FreeCommand, value FreeInstructionInt, program FreeVal, f func(any) FreeInstructionInt) FreeCommandInt {
 	for {
 		switch step {
-		case shared.SubstFreeInstructionCommandIntStep:
+		case shared.SubstFreeStep:
 			switch value.Tag {
 			case FreeInstructionIntPure:
 				a := value.Pure
@@ -355,34 +355,34 @@ func substFreeInstructionCommandIntOrAndThenCommandValIntNext(step int, k func(*
 			default: // FreeInstructionIntBind
 				command := value.Bind0
 				continue_ := value.Bind1
-				step, program, f = shared.AndThenCommandValIntNextStep, convert5(k(convert4(command))), continue_
+				step, program, f = shared.AndThenNextValStep, convert5(k(convert4(command))), continue_
 				continue
 			}
-		default: // shared.AndThenCommandValIntNextStep
+		default: // shared.AndThenNextValStep
 			kCaptured := k
 			fCaptured := f
 			switch program.Tag {
-			case FreeCommandValPure:
+			case FreeValPure:
 				a := program.Pure
-				step, k, value = shared.SubstFreeInstructionCommandIntStep, kCaptured, fCaptured(a)
+				step, k, value = shared.SubstFreeStep, kCaptured, fCaptured(a)
 				continue
-			default: // FreeCommandValBind
+			default: // FreeValBind
 				command := program.Bind0
 				continue_ := program.Bind1
 				return FreeCommandInt{Tag: FreeCommandIntBind, Bind0: command, Bind1: func(value2 any) FreeCommandInt {
-					return andThenCommandValIntNext(continue_(value2), kCaptured, fCaptured)
+					return andThenNextVal(continue_(value2), kCaptured, fCaptured)
 				}}
 			}
 		}
 	}
 }
 
-func substFreeInstructionCommandInt(k func(*Instruction) *FreeCommand, value FreeInstructionInt) FreeCommandInt {
-	var program FreeCommandVal
-	return substFreeInstructionCommandIntOrAndThenCommandValIntNext(shared.SubstFreeInstructionCommandIntStep, k, value, program, nil)
+func substFree(k func(*Instruction) *FreeCommand, value FreeInstructionInt) FreeCommandInt {
+	var program FreeVal
+	return substFreeOrAndThenCommandValIntNext(shared.SubstFreeStep, k, value, program, nil)
 }
 
-func andThenCommandUnitIntNext(program FreeCommandUnit) FreeCommandInt {
+func andThenNextCommandUnit(program FreeCommandUnit) FreeCommandInt {
 	switch program.Tag {
 	case FreeCommandUnitPure:
 		return FreeCommandInt{Tag: FreeCommandIntBind, Bind0: convert6(Pop(category.Identity)), Bind1: func(value any) FreeCommandInt {
@@ -390,17 +390,17 @@ func andThenCommandUnitIntNext(program FreeCommandUnit) FreeCommandInt {
 		}}
 	default: // FreeCommandUnitBind
 		return FreeCommandInt{Tag: FreeCommandIntBind, Bind0: program.Bind0, Bind1: func(value any) FreeCommandInt {
-			return andThenCommandUnitIntNext(program.Bind1(value))
+			return andThenNextCommandUnit(program.Bind1(value))
 		}}
 	}
 }
 
-func andThenCommandValIntNext(program FreeCommandVal, f func(*Instruction) *FreeCommand, f2 func(any) FreeInstructionInt) FreeCommandInt {
+func andThenNextVal(program FreeVal, f func(*Instruction) *FreeCommand, f2 func(any) FreeInstructionInt) FreeCommandInt {
 	var value FreeInstructionInt
-	return substFreeInstructionCommandIntOrAndThenCommandValIntNext(shared.AndThenCommandValIntNextStep, f, value, program, f2)
+	return substFreeOrAndThenCommandValIntNext(shared.AndThenNextValStep, f, value, program, f2)
 }
 
-func andThenInstructionUnitIntNext(program FreeInstructionUnit) FreeInstructionInt {
+func andThenNextInstruction(program FreeInstructionUnit) FreeInstructionInt {
 	switch program.Tag {
 	case FreeInstructionUnitPure:
 		return FreeInstructionInt{Tag: FreeInstructionIntBind, Bind0: convert7(Load(func(value int32) int32 {
@@ -410,12 +410,12 @@ func andThenInstructionUnitIntNext(program FreeInstructionUnit) FreeInstructionI
 		}}
 	default: // FreeInstructionUnitBind
 		return FreeInstructionInt{Tag: FreeInstructionIntBind, Bind0: program.Bind0, Bind1: func(value any) FreeInstructionInt {
-			return andThenInstructionUnitIntNext(program.Bind1(value))
+			return andThenNextInstruction(program.Bind1(value))
 		}}
 	}
 }
 
-func foldFreeCommandIntIntIntoState(program FreeCommandInt, state int32) shared.StateValueOfInt {
+func foldFreeIntoState(program FreeCommandInt, state int32) shared.StateValueOfInt {
 	for {
 		switch program.Tag {
 		case FreeCommandIntPure:
@@ -460,6 +460,6 @@ type StateValueOfValue struct {
 }
 
 const (
-	SubstFreeInstructionCommandIntStep = iota
-	AndThenCommandValIntNextStep
+	SubstFreeStep = iota
+	AndThenNextValStep
 )

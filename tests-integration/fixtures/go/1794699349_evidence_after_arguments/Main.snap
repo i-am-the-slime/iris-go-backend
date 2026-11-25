@@ -15,12 +15,12 @@ import (
 var main_ = initializeMain_()
 
 func initializeMain_() []string {
-	return []string{"value=42", "text=" + prim.ShowString("x"), "true", "different", boxedInt.Describe(7), local}
+	return []string{"value=42", "text=" + prim.ShowString("x"), "true", "different", boxed.Describe(7), local}
 }
 
 var local string = "local=13"
 
-var boxedInt shared.Describe = shared.Describe{Describe: func(value int32) string {
+var boxed shared.Describe = shared.Describe{Describe: func(value int32) string {
 	return "boxed " + strconv.Itoa(int(value))
 }}
 

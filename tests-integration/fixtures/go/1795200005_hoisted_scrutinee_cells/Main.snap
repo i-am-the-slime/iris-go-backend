@@ -4,12 +4,12 @@ source: tests-integration/src/fixtures.rs
 // Data/List/Types/types.go
 package types
 
-type ListInt struct {
-	Cons1 *ListInt
+type List struct {
+	Cons1 *List
 	Cons0 int32
 }
 
-var SharedListIntNil = &ListInt{}
+var SharedListNil = &List{}
 
 // main.go
 package main
@@ -22,7 +22,7 @@ import (
 )
 
 type Shape struct {
-	Leaf    *list.ListInt
+	Leaf    *list.List
 	Branch0 *Shape
 	Branch1 shared.FlagsItems
 	Branch2 *Shape
@@ -36,49 +36,49 @@ const (
 	ShapeWrap
 )
 
-func Leaf(leaf *list.ListInt) *Shape {
+func Leaf(leaf *list.List) *Shape {
 	return &Shape{Tag: ShapeLeaf, Leaf: leaf}
 }
 
 func main_() int32 {
-	accumulator := list.SharedListIntNil
-	var listIntCells alloc.Cells[list.ListInt]
+	accumulator := list.SharedListNil
+	var listIntCells alloc.Cells[list.List]
 	for index := len([]int32{}) - 1; index >= 0; index-- {
 		i := []int32{}[index]
-		accumulator = listIntCells.New(list.ListInt{Cons0: i, Cons1: accumulator})
+		accumulator = listIntCells.New(list.List{Cons0: i, Cons1: accumulator})
 	}
 	scrutinee := Leaf(accumulator)
 	var result2 *Shape
 	if scrutinee.Tag == ShapeBranch && scrutinee.Branch0.Tag == ShapeWrap && scrutinee.Branch2.Tag == ShapeBranch {
-		accumulator2 := list.SharedListIntNil
-		var listIntCells2 alloc.Cells[list.ListInt]
+		accumulator2 := list.SharedListNil
+		var listIntCells2 alloc.Cells[list.List]
 		for index := len([]int32{}) - 1; index >= 0; index-- {
 			i := []int32{}[index]
-			accumulator2 = listIntCells2.New(list.ListInt{Cons0: i, Cons1: accumulator2})
+			accumulator2 = listIntCells2.New(list.List{Cons0: i, Cons1: accumulator2})
 		}
 		*scrutinee = Shape{Tag: ShapeLeaf, Leaf: accumulator2}
 		result2 = scrutinee
-	} else if scrutinee.Tag == ShapeLeaf && scrutinee.Leaf != list.SharedListIntNil {
-		accumulator2 := list.SharedListIntNil
-		var listIntCells3 alloc.Cells[list.ListInt]
+	} else if scrutinee.Tag == ShapeLeaf && scrutinee.Leaf != list.SharedListNil {
+		accumulator2 := list.SharedListNil
+		var listIntCells3 alloc.Cells[list.List]
 		for index := len([]int32{}) - 1; index >= 0; index-- {
 			i := []int32{}[index]
-			accumulator2 = listIntCells3.New(list.ListInt{Cons0: i, Cons1: accumulator2})
+			accumulator2 = listIntCells3.New(list.List{Cons0: i, Cons1: accumulator2})
 		}
 		scrutinee.Leaf = accumulator2
 		result2 = scrutinee
 	} else {
 		array := []int32{1}
-		accumulator2 := list.SharedListIntNil
-		var listIntCells4 alloc.Cells[list.ListInt]
+		accumulator2 := list.SharedListNil
+		var listIntCells4 alloc.Cells[list.List]
 		for index := len(array) - 1; index >= 0; index-- {
 			i := array[index]
-			accumulator2 = listIntCells4.New(list.ListInt{Cons0: i, Cons1: accumulator2})
+			accumulator2 = listIntCells4.New(list.List{Cons0: i, Cons1: accumulator2})
 		}
 		result2 = Leaf(accumulator2)
 	}
 	var result int32
-	if result2.Tag == ShapeLeaf && result2.Leaf != list.SharedListIntNil {
+	if result2.Tag == ShapeLeaf && result2.Leaf != list.SharedListNil {
 		result = result2.Leaf.Cons0
 	} else {
 		result = 0

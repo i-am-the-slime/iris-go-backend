@@ -9,30 +9,30 @@ import (
 	"fixture/Data/Ordering"
 )
 
-type EitherMaybeBooleanInt struct {
+type EitherMaybeBoolean struct {
 	Right int32
 	Tag   uint8
 	Left  maybe.Boolean
 }
 
 const (
-	EitherMaybeBooleanIntLeft = iota
-	EitherMaybeBooleanIntRight
+	EitherMaybeBooleanLeft = iota
+	EitherMaybeBooleanRight
 )
 
-type EitherIntBV struct {
+type EitherInt struct {
 	Left  int32
 	Right ordering.BV
 	Tag   uint8
 }
 
 const (
-	EitherIntBVLeft = iota
-	EitherIntBVRight
+	EitherIntLeft = iota
+	EitherIntRight
 )
 
-func Right(right ordering.BV) EitherIntBV {
-	return EitherIntBV{Tag: EitherIntBVRight, Right: right}
+func Right(right ordering.BV) EitherInt {
+	return EitherInt{Tag: EitherIntRight, Right: right}
 }
 
 // Data/Maybe/maybe.go
@@ -72,10 +72,10 @@ import (
 )
 
 func main_() int32 {
-	scrutineeTag := either.EitherMaybeBooleanIntLeft
+	scrutineeTag := either.EitherMaybeBooleanLeft
 	var result bool
 	switch scrutineeTag {
-	case either.EitherMaybeBooleanIntLeft:
+	case either.EitherMaybeBooleanLeft:
 		result = false
 	default:
 		result = false
@@ -89,7 +89,7 @@ func main_() int32 {
 	scrutinee := either.Right(ordering.BV{B: ordering.OrderingEQ, V: 1000})
 	var result2 int32
 	switch scrutinee.Tag {
-	case either.EitherIntBVRight:
+	case either.EitherIntRight:
 		result2 = scrutinee.Right.V
 	default:
 		result2 = 3

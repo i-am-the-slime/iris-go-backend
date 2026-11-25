@@ -4,23 +4,23 @@ source: tests-integration/src/fixtures.rs
 // Data/Either/either.go
 package either
 
-type EitherStringArrayInt struct {
+type Either struct {
 	Left  string
 	Right []int32
 	Tag   uint8
 }
 
 const (
-	EitherStringArrayIntLeft = iota
-	EitherStringArrayIntRight
+	EitherLeft = iota
+	EitherRight
 )
 
-func Right(right []int32) EitherStringArrayInt {
-	return EitherStringArrayInt{Tag: EitherStringArrayIntRight, Right: right}
+func Right(right []int32) Either {
+	return Either{Tag: EitherRight, Right: right}
 }
 
-func Left(left string) EitherStringArrayInt {
-	return EitherStringArrayInt{Tag: EitherStringArrayIntLeft, Left: left}
+func Left(left string) Either {
+	return Either{Tag: EitherLeft, Left: left}
 }
 
 // Data/Traversable/traversable.go
@@ -33,17 +33,17 @@ import (
 	"strconv"
 )
 
-func TraversePositive(array2 []int32) either.EitherStringArrayInt {
+func TraversePositive(array2 []int32) either.Either {
 	accumulator := either.Right([]int32{})
 	accumulator.Right = slices.Clip(accumulator.Right)
 	for _, element := range array2 {
-		if accumulator.Tag == either.EitherStringArrayIntLeft {
+		if accumulator.Tag == either.EitherLeft {
 			break
 		}
 		switch accumulator.Tag {
-		case either.EitherStringArrayIntLeft:
+		case either.EitherLeft:
 			accumulator = either.Left(accumulator.Left)
-		default: // either.EitherStringArrayIntRight
+		default: // either.EitherRight
 			if element > 0 {
 				accumulator = either.Right(array.Bounded(append(accumulator.Right, element)))
 			} else {
@@ -64,8 +64,8 @@ import (
 
 var main_ = initializeMain_()
 
-func initializeMain_() []either.EitherStringArrayInt {
-	return []either.EitherStringArrayInt{traversable.TraversePositive([]int32{1, 2, 3}), traversable.TraversePositive([]int32{1, -2, 3})}
+func initializeMain_() []either.Either {
+	return []either.Either{traversable.TraversePositive([]int32{1, 2, 3}), traversable.TraversePositive([]int32{1, -2, 3})}
 }
 
 func main() {

@@ -10,11 +10,11 @@ func EqBoolean(boolean bool, boolean2 bool) bool {
 	return boolean == boolean2
 }
 
-func EqString(array2 []string, array3 []string) bool {
-	return array.Eq(EqString2, array2, array3)
+func EqArray(array2 []string, array3 []string) bool {
+	return array.Eq(EqString, array2, array3)
 }
 
-func EqString2(s string, s2 string) bool {
+func EqString(s string, s2 string) bool {
 	return s == s2
 }
 
@@ -30,7 +30,7 @@ package effectexception
 
 import "github.com/i-am-the-slime/iris-go/exception"
 
-func ThrowUnit(x string) {
+func Throw(x string) {
 	panic(exception.NewError(x))
 }
 
@@ -51,32 +51,30 @@ type Problem struct {
 	Second float64
 }
 
-type EitherProblemInt struct {
+type Either struct {
 	Left  Problem
 	Right int32
 	Tag   uint8
 }
 
 const (
-	EitherProblemIntLeft = iota
-	EitherProblemIntRight
+	EitherLeft = iota
+	EitherRight
 )
 
-func Left(left Problem) EitherProblemInt {
-	return EitherProblemInt{Tag: EitherProblemIntLeft, Left: left}
-}
-
-func Right(right int32) EitherProblemInt {
-	return EitherProblemInt{Tag: EitherProblemIntRight, Right: right}
+type ProblemFailure struct {
+	Failed bool
+	Left   Problem
 }
 
 func main() {
 	array := []float64{3.0, 2.5, -1.0}
 	mapped := make([]bool, len(array))
 	for index, value := range array {
-		var result EitherProblemInt
+		var i int32
+		var err ProblemFailure
 		if value < 0.0 {
-			result = Left(Problem{First: []string{"apples", "count"}, Second: value})
+			err = ProblemFailure{Failed: true, Left: Problem{First: []string{"apples", "count"}, Second: value}}
 		} else {
 			var integer maybe.Int
 			if math.Trunc(value) == value && (value >= math.MinInt32 && value <= math.MaxInt32) {
@@ -85,15 +83,15 @@ func main() {
 				integer = maybe.NoInt
 			}
 			if integer == maybe.NoInt {
-				result = Left(Problem{First: []string{"apples", "count"}, Second: value})
+				err = ProblemFailure{Failed: true, Left: Problem{First: []string{"apples", "count"}, Second: value}}
 			} else {
-				result = Right(int32(integer))
+				i, err = int32(integer), ProblemFailure{}
 			}
 		}
-		mapped[index] = isLeftProblemInt(result)
+		mapped[index] = isLeft(i, err)
 	}
 	if !arraypkg.Eq(eq.EqBoolean, mapped, []bool{false, true, true}) {
-		effectexception.ThrowUnit("a count is read wrongly")
+		effectexception.Throw("a count is read wrongly")
 	}
 	array2 := []int32{11, 1}
 	mapped2 := make([][]string, len(array2))
@@ -107,16 +105,14 @@ func main() {
 		}
 		mapped2[index] = result
 	}
-	if !arraypkg.Eq(eq.EqString, mapped2, [][]string{{"pears", "11", "pears", "11"}, {"pears", "1"}}) {
-		effectexception.ThrowUnit("the shared value is wrong")
+	if !arraypkg.Eq(eq.EqArray, mapped2, [][]string{{"pears", "11", "pears", "11"}, {"pears", "1"}}) {
+		effectexception.Throw("the shared value is wrong")
 	}
 }
 
-func isLeftProblemInt(either EitherProblemInt) bool {
-	switch either.Tag {
-	case EitherProblemIntLeft:
+func isLeft(i int32, err ProblemFailure) bool {
+	if err.Failed {
 		return true
-	default: // EitherProblemIntRight
-		return false
 	}
+	return false
 }

@@ -36,7 +36,7 @@ package shrink
 
 import "fixture/shared"
 
-func ShrinkBaseNameScaleBaseNameScaleConsIntConsStringNil(baseNameScale shared.BaseNameScale) shared.BaseName {
+func Shrink(baseNameScale shared.BaseNameScale) shared.BaseName {
 	return shared.BaseName{Base: baseNameScale.Base, Name: baseNameScale.Name}
 }
 
@@ -109,7 +109,7 @@ func someLabels(variant2 variant.InvalidLateMissing) string {
 var shrunk = initializeShrunk()
 
 func initializeShrunk() shared.BaseName {
-	return shrink.ShrinkBaseNameScaleBaseNameScaleConsIntConsStringNil(shared.BaseNameScale{Base: 1, Name: "context", Scale: 2})
+	return shrink.Shrink(shared.BaseNameScale{Base: 1, Name: "context", Scale: 2})
 }
 
 func main() {

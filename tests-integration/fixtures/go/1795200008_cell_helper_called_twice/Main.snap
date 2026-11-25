@@ -4,23 +4,23 @@ source: tests-integration/src/fixtures.rs
 // Control/Monad/Rec/Class/class.go
 package class
 
-type StepIntUnit struct {
+type Step struct {
 	Done struct{}
 	Loop int32
 	Tag  uint8
 }
 
 const (
-	StepIntUnitLoop = iota
-	StepIntUnitDone
+	StepLoop = iota
+	StepDone
 )
 
-func Loop(loop int32) StepIntUnit {
-	return StepIntUnit{Tag: StepIntUnitLoop, Loop: loop}
+func Loop(loop int32) Step {
+	return Step{Tag: StepLoop, Loop: loop}
 }
 
-func Done(done struct{}) StepIntUnit {
-	return StepIntUnit{Tag: StepIntUnitDone, Done: done}
+func Done(done struct{}) Step {
+	return Step{Tag: StepDone, Done: done}
 }
 
 // main.go
@@ -40,7 +40,7 @@ func initializeMain_() shared.MainResult {
 	for {
 		var result bool
 		switch ref.Tag {
-		case class.StepIntUnitLoop:
+		case class.StepLoop:
 			result = true
 		default:
 			result = false
@@ -49,9 +49,9 @@ func initializeMain_() shared.MainResult {
 			break
 		}
 		switch ref.Tag {
-		case class.StepIntUnitLoop:
+		case class.StepLoop:
 			a_ := ref.Loop
-			var step class.StepIntUnit
+			var step class.Step
 			if a_ > 10 {
 				step = class.Done(struct{}{})
 			} else {
@@ -59,7 +59,7 @@ func initializeMain_() shared.MainResult {
 				step = class.Loop(a_ + 1)
 			}
 			ref = step
-		default: // class.StepIntUnitDone
+		default: // class.StepDone
 		}
 	}
 	return shared.MainResult{Total: total, Scaled: []int32{41, 42}}

@@ -41,7 +41,7 @@ func ArrayInt(array []int32) string {
 // Data/Tuple/tuple.go
 package tuple
 
-type TupleArrayIntArrayArrayInt struct {
+type Tuple struct {
 	First  []int32
 	Second [][]int32
 }
@@ -92,7 +92,7 @@ func initializeMain_() []string {
 			accumulator2 = updated
 		}
 	}
-	accumulator3 := tuple.TupleArrayIntArrayArrayInt{First: shared, Second: [][]int32{}}
+	accumulator3 := tuple.Tuple{First: shared, Second: [][]int32{}}
 	accumulator3.Second = slices.Clip(accumulator3.Second)
 	for position := int32(0); position < 3; position++ {
 		current := accumulator3.First
@@ -104,7 +104,7 @@ func initializeMain_() []string {
 		} else {
 			result = current
 		}
-		accumulator3 = tuple.TupleArrayIntArrayArrayInt{First: result, Second: array.Bounded(append(accumulator3.Second, current))}
+		accumulator3 = tuple.Tuple{First: result, Second: array.Bounded(append(accumulator3.Second, current))}
 	}
 	text := []byte("(Tuple ")
 	text = show.AppendShowArrayInt(text, accumulator3.First)

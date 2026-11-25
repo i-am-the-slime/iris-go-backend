@@ -6,12 +6,12 @@ package tuple
 
 import "fixture/shared"
 
-type TupleIntBody struct {
+type TupleBody struct {
 	Second shared.Body
 	First  int32
 }
 
-type TupleIntInt struct {
+type TupleInt struct {
 	First  int32
 	Second int32
 }
@@ -56,10 +56,10 @@ func initializeMain_() float64 {
 		accumulator += toNumber(i) * bodies[index].Mass
 	}
 	array := []int32{3, 4}
-	accumulator2 := []tuple.TupleIntInt{}
+	accumulator2 := []tuple.TupleInt{}
 	for index, i := range array {
 		i2 := int32(index)
-		accumulator2 = arraypkg.Bounded(append(accumulator2, tuple.TupleIntInt{First: i2, Second: i}))
+		accumulator2 = arraypkg.Bounded(append(accumulator2, tuple.TupleInt{First: i2, Second: i}))
 	}
 	var accumulator3 int32 = 0
 	for tupleIndex := range accumulator2 {

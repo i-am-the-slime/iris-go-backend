@@ -6,17 +6,17 @@ package main
 
 import "github.com/i-am-the-slime/iris-go/alloc"
 
-type ListInt struct {
-	Cons1 *ListInt
+type List struct {
+	Cons1 *List
 	Cons0 int32
 }
 
-var sharedListIntNil = &ListInt{}
+var sharedListNil = &List{}
 
 type MainResult struct {
-	Largest      *ListInt
-	Numbers      *ListInt
-	OwnedLargest *ListInt
+	Largest      *List
+	Numbers      *List
+	OwnedLargest *List
 	Total        int32
 }
 
@@ -28,19 +28,19 @@ type Tree struct {
 
 var sharedTreeLeaf = &Tree{}
 
-func Cons(cons0 int32, cons1 *ListInt) *ListInt {
-	return &ListInt{Cons0: cons0, Cons1: cons1}
+func Cons(cons0 int32, cons1 *List) *List {
+	return &List{Cons0: cons0, Cons1: cons1}
 }
 
 var main_ = initializeMain_()
 
 func initializeMain_() MainResult {
-	numbers := mainGo(20, sharedListIntNil)
-	return MainResult{Numbers: numbers, Largest: largestReplacesItsCell(numbers), OwnedLargest: largestReplacesItsCellReusing(mainGo(10, sharedListIntNil)), Total: total(mainGo2(5, sharedTreeLeaf))}
+	numbers := mainGo(20, sharedListNil)
+	return MainResult{Numbers: numbers, Largest: largestReplacesItsCell(numbers), OwnedLargest: largestReplacesItsCellReusing(mainGo(10, sharedListNil)), Total: total(mainGo2(5, sharedTreeLeaf))}
 }
 
-func largestReplacesItsCell(list *ListInt) *ListInt {
-	return largestReplacesItsCellGo(sharedListIntNil, list)
+func largestReplacesItsCell(list *List) *List {
+	return largestReplacesItsCellGo(sharedListNil, list)
 }
 
 func total(tree *Tree) int32 {
@@ -50,13 +50,13 @@ func total(tree *Tree) int32 {
 	return total(tree.Node0) + tree.Node1 + total(tree.Node2)
 }
 
-func mainGo(current int32, accumulator *ListInt) *ListInt {
-	var listIntCells alloc.Cells[ListInt]
+func mainGo(current int32, accumulator *List) *List {
+	var listIntCells alloc.Cells[List]
 	for {
 		if current < 1 {
 			return accumulator
 		}
-		current, accumulator = current-1, listIntCells.New(ListInt{Cons0: current, Cons1: accumulator})
+		current, accumulator = current-1, listIntCells.New(List{Cons0: current, Cons1: accumulator})
 	}
 }
 
@@ -70,43 +70,43 @@ func mainGo2(remaining int32, tree *Tree) *Tree {
 	}
 }
 
-func largestReplacesItsCellGo(best *ListInt, list *ListInt) *ListInt {
+func largestReplacesItsCellGo(best *List, list *List) *List {
 	for {
-		if list == sharedListIntNil {
+		if list == sharedListNil {
 			return best
 		}
 		value := list.Cons0
 		rest := list.Cons1
-		if best != sharedListIntNil {
+		if best != sharedListNil {
 			known := best.Cons0
 			if known >= value {
 				list = rest
 				continue
 			}
 		}
-		best, list = Cons(value, sharedListIntNil), rest
+		best, list = Cons(value, sharedListNil), rest
 	}
 }
 
-func largestReplacesItsCellReusing(list *ListInt) *ListInt {
-	return largestReplacesItsCellGoReusing(sharedListIntNil, list)
+func largestReplacesItsCellReusing(list *List) *List {
+	return largestReplacesItsCellGoReusing(sharedListNil, list)
 }
 
-func largestReplacesItsCellGoReusing(best *ListInt, list *ListInt) *ListInt {
+func largestReplacesItsCellGoReusing(best *List, list *List) *List {
 	for {
-		if list == sharedListIntNil {
+		if list == sharedListNil {
 			return best
 		}
 		value := list.Cons0
 		rest := list.Cons1
-		if best != sharedListIntNil {
+		if best != sharedListNil {
 			known := best.Cons0
 			if known >= value {
 				list = rest
 				continue
 			}
 		}
-		list.Cons1 = sharedListIntNil
+		list.Cons1 = sharedListNil
 		best, list = list, rest
 	}
 }

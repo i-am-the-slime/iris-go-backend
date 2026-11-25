@@ -6,49 +6,54 @@ package either
 
 import "github.com/i-am-the-slime/iris-go/exception"
 
-type EitherStringInt struct {
+type EitherString struct {
 	Left  string
 	Right int32
 	Tag   uint8
 }
 
 const (
-	EitherStringIntLeft = iota
-	EitherStringIntRight
+	EitherStringLeft = iota
+	EitherStringRight
 )
 
-type EitherErrorInt struct {
+type EitherError struct {
 	Left  exception.Error
 	Right int32
 	Tag   uint8
 }
 
 const (
-	EitherErrorIntLeft = iota
-	EitherErrorIntRight
+	EitherErrorLeft = iota
+	EitherErrorRight
 )
 
-func LeftEitherErrorInt(left exception.Error) EitherErrorInt {
-	return EitherErrorInt{Tag: EitherErrorIntLeft, Left: left}
+type StringFailure struct {
+	Failed bool
+	Left   string
 }
 
-func RightEitherErrorInt(right int32) EitherErrorInt {
-	return EitherErrorInt{Tag: EitherErrorIntRight, Right: right}
+func LeftEitherError(left exception.Error) EitherError {
+	return EitherError{Tag: EitherErrorLeft, Left: left}
 }
 
-func LeftEitherStringInt(left string) EitherStringInt {
-	return EitherStringInt{Tag: EitherStringIntLeft, Left: left}
+func RightEitherError(right int32) EitherError {
+	return EitherError{Tag: EitherErrorRight, Right: right}
 }
 
-func RightEitherStringInt(right int32) EitherStringInt {
-	return EitherStringInt{Tag: EitherStringIntRight, Right: right}
+func RightEitherString(right int32) EitherString {
+	return EitherString{Tag: EitherStringRight, Right: right}
 }
 
-func EitherStringIntResults(either EitherStringInt) (int32, *string) {
-	if either.Tag == EitherStringIntLeft {
-		return 0, new(either.Left)
+func LeftEitherString(left string) EitherString {
+	return EitherString{Tag: EitherStringLeft, Left: left}
+}
+
+func EitherStringResults(either EitherString) (int32, StringFailure) {
+	if either.Tag == EitherStringLeft {
+		return 0, StringFailure{Failed: true, Left: either.Left}
 	}
-	return either.Right, nil
+	return either.Right, StringFailure{}
 }
 
 // main.go
@@ -70,35 +75,35 @@ func main() {
 	journal.Log("(Left " + prim.ShowString("odd 3") + ")")
 	i, err := mainStep(7)
 	var i2 int32
-	var err2 *string
-	if err != nil {
+	var err2 either.StringFailure
+	if err.Failed {
 		err2 = err
 	} else {
 		i2, err2 = mainStep(i)
 	}
 	var result string
-	if err2 != nil {
-		result = "(Left " + prim.ShowString(*err2) + ")"
+	if err2.Failed {
+		result = "(Left " + prim.ShowString(err2.Left) + ")"
 	} else {
 		result = "(Right " + strconv.Itoa(int(i2)) + ")"
 	}
 	journal.Log(result)
-	i3, err := retrying(3, func(n int32) (int32, *string) {
+	i3, err := retrying(3, func(n int32) (int32, either.StringFailure) {
 		return mainCounted(counter, n)
 	}, 5)
 	var result2 string
-	if err != nil {
-		result2 = "(Left " + prim.ShowString(*err) + ")"
+	if err.Failed {
+		result2 = "(Left " + prim.ShowString(err.Left) + ")"
 	} else {
 		result2 = "(Right " + strconv.Itoa(int(i3)) + ")"
 	}
 	journal.Log(result2)
-	i4, err := retrying(2, func(n int32) (int32, *string) {
+	i4, err := retrying(2, func(n int32) (int32, either.StringFailure) {
 		return mainCounted(counter, n)
 	}, 1)
 	var result3 string
-	if err != nil {
-		result3 = "(Left " + prim.ShowString(*err) + ")"
+	if err.Failed {
+		result3 = "(Left " + prim.ShowString(err.Left) + ")"
 	} else {
 		result3 = "(Right " + strconv.Itoa(int(i4)) + ")"
 	}
@@ -107,80 +112,80 @@ func main() {
 	journal.Log(strconv.Itoa(int(calls)))
 	i5, err := runAll(3)
 	var result4 string
-	if err != nil {
-		result4 = "(Left " + prim.ShowString(*err) + ")"
+	if err.Failed {
+		result4 = "(Left " + prim.ShowString(err.Left) + ")"
 	} else {
 		result4 = "(Right " + strconv.Itoa(int(i5)) + ")"
 	}
 	journal.Log(result4)
 	i6, err := runAll(4)
 	var result5 string
-	if err != nil {
-		result5 = "(Left " + prim.ShowString(*err) + ")"
+	if err.Failed {
+		result5 = "(Left " + prim.ShowString(err.Left) + ")"
 	} else {
 		result5 = "(Right " + strconv.Itoa(int(i6)) + ")"
 	}
 	journal.Log(result5)
-	either2 := direct.CatchException(func(x exception.Error) either.EitherErrorInt {
-		return either.LeftEitherErrorInt(x)
-	}, func() either.EitherErrorInt {
+	either2 := direct.CatchException(func(x exception.Error) either.EitherError {
+		return either.LeftEitherError(x)
+	}, func() either.EitherError {
 		panic(exception.NewError("no"))
 	})
 	var result6 string
 	switch either2.Tag {
-	case either.EitherErrorIntLeft:
+	case either.EitherErrorLeft:
 		result6 = "(Left " + prim.ShowString("thrown") + ")"
-	default: // either.EitherErrorIntRight
+	default: // either.EitherErrorRight
 		result6 = "(Right " + strconv.Itoa(int(either2.Right)) + ")"
 	}
 	journal.Log(result6)
-	either3 := direct.CatchException(func(x exception.Error) either.EitherErrorInt {
-		return either.LeftEitherErrorInt(x)
-	}, func() either.EitherErrorInt {
-		return either.RightEitherErrorInt(5)
+	either3 := direct.CatchException(func(x exception.Error) either.EitherError {
+		return either.LeftEitherError(x)
+	}, func() either.EitherError {
+		return either.RightEitherError(5)
 	})
-	var result7 either.EitherStringInt
+	var i7 int32
+	var err3 either.StringFailure
 	switch either3.Tag {
-	case either.EitherErrorIntLeft:
-		result7 = either.LeftEitherStringInt("thrown")
-	default: // either.EitherErrorIntRight
-		result7 = either.RightEitherStringInt(either3.Right)
+	case either.EitherErrorLeft:
+		err3 = either.StringFailure{Failed: true, Left: "thrown"}
+	default: // either.EitherErrorRight
+		i7, err3 = either3.Right, either.StringFailure{}
 	}
-	var either4 either.EitherStringInt
-	switch result7.Tag {
-	case either.EitherStringIntLeft:
-		either4 = either.LeftEitherStringInt(result7.Left)
-	default: // either.EitherStringIntRight
-		b := result7.Right
+	var i8 int32
+	var err4 either.StringFailure
+	if err3.Failed {
+		err4 = err3
+	} else {
+		b := i7
 		if b&1 == 0 {
-			either4 = either.RightEitherStringInt(b >> 1)
+			i8, err4 = b>>1, either.StringFailure{}
 		} else {
-			either4 = either.LeftEitherStringInt("odd " + strconv.Itoa(int(b)))
+			err4 = either.StringFailure{Failed: true, Left: "odd " + strconv.Itoa(int(b))}
 		}
 	}
-	var result8 string
-	switch either4.Tag {
-	case either.EitherStringIntLeft:
-		result8 = "(Left " + prim.ShowString(either4.Left) + ")"
-	default: // either.EitherStringIntRight
-		result8 = "(Right " + strconv.Itoa(int(either4.Right)) + ")"
+	var result7 string
+	if err4.Failed {
+		result7 = "(Left " + prim.ShowString(err4.Left) + ")"
+	} else {
+		result7 = "(Right " + strconv.Itoa(int(i8)) + ")"
 	}
-	journal.Log(result8)
+	journal.Log(result7)
 	journal.Log(strconv.Itoa(len(pipeline)))
 }
 
-func halve(n int32) either.EitherStringInt {
+func halve(n int32) either.EitherString {
 	if n&1 == 0 {
-		return either.RightEitherStringInt(n >> 1)
+		return either.RightEitherString(n >> 1)
 	}
-	return either.LeftEitherStringInt("odd " + strconv.Itoa(int(n)))
+	return either.LeftEitherString("odd " + strconv.Itoa(int(n)))
 }
 
-func retrying(attempts int32, step func(int32) (int32, *string), n int32) (int32, *string) {
+func retrying(attempts int32, step func(int32) (int32, either.StringFailure), n int32) (int32, either.StringFailure) {
 	for {
 		i, err := step(n)
-		if err == nil {
-			return i, nil
+		if !err.Failed {
+			return i, either.StringFailure{}
 		}
 		if attempts <= 1 {
 			return 0, err
@@ -189,44 +194,44 @@ func retrying(attempts int32, step func(int32) (int32, *string), n int32) (int32
 	}
 }
 
-func runAll(start int32) (int32, *string) {
-	accumulator := either.RightEitherStringInt(start)
+func runAll(start int32) (int32, either.StringFailure) {
+	accumulator := either.RightEitherString(start)
 	for _, a := range pipeline {
-		var next either.EitherStringInt
+		var next either.EitherString
 		switch accumulator.Tag {
-		case either.EitherStringIntLeft:
-			next = either.LeftEitherStringInt(accumulator.Left)
-		default: // either.EitherStringIntRight
+		case either.EitherStringLeft:
+			next = either.LeftEitherString(accumulator.Left)
+		default: // either.EitherStringRight
 			next = a(accumulator.Right)
 		}
 		accumulator = next
 	}
-	return either.EitherStringIntResults(accumulator)
+	return either.EitherStringResults(accumulator)
 }
 
-var pipeline []func(int32) either.EitherStringInt = []func(int32) either.EitherStringInt{addOne, halve, func(n int32) either.EitherStringInt {
-	return either.RightEitherStringInt(n + 2)
+var pipeline []func(int32) either.EitherString = []func(int32) either.EitherString{addOne, halve, func(n int32) either.EitherString {
+	return either.RightEitherString(n + 2)
 }}
 
-func addOne(n int32) either.EitherStringInt {
-	return either.RightEitherStringInt(n + 1)
+func addOne(n int32) either.EitherString {
+	return either.RightEitherString(n + 1)
 }
 
-func mainCounted(counter *shared.Ref[int32], n int32) (int32, *string) {
+func mainCounted(counter *shared.Ref[int32], n int32) (int32, either.StringFailure) {
 	s := counter.Value
 	s_ := s + 1
 	counter.Value = s_
 	if n&1 == 0 {
-		return n>>1, nil
+		return n>>1, either.StringFailure{}
 	}
-	return 0, new("odd "+strconv.Itoa(int(n)))
+	return 0, either.StringFailure{Failed: true, Left: "odd " + strconv.Itoa(int(n))}
 }
 
-func mainStep(n int32) (int32, *string) {
+func mainStep(n int32) (int32, either.StringFailure) {
 	if n > 100 {
-		return 0, new("big")
+		return 0, either.StringFailure{Failed: true, Left: "big"}
 	}
-	return n*10, nil
+	return n*10, either.StringFailure{}
 }
 
 // shared/shared.go

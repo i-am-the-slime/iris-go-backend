@@ -601,7 +601,7 @@ import (
 var main_ = initializeMain_()
 
 func initializeMain_() []int32 {
-	fromStoring := mainGo(redblack.SharedTreeLeaf, redblack_types.SharedListTreeNil, 0, 40)
+	fromStoring := mainGo(redblack.SharedTreeLeaf, redblack_types.SharedListNil, 0, 40)
 	effect := func() []int32 {
 		var fromTheRef *redblack.Tree
 		if fromStoring > 0 {
@@ -609,11 +609,11 @@ func initializeMain_() []int32 {
 		} else {
 			fromTheRef = redblack.SharedTreeLeaf
 		}
-		record := mainGoReusing(redblack.SharedTreeLeaf, redblack_types.SharedListTreeNil, redblack.KeptTotal{Kept: redblack.SharedTreeLeaf, Total: 0}, 40)
-		closure := mainGoReusing2(redblack.SharedTreeLeaf, redblack_types.SharedListTreeNil, func(_ struct{}) int32 {
+		record := mainGoReusing(redblack.SharedTreeLeaf, redblack_types.SharedListNil, redblack.KeptTotal{Kept: redblack.SharedTreeLeaf, Total: 0}, 40)
+		closure := mainGoReusing2(redblack.SharedTreeLeaf, redblack_types.SharedListNil, func(_ struct{}) int32 {
 			return 0
 		}, 40)
-		fromKeeping := mainGoReusing3(redblack.SharedTreeLeaf, redblack_types.SharedListTreeNil, 0, 40)
+		fromKeeping := mainGoReusing3(redblack.SharedTreeLeaf, redblack_types.SharedListNil, 0, 40)
 		var fromTheForeign *redblack.Tree
 		if fromKeeping > 0 {
 			fromTheForeign = keeper.Kept[*redblack.Tree]()
@@ -633,7 +633,7 @@ func initializeStashed() *shared.Ref[*redblack.Tree] {
 	return performed
 }
 
-func mainGo(tree *redblack.Tree, trail *redblack_types.ListTree, total int32, n int32) int32 {
+func mainGo(tree *redblack.Tree, trail *redblack_types.List, total int32, n int32) int32 {
 	for {
 		if n <= 0 {
 			return total + redblack.Checksum(tree)
@@ -649,7 +649,7 @@ func mainGo(tree *redblack.Tree, trail *redblack_types.ListTree, total int32, n 
 		} else {
 			next = redblack.Ins(n, true, tree)
 		}
-		var result *redblack_types.ListTree
+		var result *redblack_types.List
 		if n%4 == 0 {
 			result = redblack_types.Cons(next, trail)
 		} else {
@@ -670,7 +670,7 @@ func mainGo(tree *redblack.Tree, trail *redblack_types.ListTree, total int32, n 
 	}
 }
 
-func mainGoChecked(tree *redblack.Tree, trail *redblack_types.ListTree, total int32, n int32, treeOwned bool) int32 {
+func mainGoChecked(tree *redblack.Tree, trail *redblack_types.List, total int32, n int32, treeOwned bool) int32 {
 	for {
 		if n <= 0 {
 			return total + redblack.Checksum(tree)
@@ -690,7 +690,7 @@ func mainGoChecked(tree *redblack.Tree, trail *redblack_types.ListTree, total in
 		} else {
 			next = redblack.InsChecked(n, true, tree, treeOwned)
 		}
-		var result *redblack_types.ListTree
+		var result *redblack_types.List
 		if n%4 == 0 {
 			result = redblack_types.Cons(next, trail)
 		} else {
@@ -706,7 +706,7 @@ func mainGoChecked(tree *redblack.Tree, trail *redblack_types.ListTree, total in
 	}
 }
 
-func mainGoChecked2(tree *redblack.Tree, trail *redblack_types.ListTree, later func(struct{}) int32, n int32, treeOwned bool) shared.Closure {
+func mainGoChecked2(tree *redblack.Tree, trail *redblack_types.List, later func(struct{}) int32, n int32, treeOwned bool) shared.Closure {
 	for {
 		if n <= 0 {
 			return shared.Closure{Later: later, Total: redblack.Checksum(tree)}
@@ -726,7 +726,7 @@ func mainGoChecked2(tree *redblack.Tree, trail *redblack_types.ListTree, later f
 		} else {
 			next = redblack.InsChecked(n, true, tree, treeOwned)
 		}
-		var result *redblack_types.ListTree
+		var result *redblack_types.List
 		if n%4 == 0 {
 			result = redblack_types.Cons(next, trail)
 		} else {
@@ -744,7 +744,7 @@ func mainGoChecked2(tree *redblack.Tree, trail *redblack_types.ListTree, later f
 	}
 }
 
-func mainGoChecked3(tree *redblack.Tree, trail *redblack_types.ListTree, record redblack.KeptTotal, n int32, treeOwned bool) redblack.KeptTotal {
+func mainGoChecked3(tree *redblack.Tree, trail *redblack_types.List, record redblack.KeptTotal, n int32, treeOwned bool) redblack.KeptTotal {
 	for {
 		if n <= 0 {
 			updated := record
@@ -766,7 +766,7 @@ func mainGoChecked3(tree *redblack.Tree, trail *redblack_types.ListTree, record 
 		} else {
 			next = redblack.InsChecked(n, true, tree, treeOwned)
 		}
-		var result *redblack_types.ListTree
+		var result *redblack_types.List
 		if n%4 == 0 {
 			result = redblack_types.Cons(next, trail)
 		} else {
@@ -784,7 +784,7 @@ func mainGoChecked3(tree *redblack.Tree, trail *redblack_types.ListTree, record 
 	}
 }
 
-func mainGoReusing(tree *redblack.Tree, trail *redblack_types.ListTree, record redblack.KeptTotal, n int32) redblack.KeptTotal {
+func mainGoReusing(tree *redblack.Tree, trail *redblack_types.List, record redblack.KeptTotal, n int32) redblack.KeptTotal {
 	if n <= 0 {
 		updated := record
 		updated.Total = record.Total + redblack.Checksum(tree)
@@ -803,7 +803,7 @@ func mainGoReusing(tree *redblack.Tree, trail *redblack_types.ListTree, record r
 	} else {
 		next = redblack.InsReusing(n, true, tree)
 	}
-	var result *redblack_types.ListTree
+	var result *redblack_types.List
 	if n%4 == 0 {
 		result = redblack_types.Cons(next, trail)
 	} else {
@@ -820,7 +820,7 @@ func mainGoReusing(tree *redblack.Tree, trail *redblack_types.ListTree, record r
 	return mainGoChecked3(next, result, result2, n-1, n%4 != 0 && n != 7)
 }
 
-func mainGoReusing2(tree *redblack.Tree, trail *redblack_types.ListTree, later func(struct{}) int32, n int32) shared.Closure {
+func mainGoReusing2(tree *redblack.Tree, trail *redblack_types.List, later func(struct{}) int32, n int32) shared.Closure {
 	if n <= 0 {
 		return shared.Closure{Later: later, Total: redblack.Checksum(tree)}
 	}
@@ -837,7 +837,7 @@ func mainGoReusing2(tree *redblack.Tree, trail *redblack_types.ListTree, later f
 	} else {
 		next = redblack.InsReusing(n, true, tree)
 	}
-	var result *redblack_types.ListTree
+	var result *redblack_types.List
 	if n%4 == 0 {
 		result = redblack_types.Cons(next, trail)
 	} else {
@@ -854,7 +854,7 @@ func mainGoReusing2(tree *redblack.Tree, trail *redblack_types.ListTree, later f
 	return mainGoChecked2(next, result, result2, n-1, n%4 != 0 && n != 7)
 }
 
-func mainGoReusing3(tree *redblack.Tree, trail *redblack_types.ListTree, total int32, n int32) int32 {
+func mainGoReusing3(tree *redblack.Tree, trail *redblack_types.List, total int32, n int32) int32 {
 	if n <= 0 {
 		return total + redblack.Checksum(tree)
 	}
@@ -871,7 +871,7 @@ func mainGoReusing3(tree *redblack.Tree, trail *redblack_types.ListTree, total i
 	} else {
 		next = redblack.InsReusing(n, true, tree)
 	}
-	var result *redblack_types.ListTree
+	var result *redblack_types.List
 	if n%4 == 0 {
 		result = redblack_types.Cons(next, trail)
 	} else {
@@ -899,15 +899,15 @@ package redblack_types
 
 import "fixture/RedBlack"
 
-type ListTree struct {
+type List struct {
 	Cons0 *redblack.Tree
-	Cons1 *ListTree
+	Cons1 *List
 }
 
-var SharedListTreeNil = &ListTree{}
+var SharedListNil = &List{}
 
-func Cons(cons0 *redblack.Tree, cons1 *ListTree) *ListTree {
-	return &ListTree{Cons0: cons0, Cons1: cons1}
+func Cons(cons0 *redblack.Tree, cons1 *List) *List {
+	return &List{Cons0: cons0, Cons1: cons1}
 }
 
 // shared/shared.go

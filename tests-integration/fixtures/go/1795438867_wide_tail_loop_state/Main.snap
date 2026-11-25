@@ -10,8 +10,8 @@ type Int int64
 
 const NoInt Int = 1 << 32
 
-func ShowInt(maybe Int) string {
-	return string(AppendShowInt(nil, maybe))
+func Show(maybe Int) string {
+	return string(AppendShow(nil, maybe))
 }
 
 func AppendShowArrayMaybeInt(buffer []byte, array []Int) []byte {
@@ -20,13 +20,13 @@ func AppendShowArrayMaybeInt(buffer []byte, array []Int) []byte {
 		if index > 0 {
 			buffer = append(buffer, ',')
 		}
-		buffer = AppendShowInt(buffer, element)
+		buffer = AppendShow(buffer, element)
 	}
 	buffer = append(buffer, ']')
 	return buffer
 }
 
-func AppendShowInt(buffer []byte, maybe Int) []byte {
+func AppendShow(buffer []byte, maybe Int) []byte {
 	if maybe != NoInt {
 		buffer = append(buffer, "(Just "...)
 		buffer = strconv.AppendInt(buffer, int64(int32(maybe)), 10)

@@ -4,15 +4,15 @@ source: tests-integration/src/fixtures.rs
 // Data/List/Types/types.go
 package types
 
-type ListString struct {
+type List struct {
 	Cons0 string
-	Cons1 *ListString
+	Cons1 *List
 }
 
-var SharedListStringNil = &ListString{}
+var SharedListNil = &List{}
 
-func Cons(cons0 string, cons1 *ListString) *ListString {
-	return &ListString{Cons0: cons0, Cons1: cons1}
+func Cons(cons0 string, cons1 *List) *List {
+	return &List{Cons0: cons0, Cons1: cons1}
 }
 
 // Data/Maybe/maybe.go
@@ -35,8 +35,8 @@ func JustString(just string) String {
 
 var NoString = String{Tag: TagNothing}
 
-func ShowString(maybe String) string {
-	return string(AppendShowString(nil, maybe))
+func Show(maybe String) string {
+	return string(AppendShow(nil, maybe))
 }
 
 func AppendShowArrayMaybeString(buffer []byte, array []String) []byte {
@@ -45,13 +45,13 @@ func AppendShowArrayMaybeString(buffer []byte, array []String) []byte {
 		if index > 0 {
 			buffer = append(buffer, ',')
 		}
-		buffer = AppendShowString(buffer, element)
+		buffer = AppendShow(buffer, element)
 	}
 	buffer = append(buffer, ']')
 	return buffer
 }
 
-func AppendShowString(buffer []byte, maybe String) []byte {
+func AppendShow(buffer []byte, maybe String) []byte {
 	switch maybe.Tag {
 	case TagJust:
 		buffer = append(buffer, "(Just "...)
@@ -100,11 +100,11 @@ import (
 	"fixture/shared"
 )
 
-func InjStringCircleCaptionCircle(p proxy.Proxy, value string) shared.TypeValue {
+func InjString(p proxy.Proxy, value string) shared.TypeValue {
 	return shared.Convert3(shared.VariantRepString{Type: "caption", Value: value})
 }
 
-func InjNumberCaptionCaptionCircle(p proxy.Proxy, value float64) shared.TypeValue {
+func InjNumber(p proxy.Proxy, value float64) shared.TypeValue {
 	return shared.Convert(shared.VariantRepNumber{Type: "circle", Value: value})
 }
 
@@ -170,7 +170,7 @@ func initializeMain_() []string {
 	mapped := make([]maybe.String, len(shapes))
 	for index, x := range shapes {
 		var result maybe.String
-		if mainGo(x, types.Cons("caption", types.Cons("square", types.SharedListStringNil))) {
+		if mainGo(x, types.Cons("caption", types.Cons("square", types.SharedListNil))) {
 			var run proxy.UnvariantRecordCaptionSquare
 			if x.Type == "caption" {
 				run = func(continuation proxy.Unvariant_RecordCaptionSquareString) string {
@@ -195,7 +195,7 @@ func initializeMain_() []string {
 	}
 	mapped2 := make([]string, len(shapes))
 	for index, element := range shapes {
-		mapped2[index] = labelOfCaptionCircleSquare(element)
+		mapped2[index] = labelOf(element)
 	}
 	mapped3 := make([]string, len(shapes))
 	for index, element := range shapes {
@@ -210,7 +210,7 @@ func initializeShapes() []shared.TypeValue {
 	return []shared.TypeValue{shared.Convert(shared.VariantRepNumber{Type: "circle", Value: 1.5}), shared.Convert2(shared.VariantRepInt{Type: "square", Value: 2}), shared.Convert3(shared.VariantRepString{Type: "caption", Value: "hi"})}
 }
 
-func labelOfCaptionCircleSquare(variant shared.TypeValue) string {
+func labelOf(variant shared.TypeValue) string {
 	var run proxy.UnvariantCaptionCircleSquare
 	if variant.Type == "caption" {
 		run = func(continuation proxy.Unvariant_CaptionCircleSquareString) string {
@@ -258,7 +258,7 @@ func roundTripped(r shared.TypeValue) string {
 	} else {
 		panic("Failed pattern match")
 	}
-	scrutinee := result.ForVariantRecordCaptionCircle(proxy.NumberRecordCaptionStringRecordCircle{NumberRecordCaption: datavariant.InjNumberCaptionCaptionCircle, StringRecordCircle: datavariant.InjStringCircleCaptionCircle})
+	scrutinee := result.ForVariantRecordCaptionCircle(proxy.NumberRecordCaptionStringRecordCircle{NumberRecordCaption: datavariant.InjNumber, StringRecordCircle: datavariant.InjString})
 	var run proxy.StringVariantRecordCaptionCircle
 	if scrutinee.Type == "caption" {
 		argument := scrutinee.Value
@@ -284,9 +284,9 @@ func roundTripped(r shared.TypeValue) string {
 	}})
 }
 
-func mainGo(x shared.TypeValue, value *types.ListString) bool {
+func mainGo(x shared.TypeValue, value *types.List) bool {
 	for {
-		if value != types.SharedListStringNil {
+		if value != types.SharedListNil {
 			t := value.Cons0
 			ts := value.Cons1
 			if t == x.Type {

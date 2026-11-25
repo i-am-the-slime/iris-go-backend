@@ -4,36 +4,36 @@ source: tests-integration/src/fixtures.rs
 // Data/Map/Internal/internal.go
 package internal
 
-type MapIntInt struct {
-	Node4 *MapIntInt
-	Node5 *MapIntInt
+type Map struct {
+	Node4 *Map
+	Node5 *Map
 	Node0 int32
 	Node1 int32
 	Node2 int32
 	Node3 int32
 }
 
-var SharedMapIntIntLeaf = &MapIntInt{}
+var SharedMapLeaf = &Map{}
 
 type Window struct {
-	Seen  *MapIntInt
+	Seen  *Map
 	Start int32
 }
 
-func Node(node0 int32, node1 int32, node2 int32, node3 int32, node4 *MapIntInt, node5 *MapIntInt) *MapIntInt {
-	return &MapIntInt{Node0: node0, Node1: node1, Node2: node2, Node3: node3, Node4: node4, Node5: node5}
+func Node(node0 int32, node1 int32, node2 int32, node3 int32, node4 *Map, node5 *Map) *Map {
+	return &Map{Node0: node0, Node1: node1, Node2: node2, Node3: node3, Node4: node4, Node5: node5}
 }
 
-func UnsafeNodeIntInt(k int32, v int32, l *MapIntInt, r *MapIntInt) *MapIntInt {
-	if l == SharedMapIntIntLeaf {
-		if r == SharedMapIntIntLeaf {
+func UnsafeNodeInt(k int32, v int32, l *Map, r *Map) *Map {
+	if l == SharedMapLeaf {
+		if r == SharedMapLeaf {
 			return Node(1, 1, k, v, l, r)
 		}
 		return Node(1+r.Node0, 1+r.Node1, k, v, l, r)
 	}
 	h1 := l.Node0
 	s1 := l.Node1
-	if r == SharedMapIntIntLeaf {
+	if r == SharedMapLeaf {
 		return Node(1+h1, 1+s1, k, v, l, r)
 	}
 	h2 := r.Node0
@@ -41,58 +41,58 @@ func UnsafeNodeIntInt(k int32, v int32, l *MapIntInt, r *MapIntInt) *MapIntInt {
 	return Node(1+result, 1+s1+r.Node1, k, v, l, r)
 }
 
-func UnsafeBalancedNodeIntIntReusing(k int32, v int32, l *MapIntInt, r *MapIntInt, donor *MapIntInt) *MapIntInt {
-	if l == SharedMapIntIntLeaf {
-		if r == SharedMapIntIntLeaf {
+func UnsafeBalancedNode(k int32, v int32, l *Map, r *Map, donor *Map) *Map {
+	if l == SharedMapLeaf {
+		if r == SharedMapLeaf {
 			donor.Node0 = 1
 			donor.Node1 = 1
 			donor.Node2 = k
 			donor.Node3 = v
-			donor.Node4 = SharedMapIntIntLeaf
-			donor.Node5 = SharedMapIntIntLeaf
+			donor.Node4 = SharedMapLeaf
+			donor.Node5 = SharedMapLeaf
 			return donor
 		}
-		if r != SharedMapIntIntLeaf {
+		if r != SharedMapLeaf {
 			rh := r.Node0
 			rk := r.Node2
 			rv := r.Node3
 			rl := r.Node4
 			rr := r.Node5
 			if rh > 1 {
-				return UnsafeBalancedNodeIntIntRotateLeftReusing(k, v, l, rk, rv, rl, rr, donor)
+				return UnsafeBalancedNodeRotateLeft(k, v, l, rk, rv, rl, rr, donor)
 			}
 		}
-		return UnsafeNodeIntIntReusing(k, v, l, r, donor)
+		return UnsafeNodeIntReusing(k, v, l, r, donor)
 	}
 	lh := l.Node0
 	lk := l.Node2
 	lv := l.Node3
 	ll := l.Node4
 	lr := l.Node5
-	if r != SharedMapIntIntLeaf {
+	if r != SharedMapLeaf {
 		rh := r.Node0
 		rk := r.Node2
 		rv := r.Node3
 		rl := r.Node4
 		rr := r.Node5
 		if rh > lh+1 {
-			return UnsafeBalancedNodeIntIntRotateLeftReusing(k, v, l, rk, rv, rl, rr, donor)
+			return UnsafeBalancedNodeRotateLeft(k, v, l, rk, rv, rl, rr, donor)
 		}
 		if lh > rh+1 {
-			return UnsafeBalancedNodeIntIntRotateRightReusing(k, v, lk, lv, ll, lr, r, donor)
+			return UnsafeBalancedNodeRotateRight(k, v, lk, lv, ll, lr, r, donor)
 		}
 	}
-	if r == SharedMapIntIntLeaf {
+	if r == SharedMapLeaf {
 		if lh > 1 {
-			return UnsafeBalancedNodeIntIntRotateRightReusing(k, v, lk, lv, ll, lr, r, donor)
+			return UnsafeBalancedNodeRotateRight(k, v, lk, lv, ll, lr, r, donor)
 		}
 	}
-	return UnsafeNodeIntIntReusing(k, v, l, r, donor)
+	return UnsafeNodeIntReusing(k, v, l, r, donor)
 }
 
-func UnsafeNodeIntIntReusing(k int32, v int32, l *MapIntInt, r *MapIntInt, donor *MapIntInt) *MapIntInt {
-	if l == SharedMapIntIntLeaf {
-		if r == SharedMapIntIntLeaf {
+func UnsafeNodeIntReusing(k int32, v int32, l *Map, r *Map, donor *Map) *Map {
+	if l == SharedMapLeaf {
+		if r == SharedMapLeaf {
 			donor.Node0 = 1
 			donor.Node1 = 1
 			donor.Node2 = k
@@ -113,7 +113,7 @@ func UnsafeNodeIntIntReusing(k int32, v int32, l *MapIntInt, r *MapIntInt, donor
 	}
 	h1 := l.Node0
 	s1 := l.Node1
-	if r == SharedMapIntIntLeaf {
+	if r == SharedMapLeaf {
 		donor.Node0 = 1 + h1
 		donor.Node1 = 1 + s1
 		donor.Node2 = k
@@ -134,44 +134,44 @@ func UnsafeNodeIntIntReusing(k int32, v int32, l *MapIntInt, r *MapIntInt, donor
 	return donor
 }
 
-func UnsafeBalancedNodeIntIntRotateLeftReusing(k int32, v int32, l *MapIntInt, rk int32, rv int32, rl *MapIntInt, rr *MapIntInt, donor *MapIntInt) *MapIntInt {
-	if rl != SharedMapIntIntLeaf {
+func UnsafeBalancedNodeRotateLeft(k int32, v int32, l *Map, rk int32, rv int32, rl *Map, rr *Map, donor *Map) *Map {
+	if rl != SharedMapLeaf {
 		lh := rl.Node0
 		lk := rl.Node2
 		lv := rl.Node3
 		ll := rl.Node4
 		lr := rl.Node5
 		var result int32
-		if rr == SharedMapIntIntLeaf {
+		if rr == SharedMapLeaf {
 			result = 0
 		} else {
 			result = rr.Node0
 		}
 		if lh > result {
-			return UnsafeNodeIntIntReusing(lk, lv, UnsafeNodeIntInt(k, v, l, ll), UnsafeNodeIntInt(rk, rv, lr, rr), donor)
+			return UnsafeNodeIntReusing(lk, lv, UnsafeNodeInt(k, v, l, ll), UnsafeNodeInt(rk, rv, lr, rr), donor)
 		}
 	}
-	return UnsafeNodeIntIntReusing(rk, rv, UnsafeNodeIntInt(k, v, l, rl), rr, donor)
+	return UnsafeNodeIntReusing(rk, rv, UnsafeNodeInt(k, v, l, rl), rr, donor)
 }
 
-func UnsafeBalancedNodeIntIntRotateRightReusing(k int32, v int32, lk int32, lv int32, ll *MapIntInt, lr *MapIntInt, r *MapIntInt, donor *MapIntInt) *MapIntInt {
-	if lr != SharedMapIntIntLeaf {
+func UnsafeBalancedNodeRotateRight(k int32, v int32, lk int32, lv int32, ll *Map, lr *Map, r *Map, donor *Map) *Map {
+	if lr != SharedMapLeaf {
 		rh := lr.Node0
 		rk := lr.Node2
 		rv := lr.Node3
 		rl := lr.Node4
 		rr := lr.Node5
 		var result int32
-		if ll == SharedMapIntIntLeaf {
+		if ll == SharedMapLeaf {
 			result = 0
 		} else {
 			result = ll.Node0
 		}
 		if result <= rh {
-			return UnsafeNodeIntIntReusing(rk, rv, UnsafeNodeIntInt(lk, lv, ll, rl), UnsafeNodeIntInt(k, v, rr, r), donor)
+			return UnsafeNodeIntReusing(rk, rv, UnsafeNodeInt(lk, lv, ll, rl), UnsafeNodeInt(k, v, rr, r), donor)
 		}
 	}
-	return UnsafeNodeIntIntReusing(lk, lv, ll, UnsafeNodeIntInt(k, v, lr, r), donor)
+	return UnsafeNodeIntReusing(lk, lv, ll, UnsafeNodeInt(k, v, lr, r), donor)
 }
 
 // Data/Maybe/maybe.go
@@ -194,7 +194,7 @@ import (
 func main() {
 	words := []string{"a", "b", "a"}
 	numbers := []int32{3, 1, 3, 2}
-	accumulator := internal.Window{Start: 0, Seen: internal.SharedMapIntIntLeaf}
+	accumulator := internal.Window{Start: 0, Seen: internal.SharedMapLeaf}
 	for _, x := range numbers {
 		seen := accumulator.Seen
 		scrutinee := mainGo(x, seen)
@@ -226,7 +226,7 @@ func main() {
 		accumulator2 = object.InsertOwned(word, result, accumulator2)
 	}
 	var result2 int32
-	if accumulator.Seen == internal.SharedMapIntIntLeaf {
+	if accumulator.Seen == internal.SharedMapLeaf {
 		result2 = 0
 	} else {
 		result2 = accumulator.Seen.Node1
@@ -235,9 +235,9 @@ func main() {
 	output.Value = 0
 }
 
-func mainGo(x int32, value *internal.MapIntInt) maybe.Int {
+func mainGo(x int32, value *internal.Map) maybe.Int {
 	for {
-		if value == internal.SharedMapIntIntLeaf {
+		if value == internal.SharedMapLeaf {
 			return maybe.NoInt
 		}
 		mk := value.Node2
@@ -255,23 +255,23 @@ func mainGo(x int32, value *internal.MapIntInt) maybe.Int {
 	}
 }
 
-func mainGoReusing(x int32, v int32, value *internal.MapIntInt) *internal.MapIntInt {
-	if value == internal.SharedMapIntIntLeaf {
-		return internal.Node(1, 1, x, v, internal.SharedMapIntIntLeaf, internal.SharedMapIntIntLeaf)
+func mainGoReusing(x int32, v int32, value *internal.Map) *internal.Map {
+	if value == internal.SharedMapLeaf {
+		return internal.Node(1, 1, x, v, internal.SharedMapLeaf, internal.SharedMapLeaf)
 	}
 	mk := value.Node2
 	mv := value.Node3
 	ml := value.Node4
 	mr := value.Node5
 	if x < mk {
-		return internal.UnsafeBalancedNodeIntIntReusing(mk, mv, mainGoReusing(x, v, ml), mr, value)
+		return internal.UnsafeBalancedNode(mk, mv, mainGoReusing(x, v, ml), mr, value)
 	}
 	if x == mk {
 		value.Node2 = x
 		value.Node3 = v
 		return value
 	}
-	return internal.UnsafeBalancedNodeIntIntReusing(mk, mv, ml, mainGoReusing(x, v, mr), value)
+	return internal.UnsafeBalancedNode(mk, mv, ml, mainGoReusing(x, v, mr), value)
 }
 
 // shared/shared.go

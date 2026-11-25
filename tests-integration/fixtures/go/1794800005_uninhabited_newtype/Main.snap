@@ -42,13 +42,13 @@ func value(step *Step) int32 {
 	case StepDone:
 		return step.Done
 	default: // StepImpossible
-		return absurdInt(step.Impossible)
+		return absurd(step.Impossible)
 	}
 }
 
 var steps []*Step = []*Step{Done(7), Done(8)}
 
-func absurdInt(never Never) int32 {
+func absurd(never Never) int32 {
 	for {
 	}
 }

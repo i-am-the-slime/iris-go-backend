@@ -19,11 +19,11 @@ import (
 	"strings"
 )
 
-type LayerIntString struct {
+type LayerInt struct {
 	Layer shared.RunScopeString
 }
 
-type LayerLabelScopeString struct {
+type LayerLabelScope struct {
 	Layer shared.RunLabelScopeString
 }
 
@@ -37,13 +37,13 @@ func initializeMain_() []string {
 	}))), continue_2(shared.LabelScope{Scope: 5, Label: "outer"}, category.Identity)}
 }
 
-var scoped LayerIntString = LayerIntString{Layer: shared.RunScopeString{ForInt: func(depth int32, done func(string) int32) int32 {
+var scoped LayerInt = LayerInt{Layer: shared.RunScopeString{ForInt: func(depth int32, done func(string) int32) int32 {
 	return done("depth " + strconv.Itoa(int(depth)))
 }, ForString: func(depth int32, done func(string) string) string {
 	return done("depth " + strconv.Itoa(int(depth)))
 }}}
 
-var labelled LayerLabelScopeString = LayerLabelScopeString{Layer: func(labelScope shared.LabelScope, done func(string) string) string {
+var labelled LayerLabelScope = LayerLabelScope{Layer: func(labelScope shared.LabelScope, done func(string) string) string {
 	return done(labelScope.Label + " " + strconv.Itoa(int(labelScope.Scope)))
 }}
 

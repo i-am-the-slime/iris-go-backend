@@ -7,7 +7,7 @@ package effectexception
 import "github.com/i-am-the-slime/iris-go/exception"
 
 //line exception.go:6
-func ThrowUnit(x string) {
+func Throw(x string) {
 //line exception.go:8
 	panic(exception.NewError(x))
 //line exception.go:10
@@ -61,7 +61,7 @@ func main() {
 //line Main.purs:50:3
 	if size(insert(counter, insert(1, insert(5, sharedTreeLeaf)))) != 3 {
 //line Main.purs:51:5
-		effectexception.ThrowUnit("the size is wrong")
+		effectexception.Throw("the size is wrong")
 //line Main.purs:50:3
 	}
 //line Main.purs:52:9
@@ -79,7 +79,7 @@ func main() {
 //line Main.purs:52:3
 	if result != "hearts" {
 //line Main.purs:53:5
-		effectexception.ThrowUnit("the suit is wrong")
+		effectexception.Throw("the suit is wrong")
 //line Main.purs:52:3
 	}
 //line Main.purs:54:9
@@ -101,7 +101,7 @@ func main() {
 //line Main.purs:54:3
 	if result2 != "positive" {
 //line Main.purs:55:5
-		effectexception.ThrowUnit("the description is wrong")
+		effectexception.Throw("the description is wrong")
 //line Main.purs:54:3
 	}
 //line Main.purs:59:3
@@ -123,7 +123,7 @@ func main() {
 //line Main.purs:59:3
 	if /*line Main.purs:58:13*/ accumulator /*line Main.purs:59:3*/ != 1892.0 || int32(count) != 43 {
 //line Main.purs:60:5
-		effectexception.ThrowUnit("the total is wrong")
+		effectexception.Throw("the total is wrong")
 //line Main.purs:59:3
 	}
 //line Main.purs:61:12
@@ -133,7 +133,7 @@ func main() {
 //line Main.purs:64:5
 	case SuitHearts:
 //line Main.purs:65:7
-		effectexception.ThrowUnit("the suit is hearts")
+		effectexception.Throw("the suit is hearts")
 //line Main.purs:66:5
 	default: // SuitSpades
 //line Main.purs:67:7
@@ -143,7 +143,7 @@ func main() {
 //line Main.purs:42:5
 	if counter > 100 {
 //line Main.purs:70:7
-		effectexception.ThrowUnit( /*line Main.purs:42:20*/ "too big" /*line Main.purs:70:7*/)
+		effectexception.Throw( /*line Main.purs:42:20*/ "too big" /*line Main.purs:70:7*/)
 //line Main.purs:70:7
 		return
 //line Main.purs:42:5

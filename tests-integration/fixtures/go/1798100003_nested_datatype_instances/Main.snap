@@ -6,12 +6,12 @@ package eq
 
 import "github.com/i-am-the-slime/iris-go/array"
 
-func Eq(i int32, i2 int32) bool {
+func EqInt(i int32, i2 int32) bool {
 	return i == i2
 }
 
-func EqInt(array2 []int32, array3 []int32) bool {
-	return array.Eq(Eq, array2, array3)
+func EqArray(array2 []int32, array3 []int32) bool {
+	return array.Eq(EqInt, array2, array3)
 }
 
 // Data/Maybe/maybe.go
@@ -73,7 +73,7 @@ import (
 	"github.com/i-am-the-slime/iris-go/direct"
 )
 
-func CompareInt(xs []int32, ys []int32) ordering.Ordering {
+func Compare(xs []int32, ys []int32) ordering.Ordering {
 	i := direct.CompareArray(func(x int32, y int32) int32 {
 		if x < y {
 			return 1
@@ -139,11 +139,11 @@ func ArrayInt(array []int32) string {
 package main
 
 import (
-	"fixture/Data/Eq"
+	dataeq "fixture/Data/Eq"
 	"fixture/Data/Maybe"
 	"fixture/Data/Ord"
 	dataordering "fixture/Data/Ordering"
-	"fixture/Data/Show"
+	datashow "fixture/Data/Show"
 	"fixture/shared"
 	"github.com/i-am-the-slime/iris-go/array"
 	"github.com/i-am-the-slime/iris-go/console"
@@ -174,8 +174,8 @@ func initializeMain_() []string {
 		result = "Flat " + strconv.Itoa(int(deep.Flat.(int32)))
 	default: // NestedNest
 		text := []byte("Nest (")
-		text = appendShowArrayInt(text, shared.Show{Show: func(coerced any) string {
-			return show.ArrayInt(shared.Convert(coerced))
+		text = appendShow(text, shared.Show{Show: func(coerced any) string {
+			return datashow.ArrayInt(shared.Convert(coerced))
 		}}, deep.Nest)
 		text = append(text, ')')
 		result = string(text)
@@ -186,10 +186,10 @@ func initializeMain_() []string {
 	} else if deep.Tag == NestedNest {
 		original := func(array []int32) func([]int32) bool {
 			return func(array2 []int32) bool {
-				return eq.EqInt(array, array2)
+				return dataeq.EqArray(array, array2)
 			}
 		}
-		result2 = eqArrayInt(shared.Eq{Eq: func(coerced any) func(any) bool {
+		result2 = eq(shared.Eq{Eq: func(coerced any) func(any) bool {
 			original2 := original(shared.Convert(coerced))
 			return func(coerced2 any) bool {
 				return original2(shared.Convert(coerced2))
@@ -203,10 +203,10 @@ func initializeMain_() []string {
 	case NestedNest:
 		original := func(array []int32) func([]int32) bool {
 			return func(array2 []int32) bool {
-				return eq.EqInt(array, array2)
+				return dataeq.EqArray(array, array2)
 			}
 		}
-		result3 = eqArrayInt(shared.Eq{Eq: func(coerced any) func(any) bool {
+		result3 = eq(shared.Eq{Eq: func(coerced any) func(any) bool {
 			original2 := original(shared.Convert(coerced))
 			return func(coerced2 any) bool {
 				return original2(shared.Convert(coerced2))
@@ -222,15 +222,15 @@ func initializeMain_() []string {
 	default: // NestedNest
 		original := func(array []int32) func([]int32) bool {
 			return func(array2 []int32) bool {
-				return eq.EqInt(array, array2)
+				return dataeq.EqArray(array, array2)
 			}
 		}
 		original2 := func(xs []int32) func([]int32) dataordering.Ordering {
 			return func(ys []int32) dataordering.Ordering {
-				return ord.CompareInt(xs, ys)
+				return ord.Compare(xs, ys)
 			}
 		}
-		ordering := compareArrayInt(dataordering.Eq0Compare{Eq0: shared.Eq{Eq: func(coerced any) func(any) bool {
+		ordering := compare(dataordering.Eq0Compare{Eq0: shared.Eq{Eq: func(coerced any) func(any) bool {
 			original3 := original(shared.Convert(coerced))
 			return func(coerced2 any) bool {
 				return original3(shared.Convert(coerced2))
@@ -265,11 +265,11 @@ func initializeMain_() []string {
 		text := []byte("Nest (")
 		original := func(fa *Nested) func(func(any) any) *Nested {
 			return func(f func(any) any) *Nested {
-				return mapFlippedNestedArrayIntArrayInt(fa, f)
+				return mapFlipped(fa, f)
 			}
 		}
-		text = appendShowArrayInt(text, shared.Show{Show: func(coerced any) string {
-			return show.ArrayInt(shared.Convert(coerced))
+		text = appendShow(text, shared.Show{Show: func(coerced any) string {
+			return datashow.ArrayInt(shared.Convert(coerced))
 		}}, original(deep.Nest)(func(coerced any) any {
 			return shared.Convert2(mapLanes(shared.Convert(coerced)))
 		}))
@@ -392,8 +392,8 @@ func initializeMain_() []string {
 			result12 = "Flat " + strconv.Itoa(int(result10.Flat.(int32)))
 		default: // NestedNest
 			text := []byte("Nest (")
-			text = appendShowArrayInt(text, shared.Show{Show: func(coerced any) string {
-				return show.ArrayInt(shared.Convert(coerced))
+			text = appendShow(text, shared.Show{Show: func(coerced any) string {
+				return datashow.ArrayInt(shared.Convert(coerced))
 			}}, result10.Nest)
 			text = append(text, ')')
 			result12 = string(text)
@@ -415,11 +415,11 @@ func initializeDeep() *Nested {
 	return &nesteds[0]
 }
 
-func showArrayInt(showDictionary shared.Show, nested *Nested) string {
-	return string(appendShowArrayInt(nil, showDictionary, nested))
+func show(showDictionary shared.Show, nested *Nested) string {
+	return string(appendShow(nil, showDictionary, nested))
 }
 
-func eqArrayInt(eqDictionary shared.Eq, left *Nested, right *Nested) bool {
+func eq(eqDictionary shared.Eq, left *Nested, right *Nested) bool {
 	for {
 		eqDictionaryCaptured := eqDictionary
 		if left.Tag == NestedFlat && right.Tag == NestedFlat {
@@ -449,7 +449,7 @@ func eqArrayInt(eqDictionary shared.Eq, left *Nested, right *Nested) bool {
 	}
 }
 
-func compareArrayInt(ordDictionary dataordering.Eq0Compare, left *Nested, right *Nested) dataordering.Ordering {
+func compare(ordDictionary dataordering.Eq0Compare, left *Nested, right *Nested) dataordering.Ordering {
 	if left.Tag == NestedFlat && right.Tag == NestedFlat {
 		ordering := ordDictionary.Compare(left.Flat)(right.Flat)
 		switch ordering {
@@ -494,7 +494,7 @@ func compareArrayInt(ordDictionary dataordering.Eq0Compare, left *Nested, right 
 			return dataordering.OrderingGT
 		}
 	}
-	ordering2 := compareArrayInt(dataordering.Eq0Compare{Eq0: shared.Eq{Eq: func(coerced any) func(any) bool {
+	ordering2 := compare(dataordering.Eq0Compare{Eq0: shared.Eq{Eq: func(coerced any) func(any) bool {
 		original3 := original(coerced.([]any))
 		return func(coerced2 any) bool {
 			return original3(coerced2.([]any))
@@ -607,7 +607,7 @@ func traverse(visit func(any) *maybe.Maybe, nested *Nested) *Nested {
 	}
 }
 
-func mapFlippedNestedArrayIntArrayInt(fa *Nested, f func(any) any) *Nested {
+func mapFlipped(fa *Nested, f func(any) any) *Nested {
 	return map_(f, fa)
 }
 
@@ -618,7 +618,7 @@ func map_(change func(any) any, nested *Nested) *Nested {
 	default: // NestedNest
 		original := func(fa *Nested) func(func(any) any) *Nested {
 			return func(f func(any) any) *Nested {
-				return mapFlippedNestedArrayIntArrayInt(fa, f)
+				return mapFlipped(fa, f)
 			}
 		}
 		return &Nested{Tag: NestedNest, Nest: original(nested.Nest)(func(coerced any) any {
@@ -631,14 +631,14 @@ func mainChange(value int32) int32 {
 	return value * 10
 }
 
-func appendShowArrayInt(buffer []byte, showDictionary shared.Show, nested *Nested) []byte {
+func appendShow(buffer []byte, showDictionary shared.Show, nested *Nested) []byte {
 	switch nested.Tag {
 	case NestedFlat:
 		buffer = append(buffer, "Flat "...)
 		buffer = prim.AppendString(buffer, showDictionary.Show(nested.Flat))
 	default: // NestedNest
 		buffer = append(buffer, "Nest ("...)
-		buffer = appendShowArrayInt(buffer, shared.Show{Show: func(coerced any) string {
+		buffer = appendShow(buffer, shared.Show{Show: func(coerced any) string {
 			return prim.ShowArray(showDictionary.Show, coerced.([]any))
 		}}, nested.Nest)
 		buffer = append(buffer, ')')

@@ -14,8 +14,8 @@ type Int int64
 
 const NoInt Int = 1 << 32
 
-func ShowChar(maybe Char) string {
-	return string(AppendShowChar(nil, maybe))
+func Show(maybe Char) string {
+	return string(AppendShow(nil, maybe))
 }
 
 func AppendShowArrayMaybeChar(buffer []byte, array []Char) []byte {
@@ -24,13 +24,13 @@ func AppendShowArrayMaybeChar(buffer []byte, array []Char) []byte {
 		if index > 0 {
 			buffer = append(buffer, ',')
 		}
-		buffer = AppendShowChar(buffer, element)
+		buffer = AppendShow(buffer, element)
 	}
 	buffer = append(buffer, ']')
 	return buffer
 }
 
-func AppendShowChar(buffer []byte, maybe Char) []byte {
+func AppendShow(buffer []byte, maybe Char) []byte {
 	if maybe != NoChar {
 		buffer = append(buffer, "(Just "...)
 		buffer = prim.AppendShowChar(buffer, rune(maybe))

@@ -44,12 +44,12 @@ type Entry struct {
 
 var sharedEntryBlank = &Entry{}
 
-type ListEntry struct {
+type List struct {
 	Cons0 *Entry
-	Cons1 *ListEntry
+	Cons1 *List
 }
 
-var sharedListEntryNil = &ListEntry{}
+var sharedListNil = &List{}
 
 func Found(found0 string, found1 string, found2 string, found3 string, found4 string, found5 string, found6 string, found7 string, found8 string, found9 string) Outcome {
 	return Outcome{Tag: OutcomeFound, Found0: found0, Found1: found1, Found2: found2, Found3: found3, Found4: found4, Found5: found5, Found6: found6, Found7: found7, Found8: found8, Found9: found9}
@@ -59,8 +59,8 @@ func EntryEntry(entry0 string, entry1 string, entry2 string, entry3 string, entr
 	return &Entry{Entry0: entry0, Entry1: entry1, Entry2: entry2, Entry3: entry3, Entry4: entry4, Entry5: entry5, Entry6: entry6, Entry7: entry7, Entry8: entry8, Entry9: entry9}
 }
 
-func Cons(cons0 *Entry, cons1 *ListEntry) *ListEntry {
-	return &ListEntry{Cons0: cons0, Cons1: cons1}
+func Cons(cons0 *Entry, cons1 *List) *List {
+	return &List{Cons0: cons0, Cons1: cons1}
 }
 
 var main_ = initializeMain_()
@@ -97,14 +97,14 @@ func search(target int32, key int32) Outcome {
 	}
 }
 
-func firsts(list *ListEntry) string {
+func firsts(list *List) string {
 	return string(appendFirsts(nil, list))
 }
 
-var entries *ListEntry = Cons(EntryEntry("k", "l", "m", "n", "o", "p", "q", "r", "s", "t"), Cons(sharedEntryBlank, sharedListEntryNil))
+var entries *List = Cons(EntryEntry("k", "l", "m", "n", "o", "p", "q", "r", "s", "t"), Cons(sharedEntryBlank, sharedListNil))
 
-func appendFirsts(buffer []byte, list *ListEntry) []byte {
-	if list != sharedListEntryNil {
+func appendFirsts(buffer []byte, list *List) []byte {
+	if list != sharedListNil {
 		if list.Cons0 != sharedEntryBlank {
 			buffer = prim.AppendString(buffer, list.Cons0.Entry0)
 			buffer = appendFirsts(buffer, list.Cons1)

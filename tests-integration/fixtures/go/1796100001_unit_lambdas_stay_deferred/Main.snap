@@ -13,7 +13,7 @@ package effectexception
 
 import "github.com/i-am-the-slime/iris-go/exception"
 
-func ThrowUnit(x string) {
+func Throw(x string) {
 	panic(exception.NewError(x))
 }
 
@@ -35,10 +35,10 @@ func main() {
 	}, []int32{100, 10})
 	mapped := make([]int32, len(array))
 	for index, element := range array {
-		mapped[index] = forceInt(element)
+		mapped[index] = force(element)
 	}
 	if !arraypkg.Eq(eq.Eq, mapped, []int32{5050, 55}) {
-		effectexception.ThrowUnit("the deferred values are wrong")
+		effectexception.Throw("the deferred values are wrong")
 	}
 	bound := actions.RunWhenAsked(func() int32 {
 		var accumulator int32 = 0
@@ -56,10 +56,10 @@ func main() {
 	})
 	free := actions.RunWhenAsked(answer)
 	if !arraypkg.Eq(eq.Eq, []int32{bound, mapped2, free}, []int32{55, 210, 42}) {
-		effectexception.ThrowUnit("the continued values are wrong")
+		effectexception.Throw("the continued values are wrong")
 	}
 	if !arraypkg.Eq(eq.Eq, arraypkg.Append(shifted(10, []int32{1, 2}), shifted(4, []int32{1})), []int32{56, 57, 11}) {
-		effectexception.ThrowUnit("the shifted values are wrong")
+		effectexception.Throw("the shifted values are wrong")
 	}
 	checked(10, []int32{1, 2})
 	checked(4, []int32{1, 2})
@@ -75,7 +75,7 @@ func deferred(n int32, ignored struct{}) int32 {
 	return accumulator
 }
 
-func forceInt(later func(struct{}) int32) int32 {
+func force(later func(struct{}) int32) int32 {
 	return later(struct{}{})
 }
 
@@ -106,7 +106,7 @@ func checked(n int32, xs []int32) {
 			accumulator += value
 		}
 		if i+accumulator < 0 {
-			effectexception.ThrowUnit("negative")
+			effectexception.Throw("negative")
 		}
 	}
 }

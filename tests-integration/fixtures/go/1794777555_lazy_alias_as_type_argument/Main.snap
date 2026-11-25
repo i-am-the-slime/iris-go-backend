@@ -12,16 +12,16 @@ import (
 	"strings"
 )
 
-type Stream = *lazy.Lazy[*TupleLabelledLazyStream]
+type Stream = *lazy.Lazy[*Tuple]
 
 type Labelled struct {
 	First  string
 	Second Stream
 }
 
-type TupleLabelledLazyStream struct {
+type Tuple struct {
 	First  *Labelled
-	Second *lazy.Lazy[*lazy.Lazy[*TupleLabelledLazyStream]]
+	Second *lazy.Lazy[*lazy.Lazy[*Tuple]]
 }
 
 var main_ = initializeMain_()
@@ -40,9 +40,9 @@ func take(n int32, cell Stream) []string {
 	}
 }
 
-func from(n int32) *lazy.Lazy[*TupleLabelledLazyStream] {
-	return lazy.Defer(func() *TupleLabelledLazyStream {
-		return &TupleLabelledLazyStream{First: &Labelled{First: strconv.Itoa(int(n)), Second: nil}, Second: lazy.Defer(func() Stream {
+func from(n int32) *lazy.Lazy[*Tuple] {
+	return lazy.Defer(func() *Tuple {
+		return &Tuple{First: &Labelled{First: strconv.Itoa(int(n)), Second: nil}, Second: lazy.Defer(func() Stream {
 			return from(n + 1)
 		})}
 	})

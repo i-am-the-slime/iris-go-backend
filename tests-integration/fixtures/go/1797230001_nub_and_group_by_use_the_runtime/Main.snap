@@ -12,13 +12,13 @@ import (
 	"github.com/i-am-the-slime/iris-go/direct"
 )
 
-func NubNumber(xs []float64) []float64 {
-	mapped := make([]tuple.TupleIntNumber, len(xs))
+func Nub(xs []float64) []float64 {
+	mapped := make([]tuple.TupleNumber, len(xs))
 	for slot, number := range xs {
 		i := int32(slot)
-		mapped[slot] = tuple.TupleIntNumber{First: i, Second: number}
+		mapped[slot] = tuple.TupleNumber{First: i, Second: number}
 	}
-	indexedAndSorted := direct.SortBy(mapped, func(x tuple.TupleIntNumber, y tuple.TupleIntNumber) int {
+	indexedAndSorted := direct.SortBy(mapped, func(x tuple.TupleNumber, y tuple.TupleNumber) int {
 		number := x.Second
 		number2 := y.Second
 		var result ordering.Ordering
@@ -38,12 +38,12 @@ func NubNumber(xs []float64) []float64 {
 		return 0
 	})
 	if len(indexedAndSorted) > 0 {
-		array2 := *arraypkg.UnsafeThaw([]tuple.TupleIntNumber{indexedAndSorted[0]})
+		array2 := *arraypkg.UnsafeThaw([]tuple.TupleNumber{indexedAndSorted[0]})
 		for _, pair := range indexedAndSorted {
 			x_ := pair.Second
 			array3 := shared.Frozen(array2)
 			index := int32(len(array3)) - 1
-			var result tuple.TupleIntNumber
+			var result tuple.TupleNumber
 			if index >= 0 && index < int32(len(array3)) {
 				result = array3[index]
 			} else {
@@ -57,7 +57,7 @@ func NubNumber(xs []float64) []float64 {
 			}
 		}
 		performed := shared.Frozen(array2)
-		array := direct.SortBy(performed, func(x tuple.TupleIntNumber, y tuple.TupleIntNumber) int {
+		array := direct.SortBy(performed, func(x tuple.TupleNumber, y tuple.TupleNumber) int {
 			i := x.First
 			i2 := y.First
 			var result ordering.Ordering
@@ -233,12 +233,12 @@ func ArrayInt(array []int32) string {
 // Data/Tuple/tuple.go
 package tuple
 
-type TupleIntInt struct {
+type TupleInt struct {
 	First  int32
 	Second int32
 }
 
-type TupleIntNumber struct {
+type TupleNumber struct {
 	Second float64
 	First  int32
 }
@@ -264,14 +264,14 @@ func main() {
 	mainRecord(shown, show.ArrayString(arraypkg.NubComparable([]string{"b", "a", "b"})))
 	mainRecord(shown, show.ArrayChar(arraypkg.NubComparable([]rune{'x', 'y', 'x'})))
 	mainRecord(shown, show.ArrayBoolean(arraypkg.NubComparable([]bool{true, false, true})))
-	mainRecord(shown, show.ArrayNumber(dataarray.NubNumber([]float64{1.5, 0.5, 1.5})))
+	mainRecord(shown, show.ArrayNumber(dataarray.Nub([]float64{1.5, 0.5, 1.5})))
 	array := []int32{1, 4, 2, 5, 3}
-	mapped := make([]tuple.TupleIntInt, len(array))
+	mapped := make([]tuple.TupleInt, len(array))
 	for slot, i := range array {
 		i2 := int32(slot)
-		mapped[slot] = tuple.TupleIntInt{First: i2, Second: i}
+		mapped[slot] = tuple.TupleInt{First: i2, Second: i}
 	}
-	indexedAndSorted := direct.SortBy(mapped, func(x tuple.TupleIntInt, y tuple.TupleIntInt) int {
+	indexedAndSorted := direct.SortBy(mapped, func(x tuple.TupleInt, y tuple.TupleInt) int {
 		switch mainComp(x.Second, y.Second) {
 		case ordering.OrderingLT:
 			return -1
@@ -282,11 +282,11 @@ func main() {
 	})
 	var result []int32
 	if len(indexedAndSorted) > 0 {
-		array2 := *arraypkg.UnsafeThaw([]tuple.TupleIntInt{indexedAndSorted[0]})
+		array2 := *arraypkg.UnsafeThaw([]tuple.TupleInt{indexedAndSorted[0]})
 		for _, pair := range indexedAndSorted {
 			array3 := shared.Frozen(array2)
 			index := int32(len(array3)) - 1
-			var result2 tuple.TupleIntInt
+			var result2 tuple.TupleInt
 			if index >= 0 && index < int32(len(array3)) {
 				result2 = array3[index]
 			} else {
@@ -298,7 +298,7 @@ func main() {
 			}
 		}
 		performed := shared.Frozen(array2)
-		array4 := direct.SortBy(performed, func(x tuple.TupleIntInt, y tuple.TupleIntInt) int {
+		array4 := direct.SortBy(performed, func(x tuple.TupleInt, y tuple.TupleInt) int {
 			i := x.First
 			i2 := y.First
 			var result2 ordering.Ordering

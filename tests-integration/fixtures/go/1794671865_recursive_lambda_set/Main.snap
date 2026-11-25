@@ -38,7 +38,7 @@ var sharedIntToIntMain = &IntToInt{Tag: IntToIntMain}
 var main_ = initializeMain_()
 
 func initializeMain_() shared.MainResult {
-	return shared.MainResult{Forced: forceInt(buildThunks(1000, sharedLazyIntMain)), Continued: countDown(10, sharedIntToIntMain)}
+	return shared.MainResult{Forced: force(buildThunks(1000, sharedLazyIntMain)), Continued: countDown(10, sharedIntToIntMain)}
 }
 
 func buildThunks(n int32, acc *LazyInt) *LazyInt {
@@ -69,12 +69,12 @@ func countDown(n int32, k *IntToInt) int32 {
 	}
 }
 
-func forceInt(lazy *LazyInt) int32 {
+func force(lazy *LazyInt) int32 {
 	switch lazy.Tag {
 	case LazyIntMain:
 		return 0
 	default: // LazyIntBuildThunks
-		return forceInt(lazy.Acc) + 1
+		return force(lazy.Acc) + 1
 	}
 }
 

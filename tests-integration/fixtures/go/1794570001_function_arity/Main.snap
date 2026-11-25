@@ -109,7 +109,7 @@ func initializeMain_() []string {
 func fromInt(n int32) func(func(int32) int32, int32) int32 {
 	switch n {
 	case 0:
-		return zeroCInt
+		return zeroC
 	default:
 		n2 := fromInt(n - 1)
 		return func(f func(int32) int32, x int32) int32 {
@@ -125,7 +125,7 @@ func prepared(a int32) func(string) string {
 	}
 }
 
-func zeroCInt(ignored func(int32) int32, x int32) int32 {
+func zeroC(ignored func(int32) int32, x int32) int32 {
 	return x
 }
 

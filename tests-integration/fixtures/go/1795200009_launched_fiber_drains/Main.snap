@@ -6,68 +6,68 @@ package either
 
 import "github.com/i-am-the-slime/iris-go/exception"
 
-type EitherErrorInt struct {
+type EitherInt struct {
 	Left  exception.Error
 	Right int32
 	Tag   uint8
 }
 
 const (
-	EitherErrorIntLeft = iota
-	EitherErrorIntRight
+	EitherIntLeft = iota
+	EitherIntRight
 )
 
-type EitherErrorUnit struct {
+type EitherUnit struct {
 	Right struct{}
 	Left  exception.Error
 	Tag   uint8
 }
 
 const (
-	EitherErrorUnitLeft = iota
-	EitherErrorUnitRight
+	EitherUnitLeft = iota
+	EitherUnitRight
 )
 
 type OnCompleteInt struct {
-	Handler func(func(EitherErrorInt))
+	Handler func(func(EitherInt))
 	Rethrow bool
 }
 
 type FiberInt struct {
 	IsSuspended func() bool
-	Join        func(func(EitherErrorInt)) func()
-	Kill        func(exception.Error) func(func(EitherErrorUnit)) func()
+	Join        func(func(EitherInt)) func()
+	Kill        func(exception.Error) func(func(EitherUnit)) func()
 	OnComplete  func(OnCompleteInt) func()
 	Run         func()
 }
 
 type OnCompleteUnit struct {
-	Handler func(func(EitherErrorUnit))
+	Handler func(func(EitherUnit))
 	Rethrow bool
 }
 
 type FiberUnit struct {
 	IsSuspended func() bool
-	Join        func(func(EitherErrorUnit)) func()
-	Kill        func(exception.Error) func(func(EitherErrorUnit)) func()
+	Join        func(func(EitherUnit)) func()
+	Kill        func(exception.Error) func(func(EitherUnit)) func()
 	OnComplete  func(OnCompleteUnit) func()
 	Run         func()
 }
 
-func LeftEitherErrorInt(left exception.Error) EitherErrorInt {
-	return EitherErrorInt{Tag: EitherErrorIntLeft, Left: left}
+func LeftEitherInt(left exception.Error) EitherInt {
+	return EitherInt{Tag: EitherIntLeft, Left: left}
 }
 
-func RightEitherErrorInt(right int32) EitherErrorInt {
-	return EitherErrorInt{Tag: EitherErrorIntRight, Right: right}
+func RightEitherInt(right int32) EitherInt {
+	return EitherInt{Tag: EitherIntRight, Right: right}
 }
 
-func RightEitherErrorUnit(right struct{}) EitherErrorUnit {
-	return EitherErrorUnit{Tag: EitherErrorUnitRight, Right: right}
+func RightEitherUnit(right struct{}) EitherUnit {
+	return EitherUnit{Tag: EitherUnitRight, Right: right}
 }
 
-func LeftEitherErrorUnit(left exception.Error) EitherErrorUnit {
-	return EitherErrorUnit{Tag: EitherErrorUnitLeft, Left: left}
+func LeftEitherUnit(left exception.Error) EitherUnit {
+	return EitherUnit{Tag: EitherUnitLeft, Left: left}
 }
 
 // main.go
@@ -89,21 +89,21 @@ func main_() int32 {
 		fiber := aff.ForkFiber(true, func() int32 {
 			return 2
 		})
-		isSuspended, join, kill, onComplete, run := aff.FiberFields(fiber, func(payload exception.Error) either.EitherErrorInt {
-			return either.LeftEitherErrorInt(payload)
-		}, func(payload int32) either.EitherErrorInt {
-			return either.RightEitherErrorInt(payload)
-		}, either.RightEitherErrorUnit(struct{}{}), func(value either.OnCompleteInt) func(func(either.EitherErrorInt)) {
+		isSuspended, join, kill, onComplete, run := aff.FiberFields(fiber, func(payload exception.Error) either.EitherInt {
+			return either.LeftEitherInt(payload)
+		}, func(payload int32) either.EitherInt {
+			return either.RightEitherInt(payload)
+		}, either.RightEitherUnit(struct{}{}), func(value either.OnCompleteInt) func(func(either.EitherInt)) {
 			return value.Handler
 		})
 		fiber2 := either.FiberInt{IsSuspended: isSuspended, Join: join, Kill: kill, OnComplete: onComplete, Run: run}
-		joined := aff.MakeAffDirect(func(value either.EitherErrorInt) bool {
-			return value.Tag == either.EitherErrorIntLeft
-		}, func(value either.EitherErrorInt) exception.Error {
+		joined := aff.MakeAffDirect(func(value either.EitherInt) bool {
+			return value.Tag == either.EitherIntLeft
+		}, func(value either.EitherInt) exception.Error {
 			return value.Left
-		}, func(value either.EitherErrorInt) int32 {
+		}, func(value either.EitherInt) int32 {
 			return value.Right
-		}, func(k func(either.EitherErrorInt)) func(exception.Error) {
+		}, func(k func(either.EitherInt)) func(exception.Error) {
 			effect := fiber2.Join(k)
 			return func(_ exception.Error) {
 				effect()
@@ -112,11 +112,11 @@ func main_() int32 {
 		mainStep(steps, joined)
 		return struct{}{}
 	})
-	_, _, _, _, run2 := aff.FiberFields(fiber3, func(payload exception.Error) either.EitherErrorUnit {
-		return either.LeftEitherErrorUnit(payload)
-	}, func(payload struct{}) either.EitherErrorUnit {
-		return either.RightEitherErrorUnit(payload)
-	}, either.RightEitherErrorUnit(struct{}{}), func(value either.OnCompleteUnit) func(func(either.EitherErrorUnit)) {
+	_, _, _, _, run2 := aff.FiberFields(fiber3, func(payload exception.Error) either.EitherUnit {
+		return either.LeftEitherUnit(payload)
+	}, func(payload struct{}) either.EitherUnit {
+		return either.RightEitherUnit(payload)
+	}, either.RightEitherUnit(struct{}{}), func(value either.OnCompleteUnit) func(func(either.EitherUnit)) {
 		return value.Handler
 	})
 	run2()

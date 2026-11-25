@@ -1,0 +1,42 @@
+---
+source: tests-integration/src/fixtures.rs
+---
+// main.go
+package main
+
+import "strconv"
+
+func main_() []string {
+	return []string{strconv.Itoa(int(mainSumOf(1000, 0, 0))), strconv.Itoa(int(mainSumOfF(1000, 0, 0))), strconv.Itoa(int(mainGo(0, 0)))}
+}
+
+func mainSumOf(count int32, index int32, total int32) int32 {
+	for {
+		if index >= count {
+			return total
+		}
+		index, total = index+1, total+index*3
+	}
+}
+
+func mainSumOfF(count int32, index int32, total int32) int32 {
+	for {
+		if index >= count {
+			return total
+		}
+		index, total = index+1, total+index+7
+	}
+}
+
+func mainGo(index int32, total int32) int32 {
+	for {
+		if index >= 1000 {
+			return total
+		}
+		index, total = index+1, total+index*5
+	}
+}
+
+func main() {
+	main_()
+}

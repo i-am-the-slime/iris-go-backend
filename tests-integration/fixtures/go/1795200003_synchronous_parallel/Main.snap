@@ -6,36 +6,36 @@ package either
 
 import "github.com/i-am-the-slime/iris-go/exception"
 
-type EitherErrorUnit struct {
+type Either struct {
 	Right struct{}
 	Left  exception.Error
 	Tag   uint8
 }
 
 const (
-	EitherErrorUnitLeft = iota
-	EitherErrorUnitRight
+	EitherLeft = iota
+	EitherRight
 )
 
 type OnComplete struct {
-	Handler func(func(EitherErrorUnit))
+	Handler func(func(Either))
 	Rethrow bool
 }
 
 type Fiber struct {
 	IsSuspended func() bool
-	Join        func(func(EitherErrorUnit)) func()
-	Kill        func(exception.Error) func(func(EitherErrorUnit)) func()
+	Join        func(func(Either)) func()
+	Kill        func(exception.Error) func(func(Either)) func()
 	OnComplete  func(OnComplete) func()
 	Run         func()
 }
 
-func Left(left exception.Error) EitherErrorUnit {
-	return EitherErrorUnit{Tag: EitherErrorUnitLeft, Left: left}
+func Left(left exception.Error) Either {
+	return Either{Tag: EitherLeft, Left: left}
 }
 
-func Right(right struct{}) EitherErrorUnit {
-	return EitherErrorUnit{Tag: EitherErrorUnitRight, Right: right}
+func Right(right struct{}) Either {
+	return Either{Tag: EitherRight, Right: right}
 }
 
 // main.go
@@ -75,11 +75,11 @@ func main() {
 		}
 		return struct{}{}
 	})
-	_, _, _, _, run := aff.FiberFields(fiber, func(payload exception.Error) either.EitherErrorUnit {
+	_, _, _, _, run := aff.FiberFields(fiber, func(payload exception.Error) either.Either {
 		return either.Left(payload)
-	}, func(payload struct{}) either.EitherErrorUnit {
+	}, func(payload struct{}) either.Either {
 		return either.Right(payload)
-	}, either.Right(struct{}{}), func(value either.OnComplete) func(func(either.EitherErrorUnit)) {
+	}, either.Right(struct{}{}), func(value either.OnComplete) func(func(either.Either)) {
 		return value.Handler
 	})
 	run()

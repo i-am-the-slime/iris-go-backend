@@ -6,19 +6,19 @@ package either
 
 import "github.com/i-am-the-slime/iris-go/exception"
 
-type EitherErrorForeign struct {
+type Either struct {
 	Left  exception.Error
 	Right any
 	Tag   uint8
 }
 
 const (
-	EitherErrorForeignLeft = iota
-	EitherErrorForeignRight
+	EitherLeft = iota
+	EitherRight
 )
 
-func Left(left exception.Error) EitherErrorForeign {
-	return EitherErrorForeign{Tag: EitherErrorForeignLeft, Left: left}
+func Left(left exception.Error) Either {
+	return Either{Tag: EitherLeft, Left: left}
 }
 
 // Data/Maybe/maybe.go
@@ -68,12 +68,12 @@ type ListForeignError struct {
 
 var SharedListForeignErrorNil = &ListForeignError{}
 
-type NonEmptyListForeignError struct {
+type NonEmpty struct {
 	First  *ForeignError
 	Second *ListForeignError
 }
 
-func ShowNonEmptyListForeignError(errors NonEmptyListForeignError) string {
+func ShowNonEmptyListForeignError(errors NonEmpty) string {
 	shown := []string{Show(errors.First)}
 	cell := errors.Second
 	for {
@@ -86,48 +86,48 @@ func ShowNonEmptyListForeignError(errors NonEmptyListForeignError) string {
 	return foreignvalue.ShowErrors(shown)
 }
 
-type EitherNonEmptyListForeignErrorInt struct {
-	Left  NonEmptyListForeignError
+type EitherInt struct {
+	Left  NonEmpty
 	Right int32
 	Tag   uint8
 }
 
 const (
-	EitherNonEmptyListForeignErrorIntLeft = iota
-	EitherNonEmptyListForeignErrorIntRight
+	EitherIntLeft = iota
+	EitherIntRight
 )
 
-type EitherNonEmptyListForeignErrorChar struct {
-	Left  NonEmptyListForeignError
+type EitherChar struct {
+	Left  NonEmpty
 	Right rune
 	Tag   uint8
 }
 
 const (
-	EitherNonEmptyListForeignErrorCharLeft = iota
-	EitherNonEmptyListForeignErrorCharRight
+	EitherCharLeft = iota
+	EitherCharRight
 )
 
-type EitherNonEmptyListForeignErrorForeign struct {
-	Left  NonEmptyListForeignError
+type EitherForeign struct {
+	Left  NonEmpty
 	Right any
 	Tag   uint8
 }
 
 const (
-	EitherNonEmptyListForeignErrorForeignLeft = iota
-	EitherNonEmptyListForeignErrorForeignRight
+	EitherForeignLeft = iota
+	EitherForeignRight
 )
 
-type EitherNonEmptyListForeignErrorBigInt struct {
-	Left  NonEmptyListForeignError
+type EitherBigInt struct {
+	Left  NonEmpty
 	Right *big.Int
 	Tag   uint8
 }
 
 const (
-	EitherNonEmptyListForeignErrorBigIntLeft = iota
-	EitherNonEmptyListForeignErrorBigIntRight
+	EitherBigIntLeft = iota
+	EitherBigIntRight
 )
 
 type ListListForeignError struct {
@@ -137,44 +137,41 @@ type ListListForeignError struct {
 
 var SharedListListForeignErrorNil = &ListListForeignError{}
 
+type NonEmptyFailure struct {
+	Failed bool
+	Left   NonEmpty
+}
+
 func TypeMismatch(typeMismatch0 string, typeMismatch1 string) *ForeignError {
 	return &ForeignError{Tag: ForeignErrorTypeMismatch, TypeMismatch0: typeMismatch0, TypeMismatch1: typeMismatch1}
 }
 
-func LeftEitherNonEmptyListForeignErrorInt(left NonEmptyListForeignError) EitherNonEmptyListForeignErrorInt {
-	return EitherNonEmptyListForeignErrorInt{Tag: EitherNonEmptyListForeignErrorIntLeft, Left: left}
+func LeftEitherInt(left NonEmpty) EitherInt {
+	return EitherInt{Tag: EitherIntLeft, Left: left}
 }
 
-func RightEitherNonEmptyListForeignErrorInt(right int32) EitherNonEmptyListForeignErrorInt {
-	return EitherNonEmptyListForeignErrorInt{Tag: EitherNonEmptyListForeignErrorIntRight, Right: right}
+func RightEitherInt(right int32) EitherInt {
+	return EitherInt{Tag: EitherIntRight, Right: right}
 }
 
 func ForeignErrorForeignError(foreignError string) *ForeignError {
 	return &ForeignError{Tag: ForeignErrorForeignError2, ForeignError: foreignError}
 }
 
-func LeftEitherNonEmptyListForeignErrorChar(left NonEmptyListForeignError) EitherNonEmptyListForeignErrorChar {
-	return EitherNonEmptyListForeignErrorChar{Tag: EitherNonEmptyListForeignErrorCharLeft, Left: left}
-}
-
-func RightEitherNonEmptyListForeignErrorChar(right rune) EitherNonEmptyListForeignErrorChar {
-	return EitherNonEmptyListForeignErrorChar{Tag: EitherNonEmptyListForeignErrorCharRight, Right: right}
-}
-
-func LeftEitherNonEmptyListForeignErrorForeign(left NonEmptyListForeignError) EitherNonEmptyListForeignErrorForeign {
-	return EitherNonEmptyListForeignErrorForeign{Tag: EitherNonEmptyListForeignErrorForeignLeft, Left: left}
+func LeftEitherForeign(left NonEmpty) EitherForeign {
+	return EitherForeign{Tag: EitherForeignLeft, Left: left}
 }
 
 func ErrorAtProperty(errorAtProperty0 string, errorAtProperty1 *ForeignError) *ForeignError {
 	return &ForeignError{Tag: ForeignErrorErrorAtProperty, ErrorAtProperty0: errorAtProperty0, ErrorAtProperty1: errorAtProperty1}
 }
 
-func LeftEitherNonEmptyListForeignErrorBigInt(left NonEmptyListForeignError) EitherNonEmptyListForeignErrorBigInt {
-	return EitherNonEmptyListForeignErrorBigInt{Tag: EitherNonEmptyListForeignErrorBigIntLeft, Left: left}
+func RightEitherBigInt(right *big.Int) EitherBigInt {
+	return EitherBigInt{Tag: EitherBigIntRight, Right: right}
 }
 
-func RightEitherNonEmptyListForeignErrorBigInt(right *big.Int) EitherNonEmptyListForeignErrorBigInt {
-	return EitherNonEmptyListForeignErrorBigInt{Tag: EitherNonEmptyListForeignErrorBigIntRight, Right: right}
+func LeftEitherBigInt(left NonEmpty) EitherBigInt {
+	return EitherBigInt{Tag: EitherBigIntLeft, Left: left}
 }
 
 func Cons(cons0 *ForeignError, cons1 *ListForeignError) *ListForeignError {
@@ -185,25 +182,23 @@ func Show(foreignError *ForeignError) string {
 	return string(AppendShow(nil, foreignError))
 }
 
-func AltNonEmptyListForeignErrorIdentity(either EitherNonEmptyListForeignErrorBigInt, either2 EitherNonEmptyListForeignErrorBigInt) (*big.Int, *NonEmptyListForeignError) {
-	switch either.Tag {
-	case EitherNonEmptyListForeignErrorBigIntRight:
-		return either.Right, nil
-	default: // EitherNonEmptyListForeignErrorBigIntLeft
-		switch either2.Tag {
-		case EitherNonEmptyListForeignErrorBigIntRight:
-			return either2.Right, nil
-		default: // EitherNonEmptyListForeignErrorBigIntLeft
-			return nil, new(NonEmptyListForeignError{First: either.Left.First, Second: AltNonEmptyListForeignErrorIdentityGoReusing(Cons(either2.Left.First, either2.Left.Second), AltNonEmptyListForeignErrorIdentityGo(SharedListForeignErrorNil, either.Left.Second))})
+func Alt(bigInt *big.Int, err NonEmptyFailure, either EitherBigInt) (*big.Int, NonEmptyFailure) {
+	if err.Failed {
+		switch either.Tag {
+		case EitherBigIntRight:
+			return either.Right, NonEmptyFailure{}
+		default: // EitherBigIntLeft
+			return nil, NonEmptyFailure{Failed: true, Left: NonEmpty{First: err.Left.First, Second: AltGoIdentityReusing(Cons(either.Left.First, either.Left.Second), AltGoIdentity(SharedListForeignErrorNil, err.Left.Second))}}
 		}
 	}
+	return bigInt, NonEmptyFailure{}
 }
 
-func PureIdentityNonEmptyListForeignError(x any) EitherNonEmptyListForeignErrorForeign {
-	return EitherNonEmptyListForeignErrorForeign{Tag: EitherNonEmptyListForeignErrorForeignRight, Right: x}
+func Pure(x any) EitherForeign {
+	return EitherForeign{Tag: EitherForeignRight, Right: x}
 }
 
-func AltNonEmptyListForeignErrorIdentityGo(acc *ListForeignError, list *ListForeignError) *ListForeignError {
+func AltGoIdentity(acc *ListForeignError, list *ListForeignError) *ListForeignError {
 	var listForeignErrorCells alloc.Cells[ListForeignError]
 	for {
 		if list == SharedListForeignErrorNil {
@@ -215,7 +210,7 @@ func AltNonEmptyListForeignErrorIdentityGo(acc *ListForeignError, list *ListFore
 	}
 }
 
-func AltNonEmptyListForeignErrorIdentityGoReusing(acc *ListForeignError, list *ListForeignError) *ListForeignError {
+func AltGoIdentityReusing(acc *ListForeignError, list *ListForeignError) *ListForeignError {
 	for {
 		if list == SharedListForeignErrorNil {
 			return acc
@@ -254,11 +249,11 @@ func AppendShow(buffer []byte, foreignError *ForeignError) []byte {
 	return buffer
 }
 
-func EitherNonEmptyListForeignErrorBigIntFromResults(value *big.Int, err *NonEmptyListForeignError) EitherNonEmptyListForeignErrorBigInt {
-	if err != nil {
-		return LeftEitherNonEmptyListForeignErrorBigInt(*err)
+func EitherBigIntFromResults(value *big.Int, err NonEmptyFailure) EitherBigInt {
+	if err.Failed {
+		return LeftEitherBigInt(err.Left)
 	}
-	return RightEitherNonEmptyListForeignErrorBigInt(value)
+	return RightEitherBigInt(value)
 }
 
 // Yoga/JSON/json.go
@@ -274,9 +269,9 @@ import (
 	"math/big"
 )
 
-func ReadImpl(fValue any) (*big.Int, *foreign.NonEmptyListForeignError) {
-	error_ := foreign.LeftEitherNonEmptyListForeignErrorInt(foreign.NonEmptyListForeignError{First: foreign.TypeMismatch("Int", foreignvalue.TagOf(fValue)), Second: foreign.SharedListForeignErrorNil})
-	var result2 foreign.EitherNonEmptyListForeignErrorInt
+func ReadImpl(fValue any) (*big.Int, foreign.NonEmptyFailure) {
+	error_ := foreign.LeftEitherInt(foreign.NonEmpty{First: foreign.TypeMismatch("Int", foreignvalue.TagOf(fValue)), Second: foreign.SharedListForeignErrorNil})
+	var result foreign.EitherInt
 	if foreignvalue.TagOf(fValue) == "Number" {
 		number := foreignvalue.Number(fValue)
 		var integer maybe.Int
@@ -286,55 +281,58 @@ func ReadImpl(fValue any) (*big.Int, *foreign.NonEmptyListForeignError) {
 			integer = maybe.NoInt
 		}
 		if integer == maybe.NoInt {
-			result2 = error_
+			result = error_
 		} else {
-			result2 = foreign.RightEitherNonEmptyListForeignErrorInt(int32(integer))
+			result = foreign.RightEitherInt(int32(integer))
 		}
 	} else {
-		result2 = error_
+		result = error_
 	}
-	var result foreign.EitherNonEmptyListForeignErrorBigInt
-	switch result2.Tag {
-	case foreign.EitherNonEmptyListForeignErrorIntLeft:
-		result = foreign.LeftEitherNonEmptyListForeignErrorBigInt(result2.Left)
-	default: // foreign.EitherNonEmptyListForeignErrorIntRight
-		result = foreign.RightEitherNonEmptyListForeignErrorBigInt(jsbigint.FromInt(result2.Right))
+	var bigInt *big.Int
+	var err foreign.NonEmptyFailure
+	switch result.Tag {
+	case foreign.EitherIntLeft:
+		err = foreign.NonEmptyFailure{Failed: true, Left: result.Left}
+	default: // foreign.EitherIntRight
+		bigInt, err = jsbigint.FromInt(result.Right), foreign.NonEmptyFailure{}
 	}
-	var result3 foreign.EitherNonEmptyListForeignErrorBigInt
+	var bigInt2 *big.Int
+	var err2 foreign.NonEmptyFailure
 	if foreignvalue.TagOf(fValue) == "Number" {
 		field := foreignvalue.Number(fValue)
 		if prim.NumberRound(field) == field {
 			a, found := jsbigint.FromNumber(field)
 			if found {
-				result3 = foreign.RightEitherNonEmptyListForeignErrorBigInt(a)
+				bigInt2, err2 = a, foreign.NonEmptyFailure{}
 			} else {
-				result3 = foreign.LeftEitherNonEmptyListForeignErrorBigInt(foreign.NonEmptyListForeignError{First: foreign.ForeignErrorForeignError("Cannot convert Number " + prim.ShowNumber(field) + " to BigInt"), Second: foreign.SharedListForeignErrorNil})
+				err2 = foreign.NonEmptyFailure{Failed: true, Left: foreign.NonEmpty{First: foreign.ForeignErrorForeignError("Cannot convert Number " + prim.ShowNumber(field) + " to BigInt"), Second: foreign.SharedListForeignErrorNil}}
 			}
 		} else {
-			result3 = foreign.LeftEitherNonEmptyListForeignErrorBigInt(foreign.NonEmptyListForeignError{First: foreign.ForeignErrorForeignError("Cannot convert decimal Number " + prim.ShowNumber(field) + " to BigInt"), Second: foreign.SharedListForeignErrorNil})
+			err2 = foreign.NonEmptyFailure{Failed: true, Left: foreign.NonEmpty{First: foreign.ForeignErrorForeignError("Cannot convert decimal Number " + prim.ShowNumber(field) + " to BigInt"), Second: foreign.SharedListForeignErrorNil}}
 		}
 	} else {
-		result3 = foreign.LeftEitherNonEmptyListForeignErrorBigInt(foreign.NonEmptyListForeignError{First: foreign.TypeMismatch("Number", foreignvalue.TagOf(fValue)), Second: foreign.SharedListForeignErrorNil})
+		err2 = foreign.NonEmptyFailure{Failed: true, Left: foreign.NonEmpty{First: foreign.TypeMismatch("Number", foreignvalue.TagOf(fValue)), Second: foreign.SharedListForeignErrorNil}}
 	}
-	var result4 foreign.EitherNonEmptyListForeignErrorBigInt
+	var bigInt3 *big.Int
+	var err3 foreign.NonEmptyFailure
 	if foreignvalue.TagOf(fValue) == "BigInt" {
-		result4 = foreign.RightEitherNonEmptyListForeignErrorBigInt(fValue.(*big.Int))
+		bigInt3, err3 = fValue.(*big.Int), foreign.NonEmptyFailure{}
 	} else {
-		result4 = foreign.LeftEitherNonEmptyListForeignErrorBigInt(foreign.NonEmptyListForeignError{First: foreign.TypeMismatch("BigInt", foreignvalue.TagOf(fValue)), Second: foreign.SharedListForeignErrorNil})
+		err3 = foreign.NonEmptyFailure{Failed: true, Left: foreign.NonEmpty{First: foreign.TypeMismatch("BigInt", foreignvalue.TagOf(fValue)), Second: foreign.SharedListForeignErrorNil}}
 	}
-	var result5 foreign.EitherNonEmptyListForeignErrorBigInt
+	var result2 foreign.EitherBigInt
 	if foreignvalue.TagOf(fValue) == "String" {
 		field := fValue.(string)
 		a, found := jsbigint.FromString(field)
 		if found {
-			result5 = foreign.RightEitherNonEmptyListForeignErrorBigInt(a)
+			result2 = foreign.RightEitherBigInt(a)
 		} else {
-			result5 = foreign.LeftEitherNonEmptyListForeignErrorBigInt(foreign.NonEmptyListForeignError{First: foreign.ForeignErrorForeignError("Cannot convert String " + field + " to BigInt"), Second: foreign.SharedListForeignErrorNil})
+			result2 = foreign.LeftEitherBigInt(foreign.NonEmpty{First: foreign.ForeignErrorForeignError("Cannot convert String " + field + " to BigInt"), Second: foreign.SharedListForeignErrorNil})
 		}
 	} else {
-		result5 = foreign.LeftEitherNonEmptyListForeignErrorBigInt(foreign.NonEmptyListForeignError{First: foreign.TypeMismatch("String", foreignvalue.TagOf(fValue)), Second: foreign.SharedListForeignErrorNil})
+		result2 = foreign.LeftEitherBigInt(foreign.NonEmpty{First: foreign.TypeMismatch("String", foreignvalue.TagOf(fValue)), Second: foreign.SharedListForeignErrorNil})
 	}
-	return foreign.AltNonEmptyListForeignErrorIdentity(result, foreign.EitherNonEmptyListForeignErrorBigIntFromResults(foreign.AltNonEmptyListForeignErrorIdentity(result3, foreign.EitherNonEmptyListForeignErrorBigIntFromResults(foreign.AltNonEmptyListForeignErrorIdentity(result4, result5)))))
+	return foreign.Alt(bigInt, err, foreign.EitherBigIntFromResults(foreign.Alt(bigInt2, err2, foreign.EitherBigIntFromResults(foreign.Alt(bigInt3, err3, result2)))))
 }
 
 // main.go
@@ -369,11 +367,11 @@ func initializeMain_() []string {
 	if foreignvalue.TagOf(value) == "Number" {
 		result = "(Right " + prim.ShowNumber(foreignvalue.Number(value)) + ")"
 	} else {
-		result = "(Left " + foreign.ShowNonEmptyListForeignError(foreign.NonEmptyListForeignError{First: foreign.TypeMismatch("Number", foreignvalue.TagOf(value)), Second: foreign.SharedListForeignErrorNil}) + ")"
+		result = "(Left " + foreign.ShowNonEmptyListForeignError(foreign.NonEmpty{First: foreign.TypeMismatch("Number", foreignvalue.TagOf(value)), Second: foreign.SharedListForeignErrorNil}) + ")"
 	}
 	var value2 any = int32(-200)
-	error_ := foreign.LeftEitherNonEmptyListForeignErrorInt(foreign.NonEmptyListForeignError{First: foreign.TypeMismatch("Int", foreignvalue.TagOf(value2)), Second: foreign.SharedListForeignErrorNil})
-	var result2 foreign.EitherNonEmptyListForeignErrorInt
+	error_ := foreign.LeftEitherInt(foreign.NonEmpty{First: foreign.TypeMismatch("Int", foreignvalue.TagOf(value2)), Second: foreign.SharedListForeignErrorNil})
+	var result2 foreign.EitherInt
 	if foreignvalue.TagOf(value2) == "Number" {
 		number := foreignvalue.Number(value2)
 		var integer maybe.Int
@@ -385,16 +383,16 @@ func initializeMain_() []string {
 		if integer == maybe.NoInt {
 			result2 = error_
 		} else {
-			result2 = foreign.RightEitherNonEmptyListForeignErrorInt(int32(integer))
+			result2 = foreign.RightEitherInt(int32(integer))
 		}
 	} else {
 		result2 = error_
 	}
 	var result3 string
 	switch result2.Tag {
-	case foreign.EitherNonEmptyListForeignErrorIntLeft:
+	case foreign.EitherIntLeft:
 		result3 = "(Left " + foreign.ShowNonEmptyListForeignError(result2.Left) + ")"
-	default: // foreign.EitherNonEmptyListForeignErrorIntRight
+	default: // foreign.EitherIntRight
 		result3 = "(Right " + strconv.Itoa(int(result2.Right)) + ")"
 	}
 	nullable := nullablepkg.Nullable(nullablepkg.Null[int32](), maybe.NoInt, maybe.JustInt)
@@ -404,66 +402,66 @@ func initializeMain_() []string {
 	} else {
 		result4 = int32(nullable)
 	}
-	performed := direct.CatchException(func(x exception.Error) either.EitherErrorForeign {
+	performed := direct.CatchException(func(x exception.Error) either.Either {
 		return either.Left(x)
-	}, func() either.EitherErrorForeign {
+	}, func() either.Either {
 		argument := foreignvalue.ParseJSON("\"a\"")
-		return either.EitherErrorForeign{Tag: either.EitherErrorForeignRight, Right: argument}
+		return either.Either{Tag: either.EitherRight, Right: argument}
 	})
-	var result5 foreign.EitherNonEmptyListForeignErrorChar
+	var char rune
+	var err foreign.NonEmptyFailure
 	switch performed.Tag {
-	case either.EitherErrorForeignLeft:
-		result5 = foreign.LeftEitherNonEmptyListForeignErrorChar(foreign.NonEmptyListForeignError{First: foreign.ForeignErrorForeignError(exception.Message(performed.Left)), Second: foreign.SharedListForeignErrorNil})
-	default: // either.EitherErrorForeignRight
+	case either.EitherLeft:
+		err = foreign.NonEmptyFailure{Failed: true, Left: foreign.NonEmpty{First: foreign.ForeignErrorForeignError(exception.Message(performed.Left)), Second: foreign.SharedListForeignErrorNil}}
+	default: // either.EitherRight
 		r := performed.Right
 		if foreignvalue.TagOf(r) == "String" {
 			a, found := prim.CodeUnitToChar(r.(string))
 			if found {
-				result5 = foreign.RightEitherNonEmptyListForeignErrorChar(a)
+				char, err = a, foreign.NonEmptyFailure{}
 			} else {
-				result5 = foreign.LeftEitherNonEmptyListForeignErrorChar(foreign.NonEmptyListForeignError{First: foreign.TypeMismatch("Char", foreignvalue.TagOf(r)), Second: foreign.SharedListForeignErrorNil})
+				err = foreign.NonEmptyFailure{Failed: true, Left: foreign.NonEmpty{First: foreign.TypeMismatch("Char", foreignvalue.TagOf(r)), Second: foreign.SharedListForeignErrorNil}}
 			}
 		} else {
-			result5 = foreign.LeftEitherNonEmptyListForeignErrorChar(foreign.NonEmptyListForeignError{First: foreign.TypeMismatch("Char", foreignvalue.TagOf(r)), Second: foreign.SharedListForeignErrorNil})
+			err = foreign.NonEmptyFailure{Failed: true, Left: foreign.NonEmpty{First: foreign.TypeMismatch("Char", foreignvalue.TagOf(r)), Second: foreign.SharedListForeignErrorNil}}
 		}
 	}
-	var result6 string
-	switch result5.Tag {
-	case foreign.EitherNonEmptyListForeignErrorCharLeft:
-		result6 = "(Left " + foreign.ShowNonEmptyListForeignError(result5.Left) + ")"
-	default: // foreign.EitherNonEmptyListForeignErrorCharRight
-		result6 = "(Right " + prim.ShowChar(result5.Right) + ")"
+	var result5 string
+	if err.Failed {
+		result5 = "(Left " + foreign.ShowNonEmptyListForeignError(err.Left) + ")"
+	} else {
+		result5 = "(Right " + prim.ShowChar(char) + ")"
 	}
-	performed2 := direct.CatchException(func(x exception.Error) either.EitherErrorForeign {
+	performed2 := direct.CatchException(func(x exception.Error) either.Either {
 		return either.Left(x)
-	}, func() either.EitherErrorForeign {
+	}, func() either.Either {
 		argument := foreignvalue.ParseJSON("{\"big\":12}")
-		return either.EitherErrorForeign{Tag: either.EitherErrorForeignRight, Right: argument}
+		return either.Either{Tag: either.EitherRight, Right: argument}
 	})
-	var result7 string
+	var result6 string
 	switch performed2.Tag {
-	case either.EitherErrorForeignLeft:
-		result7 = "(Left " + foreign.ShowNonEmptyListForeignError(foreign.NonEmptyListForeignError{First: foreign.ForeignErrorForeignError(exception.Message(performed2.Left)), Second: foreign.SharedListForeignErrorNil}) + ")"
-	default: // either.EitherErrorForeignRight
+	case either.EitherLeft:
+		result6 = "(Left " + foreign.ShowNonEmptyListForeignError(foreign.NonEmpty{First: foreign.ForeignErrorForeignError(exception.Message(performed2.Left)), Second: foreign.SharedListForeignErrorNil}) + ")"
+	default: // either.EitherRight
 		r := performed2.Right
-		unsafeReadPropImpl := foreignvalue.UnsafeReadPropImpl(func() foreign.EitherNonEmptyListForeignErrorForeign {
-			return foreign.LeftEitherNonEmptyListForeignErrorForeign(foreign.NonEmptyListForeignError{First: foreign.TypeMismatch("object", foreignvalue.TypeOf(r)), Second: foreign.SharedListForeignErrorNil})
-		}, foreign.PureIdentityNonEmptyListForeignError, "big", r)
+		unsafeReadPropImpl := foreignvalue.UnsafeReadPropImpl(func() foreign.EitherForeign {
+			return foreign.LeftEitherForeign(foreign.NonEmpty{First: foreign.TypeMismatch("object", foreignvalue.TypeOf(r)), Second: foreign.SharedListForeignErrorNil})
+		}, foreign.Pure, "big", r)
 		var bigInt *big.Int
-		var err *foreign.NonEmptyListForeignError
+		var err2 foreign.NonEmptyFailure
 		switch unsafeReadPropImpl.Tag {
-		case foreign.EitherNonEmptyListForeignErrorForeignLeft:
-			err = new(unsafeReadPropImpl.Left)
-		default: // foreign.EitherNonEmptyListForeignErrorForeignRight
-			bigInt, err = json.ReadImpl(unsafeReadPropImpl.Right)
+		case foreign.EitherForeignLeft:
+			err2 = foreign.NonEmptyFailure{Failed: true, Left: unsafeReadPropImpl.Left}
+		default: // foreign.EitherForeignRight
+			bigInt, err2 = json.ReadImpl(unsafeReadPropImpl.Right)
 		}
-		if err != nil {
-			result7 = "(Left " + foreign.ShowNonEmptyListForeignError(foreign.NonEmptyListForeignError{First: foreign.ErrorAtProperty("big", err.First), Second: mainChunkedRevMap(foreign.SharedListListForeignErrorNil, err.Second)}) + ")"
+		if err2.Failed {
+			result6 = "(Left " + foreign.ShowNonEmptyListForeignError(foreign.NonEmpty{First: foreign.ErrorAtProperty("big", err2.Left.First), Second: mainChunkedRevMap(foreign.SharedListListForeignErrorNil, err2.Left.Second)}) + ")"
 		} else {
-			result7 = "(Right { big: " + jsbigint.ToString(bigInt) + " })"
+			result6 = "(Right { big: " + jsbigint.ToString(bigInt) + " })"
 		}
 	}
-	return []string{foreignvalue.TypeOf(any(array.Snoc[any](array.Snoc[any]([]any{}, int32(1)), "Freddy"))), result, result3, foreignvalue.UnsafeStringify(prim.CharSingleton('a')), foreignvalue.UnsafeStringify(jsbigint.FromInt(10)), foreignvalue.UnsafeStringify(direct.ForeignRecord([]string{"missing", "letter", "big"}, []any{result4, prim.CharSingleton('x'), jsbigint.FromInt(7)})), result6, result7}
+	return []string{foreignvalue.TypeOf(any(array.Snoc[any](array.Snoc[any]([]any{}, int32(1)), "Freddy"))), result, result3, foreignvalue.UnsafeStringify(prim.CharSingleton('a')), foreignvalue.UnsafeStringify(jsbigint.FromInt(10)), foreignvalue.UnsafeStringify(direct.ForeignRecord([]string{"missing", "letter", "big"}, []any{result4, prim.CharSingleton('x'), jsbigint.FromInt(7)})), result5, result6}
 }
 
 func mainChunkedRevMap(chunksAcc *foreign.ListListForeignError, chunk *foreign.ListForeignError) *foreign.ListForeignError {

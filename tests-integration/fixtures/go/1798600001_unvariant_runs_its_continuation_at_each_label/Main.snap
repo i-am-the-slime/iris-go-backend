@@ -130,11 +130,11 @@ var main_ = initializeMain_()
 func initializeMain_() []string {
 	mapped := make([]string, len(shapes))
 	for index, element := range shapes {
-		mapped[index] = labelOfCaptionCircleSquare(element)
+		mapped[index] = labelOf(element)
 	}
 	mapped2 := make([]int32, len(shapes))
 	for index, element := range shapes {
-		mapped2[index] = labelLengthCaptionCircleSquare(element)
+		mapped2[index] = labelLength(element)
 	}
 	mapped3 := make([]string, len(shapes))
 	for index, x := range shapes {
@@ -152,12 +152,12 @@ func initializeMain_() []string {
 	}
 	mapped4 := make([]string, len(shapes))
 	for index, x := range shapes {
-		mapped4[index] = labelOfCaptionCircleSquare(roundTrip(roundTrip(x)))
+		mapped4[index] = labelOf(roundTrip(roundTrip(x)))
 	}
 	return []string{show.ArrayString(mapped), show.ArrayInt(mapped2), show.ArrayString(mapped3), show.ArrayString(mapped4), "only"}
 }
 
-func labelOfCaptionCircleSquare(variant2 variant.CaptionCircleSquare) string {
+func labelOf(variant2 variant.CaptionCircleSquare) string {
 	var run variant.Unvariant
 	switch variant2.Tag {
 	case variant.CaptionCircleSquareCaption:
@@ -199,7 +199,7 @@ func labelOfCaptionCircleSquare(variant2 variant.CaptionCircleSquare) string {
 
 var shapes []variant.CaptionCircleSquare = []variant.CaptionCircleSquare{variant.Circle(1.5), variant.Square(2), variant.Caption("hi")}
 
-func labelLengthCaptionCircleSquare(variant2 variant.CaptionCircleSquare) int32 {
+func labelLength(variant2 variant.CaptionCircleSquare) int32 {
 	var run variant.Unvariant
 	switch variant2.Tag {
 	case variant.CaptionCircleSquareCaption:

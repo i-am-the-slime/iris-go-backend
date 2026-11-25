@@ -1,0 +1,151 @@
+---
+source: tests-integration/src/fixtures.rs
+---
+// main.go
+package main
+
+import (
+	"github.com/i-am-the-slime/iris-go/prim"
+	"strconv"
+)
+
+type OutcomeStringInt struct {
+	Failed    string
+	Succeeded int32
+	Tag       uint8
+}
+
+const (
+	OutcomeStringIntFailed = iota
+	OutcomeStringIntSucceeded
+)
+
+type OutcomeStringBoolean struct {
+	Failed    string
+	Tag       uint8
+	Succeeded bool
+}
+
+const (
+	OutcomeStringBooleanFailed = iota
+	OutcomeStringBooleanSucceeded
+)
+
+type OutcomeIntBoolean struct {
+	Failed    int32
+	Tag       uint8
+	Succeeded bool
+}
+
+const (
+	OutcomeIntBooleanFailed = iota
+	OutcomeIntBooleanSucceeded
+)
+
+func FailedOutcomeStringInt(failed string) OutcomeStringInt {
+	return OutcomeStringInt{Tag: OutcomeStringIntFailed, Failed: failed}
+}
+
+func SucceededOutcomeStringInt(succeeded int32) OutcomeStringInt {
+	return OutcomeStringInt{Tag: OutcomeStringIntSucceeded, Succeeded: succeeded}
+}
+
+func SucceededOutcomeStringBoolean(succeeded bool) OutcomeStringBoolean {
+	return OutcomeStringBoolean{Tag: OutcomeStringBooleanSucceeded, Succeeded: succeeded}
+}
+
+func FailedOutcomeStringBoolean(failed string) OutcomeStringBoolean {
+	return OutcomeStringBoolean{Tag: OutcomeStringBooleanFailed, Failed: failed}
+}
+
+func FailedOutcomeIntBoolean(failed int32) OutcomeIntBoolean {
+	return OutcomeIntBoolean{Tag: OutcomeIntBooleanFailed, Failed: failed}
+}
+
+func SucceededOutcomeIntBoolean(succeeded bool) OutcomeIntBoolean {
+	return OutcomeIntBoolean{Tag: OutcomeIntBooleanSucceeded, Succeeded: succeeded}
+}
+
+func main_() []string {
+	outcomes := []OutcomeStringInt{FailedOutcomeStringInt("timeout"), SucceededOutcomeStringInt(3)}
+	outcomes2 := []OutcomeStringBoolean{SucceededOutcomeStringBoolean(true), FailedOutcomeStringBoolean("refused")}
+	outcomes3 := []OutcomeIntBoolean{FailedOutcomeIntBoolean(404), SucceededOutcomeIntBoolean(false)}
+	return []string{mainDescribeFrom(outcomes, 0, ""), mainDescribeFrom2(outcomes2, 0, ""), mainDescribeFrom3(outcomes3, 0, ""), strconv.Itoa(int(mainCountFrom(0)))}
+}
+
+func mainDescribeFrom(outcomes []OutcomeStringInt, index int32, text string) string {
+	textBytes := []byte(text)
+	for {
+		if index < int32(len(outcomes)) {
+			scrutinee := outcomes[index]
+			switch scrutinee.Tag {
+			case OutcomeStringIntFailed:
+				textBytes = append(textBytes, "failed with "...)
+				textBytes = prim.AppendShowString(textBytes, scrutinee.Failed)
+			default: // OutcomeStringIntSucceeded
+				textBytes = append(textBytes, "succeeded with "...)
+				textBytes = strconv.AppendInt(textBytes, int64(scrutinee.Succeeded), 10)
+			}
+			textBytes = append(textBytes, "; "...)
+			index += 1
+			continue
+		}
+		return string(textBytes)
+	}
+}
+
+func mainDescribeFrom2(outcomes []OutcomeStringBoolean, index int32, text string) string {
+	textBytes := []byte(text)
+	for {
+		if index < int32(len(outcomes)) {
+			scrutinee := outcomes[index]
+			switch scrutinee.Tag {
+			case OutcomeStringBooleanFailed:
+				textBytes = append(textBytes, "failed with "...)
+				textBytes = prim.AppendShowString(textBytes, scrutinee.Failed)
+			default: // OutcomeStringBooleanSucceeded
+				textBytes = append(textBytes, "succeeded with "...)
+				textBytes = strconv.AppendBool(textBytes, scrutinee.Succeeded)
+			}
+			textBytes = append(textBytes, "; "...)
+			index += 1
+			continue
+		}
+		return string(textBytes)
+	}
+}
+
+func mainDescribeFrom3(outcomes []OutcomeIntBoolean, index int32, text string) string {
+	textBytes := []byte(text)
+	for {
+		if index < int32(len(outcomes)) {
+			scrutinee := outcomes[index]
+			switch scrutinee.Tag {
+			case OutcomeIntBooleanFailed:
+				textBytes = append(textBytes, "failed with "...)
+				textBytes = strconv.AppendInt(textBytes, int64(scrutinee.Failed), 10)
+			default: // OutcomeIntBooleanSucceeded
+				textBytes = append(textBytes, "succeeded with "...)
+				textBytes = strconv.AppendBool(textBytes, scrutinee.Succeeded)
+			}
+			textBytes = append(textBytes, "; "...)
+			index += 1
+			continue
+		}
+		return string(textBytes)
+	}
+}
+
+func mainCountFrom(index int32) int32 {
+	for {
+		if index >= 0 && index < int32(len([]float64{1.5, 2.5})) {
+			index += 1
+			continue
+		}
+		return index
+	}
+}
+
+func main() {
+	main_()
+}

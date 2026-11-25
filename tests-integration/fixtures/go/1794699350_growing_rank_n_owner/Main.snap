@@ -15,7 +15,7 @@ func Identity2(x func(int32) int32) func(int32) int32 {
 // Data/Tuple/tuple.go
 package tuple
 
-type TupleFnIntInt struct {
+type TupleFnInt struct {
 	First  func(int32) any
 	Origin any
 	Second int32
@@ -27,7 +27,7 @@ type Tuple struct {
 	Origin any
 }
 
-func Convert(value *TupleFnIntInt) *Tuple {
+func Convert(value *TupleFnInt) *Tuple {
 	if original, ok := value.Origin.(*Tuple); ok {
 		return original
 	}
@@ -36,7 +36,7 @@ func Convert(value *TupleFnIntInt) *Tuple {
 	}, Second: value.Second, Origin: value}
 }
 
-func Convert2(value []func(int32) *TupleFnIntInt) []func(int32) any {
+func Convert2(value []func(int32) *TupleFnInt) []func(int32) any {
 	converted := make([]func(int32) any, len(value))
 	for index, element := range value {
 		converted[index] = func(coerced int32) any {
@@ -46,18 +46,18 @@ func Convert2(value []func(int32) *TupleFnIntInt) []func(int32) any {
 	return converted
 }
 
-func Convert3(value *Tuple) *TupleFnIntInt {
-	if original, ok := value.Origin.(*TupleFnIntInt); ok {
+func Convert3(value *Tuple) *TupleFnInt {
+	if original, ok := value.Origin.(*TupleFnInt); ok {
 		return original
 	}
 	original2 := value.First.(func(any) any)
-	return &TupleFnIntInt{First: func(coerced int32) any {
+	return &TupleFnInt{First: func(coerced int32) any {
 		return original2(coerced)
 	}, Second: value.Second.(int32), Origin: value}
 }
 
-func Convert4(value []any) []*TupleFnIntInt {
-	converted := make([]*TupleFnIntInt, len(value))
+func Convert4(value []any) []*TupleFnInt {
+	converted := make([]*TupleFnInt, len(value))
 	for index, element := range value {
 		converted[index] = Convert3(element.(*Tuple))
 	}
@@ -95,17 +95,17 @@ func initializeMain_() []int32 {
 			}
 			mapped2[index] = value2(1)
 		}
-		array2 := tuple.Convert2(arraypkg.Map(func(f func(int32) any) func(int32) *tuple.TupleFnIntInt {
-			return func(i int32) *tuple.TupleFnIntInt {
-				return &tuple.TupleFnIntInt{First: f, Second: i}
+		array2 := tuple.Convert2(arraypkg.Map(func(f func(int32) any) func(int32) *tuple.TupleFnInt {
+			return func(i int32) *tuple.TupleFnInt {
+				return &tuple.TupleFnInt{First: f, Second: i}
 			}
 		}, questions))
 		mapped3 := make([]any, len(array2))
 		for index, value := range array2 {
 			mapped3[index] = value(10)
 		}
-		return arraypkg.Apply(arraypkg.Map(func(function func(int32) int32) func(*tuple.TupleFnIntInt) any {
-			return func(tuple *tuple.TupleFnIntInt) any {
+		return arraypkg.Apply(arraypkg.Map(func(function func(int32) int32) func(*tuple.TupleFnInt) any {
+			return func(tuple *tuple.TupleFnInt) any {
 				return tuple.First(function(tuple.Second))
 			}
 		}, shared.Convert2(mapped2)), tuple.Convert4(mapped3))

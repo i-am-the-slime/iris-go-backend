@@ -11,24 +11,24 @@ import (
 )
 
 type Env struct {
-	Listeners *shared.Ref[[]ActionUnit]
+	Listeners *shared.Ref[[]Action]
 }
 
-type ActionUnit func(Env)
+type Action func(Env)
 
 type StateValue struct {
-	State []ActionUnit
-	Value []ActionUnit
+	State []Action
+	Value []Action
 }
 
 func main() {
-	listeners := &shared.Ref[[]ActionUnit]{Value: []ActionUnit{}}
+	listeners := &shared.Ref[[]Action]{Value: []Action{}}
 	original := func(text string) func(Env) {
 		return func(ignored Env) {
 			say(text, ignored)
 		}
 	}
-	original2 := func(listener ActionUnit) func(Env) {
+	original2 := func(listener Action) func(Env) {
 		return func(env Env) {
 			listen(listener, env)
 		}
@@ -40,7 +40,7 @@ func main() {
 			say(text, ignored)
 		}
 	}
-	original4 := func(listener ActionUnit) func(Env) {
+	original4 := func(listener Action) func(Env) {
 		return func(env Env) {
 			listen(listener, env)
 		}
@@ -52,9 +52,9 @@ func main() {
 	}
 }
 
-func listen(listener ActionUnit, env Env) {
+func listen(listener Action, env Env) {
 	s := env.Listeners.Value
-	s_ := array.Append(s, []ActionUnit{listener})
+	s_ := array.Append(s, []Action{listener})
 	env.Listeners.Value = s_
 }
 

@@ -4,7 +4,7 @@ source: tests-integration/src/fixtures.rs
 // Data/Monoid/monoid.go
 package monoid
 
-var MemptyInt []int32 = []int32{}
+var Mempty []int32 = []int32{}
 
 // Data/Show/show.go
 package show
@@ -48,7 +48,7 @@ var main_ = initializeMain_()
 
 func initializeMain_() []string {
 	array := [][]int32{{1}, {2, 3}}
-	accumulator := shared.AccInit{Init: true, Acc: monoid.MemptyInt}
+	accumulator := shared.AccInit{Init: true, Acc: monoid.Mempty}
 	for _, x := range array {
 		if accumulator.Init {
 			accumulator = shared.AccInit{Init: false, Acc: x}

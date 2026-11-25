@@ -4,24 +4,24 @@ source: tests-integration/src/fixtures.rs
 // Data/List/Types/types.go
 package types
 
-type ListInt struct {
-	Cons1 *ListInt
+type List struct {
+	Cons1 *List
 	Cons0 int32
 }
 
-var SharedListIntNil = &ListInt{}
+var SharedListNil = &List{}
 
-func Cons(cons0 int32, cons1 *ListInt) *ListInt {
-	return &ListInt{Cons0: cons0, Cons1: cons1}
+func Cons(cons0 int32, cons1 *List) *List {
+	return &List{Cons0: cons0, Cons1: cons1}
 }
 
-func SumIntList(value *ListInt) int32 {
-	return SumIntListGo(0, value)
+func Sum(value *List) int32 {
+	return SumGo(0, value)
 }
 
-func SumIntListGo(b int32, value *ListInt) int32 {
+func SumGo(b int32, value *List) int32 {
 	for {
-		if value == SharedListIntNil {
+		if value == SharedListNil {
 			return b
 		}
 		a := value.Cons0
@@ -687,7 +687,7 @@ var main_ = initializeMain_()
 
 func initializeMain_() []int32 {
 	result := mainGoReusing(redblack.SharedTreeLeaf, redblack_types.SharedListTreeNil, 0, 1500)
-	return []int32{result.Inspected, list_redblack.LengthTree(result.Trees), types.SumIntList(redblack_types.MapSize(result.Trees)), types.SumIntList(redblack_types.Map_(redblack.Checksum, result.Trees)), list_redblack.LengthTree(mainGoReusing2(redblack_types.SharedListTreeNil, result.Trees))}
+	return []int32{result.Inspected, list_redblack.Length(result.Trees), types.Sum(redblack_types.MapSize(result.Trees)), types.Sum(redblack_types.Map_(redblack.Checksum, result.Trees)), list_redblack.Length(mainGoReusing2(redblack_types.SharedListTreeNil, result.Trees))}
 }
 
 func member(key int32, value *redblack.Tree) bool {
@@ -784,7 +784,7 @@ func mainGoReusing2(acc *redblack_types.ListTree, list *redblack_types.ListTree)
 	var listTreeCells alloc.Cells[redblack_types.ListTree]
 	for {
 		if list == redblack_types.SharedListTreeNil {
-			return list_redblack.ReverseTreeReusing(acc)
+			return list_redblack.Reverse(acc)
 		}
 		x := list.Cons0
 		xs := list.Cons1
@@ -846,11 +846,11 @@ package list_redblack
 
 import "fixture/shared/RedBlack+Data.List.Types"
 
-func LengthTree(value *redblack_types.ListTree) int32 {
-	return LengthTreeGo(0, value)
+func Length(value *redblack_types.ListTree) int32 {
+	return LengthGo(0, value)
 }
 
-func LengthTreeGo(b int32, value *redblack_types.ListTree) int32 {
+func LengthGo(b int32, value *redblack_types.ListTree) int32 {
 	for {
 		if value == redblack_types.SharedListTreeNil {
 			return b
@@ -860,11 +860,11 @@ func LengthTreeGo(b int32, value *redblack_types.ListTree) int32 {
 	}
 }
 
-func ReverseTreeReusing(list *redblack_types.ListTree) *redblack_types.ListTree {
-	return ReverseTreeGoReusing(redblack_types.SharedListTreeNil, list)
+func Reverse(list *redblack_types.ListTree) *redblack_types.ListTree {
+	return ReverseGo(redblack_types.SharedListTreeNil, list)
 }
 
-func ReverseTreeGoReusing(acc *redblack_types.ListTree, list *redblack_types.ListTree) *redblack_types.ListTree {
+func ReverseGo(acc *redblack_types.ListTree, list *redblack_types.ListTree) *redblack_types.ListTree {
 	for {
 		if list == redblack_types.SharedListTreeNil {
 			return acc
@@ -907,15 +907,15 @@ func Cons(cons0 *redblack.Tree, cons1 *ListTree) *ListTree {
 	return &ListTree{Cons0: cons0, Cons1: cons1}
 }
 
-func Map_(f func(*redblack.Tree) int32, list *ListTree) *types.ListInt {
+func Map_(f func(*redblack.Tree) int32, list *ListTree) *types.List {
 	return MapChunkedRevMap(f, SharedListListTreeNil, list)
 }
 
-func MapSize(list *ListTree) *types.ListInt {
+func MapSize(list *ListTree) *types.List {
 	return MapSizeChunkedRevMap(SharedListListTreeNil, list)
 }
 
-func MapChunkedRevMap(f func(*redblack.Tree) int32, chunksAcc *ListListTree, chunk *ListTree) *types.ListInt {
+func MapChunkedRevMap(f func(*redblack.Tree) int32, chunksAcc *ListListTree, chunk *ListTree) *types.List {
 	var listListTreeCells alloc.Cells[ListListTree]
 	for {
 		if chunk != SharedListTreeNil && chunk.Cons1 != SharedListTreeNil && chunk.Cons1.Cons1 != SharedListTreeNil {
@@ -923,34 +923,34 @@ func MapChunkedRevMap(f func(*redblack.Tree) int32, chunksAcc *ListListTree, chu
 			chunksAcc, chunk = listListTreeCells.New(ListListTree{Cons0: chunk, Cons1: chunksAcc}), xs
 			continue
 		}
-		var result *types.ListInt
+		var result *types.List
 		if chunk != SharedListTreeNil && chunk.Cons1 != SharedListTreeNil && chunk.Cons1.Cons1 == SharedListTreeNil {
-			result = types.Cons(f(chunk.Cons0), types.Cons(f(chunk.Cons1.Cons0), types.SharedListIntNil))
+			result = types.Cons(f(chunk.Cons0), types.Cons(f(chunk.Cons1.Cons0), types.SharedListNil))
 		} else if chunk != SharedListTreeNil && chunk.Cons1 == SharedListTreeNil {
-			result = types.Cons(f(chunk.Cons0), types.SharedListIntNil)
+			result = types.Cons(f(chunk.Cons0), types.SharedListNil)
 		} else {
-			result = types.SharedListIntNil
+			result = types.SharedListNil
 		}
 		return MapChunkedRevMapReverseUnrolledMap(f, chunksAcc, result)
 	}
 }
 
-func MapChunkedRevMapReverseUnrolledMap(f func(*redblack.Tree) int32, list *ListListTree, acc *types.ListInt) *types.ListInt {
-	var listIntCells alloc.Cells[types.ListInt]
+func MapChunkedRevMapReverseUnrolledMap(f func(*redblack.Tree) int32, list *ListListTree, acc *types.List) *types.List {
+	var listIntCells alloc.Cells[types.List]
 	for {
 		if list != SharedListListTreeNil && list.Cons0 != SharedListTreeNil && list.Cons0.Cons1 != SharedListTreeNil && list.Cons0.Cons1.Cons1 != SharedListTreeNil {
 			x1 := list.Cons0.Cons0
 			x2 := list.Cons0.Cons1.Cons0
 			x3 := list.Cons0.Cons1.Cons1.Cons0
 			cs := list.Cons1
-			list, acc = cs, listIntCells.New(types.ListInt{Cons0: f(x1), Cons1: listIntCells.New(types.ListInt{Cons0: f(x2), Cons1: listIntCells.New(types.ListInt{Cons0: f(x3), Cons1: acc})})})
+			list, acc = cs, listIntCells.New(types.List{Cons0: f(x1), Cons1: listIntCells.New(types.List{Cons0: f(x2), Cons1: listIntCells.New(types.List{Cons0: f(x3), Cons1: acc})})})
 			continue
 		}
 		return acc
 	}
 }
 
-func MapSizeChunkedRevMap(chunksAcc *ListListTree, chunk *ListTree) *types.ListInt {
+func MapSizeChunkedRevMap(chunksAcc *ListListTree, chunk *ListTree) *types.List {
 	var listListTreeCells alloc.Cells[ListListTree]
 	for {
 		if chunk != SharedListTreeNil && chunk.Cons1 != SharedListTreeNil && chunk.Cons1.Cons1 != SharedListTreeNil {
@@ -958,27 +958,27 @@ func MapSizeChunkedRevMap(chunksAcc *ListListTree, chunk *ListTree) *types.ListI
 			chunksAcc, chunk = listListTreeCells.New(ListListTree{Cons0: chunk, Cons1: chunksAcc}), xs
 			continue
 		}
-		var result *types.ListInt
+		var result *types.List
 		if chunk != SharedListTreeNil && chunk.Cons1 != SharedListTreeNil && chunk.Cons1.Cons1 == SharedListTreeNil {
-			result = types.Cons(redblack.Size(chunk.Cons0), types.Cons(redblack.Size(chunk.Cons1.Cons0), types.SharedListIntNil))
+			result = types.Cons(redblack.Size(chunk.Cons0), types.Cons(redblack.Size(chunk.Cons1.Cons0), types.SharedListNil))
 		} else if chunk != SharedListTreeNil && chunk.Cons1 == SharedListTreeNil {
-			result = types.Cons(redblack.Size(chunk.Cons0), types.SharedListIntNil)
+			result = types.Cons(redblack.Size(chunk.Cons0), types.SharedListNil)
 		} else {
-			result = types.SharedListIntNil
+			result = types.SharedListNil
 		}
 		return MapSizeChunkedRevMapReverseUnrolledMap(chunksAcc, result)
 	}
 }
 
-func MapSizeChunkedRevMapReverseUnrolledMap(list *ListListTree, acc *types.ListInt) *types.ListInt {
-	var listIntCells alloc.Cells[types.ListInt]
+func MapSizeChunkedRevMapReverseUnrolledMap(list *ListListTree, acc *types.List) *types.List {
+	var listIntCells alloc.Cells[types.List]
 	for {
 		if list != SharedListListTreeNil && list.Cons0 != SharedListTreeNil && list.Cons0.Cons1 != SharedListTreeNil && list.Cons0.Cons1.Cons1 != SharedListTreeNil {
 			x1 := list.Cons0.Cons0
 			x2 := list.Cons0.Cons1.Cons0
 			x3 := list.Cons0.Cons1.Cons1.Cons0
 			cs := list.Cons1
-			list, acc = cs, listIntCells.New(types.ListInt{Cons0: redblack.Size(x1), Cons1: listIntCells.New(types.ListInt{Cons0: redblack.Size(x2), Cons1: listIntCells.New(types.ListInt{Cons0: redblack.Size(x3), Cons1: acc})})})
+			list, acc = cs, listIntCells.New(types.List{Cons0: redblack.Size(x1), Cons1: listIntCells.New(types.List{Cons0: redblack.Size(x2), Cons1: listIntCells.New(types.List{Cons0: redblack.Size(x3), Cons1: acc})})})
 			continue
 		}
 		return acc

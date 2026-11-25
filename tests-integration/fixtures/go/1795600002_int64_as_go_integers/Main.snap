@@ -57,7 +57,7 @@ func JustUInt64(just uint64) UInt64 {
 // Data/Ord/ord.go
 package ord
 
-func MaxInt64(x int64, y int64) int64 {
+func Max_(x int64, y int64) int64 {
 	if x >= y {
 		return x
 	}

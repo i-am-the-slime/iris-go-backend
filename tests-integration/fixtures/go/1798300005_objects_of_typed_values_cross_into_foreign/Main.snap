@@ -11,7 +11,7 @@ const NoInt Int = 1 << 32
 // Data/Tuple/tuple.go
 package tuple
 
-type TupleStringInt struct {
+type Tuple struct {
 	First  string
 	Second int32
 }
@@ -30,7 +30,7 @@ import (
 
 func main() {
 	object2 := object.New[int32]()
-	for _, tuple := range []tuple.TupleStringInt{{First: "bearerAuth", Second: 1}, {First: "apiKey", Second: 2}} {
+	for _, tuple := range []tuple.Tuple{{First: "bearerAuth", Second: 1}, {First: "apiKey", Second: 2}} {
 		object.Poke(tuple.First, tuple.Second, object2)
 	}
 	var schemes any = shared.Convert(object2)

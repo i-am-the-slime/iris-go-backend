@@ -6,20 +6,20 @@ package eq
 
 import "github.com/i-am-the-slime/iris-go/array"
 
-func EqInt2(i int32, i2 int32) bool {
+func EqInt(i int32, i2 int32) bool {
 	return i == i2
 }
 
-func EqInt(array2 []int32, array3 []int32) bool {
-	return array.Eq(EqInt2, array2, array3)
+func EqArrayInt(array2 []int32, array3 []int32) bool {
+	return array.Eq(EqInt, array2, array3)
 }
 
-func EqChar2(char rune, char2 rune) bool {
+func EqChar(char rune, char2 rune) bool {
 	return char == char2
 }
 
-func EqChar(array2 []rune, array3 []rune) bool {
-	return array.Eq(EqChar2, array2, array3)
+func EqArrayChar(array2 []rune, array3 []rune) bool {
+	return array.Eq(EqChar, array2, array3)
 }
 
 // Data/Ord/ord.go
@@ -116,7 +116,7 @@ var main_ = initializeMain_()
 func initializeMain_() []string {
 	original := func(array []int32) func([]int32) bool {
 		return func(array2 []int32) bool {
-			return eq.EqInt(array, array2)
+			return eq.EqArrayInt(array, array2)
 		}
 	}
 	original2 := func(xs []int32) func([]int32) ordering.Ordering {
@@ -126,7 +126,7 @@ func initializeMain_() []string {
 	}
 	original3 := func(array []rune) func([]rune) bool {
 		return func(array2 []rune) bool {
-			return eq.EqChar(array, array2)
+			return eq.EqArrayChar(array, array2)
 		}
 	}
 	original4 := func(xs []rune) func([]rune) ordering.Ordering {
@@ -134,7 +134,7 @@ func initializeMain_() []string {
 			return ord.CompareChar(xs, ys)
 		}
 	}
-	return []string{relateArrayInt(ordering.Eq0Compare{Eq0: shared.Eq{Eq: func(coerced any) func(any) bool {
+	return []string{relate(ordering.Eq0Compare{Eq0: shared.Eq{Eq: func(coerced any) func(any) bool {
 		original5 := original(shared.Convert(coerced))
 		return func(coerced2 any) bool {
 			return original5(shared.Convert(coerced2))
@@ -144,7 +144,7 @@ func initializeMain_() []string {
 		return func(coerced2 any) ordering.Ordering {
 			return original5(shared.Convert(coerced2))
 		}
-	}}, 1, shared.Convert2([]int32{1}), shared.Convert2([]int32{1, 1})), relateArrayInt(ordering.Eq0Compare{Eq0: shared.Eq{Eq: func(coerced any) func(any) bool {
+	}}, 1, shared.Convert2([]int32{1}), shared.Convert2([]int32{1, 1})), relate(ordering.Eq0Compare{Eq0: shared.Eq{Eq: func(coerced any) func(any) bool {
 		original5 := original3(shared.Convert3(coerced))
 		return func(coerced2 any) bool {
 			return original5(shared.Convert3(coerced2))
@@ -157,7 +157,7 @@ func initializeMain_() []string {
 	}}, 1, shared.Convert4([]rune{'a'}), shared.Convert4([]rune{'b', 'b'}))}
 }
 
-func relateArrayInt(ordDictionary ordering.Eq0Compare, depth int32, left any, right any) string {
+func relate(ordDictionary ordering.Eq0Compare, depth int32, left any, right any) string {
 	for {
 		ordDictionaryCaptured := ordDictionary
 		if depth == 0 {

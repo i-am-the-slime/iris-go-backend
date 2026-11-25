@@ -14,7 +14,7 @@ func ShowParticleConsNumberConsNumberNil(record shared.Particle) string {
 	return string(AppendShowParticleConsNumberConsNumberNil(nil, record))
 }
 
-func Show(i int32) string {
+func ShowInt(i int32) string {
 	return strconv.Itoa(int(i))
 }
 
@@ -80,7 +80,7 @@ package tuple
 
 import "fixture/shared"
 
-type TupleIntParticle struct {
+type Tuple struct {
 	Second shared.Particle
 	First  int32
 }

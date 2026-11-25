@@ -4,40 +4,35 @@ source: tests-integration/src/fixtures.rs
 // Data/Either/either.go
 package either
 
-type EitherStringInt struct {
+type EitherString struct {
 	Left  string
 	Right int32
 	Tag   uint8
 }
 
 const (
-	EitherStringIntLeft = iota
-	EitherStringIntRight
+	EitherStringLeft = iota
+	EitherStringRight
 )
 
-type EitherIntInt struct {
+type EitherInt struct {
 	Field0 int32
 	Tag    uint8
 }
 
 const (
-	EitherIntIntLeft = iota
-	EitherIntIntRight
+	EitherIntLeft = iota
+	EitherIntRight
 )
 
-func Left(field0 int32) EitherIntInt {
-	return EitherIntInt{Tag: EitherIntIntLeft, Field0: field0}
+type IntFailure struct {
+	Failed bool
+	Left   int32
 }
 
-func Right(field0 int32) EitherIntInt {
-	return EitherIntInt{Tag: EitherIntIntRight, Field0: field0}
-}
-
-func EitherIntIntFromResults(value int32, err *int32) EitherIntInt {
-	if err != nil {
-		return Left(*err)
-	}
-	return Right(value)
+type StringFailure struct {
+	Failed bool
+	Left   string
 }
 
 // Data/Variant/variant.go
@@ -54,16 +49,21 @@ const (
 	NotFoundTooBigTooBig
 )
 
-type EitherVariantNotFoundTooBigString struct {
+type Either struct {
 	Left  NotFoundTooBig
 	Right string
 	Tag   uint8
 }
 
 const (
-	EitherVariantNotFoundTooBigStringLeft = iota
-	EitherVariantNotFoundTooBigStringRight
+	EitherLeft = iota
+	EitherRight
 )
+
+type NotFoundTooBigFailure struct {
+	Failed bool
+	Left   NotFoundTooBig
+}
 
 func TooBig(tooBig int32) NotFoundTooBig {
 	return NotFoundTooBig{Tag: NotFoundTooBigTooBig, TooBig: tooBig}
@@ -88,44 +88,44 @@ import (
 func main() {
 	i, err := chain(5)
 	var result string
-	if err != nil {
-		result = "(Left " + prim.ShowString(*err) + ")"
+	if err.Failed {
+		result = "(Left " + prim.ShowString(err.Left) + ")"
 	} else {
 		result = "(Right " + strconv.Itoa(int(i)) + ")"
 	}
 	journal.Log(result)
 	i2, err := chain(0)
 	var result2 string
-	if err != nil {
-		result2 = "(Left " + prim.ShowString(*err) + ")"
+	if err.Failed {
+		result2 = "(Left " + prim.ShowString(err.Left) + ")"
 	} else {
 		result2 = "(Right " + strconv.Itoa(int(i2)) + ")"
 	}
 	journal.Log(result2)
 	i3, err := countdown(10)
 	var result3 string
-	if err != nil {
-		result3 = "(Left " + prim.ShowString(*err) + ")"
+	if err.Failed {
+		result3 = "(Left " + prim.ShowString(err.Left) + ")"
 	} else {
 		result3 = "(Right " + strconv.Itoa(int(i3)) + ")"
 	}
 	journal.Log(result3)
 	i4, err := countdown(9)
 	var result4 string
-	if err != nil {
-		result4 = "(Left " + prim.ShowString(*err) + ")"
+	if err.Failed {
+		result4 = "(Left " + prim.ShowString(err.Left) + ")"
 	} else {
 		result4 = "(Right " + strconv.Itoa(int(i4)) + ")"
 	}
 	journal.Log(result4)
 	s, err2 := greet(42)
 	var result5 string
-	if err2 != nil {
-		switch err2.Tag {
+	if err2.Failed {
+		switch err2.Left.Tag {
 		case variant.NotFoundTooBigNotFound:
-			result5 = "missing: " + err2.NotFound
+			result5 = "missing: " + err2.Left.NotFound
 		default: // variant.NotFoundTooBigTooBig
-			result5 = "too big: " + strconv.Itoa(int(err2.TooBig))
+			result5 = "too big: " + strconv.Itoa(int(err2.Left.TooBig))
 		}
 	} else {
 		result5 = s
@@ -133,12 +133,12 @@ func main() {
 	journal.Log(result5)
 	s2, err2 := greet(7)
 	var result6 string
-	if err2 != nil {
-		switch err2.Tag {
+	if err2.Failed {
+		switch err2.Left.Tag {
 		case variant.NotFoundTooBigNotFound:
-			result6 = "missing: " + err2.NotFound
+			result6 = "missing: " + err2.Left.NotFound
 		default: // variant.NotFoundTooBigTooBig
-			result6 = "too big: " + strconv.Itoa(int(err2.TooBig))
+			result6 = "too big: " + strconv.Itoa(int(err2.Left.TooBig))
 		}
 	} else {
 		result6 = s2
@@ -146,12 +146,12 @@ func main() {
 	journal.Log(result6)
 	s3, err2 := greet(5000)
 	var result7 string
-	if err2 != nil {
-		switch err2.Tag {
+	if err2.Failed {
+		switch err2.Left.Tag {
 		case variant.NotFoundTooBigNotFound:
-			result7 = "missing: " + err2.NotFound
+			result7 = "missing: " + err2.Left.NotFound
 		default: // variant.NotFoundTooBigTooBig
-			result7 = "too big: " + strconv.Itoa(int(err2.TooBig))
+			result7 = "too big: " + strconv.Itoa(int(err2.Left.TooBig))
 		}
 	} else {
 		result7 = s3
@@ -159,55 +159,52 @@ func main() {
 	journal.Log(result7)
 	s4, err2 := greet(9)
 	var result8 string
-	if err2 != nil {
+	if err2.Failed {
 		result8 = "failed"
 	} else {
 		result8 = s4
 	}
 	journal.Log(result8)
 	ref := &shared.Ref[int32]{Value: 0}
-	either2 := either.EitherIntIntFromResults(statuses(ref))
+	i5, err3 := statuses(ref)
 	var result9 string
-	switch either2.Tag {
-	case either.EitherIntIntLeft:
-		result9 = "(Left " + strconv.Itoa(int(either2.Field0)) + ")"
-	default: // either.EitherIntIntRight
-		result9 = "(Right " + strconv.Itoa(int(either2.Field0)) + ")"
+	if err3.Failed {
+		result9 = "(Left " + strconv.Itoa(int(err3.Left)) + ")"
+	} else {
+		result9 = "(Right " + strconv.Itoa(int(i5)) + ")"
 	}
 	journal.Log(result9)
 	ref.Value = 3
-	either3 := either.EitherIntIntFromResults(statuses(ref))
+	i6, err3 := statuses(ref)
 	var result10 string
-	switch either3.Tag {
-	case either.EitherIntIntLeft:
-		result10 = "(Left " + strconv.Itoa(int(either3.Field0)) + ")"
-	default: // either.EitherIntIntRight
-		result10 = "(Right " + strconv.Itoa(int(either3.Field0)) + ")"
+	if err3.Failed {
+		result10 = "(Left " + strconv.Itoa(int(err3.Left)) + ")"
+	} else {
+		result10 = "(Right " + strconv.Itoa(int(i6)) + ")"
 	}
 	journal.Log(result10)
 	ref.Value = 19
-	either4 := either.EitherIntIntFromResults(statuses(ref))
+	i7, err3 := statuses(ref)
 	var result11 string
-	switch either4.Tag {
-	case either.EitherIntIntLeft:
-		result11 = "(Left " + strconv.Itoa(int(either4.Field0)) + ")"
-	default: // either.EitherIntIntRight
-		result11 = "(Right " + strconv.Itoa(int(either4.Field0)) + ")"
+	if err3.Failed {
+		result11 = "(Left " + strconv.Itoa(int(err3.Left)) + ")"
+	} else {
+		result11 = "(Right " + strconv.Itoa(int(i7)) + ")"
 	}
 	journal.Log(result11)
 }
 
-func chain(n int32) (int32, *string) {
+func chain(n int32) (int32, either.StringFailure) {
 	switch n {
 	case 0:
-		return 0, new("division by zero")
+		return 0, either.StringFailure{Failed: true, Left: "division by zero"}
 	default:
 		field := 100 / n
 		if field > 10 {
 			scrutinee := n - 1
 			switch scrutinee {
 			case 0:
-				return 0, new("division by zero")
+				return 0, either.StringFailure{Failed: true, Left: "division by zero"}
 			default:
 				return chainJoin(field, prim.IntDiv(field, scrutinee))
 			}
@@ -217,87 +214,83 @@ func chain(n int32) (int32, *string) {
 	}
 }
 
-func countdown(n int32) (int32, *string) {
+func countdown(n int32) (int32, either.StringFailure) {
 	if n < 0 {
-		return 0, new("below zero")
+		return 0, either.StringFailure{Failed: true, Left: "below zero"}
 	}
 	if n == 0 {
-		return 0, nil
+		return 0, either.StringFailure{}
 	}
 	i, err := countdown(n - 2)
-	if err != nil {
+	if err.Failed {
 		return 0, err
 	}
-	return i+n, nil
+	return i+n, either.StringFailure{}
 }
 
-func greet(id int32) (string, *variant.NotFoundTooBig) {
+func greet(id int32) (string, variant.NotFoundTooBigFailure) {
 	if id == 42 {
 		journal.Log("found Alice")
 		id2 := id*2 - id
 		if id2 == 42 {
-			return "hello Alice and Alice", nil
+			return "hello Alice and Alice", variant.NotFoundTooBigFailure{}
 		}
 		if id2 > 1000 {
-			return "", new(variant.TooBig(id2))
+			return "", variant.NotFoundTooBigFailure{Failed: true, Left: variant.TooBig(id2)}
 		}
-		return "", new(variant.NotFound("no user "+strconv.Itoa(int(id2))))
+		return "", variant.NotFoundTooBigFailure{Failed: true, Left: variant.NotFound("no user " + strconv.Itoa(int(id2)))}
 	}
 	if id > 1000 {
-		return "", new(variant.TooBig(id))
+		return "", variant.NotFoundTooBigFailure{Failed: true, Left: variant.TooBig(id)}
 	}
-	return "", new(variant.NotFound("no user "+strconv.Itoa(int(id))))
+	return "", variant.NotFoundTooBigFailure{Failed: true, Left: variant.NotFound("no user " + strconv.Itoa(int(id)))}
 }
 
-func statuses(ref *shared.Ref[int32]) (int32, *int32) {
+func statuses(ref *shared.Ref[int32]) (int32, either.IntFailure) {
 	s := ref.Value
 	s_ := s + 1
 	ref.Value = s_
-	var either2 either.EitherIntInt
+	var i int32
+	var err either.IntFailure
 	if s_ > 10 {
-		either2 = either.Left(500)
+		err = either.IntFailure{Failed: true, Left: 500}
 	} else {
-		either2 = either.EitherIntIntFromResults(status(s_))
+		i, err = status(s_)
 	}
-	switch either2.Tag {
-	case either.EitherIntIntLeft:
-		return 0, new(either2.Field0)
-	default: // either.EitherIntIntRight
-		b := either2.Field0
-		var either3 either.EitherIntInt
-		if b > 5 {
-			either3 = either.Right(1)
-		} else {
-			either3 = either.EitherIntIntFromResults(status(s_ + 4))
-		}
-		switch either3.Tag {
-		case either.EitherIntIntLeft:
-			return 0, new(either3.Field0)
-		default: // either.EitherIntIntRight
-			return b+either3.Field0, nil
-		}
+	if err.Failed {
+		return 0, err
 	}
+	b := i
+	var i2 int32
+	var err2 either.IntFailure
+	if b > 5 {
+		i2, err2 = 1, either.IntFailure{}
+	} else {
+		i2, err2 = status(s_ + 4)
+	}
+	if err2.Failed {
+		return 0, err2
+	}
+	return b+i2, either.IntFailure{}
 }
 
-func status(n int32) (int32, *int32) {
+func status(n int32) (int32, either.IntFailure) {
 	if n > 100 {
-		return 0, new(int32(404))
+		return 0, either.IntFailure{Failed: true, Left: 404}
 	}
 	if n > 3 {
-		either2 := either.EitherIntIntFromResults(status(n * 2))
-		switch either2.Tag {
-		case either.EitherIntIntLeft:
-			return 0, new(either2.Field0)
-		default: // either.EitherIntIntRight
-			return either2.Field0+1, nil
+		i, err := status(n * 2)
+		if err.Failed {
+			return 0, err
 		}
+		return i+1, either.IntFailure{}
 	}
-	return 7, nil
+	return 7, either.IntFailure{}
 }
 
-func chainJoin(field int32, b int32) (int32, *string) {
+func chainJoin(field int32, b int32) (int32, either.StringFailure) {
 	journal.Log("chain " + strconv.Itoa(int(field)) + " " + strconv.Itoa(int(b)))
-	return field+b, nil
+	return field+b, either.StringFailure{}
 }
 
 // shared/shared.go

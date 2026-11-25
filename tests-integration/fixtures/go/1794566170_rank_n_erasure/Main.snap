@@ -25,15 +25,15 @@ const (
 var main_ = initializeMain_()
 
 func initializeMain_() []int32 {
-	return []int32{3, 1 + depthArrayInt(&Nested{Tag: NestedDeep, Deep: &Nested{Tag: NestedFlat, Flat: shared.Convert([][]int32{{1}})}})}
+	return []int32{3, 1 + depth(&Nested{Tag: NestedDeep, Deep: &Nested{Tag: NestedFlat, Flat: shared.Convert([][]int32{{1}})}})}
 }
 
-func depthArrayInt(value *Nested) int32 {
+func depth(value *Nested) int32 {
 	switch value.Tag {
 	case NestedFlat:
 		return 0
 	default: // NestedDeep
-		return 1 + depthArrayInt(value.Deep)
+		return 1 + depth(value.Deep)
 	}
 }
 

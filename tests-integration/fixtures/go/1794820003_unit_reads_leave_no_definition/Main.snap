@@ -4,7 +4,7 @@ source: tests-integration/src/fixtures.rs
 // Data/Tuple/tuple.go
 package tuple
 
-type TupleUnitUnit struct {
+type Tuple struct {
 	First  struct{}
 	Second struct{}
 }
@@ -29,7 +29,7 @@ func main_() int32 {
 	return 100 + count*10 + accumulator
 }
 
-var units []tuple.TupleUnitUnit = []tuple.TupleUnitUnit{{First: struct{}{}, Second: struct{}{}}, {First: struct{}{}, Second: struct{}{}}}
+var units []tuple.Tuple = []tuple.Tuple{{First: struct{}{}, Second: struct{}{}}, {First: struct{}{}, Second: struct{}{}}}
 
 func main() {
 	exitStatus := main_()

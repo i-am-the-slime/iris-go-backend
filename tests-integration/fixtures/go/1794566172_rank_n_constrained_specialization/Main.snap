@@ -6,31 +6,31 @@ package tuple
 
 import "fixture/shared"
 
-type TupleIntInt struct {
+type TupleInt struct {
 	First  int32
 	Second int32
 }
 
-type TupleUnitInt struct {
+type TupleUnit struct {
 	First  struct{}
 	Second int32
 }
 
 type Interpreter struct {
-	Emit    func(int32, int32) TupleUnitInt
-	Measure func(string) func(int32) TupleIntInt
+	Emit    func(int32, int32) TupleUnit
+	Measure func(string) func(int32) TupleInt
 }
 
 type SceneInt struct {
 	Identity          func(shared.InterpreterIdentity) int32
 	ST                func(shared.InterpreterST) int32
-	StateTIntIdentity func(Interpreter) func(int32) TupleIntInt
+	StateTIntIdentity func(Interpreter) func(int32) TupleInt
 }
 
 type SceneUnit struct {
 	Identity          func(shared.InterpreterIdentity)
 	ST                func(shared.InterpreterST)
-	StateTIntIdentity func(Interpreter) func(int32) TupleUnitInt
+	StateTIntIdentity func(Interpreter) func(int32) TupleUnit
 }
 
 func DiscardNext(run SceneUnit, i int32) SceneInt {
@@ -40,12 +40,12 @@ func DiscardNext(run SceneUnit, i int32) SceneInt {
 		run.ST(interpreter)
 		interpreter.Emit(i * 2)
 		return i + 1
-	}, StateTIntIdentity: func(interpreter Interpreter) func(int32) TupleIntInt {
+	}, StateTIntIdentity: func(interpreter Interpreter) func(int32) TupleInt {
 		f := run.StateTIntIdentity(interpreter)
-		return func(s int32) TupleIntInt {
+		return func(s int32) TupleInt {
 			scrutinee := f(s)
 			scrutinee2 := interpreter.Emit(i*2, scrutinee.Second)
-			return TupleIntInt{First: i + 1, Second: scrutinee2.Second}
+			return TupleInt{First: i + 1, Second: scrutinee2.Second}
 		}
 	}}
 }
@@ -80,11 +80,11 @@ func initializeRecorded() int32 {
 var counted = initializeCounted()
 
 func initializeCounted() int32 {
-	scrutinee := program.StateTIntIdentity(tuple.Interpreter{Emit: func(_ int32, x int32) tuple.TupleUnitInt {
-		return tuple.TupleUnitInt{First: struct{}{}, Second: x + 1}
-	}, Measure: func(_ string) func(int32) tuple.TupleIntInt {
-		return func(s int32) tuple.TupleIntInt {
-			return tuple.TupleIntInt{First: 3, Second: s}
+	scrutinee := program.StateTIntIdentity(tuple.Interpreter{Emit: func(_ int32, x int32) tuple.TupleUnit {
+		return tuple.TupleUnit{First: struct{}{}, Second: x + 1}
+	}, Measure: func(_ string) func(int32) tuple.TupleInt {
+		return func(s int32) tuple.TupleInt {
+			return tuple.TupleInt{First: 3, Second: s}
 		}
 	}})(0)
 	return scrutinee.Second
@@ -104,9 +104,9 @@ var program tuple.SceneInt = tuple.SceneInt{Identity: func(interpreter shared.In
 }, ST: func(interpreter shared.InterpreterST) int32 {
 	i := interpreter.Measure("hello")
 	return programNext(i).ST(interpreter)
-}, StateTIntIdentity: func(interpreter tuple.Interpreter) func(int32) tuple.TupleIntInt {
+}, StateTIntIdentity: func(interpreter tuple.Interpreter) func(int32) tuple.TupleInt {
 	f := interpreter.Measure("hello")
-	return func(s int32) tuple.TupleIntInt {
+	return func(s int32) tuple.TupleInt {
 		scrutinee := f(s)
 		return programNext(scrutinee.First).StateTIntIdentity(interpreter)(scrutinee.Second)
 	}
@@ -117,8 +117,8 @@ func programNext(width int32) tuple.SceneInt {
 		interpreter.Emit(width)
 	}, ST: func(interpreter shared.InterpreterST) {
 		interpreter.Emit(width)
-	}, StateTIntIdentity: func(interpreter tuple.Interpreter) func(int32) tuple.TupleUnitInt {
-		return func(i int32) tuple.TupleUnitInt {
+	}, StateTIntIdentity: func(interpreter tuple.Interpreter) func(int32) tuple.TupleUnit {
+		return func(i int32) tuple.TupleUnit {
 			return interpreter.Emit(width, i)
 		}
 	}}, width)

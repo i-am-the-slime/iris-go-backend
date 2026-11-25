@@ -52,23 +52,23 @@ var main_ = initializeMain_()
 
 func initializeMain_() []string {
 	text := []byte("Nest ")
-	text = appendShowNestedArrayInt(text, shared.Show{Show: func(coerced any) string {
+	text = appendShowNested(text, shared.Show{Show: func(coerced any) string {
 		return show.ArrayInt(shared.Convert(coerced))
 	}}, &Nested{Tag: NestedNest, Nest: &Nested{Tag: NestedFlat, Flat: shared.Convert2([][]int32{{1, 2}, {3}})}})
 	return []string{"1", string(text)}
 }
 
-func showNestedArrayInt(showDictionary shared.Show, nested *Nested) string {
-	return string(appendShowNestedArrayInt(nil, showDictionary, nested))
+func showNested(showDictionary shared.Show, nested *Nested) string {
+	return string(appendShowNested(nil, showDictionary, nested))
 }
 
-func appendShowNestedArrayInt(buffer []byte, showDictionary shared.Show, nested *Nested) []byte {
+func appendShowNested(buffer []byte, showDictionary shared.Show, nested *Nested) []byte {
 	switch nested.Tag {
 	case NestedFlat:
 		buffer = prim.AppendString(buffer, showDictionary.Show(nested.Flat))
 	default: // NestedNest
 		buffer = append(buffer, "Nest "...)
-		buffer = appendShowNestedArrayInt(buffer, shared.Show{Show: func(coerced any) string {
+		buffer = appendShowNested(buffer, shared.Show{Show: func(coerced any) string {
 			return prim.ShowArray(showDictionary.Show, coerced.([]any))
 		}}, nested.Nest)
 	}

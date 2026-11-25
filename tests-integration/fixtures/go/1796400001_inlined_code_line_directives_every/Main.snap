@@ -59,7 +59,7 @@ package effectexception
 import "github.com/i-am-the-slime/iris-go/exception"
 
 //line exception.go:6
-func ThrowUnit(x string) {
+func Throw(x string) {
 //line exception.go:8
 	panic(exception.NewError(x))
 //line exception.go:10
@@ -146,13 +146,13 @@ func main() {
 //line Main.purs:36:3
 	if /*line Main.purs:34:18*/ (count-1) /*line Main.purs:36:3*/ * /*line Main.purs:21:23*/ 2 /*line Main.purs:36:3*/ != 6 {
 //line Main.purs:37:5
-		effectexception.ThrowUnit("twice is wrong")
+		effectexception.Throw("twice is wrong")
 //line Main.purs:36:3
 	}
 //line Main.purs:38:3
 	if !many {
 //line Main.purs:39:5
-		effectexception.ThrowUnit("many is wrong")
+		effectexception.Throw("many is wrong")
 //line Main.purs:38:3
 	}
 //line Main.purs:40:18
@@ -176,13 +176,13 @@ func main() {
 //line Main.purs:41:3
 	if show.ArrayInt(mapped2) != "[24,32]" {
 //line Main.purs:42:5
-		effectexception.ThrowUnit("the readings are wrong")
+		effectexception.Throw("the readings are wrong")
 //line Main.purs:41:3
 	}
 //line Main.purs:43:3
 	if len(mapped) != 2 {
 //line Main.purs:44:5
-		effectexception.ThrowUnit("the length is wrong")
+		effectexception.Throw("the length is wrong")
 //line Main.purs:43:3
 	}
 //line Main.purs:46:3
@@ -198,7 +198,7 @@ func main() {
 //line Main.purs:46:3
 	if !arraypkg.Eq(dataeq.Eq, mapped3, []float64{27.0, 8.0, 0.0}) {
 //line Main.purs:47:5
-		effectexception.ThrowUnit("the areas are wrong")
+		effectexception.Throw("the areas are wrong")
 //line Main.purs:46:3
 	}
 //line Main.purs:48:14
@@ -220,7 +220,7 @@ func main() {
 //line Main.purs:51:3
 	if !arraypkg.Eq(eq, colours, []Colour{ColourGreen, ColourRed}) {
 //line Main.purs:52:5
-		effectexception.ThrowUnit("the colour is wrong")
+		effectexception.Throw("the colour is wrong")
 //line Main.purs:51:3
 	}
 //line Main.purs:53:3
