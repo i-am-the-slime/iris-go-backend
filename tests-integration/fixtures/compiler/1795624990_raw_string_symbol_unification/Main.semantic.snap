@@ -1,0 +1,22 @@
+---
+source: tests-integration/src/fixtures.rs
+---
+interface Named :: Prim.Symbol -> Prim.Constraint
+interface Named s where
+  name :: Type.Proxy.Proxy @Prim.Symbol s -> Prim.String
+
+dictionary named :: Main.Named "box" where
+  name :: Type.Proxy.Proxy @Prim.Symbol "box" -> Prim.String
+  name = \_ -> "a box"
+
+rawName :: Prim.String
+rawName = name {named} Proxy
+
+rawAsPlain :: Type.Proxy.Proxy @Prim.Symbol "box"
+rawAsPlain = Proxy
+
+plainAsRaw :: Type.Proxy.Proxy @Prim.Symbol """box"""
+plainAsRaw = Proxy
+
+multilineAsEscaped :: Type.Proxy.Proxy @Prim.Symbol "two\nlines"
+multilineAsEscaped = Proxy

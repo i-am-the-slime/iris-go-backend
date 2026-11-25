@@ -1,0 +1,46 @@
+---
+source: tests-integration/src/fixtures.rs
+---
+Error! · [CannotUnify] · Main.purs:12:1
+  •
+  │
+  • Could not match '"""box"""' with '"box"'
+  │
+  │   rawName :: String
+  │   ╰────────────────
+  •
+
+Error! · [CannotUnify] · Main.purs:16:14
+  •
+  │
+  • Could not match '"""box"""' with '"box"'
+  │
+  │   rawAsPlain = Proxy :: Proxy """box"""
+  │                ╰───────────────────────
+  │
+  • While matching 'Proxy @Symbol """box"""' with 'Proxy @Symbol "box"'
+  •
+
+Error! · [CannotUnify] · Main.purs:19:14
+  •
+  │
+  • Could not match '"box"' with '"""box"""'
+  │
+  │   plainAsRaw = Proxy :: Proxy "box"
+  │                ╰───────────────────
+  │
+  • While matching 'Proxy @Symbol "box"' with 'Proxy @Symbol """box"""'
+  •
+
+Error! · [CannotUnify] · Main.purs:22:22
+  •
+  │
+  • Could not match '"""two
+  │ lines"""' with '"two\nlines"'
+  │
+  │   multilineAsEscaped = Proxy :: Proxy """two
+  │                        ╰────────────────────
+  │
+  • While matching 'Proxy @Symbol """two
+  │ lines"""' with 'Proxy @Symbol "two\nlines"'
+  •

@@ -1,0 +1,23 @@
+---
+source: tests-integration/src/fixtures.rs
+---
+Terms
+name ::
+  forall (@s :: Prim.Symbol).
+    Main.Named (s :: Prim.Symbol) => Type.Proxy.Proxy @Prim.Symbol (s :: Prim.Symbol) -> Prim.String
+rawName :: Prim.String
+rawAsPlain :: Type.Proxy.Proxy @Prim.Symbol "box"
+plainAsRaw :: Type.Proxy.Proxy @Prim.Symbol """box"""
+multilineAsEscaped :: Type.Proxy.Proxy @Prim.Symbol "two\nlines"
+
+Types
+Named :: Prim.Symbol -> Prim.Constraint
+
+Classes
+class forall (s :: Prim.Symbol). Main.Named (s :: Prim.Symbol)
+  name ::
+  forall (@s :: Prim.Symbol).
+    Main.Named (s :: Prim.Symbol) => Type.Proxy.Proxy @Prim.Symbol (s :: Prim.Symbol) -> Prim.String
+
+Instances
+instance Main.Named "box"
