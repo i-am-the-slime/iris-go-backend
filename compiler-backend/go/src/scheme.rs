@@ -374,7 +374,7 @@ where
     Q: checking::ExternalQueries,
 {
     let type_id = context.types.strip_annotations(type_id);
-    if !matches!(context.types.lookup(type_id), Type::Forall(..)) {
+    if !matches!(context.types.lookup(type_id), Type::Forall(..) | Type::Constrained(..)) {
         return Ok(None);
     }
     let (names, inner) = context.types.peel_quantifiers(type_id);

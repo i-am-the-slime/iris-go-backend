@@ -185,6 +185,9 @@ impl Monotypes {
                 if is_partial(context, constraint)? {
                     return self.convert(context, inner, expansions);
                 }
+                if let Some(scheme) = constrained_scheme(context, type_id)? {
+                    return self.convert_scheme(context, &scheme, expansions);
+                }
                 return Err(UnsupportedState::Construct {
                     construct: "constrained types in argument positions",
                 }

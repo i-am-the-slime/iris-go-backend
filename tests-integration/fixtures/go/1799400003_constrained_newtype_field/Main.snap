@@ -1,0 +1,94 @@
+---
+source: tests-integration/src/fixtures.rs
+---
+// Data/Either/either.go
+package either
+
+type EitherString struct {
+	Left  string
+	Right int32
+	Tag   uint8
+}
+
+const (
+	EitherStringLeft = iota
+	EitherStringRight
+)
+
+type EitherInt struct {
+	Field0 int32
+	Tag    uint8
+}
+
+const (
+	EitherIntLeft = iota
+	EitherIntRight
+)
+
+type ParserProblemInt struct {
+	Instance func(int32) (int32, StringFailure)
+}
+
+type ParserCodeInt struct {
+	Instance func(int32) (int32, IntFailure)
+}
+
+type IntFailure struct {
+	Failed bool
+	Left   int32
+}
+
+type StringFailure struct {
+	Failed bool
+	Left   string
+}
+
+// main.go
+package main
+
+import (
+	"fixture/Data/Either"
+	journal "fixture/Journal_ffi"
+	"strconv"
+)
+
+func main() {
+	i, err := positiveProblem.Instance(0)
+	var result string
+	if err.Failed {
+		result = "problem: " + err.Left
+	} else {
+		result = strconv.Itoa(int(i))
+	}
+	journal.Log(result)
+	i2, err := positiveProblem.Instance(3)
+	var result2 string
+	if err.Failed {
+		result2 = "problem: " + err.Left
+	} else {
+		result2 = strconv.Itoa(int(i2))
+	}
+	journal.Log(result2)
+	i3, err2 := positiveCode.Instance(-1)
+	var result3 string
+	if err2.Failed {
+		result3 = "code " + strconv.Itoa(int(err2.Left))
+	} else {
+		result3 = strconv.Itoa(int(i3))
+	}
+	journal.Log(result3)
+}
+
+var positiveProblem either.ParserProblemInt = either.ParserProblemInt{Instance: func(n int32) (int32, either.StringFailure) {
+	if n > 0 {
+		return n, either.StringFailure{}
+	}
+	return 0, either.StringFailure{Failed: true, Left: "end"}
+}}
+
+var positiveCode either.ParserCodeInt = either.ParserCodeInt{Instance: func(n int32) (int32, either.IntFailure) {
+	if n > 0 {
+		return n, either.IntFailure{}
+	}
+	return 0, either.IntFailure{Failed: true, Left: 404}
+}}

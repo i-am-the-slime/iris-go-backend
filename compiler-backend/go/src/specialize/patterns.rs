@@ -404,7 +404,7 @@ where
         };
         let quantified = matches!(
             self.context.types.lookup(self.context.types.strip_annotations(closed)),
-            Type::Forall(..)
+            Type::Forall(..) | Type::Constrained(..)
         );
         Ok(quantified.then_some(closed))
     }
