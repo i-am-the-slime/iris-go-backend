@@ -530,13 +530,24 @@ pub(super) fn restore(declarations: &mut [GoDeclaration], mut aside: SetAside) {
             }
         }
     }
+    let remaining: FxHashSet<String> = declarations
+        .iter()
+        .filter_map(|declaration| declaration.name().map(str::to_string))
+        .collect();
+    let inlined: Vec<(String, Vec<SourceLine>)> = aside
+        .statements
+        .iter()
+        .filter(|(name, _)| !remaining.contains(name.as_str()))
+        .flat_map(|(_, statements)| statements.iter())
+        .map(|(head, lines)| (without_fresh_suffixes(head), lines.clone()))
+        .collect();
     for declaration in declarations.iter_mut() {
         let Some(before) = declaration.name().and_then(|name| aside.statements.remove(name)) else {
             continue;
         };
         let mut heads = Heads(vec![]);
         go_traversal::declaration(&mut heads, declaration);
-        let lines = align(&before, &heads.0);
+        let lines = align(&before, &heads.0, &inlined);
         go_traversal::declaration(&mut Insert(lines.into_iter()), declaration);
         if let GoDeclaration::Function { name, body, .. } = declaration
             && let Some(definition) = aside.definitions.remove(name.as_str())
@@ -547,28 +558,38 @@ pub(super) fn restore(declarations: &mut [GoDeclaration], mut aside: SetAside) {
 }
 
 /// The line for each statement of `after`: the line of the same statement in `before`, matched
-/// in order, and between two matched statements the line of an unmatched one in `before` of the
+/// in order, or of the statement a pass moved it from, in `before` or in a function `inlined`
+/// into it, and between two matched statements the line of an unmatched one in `before` of the
 /// same kind, or of the first one.
-fn align(before: &[(String, Vec<SourceLine>)], after: &[String]) -> Vec<Vec<SourceLine>> {
-    let mut positions: FxHashMap<&str, VecDeque<usize>> = FxHashMap::default();
-    for (at, (head, _)) in before.iter().enumerate() {
-        positions.entry(head).or_default().push_back(at);
-    }
-    // The statement of `before` each statement of `after` is, in increasing order.
-    let mut matched: Vec<Option<usize>> = Vec::with_capacity(after.len());
-    let mut next = 0;
-    for head in after {
-        let found = positions.get_mut(head.as_str()).and_then(|queue| {
-            while queue.front().is_some_and(|&at| at < next) {
-                queue.pop_front();
+fn align(
+    before: &[(String, Vec<SourceLine>)],
+    after: &[String],
+    inlined: &[(String, Vec<SourceLine>)],
+) -> Vec<Vec<SourceLine>> {
+    let before_heads: Vec<&str> = before.iter().map(|(head, _)| head.as_str()).collect();
+    let matched = if before.len() * after.len() <= LARGEST_ALIGNMENT {
+        most_matches_in_order(&before_heads, after)
+    } else {
+        first_matches_in_order(&before_heads, after)
+    };
+    let mut used: FxHashSet<usize> = matched.iter().flatten().copied().collect();
+    let mut inlined_used: FxHashSet<usize> = FxHashSet::default();
+    let moved: Vec<Option<&Vec<SourceLine>>> = after
+        .iter()
+        .zip(&matched)
+        .map(|(head, found)| match found {
+            Some(_) => None,
+            None => {
+                moved_from(head, before, &mut used).map(|origin| &before[origin].1).or_else(|| {
+                    let head = without_fresh_suffixes(head);
+                    let origin = (0..inlined.len())
+                        .find(|at| !inlined_used.contains(at) && inlined[*at].0 == head)?;
+                    inlined_used.insert(origin);
+                    Some(&inlined[origin].1)
+                })
             }
-            queue.pop_front()
-        });
-        if let Some(at) = found {
-            next = at + 1;
-        }
-        matched.push(found);
-    }
+        })
+        .collect();
     let mut lines = Vec::with_capacity(after.len());
     let mut gap_start = 0;
     let mut at = 0;
@@ -579,8 +600,15 @@ fn align(before: &[(String, Vec<SourceLine>)], after: &[String]) -> Vec<Vec<Sour
             at += 1;
             continue;
         }
-        let end = (at..after.len()).find(|&index| matched[index].is_some()).unwrap_or(after.len());
-        let gap_end = matched.get(end).copied().flatten().unwrap_or(before.len());
+        if let Some(origin) = moved[at] {
+            lines.push(origin.clone());
+            at += 1;
+            continue;
+        }
+        let end = (at..after.len())
+            .find(|&index| matched[index].is_some() || moved[index].is_some())
+            .unwrap_or(after.len());
+        let gap_end = matched[end..].iter().flatten().next().copied().unwrap_or(before.len());
         let replaced = &before[gap_start..gap_end];
         // A statement a pass rewrote is mostly still the same kind of statement.
         let mut cursor = 0;
@@ -609,6 +637,135 @@ fn align(before: &[(String, Vec<SourceLine>)], after: &[String]) -> Vec<Vec<Sour
     }
     lines
 }
+
+/// The statement of `before` that a statement a pass moved out of order was: a loop or a
+/// definition that is the same apart from what it iterates, or for a definition of what a loop
+/// iterated, that loop.
+fn moved_from(
+    head: &str,
+    before: &[(String, Vec<SourceLine>)],
+    used: &mut FxHashSet<usize>,
+) -> Option<usize> {
+    if !MOVABLE_KINDS.contains(&kind(head)) {
+        return None;
+    }
+    let loose = without_iterable(head);
+    let same = (0..before.len()).find(|at| {
+        !used.contains(at) && (before[*at].0 == head || without_iterable(&before[*at].0) == loose)
+    });
+    if let Some(at) = same {
+        used.insert(at);
+        return Some(at);
+    }
+    let value = defined_value(head)?;
+    (0..before.len()).find(|&at| iterable(&before[at].0) == Some(value))
+}
+
+const LARGEST_ALIGNMENT: usize = 4_000_000;
+
+/// The statement of `before` each statement of `after` is, in increasing order, as many of them
+/// as there can be: a statement an inlined body repeats does not take the place of the caller's.
+fn most_matches_in_order(before: &[&str], after: &[String]) -> Vec<Option<usize>> {
+    let mut ids: FxHashMap<&str, usize> = FxHashMap::default();
+    for head in before.iter().copied().chain(after.iter().map(String::as_str)) {
+        let next = ids.len();
+        ids.entry(head).or_insert(next);
+    }
+    let before: Vec<usize> = before.iter().map(|head| ids[head]).collect();
+    let after: Vec<usize> = after.iter().map(|head| ids[head.as_str()]).collect();
+    let width = before.len() + 1;
+    let mut longest = vec![0u32; (after.len() + 1) * width];
+    for row in (0..after.len()).rev() {
+        for column in (0..before.len()).rev() {
+            longest[row * width + column] = if after[row] == before[column] {
+                longest[(row + 1) * width + column + 1] + 1
+            } else {
+                longest[(row + 1) * width + column].max(longest[row * width + column + 1])
+            };
+        }
+    }
+    let mut matched = vec![None; after.len()];
+    let (mut row, mut column) = (0, 0);
+    while row < after.len() && column < before.len() {
+        let here = longest[row * width + column];
+        if after[row] == before[column] && here == longest[(row + 1) * width + column + 1] + 1 {
+            matched[row] = Some(column);
+            row += 1;
+            column += 1;
+        } else if longest[(row + 1) * width + column] >= longest[row * width + column + 1] {
+            row += 1;
+        } else {
+            column += 1;
+        }
+    }
+    matched
+}
+
+/// The statement of `before` each statement of `after` is, in increasing order, taking the
+/// first that fits.
+fn first_matches_in_order(before: &[&str], after: &[String]) -> Vec<Option<usize>> {
+    let mut positions: FxHashMap<&str, VecDeque<usize>> = FxHashMap::default();
+    for (at, head) in before.iter().enumerate() {
+        positions.entry(head).or_default().push_back(at);
+    }
+    let mut matched: Vec<Option<usize>> = Vec::with_capacity(after.len());
+    let mut next = 0;
+    for head in after {
+        let found = positions.get_mut(head.as_str()).and_then(|queue| {
+            while queue.front().is_some_and(|&at| at < next) {
+                queue.pop_front();
+            }
+            queue.pop_front()
+        });
+        if let Some(at) = found {
+            next = at + 1;
+        }
+        matched.push(found);
+    }
+    matched
+}
+
+/// The statement without the numbers that keep the names an inlined body binds apart from the
+/// caller's: `itemǂ2` is `item`.
+fn without_fresh_suffixes(head: &str) -> String {
+    let mut plain = String::with_capacity(head.len());
+    let mut characters = head.chars().peekable();
+    while let Some(character) = characters.next() {
+        if character != 'ǂ' {
+            plain.push(character);
+            continue;
+        }
+        while characters.next_if(char::is_ascii_digit).is_some() {}
+    }
+    plain
+}
+
+const MOVABLE_KINDS: &[&str] = &["Define", "Counting", "CountingDown", "Range", "Loop"];
+
+fn iterable_span(head: &str) -> Option<(usize, usize)> {
+    head.strip_prefix("Range {")?;
+    let start = head.find(", iterable: ")?;
+    let end = head.rfind(", body: ")?;
+    (start < end).then_some((start, end))
+}
+
+fn iterable(head: &str) -> Option<&str> {
+    let (start, end) = iterable_span(head)?;
+    Some(&head[start + ", iterable: ".len()..end])
+}
+
+fn without_iterable(head: &str) -> String {
+    match iterable_span(head) {
+        Some((start, end)) => format!("{}{}", &head[..start], &head[end..]),
+        None => head.to_string(),
+    }
+}
+
+fn defined_value(head: &str) -> Option<&str> {
+    let values = head.strip_prefix("Define { names: ")?.split_once(", values: [")?.1;
+    values.strip_suffix("] }")
+}
+
 fn defined_names(head: &str) -> Option<&str> {
     let names = head.strip_prefix("Define { names: ")?;
     Some(names.split_once(", values: ")?.0)
