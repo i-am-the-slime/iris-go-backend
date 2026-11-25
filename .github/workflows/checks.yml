@@ -228,11 +228,12 @@ jobs:
         run: cargo nextest run -p tests-integration --test go --test go_style --locked --failure-output=final
 
       # Spago fetches that run at the same time into a cold registry cache fail at random, so the
-      # examples' packages are fetched one project at a time before they build in parallel.
+      # examples' packages are fetched one project at a time before they build in parallel. Iris
+      # runs Spago with its own purs; a JavaScript build that fails afterwards does not matter here.
       - name: Fetch the examples' packages
         run: |
           for manifest in iris-go-runtime/examples/*/spago.yaml; do
-            (cd "$(dirname "$manifest")" && spago fetch --quiet)
+            (cd "$(dirname "$manifest")" && "$GITHUB_WORKSPACE/target/debug/iris" build --quiet >/dev/null 2>&1) || true
           done
 
       - name: Build and run iris-go's examples
