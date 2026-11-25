@@ -1,0 +1,94 @@
+---
+source: tests-integration/src/fixtures.rs
+assertion_line: 571
+---
+// main.go
+package main
+
+import (
+	journal "fixture/Journal_ffi"
+	"github.com/i-am-the-slime/iris-go/prim"
+	"strconv"
+)
+
+func main() {
+	journal.Log(strconv.Itoa(int(mainGoJust(0, 0))))
+	journal.Log(strconv.Itoa(int(mainGoTuple(0, 1, 40))))
+	xs := []int32{5, 3, 9, 1, 7}
+	journal.Log(strconv.Itoa(int(mainGoState(xs, 0, 1000000, 0))))
+	journal.Log(strconv.Itoa(int(runsIn("aaabbbcccaa"))))
+	journal.Log(strconv.Itoa(int(runsIn(""))))
+	journal.Log(strconv.Itoa(int(sumDownJust(0, 100))))
+	journal.Log(strconv.Itoa(int(sumDownNothing(100))))
+}
+
+func runsIn(text string) int32 {
+	chars := prim.StringToCharArray(text)
+	return runsInGoFresh(chars, 0, 0)
+}
+
+func sumDownJust(s int32, n int32) int32 {
+	for {
+		if n <= 0 {
+			return s
+		}
+		s, n = s+n, n-1
+	}
+}
+
+func sumDownNothing(n int32) int32 {
+	return n
+}
+
+func mainGoJust(s int32, i int32) int32 {
+	for {
+		if i >= 1000 {
+			return s
+		}
+		s, i = s+i, i+1
+	}
+}
+
+func mainGoTuple(a int32, b int32, k int32) int32 {
+	for {
+		if k <= 0 {
+			return a
+		}
+		a, b, k = b, a+b, k-1
+	}
+}
+
+func mainGoState(xs []int32, high int32, low int32, i int32) int32 {
+	for {
+		if i < int32(len(xs)) {
+			field := xs[i]
+			result := max(high, field)
+			result2 := min(low, field)
+			high, low, i = result, result2, i+1
+			continue
+		}
+		return high - low
+	}
+}
+
+func runsInGoInRun(chars []rune, d rune, k int32, runs int32, i int32) int32 {
+	for {
+		if i < int32(len(chars)) {
+			field := chars[i]
+			if field == d {
+				k, i = k+1, i+1
+				continue
+			}
+			d, k, runs, i = field, 1, runs+1, i+1
+			continue
+		}
+		return runs
+	}
+}
+
+func runsInGoFresh(chars []rune, runs int32, i int32) int32 {
+	if i < int32(len(chars)) {
+		return runsInGoInRun(chars, chars[i], 1, runs+1, i+1)
+	}
+	return runs
+}

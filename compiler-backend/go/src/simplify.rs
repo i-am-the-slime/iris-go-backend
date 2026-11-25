@@ -29,10 +29,12 @@ use crate::timing::timed;
 use smol_str::SmolStr;
 
 use self::arguments::ArgumentSpecializations;
+use self::call_patterns::CallPatternCopies;
 use self::coverage::{binds_only, decided_guards, reachable};
 use self::fold::shares_branch_with_next;
 
 mod arguments;
+mod call_patterns;
 mod choice;
 mod coverage;
 mod effects;
@@ -108,6 +110,7 @@ pub fn simplify(
         copies: FxHashSet::default(),
         forwarded: FxHashMap::default(),
         argument_specializations: ArgumentSpecializations::default(),
+        call_pattern_copies: CallPatternCopies::default(),
         source_ranks: SourceRanks { entry: entry_file, home: None },
     };
     for component in &components {
@@ -180,6 +183,7 @@ struct Simplifier<'m> {
     copies: FxHashSet<LocalId>,
     forwarded: FxHashMap<LocalId, LocalId>,
     argument_specializations: ArgumentSpecializations,
+    call_pattern_copies: CallPatternCopies,
     source_ranks: SourceRanks,
 }
 
@@ -1006,6 +1010,10 @@ impl Simplifier<'_> {
                         Ok(call) => return call,
                         Err(arguments) => arguments,
                     };
+                    let arguments = match self.call_pattern_call(id, arguments, monotype) {
+                        Ok(call) => return call,
+                        Err(arguments) => arguments,
+                    };
                     let function = Expression::new(ExpressionKind::Function(id), function.monotype);
                     let kind = ExpressionKind::Apply { function: Box::new(function), arguments };
                     return Expression::new(kind, monotype);
@@ -1113,6 +1121,7 @@ impl Simplifier<'_> {
         }
         if recursive {
             let (bindings, body) = self.specialize_local_calls(bindings, body);
+            let (bindings, body) = self.specialize_call_patterns(bindings, body);
             let monotype = body.monotype;
             return Expression::new(
                 ExpressionKind::Let { bindings, body: Box::new(body) },

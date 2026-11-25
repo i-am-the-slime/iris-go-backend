@@ -9,6 +9,8 @@ use indexing::{IndexedTypeItemKind, TypeItemId};
 use super::types::{
     expand_synonyms, is_refuted_equality, newtype_underlying, open_type, regular_occurrences,
 };
+use smol_str::SmolStr;
+
 use super::{Converted, DataConstructor, DataType, Monotype, MonotypeId, Monotypes, RecordField};
 use crate::context::Context;
 use crate::error::{GoResult, UnsupportedState};
@@ -231,6 +233,10 @@ impl Monotypes {
     /// How many constructors a data type has, when every one of them is
     /// known and has no fields: values of it are told apart, and ordered, by
     /// their constructor alone, as Go's constants of an enumeration are.
+    pub fn constructor_name(&self, data: &DataType, constructor: usize) -> Option<SmolStr> {
+        Some(self.constructors.get(data)?.get(constructor)?.name.clone())
+    }
+
     pub fn enumeration_size(&self, data: &DataType) -> Option<usize> {
         let constructors = self.constructors.get(data)?;
         let nullary = constructors.iter().all(|constructor| constructor.fields.is_empty());

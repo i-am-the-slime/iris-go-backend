@@ -236,7 +236,7 @@ impl Simplifier<'_> {
         });
     }
 
-    fn simplified_copy(&mut self, mut function: Function) -> Function {
+    pub(super) fn simplified_copy(&mut self, mut function: Function) -> Function {
         let fuel = std::mem::replace(&mut self.fuel, INLINE_FUEL);
         let names = std::mem::take(&mut self.names);
         function.body = self.expression(function.body);
