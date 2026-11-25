@@ -1,0 +1,40 @@
+---
+source: tests-integration/src/fixtures.rs
+assertion_line: 571
+---
+// main.go
+package main
+
+import (
+	journal "fixture/Journal_ffi"
+	"github.com/i-am-the-slime/iris-go/array"
+	"strconv"
+)
+
+func main() {
+	journal.Log(strconv.Itoa(int(mainGo(0, array.RangeInt32(1, 1000)))))
+	journal.Log(strconv.Itoa(int(mainGo2(0, []int32{3, 1, 4, 1, 5}))))
+}
+
+func mainGo(total int32, rest []int32) int32 {
+	for {
+		if len(rest) == 0 {
+			return total
+		}
+		total, rest = total+rest[0], array.Tail(rest)
+	}
+}
+
+func mainGo2(weighted int32, rest []int32) int32 {
+	for {
+		if len(rest) == 0 {
+			return weighted
+		}
+		index := int32(len(rest)) - 1
+		if index >= 0 {
+			weighted, rest = weighted*10+rest[index], array.Slice(0, int32(len(rest))-1, rest)
+			continue
+		}
+		return weighted
+	}
+}

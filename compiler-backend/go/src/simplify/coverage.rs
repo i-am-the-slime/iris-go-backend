@@ -4,9 +4,10 @@ use crate::monomorphic::{
     Alternative, Binding, Expression, ExpressionKind, Guard, Guarded, GuardedBranch, Literal,
     Local, LocalId, Pattern, PatternKind,
 };
-use crate::monotype::Monotypes;
+use crate::monotype::{MonotypeId, Monotypes};
 use crate::naming::is_vague;
 use crate::purity::{can_fail, size};
+use smol_str::SmolStr;
 
 impl Simplifier<'_> {
     pub(super) fn eliminate_columns(
@@ -53,7 +54,14 @@ impl Simplifier<'_> {
                 if let ColumnOutcome::Matches = outcome {
                     for (local, field) in pattern_variables(&pattern) {
                         let value = match field {
-                            Some(position) => fields[position].expression(),
+                            Some(FieldPath { position, labels }) => labels.into_iter().fold(
+                                fields[position].expression(),
+                                |record, (label, monotype)| {
+                                    let kind =
+                                        ExpressionKind::Access { record: Box::new(record), label };
+                                    Expression::new(kind, monotype)
+                                },
+                            ),
                             None => match &scrutinee.kind {
                                 ExpressionKind::Construct { data, constructor, .. }
                                     if !fields.is_empty() =>
@@ -217,7 +225,7 @@ pub(super) fn column_outcomes(
                 } else {
                     let binds_or_matches =
                         |pattern: &Pattern, value: &Expression| match pattern.kind {
-                            PatternKind::Variable(_) => Some(true),
+                            _ if irrefutable(pattern) => Some(true),
                             _ => known_match(pattern, value),
                         };
                     all_of(patterns.iter().zip(values).map(|(p, v)| binds_or_matches(p, v)))?
@@ -290,18 +298,48 @@ fn literals_equal(left: &Literal, right: &Literal) -> Option<bool> {
     }
 }
 
-fn pattern_variables(pattern: &Pattern) -> Vec<(LocalId, Option<usize>)> {
+/// A field of a matched constructor, and the record labels read on the way into it.
+struct FieldPath {
+    position: usize,
+    labels: Vec<(SmolStr, MonotypeId)>,
+}
+
+fn pattern_variables(pattern: &Pattern) -> Vec<(LocalId, Option<FieldPath>)> {
     match &pattern.kind {
         PatternKind::Variable(local) => vec![(local.id, None)],
-        PatternKind::Constructor { arguments, .. } => arguments
-            .iter()
-            .enumerate()
-            .filter_map(|(position, argument)| match &argument.kind {
-                PatternKind::Variable(local) => Some((local.id, Some(position))),
-                _ => None,
-            })
-            .collect(),
+        PatternKind::Constructor { arguments, .. } => {
+            let mut variables = vec![];
+            for (position, argument) in arguments.iter().enumerate() {
+                field_variables(argument, position, &mut vec![], &mut variables);
+            }
+            variables
+        }
         _ => vec![],
+    }
+}
+
+fn field_variables(
+    pattern: &Pattern,
+    position: usize,
+    labels: &mut Vec<(SmolStr, MonotypeId)>,
+    variables: &mut Vec<(LocalId, Option<FieldPath>)>,
+) {
+    match &pattern.kind {
+        PatternKind::Variable(local) => {
+            variables.push((local.id, Some(FieldPath { position, labels: labels.clone() })))
+        }
+        PatternKind::Named { local, pattern } => {
+            variables.push((local.id, Some(FieldPath { position, labels: labels.clone() })));
+            field_variables(pattern, position, labels, variables);
+        }
+        PatternKind::Record(fields) => {
+            for (label, field) in fields {
+                labels.push((label.clone(), field.monotype));
+                field_variables(field, position, labels, variables);
+                labels.pop();
+            }
+        }
+        _ => {}
     }
 }
 
