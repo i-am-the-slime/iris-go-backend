@@ -1,0 +1,200 @@
+---
+source: tests-integration/src/fixtures.rs
+---
+// Data/Show/show.go
+package show
+
+import "strconv"
+
+func ShowInt(i int32) string {
+	return strconv.Itoa(int(i))
+}
+
+func ShowBoolean(boolean bool) string {
+	if boolean {
+		return "true"
+	}
+	return "false"
+}
+
+func AppendShowArrayBoolean(buffer []byte, array []bool) []byte {
+	buffer = append(buffer, '[')
+	for index, element := range array {
+		if index > 0 {
+			buffer = append(buffer, ',')
+		}
+		buffer = strconv.AppendBool(buffer, element)
+	}
+	buffer = append(buffer, ']')
+	return buffer
+}
+
+func AppendShowArrayInt(buffer []byte, array []int32) []byte {
+	buffer = append(buffer, '[')
+	for index, element := range array {
+		if index > 0 {
+			buffer = append(buffer, ',')
+		}
+		buffer = strconv.AppendInt(buffer, int64(element), 10)
+	}
+	buffer = append(buffer, ']')
+	return buffer
+}
+
+func ArrayBoolean(array []bool) string {
+	return string(AppendShowArrayBoolean(nil, array))
+}
+
+func ArrayInt(array []int32) string {
+	return string(AppendShowArrayInt(nil, array))
+}
+
+// main.go
+package main
+
+import (
+	"fixture/Data/Show"
+	"fixture/shared"
+	"github.com/i-am-the-slime/iris-go/console"
+	"github.com/i-am-the-slime/iris-go/prim"
+	"strconv"
+	"strings"
+)
+
+type Nested struct {
+	Flat any
+	Nest *Nested
+	Tag  uint8
+}
+
+const (
+	NestedFlat = iota
+	NestedNest
+)
+
+var main_ = initializeMain_()
+
+func initializeMain_() []string {
+	nesteds := make([]Nested, 3)
+	nesteds[0] = Nested{Tag: NestedNest, Nest: &nesteds[1]}
+	nesteds[1] = Nested{Tag: NestedNest, Nest: &nesteds[2]}
+	nesteds[2] = Nested{Tag: NestedFlat, Flat: shared.Convert([][]int32{{1, 2}, {3}})}
+	return []string{showLocal(&Nested{Tag: NestedFlat, Flat: int32(1)}), showLocal(&nesteds[0]), mainGo(&Nested{Tag: NestedNest, Nest: &Nested{Tag: NestedFlat, Flat: shared.Convert2([]bool{true})}})}
+}
+
+var showLocal func(*Nested) string = showLocalGo
+
+func mainGo(nested *Nested) string {
+	switch nested.Tag {
+	case NestedFlat:
+		return "nested: " + strconv.FormatBool(nested.Flat.(bool))
+	default: // NestedNest
+		return mainGo2(shared.Show{Show: func(coerced any) string {
+			return show.ArrayBoolean(shared.Convert3(coerced))
+		}}, nested.Nest)
+	}
+}
+
+func mainGo2(dictionary shared.Show, nested *Nested) string {
+	for {
+		dictionaryCaptured := dictionary
+		switch nested.Tag {
+		case NestedFlat:
+			value := nested.Flat
+			return "nested: " + dictionaryCaptured.Show(value)
+		default: // NestedNest
+			inner := nested.Nest
+			dictionary, nested = shared.Show{Show: func(coerced any) string {
+				return prim.ShowArray(dictionaryCaptured.Show, coerced.([]any))
+			}}, inner
+			continue
+		}
+	}
+}
+
+func showLocalGo(nested *Nested) string {
+	switch nested.Tag {
+	case NestedFlat:
+		return strconv.Itoa(int(nested.Flat.(int32)))
+	default: // NestedNest
+		text := []byte("Nest ")
+		text = appendShowLocalGo2(text, shared.Show{Show: func(coerced any) string {
+			return show.ArrayInt(shared.Convert4(coerced))
+		}}, nested.Nest)
+		return string(text)
+	}
+}
+
+func showLocalGo2(dictionary shared.Show, nested *Nested) string {
+	return string(appendShowLocalGo2(nil, dictionary, nested))
+}
+
+func appendShowLocalGo2(buffer []byte, dictionary shared.Show, nested *Nested) []byte {
+	switch nested.Tag {
+	case NestedFlat:
+		buffer = prim.AppendString(buffer, dictionary.Show(nested.Flat))
+	default: // NestedNest
+		buffer = append(buffer, "Nest "...)
+		buffer = appendShowLocalGo2(buffer, shared.Show{Show: func(coerced any) string {
+			return prim.ShowArray(dictionary.Show, coerced.([]any))
+		}}, nested.Nest)
+	}
+	return buffer
+}
+
+func main() {
+	console.Print("[" + strings.Join(main_, " ") + "]")
+}
+
+// shared/shared.go
+package shared
+
+func Convert(value [][]int32) any {
+	converted := make([]any, len(value))
+	for index, element := range value {
+		converted[index] = Convert5(element)
+	}
+	return converted
+}
+
+func Convert2(value []bool) any {
+	converted := make([]any, len(value))
+	for index, element := range value {
+		converted[index] = element
+	}
+	return converted
+}
+
+func Convert3(value any) []bool {
+	array := value.([]any)
+	converted := make([]bool, len(array))
+	for index, element := range array {
+		converted[index] = element.(bool)
+	}
+	return converted
+}
+
+type Show struct {
+	Show func(any) string
+}
+
+func Convert4(value any) []int32 {
+	array := value.([]any)
+	converted := make([]int32, len(array))
+	for index, element := range array {
+		converted[index] = element.(int32)
+	}
+	return converted
+}
+
+func Convert5(value []int32) any {
+	converted := make([]any, len(value))
+	for index, element := range value {
+		converted[index] = element
+	}
+	return converted
+}
+
+// note: the local go of Main.showLocal takes its Show dictionary at run time, because polymorphic recursion reaches it at ever larger types; only this definition is slower
+
+// note: the local go of Main.labelled takes its Show dictionary at run time, because polymorphic recursion reaches it at ever larger types; only this definition is slower

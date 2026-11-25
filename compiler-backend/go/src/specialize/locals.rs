@@ -336,6 +336,14 @@ where
                 substitution.insert(name, terminated);
             }
         }
+        let name = scope.polymorphic_locals[&source].name.clone();
+        let dictionaries = self.promote_growing_local_evidence(
+            scope,
+            &name,
+            &declaration.value.abstractions,
+            (&requested, &types),
+            dictionaries,
+        )?;
         let types: Arc<[TypeId]> = Arc::from(types);
         let (dictionaries, runtime_values) = self::runtime::detach_runtime_values(&dictionaries);
         let dictionaries: Arc<[Dictionary]> = Arc::from(dictionaries);
