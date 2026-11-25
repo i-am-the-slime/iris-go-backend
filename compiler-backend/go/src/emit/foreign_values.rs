@@ -53,6 +53,7 @@ where
         let second = self.projection(tuple, "Tuple", Some(1))?;
         let producer = self.value(producer, out)?;
         let seed = self.value(&arguments[5], out)?;
+        let seed = self.typed_argument(seed, &arguments[5])?;
         let name = match foreign {
             Foreign::Unfoldr => "Unfoldr",
             _ => "Unfoldr1",
