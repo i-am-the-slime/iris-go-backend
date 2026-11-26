@@ -1,0 +1,48 @@
+---
+source: tests-integration/src/fixtures.rs
+---
+// Data/Show/show.go
+package show
+
+func Show(ignored struct{}) string {
+	return "unit"
+}
+
+func AppendShowArrayUnit(buffer []byte, array []struct{}) []byte {
+	buffer = append(buffer, '[')
+	for index := range array {
+		if index > 0 {
+			buffer = append(buffer, ',')
+		}
+		buffer = append(buffer, "unit"...)
+	}
+	buffer = append(buffer, ']')
+	return buffer
+}
+
+func ArrayUnit(array []struct{}) string {
+	return string(AppendShowArrayUnit(nil, array))
+}
+
+// main.go
+package main
+
+import (
+	"fixture/Data/Show"
+	journal "fixture/Journal_ffi"
+	"github.com/i-am-the-slime/iris-go/direct"
+	"strconv"
+)
+
+func main() {
+	array := direct.MapWithIndex(func(index int, letter string) func() {
+		return func() {
+			journal.Log(strconv.Itoa(index) + letter)
+		}
+	}, []string{"a", "b"})
+	collected := make([]struct{}, len(array))
+	for _, action := range array {
+		action()
+	}
+	journal.Log(show.ArrayUnit(collected))
+}

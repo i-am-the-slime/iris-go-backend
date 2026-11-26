@@ -69,6 +69,13 @@ impl Simplifier<'_> {
                 )
             }
             Foreign::Perform { function, .. }
+                if function.package == GoPackage::Direct
+                    && function.name == "SequenceArray"
+                    && self.sequences_unit_actions(&arguments[0]) =>
+            {
+                self.sequenced_unit_actions(arguments, monotype)
+            }
+            Foreign::Perform { function, .. }
                 if function.package == GoPackage::Aff
                     && function.name == "ParApplyDirect"
                     && arguments
@@ -700,4 +707,33 @@ fn chooses_only_pure(expression: &Expression) -> bool {
 fn has_literal_label(arguments: &[Expression]) -> bool {
     let [label, _] = arguments else { return false };
     matches!(label.kind, ExpressionKind::Literal(Literal::String(_)))
+}
+
+impl Simplifier<'_> {
+    fn sequences_unit_actions(&self, actions: &Expression) -> bool {
+        let Monotype::Array(action) = *self.monotypes.get(actions.monotype) else { return false };
+        self.monotypes
+            .effect_result(action)
+            .is_some_and(|result| matches!(self.monotypes.get(result), Monotype::Unit))
+    }
+
+    fn sequenced_unit_actions(
+        &mut self,
+        arguments: Vec<Expression>,
+        monotype: crate::monotype::MonotypeId,
+    ) -> Expression {
+        let [actions] = <[Expression; 1]>::try_from(arguments)
+            .unwrap_or_else(|_| unreachable!("invariant violated: a sequence has one argument"));
+        let Monotype::Array(action) = *self.monotypes.get(actions.monotype) else {
+            unreachable!("invariant violated: a sequence runs an array of actions")
+        };
+        let element = self.named_local("action", action);
+        let kind = ExpressionKind::EffectEach {
+            array: Box::new(actions),
+            body: Box::new(element.expression()),
+            element,
+            results: Results::Collected,
+        };
+        Expression::new(kind, monotype)
+    }
 }
