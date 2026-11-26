@@ -42,8 +42,12 @@ pub(super) const BUILTINS: &[&str] = &[
     "complex", "real", "imag",
 ];
 
-pub(super) fn read_headers_once(declarations: &mut [GoDeclaration], effects: &Effects) {
-    let keeping = Keeping::of(declarations, effects);
+pub(super) fn read_headers_once(
+    declarations: &mut [GoDeclaration],
+    effects: &Effects,
+    helpers: &FxHashSet<String>,
+) {
+    let keeping = Keeping::of(declarations, effects, helpers);
     let sliced = pass_slices(declarations, &keeping);
     for declaration in declarations.iter_mut() {
         let GoDeclaration::Function { name, .. } = declaration else { continue };
@@ -57,15 +61,28 @@ pub(super) fn read_headers_once(declarations: &mut [GoDeclaration], effects: &Ef
     }
 }
 
+/// The helpers declared beside the program's functions, such as data constructors and the
+/// `Just` of a Maybe, that cannot change an array's header.
+pub(super) fn keeping_helpers(helpers: &mut [GoDeclaration], effects: &Effects) -> FxHashSet<String> {
+    Keeping::of(helpers, effects, &FxHashSet::default()).functions
+}
+
 /// The functions that cannot change an array's header.
 pub(super) struct Keeping<'e> {
     functions: FxHashSet<String>,
     declared: FxHashSet<String>,
     effects: &'e Effects,
+    /// The helpers declared beside the program's functions, such as the constructors of its
+    /// data types, that cannot change a header either.
+    helpers: &'e FxHashSet<String>,
 }
 
 impl<'e> Keeping<'e> {
-    pub(super) fn of(declarations: &mut [GoDeclaration], effects: &'e Effects) -> Self {
+    pub(super) fn of(
+        declarations: &mut [GoDeclaration],
+        effects: &'e Effects,
+        helpers: &'e FxHashSet<String>,
+    ) -> Self {
         let declared: FxHashSet<String> = declarations
             .iter()
             .filter_map(|declaration| match declaration {
@@ -75,7 +92,7 @@ impl<'e> Keeping<'e> {
             .collect();
         let mut functions = declared.clone();
         loop {
-            let mut keeping = Keeping { functions, declared: declared.clone(), effects };
+            let mut keeping = Keeping { functions, declared: declared.clone(), effects, helpers };
             let before = keeping.functions.len();
             let mut dropped = vec![];
             for declaration in declarations.iter_mut() {
@@ -116,7 +133,9 @@ impl<'e> Keeping<'e> {
             GoExpression::Identifier(name) if self.declared.contains(name.as_str()) => {
                 self.functions.contains(name.as_str())
             }
-            GoExpression::Identifier(name) => BUILTINS.contains(&name.as_str()),
+            GoExpression::Identifier(name) => {
+                BUILTINS.contains(&name.as_str()) || self.helpers.contains(name.as_str())
+            }
             GoExpression::Qualified { package, name } => {
                 !self.effects.contains(&(package.clone(), name.clone()))
             }
@@ -436,8 +455,12 @@ fn binds(statement: &mut GoStatement, name: &str) -> bool {
     found
 }
 
-pub(super) fn drop_repeated_bounds_tests(declarations: &mut [GoDeclaration], effects: &Effects) {
-    let keeping = Keeping::of(declarations, effects);
+pub(super) fn drop_repeated_bounds_tests(
+    declarations: &mut [GoDeclaration],
+    effects: &Effects,
+    helpers: &FxHashSet<String>,
+) {
+    let keeping = Keeping::of(declarations, effects, helpers);
     for declaration in declarations.iter_mut() {
         let GoDeclaration::Function { body, .. } = declaration else { continue };
         let written = written_names(body);
@@ -753,7 +776,7 @@ mod tests {
 
     fn rendered(runtime: &str, effects: &Effects) -> String {
         let mut declarations = vec![indexing_loop(runtime)];
-        read_headers_once(&mut declarations, effects);
+        read_headers_once(&mut declarations, effects, &FxHashSet::default());
         declarations[0].render()
     }
 

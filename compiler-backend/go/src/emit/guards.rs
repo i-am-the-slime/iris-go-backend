@@ -40,8 +40,12 @@ use crate::syntax::{GoDeclaration, GoExpression, GoStatement};
 /// every one of them is copied.
 const GUARDED_SIZE: usize = 48;
 
-pub(super) fn guard_accesses_together(declarations: &mut [GoDeclaration], effects: &Effects) {
-    let keeping = Keeping::of(declarations, effects);
+pub(super) fn guard_accesses_together(
+    declarations: &mut [GoDeclaration],
+    effects: &Effects,
+    helpers: &FxHashSet<String>,
+) {
+    let keeping = Keeping::of(declarations, effects, helpers);
     for declaration in declarations.iter_mut() {
         let mut names = declaration.all_names();
         let GoDeclaration::Function { body, .. } = declaration else { continue };

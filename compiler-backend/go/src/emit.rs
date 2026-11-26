@@ -253,10 +253,13 @@ where
     timed("ranges", || ranges::read_elements_in_place(&mut declarations));
     timed("swaps", || swaps::swap_crosswise_pokes(&mut declarations));
     let effects = std::mem::take(&mut emitter.effects);
-    timed("headers", || headers::read_headers_once(&mut declarations, &effects));
-    timed("bounds", || headers::drop_repeated_bounds_tests(&mut declarations, &effects));
-    timed("guards", || guards::guard_accesses_together(&mut declarations, &effects));
-    timed("intervals", || intervals::prove_bounds(&mut declarations, &effects));
+    let pure_helpers = headers::keeping_helpers(&mut emitter.type_declarations, &effects);
+    timed("headers", || headers::read_headers_once(&mut declarations, &effects, &pure_helpers));
+    timed("bounds", || {
+        headers::drop_repeated_bounds_tests(&mut declarations, &effects, &pure_helpers)
+    });
+    timed("guards", || guards::guard_accesses_together(&mut declarations, &effects, &pure_helpers));
+    timed("intervals", || intervals::prove_bounds(&mut declarations, &effects, &pure_helpers));
     timed("divisions", || divisions::reduce_constant_divisions(&mut declarations));
     timed("shorthands", || shorthands::use_shorthands(&mut declarations));
     let taken =

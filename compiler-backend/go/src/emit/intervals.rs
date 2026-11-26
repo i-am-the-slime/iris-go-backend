@@ -39,8 +39,12 @@ use super::headers::{Effects, Keeping};
 use crate::go_traversal::{self, Walk};
 use crate::syntax::{GoDeclaration, GoExpression, GoStatement, GoType};
 
-pub(super) fn prove_bounds(declarations: &mut [GoDeclaration], effects: &Effects) {
-    let keeping = Keeping::of(declarations, effects);
+pub(super) fn prove_bounds(
+    declarations: &mut [GoDeclaration],
+    effects: &Effects,
+    helpers: &FxHashSet<String>,
+) {
+    let keeping = Keeping::of(declarations, effects, helpers);
     let program = Program::of(declarations);
     let plans: Vec<Plan> =
         declarations.iter_mut().map(|declaration| program.plan(declaration)).collect();

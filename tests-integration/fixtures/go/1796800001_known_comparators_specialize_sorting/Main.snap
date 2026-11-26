@@ -103,81 +103,64 @@ func toArray(value *List) []int {
 
 func sortByCompare(xs []int) []int {
 	result := array.Thaw(xs)
-	sortByCompareQuicksort(result, 0, len(xs)-1)
+	sortByCompareQuicksort(*result, 0, len(xs)-1)
 	performed := shared.Frozen(*result)
 	return performed
 }
 
 func sortByDescending(xs []int) []int {
 	result := array.Thaw(xs)
-	sortByDescendingQuicksort(result, 0, len(xs)-1)
+	sortByDescendingQuicksort(*result, 0, len(xs)-1)
 	performed := shared.Frozen(*result)
 	return performed
 }
 
 func sortByOrder(xs []int) []int {
 	result := array.Thaw(xs)
-	sortByOrderQuicksort(result, 0, len(xs)-1)
+	sortByOrderQuicksort(*result, 0, len(xs)-1)
 	performed := shared.Frozen(*result)
 	return performed
 }
 
 func sortByOrder2(xs []int) []int {
 	result := array.Thaw(xs)
-	sortByOrderQuicksort2(result, 0, len(xs)-1)
+	sortByOrderQuicksort2(*result, 0, len(xs)-1)
 	performed := shared.Frozen(*result)
 	return performed
 }
 
-func sortByCompareSwap(array *[]int, i int, j int) {
+func sortByCompareSwap(array []int, i int, j int) {
 	var peeked maybe.Int
-	if i < len(*array) {
-		peeked = maybe.JustInt((*array)[i])
-	} else {
-		peeked = maybe.NoInt
-	}
+	peeked = maybe.JustInt(array[i])
 	var peeked2 maybe.Int
-	if j < len(*array) {
-		peeked2 = maybe.JustInt((*array)[j])
-	} else {
-		peeked2 = maybe.NoInt
-	}
+	peeked2 = maybe.JustInt(array[j])
 	if peeked.Tag == maybe.TagJust && peeked2.Tag == maybe.TagJust {
-		if i < len(*array) {
-			(*array)[i] = peeked2.Just
-		}
-		if j < len(*array) {
-			(*array)[j] = peeked.Just
-		}
+		array[i] = peeked2.Just
+		array[j] = peeked.Just
 	}
 }
 
-func sortByCompareQuicksort(array *[]int, low int, high int) {
+func sortByCompareQuicksort(array []int, low int, high int) {
 	for {
 		if low < high {
-			within := high < len(*array)
+			within := high < len(array)
 			var pivotIndex int
 			if within {
-				element := (*array)[high]
+				element := array[high]
 				var pivotIndex2 int
 				var i int = low
 				var j int = low
 			sortByIntComparePartitionFrom:
 				for {
 					if j < high {
-						within2 := j < len(*array)
-						if within2 {
-							element2 := (*array)[j]
-							if element2 <= element {
-								sortByCompareSwap(array, i, j)
-								i, j = i+1, j+1
-								continue
-							}
-							j += 1
+						element2 := array[j]
+						if element2 <= element {
+							sortByCompareSwap(array, i, j)
+							i, j = i+1, j+1
 							continue
 						}
-						pivotIndex2 = i
-						break sortByIntComparePartitionFrom
+						j += 1
+						continue
 					}
 					pivotIndex2 = i
 					break sortByIntComparePartitionFrom
@@ -195,32 +178,27 @@ func sortByCompareQuicksort(array *[]int, low int, high int) {
 	}
 }
 
-func sortByDescendingQuicksort(array *[]int, low int, high int) {
+func sortByDescendingQuicksort(array []int, low int, high int) {
 	for {
 		if low < high {
-			within := high < len(*array)
+			within := high < len(array)
 			var pivotIndex int
 			if within {
-				element := (*array)[high]
+				element := array[high]
 				var pivotIndex2 int
 				var i int = low
 				var j int = low
 			sortByIntDescendingPartitionFrom:
 				for {
 					if j < high {
-						within2 := j < len(*array)
-						if within2 {
-							element2 := (*array)[j]
-							if element <= element2 {
-								sortByCompareSwap(array, i, j)
-								i, j = i+1, j+1
-								continue
-							}
-							j += 1
+						element2 := array[j]
+						if element <= element2 {
+							sortByCompareSwap(array, i, j)
+							i, j = i+1, j+1
 							continue
 						}
-						pivotIndex2 = i
-						break sortByIntDescendingPartitionFrom
+						j += 1
+						continue
 					}
 					pivotIndex2 = i
 					break sortByIntDescendingPartitionFrom
@@ -238,44 +216,39 @@ func sortByDescendingQuicksort(array *[]int, low int, high int) {
 	}
 }
 
-func sortByOrderQuicksort(array *[]int, low int, high int) {
+func sortByOrderQuicksort(array []int, low int, high int) {
 	for {
 		if low < high {
-			within := high < len(*array)
+			within := high < len(array)
 			var pivotIndex int
 			if within {
-				element := (*array)[high]
+				element := array[high]
 				var pivotIndex2 int
 				var i int = low
 				var j int = low
 			sortByIntOrderPartitionFrom:
 				for {
 					if j < high {
-						within2 := j < len(*array)
-						if within2 {
-							element2 := (*array)[j]
-							var i2 int
-							if element2 < 4 {
-								i2 = 4 - element2
-							} else {
-								i2 = element2 - 4
-							}
-							var i3 int
-							if element < 4 {
-								i3 = 4 - element
-							} else {
-								i3 = element - 4
-							}
-							if i2 <= i3 {
-								sortByCompareSwap(array, i, j)
-								i, j = i+1, j+1
-								continue
-							}
-							j += 1
+						element2 := array[j]
+						var i2 int
+						if element2 < 4 {
+							i2 = 4 - element2
+						} else {
+							i2 = element2 - 4
+						}
+						var i3 int
+						if element < 4 {
+							i3 = 4 - element
+						} else {
+							i3 = element - 4
+						}
+						if i2 <= i3 {
+							sortByCompareSwap(array, i, j)
+							i, j = i+1, j+1
 							continue
 						}
-						pivotIndex2 = i
-						break sortByIntOrderPartitionFrom
+						j += 1
+						continue
 					}
 					pivotIndex2 = i
 					break sortByIntOrderPartitionFrom
@@ -293,34 +266,29 @@ func sortByOrderQuicksort(array *[]int, low int, high int) {
 	}
 }
 
-func sortByOrderQuicksort2(array *[]int, low int, high int) {
+func sortByOrderQuicksort2(array []int, low int, high int) {
 	for {
 		if low < high {
-			within := high < len(*array)
+			within := high < len(array)
 			var pivotIndex int
 			if within {
-				element := (*array)[high]
+				element := array[high]
 				var pivotIndex2 int
 				var i int = low
 				var j int = low
 			sortByIntOrderPartitionFrom2:
 				for {
 					if j < high {
-						within2 := j < len(*array)
-						if within2 {
-							element2 := (*array)[j]
-							i2 := -element2
-							i3 := -element
-							if i2 <= i3 {
-								sortByCompareSwap(array, i, j)
-								i, j = i+1, j+1
-								continue
-							}
-							j += 1
+						element2 := array[j]
+						i2 := -element2
+						i3 := -element
+						if i2 <= i3 {
+							sortByCompareSwap(array, i, j)
+							i, j = i+1, j+1
 							continue
 						}
-						pivotIndex2 = i
-						break sortByIntOrderPartitionFrom2
+						j += 1
+						continue
 					}
 					pivotIndex2 = i
 					break sortByIntOrderPartitionFrom2
