@@ -17,15 +17,8 @@ main = do
 ```go
 func main() {
 	argv := os.Args()
-	console.Print(strconv.FormatInt(factorial(int64(20+int32(len(argv)))), 10) + "l")
-	long := uint64(2)
-	var result uint64
-	if long == 0 {
-		result = uint64(0)
-	} else {
-		result = Data_Int64_Internal_ffi.Divide_(uint64(18446744073709551615), long)
-	}
-	console.Print(strconv.FormatUint(result, 10) + "ul")
+	console.Print(strconv.FormatInt(factorial(int64(20+len(argv))), 10) + "l")
+	console.Print(strconv.FormatUint(uint64(9223372036854775807), 10) + "ul")
 }
 
 func factorial(n int64) int64 {
@@ -42,7 +35,8 @@ func factorial(n int64) int64 {
 ```
 
 `Int64` from the `int64` package is an `int64` and `UInt64` a `uint64`, so `+`, `*`, `<=` and
-`one` are Go's own arithmetic and constants. No boxing, no pairs of 32-bit halves.
+`one` are Go's own arithmetic and constants. No boxing, no pairs of 32-bit halves, and the
+`UInt64` division only used constants, so it was done before your program runs.
 
 PureScript has no literal syntax beyond 32-bit `Int`, but type-level `Int`s can be as big as you
 like, so they're how you write a 64-bit number at compile time: `Prim.Int`'s `ToString`,
@@ -68,47 +62,44 @@ main = launchAff_ do
 ```go
 func main() {
 	defer eventloop.Await()
-	fiber4 := aff.NewFiber(func() struct{} {
-		func() {
-			fiber2 := aff.ForkFiber(true, func() int32 {
-				aff.DelayDirect(nil, 100.0)
-				console.Print("background done")
-				return 42
-			})
-			isSuspended, join, kill, onComplete, run := aff.FiberFields(fiber2, func(payload exception.Error) either.EitherErrorInt {
-				return either.EitherErrorInt{Tag: either.EitherErrorIntLeft, Left: payload}
-			}, func(payload int32) either.EitherErrorInt {
-				return either.EitherErrorInt{Tag: either.EitherErrorIntRight, Right: payload}
-			}, either.EitherErrorUnit{Tag: either.EitherErrorUnitRight, Right: struct{}{}}, func(value either.OnCompleteInt) func(func(either.EitherErrorInt)) {
-				return value.Handler
-			})
-			fiber3 := either.FiberInt{IsSuspended: isSuspended, Join: join, Kill: kill, OnComplete: onComplete, Run: run}
-			console.Print("main keeps going")
-			answer := aff.MakeAffDirect(func(value either.EitherErrorInt) bool {
-				return value.Tag == either.EitherErrorIntLeft
-			}, func(value either.EitherErrorInt) exception.Error {
-				return value.Left
-			}, func(value either.EitherErrorInt) int32 {
-				return value.Right
-			}, func(k func(either.EitherErrorInt)) func(exception.Error) {
-				effect := fiber3.Join(k)
-				return func(_ exception.Error) {
-					effect()
-				}
-			})
-			console.Print("joined: " + strconv.Itoa(int(answer)))
-		}()
+	fiber3 := aff.NewFiber(func() struct{} {
+		fiber := aff.ForkFiber(true, func() int {
+			aff.DelayDirect(nil, 100.0)
+			console.Print("background done")
+			return 42
+		})
+		isSuspended, join, kill, onComplete, run := aff.FiberFields(fiber, func(payload exception.Error) either.EitherInt {
+			return either.LeftEitherInt(payload)
+		}, func(payload int) either.EitherInt {
+			return either.RightEitherInt(payload)
+		}, either.RightEitherUnit(struct{}{}), func(value either.OnCompleteInt) func(func(either.EitherInt)) {
+			return value.Handler
+		})
+		fiber2 := effectaff.FiberInt{IsSuspended: isSuspended, Join: join, Kill: kill, OnComplete: onComplete, Run: run}
+		console.Print("main keeps going")
+		answer := aff.MakeAffDirect(func(value either.EitherInt) bool {
+			return value.Tag == either.EitherIntLeft
+		}, func(value either.EitherInt) exception.Error {
+			return value.Left
+		}, func(value either.EitherInt) int {
+			return value.Right
+		}, func(k func(either.EitherInt)) func(exception.Error) {
+			effect := fiber2.Join(k)
+			return func(_ exception.Error) {
+				effect()
+			}
+		})
+		console.Print("joined: " + strconv.Itoa(answer))
 		return struct{}{}
 	})
-	isSuspended2, join2, kill2, onComplete2, run2 := aff.FiberFields(fiber4, func(payload exception.Error) either.EitherErrorUnit {
-		return either.EitherErrorUnit{Tag: either.EitherErrorUnitLeft, Left: payload}
-	}, func(payload struct{}) either.EitherErrorUnit {
-		return either.EitherErrorUnit{Tag: either.EitherErrorUnitRight, Right: payload}
-	}, either.EitherErrorUnit{Tag: either.EitherErrorUnitRight, Right: struct{}{}}, func(value either.OnCompleteUnit) func(func(either.EitherErrorUnit)) {
+	_, _, _, _, run2 := aff.FiberFields(fiber3, func(payload exception.Error) either.EitherUnit {
+		return either.LeftEitherUnit(payload)
+	}, func(payload struct{}) either.EitherUnit {
+		return either.RightEitherUnit(payload)
+	}, either.RightEitherUnit(struct{}{}), func(value either.OnCompleteUnit) func(func(either.EitherUnit)) {
 		return value.Handler
 	})
-	fiber := either.FiberUnit{IsSuspended: isSuspended2, Join: join2, Kill: kill2, OnComplete: onComplete2, Run: run2}
-	fiber.Run()
+	run2()
 }
 ```
 
@@ -205,24 +196,27 @@ main = do
 
 ```go
 func main() {
-	decoded, ok := foreignvalue.Decode("{ \"title\": \"write docs\", \"done\": false, \"tags\": [\"iris\"] }", shared.DecodeJSONTodo)
-	var read foreign.EitherNonEmptyListForeignErrorTodo
-	if ok {
-		read = foreign.EitherNonEmptyListForeignErrorTodo{Tag: foreign.EitherNonEmptyListForeignErrorTodoRight, Right: decoded}
-	} else {
-```
-
-```go
-	default: // foreign.EitherNonEmptyListForeignErrorTodoRight
-		updated := read.Right
-		updated.Done = true
-		console.Print(foreignvalue.Encode(shared.EncodeJSONTodo, updated))
+	todo, err := json.ReadJSON("{ \"title\": \"write docs\", \"done\": false, \"tags\": [\"iris\"] }")
+	if err.Failed {
+		console.Print("bad JSON: " + foreign.ShowNonEmptyListForeignError(err.Left))
+		return
 	}
+	updated := todo
+	updated.Done = true
+	console.Print(foreignvalue.Encode(shared.EncodeJSONTodo, updated))
 }
 ```
 
 ```go
-func DecodeJSONTodo(d *foreignvalue.Decoder) Todo {
+func ReadJSON(text string) (shared.Todo, foreign.NonEmptyFailure) {
+	decoded, ok := foreignvalue.Decode(text, DecodeJSONTodo)
+	if ok {
+		return decoded, foreign.NonEmptyFailure{}
+	}
+```
+
+```go
+func DecodeJSONTodo(d *foreignvalue.Decoder) shared.Todo {
 	var done bool
 	hasDone := false
 	var tags []string
@@ -252,9 +246,11 @@ func DecodeJSONTodo(d *foreignvalue.Decoder) Todo {
 	if !hasDone || !hasTags || !hasTitle {
 		d.Fail()
 	}
-	return Todo{Done: done, Tags: tags, Title: title}
+	return shared.Todo{Done: done, Tags: tags, Title: title}
 }
+```
 
+```go
 func EncodeJSONTodo(e *foreignvalue.Encoder, value Todo) {
 	e.Raw("{\"title\":")
 	e.String(value.Title)
@@ -273,7 +269,9 @@ func EncodeJSONTodo(e *foreignvalue.Encoder, value Todo) {
 `readJSON` at a record type reads the text straight into the `Todo` struct, and `writeJSON` writes
 the struct straight out. Neither goes through a generic JSON value. When the input doesn't fit,
 the decoder gives up, and `readJSON` reads it again the way `yoga-json` does in JavaScript, to
-give you the same errors. That part, left out above, is the long `else` branch.
+give you the same errors. That part, left out above, is the rest of `ReadJSON`. Like any function
+that returns an `Either`, `ReadJSON` gives back the `Todo` and a failure that's only set when the
+JSON was bad.
 
 ### Labels that clash in Go
 
@@ -296,7 +294,7 @@ main = do
 type Request struct {
 	A            string
 	Content_type string `purescript:"content-type"`
-	A_           int32  `purescript:"A"`
+	A_           int    `purescript:"A"`
 }
 
 func EncodeJSONRequest(e *foreignvalue.Encoder, value Request) {
@@ -356,7 +354,7 @@ func Elapsed(stopwatch Stopwatch) float64 {
 	return float64(time.Since(stopwatch.started).Microseconds()) / 1000
 }
 
-func Repeat[A any](n int32, x A) []A {
+func Repeat[A any](n int, x A) []A {
 	xs := make([]A, n)
 	for i := range xs {
 		xs[i] = x
@@ -380,11 +378,11 @@ main = do
 
 ```go
 func main() {
-	watch := Ex_Greeting_ffi.Start()
-	console.Print(Ex_Greeting_ffi.Greeting)
-	console.Print(string(show.AppendShowArrayString(nil, Ex_Greeting_ffi.Repeat(3, "hi"))))
-	console.Print(strconv.Itoa(len(Ex_Greeting_ffi.None[int32]())))
-	number := Ex_Greeting_ffi.Elapsed(watch)
+	watch := greeting.Start()
+	console.Print(greeting.Greeting)
+	console.Print(show.ArrayString(greeting.Repeat(3, "hi")))
+	console.Print(strconv.Itoa(len(greeting.None[int]())))
+	number := greeting.Elapsed(watch)
 	var result string
 	if number < 1000.0 {
 		result = "fast"
@@ -399,7 +397,7 @@ Your foreign imports are called like any Go function, with all their arguments a
 such as `greeting :: String` is a Go variable, and the `//go:embed` file ends up inside your
 binary. A polymorphic function is a generic Go function, called at the type you use it with:
 `Repeat(…, "hi")` lets Go infer `string`. Go has no generic variables, so a polymorphic value like
-`none :: forall a. Array a` is a generic function without arguments, `None[int32]()`.
+`none :: forall a. Array a` is a generic function without arguments, `None[int]()`. An `Int` parameter is a Go `int`.
 
 Callbacks you hand to Go come in two kinds, just like in JavaScript FFI. One Go calls right away,
 before your foreign returns, is an `Effect`. One Go calls later, from a goroutine, is an `IO`.

@@ -33,8 +33,8 @@ Other flags: `--batch` (modules per `iris build`, default 8), `--statements` and
 (iris-go checkout), `FUZZ_RUN_TIMEOUT` (milliseconds per program run).
 
 Classifications: `OK`, `DOCUMENTED DIFFERENCE` (outputs differ only by a documented platform
-difference: a JavaScript Int result outside int32 such as `Int.rem x 0`, `div bottom (-1)` or
-`Bits.zshr`, or a last-ulp result of the numeric library such as `Number.pow`), `OUTPUT
+difference: an Int result past 32 bits, which Go keeps and JavaScript wraps or turns
+into a Number, such as `Int.rem x 0`, `div bottom (-1)`, a sum past `2^31` or `Bits.zshr`, or a last-ulp result of the numeric library such as `Number.pow`), `OUTPUT
 MISMATCH`, `EXIT MISMATCH`, `IRIS ERROR` (Go backend rejected
 the program), `IRIS JS ERROR` (the JavaScript build failed for a reason other than the generated
 module), `GO BUILD ERROR`, `GO PANIC`, `TIMEOUT JS`, `TIMEOUT GO`, `TIMEOUT BOTH`,

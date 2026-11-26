@@ -16,8 +16,8 @@ as if a careful person had written it by hand for those types.
   - Recursive newtypes and data types become recursive named Go types.
 - Effects are direct. `a -> Effect b` is `func(A) B`, a do-block is a sequence of statements, and a
   thunk exists only where an effect is genuinely first-class.
-- PureScript `Int` is `int32` and wraps like JS. Conversions to Go's `int` happen only at Go API
-  boundaries.
+- PureScript `Int` is Go's `int` and wraps at its width, not at JavaScript's 32 bits (see
+  documentation/go-output.md). It crosses Go APIs without conversions.
 - No `reflect` and no `unsafe` in generated code.
 - Calls read like the PureScript they come from: `n(f, x)`, never `n.Apply(f, x)`, `Invoke`,
   `Call2` or similar plumbing names.

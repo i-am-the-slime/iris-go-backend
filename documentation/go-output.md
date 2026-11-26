@@ -116,7 +116,6 @@ They make the Go a bit noisier to read. `googoo go --no-line-directives out` lea
 
 ## What stays the same
 
-- `Int` is a 32-bit integer and wraps on overflow, as `| 0` does in JavaScript.
 - `Number` is a 64-bit float, and `show` formats it exactly as JavaScript does.
 - `String` operations count, index and compare by UTF-16 code units. A string can hold a lone
   surrogate, and joining the two halves of a surrogate pair gives back the original character.
@@ -154,40 +153,60 @@ non-zero instead.
 `Effect.Exception.stack` and `show` on an `Error` give just the `Error: <message>` header, with
 no stack frames.
 
-### Division of the smallest `Int` by -1
+### `Int` is Go's `int`
 
-`bottom / -1` is `-2147483648`, the wrapped result. In JavaScript it is `2147483648`, which is not
-a valid `Int` and is a bug in the JavaScript Prelude's `intDiv`. `bottom `mod` -1` is `0` in both.
-
-### Other `Int` results outside the `Int` range
-
-A few JavaScript foreigns compute with doubles and return a value that is not an `Int` at all. The
-Go backend keeps every `Int` a 32-bit integer instead:
+An `Int` is a Go `int`: 64 bits on the 64-bit machines Go runs on (amd64, arm64), 32 bits only on
+32-bit ones. In JavaScript it's a 32-bit integer that every operation wraps with `| 0`. Go doesn't
+emulate that, because wrapping at 32 bits on a 64-bit machine costs instructions on every `+` and
+`*`, and Go code is written with `int` anyway. As long as your numbers stay within 32 bits, which is
+what a program that runs correctly on JavaScript does, both backends print the same. They differ
+where a result passes 32 bits:
 
 | Expression | JavaScript | Go |
 |---|---|---|
+| `top :: Int` | `2147483647` | `9223372036854775807` (`math.MaxInt`) |
+| `bottom :: Int` | `-2147483648` | `-9223372036854775808` (`math.MinInt`) |
+| `top + 1` | `-2147483648` | `-9223372036854775808` |
+| `123456789 * 987654321` | `-67153024` | `121932631112635269` |
+| `sum (1 .. 1000000)` | `1784293664` | `500000500000` |
+| `Int.pow 10 10` | `1410065408` | `10000000000` |
+| `bottom / -1` | `2147483648` | `math.MinInt`, the wrapped result |
+| `Int.fromString "2147483648"` | `Nothing` | `Just 2147483648` |
+| `Int.fromNumber 1.0e10` | `Nothing` | `Just 10000000000` |
+| `Int.round 1.0e20`, `floor`, `ceil` | `2147483647` | `9223372036854775807`: they clamp to Go's `top` |
 | `Int.rem 5 0` | `NaN` | `0` |
-| `Bits.zshr (-3) 0` | `4294967293` | `-3` |
-| `Bits.zshr (-1073741824) (-1073741824)` | `3221225472` | `-1073741824` |
-| `123456789 * 987654321` | `-67153024` | `-67153019` |
-| `Int.pow 3 40` | `689956864` | `689956897` |
 
-`zshr` is JavaScript's unsigned `>>>`, whose result does not fit an `Int` when the top bit stays
-set. `Int.quot`, `div` and `mod` by zero are `0` in both.
+The bit operations of `Data.Int.Bits` work on all 64 bits too:
 
-`*` and `Int.pow` wrap like 32-bit integers in Go, so they keep the low 32 bits of the exact
-product. JavaScript computes the product as a double first, which drops low bits once it passes
-2^53, and then cuts it to 32 bits. Products below 2^53 are the same in both. A hash that multiplies
-by a large constant, such as FNV's `* 16777619`, passes 2^53 on almost every step, so the hashes come
-out different. Go's are the true 32-bit ones. To get the same hash in both, split the multiplication
-so every product stays below 2^53, as `Math.imul` does.
+| Expression | JavaScript | Go |
+|---|---|---|
+| `1 `shl` 31` | `-2147483648` | `2147483648` |
+| `1 `shl` 32` | `1` (the count is taken mod 32) | `4294967296` (the count is taken mod 64) |
+| `(-1) `zshr` 1` | `2147483647` | `9223372036854775807` |
+| `(-1) `zshr` 0` | `4294967295`, which isn't an `Int` | `-1` |
+| `complement 0` | `-1` | `-1` |
 
-Such a value then behaves differently wherever it is used. A `NaN` index passes JavaScript's bounds
-check, so `Array.index [] (Int.rem 5 0)` is `Just undefined`, which crashes or prints an empty
-element when it is shown or matched, while `STArray.poke (Int.rem 5 0) x array` is `false` and
-changes no element. In Go the index is `0`: the lookup is `Nothing`, and the poke writes the first
-element of a non-empty array and is `true`. Likewise `Array.range 0 (clamp 0 1 (div bottom
-(-1)))` is `[0,1]` in JavaScript and `[0]` in Go.
+More to know:
+
+- **`toNumber` is exact up to 2^53.** An `Int` past that rounds to the nearest `Number`, and
+  `fromNumber` accepts every whole `Number` from `-2^63` up to just below `2^63`.
+- **Hashes and random numbers that rely on 32-bit wrapping come out different.** A hash such as
+  `foldl (\h c -> h * 31 + toCharCode c) 0`, FNV's `* 16777619`, djb2's `* 33`, an LCG like
+  `n * 1103515245 + 12345`, or xorshift32 with `shl 13`, `zshr 17` and `shl 5` all keep more bits in
+  Go, so their values, and anything chosen by them, differ from JavaScript's. `Math.imul`-style code
+  that ends in `.|. 0` doesn't cut back to 32 bits either. To get JavaScript's numbers on both
+  backends, keep the value in 32 bits yourself: `(x `shl` 32) `shr` 32` is the low 32 bits with
+  their sign, as JavaScript sees them, and `(x `shl` 32) `zshr` 32` the same bits unsigned. In
+  JavaScript both are `x` itself, since it takes the shift count mod 32. Registry packages that do
+  such arithmetic include unordered-collections (`hash`; a `HashMap` still lists its entries in
+  JavaScript's order, because it only uses the low 32 bits of a hash), grain (class names), midi
+  (32-bit lengths read with `shl 24`), open-memoize and yoga-protobuf.
+- **JSON reads and writes the whole `Int`.** `readJSON` of `{"id": 2147483648}` into an `Int` is
+  `2147483648`, where JavaScript reports a type mismatch, and `writeJSON` writes every digit of a
+  large `Int`. JavaScript can't read back an integer past 2^53 exactly.
+- **Arrays.** An array's length is an `int` too, so it can hold as many elements as Go allows.
+
+Go `int64` from the `int64` package is unchanged: it's 64 bits everywhere.
 
 ### Multiply, then add
 
@@ -202,7 +221,7 @@ Whether Go fuses depends on the CPU it compiles for: it does on arm64, and on am
 ### Sums over vectors
 
 On arm64 (and wasm), with `GOEXPERIMENT=simd`, which `googoo run --go` sets for you, simple number
-crunching over `Array Number` and `Array Int` runs on SIMD vectors: `foldl (+) 0.0 xs`, `sum`,
+crunching over `Array Number` (and `Array Int64`) runs on SIMD vectors: `foldl (+) 0.0 xs`, `sum`,
 `foldl (*)`, `foldl max`, `map (_ * k)`, `zipWith (\x y -> a * x + y)`, `sum (zipWith (*) xs ys)`,
 clamping with `min`, `max` and `if`, and so on. That's several times faster than a plain Go loop.
 
@@ -331,11 +350,6 @@ main = do
 Now both backends time the sum: the thunk keeps JavaScript from computing it before `timed` starts,
 and `evaluate` keeps Go from computing it after `timed` is done.
 
-### Array length
-
-An array holds at most 2147483647 elements, since its `length` is an `Int`. Growing one past that,
-or making a `range` that long, stops the program with `array longer than 2147483647 elements`.
-
 ### Deep recursion
 
 Go stacks grow to 1 GB, so recursion that is not tail-recursive goes far deeper before it fails.
@@ -427,7 +441,7 @@ func Elapsed(stopwatch Stopwatch) float64 {
 	return float64(time.Since(stopwatch.started).Milliseconds())
 }
 
-func Repeat[A any](n int32, x A) []A {
+func Repeat[A any](n int, x A) []A {
 	xs := make([]A, n)
 	for i := range xs {
 		xs[i] = x
@@ -435,8 +449,8 @@ func Repeat[A any](n int32, x A) []A {
 	return xs
 }
 
-func Every(n int32, f func(int32)) {
-	for i := int32(0); i < n; i++ {
+func Every(n int, f func(int)) {
+	for i := range n {
 		f(i)
 	}
 }
@@ -447,7 +461,7 @@ whatever you like, Iris renames it.
 
 | PureScript | Go |
 | --- | --- |
-| `Int` | `int32` |
+| `Int` | `int` |
 | `Number` | `float64` |
 | `String` | `string` |
 | `Boolean` | `bool` |
@@ -463,21 +477,21 @@ whatever you like, Iris renames it.
   gets the extra three-byte encoding. You'll never see it with normal text. When your Go hands a
   string to PureScript, make it valid UTF-8; bytes from outside (files, sockets, protobuf) are
   worth a `utf8.Valid` first, or keep them as bytes.
-- **Arguments come all at once.** `repeat :: Int -> a -> Array a` is `Repeat(n int32, x A)`, not a
+- **Arguments come all at once.** `repeat :: Int -> a -> Array a` is `Repeat(n int, x A)`, not a
   function returning a function.
 - **Calling a function performs its effect.** `elapsed :: Stopwatch -> Effect Number` is
   `Elapsed(stopwatch Stopwatch) float64`: no thunk to return, Iris calls it when the effect runs.
   `start` has no arguments, so `Start` _is_ the effect.
-- **Callbacks stay curried and perform when called.** `Int -> Effect Unit` is `func(int32)`, and
+- **Callbacks stay curried and perform when called.** `Int -> Effect Unit` is `func(int)`, and
   `a -> b -> Effect c` is `func(A) func(B) C`.
 - **An `Effect` callback gets called right away.** Go calls it while your foreign runs, on the same
   goroutine, like `Every` above or a sort's comparator. Iris puts nothing around it. Calling one
   later, from a goroutine, is a bug: see
   [Callbacks from goroutines](#callbacks-from-goroutines).
 - **`EffectFn` and `STFn` work the same way.** `EffectFn2 a b c` is `func(A, B) C`.
-- **An `Int` is an `int32`, everywhere.** Where a Go API wants an `int`, convert it yourself:
-  `os.Exit(int(code))`. Where a Go value might not fit 32 bits, decide what to do about it rather
-  than letting `int32(…)` cut it off: a file size is better a `Number`.
+- **An `Int` is an `int`, everywhere.** Hand it straight to Go APIs: `os.Exit(code)`, `make([]A, n)`,
+  `time.Duration(ms) * time.Millisecond`. Where JavaScript must agree, remember that its `Int` has
+  32 bits: a file size is better a `Number` if the same code also runs on JavaScript.
 - **A value without arguments or effects is a variable.** `greeting :: String` is
   `var Greeting string`, not a function.
 - **Values with a `forall` are generic functions.** Go has no generic variables, so
@@ -531,7 +545,7 @@ import (
 	"github.com/i-am-the-slime/iris-go/eventloop"
 )
 
-func OnWorkersImpl(workers int32, handler func(), done func()) {
+func OnWorkersImpl(workers int, handler func(), done func()) {
 	retire := eventloop.Hold()
 	go func() {
 		var running sync.WaitGroup
@@ -604,7 +618,7 @@ type Header struct {
 	A             string
 	Content_type2 string `purescript:"content-type"`
 	Content_type  string
-	A_            int32 `purescript:"A"`
+	A_            int    `purescript:"A"`
 }
 ```
 
@@ -626,7 +640,7 @@ type Routes =
 ```go
 type Routes struct {
 	Handle func(string, func(string))
-	Add    func(int32) func(int32) int32
+	Add    func(int) func(int) int
 	Each   []func(string)
 }
 ```

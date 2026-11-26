@@ -20,17 +20,17 @@ main = do
 ```go
 func main() {
 	argv := os.Args()
-	n := int32(len(argv))
-	console.Print(prim.StringToUpper("count: " + strconv.Itoa(int(n))))
+	n := len(argv)
+	console.Print(prim.StringToUpper("count: " + strconv.Itoa(n)))
 	step, count := array.RangeSteps(1, n+6)
-	mapped := []int32{}
+	mapped := []int{}
 	for index := range count {
-		i := 1 + int32(index)*step
-		if prim.IntMod(i, 3) == 0 {
+		i := 1 + index*step
+		if i%3 == 0 {
 			mapped = append(mapped, i*10)
 		}
 	}
-	console.Print(string(show.AppendShowArrayInt(nil, mapped)))
+	console.Print(show.ArrayInt(mapped))
 }
 ```
 
@@ -57,27 +57,13 @@ main = do
 ```go
 func main() {
 	argv := os.Args()
-	hero := shared.Player{Name: "Ada", Stats: shared.HpXp{Hp: 10 + int32(len(argv)), Xp: 0}, Items: []string{"sword", "map"}}
-	x := hero.Stats
-	healed := shared.Player{Name: hero.Name, Stats: shared.HpXp{Hp: x.Hp + 5, Xp: x.Xp}, Items: hero.Items}
-	x2 := healed.Items
-	var result []string
-	if 0 < int32(len(x2)) {
-		updateAt := direct.UpdateAt(func(payload []string) maybe.ArrayString {
-			return maybe.JustArrayString(payload)
-		}, maybe.NoArrayString, 0, "better sword", x2)
-		switch updateAt.Tag {
-		case maybe.TagNothing:
-			result = x2
-		default: // maybe.TagJust
-			result = updateAt.Just
-		}
-	} else {
-		result = x2
-	}
-	upgraded := shared.Player{Name: healed.Name, Stats: healed.Stats, Items: result}
-	console.Print(strconv.Itoa(int(upgraded.Stats.Hp)))
-	console.Print(string(show.AppendShowArrayString(nil, upgraded.Items)))
+	x := []string{"sword", "map"}
+	var upgradedItems []string
+	updated := slices.Clone(x)
+	updated[0] = "better sword"
+	upgradedItems = updated
+	console.Print(strconv.Itoa(len(argv) + 15))
+	console.Print(show.ArrayString(upgradedItems))
 }
 ```
 
@@ -86,9 +72,10 @@ func main() {
 ["better sword","map"]
 ```
 
-The profunctors, the `Proxy`s and the composition are gone. `view hp` is `upgraded.Stats.Hp`,
-`over hp` builds the updated record directly, and `set (ix 0)` is the same bounds test and
-`updateAt` you'd get from `Data.Array.updateAt`.
+The profunctors, the `Proxy`s and the composition are gone, and so are the records: each lens is
+the field it points at. `view hp` after `over hp (_ + 5)` is just `len(argv) + 15`, and
+`set firstItem` on an array that's known to have two elements copies it and assigns, with no bounds
+test left.
 
 ## Pure `let`s move into the branches that use them
 
@@ -111,31 +98,22 @@ main = do
 ```go
 func main() {
 	argv := os.Args()
-	for _, i := range []int32{0, 50 + int32(len(argv)), 500} {
-		var result either.EitherStringInt
-		if i < 1 {
-			result = either.EitherStringInt{Tag: either.EitherStringIntLeft, Left: "age must be between 1 and 100, got " + strconv.Itoa(int(i))}
-		} else if i > 100 {
-			result = either.EitherStringInt{Tag: either.EitherStringIntLeft, Left: "age must be between 1 and 100, got " + strconv.Itoa(int(i))}
+	for _, i := range []int{0, 50 + len(argv), 500} {
+		if i < 1 || i > 100 {
+			console.Print("age must be between 1 and 100, got " + strconv.Itoa(i))
 		} else {
-			result = either.EitherStringInt{Tag: either.EitherStringIntRight, Right: i}
-		}
-		switch result.Tag {
-		case either.EitherStringIntLeft:
-			console.Print(result.Left)
-		default: // either.EitherStringIntRight
-			console.Print("ok " + strconv.Itoa(int(result.Right)))
+			console.Print("ok " + strconv.Itoa(i))
 		}
 	}
 }
 ```
 
 PureScript is strict, so you might expect `problem`, message and all, to be built every time. It
-isn't: building it has no effect, so it's built in each branch that returns it, and the valid path
-never formats a message.
+isn't: building it has no effect, so it's only built on the paths that return it. Here the `case`
+takes the `Either` apart right away, so it never exists at all. The two bad branches are one `if`,
+and the valid path never formats a message.
 
-This doesn't always happen yet. Calling `validate` through `either identity show` builds `problem`
-up front:
+The same goes when you call `validate` through `either identity show`:
 
 ```purescript
 main :: Effect Unit
@@ -147,13 +125,21 @@ main = do
 ```
 
 ```go
-		problem := either.EitherStringInt{Tag: either.EitherStringIntLeft, Left: "age must be between 1 and 100, got " + strconv.Itoa(int(i))}
-		var result2 either.EitherStringInt
-		if i < 1 {
-			result2 = problem
-		} else if i > 100 {
-			result2 = problem
+	for _, i := range []int{0, 50 + len(argv), 500} {
+		var result string
+		if i < 1 || i > 100 {
+			result = "age must be between 1 and 100, got " + strconv.Itoa(i)
 		} else {
-			result2 = either.EitherStringInt{Tag: either.EitherStringIntRight, Right: i}
+			result = strconv.Itoa(i)
 		}
+		console.Print(result)
+		n := i * 2
+		var result2 string
+		if n < 1 || n > 100 {
+			result2 = "weight must be between 1 and 100, got " + strconv.Itoa(n)
+		} else {
+			result2 = strconv.Itoa(n)
+		}
+		console.Print(result2)
+	}
 ```

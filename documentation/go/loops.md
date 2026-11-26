@@ -20,16 +20,16 @@ main = do
 ```go
 func main() {
 	argv := os.Args()
-	step, count := array.RangeSteps(1, int32(len(argv))+20)
-	var accumulator int32 = 0
+	step, count := array.RangeSteps(1, len(argv)+20)
+	accumulator := 0
 	for index := range count {
-		i := 1 + int32(index)*step
-		value := codepoints.Length("item" + strconv.Itoa(int(i)))
+		i := 1 + index*step
+		value := codepoints.Length("item" + strconv.Itoa(i))
 		if value > 5 {
 			accumulator += value
 		}
 	}
-	console.Print(strconv.Itoa(int(accumulator)))
+	console.Print(strconv.Itoa(accumulator))
 }
 ```
 
@@ -37,8 +37,9 @@ The range, both `map`s, the `filter` and the `foldl` run in a single loop, and n
 arrays in between is ever built. An array that's only read once by the next step doesn't need to
 exist.
 
-Not every pipeline fuses: in the [`Maybe` and `Either`](basics.md#maybe-and-either) example,
-`map parse numbers` is built as an array before `for_` loops over it.
+An array that's read more than once is built, though: in the [`Maybe` and
+`Either`](basics.md#maybe-and-either) example, both `for_`s go over `numbers`, so `numbers` exists
+while the two `map`s over it don't.
 
 ## Appending to an accumulator changes it in place
 
@@ -60,19 +61,18 @@ main = do
 ```go
 func main() {
 	argv := os.Args()
-	numbers := array.RangeInt32(1, int32(len(argv))+10)
-	accumulator := []int32{}
-	accumulator = slices.Clip(accumulator)
+	numbers := array.Range(1, len(argv)+10)
+	accumulator := []int{}
 	for _, n := range numbers {
-		if prim.IntMod(n, 2) == 0 {
-			accumulator = array.Bounded(append(accumulator, n))
+		if n&1 == 0 {
+			accumulator = append(accumulator, n)
 		}
 	}
-	console.Print(string(show.AppendShowArrayInt(nil, accumulator)))
-	accumulator2 := []byte("")
+	console.Print(show.ArrayInt(accumulator))
+	accumulator2 := []byte(nil)
 	for _, n := range numbers {
 		accumulator2 = strconv.AppendInt(accumulator2, int64(n), 10)
-		accumulator2 = append(accumulator2, ","...)
+		accumulator2 = append(accumulator2, ',')
 	}
 	built := string(accumulator2)
 	console.Print(built)
@@ -106,19 +106,19 @@ main = do
 ```go
 func main() {
 	argv := os.Args()
-	step, count := array.RangeSteps(1, int32(len(argv))+100)
+	step, count := array.RangeSteps(1, len(argv)+100)
 	accumulator := sharedTreeLeaf
 	for index := range count {
-		i := 1 + int32(index)*step
-		a := prim.IntMod(i*37, 101)
+		i := 1 + index*step
+		a := prim.IntModPositive(i*37, 101)
 		accumulator = insertReusing(a, accumulator)
 	}
-	console.Print(strconv.Itoa(int(size(accumulator))))
+	console.Print(strconv.Itoa(size(accumulator)))
 }
 
-func insertReusing(x int32, value *Tree) *Tree {
+func insertReusing(x int, value *Tree) *Tree {
 	if value == sharedTreeLeaf {
-		return &Tree{Node0: sharedTreeLeaf, Node1: x, Node2: sharedTreeLeaf}
+		return Node(sharedTreeLeaf, x, sharedTreeLeaf)
 	}
 	left := value.Node0
 	y := value.Node1
@@ -126,26 +126,20 @@ func insertReusing(x int32, value *Tree) *Tree {
 	if x < y {
 		field := insertReusing(x, left)
 		value.Node0 = field
-		value.Node1 = y
-		value.Node2 = right
 		return value
 	}
 	if x > y {
 		field := insertReusing(x, right)
-		value.Node0 = left
-		value.Node1 = y
 		value.Node2 = field
 		return value
 	}
-	value.Node0 = left
-	value.Node1 = y
-	value.Node2 = right
 	return value
 }
 ```
 
 Each tree in the fold is dropped as soon as the next one is built, so `insert` can overwrite the
-nodes it takes apart instead of allocating new ones. Iris writes a second version of `insert` that
+nodes it takes apart instead of allocating new ones, writing only the field that changed. Iris
+writes a second version of `insert` that
 does that, and calls it where the old tree is dead. A tree you still hold elsewhere gets the plain
 `insert`, which copies.
 
@@ -174,12 +168,12 @@ main = do
 ```go
 func main() {
 	argv := os.Args()
-	step, count := array.RangeSteps(1, int32(len(argv))+1000)
-	var accumulatorCount float64 = 0.0
-	var accumulatorSum float64 = 0.0
-	var accumulatorSumOfSquares float64 = 0.0
+	step, count := array.RangeSteps(1, len(argv)+1000)
+	accumulatorCount := 0.0
+	accumulatorSum := 0.0
+	accumulatorSumOfSquares := 0.0
 	for index := range count {
-		i := 1 + int32(index)*step
+		i := 1 + index*step
 		x := float64(i)
 		accumulatorCount += 1.0
 		accumulatorSum += x
@@ -205,7 +199,7 @@ simulate steps body
 ```
 
 ```go
-func simulate(steps int32, body shared.Body) shared.Body {
+func simulate(steps int, body shared.Body) shared.Body {
 	for {
 		if steps <= 0 {
 			return body
@@ -228,7 +222,8 @@ main = do
   let prices = map toNumber (1 .. (length argv + 1000))
   let withTax = map (\p -> p * 1.19) prices
   let total = foldl (+) 0.0 withTax
-  log (show (length withTax) <> " prices, total " <> show total)
+  let dearest = foldl max 0.0 withTax
+  log (show total <> " in total, the dearest " <> show dearest)
 ```
 
 `main.go`:
@@ -236,14 +231,14 @@ main = do
 ```go
 func main() {
 	argv := os.Args()
-	step, count := array.RangeSteps(1, int32(len(argv))+1000)
+	step, count := array.RangeSteps(1, len(argv)+1000)
 	mapped := make([]float64, count)
 	for index := range count {
-		i := 1 + int32(index)*step
+		i := 1 + index*step
 		p := float64(i)
 		mapped[index] = p * 1.19
 	}
-	console.Print(strconv.Itoa(len(mapped)) + " prices, total " + prim.ShowNumber(foldLanes(mapped, 0.0)))
+	console.Print(prim.ShowNumber(foldLanes(mapped, 0.0)) + " in total, the dearest " + prim.ShowNumber(foldLanes2(mapped, 0.0)))
 }
 ```
 
@@ -282,10 +277,13 @@ func foldLanes(xs []float64, initial float64) float64 {
 }
 ```
 
-`withTax` is used twice, so it's built, and the `foldl (+)` over it is a kernel of its own. Next to
-`main.go` you get one file per target: `main_neon.go` for arm64, `main_vector.go` for wasm, and
-`main_scalar.go`, a plain loop, for everything else or when `GOEXPERIMENT=simd` is off.
-`googoo run --go` turns the experiment on for you.
+`withTax` is used twice, so it's built, and each fold over it is a kernel of its own: `foldLanes`
+for the sum, shown above, and `foldLanes2` for the `max`. Next to `main.go` you get one file per
+target: `main_neon.go` for arm64, `main_vector.go` for wasm, and `main_scalar.go`, a plain loop,
+for everything else or when `GOEXPERIMENT=simd` is off. `googoo run --go` turns the experiment on
+for you.
+
+Vectors are for `Number`, `Int64` and `UInt64`. A fold over an `Array Int` is a plain loop.
 
 A vector adds up several elements at a time, so a `Number` sum can differ from JavaScript's in its
 last digits. [Sums over vectors](../go-output.md#sums-over-vectors) says which folds and maps run
@@ -321,36 +319,35 @@ main = do
 ```go
 func main() {
 	argv := os.Args()
-	xs := array.RangeInt32(1, int32(len(argv))+7)
-	array2 := array.Thaw(xs)()
-	n := int32(len(xs))
-	end := prim.IntDiv(n, 2)
-	elements := *array2
-	for i := int32(0); i < end; i++ {
+	xs := array.Range(1, len(argv)+7)
+	array2 := *array.Thaw(xs)
+	n := len(xs)
+	end := n >> 1
+	for i := 0; i < end; i++ {
 		j := n - 1 - i
 		var peeked maybe.Int
-		if int(i) < len(elements) {
-			peeked = maybe.Int(elements[i])
+		if i < len(array2) {
+			peeked = maybe.JustInt(array2[i])
 		} else {
 			peeked = maybe.NoInt
 		}
 		var peeked2 maybe.Int
-		if j >= 0 && int(j) < len(elements) {
-			peeked2 = maybe.Int(elements[j])
+		if j >= 0 && j < len(array2) {
+			peeked2 = maybe.JustInt(array2[j])
 		} else {
 			peeked2 = maybe.NoInt
 		}
-		if peeked != maybe.NoInt && peeked2 != maybe.NoInt {
-			if int(i) < len(elements) {
-				elements[i] = int32(peeked2)
+		if peeked.Tag == maybe.TagJust && peeked2.Tag == maybe.TagJust {
+			if i < len(array2) {
+				array2[i] = peeked2.Just
 			}
-			if j >= 0 && int(j) < len(elements) {
-				elements[j] = int32(peeked)
+			if j >= 0 && j < len(array2) {
+				array2[j] = peeked.Just
 			}
 		}
 	}
-	performed := array.UnsafeFreeze(array2)()
-	console.Print(string(show.AppendShowArrayInt(nil, performed)))
+	performed := shared.Frozen(array2)
+	console.Print(show.ArrayInt(performed))
 }
 ```
 
@@ -375,33 +372,33 @@ reverseInPlace xs = STArray.run do
 ```
 
 ```go
-	for i := int32(0); i < end; i++ {
+	for i := 0; i < end; i++ {
 		j := n - 1 - i
-		var i2 int32
-		var i3 int32
-		if int(i) < len(elements) && j >= 0 && int(j) < len(elements) {
-			i2 = elements[i]
-			i3 = elements[j]
-			elements[i] = i3
-			elements[j] = i2
+		var i2 int
+		var i3 int
+		if i < len(array2) && j >= 0 && j < len(array2) {
+			i2 = array2[i]
+			i3 = array2[j]
+			array2[i] = i3
+			array2[j] = i2
 		} else {
-			within := int(i) < len(elements)
+			within := i < len(array2)
 			if within {
-				i2 = elements[i]
+				i2 = array2[i]
 			} else {
 				i2 = 0
 			}
-			within2 := j >= 0 && int(j) < len(elements)
+			within2 := j >= 0 && j < len(array2)
 			if within2 {
-				i3 = elements[j]
+				i3 = array2[j]
 			} else {
 				i3 = 0
 			}
-			if int(i) < len(elements) {
-				elements[i] = i3
+			if i < len(array2) {
+				array2[i] = i3
 			}
-			if j >= 0 && int(j) < len(elements) {
-				elements[j] = i2
+			if j >= 0 && j < len(array2) {
+				array2[j] = i2
 			}
 		}
 	}

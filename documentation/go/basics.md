@@ -25,13 +25,13 @@ main = do
 ```go
 func main() {
 	console.Print("43")
-	console.Print(prim.ShowNumber(1.5))
+	console.Print("1.5")
 	console.Print("Iris!")
 }
 ```
 
 `answer`, `ratio` and `name` are gone, and so are `+`, `*` and `<>`: Iris did the sums, and
-`show 43` is just `"43"`. Small functions get copied into the code that calls them, so whatever
+`show 43` is just `"43"`, `show 1.5` just `"1.5"`. Small functions get copied into the code that calls them, so whatever
 depends only on constants ends up computed too.
 
 That's why most examples on these pages start with `argv <- args` (from `Go.OS`) and use
@@ -58,16 +58,11 @@ main = do
 ```go
 func main() {
 	argv := os.Args()
-	count := int32(len(argv))
-	word := "args: " + strconv.Itoa(int(count))
-	codeUnitCharAt := prim.CodeUnitCharAt(func(payload rune) maybe.Char {
-		return maybe.Char(payload)
-	}, maybe.NoChar, 0, word)
-	var first rune
-	if codeUnitCharAt == maybe.NoChar {
+	count := len(argv)
+	word := "args: " + strconv.Itoa(count)
+	first, found := prim.CodeUnitCharAt(0, word)
+	if !found {
 		first = '?'
-	} else {
-		first = rune(codeUnitCharAt)
 	}
 	console.Print(word)
 	console.Print(prim.ShowNumber(float64(count) / 2.0))
@@ -78,11 +73,15 @@ func main() {
 
 | PureScript | Go |
 | --- | --- |
-| `Int` | `int32` |
+| `Int` | `int` |
 | `Number` | `float64` |
 | `String` | `string` |
 | `Boolean` | `bool` |
 | `Char` | `rune` |
+
+`length` is Go's `len` as it is, no conversion. An `int` is 64 bits on the machines Go runs on, so
+an `Int` that grows past 32 bits keeps going where JavaScript would wrap around:
+[`Int` is Go's `int`](../go-output.md#int-is-gos-int) has the details.
 
 A `let` that's used once is written where it's used, like `half` and `many` here. One that's used
 more than once becomes a Go variable, like `word`, and so does an `if` or a `case`, like `first`.
@@ -111,28 +110,28 @@ main = do
 ```go
 func main() {
 	argv := os.Args()
-	n := int32(len(argv))
+	n := len(argv)
 	var result string
 	if n == 0 {
 		result = "no apple"
 	} else if n == 1 {
-		result = "one apple for " + prim.ShowNumber(1.25)
+		result = "one apple for 1.25"
 	} else {
-		result = strconv.Itoa(int(n)) + " apples for " + prim.ShowNumber(1.125)
+		result = strconv.Itoa(n) + " apples for 1.125"
 	}
 	console.Print(result)
 	console.Print(mainPears(n+1, 0.8))
 	console.Print(mainPears(n+2, 0.8))
 }
 
-func mainPears(amount int32, price float64) string {
+func mainPears(amount int, price float64) string {
 	if amount == 0 {
 		return "no pear"
 	}
 	if amount == 1 {
 		return "one pear for " + prim.ShowNumber(price)
 	}
-	return strconv.Itoa(int(amount)) + " pears for " + prim.ShowNumber(price*0.9)
+	return strconv.Itoa(amount) + " pears for " + prim.ShowNumber(price*0.9)
 }
 ```
 
@@ -172,16 +171,16 @@ type Address struct {
 type Person struct {
 	Address Address
 	Name    string
-	Age     int32
+	Age     int
 }
 
 func main() {
 	argv := os.Args()
-	ada := shared.Person{Name: "Ada", Age: 36 + int32(len(argv)), Address: shared.Address{Street: "St James's Square", City: "London"}}
-	console.Print(ada.Name + " (" + strconv.Itoa(int(ada.Age)) + ") lives in " + ada.Address.City)
+	ada := shared.Person{Name: "Ada", Age: 36 + len(argv), Address: shared.Address{Street: "St James's Square", City: "London"}}
+	console.Print(ada.Name + " (" + strconv.Itoa(ada.Age) + ") lives in " + ada.Address.City)
 	ada.Age += 1
 	ada.Address.City = "Paris"
-	console.Print(ada.Name + " (" + strconv.Itoa(int(ada.Age)) + ") lives in " + ada.Address.City)
+	console.Print(ada.Name + " (" + strconv.Itoa(ada.Age) + ") lives in " + ada.Address.City)
 }
 ```
 
@@ -228,16 +227,31 @@ const (
 	ShapeDot
 )
 
+func Circle(circle float64) Shape {
+	return Shape{Tag: ShapeCircle, Circle: circle}
+}
+
+func Rectangle(rectangle0 float64, rectangle1 float64) Shape {
+	return Shape{Tag: ShapeRectangle, Rectangle0: rectangle0, Rectangle1: rectangle1}
+}
+
 func main() {
 	argv := os.Args()
-	for _, shape := range array.Append([]Shape{{Tag: ShapeCircle, Circle: 1.0}, {Tag: ShapeRectangle, Rectangle0: 2.0, Rectangle1: 3.0}, {Tag: ShapeDot}}, array.Replicate(int32(len(argv)), Shape{Tag: ShapeDot})) {
+	shape := Shape{Tag: ShapeDot}
+	value := shape
+	built := make([]Shape, len(argv)+3)
+	built[0], built[1], built[2] = Circle(1.0), Rectangle(2.0, 3.0), shape
+	for index := range len(argv) {
+		built[index+3] = value
+	}
+	for _, shape2 := range built {
 		var result float64
-		switch shape.Tag {
+		switch shape2.Tag {
 		case ShapeCircle:
-			r := shape.Circle
+			r := shape2.Circle
 			result = 3.14159 * r * r
 		case ShapeRectangle:
-			result = shape.Rectangle0 * shape.Rectangle1
+			result = shape2.Rectangle0 * shape2.Rectangle1
 		default: // ShapeDot
 			result = 0.0
 		}
@@ -247,7 +261,9 @@ func main() {
 ```
 
 A data type is one struct with a field for each constructor argument and a `Tag` that says which
-constructor it is. The struct is a plain value, so an array of shapes is one block of memory.
+constructor it is, and a constructor with arguments is a Go function that fills it in. The struct
+is a plain value, so an array of shapes is one block of memory: `<>` with `replicate` makes one
+slice of the right length and fills it.
 
 A data type whose constructors have no arguments is just a number:
 
@@ -280,12 +296,12 @@ sum = case _ of
 type Tree struct {
 	Node0 *Tree
 	Node2 *Tree
-	Node1 int32
+	Node1 int
 }
 
 var sharedTreeLeaf = &Tree{}
 
-func sum(value *Tree) int32 {
+func sum(value *Tree) int {
 	if value == sharedTreeLeaf {
 		return 0
 	}
@@ -322,22 +338,21 @@ type Reading struct {
 
 func main() {
 	argv := os.Args()
-	step, count := array.RangeSteps(1, int32(len(argv))+2)
-	mapped := make([]shared.Reading, count)
+	step, count := array.RangeSteps(1, len(argv)+2)
+	mapped := make([]float64, count)
 	for index := range count {
-		i := 1 + int32(index)*step
-		mapped[index] = shared.Reading{City: "City " + strconv.Itoa(int(i)), Temperature: float64(i) * 10.0}
+		i := 1 + index*step
+		rTemperature := float64(i) * 10.0
+		mapped[index] = rTemperature*9.0/5.0 + 32.0
 	}
-	mapped2 := make([]float64, len(mapped))
-	for index := range mapped {
-		mapped2[index] = mapped[index].Temperature*9.0/5.0 + 32.0
-	}
-	console.Print(string(show.AppendShowArrayNumber(nil, mapped2)))
-	console.Print(strconv.Itoa(len(mapped)))
+	console.Print(show.ArrayNumber(mapped))
+	console.Print(strconv.Itoa(count))
 }
 ```
 
-A `Celsius` is a `float64`. Wrapping and unwrapping it costs nothing.
+A `Celsius` is a `float64`. Wrapping and unwrapping it costs nothing. The readings themselves are
+never built either: the two `map`s run as one loop, nobody reads `city`, and `length readings` is
+the length of the range.
 
 ## `Maybe` and `Either`
 
@@ -363,54 +378,46 @@ main = do
 ```
 
 ```go
-type EitherStringInt struct {
-	Left  string
-	Right int32
-	Tag   uint8
-}
-
 type String struct {
 	Just string
 	Tag  uint8
 }
 
+type StringFailure struct {
+	Failed bool
+	Left   string
+}
+
 func main() {
 	argv := os.Args()
-	numbers := array.RangeInt32(0, int32(len(argv))+3)
-	mapped := make([]either.EitherStringInt, len(numbers))
-	for index, element := range numbers {
-		mapped[index] = parse(element)
-	}
-	for eitherIndex := range mapped {
-		switch mapped[eitherIndex].Tag {
-		case either.EitherStringIntLeft:
-			console.Print(mapped[eitherIndex].Left)
-		default: // either.EitherStringIntRight
-			console.Print(strconv.Itoa(int(mapped[eitherIndex].Right)))
+	numbers := array.Range(0, len(argv)+3)
+	for _, element := range numbers {
+		i, err := parse(element)
+		if err.Failed {
+			console.Print(err.Left)
+		} else {
+			console.Print(strconv.Itoa(i))
 		}
 	}
-	mapped2 := make([]maybe.String, len(numbers))
-	for index, element := range numbers {
-		mapped2[index] = nickname(element)
-	}
-	for maybeIndex := range mapped2 {
-		switch mapped2[maybeIndex].Tag {
+	for _, element := range numbers {
+		maybe2 := nickname(element)
+		switch maybe2.Tag {
 		case maybe.TagNothing:
 			console.Print("-")
 		default: // maybe.TagJust
-			console.Print(mapped2[maybeIndex].Just)
+			console.Print(maybe2.Just)
 		}
 	}
 }
 
-func parse(n int32) either.EitherStringInt {
+func parse(n int) (int, either.StringFailure) {
 	if n > 2 {
-		return either.EitherStringInt{Tag: either.EitherStringIntLeft, Left: "too big: " + strconv.Itoa(int(n))}
+		return 0, either.StringFailure{Failed: true, Left: "too big: " + strconv.Itoa(n)}
 	}
-	return either.EitherStringInt{Tag: either.EitherStringIntRight, Right: n * 10}
+	return n*10, either.StringFailure{}
 }
 
-func nickname(n int32) maybe.String {
+func nickname(n int) maybe.String {
 	if n == 1 {
 		return maybe.JustString("one")
 	}
@@ -418,11 +425,13 @@ func nickname(n int32) maybe.String {
 }
 ```
 
-`Maybe` and `Either` are data types like any other, with a struct for each type they hold:
-`maybe.String` is a `Maybe String`, `either.EitherStringInt` an `Either String Int`.
+`Maybe` is a data type like any other, with a struct for each type it holds: `maybe.String` is a
+`Maybe String`. A function that returns an `Either` returns two things the Go way: the `Right`
+value, and an `either.StringFailure` that says whether it failed and holds the `Left`. Neither
+`map` builds an array, each `for_` calls the function as it goes.
 
-A `Maybe Int` or a `Maybe Char` doesn't need a struct. It's a 64-bit number, and `Nothing` is a
-value no `Int` can have:
+A `Maybe Int` is a struct too, `maybe.Int`. When you match on a `find` right away, the search runs
+inside the loop that makes the numbers, and no array is built at all:
 
 ```purescript
 firstEven :: Array Int -> Maybe Int
@@ -440,33 +449,49 @@ main = do
 ```go
 package maybe
 
-type Int int64
+type Int struct {
+	Just int
+	Tag  uint8
+}
 
-const NoInt Int = 1 << 32
+var NoInt = Int{Tag: TagNothing}
+
+func JustInt(just int) Int {
+	return Int{Tag: TagJust, Just: just}
+}
 ```
 
 ```go
 func main() {
 	argv := os.Args()
-	step, count := array.RangeSteps(0, int32(len(argv))+2)
-	mapped := make([]int32, count)
-	for index := range count {
-		value := int32(index) * step
-		mapped[index] = value + 1
-	}
+	step, count := array.RangeSteps(0, len(argv)+2)
 	found := maybe.NoInt
-	for index, n := range mapped {
-		if prim.IntMod(n, 2) == 0 {
-			found = maybe.Int(int32(index))
+	for index := range count {
+		value := index * step
+		n := value + 1
+		if n&1 == 0 {
+			found = maybe.JustInt(n)
 			break
 		}
 	}
-	if found != maybe.NoInt {
-		console.Print("first even: " + strconv.Itoa(int(mapped[int32(found)])))
-		return
+	switch found.Tag {
+	case maybe.TagNothing:
+		console.Print("all odd")
+	default: // maybe.TagJust
+		console.Print("first even: " + strconv.Itoa(found.Just))
 	}
-	console.Print("all odd")
 }
+```
+
+A `Maybe Char` doesn't need a struct. It's a 64-bit number, and `Nothing` is a value no `Char` can
+have:
+
+```go
+package maybe
+
+type Char int64
+
+const NoChar Char = 1 << 32
 ```
 
 ## Type classes are resolved at compile time
@@ -499,12 +524,12 @@ main = do
 ```go
 func main() {
 	argv := os.Args()
-	step, count := array.RangeSteps(0, int32(len(argv))+3)
+	step, count := array.RangeSteps(0, len(argv)+3)
 	mapped := make([]Card, count)
 	for index := range count {
-		i := int32(index) * step
+		i := index * step
 		var result Suit
-		if prim.IntMod(i, 2) == 0 {
+		if i&1 == 0 {
 			result = SuitHearts
 		} else {
 			result = SuitSpades
@@ -515,70 +540,34 @@ func main() {
 	for index := range mapped {
 		mapped2[index] = mapped[index].Suit
 	}
-	for _, suit := range direct.SortBy(compare, func(value ordering.Ordering) int32 {
-		switch value {
-		case ordering.OrderingGT:
-			return 1
-		case ordering.OrderingEQ:
-			return 0
-		default: // ordering.OrderingLT
-			return -1
-		}
-	}, mapped2) {
-		var result string
-		switch suit {
-		case SuitHearts:
-			result = "♥"
-		default: // SuitSpades
-			result = "♠"
-		}
-		console.Print(result)
+	sorted := slices.Clone(mapped2)
+	slices.Sort(sorted)
+	for _, suit := range sorted {
+		console.Print(show(suit))
 	}
 	mapped3 := make([]string, len(mapped))
 	for index, element := range mapped {
 		mapped3[index] = showCard(element)
 	}
-	console.Print(string(show.AppendShowArrayString(nil, mapped3)))
-	console.Print(strconv.FormatBool(array.Eq(eqCardConsIntConsSuitNil, mapped, mapped)))
+	console.Print(datashow.ArrayString(mapped3))
+	console.Print(strconv.FormatBool(array.Eq(eq, mapped, mapped)))
+}
+
+func show(suit Suit) string {
+	switch suit {
+	case SuitHearts:
+		return "♥"
+	default: // SuitSpades
+		return "♠"
+	}
 }
 
 func showCard(card Card) string {
-	var result string
-	switch card.Suit {
-	case SuitHearts:
-		result = "♥"
-	default: // SuitSpades
-		result = "♠"
-	}
-	return strconv.Itoa(int(card.Rank)) + result
+	return strconv.Itoa(card.Rank) + show(card.Suit)
 }
 
-func compare(left Suit, right Suit) ordering.Ordering {
-	if left == SuitHearts && right == SuitHearts {
-		return ordering.OrderingEQ
-	}
-	if left == SuitHearts {
-		return ordering.OrderingLT
-	}
-	if right == SuitHearts {
-		return ordering.OrderingGT
-	}
-	return ordering.OrderingEQ
-}
-
-func eqCardConsIntConsSuitNil(ra Card, rb Card) bool {
-	scrutinee := eqCardConsIntConsSuitNilGet2(ra)
-	scrutinee2 := eqCardConsIntConsSuitNilGet2(rb)
-	tail := scrutinee == SuitHearts && scrutinee2 == SuitHearts || scrutinee == SuitSpades && scrutinee2 == SuitSpades
-	return eqCardConsIntConsSuitNilGet(ra) == eqCardConsIntConsSuitNilGet(rb) && tail
-}
-
-func eqCardConsIntConsSuitNilGet(card Card) int32 {
-	return card.Rank
-}
-
-func eqCardConsIntConsSuitNilGet2(card Card) Suit {
-	return card.Suit
+func eq(ra Card, rb Card) bool {
+	return ra == rb
 }
 ```
 
@@ -592,9 +581,11 @@ true
 ```
 
 There are no dictionaries. Iris knows which instance each `show`, `compare` and `==` means, and
-writes that instance's code where it's used: `show suit` is a `switch`, `show rank` is
-`strconv.Itoa`, the derived `Ord Suit` is the function `compare`, and `==` on two arrays of cards
-gets an equality function for `Card`.
+writes that instance's code where it's used: `show suit` is a function with a `switch`, `show rank`
+is `strconv.Itoa`, and the derived `Ord Suit` orders the constructors the way Go orders their
+numbers, so `sort` is `slices.Sort`. `==` on two arrays of cards gets an equality function for
+`Card`, and since every field of a `Card` compares like a Go value, that's Go's `==` on the
+struct.
 
 ## Polymorphic functions get one copy per type
 
@@ -625,22 +616,29 @@ main = do
 ```go
 func main() {
 	argv := os.Args()
-	ints := array.RangeInt32(1, int32(len(argv))+5)
-	mapped := make([]string, len(ints))
-	for index, i := range ints {
-		mapped[index] = "w" + strconv.Itoa(int(i))
+	var length int
+	if 0 <= len(argv)+4 {
+		length = len(argv) + 5
+	} else {
+		length = -len(argv) - 3
 	}
-	console.Print(strconv.FormatBool(mainGo(ints, 0, int32(len(ints))-1)))
-	console.Print(strconv.FormatBool(mainGo2(mapped, 0, int32(len(mapped))-1)))
+	var step int
+	if 0 <= len(argv)+4 {
+		step = 1
+	} else {
+		step = -1
+	}
+	console.Print(strconv.FormatBool(mainGo(step, 0, length-1)))
+	console.Print(strconv.FormatBool(mainGo2(step, 0, length-1)))
 }
 
-func mainGo(ints []int32, low int32, high int32) bool {
+func mainGo(step int, low int, high int) bool {
 	for {
 		if low > high {
 			return false
 		}
-		mid := prim.IntDiv(low+high, 2)
-		y := ints[mid]
+		mid := (low + high) >> 1
+		y := 1 + mid*step
 		if 4 < y {
 			high = mid - 1
 			continue
@@ -652,14 +650,14 @@ func mainGo(ints []int32, low int32, high int32) bool {
 	}
 }
 
-func mainGo2(words []string, low int32, high int32) bool {
+func mainGo2(step int, low int, high int) bool {
 	for {
 		if low > high {
 			return false
 		}
-		mid := prim.IntDiv(low+high, 2)
-		y := words[mid]
-		if prim.CompareString("w9", y) < 0 {
+		mid := (low + high) >> 1
+		y := "w" + strconv.Itoa(1+mid*step)
+		if "w9" < y {
 			high = mid - 1
 			continue
 		}
@@ -671,12 +669,15 @@ func mainGo2(words []string, low int32, high int32) bool {
 }
 ```
 
-`search` is used at two types, so there are two Go functions: one for `[]int32` that compares with
-`<`, and one for `[]string` that compares with `prim.CompareString`. The value you search for is
-baked in too. `compare x y` returning `EQ`, `LT` or `GT` turned into two plain comparisons.
+`search` is used at two types, so there are two Go functions, one for `Int`s and one for
+`String`s. The value you search for is baked in too, and `compare x y` returning `EQ`, `LT` or `GT`
+turned into two plain comparisons. Neither array is ever built: `ints` is a range and `words` a
+`map` over it, so each step of the search works out the one element it looks at, `1 + mid*step`
+or `"w" + strconv.Itoa(1+mid*step)`. The `if`s in `main` are the range's length and direction.
 
-Strings compare by UTF-16 code units, as they do in JavaScript, which is why `String` uses
-`prim.CompareString` rather than Go's `<`.
+Strings compare by UTF-16 code units, as they do in JavaScript. Go's `<` compares bytes, which
+gives the same answer when one side is a constant without characters from U+D800 up, like `"w9"`.
+Anywhere else `String` compares with `prim.CompareString`.
 
 ## Functions are values, and closures capture what they use
 
@@ -702,31 +703,33 @@ main = do
 
 ```go
 type Rule struct {
-	Check func(int32) bool
+	Check func(int) bool
 	Name  string
 }
 
 func main() {
 	argv := os.Args()
-	limit := int32(len(argv)) + 3
-	for i := int32(0); i < 5; i++ {
-		for _, rule := range []shared.Rule{{Name: "positive", Check: func(n int32) bool {
-			return n > 0
-		}}, {Name: "small", Check: func(n int32) bool {
-			return n < limit
-		}}, {Name: "even", Check: func(n int32) bool {
-			return prim.IntMod(n, 2) == 0
-		}}} {
+	limit := len(argv) + 3
+	rules := []shared.Rule{{Name: "positive", Check: func(n int) bool {
+		return n > 0
+	}}, {Name: "small", Check: func(n int) bool {
+		return n < limit
+	}}, {Name: "even", Check: func(n int) bool {
+		return n&1 == 0
+	}}}
+	for i := 0; i < 5; i++ {
+		for _, rule := range rules {
 			if rule.Check(i) {
-				console.Print(strconv.Itoa(int(i)) + " is " + rule.Name)
+				console.Print(strconv.Itoa(i) + " is " + rule.Name)
 			}
 		}
 	}
 }
 ```
 
-An `Int -> Boolean` is a `func(int32) bool`, and a lambda is a Go function literal. `\n -> n < limit`
-captures `limit` the way any Go closure does. A function you pass to `map`, `filter` or `for_` is
+An `Int -> Boolean` is a `func(int) bool`, and a lambda is a Go function literal. `\n -> n < limit`
+captures `limit` the way any Go closure does. `rules limit` doesn't change from one `n` to the
+next, so it's built once, before the loops. A function you pass to `map`, `filter` or `for_` is
 usually written straight into the loop instead, so it never exists as a value.
 
 ## Arrays are slices
@@ -747,19 +750,27 @@ main = do
 ```go
 func main() {
 	argv := os.Args()
-	more := array.Snoc(array.Append([]int32{70, 85, 92}, array.RangeInt32(0, int32(len(argv)))), int32(100))
+	step, count := array.RangeSteps(0, len(argv))
+	built := make([]int, count+3, count+4)
+	built[0], built[1], built[2] = 70, 85, 92
+	for index := range count {
+		element := index * step
+		built[index+3] = element
+	}
+	more := append(built, 100)
 	console.Print(strconv.Itoa(len(more)))
-	console.Print(string(show.AppendShowArrayInt(nil, array.Reverse(more))))
-	if 1 < int32(len(more)) {
-		console.Print("second: " + strconv.Itoa(int(more[1])))
+	console.Print(show.ArrayInt(array.Reverse(more)))
+	if len(more) > 1 {
+		console.Print("second: " + strconv.Itoa(more[1]))
 		return
 	}
 	console.Print("too short")
 }
 ```
 
-An `Array Int` is a `[]int32`, and `length` is `len`. `more !! 1` returns a `Maybe`, but matching
-on it right away leaves only the bounds test and the index.
+An `Array Int` is a `[]int`, and `length` is `len`. `<>` and `snoc` fill one slice, made with room
+for the `100` that `snoc` adds. `more !! 1` returns a `Maybe`, but matching on it right away leaves
+only the bounds test and the index.
 
 ## Recursion, and tail recursion as a loop
 
@@ -779,23 +790,27 @@ countdown acc n = if n <= 0 then acc else countdown (acc + n) (n - 1)
 ```
 
 ```go
-func insert(x int32, value *Tree) *Tree {
+func Node(node0 *Tree, node1 int, node2 *Tree) *Tree {
+	return &Tree{Node0: node0, Node1: node1, Node2: node2}
+}
+
+func insert(x int, value *Tree) *Tree {
 	if value == sharedTreeLeaf {
-		return &Tree{Node0: sharedTreeLeaf, Node1: x, Node2: sharedTreeLeaf}
+		return Node(sharedTreeLeaf, x, sharedTreeLeaf)
 	}
 	left := value.Node0
 	y := value.Node1
 	right := value.Node2
 	if x < y {
-		return &Tree{Node0: insert(x, left), Node1: y, Node2: right}
+		return Node(insert(x, left), y, right)
 	}
 	if x > y {
-		return &Tree{Node0: left, Node1: y, Node2: insert(x, right)}
+		return Node(left, y, insert(x, right))
 	}
 	return value
 }
 
-func countdown(acc int32, n int32) int32 {
+func countdown(acc int, n int) int {
 	for {
 		if n <= 0 {
 			return acc
@@ -830,7 +845,7 @@ main = do
 ```go
 func main() {
 	argv := os.Args()
-	for _, quantity := range []int32{1, 10 + int32(len(argv)), 20} {
+	for _, quantity := range []int{1, 10 + len(argv), 20} {
 		subtotal := float64(quantity) * 2.5
 		var discount float64
 		if quantity >= 10 {
@@ -865,12 +880,12 @@ main = do
 ```go
 func main() {
 	argv := os.Args()
-	var total int32 = 0
-	step, count := array.RangeSteps(1, int32(len(argv))+4)
+	total := 0
+	step, count := array.RangeSteps(1, len(argv)+4)
 	for index := range count {
-		i := 1 + int32(index)*step
+		i := 1 + index*step
 		total += i
-		console.Print("running total: " + strconv.Itoa(int(total)))
+		console.Print("running total: " + strconv.Itoa(total))
 	}
 	if total > 5 {
 		console.Print("that's a lot")
