@@ -46,8 +46,8 @@ where
             Ok(held) => return Ok(held),
             Err(value) => value,
         };
-        let from = self.opaque_when_uninhabited(from)?;
-        let to = self.opaque_when_uninhabited(to)?;
+        let from = self.opaque_when_any_value(from)?;
+        let to = self.opaque_when_any_value(to)?;
         if from == to || (self.same_go_type(from, to)? && !self.performs_differently(from, to)) {
             return Ok(value);
         }
@@ -541,9 +541,17 @@ where
         self.unfolds_only_to_newtypes(data, unfolded)
     }
 
-    fn opaque_when_uninhabited(&mut self, monotype: MonotypeId) -> GoResult<MonotypeId> {
+    fn opaque_when_any_value(&mut self, monotype: MonotypeId) -> GoResult<MonotypeId> {
         match self.monotypes.get(monotype).clone() {
             Monotype::Recursive(data) if self.is_uninhabited(&data)? => {
+                Ok(self.monotypes.intern(Monotype::Opaque))
+            }
+            Monotype::ForeignData(data)
+                if self
+                    .monotypes
+                    .empty_interface_foreign_data
+                    .contains(&(data.file_id, data.item)) =>
+            {
                 Ok(self.monotypes.intern(Monotype::Opaque))
             }
             _ => Ok(monotype),

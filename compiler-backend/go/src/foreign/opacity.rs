@@ -11,6 +11,7 @@ pub struct Opacity {
     pub called_in_place: FxHashMap<String, Vec<usize>>,
     /// The shapes of each function's value parameters and of its one result.
     pub signatures: FxHashMap<String, ForeignSignature>,
+    pub interface_aliases: FxHashSet<String>,
 }
 
 /// What a foreign function's signature says about its values, in terms of its type parameters.
@@ -559,12 +560,31 @@ impl Package {
             types: types.collect(),
             unreadable: None,
             called_in_place: self.called_in_place(),
+            interface_aliases: self.interface_aliases(),
             signatures: self
                 .functions
                 .iter()
                 .map(|function| (function.name.clone(), signature_shapes(function)))
                 .collect(),
         }
+    }
+
+    fn interface_aliases(&self) -> FxHashSet<String> {
+        let aliases_the_empty_interface = |declaration: &&TypeDeclaration| {
+            declaration.type_parameters.is_empty()
+                && match declaration.definition.as_slice() {
+                    [equals, any] => equals.is("=") && any.is_word("any"),
+                    [equals, interface, open, close] => {
+                        equals.is("=")
+                            && interface.is_word("interface")
+                            && open.is("{")
+                            && close.is("}")
+                    }
+                    _ => false,
+                }
+        };
+        let aliases = self.types.iter().filter(aliases_the_empty_interface);
+        aliases.map(|declaration| declaration.name.clone()).collect()
     }
 
     fn called_in_place(&self) -> FxHashMap<String, Vec<usize>> {

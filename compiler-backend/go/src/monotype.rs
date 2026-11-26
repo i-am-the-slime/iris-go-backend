@@ -203,6 +203,7 @@ pub struct Monotypes {
     pub native_foreigns: rustc_hash::FxHashSet<(FileId, TermItemId)>,
     pub row_free_foreigns: rustc_hash::FxHashSet<(FileId, TermItemId)>,
     pub native_foreign_data: rustc_hash::FxHashSet<(FileId, TypeItemId)>,
+    pub empty_interface_foreign_data: rustc_hash::FxHashSet<(FileId, TypeItemId)>,
     pub uncurried_fields: FxHashMap<MonotypeId, UncurriedFields>,
     /// What the Go files next to each module's source declare.
     pub foreign_sources: Vec<crate::foreign::ForeignSource>,

@@ -21,6 +21,7 @@ struct ForeignData {
     name: String,
     generic: bool,
     boxed: Option<String>,
+    empty_interface: bool,
 }
 
 impl<'q, Q> Specializer<'q, Q>
@@ -71,6 +72,8 @@ where
             .collect();
         self.monotypes.native_foreigns = native_functions;
         self.monotypes.native_foreign_data = native_data;
+        self.monotypes.empty_interface_foreign_data =
+            data.iter().filter(|(_, data)| data.empty_interface).map(|(&key, _)| key).collect();
         Ok(())
     }
 
@@ -89,7 +92,8 @@ where
             let generic = declaration.is_some_and(|declaration| !declaration.parameters.is_empty());
             let boxed = boxed_reason(source, declaration, &go_name, None).filter(|_| generic);
             let name = format!("{}.{name}", module.name);
-            data.push(((file_id, item), ForeignData { name, generic, boxed }));
+            let empty_interface = source.opacity.interface_aliases.contains(&go_name);
+            data.push(((file_id, item), ForeignData { name, generic, boxed, empty_interface }));
         }
         Ok(data)
     }
