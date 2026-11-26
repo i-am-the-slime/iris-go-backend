@@ -1,0 +1,21 @@
+[-1,0,0,2,0]
+4
+[1,2,3,4]
+Nothing
+[(Tuple 0 -1),(Tuple 1 0),(Tuple 2 0),(Tuple 3 2),(Tuple 4 0)]
+x = 0
+y = 0
+name = "cell 0"
+colour = 0
+x = 1
+y = 2
+name = "cell 1"
+colour = 1
+x = 2
+y = 4
+name = "cell 2"
+colour = 2
+x = 3
+y = 6
+name = "cell 3"
+colour = 3

@@ -243,6 +243,8 @@ pub const ARRAY_APPEND: Foreign = array("Append", 2);
 
 pub const ARRAY_CONCAT: Foreign = array("Concat", 1);
 
+pub const ARRAY_REVERSE: Foreign = array("Reverse", 1);
+
 pub const ARRAY_THAW: Foreign = perform_in(GoPackage::Array, "Thaw", 1, PLAIN);
 
 pub const ARRAY_THAW_OWNED: Foreign = perform_in(GoPackage::Array, "ThawOwned", 1, PLAIN);
@@ -332,7 +334,7 @@ pub(super) const FOREIGN_IMPORTS: &[(&str, &str, Foreign)] = &[
     ("Data.Foldable", "foldrArray", ARRAY_FOLD_RIGHT),
     ("Data.Foldable", "foldlArray", ARRAY_FOLD),
     ("Data.Array", "length", Foreign::Operator(Operator::ArrayLength)),
-    ("Data.Array", "reverse", array("Reverse", 1)),
+    ("Data.Array", "reverse", ARRAY_REVERSE),
     ("Data.Array", "concat", ARRAY_CONCAT),
     ("Data.Array", "indexImpl", Foreign::MaybeIndex),
     ("Data.Array", "unsafeIndexImpl", Foreign::Operator(Operator::ArrayIndex)),

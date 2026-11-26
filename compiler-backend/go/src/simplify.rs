@@ -15,7 +15,7 @@ use crate::monomorphic::traversal::{
 use crate::monomorphic::{
     Alternative, Binding, Expression, ExpressionKind, Function, FunctionId, Guard, Guarded,
     GuardedBranch, Literal, Local, LocalId, PATTERN_MATCH_FAILURE, Pattern, PatternKind, Program,
-    RecordUpdate, SourcePosition,
+    RecordUpdate, Results, SourcePosition,
 };
 use crate::monotype::{Monotype, MonotypeId, Monotypes};
 use crate::naming::{is_vague, is_vaguely_spelled};
@@ -37,6 +37,7 @@ mod arguments;
 mod call_patterns;
 mod choice;
 mod coerced;
+mod constants;
 mod coverage;
 mod effects;
 mod find;
@@ -61,6 +62,9 @@ mod views;
 const INLINE_SIZE: usize = 40;
 
 const OWN_FUNCTION_SIZE: usize = 120;
+
+/// The size of a function that returns a closure copied to each of its calls.
+const CLOSURE_RESULT_SIZE: usize = 160;
 
 /// The size of a local helper that is copied to each of its calls whatever it works on.
 const TINY_HELPER: usize = 12;
@@ -118,6 +122,8 @@ pub fn simplify(
         argument_specializations: ArgumentSpecializations::default(),
         call_pattern_copies: CallPatternCopies::default(),
         appenders: FxHashSet::default(),
+        evaluated_constants: FxHashMap::default(),
+        stores_built: false,
         source_ranks: SourceRanks { entry: entry_file, home: None },
     };
     for component in &components {
@@ -197,6 +203,12 @@ struct Simplifier<'m> {
     /// The locals bound to the appender a traversal threads: `append values x` is `snoc values x`,
     /// which a loop that owns the values extends in place.
     appenders: FxHashSet<LocalId>,
+    /// What calls with constant arguments evaluated to at compile time, when that is a constant.
+    evaluated_constants:
+        FxHashMap<(FunctionId, Vec<Expression>, Option<SmolStr>), Option<Expression>>,
+    /// Whether the call being simplified is an element of an array literal, whose value is
+    /// stored rather than taken apart.
+    stores_built: bool,
     source_ranks: SourceRanks,
 }
 
@@ -319,7 +331,17 @@ impl Simplifier<'_> {
         let once = self.uses[id.0 as usize] == 1 && !self.stands_on_its_own(id, function);
         // A copy of a failure saves no work, only adds another place to fail; a copy of a loop
         // saves only a call, and repeats the whole loop at every call.
-        let small = self.sizes[id.0 as usize] <= INLINE_SIZE
+        // A function that answers with a constructor holding a closure, such as `Right` of the
+        // record builder a decoder composes field by field, is copied up to a larger size: at its
+        // call the closure is applied and resolves. One that returns a function is not: an `Event`
+        // is one, and most of the code that uses it builds more of them.
+        let holds_closure = matches!(self.monotypes.get(function.result), Monotype::Data(_))
+            && self.monotypes.holds_function(function.result);
+        let limit = match holds_closure {
+            true => CLOSURE_RESULT_SIZE,
+            false => INLINE_SIZE,
+        };
+        let small = self.sizes[id.0 as usize] <= limit
             && !can_fail(&function.body)
             && !runs_own_loop(&function.body);
         ((small || once) && !function.parameters.is_empty() || is_trivial(&function.body))
@@ -329,12 +351,19 @@ impl Simplifier<'_> {
     /// Whether a function called once stays a function of its own, as the programmer named it:
     /// one that is more than a few lines and works on plain values, such as `validRows` or a
     /// message's decoder. Copied into its caller it saves only a call, and the caller grows by
-    /// the whole of it. A function that takes or returns a function is still copied, since its
-    /// caller's lambdas then become plain code.
+    /// the whole of it. A function that takes or returns a function, or a record or array of
+    /// them such as a codec, is still copied, since its caller's lambdas then become plain code.
     fn stands_on_its_own(&self, id: FunctionId, function: &Function) -> bool {
-        let plain = |monotype: MonotypeId| !self.monotypes.holds_function(monotype);
-        self.sizes[id.0 as usize] > OWN_FUNCTION_SIZE
-            && function.parameters.iter().all(|parameter| plain(parameter.monotype))
+        let size = self.sizes[id.0 as usize];
+        let plain = |monotype: MonotypeId| !self.builds_functions(monotype, 2);
+        // A large function that takes records of functions, such as a test runner's reporters,
+        // stays one: only its result decides.
+        let plain_parameter = |monotype: MonotypeId| match size > 2 * OWN_FUNCTION_SIZE {
+            true => !self.monotypes.holds_function(monotype),
+            false => plain(monotype),
+        };
+        size > OWN_FUNCTION_SIZE
+            && function.parameters.iter().all(|parameter| plain_parameter(parameter.monotype))
             && plain(function.result)
     }
 
@@ -700,7 +729,16 @@ impl Simplifier<'_> {
                 ExpressionKind::Function(id)
             }
             ExpressionKind::Array(elements) => ExpressionKind::Array(
-                elements.into_iter().map(|element| self.expression(element)).collect(),
+                elements
+                    .into_iter()
+                    .map(|element| {
+                        // An element is stored, not taken apart: a builder called for one stays a call.
+                        self.stores_built = matches!(element.kind, ExpressionKind::Apply { .. });
+                        let element = self.expression(element);
+                        self.stores_built = false;
+                        element
+                    })
+                    .collect(),
             ),
             ExpressionKind::Closure { tag, captures } => ExpressionKind::Closure {
                 tag,
@@ -865,7 +903,7 @@ impl Simplifier<'_> {
                     return choice_at_case(distributed, position);
                 }
                 if let [scrutinee] = scrutinees.as_slice()
-                    && self.is_constant_path(scrutinee)
+                    && (self.is_constant_path(scrutinee) || is_built_record(scrutinee))
                     && let Some(fields) = destructured_fields(&alternatives)
                 {
                     let bindings = fields
@@ -951,10 +989,15 @@ impl Simplifier<'_> {
                 return self.effect_bind(action, local, body, monotype);
             }
             ExpressionKind::EffectEach { array, element, body, results } => {
+                let array = self.expression(*array);
+                let body = self.expression(*body);
+                if results == Results::Discarded && self.runs_each_of_literal(&array, &body) {
+                    return self.each_of_literal(array, element, body, monotype);
+                }
                 ExpressionKind::EffectEach {
-                    array: Box::new(self.expression(*array)),
+                    array: Box::new(array),
                     element,
-                    body: Box::new(self.expression(*body)),
+                    body: Box::new(body),
                     results,
                 }
             }
@@ -1009,6 +1052,7 @@ impl Simplifier<'_> {
         mut arguments: Vec<Expression>,
         monotype: crate::monotype::MonotypeId,
     ) -> Expression {
+        let stored = std::mem::take(&mut self.stores_built);
         if arguments.is_empty() {
             return function;
         }
@@ -1052,7 +1096,14 @@ impl Simplifier<'_> {
                         && !self.keeps_table_call(id, function, &arguments))
                     .then(|| (function.parameters.clone(), function.body.clone()))
                 });
+                let inlined = match stored {
+                    true => inlined,
+                    false => inlined.or_else(|| self.evaluated_call(id, &arguments)),
+                };
                 let Some((parameters, body)) = inlined else {
+                    if let Some(value) = self.evaluated_constant(id, &arguments, monotype) {
+                        return value;
+                    }
                     let arguments = match self.specialized_call(id, arguments, monotype) {
                         Ok(call) => return call,
                         Err(arguments) => arguments,
@@ -1150,6 +1201,7 @@ impl Simplifier<'_> {
             self.remember_unsafely_effectful(binding);
             self.pass_on_thunk_parameter(binding);
         }
+        let (bindings, body) = self.substituted_constant_arrays(bindings, body);
         let body = self.expression(body);
         let result = self.let_bindings(bindings, body);
         self.apply(result, rest, monotype)
@@ -1190,6 +1242,7 @@ impl Simplifier<'_> {
                 || trivial_record
                 || self.is_constant_path(&binding.value)
                 || self.is_coerced_record_read(&binding, &body)
+                || constants::is_consumed_literal_array(&binding, &body, &self.sizes)
                 || uses.total == 0
                 || (uses.total == 1
                     && (uses.under_lambda == 0 || self.does_no_work(&binding.value)))
@@ -1221,7 +1274,12 @@ impl Simplifier<'_> {
             } else if views::viewable(&binding, &body) {
                 body = self.view(binding, body);
             } else {
-                kept.push(binding);
+                // A lambda whose every call was evaluated is no longer needed.
+                let called = occurrences_up_to(&body, binding.local.id, 1).total > 0;
+                body = self.evaluated_local_calls(&binding, body);
+                if !called || occurrences_up_to(&body, binding.local.id, 1).total > 0 {
+                    kept.push(binding);
+                }
             }
         }
         if kept.is_empty() {
@@ -1233,6 +1291,10 @@ impl Simplifier<'_> {
     }
 
     fn field_of(&mut self, record: Expression, label: SmolStr, monotype: MonotypeId) -> Expression {
+        let record = match self.field_of_call(record, &label, monotype) {
+            Ok(field) => return field,
+            Err(record) => record,
+        };
         if let Some(value) = self.constant_field(&record, &label)
             && (value.monotype == monotype || self.monotypes.function_parts(monotype).is_none())
         {
@@ -1709,4 +1771,11 @@ fn choice_at_case(mut distributed: Expression, position: Option<SourcePosition>)
     }
     choice.position = choice.position.or(position);
     distributed
+}
+
+/// A record literal whose fields can be read one by one: a case that takes it apart reads each
+/// field it binds from the literal, and the others are dropped.
+fn is_built_record(expression: &Expression) -> bool {
+    matches!(&expression.kind, ExpressionKind::Record(fields)
+        if fields.iter().all(|(_, value)| is_discardable(value)))
 }

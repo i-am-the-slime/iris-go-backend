@@ -10,7 +10,7 @@ use super::coverage::column_outcomes;
 use crate::monomorphic::traversal::{
     for_each_alternative_child, for_each_child, for_each_child_mut,
 };
-use crate::monomorphic::{Binding, Expression, ExpressionKind, Local, LocalId};
+use crate::monomorphic::{Binding, Expression, ExpressionKind, Local, LocalId, RecordUpdate};
 use crate::monotype::Monotypes;
 
 /// Whether every use of the binding in the body takes its value apart.
@@ -64,10 +64,13 @@ impl Simplifier<'_> {
         };
         let locals: Vec<Local> = fields.iter().map(|field| field.local.clone()).collect();
         let mut body = body;
+        let updated = updates_whole(&body, id);
         take_apart(&mut body, id, &shape, &locals, self.monotypes);
         // A read became its field's local; a match resolves only when it is
         // simplified again.
         if let Shape::Construct(_) = shape {
+            body = self.expression(body);
+        } else if updated {
             body = self.expression(body);
         }
         self.let_bindings(fields, body)
@@ -100,6 +103,14 @@ fn only_taken_apart(
     match &expression.kind {
         ExpressionKind::Local(found) => *found != id,
         ExpressionKind::Access { record, .. } if construct.is_none() && is_whole(record) => true,
+        ExpressionKind::Update { record, updates } if construct.is_none() && is_whole(record) => {
+            updates.iter().all(|update| match update {
+                RecordUpdate::Leaf { value, .. } => {
+                    only_taken_apart(value, id, monotype, construct, monotypes)
+                }
+                RecordUpdate::Branch { .. } => false,
+            })
+        }
         ExpressionKind::Case { scrutinees, alternatives } => {
             let mut taken_apart = true;
             for (column, scrutinee) in scrutinees.iter().enumerate() {
@@ -149,6 +160,26 @@ fn take_apart(
             *expression = field;
             return;
         }
+        (ExpressionKind::Update { record, updates }, Shape::Record(labels)) if is_whole(record) => {
+            let mut values: Vec<(SmolStr, Expression)> = labels
+                .iter()
+                .zip(fields)
+                .map(|(label, field)| (label.clone(), field.expression()))
+                .collect();
+            for update in std::mem::take(updates) {
+                let RecordUpdate::Leaf { label, mut value } = update else {
+                    unreachable!("invariant violated: only leaf updates are taken apart")
+                };
+                take_apart(&mut value, id, shape, fields, monotypes);
+                let (_, slot) = values
+                    .iter_mut()
+                    .find(|(field, _)| *field == label)
+                    .expect("invariant violated: an update sets a field of its record");
+                *slot = value;
+            }
+            expression.kind = ExpressionKind::Record(values);
+            return;
+        }
         (ExpressionKind::Case { scrutinees, .. }, Shape::Construct(construct)) => {
             for scrutinee in scrutinees.iter_mut().filter(|scrutinee| is_whole(scrutinee)) {
                 *scrutinee = construct.as_ref().clone();
@@ -157,4 +188,15 @@ fn take_apart(
         _ => {}
     }
     for_each_child_mut(expression, &mut |child| take_apart(child, id, shape, fields, monotypes));
+}
+
+/// Whether the body updates the local's record: the update becomes a record of the fields,
+/// which reads of it then resolve.
+fn updates_whole(expression: &Expression, id: LocalId) -> bool {
+    let mut updates = false;
+    crate::monomorphic::traversal::visit(expression, &mut |node| {
+        updates |= matches!(&node.kind, ExpressionKind::Update { record, .. }
+            if matches!(record.kind, ExpressionKind::Local(found) if found == id));
+    });
+    updates
 }

@@ -1,0 +1,52 @@
+---
+source: tests-integration/src/fixtures.rs
+---
+// Data/Show/show.go
+package show
+
+import "strconv"
+
+func AppendShowArrayInt(buffer []byte, array []int) []byte {
+	buffer = append(buffer, '[')
+	for index, element := range array {
+		if index > 0 {
+			buffer = append(buffer, ',')
+		}
+		buffer = strconv.AppendInt(buffer, int64(element), 10)
+	}
+	buffer = append(buffer, ']')
+	return buffer
+}
+
+func ArrayInt(array []int) string {
+	return string(AppendShowArrayInt(nil, array))
+}
+
+// main.go
+package main
+
+import (
+	"fixture/Data/Show"
+	journal "fixture/Journal_ffi"
+	"fixture/shared"
+	"strconv"
+)
+
+func main() {
+	journal.Log(show.ArrayInt([]int{-1, 0, 0, 2}))
+	for n := 1; n < 4; n++ {
+		point := shared.Point{X: n, Y: n * n, Label: "point " + strconv.Itoa(n)}
+		journal.Log(strconv.Itoa(point.X))
+		journal.Log(strconv.Itoa(point.Y))
+		journal.Log(point.Label)
+	}
+}
+
+// shared/shared.go
+package shared
+
+type Point struct {
+	Label string
+	X     int
+	Y     int
+}

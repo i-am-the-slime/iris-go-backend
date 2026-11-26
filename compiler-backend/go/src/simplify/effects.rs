@@ -30,6 +30,10 @@ impl Simplifier<'_> {
         if let Some(value) = three_way::constant_comparison(foreign, &arguments) {
             return Expression::new(ExpressionKind::Literal(Literal::Boolean(value)), monotype);
         }
+        let arguments = match self.literal_array_operation(foreign, arguments, monotype) {
+            Ok(evaluated) => return evaluated,
+            Err(arguments) => arguments,
+        };
         let arguments = match self.short_circuit(foreign, arguments, monotype) {
             Ok(searched) => return searched,
             Err(arguments) => arguments,

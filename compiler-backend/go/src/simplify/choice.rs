@@ -51,6 +51,9 @@ impl Simplifier<'_> {
             | ExpressionKind::Let { .. }
             | ExpressionKind::Case { .. } => {
                 if let Some(placements) = plan(scrutinee, alternatives, self.monotypes) {
+                    if self.joins_closures(&placements, monotype) {
+                        return None;
+                    }
                     let unit = Expression::new(ExpressionKind::Unit, scrutinee.monotype);
                     (std::mem::replace(scrutinee, unit), placements)
                 } else {
@@ -63,6 +66,9 @@ impl Simplifier<'_> {
             }
             _ => return None,
         };
+        if self.joins_closures(&placements, monotype) {
+            return None;
+        }
         if let Some(bound) = self.bind_only_field(&scrutinee, alternatives, &placements) {
             return Some(bound);
         }
@@ -188,6 +194,15 @@ impl Simplifier<'_> {
         Some(self.let_bindings(vec![binding], body.clone()))
     }
 
+    /// Whether a join point would return a closure: a case whose alternatives build a function,
+    /// such as the `Builder` a record decoder composes field by field, keeps its scrutinee
+    /// whole, since a join point would build the closure on each call and hide it from the
+    /// application that follows.
+    fn joins_closures(&self, placements: &[Placement], monotype: MonotypeId) -> bool {
+        placements.iter().any(|placement| matches!(placement, Placement::Joined))
+            && self.builds_functions(monotype, 2)
+    }
+
     /// Each joined alternative's body as a local function of the alternative's
     /// variables, which the alternative calls instead: once lifted, a join
     /// point that several chosen values reach is one Go function.
@@ -259,7 +274,7 @@ impl Simplifier<'_> {
     /// `updateAt i x xs` as the choice the foreign makes: `Just` a copy of
     /// `xs` with `x` at `i` when `i` is within the array, and `Nothing`
     /// otherwise.
-    fn update_choice(
+    pub(super) fn update_choice(
         &mut self,
         arguments: Vec<Expression>,
         monotype: MonotypeId,
