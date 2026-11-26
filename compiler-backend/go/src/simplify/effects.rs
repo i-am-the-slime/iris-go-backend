@@ -162,6 +162,12 @@ impl Simplifier<'_> {
             Foreign::Ordering => self.ordering(arguments, monotype),
             Foreign::Operator(_) => self.operator(foreign, arguments, monotype),
             Foreign::Int64 { .. } => self.int64_operation(foreign, arguments, monotype),
+            foreign
+                if foreign.calls(crate::foreign::ARRAY_CONCAT)
+                    && matches!(arguments[0].kind, ExpressionKind::Array(_)) =>
+            {
+                self.concatenation(arguments, monotype)
+            }
             // A string's code units are the chars it was built from, one by one, lone
             // surrogates included: the array is its own.
             foreign
@@ -521,6 +527,47 @@ impl Simplifier<'_> {
             && self.thunk_parameters.contains(&binding.local.id)
         {
             self.thunk_parameters.insert(argument);
+        }
+    }
+
+    /// `concat [a, mempty, b]` without the arrays that are empty, such as `mempty`'s, and a
+    /// lone array that remains for itself: `[]` when none does.
+    fn concatenation(
+        &mut self,
+        mut arguments: Vec<Expression>,
+        monotype: MonotypeId,
+    ) -> Expression {
+        let array = arguments.pop().expect("invariant violated: concat has one argument");
+        let ExpressionKind::Array(mut arrays) = array.kind else {
+            unreachable!("invariant violated: the argument was just matched as an array")
+        };
+        arrays.retain(|array| !self.is_empty_array(array));
+        match arrays.len() {
+            0 => Expression::new(ExpressionKind::Array(vec![]), monotype),
+            1 => arrays.pop().expect("invariant violated: one array remains"),
+            _ => {
+                let array = Expression::new(ExpressionKind::Array(arrays), array.monotype);
+                let foreign = crate::foreign::ARRAY_CONCAT.interned();
+                Expression::new(
+                    ExpressionKind::Foreign { foreign, arguments: vec![array] },
+                    monotype,
+                )
+            }
+        }
+    }
+
+    pub(super) fn is_empty_array(&self, expression: &Expression) -> bool {
+        match &expression.kind {
+            ExpressionKind::Array(elements) => elements.is_empty(),
+            ExpressionKind::Coerce(value) => self.is_empty_array(value),
+            ExpressionKind::Function(id) => {
+                self.functions[id.0 as usize].as_ref().is_some_and(|function| {
+                    function.parameters.is_empty()
+                        && !self.recursive[id.0 as usize]
+                        && self.is_empty_array(&function.body)
+                })
+            }
+            _ => false,
         }
     }
 }

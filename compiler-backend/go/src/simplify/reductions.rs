@@ -195,6 +195,9 @@ impl Simplifier<'_> {
         monotype: MonotypeId,
     ) -> Result<Expression, Vec<Expression>> {
         let [array] = arguments.as_slice() else { return Err(arguments) };
+        if self.is_empty_array(array) {
+            return Ok(Expression::new(ExpressionKind::Literal(Literal::Int(0)), monotype));
+        }
         let ExpressionKind::Foreign {
             foreign: Foreign::Call { boundary, .. },
             arguments: filtered,
