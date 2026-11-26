@@ -27,8 +27,7 @@ func mainGoStatus(attempts *shared.Ref[int], cumulativeDelay float64, iterNumber
 	attemptsValue := attempts.Value
 	for {
 		status := RetryStatus{CumulativeDelay: cumulativeDelay, IterNumber: iterNumber}
-		s := attemptsValue
-		s_ := s + 1
+		s_ := attemptsValue + 1
 		attemptsValue = s_
 		if s_ >= 3 {
 			attempts.Value = attemptsValue

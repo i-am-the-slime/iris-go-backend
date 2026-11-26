@@ -40,9 +40,7 @@ func drain(cell *shared.Ref[int], n int) {
 			cell.Value = cellValue
 			return
 		}
-		s := cellValue
-		s_ := s + n
-		cellValue = s_
+		cellValue += n
 		n -= 1
 	}
 }

@@ -116,6 +116,7 @@ func check(n int) (int, either.StringFailure) {
 }
 
 func reportFailure(failure exception.Error) either.EitherString {
-	journal.Log("reported " + exception.Message(failure))
-	return either.Left(exception.Message(failure))
+	message := exception.Message(failure)
+	journal.Log("reported " + message)
+	return either.Left(message)
 }

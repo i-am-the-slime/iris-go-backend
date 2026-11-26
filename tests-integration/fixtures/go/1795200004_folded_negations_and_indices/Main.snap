@@ -36,17 +36,7 @@ func main_() int {
 
 var negated int = 1
 
-var missing = initializeMissing()
-
-func initializeMissing() maybe.Int {
-	var result maybe.Int
-	if len([]any{}) > 0 {
-		result = maybe.NoInt
-	} else {
-		result = maybe.NoInt
-	}
-	return result
-}
+var missing maybe.Int = maybe.NoInt
 
 func main() {
 	os.Exit(main_())

@@ -38,15 +38,12 @@ func main_() int {
 		result7 = 0
 	}
 	var result8 int
-	if !(prim.NumberNaN <= 1.0) {
-		result8 = 16
-	} else {
-		result8 = 0
-	}
 	var result9 int
 	if !(prim.NumberNaN <= 1.0) {
+		result8 = 16
 		result9 = 32
 	} else {
+		result8 = 0
 		result9 = 0
 	}
 	var result10 int

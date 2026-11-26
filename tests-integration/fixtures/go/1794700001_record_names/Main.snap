@@ -26,10 +26,6 @@ package show
 
 import "github.com/i-am-the-slime/iris-go/prim"
 
-func Show(number float64) string {
-	return prim.ShowNumber(number)
-}
-
 func AppendShowArrayNumber(buffer []byte, array []float64) []byte {
 	buffer = append(buffer, '[')
 	for index, element := range array {

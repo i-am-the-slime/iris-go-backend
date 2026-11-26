@@ -127,23 +127,19 @@ func send(n int, r int) (struct{}, FailureFailure) {
 	}
 }
 
-func show(i int, err FailureFailure) string {
-	return string(appendShow(nil, i, err))
-}
-
 func appendShowArrayEitherFailureInt(buffer []byte, array []EitherInt) []byte {
 	buffer = append(buffer, '[')
 	for index, element := range array {
 		if index > 0 {
 			buffer = append(buffer, ',')
 		}
-		buffer = appendShow(buffer, element.Right, EitherIntFailure(element))
+		buffer = appendShowEitherFailureInt(buffer, element.Right, EitherIntFailure(element))
 	}
 	buffer = append(buffer, ']')
 	return buffer
 }
 
-func appendShow(buffer []byte, i int, err FailureFailure) []byte {
+func appendShowEitherFailureInt(buffer []byte, i int, err FailureFailure) []byte {
 	if err.Failed {
 		buffer = append(buffer, "(Left "...)
 		switch err.Left.Tag {
@@ -174,10 +170,6 @@ func appendShowArrayArrayEitherFailureInt(buffer []byte, array [][]EitherInt) []
 	}
 	buffer = append(buffer, ']')
 	return buffer
-}
-
-func arrayEitherFailureInt(array []EitherInt) string {
-	return string(appendShowArrayEitherFailureInt(nil, array))
 }
 
 func arrayArrayEitherFailureInt(array [][]EitherInt) string {

@@ -39,8 +39,7 @@ func initializeMain_() []int {
 	} else {
 		result2 = 0
 	}
-	performed := array.Append(elements2, []int{0, result2})
-	return performed
+	return array.Append(elements2, []int{0, result2})
 }
 
 func main() {

@@ -38,8 +38,7 @@ func initializeMain_() []int {
 		missing = 0
 	}
 	elements := shared.Frozen(array2)
-	performed := array.Append(elements, []int{first, missing, -1})
-	return performed
+	return array.Append(elements, []int{first, missing, -1})
 }
 
 func main() {

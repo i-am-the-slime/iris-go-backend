@@ -16,7 +16,6 @@ const (
 package main
 
 import (
-	"fixture/Data/Ordering"
 	"fixture/shared"
 	arraypkg "github.com/i-am-the-slime/iris-go/array"
 	"github.com/i-am-the-slime/iris-go/console"
@@ -46,40 +45,19 @@ func initializeMain_() []string {
 	return []string{arraySuit(sorted), arraySuit(sorted2), arraySuit(performed)}
 }
 
-func show(suit Suit) string {
-	switch suit {
-	case SuitHearts:
-		return "hearts"
-	case SuitSpades:
-		return "spades"
-	default: // SuitClubs
-		return "clubs"
-	}
-}
-
-func compare(left Suit, right Suit) ordering.Ordering {
-	if left == right {
-		return ordering.OrderingEQ
-	}
-	if left < right {
-		return ordering.OrderingLT
-	}
-	return ordering.OrderingGT
-}
-
 func appendShowArraySuit(buffer []byte, array []Suit) []byte {
 	buffer = append(buffer, '[')
 	for index, element := range array {
 		if index > 0 {
 			buffer = append(buffer, ',')
 		}
-		buffer = appendShow(buffer, element)
+		buffer = appendShowSuit(buffer, element)
 	}
 	buffer = append(buffer, ']')
 	return buffer
 }
 
-func appendShow(buffer []byte, suit Suit) []byte {
+func appendShowSuit(buffer []byte, suit Suit) []byte {
 	switch suit {
 	case SuitHearts:
 		buffer = append(buffer, "hearts"...)

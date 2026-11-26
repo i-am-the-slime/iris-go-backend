@@ -5,7 +5,7 @@ source: tests-integration/src/fixtures.rs
 package either
 
 type EitherInt struct {
-	Field0 int
+	Field0 int32
 	Tag    uint8
 }
 
@@ -44,21 +44,6 @@ type IntFailure struct {
 type StringFailure struct {
 	Failed bool
 	Left   string
-}
-
-func Left(field0 int) EitherInt {
-	return EitherInt{Tag: EitherIntLeft, Field0: field0}
-}
-
-func Right(field0 int) EitherInt {
-	return EitherInt{Tag: EitherIntRight, Field0: field0}
-}
-
-func EitherIntFromResults(value int, err IntFailure) EitherInt {
-	if err.Failed {
-		return Left(err.Left)
-	}
-	return Right(value)
 }
 
 // main.go

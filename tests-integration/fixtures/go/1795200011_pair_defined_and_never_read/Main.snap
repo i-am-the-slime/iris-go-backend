@@ -22,8 +22,7 @@ func initializeMain_() []string {
 		accumulator = s
 	}
 	direct.SplitAt(1, accumulator)
-	performed := shared.Frozen(array2)
-	return performed
+	return shared.Frozen(array2)
 }
 
 func main() {

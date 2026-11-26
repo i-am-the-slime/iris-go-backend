@@ -61,8 +61,7 @@ func mainGo(value Step) int {
 			value = next(struct{}{})
 			continue
 		default: // StepDone
-			a := value.Done
-			return a
+			return value.Done
 		}
 	}
 }

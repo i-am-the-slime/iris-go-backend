@@ -9,14 +9,6 @@ import (
 	"strconv"
 )
 
-func ShowInt(i int) string {
-	return strconv.Itoa(i)
-}
-
-func ShowString(s string) string {
-	return prim.ShowString(s)
-}
-
 func AppendShowArrayInt(buffer []byte, array []int) []byte {
 	buffer = append(buffer, '[')
 	for index, element := range array {

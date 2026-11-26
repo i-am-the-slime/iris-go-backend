@@ -622,15 +622,13 @@ func initializeMain_() []int {
 		}
 		return []int{fromStoring, redblack.Checksum(fromTheRef), record.Total, redblack.Checksum(record.Kept), closure.Total, closure.Later(struct{}{}), fromKeeping, redblack.Checksum(fromTheForeign)}
 	}
-	performed := effect()
-	return performed
+	return effect()
 }
 
 var stashed = initializeStashed()
 
 func initializeStashed() *shared.Ref[*redblack.Tree] {
-	performed := &shared.Ref[*redblack.Tree]{Value: redblack.SharedTreeLeaf}
-	return performed
+	return &shared.Ref[*redblack.Tree]{Value: redblack.SharedTreeLeaf}
 }
 
 func mainGo(tree *redblack.Tree, trail *redblack_types.List, total int, n int) int {

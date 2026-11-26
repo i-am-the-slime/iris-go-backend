@@ -65,10 +65,8 @@ func addCodes(total *shared.Ref[int], text string, index int) {
 			total.Value = totalValue
 			return
 		}
-		s := totalValue
 		total.Value = totalValue
-		s_ := s + prim.ToCharCode(textUnits.UnsafeCharAt(index))
-		totalValue = s_
+		totalValue += prim.ToCharCode(textUnits.UnsafeCharAt(index))
 		index += 1
 	}
 }

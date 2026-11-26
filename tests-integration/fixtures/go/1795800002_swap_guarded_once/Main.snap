@@ -17,8 +17,7 @@ var main_ = initializeMain_()
 func initializeMain_() []int {
 	result := array.Thaw([]int{1, 2, 3, 4, 5})
 	reversed(result)
-	performed := shared.Frozen(*result)
-	return performed
+	return shared.Frozen(*result)
 }
 
 func reversed(array *[]int) {

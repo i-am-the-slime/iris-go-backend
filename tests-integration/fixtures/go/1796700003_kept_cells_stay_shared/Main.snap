@@ -79,15 +79,13 @@ func initializeMain_() []int {
 		}
 		return []int{fromStoring, total(fromTheRef), result, result2, fromKeeping, total(fromTheForeign)}
 	}
-	performed := effect()
-	return performed
+	return effect()
 }
 
 var stashed = initializeStashed()
 
 func initializeStashed() *shared.Ref[*Tree] {
-	performed := &shared.Ref[*Tree]{Value: sharedTreeLeaf}
-	return performed
+	return &shared.Ref[*Tree]{Value: sharedTreeLeaf}
 }
 
 func total(value *Tree) int {
@@ -117,8 +115,7 @@ func stashedAfter(countdown int, tree *Tree) int {
 				stashed.Value = treeCaptured
 				return total(treeCaptured)
 			}
-			performed := effect()
-			return performed
+			return effect()
 		}
 		countdown, tree = countdown-1, treeCaptured
 	}

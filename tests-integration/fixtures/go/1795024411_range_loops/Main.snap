@@ -36,8 +36,7 @@ func initializeMain_() shared.MainResult {
 		x := 1 + slot*step2
 		mapped[slot] = slot * x
 	}
-	performed := shared.MainResult{Visited: seen, Summed: accumulator, Listed: accumulator2, Counted: count2, Indexed: mapped, Descending: descending}
-	return performed
+	return shared.MainResult{Visited: seen, Summed: accumulator, Listed: accumulator2, Counted: count2, Indexed: mapped, Descending: descending}
 }
 
 var descending = initializeDescending()

@@ -17,16 +17,16 @@ func initializeMain_() shared2.MainResult {
 	kept := []int{}
 	for _, x := range numbers {
 		predicates += 1
-		performed2 := x > 2
-		if performed2 {
+		performed := x > 2
+		if performed {
 			kept = append(kept, x)
 		}
 	}
 	mapped := make([]int, len(kept))
 	for index, x := range kept {
 		mappings += 1
-		performed2 := x * 3
-		mapped[index] = performed2
+		performed := x * 3
+		mapped[index] = performed
 	}
 	fused = foldLanes(mapped, 0)
 	predicateCalls := predicates
@@ -36,8 +36,8 @@ func initializeMain_() shared2.MainResult {
 	mapped2 := make([]int, len(numbers))
 	for index, x := range numbers {
 		mappings += 1
-		performed2 := x * 3
-		mapped2[index] = performed2
+		performed := x * 3
+		mapped2[index] = performed
 	}
 	shared = foldLanes(mapped2, 0) + len(mapped2)
 	modified2 := shared2.StateValue{State: 0, Value: mappings}
@@ -46,8 +46,8 @@ func initializeMain_() shared2.MainResult {
 	mapped3 := make([]int, len(numbers))
 	for index, x := range numbers {
 		mappings += 1
-		performed2 := x * 3
-		mapped3[index] = performed2
+		performed := x * 3
+		mapped3[index] = performed
 	}
 	found := false
 	for _, value := range mapped3 {
@@ -75,8 +75,7 @@ func initializeMain_() shared2.MainResult {
 		}
 		accumulator += result
 	}
-	performed := f(accumulator)
-	return performed
+	return f(accumulator)
 }
 
 var numbers []int = []int{3, 1, 4, 1, 5, 9, 2, 6}

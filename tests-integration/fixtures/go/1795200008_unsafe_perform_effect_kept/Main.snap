@@ -1,13 +1,6 @@
 ---
 source: tests-integration/src/fixtures.rs
 ---
-// Control/Category/category.go
-package category
-
-func Identity(x any) any {
-	return x
-}
-
 // main.go
 package main
 

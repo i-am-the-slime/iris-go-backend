@@ -44,10 +44,6 @@ func deepest(depth int, value *Tree) int {
 	return x
 }
 
-func elements(value *Tree) string {
-	return string(appendElements(nil, value))
-}
-
 func size(value *Tree) int {
 	if value == sharedTreeLeaf {
 		return 0

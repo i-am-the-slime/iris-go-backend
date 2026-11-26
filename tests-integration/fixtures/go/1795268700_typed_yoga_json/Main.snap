@@ -192,24 +192,6 @@ type Maybe struct {
 
 var MemptyItem []Item = []Item{}
 
-func IsNothing(maybe *Maybe) bool {
-	switch maybe.Tag {
-	case TagNothing:
-		return true
-	default: // TagJust
-		return false
-	}
-}
-
-func FromJust(maybe *Maybe) any {
-	switch maybe.Tag {
-	case TagJust:
-		return maybe.Just
-	default:
-		panic("Failed pattern match")
-	}
-}
-
 var MemptyMaybeBoolean []Boolean = []Boolean{}
 
 // Data/Tuple/tuple.go

@@ -14,10 +14,8 @@ import (
 func main() {
 //line Main.purs:22:13
 	passed := 0
-//line Main.purs:23:12
-	ref := 3
 //line Main.purs:23:3
-	limit := ref
+	limit := 3
 //line Main.purs:25:5
 	rules := []shared.Rule{{Name: "positive", Check: func(n int) bool {
 //line Main.purs:15:38

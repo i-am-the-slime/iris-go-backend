@@ -13,21 +13,6 @@ type ArrayInt struct {
 	Tag  uint8
 }
 
-// Data/Ord/ord.go
-package ord
-
-import "fixture/Data/Ordering"
-
-func Compare(char rune, char2 rune) ordering.Ordering {
-	if char < char2 {
-		return ordering.OrderingLT
-	}
-	if char == char2 {
-		return ordering.OrderingEQ
-	}
-	return ordering.OrderingGT
-}
-
 // Data/Ordering/ordering.go
 package ordering
 
