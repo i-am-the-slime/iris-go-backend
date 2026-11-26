@@ -6,7 +6,6 @@ package main
 
 import (
 	journal "fixture/Journal_ffi"
-	"fixture/shared"
 	"strconv"
 )
 
@@ -23,7 +22,7 @@ const (
 
 func main() {
 	journal.Log(strconv.Itoa(int(1 + depthDeep(&Nested{Tag: NestedFlat}))))
-	journal.Log(strconv.Itoa(int(2 + totalDeep(shared.Convert([]int32{2, 3}), &Nested{Tag: NestedDeep, Deep0: shared.Convert2([][]int32{{4}}), Deep1: &Nested{Tag: NestedFlat}}))))
+	journal.Log(strconv.Itoa(int(2 + totalDeepDeep(&Nested{Tag: NestedFlat}))))
 }
 
 func depth(value *Nested) int32 {
@@ -49,24 +48,15 @@ func depthDeep(rest *Nested) int32 {
 	return 1 + depth(rest)
 }
 
-func totalDeep(argument any, rest *Nested) int32 {
-	scrutinee := &Nested{Tag: NestedDeep, Deep0: argument, Deep1: rest}
-	if scrutinee.Tag == NestedFlat {
-		return 0
-	}
-	if scrutinee.Tag == NestedDeep && scrutinee.Deep1.Tag == NestedFlat {
+func totalDeep(rest *Nested) int32 {
+	switch rest.Tag {
+	case NestedFlat:
 		return 1
+	default:
+		return 2 + total(rest)
 	}
-	return 2 + total(scrutinee.Deep1)
 }
 
-// shared/shared.go
-package shared
-
-func Convert(value []int32) any {
-	return value
-}
-
-func Convert2(value [][]int32) any {
-	return value
+func totalDeepDeep(nested *Nested) int32 {
+	return 2 + totalDeep(nested)
 }

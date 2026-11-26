@@ -47,33 +47,22 @@ func main_() int32 {
 		i := []int32{}[index]
 		accumulator = listIntCells.New(list.List{Cons0: i, Cons1: accumulator})
 	}
-	scrutinee := Leaf(accumulator)
 	var result2 *Shape
-	if scrutinee.Tag == ShapeBranch && scrutinee.Branch0.Tag == ShapeWrap && scrutinee.Branch2.Tag == ShapeBranch {
+	if accumulator != list.SharedListNil {
 		accumulator2 := list.SharedListNil
 		var listIntCells2 alloc.Cells[list.List]
 		for index := len([]int32{}) - 1; index >= 0; index-- {
 			i := []int32{}[index]
 			accumulator2 = listIntCells2.New(list.List{Cons0: i, Cons1: accumulator2})
 		}
-		*scrutinee = Shape{Tag: ShapeLeaf, Leaf: accumulator2}
-		result2 = scrutinee
-	} else if scrutinee.Tag == ShapeLeaf && scrutinee.Leaf != list.SharedListNil {
-		accumulator2 := list.SharedListNil
-		var listIntCells3 alloc.Cells[list.List]
-		for index := len([]int32{}) - 1; index >= 0; index-- {
-			i := []int32{}[index]
-			accumulator2 = listIntCells3.New(list.List{Cons0: i, Cons1: accumulator2})
-		}
-		scrutinee.Leaf = accumulator2
-		result2 = scrutinee
+		result2 = Leaf(accumulator2)
 	} else {
 		array := []int32{1}
 		accumulator2 := list.SharedListNil
-		var listIntCells4 alloc.Cells[list.List]
+		var listIntCells3 alloc.Cells[list.List]
 		for index := len(array) - 1; index >= 0; index-- {
 			i := array[index]
-			accumulator2 = listIntCells4.New(list.List{Cons0: i, Cons1: accumulator2})
+			accumulator2 = listIntCells3.New(list.List{Cons0: i, Cons1: accumulator2})
 		}
 		result2 = Leaf(accumulator2)
 	}

@@ -6,7 +6,7 @@ use crate::monomorphic::{
 };
 use crate::monotype::{MonotypeId, Monotypes};
 use crate::naming::is_vague;
-use crate::purity::{can_fail, size};
+use crate::purity::{can_fail, is_trivial, size};
 use smol_str::SmolStr;
 
 impl Simplifier<'_> {
@@ -16,6 +16,7 @@ impl Simplifier<'_> {
         mut alternatives: Vec<Alternative>,
     ) -> (Vec<Binding>, Vec<Expression>, Vec<Alternative>) {
         let mut bindings = vec![];
+        self.split_known_constructions(&mut scrutinees, &mut alternatives, &mut bindings);
         for column in (0..scrutinees.len()).rev() {
             let Some(outcomes) = column_outcomes(&scrutinees[column], &alternatives, column) else {
                 continue;
@@ -92,6 +93,63 @@ impl Simplifier<'_> {
             }
         }
         (bindings, scrutinees, alternatives)
+    }
+
+    /// A column whose scrutinee is a constructor the code builds, matched by patterns that look
+    /// into its fields, `Deep _ Flat` against `Deep x rest`, becomes a column for each field: the
+    /// alternatives for other constructors are dropped, and one that binds the whole value gets it
+    /// rebuilt from the fields.
+    fn split_known_constructions(
+        &mut self,
+        scrutinees: &mut Vec<Expression>,
+        alternatives: &mut Vec<Alternative>,
+        bindings: &mut Vec<Binding>,
+    ) {
+        let mut column = 0;
+        while column < scrutinees.len() {
+            if !splits(&scrutinees[column], alternatives, column) {
+                column += 1;
+                continue;
+            }
+            let scrutinee = scrutinees.remove(column);
+            let monotype = scrutinee.monotype;
+            let ExpressionKind::Construct { data, constructor, arguments } = scrutinee.kind else {
+                unreachable!("invariant violated: only a construction is split")
+            };
+            let fields: Vec<Expression> = arguments
+                .into_iter()
+                .map(|argument| {
+                    if is_trivial(&argument) {
+                        return argument;
+                    }
+                    let template =
+                        Local { id: LocalId(0), name: "field".into(), monotype: argument.monotype };
+                    let field = self.fresh(&template);
+                    let expression = field.expression();
+                    bindings.push(Binding { local: field, value: argument });
+                    expression
+                })
+                .collect();
+            let monotypes: Vec<MonotypeId> = fields.iter().map(|field| field.monotype).collect();
+            let kind = ExpressionKind::Construct { data, constructor, arguments: fields.clone() };
+            let rebuilt = Expression::new(kind, monotype);
+            let mut kept = Vec::with_capacity(alternatives.len());
+            for mut alternative in std::mem::take(alternatives) {
+                let pattern = alternative.patterns.remove(column);
+                let mut whole = vec![];
+                let Some(parts) = field_patterns(pattern, constructor, &monotypes, &mut whole)
+                else {
+                    continue;
+                };
+                for local in whole {
+                    substitute_guarded(&mut alternative.body, local, &rebuilt, self.monotypes);
+                }
+                alternative.patterns.splice(column..column, parts);
+                kept.push(alternative);
+            }
+            *alternatives = kept;
+            scrutinees.splice(column..column, fields);
+        }
     }
 }
 
@@ -376,4 +434,49 @@ pub(super) fn alternatives_size(alternatives: &[Alternative]) -> usize {
     let mut total = 0;
     for_each_alternative_child(alternatives, &mut |child| total += size(child));
     total
+}
+
+/// Whether a column's scrutinee builds a constructor with fields that some pattern looks into
+/// further than the constructor, so that only splitting it into its fields resolves the match.
+fn splits(scrutinee: &Expression, alternatives: &[Alternative], column: usize) -> bool {
+    let ExpressionKind::Construct { arguments, .. } = &scrutinee.kind else { return false };
+    fn splittable(pattern: &Pattern) -> bool {
+        match &pattern.kind {
+            PatternKind::Wildcard | PatternKind::Variable(_) | PatternKind::Constructor { .. } => {
+                true
+            }
+            PatternKind::Named { pattern, .. } => splittable(pattern),
+            _ => false,
+        }
+    }
+    !arguments.is_empty()
+        && column_outcomes(scrutinee, alternatives, column).is_none()
+        && alternatives.iter().all(|alternative| splittable(&alternative.patterns[column]))
+}
+
+/// The patterns a split column's fields meet, or `None` when the pattern is for another
+/// constructor; the locals that bind the whole value are added to `whole`.
+fn field_patterns(
+    pattern: Pattern,
+    constructor: usize,
+    monotypes: &[MonotypeId],
+    whole: &mut Vec<LocalId>,
+) -> Option<Vec<Pattern>> {
+    let wildcards =
+        || monotypes.iter().map(|&monotype| Pattern { kind: PatternKind::Wildcard, monotype });
+    match pattern.kind {
+        PatternKind::Wildcard => Some(wildcards().collect()),
+        PatternKind::Variable(local) => {
+            whole.push(local.id);
+            Some(wildcards().collect())
+        }
+        PatternKind::Named { local, pattern } => {
+            whole.push(local.id);
+            field_patterns(*pattern, constructor, monotypes, whole)
+        }
+        PatternKind::Constructor { constructor: matched, arguments, .. } => {
+            (matched == constructor).then_some(arguments)
+        }
+        _ => unreachable!("invariant violated: only a splittable pattern is split"),
+    }
 }

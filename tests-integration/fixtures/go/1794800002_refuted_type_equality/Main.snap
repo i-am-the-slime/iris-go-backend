@@ -57,7 +57,7 @@ func StringValue(stringValue0 Equal, stringValue1 string) *ValueString {
 var main_ = initializeMain_()
 
 func initializeMain_() []string {
-	return []string{strconv.Itoa(int(evaluatePairInt(IntValue(refl, 41), IntValue(refl, 0)) + 1)), evaluatePairString(StringValue(refl, "left"), StringValue(refl, "right"))}
+	return []string{strconv.Itoa(int(evaluateInt(IntValue(refl, 41)) + 1)), evaluateString(StringValue(refl, "left"))}
 }
 
 func evaluateInt(value *ValueInt) int32 {
@@ -86,14 +86,6 @@ func evaluateString(value *ValueString) string {
 			continue
 		}
 	}
-}
-
-func evaluatePairInt(left *ValueInt, value *ValueInt) int32 {
-	return evaluateInt(left)
-}
-
-func evaluatePairString(left *ValueString, value *ValueString) string {
-	return evaluateString(left)
 }
 
 func main() {

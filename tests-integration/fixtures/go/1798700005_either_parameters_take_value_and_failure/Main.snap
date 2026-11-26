@@ -43,16 +43,12 @@ func TooLarge(field0 int32) Problem {
 	return Problem{Tag: ProblemTooLarge, Field0: field0}
 }
 
-func Left(left Problem) Either {
-	return Either{Tag: EitherLeft, Left: left}
-}
-
 func main() {
 	s := settleRight("run 5", 15)
 	journal.Log(s)
-	s2 := settleLeft("run -2", Negative(-2))
+	s2 := settleLeftNegative("run -2", -2)
 	journal.Log(s2)
-	s3 := settleLeft("run 2000", TooLarge(2000))
+	s3 := settleLeftTooLarge("run 2000", 2000)
 	journal.Log(s3)
 	s4 := settleRight("run 40", 120)
 	journal.Log(s4)
@@ -102,36 +98,36 @@ func kept(n int32) (int32, ProblemFailure) {
 
 func settleRight(label string, value int32) string {
 	if value > 100 {
-		return settleLeft(label+" again", TooLarge(value))
+		return settleLeftTooLarge(label+" again", value)
 	}
 	journal.Log(label + ": " + strconv.Itoa(int(value)))
 	return "ok"
 }
 
 func settleLeft(label string, problem Problem) string {
-	for {
-		scrutinee := Left(problem)
-		if scrutinee.Tag == EitherLeft && scrutinee.Left.Tag == ProblemNegative {
-			journal.Log(label + ": below zero by " + strconv.Itoa(int(-scrutinee.Left.Field0)))
-			return "negative"
+	switch problem.Tag {
+	case ProblemNegative:
+		journal.Log(label + ": below zero by " + strconv.Itoa(int(-problem.Field0)))
+		return "negative"
+	default:
+		var result string
+		switch problem.Tag {
+		case ProblemNegative:
+			result = "Negative " + strconv.Itoa(int(problem.Field0))
+		default: // ProblemTooLarge
+			result = "TooLarge " + strconv.Itoa(int(problem.Field0))
 		}
-		if scrutinee.Tag == EitherLeft {
-			var result string
-			switch scrutinee.Left.Tag {
-			case ProblemNegative:
-				result = "Negative " + strconv.Itoa(int(scrutinee.Left.Field0))
-			default: // ProblemTooLarge
-				result = "TooLarge " + strconv.Itoa(int(scrutinee.Left.Field0))
-			}
-			journal.Log(label + ": " + result)
-			return "failed"
-		}
-		value := scrutinee.Right
-		if value > 100 {
-			label, problem = label+" again", TooLarge(value)
-			continue
-		}
-		journal.Log(label + ": " + strconv.Itoa(int(value)))
-		return "ok"
+		journal.Log(label + ": " + result)
+		return "failed"
 	}
+}
+
+func settleLeftTooLarge(label string, i int32) string {
+	journal.Log(label + ": TooLarge " + strconv.Itoa(int(i)))
+	return "failed"
+}
+
+func settleLeftNegative(label string, n int32) string {
+	journal.Log(label + ": below zero by " + strconv.Itoa(int(-n)))
+	return "negative"
 }

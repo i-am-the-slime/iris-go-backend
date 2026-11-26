@@ -1,0 +1,75 @@
+---
+source: tests-integration/src/fixtures.rs
+assertion_line: 571
+---
+// Data/Maybe/maybe.go
+package maybe
+
+import "strconv"
+
+type Int int64
+
+const NoInt Int = 1 << 32
+
+func Show(maybe Int) string {
+	return string(AppendShow(nil, maybe))
+}
+
+func AppendShowArrayMaybeInt(buffer []byte, array []Int) []byte {
+	buffer = append(buffer, '[')
+	for index, element := range array {
+		if index > 0 {
+			buffer = append(buffer, ',')
+		}
+		buffer = AppendShow(buffer, element)
+	}
+	buffer = append(buffer, ']')
+	return buffer
+}
+
+func AppendShow(buffer []byte, maybe Int) []byte {
+	if maybe != NoInt {
+		buffer = append(buffer, "(Just "...)
+		buffer = strconv.AppendInt(buffer, int64(int32(maybe)), 10)
+		buffer = append(buffer, ')')
+	} else {
+		buffer = append(buffer, "Nothing"...)
+	}
+	return buffer
+}
+
+func ArrayMaybeInt(array []Int) string {
+	return string(AppendShowArrayMaybeInt(nil, array))
+}
+
+// main.go
+package main
+
+import (
+	"fixture/Data/Maybe"
+	journal "fixture/Journal_ffi"
+	"strconv"
+)
+
+func main() {
+	journal.Log(mainGoJust(0, 0))
+	journal.Log(maybe.ArrayMaybeInt(stepsBelowJust(10, 0, 0)))
+}
+
+func stepsBelowJust(limit int32, n int32, steps int32) []maybe.Int {
+	for {
+		if n >= limit {
+			return []maybe.Int{maybe.Int(n), maybe.Int(steps)}
+		}
+		n, steps = n+2, steps+1
+	}
+}
+
+func mainGoJust(n int32, total int32) string {
+	for {
+		if n >= 1000 {
+			return strconv.Itoa(int(total)) + " at (Just " + strconv.Itoa(int(n)) + ")"
+		}
+		n, total = n+1, total+n
+	}
+}

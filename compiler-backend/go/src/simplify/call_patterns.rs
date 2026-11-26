@@ -13,6 +13,7 @@ use crate::purity::{is_within_size, size};
 
 const CALL_PATTERN_COPIES: usize = 6;
 const CALL_PATTERN_SIZE: usize = 600;
+const REBUILT_USES: usize = 1;
 
 #[derive(Clone, PartialEq)]
 enum Shape {
@@ -182,7 +183,7 @@ impl Simplifier<'_> {
                 continue;
             }
             for (index, parameter) in parameters.iter().enumerate() {
-                if !taken_apart_only(lambda_body, parameter.id, Loop::Local(local), index) {
+                if !worth_copying(lambda_body, parameter.id, Loop::Local(local), index) {
                     continue;
                 }
                 let shape = calls.iter().find_map(|arguments| {
@@ -218,7 +219,9 @@ impl Simplifier<'_> {
         };
         let parameter = parameters.remove(pattern.index);
         let names = matched_names(&body, parameter.id, &pattern.shape);
-        let kept = self.kept_fields(&body, parameter.id, &pattern.shape, parameters.len());
+        let callee = Loop::Local(original.local.id);
+        let whole = whole_uses(&body, parameter.id, callee, pattern.index);
+        let kept = self.kept_fields(&body, parameter.id, &pattern.shape, parameters.len(), whole);
         let (fields, built, suffix) = self.shape_fields(&pattern.shape, &parameter, names, &kept);
         substitute_local(&mut body, parameter.id, &built);
         for (offset, field) in fields.into_iter().enumerate() {
@@ -235,15 +238,20 @@ impl Simplifier<'_> {
     }
 
     /// The constructor's fields a copy takes: every field but an erased one the loop's matches
-    /// never bind, which the copy would only pass around as `any`.
+    /// never bind, which the copy would only pass around as `any`, and every field when the copy
+    /// rebuilds the value.
     fn kept_fields(
         &self,
         body: &Expression,
         parameter: LocalId,
         shape: &Shape,
         other_parameters: usize,
+        whole_uses: Option<usize>,
     ) -> Vec<bool> {
         let Shape::Constructor { fields, .. } = shape else { return vec![] };
+        if whole_uses.is_some_and(|whole| whole > 0) {
+            return vec![true; fields.len()];
+        }
         let bound = bound_fields(body, parameter, shape);
         let kept: Vec<bool> = fields
             .iter()
@@ -345,55 +353,57 @@ fn saturated_calls(
     }
 }
 
-/// Whether the parameter is matched or has its fields read, and is otherwise only passed on
-/// to the loop again in its own place.
-fn taken_apart_only(body: &Expression, parameter: LocalId, callee: Loop, index: usize) -> bool {
+/// How often the loop uses the parameter whole, when it matches it or reads its fields: a use
+/// that passes it on to the loop again in its own place is not counted, and a copy rebuilds it
+/// for the others.
+fn whole_uses(body: &Expression, parameter: LocalId, callee: Loop, index: usize) -> Option<usize> {
     fn walk(
         expression: &Expression,
         parameter: LocalId,
         callee: Loop,
         index: usize,
         taken_apart: &mut bool,
-    ) -> bool {
+        whole: &mut usize,
+    ) {
         let is_parameter = |expression: &Expression| matches!(expression.kind, ExpressionKind::Local(id) if id == parameter);
         match &expression.kind {
-            ExpressionKind::Local(id) => *id != parameter,
-            ExpressionKind::Access { record, .. } if is_parameter(record) => {
-                *taken_apart = true;
-                true
-            }
+            ExpressionKind::Local(id) if *id == parameter => *whole += 1,
+            ExpressionKind::Access { record, .. } if is_parameter(record) => *taken_apart = true,
             ExpressionKind::Case { scrutinees, alternatives } => {
-                let mut only = true;
                 for scrutinee in scrutinees {
                     if is_parameter(scrutinee) {
                         *taken_apart = true;
                     } else {
-                        only = only && walk(scrutinee, parameter, callee, index, taken_apart);
+                        walk(scrutinee, parameter, callee, index, taken_apart, whole);
                     }
                 }
                 crate::monomorphic::traversal::for_each_alternative_child(
                     alternatives,
-                    &mut |child| only = only && walk(child, parameter, callee, index, taken_apart),
+                    &mut |child| walk(child, parameter, callee, index, taken_apart, whole),
                 );
-                only
             }
             ExpressionKind::Apply { function, arguments } if callee.is(function) => {
-                arguments.iter().enumerate().all(|(position, argument)| {
-                    (position == index && is_parameter(argument))
-                        || walk(argument, parameter, callee, index, taken_apart)
-                })
+                for (position, argument) in arguments.iter().enumerate() {
+                    if position != index || !is_parameter(argument) {
+                        walk(argument, parameter, callee, index, taken_apart, whole);
+                    }
+                }
             }
-            _ => {
-                let mut only = true;
-                for_each_child(expression, &mut |child| {
-                    only = only && walk(child, parameter, callee, index, taken_apart)
-                });
-                only
-            }
+            _ => for_each_child(expression, &mut |child| {
+                walk(child, parameter, callee, index, taken_apart, whole)
+            }),
         }
     }
     let mut taken_apart = false;
-    walk(body, parameter, callee, index, &mut taken_apart) && taken_apart
+    let mut whole = 0;
+    walk(body, parameter, callee, index, &mut taken_apart, &mut whole);
+    taken_apart.then_some(whole)
+}
+
+/// Whether a copy for the parameter pays: the loop takes it apart, and rebuilds it for at most
+/// one other use.
+fn worth_copying(body: &Expression, parameter: LocalId, callee: Loop, index: usize) -> bool {
+    whole_uses(body, parameter, callee, index).is_some_and(|whole| whole <= REBUILT_USES)
 }
 
 /// The names the loop's own match gives the constructor's fields.
@@ -426,8 +436,8 @@ fn matched_names(body: &Expression, parameter: LocalId, shape: &Shape) -> Vec<Op
     names
 }
 
-/// Which of the constructor's fields a match of the parameter binds; a match that binds the
-/// whole value, or looks into a field, which the copy may not resolve, binds every field.
+/// Which of the constructor's fields a match of the parameter binds or looks into; a match that
+/// binds the whole value binds every field.
 fn bound_fields(body: &Expression, parameter: LocalId, shape: &Shape) -> Vec<bool> {
     let Shape::Constructor { constructor, fields, .. } = shape else { return vec![] };
     let mut bound = vec![false; fields.len()];
@@ -442,14 +452,7 @@ fn bound_fields(body: &Expression, parameter: LocalId, shape: &Shape) -> Vec<boo
                     PatternKind::Wildcard => {}
                     PatternKind::Constructor { constructor: matched, .. }
                         if matched != constructor => {}
-                    PatternKind::Constructor { arguments, .. }
-                        if arguments.iter().all(|argument| {
-                            matches!(
-                                argument.kind,
-                                PatternKind::Wildcard | PatternKind::Variable(_)
-                            )
-                        }) =>
-                    {
+                    PatternKind::Constructor { arguments, .. } => {
                         for (bound, argument) in bound.iter_mut().zip(arguments) {
                             *bound |= !matches!(argument.kind, PatternKind::Wildcard);
                         }
@@ -596,8 +599,7 @@ impl Simplifier<'_> {
                     return None;
                 }
                 let loop_ = Loop::Function(callee);
-                taken_apart_only(&function.body, parameter.id, loop_, index)
-                    .then_some((index, shape))
+                worth_copying(&function.body, parameter.id, loop_, index).then_some((index, shape))
             },
         )
     }
@@ -616,7 +618,8 @@ impl Simplifier<'_> {
         self.rename(&mut body, &mut renaming);
         let parameter = parameters.remove(index);
         let names = matched_names(&body, parameter.id, &shape);
-        let kept = self.kept_fields(&body, parameter.id, &shape, parameters.len());
+        let whole = whole_uses(&body, parameter.id, Loop::Function(callee), index);
+        let kept = self.kept_fields(&body, parameter.id, &shape, parameters.len(), whole);
         let (fields, built, suffix) = self.shape_fields(&shape, &parameter, names, &kept);
         substitute_local(&mut body, parameter.id, &built);
         for (offset, field) in fields.into_iter().enumerate() {
@@ -644,9 +647,71 @@ impl Simplifier<'_> {
         self.recursive.push(true);
         self.uses.push(self.uses[callee.0 as usize]);
         self.suspension.copy(callee);
-        let function = self.simplified_copy(function);
+        let mut function = self.simplified_copy(function);
+        let made = self.leave_out_unread_fields(&mut function, made, index);
         self.sizes[copy.0 as usize] = size(&function.body);
         self.functions[copy.0 as usize] = Some(function);
         made
+    }
+
+    /// The copy without the fields its simplified body never reads, such as one that only
+    /// rebuilt the value for a call that now passes the other fields to another copy. Calls of the
+    /// copy that its own body makes leave them out too; one any other function makes keeps them.
+    fn leave_out_unread_fields(
+        &mut self,
+        function: &mut Function,
+        made: TopLevelCopy,
+        index: usize,
+    ) -> TopLevelCopy {
+        let mut made = made;
+        if !matches!(made.shape, Shape::Constructor { .. }) {
+            return made;
+        }
+        let taken = made.kept.iter().filter(|&&kept| kept).count();
+        let unread: Vec<usize> = (index..index + taken)
+            .filter(|&position| !mentions(&function.body, function.parameters[position].id))
+            .collect();
+        let called_elsewhere = self.functions.iter().flatten().any(|other| {
+            let mut called = false;
+            crate::monomorphic::traversal::visit(&other.body, &mut |node| {
+                called |= matches!(node.kind, ExpressionKind::Function(id) if id == made.copy);
+            });
+            called
+        });
+        if unread.is_empty() || called_elsewhere || unread.len() == function.parameters.len() {
+            return made;
+        }
+        leave_out_arguments(&mut function.body, made.copy, &unread);
+        for &position in unread.iter().rev() {
+            function.parameters.remove(position);
+        }
+        for (field, kept) in (index..).zip(made.kept.iter_mut().filter(|kept| **kept)) {
+            *kept = !unread.contains(&field);
+        }
+        made.monotype =
+            function.parameters.iter().rev().fold(function.result, |result, parameter| {
+                self.monotypes.function(parameter.monotype, result)
+            });
+        let entry = self
+            .call_pattern_copies
+            .made
+            .iter_mut()
+            .find(|entry| entry.copy == made.copy)
+            .expect("invariant violated: a copy is recorded when it is made");
+        *entry = made.clone();
+        made
+    }
+}
+
+fn leave_out_arguments(expression: &mut Expression, function: FunctionId, positions: &[usize]) {
+    for_each_child_mut(expression, &mut |child| leave_out_arguments(child, function, positions));
+    let ExpressionKind::Apply { function: callee, arguments } = &mut expression.kind else {
+        return;
+    };
+    if !matches!(callee.kind, ExpressionKind::Function(id) if id == function) {
+        return;
+    }
+    for &position in positions.iter().rev() {
+        arguments.remove(position);
     }
 }
