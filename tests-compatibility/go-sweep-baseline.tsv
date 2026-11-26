@@ -78,7 +78,7 @@ package	csv-stream	ffi-only
 package	currency	pass
 package	data-mvc	pass
 package	datetime	pass
-package	datetime-parsing	ffi-only
+package	datetime-parsing	pass
 package	debounce	ffi-only
 package	debug	ffi-only
 package	decimals	ffi-only
@@ -246,7 +246,7 @@ package	lists	pass
 package	literals	ffi-only
 package	logging	pass
 package	logging-journald	ffi-only
-package	lumi-components	backend
+package	lumi-components	ffi-only
 package	machines	pass
 package	maps-eager	pass
 package	marionette	pass
@@ -1056,7 +1056,7 @@ ok	datetime	Data.Interval.Duration	Day Duration Hour Minute Month Second Week Ye
 ok	datetime	Data.Interval.Duration.Iso	ContainsNegativeValue InvalidFractionalUse InvalidWeekComponentUsage IsEmpty mkIsoDuration prettyError unIsoDuration
 ok	datetime	Data.Time	Time hour millisecond minute second setHour setMillisecond setMinute setSecond
 ok	datetime	Data.Time.Duration	Days Hours Milliseconds Minutes Seconds
-ok	datetime-parsing	Data.DateTime.Parsing	FullDateTime Minus Offset Plus Zulu fromString parseFullDateTime
+ok	datetime-parsing	Data.DateTime.Parsing	FullDateTime Minus Offset Plus Zulu fromString parseFullDateTime toUTC
 ok	deku	Deku.CSS	render
 ok	deku	Deku.Core	bus busUncurried
 ok	deku	Deku.DOM	Self SelfT
@@ -2132,7 +2132,7 @@ ok	lumi-components	Lumi.Components.Color	colorNames colors shade
 ok	lumi-components	Lumi.Components.FetchCache	Fetch Receive
 ok	lumi-components	Lumi.Components.Form	filterWithProps focus mapProps mapUI mapUI_ match match_ via withProps withValue
 ok	lumi-components	Lumi.Components.Form.Internal	FormBuilder SeqFormBuilder invalidate listen revalidate
-ok	lumi-components	Lumi.Components.Form.Validation	Fresh Modified ModifyValidated ModifyValidatedProxy mustBe mustEqual nonEmpty nonEmpty' nonEmptyArray nonEmptyArray' nonNull nonNull' optional validDate validDate' validInt validInt' validNumber validNumber'
+ok	lumi-components	Lumi.Components.Form.Validation	Fresh Modified ModifyValidated ModifyValidatedProxy mustBe mustEqual nonEmpty nonEmpty' nonEmptyArray nonEmptyArray' nonNull nonNull' optional setFresh setModified validDate validDate' validInt validInt' validNumber validNumber'
 ok	lumi-components	Lumi.Components.Icon	ArrowDown ArrowLeft ArrowRight ArrowUp Bin Cart Check Close Currency Grid Hamburger Indeterminate Info List Minus Overflow Percent Plus Rearrange Remove Search iconArrowDown iconArrowLeft iconArrowRight iconArrowUp iconBin iconCart iconClose iconCurrency iconGrid iconHamburger iconIndeterminate iconInfo iconList iconMinus iconOverflow iconPercent iconPlus iconRearrange iconRemove iconSearch
 ok	lumi-components	Lumi.Components.Input	Any Indeterminate None Off On Step Switch checkIndeterminate checkOff checkOn variantNone variantSwitch
 ok	lumi-components	Lumi.Components.LabeledField	Error Neither Optional Required Warning
