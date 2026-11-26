@@ -78,10 +78,9 @@ where
             _ => return Ok(None),
         };
         let element_type = self.go_type(element)?;
-        let comparator = match identity || reversed {
-            true => None,
-            false => Some(self.key_comparator(&ordering, &element_type)?),
-        };
+        if !identity && !reversed {
+            return self.keyed_sort(&ordering, &element_type, array, placement, out).map(Some);
+        }
         let array = self.value(array, out)?;
         let (result, sorted_expression) = match placement {
             Placement::Copied if ordering.primitive == Primitive::Number => {
@@ -110,22 +109,76 @@ where
             out.push(GoStatement::Expression(copied));
             return Ok(Some(result));
         }
-        let sort = match (comparator, ordering.primitive) {
-            (Some(comparator), _) => {
-                self.slices("SortStableFunc", vec![sorted_expression.clone(), comparator])
-            }
-            (None, Primitive::String) => {
+        let sort = match ordering.primitive {
+            Primitive::String => {
                 let compare = self
                     .go_function(GoFunction { package: GoPackage::Prim, name: "CompareString" });
                 self.slices("SortFunc", vec![sorted_expression.clone(), compare])
             }
-            (None, _) => self.slices("Sort", vec![sorted_expression.clone()]),
+            _ => self.slices("Sort", vec![sorted_expression.clone()]),
         };
         out.push(GoStatement::Expression(sort));
         if reversed {
             out.push(GoStatement::Expression(self.slices("Reverse", vec![sorted_expression])));
         }
         Ok(Some(result))
+    }
+
+    /// A stable sort by a key of each element. An ascending Int, Char or enumeration key is read
+    /// once per element and the (key, position) pairs merge sorted with the keys compared inline;
+    /// a String key, which compares by UTF-16 code units, or a descending one, goes through the
+    /// runtime's merge sort.
+    fn keyed_sort(
+        &mut self,
+        ordering: &Ordering<'_>,
+        element_type: &GoType,
+        array: &Expression,
+        placement: Placement,
+        out: &mut Vec<GoStatement>,
+    ) -> GoResult<GoExpression> {
+        let descending = free_locals(&ordering.keys[0]).contains(&ordering.parameters[1].id);
+        if ordering.primitive == Primitive::String || descending {
+            let comparator = self.key_comparator(ordering, element_type)?;
+            let array = self.value(array, out)?;
+            let name = match placement {
+                Placement::Copied => "SortBy",
+                Placement::InPlace => "SortByMutable",
+            };
+            let sort = self.go_function(GoFunction { package: GoPackage::Direct, name });
+            return Ok(call(sort, vec![array, comparator]));
+        }
+        let key = self.key_function(ordering, element_type)?;
+        let array = self.value(array, out)?;
+        let sort = identifier_expression(&self.support_function("sortByKey", SORT_BY_KEY_SOURCE));
+        match placement {
+            Placement::Copied => Ok(call(sort, vec![array, key])),
+            Placement::InPlace => {
+                let array = self.hoist(array, "array", out);
+                let elements =
+                    GoExpression::Unary { operator: "*", operand: Box::new(array.clone()) };
+                let sorted = call(sort, vec![elements.clone(), key]);
+                let copied = call(identifier_expression("copy"), vec![elements, sorted]);
+                out.push(GoStatement::Expression(copied));
+                Ok(array)
+            }
+        }
+    }
+
+    /// `func(element T) K`: the key an ordering compares the elements by.
+    fn key_function(
+        &mut self,
+        ordering: &Ordering<'_>,
+        element_type: &GoType,
+    ) -> GoResult<GoExpression> {
+        let saved = self.tail_loop.take();
+        let name = self.bind_local(ordering.parameters[0]);
+        let mut body = vec![];
+        let key = self.value(&ordering.keys[0], &mut body);
+        self.tail_loop = saved;
+        body.push(GoStatement::Return(Some(key?)));
+        let result = self.go_type(ordering.keys[0].monotype)?;
+        let parameters = vec![(name, element_type.clone())];
+        Ok(GoExpression::Function { parameters, result: Some(result), body })
     }
 
     /// `sortBy compare xs` with a comparison the backend cannot read as primitive keys: the
@@ -533,5 +586,55 @@ const SORT_NUMBERS_SOURCE: &str = "func {name}(xs []float64) []float64 {
 \t}
 \tmerge(sorted, scratch, 0, len(xs))
 \treturn sorted
+}
+";
+
+const SORT_BY_KEY_SOURCE: &str = "type {name}Ordered interface {
+	~int | ~int8 | ~int16 | ~int32 | ~int64 | ~uint | ~uint8 | ~uint16 | ~uint32 | ~uint64
+}
+
+type {name}Entry[K {name}Ordered] struct {
+\tkey   K
+\tindex int
+}
+
+func {name}[T any, K {name}Ordered](xs []T, key func(T) K) []T {
+\tentries := make([]{name}Entry[K], len(xs))
+\tfor index, x := range xs {
+\t\tentries[index] = {name}Entry[K]{key: key(x), index: index}
+\t}
+\tif len(xs) > 1 {
+\t\tscratch := make([]{name}Entry[K], len(xs))
+\t\tcopy(scratch, entries)
+\t\t{name}Merge(entries, scratch, 0, len(xs))
+\t}
+\tsorted := make([]T, len(xs))
+\tfor index, entry := range entries {
+\t\tsorted[index] = xs[entry.index]
+\t}
+\treturn sorted
+}
+
+func {name}Merge[K {name}Ordered](into []{name}Entry[K], from []{name}Entry[K], low int, high int) {
+\tmiddle := low + (high-low)>>1
+\tif middle-low > 1 {
+\t\t{name}Merge(from, into, low, middle)
+\t}
+\tif high-middle > 1 {
+\t\t{name}Merge(from, into, middle, high)
+\t}
+\ti, j, k := low, middle, low
+\tfor i < middle && j < high {
+\t\tif from[j].key < from[i].key {
+\t\t\tinto[k] = from[j]
+\t\t\tj++
+\t\t} else {
+\t\t\tinto[k] = from[i]
+\t\t\ti++
+\t\t}
+\t\tk++
+\t}
+\tk += copy(into[k:], from[i:middle])
+\tcopy(into[k:], from[j:high])
 }
 ";

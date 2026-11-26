@@ -146,57 +146,35 @@ func initializeMain_() []string {
 	for index, label := range sorted9 {
 		mapped3[index] = label
 	}
-	sorted10 := slices.Clone(entries)
-	slices.SortStableFunc(sorted10, func(x shared.Entry, y shared.Entry) int {
-		if x.Rank < y.Rank {
-			return -1
-		}
-		if x.Rank > y.Rank {
-			return 1
-		}
-		return 0
+	array2 := shared.SortByKey(entries, func(x shared.Entry) int {
+		return x.Rank
 	})
-	mapped4 := make([]string, len(sorted10))
-	for index := range sorted10 {
-		mapped4[index] = sorted10[index].Name
+	mapped4 := make([]string, len(array2))
+	for index := range array2 {
+		mapped4[index] = array2[index].Name
 	}
-	sorted11 := slices.Clone(entries)
-	slices.SortStableFunc(sorted11, func(x shared.Entry, y shared.Entry) int {
-		if x.Rank < y.Rank {
-			return -1
-		}
-		if x.Rank > y.Rank {
-			return 1
-		}
-		return 0
+	array3 := shared.SortByKey(entries, func(x shared.Entry) int {
+		return x.Rank
 	})
-	mapped5 := make([]string, len(sorted11))
-	for index := range sorted11 {
-		mapped5[index] = sorted11[index].Name
+	mapped5 := make([]string, len(array3))
+	for index := range array3 {
+		mapped5[index] = array3[index].Name
 	}
-	sorted12 := slices.Clone(entries)
-	slices.SortStableFunc(sorted12, func(x shared.Entry, y shared.Entry) int {
-		if x.Initial < y.Initial {
-			return -1
-		}
-		if x.Initial > y.Initial {
-			return 1
-		}
-		return 0
+	array4 := shared.SortByKey(entries, func(x shared.Entry) rune {
+		return x.Initial
 	})
-	mapped6 := make([]string, len(sorted12))
-	for index := range sorted12 {
-		mapped6[index] = sorted12[index].Name
+	mapped6 := make([]string, len(array4))
+	for index := range array4 {
+		mapped6[index] = array4[index].Name
 	}
-	sorted13 := slices.Clone(entries)
-	slices.SortStableFunc(sorted13, func(x shared.Entry, y shared.Entry) int {
+	array5 := direct.SortBy(entries, func(x shared.Entry, y shared.Entry) int {
 		return prim.CompareString(x.Name, y.Name)
 	})
-	mapped7 := make([]string, len(sorted13))
-	for index := range sorted13 {
-		mapped7[index] = sorted13[index].Name
+	mapped7 := make([]string, len(array5))
+	for index := range array5 {
+		mapped7[index] = array5[index].Name
 	}
-	array2 := direct.SortBy(entries, func(x shared.Entry, y shared.Entry) int {
+	array6 := direct.SortBy(entries, func(x shared.Entry, y shared.Entry) int {
 		number := x.Weight
 		number2 := y.Weight
 		var result3 ordering.Ordering
@@ -215,53 +193,24 @@ func initializeMain_() []string {
 		}
 		return 0
 	})
-	mapped8 := make([]string, len(array2))
-	for index := range array2 {
-		mapped8[index] = array2[index].Name
+	mapped8 := make([]string, len(array6))
+	for index := range array6 {
+		mapped8[index] = array6[index].Name
 	}
-	sorted14 := slices.Clone(entries)
-	slices.SortStableFunc(sorted14, func(x shared.Entry, y shared.Entry) int {
-		key := x.Rank*10 - prim.CodeUnitLength(x.Name)
-		key2 := y.Rank*10 - prim.CodeUnitLength(y.Name)
-		if key < key2 {
-			return -1
-		}
-		if key > key2 {
-			return 1
-		}
-		return 0
+	array7 := shared.SortByKey(entries, func(x shared.Entry) int {
+		return x.Rank*10 - prim.CodeUnitLength(x.Name)
 	})
-	mapped9 := make([]string, len(sorted14))
-	for index := range sorted14 {
-		mapped9[index] = sorted14[index].Name
+	mapped9 := make([]string, len(array7))
+	for index := range array7 {
+		mapped9[index] = array7[index].Name
 	}
-	sorted15 := slices.Clone([]string{"ccc", "a", "bb", "d", ""})
-	slices.SortStableFunc(sorted15, func(x string, y string) int {
-		key := prim.CodeUnitLength(x)
-		key2 := prim.CodeUnitLength(y)
-		if key < key2 {
-			return -1
-		}
-		if key > key2 {
-			return 1
-		}
-		return 0
-	})
-	sorted16 := slices.Clone([]int{3, 1, 2, 1})
-	slices.SortStableFunc(sorted16, func(x int, y int) int {
-		key := -x
-		key2 := -y
-		if key < key2 {
-			return -1
-		}
-		if key > key2 {
-			return 1
-		}
-		return 0
-	})
-	sorted17 := slices.Clone(prim.StringToCharArray("hello"))
-	slices.Sort(sorted17)
-	return []string{show.ArrayInt(sorted), show.ArrayInt(sorted2), show.ArrayInt(sorted3), show.ArrayInt(sorted4), show.ArrayNumber(shared.SortNumbers(numbers)), show.ArrayString(mapped), show.ArrayChar(sorted5), show.ArrayString(sorted6), show.ArrayString(sorted7), show.ArrayInt(mapped2), show.ArrayString(mapped3), show.ArrayString(mapped4), show.ArrayString(mapped5), show.ArrayString(mapped6), show.ArrayString(mapped7), show.ArrayString(mapped8), show.ArrayString(mapped9), show.ArrayString(sorted15), show.ArrayInt(sorted16), prim.CharArrayToString(sorted17)}
+	sorted10 := slices.Clone(prim.StringToCharArray("hello"))
+	slices.Sort(sorted10)
+	return []string{show.ArrayInt(sorted), show.ArrayInt(sorted2), show.ArrayInt(sorted3), show.ArrayInt(sorted4), show.ArrayNumber(shared.SortNumbers(numbers)), show.ArrayString(mapped), show.ArrayChar(sorted5), show.ArrayString(sorted6), show.ArrayString(sorted7), show.ArrayInt(mapped2), show.ArrayString(mapped3), show.ArrayString(mapped4), show.ArrayString(mapped5), show.ArrayString(mapped6), show.ArrayString(mapped7), show.ArrayString(mapped8), show.ArrayString(mapped9), show.ArrayString(shared.SortByKey([]string{"ccc", "a", "bb", "d", ""}, func(x string) int {
+		return prim.CodeUnitLength(x)
+	})), show.ArrayInt(shared.SortByKey([]int{3, 1, 2, 1}, func(x int) int {
+		return -x
+	})), prim.CharArrayToString(sorted10)}
 }
 
 var numbers = initializeNumbers()
@@ -341,4 +290,53 @@ type Entry struct {
 	Weight  float64
 	Initial rune
 	Rank    int
+}
+
+type SortByKeyOrdered interface {
+	~int | ~int8 | ~int16 | ~int32 | ~int64 | ~uint | ~uint8 | ~uint16 | ~uint32 | ~uint64
+}
+
+type SortByKeyEntry[K SortByKeyOrdered] struct {
+	key   K
+	index int
+}
+
+func SortByKey[T any, K SortByKeyOrdered](xs []T, key func(T) K) []T {
+	entries := make([]SortByKeyEntry[K], len(xs))
+	for index, x := range xs {
+		entries[index] = SortByKeyEntry[K]{key: key(x), index: index}
+	}
+	if len(xs) > 1 {
+		scratch := make([]SortByKeyEntry[K], len(xs))
+		copy(scratch, entries)
+		SortByKeyMerge(entries, scratch, 0, len(xs))
+	}
+	sorted := make([]T, len(xs))
+	for index, entry := range entries {
+		sorted[index] = xs[entry.index]
+	}
+	return sorted
+}
+
+func SortByKeyMerge[K SortByKeyOrdered](into []SortByKeyEntry[K], from []SortByKeyEntry[K], low int, high int) {
+	middle := low + (high-low)>>1
+	if middle-low > 1 {
+		SortByKeyMerge(from, into, low, middle)
+	}
+	if high-middle > 1 {
+		SortByKeyMerge(from, into, middle, high)
+	}
+	i, j, k := low, middle, low
+	for i < middle && j < high {
+		if from[j].key < from[i].key {
+			into[k] = from[j]
+			j++
+		} else {
+			into[k] = from[i]
+			i++
+		}
+		k++
+	}
+	k += copy(into[k:], from[i:middle])
+	copy(into[k:], from[j:high])
 }
