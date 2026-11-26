@@ -37,15 +37,15 @@ validLocalEval = consumeIdentity eval
   where
   eval = mkEval Spec
 
-validNestedLocalEval :: Unit
-validNestedLocalEval = consumeIdentity outer
+escapedNestedLocalEval :: Unit
+escapedNestedLocalEval = consumeIdentity outer
   where
   outer = inner
     where
     inner = mkEval Spec
 
-escapedLocalEvidence :: Unit
-escapedLocalEvidence = consumeIdentity eval
+validLocalEvidence :: Unit
+validLocalEvidence = consumeIdentity eval
   where
   eval = constrainedEval Spec
 
@@ -61,7 +61,7 @@ escapedArrayWrapper = [leak modify]
 
 escapedConditionalWrapper = leak (\token -> if true then modify token else modify token)
 
-escapedUnusedLocal :: Int
-escapedUnusedLocal = 0
+validUnusedLocal :: Int
+validUnusedLocal = 0
   where
   escaped = leak modify

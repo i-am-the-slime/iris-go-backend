@@ -1,0 +1,41 @@
+---
+source: tests-integration/src/fixtures.rs
+assertion_line: 346
+---
+Terms
+Unit :: Main.Unit
+Spec :: Main.Spec
+Index :: forall t0 (@scope :: t0). Prim.Int -> Main.Index @t0 (scope :: t0)
+shout :: forall @value. Main.Shout value => value -> value
+mkEval :: forall value. Main.Spec -> value -> value
+consumeIdentity :: (forall value. value -> value) -> Main.Unit
+consumeUnit :: (forall value. value -> Main.Unit) -> Main.Unit
+applyBoth :: (forall value. value -> Prim.Array value) -> Main.Unit
+consumeShout :: (forall value. Main.Shout value => value -> value) -> Main.Unit
+toInt :: forall t0 (scope :: t0). Main.Index @t0 (scope :: t0) -> Prim.Int
+acceptedPointFree :: Main.Unit
+acceptedAlias :: Main.Unit
+acceptedIgnoredArgument :: Main.Unit
+acceptedLocalEvidence :: Main.Unit
+acceptedNestedUnderSignature :: Prim.Int -> Prim.Int
+acceptedSiblingAlias :: Prim.Int -> Prim.Int
+rejectedWrap :: Main.Unit
+rejectedLambda :: Main.Unit
+rejectedCase :: Main.Unit
+rejectedLet :: Main.Unit
+rejectedSiblingOfSignature :: Prim.Int -> Prim.Int
+
+Types
+Unit :: Prim.Type
+Spec :: Prim.Type
+Index :: forall t0. t0 -> Prim.Type
+Shout :: Prim.Type -> Prim.Constraint
+
+Classes
+class forall (value :: Prim.Type). Main.Shout value
+  shout :: forall @value. Main.Shout value => value -> value
+
+Roles
+Unit = []
+Spec = []
+Index = [Phantom]

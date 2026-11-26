@@ -1,0 +1,93 @@
+---
+source: tests-integration/src/fixtures.rs
+---
+Error! · [EscapedSkolem] · Main.purs:68:3
+  •
+  │
+  • Rigid type variable 'value' escaped its scope
+  │
+  │     wrap value = [ value ]
+  │     ╰─────────────────────
+  │
+  • Appears in type 'Array value'
+  •
+
+Error! · [EscapedSkolem] · Main.purs:73:3
+  •
+  │
+  • Rigid type variable 'value1' escaped its scope
+  │
+  │     same = \value -> value
+  │     ╰─────────────────────
+  │
+  • Appears in type 'value1'
+  •
+
+Error! · [EscapedSkolem] · Main.purs:78:3
+  •
+  │
+  • Rigid type variable 'value2' escaped its scope
+  │
+  │     eval = case Spec of
+  │     ╰──────────────────
+  │
+  • Appears in type 'value2 -> value2'
+  •
+
+Error! · [EscapedSkolem] · Main.purs:83:7
+  •
+  │
+  • Rigid type variable 'value3' escaped its scope
+  │
+  │     let same value = value
+  │         ╰─────────────────
+  │
+  • Appears in type 'value3'
+  •
+
+Error! · [EscapedSkolem] · Main.purs:92:3
+  •
+  │
+  • Rigid type variable '(scope :: ?57)' escaped its scope
+  │
+  │     lowest index = toInt index
+  │     ╰─────────────────────────
+  │
+  • Appears in type 'Index @?57 (scope :: ?57)'
+  •
+
+Error! · [MissingFFIModule] · Main.purs:12:1
+  •
+  │
+  • No JavaScript FFI module found for foreign import 'mkEval'
+  │
+  │   foreign import mkEval :: forall value. Spec -> value -> value
+  │   ╰────────────────────────────────────────────────────────────
+  •
+
+Error! · [MissingFFIModule] · Main.purs:14:1
+  •
+  │
+  • No JavaScript FFI module found for foreign import 'consumeIdentity'
+  │
+  │   foreign import consumeIdentity :: (forall value. value -> value) -> Unit
+  │   ╰───────────────────────────────────────────────────────────────────────
+  •
+
+Error! · [MissingFFIModule] · Main.purs:16:1
+  •
+  │
+  • No JavaScript FFI module found for foreign import 'consumeUnit'
+  │
+  │   foreign import consumeUnit :: (forall value. value -> Unit) -> Unit
+  │   ╰──────────────────────────────────────────────────────────────────
+  •
+
+Error! · [MissingFFIModule] · Main.purs:18:1
+  •
+  │
+  • No JavaScript FFI module found for foreign import 'applyBoth'
+  │
+  │   foreign import applyBoth :: (forall value. value -> Array value) -> Unit
+  │   ╰───────────────────────────────────────────────────────────────────────
+  •

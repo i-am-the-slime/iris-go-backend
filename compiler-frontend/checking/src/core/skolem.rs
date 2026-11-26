@@ -4,20 +4,19 @@
 use std::iter;
 use std::sync::Arc;
 
-use building_types::QueryResult;
 use itertools::Itertools;
 use rustc_hash::{FxHashMap, FxHashSet};
 
 use crate::context::CheckContext;
-use crate::core::{SkolemScope, Type, TypeId};
+use crate::core::{Name, SkolemScope, Type, TypeId};
 use crate::error::{CheckingError, ErrorCrumb, ErrorKind};
 use crate::state::CheckState;
 use crate::tree::{
     BinderId, BinderKind, CaseAlternative, DeclarationAbstraction, Equation, ExpressionId,
     ExpressionKind, GuardedExpression, InstanceDeclaration, InstanceImplementation, InstanceMember,
-    LetBindingChunk, LetBindings, LocalDeclarationId, PatternGuard, RecordBinderField,
-    RecordExpressionField, RecordExpressionUpdate, TermDeclaration, TermDeclarationKind,
-    WhereExpression,
+    LetBindingChunk, LetBindings, LocalDeclaration, LocalDeclarationId, PatternGuard,
+    RecordBinderField, RecordExpressionField, RecordExpressionUpdate, TermDeclaration,
+    TermDeclarationKind, WhereExpression,
 };
 use crate::{CheckedModule, ExternalQueries};
 
@@ -33,14 +32,9 @@ enum Task<'c> {
     Updates(&'c [RecordExpressionUpdate], ErrorCrumb),
     Binder(BinderId, ErrorCrumb),
     Expression(ExpressionId, ErrorCrumb),
+    UnjudgedExpression(ExpressionId, ErrorCrumb),
     ExitScope(SkolemScope),
-    EnterLocalEvidence(LocalDeclarationId),
-    ExitEvidence,
-}
-
-enum Pass {
-    Discover,
-    Audit(FxHashSet<SkolemScope>),
+    ExitLocal,
 }
 
 struct SkolemChecker<'c, 'context, 'queries, Q>
@@ -50,17 +44,14 @@ where
     checked: &'c CheckedModule,
     context: &'context CheckContext<'queries, Q>,
     judgments: &'c FxHashSet<ExpressionId>,
-    local: Option<LocalDeclarationId>,
-    /// Crumbs from the enclosing checking context, which keep errors in
-    /// local declarations attributed to their top-level declaration.
     enclosing: Arc<[ErrorCrumb]>,
-    discovering: bool,
     expected_skolems: FxHashSet<SkolemScope>,
+    expects_signature_rigids: bool,
     tasks: Vec<Task<'c>>,
     active: FxHashMap<SkolemScope, u32>,
     reported: FxHashSet<SkolemScope>,
     errors: Vec<CheckingError>,
-    evidence_depth: u32,
+    local_depth: u32,
 }
 
 pub fn check<Q>(state: &mut CheckState, context: &CheckContext<Q>)
@@ -72,98 +63,75 @@ where
         let scopes = leading_scopes(context, expression.type_id);
         expected_skolems.extend(scopes);
     }
+    let signature_rigids = state.checked.tree.arena.lets.iter().flat_map(|(_, declaration)| {
+        signature_rigids(context, declaration).map(|(name, _)| rigid_scope(name))
+    });
+    let signature_rigids: FxHashSet<SkolemScope> = signature_rigids.collect();
+    let expects_signature_rigids = !signature_rigids.is_empty();
+    expected_skolems.extend(signature_rigids);
     if expected_skolems.is_empty() {
         return;
     }
 
-    let (errors, _) = collect_errors(
+    let errors = collect_errors(
         &state.checked,
         &state.judgments,
         context,
-        None,
-        Arc::from([]),
-        Pass::Audit(expected_skolems),
+        expected_skolems,
+        expects_signature_rigids,
     );
     state.checked.errors.extend(errors);
 }
 
-pub fn check_local<Q>(
-    state: &mut CheckState,
-    context: &CheckContext<Q>,
-    declaration: LocalDeclarationId,
-) -> QueryResult<()>
+fn signature_rigids<'c, Q>(
+    context: &'c CheckContext<Q>,
+    declaration: &'c LocalDeclaration,
+) -> impl Iterator<Item = (Name, TypeId)> + 'c
 where
     Q: ExternalQueries,
 {
-    let type_id = state.checked.tree[declaration].type_id;
-    let type_id = super::zonk::zonk(state, context, type_id)?;
-    state.checked.tree.set_let_type(declaration, type_id);
+    declaration.value.abstractions.iter().filter_map(|abstraction| {
+        let DeclarationAbstraction::Type { rigid, .. } = abstraction else { return None };
+        let Type::Rigid(name, _, _) = *context.lookup_type(*rigid) else { return None };
+        Some((name, *rigid))
+    })
+}
 
-    let enclosing = Arc::from(state.crumbs.as_slice());
-    let (_, expected_skolems) = collect_errors(
-        &state.checked,
-        &state.judgments,
-        context,
-        Some(declaration),
-        Arc::clone(&enclosing),
-        Pass::Discover,
-    );
-    if expected_skolems.is_empty() {
-        return Ok(());
-    }
-    let (errors, _) = collect_errors(
-        &state.checked,
-        &state.judgments,
-        context,
-        Some(declaration),
-        enclosing,
-        Pass::Audit(expected_skolems),
-    );
-    state.checked.errors.extend(errors);
-    Ok(())
+fn rigid_scope(name: Name) -> SkolemScope {
+    SkolemScope { file: name.file, unique: name.unique }
 }
 
 fn new_checker<'c, 'context, 'queries, Q>(
     checked: &'c CheckedModule,
     judgments: &'c FxHashSet<ExpressionId>,
     context: &'context CheckContext<'queries, Q>,
-    local: Option<LocalDeclarationId>,
-    enclosing: Arc<[ErrorCrumb]>,
-    pass: Pass,
+    expected_skolems: FxHashSet<SkolemScope>,
+    expects_signature_rigids: bool,
 ) -> SkolemChecker<'c, 'context, 'queries, Q>
 where
     Q: ExternalQueries,
 {
-    let (discovering, expected_skolems) = match pass {
-        Pass::Discover => (true, FxHashSet::default()),
-        Pass::Audit(expected_skolems) => (false, expected_skolems),
-    };
-
-    let mut tasks = if let Some(declaration) = local {
-        vec![Task::Local(declaration)]
-    } else {
-        let terms = checked.tree.iter_terms();
-        let terms = terms.collect_vec();
-        let tasks = terms.iter().map(|&(source, declaration)| {
-            let crumb = ErrorCrumb::TermDeclaration(source);
-            Task::Term(&checked.tree[declaration], crumb)
-        });
-        let instances = checked.tree.iter_instances().map(|(source, declaration)| {
-            let crumb = ErrorCrumb::InstanceDeclaration(source);
-            Task::Term(&checked.tree[declaration], crumb)
-        });
-        let derives = checked.tree.iter_derives().map(|(source, declaration)| {
-            let crumb = ErrorCrumb::DeriveDeclaration(source);
-            Task::Term(&checked.tree[declaration], crumb)
-        });
-        tasks.chain(instances).chain(derives).collect_vec()
-    };
+    let terms = checked.tree.iter_terms();
+    let terms = terms.collect_vec();
+    let tasks = terms.iter().map(|&(source, declaration)| {
+        let crumb = ErrorCrumb::TermDeclaration(source);
+        Task::Term(&checked.tree[declaration], crumb)
+    });
+    let instances = checked.tree.iter_instances().map(|(source, declaration)| {
+        let crumb = ErrorCrumb::InstanceDeclaration(source);
+        Task::Term(&checked.tree[declaration], crumb)
+    });
+    let derives = checked.tree.iter_derives().map(|(source, declaration)| {
+        let crumb = ErrorCrumb::DeriveDeclaration(source);
+        Task::Term(&checked.tree[declaration], crumb)
+    });
+    let mut tasks = tasks.chain(instances).chain(derives).collect_vec();
     tasks.reverse();
 
     let reported = checked.errors.iter().filter_map(|error| {
         let ErrorKind::EscapedSkolem { skolem, .. } = error.kind else { return None };
         let Type::Rigid(name, _, _) = *context.lookup_type(skolem) else { return None };
-        name.scope()
+        Some(rigid_scope(name))
     });
     let reported = reported.collect();
 
@@ -171,15 +139,14 @@ where
         checked,
         context,
         judgments,
-        local,
-        enclosing,
-        discovering,
+        enclosing: Arc::from([]),
         expected_skolems,
+        expects_signature_rigids,
         tasks,
         active: FxHashMap::default(),
         reported,
         errors: Vec::new(),
-        evidence_depth: 0,
+        local_depth: 0,
     }
 }
 
@@ -258,15 +225,46 @@ fn check_local_declaration<Q>(
     let checked = checker.checked;
     let declaration = &checked.tree[declaration_id];
     let crumb = ErrorCrumb::CheckingLetName(declaration.source);
-    if checker.evidence_depth == 0 {
-        inspect_type(checker, declaration.type_id, crumb);
-        inspect_abstractions(checker, &declaration.value.abstractions, crumb);
-    } else {
-        inspect_evidence_abstractions(checker, &declaration.value.abstractions, crumb);
+    checker.local_depth += 1;
+    checker.tasks.push(Task::ExitLocal);
+    for (name, _) in signature_rigids(checker.context, declaration) {
+        let scope = rigid_scope(name);
+        *checker.active.entry(scope).or_default() += 1;
+        checker.tasks.push(Task::ExitScope(scope));
+    }
+    if let Some(root) = unjudged_root(checker, declaration) {
+        checker.tasks.push(Task::UnjudgedExpression(root, crumb));
+        return;
     }
     let equations =
         declaration.value.equations.iter().map(|equation| Task::Equation(equation, crumb));
     checker.tasks.extend(equations);
+}
+
+fn unjudged_root<Q>(
+    checker: &SkolemChecker<'_, '_, '_, Q>,
+    declaration: &LocalDeclaration,
+) -> Option<ExpressionId>
+where
+    Q: ExternalQueries,
+{
+    let binding = checker.context.lowered.tree.get_let_binding(declaration.source)?;
+    if binding.signature.is_some() {
+        return None;
+    }
+    let [equation] = declaration.value.equations.as_ref() else { return None };
+    let [alternative] = equation.guarded_expression.alternatives.as_ref() else { return None };
+    let unconditional = equation.binders.is_empty()
+        && alternative.pattern_guards.is_empty()
+        && alternative.where_expression.bindings.chunks.is_empty();
+    unconditional.then_some(alternative.where_expression.expression)
+}
+
+fn exit_local<Q>(checker: &mut SkolemChecker<'_, '_, '_, Q>)
+where
+    Q: ExternalQueries,
+{
+    checker.local_depth -= 1;
 }
 
 fn check_equation<'c, Q>(
@@ -334,12 +332,8 @@ fn check_bindings<'c, Q>(
                 }
             }
             LetBindingChunk::Names { declarations, .. } => {
-                if checker.evidence_depth > 0 || checker.local.is_none() {
-                    let declarations = declarations
-                        .iter()
-                        .map(|&declaration| Task::EnterLocalEvidence(declaration));
-                    checker.tasks.extend(declarations);
-                }
+                let declarations = declarations.iter().map(|&declaration| Task::Local(declaration));
+                checker.tasks.extend(declarations);
             }
         }
     }
@@ -384,7 +378,7 @@ fn check_binder<Q>(
 ) where
     Q: ExternalQueries,
 {
-    if checker.evidence_depth > 0 {
+    if checker.local_depth > 0 {
         return;
     }
 
@@ -428,6 +422,7 @@ fn check_binder<Q>(
 fn check_expression<Q>(
     checker: &mut SkolemChecker<'_, '_, '_, Q>,
     expression_id: ExpressionId,
+    judged: bool,
     crumb: ErrorCrumb,
 ) where
     Q: ExternalQueries,
@@ -436,15 +431,11 @@ fn check_expression<Q>(
     let expression = &checked.tree[expression_id];
 
     for scope in leading_scopes(checker.context, expression.type_id) {
-        if checker.discovering {
-            checker.expected_skolems.insert(scope);
-            checker.reported.insert(scope);
-        }
         *checker.active.entry(scope).or_default() += 1;
         checker.tasks.push(Task::ExitScope(scope));
     }
 
-    if checker.evidence_depth == 0 && checker.judgments.contains(&expression_id) {
+    if judged && checker.judgments.contains(&expression_id) {
         inspect_type(checker, expression.type_id, crumb);
     }
 
@@ -486,11 +477,15 @@ fn check_expression<Q>(
             checker.tasks.push(Task::Expression(*argument, crumb));
         }
         ExpressionKind::EvidenceApplication { function, constraint, .. } => {
-            inspect_type(checker, *constraint, crumb);
+            if checker.local_depth == 0 {
+                inspect_type(checker, *constraint, crumb);
+            }
             checker.tasks.push(Task::Expression(*function, crumb));
         }
         ExpressionKind::EvidenceAbstraction { binder, expression } => {
-            inspect_type(checker, checked.evidence[*binder].constraint, crumb);
+            if checker.local_depth == 0 {
+                inspect_type(checker, checked.evidence[*binder].constraint, crumb);
+            }
             checker.tasks.push(Task::Expression(*expression, crumb));
         }
         ExpressionKind::Lambda { binders, expression } => {
@@ -529,24 +524,6 @@ where
     }
 }
 
-fn enter_local_evidence<Q>(
-    checker: &mut SkolemChecker<'_, '_, '_, Q>,
-    declaration: LocalDeclarationId,
-) where
-    Q: ExternalQueries,
-{
-    checker.evidence_depth += 1;
-    checker.tasks.push(Task::ExitEvidence);
-    checker.tasks.push(Task::Local(declaration));
-}
-
-fn exit_evidence<Q>(checker: &mut SkolemChecker<'_, '_, '_, Q>)
-where
-    Q: ExternalQueries,
-{
-    checker.evidence_depth -= 1;
-}
-
 fn inspect_abstractions<Q>(
     checker: &mut SkolemChecker<'_, '_, '_, Q>,
     abstractions: &[DeclarationAbstraction],
@@ -565,20 +542,6 @@ fn inspect_abstractions<Q>(
                 inspect_type(checker, *constraint, crumb);
             }
             DeclarationAbstraction::Argument => {}
-        }
-    }
-}
-
-fn inspect_evidence_abstractions<Q>(
-    checker: &mut SkolemChecker<'_, '_, '_, Q>,
-    abstractions: &[DeclarationAbstraction],
-    crumb: ErrorCrumb,
-) where
-    Q: ExternalQueries,
-{
-    for abstraction in abstractions {
-        if let DeclarationAbstraction::Evidence { constraint, .. } = abstraction {
-            inspect_type(checker, *constraint, crumb);
         }
     }
 }
@@ -602,7 +565,7 @@ fn inspect_type<Q>(
 ) where
     Q: ExternalQueries,
 {
-    if checker.discovering || !has_scoped_rigid(checker, annotation) {
+    if !may_mention_expected_skolem(checker, annotation) {
         return;
     }
 
@@ -610,7 +573,7 @@ fn inspect_type<Q>(
     let mut visited = FxHashSet::default();
 
     while let Some(type_id) = pending.pop() {
-        if !has_scoped_rigid(checker, type_id) || !visited.insert(type_id) {
+        if !may_mention_expected_skolem(checker, type_id) || !visited.insert(type_id) {
             continue;
         }
 
@@ -636,8 +599,8 @@ fn inspect_type<Q>(
                 pending.extend(row.tail);
             }
             Type::Rigid(name, _, kind) => {
-                if let Some(scope) = name.scope()
-                    && checker.expected_skolems.contains(&scope)
+                let scope = rigid_scope(name);
+                if checker.expected_skolems.contains(&scope)
                     && !checker.active.contains_key(&scope)
                     && checker.reported.insert(scope)
                 {
@@ -659,19 +622,18 @@ fn inspect_type<Q>(
     }
 }
 
-fn has_scoped_rigid<Q>(checker: &SkolemChecker<'_, '_, '_, Q>, type_id: TypeId) -> bool
+fn may_mention_expected_skolem<Q>(checker: &SkolemChecker<'_, '_, '_, Q>, type_id: TypeId) -> bool
 where
     Q: ExternalQueries,
 {
-    // Only a scoped rigid variable can be an expected skolem. The audit does
-    // not look through unification variables, so a type whose flags report no
-    // scoped rigid variable cannot mention an expected skolem.
-    let has_scoped_rigid = checker.context.lookup_type_flags(type_id).has_scoped_rigid();
+    let flags = checker.context.lookup_type_flags(type_id);
+    let may_mention =
+        if checker.expects_signature_rigids { flags.has_rigid() } else { flags.has_scoped_rigid() };
     debug_assert!(
-        has_scoped_rigid || !mentions_expected_skolem(checker, type_id),
+        may_mention || !mentions_expected_skolem(checker, type_id),
         "invariant violated: a type without scoped rigids mentions an expected skolem",
     );
-    has_scoped_rigid
+    may_mention
 }
 
 fn mentions_expected_skolem<Q>(checker: &SkolemChecker<'_, '_, '_, Q>, type_id: TypeId) -> bool
@@ -709,7 +671,7 @@ where
                 pending.extend(row.tail);
             }
             Type::Rigid(name, _, kind) => {
-                if name.scope().is_some_and(|scope| checker.expected_skolems.contains(&scope)) {
+                if checker.expected_skolems.contains(&rigid_scope(name)) {
                     return true;
                 }
                 pending.push(kind);
@@ -731,14 +693,14 @@ fn collect_errors<'c, Q>(
     checked: &'c CheckedModule,
     judgments: &'c FxHashSet<ExpressionId>,
     context: &CheckContext<Q>,
-    local: Option<LocalDeclarationId>,
-    enclosing: Arc<[ErrorCrumb]>,
-    pass: Pass,
-) -> (Vec<CheckingError>, FxHashSet<SkolemScope>)
+    expected_skolems: FxHashSet<SkolemScope>,
+    expects_signature_rigids: bool,
+) -> Vec<CheckingError>
 where
     Q: ExternalQueries,
 {
-    let mut checker = new_checker(checked, judgments, context, local, enclosing, pass);
+    let mut checker =
+        new_checker(checked, judgments, context, expected_skolems, expects_signature_rigids);
 
     while let Some(task) = checker.tasks.pop() {
         match task {
@@ -760,17 +722,17 @@ where
             Task::Updates(updates, crumb) => check_updates(&mut checker, updates, crumb),
             Task::Binder(binder, crumb) => check_binder(&mut checker, binder, crumb),
             Task::Expression(expression, crumb) => {
-                check_expression(&mut checker, expression, crumb);
+                check_expression(&mut checker, expression, true, crumb);
+            }
+            Task::UnjudgedExpression(expression, crumb) => {
+                check_expression(&mut checker, expression, false, crumb);
             }
             Task::ExitScope(scope) => exit_scope(&mut checker, scope),
-            Task::EnterLocalEvidence(declaration) => {
-                enter_local_evidence(&mut checker, declaration);
-            }
-            Task::ExitEvidence => exit_evidence(&mut checker),
+            Task::ExitLocal => exit_local(&mut checker),
         }
     }
 
-    (checker.errors, checker.expected_skolems)
+    checker.errors
 }
 
 fn leading_scopes<Q>(

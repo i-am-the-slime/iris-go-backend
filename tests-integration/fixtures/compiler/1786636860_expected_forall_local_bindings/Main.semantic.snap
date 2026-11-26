@@ -38,8 +38,8 @@ validLocalEval = consumeIdentity eval
   eval :: value -> value
   eval = mkEval Spec
 
-validNestedLocalEval :: Main.Unit
-validNestedLocalEval = consumeIdentity outer
+escapedNestedLocalEval :: Main.Unit
+escapedNestedLocalEval = consumeIdentity outer
   where
   outer :: value -> value
   outer = inner
@@ -47,8 +47,8 @@ validNestedLocalEval = consumeIdentity outer
     inner :: value -> value
     inner = mkEval Spec
 
-escapedLocalEvidence :: Main.Unit
-escapedLocalEvidence = consumeIdentity eval
+validLocalEvidence :: Main.Unit
+validLocalEvidence = consumeIdentity eval
   where
   eval :: value -> value
   eval = constrainedEval {witnessValue} Spec
@@ -73,8 +73,8 @@ escapedConditionalWrapper =
   leak \token ->
     if true then modify token else modify token
 
-escapedUnusedLocal :: Prim.Int
-escapedUnusedLocal = 0
+validUnusedLocal :: Prim.Int
+validUnusedLocal = 0
   where
   escaped :: Main.Token @?61 scope
   escaped = leak modify

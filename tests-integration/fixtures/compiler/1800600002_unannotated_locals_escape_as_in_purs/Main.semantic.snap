@@ -1,0 +1,111 @@
+---
+source: tests-integration/src/fixtures.rs
+---
+data Unit :: Prim.Type
+data Unit
+  | Unit :: Main.Unit
+
+data Spec :: Prim.Type
+data Spec
+  | Spec :: Main.Spec
+
+data Index :: forall k0. k0 -> Prim.Type
+data Index @scope
+  | Index :: Prim.Int -> Main.Index scope
+
+interface Shout :: Prim.Type -> Prim.Constraint
+interface Shout value where
+  shout :: value -> value
+
+foreign import mkEval :: forall value. Main.Spec -> value -> value
+
+foreign import consumeIdentity :: (forall value. value -> value) -> Main.Unit
+
+foreign import consumeUnit :: (forall value. value -> Main.Unit) -> Main.Unit
+
+foreign import applyBoth :: (forall value. value -> Prim.Array value) -> Main.Unit
+
+consumeShout :: (forall value. Main.Shout value => value -> value) -> Main.Unit
+consumeShout = \_ -> Unit
+
+toInt :: forall t0 scope. Main.Index @t0 scope -> Prim.Int
+toInt = \(Index number) -> number
+
+acceptedPointFree :: Main.Unit
+acceptedPointFree = consumeIdentity eval
+  where
+  eval :: value -> value
+  eval = mkEval Spec
+
+acceptedAlias :: Main.Unit
+acceptedAlias = applyBoth wrap
+  where
+  wrap :: forall value. value -> Prim.Array value
+  wrap = singleton
+  singleton :: forall value. value -> Prim.Array value
+  singleton = \value -> [value]
+
+acceptedIgnoredArgument :: Main.Unit
+acceptedIgnoredArgument = consumeUnit ignore
+  where
+  ignore :: value -> Main.Unit
+  ignore = \_ -> Unit
+
+acceptedLocalEvidence :: Main.Unit
+acceptedLocalEvidence = consumeShout \{shoutDict} -> loud {shoutDict}
+  where
+  loud :: forall @value. Main.Shout value => value -> value
+  loud = shout
+
+acceptedNestedUnderSignature :: Prim.Int -> Prim.Int
+acceptedNestedUnderSignature = \number -> fill (Index number)
+  where
+  fill :: forall (scope :: ?26). Main.Index @?26 scope -> Prim.Int
+  fill = \index -> lowest index
+    where
+    lowest :: Main.Index @?26 scope -> Prim.Int
+    lowest = \nested -> toInt nested
+
+acceptedSiblingAlias :: Prim.Int -> Prim.Int
+acceptedSiblingAlias = \number -> fill (Index number)
+  where
+  fill :: forall (scope :: ?34). Main.Index @?34 scope -> Prim.Int
+  fill = \index -> lowest index
+  lowest :: forall t0 (scope :: t0). Main.Index @t0 scope -> Prim.Int
+  lowest = toInt
+
+rejectedWrap :: Main.Unit
+rejectedWrap = applyBoth wrap
+  where
+  wrap :: value -> Prim.Array value
+  wrap = \value -> [value]
+
+rejectedLambda :: Main.Unit
+rejectedLambda = consumeIdentity same
+  where
+  same :: value -> value
+  same = \value -> value
+
+rejectedCase :: Main.Unit
+rejectedCase = consumeIdentity eval
+  where
+  eval :: value -> value
+  eval =
+    case Spec of
+      Spec -> mkEval Spec
+
+rejectedLet :: Main.Unit
+rejectedLet =
+  let
+    same :: value -> value
+    same = \value -> value
+  in
+    consumeIdentity same
+
+rejectedSiblingOfSignature :: Prim.Int -> Prim.Int
+rejectedSiblingOfSignature = \number -> fill (Index number)
+  where
+  fill :: forall (scope :: ?57). Main.Index @?57 scope -> Prim.Int
+  fill = \index -> lowest index
+  lowest :: Main.Index @?57 scope -> Prim.Int
+  lowest = \index -> toInt index

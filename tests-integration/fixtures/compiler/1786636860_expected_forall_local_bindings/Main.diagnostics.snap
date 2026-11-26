@@ -1,81 +1,70 @@
 ---
 source: tests-integration/src/fixtures.rs
 ---
-Error! · [EscapedSkolem] · Main.purs:54:3
-  •
-  │
-  • Rigid type variable '(scope :: t0)' escaped its scope
-  │
-  │     escaped = leak modify
-  │     ╰────────────────────
-  │
-  • Appears in type 'Token @t0 (scope :: t0)'
-  •
-
-Error! · [EscapedSkolem] · Main.purs:67:3
-  •
-  │
-  • Rigid type variable '(scope1 :: ?61)' escaped its scope
-  │
-  │     escaped = leak modify
-  │     ╰────────────────────
-  │
-  • Appears in type 'Token @?61 (scope1 :: ?61)'
-  •
-
-Error! · [EscapedSkolem] · Main.purs:50:3
+Error! · [EscapedSkolem] · Main.purs:43:3
   •
   │
   • Rigid type variable 'value' escaped its scope
   │
-  │     eval = constrainedEval Spec
-  │     ╰──────────────────────────
+  │     outer = inner
+  │     ╰────────────
   │
-  • Appears in type 'Witness @Type value'
+  • Appears in type 'value -> value'
+  •
+
+Error! · [EscapedSkolem] · Main.purs:52:1
+  •
+  │
+  • Rigid type variable '(scope :: t0)' escaped its scope
+  │
+  │   escapedLocalAlias = escaped
+  │   ╰──────────────────────────
+  │
+  • Appears in type 'forall t0. Token @t0 (scope :: t0)'
   •
 
 Error! · [EscapedSkolem] · Main.purs:56:1
   •
   │
-  • Rigid type variable '(scope2 :: t1)' escaped its scope
+  • Rigid type variable '(scope1 :: t1)' escaped its scope
   │
   │   escapedEtaExpansion = leak (\token -> modify token)
   │   ╰──────────────────────────────────────────────────
   │
-  • Appears in type 'forall t1. Token @t1 (scope2 :: t1)'
+  • Appears in type 'forall t1. Token @t1 (scope1 :: t1)'
   •
 
 Error! · [EscapedSkolem] · Main.purs:58:1
   •
   │
-  • Rigid type variable '(scope3 :: t2)' escaped its scope
+  • Rigid type variable '(scope2 :: t2)' escaped its scope
   │
   │   escapedIdentityWrapper = identity (leak modify)
   │   ╰──────────────────────────────────────────────
   │
-  • Appears in type 'forall t2. Token @t2 (scope3 :: t2)'
+  • Appears in type 'forall t2. Token @t2 (scope2 :: t2)'
   •
 
 Error! · [EscapedSkolem] · Main.purs:60:1
   •
   │
-  • Rigid type variable '(scope4 :: t3)' escaped its scope
+  • Rigid type variable '(scope3 :: t3)' escaped its scope
   │
   │   escapedArrayWrapper = [leak modify]
   │   ╰──────────────────────────────────
   │
-  • Appears in type 'forall t3. Array (Token @t3 (scope4 :: t3))'
+  • Appears in type 'forall t3. Array (Token @t3 (scope3 :: t3))'
   •
 
 Error! · [EscapedSkolem] · Main.purs:62:1
   •
   │
-  • Rigid type variable '(scope5 :: t4)' escaped its scope
+  • Rigid type variable '(scope4 :: t4)' escaped its scope
   │
   │   escapedConditionalWrapper = leak (\token -> if true then modify token else modify token)
   │   ╰───────────────────────────────────────────────────────────────────────────────────────
   │
-  • Appears in type 'forall t4. Token @t4 (scope5 :: t4)'
+  • Appears in type 'forall t4. Token @t4 (scope4 :: t4)'
   •
 
 Error! · [MissingFFIModule] · Main.purs:19:1

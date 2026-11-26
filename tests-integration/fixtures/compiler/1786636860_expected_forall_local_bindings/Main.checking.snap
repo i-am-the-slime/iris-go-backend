@@ -12,14 +12,14 @@ constrainedEval :: forall value. Main.Witness @Prim.Type value => Main.Spec -> v
 consumeIdentity :: (forall value. value -> value) -> Main.Unit
 leak :: forall t0 result. (forall (scope :: t0). Main.Token @t0 (scope :: t0) -> result) -> result
 validLocalEval :: Main.Unit
-validNestedLocalEval :: Main.Unit
-escapedLocalEvidence :: Main.Unit
+escapedNestedLocalEval :: Main.Unit
+validLocalEvidence :: Main.Unit
 escapedLocalAlias :: forall t0. Main.Token @t0 (scope :: t0)
 escapedEtaExpansion :: forall t0. Main.Token @t0 (scope :: t0)
 escapedIdentityWrapper :: forall t0. Main.Token @t0 (scope :: t0)
 escapedArrayWrapper :: forall t0. Prim.Array (Main.Token @t0 (scope :: t0))
 escapedConditionalWrapper :: forall t0. Main.Token @t0 (scope :: t0)
-escapedUnusedLocal :: Prim.Int
+validUnusedLocal :: Prim.Int
 
 Types
 Unit :: Prim.Type

@@ -3,7 +3,7 @@ use std::sync::Arc;
 use building_types::QueryResult;
 
 use crate::context::CheckContext;
-use crate::core::{Type, TypeId, exhaustive, normalise, skolem, unification};
+use crate::core::{Type, TypeId, exhaustive, normalise, unification, zonk};
 use crate::error::ErrorCrumb;
 use crate::source::terms::{ElaboratedExpression, application, equations, guarded};
 use crate::source::{binder, types};
@@ -172,13 +172,13 @@ where
             lowering::Scc::Base(id) | lowering::Scc::Recursive(id) => {
                 let declaration = check_let_name_binding(state, context, *id)?;
                 let declaration = state.checked.tree.insert_let(declaration);
-                skolem::check_local(state, context, declaration)?;
+                zonk_local_type(state, context, declaration)?;
             }
             lowering::Scc::Mutual(mutual) => {
                 for &id in mutual {
                     let declaration = check_let_name_binding(state, context, id)?;
                     let declaration = state.checked.tree.insert_let(declaration);
-                    skolem::check_local(state, context, declaration)?;
+                    zonk_local_type(state, context, declaration)?;
                 }
             }
         }
@@ -197,6 +197,20 @@ where
     let groups = Arc::from(scc);
 
     Ok(tree::LetBindingChunk::Names { declarations, groups })
+}
+
+fn zonk_local_type<Q>(
+    state: &mut CheckState,
+    context: &CheckContext<Q>,
+    declaration: tree::LocalDeclarationId,
+) -> QueryResult<()>
+where
+    Q: ExternalQueries,
+{
+    let type_id = state.checked.tree[declaration].type_id;
+    let type_id = zonk::zonk(state, context, type_id)?;
+    state.checked.tree.set_let_type(declaration, type_id);
+    Ok(())
 }
 
 pub fn check_let_name_binding<Q>(
