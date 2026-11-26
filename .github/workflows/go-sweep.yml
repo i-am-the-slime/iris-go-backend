@@ -10,15 +10,31 @@ on:
   schedule:
     - cron: "17 2 * * *"
   workflow_dispatch:
+    inputs:
+      runtime-ref:
+        description: iris-go ref to build against
+        default: main
+        type: string
+  workflow_call:
+    inputs:
+      runtime-ref:
+        description: iris-go ref to build against
+        default: main
+        type: string
+    outputs:
+      summary:
+        description: The comparison's packages and entries rows
+        value: ${{ jobs.compare.outputs.summary }}
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
+  group: go-sweep-${{ github.ref }}
   cancel-in-progress: false
 
 env:
   CARGO_TERM_COLOR: always
   PACKAGE_SET: "82.1.1"
   CORPUS_DIR: go-sweep-corpus
+  PARTS: "3"
 
 jobs:
   harness:
@@ -81,16 +97,17 @@ jobs:
           retention-days: 3
 
   sweep:
-    name: Sweep shard ${{ matrix.shard }}/4
+    name: Sweep shard ${{ matrix.shard }}/4 part ${{ matrix.part }}/3
     needs: harness
     permissions:
       contents: read
     runs-on: ubuntu-latest
-    timeout-minutes: 300
+    timeout-minutes: 120
     strategy:
       fail-fast: false
       matrix:
         shard: [1, 2, 3, 4]
+        part: [1, 2, 3]
     env:
       IRIS_GO: ${{ github.workspace }}/iris-go-runtime
       GOEXPERIMENT: simd
@@ -106,7 +123,7 @@ jobs:
         uses: actions/checkout@v7
         with:
           repository: i-am-the-slime/iris-go
-          ref: main
+          ref: ${{ inputs.runtime-ref || 'main' }}
           path: iris-go-runtime
           persist-credentials: false
 
@@ -115,6 +132,14 @@ jobs:
         with:
           go-version: "1.27"
           cache: false
+
+      - name: Restore Go builds
+        uses: actions/cache/restore@v6
+        with:
+          path: ~/.cache/go-build
+          key: v1-go-build-${{ runner.os }}-${{ hashFiles('iris-go-runtime/**/*.go') }}
+          restore-keys: |
+            v1-go-build-${{ runner.os }}-
 
       - name: Download the sweep
         uses: actions/download-artifact@v8
@@ -146,6 +171,19 @@ jobs:
             --timeout 600 \
             --check-timeout 300
 
+      - name: Keep this part's programs
+        env:
+          PART: ${{ matrix.part }}
+        run: |
+          mv sweep/outcomes.jsonl sweep/all-outcomes.jsonl
+          jq -c --argjson part "$PART" --argjson parts "$PARTS" '
+            select(
+              if .status == "ok"
+              then (.program | explode | add) % $parts == $part - 1
+              else $part == 1
+              end)' sweep/all-outcomes.jsonl > sweep/outcomes.jsonl
+          echo "part $PART/$PARTS keeps $(wc -l < sweep/outcomes.jsonl) of $(wc -l < sweep/all-outcomes.jsonl) outcomes"
+
       - name: Build the programs
         run: go-sweep-bin/go_sweep build --out sweep --jobs 1
 
@@ -153,12 +191,20 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v7
         with:
-          name: go-sweep-shard-${{ matrix.shard }}
+          name: go-sweep-shard-${{ matrix.shard }}-part-${{ matrix.part }}
           path: |
             sweep/outcomes.jsonl
             sweep/builds.jsonl
             sweep/skip.txt
-            sweep/go
+          if-no-files-found: warn
+          retention-days: 14
+
+      - name: Upload the programs
+        if: always() && github.workflow == 'Go registry sweep'
+        uses: actions/upload-artifact@v7
+        with:
+          name: go-sweep-programs-${{ matrix.shard }}-part-${{ matrix.part }}
+          path: sweep/go
           if-no-files-found: warn
           retention-days: 14
 
@@ -170,6 +216,8 @@ jobs:
       contents: read
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    outputs:
+      summary: ${{ steps.compare.outputs.summary }}
 
     steps:
       - name: Checkout repository
@@ -190,6 +238,7 @@ jobs:
           path: shards
 
       - name: Compare with the baseline
+        id: compare
         run: |
           chmod +x go-sweep-bin/go_sweep
           mkdir -p report
@@ -197,11 +246,17 @@ jobs:
           for shard in shards/*/; do
             outs+=(--out "$shard")
           done
-          set -o pipefail
+          set +e
           go-sweep-bin/go_sweep compare "${outs[@]}" \
             --baseline tests-compatibility/go-sweep-baseline.tsv \
             --report report \
             | tee report/summary.md "$GITHUB_STEP_SUMMARY"
+          status=${PIPESTATUS[0]}
+          set -e
+          rows=$(grep -E '^\| (pass|entries ok) ' report/summary.md | sed -E 's/^\| ([^|]+) \| ([0-9]+) \| ([0-9]+) \|$/\1 \2 → \3/' | paste -sd ";" -)
+          verdict=$(grep -q '^No regressions' report/summary.md && echo "no regressions" || echo "regressions")
+          echo "summary=$rows; $verdict" >> "$GITHUB_OUTPUT"
+          exit "$status"
 
       - name: Upload the report
         if: always()

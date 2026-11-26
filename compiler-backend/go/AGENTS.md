@@ -65,3 +65,77 @@ the shortcut and mention it afterwards.
 ## Reporting
 
 Say what changed, the gate results, and anything left undone.
+
+## Runbook
+
+The fork is `i-am-the-slime/iris-go-backend`, jj remote `fork`. Never push to `origin`
+(purefunctor/purescript-iris).
+
+### Workspace and build
+
+```bash
+jj -R ~/Developer/iris-ws-merge6 workspace add ~/Developer/iris-ws-<name> -r main@fork
+cd ~/Developer/iris-ws-<name>
+export CARGO_BUILD_JOBS=4 GOMAXPROCS=4    # always, on Mark's laptop
+cargo build -p iris-cli --release          # target/release/googoo
+```
+
+`IRIS_GO` points at the iris-go checkout to build against (Mark's shell sets `~/Developer/iris-go`,
+kept on main).
+
+### Quick local checks
+
+Run only what the change touches. Never run the full suites locally; CI runs them.
+
+```bash
+just integration --test go <fixture-dir>           # one Go fixture, e.g. 1794566171_recursive_newtypes
+just integration --test go_style <fixture-dir>     # one style-suite fixture
+just t go <fixture-dir>                            # same, and update its snapshot (read the diff)
+IRIS=$PWD/target/release/googoo JOBS=4 \
+  compiler-backend/go/scripts/run-examples.sh Tco01 Array01   # selected iris-go examples vs JS
+```
+
+Selected examples skip the quality ratchet; the full run in CI checks it.
+
+### Full gates in CI
+
+Pushing a branch named `gates/<name>` to `fork` runs the Gates workflow
+(`.github/workflows/gates.yml`), in about 15 minutes:
+
+- every `tests-integration` test with the Go fixtures' builds required, in 4 hash partitions;
+- `tests-e2e` on Linux;
+- iris-go's examples against JS (`run-examples.sh`, quality ratchet included);
+- the registry sweep against `tests-compatibility/go-sweep-baseline.tsv`, 4 shards x 3 build parts.
+
+They build against the iris-go tag in `RUNTIME_VERSION`. A manual run can take another ref:
+`gh workflow run gates.yml -R i-am-the-slime/iris-go-backend --ref gates/<name> -f runtime-ref=main`.
+
+```bash
+jj bookmark create gates/<name> -r @-
+jj git push --remote fork -b gates/<name> --allow-new
+gh run list -R i-am-the-slime/iris-go-backend -w Gates -b gates/<name> -L 1
+gh run watch <run-id> -R i-am-the-slime/iris-go-backend --exit-status
+gh run view <run-id> -R i-am-the-slime/iris-go-backend --log-failed
+```
+
+The Summary job's page has one row per gate. Delete the branch when done:
+`jj bookmark delete gates/<name> && jj git push --remote fork --deleted`.
+
+`main` runs Cargo Build & Test on push (all platforms, Go fixtures and style suite, examples
+against iris-go main). The registry sweep also runs nightly at 02:17 UTC against iris-go main.
+
+### Cutting a release
+
+Only when Mark asks.
+
+1. Tag and push iris-go (`vX.Y.Z`) if the runtime changed.
+2. Set `RUNTIME_VERSION` (`compiler-executable/iris-go/src/program.rs`) and `GO_RUNTIME_VERSION`
+   (`tests-integration/src/fixtures.rs`) to that tag; `just prepare-release 0.1.18-go.N`.
+3. Commit `Release 0.1.18-go.N against iris-go vX.Y.Z`, get Gates green, move `main` there and
+   push it to `fork` (fast-forward).
+4. Tag `v0.1.18-go.N` on that commit and push the tag to `fork`; Cargo Build & Release publishes
+   the `googoo-<target>` archives.
+5. Tap (`i-am-the-slime/homebrew-tap`): set `version` in `Formula/googoo.rb`, run
+   `bin/update-googoo-checksums`, commit `googoo 0.1.18-go.N`, push.
+6. Package set (`rowtype-yoga/purescript-go-package-sets`): `gogogo scripts/verify.purs` with the
+   new googoo, add the row to the README's tag table, tag `go-0.1.18-<yyyymmdd>[.n]`, push.

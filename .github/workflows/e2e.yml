@@ -1,0 +1,86 @@
+name: End-to-end tests
+
+on:
+  workflow_call:
+    inputs:
+      os:
+        description: JSON array of runner images, one job each
+        default: '["ubuntu-latest"]'
+        type: string
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  end_to_end:
+    name: End-to-end tests (${{ matrix.os }})
+    permissions:
+      attestations: read
+      contents: read
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: ${{ fromJSON(inputs.os) }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Install pnpm and Node.js
+        uses: pnpm/setup@v3
+        with:
+          version: 12
+          runtime: node@22
+          install: false
+
+      - name: Locate pnpm store
+        id: pnpm-store
+        shell: bash
+        run: echo "path=$(pnpm store path --silent)" >> "$GITHUB_OUTPUT"
+
+      - name: Cache pnpm store
+        uses: actions/cache@v6
+        with:
+          path: ${{ steps.pnpm-store.outputs.path }}
+          key: v2-e2e-pnpm-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('tests-e2e/tools/pnpm-lock.yaml') }}
+
+      - name: Install Rust toolchain
+        run: rustup update stable && rustup default stable
+
+      - name: Cache build artifacts
+        uses: Swatinem/rust-cache@v2.9.3
+        with:
+          cache-bin: "false"
+          prefix-key: "v9-workspace"
+          shared-key: "build-e2e"
+          save-if: "false"
+
+      - name: Install tools
+        uses: taiki-e/install-action@v2.88.0
+        with:
+          tool: cargo-nextest,just
+
+      - name: Install Go
+        uses: actions/setup-go@v6
+        with:
+          go-version: "1.27"
+          cache: false
+
+      - name: Cache Spago registry
+        uses: actions/cache@v6
+        with:
+          path: ${{ runner.os == 'Linux' && '~/.cache/spago-nodejs' || runner.os == 'macOS' && '~/Library/Caches/spago-nodejs' || '~/AppData/Local/spago-nodejs/Cache' }}
+          key: v2-spago-${{ runner.os }}-${{ hashFiles('tests-e2e/tools/pnpm-lock.yaml') }}
+
+      - name: Prepare end-to-end tools
+        run: just e2e-prepare
+
+      - name: Run end-to-end tests
+        env:
+          # `iris self update` verifies release attestations with the GitHub CLI, which requires
+          # signing in, and reads canaries through the rate-limited API.
+          GH_TOKEN: ${{ github.token }}
+        run: just e2e --locked

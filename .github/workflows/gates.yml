@@ -1,0 +1,115 @@
+name: Gates
+
+on:
+  push:
+    branches:
+      - 'gates/**'
+  workflow_dispatch:
+    inputs:
+      runtime-ref:
+        description: iris-go ref to build against; empty for the compiler's RUNTIME_VERSION
+        default: ''
+        type: string
+
+concurrency:
+  group: gates-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  runtime:
+    name: Resolve the iris-go ref
+    runs-on: ubuntu-latest
+    outputs:
+      ref: ${{ steps.ref.outputs.ref }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+          sparse-checkout: compiler-executable/iris-go/src/program.rs
+          sparse-checkout-cone-mode: false
+
+      - name: Resolve the ref
+        id: ref
+        env:
+          REQUESTED: ${{ inputs.runtime-ref }}
+        run: |
+          pinned=$(sed -n 's/^pub const RUNTIME_VERSION: &str = "\(.*\)";$/\1/p' compiler-executable/iris-go/src/program.rs)
+          ref="${REQUESTED:-$pinned}"
+          test -n "$ref"
+          echo "ref=$ref" >> "$GITHUB_OUTPUT"
+
+  integration:
+    name: Integration
+    needs: runtime
+    uses: ./.github/workflows/generated-go.yml
+    with:
+      runtime-ref: ${{ needs.runtime.outputs.ref }}
+      tests: ''
+      partitions: '["1/4","2/4","3/4","4/4"]'
+      examples: false
+
+  examples:
+    name: Examples
+    needs: runtime
+    uses: ./.github/workflows/generated-go.yml
+    with:
+      runtime-ref: ${{ needs.runtime.outputs.ref }}
+      fixtures: false
+
+  e2e:
+    name: E2E
+    permissions:
+      attestations: read
+      contents: read
+    uses: ./.github/workflows/e2e.yml
+    with:
+      os: '["ubuntu-latest"]'
+
+  sweep:
+    name: Sweep
+    needs: runtime
+    uses: ./.github/workflows/go-sweep.yml
+    with:
+      runtime-ref: ${{ needs.runtime.outputs.ref }}
+
+  summary:
+    name: Summary
+    needs: [runtime, integration, examples, e2e, sweep]
+    if: always()
+    runs-on: ubuntu-latest
+    permissions:
+      actions: read
+    steps:
+      - name: Summarize the gates
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RUNTIME: ${{ needs.runtime.outputs.ref }}
+          INTEGRATION: ${{ needs.integration.result }}
+          EXAMPLES: ${{ needs.examples.result }}
+          EXAMPLES_DETAIL: ${{ needs.examples.outputs.examples }}
+          E2E: ${{ needs.e2e.result }}
+          SWEEP: ${{ needs.sweep.result }}
+          SWEEP_DETAIL: ${{ needs.sweep.outputs.summary }}
+        run: |
+          started=$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID" -q .run_started_at)
+          minutes=$(( ($(date +%s) - $(date -d "$started" +%s)) / 60 ))
+          mark() { [ "$1" = success ] && echo "pass" || echo "**$1**"; }
+          {
+            echo "## Gates for \`${GITHUB_SHA::12}\` against iris-go \`$RUNTIME\`"
+            echo
+            echo "| Gate | Result | Detail |"
+            echo "|---|---|---|"
+            echo "| Integration tests (4 partitions, Go builds required) | $(mark "$INTEGRATION") | |"
+            echo "| iris-go examples vs JavaScript | $(mark "$EXAMPLES") | $EXAMPLES_DETAIL |"
+            echo "| End-to-end tests | $(mark "$E2E") | |"
+            echo "| Registry sweep vs baseline (4 shards x 3 parts) | $(mark "$SWEEP") | $SWEEP_DETAIL |"
+            echo
+            echo "Wall time so far: $minutes min."
+          } >> "$GITHUB_STEP_SUMMARY"
+          for result in "$INTEGRATION" "$EXAMPLES" "$E2E" "$SWEEP"; do
+            [ "$result" = success ] || exit 1
+          done

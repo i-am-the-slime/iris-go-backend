@@ -39,210 +39,21 @@ jobs:
       partitions: '["1/5","2/5","3/5","4/5","5/5"]'
 
   end_to_end:
-    name: End-to-end tests (${{ matrix.os }})
     permissions:
       attestations: read
       contents: read
-    runs-on: ${{ matrix.os }}
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - os: ubuntu-latest
-            spago_cache: ~/.cache/spago-nodejs
-          - os: macos-latest
-            spago_cache: ~/Library/Caches/spago-nodejs
-          - os: windows-latest
-            spago_cache: ~/AppData/Local/spago-nodejs/Cache
-
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v7
-        with:
-          persist-credentials: false
-
-      - name: Install pnpm and Node.js
-        uses: pnpm/setup@v3
-        with:
-          version: 12
-          runtime: node@22
-          install: false
-
-      - name: Locate pnpm store
-        id: pnpm-store
-        shell: bash
-        run: echo "path=$(pnpm store path --silent)" >> "$GITHUB_OUTPUT"
-
-      - name: Cache pnpm store
-        uses: actions/cache@v6
-        with:
-          path: ${{ steps.pnpm-store.outputs.path }}
-          key: v2-e2e-pnpm-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('tests-e2e/tools/pnpm-lock.yaml') }}
-
-      - name: Install Rust toolchain
-        run: rustup update stable && rustup default stable
-
-      - name: Cache build artifacts
-        uses: Swatinem/rust-cache@v2.9.3
-        with:
-          cache-bin: "false"
-          prefix-key: "v9-workspace"
-          shared-key: "build-e2e"
-          save-if: "false"
-
-      - name: Install tools
-        uses: taiki-e/install-action@v2.88.0
-        with:
-          tool: cargo-nextest,just
-
-      - name: Install Go
-        uses: actions/setup-go@v6
-        with:
-          go-version: "1.27"
-          cache: false
-
-      - name: Cache Spago registry
-        uses: actions/cache@v6
-        with:
-          path: ${{ matrix.spago_cache }}
-          key: v2-spago-${{ runner.os }}-${{ hashFiles('tests-e2e/tools/pnpm-lock.yaml') }}
-
-      - name: Prepare end-to-end tools
-        run: just e2e-prepare
-
-      - name: Run end-to-end tests
-        env:
-          # `iris self update` verifies release attestations with the GitHub CLI, which requires
-          # signing in, and reads canaries through the rate-limited API.
-          GH_TOKEN: ${{ github.token }}
-        run: just e2e --locked
+    uses: ./.github/workflows/e2e.yml
+    with:
+      os: '["ubuntu-latest","macos-latest","windows-latest"]'
 
   generated_go:
-    name: Generated Go (examples, Go fixtures, style suite)
     permissions:
       contents: read
-    runs-on: ubuntu-latest
-    env:
-      IRIS_GO: ${{ github.workspace }}/iris-go-runtime
-      IRIS_GO_FIXTURE_BUILD: require
-      GOEXPERIMENT: simd
-      GOFLAGS: -buildvcs=false
-
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v7
-        with:
-          persist-credentials: false
-
-      - name: Checkout the iris-go runtime
-        uses: actions/checkout@v7
-        with:
-          repository: i-am-the-slime/iris-go
-          ref: main
-          path: iris-go-runtime
-          persist-credentials: false
-
-      - name: Install pnpm and Node.js
-        uses: pnpm/setup@v3
-        with:
-          version: 12
-          runtime: node@22
-          install: false
-
-      - name: Locate pnpm store
-        id: pnpm-store
-        shell: bash
-        run: echo "path=$(pnpm store path --silent)" >> "$GITHUB_OUTPUT"
-
-      - name: Cache pnpm store
-        uses: actions/cache@v6
-        with:
-          path: ${{ steps.pnpm-store.outputs.path }}
-          key: v2-e2e-pnpm-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('tests-e2e/tools/pnpm-lock.yaml') }}
-
-      - name: Install Spago
-        run: |
-          pnpm --dir tests-e2e/tools install --frozen-lockfile
-          echo "$GITHUB_WORKSPACE/tests-e2e/tools/node_modules/.bin" >> "$GITHUB_PATH"
-
-      - name: Install Bun
-        uses: oven-sh/setup-bun@v2
-
-      - name: Install Rust toolchain
-        run: rustup update stable && rustup default stable
-
-      - name: Cache build artifacts
-        uses: Swatinem/rust-cache@v2.9.3
-        with:
-          cache-bin: "false"
-          prefix-key: "v1-generated-go"
-          save-if: ${{ github.ref == 'refs/heads/main' }}
-
-      - name: Install tools
-        uses: taiki-e/install-action@v2.88.0
-        with:
-          tool: cargo-nextest
-
-      - name: Install Go
-        uses: actions/setup-go@v6
-        with:
-          go-version: "1.27"
-          cache: false
-
-      - name: Cache Go builds
-        uses: actions/cache@v6
-        with:
-          path: ~/.cache/go-build
-          key: v1-go-build-${{ runner.os }}-${{ hashFiles('iris-go-runtime/**/*.go') }}
-          restore-keys: |
-            v1-go-build-${{ runner.os }}-
-
-      - name: Cache Spago registry
-        uses: actions/cache@v6
-        with:
-          path: ~/.cache/spago-nodejs
-          key: v1-generated-go-spago-${{ hashFiles('iris-go-runtime/examples/*/spago.lock') }}
-          restore-keys: |
-            v1-generated-go-spago-
-
-      # The build artifact cache restores all of target/, which can include an incomplete copy of
-      # the integration packages. The packages cache below owns that directory, so start it empty.
-      - name: Clear restored integration packages
-        run: rm -rf target/integration-packages
-
-      - name: Cache integration packages
-        uses: actions/cache@v6
-        with:
-          path: target/integration-packages
-          key: integration-packages-v3-${{ runner.os }}-${{ hashFiles('tests-integration/packages.json', 'tests-integration/go-style-packages.json', 'tests-support/src/**') }}
-
-      - name: Prepare integration packages
-        run: |
-          cargo run -p tests-support --locked -- prepare tests-integration/packages.json target/integration-packages
-          cargo run -p tests-support --locked -- prepare tests-integration/go-style-packages.json target/integration-packages
-
-      - name: Build Iris
-        run: cargo build -p iris-cli --locked
-
-      - name: Build and run the Go fixtures and the style suite
-        run: cargo nextest run -p tests-integration --test go --test go_style --locked --failure-output=final
-
-      # Spago fetches that run at the same time into a cold registry cache fail at random, so the
-      # examples' packages are fetched one project at a time before they build in parallel. Iris
-      # runs Spago with its own purs; a JavaScript build that fails afterwards does not matter here.
-      - name: Fetch the examples' packages
-        run: |
-          for manifest in iris-go-runtime/examples/*/spago.yaml; do
-            (cd "$(dirname "$manifest")" && "$GITHUB_WORKSPACE/target/debug/googoo" build --quiet >/dev/null 2>&1) || true
-          done
-
-      - name: Build and run iris-go's examples
-        env:
-          IRIS: ${{ github.workspace }}/target/debug/googoo
-          EXAMPLES: ${{ github.workspace }}/iris-go-runtime/examples
-          GO_SUPPORT: ${{ github.workspace }}/iris-go-runtime
-          JOBS: "4"
-        run: compiler-backend/go/scripts/run-examples.sh
+    uses: ./.github/workflows/generated-go.yml
+    with:
+      runtime-ref: main
+      tests: --test go --test go_style
+      partitions: '["1/2","2/2"]'
 
   compatibility:
     name: Package compatibility
