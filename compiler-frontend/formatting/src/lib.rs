@@ -394,7 +394,7 @@ fn trivia(annotation: &str) -> Result<(Vec<Comment<'_>>, &str), FormatError> {
         if remaining.is_empty() {
             return Ok((comments, whitespace));
         }
-        let line = remaining.starts_with("--");
+        let line = remaining.starts_with("--") || remaining.starts_with("#!");
         let length = if line {
             remaining.find('\n').unwrap_or(remaining.len())
         } else if remaining.starts_with("{-") {

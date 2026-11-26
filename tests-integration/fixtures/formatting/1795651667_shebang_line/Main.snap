@@ -1,4 +1,9 @@
 ---
 source: tests-integration/tests/formatting.rs
 ---
-cannot format: 1:1: Expected 'module'
+#!/usr/bin/env purs
+-- | Docs
+module Main where
+
+life :: Int
+life = 42
