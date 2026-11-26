@@ -1,6 +1,5 @@
 ---
 source: tests-integration/src/fixtures.rs
-assertion_line: 571
 ---
 // main.go
 package main
@@ -13,7 +12,7 @@ import (
 )
 
 type StepInt struct {
-	Emit0 []int32
+	Emit0 []int
 	Emit1 func(struct{}) StepInt
 	Tag   uint8
 }
@@ -45,7 +44,7 @@ const (
 	StepStringEmit
 )
 
-func EmitStepInt(emit0 []int32, emit1 func(struct{}) StepInt) StepInt {
+func EmitStepInt(emit0 []int, emit1 func(struct{}) StepInt) StepInt {
 	return StepInt{Tag: StepIntEmit, Emit0: emit0, Emit1: emit1}
 }
 
@@ -75,12 +74,12 @@ func initializeMain_() []string {
 	})}
 }
 
-func range_(from int32, to int32, ignored struct{}) StepInt {
+func range_(from int, to int, ignored struct{}) StepInt {
 	if from >= to {
 		return StepInt{Tag: StepIntDone}
 	}
 	from2 := from + 2
-	return EmitStepInt([]int32{from, from + 1}, func(ignored2 struct{}) StepInt {
+	return EmitStepInt([]int{from, from + 1}, func(ignored2 struct{}) StepInt {
 		return range_(from2, to, ignored2)
 	})
 }
@@ -134,7 +133,7 @@ func mapChunksChangeShow(pull func(struct{}) StepInt, ignored struct{}) StepStri
 	default: // StepIntEmit
 		mapped := make([]string, len(scrutinee.Emit0))
 		for index, value := range scrutinee.Emit0 {
-			mapped[index] = strconv.Itoa(int(value))
+			mapped[index] = strconv.Itoa(value)
 		}
 		return EmitStepString(mapped, func(ignored2 struct{}) StepString {
 			return mapChunksChangeShow(scrutinee.Emit1, ignored2)

@@ -9,12 +9,12 @@ import (
 	"os"
 )
 
-func main_() int32 {
-	hits := &shared.Ref[int32]{Value: 0}
+func main_() int {
+	hits := &shared.Ref[int]{Value: 0}
 	drain(hits, 3)
 	hits2 := hits.Value
-	var total int32 = 0
-	var index int32 = 0
+	total := 0
+	index := 0
 	for {
 		continuing := index < 4
 		if !continuing {
@@ -23,17 +23,17 @@ func main_() int32 {
 		total += index
 		index += 1
 	}
-	for i := int32(0); i < 4; i++ {
+	for i := 0; i < 4; i++ {
 		total += i
 	}
-	var total2 int32 = 0
-	for _, i := range []int32{1, 2} {
+	total2 := 0
+	for _, i := range []int{1, 2} {
 		total2 += i
 	}
 	return total + total2 + hits2
 }
 
-func drain(cell *shared.Ref[int32], n int32) {
+func drain(cell *shared.Ref[int], n int) {
 	cellValue := cell.Value
 	for {
 		if n <= 0 {
@@ -48,8 +48,7 @@ func drain(cell *shared.Ref[int32], n int32) {
 }
 
 func main() {
-	exitStatus := main_()
-	os.Exit(int(exitStatus))
+	os.Exit(main_())
 }
 
 // shared/shared.go
@@ -60,6 +59,6 @@ type Ref[T any] struct {
 }
 
 type StateValue struct {
-	State int32
-	Value int32
+	State int
+	Value int
 }

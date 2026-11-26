@@ -12,26 +12,26 @@ import (
 	"strings"
 )
 
-type Step func(int32) Step
+type Step func(int) Step
 
 var main_ = initializeMain_()
 
 func initializeMain_() []string {
-	return array.Append(namesLevel([]shared.Level{{Name: "a", Minis: []shared.Level{}}}, "root"), []string{strconv.Itoa(int(countSteps(func(n int32) Step {
+	return array.Append(namesLevel([]shared.Level{{Name: "a", Minis: []shared.Level{}}}, "root"), []string{strconv.Itoa(countSteps(func(n int) Step {
 		if n < 3 {
-			return func(_ int32) Step {
+			return func(_ int) Step {
 				return nil
 			}
 		}
 		return nil
-	}, 0)))})
+	}, 0))})
 }
 
 func names(level shared.Level) []string {
 	return array.Append([]string{level.Name}, array.Bind(level.Minis, names))
 }
 
-func countSteps(step Step, n int32) int32 {
+func countSteps(step Step, n int) int {
 	for {
 		scrutinee := step(n)
 		if scrutinee == nil {

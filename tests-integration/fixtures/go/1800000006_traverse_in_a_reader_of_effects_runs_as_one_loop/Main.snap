@@ -1,13 +1,12 @@
 ---
 source: tests-integration/src/fixtures.rs
-assertion_line: 571
 ---
 // Data/Either/either.go
 package either
 
 type EitherArrayInt struct {
 	Left  string
-	Right []int32
+	Right []int
 	Tag   uint8
 }
 
@@ -18,7 +17,7 @@ const (
 
 type EitherInt struct {
 	Left  string
-	Right int32
+	Right int
 	Tag   uint8
 }
 
@@ -37,11 +36,11 @@ package show
 
 import "strconv"
 
-func Show(i int32) string {
-	return strconv.Itoa(int(i))
+func Show(i int) string {
+	return strconv.Itoa(i)
 }
 
-func AppendShowArrayInt(buffer []byte, array []int32) []byte {
+func AppendShowArrayInt(buffer []byte, array []int) []byte {
 	buffer = append(buffer, '[')
 	for index, element := range array {
 		if index > 0 {
@@ -53,7 +52,7 @@ func AppendShowArrayInt(buffer []byte, array []int32) []byte {
 	return buffer
 }
 
-func ArrayInt(array []int32) string {
+func ArrayInt(array []int) string {
 	return string(AppendShowArrayInt(nil, array))
 }
 
@@ -62,23 +61,22 @@ package traversable
 
 import (
 	"fixture/Data/Either"
-	"github.com/i-am-the-slime/iris-go/array"
 	"slices"
 )
 
-func Traverse(function func(int32, struct{}) (int32, either.StringFailure), array []int32, context struct{}) ([]int32, either.StringFailure) {
-	return TraverseFrom(function, array, 0, []int32{})
+func Traverse(function func(int, struct{}) (int, either.StringFailure), array []int, context struct{}) ([]int, either.StringFailure) {
+	return TraverseFrom(function, array, 0, []int{})
 }
 
-func TraverseFrom(function func(int32, struct{}) (int32, either.StringFailure), array2 []int32, index int32, field0 []int32) ([]int32, either.StringFailure) {
+func TraverseFrom(function func(int, struct{}) (int, either.StringFailure), array []int, index int, field0 []int) ([]int, either.StringFailure) {
 	field0 = slices.Clip(field0)
 	for {
-		if index < int32(len(array2)) {
-			i, err := function(array2[index], struct{}{})
+		if index < len(array) {
+			i, err := function(array[index], struct{}{})
 			if err.Failed {
 				return nil, err
 			}
-			index, field0 = index+1, array.Bounded(append(field0, i))
+			index, field0 = index+1, append(field0, i)
 			continue
 		} else {
 			return field0, either.StringFailure{}
@@ -101,7 +99,7 @@ import (
 )
 
 func main() {
-	array_, err := mainFrom(0, []int32{})
+	array_, err := mainFrom(0, []int{})
 	var result string
 	if err.Failed {
 		result = "failed: " + err.Left
@@ -109,10 +107,10 @@ func main() {
 		result = show.ArrayInt(array_)
 	}
 	journal.Log(result)
-	seen := &shared.Ref[int32]{Value: 0}
-	array_2, err := traversable.Traverse(func(number int32, context struct{}) (int32, either.StringFailure) {
+	seen := &shared.Ref[int]{Value: 0}
+	array_2, err := traversable.Traverse(func(number int, context struct{}) (int, either.StringFailure) {
 		return mainCounting(seen, number, context)
-	}, array.RangeInt32(1, 5), struct{}{})
+	}, array.Range(1, 5), struct{}{})
 	var result2 string
 	if err.Failed {
 		result2 = "failed: " + err.Left
@@ -120,16 +118,16 @@ func main() {
 		result2 = show.ArrayInt(array_2)
 	}
 	journal.Log(result2)
-	array_3, err := traversable.Traverse(func(a int32, context struct{}) (int32, either.StringFailure) {
+	array_3, err := traversable.Traverse(func(a int, context struct{}) (int, either.StringFailure) {
 		number, err2 := mainCounting(seen, a, context)
 		if err2.Failed {
 			return 0, err2
 		}
 		if number >= 30 {
-			return 0, either.StringFailure{Failed: true, Left: "stopped at " + strconv.Itoa(int(number))}
+			return 0, either.StringFailure{Failed: true, Left: "stopped at " + strconv.Itoa(number)}
 		}
 		return number, either.StringFailure{}
-	}, array.RangeInt32(1, 5), struct{}{})
+	}, array.Range(1, 5), struct{}{})
 	var result3 string
 	if err.Failed {
 		result3 = "failed: " + err.Left
@@ -138,10 +136,10 @@ func main() {
 	}
 	journal.Log(result3)
 	i := seen.Value
-	journal.Log(strconv.Itoa(int(i)))
+	journal.Log(strconv.Itoa(i))
 }
 
-func mainCounting(seen *shared.Ref[int32], number int32, context struct{}) (int32, either.StringFailure) {
+func mainCounting(seen *shared.Ref[int], number int, context struct{}) (int, either.StringFailure) {
 	x := number * 10
 	s := seen.Value
 	s_ := s + 1
@@ -149,11 +147,11 @@ func mainCounting(seen *shared.Ref[int32], number int32, context struct{}) (int3
 	return x, either.StringFailure{}
 }
 
-func mainFrom(index int32, field0 []int32) ([]int32, either.StringFailure) {
+func mainFrom(index int, field0 []int) ([]int, either.StringFailure) {
 	field0 = slices.Clip(field0)
 	for {
 		if index < 5 {
-			index, field0 = index+1, array.Bounded(append(field0, (1+index)*2))
+			index, field0 = index+1, append(field0, (1+index)*2)
 			continue
 		}
 		return field0, either.StringFailure{}
@@ -168,6 +166,6 @@ type Ref[T any] struct {
 }
 
 type StateValue struct {
-	State int32
-	Value int32
+	State int
+	Value int
 }

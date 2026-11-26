@@ -13,7 +13,7 @@ import (
 
 type SayInt struct {
 	First  string
-	Second int32
+	Second int
 }
 
 type Say struct {
@@ -26,15 +26,15 @@ func convert(value *Say) SayInt {
 	if original, ok := value.Origin.(SayInt); ok {
 		return original
 	}
-	return SayInt{First: value.First, Second: value.Second.(int32)}
+	return SayInt{First: value.First, Second: value.Second.(int)}
 }
 
 type CountInt struct {
-	Count func(int32) int32
+	Count func(int) int
 }
 
 type Count struct {
-	Count  func(int32) any
+	Count  func(int) any
 	Origin any
 }
 
@@ -42,8 +42,8 @@ func convert2(value *Count) CountInt {
 	if original, ok := value.Origin.(CountInt); ok {
 		return original
 	}
-	return CountInt{Count: func(coerced int32) int32 {
-		return value.Count(coerced).(int32)
+	return CountInt{Count: func(coerced int) int {
+		return value.Count(coerced).(int)
 	}}
 }
 
@@ -73,7 +73,7 @@ type MapTypeValueOfFnFnValueValueFnCountCountCountInt struct {
 }
 
 func convert5(value CountInt) *Count {
-	return &Count{Count: func(coerced int32) any {
+	return &Count{Count: func(coerced int) any {
 		return value.Count(coerced)
 	}, Origin: value}
 }
@@ -91,20 +91,20 @@ var main_ = initializeMain_()
 
 func initializeMain_() []string {
 	return []string{describe(say), describe(count), describe(shared.MapTypeValue{Type: "say", Value: say.Map(func(coerced any) any {
-		return coerced.(int32) * 10
+		return coerced.(int) * 10
 	})(say.Value), Map: say.Map}), describe(shared.MapTypeValue{Type: "count", Value: count.Map(func(coerced any) any {
-		return coerced.(int32) * 10
+		return coerced.(int) * 10
 	})(count.Value), Map: count.Map})}
 }
 
 func describe(r shared.MapTypeValue) string {
 	if r.Type == "say" {
 		scrutinee := convert(r.Value.(*Say))
-		return scrutinee.First + " " + strconv.Itoa(int(scrutinee.Second))
+		return scrutinee.First + " " + strconv.Itoa(scrutinee.Second)
 	}
 	if r.Type == "count" {
 		scrutinee := convert2(r.Value.(*Count))
-		return "count " + strconv.Itoa(int(scrutinee.Count(2)))
+		return "count " + strconv.Itoa(scrutinee.Count(2))
 	}
 	panic("Data.Functor.Variant: pattern match failure [" + r.Type + "]")
 }
@@ -122,7 +122,7 @@ func initializeSay() shared.MapTypeValue {
 var count = initializeCount()
 
 func initializeCount() shared.MapTypeValue {
-	return convert6(MapTypeValueOfFnFnValueValueFnCountCountCountInt{Type: "count", Value: CountInt{Count: func(value int32) int32 {
+	return convert6(MapTypeValueOfFnFnValueValueFnCountCountCountInt{Type: "count", Value: CountInt{Count: func(value int) int {
 		return value + 1
 	}}, Map: func(f func(any) any) func(*Count) *Count {
 		return func(count *Count) *Count {
@@ -136,7 +136,7 @@ func mapSay(f func(any) any, say *Say) *Say {
 }
 
 func mapCount(f func(any) any, count *Count) *Count {
-	return &Count{Count: func(x int32) any {
+	return &Count{Count: func(x int) any {
 		return f(count.Count(x))
 	}}
 }

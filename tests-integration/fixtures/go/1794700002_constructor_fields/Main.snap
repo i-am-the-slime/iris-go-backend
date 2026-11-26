@@ -6,7 +6,7 @@ package either
 
 type Either struct {
 	Left  string
-	Right int32
+	Right int
 	Tag   uint8
 }
 
@@ -15,7 +15,7 @@ const (
 	EitherRight
 )
 
-func Right(right int32) Either {
+func Right(right int) Either {
 	return Either{Tag: EitherRight, Right: right}
 }
 
@@ -28,21 +28,32 @@ package types
 
 type List struct {
 	Cons1 *List
-	Cons0 int32
+	Cons0 int
 }
 
 var SharedListNil = &List{}
 
-func Cons(cons0 int32, cons1 *List) *List {
+func Cons(cons0 int, cons1 *List) *List {
 	return &List{Cons0: cons0, Cons1: cons1}
 }
 
 // Data/Maybe/maybe.go
 package maybe
 
-type Int int64
+const TagNothing = 0
 
-const NoInt Int = 1 << 32
+const TagJust = 1
+
+type Int struct {
+	Just int
+	Tag  uint8
+}
+
+func JustInt(just int) Int {
+	return Int{Tag: TagJust, Just: just}
+}
+
+var NoInt = Int{Tag: TagNothing}
 
 // Data/Show/show.go
 package show
@@ -94,8 +105,8 @@ type Entry struct {
 	Duo1   string
 	Trio0  string
 	Trio1  string
-	Field0 int32
-	Field1 int32
+	Field0 int
+	Field1 int
 	Tag    uint8
 }
 
@@ -109,7 +120,7 @@ func Tag(tag0 string) Labelled {
 	return Labelled{Tag: LabelledTag, Tag0: tag0}
 }
 
-func Field(field0 int32, field1 int32) Entry {
+func Field(field0 int, field1 int) Entry {
 	return Entry{Tag: EntryField, Field0: field0, Field1: field1}
 }
 
@@ -125,11 +136,11 @@ var main_ = initializeMain_()
 
 func initializeMain_() string {
 	var text []byte
-	array := []either_tuple.Tuple{{First: maybe.Int(1), Second: either.Right(2)}, {First: maybe.NoInt, Second: either.Left("x")}}
-	var accumulator int32 = 0
+	array := []either_tuple.Tuple{{First: maybe.JustInt(1), Second: either.Right(2)}, {First: maybe.NoInt, Second: either.Left("x")}}
+	accumulator := 0
 	for tupleIndex := range array {
-		if array[tupleIndex].First != maybe.NoInt && array[tupleIndex].Second.Tag == either.EitherRight {
-			accumulator = accumulator + int32(array[tupleIndex].First) + array[tupleIndex].Second.Right
+		if array[tupleIndex].First.Tag == maybe.TagJust && array[tupleIndex].Second.Tag == either.EitherRight {
+			accumulator = accumulator + array[tupleIndex].First.Just + array[tupleIndex].Second.Right
 		} else if array[tupleIndex].Second.Tag == either.EitherLeft {
 			accumulator -= 1
 		}
@@ -162,7 +173,7 @@ func label(labelled Labelled) string {
 func entry(entry Entry) string {
 	switch entry.Tag {
 	case EntryField:
-		return strconv.Itoa(int(entry.Field0 - entry.Field1))
+		return strconv.Itoa(entry.Field0 - entry.Field1)
 	case EntryDuo:
 		return prim.Append(entry.Duo0, entry.Duo1)
 	default: // EntryTrio
@@ -170,14 +181,14 @@ func entry(entry Entry) string {
 	}
 }
 
-func mainSum(list *types.List) int32 {
+func mainSum(list *types.List) int {
 	if list == types.SharedListNil {
 		return 0
 	}
 	return list.Cons0 + mainSum(list.Cons1)
 }
 
-func mainSumCons(head int32, tail *types.List) int32 {
+func mainSumCons(head int, tail *types.List) int {
 	return head + mainSum(tail)
 }
 

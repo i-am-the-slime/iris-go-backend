@@ -13,42 +13,42 @@ import (
 
 type List struct {
 	Cons1 *List
-	Cons0 int32
+	Cons0 int
 }
 
 var sharedListNil = &List{}
 
 var main_ = initializeMain_()
 
-func initializeMain_() []int32 {
-	var accumulator int32 = 0
-	for element := int32(1); element < 11; element++ {
+func initializeMain_() []int {
+	accumulator := 0
+	for element := 1; element < 11; element++ {
 		accumulator = addSquare(accumulator, element)
 	}
-	var accumulator2 int32 = 0
-	for x := int32(1); x < 11; x++ {
+	accumulator2 := 0
+	for x := 1; x < 11; x++ {
 		accumulator2 += 2 * x
 	}
-	return []int32{foldListAddSquare(0, range_(1, 10)), foldListStep3(0, range_(1, 10)), foldListStep(5, 0, range_(1, 10)), foldListStep(7, 0, range_(1, 4)), foldListStep2(100, 0, range_(1, 3)), foldListMax(0, range_(3, 9)), accumulator, accumulator2}
+	return []int{foldListAddSquare(0, range_(1, 10)), foldListStep3(0, range_(1, 10)), foldListStep(5, 0, range_(1, 10)), foldListStep(7, 0, range_(1, 4)), foldListStep2(100, 0, range_(1, 3)), foldListMax(0, range_(3, 9)), accumulator, accumulator2}
 }
 
-func addSquare(total int32, x int32) int32 {
+func addSquare(total int, x int) int {
 	return total + x*x
 }
 
-func range_(low int32, high int32) *List {
+func range_(low int, high int) *List {
 	var cells alloc.Cells[List]
 	return range_Chunked(low, high, &cells)
 }
 
-func range_Chunked(low int32, high int32, cells *alloc.Cells[List]) *List {
+func range_Chunked(low int, high int, cells *alloc.Cells[List]) *List {
 	if low > high {
 		return sharedListNil
 	}
 	return cells.New(List{Cons0: low, Cons1: range_Chunked(low+1, high, cells)})
 }
 
-func foldListStep(i int32, accumulator int32, value *List) int32 {
+func foldListStep(i int, accumulator int, value *List) int {
 	for {
 		if value == sharedListNil {
 			return accumulator
@@ -59,7 +59,7 @@ func foldListStep(i int32, accumulator int32, value *List) int32 {
 	}
 }
 
-func foldListStep2(i int32, accumulator int32, value *List) int32 {
+func foldListStep2(i int, accumulator int, value *List) int {
 	for {
 		if value == sharedListNil {
 			return accumulator
@@ -70,7 +70,7 @@ func foldListStep2(i int32, accumulator int32, value *List) int32 {
 	}
 }
 
-func foldListAddSquare(accumulator int32, value *List) int32 {
+func foldListAddSquare(accumulator int, value *List) int {
 	for {
 		if value == sharedListNil {
 			return accumulator
@@ -81,7 +81,7 @@ func foldListAddSquare(accumulator int32, value *List) int32 {
 	}
 }
 
-func foldListStep3(accumulator int32, value *List) int32 {
+func foldListStep3(accumulator int, value *List) int {
 	for {
 		if value == sharedListNil {
 			return accumulator
@@ -92,7 +92,7 @@ func foldListStep3(accumulator int32, value *List) int32 {
 	}
 }
 
-func foldListMax(accumulator int32, value *List) int32 {
+func foldListMax(accumulator int, value *List) int {
 	for {
 		if value == sharedListNil {
 			return accumulator

@@ -55,8 +55,8 @@ import (
 )
 
 type Span struct {
-	From int32
-	To   int32
+	From int
+	To   int
 }
 
 var main_ = initializeMain_()
@@ -93,12 +93,12 @@ func initializeMain_() string {
 	}
 	text = show.AppendShowArrayNumber(text, []float64{3.0, accumulator, accumulator2, accumulator3, accumulator4})
 	array5 := []Span{{From: 2, To: 7}}
-	var accumulator5 int32 = 0
+	accumulator5 := 0
 	for spanIndex := range array5 {
 		accumulator5 = accumulator5 + array5[spanIndex].To - array5[spanIndex].From
 	}
 	array6 := []shared.PairInt{{Left: 1, Right: 2}}
-	var accumulator6 int32 = 0
+	accumulator6 := 0
 	for pairIndex := range array6 {
 		accumulator6 = accumulator6 + array6[pairIndex].Left + array6[pairIndex].Right
 	}
@@ -143,8 +143,8 @@ type ShapesTiming struct {
 }
 
 type PairInt struct {
-	Left  int32
-	Right int32
+	Left  int
+	Right int
 }
 
 type PairString struct {

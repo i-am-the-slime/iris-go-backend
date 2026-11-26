@@ -43,11 +43,11 @@ package show
 
 import "strconv"
 
-func Show(i int32) string {
-	return strconv.Itoa(int(i))
+func Show(i int) string {
+	return strconv.Itoa(i)
 }
 
-func AppendShowArrayInt(buffer []byte, array []int32) []byte {
+func AppendShowArrayInt(buffer []byte, array []int) []byte {
 	buffer = append(buffer, '[')
 	for index, element := range array {
 		if index > 0 {
@@ -59,7 +59,7 @@ func AppendShowArrayInt(buffer []byte, array []int32) []byte {
 	return buffer
 }
 
-func ArrayInt(array []int32) string {
+func ArrayInt(array []int) string {
 	return string(AppendShowArrayInt(nil, array))
 }
 
@@ -90,7 +90,7 @@ func main() {
 		return value.Tag == maybe.TagNothing
 	}, func(value *maybe.Maybe) any {
 		return value.Just
-	}, func(value *maybe_tuple.TupleMaybe) int32 {
+	}, func(value *maybe_tuple.TupleMaybe) int {
 		return value.First
 	}, func(value *maybe_tuple.TupleMaybe) *maybe.Maybe {
 		return value.Second
@@ -106,11 +106,11 @@ import "fixture/Data/Maybe"
 
 type TupleMaybe struct {
 	Second *maybe.Maybe
-	First  int32
+	First  int
 }
 
 type TupleMaybeUnit struct {
-	First  int32
+	First  int
 	Second maybe.Unit
 }
 

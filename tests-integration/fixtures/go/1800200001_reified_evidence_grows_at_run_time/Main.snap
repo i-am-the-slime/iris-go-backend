@@ -11,7 +11,7 @@ const (
 )
 
 type Count struct {
-	Count func(Proxy) int32
+	Count func(Proxy) int
 }
 
 type Positive struct {
@@ -45,23 +45,23 @@ var sharedCountToFunctionMain = &CountToFunction{Tag: CountToFunctionMain}
 var main_ = initializeMain_()
 
 func initializeMain_() []string {
-	array := []int32{1, 6, 37, 1000}
+	array := []int{1, 6, 37, 1000}
 	mapped := make([]string, len(array))
 	for index, wanted := range array {
-		mapped[index] = strconv.Itoa(int(reifyPositiveUseInt(wanted, func(dictionary proxy.Positive, proxy proxy.Proxy) int32 {
+		mapped[index] = strconv.Itoa(reifyPositiveUseInt(wanted, func(dictionary proxy.Positive, proxy proxy.Proxy) int {
 			return dictionary.Count0.Count(proxy)
-		})))
+		}))
 	}
 	return arraypkg.Append(mapped, []string{reifyPositiveUseString(12, func(dictionary proxy.Positive, proxy proxy.Proxy) string {
-		return "counted " + strconv.Itoa(int(dictionary.Count0.Count(proxy)))
-	}), strconv.Itoa(int(reifyComposedUse(5, sharedCountToFunctionMain)))})
+		return "counted " + strconv.Itoa(dictionary.Count0.Count(proxy))
+	}), strconv.Itoa(reifyComposedUse(5, sharedCountToFunctionMain))})
 }
 
-func count(ignored proxy.Proxy) int32 {
+func count(ignored proxy.Proxy) int {
 	return 1
 }
 
-func reifyPositiveUseString(wanted int32, AtRunTime func(proxy.Positive, proxy.Proxy) string) string {
+func reifyPositiveUseString(wanted int, AtRunTime func(proxy.Positive, proxy.Proxy) string) string {
 	for {
 		AtRunTimeCaptured := AtRunTime
 		switch wanted {
@@ -71,14 +71,14 @@ func reifyPositiveUseString(wanted int32, AtRunTime func(proxy.Positive, proxy.P
 			switch wanted & 1 {
 			case 0:
 				wanted, AtRunTime = wanted>>1, func(dictionary proxy.Positive, _ proxy.Proxy) string {
-					return AtRunTimeCaptured(proxy.Positive{Count0: proxy.Count{Count: func(_ proxy.Proxy) int32 {
+					return AtRunTimeCaptured(proxy.Positive{Count0: proxy.Count{Count: func(_ proxy.Proxy) int {
 						return 2 * dictionary.Count0.Count(proxy.ProxyProxy)
 					}}}, proxy.ProxyProxy)
 				}
 				continue
 			default:
 				wanted, AtRunTime = wanted-1, func(dictionary proxy.Positive, _ proxy.Proxy) string {
-					return AtRunTimeCaptured(proxy.Positive{Count0: proxy.Count{Count: func(_ proxy.Proxy) int32 {
+					return AtRunTimeCaptured(proxy.Positive{Count0: proxy.Count{Count: func(_ proxy.Proxy) int {
 						return 1 + dictionary.Count0.Count(proxy.ProxyProxy)
 					}}}, proxy.ProxyProxy)
 				}
@@ -88,7 +88,7 @@ func reifyPositiveUseString(wanted int32, AtRunTime func(proxy.Positive, proxy.P
 	}
 }
 
-func reifyPositiveUseInt(wanted int32, AtRunTime func(proxy.Positive, proxy.Proxy) int32) int32 {
+func reifyPositiveUseInt(wanted int, AtRunTime func(proxy.Positive, proxy.Proxy) int) int {
 	for {
 		AtRunTimeCaptured := AtRunTime
 		switch wanted {
@@ -97,15 +97,15 @@ func reifyPositiveUseInt(wanted int32, AtRunTime func(proxy.Positive, proxy.Prox
 		default:
 			switch wanted & 1 {
 			case 0:
-				wanted, AtRunTime = wanted>>1, func(dictionary proxy.Positive, _ proxy.Proxy) int32 {
-					return AtRunTimeCaptured(proxy.Positive{Count0: proxy.Count{Count: func(_ proxy.Proxy) int32 {
+				wanted, AtRunTime = wanted>>1, func(dictionary proxy.Positive, _ proxy.Proxy) int {
+					return AtRunTimeCaptured(proxy.Positive{Count0: proxy.Count{Count: func(_ proxy.Proxy) int {
 						return 2 * dictionary.Count0.Count(proxy.ProxyProxy)
 					}}}, proxy.ProxyProxy)
 				}
 				continue
 			default:
-				wanted, AtRunTime = wanted-1, func(dictionary proxy.Positive, _ proxy.Proxy) int32 {
-					return AtRunTimeCaptured(proxy.Positive{Count0: proxy.Count{Count: func(_ proxy.Proxy) int32 {
+				wanted, AtRunTime = wanted-1, func(dictionary proxy.Positive, _ proxy.Proxy) int {
+					return AtRunTimeCaptured(proxy.Positive{Count0: proxy.Count{Count: func(_ proxy.Proxy) int {
 						return 1 + dictionary.Count0.Count(proxy.ProxyProxy)
 					}}}, proxy.ProxyProxy)
 				}
@@ -115,7 +115,7 @@ func reifyPositiveUseInt(wanted int32, AtRunTime func(proxy.Positive, proxy.Prox
 	}
 }
 
-func reifyComposedUse(wanted int32, AtRunTime *CountToFunction) int32 {
+func reifyComposedUse(wanted int, AtRunTime *CountToFunction) int {
 	var countToFunctionCells alloc.Cells[CountToFunction]
 	for {
 		switch wanted {
@@ -128,15 +128,15 @@ func reifyComposedUse(wanted int32, AtRunTime *CountToFunction) int32 {
 	}
 }
 
-func runCountToFunction(function *CountToFunction, dictionary proxy.Count) func(proxy.Proxy) int32 {
+func runCountToFunction(function *CountToFunction, dictionary proxy.Count) func(proxy.Proxy) int {
 	switch function.Tag {
 	case CountToFunctionMain:
 		return dictionary.Count
 	default: // CountToFunctionReifyComposedIntUse
-		f := runCountToFunction(function.AtRunTime, proxy.Count{Count: func(_ proxy.Proxy) int32 {
+		f := runCountToFunction(function.AtRunTime, proxy.Count{Count: func(_ proxy.Proxy) int {
 			return 1 + dictionary.Count(proxy.ProxyProxy)
 		}})
-		return func(_ proxy.Proxy) int32 {
+		return func(_ proxy.Proxy) int {
 			return f(proxy.ProxyProxy)
 		}
 	}

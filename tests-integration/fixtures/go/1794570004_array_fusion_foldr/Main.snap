@@ -4,14 +4,25 @@ source: tests-integration/src/fixtures.rs
 // Data/Maybe/maybe.go
 package maybe
 
-type Int int64
+const TagNothing = 0
 
-const NoInt Int = 1 << 32
+const TagJust = 1
+
+type Int struct {
+	Just int
+	Tag  uint8
+}
 
 type MainResult struct {
 	OverFilter string
 	OverMap    string
 	LastSmall  Int
+}
+
+var NoInt = Int{Tag: TagNothing}
+
+func JustInt(just int) Int {
+	return Int{Tag: TagJust, Just: just}
 }
 
 // main.go
@@ -29,9 +40,9 @@ func initializeMain_() maybe.MainResult {
 	for index := len(numbers) - 1; index >= 0; index-- {
 		value := numbers[index]
 		x := value * 2
-		accumulator = strconv.Itoa(int(x)) + "," + accumulator
+		accumulator = strconv.Itoa(x) + "," + accumulator
 	}
-	kept := []int32{}
+	kept := []int{}
 	for _, value := range numbers {
 		if value > 2 {
 			kept = append(kept, value)
@@ -40,21 +51,21 @@ func initializeMain_() maybe.MainResult {
 	accumulator2 := ""
 	for index := len(kept) - 1; index >= 0; index-- {
 		x := kept[index]
-		accumulator2 = strconv.Itoa(int(x)) + ";" + accumulator2
+		accumulator2 = strconv.Itoa(x) + ";" + accumulator2
 	}
 	found := maybe.NoInt
 	for index := len(numbers) - 1; index >= 0; index-- {
 		value := numbers[index]
 		value2 := value * 2
 		if value2 < 5 {
-			found = maybe.Int(int32(index))
+			found = maybe.JustInt(index)
 			break
 		}
 	}
 	return maybe.MainResult{OverMap: accumulator, OverFilter: accumulator2, LastSmall: found}
 }
 
-var numbers []int32 = []int32{3, 1, 4, 1, 5, 9, 2, 6}
+var numbers []int = []int{3, 1, 4, 1, 5, 9, 2, 6}
 
 func main() {
 	_ = main_

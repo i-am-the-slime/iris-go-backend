@@ -11,9 +11,9 @@ import (
 )
 
 type Step struct {
-	Step1 func(int32) Step
-	Step0 int32
-	Done  int32
+	Step1 func(int) Step
+	Step0 int
+	Done  int
 	Tag   uint8
 }
 
@@ -22,21 +22,21 @@ const (
 	StepDone
 )
 
-func Done(done int32) Step {
+func Done(done int) Step {
 	return Step{Tag: StepDone, Done: done}
 }
 
-func StepStep(step0 int32, step1 func(int32) Step) Step {
+func StepStep(step0 int, step1 func(int) Step) Step {
 	return Step{Tag: StepStep2, Step0: step0, Step1: step1}
 }
 
 var main_ = initializeMain_()
 
-func initializeMain_() []int32 {
-	return []int32{run(countdown(3))}
+func initializeMain_() []int {
+	return []int{run(countdown(3))}
 }
 
-func run(step Step) int32 {
+func run(step Step) int {
 	switch step.Tag {
 	case StepDone:
 		return step.Done
@@ -46,7 +46,7 @@ func run(step Step) int32 {
 	}
 }
 
-func countdown(n int32) Step {
+func countdown(n int) Step {
 	switch n {
 	case 0:
 		return Done(0)

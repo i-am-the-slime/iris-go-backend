@@ -1,11 +1,10 @@
 ---
 source: tests-integration/src/fixtures.rs
-assertion_line: 571
 ---
 // Data/Semiring/semiring.go
 package semiring
 
-func Add(i int32, i2 int32) int32 {
+func Add(i int, i2 int) int {
 	return i + i2
 }
 
@@ -17,8 +16,8 @@ import (
 	"strconv"
 )
 
-func ShowInt(i int32) string {
-	return strconv.Itoa(int(i))
+func ShowInt(i int) string {
+	return strconv.Itoa(i)
 }
 
 func ShowString(s string) string {
@@ -37,7 +36,7 @@ func AppendShowArrayString(buffer []byte, array []string) []byte {
 	return buffer
 }
 
-func AppendShowArrayInt(buffer []byte, array []int32) []byte {
+func AppendShowArrayInt(buffer []byte, array []int) []byte {
 	buffer = append(buffer, '[')
 	for index, element := range array {
 		if index > 0 {
@@ -53,7 +52,7 @@ func ArrayString(array []string) string {
 	return string(AppendShowArrayString(nil, array))
 }
 
-func ArrayInt(array []int32) string {
+func ArrayInt(array []int) string {
 	return string(AppendShowArrayInt(nil, array))
 }
 
@@ -74,15 +73,15 @@ var main_ = initializeMain_()
 
 func initializeMain_() []string {
 	function := fromInt(4)
-	array := []int32{1, 2}
+	array := []int{1, 2}
 	mapped := make([]string, len(array))
 	for index, x := range array {
 		a := x * x
-		mapped[index] = show.ArrayInt([]int32{12, a*10 + 3, a*10 + 4})
+		mapped[index] = show.ArrayInt([]int{12, a*10 + 3, a*10 + 4})
 	}
-	array2 := []func(int32) func(string) string{prepared, func(a int32) func(string) string {
+	array2 := []func(int) func(string) string{prepared, func(a int) func(string) string {
 		return func(b string) string {
-			return strconv.Itoa(int(a)) + b
+			return strconv.Itoa(a) + b
 		}
 	}}
 	mapped2 := make([]string, len(array2))
@@ -90,48 +89,48 @@ func initializeMain_() []string {
 		g := x(4)
 		mapped2[index] = show.ArrayString([]string{x(1)("a"), g("b"), g("c")})
 	}
-	array3 := []func(int32, int32) int32{semiring.Add, func(a int32, b int32) int32 {
+	array3 := []func(int, int) int{semiring.Add, func(a int, b int) int {
 		return a*b + 1
 	}}
 	mapped3 := make([]string, len(array3))
 	for index, combine := range array3 {
-		mapped3[index] = strconv.Itoa(int(arraypkg.Foldl(combine, int32(0), []int32{1, 2, 3})))
+		mapped3[index] = strconv.Itoa(arraypkg.Foldl(combine, 0, []int{1, 2, 3}))
 	}
-	return arraypkg.Append([]string{strconv.Itoa(int(fromInt(3)(func(i int32) int32 {
-		return function(func(value int32) int32 {
+	return arraypkg.Append([]string{strconv.Itoa(fromInt(3)(func(i int) int {
+		return function(func(value int) int {
 			return value + 1
 		}, i)
-	}, 0)))}, arraypkg.Append(mapped, arraypkg.Append(mapped2, mapped3)))
+	}, 0))}, arraypkg.Append(mapped, arraypkg.Append(mapped2, mapped3)))
 }
 
-func fromInt(n int32) func(func(int32) int32, int32) int32 {
+func fromInt(n int) func(func(int) int, int) int {
 	switch n {
 	case 0:
 		return zeroC
 	default:
 		n2 := fromInt(n - 1)
-		return func(f func(int32) int32, x int32) int32 {
+		return func(f func(int) int, x int) int {
 			return f(n2(f, x))
 		}
 	}
 }
 
-func prepared(a int32) func(string) string {
+func prepared(a int) func(string) string {
 	prefix := repeat(a)
 	return func(b string) string {
 		return prim.Append(prefix, b)
 	}
 }
 
-func zeroC(ignored func(int32) int32, x int32) int32 {
+func zeroC(ignored func(int) int, x int) int {
 	return x
 }
 
-func repeat(n int32) string {
+func repeat(n int) string {
 	return string(appendRepeat(nil, n))
 }
 
-func appendRepeat(buffer []byte, n int32) []byte {
+func appendRepeat(buffer []byte, n int) []byte {
 	switch n {
 	case 0:
 	default:

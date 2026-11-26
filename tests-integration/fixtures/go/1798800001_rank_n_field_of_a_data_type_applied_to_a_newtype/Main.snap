@@ -20,8 +20,8 @@ import (
 )
 
 type RunScopeString struct {
-	ForInt    func(int32, func(string) int32) int32
-	ForString func(int32, func(string) string) string
+	ForInt    func(int, func(string) int) int
+	ForString func(int, func(string) string) string
 }
 
 type LayerInt struct {
@@ -39,19 +39,19 @@ var main_ = initializeMain_()
 func initializeMain_() []string {
 	continue_ := scoped.Layer
 	continue_2 := labelled.Layer
-	return []string{continue_.ForString(3, category.Identity), strconv.Itoa(int(continue_.ForInt(4, func(_ string) int32 {
+	return []string{continue_.ForString(3, category.Identity), strconv.Itoa(continue_.ForInt(4, func(_ string) int {
 		return 7
-	}))), continue_2(shared.LabelScope{Scope: 5, Label: "outer"}, category.Identity)}
+	})), continue_2(shared.LabelScope{Scope: 5, Label: "outer"}, category.Identity)}
 }
 
-var scoped LayerInt = LayerInt{Layer: RunScopeString{ForInt: func(depth int32, done func(string) int32) int32 {
-	return done("depth " + strconv.Itoa(int(depth)))
-}, ForString: func(depth int32, done func(string) string) string {
-	return done("depth " + strconv.Itoa(int(depth)))
+var scoped LayerInt = LayerInt{Layer: RunScopeString{ForInt: func(depth int, done func(string) int) int {
+	return done("depth " + strconv.Itoa(depth))
+}, ForString: func(depth int, done func(string) string) string {
+	return done("depth " + strconv.Itoa(depth))
 }}}
 
 var labelled LayerLabelScope = LayerLabelScope{Layer: func(labelScope shared.LabelScope, done func(string) string) string {
-	return done(labelScope.Label + " " + strconv.Itoa(int(labelScope.Scope)))
+	return done(labelScope.Label + " " + strconv.Itoa(labelScope.Scope))
 }}
 
 func main() {
@@ -63,5 +63,5 @@ package shared
 
 type LabelScope struct {
 	Label string
-	Scope int32
+	Scope int
 }

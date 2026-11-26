@@ -9,24 +9,24 @@ import "fixture/shared"
 var main_ = initializeMain_()
 
 func initializeMain_() shared.MainResult {
-	scrutinee := []shared.Operation{{Name: "add", Run: func(x int32) int32 {
+	scrutinee := []shared.Operation{{Name: "add", Run: func(x int) int {
 		return x + 3
-	}}, {Name: "scale", Run: func(x int32) int32 {
+	}}, {Name: "scale", Run: func(x int) int {
 		return x * 3
 	}}}
-	var result int32
+	var result int
 	if len(scrutinee) == 2 {
 		first := scrutinee[0]
 		result = first.Run(10)
 	} else {
 		result = 10
 	}
-	scrutinee2 := []shared.Operation{{Name: "add", Run: func(x int32) int32 {
+	scrutinee2 := []shared.Operation{{Name: "add", Run: func(x int) int {
 		return x + 3
-	}}, {Name: "scale", Run: func(x int32) int32 {
+	}}, {Name: "scale", Run: func(x int) int {
 		return x * 3
 	}}}
-	var result2 int32
+	var result2 int
 	if len(scrutinee2) == 2 {
 		second := scrutinee2[1]
 		result2 = second.Run(10)
@@ -44,13 +44,13 @@ func main() {
 package shared
 
 type MainResult struct {
-	Added  int32
-	Scaled int32
+	Added  int
+	Scaled int
 }
 
 type Operation struct {
 	Name string
-	Run  func(int32) int32
+	Run  func(int) int
 }
 
 // note: the entry's value of type { added, scaled } is not printed; use an Effect entry or a value of a printable type (Int, Number, Boolean, Char, String or an Array of them)

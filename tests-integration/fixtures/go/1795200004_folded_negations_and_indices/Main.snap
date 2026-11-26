@@ -4,9 +4,16 @@ source: tests-integration/src/fixtures.rs
 // Data/Maybe/maybe.go
 package maybe
 
-type Int int64
+const TagNothing = 0
 
-const NoInt Int = 1 << 32
+const TagJust = 1
+
+type Int struct {
+	Just int
+	Tag  uint8
+}
+
+var NoInt = Int{Tag: TagNothing}
 
 // main.go
 package main
@@ -16,17 +23,18 @@ import (
 	"os"
 )
 
-func main_() int32 {
-	var result int32
-	if missing == maybe.NoInt {
+func main_() int {
+	var result int
+	switch missing.Tag {
+	case maybe.TagNothing:
 		result = 10
-	} else {
-		result = int32(missing)
+	default: // maybe.TagJust
+		result = missing.Just
 	}
 	return negated + result + 101
 }
 
-var negated int32 = 1
+var negated int = 1
 
 var missing = initializeMissing()
 
@@ -41,6 +49,5 @@ func initializeMissing() maybe.Int {
 }
 
 func main() {
-	exitStatus := main_()
-	os.Exit(int(exitStatus))
+	os.Exit(main_())
 }

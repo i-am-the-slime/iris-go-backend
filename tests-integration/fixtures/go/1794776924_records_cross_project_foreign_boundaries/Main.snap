@@ -6,11 +6,11 @@ package show
 
 import "strconv"
 
-func Show(i int32) string {
-	return strconv.Itoa(int(i))
+func Show(i int) string {
+	return strconv.Itoa(i)
 }
 
-func AppendShowArrayInt(buffer []byte, array []int32) []byte {
+func AppendShowArrayInt(buffer []byte, array []int) []byte {
 	buffer = append(buffer, '[')
 	for index, element := range array {
 		if index > 0 {
@@ -22,7 +22,7 @@ func AppendShowArrayInt(buffer []byte, array []int32) []byte {
 	return buffer
 }
 
-func ArrayInt(array []int32) string {
+func ArrayInt(array []int) string {
 	return string(AppendShowArrayInt(nil, array))
 }
 
@@ -56,7 +56,7 @@ func initializeMain_() string {
 }
 
 func sizes(shapes []shared.Shape) string {
-	mapped := make([]int32, len(shapes))
+	mapped := make([]int, len(shapes))
 	for index := range shapes {
 		mapped[index] = shapes[index].Size
 	}
@@ -72,10 +72,10 @@ package shared
 
 type NameSides struct {
 	Name  string
-	Sides int32
+	Sides int
 }
 
 type Shape struct {
 	Kind string
-	Size int32
+	Size int
 }

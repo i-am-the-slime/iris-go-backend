@@ -6,7 +6,7 @@ package either
 
 type Either struct {
 	Left  string
-	Right int32
+	Right int
 	Tag   uint8
 }
 
@@ -20,7 +20,7 @@ type StringFailure struct {
 	Left   string
 }
 
-func Right(right int32) Either {
+func Right(right int) Either {
 	return Either{Tag: EitherRight, Right: right}
 }
 
@@ -47,7 +47,7 @@ var SharedListEitherStringIntNil = &ListEitherStringInt{}
 
 type ListInt struct {
 	Cons1 *ListInt
-	Cons0 int32
+	Cons0 int
 }
 
 var SharedListIntNil = &ListInt{}
@@ -98,7 +98,7 @@ func Left(left string) Either {
 	return Either{Tag: EitherLeft, Left: left}
 }
 
-func ConsListInt(cons0 int32, cons1 *ListInt) *ListInt {
+func ConsListInt(cons0 int, cons1 *ListInt) *ListInt {
 	return &ListInt{Cons0: cons0, Cons1: cons1}
 }
 
@@ -143,9 +143,9 @@ func ShowChunkedRevMap(chunksAcc *ListListInt, chunk *ListInt) *ListString {
 		}
 		var result *ListString
 		if chunk != SharedListIntNil && chunk.Cons1 != SharedListIntNil && chunk.Cons1.Cons1 == SharedListIntNil {
-			result = ConsListString(strconv.Itoa(int(chunk.Cons0)), ConsListString(strconv.Itoa(int(chunk.Cons1.Cons0)), SharedListStringNil))
+			result = ConsListString(strconv.Itoa(chunk.Cons0), ConsListString(strconv.Itoa(chunk.Cons1.Cons0), SharedListStringNil))
 		} else if chunk != SharedListIntNil && chunk.Cons1 == SharedListIntNil {
-			result = ConsListString(strconv.Itoa(int(chunk.Cons0)), SharedListStringNil)
+			result = ConsListString(strconv.Itoa(chunk.Cons0), SharedListStringNil)
 		} else {
 			result = SharedListStringNil
 		}
@@ -161,7 +161,7 @@ func ShowChunkedRevMapReverseUnrolledMap(list *ListListInt, acc *ListString) *Li
 			x2 := list.Cons0.Cons1.Cons0
 			x3 := list.Cons0.Cons1.Cons1.Cons0
 			cs := list.Cons1
-			list, acc = cs, listStringCells.New(ListString{Cons0: strconv.Itoa(int(x1)), Cons1: listStringCells.New(ListString{Cons0: strconv.Itoa(int(x2)), Cons1: listStringCells.New(ListString{Cons0: strconv.Itoa(int(x3)), Cons1: acc})})})
+			list, acc = cs, listStringCells.New(ListString{Cons0: strconv.Itoa(x1), Cons1: listStringCells.New(ListString{Cons0: strconv.Itoa(x2), Cons1: listStringCells.New(ListString{Cons0: strconv.Itoa(x3), Cons1: acc})})})
 			continue
 		}
 		return acc

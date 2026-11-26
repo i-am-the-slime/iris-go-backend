@@ -9,15 +9,15 @@ import (
 	"strconv"
 )
 
-func ShowInt(i int32) string {
-	return strconv.Itoa(int(i))
+func ShowInt(i int) string {
+	return strconv.Itoa(i)
 }
 
 func ShowString(s string) string {
 	return prim.ShowString(s)
 }
 
-func AppendShowArrayInt(buffer []byte, array []int32) []byte {
+func AppendShowArrayInt(buffer []byte, array []int) []byte {
 	buffer = append(buffer, '[')
 	for index, element := range array {
 		if index > 0 {
@@ -41,7 +41,7 @@ func AppendShowArrayString(buffer []byte, array []string) []byte {
 	return buffer
 }
 
-func ArrayInt(array []int32) string {
+func ArrayInt(array []int) string {
 	return string(AppendShowArrayInt(nil, array))
 }
 
@@ -71,15 +71,15 @@ func initializeMain_() []string {
 	items2 := []string{}
 	var result2 []string
 	result2 = items2
-	numbers := []int32{1, 2, 3}
-	var result3 []int32
+	numbers := []int{1, 2, 3}
+	var result3 []int
 	updated2 := slices.Clone(numbers)
 	updated2[1] = 0
 	result3 = updated2
-	numbers2 := []int32{1, 2, 3}
-	var result4 []int32
+	numbers2 := []int{1, 2, 3}
+	var result4 []int
 	result4 = numbers2
-	elements := []int32{1}
+	elements := []int{1}
 	var result5 string
 	text := []byte("(Just ")
 	updated3 := slices.Clone(elements)
@@ -89,7 +89,7 @@ func initializeMain_() []string {
 	result5 = string(text)
 	var result6 string
 	if false {
-		elements2 := []int32{1}
+		elements2 := []int{1}
 		text2 := []byte("(Just ")
 		text2 = show.AppendShowArrayInt(text2, elements2)
 		text2 = append(text2, ')')
@@ -97,12 +97,12 @@ func initializeMain_() []string {
 	} else {
 		result6 = "Nothing"
 	}
-	numbers3 := []int32{1, 2}
-	var result7 int32
+	numbers3 := []int{1, 2}
+	var result7 int
 	result7 = numbers3[1] + numbers3[1]
-	var result8 int32
+	var result8 int
 	result8 = -1
-	return []string{show.ArrayString(result), show.ArrayString(result2), show.ArrayInt(result3), show.ArrayInt(result4), result5, result6, strconv.Itoa(int(result7)), strconv.Itoa(int(result8))}
+	return []string{show.ArrayString(result), show.ArrayString(result2), show.ArrayInt(result3), show.ArrayInt(result4), result5, result6, strconv.Itoa(result7), strconv.Itoa(result8)}
 }
 
 func main() {

@@ -21,7 +21,7 @@ import (
 )
 
 type TreeFnIntFnIntInt struct {
-	Leaf func(int32) func(int32) int32
+	Leaf func(int) func(int) int
 	Tag  uint8
 	Pair exists.Exists
 }
@@ -41,7 +41,7 @@ type ExistsPairEFnIntInt struct {
 }
 
 type TreeFnIntInt struct {
-	Leaf func(int32) int32
+	Leaf func(int) int
 	Pair *ExistsPairEFnIntInt
 	Tag  uint8
 }
@@ -62,7 +62,7 @@ type ExistsPairEInt struct {
 
 type TreeInt struct {
 	Pair *ExistsPairEInt
-	Leaf int32
+	Leaf int
 	Tag  uint8
 }
 
@@ -101,9 +101,9 @@ func convert(value TreeFnIntFnIntInt) *TreeFn {
 	switch value.Tag {
 	case TreeFnIntFnIntIntLeaf:
 		return &TreeFn{Tag: TreeFnLeaf, Leaf: func(coerced any) any {
-			original := value.Leaf(coerced.(int32))
+			original := value.Leaf(coerced.(int))
 			return func(coerced2 any) any {
-				return original(coerced2.(int32))
+				return original(coerced2.(int))
 			}
 		}}
 	default: // TreeFnIntFnIntIntPair
@@ -118,7 +118,7 @@ func convert2(value *TreeFnIntInt) *TreeFn {
 	switch value.Tag {
 	case TreeFnIntIntLeaf:
 		return &TreeFn{Tag: TreeFnLeaf, Leaf: func(coerced any) any {
-			return value.Leaf(coerced.(int32))
+			return value.Leaf(coerced.(int))
 		}}
 	default: // TreeFnIntIntPair
 		return &TreeFn{Tag: TreeFnPair, Pair: convert7(value.Pair)}
@@ -166,7 +166,7 @@ func convert8(value *TreeFnIntInt) *Tree {
 	switch value.Tag {
 	case TreeFnIntIntLeaf:
 		return &Tree{Tag: TreeLeaf, Field0: func(coerced any) any {
-			return value.Leaf(coerced.(int32))
+			return value.Leaf(coerced.(int))
 		}}
 	default: // TreeFnIntIntPair
 		return &Tree{Tag: TreePair, Field0: convert7(value.Pair)}
@@ -185,11 +185,11 @@ func convert9(value *TreeFn) *Tree {
 	}
 }
 
-func LeafTreeInt(leaf int32) *TreeInt {
+func LeafTreeInt(leaf int) *TreeInt {
 	return &TreeInt{Tag: TreeIntLeaf, Leaf: leaf}
 }
 
-func LeafTreeFnIntInt(leaf func(int32) int32) *TreeFnIntInt {
+func LeafTreeFnIntInt(leaf func(int) int) *TreeFnIntInt {
 	return &TreeFnIntInt{Tag: TreeFnIntIntLeaf, Leaf: leaf}
 }
 
@@ -197,7 +197,7 @@ func PairTreeInt(pair *ExistsPairEInt) *TreeInt {
 	return &TreeInt{Tag: TreeIntPair, Pair: pair}
 }
 
-func LeafTreeFnIntFnIntInt(leaf func(int32) func(int32) int32) TreeFnIntFnIntInt {
+func LeafTreeFnIntFnIntInt(leaf func(int) func(int) int) TreeFnIntFnIntInt {
 	return TreeFnIntFnIntInt{Tag: TreeFnIntFnIntIntLeaf, Leaf: leaf}
 }
 
@@ -207,27 +207,27 @@ func PairTreeFnIntInt(pair *ExistsPairEFnIntInt) *TreeFnIntInt {
 
 var main_ = initializeMain_()
 
-func initializeMain_() []int32 {
-	return []int32{leaves(LeafTreeInt(1)), leaves(PairTreeInt(&ExistsPairEInt{Int: &PairEInt{First: LeafTreeFnIntInt(func(value int32) int32 {
+func initializeMain_() []int {
+	return []int{leaves(LeafTreeInt(1)), leaves(PairTreeInt(&ExistsPairEInt{Int: &PairEInt{First: LeafTreeFnIntInt(func(value int) int {
 		return value + 1
-	}), Second: LeafTreeInt(1)}})), leaves(PairTreeInt(&ExistsPairEInt{Int: &PairEInt{First: PairTreeFnIntInt(&ExistsPairEFnIntInt{Int: &PairEFnIntInt{First: LeafTreeFnIntFnIntInt(func(x int32) func(int32) int32 {
-		return func(y int32) int32 {
+	}), Second: LeafTreeInt(1)}})), leaves(PairTreeInt(&ExistsPairEInt{Int: &PairEInt{First: PairTreeFnIntInt(&ExistsPairEFnIntInt{Int: &PairEFnIntInt{First: LeafTreeFnIntFnIntInt(func(x int) func(int) int {
+		return func(y int) int {
 			return x + y
 		}
 	}), Second: LeafTreeInt(1)}}), Second: LeafTreeInt(2)}}))}
 }
 
-func leaves(tree *TreeInt) int32 {
+func leaves(tree *TreeInt) int {
 	return leavesGo(0, tree)
 }
 
-func leavesGo(depth int32, tree *TreeInt) int32 {
+func leavesGo(depth int, tree *TreeInt) int {
 	switch tree.Tag {
 	case TreeIntLeaf:
 		return depth + 1
 	default: // TreeIntPair
-		original := func(depth2 int32) func(*Tree) int32 {
-			return func(tree2 *Tree) int32 {
+		original := func(depth2 int) func(*Tree) int {
+			return func(tree2 *Tree) int {
 				return leavesGo2(depth2, tree2)
 			}
 		}
@@ -235,14 +235,14 @@ func leavesGo(depth int32, tree *TreeInt) int32 {
 	}
 }
 
-func leavesGo2(depth int32, tree *Tree) int32 {
+func leavesGo2(depth int, tree *Tree) int {
 	switch tree.Tag {
 	case TreeLeaf:
 		return depth + 1
 	default: // TreePair
 		scrutinee := tree.Field0.(*PairE)
-		original := func(depth2 int32) func(*Tree) int32 {
-			return func(tree2 *Tree) int32 {
+		original := func(depth2 int) func(*Tree) int {
+			return func(tree2 *Tree) int {
 				return leavesGo2(depth2, tree2)
 			}
 		}
@@ -250,14 +250,14 @@ func leavesGo2(depth int32, tree *Tree) int32 {
 	}
 }
 
-func leavesGo3(depth int32, tree *Tree) int32 {
+func leavesGo3(depth int, tree *Tree) int {
 	switch tree.Tag {
 	case TreeLeaf:
 		return depth + 1
 	default: // TreePair
 		scrutinee := tree.Field0.(*PairE)
-		original := func(depth2 int32) func(*Tree) int32 {
-			return func(tree2 *Tree) int32 {
+		original := func(depth2 int) func(*Tree) int {
+			return func(tree2 *Tree) int {
 				return leavesGo2(depth2, tree2)
 			}
 		}

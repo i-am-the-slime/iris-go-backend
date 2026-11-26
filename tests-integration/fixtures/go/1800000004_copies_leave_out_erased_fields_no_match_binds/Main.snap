@@ -21,11 +21,11 @@ const (
 )
 
 func main() {
-	journal.Log(strconv.Itoa(int(1 + depthDeep(&Nested{Tag: NestedFlat}))))
-	journal.Log(strconv.Itoa(int(2 + totalDeepDeep(&Nested{Tag: NestedFlat}))))
+	journal.Log(strconv.Itoa(1 + depthDeep(&Nested{Tag: NestedFlat})))
+	journal.Log(strconv.Itoa(2 + totalDeepDeep(&Nested{Tag: NestedFlat})))
 }
 
-func depth(value *Nested) int32 {
+func depth(value *Nested) int {
 	switch value.Tag {
 	case NestedFlat:
 		return 0
@@ -34,7 +34,7 @@ func depth(value *Nested) int32 {
 	}
 }
 
-func total(value *Nested) int32 {
+func total(value *Nested) int {
 	if value.Tag == NestedFlat {
 		return 0
 	}
@@ -44,11 +44,11 @@ func total(value *Nested) int32 {
 	return 2 + total(value.Deep1)
 }
 
-func depthDeep(rest *Nested) int32 {
+func depthDeep(rest *Nested) int {
 	return 1 + depth(rest)
 }
 
-func totalDeep(rest *Nested) int32 {
+func totalDeep(rest *Nested) int {
 	switch rest.Tag {
 	case NestedFlat:
 		return 1
@@ -57,6 +57,6 @@ func totalDeep(rest *Nested) int32 {
 	}
 }
 
-func totalDeepDeep(nested *Nested) int32 {
+func totalDeepDeep(nested *Nested) int {
 	return 2 + totalDeep(nested)
 }

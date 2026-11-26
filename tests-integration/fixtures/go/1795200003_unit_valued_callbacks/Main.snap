@@ -17,7 +17,7 @@ package tuple
 
 type Tuple struct {
 	Second struct{}
-	First  int32
+	First  int
 }
 
 func Snd(tuple Tuple) {
@@ -35,21 +35,21 @@ import (
 	"os"
 )
 
-func main_() int32 {
-	array := []int32{1, 2}
-	array2 := []int32{1}
+func main_() int {
+	array := []int{1, 2}
+	array2 := []int{1}
 	count := min(len(array2), len(units))
-	array3 := []int32{1}
-	accumulator := func(_ int32) {
+	array3 := []int{1}
+	accumulator := func(_ int) {
 	}
 	for range array3 {
-		accumulator = func(_ int32) {
+		accumulator = func(_ int) {
 		}
 	}
-	return int32(len(units)) + int32(len(array))*10 + int32(count)*100 + int32(len(arraypkg.Map(func(i int32) struct{} {
+	return len(units) + len(array)*10 + count*100 + len(arraypkg.Map(func(i int) struct{} {
 		accumulator(i)
 		return struct{}{}
-	}, []int32{1, 2, 3})))*1000
+	}, []int{1, 2, 3}))*1000
 }
 
 var units = initializeUnits()
@@ -58,8 +58,7 @@ func initializeUnits() []struct{} {
 	array := []struct{}{{}, {}}
 	mapped := make([]tuple.Tuple, len(array))
 	for slot, unit := range array {
-		i := int32(slot)
-		mapped[slot] = tuple.Tuple{First: i, Second: unit}
+		mapped[slot] = tuple.Tuple{First: slot, Second: unit}
 	}
 	indexedAndSorted := direct.SortBy(mapped, func(_ tuple.Tuple, _ tuple.Tuple) int {
 		return 0
@@ -103,8 +102,7 @@ func initializeUnits() []struct{} {
 }
 
 func main() {
-	exitStatus := main_()
-	os.Exit(int(exitStatus))
+	os.Exit(main_())
 }
 
 // shared/shared.go

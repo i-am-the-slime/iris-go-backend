@@ -4,14 +4,25 @@ source: tests-integration/src/fixtures.rs
 // Data/Maybe/maybe.go
 package maybe
 
-type Int int64
+const TagNothing = 0
 
-const NoInt Int = 1 << 32
+const TagJust = 1
+
+type Int struct {
+	Just int
+	Tag  uint8
+}
+
+var NoInt = Int{Tag: TagNothing}
+
+func JustInt(just int) Int {
+	return Int{Tag: TagJust, Just: just}
+}
 
 // Data/Semiring/semiring.go
 package semiring
 
-func Add(i int32, i2 int32) int32 {
+func Add(i int, i2 int) int {
 	return i + i2
 }
 
@@ -26,12 +37,12 @@ import (
 
 type TupleString struct {
 	First  string
-	Second int32
+	Second int
 }
 
 type TupleHashMapIntInt struct {
-	First  hashmap.Native[int32, int32]
-	Second int32
+	First  hashmap.Native[int, int]
+	Second int
 }
 
 func Show(tuple TupleString) string {
@@ -79,67 +90,69 @@ import (
 )
 
 type Point struct {
-	X int32
-	Y int32
+	X int
+	Y int
 }
 
 var main_ = initializeMain_()
 
 func initializeMain_() []string {
 	array := []string{"a", "b", "a", ""}
-	accumulator := shared.Tally{ByWord: hashmap.NativeEmpty[string, int32](), ByFirst: object.Empty[int32](), Lengths: hashmap.NativeEmpty[int32, int32]()}
+	accumulator := shared.Tally{ByWord: hashmap.NativeEmpty[string, int](), ByFirst: object.Empty[int](), Lengths: hashmap.NativeEmpty[int, int]()}
 	accumulator.ByFirst = object.Lend(accumulator.ByFirst)
 	accumulator.ByWord = hashmap.Lend(accumulator.ByWord)
 	accumulator.Lengths = hashmap.Lend(accumulator.Lengths)
 	for _, word := range array {
-		nativeLookup := hashmap.NativeLookup(maybe.NoInt, func(payload int32) maybe.Int {
-			return maybe.Int(payload)
+		nativeLookup := hashmap.NativeLookup(maybe.NoInt, func(payload int) maybe.Int {
+			return maybe.JustInt(payload)
 		}, nil, word, nil, accumulator.ByWord)
-		var seen int32
-		if nativeLookup == maybe.NoInt {
+		var seen int
+		switch nativeLookup.Tag {
+		case maybe.TagNothing:
 			seen = 0
-		} else {
-			seen = int32(nativeLookup)
+		default: // maybe.TagJust
+			seen = nativeLookup.Just
 		}
-		var result int32
+		var result int
 		if word == "" {
 			result = 0
 		} else {
 			result = 1
 		}
-		accumulator = shared.Tally{ByWord: hashmap.NativeInsertOwned(nil, nil, word, seen+1, accumulator.ByWord), ByFirst: object.InsertOwned(word, seen+1, accumulator.ByFirst), Lengths: hashmap.NativeInsertWithOwned(nil, nil, semiring.Add, result, int32(1), accumulator.Lengths)}
+		accumulator = shared.Tally{ByWord: hashmap.NativeInsertOwned(nil, nil, word, seen+1, accumulator.ByWord), ByFirst: object.InsertOwned(word, seen+1, accumulator.ByFirst), Lengths: hashmap.NativeInsertWithOwned(nil, nil, semiring.Add, result, 1, accumulator.Lengths)}
 	}
-	nativeLookup2 := hashmap.NativeLookup(maybe.NoInt, func(payload int32) maybe.Int {
-		return maybe.Int(payload)
-	}, nil, int32(1), nil, accumulator.Lengths)
+	nativeLookup2 := hashmap.NativeLookup(maybe.NoInt, func(payload int) maybe.Int {
+		return maybe.JustInt(payload)
+	}, nil, 1, nil, accumulator.Lengths)
 	var result2 string
-	if nativeLookup2 != maybe.NoInt {
-		result2 = "(Just " + strconv.Itoa(int(int32(nativeLookup2))) + ")"
-	} else {
+	switch nativeLookup2.Tag {
+	case maybe.TagJust:
+		result2 = "(Just " + strconv.Itoa(nativeLookup2.Just) + ")"
+	default: // maybe.TagNothing
 		result2 = "Nothing"
 	}
-	array2 := []int32{1, 2, 3, 4}
-	accumulator2 := hashmap.Empty[Point, int32]()
+	array2 := []int{1, 2, 3, 4}
+	accumulator2 := hashmap.Empty[Point, int]()
 	for _, n := range array2 {
 		k := Point{X: n - 1, Y: 1 - n}
 		accumulator2 = hashmap.Insert(eq, hash, Point{X: n, Y: -n}, n, hashmap.Delete(eq, k, k.X*31+k.Y*31, accumulator2))
 	}
-	array3 := []int32{1, 2, 3}
-	accumulator3 := tuple.TupleHashMapIntInt{First: hashmap.NativeEmpty[int32, int32](), Second: 0}
+	array3 := []int{1, 2, 3}
+	accumulator3 := tuple.TupleHashMapIntInt{First: hashmap.NativeEmpty[int, int](), Second: 0}
 	for _, n := range array3 {
 		table := accumulator3.First
 		accumulator3 = tuple.TupleHashMapIntInt{First: hashmap.NativeInsert(nil, nil, n, n, table), Second: hashmap.NativeSize(table)}
 	}
-	return []string{tuple.ArrayTupleStringInt(hashmap.NativeToArrayBy(func(s string, i int32) tuple.TupleString {
+	return []string{tuple.ArrayTupleStringInt(hashmap.NativeToArrayBy(func(s string, i int) tuple.TupleString {
 		return tuple.TupleString{First: s, Second: i}
-	}, accumulator.ByWord)), strconv.Itoa(int(object.Size(accumulator.ByFirst))), result2, strconv.Itoa(int(hashmap.Size(accumulator2))), "(Tuple " + strconv.Itoa(int(hashmap.NativeSize(accumulator3.First))) + " " + strconv.Itoa(int(accumulator3.Second)) + ")"}
+	}, accumulator.ByWord)), strconv.Itoa(object.Size(accumulator.ByFirst)), result2, strconv.Itoa(hashmap.Size(accumulator2)), "(Tuple " + strconv.Itoa(hashmap.NativeSize(accumulator3.First)) + " " + strconv.Itoa(accumulator3.Second) + ")"}
 }
 
 func eq(ra Point, rb Point) bool {
 	return ra == rb
 }
 
-func hash(record Point) int32 {
+func hash(record Point) int {
 	return record.X*31 + record.Y*31
 }
 
@@ -157,8 +170,8 @@ type Tally struct {
 	Index map[string]int
 	Ints  int
 	Keys  []string
-	Vals  []int32
+	Vals  []int
 }
-	ByWord  hashmap.Native[string, int32]
-	Lengths hashmap.Native[int32, int32]
+	ByWord  hashmap.Native[string, int]
+	Lengths hashmap.Native[int, int]
 }

@@ -24,9 +24,20 @@ func Left(left exception.Error) Either {
 // Data/Maybe/maybe.go
 package maybe
 
-type Int int64
+const TagNothing = 0
 
-const NoInt Int = 1 << 32
+const TagJust = 1
+
+type Int struct {
+	Just int
+	Tag  uint8
+}
+
+func JustInt(just int) Int {
+	return Int{Tag: TagJust, Just: just}
+}
+
+var NoInt = Int{Tag: TagNothing}
 
 // Foreign/foreign.go
 package foreign
@@ -43,7 +54,7 @@ type ForeignError struct {
 	ErrorAtIndex1    *ForeignError
 	ErrorAtProperty0 string
 	ErrorAtProperty1 *ForeignError
-	ErrorAtIndex0    int32
+	ErrorAtIndex0    int
 	Tag              uint8
 }
 
@@ -101,7 +112,7 @@ const (
 
 type EitherInt struct {
 	Left  NonEmpty
-	Right int32
+	Right int
 	Tag   uint8
 }
 
@@ -365,9 +376,9 @@ import (
 )
 
 func DecodeJSONPair(d *foreignvalue.Decoder) shared.Pair {
-	var a int32
+	var a int
 	hasA := false
-	var a2 int32
+	var a2 int
 	hasA2 := false
 	if d.Object() {
 		for {
@@ -393,7 +404,7 @@ func DecodeJSONPair(d *foreignvalue.Decoder) shared.Pair {
 }
 
 func DecodeJSONTriple(d *foreignvalue.Decoder) shared.Triple {
-	var a int32
+	var a int
 	hasA := false
 	var a2 float64
 	hasA2 := false
@@ -514,7 +525,7 @@ func ReadImplPair(o any) (shared.Pair, foreign.NonEmptyFailure) {
 	unsafeReadPropImpl := foreignvalue.UnsafeReadPropImpl(func() foreign.EitherForeign {
 		return foreign.LeftEitherForeign(foreign.NonEmpty{First: foreign.TypeMismatch("object", foreignvalue.TypeOf(o)), Second: foreign.SharedListForeignErrorNil})
 	}, foreign.Pure, "A", o)
-	var i int32
+	var i int
 	var err foreign.NonEmptyFailure
 	switch unsafeReadPropImpl.Tag {
 	case foreign.EitherForeignLeft:
@@ -524,15 +535,16 @@ func ReadImplPair(o any) (shared.Pair, foreign.NonEmptyFailure) {
 		if foreignvalue.TagOf(b) == "Number" {
 			number := foreignvalue.Number(b)
 			var integer maybe.Int
-			if math.Trunc(number) == number && (number >= math.MinInt32 && number <= math.MaxInt32) {
-				integer = maybe.Int(int32(number))
+			if math.Trunc(number) == number && (number >= math.MinInt && number < -math.MinInt) {
+				integer = maybe.JustInt(int(number))
 			} else {
 				integer = maybe.NoInt
 			}
-			if integer == maybe.NoInt {
+			switch integer.Tag {
+			case maybe.TagNothing:
 				err = foreign.NonEmptyFailure{Failed: true, Left: foreign.NonEmpty{First: foreign.TypeMismatch("Int", foreignvalue.TagOf(b)), Second: foreign.SharedListForeignErrorNil}}
-			} else {
-				i, err = int32(integer), foreign.NonEmptyFailure{}
+			default: // maybe.TagJust
+				i, err = integer.Just, foreign.NonEmptyFailure{}
 			}
 		} else {
 			err = foreign.NonEmptyFailure{Failed: true, Left: foreign.NonEmpty{First: foreign.TypeMismatch("Int", foreignvalue.TagOf(b)), Second: foreign.SharedListForeignErrorNil}}
@@ -549,7 +561,7 @@ func ReadImplPair(o any) (shared.Pair, foreign.NonEmptyFailure) {
 	unsafeReadPropImpl2 := foreignvalue.UnsafeReadPropImpl(func() foreign.EitherForeign {
 		return foreign.LeftEitherForeign(foreign.NonEmpty{First: foreign.TypeMismatch("object", foreignvalue.TypeOf(o)), Second: foreign.SharedListForeignErrorNil})
 	}, foreign.Pure, "a", o)
-	var i2 int32
+	var i2 int
 	var err2 foreign.NonEmptyFailure
 	switch unsafeReadPropImpl2.Tag {
 	case foreign.EitherForeignLeft:
@@ -559,15 +571,16 @@ func ReadImplPair(o any) (shared.Pair, foreign.NonEmptyFailure) {
 		if foreignvalue.TagOf(b) == "Number" {
 			number := foreignvalue.Number(b)
 			var integer maybe.Int
-			if math.Trunc(number) == number && (number >= math.MinInt32 && number <= math.MaxInt32) {
-				integer = maybe.Int(int32(number))
+			if math.Trunc(number) == number && (number >= math.MinInt && number < -math.MinInt) {
+				integer = maybe.JustInt(int(number))
 			} else {
 				integer = maybe.NoInt
 			}
-			if integer == maybe.NoInt {
+			switch integer.Tag {
+			case maybe.TagNothing:
 				err2 = foreign.NonEmptyFailure{Failed: true, Left: foreign.NonEmpty{First: foreign.TypeMismatch("Int", foreignvalue.TagOf(b)), Second: foreign.SharedListForeignErrorNil}}
-			} else {
-				i2, err2 = int32(integer), foreign.NonEmptyFailure{}
+			default: // maybe.TagJust
+				i2, err2 = integer.Just, foreign.NonEmptyFailure{}
 			}
 		} else {
 			err2 = foreign.NonEmptyFailure{Failed: true, Left: foreign.NonEmpty{First: foreign.TypeMismatch("Int", foreignvalue.TagOf(b)), Second: foreign.SharedListForeignErrorNil}}
@@ -597,7 +610,7 @@ func ReadImplTriple(o any) (shared.Triple, foreign.NonEmptyFailure) {
 	unsafeReadPropImpl := foreignvalue.UnsafeReadPropImpl(func() foreign.EitherForeign {
 		return foreign.LeftEitherForeign(foreign.NonEmpty{First: foreign.TypeMismatch("object", foreignvalue.TypeOf(o)), Second: foreign.SharedListForeignErrorNil})
 	}, foreign.Pure, "A", o)
-	var i int32
+	var i int
 	var err foreign.NonEmptyFailure
 	switch unsafeReadPropImpl.Tag {
 	case foreign.EitherForeignLeft:
@@ -607,15 +620,16 @@ func ReadImplTriple(o any) (shared.Triple, foreign.NonEmptyFailure) {
 		if foreignvalue.TagOf(b) == "Number" {
 			number := foreignvalue.Number(b)
 			var integer maybe.Int
-			if math.Trunc(number) == number && (number >= math.MinInt32 && number <= math.MaxInt32) {
-				integer = maybe.Int(int32(number))
+			if math.Trunc(number) == number && (number >= math.MinInt && number < -math.MinInt) {
+				integer = maybe.JustInt(int(number))
 			} else {
 				integer = maybe.NoInt
 			}
-			if integer == maybe.NoInt {
+			switch integer.Tag {
+			case maybe.TagNothing:
 				err = foreign.NonEmptyFailure{Failed: true, Left: foreign.NonEmpty{First: foreign.TypeMismatch("Int", foreignvalue.TagOf(b)), Second: foreign.SharedListForeignErrorNil}}
-			} else {
-				i, err = int32(integer), foreign.NonEmptyFailure{}
+			default: // maybe.TagJust
+				i, err = integer.Just, foreign.NonEmptyFailure{}
 			}
 		} else {
 			err = foreign.NonEmptyFailure{Failed: true, Left: foreign.NonEmpty{First: foreign.TypeMismatch("Int", foreignvalue.TagOf(b)), Second: foreign.SharedListForeignErrorNil}}
@@ -778,14 +792,14 @@ func initializeMain_() []string {
 	if err.Failed {
 		result = "bad"
 	} else {
-		result = "{ A: " + strconv.Itoa(int(read.A_)) + ", a: " + strconv.Itoa(int(read.A)) + " }"
+		result = "{ A: " + strconv.Itoa(read.A_) + ", a: " + strconv.Itoa(read.A) + " }"
 	}
 	read2, err := json.ReadJSONTriple(foreignvalue.Encode(shared.EncodeJSONTriple, shared.Triple{A_: 3, A: "three", A2: 3.5}))
 	var result2 string
 	if err.Failed {
 		result2 = "bad"
 	} else {
-		result2 = "{ A: " + strconv.Itoa(int(read2.A_)) + ", A2: " + prim.ShowNumber(read2.A2) + ", a: " + prim.ShowString(read2.A) + " }"
+		result2 = "{ A: " + strconv.Itoa(read2.A_) + ", A2: " + prim.ShowNumber(read2.A2) + ", a: " + prim.ShowString(read2.A) + " }"
 	}
 	read3, err := json.ReadJSONHeader(foreignvalue.Encode(shared.EncodeJSONHeader, shared.Header{Content_type2: "text/plain", Content_type: "underscore"}))
 	var result3 string
@@ -801,7 +815,7 @@ func initializeMain_() []string {
 	updated2.A2 = 0.5
 	updated3 := shared.Header{Content_type2: "text/plain", Content_type: "underscore"}
 	updated3.Content_type2 = "application/json"
-	return []string{result, result2, result3, "{ A: " + strconv.Itoa(int(updated.A_)) + ", a: " + strconv.Itoa(int(updated.A)) + " }", "{ A: " + strconv.Itoa(int(updated2.A_)) + ", A2: " + prim.ShowNumber(updated2.A2) + ", a: " + prim.ShowString(updated2.A) + " }", "{ content-type: " + prim.ShowString(updated3.Content_type2) + ", content_type: " + prim.ShowString(updated3.Content_type) + " }"}
+	return []string{result, result2, result3, "{ A: " + strconv.Itoa(updated.A_) + ", a: " + strconv.Itoa(updated.A) + " }", "{ A: " + strconv.Itoa(updated2.A_) + ", A2: " + prim.ShowNumber(updated2.A2) + ", a: " + prim.ShowString(updated2.A) + " }", "{ content-type: " + prim.ShowString(updated3.Content_type2) + ", content_type: " + prim.ShowString(updated3.Content_type) + " }"}
 }
 
 func main() {
@@ -814,8 +828,8 @@ package shared
 import "github.com/i-am-the-slime/iris-go/foreignvalue"
 
 type Pair struct {
-	A_ int32 `purescript:"A"`
-	A  int32
+	A_ int `purescript:"A"`
+	A  int
 }
 
 func EncodeJSONPair(e *foreignvalue.Encoder, value Pair) {
@@ -829,7 +843,7 @@ func EncodeJSONPair(e *foreignvalue.Encoder, value Pair) {
 type Triple struct {
 	A  string
 	A2 float64
-	A_ int32 `purescript:"A"`
+	A_ int `purescript:"A"`
 }
 
 func EncodeJSONTriple(e *foreignvalue.Encoder, value Triple) {
@@ -856,7 +870,7 @@ func EncodeJSONHeader(e *foreignvalue.Encoder, value Header) {
 }
 
 type AOfInt struct {
-	A int32
+	A int
 }
 
 type Empty struct{}

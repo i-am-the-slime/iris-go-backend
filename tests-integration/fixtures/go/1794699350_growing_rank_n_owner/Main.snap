@@ -4,11 +4,11 @@ source: tests-integration/src/fixtures.rs
 // Control/Category/category.go
 package category
 
-func Identity(x int32) int32 {
+func Identity(x int) int {
 	return x
 }
 
-func Identity2(x func(int32) int32) func(int32) int32 {
+func Identity2(x func(int) int) func(int) int {
 	return x
 }
 
@@ -16,9 +16,9 @@ func Identity2(x func(int32) int32) func(int32) int32 {
 package tuple
 
 type TupleFnInt struct {
-	First  func(int32) any
+	First  func(int) any
 	Origin any
-	Second int32
+	Second int
 }
 
 type Tuple struct {
@@ -35,14 +35,14 @@ func Convert(value *TupleFnInt) *Tuple {
 		return original
 	}
 	return &Tuple{First: func(coerced any) any {
-		return value.First(coerced.(int32))
+		return value.First(coerced.(int))
 	}, Second: value.Second, Origin: value}
 }
 
-func Convert2(value []func(int32) *TupleFnInt) []func(int32) any {
-	converted := make([]func(int32) any, len(value))
+func Convert2(value []func(int) *TupleFnInt) []func(int) any {
+	converted := make([]func(int) any, len(value))
 	for index, element := range value {
-		converted[index] = func(coerced int32) any {
+		converted[index] = func(coerced int) any {
 			return Convert(element(coerced))
 		}
 	}
@@ -57,9 +57,9 @@ func Convert3(value *Tuple) *TupleFnInt {
 		return original
 	}
 	original2 := value.First.(func(any) any)
-	return &TupleFnInt{First: func(coerced int32) any {
+	return &TupleFnInt{First: func(coerced int) any {
 		return original2(coerced)
-	}, Second: value.Second.(int32), Origin: value}
+	}, Second: value.Second.(int), Origin: value}
 }
 
 func Convert4(value []any) []*TupleFnInt {
@@ -86,24 +86,24 @@ import (
 
 var main_ = initializeMain_()
 
-func initializeMain_() []int32 {
-	return shared.Convert4(func(questions []func(int32) any) []any {
-		mapped := make([]func(func(int32) int32) func(int32) int32, len(questions))
+func initializeMain_() []int {
+	return shared.Convert4(func(questions []func(int) any) []any {
+		mapped := make([]func(func(int) int) func(int) int, len(questions))
 		for index := range questions {
 			mapped[index] = category.Identity2
 		}
 		array := shared.Convert(mapped)
 		mapped2 := make([]any, len(array))
 		for index, value := range array {
-			value2 := func(x int32) any {
-				return value(func(i int32) int32 {
+			value2 := func(x int) any {
+				return value(func(i int) int {
 					return x + i
 				})
 			}
 			mapped2[index] = value2(1)
 		}
-		array2 := tuple.Convert2(arraypkg.Map(func(f func(int32) any) func(int32) *tuple.TupleFnInt {
-			return func(i int32) *tuple.TupleFnInt {
+		array2 := tuple.Convert2(arraypkg.Map(func(f func(int) any) func(int) *tuple.TupleFnInt {
+			return func(i int) *tuple.TupleFnInt {
 				return &tuple.TupleFnInt{First: f, Second: i}
 			}
 		}, questions))
@@ -111,12 +111,12 @@ func initializeMain_() []int32 {
 		for index, value := range array2 {
 			mapped3[index] = value(10)
 		}
-		return arraypkg.Apply(arraypkg.Map(func(function func(int32) int32) func(*tuple.TupleFnInt) any {
+		return arraypkg.Apply(arraypkg.Map(func(function func(int) int) func(*tuple.TupleFnInt) any {
 			return func(tuple *tuple.TupleFnInt) any {
 				return tuple.First(function(tuple.Second))
 			}
 		}, shared.Convert2(mapped2)), tuple.Convert4(mapped3))
-	}(shared.Convert3([]func(int32) int32{category.Identity, func(value int32) int32 {
+	}(shared.Convert3([]func(int) int{category.Identity, func(value int) int {
 		return value * 2
 	}})))
 }
@@ -132,44 +132,44 @@ func main() {
 // shared/shared.go
 package shared
 
-func Convert(value []func(func(int32) int32) func(int32) int32) []func(func(int32) int32) any {
-	converted := make([]func(func(int32) int32) any, len(value))
+func Convert(value []func(func(int) int) func(int) int) []func(func(int) int) any {
+	converted := make([]func(func(int) int) any, len(value))
 	for index, element := range value {
-		converted[index] = func(coerced func(int32) int32) any {
+		converted[index] = func(coerced func(int) int) any {
 			original := element(coerced)
 			return func(coerced2 any) any {
-				return original(coerced2.(int32))
+				return original(coerced2.(int))
 			}
 		}
 	}
 	return converted
 }
 
-func Convert2(value []any) []func(int32) int32 {
-	converted := make([]func(int32) int32, len(value))
+func Convert2(value []any) []func(int) int {
+	converted := make([]func(int) int, len(value))
 	for index, element := range value {
 		original := element.(func(any) any)
-		converted[index] = func(coerced int32) int32 {
-			return original(coerced).(int32)
+		converted[index] = func(coerced int) int {
+			return original(coerced).(int)
 		}
 	}
 	return converted
 }
 
-func Convert3(value []func(int32) int32) []func(int32) any {
-	converted := make([]func(int32) any, len(value))
+func Convert3(value []func(int) int) []func(int) any {
+	converted := make([]func(int) any, len(value))
 	for index, element := range value {
-		converted[index] = func(coerced int32) any {
+		converted[index] = func(coerced int) any {
 			return element(coerced)
 		}
 	}
 	return converted
 }
 
-func Convert4(value []any) []int32 {
-	converted := make([]int32, len(value))
+func Convert4(value []any) []int {
+	converted := make([]int, len(value))
 	for index, element := range value {
-		converted[index] = element.(int32)
+		converted[index] = element.(int)
 	}
 	return converted
 }

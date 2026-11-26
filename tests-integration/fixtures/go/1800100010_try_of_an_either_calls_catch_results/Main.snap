@@ -8,7 +8,7 @@ import "github.com/i-am-the-slime/iris-go/exception"
 
 type EitherString struct {
 	Left  string
-	Right int32
+	Right int
 	Tag   uint8
 }
 
@@ -42,11 +42,11 @@ func Left(left string) EitherString {
 	return EitherString{Tag: EitherStringLeft, Left: left}
 }
 
-func Right(right int32) EitherString {
+func Right(right int) EitherString {
 	return EitherString{Tag: EitherStringRight, Right: right}
 }
 
-func EitherStringFromResults(value int32, err StringFailure) EitherString {
+func EitherStringFromResults(value int, err StringFailure) EitherString {
 	if err.Failed {
 		return Left(err.Left)
 	}
@@ -66,7 +66,7 @@ import (
 )
 
 func main() {
-	for _, i := range []int32{1, 3, -1} {
+	for _, i := range []int{1, 3, -1} {
 		either3, err := internal.CatchResultsImpl(func(failure exception.Error) (either.EitherString, either.ErrorFailure) {
 			return either.EitherString{}, either.ErrorFailure{Failed: true, Left: failure}
 		}, func() (either.EitherString, either.ErrorFailure) {
@@ -79,33 +79,33 @@ func main() {
 		} else if !err.Failed && either3.Tag == either.EitherStringLeft {
 			result = "failed " + either3.Left
 		} else {
-			result = "got " + strconv.Itoa(int(either3.Right))
+			result = "got " + strconv.Itoa(either3.Right)
 		}
 		journal.Log(result)
-		i2, err2 := internal.CatchResultsImpl(func(failure exception.Error) (int32, either.StringFailure) {
-			var result2 int32
+		i2, err2 := internal.CatchResultsImpl(func(failure exception.Error) (int, either.StringFailure) {
+			var result2 int
 			if exception.Message(failure) == "below zero" {
 				result2 = 1
 			} else {
 				result2 = 2
 			}
 			return -result2, either.StringFailure{}
-		}, func() (int32, either.StringFailure) {
+		}, func() (int, either.StringFailure) {
 			return check(i)
 		})
 		var result3 string
 		if err2.Failed {
 			result3 = "(Left " + prim.ShowString(err2.Left) + ")"
 		} else {
-			result3 = "(Right " + strconv.Itoa(int(i2)) + ")"
+			result3 = "(Right " + strconv.Itoa(i2) + ")"
 		}
 		journal.Log(result3)
 	}
 }
 
-func check(n int32) (int32, either.StringFailure) {
+func check(n int) (int, either.StringFailure) {
 	if n > 2 {
-		return 0, either.StringFailure{Failed: true, Left: "too many: " + strconv.Itoa(int(n))}
+		return 0, either.StringFailure{Failed: true, Left: "too many: " + strconv.Itoa(n)}
 	}
 	if n < 0 {
 		panic(exception.NewError("below zero"))

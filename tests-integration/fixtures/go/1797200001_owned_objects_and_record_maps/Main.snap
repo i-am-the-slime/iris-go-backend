@@ -7,24 +7,24 @@ package internal
 type Map struct {
 	Node4 *Map
 	Node5 *Map
-	Node0 int32
-	Node1 int32
-	Node2 int32
-	Node3 int32
+	Node0 int
+	Node1 int
+	Node2 int
+	Node3 int
 }
 
 var SharedMapLeaf = &Map{}
 
 type Window struct {
 	Seen  *Map
-	Start int32
+	Start int
 }
 
-func Node(node0 int32, node1 int32, node2 int32, node3 int32, node4 *Map, node5 *Map) *Map {
+func Node(node0 int, node1 int, node2 int, node3 int, node4 *Map, node5 *Map) *Map {
 	return &Map{Node0: node0, Node1: node1, Node2: node2, Node3: node3, Node4: node4, Node5: node5}
 }
 
-func UnsafeNodeInt(k int32, v int32, l *Map, r *Map) *Map {
+func UnsafeNodeInt(k int, v int, l *Map, r *Map) *Map {
 	if l == SharedMapLeaf {
 		if r == SharedMapLeaf {
 			return Node(1, 1, k, v, l, r)
@@ -41,7 +41,7 @@ func UnsafeNodeInt(k int32, v int32, l *Map, r *Map) *Map {
 	return Node(1+result, 1+s1+r.Node1, k, v, l, r)
 }
 
-func UnsafeBalancedNode(k int32, v int32, l *Map, r *Map, donor *Map) *Map {
+func UnsafeBalancedNode(k int, v int, l *Map, r *Map, donor *Map) *Map {
 	if l == SharedMapLeaf {
 		if r == SharedMapLeaf {
 			donor.Node0 = 1
@@ -90,7 +90,7 @@ func UnsafeBalancedNode(k int32, v int32, l *Map, r *Map, donor *Map) *Map {
 	return UnsafeNodeIntReusing(k, v, l, r, donor)
 }
 
-func UnsafeNodeIntReusing(k int32, v int32, l *Map, r *Map, donor *Map) *Map {
+func UnsafeNodeIntReusing(k int, v int, l *Map, r *Map, donor *Map) *Map {
 	if l == SharedMapLeaf {
 		if r == SharedMapLeaf {
 			donor.Node0 = 1
@@ -134,14 +134,14 @@ func UnsafeNodeIntReusing(k int32, v int32, l *Map, r *Map, donor *Map) *Map {
 	return donor
 }
 
-func UnsafeBalancedNodeRotateLeft(k int32, v int32, l *Map, rk int32, rv int32, rl *Map, rr *Map, donor *Map) *Map {
+func UnsafeBalancedNodeRotateLeft(k int, v int, l *Map, rk int, rv int, rl *Map, rr *Map, donor *Map) *Map {
 	if rl != SharedMapLeaf {
 		lh := rl.Node0
 		lk := rl.Node2
 		lv := rl.Node3
 		ll := rl.Node4
 		lr := rl.Node5
-		var result int32
+		var result int
 		if rr == SharedMapLeaf {
 			result = 0
 		} else {
@@ -154,14 +154,14 @@ func UnsafeBalancedNodeRotateLeft(k int32, v int32, l *Map, rk int32, rv int32, 
 	return UnsafeNodeIntReusing(rk, rv, UnsafeNodeInt(k, v, l, rl), rr, donor)
 }
 
-func UnsafeBalancedNodeRotateRight(k int32, v int32, lk int32, lv int32, ll *Map, lr *Map, r *Map, donor *Map) *Map {
+func UnsafeBalancedNodeRotateRight(k int, v int, lk int, lv int, ll *Map, lr *Map, r *Map, donor *Map) *Map {
 	if lr != SharedMapLeaf {
 		rh := lr.Node0
 		rk := lr.Node2
 		rv := lr.Node3
 		rl := lr.Node4
 		rr := lr.Node5
-		var result int32
+		var result int
 		if ll == SharedMapLeaf {
 			result = 0
 		} else {
@@ -177,9 +177,20 @@ func UnsafeBalancedNodeRotateRight(k int32, v int32, lk int32, lv int32, ll *Map
 // Data/Maybe/maybe.go
 package maybe
 
-type Int int64
+const TagNothing = 0
 
-const NoInt Int = 1 << 32
+const TagJust = 1
+
+type Int struct {
+	Just int
+	Tag  uint8
+}
+
+var NoInt = Int{Tag: TagNothing}
+
+func JustInt(just int) Int {
+	return Int{Tag: TagJust, Just: just}
+}
 
 // main.go
 package main
@@ -193,31 +204,32 @@ import (
 
 func main() {
 	words := []string{"a", "b", "a"}
-	numbers := []int32{3, 1, 3, 2}
+	numbers := []int{3, 1, 3, 2}
 	accumulator := internal.Window{Start: 0, Seen: internal.SharedMapLeaf}
 	for _, x := range numbers {
 		seen := accumulator.Seen
 		scrutinee := mainGo(x, seen)
-		var start int32
-		if scrutinee != maybe.NoInt {
-			at := int32(scrutinee)
+		var start int
+		switch scrutinee.Tag {
+		case maybe.TagJust:
+			at := scrutinee.Just
 			x2 := accumulator.Start
 			if x2 < at {
 				start = at
 			} else {
 				start = x2
 			}
-		} else {
+		default: // maybe.TagNothing
 			start = accumulator.Start
 		}
 		v := start + 1
 		accumulator = internal.Window{Start: start, Seen: mainGoReusing(x, v, seen)}
 	}
-	accumulator2 := object.Empty[int32]()
+	accumulator2 := object.Empty[int]()
 	accumulator2 = object.Lend(accumulator2)
 	for _, word := range words {
 		value, found := object.Lookup(word, accumulator2)
-		var result int32
+		var result int
 		if found {
 			result = value + 1
 		} else {
@@ -225,17 +237,17 @@ func main() {
 		}
 		accumulator2 = object.InsertOwned(word, result, accumulator2)
 	}
-	var result2 int32
+	var result2 int
 	if accumulator.Seen == internal.SharedMapLeaf {
 		result2 = 0
 	} else {
 		result2 = accumulator.Seen.Node1
 	}
-	output := &shared.Ref[int32]{Value: object.Size(accumulator2) + accumulator.Start + result2}
+	output := &shared.Ref[int]{Value: object.Size(accumulator2) + accumulator.Start + result2}
 	output.Value = 0
 }
 
-func mainGo(x int32, value *internal.Map) maybe.Int {
+func mainGo(x int, value *internal.Map) maybe.Int {
 	for {
 		if value == internal.SharedMapLeaf {
 			return maybe.NoInt
@@ -249,13 +261,13 @@ func mainGo(x int32, value *internal.Map) maybe.Int {
 			continue
 		}
 		if x == mk {
-			return maybe.Int(mv)
+			return maybe.JustInt(mv)
 		}
 		value = mr
 	}
 }
 
-func mainGoReusing(x int32, v int32, value *internal.Map) *internal.Map {
+func mainGoReusing(x int, v int, value *internal.Map) *internal.Map {
 	if value == internal.SharedMapLeaf {
 		return internal.Node(1, 1, x, v, internal.SharedMapLeaf, internal.SharedMapLeaf)
 	}

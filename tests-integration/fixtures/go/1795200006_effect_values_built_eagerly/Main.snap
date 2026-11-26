@@ -8,7 +8,7 @@ import "github.com/i-am-the-slime/iris-go/exception"
 
 type Either struct {
 	Left  exception.Error
-	Right int32
+	Right int
 	Tag   uint8
 }
 
@@ -22,13 +22,12 @@ package main
 
 import "os"
 
-func main_() int32 {
+func main_() int {
 	panic("boom")
 }
 
 func main() {
-	exitStatus := main_()
-	os.Exit(int(exitStatus))
+	os.Exit(main_())
 }
 
 // shared/shared.go
@@ -39,6 +38,6 @@ type Ref[T any] struct {
 }
 
 type StateValue struct {
-	State int32
-	Value int32
+	State int
+	Value int
 }

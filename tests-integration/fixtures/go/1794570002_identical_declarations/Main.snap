@@ -15,12 +15,12 @@ import (
 var main_ = initializeMain_()
 
 func initializeMain_() []string {
-	array := []int32{1, 2}
+	array := []int{1, 2}
 	mapped := make([]string, len(array))
 	for index, value := range array {
 		mapped[index] = opsForLeft.Describe(opsForLeft.Double(value))
 	}
-	array2 := []int32{3}
+	array2 := []int{3}
 	mapped2 := make([]string, len(array2))
 	for index, value := range array2 {
 		mapped2[index] = opsForLeft.Describe(opsForLeft.Double(value))
@@ -28,10 +28,10 @@ func initializeMain_() []string {
 	return arraypkg.Append(mapped, mapped2)
 }
 
-var opsForLeft shared.Ops = shared.Ops{Double: func(n int32) int32 {
+var opsForLeft shared.Ops = shared.Ops{Double: func(n int) int {
 	return n * 2
-}, Describe: func(n int32) string {
-	return "n = " + strconv.Itoa(int(n))
+}, Describe: func(n int) string {
+	return "n = " + strconv.Itoa(n)
 }}
 
 func main() {
@@ -42,6 +42,6 @@ func main() {
 package shared
 
 type Ops struct {
-	Describe func(int32) string
-	Double   func(int32) int32
+	Describe func(int) string
+	Double   func(int) int
 }

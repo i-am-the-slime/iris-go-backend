@@ -13,19 +13,19 @@ import (
 
 func main() {
 	model := box.ReadBox(box.NewBox(any(shared.Model{Count: 1, Name: "first", Size: shared.Size{Width: 80, Height: 24}}))).(shared.Model)
-	journal.Log(model.Name + " " + strconv.Itoa(int(model.Count)) + " " + strconv.Itoa(int(model.Size.Width)))
+	journal.Log(model.Name + " " + strconv.Itoa(model.Count) + " " + strconv.Itoa(model.Size.Width))
 }
 
 // shared/shared.go
 package shared
 
 type Size struct {
-	Height int32
-	Width  int32
+	Height int
+	Width  int
 }
 
 type Model struct {
 	Name  string
-	Count int32
+	Count int
 	Size  Size
 }

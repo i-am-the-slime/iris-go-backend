@@ -7,7 +7,7 @@ package either
 import "strconv"
 
 type Either struct {
-	Field0 int32
+	Field0 int
 	Tag    uint8
 }
 
@@ -18,18 +18,18 @@ const (
 
 type IntFailure struct {
 	Failed bool
-	Left   int32
+	Left   int
 }
 
-func Left(field0 int32) Either {
+func Left(field0 int) Either {
 	return Either{Tag: EitherLeft, Field0: field0}
 }
 
-func Right(field0 int32) Either {
+func Right(field0 int) Either {
 	return Either{Tag: EitherRight, Field0: field0}
 }
 
-func Show(i int32, err IntFailure) string {
+func Show(i int, err IntFailure) string {
 	return string(AppendShow(nil, i, err))
 }
 
@@ -45,7 +45,7 @@ func AppendShowArrayEitherIntInt(buffer []byte, array []Either) []byte {
 	return buffer
 }
 
-func AppendShow(buffer []byte, i int32, err IntFailure) []byte {
+func AppendShow(buffer []byte, i int, err IntFailure) []byte {
 	if err.Failed {
 		buffer = append(buffer, "(Left "...)
 		buffer = strconv.AppendInt(buffer, int64(err.Left), 10)
@@ -79,12 +79,12 @@ import (
 )
 
 func main() {
-	journal.Log(either.ArrayEitherIntInt(array.Apply([]func(int32) either.Either{tenfoldAboveOne, func(x int32) either.Either {
+	journal.Log(either.ArrayEitherIntInt(array.Apply([]func(int) either.Either{tenfoldAboveOne, func(x int) either.Either {
 		return either.Left(x + 100)
-	}}, []int32{1, 2, 3})))
+	}}, []int{1, 2, 3})))
 }
 
-func tenfoldAboveOne(x int32) either.Either {
+func tenfoldAboveOne(x int) either.Either {
 	if x > 1 {
 		return either.Right(x * 10)
 	}

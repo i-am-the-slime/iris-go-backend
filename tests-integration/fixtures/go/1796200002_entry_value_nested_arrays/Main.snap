@@ -13,7 +13,7 @@ import (
 var main_ = initializeMain_()
 
 func initializeMain_() [][]bool {
-	array := []int32{1, 2, 3}
+	array := []int{1, 2, 3}
 	mapped := make([][]bool, len(array))
 	for index, n := range array {
 		mapped[index] = []bool{n > 1, n > 2}

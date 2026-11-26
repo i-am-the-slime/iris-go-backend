@@ -15,12 +15,17 @@ type VariantCircleSquare struct {
 	Tag  uint8
 }
 
-type Int int64
+type Int struct {
+	Just int
+	Tag  uint8
+}
 
-const NoInt Int = 1 << 32
+func JustInt(just int) Int {
+	return Int{Tag: TagJust, Just: just}
+}
 
 type Circle struct {
-	Circle func(int32) Int
+	Circle func(int) Int
 }
 
 type Maybe struct {
@@ -29,10 +34,12 @@ type Maybe struct {
 }
 
 func Convert(value Int) *Maybe {
-	if value == NoInt {
+	switch value.Tag {
+	case TagNothing:
 		return &Maybe{Tag: TagNothing}
+	default: // TagJust
+		return &Maybe{Tag: TagJust, Just: value.Just}
 	}
-	return &Maybe{Tag: TagJust, Just: int32(value)}
 }
 
 func JustVariantCircleSquare(just shared.TypeValue) VariantCircleSquare {
@@ -48,7 +55,7 @@ import "fixture/shared"
 
 type VariantRepInt struct {
 	Type  string
-	Value int32
+	Value int
 }
 
 func Convert(value VariantRepInt) shared.TypeValue {
@@ -81,14 +88,14 @@ func main() {
 	square := internal.Convert2(internal.VariantRepNumber{Type: "square", Value: 1.5})
 	var result shared.TypeValue
 	if circle.Type == "circle" {
-		record := shared.Circle{Circle: func(value int32) int32 {
+		record := shared.Circle{Circle: func(value int) int {
 			return value * 2
 		}}
 		var field func(any) any
 		switch circle.Type {
 		case "circle":
 			field = func(coerced any) any {
-				return record.Circle(coerced.(int32))
+				return record.Circle(coerced.(int))
 			}
 		}
 		result = shared.TypeValue{Type: circle.Type, Value: field(circle.Value)}
@@ -115,14 +122,14 @@ func main() {
 	journal.Log(describe(result2))
 	var result3 maybe.VariantCircleSquare
 	if circle.Type == "circle" {
-		record := maybe.Circle{Circle: func(radius int32) maybe.Int {
-			return maybe.Int(radius + 1)
+		record := maybe.Circle{Circle: func(radius int) maybe.Int {
+			return maybe.JustInt(radius + 1)
 		}}
 		var field func(any) *maybe.Maybe
 		switch circle.Type {
 		case "circle":
 			field = func(coerced any) *maybe.Maybe {
-				return maybe.Convert(record.Circle(coerced.(int32)))
+				return maybe.Convert(record.Circle(coerced.(int)))
 			}
 		}
 		scrutinee := field(circle.Value)
@@ -150,7 +157,7 @@ func describe(r shared.TypeValue) string {
 		return "square " + prim.ShowNumber(r.Value.(float64))
 	}
 	if r.Type == "circle" {
-		return "circle " + strconv.Itoa(int(r.Value.(int32)))
+		return "circle " + strconv.Itoa(r.Value.(int))
 	}
 	panic("Data.Variant: pattern match failure")
 }
@@ -164,7 +171,7 @@ type TypeValue struct {
 }
 
 type Circle struct {
-	Circle func(int32) int32
+	Circle func(int) int
 }
 
 type Square struct {

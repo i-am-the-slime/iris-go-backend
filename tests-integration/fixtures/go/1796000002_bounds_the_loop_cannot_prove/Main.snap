@@ -14,13 +14,13 @@ import (
 
 var main_ = initializeMain_()
 
-func initializeMain_() []int32 {
-	result := *array.Thaw([]int32{1, 2, 3})
-	size := int32(len(result))
+func initializeMain_() []int {
+	result := *array.Thaw([]int{1, 2, 3})
+	size := len(result)
 	end := size + 1
-	for i := int32(0); i < end; i++ {
-		var i2 int32
-		if int(i) < len(result) {
+	for i := 0; i < end; i++ {
+		var i2 int
+		if i < len(result) {
 			i2 = result[i]
 			result[i] = i2 + 1
 		} else {
@@ -28,18 +28,18 @@ func initializeMain_() []int32 {
 		}
 	}
 	performed := shared.Frozen(result)
-	result2 := *array.Thaw([]int32{1, 2, 3})
-	size2 := int32(len(result2))
-	for i := int32(0); i < size2; i++ {
+	result2 := *array.Thaw([]int{1, 2, 3})
+	size2 := len(result2)
+	for i := 0; i < size2; i++ {
 		i2 := i - 1
-		within := i2 >= 0 && int(i2) < len(result2)
-		var previous int32
+		within := i2 >= 0 && i2 < len(result2)
+		var previous int
 		if within {
 			previous = result2[i2]
 		} else {
 			previous = 0
 		}
-		within2 := int(i) < len(result2)
+		within2 := i < len(result2)
 		if within2 {
 			element := result2[i]
 			result2[i] = element + previous

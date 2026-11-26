@@ -6,8 +6,8 @@ package show
 
 import "strconv"
 
-func ShowInt(i int32) string {
-	return strconv.Itoa(int(i))
+func ShowInt(i int) string {
+	return strconv.Itoa(i)
 }
 
 func ShowBoolean(boolean bool) string {
@@ -29,7 +29,7 @@ func AppendShowArrayBoolean(buffer []byte, array []bool) []byte {
 	return buffer
 }
 
-func AppendShowArrayInt(buffer []byte, array []int32) []byte {
+func AppendShowArrayInt(buffer []byte, array []int) []byte {
 	buffer = append(buffer, '[')
 	for index, element := range array {
 		if index > 0 {
@@ -45,7 +45,7 @@ func ArrayBoolean(array []bool) string {
 	return string(AppendShowArrayBoolean(nil, array))
 }
 
-func ArrayInt(array []int32) string {
+func ArrayInt(array []int) string {
 	return string(AppendShowArrayInt(nil, array))
 }
 
@@ -78,8 +78,8 @@ func initializeMain_() []string {
 	nesteds := make([]Nested, 3)
 	nesteds[0] = Nested{Tag: NestedNest, Nest: &nesteds[1]}
 	nesteds[1] = Nested{Tag: NestedNest, Nest: &nesteds[2]}
-	nesteds[2] = Nested{Tag: NestedFlat, Flat: shared.Convert([][]int32{{1, 2}, {3}})}
-	return []string{showLocal(&Nested{Tag: NestedFlat, Flat: int32(1)}), showLocal(&nesteds[0]), mainGoNest(&Nested{Tag: NestedFlat, Flat: shared.Convert2([]bool{true})})}
+	nesteds[2] = Nested{Tag: NestedFlat, Flat: shared.Convert([][]int{{1, 2}, {3}})}
+	return []string{showLocal(&Nested{Tag: NestedFlat, Flat: int(1)}), showLocal(&nesteds[0]), mainGoNest(&Nested{Tag: NestedFlat, Flat: shared.Convert2([]bool{true})})}
 }
 
 var showLocal func(*Nested) string = showLocalGo
@@ -110,7 +110,7 @@ func mainGoNest(inner *Nested) string {
 func showLocalGo(nested *Nested) string {
 	switch nested.Tag {
 	case NestedFlat:
-		return strconv.Itoa(int(nested.Flat.(int32)))
+		return strconv.Itoa(nested.Flat.(int))
 	default: // NestedNest
 		text := []byte("Nest ")
 		text = appendShowLocalGo2(text, shared.Show{Show: func(coerced any) string {
@@ -144,7 +144,7 @@ func main() {
 // shared/shared.go
 package shared
 
-func Convert(value [][]int32) any {
+func Convert(value [][]int) any {
 	converted := make([]any, len(value))
 	for index, element := range value {
 		converted[index] = Convert5(element)
@@ -173,16 +173,16 @@ func Convert3(value any) []bool {
 	return converted
 }
 
-func Convert4(value any) []int32 {
+func Convert4(value any) []int {
 	array := value.([]any)
-	converted := make([]int32, len(array))
+	converted := make([]int, len(array))
 	for index, element := range array {
-		converted[index] = element.(int32)
+		converted[index] = element.(int)
 	}
 	return converted
 }
 
-func Convert5(value []int32) any {
+func Convert5(value []int) any {
 	converted := make([]any, len(value))
 	for index, element := range value {
 		converted[index] = element

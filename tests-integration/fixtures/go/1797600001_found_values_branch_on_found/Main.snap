@@ -10,9 +10,14 @@ type Char int64
 
 const NoChar Char = 1 << 32
 
-type Int int64
+const TagNothing = 0
 
-const NoInt Int = 1 << 32
+const TagJust = 1
+
+type Int struct {
+	Just int
+	Tag  uint8
+}
 
 func Show(maybe Char) string {
 	return string(AppendShow(nil, maybe))
@@ -71,14 +76,14 @@ func initializeMain_() []string {
 	at, found3 := prim.CodeUnitIndexOf("b", "abc")
 	var result3 string
 	if found3 {
-		result3 = "b at " + strconv.Itoa(int(at))
+		result3 = "b at " + strconv.Itoa(at)
 	} else {
 		result3 = "no b"
 	}
 	at2, found4 := prim.CodeUnitIndexOf("b", "xyz")
 	var result4 string
 	if found4 {
-		result4 = "b at " + strconv.Itoa(int(at2))
+		result4 = "b at " + strconv.Itoa(at2)
 	} else {
 		result4 = "no b"
 	}
@@ -93,14 +98,14 @@ func initializeMain_() []string {
 	_, found7 := object.Lookup("apple", prices)
 	_, found8 := object.Lookup("fig", prices)
 	number, found9 := prim.IntFromStringAs(10, "21")
-	var result7 int32
+	var result7 int
 	if found9 {
 		result7 = number * 2
 	} else {
 		result7 = -1
 	}
 	number2, found10 := prim.IntFromStringAs(10, "x")
-	var result8 int32
+	var result8 int
 	if found10 {
 		result8 = number2 * 2
 	} else {
@@ -118,7 +123,7 @@ func initializeMain_() []string {
 		}
 		mapped[index] = codeUnitCharAt
 	}
-	return []string{prim.ShowChar(result), prim.ShowChar(result2), result3, result4, strconv.Itoa(int(result5)), strconv.Itoa(int(result6)), strconv.FormatBool(found7), strconv.FormatBool(found8), strconv.Itoa(int(result7)), strconv.Itoa(int(result8)), maybe.ArrayMaybeChar(mapped)}
+	return []string{prim.ShowChar(result), prim.ShowChar(result2), result3, result4, strconv.Itoa(result5), strconv.Itoa(result6), strconv.FormatBool(found7), strconv.FormatBool(found8), strconv.Itoa(result7), strconv.Itoa(result8), maybe.ArrayMaybeChar(mapped)}
 }
 
 var prices = initializePrices()
@@ -127,9 +132,9 @@ func initializePrices() *struct {
 	Index map[string]int
 	Ints  int
 	Keys  []string
-	Vals  []int32
+	Vals  []int
 } {
-	return object.FromEntries([]string{"apple", "pear"}, []int32{3, 5})
+	return object.FromEntries([]string{"apple", "pear"}, []int{3, 5})
 }
 
 func main() {

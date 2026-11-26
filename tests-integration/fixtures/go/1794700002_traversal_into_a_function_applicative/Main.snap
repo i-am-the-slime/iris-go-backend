@@ -13,15 +13,15 @@ import (
 
 var main_ = initializeMain_()
 
-func initializeMain_() []int32 {
-	append_ := direct.Appender[int32]()
-	array := []int32{1, 2, 3}
-	accumulator := func(_ int32, _ int32) []int32 {
-		return []int32{}
+func initializeMain_() []int {
+	append_ := direct.Appender[int]()
+	array := []int{1, 2, 3}
+	accumulator := func(_ int, _ int) []int {
+		return []int{}
 	}
 	for _, element := range array {
 		accumulator2 := accumulator
-		accumulator = func(scale int32, offset int32) []int32 {
+		accumulator = func(scale int, offset int) []int {
 			return append_(accumulator2(scale, offset))(element*scale + offset)
 		}
 	}

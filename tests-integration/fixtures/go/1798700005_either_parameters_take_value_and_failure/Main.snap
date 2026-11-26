@@ -10,7 +10,7 @@ import (
 )
 
 type Problem struct {
-	Field0 int32
+	Field0 int
 	Tag    uint8
 }
 
@@ -21,7 +21,7 @@ const (
 
 type Either struct {
 	Left  Problem
-	Right int32
+	Right int
 	Tag   uint8
 }
 
@@ -35,11 +35,11 @@ type ProblemFailure struct {
 	Left   Problem
 }
 
-func Negative(field0 int32) Problem {
+func Negative(field0 int) Problem {
 	return Problem{Tag: ProblemNegative, Field0: field0}
 }
 
-func TooLarge(field0 int32) Problem {
+func TooLarge(field0 int) Problem {
 	return Problem{Tag: ProblemTooLarge, Field0: field0}
 }
 
@@ -66,18 +66,18 @@ func main() {
 		var result2 string
 		switch err.Left.Tag {
 		case ProblemNegative:
-			result2 = "Negative " + strconv.Itoa(int(err.Left.Field0))
+			result2 = "Negative " + strconv.Itoa(err.Left.Field0)
 		default: // ProblemTooLarge
-			result2 = "TooLarge " + strconv.Itoa(int(err.Left.Field0))
+			result2 = "TooLarge " + strconv.Itoa(err.Left.Field0)
 		}
 		result = "(Left " + result2 + ")"
 	} else {
-		result = "(Right " + strconv.Itoa(int(i2)) + ")"
+		result = "(Right " + strconv.Itoa(i2) + ")"
 	}
 	journal.Log(result)
 }
 
-func kept(n int32) (int32, ProblemFailure) {
+func kept(n int) (int, ProblemFailure) {
 	if n < 0 {
 		return 0, ProblemFailure{Failed: true, Left: Negative(n)}
 	}
@@ -85,7 +85,7 @@ func kept(n int32) (int32, ProblemFailure) {
 		return 0, ProblemFailure{Failed: true, Left: TooLarge(n)}
 	}
 	field := n * 3
-	journal.Log("checked " + strconv.Itoa(int(field)))
+	journal.Log("checked " + strconv.Itoa(field))
 	n2 := field - 50
 	if n2 < 0 {
 		return 0, ProblemFailure{Failed: true, Left: Negative(n2)}
@@ -96,38 +96,38 @@ func kept(n int32) (int32, ProblemFailure) {
 	return field+n2*3, ProblemFailure{}
 }
 
-func settleRight(label string, value int32) string {
+func settleRight(label string, value int) string {
 	if value > 100 {
 		return settleLeftTooLarge(label+" again", value)
 	}
-	journal.Log(label + ": " + strconv.Itoa(int(value)))
+	journal.Log(label + ": " + strconv.Itoa(value))
 	return "ok"
 }
 
 func settleLeft(label string, problem Problem) string {
 	switch problem.Tag {
 	case ProblemNegative:
-		journal.Log(label + ": below zero by " + strconv.Itoa(int(-problem.Field0)))
+		journal.Log(label + ": below zero by " + strconv.Itoa(-problem.Field0))
 		return "negative"
 	default:
 		var result string
 		switch problem.Tag {
 		case ProblemNegative:
-			result = "Negative " + strconv.Itoa(int(problem.Field0))
+			result = "Negative " + strconv.Itoa(problem.Field0)
 		default: // ProblemTooLarge
-			result = "TooLarge " + strconv.Itoa(int(problem.Field0))
+			result = "TooLarge " + strconv.Itoa(problem.Field0)
 		}
 		journal.Log(label + ": " + result)
 		return "failed"
 	}
 }
 
-func settleLeftTooLarge(label string, i int32) string {
-	journal.Log(label + ": TooLarge " + strconv.Itoa(int(i)))
+func settleLeftTooLarge(label string, i int) string {
+	journal.Log(label + ": TooLarge " + strconv.Itoa(i))
 	return "failed"
 }
 
-func settleLeftNegative(label string, n int32) string {
-	journal.Log(label + ": below zero by " + strconv.Itoa(int(-n)))
+func settleLeftNegative(label string, n int) string {
+	journal.Log(label + ": below zero by " + strconv.Itoa(-n))
 	return "negative"
 }

@@ -13,27 +13,27 @@ import (
 //line Main.purs:21:1
 func main() {
 //line Main.purs:22:13
-	var passed int32 = 0
-//line Main.purs:22:13
-	var ref int32 = 3
+	passed := 0
+//line Main.purs:23:12
+	ref := 3
 //line Main.purs:23:3
 	limit := ref
 //line Main.purs:25:5
-	rules := []shared.Rule{{Name: "positive", Check: func(n int32) bool {
+	rules := []shared.Rule{{Name: "positive", Check: func(n int) bool {
 //line Main.purs:15:38
 		return n > 0
 //line Main.purs:25:5
-	}}, {Name: "small", Check: func(n int32) bool {
+	}}, {Name: "small", Check: func(n int) bool {
 //line Main.purs:16:35
 		return n < limit
 //line Main.purs:25:5
-	}}, {Name: "even", Check: func(n int32) bool {
+	}}, {Name: "even", Check: func(n int) bool {
 //line Main.purs:17:34
 		return n&1 == 0
 //line Main.purs:25:5
 	}}}
 //line Main.purs:24:3
-	for i := int32(0); i < 5; i++ {
+	for i := 0; i < 5; i++ {
 //line Main.purs:25:5
 		for _, rule := range rules {
 //line Main.purs:26:7
@@ -49,7 +49,7 @@ func main() {
 //line Main.purs:29:3
 	if passed != 10 {
 //line Main.purs:30:5
-		panic(exception.NewError("the rules passed " + strconv.Itoa(int(passed))))
+		panic(exception.NewError("the rules passed " + strconv.Itoa(passed)))
 //line Main.purs:29:3
 	}
 //line Main.purs:21:1
@@ -68,7 +68,7 @@ type Ref[T any] struct {
 //line shared.go:11
 type Rule struct {
 //line shared.go:13
-	Check func(int32) bool
+	Check func(int) bool
 //line shared.go:15
 	Name  string
 //line shared.go:17
@@ -77,8 +77,8 @@ type Rule struct {
 //line shared.go:20
 type StateValue struct {
 //line shared.go:22
-	State int32
+	State int
 //line shared.go:24
-	Value int32
+	Value int
 //line shared.go:26
 }

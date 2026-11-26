@@ -10,26 +10,26 @@ import (
 )
 
 type Resource struct {
-	ForInt  func(func(int32) int32) int32
-	ForUnit func(func(int32))
+	ForInt  func(func(int) int) int
+	ForUnit func(func(int))
 }
 
 func main() {
-	i := acquired.ForInt(func(x int32) int32 {
+	i := acquired.ForInt(func(x int) int {
 		return x + 1
 	})
-	journal.Log(strconv.Itoa(int(i)))
-	acquired.ForUnit(func(x int32) {
-		journal.Log(strconv.Itoa(int(x)))
+	journal.Log(strconv.Itoa(i))
+	acquired.ForUnit(func(x int) {
+		journal.Log(strconv.Itoa(x))
 	})
 }
 
-var acquired Resource = Resource{ForInt: func(use func(int32) int32) int32 {
+var acquired Resource = Resource{ForInt: func(use func(int) int) int {
 	journal.Log("acquire")
 	result := use(41)
 	journal.Log("release")
 	return result
-}, ForUnit: func(use func(int32)) {
+}, ForUnit: func(use func(int)) {
 	journal.Log("acquire")
 	use(41)
 	journal.Log("release")

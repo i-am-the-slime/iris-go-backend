@@ -47,7 +47,6 @@ import (
 	"fixture/Data/Maybe"
 	"fixture/Data/Show"
 	"fixture/shared"
-	"github.com/i-am-the-slime/iris-go/array"
 	"github.com/i-am-the-slime/iris-go/console"
 	"slices"
 	"strconv"
@@ -68,7 +67,7 @@ func initializeMain_() []string {
 			if tag == "" {
 				accumulator = maybe.NoArrayString
 			} else {
-				accumulator = maybe.JustArrayString(array.Bounded(append(accumulator.Just, tag+"!")))
+				accumulator = maybe.JustArrayString(append(accumulator.Just, tag+"!"))
 			}
 		default:
 			accumulator = maybe.NoArrayString
@@ -84,12 +83,12 @@ func initializeMain_() []string {
 	default:
 		result = "Nothing"
 	}
-	return []string{"6", "4", "(Just 2)", "Nothing", "5", result, "1", strconv.Itoa(int(bump(3, origin).X))}
+	return []string{"6", "4", "(Just 2)", "Nothing", "5", result, "1", strconv.Itoa(bump(3, origin).X)}
 }
 
 var origin shared.Point = shared.Point{X: 3, Tags: []string{"a", "b"}}
 
-func bump(n int32, point shared.Point) shared.Point {
+func bump(n int, point shared.Point) shared.Point {
 	for {
 		switch n {
 		case 0:
@@ -110,5 +109,5 @@ package shared
 
 type Point struct {
 	Tags []string
-	X    int32
+	X    int
 }

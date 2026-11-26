@@ -13,7 +13,7 @@ func main_() []string {
 	output := run.Run("echo")
 	outputs := run.RunAll([]string{"a", "b"})
 	output.Stdout += "!"
-	return []string{run.Describe(output), run.Describe(made), strconv.Itoa(len(outputs)), output.Stderr + strconv.Itoa(int(output.ExitCode))}
+	return []string{run.Describe(output), run.Describe(made), strconv.Itoa(len(outputs)), output.Stderr + strconv.Itoa(output.ExitCode)}
 }
 
 var made run.Output = run.Output{Stdout: "made", Stderr: "", ExitCode: 3}

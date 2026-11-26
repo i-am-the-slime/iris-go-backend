@@ -6,7 +6,7 @@ package either
 
 type EitherArrayInt struct {
 	Left  string
-	Right []int32
+	Right []int
 	Tag   uint8
 }
 
@@ -16,15 +16,15 @@ const (
 )
 
 type MainResult struct {
-	Appended []int32
+	Appended []int
 	Combined EitherArrayInt
-	Escaping [][]int32
-	Snocs    []int32
+	Escaping [][]int
+	Snocs    []int
 }
 
 type EitherInt struct {
 	Left  string
-	Right int32
+	Right int
 	Tag   uint8
 }
 
@@ -33,11 +33,11 @@ const (
 	EitherIntRight
 )
 
-func RightEitherInt(right int32) EitherInt {
+func RightEitherInt(right int) EitherInt {
 	return EitherInt{Tag: EitherIntRight, Right: right}
 }
 
-func RightEitherArrayInt(right []int32) EitherArrayInt {
+func RightEitherArrayInt(right []int) EitherArrayInt {
 	return EitherArrayInt{Tag: EitherArrayIntRight, Right: right}
 }
 
@@ -59,17 +59,17 @@ import (
 var main_ = initializeMain_()
 
 func initializeMain_() either.MainResult {
-	accumulator := []int32{}
-	for x := int32(1); x < 6; x++ {
-		accumulator = arraypkg.Bounded(append(accumulator, x))
+	accumulator := []int{}
+	for x := 1; x < 6; x++ {
+		accumulator = append(accumulator, x)
 	}
-	accumulator2 := []int32{1}
+	accumulator2 := []int{1}
 	accumulator2 = slices.Clip(accumulator2)
-	for x := int32(1); x < 6; x++ {
-		accumulator2 = arraypkg.Bounded(append(accumulator2, x*2))
+	for x := 1; x < 6; x++ {
+		accumulator2 = append(accumulator2, x*2)
 	}
 	array := []either.EitherInt{either.RightEitherInt(1), either.RightEitherInt(2), either.RightEitherInt(3)}
-	accumulator3 := either.RightEitherArrayInt([]int32{})
+	accumulator3 := either.RightEitherArrayInt([]int{})
 	accumulator3.Right = slices.Clip(accumulator3.Right)
 	for _, element := range array {
 		if accumulator3.Tag == either.EitherArrayIntLeft && element.Tag == either.EitherIntLeft {
@@ -77,15 +77,15 @@ func initializeMain_() either.MainResult {
 		} else if accumulator3.Tag == either.EitherArrayIntLeft && element.Tag == either.EitherIntRight {
 			accumulator3 = either.Left(accumulator3.Left)
 		} else if accumulator3.Tag == either.EitherArrayIntRight && element.Tag == either.EitherIntRight {
-			accumulator3 = either.RightEitherArrayInt(arraypkg.Bounded(append(accumulator3.Right, element.Right)))
+			accumulator3 = either.RightEitherArrayInt(append(accumulator3.Right, element.Right))
 		} else {
 			accumulator3 = either.Left(element.Left)
 		}
 	}
-	accumulator4 := shared.AccSeen{Acc: []int32{}, Seen: [][]int32{}}
+	accumulator4 := shared.AccSeen{Acc: []int{}, Seen: [][]int{}}
 	accumulator4.Seen = slices.Clip(accumulator4.Seen)
-	for x := int32(1); x < 5; x++ {
-		accumulator4 = shared.AccSeen{Acc: arraypkg.Append(accumulator4.Acc, []int32{x}), Seen: arraypkg.Bounded(append(accumulator4.Seen, accumulator4.Acc))}
+	for x := 1; x < 5; x++ {
+		accumulator4 = shared.AccSeen{Acc: arraypkg.Append(accumulator4.Acc, []int{x}), Seen: append(accumulator4.Seen, accumulator4.Acc)}
 	}
 	return either.MainResult{Appended: accumulator, Snocs: accumulator2, Combined: accumulator3, Escaping: accumulator4.Seen}
 }
@@ -98,8 +98,8 @@ func main() {
 package shared
 
 type AccSeen struct {
-	Acc  []int32
-	Seen [][]int32
+	Acc  []int
+	Seen [][]int
 }
 
 // note: the entry's value of type { appended, combined, escaping, snocs } is not printed; use an Effect entry or a value of a printable type (Int, Number, Boolean, Char, String or an Array of them)

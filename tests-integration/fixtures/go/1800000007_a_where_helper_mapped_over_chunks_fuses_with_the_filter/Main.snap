@@ -1,6 +1,5 @@
 ---
 source: tests-integration/src/fixtures.rs
-assertion_line: 571
 ---
 // Data/Either/either.go
 package either
@@ -33,7 +32,7 @@ import (
 )
 
 type Step struct {
-	Emit []int32
+	Emit []int
 	Tag  uint8
 }
 
@@ -57,20 +56,20 @@ func Right(right Step) Either {
 	return Either{Tag: EitherRight, Right: right}
 }
 
-func Emit(emit []int32) Step {
+func Emit(emit []int) Step {
 	return Step{Tag: StepEmit, Emit: emit}
 }
 
 func main() {
-	sent := &shared.Ref[int32]{Value: 0}
-	ref := &shared.Ref[int32]{Value: 0}
-	ref2 := &shared.Ref[int32]{Value: 250}
+	sent := &shared.Ref[int]{Value: 0}
+	ref := &shared.Ref[int]{Value: 0}
+	ref2 := &shared.Ref[int]{Value: 250}
 	foldPulledFPullFF(sent, ref2, ref, 1000, struct{}{})
 	total := sent.Value
-	journal.Log(strconv.Itoa(int(total)))
+	journal.Log(strconv.Itoa(total))
 }
 
-func foldPulledFPullFF(ref *shared.Ref[int32], ref2 *shared.Ref[int32], ref3 *shared.Ref[int32], i int32, context struct{}) (struct{}, either.StringFailure) {
+func foldPulledFPullFF(ref *shared.Ref[int], ref2 *shared.Ref[int], ref3 *shared.Ref[int], i int, context struct{}) (struct{}, either.StringFailure) {
 	step2 := Step{Tag: StepEnd}
 	eitherStringStep := Right(step2)
 	for {
@@ -86,21 +85,21 @@ func foldPulledFPullFF(ref *shared.Ref[int32], ref2 *shared.Ref[int32], ref3 *sh
 				y := i3 + 64
 				stop := min(i, y)
 				ref3.Value = stop
-				var taken []int32
+				var taken []int
 				if i2 < 1 {
-					taken = []int32{}
+					taken = []int{}
 				} else {
 					step, count := array.RangeSteps(i3, stop-1)
-					mapped := []int32{}
+					mapped := []int{}
 					for index := range count {
-						number := i3 + int32(index)*step
+						number := i3 + index*step
 						if number&1 == 1 {
 							mapped = append(mapped, number*3)
 						}
 					}
 					taken = array.Slice(0, i2, mapped)
 				}
-				ref2.Value = i2 - int32(len(taken))
+				ref2.Value = i2 - len(taken)
 				result = Right(Emit(taken))
 			}
 		}
@@ -113,11 +112,11 @@ func foldPulledFPullFF(ref *shared.Ref[int32], ref2 *shared.Ref[int32], ref3 *sh
 				return struct{}{}, either.StringFailure{}
 			default: // StepEmit
 				var err either.StringFailure
-				var chunk []int32 = result.Right.Emit
-				var index int32 = 0
+				var chunk []int = result.Right.Emit
+				index := 0
 			foldPulledFPullFFFrom:
 				for {
-					if index < int32(len(chunk)) {
+					if index < len(chunk) {
 						n := chunk[index]
 						s := ref.Value
 						s_ := s + n
@@ -145,6 +144,6 @@ type Ref[T any] struct {
 }
 
 type StateValue struct {
-	State int32
-	Value int32
+	State int
+	Value int
 }

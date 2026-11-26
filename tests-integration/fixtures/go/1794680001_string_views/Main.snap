@@ -10,9 +10,20 @@ type Char int64
 
 const NoChar Char = 1 << 32
 
-type Int int64
+const TagNothing = 0
 
-const NoInt Int = 1 << 32
+const TagJust = 1
+
+type Int struct {
+	Just int
+	Tag  uint8
+}
+
+func JustInt(just int) Int {
+	return Int{Tag: TagJust, Just: just}
+}
+
+var NoInt = Int{Tag: TagNothing}
 
 func Show(maybe Char) string {
 	return string(AppendShow(nil, maybe))
@@ -94,9 +105,9 @@ func initializeMain_() []string {
 	textUnits := prim.UTF16(text)
 	textASCII := textUnits.ASCII()
 	for index := range count {
-		i := int32(index) * step
+		i := index * step
 		var codeUnitCharAt maybe.Char
-		if i >= 0 && int(i) < len(textASCII) {
+		if i >= 0 && i < len(textASCII) {
 			codeUnitCharAt = maybe.Char(rune(textASCII[i]))
 		} else {
 			value, found := textUnits.CharAt(i)
@@ -108,17 +119,17 @@ func initializeMain_() []string {
 		}
 		mapped[index] = codeUnitCharAt
 	}
-	x, found2 := prim.CodeUnitCharAt(int32(23)-3, "naïve 😀 banana 日本 a𝄞a")
+	x, found2 := prim.CodeUnitCharAt(23-3, "naïve 😀 banana 日本 a𝄞a")
 	var result string
 	if found2 {
 		result = "(Just " + prim.ShowChar(x) + ")"
 	} else {
 		result = "Nothing"
 	}
-	return []string{strconv.Itoa(int(charAtLoopViewsTheText("naïve 😀 banana 日本 a𝄞a", 0, 0))), unsafeCharAtLoopViewsTheText("ab😀c", 4, ""), strconv.Itoa(int(indexOfLoopViewsTheText("naïve 😀 banana 日本 a𝄞a", 0, 0))), strconv.Itoa(int(lastIndexOfLoopViewsTheText("naïve 😀 banana 日本 a𝄞a", 100, 0))), show.ArrayString(slicesInALoopViewTheText("a😀b𝄞", 0, []string{})), strconv.Itoa(int(codePointLoopViewsTheText("naïve 😀 banana 日本 a𝄞a", 0, 0))), strconv.Itoa(int(changedTextIsWalkedEachIteration("naïve 😀 banana 日本 a𝄞a", 0))), strconv.Itoa(int(literalIndexesAloneWalkTheText("naïve 😀 banana 日本 a𝄞a", 0))), maybe.ArrayMaybeChar(closureInTheLoopReadsTheView("x😀yz", 0, []maybe.Char{})), maybe.ArrayMaybeChar(mapped), result}
+	return []string{strconv.Itoa(charAtLoopViewsTheText("naïve 😀 banana 日本 a𝄞a", 0, 0)), unsafeCharAtLoopViewsTheText("ab😀c", 4, ""), strconv.Itoa(indexOfLoopViewsTheText("naïve 😀 banana 日本 a𝄞a", 0, 0)), strconv.Itoa(lastIndexOfLoopViewsTheText("naïve 😀 banana 日本 a𝄞a", 100, 0)), show.ArrayString(slicesInALoopViewTheText("a😀b𝄞", 0, []string{})), strconv.Itoa(codePointLoopViewsTheText("naïve 😀 banana 日本 a𝄞a", 0, 0)), strconv.Itoa(changedTextIsWalkedEachIteration("naïve 😀 banana 日本 a𝄞a", 0)), strconv.Itoa(literalIndexesAloneWalkTheText("naïve 😀 banana 日本 a𝄞a", 0)), maybe.ArrayMaybeChar(closureInTheLoopReadsTheView("x😀yz", 0, []maybe.Char{})), maybe.ArrayMaybeChar(mapped), result}
 }
 
-func charAtLoopViewsTheText(text string, i int32, count int32) int32 {
+func charAtLoopViewsTheText(text string, i int, count int) int {
 	textUnits := prim.UTF16(text)
 	textASCII := textUnits.ASCII()
 	for {
@@ -126,7 +137,7 @@ func charAtLoopViewsTheText(text string, i int32, count int32) int32 {
 			return count
 		}
 		var result2 bool
-		if i >= 0 && int(i) < len(textASCII) {
+		if i >= 0 && i < len(textASCII) {
 			result2 = rune(textASCII[i]) == 'a'
 		} else {
 			left0, found := textUnits.CharAt(i)
@@ -136,7 +147,7 @@ func charAtLoopViewsTheText(text string, i int32, count int32) int32 {
 				result2 = false
 			}
 		}
-		var result int32
+		var result int
 		if result2 {
 			result = count + 1
 		} else {
@@ -146,7 +157,7 @@ func charAtLoopViewsTheText(text string, i int32, count int32) int32 {
 	}
 }
 
-func unsafeCharAtLoopViewsTheText(text string, i int32, reversed string) string {
+func unsafeCharAtLoopViewsTheText(text string, i int, reversed string) string {
 	reversedBytes := []byte(reversed)
 	textUnits := prim.UTF16(text)
 	for {
@@ -158,7 +169,7 @@ func unsafeCharAtLoopViewsTheText(text string, i int32, reversed string) string 
 	}
 }
 
-func indexOfLoopViewsTheText(text string, offset int32, count int32) int32 {
+func indexOfLoopViewsTheText(text string, offset int, count int) int {
 	textUnits := prim.UTF16(text)
 	for {
 		found, found2 := textUnits.IndexOfStartingAt("a", offset)
@@ -171,42 +182,42 @@ func indexOfLoopViewsTheText(text string, offset int32, count int32) int32 {
 	}
 }
 
-func lastIndexOfLoopViewsTheText(text string, offset int32, count int32) int32 {
+func lastIndexOfLoopViewsTheText(text string, offset int, count int) int {
 	textUnits := prim.UTF16(text)
 	for {
 		value, found := textUnits.LastIndexOfStartingAt("a", offset)
 		var codeUnitLastIndexOfStartingAt maybe.Int
 		if found {
-			codeUnitLastIndexOfStartingAt = maybe.Int(value)
+			codeUnitLastIndexOfStartingAt = maybe.JustInt(value)
 		} else {
 			codeUnitLastIndexOfStartingAt = maybe.NoInt
 		}
-		if codeUnitLastIndexOfStartingAt != maybe.NoInt {
-			found2 := int32(codeUnitLastIndexOfStartingAt)
+		if codeUnitLastIndexOfStartingAt.Tag == maybe.TagJust {
+			found2 := codeUnitLastIndexOfStartingAt.Just
 			if found2 > 0 {
 				offset, count = found2-1, count+1
 				continue
 			}
 		}
-		if codeUnitLastIndexOfStartingAt != maybe.NoInt {
+		if codeUnitLastIndexOfStartingAt.Tag == maybe.TagJust {
 			return count + 1
 		}
 		return count
 	}
 }
 
-func slicesInALoopViewTheText(text string, i int32, pieces []string) []string {
+func slicesInALoopViewTheText(text string, i int, pieces []string) []string {
 	pieces = slices.Clip(pieces)
 	textUnits := prim.UTF16(text)
 	for {
 		if i >= textUnits.Length() {
 			return pieces
 		}
-		i, pieces = i+2, arraypkg.Bounded(append(pieces, textUnits.Slice(i, i+2), textUnits.Take(i), textUnits.Drop(i)))
+		i, pieces = i+2, append(pieces, textUnits.Slice(i, i+2), textUnits.Take(i), textUnits.Drop(i))
 	}
 }
 
-func codePointLoopViewsTheText(text string, i int32, count int32) int32 {
+func codePointLoopViewsTheText(text string, i int, count int) int {
 	textPoints := direct.CodePoints(text)
 	for {
 		if i >= textPoints.Length() {
@@ -216,12 +227,12 @@ func codePointLoopViewsTheText(text string, i int32, count int32) int32 {
 		if i < 0 || i == 0 && text == "" {
 			result2 = maybe.NoInt
 		} else if i == 0 {
-			result2 = maybe.Int(direct.CodePointAt0(nil, text))
+			result2 = maybe.JustInt(direct.CodePointAt0(nil, text))
 		} else {
 			value, found := textPoints.CodePointAt(i)
 			var codePointAt maybe.Int
 			if found {
-				codePointAt = maybe.Int(value)
+				codePointAt = maybe.JustInt(value)
 			} else {
 				codePointAt = maybe.NoInt
 			}
@@ -232,17 +243,17 @@ func codePointLoopViewsTheText(text string, i int32, count int32) int32 {
 		if codePointTake == "" {
 			result3 = maybe.NoInt
 		} else {
-			result3 = maybe.Int(direct.CodePointAt0(nil, codePointTake))
+			result3 = maybe.JustInt(direct.CodePointAt0(nil, codePointTake))
 		}
 		var result4 bool
-		if result2 == maybe.NoInt && result3 == maybe.NoInt {
+		if result2.Tag == maybe.TagNothing && result3.Tag == maybe.TagNothing {
 			result4 = true
-		} else if result2 != maybe.NoInt && result3 != maybe.NoInt {
-			result4 = int32(result2) == int32(result3)
+		} else if result2.Tag == maybe.TagJust && result3.Tag == maybe.TagJust {
+			result4 = result2.Just == result3.Just
 		} else {
 			result4 = false
 		}
-		var result int32
+		var result int
 		if result4 {
 			result = count + 1
 		} else {
@@ -252,7 +263,7 @@ func codePointLoopViewsTheText(text string, i int32, count int32) int32 {
 	}
 }
 
-func changedTextIsWalkedEachIteration(rest string, count int32) int32 {
+func changedTextIsWalkedEachIteration(rest string, count int) int {
 	for {
 		_, found := prim.CodeUnitCharAt(count&1, rest)
 		if found {
@@ -264,7 +275,7 @@ func changedTextIsWalkedEachIteration(rest string, count int32) int32 {
 	}
 }
 
-func literalIndexesAloneWalkTheText(text string, count int32) int32 {
+func literalIndexesAloneWalkTheText(text string, count int) int {
 	for {
 		if count >= 3 {
 			return count
@@ -273,13 +284,13 @@ func literalIndexesAloneWalkTheText(text string, count int32) int32 {
 	}
 }
 
-func closureInTheLoopReadsTheView(text string, i int32, found []maybe.Char) []maybe.Char {
+func closureInTheLoopReadsTheView(text string, i int, found []maybe.Char) []maybe.Char {
 	textUnits := prim.UTF16(text)
 	for {
 		if i >= textUnits.Length() {
 			return found
 		}
-		array := []int32{0, 1}
+		array := []int{0, 1}
 		mapped := make([]maybe.Char, len(array))
 		for index, offset := range array {
 			value, found2 := textUnits.CharAt(i + offset)

@@ -4,7 +4,7 @@ source: tests-integration/src/fixtures.rs
 // Data/Ring/ring.go
 package ring
 
-func Sub(i int32, i2 int32) int32 {
+func Sub(i int, i2 int) int {
 	return i - i2
 }
 
@@ -20,35 +20,35 @@ import (
 
 var main_ = initializeMain_()
 
-func initializeMain_() []int32 {
-	return []int32{nested(3, increment, 0), nested(2, func(value int32) int32 {
+func initializeMain_() []int {
+	return []int{nested(3, increment, 0), nested(2, func(value int) int {
 		return value * 3
-	}, 1), alternating(3, ring.Sub, 10, 4), alternating(4, func(x int32, y int32) int32 {
+	}, 1), alternating(3, ring.Sub, 10, 4), alternating(4, func(x int, y int) int {
 		return x*10 + y
 	}, 1, 2)}
 }
 
-func nested(depth int32, f func(int32) int32, x int32) int32 {
+func nested(depth int, f func(int) int, x int) int {
 	for {
 		fCaptured := f
 		if depth <= 0 {
 			return fCaptured(x)
 		}
-		depth, f = depth-1, func(x2 int32) int32 {
+		depth, f = depth-1, func(x2 int) int {
 			return fCaptured(fCaptured(x2))
 		}
 	}
 }
 
-func increment(x int32) int32 {
+func increment(x int) int {
 	return x + 1
 }
 
-func alternating(depth int32, combine func(int32, int32) int32, x int32, y int32) int32 {
+func alternating(depth int, combine func(int, int) int, x int, y int) int {
 	if depth <= 0 {
 		return combine(x, y)
 	}
-	return combine(alternating(depth-1, func(b int32, a int32) int32 {
+	return combine(alternating(depth-1, func(b int, a int) int {
 		return combine(a, b)
 	}, y, x), depth)
 }

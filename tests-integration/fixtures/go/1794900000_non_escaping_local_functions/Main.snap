@@ -12,25 +12,30 @@ import (
 
 type List struct {
 	Cons1 *List
-	Cons0 int32
+	Cons0 int
 }
 
 var sharedListNil = &List{}
 
-func Cons(cons0 int32, cons1 *List) *List {
+func Cons(cons0 int, cons1 *List) *List {
 	return &List{Cons0: cons0, Cons1: cons1}
 }
 
-func main_() int32 {
-	return foldLanes(direct.FromFoldable(func(f func(int32) func(*direct.ConsList[int32]) *direct.ConsList[int32]) func(*direct.ConsList[int32]) func(*List) *direct.ConsList[int32] {
-		return func(b *direct.ConsList[int32]) func(*List) *direct.ConsList[int32] {
+func main_() int {
+	array := direct.FromFoldable(func(f func(int) func(*direct.ConsList[int]) *direct.ConsList[int]) func(*direct.ConsList[int]) func(*List) *direct.ConsList[int] {
+		return func(b *direct.ConsList[int]) func(*List) *direct.ConsList[int] {
 			return foldr(f, b)
 		}
-	}, Cons(1, Cons(2, sharedListNil))), 0)
+	}, Cons(1, Cons(2, sharedListNil)))
+	accumulator := 0
+	for _, value := range array {
+		accumulator += value
+	}
+	return accumulator
 }
 
-func foldr(f func(int32) func(*direct.ConsList[int32]) *direct.ConsList[int32], b *direct.ConsList[int32]) func(*List) *direct.ConsList[int32] {
-	return func(x *List) *direct.ConsList[int32] {
+func foldr(f func(int) func(*direct.ConsList[int]) *direct.ConsList[int], b *direct.ConsList[int]) func(*List) *direct.ConsList[int] {
+	return func(x *List) *direct.ConsList[int] {
 		return foldrGo2(f, b, foldrGo(sharedListNil, x))
 	}
 }
@@ -47,7 +52,7 @@ func foldrGo(accumulator *List, list *List) *List {
 	}
 }
 
-func foldrGo2(f func(int32) func(*direct.ConsList[int32]) *direct.ConsList[int32], accumulator *direct.ConsList[int32], list *List) *direct.ConsList[int32] {
+func foldrGo2(f func(int) func(*direct.ConsList[int]) *direct.ConsList[int], accumulator *direct.ConsList[int], list *List) *direct.ConsList[int] {
 	for {
 		if list == sharedListNil {
 			return accumulator
@@ -59,91 +64,5 @@ func foldrGo2(f func(int32) func(*direct.ConsList[int32]) *direct.ConsList[int32
 }
 
 func main() {
-	exitStatus := main_()
-	os.Exit(int(exitStatus))
-}
-
-// main_neon.go
-//go:build goexperiment.simd && arm64
-
-package main
-
-import "simd/archsimd"
-
-func foldLanes(xs []int32, initial int32) int32 {
-	acc0 := archsimd.BroadcastInt32x4(0)
-	acc1, acc2, acc3 := acc0, acc0, acc0
-	const step = 4
-	i := 0
-	for ; i < len(xs)-4*step+1; i += 4 * step {
-		x0 := archsimd.LoadInt32x4(xs[i : i+step])
-		acc0 = acc0.Add(x0)
-		x1 := archsimd.LoadInt32x4(xs[i+step : i+2*step])
-		acc1 = acc1.Add(x1)
-		x2 := archsimd.LoadInt32x4(xs[i+2*step : i+3*step])
-		acc2 = acc2.Add(x2)
-		x3 := archsimd.LoadInt32x4(xs[i+3*step : i+4*step])
-		acc3 = acc3.Add(x3)
-	}
-	acc0 = acc0.Add(acc1).Add(acc2.Add(acc3))
-	var lanes [4]int32
-	acc0.Store(lanes[:])
-	accumulator := initial
-	for _, lane := range lanes[:step] {
-		accumulator = accumulator + lane
-	}
-	for ; i < len(xs); i++ {
-		x := xs[i]
-		accumulator = accumulator + x
-	}
-	return accumulator
-}
-
-// main_scalar.go
-//go:build !(goexperiment.simd && (arm64 || wasm))
-
-package main
-
-func foldLanes(xs []int32, initial int32) int32 {
-	accumulator := initial
-	for _, x := range xs {
-		accumulator = accumulator + x
-	}
-	return accumulator
-}
-
-// main_vector.go
-//go:build goexperiment.simd && wasm
-
-package main
-
-import "simd"
-
-func foldLanes(xs []int32, initial int32) int32 {
-	acc0 := simd.BroadcastInt32s(0)
-	acc1, acc2, acc3 := acc0, acc0, acc0
-	step := acc0.Len()
-	i := 0
-	for ; i < len(xs)-4*step+1; i += 4 * step {
-		x0 := simd.LoadInt32s(xs[i : i+step])
-		acc0 = acc0.Add(x0)
-		x1 := simd.LoadInt32s(xs[i+step : i+2*step])
-		acc1 = acc1.Add(x1)
-		x2 := simd.LoadInt32s(xs[i+2*step : i+3*step])
-		acc2 = acc2.Add(x2)
-		x3 := simd.LoadInt32s(xs[i+3*step : i+4*step])
-		acc3 = acc3.Add(x3)
-	}
-	acc0 = acc0.Add(acc1).Add(acc2.Add(acc3))
-	var lanes [16]int32
-	acc0.Store(lanes[:])
-	accumulator := initial
-	for _, lane := range lanes[:step] {
-		accumulator = accumulator + lane
-	}
-	for ; i < len(xs); i++ {
-		x := xs[i]
-		accumulator = accumulator + x
-	}
-	return accumulator
+	os.Exit(main_())
 }

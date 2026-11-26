@@ -5,8 +5,8 @@ source: tests-integration/src/fixtures.rs
 package tuple
 
 type TupleInt struct {
-	First  int32
-	Second int32
+	First  int
+	Second int
 }
 
 type Tuple struct {
@@ -23,7 +23,7 @@ func Convert2(value *Tuple) TupleInt {
 	if original, ok := value.Origin.(TupleInt); ok {
 		return original
 	}
-	return TupleInt{First: value.First.(int32), Second: value.Second.(int32)}
+	return TupleInt{First: value.First.(int), Second: value.Second.(int)}
 }
 
 // main.go
@@ -52,9 +52,9 @@ const (
 
 var main_ = initializeMain_()
 
-func initializeMain_() []int32 {
-	array := [][]int32{{1}, {1, 2, 3}, {4, 5, 6}, {9, 3}, {}}
-	mapped := make([]int32, len(array))
+func initializeMain_() []int {
+	array := [][]int{{1}, {1, 2, 3}, {4, 5, 6}, {9, 3}, {}}
+	mapped := make([]int, len(array))
 	var sequenceCells alloc.Cells[Sequence]
 	for index, x := range array {
 		accumulator := &Sequence{Tag: SequenceEmpty}
@@ -70,27 +70,27 @@ func initializeMain_() []int32 {
 						return cons(x2, value)
 					}
 				}
-				accumulator = &Sequence{Tag: SequenceZero, Zero: original(tuple.Convert(tuple.TupleInt{First: a, Second: accumulator.One0.(int32)}))(accumulator.One1)}
+				accumulator = &Sequence{Tag: SequenceZero, Zero: original(tuple.Convert(tuple.TupleInt{First: a, Second: accumulator.One0.(int)}))(accumulator.One1)}
 			}
 		}
-		var result int32
+		var result int
 	matched:
 		for {
 			if accumulator.Tag == SequenceOne {
-				guarded := accumulator.One0.(int32)
+				guarded := accumulator.One0.(int)
 				if guarded == 1 {
 					result = 100
 					break matched
 				}
 			}
 			if accumulator.Tag == SequenceOne && accumulator.One1.Tag == SequenceOne {
-				guarded := accumulator.One0.(int32)
+				guarded := accumulator.One0.(int)
 				guarded2 := tuple.Convert2(accumulator.One1.One0.(*tuple.Tuple))
 				result = guarded + guarded2.First*10 + guarded2.Second
 				break matched
 			}
 			if accumulator.Tag == SequenceOne {
-				result = accumulator.One0.(int32)
+				result = accumulator.One0.(int)
 				break matched
 			}
 			if accumulator.Tag == SequenceZero && accumulator.Zero.Tag == SequenceOne {

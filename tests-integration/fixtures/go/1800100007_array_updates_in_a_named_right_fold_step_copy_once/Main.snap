@@ -6,11 +6,11 @@ package show
 
 import "strconv"
 
-func Show(i int32) string {
-	return strconv.Itoa(int(i))
+func Show(i int) string {
+	return strconv.Itoa(i)
 }
 
-func AppendShowArrayInt(buffer []byte, array []int32) []byte {
+func AppendShowArrayInt(buffer []byte, array []int) []byte {
 	buffer = append(buffer, '[')
 	for index, element := range array {
 		if index > 0 {
@@ -22,7 +22,7 @@ func AppendShowArrayInt(buffer []byte, array []int32) []byte {
 	return buffer
 }
 
-func ArrayInt(array []int32) string {
+func ArrayInt(array []int) string {
 	return string(AppendShowArrayInt(nil, array))
 }
 
@@ -40,24 +40,22 @@ import (
 var main_ = initializeMain_()
 
 func initializeMain_() []string {
-	shared := array.Replicate(5, int32(1))
+	shared := array.Replicate(5, 1)
 	accumulator := shared
 	accumulator = slices.Clone(accumulator)
 	for index := 3; index >= 0; index-- {
-		element := int32(index)
-		accumulator = squaredIntoOwning(element, accumulator)
+		accumulator = squaredIntoOwning(index, accumulator)
 	}
-	accumulator2 := []int32{}
+	accumulator2 := []int{}
 	accumulator2 = slices.Clone(accumulator2)
 	for index := 3; index >= 0; index-- {
-		element := int32(index)
-		accumulator2 = squaredIntoOwning(element, accumulator2)
+		accumulator2 = squaredIntoOwning(index, accumulator2)
 	}
 	return []string{show.ArrayInt(accumulator), show.ArrayInt(accumulator2), show.ArrayInt(shared)}
 }
 
-func squaredInto(position int32, current []int32) []int32 {
-	if position >= 0 && position < int32(len(current)) {
+func squaredInto(position int, current []int) []int {
+	if position >= 0 && position < len(current) {
 		updated := slices.Clone(current)
 		updated[position] = position * position
 		return updated
@@ -65,8 +63,8 @@ func squaredInto(position int32, current []int32) []int32 {
 	return current
 }
 
-func squaredIntoOwning(position int32, current []int32) []int32 {
-	if position < int32(len(current)) {
+func squaredIntoOwning(position int, current []int) []int {
+	if position < len(current) {
 		value := position * position
 		updated := current
 		updated[position] = value

@@ -1,6 +1,6 @@
 package ffi
 
-func RepeatImpl[A any](times int32, action func() A) []A {
+func RepeatImpl[A any](times int, action func() A) []A {
 	results := make([]A, 0, times)
 	for range times {
 		results = append(results, action())

@@ -52,12 +52,12 @@ type TupleString struct {
 
 type TupleTupleStringBoolean struct {
 	First  TupleBoolean
-	Second int32
+	Second int
 }
 
 type TupleTupleStringString struct {
 	First  TupleString
-	Second int32
+	Second int
 }
 
 // main.go
@@ -70,7 +70,7 @@ import (
 	"fixture/Data/Tuple"
 	"fixture/shared/Data.Tuple+Data.Maybe"
 	"github.com/i-am-the-slime/iris-go/alloc"
-	arraypkg "github.com/i-am-the-slime/iris-go/array"
+	"github.com/i-am-the-slime/iris-go/array"
 	"github.com/i-am-the-slime/iris-go/console"
 	"strings"
 )
@@ -80,7 +80,7 @@ var main_ = initializeMain_()
 func initializeMain_() []string {
 	x := []bool{true, false}
 	x2 := []string{"kept"}
-	len_ := int32(len(x))
+	len_ := len(x)
 	cell := mainGoReusing(x, len_, 0, types.SharedListTupleStringBooleanNil)
 	elements := []tuple.TupleBoolean{}
 	for {
@@ -90,12 +90,11 @@ func initializeMain_() []string {
 		elements = append(elements, cell.Cons0)
 		cell = cell.Cons1
 	}
-	array := arraypkg.Bounded(elements)
-	mapped := make([]string, len(array))
-	for index := range array {
-		mapped[index] = show.Show(array[index].Second)
+	mapped := make([]string, len(elements))
+	for index := range elements {
+		mapped[index] = show.Show(elements[index].Second)
 	}
-	len_2 := int32(len(x2))
+	len_2 := len(x2)
 	cell2 := mainGoReusing2(x2, len_2, 0, types.SharedListTupleStringStringNil)
 	elements2 := []tuple.TupleString{}
 	for {
@@ -105,15 +104,14 @@ func initializeMain_() []string {
 		elements2 = append(elements2, cell2.Cons0)
 		cell2 = cell2.Cons1
 	}
-	array2 := arraypkg.Bounded(elements2)
-	mapped2 := make([]string, len(array2))
-	for index := range array2 {
-		mapped2[index] = array2[index].Second
+	mapped2 := make([]string, len(elements2))
+	for index := range elements2 {
+		mapped2[index] = elements2[index].Second
 	}
-	return arraypkg.Append(mapped, mapped2)
+	return array.Append(mapped, mapped2)
 }
 
-func mainGoReusing(x []bool, len_ int32, source int32, memo *types.ListTupleStringBoolean) *types.ListTupleStringBoolean {
+func mainGoReusing(x []bool, len_ int, source int, memo *types.ListTupleStringBoolean) *types.ListTupleStringBoolean {
 	var listTupleStringBooleanCells alloc.Cells[types.ListTupleStringBoolean]
 	for {
 		var result tuple_maybe.MaybeTupleTupleStringBooleanInt
@@ -129,7 +127,7 @@ func mainGoReusing(x []bool, len_ int32, source int32, memo *types.ListTupleStri
 	}
 }
 
-func mainGoReusing2(x []string, len_ int32, source int32, memo *types.ListTupleStringString) *types.ListTupleStringString {
+func mainGoReusing2(x []string, len_ int, source int, memo *types.ListTupleStringString) *types.ListTupleStringString {
 	var listTupleStringStringCells alloc.Cells[types.ListTupleStringString]
 	for {
 		var result tuple_maybe.MaybeTupleTupleStringStringInt

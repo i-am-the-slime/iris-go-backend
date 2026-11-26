@@ -6,7 +6,7 @@ package either
 
 type Either struct {
 	Left  string
-	Right int32
+	Right int
 	Tag   uint8
 }
 
@@ -15,7 +15,7 @@ const (
 	EitherRight
 )
 
-func Right(right int32) Either {
+func Right(right int) Either {
 	return Either{Tag: EitherRight, Right: right}
 }
 
@@ -35,7 +35,7 @@ import (
 )
 
 func main() {
-	finished := outcome.OutcomeImpl(func(code int32) func(string) either.Either {
+	finished := outcome.OutcomeImpl(func(code int) func(string) either.Either {
 		return func(message string) either.Either {
 			return failedWith(code, message)
 		}
@@ -45,10 +45,10 @@ func main() {
 	case either.EitherLeft:
 		result = "(Left " + prim.ShowString(finished.Left) + ")"
 	default: // either.EitherRight
-		result = "(Right " + strconv.Itoa(int(finished.Right)) + ")"
+		result = "(Right " + strconv.Itoa(finished.Right) + ")"
 	}
 	journal.Log(result)
-	broken := outcome.OutcomeImpl(func(code int32) func(string) either.Either {
+	broken := outcome.OutcomeImpl(func(code int) func(string) either.Either {
 		return func(message string) either.Either {
 			return failedWith(code, message)
 		}
@@ -58,11 +58,11 @@ func main() {
 	case either.EitherLeft:
 		result2 = "(Left " + prim.ShowString(broken.Left) + ")"
 	default: // either.EitherRight
-		result2 = "(Right " + strconv.Itoa(int(broken.Right)) + ")"
+		result2 = "(Right " + strconv.Itoa(broken.Right) + ")"
 	}
 	journal.Log(result2)
 }
 
-func failedWith(code int32, message string) either.Either {
-	return either.Left(message + " (code " + strconv.Itoa(int(code)) + ")")
+func failedWith(code int, message string) either.Either {
+	return either.Left(message + " (code " + strconv.Itoa(code) + ")")
 }

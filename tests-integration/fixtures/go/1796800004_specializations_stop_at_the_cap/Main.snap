@@ -12,15 +12,15 @@ import (
 
 var main_ = initializeMain_()
 
-func initializeMain_() []int32 {
-	return []int32{iterateF(3, 0), iterateF2(3, 0), iterateF3(3, 0), iterateF4(3, 1), iterateF5(3, 1), iterateSquare(2, 3), iterateHalve(3, 100), iterateF6(3, 5), iterate(func(x int32) int32 {
+func initializeMain_() []int {
+	return []int{iterateF(3, 0), iterateF2(3, 0), iterateF3(3, 0), iterateF4(3, 1), iterateF5(3, 1), iterateSquare(2, 3), iterateHalve(3, 100), iterateF6(3, 5), iterate(func(x int) int {
 		return x + 4
-	}, 3, 0), iterate(func(x int32) int32 {
+	}, 3, 0), iterate(func(x int) int {
 		return x * 4
 	}, 3, 1), iterateF(5, 10)}
 }
 
-func iterate(f func(int32) int32, count int32, x int32) int32 {
+func iterate(f func(int) int, count int, x int) int {
 	for {
 		if count <= 0 {
 			return x
@@ -29,7 +29,7 @@ func iterate(f func(int32) int32, count int32, x int32) int32 {
 	}
 }
 
-func iterateF(count int32, x int32) int32 {
+func iterateF(count int, x int) int {
 	for {
 		if count <= 0 {
 			return x
@@ -38,7 +38,7 @@ func iterateF(count int32, x int32) int32 {
 	}
 }
 
-func iterateF2(count int32, x int32) int32 {
+func iterateF2(count int, x int) int {
 	for {
 		if count <= 0 {
 			return x
@@ -47,7 +47,7 @@ func iterateF2(count int32, x int32) int32 {
 	}
 }
 
-func iterateF3(count int32, x int32) int32 {
+func iterateF3(count int, x int) int {
 	for {
 		if count <= 0 {
 			return x
@@ -56,7 +56,7 @@ func iterateF3(count int32, x int32) int32 {
 	}
 }
 
-func iterateF4(count int32, x int32) int32 {
+func iterateF4(count int, x int) int {
 	for {
 		if count <= 0 {
 			return x
@@ -65,7 +65,7 @@ func iterateF4(count int32, x int32) int32 {
 	}
 }
 
-func iterateF5(count int32, x int32) int32 {
+func iterateF5(count int, x int) int {
 	for {
 		if count <= 0 {
 			return x
@@ -74,7 +74,7 @@ func iterateF5(count int32, x int32) int32 {
 	}
 }
 
-func iterateSquare(count int32, x int32) int32 {
+func iterateSquare(count int, x int) int {
 	for {
 		if count <= 0 {
 			return x
@@ -83,7 +83,7 @@ func iterateSquare(count int32, x int32) int32 {
 	}
 }
 
-func iterateHalve(count int32, x int32) int32 {
+func iterateHalve(count int, x int) int {
 	for {
 		if count <= 0 {
 			return x
@@ -92,7 +92,7 @@ func iterateHalve(count int32, x int32) int32 {
 	}
 }
 
-func iterateF6(count int32, x int32) int32 {
+func iterateF6(count int, x int) int {
 	for {
 		if count <= 0 {
 			return x

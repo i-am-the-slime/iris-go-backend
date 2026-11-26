@@ -6,11 +6,11 @@ package show
 
 import "strconv"
 
-func Show(i int32) string {
-	return strconv.Itoa(int(i))
+func Show(i int) string {
+	return strconv.Itoa(i)
 }
 
-func AppendShowArrayInt(buffer []byte, array []int32) []byte {
+func AppendShowArrayInt(buffer []byte, array []int) []byte {
 	buffer = append(buffer, '[')
 	for index, element := range array {
 		if index > 0 {
@@ -34,7 +34,7 @@ var main_ = initializeMain_()
 
 func initializeMain_() string {
 	text := []byte("Box Box ")
-	text = show.AppendShowArrayInt(text, []int32{1, 2})
+	text = show.AppendShowArrayInt(text, []int{1, 2})
 	return string(text)
 }
 

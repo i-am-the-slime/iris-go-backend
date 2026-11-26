@@ -13,7 +13,6 @@ package main
 
 import (
 	"fixture/Data/Maybe"
-	"github.com/i-am-the-slime/iris-go/array"
 	"github.com/i-am-the-slime/iris-go/console"
 	"github.com/i-am-the-slime/iris-go/prim"
 	"slices"
@@ -23,7 +22,7 @@ import (
 
 type Rose struct {
 	Second []Rose
-	First  int32
+	First  int
 }
 
 type MaybeRoseInt struct {
@@ -55,12 +54,12 @@ func initializeMain_() []string {
 	var result string
 	switch scrutinee.Tag {
 	case maybe.TagJust:
-		result = "(Just " + strconv.Itoa(int(foldlAdd(0, scrutinee.Just))) + ")"
+		result = "(Just " + strconv.Itoa(foldlAdd(0, scrutinee.Just)) + ")"
 	default:
 		result = "Nothing"
 	}
-	var performed int32 = 3
-	return []string{result, foldMapVisit(mapChange(tree)), strconv.Itoa(int(performed))}
+	performed := 3
+	return []string{result, foldMapVisit(mapChange(tree)), strconv.Itoa(performed)}
 }
 
 var tree Rose = Rose{First: 1, Second: []Rose{{First: 2, Second: []Rose{}}, {First: 3, Second: []Rose{{First: 4, Second: []Rose{}}}}}}
@@ -77,7 +76,7 @@ func traverseVisit(rose Rose) MaybeRoseInt {
 			scrutinee := traverseVisit(element)
 			switch scrutinee.Tag {
 			case maybe.TagJust:
-				accumulator = JustArrayRoseInt(array.Bounded(append(accumulator.Just, scrutinee.Just)))
+				accumulator = JustArrayRoseInt(append(accumulator.Just, scrutinee.Just))
 			default:
 				accumulator = NoArrayRoseInt
 			}
@@ -93,7 +92,7 @@ func traverseVisit(rose Rose) MaybeRoseInt {
 	}
 }
 
-func foldlAdd(initial int32, rose Rose) int32 {
+func foldlAdd(initial int, rose Rose) int {
 	accumulator := initial + rose.First
 	for _, kid := range rose.Second {
 		accumulator = foldlAdd(accumulator, kid)

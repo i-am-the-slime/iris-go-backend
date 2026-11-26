@@ -16,7 +16,7 @@ const (
 type Tree struct {
 	Node1  *Tree
 	Node4  *Tree
-	Node2  int32
+	Node2  int
 	Node0  Color
 	Node3  bool
 	Unique uint8
@@ -26,18 +26,18 @@ var SharedTreeLeaf = &Tree{}
 
 type KeptTotal struct {
 	Kept  *Tree
-	Total int32
+	Total int
 }
 
-func Node(node0 Color, node1 *Tree, node2 int32, node3 bool, node4 *Tree) *Tree {
+func Node(node0 Color, node1 *Tree, node2 int, node3 bool, node4 *Tree) *Tree {
 	return &Tree{Node0: node0, Node1: node1, Node2: node2, Node3: node3, Node4: node4}
 }
 
-func Checksum(value *Tree) int32 {
+func Checksum(value *Tree) int {
 	return ChecksumGo(0, value)
 }
 
-func Ins(kx int32, vx bool, value *Tree) *Tree {
+func Ins(kx int, vx bool, value *Tree) *Tree {
 	if value == SharedTreeLeaf {
 		return &Tree{Node0: ColorRed, Node1: SharedTreeLeaf, Node2: kx, Node3: vx, Node4: SharedTreeLeaf, Unique: 3}
 	}
@@ -109,7 +109,7 @@ func Ins(kx int32, vx bool, value *Tree) *Tree {
 	return &Tree{Node0: ColorBlack, Node1: a2, Node2: ky2, Node3: vy2, Node4: Ins(kx, vx, b2), Unique: 2}
 }
 
-func ChecksumGo(acc int32, value *Tree) int32 {
+func ChecksumGo(acc int, value *Tree) int {
 	for {
 		if value == SharedTreeLeaf {
 			return acc
@@ -118,7 +118,7 @@ func ChecksumGo(acc int32, value *Tree) int32 {
 		k := value.Node2
 		v := value.Node3
 		r := value.Node4
-		var result int32
+		var result int
 		if v {
 			result = k
 		} else {
@@ -128,7 +128,7 @@ func ChecksumGo(acc int32, value *Tree) int32 {
 	}
 }
 
-func InsChecked(kx int32, vx bool, value *Tree, valueOwned bool) *Tree {
+func InsChecked(kx int, vx bool, value *Tree, valueOwned bool) *Tree {
 	if value == SharedTreeLeaf {
 		return &Tree{Node0: ColorRed, Node1: SharedTreeLeaf, Node2: kx, Node3: vx, Node4: SharedTreeLeaf, Unique: 3}
 	}
@@ -404,7 +404,7 @@ func InsChecked(kx int32, vx bool, value *Tree, valueOwned bool) *Tree {
 	return &Tree{Node0: ColorBlack, Node1: a2, Node2: ky2, Node3: vy2, Node4: field3, Unique: 2 | shared.UniqueBit(aOwned2, 1)}
 }
 
-func InsReusing(kx int32, vx bool, value *Tree) *Tree {
+func InsReusing(kx int, vx bool, value *Tree) *Tree {
 	if value == SharedTreeLeaf {
 		return &Tree{Node0: ColorRed, Node1: SharedTreeLeaf, Node2: kx, Node3: vx, Node4: SharedTreeLeaf, Unique: 3}
 	}
@@ -600,9 +600,9 @@ import (
 
 var main_ = initializeMain_()
 
-func initializeMain_() []int32 {
+func initializeMain_() []int {
 	fromStoring := mainGo(redblack.SharedTreeLeaf, redblack_types.SharedListNil, 0, 40)
-	effect := func() []int32 {
+	effect := func() []int {
 		var fromTheRef *redblack.Tree
 		if fromStoring > 0 {
 			fromTheRef = stashed.Value
@@ -610,7 +610,7 @@ func initializeMain_() []int32 {
 			fromTheRef = redblack.SharedTreeLeaf
 		}
 		record := mainGoReusing(redblack.SharedTreeLeaf, redblack_types.SharedListNil, redblack.KeptTotal{Kept: redblack.SharedTreeLeaf, Total: 0}, 40)
-		closure := mainGoReusing2(redblack.SharedTreeLeaf, redblack_types.SharedListNil, func(_ struct{}) int32 {
+		closure := mainGoReusing2(redblack.SharedTreeLeaf, redblack_types.SharedListNil, func(_ struct{}) int {
 			return 0
 		}, 40)
 		fromKeeping := mainGoReusing3(redblack.SharedTreeLeaf, redblack_types.SharedListNil, 0, 40)
@@ -620,7 +620,7 @@ func initializeMain_() []int32 {
 		} else {
 			fromTheForeign = redblack.SharedTreeLeaf
 		}
-		return []int32{fromStoring, redblack.Checksum(fromTheRef), record.Total, redblack.Checksum(record.Kept), closure.Total, closure.Later(struct{}{}), fromKeeping, redblack.Checksum(fromTheForeign)}
+		return []int{fromStoring, redblack.Checksum(fromTheRef), record.Total, redblack.Checksum(record.Kept), closure.Total, closure.Later(struct{}{}), fromKeeping, redblack.Checksum(fromTheForeign)}
 	}
 	performed := effect()
 	return performed
@@ -633,7 +633,7 @@ func initializeStashed() *shared.Ref[*redblack.Tree] {
 	return performed
 }
 
-func mainGo(tree *redblack.Tree, trail *redblack_types.List, total int32, n int32) int32 {
+func mainGo(tree *redblack.Tree, trail *redblack_types.List, total int, n int) int {
 	for {
 		if n <= 0 {
 			return total + redblack.Checksum(tree)
@@ -655,9 +655,9 @@ func mainGo(tree *redblack.Tree, trail *redblack_types.List, total int32, n int3
 		} else {
 			result = trail
 		}
-		var result2 int32
+		var result2 int
 		if n == 7 {
-			effect := func() int32 {
+			effect := func() int {
 				stashed.Value = next
 				return redblack.Checksum(next)
 			}
@@ -670,7 +670,7 @@ func mainGo(tree *redblack.Tree, trail *redblack_types.List, total int32, n int3
 	}
 }
 
-func mainGoChecked(tree *redblack.Tree, trail *redblack_types.List, total int32, n int32, treeOwned bool) int32 {
+func mainGoChecked(tree *redblack.Tree, trail *redblack_types.List, total int, n int, treeOwned bool) int {
 	for {
 		if n <= 0 {
 			return total + redblack.Checksum(tree)
@@ -696,7 +696,7 @@ func mainGoChecked(tree *redblack.Tree, trail *redblack_types.List, total int32,
 		} else {
 			result = trail
 		}
-		var result2 int32
+		var result2 int
 		if n == 7 {
 			result2 = total + keeper.Keep(next)
 		} else {
@@ -706,7 +706,7 @@ func mainGoChecked(tree *redblack.Tree, trail *redblack_types.List, total int32,
 	}
 }
 
-func mainGoChecked2(tree *redblack.Tree, trail *redblack_types.List, later func(struct{}) int32, n int32, treeOwned bool) shared.Closure {
+func mainGoChecked2(tree *redblack.Tree, trail *redblack_types.List, later func(struct{}) int, n int, treeOwned bool) shared.Closure {
 	for {
 		if n <= 0 {
 			return shared.Closure{Later: later, Total: redblack.Checksum(tree)}
@@ -732,9 +732,9 @@ func mainGoChecked2(tree *redblack.Tree, trail *redblack_types.List, later func(
 		} else {
 			result = trail
 		}
-		var result2 func(struct{}) int32
+		var result2 func(struct{}) int
 		if n == 7 {
-			result2 = func(_ struct{}) int32 {
+			result2 = func(_ struct{}) int {
 				return redblack.Checksum(next)
 			}
 		} else {
@@ -744,7 +744,7 @@ func mainGoChecked2(tree *redblack.Tree, trail *redblack_types.List, later func(
 	}
 }
 
-func mainGoChecked3(tree *redblack.Tree, trail *redblack_types.List, record redblack.KeptTotal, n int32, treeOwned bool) redblack.KeptTotal {
+func mainGoChecked3(tree *redblack.Tree, trail *redblack_types.List, record redblack.KeptTotal, n int, treeOwned bool) redblack.KeptTotal {
 	for {
 		if n <= 0 {
 			updated := record
@@ -784,7 +784,7 @@ func mainGoChecked3(tree *redblack.Tree, trail *redblack_types.List, record redb
 	}
 }
 
-func mainGoReusing(tree *redblack.Tree, trail *redblack_types.List, record redblack.KeptTotal, n int32) redblack.KeptTotal {
+func mainGoReusing(tree *redblack.Tree, trail *redblack_types.List, record redblack.KeptTotal, n int) redblack.KeptTotal {
 	if n <= 0 {
 		updated := record
 		updated.Total = record.Total + redblack.Checksum(tree)
@@ -820,7 +820,7 @@ func mainGoReusing(tree *redblack.Tree, trail *redblack_types.List, record redbl
 	return mainGoChecked3(next, result, result2, n-1, n%4 != 0 && n != 7)
 }
 
-func mainGoReusing2(tree *redblack.Tree, trail *redblack_types.List, later func(struct{}) int32, n int32) shared.Closure {
+func mainGoReusing2(tree *redblack.Tree, trail *redblack_types.List, later func(struct{}) int, n int) shared.Closure {
 	if n <= 0 {
 		return shared.Closure{Later: later, Total: redblack.Checksum(tree)}
 	}
@@ -843,9 +843,9 @@ func mainGoReusing2(tree *redblack.Tree, trail *redblack_types.List, later func(
 	} else {
 		result = trail
 	}
-	var result2 func(struct{}) int32
+	var result2 func(struct{}) int
 	if n == 7 {
-		result2 = func(_ struct{}) int32 {
+		result2 = func(_ struct{}) int {
 			return redblack.Checksum(next)
 		}
 	} else {
@@ -854,7 +854,7 @@ func mainGoReusing2(tree *redblack.Tree, trail *redblack_types.List, later func(
 	return mainGoChecked2(next, result, result2, n-1, n%4 != 0 && n != 7)
 }
 
-func mainGoReusing3(tree *redblack.Tree, trail *redblack_types.List, total int32, n int32) int32 {
+func mainGoReusing3(tree *redblack.Tree, trail *redblack_types.List, total int, n int) int {
 	if n <= 0 {
 		return total + redblack.Checksum(tree)
 	}
@@ -877,7 +877,7 @@ func mainGoReusing3(tree *redblack.Tree, trail *redblack_types.List, total int32
 	} else {
 		result = trail
 	}
-	var result2 int32
+	var result2 int
 	if n == 7 {
 		result2 = total + keeper.Keep(next)
 	} else {
@@ -925,6 +925,6 @@ func UniqueBit(owned bool, bit uint8) uint8 {
 }
 
 type Closure struct {
-	Later func(struct{}) int32
-	Total int32
+	Later func(struct{}) int
+	Total int
 }

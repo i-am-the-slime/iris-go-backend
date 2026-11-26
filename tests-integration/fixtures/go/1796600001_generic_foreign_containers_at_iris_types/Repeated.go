@@ -8,9 +8,9 @@ func SnocImpl[A any](items Repeated[A], item A) Repeated[A] { return append(item
 
 func Freeze[A any](items Repeated[A]) []A { return items }
 
-func Length[A any](items Repeated[A]) int32 { return int32(len(items)) }
+func Length[A any](items Repeated[A]) int { return len(items) }
 
-func IndexOrImpl[A any](fallback A, index int32, items Repeated[A]) A {
+func IndexOrImpl[A any](fallback A, index int, items Repeated[A]) A {
 	if index < 0 || int(index) >= len(items) {
 		return fallback
 	}
@@ -19,7 +19,7 @@ func IndexOrImpl[A any](fallback A, index int32, items Repeated[A]) A {
 
 func Describe[A any](value A) string {
 	switch any(value).(type) {
-	case int32:
+	case int:
 		return "an int"
 	default:
 		return "something else"

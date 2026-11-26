@@ -5,7 +5,7 @@ source: tests-integration/src/fixtures.rs
 package either
 
 type EitherInt struct {
-	Field0 int32
+	Field0 int
 	Tag    uint8
 }
 
@@ -27,7 +27,7 @@ const (
 
 type IntFailure struct {
 	Failed bool
-	Left   int32
+	Left   int
 }
 
 type StringFailure struct {
@@ -38,9 +38,14 @@ type StringFailure struct {
 // Data/Maybe/maybe.go
 package maybe
 
-type Int int64
+const TagNothing = 0
 
-const NoInt Int = 1 << 32
+const TagJust = 1
+
+type Int struct {
+	Just int
+	Tag  uint8
+}
 
 // main.go
 package main
@@ -73,7 +78,7 @@ func main() {
 	}
 }
 
-func readSide(n int32) (int32, either.IntFailure, either.StringFailure) {
+func readSide(n int) (int, either.IntFailure, either.StringFailure) {
 	for {
 		if n > 1000 {
 			n -= 1000

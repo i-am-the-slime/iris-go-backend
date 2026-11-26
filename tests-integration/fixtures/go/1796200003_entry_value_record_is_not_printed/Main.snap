@@ -17,7 +17,7 @@ package shared
 
 type LabelTotal struct {
 	Label string
-	Total int32
+	Total int
 }
 
 // note: the entry's value of type { label, total } is not printed; use an Effect entry or a value of a printable type (Int, Number, Boolean, Char, String or an Array of them)

@@ -20,8 +20,8 @@ func initializeMain_() []string {
 
 var local string = "local=13"
 
-var boxed shared.Describe = shared.Describe{Describe: func(value int32) string {
-	return "boxed " + strconv.Itoa(int(value))
+var boxed shared.Describe = shared.Describe{Describe: func(value int) string {
+	return "boxed " + strconv.Itoa(value)
 }}
 
 func main() {
@@ -32,5 +32,5 @@ func main() {
 package shared
 
 type Describe struct {
-	Describe func(int32) string
+	Describe func(int) string
 }

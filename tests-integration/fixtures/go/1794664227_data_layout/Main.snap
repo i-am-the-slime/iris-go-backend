@@ -13,7 +13,7 @@ import (
 type Expr struct {
 	Field0 *Expr
 	Field1 *Expr
-	Val    int32
+	Val    int
 	Tag    uint8
 }
 
@@ -41,8 +41,8 @@ const (
 
 type Item struct {
 	Field  string
-	Field0 int32
-	Field1 int32
+	Field0 int
+	Field1 int
 	Tag    uint8
 }
 
@@ -80,15 +80,15 @@ func Field(field string) Item {
 	return Item{Tag: ItemField, Field: field}
 }
 
-func Pair(field0 int32, field1 int32) Item {
+func Pair(field0 int, field1 int) Item {
 	return Item{Tag: ItemPair, Field0: field0, Field1: field1}
 }
 
-func Couple(field0 int32, field1 int32) Item {
+func Couple(field0 int, field1 int) Item {
 	return Item{Tag: ItemCouple, Field0: field0, Field1: field1}
 }
 
-func Val(val int32) *Expr {
+func Val(val int) *Expr {
 	return &Expr{Tag: ExprVal, Val: val}
 }
 
@@ -101,7 +101,7 @@ func initializeMain_() shared.MainResult {
 		mapped[index] = describe(element)
 	}
 	array2 := []Item{Field("x"), Pair(1, 2), Couple(3, 4)}
-	mapped2 := make([]int32, len(array2))
+	mapped2 := make([]int, len(array2))
 	for index, element := range array2 {
 		mapped2[index] = itemTotal(element)
 	}
@@ -119,7 +119,7 @@ func initializeMain_() shared.MainResult {
 	return shared.MainResult{Expression: evaluateAdd(Val(1), &exprs[0]), Shapes: mapped, Items: mapped2, Colours: mapped3, Sample: "strue0.53"}
 }
 
-func evaluate(expr *Expr) int32 {
+func evaluate(expr *Expr) int {
 	switch expr.Tag {
 	case ExprVal:
 		return expr.Val
@@ -147,7 +147,7 @@ func describe(shape Shape) string {
 	}
 }
 
-func itemTotal(item Item) int32 {
+func itemTotal(item Item) int {
 	switch item.Tag {
 	case ItemField:
 		return 0
@@ -169,7 +169,7 @@ func colourName(colour Colour) string {
 	}
 }
 
-func evaluateAdd(left *Expr, right *Expr) int32 {
+func evaluateAdd(left *Expr, right *Expr) int {
 	return evaluate(left) + evaluate(right)
 }
 
@@ -182,10 +182,10 @@ package shared
 
 type MainResult struct {
 	Colours    []string
-	Items      []int32
+	Items      []int
 	Sample     string
 	Shapes     []string
-	Expression int32
+	Expression int
 }
 
 // note: the entry's value of type { colours, expression, items, sample, shapes } is not printed; use an Effect entry or a value of a printable type (Int, Number, Boolean, Char, String or an Array of them)

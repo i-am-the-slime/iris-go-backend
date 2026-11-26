@@ -6,11 +6,11 @@ package show
 
 import "strconv"
 
-func Show(i int32) string {
-	return strconv.Itoa(int(i))
+func Show(i int) string {
+	return strconv.Itoa(i)
 }
 
-func AppendShowArrayInt(buffer []byte, array []int32) []byte {
+func AppendShowArrayInt(buffer []byte, array []int) []byte {
 	buffer = append(buffer, '[')
 	for index, element := range array {
 		if index > 0 {
@@ -22,7 +22,7 @@ func AppendShowArrayInt(buffer []byte, array []int32) []byte {
 	return buffer
 }
 
-func ArrayInt(array []int32) string {
+func ArrayInt(array []int) string {
 	return string(AppendShowArrayInt(nil, array))
 }
 
@@ -54,7 +54,7 @@ func initializeMain_() []string {
 	text := []byte("Nest ")
 	text = appendShowNestedShowDictionaryNest(text, func(coerced any) string {
 		return datashow.ArrayInt(shared.Convert(coerced))
-	}, &Nested{Tag: NestedFlat, Flat: shared.Convert2([][]int32{{1, 2}, {3}})})
+	}, &Nested{Tag: NestedFlat, Flat: shared.Convert2([][]int{{1, 2}, {3}})})
 	return []string{"1", string(text)}
 }
 
@@ -94,16 +94,16 @@ func main() {
 // shared/shared.go
 package shared
 
-func Convert(value any) []int32 {
+func Convert(value any) []int {
 	array := value.([]any)
-	converted := make([]int32, len(array))
+	converted := make([]int, len(array))
 	for index, element := range array {
-		converted[index] = element.(int32)
+		converted[index] = element.(int)
 	}
 	return converted
 }
 
-func Convert2(value [][]int32) any {
+func Convert2(value [][]int) any {
 	converted := make([]any, len(value))
 	for index, element := range value {
 		converted[index] = Convert3(element)
@@ -111,7 +111,7 @@ func Convert2(value [][]int32) any {
 	return converted
 }
 
-func Convert3(value []int32) any {
+func Convert3(value []int) any {
 	converted := make([]any, len(value))
 	for index, element := range value {
 		converted[index] = element

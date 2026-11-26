@@ -53,16 +53,16 @@ func main_() []string {
 		mainRecord(seen, "argument ")
 		return struct{}{}
 	})
-	lifted.ModifyImpl(func(n int32) int32 {
+	lifted.ModifyImpl(func(n int) int {
 		return n + 1
-	}, func(_ int32) struct{} {
+	}, func(_ int) struct{} {
 		return struct{}{}
 	})
-	counted := lifted.PerformImpl(func() int32 {
+	counted := lifted.PerformImpl(func() int {
 		return 7
 	})
 	log := seen.Value
-	return []string{log, strconv.Itoa(int(counted))}
+	return []string{log, strconv.Itoa(counted)}
 }
 
 func mainRecord(seen *shared.Ref[string], label string) {

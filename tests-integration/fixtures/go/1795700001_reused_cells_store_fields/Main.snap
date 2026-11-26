@@ -9,15 +9,15 @@ import "fixture/shared"
 type Tree struct {
 	Node2 *Tree
 	Node3 *Tree
-	Node0 int32
-	Node1 int32
+	Node0 int
+	Node1 int
 }
 
 var sharedTreeLeaf = &Tree{}
 
 type Chain struct {
 	Field1 *Chain
-	Field0 int32
+	Field0 int
 	Tag    uint8
 }
 
@@ -29,15 +29,15 @@ const (
 
 var sharedChainEnd = &Chain{Tag: ChainEnd}
 
-func Red(field0 int32, field1 *Chain) *Chain {
+func Red(field0 int, field1 *Chain) *Chain {
 	return &Chain{Tag: ChainRed, Field0: field0, Field1: field1}
 }
 
-func Blue(field0 int32, field1 *Chain) *Chain {
+func Blue(field0 int, field1 *Chain) *Chain {
 	return &Chain{Tag: ChainBlue, Field0: field0, Field1: field1}
 }
 
-func Node(node0 int32, node1 int32, node2 *Tree, node3 *Tree) *Tree {
+func Node(node0 int, node1 int, node2 *Tree, node3 *Tree) *Tree {
 	return &Tree{Node0: node0, Node1: node1, Node2: node2, Node3: node3}
 }
 
@@ -63,7 +63,7 @@ func initializeMain_() shared.MainResult {
 	return shared.MainResult{Size: sizeOf(counts), Swapped: sizeOf(result), Blues: blues(recolourStoresTheTagRedReusing(1, Blue(2, Red(3, sharedChainEnd))))}
 }
 
-func sizeOf(tree *Tree) int32 {
+func sizeOf(tree *Tree) int {
 	if tree == sharedTreeLeaf {
 		return 0
 	}
@@ -76,7 +76,7 @@ func initializeCounts() *Tree {
 	return insertCountsReusing(2, insertCountsReusing(1, insertCountsLeaf(2)))
 }
 
-func blues(value *Chain) int32 {
+func blues(value *Chain) int {
 	for {
 		switch value.Tag {
 		case ChainBlue:
@@ -92,11 +92,11 @@ func blues(value *Chain) int32 {
 	}
 }
 
-func insertCountsLeaf(key int32) *Tree {
+func insertCountsLeaf(key int) *Tree {
 	return Node(key, 1, sharedTreeLeaf, sharedTreeLeaf)
 }
 
-func insertCountsReusing(key int32, value *Tree) *Tree {
+func insertCountsReusing(key int, value *Tree) *Tree {
 	if value == sharedTreeLeaf {
 		return Node(key, 1, sharedTreeLeaf, sharedTreeLeaf)
 	}
@@ -118,7 +118,7 @@ func insertCountsReusing(key int32, value *Tree) *Tree {
 	return value
 }
 
-func recolourStoresTheTagRedReusing(n int32, rest *Chain) *Chain {
+func recolourStoresTheTagRedReusing(n int, rest *Chain) *Chain {
 	return Blue(n+1, recolourStoresTheTagReusing(rest))
 }
 
@@ -151,9 +151,9 @@ func main() {
 package shared
 
 type MainResult struct {
-	Blues   int32
-	Size    int32
-	Swapped int32
+	Blues   int
+	Size    int
+	Swapped int
 }
 
 // note: the entry's value of type { blues, size, swapped } is not printed; use an Effect entry or a value of a printable type (Int, Number, Boolean, Char, String or an Array of them)

@@ -13,8 +13,8 @@ import (
 
 var main_ = initializeMain_()
 
-func initializeMain_() []int32 {
-	var result int32
+func initializeMain_() []int {
+	var result int
 	receiver := counter.Zero
 	if receiver.Bump() > 0 {
 		result = counter.Count(counter.Zero)
@@ -24,7 +24,7 @@ func initializeMain_() []int32 {
 	receiver2 := counter.Zero
 	receiver3 := counter.Zero
 	receiver4 := counter.Zero
-	return []int32{receiver2.Bump(), receiver3.Bump() + receiver4.Bump(), result, counter.Count(counter.Zero)}
+	return []int{receiver2.Bump(), receiver3.Bump() + receiver4.Bump(), result, counter.Count(counter.Zero)}
 }
 
 func main() {

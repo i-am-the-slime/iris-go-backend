@@ -31,7 +31,7 @@ const (
 
 type Chain struct {
 	Link1 *Chain
-	Link0 int32
+	Link0 int
 }
 
 var sharedChainEnd = &Chain{}
@@ -44,32 +44,32 @@ func Square(field0 float64) Shape {
 	return Shape{Tag: ShapeSquare, Field0: field0}
 }
 
-func Link(link0 int32, link1 *Chain) *Chain {
+func Link(link0 int, link1 *Chain) *Chain {
 	return &Chain{Link0: link0, Link1: link1}
 }
 
 var main_ = initializeMain_()
 
 func initializeMain_() []bool {
-	left := shared.Handler{Name: "a", Run: func(n int32) int32 {
+	left := shared.Handler{Name: "a", Run: func(n int) int {
 		return n + 1
 	}}
-	right := shared.Handler{Name: "a", Run: func(n int32) int32 {
+	right := shared.Handler{Name: "a", Run: func(n int) int {
 		return n + 2
 	}}
-	return []bool{int32(1) == int32(2), float64(1.0) == float64(1.0), true == false, rune('a') == rune('a'), "a" == "b", struct{}{} == struct{}{}, RoomKitchen == RoomGarden, refeq.SameFunc(func(n int32) int32 {
+	return []bool{int(1) == int(2), float64(1.0) == float64(1.0), true == false, rune('a') == rune('a'), "a" == "b", struct{}{} == struct{}{}, RoomKitchen == RoomGarden, refeq.SameFunc(func(n int) int {
 		return n + 1
-	}, func(n int32) int32 {
+	}, func(n int) int {
 		return n + 2
 	}), refeq.SameFunc(func() {
 	}, func() {
-	}), refeq.SameSlice([]int32{1}, []int32{1}), counter == counter, shared.XY{X: 1, Y: 2.0} == shared.XY{X: 1, Y: 3.0}, left.Name == right.Name && refeq.SameFunc(left.Run, right.Run), Circle(1.0) == Square(1.0), Link(1, sharedChainEnd) == sharedChainEnd}
+	}), refeq.SameSlice([]int{1}, []int{1}), counter == counter, shared.XY{X: 1, Y: 2.0} == shared.XY{X: 1, Y: 3.0}, left.Name == right.Name && refeq.SameFunc(left.Run, right.Run), Circle(1.0) == Square(1.0), Link(1, sharedChainEnd) == sharedChainEnd}
 }
 
 var counter = initializeCounter()
 
-func initializeCounter() *shared.Ref[int32] {
-	performed := &shared.Ref[int32]{Value: 0}
+func initializeCounter() *shared.Ref[int] {
+	performed := &shared.Ref[int]{Value: 0}
 	return performed
 }
 
@@ -90,10 +90,10 @@ type Ref[T any] struct {
 
 type XY struct {
 	Y float64
-	X int32
+	X int
 }
 
 type Handler struct {
 	Name string
-	Run  func(int32) int32
+	Run  func(int) int
 }

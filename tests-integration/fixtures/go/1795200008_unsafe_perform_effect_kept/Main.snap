@@ -13,8 +13,8 @@ package main
 
 import "os"
 
-func main_() int32 {
-	var count int32 = 0
+func main_() int {
+	count := 0
 	count += 1
 	count += 10
 	count += 100
@@ -23,7 +23,7 @@ func main_() int32 {
 	var performed bool
 	performed = false
 	count += 10000
-	var result int32
+	var result int
 	if performed {
 		result = 1
 	} else {
@@ -32,7 +32,7 @@ func main_() int32 {
 	return count + result
 }
 
-func mainGo(n int32, acc struct{}) {
+func mainGo(n int, acc struct{}) {
 	for {
 		if n <= 0 {
 			return
@@ -42,8 +42,7 @@ func mainGo(n int32, acc struct{}) {
 }
 
 func main() {
-	exitStatus := main_()
-	os.Exit(int(exitStatus))
+	os.Exit(main_())
 }
 
 // shared/shared.go
@@ -54,6 +53,6 @@ type Ref[T any] struct {
 }
 
 type StateValue struct {
-	State int32
-	Value int32
+	State int
+	Value int
 }

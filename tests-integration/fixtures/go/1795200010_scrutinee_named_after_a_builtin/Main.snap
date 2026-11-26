@@ -14,39 +14,39 @@ import (
 
 var main_ = initializeMain_()
 
-func initializeMain_() []int32 {
-	xs := []int32{4}
-	xs2 := []int32{}
-	pushed := []int32{}
-	a := array.Append(xs, []int32{5})
+func initializeMain_() []int {
+	xs := []int{4}
+	xs2 := []int{}
+	pushed := []int{}
+	a := array.Append(xs, []int{5})
 	if len(a) == 0 {
-		pushed = array.Bounded(append(pushed, 0))
+		pushed = append(pushed, 0)
 	} else {
-		pushed = array.Bounded(append(pushed, 1))
+		pushed = append(pushed, 1)
 	}
-	mapped := make([]int32, len(xs))
+	mapped := make([]int, len(xs))
 	for index, value := range xs {
 		mapped[index] = value * 2
 	}
 	if len(mapped) == 1 {
 		x := mapped[0]
-		pushed = array.Bounded(append(pushed, x))
+		pushed = append(pushed, x)
 	}
 	performed := shared.Frozen(pushed)
-	pushed2 := []int32{}
-	a2 := array.Append(xs2, []int32{})
+	pushed2 := []int{}
+	a2 := array.Append(xs2, []int{})
 	if len(a2) == 0 {
-		pushed2 = array.Bounded(append(pushed2, 0))
+		pushed2 = append(pushed2, 0)
 	} else {
-		pushed2 = array.Bounded(append(pushed2, 1))
+		pushed2 = append(pushed2, 1)
 	}
-	mapped2 := make([]int32, len(xs2))
+	mapped2 := make([]int, len(xs2))
 	for index, value := range xs2 {
 		mapped2[index] = value * 2
 	}
 	if len(mapped2) == 1 {
 		x := mapped2[0]
-		pushed2 = array.Bounded(append(pushed2, x))
+		pushed2 = append(pushed2, x)
 	}
 	performed2 := shared.Frozen(pushed2)
 	return array.Append(performed, performed2)

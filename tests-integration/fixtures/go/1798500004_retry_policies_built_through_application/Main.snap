@@ -12,18 +12,18 @@ import (
 
 type RetryStatus struct {
 	CumulativeDelay float64
-	IterNumber      int32
+	IterNumber      int
 }
 
 func main_() []string {
-	attempts := &shared.Ref[int32]{Value: 0}
+	attempts := &shared.Ref[int]{Value: 0}
 	recovered := mainGoStatus(attempts, 0.0, 0)
 	exhausted := mainGoStatus2(0.0, 0)
 	delayed := mainGoStatus3(0.0, 0)
-	return []string{"stopped after " + strconv.Itoa(int(recovered.IterNumber)) + " retries, waiting " + prim.ShowNumber(recovered.CumulativeDelay), "stopped after " + strconv.Itoa(int(exhausted.IterNumber)) + " retries, waiting " + prim.ShowNumber(exhausted.CumulativeDelay), "stopped after " + strconv.Itoa(int(delayed.IterNumber)) + " retries, waiting " + prim.ShowNumber(delayed.CumulativeDelay)}
+	return []string{"stopped after " + strconv.Itoa(recovered.IterNumber) + " retries, waiting " + prim.ShowNumber(recovered.CumulativeDelay), "stopped after " + strconv.Itoa(exhausted.IterNumber) + " retries, waiting " + prim.ShowNumber(exhausted.CumulativeDelay), "stopped after " + strconv.Itoa(delayed.IterNumber) + " retries, waiting " + prim.ShowNumber(delayed.CumulativeDelay)}
 }
 
-func mainGoStatus(attempts *shared.Ref[int32], cumulativeDelay float64, iterNumber int32) RetryStatus {
+func mainGoStatus(attempts *shared.Ref[int], cumulativeDelay float64, iterNumber int) RetryStatus {
 	attemptsValue := attempts.Value
 	for {
 		status := RetryStatus{CumulativeDelay: cumulativeDelay, IterNumber: iterNumber}
@@ -42,7 +42,7 @@ func mainGoStatus(attempts *shared.Ref[int32], cumulativeDelay float64, iterNumb
 	}
 }
 
-func mainGoStatus2(cumulativeDelay float64, iterNumber int32) RetryStatus {
+func mainGoStatus2(cumulativeDelay float64, iterNumber int) RetryStatus {
 	for {
 		status := RetryStatus{CumulativeDelay: cumulativeDelay, IterNumber: iterNumber}
 		if status.IterNumber >= 2 {
@@ -52,7 +52,7 @@ func mainGoStatus2(cumulativeDelay float64, iterNumber int32) RetryStatus {
 	}
 }
 
-func mainGoStatus3(cumulativeDelay float64, iterNumber int32) RetryStatus {
+func mainGoStatus3(cumulativeDelay float64, iterNumber int) RetryStatus {
 	for {
 		status := RetryStatus{CumulativeDelay: cumulativeDelay, IterNumber: iterNumber}
 		if status.IterNumber >= 4 {
@@ -74,6 +74,6 @@ type Ref[T any] struct {
 }
 
 type StateValue struct {
-	State int32
-	Value int32
+	State int
+	Value int
 }

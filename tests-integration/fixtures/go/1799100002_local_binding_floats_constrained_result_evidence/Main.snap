@@ -6,15 +6,28 @@ package maybe
 
 import "strconv"
 
-type Int int64
+const TagNothing = 0
 
-const NoInt Int = 1 << 32
+const TagJust = 1
+
+type Int struct {
+	Just int
+	Tag  uint8
+}
+
+var NoInt = Int{Tag: TagNothing}
+
+func JustInt(just int) Int {
+	return Int{Tag: TagJust, Just: just}
+}
 
 func Show(maybe Int) string {
-	if maybe != NoInt {
-		return "(Just " + strconv.Itoa(int(int32(maybe))) + ")"
+	switch maybe.Tag {
+	case TagJust:
+		return "(Just " + strconv.Itoa(maybe.Just) + ")"
+	default: // TagNothing
+		return "Nothing"
 	}
-	return "Nothing"
 }
 
 // main.go
@@ -30,7 +43,7 @@ import (
 var main_ = initializeMain_()
 
 func initializeMain_() []string {
-	array := arraypkg.Append([]maybe.Int{maybe.NoInt}, []maybe.Int{maybe.Int(20)})
+	array := arraypkg.Append([]maybe.Int{maybe.NoInt}, []maybe.Int{maybe.JustInt(20)})
 	mapped := make([]string, len(array))
 	for index, element := range array {
 		mapped[index] = maybe.Show(element)

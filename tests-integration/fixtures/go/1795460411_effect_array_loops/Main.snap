@@ -19,7 +19,7 @@ const (
 
 type EitherArrayInt struct {
 	Left  exception.Error
-	Right []int32
+	Right []int
 	Tag   uint8
 }
 
@@ -40,16 +40,21 @@ func LeftEitherArrayInt(left exception.Error) EitherArrayInt {
 	return EitherArrayInt{Tag: EitherArrayIntLeft, Left: left}
 }
 
-func RightEitherArrayInt(right []int32) EitherArrayInt {
+func RightEitherArrayInt(right []int) EitherArrayInt {
 	return EitherArrayInt{Tag: EitherArrayIntRight, Right: right}
 }
 
 // Data/Maybe/maybe.go
 package maybe
 
-type Int int64
+const TagNothing = 0
 
-const NoInt Int = 1 << 32
+const TagJust = 1
+
+type Int struct {
+	Just int
+	Tag  uint8
+}
 
 // Data/Show/show.go
 package show
@@ -59,8 +64,8 @@ import (
 	"strconv"
 )
 
-func ShowInt(i int32) string {
-	return strconv.Itoa(int(i))
+func ShowInt(i int) string {
+	return strconv.Itoa(i)
 }
 
 func ShowString(s string) string {
@@ -79,7 +84,7 @@ func AppendShowArrayString(buffer []byte, array []string) []byte {
 	return buffer
 }
 
-func AppendShowArrayInt(buffer []byte, array []int32) []byte {
+func AppendShowArrayInt(buffer []byte, array []int) []byte {
 	buffer = append(buffer, '[')
 	for index, element := range array {
 		if index > 0 {
@@ -95,7 +100,7 @@ func ArrayString(array []string) string {
 	return string(AppendShowArrayString(nil, array))
 }
 
-func ArrayInt(array []int32) string {
+func ArrayInt(array []int) string {
 	return string(AppendShowArrayInt(nil, array))
 }
 
@@ -104,17 +109,17 @@ package tuple
 
 type TupleIntString struct {
 	Second string
-	First  int32
+	First  int
 }
 
 type TupleStringInt struct {
 	First  string
-	Second int32
+	Second int
 }
 
 type TupleIntInt struct {
-	First  int32
-	Second int32
+	First  int
+	Second int
 }
 
 // Effect/Exception/exception.go
@@ -148,45 +153,45 @@ func main() {
 	failures()
 	folds()
 	journal.Log("st")
-	values := []int32{3, 1, 2}
-	seen := []int32{}
+	values := []int{3, 1, 2}
+	seen := []int{}
 	for _, i := range values {
-		seen = arraypkg.Append(seen, []int32{i})
+		seen = arraypkg.Append(seen, []int{i})
 	}
 	for _, i := range values {
-		seen = arraypkg.Append(seen, []int32{i * 100})
+		seen = arraypkg.Append(seen, []int{i * 100})
 	}
 	journal.Log(show.ArrayInt(seen))
-	values2 := []int32{10, 20, 30}
-	seen2 := []int32{}
-	end := int32(len(values2))
-	for index := int32(0); index < end; index++ {
+	values2 := []int{10, 20, 30}
+	seen2 := []int{}
+	end := len(values2)
+	for index := 0; index < end; index++ {
 		x := values2[index]
-		seen2 = arraypkg.Append(seen2, []int32{index + x})
+		seen2 = arraypkg.Append(seen2, []int{index + x})
 	}
 	journal.Log(show.ArrayInt(seen2))
-	var counter int32 = 0
-	array := []int32{1, 2, 3}
+	counter := 0
+	array := []int{1, 2, 3}
 	collected := make([]string, len(array))
 	for index, i := range array {
 		s_ := counter + 1
 		counter = s_
-		value := strconv.Itoa(int(s_)) + ":" + strconv.Itoa(int(i))
+		value := strconv.Itoa(s_) + ":" + strconv.Itoa(i)
 		collected[index] = value
 	}
 	journal.Log(show.ArrayString(collected))
-	var accumulator int32 = 1
-	for _, i := range []int32{1, 2, 3} {
+	accumulator := 1
+	for _, i := range []int{1, 2, 3} {
 		accumulator = accumulator*2 + i
 	}
-	journal.Log(strconv.Itoa(int(accumulator)))
+	journal.Log(strconv.Itoa(accumulator))
 	large()
 }
 
 func traversals() {
 	journal.Log("for_ effect")
-	for _, i := range []int32{1, 2, 3} {
-		journal.Log(strconv.Itoa(int(i)))
+	for _, i := range []int{1, 2, 3} {
+		journal.Log(strconv.Itoa(i))
 	}
 	journal.Log("traverse_ effect")
 	for _, s := range []string{"a", "b"} {
@@ -194,47 +199,47 @@ func traversals() {
 	}
 	journal.Log("forWithIndex_ effect")
 	array2 := []string{"x", "y", "z"}
-	end := int32(len(array2))
-	for index := int32(0); index < end; index++ {
-		journal.Log(strconv.Itoa(int(index)) + array2[index])
+	end := len(array2)
+	for index := 0; index < end; index++ {
+		journal.Log(strconv.Itoa(index) + array2[index])
 	}
 	journal.Log("traverseWithIndex_ effect")
-	array3 := []int32{5, 6}
-	end2 := int32(len(array3))
-	for index := int32(0); index < end2; index++ {
-		journal.Log(strconv.Itoa(int(index * array3[index])))
+	array3 := []int{5, 6}
+	end2 := len(array3)
+	for index := 0; index < end2; index++ {
+		journal.Log(strconv.Itoa(index * array3[index]))
 	}
 	journal.Log("for effect")
-	array := []int32{1, 2, 3}
-	collected := make([]int32, len(array))
+	array := []int{1, 2, 3}
+	collected := make([]int, len(array))
 	for index, i := range array {
-		journal.Log("visit " + strconv.Itoa(int(i)))
+		journal.Log("visit " + strconv.Itoa(i))
 		value := i * 2
 		collected[index] = value
 	}
 	journal.Log(show.ArrayInt(collected))
 	journal.Log("traverse effect")
-	array4 := []int32{7, 8}
+	array4 := []int{7, 8}
 	collected2 := make([]string, len(array4))
 	for index, i := range array4 {
-		journal.Log("see " + strconv.Itoa(int(i)))
-		value := strconv.Itoa(int(i))
+		journal.Log("see " + strconv.Itoa(i))
+		value := strconv.Itoa(i)
 		collected2[index] = value
 	}
 	journal.Log(show.ArrayString(collected2))
 	journal.Log("foldM effect")
-	var accumulator int32 = 0
-	for _, i := range []int32{1, 2, 3, 4} {
-		journal.Log("add " + strconv.Itoa(int(i)))
+	accumulator := 0
+	for _, i := range []int{1, 2, 3, 4} {
+		journal.Log("add " + strconv.Itoa(i))
 		accumulator += i
 	}
-	journal.Log(strconv.Itoa(int(accumulator)))
-	var accumulator2 int32 = 0
-	for _, i := range []int32{4, 2} {
-		journal.Log("digit " + strconv.Itoa(int(i)))
+	journal.Log(strconv.Itoa(accumulator))
+	accumulator2 := 0
+	for _, i := range []int{4, 2} {
+		journal.Log("digit " + strconv.Itoa(i))
 		accumulator2 = accumulator2*10 + i
 	}
-	journal.Log(strconv.Itoa(int(accumulator2)))
+	journal.Log(strconv.Itoa(accumulator2))
 	journal.Log("sequence_ effect")
 	for _, effect := range []func(){func() {
 		journal.Log("first")
@@ -247,17 +252,17 @@ func traversals() {
 	}
 	journal.Log("nested")
 	inners := []string{"a", "b"}
-	for _, outer := range []int32{1, 2} {
+	for _, outer := range []int{1, 2} {
 		for _, inner := range inners {
-			journal.Log(strconv.Itoa(int(outer)) + inner)
+			journal.Log(strconv.Itoa(outer) + inner)
 		}
 	}
 	journal.Log("empty")
-	for _, i := range []int32{} {
-		journal.Log(strconv.Itoa(int(i)))
+	for _, i := range []int{} {
+		journal.Log(strconv.Itoa(i))
 	}
-	collected3 := make([]int32, len([]int32{}))
-	for index, i := range []int32{} {
+	collected3 := make([]int, len([]int{}))
+	for index, i := range []int{} {
 		value := i + 1
 		collected3[index] = value
 	}
@@ -266,13 +271,13 @@ func traversals() {
 
 func failures() {
 	journal.Log("throws midway")
-	visited := []int32{}
+	visited := []int{}
 	outcome := direct.CatchException(func(x exception.Error) either.EitherUnit {
 		return either.LeftEitherUnit(x)
 	}, func() either.EitherUnit {
-		for _, i := range []int32{1, 2, 3, 4} {
+		for _, i := range []int{1, 2, 3, 4} {
 			s := visited
-			visited = arraypkg.Append(s, []int32{i})
+			visited = arraypkg.Append(s, []int{i})
 			if i == 3 {
 				effectexception.Throw("three")
 			}
@@ -290,15 +295,15 @@ func failures() {
 	text = append(text, " after "...)
 	text = show.AppendShowArrayInt(text, seen)
 	journal.Log(string(text))
-	traversed := []int32{}
+	traversed := []int{}
 	traverseOutcome := direct.CatchException(func(x exception.Error) either.EitherArrayInt {
 		return either.LeftEitherArrayInt(x)
 	}, func() either.EitherArrayInt {
-		array := []int32{1, 2, 3}
-		collected := make([]int32, len(array))
+		array := []int{1, 2, 3}
+		collected := make([]int, len(array))
 		for index, i := range array {
 			s := traversed
-			traversed = arraypkg.Append(s, []int32{i})
+			traversed = arraypkg.Append(s, []int{i})
 			if i == 2 {
 				effectexception.Throw("two")
 			}
@@ -321,58 +326,57 @@ func failures() {
 
 func folds() {
 	journal.Log("range")
-	for i := int32(1); i < 5; i++ {
-		journal.Log("r" + strconv.Itoa(int(i)))
+	for i := 1; i < 5; i++ {
+		journal.Log("r" + strconv.Itoa(i))
 	}
 	journal.Log("maybe")
 	journal.Log("just 9")
 	journal.Log("wrapped")
 	array := []string{"p", "q"}
 	for index, s := range array {
-		i := int32(index)
-		journal.Log(s + strconv.Itoa(int(i)))
+		journal.Log(s + strconv.Itoa(index))
 	}
-	for _, i := range []int32{4, 5} {
-		journal.Log("w" + strconv.Itoa(int(i)))
+	for _, i := range []int{4, 5} {
+		journal.Log("w" + strconv.Itoa(i))
 	}
-	var accumulator int32 = 100
-	for _, i := range []int32{1, 10} {
-		journal.Log("minus " + strconv.Itoa(int(i)))
+	accumulator := 100
+	for _, i := range []int{1, 10} {
+		journal.Log("minus " + strconv.Itoa(i))
 		accumulator -= i
 	}
-	journal.Log(strconv.Itoa(int(accumulator)))
+	journal.Log(strconv.Itoa(accumulator))
 	journal.Log("stops early")
-	arraypkg.Foldr(func(x int32, rest func()) func() {
+	arraypkg.Foldr(func(x int, rest func()) func() {
 		if x == 3 {
 			return func() {
 			}
 		}
 		return func() {
-			journal.Log("upto " + strconv.Itoa(int(x)))
+			journal.Log("upto " + strconv.Itoa(x))
 			rest()
 		}
 	}, func() {
-	}, []int32{1, 2, 3, 4, 5})()
+	}, []int{1, 2, 3, 4, 5})()
 	journal.Log("reversed")
-	arraypkg.Foldr(func(x int32, rest func()) func() {
+	arraypkg.Foldr(func(x int, rest func()) func() {
 		return func() {
 			rest()
-			journal.Log("back " + strconv.Itoa(int(x)))
+			journal.Log("back " + strconv.Itoa(x))
 		}
 	}, func() {
-	}, []int32{1, 2, 3})()
+	}, []int{1, 2, 3})()
 	journal.Log("left fold")
 	journal.Log("seed")
-	for _, x := range []int32{1, 2} {
-		journal.Log("left " + strconv.Itoa(int(x)))
+	for _, x := range []int{1, 2} {
+		journal.Log("left " + strconv.Itoa(x))
 	}
 	journal.Log("object")
-	object2 := object.New[int32]()
+	object2 := object.New[int]()
 	for _, tuple := range []tuple.TupleStringInt{{First: "a", Second: 1}, {First: "b", Second: 2}, {First: "a", Second: 30}} {
 		k := tuple.First
 		v := tuple.Second
 		value, found := object.LookupST(k, object2)
-		var lookupST int32
+		var lookupST int
 		if found {
 			lookupST = v + value
 		} else {
@@ -383,7 +387,7 @@ func folds() {
 	x2, found2 := object.Lookup("a", object2)
 	var result string
 	if found2 {
-		result = "(Just " + strconv.Itoa(int(x2)) + ")"
+		result = "(Just " + strconv.Itoa(x2) + ")"
 	} else {
 		result = "Nothing"
 	}
@@ -392,47 +396,46 @@ func folds() {
 
 func large() {
 	journal.Log("large")
-	values := arraypkg.Replicate(1000000, int32(1))
-	var total int32 = 0
+	values := arraypkg.Replicate(1000000, 1)
+	total := 0
 	for _, i := range values {
 		total += i
 	}
-	function := func(_ int32) {
+	function := func(_ int) {
 	}
-	for _, effect := range arraypkg.Map(func(i int32) func() {
+	for _, effect := range arraypkg.Map(func(i int) func() {
 		return func() {
 			function(i)
 		}
 	}, values) {
 		effect()
 	}
-	journal.Log(strconv.Itoa(int(total)))
-	array := arraypkg.Replicate(1000000, int32(2))
-	collected := make([]int32, len(array))
+	journal.Log(strconv.Itoa(total))
+	array := arraypkg.Replicate(1000000, 2)
+	collected := make([]int, len(array))
 	for index, i := range array {
 		value := i + 1
 		collected[index] = value
 	}
 	journal.Log(strconv.Itoa(len(collected)))
-	var counter int32 = 0
-	value2 := int32(3)
+	counter := 0
 	for range 1000000 {
-		counter += value2
+		i := 3
+		counter += i
 	}
-	journal.Log(strconv.Itoa(int(counter)))
-	var accumulator int32 = 0
-	value3 := int32(1)
+	journal.Log(strconv.Itoa(counter))
+	accumulator := 0
 	for range 1000000 {
-		accumulator += value3
+		i := 1
+		accumulator += i
 	}
-	journal.Log(strconv.Itoa(int(accumulator)))
-	var wrappedCounter int32 = 0
-	value4 := int32(1)
+	journal.Log(strconv.Itoa(accumulator))
+	wrappedCounter := 0
 	for index := range 1000000 {
-		i := int32(index)
-		wrappedCounter += i * value4
+		i := 1
+		wrappedCounter += index * i
 	}
-	journal.Log(strconv.Itoa(int(wrappedCounter)))
+	journal.Log(strconv.Itoa(wrappedCounter))
 }
 
 // shared/shared.go
@@ -443,11 +446,11 @@ type Ref[T any] struct {
 }
 
 type StateValueOfArrayIntArrayInt struct {
-	State []int32
-	Value []int32
+	State []int
+	Value []int
 }
 
 type StateValueOfIntInt struct {
-	State int32
-	Value int32
+	State int
+	Value int
 }

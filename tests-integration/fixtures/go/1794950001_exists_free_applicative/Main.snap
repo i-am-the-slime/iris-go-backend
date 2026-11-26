@@ -37,9 +37,9 @@ import (
 )
 
 type ApFnNumberFnIntFnBooleanPerson struct {
-	Done   func(float64) func(int32) func(bool) shared.Person
+	Done   func(float64) func(int) func(bool) shared.Person
 	Field0 string
-	Field1 func(float64) func(int32) func(bool) shared.Person
+	Field1 func(float64) func(int) func(bool) shared.Person
 	Apply  any
 	Tag    uint8
 }
@@ -74,9 +74,9 @@ type ExistsApplyEFnIntFnBooleanPerson struct {
 }
 
 type ApFnIntFnBooleanPerson struct {
-	Done   func(int32) func(bool) shared.Person
+	Done   func(int) func(bool) shared.Person
 	Field0 string
-	Field1 func(int32) func(bool) shared.Person
+	Field1 func(int) func(bool) shared.Person
 	Apply  ExistsApplyEFnIntFnBooleanPerson
 	Tag    uint8
 }
@@ -89,8 +89,8 @@ const (
 
 type ApInt struct {
 	Field0 string
-	Done   int32
-	Field1 int32
+	Done   int
+	Field1 int
 	Tag    uint8
 	Apply  exists.ExistsApplyEInt
 }
@@ -202,7 +202,7 @@ func convert(value ApFnNumberFnIntFnBooleanPerson) *ApFn {
 		return &ApFn{Tag: ApFnDone, Done: func(coerced any) any {
 			original := value.Done(coerced.(float64))
 			return func(coerced2 any) any {
-				original2 := original(coerced2.(int32))
+				original2 := original(coerced2.(int))
 				return func(coerced3 any) any {
 					return shared.Convert(original2(coerced3.(bool)))
 				}
@@ -212,7 +212,7 @@ func convert(value ApFnNumberFnIntFnBooleanPerson) *ApFn {
 		return &ApFn{Tag: ApFnField, Field0: value.Field0, Field1: func(coerced any) any {
 			original := value.Field1(coerced.(float64))
 			return func(coerced2 any) any {
-				original2 := original(coerced2.(int32))
+				original2 := original(coerced2.(int))
 				return func(coerced3 any) any {
 					return shared.Convert(original2(coerced3.(bool)))
 				}
@@ -246,14 +246,14 @@ func convert5(value ApFnIntFnBooleanPerson) *ApFn {
 	switch value.Tag {
 	case ApFnIntFnBooleanPersonDone:
 		return &ApFn{Tag: ApFnDone, Done: func(coerced any) any {
-			original := value.Done(coerced.(int32))
+			original := value.Done(coerced.(int))
 			return func(coerced2 any) any {
 				return shared.Convert(original(coerced2.(bool)))
 			}
 		}}
 	case ApFnIntFnBooleanPersonField:
 		return &ApFn{Tag: ApFnField, Field0: value.Field0, Field1: func(coerced any) any {
-			original := value.Field1(coerced.(int32))
+			original := value.Field1(coerced.(int))
 			return func(coerced2 any) any {
 				return shared.Convert(original(coerced2.(bool)))
 			}
@@ -481,11 +481,11 @@ func convert17(value *Ap) *ApFn {
 	}
 }
 
-func FieldApFnIntFnBooleanPerson(field0 string, field1 func(int32) func(bool) shared.Person) ApFnIntFnBooleanPerson {
+func FieldApFnIntFnBooleanPerson(field0 string, field1 func(int) func(bool) shared.Person) ApFnIntFnBooleanPerson {
 	return ApFnIntFnBooleanPerson{Tag: ApFnIntFnBooleanPersonField, Field0: field0, Field1: field1}
 }
 
-func FieldApInt(field0 string, field1 int32) ApInt {
+func FieldApInt(field0 string, field1 int) ApInt {
 	return ApInt{Tag: ApIntField, Field0: field0, Field1: field1}
 }
 
@@ -617,10 +617,10 @@ func initializeMain_() []string {
 			}
 		}(greeting.Apply.Number.First)(result2)
 	}
-	return []string{prim.StringJoinWith(",", result), "{ admin: " + strconv.FormatBool(record.Admin) + ", age: " + strconv.Itoa(int(record.Age)) + ", name: " + prim.ShowString(record.Name) + " }", result3, strconv.Itoa(int(direct.CodePointLength(result4)))}
+	return []string{prim.StringJoinWith(",", result), "{ admin: " + strconv.FormatBool(record.Admin) + ", age: " + strconv.Itoa(record.Age) + ", name: " + prim.ShowString(record.Name) + " }", result3, strconv.Itoa(direct.CodePointLength(result4))}
 }
 
-var person *ApPerson = ApplyApPerson(ExistsApplyEPerson{Boolean: ApplyEPerson{First: ApplyApFnBooleanPerson(ExistsApplyEFnBooleanPerson{Int: ApplyEFnBooleanPerson{First: FieldApFnIntFnBooleanPerson("name", func(value int32) func(bool) shared.Person {
+var person *ApPerson = ApplyApPerson(ExistsApplyEPerson{Boolean: ApplyEPerson{First: ApplyApFnBooleanPerson(ExistsApplyEFnBooleanPerson{Int: ApplyEFnBooleanPerson{First: FieldApFnIntFnBooleanPerson("name", func(value int) func(bool) shared.Person {
 	return func(value2 bool) shared.Person {
 		return shared.Person{Name: "ada", Age: value, Admin: value2}
 	}
@@ -718,7 +718,7 @@ func run(value *Ap) any {
 }
 
 func greetingF(p shared.Person, n float64) string {
-	return p.Name + " is " + strconv.Itoa(int(p.Age)) + " " + prim.ShowNumber(n)
+	return p.Name + " is " + strconv.Itoa(p.Age) + " " + prim.ShowNumber(n)
 }
 
 func main() {
@@ -730,7 +730,7 @@ package shared
 
 type Person struct {
 	Name  string
-	Age   int32
+	Age   int
 	Admin bool
 }
 
@@ -745,5 +745,5 @@ func Convert(value Person) AdminAgeName {
 }
 
 func Convert2(value AdminAgeName) Person {
-	return Person{Admin: value.Admin.(bool), Age: value.Age.(int32), Name: value.Name.(string)}
+	return Person{Admin: value.Admin.(bool), Age: value.Age.(int), Name: value.Name.(string)}
 }

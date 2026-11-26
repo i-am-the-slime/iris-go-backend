@@ -8,7 +8,7 @@ import "github.com/i-am-the-slime/iris-go/alloc"
 
 type List struct {
 	Cons1 *List
-	Cons0 int32
+	Cons0 int
 }
 
 var sharedListNil = &List{}
@@ -17,18 +17,18 @@ type MainResult struct {
 	Largest      *List
 	Numbers      *List
 	OwnedLargest *List
-	Total        int32
+	Total        int
 }
 
 type Tree struct {
 	Node0 *Tree
 	Node2 *Tree
-	Node1 int32
+	Node1 int
 }
 
 var sharedTreeLeaf = &Tree{}
 
-func Cons(cons0 int32, cons1 *List) *List {
+func Cons(cons0 int, cons1 *List) *List {
 	return &List{Cons0: cons0, Cons1: cons1}
 }
 
@@ -43,14 +43,14 @@ func largestReplacesItsCell(list *List) *List {
 	return largestReplacesItsCellGo(sharedListNil, list)
 }
 
-func total(tree *Tree) int32 {
+func total(tree *Tree) int {
 	if tree == sharedTreeLeaf {
 		return 0
 	}
 	return total(tree.Node0) + tree.Node1 + total(tree.Node2)
 }
 
-func mainGo(current int32, accumulator *List) *List {
+func mainGo(current int, accumulator *List) *List {
 	var listIntCells alloc.Cells[List]
 	for {
 		if current < 1 {
@@ -60,7 +60,7 @@ func mainGo(current int32, accumulator *List) *List {
 	}
 }
 
-func mainGo2(remaining int32, tree *Tree) *Tree {
+func mainGo2(remaining int, tree *Tree) *Tree {
 	var treeCells alloc.Cells[Tree]
 	for {
 		if remaining <= 0 {

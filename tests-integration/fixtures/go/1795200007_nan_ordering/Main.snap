@@ -9,47 +9,47 @@ import (
 	"os"
 )
 
-func main_() int32 {
+func main_() int {
 	result2 := !(prim.NumberNaN < 0.0) && prim.NumberNaN <= 1.0
-	var result int32
+	var result int
 	if result2 {
 		result = 1
 	} else {
 		result = 0
 	}
 	result3 := 0.5 <= prim.NumberNaN
-	var result4 int32
+	var result4 int
 	if result3 {
 		result4 = 2
 	} else {
 		result4 = 0
 	}
 	result5 := !(0.5 < prim.NumberNaN)
-	var result6 int32
+	var result6 int
 	if result5 {
 		result6 = 4
 	} else {
 		result6 = 0
 	}
-	var result7 int32
+	var result7 int
 	if !(prim.NumberNaN < 0.0) {
 		result7 = 8
 	} else {
 		result7 = 0
 	}
-	var result8 int32
+	var result8 int
 	if !(prim.NumberNaN <= 1.0) {
 		result8 = 16
 	} else {
 		result8 = 0
 	}
-	var result9 int32
+	var result9 int
 	if !(prim.NumberNaN <= 1.0) {
 		result9 = 32
 	} else {
 		result9 = 0
 	}
-	var result10 int32
+	var result10 int
 	if !(prim.NumberNaN < prim.NumberNaN) {
 		result10 = 64
 	} else {
@@ -69,14 +69,14 @@ func main_() int32 {
 	} else {
 		result11 = y
 	}
-	var result12 int32
+	var result12 int
 	if prim.NumberIsNaN(result11) {
 		result12 = 128
 	} else {
 		result12 = 0
 	}
 	result13 := !(prim.NumberNaN < 0.0) && prim.NumberNaN != 0.0
-	var result14 int32
+	var result14 int
 	if result13 {
 		result14 = 256
 	} else {
@@ -86,6 +86,5 @@ func main_() int32 {
 }
 
 func main() {
-	exitStatus := main_()
-	os.Exit(int(exitStatus))
+	os.Exit(main_())
 }

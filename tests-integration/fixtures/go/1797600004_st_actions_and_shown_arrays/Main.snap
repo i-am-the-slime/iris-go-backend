@@ -9,8 +9,8 @@ import (
 	"strconv"
 )
 
-func ShowInt(i int32) string {
-	return strconv.Itoa(int(i))
+func ShowInt(i int) string {
+	return strconv.Itoa(i)
 }
 
 func ShowString(s string) string {
@@ -48,7 +48,7 @@ func AppendShowArrayString(buffer []byte, array []string) []byte {
 	return buffer
 }
 
-func AppendShowArrayInt(buffer []byte, array []int32) []byte {
+func AppendShowArrayInt(buffer []byte, array []int) []byte {
 	buffer = append(buffer, '[')
 	for index, element := range array {
 		if index > 0 {
@@ -68,7 +68,7 @@ func ArrayString(array []string) string {
 	return string(AppendShowArrayString(nil, array))
 }
 
-func ArrayInt(array []int32) string {
+func ArrayInt(array []int) string {
 	return string(AppendShowArrayInt(nil, array))
 }
 
@@ -87,8 +87,8 @@ import (
 var main_ = initializeMain_()
 
 func initializeMain_() []string {
-	array2 := *array.Thaw([]int32{1, 2})
-	array2 = array.Bounded(append(array2, 0))
+	array2 := *array.Thaw([]int{1, 2})
+	array2 = append(array2, 0)
 	performed := shared.Frozen(array2)
 	return []string{show.ArrayInt(performed), show.ArrayString(object.Keys(counts)), show.ArrayBoolean([]bool{true, false})}
 }
@@ -99,11 +99,11 @@ func initializeCounts() *struct {
 	Index map[string]int
 	Ints  int
 	Keys  []string
-	Vals  []int32
+	Vals  []int
 } {
-	table := object.New[int32]()
-	object.Poke("a", int32(1), table)
-	object.Poke("b", int32(2), table)
+	table := object.New[int]()
+	object.Poke("a", 1, table)
+	object.Poke("b", 2, table)
 	return table
 }
 

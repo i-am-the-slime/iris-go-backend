@@ -16,8 +16,8 @@ import (
 	"strconv"
 )
 
-func ShowInt(i int32) string {
-	return strconv.Itoa(int(i))
+func ShowInt(i int) string {
+	return strconv.Itoa(i)
 }
 
 func ShowNumber(number float64) string {
@@ -52,9 +52,9 @@ import (
 )
 
 type DescribedInt struct {
-	Second func(int32) string
-	Third  func(int32) int32
-	First  int32
+	Second func(int) string
+	Third  func(int) int
+	First  int
 }
 
 type DescribedString struct {
@@ -128,7 +128,7 @@ func initializeMain_() []string {
 	return mapped
 }
 
-var things []Exists = []Exists{Int(DescribedInt{First: 1, Second: show.ShowInt, Third: func(value int32) int32 {
+var things []Exists = []Exists{Int(DescribedInt{First: 1, Second: show.ShowInt, Third: func(value int) int {
 	return value + 1
 }}), String(DescribedString{First: "a", Second: category.Identity, Third: func(value string) string {
 	return value + "!"

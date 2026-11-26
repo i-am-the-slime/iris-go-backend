@@ -11,13 +11,14 @@ func Pure(x any) any {
 // Data/Maybe/maybe.go
 package maybe
 
-type Int int64
-
-const NoInt Int = 1 << 32
-
 const TagNothing = 0
 
 const TagJust = 1
+
+type Int struct {
+	Just int
+	Tag  uint8
+}
 
 type Maybe struct {
 	Just   any
@@ -34,12 +35,20 @@ func Convert(value *Maybe) func(any) any {
 	}
 }
 
-func Convert2(value Int) *Maybe {
-	if value == NoInt {
-		return &Maybe{Tag: TagNothing, Origin: value}
-	}
-	return &Maybe{Tag: TagJust, Just: int32(value), Origin: value}
+func JustInt(just int) Int {
+	return Int{Tag: TagJust, Just: just}
 }
+
+func Convert2(value Int) *Maybe {
+	switch value.Tag {
+	case TagNothing:
+		return &Maybe{Tag: TagNothing, Origin: value}
+	default: // TagJust
+		return &Maybe{Tag: TagJust, Just: value.Just, Origin: value}
+	}
+}
+
+var NoInt = Int{Tag: TagNothing}
 
 func Convert3(value *Maybe) Int {
 	if original, ok := value.Origin.(Int); ok {
@@ -49,16 +58,16 @@ func Convert3(value *Maybe) Int {
 	case TagNothing:
 		return NoInt
 	default: // TagJust
-		return Int(value.Just.(int32))
+		return JustInt(value.Just.(int))
 	}
 }
 
 type ArrayInt struct {
-	Just []int32
+	Just []int
 	Tag  uint8
 }
 
-func JustArrayInt(just []int32) ArrayInt {
+func JustArrayInt(just []int) ArrayInt {
 	return ArrayInt{Tag: TagJust, Just: just}
 }
 
@@ -120,7 +129,7 @@ func Append_(s string, s2 string) string {
 // Data/Semiring/semiring.go
 package semiring
 
-func Add(i int32, i2 int32) int32 {
+func Add(i int, i2 int) int {
 	return i + i2
 }
 
@@ -129,8 +138,8 @@ package show
 
 import "strconv"
 
-func Show(i int32) string {
-	return strconv.Itoa(int(i))
+func Show(i int) string {
+	return strconv.Itoa(i)
 }
 
 // main.go
@@ -172,7 +181,7 @@ func convert(value *Wrapped) *WrappedArray {
 }
 
 type WrappedArrayInt struct {
-	Wrapped []int32
+	Wrapped []int
 }
 
 func convert2(value WrappedArrayInt) *Wrapped {
@@ -234,19 +243,21 @@ func convert6(value *Wrapped) *Wrapped2 {
 var main_ = initializeMain_()
 
 func initializeMain_() []string {
-	values := []int32{4, 5, 6}
-	scrutinee := checked(2, []int32{1, 2})
+	values := []int{4, 5, 6}
+	scrutinee := checked(2, []int{1, 2})
 	var result string
-	if scrutinee != maybe.NoInt {
-		result = "(Just " + strconv.Itoa(int(int32(scrutinee))) + ")"
-	} else {
+	switch scrutinee.Tag {
+	case maybe.TagJust:
+		result = "(Just " + strconv.Itoa(scrutinee.Just) + ")"
+	default: // maybe.TagNothing
 		result = "Nothing"
 	}
-	scrutinee2 := checked(2, []int32{1, 0})
+	scrutinee2 := checked(2, []int{1, 0})
 	var result2 string
-	if scrutinee2 != maybe.NoInt {
-		result2 = "(Just " + strconv.Itoa(int(int32(scrutinee2))) + ")"
-	} else {
+	switch scrutinee2.Tag {
+	case maybe.TagJust:
+		result2 = "(Just " + strconv.Itoa(scrutinee2.Just) + ")"
+	default: // maybe.TagNothing
 		result2 = "Nothing"
 	}
 	original2 := func(change func() func(any) any) func(func() any) any {
@@ -264,7 +275,7 @@ func initializeMain_() []string {
 			return bindEffect(inner, next)
 		}
 	}
-	original5 := func() int32 {
+	original5 := func() int {
 		return 4
 	}
 	original7 := steppedMonadDictionaryApplicative0Apply0Functor0Bind1Apply0Functor0(func(coerced func(any) any) func(any) any {
@@ -321,7 +332,7 @@ func initializeMain_() []string {
 	}, 2, func() any {
 		return original5()
 	}).(func() any)
-	performed := original7().(int32)
+	performed := original7().(int)
 	original8 := func(change func(any) any) func(*maybe.Maybe) *maybe.Maybe {
 		return func(inner *maybe.Maybe) *maybe.Maybe {
 			return maybe.Apply(change, inner)
@@ -375,15 +386,16 @@ func initializeMain_() []string {
 				return typed2
 			})
 		}
-	}, 1, maybe.Convert2(maybe.Int(5))).(*maybe.Maybe)
+	}, 1, maybe.Convert2(maybe.JustInt(5))).(*maybe.Maybe)
 	scrutinee3 := maybe.Convert3(typed3)
 	var result3 string
-	if scrutinee3 != maybe.NoInt {
-		result3 = "(Just " + strconv.Itoa(int(int32(scrutinee3))) + ")"
-	} else {
+	switch scrutinee3.Tag {
+	case maybe.TagJust:
+		result3 = "(Just " + strconv.Itoa(scrutinee3.Just) + ")"
+	default: // maybe.TagNothing
 		result3 = "Nothing"
 	}
-	return []string{strconv.Itoa(int(countedFoldableDictionary(func(coerced shared.Semigroup0Mempty) func(func(any) any) func(any) any {
+	return []string{strconv.Itoa(countedFoldableDictionary(func(coerced shared.Semigroup0Mempty) func(func(any) any) func(any) any {
 		original := func(visit func(any) any) func(*WrappedArray) any {
 			return func(wrapped *WrappedArray) any {
 				accumulator := coerced.Mempty
@@ -427,7 +439,7 @@ func initializeMain_() []string {
 				return original6(convert(typed))
 			}
 		}
-	}, 2, convert2(WrappedArrayInt{Wrapped: []int32{1, 2}})))), describedFoldableDictionary(func(coerced shared.Semigroup0Mempty) func(func(any) any) func(any) any {
+	}, 2, convert2(WrappedArrayInt{Wrapped: []int{1, 2}}))), describedFoldableDictionary(func(coerced shared.Semigroup0Mempty) func(func(any) any) func(any) any {
 		original := func(visit func(any) any) func(*WrappedArray) any {
 			return func(wrapped *WrappedArray) any {
 				accumulator := coerced.Mempty
@@ -471,7 +483,7 @@ func initializeMain_() []string {
 				return original6(convert(typed))
 			}
 		}
-	}, 1, convert2(WrappedArrayInt{Wrapped: values})), strconv.Itoa(int(doubledFunctorDictionaryFoldableDictionary(func(coerced func(any) any) func(any) any {
+	}, 1, convert2(WrappedArrayInt{Wrapped: values})), strconv.Itoa(doubledFunctorDictionaryFoldableDictionary(func(coerced func(any) any) func(any) any {
 		original := func(wrapped *WrappedArray) *WrappedArray {
 			return mapWrapped(coerced, wrapped)
 		}
@@ -523,13 +535,13 @@ func initializeMain_() []string {
 				return original6(convert(typed))
 			}
 		}
-	}, 3, convert2(WrappedArrayInt{Wrapped: []int32{1, 2, 3}})))), result + " " + result2, strconv.Itoa(int(performed)), result3}
+	}, 3, convert2(WrappedArrayInt{Wrapped: []int{1, 2, 3}}))), result + " " + result2, strconv.Itoa(performed), result3}
 }
 
-func checked(depth int32, values []int32) maybe.Int {
+func checked(depth int, values []int) maybe.Int {
 	switch depth {
 	case 0:
-		accumulator := maybe.JustArrayInt([]int32{})
+		accumulator := maybe.JustArrayInt([]int{})
 		accumulator.Just = slices.Clip(accumulator.Just)
 		for _, element := range values {
 			if accumulator.Tag == maybe.TagNothing {
@@ -538,7 +550,7 @@ func checked(depth int32, values []int32) maybe.Int {
 			switch accumulator.Tag {
 			case maybe.TagJust:
 				if element > 0 {
-					accumulator = maybe.JustArrayInt(array.Bounded(append(accumulator.Just, element)))
+					accumulator = maybe.JustArrayInt(append(accumulator.Just, element))
 				} else {
 					accumulator = maybe.NoArrayInt
 				}
@@ -548,7 +560,11 @@ func checked(depth int32, values []int32) maybe.Int {
 		}
 		switch accumulator.Tag {
 		case maybe.TagJust:
-			return maybe.Int(foldLanes(accumulator.Just, 0))
+			accumulator2 := 0
+			for _, value := range accumulator.Just {
+				accumulator2 += value
+			}
+			return maybe.JustInt(accumulator2)
 		default:
 			return maybe.NoInt
 		}
@@ -705,7 +721,7 @@ func bindMaybe(inner *maybe.Maybe, next func(any) *maybe.Maybe) *maybe.Maybe {
 	}
 }
 
-func countedFoldableDictionary(foldMap func(shared.Semigroup0Mempty) func(func(any) any) func(any) any, foldl func(func(any) func(any) any) func(any) func(any) any, foldr func(func(any) func(any) any) func(any) func(any) any, depth int32, values any) int32 {
+func countedFoldableDictionary(foldMap func(shared.Semigroup0Mempty) func(func(any) any) func(any) any, foldl func(func(any) func(any) any) func(any) func(any) any, foldr func(func(any) func(any) any) func(any) func(any) any, depth int, values any) int {
 	for {
 		foldMapCaptured := foldMap
 		foldlCaptured := foldl
@@ -713,29 +729,29 @@ func countedFoldableDictionary(foldMap func(shared.Semigroup0Mempty) func(func(a
 		switch depth {
 		case 0:
 			original := foldlCaptured(func(coerced any) func(any) any {
-				function := func(c int32, _ int32) int32 {
+				function := func(c int, _ int) int {
 					return 1 + c
 				}
-				i := coerced.(int32)
+				i := coerced.(int)
 				return func(coerced2 any) any {
-					return function(i, coerced2.(int32))
+					return function(i, coerced2.(int))
 				}
 			})
 			original2 := foldlCaptured(func(coerced any) func(any) any {
-				i := coerced.(int32)
+				i := coerced.(int)
 				return func(coerced2 any) any {
-					return semiring.Add(i, coerced2.(int32))
+					return semiring.Add(i, coerced2.(int))
 				}
 			})
-			return func(coerced int32) func(any) int32 {
+			return func(coerced int) func(any) int {
 				original3 := original(coerced)
-				return func(coerced2 any) int32 {
-					return original3(coerced2).(int32)
+				return func(coerced2 any) int {
+					return original3(coerced2).(int)
 				}
-			}(0)(values) + func(coerced int32) func(any) int32 {
+			}(0)(values) + func(coerced int) func(any) int {
 				original3 := original2(coerced)
-				return func(coerced2 any) int32 {
-					return original3(coerced2).(int32)
+				return func(coerced2 any) int {
+					return original3(coerced2).(int)
 				}
 			}(0)(values)
 		default:
@@ -784,7 +800,7 @@ func countedFoldableDictionary(foldMap func(shared.Semigroup0Mempty) func(func(a
 	}
 }
 
-func describedFoldableDictionary(foldMap func(shared.Semigroup0Mempty) func(func(any) any) func(any) any, foldl func(func(any) func(any) any) func(any) func(any) any, foldr func(func(any) func(any) any) func(any) func(any) any, depth int32, values any) string {
+func describedFoldableDictionary(foldMap func(shared.Semigroup0Mempty) func(func(any) any) func(any) any, foldl func(func(any) func(any) any) func(any) func(any) any, foldr func(func(any) func(any) any) func(any) func(any) any, depth int, values any) string {
 	for {
 		foldMapCaptured := foldMap
 		foldlCaptured := foldl
@@ -802,7 +818,7 @@ func describedFoldableDictionary(foldMap func(shared.Semigroup0Mempty) func(func
 					return original2(coerced2.(string))
 				}
 			}}, Mempty: ""})(func(coerced any) any {
-				return show.Show(coerced.(int32))
+				return show.Show(coerced.(int))
 			})
 			return func(coerced any) string {
 				return original3(coerced).(string)
@@ -853,7 +869,7 @@ func describedFoldableDictionary(foldMap func(shared.Semigroup0Mempty) func(func
 	}
 }
 
-func doubledFunctorDictionaryFoldableDictionary(map_ func(func(any) any) func(any) any, foldMap func(shared.Semigroup0Mempty) func(func(any) any) func(any) any, foldl func(func(any) func(any) any) func(any) func(any) any, foldr func(func(any) func(any) any) func(any) func(any) any, depth int32, values any) int32 {
+func doubledFunctorDictionaryFoldableDictionary(map_ func(func(any) any) func(any) any, foldMap func(shared.Semigroup0Mempty) func(func(any) any) func(any) any, foldl func(func(any) func(any) any) func(any) func(any) any, foldr func(func(any) func(any) any) func(any) func(any) any, depth int, values any) int {
 	for {
 		map_Captured := map_
 		foldMapCaptured := foldMap
@@ -862,18 +878,18 @@ func doubledFunctorDictionaryFoldableDictionary(map_ func(func(any) any) func(an
 		switch depth {
 		case 0:
 			original := foldlCaptured(func(coerced any) func(any) any {
-				i := coerced.(int32)
+				i := coerced.(int)
 				return func(coerced2 any) any {
-					return semiring.Add(i, coerced2.(int32))
+					return semiring.Add(i, coerced2.(int))
 				}
 			})
-			return func(coerced int32) func(any) int32 {
+			return func(coerced int) func(any) int {
 				original2 := original(coerced)
-				return func(coerced2 any) int32 {
-					return original2(coerced2).(int32)
+				return func(coerced2 any) int {
+					return original2(coerced2).(int)
 				}
 			}(0)(map_Captured(func(coerced any) any {
-				return coerced.(int32) * 2
+				return coerced.(int) * 2
 			})(values))
 		default:
 			map_, foldMap, foldl, foldr, depth, values = func(coerced func(any) any) func(any) any {
@@ -929,7 +945,7 @@ func doubledFunctorDictionaryFoldableDictionary(map_ func(func(any) any) func(an
 	}
 }
 
-func checkedTraversableDictionaryFoldable1Functor0(foldMap func(shared.Semigroup0Mempty) func(func(any) any) func(any) any, foldl func(func(any) func(any) any) func(any) func(any) any, foldr func(func(any) func(any) any) func(any) func(any) any, map_ func(func(any) any) func(any) any, sequence func(shared.Apply0Pure) func(any) any, traverse func(shared.Apply0Pure) func(func(any) any) func(any) any, depth int32, values any) maybe.Int {
+func checkedTraversableDictionaryFoldable1Functor0(foldMap func(shared.Semigroup0Mempty) func(func(any) any) func(any) any, foldl func(func(any) func(any) any) func(any) func(any) any, foldr func(func(any) func(any) any) func(any) func(any) any, map_ func(func(any) any) func(any) any, sequence func(shared.Apply0Pure) func(any) any, traverse func(shared.Apply0Pure) func(func(any) any) func(any) any, depth int, values any) maybe.Int {
 	for {
 		foldMapCaptured := foldMap
 		foldlCaptured := foldl
@@ -943,9 +959,9 @@ func checkedTraversableDictionaryFoldable1Functor0(foldMap func(shared.Semigroup
 					return maybe.Apply(change, inner)
 				}
 			}
-			original3 := func(n int32) maybe.Int {
+			original3 := func(n int) maybe.Int {
 				if n > 0 {
-					return maybe.Int(n)
+					return maybe.JustInt(n)
 				}
 				return maybe.NoInt
 			}
@@ -967,7 +983,7 @@ func checkedTraversableDictionaryFoldable1Functor0(foldMap func(shared.Semigroup
 			}}, Pure: func(coerced any) any {
 				return maybe.Pure(coerced)
 			}})(func(coerced any) any {
-				return maybe.Convert2(original3(coerced.(int32)))
+				return maybe.Convert2(original3(coerced.(int)))
 			})
 			scrutinee := func(coerced any) *maybe.Int2 {
 				typed, _ := original4(coerced).(*maybe.Maybe)
@@ -976,15 +992,15 @@ func checkedTraversableDictionaryFoldable1Functor0(foldMap func(shared.Semigroup
 			switch scrutinee.Tag {
 			case maybe.TagJust:
 				original := foldlCaptured(func(coerced any) func(any) any {
-					i := coerced.(int32)
+					i := coerced.(int)
 					return func(coerced2 any) any {
-						return semiring.Add(i, coerced2.(int32))
+						return semiring.Add(i, coerced2.(int))
 					}
 				})
-				return maybe.Int(func(coerced int32) func(any) int32 {
+				return maybe.JustInt(func(coerced int) func(any) int {
 					original5 := original(coerced)
-					return func(coerced2 any) int32 {
-						return original5(coerced2).(int32)
+					return func(coerced2 any) int {
+						return original5(coerced2).(int)
 					}
 				}(0)(scrutinee.Just))
 			default:
@@ -1069,7 +1085,7 @@ func checkedTraversableDictionaryFoldable1Functor0(foldMap func(shared.Semigroup
 	}
 }
 
-func steppedMonadDictionaryApplicative0Apply0Functor0Bind1Apply0Functor0(map_ func(func(any) any) func(any) any, apply func(any) func(any) any, pure func(any) any, map_2 func(func(any) any) func(any) any, apply2 func(any) func(any) any, bind func(any) func(func(any) any) any, depth int32, action any) any {
+func steppedMonadDictionaryApplicative0Apply0Functor0Bind1Apply0Functor0(map_ func(func(any) any) func(any) any, apply func(any) func(any) any, pure func(any) any, map_2 func(func(any) any) func(any) any, apply2 func(any) func(any) any, bind func(any) func(func(any) any) any, depth int, action any) any {
 	for {
 		map_Captured := map_
 		applyCaptured := apply
@@ -1079,20 +1095,20 @@ func steppedMonadDictionaryApplicative0Apply0Functor0Bind1Apply0Functor0(map_ fu
 		bindCaptured := bind
 		switch depth {
 		case 0:
-			original2 := func(n int32) any {
-				original := func(m int32) any {
-					return func(coerced int32) any {
+			original2 := func(n int) any {
+				original := func(m int) any {
+					return func(coerced int) any {
 						return pureCaptured(coerced)
 					}(m + 1)
 				}
-				return bindCaptured(func(coerced int32) any {
+				return bindCaptured(func(coerced int) any {
 					return pureCaptured(coerced)
 				}(n * 10))(func(coerced any) any {
-					return original(coerced.(int32))
+					return original(coerced.(int))
 				})
 			}
 			return bindCaptured(action)(func(coerced any) any {
-				return original2(coerced.(int32))
+				return original2(coerced.(int))
 			})
 		default:
 			map_, apply, pure, map_2, apply2, bind, depth = func(change func(any) any) func(any) any {
@@ -1125,91 +1141,6 @@ func main() {
 	console.Print("[" + strings.Join(main_, " ") + "]")
 }
 
-// main_neon.go
-//go:build goexperiment.simd && arm64
-
-package main
-
-import "simd/archsimd"
-
-func foldLanes(xs []int32, initial int32) int32 {
-	acc0 := archsimd.BroadcastInt32x4(0)
-	acc1, acc2, acc3 := acc0, acc0, acc0
-	const step = 4
-	i := 0
-	for ; i < len(xs)-4*step+1; i += 4 * step {
-		x0 := archsimd.LoadInt32x4(xs[i : i+step])
-		acc0 = acc0.Add(x0)
-		x1 := archsimd.LoadInt32x4(xs[i+step : i+2*step])
-		acc1 = acc1.Add(x1)
-		x2 := archsimd.LoadInt32x4(xs[i+2*step : i+3*step])
-		acc2 = acc2.Add(x2)
-		x3 := archsimd.LoadInt32x4(xs[i+3*step : i+4*step])
-		acc3 = acc3.Add(x3)
-	}
-	acc0 = acc0.Add(acc1).Add(acc2.Add(acc3))
-	var lanes [4]int32
-	acc0.Store(lanes[:])
-	accumulator := initial
-	for _, lane := range lanes[:step] {
-		accumulator = accumulator + lane
-	}
-	for ; i < len(xs); i++ {
-		x := xs[i]
-		accumulator = accumulator + x
-	}
-	return accumulator
-}
-
-// main_scalar.go
-//go:build !(goexperiment.simd && (arm64 || wasm))
-
-package main
-
-func foldLanes(xs []int32, initial int32) int32 {
-	accumulator := initial
-	for _, x := range xs {
-		accumulator = accumulator + x
-	}
-	return accumulator
-}
-
-// main_vector.go
-//go:build goexperiment.simd && wasm
-
-package main
-
-import "simd"
-
-func foldLanes(xs []int32, initial int32) int32 {
-	acc0 := simd.BroadcastInt32s(0)
-	acc1, acc2, acc3 := acc0, acc0, acc0
-	step := acc0.Len()
-	i := 0
-	for ; i < len(xs)-4*step+1; i += 4 * step {
-		x0 := simd.LoadInt32s(xs[i : i+step])
-		acc0 = acc0.Add(x0)
-		x1 := simd.LoadInt32s(xs[i+step : i+2*step])
-		acc1 = acc1.Add(x1)
-		x2 := simd.LoadInt32s(xs[i+2*step : i+3*step])
-		acc2 = acc2.Add(x2)
-		x3 := simd.LoadInt32s(xs[i+3*step : i+4*step])
-		acc3 = acc3.Add(x3)
-	}
-	acc0 = acc0.Add(acc1).Add(acc2.Add(acc3))
-	var lanes [16]int32
-	acc0.Store(lanes[:])
-	accumulator := initial
-	for _, lane := range lanes[:step] {
-		accumulator = accumulator + lane
-	}
-	for ; i < len(xs); i++ {
-		x := xs[i]
-		accumulator = accumulator + x
-	}
-	return accumulator
-}
-
 // shared/shared.go
 package shared
 
@@ -1222,7 +1153,7 @@ type Semigroup0Mempty struct {
 	Mempty     any
 }
 
-func Convert(value []int32) any {
+func Convert(value []int) any {
 	converted := make([]any, len(value))
 	for index, element := range value {
 		converted[index] = element

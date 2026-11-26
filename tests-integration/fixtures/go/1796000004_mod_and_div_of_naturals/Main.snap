@@ -12,11 +12,11 @@ import (
 
 var main_ = initializeMain_()
 
-func initializeMain_() []int32 {
-	return []int32{117, 109, 65, mainGo(0, 0), -1, 3, 1}
+func initializeMain_() []int {
+	return []int{117, 109, 65, mainGo(0, 0), -1, 3, 1}
 }
 
-func mainGo(i int32, total int32) int32 {
+func mainGo(i int, total int) int {
 	for {
 		if i >= 25 {
 			return total

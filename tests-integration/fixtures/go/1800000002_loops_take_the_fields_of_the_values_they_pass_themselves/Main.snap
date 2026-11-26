@@ -1,6 +1,5 @@
 ---
 source: tests-integration/src/fixtures.rs
-assertion_line: 571
 ---
 // main.go
 package main
@@ -12,22 +11,22 @@ import (
 )
 
 func main() {
-	journal.Log(strconv.Itoa(int(mainGoJust(0, 0))))
-	journal.Log(strconv.Itoa(int(mainGoTuple(0, 1, 40))))
-	xs := []int32{5, 3, 9, 1, 7}
-	journal.Log(strconv.Itoa(int(mainGoState(xs, 0, 1000000, 0))))
-	journal.Log(strconv.Itoa(int(runsIn("aaabbbcccaa"))))
-	journal.Log(strconv.Itoa(int(runsIn(""))))
-	journal.Log(strconv.Itoa(int(sumDownJust(0, 100))))
-	journal.Log(strconv.Itoa(int(sumDownNothing(100))))
+	journal.Log(strconv.Itoa(mainGoJust(0, 0)))
+	journal.Log(strconv.Itoa(mainGoTuple(0, 1, 40)))
+	xs := []int{5, 3, 9, 1, 7}
+	journal.Log(strconv.Itoa(mainGoState(xs, 0, 1000000, 0)))
+	journal.Log(strconv.Itoa(runsIn("aaabbbcccaa")))
+	journal.Log(strconv.Itoa(runsIn("")))
+	journal.Log(strconv.Itoa(sumDownJust(0, 100)))
+	journal.Log(strconv.Itoa(sumDownNothing(100)))
 }
 
-func runsIn(text string) int32 {
+func runsIn(text string) int {
 	chars := prim.StringToCharArray(text)
 	return runsInGoFresh(chars, 0, 0)
 }
 
-func sumDownJust(s int32, n int32) int32 {
+func sumDownJust(s int, n int) int {
 	for {
 		if n <= 0 {
 			return s
@@ -36,11 +35,11 @@ func sumDownJust(s int32, n int32) int32 {
 	}
 }
 
-func sumDownNothing(n int32) int32 {
+func sumDownNothing(n int) int {
 	return n
 }
 
-func mainGoJust(s int32, i int32) int32 {
+func mainGoJust(s int, i int) int {
 	for {
 		if i >= 1000 {
 			return s
@@ -49,7 +48,7 @@ func mainGoJust(s int32, i int32) int32 {
 	}
 }
 
-func mainGoTuple(a int32, b int32, k int32) int32 {
+func mainGoTuple(a int, b int, k int) int {
 	for {
 		if k <= 0 {
 			return a
@@ -58,9 +57,9 @@ func mainGoTuple(a int32, b int32, k int32) int32 {
 	}
 }
 
-func mainGoState(xs []int32, high int32, low int32, i int32) int32 {
+func mainGoState(xs []int, high int, low int, i int) int {
 	for {
-		if i < int32(len(xs)) {
+		if i < len(xs) {
 			field := xs[i]
 			result := max(high, field)
 			result2 := min(low, field)
@@ -71,9 +70,9 @@ func mainGoState(xs []int32, high int32, low int32, i int32) int32 {
 	}
 }
 
-func runsInGoInRun(chars []rune, d rune, k int32, runs int32, i int32) int32 {
+func runsInGoInRun(chars []rune, d rune, k int, runs int, i int) int {
 	for {
-		if i < int32(len(chars)) {
+		if i < len(chars) {
 			field := chars[i]
 			if field == d {
 				k, i = k+1, i+1
@@ -86,8 +85,8 @@ func runsInGoInRun(chars []rune, d rune, k int32, runs int32, i int32) int32 {
 	}
 }
 
-func runsInGoFresh(chars []rune, runs int32, i int32) int32 {
-	if i < int32(len(chars)) {
+func runsInGoFresh(chars []rune, runs int, i int) int {
+	if i < len(chars) {
 		return runsInGoInRun(chars, chars[i], 1, runs+1, i+1)
 	}
 	return runs

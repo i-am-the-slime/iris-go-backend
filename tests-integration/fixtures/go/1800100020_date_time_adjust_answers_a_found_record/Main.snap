@@ -53,8 +53,8 @@ import (
 )
 
 type Date struct {
-	First  int32
-	Third  int32
+	First  int
+	Third  int
 	Second component.Month
 }
 
@@ -69,8 +69,8 @@ func JustDate(just Date) MaybeDate {
 	return MaybeDate{Tag: maybe.TagJust, Just: just}
 }
 
-func CanonicalDate(y int32, m component.Month, d int32) Date {
-	var result2 int32
+func CanonicalDate(y int, m component.Month, d int) Date {
+	var result2 int
 	switch m {
 	case component.MonthJanuary:
 		result2 = 1
@@ -97,7 +97,7 @@ func CanonicalDate(y int32, m component.Month, d int32) Date {
 	default: // component.MonthDecember
 		result2 = 12
 	}
-	return datetime.CanonicalDateImpl(func(y_ int32, m_ int32, d_ int32) Date {
+	return datetime.CanonicalDateImpl(func(y_ int, m_ int, d_ int) Date {
 		var result component.MaybeMonth
 		switch m_ {
 		case 1:
@@ -154,13 +154,13 @@ type MaybeDateTime struct {
 }
 
 type DateRec struct {
-	Day         int32
-	Hour        int32
-	Millisecond int32
-	Minute      int32
-	Month       int32
-	Second      int32
-	Year        int32
+	Day         int
+	Hour        int
+	Millisecond int
+	Minute      int
+	Month       int
+	Second      int
+	Year        int
 }
 
 func JustDateTime(just DateTime) MaybeDateTime {
@@ -199,7 +199,7 @@ func Show(maybe2 MaybeDateTime) string {
 		default: // component.MonthDecember
 			result = "December"
 		}
-		return "(Just (DateTime (Date (Year " + strconv.Itoa(int(maybe2.Just.First.First)) + ") " + result + " (Day " + strconv.Itoa(int(maybe2.Just.First.Third)) + ")) (Time (Hour " + strconv.Itoa(int(maybe2.Just.Second.First)) + ") (Minute " + strconv.Itoa(int(maybe2.Just.Second.Second)) + ") (Second " + strconv.Itoa(int(maybe2.Just.Second.Third)) + ") (Millisecond " + strconv.Itoa(int(maybe2.Just.Second.Fourth)) + "))))"
+		return "(Just (DateTime (Date (Year " + strconv.Itoa(maybe2.Just.First.First) + ") " + result + " (Day " + strconv.Itoa(maybe2.Just.First.Third) + ")) (Time (Hour " + strconv.Itoa(maybe2.Just.Second.First) + ") (Minute " + strconv.Itoa(maybe2.Just.Second.Second) + ") (Second " + strconv.Itoa(maybe2.Just.Second.Third) + ") (Millisecond " + strconv.Itoa(maybe2.Just.Second.Fourth) + "))))"
 	default: // maybe.TagNothing
 		return "Nothing"
 	}
@@ -208,7 +208,7 @@ func Show(maybe2 MaybeDateTime) string {
 func AdjustDays(d float64, dt DateTime) MaybeDateTime {
 	d2 := dt.First
 	t := dt.Second
-	var result int32
+	var result int
 	switch d2.Second {
 	case component.MonthJanuary:
 		result = 1
@@ -238,7 +238,7 @@ func AdjustDays(d float64, dt DateTime) MaybeDateTime {
 	record := DateRec{Year: d2.First, Month: result, Day: d2.Third, Hour: t.First, Minute: t.Second, Second: t.Third, Millisecond: t.Fourth}
 	day, hour, millisecond, minute, month, second, year, found := datetime.AdjustImpl(d*86400000.0, record.Day, record.Hour, record.Millisecond, record.Minute, record.Month, record.Second, record.Year)
 	if found {
-		var result2 func(int32) date.MaybeDate
+		var result2 func(int) date.MaybeDate
 		if year >= -271820 && year <= 275759 {
 			switch month {
 			case 1:
@@ -307,7 +307,7 @@ func AdjustDays(d float64, dt DateTime) MaybeDateTime {
 func AdjustHours(d float64, dt DateTime) MaybeDateTime {
 	d2 := dt.First
 	t := dt.Second
-	var result int32
+	var result int
 	switch d2.Second {
 	case component.MonthJanuary:
 		result = 1
@@ -337,7 +337,7 @@ func AdjustHours(d float64, dt DateTime) MaybeDateTime {
 	record := DateRec{Year: d2.First, Month: result, Day: d2.Third, Hour: t.First, Minute: t.Second, Second: t.Third, Millisecond: t.Fourth}
 	day, hour, millisecond, minute, month, second, year, found := datetime.AdjustImpl(d*3600000.0, record.Day, record.Hour, record.Millisecond, record.Minute, record.Month, record.Second, record.Year)
 	if found {
-		var result2 func(int32) date.MaybeDate
+		var result2 func(int) date.MaybeDate
 		if year >= -271820 && year <= 275759 {
 			switch month {
 			case 1:
@@ -406,7 +406,7 @@ func AdjustHours(d float64, dt DateTime) MaybeDateTime {
 func AdjustMinutes(d float64, dt DateTime) MaybeDateTime {
 	d2 := dt.First
 	t := dt.Second
-	var result int32
+	var result int
 	switch d2.Second {
 	case component.MonthJanuary:
 		result = 1
@@ -436,7 +436,7 @@ func AdjustMinutes(d float64, dt DateTime) MaybeDateTime {
 	record := DateRec{Year: d2.First, Month: result, Day: d2.Third, Hour: t.First, Minute: t.Second, Second: t.Third, Millisecond: t.Fourth}
 	day, hour, millisecond, minute, month, second, year, found := datetime.AdjustImpl(d*60000.0, record.Day, record.Hour, record.Millisecond, record.Minute, record.Month, record.Second, record.Year)
 	if found {
-		var result2 func(int32) date.MaybeDate
+		var result2 func(int) date.MaybeDate
 		if year >= -271820 && year <= 275759 {
 			switch month {
 			case 1:
@@ -505,7 +505,7 @@ func AdjustMinutes(d float64, dt DateTime) MaybeDateTime {
 func AdjustMilliseconds(d float64, dt DateTime) MaybeDateTime {
 	d2 := dt.First
 	t := dt.Second
-	var result int32
+	var result int
 	switch d2.Second {
 	case component.MonthJanuary:
 		result = 1
@@ -535,7 +535,7 @@ func AdjustMilliseconds(d float64, dt DateTime) MaybeDateTime {
 	record := DateRec{Year: d2.First, Month: result, Day: d2.Third, Hour: t.First, Minute: t.Second, Second: t.Third, Millisecond: t.Fourth}
 	day, hour, millisecond, minute, month, second, year, found := datetime.AdjustImpl(d, record.Day, record.Hour, record.Millisecond, record.Minute, record.Month, record.Second, record.Year)
 	if found {
-		var result2 func(int32) date.MaybeDate
+		var result2 func(int) date.MaybeDate
 		if year >= -271820 && year <= 275759 {
 			switch month {
 			case 1:
@@ -601,8 +601,8 @@ func AdjustMilliseconds(d float64, dt DateTime) MaybeDateTime {
 	}
 }
 
-func AdjustJoin(n int32, x component.Month) func(int32) date.MaybeDate {
-	return func(d int32) date.MaybeDate {
+func AdjustJoin(n int, x component.Month) func(int) date.MaybeDate {
+	return func(d int) date.MaybeDate {
 		dt := date.Date{First: n, Second: x, Third: d}
 		scrutinee := date.CanonicalDate(n, x, d)
 		var result bool
@@ -633,10 +633,10 @@ const TagJust = 1
 package time
 
 type Time struct {
-	First  int32
-	Second int32
-	Third  int32
-	Fourth int32
+	First  int
+	Second int
+	Third  int
+	Fourth int
 }
 
 // main.go
@@ -681,8 +681,8 @@ func initializeNewYear() datadatetime.DateTime {
 	return dateTime(2026, 12, 31, 0, 0, 0, 0)
 }
 
-func dateTime(y int32, mo int32, d int32, h int32, mi int32, s int32, ms int32) datadatetime.DateTime {
-	var result int32
+func dateTime(y int, mo int, d int, h int, mi int, s int, ms int) datadatetime.DateTime {
+	var result int
 	if y >= -271820 && y <= 275759 {
 		result = y
 	} else {
@@ -717,31 +717,31 @@ func dateTime(y int32, mo int32, d int32, h int32, mi int32, s int32, ms int32) 
 	default:
 		result2 = component.NoMonth
 	}
-	var result3 int32
+	var result3 int
 	if d >= 1 && d <= 31 {
 		result3 = d
 	} else {
 		panic("Failed pattern match")
 	}
-	var result4 int32
+	var result4 int
 	if h >= 0 && h <= 23 {
 		result4 = h
 	} else {
 		panic("Failed pattern match")
 	}
-	var result5 int32
+	var result5 int
 	if mi >= 0 && mi <= 59 {
 		result5 = mi
 	} else {
 		panic("Failed pattern match")
 	}
-	var result6 int32
+	var result6 int
 	if s >= 0 && s <= 59 {
 		result6 = s
 	} else {
 		panic("Failed pattern match")
 	}
-	var result7 int32
+	var result7 int
 	if ms >= 0 && ms <= 999 {
 		result7 = ms
 	} else {

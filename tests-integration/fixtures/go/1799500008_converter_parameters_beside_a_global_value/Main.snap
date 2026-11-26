@@ -6,7 +6,7 @@ package checks
 
 import "fixture/Data/Either"
 
-func Value(n int32) (int32, either.StringFailure) {
+func Value(n int) (int, either.StringFailure) {
 	for {
 		if n > 100 {
 			return 0, either.StringFailure{Failed: true, Left: "too big"}
@@ -28,7 +28,7 @@ import (
 
 type Either struct {
 	Left  string
-	Right int32
+	Right int
 	Tag   uint8
 }
 
@@ -46,11 +46,11 @@ func Left(left string) Either {
 	return Either{Tag: EitherLeft, Left: left}
 }
 
-func Right(right int32) Either {
+func Right(right int) Either {
 	return Either{Tag: EitherRight, Right: right}
 }
 
-func Show(i int32, err StringFailure) string {
+func Show(i int, err StringFailure) string {
 	return string(AppendShow(nil, i, err))
 }
 
@@ -66,7 +66,7 @@ func AppendShowArrayEitherStringInt(buffer []byte, array []Either) []byte {
 	return buffer
 }
 
-func AppendShow(buffer []byte, i int32, err StringFailure) []byte {
+func AppendShow(buffer []byte, i int, err StringFailure) []byte {
 	if err.Failed {
 		buffer = append(buffer, "(Left "...)
 		buffer = prim.AppendShowString(buffer, err.Left)
@@ -90,7 +90,7 @@ func EitherFailure(either Either) StringFailure {
 	return StringFailure{}
 }
 
-func EitherFromResults(value2 int32, err StringFailure) Either {
+func EitherFromResults(value2 int, err StringFailure) Either {
 	if err.Failed {
 		return Left(err.Left)
 	}
@@ -107,7 +107,7 @@ import (
 )
 
 func main() {
-	array := []int32{5, -3, 200}
+	array := []int{5, -3, 200}
 	mapped := make([]either.Either, len(array))
 	for index, element := range array {
 		mapped[index] = either.EitherFromResults(checks.Value(element))

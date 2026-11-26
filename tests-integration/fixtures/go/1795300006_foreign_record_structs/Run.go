@@ -3,7 +3,7 @@ package ffi
 type Output struct {
 	Stdout   string
 	Stderr   string
-	ExitCode int32
+	ExitCode int
 }
 
 func Run(program string) Output { return Output{Stdout: program} }

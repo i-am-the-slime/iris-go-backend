@@ -4,13 +4,20 @@ source: tests-integration/src/fixtures.rs
 // Data/Maybe/maybe.go
 package maybe
 
-type Int int64
-
-const NoInt Int = 1 << 32
-
 const TagNothing = 0
 
 const TagJust = 1
+
+type Int struct {
+	Just int
+	Tag  uint8
+}
+
+func JustInt(just int) Int {
+	return Int{Tag: TagJust, Just: just}
+}
+
+var NoInt = Int{Tag: TagNothing}
 
 type MaybeInt struct {
 	Just Int
@@ -52,15 +59,15 @@ import (
 type Tree struct {
 	Node0 *Tree
 	Node2 *Tree
-	Node1 int32
+	Node1 int
 }
 
 var sharedTreeLeaf = &Tree{}
 
 type Shape struct {
-	Circle  int32
-	Square0 int32
-	Square1 int32
+	Circle  int
+	Square0 int
+	Square1 int
 	Tag     uint8
 }
 
@@ -80,15 +87,15 @@ func JustShape(just Shape) MaybeShape {
 
 var NoShape = MaybeShape{Tag: maybe.TagNothing}
 
-func Circle(circle int32) Shape {
+func Circle(circle int) Shape {
 	return Shape{Tag: ShapeCircle, Circle: circle}
 }
 
-func Square(square0 int32, square1 int32) Shape {
+func Square(square0 int, square1 int) Shape {
 	return Shape{Tag: ShapeSquare, Square0: square0, Square1: square1}
 }
 
-func Node(node0 *Tree, node1 int32, node2 *Tree) *Tree {
+func Node(node0 *Tree, node1 int, node2 *Tree) *Tree {
 	return &Tree{Node0: node0, Node1: node1, Node2: node2}
 }
 
@@ -96,7 +103,7 @@ var main_ = initializeMain_()
 
 func initializeMain_() []string {
 	x := opaque(10)
-	var result int32
+	var result int
 	if x > 0 {
 		result = x + 1
 	} else {
@@ -106,21 +113,21 @@ func initializeMain_() []string {
 	x3 := opaque(1)
 	var result2 maybe.Int
 	if x2 > 0 {
-		result2 = maybe.Int(x2 + 1)
+		result2 = maybe.JustInt(x2 + 1)
 	} else {
 		result2 = maybe.NoInt
 	}
 	var result3 maybe.Int
 	if x3 > 0 {
-		result3 = maybe.Int(x3 + 1)
+		result3 = maybe.JustInt(x3 + 1)
 	} else {
 		result3 = maybe.NoInt
 	}
 	var result4 bool
-	if result2 == maybe.NoInt && result3 == maybe.NoInt {
+	if result2.Tag == maybe.TagNothing && result3.Tag == maybe.TagNothing {
 		result4 = true
-	} else if result2 != maybe.NoInt && result3 != maybe.NoInt {
-		result4 = int32(result2) == int32(result3)
+	} else if result2.Tag == maybe.TagJust && result3.Tag == maybe.TagJust {
+		result4 = result2.Just == result3.Just
 	} else {
 		result4 = false
 	}
@@ -128,26 +135,26 @@ func initializeMain_() []string {
 	x5 := opaque(2)
 	var result5 maybe.Int
 	if x4 > 0 {
-		result5 = maybe.Int(x4 + 1)
+		result5 = maybe.JustInt(x4 + 1)
 	} else {
 		result5 = maybe.NoInt
 	}
 	var result6 maybe.Int
 	if x5 > 0 {
-		result6 = maybe.Int(x5 + 1)
+		result6 = maybe.JustInt(x5 + 1)
 	} else {
 		result6 = maybe.NoInt
 	}
 	var result7 string
-	if result5 == maybe.NoInt && result6 == maybe.NoInt {
+	if result5.Tag == maybe.TagNothing && result6.Tag == maybe.TagNothing {
 		result7 = "EQ"
-	} else if result5 == maybe.NoInt {
+	} else if result5.Tag == maybe.TagNothing {
 		result7 = "LT"
-	} else if result6 == maybe.NoInt {
+	} else if result6.Tag == maybe.TagNothing {
 		result7 = "GT"
 	} else {
-		left0 := int32(result5)
-		right0 := int32(result6)
+		left0 := result5.Just
+		right0 := result6.Just
 		if left0 < right0 {
 			result7 = "LT"
 		} else if left0 == right0 {
@@ -172,14 +179,14 @@ func initializeMain_() []string {
 	x7 := opaque(4)
 	var result10 string
 	if x7 > 0 {
-		result10 = "(Just " + strconv.Itoa(int(sumTreeNode(sharedTreeLeaf, x7, sharedTreeLeaf))) + ")"
+		result10 = "(Just " + strconv.Itoa(sumTreeNode(sharedTreeLeaf, x7, sharedTreeLeaf)) + ")"
 	} else {
 		result10 = "Nothing"
 	}
 	x8 := opaque(5)
 	var result11 string
 	if x8 > 0 {
-		result11 = "(Just " + strconv.Itoa(int(1+x8)) + ")"
+		result11 = "(Just " + strconv.Itoa(1+x8) + ")"
 	} else {
 		result11 = "Nothing"
 	}
@@ -195,7 +202,7 @@ func initializeMain_() []string {
 		x10 := x9 - 1
 		var result14 string
 		if x10 > 0 {
-			result14 = "(Just " + strconv.Itoa(int(x10+1)) + ")"
+			result14 = "(Just " + strconv.Itoa(x10+1) + ")"
 		} else {
 			result14 = "Nothing"
 		}
@@ -300,7 +307,7 @@ func initializeMain_() []string {
 	x15 := opaque(1)
 	var result21 maybe.Int
 	if x15 > 0 {
-		result21 = maybe.Int(x15 + 1)
+		result21 = maybe.JustInt(x15 + 1)
 	} else {
 		result21 = maybe.NoInt
 	}
@@ -308,9 +315,10 @@ func initializeMain_() []string {
 	var result22 string
 	scrutinee := elements[0]
 	var result23 string
-	if scrutinee != maybe.NoInt {
-		result23 = "(Just " + strconv.Itoa(int(int32(scrutinee))) + ")"
-	} else {
+	switch scrutinee.Tag {
+	case maybe.TagJust:
+		result23 = "(Just " + strconv.Itoa(scrutinee.Just) + ")"
+	default: // maybe.TagNothing
 		result23 = "Nothing"
 	}
 	result22 = "(Just " + result23 + ")"
@@ -323,7 +331,7 @@ func initializeMain_() []string {
 	}
 	var result25 string
 	if result24 != nil && result24 != sharedTreeLeaf {
-		result25 = strconv.Itoa(int(result24.Node1))
+		result25 = strconv.Itoa(result24.Node1)
 	} else if result24 != nil && result24 == sharedTreeLeaf {
 		result25 = "leaf"
 	} else {
@@ -335,7 +343,7 @@ func initializeMain_() []string {
 		x10 := x17 - 1
 		var result14 maybe.Int
 		if x10 > 0 {
-			result14 = maybe.Int(x10 + 1)
+			result14 = maybe.JustInt(x10 + 1)
 		} else {
 			result14 = maybe.NoInt
 		}
@@ -344,9 +352,9 @@ func initializeMain_() []string {
 		result26 = maybe.NoMaybeInt
 	}
 	var result27 string
-	if result26.Tag == maybe.TagJust && result26.Just != maybe.NoInt {
-		result27 = strconv.Itoa(int(int32(result26.Just)))
-	} else if result26.Tag == maybe.TagJust && result26.Just == maybe.NoInt {
+	if result26.Tag == maybe.TagJust && result26.Just.Tag == maybe.TagJust {
+		result27 = strconv.Itoa(result26.Just.Just)
+	} else if result26.Tag == maybe.TagJust && result26.Just.Tag == maybe.TagNothing {
 		result27 = "just nothing"
 	} else {
 		result27 = "nothing"
@@ -372,10 +380,10 @@ func initializeMain_() []string {
 	} else {
 		result30 = "none"
 	}
-	return []string{strconv.Itoa(int(result)), strconv.FormatBool(result4), result7, result8, result9, result10, result11, result12, result13, strconv.FormatBool(result17), result20, strconv.FormatBool(opaque(0) > 0), result22, result25, result27, result28, result30}
+	return []string{strconv.Itoa(result), strconv.FormatBool(result4), result7, result8, result9, result10, result11, result12, result13, strconv.FormatBool(result17), result20, strconv.FormatBool(opaque(0) > 0), result22, result25, result27, result28, result30}
 }
 
-func opaque(x int32) int32 {
+func opaque(x int) int {
 	for {
 		if x == 12345 {
 			continue
@@ -384,14 +392,14 @@ func opaque(x int32) int32 {
 	}
 }
 
-func sumTree(tree *Tree) int32 {
+func sumTree(tree *Tree) int {
 	if tree == sharedTreeLeaf {
 		return 0
 	}
 	return sumTree(tree.Node0) + tree.Node1 + sumTree(tree.Node2)
 }
 
-func sumTreeNode(l *Tree, x int32, r *Tree) int32 {
+func sumTreeNode(l *Tree, x int, r *Tree) int {
 	return sumTree(l) + x + sumTree(r)
 }
 

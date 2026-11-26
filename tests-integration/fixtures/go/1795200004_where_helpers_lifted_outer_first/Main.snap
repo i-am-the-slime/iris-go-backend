@@ -14,28 +14,28 @@ import (
 
 var main_ = initializeMain_()
 
-func initializeMain_() []int32 {
-	result := *array.Thaw([]int32{3, 1, 2})
-	size := int32(len(result))
-	for i := int32(1); i < size; i++ {
-		within := int(i) < len(result)
-		var current int32
+func initializeMain_() []int {
+	result := *array.Thaw([]int{3, 1, 2})
+	size := len(result)
+	for i := 1; i < size; i++ {
+		within := i < len(result)
+		var current int
 		if within {
 			current = result[i]
 		} else {
 			current = 0
 		}
-		var j int32 = i - 1
+		var j int = i - 1
 	mainShiftDown:
 		for {
 			if j < 0 {
-				if 0 < len(result) {
+				if len(result) > 0 {
 					result[0] = current
 				}
 				break mainShiftDown
 			}
-			within2 := int(j) < len(result)
-			var previous int32
+			within2 := j < len(result)
+			var previous int
 			if within2 {
 				previous = result[j]
 			} else {
@@ -43,24 +43,24 @@ func initializeMain_() []int32 {
 			}
 			if previous > current {
 				index := j + 1
-				if int(index) < len(result) {
+				if index < len(result) {
 					result[index] = previous
 				}
 				j -= 1
 				continue
 			}
 			index2 := j + 1
-			if int(index2) < len(result) {
+			if index2 < len(result) {
 				result[index2] = current
 			}
 			break mainShiftDown
 		}
 	}
 	performed := shared.Frozen(result)
-	return array.Append([]int32{mainGo(100, 0)}, performed)
+	return array.Append([]int{mainGo(100, 0)}, performed)
 }
 
-func mainDigitSum(x int32, acc int32) int32 {
+func mainDigitSum(x int, acc int) int {
 	for {
 		if x == 0 {
 			return acc
@@ -69,7 +69,7 @@ func mainDigitSum(x int32, acc int32) int32 {
 	}
 }
 
-func mainGo(i int32, acc int32) int32 {
+func mainGo(i int, acc int) int {
 	for {
 		if i == 0 {
 			return acc

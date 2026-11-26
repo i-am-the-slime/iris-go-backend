@@ -4,13 +4,20 @@ source: tests-integration/src/fixtures.rs
 // Data/Maybe/maybe.go
 package maybe
 
-type Int int64
-
-const NoInt Int = 1 << 32
-
 const TagNothing = 0
 
 const TagJust = 1
+
+type Int struct {
+	Just int
+	Tag  uint8
+}
+
+var NoInt = Int{Tag: TagNothing}
+
+func JustInt(just int) Int {
+	return Int{Tag: TagJust, Just: just}
+}
 
 type String struct {
 	Just string
@@ -31,8 +38,8 @@ import (
 	"strconv"
 )
 
-func ShowInt(i int32) string {
-	return strconv.Itoa(int(i))
+func ShowInt(i int) string {
+	return strconv.Itoa(i)
 }
 
 func ShowString(s string) string {
@@ -51,7 +58,7 @@ func AppendShowArrayString(buffer []byte, array []string) []byte {
 	return buffer
 }
 
-func AppendShowArrayInt(buffer []byte, array []int32) []byte {
+func AppendShowArrayInt(buffer []byte, array []int) []byte {
 	buffer = append(buffer, '[')
 	for index, element := range array {
 		if index > 0 {
@@ -67,7 +74,7 @@ func ArrayString(array []string) string {
 	return string(AppendShowArrayString(nil, array))
 }
 
-func ArrayInt(array []int32) string {
+func ArrayInt(array []int) string {
 	return string(AppendShowArrayInt(nil, array))
 }
 
@@ -88,24 +95,25 @@ import (
 var main_ = initializeMain_()
 
 func initializeMain_() []string {
-	numbers := arraypkg.RangeInt32(0, 40)
+	numbers := arraypkg.Range(0, 40)
 	found := maybe.NoInt
 	for _, value := range numbers {
 		n := value + 1
 		if n&1 == 0 {
-			found = maybe.Int(n)
+			found = maybe.JustInt(n)
 			break
 		}
 	}
 	var result string
-	if found != maybe.NoInt {
-		result = "(Just " + strconv.Itoa(int(int32(found))) + ")"
-	} else {
+	switch found.Tag {
+	case maybe.TagJust:
+		result = "(Just " + strconv.Itoa(found.Just) + ")"
+	default: // maybe.TagNothing
 		result = "Nothing"
 	}
 	found2 := maybe.NoString
 	for _, value := range numbers {
-		value2 := strconv.Itoa(int(value))
+		value2 := strconv.Itoa(value)
 		word := value2 + "!"
 		if word > "w5" {
 			found2 = maybe.JustString(word)
@@ -120,195 +128,75 @@ func initializeMain_() []string {
 		result2 = "Nothing"
 	}
 	accumulator := 0.0
-	for x := int32(1); x < 42; x++ {
+	for x := 1; x < 42; x++ {
 		number := float64(x) * 0.5
 		accumulator += number
 	}
 	first := prim.ShowNumber(accumulator / float64(41))
 	first2 := show.ArrayInt(clamped(numbers))
 	bound := []string{}
-	array := []shared.Rule{{Name: "positive", Check: func(n int32) bool {
+	array := []shared.Rule{{Name: "positive", Check: func(n int) bool {
 		return n > 0
-	}}, {Name: "small", Check: func(n int32) bool {
+	}}, {Name: "small", Check: func(n int) bool {
 		return n < 3
 	}}}
-	for n := int32(0); n < 5; n++ {
+	for n := 0; n < 5; n++ {
 		for _, rule := range array {
 			if rule.Check(n) {
 				bound = append(bound, rule.Name)
 			}
 		}
 	}
-	first3 := show.ArrayString(arraypkg.Bounded(bound))
-	array2 := [][]int32{{1}, {2}}
-	var count int32 = 0
+	first3 := show.ArrayString(bound)
+	array2 := [][]int{{1}, {2}}
+	count := 0
 	for range array2 {
-		for value := int32(1); value < 4; value++ {
+		for value := 1; value < 4; value++ {
 			count += 1
 		}
 	}
-	first4 := strconv.Itoa(int(count))
-	array3 := []int32{1, 2}
+	first4 := strconv.Itoa(count)
+	array3 := []int{1, 2}
 	built := []string{result, result2, first, first2, first3, first4}
 	for _, round := range array3 {
-		built = append(built, []string{show.ArrayInt(clamped(mapLanes(numbers, round))), show.ArrayInt(mapLanes2(numbers))}...)
+		mapped := make([]int, len(numbers))
+		for index, value := range numbers {
+			mapped[index] = value * round
+		}
+		mapped2 := make([]int, len(numbers))
+		for index, x := range numbers {
+			result3 := max(x, 7)
+			mapped2[index] = result3
+		}
+		built = append(built, []string{show.ArrayInt(clamped(mapped)), show.ArrayInt(mapped2)}...)
 	}
 	return built
 }
 
-func clamped(array []int32) []int32 {
-	return mapLanes3(array)
+func clamped(array []int) []int {
+	mapped := make([]int, len(array))
+	for index, x := range array {
+		var result int
+		if x < 2 {
+			result = 2
+		} else if x > 40 {
+			result = 40
+		} else {
+			result = x
+		}
+		mapped[index] = result
+	}
+	return mapped
 }
 
 func main() {
 	console.Print("[" + strings.Join(main_, " ") + "]")
 }
 
-// main_neon.go
-//go:build goexperiment.simd && arm64
-
-package main
-
-import "simd/archsimd"
-
-func mapLanes(xs []int32, round int32) []int32 {
-	roundLanes := archsimd.BroadcastInt32x4(round)
-	out := make([]int32, len(xs))
-	const step = 4
-	i := 0
-	for ; i < len(xs)-step+1; i += step {
-		x := archsimd.LoadInt32x4(xs[i : i+step])
-		x.Mul(roundLanes).Store(out[i : i+step])
-	}
-	if i < len(xs) {
-		x, _ := archsimd.LoadInt32x4Part(xs[i:])
-		x.Mul(roundLanes).StorePart(out[i:])
-	}
-	return out
-}
-
-func mapLanes2(xs []int32) []int32 {
-	c0 := archsimd.BroadcastInt32x4(7)
-	out := make([]int32, len(xs))
-	const step = 4
-	i := 0
-	for ; i < len(xs)-step+1; i += step {
-		x := archsimd.LoadInt32x4(xs[i : i+step])
-		x.Max(c0).Store(out[i : i+step])
-	}
-	if i < len(xs) {
-		x, _ := archsimd.LoadInt32x4Part(xs[i:])
-		x.Max(c0).StorePart(out[i:])
-	}
-	return out
-}
-
-func mapLanes3(xs []int32) []int32 {
-	c0 := archsimd.BroadcastInt32x4(2)
-	c1 := archsimd.BroadcastInt32x4(40)
-	out := make([]int32, len(xs))
-	const step = 4
-	i := 0
-	for ; i < len(xs)-step+1; i += step {
-		x := archsimd.LoadInt32x4(xs[i : i+step])
-		c0.IfElse(x.Less(c0), x.Min(c1)).Store(out[i : i+step])
-	}
-	if i < len(xs) {
-		x, _ := archsimd.LoadInt32x4Part(xs[i:])
-		c0.IfElse(x.Less(c0), x.Min(c1)).StorePart(out[i:])
-	}
-	return out
-}
-
-// main_scalar.go
-//go:build !(goexperiment.simd && (arm64 || wasm))
-
-package main
-
-func mapLanes(xs []int32, round int32) []int32 {
-	out := make([]int32, len(xs))
-	for i, x := range xs {
-		out[i] = x * round
-	}
-	return out
-}
-
-func mapLanes2(xs []int32) []int32 {
-	out := make([]int32, len(xs))
-	for i, x := range xs {
-		out[i] = max(x, 7)
-	}
-	return out
-}
-
-func mapLanes3(xs []int32) []int32 {
-	out := make([]int32, len(xs))
-	for i, x := range xs {
-		out[i] = min(max(x, 2), 40)
-	}
-	return out
-}
-
-// main_vector.go
-//go:build goexperiment.simd && wasm
-
-package main
-
-import "simd"
-
-func mapLanes(xs []int32, round int32) []int32 {
-	roundLanes := simd.BroadcastInt32s(round)
-	out := make([]int32, len(xs))
-	step := simd.Int32s{}.Len()
-	i := 0
-	for ; i < len(xs)-step+1; i += step {
-		x := simd.LoadInt32s(xs[i : i+step])
-		x.Mul(roundLanes).Store(out[i : i+step])
-	}
-	if i < len(xs) {
-		x, _ := simd.LoadInt32sPart(xs[i:])
-		x.Mul(roundLanes).StorePart(out[i:])
-	}
-	return out
-}
-
-func mapLanes2(xs []int32) []int32 {
-	c0 := simd.BroadcastInt32s(7)
-	out := make([]int32, len(xs))
-	step := simd.Int32s{}.Len()
-	i := 0
-	for ; i < len(xs)-step+1; i += step {
-		x := simd.LoadInt32s(xs[i : i+step])
-		x.Max(c0).Store(out[i : i+step])
-	}
-	if i < len(xs) {
-		x, _ := simd.LoadInt32sPart(xs[i:])
-		x.Max(c0).StorePart(out[i:])
-	}
-	return out
-}
-
-func mapLanes3(xs []int32) []int32 {
-	c0 := simd.BroadcastInt32s(2)
-	c1 := simd.BroadcastInt32s(40)
-	out := make([]int32, len(xs))
-	step := simd.Int32s{}.Len()
-	i := 0
-	for ; i < len(xs)-step+1; i += step {
-		x := simd.LoadInt32s(xs[i : i+step])
-		c0.IfElse(x.Less(c0), x.Min(c1)).Store(out[i : i+step])
-	}
-	if i < len(xs) {
-		x, _ := simd.LoadInt32sPart(xs[i:])
-		c0.IfElse(x.Less(c0), x.Min(c1)).StorePart(out[i:])
-	}
-	return out
-}
-
 // shared/shared.go
 package shared
 
 type Rule struct {
-	Check func(int32) bool
+	Check func(int) bool
 	Name  string
 }

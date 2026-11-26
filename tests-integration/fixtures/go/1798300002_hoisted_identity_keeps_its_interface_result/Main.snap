@@ -56,7 +56,7 @@ import (
 
 type TreeInt struct {
 	Leaf0 string
-	Leaf1 func(int32) int32
+	Leaf1 func(int) int
 	Node0 string
 	Node1 []TreeInt
 	Tag   uint8
@@ -93,7 +93,7 @@ func convert4(value *tuple.Tuple) Tuple {
 
 type TreeString struct {
 	Leaf0 string
-	Leaf1 func(int32) string
+	Leaf1 func(int) string
 	Node0 string
 	Node1 []TreeString
 	Tag   uint8
@@ -104,7 +104,7 @@ const (
 	TreeStringNode
 )
 
-func LeafTreeInt(leaf0 string, leaf1 func(int32) int32) TreeInt {
+func LeafTreeInt(leaf0 string, leaf1 func(int) int) TreeInt {
 	return TreeInt{Tag: TreeIntLeaf, Leaf0: leaf0, Leaf1: leaf1}
 }
 
@@ -112,7 +112,7 @@ func NodeTreeInt(node0 string, node1 []TreeInt) TreeInt {
 	return TreeInt{Tag: TreeIntNode, Node0: node0, Node1: node1}
 }
 
-func LeafTreeString(leaf0 string, leaf1 func(int32) string) TreeString {
+func LeafTreeString(leaf0 string, leaf1 func(int) string) TreeString {
 	return TreeString{Tag: TreeStringLeaf, Leaf0: leaf0, Leaf1: leaf1}
 }
 
@@ -133,15 +133,15 @@ func main() {
 	journal.Log(show.ArrayString(mapped2))
 }
 
-var collected Tuple = Tuple{First: struct{}{}, Second: []TreeInt{NodeTreeInt("around", []TreeInt{LeafTreeInt("fixture", func(value int32) int32 {
+var collected Tuple = Tuple{First: struct{}{}, Second: []TreeInt{NodeTreeInt("around", []TreeInt{LeafTreeInt("fixture", func(value int) int {
 	return value + 1
 })})}}
 
 func mapShow(tree TreeInt) TreeString {
 	switch tree.Tag {
 	case TreeIntLeaf:
-		return LeafTreeString(tree.Leaf0, func(x int32) string {
-			return strconv.Itoa(int(tree.Leaf1(x)))
+		return LeafTreeString(tree.Leaf0, func(x int) string {
+			return strconv.Itoa(tree.Leaf1(x))
 		})
 	default: // TreeIntNode
 		mapped := make([]TreeString, len(tree.Node1))

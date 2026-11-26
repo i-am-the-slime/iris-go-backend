@@ -8,7 +8,7 @@ type Settings struct {
 
 type Routes struct {
 	Handle   func(string, string, func(string))
-	Add      func(int32) func(int32) int32
+	Add      func(int) func(int) int
 	Each     []func(string) func(string)
 	Settings Settings
 }

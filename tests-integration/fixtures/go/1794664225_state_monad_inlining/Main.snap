@@ -12,11 +12,11 @@ import (
 
 var main_ = initializeMain_()
 
-func initializeMain_() int32 {
+func initializeMain_() int {
 	return countDown(60, 0).State
 }
 
-func countDown(n int32, state int32) shared.StateValue {
+func countDown(n int, state int) shared.StateValue {
 	for {
 		switch n {
 		case 0:
@@ -37,5 +37,5 @@ package shared
 
 type StateValue struct {
 	Value struct{}
-	State int32
+	State int
 }

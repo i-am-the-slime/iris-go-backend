@@ -8,7 +8,7 @@ import "fixture/shared"
 
 type VariantRep struct {
 	Type  string
-	Value int32
+	Value int
 }
 
 func Convert(value VariantRep) shared.TypeValue {
@@ -48,7 +48,7 @@ func initializeMain_() []string {
 }
 
 func mounted() []string {
-	var toggles int32 = 0
+	toggles := 0
 	scrutinee := Self{Props: func() shared.SelectedTodo {
 		return shared.SelectedTodo{Todo: shared.Todo{Title: "write tests", Done: false}, Selected: true}
 	}, Emit: func(value TodoMessage) {
@@ -75,9 +75,9 @@ func mounted() []string {
 	count2 := scrutinee2.Props()
 	count := count2.Count
 	scrutinee2.Emit(variant.Convert(variant.VariantRep{Type: "clicked", Value: count}))
-	clicks := "clicked " + strconv.Itoa(int(count))
+	clicks := "clicked " + strconv.Itoa(count)
 	toggled := toggles
-	return []string{item, clicks, strconv.Itoa(int(toggled))}
+	return []string{item, clicks, strconv.Itoa(toggled)}
 }
 
 func main() {
@@ -102,12 +102,12 @@ type SelectedTodo struct {
 }
 
 type StateValue struct {
-	State int32
-	Value int32
+	State int
+	Value int
 }
 
 type Count struct {
-	Count int32
+	Count int
 }
 
 type TypeValue struct {

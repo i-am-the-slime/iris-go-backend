@@ -11,7 +11,7 @@ import (
 )
 
 type ValidatedInt struct {
-	Field0 int32
+	Field0 int
 	Tag    uint8
 }
 
@@ -30,11 +30,11 @@ const (
 	ValidatedStringModified
 )
 
-func ModifiedValidatedInt(field0 int32) ValidatedInt {
+func ModifiedValidatedInt(field0 int) ValidatedInt {
 	return ValidatedInt{Tag: ValidatedIntModified, Field0: field0}
 }
 
-func FreshValidatedInt(field0 int32) ValidatedInt {
+func FreshValidatedInt(field0 int) ValidatedInt {
 	return ValidatedInt{Tag: ValidatedIntFresh, Field0: field0}
 }
 
@@ -51,14 +51,14 @@ var main_ = initializeMain_()
 func initializeMain_() []string {
 	mapped := make([]string, 4)
 	for index := range 4 {
-		n := 1 + int32(index)
+		n := 1 + index
 		var x ValidatedInt
 		if n > 2 {
 			x = ModifiedValidatedInt(n)
 		} else {
 			x = FreshValidatedInt(n)
 		}
-		var result int32
+		var result int
 		switch x.Tag {
 		case ValidatedIntFresh:
 			result = x.Field0
@@ -73,7 +73,7 @@ func initializeMain_() []string {
 		default: // ValidatedIntModified
 			touched = ModifiedValidatedInt(x2)
 		}
-		b := strconv.Itoa(int(n))
+		b := strconv.Itoa(n)
 		var renamed ValidatedString
 		switch touched.Tag {
 		case ValidatedIntFresh:
@@ -81,7 +81,7 @@ func initializeMain_() []string {
 		default: // ValidatedIntModified
 			renamed = ModifiedValidatedString(b)
 		}
-		var result2 int32
+		var result2 int
 		switch touched.Tag {
 		case ValidatedIntFresh:
 			result2 = touched.Field0
@@ -102,7 +102,7 @@ func initializeMain_() []string {
 		default: // ValidatedStringModified
 			result4 = "true"
 		}
-		mapped[index] = strconv.Itoa(int(result2)) + " " + result3 + " " + result4
+		mapped[index] = strconv.Itoa(result2) + " " + result3 + " " + result4
 	}
 	return mapped
 }

@@ -13,7 +13,7 @@ import (
 type Step struct {
 	More func(struct{}) Step
 	Stop string
-	Done int32
+	Done int
 	Tag  uint8
 }
 
@@ -31,11 +31,11 @@ type Failure struct {
 	Failure string
 }
 
-func Done(done int32) Step {
+func Done(done int) Step {
 	return Step{Tag: StepDone, Done: done}
 }
 
-type M func(int32, func(func(struct{}) Step) Step, func(Failure) Step, func(int32) Step) Step
+type M func(int, func(func(struct{}) Step) Step, func(Failure) Step, func(int) Step) Step
 
 func Stop(stop string) Step {
 	return Step{Tag: StepStop, Stop: stop}
@@ -43,11 +43,11 @@ func Stop(stop string) Step {
 
 var main_ = initializeMain_()
 
-func initializeMain_() []int32 {
+func initializeMain_() []int {
 	scrutinee := mainGo(loop(30, 0)(0, More, func(failure Failure) Step {
 		return Stop(failure.Failure)
 	}, Done))
-	var result int32
+	var result int
 	switch scrutinee.Tag {
 	case StepDone:
 		result = scrutinee.Done
@@ -56,22 +56,22 @@ func initializeMain_() []int32 {
 	default: // StepMore
 		result = -2
 	}
-	return []int32{result}
+	return []int{result}
 }
 
-func loop(i int32, total int32) M {
+func loop(i int, total int) M {
 	if i <= 0 {
-		return func(_ int32, _ func(func(struct{}) Step) Step, _ func(Failure) Step, done func(int32) Step) Step {
+		return func(_ int, _ func(func(struct{}) Step) Step, _ func(Failure) Step, done func(int) Step) Step {
 			return done(total)
 		}
 	}
-	return func(env int32, more func(func(struct{}) Step) Step, failure func(Failure) Step, done func(int32) Step) Step {
+	return func(env int, more func(func(struct{}) Step) Step, failure func(Failure) Step, done func(int) Step) Step {
 		return more(func(_ struct{}) Step {
-			return ask(env+i, more, failure, func(shifted int32) Step {
+			return ask(env+i, more, failure, func(shifted int) Step {
 				m := countdown(prim.IntModPositive(i, 3))
 				return more(func(_ struct{}) Step {
 					return more(func(_ struct{}) Step {
-						return m(env, more, failure, func(counted int32) Step {
+						return m(env, more, failure, func(counted int) Step {
 							n := loop(i-1, prim.IntModPositive(total+shifted+counted, 1000003))
 							return more(func(_ struct{}) Step {
 								return n(env, more, failure, done)
@@ -84,17 +84,17 @@ func loop(i int32, total int32) M {
 	}
 }
 
-var ask M = func(env int32, _ func(func(struct{}) Step) Step, _ func(Failure) Step, done func(int32) Step) Step {
+var ask M = func(env int, _ func(func(struct{}) Step) Step, _ func(Failure) Step, done func(int) Step) Step {
 	return done(env)
 }
 
-func countdown(n int32) M {
+func countdown(n int) M {
 	if n <= 0 {
 		return ask
 	}
-	return func(env int32, more func(func(struct{}) Step) Step, failure func(Failure) Step, done func(int32) Step) Step {
+	return func(env int, more func(func(struct{}) Step) Step, failure func(Failure) Step, done func(int) Step) Step {
 		return more(func(_ struct{}) Step {
-			return ask(env, more, failure, func(_ int32) Step {
+			return ask(env, more, failure, func(_ int) Step {
 				n2 := countdown(n - 1)
 				return more(func(_ struct{}) Step {
 					return n2(env, more, failure, done)

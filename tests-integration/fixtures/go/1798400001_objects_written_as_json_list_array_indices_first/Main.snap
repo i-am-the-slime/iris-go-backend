@@ -31,7 +31,7 @@ package tuple
 
 type Tuple struct {
 	First  string
-	Second int32
+	Second int
 }
 
 // main.go
@@ -59,9 +59,9 @@ func initializeScores() *struct {
 	Index map[string]int
 	Ints  int
 	Keys  []string
-	Vals  []int32
+	Vals  []int
 } {
-	object2 := object.New[int32]()
+	object2 := object.New[int]()
 	for _, tuple := range []tuple.Tuple{{First: "b", Second: 1}, {First: "10", Second: 2}, {First: "2", Second: 3}} {
 		object.Poke(tuple.First, tuple.Second, object2)
 	}
@@ -84,7 +84,7 @@ func EncodeJSONObjectInt(e *foreignvalue.Encoder, value *struct {
 	Index map[string]int
 	Ints  int
 	Keys  []string
-	Vals  []int32
+	Vals  []int
 }) {
 	e.Raw("{")
 	for key, member := range object.Entries(value) {

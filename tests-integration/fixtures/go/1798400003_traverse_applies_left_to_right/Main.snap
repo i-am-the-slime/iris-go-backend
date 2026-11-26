@@ -13,26 +13,26 @@ import (
 
 type ShapeArrayInt struct {
 	Shape string
-	Value []int32
+	Value []int
 }
 
 type ShapeFnIntArrayInt struct {
 	Shape string
-	Value func(int32) []int32
+	Value func(int) []int
 }
 
 var main_ = initializeMain_()
 
 func initializeMain_() []string {
-	return []string{shapeOf([]int32{}), shapeOf([]int32{1, 2}), shapeOf([]int32{1, 2, 3, 4, 5})}
+	return []string{shapeOf([]int{}), shapeOf([]int{1, 2}), shapeOf([]int{1, 2, 3, 4, 5})}
 }
 
-func shapeOf(xs []int32) string {
-	append_ := direct.Appender[int32]()
-	accumulator := ShapeArrayInt{Shape: "pure", Value: []int32{}}
+func shapeOf(xs []int) string {
+	append_ := direct.Appender[int]()
+	accumulator := ShapeArrayInt{Shape: "pure", Value: []int{}}
 	for _, element := range xs {
 		shapeFnIntArrayInt := ShapeFnIntArrayInt{Shape: accumulator.Shape, Value: append_(accumulator.Value)}
-		accumulator = ShapeArrayInt{Shape: "(" + shapeFnIntArrayInt.Shape + " " + strconv.Itoa(int(element)) + ")", Value: shapeFnIntArrayInt.Value(element)}
+		accumulator = ShapeArrayInt{Shape: "(" + shapeFnIntArrayInt.Shape + " " + strconv.Itoa(element) + ")", Value: shapeFnIntArrayInt.Value(element)}
 	}
 	return accumulator.Shape
 }

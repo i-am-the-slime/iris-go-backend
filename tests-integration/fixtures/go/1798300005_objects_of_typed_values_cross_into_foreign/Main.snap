@@ -4,16 +4,21 @@ source: tests-integration/src/fixtures.rs
 // Data/Maybe/maybe.go
 package maybe
 
-type Int int64
+const TagNothing = 0
 
-const NoInt Int = 1 << 32
+const TagJust = 1
+
+type Int struct {
+	Just int
+	Tag  uint8
+}
 
 // Data/Tuple/tuple.go
 package tuple
 
 type Tuple struct {
 	First  string
-	Second int32
+	Second int
 }
 
 // main.go
@@ -29,7 +34,7 @@ import (
 )
 
 func main() {
-	object2 := object.New[int32]()
+	object2 := object.New[int]()
 	for _, tuple := range []tuple.Tuple{{First: "bearerAuth", Second: 1}, {First: "apiKey", Second: 2}} {
 		object.Poke(tuple.First, tuple.Second, object2)
 	}
@@ -44,7 +49,7 @@ func main() {
 	})))
 	var result string
 	if found {
-		result = "(Just " + strconv.Itoa(int(x)) + ")"
+		result = "(Just " + strconv.Itoa(x) + ")"
 	} else {
 		result = "Nothing"
 	}
@@ -60,14 +65,14 @@ func Convert(value *struct {
 	Index map[string]int
 	Ints  int
 	Keys  []string
-	Vals  []int32
+	Vals  []int
 }) *struct {
 	Index map[string]int
 	Ints  int
 	Keys  []string
 	Vals  []any
 } {
-	return object.FmapObject(value, func(element int32) any {
+	return object.FmapObject(value, func(element int) any {
 		return element
 	})
 }
@@ -81,9 +86,9 @@ func Convert2(value *struct {
 	Index map[string]int
 	Ints  int
 	Keys  []string
-	Vals  []int32
+	Vals  []int
 } {
-	return object.FmapObject(value, func(element any) int32 {
-		return element.(int32)
+	return object.FmapObject(value, func(element any) int {
+		return element.(int)
 	})
 }

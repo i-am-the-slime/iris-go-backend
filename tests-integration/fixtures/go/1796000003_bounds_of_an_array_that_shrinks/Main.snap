@@ -14,12 +14,12 @@ import (
 
 var main_ = initializeMain_()
 
-func initializeMain_() []int32 {
-	result := *array.Thaw([]int32{1, 5, 2, 7, 3})
-	size := int32(len(result))
-	for i := int32(0); i < size; i++ {
-		within := int(i) < len(result)
-		var i2 int32
+func initializeMain_() []int {
+	result := *array.Thaw([]int{1, 5, 2, 7, 3})
+	size := len(result)
+	for i := 0; i < size; i++ {
+		within := i < len(result)
+		var i2 int
 		if within {
 			i2 = result[i]
 		} else {
@@ -30,23 +30,23 @@ func initializeMain_() []int32 {
 				result = shared.WithoutLast(result)
 			}
 		}
-		if int(i) < len(result) {
+		if i < len(result) {
 			result[i] = i2 * 10
 		}
 	}
 	performed := shared.Frozen(result)
-	result2 := *array.Thaw([]int32{1, 2})
-	size2 := int32(len(result2))
+	result2 := *array.Thaw([]int{1, 2})
+	size2 := len(result2)
 	end := size2 * 2
-	for i := int32(0); i < end; i++ {
-		within := int(i) < len(result2)
-		var i2 int32
+	for i := 0; i < end; i++ {
+		within := i < len(result2)
+		var i2 int
 		if within {
 			i2 = result2[i]
 		} else {
 			i2 = 0
 		}
-		result2 = array.Bounded(append(result2, i2+1))
+		result2 = append(result2, i2+1)
 	}
 	performed2 := shared.Frozen(result2)
 	return array.Append(performed, performed2)

@@ -14,15 +14,23 @@ var SharedListNil = &List{}
 // Data/Maybe/maybe.go
 package maybe
 
-type Int int64
+const TagNothing = 0
 
-const NoInt Int = 1 << 32
+const TagJust = 1
+
+type Int struct {
+	Just int
+	Tag  uint8
+}
+
+var NoInt = Int{Tag: TagNothing}
 
 // main.go
 package main
 
 import (
 	list "fixture/Data/List/Types"
+	"fixture/Data/Maybe"
 	"github.com/i-am-the-slime/iris-go/alloc"
 	"github.com/i-am-the-slime/iris-go/console"
 	"github.com/i-am-the-slime/iris-go/prim"
@@ -31,26 +39,36 @@ import (
 
 var main_ = initializeMain_()
 
-func initializeMain_() []int32 {
-	return []int32{defaulted(1.0), defaulted(2.0), defaulted(3.0)}
+func initializeMain_() []int {
+	return []int{defaulted(1.0), defaulted(2.0), defaulted(3.0)}
 }
 
-func defaulted(ignored float64) int32 {
-	array := []struct{}{{}, {}, {}}
-	accumulator := list.SharedListNil
-	var listUnitCells alloc.Cells[list.List]
-	for index := len(array) - 1; index >= 0; index-- {
-		unit := array[index]
-		accumulator = listUnitCells.New(list.List{Cons0: unit, Cons1: accumulator})
+func defaulted(ignored float64) int {
+	switch maybe.NoInt.Tag {
+	case maybe.TagNothing:
+		array := []struct{}{{}, {}, {}}
+		accumulator := list.SharedListNil
+		var listUnitCells alloc.Cells[list.List]
+		for index := len(array) - 1; index >= 0; index-- {
+			unit := array[index]
+			accumulator = listUnitCells.New(list.List{Cons0: unit, Cons1: accumulator})
+		}
+		var result int
+		switch maybe.NoInt.Tag {
+		case maybe.TagNothing:
+			result = -17
+		default: // maybe.TagJust
+			result = maybe.NoInt.Just
+		}
+		return defaultedGo(func(x int) int {
+			return x
+		}, accumulator)(result)
+	default: // maybe.TagJust
+		return maybe.NoInt.Just
 	}
-	var result int32
-	result = -17
-	return defaultedGo(func(x int32) int32 {
-		return x
-	}, accumulator)(result)
 }
 
-func defaultedGo(b func(int32) int32, value *list.List) func(int32) int32 {
+func defaultedGo(b func(int) int, value *list.List) func(int) int {
 	for {
 		if value == list.SharedListNil {
 			return b

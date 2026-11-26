@@ -15,7 +15,7 @@ func initializeMain_() shared.MainResult {
 	return shared.MainResult{Steps: walk(0, 27), Halved: halve(0, 64.0), Even: isEven(100000)}
 }
 
-func walkOrHalve(step int, steps int32, n int32, x float64) int32 {
+func walkOrHalve(step int, steps int, n int, x float64) int {
 	for {
 		switch step {
 		case shared.WalkStep:
@@ -33,15 +33,15 @@ func walkOrHalve(step int, steps int32, n int32, x float64) int32 {
 	}
 }
 
-func walk(steps int32, n int32) int32 {
+func walk(steps int, n int) int {
 	return walkOrHalve(shared.WalkStep, steps, n, 0)
 }
 
-func halve(steps int32, x float64) int32 {
+func halve(steps int, x float64) int {
 	return walkOrHalve(shared.HalveStep, steps, 0, x)
 }
 
-func isEvenOrIsOdd(step int, k int32) bool {
+func isEvenOrIsOdd(step int, k int) bool {
 	for {
 		switch step {
 		case shared.IsEvenStep:
@@ -64,7 +64,7 @@ func isEvenOrIsOdd(step int, k int32) bool {
 	}
 }
 
-func isEven(k int32) bool {
+func isEven(k int) bool {
 	return isEvenOrIsOdd(shared.IsEvenStep, k)
 }
 
@@ -76,8 +76,8 @@ func main() {
 package shared
 
 type MainResult struct {
-	Halved int32
-	Steps  int32
+	Halved int
+	Steps  int
 	Even   bool
 }
 

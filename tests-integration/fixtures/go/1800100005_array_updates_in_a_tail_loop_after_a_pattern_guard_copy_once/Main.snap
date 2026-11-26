@@ -4,20 +4,31 @@ source: tests-integration/src/fixtures.rs
 // Data/Maybe/maybe.go
 package maybe
 
-type Int int64
+const TagNothing = 0
 
-const NoInt Int = 1 << 32
+const TagJust = 1
+
+type Int struct {
+	Just int
+	Tag  uint8
+}
+
+func JustInt(just int) Int {
+	return Int{Tag: TagJust, Just: just}
+}
+
+var NoInt = Int{Tag: TagNothing}
 
 // Data/Show/show.go
 package show
 
 import "strconv"
 
-func Show(i int32) string {
-	return strconv.Itoa(int(i))
+func Show(i int) string {
+	return strconv.Itoa(i)
 }
 
-func AppendShowArrayInt(buffer []byte, array []int32) []byte {
+func AppendShowArrayInt(buffer []byte, array []int) []byte {
 	buffer = append(buffer, '[')
 	for index, element := range array {
 		if index > 0 {
@@ -29,7 +40,7 @@ func AppendShowArrayInt(buffer []byte, array []int32) []byte {
 	return buffer
 }
 
-func ArrayInt(array []int32) string {
+func ArrayInt(array []int) string {
 	return string(AppendShowArrayInt(nil, array))
 }
 
@@ -48,24 +59,24 @@ import (
 var main_ = initializeMain_()
 
 func initializeMain_() []string {
-	shared := array.RangeInt32(1, 5)
+	shared := array.Range(1, 5)
 	return []string{show.ArrayInt(doubled(0, shared)), show.ArrayInt(doubled(3, shared)), show.ArrayInt(shared)}
 }
 
-func doubled(position int32, values []int32) []int32 {
+func doubled(position int, values []int) []int {
 	values = slices.Clip(values)
 	copied := false
 	for {
 		var element maybe.Int
-		if position >= 0 && int(position) < len(values) {
-			element = maybe.Int(values[position])
+		if position >= 0 && position < len(values) {
+			element = maybe.JustInt(values[position])
 		} else {
 			element = maybe.NoInt
 		}
-		if element != maybe.NoInt {
-			var result []int32
-			if position >= 0 && position < int32(len(values)) {
-				value := int32(element) * 2
+		if element.Tag == maybe.TagJust {
+			var result []int
+			if position >= 0 && position < len(values) {
+				value := element.Just * 2
 				updated := values
 				if !copied {
 					updated = slices.Clone(updated)

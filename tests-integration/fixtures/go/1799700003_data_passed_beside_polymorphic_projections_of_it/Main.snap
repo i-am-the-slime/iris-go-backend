@@ -11,7 +11,7 @@ import (
 
 type EntryString struct {
 	First  string
-	Second int32
+	Second int
 }
 
 type Entry struct {

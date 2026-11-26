@@ -4,9 +4,20 @@ source: tests-integration/src/fixtures.rs
 // Data/Maybe/maybe.go
 package maybe
 
-type Int int64
+const TagNothing = 0
 
-const NoInt Int = 1 << 32
+const TagJust = 1
+
+type Int struct {
+	Just int
+	Tag  uint8
+}
+
+var NoInt = Int{Tag: TagNothing}
+
+func JustInt(just int) Int {
+	return Int{Tag: TagJust, Just: just}
+}
 
 // main.go
 package main
@@ -17,15 +28,15 @@ var main_ = initializeMain_()
 
 func initializeMain_() []maybe.Int {
 	var element maybe.Int
-	if 1 < len(numbers) {
-		element = maybe.Int(numbers[1])
+	if len(numbers) > 1 {
+		element = maybe.JustInt(numbers[1])
 	} else {
 		element = maybe.NoInt
 	}
 	return []maybe.Int{maybe.NoInt, element, maybe.NoInt}
 }
 
-var numbers []int32 = []int32{1, 2, 3}
+var numbers []int = []int{1, 2, 3}
 
 func main() {
 	_ = main_

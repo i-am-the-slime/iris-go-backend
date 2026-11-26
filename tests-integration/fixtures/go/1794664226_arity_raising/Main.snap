@@ -15,19 +15,19 @@ import (
 var main_ = initializeMain_()
 
 func initializeMain_() []string {
-	array := []func(int32) int32{func(x int32) int32 {
+	array := []func(int) int{func(x int) int {
 		return offset(2, x)
-	}, func(x int32) int32 {
+	}, func(x int) int {
 		return offset(5, x)
 	}}
 	mapped := make([]string, len(array))
 	for index, shift := range array {
-		mapped[index] = strconv.Itoa(int(shift(1)))
+		mapped[index] = strconv.Itoa(shift(1))
 	}
-	return arraypkg.Append(mapped, arraypkg.Append([]string{strconv.Itoa(int(offset(3, 4)))}, arraypkg.Map(prefixed(2), []string{"a", "b"})))
+	return arraypkg.Append(mapped, arraypkg.Append([]string{strconv.Itoa(offset(3, 4))}, arraypkg.Map(prefixed(2), []string{"a", "b"})))
 }
 
-func offset(n int32, x int32) int32 {
+func offset(n int, x int) int {
 	switch n {
 	case 0:
 		return x
@@ -36,7 +36,7 @@ func offset(n int32, x int32) int32 {
 	}
 }
 
-func prefixed(n int32) func(string) string {
+func prefixed(n int) func(string) string {
 	switch n {
 	case 0:
 		return func(text string) string {
@@ -50,11 +50,11 @@ func prefixed(n int32) func(string) string {
 	}
 }
 
-func repeat(n int32) string {
+func repeat(n int) string {
 	return string(appendRepeat(nil, n))
 }
 
-func appendRepeat(buffer []byte, n int32) []byte {
+func appendRepeat(buffer []byte, n int) []byte {
 	switch n {
 	case 0:
 	default:

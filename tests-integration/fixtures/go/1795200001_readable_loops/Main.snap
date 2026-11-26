@@ -56,21 +56,21 @@ const (
 var main_ = initializeMain_()
 
 func initializeMain_() []string {
-	array := []int32{1, 2, opaque(3)}
-	var accumulator int32 = 0
+	array := []int{1, 2, opaque(3)}
+	accumulator := 0
 	for _, value := range array {
 		accumulator += value
 	}
-	array2 := []int32{4, opaque(5)}
+	array2 := []int{4, opaque(5)}
 	mapped := make([]string, len(array2))
 	for index, value := range array2 {
-		mapped[index] = strconv.Itoa(int(value))
+		mapped[index] = strconv.Itoa(value)
 	}
-	array3 := []int32{6, opaque(7)}
+	array3 := []int{6, opaque(7)}
 	accumulator2 := ""
 	for index := len(array3) - 1; index >= 0; index-- {
 		x := array3[index]
-		accumulator2 = strconv.Itoa(int(x)) + "," + accumulator2
+		accumulator2 = strconv.Itoa(x) + "," + accumulator2
 	}
 	value2, found := prim.CodeUnitCharAt(0, "abc")
 	var codeUnitCharAt maybe.Char
@@ -107,10 +107,10 @@ func initializeMain_() []string {
 	}
 	n3 := opaque(3)
 	result2 := !(n3 > 10) && n3 <= 5
-	return []string{strconv.Itoa(int(accumulator)), show.ArrayString(mapped), accumulator2, result, strconv.FormatBool(left == right), strconv.FormatBool(result2)}
+	return []string{strconv.Itoa(accumulator), show.ArrayString(mapped), accumulator2, result, strconv.FormatBool(left == right), strconv.FormatBool(result2)}
 }
 
-func opaque(x int32) int32 {
+func opaque(x int) int {
 	for {
 		if x == 12345 {
 			continue

@@ -6,10 +6,10 @@ package main
 
 import "os"
 
-func main_() int32 {
-	var seen int32 = 0
-	var accumulator int32 = 0
-	for _, i := range []int32{1, 2, 3} {
+func main_() int {
+	seen := 0
+	accumulator := 0
+	for _, i := range []int{1, 2, 3} {
 		seen += 1
 		accumulator += i
 	}
@@ -17,8 +17,7 @@ func main_() int32 {
 }
 
 func main() {
-	exitStatus := main_()
-	os.Exit(int(exitStatus))
+	os.Exit(main_())
 }
 
 // shared/shared.go
@@ -29,6 +28,6 @@ type Ref[T any] struct {
 }
 
 type StateValue struct {
-	State int32
-	Value int32
+	State int
+	Value int
 }

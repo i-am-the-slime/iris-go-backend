@@ -6,11 +6,11 @@ package show
 
 import "strconv"
 
-func Show(i int32) string {
-	return strconv.Itoa(int(i))
+func Show(i int) string {
+	return strconv.Itoa(i)
 }
 
-func AppendShowArrayInt(buffer []byte, array []int32) []byte {
+func AppendShowArrayInt(buffer []byte, array []int) []byte {
 	buffer = append(buffer, '[')
 	for index, element := range array {
 		if index > 0 {
@@ -22,7 +22,7 @@ func AppendShowArrayInt(buffer []byte, array []int32) []byte {
 	return buffer
 }
 
-func ArrayInt(array []int32) string {
+func ArrayInt(array []int) string {
 	return string(AppendShowArrayInt(nil, array))
 }
 
@@ -31,7 +31,7 @@ package variant
 
 type AX_respondNowALater struct {
 	Later  string
-	Field0 int32
+	Field0 int
 	Tag    uint8
 }
 
@@ -44,7 +44,7 @@ const (
 
 type X_respondNowALater struct {
 	Later  string
-	Field0 int32
+	Field0 int
 	Tag    uint8
 }
 
@@ -54,15 +54,15 @@ const (
 	X_respondNowALaterLater
 )
 
-func X_respondNowAX_respondNowALater(field0 int32) AX_respondNowALater {
+func X_respondNowAX_respondNowALater(field0 int) AX_respondNowALater {
 	return AX_respondNowALater{Tag: AX_respondNowALaterX_respondNow, Field0: field0}
 }
 
-func AAX_respondNowALater(field0 int32) AX_respondNowALater {
+func AAX_respondNowALater(field0 int) AX_respondNowALater {
 	return AX_respondNowALater{Tag: AX_respondNowALaterA2, Field0: field0}
 }
 
-func AAX_respondNowALater2(field0 int32) AX_respondNowALater {
+func AAX_respondNowALater2(field0 int) AX_respondNowALater {
 	return AX_respondNowALater{Tag: AX_respondNowALaterA, Field0: field0}
 }
 
@@ -70,11 +70,11 @@ func LaterAX_respondNowALater(later string) AX_respondNowALater {
 	return AX_respondNowALater{Tag: AX_respondNowALaterLater, Later: later}
 }
 
-func X_respondNowX_respondNowALater(field0 int32) X_respondNowALater {
+func X_respondNowX_respondNowALater(field0 int) X_respondNowALater {
 	return X_respondNowALater{Tag: X_respondNowALaterX_respondNow, Field0: field0}
 }
 
-func AX_respondNowALater2(field0 int32) X_respondNowALater {
+func AX_respondNowALater2(field0 int) X_respondNowALater {
 	return X_respondNowALater{Tag: X_respondNowALaterA, Field0: field0}
 }
 
@@ -93,7 +93,7 @@ import (
 func Describe(variant2 variant.AX_respondNowALater) string {
 	switch variant2.Tag {
 	case variant.AX_respondNowALaterA:
-		return "A " + strconv.Itoa(int(variant2.Field0))
+		return "A " + strconv.Itoa(variant2.Field0)
 	case variant.AX_respondNowALaterX_respondNow:
 		return DescribeFallback(variant.X_respondNowX_respondNowALater(variant2.Field0))
 	case variant.AX_respondNowALaterA2:
@@ -106,9 +106,9 @@ func Describe(variant2 variant.AX_respondNowALater) string {
 func DescribeFallback(variant2 variant.X_respondNowALater) string {
 	switch variant2.Tag {
 	case variant.X_respondNowALaterX_respondNow:
-		return "now " + strconv.Itoa(int(variant2.Field0))
+		return "now " + strconv.Itoa(variant2.Field0)
 	case variant.X_respondNowALaterA:
-		return "a " + strconv.Itoa(int(variant2.Field0))
+		return "a " + strconv.Itoa(variant2.Field0)
 	default: // variant.X_respondNowALaterLater
 		return "later " + variant2.Later
 	}
@@ -139,7 +139,7 @@ func initializeMain_() []string {
 	for index, element := range replies {
 		mapped[index] = labels.Describe(element)
 	}
-	return array.Append(mapped, []string{show.ArrayInt([]int32{updated.X_respondNow, updated.X1st, updated.X, updated.X_, updated.Über}), updated.Content_type2 + " " + updated.Content_type, strconv.Itoa(len(replies))})
+	return array.Append(mapped, []string{show.ArrayInt([]int{updated.X_respondNow, updated.X1st, updated.X, updated.X_, updated.Über}), updated.Content_type2 + " " + updated.Content_type, strconv.Itoa(len(replies))})
 }
 
 func main() {
@@ -152,9 +152,9 @@ package shared
 type Odd struct {
 	Content_type2 string `purescript:"content-type"`
 	Content_type  string
-	X1st          int32 `purescript:"1st"`
-	X_            int32 `purescript:"X"`
-	X_respondNow  int32 `purescript:"_respondNow"`
-	X             int32
-	Über          int32
+	X1st          int `purescript:"1st"`
+	X_            int `purescript:"X"`
+	X_respondNow  int `purescript:"_respondNow"`
+	X             int
+	Über          int
 }

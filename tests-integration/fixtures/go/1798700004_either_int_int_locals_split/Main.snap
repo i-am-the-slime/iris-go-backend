@@ -5,7 +5,7 @@ source: tests-integration/src/fixtures.rs
 package either
 
 type Either struct {
-	Field0 int32
+	Field0 int
 	Tag    uint8
 }
 
@@ -16,7 +16,7 @@ const (
 
 type IntFailure struct {
 	Failed bool
-	Left   int32
+	Left   int
 }
 
 // main.go
@@ -32,28 +32,28 @@ func main() {
 	journal.Log("(Right 19)")
 	journal.Log("(Right 501)")
 	journal.Log("value 100")
-	i, err := sumUntilNegative([]int32{1, 2, 3})
+	i, err := sumUntilNegative([]int{1, 2, 3})
 	var result string
 	if err.Failed {
-		result = "(Left " + strconv.Itoa(int(err.Left)) + ")"
+		result = "(Left " + strconv.Itoa(err.Left) + ")"
 	} else {
-		result = "(Right " + strconv.Itoa(int(i)) + ")"
+		result = "(Right " + strconv.Itoa(i) + ")"
 	}
 	journal.Log(result)
-	i2, err := sumUntilNegative([]int32{1, -2, 3})
+	i2, err := sumUntilNegative([]int{1, -2, 3})
 	var result2 string
 	if err.Failed {
-		result2 = "(Left " + strconv.Itoa(int(err.Left)) + ")"
+		result2 = "(Left " + strconv.Itoa(err.Left) + ")"
 	} else {
-		result2 = "(Right " + strconv.Itoa(int(i2)) + ")"
+		result2 = "(Right " + strconv.Itoa(i2) + ")"
 	}
 	journal.Log(result2)
-	i3, err := sumUntilNegative([]int32{})
+	i3, err := sumUntilNegative([]int{})
 	var result3 string
 	if err.Failed {
-		result3 = "(Left " + strconv.Itoa(int(err.Left)) + ")"
+		result3 = "(Left " + strconv.Itoa(err.Left) + ")"
 	} else {
-		result3 = "(Right " + strconv.Itoa(int(i3)) + ")"
+		result3 = "(Right " + strconv.Itoa(i3) + ")"
 	}
 	journal.Log(result3)
 	journal.Log("(Right 103)")
@@ -61,8 +61,8 @@ func main() {
 	journal.Log("(Left 40)")
 }
 
-func sumUntilNegative(array []int32) (int32, either.IntFailure) {
-	var i int32 = 0
+func sumUntilNegative(array []int) (int, either.IntFailure) {
+	var i int = 0
 	var err either.IntFailure
 	for _, x := range array {
 		if err.Failed {

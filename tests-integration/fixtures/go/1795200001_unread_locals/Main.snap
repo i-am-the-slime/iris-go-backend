@@ -9,7 +9,7 @@ const TagNothing = 0
 const TagJust = 1
 
 type ArrayInt struct {
-	Just []int32
+	Just []int
 	Tag  uint8
 }
 
@@ -49,10 +49,10 @@ import (
 	"slices"
 )
 
-func main_() int32 {
+func main_() int {
 	prim.IntTrunc(0.5)
-	direct.DeleteAt(0, []int32{})
-	var counter int32 = 0
+	direct.DeleteAt(0, []int{})
+	counter := 0
 	counter += 1
 	sorted := slices.Clone([]rune{'b', 'a'})
 	slices.Sort(sorted)
@@ -60,8 +60,7 @@ func main_() int32 {
 }
 
 func main() {
-	exitStatus := main_()
-	os.Exit(int(exitStatus))
+	os.Exit(main_())
 }
 
 // shared/shared.go
@@ -72,8 +71,8 @@ type Ref[T any] struct {
 }
 
 type StateValue struct {
-	State int32
-	Value int32
+	State int
+	Value int
 }
 
 type Items struct {

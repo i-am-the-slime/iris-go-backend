@@ -47,7 +47,7 @@ const (
 
 type Either struct {
 	Left  ReadError
-	Right int32
+	Right int
 	Tag   uint8
 }
 
@@ -58,14 +58,14 @@ const (
 
 type Reader struct {
 	Name string
-	Read func(string) (int32, ReadErrorFailure)
+	Read func(string) (int, ReadErrorFailure)
 }
 
 type Parser struct {
 	Option Reader
 	Both0  *Parser
 	Both1  *Parser
-	Done   int32
+	Done   int
 	Tag    uint8
 }
 
@@ -80,7 +80,7 @@ type ReadErrorFailure struct {
 	Left   ReadError
 }
 
-func Done(done int32) *Parser {
+func Done(done int) *Parser {
 	return &Parser{Tag: ParserDone, Done: done}
 }
 

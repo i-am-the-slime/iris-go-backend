@@ -1,14 +1,14 @@
 package ffi
 
-type Counter struct{ Total int32 }
+type Counter struct{ Total int }
 
 var Zero = Counter{}
 
-func (counter *Counter) Bump() int32 {
+func (counter *Counter) Bump() int {
 	counter.Total++
 	return counter.Total
 }
 
-func Bumped(counter Counter) int32 { return counter.Bump() }
+func Bumped(counter Counter) int { return counter.Bump() }
 
-func Count(counter Counter) int32 { return counter.Total }
+func Count(counter Counter) int { return counter.Total }

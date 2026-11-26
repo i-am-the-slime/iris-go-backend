@@ -7,12 +7,12 @@ package main
 import "fixture/shared"
 
 func main() {
-	output := &shared.Ref[[]int32]{Value: []int32{}}
+	output := &shared.Ref[[]int]{Value: []int{}}
 	matches := []bool{true, false, true, true, false, true}
-	numbers := []int32{1, 5, 2, 7, 0}
-	var accumulatorBefore int32 = 0
-	var accumulatorMatches int32 = 0
-	var accumulatorTotal int32 = 0
+	numbers := []int{1, 5, 2, 7, 0}
+	accumulatorBefore := 0
+	accumulatorMatches := 0
+	accumulatorTotal := 0
 	for _, same := range matches {
 		if same {
 			accumulatorMatches += 1
@@ -33,7 +33,7 @@ func main() {
 			accumulator = shared.Bounds{Low: accumulator.Low - 1, High: accumulator.High + accumulator.Low*2}
 		}
 	}
-	output.Value = []int32{accumulatorTotal, accumulator.High}
+	output.Value = []int{accumulatorTotal, accumulator.High}
 }
 
 // shared/shared.go
@@ -44,12 +44,12 @@ type Ref[T any] struct {
 }
 
 type Run struct {
-	Before  int32
-	Matches int32
-	Total   int32
+	Before  int
+	Matches int
+	Total   int
 }
 
 type Bounds struct {
-	High int32
-	Low  int32
+	High int
+	Low  int
 }

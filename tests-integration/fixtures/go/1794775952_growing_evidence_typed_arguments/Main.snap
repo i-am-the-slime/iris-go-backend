@@ -13,11 +13,11 @@ func ShowBoolean(boolean bool) string {
 	return "false"
 }
 
-func ShowInt(i int32) string {
-	return strconv.Itoa(int(i))
+func ShowInt(i int) string {
+	return strconv.Itoa(i)
 }
 
-func AppendShowArrayInt(buffer []byte, array []int32) []byte {
+func AppendShowArrayInt(buffer []byte, array []int) []byte {
 	buffer = append(buffer, '[')
 	for index, element := range array {
 		if index > 0 {
@@ -63,10 +63,10 @@ var main_ = initializeMain_()
 func initializeMain_() []string {
 	return []string{describeShowDictionary(func(coerced any) string {
 		return datashow.ArrayBoolean(shared.Convert(coerced))
-	}, array.Append([]int32{}, []int32{2}), ">", 1, shared.Convert2([]bool{true}))}
+	}, array.Append([]int{}, []int{2}), ">", 1, shared.Convert2([]bool{true}))}
 }
 
-func describeShowDictionary(show func(any) string, depths []int32, label string, depth int32, value any) string {
+func describeShowDictionary(show func(any) string, depths []int, label string, depth int, value any) string {
 	depths = slices.Clip(depths)
 	labelBytes := []byte(label)
 	for {
@@ -82,7 +82,7 @@ func describeShowDictionary(show func(any) string, depths []int32, label string,
 			labelBytes = append(labelBytes, '>')
 			show, depths, depth, value = func(coerced any) string {
 				return prim.ShowArray(showCaptured, coerced.([]any))
-			}, array.Bounded(append(depths, depth)), depth-1, []any{value}
+			}, append(depths, depth), depth-1, []any{value}
 			continue
 		}
 	}

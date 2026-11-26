@@ -41,7 +41,7 @@ type SpaceValue struct {
 
 type KindSpaceAfterSpaceBeforeValue struct {
 	Value       string
-	Kind        int32
+	Kind        int
 	SpaceAfter  bool
 	SpaceBefore bool
 }

@@ -15,45 +15,45 @@ var main_ = initializeMain_()
 
 func initializeMain_() []string {
 	accumulator := []byte("start:")
-	for i := int32(1); i < 13; i++ {
+	for i := 1; i < 13; i++ {
 		accumulator = strconv.AppendInt(accumulator, int64(i), 10)
 	}
 	built := string(accumulator)
 	accumulator2 := []byte(nil)
-	for i := int32(1); i < 13; i++ {
+	for i := 1; i < 13; i++ {
 		accumulator2 = strconv.AppendInt(accumulator2, int64(i), 10)
 		accumulator2 = append(accumulator2, ',')
 	}
 	built2 := string(accumulator2)
 	accumulator3 := []byte(nil)
-	for i := int32(1); i < 6; i++ {
+	for i := 1; i < 6; i++ {
 		accumulator3 = append(accumulator3, '<')
 		accumulator3 = strconv.AppendInt(accumulator3, int64(i), 10)
 		accumulator3 = append(accumulator3, '>')
 	}
 	built3 := string(accumulator3)
 	accumulator4 := ""
-	for i := int32(1); i < 11; i++ {
+	for i := 1; i < 11; i++ {
 		if !(prim.CodeUnitLengthUpTo(6, accumulator4) > 5) {
-			accumulator4 += strconv.Itoa(int(i))
+			accumulator4 += strconv.Itoa(i)
 		}
 	}
 	accumulator5 := ""
-	for value := int32(1); value < 7; value++ {
-		accumulator5 = accumulator5 + strconv.Itoa(int(prim.CodeUnitLength(accumulator5))) + ","
+	for value := 1; value < 7; value++ {
+		accumulator5 = accumulator5 + strconv.Itoa(prim.CodeUnitLength(accumulator5)) + ","
 	}
 	accumulator6 := ""
-	for i := int32(1); i < 6; i++ {
-		accumulator6 = strconv.Itoa(int(i)) + accumulator6
+	for i := 1; i < 6; i++ {
+		accumulator6 = strconv.Itoa(i) + accumulator6
 	}
 	accumulator7 := ""
-	for i := int32(1); i < 5; i++ {
-		accumulator7 = "[" + accumulator7 + strconv.Itoa(int(i)) + "]"
+	for i := 1; i < 5; i++ {
+		accumulator7 = "[" + accumulator7 + strconv.Itoa(i) + "]"
 	}
-	return []string{built, mainGo(0, ""), strconv.Itoa(int(mainGo2(0, "x"))), built2, mainGo3(0, ""), built3, accumulator4, mainGo4(0, ""), accumulator5, accumulator6, accumulator7}
+	return []string{built, mainGo(0, ""), strconv.Itoa(mainGo2(0, "x")), built2, mainGo3(0, ""), built3, accumulator4, mainGo4(0, ""), accumulator5, accumulator6, accumulator7}
 }
 
-func mainGo(i int32, acc string) string {
+func mainGo(i int, acc string) string {
 	accBytes := []byte(acc)
 	for {
 		if i >= 10 {
@@ -68,7 +68,7 @@ func mainGo(i int32, acc string) string {
 	}
 }
 
-func mainGo2(i int32, acc string) int32 {
+func mainGo2(i int, acc string) int {
 	accBytes := []byte(acc)
 	for {
 		if i >= 5 {
@@ -79,7 +79,7 @@ func mainGo2(i int32, acc string) int32 {
 	}
 }
 
-func mainGo3(i int32, acc string) string {
+func mainGo3(i int, acc string) string {
 	accBytes := []byte(acc)
 	for {
 		if i >= 12 {
@@ -91,12 +91,12 @@ func mainGo3(i int32, acc string) string {
 	}
 }
 
-func mainGo4(i int32, acc string) string {
+func mainGo4(i int, acc string) string {
 	for {
 		if i >= 12 {
 			return acc
 		}
-		i, acc = i+1, acc+strconv.Itoa(int(prim.CodeUnitLength(acc)))
+		i, acc = i+1, acc+strconv.Itoa(prim.CodeUnitLength(acc))
 	}
 }
 

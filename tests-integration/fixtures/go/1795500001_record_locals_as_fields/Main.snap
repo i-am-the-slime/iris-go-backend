@@ -85,7 +85,7 @@ import "fixture/shared"
 
 type Tuple struct {
 	Second shared.Body
-	First  int32
+	First  int
 }
 
 // main.go
@@ -107,15 +107,13 @@ func initializeMain_() []string {
 	bodies := []shared.Body{{X: 0.0, Y: 0.0, Vx: 0.0, Vy: 0.0, Mass: 1.0}, {X: 1.0, Y: 2.0, Vx: 0.5, Vy: 0.0, Mass: 0.5}, {X: -1.0, Y: 0.5, Vx: 0.0, Vy: 0.25, Mass: 2.0}}
 	mapped := make([]shared.Body, len(bodies))
 	for index, body := range bodies {
-		i := int32(index)
 		accumulatorMass := body.Mass
 		accumulatorVx := body.Vx
 		accumulatorVy := body.Vy
 		accumulatorX := body.X
 		accumulatorY := body.Y
 		for index2, body2 := range bodies {
-			i2 := int32(index2)
-			if i != i2 {
+			if index != index2 {
 				accumulatorVx += (body2.X - accumulatorX) * body2.Mass
 				accumulatorVy += (body2.Y - accumulatorY) * body2.Mass
 			}
@@ -128,8 +126,8 @@ func initializeMain_() []string {
 		mapped[index].X = accumulatorX
 		mapped[index].Y = accumulatorY
 	}
-	record := tally([]int32{1, 2, 3, 4})
-	array := []int32{2, 3, 4}
+	record := tally([]int{1, 2, 3, 4})
+	array := []int{2, 3, 4}
 	accumulator := shared.Cells{Rows: 0, Cells: 0}
 	for _, width := range array {
 		updated := accumulator
@@ -143,24 +141,24 @@ func initializeMain_() []string {
 		accumulator = updated
 	}
 	accumulator2 := shared.Pair{Left: 1, Right: 2}
-	for i := int32(1); i < 6; i++ {
+	for i := 1; i < 6; i++ {
 		updated := accumulator2
 		updated.Left = accumulator2.Right + i
 		updated.Right = accumulator2.Left
 		accumulator2 = updated
 	}
-	return []string{show.ArrayBody(mapped), "{ count: " + strconv.Itoa(int(record.Count)) + ", label: " + prim.ShowString(record.Label) + ", seen: " + strconv.FormatBool(record.Seen) + ", total: " + strconv.Itoa(int(record.Total)) + " }", show.ArrayTally(arraypkg.Reverse([]shared.Tally{tally([]int32{5}), tally([]int32{1, 2, 3})})), "{ cells: " + strconv.Itoa(int(accumulator.Cells)) + ", rows: " + strconv.Itoa(int(accumulator.Rows)) + " }", "{ left: " + strconv.Itoa(int(accumulator2.Left)) + ", right: " + strconv.Itoa(int(accumulator2.Right)) + " }"}
+	return []string{show.ArrayBody(mapped), "{ count: " + strconv.Itoa(record.Count) + ", label: " + prim.ShowString(record.Label) + ", seen: " + strconv.FormatBool(record.Seen) + ", total: " + strconv.Itoa(record.Total) + " }", show.ArrayTally(arraypkg.Reverse([]shared.Tally{tally([]int{5}), tally([]int{1, 2, 3})})), "{ cells: " + strconv.Itoa(accumulator.Cells) + ", rows: " + strconv.Itoa(accumulator.Rows) + " }", "{ left: " + strconv.Itoa(accumulator2.Left) + ", right: " + strconv.Itoa(accumulator2.Right) + " }"}
 }
 
-func tally(array []int32) shared.Tally {
+func tally(array []int) shared.Tally {
 	accumulatorLabel := ""
-	var accumulatorCount int32 = 0
-	var accumulatorTotal int32 = 0
+	accumulatorCount := 0
+	accumulatorTotal := 0
 	accumulatorSeen := false
 	for _, n := range array {
 		accumulatorCount += 1
 		accumulatorTotal += n
-		accumulatorLabel += strconv.Itoa(int(n))
+		accumulatorLabel += strconv.Itoa(n)
 		accumulatorSeen = accumulatorSeen || n > 2
 	}
 	return shared.Tally{Label: accumulatorLabel, Count: accumulatorCount, Total: accumulatorTotal, Seen: accumulatorSeen}
@@ -183,17 +181,17 @@ type Body struct {
 
 type Tally struct {
 	Label string
-	Count int32
-	Total int32
+	Count int
+	Total int
 	Seen  bool
 }
 
 type Cells struct {
-	Cells int32
-	Rows  int32
+	Cells int
+	Rows  int
 }
 
 type Pair struct {
-	Left  int32
-	Right int32
+	Left  int
+	Right int
 }

@@ -14,7 +14,7 @@ type Never any
 
 type Step struct {
 	Impossible Never
-	Done       int32
+	Done       int
 	Tag        uint8
 }
 
@@ -23,21 +23,21 @@ const (
 	StepImpossible
 )
 
-func Done(done int32) *Step {
+func Done(done int) *Step {
 	return &Step{Tag: StepDone, Done: done}
 }
 
 var main_ = initializeMain_()
 
-func initializeMain_() []int32 {
-	mapped := make([]int32, len(steps))
+func initializeMain_() []int {
+	mapped := make([]int, len(steps))
 	for index, element := range steps {
 		mapped[index] = value(element)
 	}
 	return mapped
 }
 
-func value(step *Step) int32 {
+func value(step *Step) int {
 	switch step.Tag {
 	case StepDone:
 		return step.Done
@@ -48,7 +48,7 @@ func value(step *Step) int32 {
 
 var steps []*Step = []*Step{Done(7), Done(8)}
 
-func absurd(never Never) int32 {
+func absurd(never Never) int {
 	for {
 	}
 }

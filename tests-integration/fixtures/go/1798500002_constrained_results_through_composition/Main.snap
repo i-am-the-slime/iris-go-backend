@@ -4,9 +4,18 @@ source: tests-integration/src/fixtures.rs
 // Data/Maybe/maybe.go
 package maybe
 
-type Int int64
+const TagNothing = 0
 
-const NoInt Int = 1 << 32
+const TagJust = 1
+
+type Int struct {
+	Just int
+	Tag  uint8
+}
+
+func JustInt(just int) Int {
+	return Int{Tag: TagJust, Just: just}
+}
 
 // main.go
 package main
@@ -17,11 +26,12 @@ import (
 )
 
 func main_() []string {
-	constant := maybe.Int(20)
+	constant := maybe.JustInt(20)
 	var result string
-	if constant != maybe.NoInt {
-		result = "(Just " + strconv.Itoa(int(int32(constant))) + ")"
-	} else {
+	switch constant.Tag {
+	case maybe.TagJust:
+		result = "(Just " + strconv.Itoa(constant.Just) + ")"
+	default: // maybe.TagNothing
 		result = "Nothing"
 	}
 	return []string{"(Just 20)", "Nothing", "(Just 10)", result}

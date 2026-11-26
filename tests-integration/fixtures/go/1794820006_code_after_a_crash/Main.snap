@@ -9,15 +9,15 @@ import (
 	"os"
 )
 
-func main_() int32 {
-	var count int32 = 1
+func main_() int {
+	count := 1
 	seen := count
 	s_ := count + 1
 	count = s_
 	if seen > 5 {
 		panic(exception.NewError("too many"))
 	}
-	var result int32
+	var result int
 	if seen > 100 {
 		panic("too large")
 	} else {
@@ -27,8 +27,7 @@ func main_() int32 {
 }
 
 func main() {
-	exitStatus := main_()
-	os.Exit(int(exitStatus))
+	os.Exit(main_())
 }
 
 // shared/shared.go
@@ -39,6 +38,6 @@ type Ref[T any] struct {
 }
 
 type StateValue struct {
-	State int32
-	Value int32
+	State int
+	Value int
 }

@@ -14,43 +14,43 @@ import (
 type Tree struct {
 	Node0 *Tree
 	Node2 *Tree
-	Node1 int32
+	Node1 int
 }
 
 var sharedTreeLeaf = &Tree{}
 
-func Node(node0 *Tree, node1 int32, node2 *Tree) *Tree {
+func Node(node0 *Tree, node1 int, node2 *Tree) *Tree {
 	return &Tree{Node0: node0, Node1: node1, Node2: node2}
 }
 
 var main_ = initializeMain_()
 
-func initializeMain_() []int32 {
+func initializeMain_() []int {
 	full := fullTreeIsBuiltFromOneChunk(4)
 	argument := total(full)
-	return []int32{argument, total(inspectedResultIsNotChunked(4)), total(insertCopiesItsPathCellByCell(5, full)), total(full)}
+	return []int{argument, total(inspectedResultIsNotChunked(4)), total(insertCopiesItsPathCellByCell(5, full)), total(full)}
 }
 
-func fullTreeIsBuiltFromOneChunk(depth int32) *Tree {
+func fullTreeIsBuiltFromOneChunk(depth int) *Tree {
 	var cells alloc.Cells[Tree]
 	return fullTreeIsBuiltFromOneChunkChunked(depth, &cells)
 }
 
-func fullTreeIsBuiltFromOneChunkChunked(depth int32, cells *alloc.Cells[Tree]) *Tree {
+func fullTreeIsBuiltFromOneChunkChunked(depth int, cells *alloc.Cells[Tree]) *Tree {
 	if depth == 0 {
 		return sharedTreeLeaf
 	}
 	return cells.New(Tree{Node0: fullTreeIsBuiltFromOneChunkChunked(depth-1, cells), Node1: depth, Node2: fullTreeIsBuiltFromOneChunkChunked(depth-1, cells)})
 }
 
-func total(value *Tree) int32 {
+func total(value *Tree) int {
 	if value == sharedTreeLeaf {
 		return 0
 	}
 	return total(value.Node0) + value.Node1 + total(value.Node2)
 }
 
-func inspectedResultIsNotChunked(depth int32) *Tree {
+func inspectedResultIsNotChunked(depth int) *Tree {
 	if depth == 0 {
 		return sharedTreeLeaf
 	}
@@ -63,7 +63,7 @@ func inspectedResultIsNotChunked(depth int32) *Tree {
 	return Node(sharedTreeLeaf, depth, sharedTreeLeaf)
 }
 
-func insertCopiesItsPathCellByCell(value int32, value2 *Tree) *Tree {
+func insertCopiesItsPathCellByCell(value int, value2 *Tree) *Tree {
 	if value2 == sharedTreeLeaf {
 		return Node(sharedTreeLeaf, value, sharedTreeLeaf)
 	}

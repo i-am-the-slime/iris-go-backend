@@ -6,7 +6,7 @@ package either
 
 type Either struct {
 	Left  string
-	Right []int32
+	Right []int
 	Tag   uint8
 }
 
@@ -15,7 +15,7 @@ const (
 	EitherRight
 )
 
-func Right(right []int32) Either {
+func Right(right []int) Either {
 	return Either{Tag: EitherRight, Right: right}
 }
 
@@ -28,15 +28,14 @@ package traversable
 
 import (
 	"fixture/Data/Either"
-	"github.com/i-am-the-slime/iris-go/array"
 	"slices"
 	"strconv"
 )
 
-func TraversePositive(array2 []int32) either.Either {
-	accumulator := either.Right([]int32{})
+func TraversePositive(array []int) either.Either {
+	accumulator := either.Right([]int{})
 	accumulator.Right = slices.Clip(accumulator.Right)
-	for _, element := range array2 {
+	for _, element := range array {
 		if accumulator.Tag == either.EitherLeft {
 			break
 		}
@@ -45,9 +44,9 @@ func TraversePositive(array2 []int32) either.Either {
 			accumulator = either.Left(accumulator.Left)
 		default: // either.EitherRight
 			if element > 0 {
-				accumulator = either.Right(array.Bounded(append(accumulator.Right, element)))
+				accumulator = either.Right(append(accumulator.Right, element))
 			} else {
-				accumulator = either.Left("not positive: " + strconv.Itoa(int(element)))
+				accumulator = either.Left("not positive: " + strconv.Itoa(element))
 			}
 		}
 	}
@@ -65,7 +64,7 @@ import (
 var main_ = initializeMain_()
 
 func initializeMain_() []either.Either {
-	return []either.Either{traversable.TraversePositive([]int32{1, 2, 3}), traversable.TraversePositive([]int32{1, -2, 3})}
+	return []either.Either{traversable.TraversePositive([]int{1, 2, 3}), traversable.TraversePositive([]int{1, -2, 3})}
 }
 
 func main() {

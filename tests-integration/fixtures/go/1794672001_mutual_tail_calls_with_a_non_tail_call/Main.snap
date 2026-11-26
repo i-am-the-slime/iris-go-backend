@@ -15,7 +15,7 @@ func initializeMain_() shared.MainResult {
 	return shared.MainResult{Depth: depth(0, 30), Letters: a(7, "")}
 }
 
-func depthOrBranch(step int, acc int32, n int32) int32 {
+func depthOrBranch(step int, acc int, n int) int {
 	for {
 		switch step {
 		case shared.DepthStep:
@@ -33,11 +33,11 @@ func depthOrBranch(step int, acc int32, n int32) int32 {
 	}
 }
 
-func depth(acc int32, n int32) int32 {
+func depth(acc int, n int) int {
 	return depthOrBranch(shared.DepthStep, acc, n)
 }
 
-func aGroup(step int, n int32, s string) string {
+func aGroup(step int, n int, s string) string {
 	for {
 		switch step {
 		case shared.AStep:
@@ -49,14 +49,14 @@ func aGroup(step int, n int32, s string) string {
 			if n <= 0 {
 				return s
 			}
-			step, s, n = shared.CStep, strconv.Itoa(int(n)), n-1
+			step, s, n = shared.CStep, strconv.Itoa(n), n-1
 		default: // shared.CStep
 			step, s = shared.AStep, s+"c"
 		}
 	}
 }
 
-func a(n int32, s string) string {
+func a(n int, s string) string {
 	return aGroup(shared.AStep, n, s)
 }
 
@@ -69,7 +69,7 @@ package shared
 
 type MainResult struct {
 	Letters string
-	Depth   int32
+	Depth   int
 }
 
 const (

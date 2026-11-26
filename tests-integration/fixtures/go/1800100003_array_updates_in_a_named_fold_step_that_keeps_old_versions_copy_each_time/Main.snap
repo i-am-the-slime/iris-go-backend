@@ -6,11 +6,11 @@ package show
 
 import "strconv"
 
-func Show(i int32) string {
-	return strconv.Itoa(int(i))
+func Show(i int) string {
+	return strconv.Itoa(i)
 }
 
-func AppendShowArrayArrayInt(buffer []byte, array [][]int32) []byte {
+func AppendShowArrayArrayInt(buffer []byte, array [][]int) []byte {
 	buffer = append(buffer, '[')
 	for index, element := range array {
 		if index > 0 {
@@ -22,7 +22,7 @@ func AppendShowArrayArrayInt(buffer []byte, array [][]int32) []byte {
 	return buffer
 }
 
-func AppendShowArrayInt(buffer []byte, array []int32) []byte {
+func AppendShowArrayInt(buffer []byte, array []int) []byte {
 	buffer = append(buffer, '[')
 	for index, element := range array {
 		if index > 0 {
@@ -34,7 +34,7 @@ func AppendShowArrayInt(buffer []byte, array []int32) []byte {
 	return buffer
 }
 
-func ArrayInt(array []int32) string {
+func ArrayInt(array []int) string {
 	return string(AppendShowArrayInt(nil, array))
 }
 
@@ -42,8 +42,8 @@ func ArrayInt(array []int32) string {
 package tuple
 
 type Tuple struct {
-	First  []int32
-	Second [][]int32
+	First  []int
+	Second [][]int
 }
 
 // main.go
@@ -61,10 +61,10 @@ import (
 var main_ = initializeMain_()
 
 func initializeMain_() []string {
-	shared := array.Replicate(4, int32(0))
-	accumulator := tuple.Tuple{First: shared, Second: [][]int32{}}
+	shared := array.Replicate(4, 0)
+	accumulator := tuple.Tuple{First: shared, Second: [][]int{}}
 	accumulator.Second = slices.Clip(accumulator.Second)
-	for element := int32(0); element < 3; element++ {
+	for element := 0; element < 3; element++ {
 		accumulator = rememberedOwning(accumulator, element)
 	}
 	text := []byte("(Tuple ")
@@ -75,10 +75,10 @@ func initializeMain_() []string {
 	return []string{string(text), show.ArrayInt(shared)}
 }
 
-func remembered(tuple2 tuple.Tuple, position int32) tuple.Tuple {
+func remembered(tuple2 tuple.Tuple, position int) tuple.Tuple {
 	current := tuple2.First
-	var result []int32
-	if position >= 0 && position < int32(len(current)) {
+	var result []int
+	if position >= 0 && position < len(current) {
 		updated := slices.Clone(current)
 		updated[position] = 7
 		result = updated
@@ -88,17 +88,17 @@ func remembered(tuple2 tuple.Tuple, position int32) tuple.Tuple {
 	return tuple.Tuple{First: result, Second: array.Snoc(tuple2.Second, current)}
 }
 
-func rememberedOwning(tuple2 tuple.Tuple, position int32) tuple.Tuple {
+func rememberedOwning(tuple2 tuple.Tuple, position int) tuple.Tuple {
 	current := tuple2.First
-	var result []int32
-	if position < int32(len(current)) {
+	var result []int
+	if position < len(current) {
 		updated := slices.Clone(current)
 		updated[position] = 7
 		result = updated
 	} else {
 		result = current
 	}
-	return tuple.Tuple{First: result, Second: array.Bounded(append(tuple2.Second, current))}
+	return tuple.Tuple{First: result, Second: append(tuple2.Second, current)}
 }
 
 func main() {

@@ -6,9 +6,20 @@ package maybe
 
 import "strconv"
 
-type Int int64
+const TagNothing = 0
 
-const NoInt Int = 1 << 32
+const TagJust = 1
+
+type Int struct {
+	Just int
+	Tag  uint8
+}
+
+var NoInt = Int{Tag: TagNothing}
+
+func JustInt(just int) Int {
+	return Int{Tag: TagJust, Just: just}
+}
 
 func Show(maybe Int) string {
 	return string(AppendShow(nil, maybe))
@@ -27,11 +38,12 @@ func AppendShowArrayMaybeInt(buffer []byte, array []Int) []byte {
 }
 
 func AppendShow(buffer []byte, maybe Int) []byte {
-	if maybe != NoInt {
+	switch maybe.Tag {
+	case TagJust:
 		buffer = append(buffer, "(Just "...)
-		buffer = strconv.AppendInt(buffer, int64(int32(maybe)), 10)
+		buffer = strconv.AppendInt(buffer, int64(maybe.Just), 10)
 		buffer = append(buffer, ')')
-	} else {
+	default: // TagNothing
 		buffer = append(buffer, "Nothing"...)
 	}
 	return buffer
@@ -46,11 +58,11 @@ package show
 
 import "strconv"
 
-func Show(i int32) string {
-	return strconv.Itoa(int(i))
+func Show(i int) string {
+	return strconv.Itoa(i)
 }
 
-func AppendShowArrayInt(buffer []byte, array []int32) []byte {
+func AppendShowArrayInt(buffer []byte, array []int) []byte {
 	buffer = append(buffer, '[')
 	for index, element := range array {
 		if index > 0 {
@@ -62,7 +74,7 @@ func AppendShowArrayInt(buffer []byte, array []int32) []byte {
 	return buffer
 }
 
-func ArrayInt(array []int32) string {
+func ArrayInt(array []int) string {
 	return string(AppendShowArrayInt(nil, array))
 }
 
@@ -78,42 +90,42 @@ import (
 )
 
 func main_() []string {
-	commands := []int32{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 2, 9, 8, 3, 3, 10, 1, 0, 7, 7, 5, 6, 4, 11, 2, 8}
-	return array.Append(stepR(commands, 0, 1, 2, 3, 4, "s", "t", "u", maybe.NoInt, maybe.NoInt, []int32{}, []int32{}, 0, "start", 10, 20, 30, "p", "q", false, 0, 7, 8), stepR(commands, 0, 5, 2, 3, int32(len(commands)), "s", "t", "v", maybe.Int(1), maybe.NoInt, []int32{9}, []int32{}, 1, "shifted", 10, 20, 30, "p", "q", true, 0, 7, 8))
+	commands := []int{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 2, 9, 8, 3, 3, 10, 1, 0, 7, 7, 5, 6, 4, 11, 2, 8}
+	return array.Append(stepR(commands, 0, 1, 2, 3, 4, "s", "t", "u", maybe.NoInt, maybe.NoInt, []int{}, []int{}, 0, "start", 10, 20, 30, "p", "q", false, 0, 7, 8), stepR(commands, 0, 5, 2, 3, len(commands), "s", "t", "v", maybe.JustInt(1), maybe.NoInt, []int{9}, []int{}, 1, "shifted", 10, 20, 30, "p", "q", true, 0, 7, 8))
 }
 
-func stepR(commands []int32, i int32, a int32, b int32, c int32, d int32, s string, t string, u string, m maybe.Int, n maybe.Int, xs []int32, ys []int32, count int32, label string, e int32, f int32, g int32, p string, q string, flag bool, k int32, h int32, w int32) []string {
+func stepR(commands []int, i int, a int, b int, c int, d int, s string, t string, u string, m maybe.Int, n maybe.Int, xs []int, ys []int, count int, label string, e int, f int, g int, p string, q string, flag bool, k int, h int, w int) []string {
 	labelBytes := []byte(label)
 	state := struct {
-		a     int32
-		b     int32
-		c     int32
-		d     int32
+		a     int
+		b     int
+		c     int
+		d     int
 		sǂ    string
 		t     string
 		u     string
 		m     maybe.Int
 		n     maybe.Int
-		xs    []int32
-		ys    []int32
-		count int32
-		e     int32
-		f     int32
-		g     int32
+		xs    []int
+		ys    []int
+		count int
+		e     int
+		f     int
+		g     int
 		p     string
 		q     string
 		flag  bool
-		k     int32
-		h     int32
-		w     int32
+		k     int
+		h     int
+		w     int
 	}{a: a, b: 2, c: 3, d: d, sǂ: "s", t: "t", u: u, m: m, n: n, xs: xs, ys: ys, count: count, e: 10, f: 20, g: 30, p: "p", q: "q", flag: flag, k: 0, h: 7, w: 8}
 	for {
-		if i >= int32(len(commands)) {
+		if i >= len(commands) {
 			text := show.AppendShowArrayInt(nil, state.xs)
 			text = show.AppendShowArrayInt(text, state.ys)
-			return []string{show.ArrayInt([]int32{state.a, state.b, state.c, state.d, state.e, state.f, state.g, state.k, state.h, state.w}), state.sǂ + "|" + state.t + "|" + state.u + "|" + state.p + "|" + state.q, maybe.ArrayMaybeInt([]maybe.Int{state.m, state.n}), string(text), strconv.Itoa(int(state.count)) + string(labelBytes), strconv.FormatBool(state.flag)}
+			return []string{show.ArrayInt([]int{state.a, state.b, state.c, state.d, state.e, state.f, state.g, state.k, state.h, state.w}), state.sǂ + "|" + state.t + "|" + state.u + "|" + state.p + "|" + state.q, maybe.ArrayMaybeInt([]maybe.Int{state.m, state.n}), string(text), strconv.Itoa(state.count) + string(labelBytes), strconv.FormatBool(state.flag)}
 		}
-		var result int32
+		var result int
 		result = commands[i]
 		intMod := prim.IntModPositive(result, 12)
 		switch intMod {
@@ -124,7 +136,7 @@ func stepR(commands []int32, i int32, a int32, b int32, c int32, d int32, s stri
 			i, state.sǂ, state.t = i+1, prim.Append(state.sǂ, state.t), state.sǂ
 			continue
 		case 2:
-			i, state.m, state.n = i+1, maybe.Int(state.a+state.b), state.m
+			i, state.m, state.n = i+1, maybe.JustInt(state.a+state.b), state.m
 			continue
 		case 3:
 			i, state.xs, state.ys = i+1, array.Snoc(state.xs, state.c), state.xs
@@ -143,11 +155,12 @@ func stepR(commands []int32, i int32, a int32, b int32, c int32, d int32, s stri
 			i, state.c, state.d = i+1, state.c+state.d, state.c
 			continue
 		case 8:
-			var result2 int32
-			if state.n == maybe.NoInt {
+			var result2 int
+			switch state.n.Tag {
+			case maybe.TagNothing:
 				result2 = 0
-			} else {
-				result2 = int32(state.n)
+			default: // maybe.TagJust
+				result2 = state.n.Just
 			}
 			i, state.u, state.k = i+1, prim.Append(state.u, state.p), state.k+result2
 			continue

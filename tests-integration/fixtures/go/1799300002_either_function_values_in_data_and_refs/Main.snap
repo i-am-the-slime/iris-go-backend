@@ -6,7 +6,7 @@ package either
 
 type Either struct {
 	Left  string
-	Right int32
+	Right int
 	Tag   uint8
 }
 
@@ -31,7 +31,7 @@ import (
 )
 
 type Step struct {
-	Emit int32
+	Emit int
 	Tag  uint8
 }
 
@@ -56,12 +56,12 @@ type Source struct {
 	Pull func(struct{}) (Step, either.StringFailure)
 }
 
-func Emit(emit int32) Step {
+func Emit(emit int) Step {
 	return Step{Tag: StepEmit, Emit: emit}
 }
 
 func main() {
-	var next int32 = 0
+	next := 0
 	short := taking(4, Source{Name: "counter 10", Pull: func(_ struct{}) (Step, either.StringFailure) {
 		i := next
 		next = i + 1
@@ -75,10 +75,10 @@ func main() {
 	if err.Failed {
 		result = "(Left " + prim.ShowString(err.Left) + ")"
 	} else {
-		result = "(Right " + strconv.Itoa(int(i2)) + ")"
+		result = "(Right " + strconv.Itoa(i2) + ")"
 	}
 	journal.Log(short.Name + ": " + result)
-	var next2 int32 = 0
+	next2 := 0
 	long := taking(10, Source{Name: "counter 3", Pull: func(_ struct{}) (Step, either.StringFailure) {
 		i := next2
 		next2 = i + 1
@@ -92,15 +92,15 @@ func main() {
 	if err.Failed {
 		result2 = "(Left " + prim.ShowString(err.Left) + ")"
 	} else {
-		result2 = "(Right " + strconv.Itoa(int(i3)) + ")"
+		result2 = "(Right " + strconv.Itoa(i3) + ")"
 	}
 	journal.Log(long.Name + ": " + result2)
 }
 
-func taking(n int32, upstream Source) Source {
+func taking(n int, upstream Source) Source {
 	left := n
 	current := upstream.Pull
-	return Source{Name: upstream.Name + " taking " + strconv.Itoa(int(n)), Pull: func(_ struct{}) (Step, either.StringFailure) {
+	return Source{Name: upstream.Name + " taking " + strconv.Itoa(n), Pull: func(_ struct{}) (Step, either.StringFailure) {
 		i := left
 		if i <= 0 {
 			return Step{Tag: StepDone}, either.StringFailure{}
@@ -114,7 +114,7 @@ func taking(n int32, upstream Source) Source {
 	}}
 }
 
-func mainGo(short Source, total int32) (int32, either.StringFailure) {
+func mainGo(short Source, total int) (int, either.StringFailure) {
 	for {
 		step, err := short.Pull(struct{}{})
 		if err.Failed {

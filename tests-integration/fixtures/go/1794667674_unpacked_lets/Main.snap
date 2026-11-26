@@ -4,13 +4,18 @@ source: tests-integration/src/fixtures.rs
 // Data/Maybe/maybe.go
 package maybe
 
-type Int int64
-
-const NoInt Int = 1 << 32
-
 const TagNothing = 0
 
 const TagJust = 1
+
+type Int struct {
+	Just int
+	Tag  uint8
+}
+
+func JustInt(just int) Int {
+	return Int{Tag: TagJust, Just: just}
+}
 
 type MaybeInt struct {
 	Just Int
@@ -34,7 +39,7 @@ import (
 
 var main_ = initializeMain_()
 
-func initializeMain_() []int32 {
+func initializeMain_() []int {
 	boxWidth := opaque(3)
 	point := shared.XY{X: opaque(5), Y: opaque(5)}
 	var result shared.XY
@@ -43,10 +48,10 @@ func initializeMain_() []int32 {
 	} else {
 		result = shared.XY{X: 0, Y: point.Y}
 	}
-	found := maybe.JustMaybeInt(maybe.Int(opaque(6)))
-	var result2 int32
-	if found.Tag == maybe.TagJust && found.Just != maybe.NoInt {
-		result2 = int32(found.Just)
+	found := maybe.JustMaybeInt(maybe.JustInt(opaque(6)))
+	var result2 int
+	if found.Tag == maybe.TagJust && found.Just.Tag == maybe.TagJust {
+		result2 = found.Just.Just
 	} else {
 		switch found.Tag {
 		case maybe.TagJust:
@@ -55,10 +60,10 @@ func initializeMain_() []int32 {
 			result2 = 0
 		}
 	}
-	return []int32{boxWidth*opaque(4) + boxWidth, opaque(4) * opaque(6), result.Y, result2}
+	return []int{boxWidth*opaque(4) + boxWidth, opaque(4) * opaque(6), result.Y, result2}
 }
 
-func opaque(x int32) int32 {
+func opaque(x int) int {
 	for {
 		if x == 12345 {
 			continue
@@ -79,6 +84,6 @@ func main() {
 package shared
 
 type XY struct {
-	X int32
-	Y int32
+	X int
+	Y int
 }

@@ -1,6 +1,5 @@
 ---
 source: tests-integration/src/fixtures.rs
-assertion_line: 571
 ---
 // main.go
 package main
@@ -12,11 +11,11 @@ import (
 )
 
 func main() {
-	journal.Log(strconv.Itoa(int(mainGo(0, array.RangeInt32(1, 1000)))))
-	journal.Log(strconv.Itoa(int(mainGo2(0, []int32{3, 1, 4, 1, 5}))))
+	journal.Log(strconv.Itoa(mainGo(0, array.Range(1, 1000))))
+	journal.Log(strconv.Itoa(mainGo2(0, []int{3, 1, 4, 1, 5})))
 }
 
-func mainGo(total int32, rest []int32) int32 {
+func mainGo(total int, rest []int) int {
 	for {
 		if len(rest) == 0 {
 			return total
@@ -25,14 +24,14 @@ func mainGo(total int32, rest []int32) int32 {
 	}
 }
 
-func mainGo2(weighted int32, rest []int32) int32 {
+func mainGo2(weighted int, rest []int) int {
 	for {
 		if len(rest) == 0 {
 			return weighted
 		}
-		index := int32(len(rest)) - 1
+		index := len(rest) - 1
 		if index >= 0 {
-			weighted, rest = weighted*10+rest[index], array.Slice(0, int32(len(rest))-1, rest)
+			weighted, rest = weighted*10+rest[index], array.Slice(0, len(rest)-1, rest)
 			continue
 		}
 		return weighted

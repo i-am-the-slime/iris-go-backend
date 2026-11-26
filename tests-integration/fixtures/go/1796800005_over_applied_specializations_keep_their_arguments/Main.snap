@@ -4,7 +4,7 @@ source: tests-integration/src/fixtures.rs
 // Control/Category/category.go
 package category
 
-func Identity(x int32) int32 {
+func Identity(x int) int {
 	return x
 }
 
@@ -21,52 +21,52 @@ import (
 
 var main_ = initializeMain_()
 
-func initializeMain_() []int32 {
-	mapped := make([]int32, len(partiallyApplied))
+func initializeMain_() []int {
+	mapped := make([]int, len(partiallyApplied))
 	for index, f := range partiallyApplied {
 		mapped[index] = f(1)
 	}
-	mapped2 := make([]int32, len(onlyTheFunction))
+	mapped2 := make([]int, len(onlyTheFunction))
 	for index, f := range onlyTheFunction {
 		mapped2[index] = f(3)(1)
 	}
-	return array.Append([]int32{composeTimesDouble(5)(1), composeTimesDouble(3)(7), composeTimesF2(4)(0)}, array.Append(mapped, mapped2))
+	return array.Append([]int{composeTimesDouble(5)(1), composeTimesDouble(3)(7), composeTimesF2(4)(0)}, array.Append(mapped, mapped2))
 }
 
 var partiallyApplied = initializePartiallyApplied()
 
-func initializePartiallyApplied() []func(int32) int32 {
-	return []func(int32) int32{composeTimesDouble(2), composeTimesF(2)}
+func initializePartiallyApplied() []func(int) int {
+	return []func(int) int{composeTimesDouble(2), composeTimesF(2)}
 }
 
-var onlyTheFunction []func(int32) func(int32) int32 = []func(int32) func(int32) int32{composeTimesDouble, composeTimesF}
+var onlyTheFunction []func(int) func(int) int = []func(int) func(int) int{composeTimesDouble, composeTimesF}
 
-func composeTimesDouble(n int32) func(int32) int32 {
+func composeTimesDouble(n int) func(int) int {
 	if n <= 0 {
 		return category.Identity
 	}
 	g := composeTimesDouble(n - 1)
-	return func(x int32) int32 {
+	return func(x int) int {
 		return g(x) * 2
 	}
 }
 
-func composeTimesF(n int32) func(int32) int32 {
+func composeTimesF(n int) func(int) int {
 	if n <= 0 {
 		return category.Identity
 	}
 	g := composeTimesF(n - 1)
-	return func(x int32) int32 {
+	return func(x int) int {
 		return g(x) + 3
 	}
 }
 
-func composeTimesF2(n int32) func(int32) int32 {
+func composeTimesF2(n int) func(int) int {
 	if n <= 0 {
 		return category.Identity
 	}
 	g := composeTimesF2(n - 1)
-	return func(x int32) int32 {
+	return func(x int) int {
 		return g(x) + 1
 	}
 }

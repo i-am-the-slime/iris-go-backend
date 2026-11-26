@@ -18,7 +18,7 @@ func initializeMain_() []string {
 	union := shared.AZ{A: 1, Z: 'z'}
 	record := shared.Defaults{A: "shadowed", Z: 'y'}
 	record2 := shared.ABZ{A: "shadowed", Z: 'z', B: true}
-	return []string{strconv.Itoa(int(union.A)) + " " + prim.ShowChar(union.Z), "{ a: " + strconv.Itoa(int(built.A)) + ", z: " + prim.ShowChar(built.Z) + " }", "{ a: " + strconv.Itoa(int(merged.A)) + ", z: " + prim.ShowChar(merged.Z) + " }", "{ a: " + prim.ShowString(flipped.A) + ", z: " + prim.ShowChar(flipped.Z) + " }", "{ a: " + prim.ShowString(record.A) + ", z: " + prim.ShowChar(record.Z) + " }", "{ a: " + prim.ShowString(record2.A) + ", b: " + strconv.FormatBool(record2.B) + ", z: " + prim.ShowChar(record2.Z) + " }"}
+	return []string{strconv.Itoa(union.A) + " " + prim.ShowChar(union.Z), "{ a: " + strconv.Itoa(built.A) + ", z: " + prim.ShowChar(built.Z) + " }", "{ a: " + strconv.Itoa(merged.A) + ", z: " + prim.ShowChar(merged.Z) + " }", "{ a: " + prim.ShowString(flipped.A) + ", z: " + prim.ShowChar(flipped.Z) + " }", "{ a: " + prim.ShowString(record.A) + ", z: " + prim.ShowChar(record.Z) + " }", "{ a: " + prim.ShowString(record2.A) + ", b: " + strconv.FormatBool(record2.B) + ", z: " + prim.ShowChar(record2.Z) + " }"}
 }
 
 var built shared.AZ = shared.AZ{A: 2, Z: 'z'}
@@ -35,7 +35,7 @@ func main() {
 package shared
 
 type AZ struct {
-	A int32
+	A int
 	Z rune
 }
 

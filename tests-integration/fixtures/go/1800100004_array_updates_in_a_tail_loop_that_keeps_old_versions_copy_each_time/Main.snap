@@ -6,11 +6,11 @@ package show
 
 import "strconv"
 
-func Show(i int32) string {
-	return strconv.Itoa(int(i))
+func Show(i int) string {
+	return strconv.Itoa(i)
 }
 
-func AppendShowArrayInt(buffer []byte, array []int32) []byte {
+func AppendShowArrayInt(buffer []byte, array []int) []byte {
 	buffer = append(buffer, '[')
 	for index, element := range array {
 		if index > 0 {
@@ -22,7 +22,7 @@ func AppendShowArrayInt(buffer []byte, array []int32) []byte {
 	return buffer
 }
 
-func AppendShowArrayArrayInt(buffer []byte, array [][]int32) []byte {
+func AppendShowArrayArrayInt(buffer []byte, array [][]int) []byte {
 	buffer = append(buffer, '[')
 	for index, element := range array {
 		if index > 0 {
@@ -34,11 +34,11 @@ func AppendShowArrayArrayInt(buffer []byte, array [][]int32) []byte {
 	return buffer
 }
 
-func ArrayInt(array []int32) string {
+func ArrayInt(array []int) string {
 	return string(AppendShowArrayInt(nil, array))
 }
 
-func ArrayArrayInt(array [][]int32) string {
+func ArrayArrayInt(array [][]int) string {
 	return string(AppendShowArrayArrayInt(nil, array))
 }
 
@@ -56,21 +56,21 @@ import (
 var main_ = initializeMain_()
 
 func initializeMain_() []string {
-	shared := array.Replicate(3, int32(0))
-	return []string{show.ArrayArrayInt(versions(0, shared, [][]int32{})), show.ArrayInt(shared)}
+	shared := array.Replicate(3, 0)
+	return []string{show.ArrayArrayInt(versions(0, shared, [][]int{})), show.ArrayInt(shared)}
 }
 
-func versions(position int32, values []int32, history [][]int32) [][]int32 {
+func versions(position int, values []int, history [][]int) [][]int {
 	history = slices.Clip(history)
 	for {
-		if position >= int32(len(values)) {
+		if position >= len(values) {
 			return array.Snoc(history, values)
 		}
-		var result []int32
+		var result []int
 		updated := slices.Clone(values)
 		updated[position] = 1
 		result = updated
-		position, values, history = position+1, result, array.Bounded(append(history, values))
+		position, values, history = position+1, result, append(history, values)
 	}
 }
 

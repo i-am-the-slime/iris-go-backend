@@ -6,11 +6,11 @@ package show
 
 import "strconv"
 
-func Show(i int32) string {
-	return strconv.Itoa(int(i))
+func Show(i int) string {
+	return strconv.Itoa(i)
 }
 
-func AppendShowArrayArrayInt(buffer []byte, array [][]int32) []byte {
+func AppendShowArrayArrayInt(buffer []byte, array [][]int) []byte {
 	buffer = append(buffer, '[')
 	for index, element := range array {
 		if index > 0 {
@@ -22,7 +22,7 @@ func AppendShowArrayArrayInt(buffer []byte, array [][]int32) []byte {
 	return buffer
 }
 
-func AppendShowArrayInt(buffer []byte, array []int32) []byte {
+func AppendShowArrayInt(buffer []byte, array []int) []byte {
 	buffer = append(buffer, '[')
 	for index, element := range array {
 		if index > 0 {
@@ -34,7 +34,7 @@ func AppendShowArrayInt(buffer []byte, array []int32) []byte {
 	return buffer
 }
 
-func ArrayInt(array []int32) string {
+func ArrayInt(array []int) string {
 	return string(AppendShowArrayInt(nil, array))
 }
 
@@ -42,8 +42,8 @@ func ArrayInt(array []int32) string {
 package tuple
 
 type Tuple struct {
-	First  []int32
-	Second [][]int32
+	First  []int
+	Second [][]int
 }
 
 // main.go
@@ -61,12 +61,12 @@ import (
 var main_ = initializeMain_()
 
 func initializeMain_() []string {
-	shared := array.Replicate(6, int32(0))
+	shared := array.Replicate(6, 0)
 	accumulator := shared
 	accumulator = slices.Clip(accumulator)
 	copied := false
-	for position := int32(0); position < 10; position++ {
-		if position < int32(len(accumulator)) {
+	for position := 0; position < 10; position++ {
+		if position < len(accumulator) {
 			value := accumulator[position] + 1
 			updated := accumulator
 			if !copied {
@@ -80,8 +80,8 @@ func initializeMain_() []string {
 	accumulator2 := shared
 	accumulator2 = slices.Clip(accumulator2)
 	copied2 := false
-	for position := int32(0); position < 5; position++ {
-		if position < int32(len(accumulator2)) {
+	for position := 0; position < 5; position++ {
+		if position < len(accumulator2) {
 			value := position * 3
 			updated := accumulator2
 			if !copied2 {
@@ -92,19 +92,19 @@ func initializeMain_() []string {
 			accumulator2 = updated
 		}
 	}
-	accumulator3 := tuple.Tuple{First: shared, Second: [][]int32{}}
+	accumulator3 := tuple.Tuple{First: shared, Second: [][]int{}}
 	accumulator3.Second = slices.Clip(accumulator3.Second)
-	for position := int32(0); position < 3; position++ {
+	for position := 0; position < 3; position++ {
 		current := accumulator3.First
-		var result []int32
-		if position < int32(len(current)) {
+		var result []int
+		if position < len(current) {
 			updated := slices.Clone(current)
 			updated[position] = 7
 			result = updated
 		} else {
 			result = current
 		}
-		accumulator3 = tuple.Tuple{First: result, Second: array.Bounded(append(accumulator3.Second, current))}
+		accumulator3 = tuple.Tuple{First: result, Second: append(accumulator3.Second, current)}
 	}
 	text := []byte("(Tuple ")
 	text = show.AppendShowArrayInt(text, accumulator3.First)
@@ -114,14 +114,14 @@ func initializeMain_() []string {
 	return []string{show.ArrayInt(accumulator), show.ArrayInt(accumulator2), show.ArrayInt(countedUp(0, shared)), string(text), show.ArrayInt(shared)}
 }
 
-func countedUp(position int32, values []int32) []int32 {
+func countedUp(position int, values []int) []int {
 	values = slices.Clip(values)
 	copied := false
 	for {
-		if position >= int32(len(values)) {
+		if position >= len(values) {
 			return values
 		}
-		var result []int32
+		var result []int
 		updated := values
 		if !copied {
 			updated = slices.Clone(updated)

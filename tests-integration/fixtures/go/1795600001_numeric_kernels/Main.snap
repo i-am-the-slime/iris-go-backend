@@ -11,7 +11,7 @@ func Max_(x float64, y float64) float64 {
 	return x
 }
 
-func MinInt(x int32, y int32) int32 {
+func MinInt(x int, y int) int {
 	if x <= y {
 		return x
 	}
@@ -69,23 +69,35 @@ var main_ = initializeMain_()
 
 func initializeMain_() []string {
 	xs := mapLanes([]float64{1.0, -2.0, 3.0, 4.0, -5.0, 6.0, 7.0, 8.0, 9.0, -10.0, 11.0, 12.0, 13.0, 14.0, 15.0, 16.0, 17.0, 18.0, 19.0, -20.0, 21.0, 22.0, 23.0, 24.0, 25.0, 26.0, 27.0, 28.0, 29.0, 30.0, 31.0, 32.0, 33.0, 34.0, 35.0})
-	ints := mapLanes2([]int32{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33})
-	accumulator := prim.NumberInfinity
+	array := []int{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33}
+	mapped := make([]int, len(array))
+	for index, value := range array {
+		mapped[index] = value - 7
+	}
+	accumulator := 1
+	for _, value := range mapped {
+		accumulator *= value
+	}
+	accumulator2 := prim.TopInt
+	for _, element := range mapped {
+		accumulator2 = ord.MinInt(accumulator2, element)
+	}
+	accumulator3 := prim.NumberInfinity
 	for _, element := range xs {
-		accumulator = ord.MinNumber(accumulator, element)
+		accumulator3 = ord.MinNumber(accumulator3, element)
 	}
-	accumulator2 := 0.0
+	accumulator4 := 0.0
 	for _, x := range xs {
-		accumulator2 = accumulator2*0.5 + x
+		accumulator4 = accumulator4*0.5 + x
 	}
-	return []string{prim.ShowNumber(foldLanes(xs, 0.0)), prim.ShowNumber(foldLanes2(xs, xs, 0.0)), prim.ShowNumber(foldLanes3(xs, 0.0)), prim.ShowNumber(foldLanes4(xs, -prim.NumberInfinity)), strconv.Itoa(int(foldLanes5(ints, 1))), strconv.Itoa(int(foldLanes6(ints, int32(prim.TopInt)))), show.ArrayNumber(zipLanes(xs, xs)), show.ArrayNumber(zipLanes2(xs, xs)), prim.ShowNumber(accumulator), prim.ShowNumber(accumulator2), strconv.Itoa(int(literal))}
+	return []string{prim.ShowNumber(foldLanes(xs, 0.0)), prim.ShowNumber(foldLanes2(xs, xs, 0.0)), prim.ShowNumber(foldLanes3(xs, 0.0)), prim.ShowNumber(foldLanes4(xs, -prim.NumberInfinity)), strconv.Itoa(accumulator), strconv.Itoa(accumulator2), show.ArrayNumber(zipLanes(xs, xs)), show.ArrayNumber(zipLanes2(xs, xs)), prim.ShowNumber(accumulator3), prim.ShowNumber(accumulator4), strconv.Itoa(literal)}
 }
 
 var literal = initializeLiteral()
 
-func initializeLiteral() int32 {
-	array := []int32{1, 2, 3}
-	var accumulator int32 = 0
+func initializeLiteral() int {
+	array := []int{1, 2, 3}
+	accumulator := 0
 	for _, value := range array {
 		accumulator += value
 	}
@@ -235,66 +247,6 @@ func foldLanes4(xs []float64, initial float64) float64 {
 	return accumulator
 }
 
-func foldLanes5(xs []int32, initial int32) int32 {
-	acc0 := archsimd.BroadcastInt32x4(1)
-	acc1, acc2, acc3 := acc0, acc0, acc0
-	const step = 4
-	i := 0
-	for ; i < len(xs)-4*step+1; i += 4 * step {
-		x0 := archsimd.LoadInt32x4(xs[i : i+step])
-		acc0 = acc0.Mul(x0)
-		x1 := archsimd.LoadInt32x4(xs[i+step : i+2*step])
-		acc1 = acc1.Mul(x1)
-		x2 := archsimd.LoadInt32x4(xs[i+2*step : i+3*step])
-		acc2 = acc2.Mul(x2)
-		x3 := archsimd.LoadInt32x4(xs[i+3*step : i+4*step])
-		acc3 = acc3.Mul(x3)
-	}
-	acc0 = acc0.Mul(acc1).Mul(acc2.Mul(acc3))
-	var lanes [4]int32
-	acc0.Store(lanes[:])
-	accumulator := initial
-	for _, lane := range lanes[:step] {
-		accumulator = accumulator * lane
-	}
-	for ; i < len(xs); i++ {
-		x := xs[i]
-		accumulator = accumulator * x
-	}
-	return accumulator
-}
-
-func foldLanes6(xs []int32, initial int32) int32 {
-	acc0 := archsimd.BroadcastInt32x4(initial)
-	acc1, acc2, acc3 := acc0, acc0, acc0
-	const step = 4
-	i := 0
-	for ; i < len(xs)-4*step+1; i += 4 * step {
-		x0 := archsimd.LoadInt32x4(xs[i : i+step])
-		acc0 = acc0.Min(x0)
-		x1 := archsimd.LoadInt32x4(xs[i+step : i+2*step])
-		acc1 = acc1.Min(x1)
-		x2 := archsimd.LoadInt32x4(xs[i+2*step : i+3*step])
-		acc2 = acc2.Min(x2)
-		x3 := archsimd.LoadInt32x4(xs[i+3*step : i+4*step])
-		acc3 = acc3.Min(x3)
-	}
-	acc0 = acc0.Min(acc1).Min(acc2.Min(acc3))
-	var lanes [4]int32
-	acc0.Store(lanes[:])
-	accumulator := initial
-	for _, lane := range lanes[:step] {
-		if lane < accumulator {
-			accumulator = lane
-		}
-	}
-	for ; i < len(xs); i++ {
-		x := xs[i]
-		accumulator = min(accumulator, x)
-	}
-	return accumulator
-}
-
 func mapLanes(xs []float64) []float64 {
 	c0 := archsimd.BroadcastFloat64x2(0.25)
 	out := make([]float64, len(xs))
@@ -307,22 +259,6 @@ func mapLanes(xs []float64) []float64 {
 	if i < len(xs) {
 		x, _ := archsimd.LoadFloat64x2Part(xs[i:])
 		c0.Mul(x).StorePart(out[i:])
-	}
-	return out
-}
-
-func mapLanes2(xs []int32) []int32 {
-	c0 := archsimd.BroadcastInt32x4(7)
-	out := make([]int32, len(xs))
-	const step = 4
-	i := 0
-	for ; i < len(xs)-step+1; i += step {
-		x := archsimd.LoadInt32x4(xs[i : i+step])
-		x.Sub(c0).Store(out[i : i+step])
-	}
-	if i < len(xs) {
-		x, _ := archsimd.LoadInt32x4Part(xs[i:])
-		x.Sub(c0).StorePart(out[i:])
 	}
 	return out
 }
@@ -419,34 +355,10 @@ func foldLanes4(xs []float64, initial float64) float64 {
 	return accumulator
 }
 
-func foldLanes5(xs []int32, initial int32) int32 {
-	accumulator := initial
-	for _, x := range xs {
-		accumulator = accumulator * x
-	}
-	return accumulator
-}
-
-func foldLanes6(xs []int32, initial int32) int32 {
-	accumulator := initial
-	for _, x := range xs {
-		accumulator = min(accumulator, x)
-	}
-	return accumulator
-}
-
 func mapLanes(xs []float64) []float64 {
 	out := make([]float64, len(xs))
 	for i, x := range xs {
 		out[i] = 0.25 * x
-	}
-	return out
-}
-
-func mapLanes2(xs []int32) []int32 {
-	out := make([]int32, len(xs))
-	for i, x := range xs {
-		out[i] = x - 7
 	}
 	return out
 }
@@ -624,66 +536,6 @@ func foldLanes4(xs []float64, initial float64) float64 {
 	return accumulator
 }
 
-func foldLanes5(xs []int32, initial int32) int32 {
-	acc0 := simd.BroadcastInt32s(1)
-	acc1, acc2, acc3 := acc0, acc0, acc0
-	step := acc0.Len()
-	i := 0
-	for ; i < len(xs)-4*step+1; i += 4 * step {
-		x0 := simd.LoadInt32s(xs[i : i+step])
-		acc0 = acc0.Mul(x0)
-		x1 := simd.LoadInt32s(xs[i+step : i+2*step])
-		acc1 = acc1.Mul(x1)
-		x2 := simd.LoadInt32s(xs[i+2*step : i+3*step])
-		acc2 = acc2.Mul(x2)
-		x3 := simd.LoadInt32s(xs[i+3*step : i+4*step])
-		acc3 = acc3.Mul(x3)
-	}
-	acc0 = acc0.Mul(acc1).Mul(acc2.Mul(acc3))
-	var lanes [16]int32
-	acc0.Store(lanes[:])
-	accumulator := initial
-	for _, lane := range lanes[:step] {
-		accumulator = accumulator * lane
-	}
-	for ; i < len(xs); i++ {
-		x := xs[i]
-		accumulator = accumulator * x
-	}
-	return accumulator
-}
-
-func foldLanes6(xs []int32, initial int32) int32 {
-	acc0 := simd.BroadcastInt32s(initial)
-	acc1, acc2, acc3 := acc0, acc0, acc0
-	step := acc0.Len()
-	i := 0
-	for ; i < len(xs)-4*step+1; i += 4 * step {
-		x0 := simd.LoadInt32s(xs[i : i+step])
-		acc0 = acc0.Min(x0)
-		x1 := simd.LoadInt32s(xs[i+step : i+2*step])
-		acc1 = acc1.Min(x1)
-		x2 := simd.LoadInt32s(xs[i+2*step : i+3*step])
-		acc2 = acc2.Min(x2)
-		x3 := simd.LoadInt32s(xs[i+3*step : i+4*step])
-		acc3 = acc3.Min(x3)
-	}
-	acc0 = acc0.Min(acc1).Min(acc2.Min(acc3))
-	var lanes [16]int32
-	acc0.Store(lanes[:])
-	accumulator := initial
-	for _, lane := range lanes[:step] {
-		if lane < accumulator {
-			accumulator = lane
-		}
-	}
-	for ; i < len(xs); i++ {
-		x := xs[i]
-		accumulator = min(accumulator, x)
-	}
-	return accumulator
-}
-
 func mapLanes(xs []float64) []float64 {
 	c0 := simd.BroadcastFloat64s(0.25)
 	out := make([]float64, len(xs))
@@ -696,22 +548,6 @@ func mapLanes(xs []float64) []float64 {
 	if i < len(xs) {
 		x, _ := simd.LoadFloat64sPart(xs[i:])
 		c0.Mul(x).StorePart(out[i:])
-	}
-	return out
-}
-
-func mapLanes2(xs []int32) []int32 {
-	c0 := simd.BroadcastInt32s(7)
-	out := make([]int32, len(xs))
-	step := simd.Int32s{}.Len()
-	i := 0
-	for ; i < len(xs)-step+1; i += step {
-		x := simd.LoadInt32s(xs[i : i+step])
-		x.Sub(c0).Store(out[i : i+step])
-	}
-	if i < len(xs) {
-		x, _ := simd.LoadInt32sPart(xs[i:])
-		x.Sub(c0).StorePart(out[i:])
 	}
 	return out
 }

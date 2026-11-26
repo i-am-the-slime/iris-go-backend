@@ -6,11 +6,11 @@ package show
 
 import "strconv"
 
-func Show(i int32) string {
-	return strconv.Itoa(int(i))
+func Show(i int) string {
+	return strconv.Itoa(i)
 }
 
-func AppendShowArrayInt(buffer []byte, array []int32) []byte {
+func AppendShowArrayInt(buffer []byte, array []int) []byte {
 	buffer = append(buffer, '[')
 	for index, element := range array {
 		if index > 0 {
@@ -26,12 +26,12 @@ func AppendShowArrayInt(buffer []byte, array []int32) []byte {
 package distances
 
 type Distance struct {
-	Distance0 int32
-	Distance1 int32
-	Distance2 int32
-	Distance3 int32
-	Distance4 int32
-	Distance5 int32
+	Distance0 int
+	Distance1 int
+	Distance2 int
+	Distance3 int
+	Distance4 int
+	Distance5 int
 	Tag       uint8
 }
 
@@ -40,7 +40,7 @@ const (
 	DistanceDistance2
 )
 
-func DistanceDistance(distance0 int32, distance1 int32, distance2 int32, distance3 int32, distance4 int32, distance5 int32) Distance {
+func DistanceDistance(distance0 int, distance1 int, distance2 int, distance3 int, distance4 int, distance5 int) Distance {
 	return Distance{Tag: DistanceDistance2, Distance0: distance0, Distance1: distance1, Distance2: distance2, Distance3: distance3, Distance4: distance4, Distance5: distance5}
 }
 
@@ -54,37 +54,37 @@ import (
 )
 
 func main() {
-	scrutinee := farthest([]int32{3, -1, 5, 2})
+	scrutinee := farthest([]int{3, -1, 5, 2})
 	var result string
 	switch scrutinee.Tag {
 	case distances.DistanceNone:
 		result = "None"
 	default: // distances.DistanceDistance2
 		text := []byte("Distance ")
-		text = show.AppendShowArrayInt(text, []int32{scrutinee.Distance0, scrutinee.Distance1, scrutinee.Distance2, scrutinee.Distance3, scrutinee.Distance4, scrutinee.Distance5})
+		text = show.AppendShowArrayInt(text, []int{scrutinee.Distance0, scrutinee.Distance1, scrutinee.Distance2, scrutinee.Distance3, scrutinee.Distance4, scrutinee.Distance5})
 		result = string(text)
 	}
 	journal.Log(result)
-	scrutinee2 := farthest([]int32{-1})
+	scrutinee2 := farthest([]int{-1})
 	var result2 string
 	switch scrutinee2.Tag {
 	case distances.DistanceNone:
 		result2 = "None"
 	default: // distances.DistanceDistance2
 		text := []byte("Distance ")
-		text = show.AppendShowArrayInt(text, []int32{scrutinee2.Distance0, scrutinee2.Distance1, scrutinee2.Distance2, scrutinee2.Distance3, scrutinee2.Distance4, scrutinee2.Distance5})
+		text = show.AppendShowArrayInt(text, []int{scrutinee2.Distance0, scrutinee2.Distance1, scrutinee2.Distance2, scrutinee2.Distance3, scrutinee2.Distance4, scrutinee2.Distance5})
 		result2 = string(text)
 	}
 	journal.Log(result2)
 }
 
-func farthest(array []int32) distances.Distance {
-	var accumulatorDistance0 int32
-	var accumulatorDistance1 int32
-	var accumulatorDistance2 int32
-	var accumulatorDistance3 int32
-	var accumulatorDistance4 int32
-	var accumulatorDistance5 int32
+func farthest(array []int) distances.Distance {
+	var accumulatorDistance0 int
+	var accumulatorDistance1 int
+	var accumulatorDistance2 int
+	var accumulatorDistance3 int
+	var accumulatorDistance4 int
+	var accumulatorDistance5 int
 	var accumulatorTag uint8 = distances.DistanceNone
 	for _, n := range array {
 		var d distances.Distance

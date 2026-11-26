@@ -6,20 +6,20 @@ package types
 
 type List struct {
 	Cons1 *List
-	Cons0 int32
+	Cons0 int
 }
 
 var SharedListNil = &List{}
 
-func Cons(cons0 int32, cons1 *List) *List {
+func Cons(cons0 int, cons1 *List) *List {
 	return &List{Cons0: cons0, Cons1: cons1}
 }
 
-func Sum(value *List) int32 {
+func Sum(value *List) int {
 	return SumGo(0, value)
 }
 
-func SumGo(b int32, value *List) int32 {
+func SumGo(b int, value *List) int {
 	for {
 		if value == SharedListNil {
 			return b
@@ -45,7 +45,7 @@ const (
 type Tree struct {
 	Node1  *Tree
 	Node4  *Tree
-	Node2  int32
+	Node2  int
 	Node0  Color
 	Node3  bool
 	Unique uint8
@@ -53,18 +53,18 @@ type Tree struct {
 
 var SharedTreeLeaf = &Tree{}
 
-func Size(value *Tree) int32 {
+func Size(value *Tree) int {
 	if value == SharedTreeLeaf {
 		return 0
 	}
 	return Size(value.Node1) + 1 + Size(value.Node4)
 }
 
-func Checksum(value *Tree) int32 {
+func Checksum(value *Tree) int {
 	return ChecksumGo(0, value)
 }
 
-func BlackHeight(value *Tree) int32 {
+func BlackHeight(value *Tree) int {
 	if value == SharedTreeLeaf {
 		return 1
 	}
@@ -84,7 +84,7 @@ func BlackHeight(value *Tree) int32 {
 	if left < 0 || (left != BlackHeight(r) || result) {
 		return -1
 	}
-	var result4 int32
+	var result4 int
 	switch color {
 	case ColorRed:
 		result4 = 0
@@ -94,7 +94,7 @@ func BlackHeight(value *Tree) int32 {
 	return left + result4
 }
 
-func Ordered(low int32, high int32, value *Tree) bool {
+func Ordered(low int, high int, value *Tree) bool {
 	for {
 		if value == SharedTreeLeaf {
 			return true
@@ -116,7 +116,7 @@ func Ordered(low int32, high int32, value *Tree) bool {
 	}
 }
 
-func ChecksumGo(acc int32, value *Tree) int32 {
+func ChecksumGo(acc int, value *Tree) int {
 	for {
 		if value == SharedTreeLeaf {
 			return acc
@@ -125,7 +125,7 @@ func ChecksumGo(acc int32, value *Tree) int32 {
 		k := value.Node2
 		v := value.Node3
 		r := value.Node4
-		var result int32
+		var result int
 		if v {
 			result = k
 		} else {
@@ -135,7 +135,7 @@ func ChecksumGo(acc int32, value *Tree) int32 {
 	}
 }
 
-func InsChecked(kx int32, vx bool, value *Tree, valueOwned bool) *Tree {
+func InsChecked(kx int, vx bool, value *Tree, valueOwned bool) *Tree {
 	if value == SharedTreeLeaf {
 		return &Tree{Node0: ColorRed, Node1: SharedTreeLeaf, Node2: kx, Node3: vx, Node4: SharedTreeLeaf, Unique: 3}
 	}
@@ -411,7 +411,7 @@ func InsChecked(kx int32, vx bool, value *Tree, valueOwned bool) *Tree {
 	return &Tree{Node0: ColorBlack, Node1: a2, Node2: ky2, Node3: vy2, Node4: field3, Unique: 2 | shared.UniqueBit(aOwned2, 1)}
 }
 
-func InsReusing(kx int32, vx bool, value *Tree) *Tree {
+func InsReusing(kx int, vx bool, value *Tree) *Tree {
 	if value == SharedTreeLeaf {
 		return &Tree{Node0: ColorRed, Node1: SharedTreeLeaf, Node2: kx, Node3: vx, Node4: SharedTreeLeaf, Unique: 3}
 	}
@@ -602,7 +602,6 @@ import (
 	"fixture/shared/Data.List+RedBlack"
 	"fixture/shared/RedBlack+Data.List.Types"
 	"github.com/i-am-the-slime/iris-go/alloc"
-	arraypkg "github.com/i-am-the-slime/iris-go/array"
 	"github.com/i-am-the-slime/iris-go/console"
 	"github.com/i-am-the-slime/iris-go/prim"
 	"strings"
@@ -610,9 +609,9 @@ import (
 
 var main_ = initializeMain_()
 
-func initializeMain_() []int32 {
-	array := []int32{1, 2, 3, 42, 1234}
-	bound := make([]int32, 0, 5*len(array))
+func initializeMain_() []int {
+	array := []int{1, 2, 3, 42, 1234}
+	bound := make([]int, 0, 5*len(array))
 	for _, seed := range array {
 		scrutinee := mainGoReusing(redblack.SharedTreeLeaf, redblack_types.SharedListTreeNil, 0, seed, 3000)
 		trees := scrutinee.Trees
@@ -620,10 +619,10 @@ func initializeMain_() []int32 {
 		argument2 := types.Sum(redblack_types.MapSize(trees))
 		bound = append(bound, argument, argument2, types.Sum(redblack_types.Map_(redblack.Checksum, trees)), list_redblack.Length(mainGoReusing2(redblack_types.SharedListTreeNil, trees)), scrutinee.Folded)
 	}
-	return arraypkg.Bounded(bound)
+	return bound
 }
 
-func mainGoChecked(tree *redblack.Tree, kept *redblack_types.ListTree, folded int32, state int32, n int32, treeOwned bool) redblack_types.Run {
+func mainGoChecked(tree *redblack.Tree, kept *redblack_types.ListTree, folded int, state int, n int, treeOwned bool) redblack_types.Run {
 	for {
 		if n <= 0 {
 			return redblack_types.Run{Trees: redblack_types.Cons(tree, kept), Folded: folded}
@@ -652,7 +651,7 @@ func mainGoChecked(tree *redblack.Tree, kept *redblack_types.ListTree, folded in
 		} else {
 			result = kept
 		}
-		var result2 int32
+		var result2 int
 		if next%11 == 0 {
 			result2 = folded + types.Sum(redblack_types.Map_(redblack.Checksum, list_redblack.Take(3, kept)))
 		} else {
@@ -662,7 +661,7 @@ func mainGoChecked(tree *redblack.Tree, kept *redblack_types.ListTree, folded in
 	}
 }
 
-func mainGoReusing(tree *redblack.Tree, kept *redblack_types.ListTree, folded int32, state int32, n int32) redblack_types.Run {
+func mainGoReusing(tree *redblack.Tree, kept *redblack_types.ListTree, folded int, state int, n int) redblack_types.Run {
 	if n <= 0 {
 		return redblack_types.Run{Trees: redblack_types.Cons(tree, kept), Folded: folded}
 	}
@@ -688,7 +687,7 @@ func mainGoReusing(tree *redblack.Tree, kept *redblack_types.ListTree, folded in
 	} else {
 		result = kept
 	}
-	var result2 int32
+	var result2 int
 	if next%11 == 0 {
 		result2 = folded + types.Sum(redblack_types.Map_(redblack.Checksum, list_redblack.Take(3, kept)))
 	} else {
@@ -729,15 +728,15 @@ import (
 	"github.com/i-am-the-slime/iris-go/alloc"
 )
 
-func Length(value *redblack_types.ListTree) int32 {
+func Length(value *redblack_types.ListTree) int {
 	return LengthGo(0, value)
 }
 
-func Take(n int32, list *redblack_types.ListTree) *redblack_types.ListTree {
+func Take(n int, list *redblack_types.ListTree) *redblack_types.ListTree {
 	return TakeGo(redblack_types.SharedListTreeNil, n, list)
 }
 
-func LengthGo(b int32, value *redblack_types.ListTree) int32 {
+func LengthGo(b int, value *redblack_types.ListTree) int {
 	for {
 		if value == redblack_types.SharedListTreeNil {
 			return b
@@ -747,7 +746,7 @@ func LengthGo(b int32, value *redblack_types.ListTree) int32 {
 	}
 }
 
-func TakeGo(acc *redblack_types.ListTree, n int32, list *redblack_types.ListTree) *redblack_types.ListTree {
+func TakeGo(acc *redblack_types.ListTree, n int, list *redblack_types.ListTree) *redblack_types.ListTree {
 	var listTreeCells alloc.Cells[redblack_types.ListTree]
 	for {
 		if n < 1 {
@@ -802,14 +801,14 @@ var SharedListListTreeNil = &ListListTree{}
 
 type Run struct {
 	Trees  *ListTree
-	Folded int32
+	Folded int
 }
 
 func Cons(cons0 *redblack.Tree, cons1 *ListTree) *ListTree {
 	return &ListTree{Cons0: cons0, Cons1: cons1}
 }
 
-func Map_(f func(*redblack.Tree) int32, list *ListTree) *types.List {
+func Map_(f func(*redblack.Tree) int, list *ListTree) *types.List {
 	return MapChunkedRevMap(f, SharedListListTreeNil, list)
 }
 
@@ -817,7 +816,7 @@ func MapSize(list *ListTree) *types.List {
 	return MapSizeChunkedRevMap(SharedListListTreeNil, list)
 }
 
-func MapChunkedRevMap(f func(*redblack.Tree) int32, chunksAcc *ListListTree, chunk *ListTree) *types.List {
+func MapChunkedRevMap(f func(*redblack.Tree) int, chunksAcc *ListListTree, chunk *ListTree) *types.List {
 	var listListTreeCells alloc.Cells[ListListTree]
 	for {
 		if chunk != SharedListTreeNil && chunk.Cons1 != SharedListTreeNil && chunk.Cons1.Cons1 != SharedListTreeNil {
@@ -837,7 +836,7 @@ func MapChunkedRevMap(f func(*redblack.Tree) int32, chunksAcc *ListListTree, chu
 	}
 }
 
-func MapChunkedRevMapReverseUnrolledMap(f func(*redblack.Tree) int32, list *ListListTree, acc *types.List) *types.List {
+func MapChunkedRevMapReverseUnrolledMap(f func(*redblack.Tree) int, list *ListListTree, acc *types.List) *types.List {
 	var listIntCells alloc.Cells[types.List]
 	for {
 		if list != SharedListListTreeNil && list.Cons0 != SharedListTreeNil && list.Cons0.Cons1 != SharedListTreeNil && list.Cons0.Cons1.Cons1 != SharedListTreeNil {

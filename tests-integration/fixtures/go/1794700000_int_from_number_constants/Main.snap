@@ -4,9 +4,20 @@ source: tests-integration/src/fixtures.rs
 // Data/Maybe/maybe.go
 package maybe
 
-type Int int64
+const TagNothing = 0
 
-const NoInt Int = 1 << 32
+const TagJust = 1
+
+type Int struct {
+	Just int
+	Tag  uint8
+}
+
+func JustInt(just int) Int {
+	return Int{Tag: TagJust, Just: just}
+}
+
+var NoInt = Int{Tag: TagNothing}
 
 // main.go
 package main
@@ -21,19 +32,19 @@ var main_ = initializeMain_()
 func initializeMain_() []maybe.Int {
 	number := math.Copysign(0, -1)
 	var integer maybe.Int
-	if math.Trunc(number) == number && (number >= math.MinInt32 && number <= math.MaxInt32) {
-		integer = maybe.Int(int32(number))
+	if math.Trunc(number) == number && (number >= math.MinInt && number < -math.MinInt) {
+		integer = maybe.JustInt(int(number))
 	} else {
 		integer = maybe.NoInt
 	}
 	number2 := opaque(3.0e10)
 	var integer2 maybe.Int
-	if math.Trunc(number2) == number2 && (number2 >= math.MinInt32 && number2 <= math.MaxInt32) {
-		integer2 = maybe.Int(int32(number2))
+	if math.Trunc(number2) == number2 && (number2 >= math.MinInt && number2 < -math.MinInt) {
+		integer2 = maybe.JustInt(int(number2))
 	} else {
 		integer2 = maybe.NoInt
 	}
-	return []maybe.Int{maybe.NoInt, maybe.NoInt, maybe.Int(2147483647), maybe.Int(-2147483648), maybe.NoInt, integer, integer2}
+	return []maybe.Int{maybe.JustInt(30000000000), maybe.JustInt(-30000000000), maybe.JustInt(2147483647), maybe.JustInt(-2147483648), maybe.NoInt, integer, integer2}
 }
 
 func opaque(x float64) float64 {

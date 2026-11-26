@@ -6,11 +6,11 @@ package show
 
 import "strconv"
 
-func Show(i int32) string {
-	return strconv.Itoa(int(i))
+func Show(i int) string {
+	return strconv.Itoa(i)
 }
 
-func AppendShowArrayInt(buffer []byte, array []int32) []byte {
+func AppendShowArrayInt(buffer []byte, array []int) []byte {
 	buffer = append(buffer, '[')
 	for index, element := range array {
 		if index > 0 {
@@ -36,46 +36,46 @@ import (
 
 type ShapeNonEmptyArrayInt struct {
 	Shape string
-	Value []int32
+	Value []int
 }
 
 type ShapeInt struct {
 	Shape string
-	Value int32
+	Value int
 }
 
 type ShapeFnIntNonEmptyArrayInt struct {
 	Shape string
-	Value func(int32) []int32
+	Value func(int) []int
 }
 
 var main_ = initializeMain_()
 
 func initializeMain_() []string {
 	text := []byte("(NonEmptyArray ")
-	text = show.AppendShowArrayInt(text, traverse1Function2(arraypkg.Append([]int32{1}, []int32{2, 3})).Value)
+	text = show.AppendShowArrayInt(text, traverse1Function2(arraypkg.Append([]int{1}, []int{2, 3})).Value)
 	text = append(text, ')')
-	return []string{traverse1Function([]int32{1}).Shape, traverse1Function(arraypkg.Append([]int32{1}, []int32{2})).Shape, traverse1Function(arraypkg.Append([]int32{1}, []int32{2, 3, 4, 5})).Shape, string(text)}
+	return []string{traverse1Function([]int{1}).Shape, traverse1Function(arraypkg.Append([]int{1}, []int{2})).Shape, traverse1Function(arraypkg.Append([]int{1}, []int{2, 3, 4, 5})).Shape, string(text)}
 }
 
-func traverse1Function(array2 []int32) ShapeNonEmptyArrayInt {
-	append_ := direct.Appender[int32]()
+func traverse1Function(array2 []int) ShapeNonEmptyArrayInt {
+	append_ := direct.Appender[int]()
 	x := array2[0]
-	shapeInt := ShapeInt{Shape: strconv.Itoa(int(x)), Value: x}
-	array := arraypkg.Slice(1, int32(len(array2)), array2)
-	accumulator := ShapeNonEmptyArrayInt{Shape: shapeInt.Shape, Value: []int32{shapeInt.Value}}
+	shapeInt := ShapeInt{Shape: strconv.Itoa(x), Value: x}
+	array := arraypkg.Slice(1, len(array2), array2)
+	accumulator := ShapeNonEmptyArrayInt{Shape: shapeInt.Shape, Value: []int{shapeInt.Value}}
 	for _, element := range array {
 		shapeFnIntNonEmptyArrayInt := ShapeFnIntNonEmptyArrayInt{Shape: accumulator.Shape, Value: append_(accumulator.Value)}
-		accumulator = ShapeNonEmptyArrayInt{Shape: "(" + shapeFnIntNonEmptyArrayInt.Shape + " " + strconv.Itoa(int(element)) + ")", Value: shapeFnIntNonEmptyArrayInt.Value(element)}
+		accumulator = ShapeNonEmptyArrayInt{Shape: "(" + shapeFnIntNonEmptyArrayInt.Shape + " " + strconv.Itoa(element) + ")", Value: shapeFnIntNonEmptyArrayInt.Value(element)}
 	}
 	return accumulator
 }
 
-func traverse1Function2(array2 []int32) ShapeNonEmptyArrayInt {
-	append_ := direct.Appender[int32]()
+func traverse1Function2(array2 []int) ShapeNonEmptyArrayInt {
+	append_ := direct.Appender[int]()
 	shapeInt := ShapeInt{Shape: "", Value: array2[0] * 10}
-	array := arraypkg.Slice(1, int32(len(array2)), array2)
-	accumulator := ShapeNonEmptyArrayInt{Shape: shapeInt.Shape, Value: []int32{shapeInt.Value}}
+	array := arraypkg.Slice(1, len(array2), array2)
+	accumulator := ShapeNonEmptyArrayInt{Shape: shapeInt.Shape, Value: []int{shapeInt.Value}}
 	for _, element := range array {
 		shapeFnIntNonEmptyArrayInt := ShapeFnIntNonEmptyArrayInt{Shape: accumulator.Shape, Value: append_(accumulator.Value)}
 		accumulator = ShapeNonEmptyArrayInt{Shape: "(" + shapeFnIntNonEmptyArrayInt.Shape + " )", Value: shapeFnIntNonEmptyArrayInt.Value(element * 10)}

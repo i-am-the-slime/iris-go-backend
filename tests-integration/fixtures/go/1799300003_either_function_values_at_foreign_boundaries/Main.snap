@@ -11,7 +11,7 @@ import (
 
 type Either struct {
 	Left  string
-	Right int32
+	Right int
 	Tag   uint8
 }
 
@@ -29,11 +29,11 @@ func Left(left string) Either {
 	return Either{Tag: EitherLeft, Left: left}
 }
 
-func Right(right int32) Either {
+func Right(right int) Either {
 	return Either{Tag: EitherRight, Right: right}
 }
 
-func Show(i int32, err StringFailure) string {
+func Show(i int, err StringFailure) string {
 	return string(AppendShow(nil, i, err))
 }
 
@@ -49,7 +49,7 @@ func AppendShowArrayEitherStringInt(buffer []byte, array []Either) []byte {
 	return buffer
 }
 
-func AppendShow(buffer []byte, i int32, err StringFailure) []byte {
+func AppendShow(buffer []byte, i int, err StringFailure) []byte {
 	if err.Failed {
 		buffer = append(buffer, "(Left "...)
 		buffer = prim.AppendShowString(buffer, err.Left)
@@ -85,19 +85,19 @@ import (
 )
 
 func main() {
-	var calls int32 = 0
+	calls := 0
 	repeated := boundary.RepeatImpl(4, func() either.Either {
 		s_ := calls + 1
 		calls = s_
 		if s_ > 2 {
-			return either.Left("too many: " + strconv.Itoa(int(s_)))
+			return either.Left("too many: " + strconv.Itoa(s_))
 		}
 		return either.Right(s_ * 10)
 	})
 	journal.Log(either.ArrayEitherStringInt(repeated))
 	handler := boundary.KeepImpl(check)
 	i, err := handler(1)
-	var i2 int32
+	var i2 int
 	var err2 either.StringFailure
 	if err.Failed {
 		err2 = err
@@ -108,7 +108,7 @@ func main() {
 	if err2.Failed {
 		result = "(Left " + prim.ShowString(err2.Left) + ")"
 	} else {
-		result = "(Right " + strconv.Itoa(int(i2)) + ")"
+		result = "(Right " + strconv.Itoa(i2) + ")"
 	}
 	journal.Log(result)
 	i3, err := handler(5)
@@ -116,14 +116,14 @@ func main() {
 	if err.Failed {
 		result2 = "(Left " + prim.ShowString(err.Left) + ")"
 	} else {
-		result2 = "(Right " + strconv.Itoa(int(i3)) + ")"
+		result2 = "(Right " + strconv.Itoa(i3) + ")"
 	}
 	journal.Log(result2)
 }
 
-func check(n int32) (int32, either.StringFailure) {
+func check(n int) (int, either.StringFailure) {
 	if n > 2 {
-		return 0, either.StringFailure{Failed: true, Left: "too many: " + strconv.Itoa(int(n))}
+		return 0, either.StringFailure{Failed: true, Left: "too many: " + strconv.Itoa(n)}
 	}
 	return n*10, either.StringFailure{}
 }
@@ -136,6 +136,6 @@ type Ref[T any] struct {
 }
 
 type StateValue struct {
-	State int32
-	Value int32
+	State int
+	Value int
 }

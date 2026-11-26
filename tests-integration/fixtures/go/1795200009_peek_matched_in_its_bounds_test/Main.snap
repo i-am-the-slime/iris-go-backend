@@ -14,31 +14,31 @@ import (
 
 var main_ = initializeMain_()
 
-func initializeMain_() []int32 {
-	array2 := *array.Thaw([]int32{10, 20, 30})
-	for i := int32(0); i < 3; i++ {
-		within := int(i) < len(array2)
+func initializeMain_() []int {
+	array2 := *array.Thaw([]int{10, 20, 30})
+	for i := 0; i < 3; i++ {
+		within := i < len(array2)
 		if within {
 			element := array2[i]
 			array2[i] = prim.IntModPositive(element, 7)
 		}
 	}
-	within2 := 0 < len(array2)
-	var first int32
+	within2 := len(array2) > 0
+	var first int
 	if within2 {
 		first = array2[0]
 	} else {
 		first = 0
 	}
-	within3 := 5 < len(array2)
-	var missing int32
+	within3 := len(array2) > 5
+	var missing int
 	if within3 {
 		missing = array2[5]
 	} else {
 		missing = 0
 	}
 	elements := shared.Frozen(array2)
-	performed := array.Append(elements, []int32{first, missing, -1})
+	performed := array.Append(elements, []int{first, missing, -1})
 	return performed
 }
 

@@ -6,11 +6,11 @@ package show
 
 import "strconv"
 
-func Show(i int32) string {
-	return strconv.Itoa(int(i))
+func Show(i int) string {
+	return strconv.Itoa(i)
 }
 
-func AppendShowArrayInt(buffer []byte, array []int32) []byte {
+func AppendShowArrayInt(buffer []byte, array []int) []byte {
 	buffer = append(buffer, '[')
 	for index, element := range array {
 		if index > 0 {
@@ -22,7 +22,7 @@ func AppendShowArrayInt(buffer []byte, array []int32) []byte {
 	return buffer
 }
 
-func ArrayInt(array []int32) string {
+func ArrayInt(array []int) string {
 	return string(AppendShowArrayInt(nil, array))
 }
 
@@ -42,19 +42,19 @@ import (
 var main_ = initializeMain_()
 
 func initializeMain_() []string {
-	shared := array.Replicate(5, int32(0))
+	shared := array.Replicate(5, 0)
 	accumulator := shared2.Board{Cells: shared, Moves: 0}
 	accumulator.Cells = slices.Clone(accumulator.Cells)
-	for element := int32(1); element < 4; element++ {
+	for element := 1; element < 4; element++ {
 		accumulator = markedOwning(accumulator, element)
 	}
-	return []string{show.ArrayInt(accumulator.Cells), strconv.Itoa(int(accumulator.Moves)), show.ArrayInt(shared)}
+	return []string{show.ArrayInt(accumulator.Cells), strconv.Itoa(accumulator.Moves), show.ArrayInt(shared)}
 }
 
-func marked(board shared2.Board, position int32) shared2.Board {
+func marked(board shared2.Board, position int) shared2.Board {
 	elements := board.Cells
-	var result []int32
-	if position >= 0 && position < int32(len(elements)) {
+	var result []int
+	if position >= 0 && position < len(elements) {
 		updated := slices.Clone(elements)
 		updated[position] = position + 10
 		result = updated
@@ -64,10 +64,10 @@ func marked(board shared2.Board, position int32) shared2.Board {
 	return shared2.Board{Cells: result, Moves: board.Moves + 1}
 }
 
-func markedOwning(board shared2.Board, position int32) shared2.Board {
+func markedOwning(board shared2.Board, position int) shared2.Board {
 	elements := board.Cells
-	var result []int32
-	if position < int32(len(elements)) {
+	var result []int
+	if position < len(elements) {
 		value := position + 10
 		updated := elements
 		updated[position] = value
@@ -86,6 +86,6 @@ func main() {
 package shared
 
 type Board struct {
-	Cells []int32
-	Moves int32
+	Cells []int
+	Moves int
 }

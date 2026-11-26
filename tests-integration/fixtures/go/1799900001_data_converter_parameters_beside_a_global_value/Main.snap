@@ -25,8 +25,8 @@ const (
 )
 
 type PairInt struct {
-	First  int32
-	Second int32
+	First  int
+	Second int
 }
 
 type Pair struct {
@@ -43,14 +43,14 @@ func convert2(value2 *Pair) PairInt {
 	if original, ok := value2.Origin.(PairInt); ok {
 		return original
 	}
-	return PairInt{First: value2.First.(int32), Second: value2.Second.(int32)}
+	return PairInt{First: value2.First.(int), Second: value2.Second.(int)}
 }
 
 var main_ = initializeMain_()
 
-func initializeMain_() []int32 {
-	array := [][]int32{{1}, {1, 2, 3}, {4, 5, 6}, {9, 3}, {}}
-	mapped := make([]int32, len(array))
+func initializeMain_() []int {
+	array := [][]int{{1}, {1, 2, 3}, {4, 5, 6}, {9, 3}, {}}
+	mapped := make([]int, len(array))
 	var sequenceCells alloc.Cells[Sequence]
 	for index, x := range array {
 		accumulator := &Sequence{Tag: SequenceEmpty}
@@ -66,16 +66,16 @@ func initializeMain_() []int32 {
 						return cons(x2, value)
 					}
 				}
-				accumulator = &Sequence{Tag: SequenceZero, Zero: original(convert(PairInt{First: a, Second: accumulator.One0.(int32)}))(accumulator.One1)}
+				accumulator = &Sequence{Tag: SequenceZero, Zero: original(convert(PairInt{First: a, Second: accumulator.One0.(int)}))(accumulator.One1)}
 			}
 		}
-		var result int32
+		var result int
 		if accumulator.Tag == SequenceOne && accumulator.One1.Tag == SequenceOne {
-			result = accumulator.One0.(int32) + value(convert2(accumulator.One1.One0.(*Pair)))
+			result = accumulator.One0.(int) + value(convert2(accumulator.One1.One0.(*Pair)))
 		} else if accumulator.Tag == SequenceZero && accumulator.Zero.Tag == SequenceOne {
 			result = value(convert2(accumulator.Zero.One0.(*Pair)))
 		} else if accumulator.Tag == SequenceOne {
-			result = accumulator.One0.(int32)
+			result = accumulator.One0.(int)
 		} else {
 			result = 0
 		}
@@ -84,7 +84,7 @@ func initializeMain_() []int32 {
 	return mapped
 }
 
-func value(pair PairInt) int32 {
+func value(pair PairInt) int {
 	for {
 		first := pair.First
 		second := pair.Second

@@ -17,12 +17,12 @@ import (
 	"os"
 )
 
-func main_() int32 {
-	var count int32 = 0
+func main_() int {
+	count := 0
 	for range units {
 		count += 1
 	}
-	var accumulator int32 = 0
+	accumulator := 0
 	for range units {
 		accumulator += 1
 	}
@@ -32,8 +32,7 @@ func main_() int32 {
 var units []tuple.Tuple = []tuple.Tuple{{First: struct{}{}, Second: struct{}{}}, {First: struct{}{}, Second: struct{}{}}}
 
 func main() {
-	exitStatus := main_()
-	os.Exit(int(exitStatus))
+	os.Exit(main_())
 }
 
 // shared/shared.go
@@ -44,8 +43,8 @@ type Ref[T any] struct {
 }
 
 type StateValue struct {
-	State int32
-	Value int32
+	State int
+	Value int
 }
 
 type ActualExpected struct {

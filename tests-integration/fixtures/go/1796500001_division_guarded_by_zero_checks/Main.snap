@@ -6,8 +6,8 @@ package show
 
 import "strconv"
 
-func ShowInt(i int32) string {
-	return strconv.Itoa(int(i))
+func ShowInt(i int) string {
+	return strconv.Itoa(i)
 }
 
 func ShowBoolean(boolean bool) string {
@@ -29,7 +29,7 @@ func AppendShowArrayBoolean(buffer []byte, array []bool) []byte {
 	return buffer
 }
 
-func AppendShowArrayInt(buffer []byte, array []int32) []byte {
+func AppendShowArrayInt(buffer []byte, array []int) []byte {
 	buffer = append(buffer, '[')
 	for index, element := range array {
 		if index > 0 {
@@ -45,7 +45,7 @@ func ArrayBoolean(array []bool) string {
 	return string(AppendShowArrayBoolean(nil, array))
 }
 
-func ArrayInt(array []int32) string {
+func ArrayInt(array []int) string {
 	return string(AppendShowArrayInt(nil, array))
 }
 
@@ -62,11 +62,11 @@ import (
 
 func main() {
 	output := &shared.Ref[[]string]{Value: []string{}}
-	inputs := shared.DivisorsN{N: 17, Divisors: []int32{0, 4, 5, -3}}
+	inputs := shared.DivisorsN{N: 17, Divisors: []int{0, 4, 5, -3}}
 	n := inputs.N
 	n2 := n + 23
 	n3 := n + 23
-	mainLog(output, show.ArrayInt([]int32{mainGo(n2, 0, 0), mainGo2(n3, 0, 0)}))
+	mainLog(output, show.ArrayInt([]int{mainGo(n2, 0, 0), mainGo2(n3, 0, 0)}))
 	step, count := array.RangeSteps(1, n)
 	for _, i := range inputs.Divisors {
 		var result bool
@@ -88,13 +88,13 @@ func main() {
 		} else {
 			result2 = "small"
 		}
-		var result3 int32
+		var result3 int
 		if i != 0 && prim.IntDiv(n, i) > 3 {
 			result3 = prim.IntDiv(n, i)
 		} else {
 			result3 = -1
 		}
-		var result4 int32
+		var result4 int
 		if i == 0 {
 			result4 = 0
 		} else if prim.IntMod(n, i) > 1 {
@@ -102,10 +102,10 @@ func main() {
 		} else {
 			result4 = prim.IntDiv(n, i)
 		}
-		mainLog(output, result2+" "+strconv.Itoa(int(result3))+" "+strconv.Itoa(int(result4)))
-		kept := []int32{}
+		mainLog(output, result2+" "+strconv.Itoa(result3)+" "+strconv.Itoa(result4))
+		kept := []int{}
 		for index := range count {
-			n4 := 1 + int32(index)*step
+			n4 := 1 + index*step
 			if i != 0 && (prim.IntMod(n4, i) == 0 && prim.IntDiv(n4, i) > 1) {
 				kept = append(kept, n4)
 			}
@@ -120,22 +120,22 @@ func main() {
 			result5 = prim.IntMod(n, i) == 1
 		}
 		mainLog(output, show.ArrayBoolean([]bool{n >= 0 && (i > 0 && prim.IntDiv(n, i) > 3), result5}))
-		kept2 := []int32{}
+		kept2 := []int{}
 		for index := range count {
-			n4 := 1 + int32(index)*step
+			n4 := 1 + index*step
 			if i > 0 && (prim.IntMod(n4, i) == 0 && prim.IntDiv(n4, i) > 1) {
 				kept2 = append(kept2, n4)
 			}
 		}
 		mainLog(output, show.ArrayInt(kept2))
 		if i != 0 {
-			mainLog(output, "quotient "+strconv.Itoa(int(prim.IntDiv(n, i)))+" remainder "+strconv.Itoa(int(prim.IntMod(n, i))))
+			mainLog(output, "quotient "+strconv.Itoa(prim.IntDiv(n, i))+" remainder "+strconv.Itoa(prim.IntMod(n, i)))
 		}
 		if i != 0 && prim.IntDiv(n, i) > 3 {
 			mainLog(output, "more than three")
 		}
 		if n >= 0 && i > 0 {
-			mainLog(output, "natural quotient "+strconv.Itoa(int(prim.IntDiv(n, i)))+" remainder "+strconv.Itoa(int(prim.IntMod(n, i))))
+			mainLog(output, "natural quotient "+strconv.Itoa(prim.IntDiv(n, i))+" remainder "+strconv.Itoa(prim.IntMod(n, i)))
 		}
 	}
 }
@@ -146,7 +146,7 @@ func mainLog(output *shared.Ref[[]string], line string) {
 	output.Value = s_
 }
 
-func mainGo(n int32, i int32, total int32) int32 {
+func mainGo(n int, i int, total int) int {
 	for {
 		if i >= n {
 			return total
@@ -159,7 +159,7 @@ func mainGo(n int32, i int32, total int32) int32 {
 	}
 }
 
-func mainGo2(n int32, i int32, total int32) int32 {
+func mainGo2(n int, i int, total int) int {
 	for {
 		if i >= n {
 			return total
@@ -172,7 +172,7 @@ func mainGo2(n int32, i int32, total int32) int32 {
 		} else {
 			result2 = 100%(i-2) == 1
 		}
-		var result int32
+		var result int
 		if result2 {
 			result = 1
 		} else {
@@ -190,8 +190,8 @@ type Ref[T any] struct {
 }
 
 type DivisorsN struct {
-	Divisors []int32
-	N        int32
+	Divisors []int
+	N        int
 }
 
 type StateValue struct {

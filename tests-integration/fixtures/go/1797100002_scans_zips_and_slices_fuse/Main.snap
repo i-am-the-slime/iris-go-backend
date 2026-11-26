@@ -4,7 +4,7 @@ source: tests-integration/src/fixtures.rs
 // Data/Ord/ord.go
 package ord
 
-func Min_(x int32, y int32) int32 {
+func Min_(x int, y int) int {
 	if x <= y {
 		return x
 	}
@@ -14,7 +14,7 @@ func Min_(x int32, y int32) int32 {
 // Data/Semiring/semiring.go
 package semiring
 
-func Add(i int32, i2 int32) int32 {
+func Add(i int, i2 int) int {
 	return i + i2
 }
 
@@ -27,8 +27,8 @@ import (
 	"strconv"
 )
 
-func ShowInt(i int32) string {
-	return strconv.Itoa(int(i))
+func ShowInt(i int) string {
+	return strconv.Itoa(i)
 }
 
 func ShowXYConsIntConsIntNil(record shared.XY) string {
@@ -72,7 +72,7 @@ func AppendShowXYConsIntConsIntNil(buffer []byte, record shared.XY) []byte {
 	return buffer
 }
 
-func AppendShowArrayInt(buffer []byte, array []int32) []byte {
+func AppendShowArrayInt(buffer []byte, array []int) []byte {
 	buffer = append(buffer, '[')
 	for index, element := range array {
 		if index > 0 {
@@ -92,7 +92,7 @@ func ArrayXY(array []shared.XY) string {
 	return string(AppendShowArrayXY(nil, array))
 }
 
-func ArrayInt(array []int32) string {
+func ArrayInt(array []int) string {
 	return string(AppendShowArrayInt(nil, array))
 }
 
@@ -114,80 +114,80 @@ import (
 var main_ = initializeMain_()
 
 func initializeMain_() []string {
-	var scanned int32 = 7
-	mapped := make([]int32, 12)
+	scanned := 7
+	mapped := make([]int, 12)
 	for index := range 12 {
 		x1 := scanned ^ scanned<<13
-		x2 := x1 ^ int32(uint32(x1)>>17)
+		x2 := x1 ^ int(uint(x1)>>17)
 		scanned = x2 ^ x2<<5
-		mapped[index] = int32(uint32(scanned)>>1) % 100
+		mapped[index] = int(uint(scanned)>>1) % 100
 	}
-	var scanned2 int32 = 7
-	mapped2 := make([]int32, 0)
+	scanned2 := 7
+	mapped2 := make([]int, 0)
 	for index := range 0 {
 		x1 := scanned2 ^ scanned2<<13
-		x2 := x1 ^ int32(uint32(x1)>>17)
+		x2 := x1 ^ int(uint(x1)>>17)
 		scanned2 = x2 ^ x2<<5
-		mapped2[index] = int32(uint32(scanned2)>>1) % 100
+		mapped2[index] = int(uint(scanned2)>>1) % 100
 	}
-	var scanned3 int32 = 7
-	mapped3 := make([]int32, 0)
+	scanned3 := 7
+	mapped3 := make([]int, 0)
 	for index := range 0 {
 		x1 := scanned3 ^ scanned3<<13
-		x2 := x1 ^ int32(uint32(x1)>>17)
+		x2 := x1 ^ int(uint(x1)>>17)
 		scanned3 = x2 ^ x2<<5
-		mapped3[index] = int32(uint32(scanned3)>>1) % 100
+		mapped3[index] = int(uint(scanned3)>>1) % 100
 	}
-	var scanned4 int32 = 0
-	array := []int32{3, 1, 4, 1, 5}
-	built := make([]int32, len(array))
+	scanned4 := 0
+	array := []int{3, 1, 4, 1, 5}
+	built := make([]int, len(array))
 	for index, element := range array {
 		scanned4 = semiring.Add(scanned4, element)
 		built[index] = scanned4
 	}
-	var scanned5 int32 = 0
-	built2 := make([]int32, len([]int32{}))
-	for index, element := range []int32{} {
+	scanned5 := 0
+	built2 := make([]int, len([]int{}))
+	for index, element := range []int{} {
 		scanned5 = semiring.Add(scanned5, element)
 		built2[index] = scanned5
 	}
-	var scanned6 int32 = 10
-	array2 := []int32{3, 1, 4, 1, 5}
-	built3 := []int32{}
+	scanned6 := 10
+	array2 := []int{3, 1, 4, 1, 5}
+	built3 := []int{}
 	for _, value := range array2 {
 		if value > 1 {
 			scanned6 = semiring.Add(scanned6, value*2)
 			built3 = append(built3, scanned6)
 		}
 	}
-	var scanned7 int32 = 1
-	built4 := make([]int32, 6)
+	scanned7 := 1
+	built4 := make([]int, 6)
 	for index := range 6 {
-		x := 3 - int32(index)
+		x := 3 - index
 		scanned7 = scanned7*2 + x
 		built4[index] = scanned7
 	}
-	var scanned8 int32 = 0
-	var accumulator int32 = 0
-	for element := int32(1); element < 101; element++ {
+	scanned8 := 0
+	accumulator := 0
+	for element := 1; element < 101; element++ {
 		scanned8 = semiring.Add(scanned8, element)
 		accumulator += scanned8
 	}
-	var scanned9 int32 = 0
-	array3 := []int32{1, 2, 3, 4}
-	built5 := make([]int32, len(array3))
+	scanned9 := 0
+	array3 := []int{1, 2, 3, 4}
+	built5 := make([]int, len(array3))
 	for index, element := range array3 {
 		scanned9 = semiring.Add(scanned9, element)
 		built5[index] = scanned9
 	}
-	var accumulator2 int32 = 0
+	accumulator2 := 0
 	for index := len(built5) - 1; index >= 0; index-- {
 		x := built5[index]
 		accumulator2 = x - accumulator2
 	}
-	array4 := []int32{1, 2, 3}
-	var scanned10 int32 = 0
-	array5 := []int32{1, 2, 3, 4}
+	array4 := []int{1, 2, 3}
+	scanned10 := 0
+	array5 := []int{1, 2, 3, 4}
 	found := false
 	for _, element := range array5 {
 		scanned10 = semiring.Add(scanned10, element)
@@ -196,8 +196,8 @@ func initializeMain_() []string {
 			break
 		}
 	}
-	var scanned11 int32 = 0
-	array6 := []int32{1, 2, 3, 4}
+	scanned11 := 0
+	array6 := []int{1, 2, 3, 4}
 	every := true
 	for _, element := range array6 {
 		scanned11 = semiring.Add(scanned11, element)
@@ -206,18 +206,18 @@ func initializeMain_() []string {
 			break
 		}
 	}
-	var scanned12 int32 = 0
-	array7 := []int32{1, 2, 3, 4, 5}
-	kept := []int32{}
+	scanned12 := 0
+	array7 := []int{1, 2, 3, 4, 5}
+	kept := []int{}
 	for _, element := range array7 {
 		scanned12 = semiring.Add(scanned12, element)
 		if scanned12&1 == 0 {
 			kept = append(kept, scanned12)
 		}
 	}
-	array8 := []int32{10, 20}
-	bound := []int32{}
-	array9 := []int32{1, 1, 1}
+	array8 := []int{10, 20}
+	bound := []int{}
+	array9 := []int{1, 1, 1}
 	for _, n := range array8 {
 		scanned13 := n
 		for _, element := range array9 {
@@ -225,84 +225,82 @@ func initializeMain_() []string {
 			bound = append(bound, scanned13)
 		}
 	}
-	array10 := []int32{1, 2, 3, 4}
-	array11 := []int32{10, 20}
+	array10 := []int{1, 2, 3, 4}
+	array11 := []int{10, 20}
 	count := min(len(array10), len(array11))
-	built6 := make([]int32, count)
+	built6 := make([]int, count)
 	for index := range count {
 		value := array10[index]
 		value2 := array11[index]
 		element := value + value2
 		built6[index] = element
 	}
-	array12 := []int32{10, 20}
-	count2 := min(len([]int32{}), len(array12))
-	built7 := make([]int32, count2)
+	array12 := []int{10, 20}
+	count2 := min(len([]int{}), len(array12))
+	built7 := make([]int, count2)
 	for index := range count2 {
-		value := []int32{}[index]
+		value := []int{}[index]
 		value2 := array12[index]
 		element := value + value2
 		built7[index] = element
 	}
-	xs := []int32{1, 2, 3, 4, 5}
-	array13 := arraypkg.Slice(2, int32(len(xs)), xs)
+	xs := []int{1, 2, 3, 4, 5}
+	array13 := arraypkg.Slice(2, len(xs), xs)
 	count3 := min(len(array13), 5)
 	built8 := make([]shared.XY, count3)
 	for index := range count3 {
 		x := array13[index]
-		y := 7 - int32(index)
+		y := 7 - index
 		element := shared.XY{X: x, Y: y}
 		built8[index] = element
 	}
-	array14 := arraypkg.Slice(-3, -1, []int32{1, 2, 3, 4, 5})
-	array15 := arraypkg.Slice(1, 100, []int32{10, 20, 30})
+	array14 := arraypkg.Slice(-3, -1, []int{1, 2, 3, 4, 5})
+	array15 := arraypkg.Slice(1, 100, []int{10, 20, 30})
 	count4 := min(len(array14), len(array15))
-	built9 := make([]int32, count4)
+	built9 := make([]int, count4)
 	for index := range count4 {
 		value := array14[index]
 		value2 := array15[index]
 		element := value - value2
 		built9[index] = element
 	}
-	array16 := arraypkg.Slice(4, 2, []int32{1, 2, 3, 4, 5})
-	array17 := []int32{1, 2}
+	array16 := arraypkg.Slice(4, 2, []int{1, 2, 3, 4, 5})
+	array17 := []int{1, 2}
 	count5 := min(len(array16), len(array17))
-	built10 := make([]int32, count5)
+	built10 := make([]int, count5)
 	for index := range count5 {
 		value := array16[index]
 		value2 := array17[index]
 		element := value * value2
 		built10[index] = element
 	}
-	xs2 := []int32{1, 2, 3}
-	array18 := []int32{1, 2, 3}
-	array19 := arraypkg.Slice(9, int32(len(xs2)), xs2)
+	xs2 := []int{1, 2, 3}
+	array18 := []int{1, 2, 3}
+	array19 := arraypkg.Slice(9, len(xs2), xs2)
 	count6 := min(len(array18), len(array19))
-	built11 := make([]int32, count6)
+	built11 := make([]int, count6)
 	for index := range count6 {
 		value := array18[index]
 		value2 := array19[index]
 		element := value * value2
 		built11[index] = element
 	}
-	array20 := []int32{5, 6, 7}
-	value3 := int32(3)
+	array20 := []int{5, 6, 7}
 	count7 := min(len(array20), 5)
-	var accumulator3 int32 = 0
+	accumulator3 := 0
 	for index := range count7 {
-		i := int32(index)
 		x := array20[index]
-		value := i * x
-		value2 := value * value3
+		value := index * x
+		value2 := value * 3
 		accumulator3 += value2
 	}
-	array21 := []int32{1, 2, 3}
-	array22 := []int32{4, 5, 6}
+	array21 := []int{1, 2, 3}
+	array22 := []int{4, 5, 6}
 	count8 := min(len(array21), len(array22))
-	var scanned14 int32 = 0
-	array23 := []int32{1, 1, 1, 1}
+	scanned14 := 0
+	array23 := []int{1, 1, 1, 1}
 	count9 := min(count8, len(array23))
-	built12 := make([]int32, count9)
+	built12 := make([]int, count9)
 	for index := range count9 {
 		value := array21[index]
 		value2 := array22[index]
@@ -311,23 +309,22 @@ func initializeMain_() []string {
 		element2 := element + scanned14
 		built12[index] = element2
 	}
-	array24 := []int32{1, 2, 3}
-	array25 := []int32{4, 5, 6}
+	array24 := []int{1, 2, 3}
+	array25 := []int{4, 5, 6}
 	count10 := min(len(array24), len(array25))
-	mapped4 := make([]int32, count10)
+	mapped4 := make([]int, count10)
 	for slot := range count10 {
 		value := array24[slot]
 		value2 := array25[slot]
 		x := value + value2
-		i := int32(slot)
-		mapped4[slot] = i + x
+		mapped4[slot] = slot + x
 	}
-	xs3 := []int32{4, 5, 6}
-	array26 := []int32{1, 2, 3}
-	array27 := arraypkg.Slice(1, int32(len(xs3)), xs3)
+	xs3 := []int{4, 5, 6}
+	array26 := []int{1, 2, 3}
+	array27 := arraypkg.Slice(1, len(xs3), xs3)
 	count11 := min(len(array26), len(array27))
-	array28 := []int32{1, 2, 3}
-	array29 := []int32{2, 3, 1}
+	array28 := []int{1, 2, 3}
+	array29 := []int{2, 3, 1}
 	count12 := min(len(array28), len(array29))
 	every2 := true
 	for index := range count12 {
@@ -339,67 +336,71 @@ func initializeMain_() []string {
 			break
 		}
 	}
-	value4 := shared.Name{Name: "r"}
+	value3 := shared.Name{Name: "r"}
 	mapped5 := make([]string, 3)
 	for index := range 3 {
-		mapped5[index] = value4.Name
+		mapped5[index] = value3.Name
 	}
-	value5 := int32(5)
-	var accumulator4 int32 = 0
+	accumulator4 := 0
 	for range 4 {
-		accumulator4 += value5
+		value := 5
+		accumulator4 += value
 	}
-	var scanned15 int32 = 1
-	array30 := []int32{1, 2, 3}
-	built13 := make([]int32, len(array30)+1)
+	scanned15 := 1
+	array30 := []int{1, 2, 3}
+	built13 := make([]int, len(array30)+1)
 	built13[0] = 0
 	for index, element := range array30 {
 		scanned15 = semiring.Add(scanned15, element)
 		built13[index+1] = scanned15
 	}
-	array31 := []int32{1, 2, 3}
-	built14 := []int32{0}
+	array31 := []int{1, 2, 3}
+	built14 := []int{0}
 	for _, value := range array31 {
 		if value > 1 {
 			built14 = append(built14, value)
 		}
 	}
-	array32 := []int32{1, 2}
-	built15 := make([]int32, len(array32)+2)
+	array32 := []int{1, 2}
+	built15 := make([]int, len(array32)+2)
 	built15[0], built15[1] = 7, 8
 	for index, value := range array32 {
 		built15[index+2] = value * 3
 	}
-	array33 := []int32{1, 2}
-	built16 := []int32{0}
+	array33 := []int{1, 2}
+	built16 := []int{0}
 	for _, x := range array33 {
-		built16 = append(built16, []int32{x, x}...)
+		built16 = append(built16, []int{x, x}...)
 	}
 	letters := prim.StringToCharArray("bca")
-	n2 := int32(len(letters))
+	n2 := len(letters)
 	array34 := prim.StringToCharArray("abcab")
-	accumulator5 := arraypkg.RangeInt32(0, int32(len(letters)))
+	accumulator5 := arraypkg.Range(0, len(letters))
 	for _, element := range array34 {
 		accumulator5 = row(letters, accumulator5, element)
 	}
-	var result []int32
+	var result []int
 	if n2 < 1 {
 		result = accumulator5
 	} else {
-		result = arraypkg.Slice(n2, int32(len(accumulator5)), accumulator5)
+		result = arraypkg.Slice(n2, len(accumulator5), accumulator5)
 	}
-	xs4 := []int32{1, 2, 1, 1}
-	ys := []int32{2, 1, 1}
-	var result2 int32
+	accumulator6 := 0
+	for _, value := range result {
+		accumulator6 += value
+	}
+	xs4 := []int{1, 2, 1, 1}
+	ys := []int{2, 1, 1}
+	var result2 int
 	if len(xs4) == 0 {
-		array35 := []int32{0, -1}
-		var accumulator6 int32 = 0
+		array35 := []int{0, -1}
+		accumulator7 := 0
 		for _, start := range array35 {
-			var result3 []int32
+			var result3 []int
 			if start < 1 {
 				result3 = xs4
 			} else {
-				result3 = arraypkg.Slice(start, int32(len(xs4)), xs4)
+				result3 = arraypkg.Slice(start, len(xs4), xs4)
 			}
 			count13 := min(len(result3), len(ys))
 			built17 := make([]bool, count13)
@@ -409,19 +410,18 @@ func initializeMain_() []string {
 				element := value == value2
 				built17[index] = element
 			}
-			value6 := countAlong(built17)
-			accumulator6 += value6
+			value4 := countAlong(built17)
+			accumulator7 += value4
 		}
-		result2 = accumulator6
+		result2 = accumulator7
 	} else {
-		var accumulator6 int32 = 0
+		accumulator7 := 0
 		for index := range xs4 {
-			start := int32(index)
-			var result3 []int32
-			if start < 1 {
+			var result3 []int
+			if index < 1 {
 				result3 = xs4
 			} else {
-				result3 = arraypkg.Slice(start, int32(len(xs4)), xs4)
+				result3 = arraypkg.Slice(index, len(xs4), xs4)
 			}
 			count13 := min(len(result3), len(ys))
 			built17 := make([]bool, count13)
@@ -431,44 +431,44 @@ func initializeMain_() []string {
 				element := value == value2
 				built17[index2] = element
 			}
-			value6 := countAlong(built17)
-			accumulator6 += value6
+			value4 := countAlong(built17)
+			accumulator7 += value4
 		}
-		result2 = accumulator6
+		result2 = accumulator7
 	}
-	array36 := []int32{1, 5, 2, 7, 0}
-	accumulator7 := shared.Bounds{Low: 0, High: 0}
+	array36 := []int{1, 5, 2, 7, 0}
+	accumulator8 := shared.Bounds{Low: 0, High: 0}
 	for _, x := range array36 {
 		if x < 3 {
-			updated := accumulator7
-			updated.Low = accumulator7.Low + x
-			updated.High = accumulator7.High + accumulator7.Low
-			accumulator7 = updated
+			updated := accumulator8
+			updated.Low = accumulator8.Low + x
+			updated.High = accumulator8.High + accumulator8.Low
+			accumulator8 = updated
 		} else {
-			accumulator7 = shared.Bounds{Low: accumulator7.Low - 1, High: accumulator7.High + x}
+			accumulator8 = shared.Bounds{Low: accumulator8.Low - 1, High: accumulator8.High + x}
 		}
 	}
-	return []string{show.ArrayInt(mapped), show.ArrayInt(mapped2), show.ArrayInt(mapped3), show.ArrayInt(built), show.ArrayInt(built2), show.ArrayInt(built3), show.ArrayInt(built4), strconv.Itoa(int(accumulator)), strconv.Itoa(int(accumulator2)), strconv.Itoa(len(array4)), strconv.FormatBool(found), strconv.FormatBool(every), show.ArrayInt(kept), show.ArrayInt(arraypkg.Bounded(bound)), show.ArrayInt(built6), show.ArrayInt(built7), show.ArrayXY(built8), show.ArrayInt(built9), show.ArrayInt(built10), show.ArrayInt(built11), strconv.Itoa(int(accumulator3)), show.ArrayInt(built12), show.ArrayInt(mapped4), strconv.Itoa(int(int32(count11))), strconv.FormatBool(every2), show.ArrayString(mapped5), strconv.Itoa(int(accumulator4)), show.ArrayInt(built13), show.ArrayInt(built14), show.ArrayInt(built15), show.ArrayInt(built16), show.ArrayInt(row([]rune{'a', 'b'}, []int32{0, 1, 2}, 'b')), strconv.Itoa(int(foldLanes(result, 0))), strconv.Itoa(int(result2)), strconv.Itoa(int(countAlong([]bool{true, false, true, true, false}))), strconv.Itoa(int(accumulator7.High))}
+	return []string{show.ArrayInt(mapped), show.ArrayInt(mapped2), show.ArrayInt(mapped3), show.ArrayInt(built), show.ArrayInt(built2), show.ArrayInt(built3), show.ArrayInt(built4), strconv.Itoa(accumulator), strconv.Itoa(accumulator2), strconv.Itoa(len(array4)), strconv.FormatBool(found), strconv.FormatBool(every), show.ArrayInt(kept), show.ArrayInt(bound), show.ArrayInt(built6), show.ArrayInt(built7), show.ArrayXY(built8), show.ArrayInt(built9), show.ArrayInt(built10), show.ArrayInt(built11), strconv.Itoa(accumulator3), show.ArrayInt(built12), show.ArrayInt(mapped4), strconv.Itoa(count11), strconv.FormatBool(every2), show.ArrayString(mapped5), strconv.Itoa(accumulator4), show.ArrayInt(built13), show.ArrayInt(built14), show.ArrayInt(built15), show.ArrayInt(built16), show.ArrayInt(row([]rune{'a', 'b'}, []int{0, 1, 2}, 'b')), strconv.Itoa(accumulator6), strconv.Itoa(result2), strconv.Itoa(countAlong([]bool{true, false, true, true, false})), strconv.Itoa(accumulator8.High)}
 }
 
-func row(letters []rune, previous []int32, letter rune) []int32 {
+func row(letters []rune, previous []int, letter rune) []int {
 	array := arraypkg.Slice(0, 1, previous)
-	var accumulator int32 = 0
+	accumulator := 0
 	for _, value := range array {
 		accumulator += value
 	}
 	first := accumulator + 1
 	scanned := first
-	array2 := arraypkg.Slice(1, int32(len(previous)), previous)
+	array2 := arraypkg.Slice(1, len(previous), previous)
 	count := min(len(previous), len(letters))
 	count2 := min(len(array2), count)
-	built := make([]int32, count2+1)
+	built := make([]int, count2+1)
 	built[0] = first
 	for index := range count2 {
 		value := array2[index]
 		diagonal := previous[index]
 		other := letters[index]
-		var result int32
+		var result int
 		if other == letter {
 			result = 0
 		} else {
@@ -487,10 +487,10 @@ func row(letters []rune, previous []int32, letter rune) []int32 {
 	return built
 }
 
-func countAlong(matches []bool) int32 {
-	var accumulatorBefore int32 = 0
-	var accumulatorMatches int32 = 0
-	var accumulatorTotal int32 = 0
+func countAlong(matches []bool) int {
+	accumulatorBefore := 0
+	accumulatorMatches := 0
+	accumulatorTotal := 0
 	for _, same := range matches {
 		if same {
 			accumulatorMatches += 1
@@ -507,97 +507,12 @@ func main() {
 	console.Print("[" + strings.Join(main_, " ") + "]")
 }
 
-// main_neon.go
-//go:build goexperiment.simd && arm64
-
-package main
-
-import "simd/archsimd"
-
-func foldLanes(xs []int32, initial int32) int32 {
-	acc0 := archsimd.BroadcastInt32x4(0)
-	acc1, acc2, acc3 := acc0, acc0, acc0
-	const step = 4
-	i := 0
-	for ; i < len(xs)-4*step+1; i += 4 * step {
-		x0 := archsimd.LoadInt32x4(xs[i : i+step])
-		acc0 = acc0.Add(x0)
-		x1 := archsimd.LoadInt32x4(xs[i+step : i+2*step])
-		acc1 = acc1.Add(x1)
-		x2 := archsimd.LoadInt32x4(xs[i+2*step : i+3*step])
-		acc2 = acc2.Add(x2)
-		x3 := archsimd.LoadInt32x4(xs[i+3*step : i+4*step])
-		acc3 = acc3.Add(x3)
-	}
-	acc0 = acc0.Add(acc1).Add(acc2.Add(acc3))
-	var lanes [4]int32
-	acc0.Store(lanes[:])
-	accumulator := initial
-	for _, lane := range lanes[:step] {
-		accumulator = accumulator + lane
-	}
-	for ; i < len(xs); i++ {
-		x := xs[i]
-		accumulator = accumulator + x
-	}
-	return accumulator
-}
-
-// main_scalar.go
-//go:build !(goexperiment.simd && (arm64 || wasm))
-
-package main
-
-func foldLanes(xs []int32, initial int32) int32 {
-	accumulator := initial
-	for _, x := range xs {
-		accumulator = accumulator + x
-	}
-	return accumulator
-}
-
-// main_vector.go
-//go:build goexperiment.simd && wasm
-
-package main
-
-import "simd"
-
-func foldLanes(xs []int32, initial int32) int32 {
-	acc0 := simd.BroadcastInt32s(0)
-	acc1, acc2, acc3 := acc0, acc0, acc0
-	step := acc0.Len()
-	i := 0
-	for ; i < len(xs)-4*step+1; i += 4 * step {
-		x0 := simd.LoadInt32s(xs[i : i+step])
-		acc0 = acc0.Add(x0)
-		x1 := simd.LoadInt32s(xs[i+step : i+2*step])
-		acc1 = acc1.Add(x1)
-		x2 := simd.LoadInt32s(xs[i+2*step : i+3*step])
-		acc2 = acc2.Add(x2)
-		x3 := simd.LoadInt32s(xs[i+3*step : i+4*step])
-		acc3 = acc3.Add(x3)
-	}
-	acc0 = acc0.Add(acc1).Add(acc2.Add(acc3))
-	var lanes [16]int32
-	acc0.Store(lanes[:])
-	accumulator := initial
-	for _, lane := range lanes[:step] {
-		accumulator = accumulator + lane
-	}
-	for ; i < len(xs); i++ {
-		x := xs[i]
-		accumulator = accumulator + x
-	}
-	return accumulator
-}
-
 // shared/shared.go
 package shared
 
 type XY struct {
-	X int32
-	Y int32
+	X int
+	Y int
 }
 
 type Name struct {
@@ -605,12 +520,12 @@ type Name struct {
 }
 
 type Bounds struct {
-	High int32
-	Low  int32
+	High int
+	Low  int
 }
 
 type Run struct {
-	Before  int32
-	Matches int32
-	Total   int32
+	Before  int
+	Matches int
+	Total   int
 }

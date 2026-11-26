@@ -1,6 +1,5 @@
 ---
 source: tests-integration/src/fixtures.rs
-assertion_line: 571
 ---
 // Data/Either/either.go
 package either
@@ -32,23 +31,23 @@ import (
 )
 
 func main() {
-	sent := &shared.Ref[int32]{Value: 0}
-	ref := &shared.Ref[int32]{Value: 0}
-	ref2 := &shared.Ref[int32]{Value: 500}
+	sent := &shared.Ref[int]{Value: 0}
+	ref := &shared.Ref[int]{Value: 0}
+	ref2 := &shared.Ref[int]{Value: 500}
 	foldPulledFPull2(sent, ref2, ref, 1000, struct{}{})
 	total := sent.Value
-	journal.Log(strconv.Itoa(int(total)))
-	sent2 := &shared.Ref[int32]{Value: 0}
+	journal.Log(strconv.Itoa(total))
+	sent2 := &shared.Ref[int]{Value: 0}
 	foldPulledFPull(sent2, struct{}{})
 	none := sent2.Value
-	journal.Log(strconv.Itoa(int(none)))
+	journal.Log(strconv.Itoa(none))
 }
 
-func foldPulledFPull(ref *shared.Ref[int32], context struct{}) (struct{}, either.StringFailure) {
+func foldPulledFPull(ref *shared.Ref[int], context struct{}) (struct{}, either.StringFailure) {
 	return struct{}{}, either.StringFailure{}
 }
 
-func foldPulledFPull2(ref *shared.Ref[int32], ref2 *shared.Ref[int32], ref3 *shared.Ref[int32], i int32, context struct{}) (struct{}, either.StringFailure) {
+func foldPulledFPull2(ref *shared.Ref[int], ref2 *shared.Ref[int], ref3 *shared.Ref[int], i int, context struct{}) (struct{}, either.StringFailure) {
 	for {
 		i2 := ref2.Value
 		if i2 <= 0 {
@@ -61,7 +60,7 @@ func foldPulledFPull2(ref *shared.Ref[int32], ref2 *shared.Ref[int32], ref3 *sha
 		y := i3 + 64
 		stop := min(i, y)
 		ref3.Value = stop
-		var whole int32
+		var whole int
 		if i3 < stop {
 			whole = stop - i3
 		} else {
@@ -69,7 +68,7 @@ func foldPulledFPull2(ref *shared.Ref[int32], ref2 *shared.Ref[int32], ref3 *sha
 		}
 		taken := min(i2, whole)
 		length := max(taken, 0)
-		var step int32
+		var step int
 		if i3 < stop {
 			step = 1
 		} else {
@@ -77,7 +76,7 @@ func foldPulledFPull2(ref *shared.Ref[int32], ref2 *shared.Ref[int32], ref3 *sha
 		}
 		ref2.Value = i2 - length
 		var err either.StringFailure
-		var index int32 = 0
+		index := 0
 	foldPulledFPullFrom:
 		for {
 			if index >= 0 && index < length {
@@ -106,6 +105,6 @@ type Ref[T any] struct {
 }
 
 type StateValue struct {
-	State int32
-	Value int32
+	State int
+	Value int
 }

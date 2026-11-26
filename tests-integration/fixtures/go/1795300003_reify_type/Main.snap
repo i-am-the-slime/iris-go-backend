@@ -82,7 +82,6 @@ package main
 import (
 	"fixture/Data/Ordering"
 	"fixture/Data/Show"
-	arraypkg "github.com/i-am-the-slime/iris-go/array"
 	"github.com/i-am-the-slime/iris-go/console"
 	"slices"
 	"strconv"
@@ -92,10 +91,10 @@ import (
 var main_ = initializeMain_()
 
 func initializeMain_() []string {
-	array := []int32{1, 2, 3}
+	array := []int{1, 2, 3}
 	mapped := make([]string, len(array))
 	for index, n := range array {
-		mapped[index] = "item" + strconv.Itoa(int(n))
+		mapped[index] = "item" + strconv.Itoa(n)
 	}
 	array2 := []ordering.Ordering{ordering.OrderingLT, ordering.OrderingEQ, ordering.OrderingGT}
 	mapped2 := make([]ordering.Ordering, len(array2))
@@ -105,13 +104,13 @@ func initializeMain_() []string {
 	return []string{"42", "-8", "7", "erin!", "false", "false", "greater", show.ArrayString(mapped), show.ArrayString(reifiedEach(0, []string{})), ordering.ArrayOrdering(mapped2)}
 }
 
-func reifiedEach(n int32, done []string) []string {
+func reifiedEach(n int, done []string) []string {
 	done = slices.Clip(done)
 	for {
 		if n > 3 {
 			return done
 		}
-		n, done = n+1, arraypkg.Bounded(append(done, "n="+strconv.Itoa(int(n*10+n))+"n="+strconv.Itoa(int(n*10+1))))
+		n, done = n+1, append(done, "n="+strconv.Itoa(n*10+n)+"n="+strconv.Itoa(n*10+1))
 	}
 }
 

@@ -16,32 +16,32 @@ import (
 type Tree struct {
 	Node0 *Tree
 	Node2 *Tree
-	Node1 int32
+	Node1 int
 }
 
 var sharedTreeLeaf = &Tree{}
 
 type TotalTree struct {
 	Tree  *Tree
-	Total int32
+	Total int
 }
 
-func Node(node0 *Tree, node1 int32, node2 *Tree) *Tree {
+func Node(node0 *Tree, node1 int, node2 *Tree) *Tree {
 	return &Tree{Node0: node0, Node1: node1, Node2: node2}
 }
 
 var main_ = initializeMain_()
 
-func initializeMain_() []int32 {
+func initializeMain_() []int {
 	tree := sample(3)
 	i := stashedAfter(2, tree)
-	var fromStoring int32
+	var fromStoring int
 	if i > 0 {
 		fromStoring = total(incremented(tree))
 	} else {
 		fromStoring = 0
 	}
-	effect := func() []int32 {
+	effect := func() []int {
 		var fromTheRef *Tree
 		if fromStoring > 0 {
 			fromTheRef = stashed.Value
@@ -49,7 +49,7 @@ func initializeMain_() []int32 {
 			fromTheRef = sharedTreeLeaf
 		}
 		tree2 := sample(3)
-		var fromKeeping int32
+		var fromKeeping int
 		if keptAfter(2, tree2) > 0 {
 			fromKeeping = total(incremented(tree2))
 		} else {
@@ -63,7 +63,7 @@ func initializeMain_() []int32 {
 		}
 		tree3 := sample(3)
 		record := withTotalAfter(2, tree3)
-		var result int32
+		var result int
 		if record.Total > 0 {
 			result = total(incremented(tree3))*1000 + total(record.Tree)
 		} else {
@@ -71,13 +71,13 @@ func initializeMain_() []int32 {
 		}
 		tree4 := sample(3)
 		later := totalLaterAfter(2, tree4)
-		var result2 int32
+		var result2 int
 		if later(struct{}{}) > 0 {
 			result2 = total(incremented(tree4))*1000 + later(struct{}{})
 		} else {
 			result2 = 0
 		}
-		return []int32{fromStoring, total(fromTheRef), result, result2, fromKeeping, total(fromTheForeign)}
+		return []int{fromStoring, total(fromTheRef), result, result2, fromKeeping, total(fromTheForeign)}
 	}
 	performed := effect()
 	return performed
@@ -90,30 +90,30 @@ func initializeStashed() *shared.Ref[*Tree] {
 	return performed
 }
 
-func total(value *Tree) int32 {
+func total(value *Tree) int {
 	if value == sharedTreeLeaf {
 		return 0
 	}
 	return total(value.Node0) + value.Node1 + total(value.Node2)
 }
 
-func sample(depth int32) *Tree {
+func sample(depth int) *Tree {
 	var cells alloc.Cells[Tree]
 	return sampleChunked(depth, &cells)
 }
 
-func sampleChunked(depth int32, cells *alloc.Cells[Tree]) *Tree {
+func sampleChunked(depth int, cells *alloc.Cells[Tree]) *Tree {
 	if depth == 0 {
 		return sharedTreeLeaf
 	}
 	return cells.New(Tree{Node0: sampleChunked(depth-1, cells), Node1: depth, Node2: sampleChunked(depth-1, cells)})
 }
 
-func stashedAfter(countdown int32, tree *Tree) int32 {
+func stashedAfter(countdown int, tree *Tree) int {
 	for {
 		treeCaptured := tree
 		if countdown == 0 {
-			effect := func() int32 {
+			effect := func() int {
 				stashed.Value = treeCaptured
 				return total(treeCaptured)
 			}
@@ -131,7 +131,7 @@ func incremented(value *Tree) *Tree {
 	return Node(incremented(value.Node0), value.Node1+1, incremented(value.Node2))
 }
 
-func keptAfter(countdown int32, tree *Tree) int32 {
+func keptAfter(countdown int, tree *Tree) int {
 	for {
 		if countdown == 0 {
 			return keeper.Keep(tree)
@@ -140,7 +140,7 @@ func keptAfter(countdown int32, tree *Tree) int32 {
 	}
 }
 
-func withTotalAfter(countdown int32, tree *Tree) TotalTree {
+func withTotalAfter(countdown int, tree *Tree) TotalTree {
 	for {
 		if countdown == 0 {
 			argument := total(tree)
@@ -150,11 +150,11 @@ func withTotalAfter(countdown int32, tree *Tree) TotalTree {
 	}
 }
 
-func totalLaterAfter(countdown int32, tree *Tree) func(struct{}) int32 {
+func totalLaterAfter(countdown int, tree *Tree) func(struct{}) int {
 	for {
 		treeCaptured := tree
 		if countdown == 0 {
-			return func(_ struct{}) int32 {
+			return func(_ struct{}) int {
 				return total(treeCaptured)
 			}
 		}

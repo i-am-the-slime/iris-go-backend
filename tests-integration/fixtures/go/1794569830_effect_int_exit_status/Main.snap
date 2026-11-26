@@ -6,11 +6,10 @@ package main
 
 import "os"
 
-func main_() int32 {
+func main_() int {
 	return 3
 }
 
 func main() {
-	exitStatus := main_()
-	os.Exit(int(exitStatus))
+	os.Exit(main_())
 }

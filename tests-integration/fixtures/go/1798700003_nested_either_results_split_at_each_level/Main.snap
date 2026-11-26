@@ -5,7 +5,7 @@ source: tests-integration/src/fixtures.rs
 package either
 
 type EitherInt struct {
-	Field0 int32
+	Field0 int
 	Tag    uint8
 }
 
@@ -27,7 +27,7 @@ const (
 
 type EitherStringInt struct {
 	Left  string
-	Right int32
+	Right int
 	Tag   uint8
 }
 
@@ -38,7 +38,7 @@ const (
 
 type IntFailure struct {
 	Failed bool
-	Left   int32
+	Left   int
 }
 
 type StringFailure struct {
@@ -46,15 +46,15 @@ type StringFailure struct {
 	Left   string
 }
 
-func Left(field0 int32) EitherInt {
+func Left(field0 int) EitherInt {
 	return EitherInt{Tag: EitherIntLeft, Field0: field0}
 }
 
-func Right(field0 int32) EitherInt {
+func Right(field0 int) EitherInt {
 	return EitherInt{Tag: EitherIntRight, Field0: field0}
 }
 
-func EitherIntFromResults(value int32, err IntFailure) EitherInt {
+func EitherIntFromResults(value int, err IntFailure) EitherInt {
 	if err.Failed {
 		return Left(err.Left)
 	}
@@ -73,7 +73,7 @@ import (
 
 func main() {
 	i, err, err2 := classify(304)
-	var i2 int32
+	var i2 int
 	var err3 either.StringFailure
 	if err2.Failed {
 		err3 = err2
@@ -89,11 +89,11 @@ func main() {
 	if err3.Failed {
 		result = "(Left " + prim.ShowString(err3.Left) + ")"
 	} else {
-		result = "(Right " + strconv.Itoa(int(i2)) + ")"
+		result = "(Right " + strconv.Itoa(i2) + ")"
 	}
 	journal.Log(result)
 	i3, err, err2 := classify(207)
-	var i4 int32
+	var i4 int
 	var err4 either.StringFailure
 	if err2.Failed {
 		err4 = err2
@@ -109,11 +109,11 @@ func main() {
 	if err4.Failed {
 		result2 = "(Left " + prim.ShowString(err4.Left) + ")"
 	} else {
-		result2 = "(Right " + strconv.Itoa(int(i4)) + ")"
+		result2 = "(Right " + strconv.Itoa(i4) + ")"
 	}
 	journal.Log(result2)
 	i5, err, err2 := classify(-5)
-	var i6 int32
+	var i6 int
 	var err5 either.StringFailure
 	if err2.Failed {
 		err5 = err2
@@ -129,7 +129,7 @@ func main() {
 	if err5.Failed {
 		result3 = "(Left " + prim.ShowString(err5.Left) + ")"
 	} else {
-		result3 = "(Right " + strconv.Itoa(int(i6)) + ")"
+		result3 = "(Right " + strconv.Itoa(i6) + ")"
 	}
 	journal.Log(result3)
 	journal.Log("(Right 3)")
@@ -143,9 +143,9 @@ func main() {
 	} else {
 		var result5 string
 		if err.Failed {
-			result5 = "(Left " + strconv.Itoa(int(err.Left)) + ")"
+			result5 = "(Left " + strconv.Itoa(err.Left) + ")"
 		} else {
-			result5 = "(Right " + strconv.Itoa(int(i7)) + ")"
+			result5 = "(Right " + strconv.Itoa(i7) + ")"
 		}
 		result4 = "(Right " + result5 + ")"
 	}
@@ -158,19 +158,19 @@ func main() {
 	} else {
 		var result5 string
 		if err.Failed {
-			result5 = "(Left " + strconv.Itoa(int(err.Left)) + ")"
+			result5 = "(Left " + strconv.Itoa(err.Left) + ")"
 		} else {
-			result5 = "(Right " + strconv.Itoa(int(i8)) + ")"
+			result5 = "(Right " + strconv.Itoa(i8) + ")"
 		}
 		result6 = "(Right " + result5 + ")"
 	}
 	journal.Log(result6)
 }
 
-func classify(n int32) (int32, either.IntFailure, either.StringFailure) {
+func classify(n int) (int, either.IntFailure, either.StringFailure) {
 	for {
 		if n < 0 {
-			return 0, either.IntFailure{}, either.StringFailure{Failed: true, Left: "negative " + strconv.Itoa(int(n))}
+			return 0, either.IntFailure{}, either.StringFailure{Failed: true, Left: "negative " + strconv.Itoa(n)}
 		}
 		if n > 100 {
 			n -= 100

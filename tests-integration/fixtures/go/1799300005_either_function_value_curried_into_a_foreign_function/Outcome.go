@@ -1,6 +1,6 @@
 package ffi
 
-func OutcomeImpl[R any](failed func(int32) func(string) R, finished R, succeeded bool) R {
+func OutcomeImpl[R any](failed func(int) func(string) R, finished R, succeeded bool) R {
 	if succeeded {
 		return finished
 	}

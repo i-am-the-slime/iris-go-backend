@@ -14,15 +14,15 @@ import (
 //line Main.purs:12:1
 func main() {
 //line Main.purs:13:12
-	var ref int32 = 3
+	ref := 3
 //line Main.purs:19:28
-	xs := mainCountdown(ref, 0, []int32{})
+	xs := mainCountdown(ref, 0, []int{})
 //line Main.purs:14:3
-	index := int32(len(xs)) - 1
+	index := len(xs) - 1
 //line Main.purs:14:3
 	if index >= 0 {
 //line Main.purs:15:20
-		journal.Log(strconv.Itoa(int(xs[index] * 2)))
+		journal.Log(strconv.Itoa(xs[index] * 2))
 //line Main.purs:15:20
 		return
 //line Main.purs:14:3
@@ -33,7 +33,7 @@ func main() {
 }
 
 //line Main.purs:21:3
-func mainCountdown(n int32, total int32, kept []int32) []int32 {
+func mainCountdown(n int, total int, kept []int) []int {
 //line Main.purs:21:3
 	kept = slices.Clip(kept)
 //line Main.purs:21:3
@@ -47,11 +47,11 @@ func mainCountdown(n int32, total int32, kept []int32) []int32 {
 //line Main.purs:24:20
 		next := total + n
 //line Main.purs:25:33
-		var result []int32
+		var result []int
 //line Main.purs:28:7
 		if n% /*line Main.purs:14:30*/ 2 /*line Main.purs:28:7*/ == 0 {
 //line Main.purs:28:31
-			result = array.Bounded(append(kept, next))
+			result = append(kept, next)
 //line Main.purs:25:33
 		} else {
 //line Main.purs:25:33

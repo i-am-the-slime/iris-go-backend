@@ -493,14 +493,18 @@ where
         in_place: bool,
     ) -> GoResult<GoStatement> {
         let index = if indexed { self.loop_variable(callback, 0, "index") } else { "_".into() };
-        let slot = in_place.then_some("index");
+        let slot = in_place.then_some(if index == "_" { "index" } else { "slot" });
         let need = Need::Argument { callback, position: usize::from(indexed) };
         let mut opened = self.open(pipeline, need, slot)?;
         let mut arguments = vec![opened.element];
         if indexed && index != "_" {
             let slot =
                 opened.index.as_deref().expect("invariant violated: an indexed map has a slot");
-            arguments.insert(0, identifier_expression(slot));
+            opened.body.body().push(GoStatement::Define {
+                names: vec![index.clone()],
+                values: vec![identifier_expression(slot)],
+            });
+            arguments.insert(0, identifier_expression(&index));
         }
         let value = self.callback_value(callback, arguments, opened.body.body())?;
         let statement = match &opened.index {

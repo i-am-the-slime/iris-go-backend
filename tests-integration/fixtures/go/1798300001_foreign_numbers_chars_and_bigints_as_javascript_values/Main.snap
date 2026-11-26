@@ -24,13 +24,20 @@ func Left(left exception.Error) Either {
 // Data/Maybe/maybe.go
 package maybe
 
-type Int int64
+const TagNothing = 0
 
-const NoInt Int = 1 << 32
+const TagJust = 1
 
-func JustInt(just int32) Int {
-	return Int(just)
+type Int struct {
+	Just int
+	Tag  uint8
 }
+
+func JustInt(just int) Int {
+	return Int{Tag: TagJust, Just: just}
+}
+
+var NoInt = Int{Tag: TagNothing}
 
 // Foreign/foreign.go
 package foreign
@@ -50,7 +57,7 @@ type ForeignError struct {
 	ErrorAtIndex1    *ForeignError
 	ErrorAtProperty0 string
 	ErrorAtProperty1 *ForeignError
-	ErrorAtIndex0    int32
+	ErrorAtIndex0    int
 	Tag              uint8
 }
 
@@ -88,7 +95,7 @@ func ShowNonEmptyListForeignError(errors NonEmpty) string {
 
 type EitherInt struct {
 	Left  NonEmpty
-	Right int32
+	Right int
 	Tag   uint8
 }
 
@@ -150,7 +157,7 @@ func LeftEitherInt(left NonEmpty) EitherInt {
 	return EitherInt{Tag: EitherIntLeft, Left: left}
 }
 
-func RightEitherInt(right int32) EitherInt {
+func RightEitherInt(right int) EitherInt {
 	return EitherInt{Tag: EitherIntRight, Right: right}
 }
 
@@ -275,15 +282,16 @@ func ReadImpl(fValue any) (*big.Int, foreign.NonEmptyFailure) {
 	if foreignvalue.TagOf(fValue) == "Number" {
 		number := foreignvalue.Number(fValue)
 		var integer maybe.Int
-		if math.Trunc(number) == number && (number >= math.MinInt32 && number <= math.MaxInt32) {
-			integer = maybe.Int(int32(number))
+		if math.Trunc(number) == number && (number >= math.MinInt && number < -math.MinInt) {
+			integer = maybe.JustInt(int(number))
 		} else {
 			integer = maybe.NoInt
 		}
-		if integer == maybe.NoInt {
+		switch integer.Tag {
+		case maybe.TagNothing:
 			result = error_
-		} else {
-			result = foreign.RightEitherInt(int32(integer))
+		default: // maybe.TagJust
+			result = foreign.RightEitherInt(integer.Just)
 		}
 	} else {
 		result = error_
@@ -362,28 +370,29 @@ import (
 var main_ = initializeMain_()
 
 func initializeMain_() []string {
-	var value any = int32(7)
+	var value any = int(7)
 	var result string
 	if foreignvalue.TagOf(value) == "Number" {
 		result = "(Right " + prim.ShowNumber(foreignvalue.Number(value)) + ")"
 	} else {
 		result = "(Left " + foreign.ShowNonEmptyListForeignError(foreign.NonEmpty{First: foreign.TypeMismatch("Number", foreignvalue.TagOf(value)), Second: foreign.SharedListForeignErrorNil}) + ")"
 	}
-	var value2 any = int32(-200)
+	var value2 any = int(-200)
 	error_ := foreign.LeftEitherInt(foreign.NonEmpty{First: foreign.TypeMismatch("Int", foreignvalue.TagOf(value2)), Second: foreign.SharedListForeignErrorNil})
 	var result2 foreign.EitherInt
 	if foreignvalue.TagOf(value2) == "Number" {
 		number := foreignvalue.Number(value2)
 		var integer maybe.Int
-		if math.Trunc(number) == number && (number >= math.MinInt32 && number <= math.MaxInt32) {
-			integer = maybe.Int(int32(number))
+		if math.Trunc(number) == number && (number >= math.MinInt && number < -math.MinInt) {
+			integer = maybe.JustInt(int(number))
 		} else {
 			integer = maybe.NoInt
 		}
-		if integer == maybe.NoInt {
+		switch integer.Tag {
+		case maybe.TagNothing:
 			result2 = error_
-		} else {
-			result2 = foreign.RightEitherInt(int32(integer))
+		default: // maybe.TagJust
+			result2 = foreign.RightEitherInt(integer.Just)
 		}
 	} else {
 		result2 = error_
@@ -393,14 +402,15 @@ func initializeMain_() []string {
 	case foreign.EitherIntLeft:
 		result3 = "(Left " + foreign.ShowNonEmptyListForeignError(result2.Left) + ")"
 	default: // foreign.EitherIntRight
-		result3 = "(Right " + strconv.Itoa(int(result2.Right)) + ")"
+		result3 = "(Right " + strconv.Itoa(result2.Right) + ")"
 	}
-	nullable := nullablepkg.Nullable(nullablepkg.Null[int32](), maybe.NoInt, maybe.JustInt)
+	nullable := nullablepkg.Nullable(nullablepkg.Null[int](), maybe.NoInt, maybe.JustInt)
 	var result4 any
-	if nullable == maybe.NoInt {
+	switch nullable.Tag {
+	case maybe.TagNothing:
 		result4 = shared.Convert(nullablepkg.Null[any]())
-	} else {
-		result4 = int32(nullable)
+	default: // maybe.TagJust
+		result4 = nullable.Just
 	}
 	performed := direct.CatchException(func(x exception.Error) either.Either {
 		return either.Left(x)
@@ -461,7 +471,7 @@ func initializeMain_() []string {
 			result6 = "(Right { big: " + jsbigint.ToString(bigInt) + " })"
 		}
 	}
-	return []string{foreignvalue.TypeOf(any(array.Snoc[any](array.Snoc[any]([]any{}, int32(1)), "Freddy"))), result, result3, foreignvalue.UnsafeStringify(prim.CharSingleton('a')), foreignvalue.UnsafeStringify(jsbigint.FromInt(10)), foreignvalue.UnsafeStringify(direct.ForeignRecord([]string{"missing", "letter", "big"}, []any{result4, prim.CharSingleton('x'), jsbigint.FromInt(7)})), result5, result6}
+	return []string{foreignvalue.TypeOf(any(array.Snoc[any](array.Snoc[any]([]any{}, int(1)), "Freddy"))), result, result3, foreignvalue.UnsafeStringify(prim.CharSingleton('a')), foreignvalue.UnsafeStringify(jsbigint.FromInt(10)), foreignvalue.UnsafeStringify(direct.ForeignRecord([]string{"missing", "letter", "big"}, []any{result4, prim.CharSingleton('x'), jsbigint.FromInt(7)})), result5, result6}
 }
 
 func mainChunkedRevMap(chunksAcc *foreign.ListListForeignError, chunk *foreign.ListForeignError) *foreign.ListForeignError {

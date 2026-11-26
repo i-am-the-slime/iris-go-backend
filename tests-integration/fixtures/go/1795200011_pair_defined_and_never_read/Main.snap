@@ -21,7 +21,7 @@ func initializeMain_() []string {
 	for _, s := range strings {
 		accumulator = s
 	}
-	direct.SplitAt(int32(1), accumulator)
+	direct.SplitAt(1, accumulator)
 	performed := shared.Frozen(array2)
 	return performed
 }

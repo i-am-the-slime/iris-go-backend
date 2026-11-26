@@ -23,7 +23,7 @@ var sharedLazyIntMain = &LazyInt{Tag: LazyIntMain}
 
 type IntToInt struct {
 	K   *IntToInt
-	N   int32
+	N   int
 	Tag uint8
 }
 
@@ -41,7 +41,7 @@ func initializeMain_() shared.MainResult {
 	return shared.MainResult{Forced: force(buildThunks(1000, sharedLazyIntMain)), Continued: countDown(10, sharedIntToIntMain)}
 }
 
-func buildThunks(n int32, acc *LazyInt) *LazyInt {
+func buildThunks(n int, acc *LazyInt) *LazyInt {
 	var lazyIntCells alloc.Cells[LazyInt]
 	for {
 		switch n {
@@ -54,7 +54,7 @@ func buildThunks(n int32, acc *LazyInt) *LazyInt {
 	}
 }
 
-func countDown(n int32, k *IntToInt) int32 {
+func countDown(n int, k *IntToInt) int {
 	var intToIntCells alloc.Cells[IntToInt]
 	for {
 		if n == 0 {
@@ -69,7 +69,7 @@ func countDown(n int32, k *IntToInt) int32 {
 	}
 }
 
-func force(lazy *LazyInt) int32 {
+func force(lazy *LazyInt) int {
 	switch lazy.Tag {
 	case LazyIntMain:
 		return 0
@@ -78,7 +78,7 @@ func force(lazy *LazyInt) int32 {
 	}
 }
 
-func runIntToInt(function *IntToInt, x int32) int32 {
+func runIntToInt(function *IntToInt, x int) int {
 	for {
 		switch function.Tag {
 		case IntToIntMain:
@@ -104,8 +104,8 @@ func main() {
 package shared
 
 type MainResult struct {
-	Continued int32
-	Forced    int32
+	Continued int
+	Forced    int
 }
 
 // note: the entry's value of type { continued, forced } is not printed; use an Effect entry or a value of a printable type (Int, Number, Boolean, Char, String or an Array of them)

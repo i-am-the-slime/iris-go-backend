@@ -11,7 +11,7 @@ import (
 
 type OutcomeStringInt struct {
 	Failed    string
-	Succeeded int32
+	Succeeded int
 	Tag       uint8
 }
 
@@ -32,7 +32,7 @@ const (
 )
 
 type OutcomeIntBoolean struct {
-	Failed    int32
+	Failed    int
 	Tag       uint8
 	Succeeded bool
 }
@@ -46,7 +46,7 @@ func FailedOutcomeStringInt(failed string) OutcomeStringInt {
 	return OutcomeStringInt{Tag: OutcomeStringIntFailed, Failed: failed}
 }
 
-func SucceededOutcomeStringInt(succeeded int32) OutcomeStringInt {
+func SucceededOutcomeStringInt(succeeded int) OutcomeStringInt {
 	return OutcomeStringInt{Tag: OutcomeStringIntSucceeded, Succeeded: succeeded}
 }
 
@@ -58,7 +58,7 @@ func FailedOutcomeStringBoolean(failed string) OutcomeStringBoolean {
 	return OutcomeStringBoolean{Tag: OutcomeStringBooleanFailed, Failed: failed}
 }
 
-func FailedOutcomeIntBoolean(failed int32) OutcomeIntBoolean {
+func FailedOutcomeIntBoolean(failed int) OutcomeIntBoolean {
 	return OutcomeIntBoolean{Tag: OutcomeIntBooleanFailed, Failed: failed}
 }
 
@@ -70,13 +70,13 @@ func main_() []string {
 	outcomes := []OutcomeStringInt{FailedOutcomeStringInt("timeout"), SucceededOutcomeStringInt(3)}
 	outcomes2 := []OutcomeStringBoolean{SucceededOutcomeStringBoolean(true), FailedOutcomeStringBoolean("refused")}
 	outcomes3 := []OutcomeIntBoolean{FailedOutcomeIntBoolean(404), SucceededOutcomeIntBoolean(false)}
-	return []string{mainDescribeFrom(outcomes, 0, ""), mainDescribeFrom2(outcomes2, 0, ""), mainDescribeFrom3(outcomes3, 0, ""), strconv.Itoa(int(mainCountFrom(0)))}
+	return []string{mainDescribeFrom(outcomes, 0, ""), mainDescribeFrom2(outcomes2, 0, ""), mainDescribeFrom3(outcomes3, 0, ""), strconv.Itoa(mainCountFrom(0))}
 }
 
-func mainDescribeFrom(outcomes []OutcomeStringInt, index int32, text string) string {
+func mainDescribeFrom(outcomes []OutcomeStringInt, index int, text string) string {
 	textBytes := []byte(text)
 	for {
-		if index < int32(len(outcomes)) {
+		if index < len(outcomes) {
 			scrutinee := outcomes[index]
 			switch scrutinee.Tag {
 			case OutcomeStringIntFailed:
@@ -94,10 +94,10 @@ func mainDescribeFrom(outcomes []OutcomeStringInt, index int32, text string) str
 	}
 }
 
-func mainDescribeFrom2(outcomes []OutcomeStringBoolean, index int32, text string) string {
+func mainDescribeFrom2(outcomes []OutcomeStringBoolean, index int, text string) string {
 	textBytes := []byte(text)
 	for {
-		if index < int32(len(outcomes)) {
+		if index < len(outcomes) {
 			scrutinee := outcomes[index]
 			switch scrutinee.Tag {
 			case OutcomeStringBooleanFailed:
@@ -115,10 +115,10 @@ func mainDescribeFrom2(outcomes []OutcomeStringBoolean, index int32, text string
 	}
 }
 
-func mainDescribeFrom3(outcomes []OutcomeIntBoolean, index int32, text string) string {
+func mainDescribeFrom3(outcomes []OutcomeIntBoolean, index int, text string) string {
 	textBytes := []byte(text)
 	for {
-		if index < int32(len(outcomes)) {
+		if index < len(outcomes) {
 			scrutinee := outcomes[index]
 			switch scrutinee.Tag {
 			case OutcomeIntBooleanFailed:
@@ -136,9 +136,9 @@ func mainDescribeFrom3(outcomes []OutcomeIntBoolean, index int32, text string) s
 	}
 }
 
-func mainCountFrom(index int32) int32 {
+func mainCountFrom(index int) int {
 	for {
-		if index >= 0 && index < int32(len([]float64{1.5, 2.5})) {
+		if index >= 0 && index < len([]float64{1.5, 2.5}) {
 			index += 1
 			continue
 		}

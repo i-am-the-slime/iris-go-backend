@@ -15,20 +15,20 @@ var main_ = initializeMain_()
 func initializeMain_() []string {
 	mapped := make([]string, len(names))
 	for index, value := range names {
-		mapped[index] = value + strconv.Itoa(int(total))
+		mapped[index] = value + strconv.Itoa(total)
 	}
 	return mapped
 }
 
 var total = initializeTotal()
 
-func initializeTotal() int32 {
+func initializeTotal() int {
 	return count(5)
 }
 
 var names []string = []string{"a", "b"}
 
-func count(n int32) int32 {
+func count(n int) int {
 	if n <= 0 {
 		return 0
 	}

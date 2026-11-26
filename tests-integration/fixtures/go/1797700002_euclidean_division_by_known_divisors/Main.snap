@@ -13,11 +13,11 @@ func ShowBoolean(boolean bool) string {
 	return "false"
 }
 
-func ShowInt(i int32) string {
-	return strconv.Itoa(int(i))
+func ShowInt(i int) string {
+	return strconv.Itoa(i)
 }
 
-func AppendShowArrayInt(buffer []byte, array []int32) []byte {
+func AppendShowArrayInt(buffer []byte, array []int) []byte {
 	buffer = append(buffer, '[')
 	for index, element := range array {
 		if index > 0 {
@@ -41,7 +41,7 @@ func AppendShowArrayBoolean(buffer []byte, array []bool) []byte {
 	return buffer
 }
 
-func ArrayInt(array []int32) string {
+func ArrayInt(array []int) string {
 	return string(AppendShowArrayInt(nil, array))
 }
 
@@ -62,56 +62,56 @@ import (
 var main_ = initializeMain_()
 
 func initializeMain_() []string {
-	array := []int32{-7, -6, 6, 7}
+	array := []int{-7, -6, 6, 7}
 	mapped := make([]bool, len(array))
 	for index, element := range array {
 		mapped[index] = divisibleByThree(element)
 	}
-	array2 := []int32{-7, -6, 6, 7}
+	array2 := []int{-7, -6, 6, 7}
 	mapped2 := make([]bool, len(array2))
 	for index, element := range array2 {
 		mapped2[index] = notDivisibleByMinusThree(element)
 	}
-	array3 := []int32{-7, -1, 7}
-	mapped3 := make([]int32, len(array3))
+	array3 := []int{-7, -1, 7}
+	mapped3 := make([]int, len(array3))
 	for index, element := range array3 {
 		mapped3[index] = halvesAndQuarters(element)
 	}
-	array4 := []int32{-7, -1, 7}
-	mapped4 := make([]int32, len(array4))
+	array4 := []int{-7, -1, 7}
+	mapped4 := make([]int, len(array4))
 	for index, element := range array4 {
 		mapped4[index] = thirds(element)
 	}
-	array5 := []int32{-3, 0, 3, 4}
-	mapped5 := make([]int32, len(array5))
+	array5 := []int{-3, 0, 3, 4}
+	mapped5 := make([]int, len(array5))
 	for index, element := range array5 {
 		mapped5[index] = tenOver(element)
 	}
-	array6 := []int32{-3, 0, 3}
-	mapped6 := make([]int32, len(array6))
+	array6 := []int{-3, 0, 3}
+	mapped6 := make([]int, len(array6))
 	for index, element := range array6 {
 		mapped6[index] = minusTenOver(element)
 	}
 	return []string{show.ArrayBoolean(mapped), show.ArrayBoolean(mapped2), show.ArrayInt(mapped3), show.ArrayInt(mapped4), show.ArrayInt(mapped5), show.ArrayInt(mapped6)}
 }
 
-func divisibleByThree(n int32) bool {
+func divisibleByThree(n int) bool {
 	return n%3 == 0
 }
 
-func notDivisibleByMinusThree(n int32) bool {
+func notDivisibleByMinusThree(n int) bool {
 	return n%-3 != 0
 }
 
-func halvesAndQuarters(n int32) int32 {
+func halvesAndQuarters(n int) int {
 	return n>>1*10 + n&3
 }
 
-func thirds(n int32) int32 {
+func thirds(n int) int {
 	return prim.IntDivPositive(n, 3)*10 + prim.IntModPositive(n, 3)
 }
 
-func tenOver(d int32) int32 {
+func tenOver(d int) int {
 	switch d {
 	case 0:
 		return 0
@@ -120,7 +120,7 @@ func tenOver(d int32) int32 {
 	}
 }
 
-func minusTenOver(d int32) int32 {
+func minusTenOver(d int) int {
 	if d == 0 {
 		return 0
 	}

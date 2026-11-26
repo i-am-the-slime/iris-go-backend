@@ -64,7 +64,7 @@ import (
 )
 
 type BoxInt struct {
-	Box int32
+	Box int
 }
 
 type Box struct {
@@ -95,12 +95,12 @@ func convert3(value *Box) BoxInt {
 	if original, ok := value.Origin.(BoxInt); ok {
 		return original
 	}
-	return BoxInt{Box: value.Box.(int32)}
+	return BoxInt{Box: value.Box.(int)}
 }
 
 type PairInt struct {
-	First  int32
-	Second int32
+	First  int
+	Second int
 }
 
 type Pair struct {
@@ -113,7 +113,7 @@ func convert4(value *Pair) PairInt {
 	if original, ok := value.Origin.(PairInt); ok {
 		return original
 	}
-	return PairInt{First: value.First.(int32), Second: value.Second.(int32)}
+	return PairInt{First: value.First.(int), Second: value.Second.(int)}
 }
 
 type MapTypeValueOfFnFnValueValueFnPairPairPairInt struct {
@@ -144,15 +144,15 @@ func initializeMain_() []string {
 		}
 	}})
 	vValue := a.Map(func(coerced any) any {
-		return coerced.(int32) + 1
+		return coerced.(int) + 1
 	})(a.Value)
 	var result string
 	if a.Type == "first" {
 		scrutinee := convert3(vValue.(*Box))
-		result = "box " + strconv.Itoa(int(scrutinee.Box))
+		result = "box " + strconv.Itoa(scrutinee.Box)
 	} else {
 		scrutinee := convert4(vValue.(*Pair))
-		result = "pair " + strconv.Itoa(int(scrutinee.First)) + " " + strconv.Itoa(int(scrutinee.Second))
+		result = "pair " + strconv.Itoa(scrutinee.First) + " " + strconv.Itoa(scrutinee.Second)
 	}
 	v := convert6(MapTypeValueOfFnFnValueValueFnPairPairPairInt{Type: "second", Value: PairInt{First: 1, Second: 2}, Map: func(function func(any) any) func(*Pair) *Pair {
 		return func(value *Pair) *Pair {
@@ -167,15 +167,15 @@ func initializeMain_() []string {
 		a2 = v
 	}
 	vValue2 := a2.Map(func(coerced any) any {
-		return coerced.(int32) * 2
+		return coerced.(int) * 2
 	})(a2.Value)
 	var result2 string
 	if a2.Type == "first" {
 		scrutinee := convert3(vValue2.(*Box))
-		result2 = "box " + strconv.Itoa(int(scrutinee.Box))
+		result2 = "box " + strconv.Itoa(scrutinee.Box)
 	} else {
 		scrutinee := convert4(vValue2.(*Pair))
-		result2 = "pair " + strconv.Itoa(int(scrutinee.First)) + " " + strconv.Itoa(int(scrutinee.Second))
+		result2 = "pair " + strconv.Itoa(scrutinee.First) + " " + strconv.Itoa(scrutinee.Second)
 	}
 	return []string{result, result2}
 }

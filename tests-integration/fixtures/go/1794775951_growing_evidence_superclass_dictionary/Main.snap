@@ -6,11 +6,11 @@ package eq
 
 import "github.com/i-am-the-slime/iris-go/array"
 
-func EqInt(i int32, i2 int32) bool {
+func EqInt(i int, i2 int) bool {
 	return i == i2
 }
 
-func EqArrayInt(array2 []int32, array3 []int32) bool {
+func EqArrayInt(array2 []int, array3 []int) bool {
 	return array.Eq(EqInt, array2, array3)
 }
 
@@ -30,8 +30,8 @@ import (
 	"github.com/i-am-the-slime/iris-go/direct"
 )
 
-func CompareInt(xs []int32, ys []int32) ordering.Ordering {
-	i := direct.CompareArray(func(x int32, y int32) int32 {
+func CompareInt(xs []int, ys []int) ordering.Ordering {
+	i := direct.CompareArray(func(x int, y int) int {
 		if x < y {
 			return 1
 		}
@@ -50,7 +50,7 @@ func CompareInt(xs []int32, ys []int32) ordering.Ordering {
 }
 
 func CompareChar(xs []rune, ys []rune) ordering.Ordering {
-	i := direct.CompareArray(func(x rune, y rune) int32 {
+	i := direct.CompareArray(func(x rune, y rune) int {
 		if x < y {
 			return 1
 		}
@@ -107,13 +107,13 @@ import (
 var main_ = initializeMain_()
 
 func initializeMain_() []string {
-	original := func(array []int32) func([]int32) bool {
-		return func(array2 []int32) bool {
+	original := func(array []int) func([]int) bool {
+		return func(array2 []int) bool {
 			return dataeq.EqArrayInt(array, array2)
 		}
 	}
-	original2 := func(xs []int32) func([]int32) ordering.Ordering {
-		return func(ys []int32) ordering.Ordering {
+	original2 := func(xs []int) func([]int) ordering.Ordering {
+		return func(ys []int) ordering.Ordering {
 			return ord.CompareInt(xs, ys)
 		}
 	}
@@ -137,7 +137,7 @@ func initializeMain_() []string {
 		return func(coerced2 any) ordering.Ordering {
 			return original5(shared.Convert(coerced2))
 		}
-	}, 1, shared.Convert2([]int32{1}), shared.Convert2([]int32{1, 1})), relateOrdDictionaryEq0(func(coerced any) func(any) bool {
+	}, 1, shared.Convert2([]int{1}), shared.Convert2([]int{1, 1})), relateOrdDictionaryEq0(func(coerced any) func(any) bool {
 		original5 := original3(shared.Convert3(coerced))
 		return func(coerced2 any) bool {
 			return original5(shared.Convert3(coerced2))
@@ -150,7 +150,7 @@ func initializeMain_() []string {
 	}, 1, shared.Convert4([]rune{'a'}), shared.Convert4([]rune{'b', 'b'}))}
 }
 
-func relateOrdDictionaryEq0(eq func(any) func(any) bool, compare func(any) func(any) ordering.Ordering, depth int32, left any, right any) string {
+func relateOrdDictionaryEq0(eq func(any) func(any) bool, compare func(any) func(any) ordering.Ordering, depth int, left any, right any) string {
 	for {
 		eqCaptured := eq
 		compareCaptured := compare
@@ -169,7 +169,7 @@ func relateOrdDictionaryEq0(eq func(any) func(any) bool, compare func(any) func(
 		}
 		original2 := func(xs []any) func([]any) ordering.Ordering {
 			return func(ys []any) ordering.Ordering {
-				i := direct.CompareArray(func(x any, y any) int32 {
+				i := direct.CompareArray(func(x any, y any) int {
 					scrutinee := compareCaptured(x)(y)
 					switch scrutinee {
 					case ordering.OrderingEQ:
@@ -210,16 +210,16 @@ func main() {
 // shared/shared.go
 package shared
 
-func Convert(value any) []int32 {
+func Convert(value any) []int {
 	array := value.([]any)
-	converted := make([]int32, len(array))
+	converted := make([]int, len(array))
 	for index, element := range array {
-		converted[index] = element.(int32)
+		converted[index] = element.(int)
 	}
 	return converted
 }
 
-func Convert2(value []int32) any {
+func Convert2(value []int) any {
 	converted := make([]any, len(value))
 	for index, element := range value {
 		converted[index] = element

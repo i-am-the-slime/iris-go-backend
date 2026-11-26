@@ -85,10 +85,10 @@ func initializeMain_() shared.MainResult {
 	return shared.MainResult{Found: result, Missing: result2, Entries: firsts(entries)}
 }
 
-func search(target int32, key int32) Outcome {
+func search(target int, key int) Outcome {
 	for {
 		if key == target {
-			return Found(strconv.Itoa(int(key)), "b", "c", "d", "e", "f", "g", "h", "i", "j")
+			return Found(strconv.Itoa(key), "b", "c", "d", "e", "f", "g", "h", "i", "j")
 		}
 		if key > 9 {
 			return Outcome{Tag: OutcomeMissing}

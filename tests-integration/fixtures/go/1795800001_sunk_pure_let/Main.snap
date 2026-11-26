@@ -21,9 +21,20 @@ func EqString(s string, s2 string) bool {
 // Data/Maybe/maybe.go
 package maybe
 
-type Int int64
+const TagNothing = 0
 
-const NoInt Int = 1 << 32
+const TagJust = 1
+
+type Int struct {
+	Just int
+	Tag  uint8
+}
+
+func JustInt(just int) Int {
+	return Int{Tag: TagJust, Just: just}
+}
+
+var NoInt = Int{Tag: TagNothing}
 
 // Effect/Exception/exception.go
 package effectexception
@@ -53,7 +64,7 @@ type Problem struct {
 
 type Either struct {
 	Left  Problem
-	Right int32
+	Right int
 	Tag   uint8
 }
 
@@ -71,21 +82,22 @@ func main() {
 	array := []float64{3.0, 2.5, -1.0}
 	mapped := make([]bool, len(array))
 	for index, value := range array {
-		var i int32
+		var i int
 		var err ProblemFailure
 		if value < 0.0 {
 			err = ProblemFailure{Failed: true, Left: Problem{First: []string{"apples", "count"}, Second: value}}
 		} else {
 			var integer maybe.Int
-			if math.Trunc(value) == value && (value >= math.MinInt32 && value <= math.MaxInt32) {
-				integer = maybe.Int(int32(value))
+			if math.Trunc(value) == value && (value >= math.MinInt && value < -math.MinInt) {
+				integer = maybe.JustInt(int(value))
 			} else {
 				integer = maybe.NoInt
 			}
-			if integer == maybe.NoInt {
+			switch integer.Tag {
+			case maybe.TagNothing:
 				err = ProblemFailure{Failed: true, Left: Problem{First: []string{"apples", "count"}, Second: value}}
-			} else {
-				i, err = int32(integer), ProblemFailure{}
+			default: // maybe.TagJust
+				i, err = integer.Just, ProblemFailure{}
 			}
 		}
 		mapped[index] = isLeft(i, err)
@@ -93,10 +105,10 @@ func main() {
 	if !arraypkg.Eq(eq.EqBoolean, mapped, []bool{false, true, true}) {
 		effectexception.Throw("a count is read wrongly")
 	}
-	array2 := []int32{11, 1}
+	array2 := []int{11, 1}
 	mapped2 := make([][]string, len(array2))
 	for index, count := range array2 {
-		shared := []string{"pears", strconv.Itoa(int(count))}
+		shared := []string{"pears", strconv.Itoa(count)}
 		var result []string
 		if count > 10 {
 			result = arraypkg.Append(shared, shared)
@@ -110,7 +122,7 @@ func main() {
 	}
 }
 
-func isLeft(i int32, err ProblemFailure) bool {
+func isLeft(i int, err ProblemFailure) bool {
 	if err.Failed {
 		return true
 	}

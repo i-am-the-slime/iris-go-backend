@@ -4,20 +4,31 @@ source: tests-integration/src/fixtures.rs
 // Data/Maybe/maybe.go
 package maybe
 
-type Int int64
+const TagNothing = 0
 
-const NoInt Int = 1 << 32
+const TagJust = 1
+
+type Int struct {
+	Just int
+	Tag  uint8
+}
+
+var NoInt = Int{Tag: TagNothing}
+
+func JustInt(just int) Int {
+	return Int{Tag: TagJust, Just: just}
+}
 
 // Data/Show/show.go
 package show
 
 import "strconv"
 
-func Show(i int32) string {
-	return strconv.Itoa(int(i))
+func Show(i int) string {
+	return strconv.Itoa(i)
 }
 
-func AppendShowArrayInt(buffer []byte, array []int32) []byte {
+func AppendShowArrayInt(buffer []byte, array []int) []byte {
 	buffer = append(buffer, '[')
 	for index, element := range array {
 		if index > 0 {
@@ -29,7 +40,7 @@ func AppendShowArrayInt(buffer []byte, array []int32) []byte {
 	return buffer
 }
 
-func ArrayInt(array []int32) string {
+func ArrayInt(array []int) string {
 	return string(AppendShowArrayInt(nil, array))
 }
 
@@ -48,47 +59,58 @@ import (
 var main_ = initializeMain_()
 
 func initializeMain_() []string {
-	return []string{show.ArrayInt(sortByCompare(numbers)), show.ArrayInt(sortByDescending(numbers)), show.ArrayInt(sortByCompare([]int32{}))}
+	return []string{show.ArrayInt(sortByCompare(numbers)), show.ArrayInt(sortByDescending(numbers)), show.ArrayInt(sortByCompare([]int{}))}
 }
 
-var numbers []int32 = []int32{7, 3, 9, 1, 4, 8, 2, 6, 5, 0}
+var numbers []int = []int{7, 3, 9, 1, 4, 8, 2, 6, 5, 0}
 
-func sortByCompare(xs []int32) []int32 {
+func sortByCompare(xs []int) []int {
 	result := array.Thaw(xs)
-	length := int32(len(*result))
+	length := len(*result)
 	sortByCompareInsertFrom(result, 1, length)
 	performed := shared.Frozen(*result)
 	return performed
 }
 
-func sortByDescending(xs []int32) []int32 {
+func sortByDescending(xs []int) []int {
 	result := array.Thaw(xs)
-	length := int32(len(*result))
+	length := len(*result)
 	sortByDescendingInsertFrom(result, 1, length)
 	performed := shared.Frozen(*result)
 	return performed
 }
 
-func sortByCompareInsertFrom(array *[]int32, i int32, length int32) {
-	array2 := *array
+func sortByCompareInsertFrom(array *[]int, i int, length int) {
 	for {
 		if i < length {
-			var i2 int32 = i
+			var i2 int = i
 		sortByIntCompareSink:
 			for {
 				if i2 > 0 {
 					index := i2 - 1
 					var peeked maybe.Int
-					peeked = maybe.Int(array2[index])
+					if index < len(*array) {
+						peeked = maybe.JustInt((*array)[index])
+					} else {
+						peeked = maybe.NoInt
+					}
 					var peeked2 maybe.Int
-					peeked2 = maybe.Int(array2[i2])
-					if peeked != maybe.NoInt && peeked2 != maybe.NoInt {
-						x := int32(peeked)
-						y := int32(peeked2)
+					if i2 < len(*array) {
+						peeked2 = maybe.JustInt((*array)[i2])
+					} else {
+						peeked2 = maybe.NoInt
+					}
+					if peeked.Tag == maybe.TagJust && peeked2.Tag == maybe.TagJust {
+						x := peeked.Just
+						y := peeked2.Just
 						if x > y {
 							index2 := i2 - 1
-							array2[index2] = y
-							array2[i2] = x
+							if index2 < len(*array) {
+								(*array)[index2] = y
+							}
+							if i2 < len(*array) {
+								(*array)[i2] = x
+							}
 							i2 -= 1
 							continue
 						}
@@ -100,31 +122,41 @@ func sortByCompareInsertFrom(array *[]int32, i int32, length int32) {
 			i += 1
 			continue
 		}
-		*array = array2
 		return
 	}
 }
 
-func sortByDescendingInsertFrom(array *[]int32, i int32, length int32) {
-	array2 := *array
+func sortByDescendingInsertFrom(array *[]int, i int, length int) {
 	for {
 		if i < length {
-			var i2 int32 = i
+			var i2 int = i
 		sortByIntDescendingSink:
 			for {
 				if i2 > 0 {
 					index := i2 - 1
 					var peeked maybe.Int
-					peeked = maybe.Int(array2[index])
+					if index < len(*array) {
+						peeked = maybe.JustInt((*array)[index])
+					} else {
+						peeked = maybe.NoInt
+					}
 					var peeked2 maybe.Int
-					peeked2 = maybe.Int(array2[i2])
-					if peeked != maybe.NoInt && peeked2 != maybe.NoInt {
-						x := int32(peeked)
-						y := int32(peeked2)
+					if i2 < len(*array) {
+						peeked2 = maybe.JustInt((*array)[i2])
+					} else {
+						peeked2 = maybe.NoInt
+					}
+					if peeked.Tag == maybe.TagJust && peeked2.Tag == maybe.TagJust {
+						x := peeked.Just
+						y := peeked2.Just
 						if y > x {
 							index2 := i2 - 1
-							array2[index2] = y
-							array2[i2] = x
+							if index2 < len(*array) {
+								(*array)[index2] = y
+							}
+							if i2 < len(*array) {
+								(*array)[i2] = x
+							}
 							i2 -= 1
 							continue
 						}
@@ -136,7 +168,6 @@ func sortByDescendingInsertFrom(array *[]int32, i int32, length int32) {
 			i += 1
 			continue
 		}
-		*array = array2
 		return
 	}
 }

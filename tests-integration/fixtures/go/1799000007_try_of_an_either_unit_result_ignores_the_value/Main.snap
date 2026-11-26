@@ -23,7 +23,7 @@ const (
 
 type EitherInt struct {
 	Left  Failure
-	Right int32
+	Right int
 	Tag   uint8
 }
 
@@ -33,7 +33,7 @@ const (
 )
 
 type Client struct {
-	SendAll func(int32, int32) (int32, FailureFailure)
+	SendAll func(int, int) (int, FailureFailure)
 }
 
 type EitherUnit struct {
@@ -60,7 +60,7 @@ func Left(left Failure) EitherInt {
 	return EitherInt{Tag: EitherIntLeft, Left: left}
 }
 
-func Right(right int32) EitherInt {
+func Right(right int) EitherInt {
 	return EitherInt{Tag: EitherIntRight, Right: right}
 }
 
@@ -68,7 +68,7 @@ func main() {
 	array := []Client{client(100), client(200)}
 	collected := make([][]EitherInt, len(array))
 	for index, client := range array {
-		array2 := []int32{2, 5, -1}
+		array2 := []int{2, 5, -1}
 		collected2 := make([]EitherInt, len(array2))
 		for index2, i := range array2 {
 			value := EitherIntFromResults(client.SendAll(i, 3))
@@ -79,9 +79,9 @@ func main() {
 	journal.Log(arrayArrayEitherFailureInt(collected))
 }
 
-func client(offset int32) Client {
+func client(offset int) Client {
 	failure := Failure{Tag: FailureNoReply}
-	return Client{SendAll: func(n int32, r int32) (int32, FailureFailure) {
+	return Client{SendAll: func(n int, r int) (int, FailureFailure) {
 		_, err := send(n, r)
 		if err.Failed {
 			field0 := err.Left
@@ -97,13 +97,13 @@ func client(offset int32) Client {
 			if !result {
 				return 0, FailureFailure{Failed: true, Left: field0}
 			}
-			journal.Log("receiving " + strconv.Itoa(int(n)))
+			journal.Log("receiving " + strconv.Itoa(n))
 			if n > 4 {
 				return 0, FailureFailure{Failed: true, Left: failure}
 			}
 			return (n+1)*2+offset, FailureFailure{}
 		}
-		journal.Log("receiving " + strconv.Itoa(int(n)))
+		journal.Log("receiving " + strconv.Itoa(n))
 		if n > 4 {
 			return 0, FailureFailure{Failed: true, Left: failure}
 		}
@@ -111,7 +111,7 @@ func client(offset int32) Client {
 	}}
 }
 
-func send(n int32, r int32) (struct{}, FailureFailure) {
+func send(n int, r int) (struct{}, FailureFailure) {
 	for {
 		if n > r {
 			return struct{}{}, FailureFailure{Failed: true, Left: Failure{Tag: FailureInterrupted}}
@@ -122,12 +122,12 @@ func send(n int32, r int32) (struct{}, FailureFailure) {
 		if n == 0 {
 			return struct{}{}, FailureFailure{}
 		}
-		journal.Log("sent " + strconv.Itoa(int(n)))
+		journal.Log("sent " + strconv.Itoa(n))
 		n -= 1
 	}
 }
 
-func show(i int32, err FailureFailure) string {
+func show(i int, err FailureFailure) string {
 	return string(appendShow(nil, i, err))
 }
 
@@ -143,7 +143,7 @@ func appendShowArrayEitherFailureInt(buffer []byte, array []EitherInt) []byte {
 	return buffer
 }
 
-func appendShow(buffer []byte, i int32, err FailureFailure) []byte {
+func appendShow(buffer []byte, i int, err FailureFailure) []byte {
 	if err.Failed {
 		buffer = append(buffer, "(Left "...)
 		switch err.Left.Tag {
@@ -191,7 +191,7 @@ func EitherIntFailure(either EitherInt) FailureFailure {
 	return FailureFailure{}
 }
 
-func EitherIntFromResults(value int32, err FailureFailure) EitherInt {
+func EitherIntFromResults(value int, err FailureFailure) EitherInt {
 	if err.Failed {
 		return Left(err.Left)
 	}

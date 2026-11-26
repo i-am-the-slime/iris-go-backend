@@ -8,7 +8,7 @@ import "fixture/shared"
 
 type Step struct {
 	Loop shared.AccI
-	Done int32
+	Done int
 	Tag  uint8
 }
 
@@ -17,7 +17,7 @@ const (
 	StepDone
 )
 
-func Done(done int32) Step {
+func Done(done int) Step {
 	return Step{Tag: StepDone, Done: done}
 }
 
@@ -34,8 +34,8 @@ import (
 	"os"
 )
 
-func main_() int32 {
-	count := &shared.Ref[int32]{Value: 0}
+func main_() int {
+	count := &shared.Ref[int]{Value: 0}
 	mainGo(count, mainF(count, shared.AccI{Acc: 3, I: 0}))
 	countdown(count, 1, 3)
 	iterateF(count, 1, 3)
@@ -43,7 +43,7 @@ func main_() int32 {
 	return total
 }
 
-func countdown(count *shared.Ref[int32], n int32, acc int32) int32 {
+func countdown(count *shared.Ref[int], n int, acc int) int {
 	for {
 		countCaptured := count
 		if n <= 0 {
@@ -56,7 +56,7 @@ func countdown(count *shared.Ref[int32], n int32, acc int32) int32 {
 	}
 }
 
-func iterateF(ref *shared.Ref[int32], n int32, x int32) int32 {
+func iterateF(ref *shared.Ref[int], n int, x int) int {
 	for {
 		refCaptured := ref
 		if n <= 0 {
@@ -69,7 +69,7 @@ func iterateF(ref *shared.Ref[int32], n int32, x int32) int32 {
 	}
 }
 
-func mainF(count *shared.Ref[int32], st shared.AccI) class.Step {
+func mainF(count *shared.Ref[int], st shared.AccI) class.Step {
 	if st.I >= 1 {
 		return class.Done(st.Acc)
 	}
@@ -81,7 +81,7 @@ func mainF(count *shared.Ref[int32], st shared.AccI) class.Step {
 	return class.Loop(accI)
 }
 
-func mainGo(count *shared.Ref[int32], step class.Step) int32 {
+func mainGo(count *shared.Ref[int], step class.Step) int {
 	for {
 		switch step.Tag {
 		case class.StepLoop:
@@ -96,8 +96,7 @@ func mainGo(count *shared.Ref[int32], step class.Step) int32 {
 }
 
 func main() {
-	exitStatus := main_()
-	os.Exit(int(exitStatus))
+	os.Exit(main_())
 }
 
 // shared/shared.go
@@ -108,11 +107,11 @@ type Ref[T any] struct {
 }
 
 type AccI struct {
-	Acc int32
-	I   int32
+	Acc int
+	I   int
 }
 
 type StateValue struct {
-	State int32
-	Value int32
+	State int
+	Value int
 }

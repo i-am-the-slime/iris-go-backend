@@ -11,7 +11,7 @@ import (
 )
 
 type NestInt struct {
-	Nest int32
+	Nest int
 }
 
 type Nest struct {
@@ -44,11 +44,11 @@ func convert3(value *NestNest) *Nest {
 
 var main_ = initializeMain_()
 
-func initializeMain_() []int32 {
-	return []int32{nested(3, convert(NestInt{Nest: 1})), nested(4, convert2(NestString{Nest: "deep"}))}
+func initializeMain_() []int {
+	return []int{nested(3, convert(NestInt{Nest: 1})), nested(4, convert2(NestString{Nest: "deep"}))}
 }
 
-func nested(n int32, e any) int32 {
+func nested(n int, e any) int {
 	if n <= 0 {
 		return 0
 	}

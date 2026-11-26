@@ -14,21 +14,21 @@ import (
 
 var main_ = initializeMain_()
 
-func initializeMain_() []int32 {
-	result := array.Thaw([]int32{1, 2, 3, 4, 5})
+func initializeMain_() []int {
+	result := array.Thaw([]int{1, 2, 3, 4, 5})
 	reversed(result)
 	performed := shared.Frozen(*result)
 	return performed
 }
 
-func reversed(array *[]int32) {
+func reversed(array *[]int) {
 	array2 := *array
-	size := int32(len(array2))
+	size := len(array2)
 	end := size / 2
-	for i := int32(0); i < end; i++ {
+	for i := 0; i < end; i++ {
 		j := size - 1 - i
-		var i2 int32
-		var i3 int32
+		var i2 int
+		var i3 int
 		if j >= 0 {
 			i2 = array2[i]
 			i3 = array2[j]
@@ -40,12 +40,12 @@ func reversed(array *[]int32) {
 			array2[i] = i3
 		}
 	}
-	var i4 int32
+	var i4 int
 	i4 = 0
-	if 0 < len(array2) {
+	if len(array2) > 0 {
 		array2[0] = i4
 	}
-	if 1 < len(array2) {
+	if len(array2) > 1 {
 		array2[1] = 0
 	}
 	*array = array2

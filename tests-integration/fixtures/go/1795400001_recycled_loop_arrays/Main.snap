@@ -14,11 +14,11 @@ func ShowParticleConsNumberConsNumberNil(record shared.Particle) string {
 	return string(AppendShowParticleConsNumberConsNumberNil(nil, record))
 }
 
-func ShowInt(i int32) string {
-	return strconv.Itoa(int(i))
+func ShowInt(i int) string {
+	return strconv.Itoa(i)
 }
 
-func AppendShowArrayArrayInt(buffer []byte, array [][]int32) []byte {
+func AppendShowArrayArrayInt(buffer []byte, array [][]int) []byte {
 	buffer = append(buffer, '[')
 	for index, element := range array {
 		if index > 0 {
@@ -30,7 +30,7 @@ func AppendShowArrayArrayInt(buffer []byte, array [][]int32) []byte {
 	return buffer
 }
 
-func AppendShowArrayInt(buffer []byte, array []int32) []byte {
+func AppendShowArrayInt(buffer []byte, array []int) []byte {
 	buffer = append(buffer, '[')
 	for index, element := range array {
 		if index > 0 {
@@ -63,11 +63,11 @@ func AppendShowParticleConsNumberConsNumberNil(buffer []byte, record shared.Part
 	return buffer
 }
 
-func ArrayArrayInt(array [][]int32) string {
+func ArrayArrayInt(array [][]int) string {
 	return string(AppendShowArrayArrayInt(nil, array))
 }
 
-func ArrayInt(array []int32) string {
+func ArrayInt(array []int) string {
 	return string(AppendShowArrayInt(nil, array))
 }
 
@@ -82,7 +82,7 @@ import "fixture/shared"
 
 type Tuple struct {
 	Second shared.Particle
-	First  int32
+	First  int
 }
 
 // main.go
@@ -99,12 +99,12 @@ import (
 var main_ = initializeMain_()
 
 func initializeMain_() []string {
-	return []string{show.ArrayParticle(mainGo(0, []shared.Particle{{Position: 0.0, Velocity: 0.0}, {Position: 1.0, Velocity: 0.5}, {Position: 4.0, Velocity: -0.25}})), show.ArrayInt(mainGo2(0, []int32{1, 2, 3})), show.ArrayInt(shrink([]int32{9, 3, 7, 5, 4})), show.ArrayInt(mainGo3(0, []int32{0}, []int32{1, 2})), show.ArrayArrayInt(mainGo4(0, [][]int32{{1}, {2}}))}
+	return []string{show.ArrayParticle(mainGo(0, []shared.Particle{{Position: 0.0, Velocity: 0.0}, {Position: 1.0, Velocity: 0.5}, {Position: 4.0, Velocity: -0.25}})), show.ArrayInt(mainGo2(0, []int{1, 2, 3})), show.ArrayInt(shrink([]int{9, 3, 7, 5, 4})), show.ArrayInt(mainGo3(0, []int{0}, []int{1, 2})), show.ArrayArrayInt(mainGo4(0, [][]int{{1}, {2}}))}
 }
 
-var shrink func([]int32) []int32 = shrinkGo
+var shrink func([]int) []int = shrinkGo
 
-func mainGo(i int32, particles []shared.Particle) []shared.Particle {
+func mainGo(i int, particles []shared.Particle) []shared.Particle {
 	var particlesOwned []shared.Particle
 	var particlesSpare []shared.Particle
 	for {
@@ -113,12 +113,10 @@ func mainGo(i int32, particles []shared.Particle) []shared.Particle {
 		}
 		mapped := shared.Recycle(particlesSpare, len(particles))
 		for index := range particles {
-			i2 := int32(index)
 			accumulatorPosition := particles[index].Position
 			accumulatorVelocity := particles[index].Velocity
 			for index2 := range particles {
-				i3 := int32(index2)
-				if i2 != i3 {
+				if index != index2 {
 					accumulatorVelocity += (particles[index2].Position - accumulatorPosition) * 0.001
 				}
 			}
@@ -130,9 +128,9 @@ func mainGo(i int32, particles []shared.Particle) []shared.Particle {
 	}
 }
 
-func mainGo2(i int32, values []int32) []int32 {
-	var valuesOwned []int32
-	var valuesSpare []int32
+func mainGo2(i int, values []int) []int {
+	var valuesOwned []int
+	var valuesSpare []int
 	for {
 		if i >= 10 {
 			return values
@@ -146,31 +144,35 @@ func mainGo2(i int32, values []int32) []int32 {
 	}
 }
 
-func mainGo3(i int32, previous []int32, values []int32) []int32 {
+func mainGo3(i int, previous []int, values []int) []int {
 	for {
 		if i >= 3 {
 			return array.Append(previous, values)
 		}
-		i, previous, values = i+1, values, mapLanes(values)
+		mapped := make([]int, len(values))
+		for index, value := range values {
+			mapped[index] = value + 1
+		}
+		i, previous, values = i+1, values, mapped
 	}
 }
 
-func mainGo4(i int32, rows [][]int32) [][]int32 {
+func mainGo4(i int, rows [][]int) [][]int {
 	for {
 		if i >= 3 {
 			return rows
 		}
-		mapped := make([][]int32, len(rows))
+		mapped := make([][]int, len(rows))
 		for index, row := range rows {
-			mapped[index] = array.Append(row, []int32{i})
+			mapped[index] = array.Append(row, []int{i})
 		}
 		i, rows = i+1, mapped
 	}
 }
 
-func shrinkGo(values []int32) []int32 {
-	var valuesOwned []int32
-	var valuesSpare []int32
+func shrinkGo(values []int) []int {
+	var valuesOwned []int
+	var valuesSpare []int
 	for {
 		if len(values) <= 1 {
 			return values
@@ -188,65 +190,6 @@ func shrinkGo(values []int32) []int32 {
 
 func main() {
 	console.Print("[" + strings.Join(main_, " ") + "]")
-}
-
-// main_neon.go
-//go:build goexperiment.simd && arm64
-
-package main
-
-import "simd/archsimd"
-
-func mapLanes(xs []int32) []int32 {
-	c0 := archsimd.BroadcastInt32x4(1)
-	out := make([]int32, len(xs))
-	const step = 4
-	i := 0
-	for ; i < len(xs)-step+1; i += step {
-		x := archsimd.LoadInt32x4(xs[i : i+step])
-		x.Add(c0).Store(out[i : i+step])
-	}
-	if i < len(xs) {
-		x, _ := archsimd.LoadInt32x4Part(xs[i:])
-		x.Add(c0).StorePart(out[i:])
-	}
-	return out
-}
-
-// main_scalar.go
-//go:build !(goexperiment.simd && (arm64 || wasm))
-
-package main
-
-func mapLanes(xs []int32) []int32 {
-	out := make([]int32, len(xs))
-	for i, x := range xs {
-		out[i] = x + 1
-	}
-	return out
-}
-
-// main_vector.go
-//go:build goexperiment.simd && wasm
-
-package main
-
-import "simd"
-
-func mapLanes(xs []int32) []int32 {
-	c0 := simd.BroadcastInt32s(1)
-	out := make([]int32, len(xs))
-	step := simd.Int32s{}.Len()
-	i := 0
-	for ; i < len(xs)-step+1; i += step {
-		x := simd.LoadInt32s(xs[i : i+step])
-		x.Add(c0).Store(out[i : i+step])
-	}
-	if i < len(xs) {
-		x, _ := simd.LoadInt32sPart(xs[i:])
-		x.Add(c0).StorePart(out[i:])
-	}
-	return out
 }
 
 // shared/shared.go

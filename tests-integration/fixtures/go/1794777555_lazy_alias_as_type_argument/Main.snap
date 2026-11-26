@@ -30,7 +30,7 @@ func initializeMain_() []string {
 	return take(3, from(1))
 }
 
-func take(n int32, cell Stream) []string {
+func take(n int, cell Stream) []string {
 	switch n {
 	case 0:
 		return []string{}
@@ -40,9 +40,9 @@ func take(n int32, cell Stream) []string {
 	}
 }
 
-func from(n int32) *lazy.Lazy[*Tuple] {
+func from(n int) *lazy.Lazy[*Tuple] {
 	return lazy.Defer(func() *Tuple {
-		return &Tuple{First: &Labelled{First: strconv.Itoa(int(n)), Second: nil}, Second: lazy.Defer(func() Stream {
+		return &Tuple{First: &Labelled{First: strconv.Itoa(n), Second: nil}, Second: lazy.Defer(func() Stream {
 			return from(n + 1)
 		})}
 	})

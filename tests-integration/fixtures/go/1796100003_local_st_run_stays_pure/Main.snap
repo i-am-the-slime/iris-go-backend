@@ -9,7 +9,7 @@ import "fixture/shared"
 var main_ = initializeMain_()
 
 func initializeMain_() shared.MainResult {
-	var accumulator int32 = 0
+	accumulator := 0
 	for _, element := range numbers {
 		value := tripled(element)
 		accumulator += value
@@ -22,7 +22,7 @@ func initializeMain_() shared.MainResult {
 			break
 		}
 	}
-	var accumulator2 int32 = 0
+	accumulator2 := 0
 	for _, x := range numbers {
 		ref := x
 		s_ := ref + 1
@@ -32,13 +32,13 @@ func initializeMain_() shared.MainResult {
 	return shared.MainResult{Sum: accumulator, Found: found, Counted: accumulator2, Ignored: 0}
 }
 
-func tripled(x int32) int32 {
+func tripled(x int) int {
 	ref := x
 	ref *= 3
 	return ref
 }
 
-var numbers []int32 = []int32{3, 1, 4, 1, 5, 9, 2, 6}
+var numbers []int = []int{3, 1, 4, 1, 5, 9, 2, 6}
 
 func main() {
 	_ = main_
@@ -48,9 +48,9 @@ func main() {
 package shared
 
 type MainResult struct {
-	Counted int32
-	Ignored int32
-	Sum     int32
+	Counted int
+	Ignored int
+	Sum     int
 	Found   bool
 }
 
@@ -59,8 +59,8 @@ type Ref[T any] struct {
 }
 
 type StateValue struct {
-	State int32
-	Value int32
+	State int
+	Value int
 }
 
 // note: the entry's value of type { counted, found, ignored, sum } is not printed; use an Effect entry or a value of a printable type (Int, Number, Boolean, Char, String or an Array of them)

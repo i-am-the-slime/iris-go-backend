@@ -22,7 +22,7 @@ import (
 var main_ = initializeMain_()
 
 func initializeMain_() []string {
-	codeUnitLength := int32(2)
+	codeUnitLength := 2
 	var result string
 	switch codeUnitLength {
 	case 0:
@@ -34,10 +34,10 @@ func initializeMain_() []string {
 	default:
 		result = "many"
 	}
-	return []string{strconv.Itoa(int(countSpacesUnconsingCountsUpToTwo("a b c", 0))), result, strconv.FormatBool(int(int32(4)) < 4), strconv.Itoa(int(int32(2))), strconv.Itoa(int(unchangedTextLengthIsCountedBeforeTheLoop("banana", 0, 0))), strconv.Itoa(int(changedRestLengthIsCountedEachIteration("abcdefghij", 0)))}
+	return []string{strconv.Itoa(countSpacesUnconsingCountsUpToTwo("a b c", 0)), result, strconv.FormatBool(4 < 4), strconv.Itoa(2), strconv.Itoa(unchangedTextLengthIsCountedBeforeTheLoop("banana", 0, 0)), strconv.Itoa(changedRestLengthIsCountedEachIteration("abcdefghij", 0))}
 }
 
-func countSpacesUnconsingCountsUpToTwoOrCountSpacesUnconsingCountsUpToTwoJoin(step int, text string, count int32, head int32) int32 {
+func countSpacesUnconsingCountsUpToTwoOrCountSpacesUnconsingCountsUpToTwoJoin(step int, text string, count int, head int) int {
 	for {
 		switch step {
 		case shared.CountSpacesUnconsingCountsUpToTwoStep:
@@ -59,7 +59,7 @@ func countSpacesUnconsingCountsUpToTwoOrCountSpacesUnconsingCountsUpToTwoJoin(st
 				continue
 			}
 		default: // shared.CountSpacesUnconsingCountsUpToTwoJoinStep
-			var result int32
+			var result int
 			if head == prim.ToCharCode(' ') {
 				result = count + 1
 			} else {
@@ -70,11 +70,11 @@ func countSpacesUnconsingCountsUpToTwoOrCountSpacesUnconsingCountsUpToTwoJoin(st
 	}
 }
 
-func countSpacesUnconsingCountsUpToTwo(text string, count int32) int32 {
+func countSpacesUnconsingCountsUpToTwo(text string, count int) int {
 	return countSpacesUnconsingCountsUpToTwoOrCountSpacesUnconsingCountsUpToTwoJoin(shared.CountSpacesUnconsingCountsUpToTwoStep, text, count, 0)
 }
 
-func unchangedTextLengthIsCountedBeforeTheLoop(text string, i int32, count int32) int32 {
+func unchangedTextLengthIsCountedBeforeTheLoop(text string, i int, count int) int {
 	textUnits := prim.UTF16(text)
 	textASCII := textUnits.ASCII()
 	for {
@@ -82,7 +82,7 @@ func unchangedTextLengthIsCountedBeforeTheLoop(text string, i int32, count int32
 			return count
 		}
 		var result2 bool
-		if i >= 0 && int(i) < len(textASCII) {
+		if i >= 0 && i < len(textASCII) {
 			result2 = rune(textASCII[i]) == 'a'
 		} else {
 			left0, found := textUnits.CharAt(i)
@@ -92,7 +92,7 @@ func unchangedTextLengthIsCountedBeforeTheLoop(text string, i int32, count int32
 				result2 = false
 			}
 		}
-		var result int32
+		var result int
 		if result2 {
 			result = count + 1
 		} else {
@@ -102,7 +102,7 @@ func unchangedTextLengthIsCountedBeforeTheLoop(text string, i int32, count int32
 	}
 }
 
-func changedRestLengthIsCountedEachIteration(rest string, count int32) int32 {
+func changedRestLengthIsCountedEachIteration(rest string, count int) int {
 	for {
 		if prim.CodeUnitLengthUpTo(4, rest) < 3 {
 			return count

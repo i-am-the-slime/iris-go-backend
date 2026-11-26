@@ -12,7 +12,7 @@ import (
 type Expr struct {
 	Field0 *Expr
 	Field1 *Expr
-	Val    int32
+	Val    int
 	Tag    uint8
 }
 
@@ -25,16 +25,16 @@ const (
 
 type List struct {
 	Cons1 *List
-	Cons0 int32
+	Cons0 int
 }
 
 var sharedListNil = &List{}
 
-func Val(val int32) *Expr {
+func Val(val int) *Expr {
 	return &Expr{Tag: ExprVal, Val: val}
 }
 
-func Cons(cons0 int32, cons1 *List) *List {
+func Cons(cons0 int, cons1 *List) *List {
 	return &List{Cons0: cons0, Cons1: cons1}
 }
 
@@ -42,12 +42,12 @@ func Mul(field0 *Expr, field1 *Expr) *Expr {
 	return &Expr{Tag: ExprMul, Field0: field0, Field1: field1}
 }
 
-func main_(n int32) shared.MainResult {
+func main_(n int) shared.MainResult {
 	n2 := -n
 	return shared.MainResult{Built: evaluate(build(4)), Mirrored: evaluate(mirrorReusing(build(3))), Two: evaluateAdd(build(2), Val(2)), Linked: total(mainGo(5, sharedListNil)), Literal: totalCons(n, Cons(2, Cons(3, sharedListNil))), Positive: n > 0 && evaluateAdd(Val(n), Mul(Val(2), Val(n))) > 5, Negative: n2 > 0 && evaluateAdd(Val(n2), Mul(Val(2), Val(n2))) > 5}
 }
 
-func evaluate(expr *Expr) int32 {
+func evaluate(expr *Expr) int {
 	switch expr.Tag {
 	case ExprVal:
 		return expr.Val
@@ -60,12 +60,12 @@ func evaluate(expr *Expr) int32 {
 	}
 }
 
-func build(n int32) *Expr {
+func build(n int) *Expr {
 	var cells alloc.Cells[Expr]
 	return buildChunked(n, &cells)
 }
 
-func buildChunked(n int32, cells *alloc.Cells[Expr]) *Expr {
+func buildChunked(n int, cells *alloc.Cells[Expr]) *Expr {
 	switch n {
 	case 0:
 		return cells.New(Expr{Tag: ExprVal, Val: 1})
@@ -74,22 +74,22 @@ func buildChunked(n int32, cells *alloc.Cells[Expr]) *Expr {
 	}
 }
 
-func total(list *List) int32 {
+func total(list *List) int {
 	if list == sharedListNil {
 		return 0
 	}
 	return list.Cons0 + total(list.Cons1)
 }
 
-func evaluateAdd(left *Expr, right *Expr) int32 {
+func evaluateAdd(left *Expr, right *Expr) int {
 	return evaluate(left) + evaluate(right)
 }
 
-func totalCons(value int32, rest *List) int32 {
+func totalCons(value int, rest *List) int {
 	return value + total(rest)
 }
 
-func mainGo(remaining int32, list *List) *List {
+func mainGo(remaining int, list *List) *List {
 	var listIntCells alloc.Cells[List]
 	for {
 		if remaining <= 0 {
@@ -122,11 +122,11 @@ func main() {
 package shared
 
 type MainResult struct {
-	Built    int32
-	Linked   int32
-	Literal  int32
-	Mirrored int32
-	Two      int32
+	Built    int
+	Linked   int
+	Literal  int
+	Mirrored int
+	Two      int
 	Negative bool
 	Positive bool
 }

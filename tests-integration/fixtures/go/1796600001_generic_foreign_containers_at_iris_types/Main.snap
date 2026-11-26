@@ -29,8 +29,8 @@ import (
 	"strconv"
 )
 
-func ShowInt(i int32) string {
-	return strconv.Itoa(int(i))
+func ShowInt(i int) string {
+	return strconv.Itoa(i)
 }
 
 func ShowString(s string) string {
@@ -49,7 +49,7 @@ func AppendShowArrayString(buffer []byte, array []string) []byte {
 	return buffer
 }
 
-func AppendShowArrayArrayInt(buffer []byte, array [][]int32) []byte {
+func AppendShowArrayArrayInt(buffer []byte, array [][]int) []byte {
 	buffer = append(buffer, '[')
 	for index, element := range array {
 		if index > 0 {
@@ -61,7 +61,7 @@ func AppendShowArrayArrayInt(buffer []byte, array [][]int32) []byte {
 	return buffer
 }
 
-func AppendShowArrayInt(buffer []byte, array []int32) []byte {
+func AppendShowArrayInt(buffer []byte, array []int) []byte {
 	buffer = append(buffer, '[')
 	for index, element := range array {
 		if index > 0 {
@@ -77,11 +77,11 @@ func ArrayString(array []string) string {
 	return string(AppendShowArrayString(nil, array))
 }
 
-func ArrayArrayInt(array [][]int32) string {
+func ArrayArrayInt(array [][]int) string {
 	return string(AppendShowArrayArrayInt(nil, array))
 }
 
-func ArrayInt(array []int32) string {
+func ArrayInt(array []int) string {
 	return string(AppendShowArrayInt(nil, array))
 }
 
@@ -110,13 +110,13 @@ func main_() []string {
 	}
 	outer := repeated.IndexOrImpl(shared.Outer{Name: "none", Inner: shared.Inner{A: 0, B: ""}, Tags: []shared.Inner{}}, 0, accumulator2)
 	array3 := repeated.Freeze(accumulator)
-	mapped := make([]int32, len(array3))
+	mapped := make([]int, len(array3))
 	for index := range array3 {
 		mapped[index] = array3[index].A
 	}
 	text := prim.AppendString(nil, outer.Name)
 	text = prim.AppendString(text, outer.Inner.B)
-	mapped2 := make([]int32, len(outer.Tags))
+	mapped2 := make([]int, len(outer.Tags))
 	for index, value := range outer.Tags {
 		mapped2[index] = value.A
 	}
@@ -127,9 +127,9 @@ func main_() []string {
 		accumulator3 = repeated.SnocImpl(accumulator3, array5)
 	}
 	array6 := repeated.Freeze(accumulator3)
-	mapped3 := make([][]int32, len(array6))
+	mapped3 := make([][]int, len(array6))
 	for index, array5 := range array6 {
-		mapped4 := make([]int32, len(array5))
+		mapped4 := make([]int, len(array5))
 		for index2 := range array5 {
 			mapped4[index2] = array5[index2].A
 		}
@@ -152,7 +152,7 @@ func main_() []string {
 		}
 		mapped5[index] = result
 	}
-	return []string{show.ArrayInt(mapped), strconv.Itoa(int(repeated.Length(accumulator2))), string(text), show.ArrayArrayInt(mapped3), show.ArrayString(mapped5), repeated.Describe(any(repeated.IndexOrImpl(shared.Inner{A: 0, B: ""}, 1, accumulator))), repeated.Describe(int32(7))}
+	return []string{show.ArrayInt(mapped), strconv.Itoa(repeated.Length(accumulator2)), string(text), show.ArrayArrayInt(mapped3), show.ArrayString(mapped5), repeated.Describe(any(repeated.IndexOrImpl(shared.Inner{A: 0, B: ""}, 1, accumulator))), repeated.Describe(7)}
 }
 
 func main() {
@@ -164,7 +164,7 @@ package shared
 
 type Inner struct {
 	B string
-	A int32
+	A int
 }
 
 type Outer struct {

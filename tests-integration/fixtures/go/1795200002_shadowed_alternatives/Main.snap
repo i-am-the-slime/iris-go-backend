@@ -7,7 +7,7 @@ package either
 import "fixture/Data/Maybe"
 
 type Either struct {
-	Right int32
+	Right int
 	Tag   uint8
 	Left  maybe.Boolean
 }
@@ -36,7 +36,7 @@ import (
 	"os"
 )
 
-func main_() int32 {
+func main_() int {
 	var scrutineeTag uint8 = either.EitherLeft
 	var result bool
 	switch scrutineeTag {
@@ -45,7 +45,7 @@ func main_() int32 {
 	default:
 		result = false
 	}
-	var first int32
+	var first int
 	if result {
 		first = 1
 	} else {
@@ -55,6 +55,5 @@ func main_() int32 {
 }
 
 func main() {
-	exitStatus := main_()
-	os.Exit(int(exitStatus))
+	os.Exit(main_())
 }

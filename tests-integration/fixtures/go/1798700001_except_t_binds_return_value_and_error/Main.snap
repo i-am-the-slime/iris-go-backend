@@ -6,7 +6,7 @@ package either
 
 type EitherString struct {
 	Left  string
-	Right int32
+	Right int
 	Tag   uint8
 }
 
@@ -16,7 +16,7 @@ const (
 )
 
 type EitherInt struct {
-	Field0 int32
+	Field0 int
 	Tag    uint8
 }
 
@@ -27,7 +27,7 @@ const (
 
 type IntFailure struct {
 	Failed bool
-	Left   int32
+	Left   int
 }
 
 type StringFailure struct {
@@ -40,7 +40,7 @@ package variant
 
 type NotFoundTooBig struct {
 	NotFound string
-	TooBig   int32
+	TooBig   int
 	Tag      uint8
 }
 
@@ -65,7 +65,7 @@ type NotFoundTooBigFailure struct {
 	Left   NotFoundTooBig
 }
 
-func TooBig(tooBig int32) NotFoundTooBig {
+func TooBig(tooBig int) NotFoundTooBig {
 	return NotFoundTooBig{Tag: NotFoundTooBigTooBig, TooBig: tooBig}
 }
 
@@ -91,7 +91,7 @@ func main() {
 	if err.Failed {
 		result = "(Left " + prim.ShowString(err.Left) + ")"
 	} else {
-		result = "(Right " + strconv.Itoa(int(i)) + ")"
+		result = "(Right " + strconv.Itoa(i) + ")"
 	}
 	journal.Log(result)
 	i2, err := chain(0)
@@ -99,7 +99,7 @@ func main() {
 	if err.Failed {
 		result2 = "(Left " + prim.ShowString(err.Left) + ")"
 	} else {
-		result2 = "(Right " + strconv.Itoa(int(i2)) + ")"
+		result2 = "(Right " + strconv.Itoa(i2) + ")"
 	}
 	journal.Log(result2)
 	i3, err := countdown(10)
@@ -107,7 +107,7 @@ func main() {
 	if err.Failed {
 		result3 = "(Left " + prim.ShowString(err.Left) + ")"
 	} else {
-		result3 = "(Right " + strconv.Itoa(int(i3)) + ")"
+		result3 = "(Right " + strconv.Itoa(i3) + ")"
 	}
 	journal.Log(result3)
 	i4, err := countdown(9)
@@ -115,7 +115,7 @@ func main() {
 	if err.Failed {
 		result4 = "(Left " + prim.ShowString(err.Left) + ")"
 	} else {
-		result4 = "(Right " + strconv.Itoa(int(i4)) + ")"
+		result4 = "(Right " + strconv.Itoa(i4) + ")"
 	}
 	journal.Log(result4)
 	s, err2 := greet(42)
@@ -125,7 +125,7 @@ func main() {
 		case variant.NotFoundTooBigNotFound:
 			result5 = "missing: " + err2.Left.NotFound
 		default: // variant.NotFoundTooBigTooBig
-			result5 = "too big: " + strconv.Itoa(int(err2.Left.TooBig))
+			result5 = "too big: " + strconv.Itoa(err2.Left.TooBig)
 		}
 	} else {
 		result5 = s
@@ -138,7 +138,7 @@ func main() {
 		case variant.NotFoundTooBigNotFound:
 			result6 = "missing: " + err2.Left.NotFound
 		default: // variant.NotFoundTooBigTooBig
-			result6 = "too big: " + strconv.Itoa(int(err2.Left.TooBig))
+			result6 = "too big: " + strconv.Itoa(err2.Left.TooBig)
 		}
 	} else {
 		result6 = s2
@@ -151,7 +151,7 @@ func main() {
 		case variant.NotFoundTooBigNotFound:
 			result7 = "missing: " + err2.Left.NotFound
 		default: // variant.NotFoundTooBigTooBig
-			result7 = "too big: " + strconv.Itoa(int(err2.Left.TooBig))
+			result7 = "too big: " + strconv.Itoa(err2.Left.TooBig)
 		}
 	} else {
 		result7 = s3
@@ -165,36 +165,36 @@ func main() {
 		result8 = s4
 	}
 	journal.Log(result8)
-	ref := &shared.Ref[int32]{Value: 0}
+	ref := &shared.Ref[int]{Value: 0}
 	i5, err3 := statuses(ref)
 	var result9 string
 	if err3.Failed {
-		result9 = "(Left " + strconv.Itoa(int(err3.Left)) + ")"
+		result9 = "(Left " + strconv.Itoa(err3.Left) + ")"
 	} else {
-		result9 = "(Right " + strconv.Itoa(int(i5)) + ")"
+		result9 = "(Right " + strconv.Itoa(i5) + ")"
 	}
 	journal.Log(result9)
 	ref.Value = 3
 	i6, err3 := statuses(ref)
 	var result10 string
 	if err3.Failed {
-		result10 = "(Left " + strconv.Itoa(int(err3.Left)) + ")"
+		result10 = "(Left " + strconv.Itoa(err3.Left) + ")"
 	} else {
-		result10 = "(Right " + strconv.Itoa(int(i6)) + ")"
+		result10 = "(Right " + strconv.Itoa(i6) + ")"
 	}
 	journal.Log(result10)
 	ref.Value = 19
 	i7, err3 := statuses(ref)
 	var result11 string
 	if err3.Failed {
-		result11 = "(Left " + strconv.Itoa(int(err3.Left)) + ")"
+		result11 = "(Left " + strconv.Itoa(err3.Left) + ")"
 	} else {
-		result11 = "(Right " + strconv.Itoa(int(i7)) + ")"
+		result11 = "(Right " + strconv.Itoa(i7) + ")"
 	}
 	journal.Log(result11)
 }
 
-func chain(n int32) (int32, either.StringFailure) {
+func chain(n int) (int, either.StringFailure) {
 	switch n {
 	case 0:
 		return 0, either.StringFailure{Failed: true, Left: "division by zero"}
@@ -214,7 +214,7 @@ func chain(n int32) (int32, either.StringFailure) {
 	}
 }
 
-func countdown(n int32) (int32, either.StringFailure) {
+func countdown(n int) (int, either.StringFailure) {
 	if n < 0 {
 		return 0, either.StringFailure{Failed: true, Left: "below zero"}
 	}
@@ -228,7 +228,7 @@ func countdown(n int32) (int32, either.StringFailure) {
 	return i+n, either.StringFailure{}
 }
 
-func greet(id int32) (string, variant.NotFoundTooBigFailure) {
+func greet(id int) (string, variant.NotFoundTooBigFailure) {
 	if id == 42 {
 		journal.Log("found Alice")
 		id2 := id*2 - id
@@ -238,15 +238,15 @@ func greet(id int32) (string, variant.NotFoundTooBigFailure) {
 		if id2 > 1000 {
 			return "", variant.NotFoundTooBigFailure{Failed: true, Left: variant.TooBig(id2)}
 		}
-		return "", variant.NotFoundTooBigFailure{Failed: true, Left: variant.NotFound("no user " + strconv.Itoa(int(id2)))}
+		return "", variant.NotFoundTooBigFailure{Failed: true, Left: variant.NotFound("no user " + strconv.Itoa(id2))}
 	}
 	if id > 1000 {
 		return "", variant.NotFoundTooBigFailure{Failed: true, Left: variant.TooBig(id)}
 	}
-	return "", variant.NotFoundTooBigFailure{Failed: true, Left: variant.NotFound("no user " + strconv.Itoa(int(id)))}
+	return "", variant.NotFoundTooBigFailure{Failed: true, Left: variant.NotFound("no user " + strconv.Itoa(id))}
 }
 
-func statuses(ref *shared.Ref[int32]) (int32, either.IntFailure) {
+func statuses(ref *shared.Ref[int]) (int, either.IntFailure) {
 	s := ref.Value
 	s_ := s + 1
 	ref.Value = s_
@@ -267,7 +267,7 @@ func statuses(ref *shared.Ref[int32]) (int32, either.IntFailure) {
 	return b+i, either.IntFailure{}
 }
 
-func status(n int32) (int32, either.IntFailure) {
+func status(n int) (int, either.IntFailure) {
 	if n > 100 {
 		return 0, either.IntFailure{Failed: true, Left: 404}
 	}
@@ -281,8 +281,8 @@ func status(n int32) (int32, either.IntFailure) {
 	return 7, either.IntFailure{}
 }
 
-func chainJoin(field int32, b int32) (int32, either.StringFailure) {
-	journal.Log("chain " + strconv.Itoa(int(field)) + " " + strconv.Itoa(int(b)))
+func chainJoin(field int, b int) (int, either.StringFailure) {
+	journal.Log("chain " + strconv.Itoa(field) + " " + strconv.Itoa(b))
 	return field+b, either.StringFailure{}
 }
 
@@ -294,6 +294,6 @@ type Ref[T any] struct {
 }
 
 type StateValue struct {
-	State int32
-	Value int32
+	State int
+	Value int
 }

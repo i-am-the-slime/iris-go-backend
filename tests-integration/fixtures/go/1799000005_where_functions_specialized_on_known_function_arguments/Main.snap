@@ -7,10 +7,10 @@ package main
 import "strconv"
 
 func main_() []string {
-	return []string{strconv.Itoa(int(mainSumOf(1000, 0, 0))), strconv.Itoa(int(mainSumOfF(1000, 0, 0))), strconv.Itoa(int(mainGo(0, 0)))}
+	return []string{strconv.Itoa(mainSumOf(1000, 0, 0)), strconv.Itoa(mainSumOfF(1000, 0, 0)), strconv.Itoa(mainGo(0, 0))}
 }
 
-func mainSumOf(count int32, index int32, total int32) int32 {
+func mainSumOf(count int, index int, total int) int {
 	for {
 		if index >= count {
 			return total
@@ -19,7 +19,7 @@ func mainSumOf(count int32, index int32, total int32) int32 {
 	}
 }
 
-func mainSumOfF(count int32, index int32, total int32) int32 {
+func mainSumOfF(count int, index int, total int) int {
 	for {
 		if index >= count {
 			return total
@@ -28,7 +28,7 @@ func mainSumOfF(count int32, index int32, total int32) int32 {
 	}
 }
 
-func mainGo(index int32, total int32) int32 {
+func mainGo(index int, total int) int {
 	for {
 		if index >= 1000 {
 			return total

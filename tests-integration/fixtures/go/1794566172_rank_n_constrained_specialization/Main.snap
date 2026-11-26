@@ -5,18 +5,18 @@ source: tests-integration/src/fixtures.rs
 package tuple
 
 type TupleInt struct {
-	First  int32
-	Second int32
+	First  int
+	Second int
 }
 
 type TupleUnit struct {
 	First  struct{}
-	Second int32
+	Second int
 }
 
 type Interpreter struct {
-	Emit    func(int32, int32) TupleUnit
-	Measure func(string) func(int32) TupleInt
+	Emit    func(int, int) TupleUnit
+	Measure func(string) func(int) TupleInt
 }
 
 // main.go
@@ -32,26 +32,26 @@ import (
 )
 
 type SceneInt struct {
-	ForIdentity          func(shared.InterpreterIdentity) int32
-	ForST                func(shared.InterpreterST) int32
-	ForStateTIntIdentity func(tuple.Interpreter) func(int32) tuple.TupleInt
+	ForIdentity          func(shared.InterpreterIdentity) int
+	ForST                func(shared.InterpreterST) int
+	ForStateTIntIdentity func(tuple.Interpreter) func(int) tuple.TupleInt
 }
 
 type SceneUnit struct {
 	ForIdentity          func(shared.InterpreterIdentity)
 	ForST                func(shared.InterpreterST)
-	ForStateTIntIdentity func(tuple.Interpreter) func(int32) tuple.TupleUnit
+	ForStateTIntIdentity func(tuple.Interpreter) func(int) tuple.TupleUnit
 }
 
-var main_ []int32 = []int32{recorded, counted, measured}
+var main_ []int = []int{recorded, counted, measured}
 
 var recorded = initializeRecorded()
 
-func initializeRecorded() int32 {
-	var total int32 = 0
-	result := program.ForST(shared.InterpreterST{Emit: func(value int32) {
+func initializeRecorded() int {
+	total := 0
+	result := program.ForST(shared.InterpreterST{Emit: func(value int) {
 		total += value
-	}, Measure: func(text string) int32 {
+	}, Measure: func(text string) int {
 		return direct.CodePointLength(text)
 	}})
 	performed := total + result
@@ -60,11 +60,11 @@ func initializeRecorded() int32 {
 
 var counted = initializeCounted()
 
-func initializeCounted() int32 {
-	scrutinee := program.ForStateTIntIdentity(tuple.Interpreter{Emit: func(_ int32, x int32) tuple.TupleUnit {
+func initializeCounted() int {
+	scrutinee := program.ForStateTIntIdentity(tuple.Interpreter{Emit: func(_ int, x int) tuple.TupleUnit {
 		return tuple.TupleUnit{First: struct{}{}, Second: x + 1}
-	}, Measure: func(_ string) func(int32) tuple.TupleInt {
-		return func(s int32) tuple.TupleInt {
+	}, Measure: func(_ string) func(int) tuple.TupleInt {
+		return func(s int) tuple.TupleInt {
 			return tuple.TupleInt{First: 3, Second: s}
 		}
 	}})(0)
@@ -73,36 +73,36 @@ func initializeCounted() int32 {
 
 var measured = initializeMeasured()
 
-func initializeMeasured() int32 {
-	return program.ForIdentity(shared.InterpreterIdentity{Emit: func(_ int32) {
-	}, Measure: func(text string) int32 {
+func initializeMeasured() int {
+	return program.ForIdentity(shared.InterpreterIdentity{Emit: func(_ int) {
+	}, Measure: func(text string) int {
 		return direct.CodePointLength(text)
 	}})
 }
 
-var program SceneInt = SceneInt{ForIdentity: func(interpreter shared.InterpreterIdentity) int32 {
+var program SceneInt = SceneInt{ForIdentity: func(interpreter shared.InterpreterIdentity) int {
 	return programNext(interpreter.Measure("hello")).ForIdentity(interpreter)
-}, ForST: func(interpreter shared.InterpreterST) int32 {
+}, ForST: func(interpreter shared.InterpreterST) int {
 	i := interpreter.Measure("hello")
 	return programNext(i).ForST(interpreter)
-}, ForStateTIntIdentity: func(interpreter tuple.Interpreter) func(int32) tuple.TupleInt {
+}, ForStateTIntIdentity: func(interpreter tuple.Interpreter) func(int) tuple.TupleInt {
 	f := interpreter.Measure("hello")
-	return func(s int32) tuple.TupleInt {
+	return func(s int) tuple.TupleInt {
 		scrutinee := f(s)
 		return programNext(scrutinee.First).ForStateTIntIdentity(interpreter)(scrutinee.Second)
 	}
 }}
 
-func discardNext(run SceneUnit, i int32) SceneInt {
-	return SceneInt{ForIdentity: func(_ shared.InterpreterIdentity) int32 {
+func discardNext(run SceneUnit, i int) SceneInt {
+	return SceneInt{ForIdentity: func(_ shared.InterpreterIdentity) int {
 		return i + 1
-	}, ForST: func(interpreter shared.InterpreterST) int32 {
+	}, ForST: func(interpreter shared.InterpreterST) int {
 		run.ForST(interpreter)
 		interpreter.Emit(i * 2)
 		return i + 1
-	}, ForStateTIntIdentity: func(interpreter tuple.Interpreter) func(int32) tuple.TupleInt {
+	}, ForStateTIntIdentity: func(interpreter tuple.Interpreter) func(int) tuple.TupleInt {
 		f := run.ForStateTIntIdentity(interpreter)
-		return func(s int32) tuple.TupleInt {
+		return func(s int) tuple.TupleInt {
 			scrutinee := f(s)
 			scrutinee2 := interpreter.Emit(i*2, scrutinee.Second)
 			return tuple.TupleInt{First: i + 1, Second: scrutinee2.Second}
@@ -110,13 +110,13 @@ func discardNext(run SceneUnit, i int32) SceneInt {
 	}}
 }
 
-func programNext(width int32) SceneInt {
+func programNext(width int) SceneInt {
 	return discardNext(SceneUnit{ForIdentity: func(interpreter shared.InterpreterIdentity) {
 		interpreter.Emit(width)
 	}, ForST: func(interpreter shared.InterpreterST) {
 		interpreter.Emit(width)
-	}, ForStateTIntIdentity: func(interpreter tuple.Interpreter) func(int32) tuple.TupleUnit {
-		return func(i int32) tuple.TupleUnit {
+	}, ForStateTIntIdentity: func(interpreter tuple.Interpreter) func(int) tuple.TupleUnit {
+		return func(i int) tuple.TupleUnit {
 			return interpreter.Emit(width, i)
 		}
 	}}, width)
@@ -138,16 +138,16 @@ type Ref[T any] struct {
 }
 
 type StateValue struct {
-	State int32
-	Value int32
+	State int
+	Value int
 }
 
 type InterpreterST struct {
-	Emit    func(int32)
-	Measure func(string) int32
+	Emit    func(int)
+	Measure func(string) int
 }
 
 type InterpreterIdentity struct {
-	Emit    func(int32)
-	Measure func(string) int32
+	Emit    func(int)
+	Measure func(string) int
 }

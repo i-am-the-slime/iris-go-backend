@@ -18,20 +18,20 @@ import "fixture/Effect/Exception"
 //line Main.purs:22:3
 func main() {
 //line Main.purs:22:3
-	if sumFrom([]int32{1, 2, 3}, 0, 0) != 6 {
+	if sumFrom([]int{1, 2, 3}, 0, 0) != 6 {
 		effectexception.Throw("the total is wrong")
 	}
 //line Main.purs:24:3
-	if sumFrom([]int32{4}, 0, 0) != 4 {
+	if sumFrom([]int{4}, 0, 0) != 4 {
 		effectexception.Throw("the second total is wrong")
 	}
 }
 
 //line Main.purs:14:3
-func sumFrom(numbers []int32, index int32, total int32) int32 {
+func sumFrom(numbers []int, index int, total int) int {
 	for {
 //line Main.purs:14:3
-		if index >= int32(len(numbers)) {
+		if index >= len(numbers) {
 			return total
 		}
 //line Main.purs:16:5

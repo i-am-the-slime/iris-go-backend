@@ -18,7 +18,7 @@ package shared
 type MainResult struct {
 	Name string
 	Tags []string
-	Size int32
+	Size int
 }
 
 // note: the entry's value of type { name, size, tags } is not printed; use an Effect entry or a value of a printable type (Int, Number, Boolean, Char, String or an Array of them)

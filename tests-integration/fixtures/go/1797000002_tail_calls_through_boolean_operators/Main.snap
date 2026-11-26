@@ -15,13 +15,13 @@ import (
 var main_ = initializeMain_()
 
 func initializeMain_() []bool {
-	xs := []int32{1, 3, 2}
-	return []bool{allPositiveFrom(0, array.RangeInt32(1, 1000000)), allPositiveFrom(0, []int32{1, 2, -3}), anyNegativeFrom(0, array.RangeInt32(1, 1000000)), anyNegativeFrom(0, []int32{1, 2, -3}), mainGo(1), mainGo2(xs, 1), isEven(1000000), isOdd(7)}
+	xs := []int{1, 3, 2}
+	return []bool{allPositiveFrom(0, array.Range(1, 1000000)), allPositiveFrom(0, []int{1, 2, -3}), anyNegativeFrom(0, array.Range(1, 1000000)), anyNegativeFrom(0, []int{1, 2, -3}), mainGo(1), mainGo2(xs, 1), isEven(1000000), isOdd(7)}
 }
 
-func allPositiveFrom(i int32, xs []int32) bool {
+func allPositiveFrom(i int, xs []int) bool {
 	for {
-		if i >= int32(len(xs)) {
+		if i >= len(xs) {
 			return true
 		}
 		if xs[i] > 0 {
@@ -32,9 +32,9 @@ func allPositiveFrom(i int32, xs []int32) bool {
 	}
 }
 
-func anyNegativeFrom(i int32, xs []int32) bool {
+func anyNegativeFrom(i int, xs []int) bool {
 	for {
-		if i < int32(len(xs)) {
+		if i < len(xs) {
 			if xs[i] < 0 {
 				return true
 			}
@@ -45,7 +45,7 @@ func anyNegativeFrom(i int32, xs []int32) bool {
 	}
 }
 
-func isEvenOrIsOdd(step int, n int32) bool {
+func isEvenOrIsOdd(step int, n int) bool {
 	for {
 		switch step {
 		case shared.IsEvenStep:
@@ -70,15 +70,15 @@ func isEvenOrIsOdd(step int, n int32) bool {
 	}
 }
 
-func isEven(n int32) bool {
+func isEven(n int) bool {
 	return isEvenOrIsOdd(shared.IsEvenStep, n)
 }
 
-func isOdd(n int32) bool {
+func isOdd(n int) bool {
 	return isEvenOrIsOdd(shared.IsOddStep, n)
 }
 
-func mainGo(i int32) bool {
+func mainGo(i int) bool {
 	for {
 		if i >= 1000000 {
 			return true
@@ -91,9 +91,9 @@ func mainGo(i int32) bool {
 	}
 }
 
-func mainGo2(xs []int32, i int32) bool {
+func mainGo2(xs []int, i int) bool {
 	for {
-		if i >= int32(len(xs)) {
+		if i >= len(xs) {
 			return true
 		}
 		if xs[i-1] <= xs[i] {

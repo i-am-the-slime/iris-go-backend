@@ -9,11 +9,11 @@ const TagNothing = 0
 const TagJust = 1
 
 type ArrayInt struct {
-	Just []int32
+	Just []int
 	Tag  uint8
 }
 
-func JustArrayInt(just []int32) ArrayInt {
+func JustArrayInt(just []int) ArrayInt {
 	return ArrayInt{Tag: TagJust, Just: just}
 }
 
@@ -31,15 +31,15 @@ import (
 var main_ = initializeMain_()
 
 func initializeMain_() maybe.ArrayInt {
-	array2 := arraypkg.Append([]int32{2}, []int32{4, 8})
+	array2 := arraypkg.Append([]int{2}, []int{4, 8})
 	n := array2[0]
 	var result maybe.ArrayInt
 	if n&1 == 0 {
-		result = maybe.JustArrayInt([]int32{n >> 1})
+		result = maybe.JustArrayInt([]int{n >> 1})
 	} else {
 		result = maybe.NoArrayInt
 	}
-	array := arraypkg.Slice(1, int32(len(array2)), array2)
+	array := arraypkg.Slice(1, len(array2), array2)
 	result.Just = slices.Clip(result.Just)
 	for _, element := range array {
 		if result.Tag == maybe.TagNothing {
@@ -48,7 +48,7 @@ func initializeMain_() maybe.ArrayInt {
 		switch result.Tag {
 		case maybe.TagJust:
 			if element&1 == 0 {
-				result = maybe.JustArrayInt(arraypkg.Bounded(append(result.Just, element>>1)))
+				result = maybe.JustArrayInt(append(result.Just, element>>1))
 			} else {
 				result = maybe.NoArrayInt
 			}

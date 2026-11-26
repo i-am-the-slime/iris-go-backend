@@ -6,7 +6,7 @@ package dataint64
 
 import "strconv"
 
-func FromInt(a int32) int64 {
+func FromInt(a int) int64 {
 	return int64(a)
 }
 
@@ -53,7 +53,7 @@ func Min_(x uint64, y uint64) uint64 {
 	return y
 }
 
-func MaxInt(x int32, y int32) int32 {
+func MaxInt(x int, y int) int {
 	if x < y {
 		return y
 	}
@@ -72,11 +72,11 @@ package show
 
 import "strconv"
 
-func Show(i int32) string {
-	return strconv.Itoa(int(i))
+func Show(i int) string {
+	return strconv.Itoa(i)
 }
 
-func AppendShowArrayInt(buffer []byte, array []int32) []byte {
+func AppendShowArrayInt(buffer []byte, array []int) []byte {
 	buffer = append(buffer, '[')
 	for index, element := range array {
 		if index > 0 {
@@ -88,7 +88,7 @@ func AppendShowArrayInt(buffer []byte, array []int32) []byte {
 	return buffer
 }
 
-func ArrayInt(array []int32) string {
+func ArrayInt(array []int) string {
 	return string(AppendShowArrayInt(nil, array))
 }
 
@@ -97,7 +97,7 @@ package datauint64
 
 import "strconv"
 
-func UnsafeFromInt(a int32) uint64 {
+func UnsafeFromInt(a int) uint64 {
 	return uint64(a)
 }
 
@@ -132,6 +132,7 @@ package main
 
 import (
 	"fixture/Data/Int64"
+	"fixture/Data/Ord"
 	"fixture/Data/Show"
 	"fixture/Data/UInt64"
 	"github.com/i-am-the-slime/iris-go/console"
@@ -143,7 +144,7 @@ import (
 var main_ = initializeMain_()
 
 func initializeMain_() []string {
-	ints := []int32{3, -1, 4, 1, -5, 9, 2, 6, 5, 3, -5, 8, 9, 7, 9, 3, 2, 3, 8, 4, -6, 2, 6, 4, 3, 3, 8, 3, 2, 7, 9, 5, 0}
+	ints := []int{3, -1, 4, 1, -5, 9, 2, 6, 5, 3, -5, 8, 9, 7, 9, 3, 2, 3, 8, 4, -6, 2, 6, 4, 3, 3, 8, 3, 2, 7, 9, 5, 0}
 	mapped := make([]int64, len(ints))
 	for index, element := range ints {
 		mapped[index] = dataint64.FromInt(element)
@@ -151,6 +152,10 @@ func initializeMain_() []string {
 	mapped2 := make([]uint64, len(ints))
 	for index, element := range ints {
 		mapped2[index] = datauint64.UnsafeFromInt(element)
+	}
+	accumulator := prim.BottomInt
+	for _, element := range ints {
+		accumulator = ord.MaxInt(accumulator, element)
 	}
 	kept := []int64{}
 	for _, x := range mapped {
@@ -164,9 +169,9 @@ func initializeMain_() []string {
 			kept2 = append(kept2, x)
 		}
 	}
-	mapped3 := make([]int32, len(mapped))
+	mapped3 := make([]int, len(mapped))
 	for index, x := range mapped {
-		var result int32
+		var result int
 		if x == 3 {
 			result = 2
 		} else if x > 3 {
@@ -176,7 +181,7 @@ func initializeMain_() []string {
 		}
 		mapped3[index] = result
 	}
-	return []string{strconv.FormatInt(foldLanes(mapped, int64(-9223372036854775808)), 10) + "l", strconv.FormatUint(foldLanes2(mapped2, uint64(18446744073709551615)), 10) + "ul", strconv.Itoa(int(foldLanes3(ints, int32(prim.BottomInt)))), prim.ShowNumber(foldLanes4([]float64{3.5, -1.0, 4.0, 1.0, -5.0, 9.25, 2.0, 6.0, 5.0, 3.0, -5.0, 8.0, 9.0, 7.0, 9.0, 3.0, 2.0, 3.0, 8.0, 4.0, -6.0, 2.0, 6.0, 4.0, 3.0, 3.0, 8.0, 3.0, 2.0, 7.0, 9.0, 5.0, 0.0}, 0.0)), dataint64.ArrayInt64(kept), datauint64.ArrayUInt64(kept2), show.ArrayInt(mapped3), "true"}
+	return []string{strconv.FormatInt(foldLanes(mapped, int64(-9223372036854775808)), 10) + "l", strconv.FormatUint(foldLanes2(mapped2, uint64(18446744073709551615)), 10) + "ul", strconv.Itoa(accumulator), prim.ShowNumber(foldLanes3([]float64{3.5, -1.0, 4.0, 1.0, -5.0, 9.25, 2.0, 6.0, 5.0, 3.0, -5.0, 8.0, 9.0, 7.0, 9.0, 3.0, 2.0, 3.0, 8.0, 4.0, -6.0, 2.0, 6.0, 4.0, 3.0, 3.0, 8.0, 3.0, 2.0, 7.0, 9.0, 5.0, 0.0}, 0.0)), dataint64.ArrayInt64(kept), datauint64.ArrayUInt64(kept2), show.ArrayInt(mapped3), "true"}
 }
 
 func main() {
@@ -252,38 +257,7 @@ func foldLanes2(xs []uint64, initial uint64) uint64 {
 	return accumulator
 }
 
-func foldLanes3(xs []int32, initial int32) int32 {
-	acc0 := archsimd.BroadcastInt32x4(initial)
-	acc1, acc2, acc3 := acc0, acc0, acc0
-	const step = 4
-	i := 0
-	for ; i < len(xs)-4*step+1; i += 4 * step {
-		x0 := archsimd.LoadInt32x4(xs[i : i+step])
-		acc0 = acc0.Max(x0)
-		x1 := archsimd.LoadInt32x4(xs[i+step : i+2*step])
-		acc1 = acc1.Max(x1)
-		x2 := archsimd.LoadInt32x4(xs[i+2*step : i+3*step])
-		acc2 = acc2.Max(x2)
-		x3 := archsimd.LoadInt32x4(xs[i+3*step : i+4*step])
-		acc3 = acc3.Max(x3)
-	}
-	acc0 = acc0.Max(acc1).Max(acc2.Max(acc3))
-	var lanes [4]int32
-	acc0.Store(lanes[:])
-	accumulator := initial
-	for _, lane := range lanes[:step] {
-		if accumulator < lane {
-			accumulator = lane
-		}
-	}
-	for ; i < len(xs); i++ {
-		x := xs[i]
-		accumulator = max(accumulator, x)
-	}
-	return accumulator
-}
-
-func foldLanes4(xs []float64, initial float64) float64 {
+func foldLanes3(xs []float64, initial float64) float64 {
 	acc0 := archsimd.BroadcastFloat64x2(initial)
 	acc1, acc2, acc3 := acc0, acc0, acc0
 	const step = 2
@@ -339,15 +313,7 @@ func foldLanes2(xs []uint64, initial uint64) uint64 {
 	return accumulator
 }
 
-func foldLanes3(xs []int32, initial int32) int32 {
-	accumulator := initial
-	for _, x := range xs {
-		accumulator = max(accumulator, x)
-	}
-	return accumulator
-}
-
-func foldLanes4(xs []float64, initial float64) float64 {
+func foldLanes3(xs []float64, initial float64) float64 {
 	accumulator := initial
 	for _, x := range xs {
 		s0 := accumulator
@@ -428,38 +394,7 @@ func foldLanes2(xs []uint64, initial uint64) uint64 {
 	return accumulator
 }
 
-func foldLanes3(xs []int32, initial int32) int32 {
-	acc0 := simd.BroadcastInt32s(initial)
-	acc1, acc2, acc3 := acc0, acc0, acc0
-	step := acc0.Len()
-	i := 0
-	for ; i < len(xs)-4*step+1; i += 4 * step {
-		x0 := simd.LoadInt32s(xs[i : i+step])
-		acc0 = acc0.Max(x0)
-		x1 := simd.LoadInt32s(xs[i+step : i+2*step])
-		acc1 = acc1.Max(x1)
-		x2 := simd.LoadInt32s(xs[i+2*step : i+3*step])
-		acc2 = acc2.Max(x2)
-		x3 := simd.LoadInt32s(xs[i+3*step : i+4*step])
-		acc3 = acc3.Max(x3)
-	}
-	acc0 = acc0.Max(acc1).Max(acc2.Max(acc3))
-	var lanes [16]int32
-	acc0.Store(lanes[:])
-	accumulator := initial
-	for _, lane := range lanes[:step] {
-		if accumulator < lane {
-			accumulator = lane
-		}
-	}
-	for ; i < len(xs); i++ {
-		x := xs[i]
-		accumulator = max(accumulator, x)
-	}
-	return accumulator
-}
-
-func foldLanes4(xs []float64, initial float64) float64 {
+func foldLanes3(xs []float64, initial float64) float64 {
 	acc0 := simd.BroadcastFloat64s(initial)
 	acc1, acc2, acc3 := acc0, acc0, acc0
 	step := acc0.Len()

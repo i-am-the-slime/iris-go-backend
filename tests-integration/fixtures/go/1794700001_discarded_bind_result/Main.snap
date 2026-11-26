@@ -10,19 +10,19 @@ import (
 	"os"
 )
 
-func main_() int32 {
-	var total int32 = 0
+func main_() int {
+	total := 0
 	ticks := create()
 	ticks2 := create()
 	previous := ticks2.Subscribe
-	previous(func(n int32) {
+	previous(func(n int) {
 		total += n
 	})
-	var latest int32 = 0
-	previous(func(n int32) {
+	latest := 0
+	previous(func(n int) {
 		latest = n
 	})
-	ticks.Subscribe(func(n int32) {
+	ticks.Subscribe(func(n int) {
 		previous2 := latest
 		ticks2.Push(previous2 + n)
 	})
@@ -32,13 +32,13 @@ func main_() int32 {
 }
 
 func create() shared.Ticks {
-	subscribers := []func(int32){}
-	return shared.Ticks{Subscribe: func(k func(int32)) func() {
+	subscribers := []func(int){}
+	return shared.Ticks{Subscribe: func(k func(int)) func() {
 		s := subscribers
-		subscribers = array.Append(s, []func(int32){k})
+		subscribers = array.Append(s, []func(int){k})
 		return func() {
 		}
-	}, Push: func(n int32) {
+	}, Push: func(n int) {
 		array := subscribers
 		for _, f := range array {
 			f(n)
@@ -47,8 +47,7 @@ func create() shared.Ticks {
 }
 
 func main() {
-	exitStatus := main_()
-	os.Exit(int(exitStatus))
+	os.Exit(main_())
 }
 
 // shared/shared.go
@@ -59,16 +58,16 @@ type Ref[T any] struct {
 }
 
 type StateValueOfIntInt struct {
-	State int32
-	Value int32
+	State int
+	Value int
 }
 
 type Ticks struct {
-	Push      func(int32)
-	Subscribe func(func(int32)) func()
+	Push      func(int)
+	Subscribe func(func(int)) func()
 }
 
 type StateValueOfArrayFnIntEffectArrayFnIntEffect struct {
-	State []func(int32)
-	Value []func(int32)
+	State []func(int)
+	Value []func(int)
 }

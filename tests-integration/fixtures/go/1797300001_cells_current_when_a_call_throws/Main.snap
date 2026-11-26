@@ -37,8 +37,8 @@ import (
 	"os"
 )
 
-func main_() int32 {
-	total := &shared.Ref[int32]{Value: 0}
+func main_() int {
+	total := &shared.Ref[int]{Value: 0}
 	either2 := direct.CatchException(func(x exception.Error) either.Either {
 		return either.Left(x)
 	}, func() either.Either {
@@ -46,7 +46,7 @@ func main_() int32 {
 		return either.Right(struct{}{})
 	})
 	read := total.Value
-	var result int32
+	var result int
 	switch either2.Tag {
 	case either.EitherLeft:
 		result = 1
@@ -56,7 +56,7 @@ func main_() int32 {
 	return read + result
 }
 
-func addCodes(total *shared.Ref[int32], text string, index int32) {
+func addCodes(total *shared.Ref[int], text string, index int) {
 	totalValue := total.Value
 	textUnits := prim.UTF16(text)
 	for {
@@ -74,8 +74,7 @@ func addCodes(total *shared.Ref[int32], text string, index int32) {
 }
 
 func main() {
-	exitStatus := main_()
-	os.Exit(int(exitStatus))
+	os.Exit(main_())
 }
 
 // shared/shared.go
@@ -86,6 +85,6 @@ type Ref[T any] struct {
 }
 
 type StateValue struct {
-	State int32
-	Value int32
+	State int
+	Value int
 }

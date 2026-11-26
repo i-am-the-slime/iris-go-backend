@@ -6,20 +6,20 @@ package types
 
 type List struct {
 	Cons1 *List
-	Cons0 int32
+	Cons0 int
 }
 
 var SharedListNil = &List{}
 
-func Cons(cons0 int32, cons1 *List) *List {
+func Cons(cons0 int, cons1 *List) *List {
 	return &List{Cons0: cons0, Cons1: cons1}
 }
 
-func Sum(value *List) int32 {
+func Sum(value *List) int {
 	return SumGo(0, value)
 }
 
-func SumGo(b int32, value *List) int32 {
+func SumGo(b int, value *List) int {
 	for {
 		if value == SharedListNil {
 			return b
@@ -45,7 +45,7 @@ const (
 type Tree struct {
 	Node1  *Tree
 	Node4  *Tree
-	Node2  int32
+	Node2  int
 	Node0  Color
 	Node3  bool
 	Unique uint8
@@ -53,22 +53,22 @@ type Tree struct {
 
 var SharedTreeLeaf = &Tree{}
 
-func Node(node0 Color, node1 *Tree, node2 int32, node3 bool, node4 *Tree) *Tree {
+func Node(node0 Color, node1 *Tree, node2 int, node3 bool, node4 *Tree) *Tree {
 	return &Tree{Node0: node0, Node1: node1, Node2: node2, Node3: node3, Node4: node4}
 }
 
-func Size(value *Tree) int32 {
+func Size(value *Tree) int {
 	if value == SharedTreeLeaf {
 		return 0
 	}
 	return Size(value.Node1) + 1 + Size(value.Node4)
 }
 
-func Checksum(value *Tree) int32 {
+func Checksum(value *Tree) int {
 	return ChecksumGo(0, value)
 }
 
-func BlackHeight(value *Tree) int32 {
+func BlackHeight(value *Tree) int {
 	if value == SharedTreeLeaf {
 		return 1
 	}
@@ -88,7 +88,7 @@ func BlackHeight(value *Tree) int32 {
 	if left < 0 || (left != BlackHeight(r) || result) {
 		return -1
 	}
-	var result4 int32
+	var result4 int
 	switch color {
 	case ColorRed:
 		result4 = 0
@@ -98,7 +98,7 @@ func BlackHeight(value *Tree) int32 {
 	return left + result4
 }
 
-func Ordered(low int32, high int32, value *Tree) bool {
+func Ordered(low int, high int, value *Tree) bool {
 	for {
 		if value == SharedTreeLeaf {
 			return true
@@ -120,7 +120,7 @@ func Ordered(low int32, high int32, value *Tree) bool {
 	}
 }
 
-func Ins(kx int32, vx bool, value *Tree) *Tree {
+func Ins(kx int, vx bool, value *Tree) *Tree {
 	if value == SharedTreeLeaf {
 		return &Tree{Node0: ColorRed, Node1: SharedTreeLeaf, Node2: kx, Node3: vx, Node4: SharedTreeLeaf, Unique: 3}
 	}
@@ -192,7 +192,7 @@ func Ins(kx int32, vx bool, value *Tree) *Tree {
 	return &Tree{Node0: ColorBlack, Node1: a2, Node2: ky2, Node3: vy2, Node4: Ins(kx, vx, b2), Unique: 2}
 }
 
-func ChecksumGo(acc int32, value *Tree) int32 {
+func ChecksumGo(acc int, value *Tree) int {
 	for {
 		if value == SharedTreeLeaf {
 			return acc
@@ -201,7 +201,7 @@ func ChecksumGo(acc int32, value *Tree) int32 {
 		k := value.Node2
 		v := value.Node3
 		r := value.Node4
-		var result int32
+		var result int
 		if v {
 			result = k
 		} else {
@@ -211,7 +211,7 @@ func ChecksumGo(acc int32, value *Tree) int32 {
 	}
 }
 
-func InsReusing(kx int32, vx bool, value *Tree) *Tree {
+func InsReusing(kx int, vx bool, value *Tree) *Tree {
 	if value == SharedTreeLeaf {
 		return &Tree{Node0: ColorRed, Node1: SharedTreeLeaf, Node2: kx, Node3: vx, Node4: SharedTreeLeaf, Unique: 3}
 	}
@@ -392,7 +392,7 @@ func InsReusing(kx int32, vx bool, value *Tree) *Tree {
 	return value
 }
 
-func InsChecked(kx int32, vx bool, value *Tree, valueOwned bool) *Tree {
+func InsChecked(kx int, vx bool, value *Tree, valueOwned bool) *Tree {
 	if value == SharedTreeLeaf {
 		return &Tree{Node0: ColorRed, Node1: SharedTreeLeaf, Node2: kx, Node3: vx, Node4: SharedTreeLeaf, Unique: 3}
 	}
@@ -685,12 +685,12 @@ import (
 
 var main_ = initializeMain_()
 
-func initializeMain_() []int32 {
+func initializeMain_() []int {
 	result := mainGoReusing(redblack.SharedTreeLeaf, redblack_types.SharedListTreeNil, 0, 1500)
-	return []int32{result.Inspected, list_redblack.Length(result.Trees), types.Sum(redblack_types.MapSize(result.Trees)), types.Sum(redblack_types.Map_(redblack.Checksum, result.Trees)), list_redblack.Length(mainGoReusing2(redblack_types.SharedListTreeNil, result.Trees))}
+	return []int{result.Inspected, list_redblack.Length(result.Trees), types.Sum(redblack_types.MapSize(result.Trees)), types.Sum(redblack_types.Map_(redblack.Checksum, result.Trees)), list_redblack.Length(mainGoReusing2(redblack_types.SharedListTreeNil, result.Trees))}
 }
 
-func member(key int32, value *redblack.Tree) bool {
+func member(key int, value *redblack.Tree) bool {
 	for {
 		if value == redblack.SharedTreeLeaf {
 			return false
@@ -710,7 +710,7 @@ func member(key int32, value *redblack.Tree) bool {
 	}
 }
 
-func mainGo(tree *redblack.Tree, kept *redblack_types.ListTree, inspected int32, n int32) redblack_types.MainGoResult {
+func mainGo(tree *redblack.Tree, kept *redblack_types.ListTree, inspected int, n int) redblack_types.MainGoResult {
 	for {
 		if n <= 0 {
 			return redblack_types.MainGoResult{Inspected: inspected, Trees: redblack_types.Cons(tree, kept)}
@@ -735,7 +735,7 @@ func mainGo(tree *redblack.Tree, kept *redblack_types.ListTree, inspected int32,
 		} else {
 			result = kept
 		}
-		var result2 int32
+		var result2 int
 		if n%3 == 0 {
 			result2 = redblack.Checksum(next)
 		} else {
@@ -745,7 +745,7 @@ func mainGo(tree *redblack.Tree, kept *redblack_types.ListTree, inspected int32,
 	}
 }
 
-func mainGoReusing(tree *redblack.Tree, kept *redblack_types.ListTree, inspected int32, n int32) redblack_types.MainGoResult {
+func mainGoReusing(tree *redblack.Tree, kept *redblack_types.ListTree, inspected int, n int) redblack_types.MainGoResult {
 	if n <= 0 {
 		return redblack_types.MainGoResult{Inspected: inspected, Trees: redblack_types.Cons(tree, kept)}
 	}
@@ -771,7 +771,7 @@ func mainGoReusing(tree *redblack.Tree, kept *redblack_types.ListTree, inspected
 	} else {
 		result = kept
 	}
-	var result2 int32
+	var result2 int
 	if n%3 == 0 {
 		result2 = redblack.Checksum(next)
 	} else {
@@ -796,7 +796,7 @@ func mainGoReusing2(acc *redblack_types.ListTree, list *redblack_types.ListTree)
 	}
 }
 
-func mainGoReusingChecked(tree *redblack.Tree, kept *redblack_types.ListTree, inspected int32, n int32, treeOwned bool) redblack_types.MainGoResult {
+func mainGoReusingChecked(tree *redblack.Tree, kept *redblack_types.ListTree, inspected int, n int, treeOwned bool) redblack_types.MainGoResult {
 	if n <= 0 {
 		return redblack_types.MainGoResult{Inspected: inspected, Trees: redblack_types.Cons(tree, kept)}
 	}
@@ -824,7 +824,7 @@ func mainGoReusingChecked(tree *redblack.Tree, kept *redblack_types.ListTree, in
 	} else {
 		result = kept
 	}
-	var result2 int32
+	var result2 int
 	if n%3 == 0 {
 		result2 = redblack.Checksum(next)
 	} else {
@@ -846,11 +846,11 @@ package list_redblack
 
 import "fixture/shared/RedBlack+Data.List.Types"
 
-func Length(value *redblack_types.ListTree) int32 {
+func Length(value *redblack_types.ListTree) int {
 	return LengthGo(0, value)
 }
 
-func LengthGo(b int32, value *redblack_types.ListTree) int32 {
+func LengthGo(b int, value *redblack_types.ListTree) int {
 	for {
 		if value == redblack_types.SharedListTreeNil {
 			return b
@@ -900,14 +900,14 @@ var SharedListListTreeNil = &ListListTree{}
 
 type MainGoResult struct {
 	Trees     *ListTree
-	Inspected int32
+	Inspected int
 }
 
 func Cons(cons0 *redblack.Tree, cons1 *ListTree) *ListTree {
 	return &ListTree{Cons0: cons0, Cons1: cons1}
 }
 
-func Map_(f func(*redblack.Tree) int32, list *ListTree) *types.List {
+func Map_(f func(*redblack.Tree) int, list *ListTree) *types.List {
 	return MapChunkedRevMap(f, SharedListListTreeNil, list)
 }
 
@@ -915,7 +915,7 @@ func MapSize(list *ListTree) *types.List {
 	return MapSizeChunkedRevMap(SharedListListTreeNil, list)
 }
 
-func MapChunkedRevMap(f func(*redblack.Tree) int32, chunksAcc *ListListTree, chunk *ListTree) *types.List {
+func MapChunkedRevMap(f func(*redblack.Tree) int, chunksAcc *ListListTree, chunk *ListTree) *types.List {
 	var listListTreeCells alloc.Cells[ListListTree]
 	for {
 		if chunk != SharedListTreeNil && chunk.Cons1 != SharedListTreeNil && chunk.Cons1.Cons1 != SharedListTreeNil {
@@ -935,7 +935,7 @@ func MapChunkedRevMap(f func(*redblack.Tree) int32, chunksAcc *ListListTree, chu
 	}
 }
 
-func MapChunkedRevMapReverseUnrolledMap(f func(*redblack.Tree) int32, list *ListListTree, acc *types.List) *types.List {
+func MapChunkedRevMapReverseUnrolledMap(f func(*redblack.Tree) int, list *ListListTree, acc *types.List) *types.List {
 	var listIntCells alloc.Cells[types.List]
 	for {
 		if list != SharedListListTreeNil && list.Cons0 != SharedListTreeNil && list.Cons0.Cons1 != SharedListTreeNil && list.Cons0.Cons1.Cons1 != SharedListTreeNil {

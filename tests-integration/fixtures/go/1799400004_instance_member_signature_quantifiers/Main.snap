@@ -4,13 +4,20 @@ source: tests-integration/src/fixtures.rs
 // Data/Maybe/maybe.go
 package maybe
 
-type Int int64
-
-const NoInt Int = 1 << 32
-
 const TagNothing = 0
 
 const TagJust = 1
+
+type Int struct {
+	Just int
+	Tag  uint8
+}
+
+func JustInt(just int) Int {
+	return Int{Tag: TagJust, Just: just}
+}
+
+var NoInt = Int{Tag: TagNothing}
 
 type String struct {
 	Just string
@@ -31,8 +38,8 @@ import (
 	"strconv"
 )
 
-func ShowInt(i int32) string {
-	return strconv.Itoa(int(i))
+func ShowInt(i int) string {
+	return strconv.Itoa(i)
 }
 
 func ShowString(s string) string {
@@ -51,7 +58,7 @@ func AppendShowArrayString(buffer []byte, array []string) []byte {
 	return buffer
 }
 
-func AppendShowArrayInt(buffer []byte, array []int32) []byte {
+func AppendShowArrayInt(buffer []byte, array []int) []byte {
 	buffer = append(buffer, '[')
 	for index, element := range array {
 		if index > 0 {
@@ -67,7 +74,7 @@ func ArrayString(array []string) string {
 	return string(AppendShowArrayString(nil, array))
 }
 
-func ArrayInt(array []int32) string {
+func ArrayInt(array []int) string {
 	return string(AppendShowArrayInt(nil, array))
 }
 
@@ -79,19 +86,20 @@ import (
 	"fixture/Data/Show"
 	journal "fixture/Journal_ffi"
 	"fixture/shared"
-	arraypkg "github.com/i-am-the-slime/iris-go/array"
 	"strconv"
 )
 
 func main() {
-	array := []maybe.Int{maybe.Int(1), maybe.NoInt, maybe.Int(3)}
-	bound := make([]int32, 0, len(array))
-	for _, x := range array {
-		if x != maybe.NoInt {
-			bound = append(bound, int32(x))
+	array := []maybe.Int{maybe.JustInt(1), maybe.NoInt, maybe.JustInt(3)}
+	bound := make([]int, 0, len(array))
+	for xIndex := range array {
+		switch array[xIndex].Tag {
+		case maybe.TagNothing:
+		default: // maybe.TagJust
+			bound = append(bound, array[xIndex].Just)
 		}
 	}
-	journal.Log(show.ArrayInt(arraypkg.Bounded(bound)))
+	journal.Log(show.ArrayInt(bound))
 	array2 := []maybe.String{maybe.JustString("a"), maybe.NoString}
 	bound2 := make([]string, 0, len(array2))
 	for xIndex := range array2 {
@@ -101,8 +109,8 @@ func main() {
 			bound2 = append(bound2, array2[xIndex].Just)
 		}
 	}
-	journal.Log(show.ArrayString(arraypkg.Bounded(bound2)))
-	array3 := []int32{1, 2}
+	journal.Log(show.ArrayString(bound2))
+	array3 := []int{1, 2}
 	mapped := []string{}
 	for _, left := range array3 {
 		array4 := []string{"x"}
@@ -111,7 +119,7 @@ func main() {
 			mapped2[index] = shared.LeftRight{Left: left, Right: value}
 		}
 		for leftRightIndex := range mapped2 {
-			mapped = append(mapped, strconv.Itoa(int(mapped2[leftRightIndex].Left))+mapped2[leftRightIndex].Right)
+			mapped = append(mapped, strconv.Itoa(mapped2[leftRightIndex].Left)+mapped2[leftRightIndex].Right)
 		}
 	}
 	journal.Log(show.ArrayString(mapped))
@@ -122,5 +130,5 @@ package shared
 
 type LeftRight struct {
 	Right string
-	Left  int32
+	Left  int
 }

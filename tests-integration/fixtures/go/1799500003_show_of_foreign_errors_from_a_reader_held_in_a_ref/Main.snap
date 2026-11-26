@@ -4,9 +4,20 @@ source: tests-integration/src/fixtures.rs
 // Data/Maybe/maybe.go
 package maybe
 
-type Int int64
+const TagNothing = 0
 
-const NoInt Int = 1 << 32
+const TagJust = 1
+
+type Int struct {
+	Just int
+	Tag  uint8
+}
+
+func JustInt(just int) Int {
+	return Int{Tag: TagJust, Just: just}
+}
+
+var NoInt = Int{Tag: TagNothing}
 
 // Foreign/foreign.go
 package foreign
@@ -26,7 +37,7 @@ type ForeignError struct {
 	ErrorAtIndex1    *ForeignError
 	ErrorAtProperty0 string
 	ErrorAtProperty1 *ForeignError
-	ErrorAtIndex0    int32
+	ErrorAtIndex0    int
 	Tag              uint8
 }
 
@@ -51,7 +62,7 @@ type NonEmpty struct {
 
 type Either struct {
 	Left  NonEmpty
-	Right int32
+	Right int
 	Tag   uint8
 }
 
@@ -82,19 +93,21 @@ func TypeMismatch(typeMismatch0 string, typeMismatch1 string) *ForeignError {
 	return &ForeignError{Tag: ForeignErrorTypeMismatch, TypeMismatch0: typeMismatch0, TypeMismatch1: typeMismatch1}
 }
 
-func ReadInt(value any) (int32, NonEmptyFailure) {
+func ReadInt(value any) (int, NonEmptyFailure) {
 	if foreignvalue.TagOf(value) == "Number" {
 		number := foreignvalue.Number(value)
 		var integer maybe.Int
-		if math.Trunc(number) == number && (number >= math.MinInt32 && number <= math.MaxInt32) {
-			integer = maybe.Int(int32(number))
+		if math.Trunc(number) == number && (number >= math.MinInt && number < -math.MinInt) {
+			integer = maybe.JustInt(int(number))
 		} else {
 			integer = maybe.NoInt
 		}
-		if integer == maybe.NoInt {
+		switch integer.Tag {
+		case maybe.TagNothing:
 			return 0, NonEmptyFailure{Failed: true, Left: NonEmpty{First: TypeMismatch("Int", foreignvalue.TagOf(value)), Second: SharedListNil}}
+		default: // maybe.TagJust
+			return integer.Just, NonEmptyFailure{}
 		}
-		return int32(integer), NonEmptyFailure{}
 	}
 	return 0, NonEmptyFailure{Failed: true, Left: NonEmpty{First: TypeMismatch("Int", foreignvalue.TagOf(value)), Second: SharedListNil}}
 }
@@ -142,12 +155,12 @@ import (
 
 func main() {
 	ref := foreign.ReadInt
-	i, err := ref(int32(42))
+	i, err := ref(int(42))
 	var result string
 	if err.Failed {
 		result = "failed: " + foreign.ShowNonEmptyListForeignError(err.Left)
 	} else {
-		result = strconv.Itoa(int(i))
+		result = strconv.Itoa(i)
 	}
 	journal.Log(result)
 	i2, err := ref("forty-two")
@@ -155,7 +168,7 @@ func main() {
 	if err.Failed {
 		result2 = "failed: " + foreign.ShowNonEmptyListForeignError(err.Left)
 	} else {
-		result2 = strconv.Itoa(int(i2))
+		result2 = strconv.Itoa(i2)
 	}
 	journal.Log(result2)
 }

@@ -63,8 +63,8 @@ func ShowString(s string) string {
 	return prim.ShowString(s)
 }
 
-func ShowInt(i int32) string {
-	return strconv.Itoa(int(i))
+func ShowInt(i int) string {
+	return strconv.Itoa(i)
 }
 
 func ShowBoolean(boolean bool) string {
@@ -74,7 +74,7 @@ func ShowBoolean(boolean bool) string {
 	return "false"
 }
 
-func AppendShowArrayInt(buffer []byte, array []int32) []byte {
+func AppendShowArrayInt(buffer []byte, array []int) []byte {
 	buffer = append(buffer, '[')
 	for index, element := range array {
 		if index > 0 {
@@ -110,7 +110,7 @@ func AppendShowArrayString(buffer []byte, array []string) []byte {
 	return buffer
 }
 
-func ArrayInt(array []int32) string {
+func ArrayInt(array []int) string {
 	return string(AppendShowArrayInt(nil, array))
 }
 
@@ -144,14 +144,14 @@ const (
 )
 
 type Card struct {
-	Rank int32
+	Rank int
 	Suit Suit
 }
 
 type Expression struct {
 	Add0 *Expression
 	Add1 *Expression
-	Leaf int32
+	Leaf int
 	Tag  uint8
 }
 
@@ -196,8 +196,8 @@ func initializeMain_() []string {
 		element := ordered(suits[index], sorted2[index])
 		built2[index] = element
 	}
-	array2 := []int32{3, 1}
-	array3 := []int32{2, 2}
+	array2 := []int{3, 1}
+	array3 := []int{2, 2}
 	count3 := min(len(array2), len(array3))
 	built3 := make([]bool, count3)
 	for index := range count3 {
@@ -213,7 +213,7 @@ func initializeMain_() []string {
 	expressions[3] = Expression{Tag: ExpressionLeaf, Leaf: 2}
 	expressions[4] = Expression{Tag: ExpressionLeaf, Leaf: 3}
 	array4 := []*Expression{&expressions[0]}
-	mapped3 := make([]int32, len(array4))
+	mapped3 := make([]int, len(array4))
 	for index, element := range array4 {
 		mapped3[index] = scaled(3, element)
 	}
@@ -225,7 +225,7 @@ func initializeMain_() []string {
 }
 
 func describe(card Card) string {
-	return strconv.Itoa(int(card.Rank)) + " of " + show(card.Suit)
+	return strconv.Itoa(card.Rank) + " of " + show(card.Suit)
 }
 
 var cards = initializeCards()
@@ -265,7 +265,7 @@ func ordered(left Suit, right Suit) ordering.Ordering {
 	return ordering.OrderingGT
 }
 
-func scaled(factor int32, value *Expression) int32 {
+func scaled(factor int, value *Expression) int {
 	switch value.Tag {
 	case ExpressionLeaf:
 		return value.Leaf * factor

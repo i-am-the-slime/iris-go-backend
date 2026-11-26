@@ -17,8 +17,8 @@ func initializeMain_() []string {
 	xs := []shared.Id{{Id: "a"}}
 	var result string
 	result = xs[0].Id
-	xs2 := []int32{1, 2}
-	var result2 int32
+	xs2 := []int{1, 2}
+	var result2 int
 	result2 = xs2[1] + 1
 	field := opaque(3)
 	scrutinee := opaque(1)
@@ -49,10 +49,10 @@ func initializeMain_() []string {
 	} else {
 		result5 = "none"
 	}
-	return []string{result, strconv.Itoa(int(result2)), strconv.Itoa(int(field * field)), result3, result4, result5}
+	return []string{result, strconv.Itoa(result2), strconv.Itoa(field * field), result3, result4, result5}
 }
 
-func opaque(x int32) int32 {
+func opaque(x int) int {
 	for {
 		if x == 12345 {
 			continue
@@ -61,12 +61,12 @@ func opaque(x int32) int32 {
 	}
 }
 
-func mainJoin(m int32) string {
-	return strconv.Itoa(int(m)) + strconv.Itoa(int(m)) + strconv.Itoa(int(m)) + strconv.Itoa(int(m)) + strconv.Itoa(int(m)) + strconv.Itoa(int(m)) + strconv.Itoa(int(m)) + strconv.Itoa(int(m)) + strconv.Itoa(int(m)) + strconv.Itoa(int(m)) + strconv.Itoa(int(m))
+func mainJoin(m int) string {
+	return strconv.Itoa(m) + strconv.Itoa(m) + strconv.Itoa(m) + strconv.Itoa(m) + strconv.Itoa(m) + strconv.Itoa(m) + strconv.Itoa(m) + strconv.Itoa(m) + strconv.Itoa(m) + strconv.Itoa(m) + strconv.Itoa(m)
 }
 
-func mainJoin2(m int32) string {
-	return strconv.Itoa(int(m)) + strconv.Itoa(int(m)) + strconv.Itoa(int(m)) + strconv.Itoa(int(m)) + strconv.Itoa(int(m)) + strconv.Itoa(int(m)) + strconv.Itoa(int(m)) + strconv.Itoa(int(m)) + strconv.Itoa(int(m)) + strconv.Itoa(int(m)) + strconv.Itoa(int(m)) + strconv.Itoa(int(m)) + strconv.Itoa(int(m)) + strconv.Itoa(int(m)) + strconv.Itoa(int(m)) + strconv.Itoa(int(m)) + strconv.Itoa(int(m)) + strconv.Itoa(int(m)) + strconv.Itoa(int(m)) + strconv.Itoa(int(m))
+func mainJoin2(m int) string {
+	return strconv.Itoa(m) + strconv.Itoa(m) + strconv.Itoa(m) + strconv.Itoa(m) + strconv.Itoa(m) + strconv.Itoa(m) + strconv.Itoa(m) + strconv.Itoa(m) + strconv.Itoa(m) + strconv.Itoa(m) + strconv.Itoa(m) + strconv.Itoa(m) + strconv.Itoa(m) + strconv.Itoa(m) + strconv.Itoa(m) + strconv.Itoa(m) + strconv.Itoa(m) + strconv.Itoa(m) + strconv.Itoa(m) + strconv.Itoa(m)
 }
 
 func main() {

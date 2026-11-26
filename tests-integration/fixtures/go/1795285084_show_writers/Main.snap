@@ -11,7 +11,7 @@ import (
 
 type Either struct {
 	Right string
-	Left  int32
+	Left  int
 	Tag   uint8
 }
 
@@ -22,10 +22,10 @@ const (
 
 type IntFailure struct {
 	Failed bool
-	Left   int32
+	Left   int
 }
 
-func Left(left int32) Either {
+func Left(left int) Either {
 	return Either{Tag: EitherLeft, Left: left}
 }
 
@@ -77,18 +77,25 @@ import (
 	"strconv"
 )
 
-type Int int64
+const TagNothing = 0
 
-const NoInt Int = 1 << 32
+const TagJust = 1
+
+type Int struct {
+	Just int
+	Tag  uint8
+}
 
 type XY struct {
 	X Int
 	Y Int
 }
 
-const TagNothing = 0
+func JustInt(just int) Int {
+	return Int{Tag: TagJust, Just: just}
+}
 
-const TagJust = 1
+var NoInt = Int{Tag: TagNothing}
 
 type Number struct {
 	Just float64
@@ -145,19 +152,21 @@ func AppendShowArrayXY(buffer []byte, array []XY) []byte {
 
 func AppendShowXYConsMaybeIntConsMaybeIntNil(buffer []byte, record XY) []byte {
 	buffer = append(buffer, "{ x: "...)
-	if record.X != NoInt {
+	switch record.X.Tag {
+	case TagJust:
 		buffer = append(buffer, "(Just "...)
-		buffer = strconv.AppendInt(buffer, int64(int32(record.X)), 10)
+		buffer = strconv.AppendInt(buffer, int64(record.X.Just), 10)
 		buffer = append(buffer, ')')
-	} else {
+	default: // TagNothing
 		buffer = append(buffer, "Nothing"...)
 	}
 	buffer = append(buffer, ", y: "...)
-	if record.Y != NoInt {
+	switch record.Y.Tag {
+	case TagJust:
 		buffer = append(buffer, "(Just "...)
-		buffer = strconv.AppendInt(buffer, int64(int32(record.Y)), 10)
+		buffer = strconv.AppendInt(buffer, int64(record.Y.Just), 10)
 		buffer = append(buffer, ')')
-	} else {
+	default: // TagNothing
 		buffer = append(buffer, "Nothing"...)
 	}
 	buffer = append(buffer, " }"...)
@@ -176,8 +185,8 @@ import (
 	"strconv"
 )
 
-func ShowInt(i int32) string {
-	return strconv.Itoa(int(i))
+func ShowInt(i int) string {
+	return strconv.Itoa(i)
 }
 
 func ShowNumber(number float64) string {
@@ -196,7 +205,7 @@ func AppendShowArrayNumber(buffer []byte, array []float64) []byte {
 	return buffer
 }
 
-func AppendShowArrayArrayInt(buffer []byte, array [][]int32) []byte {
+func AppendShowArrayArrayInt(buffer []byte, array [][]int) []byte {
 	buffer = append(buffer, '[')
 	for index, element := range array {
 		if index > 0 {
@@ -208,7 +217,7 @@ func AppendShowArrayArrayInt(buffer []byte, array [][]int32) []byte {
 	return buffer
 }
 
-func AppendShowArrayInt(buffer []byte, array []int32) []byte {
+func AppendShowArrayInt(buffer []byte, array []int) []byte {
 	buffer = append(buffer, '[')
 	for index, element := range array {
 		if index > 0 {
@@ -220,11 +229,11 @@ func AppendShowArrayInt(buffer []byte, array []int32) []byte {
 	return buffer
 }
 
-func ArrayArrayInt(array [][]int32) string {
+func ArrayArrayInt(array [][]int) string {
 	return string(AppendShowArrayArrayInt(nil, array))
 }
 
-func ArrayInt(array []int32) string {
+func ArrayInt(array []int) string {
 	return string(AppendShowArrayInt(nil, array))
 }
 
@@ -245,9 +254,9 @@ import (
 
 type Shape struct {
 	Circle float64
-	Pair1  maybe.Int
 	Rect   shared.HW
-	Pair0  int32
+	Pair0  int
+	Pair1  maybe.Int
 	Tag    uint8
 }
 
@@ -274,12 +283,12 @@ const (
 var sharedColourRed = &Colour{Tag: ColourRed}
 
 type Wrapped struct {
-	A int32
+	A int
 }
 
 type Point struct {
-	First  int32
-	Second int32
+	First  int
+	Second int
 }
 
 func Circle(circle float64) Shape {
@@ -290,7 +299,7 @@ func Rect(rect shared.HW) Shape {
 	return Shape{Tag: ShapeRect, Rect: rect}
 }
 
-func Pair(pair0 int32, pair1 maybe.Int) Shape {
+func Pair(pair0 int, pair1 maybe.Int) Shape {
 	return Shape{Tag: ShapePair, Pair0: pair0, Pair1: pair1}
 }
 
@@ -316,7 +325,7 @@ func initializeMain_() []string {
 	text2 = maybe_tuple.AppendShowArrayTupleCharArrayMaybeNumber(text2, []maybe_tuple.Tuple{{First: 'a', Second: []maybe.Number{maybe.JustNumber(2.5)}}})
 	text3 := appendShowArrayNumber(nil, []float64{1.0})
 	text3 = show.AppendShowArrayNumber(text3, []float64{1.0})
-	return []string{show.ArrayInt([]int32{1, 2, 3}), show.ArrayInt([]int32{}), show.ArrayArrayInt([][]int32{{1}, {}, {-2, 3}}), string(text), maybe.ArrayXY([]maybe.XY{{X: maybe.Int(1), Y: maybe.NoInt}}), string(text2), arrayShape([]Shape{Circle(1.0), Rect(shared.HW{W: 1, H: -2}), {Tag: ShapeEmpty}, Pair(-3, maybe.Int(-4))}), arrayColour([]*Colour{sharedColourRed, Mixed(sharedColourRed, Named("x\"y"))}), string(text3), arrayWrapped([]Wrapped{{A: 1}}), arrayPoint([]Point{{First: 1, Second: 2}})}
+	return []string{show.ArrayInt([]int{1, 2, 3}), show.ArrayInt([]int{}), show.ArrayArrayInt([][]int{{1}, {}, {-2, 3}}), string(text), maybe.ArrayXY([]maybe.XY{{X: maybe.JustInt(1), Y: maybe.NoInt}}), string(text2), arrayShape([]Shape{Circle(1.0), Rect(shared.HW{W: 1, H: -2}), {Tag: ShapeEmpty}, Pair(-3, maybe.JustInt(-4))}), arrayColour([]*Colour{sharedColourRed, Mixed(sharedColourRed, Named("x\"y"))}), string(text3), arrayWrapped([]Wrapped{{A: 1}}), arrayPoint([]Point{{First: 1, Second: 2}})}
 }
 
 func showShape(shape Shape) string {
@@ -459,11 +468,12 @@ func appendShowShape(buffer []byte, shape Shape) []byte {
 		buffer = append(buffer, "(Pair "...)
 		buffer = strconv.AppendInt(buffer, int64(shape.Pair0), 10)
 		buffer = append(buffer, ' ')
-		if shape.Pair1 != maybe.NoInt {
+		switch shape.Pair1.Tag {
+		case maybe.TagJust:
 			buffer = append(buffer, "(Just "...)
-			buffer = strconv.AppendInt(buffer, int64(int32(shape.Pair1)), 10)
+			buffer = strconv.AppendInt(buffer, int64(shape.Pair1.Just), 10)
 			buffer = append(buffer, ')')
-		} else {
+		default: // maybe.TagNothing
 			buffer = append(buffer, "Nothing"...)
 		}
 		buffer = append(buffer, ')')
@@ -533,6 +543,6 @@ func AppendShow(buffer []byte, tuple Tuple) []byte {
 package shared
 
 type HW struct {
-	H int32
-	W int32
+	H int
+	W int
 }

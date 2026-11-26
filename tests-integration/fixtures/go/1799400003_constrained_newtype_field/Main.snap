@@ -6,7 +6,7 @@ package either
 
 type EitherString struct {
 	Left  string
-	Right int32
+	Right int
 	Tag   uint8
 }
 
@@ -16,7 +16,7 @@ const (
 )
 
 type EitherInt struct {
-	Field0 int32
+	Field0 int
 	Tag    uint8
 }
 
@@ -27,7 +27,7 @@ const (
 
 type IntFailure struct {
 	Failed bool
-	Left   int32
+	Left   int
 }
 
 type StringFailure struct {
@@ -44,9 +44,9 @@ import (
 	"strconv"
 )
 
-type ParserProblemInt func(int32) (int32, either.StringFailure)
+type ParserProblemInt func(int) (int, either.StringFailure)
 
-type ParserCodeInt func(int32) (int32, either.IntFailure)
+type ParserCodeInt func(int) (int, either.IntFailure)
 
 func main() {
 	i, err := positiveProblem(0)
@@ -54,7 +54,7 @@ func main() {
 	if err.Failed {
 		result = "problem: " + err.Left
 	} else {
-		result = strconv.Itoa(int(i))
+		result = strconv.Itoa(i)
 	}
 	journal.Log(result)
 	i2, err := positiveProblem(3)
@@ -62,27 +62,27 @@ func main() {
 	if err.Failed {
 		result2 = "problem: " + err.Left
 	} else {
-		result2 = strconv.Itoa(int(i2))
+		result2 = strconv.Itoa(i2)
 	}
 	journal.Log(result2)
 	i3, err2 := positiveCode(-1)
 	var result3 string
 	if err2.Failed {
-		result3 = "code " + strconv.Itoa(int(err2.Left))
+		result3 = "code " + strconv.Itoa(err2.Left)
 	} else {
-		result3 = strconv.Itoa(int(i3))
+		result3 = strconv.Itoa(i3)
 	}
 	journal.Log(result3)
 }
 
-var positiveProblem ParserProblemInt = func(n int32) (int32, either.StringFailure) {
+var positiveProblem ParserProblemInt = func(n int) (int, either.StringFailure) {
 	if n > 0 {
 		return n, either.StringFailure{}
 	}
 	return 0, either.StringFailure{Failed: true, Left: "end"}
 }
 
-var positiveCode ParserCodeInt = func(n int32) (int32, either.IntFailure) {
+var positiveCode ParserCodeInt = func(n int) (int, either.IntFailure) {
 	if n > 0 {
 		return n, either.IntFailure{}
 	}

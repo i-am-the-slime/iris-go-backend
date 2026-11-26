@@ -4,13 +4,20 @@ source: tests-integration/src/fixtures.rs
 // Data/Maybe/maybe.go
 package maybe
 
-type Int int64
-
-const NoInt Int = 1 << 32
-
 const TagNothing = 0
 
 const TagJust = 1
+
+type Int struct {
+	Just int
+	Tag  uint8
+}
+
+func JustInt(just int) Int {
+	return Int{Tag: TagJust, Just: just}
+}
+
+var NoInt = Int{Tag: TagNothing}
 
 type String struct {
 	Just string
@@ -42,9 +49,9 @@ const (
 )
 
 type Shape struct {
-	Circle     int32
-	Rectangle0 int32
-	Rectangle1 int32
+	Circle     int
+	Rectangle0 int
+	Rectangle1 int
 	Tag        uint8
 }
 
@@ -53,11 +60,11 @@ const (
 	ShapeRectangle
 )
 
-func Circle(circle int32) Shape {
+func Circle(circle int) Shape {
 	return Shape{Tag: ShapeCircle, Circle: circle}
 }
 
-func Rectangle(rectangle0 int32, rectangle1 int32) Shape {
+func Rectangle(rectangle0 int, rectangle1 int) Shape {
 	return Shape{Tag: ShapeRectangle, Rectangle0: rectangle0, Rectangle1: rectangle1}
 }
 
@@ -72,7 +79,7 @@ func initializeMain_() []string {
 	array2 := []Shape{Circle(1), Rectangle(2, 3)}
 	mapped2 := make([]string, len(array2))
 	for index, x := range array2 {
-		var result int32
+		var result int
 		switch x.Tag {
 		case ShapeCircle:
 			radius := x.Circle
@@ -80,23 +87,24 @@ func initializeMain_() []string {
 		default: // ShapeRectangle
 			result = x.Rectangle0 * x.Rectangle1
 		}
-		mapped2[index] = strconv.Itoa(int(result))
+		mapped2[index] = strconv.Itoa(result)
 	}
-	array3 := []maybe.Int{maybe.Int(2), maybe.NoInt}
+	array3 := []maybe.Int{maybe.JustInt(2), maybe.NoInt}
 	mapped3 := make([]string, len(array3))
-	for index, x := range array3 {
-		var result int32
-		if x != maybe.NoInt {
-			result = 1 + int32(x)
-		} else {
+	for index := range array3 {
+		var result int
+		switch array3[index].Tag {
+		case maybe.TagJust:
+			result = 1 + array3[index].Just
+		default: // maybe.TagNothing
 			result = 1
 		}
-		mapped3[index] = strconv.Itoa(int(result))
+		mapped3[index] = strconv.Itoa(result)
 	}
 	array4 := []string{"start", "jump"}
 	mapped4 := make([]string, len(array4))
 	for index, x := range array4 {
-		var result int32
+		var result int
 		switch x {
 		case "start":
 			result = 1
@@ -105,9 +113,9 @@ func initializeMain_() []string {
 		default:
 			result = 0
 		}
-		mapped4[index] = strconv.Itoa(int(result))
+		mapped4[index] = strconv.Itoa(result)
 	}
-	array5 := []int32{500, 5}
+	array5 := []int{500, 5}
 	mapped5 := make([]string, len(array5))
 	for index, number := range array5 {
 		var result string
@@ -121,7 +129,7 @@ func initializeMain_() []string {
 	array6 := []shared.LeftRight{{Left: 1, Right: 2}}
 	mapped6 := make([]string, len(array6))
 	for index := range array6 {
-		mapped6[index] = strconv.Itoa(int(array6[index].Left + array6[index].Right))
+		mapped6[index] = strconv.Itoa(array6[index].Left + array6[index].Right)
 	}
 	array7 := []maybe.String{maybe.JustString("here")}
 	mapped7 := make([]string, len(array7))
@@ -157,6 +165,6 @@ func main() {
 package shared
 
 type LeftRight struct {
-	Left  int32
-	Right int32
+	Left  int
+	Right int
 }

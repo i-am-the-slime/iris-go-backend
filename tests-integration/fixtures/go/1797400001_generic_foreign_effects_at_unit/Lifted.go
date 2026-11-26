@@ -11,4 +11,4 @@ func CombineImpl[A, B, C any](combine func(A) func(B) C, left func() A, right fu
 	return combine(left())(right())
 }
 
-func ModifyImpl[T, B any](f func(int32) T, result func(T) B) B { return result(f(41)) }
+func ModifyImpl[T, B any](f func(int) T, result func(T) B) B { return result(f(41)) }

@@ -15,9 +15,9 @@ import (
 	"github.com/i-am-the-slime/iris-go/array"
 )
 
-func Traverse_F(array2 []int32) []struct{} {
-	function2 := func(x int32) func([]struct{}) []struct{} {
-		a := []int32{x, x + 1}
+func Traverse_F(array2 []int) []struct{} {
+	function2 := func(x int) func([]struct{}) []struct{} {
+		a := []int{x, x + 1}
 		return func(b []struct{}) []struct{} {
 			mapped := make([]func(struct{}), len(a))
 			for index := range a {
@@ -32,7 +32,7 @@ func Traverse_F(array2 []int32) []struct{} {
 			return units
 		}
 	}
-	return array.Foldr(func(i int32, array []struct{}) []struct{} {
+	return array.Foldr(func(i int, array []struct{}) []struct{} {
 		return function2(i)(array)
 	}, []struct{}{{}}, array2)
 }
@@ -64,8 +64,8 @@ func ArrayUnit(array []struct{}) string {
 package tuple
 
 type Tuple struct {
-	First  int32
-	Second int32
+	First  int
+	Second int
 }
 
 // main.go
@@ -79,12 +79,12 @@ import (
 )
 
 func main() {
-	journal.Log(show.ArrayUnit(foldable.Traverse_F([]int32{1, 2})))
-	array := []int32{1, 2, 3}
+	journal.Log(show.ArrayUnit(foldable.Traverse_F([]int{1, 2})))
+	array := []int{1, 2, 3}
 	accumulator := []struct{}{{}}
 	for index2 := len(array) - 1; index2 >= 0; index2-- {
 		x := array[index2]
-		array2 := []int32{x}
+		array2 := []int{x}
 		mapped := make([]func(struct{}), len(array2))
 		for index := range array2 {
 			mapped[index] = category.Identity
@@ -98,7 +98,7 @@ func main() {
 		accumulator = units
 	}
 	journal.Log(show.ArrayUnit(accumulator))
-	array3 := [][]int32{{1}, {2, 3}}
+	array3 := [][]int{{1}, {2, 3}}
 	accumulator2 := []struct{}{{}}
 	for index := len(array3) - 1; index >= 0; index-- {
 		x := array3[index]
@@ -115,12 +115,11 @@ func main() {
 		accumulator2 = units
 	}
 	journal.Log(show.ArrayUnit(accumulator2))
-	array4 := []int32{5, 6}
+	array4 := []int{5, 6}
 	accumulator3 := []struct{}{{}}
 	for index := len(array4) - 1; index >= 0; index-- {
 		i := array4[index]
-		i2 := int32(index)
-		array2 := []int32{i2, i}
+		array2 := []int{index, i}
 		mapped := make([]func(struct{}), len(array2))
 		for index2 := range array2 {
 			mapped[index2] = category.Identity
@@ -134,10 +133,10 @@ func main() {
 		accumulator3 = units
 	}
 	journal.Log(show.ArrayUnit(accumulator3))
-	functions := []func(int32){func(_ int32) {
-	}, func(_ int32) {
+	functions := []func(int){func(_ int) {
+	}, func(_ int) {
 	}}
-	values := []int32{1, 2, 3}
+	values := []int{1, 2, 3}
 	units2 := make([]struct{}, len(functions)*len(values))
 	for _, function := range functions {
 		for _, value := range values {

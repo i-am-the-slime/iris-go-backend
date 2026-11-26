@@ -13,15 +13,15 @@ import (
 
 var main_ = initializeMain_()
 
-func initializeMain_() []int32 {
-	mapped := make([]int32, len(values))
+func initializeMain_() []int {
+	mapped := make([]int, len(values))
 	for index, value := range values {
-		mapped[index] = value.(int32) + 1
+		mapped[index] = value.(int) + 1
 	}
-	return array.Append(mapped, []int32{3})
+	return array.Append(mapped, []int{3})
 }
 
-var values []any = []any{int32(1), int32(2)}
+var values []any = []any{int(1), int(2)}
 
 func main() {
 	texts := make([]string, 0, len(main_))

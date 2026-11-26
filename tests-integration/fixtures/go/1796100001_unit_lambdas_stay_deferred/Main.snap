@@ -4,7 +4,7 @@ source: tests-integration/src/fixtures.rs
 // Data/Eq/eq.go
 package eq
 
-func Eq(i int32, i2 int32) bool {
+func Eq(i int, i2 int) bool {
 	return i == i2
 }
 
@@ -28,68 +28,68 @@ import (
 )
 
 func main() {
-	array := arraypkg.Map(func(n int32) func(struct{}) int32 {
-		return func(ignored struct{}) int32 {
+	array := arraypkg.Map(func(n int) func(struct{}) int {
+		return func(ignored struct{}) int {
 			return deferred(n, ignored)
 		}
-	}, []int32{100, 10})
-	mapped := make([]int32, len(array))
+	}, []int{100, 10})
+	mapped := make([]int, len(array))
 	for index, element := range array {
 		mapped[index] = force(element)
 	}
-	if !arraypkg.Eq(eq.Eq, mapped, []int32{5050, 55}) {
+	if !arraypkg.Eq(eq.Eq, mapped, []int{5050, 55}) {
 		effectexception.Throw("the deferred values are wrong")
 	}
-	bound := actions.RunWhenAsked(func() int32 {
-		var accumulator int32 = 0
-		for value := int32(1); value < 11; value++ {
+	bound := actions.RunWhenAsked(func() int {
+		accumulator := 0
+		for value := 1; value < 11; value++ {
 			accumulator += value
 		}
 		return accumulator
 	})
-	mapped2 := actions.RunWhenAsked(func() int32 {
-		var accumulator int32 = 0
-		for value := int32(1); value < 21; value++ {
+	mapped2 := actions.RunWhenAsked(func() int {
+		accumulator := 0
+		for value := 1; value < 21; value++ {
 			accumulator += value
 		}
 		return accumulator
 	})
 	free := actions.RunWhenAsked(answer)
-	if !arraypkg.Eq(eq.Eq, []int32{bound, mapped2, free}, []int32{55, 210, 42}) {
+	if !arraypkg.Eq(eq.Eq, []int{bound, mapped2, free}, []int{55, 210, 42}) {
 		effectexception.Throw("the continued values are wrong")
 	}
-	if !arraypkg.Eq(eq.Eq, arraypkg.Append(shifted(10, []int32{1, 2}), shifted(4, []int32{1})), []int32{56, 57, 11}) {
+	if !arraypkg.Eq(eq.Eq, arraypkg.Append(shifted(10, []int{1, 2}), shifted(4, []int{1})), []int{56, 57, 11}) {
 		effectexception.Throw("the shifted values are wrong")
 	}
-	checked(10, []int32{1, 2})
-	checked(4, []int32{1, 2})
+	checked(10, []int{1, 2})
+	checked(4, []int{1, 2})
 }
 
-func deferred(n int32, ignored struct{}) int32 {
+func deferred(n int, ignored struct{}) int {
 	step, count := arraypkg.RangeSteps(1, n)
-	var accumulator int32 = 0
+	accumulator := 0
 	for index := range count {
-		value := 1 + int32(index)*step
+		value := 1 + index*step
 		accumulator += value
 	}
 	return accumulator
 }
 
-func force(later func(struct{}) int32) int32 {
+func force(later func(struct{}) int) int {
 	return later(struct{}{})
 }
 
-func answer() int32 {
+func answer() int {
 	return 42
 }
 
-func shifted(n int32, array []int32) []int32 {
-	mapped := make([]int32, len(array))
+func shifted(n int, array []int) []int {
+	mapped := make([]int, len(array))
 	step, count := arraypkg.RangeSteps(1, n)
 	for index, x := range array {
-		var accumulator int32 = 0
+		accumulator := 0
 		for index2 := range count {
-			value := 1 + int32(index2)*step
+			value := 1 + index2*step
 			accumulator += value
 		}
 		mapped[index] = x + accumulator
@@ -97,12 +97,12 @@ func shifted(n int32, array []int32) []int32 {
 	return mapped
 }
 
-func checked(n int32, xs []int32) {
+func checked(n int, xs []int) {
 	step, count := arraypkg.RangeSteps(1, n)
 	for _, i := range xs {
-		var accumulator int32 = 0
+		accumulator := 0
 		for index := range count {
-			value := 1 + int32(index)*step
+			value := 1 + index*step
 			accumulator += value
 		}
 		if i+accumulator < 0 {

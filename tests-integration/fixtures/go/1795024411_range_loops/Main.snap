@@ -13,40 +13,39 @@ import (
 var main_ = initializeMain_()
 
 func initializeMain_() shared.MainResult {
-	var bound int32 = 4
-	seen := []int32{}
+	bound := 4
+	seen := []int{}
 	step, count := array.RangeSteps(bound, 1)
 	for index := range count {
-		i := bound + int32(index)*step
-		seen = array.Append(seen, []int32{i})
+		i := bound + index*step
+		seen = array.Append(seen, []int{i})
 	}
 	step2, count2 := array.RangeSteps(1, bound)
-	var accumulator int32 = 0
+	accumulator := 0
 	for index := range count2 {
-		value := 1 + int32(index)*step2
+		value := 1 + index*step2
 		accumulator += value
 	}
 	accumulator2 := ""
 	for index := count - 1; index >= 0; index-- {
-		x := bound + int32(index)*step
-		accumulator2 = strconv.Itoa(int(x)) + "," + accumulator2
+		x := bound + index*step
+		accumulator2 = strconv.Itoa(x) + "," + accumulator2
 	}
-	mapped := make([]int32, count2)
+	mapped := make([]int, count2)
 	for slot := range count2 {
-		x := 1 + int32(slot)*step2
-		index := int32(slot)
-		mapped[slot] = index * x
+		x := 1 + slot*step2
+		mapped[slot] = slot * x
 	}
-	performed := shared.MainResult{Visited: seen, Summed: accumulator, Listed: accumulator2, Counted: int32(count2), Indexed: mapped, Descending: descending}
+	performed := shared.MainResult{Visited: seen, Summed: accumulator, Listed: accumulator2, Counted: count2, Indexed: mapped, Descending: descending}
 	return performed
 }
 
 var descending = initializeDescending()
 
-func initializeDescending() []int32 {
-	mapped := make([]int32, 3)
+func initializeDescending() []int {
+	mapped := make([]int, 3)
 	for index := range 3 {
-		value := 3 - int32(index)
+		value := 3 - index
 		mapped[index] = value * 2
 	}
 	return mapped
@@ -60,12 +59,12 @@ func main() {
 package shared
 
 type MainResult struct {
-	Descending []int32
-	Indexed    []int32
+	Descending []int
+	Indexed    []int
 	Listed     string
-	Visited    []int32
-	Counted    int32
-	Summed     int32
+	Visited    []int
+	Counted    int
+	Summed     int
 }
 
 type Ref[T any] struct {
@@ -73,8 +72,8 @@ type Ref[T any] struct {
 }
 
 type StateValue struct {
-	State []int32
-	Value []int32
+	State []int
+	Value []int
 }
 
 // note: the entry's value of type { counted, descending, indexed, listed, summed, visited } is not printed; use an Effect entry or a value of a printable type (Int, Number, Boolean, Char, String or an Array of them)

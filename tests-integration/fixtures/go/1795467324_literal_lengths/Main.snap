@@ -15,26 +15,26 @@ import (
 var main_ = initializeMain_()
 
 func initializeMain_() []string {
-	after, before := direct.SplitAt(int32(3), "😀ab")
+	after, before := direct.SplitAt(3, "😀ab")
 	var result string
 	if before == "😀a" {
 		result = "(Just " + prim.ShowString(after) + ")"
 	} else {
 		result = "Nothing"
 	}
-	return []string{result, strconv.Itoa(int(literalCodeUnitLengthIsAConstant)), strconv.Itoa(int(literalCodePointLengthIsAConstant))}
+	return []string{result, strconv.Itoa(literalCodeUnitLengthIsAConstant), strconv.Itoa(literalCodePointLengthIsAConstant)}
 }
 
 var literalCodeUnitLengthIsAConstant = initializeLiteralCodeUnitLengthIsAConstant()
 
-func initializeLiteralCodeUnitLengthIsAConstant() int32 {
-	return int32(4)
+func initializeLiteralCodeUnitLengthIsAConstant() int {
+	return 4
 }
 
 var literalCodePointLengthIsAConstant = initializeLiteralCodePointLengthIsAConstant()
 
-func initializeLiteralCodePointLengthIsAConstant() int32 {
-	return int32(int(int32(3)))
+func initializeLiteralCodePointLengthIsAConstant() int {
+	return 3
 }
 
 func main() {

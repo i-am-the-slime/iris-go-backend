@@ -51,13 +51,13 @@ type Item struct {
 	Index map[string]int
 	Ints  int
 	Keys  []string
-	Vals  []int32
+	Vals  []int
 }
 	Label *float64
 	Name  string
 	Note  String
 	Tags  []Boolean
-	Id    int32
+	Id    int
 }
 
 func EncodeJSONArrayMaybeBoolean(e *foreignvalue.Encoder, value []Boolean) {
@@ -79,7 +79,7 @@ func EncodeJSONObjectInt(e *foreignvalue.Encoder, value *struct {
 	Index map[string]int
 	Ints  int
 	Keys  []string
-	Vals  []int32
+	Vals  []int
 }) {
 	e.Raw("{")
 	for key, member := range object.Entries(value) {
@@ -142,7 +142,7 @@ type IdLabelNameNoteTags struct {
 	Name  string
 	Note  String
 	Tags  []Boolean
-	Id    int32
+	Id    int
 }
 
 type LabelNameNoteTags struct {
@@ -152,9 +152,16 @@ type LabelNameNoteTags struct {
 	Tags  []Boolean
 }
 
-type Int int64
+type Int struct {
+	Just int
+	Tag  uint8
+}
 
-const NoInt Int = 1 << 32
+func JustInt(just int) Int {
+	return Int{Tag: TagJust, Just: just}
+}
+
+var NoInt = Int{Tag: TagNothing}
 
 type NameNoteTags struct {
 	Name string
@@ -229,7 +236,7 @@ type ForeignError struct {
 	ErrorAtIndex1    *ForeignError
 	ErrorAtProperty0 string
 	ErrorAtProperty1 *ForeignError
-	ErrorAtIndex0    int32
+	ErrorAtIndex0    int
 	Tag              uint8
 }
 
@@ -280,7 +287,7 @@ type EitherObjectInt struct {
 	Index map[string]int
 	Ints  int
 	Keys  []string
-	Vals  []int32
+	Vals  []int
 }
 	Tag   uint8
 }
@@ -325,7 +332,7 @@ const (
 
 type EitherInt struct {
 	Left  NonEmpty
-	Right int32
+	Right int
 	Tag   uint8
 }
 
@@ -462,7 +469,7 @@ type TupleString struct {
 
 type TupleTupleStringEitherNonEmptyListForeignErrorInt struct {
 	First  TupleString
-	Second int32
+	Second int
 }
 
 type MaybeTupleTupleStringEitherNonEmptyListForeignErrorIntInt struct {
@@ -596,7 +603,7 @@ func LeftEitherInt(left NonEmpty) EitherInt {
 	return EitherInt{Tag: EitherIntLeft, Left: left}
 }
 
-func RightEitherInt(right int32) EitherInt {
+func RightEitherInt(right int) EitherInt {
 	return EitherInt{Tag: EitherIntRight, Right: right}
 }
 
@@ -604,7 +611,7 @@ func ErrorAtProperty(errorAtProperty0 string, errorAtProperty1 *ForeignError) *F
 	return &ForeignError{Tag: ForeignErrorErrorAtProperty, ErrorAtProperty0: errorAtProperty0, ErrorAtProperty1: errorAtProperty1}
 }
 
-func ErrorAtIndex(errorAtIndex0 int32, errorAtIndex1 *ForeignError) *ForeignError {
+func ErrorAtIndex(errorAtIndex0 int, errorAtIndex1 *ForeignError) *ForeignError {
 	return &ForeignError{Tag: ForeignErrorErrorAtIndex, ErrorAtIndex0: errorAtIndex0, ErrorAtIndex1: errorAtIndex1}
 }
 
@@ -644,7 +651,7 @@ func MapFunction2(value NonEmpty) NonEmpty {
 	return NonEmpty{First: result, Second: MapFunctionChunkedRevMap2(SharedListListForeignErrorNil, value.Second)}
 }
 
-func MapFunction3(i int32, value NonEmpty) NonEmpty {
+func MapFunction3(i int, value NonEmpty) NonEmpty {
 	return NonEmpty{First: ErrorAtIndex(i, value.First), Second: MapFunctionChunkedRevMap3(i, SharedListListForeignErrorNil, value.Second)}
 }
 
@@ -764,7 +771,7 @@ func MapFunctionChunkedRevMapReverseUnrolledMap2(list *ListListForeignError, acc
 	}
 }
 
-func MapFunctionChunkedRevMap3(i int32, chunksAcc *ListListForeignError, chunk *ListForeignError) *ListForeignError {
+func MapFunctionChunkedRevMap3(i int, chunksAcc *ListListForeignError, chunk *ListForeignError) *ListForeignError {
 	var listListForeignErrorCells alloc.Cells[ListListForeignError]
 	for {
 		if chunk != SharedListForeignErrorNil && chunk.Cons1 != SharedListForeignErrorNil && chunk.Cons1.Cons1 != SharedListForeignErrorNil {
@@ -784,7 +791,7 @@ func MapFunctionChunkedRevMap3(i int32, chunksAcc *ListListForeignError, chunk *
 	}
 }
 
-func MapFunctionChunkedRevMapReverseUnrolledMap3(i int32, list *ListListForeignError, acc *ListForeignError) *ListForeignError {
+func MapFunctionChunkedRevMapReverseUnrolledMap3(i int, list *ListListForeignError, acc *ListForeignError) *ListForeignError {
 	var foreignErrorCells alloc.Cells[ForeignError]
 	var listForeignErrorCells alloc.Cells[ListForeignError]
 	for {
@@ -837,10 +844,10 @@ func DecodeJSONObjectInt(d *foreignvalue.Decoder) *struct {
 	Index map[string]int
 	Ints  int
 	Keys  []string
-	Vals  []int32
+	Vals  []int
 } {
 	var keys []string
-	var values []int32
+	var values []int
 	if d.Object() {
 		for {
 			keys = append(keys, d.Key())
@@ -869,7 +876,7 @@ func DecodeJSONArrayMaybeBoolean(d *foreignvalue.Decoder) []maybe.Boolean {
 			}
 		}
 	}
-	return arraypkg.Bounded(slices.Clip(items))
+	return slices.Clip(items)
 }
 
 func DecodeJSONItem(d *foreignvalue.Decoder) maybe.Item {
@@ -877,10 +884,10 @@ func DecodeJSONItem(d *foreignvalue.Decoder) maybe.Item {
 		Index map[string]int
 		Ints  int
 		Keys  []string
-		Vals  []int32
+		Vals  []int
 	}
 	hasExtra := false
-	var id int32
+	var id int
 	hasId := false
 	var label *float64
 	hasLabel := false
@@ -941,7 +948,7 @@ func DecodeJSONArrayItem(d *foreignvalue.Decoder) []maybe.Item {
 			}
 		}
 	}
-	return arraypkg.Bounded(slices.Clip(items))
+	return slices.Clip(items)
 }
 
 func ReadJSON(text string) ([]maybe.Item, foreign.NonEmptyFailure) {
@@ -966,12 +973,12 @@ func ReadJSON(text string) ([]maybe.Item, foreign.NonEmptyFailure) {
 			var err foreign.NonEmptyFailure
 			array_ = slices.Clip(array_)
 			for index, element := range array {
-				elem := foreign.EitherItemFromResults(ReadAtIdxItem(int32(index), element))
+				elem := foreign.EitherItemFromResults(ReadAtIdxItem(index, element))
 				if err.Failed && elem.Tag == foreign.EitherItemLeft {
 					err = foreign.NonEmptyFailure{Failed: true, Left: foreign.NonEmpty{First: err.Left.First, Second: ReadJSONGoArrayItemReusing(foreign.Cons(elem.Left.First, elem.Left.Second), ReadJSONGoArrayItem(foreign.SharedListForeignErrorNil, err.Left.Second))}}
 				} else if err.Failed && elem.Tag == foreign.EitherItemRight {
 				} else if !err.Failed && elem.Tag == foreign.EitherItemRight {
-					array_, err = arraypkg.Bounded(append(array_, elem.Right)), foreign.NonEmptyFailure{}
+					array_, err = append(array_, elem.Right), foreign.NonEmptyFailure{}
 				} else {
 					err = foreign.NonEmptyFailure{Failed: true, Left: elem.Left}
 				}
@@ -982,7 +989,7 @@ func ReadJSON(text string) ([]maybe.Item, foreign.NonEmptyFailure) {
 	}
 }
 
-func ReadAtIdxItem(i int32, f any) (maybe.Item, foreign.NonEmptyFailure) {
+func ReadAtIdxItem(i int, f any) (maybe.Item, foreign.NonEmptyFailure) {
 	item, err := ReadImplItemConsObjectIntConsIntConsNullableNumberConsStringConsMaybeStringConsArrayMaybeBooleanNil(f)
 	if err.Failed {
 		return maybe.Item{}, foreign.NonEmptyFailure{Failed: true, Left: foreign.MapFunction3(i, err.Left)}
@@ -998,7 +1005,7 @@ func ReadImplItemConsObjectIntConsIntConsNullableNumberConsStringConsMaybeString
 		Index map[string]int
 		Ints  int
 		Keys  []string
-		Vals  []int32
+		Vals  []int
 	}
 	var err foreign.NonEmptyFailure
 	switch unsafeReadPropImpl.Tag {
@@ -1018,7 +1025,7 @@ func ReadImplItemConsObjectIntConsIntConsNullableNumberConsStringConsMaybeString
 	unsafeReadPropImpl2 := foreignvalue.UnsafeReadPropImpl(func() foreign.EitherForeign {
 		return foreign.LeftEitherForeign(foreign.NonEmpty{First: foreign.TypeMismatch("object", foreignvalue.TypeOf(o)), Second: foreign.SharedListForeignErrorNil})
 	}, foreign.Pure, "id", o)
-	var i int32
+	var i int
 	var err2 foreign.NonEmptyFailure
 	switch unsafeReadPropImpl2.Tag {
 	case foreign.EitherForeignLeft:
@@ -1028,15 +1035,16 @@ func ReadImplItemConsObjectIntConsIntConsNullableNumberConsStringConsMaybeString
 		if foreignvalue.TagOf(b) == "Number" {
 			number := foreignvalue.Number(b)
 			var integer maybe.Int
-			if math.Trunc(number) == number && (number >= math.MinInt32 && number <= math.MaxInt32) {
-				integer = maybe.Int(int32(number))
+			if math.Trunc(number) == number && (number >= math.MinInt && number < -math.MinInt) {
+				integer = maybe.JustInt(int(number))
 			} else {
 				integer = maybe.NoInt
 			}
-			if integer == maybe.NoInt {
+			switch integer.Tag {
+			case maybe.TagNothing:
 				err2 = foreign.NonEmptyFailure{Failed: true, Left: foreign.NonEmpty{First: foreign.TypeMismatch("Int", foreignvalue.TagOf(b)), Second: foreign.SharedListForeignErrorNil}}
-			} else {
-				i, err2 = int32(integer), foreign.NonEmptyFailure{}
+			default: // maybe.TagJust
+				i, err2 = integer.Just, foreign.NonEmptyFailure{}
 			}
 		} else {
 			err2 = foreign.NonEmptyFailure{Failed: true, Left: foreign.NonEmpty{First: foreign.TypeMismatch("Int", foreignvalue.TagOf(b)), Second: foreign.SharedListForeignErrorNil}}
@@ -1126,13 +1134,13 @@ func ReadImplItemConsObjectIntConsIntConsNullableNumberConsStringConsMaybeString
 			accumulator := foreign.RightEitherArrayMaybeBoolean(maybe.MemptyMaybeBoolean)
 			accumulator.Right = slices.Clip(accumulator.Right)
 			for index, element := range array {
-				elem := foreign.EitherMaybeBooleanFromResults(ReadAtIdxMaybeBoolean(int32(index), element))
+				elem := foreign.EitherMaybeBooleanFromResults(ReadAtIdxMaybeBoolean(index, element))
 				if accumulator.Tag == foreign.EitherArrayMaybeBooleanLeft && elem.Tag == foreign.EitherMaybeBooleanLeft {
 					accumulator = foreign.LeftEitherArrayMaybeBoolean(foreign.NonEmpty{First: accumulator.Left.First, Second: ReadJSONGoArrayItemReusing(foreign.Cons(elem.Left.First, elem.Left.Second), ReadJSONGoArrayItem(foreign.SharedListForeignErrorNil, accumulator.Left.Second))})
 				} else if accumulator.Tag == foreign.EitherArrayMaybeBooleanLeft && elem.Tag == foreign.EitherMaybeBooleanRight {
 					accumulator = foreign.LeftEitherArrayMaybeBoolean(accumulator.Left)
 				} else if accumulator.Tag == foreign.EitherArrayMaybeBooleanRight && elem.Tag == foreign.EitherMaybeBooleanRight {
-					accumulator = foreign.RightEitherArrayMaybeBoolean(arraypkg.Bounded(append(accumulator.Right, elem.Right)))
+					accumulator = foreign.RightEitherArrayMaybeBoolean(append(accumulator.Right, elem.Right))
 				} else {
 					accumulator = foreign.LeftEitherArrayMaybeBoolean(elem.Left)
 				}
@@ -1215,7 +1223,7 @@ func ReadImplObject(a any) (*struct {
 	Index map[string]int
 	Ints  int
 	Keys  []string
-	Vals  []int32
+	Vals  []int
 }, foreign.NonEmptyFailure) {
 	if foreignvalue.TagOf(a) == "Object" {
 		xs := object.ToArrayWithKey(func(s string, either foreign.EitherInt) foreign.TupleString {
@@ -1231,15 +1239,16 @@ func ReadImplObject(a any) (*struct {
 			if foreignvalue.TagOf(value) == "Number" {
 				number := foreignvalue.Number(value)
 				var integer maybe.Int
-				if math.Trunc(number) == number && (number >= math.MinInt32 && number <= math.MaxInt32) {
-					integer = maybe.Int(int32(number))
+				if math.Trunc(number) == number && (number >= math.MinInt && number < -math.MinInt) {
+					integer = maybe.JustInt(int(number))
 				} else {
 					integer = maybe.NoInt
 				}
-				if integer == maybe.NoInt {
+				switch integer.Tag {
+				case maybe.TagNothing:
 					result = error_
-				} else {
-					result = foreign.RightEitherInt(int32(integer))
+				default: // maybe.TagJust
+					result = foreign.RightEitherInt(integer.Just)
 				}
 			} else {
 				result = error_
@@ -1251,22 +1260,22 @@ func ReadImplObject(a any) (*struct {
 				return foreign.RightEitherInt(result.Right)
 			}
 		}))
-		len_ := int32(len(xs))
+		len_ := len(xs)
 		array := arraypkg.Unfoldr(func(value foreign.MaybeTupleTupleStringEitherNonEmptyListForeignErrorIntInt) bool {
 			return value.Tag == maybe.TagNothing
 		}, func(value foreign.MaybeTupleTupleStringEitherNonEmptyListForeignErrorIntInt) foreign.TupleTupleStringEitherNonEmptyListForeignErrorInt {
 			return value.Just
 		}, func(value foreign.TupleTupleStringEitherNonEmptyListForeignErrorInt) foreign.TupleString {
 			return value.First
-		}, func(value foreign.TupleTupleStringEitherNonEmptyListForeignErrorInt) int32 {
+		}, func(value foreign.TupleTupleStringEitherNonEmptyListForeignErrorInt) int {
 			return value.Second
-		}, func(i int32) foreign.MaybeTupleTupleStringEitherNonEmptyListForeignErrorIntInt {
+		}, func(i int) foreign.MaybeTupleTupleStringEitherNonEmptyListForeignErrorIntInt {
 			if i < len_ {
 				return foreign.JustTupleTupleStringEitherNonEmptyListForeignErrorIntInt(foreign.TupleTupleStringEitherNonEmptyListForeignErrorInt{First: xs[i], Second: i + 1})
 			}
 			return foreign.NoTupleTupleStringEitherNonEmptyListForeignErrorIntInt
-		}, int32(0))
-		object_ := object.Empty[int32]()
+		}, 0)
+		object_ := object.Empty[int]()
 		var err foreign.NonEmptyFailure
 		object_ = object.Lend(object_)
 		for tupleIndex := range array {
@@ -1284,7 +1293,7 @@ func ReadImplObject(a any) (*struct {
 	return nil, foreign.NonEmptyFailure{Failed: true, Left: foreign.NonEmpty{First: foreign.TypeMismatch("Object", foreignvalue.TagOf(a)), Second: foreign.SharedListForeignErrorNil}}
 }
 
-func ReadAtIdxMaybeBoolean(i int32, f any) (maybe.Boolean, foreign.NonEmptyFailure) {
+func ReadAtIdxMaybeBoolean(i int, f any) (maybe.Boolean, foreign.NonEmptyFailure) {
 	if foreignvalue.IsNull(f) || foreignvalue.IsUndefined(f) {
 		return maybe.NoBoolean, foreign.NonEmptyFailure{}
 	}

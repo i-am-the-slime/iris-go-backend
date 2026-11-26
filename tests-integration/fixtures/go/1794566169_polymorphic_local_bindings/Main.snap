@@ -9,15 +9,15 @@ import (
 	"strconv"
 )
 
-func ShowInt(i int32) string {
-	return strconv.Itoa(int(i))
+func ShowInt(i int) string {
+	return strconv.Itoa(i)
 }
 
 func ShowString(s string) string {
 	return prim.ShowString(s)
 }
 
-func AppendShowArrayInt(buffer []byte, array []int32) []byte {
+func AppendShowArrayInt(buffer []byte, array []int) []byte {
 	buffer = append(buffer, '[')
 	for index, element := range array {
 		if index > 0 {
@@ -46,7 +46,6 @@ package main
 
 import (
 	"fixture/Data/Show"
-	"github.com/i-am-the-slime/iris-go/array"
 	"github.com/i-am-the-slime/iris-go/console"
 	"github.com/i-am-the-slime/iris-go/prim"
 	"slices"
@@ -58,7 +57,7 @@ var main_ = initializeMain_()
 
 func initializeMain_() []string {
 	text := show.AppendShowArrayString(nil, mainGo(3, []string{}))
-	text = show.AppendShowArrayInt(text, mainGo2(3, []int32{}))
+	text = show.AppendShowArrayInt(text, mainGo2(3, []int{}))
 	return []string{"x2", pairs, joined, string(text)}
 }
 
@@ -70,23 +69,23 @@ func initializeJoined() string {
 	return "<3><" + prim.ShowString("y") + ">"
 }
 
-func mainGo(n int32, accumulated []string) []string {
+func mainGo(n int, accumulated []string) []string {
 	accumulated = slices.Clip(accumulated)
 	for {
 		if n <= 0 {
 			return accumulated
 		}
-		n, accumulated = n-1, array.Bounded(append(accumulated, strconv.Itoa(int(n))))
+		n, accumulated = n-1, append(accumulated, strconv.Itoa(n))
 	}
 }
 
-func mainGo2(n int32, accumulated []int32) []int32 {
+func mainGo2(n int, accumulated []int) []int {
 	accumulated = slices.Clip(accumulated)
 	for {
 		if n <= 0 {
 			return accumulated
 		}
-		n, accumulated = n-1, array.Bounded(append(accumulated, n))
+		n, accumulated = n-1, append(accumulated, n)
 	}
 }
 

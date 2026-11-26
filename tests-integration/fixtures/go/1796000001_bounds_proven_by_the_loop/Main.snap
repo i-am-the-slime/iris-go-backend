@@ -14,12 +14,12 @@ import (
 
 var main_ = initializeMain_()
 
-func initializeMain_() []int32 {
-	result := *array.Thaw([]int32{1, 2, 3})
-	size := int32(len(result))
-	for i := int32(0); i < size; i++ {
-		var i2 int32
-		if int(i) < len(result) {
+func initializeMain_() []int {
+	result := *array.Thaw([]int{1, 2, 3})
+	size := len(result)
+	for i := 0; i < size; i++ {
+		var i2 int
+		if i < len(result) {
 			i2 = result[i]
 			result[i] = i2 * 2
 		} else {
@@ -27,32 +27,32 @@ func initializeMain_() []int32 {
 		}
 	}
 	performed := shared.Frozen(result)
-	result2 := *array.Thaw([]int32{4, 5, 6})
-	size2 := int32(len(result2))
-	for i := int32(1); i < size2; i++ {
-		within := int(i) < len(result2)
-		var i2 int32
+	result2 := *array.Thaw([]int{4, 5, 6})
+	size2 := len(result2)
+	for i := 1; i < size2; i++ {
+		within := i < len(result2)
+		var i2 int
 		if within {
 			i2 = result2[i]
 		} else {
 			i2 = 0
 		}
 		index := i - 1
-		if int(index) < len(result2) {
+		if index < len(result2) {
 			result2[index] = i2
 		}
 	}
 	performed2 := shared.Frozen(result2)
-	size3 := int32(len(performed))
-	return array.Append(performed, array.Append(performed2, []int32{mainGo(performed, size3, 0, 0)}))
+	size3 := len(performed)
+	return array.Append(performed, array.Append(performed2, []int{mainGo(performed, size3, 0, 0)}))
 }
 
-func mainGo(doubled []int32, size int32, i int32, total int32) int32 {
+func mainGo(doubled []int, size int, i int, total int) int {
 	for {
 		if i >= size {
 			return total
 		}
-		var result int32
+		var result int
 		result = doubled[i]
 		i, total = i+1, total+result
 	}

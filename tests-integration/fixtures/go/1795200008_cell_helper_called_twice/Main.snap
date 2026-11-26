@@ -6,7 +6,7 @@ package class
 
 type Step struct {
 	Done struct{}
-	Loop int32
+	Loop int
 	Tag  uint8
 }
 
@@ -15,7 +15,7 @@ const (
 	StepDone
 )
 
-func Loop(loop int32) Step {
+func Loop(loop int) Step {
 	return Step{Tag: StepLoop, Loop: loop}
 }
 
@@ -34,7 +34,7 @@ import (
 var main_ = initializeMain_()
 
 func initializeMain_() shared.MainResult {
-	var total int32 = 0
+	total := 0
 	total += 1
 	ref := class.Loop(2)
 	for {
@@ -62,7 +62,7 @@ func initializeMain_() shared.MainResult {
 		default: // class.StepDone
 		}
 	}
-	return shared.MainResult{Total: total, Scaled: []int32{41, 42}}
+	return shared.MainResult{Total: total, Scaled: []int{41, 42}}
 }
 
 func main() {
@@ -73,8 +73,8 @@ func main() {
 package shared
 
 type MainResult struct {
-	Scaled []int32
-	Total  int32
+	Scaled []int
+	Total  int
 }
 
 type Ref[T any] struct {
@@ -82,8 +82,8 @@ type Ref[T any] struct {
 }
 
 type StateValue struct {
-	State int32
-	Value int32
+	State int
+	Value int
 }
 
 // note: the entry's value of type { scaled, total } is not printed; use an Effect entry or a value of a printable type (Int, Number, Boolean, Char, String or an Array of them)

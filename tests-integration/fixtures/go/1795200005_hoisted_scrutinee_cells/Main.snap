@@ -6,7 +6,7 @@ package types
 
 type List struct {
 	Cons1 *List
-	Cons0 int32
+	Cons0 int
 }
 
 var SharedListNil = &List{}
@@ -40,24 +40,24 @@ func Leaf(leaf *list.List) *Shape {
 	return &Shape{Tag: ShapeLeaf, Leaf: leaf}
 }
 
-func main_() int32 {
+func main_() int {
 	accumulator := list.SharedListNil
 	var listIntCells alloc.Cells[list.List]
-	for index := len([]int32{}) - 1; index >= 0; index-- {
-		i := []int32{}[index]
+	for index := len([]int{}) - 1; index >= 0; index-- {
+		i := []int{}[index]
 		accumulator = listIntCells.New(list.List{Cons0: i, Cons1: accumulator})
 	}
 	var result2 *Shape
 	if accumulator != list.SharedListNil {
 		accumulator2 := list.SharedListNil
 		var listIntCells2 alloc.Cells[list.List]
-		for index := len([]int32{}) - 1; index >= 0; index-- {
-			i := []int32{}[index]
+		for index := len([]int{}) - 1; index >= 0; index-- {
+			i := []int{}[index]
 			accumulator2 = listIntCells2.New(list.List{Cons0: i, Cons1: accumulator2})
 		}
 		result2 = Leaf(accumulator2)
 	} else {
-		array := []int32{1}
+		array := []int{1}
 		accumulator2 := list.SharedListNil
 		var listIntCells3 alloc.Cells[list.List]
 		for index := len(array) - 1; index >= 0; index-- {
@@ -66,7 +66,7 @@ func main_() int32 {
 		}
 		result2 = Leaf(accumulator2)
 	}
-	var result int32
+	var result int
 	if result2.Tag == ShapeLeaf && result2.Leaf != list.SharedListNil {
 		result = result2.Leaf.Cons0
 	} else {
@@ -76,8 +76,7 @@ func main_() int32 {
 }
 
 func main() {
-	exitStatus := main_()
-	os.Exit(int(exitStatus))
+	os.Exit(main_())
 }
 
 // shared/shared.go
@@ -85,5 +84,5 @@ package shared
 
 type FlagsItems struct {
 	Flags []struct{}
-	Items int32
+	Items int
 }

@@ -37,12 +37,12 @@ func initializeMain_() []string {
 	if n3 > 0 {
 		result3 = "circle 1.5"
 	} else {
-		result3 = "square " + strconv.Itoa(int(n3))
+		result3 = "square " + strconv.Itoa(n3)
 	}
 	return []string{prim.ShowNumber(result), prim.ShowNumber(result2), result3, "tag", "a shape", "label x"}
 }
 
-func opaque(x int32) int32 {
+func opaque(x int) int {
 	for {
 		if x == 12345 {
 			continue

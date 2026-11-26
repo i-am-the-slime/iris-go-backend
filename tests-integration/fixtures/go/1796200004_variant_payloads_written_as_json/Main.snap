@@ -13,7 +13,7 @@ type CountFlagNamePointRatioTags struct {
 	Name  string
 	Tags  []string
 	Ratio float64
-	Count int32
+	Count int
 	Point shared.X
 	Tag   uint8
 	Flag  bool
@@ -82,7 +82,7 @@ func Point(point shared.X) CountFlagNamePointRatioTags {
 	return CountFlagNamePointRatioTags{Tag: CountFlagNamePointRatioTagsPoint, Point: point}
 }
 
-func Count(count int32) CountFlagNamePointRatioTags {
+func Count(count int) CountFlagNamePointRatioTags {
 	return CountFlagNamePointRatioTags{Tag: CountFlagNamePointRatioTagsCount, Count: count}
 }
 
@@ -134,5 +134,5 @@ func main() {
 package shared
 
 type X struct {
-	X int32
+	X int
 }

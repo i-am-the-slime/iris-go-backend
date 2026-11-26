@@ -23,7 +23,7 @@ package types
 
 type ListInt struct {
 	Cons1 *ListInt
-	Cons0 int32
+	Cons0 int
 }
 
 var SharedListIntNil = &ListInt{}
@@ -33,7 +33,7 @@ type ListString struct {
 	Cons1 *ListString
 }
 
-func ConsListInt(cons0 int32, cons1 *ListInt) *ListInt {
+func ConsListInt(cons0 int, cons1 *ListInt) *ListInt {
 	return &ListInt{Cons0: cons0, Cons1: cons1}
 }
 
@@ -49,13 +49,13 @@ type Map struct {
 	Node2 string
 	Node4 *Map
 	Node5 *Map
-	Node0 int32
-	Node1 int32
+	Node0 int
+	Node1 int
 }
 
 var SharedMapLeaf = &Map{}
 
-func Node(node0 int32, node1 int32, node2 string, node3 struct{}, node4 *Map, node5 *Map) *Map {
+func Node(node0 int, node1 int, node2 string, node3 struct{}, node4 *Map, node5 *Map) *Map {
 	return &Map{Node0: node0, Node1: node1, Node2: node2, Node3: node3, Node4: node4, Node5: node5}
 }
 
@@ -172,7 +172,7 @@ func UnsafeBalancedNodeRotateLeft(k string, v struct{}, l *Map, rk string, rv st
 		lk := rl.Node2
 		ll := rl.Node4
 		lr := rl.Node5
-		var result int32
+		var result int
 		if rr == SharedMapLeaf {
 			result = 0
 		} else {
@@ -191,7 +191,7 @@ func UnsafeBalancedNodeRotateRight(k string, v struct{}, lk string, lv struct{},
 		rk := lr.Node2
 		rl := lr.Node4
 		rr := lr.Node5
-		var result int32
+		var result int
 		if ll == SharedMapLeaf {
 			result = 0
 		} else {
@@ -280,7 +280,6 @@ import (
 	"fixture/Data/Map/Internal"
 	"fixture/Data/Maybe"
 	"fixture/Data/Set"
-	arraypkg "github.com/i-am-the-slime/iris-go/array"
 	"github.com/i-am-the-slime/iris-go/console"
 	"github.com/i-am-the-slime/iris-go/direct"
 	"github.com/i-am-the-slime/iris-go/prim"
@@ -288,9 +287,9 @@ import (
 
 var main_ = initializeMain_()
 
-func initializeMain_() int32 {
+func initializeMain_() int {
 	cell := numbers
-	elements := []int32{}
+	elements := []int{}
 	for {
 		if cell == types.SharedListIntNil {
 			break
@@ -298,17 +297,17 @@ func initializeMain_() int32 {
 		elements = append(elements, cell.Cons0)
 		cell = cell.Cons1
 	}
-	return int32(len(arraypkg.Bounded(elements))) + int32(len(direct.FromFoldable(func(f func(string) func(*direct.ConsList[string]) *direct.ConsList[string]) func(*direct.ConsList[string]) func(maybe.String) *direct.ConsList[string] {
+	return len(elements) + len(direct.FromFoldable(func(f func(string) func(*direct.ConsList[string]) *direct.ConsList[string]) func(*direct.ConsList[string]) func(maybe.String) *direct.ConsList[string] {
 		return func(z *direct.ConsList[string]) func(maybe.String) *direct.ConsList[string] {
 			return func(maybe maybe.String) *direct.ConsList[string] {
 				return foldable.Foldr(f, z, maybe)
 			}
 		}
-	}, maybe.JustString("x")))) + int32(len(direct.FromFoldable(func(f func(string) func(*direct.ConsList[string]) *direct.ConsList[string]) func(*direct.ConsList[string]) func(*internal.Map) *direct.ConsList[string] {
+	}, maybe.JustString("x"))) + len(direct.FromFoldable(func(f func(string) func(*direct.ConsList[string]) *direct.ConsList[string]) func(*direct.ConsList[string]) func(*internal.Map) *direct.ConsList[string] {
 		return func(x *direct.ConsList[string]) func(*internal.Map) *direct.ConsList[string] {
 			return set.Foldr(f, x)
 		}
-	}, words)))
+	}, words))
 }
 
 var numbers *types.ListInt = types.ConsListInt(1, types.ConsListInt(2, types.ConsListInt(3, types.SharedListIntNil)))

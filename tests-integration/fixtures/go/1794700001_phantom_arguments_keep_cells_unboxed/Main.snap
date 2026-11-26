@@ -12,7 +12,7 @@ import (
 
 type Step struct {
 	More func(struct{}) Step
-	Done int32
+	Done int
 	Tag  uint8
 }
 
@@ -25,25 +25,25 @@ func More(more func(struct{}) Step) Step {
 	return Step{Tag: StepMore, More: more}
 }
 
-func Done(done int32) Step {
+func Done(done int) Step {
 	return Step{Tag: StepDone, Done: done}
 }
 
-type Count func(func(func(struct{}) Step) Step, func(int32) Step) Step
+type Count func(func(func(struct{}) Step) Step, func(int) Step) Step
 
 var main_ = initializeMain_()
 
-func initializeMain_() []int32 {
-	return []int32{mainGo(countdown(10, 0)(More, Done))}
+func initializeMain_() []int {
+	return []int{mainGo(countdown(10, 0)(More, Done))}
 }
 
-func countdown(n int32, total int32) Count {
+func countdown(n int, total int) Count {
 	if n <= 0 {
-		return func(_ func(func(struct{}) Step) Step, done func(int32) Step) Step {
+		return func(_ func(func(struct{}) Step) Step, done func(int) Step) Step {
 			return done(total)
 		}
 	}
-	return func(more func(func(struct{}) Step) Step, done func(int32) Step) Step {
+	return func(more func(func(struct{}) Step) Step, done func(int) Step) Step {
 		return more(func(_ struct{}) Step {
 			n2 := countdown(n-1, total+n)
 			return more(func(_ struct{}) Step {
@@ -53,7 +53,7 @@ func countdown(n int32, total int32) Count {
 	}
 }
 
-func mainGo(value Step) int32 {
+func mainGo(value Step) int {
 	for {
 		switch value.Tag {
 		case StepMore:

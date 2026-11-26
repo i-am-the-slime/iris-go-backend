@@ -44,7 +44,7 @@ type ForeignError struct {
 	ErrorAtIndex1    *ForeignError
 	ErrorAtProperty0 string
 	ErrorAtProperty1 *ForeignError
-	ErrorAtIndex0    int32
+	ErrorAtIndex0    int
 	Tag              uint8
 }
 
@@ -236,7 +236,7 @@ func LeftEitherFnEmptyTagsTitle(left NonEmpty) EitherFnEmptyTagsTitle {
 	return EitherFnEmptyTagsTitle{Tag: EitherFnEmptyTagsTitleLeft, Left: left}
 }
 
-func ErrorAtIndex(errorAtIndex0 int32, errorAtIndex1 *ForeignError) *ForeignError {
+func ErrorAtIndex(errorAtIndex0 int, errorAtIndex1 *ForeignError) *ForeignError {
 	return &ForeignError{Tag: ForeignErrorErrorAtIndex, ErrorAtIndex0: errorAtIndex0, ErrorAtIndex1: errorAtIndex1}
 }
 
@@ -260,7 +260,7 @@ func Pure(x any) EitherForeign {
 	return EitherForeign{Tag: EitherForeignRight, Right: x}
 }
 
-func MapFunction(i int32, value NonEmpty) NonEmpty {
+func MapFunction(i int, value NonEmpty) NonEmpty {
 	return NonEmpty{First: ErrorAtIndex(i, value.First), Second: MapFunctionChunkedRevMap(i, SharedListListForeignErrorNil, value.Second)}
 }
 
@@ -268,7 +268,7 @@ func MapFunction2(s string, value NonEmpty) NonEmpty {
 	return NonEmpty{First: ErrorAtProperty(s, value.First), Second: MapFunctionChunkedRevMap2(s, SharedListListForeignErrorNil, value.Second)}
 }
 
-func MapFunctionChunkedRevMap(i int32, chunksAcc *ListListForeignError, chunk *ListForeignError) *ListForeignError {
+func MapFunctionChunkedRevMap(i int, chunksAcc *ListListForeignError, chunk *ListForeignError) *ListForeignError {
 	var listListForeignErrorCells alloc.Cells[ListListForeignError]
 	for {
 		if chunk != SharedListForeignErrorNil && chunk.Cons1 != SharedListForeignErrorNil && chunk.Cons1.Cons1 != SharedListForeignErrorNil {
@@ -288,7 +288,7 @@ func MapFunctionChunkedRevMap(i int32, chunksAcc *ListListForeignError, chunk *L
 	}
 }
 
-func MapFunctionChunkedRevMapReverseUnrolledMap(i int32, list *ListListForeignError, acc *ListForeignError) *ListForeignError {
+func MapFunctionChunkedRevMapReverseUnrolledMap(i int, list *ListListForeignError, acc *ListForeignError) *ListForeignError {
 	var foreignErrorCells alloc.Cells[ForeignError]
 	var listForeignErrorCells alloc.Cells[ListForeignError]
 	for {
@@ -384,7 +384,6 @@ import (
 	"fixture/Foreign"
 	"fixture/shared"
 	"github.com/i-am-the-slime/iris-go/alloc"
-	arraypkg "github.com/i-am-the-slime/iris-go/array"
 	"github.com/i-am-the-slime/iris-go/direct"
 	"github.com/i-am-the-slime/iris-go/exception"
 	"github.com/i-am-the-slime/iris-go/foreignvalue"
@@ -401,7 +400,7 @@ func DecodeJSONArrayString(d *foreignvalue.Decoder) []string {
 			}
 		}
 	}
-	return arraypkg.Bounded(slices.Clip(items))
+	return slices.Clip(items)
 }
 
 func DecodeJSONTodo(d *foreignvalue.Decoder) shared.Todo {
@@ -488,13 +487,13 @@ func ReadImpl(o any) (shared.Todo, foreign.NonEmptyFailure) {
 			accumulator := foreign.RightEitherArrayString(monoid.Mempty)
 			accumulator.Right = slices.Clip(accumulator.Right)
 			for index, element := range array {
-				elem := foreign.EitherStringFromResults(ReadAtIdx(int32(index), element))
+				elem := foreign.EitherStringFromResults(ReadAtIdx(index, element))
 				if accumulator.Tag == foreign.EitherArrayStringLeft && elem.Tag == foreign.EitherStringLeft {
 					accumulator = foreign.LeftEitherArrayString(foreign.NonEmpty{First: accumulator.Left.First, Second: ReadImplGoConsBooleanConsArrayStringConsStringNilReusing(foreign.Cons(elem.Left.First, elem.Left.Second), ReadImplGoConsBooleanConsArrayStringConsStringNil(foreign.SharedListForeignErrorNil, accumulator.Left.Second))})
 				} else if accumulator.Tag == foreign.EitherArrayStringLeft && elem.Tag == foreign.EitherStringRight {
 					accumulator = foreign.LeftEitherArrayString(accumulator.Left)
 				} else if accumulator.Tag == foreign.EitherArrayStringRight && elem.Tag == foreign.EitherStringRight {
-					accumulator = foreign.RightEitherArrayString(arraypkg.Bounded(append(accumulator.Right, elem.Right)))
+					accumulator = foreign.RightEitherArrayString(append(accumulator.Right, elem.Right))
 				} else {
 					accumulator = foreign.LeftEitherArrayString(elem.Left)
 				}
@@ -554,7 +553,7 @@ func ReadImpl(o any) (shared.Todo, foreign.NonEmptyFailure) {
 	return shared.Todo{}, foreign.NonEmptyFailure{Failed: true, Left: result.Left}
 }
 
-func ReadAtIdx(i int32, f any) (string, foreign.NonEmptyFailure) {
+func ReadAtIdx(i int, f any) (string, foreign.NonEmptyFailure) {
 	if foreignvalue.TagOf(f) == "String" {
 		return f.(string), foreign.NonEmptyFailure{}
 	}

@@ -108,7 +108,7 @@ func Convert(value VariantRepNumber) shared.TypeValue {
 
 type VariantRepInt struct {
 	Type  string
-	Value int32
+	Value int
 }
 
 func Convert2(value VariantRepInt) shared.TypeValue {
@@ -157,12 +157,12 @@ const (
 )
 
 type Unvariant_RecordCaptionSquareString struct {
-	ForIntRecordCaption   func(Proxy, int32) string
+	ForIntRecordCaption   func(Proxy, int) string
 	ForStringRecordSquare func(Proxy, string) string
 }
 
 type Unvariant_CaptionCircleSquareString struct {
-	ForIntRecordCaptionCircle    func(Proxy, int32) string
+	ForIntRecordCaptionCircle    func(Proxy, int) string
 	ForNumberRecordCaptionSquare func(Proxy, float64) string
 	ForStringRecordCircleSquare  func(Proxy, string) string
 }
@@ -213,12 +213,12 @@ func initializeMain_() []string {
 				}
 			} else if x.Type == "square" {
 				run = func(continuation proxy.Unvariant_RecordCaptionSquareString) string {
-					return continuation.ForIntRecordCaption(proxy.ProxyProxy, x.Value.(int32))
+					return continuation.ForIntRecordCaption(proxy.ProxyProxy, x.Value.(int))
 				}
 			} else {
 				panic("Failed pattern match")
 			}
-			result = maybe.JustString(run(proxy.Unvariant_RecordCaptionSquareString{ForIntRecordCaption: func(_ proxy.Proxy, _ int32) string {
+			result = maybe.JustString(run(proxy.Unvariant_RecordCaptionSquareString{ForIntRecordCaption: func(_ proxy.Proxy, _ int) string {
 				return "square"
 			}, ForStringRecordSquare: func(_ proxy.Proxy, _ string) string {
 				return "caption"
@@ -257,12 +257,12 @@ func labelOf(variant shared.TypeValue) string {
 		}
 	} else if variant.Type == "square" {
 		run = func(continuation proxy.Unvariant_CaptionCircleSquareString) string {
-			return continuation.ForIntRecordCaptionCircle(proxy.ProxyProxy, variant.Value.(int32))
+			return continuation.ForIntRecordCaptionCircle(proxy.ProxyProxy, variant.Value.(int))
 		}
 	} else {
 		panic("Failed pattern match")
 	}
-	return run(proxy.Unvariant_CaptionCircleSquareString{ForIntRecordCaptionCircle: func(_ proxy.Proxy, _ int32) string {
+	return run(proxy.Unvariant_CaptionCircleSquareString{ForIntRecordCaptionCircle: func(_ proxy.Proxy, _ int) string {
 		return "square"
 	}, ForNumberRecordCaptionSquare: func(_ proxy.Proxy, _ float64) string {
 		return "circle"
@@ -273,7 +273,7 @@ func labelOf(variant shared.TypeValue) string {
 
 func roundTripped(r shared.TypeValue) string {
 	if r.Type == "square" {
-		return "side " + strconv.Itoa(int(r.Value.(int32)))
+		return "side " + strconv.Itoa(r.Value.(int))
 	}
 	var result proxy.StringVariantRecordCaptionCircle
 	if r.Type == "caption" {

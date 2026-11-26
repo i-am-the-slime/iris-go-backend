@@ -40,7 +40,7 @@ type Tree struct {
 //line Main.purs:13:20
 	Node2 *Tree
 //line Main.purs:13:20
-	Node1 int32
+	Node1 int
 //line Main.purs:13:1
 }
 
@@ -48,7 +48,7 @@ type Tree struct {
 var sharedTreeLeaf = &Tree{}
 
 //line Main.purs:13:20
-func Node(node0 *Tree, node1 int32, node2 *Tree) *Tree {
+func Node(node0 *Tree, node1 int, node2 *Tree) *Tree {
 //line Main.purs:13:20
 	return &Tree{Node0: node0, Node1: node1, Node2: node2}
 //line Main.purs:13:20
@@ -57,7 +57,7 @@ func Node(node0 *Tree, node1 int32, node2 *Tree) *Tree {
 //line Main.purs:46:1
 func main() {
 //line Main.purs:47:14
-	var counter int32 = 3
+	counter := 3
 //line Main.purs:50:3
 	if size(insert(counter, insert(1, insertLeaf(5)))) != 3 {
 //line Main.purs:51:5
@@ -111,7 +111,7 @@ func main() {
 //line Main.purs:59:3
 	for index := range count {
 //line Main.purs:59:3
-		i := 1 + int32(index)*step
+		i := 1 + index*step
 //line Main.purs:59:3
 		price := float64(i)
 //line Main.purs:57:32
@@ -121,7 +121,7 @@ func main() {
 //line Main.purs:59:3
 	}
 //line Main.purs:59:3
-	if /*line Main.purs:58:13*/ accumulator /*line Main.purs:59:3*/ != 1892.0 || int32(count) != 43 {
+	if /*line Main.purs:58:13*/ accumulator /*line Main.purs:59:3*/ != 1892.0 || count != 43 {
 //line Main.purs:60:5
 		effectexception.Throw("the total is wrong")
 //line Main.purs:59:3
@@ -154,7 +154,7 @@ func main() {
 }
 
 //line Main.purs:22:1
-func insert(x int32, value *Tree) *Tree {
+func insert(x int, value *Tree) *Tree {
 //line Main.purs:23:3
 	if value == sharedTreeLeaf {
 //line Main.purs:23:11
@@ -185,7 +185,7 @@ func insert(x int32, value *Tree) *Tree {
 }
 
 //line Main.purs:30:1
-func size(value *Tree) int32 {
+func size(value *Tree) int {
 //line Main.purs:31:3
 	if value == sharedTreeLeaf {
 //line Main.purs:31:11
@@ -198,7 +198,7 @@ func size(value *Tree) int32 {
 }
 
 //line Main.purs:22:1
-func insertLeaf(x int32) *Tree {
+func insertLeaf(x int) *Tree {
 //line Main.purs:23:3
 	if sharedTreeLeaf == sharedTreeLeaf {
 //line Main.purs:23:11

@@ -611,7 +611,7 @@ fn zero_filling_shift(value: &GoExpression) -> Option<i64> {
         return None;
     };
     let GoExpression::Integer(shift) = right.as_ref() else { return None };
-    (source == "uint32" && (1..32).contains(shift)).then_some(*shift)
+    (source == "uint" && (1..64).contains(shift)).then_some(*shift)
 }
 
 #[derive(Clone, Copy, PartialEq, Debug)]
@@ -2026,7 +2026,7 @@ impl<'p, 'k, 'e> Analysis<'p, 'k, 'e> {
                     if package == "prim"
                         && matches!(name.as_str(), "IntDiv" | "IntMod" | "ToCharCode") =>
                 {
-                    Some(Typing::Typed(Kind::Int32))
+                    Some(Typing::Typed(Kind::Int))
                 }
                 _ => None,
             },
@@ -2096,13 +2096,12 @@ impl<'p, 'k, 'e> Analysis<'p, 'k, 'e> {
                 let binding = self.bindings.get(&symbol)?;
                 (binding.tracked && binding.kind.is_some()).then_some(Value::of(symbol))
             }
-            GoExpression::Conversion { type_: GoType::Named(target), value: inner }
-                if target == "int32"
-                    && let Some(shift) = zero_filling_shift(inner) =>
+            GoExpression::Conversion { type_: GoType::Int, value: inner }
+                if let Some(shift) = zero_filling_shift(inner) =>
             {
                 let temporary = self.temporary(state, kind);
                 state.add(ZERO, temporary, 0);
-                state.add(temporary, ZERO, (1i128 << (32 - shift)) - 1);
+                state.add(temporary, ZERO, (1i128 << (64 - shift)) - 1);
                 Some(Value::of(temporary))
             }
             GoExpression::Conversion { type_, value: inner } => {
@@ -2468,7 +2467,7 @@ impl<'p, 'k, 'e> Analysis<'p, 'k, 'e> {
     }
 
     /// Whether Go's truncating division agrees with Euclidean division here: a dividend proven
-    /// non-negative, a divisor proven positive, and an Int32 among them for the result's type.
+    /// non-negative, a divisor proven positive, and a typed one among them for the result's type.
     fn natural_division(
         &mut self,
         dividend: &GoExpression,
@@ -2477,7 +2476,7 @@ impl<'p, 'k, 'e> Analysis<'p, 'k, 'e> {
     ) -> bool {
         let typed = [dividend, divisor]
             .iter()
-            .any(|side| self.typing(side) == Some(Typing::Typed(Kind::Int32)));
+            .any(|side| matches!(self.typing(side), Some(Typing::Typed(_))));
         let from = self.temporaries.len();
         let mut scratch = state.clone();
         let dividend = self.value(dividend, &mut scratch);

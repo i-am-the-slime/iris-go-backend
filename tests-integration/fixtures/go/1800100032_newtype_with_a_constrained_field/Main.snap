@@ -6,7 +6,7 @@ package either
 
 type Either struct {
 	Left  string
-	Right int32
+	Right int
 	Tag   uint8
 }
 
@@ -30,7 +30,7 @@ import (
 	"strings"
 )
 
-type Parser func(int32) (int32, either.StringFailure)
+type Parser func(int) (int, either.StringFailure)
 
 var main_ = initializeMain_()
 
@@ -40,19 +40,19 @@ func initializeMain_() []string {
 	if err.Failed {
 		result = "(Left Problem " + err.Left + ")"
 	} else {
-		result = "(Right " + strconv.Itoa(int(i)) + ")"
+		result = "(Right " + strconv.Itoa(i) + ")"
 	}
 	i2, err := positive(5)
 	var result2 string
 	if err.Failed {
 		result2 = "(Left Problem " + err.Left + ")"
 	} else {
-		result2 = "(Right " + strconv.Itoa(int(i2)) + ")"
+		result2 = "(Right " + strconv.Itoa(i2) + ")"
 	}
 	return []string{result, result2}
 }
 
-var positive Parser = func(n int32) (int32, either.StringFailure) {
+var positive Parser = func(n int) (int, either.StringFailure) {
 	if n > 0 {
 		return n, either.StringFailure{}
 	}

@@ -1,5 +1,5 @@
 package ffi
 
-func RunWhenAsked(action func() int32) int32 {
+func RunWhenAsked(action func() int) int {
 	return action()
 }

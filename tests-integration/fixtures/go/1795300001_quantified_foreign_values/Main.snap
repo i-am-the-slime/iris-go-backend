@@ -6,11 +6,11 @@ package show
 
 import "strconv"
 
-func Show(i int32) string {
-	return strconv.Itoa(int(i))
+func Show(i int) string {
+	return strconv.Itoa(i)
 }
 
-func AppendShowArrayInt(buffer []byte, array []int32) []byte {
+func AppendShowArrayInt(buffer []byte, array []int) []byte {
 	buffer = append(buffer, '[')
 	for index, element := range array {
 		if index > 0 {
@@ -22,7 +22,7 @@ func AppendShowArrayInt(buffer []byte, array []int32) []byte {
 	return buffer
 }
 
-func ArrayInt(array []int32) string {
+func ArrayInt(array []int) string {
 	return string(AppendShowArrayInt(nil, array))
 }
 
@@ -36,9 +36,9 @@ import (
 )
 
 func main_() []string {
-	counter := optional.NewCounter[int32]()
+	counter := optional.NewCounter[int]()
 	again := optional.NewCounter[bool]()
-	return []string{show.ArrayInt([]int32{optional.WithDefault(int32(1), optional.Absent[int32]()), optional.WithDefault(int32(1), optional.Present(int32(2)))}), optional.WithDefault("fallback", optional.Absent[string]()), strconv.Itoa(len(optional.EmptyArray[string]())), show.ArrayInt([]int32{optional.PairSize(optional.SwappedPair(int32(1), "one")), optional.PairSize(optional.EmptySwappedPair[int32, string]())}), strconv.Itoa(int(optional.WithDefault(int32(3), counter))), strconv.FormatBool(optional.WithDefault(true, again))}
+	return []string{show.ArrayInt([]int{optional.WithDefault(1, optional.Absent[int]()), optional.WithDefault(1, optional.Present(2))}), optional.WithDefault("fallback", optional.Absent[string]()), strconv.Itoa(len(optional.EmptyArray[string]())), show.ArrayInt([]int{optional.PairSize(optional.SwappedPair(1, "one")), optional.PairSize(optional.EmptySwappedPair[int, string]())}), strconv.Itoa(optional.WithDefault(3, counter)), strconv.FormatBool(optional.WithDefault(true, again))}
 }
 
 func main() {

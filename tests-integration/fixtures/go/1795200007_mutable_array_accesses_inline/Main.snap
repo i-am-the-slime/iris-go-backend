@@ -4,13 +4,20 @@ source: tests-integration/src/fixtures.rs
 // Data/Maybe/maybe.go
 package maybe
 
-type Int int64
-
-const NoInt Int = 1 << 32
-
 const TagNothing = 0
 
 const TagJust = 1
+
+type Int struct {
+	Just int
+	Tag  uint8
+}
+
+var NoInt = Int{Tag: TagNothing}
+
+func JustInt(just int) Int {
+	return Int{Tag: TagJust, Just: just}
+}
 
 type String struct {
 	Just string
@@ -37,41 +44,39 @@ import (
 
 var main_ = initializeMain_()
 
-func initializeMain_() []int32 {
-	array2 := *array.Thaw([]int32{1, 2, 3})
-	size := int32(len(array2))
-	for i := int32(0); i < size; i++ {
+func initializeMain_() []int {
+	array2 := *array.Thaw([]int{1, 2, 3})
+	size := len(array2)
+	for i := 0; i < size; i++ {
 		var peeked maybe.Int
-		var result int32
-		if int(i) < len(array2) {
-			peeked = maybe.Int(array2[i])
-			if peeked == maybe.NoInt {
-				result = 0
-			} else {
-				result = int32(peeked)
-			}
-			array2[i] = 2 * result
+		if i < len(array2) {
+			peeked = maybe.JustInt(array2[i])
 		} else {
 			peeked = maybe.NoInt
-			if peeked == maybe.NoInt {
-				result = 0
-			} else {
-				result = int32(peeked)
-			}
+		}
+		var result int
+		switch peeked.Tag {
+		case maybe.TagNothing:
+			result = 0
+		default: // maybe.TagJust
+			result = peeked.Just
+		}
+		if i < len(array2) {
+			array2[i] = 2 * result
 		}
 	}
-	size2 := int32(len(array2))
+	size2 := len(array2)
 	last := array2[size2-1]
 	array2[size2-1] = last + 1
 	var poked bool
-	if size2 >= 0 && int(size2) < len(array2) {
+	if size2 >= 0 && size2 < len(array2) {
 		array2[size2] = 0
 		poked = true
 	} else {
 		poked = false
 	}
 	names := *array.Thaw([]string{"a", "b"})
-	within := 1 < len(names)
+	within := len(names) > 1
 	var left maybe.String
 	if within {
 		element := names[1]
@@ -80,7 +85,7 @@ func initializeMain_() []int32 {
 		left = maybe.NoString
 	}
 	elements := shared.Frozen(array2)
-	var result2 int32
+	var result2 int
 	if poked {
 		result2 = 1
 	} else {
@@ -93,13 +98,13 @@ func initializeMain_() []int32 {
 	default:
 		result3 = false
 	}
-	var result4 int32
+	var result4 int
 	if result3 {
 		result4 = 1
 	} else {
 		result4 = 0
 	}
-	performed := array.Append(elements, []int32{size, result2, result4})
+	performed := array.Append(elements, []int{size, result2, result4})
 	return performed
 }
 
