@@ -16,7 +16,7 @@ use smol_str::SmolStr;
 use super::names::{NamePart, PendingSpelling};
 use super::{Emitter, Mode, Sink, binary, call, identifier_expression};
 use crate::error::GoResult;
-use crate::foreign::{GoFunction, GoPackage, JsonCodec};
+use crate::foreign::{GoPackage, JsonCodec};
 use crate::monomorphic::{Expression, Local, LocalId, Pattern, PatternKind};
 use crate::monotype::{Monotype, MonotypeId};
 use crate::naming::{capitalise, identifier, lower_camel};
@@ -353,10 +353,7 @@ where
                 self.imports.insert("slices".into());
                 let clip =
                     GoExpression::Qualified { package: "slices".into(), name: "Clip".into() };
-                let clipped = call(clip, vec![identifier_expression(&items)]);
-                let bounded =
-                    self.go_function(GoFunction { package: GoPackage::Array, name: "Bounded" });
-                Ok(call(bounded, vec![clipped]))
+                Ok(call(clip, vec![identifier_expression(&items)]))
             }
             Monotype::Object(element) => {
                 let keys = locals.fresh("keys");

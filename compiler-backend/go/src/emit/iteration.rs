@@ -493,21 +493,14 @@ where
         in_place: bool,
     ) -> GoResult<GoStatement> {
         let index = if indexed { self.loop_variable(callback, 0, "index") } else { "_".into() };
-        let slot = in_place.then_some(if index == "_" { "index" } else { "slot" });
+        let slot = in_place.then_some("index");
         let need = Need::Argument { callback, position: usize::from(indexed) };
         let mut opened = self.open(pipeline, need, slot)?;
         let mut arguments = vec![opened.element];
         if indexed && index != "_" {
             let slot =
                 opened.index.as_deref().expect("invariant violated: an indexed map has a slot");
-            opened.body.body().push(GoStatement::Define {
-                names: vec![index.clone()],
-                values: vec![GoExpression::Conversion {
-                    type_: GoType::Named("int32".into()),
-                    value: Box::new(identifier_expression(slot)),
-                }],
-            });
-            arguments.insert(0, identifier_expression(&index));
+            arguments.insert(0, identifier_expression(slot));
         }
         let value = self.callback_value(callback, arguments, opened.body.body())?;
         let statement = match &opened.index {
@@ -660,9 +653,7 @@ where
         };
         self.tail_loop = saved;
         out.push(outcome?);
-        // Each produced array is bounded, but not what they add up to.
-        let bounded = self.go_function(GoFunction { package: GoPackage::Array, name: "Bounded" });
-        Ok(call(bounded, vec![identifier_expression(&bound)]))
+        Ok(identifier_expression(&bound))
     }
 
     /// Appends every element a pipeline produces, one at a time.
@@ -793,11 +784,7 @@ where
         let mut opened = self.open(pipeline, need, Some("index"))?;
         let index = opened.index.clone().expect("invariant violated: a search by index has one");
         let condition = self.callback_value(callback, vec![opened.element], opened.body.body())?;
-        let position = GoExpression::Conversion {
-            type_: GoType::Named("int32".into()),
-            value: Box::new(identifier_expression(&index)),
-        };
-        let present = self.construct(data, just, vec![position])?;
+        let present = self.construct(data, just, vec![identifier_expression(&index)])?;
         opened.body.body().push(GoStatement::If {
             condition,
             then: vec![

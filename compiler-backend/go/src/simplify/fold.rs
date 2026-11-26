@@ -479,7 +479,7 @@ fn evaluate(foreign: Foreign, arguments: &[Expression]) -> Option<Literal> {
 /// A literal as the value JavaScript computes with.
 #[derive(Clone)]
 enum Value<'l> {
-    Int(i32),
+    Int(i64),
     Number(f64),
     Boolean(bool),
     Char(char),
@@ -490,9 +490,7 @@ enum Value<'l> {
 impl<'l> Value<'l> {
     fn of(literal: &'l Literal) -> Option<Value<'l>> {
         Some(match literal {
-            // The one Int literal outside the range, 2147483648, is negated:
-            // `-2147483648` is `negate 2147483648`, and both wrap alike.
-            Literal::Int(value) => Value::Int(*value as i32),
+            Literal::Int(value) => Value::Int(*value),
             Literal::Number(value) => Value::Number(value.parse().ok()?),
             Literal::Boolean(value) => Value::Boolean(*value),
             Literal::Char(value) => Value::Char(*value),
@@ -504,7 +502,7 @@ impl<'l> Value<'l> {
 
     fn literal(self) -> Literal {
         match self {
-            Value::Int(value) => Literal::Int(i64::from(value)),
+            Value::Int(value) => Literal::Int(value),
             // Debug formatting is the shortest text that parses back to the
             // same double, `-0.0` and `NaN` included.
             Value::Number(value) => Literal::Number(format!("{value:?}").into()),
@@ -528,7 +526,7 @@ fn unary<'l>(operator: Operator, operand: &Value<'l>) -> Option<Value<'l>> {
     Some(match (operator, operand) {
         (Operator::IntNegate, Value::Int(x)) => Value::Int(x.wrapping_neg()),
         (Operator::IntComplement, Value::Int(x)) => Value::Int(!x),
-        (Operator::IntToNumber, Value::Int(x)) => Value::Number(f64::from(*x)),
+        (Operator::IntToNumber, Value::Int(x)) => Value::Number(*x as f64),
         (Operator::NumberNegate, Value::Number(x)) => Value::Number(-x),
         (Operator::BooleanNot, Value::Boolean(x)) => Value::Boolean(!x),
         _ => return None,
@@ -549,7 +547,7 @@ fn binary<'l>(operator: Operator, left: &Value<'l>, right: &Value<'l>) -> Option
             | Operator::IntZeroFillShiftRight,
             Value::Int(x),
             Value::Int(y),
-        ) => Value::Int(i32::try_from(crate::numeric::fold_bitwise(operator, *x, *y)).ok()?),
+        ) => Value::Int(crate::numeric::fold_bitwise(operator, *x, *y)),
         (Operator::NumberAdd, Value::Number(x), Value::Number(y)) => Value::Number(x + y),
         (Operator::NumberSubtract, Value::Number(x), Value::Number(y)) => Value::Number(x - y),
         (Operator::NumberMultiply, Value::Number(x), Value::Number(y)) => Value::Number(x * y),
@@ -563,22 +561,21 @@ fn binary<'l>(operator: Operator, left: &Value<'l>, right: &Value<'l>) -> Option
     })
 }
 
-/// `x * y | 0`: the product is a double, exact up to 2^53 and rounded beyond.
-/// The prelude's `intDiv`, Euclidean division with zero for a zero divisor.
-/// `minBound / -1` leaves the Int range in JavaScript and stays unfolded.
-fn divide(x: i32, y: i32) -> Option<i32> {
+/// The prelude's `intDiv`, Euclidean division with zero for a zero divisor. `bottom / -1`
+/// wraps to bottom in Go, where JavaScript leaves the Int range; it stays unfolded.
+fn divide(x: i64, y: i64) -> Option<i64> {
     if y == 0 {
         return Some(0);
     }
-    i32::try_from(i64::from(x).div_euclid(i64::from(y))).ok()
+    x.checked_div_euclid(y)
 }
 
 /// The prelude's `intMod`, never negative, with zero for a zero divisor.
-fn modulo(x: i32, y: i32) -> i32 {
+fn modulo(x: i64, y: i64) -> i64 {
     if y == 0 {
         return 0;
     }
-    i64::from(x).rem_euclid(i64::from(y)) as i32
+    x.wrapping_rem_euclid(y)
 }
 
 /// `show` of a Number: JavaScript's `toString`, with `.0` after a whole number it writes

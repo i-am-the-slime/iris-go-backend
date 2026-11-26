@@ -23,7 +23,7 @@
 //! ```go
 //! step, count := array.RangeSteps(first, last)
 //! for index := range count {
-//!     x := first + int32(index)*step
+//!     x := first + index*step
 //!     ...
 //! }
 //! ```
@@ -47,7 +47,7 @@ use crate::foreign::{
 use crate::monomorphic::{Binding, Expression, ExpressionKind, Literal, Local};
 use crate::monotype::{Monotype, MonotypeId};
 use crate::naming::VALUE;
-use crate::syntax::{GoExpression, GoStatement, GoType, SourceLine};
+use crate::syntax::{GoExpression, GoStatement, SourceLine};
 
 /// The most elements of a literal prefix stored in one assignment.
 const PREFIX_ON_ONE_LINE: usize = 4;
@@ -247,11 +247,7 @@ impl<'e> Pipeline<'e> {
     }
 
     fn count(&self) -> Option<GoExpression> {
-        let known = self.known_length()?;
-        Some(match &self.source {
-            Source::Range { .. } | Source::Stepping(_) => as_int(known),
-            Source::Array(_) | Source::Replicate { .. } | Source::Zip(_) => known,
-        })
+        self.known_length()
     }
 }
 
@@ -388,16 +384,12 @@ where
                 let count = self.value(count, out)?;
                 let count = match count {
                     GoExpression::Integer(count) => GoExpression::Integer(count.max(0)),
-                    count => match as_int(count) {
-                        count if is_go_length(&count) => count,
-                        count => {
-                            let count = call(
-                                identifier_expression("max"),
-                                vec![count, GoExpression::Integer(0)],
-                            );
-                            self.hoist(count, "count", out)
-                        }
-                    },
+                    count if is_go_length(&count) => count,
+                    count => {
+                        let count =
+                            call(identifier_expression("max"), vec![count, GoExpression::Integer(0)]);
+                        self.hoist(count, "count", out)
+                    }
                 };
                 let replicated = self.value(value, out)?;
                 let replicated = self.typed_constant(replicated, value.monotype)?;
@@ -804,10 +796,7 @@ where
                 }
                 Header::Counting { variable, first, last } => GoStatement::Counting {
                     variable,
-                    start: GoExpression::Conversion {
-                        type_: GoType::Named("int32".into()),
-                        value: Box::new(GoExpression::Integer(first)),
-                    },
+                    start: GoExpression::Integer(first),
                     end: GoExpression::Integer(last + 1),
                     body,
                 },
@@ -900,10 +889,7 @@ where
         index: &str,
         body: &mut Vec<GoStatement>,
     ) -> GoExpression {
-        let position = GoExpression::Conversion {
-            type_: GoType::Named("int32".into()),
-            value: Box::new(identifier_expression(index)),
-        };
+        let position = identifier_expression(index);
         match callback {
             Callback::Inline { parameters, body: callback_body } => {
                 if !uses_local(callback_body, parameters[0].id) {
@@ -983,17 +969,17 @@ where
         array: &Expression,
         out: &mut Vec<GoStatement>,
     ) -> GoResult<Option<GoExpression>> {
-        Ok(self.built_with_spare(array, 0, out)?.map(|(built, _)| built))
+        self.built_with_spare(array, 0, out)
     }
 
     /// The array a zip, a scan or a literal prefix of a fused pipeline builds, with room for
-    /// `spare` more elements when its length is known, which the boolean then says.
+    /// `spare` more elements when its length is known.
     pub(super) fn built_with_spare(
         &mut self,
         array: &Expression,
         spare: usize,
         out: &mut Vec<GoStatement>,
-    ) -> GoResult<Option<(GoExpression, bool)>> {
+    ) -> GoResult<Option<GoExpression>> {
         let ExpressionKind::Foreign { foreign, arguments } = &array.kind else { return Ok(None) };
         if !matches!(self.monotypes.get(array.monotype), Monotype::Array(_)) {
             return Ok(None);
@@ -1003,7 +989,7 @@ where
             && let Some(vectorised) =
                 self.vectorised(Iteration::ZipWith, arguments, array.monotype, out)?
         {
-            return Ok(Some((vectorised, false)));
+            return Ok(Some(vectorised));
         }
         let scanned =
             foreign.calls(ARRAY_SCANL) && self.stage_parts(array, Demand::FORWARD, false).is_some();
@@ -1042,7 +1028,7 @@ where
         spare: usize,
         monotype: MonotypeId,
         out: &mut Vec<GoStatement>,
-    ) -> GoResult<(GoExpression, bool)> {
+    ) -> GoResult<GoExpression> {
         let array_type = self.go_type(monotype)?;
         let built = self.temporary("built");
         let offset = prefix.len();
@@ -1120,7 +1106,7 @@ where
         opened.body.body().push(stored);
         let statement = self.close(opened.body);
         out.push(statement);
-        Ok((identifier_expression(&built), known.is_some()))
+        Ok(identifier_expression(&built))
     }
 
     /// Performs an effect for every element of a pipeline, running its stages
@@ -1157,13 +1143,7 @@ where
     ) -> GoResult<GoExpression> {
         let pipeline = self.pipeline(array, Demand::FORWARD, Need::Nothing, out)?;
         if let Some(known) = pipeline.known_length() {
-            return Ok(match known {
-                GoExpression::Integer(count) => GoExpression::Integer(count),
-                known => GoExpression::Conversion {
-                    type_: GoType::Named("int32".into()),
-                    value: Box::new(known),
-                },
-            });
+            return Ok(known);
         }
         let count = self.temporary("count");
         out.push(self.define(count.clone(), GoExpression::Integer(0), monotype)?);
@@ -1223,16 +1203,6 @@ enum Generated<'e> {
     Zip { callback: Found<'e>, operands: [&'e Expression; 2] },
 }
 
-fn as_int(count: GoExpression) -> GoExpression {
-    match &count {
-        GoExpression::Integer(_) => count,
-        GoExpression::Call { function, .. } if matches!(function.as_ref(), GoExpression::Identifier(name) if name == "len") => {
-            count
-        }
-        _ => GoExpression::Conversion { type_: GoType::Int, value: Box::new(count) },
-    }
-}
-
 fn indexed(array: &str, slot: GoExpression) -> GoExpression {
     GoExpression::Index { value: Box::new(identifier_expression(array)), index: Box::new(slot) }
 }
@@ -1244,13 +1214,10 @@ fn past_bindings(mut expression: &Expression) -> &Expression {
     expression
 }
 
-/// The element at `index` of a range: `first + int32(index)*step`, which
-/// wraps like the range's own arithmetic.
+/// The element at `index` of a range: `first + index*step`, which wraps like the range's own
+/// arithmetic.
 fn stepped_value(steps: &Steps, index: &str) -> GoExpression {
-    let position = GoExpression::Conversion {
-        type_: GoType::Named("int32".into()),
-        value: Box::new(identifier_expression(index)),
-    };
+    let position = identifier_expression(index);
     let offset = match steps.step {
         GoExpression::Integer(1) => position,
         GoExpression::Integer(-1) => return binary("-", steps.first.clone(), position),

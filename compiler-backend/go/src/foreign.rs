@@ -168,9 +168,6 @@ impl RecordOperation {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct Boundary {
-    /// The Int arguments the Go helper declares as `int32` rather than as a
-    /// type parameter, where an Int literal needs no conversion.
-    pub int32_parameters: &'static [usize],
     pub ignored: &'static [usize],
     pub maybe: Option<MaybeConstructors>,
     /// The Go helper takes none of `maybe`'s constructors and returns its `Just`'s field and
@@ -294,7 +291,6 @@ pub struct MaybeConstructors {
 }
 
 const PLAIN: Boundary = Boundary {
-    int32_parameters: &[],
     ignored: &[],
     maybe: None,
     found: false,
@@ -318,10 +314,6 @@ const PLAIN: Boundary = Boundary {
 };
 
 const RESULT_PARAMETER: Boundary = Boundary { result_parameter: true, ..PLAIN };
-
-const fn int32_parameters(positions: &'static [usize]) -> Boundary {
-    Boundary { int32_parameters: positions, ..PLAIN }
-}
 
 const fn ignoring(arguments: &'static [usize]) -> Boundary {
     Boundary { ignored: arguments, ..PLAIN }
@@ -659,7 +651,6 @@ pub fn int64_import(
             unsigned,
             arity,
             effectful,
-            int32_arguments,
             three_way,
         } => {
             let name = match signedness {
@@ -667,7 +658,7 @@ pub fn int64_import(
                 Signedness::Unsigned => unsigned,
             };
             let function = GoFunction { package: GoPackage::Int64, name };
-            let boundary = Boundary { three_way, ..int32_parameters(int32_arguments) };
+            let boundary = Boundary { three_way, ..PLAIN };
             match effectful {
                 true => Foreign::Perform { function, arity, boundary },
                 false => Foreign::Call { function, arity, boundary },

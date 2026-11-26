@@ -149,8 +149,6 @@ pub enum Int64Foreign {
         unsigned: &'static str,
         arity: usize,
         effectful: bool,
-        /// The arguments the function declares as Go's `int32`.
-        int32_arguments: &'static [usize],
         /// The function is a three-way comparison of its two Longs in the
         /// order of Go's operators on their type, as `Boundary::three_way` says.
         three_way: bool,
@@ -262,7 +260,7 @@ impl Int64Operation {
         };
         match (self, operands) {
             (Operation::Constant(bits), []) => long(bits),
-            (Operation::FromInt, [x]) => long(i64::from(*x as i32)),
+            (Operation::FromInt, [x]) => long(*x),
             (Operation::Convert | Operation::Same, [x]) => long(*x),
             (Operation::Add, [x, y]) => long(x.wrapping_add(*y)),
             (Operation::Subtract, [x, y]) => long(x.wrapping_sub(*y)),
@@ -344,23 +342,21 @@ pub fn int64_foreign(module: &str, name: &str) -> Option<Int64Foreign> {
         return None;
     }
     let inline = |operation| Some(Int64Foreign::Inline(operation));
-    let generic = |name: &'static str, arity, int32_arguments| {
+    let generic = |name: &'static str, arity| {
         Some(Int64Foreign::Runtime {
             signed: name,
             unsigned: name,
             arity,
             effectful: false,
-            int32_arguments,
             three_way: false,
         })
     };
-    let typed = |signed: &'static str, unsigned: &'static str, arity, int32_arguments| {
+    let typed = |signed: &'static str, unsigned: &'static str, arity| {
         Some(Int64Foreign::Runtime {
             signed,
             unsigned,
             arity,
             effectful: false,
-            int32_arguments,
             three_way: false,
         })
     };
@@ -408,27 +404,25 @@ pub fn int64_foreign(module: &str, name: &str) -> Option<Int64Foreign> {
             unsigned: "Compare_",
             arity: 2,
             effectful: false,
-            int32_arguments: &[],
             three_way: true,
         }),
-        "toString_" => generic("ToString_", 2, &[1]),
-        "rotateLeft_" => generic("RotateLeft_", 2, &[]),
-        "rotateRight_" => generic("RotateRight_", 2, &[]),
-        "getNumBitsAbs" => generic("GetNumBitsAbs", 1, &[]),
-        "toBytes_" => generic("ToBytes_", 2, &[]),
-        "fromBits_" => typed("FromBits_Int64", "FromBits_UInt64", 3, &[0, 1]),
-        "fromBytes_" => typed("FromBytes_Int64", "FromBytes_UInt64", 3, &[]),
-        "fromBytesLE_" => typed("FromBytesLE_Int64", "FromBytesLE_UInt64", 2, &[]),
-        "fromBytesBE_" => typed("FromBytesBE_Int64", "FromBytesBE_UInt64", 2, &[]),
-        "fromNumber_" => typed("FromNumber_Int64", "FromNumber_UInt64", 2, &[]),
-        "fromValue_" => typed("FromValue_Int64", "FromValue_UInt64", 2, &[]),
-        "safeReadLong_" => typed("SafeReadLong_Int64", "SafeReadLong_UInt64", 3, &[2]),
+        "toString_" => generic("ToString_", 2),
+        "rotateLeft_" => generic("RotateLeft_", 2),
+        "rotateRight_" => generic("RotateRight_", 2),
+        "getNumBitsAbs" => generic("GetNumBitsAbs", 1),
+        "toBytes_" => generic("ToBytes_", 2),
+        "fromBits_" => typed("FromBits_Int64", "FromBits_UInt64", 3),
+        "fromBytes_" => typed("FromBytes_Int64", "FromBytes_UInt64", 3),
+        "fromBytesLE_" => typed("FromBytesLE_Int64", "FromBytesLE_UInt64", 2),
+        "fromBytesBE_" => typed("FromBytesBE_Int64", "FromBytesBE_UInt64", 2),
+        "fromNumber_" => typed("FromNumber_Int64", "FromNumber_UInt64", 2),
+        "fromValue_" => typed("FromValue_Int64", "FromValue_UInt64", 2),
+        "safeReadLong_" => typed("SafeReadLong_Int64", "SafeReadLong_UInt64", 3),
         "fromString_" => Some(Int64Foreign::Runtime {
             signed: "FromString_Int64",
             unsigned: "FromString_UInt64",
             arity: 3,
             effectful: true,
-            int32_arguments: &[2],
             three_way: false,
         }),
         _ => None,

@@ -16,7 +16,6 @@ use files::FileId;
 
 #[derive(Clone, Debug)]
 pub(super) enum MaybeLayout {
-    Int { just: String, nothing: String },
     Char { just: String, nothing: String },
     Boolean { just: String, true_: String, false_: String, nothing: String },
     Pointer { just: String, payload: MonotypeId },
@@ -25,7 +24,6 @@ pub(super) enum MaybeLayout {
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(super) enum Representation {
-    Int,
     Char,
     Boolean,
     Pointer,
@@ -40,8 +38,7 @@ impl MaybeLayout {
     fn is_nothing(&self, value: &GoExpression) -> bool {
         let GoExpression::Identifier(name) = value else { return false };
         match self {
-            MaybeLayout::Int { nothing, .. }
-            | MaybeLayout::Char { nothing, .. }
+            MaybeLayout::Char { nothing, .. }
             | MaybeLayout::Boolean { nothing, .. }
             | MaybeLayout::Struct { nothing, .. } => name == nothing,
             MaybeLayout::Pointer { .. } => name == "nil",
@@ -50,8 +47,7 @@ impl MaybeLayout {
 
     fn just(&self) -> &str {
         match self {
-            MaybeLayout::Int { just, .. }
-            | MaybeLayout::Char { just, .. }
+            MaybeLayout::Char { just, .. }
             | MaybeLayout::Boolean { just, .. }
             | MaybeLayout::Pointer { just, .. }
             | MaybeLayout::Struct { just, .. } => just,
@@ -95,7 +91,6 @@ where
 
     pub(super) fn maybe_representation(&mut self, payload: MonotypeId) -> GoResult<Representation> {
         Ok(match self.monotypes.get(payload).clone() {
-            Monotype::Int => Representation::Int,
             Monotype::Char => Representation::Char,
             Monotype::Boolean => Representation::Boolean,
             Monotype::Data(data) if self.is_boxed(&data)? => Representation::Pointer,
@@ -175,7 +170,7 @@ where
             layout
         };
         match representation {
-            Representation::Int | Representation::Char => {
+            Representation::Char => {
                 let name = self.maybe_global(data, "")?;
                 let nothing = self.maybe_global(data, "No")?;
                 self.type_declarations.push(GoDeclaration::Type {
@@ -184,17 +179,14 @@ where
                     line: None,
                     member_lines: vec![],
                 });
-                let outside_int32 =
+                let outside_runes =
                     binary("<<", GoExpression::Integer(1), GoExpression::Integer(32));
                 self.type_declarations.push(GoDeclaration::Constant {
                     name: nothing.clone(),
                     type_: Some(GoType::Named(name.clone())),
-                    value: outside_int32,
+                    value: outside_runes,
                 });
-                let maybe = match representation {
-                    Representation::Int => MaybeLayout::Int { just, nothing },
-                    _ => MaybeLayout::Char { just, nothing },
-                };
+                let maybe = MaybeLayout::Char { just, nothing };
                 Ok(scalar(self, name, maybe))
             }
             Representation::Boolean => {
@@ -338,7 +330,7 @@ where
     ) -> GoResult<GoExpression> {
         let is_just = !layout.constructors[constructor].fields.is_empty();
         Ok(match maybe {
-            MaybeLayout::Int { nothing, .. } | MaybeLayout::Char { nothing, .. } => {
+            MaybeLayout::Char { nothing, .. } => {
                 if is_just {
                     let type_ = GoType::Named(layout.name.clone());
                     GoExpression::Conversion { type_, value: Box::new(values.remove(0)) }
@@ -398,7 +390,7 @@ where
         let (_, payload) = constructor.fields[0];
         let parameter = identifier_expression("just");
         let body = match maybe {
-            MaybeLayout::Int { .. } | MaybeLayout::Char { .. } => {
+            MaybeLayout::Char { .. } => {
                 let type_ = GoType::Named(layout.name.clone());
                 vec![GoStatement::Return(Some(GoExpression::Conversion {
                     type_,
@@ -478,8 +470,7 @@ where
                 };
             }
             Some(
-                MaybeLayout::Int { nothing, .. }
-                | MaybeLayout::Char { nothing, .. }
+                MaybeLayout::Char { nothing, .. }
                 | MaybeLayout::Boolean { nothing, .. },
             ) => identifier_expression(nothing),
             Some(MaybeLayout::Pointer { .. }) => identifier_expression("nil"),
@@ -525,10 +516,6 @@ where
             None | Some(MaybeLayout::Struct { .. }) => {
                 field(path, &layout.constructors[constructor].fields[position].0)
             }
-            Some(MaybeLayout::Int { .. }) => GoExpression::Conversion {
-                type_: GoType::Named("int32".into()),
-                value: Box::new(path),
-            },
             Some(MaybeLayout::Char { .. }) => {
                 GoExpression::Conversion { type_: GoType::Rune, value: Box::new(path) }
             }

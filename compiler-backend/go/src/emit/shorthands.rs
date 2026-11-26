@@ -1,25 +1,17 @@
 //! Shorter Go for what emission spells out:
 //!
-//! - an integer chosen as the larger or smaller of two, `var r int32; if x < 0 { r = 0 } else
+//! - an integer chosen as the larger or smaller of two, `var r int; if x < 0 { r = 0 } else
 //!   { r = x }`, is Go's `r := max(x, 0)`; for floats the two disagree on -0;
-//! - a length compared with a constant, `1 < int32(len(xs))`, is `len(xs) > 1`, and a length as
-//!   a Number, `float64(int32(len(xs)))`, is `float64(len(xs))`, and back as Go's `int` it is
-//!   `len(xs)`: an array holds at most as many
-//!   elements as an Int counts (`array.Bounded`), and a string JavaScript can hold has fewer
-//!   UTF-8 bytes than that, so the conversion never wraps; so is a range's count of elements,
-//!   which is the length of the array the range is;
-//! - a Number variable given a constant, `var x float64 = 0.0`, is `x := 0.0`.
-
-use rustc_hash::FxHashSet;
+//! - a constant compared with a length, `1 < len(xs)`, is `len(xs) > 1`;
+//! - a Number variable given a constant, `var x float64 = 0.0`, is `x := 0.0`, and an Int
+//!   variable given one, `var n int = 0`, is `n := 0`.
 
 use crate::go_traversal::{self, Walk};
 use crate::syntax::{GoDeclaration, GoExpression, GoStatement, GoType};
 
 pub(super) fn use_shorthands(declarations: &mut [GoDeclaration]) {
     for declaration in declarations {
-        let mut counts = RangeCounts::default();
-        go_traversal::declaration(&mut counts, declaration);
-        go_traversal::declaration(&mut Shorthands { counts: counts.names }, declaration);
+        go_traversal::declaration(&mut Shorthands, declaration);
         if let GoDeclaration::Function { result: Some(result), body, .. } = declaration {
             ReturnedConstants { result }.block(body);
         }
@@ -54,29 +46,7 @@ impl Walk for ReturnedConstants<'_> {
     }
 }
 
-struct Shorthands {
-    /// The counts of elements of ranges, `_, count := array.RangeSteps(first, last)`, which
-    /// as Go's `int` read as an array's length does.
-    counts: FxHashSet<String>,
-}
-
-#[derive(Default)]
-struct RangeCounts {
-    names: FxHashSet<String>,
-}
-
-impl Walk for RangeCounts {
-    fn statement(&mut self, statement: &mut GoStatement) {
-        if let GoStatement::Define { names, values } = statement
-            && let [_, count] = names.as_slice()
-            && let [GoExpression::Call { function, .. }] = values.as_slice()
-            && matches!(&**function, GoExpression::Qualified { name, .. } if name == "RangeSteps")
-        {
-            self.names.insert(count.clone());
-        }
-        go_traversal::statement(self, statement);
-    }
-}
+struct Shorthands;
 
 impl Walk for Shorthands {
     fn block(&mut self, body: &mut Vec<GoStatement>) {
@@ -89,9 +59,12 @@ impl Walk for Shorthands {
             position += 1;
         }
         for statement in body.iter_mut() {
-            if let GoStatement::Variable { name, type_: GoType::Float64, value: Some(value) } =
-                statement
-                && is_float_constant(value)
+            if let GoStatement::Variable { name, type_, value: Some(value) } = statement
+                && match type_ {
+                    GoType::Float64 => is_float_constant(value),
+                    GoType::Int => super::operators::is_integer_constant(value),
+                    _ => false,
+                }
             {
                 let value = std::mem::replace(value, GoExpression::Integer(0));
                 *statement =
@@ -102,38 +75,13 @@ impl Walk for Shorthands {
 
     fn expression(&mut self, value: &mut GoExpression) {
         go_traversal::expression(self, value);
-        match value {
-            GoExpression::Conversion { type_: GoType::Float64, value: converted } => {
-                if let Some(length) = int32_length(converted) {
-                    **converted = length;
-                }
-            }
-            GoExpression::Conversion { type_: GoType::Int, value: converted } => {
-                if let Some(length) = int32_length(converted) {
-                    *value = length;
-                } else if let GoExpression::Conversion { type_: GoType::Named(type_), value: count } =
-                    &**converted
-                    && type_ == "int32"
-                    && matches!(&**count, GoExpression::Identifier(name) if self.counts.contains(name))
-                {
-                    *value = (**count).clone();
-                }
-            }
-            GoExpression::Binary { operator, left, right } => {
-                let Some(flipped) = flipped_comparison(operator) else { return };
-                if let Some(length) = int32_length(right)
-                    && matches!(**left, GoExpression::Integer(_))
-                {
-                    *operator = flipped;
-                    std::mem::swap(left, right);
-                    **left = length;
-                } else if let Some(length) = int32_length(left)
-                    && matches!(**right, GoExpression::Integer(_))
-                {
-                    **left = length;
-                }
-            }
-            _ => {}
+        if let GoExpression::Binary { operator, left, right } = value
+            && let Some(flipped) = flipped_comparison(operator)
+            && is_length(right)
+            && matches!(**left, GoExpression::Integer(_))
+        {
+            *operator = flipped;
+            std::mem::swap(left, right);
         }
     }
 }
@@ -214,14 +162,10 @@ fn is_float_constant(value: &GoExpression) -> bool {
     matches!(value, GoExpression::Float(text) if text.contains(['.', 'e', 'E']))
 }
 
-/// `len(xs)` of `int32(len(xs))`.
-fn int32_length(value: &GoExpression) -> Option<GoExpression> {
-    let GoExpression::Conversion { type_: GoType::Named(type_), value } = value else {
-        return None;
-    };
-    let GoExpression::Call { function, arguments } = &**value else { return None };
-    let is_len = matches!(&**function, GoExpression::Identifier(name) if name == "len");
-    (type_ == "int32" && is_len && arguments.len() == 1).then(|| (**value).clone())
+/// `len(xs)`.
+fn is_length(value: &GoExpression) -> bool {
+    let GoExpression::Call { function, arguments } = value else { return false };
+    matches!(&**function, GoExpression::Identifier(name) if name == "len") && arguments.len() == 1
 }
 
 /// The comparison with its operands swapped.

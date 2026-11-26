@@ -13,7 +13,7 @@ use crate::monomorphic::traversal::reference_graph;
 use crate::monomorphic::{Expression, Function, FunctionId, Program};
 use crate::monotype::{Monotype, Monotypes};
 use crate::naming::identifier;
-use crate::syntax::{GoDeclaration, GoExpression, GoStatement, GoType};
+use crate::syntax::{GoDeclaration, GoExpression, GoStatement};
 
 impl<'q, Q> Emitter<'_, '_, 'q, Q>
 where
@@ -59,17 +59,8 @@ where
             self.imports.insert("os".into());
             self.effects.insert(("os".into(), "Exit".into()));
             let exit = GoExpression::Qualified { package: "os".into(), name: "Exit".into() };
-            let status = GoExpression::Conversion {
-                type_: GoType::Int,
-                value: Box::new(identifier_expression("exitStatus")),
-            };
-            vec![
-                GoStatement::Define {
-                    names: vec!["exitStatus".into()],
-                    values: vec![call(identifier_expression(&name), vec![])],
-                },
-                GoStatement::Expression(call(exit, vec![status])),
-            ]
+            let status = call(identifier_expression(&name), vec![]);
+            vec![GoStatement::Expression(call(exit, vec![status]))]
         } else if function.parameters.is_empty()
             && let Monotype::Effect(_) = self.monotypes.get(function.result)
         {

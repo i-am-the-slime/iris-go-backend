@@ -3,7 +3,6 @@ use smol_str::SmolStr;
 use super::conditions::negated;
 use super::{Emitter, call, conjunction, identifier_expression};
 use crate::error::GoResult;
-use crate::foreign::{GoFunction, GoPackage};
 use crate::monomorphic::{Expression, Local, LocalId, Pattern, PatternKind};
 use crate::monotype::{Monotype, MonotypeId};
 use crate::syntax::{GoExpression, GoStatement};
@@ -70,7 +69,6 @@ where
             GoStatement::Assign { targets: vec![identifier_expression(&cell)], values: vec![tail] },
         ];
         out.push(GoStatement::Loop(body));
-        let bounded = self.go_function(GoFunction { package: GoPackage::Array, name: "Bounded" });
-        Ok(Some(call(bounded, vec![identifier_expression(&elements)])))
+        Ok(Some(identifier_expression(&elements)))
     }
 }

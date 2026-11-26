@@ -1,6 +1,5 @@
 use super::{Emitter, binary, call, identifier_expression, negated};
 use crate::foreign::{Comparison, GoPackage, Operator};
-use crate::monotype::{Monotype, MonotypeId};
 use crate::numeric::fold_bitwise;
 use crate::syntax::{GoExpression, GoType};
 
@@ -8,18 +7,6 @@ impl<'q, Q> Emitter<'_, '_, 'q, Q>
 where
     Q: checking::ExternalQueries,
 {
-    /// go-support represents PureScript `Int` as Go `int`; generated code uses
-    /// `int32`, whose overflow wraps exactly like JavaScript's `| 0`.
-    pub(super) fn narrow(&mut self, value: GoExpression, monotype: MonotypeId) -> GoExpression {
-        if let Monotype::Int = self.monotypes.get(monotype) {
-            return GoExpression::Conversion {
-                type_: GoType::Named("int32".into()),
-                value: Box::new(value),
-            };
-        }
-        value
-    }
-
     fn fold_number(
         &mut self,
         operator: Operator,
@@ -95,15 +82,12 @@ where
                     Some(value) => self.number_constant(-value),
                     None => negated(values.remove(0)),
                 },
-                Operator::IntNegate => match int32_constant(&values[0]) {
-                    Some(value) => GoExpression::Integer(i64::from(value.wrapping_neg())),
+                Operator::IntNegate => match int_constant(&values[0]) {
+                    Some(value) => GoExpression::Integer(value.wrapping_neg()),
                     None => negated(values.remove(0)),
                 },
                 Operator::BooleanNot => unary("!", &mut values),
-                Operator::ArrayLength => GoExpression::Conversion {
-                    type_: GoType::Named("int32".into()),
-                    value: Box::new(call(identifier_expression("len"), values)),
-                },
+                Operator::ArrayLength => call(identifier_expression("len"), values),
                 Operator::IntToNumber => GoExpression::Conversion {
                     type_: GoType::Float64,
                     value: Box::new(values.remove(0)),
@@ -124,11 +108,20 @@ where
             return bitwise;
         }
         if let Operator::IntMultiply = operator {
-            // int32 multiplication wraps, as PureScript's Int does.
-            if let (Some(x), Some(y)) = (int32_constant(&left), int32_constant(&right)) {
-                return GoExpression::Integer(i64::from(x.wrapping_mul(y)));
+            // int multiplication wraps, as PureScript's Int does in Go.
+            if let (Some(x), Some(y)) = (int_constant(&left), int_constant(&right)) {
+                return GoExpression::Integer(x.wrapping_mul(y));
             }
             return binary("*", left, right);
+        }
+        let wrapping: Option<fn(i64, i64) -> i64> = match operator {
+            Operator::IntAdd => Some(i64::wrapping_add),
+            Operator::IntSubtract => Some(i64::wrapping_sub),
+            _ => None,
+        };
+        // Go would reject a constant sum past int's range, where the Int wraps.
+        if let (Some(wrapping), Some(x), Some(y)) = (wrapping, int_constant(&left), int_constant(&right)) {
+            return GoExpression::Integer(wrapping(x, y));
         }
         if let Some(folded) = self.fold_number(operator, &left, &right) {
             return folded;
@@ -182,9 +175,9 @@ where
     }
 }
 
-/// The Data.Int.Bits operators, which follow JavaScript: operands are int32 and
-/// shift counts are taken modulo 32. Constant operands are folded so that Go never
-/// sees an untyped constant overflow int32 or uint32.
+/// The Data.Int.Bits operators on Go's `int`: shift counts are taken modulo its width, as
+/// JavaScript takes them modulo 32, and `zshr` shifts the unsigned bits. Constant operands are
+/// folded at 64 bits.
 fn bitwise(operator: Operator, left: GoExpression, right: GoExpression) -> Option<GoExpression> {
     let symbol = match operator {
         Operator::IntAnd => "&",
@@ -194,34 +187,33 @@ fn bitwise(operator: Operator, left: GoExpression, right: GoExpression) -> Optio
         Operator::IntShiftRight | Operator::IntZeroFillShiftRight => ">>",
         _ => return None,
     };
-    if let (Some(x), Some(y)) = (int32_constant(&left), int32_constant(&right)) {
+    if let (Some(x), Some(y)) = (int_constant(&left), int_constant(&right)) {
         return Some(GoExpression::Integer(fold_bitwise(operator, x, y)));
     }
     let shifts = !matches!(operator, Operator::IntAnd | Operator::IntOr | Operator::IntXor);
     if !shifts {
         return Some(binary(symbol, left, right));
     }
-    let count = match int32_constant(&right) {
-        Some(count) => GoExpression::Integer(i64::from(count & 31)),
-        None => binary("&", right, GoExpression::Integer(31)),
+    let count = match int_constant(&right) {
+        Some(count) => GoExpression::Integer(count & 63),
+        None => binary("&", right, GoExpression::Integer(63)),
     };
-    let int32 = || GoType::Named("int32".into());
     if let Operator::IntZeroFillShiftRight = operator {
-        let unsigned = match int32_constant(&left) {
-            Some(x) => GoExpression::Integer(i64::from(x as u32)),
+        let unsigned = match int_constant(&left) {
+            Some(x) => GoExpression::Integer(x),
             None => left,
         };
         let unsigned = GoExpression::Conversion {
-            type_: GoType::Named("uint32".into()),
+            type_: GoType::Named("uint".into()),
             value: Box::new(unsigned),
         };
         return Some(GoExpression::Conversion {
-            type_: int32(),
+            type_: GoType::Int,
             value: Box::new(binary(symbol, unsigned, count)),
         });
     }
     let left = match is_untyped_constant(&left) {
-        true => GoExpression::Conversion { type_: int32(), value: Box::new(left) },
+        true => GoExpression::Conversion { type_: GoType::Int, value: Box::new(left) },
         false => left,
     };
     Some(binary(symbol, left, count))
@@ -238,11 +230,11 @@ pub(super) fn float_constant(expression: &GoExpression) -> Option<f64> {
     }
 }
 
-fn int32_constant(expression: &GoExpression) -> Option<i32> {
+fn int_constant(expression: &GoExpression) -> Option<i64> {
     match expression {
-        GoExpression::Integer(value) => i32::try_from(*value).ok(),
+        GoExpression::Integer(value) => Some(*value),
         GoExpression::Unary { operator: "-", operand } => match operand.as_ref() {
-            GoExpression::Integer(value) => i32::try_from(-*value).ok(),
+            GoExpression::Integer(value) => value.checked_neg(),
             _ => None,
         },
         _ => None,
@@ -256,6 +248,17 @@ pub(super) fn is_untyped_constant(expression: &GoExpression) -> bool {
         GoExpression::Unary { operand, .. } => is_untyped_constant(operand),
         GoExpression::Binary { left, right, .. } => {
             is_untyped_constant(left) && is_untyped_constant(right)
+        }
+        _ => false,
+    }
+}
+
+/// An integer literal, negated or not, which Go types as an `int` where nothing else types it.
+pub(super) fn is_integer_constant(expression: &GoExpression) -> bool {
+    match expression {
+        GoExpression::Integer(_) => true,
+        GoExpression::Unary { operator: "-", operand } => {
+            matches!(operand.as_ref(), GoExpression::Integer(_))
         }
         _ => false,
     }

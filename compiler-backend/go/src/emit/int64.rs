@@ -27,8 +27,8 @@ where
             value: Box::new(value),
         };
         if operation == Operation::FromInt {
-            return match int32_value(&values[0]) {
-                Some(value) => long_literal(i64::from(value), signedness),
+            return match int_value(&values[0]) {
+                Some(value) => long_literal(value, signedness),
                 None => typed(long, values.remove(0)),
             };
         }
@@ -96,7 +96,11 @@ where
                 Signedness::Signed => binary(">=", values.remove(0), GoExpression::Integer(0)),
                 Signedness::Unsigned => GoExpression::Boolean(true),
             },
-            Operation::ToInt => typed("int32", values.remove(0)),
+            // long.js's toInt is the low 32 bits, sign and all.
+            Operation::ToInt => GoExpression::Conversion {
+                type_: GoType::Int,
+                value: Box::new(typed("int32", values.remove(0))),
+            },
             Operation::ToNumber => GoExpression::Conversion {
                 type_: GoType::Float64,
                 value: Box::new(values.remove(0)),
@@ -211,11 +215,11 @@ fn untyped(expression: GoExpression) -> GoExpression {
     }
 }
 
-fn int32_value(expression: &GoExpression) -> Option<i32> {
+fn int_value(expression: &GoExpression) -> Option<i64> {
     match expression {
-        GoExpression::Integer(value) => i32::try_from(*value).ok(),
+        GoExpression::Integer(value) => Some(*value),
         GoExpression::Unary { operator: "-", operand } => match operand.as_ref() {
-            GoExpression::Integer(value) => i32::try_from(-*value).ok(),
+            GoExpression::Integer(value) => value.checked_neg(),
             _ => None,
         },
         _ => None,

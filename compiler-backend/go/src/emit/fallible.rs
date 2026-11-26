@@ -299,7 +299,6 @@ where
                 Some(failure) => failure.clone(),
                 None => {
                     let base = match &left_go {
-                        GoType::Named(name) if name == "int32" => "Int".into(),
                         GoType::Named(name) if name == "float64" => "Number".into(),
                         GoType::Named(name) => {
                             crate::naming::capitalise(name.rsplit('.').next().unwrap_or(name))

@@ -29,7 +29,7 @@ where
 
     fn spelled_go_type(&mut self, monotype: MonotypeId) -> GoResult<GoType> {
         Ok(match self.monotypes.get(monotype).clone() {
-            Monotype::Int => GoType::Named("int32".into()),
+            Monotype::Int => GoType::Int,
             Monotype::Int64 => GoType::Named("int64".into()),
             Monotype::UInt64 => GoType::Named("uint64".into()),
             Monotype::Number => GoType::Float64,

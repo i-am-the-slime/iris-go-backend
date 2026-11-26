@@ -380,7 +380,7 @@ where
 fn maybe_shape(representation: super::maybe::Representation) -> Option<Shape> {
     use super::maybe::Representation;
     match representation {
-        Representation::Int | Representation::Char => Some(Shape::scalar(8)),
+        Representation::Char => Some(Shape::scalar(8)),
         Representation::Boolean => Some(Shape::scalar(1)),
         Representation::Pointer => Some(Shape::POINTER),
         Representation::Struct => None,

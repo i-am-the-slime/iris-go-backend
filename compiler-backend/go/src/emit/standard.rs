@@ -1,5 +1,5 @@
 //! Go's standard library in place of a go-support function where the two do exactly the same,
-//! so that the code reads as Go: `strconv.Itoa(int(n))` for `show n`, `strings.Contains` for
+//! so that the code reads as Go: `strconv.Itoa(n)` for `show n`, `strings.Contains` for
 //! `contains`. A function that counts or indexes UTF-16 code units, or joins strings whose
 //! lone surrogates may meet, stays in go-support's prim package.
 
@@ -7,7 +7,7 @@ use super::{Emitter, call, is_simple};
 use crate::foreign::{GoFunction, GoPackage};
 use crate::monomorphic::Expression;
 use crate::monotype::Monotype;
-use crate::syntax::{GoExpression, GoType};
+use crate::syntax::GoExpression;
 
 impl<Q> Emitter<'_, '_, '_, Q>
 where
@@ -26,8 +26,7 @@ where
                 Some(GoExpression::String(constant.to_string()))
             }
             (GoPackage::Prim, "ShowInt", [value]) => {
-                let value = as_int(value.clone());
-                Some(self.standard("strconv", "Itoa", vec![value]))
+                Some(self.standard("strconv", "Itoa", vec![value.clone()]))
             }
             // strings.Contains takes its operands the other way around, which keeps the order
             // they are worked out in where one of them is a variable or a constant.
@@ -69,18 +68,6 @@ where
         let function = GoExpression::Qualified { package: package.into(), name: name.into() };
         call(function, arguments)
     }
-}
-
-/// An `int32` as Go's `int`: a length the emitter made an `int32` is the length again.
-fn as_int(value: GoExpression) -> GoExpression {
-    if let GoExpression::Conversion { type_: GoType::Named(type_), value: inner } = &value
-        && type_ == "int32"
-        && let GoExpression::Call { function, .. } = inner.as_ref()
-        && matches!(function.as_ref(), GoExpression::Identifier(name) if name == "len")
-    {
-        return *inner.clone();
-    }
-    GoExpression::Conversion { type_: GoType::Int, value: Box::new(value) }
 }
 
 fn integer(expression: &GoExpression) -> Option<i64> {

@@ -289,21 +289,19 @@ where
         let number = self.value(number, out)?;
         let (data, just) = self.constructor_named(monotype, "Just")?;
         let (_, nothing) = self.constructor_named(monotype, "Nothing")?;
-        // Go rejects `int32(c)` for a constant `c` that is not an int32, so a literal is decided here.
+        // Go rejects `int(c)` for a constant `c` that is not an int, so a literal is decided here,
+        // at the 64-bit targets' width.
         if let Some(constant) = float_constant(&number) {
             let fits = constant.trunc() == constant
-                && constant >= f64::from(i32::MIN)
-                && constant <= f64::from(i32::MAX);
+                && constant >= -(2f64.powi(63))
+                && constant < 2f64.powi(63);
             if fits {
                 return self.construct(&data, just, vec![GoExpression::Integer(constant as i64)]);
             }
             return self.construct(&data, nothing, vec![]);
         }
         let number = self.hoist(number, "number", out);
-        let integer = GoExpression::Conversion {
-            type_: GoType::Named("int32".into()),
-            value: Box::new(number.clone()),
-        };
+        let integer = GoExpression::Conversion { type_: GoType::Int, value: Box::new(number.clone()) };
         let found = self.construct(&data, just, vec![integer])?;
         let missing = self.construct(&data, nothing, vec![])?;
         self.imports.insert("math".into());
@@ -315,8 +313,9 @@ where
             whole,
             binary(
                 "&&",
-                binary(">=", number.clone(), math("MinInt32")),
-                binary("<=", number, math("MaxInt32")),
+                binary(">=", number.clone(), math("MinInt")),
+                // `-math.MinInt`, 2^63, is a float64 exactly, where math.MaxInt rounds up to it.
+                binary("<", number, GoExpression::Unary { operator: "-", operand: Box::new(math("MinInt")) }),
             ),
         );
         let name = self.temporary("integer");
@@ -347,7 +346,7 @@ where
         }
         if let Foreign::Range = foreign {
             let range =
-                self.go_function(GoFunction { package: GoPackage::Array, name: "RangeInt32" });
+                self.go_function(GoFunction { package: GoPackage::Array, name: "Range" });
             let values = self.values(arguments, out)?;
             return Ok(call(range, values));
         }
@@ -389,11 +388,7 @@ where
                 let value = self.value(element, out)?;
                 values.push(self.typed_constant(value, element.monotype)?);
             }
-            let appended = call(identifier_expression("append"), values);
-            return Ok(call(
-                self.go_function(GoFunction { package: GoPackage::Array, name: "Bounded" }),
-                vec![appended],
-            ));
+            return Ok(call(identifier_expression("append"), values));
         }
         if let Some(position) = super::ownership::object_write_position(foreign)
             && self.owned_snocs.contains(&std::ptr::from_ref(&arguments[position]))
@@ -408,27 +403,18 @@ where
             return Ok(call(self.go_function(write), values));
         }
         if let Foreign::Snoc = foreign
-            && let Some((built, exact)) = self.built_with_spare(&arguments[0], 1, out)?
+            && let Some(built) = self.built_with_spare(&arguments[0], 1, out)?
         {
             // The slice gives an appended constant its type.
             let element = self.value(&arguments[1], out)?;
-            let appended = call(identifier_expression("append"), vec![built, element]);
-            if exact {
-                return Ok(appended);
-            }
-            let bounded = GoFunction { package: GoPackage::Array, name: "Bounded" };
-            return Ok(call(self.go_function(bounded), vec![appended]));
+            return Ok(call(identifier_expression("append"), vec![built, element]));
         }
         if let Foreign::Snoc = foreign {
             let array = self.value(&arguments[0], out)?;
             let element = self.value(&arguments[1], out)?;
             let element = self.typed_constant(element, arguments[1].monotype)?;
             if self.owned_snocs.contains(&std::ptr::from_ref(&arguments[0])) {
-                let appended = call(identifier_expression("append"), vec![array, element]);
-                return Ok(call(
-                    self.go_function(GoFunction { package: GoPackage::Array, name: "Bounded" }),
-                    vec![appended],
-                ));
+                return Ok(call(identifier_expression("append"), vec![array, element]));
             }
             let snoc = self.go_function(GoFunction { package: GoPackage::Array, name: "Snoc" });
             let element_type = self.go_type(arguments[1].monotype)?;
@@ -600,11 +586,10 @@ where
             }
             Foreign::Constant(function) => {
                 self.imports.insert(function.package.path().into());
-                let constant = GoExpression::Qualified {
+                GoExpression::Qualified {
                     package: function.package.name().into(),
                     name: function.name.into(),
-                };
-                self.narrow(constant, monotype)
+                }
             }
             Foreign::Unit => unit_value(),
             Foreign::UnsafeCoerce => {

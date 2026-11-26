@@ -215,10 +215,7 @@ where
             }
             _ => {
                 let converted = self.uncurried_callback(from_ordering, 1, false, out)?;
-                let signed = call(converted, vec![ordered]);
-                let signed =
-                    GoExpression::Conversion { type_: GoType::Int, value: Box::new(signed) };
-                vec![GoStatement::Return(Some(signed))]
+                vec![GoStatement::Return(Some(call(converted, vec![ordered])))]
             }
         };
         body.extend(decided);

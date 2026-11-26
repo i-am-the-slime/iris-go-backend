@@ -103,7 +103,7 @@ use files::FileId;
 use self::application::Callable;
 use self::build::*;
 use self::declarations::{await_fibers, recursive_constants};
-use self::operators::is_untyped_constant;
+use self::operators::{is_integer_constant, is_untyped_constant};
 use self::overwrite::with_unique_mask;
 use self::packages::Spelling;
 use crate::arity::Arities;
@@ -1273,6 +1273,10 @@ where
             return Ok(value);
         }
         let type_ = self.go_type(monotype)?;
+        // An untyped integer constant is an `int` wherever nothing else types it.
+        if type_ == GoType::Int && is_integer_constant(&value) {
+            return Ok(value);
+        }
         Ok(GoExpression::Conversion { type_, value: Box::new(value) })
     }
 
@@ -1427,7 +1431,7 @@ where
         };
         let element_type = self.go_type(element)?;
         Ok(GoExpression::Function {
-            parameters: vec![(index, GoType::Named("int32".into())), (value, element_type)],
+            parameters: vec![(index, GoType::Int), (value, element_type)],
             result: Some(record_type),
             body: vec![GoStatement::Return(Some(associate))],
         })

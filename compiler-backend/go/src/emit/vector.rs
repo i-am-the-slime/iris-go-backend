@@ -1,7 +1,7 @@
 //! Vector loops for pure numeric array code.
 //!
 //! `foldl (+) 0.0 xs`, `sum (zipWith (*) xs ys)` and `map (\x -> a * x + b) xs`
-//! over `Array Number`, `Array Int`, or `Array Int64` and `Array UInt64`
+//! over `Array Number`, or `Array Int64` and `Array UInt64`
 //! (purescript-int64's, Go's `[]int64` and `[]uint64`) do the same arithmetic on every element,
 //! with no effects and no aliasing. Such a loop runs as a kernel: a function
 //! with a vector loop, written with `simd/archsimd`'s NEON vectors in a file
@@ -31,7 +31,8 @@
 //! `Number` sum is reassociated and may differ from the scalar loop in its
 //! last digits. Vectors of 64-bit integers cannot multiply, nor negate unsigned
 //! ones, so code that does keeps its scalar loop. Anything else keeps the
-//! scalar loop it had.
+//! scalar loop it had. `Array Int`, Go's `[]int`, keeps its scalar loop too: the vector
+//! packages load lanes from `[]int64`, never from `[]int`.
 
 use std::fmt::Write;
 
@@ -298,7 +299,6 @@ where
     fn element(&self, monotype: MonotypeId) -> Option<Element> {
         match self.monotypes.get(monotype) {
             Monotype::Number => Some(Element::Number),
-            Monotype::Int => Some(Element::Int),
             Monotype::Int64 => Some(Element::Int64),
             Monotype::UInt64 => Some(Element::UInt64),
             _ => None,
@@ -398,7 +398,6 @@ struct Plan<'e> {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Element {
     Number,
-    Int,
     Int64,
     UInt64,
 }
@@ -407,7 +406,6 @@ impl Element {
     fn scalar(self) -> &'static str {
         match self {
             Element::Number => "float64",
-            Element::Int => "int32",
             Element::Int64 => "int64",
             Element::UInt64 => "uint64",
         }
@@ -423,7 +421,7 @@ impl Element {
         match self {
             Element::Int64 => Some(Signedness::Signed),
             Element::UInt64 => Some(Signedness::Unsigned),
-            Element::Number | Element::Int => None,
+            Element::Number => None,
         }
     }
 }
@@ -450,11 +448,9 @@ impl Flavor {
     fn vector(self, element: Element) -> &'static str {
         match (self, element) {
             (Flavor::Portable, Element::Number) => "Float64s",
-            (Flavor::Portable, Element::Int) => "Int32s",
             (Flavor::Portable, Element::Int64) => "Int64s",
             (Flavor::Portable, Element::UInt64) => "Uint64s",
             (Flavor::Neon, Element::Number) => "Float64x2",
-            (Flavor::Neon, Element::Int) => "Int32x4",
             (Flavor::Neon, Element::Int64) => "Int64x2",
             (Flavor::Neon, Element::UInt64) => "Uint64x2",
         }
@@ -465,19 +461,7 @@ impl Flavor {
     fn widest(self, element: Element) -> usize {
         match (self, element) {
             (Flavor::Portable, Element::Number | Element::Int64 | Element::UInt64) => 8,
-            (Flavor::Portable, Element::Int) => 16,
             (Flavor::Neon, Element::Number | Element::Int64 | Element::UInt64) => 2,
-            (Flavor::Neon, Element::Int) => 4,
-        }
-    }
-
-    /// Whether the element's vectors have `Max` and `Min`, which 64-bit
-    /// integers have in neither package: NEON has no 64-bit `SMAX`, and the
-    /// portable package declares none. Their extrema choose by `Less`.
-    fn has_extrema(self, element: Element) -> bool {
-        match element {
-            Element::Int => true,
-            Element::Int64 | Element::UInt64 | Element::Number => false,
         }
     }
 
@@ -981,7 +965,6 @@ impl<'a, 'e, E: Lookup<'e>> Analysis<'a, 'e, E> {
 
     fn constant(&mut self, literal: &Literal, expression: &'e Expression) -> Option<Term> {
         match (literal, self.element) {
-            (Literal::Int(value), Element::Int) => Some(Term::Constant(value.to_string())),
             (Literal::Number(value), Element::Number) => {
                 let number = value.parse::<f64>().ok()?;
                 // Go spells -0, NaN and the infinities as calls, which the
@@ -1009,15 +992,11 @@ impl<'a, 'e, E: Lookup<'e>> Analysis<'a, 'e, E> {
     ) -> Option<Term> {
         let arithmetic =
             match (operator, self.element) {
-                (Operator::NumberAdd, Element::Number) | (Operator::IntAdd, Element::Int) => {
-                    Arithmetic::Add
-                }
-                (Operator::NumberSubtract, Element::Number)
-                | (Operator::IntSubtract, Element::Int) => Arithmetic::Subtract,
-                (Operator::NumberMultiply, Element::Number)
-                | (Operator::IntMultiply, Element::Int) => Arithmetic::Multiply,
+                (Operator::NumberAdd, Element::Number) => Arithmetic::Add,
+                (Operator::NumberSubtract, Element::Number) => Arithmetic::Subtract,
+                (Operator::NumberMultiply, Element::Number) => Arithmetic::Multiply,
                 (Operator::NumberDivide, Element::Number) => Arithmetic::Divide,
-                (Operator::NumberNegate, Element::Number) | (Operator::IntNegate, Element::Int) => {
+                (Operator::NumberNegate, Element::Number) => {
                     let operand = self.term(&arguments[0], scope, depth)?;
                     return Some(Term::Negate(Box::new(operand)));
                 }
@@ -1437,7 +1416,7 @@ impl Kernel {
                 }
                 out.push_str("\t}\n");
                 let pair =
-                    |left: &str, right: &str| self.combine_vectors(flavor, *reduction, left, right);
+                    |left: &str, right: &str| self.combine_vectors(*reduction, left, right);
                 let _ = writeln!(
                     out,
                     "\tacc0 = {}",
@@ -1539,17 +1518,13 @@ impl Kernel {
 
     fn combine_vectors(
         &self,
-        flavor: Flavor,
         reduction: Reduction,
         left: &str,
         right: &str,
     ) -> String {
-        let extrema = flavor.has_extrema(self.element);
         match reduction {
             Reduction::Add => format!("{left}.Add({right})"),
             Reduction::Multiply => format!("{left}.Mul({right})"),
-            Reduction::Max if extrema => format!("{left}.Max({right})"),
-            Reduction::Min if extrema => format!("{left}.Min({right})"),
             Reduction::Max => format!("{right}.IfElse({left}.Less({right}), {left})"),
             Reduction::Min => format!("{right}.IfElse({right}.Less({left}), {left})"),
         }
@@ -1713,21 +1688,6 @@ impl Spelling<'_> {
             }
             Term::Binary(arithmetic, left, right) => {
                 format!("{}.{}({})", self.vector(left), arithmetic.method(), self.vector(right))
-            }
-            // An Int comparison choosing one of the two it compares is `Max`
-            // or `Min`; a Number's would treat NaN differently.
-            Term::Select {
-                condition: Condition::Compare(ordering, left, right),
-                then,
-                otherwise,
-            } if self.flavor.is_some_and(|flavor| flavor.has_extrema(self.kernel.element))
-                && ordering != &Ordering::Equal
-                && ((left == then && right == otherwise)
-                    || (left == otherwise && right == then)) =>
-            {
-                let less = matches!(ordering, Ordering::Less | Ordering::LessEqual);
-                let method = if less == (right == then) { "Max" } else { "Min" };
-                format!("{}.{method}({})", self.vector(left), self.vector(right))
             }
             Term::Select { condition, then, otherwise } => {
                 let mask = self.mask(condition);

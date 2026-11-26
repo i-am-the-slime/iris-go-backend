@@ -1,7 +1,6 @@
 use super::iteration::Found;
 use super::{Emitter, Mode, Sink, binary, call, identifier_expression, unit_value};
 use crate::error::GoResult;
-use crate::foreign::{GoFunction, GoPackage};
 use crate::monomorphic::Expression;
 use crate::monotype::MonotypeId;
 use crate::syntax::{GoExpression, GoStatement, GoType};
@@ -101,16 +100,12 @@ where
                 let value = self.value(&arguments[0], out)?;
                 let elements = self.elements(&arguments[1], out)?;
                 let appended = call(identifier_expression("append"), vec![elements.clone(), value]);
-                let appended = call(
-                    self.go_function(GoFunction { package: GoPackage::Array, name: "Bounded" }),
-                    vec![appended],
-                );
                 let targets = vec![elements.clone()];
                 out.push(GoStatement::Assign { targets, values: vec![appended] });
                 if let Sink::Discard = sink {
                     return Ok(());
                 }
-                self.deliver(length(elements), result, sink, out)
+                self.deliver(call_length(elements), result, sink, out)
             }
             "PokeUnsafe" => {
                 let index = self.value(&arguments[0], out)?;
@@ -122,7 +117,7 @@ where
             }
             _ => {
                 let elements = self.elements(&arguments[0], out)?;
-                self.deliver(length(elements), result, sink, out)
+                self.deliver(call_length(elements), result, sink, out)
             }
         }
     }
@@ -262,12 +257,7 @@ where
     }
 }
 
-/// The length of the elements as a PureScript Int.
-fn length(elements: GoExpression) -> GoExpression {
-    let length = call(identifier_expression("len"), vec![elements]);
-    GoExpression::Conversion { type_: GoType::Named("int32".into()), value: Box::new(length) }
-}
-
+/// The length of the elements, which is a PureScript Int as Go gives it.
 fn call_length(elements: GoExpression) -> GoExpression {
     call(identifier_expression("len"), vec![elements])
 }
@@ -287,11 +277,7 @@ fn indexed(elements: GoExpression, index: GoExpression) -> GoExpression {
 
 pub(super) fn in_bounds(index: &GoExpression, elements: GoExpression) -> GoExpression {
     let length = call(identifier_expression("len"), vec![elements]);
-    let widened = match index {
-        GoExpression::Integer(_) => index.clone(),
-        _ => GoExpression::Conversion { type_: GoType::Int, value: Box::new(index.clone()) },
-    };
-    let below = binary("<", widened, length);
+    let below = binary("<", index.clone(), length);
     match index {
         GoExpression::Integer(constant) if *constant >= 0 => below,
         _ => binary("&&", binary(">=", index.clone(), GoExpression::Integer(0)), below),
