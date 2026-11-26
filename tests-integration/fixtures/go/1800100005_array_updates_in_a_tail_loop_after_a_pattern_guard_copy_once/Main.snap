@@ -1,0 +1,88 @@
+---
+source: tests-integration/src/fixtures.rs
+---
+// Data/Maybe/maybe.go
+package maybe
+
+type Int int64
+
+const NoInt Int = 1 << 32
+
+// Data/Show/show.go
+package show
+
+import "strconv"
+
+func Show(i int32) string {
+	return strconv.Itoa(int(i))
+}
+
+func AppendShowArrayInt(buffer []byte, array []int32) []byte {
+	buffer = append(buffer, '[')
+	for index, element := range array {
+		if index > 0 {
+			buffer = append(buffer, ',')
+		}
+		buffer = strconv.AppendInt(buffer, int64(element), 10)
+	}
+	buffer = append(buffer, ']')
+	return buffer
+}
+
+func ArrayInt(array []int32) string {
+	return string(AppendShowArrayInt(nil, array))
+}
+
+// main.go
+package main
+
+import (
+	"fixture/Data/Maybe"
+	"fixture/Data/Show"
+	"github.com/i-am-the-slime/iris-go/array"
+	"github.com/i-am-the-slime/iris-go/console"
+	"slices"
+	"strings"
+)
+
+var main_ = initializeMain_()
+
+func initializeMain_() []string {
+	shared := array.RangeInt32(1, 5)
+	return []string{show.ArrayInt(doubled(0, shared)), show.ArrayInt(doubled(3, shared)), show.ArrayInt(shared)}
+}
+
+func doubled(position int32, values []int32) []int32 {
+	values = slices.Clip(values)
+	copied := false
+	for {
+		var element maybe.Int
+		if position >= 0 && int(position) < len(values) {
+			element = maybe.Int(values[position])
+		} else {
+			element = maybe.NoInt
+		}
+		if element != maybe.NoInt {
+			var result []int32
+			if position >= 0 && position < int32(len(values)) {
+				value := int32(element) * 2
+				updated := values
+				if !copied {
+					updated = slices.Clone(updated)
+					copied = true
+				}
+				updated[position] = value
+				result = updated
+			} else {
+				result = values
+			}
+			position, values = position+1, result
+			continue
+		}
+		return values
+	}
+}
+
+func main() {
+	console.Print("[" + strings.Join(main_, " ") + "]")
+}

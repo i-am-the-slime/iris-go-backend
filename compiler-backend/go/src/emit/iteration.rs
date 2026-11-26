@@ -1,5 +1,6 @@
 use super::buffers::{to_bytes, to_string};
 use super::conditions::negated;
+use super::foreign_values::updated_arrays;
 use super::fusion::{Demand, Need, Order, Pipeline};
 use super::ownership::{Carried, Place, owned_snocs};
 use super::recycling::Recycled;
@@ -313,9 +314,15 @@ where
         if owned.is_empty() {
             return callback;
         }
-        let monotype = self.program.function(*callee).parameters[position].monotype;
-        for (place, _) in &owned {
-            out.push(self.clip(accumulator, place, monotype));
+        let function = self.program.function(*callee);
+        let monotype = function.parameters[position].monotype;
+        let updated = updated_arrays(&function.body);
+        for (place, nodes) in &owned {
+            let writes = nodes.iter().any(|node| updated.contains(&std::ptr::from_ref(*node)));
+            match writes {
+                true => out.push(self.copy(accumulator, place)),
+                false => out.push(self.clip(accumulator, place, monotype)),
+            }
         }
         let Callback::Direct { callee, leading, .. } = callback else { unreachable!() };
         let function = identifier_expression(&self.owning_variant_name(callee, position));
@@ -384,19 +391,23 @@ where
         }
     }
 
+    fn copy(&mut self, accumulator: &str, place: &Place) -> GoStatement {
+        let carried = carried_place(accumulator, place);
+        self.imports.insert("slices".into());
+        let clone = GoExpression::Qualified { package: "slices".into(), name: "Clone".into() };
+        GoStatement::Assign {
+            targets: vec![carried.clone()],
+            values: vec![call(clone, vec![carried])],
+        }
+    }
+
     pub(super) fn clip(
         &mut self,
         accumulator: &str,
         place: &Place,
         monotype: MonotypeId,
     ) -> GoStatement {
-        let carried = match place {
-            Place::Whole => identifier_expression(accumulator),
-            Place::Field(_, go_field) => super::field(identifier_expression(accumulator), go_field),
-            Place::Constructor { go_field, .. } => {
-                super::field(identifier_expression(accumulator), go_field)
-            }
-        };
+        let carried = carried_place(accumulator, place);
         let clip = match self.carried_monotype(monotype, place) {
             Some(carried) if matches!(self.monotypes.get(carried), Monotype::Object(_)) => {
                 self.go_function(GoFunction { package: GoPackage::Object, name: "Lend" })
@@ -1044,5 +1055,15 @@ fn most_literal_elements(expression: &Expression) -> Option<usize> {
             })
         }
         _ => None,
+    }
+}
+
+fn carried_place(accumulator: &str, place: &Place) -> GoExpression {
+    match place {
+        Place::Whole => identifier_expression(accumulator),
+        Place::Field(_, go_field) => super::field(identifier_expression(accumulator), go_field),
+        Place::Constructor { go_field, .. } => {
+            super::field(identifier_expression(accumulator), go_field)
+        }
     }
 }

@@ -634,7 +634,7 @@ struct Emitter<'p, 'm, 'q, Q> {
     referenced: std::cell::RefCell<FxHashSet<FunctionId>>,
     current: Option<FunctionId>,
     owned_snocs: FxHashSet<*const Expression>,
-    owned_updates: FxHashMap<*const Expression, String>,
+    owned_updates: FxHashMap<*const Expression, foreign_values::Updated>,
     copied_flags: FxHashSet<String>,
     /// The maps that build a tail loop's next array in the buffers it recycles, by their
     /// callbacks.

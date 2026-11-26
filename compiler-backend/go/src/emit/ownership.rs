@@ -3,7 +3,8 @@ use smol_str::SmolStr;
 use crate::foreign::{self, Foreign, Operator};
 use crate::monomorphic::traversal::for_each_child;
 use crate::monomorphic::{
-    Expression, ExpressionKind, FunctionId, Guard, Guarded, LocalId, PatternKind, RecordUpdate,
+    Alternative, Binding, Expression, ExpressionKind, FunctionId, Guard, Guarded, LocalId,
+    PatternKind, RecordUpdate,
 };
 
 /// Where an accumulator keeps the array, or the string, that a loop appends to.
@@ -75,9 +76,32 @@ pub(super) fn owned_loop_snocs<'e>(
     Some(owned)
 }
 
+fn aliases(carried: Carried<'_>, expression: &Expression) -> Option<Vec<LocalId>> {
+    let mut aliases = constructor_aliases(carried, expression)?;
+    loop {
+        let known = aliases.len();
+        let carried = Carried { aliases: &aliases, ..carried };
+        let mut bound = vec![];
+        crate::monomorphic::traversal::visit(expression, &mut |expression| {
+            let ExpressionKind::Let { bindings, .. } = &expression.kind else { return };
+            for binding in bindings {
+                if is_carried(carried, &binding.value)
+                    && !carried.aliases.contains(&binding.local.id)
+                {
+                    bound.push(binding.local.id);
+                }
+            }
+        });
+        aliases.extend(bound);
+        if aliases.len() == known {
+            return Some(aliases);
+        }
+    }
+}
+
 /// The locals bound to the carried constructor field by patterns on the accumulator; none when
 /// a pattern binds the accumulator as a whole, which would read it once more.
-fn aliases(carried: Carried<'_>, expression: &Expression) -> Option<Vec<LocalId>> {
+fn constructor_aliases(carried: Carried<'_>, expression: &Expression) -> Option<Vec<LocalId>> {
     let Place::Constructor { constructor, index, .. } = *carried.place else {
         return Some(vec![]);
     };
@@ -117,25 +141,13 @@ fn loop_results<'e>(
     tail_call: TailCall,
     owned: &mut Vec<&'e Expression>,
 ) -> Option<()> {
+    if let Some(branches) = branches(expression) {
+        for branch in branches {
+            loop_results(carried, branch, tail_call, owned)?;
+        }
+        return Some(());
+    }
     match &expression.kind {
-        ExpressionKind::Let { body, .. } => loop_results(carried, body, tail_call, owned),
-        ExpressionKind::If { then, otherwise, .. } => {
-            loop_results(carried, then, tail_call, owned)?;
-            loop_results(carried, otherwise, tail_call, owned)
-        }
-        ExpressionKind::Case { alternatives, .. } => {
-            for alternative in alternatives {
-                match &alternative.body {
-                    Guarded::Unconditional(body) => loop_results(carried, body, tail_call, owned)?,
-                    Guarded::Guards(branches) => {
-                        for branch in branches {
-                            loop_results(carried, &branch.body, tail_call, owned)?;
-                        }
-                    }
-                }
-            }
-            Some(())
-        }
         ExpressionKind::Apply { function, arguments }
             if matches!(function.kind, ExpressionKind::Function(id) if id == tail_call.function)
                 && arguments.len() == tail_call.arity =>
@@ -152,11 +164,11 @@ fn is_accumulator(carried: Carried<'_>, expression: &Expression) -> bool {
 
 fn is_carried(carried: Carried<'_>, expression: &Expression) -> bool {
     match (&expression.kind, carried.place) {
+        (ExpressionKind::Local(id), _) if carried.aliases.contains(id) => true,
         (ExpressionKind::Local(id), Place::Whole) => *id == carried.accumulator,
         (ExpressionKind::Access { record, label }, Place::Field(field, _)) => {
             label == field && is_accumulator(carried, record)
         }
-        (ExpressionKind::Local(id), Place::Constructor { .. }) => carried.aliases.contains(id),
         _ => false,
     }
 }
@@ -202,6 +214,7 @@ fn write_position(carried: Carried<'_>, foreign: &Foreign) -> Option<usize> {
 
 fn is_borrowing(foreign: &Foreign) -> bool {
     matches!(foreign, Foreign::Operator(Operator::ArrayLength | Operator::ArrayIndex))
+        || matches!(foreign, Foreign::MaybeIndex)
         || foreign.calls(foreign::OBJECT_LOOKUP)
         || foreign.calls(foreign::OBJECT_SIZE)
         || foreign.calls(foreign::OBJECT_INDEX)
@@ -232,26 +245,13 @@ fn results<'e>(
     expression: &'e Expression,
     owned: &mut Vec<&'e Expression>,
 ) -> Option<()> {
+    if let Some(branches) = branches(expression) {
+        for branch in branches {
+            results(carried, branch, owned)?;
+        }
+        return Some(());
+    }
     match &expression.kind {
-        ExpressionKind::Let { body, .. } => results(carried, body, owned),
-        ExpressionKind::If { then, otherwise, .. } => {
-            results(carried, then, owned)?;
-            results(carried, otherwise, owned)
-        }
-        ExpressionKind::Case { alternatives, .. } => {
-            for alternative in alternatives {
-                match &alternative.body {
-                    Guarded::Unconditional(body) => results(carried, body, owned)?,
-                    Guarded::Guards(branches) => {
-                        for branch in branches {
-                            results(carried, &branch.body, owned)?;
-                        }
-                    }
-                }
-            }
-            Some(())
-        }
-        ExpressionKind::Fail(_) => Some(()),
         _ if matches!(carried.place, Place::Whole) => carried_value(carried, expression, owned),
         ExpressionKind::Local(id) if *id == carried.accumulator => Some(()),
         ExpressionKind::Construct { constructor, arguments, .. } => match *carried.place {
@@ -286,6 +286,12 @@ fn carried_value<'e>(
     value: &'e Expression,
     owned: &mut Vec<&'e Expression>,
 ) -> Option<()> {
+    if let Some(branches) = branches(value) {
+        for branch in branches {
+            carried_value(carried, branch, owned)?;
+        }
+        return Some(());
+    }
     if is_carried(carried, value) || matches!(value.kind, ExpressionKind::Array(_)) {
         return Some(());
     }
@@ -295,6 +301,14 @@ fn carried_value<'e>(
 fn reads(carried: Carried<'_>, expression: &Expression) -> usize {
     match &expression.kind {
         _ if is_carried(carried, expression) => 1,
+        ExpressionKind::Let { bindings, body } => {
+            let bound: usize = bindings
+                .iter()
+                .filter(|binding| !binds_alias(carried, binding))
+                .map(|binding| reads(carried, &binding.value))
+                .sum();
+            bound + reads(carried, body)
+        }
         ExpressionKind::Local(id) if *id == carried.accumulator => 1,
         ExpressionKind::Access { record, .. } if is_accumulator(carried, record) => 0,
         ExpressionKind::Foreign { foreign, arguments }
@@ -371,7 +385,7 @@ fn spine_reads(carried: Carried<'_>, expression: &Expression, first: bool) -> us
     match &expression.kind {
         ExpressionKind::Let { bindings, body } => {
             let mut total = 0;
-            for binding in bindings {
+            for binding in bindings.iter().filter(|binding| !binds_alias(carried, binding)) {
                 total += leading(&binding.value, first && total == 0);
             }
             total + spine_reads(carried, body, first && total == 0)
@@ -393,10 +407,7 @@ fn spine_reads(carried: Carried<'_>, expression: &Expression, first: bool) -> us
             let first = first && scrutinised == 0;
             let branches = alternatives
                 .iter()
-                .map(|alternative| match &alternative.body {
-                    Guarded::Unconditional(body) => spine_reads(carried, body, first),
-                    guarded => guarded_reads(carried, guarded),
-                })
+                .map(|alternative| spine_guarded_reads(carried, &alternative.body, first))
                 .max()
                 .unwrap_or(0);
             scrutinised + branches
@@ -405,11 +416,42 @@ fn spine_reads(carried: Carried<'_>, expression: &Expression, first: bool) -> us
     }
 }
 
+fn spine_guarded_reads(carried: Carried<'_>, guarded: &Guarded, first: bool) -> usize {
+    let branches = match guarded {
+        Guarded::Unconditional(body) => return spine_reads(carried, body, first),
+        Guarded::Guards(branches) => branches,
+    };
+    let mut tested = 0;
+    let mut most = 0;
+    for branch in branches {
+        for guard in &branch.guards {
+            let condition = match guard {
+                Guard::Boolean(condition) => condition,
+                Guard::Pattern { value, .. } => value,
+            };
+            tested += match first && tested == 0 {
+                true => reads_before_write(carried, condition),
+                false => reads(carried, condition),
+            };
+        }
+        most = most.max(tested + spine_reads(carried, &branch.body, first && tested == 0));
+    }
+    most.max(tested)
+}
+
 fn reads_before_write(carried: Carried<'_>, expression: &Expression) -> usize {
     if !borrows_carried(carried, expression) {
         return reads(carried, expression);
     }
     match &expression.kind {
+        ExpressionKind::Let { bindings, body } => {
+            let bound: usize = bindings
+                .iter()
+                .filter(|binding| !binds_alias(carried, binding))
+                .map(|binding| reads_before_write(carried, &binding.value))
+                .sum();
+            bound + reads_before_write(carried, body)
+        }
         ExpressionKind::Foreign { foreign, arguments } if is_borrowing(foreign) => arguments
             .iter()
             .filter(|argument| !is_carried(carried, argument))
@@ -493,4 +535,29 @@ fn guarded_reads(carried: Carried<'_>, guarded: &Guarded) -> usize {
             most.max(tested)
         }
     }
+}
+
+fn binds_alias(carried: Carried<'_>, binding: &Binding) -> bool {
+    carried.aliases.contains(&binding.local.id) && is_carried(carried, &binding.value)
+}
+
+fn branches(expression: &Expression) -> Option<Vec<&Expression>> {
+    match &expression.kind {
+        ExpressionKind::Let { body, .. } => Some(vec![body]),
+        ExpressionKind::If { then, otherwise, .. } => Some(vec![then, otherwise]),
+        ExpressionKind::Case { alternatives, .. } => Some(alternative_bodies(alternatives)),
+        ExpressionKind::Fail(_) => Some(vec![]),
+        _ => None,
+    }
+}
+
+fn alternative_bodies(alternatives: &[Alternative]) -> Vec<&Expression> {
+    let mut bodies = vec![];
+    for alternative in alternatives {
+        match &alternative.body {
+            Guarded::Unconditional(body) => bodies.push(body),
+            Guarded::Guards(branches) => bodies.extend(branches.iter().map(|branch| &branch.body)),
+        }
+    }
+    bodies
 }

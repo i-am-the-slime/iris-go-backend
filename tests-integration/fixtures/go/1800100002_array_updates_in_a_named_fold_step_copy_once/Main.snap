@@ -1,0 +1,81 @@
+---
+source: tests-integration/src/fixtures.rs
+---
+// Data/Show/show.go
+package show
+
+import "strconv"
+
+func Show(i int32) string {
+	return strconv.Itoa(int(i))
+}
+
+func AppendShowArrayInt(buffer []byte, array []int32) []byte {
+	buffer = append(buffer, '[')
+	for index, element := range array {
+		if index > 0 {
+			buffer = append(buffer, ',')
+		}
+		buffer = strconv.AppendInt(buffer, int64(element), 10)
+	}
+	buffer = append(buffer, ']')
+	return buffer
+}
+
+func ArrayInt(array []int32) string {
+	return string(AppendShowArrayInt(nil, array))
+}
+
+// main.go
+package main
+
+import (
+	"fixture/Data/Show"
+	"github.com/i-am-the-slime/iris-go/array"
+	"github.com/i-am-the-slime/iris-go/console"
+	"slices"
+	"strings"
+)
+
+var main_ = initializeMain_()
+
+func initializeMain_() []string {
+	shared := array.Replicate(6, int32(0))
+	accumulator := shared
+	accumulator = slices.Clone(accumulator)
+	for element := int32(0); element < 5; element++ {
+		accumulator = overwriteOwning(accumulator, element)
+	}
+	var result []int32
+	if len(shared) > 1 {
+		updated := slices.Clone(shared)
+		updated[1] = 3
+		result = updated
+	} else {
+		result = shared
+	}
+	return []string{show.ArrayInt(accumulator), show.ArrayInt(result), show.ArrayInt(shared)}
+}
+
+func overwrite(current []int32, position int32) []int32 {
+	if position >= 0 && position < int32(len(current)) {
+		updated := slices.Clone(current)
+		updated[position] = position * 3
+		return updated
+	}
+	return current
+}
+
+func overwriteOwning(current []int32, position int32) []int32 {
+	if position < int32(len(current)) {
+		value := position * 3
+		updated := current
+		updated[position] = value
+		return updated
+	}
+	return current
+}
+
+func main() {
+	console.Print("[" + strings.Join(main_, " ") + "]")
+}

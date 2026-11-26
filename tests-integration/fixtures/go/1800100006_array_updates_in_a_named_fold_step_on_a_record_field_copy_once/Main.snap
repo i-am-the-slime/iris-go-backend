@@ -1,0 +1,91 @@
+---
+source: tests-integration/src/fixtures.rs
+---
+// Data/Show/show.go
+package show
+
+import "strconv"
+
+func Show(i int32) string {
+	return strconv.Itoa(int(i))
+}
+
+func AppendShowArrayInt(buffer []byte, array []int32) []byte {
+	buffer = append(buffer, '[')
+	for index, element := range array {
+		if index > 0 {
+			buffer = append(buffer, ',')
+		}
+		buffer = strconv.AppendInt(buffer, int64(element), 10)
+	}
+	buffer = append(buffer, ']')
+	return buffer
+}
+
+func ArrayInt(array []int32) string {
+	return string(AppendShowArrayInt(nil, array))
+}
+
+// main.go
+package main
+
+import (
+	"fixture/Data/Show"
+	shared2 "fixture/shared"
+	"github.com/i-am-the-slime/iris-go/array"
+	"github.com/i-am-the-slime/iris-go/console"
+	"slices"
+	"strconv"
+	"strings"
+)
+
+var main_ = initializeMain_()
+
+func initializeMain_() []string {
+	shared := array.Replicate(5, int32(0))
+	accumulator := shared2.Board{Cells: shared, Moves: 0}
+	accumulator.Cells = slices.Clone(accumulator.Cells)
+	for element := int32(1); element < 4; element++ {
+		accumulator = markedOwning(accumulator, element)
+	}
+	return []string{show.ArrayInt(accumulator.Cells), strconv.Itoa(int(accumulator.Moves)), show.ArrayInt(shared)}
+}
+
+func marked(board shared2.Board, position int32) shared2.Board {
+	elements := board.Cells
+	var result []int32
+	if position >= 0 && position < int32(len(elements)) {
+		updated := slices.Clone(elements)
+		updated[position] = position + 10
+		result = updated
+	} else {
+		result = board.Cells
+	}
+	return shared2.Board{Cells: result, Moves: board.Moves + 1}
+}
+
+func markedOwning(board shared2.Board, position int32) shared2.Board {
+	elements := board.Cells
+	var result []int32
+	if position < int32(len(elements)) {
+		value := position + 10
+		updated := elements
+		updated[position] = value
+		result = updated
+	} else {
+		result = board.Cells
+	}
+	return shared2.Board{Cells: result, Moves: board.Moves + 1}
+}
+
+func main() {
+	console.Print("[" + strings.Join(main_, " ") + "]")
+}
+
+// shared/shared.go
+package shared
+
+type Board struct {
+	Cells []int32
+	Moves int32
+}
