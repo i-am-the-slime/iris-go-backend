@@ -300,6 +300,7 @@ where
     timed("field reads", || loads::reuse_field_reads(&mut declarations));
     timed("branches", || branches::simplify_branches(&mut declarations));
     timed("aliases", || aliases::substitute_aliases(&mut declarations));
+    timed("repeated tests", || merging::join_repeated_tests(&mut declarations));
     let mut record_value_name = |type_name: &str| {
         let (&monotype, _) = emitter.record_names.iter().find(|(_, name)| *name == type_name)?;
         Some(emitter.value_base(monotype))

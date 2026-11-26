@@ -186,3 +186,77 @@ fn without_lines(statements: &[GoStatement]) -> Vec<GoStatement> {
     Strip.block(&mut statements);
     statements
 }
+
+/// Neighbouring `if`s that test the same thing become one: `paired < 1` choosing one slice and
+/// then the other is one test choosing both. The first `if` must not change what the test
+/// reads, and must not leave the block on either branch; the variables declared between the
+/// two move up.
+pub(super) fn join_repeated_tests(declarations: &mut [GoDeclaration]) {
+    for declaration in declarations {
+        each_block_in_declaration(declaration, |block| {
+            let mut position = 0;
+            while position < block.len() {
+                if !join_next_test(block, position) {
+                    position += 1;
+                }
+            }
+        });
+    }
+}
+
+fn join_next_test(block: &mut Vec<GoStatement>, position: usize) -> bool {
+    let GoStatement::If { condition, then, otherwise } = &block[position] else { return false };
+    if !is_pure(condition) || [then, otherwise].iter().any(|branch| leaves(branch)) {
+        return false;
+    }
+    let declared = block[position + 1..]
+        .iter()
+        .take_while(|statement| matches!(statement, GoStatement::Variable { value: None, .. }))
+        .count();
+    let next = position + 1 + declared;
+    let same = matches!(block.get(next), Some(GoStatement::If { condition: repeated, .. })
+        if repeated == condition);
+    if !same {
+        return false;
+    }
+    let mut read = vec![];
+    go_traversal::each_expression_in_statement(
+        &mut GoStatement::Expression(condition.clone()),
+        |expression| {
+            if let GoExpression::Identifier(name) = expression {
+                read.push(name.clone());
+            }
+        },
+    );
+    let GoStatement::If { then, otherwise, .. } = &mut block[position] else { unreachable!() };
+    let changes = then
+        .iter_mut()
+        .chain(otherwise.iter_mut())
+        .any(|statement| read.iter().any(|name| super::aliases::writes(statement, name)));
+    if changes {
+        return false;
+    }
+    let GoStatement::If { then: more, otherwise: more_otherwise, .. } = block.remove(next) else {
+        unreachable!()
+    };
+    let GoStatement::If { then, otherwise, .. } = &mut block[position] else { unreachable!() };
+    then.extend(more);
+    otherwise.extend(more_otherwise);
+    let declarations: Vec<GoStatement> = block.drain(position + 1..next).collect();
+    block.splice(position..position, declarations);
+    true
+}
+
+/// Whether a branch ends by leaving the block it is in.
+fn leaves(branch: &[GoStatement]) -> bool {
+    branch.last().is_some_and(|last| {
+        last.is_panic()
+            || matches!(
+                last,
+                GoStatement::Return(_)
+                    | GoStatement::Break
+                    | GoStatement::Continue
+                    | GoStatement::BreakTo(_)
+            )
+    })
+}
