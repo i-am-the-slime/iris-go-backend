@@ -1,0 +1,118 @@
+name: Snapshots
+
+# Push a branch named snapshots/<name> and this rewrites the Go and go_style fixture snapshots that
+# changed, then commits them back onto that branch. Read the diff before landing it.
+on:
+  push:
+    branches: ["snapshots/**"]
+  workflow_dispatch:
+    inputs:
+      runtime-ref:
+        description: iris-go ref to build against (empty uses the RUNTIME_VERSION the compiler pins)
+        default: ""
+        type: string
+
+env:
+  CARGO_TERM_COLOR: always
+  IRIS_GO: ${{ github.workspace }}/iris-go-runtime
+  IRIS_GO_FIXTURE_BUILD: require
+  GOEXPERIMENT: simd
+  GOFLAGS: -buildvcs=false
+
+jobs:
+  update:
+    name: Rewrite changed snapshots
+    if: github.actor != 'github-actions[bot]'
+    permissions:
+      contents: write
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Pick the runtime
+        id: runtime
+        env:
+          REF: ${{ inputs.runtime-ref }}
+        run: |
+          if [ -z "$REF" ]; then
+            REF=$(grep -hoE 'RUNTIME_VERSION: &str = "[^"]+"' compiler-executable/iris-go/src/program.rs | sed -E 's/.*"([^"]+)"/\1/')
+          fi
+          echo "ref=$REF" >> "$GITHUB_OUTPUT"
+
+      - name: Checkout the iris-go runtime
+        uses: actions/checkout@v7
+        with:
+          repository: i-am-the-slime/iris-go
+          ref: ${{ steps.runtime.outputs.ref }}
+          path: iris-go-runtime
+          persist-credentials: false
+
+      - name: Install Node.js for backend verification
+        uses: actions/setup-node@v7
+        with:
+          node-version: '22'
+
+      - name: Install Rust toolchain
+        run: rustup update stable && rustup default stable
+
+      - name: Cache build artifacts
+        uses: Swatinem/rust-cache@v2.9.3
+        with:
+          cache-bin: "false"
+          prefix-key: "v1-generated-go"
+          shared-key: "generated_go"
+          save-if: "false"
+
+      - name: Install tools
+        uses: taiki-e/install-action@v2.88.0
+        with:
+          tool: cargo-nextest
+
+      - name: Install Go
+        uses: actions/setup-go@v6
+        with:
+          go-version: "1.27"
+          cache: false
+
+      - name: Cache Go builds
+        uses: actions/cache@v6
+        with:
+          path: ~/.cache/go-build
+          key: v1-go-build-${{ runner.os }}-${{ hashFiles('iris-go-runtime/**/*.go') }}
+          restore-keys: |
+            v1-go-build-${{ runner.os }}-
+
+      - name: Clear restored integration packages
+        run: rm -rf target/integration-packages
+
+      - name: Cache integration packages
+        uses: actions/cache@v6
+        with:
+          path: target/integration-packages
+          key: integration-packages-v3-${{ runner.os }}-${{ hashFiles('tests-integration/packages.json', 'tests-integration/go-style-packages.json', 'tests-support/src/**') }}
+
+      - name: Prepare integration packages
+        run: |
+          cargo run -p tests-support --locked -- prepare tests-integration/packages.json target/integration-packages
+          cargo run -p tests-support --locked -- prepare tests-integration/go-style-packages.json target/integration-packages
+
+      - name: Rewrite the snapshots
+        run: >-
+          INSTA_UPDATE=always cargo nextest run -p tests-integration --test go --test go_style --locked
+          --no-fail-fast --status-level=fail --final-status-level=fail --failure-output=final || true
+
+      - name: Commit what changed
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A tests-integration
+          if git diff --cached --quiet; then
+            echo "No snapshot changed." >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          git diff --cached --stat | tail -1 >> "$GITHUB_STEP_SUMMARY"
+          git commit -m "tests: rewrite the Go and go_style snapshots that changed"
+          git push origin "HEAD:${GITHUB_REF_NAME}"
