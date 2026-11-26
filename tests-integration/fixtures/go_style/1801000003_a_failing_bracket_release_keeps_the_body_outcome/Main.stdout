@@ -1,0 +1,4 @@
+both fail: action failed
+only the release fails: action succeeded
+general, both fail: action failed
+general, only the release fails: action succeeded
