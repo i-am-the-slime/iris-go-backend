@@ -14,6 +14,7 @@ struct ForeignFunction {
     generic: bool,
     boxed: Option<String>,
     mentioned: Vec<(FileId, TypeItemId)>,
+    mentioned_at_quantified: Vec<(FileId, TypeItemId)>,
     names_a_row: bool,
 }
 
@@ -53,8 +54,9 @@ where
                 })
             });
             native_data.retain(|key| {
-                let mut mentioning =
-                    functions.iter().filter(|function| function.mentioned.contains(key));
+                let mut mentioning = functions
+                    .iter()
+                    .filter(|function| function.mentioned_at_quantified.contains(key));
                 let generic = data.get(key).is_some_and(|data: &ForeignData| data.generic);
                 !generic || mentioning.all(|function| native_functions.contains(&function.key))
             });
@@ -113,6 +115,8 @@ where
             let quantifiers = self.context.types.peel_quantifiers(declared).0.len();
             let mut mentioned = vec![];
             self.mentioned_foreign_data(declared, &mut mentioned, &mut FxHashSet::default())?;
+            let mut mentioned_at_quantified = vec![];
+            self.foreign_data_at_quantified(declared, &mut mentioned_at_quantified)?;
             let go_name = crate::naming::exported(name);
             let declaration = source.opacity.function(&go_name);
             let boxed = boxed_reason(source, declaration, &go_name, Some(quantifiers));
@@ -123,6 +127,7 @@ where
                 generic: quantifiers > 0,
                 boxed,
                 mentioned,
+                mentioned_at_quantified,
                 names_a_row,
             });
         }
@@ -183,6 +188,51 @@ where
                     {
                         self.mentioned_foreign_data(constructor_type, mentioned, visited)?;
                     }
+                }
+            }
+            _ => {}
+        }
+        Ok(())
+    }
+
+    fn foreign_data_at_quantified(
+        &mut self,
+        type_id: TypeId,
+        mentioned: &mut Vec<(FileId, TypeItemId)>,
+    ) -> GoResult<()> {
+        if !self.context.queries.lookup_type_flags(type_id).has_rigid() {
+            return Ok(());
+        }
+        match self.context.types.lookup(type_id).clone() {
+            Type::Application(..) => {
+                let (head, arguments) = self.context.types.spine(type_id);
+                if let Type::Constructor(..) | Type::Synonym(..) = self.context.types.lookup(head) {
+                    return self.mentioned_foreign_data(
+                        type_id,
+                        mentioned,
+                        &mut FxHashSet::default(),
+                    );
+                }
+                self.foreign_data_at_quantified(head, mentioned)?;
+                for argument in arguments {
+                    self.foreign_data_at_quantified(argument, mentioned)?;
+                }
+            }
+            Type::Function(argument, result) | Type::Constrained(argument, result) => {
+                self.foreign_data_at_quantified(argument, mentioned)?;
+                self.foreign_data_at_quantified(result, mentioned)?;
+            }
+            Type::KindApplication(inner, _)
+            | Type::Kinded(inner, _)
+            | Type::ConstraintOrigin(inner, _)
+            | Type::Forall(_, inner) => self.foreign_data_at_quantified(inner, mentioned)?,
+            Type::Row(row) => {
+                let row = self.context.queries.lookup_row_type(row).clone();
+                for field in row.fields.iter() {
+                    self.foreign_data_at_quantified(field.id, mentioned)?;
+                }
+                if let Some(tail) = row.tail {
+                    self.foreign_data_at_quantified(tail, mentioned)?;
                 }
             }
             _ => {}

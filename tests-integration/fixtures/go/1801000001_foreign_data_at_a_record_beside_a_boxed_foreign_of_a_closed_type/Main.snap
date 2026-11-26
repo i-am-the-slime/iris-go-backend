@@ -1,0 +1,36 @@
+---
+source: tests-integration/src/fixtures.rs
+---
+// main.go
+package main
+
+import (
+	box "fixture/Box_ffi"
+	"fixture/shared"
+	"strconv"
+)
+
+func main_() []string {
+	scrutinee := shared.Room{Outbox: box.Put(shared.Spot{X: 1, Y: 2}), Seal: box.Sealed("anything")}
+	get := box.Get(scrutinee.Outbox)
+	return []string{strconv.Itoa(get.X) + "," + strconv.Itoa(get.Y), strconv.Itoa(box.Get(scrutinee.Seal))}
+}
+
+func main() {
+	main_()
+}
+
+// shared/shared.go
+package shared
+
+import box "fixture/Box_ffi"
+
+type Spot struct {
+	X int
+	Y int
+}
+
+type Room struct {
+	Outbox box.Box[Spot]
+	Seal   box.Box[int]
+}
