@@ -171,7 +171,8 @@ where
     Q: checking::ExternalQueries,
 {
     pub(super) fn evidence_grows(&self, scheme: &ConstrainedScheme, types: &[TypeId]) -> bool {
-        if scheme.constraints.is_empty() || self.monotypes.schemes.rank_n_owner(&scheme.key).is_some()
+        if scheme.constraints.is_empty()
+            || self.monotypes.schemes.rank_n_owner(&scheme.key).is_some()
         {
             return false;
         }
@@ -183,6 +184,7 @@ where
         &mut self,
         scope: &Scope,
         scheme: &ConstrainedScheme,
+        grows: bool,
     ) -> GoResult<()> {
         let erased = self.context.types.erased(Erasure::PolymorphicRecursion);
         let substitution: Substitution = scheme.names.iter().map(|&name| (name, erased)).collect();
@@ -196,7 +198,9 @@ where
             let constraint = self.context.types.substitute(constraint, &substitution);
             monotypes.push(self.runtime_monotype(&scope.definition, constraint)?);
             dictionaries.push(Dictionary::Runtime(RuntimeDictionary { constraint, value: None }));
-            self.note_scheme_at_run_time(scope, constraint)?;
+            if grows {
+                self.note_scheme_at_run_time(scope, constraint)?;
+            }
         }
         let instantiation = SchemeInstantiation {
             types: scheme.names.iter().map(|_| erased).collect(),

@@ -1,0 +1,5 @@
+{ alice: 30, bob: 50, carol: 80 }
+5
+{ alice: 7, bob: 5, carol: 8 }
+16
+{ alice: "3", bob: "5", carol: "8" }

@@ -14,6 +14,11 @@ pub enum Primitive {
     /// in each branch, so each runs the continuation's instantiation at it.
     Unvariant,
     ReifyType,
+    Provide,
+    Defer,
+    DeferApply,
+    DeferLazy,
+    DeferLazyApply,
     /// `Data.Int64.Internal.signedToUnsigned` and `unsignedToSigned`, whose
     /// bodies would need a Long of each signedness at once: Go's conversion
     /// between `int64` and `uint64`, which keeps the bits as long.js does.
@@ -42,6 +47,11 @@ pub fn known(module: &str, name: &str) -> Option<Primitive> {
         ("Data.Variant", "unvariant") => Some(Primitive::Unvariant),
         ("Data.Reflectable", "reifyType") => Some(Primitive::ReifyType),
         ("Data.Symbol", "reifySymbol") => Some(Primitive::ReifyType),
+        ("Control.Ask", "provide") => Some(Primitive::Provide),
+        ("CallByName.Syntax", "defer") => Some(Primitive::Defer),
+        ("CallByName.Syntax", "deferApply") => Some(Primitive::DeferApply),
+        ("CallByName.Syntax", "lazy") => Some(Primitive::DeferLazy),
+        ("CallByName.Syntax", "lazyApply") => Some(Primitive::DeferLazyApply),
         ("Data.Int64.Internal", "signedToUnsigned") => Some(Primitive::ToUnsigned),
         ("Data.Int64.Internal", "unsignedToSigned") => Some(Primitive::ToSigned),
         ("Yoga.JSON", "readJSON") => Some(Primitive::ReadJson),

@@ -57,6 +57,11 @@ impl Simplifier<'_> {
         {
             return self.homogeneous_object(value, element, monotype);
         }
+        if let Monotype::Object(element) = *self.monotypes.get(value.monotype)
+            && let Monotype::Record(fields) = self.monotypes.get(monotype).clone()
+        {
+            return self.record_of_object(value, element, &fields, monotype);
+        }
         Expression::new(ExpressionKind::Coerce(Box::new(value)), monotype)
     }
 
@@ -163,6 +168,28 @@ impl Simplifier<'_> {
             converted = Expression::new(kind, foreign);
         }
         self.expression(converted)
+    }
+
+    fn record_of_object(
+        &mut self,
+        object: Expression,
+        element: MonotypeId,
+        fields: &[crate::monotype::RecordField],
+        record: MonotypeId,
+    ) -> Expression {
+        let string = self.monotypes.intern(Monotype::String);
+        let local = self.named_local("object", object.monotype);
+        let fields = fields.iter().map(|field| {
+            let label = ExpressionKind::Literal(Literal::String(field.label.to_string()));
+            let arguments = vec![local.expression(), Expression::new(label, string)];
+            let read = ExpressionKind::Foreign { foreign: &foreign::OBJECT_INDEX, arguments };
+            (field.label.clone(), self.coerce(Expression::new(read, element), field.monotype))
+        });
+        let fields = fields.collect();
+        let body = Expression::new(ExpressionKind::Record(fields), record);
+        let bindings = vec![Binding { local, value: object }];
+        let kind = ExpressionKind::Let { bindings, body: Box::new(body) };
+        self.expression(Expression::new(kind, record))
     }
 
     fn homogeneous_object(

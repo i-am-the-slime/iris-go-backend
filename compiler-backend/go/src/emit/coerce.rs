@@ -177,7 +177,10 @@ where
                 }
                 let type_ = self.go_type(canonical)?;
                 if matches!(type_, GoType::Pointer(_))
-                    && matches!(self.monotypes.get(from), Monotype::Erased(Erasure::PolymorphicRecursion))
+                    && matches!(
+                        self.monotypes.get(from),
+                        Monotype::Erased(Erasure::PolymorphicRecursion)
+                    )
                     && matches!(self.monotypes.get(canonical), Monotype::Data(_))
                 {
                     let name = self.temporary("typed");
@@ -257,6 +260,11 @@ where
                 let converter = self.converter(from, to)?;
                 Ok(call(identifier_expression(&converter), vec![value]))
             }
+            (Monotype::Unit, Monotype::Record(fields)) if fields.is_empty() => {
+                let type_ = GoType::Named(self.record_name(to)?);
+                Ok(GoExpression::Composite { type_, fields: vec![] })
+            }
+            (Monotype::Record(fields), Monotype::Unit) if fields.is_empty() => Ok(unit_value()),
             _ => Err(GoError::unsupported_construct(UNRELATED_TYPES)),
         }
     }
@@ -1097,8 +1105,9 @@ where
                 unreachable!("invariant violated: a round trip names its converter")
             };
             if round_trip.checks
-                && let Some(check) =
-                    body.iter().position(|statement| matches!(statement, GoStatement::IfAssert { .. }))
+                && let Some(check) = body
+                    .iter()
+                    .position(|statement| matches!(statement, GoStatement::IfAssert { .. }))
             {
                 body.remove(check);
             }
@@ -1171,6 +1180,22 @@ where
                     self.monotypes.effect_result(from),
                     self.monotypes.effect_result(to),
                 ) {
+                    _ if matches!(self.monotypes.get(from), Monotype::Record(_))
+                        && matches!(self.monotypes.get(to), Monotype::ForeignData(_)) =>
+                    {
+                        let foreign = self.purescript_type(to)?;
+                        format!(
+                            ": on Go a record is a struct, not already a {foreign} as on JavaScript; build the value with its library's functions (encodeJson or fromObject for Json) instead of coercing"
+                        )
+                    }
+                    _ if let Some(promised) = self.value_lost_to_unit(from, to)
+                        && self.monotypes.effect_result(from).is_none() =>
+                    {
+                        let promised = self.purescript_type(promised)?;
+                        format!(
+                            ": a Unit stands where its new type promises {promised}, and Go keeps no value for Unit, so whatever the value was before it was typed Unit is gone; keep its type instead of passing it through Unit or Void"
+                        )
+                    }
                     (Some(from_result), Some(to_result))
                         if self.is_unit(from_result) && !self.is_unit(to_result) =>
                     {
@@ -1219,5 +1244,22 @@ where
             to_go: self.go_type(to)?.render(),
             reason,
         })))
+    }
+}
+
+impl<'q, Q> Emitter<'_, '_, 'q, Q>
+where
+    Q: checking::ExternalQueries,
+{
+    fn value_lost_to_unit(&self, from: MonotypeId, to: MonotypeId) -> Option<MonotypeId> {
+        match (self.monotypes.get(from), self.monotypes.get(to)) {
+            (Monotype::Unit, to_monotype) if !matches!(to_monotype, Monotype::Unit) => Some(to),
+            (Monotype::Function(_, from_result), Monotype::Function(_, to_result))
+            | (Monotype::Effect(from_result), Monotype::Effect(to_result))
+            | (Monotype::Array(from_result), Monotype::Array(to_result)) => {
+                self.value_lost_to_unit(*from_result, *to_result)
+            }
+            _ => None,
+        }
     }
 }

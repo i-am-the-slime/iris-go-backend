@@ -673,7 +673,11 @@ where
         Ok(Dictionary::Runtime(RuntimeDictionary { constraint, value }))
     }
 
-    pub(super) fn runtime_monotype(&mut self, definition: &str, constraint: TypeId) -> GoResult<MonotypeId> {
+    pub(super) fn runtime_monotype(
+        &mut self,
+        definition: &str,
+        constraint: TypeId,
+    ) -> GoResult<MonotypeId> {
         let class = self.class_environment(definition, constraint)?;
         let mut fields = vec![];
         for member in &class.class.members {

@@ -43,6 +43,16 @@ where
             (Primitive::ReifyType, _) => {
                 self.reify_type(scope, (file_id, term), instantiations, monotype)
             }
+            (Primitive::Provide, _) => {
+                self.provide(scope, (file_id, term), instantiations, monotype)
+            }
+            (
+                Primitive::Defer
+                | Primitive::DeferApply
+                | Primitive::DeferLazy
+                | Primitive::DeferLazyApply,
+                _,
+            ) => self.call_by_name(scope, primitive, (file_id, term), instantiations, monotype),
             (Primitive::ToSigned | Primitive::ToUnsigned, _) => Ok(self.int64_conversion(monotype)),
             (Primitive::Unvariant, _) => {
                 self.unvariant(scope, (file_id, term), instantiations, monotype)

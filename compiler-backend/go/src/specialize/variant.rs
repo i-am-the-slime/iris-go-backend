@@ -44,6 +44,11 @@ where
             | Primitive::RunExists
             | Primitive::Unvariant
             | Primitive::ReifyType
+            | Primitive::Provide
+            | Primitive::Defer
+            | Primitive::DeferApply
+            | Primitive::DeferLazy
+            | Primitive::DeferLazyApply
             | Primitive::ToSigned
             | Primitive::ToUnsigned
             | Primitive::ReadJson

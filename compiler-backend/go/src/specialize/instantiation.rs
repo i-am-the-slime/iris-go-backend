@@ -318,17 +318,17 @@ where
         let monotype = self.closed_monotype(scope, instantiated)?;
         if let Some((runtime, _)) = self.monotypes.schemes.at_run_time(&scheme.key) {
             let requested = (types.as_slice(), dictionaries);
-            return self.scheme_value_at_run_time(scope, &scheme, local, runtime, requested, monotype);
+            return self
+                .scheme_value_at_run_time(scope, &scheme, local, runtime, requested, monotype);
         }
         if let Some(known) = self.monotypes.schemes.find(&scheme.key, &types) {
             let label = known.label.clone();
             let kind = ExpressionKind::Access { record: Box::new(local), label };
             return Ok(Expression::new(kind, monotype));
         }
-        if self.evidence_grows(&scheme, &types)
-            || dictionaries.iter().any(super::runtime::mentions_runtime)
-        {
-            self.pass_scheme_at_run_time(scope, &scheme)?;
+        let grows = self.evidence_grows(&scheme, &types);
+        if grows || dictionaries.iter().any(super::runtime::mentions_runtime) {
+            self.pass_scheme_at_run_time(scope, &scheme, grows)?;
         } else {
             self.discover(scope, scheme.key, types, dictionaries)?;
         }
