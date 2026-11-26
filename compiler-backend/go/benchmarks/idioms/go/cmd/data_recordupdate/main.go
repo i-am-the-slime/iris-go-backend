@@ -9,9 +9,9 @@ import (
 func main() { harness.Run(10000000, workload) }
 
 type particle struct {
-	position int32
-	velocity int32
-	bounces  int32
+	position int
+	velocity int
+	bounces  int
 }
 
 func workload(n int) string {

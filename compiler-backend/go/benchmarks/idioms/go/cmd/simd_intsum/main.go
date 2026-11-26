@@ -13,16 +13,16 @@ func main() {
 	})
 }
 
-func sum(xs []int32) int32 {
-	var total int32
+func sum(xs []int) int {
+	var total int
 	for _, x := range xs {
 		total += x
 	}
 	return total
 }
 
-func maximum(xs []int32) int32 {
-	var best int32
+func maximum(xs []int) int {
+	var best int
 	for _, x := range xs {
 		best = max(best, x)
 	}

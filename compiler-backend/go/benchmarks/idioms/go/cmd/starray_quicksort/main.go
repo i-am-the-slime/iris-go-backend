@@ -11,14 +11,14 @@ func main() { harness.Run(400000, workload) }
 func workload(n int) string {
 	values := harness.PseudoRandomArray(n)
 	quickSort(values, 0, len(values)-1)
-	var sum int32
+	var sum int
 	for _, value := range values {
 		sum += value
 	}
 	return strconv.Itoa(int(sum)) + " " + strconv.Itoa(int(values[n/2]))
 }
 
-func quickSort(values []int32, low int, high int) {
+func quickSort(values []int, low int, high int) {
 	if low >= high {
 		return
 	}

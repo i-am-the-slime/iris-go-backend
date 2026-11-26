@@ -11,14 +11,14 @@ func main() { harness.Run(10000, workload) }
 func workload(n int) string {
 	values := harness.PseudoRandomArray(n)
 	insertionSort(values)
-	var sum int32
+	var sum int
 	for _, value := range values {
 		sum += value
 	}
 	return strconv.Itoa(int(sum)) + " " + strconv.Itoa(int(values[n/2]))
 }
 
-func insertionSort(values []int32) {
+func insertionSort(values []int) {
 	for i := 1; i < len(values); i++ {
 		current := values[i]
 		j := i - 1

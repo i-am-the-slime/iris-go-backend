@@ -1,6 +1,6 @@
 // Data.MapChurn on a hand-written persistent tree: the height-balanced binary tree of
 // ordered-collections' Data.Map (Node height size key value left right, rebalanced by
-// unsafeBalancedNode's single and double rotations), with direct int32 comparisons. Every insert
+// unsafeBalancedNode's single and double rotations), with direct int comparisons. Every insert
 // copies the path from the root, as the PureScript library does. This is the fair baseline for
 // the generated program; data_mapchurn's Go hash map is the data-structure ceiling.
 package main
@@ -15,8 +15,8 @@ func main() { harness.Run(400000, workload) }
 
 type node struct {
 	left, right  *node
-	height, size int32
-	key, value   int32
+	height, size int
+	key, value   int
 }
 
 func workload(n int) string {
@@ -28,7 +28,7 @@ func workload(n int) string {
 	for _, key := range keys {
 		table = insertWith(key, 1, table)
 	}
-	var hits int32
+	var hits int
 	for _, key := range keys {
 		if value, found := lookup(key, table); found {
 			hits += value
@@ -37,7 +37,7 @@ func workload(n int) string {
 	return strconv.Itoa(int(size(table))) + " " + strconv.Itoa(int(hits)) + " " + strconv.Itoa(int(foldl(0, table)))
 }
 
-func insertWith(key, value int32, m *node) *node {
+func insertWith(key, value int, m *node) *node {
 	if m == nil {
 		return &node{height: 1, size: 1, key: key, value: value}
 	}
@@ -51,7 +51,7 @@ func insertWith(key, value int32, m *node) *node {
 	}
 }
 
-func lookup(key int32, m *node) (int32, bool) {
+func lookup(key int, m *node) (int, bool) {
 	for m != nil {
 		switch {
 		case key < m.key:
@@ -65,7 +65,7 @@ func lookup(key int32, m *node) (int32, bool) {
 	return 0, false
 }
 
-func foldl(z int32, m *node) int32 {
+func foldl(z int, m *node) int {
 	for m != nil {
 		z = foldl(z, m.left) + m.value
 		m = m.right
@@ -73,25 +73,25 @@ func foldl(z int32, m *node) int32 {
 	return z
 }
 
-func height(m *node) int32 {
+func height(m *node) int {
 	if m == nil {
 		return 0
 	}
 	return m.height
 }
 
-func size(m *node) int32 {
+func size(m *node) int {
 	if m == nil {
 		return 0
 	}
 	return m.size
 }
 
-func plainNode(key, value int32, l, r *node) *node {
+func plainNode(key, value int, l, r *node) *node {
 	return &node{height: 1 + max(height(l), height(r)), size: 1 + size(l) + size(r), key: key, value: value, left: l, right: r}
 }
 
-func balancedNode(key, value int32, l, r *node) *node {
+func balancedNode(key, value int, l, r *node) *node {
 	lh, rh := height(l), height(r)
 	switch {
 	case rh > lh+1:
@@ -103,14 +103,14 @@ func balancedNode(key, value int32, l, r *node) *node {
 	}
 }
 
-func rotateLeft(key, value int32, l, r *node) *node {
+func rotateLeft(key, value int, l, r *node) *node {
 	if rl := r.left; rl != nil && rl.height > height(r.right) {
 		return plainNode(rl.key, rl.value, plainNode(key, value, l, rl.left), plainNode(r.key, r.value, rl.right, r.right))
 	}
 	return plainNode(r.key, r.value, plainNode(key, value, l, r.left), r.right)
 }
 
-func rotateRight(key, value int32, l, r *node) *node {
+func rotateRight(key, value int, l, r *node) *node {
 	if lr := l.right; lr != nil && height(l.left) <= lr.height {
 		return plainNode(lr.key, lr.value, plainNode(l.key, l.value, l.left, lr.left), plainNode(key, value, lr.right, r))
 	}

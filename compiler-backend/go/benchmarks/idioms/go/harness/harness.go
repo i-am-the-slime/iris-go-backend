@@ -76,16 +76,16 @@ func report(timings []float64, results []string) {
 	fmt.Fprintf(os.Stderr, "BENCH %.3f %.3f\n", best, timings[0])
 }
 
-func Xorshift(seed int32) int32 {
+func Xorshift(seed int) int {
 	a := seed ^ (seed << 13)
-	b := a ^ int32(uint32(a)>>17)
+	b := a ^ int(uint(a)>>17)
 	return b ^ (b << 5)
 }
 
-func PseudoRandomArray(count int) []int32 {
-	values := make([]int32, count)
+func PseudoRandomArray(count int) []int {
+	values := make([]int, count)
 	for i := range values {
-		values[i] = Xorshift(int32(i + 1))
+		values[i] = Xorshift(int(i + 1))
 	}
 	return values
 }

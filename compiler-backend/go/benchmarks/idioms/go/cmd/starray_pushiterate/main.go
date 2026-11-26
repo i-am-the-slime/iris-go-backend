@@ -9,16 +9,16 @@ import (
 func main() { harness.Run(2000000, workload) }
 
 func workload(n int) string {
-	var values []int32
+	var values []int
 	for i := 0; i < n; i++ {
-		values = append(values, harness.Xorshift(int32(i+1)))
+		values = append(values, harness.Xorshift(int(i+1)))
 	}
 	for i := range values {
 		values[i] &= 0xFFFF
 	}
-	snapshot := make([]int32, len(values))
+	snapshot := make([]int, len(values))
 	copy(snapshot, values)
-	var total int32
+	var total int
 	for _, value := range snapshot {
 		total += value
 	}

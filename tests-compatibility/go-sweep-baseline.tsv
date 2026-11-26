@@ -540,7 +540,7 @@ package	webb-stateful	pass
 package	webb-string	pass
 package	webb-test	pass
 package	webb-thread	ffi-only
-package	webb-writer	backend
+package	webb-writer	pass
 package	webextension-polyfill	ffi-only
 package	webgpu	ffi-only
 package	which	ffi-only
@@ -3095,7 +3095,7 @@ ok	webb-string	Webb.String.TrimMargin	escape trimMargin
 ok	webb-test	Webb.Test.Prelude	shouldEqualM shouldNotEqualM shouldNotSatisfyM shouldNotSatisfyMFlipped shouldNotSatisfyM_ shouldNotSatisfyM_Flipped shouldSatisfyM shouldSatisfyMFlipped shouldSatisfyM_ shouldSatisfyM_Flipped
 ok	webb-thread	Webb.Thread.Data.Thread	Running Starting Stopped fiber isRunning isStarting isStopped running starting stop
 ok	webb-writer	Webb.Writer.Array	dropWhileExcl dropWhileIncl takeWhileExcl takeWhileIncl
-ok	webb-writer	Webb.Writer.ForEach	each
+ok	webb-writer	Webb.Writer.ForEach	each forEach forEach_
 ok	webb-writer	Webb.Writer.Internal	clearOutput default defaultPos evalSWriterT execSWriterT getOutput getPosition indent lastCodePoint newline runSWriterT runToString token tokens withIndent word words write
 ok	webb-writer	Webb.Writer.Lang.Purescript	bodyEquals dataEquals equals moduleWhere multiLine newtypeEquals putAdo putDo putImport putRecord putRecord' putRecordType putRecordUpdate putSignature putType string typeEquals
 ok	webb-writer	Webb.Writer.String	escape trimMargin

@@ -18,28 +18,28 @@ const (
 
 type shape struct {
 	kind kind
-	a    int32
-	b    int32
+	a    int
+	b    int
 }
 
 func workload(n int) string {
-	sides := make([]int32, 64)
+	sides := make([]int, 64)
 	for i := range sides {
-		sides[i] = int32(i + 1)
+		sides[i] = int(i + 1)
 	}
-	var total int32
-	for i := int32(1); i <= int32(n); i++ {
+	var total int
+	for i := int(1); i <= int(n); i++ {
 		total += area(makeShape(sides, i))
 	}
 	return strconv.Itoa(int(total))
 }
 
-func makeShape(sides []int32, i int32) shape {
+func makeShape(sides []int, i int) shape {
 	switch i % 3 {
 	case 0:
 		return shape{kind: circle, a: i & 15}
 	case 1:
-		side := int32(1)
+		side := int(1)
 		if index := int(i & 63); index < len(sides) {
 			side = sides[index]
 		}
@@ -49,7 +49,7 @@ func makeShape(sides []int32, i int32) shape {
 	}
 }
 
-func area(s shape) int32 {
+func area(s shape) int {
 	switch s.kind {
 	case circle:
 		return 3 * s.a * s.a

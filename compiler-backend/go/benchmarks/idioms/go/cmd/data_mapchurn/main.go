@@ -13,15 +13,15 @@ func workload(n int) string {
 	for i := range keys {
 		keys[i] &= 0xFFFF
 	}
-	table := make(map[int32]int32)
+	table := make(map[int]int)
 	for _, key := range keys {
 		table[key]++
 	}
-	var hits int32
+	var hits int
 	for _, key := range keys {
 		hits += table[key]
 	}
-	var total int32
+	var total int
 	for _, count := range table {
 		total += count
 	}
