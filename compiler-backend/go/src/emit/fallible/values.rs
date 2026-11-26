@@ -28,6 +28,9 @@ pub(super) const LITERAL_MARK: &str = "§literal:";
 /// The methods of a foreign holder that return the value it holds.
 const READING_METHODS: &[&str] = &["Load", "Swap"];
 
+/// The methods of a foreign holder that replace the value it holds with the one they are given.
+const WRITING_METHODS: &[&str] = &["Store"];
+
 const BUILTINS: &[&str] = &[
     "append", "cap", "clear", "close", "copy", "delete", "len", "make", "max", "min", "new",
     "panic",
@@ -870,6 +873,13 @@ impl<'t> Typer<'t> {
                         }
                         _ => {}
                     }
+                }
+                if WRITING_METHODS.contains(&name.as_str())
+                    && let Ty::Known(type_) = &holder
+                    && self.program.field(type_, name).is_none()
+                    && let Some(element) = self.program.element(type_)
+                {
+                    return Ty::Known(GoType::Function { parameters: vec![element], result: None });
                 }
                 match holder {
                     Ty::Known(type_) => match self.program.field(&type_, name) {

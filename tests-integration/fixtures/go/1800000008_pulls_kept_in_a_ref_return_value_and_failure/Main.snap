@@ -1,0 +1,103 @@
+---
+source: tests-integration/src/fixtures.rs
+assertion_line: 571
+---
+// Data/Either/either.go
+package either
+
+type Either struct {
+	Left  string
+	Right int32
+	Tag   uint8
+}
+
+const (
+	EitherLeft = iota
+	EitherRight
+)
+
+type StringFailure struct {
+	Failed bool
+	Left   string
+}
+
+// main.go
+package main
+
+import (
+	cell "fixture/Cell_ffi"
+	"fixture/Data/Either"
+	journal "fixture/Journal_ffi"
+	"strconv"
+)
+
+func main() {
+	var counter int32 = 0
+	current := cell.New(func(_ struct{}) (int32, either.StringFailure) {
+		s_ := counter + 1
+		counter = s_
+		var i int32
+		var err either.StringFailure
+		if s_ > 5 {
+			err = either.StringFailure{Failed: true, Left: "past 5"}
+		} else {
+			i, err = s_, either.StringFailure{}
+		}
+		return i, err
+	})
+	i2, err2 := pullThrough(current, 0)
+	var result string
+	if err2.Failed {
+		result = "failed: " + err2.Left
+	} else {
+		result = strconv.Itoa(int(i2))
+	}
+	journal.Log(result)
+}
+
+func pullThrough(current cell.Cell[func(struct{}) (int32, either.StringFailure)], total int32) (int32, either.StringFailure) {
+	for {
+		pull := current.Load()
+		count, err := pull(struct{}{})
+		if err.Failed {
+			var i int32
+			var err2 either.StringFailure
+			if total > 20 {
+				i, err2 = total, either.StringFailure{}
+			} else {
+				err2 = err
+			}
+			return i, err2
+		}
+		if count == 3 {
+			var counter int32 = 10
+			current.Store(func(_ struct{}) (int32, either.StringFailure) {
+				s_ := counter + 1
+				counter = s_
+				var i int32
+				var err2 either.StringFailure
+				if s_ > 12 {
+					err2 = either.StringFailure{Failed: true, Left: "past 12"}
+				} else {
+					i, err2 = s_, either.StringFailure{}
+				}
+				return i, err2
+			})
+			total += count
+			continue
+		}
+		total += count
+	}
+}
+
+// shared/shared.go
+package shared
+
+type Ref[T any] struct {
+	Value T
+}
+
+type StateValue struct {
+	State int32
+	Value int32
+}
