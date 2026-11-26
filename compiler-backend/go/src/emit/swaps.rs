@@ -2,7 +2,7 @@
 //! swap:
 //!
 //! ```go
-//! if int(i) < len(a) && j >= 0 && int(j) < len(a) {
+//! if i < len(a) && j >= 0 && j < len(a) {
 //!     a[i], a[j] = a[j], a[i]
 //! }
 //! ```

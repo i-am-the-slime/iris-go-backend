@@ -4,14 +4,14 @@
 //! its index on its own:
 //!
 //! ```go
-//! within := i >= 0 && int(i) < len(array)
-//! var x int32
+//! within := i >= 0 && i < len(array)
+//! var x int
 //! if within { x = array[i] } else { x = 0 }
-//! within2 := j >= 0 && int(j) < len(array)
-//! var y int32
+//! within2 := j >= 0 && j < len(array)
+//! var y int
 //! if within2 { y = array[j] } else { y = 0 }
-//! if i >= 0 && int(i) < len(array) { array[i] = y }
-//! if j >= 0 && int(j) < len(array) { array[j] = x }
+//! if i >= 0 && i < len(array) { array[i] = y }
+//! if j >= 0 && j < len(array) { array[j] = x }
 //! ```
 //!
 //! When nothing between the tests assigns what they read or changes an array's length, every
@@ -20,7 +20,7 @@
 //! statements as they were run only when some index is out of bounds:
 //!
 //! ```go
-//! if i >= 0 && int(i) < len(array) && j >= 0 && int(j) < len(array) {
+//! if i >= 0 && i < len(array) && j >= 0 && j < len(array) {
 //!     x := array[i]; y := array[j]; array[i] = y; array[j] = x   // as Go spells it, in lines
 //! } else {
 //!     ... the statements above ...

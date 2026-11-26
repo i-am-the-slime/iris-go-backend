@@ -168,7 +168,7 @@ pub(super) fn view_invariant_strings(
 ///
 /// ```go
 /// var char rune
-/// found := i >= 0 && int(i) < len(textASCII)
+/// found := i >= 0 && i < len(textASCII)
 /// if found {
 ///     char = rune(textASCII[i])
 /// } else {

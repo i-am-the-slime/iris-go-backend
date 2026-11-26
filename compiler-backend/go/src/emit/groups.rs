@@ -173,7 +173,7 @@ where
         Ok(declarations)
     }
 
-    /// `func isEven(k int32) bool { return isEvenOrIsOdd(isEvenStep, k) }`.
+    /// `func isEven(k int) bool { return isEvenOrIsOdd(isEvenStep, k) }`.
     fn tail_group_entry(&mut self, id: FunctionId, group: usize) -> GoResult<GoDeclaration> {
         let function: &Function = self.program.function(id);
         self.current = Some(id);
@@ -219,7 +219,7 @@ where
         Ok(GoDeclaration::Function { name, parameters, result, body })
     }
 
-    /// `func isEvenOrIsOdd(step int, k int32) bool { for { switch step { … } } }`.
+    /// `func isEvenOrIsOdd(step int, k int) bool { for { switch step { … } } }`.
     fn tail_group_loop(&mut self, group: usize) -> GoResult<GoDeclaration> {
         let members = self.tail_groups[group].members.clone();
         let steps = self.tail_groups[group].steps.clone();

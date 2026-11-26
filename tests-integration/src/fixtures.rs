@@ -835,17 +835,28 @@ fn go_build_slot() -> io::Result<std::fs::File> {
 }
 
 /// Builds a style-suite program with the Go backend, runs it, and compares what it prints with
-/// `Main.stdout`, the output of the same program compiled to JavaScript. A fixture with a
-/// `crashes` file expects the program to exit unsuccessfully. A fixture with a `known-failing` file
-/// names the bug that makes it fail: it passes while the bug remains and fails once the program
-/// prints the expected output, so that the marker is deleted and the program becomes required.
+/// `Main.stdout`, the output of the same program compiled to JavaScript. A fixture whose program
+/// meets a difference that documentation/go-output.md lists, such as an Int sum past 32 bits,
+/// compares with `Main.go.stdout` instead, which `INSTA_UPDATE=always` rewrites with what the Go
+/// program prints. A fixture with a `crashes` file expects the program to exit unsuccessfully. A
+/// fixture with a `known-failing` file names the bug that makes it fail: it passes while the bug
+/// remains and fails once the program prints the expected output, so that the marker is deleted
+/// and the program becomes required.
 pub fn go_style(path: &Path) -> FixtureResult {
     let folder = fixture_folder(path)?;
     let Some(runtime) = go_style_runtime()? else { return Ok(()) };
     let root = snapshot_path(folder);
+    let go_stdout = root.join("Main.go.stdout");
+    let differs_from_javascript = go_stdout.is_file();
+    let expected =
+        if differs_from_javascript { go_stdout.clone() } else { root.join("Main.stdout") };
     let expectation = StyleExpectation {
-        stdout: std::fs::read_to_string(root.join("Main.stdout"))?,
+        stdout: std::fs::read_to_string(expected)?,
         crashes: root.join("crashes").is_file(),
+        record: (differs_from_javascript
+            && env::var("INSTA_UPDATE").is_ok_and(|update| update == "always"))
+        .then_some(go_stdout),
+        source: if differs_from_javascript { "expected (Go)" } else { "expected (JavaScript)" },
     };
     let known_failing = match std::fs::read_to_string(root.join("known-failing")) {
         Ok(bug) => Some(bug.trim().to_string()),
@@ -880,6 +891,10 @@ const GO_STYLE_RUN_TIMEOUT: Duration = Duration::from_secs(60);
 struct StyleExpectation {
     stdout: String,
     crashes: bool,
+    /// Where to write what the Go program prints, when it is recorded rather than compared.
+    record: Option<PathBuf>,
+    /// Which output `stdout` is: JavaScript's, or Go's where the two differ as documented.
+    source: &'static str,
 }
 
 struct StyleProgram {
@@ -903,10 +918,14 @@ impl StyleExpectation {
         if output.stdout == self.stdout {
             return Ok(());
         }
+        if let Some(record) = &self.record {
+            return std::fs::write(record, &output.stdout)
+                .map_err(|error| format!("could not record {}: {error}", record.display()));
+        }
         let diff = similar::TextDiff::from_lines(&self.stdout, &output.stdout);
         let mut unified = diff.unified_diff();
         unified.context_radius(2);
-        unified.header("expected (JavaScript)", "Go");
+        unified.header(self.source, "Go");
         Err(format!("the program prints something else:\n{unified}{stderr}"))
     }
 }

@@ -14,15 +14,15 @@
 //!
 //! - A function that cannot change a header and only reads, writes and
 //!   measures the elements of an array parameter takes the slice itself:
-//!   `func get(array []float64, i int32)`, called as `get(*xs, i)`.
+//!   `func get(array []float64, i int)`, called as `get(*xs, i)`.
 //! - A loop that cannot change a header reads each array it indexes once,
 //!   before it starts: `elements := *xs`.
 //! - A function that cannot change a header but is also used as a value, so
 //!   that its signature stays, reads each array parameter once on entry.
 //!
 //! A bounds test that repeats one already passed is dropped: in
-//! `within := i >= 0 && int(i) < len(elements)` followed by `if within { ...
-//! if i >= 0 && int(i) < len(elements) { poke } }`, the inner test holds,
+//! `within := i >= 0 && i < len(elements)` followed by `if within { ...
+//! if i >= 0 && i < len(elements) { poke } }`, the inner test holds,
 //! since nothing it reads is assigned anywhere in the function.
 
 use rustc_hash::{FxHashMap, FxHashSet};

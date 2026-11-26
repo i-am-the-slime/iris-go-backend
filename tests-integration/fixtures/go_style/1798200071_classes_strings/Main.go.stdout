@@ -1,0 +1,42 @@
+[5,10,6,14,7,0,6,7]
+[5,10,6,17,7,0,6,7]
+["HELLO","  PADDED\t\n","STRASSE","ÉMOJI 😀👍🏽 DONE","日本語テキスト","","A,B,,C","Ǆ İ SS FF"]
+["hello","  padded\t\n","straße","émoji 😀👍🏽 done","日本語テキスト","","a,b,,c","ǆ i̇ ß ﬀ"]
+["hello","padded","Straße","émoji 😀👍🏽 done","日本語テキスト","","a,b,,c","ǅ İ ß ﬀ"]
+[["h","e","l","l","o"],[" "," ","p","a","d","d","e","d","\t","\n"],["S","t","r","a","ß","e"],["é","m","o","j","i"," ","😀","👍","🏽"," ","d","o","n","e"],["日","本","語","テ","キ","ス","ト"],[],["a",",","b",",",",","c"],["ǅ"," ","İ"," ","ß"," ","ﬀ"]]
+[5,10,6,17,7,0,6,7]
+[Nothing,(Just (CodePoint 0x65)),Nothing,(Just (CodePoint 0x1F600)),(Just (CodePoint 0x30C8)),Nothing,Nothing,(Just (CodePoint 0xFB00))]
+[Nothing,(Just 'e'),Nothing,(Just '�'),(Just 'ト'),Nothing,Nothing,(Just 'ﬀ')]
+["hello","  padde","Straße","émoji 😀","日本語テキスト","","a,b,,c","ǅ İ ß ﬀ"]
+["hello","  padde","Straße","émoji �","日本語テキスト","","a,b,,c","ǅ İ ß ﬀ"]
+["llo","padded\t\n","raße","oji 😀👍🏽 done","語テキスト","","b,,c","İ ß ﬀ"]
+[(Just 4),Nothing,Nothing,(Just 2),Nothing,Nothing,Nothing,Nothing]
+[(Just 4),Nothing,Nothing,(Just 2),Nothing,Nothing,Nothing,Nothing]
+[Nothing,Nothing,Nothing,(Just 6),Nothing,Nothing,Nothing,Nothing]
+[["hello"],["  padded\t\n"],["Straße"],["émoji 😀👍🏽 done"],["日本語テキスト"],[""],["a","b","","c"],["ǅ İ ß ﬀ"]]
+[["h","e","l","l","o"],[" "," ","p","a","d","d","e","d","\t","\n"],["S","t","r","a","ß","e"],["é","m","o","j","i"," ","�","�","�","�","�","�"," ","d","o","n","e"],["日","本","語","テ","キ","ス","ト"],[],["a",",","b",",",",","c"],["ǅ"," ","İ"," ","ß"," ","ﬀ"]]
+["hell0","  padded\t\n","Straße","ém0ji 😀👍🏽 d0ne","日本語テキスト","","a,b,,c","ǅ İ ß ﬀ"]
+["hell[o]","  padded\t\n","Straße","ém[o]ji 😀👍🏽 done","日本語テキスト","","a,b,,c","ǅ İ ß ﬀ"]
+[(Just "llo"),Nothing,Nothing,Nothing,Nothing,Nothing,Nothing,Nothing]
+[(Just { head: 'h', tail: "ello" }),(Just { head: ' ', tail: " padded\t\n" }),(Just { head: 'S', tail: "traße" }),(Just { head: 'é', tail: "moji 😀👍🏽 done" }),(Just { head: '日', tail: "本語テキスト" }),Nothing,(Just { head: 'a', tail: ",b,,c" }),(Just { head: 'ǅ', tail: " İ ß ﬀ" })]
+[(Just { head: (CodePoint 0x68), tail: "ello" }),(Just { head: (CodePoint 0x20), tail: " padded\t\n" }),(Just { head: (CodePoint 0x53), tail: "traße" }),(Just { head: (CodePoint 0xE9), tail: "moji 😀👍🏽 done" }),(Just { head: (CodePoint 0x65E5), tail: "本語テキスト" }),Nothing,(Just { head: (CodePoint 0x61), tail: ",b,,c" }),(Just { head: (CodePoint 0x1C5), tail: " İ ß ﬀ" })]
+[{ after: "lo", before: "hel" },{ after: "added\t\n", before: "  p" },{ after: "aße", before: "Str" },{ after: "ji 😀👍🏽 done", before: "émo" },{ after: "テキスト", before: "日本語" },{ after: "", before: "" },{ after: ",,c", before: "a,b" },{ after: " ß ﬀ", before: "ǅ İ" }]
+[{ after: "lo", before: "hel" },{ after: "added\t\n", before: "  p" },{ after: "aße", before: "Str" },{ after: "ji 😀👍🏽 done", before: "émo" },{ after: "テキスト", before: "日本語" },{ after: "", before: "" },{ after: ",,c", before: "a,b" },{ after: " ß ﬀ", before: "ǅ İ" }]
+[false,false,false,true,false,false,false,false]
+hello/  padded	
+/Straße/émoji 😀👍🏽 done/日本語テキスト//a,b,,c/ǅ İ ß ﬀ
+["","  padded\t\n","Straße","a,b,,c","hello","émoji 😀👍🏽 done","ǅ İ ß ﬀ","日本語テキスト"]
+["ell"," pa","tra","moj","本語テ","",",b,"," İ "]
+"aß日""x😀"
+(CodePoint 0x41)[(Just (CodePoint 0x1F600)),Nothing]
+LTfalseGT
+[(Just 42),(Just -7),Nothing,Nothing,Nothing,Nothing,Nothing,(Just 5),(Just 2147483648),(Just -2147483648),(Just 7)]
+[(Just 42.0),(Just -7.0),(Just 3.0),(Just 3.5),(Just 1000.0),(Just 0.5),Nothing,(Just 1.5),Nothing,(Just 0.0),Nothing,(Just 1.0)]
+["0.1","1.0","0.0","1e+21","1e-7","123.456","2e-323","1.7976931348623157e+308","100.0","100000000000000000000.0","5e-324"]
+[{ floor: 0, half: 0.05, n: 0.1, rounded: 0 },{ floor: -3, half: -1.25, n: -2.5, rounded: -2 },{ floor: 3, half: 1.5, n: 3.0, rounded: 3 }]
+["ff","-1","0"]
+[(Just 255),Nothing,(Just 16)]
+3.53-41-3-1
+falseInfinity-InfinityNaN
+3-239223372036854775807(Just 3)Nothing
+"x'y''\\n'\"tab\\there\"\"q\\\"uote\"\"😀\"\"\\127\""

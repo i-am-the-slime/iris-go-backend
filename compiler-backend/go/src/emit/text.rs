@@ -196,7 +196,7 @@ where
         Ok(name)
     }
 
-    /// `func ArrayInt(array []int32) string`, the array shown by its writer.
+    /// `func ArrayInt(array []int) string`, the array shown by its writer.
     fn array_show(&mut self, show: FunctionId, array: MonotypeId) -> GoResult<String> {
         if let Some(name) = self.array_shows.get(&show) {
             return Ok(name.clone());

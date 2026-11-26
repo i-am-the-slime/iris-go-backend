@@ -3,7 +3,7 @@
 //! A function such as `sumTree` in
 //!
 //! ```go
-//! func sumTree(depth int32, number int32) *Expr {
+//! func sumTree(depth int, number int) *Expr {
 //!     if depth == 0 {
 //!         return &Expr{Tag: ExprVal, FieldB0: number}
 //!     }
@@ -17,7 +17,7 @@
 //! itself whose results it returns:
 //!
 //! ```go
-//! func sumTree(depth int32, number int32) *Expr {
+//! func sumTree(depth int, number int) *Expr {
 //!     var cells alloc.Cells[Expr]
 //!     return sumTreeChunked(depth, number, &cells)
 //! }

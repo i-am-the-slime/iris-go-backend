@@ -1,12 +1,12 @@
 //! Bounds tests that the ranges of the indices prove.
 //!
-//! A peek, a poke and `Array.index` test their index, `i >= 0 && int(i) < len(array)`, and
+//! A peek, a poke and `Array.index` test their index, `i >= 0 && i < len(array)`, and
 //! Euclidean `div` and `mod` correct Go's truncating `/` and `%` for negative operands. In a
 //! loop over an array the test is often implied by the loop itself:
 //!
 //! ```go
-//! for i := int32(1); i < size; i++ {      // size := int32(len(elements))
-//!     if i >= 0 && int(i) < len(elements) { x = elements[i] } else { x = 0 }
+//! for i := 1; i < size; i++ {      // size := len(elements)
+//!     if i >= 0 && i < len(elements) { x = elements[i] } else { x = 0 }
 //! }
 //! ```
 //!
@@ -25,9 +25,8 @@
 //! The analysis assumes nothing it cannot show:
 //!
 //! - Int arithmetic wraps, so `i + 1` has a range only when `i` is proven below the largest
-//!   Int. An array holds at most that many elements, as its length is an Int: the runtime and
-//!   the emitted pushes refuse to grow one further (`array.Bounded`), so `int32(len(xs))` is
-//!   `len(xs)` and an index below a length can be incremented.
+//!   Int. An Int is Go's `int`, and no slice holds more elements than an `int` counts, so an
+//!   index below a length can be incremented.
 //! - A length is a fact only while the array cannot change it: a local slice until it is
 //!   assigned, `*xs` until a push, a write through a pointer or a call that may change a
 //!   header (the rule of `headers`).
@@ -96,8 +95,6 @@ enum Place {
     Parameter(usize),
     /// The length of an array parameter: `len(xs)`, or `len(*xs)` for a pointer.
     Length(usize),
-    /// That length as an Int: `int32(len(xs))`.
-    Wrapped(usize),
 }
 
 /// How often a function's entry may grow before its changing constraints are dropped.
@@ -356,8 +353,6 @@ const MOST_SYMBOLS: usize = 64;
 struct State {
     unreachable: bool,
     bounds: FxHashMap<Symbol, FxHashMap<Symbol, i64>>,
-    /// Integer locals that hold `int32(length + k)`: `(length, k)`.
-    congruent: FxHashMap<Symbol, (Symbol, i64)>,
     /// When each symbol was last assigned, for the conditions bound to names; 0 when the paths
     /// that meet disagree.
     generations: FxHashMap<Symbol, u32>,
@@ -457,7 +452,6 @@ impl State {
             row.remove(&symbol);
             !row.is_empty()
         });
-        self.congruent.remove(&symbol);
     }
 
     /// The constraints both states hold, each as loose as the looser of the two.
@@ -479,19 +473,13 @@ impl State {
                 bounds.insert(*a, joined);
             }
         }
-        let congruent = self
-            .congruent
-            .iter()
-            .filter(|(symbol, value)| other.congruent.get(symbol) == Some(value))
-            .map(|(symbol, value)| (*symbol, *value))
-            .collect();
         let mut generations = FxHashMap::default();
         for symbol in self.generations.keys().chain(other.generations.keys()) {
             let (left, right) = (self.generations.get(symbol), other.generations.get(symbol));
             generations.insert(*symbol, if left == right { *left.unwrap() } else { 0 });
         }
         let heap = if self.heap == other.heap { self.heap } else { 0 };
-        State { unreachable: false, bounds, congruent, generations, heap }
+        State { unreachable: false, bounds, generations, heap }
     }
 
     /// `self`'s constraints that `joined`, its join with a later iteration, keeps as they
@@ -1034,11 +1022,8 @@ struct Analysis<'p, 'k, 'e> {
     names: Names,
     bindings: FxHashMap<Symbol, Binding>,
     scopes: Vec<FxHashMap<String, Symbol>>,
-    /// `int32(length + k)` for each `(length, k)` met.
-    wraps: FxHashMap<(Symbol, i64), Symbol>,
     /// The Go integer type of each symbol that has one, whose range bounds it.
     kinds: FxHashMap<Symbol, Kind>,
-    wrapped: FxHashMap<Symbol, Symbol>,
     lengths_through_pointers: FxHashSet<Symbol>,
     temporaries: Vec<Symbol>,
     frames: Vec<Frame>,
@@ -1058,9 +1043,7 @@ impl<'p, 'k, 'e> Analysis<'p, 'k, 'e> {
             names: Names::default(),
             bindings: FxHashMap::default(),
             scopes: vec![],
-            wraps: FxHashMap::default(),
             kinds: FxHashMap::default(),
-            wrapped: FxHashMap::default(),
             lengths_through_pointers: FxHashSet::default(),
             temporaries: vec![],
             frames: vec![],
@@ -1088,21 +1071,14 @@ impl<'p, 'k, 'e> Analysis<'p, 'k, 'e> {
                             let symbol = symbols[position];
                             analysis.bindings[&symbol].tracked.then_some(symbol)
                         }
-                        Place::Length(position) | Place::Wrapped(position) => {
+                        Place::Length(position) => {
                             analysis.bindings[&symbols[position]].length
                         }
                     };
                     for ((a, b), c) in &entry.0 {
-                        let (Some(mut left), Some(mut right)) = (place(*a, self), place(*b, self))
-                        else {
+                        let (Some(left), Some(right)) = (place(*a, self), place(*b, self)) else {
                             continue;
                         };
-                        if let Place::Wrapped(_) = a {
-                            left = self.wrap(&mut state, left, 0);
-                        }
-                        if let Place::Wrapped(_) = b {
-                            right = self.wrap(&mut state, right, 0);
-                        }
                         state.add(left, right, *c as i128);
                     }
                 }
@@ -1195,7 +1171,7 @@ impl<'p, 'k, 'e> Analysis<'p, 'k, 'e> {
         if let Some(length) = length {
             state.add(ZERO, length, 0);
             // An array holds at most the largest Int's number of elements.
-            self.kinds.insert(length, Kind::Int32);
+            self.kinds.insert(length, Kind::Int);
             if through_pointer {
                 self.lengths_through_pointers.insert(length);
             }
@@ -1225,17 +1201,9 @@ impl<'p, 'k, 'e> Analysis<'p, 'k, 'e> {
         }
     }
 
-    /// Forgets a length and the wrapped Ints counted from it.
+    /// Forgets a length.
     fn forget_length(&mut self, state: &mut State, length: Symbol) {
         state.forget(length);
-        let wraps: Vec<Symbol> = self
-            .wraps
-            .iter()
-            .filter(|((base, _), _)| *base == length)
-            .map(|(_, symbol)| *symbol)
-            .collect();
-        wraps.into_iter().for_each(|symbol| state.forget(symbol));
-        state.congruent.retain(|_, (base, _)| *base != length);
         let generation = self.fresh_generation();
         state.generations.insert(length, generation);
     }
@@ -1254,14 +1222,11 @@ impl<'p, 'k, 'e> Analysis<'p, 'k, 'e> {
 
     /// Forgets the symbols bound since `watermark`, keeping what they implied about the others.
     fn restrict(&self, state: &mut State, watermark: Symbol) {
-        let local = |symbol: Symbol| {
-            symbol >= watermark && self.wrapped.get(&symbol).is_none_or(|base| *base >= watermark)
-        };
+        let local = |symbol: Symbol| symbol >= watermark;
         state.bounds.retain(|symbol, row| {
             row.retain(|other, _| !local(*other));
             !local(*symbol) && !row.is_empty()
         });
-        state.congruent.retain(|symbol, (base, _)| !local(*symbol) && !local(*base));
         state.generations.retain(|symbol, _| !local(*symbol));
     }
 
@@ -1660,9 +1625,6 @@ impl<'p, 'k, 'e> Analysis<'p, 'k, 'e> {
                 state.assume_at_most(Value::of(symbol), value, 0);
                 state.assume_at_most(value, Value::of(symbol), 0);
             }
-            if let Some(congruence) = computed.congruence {
-                state.congruent.insert(symbol, congruence);
-            }
         }
         if let (Some(length), Some(value)) = (length, computed.length) {
             state.assume_at_most(Value::of(length), value, 0);
@@ -2049,7 +2011,6 @@ impl<'p, 'k, 'e> Analysis<'p, 'k, 'e> {
         Computed {
             value: self.value(value, state),
             length: self.length_of(value, state),
-            congruence: self.congruence(value, state),
         }
     }
 
@@ -2121,11 +2082,7 @@ impl<'p, 'k, 'e> Analysis<'p, 'k, 'e> {
                             self.lower(state, inner).is_some_and(|lower| lower >= low)
                                 && self.upper(state, inner).is_some_and(|upper| upper <= high)
                         });
-                        if fits {
-                            return inner_value;
-                        }
-                        let (length, k) = self.congruence(value, state)?;
-                        Some(Value::of(self.wrap(state, length, k)))
+                        if fits { inner_value } else { None }
                     }
                 }
             }
@@ -2150,12 +2107,7 @@ impl<'p, 'k, 'e> Analysis<'p, 'k, 'e> {
                 let kind = kind?;
                 let left_value = self.value_with(left, state, blank);
                 let right_value = self.value_with(right, state, blank);
-                let sum = self.sum(operator, left_value, right_value, kind, state);
-                if sum.is_some() {
-                    return sum;
-                }
-                let (length, k) = self.congruence(value, state)?;
-                Some(Value::of(self.wrap(state, length, k)))
+                self.sum(operator, left_value, right_value, kind, state)
             }
             GoExpression::Binary { operator: "%", left, right } => {
                 self.remainder(left, right, state, blank, false)
@@ -2271,7 +2223,7 @@ impl<'p, 'k, 'e> Analysis<'p, 'k, 'e> {
         if !euclidean && !natural {
             return None;
         }
-        let temporary = Value::of(self.temporary(state, Some(Kind::Int32)));
+        let temporary = Value::of(self.temporary(state, Some(Kind::Int)));
         state.add(ZERO, temporary.symbol, 0);
         state.assume_at_most(temporary, divisor, -1);
         if natural && let Some(dividend) = dividend {
@@ -2295,74 +2247,10 @@ impl<'p, 'k, 'e> Analysis<'p, 'k, 'e> {
         {
             return None;
         }
-        let temporary = Value::of(self.temporary(state, Some(Kind::Int32)));
+        let temporary = Value::of(self.temporary(state, Some(Kind::Int)));
         state.add(ZERO, temporary.symbol, 0);
         state.assume_at_most(temporary, dividend, 0);
         Some(temporary)
-    }
-
-    /// `int32(length + k)`.
-    fn wrap(&mut self, state: &mut State, length: Symbol, k: i64) -> Symbol {
-        let symbol = match self.wraps.get(&(length, k)) {
-            Some(symbol) => *symbol,
-            None => {
-                let symbol = self.symbol();
-                self.wraps.insert((length, k), symbol);
-                self.wrapped.insert(symbol, length);
-                symbol
-            }
-        };
-        self.kinds.insert(symbol, Kind::Int32);
-        // The Int32 congruent to `length + k` is at most `length + k` while that is at least
-        // the smallest Int32, as a length is never negative.
-        if k >= i32::MIN as i64 {
-            state.add(symbol, length, k as i128);
-        }
-        if k == 0 {
-            state.congruent.insert(symbol, (length, 0));
-        }
-        symbol
-    }
-
-    /// The `(length, k)` an Int32 expression equals modulo 2³²: `int32(len(xs)) + k`.
-    fn congruence(&mut self, value: &GoExpression, state: &mut State) -> Option<(Symbol, i64)> {
-        match value {
-            GoExpression::Conversion { type_, value: inner }
-                if kind_of_type(type_) == Some(Kind::Int32) =>
-            {
-                match &**inner {
-                    GoExpression::Call { function, arguments }
-                        if matches!(&**function, GoExpression::Identifier(name) if name == "len")
-                            && arguments.len() == 1 =>
-                    {
-                        let length = self.length(&arguments[0], state)?;
-                        (length.offset == 0).then_some((length.symbol, 0))
-                    }
-                    inner if self.typing(inner) == Some(Typing::Typed(Kind::Int32)) => {
-                        self.congruence(inner, state)
-                    }
-                    _ => None,
-                }
-            }
-            GoExpression::Identifier(name) => {
-                let symbol = self.lookup(name)?;
-                state.congruent.get(&symbol).copied()
-            }
-            GoExpression::Binary { operator: operator @ ("+" | "-"), left, right }
-                if self.typing(value) == Some(Typing::Typed(Kind::Int32)) =>
-            {
-                let sign = if *operator == "+" { 1 } else { -1 };
-                let (base, k) = match (&**left, &**right) {
-                    (base, GoExpression::Integer(k)) => (base, sign * *k),
-                    (GoExpression::Integer(k), base) if sign == 1 => (base, *k),
-                    _ => return None,
-                };
-                let (length, offset) = self.congruence(base, state)?;
-                let shifted = offset.checked_add(k)?;
-                (shifted.abs() <= 1 << 31).then_some((length, shifted))
-            }
-            _ => None,
-        }
     }
 
     /// The symbol of `len(array)`, for an array whose length is known to stay.
@@ -2528,10 +2416,6 @@ impl<'p, 'k, 'e> Analysis<'p, 'k, 'e> {
             };
             if let Some(length) = length {
                 places.push((Place::Length(position), length));
-                if length.offset == 0 {
-                    let wrapped = self.wrap(&mut scratch, length.symbol, 0);
-                    places.push((Place::Wrapped(position), Value::of(wrapped)));
-                }
             }
         }
         let mut facts = FxHashMap::default();
@@ -2748,12 +2632,10 @@ enum Header<'a> {
     Range { index: Option<Symbol>, length: Option<Symbol> },
 }
 
-/// What is known of an expression's value: as an Int, as an Int32 congruent to a length, and
-/// as a slice's length.
+/// What is known of an expression's value: as an integer, and as a slice's length.
 #[derive(Clone, Copy, Default)]
 struct Computed {
     value: Option<Value>,
-    congruence: Option<(Symbol, i64)>,
     length: Option<Value>,
 }
 
@@ -2780,8 +2662,8 @@ fn is_test(value: &GoExpression) -> bool {
     }
 }
 
-/// The tests the backend emits for an index: conjuncts `i >= 0` and `i < len(xs)`, as
-/// `int(i) < len(xs)` or `i < int32(len(xs))`, at least one of them a length's.
+/// The tests the backend emits for an index: conjuncts `i >= 0` and `i < len(xs)`, at least
+/// one of them a length's.
 fn is_bounds_test(test: &GoExpression) -> bool {
     fn is_length(value: &GoExpression) -> bool {
         match value {

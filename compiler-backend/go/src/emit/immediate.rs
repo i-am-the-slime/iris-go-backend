@@ -1,4 +1,4 @@
-//! Function literals called where they are made, `func(coerced int32) T { return g(coerced) }(e)`,
+//! Function literals called where they are made, `func(coerced int) T { return g(coerced) }(e)`,
 //! become the expression they return with the parameters replaced, `g(e)`, where that keeps
 //! what the code does:
 //!

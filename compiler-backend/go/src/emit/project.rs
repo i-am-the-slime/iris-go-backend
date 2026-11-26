@@ -104,8 +104,8 @@ where
     }
 
     /// A foreign's argument as its Go function takes it. Go infers a generic function's type
-    /// arguments from its arguments, and an untyped integer constant as an `int`, so an `Int`
-    /// constant passed for a type parameter is typed: `int32(2)`.
+    /// arguments from its arguments, and an untyped integer constant as an `int`, which is what an
+    /// `Int` is, so only the other constants passed for a type parameter are typed.
     fn project_argument(
         &mut self,
         argument: &Expression,
@@ -120,7 +120,7 @@ where
             return self.in_convention(value, erased, crossing, out);
         }
         let value = match self.monotypes.get(argument.monotype) {
-            Monotype::Int if generic => self.typed_constant(value, argument.monotype)?,
+            Monotype::Int => value,
             _ if generic => self.typed_argument(value, argument)?,
             _ => value,
         };
@@ -129,7 +129,7 @@ where
 
     /// The positions of a foreign's parameters whose declared type is one of its quantified
     /// variables, which its Go function takes as a type parameter. A parameter declared `Int` is
-    /// an `int32` in Go, even in a generic function.
+    /// an `int` in Go, even in a generic function.
     fn project_generic_parameters(&mut self, foreign: Foreign) -> GoResult<Vec<usize>> {
         let Foreign::Project { file_id, term, .. } = foreign else {
             unreachable!("invariant violated: the declared type of another foreign");

@@ -1,7 +1,7 @@
 //! A slice just made empty has no spare capacity to clip.
 //!
 //! A fold that appends to its accumulator clips the initial value, so that appending never
-//! writes into an array someone else holds: `accumulator := []int32{}; accumulator =
+//! writes into an array someone else holds: `accumulator := []int{}; accumulator =
 //! slices.Clip(accumulator)`. An empty literal has no capacity, and the clip does nothing.
 
 use crate::go_traversal::each_block_in_declaration;
