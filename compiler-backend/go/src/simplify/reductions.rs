@@ -41,6 +41,26 @@ impl Simplifier<'_> {
         Err(arguments)
     }
 
+    /// Whether a map's callback returns its element as it is, through a newtype's coercion at
+    /// most: `map (un FilePath) paths` is `paths` coerced.
+    fn maps_identity(&self, arguments: &[Expression]) -> bool {
+        let [callback, _] = arguments else { return false };
+        let (parameters, body) = match &callback.kind {
+            ExpressionKind::Lambda { parameters, body } => (parameters.as_slice(), body.as_ref()),
+            ExpressionKind::Function(id) => match self.functions[id.0 as usize].as_ref() {
+                Some(function) => (function.parameters.as_slice(), &function.body),
+                None => return false,
+            },
+            _ => return false,
+        };
+        let [parameter] = parameters else { return false };
+        let mut body = body;
+        while let ExpressionKind::Coerce(value) = &body.kind {
+            body = value;
+        }
+        matches!(body.kind, ExpressionKind::Local(local) if local == parameter.id)
+    }
+
     fn reduced_iteration(
         &mut self,
         foreign: &'static Foreign,
@@ -51,6 +71,13 @@ impl Simplifier<'_> {
         match iteration {
             Some(Iteration::FoldLeft) => self.seeded_choice(arguments, monotype),
             Some(Iteration::FoldRight) => self.leftward(arguments, monotype),
+            Some(Iteration::Map) if self.maps_identity(&arguments) => {
+                let array = arguments
+                    .into_iter()
+                    .nth(1)
+                    .expect("invariant violated: map has two arguments");
+                Ok(self.coerce(array, monotype))
+            }
             Some(Iteration::Map) => self.positional(foreign, arguments, monotype),
             _ => Err(arguments),
         }

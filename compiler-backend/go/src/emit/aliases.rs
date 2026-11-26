@@ -16,6 +16,7 @@ pub(super) fn substitute_aliases(declarations: &mut [GoDeclaration]) {
             drop_self_assignments(block);
             assign_directly(block);
             name_values_after_their_aliases(block);
+            return_directly(block);
         });
     }
 }
@@ -501,4 +502,25 @@ fn is_same_local(target: &GoExpression, value: &GoExpression) -> bool {
 
 pub(super) fn is_named(value: &GoExpression, name: &str) -> bool {
     matches!(value, GoExpression::Identifier(identifier) if identifier == name)
+}
+
+/// `return value` for `staged := value` directly followed by `return staged`.
+fn return_directly(block: &mut Vec<GoStatement>) {
+    let Some(last) = block.len().checked_sub(1) else { return };
+    let Some(defined) = (0..last).rev().find(|&at| !matches!(block[at], GoStatement::Line(_)))
+    else {
+        return;
+    };
+    let staged = match (&block[defined], &block[last]) {
+        (
+            GoStatement::Define { names, values },
+            GoStatement::Return(Some(GoExpression::Identifier(returned))),
+        ) if names.len() == 1 && values.len() == 1 && &names[0] == returned => true,
+        _ => false,
+    };
+    if !staged || defined + 1 != last {
+        return;
+    }
+    let GoStatement::Define { mut values, .. } = block.remove(defined) else { unreachable!() };
+    block[defined] = GoStatement::Return(values.pop());
 }
