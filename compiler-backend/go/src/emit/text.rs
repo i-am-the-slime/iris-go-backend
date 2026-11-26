@@ -1,4 +1,4 @@
-use rustc_hash::FxHashMap;
+use rustc_hash::{FxHashMap, FxHashSet};
 
 use super::buffers::{byte_slice, to_string};
 use super::names::{NamePart, PendingSpelling};
@@ -8,6 +8,7 @@ use super::{
 };
 use crate::error::GoResult;
 use crate::foreign::{Foreign, GoFunction, GoPackage, Operator};
+use crate::go_traversal;
 use crate::monomorphic::{Expression, ExpressionKind, FunctionId, Guarded, Literal};
 use crate::monotype::{Monotype, MonotypeId};
 use crate::syntax::{GoDeclaration, GoExpression, GoStatement, GoType};
@@ -502,6 +503,7 @@ where
             }
             delegated.insert(self.function_names[id.0 as usize].clone(), writer);
         }
+        self.delegating_wrappers.extend(delegated.keys().cloned());
         for declaration in declarations {
             let GoDeclaration::Function { name, parameters, body, .. } = declaration else {
                 continue;
@@ -616,4 +618,39 @@ fn append_operands<'e>(expression: &'e Expression, operands: &mut Vec<&'e Expres
         }
         _ => operands.push(expression),
     }
+}
+
+/// Drops the string wrappers of writers that nothing calls any more, now that callers append
+/// with the writer directly.
+pub(super) fn drop_uncalled_wrappers(
+    declarations: &mut Vec<GoDeclaration>,
+    wrappers: &FxHashSet<String>,
+) {
+    if wrappers.is_empty() {
+        return;
+    }
+    let mut called = FxHashSet::default();
+    for declaration in declarations.iter_mut() {
+        let own = declaration.name().map(str::to_string);
+        match declaration {
+            GoDeclaration::Source { template, .. } => called
+                .extend(wrappers.iter().filter(|name| template.contains(name.as_str())).cloned()),
+            GoDeclaration::Written { source, .. } => called
+                .extend(wrappers.iter().filter(|name| source.contains(name.as_str())).cloned()),
+            declaration => {
+                go_traversal::each_expression_in_declaration(declaration, |expression| {
+                    if let GoExpression::Identifier(name) = expression
+                        && wrappers.contains(name)
+                        && own.as_ref() != Some(name)
+                    {
+                        called.insert(name.clone());
+                    }
+                })
+            }
+        }
+    }
+    declarations.retain(|declaration| match declaration {
+        GoDeclaration::Function { name, .. } => !wrappers.contains(name) || called.contains(name),
+        _ => true,
+    });
 }

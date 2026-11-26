@@ -344,6 +344,7 @@ where
     emitter.spell_out_generic_alias_arguments();
     let mut all = std::mem::take(&mut emitter.type_declarations);
     all.extend(declarations);
+    timed("wrappers", || text::drop_uncalled_wrappers(&mut all, &emitter.delegating_wrappers));
     let data_structs: FxHashSet<String> = emitter
         .data_layouts
         .values()
@@ -486,6 +487,7 @@ where
             owning_variants: FxHashMap::default(),
             pending_owning_variants: vec![],
             writers: FxHashMap::default(),
+            delegating_wrappers: FxHashSet::default(),
             pending_writers: vec![],
             writable: FxHashMap::default(),
             array_writers: FxHashMap::default(),
@@ -680,6 +682,9 @@ struct Emitter<'p, 'm, 'q, Q> {
     owning_variants: FxHashMap<(FunctionId, usize), String>,
     pending_owning_variants: Vec<(FunctionId, usize)>,
     writers: FxHashMap<FunctionId, String>,
+    /// The functions that only turn what their writer appends into a string, which go when
+    /// every caller calls the writer instead.
+    delegating_wrappers: FxHashSet<String>,
     pending_writers: Vec<FunctionId>,
     writable: FxHashMap<FunctionId, bool>,
     array_writers: FxHashMap<FunctionId, (String, MonotypeId)>,
