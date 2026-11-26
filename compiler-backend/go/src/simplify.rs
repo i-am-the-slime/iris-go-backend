@@ -47,6 +47,7 @@ mod record;
 mod record_views;
 mod reductions;
 mod rename;
+mod shared_calls;
 mod short_circuit;
 mod sink;
 mod tail_choices;
@@ -143,6 +144,7 @@ pub fn simplify(
         simplifier.sequence_folds(&mut current.body);
         simplifier.settle_records(&mut current.body);
         simplifier.sink_lets(&mut current.body);
+        simplifier.share_repeated_calls(&mut current.body);
         thaw::thaw_fresh_arrays_in_place(&mut current.body, simplifier.monotypes);
         simplifier.sizes[index] = size(&current.body);
         simplifier.functions[index] = Some(current);
