@@ -153,7 +153,8 @@ pub fn run() -> i32 {
                     error.exit_code()
                 }
             },
-            Ok(cli::Run::Go { config, arguments }) => match iris_go::run_program(config, arguments) {
+            Ok(cli::Run::Go { config, arguments }) => match iris_go::run_program(config, arguments)
+            {
                 Ok(status) => status,
                 Err(error) => {
                     eprintln!("{error}");

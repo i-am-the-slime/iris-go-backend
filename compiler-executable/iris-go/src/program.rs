@@ -112,7 +112,8 @@ pub fn build_program(config: ProgramConfig) -> Result<Program, String> {
     let profiled_status = match config.profile {
         Some(arguments) => {
             let arguments = if arguments.is_empty() { &execution.exec_args } else { &arguments };
-            let run = ProfiledRun { module: &module, cache: &cache, arguments, root: &workspace.root };
+            let run =
+                ProfiledRun { module: &module, cache: &cache, arguments, root: &workspace.root };
             Some(record_profile(run, &recorded_profile)?)
         }
         None => None,
