@@ -30,6 +30,7 @@ pub struct GoConfig {
 }
 
 mod program;
+mod requirements;
 pub use program::{Program, ProgramConfig, RUNTIME_VERSION, build_program, run_program};
 
 pub fn run(config: GoConfig) -> Result<(), String> {
@@ -91,7 +92,8 @@ pub fn run(config: GoConfig) -> Result<(), String> {
     }
     let files = program.files.len();
     remove_stale_kernel_files(&config.destination, &program.files)?;
-    write_imported_packages(vendored, &program.files)?;
+    let go_modules = write_imported_packages(vendored, &program.files)?;
+    require_foreign_modules(&config.destination, &go_modules)?;
     for (path, source) in program.files {
         let path = config.destination.join(path);
         if let Some(directory) = path.parent() {
@@ -189,6 +191,7 @@ fn new_go_mod(go_mod: &Path, package: Option<&str>) -> Result<String, String> {
 struct VendoredPackage {
     directory: PathBuf,
     import_path: String,
+    go_module: Option<PathBuf>,
     files: Vec<VendoredFile>,
 }
 
@@ -202,7 +205,7 @@ struct VendoredFile {
 fn write_imported_packages(
     vendored: Vec<VendoredPackage>,
     files: &[(String, String)],
-) -> Result<(), String> {
+) -> Result<Vec<PathBuf>, String> {
     let mut imported = vec![false; vendored.len()];
     let mut importers: Vec<&str> = files.iter().map(|(_, source)| source.as_str()).collect();
     while let Some(importer) = importers.pop() {
@@ -214,12 +217,18 @@ fn write_imported_packages(
             importers.extend(package.files.iter().map(|file| file.source.as_str()));
         }
     }
+    let mut go_modules = vec![];
     for (package, imported) in vendored.into_iter().zip(imported) {
         if !imported {
             if package.directory.is_dir() {
                 fs::remove_dir_all(&package.directory).map_err(|error| error.to_string())?;
             }
             continue;
+        }
+        if let Some(go_module) = &package.go_module
+            && !go_modules.contains(go_module)
+        {
+            go_modules.push(go_module.clone());
         }
         fs::create_dir_all(&package.directory).map_err(|error| error.to_string())?;
         for file in package.files {
@@ -228,7 +237,56 @@ fn write_imported_packages(
             copy_embedded_files(Path::new(&file.shown), &file.original, &package.directory)?;
         }
     }
+    Ok(go_modules)
+}
+
+fn go_module_beside(source: &Path) -> Option<PathBuf> {
+    for directory in source.ancestors().skip(1) {
+        let go_mod = directory.join("go.mod");
+        if go_mod.is_file() {
+            return Some(go_mod);
+        }
+        if directory.join("spago.yaml").is_file() {
+            return None;
+        }
+    }
+    None
+}
+
+fn require_foreign_modules(destination: &Path, go_modules: &[PathBuf]) -> Result<(), String> {
+    if go_modules.is_empty() {
+        return Ok(());
+    }
+    let mut required = vec![];
+    let mut sums = String::new();
+    for go_module in go_modules {
+        let declaration = read_text(go_module)?.unwrap_or_default();
+        let declared = requirements::requirements(&declaration).into_iter();
+        required
+            .extend(declared.filter(|requirement| requirement.module != program::RUNTIME_MODULE));
+        sums.push_str(&read_text(&go_module.with_file_name("go.sum"))?.unwrap_or_default());
+    }
+    let go_mod = destination.join("go.mod");
+    let declaration = read_text(&go_mod)?.unwrap_or_default();
+    if let Some(declaration) = requirements::with_requirements(&declaration, &required) {
+        fs::write(&go_mod, declaration)
+            .map_err(|error| format!("could not write {}: {error}", go_mod.display()))?;
+    }
+    let go_sum = destination.join("go.sum");
+    let checksums = read_text(&go_sum)?.unwrap_or_default();
+    if let Some(checksums) = requirements::with_sums(&checksums, &sums) {
+        fs::write(&go_sum, checksums)
+            .map_err(|error| format!("could not write {}: {error}", go_sum.display()))?;
+    }
     Ok(())
+}
+
+fn read_text(path: &Path) -> Result<Option<String>, String> {
+    match fs::read_to_string(path) {
+        Ok(text) => Ok(Some(text)),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(None),
+        Err(error) => Err(format!("could not read {}: {error}", path.display())),
+    }
 }
 
 /// Copies the Go files next to each source file into a package of the program, named after its
@@ -259,6 +317,7 @@ fn vendor_foreign_packages(
         let mut package = VendoredPackage {
             directory: destination.join(&package_name),
             import_path: format!("{module_path}/{package_name}"),
+            go_module: go_module_beside(&file.path),
             files: vec![],
         };
         let mut texts = vec![];

@@ -13,13 +13,13 @@ use std::{env, fs};
 use iris_build::Workspace;
 use sha2::{Digest, Sha256};
 
-use crate::GoConfig;
+use crate::{GoConfig, requirements};
 
 /// The release of github.com/i-am-the-slime/iris-go the generated Go is written against.
 pub const RUNTIME_VERSION: &str = "v0.7.0";
 
 /// The Go module path of the runtime.
-const RUNTIME_MODULE: &str = "github.com/i-am-the-slime/iris-go";
+pub(crate) const RUNTIME_MODULE: &str = "github.com/i-am-the-slime/iris-go";
 
 /// Points the runtime at a local checkout instead of the published release.
 const RUNTIME_CHECKOUT_VARIABLE: &str = "IRIS_GO";
@@ -73,8 +73,11 @@ pub fn build_program(config: ProgramConfig) -> Result<Program, String> {
 
     let cache = workspace.root.join(".spago").join("go").join(&name);
     let module = cache.join("module");
+    let previous_requirements = previous_requirements(&module)?;
     clear_generated(&module)?;
-    write(&module.join("go.mod"), &go_mod(&name)?)?;
+    let fresh = go_mod(&name)?;
+    let declaration = requirements::with_requirements(&fresh, &previous_requirements);
+    write(&module.join("go.mod"), &declaration.unwrap_or(fresh))?;
     crate::run(GoConfig {
         package: Some(name.clone()),
         entry,
@@ -109,6 +112,17 @@ fn require_go() -> Result<(), String> {
         )),
         Err(error) => Err(format!("could not run `go version`: {error}")),
     }
+}
+
+fn previous_requirements(module: &Path) -> Result<Vec<requirements::Requirement>, String> {
+    let go_mod = module.join("go.mod");
+    let declaration = match fs::read_to_string(&go_mod) {
+        Ok(declaration) => declaration,
+        Err(error) if error.kind() == ErrorKind::NotFound => return Ok(vec![]),
+        Err(error) => return Err(format!("could not read {}: {error}", go_mod.display())),
+    };
+    let requirements = requirements::requirements(&declaration).into_iter();
+    Ok(requirements.filter(|requirement| requirement.module != RUNTIME_MODULE).collect())
 }
 
 /// Removes the previous compilation's Go, keeping `go.sum`, so packages and foreign files the

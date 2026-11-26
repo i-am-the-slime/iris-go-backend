@@ -1796,6 +1796,7 @@ dependencies = [
  "dunce",
  "go",
  "iris-build",
+ "semver",
  "sha2",
  "tempfile",
 ]
