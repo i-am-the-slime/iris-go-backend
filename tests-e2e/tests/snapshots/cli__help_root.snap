@@ -15,7 +15,7 @@ Commands:
   go      Compile a Spago workspace from an entry point to a single Go program.
   lsp     Run the language server over standard input and output.
   new     Create a Spago project in the current directory.
-  run     Build and run a Spago package with Node.js, or with Go.
+  run     Build a Spago package to Go and run it, or with --js run it with Node.js.
   self    Manage this installation of Iris.
   skills  Print agent skills for using Iris, which match this version.
   test    Build and test one or more Spago packages with Node.js.

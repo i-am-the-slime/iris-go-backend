@@ -3,7 +3,7 @@ source: tests-e2e/tests/cli.rs
 ---
 status: 0
 --- stdout
-Build and run a Spago package with Node.js, or with Go.
+Build a Spago package to Go and run it, or with --js run it with Node.js.
 
 Usage: googoo run [FLAGS] [-- ARGUMENTS]…
 
@@ -18,8 +18,10 @@ Flags:
                              [possible values: auto, always, never]
                              (default: auto)
       --main <MODULE>        Module containing the program entry point.
-      --go                   Compile to Go and run the executable instead of Node.js. Needs Go 1.27 or later.
-      --entry <MODULE.NAME>  Qualified entry point for --go, such as Main.main. Defaults to main in --main's module.
+      --js                   Run with Node.js instead of compiling to Go.
+      --go                   Compile to Go and run the executable, which is what `run` does anyway. Needs Go 1.27 or
+                             later.
+      --entry <MODULE.NAME>  Qualified entry point, such as Main.main. Defaults to main in --main's module.
       --pgo <PROFILE>        Optimise the executable for this CPU profile (go build -pgo), or `off` to leave out the one
                              --profile recorded.
       --profile              Run the program once while recording a CPU profile, keep it in .spago/go/<package>/

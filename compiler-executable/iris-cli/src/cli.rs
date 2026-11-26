@@ -42,7 +42,7 @@ pub enum Command {
     Skills(SkillsOptions),
     /// Format a Spago workspace or explicit source files.
     Format(FormatOptions),
-    /// Build and run a Spago package with Node.js, or with Go.
+    /// Build a Spago package to Go and run it, or with --js run it with Node.js.
     Run {
         #[usage(flatten)]
         options: RunOptions,
@@ -314,12 +314,17 @@ pub struct RunOptions {
     #[usage(long, value_name = "MODULE")]
     main: Option<String>,
 
-    /// Compile to Go and run the executable instead of Node.js. Needs Go 1.27 or later.
+    /// Run with Node.js instead of compiling to Go.
+    #[usage(long, conflicts("--go"))]
+    js: bool,
+
+    /// Compile to Go and run the executable, which is what `run` does anyway. Needs Go 1.27 or
+    /// later.
     #[usage(long, conflicts("--output"))]
     go: bool,
 
-    /// Qualified entry point for --go, such as Main.main. Defaults to main in --main's module.
-    #[usage(long, value_name = "MODULE.NAME", requires("--go"), conflicts("--main"))]
+    /// Qualified entry point, such as Main.main. Defaults to main in --main's module.
+    #[usage(long, value_name = "MODULE.NAME", conflicts("--main"), conflicts("--js"))]
     entry: Option<String>,
 
     #[usage(flatten)]
@@ -338,7 +343,7 @@ pub enum Run {
 
 impl RunOptions {
     pub fn into_run(self) -> Result<Run, String> {
-        if self.go {
+        if !self.js && self.build.output.is_none() {
             let entry = self.entry.or_else(|| self.main.map(|main| format!("{main}.main")));
             let config = iris_go::ProgramConfig {
                 package: self.build.package,
@@ -351,7 +356,7 @@ impl RunOptions {
             return Ok(Run::Go { config, arguments: self.arguments });
         }
         if self.optimisation.chosen() {
-            return Err("--pgo and --profile need --go".to_string());
+            return Err("--pgo and --profile are for Go, so they don't go with --js".to_string());
         }
         let (project, color) = self.build.into_project_config();
         Ok(Run::Node(RunConfig {

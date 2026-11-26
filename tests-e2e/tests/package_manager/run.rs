@@ -63,7 +63,7 @@ foreign import main :: Effect Unit
     );
     workspace.write("src/Main.js", "export const main = () => console.log(\"loaded\");\n");
 
-    let output = workspace.command(&["run", "--quiet"]);
+    let output = workspace.command(&["run", "--js", "--quiet"]);
 
     insta::assert_snapshot!(workspace.report(&output), @"
     status: 0
@@ -103,7 +103,7 @@ main = validate' Unit
     );
     workspace.write("src/Main.js", "export const fail = () => { throw new Error(\"failed\"); };\n");
 
-    let output = workspace.command(&["run", "--quiet"]);
+    let output = workspace.command(&["run", "--js", "--quiet"]);
 
     assert!(!output.status.success());
     insta::assert_snapshot!(workspace.workspace_stack_frames(&output), @"
@@ -136,7 +136,7 @@ foreign import main :: Effect Unit
     );
     workspace.write("src/Main.js", "export const main = () => { process.exitCode = 7; };\n");
 
-    let output = workspace.command(&["run", "--quiet"]);
+    let output = workspace.command(&["run", "--js", "--quiet"]);
 
     insta::assert_snapshot!(workspace.report(&output), @"
     status: 7
@@ -176,7 +176,7 @@ foreign import main :: Effect Unit
         r#"module Other where
 "#,
     );
-    let ran = workspace.command(&["run", "--quiet"]);
+    let ran = workspace.command(&["run", "--js", "--quiet"]);
     insta::assert_snapshot!(workspace.report(&ran), @"
     status: 0
     --- stdout
@@ -185,7 +185,7 @@ foreign import main :: Effect Unit
     ");
 
     std::fs::remove_file(workspace.path().join("src/Main.purs")).unwrap();
-    let output = workspace.command(&["run", "--quiet"]);
+    let output = workspace.command(&["run", "--js", "--quiet"]);
 
     insta::assert_snapshot!(workspace.report(&output), @"
     status: 1

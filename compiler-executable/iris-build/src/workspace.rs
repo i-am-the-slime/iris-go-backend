@@ -120,6 +120,19 @@ impl Workspace {
         Ok(files.into_iter().collect())
     }
 
+    /// The selected package or, when none is, the one in the workspace root, which is what
+    /// running a program means there.
+    pub fn select_root_package_by_default(mut self) -> Workspace {
+        if self.selected.is_none() {
+            self.selected = self
+                .packages
+                .iter()
+                .find(|(_, package)| package.root == self.root)
+                .map(|(name, _)| name.clone());
+        }
+        self
+    }
+
     pub fn require_selected(&self) -> Result<&WorkspacePackage, WorkspaceError> {
         let Some(name) = &self.selected else {
             return Err(WorkspaceError::AmbiguousPackage);

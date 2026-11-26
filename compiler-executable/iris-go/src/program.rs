@@ -84,7 +84,8 @@ pub fn build_program(config: ProgramConfig) -> Result<Program, String> {
     require_go()?;
     let current_directory = env::current_dir().map_err(|error| error.to_string())?;
     let workspace = Workspace::discover(&current_directory, config.package.as_deref())
-        .map_err(|error| error.to_string())?;
+        .map_err(|error| error.to_string())?
+        .select_root_package_by_default();
     let package = workspace.require_selected().map_err(|error| error.to_string())?;
     let name = workspace.selected.clone().expect("invariant violated: a package is selected");
     let execution = package.manifest.run.clone().unwrap_or_default();
@@ -104,7 +105,7 @@ pub fn build_program(config: ProgramConfig) -> Result<Program, String> {
         entry,
         destination: PathBuf::clone(&module),
         version: config.version,
-        quiet: config.quiet,
+        quiet: true,
         line_directives: Some(crate::LineCoverage::Sparse),
     })?;
 
