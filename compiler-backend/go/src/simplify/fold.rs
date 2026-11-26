@@ -205,6 +205,9 @@ impl Simplifier<'_> {
                 _ => operation(operator, vec![left, right], monotype),
             },
             Operator::IntAdd | Operator::StringAppend => associate(operator, left, right, monotype),
+            Operator::IntMultiply if is_int(&right, 1) => left,
+            Operator::IntMultiply if is_int(&left, 1) => right,
+            Operator::IntSubtract if is_int(&right, 0) => left,
             // `b == false` is `not b`, which turns a comparison around.
             Operator::Compare(comparison @ (Comparison::Equal | Comparison::NotEqual))
                 if let Some((known, other)) = match (boolean(&left), boolean(&right)) {
@@ -673,4 +676,8 @@ mod tests {
         assert_eq!(show_number(f64::NEG_INFINITY), "-Infinity");
         assert_eq!(show_number(f64::NAN), "NaN");
     }
+}
+
+fn is_int(expression: &Expression, value: i64) -> bool {
+    matches!(expression.kind, ExpressionKind::Literal(Literal::Int(literal)) if literal == value)
 }

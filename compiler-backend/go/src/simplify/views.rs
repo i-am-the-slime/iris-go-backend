@@ -128,7 +128,12 @@ impl Simplifier<'_> {
             unreachable!("invariant violated: only an array is viewed")
         };
         let view = View::of(&binding.value);
-        let length = self.view_length(&view, integer);
+        let mut bindings = vec![];
+        let length = self.view_length(&view, integer, &mut bindings);
+        let mut bindings: Vec<Binding> = bindings
+            .into_iter()
+            .map(|Binding { local, value }| Binding { local, value: self.expression(value) })
+            .collect();
         let length = self.expression(length);
         let length_local = self.named_local("length", integer);
         let mut body = body;
@@ -141,15 +146,23 @@ impl Simplifier<'_> {
             .collect();
         let mut values = values.into_iter();
         replace_uses(&mut body, binding.local.id, &length_local.expression(), &mut values);
-        let mut bindings = vec![Binding { local: length_local, value: length }];
+        bindings.push(Binding { local: length_local, value: length });
         if let Some(value) = range_step(&view, integer, self.monotypes) {
             bindings.push(Binding { local: step, value });
         }
         let body = self.expression(body);
-        self.let_bindings(bindings, body)
+        bindings
+            .into_iter()
+            .rev()
+            .fold(body, |body, binding| self.let_bindings(vec![binding], body))
     }
 
-    fn view_length(&mut self, view: &View, integer: MonotypeId) -> Expression {
+    fn view_length(
+        &mut self,
+        view: &View,
+        integer: MonotypeId,
+        bindings: &mut Vec<Binding>,
+    ) -> Expression {
         let boolean = self.monotypes.intern(Monotype::Boolean);
         let literal =
             |value| Expression::new(ExpressionKind::Literal(Literal::Int(value)), integer);
@@ -166,27 +179,36 @@ impl Simplifier<'_> {
         };
         match view {
             View::Range { first, last } => {
-                let rising = operation(
-                    Operator::IntSubtract,
-                    vec![(*last).clone(), (*first).clone()],
-                    integer,
-                );
-                let falling = operation(
-                    Operator::IntSubtract,
-                    vec![(*first).clone(), (*last).clone()],
-                    integer,
-                );
-                let rising = operation(Operator::IntAdd, vec![rising, literal(1)], integer);
-                let falling = operation(Operator::IntAdd, vec![falling, literal(1)], integer);
-                choose(
-                    compare(Comparison::LessThanOrEqual, (*first).clone(), (*last).clone()),
-                    rising,
-                    falling,
-                )
+                let first = Offset::of(first);
+                let last = Offset::of(last);
+                let rising = last.distance_past(&first, integer);
+                let falling = first.distance_past(&last, integer);
+                choose(rises(&first, &last, boolean, integer), rising, falling)
             }
-            View::Map { inner, .. } => self.view_length(inner, integer),
+            View::Map { inner, .. } => self.view_length(inner, integer, bindings),
+            View::EmptyWhen { condition, inner }
+                if let View::Prefix { end, inner } = &**inner
+                    && is_below_one(condition, end) =>
+            {
+                let whole = self.view_length(inner, integer, bindings);
+                let whole_local = self.named_local("whole", integer);
+                let taken_local = self.named_local("taken", integer);
+                let taken = choose(
+                    compare(Comparison::LessThan, (*end).clone(), whole_local.expression()),
+                    (*end).clone(),
+                    whole_local.expression(),
+                );
+                let clamped = choose(
+                    compare(Comparison::LessThan, taken_local.expression(), literal(0)),
+                    literal(0),
+                    taken_local.expression(),
+                );
+                bindings.push(Binding { local: whole_local, value: whole });
+                bindings.push(Binding { local: taken_local, value: taken });
+                clamped
+            }
             View::Prefix { end, inner } => {
-                let whole = self.view_length(inner, integer);
+                let whole = self.view_length(inner, integer, bindings);
                 let whole_local = self.named_local("whole", integer);
                 let from_end = operation(
                     Operator::IntAdd,
@@ -208,14 +230,11 @@ impl Simplifier<'_> {
                     from_end,
                     within,
                 );
-                let kind = ExpressionKind::Let {
-                    bindings: vec![Binding { local: whole_local, value: whole }],
-                    body: Box::new(chosen),
-                };
-                Expression::new(kind, integer)
+                bindings.push(Binding { local: whole_local, value: whole });
+                chosen
             }
             View::EmptyWhen { condition, inner } => {
-                let inner = self.view_length(inner, integer);
+                let inner = self.view_length(inner, integer, bindings);
                 choose((*condition).clone(), literal(0), inner)
             }
             View::Stored(array) => {
@@ -336,11 +355,7 @@ fn range_step(
             let boolean = monotypes.intern(Monotype::Boolean);
             let literal =
                 |value| Expression::new(ExpressionKind::Literal(Literal::Int(value)), integer);
-            let condition = operation(
-                Operator::Compare(Comparison::LessThanOrEqual),
-                vec![(*first).clone(), (*last).clone()],
-                boolean,
-            );
+            let condition = rises(&Offset::of(first), &Offset::of(last), boolean, integer);
             let kind = ExpressionKind::If {
                 condition: Box::new(condition),
                 then: Box::new(literal(1)),
@@ -353,4 +368,113 @@ fn range_step(
         }
         View::Stored(_) => None,
     }
+}
+
+/// An integer as what it adds to a base, `stop - 1` as `stop` and `-1`, so that the length of
+/// `range start (stop - 1)` reads `stop - start` rather than `stop - 1 - start + 1`.
+struct Offset {
+    base: Option<Expression>,
+    constant: i64,
+}
+
+impl Offset {
+    fn of(expression: &Expression) -> Offset {
+        let within =
+            |constant: i64| i64::from(i32::MIN) <= constant && constant <= i64::from(i32::MAX);
+        let ExpressionKind::Foreign { foreign: Foreign::Operator(operator), arguments } =
+            &expression.kind
+        else {
+            return match expression.kind {
+                ExpressionKind::Literal(Literal::Int(constant)) => Offset { base: None, constant },
+                _ => Offset { base: Some(expression.clone()), constant: 0 },
+            };
+        };
+        let sign = match operator {
+            Operator::IntAdd => 1,
+            Operator::IntSubtract => -1,
+            _ => return Offset { base: Some(expression.clone()), constant: 0 },
+        };
+        let (left, ExpressionKind::Literal(Literal::Int(added))) =
+            (&arguments[0], &arguments[1].kind)
+        else {
+            return Offset { base: Some(expression.clone()), constant: 0 };
+        };
+        let inner = Offset::of(left);
+        let constant = inner.constant + sign * added;
+        if !within(constant) {
+            return Offset { base: Some(expression.clone()), constant: 0 };
+        }
+        Offset { base: inner.base, constant }
+    }
+
+    /// `self - other + 1`, how many integers run from `other` up to `self`.
+    fn distance_past(&self, other: &Offset, integer: MonotypeId) -> Expression {
+        let constant = self.constant - other.constant + 1;
+        let difference = match (&self.base, &other.base) {
+            (Some(base), Some(subtracted)) => Some(operation(
+                Operator::IntSubtract,
+                vec![base.clone(), subtracted.clone()],
+                integer,
+            )),
+            (Some(base), None) => Some(base.clone()),
+            (None, Some(subtracted)) => {
+                Some(operation(Operator::IntNegate, vec![subtracted.clone()], integer))
+            }
+            (None, None) => None,
+        };
+        added(difference, constant, integer)
+    }
+}
+
+/// `base + constant`, leaving out what adds nothing.
+fn added(base: Option<Expression>, constant: i64, integer: MonotypeId) -> Expression {
+    let literal = |value| Expression::new(ExpressionKind::Literal(Literal::Int(value)), integer);
+    match base {
+        None => literal(constant),
+        Some(base) if constant == 0 => base,
+        Some(base) if constant < 0 => {
+            operation(Operator::IntSubtract, vec![base, literal(-constant)], integer)
+        }
+        Some(base) => operation(Operator::IntAdd, vec![base, literal(constant)], integer),
+    }
+}
+
+/// Whether a range from `first` to `last` counts up, `first <= last`, with their constants moved
+/// to one side: `start <= stop - 1` is `start < stop`.
+fn rises(first: &Offset, last: &Offset, boolean: MonotypeId, integer: MonotypeId) -> Expression {
+    let difference = last.constant - first.constant;
+    let first = added(first.base.clone(), 0, integer);
+    if difference == -1 {
+        let last = added(last.base.clone(), 0, integer);
+        return operation(Operator::Compare(Comparison::LessThan), vec![first, last], boolean);
+    }
+    let last = added(last.base.clone(), difference, integer);
+    operation(Operator::Compare(Comparison::LessThanOrEqual), vec![first, last], boolean)
+}
+
+/// Whether the condition that empties a prefix holds exactly when the prefix's end is below
+/// one, as `take`'s `n < 1` does: where it does not, the end is positive.
+fn is_below_one(condition: &Expression, end: &Expression) -> bool {
+    let ExpressionKind::Foreign {
+        foreign: Foreign::Operator(Operator::Compare(comparison)),
+        arguments,
+    } = &condition.kind
+    else {
+        return false;
+    };
+    let (compared, ExpressionKind::Literal(Literal::Int(bound))) =
+        (&arguments[0], &arguments[1].kind)
+    else {
+        return false;
+    };
+    let same_end = match (&compared.kind, &end.kind) {
+        (ExpressionKind::Local(left), ExpressionKind::Local(right)) => left.eq(right),
+        (ExpressionKind::Literal(left), ExpressionKind::Literal(right)) => left.eq(right),
+        _ => false,
+    };
+    same_end
+        && matches!(
+            (comparison, bound),
+            (Comparison::LessThan, 1) | (Comparison::LessThanOrEqual, 0)
+        )
 }

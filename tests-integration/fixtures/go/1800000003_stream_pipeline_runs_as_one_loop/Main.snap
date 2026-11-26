@@ -61,30 +61,16 @@ func foldPulledFPull2(ref *shared.Ref[int32], ref2 *shared.Ref[int32], ref3 *sha
 		y := i3 + 64
 		stop := min(i, y)
 		ref3.Value = stop
-		var length int32
-		if i2 < 1 {
-			length = 0
+		var whole int32
+		if i3 < stop {
+			whole = stop - i3
 		} else {
-			var whole int32
-			if i3 <= stop-1 {
-				whole = stop - 1 - i3 + 1
-			} else {
-				whole = i3 - (stop - 1) + 1
-			}
-			if i2 < 0 {
-				if whole+i2 < 0 {
-					length = 0
-				} else {
-					length = whole + i2
-				}
-			} else if i2 < whole {
-				length = i2
-			} else {
-				length = whole
-			}
+			whole = i3 - stop + 2
 		}
+		taken := min(i2, whole)
+		length := max(taken, 0)
 		var step int32
-		if i3 <= stop-1 {
+		if i3 < stop {
 			step = 1
 		} else {
 			step = -1
