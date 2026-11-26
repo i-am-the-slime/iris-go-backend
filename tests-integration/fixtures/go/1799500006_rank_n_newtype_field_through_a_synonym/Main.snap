@@ -6,9 +6,13 @@ package main
 
 import (
 	journal "fixture/Journal_ffi"
-	"fixture/shared"
 	"strconv"
 )
+
+type Resource struct {
+	ForInt  func(func(int32) int32) int32
+	ForUnit func(func(int32))
+}
 
 func main() {
 	i := acquired.ForInt(func(x int32) int32 {
@@ -20,7 +24,7 @@ func main() {
 	})
 }
 
-var acquired shared.Resource = shared.Resource{ForInt: func(use func(int32) int32) int32 {
+var acquired Resource = Resource{ForInt: func(use func(int32) int32) int32 {
 	journal.Log("acquire")
 	result := use(41)
 	journal.Log("release")
@@ -30,11 +34,3 @@ var acquired shared.Resource = shared.Resource{ForInt: func(use func(int32) int3
 	use(41)
 	journal.Log("release")
 }}
-
-// shared/shared.go
-package shared
-
-type Resource struct {
-	ForInt  func(func(int32) int32) int32
-	ForUnit func(func(int32))
-}

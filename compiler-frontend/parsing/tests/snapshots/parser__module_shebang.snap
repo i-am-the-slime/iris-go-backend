@@ -1,0 +1,51 @@
+---
+source: compiler-frontend/parsing/tests/parser.rs
+---
+(
+    Module@0..61
+      ModuleHeader@0..37
+        Annotation@0..20
+          TEXT@0..20 "#!/usr/bin/env purs\n"
+        MODULE@20..26 "module"
+        Annotation@26..27
+          TEXT@26..27 " "
+        ModuleName@27..31
+          UPPER@27..31 "Main"
+        Annotation@31..32
+          TEXT@31..32 " "
+        WHERE@32..37 "where"
+      LAYOUT_START@37..37 ""
+      ModuleStatements@37..60
+        ValueSignature@37..50
+          Annotation@37..39
+            TEXT@37..39 "\n\n"
+          LOWER@39..43 "life"
+          Annotation@43..44
+            TEXT@43..44 " "
+          DOUBLE_COLON@44..46 "::"
+          TypeConstructor@46..50
+            Annotation@46..47
+              TEXT@46..47 " "
+            QualifiedName@47..50
+              UPPER@47..50 "Int"
+        LAYOUT_SEPARATOR@50..50 ""
+        ValueEquation@50..60
+          Annotation@50..51
+            TEXT@50..51 "\n"
+          LOWER@51..55 "life"
+          Unconditional@55..60
+            Annotation@55..56
+              TEXT@55..56 " "
+            EQUAL@56..57 "="
+            WhereExpression@57..60
+              ExpressionInteger@57..60
+                Annotation@57..58
+                  TEXT@57..58 " "
+                INTEGER@58..60 "42"
+      LAYOUT_END@60..60 ""
+      Annotation@60..61
+        TEXT@60..61 "\n"
+      END_OF_FILE@61..61 ""
+    ,
+    [],
+)

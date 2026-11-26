@@ -319,7 +319,7 @@ fn comment_anchors(
         while !remaining.trim_start().is_empty() {
             let text = remaining.trim_start();
             let whitespace = &remaining[..remaining.len() - text.len()];
-            let end = if text.starts_with("--") {
+            let end = if text.starts_with("--") || text.starts_with("#!") {
                 text.find('\n').unwrap_or(text.len())
             } else {
                 assert!(text.starts_with("{-"));

@@ -562,7 +562,12 @@ where
     ) -> GoResult<TypeId> {
         let type_id = crate::monotype::expand_synonyms(&mut self.context, type_id)?;
         let (bound, body) = self.context.types.peel_quantifiers(type_id);
+        let (constraints, body) = self.context.types.peel_constraints(body);
+        let peeled = !bound.is_empty() || !constraints.is_empty();
         names.extend(bound);
+        if peeled {
+            return self.strip_inner_quantifiers(body, names);
+        }
         let Some((argument, result)) = self.context.types.function_parts(body) else {
             return Ok(body);
         };

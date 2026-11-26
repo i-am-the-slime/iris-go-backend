@@ -5,12 +5,12 @@ status: 0
 --- stdout
 Build a Spago workspace or package and rebuild when inputs change.
 
-Usage: iris watch [FLAGS] [SUBCOMMAND]
+Usage: googoo watch [FLAGS] [SUBCOMMAND]
 
 Commands:
   mcp       Serve the queries and refactorings as MCP tools over standard input and output.
-  query     Ask a running `iris watch` about the project.
-  refactor  Run a type-aware refactoring against a running `iris watch`.
+  query     Ask a running `googoo watch` about the project.
+  refactor  Run a type-aware refactoring against a running `googoo watch`.
   help      Print this message or the help of the given subcommand(s)
 
 Flags:

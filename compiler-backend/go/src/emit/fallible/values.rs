@@ -16,6 +16,7 @@
 use rustc_hash::{FxHashMap, FxHashSet};
 
 use super::EitherShape;
+use super::variants::Variants;
 use crate::foreign::{ForeignPackages, ForeignShape};
 use crate::syntax::{GoDeclaration, GoExpression, GoStatement, GoType};
 
@@ -39,6 +40,7 @@ pub(super) fn lower_function_values(
     type_declarations: &mut [GoDeclaration],
     shapes: &FxHashMap<String, EitherShape>,
     foreign: &ForeignPackages,
+    variants: &Variants,
 ) -> Vec<(GoType, GoType)> {
     let candidates = candidates(declarations, type_declarations, shapes);
     if candidates.is_empty() {
@@ -56,7 +58,7 @@ pub(super) fn lower_function_values(
         }
     }
     loop {
-        let mut typer = Typer::new(&program, &lowered, foreign, false);
+        let mut typer = Typer::new(&program, &lowered, foreign, variants, shapes, false);
         for declaration in declarations.iter_mut() {
             typer.declaration(declaration);
         }
@@ -70,7 +72,7 @@ pub(super) fn lower_function_values(
     if !lowered.contains(&true) {
         return vec![];
     }
-    let mut typer = Typer::new(&program, &lowered, foreign, true);
+    let mut typer = Typer::new(&program, &lowered, foreign, variants, shapes, true);
     for declaration in declarations.iter_mut() {
         typer.declaration(declaration);
     }
@@ -487,6 +489,8 @@ struct Typer<'t> {
     program: &'t Program,
     lowered: &'t [bool],
     foreign: &'t ForeignPackages,
+    variants: &'t Variants,
+    shapes: &'t FxHashMap<String, EitherShape>,
     rewrite: bool,
     scopes: Vec<FxHashMap<String, Ty>>,
     removed: FxHashSet<usize>,
@@ -499,12 +503,16 @@ impl<'t> Typer<'t> {
         program: &'t Program,
         lowered: &'t [bool],
         foreign: &'t ForeignPackages,
+        variants: &'t Variants,
+        shapes: &'t FxHashMap<String, EitherShape>,
         rewrite: bool,
     ) -> Typer<'t> {
         Typer {
             program,
             lowered,
             foreign,
+            variants,
+            shapes,
             rewrite,
             scopes: vec![],
             removed: FxHashSet::default(),
@@ -794,7 +802,10 @@ impl<'t> Typer<'t> {
     fn discarded(&mut self, value: &mut GoExpression) {
         match value {
             GoExpression::Attributed { value, .. } => self.discarded(value),
-            GoExpression::Call { function, arguments } if is_foreign(function) => {
+            GoExpression::Call { function, arguments }
+                if is_foreign(function)
+                    && self.variants.either_built(function, arguments, self.shapes).is_none() =>
+            {
                 self.foreign_call(function, arguments);
             }
             value => {
@@ -933,6 +944,12 @@ impl<'t> Typer<'t> {
     }
 
     fn call(&mut self, function: &mut Box<GoExpression>, arguments: &mut Vec<GoExpression>) -> Ty {
+        if let Some(either) = self.variants.either_built(function, arguments, self.shapes) {
+            for argument in arguments.iter_mut() {
+                self.expression(argument, true);
+            }
+            return Ty::Known(GoType::Named(either));
+        }
         if is_foreign(function) {
             let (result, either) = self.foreign_call(function, arguments);
             if !either.is_empty() {

@@ -1,0 +1,106 @@
+---
+source: tests-integration/src/fixtures.rs
+---
+// Data/Show/show.go
+package show
+
+import "strconv"
+
+func Show(i int32) string {
+	return strconv.Itoa(int(i))
+}
+
+func AppendShowArrayArrayInt(buffer []byte, array [][]int32) []byte {
+	buffer = append(buffer, '[')
+	for index, element := range array {
+		if index > 0 {
+			buffer = append(buffer, ',')
+		}
+		buffer = AppendShowArrayInt(buffer, element)
+	}
+	buffer = append(buffer, ']')
+	return buffer
+}
+
+func AppendShowArrayInt(buffer []byte, array []int32) []byte {
+	buffer = append(buffer, '[')
+	for index, element := range array {
+		if index > 0 {
+			buffer = append(buffer, ',')
+		}
+		buffer = strconv.AppendInt(buffer, int64(element), 10)
+	}
+	buffer = append(buffer, ']')
+	return buffer
+}
+
+func ArrayInt(array []int32) string {
+	return string(AppendShowArrayInt(nil, array))
+}
+
+// Data/Tuple/tuple.go
+package tuple
+
+type Tuple struct {
+	First  []int32
+	Second [][]int32
+}
+
+// main.go
+package main
+
+import (
+	"fixture/Data/Show"
+	"fixture/Data/Tuple"
+	"github.com/i-am-the-slime/iris-go/array"
+	"github.com/i-am-the-slime/iris-go/console"
+	"slices"
+	"strings"
+)
+
+var main_ = initializeMain_()
+
+func initializeMain_() []string {
+	shared := array.Replicate(4, int32(0))
+	accumulator := tuple.Tuple{First: shared, Second: [][]int32{}}
+	accumulator.Second = slices.Clip(accumulator.Second)
+	for element := int32(0); element < 3; element++ {
+		accumulator = rememberedOwning(accumulator, element)
+	}
+	text := []byte("(Tuple ")
+	text = show.AppendShowArrayInt(text, accumulator.First)
+	text = append(text, ' ')
+	text = show.AppendShowArrayArrayInt(text, accumulator.Second)
+	text = append(text, ')')
+	return []string{string(text), show.ArrayInt(shared)}
+}
+
+func remembered(tuple2 tuple.Tuple, position int32) tuple.Tuple {
+	current := tuple2.First
+	var result []int32
+	if position >= 0 && position < int32(len(current)) {
+		updated := slices.Clone(current)
+		updated[position] = 7
+		result = updated
+	} else {
+		result = current
+	}
+	return tuple.Tuple{First: result, Second: array.Snoc(tuple2.Second, current)}
+}
+
+func rememberedOwning(tuple2 tuple.Tuple, position int32) tuple.Tuple {
+	current := tuple2.First
+	var result []int32
+	if position < int32(len(current)) {
+		updated := slices.Clone(current)
+		updated[position] = 7
+		result = updated
+	} else {
+		result = current
+	}
+	return tuple.Tuple{First: result, Second: array.Bounded(append(tuple2.Second, current))}
+}
+
+func main() {
+	console.Print("[" + strings.Join(main_, " ") + "]")
+}

@@ -1,6 +1,6 @@
 # The basics
 
-Each section shows a small PureScript program and the Go that `iris go` writes for it, trimmed to
+Each section shows a small PureScript program and the Go that `googoo go` writes for it, trimmed to
 the lines that matter.
 
 ## Constants are worked out before your program runs

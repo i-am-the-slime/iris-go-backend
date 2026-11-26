@@ -196,6 +196,9 @@ impl Lexer<'_> {
             match self.first() {
                 i if i.is_whitespace() => self.take_annotation_whitespace(),
                 '-' if self.second() == '-' => self.take_annotation_line_comment(),
+                '#' if self.second() == '!' && self.consumed() == 0 => {
+                    self.take_annotation_line_comment()
+                }
                 '{' if self.second() == '-' => self.take_annotation_block_comment(),
                 _ => break,
             }

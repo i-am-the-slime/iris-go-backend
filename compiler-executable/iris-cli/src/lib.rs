@@ -19,14 +19,18 @@ pub fn run() -> i32 {
     match program.command {
         cli::Command::Format(options) => format::run(options),
         cli::Command::Go(options) => match options.into_target() {
-            cli::GoTarget::Sources(config) => match iris_go::run(config) {
+            Err(error) => {
+                eprintln!("{error}");
+                2
+            }
+            Ok(cli::GoTarget::Sources(config)) => match iris_go::run(config) {
                 Ok(()) => 0,
                 Err(error) => {
                     eprintln!("{error}");
                     1
                 }
             },
-            cli::GoTarget::Executable(config) => match iris_go::build_program(config) {
+            Ok(cli::GoTarget::Executable(config)) => match iris_go::build_program(config) {
                 Ok(program) => {
                     println!("{}", program.executable.display());
                     0
@@ -40,7 +44,7 @@ pub fn run() -> i32 {
         cli::Command::New(options) => match iris_package::create(options.into_config()) {
             Ok(package) => {
                 println!(
-                    "Created package `{}` with package set {}.\nRun `iris build` to get started.",
+                    "Created package `{}` with package set {}.\nRun `googoo build` to get started.",
                     package.name, package.package_set
                 );
                 0
@@ -138,14 +142,18 @@ pub fn run() -> i32 {
             }
         }
         cli::Command::Run { options } => match options.into_run() {
-            cli::Run::Node(config) => match iris_build::run(config) {
+            Err(error) => {
+                eprintln!("{error}");
+                2
+            }
+            Ok(cli::Run::Node(config)) => match iris_build::run(config) {
                 Ok(()) => 0,
                 Err(error) => {
                     eprintln!("{error}");
                     error.exit_code()
                 }
             },
-            cli::Run::Go { config, arguments } => match iris_go::run_program(config, arguments) {
+            Ok(cli::Run::Go { config, arguments }) => match iris_go::run_program(config, arguments) {
                 Ok(status) => status,
                 Err(error) => {
                     eprintln!("{error}");
@@ -198,7 +206,7 @@ fn self_update(options: cli::UpdateOptions) -> i32 {
                 "Replaced Iris {VERSION} with Iris {release} at {}.",
                 installed.executable.display()
             );
-            println!("Restart `iris watch` and editor language servers to use Iris {release}.");
+            println!("Restart `googoo watch` and editor language servers to use Iris {release}.");
             if !installed.has_self_update {
                 eprintln!(
                     "warning: Iris {release} cannot update itself; run the installer to update it."

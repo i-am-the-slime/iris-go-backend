@@ -5,35 +5,11 @@ source: tests-integration/src/fixtures.rs
 package main
 
 import (
-	"fixture/shared"
 	"github.com/i-am-the-slime/iris-go/console"
 	"github.com/i-am-the-slime/iris-go/direct"
 	"strconv"
 	"strings"
 )
-
-var main_ = initializeMain_()
-
-func initializeMain_() []string {
-	return []string{shapeOf([]int32{}), shapeOf([]int32{1, 2}), shapeOf([]int32{1, 2, 3, 4, 5})}
-}
-
-func shapeOf(xs []int32) string {
-	append_ := direct.Appender[int32]()
-	accumulator := shared.ShapeArrayInt{Shape: "pure", Value: []int32{}}
-	for _, element := range xs {
-		shapeFnIntArrayInt := shared.ShapeFnIntArrayInt{Shape: accumulator.Shape, Value: append_(accumulator.Value)}
-		accumulator = shared.ShapeArrayInt{Shape: "(" + shapeFnIntArrayInt.Shape + " " + strconv.Itoa(int(element)) + ")", Value: shapeFnIntArrayInt.Value(element)}
-	}
-	return accumulator.Shape
-}
-
-func main() {
-	console.Print("[" + strings.Join(main_, " ") + "]")
-}
-
-// shared/shared.go
-package shared
 
 type ShapeArrayInt struct {
 	Shape string
@@ -43,4 +19,24 @@ type ShapeArrayInt struct {
 type ShapeFnIntArrayInt struct {
 	Shape string
 	Value func(int32) []int32
+}
+
+var main_ = initializeMain_()
+
+func initializeMain_() []string {
+	return []string{shapeOf([]int32{}), shapeOf([]int32{1, 2}), shapeOf([]int32{1, 2, 3, 4, 5})}
+}
+
+func shapeOf(xs []int32) string {
+	append_ := direct.Appender[int32]()
+	accumulator := ShapeArrayInt{Shape: "pure", Value: []int32{}}
+	for _, element := range xs {
+		shapeFnIntArrayInt := ShapeFnIntArrayInt{Shape: accumulator.Shape, Value: append_(accumulator.Value)}
+		accumulator = ShapeArrayInt{Shape: "(" + shapeFnIntArrayInt.Shape + " " + strconv.Itoa(int(element)) + ")", Value: shapeFnIntArrayInt.Value(element)}
+	}
+	return accumulator.Shape
+}
+
+func main() {
+	console.Print("[" + strings.Join(main_, " ") + "]")
 }

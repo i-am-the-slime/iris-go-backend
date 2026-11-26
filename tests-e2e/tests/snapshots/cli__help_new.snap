@@ -5,7 +5,7 @@ status: 0
 --- stdout
 Create a Spago project in the current directory.
 
-Usage: iris new [--name <NAME>]
+Usage: googoo new [--name <NAME>]
 
 Flags:
       --name <NAME>  Package name. Defaults to the current directory name.

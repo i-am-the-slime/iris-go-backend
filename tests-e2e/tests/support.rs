@@ -124,7 +124,7 @@ impl TestWorkspace {
     pub fn normalized_metadata(&self) -> String {
         let version = self.command(&["--version"]);
         let version = String::from_utf8_lossy(&version.stdout);
-        let version = version.trim_end().strip_prefix("iris ").unwrap();
+        let version = version.trim_end().strip_prefix("googoo ").unwrap();
         let canonical = dunce::canonicalize(self.path()).unwrap();
 
         let mut summary = String::new();

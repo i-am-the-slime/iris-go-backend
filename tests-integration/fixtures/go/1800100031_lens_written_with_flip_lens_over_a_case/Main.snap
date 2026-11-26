@@ -1,0 +1,112 @@
+---
+source: tests-integration/src/fixtures.rs
+---
+// main.go
+package main
+
+import (
+	"github.com/i-am-the-slime/iris-go/console"
+	"strconv"
+	"strings"
+)
+
+type ValidatedInt struct {
+	Field0 int32
+	Tag    uint8
+}
+
+const (
+	ValidatedIntFresh = iota
+	ValidatedIntModified
+)
+
+type ValidatedString struct {
+	Field0 string
+	Tag    uint8
+}
+
+const (
+	ValidatedStringFresh = iota
+	ValidatedStringModified
+)
+
+func ModifiedValidatedInt(field0 int32) ValidatedInt {
+	return ValidatedInt{Tag: ValidatedIntModified, Field0: field0}
+}
+
+func FreshValidatedInt(field0 int32) ValidatedInt {
+	return ValidatedInt{Tag: ValidatedIntFresh, Field0: field0}
+}
+
+func FreshValidatedString(field0 string) ValidatedString {
+	return ValidatedString{Tag: ValidatedStringFresh, Field0: field0}
+}
+
+func ModifiedValidatedString(field0 string) ValidatedString {
+	return ValidatedString{Tag: ValidatedStringModified, Field0: field0}
+}
+
+var main_ = initializeMain_()
+
+func initializeMain_() []string {
+	mapped := make([]string, 4)
+	for index := range 4 {
+		n := 1 + int32(index)
+		var x ValidatedInt
+		if n > 2 {
+			x = ModifiedValidatedInt(n)
+		} else {
+			x = FreshValidatedInt(n)
+		}
+		var result int32
+		switch x.Tag {
+		case ValidatedIntFresh:
+			result = x.Field0
+		default: // ValidatedIntModified
+			result = x.Field0
+		}
+		x2 := result * 10
+		var touched ValidatedInt
+		switch x.Tag {
+		case ValidatedIntFresh:
+			touched = FreshValidatedInt(x2)
+		default: // ValidatedIntModified
+			touched = ModifiedValidatedInt(x2)
+		}
+		b := strconv.Itoa(int(n))
+		var renamed ValidatedString
+		switch touched.Tag {
+		case ValidatedIntFresh:
+			renamed = FreshValidatedString(b)
+		default: // ValidatedIntModified
+			renamed = ModifiedValidatedString(b)
+		}
+		var result2 int32
+		switch touched.Tag {
+		case ValidatedIntFresh:
+			result2 = touched.Field0
+		default: // ValidatedIntModified
+			result2 = touched.Field0
+		}
+		var result3 string
+		switch renamed.Tag {
+		case ValidatedStringFresh:
+			result3 = renamed.Field0
+		default: // ValidatedStringModified
+			result3 = renamed.Field0
+		}
+		var result4 string
+		switch renamed.Tag {
+		case ValidatedStringFresh:
+			result4 = "false"
+		default: // ValidatedStringModified
+			result4 = "true"
+		}
+		mapped[index] = strconv.Itoa(int(result2)) + " " + result3 + " " + result4
+	}
+	return mapped
+}
+
+func main() {
+	console.Print("[" + strings.Join(main_, " ") + "]")
+}

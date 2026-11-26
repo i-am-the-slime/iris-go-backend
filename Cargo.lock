@@ -1719,7 +1719,7 @@ dependencies = [
 
 [[package]]
 name = "iris-cli"
-version = "0.1.18-go.2"
+version = "0.1.18-go.3"
 dependencies = [
  "directories",
  "formatting",
@@ -1796,6 +1796,7 @@ dependencies = [
  "dunce",
  "go",
  "iris-build",
+ "semver",
  "sha2",
  "tempfile",
 ]

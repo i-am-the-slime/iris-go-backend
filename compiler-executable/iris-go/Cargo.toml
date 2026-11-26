@@ -9,5 +9,6 @@ description = "Compiles a Spago workspace from an entry point to a single Go pro
 dunce = "1.0.5"
 go = { version = "0.1.0", path = "../../compiler-backend/go" }
 iris-build = { version = "0.1.0", path = "../iris-build" }
+semver = "1"
 sha2 = "0.11"
 tempfile = "3.27.0"

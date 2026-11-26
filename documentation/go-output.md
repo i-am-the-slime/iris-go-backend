@@ -12,7 +12,7 @@ To see what the Go for your PureScript looks like, read
 ## Running a program
 
 ```bash
-iris run --go -- first second
+googoo run --go -- first second
 ```
 
 That compiles your package to Go, builds it, and runs it with `first second` as its arguments. Its
@@ -24,21 +24,60 @@ gets you one.
   Pick another with `--main Some.Module` or `--entry Some.Module.value`.
 - **An entry that isn't an `Effect`**: an `Int`, `Number`, `Boolean`, `Char` or `String`, or an
   array of them, gets printed, arrays as `[1 2 3]`. Anything else (a record, a `Maybe`, a
-  function) is computed but not printed, and `iris go` says so.
-- **Tests**: there's no `iris test --go` yet. `iris run --go --main Test.Main` runs your test suite
+  function) is computed but not printed, and `googoo go` says so.
+- **Tests**: there's no `googoo test --go` yet. `googoo run --go --main Test.Main` runs your test suite
   instead, and a failing test exits with a non-zero status.
 - **Arguments**: whatever follows `--`, or your `run.execArgs` when nothing does.
 - **Packages**: `-p my-app` in a workspace with several.
 - **Fast reruns**: the first run downloads the Go runtime. After that, if your program compiles to
   the same Go, it starts right away without building again.
-- **Just the executable**: `iris go` builds it and prints its path. It lives under
+- **Just the executable**: `googoo go` builds it and prints its path. It lives under
   `.spago/go/<package>/bin/`.
-- **Hacking on the runtime**: `IRIS_GO=~/code/iris-go iris run --go` builds against your checkout
+- **Hacking on the runtime**: `IRIS_GO=~/code/iris-go googoo run --go` builds against your checkout
   of [iris-go](https://github.com/i-am-the-slime/iris-go) instead of the release.
 
-Want the Go source in a directory of your own instead? `iris go out` writes it to `out/`. If
+Want the Go source in a directory of your own instead? `googoo go out` writes it to `out/`. If
 `out/` has no `go.mod` yet, you get one naming the module `iris.local/<package>`; change the
-`module` line whenever you like, and the next `iris go out` uses your name.
+`module` line whenever you like, and the next `googoo go out` uses your name.
+
+### Profile-guided optimisation
+
+```bash
+iris run --go --profile -- 4200000
+```
+
+That runs your program once while recording where it spends its time, keeps the profile in
+`.spago/go/<package>/default.pgo`, and builds it again with Go's
+[profile-guided optimisation](https://go.dev/doc/pgo). Every later `iris run --go` and `iris go`
+builds with that profile, until you record a new one. `iris go --profile -- 4200000` does the same
+without running the program a second time, and runs it with your `run.execArgs` when nothing
+follows `--`.
+
+- **Your own profile**: `--pgo cpu.pprof` builds with a profile you recorded yourself, say with
+  `runtime/pprof` in a server.
+- **Without it**: `--pgo off` leaves the recorded profile out.
+- **Profile a typical run**: Go optimises for what the profile saw, so run it on input like the real
+  thing. A run that ends in `os.Exit`, such as `Node.Process.exit`, leaves no profile.
+- **What to expect**: on our benchmarks, half of the programs that build and rebuild trees got
+  9 to 50 % faster, and the rest, loops over arrays among them, a few percent at most. On macOS a
+  CPU profile catches fewer of your own functions than on Linux, so a profile recorded on Linux can
+  help more.
+
+### Garbage collector settings
+
+A Go build of a PureScript program allocates more than handwritten Go does, so the garbage collector
+runs often. Go's defaults favour memory over speed: `GOGC=100` collects whenever the heap has
+doubled. Setting it higher trades memory for speed:
+
+```bash
+GOGC=400 iris run --go
+```
+
+On the benchmarks we measured, `GOGC=400` made allocation-heavy programs up to 30 % faster, and
+peak memory grew by up to 1.6 times. A program with a large heap that it keeps around, such as a
+server, can grow up to 2.5 times bigger, which is why Iris leaves `GOGC` alone. To bound it, set
+`GOMEMLIMIT` as well, say `GOGC=400 GOMEMLIMIT=2GiB`: Go then collects more often as the heap gets
+close to 2 GiB.
 
 ## Stack traces point at your PureScript
 
@@ -54,7 +93,7 @@ main :: Effect Int
 main = exitWith (at [ 1, 2 ] 2)
 ```
 
-`iris run --go` crashes with:
+`googoo run --go` crashes with:
 
 ```
 panic: runtime error: index out of range [2] with length 2 [recovered, repanicked]
@@ -69,11 +108,11 @@ main.main()
 
 When a Go build crashes, the trace names the lines of your `.purs` files, library code under
 `.spago` included, and so do `pprof` profiles and Delve's breakpoints (for Delve, `go build`
-the output of `iris go out` yourself: `iris run --go` builds without debug info). That's the
+the output of `googoo go out` yourself: `googoo run --go` builds without debug info). That's the
 `//line` comments in the generated Go. A function Iris inlines shows up as the line that calls
 it.
 
-They make the Go a bit noisier to read. `iris go --no-line-directives out` leaves them out.
+They make the Go a bit noisier to read. `googoo go --no-line-directives out` leaves them out.
 
 ## What stays the same
 
@@ -162,7 +201,7 @@ Whether Go fuses depends on the CPU it compiles for: it does on arm64, and on am
 
 ### Sums over vectors
 
-On arm64 (and wasm), with `GOEXPERIMENT=simd`, which `iris run --go` sets for you, simple number
+On arm64 (and wasm), with `GOEXPERIMENT=simd`, which `googoo run --go` sets for you, simple number
 crunching over `Array Number` and `Array Int` runs on SIMD vectors: `foldl (+) 0.0 xs`, `sum`,
 `foldl (*)`, `foldl max`, `map (_ * k)`, `zipWith (\x y -> a * x + y)`, `sum (zipWith (*) xs ys)`,
 clamping with `min`, `max` and `if`, and so on. That's several times faster than a plain Go loop.

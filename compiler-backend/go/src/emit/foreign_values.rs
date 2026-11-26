@@ -196,23 +196,34 @@ where
         elements: GoExpression,
         index: GoExpression,
         value: GoExpression,
-        copied: String,
+        updated: Updated,
         out: &mut Vec<GoStatement>,
     ) -> GoExpression {
         let index = self.hoist(index, "index", out);
         let value = self.hoist(value, "value", out);
+        let name = self.temporary("updated");
+        let target = identifier_expression(&name);
+        out.push(GoStatement::Define { names: vec![name], values: vec![elements] });
+        if let Updated::CopiedOnce(copied) = updated {
+            out.push(self.copy_once(&target, &copied));
+            self.copied_flags.insert(copied);
+        }
+        let element =
+            GoExpression::Index { value: Box::new(target.clone()), index: Box::new(index) };
+        out.push(GoStatement::Assign { targets: vec![element], values: vec![value] });
+        target
+    }
+
+    fn copy_once(&mut self, target: &GoExpression, copied: &str) -> GoStatement {
         self.imports.insert("slices".into());
         let clone = GoExpression::Qualified { package: "slices".into(), name: "Clone".into() };
-        let name = self.temporary("updated");
-        let updated = identifier_expression(&name);
-        out.push(GoStatement::Define { names: vec![name], values: vec![elements] });
-        let flag = identifier_expression(&copied);
-        out.push(GoStatement::If {
+        let flag = identifier_expression(copied);
+        GoStatement::If {
             condition: GoExpression::Unary { operator: "!", operand: Box::new(flag.clone()) },
             then: vec![
                 GoStatement::Assign {
-                    targets: vec![updated.clone()],
-                    values: vec![call(clone, vec![updated.clone()])],
+                    targets: vec![target.clone()],
+                    values: vec![call(clone, vec![target.clone()])],
                 },
                 GoStatement::Assign {
                     targets: vec![flag],
@@ -220,12 +231,7 @@ where
                 },
             ],
             otherwise: vec![],
-        });
-        let element =
-            GoExpression::Index { value: Box::new(updated.clone()), index: Box::new(index) };
-        out.push(GoStatement::Assign { targets: vec![element], values: vec![value] });
-        self.copied_flags.insert(copied);
-        updated
+        }
     }
 
     pub(super) fn own_updates(
@@ -233,14 +239,7 @@ where
         body: &Expression,
         owned: &[Vec<*const Expression>],
     ) -> Vec<String> {
-        let mut written = rustc_hash::FxHashSet::default();
-        crate::monomorphic::traversal::visit(body, &mut |expression| {
-            if let ExpressionKind::Foreign { foreign: Foreign::ArrayUpdated, arguments } =
-                &expression.kind
-            {
-                written.insert(std::ptr::from_ref(&arguments[2]));
-            }
-        });
+        let written = updated_arrays(body);
         let mut flags = vec![];
         for nodes in owned {
             let updates: Vec<_> = nodes.iter().filter(|node| written.contains(*node)).collect();
@@ -249,11 +248,18 @@ where
             }
             let flag = self.temporary("copied");
             for node in updates {
-                self.owned_updates.insert(*node, flag.clone());
+                self.owned_updates.insert(*node, Updated::CopiedOnce(flag.clone()));
             }
             flags.push(flag);
         }
         flags
+    }
+
+    pub(super) fn own_exclusive_updates(&mut self, body: &Expression, owned: &[*const Expression]) {
+        let written = updated_arrays(body);
+        for node in owned.iter().filter(|node| written.contains(*node)) {
+            self.owned_updates.insert(*node, Updated::Exclusive);
+        }
     }
 
     pub(super) fn release_updates(
@@ -355,9 +361,9 @@ where
             let index = self.value(&arguments[0], out)?;
             let value = self.value(&arguments[1], out)?;
             let elements = self.value(&arguments[2], out)?;
-            if let Some(copied) = self.owned_updates.get(&std::ptr::from_ref(&arguments[2])) {
-                let copied = copied.clone();
-                return Ok(self.updated_in_place(elements, index, value, copied, out));
+            if let Some(updated) = self.owned_updates.get(&std::ptr::from_ref(&arguments[2])) {
+                let updated = updated.clone();
+                return Ok(self.updated_in_place(elements, index, value, updated, out));
             }
             return Ok(self.updated_array(elements, index, value, out));
         }
@@ -563,7 +569,14 @@ where
             if boundary.found
                 && let Some(constructors) = boundary.maybe
             {
-                return self.found_maybe(result, arguments, constructors, monotype, out);
+                return self.found_maybe(
+                    result,
+                    arguments,
+                    constructors,
+                    boundary.record_result,
+                    monotype,
+                    out,
+                );
             }
             if boundary.record_result {
                 return self.record_from_results(result, monotype, out);
@@ -653,4 +666,22 @@ where
         out.push(GoStatement::Switch { value: Some(label), cases, default: None });
         Ok(identifier_expression(&chosen))
     }
+}
+
+#[derive(Clone)]
+pub(super) enum Updated {
+    CopiedOnce(String),
+    Exclusive,
+}
+
+pub(super) fn updated_arrays(body: &Expression) -> rustc_hash::FxHashSet<*const Expression> {
+    let mut written = rustc_hash::FxHashSet::default();
+    crate::monomorphic::traversal::visit(body, &mut |expression| {
+        if let ExpressionKind::Foreign { foreign: Foreign::ArrayUpdated, arguments } =
+            &expression.kind
+        {
+            written.insert(std::ptr::from_ref(&arguments[2]));
+        }
+    });
+    written
 }

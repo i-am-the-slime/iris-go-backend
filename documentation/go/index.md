@@ -22,11 +22,11 @@ out, nothing is rewritten.
 ```bash
 mkdir out
 printf 'module example.com/app\n\ngo 1.27.0\n' > out/go.mod
-iris go --entry Main.main out
+googoo go --entry Main.main out
 ```
 
 That writes your program to `out/main.go`, with packages for your modules' foreign code and for the
-types several modules share. To build and run your program in one step, use `iris run --go`.
+types several modules share. To build and run your program in one step, use `googoo run --go`.
 
 How a Go build behaves differently from a JavaScript one, and which programs it can't compile yet,
 is in [Go output: differences from the JavaScript backend](../go-output.md).

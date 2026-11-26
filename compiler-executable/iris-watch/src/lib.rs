@@ -84,7 +84,7 @@ async fn serve(
     })?;
 
     if !config.quiet {
-        println!("Answering queries: see `iris watch query --help` or `iris skills get watch`");
+        println!("Answering queries: see `googoo watch query --help` or `googoo skills get watch`");
     }
 
     let (requests, receiver) = mpsc::unbounded_channel();

@@ -7,6 +7,7 @@ package main
 import (
 	keeper "fixture/Keeper_ffi"
 	"fixture/shared"
+	"github.com/i-am-the-slime/iris-go/alloc"
 	"github.com/i-am-the-slime/iris-go/console"
 	"github.com/i-am-the-slime/iris-go/prim"
 	"strings"
@@ -97,10 +98,15 @@ func total(value *Tree) int32 {
 }
 
 func sample(depth int32) *Tree {
+	var cells alloc.Cells[Tree]
+	return sampleChunked(depth, &cells)
+}
+
+func sampleChunked(depth int32, cells *alloc.Cells[Tree]) *Tree {
 	if depth == 0 {
 		return sharedTreeLeaf
 	}
-	return Node(sample(depth-1), depth, sample(depth-1))
+	return cells.New(Tree{Node0: sampleChunked(depth-1, cells), Node1: depth, Node2: sampleChunked(depth-1, cells)})
 }
 
 func stashedAfter(countdown int32, tree *Tree) int32 {

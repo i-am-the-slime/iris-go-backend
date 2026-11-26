@@ -7,7 +7,7 @@ use support::TestWorkspace;
 
 fn snapshot_output(name: &str, workspace: &TestWorkspace, output: &Output) {
     let version =
-        (r"(?m)^iris \d+\.\d+\.\d+(?:-go\.\d+)?(?:-dev\.[0-9a-f]{7,64})?$", "iris [version]");
+        (r"(?m)^googoo \d+\.\d+\.\d+(?:-go\.\d+)?(?:-dev\.[0-9a-f]{7,64})?$", "googoo [version]");
     insta::with_settings!({omit_expression => true, filters => vec![version]}, {
         insta::assert_snapshot!(name, workspace.report(output));
     });

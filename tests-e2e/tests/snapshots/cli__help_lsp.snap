@@ -5,7 +5,7 @@ status: 0
 --- stdout
 Run the language server over standard input and output.
 
-Usage: iris lsp [FLAGS]
+Usage: googoo lsp [FLAGS]
 
 Flags:
       --stdio                 Use standard input and output for LSP transport.

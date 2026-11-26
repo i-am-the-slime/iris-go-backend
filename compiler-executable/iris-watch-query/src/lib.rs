@@ -350,7 +350,7 @@ pub fn render(query: &Query, value: &Value) -> Result<String, serde_json::Error>
             match build {
                 BuildState::Succeeded => "Build succeeded.".to_string(),
                 BuildState::Diagnostics => {
-                    "Build has diagnostics; see `iris watch query diagnostics`.".to_string()
+                    "Build has diagnostics; see `googoo watch query diagnostics`.".to_string()
                 }
                 BuildState::NoInputs => "No input files.".to_string(),
                 BuildState::Failed { message } => format!("Build failed: {message}"),

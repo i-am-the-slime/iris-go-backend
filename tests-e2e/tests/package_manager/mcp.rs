@@ -324,7 +324,7 @@ fn finds_a_watcher_that_starts_after_the_mcp_server() {
     let missing = client.call("wait", json!({}));
     assert_eq!(missing["isError"], true);
     let message = missing["content"][0]["text"].as_str().unwrap();
-    insta::assert_snapshot!(workspace.normalize_output(message.as_bytes()), @"no `iris watch` is running for [WORKSPACE]/output; start one with `iris watch`, or retry if it is starting");
+    insta::assert_snapshot!(workspace.normalize_output(message.as_bytes()), @"no `googoo watch` is running for [WORKSPACE]/output; start one with `googoo watch`, or retry if it is starting");
 
     let mut watch = WatchProcess::new(workspace.spawn(&["watch"]));
     watch.wait_for("initial compilation", |stdout, _| stdout.contains("Build succeeded"));
@@ -466,5 +466,5 @@ fn finds_a_watcher_with_a_custom_output_directory() {
     let missing = client.call("wait", json!({}));
     assert_eq!(missing["isError"], true, "{missing}");
     let message = missing["content"][0]["text"].as_str().unwrap();
-    insta::assert_snapshot!(workspace.normalize_output(message.as_bytes()), @"no `iris watch` is running for [WORKSPACE]/output; start one with `iris watch`, or retry if it is starting");
+    insta::assert_snapshot!(workspace.normalize_output(message.as_bytes()), @"no `googoo watch` is running for [WORKSPACE]/output; start one with `googoo watch`, or retry if it is starting");
 }

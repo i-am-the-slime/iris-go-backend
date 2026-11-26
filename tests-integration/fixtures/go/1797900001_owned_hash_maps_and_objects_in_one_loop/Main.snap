@@ -1,24 +1,6 @@
 ---
 source: tests-integration/src/fixtures.rs
 ---
-// Data/Eq/eq.go
-package eq
-
-import "fixture/shared"
-
-func Eq(ra shared.Point, rb shared.Point) bool {
-	return ra == rb
-}
-
-// Data/Hashable/hashable.go
-package hashable
-
-import "fixture/shared"
-
-func Hash(record shared.Point) int32 {
-	return record.X*31 + record.Y*31
-}
-
 // Data/Maybe/maybe.go
 package maybe
 
@@ -85,8 +67,6 @@ func ArrayTupleStringInt(array []TupleString) string {
 package main
 
 import (
-	"fixture/Data/Eq"
-	"fixture/Data/Hashable"
 	"fixture/Data/Maybe"
 	"fixture/Data/Semiring"
 	"fixture/Data/Tuple"
@@ -97,6 +77,11 @@ import (
 	"strconv"
 	"strings"
 )
+
+type Point struct {
+	X int32
+	Y int32
+}
 
 var main_ = initializeMain_()
 
@@ -134,10 +119,10 @@ func initializeMain_() []string {
 		result2 = "Nothing"
 	}
 	array2 := []int32{1, 2, 3, 4}
-	accumulator2 := hashmap.Empty[shared.Point, int32]()
+	accumulator2 := hashmap.Empty[Point, int32]()
 	for _, n := range array2 {
-		k := shared.Point{X: n - 1, Y: 1 - n}
-		accumulator2 = hashmap.Insert(eq.Eq, hashable.Hash, shared.Point{X: n, Y: -n}, n, hashmap.Delete(eq.Eq, k, k.X*31+k.Y*31, accumulator2))
+		k := Point{X: n - 1, Y: 1 - n}
+		accumulator2 = hashmap.Insert(eq, hash, Point{X: n, Y: -n}, n, hashmap.Delete(eq, k, k.X*31+k.Y*31, accumulator2))
 	}
 	array3 := []int32{1, 2, 3}
 	accumulator3 := tuple.TupleHashMapIntInt{First: hashmap.NativeEmpty[int32, int32](), Second: 0}
@@ -148,6 +133,14 @@ func initializeMain_() []string {
 	return []string{tuple.ArrayTupleStringInt(hashmap.NativeToArrayBy(func(s string, i int32) tuple.TupleString {
 		return tuple.TupleString{First: s, Second: i}
 	}, accumulator.ByWord)), strconv.Itoa(int(object.Size(accumulator.ByFirst))), result2, strconv.Itoa(int(hashmap.Size(accumulator2))), "(Tuple " + strconv.Itoa(int(hashmap.NativeSize(accumulator3.First))) + " " + strconv.Itoa(int(accumulator3.Second)) + ")"}
+}
+
+func eq(ra Point, rb Point) bool {
+	return ra == rb
+}
+
+func hash(record Point) int32 {
+	return record.X*31 + record.Y*31
 }
 
 func main() {
@@ -168,9 +161,4 @@ type Tally struct {
 }
 	ByWord  hashmap.Native[string, int32]
 	Lengths hashmap.Native[int32, int32]
-}
-
-type Point struct {
-	X int32
-	Y int32
 }

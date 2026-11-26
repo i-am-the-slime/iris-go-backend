@@ -122,8 +122,15 @@ where
                 if boundary.found
                     && let Some(constructors) = boundary.maybe
                 {
-                    let answered =
-                        self.found_maybe(performed, arguments, constructors, result, out)?;
+                    let record_result = boundary.record_result;
+                    let answered = self.found_maybe(
+                        performed,
+                        arguments,
+                        constructors,
+                        record_result,
+                        result,
+                        out,
+                    )?;
                     return self.deliver(answered, result, sink, out);
                 }
                 if boundary.record_result {

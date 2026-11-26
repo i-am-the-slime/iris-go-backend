@@ -1,0 +1,80 @@
+---
+source: tests-integration/src/fixtures.rs
+---
+// Data/Show/show.go
+package show
+
+import "strconv"
+
+func Show(i int32) string {
+	return strconv.Itoa(int(i))
+}
+
+func AppendShowArrayInt(buffer []byte, array []int32) []byte {
+	buffer = append(buffer, '[')
+	for index, element := range array {
+		if index > 0 {
+			buffer = append(buffer, ',')
+		}
+		buffer = strconv.AppendInt(buffer, int64(element), 10)
+	}
+	buffer = append(buffer, ']')
+	return buffer
+}
+
+func ArrayInt(array []int32) string {
+	return string(AppendShowArrayInt(nil, array))
+}
+
+// main.go
+package main
+
+import (
+	"fixture/Data/Show"
+	"github.com/i-am-the-slime/iris-go/array"
+	"github.com/i-am-the-slime/iris-go/console"
+	"slices"
+	"strings"
+)
+
+var main_ = initializeMain_()
+
+func initializeMain_() []string {
+	shared := array.Replicate(5, int32(1))
+	accumulator := shared
+	accumulator = slices.Clone(accumulator)
+	for index := 3; index >= 0; index-- {
+		element := int32(index)
+		accumulator = squaredIntoOwning(element, accumulator)
+	}
+	accumulator2 := []int32{}
+	accumulator2 = slices.Clone(accumulator2)
+	for index := 3; index >= 0; index-- {
+		element := int32(index)
+		accumulator2 = squaredIntoOwning(element, accumulator2)
+	}
+	return []string{show.ArrayInt(accumulator), show.ArrayInt(accumulator2), show.ArrayInt(shared)}
+}
+
+func squaredInto(position int32, current []int32) []int32 {
+	if position >= 0 && position < int32(len(current)) {
+		updated := slices.Clone(current)
+		updated[position] = position * position
+		return updated
+	}
+	return current
+}
+
+func squaredIntoOwning(position int32, current []int32) []int32 {
+	if position < int32(len(current)) {
+		value := position * position
+		updated := current
+		updated[position] = value
+		return updated
+	}
+	return current
+}
+
+func main() {
+	console.Print("[" + strings.Join(main_, " ") + "]")
+}

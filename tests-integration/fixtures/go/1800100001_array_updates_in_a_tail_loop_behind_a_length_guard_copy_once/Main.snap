@@ -1,0 +1,68 @@
+---
+source: tests-integration/src/fixtures.rs
+---
+// Data/Show/show.go
+package show
+
+import "strconv"
+
+func Show(i int32) string {
+	return strconv.Itoa(int(i))
+}
+
+func AppendShowArrayInt(buffer []byte, array []int32) []byte {
+	buffer = append(buffer, '[')
+	for index, element := range array {
+		if index > 0 {
+			buffer = append(buffer, ',')
+		}
+		buffer = strconv.AppendInt(buffer, int64(element), 10)
+	}
+	buffer = append(buffer, ']')
+	return buffer
+}
+
+func ArrayInt(array []int32) string {
+	return string(AppendShowArrayInt(nil, array))
+}
+
+// main.go
+package main
+
+import (
+	"fixture/Data/Show"
+	"github.com/i-am-the-slime/iris-go/array"
+	"github.com/i-am-the-slime/iris-go/console"
+	"slices"
+	"strings"
+)
+
+var main_ = initializeMain_()
+
+func initializeMain_() []string {
+	shared := array.Replicate(6, int32(0))
+	return []string{show.ArrayInt(countedUp(0, shared)), show.ArrayInt(countedUp(3, shared)), show.ArrayInt(shared)}
+}
+
+func countedUp(position int32, values []int32) []int32 {
+	values = slices.Clip(values)
+	copied := false
+	for {
+		if position >= int32(len(values)) {
+			return values
+		}
+		var result []int32
+		updated := values
+		if !copied {
+			updated = slices.Clone(updated)
+			copied = true
+		}
+		updated[position] = position
+		result = updated
+		position, values = position+1, result
+	}
+}
+
+func main() {
+	console.Print("[" + strings.Join(main_, " ") + "]")
+}

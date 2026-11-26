@@ -13,13 +13,13 @@ use std::{env, fs};
 use iris_build::Workspace;
 use sha2::{Digest, Sha256};
 
-use crate::GoConfig;
+use crate::{GoConfig, requirements};
 
 /// The release of github.com/i-am-the-slime/iris-go the generated Go is written against.
-pub const RUNTIME_VERSION: &str = "v0.6.0";
+pub const RUNTIME_VERSION: &str = "v0.7.0";
 
 /// The Go module path of the runtime.
-const RUNTIME_MODULE: &str = "github.com/i-am-the-slime/iris-go";
+pub(crate) const RUNTIME_MODULE: &str = "github.com/i-am-the-slime/iris-go";
 
 /// Points the runtime at a local checkout instead of the published release.
 const RUNTIME_CHECKOUT_VARIABLE: &str = "IRIS_GO";
@@ -30,6 +30,17 @@ const MINIMUM_GO: &str = "1.27";
 /// The experiment the runtime's string scanning uses when the environment names none.
 const DEFAULT_EXPERIMENT: &str = "simd";
 
+/// The name of the CPU profile `--profile` keeps next to the generated module.
+const RECORDED_PROFILE: &str = "default.pgo";
+
+/// The CPU profile `go build` optimises the executable for.
+pub enum Pgo {
+    /// The profile the last `--profile` run recorded, when there is one.
+    Recorded,
+    Off,
+    File(PathBuf),
+}
+
 pub struct ProgramConfig {
     pub package: Option<String>,
     /// Qualified entry point; when absent, `main` in the package's configured `run.main` module,
@@ -37,12 +48,20 @@ pub struct ProgramConfig {
     pub entry: Option<String>,
     pub quiet: bool,
     pub version: String,
+    pub pgo: Pgo,
+    /// Runs the program once with these arguments, or with `run.execArgs` when there are none,
+    /// while recording a CPU profile, then builds it again optimised for that profile.
+    pub profile: Option<Vec<String>>,
 }
 
 /// Compiles the package's entry point and runs the executable with `arguments`, or with the
 /// package's configured `run.execArgs` when there are none. Returns the program's exit status.
+/// With `profile`, the profiled run is the run.
 pub fn run_program(config: ProgramConfig, arguments: Vec<String>) -> Result<i32, String> {
     let program = build_program(config)?;
+    if let Some(status) = program.profiled_status {
+        return Ok(status);
+    }
     let arguments = if arguments.is_empty() { program.configured_arguments } else { arguments };
     let status = Command::new(&program.executable)
         .args(&arguments)
@@ -56,6 +75,8 @@ pub struct Program {
     pub executable: PathBuf,
     workspace_root: PathBuf,
     configured_arguments: Vec<String>,
+    /// The exit status of the run that recorded the profile, when there was one.
+    pub profiled_status: Option<i32>,
 }
 
 /// Compiles the package's entry point to Go and builds the executable.
@@ -73,8 +94,11 @@ pub fn build_program(config: ProgramConfig) -> Result<Program, String> {
 
     let cache = workspace.root.join(".spago").join("go").join(&name);
     let module = cache.join("module");
+    let previous_requirements = previous_requirements(&module)?;
     clear_generated(&module)?;
-    write(&module.join("go.mod"), &go_mod(&name)?)?;
+    let fresh = go_mod(&name)?;
+    let declaration = requirements::with_requirements(&fresh, &previous_requirements);
+    write(&module.join("go.mod"), &declaration.unwrap_or(fresh))?;
     crate::run(GoConfig {
         package: Some(name.clone()),
         entry,
@@ -84,20 +108,120 @@ pub fn build_program(config: ProgramConfig) -> Result<Program, String> {
         line_directives: Some(crate::LineCoverage::Sparse),
     })?;
 
+    let recorded_profile = cache.join(RECORDED_PROFILE);
+    let profiled_status = match config.profile {
+        Some(arguments) => {
+            let arguments = if arguments.is_empty() { &execution.exec_args } else { &arguments };
+            let run = ProfiledRun { module: &module, cache: &cache, arguments, root: &workspace.root };
+            Some(record_profile(run, &recorded_profile)?)
+        }
+        None => None,
+    };
+    let profile = match config.pgo {
+        Pgo::Recorded => recorded_profile.is_file().then_some(recorded_profile),
+        Pgo::Off => None,
+        Pgo::File(profile) => Some(dunce::canonicalize(&profile).map_err(|error| {
+            format!("could not read the profile {}: {error}", profile.display())
+        })?),
+    };
+
     let executable = cache.join("bin").join(format!("{name}{}", env::consts::EXE_SUFFIX));
-    let fingerprint = fingerprint(&module)?;
+    let fingerprint = fingerprint(&module, profile.as_deref())?;
     let recorded = cache.join("fingerprint");
     let unchanged = fs::read_to_string(&recorded).is_ok_and(|recorded| recorded == fingerprint);
     if !(unchanged && executable.is_file()) {
-        go_build(&module, &executable)?;
+        go_build(&module, &executable, profile.as_deref())?;
         write(&recorded, &fingerprint)?;
     }
     Ok(Program {
         executable,
         workspace_root: workspace.root.clone(),
         configured_arguments: execution.exec_args,
+        profiled_status,
     })
 }
+
+/// A run of the program that records where it spends its time.
+struct ProfiledRun<'a> {
+    module: &'a Path,
+    cache: &'a Path,
+    arguments: &'a [String],
+    root: &'a Path,
+}
+
+/// Builds the program with a `main` that records a CPU profile around the generated one, runs
+/// it, and keeps the profile at `destination`. Returns the run's exit status. The generated
+/// functions keep their names, so `go build -pgo` finds them in the profile.
+fn record_profile(run: ProfiledRun, destination: &Path) -> Result<i32, String> {
+    let main = run.module.join("main.go");
+    let generated = fs::read_to_string(&main)
+        .map_err(|error| format!("could not read {}: {error}", main.display()))?;
+    let renamed = generated.replacen("\nfunc main() {\n", "\nfunc irisProfiledMain() {\n", 1);
+    if renamed == generated {
+        return Err(format!("{} has no main function to profile", main.display()));
+    }
+    let wrapper = run.module.join("iris_profile.go");
+    let profiler = run.cache.join("profiling").join(format!("program{}", env::consts::EXE_SUFFIX));
+    write(&main, &renamed)?;
+    write(&wrapper, PROFILING_MAIN)?;
+    let built = go_build(run.module, &profiler, None);
+    write(&main, &generated)?;
+    fs::remove_file(&wrapper)
+        .map_err(|error| format!("could not remove {}: {error}", wrapper.display()))?;
+    built?;
+
+    let profile = run.cache.join("profiling").join(RECORDED_PROFILE);
+    let _ = fs::remove_file(&profile);
+    let status = Command::new(&profiler)
+        .args(run.arguments)
+        .env(PROFILE_VARIABLE, &profile)
+        .current_dir(run.root)
+        .status()
+        .map_err(|error| format!("could not run {}: {error}", profiler.display()))?;
+    if !fs::metadata(&profile).is_ok_and(|metadata| metadata.len() > 0) {
+        return Err(format!(
+            "the profiled run exited with status {} before returning from main, so it left no \
+             profile",
+            exit_code(status)
+        ));
+    }
+    fs::rename(&profile, destination)
+        .map_err(|error| format!("could not write {}: {error}", destination.display()))?;
+    Ok(exit_code(status))
+}
+
+/// Where the profiling `main` writes the profile.
+const PROFILE_VARIABLE: &str = "IRIS_GO_CPU_PROFILE";
+
+const PROFILING_MAIN: &str = r#"package main
+
+import (
+	"os"
+	"runtime/pprof"
+)
+
+var irisProfiling bool
+
+func main() {
+	if irisProfiling {
+		irisProfiledMain()
+		return
+	}
+	irisProfiling = true
+	profile, err := os.Create(os.Getenv("IRIS_GO_CPU_PROFILE"))
+	if err != nil {
+		panic(err)
+	}
+	if err := pprof.StartCPUProfile(profile); err != nil {
+		panic(err)
+	}
+	irisProfiledMain()
+	pprof.StopCPUProfile()
+	if err := profile.Close(); err != nil {
+		panic(err)
+	}
+}
+"#;
 
 /// Fails with what to install when `go` is not on `PATH`.
 fn require_go() -> Result<(), String> {
@@ -109,6 +233,17 @@ fn require_go() -> Result<(), String> {
         )),
         Err(error) => Err(format!("could not run `go version`: {error}")),
     }
+}
+
+fn previous_requirements(module: &Path) -> Result<Vec<requirements::Requirement>, String> {
+    let go_mod = module.join("go.mod");
+    let declaration = match fs::read_to_string(&go_mod) {
+        Ok(declaration) => declaration,
+        Err(error) if error.kind() == ErrorKind::NotFound => return Ok(vec![]),
+        Err(error) => return Err(format!("could not read {}: {error}", go_mod.display())),
+    };
+    let requirements = requirements::requirements(&declaration).into_iter();
+    Ok(requirements.filter(|requirement| requirement.module != RUNTIME_MODULE).collect())
 }
 
 /// Removes the previous compilation's Go, keeping `go.sum`, so packages and foreign files the
@@ -159,10 +294,11 @@ fn runtime_checkout(checkout: &OsString) -> Result<PathBuf, String> {
 }
 
 /// Builds the module's main package into `executable`, printing Go's own errors.
-fn go_build(module: &Path, executable: &Path) -> Result<(), String> {
+fn go_build(module: &Path, executable: &Path, profile: Option<&Path>) -> Result<(), String> {
     let status = Command::new("go")
         .arg("build")
         .args(build_flags())
+        .args(profile.map(|profile| format!("-pgo={}", profile.display())))
         .arg("-o")
         .arg(executable)
         .arg(".")
@@ -187,8 +323,9 @@ fn experiment() -> String {
     env::var("GOEXPERIMENT").unwrap_or_else(|_| DEFAULT_EXPERIMENT.to_string())
 }
 
-/// A digest of every file in the module, `go.sum` excepted, and of the build settings.
-fn fingerprint(module: &Path) -> Result<String, String> {
+/// A digest of every file in the module, `go.sum` excepted, and of the build settings and
+/// profile.
+fn fingerprint(module: &Path, profile: Option<&Path>) -> Result<String, String> {
     let mut files = vec![];
     collect_files(module, &mut files)?;
     files.sort();
@@ -198,6 +335,13 @@ fn fingerprint(module: &Path) -> Result<String, String> {
         digest.update([0]);
     }
     digest.update(experiment().as_bytes());
+    if let Some(profile) = profile {
+        let contents = fs::read(profile)
+            .map_err(|error| format!("could not read {}: {error}", profile.display()))?;
+        digest.update(b"\0pgo\0");
+        digest.update((contents.len() as u64).to_le_bytes());
+        digest.update(&contents);
+    }
     for file in files {
         if file.file_name().is_some_and(|name| name == "go.sum") {
             continue;

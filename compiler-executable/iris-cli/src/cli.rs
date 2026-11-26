@@ -15,7 +15,7 @@ use crate::logging::LoggingFilters;
 
 #[derive(Debug, usage::Cli)]
 #[usage(
-    bin = "iris",
+    bin = "googoo",
     about = env!("CARGO_PKG_DESCRIPTION"),
     version = crate::VERSION,
     unknown_flags = "error",
@@ -66,12 +66,12 @@ pub struct GoOptions {
     #[usage(short, long, value_name = "NAME")]
     package: Option<String>,
 
-    /// Qualified entry point. Defaults to Main.main, or without DIR to the one `iris run --go`
+    /// Qualified entry point. Defaults to Main.main, or without DIR to the one `googoo run --go`
     /// uses.
     #[usage(long, value_name = "MODULE.NAME")]
     entry: Option<String>,
 
-    /// Directory to write main.go to. Without one, builds the executable that `iris run --go`
+    /// Directory to write main.go to. Without one, builds the executable that `googoo run --go`
     /// runs and prints its path.
     #[usage(value_name = "DIR")]
     destination: Option<PathBuf>,
@@ -85,6 +85,41 @@ pub struct GoOptions {
     /// statement and declaration, for tools that show each Go line next to its PureScript.
     #[usage(long, value_enum, value_name = "WHICH", conflicts("--no-line-directives"))]
     line_directives: Option<LineDirectiveChoice>,
+
+    #[usage(flatten)]
+    optimisation: ProfileGuidedOptions,
+
+    /// Arguments for the --profile run. Defaults to run.execArgs.
+    #[usage(double_dash = "required", requires("--profile"))]
+    arguments: Vec<String>,
+}
+
+#[derive(Debug, Args)]
+#[usage(args_override_self = false)]
+pub struct ProfileGuidedOptions {
+    /// Optimise the executable for this CPU profile (go build -pgo), or `off` to leave out the
+    /// one --profile recorded.
+    #[usage(long, value_name = "PROFILE")]
+    pgo: Option<PathBuf>,
+
+    /// Run the program once while recording a CPU profile, keep it in .spago/go/<package>/
+    /// default.pgo and build again optimised for it. Later builds use it until --pgo off.
+    #[usage(long, conflicts("--pgo"))]
+    profile: bool,
+}
+
+impl ProfileGuidedOptions {
+    fn pgo(&self) -> iris_go::Pgo {
+        match &self.pgo {
+            None => iris_go::Pgo::Recorded,
+            Some(profile) if profile.as_os_str() == "off" => iris_go::Pgo::Off,
+            Some(profile) => iris_go::Pgo::File(profile.clone()),
+        }
+    }
+
+    fn chosen(&self) -> bool {
+        self.pgo.is_some() || self.profile
+    }
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq, ValueEnum)]
@@ -95,16 +130,21 @@ pub enum LineDirectiveChoice {
     Every,
 }
 
-/// What `iris go` makes: Go sources in a directory with a go.mod, or an executable.
+/// What `googoo go` makes: Go sources in a directory with a go.mod, or an executable.
 pub enum GoTarget {
     Sources(iris_go::GoConfig),
     Executable(iris_go::ProgramConfig),
 }
 
 impl GoOptions {
-    pub fn into_target(self) -> GoTarget {
+    pub fn into_target(self) -> Result<GoTarget, String> {
         let version = crate::VERSION.to_string();
-        match self.destination {
+        if self.destination.is_some() && self.optimisation.chosen() {
+            return Err("--pgo and --profile build the executable, so they take no DIR; build \
+                        the Go in DIR with `go build -pgo` yourself"
+                .to_string());
+        }
+        Ok(match self.destination {
             Some(destination) => GoTarget::Sources(iris_go::GoConfig {
                 package: self.package,
                 entry: self.entry.unwrap_or_else(|| "Main.main".to_string()),
@@ -122,8 +162,10 @@ impl GoOptions {
                 entry: self.entry,
                 quiet: false,
                 version,
+                pgo: self.optimisation.pgo(),
+                profile: self.optimisation.profile.then_some(self.arguments),
             }),
-        }
+        })
     }
 }
 
@@ -280,19 +322,22 @@ pub struct RunOptions {
     #[usage(long, value_name = "MODULE.NAME", requires("--go"), conflicts("--main"))]
     entry: Option<String>,
 
+    #[usage(flatten)]
+    optimisation: ProfileGuidedOptions,
+
     /// Arguments passed to the program.
     #[usage(double_dash = "required")]
     arguments: Vec<String>,
 }
 
-/// How `iris run` runs the package.
+/// How `googoo run` runs the package.
 pub enum Run {
     Node(RunConfig),
     Go { config: iris_go::ProgramConfig, arguments: Vec<String> },
 }
 
 impl RunOptions {
-    pub fn into_run(self) -> Run {
+    pub fn into_run(self) -> Result<Run, String> {
         if self.go {
             let entry = self.entry.or_else(|| self.main.map(|main| format!("{main}.main")));
             let config = iris_go::ProgramConfig {
@@ -300,17 +345,22 @@ impl RunOptions {
                 entry,
                 quiet: self.build.quiet,
                 version: crate::VERSION.to_string(),
+                pgo: self.optimisation.pgo(),
+                profile: self.optimisation.profile.then(|| self.arguments.clone()),
             };
-            return Run::Go { config, arguments: self.arguments };
+            return Ok(Run::Go { config, arguments: self.arguments });
+        }
+        if self.optimisation.chosen() {
+            return Err("--pgo and --profile need --go".to_string());
         }
         let (project, color) = self.build.into_project_config();
-        Run::Node(RunConfig {
+        Ok(Run::Node(RunConfig {
             project,
             color,
             version: crate::VERSION.to_string(),
             main: self.main,
             arguments: self.arguments,
-        })
+        }))
     }
 }
 
@@ -371,9 +421,9 @@ pub struct WatchOptions {
 
 #[derive(Debug, Subcommands)]
 pub enum WatchCommand {
-    /// Ask a running `iris watch` about the project.
+    /// Ask a running `googoo watch` about the project.
     Query(QueryOptions),
-    #[usage(help = "Run a type-aware refactoring against a running `iris watch`.")]
+    #[usage(help = "Run a type-aware refactoring against a running `googoo watch`.")]
     Refactor(RefactorOptions),
     #[usage(
         help = "Serve the queries and refactorings as MCP tools over standard input and output."
@@ -589,8 +639,8 @@ impl ItemQuery {
 }
 
 impl WatchOptions {
-    /// Takes `iris watch query`'s options. A query without its own `--output` reads the one given
-    /// to `iris watch`, so a watcher's command line still finds it with `query` appended.
+    /// Takes `googoo watch query`'s options. A query without its own `--output` reads the one given
+    /// to `googoo watch`, so a watcher's command line still finds it with `query` appended.
     pub fn take_command(&mut self) -> Option<WatchCommand> {
         let mut command = self.command.take()?;
         let inherited_output = self.output.take();
@@ -643,7 +693,7 @@ pub enum SkillsCommand {
 #[derive(Debug, Args)]
 #[usage(args_override_self = false)]
 pub struct SkillName {
-    /// Skill name, as listed by `iris skills list`.
+    /// Skill name, as listed by `googoo skills list`.
     #[usage(value_name = "NAME")]
     pub name: String,
 }
@@ -773,7 +823,7 @@ impl Program {
                 std::process::exit(0);
             }
             Err(usage::Error::Version { .. }) => {
-                println!("iris {}", crate::VERSION);
+                println!("googoo {}", crate::VERSION);
                 std::process::exit(0);
             }
             Err(error) => {
@@ -795,7 +845,7 @@ mod tests {
 
     #[test]
     fn maps_build_options_to_configuration() {
-        let arguments = ["iris", "build", "--quiet", "--no-diagnostics"];
+        let arguments = ["googoo", "build", "--quiet", "--no-diagnostics"];
         let arguments = arguments.iter().map(OsStr::new).collect_vec();
         let program = Program::try_parse_from(&arguments).unwrap();
         let Command::Build(options) = program.command else {

@@ -5,7 +5,7 @@ status: 0
 --- stdout
 Build and run a Spago package with Node.js, or with Go.
 
-Usage: iris run [FLAGS] [-- ARGUMENTS]…
+Usage: googoo run [FLAGS] [-- ARGUMENTS]…
 
 Arguments:
   [-- ARGUMENTS]…  Arguments passed to the program.

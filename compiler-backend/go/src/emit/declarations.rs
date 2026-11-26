@@ -225,11 +225,13 @@ where
         let mut owned_nodes: Vec<*const Expression> =
             owned.iter().flat_map(|(_, _, nodes)| nodes.iter().copied()).collect();
         owned_nodes.extend(strings.into_iter().flat_map(|(_, nodes)| nodes));
-        owned_nodes.extend(owned_parameters);
+        owned_nodes.extend(owned_parameters.iter().copied());
         self.owned_snocs.extend(owned_nodes.iter().copied());
-        let owned_places: Vec<Vec<*const Expression>> =
+        let mut owned_places: Vec<Vec<*const Expression>> =
             owned.iter().map(|(_, _, nodes)| nodes.clone()).collect();
         let flags = self.own_updates(&function.body, &owned_places);
+        self.own_exclusive_updates(&function.body, &owned_parameters);
+        owned_places.push(owned_parameters);
         let mut recycled_buffers = vec![];
         let mut recycled_positions = vec![];
         if loops && mode == Mode::Value {
@@ -331,7 +333,7 @@ where
         self.carried_places(parameter.monotype)
             .into_iter()
             .filter_map(|place| {
-                let carried = ownership::Carried::new(parameter.id, &place);
+                let carried = ownership::Carried::updating(parameter.id, &place);
                 let nodes = ownership::owned_snocs(carried, &function.body)?;
                 (!nodes.is_empty()).then_some((place, nodes))
             })

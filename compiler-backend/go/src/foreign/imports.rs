@@ -843,6 +843,16 @@ pub(super) const FOREIGN_IMPORTS: &[(&str, &str, Foreign)] = &[
         ),
     ),
     (
+        "Data.DateTime",
+        "adjustImpl",
+        call(
+            GoPackage::DateTime,
+            "AdjustImpl",
+            4,
+            Boundary { record_arguments: &[3], record_result: true, ..found(0, 1) },
+        ),
+    ),
+    (
         "Data.DateTime.Instant",
         "fromDateTimeImpl",
         call(GoPackage::DateTime, "FromDateTimeImpl", 7, int32_parameters(&[0, 1, 2, 3, 4, 5, 6])),

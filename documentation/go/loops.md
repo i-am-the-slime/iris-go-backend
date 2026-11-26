@@ -285,7 +285,7 @@ func foldLanes(xs []float64, initial float64) float64 {
 `withTax` is used twice, so it's built, and the `foldl (+)` over it is a kernel of its own. Next to
 `main.go` you get one file per target: `main_neon.go` for arm64, `main_vector.go` for wasm, and
 `main_scalar.go`, a plain loop, for everything else or when `GOEXPERIMENT=simd` is off.
-`iris run --go` turns the experiment on for you.
+`googoo run --go` turns the experiment on for you.
 
 A vector adds up several elements at a time, so a `Number` sum can differ from JavaScript's in its
 last digits. [Sums over vectors](../go-output.md#sums-over-vectors) says which folds and maps run

@@ -1,0 +1,13 @@
+---
+source: tests-integration/src/fixtures.rs
+---
+// main.go
+package main
+
+import "github.com/i-am-the-slime/iris-go/console"
+
+var main_ string = "3"
+
+func main() {
+	console.Print(main_)
+}

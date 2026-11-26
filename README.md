@@ -1,8 +1,8 @@
-# Iris with a Go backend
+# googoo — 'cause I don't want the world to see Go
 
-This is a fork of [Iris](https://github.com/purefunctor/purescript-iris), the PureScript compiler,
-that also compiles your program to Go. You get a single native binary that starts right away,
-uses every core you've got and talks to Go libraries through foreign imports. Everything else
+googoo is a fork of [Iris](https://github.com/purefunctor/purescript-iris), the PureScript
+compiler, that also compiles your program to Go. You get a single native binary that starts right
+away, uses every core you've got and talks to Go libraries through foreign imports. Everything else
 Iris does works as it does upstream, and upstream's README follows the Go part.
 
 ## Installing
@@ -11,37 +11,40 @@ You need Go 1.27 or later and [Spago](https://github.com/purescript/spago). Home
 three:
 
 ```bash
-brew install spago i-am-the-slime/tap/iris
+brew install spago i-am-the-slime/tap/googoo
 ```
 
 Got Node already? `npm install -g spago` works too.
+
+googoo used to be called `iris`. The `iris` command still works for now: it tells you it's called
+googoo now and then runs googoo.
 
 ## Your first program
 
 ```bash
 mkdir my-app && cd my-app
-iris new
-iris run --go
+googoo new
+googoo run --go
 ```
 
 ```
 🍝
 ```
 
-`iris run --go` compiles your package to Go, builds it and runs it. The second run of an unchanged
-program skips the build. `iris go` builds the binary and prints where it put it.
+`googoo run --go` compiles your package to Go, builds it and runs it. The second run of an
+unchanged program skips the build. `googoo go` builds the binary and prints where it put it.
 
-There's no `iris test --go` yet. Run your test suite like any other program:
+There's no `googoo test --go` yet. Run your test suite like any other program:
 
 ```bash
-iris run --go --main Test.Main
+googoo run --go --main Test.Main
 ```
 
 ## Learn more
 
 - [Go output](documentation/go-output.md): running programs, foreign imports in Go, how a Go build
   differs from a JavaScript one, and the programs the Go backend rejects.
-- [What your PureScript becomes in Go](documentation/go/index.md): the Go Iris writes, by example.
+- [What your PureScript becomes in Go](documentation/go/index.md): the Go googoo writes, by example.
 - [PureScript and Go side by side](https://i-am-the-slime.github.io/iris-go-backend/): the examples
   and benchmarks next to the Go they compile to, with timings against hand-written Go.
 - [Effect, Aff and IO](documentation/go/effects.md): which one to use when, and how to share state

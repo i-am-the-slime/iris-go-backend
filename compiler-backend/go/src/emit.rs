@@ -11,6 +11,7 @@ mod boxing;
 mod branches;
 mod buffers;
 mod build;
+mod builders;
 mod cases;
 mod cells;
 mod chunks;
@@ -273,12 +274,21 @@ where
     let chunked = timed("chunks", || {
         chunks::allocate_linked_cells_in_chunks(&mut declarations, &mut names, &taken)
     });
-    if chunked {
+    let workers = timed("builders", || {
+        builders::allocate_built_cells_in_chunks(&mut declarations, &mut names, &taken)
+    });
+    if chunked || !workers.is_empty() {
         emitter.imports.insert(GoPackage::Alloc.path().into());
     }
     timed("blocks", || {
         blocks::allocate_nested_cells_together(&mut declarations, &mut names, &taken)
     });
+    for worker in workers {
+        if let Some(&home) = emitter.homes.get(&worker.builder) {
+            emitter.homes.insert(worker.name.clone(), home);
+        }
+        emitter.global_names.insert(worker.name);
+    }
     timed("divergence", || diverging::end_blocks_at_divergence(&mut declarations));
     timed("field reads", || loads::reuse_field_reads(&mut declarations));
     timed("branches", || branches::simplify_branches(&mut declarations));
@@ -321,6 +331,24 @@ where
     }
     let spans = std::mem::take(&mut emitter.spans);
     timed("spans", || lines::attribute_spans(&mut declarations, spans));
+    emitter.settle_array_boxes()?;
+    emitter.settle_round_trips();
+    emitter.spell_out_generic_alias_arguments();
+    let mut all = std::mem::take(&mut emitter.type_declarations);
+    all.extend(declarations);
+    let declared: FxHashSet<String> = all
+        .iter()
+        .flat_map(|declaration| match declaration {
+            GoDeclaration::Constants { names, .. } => names.clone(),
+            declaration => declaration.name().map(str::to_string).into_iter().collect(),
+        })
+        .collect();
+    let record_homes = timed("names", || emitter.spell_pending(modules, &declared))?;
+    for (name, file) in record_homes {
+        if let Some(home) = modules.index(file) {
+            homes.entry(name).or_insert(home);
+        }
+    }
     let home = |declaration: &GoDeclaration| {
         let name = match declaration {
             GoDeclaration::Constants { names, .. } => names.first().map(String::as_str),
@@ -328,11 +356,6 @@ where
         };
         name.and_then(|name| homes.get(name)).copied()
     };
-    emitter.settle_array_boxes()?;
-    emitter.settle_round_trips();
-    emitter.spell_out_generic_alias_arguments();
-    let mut all = std::mem::take(&mut emitter.type_declarations);
-    all.extend(declarations);
     let all: Vec<(GoDeclaration, Option<ModuleIndex>)> = all
         .into_iter()
         .map(|declaration| {
@@ -340,14 +363,6 @@ where
             (declaration, home)
         })
         .collect();
-    let declared: FxHashSet<String> = all
-        .iter()
-        .flat_map(|(declaration, _)| match declaration {
-            GoDeclaration::Constants { names, .. } => names.clone(),
-            declaration => declaration.name().map(str::to_string).into_iter().collect(),
-        })
-        .collect();
-    timed("names", || emitter.spell_pending(modules, &declared))?;
     let typed_records: Vec<Option<String>> = emitter
         .typed_records
         .iter()
@@ -634,7 +649,7 @@ struct Emitter<'p, 'm, 'q, Q> {
     referenced: std::cell::RefCell<FxHashSet<FunctionId>>,
     current: Option<FunctionId>,
     owned_snocs: FxHashSet<*const Expression>,
-    owned_updates: FxHashMap<*const Expression, String>,
+    owned_updates: FxHashMap<*const Expression, foreign_values::Updated>,
     copied_flags: FxHashSet<String>,
     /// The maps that build a tail loop's next array in the buffers it recycles, by their
     /// callbacks.

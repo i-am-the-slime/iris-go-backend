@@ -877,7 +877,7 @@ package:
         status: 1
         --- stdout
         --- stderr
-        another `iris watch` (process [PID]) is already writing to [WORKSPACE]/output
+        another `googoo watch` (process [PID]) is already writing to [WORKSPACE]/output
         ");
     });
 
@@ -885,7 +885,7 @@ package:
     let orphaned = run_query(&workspace, "wait");
     insta::assert_snapshot!(workspace.normalize_output(orphaned.as_bytes()), @"
     $ iris watch query wait
-    [4] no `iris watch` is running for [WORKSPACE]/output; start one with `iris watch`, or retry if it is starting
+    [4] no `googoo watch` is running for [WORKSPACE]/output; start one with `googoo watch`, or retry if it is starting
     ");
 
     let mut restarted = WatchProcess::new(workspace.spawn(&["watch"]));
@@ -967,7 +967,7 @@ package:
     status: 4
     --- stdout
     --- stderr
-    no `iris watch` is running for [WORKSPACE]/output; start one with `iris watch`, or retry if it is starting
+    no `googoo watch` is running for [WORKSPACE]/output; start one with `googoo watch`, or retry if it is starting
     ");
 
     workspace.write("spago.yaml", "workspace: [\n");

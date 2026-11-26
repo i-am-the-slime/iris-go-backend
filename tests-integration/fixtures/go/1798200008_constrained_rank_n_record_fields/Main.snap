@@ -15,12 +15,12 @@ import (
 var main_ = initializeMain_()
 
 func initializeMain_() []string {
-	return []string{prim.Append(bracketed.Render.Int(1), bracketed.Render.String("two")), prim.Append(bracketed.Render.Int(1), bracketed.Render.String("two"))}
+	return []string{prim.Append(bracketed.Render.ForInt(1), bracketed.Render.ForString("two")), prim.Append(bracketed.Render.ForInt(1), bracketed.Render.ForString("two"))}
 }
 
-var bracketed shared.Renderer = shared.Renderer{Render: shared.Render{Int: func(a int32) string {
+var bracketed shared.Renderer = shared.Renderer{Render: shared.Render{ForInt: func(a int32) string {
 	return "[" + strconv.Itoa(int(a)) + "]"
-}, String: func(a string) string {
+}, ForString: func(a string) string {
 	return "[" + prim.ShowString(a) + "]"
 }}}
 
@@ -32,8 +32,8 @@ func main() {
 package shared
 
 type Render struct {
-	Int    func(int32) string
-	String func(string) string
+	ForInt    func(int32) string
+	ForString func(string) string
 }
 
 type Renderer struct {

@@ -18,10 +18,11 @@
 
 use super::iteration::Found;
 use super::{Emitter, Mode, Sink, identifier_expression, lines, local_uses};
-use crate::error::GoResult;
+use crate::error::{GoError, GoResult};
 use crate::foreign::{Foreign, MaybeConstructors};
 use crate::monomorphic::{Alternative, Expression, ExpressionKind, Guarded, Local, PatternKind};
 use crate::monotype::{Monotype, MonotypeId};
+use crate::naming::identifier;
 use crate::syntax::{GoExpression, GoStatement};
 
 /// The alternative a case over a found call takes for `Just` or for `Nothing`, with the local it
@@ -44,17 +45,15 @@ where
         called: GoExpression,
         arguments: &[Expression],
         constructors: MaybeConstructors,
+        record_result: bool,
         result: MonotypeId,
         out: &mut Vec<GoStatement>,
     ) -> GoResult<GoExpression> {
         let name = self.temporary(&super::scrutinee_name(&called));
         let payload = self.temporary("value");
-        let found = self.temporary("found");
+        let record = self.found_record(record_result, result)?;
         let defined = out.len();
-        out.push(GoStatement::Define {
-            names: vec![payload.clone(), found.clone()],
-            values: vec![called],
-        });
+        let found = self.define_found(called, payload.clone(), record, out)?;
         let payload = identifier_expression(&payload);
         let mut then = vec![];
         let mut otherwise = vec![];
@@ -114,14 +113,11 @@ where
         let values = self.boundary_arguments(arguments, boundary, scrutinee.monotype, true, out)?;
         let function = self.boundary_function(function, boundary, scrutinee.monotype)?;
         let called = super::call(function, values);
+        let record = self.found_record(boundary.record_result, scrutinee.monotype)?;
         if let (Sink::Define(name), Mode::Value, Some(local)) = (&sink, mode, present.payload)
             && matches!(present.body.kind, ExpressionKind::Local(id) if id == local.id)
         {
-            let found = self.temporary("found");
-            out.push(GoStatement::Define {
-                names: vec![name.clone(), found.clone()],
-                values: vec![called],
-            });
+            let found = self.define_found(called, name.clone(), record, out)?;
             let line = self.branch_line(absent.alternative.position)?;
             let mut fallback = vec![];
             self.sink(absent.body, mode, Sink::Assign(name.clone()), &mut fallback)?;
@@ -137,8 +133,7 @@ where
             Some(local) if local_uses(present.body, local.id) > 0 => self.bind_local(local),
             _ => "_".to_string(),
         };
-        let found = self.temporary("found");
-        out.push(GoStatement::Define { names: vec![payload, found.clone()], values: vec![called] });
+        let found = self.define_found(called, payload, record, out)?;
 
         let sink = self.prepare_branching_sink(sink, expression, mode, out)?;
         let mut blocks = vec![];
@@ -165,6 +160,62 @@ where
     fn is_maybe(&mut self, monotype: MonotypeId) -> GoResult<bool> {
         let Monotype::Data(data) = self.monotypes.get(monotype).clone() else { return Ok(false) };
         Ok(self.maybe_payload(&data)?.is_some())
+    }
+
+    fn found_record(
+        &mut self,
+        record_result: bool,
+        maybe: MonotypeId,
+    ) -> GoResult<Option<MonotypeId>> {
+        if !record_result {
+            return Ok(None);
+        }
+        let payload = match self.monotypes.get(maybe).clone() {
+            Monotype::Data(data) => self.maybe_payload(&data)?,
+            _ => None,
+        };
+        let Some(record) = payload else {
+            return Err(GoError::unsupported_construct(
+                "a foreign that answers a found record's fields, at a type that is not a Maybe",
+            ));
+        };
+        Ok(Some(record))
+    }
+
+    fn define_found(
+        &mut self,
+        called: GoExpression,
+        payload: String,
+        record: Option<MonotypeId>,
+        out: &mut Vec<GoStatement>,
+    ) -> GoResult<String> {
+        let found = self.temporary("found");
+        let Some(record) = record else {
+            let names = vec![payload, found.clone()];
+            out.push(GoStatement::Define { names, values: vec![called] });
+            return Ok(found);
+        };
+        let Monotype::Record(fields) = self.monotypes.get(record).clone() else {
+            unreachable!("invariant violated: a record result has a record type")
+        };
+        if payload == "_" {
+            let mut names = vec!["_".to_string(); fields.len()];
+            names.push(found.clone());
+            out.push(GoStatement::Define { names, values: vec![called] });
+            return Ok(found);
+        }
+        let names: Vec<String> =
+            fields.iter().map(|field| self.temporary(&identifier(&field.label))).collect();
+        let results = names.iter().cloned().chain([found.clone()]).collect();
+        out.push(GoStatement::Define { names: results, values: vec![called] });
+        let values = fields
+            .iter()
+            .zip(names)
+            .map(|(field, name)| (field.label.clone(), identifier_expression(&name)))
+            .collect();
+        let value = self.record_value(record, values)?;
+        out.push(GoStatement::Define { names: vec![payload], values: vec![value] });
+        Ok(found)
     }
 }
 

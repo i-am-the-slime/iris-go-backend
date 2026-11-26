@@ -32,7 +32,7 @@ pub enum ReleaseError {
     #[error("Iris {version} predates the current release layout; use the installer from its tag")]
     Unsupported { version: String },
     #[error(
-        "Iris {version} is the Go backend fork, which `iris self update` cannot update; run `brew upgrade i-am-the-slime/tap/iris` to update it"
+        "googoo {version} is the Go backend fork of Iris, which `googoo self update` cannot update; run `brew upgrade i-am-the-slime/tap/googoo` to update it"
     )]
     GoBackendFork { version: String },
 }
