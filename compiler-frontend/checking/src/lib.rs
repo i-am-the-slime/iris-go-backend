@@ -249,6 +249,13 @@ fn check_source(queries: &impl ExternalQueries, file_id: FileId) -> QueryResult<
         core::skolem::check(state, &context);
         core::zonk::zonk_errors(state, &context)
     })?;
+    if core::zonk::default_unsolved_rows(&mut state, &context)? {
+        state.with_zonk_cache(|state| {
+            core::zonk::zonk_nodes(state, &context)?;
+            core::zonk::zonk_tree(state, &context)?;
+            core::zonk::zonk_evidence(state, &context)
+        })?;
+    }
     report_unexplained_unknown(&mut state, &context)?;
     state.checked.evidence.assert_finished();
 

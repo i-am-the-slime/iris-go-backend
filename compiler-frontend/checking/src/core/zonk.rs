@@ -6,10 +6,10 @@ use smol_str::SmolStr;
 
 use crate::context::CheckContext;
 use crate::core::fold::{FoldAction, TypeFold, fold_type};
-use crate::core::{Type, TypeFlags, TypeId};
+use crate::core::{RowType, Type, TypeFlags, TypeId};
 use crate::error::{CheckingError, ErrorKind};
 use crate::holes::{HoleBinding, TermHole, TypeHole};
-use crate::state::CheckState;
+use crate::state::{CheckState, UnificationState};
 use crate::tree::{
     BinderKind, DeclarationAbstraction, InstanceImplementation, TermDeclarationKind,
     TypeDeclarationKind,
@@ -40,13 +40,19 @@ impl TypeFold for Zonk {
     fn complete<Q>(
         &mut self,
         state: &mut CheckState,
-        _context: &CheckContext<Q>,
+        context: &CheckContext<Q>,
         id: TypeId,
         result: TypeId,
     ) -> QueryResult<TypeId>
     where
         Q: ExternalQueries,
     {
+        if let Type::Row(row) = context.lookup_type(result)
+            && let Some(tail) = context.lookup_row_type(*row).tail
+            && let Type::Unification(unification) = context.lookup_type(tail)
+        {
+            state.unsolved_row_tails.insert(*unification);
+        }
         state.insert_zonk_cache(id, result);
         Ok(result)
     }
@@ -112,6 +118,25 @@ where
         }
     }
     Ok(())
+}
+
+pub fn default_unsolved_rows<Q>(
+    state: &mut CheckState,
+    context: &CheckContext<Q>,
+) -> QueryResult<bool>
+where
+    Q: ExternalQueries,
+{
+    let empty = context.queries.intern_row_type(RowType::from_closed(Arc::from([])));
+    let empty = context.queries.intern_type(Type::Row(empty));
+    let mut defaulted = false;
+    for index in mem::take(&mut state.unsolved_row_tails) {
+        if state.unifications.get(index).state == UnificationState::Unsolved {
+            state.unifications.solve(index, empty);
+            defaulted = true;
+        }
+    }
+    Ok(defaulted)
 }
 
 pub fn zonk_nodes<Q>(state: &mut CheckState, context: &CheckContext<Q>) -> QueryResult<()>

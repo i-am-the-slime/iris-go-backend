@@ -1,25 +1,25 @@
 ---
 source: tests-integration/src/fixtures.rs
 ---
-// Data/Variant/Internal/internal.go
-package internal
+// Data/Variant/variant.go
+package variant
 
 import "fixture/shared"
 
-type VariantRep struct {
-	Type  string
-	Value int
+type Clicked struct {
+	Clicked int
 }
 
-func Convert(value VariantRep) shared.TypeValue {
-	return shared.TypeValue{Type: value.Type, Value: value.Value}
+type Self struct {
+	Emit  func(Clicked)
+	Props func() shared.Count
 }
 
 // main.go
 package main
 
 import (
-	variant "fixture/Data/Variant/Internal"
+	"fixture/Data/Variant"
 	"fixture/shared"
 	"github.com/i-am-the-slime/iris-go/array"
 	"github.com/i-am-the-slime/iris-go/console"
@@ -68,13 +68,13 @@ func mounted() []string {
 		result = " [ ]"
 	}
 	item := prim.Append(todo.Title, result)
-	scrutinee2 := shared.EmitProps{Props: func() shared.Count {
+	scrutinee2 := variant.Self{Props: func() shared.Count {
 		return shared.Count{Count: 3}
-	}, Emit: func(_ shared.TypeValue) {
+	}, Emit: func(_ variant.Clicked) {
 	}}
 	count2 := scrutinee2.Props()
 	count := count2.Count
-	scrutinee2.Emit(variant.Convert(variant.VariantRep{Type: "clicked", Value: count}))
+	scrutinee2.Emit(variant.Clicked{Clicked: count})
 	clicks := "clicked " + strconv.Itoa(count)
 	toggled := toggles
 	return []string{item, clicks, strconv.Itoa(toggled)}
@@ -108,14 +108,4 @@ type StateValue struct {
 
 type Count struct {
 	Count int
-}
-
-type TypeValue struct {
-	Type  string
-	Value any
-}
-
-type EmitProps struct {
-	Emit  func(TypeValue)
-	Props func() Count
 }

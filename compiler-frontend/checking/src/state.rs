@@ -165,6 +165,7 @@ pub struct CheckState {
     pub patterns: PatternInterner,
 
     zonk_cache: Option<FxHashMap<TypeId, TypeId>>,
+    pub(crate) unsolved_row_tails: FxHashSet<u32>,
     pub(crate) judgments: FxHashSet<tree::ExpressionId>,
 
     pub unifications: Unifications,
@@ -193,6 +194,7 @@ impl CheckState {
             bindings: Default::default(),
             patterns: Default::default(),
             zonk_cache: None,
+            unsolved_row_tails: Default::default(),
             judgments: Default::default(),
             unifications: Default::default(),
             implications: Default::default(),

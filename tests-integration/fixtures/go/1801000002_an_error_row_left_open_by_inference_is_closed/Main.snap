@@ -1,0 +1,87 @@
+---
+source: tests-integration/src/fixtures.rs
+---
+// Data/Variant/variant.go
+package variant
+
+import "github.com/i-am-the-slime/iris-go/exception"
+
+type Exception struct {
+	Exception exception.Error
+}
+
+type EitherVariantException struct {
+	Left  Exception
+	Right int32
+	Tag   uint8
+}
+
+const (
+	EitherVariantExceptionLeft = iota
+	EitherVariantExceptionRight
+)
+
+type ExceptionInvalidArgumentNameTaken struct {
+	Exception exception.Error
+	Field0    string
+	Tag       uint8
+}
+
+const (
+	ExceptionInvalidArgumentNameTakenException = iota
+	ExceptionInvalidArgumentNameTakenInvalidArgument
+	ExceptionInvalidArgumentNameTakenNameTaken
+)
+
+type EitherVariantExceptionInvalidArgumentNameTaken struct {
+	Left  ExceptionInvalidArgumentNameTaken
+	Right int32
+	Tag   uint8
+}
+
+const (
+	EitherVariantExceptionInvalidArgumentNameTakenLeft = iota
+	EitherVariantExceptionInvalidArgumentNameTakenRight
+)
+
+func Left(left Exception) EitherVariantException {
+	return EitherVariantException{Tag: EitherVariantExceptionLeft, Left: left}
+}
+
+func NameTaken(field0 string) ExceptionInvalidArgumentNameTaken {
+	return ExceptionInvalidArgumentNameTaken{Tag: ExceptionInvalidArgumentNameTakenNameTaken, Field0: field0}
+}
+
+// main.go
+package main
+
+import (
+	"fixture/Data/Variant"
+	"github.com/i-am-the-slime/iris-go/exception"
+	"strconv"
+)
+
+func main_() []string {
+	looped := variant.Left(variant.Exception{Exception: exception.NewError("negative")})
+	var result string
+	switch variant.NameTaken("ada").Tag {
+	case variant.ExceptionInvalidArgumentNameTakenException:
+		result = exception.Message(variant.NameTaken("ada").Exception)
+	case variant.ExceptionInvalidArgumentNameTakenInvalidArgument:
+		result = "unexpected"
+	default: // variant.ExceptionInvalidArgumentNameTakenNameTaken
+		result = variant.NameTaken("ada").Field0 + " is taken"
+	}
+	var result2 string
+	switch looped.Tag {
+	case variant.EitherVariantExceptionLeft:
+		result2 = exception.Message(looped.Left.Exception)
+	default: // variant.EitherVariantExceptionRight
+		result2 = strconv.Itoa(int(looped.Right))
+	}
+	return []string{result, result2}
+}
+
+func main() {
+	main_()
+}
