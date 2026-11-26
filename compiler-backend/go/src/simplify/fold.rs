@@ -656,6 +656,10 @@ fn utf16_order(left: &str, right: &str) -> Ordering {
     left.encode_utf16().cmp(right.encode_utf16())
 }
 
+fn is_int(expression: &Expression, value: i64) -> bool {
+    matches!(expression.kind, ExpressionKind::Literal(Literal::Int(literal)) if literal == value)
+}
+
 #[cfg(test)]
 mod tests {
     use super::show_number;
@@ -676,8 +680,4 @@ mod tests {
         assert_eq!(show_number(f64::NEG_INFINITY), "-Infinity");
         assert_eq!(show_number(f64::NAN), "NaN");
     }
-}
-
-fn is_int(expression: &Expression, value: i64) -> bool {
-    matches!(expression.kind, ExpressionKind::Literal(Literal::Int(literal)) if literal == value)
 }
