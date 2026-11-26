@@ -8,7 +8,7 @@ import "github.com/i-am-the-slime/iris-go/exception"
 
 type Either struct {
 	Left  exception.Error
-	Right int
+	Right int32
 	Tag   uint8
 }
 

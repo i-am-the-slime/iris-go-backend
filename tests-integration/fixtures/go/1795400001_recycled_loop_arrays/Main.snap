@@ -82,7 +82,7 @@ import "fixture/shared"
 
 type Tuple struct {
 	Second shared.Particle
-	First  int
+	First  int32
 }
 
 // main.go

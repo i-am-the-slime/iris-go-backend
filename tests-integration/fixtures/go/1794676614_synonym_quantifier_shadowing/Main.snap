@@ -22,7 +22,7 @@ import (
 type Instruction struct {
 	Store1 any
 	Load   func(int) any
-	Store0 int
+	Store0 int32
 	Tag    uint8
 }
 
@@ -35,7 +35,7 @@ type Command struct {
 	Push1  any
 	Pop    func(int) any
 	Origin any
-	Push0  int
+	Push0  int32
 	Tag    uint8
 }
 
@@ -47,7 +47,7 @@ const (
 type CommandVal struct {
 	Push1 any
 	Pop   func(int) any
-	Push0 int
+	Push0 int32
 	Tag   uint8
 }
 
@@ -100,7 +100,7 @@ const (
 type CommandUnit struct {
 	Push1 struct{}
 	Pop   func(int)
-	Push0 int
+	Push0 int32
 	Tag   uint8
 }
 
@@ -136,7 +136,7 @@ const (
 type InstructionVal struct {
 	Store1 any
 	Load   func(int) any
-	Store0 int
+	Store0 int32
 	Tag    uint8
 }
 
@@ -160,7 +160,7 @@ const (
 type InstructionUnit struct {
 	Store1 struct{}
 	Load   func(int)
-	Store0 int
+	Store0 int32
 	Tag    uint8
 }
 
@@ -228,7 +228,7 @@ func convert5(value *FreeCommand) FreeVal {
 
 type CommandInt struct {
 	Pop   func(int) int
-	Push0 int
+	Push0 int32
 	Push1 int
 	Tag   uint8
 }
@@ -251,7 +251,7 @@ func convert6(value CommandInt) CommandVal {
 
 type InstructionInt struct {
 	Load   func(int) int
-	Store0 int
+	Store0 int32
 	Store1 int
 	Tag    uint8
 }
@@ -282,7 +282,7 @@ func convert8(value CommandVal) *Command {
 }
 
 func Push(push0 int, push1 struct{}) CommandUnit {
-	return CommandUnit{Tag: CommandUnitPush, Push0: push0, Push1: push1}
+	return CommandUnit{Tag: CommandUnitPush, Push0: int32(push0), Push1: push1}
 }
 
 func PureFreeCommandUnit(pure struct{}) FreeCommandUnit {
@@ -290,7 +290,7 @@ func PureFreeCommandUnit(pure struct{}) FreeCommandUnit {
 }
 
 func Store(store0 int, store1 struct{}) InstructionUnit {
-	return InstructionUnit{Tag: InstructionUnitStore, Store0: store0, Store1: store1}
+	return InstructionUnit{Tag: InstructionUnitStore, Store0: int32(store0), Store1: store1}
 }
 
 func PureFreeInstructionUnit(pure struct{}) FreeInstructionUnit {
@@ -428,7 +428,7 @@ func foldFreeIntoState(program FreeCommandInt, state int) shared.StateValueOfInt
 			var result shared.StateValueOfValue
 			switch scrutinee.Tag {
 			case CommandPush:
-				result = shared.StateValueOfValue{Value: scrutinee.Push1, State: scrutinee.Push0}
+				result = shared.StateValueOfValue{Value: scrutinee.Push1, State: int(scrutinee.Push0)}
 			default: // CommandPop
 				result = shared.StateValueOfValue{Value: scrutinee.Pop(state), State: state}
 			}

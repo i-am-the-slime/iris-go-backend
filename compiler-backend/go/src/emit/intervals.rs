@@ -44,7 +44,7 @@ pub(super) fn prove_bounds(
     helpers: &FxHashSet<String>,
 ) {
     let keeping = Keeping::of(declarations, effects, helpers);
-    let program = Program::of(declarations);
+    let program = Program::of(declarations, FxHashSet::default());
     let plans: Vec<Plan> =
         declarations.iter_mut().map(|declaration| program.plan(declaration)).collect();
     let (entries, mut rewritten) = program.entries(declarations, &plans, &keeping);
@@ -58,6 +58,91 @@ pub(super) fn prove_bounds(
             }
         }
     }
+}
+
+pub(super) fn fields_that_fit(
+    declarations: &mut [GoDeclaration],
+    effects: &Effects,
+    helpers: &FxHashSet<String>,
+    candidates: &FxHashSet<String>,
+) -> FxHashSet<String> {
+    let keeping = Keeping::of(declarations, effects, helpers);
+    let mut assumed = candidates.clone();
+    while !assumed.is_empty() {
+        let program = Program::of(declarations, assumed.clone());
+        let plans: Vec<Plan> =
+            declarations.iter_mut().map(|declaration| program.plan(declaration)).collect();
+        let (entries, _) = program.entries(declarations, &plans, &keeping);
+        let mut proven: FxHashMap<usize, bool> = FxHashMap::default();
+        let mut unfit: FxHashSet<String> = FxHashSet::default();
+        for (declaration, plan) in declarations.iter_mut().zip(&plans) {
+            let entry = program.entry_of(declaration, &entries).unwrap_or(None);
+            if plan.interpret {
+                let mut analysis = Analysis::new(&program, &keeping, false);
+                analysis.observations = Some(FxHashMap::default());
+                analysis.declaration(declaration, entry);
+                proven.extend(analysis.observations.unwrap_or_default());
+            }
+            each_field_write(declaration, &assumed, &mut |site, field| {
+                if proven.get(&site) != Some(&true) {
+                    unfit.insert(field.to_string());
+                }
+            });
+        }
+        if unfit.is_empty() {
+            break;
+        }
+        assumed.retain(|field| !unfit.contains(field));
+    }
+    assumed
+}
+
+fn each_field_write(
+    declaration: &mut GoDeclaration,
+    fields: &FxHashSet<String>,
+    visit: &mut dyn FnMut(usize, &str),
+) {
+    struct Writes<'f, 'v> {
+        fields: &'f FxHashSet<String>,
+        visit: &'v mut dyn FnMut(usize, &str),
+    }
+    impl Walk for Writes<'_, '_> {
+        fn statement(&mut self, statement: &mut GoStatement) {
+            if let GoStatement::Assign { targets, .. } = statement {
+                for target in targets.iter() {
+                    if let Some(field) = written_field(target, self.fields) {
+                        (self.visit)(site_of(target), field);
+                    }
+                }
+            }
+            go_traversal::statement(self, statement);
+        }
+
+        fn expression(&mut self, value: &mut GoExpression) {
+            if let GoExpression::Composite { fields, .. } = value {
+                for (label, field_value) in fields.iter() {
+                    if let Some(label) =
+                        label.as_deref().filter(|label| self.fields.contains(*label))
+                    {
+                        (self.visit)(site_of(field_value), label);
+                    }
+                }
+            }
+            go_traversal::expression(self, value);
+        }
+    }
+    go_traversal::declaration(&mut Writes { fields, visit }, declaration);
+}
+
+fn written_field<'v>(target: &'v GoExpression, fields: &FxHashSet<String>) -> Option<&'v str> {
+    match target.unattributed() {
+        GoExpression::Field { name, .. } if fields.contains(name) => Some(name),
+        _ => None,
+    }
+}
+
+fn site_of(value: &GoExpression) -> usize {
+    value as *const GoExpression as usize
 }
 
 /// Declarations rewritten while the entries were found, with the entry each was rewritten
@@ -78,6 +163,7 @@ struct Plan {
 struct Program {
     signatures: FxHashMap<String, Signature>,
     internal: FxHashSet<String>,
+    fields: FxHashSet<String>,
 }
 
 struct Signature {
@@ -101,7 +187,7 @@ enum Place {
 const WIDEN_ENTRY_AFTER: usize = 3;
 
 impl Program {
-    fn of(declarations: &mut [GoDeclaration]) -> Program {
+    fn of(declarations: &mut [GoDeclaration], fields: FxHashSet<String>) -> Program {
         let mut signatures = FxHashMap::default();
         let mut mentioned_in_text = FxHashSet::default();
         let names: Vec<String> = declarations
@@ -138,7 +224,7 @@ impl Program {
             .iter()
             .filter(|name| {
                 let unexported = name.chars().next().is_some_and(|first| !first.is_uppercase());
-                unexported
+                (unexported || !fields.is_empty())
                     && !matches!(name.as_str(), "main" | "init")
                     && counts[name.as_str()] == 1
                     && !values.contains(name.as_str())
@@ -146,7 +232,7 @@ impl Program {
             })
             .cloned()
             .collect();
-        Program { signatures, internal }
+        Program { signatures, internal, fields }
     }
 
     fn plan(&self, declaration: &mut GoDeclaration) -> Plan {
@@ -194,6 +280,12 @@ impl Program {
         let mut scan =
             Scan { program: self, rewrites: false, calls_bounded: false, callees: vec![] };
         go_traversal::declaration(&mut scan, declaration);
+        if !self.fields.is_empty() {
+            let mut writes = false;
+            each_field_write(declaration, &self.fields, &mut |_, _| writes = true);
+            let interpret = scan.calls_bounded || writes;
+            return Plan { interpret, rewrites: false, callees: scan.callees };
+        }
         let interpret = scan.rewrites || scan.calls_bounded;
         Plan { interpret, rewrites: scan.rewrites, callees: scan.callees }
     }
@@ -686,7 +778,7 @@ impl Names {
                 break;
             }
         }
-        let relevant = relevant_names(body);
+        let relevant = relevant_names(body, &program.fields);
         Names { untracked: collect.untracked, assigned: collect.assigned, shapes, relevant }
     }
 }
@@ -694,19 +786,19 @@ impl Names {
 /// The names whose constraints can reach a proof: those that bounds tests, divisions and
 /// internal calls read, and those that the definitions and tests of relevant names read.
 /// Tracking only these keeps the states of large functions small.
-fn relevant_names(body: &mut Vec<GoStatement>) -> FxHashSet<String> {
-    #[derive(Default)]
-    struct Relevance {
+fn relevant_names(body: &mut Vec<GoStatement>, fields: &FxHashSet<String>) -> FxHashSet<String> {
+    struct Relevance<'f> {
+        fields: &'f FxHashSet<String>,
         relevant: FxHashSet<String>,
         /// When any of the first names is relevant, so are the second.
         edges: Vec<(Vec<String>, Vec<String>)>,
     }
-    impl Relevance {
+    impl Relevance<'_> {
         fn related(&mut self, names: Vec<String>) {
             self.edges.push((names.clone(), names));
         }
     }
-    impl Walk for Relevance {
+    impl Walk for Relevance<'_> {
         fn statement(&mut self, statement: &mut GoStatement) {
             match statement {
                 GoStatement::Define { names, values } => {
@@ -737,6 +829,9 @@ fn relevant_names(body: &mut Vec<GoStatement>) -> FxHashSet<String> {
                         };
                         if let GoExpression::Identifier(name) = target {
                             self.edges.push((vec![name.clone()], identifiers(value)));
+                        }
+                        if written_field(target, self.fields).is_some() {
+                            self.relevant.extend(identifiers(value));
                         }
                     }
                 }
@@ -778,10 +873,17 @@ fn relevant_names(body: &mut Vec<GoStatement>) -> FxHashSet<String> {
             {
                 arguments.iter().for_each(|argument| self.relevant.extend(identifiers(argument)));
             }
+            if let GoExpression::Composite { fields, .. } = value {
+                for (label, field) in fields.iter() {
+                    if label.as_ref().is_some_and(|label| self.fields.contains(label)) {
+                        self.relevant.extend(identifiers(field));
+                    }
+                }
+            }
             go_traversal::expression(self, value);
         }
     }
-    let mut relevance = Relevance::default();
+    let mut relevance = Relevance { fields, relevant: FxHashSet::default(), edges: vec![] };
     relevance.block(body);
     loop {
         let before = relevance.relevant.len();
@@ -1029,6 +1131,7 @@ struct Analysis<'p, 'k, 'e> {
     frames: Vec<Frame>,
     conditions: FxHashMap<Symbol, Condition>,
     calls: FxHashMap<String, Entry>,
+    observations: Option<FxHashMap<usize, bool>>,
 }
 
 impl<'p, 'k, 'e> Analysis<'p, 'k, 'e> {
@@ -1049,6 +1152,7 @@ impl<'p, 'k, 'e> Analysis<'p, 'k, 'e> {
             frames: vec![],
             conditions: FxHashMap::default(),
             calls: FxHashMap::default(),
+            observations: None,
         }
     }
 
@@ -1296,6 +1400,7 @@ impl<'p, 'k, 'e> Analysis<'p, 'k, 'e> {
             GoStatement::Assign { targets, values } => {
                 values.iter_mut().for_each(|value| self.visit(value, state));
                 targets.iter_mut().for_each(|target| self.visit_target(target, state));
+                self.observe_stores(targets, values, state);
                 if !keeps {
                     self.forget_heap(state);
                 }
@@ -1350,6 +1455,7 @@ impl<'p, 'k, 'e> Analysis<'p, 'k, 'e> {
                     continues: State::unreachable(),
                 });
                 for case in cases.iter_mut() {
+                    case.values.iter_mut().for_each(|test| self.visit(test, &mut rest));
                     let mut entered = if tested {
                         let mut entered = State::unreachable();
                         for test in &case.values {
@@ -1959,6 +2065,10 @@ impl<'p, 'k, 'e> Analysis<'p, 'k, 'e> {
     fn typing(&self, value: &GoExpression) -> Option<Typing> {
         match value {
             GoExpression::Integer(_) => Some(Typing::Untyped),
+            GoExpression::Attributed { value, .. } => self.typing(value),
+            GoExpression::Field { name, .. } if self.program.fields.contains(name) => {
+                Some(Typing::Typed(Kind::Int))
+            }
             GoExpression::Identifier(name) => {
                 let symbol = self.lookup(name)?;
                 self.bindings.get(&symbol)?.kind.map(Typing::Typed)
@@ -1978,9 +2088,12 @@ impl<'p, 'k, 'e> Analysis<'p, 'k, 'e> {
                     _ => None,
                 }
             }
-            GoExpression::Call { function, .. } => match &**function {
+            GoExpression::Call { function, arguments } => match &**function {
                 GoExpression::Identifier(name) if matches!(name.as_str(), "len" | "cap") => {
                     Some(Typing::Typed(Kind::Int))
+                }
+                GoExpression::Identifier(name) if matches!(name.as_str(), "min" | "max") => {
+                    self.typing_of_extremum(arguments)
                 }
                 GoExpression::Identifier(name) => {
                     let result = self.program.signatures.get(name)?.result.as_ref()?;
@@ -1996,6 +2109,19 @@ impl<'p, 'k, 'e> Analysis<'p, 'k, 'e> {
             },
             _ => None,
         }
+    }
+
+    fn typing_of_extremum(&self, arguments: &[GoExpression]) -> Option<Typing> {
+        let mut typing = Typing::Untyped;
+        for argument in arguments {
+            let argument = self.typing(argument).unwrap_or(Typing::Typed(Kind::Int));
+            typing = match (typing, argument) {
+                (Typing::Untyped, other) | (other, Typing::Untyped) => other,
+                (Typing::Typed(left), Typing::Typed(right)) if left == right => typing,
+                _ => return None,
+            };
+        }
+        Some(typing)
     }
 
     fn kind_of_definition(&self, value: &GoExpression) -> Option<Kind> {
@@ -2049,6 +2175,14 @@ impl<'p, 'k, 'e> Analysis<'p, 'k, 'e> {
         };
         match value {
             GoExpression::Integer(constant) => Some(Value::constant(*constant)),
+            GoExpression::Attributed { value, .. } => self.value_with(value, state, blank),
+            GoExpression::Field { name, .. } if self.program.fields.contains(name) => {
+                let (low, high) = Kind::Int32.range();
+                let temporary = self.temporary(state, Some(Kind::Int32));
+                state.add(ZERO, temporary, -low);
+                state.add(temporary, ZERO, high);
+                Some(Value::of(temporary))
+            }
             GoExpression::Identifier(name) if name.is_empty() => blank.map(Value::of),
             GoExpression::Identifier(name) => {
                 let symbol = self.lookup(name)?;
@@ -2083,6 +2217,11 @@ impl<'p, 'k, 'e> Analysis<'p, 'k, 'e> {
             GoExpression::Call { function, arguments } => match &**function {
                 GoExpression::Identifier(name) if name == "len" && arguments.len() == 1 => {
                     self.length(&arguments[0], state)
+                }
+                GoExpression::Identifier(name)
+                    if matches!(name.as_str(), "min" | "max") && !arguments.is_empty() =>
+                {
+                    self.extremum(name == "min", arguments, kind?, state, blank)
                 }
                 GoExpression::Qualified { package, name }
                     if package == "prim" && arguments.len() == 2 =>
@@ -2143,6 +2282,42 @@ impl<'p, 'k, 'e> Analysis<'p, 'k, 'e> {
             }
             _ => None,
         }
+    }
+
+    fn extremum(
+        &mut self,
+        least: bool,
+        arguments: &[GoExpression],
+        kind: Kind,
+        state: &mut State,
+        blank: Option<Symbol>,
+    ) -> Option<Value> {
+        let values: Vec<Option<Value>> =
+            arguments.iter().map(|argument| self.value_with(argument, state, blank)).collect();
+        let temporary = Value::of(self.temporary(state, Some(kind)));
+        let mut bounds = vec![];
+        for value in &values {
+            let bound = match value {
+                Some(value) if least => {
+                    state.assume_at_most(temporary, *value, 0);
+                    self.lower(state, *value)
+                }
+                Some(value) => {
+                    state.assume_at_most(*value, temporary, 0);
+                    self.upper(state, *value)
+                }
+                None => None,
+            };
+            bounds.push(bound);
+        }
+        let bounds: Option<Vec<i128>> = bounds.into_iter().collect();
+        if let Some(bounds) = bounds {
+            match least {
+                true => state.add(ZERO, temporary.symbol, -bounds.into_iter().min()?),
+                false => state.add(temporary.symbol, ZERO, bounds.into_iter().max()?),
+            }
+        }
+        Some(temporary)
     }
 
     /// `left ± right` of the kind, when it cannot wrap.
@@ -2322,6 +2497,14 @@ impl<'p, 'k, 'e> Analysis<'p, 'k, 'e> {
             }
             _ => walk_children(value, |child| self.visit(child, state)),
         }
+        if let GoExpression::Composite { fields, .. } = value {
+            for (label, field) in fields.iter() {
+                if label.as_ref().is_some_and(|label| self.program.fields.contains(label)) {
+                    let fits = self.fits_in_int32(field, state);
+                    self.observe(site_of(field), fits);
+                }
+            }
+        }
         if let GoExpression::Call { function, arguments } = value {
             if let GoExpression::Identifier(callee) = &**function {
                 let callee = callee.clone();
@@ -2373,6 +2556,42 @@ impl<'p, 'k, 'e> Analysis<'p, 'k, 'e> {
                 .is_some_and(|value| self.lower(&scratch, value).is_some_and(|lower| lower >= 1));
         self.forget_temporaries(&mut scratch, from);
         typed && natural
+    }
+
+    fn observe_stores(&mut self, targets: &[GoExpression], values: &[GoExpression], state: &State) {
+        for (position, target) in targets.iter().enumerate() {
+            if written_field(target, &self.program.fields).is_none() {
+                continue;
+            }
+            let fits =
+                targets.len() == values.len() && self.fits_in_int32(&values[position], state);
+            self.observe(site_of(target), fits);
+        }
+    }
+
+    fn fits_in_int32(&mut self, value: &GoExpression, state: &State) -> bool {
+        if self.observations.is_none() || self.quiet > 0 || state.unreachable {
+            return false;
+        }
+        let from = self.temporaries.len();
+        let mut scratch = state.clone();
+        let (low, high) = Kind::Int32.range();
+        let fits = self.value(value, &mut scratch).is_some_and(|value| {
+            self.lower(&scratch, value).is_some_and(|lower| lower >= low)
+                && self.upper(&scratch, value).is_some_and(|upper| upper <= high)
+        });
+        self.forget_temporaries(&mut scratch, from);
+        fits
+    }
+
+    fn observe(&mut self, site: usize, fits: bool) {
+        if self.quiet > 0 {
+            return;
+        }
+        if let Some(observations) = &mut self.observations {
+            let proven = observations.entry(site).or_insert(true);
+            *proven &= fits;
+        }
     }
 
     /// Records what a call of an internal function gives its parameters.
@@ -2740,10 +2959,12 @@ fn walk_children(value: &mut GoExpression, mut visit: impl FnMut(&mut GoExpressi
         | GoExpression::Conversion { value, .. }
         | GoExpression::TypeAssertion { value, .. }
         | GoExpression::Spread(value)
-        | GoExpression::Instantiation { function: value, .. } => visit(value),
+        | GoExpression::Instantiation { function: value, .. }
+        | GoExpression::Attributed { value, .. } => visit(value),
         GoExpression::Composite { fields, .. } => {
             fields.iter_mut().for_each(|(_, field)| visit(field))
         }
+        GoExpression::Results(values) => values.iter_mut().for_each(visit),
         _ => {}
     }
 }
@@ -2768,9 +2989,13 @@ fn each_subexpression(value: &GoExpression, visit: &mut impl FnMut(&GoExpression
         | GoExpression::Conversion { value: inner, .. }
         | GoExpression::TypeAssertion { value: inner, .. }
         | GoExpression::Spread(inner)
-        | GoExpression::Instantiation { function: inner, .. } => each_subexpression(inner, visit),
+        | GoExpression::Instantiation { function: inner, .. }
+        | GoExpression::Attributed { value: inner, .. } => each_subexpression(inner, visit),
         GoExpression::Composite { fields, .. } => {
             fields.iter().for_each(|(_, field)| each_subexpression(field, visit))
+        }
+        GoExpression::Results(values) => {
+            values.iter().for_each(|value| each_subexpression(value, visit))
         }
         _ => {}
     }

@@ -40,7 +40,7 @@ type Tree struct {
 //line Main.purs:13:20
 	Node2 *Tree
 //line Main.purs:13:20
-	Node1 int
+	Node1 int32
 //line Main.purs:13:1
 }
 
@@ -50,7 +50,7 @@ var sharedTreeLeaf = &Tree{}
 //line Main.purs:13:20
 func Node(node0 *Tree, node1 int, node2 *Tree) *Tree {
 //line Main.purs:13:20
-	return &Tree{Node0: node0, Node1: node1, Node2: node2}
+	return &Tree{Node0: node0, Node1: int32(node1), Node2: node2}
 //line Main.purs:13:20
 }
 
@@ -164,7 +164,7 @@ func insert(x int, value *Tree) *Tree {
 //line Main.purs:24:3
 	left := value.Node0
 //line Main.purs:24:3
-	y := value.Node1
+	y := int(value.Node1)
 //line Main.purs:24:3
 	right := value.Node2
 //line Main.purs:25:7
@@ -208,7 +208,7 @@ func insertLeaf(x int) *Tree {
 //line Main.purs:24:3
 	left := sharedTreeLeaf.Node0
 //line Main.purs:24:3
-	y := sharedTreeLeaf.Node1
+	y := int(sharedTreeLeaf.Node1)
 //line Main.purs:24:3
 	right := sharedTreeLeaf.Node2
 //line Main.purs:25:7

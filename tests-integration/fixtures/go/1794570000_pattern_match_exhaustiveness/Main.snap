@@ -49,8 +49,8 @@ const (
 )
 
 type Shape struct {
-	Field0 int
-	Field1 int
+	Field0 int32
+	Field1 int32
 	Tag    uint8
 }
 
@@ -60,11 +60,11 @@ const (
 )
 
 func Circle(field0 int) Shape {
-	return Shape{Tag: ShapeCircle, Field0: field0}
+	return Shape{Tag: ShapeCircle, Field0: int32(field0)}
 }
 
 func Rectangle(field0 int, field1 int) Shape {
-	return Shape{Tag: ShapeRectangle, Field0: field0, Field1: field1}
+	return Shape{Tag: ShapeRectangle, Field0: int32(field0), Field1: int32(field1)}
 }
 
 var main_ = initializeMain_()
@@ -81,10 +81,10 @@ func initializeMain_() []string {
 		var result int
 		switch x.Tag {
 		case ShapeCircle:
-			radius := x.Field0
+			radius := int(x.Field0)
 			result = 3 * radius * radius
 		default: // ShapeRectangle
-			result = x.Field0 * x.Field1
+			result = int(x.Field0) * int(x.Field1)
 		}
 		mapped2[index] = strconv.Itoa(result)
 	}

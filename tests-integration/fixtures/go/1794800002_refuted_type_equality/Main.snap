@@ -18,7 +18,7 @@ type ValueInt struct {
 	StringValue1 string
 	Pair0        *ValueInt
 	Pair1        *ValueInt
-	Field1       int
+	Field1       int32
 	Tag          uint8
 }
 
@@ -35,7 +35,7 @@ type ValueString struct {
 	StringValue1 string
 	Pair0        *ValueString
 	Pair1        *ValueString
-	Field1       int
+	Field1       int32
 	Tag          uint8
 }
 
@@ -47,7 +47,7 @@ const (
 )
 
 func IntValue(field0 Equal, field1 int) *ValueInt {
-	return &ValueInt{Tag: ValueIntIntValue, Field0: field0, Field1: field1}
+	return &ValueInt{Tag: ValueIntIntValue, Field0: field0, Field1: int32(field1)}
 }
 
 func StringValue(stringValue0 Equal, stringValue1 string) *ValueString {
@@ -64,7 +64,7 @@ func evaluateInt(value *ValueInt) int {
 	for {
 		switch value.Tag {
 		case ValueIntIntValue, ValueIntAgeValue:
-			n := value.Field1
+			n := int(value.Field1)
 			return n
 		default: // ValueIntPair
 			value = value.Pair0

@@ -64,7 +64,7 @@ type Problem struct {
 
 type Either struct {
 	Left  Problem
-	Right int
+	Right int32
 	Tag   uint8
 }
 

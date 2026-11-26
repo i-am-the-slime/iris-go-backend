@@ -8,11 +8,11 @@ import "fixture/shared"
 
 type TupleBody struct {
 	Second shared.Body
-	First  int
+	First  int32
 }
 
 type TupleInt struct {
-	First  int
+	First  int32
 	Second int
 }
 
@@ -55,11 +55,11 @@ func initializeMain_() float64 {
 	array := []int{3, 4}
 	accumulator2 := []tuple.TupleInt{}
 	for index, i := range array {
-		accumulator2 = append(accumulator2, tuple.TupleInt{First: index, Second: i})
+		accumulator2 = append(accumulator2, tuple.TupleInt{First: int32(index), Second: i})
 	}
 	accumulator3 := 0
 	for tupleIndex := range accumulator2 {
-		accumulator3 += accumulator2[tupleIndex].First * accumulator2[tupleIndex].Second
+		accumulator3 += int(accumulator2[tupleIndex].First) * accumulator2[tupleIndex].Second
 	}
 	return accumulatorVx + accumulatorVy + accumulatorVx2 + accumulator + toNumber(accumulator3)
 }

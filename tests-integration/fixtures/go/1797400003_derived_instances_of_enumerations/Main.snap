@@ -151,7 +151,7 @@ type Card struct {
 type Expression struct {
 	Add0 *Expression
 	Add1 *Expression
-	Leaf int
+	Leaf int32
 	Tag  uint8
 }
 
@@ -268,7 +268,7 @@ func ordered(left Suit, right Suit) ordering.Ordering {
 func scaled(factor int, value *Expression) int {
 	switch value.Tag {
 	case ExpressionLeaf:
-		return value.Leaf * factor
+		return int(value.Leaf) * factor
 	default: // ExpressionAdd
 		return scaled(factor, value.Add0) + scaled(factor, value.Add1)
 	}

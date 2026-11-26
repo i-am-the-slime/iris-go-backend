@@ -16,7 +16,7 @@ const (
 )
 
 type EitherInt struct {
-	Field0 int
+	Field0 int32
 	Tag    uint8
 }
 
@@ -40,7 +40,7 @@ package variant
 
 type NotFoundTooBig struct {
 	NotFound string
-	TooBig   int
+	TooBig   int32
 	Tag      uint8
 }
 
@@ -66,7 +66,7 @@ type NotFoundTooBigFailure struct {
 }
 
 func TooBig(tooBig int) NotFoundTooBig {
-	return NotFoundTooBig{Tag: NotFoundTooBigTooBig, TooBig: tooBig}
+	return NotFoundTooBig{Tag: NotFoundTooBigTooBig, TooBig: int32(tooBig)}
 }
 
 func NotFound(notFound string) NotFoundTooBig {
@@ -125,7 +125,7 @@ func main() {
 		case variant.NotFoundTooBigNotFound:
 			result5 = "missing: " + err2.Left.NotFound
 		default: // variant.NotFoundTooBigTooBig
-			result5 = "too big: " + strconv.Itoa(err2.Left.TooBig)
+			result5 = "too big: " + strconv.Itoa(int(err2.Left.TooBig))
 		}
 	} else {
 		result5 = s
@@ -138,7 +138,7 @@ func main() {
 		case variant.NotFoundTooBigNotFound:
 			result6 = "missing: " + err2.Left.NotFound
 		default: // variant.NotFoundTooBigTooBig
-			result6 = "too big: " + strconv.Itoa(err2.Left.TooBig)
+			result6 = "too big: " + strconv.Itoa(int(err2.Left.TooBig))
 		}
 	} else {
 		result6 = s2
@@ -151,7 +151,7 @@ func main() {
 		case variant.NotFoundTooBigNotFound:
 			result7 = "missing: " + err2.Left.NotFound
 		default: // variant.NotFoundTooBigTooBig
-			result7 = "too big: " + strconv.Itoa(err2.Left.TooBig)
+			result7 = "too big: " + strconv.Itoa(int(err2.Left.TooBig))
 		}
 	} else {
 		result7 = s3

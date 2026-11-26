@@ -64,8 +64,8 @@ func ArrayUnit(array []struct{}) string {
 package tuple
 
 type Tuple struct {
-	First  int
-	Second int
+	First  int32
+	Second int32
 }
 
 // main.go

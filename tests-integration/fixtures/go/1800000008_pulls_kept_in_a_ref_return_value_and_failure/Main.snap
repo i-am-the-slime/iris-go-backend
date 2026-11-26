@@ -6,7 +6,7 @@ package either
 
 type Either struct {
 	Left  string
-	Right int
+	Right int32
 	Tag   uint8
 }
 

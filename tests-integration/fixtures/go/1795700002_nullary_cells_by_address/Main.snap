@@ -8,7 +8,7 @@ import "fixture/shared"
 
 type Route struct {
 	Trip1 *Route
-	Trip0 int
+	Trip0 int32
 }
 
 var sharedRouteHome = &Route{}
@@ -16,7 +16,7 @@ var sharedRouteHome = &Route{}
 var sharedRouteAway = &Route{}
 
 func Trip(trip0 int, trip1 *Route) *Route {
-	return &Route{Trip0: trip0, Trip1: trip1}
+	return &Route{Trip0: int32(trip0), Trip1: trip1}
 }
 
 var main_ = initializeMain_()
@@ -32,7 +32,7 @@ func legs(value *Route) int {
 	if value == sharedRouteAway {
 		return 100
 	}
-	return value.Trip0 + legs(value.Trip1)
+	return int(value.Trip0) + legs(value.Trip1)
 }
 
 func endsAway(value *Route) bool {

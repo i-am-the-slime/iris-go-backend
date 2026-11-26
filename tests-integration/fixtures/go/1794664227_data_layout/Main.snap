@@ -13,7 +13,7 @@ import (
 type Expr struct {
 	Field0 *Expr
 	Field1 *Expr
-	Val    int
+	Val    int32
 	Tag    uint8
 }
 
@@ -89,7 +89,7 @@ func Couple(field0 int, field1 int) Item {
 }
 
 func Val(val int) *Expr {
-	return &Expr{Tag: ExprVal, Val: val}
+	return &Expr{Tag: ExprVal, Val: int32(val)}
 }
 
 var main_ = initializeMain_()
@@ -122,7 +122,7 @@ func initializeMain_() shared.MainResult {
 func evaluate(expr *Expr) int {
 	switch expr.Tag {
 	case ExprVal:
-		return expr.Val
+		return int(expr.Val)
 	case ExprAdd:
 		return evaluate(expr.Field0) + evaluate(expr.Field1)
 	case ExprMul:

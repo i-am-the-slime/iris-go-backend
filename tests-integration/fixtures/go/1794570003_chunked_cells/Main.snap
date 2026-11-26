@@ -8,7 +8,7 @@ import "github.com/i-am-the-slime/iris-go/alloc"
 
 type List struct {
 	Cons1 *List
-	Cons0 int
+	Cons0 int32
 }
 
 var sharedListNil = &List{}
@@ -23,13 +23,13 @@ type MainResult struct {
 type Tree struct {
 	Node0 *Tree
 	Node2 *Tree
-	Node1 int
+	Node1 int32
 }
 
 var sharedTreeLeaf = &Tree{}
 
 func Cons(cons0 int, cons1 *List) *List {
-	return &List{Cons0: cons0, Cons1: cons1}
+	return &List{Cons0: int32(cons0), Cons1: cons1}
 }
 
 var main_ = initializeMain_()
@@ -47,7 +47,7 @@ func total(tree *Tree) int {
 	if tree == sharedTreeLeaf {
 		return 0
 	}
-	return total(tree.Node0) + tree.Node1 + total(tree.Node2)
+	return total(tree.Node0) + int(tree.Node1) + total(tree.Node2)
 }
 
 func mainGo(current int, accumulator *List) *List {
@@ -56,7 +56,7 @@ func mainGo(current int, accumulator *List) *List {
 		if current < 1 {
 			return accumulator
 		}
-		current, accumulator = current-1, listIntCells.New(List{Cons0: current, Cons1: accumulator})
+		current, accumulator = current-1, listIntCells.New(List{Cons0: int32(current), Cons1: accumulator})
 	}
 }
 
@@ -66,7 +66,7 @@ func mainGo2(remaining int, tree *Tree) *Tree {
 		if remaining <= 0 {
 			return tree
 		}
-		remaining, tree = remaining-1, treeCells.New(Tree{Node0: tree, Node1: remaining, Node2: treeCells.New(Tree{Node0: sharedTreeLeaf, Node1: remaining * 2, Node2: sharedTreeLeaf})})
+		remaining, tree = remaining-1, treeCells.New(Tree{Node0: tree, Node1: int32(remaining), Node2: treeCells.New(Tree{Node0: sharedTreeLeaf, Node1: int32(remaining * 2), Node2: sharedTreeLeaf})})
 	}
 }
 
@@ -75,10 +75,10 @@ func largestReplacesItsCellGo(best *List, list *List) *List {
 		if list == sharedListNil {
 			return best
 		}
-		value := list.Cons0
+		value := int(list.Cons0)
 		rest := list.Cons1
 		if best != sharedListNil {
-			known := best.Cons0
+			known := int(best.Cons0)
 			if known >= value {
 				list = rest
 				continue
@@ -97,10 +97,10 @@ func largestReplacesItsCellGoReusing(best *List, list *List) *List {
 		if list == sharedListNil {
 			return best
 		}
-		value := list.Cons0
+		value := int(list.Cons0)
 		rest := list.Cons1
 		if best != sharedListNil {
-			known := best.Cons0
+			known := int(best.Cons0)
 			if known >= value {
 				list = rest
 				continue

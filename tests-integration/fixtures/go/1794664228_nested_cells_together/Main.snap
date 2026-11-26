@@ -25,7 +25,7 @@ const (
 
 type List struct {
 	Cons1 *List
-	Cons0 int
+	Cons0 int32
 }
 
 var sharedListNil = &List{}
@@ -35,7 +35,7 @@ func Val(val int) *Expr {
 }
 
 func Cons(cons0 int, cons1 *List) *List {
-	return &List{Cons0: cons0, Cons1: cons1}
+	return &List{Cons0: int32(cons0), Cons1: cons1}
 }
 
 func Mul(field0 *Expr, field1 *Expr) *Expr {
@@ -78,7 +78,7 @@ func total(list *List) int {
 	if list == sharedListNil {
 		return 0
 	}
-	return list.Cons0 + total(list.Cons1)
+	return int(list.Cons0) + total(list.Cons1)
 }
 
 func evaluateAdd(left *Expr, right *Expr) int {
@@ -95,7 +95,7 @@ func mainGo(remaining int, list *List) *List {
 		if remaining <= 0 {
 			return list
 		}
-		remaining, list = remaining-1, listIntCells.New(List{Cons0: remaining, Cons1: listIntCells.New(List{Cons0: remaining * 10, Cons1: list})})
+		remaining, list = remaining-1, listIntCells.New(List{Cons0: int32(remaining), Cons1: listIntCells.New(List{Cons0: int32(remaining * 10), Cons1: list})})
 	}
 }
 

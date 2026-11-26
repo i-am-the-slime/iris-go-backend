@@ -5,7 +5,7 @@ source: tests-integration/src/fixtures.rs
 package either
 
 type EitherInt struct {
-	Field0 int
+	Field0 int32
 	Tag    uint8
 }
 

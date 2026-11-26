@@ -28,10 +28,10 @@ package distances
 type Distance struct {
 	Distance0 int
 	Distance1 int
-	Distance2 int
-	Distance3 int
+	Distance2 int32
+	Distance3 int32
 	Distance4 int
-	Distance5 int
+	Distance5 int32
 	Tag       uint8
 }
 
@@ -41,7 +41,7 @@ const (
 )
 
 func DistanceDistance(distance0 int, distance1 int, distance2 int, distance3 int, distance4 int, distance5 int) Distance {
-	return Distance{Tag: DistanceDistance2, Distance0: distance0, Distance1: distance1, Distance2: distance2, Distance3: distance3, Distance4: distance4, Distance5: distance5}
+	return Distance{Tag: DistanceDistance2, Distance0: distance0, Distance1: distance1, Distance2: int32(distance2), Distance3: int32(distance3), Distance4: distance4, Distance5: int32(distance5)}
 }
 
 // main.go
@@ -61,7 +61,7 @@ func main() {
 		result = "None"
 	default: // distances.DistanceDistance2
 		text := []byte("Distance ")
-		text = show.AppendShowArrayInt(text, []int{scrutinee.Distance0, scrutinee.Distance1, scrutinee.Distance2, scrutinee.Distance3, scrutinee.Distance4, scrutinee.Distance5})
+		text = show.AppendShowArrayInt(text, []int{scrutinee.Distance0, scrutinee.Distance1, int(scrutinee.Distance2), int(scrutinee.Distance3), scrutinee.Distance4, int(scrutinee.Distance5)})
 		result = string(text)
 	}
 	journal.Log(result)
@@ -72,7 +72,7 @@ func main() {
 		result2 = "None"
 	default: // distances.DistanceDistance2
 		text := []byte("Distance ")
-		text = show.AppendShowArrayInt(text, []int{scrutinee2.Distance0, scrutinee2.Distance1, scrutinee2.Distance2, scrutinee2.Distance3, scrutinee2.Distance4, scrutinee2.Distance5})
+		text = show.AppendShowArrayInt(text, []int{scrutinee2.Distance0, scrutinee2.Distance1, int(scrutinee2.Distance2), int(scrutinee2.Distance3), scrutinee2.Distance4, int(scrutinee2.Distance5)})
 		result2 = string(text)
 	}
 	journal.Log(result2)
@@ -103,8 +103,8 @@ func farthest(array []int) distances.Distance {
 		} else {
 			left0 := d.Distance0
 			left1 := d.Distance1
-			left2 := d.Distance2
-			left3 := d.Distance3
+			left2 := int(d.Distance2)
+			left3 := int(d.Distance3)
 			left4 := d.Distance4
 			if left0 < accumulatorDistance0 {
 				result = false
@@ -121,7 +121,7 @@ func farthest(array []int) distances.Distance {
 							if left4 < accumulatorDistance4 {
 								result = false
 							} else if left4 == accumulatorDistance4 {
-								result = d.Distance5 > accumulatorDistance5
+								result = int(d.Distance5) > accumulatorDistance5
 							} else {
 								result = true
 							}
@@ -139,8 +139,8 @@ func farthest(array []int) distances.Distance {
 			}
 		}
 		if result {
-			accumulatorDistance0, accumulatorDistance1, accumulatorDistance2, accumulatorDistance3, accumulatorDistance4, accumulatorDistance5, accumulatorTag = d.Distance0, d.Distance1, d.Distance2, d.Distance3, d.Distance4, d.Distance5, d.Tag
+			accumulatorDistance0, accumulatorDistance1, accumulatorDistance2, accumulatorDistance3, accumulatorDistance4, accumulatorDistance5, accumulatorTag = d.Distance0, d.Distance1, int(d.Distance2), int(d.Distance3), d.Distance4, int(d.Distance5), d.Tag
 		}
 	}
-	return distances.Distance{Distance0: accumulatorDistance0, Distance1: accumulatorDistance1, Distance2: accumulatorDistance2, Distance3: accumulatorDistance3, Distance4: accumulatorDistance4, Distance5: accumulatorDistance5, Tag: accumulatorTag}
+	return distances.Distance{Distance0: accumulatorDistance0, Distance1: accumulatorDistance1, Distance2: int32(accumulatorDistance2), Distance3: int32(accumulatorDistance3), Distance4: accumulatorDistance4, Distance5: int32(accumulatorDistance5), Tag: accumulatorTag}
 }

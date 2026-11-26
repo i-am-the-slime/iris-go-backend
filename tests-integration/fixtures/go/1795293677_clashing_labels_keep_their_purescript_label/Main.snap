@@ -53,7 +53,7 @@ type ForeignError struct {
 	ErrorAtIndex1    *ForeignError
 	ErrorAtProperty0 string
 	ErrorAtProperty1 *ForeignError
-	ErrorAtIndex0    int
+	ErrorAtIndex0    int32
 	Tag              uint8
 }
 

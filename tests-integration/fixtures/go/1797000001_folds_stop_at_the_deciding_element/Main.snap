@@ -5,8 +5,8 @@ source: tests-integration/src/fixtures.rs
 package tuple
 
 type Tuple struct {
-	First  int
-	Second int
+	First  int32
+	Second int32
 }
 
 // Partial/Unsafe/unsafe.go

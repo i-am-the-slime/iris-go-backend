@@ -7,7 +7,7 @@ package either
 import "fixture/Data/Maybe"
 
 type Either struct {
-	Right int
+	Right int32
 	Tag   uint8
 	Left  maybe.Boolean
 }

@@ -6,7 +6,7 @@ package either
 
 type Either struct {
 	Left  string
-	Right int
+	Right int32
 	Tag   uint8
 }
 
@@ -16,7 +16,7 @@ const (
 )
 
 func Right(right int) Either {
-	return Either{Tag: EitherRight, Right: right}
+	return Either{Tag: EitherRight, Right: int32(right)}
 }
 
 func Left(left string) Either {
@@ -45,7 +45,7 @@ func main() {
 	case either.EitherLeft:
 		result = "(Left " + prim.ShowString(finished.Left) + ")"
 	default: // either.EitherRight
-		result = "(Right " + strconv.Itoa(finished.Right) + ")"
+		result = "(Right " + strconv.Itoa(int(finished.Right)) + ")"
 	}
 	journal.Log(result)
 	broken := outcome.OutcomeImpl(func(code int) func(string) either.Either {
@@ -58,7 +58,7 @@ func main() {
 	case either.EitherLeft:
 		result2 = "(Left " + prim.ShowString(broken.Left) + ")"
 	default: // either.EitherRight
-		result2 = "(Right " + strconv.Itoa(broken.Right) + ")"
+		result2 = "(Right " + strconv.Itoa(int(broken.Right)) + ")"
 	}
 	journal.Log(result2)
 }

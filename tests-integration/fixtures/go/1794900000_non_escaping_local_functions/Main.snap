@@ -12,13 +12,13 @@ import (
 
 type List struct {
 	Cons1 *List
-	Cons0 int
+	Cons0 int32
 }
 
 var sharedListNil = &List{}
 
 func Cons(cons0 int, cons1 *List) *List {
-	return &List{Cons0: cons0, Cons1: cons1}
+	return &List{Cons0: int32(cons0), Cons1: cons1}
 }
 
 func main_() int {
@@ -41,9 +41,9 @@ func foldrGo(accumulator *List, list *List) *List {
 		if list == sharedListNil {
 			return accumulator
 		}
-		x := list.Cons0
+		x := int(list.Cons0)
 		xs := list.Cons1
-		accumulator, list = listIntCells.New(List{Cons0: x, Cons1: accumulator}), xs
+		accumulator, list = listIntCells.New(List{Cons0: int32(x), Cons1: accumulator}), xs
 	}
 }
 
@@ -52,7 +52,7 @@ func foldrGo2(f func(int) func(*direct.ConsList[int]) *direct.ConsList[int], acc
 		if list == sharedListNil {
 			return accumulator
 		}
-		x := list.Cons0
+		x := int(list.Cons0)
 		xs := list.Cons1
 		accumulator, list = f(x)(accumulator), xs
 	}

@@ -6,7 +6,7 @@ package tuple
 
 type Tuple struct {
 	First  string
-	Second int
+	Second int32
 }
 
 // main.go
@@ -54,7 +54,7 @@ func count(trees []Tree) int {
 
 func size(tree Tree) int {
 	if tree.Tag == TreeLeaf {
-		return tree.Leaf.Second
+		return int(tree.Leaf.Second)
 	}
 	return count(tree.Node)
 }

@@ -85,7 +85,7 @@ import "fixture/shared"
 
 type Tuple struct {
 	Second shared.Body
-	First  int
+	First  int32
 }
 
 // main.go

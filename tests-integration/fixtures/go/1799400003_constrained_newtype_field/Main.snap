@@ -6,7 +6,7 @@ package either
 
 type EitherString struct {
 	Left  string
-	Right int
+	Right int32
 	Tag   uint8
 }
 
@@ -16,7 +16,7 @@ const (
 )
 
 type EitherInt struct {
-	Field0 int
+	Field0 int32
 	Tag    uint8
 }
 

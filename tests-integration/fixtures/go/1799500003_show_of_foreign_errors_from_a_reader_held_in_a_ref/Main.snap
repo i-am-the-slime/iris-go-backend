@@ -36,7 +36,7 @@ type ForeignError struct {
 	ErrorAtIndex1    *ForeignError
 	ErrorAtProperty0 string
 	ErrorAtProperty1 *ForeignError
-	ErrorAtIndex0    int
+	ErrorAtIndex0    int32
 	Tag              uint8
 }
 
@@ -61,7 +61,7 @@ type NonEmpty struct {
 
 type Either struct {
 	Left  NonEmpty
-	Right int
+	Right int32
 	Tag   uint8
 }
 
@@ -123,7 +123,7 @@ func AppendShow(buffer []byte, foreignError *ForeignError) []byte {
 		buffer = append(buffer, ')')
 	case ForeignErrorErrorAtIndex:
 		buffer = append(buffer, "(ErrorAtIndex "...)
-		buffer = strconv.AppendInt(buffer, int64(foreignError.ErrorAtIndex0), 10)
+		buffer = strconv.AppendInt(buffer, int64(int(foreignError.ErrorAtIndex0)), 10)
 		buffer = append(buffer, ' ')
 		buffer = AppendShow(buffer, foreignError.ErrorAtIndex1)
 		buffer = append(buffer, ')')

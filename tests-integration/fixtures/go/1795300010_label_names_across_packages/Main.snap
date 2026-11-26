@@ -31,7 +31,7 @@ package variant
 
 type AX_respondNowALater struct {
 	Later  string
-	Field0 int
+	Field0 int32
 	Tag    uint8
 }
 
@@ -44,7 +44,7 @@ const (
 
 type X_respondNowALater struct {
 	Later  string
-	Field0 int
+	Field0 int32
 	Tag    uint8
 }
 
@@ -55,15 +55,15 @@ const (
 )
 
 func X_respondNowAX_respondNowALater(field0 int) AX_respondNowALater {
-	return AX_respondNowALater{Tag: AX_respondNowALaterX_respondNow, Field0: field0}
+	return AX_respondNowALater{Tag: AX_respondNowALaterX_respondNow, Field0: int32(field0)}
 }
 
 func AAX_respondNowALater(field0 int) AX_respondNowALater {
-	return AX_respondNowALater{Tag: AX_respondNowALaterA2, Field0: field0}
+	return AX_respondNowALater{Tag: AX_respondNowALaterA2, Field0: int32(field0)}
 }
 
 func AAX_respondNowALater2(field0 int) AX_respondNowALater {
-	return AX_respondNowALater{Tag: AX_respondNowALaterA, Field0: field0}
+	return AX_respondNowALater{Tag: AX_respondNowALaterA, Field0: int32(field0)}
 }
 
 func LaterAX_respondNowALater(later string) AX_respondNowALater {
@@ -71,11 +71,11 @@ func LaterAX_respondNowALater(later string) AX_respondNowALater {
 }
 
 func X_respondNowX_respondNowALater(field0 int) X_respondNowALater {
-	return X_respondNowALater{Tag: X_respondNowALaterX_respondNow, Field0: field0}
+	return X_respondNowALater{Tag: X_respondNowALaterX_respondNow, Field0: int32(field0)}
 }
 
 func AX_respondNowALater2(field0 int) X_respondNowALater {
-	return X_respondNowALater{Tag: X_respondNowALaterA, Field0: field0}
+	return X_respondNowALater{Tag: X_respondNowALaterA, Field0: int32(field0)}
 }
 
 func LaterX_respondNowALater(later string) X_respondNowALater {
@@ -93,11 +93,11 @@ import (
 func Describe(variant2 variant.AX_respondNowALater) string {
 	switch variant2.Tag {
 	case variant.AX_respondNowALaterA:
-		return "A " + strconv.Itoa(variant2.Field0)
+		return "A " + strconv.Itoa(int(variant2.Field0))
 	case variant.AX_respondNowALaterX_respondNow:
-		return DescribeFallback(variant.X_respondNowX_respondNowALater(variant2.Field0))
+		return DescribeFallback(variant.X_respondNowX_respondNowALater(int(variant2.Field0)))
 	case variant.AX_respondNowALaterA2:
-		return DescribeFallback(variant.AX_respondNowALater2(variant2.Field0))
+		return DescribeFallback(variant.AX_respondNowALater2(int(variant2.Field0)))
 	default: // variant.AX_respondNowALaterLater
 		return DescribeFallback(variant.LaterX_respondNowALater(variant2.Later))
 	}
@@ -106,9 +106,9 @@ func Describe(variant2 variant.AX_respondNowALater) string {
 func DescribeFallback(variant2 variant.X_respondNowALater) string {
 	switch variant2.Tag {
 	case variant.X_respondNowALaterX_respondNow:
-		return "now " + strconv.Itoa(variant2.Field0)
+		return "now " + strconv.Itoa(int(variant2.Field0))
 	case variant.X_respondNowALaterA:
-		return "a " + strconv.Itoa(variant2.Field0)
+		return "a " + strconv.Itoa(int(variant2.Field0))
 	default: // variant.X_respondNowALaterLater
 		return "later " + variant2.Later
 	}

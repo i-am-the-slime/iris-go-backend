@@ -18,7 +18,7 @@ package tuple
 
 type Tuple struct {
 	First  string
-	Second int
+	Second int32
 }
 
 // main.go
@@ -36,7 +36,7 @@ import (
 func main() {
 	object2 := object.New[int]()
 	for _, tuple := range []tuple.Tuple{{First: "bearerAuth", Second: 1}, {First: "apiKey", Second: 2}} {
-		object.Poke(tuple.First, tuple.Second, object2)
+		object.Poke(tuple.First, int(tuple.Second), object2)
 	}
 	var schemes any = shared.Convert(object2)
 	journal.Log(foreignvalue.TypeOf(schemes))

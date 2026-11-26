@@ -45,7 +45,7 @@ const (
 type Tree struct {
 	Node1  *Tree
 	Node4  *Tree
-	Node2  int
+	Node2  int32
 	Node0  Color
 	Node3  bool
 	Unique uint8
@@ -54,7 +54,7 @@ type Tree struct {
 var SharedTreeLeaf = &Tree{}
 
 func Node(node0 Color, node1 *Tree, node2 int, node3 bool, node4 *Tree) *Tree {
-	return &Tree{Node0: node0, Node1: node1, Node2: node2, Node3: node3, Node4: node4}
+	return &Tree{Node0: node0, Node1: node1, Node2: int32(node2), Node3: node3, Node4: node4}
 }
 
 func Size(value *Tree) int {
@@ -104,7 +104,7 @@ func Ordered(low int, high int, value *Tree) bool {
 			return true
 		}
 		l := value.Node1
-		k := value.Node2
+		k := int(value.Node2)
 		r := value.Node4
 		if low < k {
 			if k < high {
@@ -122,23 +122,23 @@ func Ordered(low int, high int, value *Tree) bool {
 
 func Ins(kx int, vx bool, value *Tree) *Tree {
 	if value == SharedTreeLeaf {
-		return &Tree{Node0: ColorRed, Node1: SharedTreeLeaf, Node2: kx, Node3: vx, Node4: SharedTreeLeaf, Unique: 3}
+		return &Tree{Node0: ColorRed, Node1: SharedTreeLeaf, Node2: int32(kx), Node3: vx, Node4: SharedTreeLeaf, Unique: 3}
 	}
 	if value.Node0 == ColorRed {
 		a := value.Node1
-		ky := value.Node2
+		ky := int(value.Node2)
 		vy := value.Node3
 		b := value.Node4
 		if kx < ky {
-			return &Tree{Node0: ColorRed, Node1: Ins(kx, vx, a), Node2: ky, Node3: vy, Node4: b, Unique: 1}
+			return &Tree{Node0: ColorRed, Node1: Ins(kx, vx, a), Node2: int32(ky), Node3: vy, Node4: b, Unique: 1}
 		}
 		if kx == ky {
 			return Node(ColorRed, a, kx, vx, b)
 		}
-		return &Tree{Node0: ColorRed, Node1: a, Node2: ky, Node3: vy, Node4: Ins(kx, vx, b), Unique: 2}
+		return &Tree{Node0: ColorRed, Node1: a, Node2: int32(ky), Node3: vy, Node4: Ins(kx, vx, b), Unique: 2}
 	}
 	a2 := value.Node1
-	ky2 := value.Node2
+	ky2 := int(value.Node2)
 	vy2 := value.Node3
 	b2 := value.Node4
 	if kx < ky2 {
@@ -148,22 +148,22 @@ func Ins(kx int, vx bool, value *Tree) *Tree {
 				trees := make([]Tree, 3)
 				trees[0] = Tree{Node0: ColorRed, Node1: &trees[1], Node2: scrutinee.Node2, Node3: scrutinee.Node3, Node4: &trees[2], Unique: 3}
 				trees[1] = Tree{Node0: ColorBlack, Node1: scrutinee.Node1.Node1, Node2: scrutinee.Node1.Node2, Node3: scrutinee.Node1.Node3, Node4: scrutinee.Node1.Node4}
-				trees[2] = Tree{Node0: ColorBlack, Node1: scrutinee.Node4, Node2: ky2, Node3: vy2, Node4: b2}
+				trees[2] = Tree{Node0: ColorBlack, Node1: scrutinee.Node4, Node2: int32(ky2), Node3: vy2, Node4: b2}
 				return &trees[0]
 			}
 			if scrutinee != SharedTreeLeaf && scrutinee.Node4 != SharedTreeLeaf && scrutinee.Node4.Node0 == ColorRed {
 				trees2 := make([]Tree, 3)
 				trees2[0] = Tree{Node0: ColorRed, Node1: &trees2[1], Node2: scrutinee.Node4.Node2, Node3: scrutinee.Node4.Node3, Node4: &trees2[2], Unique: 3}
 				trees2[1] = Tree{Node0: ColorBlack, Node1: scrutinee.Node1, Node2: scrutinee.Node2, Node3: scrutinee.Node3, Node4: scrutinee.Node4.Node1}
-				trees2[2] = Tree{Node0: ColorBlack, Node1: scrutinee.Node4.Node4, Node2: ky2, Node3: vy2, Node4: b2}
+				trees2[2] = Tree{Node0: ColorBlack, Node1: scrutinee.Node4.Node4, Node2: int32(ky2), Node3: vy2, Node4: b2}
 				return &trees2[0]
 			}
 			if scrutinee != SharedTreeLeaf {
-				return &Tree{Node0: ColorBlack, Node1: Node(ColorRed, scrutinee.Node1, scrutinee.Node2, scrutinee.Node3, scrutinee.Node4), Node2: ky2, Node3: vy2, Node4: b2, Unique: 1}
+				return &Tree{Node0: ColorBlack, Node1: Node(ColorRed, scrutinee.Node1, int(scrutinee.Node2), scrutinee.Node3, scrutinee.Node4), Node2: int32(ky2), Node3: vy2, Node4: b2, Unique: 1}
 			}
 			return SharedTreeLeaf
 		}
-		return &Tree{Node0: ColorBlack, Node1: Ins(kx, vx, a2), Node2: ky2, Node3: vy2, Node4: b2, Unique: 1}
+		return &Tree{Node0: ColorBlack, Node1: Ins(kx, vx, a2), Node2: int32(ky2), Node3: vy2, Node4: b2, Unique: 1}
 	}
 	if kx == ky2 {
 		return Node(ColorBlack, a2, kx, vx, b2)
@@ -173,23 +173,23 @@ func Ins(kx int, vx bool, value *Tree) *Tree {
 		if scrutinee != SharedTreeLeaf && scrutinee.Node1 != SharedTreeLeaf && scrutinee.Node1.Node0 == ColorRed {
 			trees3 := make([]Tree, 3)
 			trees3[0] = Tree{Node0: ColorRed, Node1: &trees3[1], Node2: scrutinee.Node1.Node2, Node3: scrutinee.Node1.Node3, Node4: &trees3[2], Unique: 3}
-			trees3[1] = Tree{Node0: ColorBlack, Node1: a2, Node2: ky2, Node3: vy2, Node4: scrutinee.Node1.Node1}
+			trees3[1] = Tree{Node0: ColorBlack, Node1: a2, Node2: int32(ky2), Node3: vy2, Node4: scrutinee.Node1.Node1}
 			trees3[2] = Tree{Node0: ColorBlack, Node1: scrutinee.Node1.Node4, Node2: scrutinee.Node2, Node3: scrutinee.Node3, Node4: scrutinee.Node4}
 			return &trees3[0]
 		}
 		if scrutinee != SharedTreeLeaf && scrutinee.Node4 != SharedTreeLeaf && scrutinee.Node4.Node0 == ColorRed {
 			trees4 := make([]Tree, 3)
 			trees4[0] = Tree{Node0: ColorRed, Node1: &trees4[1], Node2: scrutinee.Node2, Node3: scrutinee.Node3, Node4: &trees4[2], Unique: 3}
-			trees4[1] = Tree{Node0: ColorBlack, Node1: a2, Node2: ky2, Node3: vy2, Node4: scrutinee.Node1}
+			trees4[1] = Tree{Node0: ColorBlack, Node1: a2, Node2: int32(ky2), Node3: vy2, Node4: scrutinee.Node1}
 			trees4[2] = Tree{Node0: ColorBlack, Node1: scrutinee.Node4.Node1, Node2: scrutinee.Node4.Node2, Node3: scrutinee.Node4.Node3, Node4: scrutinee.Node4.Node4}
 			return &trees4[0]
 		}
 		if scrutinee != SharedTreeLeaf {
-			return &Tree{Node0: ColorBlack, Node1: a2, Node2: ky2, Node3: vy2, Node4: Node(ColorRed, scrutinee.Node1, scrutinee.Node2, scrutinee.Node3, scrutinee.Node4), Unique: 2}
+			return &Tree{Node0: ColorBlack, Node1: a2, Node2: int32(ky2), Node3: vy2, Node4: Node(ColorRed, scrutinee.Node1, int(scrutinee.Node2), scrutinee.Node3, scrutinee.Node4), Unique: 2}
 		}
 		return SharedTreeLeaf
 	}
-	return &Tree{Node0: ColorBlack, Node1: a2, Node2: ky2, Node3: vy2, Node4: Ins(kx, vx, b2), Unique: 2}
+	return &Tree{Node0: ColorBlack, Node1: a2, Node2: int32(ky2), Node3: vy2, Node4: Ins(kx, vx, b2), Unique: 2}
 }
 
 func ChecksumGo(acc int, value *Tree) int {
@@ -198,7 +198,7 @@ func ChecksumGo(acc int, value *Tree) int {
 			return acc
 		}
 		l := value.Node1
-		k := value.Node2
+		k := int(value.Node2)
 		v := value.Node3
 		r := value.Node4
 		var result int
@@ -213,11 +213,11 @@ func ChecksumGo(acc int, value *Tree) int {
 
 func InsChecked(kx int, vx bool, value *Tree, valueOwned bool) *Tree {
 	if value == SharedTreeLeaf {
-		return &Tree{Node0: ColorRed, Node1: SharedTreeLeaf, Node2: kx, Node3: vx, Node4: SharedTreeLeaf, Unique: 3}
+		return &Tree{Node0: ColorRed, Node1: SharedTreeLeaf, Node2: int32(kx), Node3: vx, Node4: SharedTreeLeaf, Unique: 3}
 	}
 	if value.Node0 == ColorRed {
 		a := value.Node1
-		ky := value.Node2
+		ky := int(value.Node2)
 		vy := value.Node3
 		b := value.Node4
 		aOwned := valueOwned && value.Unique&1 != 0
@@ -229,16 +229,16 @@ func InsChecked(kx int, vx bool, value *Tree, valueOwned bool) *Tree {
 				value.Unique = 1 | shared.UniqueBit(bOwned, 2)
 				return value
 			}
-			return &Tree{Node0: ColorRed, Node1: field, Node2: ky, Node3: vy, Node4: b, Unique: 1 | shared.UniqueBit(bOwned, 2)}
+			return &Tree{Node0: ColorRed, Node1: field, Node2: int32(ky), Node3: vy, Node4: b, Unique: 1 | shared.UniqueBit(bOwned, 2)}
 		}
 		if kx == ky {
 			if valueOwned {
-				value.Node2 = kx
+				value.Node2 = int32(kx)
 				value.Node3 = vx
 				value.Unique = shared.UniqueBit(aOwned, 1) | shared.UniqueBit(bOwned, 2)
 				return value
 			}
-			return &Tree{Node0: ColorRed, Node1: a, Node2: kx, Node3: vx, Node4: b, Unique: shared.UniqueBit(aOwned, 1) | shared.UniqueBit(bOwned, 2)}
+			return &Tree{Node0: ColorRed, Node1: a, Node2: int32(kx), Node3: vx, Node4: b, Unique: shared.UniqueBit(aOwned, 1) | shared.UniqueBit(bOwned, 2)}
 		}
 		field2 := InsChecked(kx, vx, b, bOwned)
 		if valueOwned {
@@ -246,10 +246,10 @@ func InsChecked(kx int, vx bool, value *Tree, valueOwned bool) *Tree {
 			value.Unique = 2 | shared.UniqueBit(aOwned, 1)
 			return value
 		}
-		return &Tree{Node0: ColorRed, Node1: a, Node2: ky, Node3: vy, Node4: field2, Unique: 2 | shared.UniqueBit(aOwned, 1)}
+		return &Tree{Node0: ColorRed, Node1: a, Node2: int32(ky), Node3: vy, Node4: field2, Unique: 2 | shared.UniqueBit(aOwned, 1)}
 	}
 	a2 := value.Node1
-	ky2 := value.Node2
+	ky2 := int(value.Node2)
 	vy2 := value.Node3
 	b2 := value.Node4
 	aOwned2 := valueOwned && value.Unique&1 != 0
@@ -260,10 +260,10 @@ func InsChecked(kx int, vx bool, value *Tree, valueOwned bool) *Tree {
 			if scrutinee != SharedTreeLeaf && scrutinee.Node1 != SharedTreeLeaf && scrutinee.Node1.Node0 == ColorRed {
 				cell := scrutinee.Node1
 				l := scrutinee.Node1.Node1
-				kx2 := scrutinee.Node1.Node2
+				kx2 := int(scrutinee.Node1.Node2)
 				vx2 := scrutinee.Node1.Node3
 				r1 := scrutinee.Node1.Node4
-				ky := scrutinee.Node2
+				ky := int(scrutinee.Node2)
 				vy := scrutinee.Node3
 				r2 := scrutinee.Node4
 				cellOwned := scrutinee.Unique&1 != 0
@@ -273,37 +273,37 @@ func InsChecked(kx int, vx bool, value *Tree, valueOwned bool) *Tree {
 				var field *Tree
 				if valueOwned {
 					value.Node1 = l
-					value.Node2 = kx2
+					value.Node2 = int32(kx2)
 					value.Node3 = vx2
 					value.Node4 = r1
 					value.Unique = shared.UniqueBit(lOwned, 1) | shared.UniqueBit(r1Owned, 2)
 					field = value
 				} else {
-					field = &Tree{Node0: ColorBlack, Node1: l, Node2: kx2, Node3: vx2, Node4: r1, Unique: shared.UniqueBit(lOwned, 1) | shared.UniqueBit(r1Owned, 2)}
+					field = &Tree{Node0: ColorBlack, Node1: l, Node2: int32(kx2), Node3: vx2, Node4: r1, Unique: shared.UniqueBit(lOwned, 1) | shared.UniqueBit(r1Owned, 2)}
 				}
 				scrutinee.Node0 = ColorBlack
 				scrutinee.Node1 = r2
-				scrutinee.Node2 = ky2
+				scrutinee.Node2 = int32(ky2)
 				scrutinee.Node3 = vy2
 				scrutinee.Node4 = b2
 				scrutinee.Unique = shared.UniqueBit(r2Owned, 1) | shared.UniqueBit(bOwned2, 2)
 				if cellOwned {
 					cell.Node1 = field
-					cell.Node2 = ky
+					cell.Node2 = int32(ky)
 					cell.Node3 = vy
 					cell.Node4 = scrutinee
 					cell.Unique = 3
 					return cell
 				}
-				return &Tree{Node0: ColorRed, Node1: field, Node2: ky, Node3: vy, Node4: scrutinee, Unique: 3}
+				return &Tree{Node0: ColorRed, Node1: field, Node2: int32(ky), Node3: vy, Node4: scrutinee, Unique: 3}
 			}
 			if scrutinee != SharedTreeLeaf && scrutinee.Node4 != SharedTreeLeaf && scrutinee.Node4.Node0 == ColorRed {
 				l1 := scrutinee.Node1
-				ky := scrutinee.Node2
+				ky := int(scrutinee.Node2)
 				vy := scrutinee.Node3
 				cell := scrutinee.Node4
 				l2 := scrutinee.Node4.Node1
-				kx2 := scrutinee.Node4.Node2
+				kx2 := int(scrutinee.Node4.Node2)
 				vx2 := scrutinee.Node4.Node3
 				r := scrutinee.Node4.Node4
 				l1Owned := scrutinee.Unique&1 != 0
@@ -313,17 +313,17 @@ func InsChecked(kx int, vx bool, value *Tree, valueOwned bool) *Tree {
 				var field *Tree
 				if valueOwned {
 					value.Node1 = l1
-					value.Node2 = ky
+					value.Node2 = int32(ky)
 					value.Node3 = vy
 					value.Node4 = l2
 					value.Unique = shared.UniqueBit(l1Owned, 1) | shared.UniqueBit(l2Owned, 2)
 					field = value
 				} else {
-					field = &Tree{Node0: ColorBlack, Node1: l1, Node2: ky, Node3: vy, Node4: l2, Unique: shared.UniqueBit(l1Owned, 1) | shared.UniqueBit(l2Owned, 2)}
+					field = &Tree{Node0: ColorBlack, Node1: l1, Node2: int32(ky), Node3: vy, Node4: l2, Unique: shared.UniqueBit(l1Owned, 1) | shared.UniqueBit(l2Owned, 2)}
 				}
 				scrutinee.Node0 = ColorBlack
 				scrutinee.Node1 = r
-				scrutinee.Node2 = ky2
+				scrutinee.Node2 = int32(ky2)
 				scrutinee.Node3 = vy2
 				scrutinee.Node4 = b2
 				scrutinee.Unique = shared.UniqueBit(rOwned, 1) | shared.UniqueBit(bOwned2, 2)
@@ -333,11 +333,11 @@ func InsChecked(kx int, vx bool, value *Tree, valueOwned bool) *Tree {
 					cell.Unique = 3
 					return cell
 				}
-				return &Tree{Node0: ColorRed, Node1: field, Node2: kx2, Node3: vx2, Node4: scrutinee, Unique: 3}
+				return &Tree{Node0: ColorRed, Node1: field, Node2: int32(kx2), Node3: vx2, Node4: scrutinee, Unique: 3}
 			}
 			if scrutinee != SharedTreeLeaf {
 				l := scrutinee.Node1
-				ky := scrutinee.Node2
+				ky := int(scrutinee.Node2)
 				vy := scrutinee.Node3
 				r := scrutinee.Node4
 				lOwned := scrutinee.Unique&1 != 0
@@ -346,17 +346,17 @@ func InsChecked(kx int, vx bool, value *Tree, valueOwned bool) *Tree {
 				if valueOwned {
 					value.Node0 = ColorRed
 					value.Node1 = l
-					value.Node2 = ky
+					value.Node2 = int32(ky)
 					value.Node3 = vy
 					value.Node4 = r
 					value.Unique = shared.UniqueBit(lOwned, 1) | shared.UniqueBit(rOwned, 2)
 					result = value
 				} else {
-					result = &Tree{Node0: ColorRed, Node1: l, Node2: ky, Node3: vy, Node4: r, Unique: shared.UniqueBit(lOwned, 1) | shared.UniqueBit(rOwned, 2)}
+					result = &Tree{Node0: ColorRed, Node1: l, Node2: int32(ky), Node3: vy, Node4: r, Unique: shared.UniqueBit(lOwned, 1) | shared.UniqueBit(rOwned, 2)}
 				}
 				scrutinee.Node0 = ColorBlack
 				scrutinee.Node1 = result
-				scrutinee.Node2 = ky2
+				scrutinee.Node2 = int32(ky2)
 				scrutinee.Node3 = vy2
 				scrutinee.Node4 = b2
 				scrutinee.Unique = 1 | shared.UniqueBit(bOwned2, 2)
@@ -370,23 +370,23 @@ func InsChecked(kx int, vx bool, value *Tree, valueOwned bool) *Tree {
 			value.Unique = 1 | shared.UniqueBit(bOwned2, 2)
 			return value
 		}
-		return &Tree{Node0: ColorBlack, Node1: field2, Node2: ky2, Node3: vy2, Node4: b2, Unique: 1 | shared.UniqueBit(bOwned2, 2)}
+		return &Tree{Node0: ColorBlack, Node1: field2, Node2: int32(ky2), Node3: vy2, Node4: b2, Unique: 1 | shared.UniqueBit(bOwned2, 2)}
 	}
 	if kx == ky2 {
 		if valueOwned {
-			value.Node2 = kx
+			value.Node2 = int32(kx)
 			value.Node3 = vx
 			value.Unique = shared.UniqueBit(aOwned2, 1) | shared.UniqueBit(bOwned2, 2)
 			return value
 		}
-		return &Tree{Node0: ColorBlack, Node1: a2, Node2: kx, Node3: vx, Node4: b2, Unique: shared.UniqueBit(aOwned2, 1) | shared.UniqueBit(bOwned2, 2)}
+		return &Tree{Node0: ColorBlack, Node1: a2, Node2: int32(kx), Node3: vx, Node4: b2, Unique: shared.UniqueBit(aOwned2, 1) | shared.UniqueBit(bOwned2, 2)}
 	}
 	if b2 != SharedTreeLeaf && b2.Node0 == ColorRed {
 		scrutinee := InsChecked(kx, vx, b2, bOwned2)
 		if scrutinee != SharedTreeLeaf && scrutinee.Node1 != SharedTreeLeaf && scrutinee.Node1.Node0 == ColorRed {
 			cell := scrutinee.Node1
 			l := scrutinee.Node1.Node1
-			kx1 := scrutinee.Node1.Node2
+			kx1 := int(scrutinee.Node1.Node2)
 			vx1 := scrutinee.Node1.Node3
 			r1 := scrutinee.Node1.Node4
 			cellOwned := scrutinee.Unique&1 != 0
@@ -399,7 +399,7 @@ func InsChecked(kx int, vx bool, value *Tree, valueOwned bool) *Tree {
 				value.Unique = shared.UniqueBit(aOwned2, 1) | shared.UniqueBit(lOwned, 2)
 				field = value
 			} else {
-				field = &Tree{Node0: ColorBlack, Node1: a2, Node2: ky2, Node3: vy2, Node4: l, Unique: shared.UniqueBit(aOwned2, 1) | shared.UniqueBit(lOwned, 2)}
+				field = &Tree{Node0: ColorBlack, Node1: a2, Node2: int32(ky2), Node3: vy2, Node4: l, Unique: shared.UniqueBit(aOwned2, 1) | shared.UniqueBit(lOwned, 2)}
 			}
 			scrutinee.Node0 = ColorBlack
 			scrutinee.Node1 = r1
@@ -410,15 +410,15 @@ func InsChecked(kx int, vx bool, value *Tree, valueOwned bool) *Tree {
 				cell.Unique = 3
 				return cell
 			}
-			return &Tree{Node0: ColorRed, Node1: field, Node2: kx1, Node3: vx1, Node4: scrutinee, Unique: 3}
+			return &Tree{Node0: ColorRed, Node1: field, Node2: int32(kx1), Node3: vx1, Node4: scrutinee, Unique: 3}
 		}
 		if scrutinee != SharedTreeLeaf && scrutinee.Node4 != SharedTreeLeaf && scrutinee.Node4.Node0 == ColorRed {
 			l1 := scrutinee.Node1
-			ky := scrutinee.Node2
+			ky := int(scrutinee.Node2)
 			vy := scrutinee.Node3
 			cell := scrutinee.Node4
 			l2 := scrutinee.Node4.Node1
-			kx2 := scrutinee.Node4.Node2
+			kx2 := int(scrutinee.Node4.Node2)
 			vx2 := scrutinee.Node4.Node3
 			r2 := scrutinee.Node4.Node4
 			l1Owned := scrutinee.Unique&1 != 0
@@ -431,27 +431,27 @@ func InsChecked(kx int, vx bool, value *Tree, valueOwned bool) *Tree {
 				value.Unique = shared.UniqueBit(aOwned2, 1) | shared.UniqueBit(l1Owned, 2)
 				field = value
 			} else {
-				field = &Tree{Node0: ColorBlack, Node1: a2, Node2: ky2, Node3: vy2, Node4: l1, Unique: shared.UniqueBit(aOwned2, 1) | shared.UniqueBit(l1Owned, 2)}
+				field = &Tree{Node0: ColorBlack, Node1: a2, Node2: int32(ky2), Node3: vy2, Node4: l1, Unique: shared.UniqueBit(aOwned2, 1) | shared.UniqueBit(l1Owned, 2)}
 			}
 			scrutinee.Node0 = ColorBlack
 			scrutinee.Node1 = l2
-			scrutinee.Node2 = kx2
+			scrutinee.Node2 = int32(kx2)
 			scrutinee.Node3 = vx2
 			scrutinee.Node4 = r2
 			scrutinee.Unique = shared.UniqueBit(l2Owned, 1) | shared.UniqueBit(r2Owned, 2)
 			if cellOwned {
 				cell.Node1 = field
-				cell.Node2 = ky
+				cell.Node2 = int32(ky)
 				cell.Node3 = vy
 				cell.Node4 = scrutinee
 				cell.Unique = 3
 				return cell
 			}
-			return &Tree{Node0: ColorRed, Node1: field, Node2: ky, Node3: vy, Node4: scrutinee, Unique: 3}
+			return &Tree{Node0: ColorRed, Node1: field, Node2: int32(ky), Node3: vy, Node4: scrutinee, Unique: 3}
 		}
 		if scrutinee != SharedTreeLeaf {
 			l := scrutinee.Node1
-			ky := scrutinee.Node2
+			ky := int(scrutinee.Node2)
 			vy := scrutinee.Node3
 			r := scrutinee.Node4
 			lOwned := scrutinee.Unique&1 != 0
@@ -460,17 +460,17 @@ func InsChecked(kx int, vx bool, value *Tree, valueOwned bool) *Tree {
 			if valueOwned {
 				value.Node0 = ColorRed
 				value.Node1 = l
-				value.Node2 = ky
+				value.Node2 = int32(ky)
 				value.Node3 = vy
 				value.Node4 = r
 				value.Unique = shared.UniqueBit(lOwned, 1) | shared.UniqueBit(rOwned, 2)
 				result = value
 			} else {
-				result = &Tree{Node0: ColorRed, Node1: l, Node2: ky, Node3: vy, Node4: r, Unique: shared.UniqueBit(lOwned, 1) | shared.UniqueBit(rOwned, 2)}
+				result = &Tree{Node0: ColorRed, Node1: l, Node2: int32(ky), Node3: vy, Node4: r, Unique: shared.UniqueBit(lOwned, 1) | shared.UniqueBit(rOwned, 2)}
 			}
 			scrutinee.Node0 = ColorBlack
 			scrutinee.Node1 = a2
-			scrutinee.Node2 = ky2
+			scrutinee.Node2 = int32(ky2)
 			scrutinee.Node3 = vy2
 			scrutinee.Node4 = result
 			scrutinee.Unique = 2 | shared.UniqueBit(aOwned2, 1)
@@ -484,7 +484,7 @@ func InsChecked(kx int, vx bool, value *Tree, valueOwned bool) *Tree {
 		value.Unique = 2 | shared.UniqueBit(aOwned2, 1)
 		return value
 	}
-	return &Tree{Node0: ColorBlack, Node1: a2, Node2: ky2, Node3: vy2, Node4: field3, Unique: 2 | shared.UniqueBit(aOwned2, 1)}
+	return &Tree{Node0: ColorBlack, Node1: a2, Node2: int32(ky2), Node3: vy2, Node4: field3, Unique: 2 | shared.UniqueBit(aOwned2, 1)}
 }
 
 // main.go
@@ -528,7 +528,7 @@ func projectedChildGoOrProjectedChildGoChecked(step int, tree *redblack.Tree, ke
 				if tree != redblack.SharedTreeLeaf && tree.Node0 == redblack.ColorRed {
 					scrutinee := redblack.Ins(k, true, tree)
 					if scrutinee != redblack.SharedTreeLeaf {
-						tree2 = redblack.Node(redblack.ColorBlack, scrutinee.Node1, scrutinee.Node2, scrutinee.Node3, scrutinee.Node4)
+						tree2 = redblack.Node(redblack.ColorBlack, scrutinee.Node1, int(scrutinee.Node2), scrutinee.Node3, scrutinee.Node4)
 					} else {
 						tree2 = redblack.SharedTreeLeaf
 					}
@@ -545,7 +545,7 @@ func projectedChildGoOrProjectedChildGoChecked(step int, tree *redblack.Tree, ke
 				if tree2 != redblack.SharedTreeLeaf && tree2.Node0 == redblack.ColorRed {
 					scrutinee := redblack.Ins(key, true, tree2)
 					if scrutinee != redblack.SharedTreeLeaf {
-						probedTreesGrown = redblack.Node(redblack.ColorBlack, scrutinee.Node1, scrutinee.Node2, scrutinee.Node3, scrutinee.Node4)
+						probedTreesGrown = redblack.Node(redblack.ColorBlack, scrutinee.Node1, int(scrutinee.Node2), scrutinee.Node3, scrutinee.Node4)
 					} else {
 						probedTreesGrown = redblack.SharedTreeLeaf
 					}
@@ -561,7 +561,7 @@ func projectedChildGoOrProjectedChildGoChecked(step int, tree *redblack.Tree, ke
 			if tree != redblack.SharedTreeLeaf && tree.Node0 == redblack.ColorRed {
 				scrutinee := redblack.Ins(k2, v, tree)
 				if scrutinee != redblack.SharedTreeLeaf {
-					next = redblack.Node(redblack.ColorBlack, scrutinee.Node1, scrutinee.Node2, scrutinee.Node3, scrutinee.Node4)
+					next = redblack.Node(redblack.ColorBlack, scrutinee.Node1, int(scrutinee.Node2), scrutinee.Node3, scrutinee.Node4)
 				} else {
 					next = redblack.SharedTreeLeaf
 				}
@@ -668,7 +668,7 @@ func projectedChildGoReusing(tree *redblack.Tree, kept *redblack_types.ListTree,
 		if tree != redblack.SharedTreeLeaf && tree.Node0 == redblack.ColorRed {
 			scrutinee := redblack.Ins(k, true, tree)
 			if scrutinee != redblack.SharedTreeLeaf {
-				tree2 = redblack.Node(redblack.ColorBlack, scrutinee.Node1, scrutinee.Node2, scrutinee.Node3, scrutinee.Node4)
+				tree2 = redblack.Node(redblack.ColorBlack, scrutinee.Node1, int(scrutinee.Node2), scrutinee.Node3, scrutinee.Node4)
 			} else {
 				tree2 = redblack.SharedTreeLeaf
 			}
@@ -685,7 +685,7 @@ func projectedChildGoReusing(tree *redblack.Tree, kept *redblack_types.ListTree,
 		if tree2 != redblack.SharedTreeLeaf && tree2.Node0 == redblack.ColorRed {
 			scrutinee := redblack.Ins(key, true, tree2)
 			if scrutinee != redblack.SharedTreeLeaf {
-				probedTreesGrown = redblack.Node(redblack.ColorBlack, scrutinee.Node1, scrutinee.Node2, scrutinee.Node3, scrutinee.Node4)
+				probedTreesGrown = redblack.Node(redblack.ColorBlack, scrutinee.Node1, int(scrutinee.Node2), scrutinee.Node3, scrutinee.Node4)
 			} else {
 				probedTreesGrown = redblack.SharedTreeLeaf
 			}
@@ -700,7 +700,7 @@ func projectedChildGoReusing(tree *redblack.Tree, kept *redblack_types.ListTree,
 	if tree != redblack.SharedTreeLeaf && tree.Node0 == redblack.ColorRed {
 		scrutinee := redblack.InsChecked(k2, v, tree, true)
 		if scrutinee != redblack.SharedTreeLeaf {
-			next = redblack.Node(redblack.ColorBlack, scrutinee.Node1, scrutinee.Node2, scrutinee.Node3, scrutinee.Node4)
+			next = redblack.Node(redblack.ColorBlack, scrutinee.Node1, int(scrutinee.Node2), scrutinee.Node3, scrutinee.Node4)
 		} else {
 			next = redblack.SharedTreeLeaf
 		}

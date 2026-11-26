@@ -255,7 +255,7 @@ import (
 type Shape struct {
 	Circle float64
 	Rect   shared.HW
-	Pair0  int
+	Pair0  int32
 	Pair1  maybe.Int
 	Tag    uint8
 }
@@ -300,7 +300,7 @@ func Rect(rect shared.HW) Shape {
 }
 
 func Pair(pair0 int, pair1 maybe.Int) Shape {
-	return Shape{Tag: ShapePair, Pair0: pair0, Pair1: pair1}
+	return Shape{Tag: ShapePair, Pair0: int32(pair0), Pair1: pair1}
 }
 
 func Named(named string) *Colour {
@@ -466,7 +466,7 @@ func appendShowShape(buffer []byte, shape Shape) []byte {
 		buffer = append(buffer, "Empty"...)
 	default: // ShapePair
 		buffer = append(buffer, "(Pair "...)
-		buffer = strconv.AppendInt(buffer, int64(shape.Pair0), 10)
+		buffer = strconv.AppendInt(buffer, int64(int(shape.Pair0)), 10)
 		buffer = append(buffer, ' ')
 		switch shape.Pair1.Tag {
 		case maybe.TagJust:

@@ -6,7 +6,7 @@ package either
 
 type Either struct {
 	Left  string
-	Right int
+	Right int32
 	Tag   uint8
 }
 
@@ -16,7 +16,7 @@ const (
 )
 
 func Right(right int) Either {
-	return Either{Tag: EitherRight, Right: right}
+	return Either{Tag: EitherRight, Right: int32(right)}
 }
 
 func Left(left string) Either {
@@ -28,13 +28,13 @@ package types
 
 type List struct {
 	Cons1 *List
-	Cons0 int
+	Cons0 int32
 }
 
 var SharedListNil = &List{}
 
 func Cons(cons0 int, cons1 *List) *List {
-	return &List{Cons0: cons0, Cons1: cons1}
+	return &List{Cons0: int32(cons0), Cons1: cons1}
 }
 
 // Data/Maybe/maybe.go
@@ -105,8 +105,8 @@ type Entry struct {
 	Duo1   string
 	Trio0  string
 	Trio1  string
-	Field0 int
-	Field1 int
+	Field0 int32
+	Field1 int32
 	Tag    uint8
 }
 
@@ -121,7 +121,7 @@ func Tag(tag0 string) Labelled {
 }
 
 func Field(field0 int, field1 int) Entry {
-	return Entry{Tag: EntryField, Field0: field0, Field1: field1}
+	return Entry{Tag: EntryField, Field0: int32(field0), Field1: int32(field1)}
 }
 
 func Duo(duo0 string, duo1 string) Entry {
@@ -140,7 +140,7 @@ func initializeMain_() string {
 	accumulator := 0
 	for tupleIndex := range array {
 		if array[tupleIndex].First.Tag == maybe.TagJust && array[tupleIndex].Second.Tag == either.EitherRight {
-			accumulator = accumulator + array[tupleIndex].First.Just + array[tupleIndex].Second.Right
+			accumulator = accumulator + array[tupleIndex].First.Just + int(array[tupleIndex].Second.Right)
 		} else if array[tupleIndex].Second.Tag == either.EitherLeft {
 			accumulator -= 1
 		}
@@ -173,7 +173,7 @@ func label(labelled Labelled) string {
 func entry(entry Entry) string {
 	switch entry.Tag {
 	case EntryField:
-		return strconv.Itoa(entry.Field0 - entry.Field1)
+		return strconv.Itoa(int(entry.Field0) - int(entry.Field1))
 	case EntryDuo:
 		return prim.Append(entry.Duo0, entry.Duo1)
 	default: // EntryTrio
@@ -185,7 +185,7 @@ func mainSum(list *types.List) int {
 	if list == types.SharedListNil {
 		return 0
 	}
-	return list.Cons0 + mainSum(list.Cons1)
+	return int(list.Cons0) + mainSum(list.Cons1)
 }
 
 func mainSumCons(head int, tail *types.List) int {

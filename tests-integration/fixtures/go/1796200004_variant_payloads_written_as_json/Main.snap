@@ -13,7 +13,7 @@ type CountFlagNamePointRatioTags struct {
 	Name  string
 	Tags  []string
 	Ratio float64
-	Count int
+	Count int32
 	Point shared.X
 	Tag   uint8
 	Flag  bool
@@ -49,7 +49,7 @@ func EncodeJSONVariantCountFlagNamePointRatioTags(e *foreignvalue.Encoder, value
 	switch value.Tag {
 	case CountFlagNamePointRatioTagsCount:
 		e.Raw("{\"count\":")
-		e.Int(value.Count)
+		e.Int(int(value.Count))
 		e.Raw("}")
 	case CountFlagNamePointRatioTagsFlag:
 		e.Raw("{\"flag\":")
@@ -83,7 +83,7 @@ func Point(point shared.X) CountFlagNamePointRatioTags {
 }
 
 func Count(count int) CountFlagNamePointRatioTags {
-	return CountFlagNamePointRatioTags{Tag: CountFlagNamePointRatioTagsCount, Count: count}
+	return CountFlagNamePointRatioTags{Tag: CountFlagNamePointRatioTagsCount, Count: int32(count)}
 }
 
 func Ratio(ratio float64) CountFlagNamePointRatioTags {

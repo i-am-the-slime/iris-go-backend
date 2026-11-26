@@ -6,7 +6,7 @@ package class
 
 type Step struct {
 	Done struct{}
-	Loop int
+	Loop int32
 	Tag  uint8
 }
 
@@ -16,7 +16,7 @@ const (
 )
 
 func Loop(loop int) Step {
-	return Step{Tag: StepLoop, Loop: loop}
+	return Step{Tag: StepLoop, Loop: int32(loop)}
 }
 
 func Done(done struct{}) Step {
@@ -50,7 +50,7 @@ func initializeMain_() shared.MainResult {
 		}
 		switch ref.Tag {
 		case class.StepLoop:
-			a_ := ref.Loop
+			a_ := int(ref.Loop)
 			var step class.Step
 			if a_ > 10 {
 				step = class.Done(struct{}{})

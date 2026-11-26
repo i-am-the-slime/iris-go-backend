@@ -65,6 +65,7 @@ mod maybe;
 mod merging;
 mod mutable;
 mod names;
+mod narrow_fields;
 mod operators;
 mod overwrite;
 mod ownership;
@@ -341,6 +342,15 @@ where
     emitter.spell_out_generic_alias_arguments();
     let mut all = std::mem::take(&mut emitter.type_declarations);
     all.extend(declarations);
+    let data_structs: FxHashSet<String> = emitter
+        .data_layouts
+        .values()
+        .filter(|layout| layout.maybe.is_none())
+        .map(|layout| layout.name.clone())
+        .collect();
+    timed("narrow fields", || {
+        narrow_fields::narrow_int_fields(&mut all, &data_structs, &effects, &pure_helpers)
+    });
     let declared: FxHashSet<String> = all
         .iter()
         .flat_map(|declaration| match declaration {

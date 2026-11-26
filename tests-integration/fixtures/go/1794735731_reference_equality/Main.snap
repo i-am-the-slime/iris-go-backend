@@ -31,7 +31,7 @@ const (
 
 type Chain struct {
 	Link1 *Chain
-	Link0 int
+	Link0 int32
 }
 
 var sharedChainEnd = &Chain{}
@@ -45,7 +45,7 @@ func Square(field0 float64) Shape {
 }
 
 func Link(link0 int, link1 *Chain) *Chain {
-	return &Chain{Link0: link0, Link1: link1}
+	return &Chain{Link0: int32(link0), Link1: link1}
 }
 
 var main_ = initializeMain_()

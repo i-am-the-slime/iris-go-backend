@@ -13,7 +13,7 @@ import (
 
 type List struct {
 	Cons1 *List
-	Cons0 int
+	Cons0 int32
 }
 
 var sharedListNil = &List{}
@@ -45,7 +45,7 @@ func range_Chunked(low int, high int, cells *alloc.Cells[List]) *List {
 	if low > high {
 		return sharedListNil
 	}
-	return cells.New(List{Cons0: low, Cons1: range_Chunked(low+1, high, cells)})
+	return cells.New(List{Cons0: int32(low), Cons1: range_Chunked(low+1, high, cells)})
 }
 
 func foldListStep(i int, accumulator int, value *List) int {
@@ -53,7 +53,7 @@ func foldListStep(i int, accumulator int, value *List) int {
 		if value == sharedListNil {
 			return accumulator
 		}
-		x := value.Cons0
+		x := int(value.Cons0)
 		rest := value.Cons1
 		accumulator, value = accumulator+i*x, rest
 	}
@@ -64,7 +64,7 @@ func foldListStep2(i int, accumulator int, value *List) int {
 		if value == sharedListNil {
 			return accumulator
 		}
-		x := value.Cons0
+		x := int(value.Cons0)
 		rest := value.Cons1
 		accumulator, value = accumulator+x+i, rest
 	}
@@ -75,7 +75,7 @@ func foldListAddSquare(accumulator int, value *List) int {
 		if value == sharedListNil {
 			return accumulator
 		}
-		x := value.Cons0
+		x := int(value.Cons0)
 		rest := value.Cons1
 		accumulator, value = accumulator+x*x, rest
 	}
@@ -86,7 +86,7 @@ func foldListStep3(accumulator int, value *List) int {
 		if value == sharedListNil {
 			return accumulator
 		}
-		x := value.Cons0
+		x := int(value.Cons0)
 		rest := value.Cons1
 		accumulator, value = accumulator+3*x, rest
 	}
@@ -97,7 +97,7 @@ func foldListMax(accumulator int, value *List) int {
 		if value == sharedListNil {
 			return accumulator
 		}
-		x := value.Cons0
+		x := int(value.Cons0)
 		rest := value.Cons1
 		result := max(accumulator, x)
 		accumulator, value = result, rest

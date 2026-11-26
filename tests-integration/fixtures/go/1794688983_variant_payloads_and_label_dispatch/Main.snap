@@ -8,7 +8,7 @@ import "fixture/shared"
 
 type InvalidLateMissing struct {
 	Missing string
-	Invalid int
+	Invalid int32
 	Late    shared.After
 	Tag     uint8
 }
@@ -24,7 +24,7 @@ func Missing(missing string) InvalidLateMissing {
 }
 
 func Invalid(invalid int) InvalidLateMissing {
-	return InvalidLateMissing{Tag: InvalidLateMissingInvalid, Invalid: invalid}
+	return InvalidLateMissing{Tag: InvalidLateMissingInvalid, Invalid: int32(invalid)}
 }
 
 func Late(late shared.After) InvalidLateMissing {
@@ -74,7 +74,7 @@ func initializeMain_() []string {
 func byLabel(variant2 variant.InvalidLateMissing) string {
 	switch variant2.Tag {
 	case variant.InvalidLateMissingInvalid:
-		return "invalid " + strconv.Itoa(variant2.Invalid)
+		return "invalid " + strconv.Itoa(int(variant2.Invalid))
 	case variant.InvalidLateMissingLate:
 		return "late " + strconv.Itoa(variant2.Late.After)
 	default: // variant.InvalidLateMissingMissing
@@ -87,7 +87,7 @@ var problems []variant.InvalidLateMissing = []variant.InvalidLateMissing{variant
 func byRecord(variant2 variant.InvalidLateMissing) string {
 	switch variant2.Tag {
 	case variant.InvalidLateMissingInvalid:
-		return "bad " + strconv.Itoa(variant2.Invalid*2)
+		return "bad " + strconv.Itoa(int(variant2.Invalid)*2)
 	case variant.InvalidLateMissingLate:
 		return "after " + strconv.Itoa(variant2.Late.After)
 	default: // variant.InvalidLateMissingMissing
@@ -98,7 +98,7 @@ func byRecord(variant2 variant.InvalidLateMissing) string {
 func someLabels(variant2 variant.InvalidLateMissing) string {
 	switch variant2.Tag {
 	case variant.InvalidLateMissingInvalid:
-		return strconv.Itoa(variant2.Invalid + 1)
+		return strconv.Itoa(int(variant2.Invalid) + 1)
 	case variant.InvalidLateMissingLate:
 		return "unhandled"
 	default: // variant.InvalidLateMissingMissing
