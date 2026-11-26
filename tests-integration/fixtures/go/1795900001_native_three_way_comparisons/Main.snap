@@ -132,7 +132,6 @@ package main
 
 import (
 	"fixture/Data/Int64"
-	"fixture/Data/Ord"
 	"fixture/Data/Show"
 	"fixture/Data/UInt64"
 	"github.com/i-am-the-slime/iris-go/console"
@@ -152,10 +151,6 @@ func initializeMain_() []string {
 	mapped2 := make([]uint64, len(ints))
 	for index, element := range ints {
 		mapped2[index] = datauint64.UnsafeFromInt(element)
-	}
-	accumulator := prim.BottomInt
-	for _, element := range ints {
-		accumulator = ord.MaxInt(accumulator, element)
 	}
 	kept := []int64{}
 	for _, x := range mapped {
@@ -181,7 +176,7 @@ func initializeMain_() []string {
 		}
 		mapped3[index] = result
 	}
-	return []string{strconv.FormatInt(foldLanes(mapped, int64(-9223372036854775808)), 10) + "l", strconv.FormatUint(foldLanes2(mapped2, uint64(18446744073709551615)), 10) + "ul", strconv.Itoa(accumulator), prim.ShowNumber(foldLanes3([]float64{3.5, -1.0, 4.0, 1.0, -5.0, 9.25, 2.0, 6.0, 5.0, 3.0, -5.0, 8.0, 9.0, 7.0, 9.0, 3.0, 2.0, 3.0, 8.0, 4.0, -6.0, 2.0, 6.0, 4.0, 3.0, 3.0, 8.0, 3.0, 2.0, 7.0, 9.0, 5.0, 0.0}, 0.0)), dataint64.ArrayInt64(kept), datauint64.ArrayUInt64(kept2), show.ArrayInt(mapped3), "true"}
+	return []string{strconv.FormatInt(foldLanes(mapped, int64(-9223372036854775808)), 10) + "l", strconv.FormatUint(foldLanes2(mapped2, uint64(18446744073709551615)), 10) + "ul", strconv.Itoa(foldLanes3(ints, prim.BottomInt)), prim.ShowNumber(foldLanes4([]float64{3.5, -1.0, 4.0, 1.0, -5.0, 9.25, 2.0, 6.0, 5.0, 3.0, -5.0, 8.0, 9.0, 7.0, 9.0, 3.0, 2.0, 3.0, 8.0, 4.0, -6.0, 2.0, 6.0, 4.0, 3.0, 3.0, 8.0, 3.0, 2.0, 7.0, 9.0, 5.0, 0.0}, 0.0)), dataint64.ArrayInt64(kept), datauint64.ArrayUInt64(kept2), show.ArrayInt(mapped3), "true"}
 }
 
 func main() {
@@ -193,7 +188,10 @@ func main() {
 
 package main
 
-import "simd/archsimd"
+import (
+	"simd/archsimd"
+	"unsafe"
+)
 
 func foldLanes(xs []int64, initial int64) int64 {
 	acc0 := archsimd.BroadcastInt64x2(initial)
@@ -257,7 +255,41 @@ func foldLanes2(xs []uint64, initial uint64) uint64 {
 	return accumulator
 }
 
-func foldLanes3(xs []float64, initial float64) float64 {
+func foldLanes3Lanes(xs []int64, initial int64) int64 {
+	acc0 := archsimd.BroadcastInt64x2(initial)
+	acc1, acc2, acc3 := acc0, acc0, acc0
+	const step = 2
+	i := 0
+	for ; i < len(xs)-4*step+1; i += 4 * step {
+		x0 := archsimd.LoadInt64x2(xs[i : i+step])
+		acc0 = x0.IfElse(acc0.Less(x0), acc0)
+		x1 := archsimd.LoadInt64x2(xs[i+step : i+2*step])
+		acc1 = x1.IfElse(acc1.Less(x1), acc1)
+		x2 := archsimd.LoadInt64x2(xs[i+2*step : i+3*step])
+		acc2 = x2.IfElse(acc2.Less(x2), acc2)
+		x3 := archsimd.LoadInt64x2(xs[i+3*step : i+4*step])
+		acc3 = x3.IfElse(acc3.Less(x3), acc3)
+	}
+	acc0 = acc3.IfElse(acc2.Less(acc3), acc2).IfElse(acc1.IfElse(acc0.Less(acc1), acc0).Less(acc3.IfElse(acc2.Less(acc3), acc2)), acc1.IfElse(acc0.Less(acc1), acc0))
+	var lanes [2]int64
+	acc0.Store(lanes[:])
+	accumulator := initial
+	for _, lane := range lanes[:step] {
+		if accumulator < lane {
+			accumulator = lane
+		}
+	}
+	for ; i < len(xs); i++ {
+		x := xs[i]
+		accumulator = max(accumulator, x)
+	}
+	return accumulator
+}
+func foldLanes3(xs []int, initial int) int {
+	return int(foldLanes3Lanes(unsafe.Slice((*int64)(unsafe.Pointer(unsafe.SliceData(xs))), len(xs)), int64(initial)))
+}
+
+func foldLanes4(xs []float64, initial float64) float64 {
 	acc0 := archsimd.BroadcastFloat64x2(initial)
 	acc1, acc2, acc3 := acc0, acc0, acc0
 	const step = 2
@@ -313,7 +345,15 @@ func foldLanes2(xs []uint64, initial uint64) uint64 {
 	return accumulator
 }
 
-func foldLanes3(xs []float64, initial float64) float64 {
+func foldLanes3(xs []int, initial int) int {
+	accumulator := initial
+	for _, x := range xs {
+		accumulator = max(accumulator, x)
+	}
+	return accumulator
+}
+
+func foldLanes4(xs []float64, initial float64) float64 {
 	accumulator := initial
 	for _, x := range xs {
 		s0 := accumulator
@@ -330,7 +370,10 @@ func foldLanes3(xs []float64, initial float64) float64 {
 
 package main
 
-import "simd"
+import (
+	"simd"
+	"unsafe"
+)
 
 func foldLanes(xs []int64, initial int64) int64 {
 	acc0 := simd.BroadcastInt64s(initial)
@@ -394,7 +437,41 @@ func foldLanes2(xs []uint64, initial uint64) uint64 {
 	return accumulator
 }
 
-func foldLanes3(xs []float64, initial float64) float64 {
+func foldLanes3Lanes(xs []int64, initial int64) int64 {
+	acc0 := simd.BroadcastInt64s(initial)
+	acc1, acc2, acc3 := acc0, acc0, acc0
+	step := acc0.Len()
+	i := 0
+	for ; i < len(xs)-4*step+1; i += 4 * step {
+		x0 := simd.LoadInt64s(xs[i : i+step])
+		acc0 = x0.IfElse(acc0.Less(x0), acc0)
+		x1 := simd.LoadInt64s(xs[i+step : i+2*step])
+		acc1 = x1.IfElse(acc1.Less(x1), acc1)
+		x2 := simd.LoadInt64s(xs[i+2*step : i+3*step])
+		acc2 = x2.IfElse(acc2.Less(x2), acc2)
+		x3 := simd.LoadInt64s(xs[i+3*step : i+4*step])
+		acc3 = x3.IfElse(acc3.Less(x3), acc3)
+	}
+	acc0 = acc3.IfElse(acc2.Less(acc3), acc2).IfElse(acc1.IfElse(acc0.Less(acc1), acc0).Less(acc3.IfElse(acc2.Less(acc3), acc2)), acc1.IfElse(acc0.Less(acc1), acc0))
+	var lanes [8]int64
+	acc0.Store(lanes[:])
+	accumulator := initial
+	for _, lane := range lanes[:step] {
+		if accumulator < lane {
+			accumulator = lane
+		}
+	}
+	for ; i < len(xs); i++ {
+		x := xs[i]
+		accumulator = max(accumulator, x)
+	}
+	return accumulator
+}
+func foldLanes3(xs []int, initial int) int {
+	return int(foldLanes3Lanes(unsafe.Slice((*int64)(unsafe.Pointer(unsafe.SliceData(xs))), len(xs)), int64(initial)))
+}
+
+func foldLanes4(xs []float64, initial float64) float64 {
 	acc0 := simd.BroadcastFloat64s(initial)
 	acc1, acc2, acc3 := acc0, acc0, acc0
 	step := acc0.Len()

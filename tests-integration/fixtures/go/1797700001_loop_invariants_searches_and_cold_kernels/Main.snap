@@ -163,34 +163,140 @@ func initializeMain_() []string {
 		for index, value := range numbers {
 			mapped[index] = value * round
 		}
-		mapped2 := make([]int, len(numbers))
-		for index, x := range numbers {
-			result3 := max(x, 7)
-			mapped2[index] = result3
-		}
-		built = append(built, []string{show.ArrayInt(clamped(mapped)), show.ArrayInt(mapped2)}...)
+		built = append(built, []string{show.ArrayInt(clamped(mapped)), show.ArrayInt(mapLanes(numbers))}...)
 	}
 	return built
 }
 
 func clamped(array []int) []int {
-	mapped := make([]int, len(array))
-	for index, x := range array {
-		var result int
-		if x < 2 {
-			result = 2
-		} else if x > 40 {
-			result = 40
-		} else {
-			result = x
-		}
-		mapped[index] = result
-	}
-	return mapped
+	return mapLanes2(array)
 }
 
 func main() {
 	console.Print("[" + strings.Join(main_, " ") + "]")
+}
+
+// main_neon.go
+//go:build goexperiment.simd && arm64
+
+package main
+
+import (
+	"simd/archsimd"
+	"unsafe"
+)
+
+func mapLanesLanes(xs []int64) []int64 {
+	c0 := archsimd.BroadcastInt64x2(7)
+	out := make([]int64, len(xs))
+	const step = 2
+	i := 0
+	for ; i < len(xs)-step+1; i += step {
+		x := archsimd.LoadInt64x2(xs[i : i+step])
+		x.IfElse(x.Greater(c0), c0).Store(out[i : i+step])
+	}
+	if i < len(xs) {
+		x, _ := archsimd.LoadInt64x2Part(xs[i:])
+		x.IfElse(x.Greater(c0), c0).StorePart(out[i:])
+	}
+	return out
+}
+func mapLanes(xs []int) []int {
+	out := mapLanesLanes(unsafe.Slice((*int64)(unsafe.Pointer(unsafe.SliceData(xs))), len(xs)))
+	return unsafe.Slice((*int)(unsafe.Pointer(unsafe.SliceData(out))), len(out))
+}
+
+func mapLanes2Lanes(xs []int64) []int64 {
+	c0 := archsimd.BroadcastInt64x2(2)
+	c1 := archsimd.BroadcastInt64x2(40)
+	out := make([]int64, len(xs))
+	const step = 2
+	i := 0
+	for ; i < len(xs)-step+1; i += step {
+		x := archsimd.LoadInt64x2(xs[i : i+step])
+		c0.IfElse(x.Less(c0), c1.IfElse(x.Greater(c1), x)).Store(out[i : i+step])
+	}
+	if i < len(xs) {
+		x, _ := archsimd.LoadInt64x2Part(xs[i:])
+		c0.IfElse(x.Less(c0), c1.IfElse(x.Greater(c1), x)).StorePart(out[i:])
+	}
+	return out
+}
+func mapLanes2(xs []int) []int {
+	out := mapLanes2Lanes(unsafe.Slice((*int64)(unsafe.Pointer(unsafe.SliceData(xs))), len(xs)))
+	return unsafe.Slice((*int)(unsafe.Pointer(unsafe.SliceData(out))), len(out))
+}
+
+// main_scalar.go
+//go:build !(goexperiment.simd && (arm64 || wasm))
+
+package main
+
+func mapLanes(xs []int) []int {
+	out := make([]int, len(xs))
+	for i, x := range xs {
+		out[i] = max(x, 7)
+	}
+	return out
+}
+
+func mapLanes2(xs []int) []int {
+	out := make([]int, len(xs))
+	for i, x := range xs {
+		out[i] = min(max(x, 2), 40)
+	}
+	return out
+}
+
+// main_vector.go
+//go:build goexperiment.simd && wasm
+
+package main
+
+import (
+	"simd"
+	"unsafe"
+)
+
+func mapLanesLanes(xs []int64) []int64 {
+	c0 := simd.BroadcastInt64s(7)
+	out := make([]int64, len(xs))
+	step := simd.Int64s{}.Len()
+	i := 0
+	for ; i < len(xs)-step+1; i += step {
+		x := simd.LoadInt64s(xs[i : i+step])
+		x.IfElse(x.Greater(c0), c0).Store(out[i : i+step])
+	}
+	if i < len(xs) {
+		x, _ := simd.LoadInt64sPart(xs[i:])
+		x.IfElse(x.Greater(c0), c0).StorePart(out[i:])
+	}
+	return out
+}
+func mapLanes(xs []int) []int {
+	out := mapLanesLanes(unsafe.Slice((*int64)(unsafe.Pointer(unsafe.SliceData(xs))), len(xs)))
+	return unsafe.Slice((*int)(unsafe.Pointer(unsafe.SliceData(out))), len(out))
+}
+
+func mapLanes2Lanes(xs []int64) []int64 {
+	c0 := simd.BroadcastInt64s(2)
+	c1 := simd.BroadcastInt64s(40)
+	out := make([]int64, len(xs))
+	step := simd.Int64s{}.Len()
+	i := 0
+	for ; i < len(xs)-step+1; i += step {
+		x := simd.LoadInt64s(xs[i : i+step])
+		c0.IfElse(x.Less(c0), c1.IfElse(x.Greater(c1), x)).Store(out[i : i+step])
+	}
+	if i < len(xs) {
+		x, _ := simd.LoadInt64sPart(xs[i:])
+		c0.IfElse(x.Less(c0), c1.IfElse(x.Greater(c1), x)).StorePart(out[i:])
+	}
+	return out
+}
+func mapLanes2(xs []int) []int {
+	out := mapLanes2Lanes(unsafe.Slice((*int64)(unsafe.Pointer(unsafe.SliceData(xs))), len(xs)))
+	return unsafe.Slice((*int)(unsafe.Pointer(unsafe.SliceData(out))), len(out))
 }
 
 // shared/shared.go

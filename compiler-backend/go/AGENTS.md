@@ -18,7 +18,8 @@ as if a careful person had written it by hand for those types.
   thunk exists only where an effect is genuinely first-class.
 - PureScript `Int` is Go's `int` and wraps at its width, not at JavaScript's 32 bits (see
   documentation/go-output.md). It crosses Go APIs without conversions.
-- No `reflect` and no `unsafe` in generated code.
+- No `reflect` and no `unsafe` in generated code, except the `Array Int` SIMD kernels, which view a
+  `[]int` as `[]int64` in files that build only for arm64 and wasm.
 - Calls read like the PureScript they come from: `n(f, x)`, never `n.Apply(f, x)`, `Invoke`,
   `Call2` or similar plumbing names.
 - Programs keep PureScript's semantics: the same output as the JS backend for everything

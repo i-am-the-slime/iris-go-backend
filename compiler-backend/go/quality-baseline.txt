@@ -16,4 +16,4 @@ examples linked-reflect 0
 examples panic 41
 examples reflect 0
 examples type-assertion 217
-examples unsafe 0
+examples unsafe 36

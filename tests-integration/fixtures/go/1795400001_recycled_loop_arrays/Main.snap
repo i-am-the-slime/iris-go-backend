@@ -149,11 +149,7 @@ func mainGo3(i int, previous []int, values []int) []int {
 		if i >= 3 {
 			return array.Append(previous, values)
 		}
-		mapped := make([]int, len(values))
-		for index, value := range values {
-			mapped[index] = value + 1
-		}
-		i, previous, values = i+1, values, mapped
+		i, previous, values = i+1, values, mapLanes(values)
 	}
 }
 
@@ -190,6 +186,79 @@ func shrinkGo(values []int) []int {
 
 func main() {
 	console.Print("[" + strings.Join(main_, " ") + "]")
+}
+
+// main_neon.go
+//go:build goexperiment.simd && arm64
+
+package main
+
+import (
+	"simd/archsimd"
+	"unsafe"
+)
+
+func mapLanesLanes(xs []int64) []int64 {
+	c0 := archsimd.BroadcastInt64x2(1)
+	out := make([]int64, len(xs))
+	const step = 2
+	i := 0
+	for ; i < len(xs)-step+1; i += step {
+		x := archsimd.LoadInt64x2(xs[i : i+step])
+		x.Add(c0).Store(out[i : i+step])
+	}
+	if i < len(xs) {
+		x, _ := archsimd.LoadInt64x2Part(xs[i:])
+		x.Add(c0).StorePart(out[i:])
+	}
+	return out
+}
+func mapLanes(xs []int) []int {
+	out := mapLanesLanes(unsafe.Slice((*int64)(unsafe.Pointer(unsafe.SliceData(xs))), len(xs)))
+	return unsafe.Slice((*int)(unsafe.Pointer(unsafe.SliceData(out))), len(out))
+}
+
+// main_scalar.go
+//go:build !(goexperiment.simd && (arm64 || wasm))
+
+package main
+
+func mapLanes(xs []int) []int {
+	out := make([]int, len(xs))
+	for i, x := range xs {
+		out[i] = x + 1
+	}
+	return out
+}
+
+// main_vector.go
+//go:build goexperiment.simd && wasm
+
+package main
+
+import (
+	"simd"
+	"unsafe"
+)
+
+func mapLanesLanes(xs []int64) []int64 {
+	c0 := simd.BroadcastInt64s(1)
+	out := make([]int64, len(xs))
+	step := simd.Int64s{}.Len()
+	i := 0
+	for ; i < len(xs)-step+1; i += step {
+		x := simd.LoadInt64s(xs[i : i+step])
+		x.Add(c0).Store(out[i : i+step])
+	}
+	if i < len(xs) {
+		x, _ := simd.LoadInt64sPart(xs[i:])
+		x.Add(c0).StorePart(out[i:])
+	}
+	return out
+}
+func mapLanes(xs []int) []int {
+	out := mapLanesLanes(unsafe.Slice((*int64)(unsafe.Pointer(unsafe.SliceData(xs))), len(xs)))
+	return unsafe.Slice((*int)(unsafe.Pointer(unsafe.SliceData(out))), len(out))
 }
 
 // shared/shared.go

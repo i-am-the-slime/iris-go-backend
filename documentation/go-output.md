@@ -221,9 +221,9 @@ Whether Go fuses depends on the CPU it compiles for: it does on arm64, and on am
 ### Sums over vectors
 
 On arm64 (and wasm), with `GOEXPERIMENT=simd`, which `googoo run --go` sets for you, simple number
-crunching over `Array Number` (and `Array Int64`) runs on SIMD vectors: `foldl (+) 0.0 xs`, `sum`,
-`foldl (*)`, `foldl max`, `map (_ * k)`, `zipWith (\x y -> a * x + y)`, `sum (zipWith (*) xs ys)`,
-clamping with `min`, `max` and `if`, and so on. That's several times faster than a plain Go loop.
+crunching over `Array Number`, `Array Int` and `Array Int64` runs on SIMD vectors:
+`foldl (+) 0.0 xs`, `sum`, `foldl (*)`, `foldl max`, `map (_ * k)`, `zipWith (\x y -> a * x + y)`,
+`sum (zipWith (*) xs ys)`, clamping with `min`, `max` and `if`, and so on. That's several times faster than a plain Go loop.
 
 The catch: Go may reassociate a fold over `Number`s. A vector keeps one partial sum (or product) per
 lane, adds every lane's next element at once, and combines the lanes at the end, so the elements are

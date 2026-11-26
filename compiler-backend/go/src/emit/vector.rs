@@ -1,7 +1,7 @@
 //! Vector loops for pure numeric array code.
 //!
 //! `foldl (+) 0.0 xs`, `sum (zipWith (*) xs ys)` and `map (\x -> a * x + b) xs`
-//! over `Array Number`, or `Array Int64` and `Array UInt64`
+//! over `Array Number`, `Array Int`, or `Array Int64` and `Array UInt64`
 //! (purescript-int64's, Go's `[]int64` and `[]uint64`) do the same arithmetic on every element,
 //! with no effects and no aliasing. Such a loop runs as a kernel: a function
 //! with a vector loop, written with `simd/archsimd`'s NEON vectors in a file
@@ -31,8 +31,10 @@
 //! `Number` sum is reassociated and may differ from the scalar loop in its
 //! last digits. Vectors of 64-bit integers cannot multiply, nor negate unsigned
 //! ones, so code that does keeps its scalar loop. Anything else keeps the
-//! scalar loop it had. `Array Int`, Go's `[]int`, keeps its scalar loop too: the vector
-//! packages load lanes from `[]int64`, never from `[]int`.
+//! scalar loop it had. An `Array Int`, Go's `[]int`, runs on
+//! `int64` lanes: the kernel files build only for arm64 and wasm, where `int` is 64 bits, and
+//! hand the `int64` loop the same memory through `unsafe.Slice`, without a copy. Its scalar twin
+//! keeps `int`.
 
 use std::fmt::Write;
 
@@ -160,6 +162,7 @@ struct KernelSource {
     portable: String,
     scalar: String,
     imports_math: bool,
+    imports_unsafe: bool,
     line: Option<SourceLine>,
 }
 
@@ -285,12 +288,14 @@ where
         let name = unique(base.to_string(), &mut self.global_names);
         self.vector_kernels.names.insert(key, name.clone());
         let imports_math = portable.contains("math.");
+        let imports_unsafe = portable.contains("unsafe.");
         self.vector_kernels.sources.push(KernelSource {
             name: name.clone(),
             neon: neon.replace("{name}", &name),
             portable: portable.replace("{name}", &name),
             scalar: scalar.replace("{name}", &name),
             imports_math,
+            imports_unsafe,
             line,
         });
         name
@@ -299,6 +304,7 @@ where
     fn element(&self, monotype: MonotypeId) -> Option<Element> {
         match self.monotypes.get(monotype) {
             Monotype::Number => Some(Element::Number),
+            Monotype::Int => Some(Element::Int),
             Monotype::Int64 => Some(Element::Int64),
             Monotype::UInt64 => Some(Element::UInt64),
             _ => None,
@@ -342,10 +348,14 @@ pub(super) fn attach_kernels(files: &mut Vec<GoSourceFile>, kernels: &Kernels) {
         let stem = file.path.strip_suffix(".go").unwrap_or(&file.path);
         let package = file.file.package.clone();
         let math = called.iter().any(|source| source.imports_math);
+        let unsafe_ = called.iter().any(|source| source.imports_unsafe);
         let imports = |path: &str| {
             let mut imports = vec![GoImport { path: path.into(), alias: None }];
             if math {
                 imports.insert(0, GoImport { path: "math".into(), alias: None });
+            }
+            if unsafe_ {
+                imports.push(GoImport { path: "unsafe".into(), alias: None });
             }
             imports
         };
@@ -398,6 +408,9 @@ struct Plan<'e> {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Element {
     Number,
+    /// Go's `int`: its vector loop runs over the same memory as `int64`, which the vector packages
+    /// have lanes of, on arm64 and wasm, where both are 64 bits.
+    Int,
     Int64,
     UInt64,
 }
@@ -406,6 +419,7 @@ impl Element {
     fn scalar(self) -> &'static str {
         match self {
             Element::Number => "float64",
+            Element::Int => "int",
             Element::Int64 => "int64",
             Element::UInt64 => "uint64",
         }
@@ -421,7 +435,15 @@ impl Element {
         match self {
             Element::Int64 => Some(Signedness::Signed),
             Element::UInt64 => Some(Signedness::Unsigned),
-            Element::Number => None,
+            Element::Number | Element::Int => None,
+        }
+    }
+
+    /// The element whose vectors the loop is written with.
+    fn lanes(self) -> Element {
+        match self {
+            Element::Int => Element::Int64,
+            element => element,
         }
     }
 }
@@ -446,7 +468,8 @@ impl Flavor {
     }
 
     fn vector(self, element: Element) -> &'static str {
-        match (self, element) {
+        match (self, element.lanes()) {
+            (_, Element::Int) => unreachable!("invariant violated: an Int vector has Int64 lanes"),
             (Flavor::Portable, Element::Number) => "Float64s",
             (Flavor::Portable, Element::Int64) => "Int64s",
             (Flavor::Portable, Element::UInt64) => "Uint64s",
@@ -459,9 +482,10 @@ impl Flavor {
     /// The most lanes a vector of the element has: 512 bits' worth for the
     /// portable package.
     fn widest(self, element: Element) -> usize {
-        match (self, element) {
-            (Flavor::Portable, Element::Number | Element::Int64 | Element::UInt64) => 8,
-            (Flavor::Neon, Element::Number | Element::Int64 | Element::UInt64) => 2,
+        let _ = element;
+        match self {
+            Flavor::Portable => 8,
+            Flavor::Neon => 2,
         }
     }
 
@@ -593,6 +617,7 @@ enum Reduction {
     Min,
 }
 
+#[derive(Clone)]
 enum Shape {
     Fold {
         step: Term,
@@ -602,6 +627,7 @@ enum Shape {
     Map(Term),
 }
 
+#[derive(Clone)]
 struct Kernel {
     element: Element,
     inputs: usize,
@@ -965,6 +991,7 @@ impl<'a, 'e, E: Lookup<'e>> Analysis<'a, 'e, E> {
 
     fn constant(&mut self, literal: &Literal, expression: &'e Expression) -> Option<Term> {
         match (literal, self.element) {
+            (Literal::Int(value), Element::Int) => Some(Term::Constant(value.to_string())),
             (Literal::Number(value), Element::Number) => {
                 let number = value.parse::<f64>().ok()?;
                 // Go spells -0, NaN and the infinities as calls, which the
@@ -991,11 +1018,15 @@ impl<'a, 'e, E: Lookup<'e>> Analysis<'a, 'e, E> {
         depth: usize,
     ) -> Option<Term> {
         let arithmetic = match (operator, self.element) {
-            (Operator::NumberAdd, Element::Number) => Arithmetic::Add,
-            (Operator::NumberSubtract, Element::Number) => Arithmetic::Subtract,
+            (Operator::NumberAdd, Element::Number) | (Operator::IntAdd, Element::Int) => {
+                Arithmetic::Add
+            }
+            (Operator::NumberSubtract, Element::Number) | (Operator::IntSubtract, Element::Int) => {
+                Arithmetic::Subtract
+            }
             (Operator::NumberMultiply, Element::Number) => Arithmetic::Multiply,
             (Operator::NumberDivide, Element::Number) => Arithmetic::Divide,
-            (Operator::NumberNegate, Element::Number) => {
+            (Operator::NumberNegate, Element::Number) | (Operator::IntNegate, Element::Int) => {
                 let operand = self.term(&arguments[0], scope, depth)?;
                 return Some(Term::Negate(Box::new(operand)));
             }
@@ -1379,6 +1410,9 @@ impl Kernel {
     }
 
     fn vector_source(&self, flavor: Flavor) -> String {
+        if self.element == Element::Int {
+            return self.int_vector_source(flavor);
+        }
         let scalar = self.element.scalar();
         let vector = flavor.vector(self.element);
         let package = flavor.package();
@@ -1444,6 +1478,34 @@ impl Kernel {
                 self.partial_body(flavor, &mut out, term);
                 out.push_str("\t}\n");
                 out.push_str("\treturn out\n");
+            }
+        }
+        out.push_str("}\n");
+        out
+    }
+
+    /// The vector loop of an `int` kernel: the `int64` kernel `{name}Lanes`, and `{name}`, which
+    /// hands it the `[]int` inputs as the `[]int64` they are on arm64 and wasm, without a copy.
+    fn int_vector_source(&self, flavor: Flavor) -> String {
+        let lanes = Kernel { element: Element::Int64, ..self.clone() };
+        let mut out = lanes.vector_source(flavor).replacen("func {name}(", "func {name}Lanes(", 1);
+        out.push_str(&self.signature());
+        let as_int64 = |name: &str| {
+            format!("unsafe.Slice((*int64)(unsafe.Pointer(unsafe.SliceData({name}))), len({name}))")
+        };
+        let mut arguments: Vec<String> =
+            (0..self.inputs).map(|position| as_int64(&input_name(position))).collect();
+        arguments.extend(self.parameters.iter().map(|name| format!("int64({name})")));
+        match self.shape {
+            Shape::Fold { .. } => {
+                arguments.push("int64(initial)".into());
+                let _ = writeln!(out, "\treturn int({{name}}Lanes({}))", arguments.join(", "));
+            }
+            Shape::Map(_) => {
+                let _ = writeln!(out, "\tout := {{name}}Lanes({})", arguments.join(", "));
+                out.push_str(
+                    "\treturn unsafe.Slice((*int)(unsafe.Pointer(unsafe.SliceData(out))), len(out))\n",
+                );
             }
         }
         out.push_str("}\n");

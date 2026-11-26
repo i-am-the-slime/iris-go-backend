@@ -283,7 +283,8 @@ target: `main_neon.go` for arm64, `main_vector.go` for wasm, and `main_scalar.go
 for everything else or when `GOEXPERIMENT=simd` is off. `googoo run --go` turns the experiment on
 for you.
 
-Vectors are for `Number`, `Int64` and `UInt64`. A fold over an `Array Int` is a plain loop.
+Vectors are for `Number`, `Int`, `Int64` and `UInt64`. An `Array Int` runs on 64-bit integer
+lanes, which can add, subtract and compare but not multiply, so a `*` keeps the plain loop.
 
 A vector adds up several elements at a time, so a `Number` sum can differ from JavaScript's in its
 last digits. [Sums over vectors](../go-output.md#sums-over-vectors) says which folds and maps run

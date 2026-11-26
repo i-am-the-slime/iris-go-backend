@@ -28,11 +28,7 @@ func initializeMain_() shared2.MainResult {
 		performed2 := x * 3
 		mapped[index] = performed2
 	}
-	accumulator := 0
-	for _, value := range mapped {
-		accumulator += value
-	}
-	fused = accumulator
+	fused = foldLanes(mapped, 0)
 	predicateCalls := predicates
 	modified := shared2.StateValue{State: 0, Value: mappings}
 	mappings = modified.State
@@ -43,11 +39,7 @@ func initializeMain_() shared2.MainResult {
 		performed2 := x * 3
 		mapped2[index] = performed2
 	}
-	accumulator2 := 0
-	for _, value := range mapped2 {
-		accumulator2 += value
-	}
-	shared = accumulator2 + len(mapped2)
+	shared = foldLanes(mapped2, 0) + len(mapped2)
 	modified2 := shared2.StateValue{State: 0, Value: mappings}
 	mappings = modified2.State
 	sharedMappingCalls := modified2.Value
@@ -72,7 +64,7 @@ func initializeMain_() shared2.MainResult {
 	f := func(value int) shared2.MainResult {
 		return shared2.MainResult{Fused: i, Shared: i2, EarlyExit: boolean, PredicateCalls: predicateCalls, FusedMappingCalls: fusedMappingCalls, SharedMappingCalls: sharedMappingCalls, EarlyExitMappingCalls: earlyExitMappingCalls, KeptLength: value}
 	}
-	accumulator3 := 0
+	accumulator := 0
 	for _, value := range numbers {
 		value2 := value * 3
 		var result int
@@ -81,9 +73,9 @@ func initializeMain_() shared2.MainResult {
 		} else {
 			result = 0
 		}
-		accumulator3 += result
+		accumulator += result
 	}
-	performed := f(accumulator3)
+	performed := f(accumulator)
 	return performed
 }
 
@@ -91,6 +83,103 @@ var numbers []int = []int{3, 1, 4, 1, 5, 9, 2, 6}
 
 func main() {
 	_ = main_
+}
+
+// main_neon.go
+//go:build goexperiment.simd && arm64
+
+package main
+
+import (
+	"simd/archsimd"
+	"unsafe"
+)
+
+func foldLanesLanes(xs []int64, initial int64) int64 {
+	acc0 := archsimd.BroadcastInt64x2(0)
+	acc1, acc2, acc3 := acc0, acc0, acc0
+	const step = 2
+	i := 0
+	for ; i < len(xs)-4*step+1; i += 4 * step {
+		x0 := archsimd.LoadInt64x2(xs[i : i+step])
+		acc0 = acc0.Add(x0)
+		x1 := archsimd.LoadInt64x2(xs[i+step : i+2*step])
+		acc1 = acc1.Add(x1)
+		x2 := archsimd.LoadInt64x2(xs[i+2*step : i+3*step])
+		acc2 = acc2.Add(x2)
+		x3 := archsimd.LoadInt64x2(xs[i+3*step : i+4*step])
+		acc3 = acc3.Add(x3)
+	}
+	acc0 = acc0.Add(acc1).Add(acc2.Add(acc3))
+	var lanes [2]int64
+	acc0.Store(lanes[:])
+	accumulator := initial
+	for _, lane := range lanes[:step] {
+		accumulator = accumulator + lane
+	}
+	for ; i < len(xs); i++ {
+		x := xs[i]
+		accumulator = accumulator + x
+	}
+	return accumulator
+}
+func foldLanes(xs []int, initial int) int {
+	return int(foldLanesLanes(unsafe.Slice((*int64)(unsafe.Pointer(unsafe.SliceData(xs))), len(xs)), int64(initial)))
+}
+
+// main_scalar.go
+//go:build !(goexperiment.simd && (arm64 || wasm))
+
+package main
+
+func foldLanes(xs []int, initial int) int {
+	accumulator := initial
+	for _, x := range xs {
+		accumulator = accumulator + x
+	}
+	return accumulator
+}
+
+// main_vector.go
+//go:build goexperiment.simd && wasm
+
+package main
+
+import (
+	"simd"
+	"unsafe"
+)
+
+func foldLanesLanes(xs []int64, initial int64) int64 {
+	acc0 := simd.BroadcastInt64s(0)
+	acc1, acc2, acc3 := acc0, acc0, acc0
+	step := acc0.Len()
+	i := 0
+	for ; i < len(xs)-4*step+1; i += 4 * step {
+		x0 := simd.LoadInt64s(xs[i : i+step])
+		acc0 = acc0.Add(x0)
+		x1 := simd.LoadInt64s(xs[i+step : i+2*step])
+		acc1 = acc1.Add(x1)
+		x2 := simd.LoadInt64s(xs[i+2*step : i+3*step])
+		acc2 = acc2.Add(x2)
+		x3 := simd.LoadInt64s(xs[i+3*step : i+4*step])
+		acc3 = acc3.Add(x3)
+	}
+	acc0 = acc0.Add(acc1).Add(acc2.Add(acc3))
+	var lanes [8]int64
+	acc0.Store(lanes[:])
+	accumulator := initial
+	for _, lane := range lanes[:step] {
+		accumulator = accumulator + lane
+	}
+	for ; i < len(xs); i++ {
+		x := xs[i]
+		accumulator = accumulator + x
+	}
+	return accumulator
+}
+func foldLanes(xs []int, initial int) int {
+	return int(foldLanesLanes(unsafe.Slice((*int64)(unsafe.Pointer(unsafe.SliceData(xs))), len(xs)), int64(initial)))
 }
 
 // shared/shared.go
