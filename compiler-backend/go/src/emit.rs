@@ -726,6 +726,9 @@ const INLINE_DATA_LIMIT: usize = 128;
 /// The largest data type held by value otherwise: a result or a step that is
 /// matched once, where a pointer would cost an allocation per value.
 const TRANSIENT_DATA_LIMIT: usize = 256;
+/// The largest node of a tree that keeps its children in an array held by value: copying the
+/// array of children, as every persistent write does, copies whole nodes.
+const ARRAY_TREE_DATA_LIMIT: usize = 32;
 
 impl DataLayout {
     fn go_type(&self) -> GoType {

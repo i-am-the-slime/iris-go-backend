@@ -170,7 +170,7 @@ fromFoldableWith :: forall f k v. Ord k => Foldable f => (v -> v -> v) -> f (k /
 fromFoldableWith combine entries = built
   where
   built
-    | ascending = fromAscending (entryArray <#> fst') (entryArray <#> snd')
+    | ascending = Array.unzip entryArray # \(entryKeys /\ entryValues) -> fromAscending entryKeys entryValues
     | otherwise = Array.foldl (\m (key /\ value) -> insertWith (flip combine) key value m) empty entryArray
   entryArray = Array.fromFoldable entries
   ascending = ascendingFrom 0
@@ -179,7 +179,6 @@ fromFoldableWith combine entries = built
     | fst' (at entryArray index) < fst' (at entryArray (index + 1)) = ascendingFrom (index + 1)
     | otherwise = false
   fst' (key /\ _) = key
-  snd' (_ /\ value) = value
 
 -- | The map of keys in strictly ascending order, built bottom up.
 fromAscending :: forall k v. Array k -> Array v -> Map k v
