@@ -472,6 +472,17 @@ pub(super) struct SetAside {
 }
 
 /// Takes the directives out of the declarations.
+impl SetAside {
+    pub(super) fn share(&mut self, from: &str, to: &str) {
+        if let Some(statements) = self.statements.get(from).cloned() {
+            self.statements.insert(to.to_string(), statements);
+        }
+        if let Some(definition) = self.definitions.get(from).cloned() {
+            self.definitions.insert(to.to_string(), definition);
+        }
+    }
+}
+
 pub(super) fn set_aside(declarations: &mut [GoDeclaration]) -> SetAside {
     struct Record(Vec<(String, Vec<SourceLine>)>);
     impl Walk for Record {

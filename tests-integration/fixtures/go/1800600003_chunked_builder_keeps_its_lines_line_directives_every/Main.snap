@@ -1,0 +1,97 @@
+---
+source: tests-integration/src/fixtures.rs
+---
+// main.go
+package main
+
+import (
+	journal "fixture/Journal_ffi"
+	"github.com/i-am-the-slime/iris-go/alloc"
+	"strconv"
+)
+
+//line Main.purs:8:1
+type Expr struct {
+//line Main.purs:9:5
+	Add0   *Expr
+//line Main.purs:9:5
+	Add1   *Expr
+//line Main.purs:8:1
+	Field0 int
+//line Main.purs:8:1
+	Tag    uint8
+//line Main.purs:8:1
+}
+
+//line Main.purs:8:1
+const (
+//line Main.purs:9:5
+	ExprAdd = iota
+//line Main.purs:10:5
+	ExprVal
+//line Main.purs:11:5
+	ExprVar
+//line Main.purs:8:1
+)
+
+//line Main.purs:14:1
+func main() {
+//line Main.purs:14:8
+	journal.Log(strconv.Itoa(eval(sumTree(4, 1))))
+//line Main.purs:14:1
+}
+
+//line Main.purs:27:1
+func eval(value *Expr) int {
+//line Main.purs:27:1
+	switch value.Tag {
+//line Main.purs:28:3
+	case ExprVar:
+//line Main.purs:28:12
+		return 0
+//line Main.purs:29:3
+	case ExprVal:
+//line Main.purs:29:17
+		return value.Field0
+//line Main.purs:30:3
+	default: // ExprAdd
+//line Main.purs:30:21
+		return eval(value.Add0) + eval(value.Add1)
+//line Main.purs:27:1
+	}
+//line Main.purs:27:1
+}
+
+//line Main.purs:17:1
+func sumTree(depth int, number int) *Expr {
+//line Main.purs:19:66
+	var cells alloc.Cells[Expr]
+//line Main.purs:19:17
+	return sumTreeChunked(depth, number, &cells)
+//line Main.purs:17:1
+}
+
+//line Main.purs:17:1
+func sumTreeChunked(depth int, number int, cells *alloc.Cells[Expr]) *Expr {
+//line Main.purs:18:5
+	if depth == 0 {
+//line Main.purs:24:18
+		if number == 0 {
+//line Main.purs:24:35
+			return cells.New(Expr{Tag: ExprVar, Field0: 1})
+//line Main.purs:24:18
+		}
+//line Main.purs:24:46
+		return cells.New(Expr{Tag: ExprVal, Field0: number})
+//line Main.purs:18:5
+	}
+//line Main.purs:21:11
+	below := depth - 1
+//line Main.purs:19:71
+	x := number - 1
+//line Main.purs:19:66
+	result := max(x, 0)
+//line Main.purs:19:17
+	return cells.New(Expr{Tag: ExprAdd, Add0: sumTreeChunked(below, number+1, cells), Add1: sumTreeChunked(below, result, cells)})
+//line Main.purs:17:1
+}

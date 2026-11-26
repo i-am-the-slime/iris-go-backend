@@ -209,7 +209,7 @@ where
         let await_ = emitter.performing(await_);
         await_fibers(&mut declarations, await_, every_line);
     }
-    let lines_aside = every_line.then(|| lines::set_aside(&mut declarations));
+    let mut lines_aside = every_line.then(|| lines::set_aside(&mut declarations));
     timed("wrappers", || wrappers::inline_wrappers(&mut declarations));
     let structs = scalars::structs_of(&emitter.type_declarations);
     timed("equality", || equality::compare_structs_whole(&mut declarations, &structs));
@@ -293,6 +293,9 @@ where
         blocks::allocate_nested_cells_together(&mut declarations, &mut names, &taken)
     });
     for worker in workers {
+        if let Some(aside) = &mut lines_aside {
+            aside.share(&worker.builder, &worker.name);
+        }
         if let Some(&home) = emitter.homes.get(&worker.builder) {
             emitter.homes.insert(worker.name.clone(), home);
         }
