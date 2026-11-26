@@ -7,7 +7,7 @@ use indexing::{IndexedTermItemKind, TermItemId};
 use smol_str::{SmolStr, format_smolstr};
 
 use super::{LocalSource, Scope, Specializer};
-use crate::dictionary::{Dictionary, Reflected};
+use crate::dictionary::{Dictionary, Reflected, RuntimeDictionary};
 use crate::error::{GoResult, UnsupportedState};
 use crate::monomorphic::{Expression, ExpressionKind, Local};
 use crate::monotype::{Monotype, MonotypeId, supported};
@@ -316,12 +316,22 @@ where
         let types: Vec<TypeId> = scheme.names.iter().map(|name| instantiations[name]).collect();
         let instantiated = scheme.instantiate(&self.context, &types);
         let monotype = self.closed_monotype(scope, instantiated)?;
+        if let Some((runtime, _)) = self.monotypes.schemes.at_run_time(&scheme.key) {
+            let requested = (types.as_slice(), dictionaries);
+            return self.scheme_value_at_run_time(scope, &scheme, local, runtime, requested, monotype);
+        }
         if let Some(known) = self.monotypes.schemes.find(&scheme.key, &types) {
             let label = known.label.clone();
             let kind = ExpressionKind::Access { record: Box::new(local), label };
             return Ok(Expression::new(kind, monotype));
         }
-        self.discover(scope, scheme.key, types, dictionaries)?;
+        if self.evidence_grows(&scheme, &types)
+            || dictionaries.iter().any(super::runtime::mentions_runtime)
+        {
+            self.pass_scheme_at_run_time(scope, &scheme)?;
+        } else {
+            self.discover(scope, scheme.key, types, dictionaries)?;
+        }
         self.note_pending();
         let pending = SmolStr::new_static("instantiation discovered in this pass");
         Ok(Expression::new(ExpressionKind::Fail(pending), monotype))
@@ -339,6 +349,15 @@ where
         let mut parameters = vec![];
         let mut dictionaries = Vec::with_capacity(instantiation.dictionaries.len());
         for dictionary in instantiation.dictionaries.iter() {
+            if let Dictionary::Runtime(RuntimeDictionary { constraint, value: None }) = dictionary {
+                let monotype = self.runtime_monotype(&scope.definition, *constraint)?;
+                let parameter = self.fresh_local(SmolStr::new_static("dictionary"), monotype);
+                let value = Some(Box::new(parameter.expression()));
+                let constraint = *constraint;
+                dictionaries.push(Dictionary::Runtime(RuntimeDictionary { constraint, value }));
+                parameters.push(parameter);
+                continue;
+            }
             let Dictionary::Reflectable(Reflected::Reified) = dictionary else {
                 dictionaries.push(dictionary.clone());
                 continue;

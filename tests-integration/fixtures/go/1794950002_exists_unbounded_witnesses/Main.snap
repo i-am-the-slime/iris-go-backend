@@ -36,6 +36,9 @@ type NestNest struct {
 }
 
 func convert3(value *NestNest) *Nest {
+	if value == nil {
+		return nil
+	}
 	return &Nest{Nest: value.Nest}
 }
 

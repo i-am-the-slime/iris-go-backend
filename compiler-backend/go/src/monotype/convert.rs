@@ -722,6 +722,17 @@ impl Monotypes {
     where
         Q: checking::ExternalQueries,
     {
+        if let Some((instantiation, dictionaries)) = self.schemes.at_run_time(&scheme.key) {
+            let instantiated = scheme.instantiate(context, &instantiation.types);
+            let mut monotype = self.convert(context, instantiated, expansions)?;
+            for &dictionary in dictionaries.iter().rev() {
+                monotype = self.intern(Monotype::Function(dictionary, monotype));
+            }
+            let field = RecordField { label: instantiation.label, monotype };
+            let record = self.intern(Monotype::Record(Arc::from([field])));
+            self.instantiated_records.insert(record);
+            return Ok(record);
+        }
         let instantiations = self.schemes.get(&scheme.key).to_vec();
         let mut fields = Vec::with_capacity(instantiations.len());
         for instantiation in instantiations {

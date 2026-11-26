@@ -29,6 +29,9 @@ const (
 )
 
 func Convert(value *EitherFn) *EitherString {
+	if value == nil {
+		return nil
+	}
 	if original, ok := value.Origin.(*EitherString); ok {
 		return original
 	}
@@ -41,6 +44,9 @@ func Convert(value *EitherFn) *EitherString {
 }
 
 func Convert2(value *EitherString) *EitherFn {
+	if value == nil {
+		return nil
+	}
 	if original, ok := value.Origin.(*EitherFn); ok {
 		return original
 	}
@@ -302,6 +308,9 @@ func convert5(value EitherFnFnCommandCommandFnCommandCommand) *dataeither.Either
 }
 
 func convert6(value *ParserFnFnCommandCommandFnCommandCommand) *ParserFn {
+	if value == nil {
+		return nil
+	}
 	switch value.Tag {
 	case ParserFnFnCommandCommandFnCommandCommandOption:
 		return &ParserFn{Tag: ParserFnOption, Option: func(coerced string) *dataeither.EitherFn {
@@ -323,6 +332,9 @@ func convert6(value *ParserFnFnCommandCommandFnCommandCommand) *ParserFn {
 }
 
 func convert7(value *AppliedFnCommandCommand) *Applied {
+	if value == nil {
+		return nil
+	}
 	return &Applied{First: convert6(value.First), Second: convert9(value.Second)}
 }
 
@@ -331,6 +343,9 @@ func convert8(value *ExistsAppliedFnCommandCommand) any {
 }
 
 func convert9(value *ParserFnCommandCommand) *Parser {
+	if value == nil {
+		return nil
+	}
 	switch value.Tag {
 	case ParserFnCommandCommandOption:
 		return &Parser{Tag: ParserOption, Option: func(coerced string) *dataeither.EitherString {
@@ -346,6 +361,9 @@ func convert9(value *ParserFnCommandCommand) *Parser {
 }
 
 func convert10(value *AppliedFnFnCommandCommandFnCommandCommand) *Applied {
+	if value == nil {
+		return nil
+	}
 	return &Applied{First: convert3(value.First), Second: convert9(value.Second)}
 }
 
@@ -354,6 +372,9 @@ func convert11(value *ExistsAppliedFnFnCommandCommandFnCommandCommand) any {
 }
 
 func convert12(value *ParserFnFnCommandCommandFnCommandCommand) *Parser {
+	if value == nil {
+		return nil
+	}
 	switch value.Tag {
 	case ParserFnFnCommandCommandFnCommandCommandOption:
 		return &Parser{Tag: ParserOption, Option: func(coerced string) *dataeither.EitherString {
@@ -460,6 +481,9 @@ func convert15(value *dataeither.EitherString) EitherFnCommandCommand {
 }
 
 func convert16(value *ParserFn) *Parser {
+	if value == nil {
+		return nil
+	}
 	if original, ok := value.Origin.(*Parser); ok {
 		return original
 	}
@@ -476,6 +500,9 @@ func convert16(value *ParserFn) *Parser {
 }
 
 func convert17(value *Parser) *ParserFn {
+	if value == nil {
+		return nil
+	}
 	if original, ok := value.Origin.(*ParserFn); ok {
 		return original
 	}

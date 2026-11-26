@@ -338,6 +338,25 @@ where
         Ok(dictionaries)
     }
 
+    pub(super) fn note_scheme_at_run_time(
+        &mut self,
+        scope: &Scope,
+        constraint: TypeId,
+    ) -> GoResult<()> {
+        let (file_id, item) = self.class_head(&scope.definition, constraint)?;
+        let class = self.context.type_name(file_id, item)?;
+        let note = format!(
+            "the constrained rank-N arguments that {} instantiates take their {class} \
+             dictionary at run time, because it instantiates them at ever larger types; only \
+             those arguments are slower",
+            scope.definition
+        );
+        if !self.runtime_dictionary_notes.contains(&note) {
+            self.runtime_dictionary_notes.push(note);
+        }
+        Ok(())
+    }
+
     pub(super) fn note_floating_at_run_time(
         &mut self,
         scope: &Scope,
@@ -654,7 +673,7 @@ where
         Ok(Dictionary::Runtime(RuntimeDictionary { constraint, value }))
     }
 
-    fn runtime_monotype(&mut self, definition: &str, constraint: TypeId) -> GoResult<MonotypeId> {
+    pub(super) fn runtime_monotype(&mut self, definition: &str, constraint: TypeId) -> GoResult<MonotypeId> {
         let class = self.class_environment(definition, constraint)?;
         let mut fields = vec![];
         for member in &class.class.members {
@@ -781,7 +800,7 @@ fn key_mentions_runtime(key: &SpecializationKey) -> bool {
     definition || key.dictionaries.iter().any(mentions_runtime)
 }
 
-fn mentions_runtime(dictionary: &Dictionary) -> bool {
+pub(super) fn mentions_runtime(dictionary: &Dictionary) -> bool {
     match dictionary {
         Dictionary::Runtime(_) => true,
         Dictionary::Instance(instance) => instance_mentions_runtime(instance),

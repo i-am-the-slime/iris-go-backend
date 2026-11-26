@@ -1,12 +1,18 @@
 use std::sync::Arc;
 
 use checking::{TypeId, tree};
+use smol_str::SmolStr;
 
 use super::{Definition, PolymorphicLocal, Scope, SpecializationKey, Specializer, runtime};
+use crate::dictionary::{Dictionary, RuntimeDictionary};
 use crate::erasure::Erasure;
-use crate::error::GoResult;
-use crate::monomorphic::Expression;
-use crate::scheme::{SchemeKey, rank_n_scheme};
+use crate::error::{GoResult, UnsupportedState};
+use crate::monomorphic::{Expression, ExpressionKind};
+use crate::monotype::{Monotype, MonotypeId};
+use crate::scheme::{
+    ConstrainedScheme, SCHEME_INSTANTIATION_LIMIT, SchemeInstantiation, SchemeKey, rank_n_scheme,
+};
+use crate::types::Substitution;
 
 impl<'q, Q> Specializer<'q, Q>
 where
@@ -157,5 +163,102 @@ where
             ancestor = specialization.requester;
         }
         types
+    }
+}
+
+impl<'q, Q> Specializer<'q, Q>
+where
+    Q: checking::ExternalQueries,
+{
+    pub(super) fn evidence_grows(&self, scheme: &ConstrainedScheme, types: &[TypeId]) -> bool {
+        if scheme.constraints.is_empty() || self.monotypes.schemes.rank_n_owner(&scheme.key).is_some()
+        {
+            return false;
+        }
+        let known = self.monotypes.schemes.get(&scheme.key).len();
+        known + 1 >= SCHEME_INSTANTIATION_LIMIT || self.grows_construction(&scheme.key, types)
+    }
+
+    pub(super) fn pass_scheme_at_run_time(
+        &mut self,
+        scope: &Scope,
+        scheme: &ConstrainedScheme,
+    ) -> GoResult<()> {
+        let erased = self.context.types.erased(Erasure::PolymorphicRecursion);
+        let substitution: Substitution = scheme.names.iter().map(|&name| (name, erased)).collect();
+        let mut dictionaries = Vec::with_capacity(scheme.constraints.len());
+        let mut monotypes = vec![];
+        for &constraint in &scheme.constraints {
+            if crate::monotype::is_partial(&mut self.context, constraint)? {
+                dictionaries.push(Dictionary::Trivial);
+                continue;
+            }
+            let constraint = self.context.types.substitute(constraint, &substitution);
+            monotypes.push(self.runtime_monotype(&scope.definition, constraint)?);
+            dictionaries.push(Dictionary::Runtime(RuntimeDictionary { constraint, value: None }));
+            self.note_scheme_at_run_time(scope, constraint)?;
+        }
+        let instantiation = SchemeInstantiation {
+            types: scheme.names.iter().map(|_| erased).collect(),
+            dictionaries: Arc::from(dictionaries),
+            label: SmolStr::new_static("AtRunTime"),
+        };
+        if let Some(functions) = self.constructions.get(&scheme.key) {
+            self.stale.extend(functions.iter().copied());
+        }
+        self.monotypes.schemes.pass_at_run_time(scheme.key.clone(), instantiation, monotypes);
+        self.grown = true;
+        Ok(())
+    }
+
+    pub(super) fn scheme_value_at_run_time(
+        &mut self,
+        scope: &mut Scope,
+        scheme: &ConstrainedScheme,
+        value: Expression,
+        runtime: SchemeInstantiation,
+        (types, dictionaries): (&[TypeId], Vec<Dictionary>),
+        monotype: MonotypeId,
+    ) -> GoResult<Expression> {
+        let field = match self.monotypes.get(value.monotype) {
+            Monotype::Record(fields) => fields.iter().find(|field| field.label == runtime.label),
+            _ => None,
+        };
+        let Some(field) = field.map(|field| field.monotype) else {
+            self.note_pending();
+            let pending = SmolStr::new_static("run-time instantiation discovered in this pass");
+            return Ok(Expression::new(ExpressionKind::Fail(pending), monotype));
+        };
+        if dictionaries.len() != scheme.constraints.len() {
+            return Err(self.unsupported(scope, UnsupportedState::UnabstractedEvidence));
+        }
+        let substitution: Substitution =
+            scheme.names.iter().copied().zip(types.iter().copied()).collect();
+        let mut arguments = vec![];
+        let passed = dictionaries.into_iter().zip(scheme.constraints.iter());
+        for ((dictionary, &constraint), expected) in passed.zip(runtime.dictionaries.iter()) {
+            let Dictionary::Runtime(RuntimeDictionary { constraint: erased, value: None }) =
+                expected
+            else {
+                continue;
+            };
+            let constraint = self.context.types.substitute(constraint, &substitution);
+            arguments.push(self.runtime_value(scope, dictionary, constraint, *erased)?);
+        }
+        let label = runtime.label;
+        let access = ExpressionKind::Access { record: Box::new(value), label };
+        let access = Expression::new(access, field);
+        if arguments.is_empty() {
+            return Ok(self.coerce(access, monotype));
+        }
+        let mut result = field;
+        for _ in &arguments {
+            let Some((_, rest)) = self.monotypes.function_parts(result) else {
+                return Err(self.unsupported(scope, UnsupportedState::UnabstractedEvidence));
+            };
+            result = rest;
+        }
+        let applied = ExpressionKind::Apply { function: Box::new(access), arguments };
+        Ok(self.coerce(Expression::new(applied, result), monotype))
     }
 }

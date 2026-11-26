@@ -176,6 +176,18 @@ where
                     return self.coerce(value, canonical, to, out);
                 }
                 let type_ = self.go_type(canonical)?;
+                if matches!(type_, GoType::Pointer(_))
+                    && matches!(self.monotypes.get(from), Monotype::Erased(Erasure::PolymorphicRecursion))
+                    && matches!(self.monotypes.get(canonical), Monotype::Data(_))
+                {
+                    let name = self.temporary("typed");
+                    let assertion = GoExpression::TypeAssertion { value: Box::new(value), type_ };
+                    out.push(GoStatement::Define {
+                        names: vec![name.clone(), "_".into()],
+                        values: vec![assertion],
+                    });
+                    return self.coerce(identifier_expression(&name), canonical, to, out);
+                }
                 let value = GoExpression::TypeAssertion { value: Box::new(value), type_ };
                 self.coerce(value, canonical, to, out)
             }
@@ -844,6 +856,14 @@ where
             })));
             return Ok(None);
         }
+        if from_layout.boxed && to_layout.boxed {
+            let absent = binary("==", value.clone(), identifier_expression("nil"));
+            body.push(GoStatement::If {
+                condition: absent,
+                then: vec![GoStatement::Return(Some(identifier_expression("nil")))],
+                otherwise: vec![],
+            });
+        }
         // A typed value converted to an erased layout and back is the original.
         let from_remembers = self.remember_origin(from)?;
         let to_remembers = self.remember_origin(to)?;
@@ -1076,8 +1096,11 @@ where
             else {
                 unreachable!("invariant violated: a round trip names its converter")
             };
-            if round_trip.checks {
-                body.remove(0);
+            if round_trip.checks
+                && let Some(check) =
+                    body.iter().position(|statement| matches!(statement, GoStatement::IfAssert { .. }))
+            {
+                body.remove(check);
             }
             if round_trip.remembers.is_some() {
                 forget_origins(body);

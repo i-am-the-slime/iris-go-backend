@@ -10,7 +10,7 @@ use smol_str::SmolStr;
 use crate::context::Context;
 use crate::dictionary::{Dictionary, Reflected};
 use crate::erasure::Erasure;
-use crate::monotype::DataType;
+use crate::monotype::{DataType, MonotypeId};
 use crate::types::Substitution;
 
 pub const SCHEME_INSTANTIATION_LIMIT: usize = 64;
@@ -46,6 +46,7 @@ pub struct SchemeInstantiations {
     erased_families: FxHashMap<TypeId, Erasure>,
     continuation_families: FxHashMap<SchemeKey, TypeId>,
     accumulators: FxHashMap<SchemeKey, TypeId>,
+    runtime_dictionaries: FxHashMap<SchemeKey, Arc<[MonotypeId]>>,
     version: u32,
     written: FxHashMap<Decision, u32>,
     reads: RefCell<Vec<Read>>,
@@ -131,6 +132,24 @@ impl SchemeInstantiations {
 
     pub fn find(&self, key: &SchemeKey, types: &[TypeId]) -> Option<&SchemeInstantiation> {
         self.get(key).iter().find(|instantiation| *instantiation.types == *types)
+    }
+
+    pub fn at_run_time(&self, key: &SchemeKey) -> Option<(SchemeInstantiation, Arc<[MonotypeId]>)> {
+        self.note_read(Decision::Instantiations(key.clone()));
+        let dictionaries = self.runtime_dictionaries.get(key)?;
+        let instantiation = self.known.get(key)?.first()?;
+        Some((instantiation.clone(), Arc::clone(dictionaries)))
+    }
+
+    pub fn pass_at_run_time(
+        &mut self,
+        key: SchemeKey,
+        instantiation: SchemeInstantiation,
+        dictionaries: Vec<MonotypeId>,
+    ) {
+        self.note_write(Decision::Instantiations(key.clone()));
+        self.known.insert(key.clone(), vec![instantiation]);
+        self.runtime_dictionaries.insert(key, Arc::from(dictionaries));
     }
 
     pub fn accumulator(&self, key: &SchemeKey) -> Option<TypeId> {

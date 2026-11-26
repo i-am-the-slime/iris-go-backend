@@ -57,6 +57,9 @@ type Array struct {
 var NoArray = &Array{Tag: TagNothing}
 
 func Convert2(value *Array) *Maybe {
+	if value == nil {
+		return nil
+	}
 	switch value.Tag {
 	case TagNothing:
 		return &Maybe{Tag: TagNothing}

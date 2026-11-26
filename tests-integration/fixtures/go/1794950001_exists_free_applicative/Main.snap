@@ -448,6 +448,9 @@ func convert15(value ApplyEFnNumberString) *ApplyE {
 }
 
 func convert16(value *ApFn) *Ap {
+	if value == nil {
+		return nil
+	}
 	if original, ok := value.Origin.(*Ap); ok {
 		return original
 	}
@@ -462,6 +465,9 @@ func convert16(value *ApFn) *Ap {
 }
 
 func convert17(value *Ap) *ApFn {
+	if value == nil {
+		return nil
+	}
 	if original, ok := value.Origin.(*ApFn); ok {
 		return original
 	}

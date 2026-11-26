@@ -72,6 +72,9 @@ type Int2 struct {
 }
 
 func Convert4(value *Maybe) *Int2 {
+	if value == nil {
+		return nil
+	}
 	switch value.Tag {
 	case TagNothing:
 		return &Int2{Tag: TagNothing}
@@ -159,6 +162,9 @@ type Wrapped struct {
 }
 
 func convert(value *Wrapped) *WrappedArray {
+	if value == nil {
+		return nil
+	}
 	if original, ok := value.Origin.(*WrappedArray); ok {
 		return original
 	}
@@ -174,6 +180,9 @@ func convert2(value WrappedArrayInt) *Wrapped {
 }
 
 func convert3(value *WrappedArray) *Wrapped {
+	if value == nil {
+		return nil
+	}
 	if original, ok := value.Origin.(*Wrapped); ok {
 		return original
 	}
@@ -189,6 +198,9 @@ func WrappedWrappedArray(wrapped []any) *WrappedArray {
 }
 
 func convert4(value *Wrapped) *WrappedArray2 {
+	if value == nil {
+		return nil
+	}
 	return &WrappedArray2{Wrapped: value.Wrapped.([]any)}
 }
 
@@ -198,6 +210,9 @@ type WrappedInt struct {
 }
 
 func convert5(value *WrappedInt) *Wrapped {
+	if value == nil {
+		return nil
+	}
 	return &Wrapped{Wrapped: value.Wrapped}
 }
 
@@ -210,6 +225,9 @@ func WrappedWrapped(wrapped any) *Wrapped {
 }
 
 func convert6(value *Wrapped) *Wrapped2 {
+	if value == nil {
+		return nil
+	}
 	return &Wrapped2{Wrapped: value.Wrapped}
 }
 
@@ -314,22 +332,20 @@ func initializeMain_() []string {
 			return maybe.Apply(change, inner)
 		}
 	}
-	original10 := func(inner *maybe.Maybe) func(func(any) *maybe.Maybe) *maybe.Maybe {
-		return func(next func(any) *maybe.Maybe) *maybe.Maybe {
-			return bindMaybe(inner, next)
-		}
-	}
-	scrutinee3 := maybe.Convert3(steppedMonadDictionaryApplicative0Apply0Functor0Bind1Apply0Functor0(func(coerced func(any) any) func(any) any {
+	typed3, _ := steppedMonadDictionaryApplicative0Apply0Functor0Bind1Apply0Functor0(func(coerced func(any) any) func(any) any {
 		original := func(inner *maybe.Maybe) *maybe.Maybe {
 			return maybe.Map_(coerced, inner)
 		}
 		return func(coerced2 any) any {
-			return original(coerced2.(*maybe.Maybe))
+			typed, _ := coerced2.(*maybe.Maybe)
+			return original(typed)
 		}
 	}, func(coerced any) func(any) any {
-		original := original8(maybe.Convert(coerced.(*maybe.Maybe)))
+		typed, _ := coerced.(*maybe.Maybe)
+		original := original8(maybe.Convert(typed))
 		return func(coerced2 any) any {
-			return original(coerced2.(*maybe.Maybe))
+			typed2, _ := coerced2.(*maybe.Maybe)
+			return original(typed2)
 		}
 	}, func(coerced any) any {
 		return maybe.Pure(coerced)
@@ -338,21 +354,29 @@ func initializeMain_() []string {
 			return maybe.Map_(coerced, inner)
 		}
 		return func(coerced2 any) any {
-			return original(coerced2.(*maybe.Maybe))
+			typed, _ := coerced2.(*maybe.Maybe)
+			return original(typed)
 		}
 	}, func(coerced any) func(any) any {
-		original := original9(maybe.Convert(coerced.(*maybe.Maybe)))
+		typed, _ := coerced.(*maybe.Maybe)
+		original := original9(maybe.Convert(typed))
 		return func(coerced2 any) any {
-			return original(coerced2.(*maybe.Maybe))
+			typed2, _ := coerced2.(*maybe.Maybe)
+			return original(typed2)
 		}
 	}, func(coerced any) func(func(any) any) any {
-		original := original10(coerced.(*maybe.Maybe))
+		typed, _ := coerced.(*maybe.Maybe)
+		original := func(next func(any) *maybe.Maybe) *maybe.Maybe {
+			return bindMaybe(typed, next)
+		}
 		return func(coerced2 func(any) any) any {
 			return original(func(coerced3 any) *maybe.Maybe {
-				return coerced2(coerced3).(*maybe.Maybe)
+				typed2, _ := coerced2(coerced3).(*maybe.Maybe)
+				return typed2
 			})
 		}
-	}, 1, maybe.Convert2(maybe.Int(5))).(*maybe.Maybe))
+	}, 1, maybe.Convert2(maybe.Int(5))).(*maybe.Maybe)
+	scrutinee3 := maybe.Convert3(typed3)
 	var result3 string
 	if scrutinee3 != maybe.NoInt {
 		result3 = "(Just " + strconv.Itoa(int(int32(scrutinee3))) + ")"
@@ -373,7 +397,8 @@ func initializeMain_() []string {
 		return func(coerced2 func(any) any) func(any) any {
 			original6 := original(coerced2)
 			return func(coerced3 any) any {
-				return original6(convert(coerced3.(*Wrapped)))
+				typed, _ := coerced3.(*Wrapped)
+				return original6(convert(typed))
 			}
 		}
 	}, func(coerced func(any) func(any) any) func(any) func(any) any {
@@ -385,7 +410,8 @@ func initializeMain_() []string {
 		return func(coerced2 any) func(any) any {
 			original6 := original(coerced2)
 			return func(coerced3 any) any {
-				return original6(convert(coerced3.(*Wrapped)))
+				typed, _ := coerced3.(*Wrapped)
+				return original6(convert(typed))
 			}
 		}
 	}, func(coerced func(any) func(any) any) func(any) func(any) any {
@@ -397,7 +423,8 @@ func initializeMain_() []string {
 		return func(coerced2 any) func(any) any {
 			original6 := original(coerced2)
 			return func(coerced3 any) any {
-				return original6(convert(coerced3.(*Wrapped)))
+				typed, _ := coerced3.(*Wrapped)
+				return original6(convert(typed))
 			}
 		}
 	}, 2, convert2(WrappedArrayInt{Wrapped: []int32{1, 2}})))), describedFoldableDictionary(func(coerced shared.Semigroup0Mempty) func(func(any) any) func(any) any {
@@ -414,7 +441,8 @@ func initializeMain_() []string {
 		return func(coerced2 func(any) any) func(any) any {
 			original6 := original(coerced2)
 			return func(coerced3 any) any {
-				return original6(convert(coerced3.(*Wrapped)))
+				typed, _ := coerced3.(*Wrapped)
+				return original6(convert(typed))
 			}
 		}
 	}, func(coerced func(any) func(any) any) func(any) func(any) any {
@@ -426,7 +454,8 @@ func initializeMain_() []string {
 		return func(coerced2 any) func(any) any {
 			original6 := original(coerced2)
 			return func(coerced3 any) any {
-				return original6(convert(coerced3.(*Wrapped)))
+				typed, _ := coerced3.(*Wrapped)
+				return original6(convert(typed))
 			}
 		}
 	}, func(coerced func(any) func(any) any) func(any) func(any) any {
@@ -438,7 +467,8 @@ func initializeMain_() []string {
 		return func(coerced2 any) func(any) any {
 			original6 := original(coerced2)
 			return func(coerced3 any) any {
-				return original6(convert(coerced3.(*Wrapped)))
+				typed, _ := coerced3.(*Wrapped)
+				return original6(convert(typed))
 			}
 		}
 	}, 1, convert2(WrappedArrayInt{Wrapped: values})), strconv.Itoa(int(doubledFunctorDictionaryFoldableDictionary(func(coerced func(any) any) func(any) any {
@@ -446,7 +476,8 @@ func initializeMain_() []string {
 			return mapWrapped(coerced, wrapped)
 		}
 		return func(coerced2 any) any {
-			return convert3(original(convert(coerced2.(*Wrapped))))
+			typed, _ := coerced2.(*Wrapped)
+			return convert3(original(convert(typed)))
 		}
 	}, func(coerced shared.Semigroup0Mempty) func(func(any) any) func(any) any {
 		original := func(visit func(any) any) func(*WrappedArray) any {
@@ -462,7 +493,8 @@ func initializeMain_() []string {
 		return func(coerced2 func(any) any) func(any) any {
 			original6 := original(coerced2)
 			return func(coerced3 any) any {
-				return original6(convert(coerced3.(*Wrapped)))
+				typed, _ := coerced3.(*Wrapped)
+				return original6(convert(typed))
 			}
 		}
 	}, func(coerced func(any) func(any) any) func(any) func(any) any {
@@ -474,7 +506,8 @@ func initializeMain_() []string {
 		return func(coerced2 any) func(any) any {
 			original6 := original(coerced2)
 			return func(coerced3 any) any {
-				return original6(convert(coerced3.(*Wrapped)))
+				typed, _ := coerced3.(*Wrapped)
+				return original6(convert(typed))
 			}
 		}
 	}, func(coerced func(any) func(any) any) func(any) func(any) any {
@@ -486,7 +519,8 @@ func initializeMain_() []string {
 		return func(coerced2 any) func(any) any {
 			original6 := original(coerced2)
 			return func(coerced3 any) any {
-				return original6(convert(coerced3.(*Wrapped)))
+				typed, _ := coerced3.(*Wrapped)
+				return original6(convert(typed))
 			}
 		}
 	}, 3, convert2(WrappedArrayInt{Wrapped: []int32{1, 2, 3}})))), result + " " + result2, strconv.Itoa(int(performed)), result3}
@@ -573,7 +607,8 @@ func checked(depth int32, values []int32) maybe.Int {
 			return func(coerced2 func(any) any) func(any) any {
 				original4 := original(coerced2)
 				return func(coerced3 any) any {
-					return original4(convert(coerced3.(*Wrapped)))
+					typed, _ := coerced3.(*Wrapped)
+					return original4(convert(typed))
 				}
 			}
 		}, func(coerced func(any) func(any) any) func(any) func(any) any {
@@ -585,7 +620,8 @@ func checked(depth int32, values []int32) maybe.Int {
 			return func(coerced2 any) func(any) any {
 				original4 := original(coerced2)
 				return func(coerced3 any) any {
-					return original4(convert(coerced3.(*Wrapped)))
+					typed, _ := coerced3.(*Wrapped)
+					return original4(convert(typed))
 				}
 			}
 		}, func(coerced func(any) func(any) any) func(any) func(any) any {
@@ -597,7 +633,8 @@ func checked(depth int32, values []int32) maybe.Int {
 			return func(coerced2 any) func(any) any {
 				original4 := original(coerced2)
 				return func(coerced3 any) any {
-					return original4(convert(coerced3.(*Wrapped)))
+					typed, _ := coerced3.(*Wrapped)
+					return original4(convert(typed))
 				}
 			}
 		}, func(coerced func(any) any) func(any) any {
@@ -605,19 +642,22 @@ func checked(depth int32, values []int32) maybe.Int {
 				return mapWrapped(coerced, wrapped)
 			}
 			return func(coerced2 any) any {
-				return convert3(original(convert(coerced2.(*Wrapped))))
+				typed, _ := coerced2.(*Wrapped)
+				return convert3(original(convert(typed)))
 			}
 		}, func(coerced shared.Apply0Pure) func(any) any {
 			original := original2(coerced)
 			return func(coerced2 any) any {
-				return original(convert4(coerced2.(*Wrapped)))
+				typed, _ := coerced2.(*Wrapped)
+				return original(convert4(typed))
 			}
 		}, func(coerced shared.Apply0Pure) func(func(any) any) func(any) any {
 			original := original3(coerced)
 			return func(coerced2 func(any) any) func(any) any {
 				original4 := original(coerced2)
 				return func(coerced3 any) any {
-					return original4(convert(coerced3.(*Wrapped)))
+					typed, _ := coerced3.(*Wrapped)
+					return original4(convert(typed))
 				}
 			}
 		}, depth-1, convert2(WrappedArrayInt{Wrapped: values}))
@@ -708,7 +748,8 @@ func countedFoldableDictionary(foldMap func(shared.Semigroup0Mempty) func(func(a
 				return func(coerced2 func(any) any) func(any) any {
 					original2 := original(coerced2)
 					return func(coerced3 any) any {
-						return original2(coerced3.(*Wrapped))
+						typed, _ := coerced3.(*Wrapped)
+						return original2(typed)
 					}
 				}
 			}, func(coerced func(any) func(any) any) func(any) func(any) any {
@@ -720,7 +761,8 @@ func countedFoldableDictionary(foldMap func(shared.Semigroup0Mempty) func(func(a
 				return func(coerced2 any) func(any) any {
 					original2 := original(coerced2)
 					return func(coerced3 any) any {
-						return original2(coerced3.(*Wrapped))
+						typed, _ := coerced3.(*Wrapped)
+						return original2(typed)
 					}
 				}
 			}, func(coerced func(any) func(any) any) func(any) func(any) any {
@@ -732,7 +774,8 @@ func countedFoldableDictionary(foldMap func(shared.Semigroup0Mempty) func(func(a
 				return func(coerced2 any) func(any) any {
 					original2 := original(coerced2)
 					return func(coerced3 any) any {
-						return original2(coerced3.(*Wrapped))
+						typed, _ := coerced3.(*Wrapped)
+						return original2(typed)
 					}
 				}
 			}, depth-1, convert5(&WrappedInt{Wrapped: values})
@@ -774,7 +817,8 @@ func describedFoldableDictionary(foldMap func(shared.Semigroup0Mempty) func(func
 				return func(coerced2 func(any) any) func(any) any {
 					original2 := original(coerced2)
 					return func(coerced3 any) any {
-						return original2(coerced3.(*Wrapped))
+						typed, _ := coerced3.(*Wrapped)
+						return original2(typed)
 					}
 				}
 			}, func(coerced func(any) func(any) any) func(any) func(any) any {
@@ -786,7 +830,8 @@ func describedFoldableDictionary(foldMap func(shared.Semigroup0Mempty) func(func
 				return func(coerced2 any) func(any) any {
 					original2 := original(coerced2)
 					return func(coerced3 any) any {
-						return original2(coerced3.(*Wrapped))
+						typed, _ := coerced3.(*Wrapped)
+						return original2(typed)
 					}
 				}
 			}, func(coerced func(any) func(any) any) func(any) func(any) any {
@@ -798,7 +843,8 @@ func describedFoldableDictionary(foldMap func(shared.Semigroup0Mempty) func(func
 				return func(coerced2 any) func(any) any {
 					original2 := original(coerced2)
 					return func(coerced3 any) any {
-						return original2(coerced3.(*Wrapped))
+						typed, _ := coerced3.(*Wrapped)
+						return original2(typed)
 					}
 				}
 			}, depth-1, convert5(&WrappedInt{Wrapped: values})
@@ -835,7 +881,8 @@ func doubledFunctorDictionaryFoldableDictionary(map_ func(func(any) any) func(an
 					return &Wrapped{Wrapped: map_Captured(coerced)(wrapped.Wrapped)}
 				}
 				return func(coerced2 any) any {
-					return original(coerced2.(*Wrapped))
+					typed, _ := coerced2.(*Wrapped)
+					return original(typed)
 				}
 			}, func(coerced shared.Semigroup0Mempty) func(func(any) any) func(any) any {
 				original := func(visit func(any) any) func(*Wrapped) any {
@@ -846,7 +893,8 @@ func doubledFunctorDictionaryFoldableDictionary(map_ func(func(any) any) func(an
 				return func(coerced2 func(any) any) func(any) any {
 					original2 := original(coerced2)
 					return func(coerced3 any) any {
-						return original2(coerced3.(*Wrapped))
+						typed, _ := coerced3.(*Wrapped)
+						return original2(typed)
 					}
 				}
 			}, func(coerced func(any) func(any) any) func(any) func(any) any {
@@ -858,7 +906,8 @@ func doubledFunctorDictionaryFoldableDictionary(map_ func(func(any) any) func(an
 				return func(coerced2 any) func(any) any {
 					original2 := original(coerced2)
 					return func(coerced3 any) any {
-						return original2(coerced3.(*Wrapped))
+						typed, _ := coerced3.(*Wrapped)
+						return original2(typed)
 					}
 				}
 			}, func(coerced func(any) func(any) any) func(any) func(any) any {
@@ -870,7 +919,8 @@ func doubledFunctorDictionaryFoldableDictionary(map_ func(func(any) any) func(an
 				return func(coerced2 any) func(any) any {
 					original2 := original(coerced2)
 					return func(coerced3 any) any {
-						return original2(coerced3.(*Wrapped))
+						typed, _ := coerced3.(*Wrapped)
+						return original2(typed)
 					}
 				}
 			}, depth-1, convert5(&WrappedInt{Wrapped: values})
@@ -904,12 +954,15 @@ func checkedTraversableDictionaryFoldable1Functor0(foldMap func(shared.Semigroup
 					return maybe.Map_(coerced, inner)
 				}
 				return func(coerced2 any) any {
-					return original(coerced2.(*maybe.Maybe))
+					typed, _ := coerced2.(*maybe.Maybe)
+					return original(typed)
 				}
 			}}, Apply: func(coerced any) func(any) any {
-				original := original2(maybe.Convert(coerced.(*maybe.Maybe)))
+				typed, _ := coerced.(*maybe.Maybe)
+				original := original2(maybe.Convert(typed))
 				return func(coerced2 any) any {
-					return original(coerced2.(*maybe.Maybe))
+					typed2, _ := coerced2.(*maybe.Maybe)
+					return original(typed2)
 				}
 			}}, Pure: func(coerced any) any {
 				return maybe.Pure(coerced)
@@ -917,7 +970,8 @@ func checkedTraversableDictionaryFoldable1Functor0(foldMap func(shared.Semigroup
 				return maybe.Convert2(original3(coerced.(int32)))
 			})
 			scrutinee := func(coerced any) *maybe.Int2 {
-				return maybe.Convert4(original4(coerced).(*maybe.Maybe))
+				typed, _ := original4(coerced).(*maybe.Maybe)
+				return maybe.Convert4(typed)
 			}(values)
 			switch scrutinee.Tag {
 			case maybe.TagJust:
@@ -946,7 +1000,8 @@ func checkedTraversableDictionaryFoldable1Functor0(foldMap func(shared.Semigroup
 				return func(coerced2 func(any) any) func(any) any {
 					original2 := original(coerced2)
 					return func(coerced3 any) any {
-						return original2(coerced3.(*Wrapped))
+						typed, _ := coerced3.(*Wrapped)
+						return original2(typed)
 					}
 				}
 			}, func(coerced func(any) func(any) any) func(any) func(any) any {
@@ -958,7 +1013,8 @@ func checkedTraversableDictionaryFoldable1Functor0(foldMap func(shared.Semigroup
 				return func(coerced2 any) func(any) any {
 					original2 := original(coerced2)
 					return func(coerced3 any) any {
-						return original2(coerced3.(*Wrapped))
+						typed, _ := coerced3.(*Wrapped)
+						return original2(typed)
 					}
 				}
 			}, func(coerced func(any) func(any) any) func(any) func(any) any {
@@ -970,7 +1026,8 @@ func checkedTraversableDictionaryFoldable1Functor0(foldMap func(shared.Semigroup
 				return func(coerced2 any) func(any) any {
 					original2 := original(coerced2)
 					return func(coerced3 any) any {
-						return original2(coerced3.(*Wrapped))
+						typed, _ := coerced3.(*Wrapped)
+						return original2(typed)
 					}
 				}
 			}, func(coerced func(any) any) func(any) any {
@@ -978,7 +1035,8 @@ func checkedTraversableDictionaryFoldable1Functor0(foldMap func(shared.Semigroup
 					return &Wrapped{Wrapped: map_Captured(coerced)(wrapped.Wrapped)}
 				}
 				return func(coerced2 any) any {
-					return original(coerced2.(*Wrapped))
+					typed, _ := coerced2.(*Wrapped)
+					return original(typed)
 				}
 			}, func(coerced shared.Apply0Pure) func(any) any {
 				original := func(wrapped *Wrapped2) any {
@@ -987,7 +1045,8 @@ func checkedTraversableDictionaryFoldable1Functor0(foldMap func(shared.Semigroup
 					})(traverseCaptured(coerced)(category.Pure)(wrapped.Wrapped))
 				}
 				return func(coerced2 any) any {
-					return original(convert6(coerced2.(*Wrapped)))
+					typed, _ := coerced2.(*Wrapped)
+					return original(convert6(typed))
 				}
 			}, func(coerced shared.Apply0Pure) func(func(any) any) func(any) any {
 				original := func(visit func(any) any) func(*Wrapped) any {
@@ -1000,7 +1059,8 @@ func checkedTraversableDictionaryFoldable1Functor0(foldMap func(shared.Semigroup
 				return func(coerced2 func(any) any) func(any) any {
 					original2 := original(coerced2)
 					return func(coerced3 any) any {
-						return original2(coerced3.(*Wrapped))
+						typed, _ := coerced3.(*Wrapped)
+						return original2(typed)
 					}
 				}
 			}, depth-1, convert5(&WrappedInt{Wrapped: values})

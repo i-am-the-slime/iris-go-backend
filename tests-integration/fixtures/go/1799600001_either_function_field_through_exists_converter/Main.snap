@@ -364,6 +364,9 @@ func convert7(value ParserFnFnCommandCommandFnFnCommandCommandFnCommandCommand) 
 }
 
 func convert8(value *AppliedFnFnCommandCommandFnCommandCommand) *Applied {
+	if value == nil {
+		return nil
+	}
 	return &Applied{First: convert7(value.First), Second: convert13(value.Second)}
 }
 
@@ -372,6 +375,9 @@ func convert9(value *ExistsAppliedFnFnCommandCommandFnCommandCommand) any {
 }
 
 func convert10(value *ParserFnFnCommandCommandFnCommandCommand) *ParserFn {
+	if value == nil {
+		return nil
+	}
 	switch value.Tag {
 	case ParserFnFnCommandCommandFnCommandCommandOption:
 		return &ParserFn{Tag: ParserFnOption, Option: convert4(value.Option)}
@@ -391,6 +397,9 @@ func convert10(value *ParserFnFnCommandCommandFnCommandCommand) *ParserFn {
 }
 
 func convert11(value *AppliedFnCommandCommand) *Applied {
+	if value == nil {
+		return nil
+	}
 	return &Applied{First: convert10(value.First), Second: convert13(value.Second)}
 }
 
@@ -399,6 +408,9 @@ func convert12(value *ExistsAppliedFnCommandCommand) any {
 }
 
 func convert13(value *ParserFnCommandCommand) *Parser {
+	if value == nil {
+		return nil
+	}
 	switch value.Tag {
 	case ParserFnCommandCommandOption:
 		return &Parser{Tag: ParserOption, Option: convert2(value.Option)}
@@ -427,6 +439,9 @@ func convert14(value *EitherReadError) EitherFnCommandCommand {
 }
 
 func convert15(value *EitherFn) *EitherReadError {
+	if value == nil {
+		return nil
+	}
 	if original, ok := value.Origin.(*EitherReadError); ok {
 		return original
 	}
@@ -445,6 +460,9 @@ func convert16(value ReaderFn) ReaderOfFnStringEitherReadError {
 }
 
 func convert17(value *ParserFn) *Parser {
+	if value == nil {
+		return nil
+	}
 	switch value.Tag {
 	case ParserFnOption:
 		return &Parser{Tag: ParserOption, Option: convert16(value.Option)}
@@ -456,6 +474,9 @@ func convert17(value *ParserFn) *Parser {
 }
 
 func convert18(value *EitherReadError) *EitherFn {
+	if value == nil {
+		return nil
+	}
 	if original, ok := value.Origin.(*EitherFn); ok {
 		return original
 	}

@@ -112,6 +112,9 @@ func convert(value TreeFnIntFnIntInt) *TreeFn {
 }
 
 func convert2(value *TreeFnIntInt) *TreeFn {
+	if value == nil {
+		return nil
+	}
 	switch value.Tag {
 	case TreeFnIntIntLeaf:
 		return &TreeFn{Tag: TreeFnLeaf, Leaf: func(coerced any) any {
@@ -123,6 +126,9 @@ func convert2(value *TreeFnIntInt) *TreeFn {
 }
 
 func convert3(value *PairEInt) *PairE {
+	if value == nil {
+		return nil
+	}
 	return &PairE{First: convert2(value.First), Second: convert5(value.Second)}
 }
 
@@ -131,6 +137,9 @@ func convert4(value *ExistsPairEInt) any {
 }
 
 func convert5(value *TreeInt) *Tree {
+	if value == nil {
+		return nil
+	}
 	switch value.Tag {
 	case TreeIntLeaf:
 		return &Tree{Tag: TreeLeaf, Field0: value.Leaf}
@@ -140,6 +149,9 @@ func convert5(value *TreeInt) *Tree {
 }
 
 func convert6(value *PairEFnIntInt) *PairE {
+	if value == nil {
+		return nil
+	}
 	return &PairE{First: convert(value.First), Second: convert5(value.Second)}
 }
 
@@ -148,6 +160,9 @@ func convert7(value *ExistsPairEFnIntInt) any {
 }
 
 func convert8(value *TreeFnIntInt) *Tree {
+	if value == nil {
+		return nil
+	}
 	switch value.Tag {
 	case TreeFnIntIntLeaf:
 		return &Tree{Tag: TreeLeaf, Field0: func(coerced any) any {
@@ -159,6 +174,9 @@ func convert8(value *TreeFnIntInt) *Tree {
 }
 
 func convert9(value *TreeFn) *Tree {
+	if value == nil {
+		return nil
+	}
 	switch value.Tag {
 	case TreeFnLeaf:
 		return &Tree{Tag: TreeLeaf, Field0: value.Leaf}

@@ -1,0 +1,151 @@
+---
+source: tests-integration/src/fixtures.rs
+---
+// Type/Proxy/proxy.go
+package proxy
+
+type Proxy uint8
+
+const (
+	ProxyProxy Proxy = iota
+)
+
+type Count struct {
+	Count func(Proxy) int32
+}
+
+type Positive struct {
+	Count0 Count
+}
+
+// main.go
+package main
+
+import (
+	"fixture/Type/Proxy"
+	"github.com/i-am-the-slime/iris-go/alloc"
+	arraypkg "github.com/i-am-the-slime/iris-go/array"
+	"github.com/i-am-the-slime/iris-go/console"
+	"strconv"
+	"strings"
+)
+
+type CountToFunction struct {
+	AtRunTime *CountToFunction
+	Tag       uint8
+}
+
+const (
+	CountToFunctionMain = iota
+	CountToFunctionReifyComposedIntUse
+)
+
+var sharedCountToFunctionMain = &CountToFunction{Tag: CountToFunctionMain}
+
+var main_ = initializeMain_()
+
+func initializeMain_() []string {
+	array := []int32{1, 6, 37, 1000}
+	mapped := make([]string, len(array))
+	for index, wanted := range array {
+		mapped[index] = strconv.Itoa(int(reifyPositiveUseInt(wanted, func(dictionary proxy.Positive, proxy proxy.Proxy) int32 {
+			return dictionary.Count0.Count(proxy)
+		})))
+	}
+	return arraypkg.Append(mapped, []string{reifyPositiveUseString(12, func(dictionary proxy.Positive, proxy proxy.Proxy) string {
+		return "counted " + strconv.Itoa(int(dictionary.Count0.Count(proxy)))
+	}), strconv.Itoa(int(reifyComposedUse(5, sharedCountToFunctionMain)))})
+}
+
+func count(ignored proxy.Proxy) int32 {
+	return 1
+}
+
+func reifyPositiveUseString(wanted int32, AtRunTime func(proxy.Positive, proxy.Proxy) string) string {
+	for {
+		AtRunTimeCaptured := AtRunTime
+		switch wanted {
+		case 1:
+			return AtRunTimeCaptured(proxy.Positive{Count0: proxy.Count{Count: count}}, proxy.ProxyProxy)
+		default:
+			switch wanted & 1 {
+			case 0:
+				wanted, AtRunTime = wanted>>1, func(dictionary proxy.Positive, _ proxy.Proxy) string {
+					return AtRunTimeCaptured(proxy.Positive{Count0: proxy.Count{Count: func(_ proxy.Proxy) int32 {
+						return 2 * dictionary.Count0.Count(proxy.ProxyProxy)
+					}}}, proxy.ProxyProxy)
+				}
+				continue
+			default:
+				wanted, AtRunTime = wanted-1, func(dictionary proxy.Positive, _ proxy.Proxy) string {
+					return AtRunTimeCaptured(proxy.Positive{Count0: proxy.Count{Count: func(_ proxy.Proxy) int32 {
+						return 1 + dictionary.Count0.Count(proxy.ProxyProxy)
+					}}}, proxy.ProxyProxy)
+				}
+				continue
+			}
+		}
+	}
+}
+
+func reifyPositiveUseInt(wanted int32, AtRunTime func(proxy.Positive, proxy.Proxy) int32) int32 {
+	for {
+		AtRunTimeCaptured := AtRunTime
+		switch wanted {
+		case 1:
+			return AtRunTimeCaptured(proxy.Positive{Count0: proxy.Count{Count: count}}, proxy.ProxyProxy)
+		default:
+			switch wanted & 1 {
+			case 0:
+				wanted, AtRunTime = wanted>>1, func(dictionary proxy.Positive, _ proxy.Proxy) int32 {
+					return AtRunTimeCaptured(proxy.Positive{Count0: proxy.Count{Count: func(_ proxy.Proxy) int32 {
+						return 2 * dictionary.Count0.Count(proxy.ProxyProxy)
+					}}}, proxy.ProxyProxy)
+				}
+				continue
+			default:
+				wanted, AtRunTime = wanted-1, func(dictionary proxy.Positive, _ proxy.Proxy) int32 {
+					return AtRunTimeCaptured(proxy.Positive{Count0: proxy.Count{Count: func(_ proxy.Proxy) int32 {
+						return 1 + dictionary.Count0.Count(proxy.ProxyProxy)
+					}}}, proxy.ProxyProxy)
+				}
+				continue
+			}
+		}
+	}
+}
+
+func reifyComposedUse(wanted int32, AtRunTime *CountToFunction) int32 {
+	var countToFunctionCells alloc.Cells[CountToFunction]
+	for {
+		switch wanted {
+		case 1:
+			return runCountToFunction(AtRunTime, proxy.Count{Count: count})(proxy.ProxyProxy)
+		default:
+			wanted, AtRunTime = wanted-1, countToFunctionCells.New(CountToFunction{Tag: CountToFunctionReifyComposedIntUse, AtRunTime: AtRunTime})
+			continue
+		}
+	}
+}
+
+func runCountToFunction(function *CountToFunction, dictionary proxy.Count) func(proxy.Proxy) int32 {
+	switch function.Tag {
+	case CountToFunctionMain:
+		return dictionary.Count
+	default: // CountToFunctionReifyComposedIntUse
+		f := runCountToFunction(function.AtRunTime, proxy.Count{Count: func(_ proxy.Proxy) int32 {
+			return 1 + dictionary.Count(proxy.ProxyProxy)
+		}})
+		return func(_ proxy.Proxy) int32 {
+			return f(proxy.ProxyProxy)
+		}
+	}
+}
+
+func main() {
+	console.Print("[" + strings.Join(main_, " ") + "]")
+}
+
+// note: the constrained rank-N arguments that Main.reifyComposed instantiates take their Count dictionary at run time, because it instantiates them at ever larger types; only those arguments are slower
+
+// note: the constrained rank-N arguments that Main.reifyPositive instantiates take their Positive dictionary at run time, because it instantiates them at ever larger types; only those arguments are slower

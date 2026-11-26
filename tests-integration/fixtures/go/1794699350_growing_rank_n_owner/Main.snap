@@ -28,6 +28,9 @@ type Tuple struct {
 }
 
 func Convert(value *TupleFnInt) *Tuple {
+	if value == nil {
+		return nil
+	}
 	if original, ok := value.Origin.(*Tuple); ok {
 		return original
 	}
@@ -47,6 +50,9 @@ func Convert2(value []func(int32) *TupleFnInt) []func(int32) any {
 }
 
 func Convert3(value *Tuple) *TupleFnInt {
+	if value == nil {
+		return nil
+	}
 	if original, ok := value.Origin.(*TupleFnInt); ok {
 		return original
 	}
@@ -59,7 +65,8 @@ func Convert3(value *Tuple) *TupleFnInt {
 func Convert4(value []any) []*TupleFnInt {
 	converted := make([]*TupleFnInt, len(value))
 	for index, element := range value {
-		converted[index] = Convert3(element.(*Tuple))
+		typed, _ := element.(*Tuple)
+		converted[index] = Convert3(typed)
 	}
 	return converted
 }
