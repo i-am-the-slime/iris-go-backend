@@ -199,3 +199,66 @@ fn is_inert(value: &GoExpression) -> bool {
         | GoExpression::Instantiation { .. } => false,
     }
 }
+
+/// Drops the calls of local functions that do nothing, `function := func(_ struct{}, _ bool) {}`,
+/// as `pure unit` for a callback becomes: with inert arguments, such a call is no work, and the
+/// function is left without a reference for [`drop_unreferenced_definitions`].
+pub(super) fn drop_calls_of_empty_functions(declarations: &mut [GoDeclaration]) {
+    for declaration in declarations {
+        let mut empty = EmptyFunctions::default();
+        go_traversal::declaration(&mut empty, declaration);
+        empty.names.retain(|name| !empty.assigned.contains(name));
+        if empty.names.is_empty() {
+            continue;
+        }
+        go_traversal::declaration(&mut EmptyCalls { names: empty.names }, declaration);
+    }
+}
+
+#[derive(Default)]
+struct EmptyFunctions {
+    names: FxHashSet<String>,
+    assigned: FxHashSet<String>,
+}
+
+impl Walk for EmptyFunctions {
+    fn statement(&mut self, statement: &mut GoStatement) {
+        match statement {
+            GoStatement::Define { names, values } => {
+                if let ([name], [GoExpression::Function { result: None, body, .. }]) =
+                    (names.as_slice(), values.as_slice())
+                    && body.is_empty()
+                {
+                    self.names.insert(name.clone());
+                }
+            }
+            GoStatement::Assign { targets, .. } => {
+                for target in targets.iter() {
+                    if let GoExpression::Identifier(name) = target {
+                        self.assigned.insert(name.clone());
+                    }
+                }
+            }
+            _ => {}
+        }
+        go_traversal::statement(self, statement);
+    }
+}
+
+struct EmptyCalls {
+    names: FxHashSet<String>,
+}
+
+impl Walk for EmptyCalls {
+    fn block(&mut self, body: &mut Vec<GoStatement>) {
+        body.retain(|statement| {
+            let GoStatement::Expression(GoExpression::Call { function, arguments }) = statement
+            else {
+                return true;
+            };
+            let empty = matches!(function.as_ref(), GoExpression::Identifier(name) if self.names.contains(name));
+            !(empty && arguments.iter().all(is_inert))
+        });
+        body.iter_mut().for_each(|statement| self.statement(statement));
+    }
+}

@@ -309,6 +309,7 @@ where
     });
     let forwarders = forwarders::Forwarders::new(emitter.foreign_packages);
     timed("forwarders", || forwarders.call_forwarded(&mut declarations));
+    timed("empty calls", || unreferenced::drop_calls_of_empty_functions(&mut declarations));
     timed("unreferenced", || unreferenced::drop_unreferenced_definitions(&mut declarations));
     timed("fallible", || emitter.return_failures_apart(&mut declarations))?;
     // Last, so that every pass before reads the constructions' fields in their literals.
