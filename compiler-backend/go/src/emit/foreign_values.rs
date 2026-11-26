@@ -569,7 +569,14 @@ where
             if boundary.found
                 && let Some(constructors) = boundary.maybe
             {
-                return self.found_maybe(result, arguments, constructors, monotype, out);
+                return self.found_maybe(
+                    result,
+                    arguments,
+                    constructors,
+                    boundary.record_result,
+                    monotype,
+                    out,
+                );
             }
             if boundary.record_result {
                 return self.record_from_results(result, monotype, out);
