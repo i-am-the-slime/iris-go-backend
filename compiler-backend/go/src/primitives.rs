@@ -67,6 +67,18 @@ pub const SHARED_CELLS: &[SharedCell] = &[SharedCell {
     modify: "atomicModifyIORefImpl",
 }];
 
+pub struct ResultsVariant {
+    pub module: &'static str,
+    pub foreign: &'static str,
+    pub results: &'static str,
+}
+
+pub const RESULTS_VARIANTS: &[ResultsVariant] = &[ResultsVariant {
+    module: "Go.IO.Internal",
+    foreign: "catchImpl",
+    results: "catchResultsImpl",
+}];
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum KnownType {
     Maybe,

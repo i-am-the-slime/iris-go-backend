@@ -1,0 +1,114 @@
+---
+source: tests-integration/src/fixtures.rs
+---
+// Data/Either/either.go
+package either
+
+import "github.com/i-am-the-slime/iris-go/exception"
+
+type EitherString struct {
+	Left  string
+	Right int32
+	Tag   uint8
+}
+
+const (
+	EitherStringLeft = iota
+	EitherStringRight
+)
+
+type EitherError struct {
+	Left  exception.Error
+	Right EitherString
+	Tag   uint8
+}
+
+const (
+	EitherErrorLeft = iota
+	EitherErrorRight
+)
+
+type ErrorFailure struct {
+	Failed bool
+	Left   exception.Error
+}
+
+type StringFailure struct {
+	Failed bool
+	Left   string
+}
+
+func Left(left string) EitherString {
+	return EitherString{Tag: EitherStringLeft, Left: left}
+}
+
+func Right(right int32) EitherString {
+	return EitherString{Tag: EitherStringRight, Right: right}
+}
+
+func EitherStringFromResults(value int32, err StringFailure) EitherString {
+	if err.Failed {
+		return Left(err.Left)
+	}
+	return Right(value)
+}
+
+// main.go
+package main
+
+import (
+	"fixture/Data/Either"
+	internal "fixture/Go_IO_Internal_ffi"
+	journal "fixture/Journal_ffi"
+	"github.com/i-am-the-slime/iris-go/exception"
+	"github.com/i-am-the-slime/iris-go/prim"
+	"strconv"
+)
+
+func main() {
+	for _, i := range []int32{1, 3, -1} {
+		either3, err := internal.CatchResultsImpl(func(failure exception.Error) (either.EitherString, either.ErrorFailure) {
+			return either.EitherString{}, either.ErrorFailure{Failed: true, Left: failure}
+		}, func() (either.EitherString, either.ErrorFailure) {
+			either2 := either.EitherStringFromResults(check(i))
+			return either2, either.ErrorFailure{}
+		})
+		var result string
+		if err.Failed {
+			result = "threw " + exception.Message(err.Left)
+		} else if !err.Failed && either3.Tag == either.EitherStringLeft {
+			result = "failed " + either3.Left
+		} else {
+			result = "got " + strconv.Itoa(int(either3.Right))
+		}
+		journal.Log(result)
+		i2, err2 := internal.CatchResultsImpl(func(failure exception.Error) (int32, either.StringFailure) {
+			var result2 int32
+			if exception.Message(failure) == "below zero" {
+				result2 = 1
+			} else {
+				result2 = 2
+			}
+			return -result2, either.StringFailure{}
+		}, func() (int32, either.StringFailure) {
+			return check(i)
+		})
+		var result3 string
+		if err2.Failed {
+			result3 = "(Left " + prim.ShowString(err2.Left) + ")"
+		} else {
+			result3 = "(Right " + strconv.Itoa(int(i2)) + ")"
+		}
+		journal.Log(result3)
+	}
+}
+
+func check(n int32) (int32, either.StringFailure) {
+	if n > 2 {
+		return 0, either.StringFailure{Failed: true, Left: "too many: " + strconv.Itoa(int(n))}
+	}
+	if n < 0 {
+		panic(exception.NewError("below zero"))
+	}
+	return n*10, either.StringFailure{}
+}

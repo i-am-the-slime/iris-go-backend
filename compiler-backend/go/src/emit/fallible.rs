@@ -21,6 +21,7 @@
 //! takes a struct apart for a `return`.
 
 mod values;
+mod variants;
 
 use rustc_hash::{FxHashMap, FxHashSet};
 pub(super) use values::lower_type;
@@ -175,18 +176,21 @@ where
             return Ok(());
         }
         let support = SupportFunctions::take(&mut self.type_declarations, declarations);
+        let variants = variants::Variants::provided(self.foreign_packages);
         self.lowered_function_types = values::lower_function_values(
             declarations,
             &mut self.type_declarations,
             &shapes,
             self.foreign_packages,
+            &variants,
         );
         let lowered = !self.lowered_function_types.is_empty();
         for shape in shapes.values_mut() {
             lower_type(&mut shape.left, &self.lowered_function_types);
             lower_type(&mut shape.right, &self.lowered_function_types);
         }
-        let marks: FxHashMap<String, String> = match lowered {
+        let called = variants.call(declarations, &shapes);
+        let marks: FxHashMap<String, String> = match lowered || called {
             true => shapes
                 .keys()
                 .map(|shape| (format!("{}{shape}", values::CALL_MARK), shape.clone()))
