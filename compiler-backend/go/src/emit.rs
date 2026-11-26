@@ -20,6 +20,7 @@ mod coerce;
 mod composites;
 mod conditions;
 mod confined;
+mod constant_fields;
 mod constructors;
 mod conventions;
 mod declarations;
@@ -301,6 +302,7 @@ where
     timed("field reads", || loads::reuse_field_reads(&mut declarations));
     timed("branches", || branches::simplify_branches(&mut declarations));
     timed("aliases", || aliases::substitute_aliases(&mut declarations));
+    timed("constant fields", || constant_fields::read_constant_fields(&mut declarations));
     timed("repeated tests", || merging::join_repeated_tests(&mut declarations));
     timed("unpacked", || unpacked::read_found_answers(&mut declarations));
     let mut record_value_name = |type_name: &str| {
@@ -314,6 +316,9 @@ where
     timed("forwarders", || forwarders.call_forwarded(&mut declarations));
     timed("empty calls", || unreferenced::drop_calls_of_empty_functions(&mut declarations));
     timed("unreferenced", || unreferenced::drop_unreferenced_definitions(&mut declarations));
+    timed("constant calls", || {
+        constant_fields::drop_calls_of_constant_functions(&mut declarations)
+    });
     timed("fallible", || emitter.return_failures_apart(&mut declarations))?;
     // Last, so that every pass before reads the constructions' fields in their literals.
     timed("constructions", || emitter.call_constructor_functions(&mut declarations))?;
@@ -348,7 +353,7 @@ where
     emitter.spell_out_generic_alias_arguments();
     let mut all = std::mem::take(&mut emitter.type_declarations);
     all.extend(declarations);
-    timed("wrappers", || text::drop_uncalled_wrappers(&mut all, &emitter.delegating_wrappers));
+    timed("wrappers", || text::drop_unreached_functions(&mut all));
     let data_structs: FxHashSet<String> = emitter
         .data_layouts
         .values()
@@ -491,7 +496,6 @@ where
             owning_variants: FxHashMap::default(),
             pending_owning_variants: vec![],
             writers: FxHashMap::default(),
-            delegating_wrappers: FxHashSet::default(),
             pending_writers: vec![],
             writable: FxHashMap::default(),
             array_writers: FxHashMap::default(),
@@ -686,9 +690,6 @@ struct Emitter<'p, 'm, 'q, Q> {
     owning_variants: FxHashMap<(FunctionId, usize), String>,
     pending_owning_variants: Vec<(FunctionId, usize)>,
     writers: FxHashMap<FunctionId, String>,
-    /// The functions that only turn what their writer appends into a string, which go when
-    /// every caller calls the writer instead.
-    delegating_wrappers: FxHashSet<String>,
     pending_writers: Vec<FunctionId>,
     writable: FxHashMap<FunctionId, bool>,
     array_writers: FxHashMap<FunctionId, (String, MonotypeId)>,

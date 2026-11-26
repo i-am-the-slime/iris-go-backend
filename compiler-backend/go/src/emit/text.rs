@@ -503,7 +503,6 @@ where
             }
             delegated.insert(self.function_names[id.0 as usize].clone(), writer);
         }
-        self.delegating_wrappers.extend(delegated.keys().cloned());
         for declaration in declarations {
             let GoDeclaration::Function { name, parameters, body, .. } = declaration else {
                 continue;
@@ -620,37 +619,56 @@ fn append_operands<'e>(expression: &'e Expression, operands: &mut Vec<&'e Expres
     }
 }
 
-/// Drops the string wrappers of writers that nothing calls any more, now that callers append
-/// with the writer directly.
-pub(super) fn drop_uncalled_wrappers(
-    declarations: &mut Vec<GoDeclaration>,
-    wrappers: &FxHashSet<String>,
-) {
-    if wrappers.is_empty() {
-        return;
-    }
-    let mut called = FxHashSet::default();
+/// Drops the functions that no code reaches: the string wrapper of a writer whose callers all
+/// append with the writer, or a helper whose every call was found to build a constant.
+pub(super) fn drop_unreached_functions(declarations: &mut Vec<GoDeclaration>) {
+    let functions: FxHashSet<String> = declarations
+        .iter()
+        .filter_map(|declaration| match declaration {
+            GoDeclaration::Function { name, .. } if name != "main" && name != "init" => {
+                Some(name.clone())
+            }
+            _ => None,
+        })
+        .collect();
+    let mut references: FxHashMap<String, Vec<String>> = FxHashMap::default();
+    let mut reached: Vec<String> = vec![];
     for declaration in declarations.iter_mut() {
-        let own = declaration.name().map(str::to_string);
-        match declaration {
-            GoDeclaration::Source { template, .. } => called
-                .extend(wrappers.iter().filter(|name| template.contains(name.as_str())).cloned()),
-            GoDeclaration::Written { source, .. } => called
-                .extend(wrappers.iter().filter(|name| source.contains(name.as_str())).cloned()),
+        let own = match &*declaration {
+            GoDeclaration::Function { name, .. } if functions.contains(name) => Some(name.clone()),
+            _ => None,
+        };
+        let mut called = vec![];
+        match &mut *declaration {
+            GoDeclaration::Source { template: text, .. } => {
+                called.extend(functions.iter().filter(|name| text.contains(name.as_str())).cloned())
+            }
+            GoDeclaration::Written { source: text, .. } => {
+                called.extend(functions.iter().filter(|name| text.contains(name.as_str())).cloned())
+            }
             declaration => {
                 go_traversal::each_expression_in_declaration(declaration, |expression| {
                     if let GoExpression::Identifier(name) = expression
-                        && wrappers.contains(name)
-                        && own.as_ref() != Some(name)
+                        && functions.contains(name)
                     {
-                        called.insert(name.clone());
+                        called.push(name.clone());
                     }
                 })
             }
         }
+        match own {
+            Some(name) => references.entry(name).or_default().extend(called),
+            None => reached.extend(called),
+        }
+    }
+    let mut kept: FxHashSet<String> = FxHashSet::default();
+    while let Some(name) = reached.pop() {
+        if kept.insert(name.clone()) {
+            reached.extend(references.remove(&name).unwrap_or_default());
+        }
     }
     declarations.retain(|declaration| match declaration {
-        GoDeclaration::Function { name, .. } => !wrappers.contains(name) || called.contains(name),
+        GoDeclaration::Function { name, .. } => !functions.contains(name) || kept.contains(name),
         _ => true,
     });
 }

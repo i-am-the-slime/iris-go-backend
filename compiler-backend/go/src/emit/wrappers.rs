@@ -209,7 +209,7 @@ fn selected(returned: &GoExpression, parameters: &[(String, GoType)]) -> Option<
 
 /// Whether leaving an argument out leaves out no work: a read of a variable, a field or an
 /// element.
-fn is_read(argument: &GoExpression) -> bool {
+pub(super) fn is_read(argument: &GoExpression) -> bool {
     match argument {
         GoExpression::Identifier(_)
         | GoExpression::Qualified { .. }
