@@ -1,0 +1,60 @@
+---
+source: tests-integration/src/fixtures.rs
+---
+// main.go
+package main
+
+import (
+	"fixture/shared"
+	"github.com/i-am-the-slime/iris-go/console"
+	"github.com/i-am-the-slime/iris-go/prim"
+)
+
+type Operation struct {
+	Add int32
+	Tag uint8
+}
+
+const (
+	OperationAdd = iota
+	OperationSkip
+)
+
+func Add(add int) Operation {
+	return Operation{Tag: OperationAdd, Add: int32(add)}
+}
+
+var main_ = initializeMain_()
+
+func initializeMain_() int {
+	accumulator := shared.Totals{Total: 0, Steps: 0}
+	for n := 1; n < 1001; n++ {
+		var value Operation
+		if n%3 == 0 {
+			value = Operation{Tag: OperationSkip}
+		} else {
+			value = Add(n)
+		}
+		total := accumulator.Total
+		steps := accumulator.Steps
+		switch value.Tag {
+		case OperationAdd:
+			accumulator = shared.Totals{Total: total + int(value.Add), Steps: steps + 1}
+		default: // OperationSkip
+			accumulator = shared.Totals{Total: total, Steps: steps + 1}
+		}
+	}
+	return accumulator.Total + accumulator.Steps
+}
+
+func main() {
+	console.Print(prim.ShowInt(main_))
+}
+
+// shared/shared.go
+package shared
+
+type Totals struct {
+	Steps int
+	Total int
+}

@@ -761,7 +761,6 @@ impl Simplifier<'_> {
             ExpressionKind::Lambda { mut parameters, body } => {
                 let mut body = self.expression(*body);
                 while !matches!(body.kind, ExpressionKind::Lambda { .. })
-                    && awaits_action(body.monotype, self.monotypes)
                     && let Some(template) = chosen_lambda_parameter(&body, self.monotypes).cloned()
                 {
                     let parameter = self.fresh(&template);
