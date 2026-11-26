@@ -54,8 +54,7 @@ func initializeRecorded() int {
 	}, Measure: func(text string) int {
 		return direct.CodePointLength(text)
 	}})
-	performed := total + result
-	return performed
+	return total + result
 }
 
 var counted = initializeCounted()

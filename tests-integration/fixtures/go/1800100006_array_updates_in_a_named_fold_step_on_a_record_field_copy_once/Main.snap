@@ -6,10 +6,6 @@ package show
 
 import "strconv"
 
-func Show(i int) string {
-	return strconv.Itoa(i)
-}
-
 func AppendShowArrayInt(buffer []byte, array []int) []byte {
 	buffer = append(buffer, '[')
 	for index, element := range array {
@@ -49,19 +45,6 @@ func initializeMain_() []string {
 		accumulator = markedOwning(accumulator, element)
 	}
 	return []string{show.ArrayInt(accumulator.Cells), strconv.Itoa(accumulator.Moves), show.ArrayInt(shared)}
-}
-
-func marked(board shared2.Board, position int) shared2.Board {
-	elements := board.Cells
-	var result []int
-	if position >= 0 && position < len(elements) {
-		updated := slices.Clone(elements)
-		updated[position] = position + 10
-		result = updated
-	} else {
-		result = board.Cells
-	}
-	return shared2.Board{Cells: result, Moves: board.Moves + 1}
 }
 
 func markedOwning(board shared2.Board, position int) shared2.Board {

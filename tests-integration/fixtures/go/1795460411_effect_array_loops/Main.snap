@@ -64,14 +64,6 @@ import (
 	"strconv"
 )
 
-func ShowInt(i int) string {
-	return strconv.Itoa(i)
-}
-
-func ShowString(s string) string {
-	return prim.ShowString(s)
-}
-
 func AppendShowArrayString(buffer []byte, array []string) []byte {
 	buffer = append(buffer, '[')
 	for index, element := range array {
@@ -222,8 +214,8 @@ func traversals() {
 	array4 := []int{7, 8}
 	collected2 := make([]string, len(array4))
 	for index, i := range array4 {
-		journal.Log("see " + strconv.Itoa(i))
 		value := strconv.Itoa(i)
+		journal.Log("see " + value)
 		collected2[index] = value
 	}
 	journal.Log(show.ArrayString(collected2))
@@ -401,11 +393,8 @@ func large() {
 	for _, i := range values {
 		total += i
 	}
-	function := func(_ int) {
-	}
 	for _, effect := range arraypkg.Map(func(i int) func() {
 		return func() {
-			function(i)
 		}
 	}, values) {
 		effect()

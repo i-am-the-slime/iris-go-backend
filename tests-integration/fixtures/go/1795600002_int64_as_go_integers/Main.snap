@@ -10,23 +10,19 @@ func FromInt(a int) int64 {
 	return int64(a)
 }
 
-func Show(long int64) string {
-	return string(AppendShow(nil, long))
-}
-
 func AppendShowArrayInt64(buffer []byte, array []int64) []byte {
 	buffer = append(buffer, '[')
 	for index, element := range array {
 		if index > 0 {
 			buffer = append(buffer, ',')
 		}
-		buffer = AppendShow(buffer, element)
+		buffer = AppendShowInt64(buffer, element)
 	}
 	buffer = append(buffer, ']')
 	return buffer
 }
 
-func AppendShow(buffer []byte, long int64) []byte {
+func AppendShowInt64(buffer []byte, long int64) []byte {
 	buffer = strconv.AppendInt(buffer, long, 10)
 	buffer = append(buffer, 'l')
 	return buffer
@@ -54,27 +50,10 @@ func JustUInt64(just uint64) UInt64 {
 	return UInt64{Tag: TagJust, Just: just}
 }
 
-// Data/Ord/ord.go
-package ord
-
-func Max_(x int64, y int64) int64 {
-	if x >= y {
-		return x
-	}
-	return y
-}
-
 // Data/Show/show.go
 package show
 
 import "strconv"
-
-func Show(boolean bool) string {
-	if boolean {
-		return "true"
-	}
-	return "false"
-}
 
 func AppendShowArrayBoolean(buffer []byte, array []bool) []byte {
 	buffer = append(buffer, '[')
@@ -153,26 +132,23 @@ func initializeMain_() []string {
 			l2_ = 0 - y
 		}
 		var result int64
+		var result2 int64
 		if y == 0 {
 			result = int64(0)
+			result2 = int64(0)
 		} else {
-			var result2 int64
+			var result3 int64
 			if l2_ == 0 {
-				result2 = int64(0)
+				result3 = int64(0)
 			} else {
-				var result3 int64
-				result3 = internal.Modulo_(int64(-7), l2_)
-				result2 = internal.Modulo_(result3+l2_, l2_)
+				var result4 int64
+				result4 = internal.Modulo_(int64(-7), l2_)
+				result3 = internal.Modulo_(result4+l2_, l2_)
 			}
-			result = internal.Divide_(-7-result2, y)
+			result = internal.Divide_(-7-result3, y)
+			result2 = internal.Divide_(int64(-7), y)
 		}
-		var result4 int64
-		if y == 0 {
-			result4 = int64(0)
-		} else {
-			result4 = internal.Divide_(int64(-7), y)
-		}
-		mapped5[index] = result + result4
+		mapped5[index] = result + result2
 	}
 	nullable := nullablepkg.Nullable(internal.SafeReadLong_UInt64("18446744073709551615", true, 10), maybe.NoUInt64, maybe.JustUInt64)
 	var result5 string

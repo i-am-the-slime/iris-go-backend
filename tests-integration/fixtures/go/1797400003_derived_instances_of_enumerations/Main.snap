@@ -12,30 +12,19 @@ const (
 	OrderingEQ
 )
 
-func Show(ordering Ordering) string {
-	switch ordering {
-	case OrderingLT:
-		return "LT"
-	case OrderingGT:
-		return "GT"
-	default: // OrderingEQ
-		return "EQ"
-	}
-}
-
 func AppendShowArrayOrdering(buffer []byte, array []Ordering) []byte {
 	buffer = append(buffer, '[')
 	for index, element := range array {
 		if index > 0 {
 			buffer = append(buffer, ',')
 		}
-		buffer = AppendShow(buffer, element)
+		buffer = AppendShowOrdering(buffer, element)
 	}
 	buffer = append(buffer, ']')
 	return buffer
 }
 
-func AppendShow(buffer []byte, ordering Ordering) []byte {
+func AppendShowOrdering(buffer []byte, ordering Ordering) []byte {
 	switch ordering {
 	case OrderingLT:
 		buffer = append(buffer, "LT"...)
@@ -58,21 +47,6 @@ import (
 	"github.com/i-am-the-slime/iris-go/prim"
 	"strconv"
 )
-
-func ShowString(s string) string {
-	return prim.ShowString(s)
-}
-
-func ShowInt(i int) string {
-	return strconv.Itoa(i)
-}
-
-func ShowBoolean(boolean bool) string {
-	if boolean {
-		return "true"
-	}
-	return "false"
-}
 
 func AppendShowArrayInt(buffer []byte, array []int) []byte {
 	buffer = append(buffer, '[')

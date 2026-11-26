@@ -69,8 +69,7 @@ func initializeMain_() []bool {
 var counter = initializeCounter()
 
 func initializeCounter() *shared.Ref[int] {
-	performed := &shared.Ref[int]{Value: 0}
-	return performed
+	return &shared.Ref[int]{Value: 0}
 }
 
 func main() {

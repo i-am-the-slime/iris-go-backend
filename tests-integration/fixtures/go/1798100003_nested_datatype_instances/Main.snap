@@ -111,10 +111,6 @@ package show
 
 import "strconv"
 
-func Show(i int) string {
-	return strconv.Itoa(i)
-}
-
 func AppendShowArrayInt(buffer []byte, array []int) []byte {
 	buffer = append(buffer, '[')
 	for index, element := range array {
@@ -169,7 +165,7 @@ func initializeMain_() []string {
 		result = "Flat " + strconv.Itoa(deep.Flat.(int))
 	default: // NestedNest
 		text := []byte("Nest (")
-		text = appendShowShowDictionary(text, func(coerced any) string {
+		text = appendShowNestedArrayIntShowDictionary(text, func(coerced any) string {
 			return datashow.ArrayInt(shared.Convert(coerced))
 		}, deep.Nest)
 		text = append(text, ')')
@@ -270,7 +266,7 @@ func initializeMain_() []string {
 			}
 			return mapped
 		}
-		text = appendShowShowDictionary(text, func(coerced any) string {
+		text = appendShowNestedArrayIntShowDictionary(text, func(coerced any) string {
 			return datashow.ArrayInt(shared.Convert(coerced))
 		}, original(deep.Nest)(func(coerced any) any {
 			return shared.Convert2(original2(shared.Convert(coerced)))
@@ -394,7 +390,7 @@ func initializeMain_() []string {
 			result12 = "Flat " + strconv.Itoa(result10.Flat.(int))
 		default: // NestedNest
 			text := []byte("Nest (")
-			text = appendShowShowDictionary(text, func(coerced any) string {
+			text = appendShowNestedArrayIntShowDictionary(text, func(coerced any) string {
 				return datashow.ArrayInt(shared.Convert(coerced))
 			}, result10.Nest)
 			text = append(text, ')')
@@ -531,10 +527,6 @@ func map_(change func(any) any, nested *Nested) *Nested {
 	}
 }
 
-func showShowDictionary(show func(any) string, nested *Nested) string {
-	return string(appendShowShowDictionary(nil, show, nested))
-}
-
 func eqEqDictionary(eq func(any) func(any) bool, left *Nested, right *Nested) bool {
 	for {
 		eqCaptured := eq
@@ -589,14 +581,14 @@ func compareOrdDictionaryEq0Flat(eq func(any) func(any) bool, compare func(any) 
 	}
 }
 
-func appendShowShowDictionary(buffer []byte, show func(any) string, nested *Nested) []byte {
+func appendShowNestedArrayIntShowDictionary(buffer []byte, show func(any) string, nested *Nested) []byte {
 	switch nested.Tag {
 	case NestedFlat:
 		buffer = append(buffer, "Flat "...)
 		buffer = prim.AppendString(buffer, show(nested.Flat))
 	default: // NestedNest
 		buffer = append(buffer, "Nest ("...)
-		buffer = appendShowShowDictionary(buffer, func(coerced any) string {
+		buffer = appendShowNestedArrayIntShowDictionary(buffer, func(coerced any) string {
 			return prim.ShowArray(show, coerced.([]any))
 		}, nested.Nest)
 		buffer = append(buffer, ')')

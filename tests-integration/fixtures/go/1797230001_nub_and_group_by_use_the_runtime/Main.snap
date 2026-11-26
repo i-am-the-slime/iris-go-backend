@@ -110,29 +110,6 @@ import (
 	"strconv"
 )
 
-func ShowInt(i int) string {
-	return strconv.Itoa(i)
-}
-
-func ShowString(s string) string {
-	return prim.ShowString(s)
-}
-
-func ShowChar(char rune) string {
-	return prim.ShowChar(char)
-}
-
-func ShowBoolean(boolean bool) string {
-	if boolean {
-		return "true"
-	}
-	return "false"
-}
-
-func ShowNumber(number float64) string {
-	return prim.ShowNumber(number)
-}
-
 func AppendShowArrayArrayInt(buffer []byte, array [][]int) []byte {
 	buffer = append(buffer, '[')
 	for index, element := range array {

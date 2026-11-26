@@ -12,30 +12,19 @@ const (
 	OrderingEQ
 )
 
-func Show(ordering Ordering) string {
-	switch ordering {
-	case OrderingLT:
-		return "LT"
-	case OrderingGT:
-		return "GT"
-	default: // OrderingEQ
-		return "EQ"
-	}
-}
-
 func AppendShowArrayOrdering(buffer []byte, array []Ordering) []byte {
 	buffer = append(buffer, '[')
 	for index, element := range array {
 		if index > 0 {
 			buffer = append(buffer, ',')
 		}
-		buffer = AppendShow(buffer, element)
+		buffer = AppendShowOrdering(buffer, element)
 	}
 	buffer = append(buffer, ']')
 	return buffer
 }
 
-func AppendShow(buffer []byte, ordering Ordering) []byte {
+func AppendShowOrdering(buffer []byte, ordering Ordering) []byte {
 	switch ordering {
 	case OrderingLT:
 		buffer = append(buffer, "LT"...)
@@ -55,10 +44,6 @@ func ArrayOrdering(array []Ordering) string {
 package show
 
 import "github.com/i-am-the-slime/iris-go/prim"
-
-func Show(s string) string {
-	return prim.ShowString(s)
-}
 
 func AppendShowArrayString(buffer []byte, array []string) []byte {
 	buffer = append(buffer, '[')
@@ -96,12 +81,7 @@ func initializeMain_() []string {
 	for index, n := range array {
 		mapped[index] = "item" + strconv.Itoa(n)
 	}
-	array2 := []ordering.Ordering{ordering.OrderingLT, ordering.OrderingEQ, ordering.OrderingGT}
-	mapped2 := make([]ordering.Ordering, len(array2))
-	for index, reified := range array2 {
-		mapped2[index] = reified
-	}
-	return []string{"42", "-8", "7", "erin!", "false", "false", "greater", show.ArrayString(mapped), show.ArrayString(reifiedEach(0, []string{})), ordering.ArrayOrdering(mapped2)}
+	return []string{"42", "-8", "7", "erin!", "false", "false", "greater", show.ArrayString(mapped), show.ArrayString(reifiedEach(0, []string{})), ordering.ArrayOrdering([]ordering.Ordering{ordering.OrderingLT, ordering.OrderingEQ, ordering.OrderingGT})}
 }
 
 func reifiedEach(n int, done []string) []string {

@@ -64,8 +64,7 @@ func evaluateInt(value *ValueInt) int {
 	for {
 		switch value.Tag {
 		case ValueIntIntValue, ValueIntAgeValue:
-			n := int(value.Field1)
-			return n
+			return int(value.Field1)
 		default: // ValueIntPair
 			value = value.Pair0
 			continue
@@ -79,8 +78,7 @@ func evaluateString(value *ValueString) string {
 	for {
 		switch value.Tag {
 		case ValueStringStringValue:
-			s := value.StringValue1
-			return s
+			return value.StringValue1
 		default: // ValueStringPair
 			value = value.Pair0
 			continue

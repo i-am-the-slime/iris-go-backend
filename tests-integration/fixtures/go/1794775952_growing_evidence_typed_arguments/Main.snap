@@ -6,17 +6,6 @@ package show
 
 import "strconv"
 
-func ShowBoolean(boolean bool) string {
-	if boolean {
-		return "true"
-	}
-	return "false"
-}
-
-func ShowInt(i int) string {
-	return strconv.Itoa(i)
-}
-
 func AppendShowArrayInt(buffer []byte, array []int) []byte {
 	buffer = append(buffer, '[')
 	for index, element := range array {

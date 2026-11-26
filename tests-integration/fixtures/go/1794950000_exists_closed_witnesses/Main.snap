@@ -16,12 +16,8 @@ import (
 	"strconv"
 )
 
-func ShowInt(i int) string {
+func Show(i int) string {
 	return strconv.Itoa(i)
-}
-
-func ShowNumber(number float64) string {
-	return prim.ShowNumber(number)
 }
 
 func AppendShowArrayNumber(buffer []byte, array []float64) []byte {
@@ -128,7 +124,7 @@ func initializeMain_() []string {
 	return mapped
 }
 
-var things []Exists = []Exists{Int(DescribedInt{First: 1, Second: show.ShowInt, Third: func(value int) int {
+var things []Exists = []Exists{Int(DescribedInt{First: 1, Second: show.Show, Third: func(value int) int {
 	return value + 1
 }}), String(DescribedString{First: "a", Second: category.Identity, Third: func(value string) string {
 	return value + "!"

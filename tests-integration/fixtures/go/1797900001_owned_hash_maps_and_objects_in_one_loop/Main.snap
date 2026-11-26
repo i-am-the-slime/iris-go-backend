@@ -45,23 +45,19 @@ type TupleHashMapIntInt struct {
 	Second int
 }
 
-func Show(tuple TupleString) string {
-	return string(AppendShow(nil, tuple))
-}
-
 func AppendShowArrayTupleStringInt(buffer []byte, array []TupleString) []byte {
 	buffer = append(buffer, '[')
 	for index, element := range array {
 		if index > 0 {
 			buffer = append(buffer, ',')
 		}
-		buffer = AppendShow(buffer, element)
+		buffer = AppendShowTupleStringInt(buffer, element)
 	}
 	buffer = append(buffer, ']')
 	return buffer
 }
 
-func AppendShow(buffer []byte, tuple TupleString) []byte {
+func AppendShowTupleStringInt(buffer []byte, tuple TupleString) []byte {
 	buffer = append(buffer, "(Tuple "...)
 	buffer = prim.AppendShowString(buffer, tuple.First)
 	buffer = append(buffer, ' ')

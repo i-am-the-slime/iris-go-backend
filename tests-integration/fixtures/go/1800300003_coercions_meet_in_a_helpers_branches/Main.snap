@@ -6,10 +6,6 @@ package show
 
 import "github.com/i-am-the-slime/iris-go/prim"
 
-func Show(s string) string {
-	return prim.ShowString(s)
-}
-
 func AppendShowArrayString(buffer []byte, array []string) []byte {
 	buffer = append(buffer, '[')
 	for index, element := range array {
@@ -44,13 +40,12 @@ func main() {
 }
 
 func runPlanPlan(items []int) []string {
-	results := direct.SequenceArray(direct.MapWithIndex(func(_ int, item int) func() string {
+	return direct.SequenceArray(direct.MapWithIndex(func(_ int, item int) func() string {
 		return func() string {
 			journal.Log("before " + strconv.Itoa(item))
 			return "item " + strconv.Itoa(item*10)
 		}
 	}, items))
-	return results
 }
 
 func runPlanPlan2(items []int) []string {

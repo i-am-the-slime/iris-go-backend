@@ -6,10 +6,6 @@ package show
 
 import "strconv"
 
-func Show(i int) string {
-	return strconv.Itoa(i)
-}
-
 func AppendShowArrayInt(buffer []byte, array []int) []byte {
 	buffer = append(buffer, '[')
 	for index, element := range array {
@@ -48,16 +44,6 @@ func initializeMain_() []string {
 	}
 	numbers := mapLanes([]float64{3.0, -1.0, 4.0, 1.0, -5.0, 9.0, 2.0, 6.0, -5.0, 3.0, 5.0, 8.0, 9.0, -7.0, 9.0, 3.0, 2.0, 3.0, -8.0, 4.0, 6.0, 2.0, 6.0, 4.0, -3.0, 3.0, 8.0, 3.0, 2.0, 7.0, 9.0, 5.0, 0.0, 2.0, 8.0, 8.0, 4.0})
 	return []string{strconv.Itoa(foldLanes(mapped, arraypkg.Slice(1, len(mapped), mapped), 0)), prim.ShowNumber(foldLanes2(numbers, arraypkg.Slice(1, len(numbers), numbers), 0.0)), strconv.Itoa(foldLanes3(mapped, 0)), strconv.Itoa(foldLanes4(mapped, 0)), show.ArrayInt(zipLanes(mapped, arraypkg.Slice(1, len(mapped), mapped))), strconv.Itoa(foldLanes5(mapped, arraypkg.Slice(1, len(mapped), mapped), 0))}
-}
-
-func sign(x int) int {
-	if x < 0 {
-		return -1
-	}
-	if x > 0 {
-		return 1
-	}
-	return 0
 }
 
 func main() {

@@ -35,23 +35,19 @@ func JustString(just string) String {
 
 var NoString = String{Tag: TagNothing}
 
-func Show(maybe String) string {
-	return string(AppendShow(nil, maybe))
-}
-
 func AppendShowArrayMaybeString(buffer []byte, array []String) []byte {
 	buffer = append(buffer, '[')
 	for index, element := range array {
 		if index > 0 {
 			buffer = append(buffer, ',')
 		}
-		buffer = AppendShow(buffer, element)
+		buffer = AppendShowMaybeString(buffer, element)
 	}
 	buffer = append(buffer, ']')
 	return buffer
 }
 
-func AppendShow(buffer []byte, maybe String) []byte {
+func AppendShowMaybeString(buffer []byte, maybe String) []byte {
 	switch maybe.Tag {
 	case TagJust:
 		buffer = append(buffer, "(Just "...)
@@ -71,10 +67,6 @@ func ArrayMaybeString(array []String) string {
 package show
 
 import "github.com/i-am-the-slime/iris-go/prim"
-
-func Show(s string) string {
-	return prim.ShowString(s)
-}
 
 func AppendShowArrayString(buffer []byte, array []string) []byte {
 	buffer = append(buffer, '[')

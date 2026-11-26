@@ -137,7 +137,20 @@ impl Simplifier<'_> {
                     }
                     _ => false,
                 };
-                pure && !arguments.is_empty() && arguments.iter().all(is_plain_argument)
+                // A foreign building an array, `replicate`'s, is one that loops fuse into what they
+                // do with it, which binding it would stop.
+                let scalar = matches!(
+                    self.monotypes.get(expression.monotype),
+                    Monotype::Int
+                        | Monotype::Number
+                        | Monotype::Boolean
+                        | Monotype::Char
+                        | Monotype::String
+                );
+                let reads_local = arguments
+                    .iter()
+                    .any(|argument| matches!(argument.kind, ExpressionKind::Local(_)));
+                pure && scalar && reads_local && arguments.iter().all(is_plain_argument)
             }
             _ => false,
         }
@@ -162,7 +175,10 @@ impl Simplifier<'_> {
             ExpressionKind::Foreign { foreign: Foreign::Call { function, .. }, .. } => {
                 let name = function.name;
                 let last = name.rfind(|character: char| character.is_ascii_uppercase());
-                Some(SmolStr::from(&name[last.unwrap_or(0)..]))
+                let word = &name[last.unwrap_or(0)..];
+                // `ShowInt`'s last word names the type it reads, not what it computes.
+                let names_a_type = ["Int", "Number", "String", "Char", "Boolean", "Array"];
+                (!names_a_type.contains(&word)).then(|| SmolStr::from(word))
             }
             _ => None,
         };

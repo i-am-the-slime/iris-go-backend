@@ -6,17 +6,6 @@ package show
 
 import "strconv"
 
-func ShowInt(i int) string {
-	return strconv.Itoa(i)
-}
-
-func ShowBoolean(boolean bool) string {
-	if boolean {
-		return "true"
-	}
-	return "false"
-}
-
 func AppendShowArrayBoolean(buffer []byte, array []bool) []byte {
 	buffer = append(buffer, '[')
 	for index, element := range array {
@@ -113,24 +102,20 @@ func showLocalGo(nested *Nested) string {
 		return strconv.Itoa(nested.Flat.(int))
 	default: // NestedNest
 		text := []byte("Nest ")
-		text = appendShowLocalGo2(text, shared.Show{Show: func(coerced any) string {
+		text = appendShowLocalIntGo2(text, shared.Show{Show: func(coerced any) string {
 			return show.ArrayInt(shared.Convert4(coerced))
 		}}, nested.Nest)
 		return string(text)
 	}
 }
 
-func showLocalGo2(dictionary shared.Show, nested *Nested) string {
-	return string(appendShowLocalGo2(nil, dictionary, nested))
-}
-
-func appendShowLocalGo2(buffer []byte, dictionary shared.Show, nested *Nested) []byte {
+func appendShowLocalIntGo2(buffer []byte, dictionary shared.Show, nested *Nested) []byte {
 	switch nested.Tag {
 	case NestedFlat:
 		buffer = prim.AppendString(buffer, dictionary.Show(nested.Flat))
 	default: // NestedNest
 		buffer = append(buffer, "Nest "...)
-		buffer = appendShowLocalGo2(buffer, shared.Show{Show: func(coerced any) string {
+		buffer = appendShowLocalIntGo2(buffer, shared.Show{Show: func(coerced any) string {
 			return prim.ShowArray(dictionary.Show, coerced.([]any))
 		}}, nested.Nest)
 	}

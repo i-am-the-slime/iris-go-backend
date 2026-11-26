@@ -40,10 +40,6 @@ func Traverse_F(array2 []int) []struct{} {
 // Data/Show/show.go
 package show
 
-func Show(ignored struct{}) string {
-	return "unit"
-}
-
 func AppendShowArrayUnit(buffer []byte, array []struct{}) []byte {
 	buffer = append(buffer, '[')
 	for index := range array {

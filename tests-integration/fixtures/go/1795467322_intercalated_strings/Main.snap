@@ -11,10 +11,6 @@ package show
 
 import "strconv"
 
-func Show(i int) string {
-	return strconv.Itoa(i)
-}
-
 func AppendShowArrayInt(buffer []byte, array []int) []byte {
 	buffer = append(buffer, '[')
 	for index, element := range array {

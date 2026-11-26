@@ -1,54 +1,6 @@
 ---
 source: tests-integration/src/fixtures.rs
 ---
-// Data/Ord/ord.go
-package ord
-
-import (
-	"fixture/Data/Ordering"
-	"github.com/i-am-the-slime/iris-go/prim"
-)
-
-func CompareInt(i int, i2 int) ordering.Ordering {
-	if i < i2 {
-		return ordering.OrderingLT
-	}
-	if i == i2 {
-		return ordering.OrderingEQ
-	}
-	return ordering.OrderingGT
-}
-
-func CompareNumber(number float64, number2 float64) ordering.Ordering {
-	if number < number2 {
-		return ordering.OrderingLT
-	}
-	if number == number2 {
-		return ordering.OrderingEQ
-	}
-	return ordering.OrderingGT
-}
-
-func CompareChar(char rune, char2 rune) ordering.Ordering {
-	if char < char2 {
-		return ordering.OrderingLT
-	}
-	if char == char2 {
-		return ordering.OrderingEQ
-	}
-	return ordering.OrderingGT
-}
-
-func CompareString(s string, s2 string) ordering.Ordering {
-	if prim.CompareString(s, s2) < 0 {
-		return ordering.OrderingLT
-	}
-	if s == s2 {
-		return ordering.OrderingEQ
-	}
-	return ordering.OrderingGT
-}
-
 // Data/Ordering/ordering.go
 package ordering
 
@@ -67,22 +19,6 @@ import (
 	"github.com/i-am-the-slime/iris-go/prim"
 	"strconv"
 )
-
-func ShowInt(i int) string {
-	return strconv.Itoa(i)
-}
-
-func ShowNumber(number float64) string {
-	return prim.ShowNumber(number)
-}
-
-func ShowString(s string) string {
-	return prim.ShowString(s)
-}
-
-func ShowChar(char rune) string {
-	return prim.ShowChar(char)
-}
 
 func AppendShowArrayChar(buffer []byte, array []rune) []byte {
 	buffer = append(buffer, '[')
@@ -356,18 +292,6 @@ var entries = initializeEntries()
 
 func initializeEntries() []shared.Entry {
 	return []shared.Entry{{Name: "delta", Rank: 2, Weight: 0.5, Initial: 'd'}, {Name: "alpha", Rank: 1, Weight: math.Copysign(0, -1), Initial: 'a'}, {Name: "echo", Rank: 2, Weight: 0.0, Initial: 'e'}, {Name: "bravo", Rank: 1, Weight: math.NaN(), Initial: 'b'}, {Name: "charlie", Rank: 3, Weight: 0.5, Initial: 'c'}, {Name: "foxtrot", Rank: 1, Weight: -1.0, Initial: 'a'}}
-}
-
-func byLength(x string, y string) ordering.Ordering {
-	i := prim.CodeUnitLength(x)
-	i2 := prim.CodeUnitLength(y)
-	if i < i2 {
-		return ordering.OrderingLT
-	}
-	if i == i2 {
-		return ordering.OrderingEQ
-	}
-	return ordering.OrderingGT
 }
 
 func main() {

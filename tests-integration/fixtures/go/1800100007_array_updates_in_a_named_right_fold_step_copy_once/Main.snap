@@ -6,10 +6,6 @@ package show
 
 import "strconv"
 
-func Show(i int) string {
-	return strconv.Itoa(i)
-}
-
 func AppendShowArrayInt(buffer []byte, array []int) []byte {
 	buffer = append(buffer, '[')
 	for index, element := range array {
@@ -52,15 +48,6 @@ func initializeMain_() []string {
 		accumulator2 = squaredIntoOwning(index, accumulator2)
 	}
 	return []string{show.ArrayInt(accumulator), show.ArrayInt(accumulator2), show.ArrayInt(shared)}
-}
-
-func squaredInto(position int, current []int) []int {
-	if position >= 0 && position < len(current) {
-		updated := slices.Clone(current)
-		updated[position] = position * position
-		return updated
-	}
-	return current
 }
 
 func squaredIntoOwning(position int, current []int) []int {

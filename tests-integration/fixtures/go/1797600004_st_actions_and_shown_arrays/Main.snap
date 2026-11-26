@@ -9,21 +9,6 @@ import (
 	"strconv"
 )
 
-func ShowInt(i int) string {
-	return strconv.Itoa(i)
-}
-
-func ShowString(s string) string {
-	return prim.ShowString(s)
-}
-
-func ShowBoolean(boolean bool) string {
-	if boolean {
-		return "true"
-	}
-	return "false"
-}
-
 func AppendShowArrayBoolean(buffer []byte, array []bool) []byte {
 	buffer = append(buffer, '[')
 	for index, element := range array {

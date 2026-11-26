@@ -10,23 +10,19 @@ func FromInt(a int) int64 {
 	return int64(a)
 }
 
-func Show(long int64) string {
-	return string(AppendShow(nil, long))
-}
-
 func AppendShowArrayInt64(buffer []byte, array []int64) []byte {
 	buffer = append(buffer, '[')
 	for index, element := range array {
 		if index > 0 {
 			buffer = append(buffer, ',')
 		}
-		buffer = AppendShow(buffer, element)
+		buffer = AppendShowInt64(buffer, element)
 	}
 	buffer = append(buffer, ']')
 	return buffer
 }
 
-func AppendShow(buffer []byte, long int64) []byte {
+func AppendShowInt64(buffer []byte, long int64) []byte {
 	buffer = strconv.AppendInt(buffer, long, 10)
 	buffer = append(buffer, 'l')
 	return buffer
@@ -36,45 +32,10 @@ func ArrayInt64(array []int64) string {
 	return string(AppendShowArrayInt64(nil, array))
 }
 
-// Data/Ord/ord.go
-package ord
-
-func MaxInt64(x int64, y int64) int64 {
-	if x >= y {
-		return x
-	}
-	return y
-}
-
-func Min_(x uint64, y uint64) uint64 {
-	if x <= y {
-		return x
-	}
-	return y
-}
-
-func MaxInt(x int, y int) int {
-	if x < y {
-		return y
-	}
-	return x
-}
-
-func MaxNumber(x float64, y float64) float64 {
-	if x < y {
-		return y
-	}
-	return x
-}
-
 // Data/Show/show.go
 package show
 
 import "strconv"
-
-func Show(i int) string {
-	return strconv.Itoa(i)
-}
 
 func AppendShowArrayInt(buffer []byte, array []int) []byte {
 	buffer = append(buffer, '[')
@@ -101,23 +62,19 @@ func UnsafeFromInt(a int) uint64 {
 	return uint64(a)
 }
 
-func Show(long uint64) string {
-	return string(AppendShow(nil, long))
-}
-
 func AppendShowArrayUInt64(buffer []byte, array []uint64) []byte {
 	buffer = append(buffer, '[')
 	for index, element := range array {
 		if index > 0 {
 			buffer = append(buffer, ',')
 		}
-		buffer = AppendShow(buffer, element)
+		buffer = AppendShowUInt64(buffer, element)
 	}
 	buffer = append(buffer, ']')
 	return buffer
 }
 
-func AppendShow(buffer []byte, long uint64) []byte {
+func AppendShowUInt64(buffer []byte, long uint64) []byte {
 	buffer = strconv.AppendUint(buffer, long, 10)
 	buffer = append(buffer, "ul"...)
 	return buffer

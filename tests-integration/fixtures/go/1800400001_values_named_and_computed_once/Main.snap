@@ -55,7 +55,11 @@ func main() {
 	ref2 := []int{1, 2}
 	journal.Log("POST")
 	journal.Log(show.ArrayString(ref))
-	journal.Log(prim.StringJoinWith("/", ref))
+	mapped := make([]string, len(ref))
+	for index, s := range ref {
+		mapped[index] = s
+	}
+	journal.Log(prim.StringJoinWith("/", mapped))
 	count := min(len(ref), len(ref2))
 	built := make([]string, count)
 	for index := range count {

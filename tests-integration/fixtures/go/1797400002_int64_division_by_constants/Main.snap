@@ -6,23 +6,19 @@ package dataint64
 
 import "strconv"
 
-func Show(long int64) string {
-	return string(AppendShow(nil, long))
-}
-
 func AppendShowArrayInt64(buffer []byte, array []int64) []byte {
 	buffer = append(buffer, '[')
 	for index, element := range array {
 		if index > 0 {
 			buffer = append(buffer, ',')
 		}
-		buffer = AppendShow(buffer, element)
+		buffer = AppendShowInt64(buffer, element)
 	}
 	buffer = append(buffer, ']')
 	return buffer
 }
 
-func AppendShow(buffer []byte, long int64) []byte {
+func AppendShowInt64(buffer []byte, long int64) []byte {
 	buffer = strconv.AppendInt(buffer, long, 10)
 	buffer = append(buffer, 'l')
 	return buffer

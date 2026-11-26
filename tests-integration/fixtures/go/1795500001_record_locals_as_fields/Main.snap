@@ -10,27 +10,19 @@ import (
 	"strconv"
 )
 
-func ShowTally(record shared.Tally) string {
-	return string(AppendShowTally(nil, record))
-}
-
-func ShowBody(record shared.Body) string {
-	return string(AppendShowBody(nil, record))
-}
-
 func AppendShowArrayTally(buffer []byte, array []shared.Tally) []byte {
 	buffer = append(buffer, '[')
 	for index, element := range array {
 		if index > 0 {
 			buffer = append(buffer, ',')
 		}
-		buffer = AppendShowTally(buffer, element)
+		buffer = AppendShowRecordCountLabelSeenTotalConsIntConsStringConsBooleanConsIntNil(buffer, element)
 	}
 	buffer = append(buffer, ']')
 	return buffer
 }
 
-func AppendShowTally(buffer []byte, record shared.Tally) []byte {
+func AppendShowRecordCountLabelSeenTotalConsIntConsStringConsBooleanConsIntNil(buffer []byte, record shared.Tally) []byte {
 	buffer = append(buffer, "{ count: "...)
 	buffer = strconv.AppendInt(buffer, int64(record.Count), 10)
 	buffer = append(buffer, ", label: "...)
@@ -49,13 +41,13 @@ func AppendShowArrayBody(buffer []byte, array []shared.Body) []byte {
 		if index > 0 {
 			buffer = append(buffer, ',')
 		}
-		buffer = AppendShowBody(buffer, element)
+		buffer = AppendShowRecordMassVxVyXYConsNumberConsNumberConsNumberConsNumberConsNumberNil(buffer, element)
 	}
 	buffer = append(buffer, ']')
 	return buffer
 }
 
-func AppendShowBody(buffer []byte, record shared.Body) []byte {
+func AppendShowRecordMassVxVyXYConsNumberConsNumberConsNumberConsNumberConsNumberNil(buffer []byte, record shared.Body) []byte {
 	buffer = append(buffer, "{ mass: "...)
 	buffer = prim.AppendShowNumber(buffer, record.Mass)
 	buffer = append(buffer, ", vx: "...)

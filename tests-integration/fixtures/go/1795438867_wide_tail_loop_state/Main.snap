@@ -21,23 +21,19 @@ func JustInt(just int) Int {
 	return Int{Tag: TagJust, Just: just}
 }
 
-func Show(maybe Int) string {
-	return string(AppendShow(nil, maybe))
-}
-
 func AppendShowArrayMaybeInt(buffer []byte, array []Int) []byte {
 	buffer = append(buffer, '[')
 	for index, element := range array {
 		if index > 0 {
 			buffer = append(buffer, ',')
 		}
-		buffer = AppendShow(buffer, element)
+		buffer = AppendShowMaybeInt(buffer, element)
 	}
 	buffer = append(buffer, ']')
 	return buffer
 }
 
-func AppendShow(buffer []byte, maybe Int) []byte {
+func AppendShowMaybeInt(buffer []byte, maybe Int) []byte {
 	switch maybe.Tag {
 	case TagJust:
 		buffer = append(buffer, "(Just "...)
@@ -57,10 +53,6 @@ func ArrayMaybeInt(array []Int) string {
 package show
 
 import "strconv"
-
-func Show(i int) string {
-	return strconv.Itoa(i)
-}
 
 func AppendShowArrayInt(buffer []byte, array []int) []byte {
 	buffer = append(buffer, '[')

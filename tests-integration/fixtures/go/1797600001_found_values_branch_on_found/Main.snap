@@ -19,23 +19,19 @@ type Int struct {
 	Tag  uint8
 }
 
-func Show(maybe Char) string {
-	return string(AppendShow(nil, maybe))
-}
-
 func AppendShowArrayMaybeChar(buffer []byte, array []Char) []byte {
 	buffer = append(buffer, '[')
 	for index, element := range array {
 		if index > 0 {
 			buffer = append(buffer, ',')
 		}
-		buffer = AppendShow(buffer, element)
+		buffer = AppendShowMaybeChar(buffer, element)
 	}
 	buffer = append(buffer, ']')
 	return buffer
 }
 
-func AppendShow(buffer []byte, maybe Char) []byte {
+func AppendShowMaybeChar(buffer []byte, maybe Char) []byte {
 	if maybe != NoChar {
 		buffer = append(buffer, "(Just "...)
 		buffer = prim.AppendShowChar(buffer, rune(maybe))

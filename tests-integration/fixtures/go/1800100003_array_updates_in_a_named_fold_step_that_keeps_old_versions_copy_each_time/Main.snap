@@ -6,10 +6,6 @@ package show
 
 import "strconv"
 
-func Show(i int) string {
-	return strconv.Itoa(i)
-}
-
 func AppendShowArrayArrayInt(buffer []byte, array [][]int) []byte {
 	buffer = append(buffer, '[')
 	for index, element := range array {
@@ -73,19 +69,6 @@ func initializeMain_() []string {
 	text = show.AppendShowArrayArrayInt(text, accumulator.Second)
 	text = append(text, ')')
 	return []string{string(text), show.ArrayInt(shared)}
-}
-
-func remembered(tuple2 tuple.Tuple, position int) tuple.Tuple {
-	current := tuple2.First
-	var result []int
-	if position >= 0 && position < len(current) {
-		updated := slices.Clone(current)
-		updated[position] = 7
-		result = updated
-	} else {
-		result = current
-	}
-	return tuple.Tuple{First: result, Second: array.Snoc(tuple2.Second, current)}
 }
 
 func rememberedOwning(tuple2 tuple.Tuple, position int) tuple.Tuple {

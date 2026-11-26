@@ -20,14 +20,6 @@ import (
 	"strconv"
 )
 
-func ShowNumber(number float64) string {
-	return prim.ShowNumber(number)
-}
-
-func ShowInt(i int) string {
-	return strconv.Itoa(i)
-}
-
 func AppendShowArrayInt(buffer []byte, array []int) []byte {
 	buffer = append(buffer, '[')
 	for index, element := range array {
@@ -120,8 +112,7 @@ func initializeMain_() []string {
 	var number2 float64
 	number2 = (*array2)[i3]
 	frozen := shared.Copied(*array2)
-	performed := array.Append([]string{show.ArrayNumber(frozen), prim.ShowNumber(edge), prim.ShowNumber(number + number2)}, array.Append(pull, array.Append(countBefore, sortEach)))
-	return performed
+	return array.Append([]string{show.ArrayNumber(frozen), prim.ShowNumber(edge), prim.ShowNumber(number + number2)}, array.Append(pull, array.Append(countBefore, sortEach)))
 }
 
 func smooth(array []float64, i int) {
@@ -273,8 +264,7 @@ func initializePull() []string {
 	}
 	array7 := shared.Copied(array2)
 	array8 := shared.Copied(array3)
-	performed := []string{show.ArrayNumber(array7), show.ArrayNumber(array8)}
-	return performed
+	return []string{show.ArrayNumber(array7), show.ArrayNumber(array8)}
 }
 
 var countBefore = initializeCountBefore()
@@ -308,8 +298,7 @@ func initializeCountBefore() []string {
 		}
 	}
 	frozen := shared.Copied(counts)
-	performed := []string{show.ArrayInt(frozen)}
-	return performed
+	return []string{show.ArrayInt(frozen)}
 }
 
 var sortEach = initializeSortEach()
@@ -351,8 +340,7 @@ func initializeSortEach() []string {
 	}
 	sorted := shared.Copied(*array2)
 	bumped := shared.Copied(array3)
-	performed := []string{show.ArrayInt(sorted), show.ArrayInt(bumped)}
-	return performed
+	return []string{show.ArrayInt(sorted), show.ArrayInt(bumped)}
 }
 
 func mainToNumber(i int) float64 {

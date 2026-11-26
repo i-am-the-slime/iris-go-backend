@@ -29,23 +29,19 @@ func Right(field0 int) Either {
 	return Either{Tag: EitherRight, Field0: field0}
 }
 
-func Show(i int, err IntFailure) string {
-	return string(AppendShow(nil, i, err))
-}
-
 func AppendShowArrayEitherIntInt(buffer []byte, array []Either) []byte {
 	buffer = append(buffer, '[')
 	for index, element := range array {
 		if index > 0 {
 			buffer = append(buffer, ',')
 		}
-		buffer = AppendShow(buffer, element.Field0, EitherFailure(element))
+		buffer = AppendShowEitherIntInt(buffer, element.Field0, EitherFailure(element))
 	}
 	buffer = append(buffer, ']')
 	return buffer
 }
 
-func AppendShow(buffer []byte, i int, err IntFailure) []byte {
+func AppendShowEitherIntInt(buffer []byte, i int, err IntFailure) []byte {
 	if err.Failed {
 		buffer = append(buffer, "(Left "...)
 		buffer = strconv.AppendInt(buffer, int64(err.Left), 10)

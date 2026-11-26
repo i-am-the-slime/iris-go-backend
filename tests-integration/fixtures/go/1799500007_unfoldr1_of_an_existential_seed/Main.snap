@@ -20,32 +20,10 @@ type Unit struct {
 
 var NoUnit = Unit{Tag: TagNothing}
 
-func IsNothing(maybe *Maybe) bool {
-	switch maybe.Tag {
-	case TagNothing:
-		return true
-	default: // TagJust
-		return false
-	}
-}
-
-func FromJust(maybe *Maybe) any {
-	switch maybe.Tag {
-	case TagJust:
-		return maybe.Just
-	default:
-		panic("Failed pattern match")
-	}
-}
-
 // Data/Show/show.go
 package show
 
 import "strconv"
-
-func Show(i int) string {
-	return strconv.Itoa(i)
-}
 
 func AppendShowArrayInt(buffer []byte, array []int) []byte {
 	buffer = append(buffer, '[')

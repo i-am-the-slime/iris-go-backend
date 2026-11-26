@@ -33,23 +33,19 @@ func Right(right string) Either {
 	return Either{Tag: EitherRight, Right: right}
 }
 
-func Show(s string, err IntFailure) string {
-	return string(AppendShow(nil, s, err))
-}
-
 func AppendShowArrayEitherIntString(buffer []byte, array []Either) []byte {
 	buffer = append(buffer, '[')
 	for index, element := range array {
 		if index > 0 {
 			buffer = append(buffer, ',')
 		}
-		buffer = AppendShow(buffer, element.Right, EitherFailure(element))
+		buffer = AppendShowEitherIntString(buffer, element.Right, EitherFailure(element))
 	}
 	buffer = append(buffer, ']')
 	return buffer
 }
 
-func AppendShow(buffer []byte, s string, err IntFailure) []byte {
+func AppendShowEitherIntString(buffer []byte, s string, err IntFailure) []byte {
 	if err.Failed {
 		buffer = append(buffer, "(Left "...)
 		buffer = strconv.AppendInt(buffer, int64(err.Left), 10)
@@ -106,27 +102,19 @@ func JustNumber(just float64) Number {
 	return Number{Tag: TagJust, Just: just}
 }
 
-func ShowXYConsMaybeIntConsMaybeIntNil(record XY) string {
-	return string(AppendShowXYConsMaybeIntConsMaybeIntNil(nil, record))
-}
-
-func ShowMaybe(maybe Number) string {
-	return string(AppendShowMaybe(nil, maybe))
-}
-
 func AppendShowArrayMaybeNumber(buffer []byte, array []Number) []byte {
 	buffer = append(buffer, '[')
 	for index, element := range array {
 		if index > 0 {
 			buffer = append(buffer, ',')
 		}
-		buffer = AppendShowMaybe(buffer, element)
+		buffer = AppendShowMaybeNumber(buffer, element)
 	}
 	buffer = append(buffer, ']')
 	return buffer
 }
 
-func AppendShowMaybe(buffer []byte, maybe Number) []byte {
+func AppendShowMaybeNumber(buffer []byte, maybe Number) []byte {
 	switch maybe.Tag {
 	case TagJust:
 		buffer = append(buffer, "(Just "...)
@@ -144,13 +132,13 @@ func AppendShowArrayXY(buffer []byte, array []XY) []byte {
 		if index > 0 {
 			buffer = append(buffer, ',')
 		}
-		buffer = AppendShowXYConsMaybeIntConsMaybeIntNil(buffer, element)
+		buffer = AppendShowRecordXYConsMaybeIntConsMaybeIntNil(buffer, element)
 	}
 	buffer = append(buffer, ']')
 	return buffer
 }
 
-func AppendShowXYConsMaybeIntConsMaybeIntNil(buffer []byte, record XY) []byte {
+func AppendShowRecordXYConsMaybeIntConsMaybeIntNil(buffer []byte, record XY) []byte {
 	buffer = append(buffer, "{ x: "...)
 	switch record.X.Tag {
 	case TagJust:
@@ -184,14 +172,6 @@ import (
 	"github.com/i-am-the-slime/iris-go/prim"
 	"strconv"
 )
-
-func ShowInt(i int) string {
-	return strconv.Itoa(i)
-}
-
-func ShowNumber(number float64) string {
-	return prim.ShowNumber(number)
-}
 
 func AppendShowArrayNumber(buffer []byte, array []float64) []byte {
 	buffer = append(buffer, '[')
@@ -328,26 +308,6 @@ func initializeMain_() []string {
 	return []string{show.ArrayInt([]int{1, 2, 3}), show.ArrayInt([]int{}), show.ArrayArrayInt([][]int{{1}, {}, {-2, 3}}), string(text), maybe.ArrayXY([]maybe.XY{{X: maybe.JustInt(1), Y: maybe.NoInt}}), string(text2), arrayShape([]Shape{Circle(1.0), Rect(shared.HW{W: 1, H: -2}), {Tag: ShapeEmpty}, Pair(-3, maybe.JustInt(-4))}), arrayColour([]*Colour{sharedColourRed, Mixed(sharedColourRed, Named("x\"y"))}), string(text3), arrayWrapped([]Wrapped{{A: 1}}), arrayPoint([]Point{{First: 1, Second: 2}})}
 }
 
-func showShape(shape Shape) string {
-	return string(appendShowShape(nil, shape))
-}
-
-func showColour(colour *Colour) string {
-	return string(appendShowColour(nil, colour))
-}
-
-func showMeters(number float64) string {
-	return string(appendShowMeters(nil, number))
-}
-
-func showWrappedConsIntNil(record Wrapped) string {
-	return string(appendShowWrappedConsIntNil(nil, record))
-}
-
-func showPoint(point Point) string {
-	return string(appendShowPoint(nil, point))
-}
-
 func appendShowColour(buffer []byte, colour *Colour) []byte {
 	switch colour.Tag {
 	case ColourRed:
@@ -393,13 +353,13 @@ func appendShowArrayWrapped(buffer []byte, array []Wrapped) []byte {
 		if index > 0 {
 			buffer = append(buffer, ',')
 		}
-		buffer = appendShowWrappedConsIntNil(buffer, element)
+		buffer = appendShowRecordAConsIntNil(buffer, element)
 	}
 	buffer = append(buffer, ']')
 	return buffer
 }
 
-func appendShowWrappedConsIntNil(buffer []byte, record Wrapped) []byte {
+func appendShowRecordAConsIntNil(buffer []byte, record Wrapped) []byte {
 	buffer = append(buffer, "{ a: "...)
 	buffer = strconv.AppendInt(buffer, int64(record.A), 10)
 	buffer = append(buffer, " }"...)
@@ -514,23 +474,19 @@ type Tuple struct {
 	First  rune
 }
 
-func Show(tuple Tuple) string {
-	return string(AppendShow(nil, tuple))
-}
-
 func AppendShowArrayTupleCharArrayMaybeNumber(buffer []byte, array []Tuple) []byte {
 	buffer = append(buffer, '[')
 	for index, element := range array {
 		if index > 0 {
 			buffer = append(buffer, ',')
 		}
-		buffer = AppendShow(buffer, element)
+		buffer = AppendShowTupleCharArrayMaybeNumber(buffer, element)
 	}
 	buffer = append(buffer, ']')
 	return buffer
 }
 
-func AppendShow(buffer []byte, tuple Tuple) []byte {
+func AppendShowTupleCharArrayMaybeNumber(buffer []byte, tuple Tuple) []byte {
 	buffer = append(buffer, "(Tuple "...)
 	buffer = prim.AppendShowChar(buffer, tuple.First)
 	buffer = append(buffer, ' ')

@@ -41,10 +41,15 @@ impl Simplifier<'_> {
         Err(arguments)
     }
 
-    /// Whether a map's callback returns its element as it is, through a newtype's coercion at
-    /// most: `map (un FilePath) paths` is `paths` coerced.
+    /// Whether a map's callback returns the elements of an array literal as they are, through a
+    /// newtype's coercion at most: `map (un FilePath) [ directory, name ]` is the literal coerced.
+    /// The literal is new either way; an array that might be shared stays copied, as
+    /// `unsafeRefEq` tells a mapped array from its source.
     fn maps_identity(&self, arguments: &[Expression]) -> bool {
-        let [callback, _] = arguments else { return false };
+        let [callback, array] = arguments else { return false };
+        if !matches!(array.kind, ExpressionKind::Array(_)) {
+            return false;
+        }
         let (parameters, body) = match &callback.kind {
             ExpressionKind::Lambda { parameters, body } => (parameters.as_slice(), body.as_ref()),
             ExpressionKind::Function(id) => match self.functions[id.0 as usize].as_ref() {
@@ -54,6 +59,10 @@ impl Simplifier<'_> {
             _ => return false,
         };
         let [parameter] = parameters else { return false };
+        // A coercion to another representation, `unsafeToForeign`'s, converts each element.
+        if !self.monotypes.same_without_causes(parameter.monotype, body.monotype) {
+            return false;
+        }
         let mut body = body;
         while let ExpressionKind::Coerce(value) = &body.kind {
             body = value;

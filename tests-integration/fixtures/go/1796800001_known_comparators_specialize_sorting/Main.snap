@@ -24,10 +24,6 @@ package show
 
 import "strconv"
 
-func Show(i int) string {
-	return strconv.Itoa(i)
-}
-
 func AppendShowArrayInt(buffer []byte, array []int) []byte {
 	buffer = append(buffer, '[')
 	for index, element := range array {
@@ -104,29 +100,25 @@ func toArray(value *List) []int {
 func sortByCompare(xs []int) []int {
 	result := array.Thaw(xs)
 	sortByCompareQuicksort(*result, 0, len(xs)-1)
-	performed := shared.Frozen(*result)
-	return performed
+	return shared.Frozen(*result)
 }
 
 func sortByDescending(xs []int) []int {
 	result := array.Thaw(xs)
 	sortByDescendingQuicksort(*result, 0, len(xs)-1)
-	performed := shared.Frozen(*result)
-	return performed
+	return shared.Frozen(*result)
 }
 
 func sortByOrder(xs []int) []int {
 	result := array.Thaw(xs)
 	sortByOrderQuicksort(*result, 0, len(xs)-1)
-	performed := shared.Frozen(*result)
-	return performed
+	return shared.Frozen(*result)
 }
 
 func sortByOrder2(xs []int) []int {
 	result := array.Thaw(xs)
 	sortByOrderQuicksort2(*result, 0, len(xs)-1)
-	performed := shared.Frozen(*result)
-	return performed
+	return shared.Frozen(*result)
 }
 
 func sortByCompareSwap(array []int, i int, j int) {

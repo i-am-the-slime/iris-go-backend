@@ -33,23 +33,19 @@ func Right(right int) Either {
 	return Either{Tag: EitherRight, Right: right}
 }
 
-func Show(i int, err StringFailure) string {
-	return string(AppendShow(nil, i, err))
-}
-
 func AppendShowArrayEitherStringInt(buffer []byte, array []Either) []byte {
 	buffer = append(buffer, '[')
 	for index, element := range array {
 		if index > 0 {
 			buffer = append(buffer, ',')
 		}
-		buffer = AppendShow(buffer, element.Right, EitherFailure(element))
+		buffer = AppendShowEitherStringInt(buffer, element.Right, EitherFailure(element))
 	}
 	buffer = append(buffer, ']')
 	return buffer
 }
 
-func AppendShow(buffer []byte, i int, err StringFailure) []byte {
+func AppendShowEitherStringInt(buffer []byte, i int, err StringFailure) []byte {
 	if err.Failed {
 		buffer = append(buffer, "(Left "...)
 		buffer = prim.AppendShowString(buffer, err.Left)

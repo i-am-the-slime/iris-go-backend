@@ -10,14 +10,6 @@ import (
 	"strconv"
 )
 
-func ShowParticleConsNumberConsNumberNil(record shared.Particle) string {
-	return string(AppendShowParticleConsNumberConsNumberNil(nil, record))
-}
-
-func ShowInt(i int) string {
-	return strconv.Itoa(i)
-}
-
 func AppendShowArrayArrayInt(buffer []byte, array [][]int) []byte {
 	buffer = append(buffer, '[')
 	for index, element := range array {
@@ -48,13 +40,13 @@ func AppendShowArrayParticle(buffer []byte, array []shared.Particle) []byte {
 		if index > 0 {
 			buffer = append(buffer, ',')
 		}
-		buffer = AppendShowParticleConsNumberConsNumberNil(buffer, element)
+		buffer = AppendShowRecordPositionVelocityConsNumberConsNumberNil(buffer, element)
 	}
 	buffer = append(buffer, ']')
 	return buffer
 }
 
-func AppendShowParticleConsNumberConsNumberNil(buffer []byte, record shared.Particle) []byte {
+func AppendShowRecordPositionVelocityConsNumberConsNumberNil(buffer []byte, record shared.Particle) []byte {
 	buffer = append(buffer, "{ position: "...)
 	buffer = prim.AppendShowNumber(buffer, record.Position)
 	buffer = append(buffer, ", velocity: "...)

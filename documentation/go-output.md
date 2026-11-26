@@ -350,6 +350,13 @@ main = do
 Now both backends time the sum: the thunk keeps JavaScript from computing it before `timed` starts,
 and `evaluate` keeps Go from computing it after `timed` is done.
 
+### Pure values can be shared
+
+Pure code gives the same answer every time, so the Go backend computes it once where it can: two
+calls of the same function on the same arguments become one, and `Array.concat [ mempty, errors ]`
+is `errors` itself. You can only tell with `unsafeRefEq`, which then answers `true` where
+JavaScript built two arrays and answers `false`.
+
 ### Deep recursion
 
 Go stacks grow to 1 GB, so recursion that is not tail-recursive goes far deeper before it fails.

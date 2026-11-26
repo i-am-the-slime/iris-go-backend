@@ -25,23 +25,19 @@ func JustInt(just int) Int {
 
 var NoInt = Int{Tag: TagNothing}
 
-func Show(maybe Char) string {
-	return string(AppendShow(nil, maybe))
-}
-
 func AppendShowArrayMaybeChar(buffer []byte, array []Char) []byte {
 	buffer = append(buffer, '[')
 	for index, element := range array {
 		if index > 0 {
 			buffer = append(buffer, ',')
 		}
-		buffer = AppendShow(buffer, element)
+		buffer = AppendShowMaybeChar(buffer, element)
 	}
 	buffer = append(buffer, ']')
 	return buffer
 }
 
-func AppendShow(buffer []byte, maybe Char) []byte {
+func AppendShowMaybeChar(buffer []byte, maybe Char) []byte {
 	if maybe != NoChar {
 		buffer = append(buffer, "(Just "...)
 		buffer = prim.AppendShowChar(buffer, rune(maybe))
@@ -60,10 +56,6 @@ func ArrayMaybeChar(array []Char) string {
 package show
 
 import "github.com/i-am-the-slime/iris-go/prim"
-
-func Show(s string) string {
-	return prim.ShowString(s)
-}
 
 func AppendShowArrayString(buffer []byte, array []string) []byte {
 	buffer = append(buffer, '[')
@@ -198,8 +190,6 @@ func lastIndexOfLoopViewsTheText(text string, offset int, count int) int {
 				offset, count = found2-1, count+1
 				continue
 			}
-		}
-		if codeUnitLastIndexOfStartingAt.Tag == maybe.TagJust {
 			return count + 1
 		}
 		return count
