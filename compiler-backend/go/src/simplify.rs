@@ -112,6 +112,7 @@ pub fn simplify(
         forwarded: FxHashMap::default(),
         argument_specializations: ArgumentSpecializations::default(),
         call_pattern_copies: CallPatternCopies::default(),
+        appenders: FxHashSet::default(),
         source_ranks: SourceRanks { entry: entry_file, home: None },
     };
     for component in &components {
@@ -185,6 +186,9 @@ struct Simplifier<'m> {
     forwarded: FxHashMap<LocalId, LocalId>,
     argument_specializations: ArgumentSpecializations,
     call_pattern_copies: CallPatternCopies,
+    /// The locals bound to the appender a traversal threads: `append values x` is `snoc values x`,
+    /// which a loop that owns the values extends in place.
+    appenders: FxHashSet<LocalId>,
     source_ranks: SourceRanks,
 }
 
@@ -912,7 +916,16 @@ impl Simplifier<'_> {
             }
             ExpressionKind::EffectBind { action, local, body } => {
                 let action = self.expression(*action);
+                if matches!(action.kind, ExpressionKind::Foreign { foreign, .. } if *foreign == crate::foreign::APPENDER)
+                {
+                    self.appenders.insert(local.id);
+                }
                 let body = self.expression(*body);
+                if self.appenders.contains(&local.id)
+                    && occurrences_up_to(&body, local.id, 1).total == 0
+                {
+                    return body;
+                }
                 return self.effect_bind(action, local, body, monotype);
             }
             ExpressionKind::EffectEach { array, element, body, results } => {
@@ -997,6 +1010,17 @@ impl Simplifier<'_> {
             }
             ExpressionKind::If { .. } | ExpressionKind::Case { .. } => {
                 self.apply_choice(function, arguments, monotype)
+            }
+            ExpressionKind::Foreign { foreign: Foreign::RunEffect, arguments: ref performed }
+                if matches!(self.monotypes.get(monotype), Monotype::Effect(_))
+                    && let [allocated] = performed.as_slice()
+                    && let ExpressionKind::EffectBind { action, local, body } = &allocated.kind
+                    && matches!(action.kind, ExpressionKind::Foreign { foreign, .. } if *foreign == crate::foreign::APPENDER)
+                    && let ExpressionKind::EffectPure(value) = &body.kind =>
+            {
+                let (action, local) = ((**action).clone(), local.clone());
+                let applied = self.apply((**value).clone(), arguments, monotype);
+                self.effect_bind(action, local, applied, monotype)
             }
             ExpressionKind::Function(id) if self.fuel > 0 => {
                 // A partial application inlines too: `beta` binds the given

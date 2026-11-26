@@ -215,8 +215,8 @@ where
                 values: vec![identifier_expression(&parameters[position].0)],
             });
         }
-        let owned = if loops && mode == Mode::Value {
-            let mut owned = self.owned_loop_arrays(id, function);
+        let owned = if loops {
+            let mut owned = self.owned_loop_arrays(id, function, mode == Mode::Perform);
             owned.retain(|(position, _, _)| !captured.contains(position));
             owned
         } else {
@@ -355,13 +355,15 @@ where
         &mut self,
         id: FunctionId,
         function: &Function,
+        performed: bool,
     ) -> Vec<(usize, ownership::Place, Vec<*const Expression>)> {
         let arity = function.parameters.len();
         let mut owned = vec![];
         for (position, parameter) in function.parameters.iter().enumerate() {
             let tail_call = ownership::TailCall { function: id, arity, position };
             for place in self.carried_places(parameter.monotype) {
-                let carried = ownership::Carried::updating(parameter.id, &place);
+                let carried =
+                    ownership::Carried::updating(parameter.id, &place).performed(performed);
                 let Some(nodes) = ownership::owned_loop_snocs(carried, &function.body, tail_call)
                 else {
                     continue;

@@ -26,15 +26,22 @@ pub(super) struct Carried<'a> {
     /// The locals that patterns bind to the carried constructor field.
     aliases: &'a [LocalId],
     updates: bool,
+    /// Whether the step is performed as it is read, as a loop in Effect runs its binds in order,
+    /// rather than built as an action that may run any number of times.
+    performed: bool,
 }
 
 impl<'a> Carried<'a> {
     pub(super) fn new(accumulator: LocalId, place: &'a Place) -> Carried<'a> {
-        Carried { accumulator, place, aliases: &[], updates: false }
+        Carried { accumulator, place, aliases: &[], updates: false, performed: false }
     }
 
     pub(super) fn updating(accumulator: LocalId, place: &'a Place) -> Carried<'a> {
-        Carried { accumulator, place, aliases: &[], updates: true }
+        Carried { accumulator, place, aliases: &[], updates: true, performed: false }
+    }
+
+    pub(super) fn performed(self, performed: bool) -> Carried<'a> {
+        Carried { performed, ..self }
     }
 }
 
@@ -148,6 +155,9 @@ fn loop_results<'e>(
         return Some(());
     }
     match &expression.kind {
+        ExpressionKind::EffectBind { body, .. } if carried.performed => {
+            loop_results(carried, body, tail_call, owned)
+        }
         ExpressionKind::Apply { function, arguments }
             if matches!(function.kind, ExpressionKind::Function(id) if id == tail_call.function)
                 && arguments.len() == tail_call.arity =>
@@ -301,6 +311,10 @@ fn carried_value<'e>(
 fn reads(carried: Carried<'_>, expression: &Expression) -> usize {
     match &expression.kind {
         _ if is_carried(carried, expression) => 1,
+        ExpressionKind::EffectBind { action, body, .. } if carried.performed => {
+            reads(carried, action) + reads(carried, body)
+        }
+        ExpressionKind::EffectPure(value) if carried.performed => reads(carried, value),
         ExpressionKind::Let { bindings, body } => {
             let bound: usize = bindings
                 .iter()
