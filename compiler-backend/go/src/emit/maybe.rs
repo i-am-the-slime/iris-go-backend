@@ -469,10 +469,9 @@ where
                     DataKind::Sentinel => Some(self.sentinel_test(layout, constructor, path)),
                 };
             }
-            Some(
-                MaybeLayout::Char { nothing, .. }
-                | MaybeLayout::Boolean { nothing, .. },
-            ) => identifier_expression(nothing),
+            Some(MaybeLayout::Char { nothing, .. } | MaybeLayout::Boolean { nothing, .. }) => {
+                identifier_expression(nothing)
+            }
             Some(MaybeLayout::Pointer { .. }) => identifier_expression("nil"),
         };
         Some(binary(if is_just { "!=" } else { "==" }, path, absent))

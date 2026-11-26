@@ -63,7 +63,10 @@ pub(super) fn read_headers_once(
 
 /// The helpers declared beside the program's functions, such as data constructors and the
 /// `Just` of a Maybe, that cannot change an array's header.
-pub(super) fn keeping_helpers(helpers: &mut [GoDeclaration], effects: &Effects) -> FxHashSet<String> {
+pub(super) fn keeping_helpers(
+    helpers: &mut [GoDeclaration],
+    effects: &Effects,
+) -> FxHashSet<String> {
     Keeping::of(helpers, effects, &FxHashSet::default()).functions
 }
 

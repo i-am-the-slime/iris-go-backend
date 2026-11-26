@@ -120,7 +120,9 @@ where
             _ => None,
         };
         // Go would reject a constant sum past int's range, where the Int wraps.
-        if let (Some(wrapping), Some(x), Some(y)) = (wrapping, int_constant(&left), int_constant(&right)) {
+        if let (Some(wrapping), Some(x), Some(y)) =
+            (wrapping, int_constant(&left), int_constant(&right))
+        {
             return GoExpression::Integer(wrapping(x, y));
         }
         if let Some(folded) = self.fold_number(operator, &left, &right) {

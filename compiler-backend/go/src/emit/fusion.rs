@@ -386,8 +386,10 @@ where
                     GoExpression::Integer(count) => GoExpression::Integer(count.max(0)),
                     count if is_go_length(&count) => count,
                     count => {
-                        let count =
-                            call(identifier_expression("max"), vec![count, GoExpression::Integer(0)]);
+                        let count = call(
+                            identifier_expression("max"),
+                            vec![count, GoExpression::Integer(0)],
+                        );
                         self.hoist(count, "count", out)
                     }
                 };

@@ -352,13 +352,7 @@ pub fn int64_foreign(module: &str, name: &str) -> Option<Int64Foreign> {
         })
     };
     let typed = |signed: &'static str, unsigned: &'static str, arity| {
-        Some(Int64Foreign::Runtime {
-            signed,
-            unsigned,
-            arity,
-            effectful: false,
-            three_way: false,
-        })
+        Some(Int64Foreign::Runtime { signed, unsigned, arity, effectful: false, three_way: false })
     };
     match name {
         "zero_" | "uzero_" => inline(Operation::Constant(0)),

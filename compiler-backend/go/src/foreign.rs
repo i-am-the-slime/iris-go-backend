@@ -646,13 +646,7 @@ pub fn int64_import(
     use crate::primitives::{Int64Foreign, Signedness};
     let foreign = match crate::primitives::int64_foreign(module_name, name)? {
         Int64Foreign::Inline(operation) => Foreign::Int64 { operation, signedness },
-        Int64Foreign::Runtime {
-            signed,
-            unsigned,
-            arity,
-            effectful,
-            three_way,
-        } => {
+        Int64Foreign::Runtime { signed, unsigned, arity, effectful, three_way } => {
             let name = match signedness {
                 Signedness::Signed => signed,
                 Signedness::Unsigned => unsigned,

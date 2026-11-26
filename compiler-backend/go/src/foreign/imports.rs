@@ -3,8 +3,8 @@ use std::sync::OnceLock;
 use super::{
     Boundary, CONS_LIST_ACCUMULATOR, Comparison, Constructed, Foreign, GoFunction, GoPackage,
     INSTANTIATE, Iteration, MaybeDestructor, Operator, PLAIN, RECORD, RESULT_PARAMETER,
-    RecordOperation, Signature, Spelled, UNIT_VALUES, Utility, found, ignoring,
-    maybe_of_maybes, maybe_search, maybe_witnessed,
+    RecordOperation, Signature, Spelled, UNIT_VALUES, Utility, found, ignoring, maybe_of_maybes,
+    maybe_search, maybe_witnessed,
 };
 
 const fn call(package: GoPackage, name: &'static str, arity: usize, boundary: Boundary) -> Foreign {
@@ -252,12 +252,10 @@ pub const ARRAY_FROM_LIST: Foreign = array("FromList", 1);
 pub const ARRAY_MAP_WITH_INDEX: Foreign =
     uncurried(iteration(GoPackage::Direct, "MapWithIndex", 2, Iteration::MapWithIndex), &[(0, 2)]);
 /// Data.Array.ST.Partial's peek, read without a bounds test.
-pub const MUTABLE_PEEK_UNSAFE: Foreign =
-    perform_in(GoPackage::Array, "PeekUnsafe", 2, PLAIN);
+pub const MUTABLE_PEEK_UNSAFE: Foreign = perform_in(GoPackage::Array, "PeekUnsafe", 2, PLAIN);
 /// Whether an index is within a mutable array: the bounds test of Data.Array.ST's peek, which
 /// the simplifier makes explicit (simplify/choice.rs) and the emitter writes in place.
-pub const MUTABLE_WITHIN: Foreign =
-    perform_in(GoPackage::Array, "Within", 2, PLAIN);
+pub const MUTABLE_WITHIN: Foreign = perform_in(GoPackage::Array, "Within", 2, PLAIN);
 pub const TRAVERSE_BALANCED: Foreign = direct_with(
     "TraverseBalanced",
     7,
@@ -367,11 +365,7 @@ pub(super) const FOREIGN_IMPORTS: &[(&str, &str, Foreign)] = &[
             Boundary { iteration: Some(Iteration::FindLastIndex), ..found(0, 1) },
         ),
     ),
-    (
-        "Data.Array",
-        "_insertAt",
-        array_with("InsertAt", 5, found(0, 1)),
-    ),
+    ("Data.Array", "_insertAt", array_with("InsertAt", 5, found(0, 1))),
     ("Data.Array", "_deleteAt", direct_with("DeleteAt", 4, found(0, 1))),
     ("Data.Array", "_updateAt", Foreign::UpdateAt),
     ("Data.Array.NonEmpty.Internal", "foldr1Impl", uncurried(array("Foldr1", 2), &[(0, 2)])),
@@ -382,11 +376,7 @@ pub(super) const FOREIGN_IMPORTS: &[(&str, &str, Foreign)] = &[
     ("Data.Array.ST", "thawImpl", ARRAY_THAW),
     ("Data.Array.ST", "freezeImpl", perform_in(GoPackage::Array, "Freeze", 1, PLAIN)),
     ("Data.Array.ST", "cloneImpl", perform_in(GoPackage::Array, "Clone", 1, PLAIN)),
-    (
-        "Data.Array.ST",
-        "peekImpl",
-        perform_in(GoPackage::Array, "Peek", 4, found(0, 1)),
-    ),
+    ("Data.Array.ST", "peekImpl", perform_in(GoPackage::Array, "Peek", 4, found(0, 1))),
     ("Data.Array.ST", "pokeImpl", perform_in(GoPackage::Array, "Poke", 3, PLAIN)),
     ("Data.Array.ST", "lengthImpl", perform_in(GoPackage::Array, "Length", 1, PLAIN)),
     ("Data.Array.ST", "popImpl", perform_in(GoPackage::Array, "Pop", 3, found(0, 1))),
@@ -394,19 +384,11 @@ pub(super) const FOREIGN_IMPORTS: &[(&str, &str, Foreign)] = &[
     ("Data.Array.ST", "pushImpl", perform_in(GoPackage::Array, "Push", 2, PLAIN)),
     ("Data.Array.ST", "pushAllImpl", perform_in(GoPackage::Array, "PushAll", 2, PLAIN)),
     ("Data.Array.ST", "unshiftAllImpl", perform_in(GoPackage::Array, "UnshiftAll", 2, PLAIN)),
-    (
-        "Data.Array.ST",
-        "spliceImpl",
-        perform_in(GoPackage::Array, "Splice", 4, PLAIN),
-    ),
+    ("Data.Array.ST", "spliceImpl", perform_in(GoPackage::Array, "Splice", 4, PLAIN)),
     ("Data.Array.ST", "sortByImpl", uncurried(perform("SortByMutable", 3), &[(0, 2)])),
     ("Data.Array.ST", "toAssocArrayImpl", Foreign::AssocArray),
     ("Data.Array.ST.Partial", "peekImpl", MUTABLE_PEEK_UNSAFE),
-    (
-        "Data.Array.ST.Partial",
-        "pokeImpl",
-        perform_in(GoPackage::Array, "PokeUnsafe", 3, PLAIN),
-    ),
+    ("Data.Array.ST.Partial", "pokeImpl", perform_in(GoPackage::Array, "PokeUnsafe", 3, PLAIN)),
     ("Effect.Exception", "showErrorImpl", exception("ShowErrorImpl", 1, PLAIN)),
     ("Effect.Exception", "error", exception("NewError", 1, PLAIN)),
     ("Effect.Exception", "errorWithCause", exception("ErrorWithCause", 2, PLAIN)),
@@ -603,42 +585,22 @@ pub(super) const FOREIGN_IMPORTS: &[(&str, &str, Foreign)] = &[
     ("Data.String.CodeUnits", "take", prim_with("CodeUnitTake", 2, PLAIN)),
     ("Data.String.CodeUnits", "drop", prim_with("CodeUnitDrop", 2, PLAIN)),
     ("Data.String.CodeUnits", "slice", prim_with("CodeUnitSlice", 3, PLAIN)),
-    (
-        "Data.String.CodeUnits",
-        "splitAt",
-        direct_with("SplitAt", 2, RECORD),
-    ),
-    (
-        "Data.String.CodeUnits",
-        "_charAt",
-        prim_with("CodeUnitCharAt", 4, found(0, 1)),
-    ),
+    ("Data.String.CodeUnits", "splitAt", direct_with("SplitAt", 2, RECORD)),
+    ("Data.String.CodeUnits", "_charAt", prim_with("CodeUnitCharAt", 4, found(0, 1))),
     ("Data.String.CodeUnits", "_toChar", prim_with("CodeUnitToChar", 3, found(0, 1))),
     ("Data.String.CodeUnits", "_indexOf", prim_with("CodeUnitIndexOf", 4, found(0, 1))),
     (
         "Data.String.CodeUnits",
         "_indexOfStartingAt",
-        prim_with(
-            "CodeUnitIndexOfStartingAt",
-            5,
-            found(0, 1),
-        ),
+        prim_with("CodeUnitIndexOfStartingAt", 5, found(0, 1)),
     ),
     ("Data.String.CodeUnits", "_lastIndexOf", prim_with("CodeUnitLastIndexOf", 4, found(0, 1))),
     (
         "Data.String.CodeUnits",
         "_lastIndexOfStartingAt",
-        prim_with(
-            "CodeUnitLastIndexOfStartingAt",
-            5,
-            found(0, 1),
-        ),
+        prim_with("CodeUnitLastIndexOfStartingAt", 5, found(0, 1)),
     ),
-    (
-        "Data.String.CodePoints",
-        "_singleton",
-        direct_with("CodePointSingleton", 2, ignoring(&[0])),
-    ),
+    ("Data.String.CodePoints", "_singleton", direct_with("CodePointSingleton", 2, ignoring(&[0]))),
     (
         "Data.String.CodePoints",
         "_fromCodePointArray",
@@ -652,22 +614,14 @@ pub(super) const FOREIGN_IMPORTS: &[(&str, &str, Foreign)] = &[
     (
         "Data.String.CodePoints",
         "_codePointAt",
-        direct_with(
-            "CodePointAt",
-            6,
-            Boundary { ignored: &[0, 3], ..found(1, 2) },
-        ),
+        direct_with("CodePointAt", 6, Boundary { ignored: &[0, 3], ..found(1, 2) }),
     ),
     (
         "Data.String.CodePoints",
         "_countPrefix",
         direct_with("CodePointCountPrefix", 4, ignoring(&[0, 1])),
     ),
-    (
-        "Data.String.CodePoints",
-        "_take",
-        direct_with("CodePointTake", 3, ignoring(&[0])),
-    ),
+    ("Data.String.CodePoints", "_take", direct_with("CodePointTake", 3, ignoring(&[0]))),
     (
         "Data.String.CodePoints",
         "_unsafeCodePointAt0",
@@ -700,24 +654,12 @@ pub(super) const FOREIGN_IMPORTS: &[(&str, &str, Foreign)] = &[
     ("Data.Number", "sqrt", prim("NumberSqrt", 1)),
     ("Data.Number", "tan", prim("NumberTan", 1)),
     ("Data.Number", "trunc", prim("NumberTrunc", 1)),
-    (
-        "Data.Number.Format",
-        "toPrecisionNative",
-        prim_with("NumberToPrecision", 2, PLAIN),
-    ),
+    ("Data.Number.Format", "toPrecisionNative", prim_with("NumberToPrecision", 2, PLAIN)),
     ("Data.Number.Format", "toFixedNative", prim_with("NumberToFixed", 2, PLAIN)),
-    (
-        "Data.Number.Format",
-        "toExponentialNative",
-        prim_with("NumberToExponential", 2, PLAIN),
-    ),
+    ("Data.Number.Format", "toExponentialNative", prim_with("NumberToExponential", 2, PLAIN)),
     ("Data.Number.Format", "toString", prim("NumberToString", 1)),
     ("Data.Int", "fromNumberImpl", Foreign::IntFromNumber),
-    (
-        "Data.Int",
-        "fromStringAsImpl",
-        prim_with("IntFromStringAs", 4, found(0, 1)),
-    ),
+    ("Data.Int", "fromStringAsImpl", prim_with("IntFromStringAs", 4, found(0, 1))),
     ("Data.Int", "toStringAs", prim_with("IntToStringAs", 2, PLAIN)),
     ("Data.Int.Bits", "and", Foreign::Operator(Operator::IntAnd)),
     ("Data.Int.Bits", "or", Foreign::Operator(Operator::IntOr)),
@@ -744,11 +686,7 @@ pub(super) const FOREIGN_IMPORTS: &[(&str, &str, Foreign)] = &[
     ("Data.Int", "rem", prim_with("IntRem", 2, PLAIN)),
     ("Data.Int", "pow", prim_with("IntPow", 2, PLAIN)),
     ("JS.BigInt", "fromStringImpl", js_bigint_with("FromString", 3, found(0, 1))),
-    (
-        "JS.BigInt",
-        "fromStringAsImpl",
-        js_bigint_with("FromStringAs", 4, found(0, 1)),
-    ),
+    ("JS.BigInt", "fromStringAsImpl", js_bigint_with("FromStringAs", 4, found(0, 1))),
     ("JS.BigInt", "fromNumberImpl", js_bigint_with("FromNumber", 3, found(0, 1))),
     ("JS.BigInt", "fromInt", js_bigint_with("FromInt", 1, PLAIN)),
     ("JS.BigInt", "fromTypeLevelInt", js_bigint("FromTypeLevelInt", 1)),
@@ -775,16 +713,7 @@ pub(super) const FOREIGN_IMPORTS: &[(&str, &str, Foreign)] = &[
     ("JS.BigInt", "asIntN", js_bigint_with("AsIntN", 2, PLAIN)),
     ("JS.BigInt", "asUintN", js_bigint_with("AsUintN", 2, PLAIN)),
     ("Data.BigInt", "fromTypeLevelInt", call(GoPackage::BigInts, "FromTypeLevelInt", 1, PLAIN)),
-    (
-        "Data.BigInt",
-        "fromBaseImpl",
-        call(
-            GoPackage::BigInts,
-            "FromBaseImpl",
-            4,
-            found(0, 1),
-        ),
-    ),
+    ("Data.BigInt", "fromBaseImpl", call(GoPackage::BigInts, "FromBaseImpl", 4, found(0, 1))),
     ("Data.BigInt", "fromInt", call(GoPackage::BigInts, "FromInt", 1, PLAIN)),
     ("Data.BigInt", "fromNumberImpl", call(GoPackage::BigInts, "FromNumberImpl", 3, found(0, 1))),
     ("Data.BigInt", "toNumber", call(GoPackage::BigInts, "ToNumber", 1, PLAIN)),
@@ -801,11 +730,7 @@ pub(super) const FOREIGN_IMPORTS: &[(&str, &str, Foreign)] = &[
     ("Data.BigInt", "shr", call(GoPackage::BigInts, "Shr", 2, PLAIN)),
     ("Data.BigInt", "biEquals", call(GoPackage::BigInts, "BiEquals", 2, PLAIN)),
     ("Data.BigInt", "biCompare", call(GoPackage::BigInts, "BiCompare", 2, PLAIN)),
-    (
-        "Data.BigInt",
-        "digitsInBase",
-        call(GoPackage::BigInts, "DigitsInBase", 2, RECORD),
-    ),
+    ("Data.BigInt", "digitsInBase", call(GoPackage::BigInts, "DigitsInBase", 2, RECORD)),
     ("Data.BigInt", "toBase", call(GoPackage::BigInts, "ToBase", 2, PLAIN)),
     ("Data.BigInt", "biAdd", call(GoPackage::BigInts, "BiAdd", 2, PLAIN)),
     ("Data.BigInt", "biMul", call(GoPackage::BigInts, "BiMul", 2, PLAIN)),
@@ -817,21 +742,10 @@ pub(super) const FOREIGN_IMPORTS: &[(&str, &str, Foreign)] = &[
     (
         "Data.Date",
         "canonicalDateImpl",
-        uncurried(
-            call(GoPackage::DateTime, "CanonicalDateImpl", 4, PLAIN),
-            &[(0, 3)],
-        ),
+        uncurried(call(GoPackage::DateTime, "CanonicalDateImpl", 4, PLAIN), &[(0, 3)]),
     ),
-    (
-        "Data.Date",
-        "calcWeekday",
-        call(GoPackage::DateTime, "CalcWeekday", 3, PLAIN),
-    ),
-    (
-        "Data.Date",
-        "calcDiff",
-        call(GoPackage::DateTime, "CalcDiff", 6, PLAIN),
-    ),
+    ("Data.Date", "calcWeekday", call(GoPackage::DateTime, "CalcWeekday", 3, PLAIN)),
+    ("Data.Date", "calcDiff", call(GoPackage::DateTime, "CalcDiff", 6, PLAIN)),
     (
         "Data.DateTime",
         "calcDiff",

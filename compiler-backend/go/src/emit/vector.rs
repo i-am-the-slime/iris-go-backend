@@ -990,18 +990,17 @@ impl<'a, 'e, E: Lookup<'e>> Analysis<'a, 'e, E> {
         scope: &FxHashMap<LocalId, Term>,
         depth: usize,
     ) -> Option<Term> {
-        let arithmetic =
-            match (operator, self.element) {
-                (Operator::NumberAdd, Element::Number) => Arithmetic::Add,
-                (Operator::NumberSubtract, Element::Number) => Arithmetic::Subtract,
-                (Operator::NumberMultiply, Element::Number) => Arithmetic::Multiply,
-                (Operator::NumberDivide, Element::Number) => Arithmetic::Divide,
-                (Operator::NumberNegate, Element::Number) => {
-                    let operand = self.term(&arguments[0], scope, depth)?;
-                    return Some(Term::Negate(Box::new(operand)));
-                }
-                _ => return None,
-            };
+        let arithmetic = match (operator, self.element) {
+            (Operator::NumberAdd, Element::Number) => Arithmetic::Add,
+            (Operator::NumberSubtract, Element::Number) => Arithmetic::Subtract,
+            (Operator::NumberMultiply, Element::Number) => Arithmetic::Multiply,
+            (Operator::NumberDivide, Element::Number) => Arithmetic::Divide,
+            (Operator::NumberNegate, Element::Number) => {
+                let operand = self.term(&arguments[0], scope, depth)?;
+                return Some(Term::Negate(Box::new(operand)));
+            }
+            _ => return None,
+        };
         let left = self.term(&arguments[0], scope, depth)?;
         let right = self.term(&arguments[1], scope, depth)?;
         Some(Term::Binary(arithmetic, Box::new(left), Box::new(right)))
@@ -1415,8 +1414,7 @@ impl Kernel {
                     });
                 }
                 out.push_str("\t}\n");
-                let pair =
-                    |left: &str, right: &str| self.combine_vectors(*reduction, left, right);
+                let pair = |left: &str, right: &str| self.combine_vectors(*reduction, left, right);
                 let _ = writeln!(
                     out,
                     "\tacc0 = {}",
@@ -1516,12 +1514,7 @@ impl Kernel {
         let _ = writeln!(out, "\t\t{}.StorePart(out[i:])", spelling.vector(term));
     }
 
-    fn combine_vectors(
-        &self,
-        reduction: Reduction,
-        left: &str,
-        right: &str,
-    ) -> String {
+    fn combine_vectors(&self, reduction: Reduction, left: &str, right: &str) -> String {
         match reduction {
             Reduction::Add => format!("{left}.Add({right})"),
             Reduction::Multiply => format!("{left}.Mul({right})"),

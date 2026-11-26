@@ -1071,9 +1071,7 @@ impl<'p, 'k, 'e> Analysis<'p, 'k, 'e> {
                             let symbol = symbols[position];
                             analysis.bindings[&symbol].tracked.then_some(symbol)
                         }
-                        Place::Length(position) => {
-                            analysis.bindings[&symbols[position]].length
-                        }
+                        Place::Length(position) => analysis.bindings[&symbols[position]].length,
                     };
                     for ((a, b), c) in &entry.0 {
                         let (Some(left), Some(right)) = (place(*a, self), place(*b, self)) else {
@@ -1620,11 +1618,11 @@ impl<'p, 'k, 'e> Analysis<'p, 'k, 'e> {
             return;
         }
         let length = binding.length;
-        if binding.kind.is_some() {
-            if let Some(value) = computed.value {
-                state.assume_at_most(Value::of(symbol), value, 0);
-                state.assume_at_most(value, Value::of(symbol), 0);
-            }
+        if binding.kind.is_some()
+            && let Some(value) = computed.value
+        {
+            state.assume_at_most(Value::of(symbol), value, 0);
+            state.assume_at_most(value, Value::of(symbol), 0);
         }
         if let (Some(length), Some(value)) = (length, computed.length) {
             state.assume_at_most(Value::of(length), value, 0);
@@ -2008,10 +2006,7 @@ impl<'p, 'k, 'e> Analysis<'p, 'k, 'e> {
     }
 
     fn computed(&mut self, value: &GoExpression, state: &mut State) -> Computed {
-        Computed {
-            value: self.value(value, state),
-            length: self.length_of(value, state),
-        }
+        Computed { value: self.value(value, state), length: self.length_of(value, state) }
     }
 
     /// The computed value, held by temporaries so that it survives an assignment of the
@@ -2020,7 +2015,6 @@ impl<'p, 'k, 'e> Analysis<'p, 'k, 'e> {
         Computed {
             value: computed.value.map(|value| self.held(value, state)),
             length: computed.length.map(|length| self.held(length, state)),
-            ..computed
         }
     }
 

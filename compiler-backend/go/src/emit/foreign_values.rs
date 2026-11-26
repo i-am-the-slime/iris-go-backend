@@ -301,7 +301,8 @@ where
             return self.construct(&data, nothing, vec![]);
         }
         let number = self.hoist(number, "number", out);
-        let integer = GoExpression::Conversion { type_: GoType::Int, value: Box::new(number.clone()) };
+        let integer =
+            GoExpression::Conversion { type_: GoType::Int, value: Box::new(number.clone()) };
         let found = self.construct(&data, just, vec![integer])?;
         let missing = self.construct(&data, nothing, vec![])?;
         self.imports.insert("math".into());
@@ -315,7 +316,11 @@ where
                 "&&",
                 binary(">=", number.clone(), math("MinInt")),
                 // `-math.MinInt`, 2^63, is a float64 exactly, where math.MaxInt rounds up to it.
-                binary("<", number, GoExpression::Unary { operator: "-", operand: Box::new(math("MinInt")) }),
+                binary(
+                    "<",
+                    number,
+                    GoExpression::Unary { operator: "-", operand: Box::new(math("MinInt")) },
+                ),
             ),
         );
         let name = self.temporary("integer");
@@ -345,8 +350,7 @@ where
             return self.thunk(&expression, out);
         }
         if let Foreign::Range = foreign {
-            let range =
-                self.go_function(GoFunction { package: GoPackage::Array, name: "Range" });
+            let range = self.go_function(GoFunction { package: GoPackage::Array, name: "Range" });
             let values = self.values(arguments, out)?;
             return Ok(call(range, values));
         }
