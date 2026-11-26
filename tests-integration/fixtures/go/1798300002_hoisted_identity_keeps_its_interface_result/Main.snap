@@ -58,7 +58,7 @@ type TreeInt struct {
 	Leaf0 string
 	Leaf1 func(int) int
 	Node0 string
-	Node1 []TreeInt
+	Node1 []*TreeInt
 	Tag   uint8
 }
 
@@ -69,10 +69,10 @@ const (
 
 type Tuple struct {
 	First  struct{}
-	Second []TreeInt
+	Second []*TreeInt
 }
 
-func convert(value []TreeInt) any {
+func convert(value []*TreeInt) any {
 	return value
 }
 
@@ -80,8 +80,8 @@ func convert2(value Tuple) *tuple.Tuple {
 	return &tuple.Tuple{First: value.First, Second: convert(value.Second), Origin: value}
 }
 
-func convert3(value any) []TreeInt {
-	return value.([]TreeInt)
+func convert3(value any) []*TreeInt {
+	return value.([]*TreeInt)
 }
 
 func convert4(value *tuple.Tuple) Tuple {
@@ -95,7 +95,7 @@ type TreeString struct {
 	Leaf0 string
 	Leaf1 func(int) string
 	Node0 string
-	Node1 []TreeString
+	Node1 []*TreeString
 	Tag   uint8
 }
 
@@ -104,25 +104,25 @@ const (
 	TreeStringNode
 )
 
-func LeafTreeInt(leaf0 string, leaf1 func(int) int) TreeInt {
-	return TreeInt{Tag: TreeIntLeaf, Leaf0: leaf0, Leaf1: leaf1}
+func LeafTreeInt(leaf0 string, leaf1 func(int) int) *TreeInt {
+	return &TreeInt{Tag: TreeIntLeaf, Leaf0: leaf0, Leaf1: leaf1}
 }
 
-func NodeTreeInt(node0 string, node1 []TreeInt) TreeInt {
-	return TreeInt{Tag: TreeIntNode, Node0: node0, Node1: node1}
+func NodeTreeInt(node0 string, node1 []*TreeInt) *TreeInt {
+	return &TreeInt{Tag: TreeIntNode, Node0: node0, Node1: node1}
 }
 
-func LeafTreeString(leaf0 string, leaf1 func(int) string) TreeString {
-	return TreeString{Tag: TreeStringLeaf, Leaf0: leaf0, Leaf1: leaf1}
+func LeafTreeString(leaf0 string, leaf1 func(int) string) *TreeString {
+	return &TreeString{Tag: TreeStringLeaf, Leaf0: leaf0, Leaf1: leaf1}
 }
 
-func NodeTreeString(node0 string, node1 []TreeString) TreeString {
-	return TreeString{Tag: TreeStringNode, Node0: node0, Node1: node1}
+func NodeTreeString(node0 string, node1 []*TreeString) *TreeString {
+	return &TreeString{Tag: TreeStringNode, Node0: node0, Node1: node1}
 }
 
 func main() {
 	scrutinee := convert4(category.Identity(convert2(collected)).(*tuple.Tuple))
-	mapped := make([]TreeString, len(scrutinee.Second))
+	mapped := make([]*TreeString, len(scrutinee.Second))
 	for index, element := range scrutinee.Second {
 		mapped[index] = mapShow(element)
 	}
@@ -133,18 +133,18 @@ func main() {
 	journal.Log(show.ArrayString(mapped2))
 }
 
-var collected Tuple = Tuple{First: struct{}{}, Second: []TreeInt{NodeTreeInt("around", []TreeInt{LeafTreeInt("fixture", func(value int) int {
+var collected Tuple = Tuple{First: struct{}{}, Second: []*TreeInt{NodeTreeInt("around", []*TreeInt{LeafTreeInt("fixture", func(value int) int {
 	return value + 1
 })})}}
 
-func mapShow(tree TreeInt) TreeString {
+func mapShow(tree *TreeInt) *TreeString {
 	switch tree.Tag {
 	case TreeIntLeaf:
 		return LeafTreeString(tree.Leaf0, func(x int) string {
 			return strconv.Itoa(tree.Leaf1(x))
 		})
 	default: // TreeIntNode
-		mapped := make([]TreeString, len(tree.Node1))
+		mapped := make([]*TreeString, len(tree.Node1))
 		for index, element := range tree.Node1 {
 			mapped[index] = mapShow(element)
 		}
@@ -152,7 +152,7 @@ func mapShow(tree TreeInt) TreeString {
 	}
 }
 
-func mainRun(tree TreeString) string {
+func mainRun(tree *TreeString) string {
 	switch tree.Tag {
 	case TreeStringLeaf:
 		return tree.Leaf0 + " " + tree.Leaf1(41)

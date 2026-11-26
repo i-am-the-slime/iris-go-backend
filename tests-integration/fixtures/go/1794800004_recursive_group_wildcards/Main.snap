@@ -20,7 +20,7 @@ import (
 
 type Tree struct {
 	Leaf tuple.Tuple
-	Node []Tree
+	Node []*Tree
 	Tag  uint8
 }
 
@@ -29,21 +29,21 @@ const (
 	TreeNode
 )
 
-func Leaf(leaf tuple.Tuple) Tree {
-	return Tree{Tag: TreeLeaf, Leaf: leaf}
+func Leaf(leaf tuple.Tuple) *Tree {
+	return &Tree{Tag: TreeLeaf, Leaf: leaf}
 }
 
-func Node(node []Tree) Tree {
-	return Tree{Tag: TreeNode, Node: node}
+func Node(node []*Tree) *Tree {
+	return &Tree{Tag: TreeNode, Node: node}
 }
 
 var main_ = initializeMain_()
 
 func initializeMain_() int {
-	return count([]Tree{Leaf(tuple.Tuple{First: "a", Second: 1}), Node([]Tree{Leaf(tuple.Tuple{First: "b", Second: 2})})})
+	return count([]*Tree{Leaf(tuple.Tuple{First: "a", Second: 1}), Node([]*Tree{Leaf(tuple.Tuple{First: "b", Second: 2})})})
 }
 
-func count(trees []Tree) int {
+func count(trees []*Tree) int {
 	accumulator := 0
 	for _, element := range trees {
 		value := size(element)
@@ -52,7 +52,7 @@ func count(trees []Tree) int {
 	return accumulator
 }
 
-func size(tree Tree) int {
+func size(tree *Tree) int {
 	if tree.Tag == TreeLeaf {
 		return int(tree.Leaf.Second)
 	}

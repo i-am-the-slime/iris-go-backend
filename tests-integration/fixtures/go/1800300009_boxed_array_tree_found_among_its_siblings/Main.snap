@@ -1,0 +1,184 @@
+---
+source: tests-integration/src/fixtures.rs
+---
+// Data/Maybe/maybe.go
+package maybe
+
+const TagNothing = 0
+
+const TagJust = 1
+
+type String struct {
+	Just string
+	Tag  uint8
+}
+
+var NoString = String{Tag: TagNothing}
+
+func JustString(just string) String {
+	return String{Tag: TagJust, Just: just}
+}
+
+// main.go
+package main
+
+import (
+	"fixture/Data/Maybe"
+	arraypkg "github.com/i-am-the-slime/iris-go/array"
+	"github.com/i-am-the-slime/iris-go/console"
+	"strings"
+)
+
+type Node struct {
+	Children []*TreeNode
+	Label    maybe.String
+	Name     string
+	Depth    int
+}
+
+type TreeNode struct {
+	TreeNode Node
+}
+
+var main_ = initializeMain_()
+
+func initializeMain_() []string {
+	array := []string{"a.b", "a.c", "d", "a.b.e"}
+	accumulator := &TreeNode{TreeNode: Node{Name: "root", Children: []*TreeNode{}, Label: maybe.NoString, Depth: 0}}
+	for _, element := range array {
+		accumulator = insertedReusing(accumulator, element)
+	}
+	return names(accumulator)
+}
+
+func names(treeNode *TreeNode) []string {
+	node := treeNode.TreeNode
+	built := []string{node.Name}
+	for _, element := range node.Children {
+		built = append(built, names(element)...)
+	}
+	return built
+}
+
+func insertedInsertAt(path string, parts []string, treeNode *TreeNode) *TreeNode {
+	node := treeNode.TreeNode
+	if len(parts) == 0 {
+		return &TreeNode{TreeNode: node}
+	}
+	fieldHead := parts[0]
+	fieldTail := arraypkg.Tail(parts)
+	var found *TreeNode
+	for _, treeNode2 := range node.Children {
+		if treeNode2.TreeNode.Name == fieldHead {
+			found = treeNode2
+			break
+		}
+	}
+	var child *TreeNode
+	if found != nil {
+		child = found
+	} else {
+		child = &TreeNode{TreeNode: Node{Name: fieldHead, Children: []*TreeNode{}, Label: maybe.NoString, Depth: node.Depth + 1}}
+	}
+	var child2 *TreeNode
+	if len(fieldTail) == 0 {
+		updated := child.TreeNode
+		updated.Label = maybe.JustString(path)
+		child2 = &TreeNode{TreeNode: updated}
+	} else {
+		child2 = insertedInsertAt(path, fieldTail, child)
+	}
+	updated2 := node
+	children := node.Children
+	var result []*TreeNode
+	found2 := false
+	for treeNodeIndex := range children {
+		if children[treeNodeIndex].TreeNode.Name == fieldHead {
+			found2 = true
+			break
+		}
+	}
+	if found2 {
+		mapped := make([]*TreeNode, len(children))
+		for index, other := range children {
+			var result2 *TreeNode
+			if other.TreeNode.Name == fieldHead {
+				result2 = child2
+			} else {
+				result2 = other
+			}
+			mapped[index] = result2
+		}
+		result = mapped
+	} else {
+		result = arraypkg.Snoc(children, child2)
+	}
+	updated2.Children = result
+	return &TreeNode{TreeNode: updated2}
+}
+
+func insertedReusing(root *TreeNode, path string) *TreeNode {
+	return insertedInsertAtReusing(path, strings.Split(path, "."), root)
+}
+
+func insertedInsertAtReusing(path string, parts []string, treeNode *TreeNode) *TreeNode {
+	node := treeNode.TreeNode
+	if len(parts) == 0 {
+		return treeNode
+	}
+	fieldHead := parts[0]
+	fieldTail := arraypkg.Tail(parts)
+	var found *TreeNode
+	for _, treeNode2 := range node.Children {
+		if treeNode2.TreeNode.Name == fieldHead {
+			found = treeNode2
+			break
+		}
+	}
+	var child *TreeNode
+	if found != nil {
+		child = found
+	} else {
+		treeNode.TreeNode = Node{Name: fieldHead, Children: []*TreeNode{}, Label: maybe.NoString, Depth: node.Depth + 1}
+		child = treeNode
+	}
+	var child2 *TreeNode
+	if len(fieldTail) == 0 {
+		updated := child.TreeNode
+		updated.Label = maybe.JustString(path)
+		child2 = &TreeNode{TreeNode: updated}
+	} else {
+		child2 = insertedInsertAt(path, fieldTail, child)
+	}
+	updated2 := node
+	children := node.Children
+	var result []*TreeNode
+	found2 := false
+	for treeNodeIndex := range children {
+		if children[treeNodeIndex].TreeNode.Name == fieldHead {
+			found2 = true
+			break
+		}
+	}
+	if found2 {
+		mapped := make([]*TreeNode, len(children))
+		for index, other := range children {
+			var result2 *TreeNode
+			if other.TreeNode.Name == fieldHead {
+				result2 = child2
+			} else {
+				result2 = other
+			}
+			mapped[index] = result2
+		}
+		result = mapped
+	} else {
+		result = arraypkg.Snoc(children, child2)
+	}
+	updated2.Children = result
+	return &TreeNode{TreeNode: updated2}
+}
+
+func main() {
+	console.Print("[" + strings.Join(main_, " ") + "]")
+}

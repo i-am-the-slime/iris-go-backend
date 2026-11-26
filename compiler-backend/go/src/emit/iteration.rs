@@ -743,12 +743,26 @@ where
         let (_, just) = self.constructor_named(monotype, "Just")?;
         let found = self.temporary("found");
         let absent = self.construct(&data, nothing, vec![])?;
-        out.push(GoStatement::Define { names: vec![found.clone()], values: vec![absent] });
+        out.push(self.absent_until_found(found.clone(), absent, monotype)?);
         let saved = self.tail_loop.take();
         let outcome = self.find_element_loop(&callback, pipeline, (&data, just), &found);
         self.tail_loop = saved;
         out.push(outcome?);
         Ok(identifier_expression(&found))
+    }
+
+    /// `found := Nothing`, or `var found *T` where Nothing is a nil pointer, which Go cannot
+    /// infer a type from.
+    fn absent_until_found(
+        &mut self,
+        found: String,
+        absent: GoExpression,
+        monotype: MonotypeId,
+    ) -> GoResult<GoStatement> {
+        if !super::build::is_nil(&absent) {
+            return Ok(GoStatement::Define { names: vec![found], values: vec![absent] });
+        }
+        Ok(GoStatement::Variable { name: found, type_: self.go_type(monotype)?, value: None })
     }
 
     fn find_element_loop(

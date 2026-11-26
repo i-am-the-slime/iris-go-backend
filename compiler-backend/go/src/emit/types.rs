@@ -2,8 +2,8 @@
 
 use super::packages::Spelling;
 use super::{
-    ConstructorLayout, Crossing, DataKind, DataLayout, Emitter, INLINE_DATA_LIMIT,
-    TRANSIENT_DATA_LIMIT, layout, names, reference_type,
+    ARRAY_TREE_DATA_LIMIT, ConstructorLayout, Crossing, DataKind, DataLayout, Emitter,
+    INLINE_DATA_LIMIT, TRANSIENT_DATA_LIMIT, layout, names, reference_type,
 };
 use crate::erasure::Erasure;
 use crate::error::GoResult;
@@ -675,6 +675,16 @@ where
     }
 
     pub(super) fn contains_itself(&mut self, data: &DataType) -> GoResult<bool> {
+        self.reaches_itself(data, false)
+    }
+
+    /// Whether the data type holds itself through an array: a tree whose node keeps its children
+    /// in an `Array`, which Go holds by value unless the node is boxed.
+    pub(super) fn contains_itself_through_arrays(&mut self, data: &DataType) -> GoResult<bool> {
+        self.reaches_itself(data, true)
+    }
+
+    fn reaches_itself(&mut self, data: &DataType, through_arrays: bool) -> GoResult<bool> {
         let mut pending: Vec<MonotypeId> = vec![];
         let mut visited: FxHashSet<DataType> = FxHashSet::default();
         visited.insert(data.clone());
@@ -691,6 +701,9 @@ where
                     pending.extend(fields.iter().map(|field| field.monotype))
                 }
                 Monotype::Recursive(_) => return Ok(true),
+                Monotype::Array(element) | Monotype::MutableArray(element) if through_arrays => {
+                    pending.push(element)
+                }
                 _ => {}
             }
         }
@@ -754,10 +767,12 @@ where
 
     pub(super) fn is_boxed(&mut self, data: &DataType) -> GoResult<bool> {
         let Some(shape) = self.inline_shape(data)? else { return Ok(true) };
-        let limit = if self.copied_by_containers.contains(data) {
-            INLINE_DATA_LIMIT
-        } else {
+        let limit = if !self.copied_by_containers.contains(data) {
             TRANSIENT_DATA_LIMIT
+        } else if self.contains_itself_through_arrays(data)? {
+            ARRAY_TREE_DATA_LIMIT
+        } else {
+            INLINE_DATA_LIMIT
         };
         Ok(shape.size() > limit)
     }
