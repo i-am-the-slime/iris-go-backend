@@ -194,7 +194,10 @@ impl Simplifier<'_> {
             foreign
                 if foreign.calls(crate::foreign::INT_DIVIDE)
                     || foreign.calls(crate::foreign::INT_MODULO)
-                    || foreign.calls(crate::foreign::SHOW_NUMBER) =>
+                    || foreign.calls(crate::foreign::SHOW_NUMBER)
+                    || foreign.calls(crate::foreign::STRING_TO_UPPER)
+                    || foreign.calls(crate::foreign::STRING_TO_LOWER)
+                    || foreign.calls(crate::foreign::STRING_TRIM) =>
             {
                 self.operator(foreign, arguments, monotype)
             }

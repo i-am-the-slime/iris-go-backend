@@ -21,8 +21,8 @@ pub use imports::{
     ARRAY_THAW, ARRAY_THAW_OWNED, ARRAY_UNCONS, ARRAY_UNZIP, EFFECT_FOLD, FOREIGN_RECORD,
     FROM_CHAR_ARRAY, INT_DIVIDE, INT_MODULO, MUTABLE_PEEK_UNSAFE, MUTABLE_WITHIN, OBJECT_DELETE,
     OBJECT_FROM_ENTRIES, OBJECT_INDEX, OBJECT_INSERT, OBJECT_KEYS, OBJECT_LOOKUP, OBJECT_SIZE,
-    SEQUENCE_ARRAY, SHOW_NUMBER, TO_CHAR_ARRAY, TRAVERSE_BALANCED, WELL_FORMED_STRING, array_fold,
-    array_fold_right, effect_fold,
+    SEQUENCE_ARRAY, SHOW_NUMBER, STRING_TO_LOWER, STRING_TO_UPPER, STRING_TRIM, TO_CHAR_ARRAY,
+    TRAVERSE_BALANCED, WELL_FORMED_STRING, array_fold, array_fold_right, effect_fold,
 };
 pub use opacity::{ForeignShape, ForeignSignature, Opacity, OpaqueDeclaration, foreign_opacity};
 pub use packages::{ForeignPackages, ForeignSource, LineCoverage, LineDirectives};

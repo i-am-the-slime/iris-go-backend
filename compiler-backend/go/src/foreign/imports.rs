@@ -233,6 +233,12 @@ pub const INT_MODULO: Foreign = prim_with("IntMod", 2, PLAIN);
 
 pub const SHOW_NUMBER: Foreign = prim("ShowNumber", 1);
 
+pub const STRING_TO_UPPER: Foreign = prim("StringToUpper", 1);
+
+pub const STRING_TO_LOWER: Foreign = prim("StringToLower", 1);
+
+pub const STRING_TRIM: Foreign = prim("StringTrim", 1);
+
 pub const ARRAY_APPEND: Foreign = array("Append", 2);
 
 pub const ARRAY_THAW: Foreign = perform_in(GoPackage::Array, "Thaw", 1, PLAIN);
@@ -572,9 +578,9 @@ pub(super) const FOREIGN_IMPORTS: &[(&str, &str, Foreign)] = &[
     ("Control.Bind", "arrayBind", iteration(GoPackage::Array, "Bind", 2, Iteration::Bind)),
     ("Data.String.Common", "joinWith", prim("StringJoinWith", 2)),
     ("Data.String.Common", "split", prim("StringSplit", 2)),
-    ("Data.String.Common", "toUpper", prim("StringToUpper", 1)),
-    ("Data.String.Common", "toLower", prim("StringToLower", 1)),
-    ("Data.String.Common", "trim", prim("StringTrim", 1)),
+    ("Data.String.Common", "toUpper", STRING_TO_UPPER),
+    ("Data.String.Common", "toLower", STRING_TO_LOWER),
+    ("Data.String.Common", "trim", STRING_TRIM),
     ("Data.String.Common", "replace", prim("StringReplace", 3)),
     ("Data.String.Common", "replaceAll", prim("StringReplaceAll", 3)),
     ("Data.String.CodeUnits", "singleton", prim("CharSingleton", 1)),

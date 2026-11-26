@@ -15,7 +15,42 @@ pub(super) fn substitute_aliases(declarations: &mut [GoDeclaration]) {
             }
             drop_self_assignments(block);
             assign_directly(block);
+            name_values_after_their_aliases(block);
         });
+    }
+}
+
+/// `alias := value` for `original := value` followed by `alias := original`, where nothing else
+/// mentions `original` and nothing writes `alias`: an erased newtype's wrapper leaves such an
+/// alias behind, and the value reads better under the name the PureScript gave it.
+fn name_values_after_their_aliases(block: &mut Vec<GoStatement>) {
+    let mut position = 0;
+    while position < block.len() {
+        let renamed = defined_alias(&block[position]).and_then(|(alias, original)| {
+            let definition = (0..position).rev().find(|&earlier| {
+                matches!(&block[earlier], GoStatement::Define { names, .. }
+                    if names.len() == 1 && names[0] == original)
+            })?;
+            let (before, after) = block.split_at_mut(position);
+            let between = &mut before[definition + 1..];
+            let quiet = between
+                .iter_mut()
+                .all(|statement| !mentions(statement, &original) && !mentions(statement, &alias))
+                && after[1..]
+                    .iter_mut()
+                    .all(|statement| !mentions(statement, &original) && !writes(statement, &alias));
+            quiet.then_some((definition, alias))
+        });
+        match renamed {
+            Some((definition, alias)) => {
+                let GoStatement::Define { names, .. } = &mut block[definition] else {
+                    unreachable!()
+                };
+                names[0] = alias;
+                block.remove(position);
+            }
+            None => position += 1,
+        }
     }
 }
 

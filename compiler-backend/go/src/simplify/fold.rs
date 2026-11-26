@@ -466,6 +466,9 @@ fn evaluate(foreign: Foreign, arguments: &[Expression]) -> Option<Literal> {
         (foreign, [Value::Number(x)]) if foreign.calls(foreign::SHOW_NUMBER) => {
             Value::Owned(show_number(*x))
         }
+        (foreign, [Value::String(text)]) if ascii_text(foreign, text).is_some() => {
+            Value::Owned(ascii_text(foreign, text)?)
+        }
         (Foreign::Operator(operator), [operand]) => unary(operator, operand)?,
         (Foreign::Operator(Operator::Compare(comparison)), [left, right]) => {
             Value::Boolean(compare(comparison, left, right)?)
@@ -474,6 +477,24 @@ fn evaluate(foreign: Foreign, arguments: &[Expression]) -> Option<Literal> {
         _ => return None,
     };
     Some(result.literal())
+}
+
+/// `toUpper`, `toLower` or `trim` of a literal, for ASCII text only, whose case and whitespace
+/// JavaScript and Go agree on.
+fn ascii_text(foreign: Foreign, text: &str) -> Option<String> {
+    if !text.is_ascii() {
+        return None;
+    }
+    if foreign.calls(foreign::STRING_TO_UPPER) {
+        Some(text.to_ascii_uppercase())
+    } else if foreign.calls(foreign::STRING_TO_LOWER) {
+        Some(text.to_ascii_lowercase())
+    } else if foreign.calls(foreign::STRING_TRIM) {
+        let whitespace = |character: char| character.is_ascii_whitespace() || character == '\x0b';
+        Some(text.trim_matches(whitespace).to_string())
+    } else {
+        None
+    }
 }
 
 /// A literal as the value JavaScript computes with.
