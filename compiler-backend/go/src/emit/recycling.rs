@@ -30,11 +30,10 @@
 
 use rustc_hash::FxHashSet;
 
+use super::uniqueness::{self, TailLoop, next_iterations};
 use super::{Emitter, call, identifier_expression, uses_local};
 use crate::foreign::{Boundary, Foreign, Iteration};
-use crate::monomorphic::{
-    Expression, ExpressionKind, Function, FunctionId, Guard, Guarded, LocalId,
-};
+use crate::monomorphic::{Expression, ExpressionKind, Function, FunctionId};
 use crate::monotype::{Monotype, MonotypeId};
 use crate::syntax::{GoExpression, GoStatement, GoType};
 
@@ -45,25 +44,22 @@ pub(super) struct Recycled {
     pub spare: String,
 }
 
-struct Loop {
-    function: FunctionId,
-    arity: usize,
-    position: usize,
-    parameter: LocalId,
-}
-
 impl<'q, Q> Emitter<'_, '_, 'q, Q>
 where
     Q: checking::ExternalQueries,
 {
     /// The maps that every jump of the loop of `function` passes as its parameter at `position`,
-    /// when they may write into the loop's recycled buffers.
+    /// when they may write into the loop's recycled buffers: a value that reaches past the
+    /// iteration may be computed from the parameter only when it holds no references.
     pub(super) fn recycled_maps(
         &mut self,
         id: FunctionId,
         function: &Function,
         position: usize,
     ) -> Option<Vec<*const Expression>> {
+        if !uniqueness::enabled() {
+            return None;
+        }
         let parameter = &function.parameters[position];
         let Monotype::Array(element) = *self.monotypes.get(parameter.monotype) else {
             return None;
@@ -71,89 +67,27 @@ where
         if self.holds_references(element, &mut FxHashSet::default()) {
             return None;
         }
-        let shape = Loop {
+        let tail_loop = TailLoop {
             function: id,
             arity: function.parameters.len(),
             position,
             parameter: parameter.id,
         };
-        let mut maps = vec![];
-        self.recycling_results(&shape, &function.body, parameter.monotype, &mut maps)?;
+        let next = next_iterations(tail_loop, &function.body, &mut |value| {
+            uses_local(value, tail_loop.parameter)
+                && self.holds_references(value.monotype, &mut FxHashSet::default())
+        })?;
+        let maps: Vec<*const Expression> = next
+            .into_iter()
+            .filter(|next| is_map(next) && next.monotype == parameter.monotype)
+            .map(|map| {
+                let ExpressionKind::Foreign { arguments, .. } = &map.kind else {
+                    unreachable!("invariant violated: a map is a foreign call")
+                };
+                std::ptr::from_ref(&arguments[0])
+            })
+            .collect();
         (!maps.is_empty()).then_some(maps)
-    }
-
-    /// Checks the expressions whose value is the loop's result or its next iteration.
-    fn recycling_results(
-        &mut self,
-        shape: &Loop,
-        expression: &Expression,
-        array: MonotypeId,
-        maps: &mut Vec<*const Expression>,
-    ) -> Option<()> {
-        match &expression.kind {
-            ExpressionKind::Let { bindings, body } => {
-                for binding in bindings {
-                    self.unaliased(shape, &binding.value)?;
-                }
-                self.recycling_results(shape, body, array, maps)
-            }
-            ExpressionKind::If { condition, then, otherwise } => {
-                self.unaliased(shape, condition)?;
-                self.recycling_results(shape, then, array, maps)?;
-                self.recycling_results(shape, otherwise, array, maps)
-            }
-            ExpressionKind::Case { scrutinees, alternatives } => {
-                for scrutinee in scrutinees {
-                    self.unaliased(shape, scrutinee)?;
-                }
-                for alternative in alternatives {
-                    match &alternative.body {
-                        Guarded::Unconditional(body) => {
-                            self.recycling_results(shape, body, array, maps)?;
-                        }
-                        Guarded::Guards(branches) => {
-                            for branch in branches {
-                                for guard in &branch.guards {
-                                    match guard {
-                                        Guard::Boolean(value) | Guard::Pattern { value, .. } => {
-                                            self.unaliased(shape, value)?;
-                                        }
-                                    }
-                                }
-                                self.recycling_results(shape, &branch.body, array, maps)?;
-                            }
-                        }
-                    }
-                }
-                Some(())
-            }
-            ExpressionKind::Apply { function, arguments }
-                if matches!(function.kind, ExpressionKind::Function(id) if id == shape.function)
-                    && arguments.len() == shape.arity =>
-            {
-                for (position, argument) in arguments.iter().enumerate() {
-                    if position != shape.position {
-                        self.unaliased(shape, argument)?;
-                    } else if is_map(argument) && argument.monotype == array {
-                        let ExpressionKind::Foreign { arguments, .. } = &argument.kind else {
-                            unreachable!("invariant violated: a map is a foreign call")
-                        };
-                        maps.push(std::ptr::from_ref(&arguments[0]));
-                    }
-                }
-                Some(())
-            }
-            // The loop's result: it ends the loop, so it may hold the parameter.
-            _ => Some(()),
-        }
-    }
-
-    /// A value that reaches past the iteration may be computed from the parameter only when it
-    /// holds no references.
-    fn unaliased(&mut self, shape: &Loop, expression: &Expression) -> Option<()> {
-        let aliases = uses_local(expression, shape.parameter)
-            && self.holds_references(expression.monotype, &mut FxHashSet::default());
-        (!aliases).then_some(())
     }
 
     /// Whether a value of this type may refer to an array or a function.

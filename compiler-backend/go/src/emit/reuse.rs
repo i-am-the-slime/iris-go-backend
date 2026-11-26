@@ -4,11 +4,10 @@ use smol_str::SmolStr;
 use super::field_reads::hoist_field_reads;
 use super::inspection::{inspecting_functions, inspects, sequence_inspections};
 use super::kept::mark_kept_fields;
+use super::uniqueness::{self, Branch, Forced, Scope, Shapes, guarded_expressions};
 use super::{Emitter, uses_local};
 use crate::foreign::{Boundary, Foreign, GoFunction, GoPackage, Iteration, Operator};
-use crate::monomorphic::traversal::{
-    for_each_child, for_each_child_mut, for_each_guarded_child, prune_unreachable, visit,
-};
+use crate::monomorphic::traversal::{for_each_child, for_each_child_mut, prune_unreachable, visit};
 use crate::monomorphic::{
     Alternative, Binding, Edge, Expression, ExpressionKind, Function, FunctionId, Guarded, Kept,
     Literal, Local, LocalId, Pattern, PatternKind, Program,
@@ -44,6 +43,11 @@ pub(super) struct Reused {
 }
 
 pub(super) fn reuse_cells(program: &Program, cells: &mut impl Cells) -> Reused {
+    if !uniqueness::enabled() {
+        let program = Program { functions: program.functions.clone(), entry: program.entry };
+        let (materialized, candidates) = (FxHashSet::default(), FxHashSet::default());
+        return Reused { program, materialized, candidates };
+    }
     let inspecting = timed("find inspecting functions", || inspecting_functions(program));
     let hoisted = timed("hoist field reads", || hoist_field_reads(program, cells));
     let sequenced = timed("sequence", || sequence_inspections(&hoisted, &inspecting, cells));
@@ -277,15 +281,6 @@ struct Dynamic {
     ancestors: Vec<LocalId>,
 }
 
-#[derive(Clone, Copy, PartialEq, Eq)]
-enum Branch {
-    Then,
-    Otherwise,
-    Alternative(usize, Option<usize>),
-}
-
-type Forced = FxHashMap<*const Expression, Vec<Branch>>;
-
 #[derive(Clone, Copy)]
 enum Origin {
     Donor,
@@ -328,6 +323,16 @@ struct Planner<'a, C> {
     hoisted_locals: FxHashMap<(*const Expression, usize), LocalId>,
     plan: Plan,
     consulted: Vec<Ownership>,
+}
+
+impl<C: Cells> Shapes for Planner<'_, C> {
+    fn inspects(&mut self, call: &Expression, argument: &Expression) -> bool {
+        inspects(&self.facts.inspecting, self.cells, call, argument)
+    }
+
+    fn is_spine(&mut self, cell: MonotypeId, field: MonotypeId) -> bool {
+        self.cells.cell(cell).is_some_and(|cell| self.cells.is_spine(&cell, field))
+    }
 }
 
 impl<'a, C: Cells> Planner<'a, C> {
@@ -1275,13 +1280,7 @@ impl<'a, C: Cells> Planner<'a, C> {
         scope: Scope<'_>,
         forced: &Forced,
     ) -> bool {
-        let family = self.conflicts(target, ancestors, scope);
-        let counter = Counter { target, conflicts: &family, forced };
-        let paths = match scope {
-            Scope::Expression(expression) => counter.count(self, expression),
-            Scope::Guarded(guarded) => counter.guarded(self, guarded),
-        };
-        paths.all_linear()
+        uniqueness::is_unique(self, target, ancestors, scope, forced)
     }
 
     fn conflicts(
@@ -1290,59 +1289,7 @@ impl<'a, C: Cells> Planner<'a, C> {
         ancestors: &[LocalId],
         scope: Scope<'_>,
     ) -> FxHashSet<LocalId> {
-        let mut family = FxHashSet::default();
-        family.insert(target);
-        match scope {
-            Scope::Expression(expression) => self.descendants(expression, &mut family),
-            Scope::Guarded(guarded) => {
-                for expression in guarded_expressions(guarded) {
-                    self.descendants(expression, &mut family);
-                }
-            }
-        }
-        family.remove(&target);
-        family.extend(ancestors.iter().copied());
-        family
-    }
-
-    fn descendants(&mut self, expression: &Expression, family: &mut FxHashSet<LocalId>) {
-        if let ExpressionKind::Case { scrutinees, alternatives } = &expression.kind {
-            for (position, scrutinee) in scrutinees.iter().enumerate() {
-                let ExpressionKind::Local(id) = scrutinee.kind else { continue };
-                if !family.contains(&id) {
-                    continue;
-                }
-                for alternative in alternatives {
-                    self.spine_locals(&alternative.patterns[position], family);
-                }
-            }
-        }
-        for_each_child(expression, &mut |child| self.descendants(child, family));
-    }
-
-    fn spine_locals(&mut self, pattern: &Pattern, family: &mut FxHashSet<LocalId>) {
-        match &pattern.kind {
-            PatternKind::Variable(local) => {
-                family.insert(local.id);
-            }
-            PatternKind::Named { local, pattern } => {
-                family.insert(local.id);
-                self.spine_locals(pattern, family);
-            }
-            PatternKind::Constructor { arguments, .. } => {
-                let Some(cell) = self.cells.cell(pattern.monotype) else { return };
-                for argument in arguments {
-                    if self.cells.is_spine(&cell, argument.monotype) {
-                        self.spine_locals(argument, family);
-                    }
-                }
-            }
-            PatternKind::Wildcard
-            | PatternKind::Literal(_)
-            | PatternKind::Array(_)
-            | PatternKind::Record(_)
-            | PatternKind::Closure { .. } => {}
-        }
+        uniqueness::relatives(self, target, ancestors, scope)
     }
 
     fn companions_at_uses(
@@ -1352,7 +1299,7 @@ impl<'a, C: Cells> Planner<'a, C> {
         ancestors: &[LocalId],
         scope: Scope<'_>,
     ) {
-        let roots = scope_expressions(scope);
+        let roots = scope.expressions();
         let mut search = Search {
             target,
             branches: vec![],
@@ -1632,13 +1579,6 @@ fn bind_all(expression: &Expression, bound: &mut FxHashSet<LocalId>) {
     }
 }
 
-fn scope_expressions(scope: Scope<'_>) -> Vec<&Expression> {
-    match scope {
-        Scope::Expression(expression) => vec![expression],
-        Scope::Guarded(guarded) => guarded_expressions(guarded),
-    }
-}
-
 fn contains_expression(expression: &Expression, target: *const Expression) -> bool {
     let mut found = false;
     visit(expression, &mut |inner| found |= std::ptr::eq(inner, target));
@@ -1710,12 +1650,6 @@ fn is_true(expression: &Expression) -> bool {
     matches!(expression.kind, ExpressionKind::Literal(Literal::Boolean(true)))
 }
 
-#[derive(Clone, Copy)]
-enum Scope<'e> {
-    Expression(&'e Expression),
-    Guarded(&'e Guarded),
-}
-
 #[derive(Clone)]
 enum Source {
     Owned { top: Top, owners: Vec<LocalId> },
@@ -1743,277 +1677,8 @@ struct Placing<'p> {
     bindings: &'p mut Vec<Binding>,
 }
 
-struct Counter<'f> {
-    target: LocalId,
-    conflicts: &'f FxHashSet<LocalId>,
-    forced: &'f Forced,
-}
-
-impl Counter<'_> {
-    fn count<C: Cells>(&self, planner: &mut Planner<'_, C>, expression: &Expression) -> Paths {
-        match &expression.kind {
-            ExpressionKind::Local(id) if *id == self.target => Paths::event(Event::Consume),
-            ExpressionKind::Local(id) if self.conflicts.contains(id) => {
-                Paths::event(Event::Conflict)
-            }
-            ExpressionKind::Lambda { .. }
-            | ExpressionKind::Closure { .. }
-            | ExpressionKind::EffectPure(_)
-            | ExpressionKind::EffectBind { .. }
-            | ExpressionKind::EffectEach { .. } => {
-                if uses_local(expression, self.target) {
-                    Paths::event(Event::Shared)
-                } else if self.conflicts.iter().any(|&conflict| uses_local(expression, conflict)) {
-                    Paths::event(Event::Conflict)
-                } else {
-                    Paths::empty()
-                }
-            }
-            ExpressionKind::Let { bindings, body } => {
-                let mut paths = Paths::empty();
-                for binding in bindings {
-                    paths = paths.then(self.count(planner, &binding.value));
-                }
-                paths.then(self.count(planner, body))
-            }
-            ExpressionKind::If { condition, then, otherwise } => {
-                let allowed = self.forced.get(&std::ptr::from_ref(expression));
-                let taken =
-                    |branch: Branch| allowed.is_none_or(|allowed| allowed.contains(&branch));
-                let mut branches = Paths::nothing();
-                if taken(Branch::Then) {
-                    branches = branches.or(self.count(planner, then));
-                }
-                if taken(Branch::Otherwise) {
-                    branches = branches.or(self.count(planner, otherwise));
-                }
-                self.count(planner, condition).then(branches)
-            }
-            ExpressionKind::Case { scrutinees, alternatives } => {
-                let mut paths = Paths::empty();
-                for (position, scrutinee) in scrutinees.iter().enumerate() {
-                    let inspected = alternatives.iter().any(|alternative| {
-                        !matches!(alternative.patterns[position].kind, PatternKind::Wildcard)
-                    });
-                    let scrutinised = match scrutinee.kind {
-                        ExpressionKind::Local(id) if id == self.target => {
-                            if inspected {
-                                Paths::event(Event::Peek)
-                            } else {
-                                Paths::empty()
-                            }
-                        }
-                        _ => self.count(planner, scrutinee),
-                    };
-                    paths = paths.then(scrutinised);
-                }
-                let allowed = self.forced.get(&std::ptr::from_ref(expression));
-                let taken = |index: usize, branch: Option<usize>| {
-                    allowed.is_none_or(|allowed| {
-                        allowed.iter().any(|allowed| match *allowed {
-                            Branch::Alternative(alternative, allowed_branch) => {
-                                alternative == index
-                                    && (allowed_branch.is_none()
-                                        || branch.is_none()
-                                        || allowed_branch == branch)
-                            }
-                            Branch::Then | Branch::Otherwise => false,
-                        })
-                    })
-                };
-                let mut guards = Paths::empty();
-                let mut bodies = Paths::nothing();
-                for (index, alternative) in alternatives.iter().enumerate() {
-                    match &alternative.body {
-                        Guarded::Unconditional(body) => {
-                            if taken(index, None) {
-                                bodies = bodies.or(self.count(planner, body));
-                            }
-                        }
-                        Guarded::Guards(branches) => {
-                            for (position, branch) in branches.iter().enumerate() {
-                                for guard in &branch.guards {
-                                    let value = guard.value();
-                                    guards = guards.then(self.count(planner, value));
-                                }
-                                if taken(index, Some(position)) {
-                                    bodies = bodies.or(self.count(planner, &branch.body));
-                                }
-                            }
-                        }
-                    }
-                }
-                let bodies = if alternatives.is_empty() { Paths::empty() } else { bodies };
-                paths.then(guards).then(bodies)
-            }
-            ExpressionKind::Apply { function, arguments } => {
-                let paths = self.count(planner, function);
-                self.call(planner, expression, arguments, paths)
-            }
-            ExpressionKind::Foreign { arguments, .. } => {
-                self.call(planner, expression, arguments, Paths::empty())
-            }
-            _ => {
-                let mut children = vec![];
-                for_each_child(expression, &mut |child| children.push(child));
-                let mut paths = Paths::empty();
-                for child in children {
-                    paths = paths.unordered(self.count(planner, child));
-                }
-                paths
-            }
-        }
-    }
-
-    fn call<C: Cells>(
-        &self,
-        planner: &mut Planner<'_, C>,
-        call: &Expression,
-        arguments: &[Expression],
-        mut paths: Paths,
-    ) -> Paths {
-        for argument in arguments {
-            let inspected = matches!(argument.kind, ExpressionKind::Local(id) if id == self.target)
-                && inspects(&planner.facts.inspecting, planner.cells, call, argument);
-            let argument_paths =
-                if inspected { Paths::event(Event::Peek) } else { self.count(planner, argument) };
-            paths = paths.unordered(argument_paths);
-        }
-        paths
-    }
-
-    fn guarded<C: Cells>(&self, planner: &mut Planner<'_, C>, guarded: &Guarded) -> Paths {
-        match guarded {
-            Guarded::Unconditional(body) => self.count(planner, body),
-            Guarded::Guards(branches) => {
-                let mut guards = Paths::empty();
-                let mut bodies = Paths::nothing();
-                for branch in branches {
-                    for guard in &branch.guards {
-                        let value = guard.value();
-                        guards = guards.then(self.count(planner, value));
-                    }
-                    bodies = bodies.or(self.count(planner, &branch.body));
-                }
-                guards.then(bodies)
-            }
-        }
-    }
-}
-
-#[derive(Clone, Copy)]
-enum Event {
-    Consume,
-    Conflict,
-    Peek,
-    Shared,
-}
-
-#[derive(Clone, Copy, PartialEq, Eq)]
-struct Path {
-    consumed: u8,
-    conflicted: bool,
-    peeked_first: bool,
-    peeked_late: bool,
-}
-
-impl Path {
-    const START: Path =
-        Path { consumed: 0, conflicted: false, peeked_first: false, peeked_late: false };
-
-    fn index(self) -> u32 {
-        u32::from(self.consumed) * 8
-            + u32::from(self.conflicted) * 4
-            + u32::from(self.peeked_first) * 2
-            + u32::from(self.peeked_late)
-    }
-
-    fn from_index(index: u32) -> Path {
-        Path {
-            consumed: (index / 8) as u8,
-            conflicted: index & 4 != 0,
-            peeked_first: index & 2 != 0,
-            peeked_late: index & 1 != 0,
-        }
-    }
-
-    fn touched(self) -> bool {
-        self.consumed > 0 || self.conflicted
-    }
-
-    fn then(self, next: Path) -> Path {
-        Path {
-            consumed: (self.consumed + next.consumed).min(2),
-            conflicted: self.conflicted || next.conflicted,
-            peeked_first: self.peeked_first || (!self.touched() && next.peeked_first),
-            peeked_late: self.peeked_late
-                || next.peeked_late
-                || (next.peeked_first && self.touched()),
-        }
-    }
-
-    fn is_linear(self) -> bool {
-        !self.peeked_late && self.consumed < 2 && !(self.consumed == 1 && self.conflicted)
-    }
-}
-
-#[derive(Clone, Copy, PartialEq, Eq)]
-struct Paths(u32);
-
-impl Paths {
-    fn nothing() -> Paths {
-        Paths(0)
-    }
-
-    fn empty() -> Paths {
-        Paths(1 << Path::START.index())
-    }
-
-    fn event(event: Event) -> Paths {
-        let path = match event {
-            Event::Consume => Path { consumed: 1, ..Path::START },
-            Event::Conflict => Path { conflicted: true, ..Path::START },
-            Event::Peek => Path { peeked_first: true, ..Path::START },
-            Event::Shared => Path { consumed: 2, ..Path::START },
-        };
-        Paths(1 << path.index())
-    }
-
-    fn paths(self) -> impl Iterator<Item = Path> {
-        (0..24).filter(move |index| self.0 & (1 << index) != 0).map(Path::from_index)
-    }
-
-    fn then(self, next: Paths) -> Paths {
-        let mut combined = 0;
-        for first in self.paths() {
-            for second in next.paths() {
-                combined |= 1 << first.then(second).index();
-            }
-        }
-        Paths(combined)
-    }
-
-    fn unordered(self, other: Paths) -> Paths {
-        Paths(self.then(other).0 | other.then(self).0)
-    }
-
-    fn or(self, other: Paths) -> Paths {
-        Paths(self.0 | other.0)
-    }
-
-    fn all_linear(self) -> bool {
-        self.paths().all(Path::is_linear)
-    }
-}
-
 fn alternative_expressions(alternative: &Alternative) -> Vec<&Expression> {
     guarded_expressions(&alternative.body)
-}
-
-fn guarded_expressions(guarded: &Guarded) -> Vec<&Expression> {
-    let mut expressions = vec![];
-    for_each_guarded_child(guarded, &mut |expression| expressions.push(expression));
-    expressions
 }
 
 fn guarded_uses(guarded: &Guarded, local: LocalId) -> usize {

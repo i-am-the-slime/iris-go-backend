@@ -24,6 +24,14 @@ mod types;
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct MonotypeId(u32);
 
+#[cfg(test)]
+impl MonotypeId {
+    /// A type for expressions in unit tests, which do not look types up.
+    pub(crate) fn for_tests() -> MonotypeId {
+        MonotypeId(0)
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum Monotype {
     Int,

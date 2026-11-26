@@ -86,6 +86,7 @@ mod strings;
 mod swaps;
 mod text;
 mod types;
+mod uniqueness;
 mod unit_apply;
 mod unit_effect_fold;
 mod unreferenced;
