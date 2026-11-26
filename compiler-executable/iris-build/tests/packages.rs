@@ -193,6 +193,45 @@ workspace: {}
 }
 
 #[test]
+fn compiles_only_the_selected_packages_test_sources() {
+    let directory = tempfile::tempdir().unwrap();
+    let root = directory.path();
+    write_file(
+        &root.join("spago.yaml"),
+        r#"package:
+  name: a
+  dependencies: []
+  test:
+    main: Test.A
+    dependencies: [console]
+workspace: {}
+"#,
+    );
+    write_file(&root.join("src/A.purs"), "module A where\n");
+    write_file(&root.join("test/Test.purs"), "module Test.A where\n");
+    write_file(
+        &root.join("b/spago.yaml"),
+        r#"package:
+  name: b
+  dependencies: [a]
+  test:
+    main: Test.B
+    dependencies: []
+"#,
+    );
+    write_file(&root.join("b/src/B.purs"), "module B where\n");
+    write_file(&root.join("b/test/Test.purs"), "module Test.B where\n");
+
+    let discovered = discover_packages(&workspace(root, Some("b"))).unwrap();
+
+    assert_eq!(relative_files(root, package(&discovered, "a")), ["src/A.purs"]);
+    assert_eq!(
+        relative_files(root, package(&discovered, "b")),
+        ["b/src/B.purs", "b/test/Test.purs"]
+    );
+}
+
+#[test]
 fn discovers_inline_git_and_local_dependencies() {
     let directory = tempfile::tempdir().unwrap();
     let root = directory.path();

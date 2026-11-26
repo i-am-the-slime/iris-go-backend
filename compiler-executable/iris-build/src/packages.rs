@@ -182,10 +182,8 @@ fn resolve_package(
     if let Some(package) = workspace.packages.get(name.as_str()) {
         let mut source_directories = vec![package.root.join(iris_spago::SRC_DIRECTORY)];
         let mut dependencies = package.manifest.core_dependency_names().cloned().collect_vec();
-        if package.has_tests {
-            source_directories.push(package.root.join(iris_spago::TEST_DIRECTORY));
-        }
         if package.has_tests && include_test_dependencies {
+            source_directories.push(package.root.join(iris_spago::TEST_DIRECTORY));
             dependencies.extend(package.manifest.test_dependency_names().cloned());
         }
         return Ok(ResolvedPackage {
