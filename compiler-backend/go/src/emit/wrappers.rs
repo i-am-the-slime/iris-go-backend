@@ -18,7 +18,8 @@ use crate::syntax::{GoDeclaration, GoExpression, GoStatement, GoType};
 
 pub(super) fn inline_wrappers(declarations: &mut Vec<GoDeclaration>) {
     let wrappers = Wrappers::of(declarations);
-    if wrappers.forwarded.is_empty() && wrappers.readers.is_empty() {
+    if wrappers.forwarded.is_empty() && wrappers.readers.is_empty() && wrappers.selectors.is_empty()
+    {
         return;
     }
     for declaration in declarations.iter_mut() {
@@ -44,6 +45,9 @@ struct Wrappers {
     forwarded: FxHashMap<String, String>,
     /// Each field reader and the fields it reads, outermost last.
     readers: FxHashMap<String, Vec<String>>,
+    /// Each function of several parameters that returns one of them, as `const` does, with that
+    /// parameter's position and the number of parameters.
+    selectors: FxHashMap<String, (usize, usize)>,
 }
 
 impl Wrappers {
@@ -81,6 +85,8 @@ impl Wrappers {
                 wrappers.forwarded.insert(name.clone(), target);
             } else if let Some(fields) = field_read(returned, parameters) {
                 wrappers.readers.insert(name.clone(), fields);
+            } else if let Some(position) = selected(returned, parameters) {
+                wrappers.selectors.insert(name.clone(), (position, parameters.len()));
             }
         }
         wrappers.follow_chains();
@@ -108,7 +114,9 @@ impl Wrappers {
     }
 
     fn replaced(&self, name: &str) -> bool {
-        self.forwarded.contains_key(name) || self.readers.contains_key(name)
+        self.forwarded.contains_key(name)
+            || self.readers.contains_key(name)
+            || self.selectors.contains_key(name)
     }
 }
 
@@ -162,6 +170,11 @@ impl Walk for Rewrite<'_> {
                     *name = target.clone();
                 }
             }
+            GoExpression::Call { function, arguments } if self.selects(function, arguments) => {
+                let GoExpression::Identifier(name) = &**function else { unreachable!() };
+                let (position, _) = self.wrappers.selectors[name];
+                *value = arguments.swap_remove(position);
+            }
             GoExpression::Call { function, arguments } if arguments.len() == 1 => {
                 let GoExpression::Identifier(name) = &**function else { return };
                 if self.locals.contains(name) {
@@ -180,5 +193,49 @@ impl Walk for Rewrite<'_> {
             }
             _ => {}
         }
+    }
+}
+
+/// The position of the parameter that `return a` returns, of a function of several parameters
+/// none of which is an interface, which would convert the value passed.
+fn selected(returned: &GoExpression, parameters: &[(String, GoType)]) -> Option<usize> {
+    let GoExpression::Identifier(returned) = returned else { return None };
+    let interface = |type_: &GoType| matches!(type_, GoType::Any | GoType::Erased(_));
+    if parameters.len() < 2 || parameters.iter().any(|(_, type_)| interface(type_)) {
+        return None;
+    }
+    parameters.iter().position(|(parameter, _)| parameter == returned)
+}
+
+/// Whether leaving an argument out leaves out no work: a read of a variable, a field or an
+/// element.
+fn is_read(argument: &GoExpression) -> bool {
+    match argument {
+        GoExpression::Identifier(_)
+        | GoExpression::Qualified { .. }
+        | GoExpression::Integer(_)
+        | GoExpression::Float(_)
+        | GoExpression::String(_)
+        | GoExpression::Rune(_)
+        | GoExpression::Boolean(_) => true,
+        GoExpression::Field { value, .. } => is_read(value),
+        GoExpression::Index { value, index } => is_read(value) && is_read(index),
+        _ => false,
+    }
+}
+
+impl Rewrite<'_> {
+    /// Whether a call of a selector can be the argument it returns: the others are reads, and
+    /// the returned one is no untyped constant, which would lose the type the parameter gave it.
+    fn selects(&self, function: &GoExpression, arguments: &[GoExpression]) -> bool {
+        let GoExpression::Identifier(name) = function else { return false };
+        let Some(&(position, arity)) = self.wrappers.selectors.get(name) else { return false };
+        !self.locals.contains(name)
+            && arguments.len() == arity
+            && !is_untyped_constant(&arguments[position])
+            && arguments
+                .iter()
+                .enumerate()
+                .all(|(at, argument)| at == position || is_read(argument))
     }
 }
