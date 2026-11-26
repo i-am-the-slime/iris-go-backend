@@ -681,7 +681,7 @@ const GO_RUNTIME_VARIABLE: &str = "IRIS_GO";
 const GO_JOBS_VARIABLE: &str = "IRIS_GO_FIXTURE_JOBS";
 
 const GO_RUNTIME_MODULE: &str = "github.com/i-am-the-slime/iris-go";
-const GO_RUNTIME_VERSION: &str = "v0.9.0";
+const GO_RUNTIME_VERSION: &str = "v0.9.1";
 
 const WASM: (&str, &str) = ("js", "wasm");
 
