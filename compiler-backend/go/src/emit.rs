@@ -28,6 +28,7 @@ mod diverging;
 mod divisions;
 mod effects;
 mod equality;
+mod erased_slots;
 mod existential;
 mod fallible;
 mod field_reads;
@@ -159,6 +160,7 @@ where
     emitter.materialized = reused.materialized;
     emitter.candidates = reused.candidates;
     emitter.closure_sets = closure_sets;
+    emitter.typed_slots = emitter.find_typed_slots(program)?;
     emitter.vector_kernels = vector::Kernels::new(program);
     emitter.assign_function_names();
     let groups = timed("groups", || {
@@ -445,6 +447,7 @@ where
             closure_layouts: FxHashMap::default(),
             converters: FxHashMap::default(),
             round_trips: vec![],
+            typed_slots: FxHashSet::default(),
             array_boxes: Default::default(),
             recursive_names: FxHashMap::default(),
             type_aliases: FxHashMap::default(),
@@ -623,6 +626,7 @@ struct Emitter<'p, 'm, 'q, Q> {
     /// used as values.
     construction_functions: FxHashMap<constructors::ConstructionKey, String>,
     round_trips: Vec<coerce::RoundTrip>,
+    typed_slots: FxHashSet<MonotypeId>,
     array_boxes: boxing::ArrayBoxes,
     recursive_names: FxHashMap<DataType, String>,
     /// The type each recursive newtype's alias spells.

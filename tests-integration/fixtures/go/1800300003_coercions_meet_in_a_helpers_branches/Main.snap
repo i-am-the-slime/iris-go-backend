@@ -1,0 +1,64 @@
+---
+source: tests-integration/src/fixtures.rs
+---
+// Data/Show/show.go
+package show
+
+import "github.com/i-am-the-slime/iris-go/prim"
+
+func Show(s string) string {
+	return prim.ShowString(s)
+}
+
+func AppendShowArrayString(buffer []byte, array []string) []byte {
+	buffer = append(buffer, '[')
+	for index, element := range array {
+		if index > 0 {
+			buffer = append(buffer, ',')
+		}
+		buffer = prim.AppendShowString(buffer, element)
+	}
+	buffer = append(buffer, ']')
+	return buffer
+}
+
+func ArrayString(array []string) string {
+	return string(AppendShowArrayString(nil, array))
+}
+
+// main.go
+package main
+
+import (
+	"fixture/Data/Show"
+	journal "fixture/Journal_ffi"
+	"github.com/i-am-the-slime/iris-go/direct"
+	"strconv"
+)
+
+func main() {
+	labels := runPlanPlan([]int{1, 2})
+	journal.Log(show.ArrayString(labels))
+	skipped := runPlanPlan2([]int{3})
+	journal.Log(show.ArrayString(skipped))
+}
+
+func runPlanPlan(items []int) []string {
+	results := direct.SequenceArray(direct.MapWithIndex(func(_ int, item int) func() string {
+		return func() string {
+			journal.Log("before " + strconv.Itoa(item))
+			return "item " + strconv.Itoa(item*10)
+		}
+	}, items))
+	return results
+}
+
+func runPlanPlan2(items []int) []string {
+	direct.SequenceArray(direct.MapWithIndex(func(_ int, item int) func() string {
+		return func() string {
+			journal.Log("only before " + strconv.Itoa(item))
+			return ""
+		}
+	}, items))
+	return []string{}
+}

@@ -36,6 +36,7 @@ use self::fold::shares_branch_with_next;
 mod arguments;
 mod call_patterns;
 mod choice;
+mod coerced;
 mod coverage;
 mod effects;
 mod find;
@@ -43,6 +44,7 @@ mod fold;
 mod lengths;
 mod object;
 mod record;
+mod record_views;
 mod reductions;
 mod rename;
 mod short_circuit;
@@ -103,6 +105,8 @@ pub fn simplify(
         monotypes,
         record_orders: FxHashMap::default(),
         narrowed_records: FxHashMap::default(),
+        record_views: FxHashMap::default(),
+        view_fields: FxHashSet::default(),
         records_settled: false,
         suspension,
         unsafely_effectful_locals: FxHashSet::default(),
@@ -173,6 +177,8 @@ struct Simplifier<'m> {
     /// Records bound by an update or a coercion, which a coercion that widens them again
     /// reads through.
     narrowed_records: FxHashMap<LocalId, Expression>,
+    record_views: FxHashMap<LocalId, Expression>,
+    view_fields: FxHashSet<LocalId>,
     records_settled: bool,
     suspension: Suspension,
     unsafely_effectful_locals: FxHashSet<LocalId>,
@@ -705,10 +711,11 @@ impl Simplifier<'_> {
                 let record = self.expression(*record);
                 return self.field_of(record, label, monotype);
             }
-            ExpressionKind::Update { record, updates } => ExpressionKind::Update {
-                record: Box::new(self.expression(*record)),
-                updates: self.updates(updates),
-            },
+            ExpressionKind::Update { record, updates } => {
+                let record = self.expression(*record);
+                let updates = self.updates(updates);
+                return self.updated_record(record, updates, monotype);
+            }
             ExpressionKind::Construct { data, constructor, arguments } => {
                 ExpressionKind::Construct {
                     data,
@@ -732,6 +739,10 @@ impl Simplifier<'_> {
                         if iterates { self.saturated_callback(argument) } else { argument }
                     })
                     .collect();
+                let arguments = match self.viewed_object_operation(foreign, arguments, monotype) {
+                    Ok(read) => return read,
+                    Err(arguments) => arguments,
+                };
                 return self.foreign(foreign, arguments, monotype);
             }
             ExpressionKind::Reuse { .. }
@@ -782,9 +793,19 @@ impl Simplifier<'_> {
                         value: self.expression(binding.value),
                     })
                     .collect();
-                for binding in &bindings {
+                let recursive =
+                    bindings.iter().any(|binding| mentions_any(&binding.value, &bindings));
+                let mut bindings = bindings;
+                for binding in &mut bindings {
                     self.remember_record_order(binding);
                     self.remember_unsafely_effectful(binding);
+                    if !recursive && occurrences_up_to(&body, binding.local.id, 2).total > 1 {
+                        let placeholder =
+                            Expression::new(ExpressionKind::Unit, binding.value.monotype);
+                        let value = std::mem::replace(&mut binding.value, placeholder);
+                        binding.value = self.shared_view(value);
+                        self.remember_record_view(binding);
+                    }
                 }
                 let body = self.expression(*body);
                 return self.let_bindings(bindings, body);
@@ -1173,11 +1194,16 @@ impl Simplifier<'_> {
                     && (uses.under_lambda == 0 || self.does_no_work(&binding.value)))
                 || (helper && uses.total == 2 && uses.applied == 2);
             let named_choice = self.is_named_choice(&binding, &body);
-            let substitutable = substitutable && !named_choice;
+            let materialized_at_each_use =
+                (uses.total > 1 || uses.under_lambda > 0) && self.is_viewed_record(&binding.value);
+            let view_field = uses.total > 0 && self.view_fields.contains(&binding.local.id);
+            let substitutable =
+                substitutable && !named_choice && !materialized_at_each_use && !view_field;
             let built_in_place = uses.total == 1
                 && matches!(&body.kind, ExpressionKind::EffectBind { action, .. }
                     if matches!(action.kind, ExpressionKind::Local(id) if id == binding.local.id));
             if self.is_small_applied_lambda(&binding, &body)
+                || self.is_coerced_helper(&binding, &body)
                 || (self.is_closed_tiny_lambda(&binding.value)
                     && passed_whole_at_most_once(&body, binding.local.id))
             {
@@ -1212,6 +1238,10 @@ impl Simplifier<'_> {
             return self.coerce(value, monotype);
         }
         let record = match self.read_through_coercion(record, &label, monotype) {
+            Ok(read) => return read,
+            Err(record) => record,
+        };
+        let record = match self.field_of_viewed_object(record, &label, monotype) {
             Ok(read) => return read,
             Err(record) => record,
         };

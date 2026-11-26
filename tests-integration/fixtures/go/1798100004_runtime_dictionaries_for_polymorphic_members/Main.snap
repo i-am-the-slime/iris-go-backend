@@ -152,6 +152,7 @@ import (
 	"fixture/Data/Semiring"
 	"fixture/Data/Show"
 	"fixture/shared"
+	"github.com/i-am-the-slime/iris-go/alloc"
 	"github.com/i-am-the-slime/iris-go/array"
 	"github.com/i-am-the-slime/iris-go/console"
 	"github.com/i-am-the-slime/iris-go/direct"
@@ -159,6 +160,24 @@ import (
 	"strconv"
 	"strings"
 )
+
+type DictionaryToFunction struct {
+	FoldMap *DictionaryToFunction
+	Tag     uint8
+}
+
+const (
+	DictionaryToFunctionMain = iota
+	DictionaryToFunctionMain2
+	DictionaryToFunctionMain3
+	DictionaryToFunctionCheckedArray
+	DictionaryToFunctionCountedWrappedArrayFoldableDictionary
+	DictionaryToFunctionDescribedWrappedArrayFoldableDictionary
+	DictionaryToFunctionDoubledWrappedArrayFunctorDictionaryFoldableDictionary
+	DictionaryToFunctionCheckedWrappedArrayTraversableDictionaryFoldable1Functor0
+)
+
+var sharedDictionaryToFunctionMain = &DictionaryToFunction{Tag: DictionaryToFunctionMain}
 
 type WrappedArray struct {
 	Wrapped []any
@@ -188,6 +207,8 @@ func convert2(value WrappedArrayInt) *Wrapped {
 	return &Wrapped{Wrapped: shared.Convert(value.Wrapped)}
 }
 
+var sharedDictionaryToFunctionMain2 = &DictionaryToFunction{Tag: DictionaryToFunctionMain2}
+
 func convert3(value *WrappedArray) *Wrapped {
 	if value == nil {
 		return nil
@@ -197,6 +218,10 @@ func convert3(value *WrappedArray) *Wrapped {
 	}
 	return &Wrapped{Wrapped: value.Wrapped, Origin: value}
 }
+
+var sharedDictionaryToFunctionMain3 = &DictionaryToFunction{Tag: DictionaryToFunctionMain3}
+
+var sharedDictionaryToFunctionCheckedArray = &DictionaryToFunction{Tag: DictionaryToFunctionCheckedArray}
 
 type WrappedArray2 struct {
 	Wrapped []any
@@ -212,6 +237,18 @@ func convert4(value *Wrapped) *WrappedArray2 {
 	}
 	return &WrappedArray2{Wrapped: value.Wrapped.([]any)}
 }
+
+type Apply0PureToFunction struct {
+	Traverse *Apply0PureToFunction
+	Tag      uint8
+}
+
+const (
+	Apply0PureToFunctionCheckedArray = iota
+	Apply0PureToFunctionCheckedWrappedArrayTraversableDictionaryFoldable1Functor0
+)
+
+var sharedApply0PureToFunctionCheckedArray = &Apply0PureToFunction{Tag: Apply0PureToFunctionCheckedArray}
 
 type WrappedInt struct {
 	Wrapped any
@@ -395,25 +432,7 @@ func initializeMain_() []string {
 	default: // maybe.TagNothing
 		result3 = "Nothing"
 	}
-	return []string{strconv.Itoa(countedFoldableDictionary(func(coerced shared.Semigroup0Mempty) func(func(any) any) func(any) any {
-		original := func(visit func(any) any) func(*WrappedArray) any {
-			return func(wrapped *WrappedArray) any {
-				accumulator := coerced.Mempty
-				for index := len(wrapped.Wrapped) - 1; index >= 0; index-- {
-					x := wrapped.Wrapped[index]
-					accumulator = coerced.Semigroup0.Append(visit(x))(accumulator)
-				}
-				return accumulator
-			}
-		}
-		return func(coerced2 func(any) any) func(any) any {
-			original6 := original(coerced2)
-			return func(coerced3 any) any {
-				typed, _ := coerced3.(*Wrapped)
-				return original6(convert(typed))
-			}
-		}
-	}, func(coerced func(any) func(any) any) func(any) func(any) any {
+	return []string{strconv.Itoa(countedFoldableDictionary(sharedDictionaryToFunctionMain, func(coerced func(any) func(any) any) func(any) func(any) any {
 		original := func(initial any) func(*WrappedArray) any {
 			return func(wrapped *WrappedArray) any {
 				return foldlArray(coerced, initial, wrapped)
@@ -439,25 +458,7 @@ func initializeMain_() []string {
 				return original6(convert(typed))
 			}
 		}
-	}, 2, convert2(WrappedArrayInt{Wrapped: []int{1, 2}}))), describedFoldableDictionary(func(coerced shared.Semigroup0Mempty) func(func(any) any) func(any) any {
-		original := func(visit func(any) any) func(*WrappedArray) any {
-			return func(wrapped *WrappedArray) any {
-				accumulator := coerced.Mempty
-				for index := len(wrapped.Wrapped) - 1; index >= 0; index-- {
-					x := wrapped.Wrapped[index]
-					accumulator = coerced.Semigroup0.Append(visit(x))(accumulator)
-				}
-				return accumulator
-			}
-		}
-		return func(coerced2 func(any) any) func(any) any {
-			original6 := original(coerced2)
-			return func(coerced3 any) any {
-				typed, _ := coerced3.(*Wrapped)
-				return original6(convert(typed))
-			}
-		}
-	}, func(coerced func(any) func(any) any) func(any) func(any) any {
+	}, 2, convert2(WrappedArrayInt{Wrapped: []int{1, 2}}))), describedFoldableDictionary(sharedDictionaryToFunctionMain2, func(coerced func(any) func(any) any) func(any) func(any) any {
 		original := func(initial any) func(*WrappedArray) any {
 			return func(wrapped *WrappedArray) any {
 				return foldlArray(coerced, initial, wrapped)
@@ -491,25 +492,7 @@ func initializeMain_() []string {
 			typed, _ := coerced2.(*Wrapped)
 			return convert3(original(convert(typed)))
 		}
-	}, func(coerced shared.Semigroup0Mempty) func(func(any) any) func(any) any {
-		original := func(visit func(any) any) func(*WrappedArray) any {
-			return func(wrapped *WrappedArray) any {
-				accumulator := coerced.Mempty
-				for index := len(wrapped.Wrapped) - 1; index >= 0; index-- {
-					x := wrapped.Wrapped[index]
-					accumulator = coerced.Semigroup0.Append(visit(x))(accumulator)
-				}
-				return accumulator
-			}
-		}
-		return func(coerced2 func(any) any) func(any) any {
-			original6 := original(coerced2)
-			return func(coerced3 any) any {
-				typed, _ := coerced3.(*Wrapped)
-				return original6(convert(typed))
-			}
-		}
-	}, func(coerced func(any) func(any) any) func(any) func(any) any {
+	}, sharedDictionaryToFunctionMain3, func(coerced func(any) func(any) any) func(any) func(any) any {
 		original := func(initial any) func(*WrappedArray) any {
 			return func(wrapped *WrappedArray) any {
 				return foldlArray(coerced, initial, wrapped)
@@ -565,8 +548,42 @@ func checked(depth int, values []int) maybe.Int {
 			return maybe.NoInt
 		}
 	default:
-		original2 := func(dictionary shared.Apply0Pure) func(*WrappedArray2) any {
-			return func(wrapped *WrappedArray2) any {
+		return checkedTraversableDictionaryFoldable1Functor0(sharedDictionaryToFunctionCheckedArray, func(coerced func(any) func(any) any) func(any) func(any) any {
+			original := func(initial any) func(*WrappedArray) any {
+				return func(wrapped *WrappedArray) any {
+					return foldlArray(coerced, initial, wrapped)
+				}
+			}
+			return func(coerced2 any) func(any) any {
+				original2 := original(coerced2)
+				return func(coerced3 any) any {
+					typed, _ := coerced3.(*Wrapped)
+					return original2(convert(typed))
+				}
+			}
+		}, func(coerced func(any) func(any) any) func(any) func(any) any {
+			original := func(initial any) func(*WrappedArray) any {
+				return func(wrapped *WrappedArray) any {
+					return foldrArray(coerced, initial, wrapped)
+				}
+			}
+			return func(coerced2 any) func(any) any {
+				original2 := original(coerced2)
+				return func(coerced3 any) any {
+					typed, _ := coerced3.(*Wrapped)
+					return original2(convert(typed))
+				}
+			}
+		}, func(coerced func(any) any) func(any) any {
+			original := func(wrapped *WrappedArray) *WrappedArray {
+				return mapWrapped(coerced, wrapped)
+			}
+			return func(coerced2 any) any {
+				typed, _ := coerced2.(*Wrapped)
+				return convert3(original(convert(typed)))
+			}
+		}, func(dictionary shared.Apply0Pure) func(any) any {
+			original2 := func(wrapped *WrappedArray2) any {
 				append_ := direct.Appender[any]()
 				accumulator := func(coerced []any) any {
 					return dictionary.Pure(coerced)
@@ -583,96 +600,11 @@ func checked(depth int, values []int) maybe.Int {
 					return convert3(WrappedWrappedArray(coerced.([]any)))
 				})(accumulator)
 			}
-		}
-		original3 := func(dictionary shared.Apply0Pure) func(func(any) any) func(*WrappedArray) any {
-			return func(visit func(any) any) func(*WrappedArray) any {
-				return func(wrapped *WrappedArray) any {
-					append_ := direct.Appender[any]()
-					accumulator := func(coerced []any) any {
-						return dictionary.Pure(coerced)
-					}([]any{})
-					for _, element := range wrapped.Wrapped {
-						accumulator = dictionary.Apply0.Apply(dictionary.Apply0.Functor0.Map(func(coerced any) any {
-							original := append_(coerced.([]any))
-							return func(coerced2 any) any {
-								return original(coerced2)
-							}
-						})(accumulator))(visit(element))
-					}
-					return dictionary.Apply0.Functor0.Map(func(coerced any) any {
-						return convert3(WrappedWrappedArray(coerced.([]any)))
-					})(accumulator)
-				}
+			return func(coerced any) any {
+				typed, _ := coerced.(*Wrapped)
+				return original2(convert4(typed))
 			}
-		}
-		return checkedTraversableDictionaryFoldable1Functor0(func(coerced shared.Semigroup0Mempty) func(func(any) any) func(any) any {
-			original := func(visit func(any) any) func(*WrappedArray) any {
-				return func(wrapped *WrappedArray) any {
-					accumulator := coerced.Mempty
-					for index := len(wrapped.Wrapped) - 1; index >= 0; index-- {
-						x := wrapped.Wrapped[index]
-						accumulator = coerced.Semigroup0.Append(visit(x))(accumulator)
-					}
-					return accumulator
-				}
-			}
-			return func(coerced2 func(any) any) func(any) any {
-				original4 := original(coerced2)
-				return func(coerced3 any) any {
-					typed, _ := coerced3.(*Wrapped)
-					return original4(convert(typed))
-				}
-			}
-		}, func(coerced func(any) func(any) any) func(any) func(any) any {
-			original := func(initial any) func(*WrappedArray) any {
-				return func(wrapped *WrappedArray) any {
-					return foldlArray(coerced, initial, wrapped)
-				}
-			}
-			return func(coerced2 any) func(any) any {
-				original4 := original(coerced2)
-				return func(coerced3 any) any {
-					typed, _ := coerced3.(*Wrapped)
-					return original4(convert(typed))
-				}
-			}
-		}, func(coerced func(any) func(any) any) func(any) func(any) any {
-			original := func(initial any) func(*WrappedArray) any {
-				return func(wrapped *WrappedArray) any {
-					return foldrArray(coerced, initial, wrapped)
-				}
-			}
-			return func(coerced2 any) func(any) any {
-				original4 := original(coerced2)
-				return func(coerced3 any) any {
-					typed, _ := coerced3.(*Wrapped)
-					return original4(convert(typed))
-				}
-			}
-		}, func(coerced func(any) any) func(any) any {
-			original := func(wrapped *WrappedArray) *WrappedArray {
-				return mapWrapped(coerced, wrapped)
-			}
-			return func(coerced2 any) any {
-				typed, _ := coerced2.(*Wrapped)
-				return convert3(original(convert(typed)))
-			}
-		}, func(coerced shared.Apply0Pure) func(any) any {
-			original := original2(coerced)
-			return func(coerced2 any) any {
-				typed, _ := coerced2.(*Wrapped)
-				return original(convert4(typed))
-			}
-		}, func(coerced shared.Apply0Pure) func(func(any) any) func(any) any {
-			original := original3(coerced)
-			return func(coerced2 func(any) any) func(any) any {
-				original4 := original(coerced2)
-				return func(coerced3 any) any {
-					typed, _ := coerced3.(*Wrapped)
-					return original4(convert(typed))
-				}
-			}
-		}, depth-1, convert2(WrappedArrayInt{Wrapped: values}))
+		}, sharedApply0PureToFunctionCheckedArray, depth-1, convert2(WrappedArrayInt{Wrapped: values}))
 	}
 }
 
@@ -717,9 +649,9 @@ func bindMaybe(inner *maybe.Maybe, next func(any) *maybe.Maybe) *maybe.Maybe {
 	}
 }
 
-func countedFoldableDictionary(foldMap func(shared.Semigroup0Mempty) func(func(any) any) func(any) any, foldl func(func(any) func(any) any) func(any) func(any) any, foldr func(func(any) func(any) any) func(any) func(any) any, depth int, values any) int {
+func countedFoldableDictionary(foldMap *DictionaryToFunction, foldl func(func(any) func(any) any) func(any) func(any) any, foldr func(func(any) func(any) any) func(any) func(any) any, depth int, values any) int {
+	var semigroup0MemptyToFunctionCells alloc.Cells[DictionaryToFunction]
 	for {
-		foldMapCaptured := foldMap
 		foldlCaptured := foldl
 		foldrCaptured := foldr
 		switch depth {
@@ -751,20 +683,7 @@ func countedFoldableDictionary(foldMap func(shared.Semigroup0Mempty) func(func(a
 				}
 			}(0)(values)
 		default:
-			foldMap, foldl, foldr, depth, values = func(coerced shared.Semigroup0Mempty) func(func(any) any) func(any) any {
-				original := func(visit func(any) any) func(*Wrapped) any {
-					return func(wrapped *Wrapped) any {
-						return foldMapCaptured(coerced)(visit)(wrapped.Wrapped)
-					}
-				}
-				return func(coerced2 func(any) any) func(any) any {
-					original2 := original(coerced2)
-					return func(coerced3 any) any {
-						typed, _ := coerced3.(*Wrapped)
-						return original2(typed)
-					}
-				}
-			}, func(coerced func(any) func(any) any) func(any) func(any) any {
+			foldMap, foldl, foldr, depth, values = semigroup0MemptyToFunctionCells.New(DictionaryToFunction{Tag: DictionaryToFunctionCountedWrappedArrayFoldableDictionary, FoldMap: foldMap}), func(coerced func(any) func(any) any) func(any) func(any) any {
 				original := func(initial any) func(*Wrapped) any {
 					return func(wrapped *Wrapped) any {
 						return foldlCaptured(coerced)(initial)(wrapped.Wrapped)
@@ -796,9 +715,9 @@ func countedFoldableDictionary(foldMap func(shared.Semigroup0Mempty) func(func(a
 	}
 }
 
-func describedFoldableDictionary(foldMap func(shared.Semigroup0Mempty) func(func(any) any) func(any) any, foldl func(func(any) func(any) any) func(any) func(any) any, foldr func(func(any) func(any) any) func(any) func(any) any, depth int, values any) string {
+func describedFoldableDictionary(foldMap *DictionaryToFunction, foldl func(func(any) func(any) any) func(any) func(any) any, foldr func(func(any) func(any) any) func(any) func(any) any, depth int, values any) string {
+	var semigroup0MemptyToFunctionCells alloc.Cells[DictionaryToFunction]
 	for {
-		foldMapCaptured := foldMap
 		foldlCaptured := foldl
 		foldrCaptured := foldr
 		switch depth {
@@ -808,7 +727,7 @@ func describedFoldableDictionary(foldMap func(shared.Semigroup0Mempty) func(func
 					return semigroup.Append_(s, s2)
 				}
 			}
-			original3 := foldMapCaptured(shared.Semigroup0Mempty{Semigroup0: shared.Append{Append: func(coerced any) func(any) any {
+			original3 := runDictionaryToFunction(foldMap, shared.Dictionary{Semigroup0: shared.Append{Append: func(coerced any) func(any) any {
 				original2 := original(coerced.(string))
 				return func(coerced2 any) any {
 					return original2(coerced2.(string))
@@ -820,20 +739,7 @@ func describedFoldableDictionary(foldMap func(shared.Semigroup0Mempty) func(func
 				return original3(coerced).(string)
 			}(values)
 		default:
-			foldMap, foldl, foldr, depth, values = func(coerced shared.Semigroup0Mempty) func(func(any) any) func(any) any {
-				original := func(visit func(any) any) func(*Wrapped) any {
-					return func(wrapped *Wrapped) any {
-						return foldMapCaptured(coerced)(visit)(wrapped.Wrapped)
-					}
-				}
-				return func(coerced2 func(any) any) func(any) any {
-					original2 := original(coerced2)
-					return func(coerced3 any) any {
-						typed, _ := coerced3.(*Wrapped)
-						return original2(typed)
-					}
-				}
-			}, func(coerced func(any) func(any) any) func(any) func(any) any {
+			foldMap, foldl, foldr, depth, values = semigroup0MemptyToFunctionCells.New(DictionaryToFunction{Tag: DictionaryToFunctionDescribedWrappedArrayFoldableDictionary, FoldMap: foldMap}), func(coerced func(any) func(any) any) func(any) func(any) any {
 				original := func(initial any) func(*Wrapped) any {
 					return func(wrapped *Wrapped) any {
 						return foldlCaptured(coerced)(initial)(wrapped.Wrapped)
@@ -865,10 +771,10 @@ func describedFoldableDictionary(foldMap func(shared.Semigroup0Mempty) func(func
 	}
 }
 
-func doubledFunctorDictionaryFoldableDictionary(map_ func(func(any) any) func(any) any, foldMap func(shared.Semigroup0Mempty) func(func(any) any) func(any) any, foldl func(func(any) func(any) any) func(any) func(any) any, foldr func(func(any) func(any) any) func(any) func(any) any, depth int, values any) int {
+func doubledFunctorDictionaryFoldableDictionary(map_ func(func(any) any) func(any) any, foldMap *DictionaryToFunction, foldl func(func(any) func(any) any) func(any) func(any) any, foldr func(func(any) func(any) any) func(any) func(any) any, depth int, values any) int {
+	var semigroup0MemptyToFunctionCells alloc.Cells[DictionaryToFunction]
 	for {
 		map_Captured := map_
-		foldMapCaptured := foldMap
 		foldlCaptured := foldl
 		foldrCaptured := foldr
 		switch depth {
@@ -896,20 +802,7 @@ func doubledFunctorDictionaryFoldableDictionary(map_ func(func(any) any) func(an
 					typed, _ := coerced2.(*Wrapped)
 					return original(typed)
 				}
-			}, func(coerced shared.Semigroup0Mempty) func(func(any) any) func(any) any {
-				original := func(visit func(any) any) func(*Wrapped) any {
-					return func(wrapped *Wrapped) any {
-						return foldMapCaptured(coerced)(visit)(wrapped.Wrapped)
-					}
-				}
-				return func(coerced2 func(any) any) func(any) any {
-					original2 := original(coerced2)
-					return func(coerced3 any) any {
-						typed, _ := coerced3.(*Wrapped)
-						return original2(typed)
-					}
-				}
-			}, func(coerced func(any) func(any) any) func(any) func(any) any {
+			}, semigroup0MemptyToFunctionCells.New(DictionaryToFunction{Tag: DictionaryToFunctionDoubledWrappedArrayFunctorDictionaryFoldableDictionary, FoldMap: foldMap}), func(coerced func(any) func(any) any) func(any) func(any) any {
 				original := func(initial any) func(*Wrapped) any {
 					return func(wrapped *Wrapped) any {
 						return foldlCaptured(coerced)(initial)(wrapped.Wrapped)
@@ -941,9 +834,10 @@ func doubledFunctorDictionaryFoldableDictionary(map_ func(func(any) any) func(an
 	}
 }
 
-func checkedTraversableDictionaryFoldable1Functor0(foldMap func(shared.Semigroup0Mempty) func(func(any) any) func(any) any, foldl func(func(any) func(any) any) func(any) func(any) any, foldr func(func(any) func(any) any) func(any) func(any) any, map_ func(func(any) any) func(any) any, sequence func(shared.Apply0Pure) func(any) any, traverse func(shared.Apply0Pure) func(func(any) any) func(any) any, depth int, values any) maybe.Int {
+func checkedTraversableDictionaryFoldable1Functor0(foldMap *DictionaryToFunction, foldl func(func(any) func(any) any) func(any) func(any) any, foldr func(func(any) func(any) any) func(any) func(any) any, map_ func(func(any) any) func(any) any, sequence func(shared.Apply0Pure) func(any) any, traverse *Apply0PureToFunction, depth int, values any) maybe.Int {
+	var semigroup0MemptyToFunctionCells alloc.Cells[DictionaryToFunction]
+	var apply0PureToFunctionCells alloc.Cells[Apply0PureToFunction]
 	for {
-		foldMapCaptured := foldMap
 		foldlCaptured := foldl
 		foldrCaptured := foldr
 		map_Captured := map_
@@ -961,7 +855,7 @@ func checkedTraversableDictionaryFoldable1Functor0(foldMap func(shared.Semigroup
 				}
 				return maybe.NoInt
 			}
-			original4 := traverseCaptured(shared.Apply0Pure{Apply0: shared.Functor0Apply{Functor0: shared.Map{Map: func(coerced func(any) any) func(any) any {
+			original4 := runApply0PureToFunction(traverseCaptured, shared.Apply0Pure{Apply0: shared.Functor0Apply{Functor0: shared.Map{Map: func(coerced func(any) any) func(any) any {
 				original := func(inner *maybe.Maybe) *maybe.Maybe {
 					return maybe.Map_(coerced, inner)
 				}
@@ -982,8 +876,7 @@ func checkedTraversableDictionaryFoldable1Functor0(foldMap func(shared.Semigroup
 				return maybe.Convert2(original3(coerced.(int)))
 			})
 			scrutinee := func(coerced any) *maybe.Int2 {
-				typed, _ := original4(coerced).(*maybe.Maybe)
-				return maybe.Convert4(typed)
+				return maybe.Convert4(original4(coerced).(*maybe.Maybe))
 			}(values)
 			switch scrutinee.Tag {
 			case maybe.TagJust:
@@ -1003,20 +896,7 @@ func checkedTraversableDictionaryFoldable1Functor0(foldMap func(shared.Semigroup
 				return maybe.NoInt
 			}
 		default:
-			foldMap, foldl, foldr, map_, _, traverse, depth, values = func(coerced shared.Semigroup0Mempty) func(func(any) any) func(any) any {
-				original := func(visit func(any) any) func(*Wrapped) any {
-					return func(wrapped *Wrapped) any {
-						return foldMapCaptured(coerced)(visit)(wrapped.Wrapped)
-					}
-				}
-				return func(coerced2 func(any) any) func(any) any {
-					original2 := original(coerced2)
-					return func(coerced3 any) any {
-						typed, _ := coerced3.(*Wrapped)
-						return original2(typed)
-					}
-				}
-			}, func(coerced func(any) func(any) any) func(any) func(any) any {
+			foldMap, foldl, foldr, map_, _, traverse, depth, values = semigroup0MemptyToFunctionCells.New(DictionaryToFunction{Tag: DictionaryToFunctionCheckedWrappedArrayTraversableDictionaryFoldable1Functor0, FoldMap: foldMap}), func(coerced func(any) func(any) any) func(any) func(any) any {
 				original := func(initial any) func(*Wrapped) any {
 					return func(wrapped *Wrapped) any {
 						return foldlCaptured(coerced)(initial)(wrapped.Wrapped)
@@ -1050,32 +930,17 @@ func checkedTraversableDictionaryFoldable1Functor0(foldMap func(shared.Semigroup
 					typed, _ := coerced2.(*Wrapped)
 					return original(typed)
 				}
-			}, func(coerced shared.Apply0Pure) func(any) any {
+			}, func(dictionary shared.Apply0Pure) func(any) any {
 				original := func(wrapped *Wrapped2) any {
-					return coerced.Apply0.Functor0.Map(func(coerced2 any) any {
-						return WrappedWrapped(coerced2)
-					})(traverseCaptured(coerced)(category.Pure)(wrapped.Wrapped))
+					return dictionary.Apply0.Functor0.Map(func(coerced any) any {
+						return WrappedWrapped(coerced)
+					})(runApply0PureToFunction(traverseCaptured, dictionary)(category.Pure)(wrapped.Wrapped))
 				}
-				return func(coerced2 any) any {
-					typed, _ := coerced2.(*Wrapped)
+				return func(coerced any) any {
+					typed, _ := coerced.(*Wrapped)
 					return original(convert6(typed))
 				}
-			}, func(coerced shared.Apply0Pure) func(func(any) any) func(any) any {
-				original := func(visit func(any) any) func(*Wrapped) any {
-					return func(wrapped *Wrapped) any {
-						return coerced.Apply0.Functor0.Map(func(coerced2 any) any {
-							return WrappedWrapped(coerced2)
-						})(traverseCaptured(coerced)(visit)(wrapped.Wrapped))
-					}
-				}
-				return func(coerced2 func(any) any) func(any) any {
-					original2 := original(coerced2)
-					return func(coerced3 any) any {
-						typed, _ := coerced3.(*Wrapped)
-						return original2(typed)
-					}
-				}
-			}, depth-1, convert5(&WrappedInt{Wrapped: values})
+			}, apply0PureToFunctionCells.New(Apply0PureToFunction{Tag: Apply0PureToFunctionCheckedWrappedArrayTraversableDictionaryFoldable1Functor0, Traverse: traverseCaptured}), depth-1, convert5(&WrappedInt{Wrapped: values})
 			continue
 		}
 	}
@@ -1129,6 +994,155 @@ func steppedMonadDictionaryApplicative0Apply0Functor0Bind1Apply0Functor0(map_ fu
 				}
 			}, depth-1
 			continue
+		}
+	}
+}
+
+func runDictionaryToFunction(function *DictionaryToFunction, dictionary shared.Dictionary) func(func(any) any) func(any) any {
+	switch function.Tag {
+	case DictionaryToFunctionMain:
+		return func(coerced func(any) any) func(any) any {
+			original := func(wrapped *WrappedArray) any {
+				accumulator := dictionary.Mempty
+				for index := len(wrapped.Wrapped) - 1; index >= 0; index-- {
+					x := wrapped.Wrapped[index]
+					accumulator = dictionary.Semigroup0.Append(coerced(x))(accumulator)
+				}
+				return accumulator
+			}
+			return func(coerced2 any) any {
+				typed, _ := coerced2.(*Wrapped)
+				return original(convert(typed))
+			}
+		}
+	case DictionaryToFunctionMain2:
+		return func(coerced func(any) any) func(any) any {
+			original := func(wrapped *WrappedArray) any {
+				accumulator := dictionary.Mempty
+				for index := len(wrapped.Wrapped) - 1; index >= 0; index-- {
+					x := wrapped.Wrapped[index]
+					accumulator = dictionary.Semigroup0.Append(coerced(x))(accumulator)
+				}
+				return accumulator
+			}
+			return func(coerced2 any) any {
+				typed, _ := coerced2.(*Wrapped)
+				return original(convert(typed))
+			}
+		}
+	case DictionaryToFunctionMain3:
+		return func(coerced func(any) any) func(any) any {
+			original := func(wrapped *WrappedArray) any {
+				accumulator := dictionary.Mempty
+				for index := len(wrapped.Wrapped) - 1; index >= 0; index-- {
+					x := wrapped.Wrapped[index]
+					accumulator = dictionary.Semigroup0.Append(coerced(x))(accumulator)
+				}
+				return accumulator
+			}
+			return func(coerced2 any) any {
+				typed, _ := coerced2.(*Wrapped)
+				return original(convert(typed))
+			}
+		}
+	case DictionaryToFunctionCheckedArray:
+		return func(coerced func(any) any) func(any) any {
+			original := func(wrapped *WrappedArray) any {
+				accumulator := dictionary.Mempty
+				for index := len(wrapped.Wrapped) - 1; index >= 0; index-- {
+					x := wrapped.Wrapped[index]
+					accumulator = dictionary.Semigroup0.Append(coerced(x))(accumulator)
+				}
+				return accumulator
+			}
+			return func(coerced2 any) any {
+				typed, _ := coerced2.(*Wrapped)
+				return original(convert(typed))
+			}
+		}
+	case DictionaryToFunctionCountedWrappedArrayFoldableDictionary:
+		return func(coerced func(any) any) func(any) any {
+			original := func(wrapped *Wrapped) any {
+				return runDictionaryToFunction(function.FoldMap, dictionary)(coerced)(wrapped.Wrapped)
+			}
+			return func(coerced2 any) any {
+				typed, _ := coerced2.(*Wrapped)
+				return original(typed)
+			}
+		}
+	case DictionaryToFunctionDescribedWrappedArrayFoldableDictionary:
+		return func(coerced func(any) any) func(any) any {
+			original := func(wrapped *Wrapped) any {
+				return runDictionaryToFunction(function.FoldMap, dictionary)(coerced)(wrapped.Wrapped)
+			}
+			return func(coerced2 any) any {
+				typed, _ := coerced2.(*Wrapped)
+				return original(typed)
+			}
+		}
+	case DictionaryToFunctionDoubledWrappedArrayFunctorDictionaryFoldableDictionary:
+		return func(coerced func(any) any) func(any) any {
+			original := func(wrapped *Wrapped) any {
+				return runDictionaryToFunction(function.FoldMap, dictionary)(coerced)(wrapped.Wrapped)
+			}
+			return func(coerced2 any) any {
+				typed, _ := coerced2.(*Wrapped)
+				return original(typed)
+			}
+		}
+	default: // DictionaryToFunctionCheckedWrappedArrayTraversableDictionaryFoldable1Functor0
+		return func(coerced func(any) any) func(any) any {
+			original := func(wrapped *Wrapped) any {
+				return runDictionaryToFunction(function.FoldMap, dictionary)(coerced)(wrapped.Wrapped)
+			}
+			return func(coerced2 any) any {
+				typed, _ := coerced2.(*Wrapped)
+				return original(typed)
+			}
+		}
+	}
+}
+
+func runApply0PureToFunction(function *Apply0PureToFunction, dictionary shared.Apply0Pure) func(func(any) any) func(any) any {
+	switch function.Tag {
+	case Apply0PureToFunctionCheckedArray:
+		original2 := func(visit func(any) any) func(*WrappedArray) any {
+			return func(wrapped *WrappedArray) any {
+				append_ := direct.Appender[any]()
+				accumulator := func(coerced []any) any {
+					return dictionary.Pure(coerced)
+				}([]any{})
+				for _, element := range wrapped.Wrapped {
+					accumulator = dictionary.Apply0.Apply(dictionary.Apply0.Functor0.Map(func(coerced any) any {
+						original := append_(coerced.([]any))
+						return func(coerced2 any) any {
+							return original(coerced2)
+						}
+					})(accumulator))(visit(element))
+				}
+				return dictionary.Apply0.Functor0.Map(func(coerced any) any {
+					return convert3(WrappedWrappedArray(coerced.([]any)))
+				})(accumulator)
+			}
+		}
+		return func(coerced func(any) any) func(any) any {
+			original := original2(coerced)
+			return func(coerced2 any) any {
+				typed, _ := coerced2.(*Wrapped)
+				return original(convert(typed))
+			}
+		}
+	default: // Apply0PureToFunctionCheckedWrappedArrayTraversableDictionaryFoldable1Functor0
+		return func(coerced func(any) any) func(any) any {
+			original := func(wrapped *Wrapped) any {
+				return dictionary.Apply0.Functor0.Map(func(coerced2 any) any {
+					return WrappedWrapped(coerced2)
+				})(runApply0PureToFunction(function.Traverse, dictionary)(coerced)(wrapped.Wrapped))
+			}
+			return func(coerced2 any) any {
+				typed, _ := coerced2.(*Wrapped)
+				return original(typed)
+			}
 		}
 	}
 }
@@ -1237,15 +1251,6 @@ func foldLanes(xs []int, initial int) int {
 // shared/shared.go
 package shared
 
-type Append struct {
-	Append func(any) func(any) any
-}
-
-type Semigroup0Mempty struct {
-	Semigroup0 Append
-	Mempty     any
-}
-
 func Convert(value []int) any {
 	converted := make([]any, len(value))
 	for index, element := range value {
@@ -1266,6 +1271,15 @@ type Functor0Apply struct {
 type Apply0Pure struct {
 	Apply0 Functor0Apply
 	Pure   func(any) any
+}
+
+type Append struct {
+	Append func(any) func(any) any
+}
+
+type Dictionary struct {
+	Semigroup0 Append
+	Mempty     any
 }
 
 // note: Main.counted takes its Foldable dictionary at run time, because polymorphic recursion reaches it at ever larger types; only this definition is slower

@@ -10,25 +10,7 @@ import (
 	"strings"
 )
 
-type IdentityOfString struct {
-	Second string
-	First  int
-}
-
-type IdentityOfUnit struct {
-	Second struct{}
-	First  int
-}
-
-var main_ = initializeMain_()
-
-func initializeMain_() []int {
-	updated := IdentityOfString{First: 1, Second: "s"}
-	updated.First = 99
-	updated2 := IdentityOfUnit{First: 0, Second: struct{}{}}
-	updated2.First = 3
-	return []int{updated.First, 7, updated2.First}
-}
+var main_ []int = []int{99, 7, 3}
 
 func main() {
 	texts := make([]string, 0, len(main_))

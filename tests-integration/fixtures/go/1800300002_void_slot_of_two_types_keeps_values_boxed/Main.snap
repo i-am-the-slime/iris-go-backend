@@ -1,0 +1,80 @@
+---
+source: tests-integration/src/fixtures.rs
+---
+// Data/Maybe/maybe.go
+package maybe
+
+import "fixture/Data/Void"
+
+const TagNothing = 0
+
+const TagJust = 1
+
+type Void struct {
+	Just void.Void
+	Tag  uint8
+}
+
+type Hooks struct {
+	OnCount *Void
+	OnWord  *Void
+}
+
+func JustVoid(just void.Void) *Void {
+	return &Void{Tag: TagJust, Just: just}
+}
+
+// Data/Void/void.go
+package void
+
+type Void any
+
+// main.go
+package main
+
+import (
+	"fixture/Data/Maybe"
+	journal "fixture/Journal_ffi"
+	"strconv"
+)
+
+func main() {
+	journal.Log(repeatHooks(hooks, "a", 1, 3))
+}
+
+func repeatHooks(chosen maybe.Hooks, word string, count int, rounds int) string {
+	for {
+		if rounds <= 0 {
+			return word + " " + strconv.Itoa(count)
+		}
+		var result string
+		switch chosen.OnWord.Tag {
+		case maybe.TagJust:
+			stored := chosen.OnWord.Just
+			original := stored.(func(any) any)
+			result = original(word).(string)
+		default: // maybe.TagNothing
+			result = word
+		}
+		var result2 int
+		switch chosen.OnCount.Tag {
+		case maybe.TagJust:
+			stored := chosen.OnCount.Just
+			original := stored.(func(any) any)
+			result2 = original(count).(int)
+		default: // maybe.TagNothing
+			result2 = count
+		}
+		word, count, rounds = result, result2, rounds-1
+	}
+}
+
+var hooks = initializeHooks()
+
+func initializeHooks() maybe.Hooks {
+	return maybe.Hooks{OnWord: maybe.JustVoid(func(coerced any) any {
+		return "<" + coerced.(string) + ">"
+	}), OnCount: maybe.JustVoid(func(coerced any) any {
+		return coerced.(int) * 2
+	})}
+}

@@ -807,14 +807,7 @@ func initializeMain_() []string {
 	} else {
 		result3 = "{ content-type: " + prim.ShowString(read3.Content_type2) + ", content_type: " + prim.ShowString(read3.Content_type) + " }"
 	}
-	updated := shared.Pair{A_: 1, A: 2}
-	updated.A_ = 10
-	updated2 := shared.Triple{A_: 3, A: "three", A2: 3.5}
-	updated2.A = "updated"
-	updated2.A2 = 0.5
-	updated3 := shared.Header{Content_type2: "text/plain", Content_type: "underscore"}
-	updated3.Content_type2 = "application/json"
-	return []string{result, result2, result3, "{ A: " + strconv.Itoa(updated.A_) + ", a: " + strconv.Itoa(updated.A) + " }", "{ A: " + strconv.Itoa(updated2.A_) + ", A2: " + prim.ShowNumber(updated2.A2) + ", a: " + prim.ShowString(updated2.A) + " }", "{ content-type: " + prim.ShowString(updated3.Content_type2) + ", content_type: " + prim.ShowString(updated3.Content_type) + " }"}
+	return []string{result, result2, result3, "{ A: 10, a: 2 }", "{ A: 3, A2: 0.5, a: " + prim.ShowString("updated") + " }", "{ content-type: " + prim.ShowString("application/json") + ", content_type: " + prim.ShowString("underscore") + " }"}
 }
 
 func main() {

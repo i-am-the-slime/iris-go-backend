@@ -1,0 +1,5 @@
+8
+{ alice: 40, bob: 80, carol: 120 }
+3
+24
+["alice","bob","carol"]

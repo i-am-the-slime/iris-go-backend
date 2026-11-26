@@ -121,7 +121,6 @@ import (
 	"fixture/Data/Show"
 	"fixture/Data/Variant"
 	"fixture/Labels"
-	"fixture/shared"
 	"github.com/i-am-the-slime/iris-go/array"
 	"github.com/i-am-the-slime/iris-go/console"
 	"strconv"
@@ -131,30 +130,14 @@ import (
 var main_ = initializeMain_()
 
 func initializeMain_() []string {
-	updated := shared.Odd{X_respondNow: 1, X1st: 2, Content_type2: "dash", Content_type: "underscore", X: 2, X_: 3, Über: 4}
-	updated.X_respondNow = 10
-	updated.Content_type2 = "changed"
 	replies := []variant.AX_respondNowALater{variant.X_respondNowAX_respondNowALater(7), variant.AAX_respondNowALater(1), variant.AAX_respondNowALater2(2), variant.LaterAX_respondNowALater("soon")}
 	mapped := make([]string, len(replies))
 	for index, element := range replies {
 		mapped[index] = labels.Describe(element)
 	}
-	return array.Append(mapped, []string{show.ArrayInt([]int{updated.X_respondNow, updated.X1st, updated.X, updated.X_, updated.Über}), updated.Content_type2 + " " + updated.Content_type, strconv.Itoa(len(replies))})
+	return array.Append(mapped, []string{show.ArrayInt([]int{10, 2, 2, 3, 4}), "changed underscore", strconv.Itoa(len(replies))})
 }
 
 func main() {
 	console.Print("[" + strings.Join(main_, " ") + "]")
-}
-
-// shared/shared.go
-package shared
-
-type Odd struct {
-	Content_type2 string `purescript:"content-type"`
-	Content_type  string
-	X1st          int `purescript:"1st"`
-	X_            int `purescript:"X"`
-	X_respondNow  int `purescript:"_respondNow"`
-	X             int
-	Über          int
 }

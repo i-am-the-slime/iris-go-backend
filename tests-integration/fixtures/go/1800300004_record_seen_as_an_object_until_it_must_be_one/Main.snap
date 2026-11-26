@@ -1,0 +1,51 @@
+---
+source: tests-integration/src/fixtures.rs
+---
+// Data/Show/show.go
+package show
+
+import "github.com/i-am-the-slime/iris-go/prim"
+
+func Show(s string) string {
+	return prim.ShowString(s)
+}
+
+func AppendShowArrayString(buffer []byte, array []string) []byte {
+	buffer = append(buffer, '[')
+	for index, element := range array {
+		if index > 0 {
+			buffer = append(buffer, ',')
+		}
+		buffer = prim.AppendShowString(buffer, element)
+	}
+	buffer = append(buffer, ']')
+	return buffer
+}
+
+func ArrayString(array []string) string {
+	return string(AppendShowArrayString(nil, array))
+}
+
+// main.go
+package main
+
+import (
+	"fixture/Data/Show"
+	journal "fixture/Journal_ffi"
+	"github.com/i-am-the-slime/iris-go/object"
+	"strconv"
+)
+
+func main() {
+	scores := object.FromEntries([]string{"alice", "bob", "carol"}, []int{4, 8, 12})
+	journal.Log("8")
+	journal.Log("{ alice: 40, bob: 80, carol: 120 }")
+	journal.Log("3")
+	array := object.Keys(scores)
+	accumulator := 0
+	for _, key := range array {
+		accumulator += object.UnsafeIndex(scores, key)
+	}
+	journal.Log(strconv.Itoa(accumulator))
+	journal.Log(show.ArrayString(object.Keys(scores)))
+}

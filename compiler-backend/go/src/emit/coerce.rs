@@ -42,6 +42,10 @@ where
             (Monotype::Erased(_), Monotype::Opaque) => self.array_boxes.erased_values_leave = true,
             _ => {}
         }
+        let value = match self.held_as_it_is(value, from, to)? {
+            Ok(held) => return Ok(held),
+            Err(value) => value,
+        };
         let from = self.opaque_when_uninhabited(from)?;
         let to = self.opaque_when_uninhabited(to)?;
         if from == to || (self.same_go_type(from, to)? && !self.performs_differently(from, to)) {
@@ -74,6 +78,44 @@ where
             | (Monotype::Opaque, Monotype::Nullable(_)) => {
                 let converter = self.converter(from, to)?;
                 Ok(call(identifier_expression(&converter), vec![value]))
+            }
+            (Monotype::Record(fields), Monotype::Object(element)) => {
+                let record = self.shared(value, "original", out);
+                let mut keys = Vec::with_capacity(fields.len());
+                let mut values = Vec::with_capacity(fields.len());
+                for record_field in fields.iter() {
+                    let field_value = self.read_field(record.clone(), from, &record_field.label);
+                    let field_value =
+                        self.coerce(field_value, record_field.monotype, element, out)?;
+                    keys.push((None, GoExpression::String(record_field.label.to_string())));
+                    values.push((None, field_value));
+                }
+                let keys = GoExpression::Composite {
+                    type_: GoType::Slice(Box::new(GoType::String)),
+                    fields: keys,
+                };
+                let element_type = self.go_type(element)?;
+                let values = GoExpression::Composite {
+                    type_: GoType::Slice(Box::new(element_type)),
+                    fields: values,
+                };
+                let entries = self
+                    .go_function(GoFunction { package: GoPackage::Object, name: "FromEntries" });
+                Ok(call(entries, vec![keys, values]))
+            }
+            (Monotype::Object(element), Monotype::Record(fields)) => {
+                let object = self.shared(value, "object", out);
+                let index = self
+                    .go_function(GoFunction { package: GoPackage::Object, name: "UnsafeIndex" });
+                let mut values = Vec::with_capacity(fields.len());
+                for record_field in fields.iter() {
+                    let label = GoExpression::String(record_field.label.to_string());
+                    let field_value = call(index.clone(), vec![object.clone(), label]);
+                    let field_value =
+                        self.coerce(field_value, element, record_field.monotype, out)?;
+                    values.push((record_field.label.clone(), field_value));
+                }
+                self.record_value(to, values)
             }
             (Monotype::Record(fields), Monotype::Opaque) => {
                 let record = self.shared(value, "original", out);
@@ -265,6 +307,13 @@ where
                 Ok(GoExpression::Composite { type_, fields: vec![] })
             }
             (Monotype::Record(fields), Monotype::Unit) if fields.is_empty() => Ok(unit_value()),
+            (Monotype::Unit, Monotype::String) => Ok(GoExpression::String(String::new())),
+            (Monotype::Unit, Monotype::Boolean) => Ok(GoExpression::Boolean(false)),
+            (Monotype::Unit, _) => {
+                let type_ = self.go_type(to)?;
+                let allocated = call(identifier_expression("new"), vec![GoExpression::Type(type_)]);
+                Ok(GoExpression::Unary { operator: "*", operand: Box::new(allocated) })
+            }
             _ => Err(GoError::unsupported_construct(UNRELATED_TYPES)),
         }
     }
@@ -487,7 +536,7 @@ where
 
     /// Whether a recursive newtype unfolds through newtypes alone back to
     /// itself, as `Data.Void` does.
-    fn is_uninhabited(&mut self, data: &DataType) -> GoResult<bool> {
+    pub(super) fn is_uninhabited(&mut self, data: &DataType) -> GoResult<bool> {
         let unfolded = self.unfold(data)?;
         self.unfolds_only_to_newtypes(data, unfolded)
     }
@@ -830,7 +879,11 @@ where
         let names = vec!["converted".into()];
         body.push(GoStatement::Define { names, values: vec![allocation] });
         let mut each = vec![];
-        let element = identifier_expression("element");
+        let name = if self.is_unit(from_element) { "_" } else { "element" };
+        let element = match self.is_unit(from_element) {
+            true => unit_value(),
+            false => identifier_expression(name),
+        };
         let element = self.coerce(element, from_element, to_element, &mut each)?;
         let slot = GoExpression::Index {
             value: Box::new(identifier_expression("converted")),
@@ -839,7 +892,7 @@ where
         each.push(GoStatement::Assign { targets: vec![slot], values: vec![element] });
         body.push(GoStatement::Range {
             index: Some("index".into()),
-            element: "element".into(),
+            element: name.into(),
             iterable: array,
             body: each,
         });
@@ -1168,40 +1221,12 @@ where
         match self.coerce(value, from, to, out) {
             Err(GoError::Unsupported {
                 state: UnsupportedState::Construct { construct }, ..
-            }) if construct == UNRELATED_TYPES && self.is_unit(from) => {
-                let type_ = self.go_type(to)?;
-                let allocated = call(identifier_expression("new"), vec![GoExpression::Type(type_)]);
-                Ok(GoExpression::Unary { operator: "*", operand: Box::new(allocated) })
-            }
-            Err(GoError::Unsupported {
-                state: UnsupportedState::Construct { construct }, ..
             }) if construct == UNRELATED_TYPES => {
-                let reason = match (
-                    self.monotypes.effect_result(from),
-                    self.monotypes.effect_result(to),
-                ) {
-                    _ if matches!(self.monotypes.get(from), Monotype::Record(_))
-                        && matches!(self.monotypes.get(to), Monotype::ForeignData(_)) =>
-                    {
+                let reason = match (self.monotypes.get(from), self.monotypes.get(to)) {
+                    (Monotype::Record(_), Monotype::ForeignData(_)) => {
                         let foreign = self.purescript_type(to)?;
                         format!(
                             ": on Go a record is a struct, not already a {foreign} as on JavaScript; build the value with its library's functions (encodeJson or fromObject for Json) instead of coercing"
-                        )
-                    }
-                    _ if let Some(promised) = self.value_lost_to_unit(from, to)
-                        && self.monotypes.effect_result(from).is_none() =>
-                    {
-                        let promised = self.purescript_type(promised)?;
-                        format!(
-                            ": a Unit stands where its new type promises {promised}, and Go keeps no value for Unit, so whatever the value was before it was typed Unit is gone; keep its type instead of passing it through Unit or Void"
-                        )
-                    }
-                    (Some(from_result), Some(to_result))
-                        if self.is_unit(from_result) && !self.is_unit(to_result) =>
-                    {
-                        let promised = self.purescript_type(to_result)?;
-                        format!(
-                            ": the action returns Unit, which has no value to give as the {promised} its new type promises; make the action return a value of type {promised} instead of coercing it"
                         )
                     }
                     _ => String::new(),
@@ -1244,22 +1269,5 @@ where
             to_go: self.go_type(to)?.render(),
             reason,
         })))
-    }
-}
-
-impl<'q, Q> Emitter<'_, '_, 'q, Q>
-where
-    Q: checking::ExternalQueries,
-{
-    fn value_lost_to_unit(&self, from: MonotypeId, to: MonotypeId) -> Option<MonotypeId> {
-        match (self.monotypes.get(from), self.monotypes.get(to)) {
-            (Monotype::Unit, to_monotype) if !matches!(to_monotype, Monotype::Unit) => Some(to),
-            (Monotype::Function(_, from_result), Monotype::Function(_, to_result))
-            | (Monotype::Effect(from_result), Monotype::Effect(to_result))
-            | (Monotype::Array(from_result), Monotype::Array(to_result)) => {
-                self.value_lost_to_unit(*from_result, *to_result)
-            }
-            _ => None,
-        }
     }
 }

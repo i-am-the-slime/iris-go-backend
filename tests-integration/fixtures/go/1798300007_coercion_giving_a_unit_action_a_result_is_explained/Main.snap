@@ -1,4 +1,0 @@
----
-source: tests-integration/src/fixtures.rs
----
-Main.purs:17:18: cannot specialize Main.main: unsafeCoerce from an Effect or Aff of Unit (Go func()) to an Effect or Aff of Int (Go func() int) changes representation: the action returns Unit, which has no value to give as the Int its new type promises; make the action return a value of type Int instead of coercing it

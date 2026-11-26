@@ -1,0 +1,96 @@
+---
+source: tests-integration/src/fixtures.rs
+---
+// Data/Maybe/maybe.go
+package maybe
+
+import "fixture/Data/Void"
+
+const TagNothing = 0
+
+const TagJust = 1
+
+type Void struct {
+	Just void.Void
+	Tag  uint8
+}
+
+type Hooks struct {
+	OnLine *Void
+	OnWord *Void
+}
+
+func JustVoid(just void.Void) *Void {
+	return &Void{Tag: TagJust, Just: just}
+}
+
+// Data/Void/void.go
+package void
+
+type Void any
+
+// main.go
+package main
+
+import (
+	"fixture/Data/Maybe"
+	journal "fixture/Journal_ffi"
+	"fixture/shared"
+	"github.com/i-am-the-slime/iris-go/prim"
+)
+
+func main() {
+	text := prim.StringJoinWith(" ", decorate(hooks, []string{"a", "b"}, 2))
+	var result string
+	switch hooks.OnLine.Tag {
+	case maybe.TagJust:
+		result = hooks.OnLine.Just.(func(string) string)(text)
+	default: // maybe.TagNothing
+		result = text
+	}
+	journal.Log(result)
+	journal.Log("untouched")
+}
+
+func decorate(chosen maybe.Hooks, words []string, rounds int) []string {
+	var wordsOwned []string
+	var wordsSpare []string
+	for {
+		if rounds <= 0 {
+			return words
+		}
+		mapped := shared.Recycle(wordsSpare, len(words))
+		for index, text := range words {
+			var result string
+			switch chosen.OnWord.Tag {
+			case maybe.TagJust:
+				result = chosen.OnWord.Just.(func(string) string)(text)
+			default: // maybe.TagNothing
+				result = text
+			}
+			mapped[index] = result
+		}
+		wordsOwned, wordsSpare = mapped, wordsOwned
+		words, rounds = mapped, rounds-1
+	}
+}
+
+var hooks = initializeHooks()
+
+func initializeHooks() maybe.Hooks {
+	return maybe.Hooks{OnWord: maybe.JustVoid(func(word string) string {
+		return "<" + word + ">"
+	}), OnLine: maybe.JustVoid(func(line string) string {
+		return line + "!"
+	})}
+}
+
+// shared/shared.go
+package shared
+
+func Recycle[T any, N ~int | ~int32 | ~int64](buffer []T, count N) []T {
+	if cap(buffer) < int(count) {
+		return make([]T, count)
+	}
+	return buffer[:count]
+}

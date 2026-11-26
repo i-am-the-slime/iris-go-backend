@@ -1,0 +1,82 @@
+---
+source: tests-integration/src/fixtures.rs
+---
+// Data/Either/either.go
+package either
+
+import "github.com/i-am-the-slime/iris-go/exception"
+
+type Either struct {
+	Right struct{}
+	Left  exception.Error
+	Tag   uint8
+}
+
+const (
+	EitherLeft = iota
+	EitherRight
+)
+
+type OnComplete struct {
+	Handler func(func(Either))
+	Rethrow bool
+}
+
+func Left(left exception.Error) Either {
+	return Either{Tag: EitherLeft, Left: left}
+}
+
+func Right(right struct{}) Either {
+	return Either{Tag: EitherRight, Right: right}
+}
+
+// Effect/Aff/aff.go
+package effectaff
+
+import (
+	"fixture/Data/Either"
+	"github.com/i-am-the-slime/iris-go/exception"
+)
+
+type Fiber struct {
+	IsSuspended func() bool
+	Join        func(func(either.Either)) func()
+	Kill        func(exception.Error) func(func(either.Either)) func()
+	OnComplete  func(either.OnComplete) func()
+	Run         func()
+}
+
+// main.go
+package main
+
+import (
+	"fixture/Data/Either"
+	journal "fixture/Journal_ffi"
+	"github.com/i-am-the-slime/iris-go/aff"
+	"github.com/i-am-the-slime/iris-go/eventloop"
+	"github.com/i-am-the-slime/iris-go/exception"
+	"strconv"
+)
+
+func main() {
+	defer eventloop.Await()
+	fiber := aff.NewFiber(func() struct{} {
+		original := func() {
+			journal.Log("handled")
+		}
+		counted := func() int {
+			original()
+			return *new(int)
+		}()
+		journal.Log(strconv.Itoa(counted))
+		return struct{}{}
+	})
+	_, _, _, _, run := aff.FiberFields(fiber, func(payload exception.Error) either.Either {
+		return either.Left(payload)
+	}, func(payload struct{}) either.Either {
+		return either.Right(payload)
+	}, either.Right(struct{}{}), func(value either.OnComplete) func(func(either.Either)) {
+		return value.Handler
+	})
+	run()
+}

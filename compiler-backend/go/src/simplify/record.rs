@@ -47,21 +47,26 @@ impl Simplifier<'_> {
         if let Some(widened) = self.widened_record(&value, monotype) {
             return widened;
         }
-        if let Monotype::Record(_) = self.monotypes.get(value.monotype)
-            && let Monotype::Opaque = self.monotypes.get(monotype)
-        {
-            return self.foreign_record(value, monotype);
+        if let Some(seen) = self.record_seen_through(&value) {
+            return self.coerce(seen, monotype);
         }
-        if let Monotype::Record(_) = self.monotypes.get(value.monotype)
-            && let Monotype::Object(element) = *self.monotypes.get(monotype)
-        {
-            return self.homogeneous_object(value, element, monotype);
+        if !self.records_settled && self.is_record_view(value.monotype, monotype) {
+            return Expression::new(ExpressionKind::Coerce(Box::new(value)), monotype);
         }
-        if let Monotype::Object(element) = *self.monotypes.get(value.monotype)
-            && let Monotype::Record(fields) = self.monotypes.get(monotype).clone()
-        {
-            return self.record_of_object(value, element, &fields, monotype);
+        match (self.monotypes.get(value.monotype).clone(), self.monotypes.get(monotype).clone()) {
+            (Monotype::Record(_), Monotype::Opaque) => return self.foreign_record(value, monotype),
+            (Monotype::Record(_), Monotype::Object(element)) => {
+                return self.homogeneous_object(value, element, monotype);
+            }
+            (Monotype::Object(element), Monotype::Record(fields)) => {
+                return self.record_of_object(value, element, &fields, monotype);
+            }
+            _ => {}
         }
+        let value = match self.pushed_coercion(value, monotype) {
+            Ok(pushed) => return pushed,
+            Err(value) => value,
+        };
         Expression::new(ExpressionKind::Coerce(Box::new(value)), monotype)
     }
 
@@ -479,5 +484,37 @@ impl Simplifier<'_> {
         }
         let monotype = body.monotype;
         Expression::new(ExpressionKind::Let { bindings, body: Box::new(body) }, monotype)
+    }
+}
+
+impl Simplifier<'_> {
+    pub(super) fn updated_record(
+        &mut self,
+        record: Expression,
+        updates: Vec<crate::monomorphic::RecordUpdate>,
+        monotype: MonotypeId,
+    ) -> Expression {
+        let ExpressionKind::Record(fields) = &record.kind else {
+            let kind = ExpressionKind::Update { record: Box::new(record), updates };
+            return Expression::new(kind, monotype);
+        };
+        let replaces_only_values = updates.iter().all(|update| match update {
+            crate::monomorphic::RecordUpdate::Leaf { label, .. } => fields
+                .iter()
+                .any(|(field, value)| field == label && crate::purity::is_discardable(value)),
+            crate::monomorphic::RecordUpdate::Branch { .. } => false,
+        });
+        if !replaces_only_values {
+            let kind = ExpressionKind::Update { record: Box::new(record), updates };
+            return Expression::new(kind, monotype);
+        }
+        let ExpressionKind::Record(mut fields) = record.kind else { unreachable!() };
+        for update in updates {
+            let crate::monomorphic::RecordUpdate::Leaf { label, value } = update else {
+                unreachable!("invariant violated: only leaf updates replace values")
+            };
+            assign(&mut fields, label, value);
+        }
+        Expression::new(ExpressionKind::Record(fields), monotype).replacing(record.position)
     }
 }

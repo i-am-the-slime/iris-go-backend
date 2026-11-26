@@ -6,22 +6,17 @@ package main
 
 import journal "fixture/Journal_ffi"
 
-type PairInt struct {
+type Pair struct {
 	Second string
-	First  int
-}
-
-type Await struct {
-	Await func(int) any
-}
-
-type Emit struct {
-	Second any
 	First  int
 }
 
 type AwaitInt struct {
 	Await func(int) int
+}
+
+type Await struct {
+	Await func(int) any
 }
 
 func convert(value AwaitInt) *Await {
@@ -35,33 +30,21 @@ type EmitString struct {
 	First  int
 }
 
+type Emit struct {
+	Second any
+	First  int
+}
+
 func convert2(value EmitString) *Emit {
 	return &Emit{First: value.First, Second: value.Second}
 }
 
-type Pair struct {
-	First  any
-	Second any
-	Origin any
-}
-
-func convert3(value PairInt) *Pair {
-	return &Pair{First: value.First, Second: value.Second, Origin: value}
-}
-
-func convert4(value *Pair) PairInt {
-	if original, ok := value.Origin.(PairInt); ok {
-		return original
-	}
-	return PairInt{First: value.First.(int), Second: value.Second.(string)}
-}
-
 func main() {
 	times := journal.Count()
-	journal.Log(mainGo(PairInt{First: times, Second: "apples"})(struct{}{}))
+	journal.Log(mainGo(Pair{First: times, Second: "apples"})(struct{}{}))
 }
 
-func mainGo(pair PairInt) func(struct{}) string {
+func mainGo(pair Pair) func(struct{}) string {
 	times := pair.First
 	name := pair.Second
 	if times > 0 {
@@ -69,7 +52,7 @@ func mainGo(pair PairInt) func(struct{}) string {
 			return value - 1
 		}})
 		scrutinee2 := convert2(EmitString{First: times, Second: name + "!"})
-		pair2 := convert4(convert3(PairInt{First: scrutinee.Await(scrutinee2.First).(int), Second: scrutinee2.Second.(string)}))
+		pair2 := Pair{First: scrutinee.Await(scrutinee2.First).(int), Second: scrutinee2.Second.(string)}
 		return func(_ struct{}) string {
 			return mainGo(pair2)(struct{}{})
 		}
