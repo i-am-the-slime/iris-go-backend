@@ -199,7 +199,9 @@ fn bitwise(operator: Operator, left: GoExpression, right: GoExpression) -> Optio
         None => binary("&", right, GoExpression::Integer(63)),
     };
     if let Operator::IntZeroFillShiftRight = operator {
+        // Go rejects `uint(c)` for a negative constant `c`, so its bits are spelled as a `uint`.
         let unsigned = match int_constant(&left) {
+            Some(x) if x < 0 => GoExpression::Identifier((x as u64).to_string()),
             Some(x) => GoExpression::Integer(x),
             None => left,
         };

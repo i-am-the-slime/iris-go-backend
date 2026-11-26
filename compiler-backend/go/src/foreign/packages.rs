@@ -79,7 +79,7 @@ const RUNTIME_SIGNATURES: &[(&str, &str)] = &[
     (
         "direct",
         "func Uncons[A, B any](empty func(struct{}) B, nonEmpty func(A, []A) B, xs []A) B {}
-         func PeekUnsafe[A any](i int32, arr *[]A) A {}
+         func PeekUnsafe[A any](i int, arr *[]A) A {}
          func CatchException[A any](handler func(exception.Error) A, action func() A) A {}
          func FindMap[A, M any](nothing M, isJust func(M) bool, f func(A) M, xs []A) M {}",
     ),

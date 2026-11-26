@@ -139,7 +139,7 @@ import (
 	"strings"
 )
 
-func Greet() int32 {
+func Greet() int {
 	fmt.Println("hello " + strings.Join(os.Args[1:], ","))
 	return 3
 }
@@ -189,7 +189,7 @@ var greeting string
 //go:embed linked/logo.svg all:config
 var assets embed.FS
 
-func Greet() int32 {
+func Greet() int {
 	fmt.Print(greeting)
 	fs.WalkDir(assets, ".", func(path string, entry fs.DirEntry, err error) error {
 		if !entry.IsDir() {
@@ -234,7 +234,7 @@ func Greet() int32 {
 #[test]
 fn run_go_refuses_an_embed_pattern_that_leaves_the_directory_of_the_go_file() {
     let workspace = greeting_workspace(
-        "package ffi\n\nimport _ \"embed\"\n\n//go:embed ../shared/greeting.txt\nvar greeting string\n\nfunc Greet() int32 { return 0 }\n",
+        "package ffi\n\nimport _ \"embed\"\n\n//go:embed ../shared/greeting.txt\nvar greeting string\n\nfunc Greet() int { return 0 }\n",
     );
     workspace.write("shared/greeting.txt", "Hello!\n");
 
@@ -250,7 +250,7 @@ fn run_go_refuses_an_embed_pattern_that_leaves_the_directory_of_the_go_file() {
 #[test]
 fn run_go_names_the_go_file_and_the_embed_pattern_that_matches_nothing() {
     let workspace = greeting_workspace(
-        "package ffi\n\nimport _ \"embed\"\n\n//go:embed greeting.txt\nvar greeting string\n\nfunc Greet() int32 { return 0 }\n",
+        "package ffi\n\nimport _ \"embed\"\n\n//go:embed greeting.txt\nvar greeting string\n\nfunc Greet() int { return 0 }\n",
     );
 
     let output = workspace.command(&["run", "--go", "--quiet"]);
@@ -286,7 +286,7 @@ fn run_go_and_go_copy_the_files_a_dependency_embeds() {
     );
     workspace.write(
         "packages/greeting/src/Greeting.go",
-        "package ffi\n\nimport (\n\t_ \"embed\"\n\t\"fmt\"\n)\n\n//go:embed greeting.txt\nvar greeting string\n\nfunc Greet() int32 {\n\tfmt.Print(greeting)\n\treturn 0\n}\n",
+        "package ffi\n\nimport (\n\t_ \"embed\"\n\t\"fmt\"\n)\n\n//go:embed greeting.txt\nvar greeting string\n\nfunc Greet() int {\n\tfmt.Print(greeting)\n\treturn 0\n}\n",
     );
     workspace.write("packages/greeting/src/greeting.txt", "Hello from a dependency!\n");
     workspace
@@ -336,7 +336,7 @@ main = exitWith (third [ 1, 2 ])
     );
     workspace.write(
         "src/Main.go",
-        "package ffi\n\nfunc At(numbers []int32, index int32) int32 {\n\treturn numbers[index]\n}\n\nfunc ExitWith(status int32) int32 {\n\treturn status\n}\n",
+        "package ffi\n\nfunc At(numbers []int, index int) int {\n\treturn numbers[index]\n}\n\nfunc ExitWith(status int) int {\n\treturn status\n}\n",
     );
 
     let output = workspace.command(&["run", "--go", "--quiet"]);
