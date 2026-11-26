@@ -1,0 +1,367 @@
+---
+source: tests-integration/src/fixtures.rs
+---
+// Data/Map/Internal/internal.go
+package internal
+
+type Map struct {
+	Node4 *Map
+	Node5 *Map
+	Node0 int
+	Node1 int
+	Node2 int
+	Node3 int
+}
+
+var SharedMapLeaf = &Map{}
+
+type State struct {
+	ByKey *Map
+	Clock int
+}
+
+type SplitLast struct {
+	Third  *Map
+	First  int
+	Second int
+}
+
+func Node(node0 int, node1 int, node2 int, node3 int, node4 *Map, node5 *Map) *Map {
+	return &Map{Node0: node0, Node1: node1, Node2: node2, Node3: node3, Node4: node4, Node5: node5}
+}
+
+func UnsafeNodeInt(k int, v int, l *Map, r *Map) *Map {
+	if l == SharedMapLeaf {
+		if r == SharedMapLeaf {
+			return Node(1, 1, k, v, l, r)
+		}
+		return Node(1+r.Node0, 1+r.Node1, k, v, l, r)
+	}
+	h1 := l.Node0
+	s1 := l.Node1
+	if r == SharedMapLeaf {
+		return Node(1+h1, 1+s1, k, v, l, r)
+	}
+	h2 := r.Node0
+	result := max(h1, h2)
+	return Node(1+result, 1+s1+r.Node1, k, v, l, r)
+}
+
+func UnsafeBalancedNode(k int, v int, l *Map, r *Map, donor *Map) *Map {
+	if l == SharedMapLeaf {
+		if r == SharedMapLeaf {
+			donor.Node0 = 1
+			donor.Node1 = 1
+			donor.Node2 = k
+			donor.Node3 = v
+			donor.Node4 = SharedMapLeaf
+			donor.Node5 = SharedMapLeaf
+			return donor
+		}
+		if r != SharedMapLeaf {
+			rh := r.Node0
+			rk := r.Node2
+			rv := r.Node3
+			rl := r.Node4
+			rr := r.Node5
+			if rh > 1 {
+				return UnsafeBalancedNodeRotateLeft(k, v, l, rk, rv, rl, rr, donor)
+			}
+		}
+		return UnsafeNodeIntReusing(k, v, l, r, donor)
+	}
+	lh := l.Node0
+	lk := l.Node2
+	lv := l.Node3
+	ll := l.Node4
+	lr := l.Node5
+	if r != SharedMapLeaf {
+		rh := r.Node0
+		rk := r.Node2
+		rv := r.Node3
+		rl := r.Node4
+		rr := r.Node5
+		if rh > lh+1 {
+			return UnsafeBalancedNodeRotateLeft(k, v, l, rk, rv, rl, rr, donor)
+		}
+		if lh > rh+1 {
+			return UnsafeBalancedNodeRotateRight2(k, v, lk, lv, ll, lr, r, donor)
+		}
+	}
+	if r == SharedMapLeaf {
+		if lh > 1 {
+			return UnsafeBalancedNodeRotateRight2(k, v, lk, lv, ll, lr, r, donor)
+		}
+	}
+	return UnsafeNodeIntReusing(k, v, l, r, donor)
+}
+
+func UnsafeSplitLast(k int, v int, l *Map, r *Map) SplitLast {
+	if r == SharedMapLeaf {
+		return SplitLast{First: k, Second: v, Third: l}
+	}
+	rk := r.Node2
+	rv := r.Node3
+	rl := r.Node4
+	rr := r.Node5
+	scrutinee := UnsafeSplitLast(rk, rv, rl, rr)
+	return SplitLast{First: scrutinee.First, Second: scrutinee.Second, Third: UnsafeBalancedNode2(k, v, l, scrutinee.Third)}
+}
+
+func UnsafeBalancedNode2(k int, v int, l *Map, r *Map) *Map {
+	if l == SharedMapLeaf {
+		if r == SharedMapLeaf {
+			return Node(1, 1, k, v, SharedMapLeaf, SharedMapLeaf)
+		}
+		if r != SharedMapLeaf {
+			rh := r.Node0
+			rk := r.Node2
+			rv := r.Node3
+			rl := r.Node4
+			rr := r.Node5
+			if rh > 1 {
+				return UnsafeBalancedNodeRotateLeft(k, v, l, rk, rv, rl, rr, r)
+			}
+		}
+		return UnsafeNodeInt(k, v, l, r)
+	}
+	lh := l.Node0
+	lk := l.Node2
+	lv := l.Node3
+	ll := l.Node4
+	lr := l.Node5
+	if r != SharedMapLeaf {
+		rh := r.Node0
+		rk := r.Node2
+		rv := r.Node3
+		rl := r.Node4
+		rr := r.Node5
+		if rh > lh+1 {
+			return UnsafeBalancedNodeRotateLeft(k, v, l, rk, rv, rl, rr, r)
+		}
+		if lh > rh+1 {
+			return UnsafeBalancedNodeRotateRight(k, v, lk, lv, ll, lr, r)
+		}
+	}
+	if r == SharedMapLeaf {
+		if lh > 1 {
+			return UnsafeBalancedNodeRotateRight(k, v, lk, lv, ll, lr, r)
+		}
+	}
+	return UnsafeNodeInt(k, v, l, r)
+}
+
+func UnsafeBalancedNodeRotateLeft(k int, v int, l *Map, rk int, rv int, rl *Map, rr *Map, donor *Map) *Map {
+	if rl != SharedMapLeaf {
+		lh := rl.Node0
+		lk := rl.Node2
+		lv := rl.Node3
+		ll := rl.Node4
+		lr := rl.Node5
+		var result int
+		if rr == SharedMapLeaf {
+			result = 0
+		} else {
+			result = rr.Node0
+		}
+		if lh > result {
+			return UnsafeNodeIntReusing(lk, lv, UnsafeNodeInt(k, v, l, ll), UnsafeNodeInt(rk, rv, lr, rr), donor)
+		}
+	}
+	return UnsafeNodeIntReusing(rk, rv, UnsafeNodeInt(k, v, l, rl), rr, donor)
+}
+
+func UnsafeBalancedNodeRotateRight(k int, v int, lk int, lv int, ll *Map, lr *Map, r *Map) *Map {
+	if lr != SharedMapLeaf {
+		rh := lr.Node0
+		rk := lr.Node2
+		rv := lr.Node3
+		rl := lr.Node4
+		rr := lr.Node5
+		var result int
+		if ll == SharedMapLeaf {
+			result = 0
+		} else {
+			result = ll.Node0
+		}
+		if result <= rh {
+			return UnsafeNodeIntReusing(rk, rv, UnsafeNodeInt(lk, lv, ll, rl), UnsafeNodeInt(k, v, rr, r), lr)
+		}
+	}
+	return UnsafeNodeInt(lk, lv, ll, UnsafeNodeInt(k, v, lr, r))
+}
+
+func UnsafeNodeIntReusing(k int, v int, l *Map, r *Map, donor *Map) *Map {
+	if l == SharedMapLeaf {
+		if r == SharedMapLeaf {
+			donor.Node0 = 1
+			donor.Node1 = 1
+			donor.Node2 = k
+			donor.Node3 = v
+			donor.Node4 = l
+			donor.Node5 = r
+			return donor
+		}
+		h2 := r.Node0
+		s2 := r.Node1
+		donor.Node0 = 1 + h2
+		donor.Node1 = 1 + s2
+		donor.Node2 = k
+		donor.Node3 = v
+		donor.Node4 = l
+		donor.Node5 = r
+		return donor
+	}
+	h1 := l.Node0
+	s1 := l.Node1
+	if r == SharedMapLeaf {
+		donor.Node0 = 1 + h1
+		donor.Node1 = 1 + s1
+		donor.Node2 = k
+		donor.Node3 = v
+		donor.Node4 = l
+		donor.Node5 = r
+		return donor
+	}
+	h22 := r.Node0
+	s22 := r.Node1
+	result := max(h1, h22)
+	donor.Node0 = 1 + result
+	donor.Node1 = 1 + s1 + s22
+	donor.Node2 = k
+	donor.Node3 = v
+	donor.Node4 = l
+	donor.Node5 = r
+	return donor
+}
+
+func UnsafeBalancedNodeRotateRight2(k int, v int, lk int, lv int, ll *Map, lr *Map, r *Map, donor *Map) *Map {
+	if lr != SharedMapLeaf {
+		rh := lr.Node0
+		rk := lr.Node2
+		rv := lr.Node3
+		rl := lr.Node4
+		rr := lr.Node5
+		var result int
+		if ll == SharedMapLeaf {
+			result = 0
+		} else {
+			result = ll.Node0
+		}
+		if result <= rh {
+			return UnsafeNodeIntReusing(rk, rv, UnsafeNodeInt(lk, lv, ll, rl), UnsafeNodeInt(k, v, rr, r), donor)
+		}
+	}
+	return UnsafeNodeIntReusing(lk, lv, ll, UnsafeNodeInt(k, v, lr, r), donor)
+}
+
+func InsertGo(k int, v int, value *Map) *Map {
+	if value == SharedMapLeaf {
+		return Node(1, 1, k, v, SharedMapLeaf, SharedMapLeaf)
+	}
+	mk := value.Node2
+	mv := value.Node3
+	ml := value.Node4
+	mr := value.Node5
+	if k < mk {
+		return UnsafeBalancedNode(mk, mv, InsertGo(k, v, ml), mr, value)
+	}
+	if k == mk {
+		value.Node2 = k
+		value.Node3 = v
+		return value
+	}
+	return UnsafeBalancedNode(mk, mv, ml, InsertGo(k, v, mr), value)
+}
+
+// main.go
+package main
+
+import (
+	"fixture/Data/Map/Internal"
+	"github.com/i-am-the-slime/iris-go/console"
+	"github.com/i-am-the-slime/iris-go/prim"
+)
+
+var main_ = initializeMain_()
+
+func initializeMain_() int {
+	mapped := make([]int, 2000)
+	for index := range 2000 {
+		value := 1 + index
+		mapped[index] = prim.IntModPositive(value, 50)
+	}
+	accumulator := internal.State{Clock: 0, ByKey: internal.SharedMapLeaf}
+	for _, element := range mapped {
+		accumulator = tickReusing(accumulator, element)
+	}
+	var result int
+	if accumulator.ByKey == internal.SharedMapLeaf {
+		result = 0
+	} else {
+		result = accumulator.ByKey.Node1
+	}
+	accumulator2 := internal.State{Clock: 0, ByKey: internal.SharedMapLeaf}
+	for _, element := range mapped {
+		accumulator2 = stepReusing(accumulator2, element)
+	}
+	var result2 int
+	if accumulator2.ByKey == internal.SharedMapLeaf {
+		result2 = 0
+	} else {
+		result2 = accumulator2.ByKey.Node1
+	}
+	return accumulator.Clock + result + result2
+}
+
+func tickReusing(state internal.State, key int) internal.State {
+	updated := state
+	updated.Clock = state.Clock + 1
+	updated.ByKey = internal.InsertGo(key, state.Clock, state.ByKey)
+	return updated
+}
+
+func stepReusing(state internal.State, key int) internal.State {
+	if key%3 == 0 {
+		key2 := key - 1
+		updated := state
+		updated.ByKey = stepGoReusing(key2, state.ByKey)
+		updated2 := updated
+		updated2.Clock = updated.Clock + 1
+		updated2.ByKey = internal.InsertGo(key, updated.Clock, updated.ByKey)
+		return updated2
+	}
+	updated3 := state
+	updated3.Clock = state.Clock + 1
+	updated3.ByKey = internal.InsertGo(key, state.Clock, state.ByKey)
+	return updated3
+}
+
+func stepGoReusing(key int, value *internal.Map) *internal.Map {
+	if value == internal.SharedMapLeaf {
+		return internal.SharedMapLeaf
+	}
+	mk := value.Node2
+	mv := value.Node3
+	ml := value.Node4
+	mr := value.Node5
+	if key < mk {
+		return internal.UnsafeBalancedNode(mk, mv, stepGoReusing(key, ml), mr, value)
+	}
+	if key == mk {
+		if ml == internal.SharedMapLeaf {
+			return mr
+		}
+		lk := ml.Node2
+		lv := ml.Node3
+		ll := ml.Node4
+		lr := ml.Node5
+		scrutinee := internal.UnsafeSplitLast(lk, lv, ll, lr)
+		return internal.UnsafeBalancedNode(scrutinee.First, scrutinee.Second, scrutinee.Third, mr, value)
+	}
+	return internal.UnsafeBalancedNode(mk, mv, ml, stepGoReusing(key, mr), value)
+}
+
+func main() {
+	console.Print(prim.ShowInt(main_))
+}

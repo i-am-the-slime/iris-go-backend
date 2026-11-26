@@ -55,8 +55,11 @@ pub(super) fn inspects(
     call: &Expression,
     argument: &Expression,
 ) -> bool {
-    if !matches!(argument.kind, ExpressionKind::Local(_)) {
-        return false;
+    let field_of_a_local = |record: &Expression| matches!(record.kind, ExpressionKind::Local(_));
+    match &argument.kind {
+        ExpressionKind::Local(_) => {}
+        ExpressionKind::Access { record, .. } if field_of_a_local(record) => {}
+        _ => return false,
     }
     let Some(cell) = cells.cell(argument.monotype) else { return false };
     let reads = match &call.kind {

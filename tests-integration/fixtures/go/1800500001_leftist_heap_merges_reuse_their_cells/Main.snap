@@ -1,0 +1,298 @@
+---
+source: tests-integration/src/fixtures.rs
+---
+// Data/Maybe/maybe.go
+package maybe
+
+const TagNothing = 0
+
+const TagJust = 1
+
+// Data/Tuple/tuple.go
+package tuple
+
+type Tuple struct {
+	First  int
+	Second int
+}
+
+// main.go
+package main
+
+import (
+	"fixture/Data/Maybe"
+	"fixture/Data/Tuple"
+	"fixture/shared"
+	"fixture/shared/Data.Maybe+Data.Tuple"
+	"github.com/i-am-the-slime/iris-go/console"
+	"github.com/i-am-the-slime/iris-go/prim"
+)
+
+type Heap struct {
+	Node2 *Heap
+	Node3 *Heap
+	Node0 int
+	Node1 tuple.Tuple
+}
+
+var sharedHeapLeaf = &Heap{}
+
+func Node(node0 int, node1 tuple.Tuple, node2 *Heap, node3 *Heap) *Heap {
+	return &Heap{Node0: node0, Node1: node1, Node2: node2, Node3: node3}
+}
+
+var main_ = initializeMain_()
+
+func initializeMain_() int {
+	accumulator := sharedHeapLeaf
+	for n := 1; n < 101; n++ {
+		a := tuple.Tuple{First: n, Second: n}
+		accumulator = mergeNode(1, a, sharedHeapLeaf, sharedHeapLeaf, accumulator)
+	}
+	for element := 1; element < 1001; element++ {
+		accumulator = churnReusing(accumulator, element)
+	}
+	var result int
+	if accumulator == sharedHeapLeaf {
+		result = 0
+	} else {
+		value := accumulator.Node1
+		result = value.First + value.Second
+	}
+	return result
+}
+
+func churnReusing(heap *Heap, step int) *Heap {
+	var result maybe_tuple.MaybeTupleIntInt
+	if heap == sharedHeapLeaf {
+		result = maybe_tuple.NoTupleIntInt
+	} else {
+		value := heap.Node1
+		result = maybe_tuple.JustTupleIntInt(value)
+	}
+	if result.Tag == maybe.TagJust {
+		var result2 *Heap
+		if heap == sharedHeapLeaf {
+			result2 = sharedHeapLeaf
+		} else {
+			left := heap.Node2
+			right := heap.Node3
+			result2 = merge(left, right)
+		}
+		return mergeNode(1, tuple.Tuple{First: result.Just.First + 1000, Second: result.Just.Second + step}, sharedHeapLeaf, sharedHeapLeaf, result2)
+	}
+	return heap
+}
+
+func mergeNodeOrMergeTupleIntIntNodeReusing2(step int, i int, tuple tuple.Tuple, left *Heap, right *Heap, heap *Heap) *Heap {
+	for {
+		switch step {
+		case shared.MergeNodeStep:
+			if heap == sharedHeapLeaf {
+				return Node(i, tuple, left, right)
+			}
+			y := heap.Node1
+			left0 := tuple.First
+			left1 := tuple.Second
+			right0 := y.First
+			var result bool
+			if left0 < right0 {
+				result = true
+			} else if left0 == right0 {
+				result = left1 <= y.Second
+			} else {
+				result = false
+			}
+			if result {
+				b := merge(right, heap)
+				var result2 int
+				if left == sharedHeapLeaf {
+					result2 = 0
+				} else {
+					result2 = left.Node0
+				}
+				var result3 int
+				if b == sharedHeapLeaf {
+					result3 = 0
+				} else {
+					result3 = b.Node0
+				}
+				if result2 >= result3 {
+					var result4 int
+					if b == sharedHeapLeaf {
+						result4 = 0
+					} else {
+						result4 = b.Node0
+					}
+					return Node(result4+1, tuple, left, b)
+				}
+				var result5 int
+				if left == sharedHeapLeaf {
+					result5 = 0
+				} else {
+					result5 = left.Node0
+				}
+				return Node(result5+1, tuple, b, left)
+			}
+			step, left, right, heap = shared.MergeNode2Step, heap, left, right
+		default: // shared.MergeNode2Step
+			if left == sharedHeapLeaf {
+				return Node(i, tuple, right, heap)
+			}
+			first := left
+			x := left.Node1
+			left2 := left.Node2
+			right2 := left.Node3
+			left0 := x.First
+			right0 := tuple.First
+			right1 := tuple.Second
+			var result bool
+			if left0 < right0 {
+				result = true
+			} else if left0 == right0 {
+				result = x.Second <= right1
+			} else {
+				result = false
+			}
+			if result {
+				b := mergeNode2(right2, i, tuple, right, heap)
+				var result2 int
+				if left2 == sharedHeapLeaf {
+					result2 = 0
+				} else {
+					result2 = left2.Node0
+				}
+				var result3 int
+				if b == sharedHeapLeaf {
+					result3 = 0
+				} else {
+					result3 = b.Node0
+				}
+				if result2 >= result3 {
+					var result4 int
+					if b == sharedHeapLeaf {
+						result4 = 0
+					} else {
+						result4 = b.Node0
+					}
+					left.Node0 = result4 + 1
+					left.Node3 = b
+					return left
+				}
+				var result5 int
+				if left2 == sharedHeapLeaf {
+					result5 = 0
+				} else {
+					result5 = left2.Node0
+				}
+				left.Node0 = result5 + 1
+				left.Node2 = b
+				left.Node3 = left2
+				return left
+			}
+			step, left, right, heap = shared.MergeNodeStep, right, heap, first
+		}
+	}
+}
+
+func mergeNode(i int, tuple tuple.Tuple, left *Heap, right *Heap, heap *Heap) *Heap {
+	return mergeNodeOrMergeTupleIntIntNodeReusing2(shared.MergeNodeStep, i, tuple, left, right, heap)
+}
+
+func merge(heap *Heap, heap2 *Heap) *Heap {
+	for {
+		if heap == sharedHeapLeaf {
+			return heap2
+		}
+		if heap2 == sharedHeapLeaf {
+			return heap
+		}
+		first := heap
+		x := heap.Node1
+		left := heap.Node2
+		right := heap.Node3
+		y := heap2.Node1
+		left0 := x.First
+		right0 := y.First
+		var result bool
+		if left0 < right0 {
+			result = true
+		} else if left0 == right0 {
+			result = x.Second <= y.Second
+		} else {
+			result = false
+		}
+		if result {
+			b := merge(right, heap2)
+			var result2 int
+			if left == sharedHeapLeaf {
+				result2 = 0
+			} else {
+				result2 = left.Node0
+			}
+			var result3 int
+			if b == sharedHeapLeaf {
+				result3 = 0
+			} else {
+				result3 = b.Node0
+			}
+			if result2 >= result3 {
+				var result4 int
+				if b == sharedHeapLeaf {
+					result4 = 0
+				} else {
+					result4 = b.Node0
+				}
+				heap.Node0 = result4 + 1
+				heap.Node3 = b
+				return heap
+			}
+			var result5 int
+			if left == sharedHeapLeaf {
+				result5 = 0
+			} else {
+				result5 = left.Node0
+			}
+			heap.Node0 = result5 + 1
+			heap.Node2 = b
+			heap.Node3 = left
+			return heap
+		}
+		heap, heap2 = heap2, first
+	}
+}
+
+func mergeNode2(heap *Heap, i int, tuple tuple.Tuple, heap2 *Heap, heap3 *Heap) *Heap {
+	return mergeNodeOrMergeTupleIntIntNodeReusing2(shared.MergeNode2Step, i, tuple, heap, heap2, heap3)
+}
+
+func main() {
+	console.Print(prim.ShowInt(main_))
+}
+
+// shared/Data.Maybe+Data.Tuple/maybe_tuple.go
+package maybe_tuple
+
+import (
+	"fixture/Data/Maybe"
+	"fixture/Data/Tuple"
+)
+
+type MaybeTupleIntInt struct {
+	Just tuple.Tuple
+	Tag  uint8
+}
+
+var NoTupleIntInt = MaybeTupleIntInt{Tag: maybe.TagNothing}
+
+func JustTupleIntInt(just tuple.Tuple) MaybeTupleIntInt {
+	return MaybeTupleIntInt{Tag: maybe.TagJust, Just: just}
+}
+
+// shared/shared.go
+package shared
+
+const (
+	MergeNodeStep = iota
+	MergeNode2Step
+)

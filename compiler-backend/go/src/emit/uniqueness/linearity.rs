@@ -5,7 +5,9 @@ use rustc_hash::{FxHashMap, FxHashSet};
 use super::paths::{Event, Paths};
 use crate::emit::uses_local;
 use crate::monomorphic::traversal::{for_each_child, for_each_guarded_child};
-use crate::monomorphic::{Expression, ExpressionKind, Guarded, LocalId, Pattern, PatternKind};
+use crate::monomorphic::{
+    Expression, ExpressionKind, Guarded, LocalId, Pattern, PatternKind, RecordUpdate,
+};
 use crate::monotype::MonotypeId;
 
 /// What the framework asks of the program's data layout and of the functions a body calls.
@@ -57,7 +59,27 @@ pub(in crate::emit) fn is_unique(
     forced: &Forced,
 ) -> bool {
     let relatives = relatives(shapes, target, ancestors, scope);
-    let counter = Counter { target, relatives: &relatives, forced };
+    let counter = Counter { target, field: None, relatives: &relatives, forced };
+    let paths = match scope {
+        Scope::Expression(expression) => counter.count(shapes, expression),
+        Scope::Guarded(guarded) => counter.guarded(shapes, guarded),
+    };
+    paths.all_linear()
+}
+
+/// Whether the field `label` of the record `record` is unique in `scope`: on every path the
+/// field is consumed at most once, by reading it (`record.label`) or by passing on the whole
+/// record or an update of it that keeps the field, and read only before that.
+pub(in crate::emit) fn is_unique_field(
+    shapes: &mut impl Shapes,
+    record: LocalId,
+    label: &str,
+    scope: Scope<'_>,
+) -> bool {
+    let relatives = FxHashSet::default();
+    let forced = Forced::default();
+    let counter =
+        Counter { target: record, field: Some(label), relatives: &relatives, forced: &forced };
     let paths = match scope {
         Scope::Expression(expression) => counter.count(shapes, expression),
         Scope::Guarded(guarded) => counter.guarded(shapes, guarded),
@@ -130,12 +152,19 @@ pub(in crate::emit) fn guarded_expressions(guarded: &Guarded) -> Vec<&Expression
 
 struct Counter<'f> {
     target: LocalId,
+    /// The field of the record `target` that is followed instead of the whole value.
+    field: Option<&'f str>,
     relatives: &'f FxHashSet<LocalId>,
     forced: &'f Forced,
 }
 
 impl Counter<'_> {
     fn count(&self, shapes: &mut impl Shapes, expression: &Expression) -> Paths {
+        if let Some(field) = self.field
+            && let Some(paths) = self.count_field(shapes, field, expression)
+        {
+            return paths;
+        }
         match &expression.kind {
             ExpressionKind::Local(id) if *id == self.target => Paths::event(Event::Consume),
             ExpressionKind::Local(id) if self.relatives.contains(id) => {
@@ -238,6 +267,10 @@ impl Counter<'_> {
             ExpressionKind::Foreign { arguments, .. } => {
                 self.call(shapes, expression, arguments, Paths::empty())
             }
+            ExpressionKind::Construct { arguments, .. } => self.stored(shapes, arguments.iter()),
+            ExpressionKind::Record(fields) => {
+                self.stored(shapes, fields.iter().map(|(_, value)| value))
+            }
             _ => {
                 let mut children = vec![];
                 for_each_child(expression, &mut |child| children.push(child));
@@ -258,13 +291,140 @@ impl Counter<'_> {
         mut paths: Paths,
     ) -> Paths {
         for argument in arguments {
-            let inspected = matches!(argument.kind, ExpressionKind::Local(id) if id == self.target)
-                && shapes.inspects(call, argument);
+            let followed = match &argument.kind {
+                ExpressionKind::Local(id) => *id == self.target,
+                ExpressionKind::Access { record, label } => {
+                    self.field == Some(label.as_str())
+                        && matches!(record.kind, ExpressionKind::Local(id) if id == self.target)
+                }
+                _ => false,
+            };
+            let inspected = followed && shapes.inspects(call, argument);
             let argument_paths =
                 if inspected { Paths::event(Event::Peek) } else { self.count(shapes, argument) };
             paths = paths.unordered(argument_paths);
         }
         paths
+    }
+
+    /// The uses of the followed field that differ from uses of a local: reading it, reading
+    /// another field, updating the record, matching on the field or on the record.
+    fn count_field(
+        &self,
+        shapes: &mut impl Shapes,
+        field: &str,
+        expression: &Expression,
+    ) -> Option<Paths> {
+        let is_target = |record: &Expression| matches!(record.kind, ExpressionKind::Local(id) if id == self.target);
+        let paths = match &expression.kind {
+            ExpressionKind::Access { record, label } if is_target(record) => match label == field {
+                true => Paths::event(Event::Consume),
+                false => Paths::empty(),
+            },
+            ExpressionKind::Update { record, updates } if is_target(record) => {
+                let replaced = updates.iter().any(
+                    |update| matches!(update, RecordUpdate::Leaf { label, .. } if label == field),
+                );
+                let mut values = vec![];
+                for update in updates {
+                    update_values(update, &mut values);
+                }
+                let mut paths =
+                    if replaced { Paths::empty() } else { Paths::event(Event::Consume) };
+                for value in values {
+                    paths = paths.unordered(self.count(shapes, value));
+                }
+                paths
+            }
+            ExpressionKind::Case { scrutinees, .. }
+                if scrutinees.iter().any(|scrutinee| self.matches_field(scrutinee, field)) =>
+            {
+                return Some(self.count_field_case(shapes, field, expression));
+            }
+            _ => return None,
+        };
+        Some(paths)
+    }
+
+    fn matches_field(&self, scrutinee: &Expression, field: &str) -> bool {
+        match &scrutinee.kind {
+            ExpressionKind::Local(id) => *id == self.target,
+            ExpressionKind::Access { record, label } => {
+                label == field
+                    && matches!(record.kind, ExpressionKind::Local(id) if id == self.target)
+            }
+            _ => false,
+        }
+    }
+
+    /// A `case` on the followed field only peeks at it when its patterns bind nothing of the
+    /// field's spine; one that binds the spine, or matches on the whole record, consumes it.
+    fn count_field_case(
+        &self,
+        shapes: &mut impl Shapes,
+        field: &str,
+        expression: &Expression,
+    ) -> Paths {
+        let ExpressionKind::Case { scrutinees, alternatives } = &expression.kind else {
+            unreachable!("invariant violated: a field case is not a case")
+        };
+        let mut paths = Paths::empty();
+        for (position, scrutinee) in scrutinees.iter().enumerate() {
+            let scrutinised = match &scrutinee.kind {
+                ExpressionKind::Access { .. } if self.matches_field(scrutinee, field) => {
+                    let mut spine = FxHashSet::default();
+                    for alternative in alternatives {
+                        spine_locals(shapes, &alternative.patterns[position], &mut spine);
+                    }
+                    if spine.is_empty() {
+                        Paths::event(Event::Peek)
+                    } else {
+                        Paths::event(Event::Shared)
+                    }
+                }
+                ExpressionKind::Local(_) if self.matches_field(scrutinee, field) => {
+                    Paths::event(Event::Consume)
+                }
+                _ => self.count(shapes, scrutinee),
+            };
+            paths = paths.then(scrutinised);
+        }
+        let mut guards = Paths::empty();
+        let mut bodies = Paths::nothing();
+        for alternative in alternatives {
+            match &alternative.body {
+                Guarded::Unconditional(body) => bodies = bodies.or(self.count(shapes, body)),
+                Guarded::Guards(branches) => {
+                    for branch in branches {
+                        for guard in &branch.guards {
+                            guards = guards.then(self.count(shapes, guard.value()));
+                        }
+                        bodies = bodies.or(self.count(shapes, &branch.body));
+                    }
+                }
+            }
+        }
+        let bodies = if alternatives.is_empty() { Paths::empty() } else { bodies };
+        paths.then(guards).then(bodies)
+    }
+
+    /// The fields of a construction: a field that is a local only stores a reference to it once
+    /// the others are computed, and storing changes no cell, so reading the local in another
+    /// field (`Node (rank b + 1) x left b`) comes first.
+    fn stored<'e>(
+        &self,
+        shapes: &mut impl Shapes,
+        fields: impl Iterator<Item = &'e Expression>,
+    ) -> Paths {
+        let mut computed = Paths::empty();
+        let mut stored = Paths::empty();
+        for field in fields {
+            match field.kind {
+                ExpressionKind::Local(_) => stored = stored.unordered(self.count(shapes, field)),
+                _ => computed = computed.unordered(self.count(shapes, field)),
+            }
+        }
+        computed.then(stored)
     }
 
     fn guarded(&self, shapes: &mut impl Shapes, guarded: &Guarded) -> Paths {
@@ -282,6 +442,15 @@ impl Counter<'_> {
                 }
                 guards.then(bodies)
             }
+        }
+    }
+}
+
+fn update_values<'e>(update: &'e RecordUpdate, values: &mut Vec<&'e Expression>) {
+    match update {
+        RecordUpdate::Leaf { value, .. } => values.push(value),
+        RecordUpdate::Branch { updates, .. } => {
+            updates.iter().for_each(|update| update_values(update, values))
         }
     }
 }

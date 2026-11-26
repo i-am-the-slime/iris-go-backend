@@ -9,8 +9,8 @@ use super::{Emitter, uses_local};
 use crate::foreign::{Boundary, Foreign, GoFunction, GoPackage, Iteration, Operator};
 use crate::monomorphic::traversal::{for_each_child, for_each_child_mut, prune_unreachable, visit};
 use crate::monomorphic::{
-    Alternative, Binding, Edge, Expression, ExpressionKind, Function, FunctionId, Guarded, Kept,
-    Literal, Local, LocalId, Pattern, PatternKind, Program,
+    Alternative, Binding, Edge, Expression, ExpressionKind, Function, FunctionId, Guarded,
+    GuardedBranch, Kept, Literal, Local, LocalId, Pattern, PatternKind, Program, RecordUpdate,
 };
 use crate::monotype::{DataType, Monotype, MonotypeId};
 use crate::purity::{can_fail, is_deferrable, is_trivial, is_within_size};
@@ -34,6 +34,9 @@ pub(super) trait Cells {
     fn tracks(&mut self, cell: &DataType, constructor: usize, field: usize) -> bool;
     fn boolean(&mut self) -> MonotypeId;
     fn is_record(&self, monotype: MonotypeId) -> bool;
+    /// The labels of a record's fields that are cells, or records with such fields, each with
+    /// the cells it holds that way.
+    fn cell_fields(&mut self, monotype: MonotypeId) -> Vec<(SmolStr, Vec<DataType>)>;
 }
 
 pub(super) struct Reused {
@@ -410,6 +413,10 @@ impl<'a, C: Cells> Planner<'a, C> {
                     self.companions_at_uses(parameter.id, &companion, &[], body);
                 }
             } else if self.variant.owned & (1 << position) != 0
+                && self.is_ownable_record(parameter, body)
+            {
+                self.owned_records.insert(parameter.id);
+            } else if self.variant.owned & (1 << position) != 0
                 && self.cells.cell(parameter.monotype).is_some()
             {
                 if self.is_linear(parameter.id, &[], body, &Forced::default()) {
@@ -498,7 +505,7 @@ impl<'a, C: Cells> Planner<'a, C> {
         match &expression.kind {
             ExpressionKind::Local(id) => {
                 stock.retain(|spare| !spare.owners.contains(id));
-                if self.owned.contains_key(id) {
+                if self.owned.contains_key(id) || self.owned_records.contains(id) {
                     return Held::Owned;
                 }
                 if let Some(dynamic) = self.checked.get(id) {
@@ -622,7 +629,8 @@ impl<'a, C: Cells> Planner<'a, C> {
             ExpressionKind::Access { record, .. }
                 if let ExpressionKind::Local(id) = record.kind
                     && self.owned_records.contains(&id)
-                    && self.cells.cell(expression.monotype).is_some() =>
+                    && (self.cells.cell(expression.monotype).is_some()
+                        || !self.cells.cell_fields(expression.monotype).is_empty()) =>
             {
                 self.unordered(expression, stock, after);
                 Held::Owned
@@ -632,6 +640,25 @@ impl<'a, C: Cells> Planner<'a, C> {
                 let held = self.arguments_of(&values, stock, after);
                 if self.owns_cells(&values, &held) { Held::Owned } else { Held::Shared }
             }
+            ExpressionKind::Update { record, updates } => {
+                let mut values: Vec<&'e Expression> = vec![record];
+                let mut nested = false;
+                for update in updates {
+                    match update {
+                        RecordUpdate::Leaf { value, .. } => values.push(value),
+                        RecordUpdate::Branch { .. } => nested = true,
+                    }
+                }
+                if nested {
+                    self.unordered(expression, stock, after);
+                    return Held::Shared;
+                }
+                let held = self.arguments_of(&values, stock, after);
+                match self.owns_updated_cells(record.monotype, &values[1..], &held) {
+                    true => Held::Owned,
+                    false => Held::Shared,
+                }
+            }
             _ => {
                 self.unordered(expression, stock, after);
                 Held::Shared
@@ -640,6 +667,10 @@ impl<'a, C: Cells> Planner<'a, C> {
     }
 
     fn bind(&mut self, local: &Local, held: Held, scope: Scope<'_>) {
+        if held.is_owned() && self.is_ownable_record(local, scope) {
+            self.owned_records.insert(local.id);
+            return;
+        }
         let Some(data) = self.cells.cell(local.monotype) else { return };
         let Some(companion) = self.companion(&held) else { return };
         if self.is_linear(local.id, &[], scope, &Forced::default()) {
@@ -693,7 +724,8 @@ impl<'a, C: Cells> Planner<'a, C> {
             let function = self.program.function(id);
             if !self.facts.eligible[id.0 as usize]
                 || function.parameters.len() != leading.len() + 2
-                || self.cells.cell(function.parameters[position].monotype).is_none()
+                || (self.cells.cell(function.parameters[position].monotype).is_none()
+                    && self.cells.cell_fields(function.parameters[position].monotype).is_empty())
             {
                 return false;
             }
@@ -726,7 +758,7 @@ impl<'a, C: Cells> Planner<'a, C> {
         }
         let accumulator = parameters[accumulator];
         if self.cells.is_record(accumulator.monotype) {
-            return self.owned_record_callback(accumulator.id, body);
+            return self.owned_record_callback(accumulator, body);
         }
         if self.cells.cell(accumulator.monotype).is_none()
             || !self.is_linear(accumulator.id, &[], Scope::Expression(body), &Forced::default())
@@ -743,32 +775,80 @@ impl<'a, C: Cells> Planner<'a, C> {
         false
     }
 
-    fn owned_record_callback(&mut self, accumulator: LocalId, body: &Expression) -> bool {
-        if !reads_cell_fields_once(self.cells, body, accumulator, &mut vec![]) {
+    fn owned_record_callback(&mut self, accumulator: &Local, body: &Expression) -> bool {
+        if !reads_cell_fields_once(self.cells, body, accumulator.id, &mut vec![])
+            && !self.is_ownable_record(accumulator, Scope::Expression(body))
+        {
             return false;
         }
         let saved = self.plan.clone();
-        self.owned_records.insert(accumulator);
+        self.owned_records.insert(accumulator.id);
         if self.expression(body, false, &mut vec![], &mut vec![]).is_owned() {
             return true;
         }
-        self.owned_records.remove(&accumulator);
+        self.owned_records.remove(&accumulator.id);
         self.plan = saved;
         false
     }
 
+    /// Whether an update of a record owns the record's cells: the record it updates is owned,
+    /// every cell it writes is owned, and no other value it writes holds such cells.
+    fn owns_updated_cells(
+        &mut self,
+        record: MonotypeId,
+        written: &[&Expression],
+        held: &[Held],
+    ) -> bool {
+        let [base, held @ ..] = held else { return false };
+        let cells: Vec<DataType> =
+            self.cells.cell_fields(record).into_iter().flat_map(|(_, cells)| cells).collect();
+        if !base.is_owned() || cells.is_empty() {
+            return false;
+        }
+        for (value, held) in written.iter().zip(held) {
+            if self.cells.cell(value.monotype).is_some()
+                || !self.cells.cell_fields(value.monotype).is_empty()
+            {
+                if !held.is_owned() {
+                    return false;
+                }
+                continue;
+            }
+            if cells.iter().any(|cell| self.cells.holds(value.monotype, cell)) {
+                return false;
+            }
+        }
+        true
+    }
+
+    /// Whether a record local may be owned in `scope`: it has fields that are cells, and each
+    /// of them is used at most once, whether read on its own or passed on with the record.
+    fn is_ownable_record(&mut self, record: &Local, scope: Scope<'_>) -> bool {
+        let fields = self.cells.cell_fields(record.monotype);
+        !fields.is_empty()
+            && fields
+                .iter()
+                .all(|(label, _)| uniqueness::is_unique_field(self, record.id, label, scope))
+    }
+
     fn owns_cells(&mut self, values: &[&Expression], held: &[Held]) -> bool {
         let mut cells = vec![];
+        let mut owning = vec![];
         for value in values {
             if let Some(cell) = self.cells.cell(value.monotype) {
                 cells.push(cell);
+                owning.push(true);
+                continue;
             }
+            let fields = self.cells.cell_fields(value.monotype);
+            owning.push(!fields.is_empty());
+            cells.extend(fields.into_iter().flat_map(|(_, cells)| cells));
         }
         if cells.is_empty() {
             return false;
         }
-        for (value, held) in values.iter().zip(held) {
-            if self.cells.cell(value.monotype).is_some() {
+        for ((value, held), owning) in values.iter().zip(held).zip(owning) {
+            if owning {
                 if !held.is_owned() {
                     return false;
                 }
@@ -841,7 +921,13 @@ impl<'a, C: Cells> Planner<'a, C> {
         let mut companions = vec![];
         for (position, (argument, held)) in arguments.iter().zip(argument_held).enumerate() {
             let borrowed = inspects(&self.facts.inspecting, self.cells, expression, argument);
-            let Some(data) = self.cells.cell(parameters[position].monotype) else { continue };
+            let Some(data) = self.cells.cell(parameters[position].monotype) else {
+                let record = parameters[position].monotype;
+                if held.is_owned() && !self.cells.cell_fields(record).is_empty() {
+                    owned |= 1 << position;
+                }
+                continue;
+            };
             if borrowed {
                 continue;
             }
@@ -938,6 +1024,8 @@ impl<'a, C: Cells> Planner<'a, C> {
                         owners.push(*id);
                         let companion = dynamic.companion.clone();
                         Source::Checked { top: Top::Local(*id), owners, companion }
+                    } else if self.owned_records.contains(id) {
+                        Source::OwnedFields
                     } else {
                         Source::Shared
                     }
@@ -949,7 +1037,14 @@ impl<'a, C: Cells> Planner<'a, C> {
                     let held = self.expression(scrutinee, false, stock, after);
                     after.truncate(mark);
                     let top = Top::Hoisted(case, position);
+                    let constant = match &scrutinee.kind {
+                        ExpressionKind::Function(id) => self.is_owned_constant(*id),
+                        ExpressionKind::Construct { arguments, .. } => arguments.is_empty(),
+                        _ => false,
+                    };
                     match self.cells.cell(scrutinee.monotype) {
+                        // A constructor without fields, such as `Leaf`, has no cell to reuse.
+                        Some(_) if constant => Source::Shared,
                         Some(_) if held.is_owned() => Source::Owned { top, owners: vec![] },
                         None if held.is_owned() => Source::OwnedFields,
                         Some(data) if self.is_checking() && self.cells.is_tracked(&data) => {
@@ -1021,6 +1116,11 @@ impl<'a, C: Cells> Planner<'a, C> {
                     self.expression(body, tail, &mut alternative_stock, after)
                 }
                 Guarded::Guards(branches) => {
+                    let matched: Vec<LocalId> = alternative_stock
+                        .iter()
+                        .filter(|spare| !stock.iter().any(|other| other.local == spare.local))
+                        .map(|spare| spare.local)
+                        .collect();
                     let mut all: Option<Held> = None;
                     for branch in branches {
                         for guard in &branch.guards {
@@ -1031,6 +1131,9 @@ impl<'a, C: Cells> Planner<'a, C> {
                             });
                         }
                         let mut branch_stock = alternative_stock.clone();
+                        branch_stock.retain(|spare| {
+                            !matched.contains(&spare.local) || unused_in_branch(spare, branch)
+                        });
                         let branch_held =
                             self.expression(&branch.body, tail, &mut branch_stock, after);
                         all = Some(match all {
@@ -1106,7 +1209,7 @@ impl<'a, C: Cells> Planner<'a, C> {
                     if let Origin::Hoisted { .. } = origin {
                         owners.push(local);
                     }
-                    let usable = !owners.iter().any(|&owner| guarded_uses(placing.body, owner) > 0);
+                    let usable = is_spare_usable(placing.body, &owners);
                     if usable {
                         let condition =
                             (!is_true(&place.companion)).then(|| place.companion.clone());
@@ -1238,7 +1341,7 @@ impl<'a, C: Cells> Planner<'a, C> {
                     if let Origin::Hoisted { .. } = origin {
                         owners.push(local);
                     }
-                    let usable = !owners.iter().any(|&owner| guarded_uses(body, owner) > 0);
+                    let usable = is_spare_usable(body, &owners);
                     if usable {
                         let data = data.clone();
                         stock.push(Spare { local, data, origin, owners, condition: None });
@@ -1257,15 +1360,23 @@ impl<'a, C: Cells> Planner<'a, C> {
     }
 
     fn adopt_fields(&mut self, pattern: &Pattern, body: &Guarded) {
-        let PatternKind::Constructor { arguments, .. } = &pattern.kind else { return };
-        for argument in arguments {
-            if let PatternKind::Variable(local) = &argument.kind {
+        let fields: Vec<&Pattern> = match &pattern.kind {
+            PatternKind::Constructor { arguments, .. } => arguments.iter().collect(),
+            PatternKind::Record(fields) => fields.iter().map(|(_, field)| field).collect(),
+            _ => return,
+        };
+        for field in fields {
+            if let PatternKind::Variable(local) = &field.kind {
                 self.adopt(local, vec![], body);
             }
         }
     }
 
     fn adopt(&mut self, local: &Local, ancestors: Vec<LocalId>, body: &Guarded) {
+        if ancestors.is_empty() && self.is_ownable_record(local, Scope::Guarded(body)) {
+            self.owned_records.insert(local.id);
+            return;
+        }
         if self.cells.cell(local.monotype).is_some()
             && self.is_linear(local.id, &ancestors, Scope::Guarded(body), &Forced::default())
         {
@@ -1679,6 +1790,23 @@ struct Placing<'p> {
 
 fn alternative_expressions(alternative: &Alternative) -> Vec<&Expression> {
     guarded_expressions(&alternative.body)
+}
+
+/// Whether a cell an alternative's pattern matched may be rebuilt in its body: none of its
+/// owners is used there. A guarded body is decided branch by branch (`unused_in_branch`), so
+/// that a branch that drops the cell may reuse it while another passes its owner on.
+fn is_spare_usable(body: &Guarded, owners: &[LocalId]) -> bool {
+    match body {
+        Guarded::Unconditional(_) => !owners.iter().any(|&owner| guarded_uses(body, owner) > 0),
+        Guarded::Guards(_) => true,
+    }
+}
+
+fn unused_in_branch(spare: &Spare, branch: &GuardedBranch) -> bool {
+    !spare.owners.iter().any(|&owner| {
+        uses_local(&branch.body, owner)
+            || branch.guards.iter().any(|guard| uses_local(guard.value(), owner))
+    })
 }
 
 fn guarded_uses(guarded: &Guarded, local: LocalId) -> usize {
@@ -2183,5 +2311,26 @@ where
     fn is_record(&self, monotype: MonotypeId) -> bool {
         matches!(self.monotypes.get(monotype), Monotype::Record(_))
             && !self.monotypes.is_instantiated_record(monotype)
+    }
+
+    fn cell_fields(&mut self, monotype: MonotypeId) -> Vec<(SmolStr, Vec<DataType>)> {
+        if !Cells::is_record(self, monotype) {
+            return vec![];
+        }
+        let Monotype::Record(fields) = self.monotypes.get(monotype).clone() else { return vec![] };
+        let mut owning = vec![];
+        for field in fields.iter() {
+            let cells = match Cells::cell(self, field.monotype) {
+                Some(cell) => vec![cell],
+                None => Cells::cell_fields(self, field.monotype)
+                    .into_iter()
+                    .flat_map(|(_, cells)| cells)
+                    .collect(),
+            };
+            if !cells.is_empty() {
+                owning.push((field.label.clone(), cells));
+            }
+        }
+        owning
     }
 }
