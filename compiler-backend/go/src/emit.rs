@@ -89,6 +89,7 @@ mod types;
 mod uniqueness;
 mod unit_apply;
 mod unit_effect_fold;
+mod unpacked;
 mod unreferenced;
 mod unzip;
 mod updates;
@@ -301,6 +302,7 @@ where
     timed("branches", || branches::simplify_branches(&mut declarations));
     timed("aliases", || aliases::substitute_aliases(&mut declarations));
     timed("repeated tests", || merging::join_repeated_tests(&mut declarations));
+    timed("unpacked", || unpacked::read_found_answers(&mut declarations));
     let mut record_value_name = |type_name: &str| {
         let (&monotype, _) = emitter.record_names.iter().find(|(_, name)| *name == type_name)?;
         Some(emitter.value_base(monotype))

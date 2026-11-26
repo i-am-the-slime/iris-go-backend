@@ -37,7 +37,6 @@ func ArrayString(array []string) string {
 package main
 
 import (
-	"fixture/Data/Maybe"
 	"fixture/Data/Show"
 	"github.com/i-am-the-slime/iris-go/console"
 	"github.com/i-am-the-slime/iris-go/prim"
@@ -73,16 +72,10 @@ func initializeMain_() []string {
 		accumulator2 = strconv.Itoa(x) + "," + accumulator2
 	}
 	value2, found := prim.CodeUnitCharAt(0, "abc")
-	var codeUnitCharAt maybe.Char
-	if found {
-		codeUnitCharAt = maybe.Char(value2)
-	} else {
-		codeUnitCharAt = maybe.NoChar
-	}
 	var result string
-	if codeUnitCharAt != maybe.NoChar && rune(codeUnitCharAt) == 'a' {
+	if found && value2 == 'a' {
 		result = "starts with a"
-	} else if codeUnitCharAt != maybe.NoChar {
+	} else if found {
 		result = "starts otherwise"
 	} else {
 		result = "empty"
