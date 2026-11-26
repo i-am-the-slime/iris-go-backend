@@ -51,9 +51,8 @@ import (
 )
 
 type ForeignError struct {
-	ForeignError     string
-	TypeMismatch0    string
-	TypeMismatch1    string
+	Field0           string
+	Field1           string
 	ErrorAtIndex1    *ForeignError
 	ErrorAtProperty0 string
 	ErrorAtProperty1 *ForeignError
@@ -149,8 +148,8 @@ type NonEmptyFailure struct {
 	Left   NonEmpty
 }
 
-func TypeMismatch(typeMismatch0 string, typeMismatch1 string) *ForeignError {
-	return &ForeignError{Tag: ForeignErrorTypeMismatch, TypeMismatch0: typeMismatch0, TypeMismatch1: typeMismatch1}
+func TypeMismatch(field0 string, field1 string) *ForeignError {
+	return &ForeignError{Tag: ForeignErrorTypeMismatch, Field0: field0, Field1: field1}
 }
 
 func LeftEitherInt(left NonEmpty) EitherInt {
@@ -161,8 +160,8 @@ func RightEitherInt(right int) EitherInt {
 	return EitherInt{Tag: EitherIntRight, Right: right}
 }
 
-func ForeignErrorForeignError(foreignError string) *ForeignError {
-	return &ForeignError{Tag: ForeignErrorForeignError2, ForeignError: foreignError}
+func ForeignErrorForeignError(field0 string) *ForeignError {
+	return &ForeignError{Tag: ForeignErrorForeignError2, Field0: field0}
 }
 
 func LeftEitherForeign(left NonEmpty) EitherForeign {
@@ -232,7 +231,7 @@ func AppendShow(buffer []byte, foreignError *ForeignError) []byte {
 	switch foreignError.Tag {
 	case ForeignErrorForeignError2:
 		buffer = append(buffer, "(ForeignError "...)
-		buffer = prim.AppendShowString(buffer, foreignError.ForeignError)
+		buffer = prim.AppendShowString(buffer, foreignError.Field0)
 		buffer = append(buffer, ')')
 	case ForeignErrorErrorAtIndex:
 		buffer = append(buffer, "(ErrorAtIndex "...)
@@ -248,9 +247,9 @@ func AppendShow(buffer []byte, foreignError *ForeignError) []byte {
 		buffer = append(buffer, ')')
 	default: // ForeignErrorTypeMismatch
 		buffer = append(buffer, "(TypeMismatch "...)
-		buffer = prim.AppendShowString(buffer, foreignError.TypeMismatch0)
+		buffer = prim.AppendShowString(buffer, foreignError.Field0)
 		buffer = append(buffer, ' ')
-		buffer = prim.AppendShowString(buffer, foreignError.TypeMismatch1)
+		buffer = prim.AppendShowString(buffer, foreignError.Field1)
 		buffer = append(buffer, ')')
 	}
 	return buffer

@@ -321,7 +321,6 @@ type ExistsApplyEString struct {
 }
 
 type ApString struct {
-	Done   string
 	Field0 string
 	Field1 string
 	Apply  ExistsApplyEString
@@ -560,7 +559,7 @@ func initializeMain_() []string {
 	var result3 string
 	switch greeting.Tag {
 	case ApStringDone:
-		result3 = prim.StringToUpper(greeting.Done)
+		result3 = prim.StringToUpper(greeting.Field0)
 	case ApStringField:
 		result3 = prim.StringToUpper(greeting.Field1)
 	default: // ApStringApply
@@ -599,7 +598,7 @@ func initializeMain_() []string {
 	var result4 string
 	switch greeting.Tag {
 	case ApStringDone:
-		result4 = greeting.Done
+		result4 = greeting.Field0
 	case ApStringField:
 		result4 = greeting.Field1
 	default: // ApStringApply

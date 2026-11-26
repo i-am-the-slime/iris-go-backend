@@ -11,10 +11,9 @@ import (
 )
 
 type Step struct {
-	Step1 func(int) Step
-	Step0 int
-	Done  int
-	Tag   uint8
+	Field1 func(int) Step
+	Field0 int
+	Tag    uint8
 }
 
 const (
@@ -22,12 +21,12 @@ const (
 	StepDone
 )
 
-func Done(done int) Step {
-	return Step{Tag: StepDone, Done: done}
+func Done(field0 int) Step {
+	return Step{Tag: StepDone, Field0: field0}
 }
 
-func StepStep(step0 int, step1 func(int) Step) Step {
-	return Step{Tag: StepStep2, Step0: step0, Step1: step1}
+func StepStep(field0 int, field1 func(int) Step) Step {
+	return Step{Tag: StepStep2, Field0: field0, Field1: field1}
 }
 
 var main_ = initializeMain_()
@@ -39,10 +38,10 @@ func initializeMain_() []int {
 func run(step Step) int {
 	switch step.Tag {
 	case StepDone:
-		return step.Done
+		return step.Field0
 	default: // StepStep2
-		n := step.Step0
-		return n + run(step.Step1(n-1))
+		n := step.Field0
+		return n + run(step.Field1(n-1))
 	}
 }
 

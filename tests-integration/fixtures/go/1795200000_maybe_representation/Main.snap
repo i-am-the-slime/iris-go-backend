@@ -65,10 +65,9 @@ type Tree struct {
 var sharedTreeLeaf = &Tree{}
 
 type Shape struct {
-	Circle  int
-	Square0 int
-	Square1 int
-	Tag     uint8
+	Field0 int
+	Field1 int
+	Tag    uint8
 }
 
 const (
@@ -87,12 +86,12 @@ func JustShape(just Shape) MaybeShape {
 
 var NoShape = MaybeShape{Tag: maybe.TagNothing}
 
-func Circle(circle int) Shape {
-	return Shape{Tag: ShapeCircle, Circle: circle}
+func Circle(field0 int) Shape {
+	return Shape{Tag: ShapeCircle, Field0: field0}
 }
 
-func Square(square0 int, square1 int) Shape {
-	return Shape{Tag: ShapeSquare, Square0: square0, Square1: square1}
+func Square(field0 int, field1 int) Shape {
+	return Shape{Tag: ShapeSquare, Field0: field0, Field1: field1}
 }
 
 func Node(node0 *Tree, node1 int, node2 *Tree) *Tree {
@@ -233,10 +232,10 @@ func initializeMain_() []string {
 		result17 = true
 	} else if result15.Tag == maybe.TagJust && result16.Tag == maybe.TagJust {
 		if result15.Just.Tag == ShapeCircle && result16.Just.Tag == ShapeCircle {
-			result17 = result15.Just.Circle == result16.Just.Circle
+			result17 = result15.Just.Field0 == result16.Just.Field0
 		} else if result15.Just.Tag == ShapeSquare && result16.Just.Tag == ShapeSquare {
-			if result15.Just.Square0 == result16.Just.Square0 {
-				result17 = result15.Just.Square1 == result16.Just.Square1
+			if result15.Just.Field0 == result16.Just.Field0 {
+				result17 = result15.Just.Field1 == result16.Just.Field1
 			} else {
 				result17 = false
 			}
@@ -272,8 +271,8 @@ func initializeMain_() []string {
 	} else if result19.Tag == maybe.TagNothing {
 		result20 = "GT"
 	} else if result18.Just.Tag == ShapeCircle && result19.Just.Tag == ShapeCircle {
-		left0 := result18.Just.Circle
-		right0 := result19.Just.Circle
+		left0 := result18.Just.Field0
+		right0 := result19.Just.Field0
 		if left0 < right0 {
 			result20 = "LT"
 		} else if left0 == right0 {
@@ -286,10 +285,10 @@ func initializeMain_() []string {
 	} else if result19.Just.Tag == ShapeCircle {
 		result20 = "GT"
 	} else {
-		left0 := result18.Just.Square0
-		left1 := result18.Just.Square1
-		right0 := result19.Just.Square0
-		right1 := result19.Just.Square1
+		left0 := result18.Just.Field0
+		left1 := result18.Just.Field1
+		right0 := result19.Just.Field0
+		right1 := result19.Just.Field1
 		if left0 < right0 {
 			result20 = "LT"
 		} else if left0 == right0 {

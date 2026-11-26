@@ -387,8 +387,10 @@ fn maybe_shape(representation: super::maybe::Representation) -> Option<Shape> {
     }
 }
 
-/// The constructors with fields, grouped by the types of their fields, in
-/// order of first appearance.
+/// The constructors with fields, grouped so that a group's constructors share its slots: each
+/// one's field types are those the group's first constructor starts with, `Ln Expr` beside
+/// `Add Expr Expr`, so the struct holds only the longest one's fields. Groups are in order of
+/// first appearance, and a group's first constructor is its longest.
 fn groups_of_equal_fields(
     constructors: &[DataConstructor],
     monotypes: &Monotypes,
@@ -398,15 +400,22 @@ fn groups_of_equal_fields(
         if constructor.fields.is_empty() {
             continue;
         }
-        let equal_fields = |fields: &[MonotypeId]| {
-            fields.len() == constructor.fields.len()
-                && fields
+        let starts_with = |fields: &[MonotypeId], prefix: &[MonotypeId]| {
+            prefix.len() <= fields.len()
+                && prefix
                     .iter()
-                    .zip(constructor.fields.iter())
+                    .zip(fields)
                     .all(|(&field, &other)| monotypes.same_without_causes(field, other))
         };
-        let same = groups.iter_mut().find(|group| equal_fields(&constructors[group[0]].fields));
-        match same {
+        let fields = &constructor.fields;
+        let sharing = groups.iter_mut().find(|group| {
+            let longest = &constructors[group[0]].fields;
+            starts_with(longest, fields) || starts_with(fields, longest)
+        });
+        match sharing {
+            Some(group) if fields.len() > constructors[group[0]].fields.len() => {
+                group.insert(0, index);
+            }
             Some(group) => group.push(index),
             None => groups.push(vec![index]),
         }
@@ -456,7 +465,8 @@ impl NamedSlots {
                 own_slots(first, constructors.len(), naming)
             };
             for &constructor in group {
-                named.constructors[constructor] = names.clone();
+                let count = constructors[constructor].fields.len();
+                named.constructors[constructor] = names[..count].to_vec();
             }
             named.fields.extend(names.into_iter().zip(first.fields.iter().copied()));
         }

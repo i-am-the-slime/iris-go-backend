@@ -22,12 +22,11 @@ import (
 )
 
 type Shape struct {
-	Leaf    *list.List
-	Branch0 *Shape
-	Branch1 shared.FlagsItems
-	Branch2 *Shape
-	Wrap    *Shape
-	Tag     uint8
+	Leaf   *list.List
+	Field0 *Shape
+	Field1 shared.FlagsItems
+	Field2 *Shape
+	Tag    uint8
 }
 
 const (
