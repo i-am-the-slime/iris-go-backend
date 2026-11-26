@@ -11,7 +11,7 @@ use url::Url;
 
 use super::compile::{self, BuildStage, CompileError};
 use super::events::{BuildEvent, BuildEventSink, ProgressEventSink, SilentBuildEvents};
-use super::fetch::FetchStamp;
+use super::fetch::{FetchStamp, ManifestContents};
 use super::output::BuildOutput;
 use super::ownership::SourceOwner;
 use super::packages::DiscoveredPackage;
@@ -64,6 +64,8 @@ enum ProjectFailure {
     CurrentDirectory(io::Error),
     #[error("failed to check whether the dependencies Spago fetched are current: {0}")]
     FetchStamp(io::Error),
+    #[error("failed to keep the spago.yaml files as they were before spago fetch: {0}")]
+    Manifests(io::Error),
     #[error("failed to normalize output directory {}: {error}", path.display())]
     NormalizeOutput { path: PathBuf, error: io::Error },
     #[error("failed to execute Node.js: {source}")]
@@ -333,7 +335,10 @@ fn fetch_dependencies(
         return Ok(());
     }
     let spago = iris_spago::SpagoCommand::with_workspace_root(current_directory, &workspace.root)?;
-    spago.fetch(workspace.selected.as_deref(), !quiet)?;
+    let manifests = ManifestContents::of(workspace).map_err(ProjectFailure::Manifests)?;
+    let fetched = spago.fetch(workspace.selected.as_deref(), !quiet);
+    manifests.restore().map_err(ProjectFailure::Manifests)?;
+    fetched?;
     let fetched = FetchStamp::of(workspace).map_err(ProjectFailure::FetchStamp)?;
     fetched.record().map_err(ProjectFailure::FetchStamp)
 }

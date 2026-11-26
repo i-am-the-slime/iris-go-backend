@@ -44,6 +44,39 @@ impl FetchStamp {
     }
 }
 
+pub(crate) struct ManifestContents {
+    manifests: Vec<(PathBuf, Option<Vec<u8>>)>,
+}
+
+impl ManifestContents {
+    pub(crate) fn of(workspace: &Workspace) -> io::Result<ManifestContents> {
+        let manifests = manifests(workspace).into_iter().map(|manifest| {
+            let content = read_if_present(&manifest)?;
+            Ok((manifest, content))
+        });
+        let manifests = manifests.collect::<io::Result<_>>()?;
+        Ok(ManifestContents { manifests })
+    }
+
+    pub(crate) fn restore(&self) -> io::Result<()> {
+        for (manifest, recorded) in &self.manifests {
+            let Some(recorded) = recorded else { continue };
+            if read_if_present(manifest)?.as_ref() != Some(recorded) {
+                fs::write(manifest, recorded)?;
+            }
+        }
+        Ok(())
+    }
+}
+
+fn read_if_present(path: &Path) -> io::Result<Option<Vec<u8>>> {
+    match fs::read(path) {
+        Ok(content) => Ok(Some(content)),
+        Err(error) if error.kind() == io::ErrorKind::NotFound => Ok(None),
+        Err(error) => Err(error),
+    }
+}
+
 fn manifests(workspace: &Workspace) -> BTreeSet<PathBuf> {
     let packages = workspace.packages.values();
     let package_manifests = packages.map(|package| package.root.join(MANIFEST_FILE));
@@ -80,7 +113,7 @@ mod tests {
     use std::fs;
     use std::path::Path;
 
-    use super::FetchStamp;
+    use super::{FetchStamp, ManifestContents};
     use crate::workspace::Workspace;
 
     fn write_file(path: &Path, contents: &str) {
@@ -143,6 +176,31 @@ mod tests {
         assert!(!stamp(&library).is_current());
         let every_package = Workspace::discover(root, None).unwrap();
         assert!(!stamp(&every_package).is_current());
+    }
+
+    #[test]
+    fn manifests_are_restored_after_spago_rewrote_their_bounds() {
+        let directory = tempfile::tempdir().unwrap();
+        let root = directory.path();
+        write_file(&root.join("spago.yaml"), "workspace: {}\n");
+        write_package(
+            &root.join("packages/application"),
+            "application",
+            "\"prelude: >=6.0.0 <7.0.0\"",
+        );
+        let workspace = Workspace::discover(root, None).unwrap();
+        let manifest = root.join("packages/application/spago.yaml");
+        let written = fs::read_to_string(&manifest).unwrap();
+
+        let manifests = ManifestContents::of(&workspace).unwrap();
+        write_package(
+            &root.join("packages/application"),
+            "application",
+            "\"prelude: >=6.0.3 <7.0.0\"",
+        );
+        manifests.restore().unwrap();
+
+        assert_eq!(fs::read_to_string(&manifest).unwrap(), written);
     }
 
     #[test]
