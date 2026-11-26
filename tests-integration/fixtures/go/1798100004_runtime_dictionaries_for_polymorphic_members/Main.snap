@@ -280,7 +280,6 @@ func convert6(value *Wrapped) *Wrapped2 {
 var main_ = initializeMain_()
 
 func initializeMain_() []string {
-	values := []int{4, 5, 6}
 	scrutinee := checked(2, []int{1, 2})
 	var result string
 	switch scrutinee.Tag {
@@ -484,7 +483,7 @@ func initializeMain_() []string {
 				return original6(convert(typed))
 			}
 		}
-	}, 1, convert2(WrappedArrayInt{Wrapped: values})), strconv.Itoa(doubledFunctorDictionaryFoldableDictionary(func(coerced func(any) any) func(any) any {
+	}, 1, convert2(WrappedArrayInt{Wrapped: []int{4, 5, 6}})), strconv.Itoa(doubledFunctorDictionaryFoldableDictionary(func(coerced func(any) any) func(any) any {
 		original := func(wrapped *WrappedArray) *WrappedArray {
 			return mapWrapped(coerced, wrapped)
 		}

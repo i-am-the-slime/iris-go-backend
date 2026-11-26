@@ -1,26 +1,6 @@
 ---
 source: tests-integration/src/fixtures.rs
 ---
-// Data/Maybe/maybe.go
-package maybe
-
-import "fixture/shared"
-
-const TagNothing = 0
-
-const TagJust = 1
-
-type MainTiming struct {
-	Just shared.MainTiming
-	Tag  uint8
-}
-
-func JustMainTiming(just shared.MainTiming) MainTiming {
-	return MainTiming{Tag: TagJust, Just: just}
-}
-
-var NoMainTiming = MainTiming{Tag: TagNothing}
-
 // Data/Show/show.go
 package show
 
@@ -42,108 +22,20 @@ func AppendShowArrayNumber(buffer []byte, array []float64) []byte {
 package main
 
 import (
-	"fixture/Data/Maybe"
 	"fixture/Data/Show"
-	"fixture/shared"
 	"github.com/i-am-the-slime/iris-go/console"
-	"github.com/i-am-the-slime/iris-go/prim"
 	"strconv"
 )
-
-type Span struct {
-	From int
-	To   int
-}
 
 var main_ = initializeMain_()
 
 func initializeMain_() string {
-	var text []byte
-	array := []maybe.MainTiming{maybe.JustMainTiming(shared.MainTiming{Start: 2.0, End: 3.0}), maybe.NoMainTiming}
-	accumulator := 0.0
-	for timingIndex := range array {
-		var result float64
-		switch array[timingIndex].Tag {
-		case maybe.TagJust:
-			x := array[timingIndex].Just
-			result = x.End - x.Start
-		default:
-			result = 0.0
-		}
-		accumulator += result
-	}
-	array2 := []shared.Adjustment{{Factor: 3.0, Offset: 1.0}}
-	accumulator2 := 2.0
-	for adjustmentIndex := range array2 {
-		accumulator2 = accumulator2*array2[adjustmentIndex].Factor + array2[adjustmentIndex].Offset
-	}
-	array3 := []shared.Margin{{Top: 1.0, Bottom: 2.0}}
-	accumulator3 := 0.0
-	for marginIndex := range array3 {
-		accumulator3 = accumulator3 + array3[marginIndex].Top + array3[marginIndex].Bottom
-	}
-	array4 := []shared.ShapesTiming{{Width: 2.0, Height: 3.0, Label: "box"}}
-	accumulator4 := 0.0
-	for shapeIndex := range array4 {
-		accumulator4 += array4[shapeIndex].Width * array4[shapeIndex].Height
-	}
-	text = show.AppendShowArrayNumber(text, []float64{3.0, accumulator, accumulator2, accumulator3, accumulator4})
-	array5 := []Span{{From: 2, To: 7}}
-	accumulator5 := 0
-	for spanIndex := range array5 {
-		accumulator5 = accumulator5 + array5[spanIndex].To - array5[spanIndex].From
-	}
-	array6 := []shared.PairInt{{Left: 1, Right: 2}}
-	accumulator6 := 0
-	for pairIndex := range array6 {
-		accumulator6 = accumulator6 + array6[pairIndex].Left + array6[pairIndex].Right
-	}
-	text = strconv.AppendInt(text, int64(accumulator5+accumulator6), 10)
-	array7 := []shared.PairString{{Left: "a", Right: "b"}}
-	accumulator7 := []byte(nil)
-	for pairIndex := range array7 {
-		accumulator7 = prim.AppendString(accumulator7, array7[pairIndex].Left)
-		accumulator7 = prim.AppendString(accumulator7, array7[pairIndex].Right)
-	}
-	built := string(accumulator7)
-	text = prim.AppendString(text, built)
+	text := show.AppendShowArrayNumber(nil, []float64{3.0, 1.0, 7.0, 3.0, 6.0})
+	text = strconv.AppendInt(text, int64(8), 10)
+	text = append(text, "ab"...)
 	return string(text)
 }
 
 func main() {
 	console.Print(main_)
-}
-
-// shared/shared.go
-package shared
-
-type MainTiming struct {
-	End   float64
-	Start float64
-}
-
-type Adjustment struct {
-	Factor float64
-	Offset float64
-}
-
-type Margin struct {
-	Bottom float64
-	Top    float64
-}
-
-type ShapesTiming struct {
-	Label  string
-	Height float64
-	Width  float64
-}
-
-type PairInt struct {
-	Left  int
-	Right int
-}
-
-type PairString struct {
-	Left  string
-	Right string
 }

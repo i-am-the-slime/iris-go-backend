@@ -39,66 +39,41 @@ func main_() int {
 	array := []int{1, 2}
 	array2 := []int{1}
 	count := min(len(array2), len(units))
-	array3 := []int{1}
-	accumulator := func(_ int) {
-	}
-	for range array3 {
-		accumulator = func(_ int) {
-		}
-	}
-	return len(units) + len(array)*10 + count*100 + len(arraypkg.Map(func(i int) struct{} {
-		accumulator(i)
-		return struct{}{}
-	}, []int{1, 2, 3}))*1000
+	return len(units) + len(array)*10 + count*100 + 3000
 }
 
 var units = initializeUnits()
 
 func initializeUnits() []struct{} {
-	array := []struct{}{{}, {}}
-	mapped := make([]tuple.Tuple, len(array))
-	for slot, unit := range array {
-		mapped[slot] = tuple.Tuple{First: int32(slot), Second: unit}
-	}
-	indexedAndSorted := direct.SortBy(mapped, func(_ tuple.Tuple, _ tuple.Tuple) int {
+	array2 := *arraypkg.UnsafeThaw([]tuple.Tuple{{First: 0, Second: struct{}{}}})
+	shared.Frozen(array2)
+	shared.Frozen(array2)
+	performed := shared.Frozen(array2)
+	array := direct.SortBy(performed, func(x tuple.Tuple, y tuple.Tuple) int {
+		i := int(x.First)
+		i2 := int(y.First)
+		var result ordering.Ordering
+		if i < i2 {
+			result = ordering.OrderingLT
+		} else if i == i2 {
+			result = ordering.OrderingEQ
+		} else {
+			result = ordering.OrderingGT
+		}
+		switch result {
+		case ordering.OrderingLT:
+			return -1
+		case ordering.OrderingGT:
+			return 1
+		}
 		return 0
 	})
-	var result []struct{}
-	if len(indexedAndSorted) > 0 {
-		array2 := *arraypkg.UnsafeThaw([]tuple.Tuple{indexedAndSorted[0]})
-		for range indexedAndSorted {
-			shared.Frozen(array2)
-		}
-		performed := shared.Frozen(array2)
-		array3 := direct.SortBy(performed, func(x tuple.Tuple, y tuple.Tuple) int {
-			i := int(x.First)
-			i2 := int(y.First)
-			var result2 ordering.Ordering
-			if i < i2 {
-				result2 = ordering.OrderingLT
-			} else if i == i2 {
-				result2 = ordering.OrderingEQ
-			} else {
-				result2 = ordering.OrderingGT
-			}
-			switch result2 {
-			case ordering.OrderingLT:
-				return -1
-			case ordering.OrderingGT:
-				return 1
-			}
-			return 0
-		})
-		mapped2 := make([]struct{}, len(array3))
-		for index, element := range array3 {
-			tuple.Snd(element)
-			mapped2[index] = struct{}{}
-		}
-		result = mapped2
-	} else {
-		result = []struct{}{}
+	mapped := make([]struct{}, len(array))
+	for index, element := range array {
+		tuple.Snd(element)
+		mapped[index] = struct{}{}
 	}
-	return result
+	return mapped
 }
 
 func main() {

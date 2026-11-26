@@ -10,16 +10,7 @@ import (
 	"strings"
 )
 
-var main_ = initializeMain_()
-
-func initializeMain_() [][]bool {
-	array := []int{1, 2, 3}
-	mapped := make([][]bool, len(array))
-	for index, n := range array {
-		mapped[index] = []bool{n > 1, n > 2}
-	}
-	return mapped
-}
+var main_ [][]bool = [][]bool{{false, false}, {true, false}, {true, true}}
 
 func main() {
 	texts := make([]string, 0, len(main_))

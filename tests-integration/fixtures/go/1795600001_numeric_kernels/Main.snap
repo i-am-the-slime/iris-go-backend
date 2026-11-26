@@ -64,18 +64,7 @@ func initializeMain_() []string {
 	for _, x := range xs {
 		accumulator3 = accumulator3*0.5 + x
 	}
-	return []string{prim.ShowNumber(foldLanes(xs, 0.0)), prim.ShowNumber(foldLanes2(xs, xs, 0.0)), prim.ShowNumber(foldLanes3(xs, 0.0)), prim.ShowNumber(foldLanes4(xs, -prim.NumberInfinity)), strconv.Itoa(accumulator), strconv.Itoa(foldLanes5(ints, prim.TopInt)), show.ArrayNumber(zipLanes(xs, xs)), show.ArrayNumber(zipLanes2(xs, xs)), prim.ShowNumber(accumulator2), prim.ShowNumber(accumulator3), strconv.Itoa(literal)}
-}
-
-var literal = initializeLiteral()
-
-func initializeLiteral() int {
-	array := []int{1, 2, 3}
-	accumulator := 0
-	for _, value := range array {
-		accumulator += value
-	}
-	return accumulator
+	return []string{prim.ShowNumber(foldLanes(xs, 0.0)), prim.ShowNumber(foldLanes2(xs, xs, 0.0)), prim.ShowNumber(foldLanes3(xs, 0.0)), prim.ShowNumber(foldLanes4(xs, -prim.NumberInfinity)), strconv.Itoa(accumulator), strconv.Itoa(foldLanes5(ints, prim.TopInt)), show.ArrayNumber(zipLanes(xs, xs)), show.ArrayNumber(zipLanes2(xs, xs)), prim.ShowNumber(accumulator2), prim.ShowNumber(accumulator3), "6"}
 }
 
 func main() {

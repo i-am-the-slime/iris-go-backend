@@ -48,7 +48,6 @@ package main
 import (
 	"fixture/Data/Show"
 	"fixture/Data/Tuple"
-	"github.com/i-am-the-slime/iris-go/array"
 	"github.com/i-am-the-slime/iris-go/console"
 	"slices"
 	"strings"
@@ -57,7 +56,7 @@ import (
 var main_ = initializeMain_()
 
 func initializeMain_() []string {
-	shared := array.Replicate(4, 0)
+	shared := []int{0, 0, 0, 0}
 	accumulator := tuple.Tuple{First: shared, Second: [][]int{}}
 	accumulator.Second = slices.Clip(accumulator.Second)
 	for element := 0; element < 3; element++ {

@@ -1,55 +1,15 @@
 ---
 source: tests-integration/src/fixtures.rs
 ---
-// Data/Maybe/maybe.go
-package maybe
-
-import "strconv"
-
-const TagNothing = 0
-
-const TagJust = 1
-
-type Int struct {
-	Just int
-	Tag  uint8
-}
-
-var NoInt = Int{Tag: TagNothing}
-
-func JustInt(just int) Int {
-	return Int{Tag: TagJust, Just: just}
-}
-
-func Show(maybe Int) string {
-	switch maybe.Tag {
-	case TagJust:
-		return "(Just " + strconv.Itoa(maybe.Just) + ")"
-	default: // TagNothing
-		return "Nothing"
-	}
-}
-
 // main.go
 package main
 
 import (
-	"fixture/Data/Maybe"
-	arraypkg "github.com/i-am-the-slime/iris-go/array"
 	"github.com/i-am-the-slime/iris-go/console"
 	"strings"
 )
 
-var main_ = initializeMain_()
-
-func initializeMain_() []string {
-	array := arraypkg.Append([]maybe.Int{maybe.NoInt}, []maybe.Int{maybe.JustInt(20)})
-	mapped := make([]string, len(array))
-	for index, element := range array {
-		mapped[index] = maybe.Show(element)
-	}
-	return mapped
-}
+var main_ []string = []string{"Nothing", "(Just 20)"}
 
 func main() {
 	console.Print("[" + strings.Join(main_, " ") + "]")

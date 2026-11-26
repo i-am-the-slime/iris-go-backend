@@ -30,22 +30,16 @@ func Add(i int, i2 int) int {
 package tuple
 
 import (
-	hashmap "github.com/i-am-the-slime/iris-go/ffi/Data_HashMap_ffi"
 	"github.com/i-am-the-slime/iris-go/prim"
 	"strconv"
 )
 
-type TupleString struct {
+type Tuple struct {
 	First  string
 	Second int
 }
 
-type TupleHashMapIntInt struct {
-	First  hashmap.Native[int, int]
-	Second int
-}
-
-func AppendShowArrayTupleStringInt(buffer []byte, array []TupleString) []byte {
+func AppendShowArrayTupleStringInt(buffer []byte, array []Tuple) []byte {
 	buffer = append(buffer, '[')
 	for index, element := range array {
 		if index > 0 {
@@ -57,7 +51,7 @@ func AppendShowArrayTupleStringInt(buffer []byte, array []TupleString) []byte {
 	return buffer
 }
 
-func AppendShowTupleStringInt(buffer []byte, tuple TupleString) []byte {
+func AppendShowTupleStringInt(buffer []byte, tuple Tuple) []byte {
 	buffer = append(buffer, "(Tuple "...)
 	buffer = prim.AppendShowString(buffer, tuple.First)
 	buffer = append(buffer, ' ')
@@ -66,7 +60,7 @@ func AppendShowTupleStringInt(buffer []byte, tuple TupleString) []byte {
 	return buffer
 }
 
-func ArrayTupleStringInt(array []TupleString) string {
+func ArrayTupleStringInt(array []Tuple) string {
 	return string(AppendShowArrayTupleStringInt(nil, array))
 }
 
@@ -127,21 +121,10 @@ func initializeMain_() []string {
 	default: // maybe.TagNothing
 		result2 = "Nothing"
 	}
-	array2 := []int{1, 2, 3, 4}
-	accumulator2 := hashmap.Empty[Point, int]()
-	for _, n := range array2 {
-		k := Point{X: n - 1, Y: 1 - n}
-		accumulator2 = hashmap.Insert(eq, hash, Point{X: n, Y: -n}, n, hashmap.Delete(eq, k, k.X*31+k.Y*31, accumulator2))
-	}
-	array3 := []int{1, 2, 3}
-	accumulator3 := tuple.TupleHashMapIntInt{First: hashmap.NativeEmpty[int, int](), Second: 0}
-	for _, n := range array3 {
-		table := accumulator3.First
-		accumulator3 = tuple.TupleHashMapIntInt{First: hashmap.NativeInsert(nil, nil, n, n, table), Second: hashmap.NativeSize(table)}
-	}
-	return []string{tuple.ArrayTupleStringInt(hashmap.NativeToArrayBy(func(s string, i int) tuple.TupleString {
-		return tuple.TupleString{First: s, Second: i}
-	}, accumulator.ByWord)), strconv.Itoa(object.Size(accumulator.ByFirst)), result2, strconv.Itoa(hashmap.Size(accumulator2)), "(Tuple " + strconv.Itoa(hashmap.NativeSize(accumulator3.First)) + " " + strconv.Itoa(accumulator3.Second) + ")"}
+	field := hashmap.NativeInsert(nil, nil, 2, 2, hashmap.NativeInsert(nil, nil, 1, 1, hashmap.NativeEmpty[int, int]()))
+	return []string{tuple.ArrayTupleStringInt(hashmap.NativeToArrayBy(func(s string, i int) tuple.Tuple {
+		return tuple.Tuple{First: s, Second: i}
+	}, accumulator.ByWord)), strconv.Itoa(object.Size(accumulator.ByFirst)), result2, strconv.Itoa(hashmap.Size(hashmap.Insert(eq, hash, Point{X: 4, Y: -4}, 4, hashmap.Delete(eq, Point{X: 3, Y: -3}, 0, hashmap.Insert(eq, hash, Point{X: 3, Y: -3}, 3, hashmap.Delete(eq, Point{X: 2, Y: -2}, 0, hashmap.Insert(eq, hash, Point{X: 2, Y: -2}, 2, hashmap.Delete(eq, Point{X: 1, Y: -1}, 0, hashmap.Insert(eq, hash, Point{X: 1, Y: -1}, 1, hashmap.Delete(eq, Point{X: 0, Y: 0}, 0, hashmap.Empty[Point, int]())))))))))), "(Tuple " + strconv.Itoa(hashmap.NativeSize(hashmap.NativeInsert(nil, nil, 3, 3, field))) + " " + strconv.Itoa(hashmap.NativeSize(field)) + ")"}
 }
 
 func eq(ra Point, rb Point) bool {

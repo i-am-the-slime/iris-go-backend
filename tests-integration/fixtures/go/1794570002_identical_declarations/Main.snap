@@ -6,7 +6,6 @@ package main
 
 import (
 	"fixture/shared"
-	arraypkg "github.com/i-am-the-slime/iris-go/array"
 	"github.com/i-am-the-slime/iris-go/console"
 	"strconv"
 	"strings"
@@ -15,17 +14,7 @@ import (
 var main_ = initializeMain_()
 
 func initializeMain_() []string {
-	array := []int{1, 2}
-	mapped := make([]string, len(array))
-	for index, value := range array {
-		mapped[index] = opsForLeft.Describe(opsForLeft.Double(value))
-	}
-	array2 := []int{3}
-	mapped2 := make([]string, len(array2))
-	for index, value := range array2 {
-		mapped2[index] = opsForLeft.Describe(opsForLeft.Double(value))
-	}
-	return arraypkg.Append(mapped, mapped2)
+	return []string{opsForLeft.Describe(opsForLeft.Double(1)), opsForLeft.Describe(opsForLeft.Double(2)), opsForLeft.Describe(opsForLeft.Double(3))}
 }
 
 var opsForLeft shared.Ops = shared.Ops{Double: func(n int) int {

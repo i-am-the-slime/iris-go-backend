@@ -27,7 +27,6 @@ package main
 
 import (
 	"fixture/Data/Show"
-	"github.com/i-am-the-slime/iris-go/array"
 	"github.com/i-am-the-slime/iris-go/console"
 	"slices"
 	"strings"
@@ -36,21 +35,12 @@ import (
 var main_ = initializeMain_()
 
 func initializeMain_() []string {
-	shared := array.Replicate(6, 0)
-	accumulator := shared
+	accumulator := []int{0, 0, 0, 0, 0, 0}
 	accumulator = slices.Clone(accumulator)
 	for element := 0; element < 5; element++ {
 		accumulator = overwriteOwning(accumulator, element)
 	}
-	var result []int
-	if len(shared) > 1 {
-		updated := slices.Clone(shared)
-		updated[1] = 3
-		result = updated
-	} else {
-		result = shared
-	}
-	return []string{show.ArrayInt(accumulator), show.ArrayInt(result), show.ArrayInt(shared)}
+	return []string{show.ArrayInt(accumulator), show.ArrayInt([]int{0, 3, 0, 0, 0, 0}), show.ArrayInt([]int{0, 0, 0, 0, 0, 0})}
 }
 
 func overwriteOwning(current []int, position int) []int {

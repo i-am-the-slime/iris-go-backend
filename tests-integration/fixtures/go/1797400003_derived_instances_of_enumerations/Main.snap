@@ -134,6 +134,10 @@ const (
 	ExpressionAdd
 )
 
+func Leaf(leaf int) *Expression {
+	return &Expression{Tag: ExpressionLeaf, Leaf: int32(leaf)}
+}
+
 var main_ = initializeMain_()
 
 func initializeMain_() []string {
@@ -180,22 +184,15 @@ func initializeMain_() []string {
 		element := value > value2
 		built3[index] = element
 	}
-	expressions := make([]Expression, 5)
-	expressions[0] = Expression{Tag: ExpressionAdd, Add0: &expressions[1], Add1: &expressions[2]}
-	expressions[1] = Expression{Tag: ExpressionLeaf, Leaf: 1}
-	expressions[2] = Expression{Tag: ExpressionAdd, Add0: &expressions[3], Add1: &expressions[4]}
-	expressions[3] = Expression{Tag: ExpressionLeaf, Leaf: 2}
-	expressions[4] = Expression{Tag: ExpressionLeaf, Leaf: 3}
-	array4 := []*Expression{&expressions[0]}
-	mapped3 := make([]int, len(array4))
-	for index, element := range array4 {
-		mapped3[index] = scaled(3, element)
-	}
-	mapped4 := make([]bool, len(suits))
+	mapped3 := make([]bool, len(suits))
 	for index, element := range suits {
-		mapped4[index] = isSpades(element)
+		mapped3[index] = isSpades(element)
 	}
-	return []string{datashow.ArrayString(mapped), datashow.ArrayBoolean(built), datashow.ArrayString(mapped2), ordering.ArrayOrdering(built2), datashow.ArrayBoolean(built3), datashow.ArrayInt(mapped3), datashow.ArrayBoolean(mapped4)}
+	expressions := make([]Expression, 3)
+	expressions[0] = Expression{Tag: ExpressionAdd, Add0: &expressions[1], Add1: &expressions[2]}
+	expressions[1] = Expression{Tag: ExpressionLeaf, Leaf: 2}
+	expressions[2] = Expression{Tag: ExpressionLeaf, Leaf: 3}
+	return []string{datashow.ArrayString(mapped), datashow.ArrayBoolean(built), datashow.ArrayString(mapped2), ordering.ArrayOrdering(built2), datashow.ArrayBoolean(built3), datashow.ArrayInt([]int{scaledAdd(3, Leaf(1), &expressions[0])}), datashow.ArrayBoolean(mapped3)}
 }
 
 func describe(card Card) string {
@@ -280,6 +277,10 @@ func compare(ra Card, rb Card) ordering.Ordering {
 		return left3
 	}
 	return ordering.OrderingEQ
+}
+
+func scaledAdd(factor int, left *Expression, right *Expression) int {
+	return scaled(factor, left) + scaled(factor, right)
 }
 
 func main() {

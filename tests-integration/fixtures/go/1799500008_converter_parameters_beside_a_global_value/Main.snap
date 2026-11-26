@@ -6,13 +6,13 @@ package checks
 
 import "fixture/Data/Either"
 
-func Value(n int) (int, either.StringFailure) {
+func Value(n int) either.Either {
 	for {
 		if n > 100 {
-			return 0, either.StringFailure{Failed: true, Left: "too big"}
+			return either.Left("too big")
 		}
 		if n > 0 {
-			return n, either.StringFailure{}
+			return either.Right(n)
 		}
 		n += 10
 	}
@@ -28,7 +28,7 @@ import (
 
 type Either struct {
 	Left  string
-	Right int
+	Right int32
 	Tag   uint8
 }
 
@@ -47,7 +47,7 @@ func Left(left string) Either {
 }
 
 func Right(right int) Either {
-	return Either{Tag: EitherRight, Right: right}
+	return Either{Tag: EitherRight, Right: int32(right)}
 }
 
 func AppendShowArrayEitherStringInt(buffer []byte, array []Either) []byte {
@@ -56,7 +56,7 @@ func AppendShowArrayEitherStringInt(buffer []byte, array []Either) []byte {
 		if index > 0 {
 			buffer = append(buffer, ',')
 		}
-		buffer = AppendShowEitherStringInt(buffer, element.Right, EitherFailure(element))
+		buffer = AppendShowEitherStringInt(buffer, int(element.Right), EitherFailure(element))
 	}
 	buffer = append(buffer, ']')
 	return buffer
@@ -86,13 +86,6 @@ func EitherFailure(either Either) StringFailure {
 	return StringFailure{}
 }
 
-func EitherFromResults(value2 int, err StringFailure) Either {
-	if err.Failed {
-		return Left(err.Left)
-	}
-	return Right(value2)
-}
-
 // main.go
 package main
 
@@ -103,10 +96,5 @@ import (
 )
 
 func main() {
-	array := []int{5, -3, 200}
-	mapped := make([]either.Either, len(array))
-	for index, element := range array {
-		mapped[index] = either.EitherFromResults(checks.Value(element))
-	}
-	journal.Log(either.ArrayEitherStringInt(mapped))
+	journal.Log(either.ArrayEitherStringInt([]either.Either{checks.Value(5), checks.Value(-3), checks.Value(200)}))
 }

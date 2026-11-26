@@ -13,44 +13,55 @@ import (
 //line Main.purs:21:1
 func main() {
 //line Main.purs:22:13
-	passed := 0
+	passed := &shared.Ref[int]{Value: 0}
 //line Main.purs:23:3
 	limit := 3
-//line Main.purs:25:5
-	rules := []shared.Rule{{Name: "positive", Check: func(n int) bool {
-//line Main.purs:15:38
-		return n > 0
-//line Main.purs:25:5
-	}}, {Name: "small", Check: func(n int) bool {
-//line Main.purs:16:35
-		return n < limit
-//line Main.purs:25:5
-	}}, {Name: "even", Check: func(n int) bool {
-//line Main.purs:17:34
-		return n&1 == 0
-//line Main.purs:25:5
-	}}}
 //line Main.purs:24:3
 	for i := 0; i < 5; i++ {
-//line Main.purs:25:5
-		for _, rule := range rules {
-//line Main.purs:26:7
-			if rule.Check(i) {
-//line Main.purs:27:9
-				passed += 1
-//line Main.purs:26:7
-			}
-//line Main.purs:25:5
-		}
+//line Main.purs:24:3
+		mainF(i, passed, shared.Rule{Name: "positive", Check: func(n int) bool {
+//line Main.purs:15:38
+			return n > 0
+//line Main.purs:24:3
+		}})
+//line Main.purs:24:3
+		mainF(i, passed, shared.Rule{Name: "small", Check: func(n int) bool {
+//line Main.purs:16:35
+			return n < limit
+//line Main.purs:24:3
+		}})
+//line Main.purs:24:3
+		mainF(i, passed, shared.Rule{Name: "even", Check: func(n int) bool {
+//line Main.purs:17:34
+			return n&1 == 0
+//line Main.purs:24:3
+		}})
 //line Main.purs:24:3
 	}
+//line Main.purs:28:12
+	total := passed.Value
 //line Main.purs:29:3
-	if passed != 10 {
+	if total != 10 {
 //line Main.purs:30:5
-		panic(exception.NewError("the rules passed " + strconv.Itoa(passed)))
+		panic(exception.NewError("the rules passed " + strconv.Itoa(total)))
 //line Main.purs:29:3
 	}
 //line Main.purs:21:1
+}
+
+//line Main.purs:25:24
+func mainF(i int, passed *shared.Ref[int], rule shared.Rule) {
+//line Main.purs:26:7
+	if rule.Check(i) {
+//line Main.purs:27:9
+		s := passed.Value
+//line Main.purs:27:9
+		s_ := s + 1
+//line Main.purs:27:9
+		passed.Value = s_
+//line Main.purs:26:7
+	}
+//line Main.purs:25:24
 }
 
 // shared/shared.go

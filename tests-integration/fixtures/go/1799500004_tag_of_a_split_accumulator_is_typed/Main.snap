@@ -61,17 +61,7 @@ func main() {
 		result = string(text)
 	}
 	journal.Log(result)
-	scrutinee2 := farthest([]int{-1})
-	var result2 string
-	switch scrutinee2.Tag {
-	case distances.DistanceNone:
-		result2 = "None"
-	default: // distances.DistanceDistance2
-		text := []byte("Distance ")
-		text = show.AppendShowArrayInt(text, []int{scrutinee2.Distance0, scrutinee2.Distance1, int(scrutinee2.Distance2), int(scrutinee2.Distance3), scrutinee2.Distance4, int(scrutinee2.Distance5)})
-		result2 = string(text)
-	}
-	journal.Log(result2)
+	journal.Log("None")
 }
 
 func farthest(array []int) distances.Distance {

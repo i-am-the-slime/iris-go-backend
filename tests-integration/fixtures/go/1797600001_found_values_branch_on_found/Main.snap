@@ -107,19 +107,21 @@ func initializeMain_() []string {
 	} else {
 		result8 = -1
 	}
-	array := []string{"ab", "c"}
-	mapped := make([]maybe.Char, len(array))
-	for index, s := range array {
-		value, found11 := prim.CodeUnitCharAt(1, s)
-		var codeUnitCharAt maybe.Char
-		if found11 {
-			codeUnitCharAt = maybe.Char(value)
-		} else {
-			codeUnitCharAt = maybe.NoChar
-		}
-		mapped[index] = codeUnitCharAt
+	value, found11 := prim.CodeUnitCharAt(1, "ab")
+	var codeUnitCharAt maybe.Char
+	if found11 {
+		codeUnitCharAt = maybe.Char(value)
+	} else {
+		codeUnitCharAt = maybe.NoChar
 	}
-	return []string{prim.ShowChar(result), prim.ShowChar(result2), result3, result4, strconv.Itoa(result5), strconv.Itoa(result6), strconv.FormatBool(found7), strconv.FormatBool(found8), strconv.Itoa(result7), strconv.Itoa(result8), maybe.ArrayMaybeChar(mapped)}
+	value2, found12 := prim.CodeUnitCharAt(1, "c")
+	var codeUnitCharAt2 maybe.Char
+	if found12 {
+		codeUnitCharAt2 = maybe.Char(value2)
+	} else {
+		codeUnitCharAt2 = maybe.NoChar
+	}
+	return []string{prim.ShowChar(result), prim.ShowChar(result2), result3, result4, strconv.Itoa(result5), strconv.Itoa(result6), strconv.FormatBool(found7), strconv.FormatBool(found8), strconv.Itoa(result7), strconv.Itoa(result8), maybe.ArrayMaybeChar([]maybe.Char{codeUnitCharAt, codeUnitCharAt2})}
 }
 
 var prices = initializePrices()

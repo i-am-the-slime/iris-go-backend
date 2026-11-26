@@ -1,4 +1,61 @@
 ---
 source: tests-integration/src/fixtures.rs
 ---
-Main.purs:15:30: cannot specialize Main.main: unsafeCoerce from { age } (Go Age) to { age, name } (Go AgeName) changes representation: the record { age, name } has fields that { age } lacks (name); a Go struct holds only the fields its type names, so a coercion cannot widen a record
+// Data/Show/show.go
+package show
+
+import (
+	"fixture/shared"
+	"github.com/i-am-the-slime/iris-go/prim"
+	"strconv"
+)
+
+func AppendShowArrayPerson(buffer []byte, array []shared.Person) []byte {
+	buffer = append(buffer, '[')
+	for index, element := range array {
+		if index > 0 {
+			buffer = append(buffer, ',')
+		}
+		buffer = AppendShowRecordAgeNameConsIntConsStringNil(buffer, element)
+	}
+	buffer = append(buffer, ']')
+	return buffer
+}
+
+func AppendShowRecordAgeNameConsIntConsStringNil(buffer []byte, record shared.Person) []byte {
+	buffer = append(buffer, "{ age: "...)
+	buffer = strconv.AppendInt(buffer, int64(record.Age), 10)
+	buffer = append(buffer, ", name: "...)
+	buffer = prim.AppendShowString(buffer, record.Name)
+	buffer = append(buffer, " }"...)
+	return buffer
+}
+
+func ArrayPerson(array []shared.Person) string {
+	return string(AppendShowArrayPerson(nil, array))
+}
+
+// main.go
+package main
+
+import (
+	"fixture/Data/Show"
+	journal "fixture/Journal_ffi"
+	"fixture/shared"
+)
+
+func main() {
+	updated := shared.Person{Name: "Ann", Age: 30}
+	updated.Age = 31
+	updated2 := shared.Person{Name: "Bo", Age: 41}
+	updated2.Age = 31
+	journal.Log(show.ArrayPerson([]shared.Person{updated, updated2}))
+}
+
+// shared/shared.go
+package shared
+
+type Person struct {
+	Name string
+	Age  int
+}

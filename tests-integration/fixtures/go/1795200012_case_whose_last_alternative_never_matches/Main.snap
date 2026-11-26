@@ -31,7 +31,6 @@ package main
 import (
 	list "fixture/Data/List/Types"
 	"fixture/Data/Maybe"
-	"github.com/i-am-the-slime/iris-go/alloc"
 	"github.com/i-am-the-slime/iris-go/console"
 	"github.com/i-am-the-slime/iris-go/prim"
 	"strings"
@@ -40,35 +39,70 @@ import (
 var main_ = initializeMain_()
 
 func initializeMain_() []int {
-	return []int{defaulted(1.0), defaulted(2.0), defaulted(3.0)}
-}
-
-func defaulted(ignored float64) int {
+	var result int
 	switch maybe.NoInt.Tag {
 	case maybe.TagNothing:
-		array := []struct{}{{}, {}, {}}
-		accumulator := list.SharedListNil
-		var listUnitCells alloc.Cells[list.List]
-		for index := len(array) - 1; index >= 0; index-- {
-			unit := array[index]
-			accumulator = listUnitCells.New(list.List{Cons0: unit, Cons1: accumulator})
-		}
-		var result int
+		var result2 int
 		switch maybe.NoInt.Tag {
 		case maybe.TagNothing:
-			result = -17
+			result2 = -17
 		default: // maybe.TagJust
-			result = maybe.NoInt.Just
+			result2 = maybe.NoInt.Just
 		}
-		return defaultedGo(func(x int) int {
+		listUnits := make([]list.List, 3)
+		listUnits[0] = list.List{Cons0: struct{}{}, Cons1: &listUnits[1]}
+		listUnits[1] = list.List{Cons0: struct{}{}, Cons1: &listUnits[2]}
+		listUnits[2] = list.List{Cons0: struct{}{}, Cons1: list.SharedListNil}
+		result = mainGo(func(x int) int {
 			return x
-		}, accumulator)(result)
+		}, &listUnits[0])(result2)
 	default: // maybe.TagJust
-		return maybe.NoInt.Just
+		result = maybe.NoInt.Just
 	}
+	var result3 int
+	switch maybe.NoInt.Tag {
+	case maybe.TagNothing:
+		var result2 int
+		switch maybe.NoInt.Tag {
+		case maybe.TagNothing:
+			result2 = -17
+		default: // maybe.TagJust
+			result2 = maybe.NoInt.Just
+		}
+		listUnits2 := make([]list.List, 3)
+		listUnits2[0] = list.List{Cons0: struct{}{}, Cons1: &listUnits2[1]}
+		listUnits2[1] = list.List{Cons0: struct{}{}, Cons1: &listUnits2[2]}
+		listUnits2[2] = list.List{Cons0: struct{}{}, Cons1: list.SharedListNil}
+		result3 = mainGo(func(x int) int {
+			return x
+		}, &listUnits2[0])(result2)
+	default: // maybe.TagJust
+		result3 = maybe.NoInt.Just
+	}
+	var result4 int
+	switch maybe.NoInt.Tag {
+	case maybe.TagNothing:
+		var result2 int
+		switch maybe.NoInt.Tag {
+		case maybe.TagNothing:
+			result2 = -17
+		default: // maybe.TagJust
+			result2 = maybe.NoInt.Just
+		}
+		listUnits3 := make([]list.List, 3)
+		listUnits3[0] = list.List{Cons0: struct{}{}, Cons1: &listUnits3[1]}
+		listUnits3[1] = list.List{Cons0: struct{}{}, Cons1: &listUnits3[2]}
+		listUnits3[2] = list.List{Cons0: struct{}{}, Cons1: list.SharedListNil}
+		result4 = mainGo(func(x int) int {
+			return x
+		}, &listUnits3[0])(result2)
+	default: // maybe.TagJust
+		result4 = maybe.NoInt.Just
+	}
+	return []int{result, result3, result4}
 }
 
-func defaultedGo(b func(int) int, value *list.List) func(int) int {
+func mainGo(b func(int) int, value *list.List) func(int) int {
 	for {
 		if value == list.SharedListNil {
 			return b

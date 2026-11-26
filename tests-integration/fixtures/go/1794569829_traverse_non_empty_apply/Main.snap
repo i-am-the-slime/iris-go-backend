@@ -31,32 +31,25 @@ import (
 var main_ = initializeMain_()
 
 func initializeMain_() maybe.ArrayInt {
-	array2 := arraypkg.Append([]int{2}, []int{4, 8})
-	n := array2[0]
-	var result maybe.ArrayInt
-	if n&1 == 0 {
-		result = maybe.JustArrayInt([]int{n >> 1})
-	} else {
-		result = maybe.NoArrayInt
-	}
-	array := arraypkg.Slice(1, len(array2), array2)
-	result.Just = slices.Clip(result.Just)
+	array := arraypkg.Slice(1, 3, []int{2, 4, 8})
+	accumulator := maybe.JustArrayInt([]int{1})
+	accumulator.Just = slices.Clip(accumulator.Just)
 	for _, element := range array {
-		if result.Tag == maybe.TagNothing {
+		if accumulator.Tag == maybe.TagNothing {
 			break
 		}
-		switch result.Tag {
+		switch accumulator.Tag {
 		case maybe.TagJust:
 			if element&1 == 0 {
-				result = maybe.JustArrayInt(append(result.Just, element>>1))
+				accumulator = maybe.JustArrayInt(append(accumulator.Just, element>>1))
 			} else {
-				result = maybe.NoArrayInt
+				accumulator = maybe.NoArrayInt
 			}
 		default:
-			result = maybe.NoArrayInt
+			accumulator = maybe.NoArrayInt
 		}
 	}
-	return result
+	return accumulator
 }
 
 func main() {

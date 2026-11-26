@@ -44,76 +44,13 @@ package main
 import (
 	"fixture/Data/Show"
 	"github.com/i-am-the-slime/iris-go/console"
-	"github.com/i-am-the-slime/iris-go/prim"
 	"strings"
 )
 
 var main_ = initializeMain_()
 
 func initializeMain_() []string {
-	array := []int{-7, -6, 6, 7}
-	mapped := make([]bool, len(array))
-	for index, element := range array {
-		mapped[index] = divisibleByThree(element)
-	}
-	array2 := []int{-7, -6, 6, 7}
-	mapped2 := make([]bool, len(array2))
-	for index, element := range array2 {
-		mapped2[index] = notDivisibleByMinusThree(element)
-	}
-	array3 := []int{-7, -1, 7}
-	mapped3 := make([]int, len(array3))
-	for index, element := range array3 {
-		mapped3[index] = halvesAndQuarters(element)
-	}
-	array4 := []int{-7, -1, 7}
-	mapped4 := make([]int, len(array4))
-	for index, element := range array4 {
-		mapped4[index] = thirds(element)
-	}
-	array5 := []int{-3, 0, 3, 4}
-	mapped5 := make([]int, len(array5))
-	for index, element := range array5 {
-		mapped5[index] = tenOver(element)
-	}
-	array6 := []int{-3, 0, 3}
-	mapped6 := make([]int, len(array6))
-	for index, element := range array6 {
-		mapped6[index] = minusTenOver(element)
-	}
-	return []string{show.ArrayBoolean(mapped), show.ArrayBoolean(mapped2), show.ArrayInt(mapped3), show.ArrayInt(mapped4), show.ArrayInt(mapped5), show.ArrayInt(mapped6)}
-}
-
-func divisibleByThree(n int) bool {
-	return n%3 == 0
-}
-
-func notDivisibleByMinusThree(n int) bool {
-	return n%-3 != 0
-}
-
-func halvesAndQuarters(n int) int {
-	return n>>1*10 + n&3
-}
-
-func thirds(n int) int {
-	return prim.IntDivPositive(n, 3)*10 + prim.IntModPositive(n, 3)
-}
-
-func tenOver(d int) int {
-	switch d {
-	case 0:
-		return 0
-	default:
-		return 10/d*10 + 10%d
-	}
-}
-
-func minusTenOver(d int) int {
-	if d == 0 {
-		return 0
-	}
-	return prim.IntDiv(-10, d)
+	return []string{show.ArrayBoolean([]bool{false, true, true, false}), show.ArrayBoolean([]bool{true, false, false, true}), show.ArrayInt([]int{-39, -7, 33}), show.ArrayInt([]int{-28, -8, 21}), show.ArrayInt([]int{-29, 0, 31, 22}), show.ArrayInt([]int{4, 0, -4})}
 }
 
 func main() {

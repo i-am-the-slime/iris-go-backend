@@ -65,30 +65,7 @@ import (
 	dataeq "fixture/Data/Eq"
 	"fixture/Data/Show"
 	"fixture/Effect/Exception"
-	"fixture/shared"
-	arraypkg "github.com/i-am-the-slime/iris-go/array"
-)
-
-//line Main.purs:11:1
-type Shape struct {
-//line Main.purs:11:1
-	Field0 float64
-//line Main.purs:13:5
-	Field1 float64
-//line Main.purs:11:1
-	Tag    uint8
-//line Main.purs:11:1
-}
-
-//line Main.purs:11:1
-const (
-//line Main.purs:12:5
-	ShapeCircle = iota
-//line Main.purs:13:5
-	ShapeRectangle
-//line Main.purs:14:5
-	ShapeDot
-//line Main.purs:11:1
+	"github.com/i-am-the-slime/iris-go/array"
 )
 
 //line Main.purs:16:1
@@ -103,27 +80,13 @@ const (
 //line Main.purs:16:1
 )
 
-//line main.go:46
+//line main.go:23
 type StateValue struct {
-//line main.go:48
+//line main.go:25
 	State []Colour
-//line main.go:50
+//line main.go:27
 	Value []Colour
-//line main.go:52
-}
-
-//line Main.purs:12:5
-func Circle(field0 float64) Shape {
-//line Main.purs:12:5
-	return Shape{Tag: ShapeCircle, Field0: field0}
-//line Main.purs:12:5
-}
-
-//line Main.purs:13:5
-func Rectangle(field0 float64, field1 float64) Shape {
-//line Main.purs:13:5
-	return Shape{Tag: ShapeRectangle, Field0: field0, Field1: field1}
-//line Main.purs:13:5
+//line main.go:29
 }
 
 //line Main.purs:30:1
@@ -146,48 +109,16 @@ func main() {
 		effectexception.Throw("many is wrong")
 //line Main.purs:38:3
 	}
-//line Main.purs:40:18
-	array := []int{counter, count}
-//line Main.purs:40:18
-	mapped := make([]shared.Value, len(array))
-//line Main.purs:40:18
-	for index2, index := range array {
-//line Main.purs:40:18
-		mapped[index2] = shared.Value{Value: index * count}
-//line Main.purs:40:18
-	}
 //line Main.purs:41:3
-	mapped2 := make([]int, len(mapped))
-//line Main.purs:41:3
-	for index := range mapped {
-//line Main.purs:41:3
-		mapped2[index] = mapped[index].Value * /*line Main.purs:21:23*/ 2
-//line Main.purs:41:3
-	}
-//line Main.purs:41:3
-	if show.ArrayInt(mapped2) != "[24,32]" {
+	if show.ArrayInt([]int{counter * count * /*line Main.purs:21:23*/ 2 /*line Main.purs:41:3*/, count * count * /*line Main.purs:21:23*/ 2 /*line Main.purs:41:3*/}) != "[24,32]" {
 //line Main.purs:42:5
 		effectexception.Throw("the readings are wrong")
 //line Main.purs:41:3
 	}
-//line Main.purs:43:3
-	if len(mapped) != 2 {
-//line Main.purs:44:5
-		effectexception.Throw("the length is wrong")
-//line Main.purs:43:3
-	}
+//line Main.purs:45:26
+	field := float64(counter)
 //line Main.purs:46:3
-	array2 := []Shape{Circle(float64(counter)), Rectangle(2.0, float64(count)), {Tag: ShapeDot}}
-//line Main.purs:46:3
-	mapped3 := make([]float64, len(array2))
-//line Main.purs:46:3
-	for index, element := range array2 {
-//line Main.purs:46:3
-		mapped3[index] = area(element)
-//line Main.purs:46:3
-	}
-//line Main.purs:46:3
-	if !arraypkg.Eq(dataeq.Eq, mapped3, []float64{27.0, 8.0, 0.0}) {
+	if !array.Eq(dataeq.Eq, []float64{ /*line Main.purs:24:1*/ 3.0 * field * field /*line Main.purs:46:3*/ /*line Main.purs:24:1*/, 2.0 * float64(count) /*line Main.purs:46:3*/, 0.0}, []float64{27.0, 8.0, 0.0}) {
 //line Main.purs:47:5
 		effectexception.Throw("the areas are wrong")
 //line Main.purs:46:3
@@ -207,9 +138,9 @@ func main() {
 //line Main.purs:49:44
 	}
 //line Main.purs:49:3
-	colours = arraypkg.Append(colours, []Colour{result})
+	colours = array.Append(colours, []Colour{result})
 //line Main.purs:51:3
-	if !arraypkg.Eq(eq, colours, []Colour{ColourGreen, ColourRed}) {
+	if !array.Eq(eq, colours, []Colour{ColourGreen, ColourRed}) {
 //line Main.purs:52:5
 		effectexception.Throw("the colour is wrong")
 //line Main.purs:51:3
@@ -217,29 +148,6 @@ func main() {
 //line Main.purs:53:3
 	counter = count * /*line Main.purs:21:23*/ 2
 //line Main.purs:30:1
-}
-
-//line Main.purs:24:1
-func area(value Shape) float64 {
-//line Main.purs:24:1
-	switch value.Tag {
-//line Main.purs:25:3
-	case ShapeCircle:
-//line Main.purs:25:3
-		radius := value.Field0
-//line Main.purs:25:20
-		return 3.0 * radius * radius
-//line Main.purs:26:3
-	case ShapeRectangle:
-//line Main.purs:26:29
-		return value.Field0 * value.Field1
-//line Main.purs:27:3
-	default: // ShapeDot
-//line Main.purs:27:10
-		return 0.0
-//line Main.purs:24:1
-	}
-//line Main.purs:24:1
 }
 
 //line Main.purs:18:1
@@ -257,11 +165,4 @@ type Ref[T any] struct {
 //line shared.go:6
 	Value T
 //line shared.go:8
-}
-
-//line shared.go:11
-type Value struct {
-//line shared.go:13
-	Value int
-//line shared.go:15
 }

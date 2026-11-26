@@ -34,7 +34,7 @@ import (
 	"fixture/Data/Monoid"
 	"fixture/Data/Show"
 	"fixture/shared"
-	arraypkg "github.com/i-am-the-slime/iris-go/array"
+	"github.com/i-am-the-slime/iris-go/array"
 	"github.com/i-am-the-slime/iris-go/console"
 	"github.com/i-am-the-slime/iris-go/prim"
 	"strings"
@@ -43,16 +43,20 @@ import (
 var main_ = initializeMain_()
 
 func initializeMain_() []string {
-	array := [][]int{{1}, {2, 3}}
-	accumulator := shared.AccInit{Init: true, Acc: monoid.Mempty}
-	for _, x := range array {
-		if accumulator.Init {
-			accumulator = shared.AccInit{Init: false, Acc: x}
-		} else {
-			accumulator = shared.AccInit{Init: false, Acc: arraypkg.Append(accumulator.Acc, arraypkg.Append([]int{0}, x))}
-		}
+	scrutinee := shared.AccInit{Init: true, Acc: monoid.Mempty}
+	var result2 shared.AccInit
+	if scrutinee.Init {
+		result2 = shared.AccInit{Init: false, Acc: []int{1}}
+	} else {
+		result2 = shared.AccInit{Init: false, Acc: array.Append(scrutinee.Acc, []int{0, 1})}
 	}
-	return []string{prim.StringJoinWith(", ", []string{"a", "b", "c"}), prim.StringJoinWith("-", []string{"x"}), show.ArrayInt(accumulator.Acc)}
+	var result shared.AccInit
+	if result2.Init {
+		result = shared.AccInit{Init: false, Acc: []int{2, 3}}
+	} else {
+		result = shared.AccInit{Init: false, Acc: array.Append(result2.Acc, []int{0, 2, 3})}
+	}
+	return []string{prim.StringJoinWith(", ", []string{"a", "b", "c"}), prim.StringJoinWith("-", []string{"x"}), show.ArrayInt(result.Acc)}
 }
 
 func main() {

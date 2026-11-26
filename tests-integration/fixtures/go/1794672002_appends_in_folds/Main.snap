@@ -4,45 +4,26 @@ source: tests-integration/src/fixtures.rs
 // Data/Either/either.go
 package either
 
-type EitherArrayInt struct {
+type Either struct {
 	Left  string
 	Right []int
 	Tag   uint8
 }
 
 const (
-	EitherArrayIntLeft = iota
-	EitherArrayIntRight
+	EitherLeft = iota
+	EitherRight
 )
 
 type MainResult struct {
 	Appended []int
-	Combined EitherArrayInt
+	Combined Either
 	Escaping [][]int
 	Snocs    []int
 }
 
-type EitherInt struct {
-	Left  string
-	Right int
-	Tag   uint8
-}
-
-const (
-	EitherIntLeft = iota
-	EitherIntRight
-)
-
-func RightEitherInt(right int) EitherInt {
-	return EitherInt{Tag: EitherIntRight, Right: right}
-}
-
-func RightEitherArrayInt(right []int) EitherArrayInt {
-	return EitherArrayInt{Tag: EitherArrayIntRight, Right: right}
-}
-
-func Left(left string) EitherArrayInt {
-	return EitherArrayInt{Tag: EitherArrayIntLeft, Left: left}
+func Right(right []int) Either {
+	return Either{Tag: EitherRight, Right: right}
 }
 
 // main.go
@@ -51,8 +32,7 @@ package main
 import (
 	"fixture/Data/Either"
 	"fixture/shared"
-	arraypkg "github.com/i-am-the-slime/iris-go/array"
-	"github.com/i-am-the-slime/iris-go/prim"
+	"github.com/i-am-the-slime/iris-go/array"
 	"slices"
 )
 
@@ -68,26 +48,12 @@ func initializeMain_() either.MainResult {
 	for x := 1; x < 6; x++ {
 		accumulator2 = append(accumulator2, x*2)
 	}
-	array := []either.EitherInt{either.RightEitherInt(1), either.RightEitherInt(2), either.RightEitherInt(3)}
-	accumulator3 := either.RightEitherArrayInt([]int{})
-	accumulator3.Right = slices.Clip(accumulator3.Right)
-	for _, element := range array {
-		if accumulator3.Tag == either.EitherArrayIntLeft && element.Tag == either.EitherIntLeft {
-			accumulator3 = either.Left(prim.Append(accumulator3.Left, element.Left))
-		} else if accumulator3.Tag == either.EitherArrayIntLeft && element.Tag == either.EitherIntRight {
-			accumulator3 = either.Left(accumulator3.Left)
-		} else if accumulator3.Tag == either.EitherArrayIntRight && element.Tag == either.EitherIntRight {
-			accumulator3 = either.RightEitherArrayInt(append(accumulator3.Right, element.Right))
-		} else {
-			accumulator3 = either.Left(element.Left)
-		}
-	}
-	accumulator4 := shared.AccSeen{Acc: []int{}, Seen: [][]int{}}
-	accumulator4.Seen = slices.Clip(accumulator4.Seen)
+	accumulator3 := shared.AccSeen{Acc: []int{}, Seen: [][]int{}}
+	accumulator3.Seen = slices.Clip(accumulator3.Seen)
 	for x := 1; x < 5; x++ {
-		accumulator4 = shared.AccSeen{Acc: arraypkg.Append(accumulator4.Acc, []int{x}), Seen: append(accumulator4.Seen, accumulator4.Acc)}
+		accumulator3 = shared.AccSeen{Acc: array.Append(accumulator3.Acc, []int{x}), Seen: append(accumulator3.Seen, accumulator3.Acc)}
 	}
-	return either.MainResult{Appended: accumulator, Snocs: accumulator2, Combined: accumulator3, Escaping: accumulator4.Seen}
+	return either.MainResult{Appended: accumulator, Snocs: accumulator2, Combined: either.Right([]int{1, 2, 3}), Escaping: accumulator3.Seen}
 }
 
 func main() {

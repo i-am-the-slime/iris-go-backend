@@ -103,33 +103,34 @@ var main_ = initializeMain_()
 
 func initializeMain_() []string {
 	scanned := 7
-	mapped := make([]int, 12)
-	for index := range 12 {
+	array := []struct{}{{}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}}
+	mapped := make([]int, len(array))
+	for index := range array {
 		x1 := scanned ^ scanned<<13
 		x2 := x1 ^ int(uint(x1)>>17)
 		scanned = x2 ^ x2<<5
 		mapped[index] = int(uint(scanned)>>1) % 100
 	}
 	scanned2 := 7
-	mapped2 := make([]int, 0)
-	for index := range 0 {
+	mapped2 := make([]int, len([]struct{}{}))
+	for index := range []struct{}{} {
 		x1 := scanned2 ^ scanned2<<13
 		x2 := x1 ^ int(uint(x1)>>17)
 		scanned2 = x2 ^ x2<<5
 		mapped2[index] = int(uint(scanned2)>>1) % 100
 	}
 	scanned3 := 7
-	mapped3 := make([]int, 0)
-	for index := range 0 {
+	mapped3 := make([]int, len([]struct{}{}))
+	for index := range []struct{}{} {
 		x1 := scanned3 ^ scanned3<<13
 		x2 := x1 ^ int(uint(x1)>>17)
 		scanned3 = x2 ^ x2<<5
 		mapped3[index] = int(uint(scanned3)>>1) % 100
 	}
 	scanned4 := 0
-	array := []int{3, 1, 4, 1, 5}
-	built := make([]int, len(array))
-	for index, element := range array {
+	array2 := []int{3, 1, 4, 1, 5}
+	built := make([]int, len(array2))
+	for index, element := range array2 {
 		scanned4 = semiring.Add(scanned4, element)
 		built[index] = scanned4
 	}
@@ -140,9 +141,9 @@ func initializeMain_() []string {
 		built2[index] = scanned5
 	}
 	scanned6 := 10
-	array2 := []int{3, 1, 4, 1, 5}
+	array3 := []int{3, 1, 4, 1, 5}
 	built3 := []int{}
-	for _, value := range array2 {
+	for _, value := range array3 {
 		if value > 1 {
 			scanned6 = semiring.Add(scanned6, value*2)
 			built3 = append(built3, scanned6)
@@ -162,9 +163,9 @@ func initializeMain_() []string {
 		accumulator += scanned8
 	}
 	scanned9 := 0
-	array3 := []int{1, 2, 3, 4}
-	built5 := make([]int, len(array3))
-	for index, element := range array3 {
+	array4 := []int{1, 2, 3, 4}
+	built5 := make([]int, len(array4))
+	for index, element := range array4 {
 		scanned9 = semiring.Add(scanned9, element)
 		built5[index] = scanned9
 	}
@@ -173,11 +174,11 @@ func initializeMain_() []string {
 		x := built5[index]
 		accumulator2 = x - accumulator2
 	}
-	array4 := []int{1, 2, 3}
+	array5 := []int{1, 2, 3}
 	scanned10 := 0
-	array5 := []int{1, 2, 3, 4}
+	array6 := []int{1, 2, 3, 4}
 	found := false
-	for _, element := range array5 {
+	for _, element := range array6 {
 		scanned10 = semiring.Add(scanned10, element)
 		if scanned10 > 6 {
 			found = true
@@ -185,9 +186,9 @@ func initializeMain_() []string {
 		}
 	}
 	scanned11 := 0
-	array6 := []int{1, 2, 3, 4}
+	array7 := []int{1, 2, 3, 4}
 	every := true
-	for _, element := range array6 {
+	for _, element := range array7 {
 		scanned11 = semiring.Add(scanned11, element)
 		if !(scanned11 < 6) {
 			every = false
@@ -195,244 +196,214 @@ func initializeMain_() []string {
 		}
 	}
 	scanned12 := 0
-	array7 := []int{1, 2, 3, 4, 5}
+	array8 := []int{1, 2, 3, 4, 5}
 	kept := []int{}
-	for _, element := range array7 {
+	for _, element := range array8 {
 		scanned12 = semiring.Add(scanned12, element)
 		if scanned12&1 == 0 {
 			kept = append(kept, scanned12)
 		}
 	}
-	array8 := []int{10, 20}
+	array9 := []int{10, 20}
 	bound := []int{}
-	array9 := []int{1, 1, 1}
-	for _, n := range array8 {
+	array10 := []int{1, 1, 1}
+	for _, n := range array9 {
 		scanned13 := n
-		for _, element := range array9 {
+		for _, element := range array10 {
 			scanned13 = semiring.Add(scanned13, element)
 			bound = append(bound, scanned13)
 		}
 	}
-	array10 := []int{1, 2, 3, 4}
-	array11 := []int{10, 20}
-	count := min(len(array10), len(array11))
+	array11 := []int{1, 2, 3, 4}
+	array12 := []int{10, 20}
+	count := min(len(array11), len(array12))
 	built6 := make([]int, count)
 	for index := range count {
-		value := array10[index]
-		value2 := array11[index]
+		value := array11[index]
+		value2 := array12[index]
 		element := value + value2
 		built6[index] = element
 	}
-	array12 := []int{10, 20}
-	count2 := min(len([]int{}), len(array12))
+	array13 := []int{10, 20}
+	count2 := min(len([]int{}), len(array13))
 	built7 := make([]int, count2)
 	for index := range count2 {
 		value := []int{}[index]
-		value2 := array12[index]
+		value2 := array13[index]
 		element := value + value2
 		built7[index] = element
 	}
-	xs := []int{1, 2, 3, 4, 5}
-	array13 := arraypkg.Slice(2, len(xs), xs)
-	count3 := min(len(array13), 5)
+	array14 := arraypkg.Slice(2, 5, []int{1, 2, 3, 4, 5})
+	count3 := min(len(array14), 5)
 	built8 := make([]shared.XY, count3)
 	for index := range count3 {
-		x := array13[index]
+		x := array14[index]
 		y := 7 - index
 		element := shared.XY{X: x, Y: y}
 		built8[index] = element
 	}
-	array14 := arraypkg.Slice(-3, -1, []int{1, 2, 3, 4, 5})
-	array15 := arraypkg.Slice(1, 100, []int{10, 20, 30})
-	count4 := min(len(array14), len(array15))
+	array15 := arraypkg.Slice(-3, -1, []int{1, 2, 3, 4, 5})
+	array16 := arraypkg.Slice(1, 100, []int{10, 20, 30})
+	count4 := min(len(array15), len(array16))
 	built9 := make([]int, count4)
 	for index := range count4 {
-		value := array14[index]
-		value2 := array15[index]
+		value := array15[index]
+		value2 := array16[index]
 		element := value - value2
 		built9[index] = element
 	}
-	array16 := arraypkg.Slice(4, 2, []int{1, 2, 3, 4, 5})
-	array17 := []int{1, 2}
-	count5 := min(len(array16), len(array17))
+	array17 := arraypkg.Slice(4, 2, []int{1, 2, 3, 4, 5})
+	array18 := []int{1, 2}
+	count5 := min(len(array17), len(array18))
 	built10 := make([]int, count5)
 	for index := range count5 {
-		value := array16[index]
-		value2 := array17[index]
+		value := array17[index]
+		value2 := array18[index]
 		element := value * value2
 		built10[index] = element
 	}
-	xs2 := []int{1, 2, 3}
-	array18 := []int{1, 2, 3}
-	array19 := arraypkg.Slice(9, len(xs2), xs2)
-	count6 := min(len(array18), len(array19))
+	array19 := []int{1, 2, 3}
+	array20 := arraypkg.Slice(9, 3, []int{1, 2, 3})
+	count6 := min(len(array19), len(array20))
 	built11 := make([]int, count6)
 	for index := range count6 {
-		value := array18[index]
-		value2 := array19[index]
+		value := array19[index]
+		value2 := array20[index]
 		element := value * value2
 		built11[index] = element
 	}
-	array20 := []int{5, 6, 7}
-	count7 := min(len(array20), 5)
+	array21 := []int{0, 6, 14}
+	array22 := []int{3, 3, 3, 3, 3}
+	count7 := min(len(array21), len(array22))
 	accumulator3 := 0
 	for index := range count7 {
-		x := array20[index]
-		value := index * x
-		value2 := value * 3
-		accumulator3 += value2
-	}
-	array21 := []int{1, 2, 3}
-	array22 := []int{4, 5, 6}
-	count8 := min(len(array21), len(array22))
-	scanned14 := 0
-	array23 := []int{1, 1, 1, 1}
-	count9 := min(count8, len(array23))
-	built12 := make([]int, count9)
-	for index := range count9 {
 		value := array21[index]
 		value2 := array22[index]
+		value3 := value * value2
+		accumulator3 += value3
+	}
+	array23 := []int{1, 2, 3}
+	array24 := []int{4, 5, 6}
+	count8 := min(len(array23), len(array24))
+	scanned14 := 0
+	array25 := []int{1, 1, 1, 1}
+	count9 := min(count8, len(array25))
+	built12 := make([]int, count9)
+	for index := range count9 {
+		value := array23[index]
+		value2 := array24[index]
 		element := value * value2
-		scanned14 = semiring.Add(scanned14, array23[index])
+		scanned14 = semiring.Add(scanned14, array25[index])
 		element2 := element + scanned14
 		built12[index] = element2
 	}
-	array24 := []int{1, 2, 3}
-	array25 := []int{4, 5, 6}
-	count10 := min(len(array24), len(array25))
+	array26 := []int{1, 2, 3}
+	array27 := []int{4, 5, 6}
+	count10 := min(len(array26), len(array27))
 	mapped4 := make([]int, count10)
 	for slot := range count10 {
-		value := array24[slot]
-		value2 := array25[slot]
+		value := array26[slot]
+		value2 := array27[slot]
 		x := value + value2
 		mapped4[slot] = slot + x
 	}
-	xs3 := []int{4, 5, 6}
-	array26 := []int{1, 2, 3}
-	array27 := arraypkg.Slice(1, len(xs3), xs3)
-	count11 := min(len(array26), len(array27))
 	array28 := []int{1, 2, 3}
-	array29 := []int{2, 3, 1}
-	count12 := min(len(array28), len(array29))
+	array29 := arraypkg.Slice(1, 3, []int{4, 5, 6})
+	count11 := min(len(array28), len(array29))
+	array30 := []int{1, 2, 3}
+	array31 := []int{2, 3, 1}
+	count12 := min(len(array30), len(array31))
 	every2 := true
 	for index := range count12 {
-		i := array28[index]
-		i2 := array29[index]
+		i := array30[index]
+		i2 := array31[index]
 		x := i < i2
 		if !x {
 			every2 = false
 			break
 		}
 	}
-	value3 := shared.Name{Name: "r"}
+	value4 := shared.Name{Name: "r"}
 	mapped5 := make([]string, 3)
 	for index := range 3 {
-		mapped5[index] = value3.Name
-	}
-	accumulator4 := 0
-	for range 4 {
-		value := 5
-		accumulator4 += value
+		mapped5[index] = value4.Name
 	}
 	scanned15 := 1
-	array30 := []int{1, 2, 3}
-	built13 := make([]int, len(array30)+1)
+	array32 := []int{1, 2, 3}
+	built13 := make([]int, len(array32)+1)
 	built13[0] = 0
-	for index, element := range array30 {
+	for index, element := range array32 {
 		scanned15 = semiring.Add(scanned15, element)
 		built13[index+1] = scanned15
 	}
-	array31 := []int{1, 2, 3}
+	array33 := []int{1, 2, 3}
 	built14 := []int{0}
-	for _, value := range array31 {
+	for _, value := range array33 {
 		if value > 1 {
 			built14 = append(built14, value)
 		}
 	}
-	array32 := []int{1, 2}
-	built15 := make([]int, len(array32)+2)
-	built15[0], built15[1] = 7, 8
-	for index, value := range array32 {
-		built15[index+2] = value * 3
-	}
-	array33 := []int{1, 2}
-	built16 := []int{0}
-	for _, x := range array33 {
-		built16 = append(built16, []int{x, x}...)
+	array34 := []int{1, 2}
+	built15 := []int{0}
+	for _, x := range array34 {
+		built15 = append(built15, []int{x, x}...)
 	}
 	letters := prim.StringToCharArray("bca")
 	n2 := len(letters)
-	array34 := prim.StringToCharArray("abcab")
-	accumulator5 := arraypkg.Range(0, len(letters))
-	for _, element := range array34 {
-		accumulator5 = row(letters, accumulator5, element)
+	array35 := prim.StringToCharArray("abcab")
+	accumulator4 := arraypkg.Range(0, len(letters))
+	for _, element := range array35 {
+		accumulator4 = row(letters, accumulator4, element)
 	}
 	var result []int
 	if n2 < 1 {
-		result = accumulator5
+		result = accumulator4
 	} else {
-		result = arraypkg.Slice(n2, len(accumulator5), accumulator5)
+		result = arraypkg.Slice(n2, len(accumulator4), accumulator4)
 	}
-	xs4 := []int{1, 2, 1, 1}
+	xs := []int{1, 2, 1, 1}
 	ys := []int{2, 1, 1}
-	var result2 int
-	if len(xs4) == 0 {
-		array35 := []int{0, -1}
-		accumulator6 := 0
-		for _, start := range array35 {
+	var result2 []int
+	if len(xs) == 0 {
+		count13 := min(len(xs), len(ys))
+		built16 := make([]bool, count13)
+		for index := range count13 {
+			value := xs[index]
+			value2 := ys[index]
+			element := value == value2
+			built16[index] = element
+		}
+		count14 := min(len(xs), len(ys))
+		built17 := make([]bool, count14)
+		for index := range count14 {
+			value := xs[index]
+			value2 := ys[index]
+			element := value == value2
+			built17[index] = element
+		}
+		result2 = []int{countAlong(built16), countAlong(built17)}
+	} else {
+		mapped6 := make([]int, len(xs))
+		for slot := range xs {
 			var result3 []int
-			if start < 1 {
-				result3 = xs4
+			if slot < 1 {
+				result3 = xs
 			} else {
-				result3 = arraypkg.Slice(start, len(xs4), xs4)
+				result3 = arraypkg.Slice(slot, len(xs), xs)
 			}
 			count13 := min(len(result3), len(ys))
-			built17 := make([]bool, count13)
+			built16 := make([]bool, count13)
 			for index := range count13 {
 				value := result3[index]
 				value2 := ys[index]
 				element := value == value2
-				built17[index] = element
+				built16[index] = element
 			}
-			value4 := countAlong(built17)
-			accumulator6 += value4
+			mapped6[slot] = countAlong(built16)
 		}
-		result2 = accumulator6
-	} else {
-		accumulator6 := 0
-		for index := range xs4 {
-			var result3 []int
-			if index < 1 {
-				result3 = xs4
-			} else {
-				result3 = arraypkg.Slice(index, len(xs4), xs4)
-			}
-			count13 := min(len(result3), len(ys))
-			built17 := make([]bool, count13)
-			for index2 := range count13 {
-				value := result3[index2]
-				value2 := ys[index2]
-				element := value == value2
-				built17[index2] = element
-			}
-			value4 := countAlong(built17)
-			accumulator6 += value4
-		}
-		result2 = accumulator6
+		result2 = mapped6
 	}
-	array36 := []int{1, 5, 2, 7, 0}
-	accumulator7 := shared.Bounds{Low: 0, High: 0}
-	for _, x := range array36 {
-		if x < 3 {
-			updated := accumulator7
-			updated.Low = accumulator7.Low + x
-			updated.High = accumulator7.High + accumulator7.Low
-			accumulator7 = updated
-		} else {
-			accumulator7 = shared.Bounds{Low: accumulator7.Low - 1, High: accumulator7.High + x}
-		}
-	}
-	return []string{show.ArrayInt(mapped), show.ArrayInt(mapped2), show.ArrayInt(mapped3), show.ArrayInt(built), show.ArrayInt(built2), show.ArrayInt(built3), show.ArrayInt(built4), strconv.Itoa(accumulator), strconv.Itoa(accumulator2), strconv.Itoa(len(array4)), strconv.FormatBool(found), strconv.FormatBool(every), show.ArrayInt(kept), show.ArrayInt(bound), show.ArrayInt(built6), show.ArrayInt(built7), show.ArrayXY(built8), show.ArrayInt(built9), show.ArrayInt(built10), show.ArrayInt(built11), strconv.Itoa(accumulator3), show.ArrayInt(built12), show.ArrayInt(mapped4), strconv.Itoa(count11), strconv.FormatBool(every2), show.ArrayString(mapped5), strconv.Itoa(accumulator4), show.ArrayInt(built13), show.ArrayInt(built14), show.ArrayInt(built15), show.ArrayInt(built16), show.ArrayInt(row([]rune{'a', 'b'}, []int{0, 1, 2}, 'b')), strconv.Itoa(foldLanes(result, 0)), strconv.Itoa(result2), strconv.Itoa(countAlong([]bool{true, false, true, true, false})), strconv.Itoa(accumulator7.High)}
+	return []string{show.ArrayInt(mapped), show.ArrayInt(mapped2), show.ArrayInt(mapped3), show.ArrayInt(built), show.ArrayInt(built2), show.ArrayInt(built3), show.ArrayInt(built4), strconv.Itoa(accumulator), strconv.Itoa(accumulator2), strconv.Itoa(len(array5)), strconv.FormatBool(found), strconv.FormatBool(every), show.ArrayInt(kept), show.ArrayInt(bound), show.ArrayInt(built6), show.ArrayInt(built7), show.ArrayXY(built8), show.ArrayInt(built9), show.ArrayInt(built10), show.ArrayInt(built11), strconv.Itoa(accumulator3), show.ArrayInt(built12), show.ArrayInt(mapped4), strconv.Itoa(count11), strconv.FormatBool(every2), show.ArrayString(mapped5), "20", show.ArrayInt(built13), show.ArrayInt(built14), show.ArrayInt([]int{7, 8, 3, 6}), show.ArrayInt(built15), show.ArrayInt(row([]rune{'a', 'b'}, []int{0, 1, 2}, 'b')), strconv.Itoa(foldLanes(result, 0)), strconv.Itoa(foldLanes(result2, 0)), "9", "13"}
 }
 
 func row(letters []rune, previous []int, letter rune) []int {
@@ -598,11 +569,6 @@ type XY struct {
 
 type Name struct {
 	Name string
-}
-
-type Bounds struct {
-	High int
-	Low  int
 }
 
 type Run struct {

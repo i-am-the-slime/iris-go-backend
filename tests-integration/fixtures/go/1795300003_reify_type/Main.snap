@@ -76,12 +76,7 @@ import (
 var main_ = initializeMain_()
 
 func initializeMain_() []string {
-	array := []int{1, 2, 3}
-	mapped := make([]string, len(array))
-	for index, n := range array {
-		mapped[index] = "item" + strconv.Itoa(n)
-	}
-	return []string{"42", "-8", "7", "erin!", "false", "false", "greater", show.ArrayString(mapped), show.ArrayString(reifiedEach(0, []string{})), ordering.ArrayOrdering([]ordering.Ordering{ordering.OrderingLT, ordering.OrderingEQ, ordering.OrderingGT})}
+	return []string{"42", "-8", "7", "erin!", "false", "false", "greater", show.ArrayString([]string{"item1", "item2", "item3"}), show.ArrayString(reifiedEach(0, []string{})), ordering.ArrayOrdering([]ordering.Ordering{ordering.OrderingLT, ordering.OrderingEQ, ordering.OrderingGT})}
 }
 
 func reifiedEach(n int, done []string) []string {

@@ -13,17 +13,6 @@ type ArrayInt struct {
 	Tag  uint8
 }
 
-// Data/Ordering/ordering.go
-package ordering
-
-type Ordering uint8
-
-const (
-	OrderingLT Ordering = iota
-	OrderingGT
-	OrderingEQ
-)
-
 // main.go
 package main
 
@@ -31,7 +20,6 @@ import (
 	"github.com/i-am-the-slime/iris-go/direct"
 	"github.com/i-am-the-slime/iris-go/prim"
 	"os"
-	"slices"
 )
 
 func main_() int {
@@ -39,8 +27,6 @@ func main_() int {
 	direct.DeleteAt(0, []int{})
 	counter := 0
 	counter += 1
-	sorted := slices.Clone([]rune{'b', 'a'})
-	slices.Sort(sorted)
 	return counter*10 + 2
 }
 
@@ -58,8 +44,4 @@ type Ref[T any] struct {
 type StateValue struct {
 	State int
 	Value int
-}
-
-type Items struct {
-	Items []rune
 }

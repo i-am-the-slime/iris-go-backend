@@ -102,15 +102,6 @@ import (
 var main_ = initializeMain_()
 
 func initializeMain_() []string {
-	sorted := slices.Clone([]int{5, 3, -7, 3, 2147483647, -2147483648, 0})
-	slices.Sort(sorted)
-	sorted2 := slices.Clone([]int{})
-	slices.Sort(sorted2)
-	sorted3 := slices.Clone([]int{9, 1, 8, 2})
-	slices.Sort(sorted3)
-	sorted4 := slices.Clone([]int{9, 1, 8, 2})
-	slices.Sort(sorted4)
-	slices.Reverse(sorted4)
 	array := shared.SortNumbers(signs)
 	mapped := make([]string, len(array))
 	for index, element := range array {
@@ -128,51 +119,37 @@ func initializeMain_() []string {
 	} else {
 		result2 = 'a'
 	}
-	sorted5 := slices.Clone([]rune{'q', 'b', 'Z', 'a', result, result2})
-	slices.Sort(sorted5)
-	sorted6 := slices.Clone([]string{"pear", "apple", "Banana", "", "apple"})
-	slices.SortFunc(sorted6, prim.CompareString)
-	sorted7 := slices.Clone(surrogates)
-	slices.SortFunc(sorted7, prim.CompareString)
-	sorted8 := slices.Clone([]int{4, 1, 3})
-	slices.Sort(sorted8)
-	mapped2 := make([]int, len(sorted8))
-	for index, score := range sorted8 {
-		mapped2[index] = score
-	}
-	sorted9 := slices.Clone([]string{"b", "a", "c"})
-	slices.SortFunc(sorted9, prim.CompareString)
-	mapped3 := make([]string, len(sorted9))
-	for index, label := range sorted9 {
-		mapped3[index] = label
-	}
+	sorted := slices.Clone([]rune{'q', 'b', 'Z', 'a', result, result2})
+	slices.Sort(sorted)
+	sorted2 := slices.Clone(surrogates)
+	slices.SortFunc(sorted2, prim.CompareString)
 	array2 := shared.SortByKey(entries, func(x shared.Entry) int {
 		return x.Rank
 	})
-	mapped4 := make([]string, len(array2))
+	mapped2 := make([]string, len(array2))
 	for index := range array2 {
-		mapped4[index] = array2[index].Name
+		mapped2[index] = array2[index].Name
 	}
 	array3 := shared.SortByKey(entries, func(x shared.Entry) int {
 		return x.Rank
 	})
-	mapped5 := make([]string, len(array3))
+	mapped3 := make([]string, len(array3))
 	for index := range array3 {
-		mapped5[index] = array3[index].Name
+		mapped3[index] = array3[index].Name
 	}
 	array4 := shared.SortByKey(entries, func(x shared.Entry) rune {
 		return x.Initial
 	})
-	mapped6 := make([]string, len(array4))
+	mapped4 := make([]string, len(array4))
 	for index := range array4 {
-		mapped6[index] = array4[index].Name
+		mapped4[index] = array4[index].Name
 	}
 	array5 := direct.SortBy(entries, func(x shared.Entry, y shared.Entry) int {
 		return prim.CompareString(x.Name, y.Name)
 	})
-	mapped7 := make([]string, len(array5))
+	mapped5 := make([]string, len(array5))
 	for index := range array5 {
-		mapped7[index] = array5[index].Name
+		mapped5[index] = array5[index].Name
 	}
 	array6 := direct.SortBy(entries, func(x shared.Entry, y shared.Entry) int {
 		number := x.Weight
@@ -193,24 +170,22 @@ func initializeMain_() []string {
 		}
 		return 0
 	})
-	mapped8 := make([]string, len(array6))
+	mapped6 := make([]string, len(array6))
 	for index := range array6 {
-		mapped8[index] = array6[index].Name
+		mapped6[index] = array6[index].Name
 	}
 	array7 := shared.SortByKey(entries, func(x shared.Entry) int {
 		return x.Rank*10 - prim.CodeUnitLength(x.Name)
 	})
-	mapped9 := make([]string, len(array7))
+	mapped7 := make([]string, len(array7))
 	for index := range array7 {
-		mapped9[index] = array7[index].Name
+		mapped7[index] = array7[index].Name
 	}
-	sorted10 := slices.Clone(prim.StringToCharArray("hello"))
-	slices.Sort(sorted10)
-	return []string{show.ArrayInt(sorted), show.ArrayInt(sorted2), show.ArrayInt(sorted3), show.ArrayInt(sorted4), show.ArrayNumber(shared.SortNumbers(numbers)), show.ArrayString(mapped), show.ArrayChar(sorted5), show.ArrayString(sorted6), show.ArrayString(sorted7), show.ArrayInt(mapped2), show.ArrayString(mapped3), show.ArrayString(mapped4), show.ArrayString(mapped5), show.ArrayString(mapped6), show.ArrayString(mapped7), show.ArrayString(mapped8), show.ArrayString(mapped9), show.ArrayString(shared.SortByKey([]string{"ccc", "a", "bb", "d", ""}, func(x string) int {
+	sorted3 := slices.Clone(prim.StringToCharArray("hello"))
+	slices.Sort(sorted3)
+	return []string{show.ArrayInt([]int{-2147483648, -7, 0, 3, 3, 5, 2147483647}), show.ArrayInt([]int{}), show.ArrayInt([]int{1, 2, 8, 9}), show.ArrayInt([]int{9, 8, 2, 1}), show.ArrayNumber(shared.SortNumbers(numbers)), show.ArrayString(mapped), show.ArrayChar(sorted), show.ArrayString([]string{"", "Banana", "apple", "apple", "pear"}), show.ArrayString(sorted2), show.ArrayInt([]int{1, 3, 4}), show.ArrayString([]string{"a", "b", "c"}), show.ArrayString(mapped2), show.ArrayString(mapped3), show.ArrayString(mapped4), show.ArrayString(mapped5), show.ArrayString(mapped6), show.ArrayString(mapped7), show.ArrayString(shared.SortByKey([]string{"ccc", "a", "bb", "d", ""}, func(x string) int {
 		return prim.CodeUnitLength(x)
-	})), show.ArrayInt(shared.SortByKey([]int{3, 1, 2, 1}, func(x int) int {
-		return -x
-	})), prim.CharArrayToString(sorted10)}
+	})), show.ArrayInt([]int{3, 2, 1, 1}), prim.CharArrayToString(sorted3)}
 }
 
 var numbers = initializeNumbers()

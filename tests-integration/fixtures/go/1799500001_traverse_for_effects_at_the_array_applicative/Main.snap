@@ -7,36 +7,6 @@ package category
 func Identity(x struct{}) {
 }
 
-// Data/Foldable/foldable.go
-package foldable
-
-import (
-	"fixture/Control/Category"
-	"github.com/i-am-the-slime/iris-go/array"
-)
-
-func Traverse_F(array2 []int) []struct{} {
-	function2 := func(x int) func([]struct{}) []struct{} {
-		a := []int{x, x + 1}
-		return func(b []struct{}) []struct{} {
-			mapped := make([]func(struct{}), len(a))
-			for index := range a {
-				mapped[index] = category.Identity
-			}
-			units := make([]struct{}, len(mapped)*len(b))
-			for _, function := range mapped {
-				for _, value := range b {
-					function(value)
-				}
-			}
-			return units
-		}
-	}
-	return array.Foldr(func(i int, array []struct{}) []struct{} {
-		return function2(i)(array)
-	}, []struct{}{{}}, array2)
-}
-
 // Data/Show/show.go
 package show
 
@@ -56,88 +26,96 @@ func ArrayUnit(array []struct{}) string {
 	return string(AppendShowArrayUnit(nil, array))
 }
 
-// Data/Tuple/tuple.go
-package tuple
-
-type Tuple struct {
-	First  int32
-	Second int32
-}
-
 // main.go
 package main
 
 import (
 	"fixture/Control/Category"
-	"fixture/Data/Foldable"
 	"fixture/Data/Show"
 	journal "fixture/Journal_ffi"
 )
 
 func main() {
-	journal.Log(show.ArrayUnit(foldable.Traverse_F([]int{1, 2})))
-	array := []int{1, 2, 3}
-	accumulator := []struct{}{{}}
-	for index2 := len(array) - 1; index2 >= 0; index2-- {
-		x := array[index2]
-		array2 := []int{x}
-		mapped := make([]func(struct{}), len(array2))
-		for index := range array2 {
-			mapped[index] = category.Identity
-		}
-		units := make([]struct{}, len(mapped)*len(accumulator))
-		for _, function := range mapped {
-			for _, value := range accumulator {
-				function(value)
-			}
-		}
-		accumulator = units
-	}
-	journal.Log(show.ArrayUnit(accumulator))
-	array3 := [][]int{{1}, {2, 3}}
-	accumulator2 := []struct{}{{}}
-	for index := len(array3) - 1; index >= 0; index-- {
-		x := array3[index]
-		mapped := make([]func(struct{}), len(x))
-		for index2 := range x {
-			mapped[index2] = category.Identity
-		}
-		units := make([]struct{}, len(mapped)*len(accumulator2))
-		for _, function := range mapped {
-			for _, value := range accumulator2 {
-				function(value)
-			}
-		}
-		accumulator2 = units
-	}
-	journal.Log(show.ArrayUnit(accumulator2))
-	array4 := []int{5, 6}
-	accumulator3 := []struct{}{{}}
-	for index := len(array4) - 1; index >= 0; index-- {
-		i := array4[index]
-		array2 := []int{index, i}
-		mapped := make([]func(struct{}), len(array2))
-		for index2 := range array2 {
-			mapped[index2] = category.Identity
-		}
-		units := make([]struct{}, len(mapped)*len(accumulator3))
-		for _, function := range mapped {
-			for _, value := range accumulator3 {
-				function(value)
-			}
-		}
-		accumulator3 = units
-	}
-	journal.Log(show.ArrayUnit(accumulator3))
-	functions := []func(int){func(_ int) {
-	}, func(_ int) {
-	}}
-	values := []int{1, 2, 3}
-	units2 := make([]struct{}, len(functions)*len(values))
-	for _, function := range functions {
+	functions := []func(struct{}){category.Identity, category.Identity}
+	functions2 := []func(struct{}){category.Identity, category.Identity}
+	values := []struct{}{{}}
+	units := make([]struct{}, len(functions2)*len(values))
+	for _, function := range functions2 {
 		for _, value := range values {
 			function(value)
 		}
 	}
+	units2 := make([]struct{}, len(functions)*len(units))
+	for _, function := range functions {
+		for _, value := range units {
+			function(value)
+		}
+	}
 	journal.Log(show.ArrayUnit(units2))
+	functions3 := []func(struct{}){category.Identity}
+	functions4 := []func(struct{}){category.Identity}
+	functions5 := []func(struct{}){category.Identity}
+	values2 := []struct{}{{}}
+	units3 := make([]struct{}, len(functions5)*len(values2))
+	for _, function := range functions5 {
+		for _, value := range values2 {
+			function(value)
+		}
+	}
+	units4 := make([]struct{}, len(functions4)*len(units3))
+	for _, function := range functions4 {
+		for _, value := range units3 {
+			function(value)
+		}
+	}
+	units5 := make([]struct{}, len(functions3)*len(units4))
+	for _, function := range functions3 {
+		for _, value := range units4 {
+			function(value)
+		}
+	}
+	journal.Log(show.ArrayUnit(units5))
+	functions6 := []func(struct{}){category.Identity}
+	functions7 := []func(struct{}){category.Identity, category.Identity}
+	values3 := []struct{}{{}}
+	units6 := make([]struct{}, len(functions7)*len(values3))
+	for _, function := range functions7 {
+		for _, value := range values3 {
+			function(value)
+		}
+	}
+	units7 := make([]struct{}, len(functions6)*len(units6))
+	for _, function := range functions6 {
+		for _, value := range units6 {
+			function(value)
+		}
+	}
+	journal.Log(show.ArrayUnit(units7))
+	functions8 := []func(struct{}){category.Identity, category.Identity}
+	functions9 := []func(struct{}){category.Identity, category.Identity}
+	values4 := []struct{}{{}}
+	units8 := make([]struct{}, len(functions9)*len(values4))
+	for _, function := range functions9 {
+		for _, value := range values4 {
+			function(value)
+		}
+	}
+	units9 := make([]struct{}, len(functions8)*len(units8))
+	for _, function := range functions8 {
+		for _, value := range units8 {
+			function(value)
+		}
+	}
+	journal.Log(show.ArrayUnit(units9))
+	functions10 := []func(int){func(_ int) {
+	}, func(_ int) {
+	}}
+	values5 := []int{1, 2, 3}
+	units10 := make([]struct{}, len(functions10)*len(values5))
+	for _, function := range functions10 {
+		for _, value := range values5 {
+			function(value)
+		}
+	}
+	journal.Log(show.ArrayUnit(units10))
 }

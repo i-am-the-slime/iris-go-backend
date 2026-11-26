@@ -90,21 +90,13 @@ import (
 )
 
 func main_() []string {
-	array := []shared.Inner{{A: 1, B: "one"}, {A: 2, B: "two"}}
-	accumulator := repeated.Empty[shared.Inner]()
-	for _, inner := range array {
-		accumulator = repeated.SnocImpl(accumulator, inner)
-	}
-	array2 := []shared.Outer{{Name: "outer", Inner: shared.Inner{A: 3, B: "three"}, Tags: repeated.Freeze(accumulator)}}
-	accumulator2 := repeated.Empty[shared.Outer]()
-	for _, outer2 := range array2 {
-		accumulator2 = repeated.SnocImpl(accumulator2, outer2)
-	}
-	outer := repeated.IndexOrImpl(shared.Outer{Name: "none", Inner: shared.Inner{A: 0, B: ""}, Tags: []shared.Inner{}}, 0, accumulator2)
-	array3 := repeated.Freeze(accumulator)
-	mapped := make([]int, len(array3))
-	for index := range array3 {
-		mapped[index] = array3[index].A
+	inners := repeated.SnocImpl(repeated.SnocImpl(repeated.Empty[shared.Inner](), shared.Inner{A: 1, B: "one"}), shared.Inner{A: 2, B: "two"})
+	outers := repeated.SnocImpl(repeated.Empty[shared.Outer](), shared.Outer{Name: "outer", Inner: shared.Inner{A: 3, B: "three"}, Tags: repeated.Freeze(inners)})
+	outer := repeated.IndexOrImpl(shared.Outer{Name: "none", Inner: shared.Inner{A: 0, B: ""}, Tags: []shared.Inner{}}, 0, outers)
+	array := repeated.Freeze(inners)
+	mapped := make([]int, len(array))
+	for index := range array {
+		mapped[index] = array[index].A
 	}
 	text := prim.AppendString(nil, outer.Name)
 	text = prim.AppendString(text, outer.Inner.B)
@@ -113,38 +105,28 @@ func main_() []string {
 		mapped2[index] = value.A
 	}
 	text = show.AppendShowArrayInt(text, mapped2)
-	array4 := [][]shared.Inner{{{A: 4, B: "four"}}, {}}
-	accumulator3 := repeated.Empty[[]shared.Inner]()
-	for _, array5 := range array4 {
-		accumulator3 = repeated.SnocImpl(accumulator3, array5)
-	}
-	array6 := repeated.Freeze(accumulator3)
-	mapped3 := make([][]int, len(array6))
-	for index, array5 := range array6 {
-		mapped4 := make([]int, len(array5))
-		for index2 := range array5 {
-			mapped4[index2] = array5[index2].A
+	array2 := repeated.Freeze(repeated.SnocImpl(repeated.SnocImpl(repeated.Empty[[]shared.Inner](), []shared.Inner{{A: 4, B: "four"}}), []shared.Inner{}))
+	mapped3 := make([][]int, len(array2))
+	for index, array3 := range array2 {
+		mapped4 := make([]int, len(array3))
+		for index2 := range array3 {
+			mapped4[index2] = array3[index2].A
 		}
 		mapped3[index] = mapped4
 	}
-	array7 := []maybe.Inner{maybe.JustInner(shared.Inner{A: 5, B: "five"}), maybe.NoInner}
-	accumulator4 := repeated.Empty[maybe.Inner]()
-	for _, maybe := range array7 {
-		accumulator4 = repeated.SnocImpl(accumulator4, maybe)
-	}
-	array8 := repeated.Freeze(accumulator4)
-	mapped5 := make([]string, len(array8))
-	for index := range array8 {
+	array4 := repeated.Freeze(repeated.SnocImpl(repeated.SnocImpl(repeated.Empty[maybe.Inner](), maybe.JustInner(shared.Inner{A: 5, B: "five"})), maybe.NoInner))
+	mapped5 := make([]string, len(array4))
+	for index := range array4 {
 		var result string
-		switch array8[index].Tag {
+		switch array4[index].Tag {
 		case maybe.TagNothing:
 			result = ""
 		default: // maybe.TagJust
-			result = array8[index].Just.B
+			result = array4[index].Just.B
 		}
 		mapped5[index] = result
 	}
-	return []string{show.ArrayInt(mapped), strconv.Itoa(repeated.Length(accumulator2)), string(text), show.ArrayArrayInt(mapped3), show.ArrayString(mapped5), repeated.Describe(any(repeated.IndexOrImpl(shared.Inner{A: 0, B: ""}, 1, accumulator))), repeated.Describe(7)}
+	return []string{show.ArrayInt(mapped), strconv.Itoa(repeated.Length(outers)), string(text), show.ArrayArrayInt(mapped3), show.ArrayString(mapped5), repeated.Describe(any(repeated.IndexOrImpl(shared.Inner{A: 0, B: ""}, 1, inners))), repeated.Describe(7)}
 }
 
 func main() {

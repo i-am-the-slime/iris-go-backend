@@ -4,11 +4,7 @@ source: tests-integration/src/fixtures.rs
 // main.go
 package main
 
-import (
-	"fixture/shared"
-	"github.com/i-am-the-slime/iris-go/prim"
-	"strconv"
-)
+import "fixture/shared"
 
 type Expr struct {
 	Field0 *Expr
@@ -24,70 +20,6 @@ const (
 	ExprSub
 )
 
-type Shape struct {
-	FieldB0 string
-	FieldA0 float64
-	Tag     uint8
-	FieldB1 bool
-}
-
-const (
-	ShapeCircle = iota
-	ShapeSquare
-	ShapeLabel
-	ShapeCaption
-	ShapePoint
-)
-
-type Item struct {
-	Field  string
-	Field0 int
-	Field1 int
-	Tag    uint8
-}
-
-const (
-	ItemField = iota
-	ItemPair
-	ItemCouple
-)
-
-type Colour uint8
-
-const (
-	ColourRed Colour = iota
-	ColourGreen
-	ColourBlue
-)
-
-func Circle(fieldA0 float64) Shape {
-	return Shape{Tag: ShapeCircle, FieldA0: fieldA0}
-}
-
-func Square(fieldA0 float64) Shape {
-	return Shape{Tag: ShapeSquare, FieldA0: fieldA0}
-}
-
-func Label(fieldB0 string, fieldB1 bool) Shape {
-	return Shape{Tag: ShapeLabel, FieldB0: fieldB0, FieldB1: fieldB1}
-}
-
-func Caption(fieldB0 string, fieldB1 bool) Shape {
-	return Shape{Tag: ShapeCaption, FieldB0: fieldB0, FieldB1: fieldB1}
-}
-
-func Field(field string) Item {
-	return Item{Tag: ItemField, Field: field}
-}
-
-func Pair(field0 int, field1 int) Item {
-	return Item{Tag: ItemPair, Field0: field0, Field1: field1}
-}
-
-func Couple(field0 int, field1 int) Item {
-	return Item{Tag: ItemCouple, Field0: field0, Field1: field1}
-}
-
 func Val(val int) *Expr {
 	return &Expr{Tag: ExprVal, Val: int32(val)}
 }
@@ -95,28 +27,13 @@ func Val(val int) *Expr {
 var main_ = initializeMain_()
 
 func initializeMain_() shared.MainResult {
-	array := []Shape{Circle(1.0), Square(2.0), Label("a", true), Caption("b", false), {Tag: ShapePoint}}
-	mapped := make([]string, len(array))
-	for index, element := range array {
-		mapped[index] = describe(element)
-	}
-	array2 := []Item{Field("x"), Pair(1, 2), Couple(3, 4)}
-	mapped2 := make([]int, len(array2))
-	for index, element := range array2 {
-		mapped2[index] = itemTotal(element)
-	}
-	array3 := []Colour{ColourRed, ColourGreen, ColourBlue}
-	mapped3 := make([]string, len(array3))
-	for index, element := range array3 {
-		mapped3[index] = colourName(element)
-	}
 	exprs := make([]Expr, 5)
 	exprs[0] = Expr{Tag: ExprSub, Field0: &exprs[1], Field1: &exprs[4]}
 	exprs[1] = Expr{Tag: ExprMul, Field0: &exprs[2], Field1: &exprs[3]}
 	exprs[2] = Expr{Tag: ExprVal, Val: 2}
 	exprs[3] = Expr{Tag: ExprVal, Val: 3}
 	exprs[4] = Expr{Tag: ExprVal, Val: 4}
-	return shared.MainResult{Expression: evaluateAdd(Val(1), &exprs[0]), Shapes: mapped, Items: mapped2, Colours: mapped3, Sample: "strue0.53"}
+	return shared.MainResult{Expression: evaluateAdd(Val(1), &exprs[0]), Shapes: []string{"circle 1.0", "square 2.0", "label atrue", "caption bfalse", "point"}, Items: []int{0, 3, 12}, Colours: []string{"red", "green", "blue"}, Sample: "strue0.53"}
 }
 
 func evaluate(expr *Expr) int {
@@ -129,43 +46,6 @@ func evaluate(expr *Expr) int {
 		return evaluate(expr.Field0) * evaluate(expr.Field1)
 	default: // ExprSub
 		return evaluate(expr.Field0) - evaluate(expr.Field1)
-	}
-}
-
-func describe(shape Shape) string {
-	switch shape.Tag {
-	case ShapeCircle:
-		return "circle " + prim.ShowNumber(shape.FieldA0)
-	case ShapeSquare:
-		return "square " + prim.ShowNumber(shape.FieldA0)
-	case ShapeLabel:
-		return "label " + shape.FieldB0 + strconv.FormatBool(shape.FieldB1)
-	case ShapeCaption:
-		return "caption " + shape.FieldB0 + strconv.FormatBool(shape.FieldB1)
-	default: // ShapePoint
-		return "point"
-	}
-}
-
-func itemTotal(item Item) int {
-	switch item.Tag {
-	case ItemField:
-		return 0
-	case ItemPair:
-		return item.Field0 + item.Field1
-	default: // ItemCouple
-		return item.Field0 * item.Field1
-	}
-}
-
-func colourName(colour Colour) string {
-	switch colour {
-	case ColourRed:
-		return "red"
-	case ColourGreen:
-		return "green"
-	default: // ColourBlue
-		return "blue"
 	}
 }
 

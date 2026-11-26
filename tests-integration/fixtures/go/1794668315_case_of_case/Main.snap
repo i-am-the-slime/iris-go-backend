@@ -5,7 +5,6 @@ source: tests-integration/src/fixtures.rs
 package main
 
 import (
-	"fixture/shared"
 	"github.com/i-am-the-slime/iris-go/console"
 	"strconv"
 	"strings"
@@ -14,42 +13,36 @@ import (
 var main_ = initializeMain_()
 
 func initializeMain_() []string {
-	xs := []shared.Id{{Id: "a"}}
-	var result string
-	result = xs[0].Id
-	xs2 := []int{1, 2}
-	var result2 int
-	result2 = xs2[1] + 1
 	field := opaque(3)
 	scrutinee := opaque(1)
-	var result3 string
+	var result string
 	switch scrutinee {
 	case 0:
-		result3 = "zero"
+		result = "zero"
 	case 1:
-		result3 = "one"
+		result = "one"
 	default:
-		result3 = "many"
+		result = "many"
 	}
 	n := opaque(11)
-	var result4 string
+	var result2 string
 	if n > 10 {
-		result4 = mainJoin(n)
+		result2 = mainJoin(n)
 	} else if n > 5 {
-		result4 = mainJoin(n * 2)
+		result2 = mainJoin(n * 2)
 	} else {
-		result4 = "none"
+		result2 = "none"
 	}
 	n2 := opaque(12)
-	var result5 string
+	var result3 string
 	if n2 > 10 {
-		result5 = mainJoin2(n2)
+		result3 = mainJoin2(n2)
 	} else if n2 > 5 {
-		result5 = mainJoin2(n2 * 2)
+		result3 = mainJoin2(n2 * 2)
 	} else {
-		result5 = "none"
+		result3 = "none"
 	}
-	return []string{result, strconv.Itoa(result2), strconv.Itoa(field * field), result3, result4, result5}
+	return []string{"a", "3", strconv.Itoa(field * field), result, result2, result3}
 }
 
 func opaque(x int) int {
@@ -71,11 +64,4 @@ func mainJoin2(m int) string {
 
 func main() {
 	console.Print("[" + strings.Join(main_, " ") + "]")
-}
-
-// shared/shared.go
-package shared
-
-type Id struct {
-	Id string
 }

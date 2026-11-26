@@ -6,7 +6,6 @@ package main
 
 import (
 	journal "fixture/Journal_ffi"
-	"fixture/shared"
 	"github.com/i-am-the-slime/iris-go/array"
 	"strconv"
 )
@@ -40,8 +39,7 @@ func main() {
 		accumulator2 += result2
 	}
 	journal.Log(strconv.Itoa(accumulator + accumulator2))
-	scrutinee := shared.X_Y{X_: 1, Y: 2}
-	journal.Log(strconv.Itoa(scrutinee.X_ + scrutinee.Y))
+	journal.Log("3")
 	journal.Log(strconv.Itoa(mainGo_(4, 0)))
 }
 
@@ -55,12 +53,4 @@ func mainGo_(k int, total_ int) int {
 			continue
 		}
 	}
-}
-
-// shared/shared.go
-package shared
-
-type X_Y struct {
-	X_ int `purescript:"x'"`
-	Y  int
 }

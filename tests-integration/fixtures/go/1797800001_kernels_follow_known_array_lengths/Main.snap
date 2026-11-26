@@ -27,7 +27,7 @@ package main
 
 import (
 	"fixture/Data/Show"
-	arraypkg "github.com/i-am-the-slime/iris-go/array"
+	"github.com/i-am-the-slime/iris-go/array"
 	"github.com/i-am-the-slime/iris-go/console"
 	"github.com/i-am-the-slime/iris-go/prim"
 	"strconv"
@@ -49,7 +49,7 @@ func initializeMain_() []string {
 		value2 := value * 2
 		accumulator += value2
 	}
-	step, count := arraypkg.RangeSteps(1, len(kept))
+	step, count := array.RangeSteps(1, len(kept))
 	accumulator2 := 0.0
 	for index := range count {
 		i := 1 + index*step
@@ -57,19 +57,7 @@ func initializeMain_() []string {
 		number := price * 1.19
 		accumulator2 += number
 	}
-	return []string{strconv.Itoa(shortLiteralStaysScalar), show.ArrayInt(shortRangeStaysScalar), strconv.Itoa(accumulator), prim.ShowNumber(accumulator2)}
-}
-
-var shortLiteralStaysScalar = initializeShortLiteralStaysScalar()
-
-func initializeShortLiteralStaysScalar() int {
-	array := []int{1, 2, 3}
-	accumulator := 0
-	for _, value := range array {
-		value2 := value * 2
-		accumulator += value2
-	}
-	return accumulator
+	return []string{"12", show.ArrayInt(shortRangeStaysScalar), strconv.Itoa(accumulator), prim.ShowNumber(accumulator2)}
 }
 
 var shortRangeStaysScalar = initializeShortRangeStaysScalar()

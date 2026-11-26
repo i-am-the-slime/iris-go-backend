@@ -99,19 +99,9 @@ func ArrayInt(array []int) string {
 // Data/Tuple/tuple.go
 package tuple
 
-type TupleIntString struct {
-	Second string
-	First  int
-}
-
-type TupleStringInt struct {
-	First  string
-	Second int
-}
-
-type TupleIntInt struct {
-	First  int
-	Second int
+type Tuple struct {
+	First  int32
+	Second int32
 }
 
 // Effect/Exception/exception.go
@@ -129,7 +119,6 @@ package main
 import (
 	"fixture/Data/Either"
 	"fixture/Data/Show"
-	"fixture/Data/Tuple"
 	"fixture/Effect/Exception"
 	journal "fixture/Journal_ffi"
 	arraypkg "github.com/i-am-the-slime/iris-go/array"
@@ -145,20 +134,17 @@ func main() {
 	failures()
 	folds()
 	journal.Log("st")
-	values := []int{3, 1, 2}
 	seen := []int{}
-	for _, i := range values {
+	for _, i := range []int{3, 1, 2} {
 		seen = arraypkg.Append(seen, []int{i})
 	}
-	for _, i := range values {
+	for _, i := range []int{3, 1, 2} {
 		seen = arraypkg.Append(seen, []int{i * 100})
 	}
 	journal.Log(show.ArrayInt(seen))
-	values2 := []int{10, 20, 30}
 	seen2 := []int{}
-	end := len(values2)
-	for index := 0; index < end; index++ {
-		x := values2[index]
+	for index := 0; index < 3; index++ {
+		x := []int{10, 20, 30}[index]
 		seen2 = arraypkg.Append(seen2, []int{index + x})
 	}
 	journal.Log(show.ArrayInt(seen2))
@@ -190,16 +176,12 @@ func traversals() {
 		journal.Log("t" + prim.ShowString(s))
 	}
 	journal.Log("forWithIndex_ effect")
-	array2 := []string{"x", "y", "z"}
-	end := len(array2)
-	for index := 0; index < end; index++ {
-		journal.Log(strconv.Itoa(index) + array2[index])
+	for index := 0; index < 3; index++ {
+		journal.Log(strconv.Itoa(index) + []string{"x", "y", "z"}[index])
 	}
 	journal.Log("traverseWithIndex_ effect")
-	array3 := []int{5, 6}
-	end2 := len(array3)
-	for index := 0; index < end2; index++ {
-		journal.Log(strconv.Itoa(index * array3[index]))
+	for index := 0; index < 2; index++ {
+		journal.Log(strconv.Itoa(index * []int{5, 6}[index]))
 	}
 	journal.Log("for effect")
 	array := []int{1, 2, 3}
@@ -211,9 +193,9 @@ func traversals() {
 	}
 	journal.Log(show.ArrayInt(collected))
 	journal.Log("traverse effect")
-	array4 := []int{7, 8}
-	collected2 := make([]string, len(array4))
-	for index, i := range array4 {
+	array2 := []int{7, 8}
+	collected2 := make([]string, len(array2))
+	for index, i := range array2 {
 		value := strconv.Itoa(i)
 		journal.Log("see " + value)
 		collected2[index] = value
@@ -233,15 +215,9 @@ func traversals() {
 	}
 	journal.Log(strconv.Itoa(accumulator2))
 	journal.Log("sequence_ effect")
-	for _, effect := range []func(){func() {
-		journal.Log("first")
-	}, func() {
-		journal.Log("second")
-	}, func() {
-		journal.Log("third")
-	}} {
-		effect()
-	}
+	journal.Log("first")
+	journal.Log("second")
+	journal.Log("third")
 	journal.Log("nested")
 	inners := []string{"a", "b"}
 	for _, outer := range []int{1, 2} {
@@ -324,10 +300,8 @@ func folds() {
 	journal.Log("maybe")
 	journal.Log("just 9")
 	journal.Log("wrapped")
-	array := []string{"p", "q"}
-	for index, s := range array {
-		journal.Log(s + strconv.Itoa(index))
-	}
+	journal.Log("p0")
+	journal.Log("q1")
 	for _, i := range []int{4, 5} {
 		journal.Log("w" + strconv.Itoa(i))
 	}
@@ -364,21 +338,33 @@ func folds() {
 	}
 	journal.Log("object")
 	object2 := object.New[int]()
-	for _, tuple := range []tuple.TupleStringInt{{First: "a", Second: 1}, {First: "b", Second: 2}, {First: "a", Second: 30}} {
-		k := tuple.First
-		v := tuple.Second
-		value, found := object.LookupST(k, object2)
-		var lookupST int
-		if found {
-			lookupST = v + value
-		} else {
-			lookupST = v
-		}
-		object.Poke(k, lookupST, object2)
+	value, found := object.LookupST("a", object2)
+	var lookupST int
+	if found {
+		lookupST = 1 + value
+	} else {
+		lookupST = 1
 	}
-	x2, found2 := object.Lookup("a", object2)
-	var result string
+	object.Poke("a", lookupST, object2)
+	value2, found2 := object.LookupST("b", object2)
+	var lookupST2 int
 	if found2 {
+		lookupST2 = 2 + value2
+	} else {
+		lookupST2 = 2
+	}
+	object.Poke("b", lookupST2, object2)
+	value3, found3 := object.LookupST("a", object2)
+	var lookupST3 int
+	if found3 {
+		lookupST3 = 30 + value3
+	} else {
+		lookupST3 = 30
+	}
+	object.Poke("a", lookupST3, object2)
+	x2, found4 := object.Lookup("a", object2)
+	var result string
+	if found4 {
 		result = "(Just " + strconv.Itoa(x2) + ")"
 	} else {
 		result = "Nothing"

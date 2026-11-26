@@ -241,12 +241,7 @@ func main() {
 	mainRecord(shown, show.ArrayChar(arraypkg.NubComparable([]rune{'x', 'y', 'x'})))
 	mainRecord(shown, show.ArrayBoolean(arraypkg.NubComparable([]bool{true, false, true})))
 	mainRecord(shown, show.ArrayNumber(dataarray.Nub([]float64{1.5, 0.5, 1.5})))
-	array := []int{1, 4, 2, 5, 3}
-	mapped := make([]tuple.TupleInt, len(array))
-	for slot, i := range array {
-		mapped[slot] = tuple.TupleInt{First: slot, Second: i}
-	}
-	indexedAndSorted := direct.SortBy(mapped, func(x tuple.TupleInt, y tuple.TupleInt) int {
+	indexedAndSorted := direct.SortBy([]tuple.TupleInt{{First: 0, Second: 1}, {First: 1, Second: 4}, {First: 2, Second: 2}, {First: 3, Second: 5}, {First: 4, Second: 3}}, func(x tuple.TupleInt, y tuple.TupleInt) int {
 		switch mainComp(x.Second, y.Second) {
 		case ordering.OrderingLT:
 			return -1
@@ -273,7 +268,7 @@ func main() {
 			}
 		}
 		performed := shared.Frozen(array2)
-		array4 := direct.SortBy(performed, func(x tuple.TupleInt, y tuple.TupleInt) int {
+		array := direct.SortBy(performed, func(x tuple.TupleInt, y tuple.TupleInt) int {
 			i := x.First
 			i2 := y.First
 			var result2 ordering.Ordering
@@ -292,29 +287,29 @@ func main() {
 			}
 			return 0
 		})
-		mapped2 := make([]int, len(array4))
-		for index := range array4 {
-			mapped2[index] = array4[index].Second
+		mapped := make([]int, len(array))
+		for index := range array {
+			mapped[index] = array[index].Second
 		}
-		result = mapped2
+		result = mapped
 	} else {
 		result = []int{}
 	}
 	mainRecord(shown, show.ArrayInt(result))
-	array5 := arraypkg.GroupBy(eq.Eq, []int{1, 1, 2, 3, 3})
+	array4 := arraypkg.GroupBy(eq.Eq, []int{1, 1, 2, 3, 3})
+	mapped2 := make([][]int, len(array4))
+	for index, element := range array4 {
+		mapped2[index] = element
+	}
+	mainRecord(shown, show.ArrayArrayInt(mapped2))
+	array5 := arraypkg.GroupBy(func(first int, x int) bool {
+		return x-first < 2
+	}, []int{1, 2, 3, 4, 7})
 	mapped3 := make([][]int, len(array5))
 	for index, element := range array5 {
 		mapped3[index] = element
 	}
 	mainRecord(shown, show.ArrayArrayInt(mapped3))
-	array6 := arraypkg.GroupBy(func(first int, x int) bool {
-		return x-first < 2
-	}, []int{1, 2, 3, 4, 7})
-	mapped4 := make([][]int, len(array6))
-	for index, element := range array6 {
-		mapped4[index] = element
-	}
-	mainRecord(shown, show.ArrayArrayInt(mapped4))
 }
 
 func mainRecord(shown *shared.Ref[string], text string) {

@@ -5,10 +5,8 @@ source: tests-integration/src/fixtures.rs
 package main
 
 import (
-	"fixture/shared"
 	"github.com/i-am-the-slime/iris-go/console"
 	"github.com/i-am-the-slime/iris-go/prim"
-	"slices"
 	"strings"
 )
 
@@ -26,13 +24,7 @@ type Rose struct {
 var main_ = initializeMain_()
 
 func initializeMain_() []int {
-	leaf := &Wide{First: []int{1, 2}, Second: []string{"a", "b"}, Third: []*Wide{}}
-	field := []*Wide{leaf, leaf}
-	var result []*Wide
-	updated := slices.Clone(field)
-	updated[0] = &Wide{First: []int{3}, Second: []string{"c"}, Third: []*Wide{}}
-	result = updated
-	return []int{sizeWide([]int{5}, result), roseTotalRose(1, []Rose{{First: 2, Second: []Rose{}}, {First: 3, Second: []Rose{{First: 4, Second: []Rose{}}}}}), len([]shared.Point{{X: 1.0, Y: 2.0, Z: 3.0, W: 4.0, Label: "p"}})}
+	return []int{sizeWide([]int{5}, []*Wide{{First: []int{3}, Second: []string{"c"}, Third: []*Wide{}}, {First: []int{1, 2}, Second: []string{"a", "b"}, Third: []*Wide{}}}), roseTotalRose(1, []Rose{{First: 2, Second: []Rose{}}, {First: 3, Second: []Rose{{First: 4, Second: []Rose{}}}}}), 1}
 }
 
 func size(wide *Wide) int {
@@ -73,15 +65,4 @@ func main() {
 		texts = append(texts, prim.ShowInt(element))
 	}
 	console.Print("[" + strings.Join(texts, " ") + "]")
-}
-
-// shared/shared.go
-package shared
-
-type Point struct {
-	Label string
-	W     float64
-	X     float64
-	Y     float64
-	Z     float64
 }

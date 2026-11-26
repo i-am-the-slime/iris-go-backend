@@ -315,29 +315,41 @@ var numbers *types.ListInt = types.ConsListInt(1, types.ConsListInt(2, types.Con
 var words = initializeWords()
 
 func initializeWords() *internal.Map {
-	array := []string{"b", "a"}
-	accumulator := internal.SharedMapLeaf
-	for _, a := range array {
-		accumulator = wordsGoReusing(a, accumulator)
-	}
-	return accumulator
+	return wordsGoReusing2(wordsGoReusing(internal.SharedMapLeaf))
 }
 
-func wordsGoReusing(a string, value *internal.Map) *internal.Map {
+func wordsGoReusing(value *internal.Map) *internal.Map {
 	if value == internal.SharedMapLeaf {
-		return internal.Node(1, 1, a, struct{}{}, internal.SharedMapLeaf, internal.SharedMapLeaf)
+		return internal.Node(1, 1, "b", struct{}{}, internal.SharedMapLeaf, internal.SharedMapLeaf)
 	}
 	mk := value.Node2
 	ml := value.Node4
 	mr := value.Node5
-	if prim.CompareString(a, mk) < 0 {
-		return internal.UnsafeBalancedNode(mk, struct{}{}, wordsGoReusing(a, ml), mr, value)
+	if "b" < mk {
+		return internal.UnsafeBalancedNode(mk, struct{}{}, wordsGoReusing(ml), mr, value)
 	}
-	if a == mk {
-		value.Node2 = a
+	if "b" == mk {
+		value.Node2 = "b"
 		return value
 	}
-	return internal.UnsafeBalancedNode(mk, struct{}{}, ml, wordsGoReusing(a, mr), value)
+	return internal.UnsafeBalancedNode(mk, struct{}{}, ml, wordsGoReusing(mr), value)
+}
+
+func wordsGoReusing2(value *internal.Map) *internal.Map {
+	if value == internal.SharedMapLeaf {
+		return internal.Node(1, 1, "a", struct{}{}, internal.SharedMapLeaf, internal.SharedMapLeaf)
+	}
+	mk := value.Node2
+	ml := value.Node4
+	mr := value.Node5
+	if "a" < mk {
+		return internal.UnsafeBalancedNode(mk, struct{}{}, wordsGoReusing2(ml), mr, value)
+	}
+	if "a" == mk {
+		value.Node2 = "a"
+		return value
+	}
+	return internal.UnsafeBalancedNode(mk, struct{}{}, ml, wordsGoReusing2(mr), value)
 }
 
 func main() {

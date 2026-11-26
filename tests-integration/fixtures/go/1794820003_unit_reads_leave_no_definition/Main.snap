@@ -46,8 +46,3 @@ type StateValue struct {
 	State int
 	Value int
 }
-
-type ActualExpected struct {
-	Actual   struct{}
-	Expected struct{}
-}

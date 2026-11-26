@@ -1,87 +1,15 @@
 ---
 source: tests-integration/src/fixtures.rs
 ---
-// Data/List/Types/types.go
-package types
-
-type List struct {
-	Cons1 *List
-	Cons0 int
-}
-
-var SharedListNil = &List{}
-
 // main.go
 package main
 
-import (
-	list "fixture/Data/List/Types"
-	"fixture/shared"
-	"github.com/i-am-the-slime/iris-go/alloc"
-	"os"
-)
-
-type Shape struct {
-	Leaf   *list.List
-	Field0 *Shape
-	Field1 shared.FlagsItems
-	Field2 *Shape
-	Tag    uint8
-}
-
-const (
-	ShapeLeaf = iota
-	ShapeBranch
-	ShapeWrap
-)
-
-func Leaf(leaf *list.List) *Shape {
-	return &Shape{Tag: ShapeLeaf, Leaf: leaf}
-}
+import "os"
 
 func main_() int {
-	accumulator := list.SharedListNil
-	var listIntCells alloc.Cells[list.List]
-	for index := len([]int{}) - 1; index >= 0; index-- {
-		i := []int{}[index]
-		accumulator = listIntCells.New(list.List{Cons0: i, Cons1: accumulator})
-	}
-	var result2 *Shape
-	if accumulator != list.SharedListNil {
-		accumulator2 := list.SharedListNil
-		var listIntCells2 alloc.Cells[list.List]
-		for index := len([]int{}) - 1; index >= 0; index-- {
-			i := []int{}[index]
-			accumulator2 = listIntCells2.New(list.List{Cons0: i, Cons1: accumulator2})
-		}
-		result2 = Leaf(accumulator2)
-	} else {
-		array := []int{1}
-		accumulator2 := list.SharedListNil
-		var listIntCells3 alloc.Cells[list.List]
-		for index := len(array) - 1; index >= 0; index-- {
-			i := array[index]
-			accumulator2 = listIntCells3.New(list.List{Cons0: i, Cons1: accumulator2})
-		}
-		result2 = Leaf(accumulator2)
-	}
-	var result int
-	if result2.Tag == ShapeLeaf && result2.Leaf != list.SharedListNil {
-		result = result2.Leaf.Cons0
-	} else {
-		result = 0
-	}
-	return result
+	return 1
 }
 
 func main() {
 	os.Exit(main_())
-}
-
-// shared/shared.go
-package shared
-
-type FlagsItems struct {
-	Flags []struct{}
-	Items int
 }

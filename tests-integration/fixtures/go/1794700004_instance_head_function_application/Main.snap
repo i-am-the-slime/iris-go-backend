@@ -1,36 +1,15 @@
 ---
 source: tests-integration/src/fixtures.rs
 ---
-// Data/Monoid/Endo/endo.go
-package endo
-
-func Mempty(x int) int {
-	return x
-}
-
 // main.go
 package main
 
 import (
-	"fixture/Data/Monoid/Endo"
 	"github.com/i-am-the-slime/iris-go/console"
 	"github.com/i-am-the-slime/iris-go/prim"
 )
 
-var main_ = initializeMain_()
-
-func initializeMain_() int {
-	array := []int{1, 2, 3}
-	accumulator := endo.Mempty
-	for index := len(array) - 1; index >= 0; index-- {
-		x := array[index]
-		acc := accumulator
-		accumulator = func(x2 int) int {
-			return acc(x2)*10 + x
-		}
-	}
-	return accumulator(0)
-}
+var main_ int = 321
 
 func main() {
 	console.Print(prim.ShowInt(main_))

@@ -9,24 +9,19 @@ import (
 	"github.com/i-am-the-slime/iris-go/array"
 	"github.com/i-am-the-slime/iris-go/console"
 	"github.com/i-am-the-slime/iris-go/direct"
-	stringspkg "strings"
+	"strings"
 )
 
 var main_ = initializeMain_()
 
 func initializeMain_() []string {
-	strings := []string{",b", "c"}
-	array2 := *array.Thaw(strings)
-	accumulator := ",a"
-	for _, s := range strings {
-		accumulator = s
-	}
-	direct.SplitAt(1, accumulator)
+	array2 := *array.Thaw([]string{",b", "c"})
+	direct.SplitAt(1, "c")
 	return shared.Frozen(array2)
 }
 
 func main() {
-	console.Print("[" + stringspkg.Join(main_, " ") + "]")
+	console.Print("[" + strings.Join(main_, " ") + "]")
 }
 
 // shared/shared.go

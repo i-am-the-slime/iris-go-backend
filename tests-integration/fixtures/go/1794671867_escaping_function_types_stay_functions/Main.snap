@@ -4,8 +4,29 @@ source: tests-integration/src/fixtures.rs
 // Control/Category/category.go
 package category
 
-func Identity(x int) int {
-	return x
+type IntToInt struct {
+	K   *IntToInt
+	Tag uint8
+}
+
+const (
+	IntToIntIdentityFn = iota
+	IntToIntChain
+)
+
+var SharedIntToIntIdentityFn = &IntToInt{Tag: IntToIntIdentityFn}
+
+func RunIntToInt(function *IntToInt, x int) int {
+	for {
+		switch function.Tag {
+		case IntToIntIdentityFn:
+			return x
+		default: // IntToIntChain
+			k := function.K
+			function, x = k, x+1
+			continue
+		}
+	}
 }
 
 // main.go
@@ -14,34 +35,28 @@ package main
 import (
 	"fixture/Control/Category"
 	"fixture/shared"
+	"github.com/i-am-the-slime/iris-go/alloc"
 	"github.com/i-am-the-slime/iris-go/lazy"
 )
 
 var main_ = initializeMain_()
 
 func initializeMain_() shared.MainResult {
-	array := []func(int) int{chain(2, category.Identity), chain(3, category.Identity)}
-	accumulator := 0
-	for _, k := range array {
-		accumulator += k(1)
-	}
-	return shared.MainResult{Summed: accumulator, Memoised: lazy.Defer(func() int {
+	return shared.MainResult{Summed: category.RunIntToInt(chain(2, category.SharedIntToIntIdentityFn), 1) + category.RunIntToInt(chain(3, category.SharedIntToIntIdentityFn), 1), Memoised: lazy.Defer(func() int {
 		return thunks(3, func(_ struct{}) int {
 			return 0
 		})(struct{}{})
 	}).Force()}
 }
 
-func chain(n int, k func(int) int) func(int) int {
+func chain(n int, k *category.IntToInt) *category.IntToInt {
+	var intToIntCells alloc.Cells[category.IntToInt]
 	for {
-		kCaptured := k
 		switch n {
 		case 0:
-			return kCaptured
+			return k
 		default:
-			n, k = n-1, func(x int) int {
-				return kCaptured(x + 1)
-			}
+			n, k = n-1, intToIntCells.New(category.IntToInt{Tag: category.IntToIntChain, K: k})
 			continue
 		}
 	}

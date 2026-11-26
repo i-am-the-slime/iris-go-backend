@@ -35,11 +35,6 @@ type ShapeNonEmptyArrayInt struct {
 	Value []int
 }
 
-type ShapeInt struct {
-	Shape string
-	Value int
-}
-
 type ShapeFnIntNonEmptyArrayInt struct {
 	Shape string
 	Value func(int) []int
@@ -49,17 +44,16 @@ var main_ = initializeMain_()
 
 func initializeMain_() []string {
 	text := []byte("(NonEmptyArray ")
-	text = show.AppendShowArrayInt(text, traverse1Function2(arraypkg.Append([]int{1}, []int{2, 3})).Value)
+	text = show.AppendShowArrayInt(text, traverse1Function2([]int{1, 2, 3}).Value)
 	text = append(text, ')')
-	return []string{traverse1Function([]int{1}).Shape, traverse1Function(arraypkg.Append([]int{1}, []int{2})).Shape, traverse1Function(arraypkg.Append([]int{1}, []int{2, 3, 4, 5})).Shape, string(text)}
+	return []string{traverse1Function([]int{1}).Shape, traverse1Function([]int{1, 2}).Shape, traverse1Function([]int{1, 2, 3, 4, 5}).Shape, string(text)}
 }
 
 func traverse1Function(array2 []int) ShapeNonEmptyArrayInt {
 	append_ := direct.Appender[int]()
 	x := array2[0]
-	shapeInt := ShapeInt{Shape: strconv.Itoa(x), Value: x}
 	array := arraypkg.Slice(1, len(array2), array2)
-	accumulator := ShapeNonEmptyArrayInt{Shape: shapeInt.Shape, Value: []int{shapeInt.Value}}
+	accumulator := ShapeNonEmptyArrayInt{Shape: strconv.Itoa(x), Value: []int{x}}
 	for _, element := range array {
 		shapeFnIntNonEmptyArrayInt := ShapeFnIntNonEmptyArrayInt{Shape: accumulator.Shape, Value: append_(accumulator.Value)}
 		accumulator = ShapeNonEmptyArrayInt{Shape: "(" + shapeFnIntNonEmptyArrayInt.Shape + " " + strconv.Itoa(element) + ")", Value: shapeFnIntNonEmptyArrayInt.Value(element)}
@@ -69,9 +63,8 @@ func traverse1Function(array2 []int) ShapeNonEmptyArrayInt {
 
 func traverse1Function2(array2 []int) ShapeNonEmptyArrayInt {
 	append_ := direct.Appender[int]()
-	shapeInt := ShapeInt{Shape: "", Value: array2[0] * 10}
 	array := arraypkg.Slice(1, len(array2), array2)
-	accumulator := ShapeNonEmptyArrayInt{Shape: shapeInt.Shape, Value: []int{shapeInt.Value}}
+	accumulator := ShapeNonEmptyArrayInt{Shape: "", Value: []int{array2[0] * 10}}
 	for _, element := range array {
 		shapeFnIntNonEmptyArrayInt := ShapeFnIntNonEmptyArrayInt{Shape: accumulator.Shape, Value: append_(accumulator.Value)}
 		accumulator = ShapeNonEmptyArrayInt{Shape: "(" + shapeFnIntNonEmptyArrayInt.Shape + " )", Value: shapeFnIntNonEmptyArrayInt.Value(element * 10)}

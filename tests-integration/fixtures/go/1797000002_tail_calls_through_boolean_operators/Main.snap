@@ -15,8 +15,7 @@ import (
 var main_ = initializeMain_()
 
 func initializeMain_() []bool {
-	xs := []int{1, 3, 2}
-	return []bool{allPositiveFrom(0, array.Range(1, 1000000)), allPositiveFrom(0, []int{1, 2, -3}), anyNegativeFrom(0, array.Range(1, 1000000)), anyNegativeFrom(0, []int{1, 2, -3}), mainGo(1), mainGo2(xs, 1), isEven(1000000), isOdd(7)}
+	return []bool{allPositiveFrom(0, array.Range(1, 1000000)), allPositiveFrom(0, []int{1, 2, -3}), anyNegativeFrom(0, array.Range(1, 1000000)), anyNegativeFrom(0, []int{1, 2, -3}), mainGo(1), mainGo2(1), isEven(1000000), isOdd(7)}
 }
 
 func allPositiveFrom(i int, xs []int) bool {
@@ -91,12 +90,12 @@ func mainGo(i int) bool {
 	}
 }
 
-func mainGo2(xs []int, i int) bool {
+func mainGo2(i int) bool {
 	for {
-		if i >= len(xs) {
+		if i >= 3 {
 			return true
 		}
-		if xs[i-1] <= xs[i] {
+		if []int{1, 3, 2}[i-1] <= []int{1, 3, 2}[i] {
 			i += 1
 			continue
 		}

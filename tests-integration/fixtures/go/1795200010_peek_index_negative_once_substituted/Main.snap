@@ -16,30 +16,25 @@ var main_ = initializeMain_()
 
 func initializeMain_() []int {
 	array2 := *array.Thaw([]int{10, 20, 30})
-	elements := []func(int) int{func(value int) int {
-		return value + 1
-	}}
 	within := len(array2) > 1
 	var kept bool
 	if within {
 		element := array2[1]
-		var result int
-		result = elements[0](element)
 		var poked bool
-		array2[1] = result
+		array2[1] = element + 1
 		poked = true
 		kept = poked
 	} else {
 		kept = false
 	}
-	elements2 := shared.Frozen(array2)
-	var result2 int
+	elements := shared.Frozen(array2)
+	var result int
 	if kept {
-		result2 = 1
+		result = 1
 	} else {
-		result2 = 0
+		result = 0
 	}
-	return array.Append(elements2, []int{0, result2})
+	return array.Append(elements, []int{0, result})
 }
 
 func main() {

@@ -31,21 +31,11 @@ func Late(late shared.After) InvalidLateMissing {
 	return InvalidLateMissing{Tag: InvalidLateMissingLate, Late: late}
 }
 
-// Record/Studio/Shrink/shrink.go
-package shrink
-
-import "fixture/shared"
-
-func Shrink(baseNameScale shared.BaseNameScale) shared.BaseName {
-	return shared.BaseName{Base: baseNameScale.Base, Name: baseNameScale.Name}
-}
-
 // main.go
 package main
 
 import (
 	"fixture/Data/Variant"
-	"fixture/Record/Studio/Shrink"
 	"fixture/shared"
 	"github.com/i-am-the-slime/iris-go/array"
 	"github.com/i-am-the-slime/iris-go/console"
@@ -68,7 +58,7 @@ func initializeMain_() []string {
 	for index, element := range problems {
 		mapped3[index] = someLabels(element)
 	}
-	return array.Append(mapped, array.Append(mapped2, array.Append(mapped3, []string{shrunk.Name + strconv.Itoa(shrunk.Base)})))
+	return array.Append(mapped, array.Append(mapped2, array.Append(mapped3, []string{"context1"})))
 }
 
 func byLabel(variant2 variant.InvalidLateMissing) string {
@@ -106,12 +96,6 @@ func someLabels(variant2 variant.InvalidLateMissing) string {
 	}
 }
 
-var shrunk = initializeShrunk()
-
-func initializeShrunk() shared.BaseName {
-	return shrink.Shrink(shared.BaseNameScale{Base: 1, Name: "context", Scale: 2})
-}
-
 func main() {
 	console.Print("[" + strings.Join(main_, " ") + "]")
 }
@@ -121,15 +105,4 @@ package shared
 
 type After struct {
 	After int
-}
-
-type BaseName struct {
-	Name string
-	Base int
-}
-
-type BaseNameScale struct {
-	Name  string
-	Base  int
-	Scale int
 }

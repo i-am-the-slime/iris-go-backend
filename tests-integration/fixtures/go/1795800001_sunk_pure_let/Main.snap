@@ -52,79 +52,30 @@ import (
 	"fixture/Data/Eq"
 	"fixture/Data/Maybe"
 	"fixture/Effect/Exception"
-	arraypkg "github.com/i-am-the-slime/iris-go/array"
-	"math"
-	"strconv"
+	"github.com/i-am-the-slime/iris-go/array"
 )
-
-type Problem struct {
-	First  []string
-	Second float64
-}
-
-type Either struct {
-	Left  Problem
-	Right int32
-	Tag   uint8
-}
-
-const (
-	EitherLeft = iota
-	EitherRight
-)
-
-type ProblemFailure struct {
-	Failed bool
-	Left   Problem
-}
 
 func main() {
-	array := []float64{3.0, 2.5, -1.0}
-	mapped := make([]bool, len(array))
-	for index, value := range array {
-		var i int
-		var err ProblemFailure
-		if value < 0.0 {
-			err = ProblemFailure{Failed: true, Left: Problem{First: []string{"apples", "count"}, Second: value}}
-		} else {
-			var integer maybe.Int
-			if math.Trunc(value) == value && (value >= math.MinInt && value < -math.MinInt) {
-				integer = maybe.JustInt(int(value))
-			} else {
-				integer = maybe.NoInt
-			}
-			switch integer.Tag {
-			case maybe.TagNothing:
-				err = ProblemFailure{Failed: true, Left: Problem{First: []string{"apples", "count"}, Second: value}}
-			default: // maybe.TagJust
-				i, err = integer.Just, ProblemFailure{}
-			}
-		}
-		mapped[index] = isLeft(i, err)
+	scrutinee := maybe.JustInt(3)
+	var result bool
+	switch scrutinee.Tag {
+	case maybe.TagNothing:
+		result = true
+	default: // maybe.TagJust
+		result = false
 	}
-	if !arraypkg.Eq(eq.EqBoolean, mapped, []bool{false, true, true}) {
+	var result2 bool
+	switch maybe.NoInt.Tag {
+	case maybe.TagNothing:
+		result2 = true
+	default: // maybe.TagJust
+		result2 = false
+	}
+	if !array.Eq(eq.EqBoolean, []bool{result, result2, true}, []bool{false, true, true}) {
 		effectexception.Throw("a count is read wrongly")
 	}
-	array2 := []int{11, 1}
-	mapped2 := make([][]string, len(array2))
-	for index, count := range array2 {
-		shared := []string{"pears", strconv.Itoa(count)}
-		var result []string
-		if count > 10 {
-			result = arraypkg.Append(shared, shared)
-		} else {
-			result = shared
-		}
-		mapped2[index] = result
-	}
-	if !arraypkg.Eq(eq.EqArray, mapped2, [][]string{{"pears", "11", "pears", "11"}, {"pears", "1"}}) {
+	shared := []string{"pears", "11"}
+	if !array.Eq(eq.EqArray, [][]string{array.Append(shared, shared), {"pears", "1"}}, [][]string{{"pears", "11", "pears", "11"}, {"pears", "1"}}) {
 		effectexception.Throw("the shared value is wrong")
 	}
-}
-
-func isLeft(i int, err ProblemFailure) bool {
-	if err.Failed {
-		return true
-	}
-	return false
 }

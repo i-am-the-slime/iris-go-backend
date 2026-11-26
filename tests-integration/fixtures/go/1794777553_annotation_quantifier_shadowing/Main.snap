@@ -78,10 +78,7 @@ import (
 var main_ = initializeMain_()
 
 func initializeMain_() []string {
-	x := []bool{true, false}
-	x2 := []string{"kept"}
-	len_ := len(x)
-	cell := mainGoReusing(x, len_, 0, types.SharedListTupleStringBooleanNil)
+	cell := mainGoReusing(0, types.SharedListTupleStringBooleanNil)
 	elements := []tuple.TupleBoolean{}
 	for {
 		if cell == types.SharedListTupleStringBooleanNil {
@@ -94,8 +91,7 @@ func initializeMain_() []string {
 	for index := range elements {
 		mapped[index] = show.Show(elements[index].Second)
 	}
-	len_2 := len(x2)
-	cell2 := mainGoReusing2(x2, len_2, 0, types.SharedListTupleStringStringNil)
+	cell2 := mainGoReusing2(0, types.SharedListTupleStringStringNil)
 	elements2 := []tuple.TupleString{}
 	for {
 		if cell2 == types.SharedListTupleStringStringNil {
@@ -111,12 +107,12 @@ func initializeMain_() []string {
 	return array.Append(mapped, mapped2)
 }
 
-func mainGoReusing(x []bool, len_ int, source int, memo *types.ListTupleStringBoolean) *types.ListTupleStringBoolean {
+func mainGoReusing(source int, memo *types.ListTupleStringBoolean) *types.ListTupleStringBoolean {
 	var listTupleStringBooleanCells alloc.Cells[types.ListTupleStringBoolean]
 	for {
 		var result tuple_maybe.MaybeTupleTupleStringBooleanInt
-		if source < len_ {
-			result = tuple_maybe.JustTupleTupleStringBooleanInt(tuple.TupleTupleStringBoolean{First: tuple.TupleBoolean{First: "label", Second: x[source]}, Second: source + 1})
+		if source < 2 {
+			result = tuple_maybe.JustTupleTupleStringBooleanInt(tuple.TupleTupleStringBoolean{First: tuple.TupleBoolean{First: "label", Second: []bool{true, false}[source]}, Second: source + 1})
 		} else {
 			result = tuple_maybe.NoTupleTupleStringBooleanInt
 		}
@@ -127,12 +123,12 @@ func mainGoReusing(x []bool, len_ int, source int, memo *types.ListTupleStringBo
 	}
 }
 
-func mainGoReusing2(x []string, len_ int, source int, memo *types.ListTupleStringString) *types.ListTupleStringString {
+func mainGoReusing2(source int, memo *types.ListTupleStringString) *types.ListTupleStringString {
 	var listTupleStringStringCells alloc.Cells[types.ListTupleStringString]
 	for {
 		var result tuple_maybe.MaybeTupleTupleStringStringInt
-		if source < len_ {
-			result = tuple_maybe.JustTupleTupleStringStringInt(tuple.TupleTupleStringString{First: tuple.TupleString{First: "label", Second: x[source]}, Second: source + 1})
+		if source < 1 {
+			result = tuple_maybe.JustTupleTupleStringStringInt(tuple.TupleTupleStringString{First: tuple.TupleString{First: "label", Second: []string{"kept"}[source]}, Second: source + 1})
 		} else {
 			result = tuple_maybe.NoTupleTupleStringStringInt
 		}

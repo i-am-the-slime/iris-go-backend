@@ -10,20 +10,7 @@ import (
 	"strings"
 )
 
-var main_ = initializeMain_()
-
-func initializeMain_() []int {
-	return []int{combineWith(2)(3, 4), combineWith(5)(1, 1)}
-}
-
-func combineWith(n int) func(int, int) int {
-	if n > 0 {
-		return func(a int, b int) int {
-			return a*n + b
-		}
-	}
-	panic("a positive weight")
-}
+var main_ []int = []int{10, 6}
 
 func main() {
 	texts := make([]string, 0, len(main_))

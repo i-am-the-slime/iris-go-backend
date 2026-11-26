@@ -27,7 +27,6 @@ package main
 
 import (
 	"fixture/Data/Show"
-	"github.com/i-am-the-slime/iris-go/array"
 	"github.com/i-am-the-slime/iris-go/console"
 	"slices"
 	"strings"
@@ -36,8 +35,7 @@ import (
 var main_ = initializeMain_()
 
 func initializeMain_() []string {
-	shared := array.Replicate(5, 1)
-	accumulator := shared
+	accumulator := []int{1, 1, 1, 1, 1}
 	accumulator = slices.Clone(accumulator)
 	for index := 3; index >= 0; index-- {
 		accumulator = squaredIntoOwning(index, accumulator)
@@ -47,7 +45,7 @@ func initializeMain_() []string {
 	for index := 3; index >= 0; index-- {
 		accumulator2 = squaredIntoOwning(index, accumulator2)
 	}
-	return []string{show.ArrayInt(accumulator), show.ArrayInt(accumulator2), show.ArrayInt(shared)}
+	return []string{show.ArrayInt(accumulator), show.ArrayInt(accumulator2), show.ArrayInt([]int{1, 1, 1, 1, 1})}
 }
 
 func squaredIntoOwning(position int, current []int) []int {

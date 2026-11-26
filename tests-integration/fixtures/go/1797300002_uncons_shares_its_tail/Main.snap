@@ -10,21 +10,7 @@ import (
 )
 
 func main_() int {
-	numbers := []int{4, 5}
-	numbers2 := []int{}
-	var result int
-	if len(numbers) == 0 {
-		result = -1
-	} else {
-		result = numbers[0]*100 + len(array.Tail(numbers))
-	}
-	var result2 int
-	if len(numbers2) == 0 {
-		result2 = -1
-	} else {
-		result2 = numbers2[0]*100 + len(array.Tail(numbers2))
-	}
-	return summed(0, []int{1, 2, 3}) + result + result2
+	return summed(0, []int{1, 2, 3}) + len(array.Tail([]int{4, 5})) + 399
 }
 
 func summed(total int, remaining []int) int {

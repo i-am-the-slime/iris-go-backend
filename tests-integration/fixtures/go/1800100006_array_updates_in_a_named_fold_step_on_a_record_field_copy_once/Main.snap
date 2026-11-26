@@ -28,7 +28,6 @@ package main
 import (
 	"fixture/Data/Show"
 	shared2 "fixture/shared"
-	"github.com/i-am-the-slime/iris-go/array"
 	"github.com/i-am-the-slime/iris-go/console"
 	"slices"
 	"strconv"
@@ -38,7 +37,7 @@ import (
 var main_ = initializeMain_()
 
 func initializeMain_() []string {
-	shared := array.Replicate(5, 0)
+	shared := []int{0, 0, 0, 0, 0}
 	accumulator := shared2.Board{Cells: shared, Moves: 0}
 	accumulator.Cells = slices.Clone(accumulator.Cells)
 	for element := 1; element < 4; element++ {

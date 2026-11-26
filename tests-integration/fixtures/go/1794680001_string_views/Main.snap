@@ -79,7 +79,7 @@ package main
 import (
 	"fixture/Data/Maybe"
 	"fixture/Data/Show"
-	arraypkg "github.com/i-am-the-slime/iris-go/array"
+	"github.com/i-am-the-slime/iris-go/array"
 	"github.com/i-am-the-slime/iris-go/console"
 	"github.com/i-am-the-slime/iris-go/direct"
 	"github.com/i-am-the-slime/iris-go/prim"
@@ -92,7 +92,7 @@ var main_ = initializeMain_()
 
 func initializeMain_() []string {
 	text := prim.StringJoinWith(" ", []string{"a😀", "naïve 😀 banana 日本 a𝄞a"})
-	step, count := arraypkg.RangeSteps(0, prim.CodeUnitLength(text)-1)
+	step, count := array.RangeSteps(0, prim.CodeUnitLength(text)-1)
 	mapped := make([]maybe.Char, count)
 	textUnits := prim.UTF16(text)
 	textASCII := textUnits.ASCII()
@@ -275,24 +275,32 @@ func literalIndexesAloneWalkTheText(text string, count int) int {
 }
 
 func closureInTheLoopReadsTheView(text string, i int, found []maybe.Char) []maybe.Char {
+	found = slices.Clip(found)
 	textUnits := prim.UTF16(text)
+	textASCII := textUnits.ASCII()
 	for {
 		if i >= textUnits.Length() {
 			return found
 		}
-		array := []int{0, 1}
-		mapped := make([]maybe.Char, len(array))
-		for index, offset := range array {
-			value, found2 := textUnits.CharAt(i + offset)
-			var codeUnitCharAt maybe.Char
+		var codeUnitCharAt maybe.Char
+		if i >= 0 && i < len(textASCII) {
+			codeUnitCharAt = maybe.Char(rune(textASCII[i]))
+		} else {
+			value, found2 := textUnits.CharAt(i)
 			if found2 {
 				codeUnitCharAt = maybe.Char(value)
 			} else {
 				codeUnitCharAt = maybe.NoChar
 			}
-			mapped[index] = codeUnitCharAt
 		}
-		i, found = i+3, arraypkg.Append(found, mapped)
+		value2, found3 := textUnits.CharAt(i + 1)
+		var codeUnitCharAt2 maybe.Char
+		if found3 {
+			codeUnitCharAt2 = maybe.Char(value2)
+		} else {
+			codeUnitCharAt2 = maybe.NoChar
+		}
+		i, found = i+3, append(found, codeUnitCharAt, codeUnitCharAt2)
 	}
 }
 

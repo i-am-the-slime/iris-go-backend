@@ -67,17 +67,14 @@ func SucceededOutcomeIntBoolean(succeeded bool) OutcomeIntBoolean {
 }
 
 func main_() []string {
-	outcomes := []OutcomeStringInt{FailedOutcomeStringInt("timeout"), SucceededOutcomeStringInt(3)}
-	outcomes2 := []OutcomeStringBoolean{SucceededOutcomeStringBoolean(true), FailedOutcomeStringBoolean("refused")}
-	outcomes3 := []OutcomeIntBoolean{FailedOutcomeIntBoolean(404), SucceededOutcomeIntBoolean(false)}
-	return []string{mainDescribeFrom(outcomes, 0, ""), mainDescribeFrom2(outcomes2, 0, ""), mainDescribeFrom3(outcomes3, 0, ""), strconv.Itoa(mainCountFrom(0))}
+	return []string{mainDescribeFrom(0, ""), mainDescribeFrom2(0, ""), mainDescribeFrom3(0, ""), strconv.Itoa(mainCountFrom(0))}
 }
 
-func mainDescribeFrom(outcomes []OutcomeStringInt, index int, text string) string {
+func mainDescribeFrom(index int, text string) string {
 	textBytes := []byte(text)
 	for {
-		if index < len(outcomes) {
-			scrutinee := outcomes[index]
+		if index >= 0 && index < 2 {
+			scrutinee := []OutcomeStringInt{FailedOutcomeStringInt("timeout"), SucceededOutcomeStringInt(3)}[index]
 			switch scrutinee.Tag {
 			case OutcomeStringIntFailed:
 				textBytes = append(textBytes, "failed with "...)
@@ -94,11 +91,11 @@ func mainDescribeFrom(outcomes []OutcomeStringInt, index int, text string) strin
 	}
 }
 
-func mainDescribeFrom2(outcomes []OutcomeStringBoolean, index int, text string) string {
+func mainDescribeFrom2(index int, text string) string {
 	textBytes := []byte(text)
 	for {
-		if index < len(outcomes) {
-			scrutinee := outcomes[index]
+		if index >= 0 && index < 2 {
+			scrutinee := []OutcomeStringBoolean{SucceededOutcomeStringBoolean(true), FailedOutcomeStringBoolean("refused")}[index]
 			switch scrutinee.Tag {
 			case OutcomeStringBooleanFailed:
 				textBytes = append(textBytes, "failed with "...)
@@ -115,11 +112,11 @@ func mainDescribeFrom2(outcomes []OutcomeStringBoolean, index int, text string) 
 	}
 }
 
-func mainDescribeFrom3(outcomes []OutcomeIntBoolean, index int, text string) string {
+func mainDescribeFrom3(index int, text string) string {
 	textBytes := []byte(text)
 	for {
-		if index < len(outcomes) {
-			scrutinee := outcomes[index]
+		if index >= 0 && index < 2 {
+			scrutinee := []OutcomeIntBoolean{FailedOutcomeIntBoolean(404), SucceededOutcomeIntBoolean(false)}[index]
 			switch scrutinee.Tag {
 			case OutcomeIntBooleanFailed:
 				textBytes = append(textBytes, "failed with "...)
@@ -138,7 +135,7 @@ func mainDescribeFrom3(outcomes []OutcomeIntBoolean, index int, text string) str
 
 func mainCountFrom(index int) int {
 	for {
-		if index >= 0 && index < len([]float64{1.5, 2.5}) {
+		if index >= 0 && index < 2 {
 			index += 1
 			continue
 		}

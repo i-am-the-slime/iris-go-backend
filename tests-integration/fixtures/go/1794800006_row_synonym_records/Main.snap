@@ -13,18 +13,27 @@ import (
 var main_ = initializeMain_()
 
 func initializeMain_() string {
-	array := []shared.KindSpaceAfterSpaceBeforeValue{{SpaceBefore: false, SpaceAfter: true, Value: "a", Kind: 1}, {SpaceBefore: true, SpaceAfter: false, Value: "b", Kind: 2}}
-	accumulator := shared.SpaceValue{Value: "", Space: false}
-	for _, kindSpaceAfterSpaceBeforeValue := range array {
-		var result string
-		if accumulator.Space && kindSpaceAfterSpaceBeforeValue.SpaceBefore {
-			result = " "
-		} else {
-			result = ""
-		}
-		accumulator = shared.SpaceValue{Value: prim.Concat(accumulator.Value, result, kindSpaceAfterSpaceBeforeValue.Value), Space: kindSpaceAfterSpaceBeforeValue.SpaceAfter}
+	scrutinee := shared.SpaceValue{Value: "", Space: false}
+	scrutineeValue := "a"
+	scrutineeSpaceAfter := true
+	scrutineeSpaceBefore := false
+	var result string
+	if scrutinee.Space && scrutineeSpaceBefore {
+		result = " "
+	} else {
+		result = ""
 	}
-	return accumulator.Value
+	scrutinee2 := shared.SpaceValue{Value: prim.Concat(scrutinee.Value, result, scrutineeValue), Space: scrutineeSpaceAfter}
+	scrutineeValue2 := "b"
+	scrutineeSpaceAfter2 := false
+	scrutineeSpaceBefore2 := true
+	var result2 string
+	if scrutinee2.Space && scrutineeSpaceBefore2 {
+		result2 = " "
+	} else {
+		result2 = ""
+	}
+	return (shared.SpaceValue{Value: prim.Concat(scrutinee2.Value, result2, scrutineeValue2), Space: scrutineeSpaceAfter2}).Value
 }
 
 func main() {

@@ -18,93 +18,37 @@ package main
 
 import "fixture/Effect/Exception"
 
-//line Main.purs:13:1
-type Shape struct {
-//line Main.purs:13:1
-	Field0 float64
-//line Main.purs:13:1
-	Tag    uint8
-//line Main.purs:13:1
-}
-
-//line Main.purs:13:1
-const (
-//line Main.purs:13:14
-	ShapeCircle = iota
-//line Main.purs:13:30
-	ShapeSquare
-//line Main.purs:13:1
-)
-
-//line Main.purs:13:14
-func Circle(field0 float64) Shape {
-//line Main.purs:13:14
-	return Shape{Tag: ShapeCircle, Field0: field0}
-//line Main.purs:13:14
-}
-
-//line Main.purs:13:30
-func Square(field0 float64) Shape {
-//line Main.purs:13:30
-	return Shape{Tag: ShapeSquare, Field0: field0}
-//line Main.purs:13:30
-}
-
 //line Main.purs:28:1
 func main() {
 //line Main.purs:29:15
 	total := sumFrom([]int{1, 2, 3}, 0, 0)
 //line Main.purs:30:13
 	big := total > 5
-//line Main.purs:31:33
-	elements := []int{total}
-//line Main.purs:31:3
-	var first int
-//line Main.purs:31:3
-	first = elements[0]
 //line Main.purs:32:3
-	if first != 6 {
+	if /*line Main.purs:31:15*/ total /*line Main.purs:32:3*/ != 6 {
 //line Main.purs:33:5
 		effectexception.Throw("the first total is wrong")
-//line Main.purs:32:3
-	}
-//line Main.purs:34:3
-	if total != 6 {
 //line Main.purs:35:5
 		effectexception.Throw("the total is wrong")
-//line Main.purs:34:3
+//line Main.purs:32:3
 	}
 //line Main.purs:36:12
 	areas := 0.0
-//line Main.purs:37:3
-	for _, shape := range []Shape{Circle(1.0), Square(2.0)} {
-//line Main.purs:38:22
-		var result float64
-//line Main.purs:38:22
-		switch shape.Tag {
-//line Main.purs:17:3
-		case ShapeCircle:
-//line Main.purs:17:3
-			radius := shape.Field0
-//line Main.purs:17:20
-			result = 3.0 * radius * radius
-//line Main.purs:18:3
-		default: // ShapeSquare
-//line Main.purs:18:3
-			side := shape.Field0
-//line Main.purs:18:18
-			result = side * side
-//line Main.purs:38:22
-		}
 //line Main.purs:38:5
-		areas += result
+	areas += 3.0
 //line Main.purs:39:5
-		if big {
+	if big {
 //line Main.purs:40:7
-			areas += 1.0
+		areas += 1.0
 //line Main.purs:39:5
-		}
-//line Main.purs:37:3
+	}
+//line Main.purs:38:5
+	areas += 4.0
+//line Main.purs:39:5
+	if big {
+//line Main.purs:40:7
+		areas += 1.0
+//line Main.purs:39:5
 	}
 //line Main.purs:42:3
 	if areas != 9.0 {

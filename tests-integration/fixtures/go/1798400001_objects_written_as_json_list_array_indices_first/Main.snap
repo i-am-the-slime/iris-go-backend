@@ -22,20 +22,11 @@ func ArrayString(array []string) string {
 	return string(AppendShowArrayString(nil, array))
 }
 
-// Data/Tuple/tuple.go
-package tuple
-
-type Tuple struct {
-	First  string
-	Second int32
-}
-
 // main.go
 package main
 
 import (
 	"fixture/Data/Show"
-	"fixture/Data/Tuple"
 	"fixture/shared"
 	"github.com/i-am-the-slime/iris-go/console"
 	"github.com/i-am-the-slime/iris-go/foreignvalue"
@@ -58,9 +49,9 @@ func initializeScores() *struct {
 	Vals  []int
 } {
 	object2 := object.New[int]()
-	for _, tuple := range []tuple.Tuple{{First: "b", Second: 1}, {First: "10", Second: 2}, {First: "2", Second: 3}} {
-		object.Poke(tuple.First, int(tuple.Second), object2)
-	}
+	object.Poke("b", 1, object2)
+	object.Poke("10", 2, object2)
+	object.Poke("2", 3, object2)
 	return object2
 }
 

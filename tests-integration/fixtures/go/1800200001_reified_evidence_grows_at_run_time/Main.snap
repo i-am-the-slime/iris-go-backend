@@ -24,7 +24,6 @@ package main
 import (
 	"fixture/Type/Proxy"
 	"github.com/i-am-the-slime/iris-go/alloc"
-	arraypkg "github.com/i-am-the-slime/iris-go/array"
 	"github.com/i-am-the-slime/iris-go/console"
 	"strconv"
 	"strings"
@@ -45,16 +44,17 @@ var sharedCountToFunctionMain = &CountToFunction{Tag: CountToFunctionMain}
 var main_ = initializeMain_()
 
 func initializeMain_() []string {
-	array := []int{1, 6, 37, 1000}
-	mapped := make([]string, len(array))
-	for index, wanted := range array {
-		mapped[index] = strconv.Itoa(reifyPositiveUseInt(wanted, func(dictionary proxy.Positive, proxy proxy.Proxy) int {
-			return dictionary.Count0.Count(proxy)
-		}))
-	}
-	return arraypkg.Append(mapped, []string{reifyPositiveUseString(12, func(dictionary proxy.Positive, proxy proxy.Proxy) string {
+	return []string{strconv.Itoa(reifyPositiveUseInt(1, func(dictionary proxy.Positive, proxy proxy.Proxy) int {
+		return dictionary.Count0.Count(proxy)
+	})), strconv.Itoa(reifyPositiveUseInt(6, func(dictionary proxy.Positive, proxy proxy.Proxy) int {
+		return dictionary.Count0.Count(proxy)
+	})), strconv.Itoa(reifyPositiveUseInt(37, func(dictionary proxy.Positive, proxy proxy.Proxy) int {
+		return dictionary.Count0.Count(proxy)
+	})), strconv.Itoa(reifyPositiveUseInt(1000, func(dictionary proxy.Positive, proxy proxy.Proxy) int {
+		return dictionary.Count0.Count(proxy)
+	})), reifyPositiveUseString(12, func(dictionary proxy.Positive, proxy proxy.Proxy) string {
 		return "counted " + strconv.Itoa(dictionary.Count0.Count(proxy))
-	}), strconv.Itoa(reifyComposedUse(5, sharedCountToFunctionMain))})
+	}), strconv.Itoa(reifyComposedUse(5, sharedCountToFunctionMain))}
 }
 
 func count(ignored proxy.Proxy) int {

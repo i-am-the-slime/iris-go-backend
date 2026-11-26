@@ -1,13 +1,6 @@
 ---
 source: tests-integration/src/fixtures.rs
 ---
-// Data/Semiring/semiring.go
-package semiring
-
-func Add(i int, i2 int) int {
-	return i + i2
-}
-
 // Data/Show/show.go
 package show
 
@@ -52,11 +45,8 @@ func ArrayInt(array []int) string {
 package main
 
 import (
-	"fixture/Data/Semiring"
 	"fixture/Data/Show"
-	arraypkg "github.com/i-am-the-slime/iris-go/array"
 	"github.com/i-am-the-slime/iris-go/console"
-	"github.com/i-am-the-slime/iris-go/prim"
 	"strconv"
 	"strings"
 )
@@ -65,34 +55,14 @@ var main_ = initializeMain_()
 
 func initializeMain_() []string {
 	function := fromInt(4)
-	array := []int{1, 2}
-	mapped := make([]string, len(array))
-	for index, x := range array {
-		a := x * x
-		mapped[index] = show.ArrayInt([]int{12, a*10 + 3, a*10 + 4})
-	}
-	array2 := []func(int) func(string) string{prepared, func(a int) func(string) string {
-		return func(b string) string {
-			return strconv.Itoa(a) + b
-		}
-	}}
-	mapped2 := make([]string, len(array2))
-	for index, x := range array2 {
-		g := x(4)
-		mapped2[index] = show.ArrayString([]string{x(1)("a"), g("b"), g("c")})
-	}
-	array3 := []func(int, int) int{semiring.Add, func(a int, b int) int {
-		return a*b + 1
-	}}
-	mapped3 := make([]string, len(array3))
-	for index, combine := range array3 {
-		mapped3[index] = strconv.Itoa(arraypkg.Foldl(combine, 0, []int{1, 2, 3}))
-	}
-	return arraypkg.Append([]string{strconv.Itoa(fromInt(3)(func(i int) int {
+	prefix := repeat(4)
+	text := appendRepeat(nil, 1)
+	text = append(text, 'a')
+	return []string{strconv.Itoa(fromInt(3)(func(i int) int {
 		return function(func(value int) int {
 			return value + 1
 		}, i)
-	}, 0))}, arraypkg.Append(mapped, arraypkg.Append(mapped2, mapped3)))
+	}, 0)), show.ArrayInt([]int{12, 13, 14}), show.ArrayInt([]int{12, 43, 44}), show.ArrayString([]string{string(text), prefix + "b", prefix + "c"}), show.ArrayString([]string{"1a", "4b", "4c"}), "6", "10"}
 }
 
 func fromInt(n int) func(func(int) int, int) int {
@@ -104,13 +74,6 @@ func fromInt(n int) func(func(int) int, int) int {
 		return func(f func(int) int, x int) int {
 			return f(n2(f, x))
 		}
-	}
-}
-
-func prepared(a int) func(string) string {
-	prefix := repeat(a)
-	return func(b string) string {
-		return prim.Append(prefix, b)
 	}
 }
 

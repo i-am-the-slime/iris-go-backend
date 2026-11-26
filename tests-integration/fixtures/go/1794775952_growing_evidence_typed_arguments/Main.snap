@@ -40,7 +40,6 @@ package main
 import (
 	datashow "fixture/Data/Show"
 	"fixture/shared"
-	"github.com/i-am-the-slime/iris-go/array"
 	"github.com/i-am-the-slime/iris-go/console"
 	"github.com/i-am-the-slime/iris-go/prim"
 	"slices"
@@ -52,7 +51,7 @@ var main_ = initializeMain_()
 func initializeMain_() []string {
 	return []string{describeShowDictionary(func(coerced any) string {
 		return datashow.ArrayBoolean(shared.Convert(coerced))
-	}, array.Append([]int{}, []int{2}), ">", 1, shared.Convert2([]bool{true}))}
+	}, []int{2}, ">", 1, shared.Convert2([]bool{true}))}
 }
 
 func describeShowDictionary(show func(any) string, depths []int, label string, depth int, value any) string {

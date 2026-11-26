@@ -24,69 +24,54 @@ import (
 	actions "fixture/Actions_ffi"
 	"fixture/Data/Eq"
 	"fixture/Effect/Exception"
-	arraypkg "github.com/i-am-the-slime/iris-go/array"
+	"github.com/i-am-the-slime/iris-go/array"
 )
 
 func main() {
-	array := arraypkg.Map(func(n int) func(struct{}) int {
-		return func(ignored struct{}) int {
-			return deferred(n, ignored)
-		}
-	}, []int{100, 10})
-	mapped := make([]int, len(array))
-	for index, element := range array {
-		mapped[index] = force(element)
+	accumulator := 0
+	for value := 1; value < 101; value++ {
+		accumulator += value
 	}
-	if !arraypkg.Eq(eq.Eq, mapped, []int{5050, 55}) {
+	accumulator2 := 0
+	for value := 1; value < 11; value++ {
+		accumulator2 += value
+	}
+	if !array.Eq(eq.Eq, []int{accumulator, accumulator2}, []int{5050, 55}) {
 		effectexception.Throw("the deferred values are wrong")
 	}
 	bound := actions.RunWhenAsked(func() int {
-		accumulator := 0
+		accumulator3 := 0
 		for value := 1; value < 11; value++ {
-			accumulator += value
+			accumulator3 += value
 		}
-		return accumulator
+		return accumulator3
 	})
-	mapped2 := actions.RunWhenAsked(func() int {
-		accumulator := 0
+	mapped := actions.RunWhenAsked(func() int {
+		accumulator3 := 0
 		for value := 1; value < 21; value++ {
-			accumulator += value
+			accumulator3 += value
 		}
-		return accumulator
+		return accumulator3
 	})
 	free := actions.RunWhenAsked(answer)
-	if !arraypkg.Eq(eq.Eq, []int{bound, mapped2, free}, []int{55, 210, 42}) {
+	if !array.Eq(eq.Eq, []int{bound, mapped, free}, []int{55, 210, 42}) {
 		effectexception.Throw("the continued values are wrong")
 	}
-	if !arraypkg.Eq(eq.Eq, arraypkg.Append(shifted(10, []int{1, 2}), shifted(4, []int{1})), []int{56, 57, 11}) {
+	if !array.Eq(eq.Eq, array.Append(shifted(10, []int{1, 2}), shifted(4, []int{1})), []int{56, 57, 11}) {
 		effectexception.Throw("the shifted values are wrong")
 	}
 	checked(10, []int{1, 2})
 	checked(4, []int{1, 2})
 }
 
-func deferred(n int, ignored struct{}) int {
-	step, count := arraypkg.RangeSteps(1, n)
-	accumulator := 0
-	for index := range count {
-		value := 1 + index*step
-		accumulator += value
-	}
-	return accumulator
-}
-
-func force(later func(struct{}) int) int {
-	return later(struct{}{})
-}
-
 func answer() int {
 	return 42
 }
 
-func shifted(n int, array []int) []int {
-	mapped := make([]int, len(array))
-	step, count := arraypkg.RangeSteps(1, n)
-	for index, x := range array {
+func shifted(n int, array2 []int) []int {
+	mapped := make([]int, len(array2))
+	step, count := array.RangeSteps(1, n)
+	for index, x := range array2 {
 		accumulator := 0
 		for index2 := range count {
 			value := 1 + index2*step
@@ -98,7 +83,7 @@ func shifted(n int, array []int) []int {
 }
 
 func checked(n int, xs []int) {
-	step, count := arraypkg.RangeSteps(1, n)
+	step, count := array.RangeSteps(1, n)
 	for _, i := range xs {
 		accumulator := 0
 		for index := range count {

@@ -63,10 +63,21 @@ type MaybeDate struct {
 	Tag  uint8
 }
 
+type MaybeMaybeDate struct {
+	Just MaybeDate
+	Tag  uint8
+}
+
+var NoMaybeDate = MaybeMaybeDate{Tag: maybe.TagNothing}
+
 var NoDate = MaybeDate{Tag: maybe.TagNothing}
 
 func JustDate(just Date) MaybeDate {
 	return MaybeDate{Tag: maybe.TagJust, Just: just}
+}
+
+func JustMaybeDate(just MaybeDate) MaybeMaybeDate {
+	return MaybeMaybeDate{Tag: maybe.TagJust, Just: just}
 }
 
 func CanonicalDate(y int, m component.Month, d int) Date {
@@ -238,47 +249,44 @@ func AdjustDays(d float64, dt DateTime) MaybeDateTime {
 	record := DateRec{Year: d2.First, Month: result, Day: d2.Third, Hour: t.First, Minute: t.Second, Second: t.Third, Millisecond: t.Fourth}
 	day, hour, millisecond, minute, month, second, year, found := datetime.AdjustImpl(d*86400000.0, record.Day, record.Hour, record.Millisecond, record.Minute, record.Month, record.Second, record.Year)
 	if found {
-		var result2 func(int) date.MaybeDate
+		var result2 date.MaybeMaybeDate
 		if year >= -271820 && year <= 275759 {
 			switch month {
 			case 1:
-				result2 = AdjustJoin(year, component.MonthJanuary)
+				result2 = AdjustJoin(year, day, component.MonthJanuary)
 			case 2:
-				result2 = AdjustJoin(year, component.MonthFebruary)
+				result2 = AdjustJoin(year, day, component.MonthFebruary)
 			case 3:
-				result2 = AdjustJoin(year, component.MonthMarch)
+				result2 = AdjustJoin(year, day, component.MonthMarch)
 			case 4:
-				result2 = AdjustJoin(year, component.MonthApril)
+				result2 = AdjustJoin(year, day, component.MonthApril)
 			case 5:
-				result2 = AdjustJoin(year, component.MonthMay)
+				result2 = AdjustJoin(year, day, component.MonthMay)
 			case 6:
-				result2 = AdjustJoin(year, component.MonthJune)
+				result2 = AdjustJoin(year, day, component.MonthJune)
 			case 7:
-				result2 = AdjustJoin(year, component.MonthJuly)
+				result2 = AdjustJoin(year, day, component.MonthJuly)
 			case 8:
-				result2 = AdjustJoin(year, component.MonthAugust)
+				result2 = AdjustJoin(year, day, component.MonthAugust)
 			case 9:
-				result2 = AdjustJoin(year, component.MonthSeptember)
+				result2 = AdjustJoin(year, day, component.MonthSeptember)
 			case 10:
-				result2 = AdjustJoin(year, component.MonthOctober)
+				result2 = AdjustJoin(year, day, component.MonthOctober)
 			case 11:
-				result2 = AdjustJoin(year, component.MonthNovember)
+				result2 = AdjustJoin(year, day, component.MonthNovember)
 			case 12:
-				result2 = AdjustJoin(year, component.MonthDecember)
+				result2 = AdjustJoin(year, day, component.MonthDecember)
 			default:
-				result2 = nil
+				result2 = date.NoMaybeDate
 			}
 		} else {
-			result2 = nil
+			result2 = date.NoMaybeDate
 		}
 		var result3 date.MaybeDate
-		if result2 != nil {
-			if day >= 1 && day <= 31 {
-				result3 = result2(day)
-			} else {
-				result3 = date.NoDate
-			}
-		} else {
+		switch result2.Tag {
+		case maybe.TagJust:
+			result3 = result2.Just
+		default: // maybe.TagNothing
 			result3 = date.NoDate
 		}
 		switch result3.Tag {
@@ -337,47 +345,44 @@ func AdjustHours(d float64, dt DateTime) MaybeDateTime {
 	record := DateRec{Year: d2.First, Month: result, Day: d2.Third, Hour: t.First, Minute: t.Second, Second: t.Third, Millisecond: t.Fourth}
 	day, hour, millisecond, minute, month, second, year, found := datetime.AdjustImpl(d*3600000.0, record.Day, record.Hour, record.Millisecond, record.Minute, record.Month, record.Second, record.Year)
 	if found {
-		var result2 func(int) date.MaybeDate
+		var result2 date.MaybeMaybeDate
 		if year >= -271820 && year <= 275759 {
 			switch month {
 			case 1:
-				result2 = AdjustJoin(year, component.MonthJanuary)
+				result2 = AdjustJoin(year, day, component.MonthJanuary)
 			case 2:
-				result2 = AdjustJoin(year, component.MonthFebruary)
+				result2 = AdjustJoin(year, day, component.MonthFebruary)
 			case 3:
-				result2 = AdjustJoin(year, component.MonthMarch)
+				result2 = AdjustJoin(year, day, component.MonthMarch)
 			case 4:
-				result2 = AdjustJoin(year, component.MonthApril)
+				result2 = AdjustJoin(year, day, component.MonthApril)
 			case 5:
-				result2 = AdjustJoin(year, component.MonthMay)
+				result2 = AdjustJoin(year, day, component.MonthMay)
 			case 6:
-				result2 = AdjustJoin(year, component.MonthJune)
+				result2 = AdjustJoin(year, day, component.MonthJune)
 			case 7:
-				result2 = AdjustJoin(year, component.MonthJuly)
+				result2 = AdjustJoin(year, day, component.MonthJuly)
 			case 8:
-				result2 = AdjustJoin(year, component.MonthAugust)
+				result2 = AdjustJoin(year, day, component.MonthAugust)
 			case 9:
-				result2 = AdjustJoin(year, component.MonthSeptember)
+				result2 = AdjustJoin(year, day, component.MonthSeptember)
 			case 10:
-				result2 = AdjustJoin(year, component.MonthOctober)
+				result2 = AdjustJoin(year, day, component.MonthOctober)
 			case 11:
-				result2 = AdjustJoin(year, component.MonthNovember)
+				result2 = AdjustJoin(year, day, component.MonthNovember)
 			case 12:
-				result2 = AdjustJoin(year, component.MonthDecember)
+				result2 = AdjustJoin(year, day, component.MonthDecember)
 			default:
-				result2 = nil
+				result2 = date.NoMaybeDate
 			}
 		} else {
-			result2 = nil
+			result2 = date.NoMaybeDate
 		}
 		var result3 date.MaybeDate
-		if result2 != nil {
-			if day >= 1 && day <= 31 {
-				result3 = result2(day)
-			} else {
-				result3 = date.NoDate
-			}
-		} else {
+		switch result2.Tag {
+		case maybe.TagJust:
+			result3 = result2.Just
+		default: // maybe.TagNothing
 			result3 = date.NoDate
 		}
 		switch result3.Tag {
@@ -436,47 +441,44 @@ func AdjustMinutes(d float64, dt DateTime) MaybeDateTime {
 	record := DateRec{Year: d2.First, Month: result, Day: d2.Third, Hour: t.First, Minute: t.Second, Second: t.Third, Millisecond: t.Fourth}
 	day, hour, millisecond, minute, month, second, year, found := datetime.AdjustImpl(d*60000.0, record.Day, record.Hour, record.Millisecond, record.Minute, record.Month, record.Second, record.Year)
 	if found {
-		var result2 func(int) date.MaybeDate
+		var result2 date.MaybeMaybeDate
 		if year >= -271820 && year <= 275759 {
 			switch month {
 			case 1:
-				result2 = AdjustJoin(year, component.MonthJanuary)
+				result2 = AdjustJoin(year, day, component.MonthJanuary)
 			case 2:
-				result2 = AdjustJoin(year, component.MonthFebruary)
+				result2 = AdjustJoin(year, day, component.MonthFebruary)
 			case 3:
-				result2 = AdjustJoin(year, component.MonthMarch)
+				result2 = AdjustJoin(year, day, component.MonthMarch)
 			case 4:
-				result2 = AdjustJoin(year, component.MonthApril)
+				result2 = AdjustJoin(year, day, component.MonthApril)
 			case 5:
-				result2 = AdjustJoin(year, component.MonthMay)
+				result2 = AdjustJoin(year, day, component.MonthMay)
 			case 6:
-				result2 = AdjustJoin(year, component.MonthJune)
+				result2 = AdjustJoin(year, day, component.MonthJune)
 			case 7:
-				result2 = AdjustJoin(year, component.MonthJuly)
+				result2 = AdjustJoin(year, day, component.MonthJuly)
 			case 8:
-				result2 = AdjustJoin(year, component.MonthAugust)
+				result2 = AdjustJoin(year, day, component.MonthAugust)
 			case 9:
-				result2 = AdjustJoin(year, component.MonthSeptember)
+				result2 = AdjustJoin(year, day, component.MonthSeptember)
 			case 10:
-				result2 = AdjustJoin(year, component.MonthOctober)
+				result2 = AdjustJoin(year, day, component.MonthOctober)
 			case 11:
-				result2 = AdjustJoin(year, component.MonthNovember)
+				result2 = AdjustJoin(year, day, component.MonthNovember)
 			case 12:
-				result2 = AdjustJoin(year, component.MonthDecember)
+				result2 = AdjustJoin(year, day, component.MonthDecember)
 			default:
-				result2 = nil
+				result2 = date.NoMaybeDate
 			}
 		} else {
-			result2 = nil
+			result2 = date.NoMaybeDate
 		}
 		var result3 date.MaybeDate
-		if result2 != nil {
-			if day >= 1 && day <= 31 {
-				result3 = result2(day)
-			} else {
-				result3 = date.NoDate
-			}
-		} else {
+		switch result2.Tag {
+		case maybe.TagJust:
+			result3 = result2.Just
+		default: // maybe.TagNothing
 			result3 = date.NoDate
 		}
 		switch result3.Tag {
@@ -535,47 +537,44 @@ func AdjustMilliseconds(d float64, dt DateTime) MaybeDateTime {
 	record := DateRec{Year: d2.First, Month: result, Day: d2.Third, Hour: t.First, Minute: t.Second, Second: t.Third, Millisecond: t.Fourth}
 	day, hour, millisecond, minute, month, second, year, found := datetime.AdjustImpl(d, record.Day, record.Hour, record.Millisecond, record.Minute, record.Month, record.Second, record.Year)
 	if found {
-		var result2 func(int) date.MaybeDate
+		var result2 date.MaybeMaybeDate
 		if year >= -271820 && year <= 275759 {
 			switch month {
 			case 1:
-				result2 = AdjustJoin(year, component.MonthJanuary)
+				result2 = AdjustJoin(year, day, component.MonthJanuary)
 			case 2:
-				result2 = AdjustJoin(year, component.MonthFebruary)
+				result2 = AdjustJoin(year, day, component.MonthFebruary)
 			case 3:
-				result2 = AdjustJoin(year, component.MonthMarch)
+				result2 = AdjustJoin(year, day, component.MonthMarch)
 			case 4:
-				result2 = AdjustJoin(year, component.MonthApril)
+				result2 = AdjustJoin(year, day, component.MonthApril)
 			case 5:
-				result2 = AdjustJoin(year, component.MonthMay)
+				result2 = AdjustJoin(year, day, component.MonthMay)
 			case 6:
-				result2 = AdjustJoin(year, component.MonthJune)
+				result2 = AdjustJoin(year, day, component.MonthJune)
 			case 7:
-				result2 = AdjustJoin(year, component.MonthJuly)
+				result2 = AdjustJoin(year, day, component.MonthJuly)
 			case 8:
-				result2 = AdjustJoin(year, component.MonthAugust)
+				result2 = AdjustJoin(year, day, component.MonthAugust)
 			case 9:
-				result2 = AdjustJoin(year, component.MonthSeptember)
+				result2 = AdjustJoin(year, day, component.MonthSeptember)
 			case 10:
-				result2 = AdjustJoin(year, component.MonthOctober)
+				result2 = AdjustJoin(year, day, component.MonthOctober)
 			case 11:
-				result2 = AdjustJoin(year, component.MonthNovember)
+				result2 = AdjustJoin(year, day, component.MonthNovember)
 			case 12:
-				result2 = AdjustJoin(year, component.MonthDecember)
+				result2 = AdjustJoin(year, day, component.MonthDecember)
 			default:
-				result2 = nil
+				result2 = date.NoMaybeDate
 			}
 		} else {
-			result2 = nil
+			result2 = date.NoMaybeDate
 		}
 		var result3 date.MaybeDate
-		if result2 != nil {
-			if day >= 1 && day <= 31 {
-				result3 = result2(day)
-			} else {
-				result3 = date.NoDate
-			}
-		} else {
+		switch result2.Tag {
+		case maybe.TagJust:
+			result3 = result2.Just
+		default: // maybe.TagNothing
 			result3 = date.NoDate
 		}
 		switch result3.Tag {
@@ -601,25 +600,29 @@ func AdjustMilliseconds(d float64, dt DateTime) MaybeDateTime {
 	}
 }
 
-func AdjustJoin(n int, x component.Month) func(int) date.MaybeDate {
-	return func(d int) date.MaybeDate {
-		dt := date.Date{First: n, Second: x, Third: d}
-		scrutinee := date.CanonicalDate(n, x, d)
-		var result bool
+func AdjustJoin(n int, n2 int, x component.Month) date.MaybeMaybeDate {
+	if n2 >= 1 && n2 <= 31 {
+		dt := date.Date{First: n, Second: x, Third: n2}
+		scrutinee := date.CanonicalDate(n, x, n2)
+		var result2 bool
 		if scrutinee.First == dt.First {
 			if scrutinee.Second == dt.Second {
-				result = scrutinee.Third == dt.Third
+				result2 = scrutinee.Third == dt.Third
 			} else {
-				result = false
+				result2 = false
 			}
 		} else {
-			result = false
+			result2 = false
 		}
-		if result {
-			return date.JustDate(dt)
+		var result date.MaybeDate
+		if result2 {
+			result = date.JustDate(dt)
+		} else {
+			result = date.NoDate
 		}
-		return date.NoDate
+		return date.JustMaybeDate(result)
 	}
+	return date.NoMaybeDate
 }
 
 // Data/Maybe/maybe.go

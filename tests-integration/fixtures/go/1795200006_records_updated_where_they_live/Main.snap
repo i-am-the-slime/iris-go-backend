@@ -1,27 +1,10 @@
 ---
 source: tests-integration/src/fixtures.rs
 ---
-// Data/Tuple/tuple.go
-package tuple
-
-import "fixture/shared"
-
-type TupleBody struct {
-	Second shared.Body
-	First  int32
-}
-
-type TupleInt struct {
-	First  int32
-	Second int
-}
-
 // main.go
 package main
 
 import (
-	"fixture/Data/Tuple"
-	"fixture/shared"
 	"github.com/i-am-the-slime/iris-go/console"
 	"github.com/i-am-the-slime/iris-go/prim"
 )
@@ -29,39 +12,7 @@ import (
 var main_ = initializeMain_()
 
 func initializeMain_() float64 {
-	bodies := []shared.Body{{X: 0.0, Y: 0.0, Vx: 0.0, Vy: 0.0, Mass: 1.0}, {X: 1.0, Y: 2.0, Vx: 0.0, Vy: 0.0, Mass: 0.5}}
-	accumulatorVx := 0.0
-	accumulatorVy := 0.0
-	accumulatorX := 0.5
-	accumulatorY := 0.5
-	for _, other := range bodies {
-		accumulatorVx += (other.X - accumulatorX) * other.Mass
-		accumulatorVy += (other.Y - accumulatorY) * other.Mass
-	}
-	accumulatorVx2 := 0.0
-	accumulatorVy2 := 0.0
-	accumulatorX2 := 0.5
-	accumulatorY2 := 0.5
-	for index, body := range bodies {
-		if 1 != index {
-			accumulatorVx2 += (body.X - accumulatorX2) * body.Mass
-			accumulatorVy2 += (body.Y - accumulatorY2) * body.Mass
-		}
-	}
-	accumulator := 0.0
-	for index := range bodies {
-		accumulator += toNumber(index) * bodies[index].Mass
-	}
-	array := []int{3, 4}
-	accumulator2 := []tuple.TupleInt{}
-	for index, i := range array {
-		accumulator2 = append(accumulator2, tuple.TupleInt{First: int32(index), Second: i})
-	}
-	accumulator3 := 0
-	for tupleIndex := range accumulator2 {
-		accumulator3 += int(accumulator2[tupleIndex].First) * accumulator2[tupleIndex].Second
-	}
-	return accumulatorVx + accumulatorVy + accumulatorVx2 + accumulator + toNumber(accumulator3)
+	return -0.5 + (0.0 + toNumber(0)*1.0 + toNumber(1)*0.5) + toNumber(4)
 }
 
 func toNumber(i int) float64 {
@@ -73,15 +24,4 @@ func toNumber(i int) float64 {
 
 func main() {
 	console.Print(prim.NumberToString(main_))
-}
-
-// shared/shared.go
-package shared
-
-type Body struct {
-	Mass float64
-	Vx   float64
-	Vy   float64
-	X    float64
-	Y    float64
 }

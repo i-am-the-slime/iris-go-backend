@@ -5,7 +5,6 @@ source: tests-integration/src/fixtures.rs
 package main
 
 import (
-	arraypkg "github.com/i-am-the-slime/iris-go/array"
 	"github.com/i-am-the-slime/iris-go/console"
 	"github.com/i-am-the-slime/iris-go/prim"
 	"strconv"
@@ -15,16 +14,7 @@ import (
 var main_ = initializeMain_()
 
 func initializeMain_() []string {
-	array := []func(int) int{func(x int) int {
-		return offset(2, x)
-	}, func(x int) int {
-		return offset(5, x)
-	}}
-	mapped := make([]string, len(array))
-	for index, shift := range array {
-		mapped[index] = strconv.Itoa(shift(1))
-	}
-	return arraypkg.Append(mapped, arraypkg.Append([]string{strconv.Itoa(offset(3, 4))}, arraypkg.Map(prefixed(2), []string{"a", "b"})))
+	return []string{strconv.Itoa(offset(2, 1)), strconv.Itoa(offset(5, 1)), strconv.Itoa(offset(3, 4)), prefixed(2)("a"), prefixed(2)("b")}
 }
 
 func offset(n int, x int) int {

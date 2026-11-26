@@ -13,8 +13,7 @@ import (
 func main() {
 	journal.Log(strconv.Itoa(mainGoJust(0, 0)))
 	journal.Log(strconv.Itoa(mainGoTuple(0, 1, 40)))
-	xs := []int{5, 3, 9, 1, 7}
-	journal.Log(strconv.Itoa(mainGoState(xs, 0, 1000000, 0)))
+	journal.Log(strconv.Itoa(mainGoState(0, 1000000, 0)))
 	journal.Log(strconv.Itoa(runsIn("aaabbbcccaa")))
 	journal.Log(strconv.Itoa(runsIn("")))
 	journal.Log(strconv.Itoa(sumDownJust(0, 100)))
@@ -57,10 +56,10 @@ func mainGoTuple(a int, b int, k int) int {
 	}
 }
 
-func mainGoState(xs []int, high int, low int, i int) int {
+func mainGoState(high int, low int, i int) int {
 	for {
-		if i < len(xs) {
-			field := xs[i]
+		if i >= 0 && i < 5 {
+			field := []int{5, 3, 9, 1, 7}[i]
 			result := max(high, field)
 			result2 := min(low, field)
 			high, low, i = result, result2, i+1

@@ -34,15 +34,10 @@ const (
 var main_ = initializeMain_()
 
 func initializeMain_() []string {
-	sorted := slices.Clone([]Suit{SuitClubs, SuitHearts, SuitSpades, SuitHearts})
-	slices.Sort(sorted)
-	sorted2 := slices.Clone([]Suit{SuitClubs, SuitHearts, SuitSpades})
-	slices.Sort(sorted2)
-	slices.Reverse(sorted2)
 	array := *arraypkg.Thaw([]Suit{SuitSpades, SuitClubs, SuitHearts})
 	slices.Sort(array)
 	performed := shared.Frozen(array)
-	return []string{arraySuit(sorted), arraySuit(sorted2), arraySuit(performed)}
+	return []string{arraySuit([]Suit{SuitHearts, SuitHearts, SuitSpades, SuitClubs}), arraySuit([]Suit{SuitClubs, SuitSpades, SuitHearts}), arraySuit(performed)}
 }
 
 func appendShowArraySuit(buffer []byte, array []Suit) []byte {

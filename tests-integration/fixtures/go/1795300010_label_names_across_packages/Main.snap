@@ -117,21 +117,14 @@ import (
 	"fixture/Data/Show"
 	"fixture/Data/Variant"
 	"fixture/Labels"
-	"github.com/i-am-the-slime/iris-go/array"
 	"github.com/i-am-the-slime/iris-go/console"
-	"strconv"
 	"strings"
 )
 
 var main_ = initializeMain_()
 
 func initializeMain_() []string {
-	replies := []variant.AX_respondNowALater{variant.X_respondNowAX_respondNowALater(7), variant.AAX_respondNowALater(1), variant.AAX_respondNowALater2(2), variant.LaterAX_respondNowALater("soon")}
-	mapped := make([]string, len(replies))
-	for index, element := range replies {
-		mapped[index] = labels.Describe(element)
-	}
-	return array.Append(mapped, []string{show.ArrayInt([]int{10, 2, 2, 3, 4}), "changed underscore", strconv.Itoa(len(replies))})
+	return []string{labels.Describe(variant.X_respondNowAX_respondNowALater(7)), labels.Describe(variant.AAX_respondNowALater(1)), labels.Describe(variant.AAX_respondNowALater2(2)), labels.Describe(variant.LaterAX_respondNowALater("soon")), show.ArrayInt([]int{10, 2, 2, 3, 4}), "changed underscore", "4"}
 }
 
 func main() {

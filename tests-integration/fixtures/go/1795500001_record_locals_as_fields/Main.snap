@@ -70,23 +70,12 @@ func ArrayBody(array []shared.Body) string {
 	return string(AppendShowArrayBody(nil, array))
 }
 
-// Data/Tuple/tuple.go
-package tuple
-
-import "fixture/shared"
-
-type Tuple struct {
-	Second shared.Body
-	First  int32
-}
-
 // main.go
 package main
 
 import (
 	"fixture/Data/Show"
 	"fixture/shared"
-	arraypkg "github.com/i-am-the-slime/iris-go/array"
 	"github.com/i-am-the-slime/iris-go/console"
 	"github.com/i-am-the-slime/iris-go/prim"
 	"strconv"
@@ -96,50 +85,79 @@ import (
 var main_ = initializeMain_()
 
 func initializeMain_() []string {
-	bodies := []shared.Body{{X: 0.0, Y: 0.0, Vx: 0.0, Vy: 0.0, Mass: 1.0}, {X: 1.0, Y: 2.0, Vx: 0.5, Vy: 0.0, Mass: 0.5}, {X: -1.0, Y: 0.5, Vx: 0.0, Vy: 0.25, Mass: 2.0}}
-	mapped := make([]shared.Body, len(bodies))
-	for index, body := range bodies {
-		accumulatorMass := body.Mass
-		accumulatorVx := body.Vx
-		accumulatorVy := body.Vy
-		accumulatorX := body.X
-		accumulatorY := body.Y
-		for index2, body2 := range bodies {
-			if index != index2 {
-				accumulatorVx += (body2.X - accumulatorX) * body2.Mass
-				accumulatorVy += (body2.Y - accumulatorY) * body2.Mass
-			}
+	array := []shared.Body{{X: 0.0, Y: 0.0, Vx: 0.0, Vy: 0.0, Mass: 1.0}, {X: 1.0, Y: 2.0, Vx: 0.5, Vy: 0.0, Mass: 0.5}, {X: -1.0, Y: 0.5, Vx: 0.0, Vy: 0.25, Mass: 2.0}}
+	mapped := make([]shared.Body, len(array))
+	for index, body := range array {
+		var accMass float64
+		var accVx float64
+		var accVy float64
+		var accX float64
+		var accY float64
+		if index == 0 {
+			accMass, accVx, accVy, accX, accY = body.Mass, body.Vx, body.Vy, body.X, body.Y
+		} else {
+			updatedMass := body.Mass
+			updatedX := body.X
+			updatedY := body.Y
+			updatedVx := body.Vx + (0.0-body.X)*1.0
+			updatedVy := body.Vy + (0.0-body.Y)*1.0
+			accMass, accVx, accVy, accX, accY = updatedMass, updatedVx, updatedVy, updatedX, updatedY
 		}
-		accumulatorX += accumulatorVx
-		accumulatorY += accumulatorVy
-		mapped[index].Mass = accumulatorMass
-		mapped[index].Vx = accumulatorVx
-		mapped[index].Vy = accumulatorVy
-		mapped[index].X = accumulatorX
-		mapped[index].Y = accumulatorY
+		var accMass2 float64
+		var accVx2 float64
+		var accVy2 float64
+		var accX2 float64
+		var accY2 float64
+		if index == 1 {
+			accVx2, accVy2, accX2, accY2 = accVx, accVy, accX, accY
+		} else {
+			updatedVx := accVx + (1.0-accX)*0.5
+			updatedVy := accVy + (2.0-accY)*0.5
+			accVx2, accVy2, accX2, accY2 = updatedVx, updatedVy, accX, accY
+		}
+		accMass2 = accMass
+		var bodyMass float64
+		var bodyVx float64
+		var bodyVy float64
+		var bodyX float64
+		var bodyY float64
+		if index == 2 {
+			bodyVx, bodyVy, bodyX, bodyY = accVx2, accVy2, accX2, accY2
+		} else {
+			updatedVx := accVx2 + (-1.0-accX2)*2.0
+			updatedVy := accVy2 + (0.5-accY2)*2.0
+			bodyVx, bodyVy, bodyX, bodyY = updatedVx, updatedVy, accX2, accY2
+		}
+		bodyMass = accMass2
+		bodyX += bodyVx
+		bodyY += bodyVy
+		mapped[index].Mass = bodyMass
+		mapped[index].Vx = bodyVx
+		mapped[index].Vy = bodyVy
+		mapped[index].X = bodyX
+		mapped[index].Y = bodyY
 	}
 	record := tally([]int{1, 2, 3, 4})
-	array := []int{2, 3, 4}
-	accumulator := shared.Cells{Rows: 0, Cells: 0}
-	for _, width := range array {
+	accumulatorCells := 0
+	for value := 1; value < 3; value++ {
+		accumulatorCells += 1
+	}
+	accumulatorCells2 := accumulatorCells
+	for value := 1; value < 4; value++ {
+		accumulatorCells2 += 1
+	}
+	accumulatorCells3 := accumulatorCells2
+	for value := 1; value < 5; value++ {
+		accumulatorCells3 += 1
+	}
+	accumulator := shared.Pair{Left: 1, Right: 2}
+	for i := 1; i < 6; i++ {
 		updated := accumulator
-		updated.Rows = accumulator.Rows + 1
-		_, count := arraypkg.RangeSteps(1, width)
-		accumulatorCells := accumulator.Cells
-		for range count {
-			accumulatorCells += 1
-		}
-		updated.Cells = accumulatorCells
+		updated.Left = accumulator.Right + i
+		updated.Right = accumulator.Left
 		accumulator = updated
 	}
-	accumulator2 := shared.Pair{Left: 1, Right: 2}
-	for i := 1; i < 6; i++ {
-		updated := accumulator2
-		updated.Left = accumulator2.Right + i
-		updated.Right = accumulator2.Left
-		accumulator2 = updated
-	}
-	return []string{show.ArrayBody(mapped), "{ count: " + strconv.Itoa(record.Count) + ", label: " + prim.ShowString(record.Label) + ", seen: " + strconv.FormatBool(record.Seen) + ", total: " + strconv.Itoa(record.Total) + " }", show.ArrayTally(arraypkg.Reverse([]shared.Tally{tally([]int{5}), tally([]int{1, 2, 3})})), "{ cells: " + strconv.Itoa(accumulator.Cells) + ", rows: " + strconv.Itoa(accumulator.Rows) + " }", "{ left: " + strconv.Itoa(accumulator2.Left) + ", right: " + strconv.Itoa(accumulator2.Right) + " }"}
+	return []string{show.ArrayBody(mapped), "{ count: " + strconv.Itoa(record.Count) + ", label: " + prim.ShowString(record.Label) + ", seen: " + strconv.FormatBool(record.Seen) + ", total: " + strconv.Itoa(record.Total) + " }", show.ArrayTally([]shared.Tally{tally([]int{1, 2, 3}), tally([]int{5})}), "{ cells: " + strconv.Itoa(accumulatorCells3) + ", rows: 3 }", "{ left: " + strconv.Itoa(accumulator.Left) + ", right: " + strconv.Itoa(accumulator.Right) + " }"}
 }
 
 func tally(array []int) shared.Tally {

@@ -1,6 +1,5 @@
 ---
 source: tests-integration/src/fixtures.rs
-assertion_line: 571
 ---
 // Data/Map/Internal/internal.go
 package internal
@@ -192,16 +191,6 @@ func JustBox(just boxes.Box) Box {
 	return Box{Tag: TagJust, Just: just}
 }
 
-// Data/Tuple/tuple.go
-package tuple
-
-import boxes "fixture/Boxes_ffi"
-
-type Tuple struct {
-	Second boxes.Box
-	First  int32
-}
-
 // main.go
 package main
 
@@ -209,7 +198,6 @@ import (
 	boxes "fixture/Boxes_ffi"
 	"fixture/Data/Map/Internal"
 	"fixture/Data/Maybe"
-	"fixture/Data/Tuple"
 	journal "fixture/Journal_ffi"
 	"fixture/shared"
 	"github.com/i-am-the-slime/iris-go/direct"
@@ -219,15 +207,13 @@ import (
 
 func main() {
 	original := shared.Name{Name: "first"}
-	array := []tuple.Tuple{{First: 1, Second: direct.ForeignRecord([]string{"name"}, []any{original.Name})}, {First: 2, Second: int(42)}}
-	accumulator := internal.SharedMapLeaf
-	for tupleIndex := range array {
-		accumulator = mainGoReusing(int(array[tupleIndex].First), array[tupleIndex].Second, accumulator)
-	}
+	field := direct.ForeignRecord([]string{"name"}, []any{original.Name})
+	field2 := int(42)
+	cache := mainGoReusing2(field2, mainGoReusing(field, internal.SharedMapLeaf))
 	original2 := shared.Name{Name: "boxed"}
 	cell := direct.ForeignRecord([]string{"name"}, []any{original2.Name})
 	journal.Log((shared.Name{Name: direct.ForeignField(cell, "name").(string)}).Name)
-	scrutinee := mainGo(accumulator)
+	scrutinee := mainGo(cache)
 	var result string
 	switch scrutinee.Tag {
 	case maybe.TagNothing:
@@ -236,7 +222,7 @@ func main() {
 		result = (shared.Name{Name: direct.ForeignField(scrutinee.Just, "name").(string)}).Name
 	}
 	journal.Log(result)
-	scrutinee2 := mainGo2(accumulator)
+	scrutinee2 := mainGo2(cache)
 	var result2 int
 	switch scrutinee2.Tag {
 	case maybe.TagJust:
@@ -287,23 +273,42 @@ func mainGo2(value *internal.Map) maybe.Box {
 	}
 }
 
-func mainGoReusing(k int, v boxes.Box, value *internal.Map) *internal.Map {
+func mainGoReusing(field boxes.Box, value *internal.Map) *internal.Map {
 	if value == internal.SharedMapLeaf {
-		return internal.Node(1, 1, k, v, internal.SharedMapLeaf, internal.SharedMapLeaf)
+		return internal.Node(1, 1, 1, field, internal.SharedMapLeaf, internal.SharedMapLeaf)
 	}
 	mk := int(value.Node2)
 	mv := value.Node3
 	ml := value.Node4
 	mr := value.Node5
-	if k < mk {
-		return internal.UnsafeBalancedNode(mk, mv, mainGoReusing(k, v, ml), mr, value)
+	if 1 < mk {
+		return internal.UnsafeBalancedNode(mk, mv, mainGoReusing(field, ml), mr, value)
 	}
-	if k == mk {
-		value.Node2 = int32(k)
-		value.Node3 = v
+	if 1 == mk {
+		value.Node2 = 1
+		value.Node3 = field
 		return value
 	}
-	return internal.UnsafeBalancedNode(mk, mv, ml, mainGoReusing(k, v, mr), value)
+	return internal.UnsafeBalancedNode(mk, mv, ml, mainGoReusing(field, mr), value)
+}
+
+func mainGoReusing2(field boxes.Box, value *internal.Map) *internal.Map {
+	if value == internal.SharedMapLeaf {
+		return internal.Node(1, 1, 2, field, internal.SharedMapLeaf, internal.SharedMapLeaf)
+	}
+	mk := int(value.Node2)
+	mv := value.Node3
+	ml := value.Node4
+	mr := value.Node5
+	if 2 < mk {
+		return internal.UnsafeBalancedNode(mk, mv, mainGoReusing2(field, ml), mr, value)
+	}
+	if 2 == mk {
+		value.Node2 = 2
+		value.Node3 = field
+		return value
+	}
+	return internal.UnsafeBalancedNode(mk, mv, ml, mainGoReusing2(field, mr), value)
 }
 
 // shared/shared.go

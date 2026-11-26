@@ -26,16 +26,14 @@ package main
 import (
 	"fixture/Data/Show"
 	journal "fixture/Journal_ffi"
-	"github.com/i-am-the-slime/iris-go/direct"
-	"strconv"
 )
 
 func main() {
-	array := direct.MapWithIndex(func(index int, letter string) func() {
-		return func() {
-			journal.Log(strconv.Itoa(index) + letter)
-		}
-	}, []string{"a", "b"})
+	array := []func(){func() {
+		journal.Log("0a")
+	}, func() {
+		journal.Log("1b")
+	}}
 	collected := make([]struct{}, len(array))
 	for _, action := range array {
 		action()
