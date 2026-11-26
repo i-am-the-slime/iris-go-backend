@@ -172,7 +172,6 @@ func ArrayXY(array []XY) string {
 package show
 
 import (
-	"fixture/shared"
 	"github.com/i-am-the-slime/iris-go/prim"
 	"strconv"
 )
@@ -183,29 +182,6 @@ func ShowInt(i int32) string {
 
 func ShowNumber(number float64) string {
 	return prim.ShowNumber(number)
-}
-
-func ShowWrappedConsIntNil(record shared.Wrapped) string {
-	return string(AppendShowWrappedConsIntNil(nil, record))
-}
-
-func AppendShowArrayWrapped(buffer []byte, array []shared.Wrapped) []byte {
-	buffer = append(buffer, '[')
-	for index, element := range array {
-		if index > 0 {
-			buffer = append(buffer, ',')
-		}
-		buffer = AppendShowWrappedConsIntNil(buffer, element)
-	}
-	buffer = append(buffer, ']')
-	return buffer
-}
-
-func AppendShowWrappedConsIntNil(buffer []byte, record shared.Wrapped) []byte {
-	buffer = append(buffer, "{ a: "...)
-	buffer = strconv.AppendInt(buffer, int64(record.A), 10)
-	buffer = append(buffer, " }"...)
-	return buffer
 }
 
 func AppendShowArrayNumber(buffer []byte, array []float64) []byte {
@@ -242,10 +218,6 @@ func AppendShowArrayInt(buffer []byte, array []int32) []byte {
 	}
 	buffer = append(buffer, ']')
 	return buffer
-}
-
-func ArrayWrapped(array []shared.Wrapped) string {
-	return string(AppendShowArrayWrapped(nil, array))
 }
 
 func ArrayArrayInt(array [][]int32) string {
@@ -301,6 +273,10 @@ const (
 
 var sharedColourRed = &Colour{Tag: ColourRed}
 
+type Wrapped struct {
+	A int32
+}
+
 type Point struct {
 	First  int32
 	Second int32
@@ -340,7 +316,7 @@ func initializeMain_() []string {
 	text2 = maybe_tuple.AppendShowArrayTupleCharArrayMaybeNumber(text2, []maybe_tuple.Tuple{{First: 'a', Second: []maybe.Number{maybe.JustNumber(2.5)}}})
 	text3 := appendShowArrayNumber(nil, []float64{1.0})
 	text3 = show.AppendShowArrayNumber(text3, []float64{1.0})
-	return []string{show.ArrayInt([]int32{1, 2, 3}), show.ArrayInt([]int32{}), show.ArrayArrayInt([][]int32{{1}, {}, {-2, 3}}), string(text), maybe.ArrayXY([]maybe.XY{{X: maybe.Int(1), Y: maybe.NoInt}}), string(text2), arrayShape([]Shape{Circle(1.0), Rect(shared.HW{W: 1, H: -2}), {Tag: ShapeEmpty}, Pair(-3, maybe.Int(-4))}), arrayColour([]*Colour{sharedColourRed, Mixed(sharedColourRed, Named("x\"y"))}), string(text3), show.ArrayWrapped([]shared.Wrapped{{A: 1}}), arrayPoint([]Point{{First: 1, Second: 2}})}
+	return []string{show.ArrayInt([]int32{1, 2, 3}), show.ArrayInt([]int32{}), show.ArrayArrayInt([][]int32{{1}, {}, {-2, 3}}), string(text), maybe.ArrayXY([]maybe.XY{{X: maybe.Int(1), Y: maybe.NoInt}}), string(text2), arrayShape([]Shape{Circle(1.0), Rect(shared.HW{W: 1, H: -2}), {Tag: ShapeEmpty}, Pair(-3, maybe.Int(-4))}), arrayColour([]*Colour{sharedColourRed, Mixed(sharedColourRed, Named("x\"y"))}), string(text3), arrayWrapped([]Wrapped{{A: 1}}), arrayPoint([]Point{{First: 1, Second: 2}})}
 }
 
 func showShape(shape Shape) string {
@@ -353,6 +329,10 @@ func showColour(colour *Colour) string {
 
 func showMeters(number float64) string {
 	return string(appendShowMeters(nil, number))
+}
+
+func showWrappedConsIntNil(record Wrapped) string {
+	return string(appendShowWrappedConsIntNil(nil, record))
 }
 
 func showPoint(point Point) string {
@@ -395,6 +375,25 @@ func appendShowPoint(buffer []byte, point Point) []byte {
 	buffer = append(buffer, ',')
 	buffer = strconv.AppendInt(buffer, int64(point.Second), 10)
 	buffer = append(buffer, '>')
+	return buffer
+}
+
+func appendShowArrayWrapped(buffer []byte, array []Wrapped) []byte {
+	buffer = append(buffer, '[')
+	for index, element := range array {
+		if index > 0 {
+			buffer = append(buffer, ',')
+		}
+		buffer = appendShowWrappedConsIntNil(buffer, element)
+	}
+	buffer = append(buffer, ']')
+	return buffer
+}
+
+func appendShowWrappedConsIntNil(buffer []byte, record Wrapped) []byte {
+	buffer = append(buffer, "{ a: "...)
+	buffer = strconv.AppendInt(buffer, int64(record.A), 10)
+	buffer = append(buffer, " }"...)
 	return buffer
 }
 
@@ -476,6 +475,10 @@ func arrayPoint(array []Point) string {
 	return string(appendShowArrayPoint(nil, array))
 }
 
+func arrayWrapped(array []Wrapped) string {
+	return string(appendShowArrayWrapped(nil, array))
+}
+
 func arrayColour(array []*Colour) string {
 	return string(appendShowArrayColour(nil, array))
 }
@@ -532,8 +535,4 @@ package shared
 type HW struct {
 	H int32
 	W int32
-}
-
-type Wrapped struct {
-	A int32
 }

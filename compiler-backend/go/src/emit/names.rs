@@ -15,6 +15,7 @@ use std::collections::BTreeSet;
 use rustc_hash::{FxHashMap, FxHashSet};
 use smol_str::SmolStr;
 
+use files::FileId;
 use indexing::IndexedTypeItemKind;
 
 use super::packages::{SpelledPart, Spelling};
@@ -76,6 +77,7 @@ struct Hint {
     /// A parameterised synonym's or newtype's name followed by its arguments,
     /// which tells its instantiations apart.
     instantiated: Option<Vec<NamePart>>,
+    home: Option<FileId>,
 }
 
 /// A parameter's or field's name as a record's name, unless it is too vague
@@ -346,7 +348,7 @@ where
         &mut self,
         modules: &Modules,
         declared: &FxHashSet<String>,
-    ) -> GoResult<()> {
+    ) -> GoResult<Vec<(String, FileId)>> {
         let pending: Vec<(String, PendingSpelling)> = std::mem::take(&mut self.pending_spellings)
             .into_iter()
             .filter(|(name, _)| declared.contains(name))
@@ -365,12 +367,22 @@ where
                 }
             }
         }
-        let ladders = self.record_ladders(&records, modules)?;
+        let (ladders, chosen_homes): (Vec<_>, Vec<_>) =
+            self.record_ladders(&records, modules)?.into_iter().unzip();
+        let record_homes: FxHashMap<MonotypeId, FileId> = records
+            .iter()
+            .zip(chosen_homes)
+            .filter_map(|(&monotype, home)| Some((monotype, home?)))
+            .collect();
         let record_ladders: FxHashMap<MonotypeId, Vec<String>> =
             records.into_iter().zip(ladders).collect();
+        let mut homes = vec![];
         for (name, spelling) in pending {
             let spelling = match spelling {
                 PendingSpelling::Record(monotype) => {
+                    if let Some(&home) = record_homes.get(&monotype) {
+                        homes.push((name.clone(), home));
+                    }
                     Spelling::Ladder(record_ladders[&monotype].clone())
                 }
                 PendingSpelling::Parts(parts) => {
@@ -392,7 +404,7 @@ where
             };
             self.spellings.insert(name, spelling);
         }
-        Ok(())
+        Ok(homes)
     }
 
     /// Each record's ladder: its name; a parameterised synonym's name with its
@@ -403,7 +415,7 @@ where
         &mut self,
         records: &BTreeSet<MonotypeId>,
         modules: &Modules,
-    ) -> GoResult<Vec<Vec<String>>> {
+    ) -> GoResult<Vec<(Vec<String>, Option<FileId>)>> {
         let hints = self.record_hints(records, modules)?;
         let fields: Vec<std::sync::Arc<[RecordField]>> = records
             .iter()
@@ -487,7 +499,8 @@ where
             let built = ladder(candidates.into_iter().flatten());
             ladders.push(built);
         }
-        Ok(ladders)
+        let homes = chosen.iter().map(|hint| hint.as_ref().and_then(|hint| hint.home));
+        Ok(ladders.into_iter().zip(homes).collect())
     }
 
     /// Each record's field types, spelling records by their chosen names, and
@@ -598,7 +611,13 @@ where
                     let qualifier = Some(owner.clone());
                     hint_record(
                         parameter.monotype,
-                        Hint { source: Source::Used, name, qualifier, instantiated: None },
+                        Hint {
+                            source: Source::Used,
+                            name,
+                            qualifier,
+                            instantiated: None,
+                            home: None,
+                        },
                     );
                 }
             }
@@ -609,7 +628,13 @@ where
             for binder in binders {
                 if let Some(name) = use_name(&binder.name) {
                     let qualifier = Some(owner.clone());
-                    let hint = Hint { source: Source::Used, name, qualifier, instantiated: None };
+                    let hint = Hint {
+                        source: Source::Used,
+                        name,
+                        qualifier,
+                        instantiated: None,
+                        home: None,
+                    };
                     hint_record(binder.monotype, hint);
                 }
             }
@@ -617,7 +642,13 @@ where
             let name = format!("{owner}Result");
             hint_record(
                 result,
-                Hint { source: Source::Returned, name, qualifier: None, instantiated: None },
+                Hint {
+                    source: Source::Returned,
+                    name,
+                    qualifier: None,
+                    instantiated: None,
+                    home: None,
+                },
             );
         }
         let mut field_hints = vec![];
@@ -634,7 +665,8 @@ where
                 hints.iter().find(|hint| hint.source <= Source::Alias).map(|hint| hint.name.clone())
             });
             if records.contains(&monotype) {
-                let hint = Hint { source: Source::Used, name, qualifier, instantiated: None };
+                let hint =
+                    Hint { source: Source::Used, name, qualifier, instantiated: None, home: None };
                 hints.entry(monotype).or_default().push(hint);
             }
         }
@@ -662,6 +694,7 @@ where
                         name,
                         qualifier,
                         instantiated: None,
+                        home: None,
                     });
                 }
             }
@@ -704,7 +737,7 @@ where
             let module = self.context.module(file_id)?;
             let qualifier =
                 module.name.rsplit('.').next().map(|last| capitalise(&identifier(last)));
-            let mut declared: Vec<(String, checking::TypeId, bool)> = vec![];
+            let mut declared: Vec<(String, checking::TypeId, bool, Option<FileId>)> = vec![];
             for (item, indexed) in module.indexed.items.iter_types() {
                 let Some(name) = indexed.name.as_ref() else { continue };
                 match &indexed.kind {
@@ -714,7 +747,7 @@ where
                             continue;
                         }
                         let direct = self.is_record_type(synonym.expansion);
-                        declared.push((name.to_string(), synonym.expansion, direct));
+                        declared.push((name.to_string(), synonym.expansion, direct, None));
                     }
                     IndexedTypeItemKind::Newtype { .. } => {
                         let parameters = module.checked.lookup_data_declaration(item);
@@ -723,7 +756,7 @@ where
                         }
                         let newtype =
                             self.context.queries.intern_type(Type::Constructor(file_id, item));
-                        declared.push((name.to_string(), newtype, true));
+                        declared.push((name.to_string(), newtype, true, Some(file_id)));
                     }
                     _ => {}
                 }
@@ -743,6 +776,9 @@ where
                     Some(synonym) if !self.is_record_type(synonym.expansion) => Source::Alias,
                     _ => Source::Declared,
                 };
+                let is_newtype =
+                    matches!(module.indexed.items[item].kind, IndexedTypeItemKind::Newtype { .. });
+                let home = is_newtype.then_some(file_id);
                 let name = capitalise(&identifier(name));
                 let instantiated = if arguments.is_empty() {
                     None
@@ -753,10 +789,10 @@ where
                     }
                     Some(instantiated)
                 };
-                let hint = Hint { source, name, qualifier: qualifier.clone(), instantiated };
+                let hint = Hint { source, name, qualifier: qualifier.clone(), instantiated, home };
                 hints.entry(record).or_default().push(hint);
             }
-            for (name, expansion, direct) in declared {
+            for (name, expansion, direct, home) in declared {
                 let Some(monotype) = self.declared_record(expansion, &label_sets)? else {
                     continue;
                 };
@@ -765,7 +801,8 @@ where
                 }
                 let source = if direct { Source::Declared } else { Source::Alias };
                 let name = capitalise(&identifier(&name));
-                let hint = Hint { source, name, qualifier: qualifier.clone(), instantiated: None };
+                let hint =
+                    Hint { source, name, qualifier: qualifier.clone(), instantiated: None, home };
                 hints.entry(monotype).or_default().push(hint);
             }
         }

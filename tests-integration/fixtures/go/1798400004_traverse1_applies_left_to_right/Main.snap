@@ -1,55 +1,6 @@
 ---
 source: tests-integration/src/fixtures.rs
 ---
-// Data/Array/NonEmpty/Internal/internal.go
-package internal
-
-import (
-	arraypkg "github.com/i-am-the-slime/iris-go/array"
-	"github.com/i-am-the-slime/iris-go/direct"
-	"strconv"
-)
-
-type ShapeNonEmptyArrayInt struct {
-	Shape string
-	Value []int32
-}
-
-type ShapeInt struct {
-	Shape string
-	Value int32
-}
-
-type ShapeFnIntNonEmptyArrayInt struct {
-	Shape string
-	Value func(int32) []int32
-}
-
-func Traverse1Function(array2 []int32) ShapeNonEmptyArrayInt {
-	append_ := direct.Appender[int32]()
-	x := array2[0]
-	shapeInt := ShapeInt{Shape: strconv.Itoa(int(x)), Value: x}
-	array := arraypkg.Slice(1, int32(len(array2)), array2)
-	accumulator := ShapeNonEmptyArrayInt{Shape: shapeInt.Shape, Value: []int32{shapeInt.Value}}
-	for _, element := range array {
-		shapeFnIntNonEmptyArrayInt := ShapeFnIntNonEmptyArrayInt{Shape: accumulator.Shape, Value: append_(accumulator.Value)}
-		accumulator = ShapeNonEmptyArrayInt{Shape: "(" + shapeFnIntNonEmptyArrayInt.Shape + " " + strconv.Itoa(int(element)) + ")", Value: shapeFnIntNonEmptyArrayInt.Value(element)}
-	}
-	return accumulator
-}
-
-func Traverse1Function2(array2 []int32) ShapeNonEmptyArrayInt {
-	append_ := direct.Appender[int32]()
-	shapeInt := ShapeInt{Shape: "", Value: array2[0] * 10}
-	array := arraypkg.Slice(1, int32(len(array2)), array2)
-	accumulator := ShapeNonEmptyArrayInt{Shape: shapeInt.Shape, Value: []int32{shapeInt.Value}}
-	for _, element := range array {
-		shapeFnIntNonEmptyArrayInt := ShapeFnIntNonEmptyArrayInt{Shape: accumulator.Shape, Value: append_(accumulator.Value)}
-		accumulator = ShapeNonEmptyArrayInt{Shape: "(" + shapeFnIntNonEmptyArrayInt.Shape + " )", Value: shapeFnIntNonEmptyArrayInt.Value(element * 10)}
-	}
-	return accumulator
-}
-
 // Data/Show/show.go
 package show
 
@@ -75,20 +26,61 @@ func AppendShowArrayInt(buffer []byte, array []int32) []byte {
 package main
 
 import (
-	nonemptyarray "fixture/Data/Array/NonEmpty/Internal"
 	"fixture/Data/Show"
-	"github.com/i-am-the-slime/iris-go/array"
+	arraypkg "github.com/i-am-the-slime/iris-go/array"
 	"github.com/i-am-the-slime/iris-go/console"
+	"github.com/i-am-the-slime/iris-go/direct"
+	"strconv"
 	"strings"
 )
+
+type ShapeNonEmptyArrayInt struct {
+	Shape string
+	Value []int32
+}
+
+type ShapeInt struct {
+	Shape string
+	Value int32
+}
+
+type ShapeFnIntNonEmptyArrayInt struct {
+	Shape string
+	Value func(int32) []int32
+}
 
 var main_ = initializeMain_()
 
 func initializeMain_() []string {
 	text := []byte("(NonEmptyArray ")
-	text = show.AppendShowArrayInt(text, nonemptyarray.Traverse1Function2(array.Append([]int32{1}, []int32{2, 3})).Value)
+	text = show.AppendShowArrayInt(text, traverse1Function2(arraypkg.Append([]int32{1}, []int32{2, 3})).Value)
 	text = append(text, ')')
-	return []string{nonemptyarray.Traverse1Function([]int32{1}).Shape, nonemptyarray.Traverse1Function(array.Append([]int32{1}, []int32{2})).Shape, nonemptyarray.Traverse1Function(array.Append([]int32{1}, []int32{2, 3, 4, 5})).Shape, string(text)}
+	return []string{traverse1Function([]int32{1}).Shape, traverse1Function(arraypkg.Append([]int32{1}, []int32{2})).Shape, traverse1Function(arraypkg.Append([]int32{1}, []int32{2, 3, 4, 5})).Shape, string(text)}
+}
+
+func traverse1Function(array2 []int32) ShapeNonEmptyArrayInt {
+	append_ := direct.Appender[int32]()
+	x := array2[0]
+	shapeInt := ShapeInt{Shape: strconv.Itoa(int(x)), Value: x}
+	array := arraypkg.Slice(1, int32(len(array2)), array2)
+	accumulator := ShapeNonEmptyArrayInt{Shape: shapeInt.Shape, Value: []int32{shapeInt.Value}}
+	for _, element := range array {
+		shapeFnIntNonEmptyArrayInt := ShapeFnIntNonEmptyArrayInt{Shape: accumulator.Shape, Value: append_(accumulator.Value)}
+		accumulator = ShapeNonEmptyArrayInt{Shape: "(" + shapeFnIntNonEmptyArrayInt.Shape + " " + strconv.Itoa(int(element)) + ")", Value: shapeFnIntNonEmptyArrayInt.Value(element)}
+	}
+	return accumulator
+}
+
+func traverse1Function2(array2 []int32) ShapeNonEmptyArrayInt {
+	append_ := direct.Appender[int32]()
+	shapeInt := ShapeInt{Shape: "", Value: array2[0] * 10}
+	array := arraypkg.Slice(1, int32(len(array2)), array2)
+	accumulator := ShapeNonEmptyArrayInt{Shape: shapeInt.Shape, Value: []int32{shapeInt.Value}}
+	for _, element := range array {
+		shapeFnIntNonEmptyArrayInt := ShapeFnIntNonEmptyArrayInt{Shape: accumulator.Shape, Value: append_(accumulator.Value)}
+		accumulator = ShapeNonEmptyArrayInt{Shape: "(" + shapeFnIntNonEmptyArrayInt.Shape + " )", Value: shapeFnIntNonEmptyArrayInt.Value(element * 10)}
+	}
+	return accumulator
 }
 
 func main() {

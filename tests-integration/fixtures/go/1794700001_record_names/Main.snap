@@ -54,6 +54,11 @@ import (
 	"strconv"
 )
 
+type Span struct {
+	From int32
+	To   int32
+}
+
 var main_ = initializeMain_()
 
 func initializeMain_() string {
@@ -87,7 +92,7 @@ func initializeMain_() string {
 		accumulator4 += array4[shapeIndex].Width * array4[shapeIndex].Height
 	}
 	text = show.AppendShowArrayNumber(text, []float64{3.0, accumulator, accumulator2, accumulator3, accumulator4})
-	array5 := []shared.Span{{From: 2, To: 7}}
+	array5 := []Span{{From: 2, To: 7}}
 	var accumulator5 int32 = 0
 	for spanIndex := range array5 {
 		accumulator5 = accumulator5 + array5[spanIndex].To - array5[spanIndex].From
@@ -135,11 +140,6 @@ type ShapesTiming struct {
 	Label  string
 	Height float64
 	Width  float64
-}
-
-type Span struct {
-	From int32
-	To   int32
 }
 
 type PairInt struct {

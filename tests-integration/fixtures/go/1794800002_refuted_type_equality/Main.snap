@@ -5,15 +5,16 @@ source: tests-integration/src/fixtures.rs
 package main
 
 import (
-	"fixture/shared"
 	"github.com/i-am-the-slime/iris-go/console"
 	"strconv"
 	"strings"
 )
 
+type Equal struct{}
+
 type ValueInt struct {
-	Field0       shared.Equal
-	StringValue0 shared.Equal
+	Field0       Equal
+	StringValue0 Equal
 	StringValue1 string
 	Pair0        *ValueInt
 	Pair1        *ValueInt
@@ -29,8 +30,8 @@ const (
 )
 
 type ValueString struct {
-	Field0       shared.Equal
-	StringValue0 shared.Equal
+	Field0       Equal
+	StringValue0 Equal
 	StringValue1 string
 	Pair0        *ValueString
 	Pair1        *ValueString
@@ -72,7 +73,7 @@ func evaluateInt(value *ValueInt) int32 {
 	}
 }
 
-var refl shared.Equal = shared.Equal{}
+var refl Equal = Equal{}
 
 func evaluateString(value *ValueString) string {
 	for {
@@ -90,8 +91,3 @@ func evaluateString(value *ValueString) string {
 func main() {
 	console.Print("[" + strings.Join(main_, " ") + "]")
 }
-
-// shared/shared.go
-package shared
-
-type Equal struct{}

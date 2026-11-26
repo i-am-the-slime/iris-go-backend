@@ -5,18 +5,27 @@ source: tests-integration/src/fixtures.rs
 package main
 
 import (
-	"fixture/shared"
 	"github.com/i-am-the-slime/iris-go/console"
 	"github.com/i-am-the-slime/iris-go/prim"
 	"strings"
 )
 
+type IdentityOfString struct {
+	Second string
+	First  int32
+}
+
+type IdentityOfUnit struct {
+	Second struct{}
+	First  int32
+}
+
 var main_ = initializeMain_()
 
 func initializeMain_() []int32 {
-	updated := shared.IdentityOfString{First: 1, Second: "s"}
+	updated := IdentityOfString{First: 1, Second: "s"}
 	updated.First = 99
-	updated2 := shared.IdentityOfUnit{First: 0, Second: struct{}{}}
+	updated2 := IdentityOfUnit{First: 0, Second: struct{}{}}
 	updated2.First = 3
 	return []int32{updated.First, 7, updated2.First}
 }
@@ -27,17 +36,4 @@ func main() {
 		texts = append(texts, prim.ShowInt(element))
 	}
 	console.Print("[" + strings.Join(texts, " ") + "]")
-}
-
-// shared/shared.go
-package shared
-
-type IdentityOfString struct {
-	Second string
-	First  int32
-}
-
-type IdentityOfUnit struct {
-	Second struct{}
-	First  int32
 }

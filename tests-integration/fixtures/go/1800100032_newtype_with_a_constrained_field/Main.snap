@@ -1,0 +1,64 @@
+---
+source: tests-integration/src/fixtures.rs
+---
+// Data/Either/either.go
+package either
+
+type Either struct {
+	Left  string
+	Right int32
+	Tag   uint8
+}
+
+const (
+	EitherLeft = iota
+	EitherRight
+)
+
+type StringFailure struct {
+	Failed bool
+	Left   string
+}
+
+// main.go
+package main
+
+import (
+	"fixture/Data/Either"
+	"github.com/i-am-the-slime/iris-go/console"
+	"strconv"
+	"strings"
+)
+
+type Parser func(int32) (int32, either.StringFailure)
+
+var main_ = initializeMain_()
+
+func initializeMain_() []string {
+	i, err := positive(0)
+	var result string
+	if err.Failed {
+		result = "(Left Problem " + err.Left + ")"
+	} else {
+		result = "(Right " + strconv.Itoa(int(i)) + ")"
+	}
+	i2, err := positive(5)
+	var result2 string
+	if err.Failed {
+		result2 = "(Left Problem " + err.Left + ")"
+	} else {
+		result2 = "(Right " + strconv.Itoa(int(i2)) + ")"
+	}
+	return []string{result, result2}
+}
+
+var positive Parser = func(n int32) (int32, either.StringFailure) {
+	if n > 0 {
+		return n, either.StringFailure{}
+	}
+	return 0, either.StringFailure{Failed: true, Left: "end"}
+}
+
+func main() {
+	console.Print("[" + strings.Join(main_, " ") + "]")
+}

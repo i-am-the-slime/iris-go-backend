@@ -740,9 +740,9 @@ impl Monotypes {
             fields.push(RecordField { label: instantiation.label, monotype });
         }
         fields.sort_by(|left, right| left.label.cmp(&right.label));
-        let is_rank_n = scheme.constraints.is_empty() && !fields.is_empty();
+        let instantiated = !fields.is_empty();
         let record = self.intern(Monotype::Record(Arc::from(fields)));
-        if is_rank_n {
+        if instantiated {
             self.instantiated_records.insert(record);
         }
         Ok(record)
