@@ -105,7 +105,17 @@ Pushing a branch named `gates/<name>` to `fork` runs the Gates workflow
 - every `tests-integration` test with the Go fixtures' builds required, in 4 hash partitions;
 - `tests-e2e` on Linux;
 - iris-go's examples against JS (`run-examples.sh`, quality ratchet included);
-- the registry sweep against `tests-compatibility/go-sweep-baseline.tsv`, 4 shards x 3 build parts.
+- the registry sweep against `tests-compatibility/go-sweep-baseline.tsv`, 4 shards x 3 build parts;
+- the compile budget (`.github/workflows/compile-budget.yml`): the instructions `googoo go` executes
+  end to end (cachegrind, single-threaded) compiling `Compat.Hyrule.TestSuite` from
+  `benchmarks/compat` and every 8th iris-go example, counted with this
+  commit's googoo and with its merge base with main's, in the same job. It fails when the total
+  grows by more than 2%.
+
+Compile time compounds, so an increase needs a reason. To accept one, add a line
+`Compile-budget: +N%` to the description of a commit on the branch, with the reason next to it; the
+gate then allows growth up to N%. Once that commit is on main it is the new base, so the allowance
+needs no reset.
 
 They build against the iris-go tag in `RUNTIME_VERSION`. A manual run can take another ref:
 `gh workflow run gates.yml -R i-am-the-slime/iris-go-backend --ref gates/<name> -f runtime-ref=main`.

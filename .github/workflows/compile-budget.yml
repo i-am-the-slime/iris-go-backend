@@ -1,0 +1,218 @@
+name: Compile budget
+
+# Counts the instructions the whole compiler executes, front end and Go backend, while `googoo go`
+# compiles a fixed set of programs. It counts them once with the googoo built from this commit and
+# once with the googoo built from its merge base with main, in the same job, so both see the same
+# machine, inputs and paths. Instruction counts come from valgrind's cachegrind without its cache
+# simulation: the runners expose no hardware counters to `perf`, and wall time on them is noisy.
+# The compiler runs single-threaded (RAYON_NUM_THREADS=1) so that no worker's spinning is counted.
+#
+# The job fails when the total grows by more than ALLOWANCE percent. A commit between the merge
+# base and this one whose message has a line `Compile-budget: +N%` raises the allowance to N%.
+on:
+  workflow_call:
+    inputs:
+      runtime-ref:
+        description: iris-go ref whose examples are compiled
+        default: main
+        type: string
+    outputs:
+      summary:
+        description: The totals and their change
+        value: ${{ jobs.budget.outputs.summary }}
+      table:
+        description: Markdown table rows, one per program and one for the total
+        value: ${{ jobs.budget.outputs.table }}
+
+env:
+  CARGO_TERM_COLOR: always
+  IRIS_GO: ${{ github.workspace }}/iris-go-runtime
+  RAYON_NUM_THREADS: "1"
+  ALLOWANCE: "2"
+  COMPAT: compiler-backend/go/benchmarks/compat
+
+jobs:
+  budget:
+    name: Instructions against main
+    permissions:
+      contents: read
+    runs-on: ubuntu-latest
+    timeout-minutes: 75
+    outputs:
+      summary: ${{ steps.compare.outputs.summary }}
+      table: ${{ steps.compare.outputs.table }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Checkout the iris-go runtime
+        uses: actions/checkout@v7
+        with:
+          repository: i-am-the-slime/iris-go
+          ref: ${{ inputs.runtime-ref }}
+          path: iris-go-runtime
+          persist-credentials: false
+
+      - name: Install valgrind
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq valgrind
+
+      - name: Install pnpm and Node.js
+        uses: pnpm/setup@v3
+        with:
+          version: 12
+          runtime: node@22
+          install: false
+
+      - name: Locate pnpm store
+        id: pnpm-store
+        shell: bash
+        run: echo "path=$(pnpm store path --silent)" >> "$GITHUB_OUTPUT"
+
+      - name: Cache pnpm store
+        uses: actions/cache@v6
+        with:
+          path: ${{ steps.pnpm-store.outputs.path }}
+          key: v2-e2e-pnpm-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('tests-e2e/tools/pnpm-lock.yaml') }}
+
+      - name: Install Spago
+        run: |
+          pnpm --dir tests-e2e/tools install --frozen-lockfile
+          echo "$GITHUB_WORKSPACE/tests-e2e/tools/node_modules/.bin" >> "$GITHUB_PATH"
+
+      - name: Install Rust toolchain
+        run: rustup update stable && rustup default stable
+
+      - name: Cache build artifacts
+        uses: Swatinem/rust-cache@v2.9.3
+        with:
+          cache-bin: "false"
+          prefix-key: "v1-compile-budget"
+
+      - name: Cache Spago registry
+        uses: actions/cache@v6
+        with:
+          path: ~/.cache/spago-nodejs
+          key: v1-compile-budget-spago-${{ hashFiles('iris-go-runtime/examples/*/spago.lock', 'compiler-backend/go/benchmarks/compat/spago.lock') }}
+          restore-keys: |
+            v1-compile-budget-spago-
+
+      # Both builds share target/ and the checkout's paths, so the second one recompiles only the
+      # crates that differ.
+      - name: Build googoo at the merge base and at this commit
+        id: build
+        run: |
+          base=$(git merge-base origin/main HEAD)
+          mkdir -p "$RUNNER_TEMP/googoo"
+          git checkout --quiet "$base"
+          cargo build -p iris-cli --release --locked
+          cp target/release/googoo "$RUNNER_TEMP/googoo/base"
+          git checkout --quiet "$GITHUB_SHA"
+          cargo build -p iris-cli --release --locked
+          cp target/release/googoo "$RUNNER_TEMP/googoo/head"
+          echo "base=$base" >> "$GITHUB_OUTPUT"
+
+      # One line per compilation: program|project directory|workspace package|entry point. The
+      # first compilation of each project fetches its packages, which is not measured.
+      - name: List the programs and fetch their packages
+        run: |
+          {
+            echo "hyrule|$COMPAT|compat-corpus|Compat.Hyrule.TestSuite.main"
+            awk 'NR % 8 == 1' iris-go-runtime/examples/examples.txt | while IFS='|' read -r name entry _; do
+              echo "examples|iris-go-runtime/examples/$name||$entry"
+            done
+          } > "$RUNNER_TEMP/programs.txt"
+          while IFS='|' read -r program directory package entry; do
+            (cd "$directory" && "$RUNNER_TEMP/googoo/head" go ${package:+-p "$package"} --entry "$entry" "$RUNNER_TEMP/warm" </dev/null) >/dev/null 2>&1 \
+              || echo "$program $entry does not compile at this commit"
+          done < "$RUNNER_TEMP/programs.txt"
+          echo "$(wc -l < "$RUNNER_TEMP/programs.txt") compilations"
+
+      # Each compilation writes `build program entry instructions status` to results/. The builds
+      # never compile the same project at the same time.
+      - name: Count the instructions
+        run: |
+          measure() {
+            local build program directory package entry slug log status
+            IFS='|' read -r program directory package entry <<< "$2"
+            build=$1
+            slug="$program-$(echo "$directory-$entry" | tr '/.' '__')"
+            log="$RUNNER_TEMP/valgrind/$build-$slug.log"
+            (cd "$directory" && valgrind --tool=cachegrind --cache-sim=no --cachegrind-out-file=/dev/null \
+              --log-file="$log" "$RUNNER_TEMP/googoo/$build" go ${package:+-p "$package"} --entry "$entry" \
+              "$RUNNER_TEMP/out/$build/$slug") >/dev/null 2>&1
+            status=$?
+            echo "$build $program $entry $(sed -n 's/^==[0-9]*== I *refs: *//p' "$log" | tr -d ,) $status" \
+              > "$RUNNER_TEMP/results/$build-$slug"
+          }
+          export -f measure
+          mkdir -p "$RUNNER_TEMP/valgrind" "$RUNNER_TEMP/out" "$RUNNER_TEMP/results"
+          started=$(date +%s)
+          for build in base head; do
+            xargs -d '\n' -P "$(nproc)" -I{} bash -c 'measure "$1" "$2"' _ "$build" {} < "$RUNNER_TEMP/programs.txt"
+          done
+          cat "$RUNNER_TEMP"/results/* > "$RUNNER_TEMP/counts.txt"
+          echo "$(wc -l < "$RUNNER_TEMP/counts.txt") compilations counted in $(( $(date +%s) - started )) s"
+
+      - name: Compare with main
+        id: compare
+        env:
+          BASE: ${{ steps.build.outputs.base }}
+        run: |
+          accepted=$(git log --format=%B "$BASE..HEAD" | sed -n 's/^Compile-budget: *+\([0-9][0-9.]*\)%.*$/\1/p' | sort -g | tail -1)
+          allowance=$(printf '%s\n' "$ALLOWANCE" "$accepted" | sort -g | tail -1)
+          set +e
+          awk -v allowance="$allowance" -v base="${BASE::12}" '
+            function giga(n) { return sprintf("%.2f G", n / 1e9) }
+            function change(from, to) { return sprintf("%+.2f%%", 100 * (to - from) / from) }
+            {
+              if (!($2 in seen)) { order[++programs] = $2; seen[$2] = 1 }
+              count[$1, $2] += $4; total[$1] += $4; compilations[$1, $2]++
+              if ($5 != 0) failed[$1, $2]++
+            }
+            END {
+              names["dhall"] = "Dhall (`Compat.Dhall.Eval`, vendored dhall)"
+              names["hyrule"] = "hyrule test suite (`Compat.Hyrule.TestSuite`)"
+              names["examples"] = "iris-go examples"
+              for (i = 1; i <= programs; i++) {
+                p = order[i]
+                note = compilations["head", p] > 1 ? " (" compilations["head", p] " programs)" : ""
+                if (failed["base", p] + failed["head", p] > 0)
+                  note = note ", failed to compile: " failed["base", p] + 0 " on main, " failed["head", p] + 0 " here"
+                printf "| %s%s | %s | %s | %s |\n", names[p], note, giga(count["base", p]), giga(count["head", p]), change(count["base", p], count["head", p]) > "table.md"
+              }
+              growth = 100 * (total["head"] - total["base"]) / total["base"]
+              printf "| **Total** | %s | %s | %s |\n", giga(total["base"]), giga(total["head"]), change(total["base"], total["head"]) > "table.md"
+              printf "%s → %s instructions (%s against main `%s`, allowed +%s%%)\n", giga(total["base"]), giga(total["head"]), change(total["base"], total["head"]), base, allowance > "summary.txt"
+              exit (growth > allowance + 0)
+            }' "$RUNNER_TEMP/counts.txt"
+          status=$?
+          set -e
+          {
+            echo "## Compile budget"
+            echo
+            echo "Instructions executed by \`googoo go\` (cachegrind), main's merge base \`${BASE::12}\` against this commit."
+            echo
+            echo "| Program | main | this commit | change |"
+            echo "|---|---|---|---|"
+            cat table.md
+            echo
+            cat summary.txt
+          } >> "$GITHUB_STEP_SUMMARY"
+          echo "summary=$(cat summary.txt)" >> "$GITHUB_OUTPUT"
+          { echo "table<<TABLE"; cat table.md; echo "TABLE"; } >> "$GITHUB_OUTPUT"
+          exit "$status"
+
+      - name: Upload the counts
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: compile-budget
+          path: ${{ runner.temp }}/counts.txt
+          if-no-files-found: warn
+          retention-days: 30

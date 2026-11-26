@@ -76,9 +76,16 @@ jobs:
     with:
       runtime-ref: ${{ needs.runtime.outputs.ref }}
 
+  budget:
+    name: Compile budget
+    needs: runtime
+    uses: ./.github/workflows/compile-budget.yml
+    with:
+      runtime-ref: ${{ needs.runtime.outputs.ref }}
+
   summary:
     name: Summary
-    needs: [runtime, integration, examples, e2e, sweep]
+    needs: [runtime, integration, examples, e2e, sweep, budget]
     if: always()
     runs-on: ubuntu-latest
     permissions:
@@ -94,6 +101,9 @@ jobs:
           E2E: ${{ needs.e2e.result }}
           SWEEP: ${{ needs.sweep.result }}
           SWEEP_DETAIL: ${{ needs.sweep.outputs.summary }}
+          BUDGET: ${{ needs.budget.result }}
+          BUDGET_DETAIL: ${{ needs.budget.outputs.summary }}
+          BUDGET_TABLE: ${{ needs.budget.outputs.table }}
         run: |
           started=$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID" -q .run_started_at)
           minutes=$(( ($(date +%s) - $(date -d "$started" +%s)) / 60 ))
@@ -107,9 +117,14 @@ jobs:
             echo "| iris-go examples vs JavaScript | $(mark "$EXAMPLES") | $EXAMPLES_DETAIL |"
             echo "| End-to-end tests | $(mark "$E2E") | |"
             echo "| Registry sweep vs baseline (4 shards x 3 parts) | $(mark "$SWEEP") | $SWEEP_DETAIL |"
+            echo "| Compile budget vs main (instructions) | $(mark "$BUDGET") | $BUDGET_DETAIL |"
+            echo
+            echo "| Compile budget | main | this commit | change |"
+            echo "|---|---|---|---|"
+            echo "$BUDGET_TABLE"
             echo
             echo "Wall time so far: $minutes min."
           } >> "$GITHUB_STEP_SUMMARY"
-          for result in "$INTEGRATION" "$EXAMPLES" "$E2E" "$SWEEP"; do
+          for result in "$INTEGRATION" "$EXAMPLES" "$E2E" "$SWEEP" "$BUDGET"; do
             [ "$result" = success ] || exit 1
           done
