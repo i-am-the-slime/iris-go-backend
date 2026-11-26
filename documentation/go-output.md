@@ -279,6 +279,58 @@ uses is not compiled, so an `unsafePerformEffect` in it never runs. In JavaScrip
 module loads. Top-level values that the program does use are evaluated when the program loads, as
 in JavaScript.
 
+### Pure code can move past effects
+
+Pure code has no effects, so the Go backend is free to compute it wherever it likes, and it does:
+it moves a pure value to where it's first needed, which can be after an effect that comes before
+it in your `do` block. That's usually what you want, but it bites timing code. This `timed`
+measures nothing:
+
+```purescript
+timed :: forall a. String -> a -> Effect a
+timed label work = do
+  start <- now
+  let result = work
+  end <- now
+  log (label <> " " <> show (un Milliseconds (unInstant end) - un Milliseconds (unInstant start)))
+  pure result
+
+main :: Effect Unit
+main = do
+  total <- timed "sum" (sum (1 .. 10000000))
+  log (show total)
+```
+
+On Go the sum runs after the second `now`, right before `log (show total)` needs it, so `timed`
+prints `sum 0.0`. On JavaScript it's measured wrong too, the other way round: the argument is
+computed before `timed` even starts, so it's never between the two clocks either.
+
+Passing the work as a function `Unit -> a` and calling it between the clocks isn't enough on its
+own: once `timed` is inlined, the call is just pure code again, and it moves the same way. What
+stops the move is an effect that needs the value. Hand it to one, like this `evaluate`, which puts
+it in a `Ref` and reads it back (on Go the `Ref` is optimised away, and only the order stays):
+
+```purescript
+evaluate :: forall a. a -> Effect a
+evaluate value = Ref.new value >>= Ref.read
+
+timed :: forall a. String -> (Unit -> a) -> Effect a
+timed label work = do
+  start <- now
+  result <- evaluate (work unit)
+  end <- now
+  log (label <> " " <> show (un Milliseconds (unInstant end) - un Milliseconds (unInstant start)))
+  pure result
+
+main :: Effect Unit
+main = do
+  total <- timed "sum" \_ -> sum (1 .. 10000000)
+  log (show total)
+```
+
+Now both backends time the sum: the thunk keeps JavaScript from computing it before `timed` starts,
+and `evaluate` keeps Go from computing it after `timed` is done.
+
 ### Array length
 
 An array holds at most 2147483647 elements, since its `length` is an `Int`. Growing one past that,
@@ -650,8 +702,10 @@ starts `cannot specialize <definition>:`. The JavaScript backend compiles them.
 ### Polymorphic recursion
 
 Polymorphic recursion that only changes the types of plain values compiles. Some recursion that
-also grows the type class evidence it passes compiles too, using run-time dictionaries. These cases
-do not compile yet:
+also grows the type class evidence it passes compiles too, using run-time dictionaries. So do
+functions that turn a run-time number into a type-level one, like `reifyPrecision` from
+fixed-precision and `reifyInt` from typelevel: the continuation you give them takes its dictionary
+at run time, and the compiler prints a note saying so. These cases do not compile yet:
 
 - recursion through an instance member, such as a derived `Show` on a nested data type. The compiler
   reports `specialization exceeded <limit> instances`;
@@ -660,11 +714,46 @@ do not compile yet:
 
 ### `unsafeCoerce` between unrelated types
 
-Each type has its own Go representation, so `unsafeCoerce` between two types with different
-representations does not compile. The message is
-`representation changes between unrelated types is not supported by the Go backend yet`.
-`unsafeCoerce` between a newtype and the type it wraps, and between types with the same
-representation, compiles.
+Each type has its own Go representation, so most `unsafeCoerce`s between two types with different
+representations don't compile. The message looks like
+`unsafeCoerce from { line, column } (Go ColumnLine) to Data.Argonaut.Core.Json (Go argonaut.Json) changes representation`,
+often followed by why and what to do instead.
+
+These compile:
+
+- between a newtype and the type it wraps, and between types with the same representation;
+- a record to `Foreign`, and a record to a `Foreign.Object` and back, the way
+  `Data.Homogeneous.Record` does it: Go copies the fields across by name;
+- `unsafeCoerce unit` to any type, the usual trick for a value nobody looks at (see below).
+
+These don't:
+
+- a record to `Json`. On JavaScript a record already is a JSON object, on Go it's a struct. Build
+  the `Json` with `encodeJson` or `fromObject` instead;
+- a value typed `Unit` (or kept as `Void`) that's coerced back to a type with a value, like a
+  function `a -> m b` stored as `a -> m Unit`. Go keeps no value for `Unit`, so the original value is
+  gone by then. Keep its real type instead.
+
+#### `unsafeCoerce unit`
+
+On JavaScript `unsafeCoerce unit` is `undefined`. On Go it's the Go zero value of the type you
+coerce it to, so code that does look at it gets a different answer:
+
+```purescript
+nothingInParticular :: forall a. a
+nothingInParticular = unsafeCoerce unit
+```
+
+| Expression | Go | JavaScript |
+|---|---|---|
+| `show ((nothingInParticular :: Number) + 1.0)` | `1.0` | `NaN` |
+| `show ((nothingInParticular :: Int) + 1)` | `1` | `0` |
+| `show (nothingInParticular :: String)` | `""` | crashes |
+| `show (nothingInParticular :: Boolean)` | `false` | crashes |
+| `show (length (nothingInParticular :: Array Int))` | `0` | crashes |
+
+A data type, a record of pointers or a function becomes Go's `nil`. That's fine as long as nothing
+looks inside it, which is what the trick is for: typelevel's `undefined` values, for instance, work.
 
 ### Other constructs
 
