@@ -1,5 +1,6 @@
 ---
 source: tests-integration/src/fixtures.rs
+assertion_line: 571
 ---
 // Data/Semiring/semiring.go
 package semiring
@@ -77,10 +78,7 @@ func initializeMain_() []string {
 	mapped := make([]string, len(array))
 	for index, x := range array {
 		a := x * x
-		partial := func(b int32) int32 {
-			return mainOp(a, b)
-		}
-		mapped[index] = show.ArrayInt([]int32{mainOp(1, 2), partial(3), partial(4)})
+		mapped[index] = show.ArrayInt([]int32{12, a*10 + 3, a*10 + 4})
 	}
 	array2 := []func(int32) func(string) string{prepared, func(a int32) func(string) string {
 		return func(b string) string {
@@ -131,10 +129,6 @@ func zeroC(ignored func(int32) int32, x int32) int32 {
 
 func repeat(n int32) string {
 	return string(appendRepeat(nil, n))
-}
-
-func mainOp(a int32, b int32) int32 {
-	return a*10 + b
 }
 
 func appendRepeat(buffer []byte, n int32) []byte {

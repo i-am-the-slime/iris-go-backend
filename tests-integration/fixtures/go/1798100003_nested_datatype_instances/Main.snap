@@ -1,5 +1,6 @@
 ---
 source: tests-integration/src/fixtures.rs
+assertion_line: 571
 ---
 // Data/Eq/eq.go
 package eq
@@ -255,7 +256,7 @@ func initializeMain_() []string {
 	var result6 string
 	switch deep.Tag {
 	case NestedFlat:
-		result6 = "Flat " + strconv.Itoa(int(mainChange(deep.Flat.(int32))))
+		result6 = "Flat " + strconv.Itoa(int(deep.Flat.(int32)*10))
 	default: // NestedNest
 		text := []byte("Nest (")
 		original := func(fa *Nested) func(func(any) any) *Nested {
@@ -580,10 +581,6 @@ func compareOrdDictionaryEq0Flat(eq func(any) func(any) bool, compare func(any) 
 	default:
 		return dataordering.OrderingGT
 	}
-}
-
-func mainChange(value int32) int32 {
-	return value * 10
 }
 
 func appendShowShowDictionary(buffer []byte, show func(any) string, nested *Nested) []byte {

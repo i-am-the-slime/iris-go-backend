@@ -1,11 +1,11 @@
 ---
 source: tests-integration/src/fixtures.rs
+assertion_line: 571
 ---
 // main.go
 package main
 
 import (
-	"github.com/i-am-the-slime/iris-go/array"
 	"github.com/i-am-the-slime/iris-go/console"
 	"github.com/i-am-the-slime/iris-go/prim"
 	"strconv"
@@ -61,21 +61,13 @@ var main_ = initializeMain_()
 
 func initializeMain_() []string {
 	return []string{prim.ShowNumber(foldAdd(0.0, func(ignored2 struct{}) StepNumber {
-		return mapChunksChangeNumber(func(value float64) float64 {
-			return value * 1.5
-		}, func(ignored3 struct{}) StepNumber {
-			return mapChunksChangeInt(func(i int32) float64 {
-				return float64(i)
-			}, func(ignored struct{}) StepInt {
+		return mapChunksChangeFNumber(func(ignored3 struct{}) StepNumber {
+			return mapChunksChangeFInt(func(ignored struct{}) StepInt {
 				return range_(0, 10, ignored)
 			}, ignored3)
 		}, ignored2)
-	})), fold(func(text string, tick string) string {
-		return prim.Concat(text, tick, ";")
-	}, "", func(ignored struct{}) StepString {
-		return mapChunksChangeString(func(value string) string {
-			return "tick " + value
-		}, func(ignored2 struct{}) StepString {
+	})), foldStep("", func(ignored struct{}) StepString {
+		return mapChunksChangeFString(func(ignored2 struct{}) StepString {
 			return mapChunksChangeShow(func(ignored3 struct{}) StepInt {
 				return range_(0, 4, ignored3)
 			}, ignored2)
@@ -93,51 +85,30 @@ func range_(from int32, to int32, ignored struct{}) StepInt {
 	})
 }
 
-func fold(step func(string, string) string, initial string, run func(struct{}) StepString) string {
-	for {
-		scrutinee := run(struct{}{})
-		switch scrutinee.Tag {
-		case StepStringDone:
-			return initial
-		default: // StepStringEmit
-			initial, run = array.Foldl(step, initial, scrutinee.Emit0), scrutinee.Emit1
-			continue
-		}
-	}
-}
-
-func mapChunksChangeNumber(f func(float64) float64, pull func(struct{}) StepNumber, ignored struct{}) StepNumber {
-	scrutinee := pull(struct{}{})
-	switch scrutinee.Tag {
-	case StepNumberDone:
-		return StepNumber{Tag: StepNumberDone}
-	default: // StepNumberEmit
-		return EmitStepNumber(array.Map(f, scrutinee.Emit0), func(ignored2 struct{}) StepNumber {
-			return mapChunksChangeNumber(f, scrutinee.Emit1, ignored2)
-		})
-	}
-}
-
-func mapChunksChangeInt(f func(int32) float64, pull func(struct{}) StepInt, ignored struct{}) StepNumber {
+func mapChunksChangeFInt(pull func(struct{}) StepInt, ignored struct{}) StepNumber {
 	scrutinee := pull(struct{}{})
 	switch scrutinee.Tag {
 	case StepIntDone:
 		return StepNumber{Tag: StepNumberDone}
 	default: // StepIntEmit
-		return EmitStepNumber(array.Map(f, scrutinee.Emit0), func(ignored2 struct{}) StepNumber {
-			return mapChunksChangeInt(f, scrutinee.Emit1, ignored2)
+		mapped := make([]float64, len(scrutinee.Emit0))
+		for index, i := range scrutinee.Emit0 {
+			mapped[index] = float64(i)
+		}
+		return EmitStepNumber(mapped, func(ignored2 struct{}) StepNumber {
+			return mapChunksChangeFInt(scrutinee.Emit1, ignored2)
 		})
 	}
 }
 
-func mapChunksChangeString(f func(string) string, pull func(struct{}) StepString, ignored struct{}) StepString {
+func mapChunksChangeFNumber(pull func(struct{}) StepNumber, ignored struct{}) StepNumber {
 	scrutinee := pull(struct{}{})
 	switch scrutinee.Tag {
-	case StepStringDone:
-		return StepString{Tag: StepStringDone}
-	default: // StepStringEmit
-		return EmitStepString(array.Map(f, scrutinee.Emit0), func(ignored2 struct{}) StepString {
-			return mapChunksChangeString(f, scrutinee.Emit1, ignored2)
+	case StepNumberDone:
+		return StepNumber{Tag: StepNumberDone}
+	default: // StepNumberEmit
+		return EmitStepNumber(mapLanes(scrutinee.Emit0), func(ignored2 struct{}) StepNumber {
+			return mapChunksChangeFNumber(scrutinee.Emit1, ignored2)
 		})
 	}
 }
@@ -168,6 +139,41 @@ func mapChunksChangeShow(pull func(struct{}) StepInt, ignored struct{}) StepStri
 		return EmitStepString(mapped, func(ignored2 struct{}) StepString {
 			return mapChunksChangeShow(scrutinee.Emit1, ignored2)
 		})
+	}
+}
+
+func mapChunksChangeFString(pull func(struct{}) StepString, ignored struct{}) StepString {
+	scrutinee := pull(struct{}{})
+	switch scrutinee.Tag {
+	case StepStringDone:
+		return StepString{Tag: StepStringDone}
+	default: // StepStringEmit
+		mapped := make([]string, len(scrutinee.Emit0))
+		for index, value := range scrutinee.Emit0 {
+			mapped[index] = "tick " + value
+		}
+		return EmitStepString(mapped, func(ignored2 struct{}) StepString {
+			return mapChunksChangeFString(scrutinee.Emit1, ignored2)
+		})
+	}
+}
+
+func foldStep(initial string, run func(struct{}) StepString) string {
+	for {
+		scrutinee := run(struct{}{})
+		switch scrutinee.Tag {
+		case StepStringDone:
+			return initial
+		default: // StepStringEmit
+			accumulator := []byte(initial)
+			for _, tick := range scrutinee.Emit0 {
+				accumulator = prim.AppendString(accumulator, tick)
+				accumulator = append(accumulator, ';')
+			}
+			built := string(accumulator)
+			initial, run = built, scrutinee.Emit1
+			continue
+		}
 	}
 }
 
@@ -214,6 +220,22 @@ func foldLanes(xs []float64, initial float64) float64 {
 	return accumulator
 }
 
+func mapLanes(xs []float64) []float64 {
+	c0 := archsimd.BroadcastFloat64x2(1.5)
+	out := make([]float64, len(xs))
+	const step = 2
+	i := 0
+	for ; i < len(xs)-step+1; i += step {
+		x := archsimd.LoadFloat64x2(xs[i : i+step])
+		x.Mul(c0).Store(out[i : i+step])
+	}
+	if i < len(xs) {
+		x, _ := archsimd.LoadFloat64x2Part(xs[i:])
+		x.Mul(c0).StorePart(out[i:])
+	}
+	return out
+}
+
 // main_scalar.go
 //go:build !(goexperiment.simd && (arm64 || wasm))
 
@@ -225,6 +247,14 @@ func foldLanes(xs []float64, initial float64) float64 {
 		accumulator = accumulator + x
 	}
 	return accumulator
+}
+
+func mapLanes(xs []float64) []float64 {
+	out := make([]float64, len(xs))
+	for i, x := range xs {
+		out[i] = x * 1.5
+	}
+	return out
 }
 
 // main_vector.go
@@ -264,4 +294,20 @@ func foldLanes(xs []float64, initial float64) float64 {
 		accumulator = accumulator + x
 	}
 	return accumulator
+}
+
+func mapLanes(xs []float64) []float64 {
+	c0 := simd.BroadcastFloat64s(1.5)
+	out := make([]float64, len(xs))
+	step := simd.Float64s{}.Len()
+	i := 0
+	for ; i < len(xs)-step+1; i += step {
+		x := simd.LoadFloat64s(xs[i : i+step])
+		x.Mul(c0).Store(out[i : i+step])
+	}
+	if i < len(xs) {
+		x, _ := simd.LoadFloat64sPart(xs[i:])
+		x.Mul(c0).StorePart(out[i:])
+	}
+	return out
 }

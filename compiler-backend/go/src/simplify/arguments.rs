@@ -2,6 +2,7 @@ use rustc_hash::FxHashMap;
 use smol_str::{SmolStr, format_smolstr};
 
 use super::{INLINE_FUEL, INLINE_SIZE, Simplifier};
+use crate::foreign::Foreign;
 use crate::lift::collect_binders;
 use crate::monomorphic::traversal::{
     for_each_binder_mut, for_each_child, for_each_child_mut, visit,
@@ -543,6 +544,18 @@ fn parameter_uses(
                 uses.occurrences += 1;
             }
             _ if callee.is(expression) => uses.passed_on_unchanged = false,
+            ExpressionKind::Foreign { foreign: Foreign::Call { boundary, .. }, arguments }
+                if boundary.iteration.is_some() && arguments.iter().any(is_parameter) =>
+            {
+                for argument in arguments {
+                    if is_parameter(argument) {
+                        uses.occurs = true;
+                        uses.occurrences += 1;
+                    } else {
+                        walk(argument, callee, index, parameter, uses);
+                    }
+                }
+            }
             ExpressionKind::Apply { function, arguments } if is_parameter(function) => {
                 uses.occurs = true;
                 uses.occurrences += 1;
@@ -601,7 +614,7 @@ fn number_locals(expression: &mut Expression, slots: &mut FxHashMap<LocalId, Loc
     for_each_child_mut(expression, &mut |child| number_locals(child, slots));
 }
 
-fn free_locals(argument: &Expression) -> Vec<Expression> {
+pub(super) fn free_locals(argument: &Expression) -> Vec<Expression> {
     let mut bound = FxHashMap::default();
     collect_binders(argument, &mut bound);
     let mut seen = vec![];

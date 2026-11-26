@@ -1177,7 +1177,9 @@ impl Simplifier<'_> {
             let built_in_place = uses.total == 1
                 && matches!(&body.kind, ExpressionKind::EffectBind { action, .. }
                     if matches!(action.kind, ExpressionKind::Local(id) if id == binding.local.id));
-            if self.is_small_applied_lambda(&binding, &body) {
+            if self.is_small_applied_lambda(&binding, &body)
+                || self.is_closed_tiny_lambda(&binding.value)
+            {
                 body = self.inline_applied(body, &binding);
                 body = self.expression(body);
             } else if substitutable && (built_in_place || !runs_effect(self, &binding.value)) {
@@ -1295,6 +1297,19 @@ impl Simplifier<'_> {
             && !can_fail(&binding.value)
             && !runs_any_effect(&binding.value)
             && only_called(body, binding.local.id, parameters.len())
+    }
+
+    /// A tiny lambda that captures nothing, such as a `where` helper `square n = n * n`, is
+    /// copied wherever it is used, also where it is passed on: a function that takes it then
+    /// sees which function it is, and is specialized for it.
+    fn is_closed_tiny_lambda(&self, value: &Expression) -> bool {
+        matches!(value.kind, ExpressionKind::Lambda { .. })
+            && self.fuel > 0
+            && is_within_size(value, TINY_HELPER)
+            && only_computes(value)
+            && !can_fail(value)
+            && !runs_any_effect(value)
+            && arguments::free_locals(value).is_empty()
     }
 
     /// The body with each call of the binding's lambda given a copy of the lambda with fresh
