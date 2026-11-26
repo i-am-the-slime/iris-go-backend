@@ -614,5 +614,12 @@ where
     let prim = context.module(context.queries.prim_id())?;
     let pretty = checking::core::pretty::Pretty::new(context.queries, &prim.checked);
     let rendered = pretty.render(type_id)?.to_string();
-    Ok(UnsupportedState::OpenType { rendered }.into())
+    let stripped = context.types.strip_annotations(type_id);
+    let hint = match context.types.lookup(stripped) {
+        checking::core::Type::Unification(_) => {
+            ": the checker left it unsolved because nothing in the program fixes it, as with a value passed between unsafeCoerce or Record.Unsafe calls whose types are free; annotate that value with its type"
+        }
+        _ => "",
+    };
+    Ok(UnsupportedState::OpenType { rendered, hint }.into())
 }

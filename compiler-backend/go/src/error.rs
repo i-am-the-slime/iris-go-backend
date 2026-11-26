@@ -69,8 +69,8 @@ pub enum UnsupportedState {
     MissingSuperclass { superclass: String },
     #[error("type variable {variable} has no instantiation at this use")]
     UninstantiatedVariable { variable: String },
-    #[error("type {rendered} has no closed representation")]
-    OpenType { rendered: String },
+    #[error("type {rendered} has no closed representation{hint}")]
+    OpenType { rendered: String, hint: &'static str },
     #[error("type constructor {name} is applied to too few arguments")]
     UnsaturatedType { name: String },
     #[error("specialization exceeded {limit} instances; polymorphic recursion is not supported")]

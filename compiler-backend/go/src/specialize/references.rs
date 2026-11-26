@@ -318,7 +318,7 @@ where
         let result = self.monotypes.result_after(monotype, 1);
         let Monotype::Data(data) = self.monotypes.get(result).clone() else {
             let rendered = format!("reflected {name}");
-            return Err(self.unsupported(scope, UnsupportedState::OpenType { rendered }));
+            return Err(self.unsupported(scope, UnsupportedState::OpenType { rendered, hint: "" }));
         };
         let constructors = self.monotypes.constructors(&mut self.context, &data);
         let constructors = constructors.map_err(|failure| failure.at(&scope.definition))?;
@@ -365,7 +365,7 @@ where
         let Monotype::Data(data) = self.monotypes.get(result).clone() else {
             return Err(self.unsupported(
                 scope,
-                UnsupportedState::OpenType { rendered: "constructor".into() },
+                UnsupportedState::OpenType { rendered: "constructor".into(), hint: "" },
             ));
         };
         let constructors = self

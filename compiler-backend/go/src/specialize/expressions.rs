@@ -318,8 +318,10 @@ where
         {
             return Ok(field.monotype);
         }
-        Err(self
-            .unsupported(scope, UnsupportedState::OpenType { rendered: format!("{{ {label} }}") }))
+        Err(self.unsupported(
+            scope,
+            UnsupportedState::OpenType { rendered: format!("{{ {label} }}"), hint: "" },
+        ))
     }
 
     fn record_updates(

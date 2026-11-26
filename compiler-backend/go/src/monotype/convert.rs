@@ -271,7 +271,7 @@ impl Monotypes {
                     Some(crate::primitives::Signedness::Signed) => Monotype::Int64,
                     Some(crate::primitives::Signedness::Unsigned) => Monotype::UInt64,
                     None => {
-                        let Failure::Unsupported(UnsupportedState::OpenType { rendered }) =
+                        let Failure::Unsupported(UnsupportedState::OpenType { rendered, .. }) =
                             open_type(context, phantom)?
                         else {
                             unreachable!("invariant violated: open_type reports an open type")
