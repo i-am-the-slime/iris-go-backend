@@ -20,5 +20,9 @@ Flags:
       --main <MODULE>        Module containing the program entry point.
       --go                   Compile to Go and run the executable instead of Node.js. Needs Go 1.27 or later.
       --entry <MODULE.NAME>  Qualified entry point for --go, such as Main.main. Defaults to main in --main's module.
+      --pgo <PROFILE>        Optimise the executable for this CPU profile (go build -pgo), or `off` to leave out the one
+                             --profile recorded.
+      --profile              Run the program once while recording a CPU profile, keep it in .spago/go/<package>/
+                             default.pgo and build again optimised for it. Later builds use it until --pgo off.
   -h, --help                 Print help
 --- stderr

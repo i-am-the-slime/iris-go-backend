@@ -5,11 +5,12 @@ status: 0
 --- stdout
 Compile a Spago workspace from an entry point to a single Go program.
 
-Usage: googoo go [FLAGS] [DIR]
+Usage: googoo go [FLAGS] [DIR] [-- ARGUMENTS]…
 
 Arguments:
-  [DIR]  Directory to write main.go to. Without one, builds the executable that `googoo run --go` runs and prints its
-         path.
+  [DIR]            Directory to write main.go to. Without one, builds the executable that `googoo run --go` runs and
+                   prints its path.
+  [-- ARGUMENTS]…  Arguments for the --profile run. Defaults to run.execArgs.
 
 Flags:
   -p, --package <NAME>           Workspace package to compile.
@@ -20,5 +21,9 @@ Flags:
       --line-directives <WHICH>  Which Go lines name their .purs line: `every` puts a //line comment in front of each
                                  statement and declaration, for tools that show each Go line next to its PureScript.
                                  [possible values: sparse, every]
+      --pgo <PROFILE>            Optimise the executable for this CPU profile (go build -pgo), or `off` to leave out the
+                                 one --profile recorded.
+      --profile                  Run the program once while recording a CPU profile, keep it in .spago/go/<package>/
+                                 default.pgo and build again optimised for it. Later builds use it until --pgo off.
   -h, --help                     Print help
 --- stderr
