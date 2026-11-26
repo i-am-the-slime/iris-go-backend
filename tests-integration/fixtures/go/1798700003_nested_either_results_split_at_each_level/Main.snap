@@ -132,82 +132,39 @@ func main() {
 		result3 = "(Right " + strconv.Itoa(int(i6)) + ")"
 	}
 	journal.Log(result3)
-	i7, err2 := stepInline(8)
+	journal.Log("(Right 3)")
+	journal.Log("(Right 56)")
+	journal.Log("(Left " + prim.ShowString("negative -1") + ")")
+	journal.Log("passing on 41")
+	i7, err, err2 := classify(42)
 	var result4 string
 	if err2.Failed {
 		result4 = "(Left " + prim.ShowString(err2.Left) + ")"
 	} else {
-		result4 = "(Right " + strconv.Itoa(int(i7)) + ")"
+		var result5 string
+		if err.Failed {
+			result5 = "(Left " + strconv.Itoa(int(err.Left)) + ")"
+		} else {
+			result5 = "(Right " + strconv.Itoa(int(i7)) + ")"
+		}
+		result4 = "(Right " + result5 + ")"
 	}
 	journal.Log(result4)
-	i8, err2 := stepInline(9)
-	var result5 string
-	if err2.Failed {
-		result5 = "(Left " + prim.ShowString(err2.Left) + ")"
-	} else {
-		result5 = "(Right " + strconv.Itoa(int(i8)) + ")"
-	}
-	journal.Log(result5)
-	i9, err2 := stepInline(-1)
+	journal.Log("passing on -3")
+	i8, err, err2 := classify(-2)
 	var result6 string
 	if err2.Failed {
 		result6 = "(Left " + prim.ShowString(err2.Left) + ")"
 	} else {
-		result6 = "(Right " + strconv.Itoa(int(i9)) + ")"
+		var result5 string
+		if err.Failed {
+			result5 = "(Left " + strconv.Itoa(int(err.Left)) + ")"
+		} else {
+			result5 = "(Right " + strconv.Itoa(int(i8)) + ")"
+		}
+		result6 = "(Right " + result5 + ")"
 	}
 	journal.Log(result6)
-	journal.Log("passing on 41")
-	i10, err, err2 := classify(42)
-	var result7 string
-	if err2.Failed {
-		result7 = "(Left " + prim.ShowString(err2.Left) + ")"
-	} else {
-		var result8 string
-		if err.Failed {
-			result8 = "(Left " + strconv.Itoa(int(err.Left)) + ")"
-		} else {
-			result8 = "(Right " + strconv.Itoa(int(i10)) + ")"
-		}
-		result7 = "(Right " + result8 + ")"
-	}
-	journal.Log(result7)
-	journal.Log("passing on -3")
-	i11, err, err2 := classify(-2)
-	var result9 string
-	if err2.Failed {
-		result9 = "(Left " + prim.ShowString(err2.Left) + ")"
-	} else {
-		var result8 string
-		if err.Failed {
-			result8 = "(Left " + strconv.Itoa(int(err.Left)) + ")"
-		} else {
-			result8 = "(Right " + strconv.Itoa(int(i11)) + ")"
-		}
-		result9 = "(Right " + result8 + ")"
-	}
-	journal.Log(result9)
-}
-
-func stepInline(n int32) (int32, either.StringFailure) {
-	var i int32
-	var err either.IntFailure
-	var err2 either.StringFailure
-	if n < 0 {
-		err2 = either.StringFailure{Failed: true, Left: "negative " + strconv.Itoa(int(n))}
-	} else if n%2 == 0 {
-		err = either.IntFailure{Failed: true, Left: n / 2}
-		err2 = either.StringFailure{}
-	} else {
-		i, err = n*3+1, either.IntFailure{}
-		err2 = either.StringFailure{}
-	}
-	if err2.Failed {
-		return 0, err2
-	}
-	if err.Failed {
-		return err.Left-1, either.StringFailure{}
-	}
-	return i*2, either.StringFailure{}
 }
 
 func classify(n int32) (int32, either.IntFailure, either.StringFailure) {

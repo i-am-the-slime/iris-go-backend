@@ -68,9 +68,9 @@ const (
 )
 
 type Unvariant_ struct {
-	IntRecordCaptionCircle    func(proxy.Proxy, int32) CaptionCircleSquare
-	NumberRecordCaptionSquare func(proxy.Proxy, float64) CaptionCircleSquare
-	StringRecordCircleSquare  func(proxy.Proxy, string) CaptionCircleSquare
+	ForIntRecordCaptionCircle    func(proxy.Proxy, int32) CaptionCircleSquare
+	ForNumberRecordCaptionSquare func(proxy.Proxy, float64) CaptionCircleSquare
+	ForStringRecordCircleSquare  func(proxy.Proxy, string) CaptionCircleSquare
 }
 
 type Unvariant struct {
@@ -101,15 +101,15 @@ const (
 )
 
 type Unvariant_CaptionCircleSquareInt struct {
-	IntRecordCaptionCircle    func(Proxy, int32) int32
-	NumberRecordCaptionSquare func(Proxy, float64) int32
-	StringRecordCircleSquare  func(Proxy, string) int32
+	ForIntRecordCaptionCircle    func(Proxy, int32) int32
+	ForNumberRecordCaptionSquare func(Proxy, float64) int32
+	ForStringRecordCircleSquare  func(Proxy, string) int32
 }
 
 type Unvariant_CaptionCircleSquareString struct {
-	IntRecordCaptionCircle    func(Proxy, int32) string
-	NumberRecordCaptionSquare func(Proxy, float64) string
-	StringRecordCircleSquare  func(Proxy, string) string
+	ForIntRecordCaptionCircle    func(Proxy, int32) string
+	ForNumberRecordCaptionSquare func(Proxy, float64) string
+	ForStringRecordCircleSquare  func(Proxy, string) string
 }
 
 // main.go
@@ -163,36 +163,36 @@ func labelOf(variant2 variant.CaptionCircleSquare) string {
 	case variant.CaptionCircleSquareCaption:
 		s := variant2.Caption
 		run = variant.Unvariant{ForInt: func(continuation proxy.Unvariant_CaptionCircleSquareInt) int32 {
-			return continuation.StringRecordCircleSquare(proxy.ProxyProxy, s)
+			return continuation.ForStringRecordCircleSquare(proxy.ProxyProxy, s)
 		}, ForString: func(continuation proxy.Unvariant_CaptionCircleSquareString) string {
-			return continuation.StringRecordCircleSquare(proxy.ProxyProxy, s)
+			return continuation.ForStringRecordCircleSquare(proxy.ProxyProxy, s)
 		}, ForVariantRecordCaptionCircleSquare: func(continuation variant.Unvariant_) variant.CaptionCircleSquare {
-			return continuation.StringRecordCircleSquare(proxy.ProxyProxy, s)
+			return continuation.ForStringRecordCircleSquare(proxy.ProxyProxy, s)
 		}}
 	case variant.CaptionCircleSquareCircle:
 		number := variant2.Circle
 		run = variant.Unvariant{ForInt: func(continuation proxy.Unvariant_CaptionCircleSquareInt) int32 {
-			return continuation.NumberRecordCaptionSquare(proxy.ProxyProxy, number)
+			return continuation.ForNumberRecordCaptionSquare(proxy.ProxyProxy, number)
 		}, ForString: func(continuation proxy.Unvariant_CaptionCircleSquareString) string {
-			return continuation.NumberRecordCaptionSquare(proxy.ProxyProxy, number)
+			return continuation.ForNumberRecordCaptionSquare(proxy.ProxyProxy, number)
 		}, ForVariantRecordCaptionCircleSquare: func(continuation variant.Unvariant_) variant.CaptionCircleSquare {
-			return continuation.NumberRecordCaptionSquare(proxy.ProxyProxy, number)
+			return continuation.ForNumberRecordCaptionSquare(proxy.ProxyProxy, number)
 		}}
 	default: // variant.CaptionCircleSquareSquare
 		i := variant2.Square
 		run = variant.Unvariant{ForInt: func(continuation proxy.Unvariant_CaptionCircleSquareInt) int32 {
-			return continuation.IntRecordCaptionCircle(proxy.ProxyProxy, i)
+			return continuation.ForIntRecordCaptionCircle(proxy.ProxyProxy, i)
 		}, ForString: func(continuation proxy.Unvariant_CaptionCircleSquareString) string {
-			return continuation.IntRecordCaptionCircle(proxy.ProxyProxy, i)
+			return continuation.ForIntRecordCaptionCircle(proxy.ProxyProxy, i)
 		}, ForVariantRecordCaptionCircleSquare: func(continuation variant.Unvariant_) variant.CaptionCircleSquare {
-			return continuation.IntRecordCaptionCircle(proxy.ProxyProxy, i)
+			return continuation.ForIntRecordCaptionCircle(proxy.ProxyProxy, i)
 		}}
 	}
-	return run.ForString(proxy.Unvariant_CaptionCircleSquareString{IntRecordCaptionCircle: func(_ proxy.Proxy, _ int32) string {
+	return run.ForString(proxy.Unvariant_CaptionCircleSquareString{ForIntRecordCaptionCircle: func(_ proxy.Proxy, _ int32) string {
 		return "square"
-	}, NumberRecordCaptionSquare: func(_ proxy.Proxy, _ float64) string {
+	}, ForNumberRecordCaptionSquare: func(_ proxy.Proxy, _ float64) string {
 		return "circle"
-	}, StringRecordCircleSquare: func(_ proxy.Proxy, _ string) string {
+	}, ForStringRecordCircleSquare: func(_ proxy.Proxy, _ string) string {
 		return "caption"
 	}})
 }
@@ -205,36 +205,36 @@ func labelLength(variant2 variant.CaptionCircleSquare) int32 {
 	case variant.CaptionCircleSquareCaption:
 		s := variant2.Caption
 		run = variant.Unvariant{ForInt: func(continuation proxy.Unvariant_CaptionCircleSquareInt) int32 {
-			return continuation.StringRecordCircleSquare(proxy.ProxyProxy, s)
+			return continuation.ForStringRecordCircleSquare(proxy.ProxyProxy, s)
 		}, ForString: func(continuation proxy.Unvariant_CaptionCircleSquareString) string {
-			return continuation.StringRecordCircleSquare(proxy.ProxyProxy, s)
+			return continuation.ForStringRecordCircleSquare(proxy.ProxyProxy, s)
 		}, ForVariantRecordCaptionCircleSquare: func(continuation variant.Unvariant_) variant.CaptionCircleSquare {
-			return continuation.StringRecordCircleSquare(proxy.ProxyProxy, s)
+			return continuation.ForStringRecordCircleSquare(proxy.ProxyProxy, s)
 		}}
 	case variant.CaptionCircleSquareCircle:
 		number := variant2.Circle
 		run = variant.Unvariant{ForInt: func(continuation proxy.Unvariant_CaptionCircleSquareInt) int32 {
-			return continuation.NumberRecordCaptionSquare(proxy.ProxyProxy, number)
+			return continuation.ForNumberRecordCaptionSquare(proxy.ProxyProxy, number)
 		}, ForString: func(continuation proxy.Unvariant_CaptionCircleSquareString) string {
-			return continuation.NumberRecordCaptionSquare(proxy.ProxyProxy, number)
+			return continuation.ForNumberRecordCaptionSquare(proxy.ProxyProxy, number)
 		}, ForVariantRecordCaptionCircleSquare: func(continuation variant.Unvariant_) variant.CaptionCircleSquare {
-			return continuation.NumberRecordCaptionSquare(proxy.ProxyProxy, number)
+			return continuation.ForNumberRecordCaptionSquare(proxy.ProxyProxy, number)
 		}}
 	default: // variant.CaptionCircleSquareSquare
 		i := variant2.Square
 		run = variant.Unvariant{ForInt: func(continuation proxy.Unvariant_CaptionCircleSquareInt) int32 {
-			return continuation.IntRecordCaptionCircle(proxy.ProxyProxy, i)
+			return continuation.ForIntRecordCaptionCircle(proxy.ProxyProxy, i)
 		}, ForString: func(continuation proxy.Unvariant_CaptionCircleSquareString) string {
-			return continuation.IntRecordCaptionCircle(proxy.ProxyProxy, i)
+			return continuation.ForIntRecordCaptionCircle(proxy.ProxyProxy, i)
 		}, ForVariantRecordCaptionCircleSquare: func(continuation variant.Unvariant_) variant.CaptionCircleSquare {
-			return continuation.IntRecordCaptionCircle(proxy.ProxyProxy, i)
+			return continuation.ForIntRecordCaptionCircle(proxy.ProxyProxy, i)
 		}}
 	}
-	return run.ForInt(proxy.Unvariant_CaptionCircleSquareInt{IntRecordCaptionCircle: func(_ proxy.Proxy, _ int32) int32 {
+	return run.ForInt(proxy.Unvariant_CaptionCircleSquareInt{ForIntRecordCaptionCircle: func(_ proxy.Proxy, _ int32) int32 {
 		return 6
-	}, NumberRecordCaptionSquare: func(_ proxy.Proxy, _ float64) int32 {
+	}, ForNumberRecordCaptionSquare: func(_ proxy.Proxy, _ float64) int32 {
 		return 6
-	}, StringRecordCircleSquare: func(_ proxy.Proxy, _ string) int32 {
+	}, ForStringRecordCircleSquare: func(_ proxy.Proxy, _ string) int32 {
 		return 0
 	}})
 }
@@ -245,36 +245,36 @@ func roundTrip(x variant.CaptionCircleSquare) variant.CaptionCircleSquare {
 	case variant.CaptionCircleSquareCaption:
 		s := x.Caption
 		result = variant.Unvariant{ForInt: func(continuation proxy.Unvariant_CaptionCircleSquareInt) int32 {
-			return continuation.StringRecordCircleSquare(proxy.ProxyProxy, s)
+			return continuation.ForStringRecordCircleSquare(proxy.ProxyProxy, s)
 		}, ForString: func(continuation proxy.Unvariant_CaptionCircleSquareString) string {
-			return continuation.StringRecordCircleSquare(proxy.ProxyProxy, s)
+			return continuation.ForStringRecordCircleSquare(proxy.ProxyProxy, s)
 		}, ForVariantRecordCaptionCircleSquare: func(continuation variant.Unvariant_) variant.CaptionCircleSquare {
-			return continuation.StringRecordCircleSquare(proxy.ProxyProxy, s)
+			return continuation.ForStringRecordCircleSquare(proxy.ProxyProxy, s)
 		}}
 	case variant.CaptionCircleSquareCircle:
 		number := x.Circle
 		result = variant.Unvariant{ForInt: func(continuation proxy.Unvariant_CaptionCircleSquareInt) int32 {
-			return continuation.NumberRecordCaptionSquare(proxy.ProxyProxy, number)
+			return continuation.ForNumberRecordCaptionSquare(proxy.ProxyProxy, number)
 		}, ForString: func(continuation proxy.Unvariant_CaptionCircleSquareString) string {
-			return continuation.NumberRecordCaptionSquare(proxy.ProxyProxy, number)
+			return continuation.ForNumberRecordCaptionSquare(proxy.ProxyProxy, number)
 		}, ForVariantRecordCaptionCircleSquare: func(continuation variant.Unvariant_) variant.CaptionCircleSquare {
-			return continuation.NumberRecordCaptionSquare(proxy.ProxyProxy, number)
+			return continuation.ForNumberRecordCaptionSquare(proxy.ProxyProxy, number)
 		}}
 	default: // variant.CaptionCircleSquareSquare
 		i := x.Square
 		result = variant.Unvariant{ForInt: func(continuation proxy.Unvariant_CaptionCircleSquareInt) int32 {
-			return continuation.IntRecordCaptionCircle(proxy.ProxyProxy, i)
+			return continuation.ForIntRecordCaptionCircle(proxy.ProxyProxy, i)
 		}, ForString: func(continuation proxy.Unvariant_CaptionCircleSquareString) string {
-			return continuation.IntRecordCaptionCircle(proxy.ProxyProxy, i)
+			return continuation.ForIntRecordCaptionCircle(proxy.ProxyProxy, i)
 		}, ForVariantRecordCaptionCircleSquare: func(continuation variant.Unvariant_) variant.CaptionCircleSquare {
-			return continuation.IntRecordCaptionCircle(proxy.ProxyProxy, i)
+			return continuation.ForIntRecordCaptionCircle(proxy.ProxyProxy, i)
 		}}
 	}
-	return result.ForVariantRecordCaptionCircleSquare(variant.Unvariant_{IntRecordCaptionCircle: func(_ proxy.Proxy, i int32) variant.CaptionCircleSquare {
+	return result.ForVariantRecordCaptionCircleSquare(variant.Unvariant_{ForIntRecordCaptionCircle: func(_ proxy.Proxy, i int32) variant.CaptionCircleSquare {
 		return variant.Square(i)
-	}, NumberRecordCaptionSquare: func(_ proxy.Proxy, number float64) variant.CaptionCircleSquare {
+	}, ForNumberRecordCaptionSquare: func(_ proxy.Proxy, number float64) variant.CaptionCircleSquare {
 		return variant.Circle(number)
-	}, StringRecordCircleSquare: func(_ proxy.Proxy, s string) variant.CaptionCircleSquare {
+	}, ForStringRecordCircleSquare: func(_ proxy.Proxy, s string) variant.CaptionCircleSquare {
 		return variant.Caption(s)
 	}})
 }

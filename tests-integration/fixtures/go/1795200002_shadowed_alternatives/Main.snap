@@ -4,36 +4,18 @@ source: tests-integration/src/fixtures.rs
 // Data/Either/either.go
 package either
 
-import (
-	"fixture/Data/Maybe"
-	"fixture/Data/Ordering"
-)
+import "fixture/Data/Maybe"
 
-type EitherMaybeBoolean struct {
+type Either struct {
 	Right int32
 	Tag   uint8
 	Left  maybe.Boolean
 }
 
 const (
-	EitherMaybeBooleanLeft = iota
-	EitherMaybeBooleanRight
+	EitherLeft = iota
+	EitherRight
 )
-
-type EitherInt struct {
-	Left  int32
-	Right ordering.BV
-	Tag   uint8
-}
-
-const (
-	EitherIntLeft = iota
-	EitherIntRight
-)
-
-func Right(right ordering.BV) EitherInt {
-	return EitherInt{Tag: EitherIntRight, Right: right}
-}
 
 // Data/Maybe/maybe.go
 package maybe
@@ -46,36 +28,19 @@ const (
 	NoBoolean
 )
 
-// Data/Ordering/ordering.go
-package ordering
-
-type Ordering uint8
-
-const (
-	OrderingLT Ordering = iota
-	OrderingGT
-	OrderingEQ
-)
-
-type BV struct {
-	V int32
-	B Ordering
-}
-
 // main.go
 package main
 
 import (
 	"fixture/Data/Either"
-	"fixture/Data/Ordering"
 	"os"
 )
 
 func main_() int32 {
-	var scrutineeTag uint8 = either.EitherMaybeBooleanLeft
+	var scrutineeTag uint8 = either.EitherLeft
 	var result bool
 	switch scrutineeTag {
-	case either.EitherMaybeBooleanLeft:
+	case either.EitherLeft:
 		result = false
 	default:
 		result = false
@@ -86,15 +51,7 @@ func main_() int32 {
 	} else {
 		first = 0
 	}
-	scrutinee := either.Right(ordering.BV{B: ordering.OrderingEQ, V: 1000})
-	var result2 int32
-	switch scrutinee.Tag {
-	case either.EitherIntRight:
-		result2 = scrutinee.Right.V
-	default:
-		result2 = 3
-	}
-	return first + 3 + result2
+	return first + 1003
 }
 
 func main() {

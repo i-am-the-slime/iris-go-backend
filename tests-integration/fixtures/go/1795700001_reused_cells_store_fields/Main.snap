@@ -29,6 +29,14 @@ const (
 
 var sharedChainEnd = &Chain{Tag: ChainEnd}
 
+func Red(field0 int32, field1 *Chain) *Chain {
+	return &Chain{Tag: ChainRed, Field0: field0, Field1: field1}
+}
+
+func Blue(field0 int32, field1 *Chain) *Chain {
+	return &Chain{Tag: ChainBlue, Field0: field0, Field1: field1}
+}
+
 func Node(node0 int32, node1 int32, node2 *Tree, node3 *Tree) *Tree {
 	return &Tree{Node0: node0, Node1: node1, Node2: node2, Node3: node3}
 }
@@ -36,7 +44,7 @@ func Node(node0 int32, node1 int32, node2 *Tree, node3 *Tree) *Tree {
 var main_ = initializeMain_()
 
 func initializeMain_() shared.MainResult {
-	scrutinee := insertCountsReusing(3, sharedTreeLeaf)
+	scrutinee := insertCountsLeaf(3)
 	var result *Tree
 	if scrutinee != sharedTreeLeaf {
 		k := scrutinee.Node0
@@ -52,11 +60,7 @@ func initializeMain_() shared.MainResult {
 	} else {
 		result = sharedTreeLeaf
 	}
-	chains := make([]Chain, 3)
-	chains[0] = Chain{Tag: ChainRed, Field0: 1, Field1: &chains[1]}
-	chains[1] = Chain{Tag: ChainBlue, Field0: 2, Field1: &chains[2]}
-	chains[2] = Chain{Tag: ChainRed, Field0: 3, Field1: sharedChainEnd}
-	return shared.MainResult{Size: sizeOf(counts), Swapped: sizeOf(result), Blues: blues(recolourStoresTheTagReusing(&chains[0]))}
+	return shared.MainResult{Size: sizeOf(counts), Swapped: sizeOf(result), Blues: blues(recolourStoresTheTagRedReusing(1, Blue(2, Red(3, sharedChainEnd))))}
 }
 
 func sizeOf(tree *Tree) int32 {
@@ -69,7 +73,7 @@ func sizeOf(tree *Tree) int32 {
 var counts = initializeCounts()
 
 func initializeCounts() *Tree {
-	return insertCountsReusing(2, insertCountsReusing(1, insertCountsReusing(2, sharedTreeLeaf)))
+	return insertCountsReusing(2, insertCountsReusing(1, insertCountsLeaf(2)))
 }
 
 func blues(value *Chain) int32 {
@@ -86,6 +90,10 @@ func blues(value *Chain) int32 {
 			return 0
 		}
 	}
+}
+
+func insertCountsLeaf(key int32) *Tree {
+	return Node(key, 1, sharedTreeLeaf, sharedTreeLeaf)
 }
 
 func insertCountsReusing(key int32, value *Tree) *Tree {
@@ -108,6 +116,10 @@ func insertCountsReusing(key int32, value *Tree) *Tree {
 	}
 	value.Node1 = count + 1
 	return value
+}
+
+func recolourStoresTheTagRedReusing(n int32, rest *Chain) *Chain {
+	return Blue(n+1, recolourStoresTheTagReusing(rest))
 }
 
 func recolourStoresTheTagReusing(value *Chain) *Chain {

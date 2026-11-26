@@ -49,7 +49,7 @@ func ArrayBoolean(array []bool) string {
 package main
 
 import (
-	"fixture/Data/Show"
+	datashow "fixture/Data/Show"
 	"fixture/shared"
 	"github.com/i-am-the-slime/iris-go/array"
 	"github.com/i-am-the-slime/iris-go/console"
@@ -61,28 +61,28 @@ import (
 var main_ = initializeMain_()
 
 func initializeMain_() []string {
-	return []string{describe(shared.Show{Show: func(coerced any) string {
-		return show.ArrayBoolean(shared.Convert(coerced))
-	}}, array.Append([]int32{}, []int32{2}), ">", 1, shared.Convert2([]bool{true}))}
+	return []string{describeShowDictionary(func(coerced any) string {
+		return datashow.ArrayBoolean(shared.Convert(coerced))
+	}, array.Append([]int32{}, []int32{2}), ">", 1, shared.Convert2([]bool{true}))}
 }
 
-func describe(showDictionary shared.Show, depths []int32, label string, depth int32, value any) string {
+func describeShowDictionary(show func(any) string, depths []int32, label string, depth int32, value any) string {
 	depths = slices.Clip(depths)
 	labelBytes := []byte(label)
 	for {
-		showDictionaryCaptured := showDictionary
+		showCaptured := show
 		switch depth {
 		case 0:
 			text := prim.AppendString(nil, string(labelBytes))
-			text = show.AppendShowArrayInt(text, depths)
+			text = datashow.AppendShowArrayInt(text, depths)
 			text = append(text, ": "...)
-			text = prim.AppendString(text, showDictionaryCaptured.Show(value))
+			text = prim.AppendString(text, showCaptured(value))
 			return string(text)
 		default:
 			labelBytes = append(labelBytes, '>')
-			showDictionary, depths, depth, value = shared.Show{Show: func(coerced any) string {
-				return prim.ShowArray(showDictionaryCaptured.Show, coerced.([]any))
-			}}, array.Bounded(append(depths, depth)), depth-1, []any{value}
+			show, depths, depth, value = func(coerced any) string {
+				return prim.ShowArray(showCaptured, coerced.([]any))
+			}, array.Bounded(append(depths, depth)), depth-1, []any{value}
 			continue
 		}
 	}
@@ -102,10 +102,6 @@ func Convert(value any) []bool {
 		converted[index] = element.(bool)
 	}
 	return converted
-}
-
-type Show struct {
-	Show func(any) string
 }
 
 func Convert2(value []bool) any {

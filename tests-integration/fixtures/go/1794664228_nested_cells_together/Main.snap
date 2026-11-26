@@ -34,8 +34,8 @@ func Val(val int32) *Expr {
 	return &Expr{Tag: ExprVal, Val: val}
 }
 
-func Add(field0 *Expr, field1 *Expr) *Expr {
-	return &Expr{Tag: ExprAdd, Field0: field0, Field1: field1}
+func Cons(cons0 int32, cons1 *List) *List {
+	return &List{Cons0: cons0, Cons1: cons1}
 }
 
 func Mul(field0 *Expr, field1 *Expr) *Expr {
@@ -44,11 +44,7 @@ func Mul(field0 *Expr, field1 *Expr) *Expr {
 
 func main_(n int32) shared.MainResult {
 	n2 := -n
-	listInts := make([]List, 3)
-	listInts[0] = List{Cons0: n, Cons1: &listInts[1]}
-	listInts[1] = List{Cons0: 2, Cons1: &listInts[2]}
-	listInts[2] = List{Cons0: 3, Cons1: sharedListNil}
-	return shared.MainResult{Built: evaluate(build(4)), Mirrored: evaluate(mirrorReusing(build(3))), Two: evaluate(Add(build(2), Val(2))), Linked: total(mainGo(5, sharedListNil)), Literal: total(&listInts[0]), Positive: n > 0 && evaluate(Add(Val(n), Mul(Val(2), Val(n)))) > 5, Negative: n2 > 0 && evaluate(Add(Val(n2), Mul(Val(2), Val(n2)))) > 5}
+	return shared.MainResult{Built: evaluate(build(4)), Mirrored: evaluate(mirrorReusing(build(3))), Two: evaluateAdd(build(2), Val(2)), Linked: total(mainGo(5, sharedListNil)), Literal: totalCons(n, Cons(2, Cons(3, sharedListNil))), Positive: n > 0 && evaluateAdd(Val(n), Mul(Val(2), Val(n))) > 5, Negative: n2 > 0 && evaluateAdd(Val(n2), Mul(Val(2), Val(n2))) > 5}
 }
 
 func evaluate(expr *Expr) int32 {
@@ -65,17 +61,16 @@ func evaluate(expr *Expr) int32 {
 }
 
 func build(n int32) *Expr {
+	var cells alloc.Cells[Expr]
+	return buildChunked(n, &cells)
+}
+
+func buildChunked(n int32, cells *alloc.Cells[Expr]) *Expr {
 	switch n {
 	case 0:
-		return Val(1)
+		return cells.New(Expr{Tag: ExprVal, Val: 1})
 	default:
-		exprs := make([]Expr, 5)
-		exprs[0] = Expr{Tag: ExprAdd, Field0: &exprs[1], Field1: &exprs[3]}
-		exprs[1] = Expr{Tag: ExprMul, Field0: &exprs[2], Field1: build(n - 1)}
-		exprs[2] = Expr{Tag: ExprVal, Val: n}
-		exprs[3] = Expr{Tag: ExprSub, Field0: build(n - 1), Field1: &exprs[4]}
-		exprs[4] = Expr{Tag: ExprVal, Val: 1}
-		return &exprs[0]
+		return cells.New(Expr{Tag: ExprAdd, Field0: cells.New(Expr{Tag: ExprMul, Field0: cells.New(Expr{Tag: ExprVal, Val: n}), Field1: buildChunked(n-1, cells)}), Field1: cells.New(Expr{Tag: ExprSub, Field0: buildChunked(n-1, cells), Field1: cells.New(Expr{Tag: ExprVal, Val: 1})})})
 	}
 }
 
@@ -84,6 +79,14 @@ func total(list *List) int32 {
 		return 0
 	}
 	return list.Cons0 + total(list.Cons1)
+}
+
+func evaluateAdd(left *Expr, right *Expr) int32 {
+	return evaluate(left) + evaluate(right)
+}
+
+func totalCons(value int32, rest *List) int32 {
+	return value + total(rest)
 }
 
 func mainGo(remaining int32, list *List) *List {

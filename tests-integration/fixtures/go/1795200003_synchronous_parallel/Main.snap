@@ -22,20 +22,28 @@ type OnComplete struct {
 	Rethrow bool
 }
 
-type Fiber struct {
-	IsSuspended func() bool
-	Join        func(func(Either)) func()
-	Kill        func(exception.Error) func(func(Either)) func()
-	OnComplete  func(OnComplete) func()
-	Run         func()
-}
-
 func Left(left exception.Error) Either {
 	return Either{Tag: EitherLeft, Left: left}
 }
 
 func Right(right struct{}) Either {
 	return Either{Tag: EitherRight, Right: right}
+}
+
+// Effect/Aff/aff.go
+package effectaff
+
+import (
+	"fixture/Data/Either"
+	"github.com/i-am-the-slime/iris-go/exception"
+)
+
+type Fiber struct {
+	IsSuspended func() bool
+	Join        func(func(either.Either)) func()
+	Kill        func(exception.Error) func(func(either.Either)) func()
+	OnComplete  func(either.OnComplete) func()
+	Run         func()
 }
 
 // main.go

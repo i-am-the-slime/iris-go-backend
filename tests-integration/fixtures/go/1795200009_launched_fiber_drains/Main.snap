@@ -33,25 +33,9 @@ type OnCompleteInt struct {
 	Rethrow bool
 }
 
-type FiberInt struct {
-	IsSuspended func() bool
-	Join        func(func(EitherInt)) func()
-	Kill        func(exception.Error) func(func(EitherUnit)) func()
-	OnComplete  func(OnCompleteInt) func()
-	Run         func()
-}
-
 type OnCompleteUnit struct {
 	Handler func(func(EitherUnit))
 	Rethrow bool
-}
-
-type FiberUnit struct {
-	IsSuspended func() bool
-	Join        func(func(EitherUnit)) func()
-	Kill        func(exception.Error) func(func(EitherUnit)) func()
-	OnComplete  func(OnCompleteUnit) func()
-	Run         func()
 }
 
 func LeftEitherInt(left exception.Error) EitherInt {
@@ -70,11 +54,36 @@ func LeftEitherUnit(left exception.Error) EitherUnit {
 	return EitherUnit{Tag: EitherUnitLeft, Left: left}
 }
 
+// Effect/Aff/aff.go
+package effectaff
+
+import (
+	"fixture/Data/Either"
+	"github.com/i-am-the-slime/iris-go/exception"
+)
+
+type FiberInt struct {
+	IsSuspended func() bool
+	Join        func(func(either.EitherInt)) func()
+	Kill        func(exception.Error) func(func(either.EitherUnit)) func()
+	OnComplete  func(either.OnCompleteInt) func()
+	Run         func()
+}
+
+type FiberUnit struct {
+	IsSuspended func() bool
+	Join        func(func(either.EitherUnit)) func()
+	Kill        func(exception.Error) func(func(either.EitherUnit)) func()
+	OnComplete  func(either.OnCompleteUnit) func()
+	Run         func()
+}
+
 // main.go
 package main
 
 import (
 	"fixture/Data/Either"
+	"fixture/Effect/Aff"
 	"fixture/shared"
 	"github.com/i-am-the-slime/iris-go/aff"
 	"github.com/i-am-the-slime/iris-go/eventloop"
@@ -96,7 +105,7 @@ func main_() int32 {
 		}, either.RightEitherUnit(struct{}{}), func(value either.OnCompleteInt) func(func(either.EitherInt)) {
 			return value.Handler
 		})
-		fiber2 := either.FiberInt{IsSuspended: isSuspended, Join: join, Kill: kill, OnComplete: onComplete, Run: run}
+		fiber2 := effectaff.FiberInt{IsSuspended: isSuspended, Join: join, Kill: kill, OnComplete: onComplete, Run: run}
 		joined := aff.MakeAffDirect(func(value either.EitherInt) bool {
 			return value.Tag == either.EitherIntLeft
 		}, func(value either.EitherInt) exception.Error {

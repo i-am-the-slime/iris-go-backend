@@ -41,11 +41,35 @@ func JustVariantCircleSquare(just shared.TypeValue) VariantCircleSquare {
 
 var NoVariantCircleSquare = VariantCircleSquare{Tag: TagNothing}
 
+// Data/Variant/Internal/internal.go
+package internal
+
+import "fixture/shared"
+
+type VariantRepInt struct {
+	Type  string
+	Value int32
+}
+
+func Convert(value VariantRepInt) shared.TypeValue {
+	return shared.TypeValue{Type: value.Type, Value: value.Value}
+}
+
+type VariantRepNumber struct {
+	Type  string
+	Value float64
+}
+
+func Convert2(value VariantRepNumber) shared.TypeValue {
+	return shared.TypeValue{Type: value.Type, Value: value.Value}
+}
+
 // main.go
 package main
 
 import (
 	"fixture/Data/Maybe"
+	"fixture/Data/Variant/Internal"
 	journal "fixture/Journal_ffi"
 	"fixture/shared"
 	"github.com/i-am-the-slime/iris-go/prim"
@@ -53,8 +77,8 @@ import (
 )
 
 func main() {
-	circle := shared.Convert(shared.VariantRepInt{Type: "circle", Value: 21})
-	square := shared.Convert2(shared.VariantRepNumber{Type: "square", Value: 1.5})
+	circle := internal.Convert(internal.VariantRepInt{Type: "circle", Value: 21})
+	square := internal.Convert2(internal.VariantRepNumber{Type: "square", Value: 1.5})
 	var result shared.TypeValue
 	if circle.Type == "circle" {
 		record := shared.Circle{Circle: func(value int32) int32 {
@@ -134,27 +158,9 @@ func describe(r shared.TypeValue) string {
 // shared/shared.go
 package shared
 
-type VariantRepInt struct {
-	Type  string
-	Value int32
-}
-
 type TypeValue struct {
 	Type  string
 	Value any
-}
-
-func Convert(value VariantRepInt) TypeValue {
-	return TypeValue{Type: value.Type, Value: value.Value}
-}
-
-type VariantRepNumber struct {
-	Type  string
-	Value float64
-}
-
-func Convert2(value VariantRepNumber) TypeValue {
-	return TypeValue{Type: value.Type, Value: value.Value}
 }
 
 type Circle struct {

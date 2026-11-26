@@ -134,7 +134,7 @@ func initializeMain_() string {
 			accumulator -= 1
 		}
 	}
-	text = strconv.AppendInt(text, int64(accumulator+mainSum(types.Cons(3, types.Cons(4, types.SharedListNil)))), 10)
+	text = strconv.AppendInt(text, int64(accumulator+mainSumCons(3, types.Cons(4, types.SharedListNil))), 10)
 	array2 := []Labelled{Tag("t"), {Tag: LabelledUntagged}}
 	mapped := make([]string, len(array2))
 	for index, element := range array2 {
@@ -175,6 +175,10 @@ func mainSum(list *types.List) int32 {
 		return 0
 	}
 	return list.Cons0 + mainSum(list.Cons1)
+}
+
+func mainSumCons(head int32, tail *types.List) int32 {
+	return head + mainSum(tail)
 }
 
 func main() {

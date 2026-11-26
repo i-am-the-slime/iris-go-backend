@@ -71,8 +71,6 @@ func CompareChar(xs []rune, ys []rune) ordering.Ordering {
 // Data/Ordering/ordering.go
 package ordering
 
-import "fixture/shared"
-
 type Ordering uint8
 
 const (
@@ -80,11 +78,6 @@ const (
 	OrderingGT
 	OrderingEQ
 )
-
-type Eq0Compare struct {
-	Eq0     shared.Eq
-	Compare func(any) func(any) Ordering
-}
 
 func Show(ordering Ordering) string {
 	switch ordering {
@@ -101,7 +94,7 @@ func Show(ordering Ordering) string {
 package main
 
 import (
-	"fixture/Data/Eq"
+	dataeq "fixture/Data/Eq"
 	"fixture/Data/Ord"
 	"fixture/Data/Ordering"
 	"fixture/shared"
@@ -116,7 +109,7 @@ var main_ = initializeMain_()
 func initializeMain_() []string {
 	original := func(array []int32) func([]int32) bool {
 		return func(array2 []int32) bool {
-			return eq.EqArrayInt(array, array2)
+			return dataeq.EqArrayInt(array, array2)
 		}
 	}
 	original2 := func(xs []int32) func([]int32) ordering.Ordering {
@@ -126,7 +119,7 @@ func initializeMain_() []string {
 	}
 	original3 := func(array []rune) func([]rune) bool {
 		return func(array2 []rune) bool {
-			return eq.EqArrayChar(array, array2)
+			return dataeq.EqArrayChar(array, array2)
 		}
 	}
 	original4 := func(xs []rune) func([]rune) ordering.Ordering {
@@ -134,49 +127,50 @@ func initializeMain_() []string {
 			return ord.CompareChar(xs, ys)
 		}
 	}
-	return []string{relate(ordering.Eq0Compare{Eq0: shared.Eq{Eq: func(coerced any) func(any) bool {
+	return []string{relateOrdDictionaryEq0(func(coerced any) func(any) bool {
 		original5 := original(shared.Convert(coerced))
 		return func(coerced2 any) bool {
 			return original5(shared.Convert(coerced2))
 		}
-	}}, Compare: func(coerced any) func(any) ordering.Ordering {
+	}, func(coerced any) func(any) ordering.Ordering {
 		original5 := original2(shared.Convert(coerced))
 		return func(coerced2 any) ordering.Ordering {
 			return original5(shared.Convert(coerced2))
 		}
-	}}, 1, shared.Convert2([]int32{1}), shared.Convert2([]int32{1, 1})), relate(ordering.Eq0Compare{Eq0: shared.Eq{Eq: func(coerced any) func(any) bool {
+	}, 1, shared.Convert2([]int32{1}), shared.Convert2([]int32{1, 1})), relateOrdDictionaryEq0(func(coerced any) func(any) bool {
 		original5 := original3(shared.Convert3(coerced))
 		return func(coerced2 any) bool {
 			return original5(shared.Convert3(coerced2))
 		}
-	}}, Compare: func(coerced any) func(any) ordering.Ordering {
+	}, func(coerced any) func(any) ordering.Ordering {
 		original5 := original4(shared.Convert3(coerced))
 		return func(coerced2 any) ordering.Ordering {
 			return original5(shared.Convert3(coerced2))
 		}
-	}}, 1, shared.Convert4([]rune{'a'}), shared.Convert4([]rune{'b', 'b'}))}
+	}, 1, shared.Convert4([]rune{'a'}), shared.Convert4([]rune{'b', 'b'}))}
 }
 
-func relate(ordDictionary ordering.Eq0Compare, depth int32, left any, right any) string {
+func relateOrdDictionaryEq0(eq func(any) func(any) bool, compare func(any) func(any) ordering.Ordering, depth int32, left any, right any) string {
 	for {
-		ordDictionaryCaptured := ordDictionary
+		eqCaptured := eq
+		compareCaptured := compare
 		if depth == 0 {
-			if ordDictionaryCaptured.Eq0.Eq(left)(right) {
+			if eqCaptured(left)(right) {
 				return "equal"
 			}
-			return ordering.Show(ordDictionaryCaptured.Compare(left)(right))
+			return ordering.Show(compareCaptured(left)(right))
 		}
 		original := func(array2 []any) func([]any) bool {
 			return func(array3 []any) bool {
 				return array.Eq(func(argument any, argument2 any) bool {
-					return ordDictionaryCaptured.Eq0.Eq(argument)(argument2)
+					return eqCaptured(argument)(argument2)
 				}, array2, array3)
 			}
 		}
 		original2 := func(xs []any) func([]any) ordering.Ordering {
 			return func(ys []any) ordering.Ordering {
 				i := direct.CompareArray(func(x any, y any) int32 {
-					scrutinee := ordDictionaryCaptured.Compare(x)(y)
+					scrutinee := compareCaptured(x)(y)
 					switch scrutinee {
 					case ordering.OrderingEQ:
 						return 0
@@ -195,17 +189,17 @@ func relate(ordDictionary ordering.Eq0Compare, depth int32, left any, right any)
 				return ordering.OrderingGT
 			}
 		}
-		ordDictionary, depth, left, right = ordering.Eq0Compare{Eq0: shared.Eq{Eq: func(coerced any) func(any) bool {
+		eq, compare, depth, left, right = func(coerced any) func(any) bool {
 			original3 := original(coerced.([]any))
 			return func(coerced2 any) bool {
 				return original3(coerced2.([]any))
 			}
-		}}, Compare: func(coerced any) func(any) ordering.Ordering {
+		}, func(coerced any) func(any) ordering.Ordering {
 			original3 := original2(coerced.([]any))
 			return func(coerced2 any) ordering.Ordering {
 				return original3(coerced2.([]any))
 			}
-		}}, depth-1, []any{left}, []any{right, right}
+		}, depth-1, []any{left}, []any{right, right}
 	}
 }
 
@@ -223,10 +217,6 @@ func Convert(value any) []int32 {
 		converted[index] = element.(int32)
 	}
 	return converted
-}
-
-type Eq struct {
-	Eq func(any) func(any) bool
 }
 
 func Convert2(value []int32) any {

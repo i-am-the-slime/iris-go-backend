@@ -43,21 +43,25 @@ func TooLarge(field0 int32) Problem {
 	return Problem{Tag: ProblemTooLarge, Field0: field0}
 }
 
+func Left(left Problem) Either {
+	return Either{Tag: EitherLeft, Left: left}
+}
+
 func main() {
-	s := settle("run 5", 15, ProblemFailure{})
+	s := settleRight("run 5", 15)
 	journal.Log(s)
-	s2 := settle("run -2", 0, ProblemFailure{Failed: true, Left: Negative(-2)})
+	s2 := settleLeft("run -2", Negative(-2))
 	journal.Log(s2)
-	s3 := settle("run 2000", 0, ProblemFailure{Failed: true, Left: TooLarge(2000)})
+	s3 := settleLeft("run 2000", TooLarge(2000))
 	journal.Log(s3)
-	s4 := settle("run 40", 120, ProblemFailure{})
+	s4 := settleRight("run 40", 120)
 	journal.Log(s4)
 	i, err := kept(30)
 	if err.Failed {
-		s5 := settle("kept", 0, err)
+		s5 := settleLeft("kept", err.Left)
 		journal.Log(s5)
 	} else {
-		s5 := settle("kept", i, ProblemFailure{})
+		s5 := settleRight("kept", i)
 		journal.Log(s5)
 	}
 	i2, err := kept(2)
@@ -96,28 +100,35 @@ func kept(n int32) (int32, ProblemFailure) {
 	return field+n2*3, ProblemFailure{}
 }
 
-func settle(label string, i int32, err ProblemFailure) string {
+func settleRight(label string, value int32) string {
+	if value > 100 {
+		return settleLeft(label+" again", TooLarge(value))
+	}
+	journal.Log(label + ": " + strconv.Itoa(int(value)))
+	return "ok"
+}
+
+func settleLeft(label string, problem Problem) string {
 	for {
-		if err.Failed && err.Left.Tag == ProblemNegative {
-			n := err.Left.Field0
-			journal.Log(label + ": below zero by " + strconv.Itoa(int(-n)))
+		scrutinee := Left(problem)
+		if scrutinee.Tag == EitherLeft && scrutinee.Left.Tag == ProblemNegative {
+			journal.Log(label + ": below zero by " + strconv.Itoa(int(-scrutinee.Left.Field0)))
 			return "negative"
 		}
-		if err.Failed {
-			problem := err.Left
+		if scrutinee.Tag == EitherLeft {
 			var result string
-			switch problem.Tag {
+			switch scrutinee.Left.Tag {
 			case ProblemNegative:
-				result = "Negative " + strconv.Itoa(int(problem.Field0))
+				result = "Negative " + strconv.Itoa(int(scrutinee.Left.Field0))
 			default: // ProblemTooLarge
-				result = "TooLarge " + strconv.Itoa(int(problem.Field0))
+				result = "TooLarge " + strconv.Itoa(int(scrutinee.Left.Field0))
 			}
 			journal.Log(label + ": " + result)
 			return "failed"
 		}
-		value := i
+		value := scrutinee.Right
 		if value > 100 {
-			label, i, err = label+" again", 0, ProblemFailure{Failed: true, Left: TooLarge(value)}
+			label, problem = label+" again", TooLarge(value)
 			continue
 		}
 		journal.Log(label + ": " + strconv.Itoa(int(value)))

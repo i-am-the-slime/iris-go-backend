@@ -88,6 +88,10 @@ func Couple(field0 int32, field1 int32) Item {
 	return Item{Tag: ItemCouple, Field0: field0, Field1: field1}
 }
 
+func Val(val int32) *Expr {
+	return &Expr{Tag: ExprVal, Val: val}
+}
+
 var main_ = initializeMain_()
 
 func initializeMain_() shared.MainResult {
@@ -106,15 +110,13 @@ func initializeMain_() shared.MainResult {
 	for index, element := range array3 {
 		mapped3[index] = colourName(element)
 	}
-	exprs := make([]Expr, 7)
-	exprs[0] = Expr{Tag: ExprAdd, Field0: &exprs[1], Field1: &exprs[2]}
-	exprs[1] = Expr{Tag: ExprVal, Val: 1}
-	exprs[2] = Expr{Tag: ExprSub, Field0: &exprs[3], Field1: &exprs[6]}
-	exprs[3] = Expr{Tag: ExprMul, Field0: &exprs[4], Field1: &exprs[5]}
-	exprs[4] = Expr{Tag: ExprVal, Val: 2}
-	exprs[5] = Expr{Tag: ExprVal, Val: 3}
-	exprs[6] = Expr{Tag: ExprVal, Val: 4}
-	return shared.MainResult{Expression: evaluate(&exprs[0]), Shapes: mapped, Items: mapped2, Colours: mapped3, Sample: "strue0.53"}
+	exprs := make([]Expr, 5)
+	exprs[0] = Expr{Tag: ExprSub, Field0: &exprs[1], Field1: &exprs[4]}
+	exprs[1] = Expr{Tag: ExprMul, Field0: &exprs[2], Field1: &exprs[3]}
+	exprs[2] = Expr{Tag: ExprVal, Val: 2}
+	exprs[3] = Expr{Tag: ExprVal, Val: 3}
+	exprs[4] = Expr{Tag: ExprVal, Val: 4}
+	return shared.MainResult{Expression: evaluateAdd(Val(1), &exprs[0]), Shapes: mapped, Items: mapped2, Colours: mapped3, Sample: "strue0.53"}
 }
 
 func evaluate(expr *Expr) int32 {
@@ -165,6 +167,10 @@ func colourName(colour Colour) string {
 	default: // ColourBlue
 		return "blue"
 	}
+}
+
+func evaluateAdd(left *Expr, right *Expr) int32 {
+	return evaluate(left) + evaluate(right)
 }
 
 func main() {

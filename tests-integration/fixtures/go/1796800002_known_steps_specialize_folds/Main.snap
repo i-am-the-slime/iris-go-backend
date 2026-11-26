@@ -5,6 +5,7 @@ source: tests-integration/src/fixtures.rs
 package main
 
 import (
+	"github.com/i-am-the-slime/iris-go/alloc"
 	"github.com/i-am-the-slime/iris-go/console"
 	"github.com/i-am-the-slime/iris-go/prim"
 	"strings"
@@ -16,10 +17,6 @@ type List struct {
 }
 
 var sharedListNil = &List{}
-
-func Cons(cons0 int32, cons1 *List) *List {
-	return &List{Cons0: cons0, Cons1: cons1}
-}
 
 var main_ = initializeMain_()
 
@@ -40,10 +37,15 @@ func addSquare(total int32, x int32) int32 {
 }
 
 func range_(low int32, high int32) *List {
+	var cells alloc.Cells[List]
+	return range_Chunked(low, high, &cells)
+}
+
+func range_Chunked(low int32, high int32, cells *alloc.Cells[List]) *List {
 	if low > high {
 		return sharedListNil
 	}
-	return Cons(low, range_(low+1, high))
+	return cells.New(List{Cons0: low, Cons1: range_Chunked(low+1, high, cells)})
 }
 
 func foldListStep(i int32, accumulator int32, value *List) int32 {

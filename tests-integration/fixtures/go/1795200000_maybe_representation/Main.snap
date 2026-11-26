@@ -80,16 +80,16 @@ func JustShape(just Shape) MaybeShape {
 
 var NoShape = MaybeShape{Tag: maybe.TagNothing}
 
-func Node(node0 *Tree, node1 int32, node2 *Tree) *Tree {
-	return &Tree{Node0: node0, Node1: node1, Node2: node2}
-}
-
 func Circle(circle int32) Shape {
 	return Shape{Tag: ShapeCircle, Circle: circle}
 }
 
 func Square(square0 int32, square1 int32) Shape {
 	return Shape{Tag: ShapeSquare, Square0: square0, Square1: square1}
+}
+
+func Node(node0 *Tree, node1 int32, node2 *Tree) *Tree {
+	return &Tree{Node0: node0, Node1: node1, Node2: node2}
 }
 
 var main_ = initializeMain_()
@@ -172,7 +172,7 @@ func initializeMain_() []string {
 	x7 := opaque(4)
 	var result10 string
 	if x7 > 0 {
-		result10 = "(Just " + strconv.Itoa(int(sumTree(Node(sharedTreeLeaf, x7, sharedTreeLeaf)))) + ")"
+		result10 = "(Just " + strconv.Itoa(int(sumTreeNode(sharedTreeLeaf, x7, sharedTreeLeaf))) + ")"
 	} else {
 		result10 = "Nothing"
 	}
@@ -389,6 +389,10 @@ func sumTree(tree *Tree) int32 {
 		return 0
 	}
 	return sumTree(tree.Node0) + tree.Node1 + sumTree(tree.Node2)
+}
+
+func sumTreeNode(l *Tree, x int32, r *Tree) int32 {
+	return sumTree(l) + x + sumTree(r)
 }
 
 func main() {

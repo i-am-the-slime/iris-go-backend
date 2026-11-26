@@ -4,32 +4,36 @@ source: tests-integration/src/fixtures.rs
 // Data/Maybe/maybe.go
 package maybe
 
-import "fixture/shared"
-
-const TagNothing = 0
-
-const TagJust = 1
-
-type HeadTail struct {
-	Just shared.HeadTail
-	Tag  uint8
-}
-
-var NoHeadTail = HeadTail{Tag: TagNothing}
-
-func JustHeadTail(just shared.HeadTail) HeadTail {
-	return HeadTail{Tag: TagJust, Just: just}
-}
-
 type Char int64
 
 const NoChar Char = 1 << 32
+
+// Data/Semiring/semiring.go
+package semiring
+
+func Add(i int32, i2 int32) int32 {
+	return i + i2
+}
+
+// Data/String/CodePoints/codepoints.go
+package codepoints
+
+import "github.com/i-am-the-slime/iris-go/prim"
+
+func Eq(left int32, right int32) bool {
+	return left == right
+}
+
+func CodePointFromChar(x rune) int32 {
+	return prim.ToCharCode(x)
+}
 
 // main.go
 package main
 
 import (
-	"fixture/Data/Maybe"
+	"fixture/Data/Semiring"
+	"fixture/Data/String/CodePoints"
 	"fixture/shared"
 	"github.com/i-am-the-slime/iris-go/console"
 	"github.com/i-am-the-slime/iris-go/prim"
@@ -55,38 +59,41 @@ func initializeMain_() []string {
 	return []string{strconv.Itoa(int(countSpacesUnconsingCountsUpToTwo("a b c", 0))), result, strconv.FormatBool(int(int32(4)) < 4), strconv.Itoa(int(int32(2))), strconv.Itoa(int(unchangedTextLengthIsCountedBeforeTheLoop("banana", 0, 0))), strconv.Itoa(int(changedRestLengthIsCountedEachIteration("abcdefghij", 0)))}
 }
 
-func countSpacesUnconsingCountsUpToTwo(text string, count int32) int32 {
+func countSpacesUnconsingCountsUpToTwoOrCountSpacesUnconsingCountsUpToTwoJoin(step int, text string, count int32, head int32) int32 {
 	for {
-		codeUnitLength := prim.CodeUnitLengthUpTo(2, text)
-		var result maybe.HeadTail
-		switch codeUnitLength {
-		case 0:
-			result = maybe.NoHeadTail
-		case 1:
-			result = maybe.JustHeadTail(shared.HeadTail{Head: prim.ToCharCode(prim.CharAt(0, text)), Tail: ""})
-		default:
-			cu0 := prim.ToCharCode(prim.CharAt(0, text))
-			cu1 := prim.ToCharCode(prim.CharAt(1, text))
-			if 55296 <= cu0 && cu0 <= 56319 && (56320 <= cu1 && cu1 <= 57343) {
-				result = maybe.JustHeadTail(shared.HeadTail{Head: (cu0-55296)*1024 + (cu1 - 56320) + 65536, Tail: prim.CodeUnitDrop(2, text)})
-			} else {
-				result = maybe.JustHeadTail(shared.HeadTail{Head: cu0, Tail: prim.CodeUnitDrop(1, text)})
+		switch step {
+		case shared.CountSpacesUnconsingCountsUpToTwoStep:
+			codeUnitLength := prim.CodeUnitLengthUpTo(2, text)
+			switch codeUnitLength {
+			case 0:
+				return count
+			case 1:
+				step, head, text = shared.CountSpacesUnconsingCountsUpToTwoJoinStep, prim.ToCharCode(prim.CharAt(0, text)), ""
+				continue
+			default:
+				fieldHead := prim.ToCharCode(prim.CharAt(0, text))
+				cu1 := prim.ToCharCode(prim.CharAt(1, text))
+				if 55296 <= fieldHead && fieldHead <= 56319 && (56320 <= cu1 && cu1 <= 57343) {
+					step, head, text = shared.CountSpacesUnconsingCountsUpToTwoJoinStep, (fieldHead-55296)*1024+(cu1-56320)+65536, prim.CodeUnitDrop(2, text)
+					continue
+				}
+				step, head, text = shared.CountSpacesUnconsingCountsUpToTwoJoinStep, fieldHead, prim.CodeUnitDrop(1, text)
+				continue
 			}
-		}
-		switch result.Tag {
-		case maybe.TagJust:
-			var result2 int32
-			if result.Just.Head == prim.ToCharCode(' ') {
-				result2 = count + 1
+		default: // shared.CountSpacesUnconsingCountsUpToTwoJoinStep
+			var result int32
+			if codepoints.Eq(head, codepoints.CodePointFromChar(' ')) {
+				result = semiring.Add(count, 1)
 			} else {
-				result2 = count
+				result = count
 			}
-			text, count = result.Just.Tail, result2
-			continue
-		default: // maybe.TagNothing
-			return count
+			step, count = shared.CountSpacesUnconsingCountsUpToTwoStep, result
 		}
 	}
+}
+
+func countSpacesUnconsingCountsUpToTwo(text string, count int32) int32 {
+	return countSpacesUnconsingCountsUpToTwoOrCountSpacesUnconsingCountsUpToTwoJoin(shared.CountSpacesUnconsingCountsUpToTwoStep, text, count, 0)
 }
 
 func unchangedTextLengthIsCountedBeforeTheLoop(text string, i int32, count int32) int32 {
@@ -133,7 +140,7 @@ func main() {
 // shared/shared.go
 package shared
 
-type HeadTail struct {
-	Tail string
-	Head int32
-}
+const (
+	CountSpacesUnconsingCountsUpToTwoStep = iota
+	CountSpacesUnconsingCountsUpToTwoJoinStep
+)

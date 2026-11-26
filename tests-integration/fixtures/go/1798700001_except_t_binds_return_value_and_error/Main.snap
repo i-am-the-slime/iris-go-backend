@@ -250,28 +250,21 @@ func statuses(ref *shared.Ref[int32]) (int32, either.IntFailure) {
 	s := ref.Value
 	s_ := s + 1
 	ref.Value = s_
-	var i int32
-	var err either.IntFailure
 	if s_ > 10 {
-		err = either.IntFailure{Failed: true, Left: 500}
-	} else {
-		i, err = status(s_)
+		return 0, either.IntFailure{Failed: true, Left: 500}
 	}
+	b, err := status(s_)
 	if err.Failed {
 		return 0, err
 	}
-	b := i
-	var i2 int32
-	var err2 either.IntFailure
 	if b > 5 {
-		i2, err2 = 1, either.IntFailure{}
-	} else {
-		i2, err2 = status(s_ + 4)
+		return b+1, either.IntFailure{}
 	}
-	if err2.Failed {
-		return 0, err2
+	i, err := status(s_ + 4)
+	if err.Failed {
+		return 0, err
 	}
-	return b+i2, either.IntFailure{}
+	return b+i, either.IntFailure{}
 }
 
 func status(n int32) (int32, either.IntFailure) {

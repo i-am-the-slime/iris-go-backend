@@ -21,6 +21,18 @@ import (
 	"github.com/i-am-the-slime/iris-go/array"
 )
 
+//line Main.purs:15:1
+type Suit uint8
+
+//line Main.purs:15:1
+const (
+//line Main.purs:15:13
+	SuitHearts Suit = iota
+//line Main.purs:15:22
+	SuitSpades
+//line Main.purs:15:1
+)
+
 //line Main.purs:13:1
 type Tree struct {
 //line Main.purs:13:20
@@ -35,18 +47,6 @@ type Tree struct {
 //line Main.purs:13:13
 var sharedTreeLeaf = &Tree{}
 
-//line Main.purs:15:1
-type Suit uint8
-
-//line Main.purs:15:1
-const (
-//line Main.purs:15:13
-	SuitHearts Suit = iota
-//line Main.purs:15:22
-	SuitSpades
-//line Main.purs:15:1
-)
-
 //line Main.purs:13:20
 func Node(node0 *Tree, node1 int32, node2 *Tree) *Tree {
 //line Main.purs:13:20
@@ -59,7 +59,7 @@ func main() {
 //line Main.purs:47:14
 	var counter int32 = 3
 //line Main.purs:50:3
-	if size(insert(counter, insert(1, insert(5, sharedTreeLeaf)))) != 3 {
+	if size(insert(counter, insert(1, insertLeaf(5)))) != 3 {
 //line Main.purs:51:5
 		effectexception.Throw("the size is wrong")
 //line Main.purs:50:3
@@ -195,6 +195,37 @@ func size(value *Tree) int32 {
 //line Main.purs:32:24
 	return size(value.Node0) + 1 + size(value.Node2)
 //line Main.purs:30:1
+}
+
+//line Main.purs:22:1
+func insertLeaf(x int32) *Tree {
+//line Main.purs:23:3
+	if sharedTreeLeaf == sharedTreeLeaf {
+//line Main.purs:23:11
+		return Node(sharedTreeLeaf, x, sharedTreeLeaf)
+//line Main.purs:23:3
+	}
+//line Main.purs:24:3
+	left := sharedTreeLeaf.Node0
+//line Main.purs:24:3
+	y := sharedTreeLeaf.Node1
+//line Main.purs:24:3
+	right := sharedTreeLeaf.Node2
+//line Main.purs:25:7
+	if x < y {
+//line Main.purs:25:16
+		return Node(insert(x, left), y, right)
+//line Main.purs:25:7
+	}
+//line Main.purs:26:7
+	if x > y {
+//line Main.purs:26:16
+		return Node(left, y, insert(x, right))
+//line Main.purs:26:7
+	}
+//line Main.purs:27:20
+	return sharedTreeLeaf
+//line Main.purs:22:1
 }
 
 // shared/shared.go

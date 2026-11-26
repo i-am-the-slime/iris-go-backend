@@ -45,64 +45,34 @@ const (
 	ReadErrorEmpty
 )
 
-type EitherInt struct {
+type Either struct {
 	Left  ReadError
 	Right int32
 	Tag   uint8
 }
 
 const (
-	EitherIntLeft = iota
-	EitherIntRight
+	EitherLeft = iota
+	EitherRight
 )
 
-type ReaderInt struct {
+type Reader struct {
 	Name string
 	Read func(string) (int32, ReadErrorFailure)
 }
 
-type ParserInt struct {
-	Option ReaderInt
-	Both0  *ParserInt
-	Both1  *ParserInt
+type Parser struct {
+	Option Reader
+	Both0  *Parser
+	Both1  *Parser
 	Done   int32
 	Tag    uint8
 }
 
 const (
-	ParserIntOption = iota
-	ParserIntDone
-	ParserIntBoth
-)
-
-type EitherString struct {
-	Left  ReadError
-	Right string
-	Tag   uint8
-}
-
-const (
-	EitherStringLeft = iota
-	EitherStringRight
-)
-
-type ReaderString struct {
-	Name string
-	Read func(string) (string, ReadErrorFailure)
-}
-
-type ParserString struct {
-	Option ReaderString
-	Done   string
-	Both0  *ParserString
-	Both1  *ParserString
-	Tag    uint8
-}
-
-const (
-	ParserStringOption = iota
-	ParserStringDone
-	ParserStringBoth
+	ParserOption = iota
+	ParserDone
+	ParserBoth
 )
 
 type ReadErrorFailure struct {
@@ -110,37 +80,30 @@ type ReadErrorFailure struct {
 	Left   ReadError
 }
 
-func Done(done string) *ParserString {
-	return &ParserString{Tag: ParserStringDone, Done: done}
+func Done(done int32) *Parser {
+	return &Parser{Tag: ParserDone, Done: done}
 }
 
 func main() {
-	parserInts := make([]ParserInt, 3)
-	parserInts[0] = ParserInt{Tag: ParserIntBoth, Both0: &parserInts[1], Both1: &parserInts[2]}
-	parserInts[1] = ParserInt{Tag: ParserIntDone, Done: 1}
-	parserInts[2] = ParserInt{Tag: ParserIntDone, Done: 2}
-	journal.Log(show.ArrayString(namesInt(&parserInts[0])))
-	journal.Log(show.ArrayString(namesString(Done("a"))))
+	journal.Log(show.ArrayString(namesBoth(Done(1), Done(2))))
+	journal.Log(show.ArrayString(namesDone("a")))
 }
 
-func namesInt(value *ParserInt) []string {
+func names(value *Parser) []string {
 	switch value.Tag {
-	case ParserIntOption:
+	case ParserOption:
 		return []string{value.Option.Name}
-	case ParserIntDone:
+	case ParserDone:
 		return []string{}
-	default: // ParserIntBoth
-		return array.Append(namesInt(value.Both0), namesInt(value.Both1))
+	default: // ParserBoth
+		return array.Append(names(value.Both0), names(value.Both1))
 	}
 }
 
-func namesString(value *ParserString) []string {
-	switch value.Tag {
-	case ParserStringOption:
-		return []string{value.Option.Name}
-	case ParserStringDone:
-		return []string{}
-	default: // ParserStringBoth
-		return array.Append(namesString(value.Both0), namesString(value.Both1))
-	}
+func namesBoth(left *Parser, right *Parser) []string {
+	return array.Append(names(left), names(right))
+}
+
+func namesDone(s string) []string {
+	return []string{}
 }

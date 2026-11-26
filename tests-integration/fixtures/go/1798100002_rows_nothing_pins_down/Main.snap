@@ -1,10 +1,25 @@
 ---
 source: tests-integration/src/fixtures.rs
 ---
+// Data/Variant/Internal/internal.go
+package internal
+
+import "fixture/shared"
+
+type VariantRep struct {
+	Type  string
+	Value int32
+}
+
+func Convert(value VariantRep) shared.TypeValue {
+	return shared.TypeValue{Type: value.Type, Value: value.Value}
+}
+
 // main.go
 package main
 
 import (
+	variant "fixture/Data/Variant/Internal"
 	"fixture/shared"
 	"github.com/i-am-the-slime/iris-go/array"
 	"github.com/i-am-the-slime/iris-go/console"
@@ -59,7 +74,7 @@ func mounted() []string {
 	}}
 	count2 := scrutinee2.Props()
 	count := count2.Count
-	scrutinee2.Emit(shared.Convert(shared.VariantRep{Type: "clicked", Value: count}))
+	scrutinee2.Emit(variant.Convert(variant.VariantRep{Type: "clicked", Value: count}))
 	clicks := "clicked " + strconv.Itoa(int(count))
 	toggled := toggles
 	return []string{item, clicks, strconv.Itoa(int(toggled))}
@@ -103,13 +118,4 @@ type TypeValue struct {
 type EmitProps struct {
 	Emit  func(TypeValue)
 	Props func() Count
-}
-
-type VariantRep struct {
-	Type  string
-	Value int32
-}
-
-func Convert(value VariantRep) TypeValue {
-	return TypeValue{Type: value.Type, Value: value.Value}
 }

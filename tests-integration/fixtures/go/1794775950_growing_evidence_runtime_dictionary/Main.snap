@@ -30,7 +30,7 @@ func ArrayInt(array []int32) string {
 package main
 
 import (
-	"fixture/Data/Show"
+	datashow "fixture/Data/Show"
 	"fixture/shared"
 	"github.com/i-am-the-slime/iris-go/console"
 	"github.com/i-am-the-slime/iris-go/prim"
@@ -52,26 +52,38 @@ var main_ = initializeMain_()
 
 func initializeMain_() []string {
 	text := []byte("Nest ")
-	text = appendShowNested(text, shared.Show{Show: func(coerced any) string {
-		return show.ArrayInt(shared.Convert(coerced))
-	}}, &Nested{Tag: NestedNest, Nest: &Nested{Tag: NestedFlat, Flat: shared.Convert2([][]int32{{1, 2}, {3}})}})
+	text = appendShowNestedShowDictionaryNest(text, func(coerced any) string {
+		return datashow.ArrayInt(shared.Convert(coerced))
+	}, &Nested{Tag: NestedFlat, Flat: shared.Convert2([][]int32{{1, 2}, {3}})})
 	return []string{"1", string(text)}
 }
 
-func showNested(showDictionary shared.Show, nested *Nested) string {
-	return string(appendShowNested(nil, showDictionary, nested))
+func showNestedShowDictionary(show func(any) string, nested *Nested) string {
+	return string(appendShowNestedShowDictionary(nil, show, nested))
 }
 
-func appendShowNested(buffer []byte, showDictionary shared.Show, nested *Nested) []byte {
+func showNestedShowDictionaryNest(show func(any) string, inner *Nested) string {
+	return string(appendShowNestedShowDictionaryNest(nil, show, inner))
+}
+
+func appendShowNestedShowDictionary(buffer []byte, show func(any) string, nested *Nested) []byte {
 	switch nested.Tag {
 	case NestedFlat:
-		buffer = prim.AppendString(buffer, showDictionary.Show(nested.Flat))
+		buffer = prim.AppendString(buffer, show(nested.Flat))
 	default: // NestedNest
 		buffer = append(buffer, "Nest "...)
-		buffer = appendShowNested(buffer, shared.Show{Show: func(coerced any) string {
-			return prim.ShowArray(showDictionary.Show, coerced.([]any))
-		}}, nested.Nest)
+		buffer = appendShowNestedShowDictionary(buffer, func(coerced any) string {
+			return prim.ShowArray(show, coerced.([]any))
+		}, nested.Nest)
 	}
+	return buffer
+}
+
+func appendShowNestedShowDictionaryNest(buffer []byte, show func(any) string, inner *Nested) []byte {
+	buffer = append(buffer, "Nest "...)
+	buffer = appendShowNestedShowDictionary(buffer, func(coerced any) string {
+		return prim.ShowArray(show, coerced.([]any))
+	}, inner)
 	return buffer
 }
 
@@ -89,10 +101,6 @@ func Convert(value any) []int32 {
 		converted[index] = element.(int32)
 	}
 	return converted
-}
-
-type Show struct {
-	Show func(any) string
 }
 
 func Convert2(value [][]int32) any {

@@ -79,23 +79,12 @@ func initializeMain_() []string {
 	nesteds[0] = Nested{Tag: NestedNest, Nest: &nesteds[1]}
 	nesteds[1] = Nested{Tag: NestedNest, Nest: &nesteds[2]}
 	nesteds[2] = Nested{Tag: NestedFlat, Flat: shared.Convert([][]int32{{1, 2}, {3}})}
-	return []string{showLocal(&Nested{Tag: NestedFlat, Flat: int32(1)}), showLocal(&nesteds[0]), mainGo(&Nested{Tag: NestedNest, Nest: &Nested{Tag: NestedFlat, Flat: shared.Convert2([]bool{true})}})}
+	return []string{showLocal(&Nested{Tag: NestedFlat, Flat: int32(1)}), showLocal(&nesteds[0]), mainGoNest(&Nested{Tag: NestedFlat, Flat: shared.Convert2([]bool{true})})}
 }
 
 var showLocal func(*Nested) string = showLocalGo
 
-func mainGo(nested *Nested) string {
-	switch nested.Tag {
-	case NestedFlat:
-		return "nested: " + strconv.FormatBool(nested.Flat.(bool))
-	default: // NestedNest
-		return mainGo2(shared.Show{Show: func(coerced any) string {
-			return show.ArrayBoolean(shared.Convert3(coerced))
-		}}, nested.Nest)
-	}
-}
-
-func mainGo2(dictionary shared.Show, nested *Nested) string {
+func mainGo(dictionary shared.Show, nested *Nested) string {
 	for {
 		dictionaryCaptured := dictionary
 		switch nested.Tag {
@@ -110,6 +99,12 @@ func mainGo2(dictionary shared.Show, nested *Nested) string {
 			continue
 		}
 	}
+}
+
+func mainGoNest(inner *Nested) string {
+	return mainGo(shared.Show{Show: func(coerced any) string {
+		return show.ArrayBoolean(shared.Convert3(coerced))
+	}}, inner)
 }
 
 func showLocalGo(nested *Nested) string {
@@ -165,6 +160,10 @@ func Convert2(value []bool) any {
 	return converted
 }
 
+type Show struct {
+	Show func(any) string
+}
+
 func Convert3(value any) []bool {
 	array := value.([]any)
 	converted := make([]bool, len(array))
@@ -172,10 +171,6 @@ func Convert3(value any) []bool {
 		converted[index] = element.(bool)
 	}
 	return converted
-}
-
-type Show struct {
-	Show func(any) string
 }
 
 func Convert4(value any) []int32 {

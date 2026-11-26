@@ -22,7 +22,7 @@ func Trip(trip0 int32, trip1 *Route) *Route {
 var main_ = initializeMain_()
 
 func initializeMain_() shared.MainResult {
-	return shared.MainResult{Legs: legs(Trip(1, Trip(2, sharedRouteAway))), Away: endsAway(Trip(1, sharedRouteAway)), First: legs(Trip(3, sharedRouteHome)), Goes: true}
+	return shared.MainResult{Legs: legsTrip(1, Trip(2, sharedRouteAway)), Away: endsAwayTrip(1, sharedRouteAway), First: legsTrip(3, sharedRouteHome), Goes: true}
 }
 
 func legs(value *Route) int32 {
@@ -46,6 +46,14 @@ func endsAway(value *Route) bool {
 		}
 		return false
 	}
+}
+
+func legsTrip(n int32, rest *Route) int32 {
+	return n + legs(rest)
+}
+
+func endsAwayTrip(i int32, rest *Route) bool {
+	return endsAway(rest)
 }
 
 func main() {

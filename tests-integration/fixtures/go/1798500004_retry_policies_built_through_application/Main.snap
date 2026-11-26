@@ -17,17 +17,16 @@ type RetryStatus struct {
 
 func main_() []string {
 	attempts := &shared.Ref[int32]{Value: 0}
-	recovered := mainGo(attempts, RetryStatus{IterNumber: 0, CumulativeDelay: 0.0})
-	exhausted := mainGo2(RetryStatus{IterNumber: 0, CumulativeDelay: 0.0})
-	delayed := mainGo3(RetryStatus{IterNumber: 0, CumulativeDelay: 0.0})
+	recovered := mainGoStatus(attempts, 0.0, 0)
+	exhausted := mainGoStatus2(0.0, 0)
+	delayed := mainGoStatus3(0.0, 0)
 	return []string{"stopped after " + strconv.Itoa(int(recovered.IterNumber)) + " retries, waiting " + prim.ShowNumber(recovered.CumulativeDelay), "stopped after " + strconv.Itoa(int(exhausted.IterNumber)) + " retries, waiting " + prim.ShowNumber(exhausted.CumulativeDelay), "stopped after " + strconv.Itoa(int(delayed.IterNumber)) + " retries, waiting " + prim.ShowNumber(delayed.CumulativeDelay)}
 }
 
-func mainGo(attempts *shared.Ref[int32], status RetryStatus) RetryStatus {
+func mainGoStatus(attempts *shared.Ref[int32], cumulativeDelay float64, iterNumber int32) RetryStatus {
 	attemptsValue := attempts.Value
 	for {
-		cumulativeDelay := status.CumulativeDelay
-		iterNumber := status.IterNumber
+		status := RetryStatus{CumulativeDelay: cumulativeDelay, IterNumber: iterNumber}
 		s := attemptsValue
 		s_ := s + 1
 		attemptsValue = s_
@@ -39,29 +38,27 @@ func mainGo(attempts *shared.Ref[int32], status RetryStatus) RetryStatus {
 			attempts.Value = attemptsValue
 			return status
 		}
-		status = RetryStatus{IterNumber: iterNumber + 1, CumulativeDelay: cumulativeDelay + 50.0}
+		cumulativeDelay, iterNumber = status.CumulativeDelay+50.0, status.IterNumber+1
 	}
 }
 
-func mainGo2(status RetryStatus) RetryStatus {
+func mainGoStatus2(cumulativeDelay float64, iterNumber int32) RetryStatus {
 	for {
-		cumulativeDelay := status.CumulativeDelay
-		iterNumber := status.IterNumber
+		status := RetryStatus{CumulativeDelay: cumulativeDelay, IterNumber: iterNumber}
 		if status.IterNumber >= 2 {
 			return status
 		}
-		status = RetryStatus{IterNumber: iterNumber + 1, CumulativeDelay: cumulativeDelay + 0.0}
+		cumulativeDelay, iterNumber = status.CumulativeDelay+0.0, status.IterNumber+1
 	}
 }
 
-func mainGo3(status RetryStatus) RetryStatus {
+func mainGoStatus3(cumulativeDelay float64, iterNumber int32) RetryStatus {
 	for {
-		cumulativeDelay := status.CumulativeDelay
-		iterNumber := status.IterNumber
+		status := RetryStatus{CumulativeDelay: cumulativeDelay, IterNumber: iterNumber}
 		if status.IterNumber >= 4 {
 			return status
 		}
-		status = RetryStatus{IterNumber: iterNumber + 1, CumulativeDelay: cumulativeDelay + 10.0}
+		cumulativeDelay, iterNumber = status.CumulativeDelay+10.0, status.IterNumber+1
 	}
 }
 

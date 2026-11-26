@@ -46,18 +46,18 @@ const (
 	ValueStringPair
 )
 
+func IntValue(field0 Equal, field1 int32) *ValueInt {
+	return &ValueInt{Tag: ValueIntIntValue, Field0: field0, Field1: field1}
+}
+
+func StringValue(stringValue0 Equal, stringValue1 string) *ValueString {
+	return &ValueString{Tag: ValueStringStringValue, StringValue0: stringValue0, StringValue1: stringValue1}
+}
+
 var main_ = initializeMain_()
 
 func initializeMain_() []string {
-	valueInts := make([]ValueInt, 3)
-	valueInts[0] = ValueInt{Tag: ValueIntPair, Pair0: &valueInts[1], Pair1: &valueInts[2]}
-	valueInts[1] = ValueInt{Tag: ValueIntIntValue, Field0: refl, Field1: 41}
-	valueInts[2] = ValueInt{Tag: ValueIntIntValue, Field0: refl, Field1: 0}
-	valueStrings := make([]ValueString, 3)
-	valueStrings[0] = ValueString{Tag: ValueStringPair, Pair0: &valueStrings[1], Pair1: &valueStrings[2]}
-	valueStrings[1] = ValueString{Tag: ValueStringStringValue, StringValue0: refl, StringValue1: "left"}
-	valueStrings[2] = ValueString{Tag: ValueStringStringValue, StringValue0: refl, StringValue1: "right"}
-	return []string{strconv.Itoa(int(evaluateInt(&valueInts[0]) + 1)), evaluateString(&valueStrings[0])}
+	return []string{strconv.Itoa(int(evaluatePairInt(IntValue(refl, 41), IntValue(refl, 0)) + 1)), evaluatePairString(StringValue(refl, "left"), StringValue(refl, "right"))}
 }
 
 func evaluateInt(value *ValueInt) int32 {
@@ -86,6 +86,14 @@ func evaluateString(value *ValueString) string {
 			continue
 		}
 	}
+}
+
+func evaluatePairInt(left *ValueInt, value *ValueInt) int32 {
+	return evaluateInt(left)
+}
+
+func evaluatePairString(left *ValueString, value *ValueString) string {
+	return evaluateString(left)
 }
 
 func main() {

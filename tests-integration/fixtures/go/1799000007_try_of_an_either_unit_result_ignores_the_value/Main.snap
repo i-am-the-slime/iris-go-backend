@@ -47,17 +47,6 @@ const (
 	EitherUnitRight
 )
 
-type EitherEitherFailureUnit struct {
-	Left  Failure
-	Right EitherUnit
-	Tag   uint8
-}
-
-const (
-	EitherEitherFailureUnitLeft = iota
-	EitherEitherFailureUnitRight
-)
-
 type FailureFailure struct {
 	Failed bool
 	Left   Failure
@@ -91,48 +80,32 @@ func main() {
 }
 
 func client(offset int32) Client {
+	failure := Failure{Tag: FailureNoReply}
 	return Client{SendAll: func(n int32, r int32) (int32, FailureFailure) {
 		_, err := send(n, r)
-		var err2 FailureFailure
-		var err3 FailureFailure
 		if err.Failed {
-			err2 = FailureFailure{Failed: true, Left: err.Left}
-			err3 = FailureFailure{}
-		} else {
-			err2 = FailureFailure{}
-			err3 = FailureFailure{}
-		}
-		if err3.Failed {
-			return 0, err3
-		}
-		var err4 FailureFailure
-	matched:
-		for {
-			if err2.Failed {
-				failure := err2.Left
-				var result bool
-				switch failure.Tag {
-				case FailureInterrupted:
-					result = true
-				case FailureBroken:
-					result = failure.Broken == "interrupted"
-				default: // FailureNoReply
-					result = false
-				}
-				if !result {
-					err4 = FailureFailure{Failed: true, Left: failure}
-					break matched
-				}
+			field0 := err.Left
+			var result bool
+			switch field0.Tag {
+			case FailureInterrupted:
+				result = true
+			case FailureBroken:
+				result = field0.Broken == "interrupted"
+			default: // FailureNoReply
+				result = false
 			}
-			err4 = FailureFailure{}
-			break matched
-		}
-		if err4.Failed {
-			return 0, err4
+			if !result {
+				return 0, FailureFailure{Failed: true, Left: field0}
+			}
+			journal.Log("receiving " + strconv.Itoa(int(n)))
+			if n > 4 {
+				return 0, FailureFailure{Failed: true, Left: failure}
+			}
+			return (n+1)*2+offset, FailureFailure{}
 		}
 		journal.Log("receiving " + strconv.Itoa(int(n)))
 		if n > 4 {
-			return 0, FailureFailure{Failed: true, Left: Failure{Tag: FailureNoReply}}
+			return 0, FailureFailure{Failed: true, Left: failure}
 		}
 		return (n+1)*2+offset, FailureFailure{}
 	}}

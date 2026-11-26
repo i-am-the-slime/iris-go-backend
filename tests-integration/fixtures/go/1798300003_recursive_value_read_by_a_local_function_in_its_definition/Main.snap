@@ -53,6 +53,7 @@ func Emit(emit0 int32, emit1 func(struct{}) Step) Step {
 func main() {
 	var ones Step
 	var go_ func(Step) Step
+	var goEmit func(int32, func(struct{}) Step) Step
 	go_ = func(step Step) Step {
 		switch step.Tag {
 		case StepEmit:
@@ -63,9 +64,14 @@ func main() {
 			return ones
 		}
 	}
-	ones = go_(Emit(1, func(_ struct{}) Step {
+	goEmit = func(value int32, rest func(struct{}) Step) Step {
+		return Emit(value, func(_ struct{}) Step {
+			return go_(rest(struct{}{}))
+		})
+	}
+	ones = goEmit(1, func(_ struct{}) Step {
 		return Step{Tag: StepStop}
-	}))
+	})
 	journal.Log(show.ArrayInt(take(5, ones)))
 }
 
