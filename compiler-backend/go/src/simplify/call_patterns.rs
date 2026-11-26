@@ -113,16 +113,16 @@ impl Simplifier<'_> {
             return (bindings, body);
         }
         let start = bindings.len() - made.len();
-        for position in start..bindings.len() {
+        for binding in &mut bindings[start..] {
             let value = std::mem::replace(
-                &mut bindings[position].value,
+                &mut binding.value,
                 Expression::new(ExpressionKind::Unit, body.monotype),
             );
             let fuel = std::mem::replace(&mut self.fuel, super::INLINE_FUEL);
             let mut value = self.expression(value);
             self.fuel = fuel;
             redirect_call_patterns(&mut value, &made);
-            bindings[position].value = value;
+            binding.value = value;
         }
         let mentioned = |local: LocalId, bindings: &[Binding], body: &Expression| {
             mentions(body, local)
