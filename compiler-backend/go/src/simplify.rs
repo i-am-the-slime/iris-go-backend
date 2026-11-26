@@ -1178,7 +1178,8 @@ impl Simplifier<'_> {
                 && matches!(&body.kind, ExpressionKind::EffectBind { action, .. }
                     if matches!(action.kind, ExpressionKind::Local(id) if id == binding.local.id));
             if self.is_small_applied_lambda(&binding, &body)
-                || self.is_closed_tiny_lambda(&binding.value)
+                || (self.is_closed_tiny_lambda(&binding.value)
+                    && passed_whole_at_most_once(&body, binding.local.id))
             {
                 body = self.inline_applied(body, &binding);
                 body = self.expression(body);
@@ -1555,6 +1556,14 @@ fn substitute_in_place(
     for_each_child_mut(expression, &mut |child| {
         substitute_in_place(child, local, value, monotypes)
     });
+}
+
+/// Whether the local is passed on whole, not called, at most once. unsafeRefEq tells two copies
+/// of a lambda apart, so a lambda passed on twice, `[ kitchen, garden, kitchen ]`, stays one
+/// function that both places share.
+fn passed_whole_at_most_once(body: &Expression, local: LocalId) -> bool {
+    let uses = occurrences_up_to(body, local, usize::MAX);
+    uses.total - uses.applied <= 1
 }
 
 /// Whether the expression only computes a value: it neither builds nor runs an action, nor
