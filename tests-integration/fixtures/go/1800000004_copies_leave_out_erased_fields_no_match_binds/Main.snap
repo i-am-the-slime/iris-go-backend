@@ -1,0 +1,72 @@
+---
+source: tests-integration/src/fixtures.rs
+---
+// main.go
+package main
+
+import (
+	journal "fixture/Journal_ffi"
+	"fixture/shared"
+	"strconv"
+)
+
+type Nested struct {
+	Deep0 any
+	Deep1 *Nested
+	Tag   uint8
+}
+
+const (
+	NestedFlat = iota
+	NestedDeep
+)
+
+func main() {
+	journal.Log(strconv.Itoa(int(1 + depthDeep(&Nested{Tag: NestedFlat}))))
+	journal.Log(strconv.Itoa(int(2 + totalDeep(shared.Convert([]int32{2, 3}), &Nested{Tag: NestedDeep, Deep0: shared.Convert2([][]int32{{4}}), Deep1: &Nested{Tag: NestedFlat}}))))
+}
+
+func depth(value *Nested) int32 {
+	switch value.Tag {
+	case NestedFlat:
+		return 0
+	default: // NestedDeep
+		return 1 + depth(value.Deep1)
+	}
+}
+
+func total(value *Nested) int32 {
+	if value.Tag == NestedFlat {
+		return 0
+	}
+	if value.Tag == NestedDeep && value.Deep1.Tag == NestedFlat {
+		return 1
+	}
+	return 2 + total(value.Deep1)
+}
+
+func depthDeep(rest *Nested) int32 {
+	return 1 + depth(rest)
+}
+
+func totalDeep(argument any, rest *Nested) int32 {
+	scrutinee := &Nested{Tag: NestedDeep, Deep0: argument, Deep1: rest}
+	if scrutinee.Tag == NestedFlat {
+		return 0
+	}
+	if scrutinee.Tag == NestedDeep && scrutinee.Deep1.Tag == NestedFlat {
+		return 1
+	}
+	return 2 + total(scrutinee.Deep1)
+}
+
+// shared/shared.go
+package shared
+
+func Convert(value []int32) any {
+	return value
+}
+
+func Convert2(value [][]int32) any {
+	return value
+}

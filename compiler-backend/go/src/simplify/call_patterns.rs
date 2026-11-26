@@ -7,7 +7,7 @@ use crate::monomorphic::{
     Binding, Expression, ExpressionKind, Function, FunctionId, FunctionSpelling, Local, LocalId,
     PatternKind,
 };
-use crate::monotype::{DataType, MonotypeId};
+use crate::monotype::{DataType, Monotype, MonotypeId};
 use crate::naming::capitalise;
 use crate::purity::{is_within_size, size};
 
@@ -63,9 +63,13 @@ impl Shape {
         }
     }
 
-    fn field_values(&self, argument: Expression) -> Vec<Expression> {
+    fn field_values(&self, argument: Expression, kept: &[bool]) -> Vec<Expression> {
         match (self, argument.kind) {
-            (Shape::Constructor { .. }, ExpressionKind::Construct { arguments, .. }) => arguments,
+            (Shape::Constructor { .. }, ExpressionKind::Construct { arguments, .. }) => arguments
+                .into_iter()
+                .zip(kept)
+                .filter_map(|(argument, &kept)| kept.then_some(argument))
+                .collect(),
             (Shape::Record { labels }, ExpressionKind::Record(mut fields)) => labels
                 .iter()
                 .map(|(label, _)| {
@@ -87,6 +91,16 @@ struct CallPattern {
     shape: Shape,
 }
 
+/// A copy made for a loop's argument at `index` built with `shape`, which takes the fields
+/// `kept` marks.
+struct LocalCopy {
+    original: LocalId,
+    index: usize,
+    shape: Shape,
+    kept: Vec<bool>,
+    copy: Local,
+}
+
 impl Simplifier<'_> {
     /// Local loops that pass a value they build to themselves, `go (Just (s + i)) (i + 1)` or
     /// `go { low, high } (i + 1)`, take its fields instead: a copy of the loop for the
@@ -97,12 +111,18 @@ impl Simplifier<'_> {
         mut bindings: Vec<Binding>,
         mut body: Expression,
     ) -> (Vec<Binding>, Expression) {
-        let mut made: Vec<(LocalId, usize, Shape, Local)> = vec![];
+        let mut made: Vec<LocalCopy> = vec![];
         for _ in 0..CALL_PATTERN_COPIES {
             let Some(pattern) = self.call_pattern(&bindings, &body, &made) else { break };
             let original = bindings[pattern.position].local.id;
-            let copy = self.call_pattern_copy(&bindings[pattern.position], &pattern);
-            made.push((original, pattern.index, pattern.shape, copy.local.clone()));
+            let (copy, kept) = self.call_pattern_copy(&bindings[pattern.position], &pattern);
+            made.push(LocalCopy {
+                original,
+                index: pattern.index,
+                shape: pattern.shape,
+                kept,
+                copy: copy.local.clone(),
+            });
             bindings.push(copy);
             for binding in &mut bindings {
                 redirect_call_patterns(&mut binding.value, &made);
@@ -143,7 +163,7 @@ impl Simplifier<'_> {
         &self,
         bindings: &[Binding],
         body: &Expression,
-        made: &[(LocalId, usize, Shape, Local)],
+        made: &[LocalCopy],
     ) -> Option<CallPattern> {
         for (position, binding) in bindings.iter().enumerate() {
             let ExpressionKind::Lambda { parameters, body: lambda_body } = &binding.value.kind
@@ -173,8 +193,8 @@ impl Simplifier<'_> {
                     if parameters.len() == 1 && shape.is_empty() {
                         return None;
                     }
-                    let done = made.iter().any(|(original, at, made, _)| {
-                        *original == local && *at == index && *made == shape
+                    let done = made.iter().any(|made| {
+                        made.original == local && made.index == index && made.shape == shape
                     });
                     (!done).then_some(shape)
                 });
@@ -186,7 +206,11 @@ impl Simplifier<'_> {
         None
     }
 
-    fn call_pattern_copy(&mut self, original: &Binding, pattern: &CallPattern) -> Binding {
+    fn call_pattern_copy(
+        &mut self,
+        original: &Binding,
+        pattern: &CallPattern,
+    ) -> (Binding, Vec<bool>) {
         let mut value = original.value.clone();
         self.rename(&mut value, &mut FxHashMap::default());
         let ExpressionKind::Lambda { mut parameters, mut body } = value.kind else {
@@ -194,7 +218,8 @@ impl Simplifier<'_> {
         };
         let parameter = parameters.remove(pattern.index);
         let names = matched_names(&body, parameter.id, &pattern.shape);
-        let (fields, built, suffix) = self.shape_fields(&pattern.shape, &parameter, names);
+        let kept = self.kept_fields(&body, parameter.id, &pattern.shape, parameters.len());
+        let (fields, built, suffix) = self.shape_fields(&pattern.shape, &parameter, names, &kept);
         substitute_local(&mut body, parameter.id, &built);
         for (offset, field) in fields.into_iter().enumerate() {
             parameters.insert(pattern.index + offset, field);
@@ -206,7 +231,31 @@ impl Simplifier<'_> {
         let local = self.fresh(&Local { id: LocalId(0), name, monotype });
         let value = Expression::new(ExpressionKind::Lambda { parameters, body }, monotype)
             .replacing(original.value.position);
-        Binding { local, value }
+        (Binding { local, value }, kept)
+    }
+
+    /// The constructor's fields a copy takes: every field but an erased one the loop's matches
+    /// never bind, which the copy would only pass around as `any`.
+    fn kept_fields(
+        &self,
+        body: &Expression,
+        parameter: LocalId,
+        shape: &Shape,
+        other_parameters: usize,
+    ) -> Vec<bool> {
+        let Shape::Constructor { fields, .. } = shape else { return vec![] };
+        let bound = bound_fields(body, parameter, shape);
+        let kept: Vec<bool> = fields
+            .iter()
+            .zip(bound)
+            .map(|(&monotype, bound)| bound || !self.is_erased(monotype))
+            .collect();
+        let takes_nothing = other_parameters == 0 && !kept.contains(&true);
+        if takes_nothing { vec![true; fields.len()] } else { kept }
+    }
+
+    fn is_erased(&self, monotype: MonotypeId) -> bool {
+        matches!(self.monotypes.get(monotype), Monotype::Erased(_))
     }
 
     fn shape_fields(
@@ -214,25 +263,30 @@ impl Simplifier<'_> {
         shape: &Shape,
         parameter: &Local,
         names: Vec<Option<SmolStr>>,
+        kept: &[bool],
     ) -> (Vec<Local>, Expression, SmolStr) {
         match shape {
             Shape::Constructor { data, constructor, fields } => {
-                let locals: Vec<Local> = fields
-                    .iter()
-                    .enumerate()
-                    .map(|(position, &monotype)| {
-                        let name = names
-                            .get(position)
-                            .cloned()
-                            .flatten()
-                            .unwrap_or_else(|| self.monotypes.value_name(monotype));
-                        self.fresh(&Local { id: LocalId(0), name, monotype })
-                    })
-                    .collect();
+                let mut locals: Vec<Local> = vec![];
+                let mut arguments: Vec<Expression> = vec![];
+                for (position, &monotype) in fields.iter().enumerate() {
+                    if !kept[position] {
+                        arguments.push(Expression::new(ExpressionKind::Unit, monotype));
+                        continue;
+                    }
+                    let name = names
+                        .get(position)
+                        .cloned()
+                        .flatten()
+                        .unwrap_or_else(|| self.monotypes.value_name(monotype));
+                    let local = self.fresh(&Local { id: LocalId(0), name, monotype });
+                    arguments.push(local.expression());
+                    locals.push(local);
+                }
                 let kind = ExpressionKind::Construct {
                     data: data.clone(),
                     constructor: *constructor,
-                    arguments: locals.iter().map(Local::expression).collect(),
+                    arguments,
                 };
                 let name = self
                     .monotypes
@@ -372,6 +426,42 @@ fn matched_names(body: &Expression, parameter: LocalId, shape: &Shape) -> Vec<Op
     names
 }
 
+/// Which of the constructor's fields a match of the parameter binds; a match that binds the
+/// whole value, or looks into a field, which the copy may not resolve, binds every field.
+fn bound_fields(body: &Expression, parameter: LocalId, shape: &Shape) -> Vec<bool> {
+    let Shape::Constructor { constructor, fields, .. } = shape else { return vec![] };
+    let mut bound = vec![false; fields.len()];
+    crate::monomorphic::traversal::visit(body, &mut |node| {
+        let ExpressionKind::Case { scrutinees, alternatives } = &node.kind else { return };
+        for (column, scrutinee) in scrutinees.iter().enumerate() {
+            if !matches!(scrutinee.kind, ExpressionKind::Local(id) if id == parameter) {
+                continue;
+            }
+            for alternative in alternatives {
+                match &alternative.patterns[column].kind {
+                    PatternKind::Wildcard => {}
+                    PatternKind::Constructor { constructor: matched, .. }
+                        if matched != constructor => {}
+                    PatternKind::Constructor { arguments, .. }
+                        if arguments.iter().all(|argument| {
+                            matches!(
+                                argument.kind,
+                                PatternKind::Wildcard | PatternKind::Variable(_)
+                            )
+                        }) =>
+                    {
+                        for (bound, argument) in bound.iter_mut().zip(arguments) {
+                            *bound |= !matches!(argument.kind, PatternKind::Wildcard);
+                        }
+                    }
+                    _ => bound.iter_mut().for_each(|bound| *bound = true),
+                }
+            }
+        }
+    });
+    bound
+}
+
 fn substitute_local(expression: &mut Expression, local: LocalId, value: &Expression) {
     if matches!(expression.kind, ExpressionKind::Local(id) if id == local) {
         *expression = value.clone().replacing(expression.position);
@@ -381,18 +471,18 @@ fn substitute_local(expression: &mut Expression, local: LocalId, value: &Express
 }
 
 /// Calls that build the value a copy was made for call the copy with the value's fields.
-fn redirect_call_patterns(expression: &mut Expression, made: &[(LocalId, usize, Shape, Local)]) {
+fn redirect_call_patterns(expression: &mut Expression, made: &[LocalCopy]) {
     for_each_child_mut(expression, &mut |child| redirect_call_patterns(child, made));
     let ExpressionKind::Apply { function, arguments } = &mut expression.kind else { return };
     loop {
         let ExpressionKind::Local(callee) = function.kind else { return };
-        let copy = made.iter().find(|(original, index, shape, _)| {
-            *original == callee
-                && arguments.get(*index).is_some_and(|argument| shape.matches(argument))
+        let copy = made.iter().find(|made| {
+            made.original == callee
+                && arguments.get(made.index).is_some_and(|argument| made.shape.matches(argument))
         });
-        let Some((_, index, shape, copy)) = copy else { return };
+        let Some(LocalCopy { index, shape, kept, copy, .. }) = copy else { return };
         let argument = arguments.remove(*index);
-        for (offset, field) in shape.field_values(argument).into_iter().enumerate() {
+        for (offset, field) in shape.field_values(argument, kept).into_iter().enumerate() {
             arguments.insert(index + offset, field);
         }
         **function = copy.expression().replacing(function.position);
@@ -423,10 +513,22 @@ impl Loop {
     }
 }
 
+/// A copy made for a top-level loop's argument at `index` built with `shape`, which takes the
+/// fields `kept` marks.
+#[derive(Clone)]
+struct TopLevelCopy {
+    original: FunctionId,
+    index: usize,
+    shape: Shape,
+    kept: Vec<bool>,
+    copy: FunctionId,
+    monotype: MonotypeId,
+}
+
 /// The copies of top-level loops made for the values their calls build.
 #[derive(Default)]
 pub(super) struct CallPatternCopies {
-    made: Vec<(FunctionId, usize, Shape, FunctionId, MonotypeId)>,
+    made: Vec<TopLevelCopy>,
     counts: FxHashMap<FunctionId, usize>,
 }
 
@@ -442,11 +544,13 @@ impl Simplifier<'_> {
         let Some((index, shape)) = self.top_level_call_pattern(callee, &arguments) else {
             return Err(arguments);
         };
-        let made = self.call_pattern_copies.made.iter().find(|(original, at, made, _, _)| {
-            *original == callee && *at == index && *made == shape
-        });
-        let (copy, copy_monotype) = match made {
-            Some((_, _, _, copy, copy_monotype)) => (*copy, *copy_monotype),
+        let made = self
+            .call_pattern_copies
+            .made
+            .iter()
+            .find(|made| made.original == callee && made.index == index && made.shape == shape);
+        let made = match made {
+            Some(made) => made.clone(),
             None => {
                 let count = self.call_pattern_copies.counts.entry(callee).or_default();
                 if *count >= CALL_PATTERN_COPIES {
@@ -458,10 +562,10 @@ impl Simplifier<'_> {
         };
         let mut arguments = arguments;
         let argument = arguments.remove(index);
-        for (offset, field) in shape.field_values(argument).into_iter().enumerate() {
+        for (offset, field) in shape.field_values(argument, &made.kept).into_iter().enumerate() {
             arguments.insert(index + offset, field);
         }
-        let function = Expression::new(ExpressionKind::Function(copy), copy_monotype);
+        let function = Expression::new(ExpressionKind::Function(made.copy), made.monotype);
         if arguments.is_empty() {
             return Ok(function);
         }
@@ -498,12 +602,7 @@ impl Simplifier<'_> {
         )
     }
 
-    fn top_level_copy(
-        &mut self,
-        callee: FunctionId,
-        index: usize,
-        shape: Shape,
-    ) -> (FunctionId, MonotypeId) {
+    fn top_level_copy(&mut self, callee: FunctionId, index: usize, shape: Shape) -> TopLevelCopy {
         let original = self.functions[callee.0 as usize]
             .clone()
             .expect("invariant violated: a loop with call patterns is known");
@@ -517,7 +616,8 @@ impl Simplifier<'_> {
         self.rename(&mut body, &mut renaming);
         let parameter = parameters.remove(index);
         let names = matched_names(&body, parameter.id, &shape);
-        let (fields, built, suffix) = self.shape_fields(&shape, &parameter, names);
+        let kept = self.kept_fields(&body, parameter.id, &shape, parameters.len());
+        let (fields, built, suffix) = self.shape_fields(&shape, &parameter, names, &kept);
         substitute_local(&mut body, parameter.id, &built);
         for (offset, field) in fields.into_iter().enumerate() {
             parameters.insert(index + offset, field);
@@ -529,7 +629,8 @@ impl Simplifier<'_> {
         let spelling = FunctionSpelling::Lifted { parent: original.name.clone(), local: suffix };
         self.monotypes.function_spellings.entry(name.clone()).or_insert(spelling);
         let copy = FunctionId(self.functions.len() as u32);
-        self.call_pattern_copies.made.push((callee, index, shape, copy, monotype));
+        let made = TopLevelCopy { original: callee, index, shape, kept, copy, monotype };
+        self.call_pattern_copies.made.push(made.clone());
         let function = Function {
             name,
             origin: original.origin,
@@ -546,6 +647,6 @@ impl Simplifier<'_> {
         let function = self.simplified_copy(function);
         self.sizes[copy.0 as usize] = size(&function.body);
         self.functions[copy.0 as usize] = Some(function);
-        (copy, monotype)
+        made
     }
 }

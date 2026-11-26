@@ -1,5 +1,5 @@
-examples any 580
-examples any:boxing 112
+examples any 579
+examples any:boxing 111
 examples any:empty-data 0
 examples any:existential 10
 examples any:foreign 79
