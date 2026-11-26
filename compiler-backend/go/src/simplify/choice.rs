@@ -218,6 +218,7 @@ impl Simplifier<'_> {
             };
             let mut lambda = Expression::new(lambda, function);
             self.rename(&mut lambda, &mut FxHashMap::default());
+            let lambda = self.expression(lambda);
             let call = ExpressionKind::Apply {
                 function: Box::new(join.expression()),
                 arguments: parameters.iter().map(Local::expression).collect(),

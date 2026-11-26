@@ -8,32 +8,10 @@ type Char int64
 
 const NoChar Char = 1 << 32
 
-// Data/Semiring/semiring.go
-package semiring
-
-func Add(i int32, i2 int32) int32 {
-	return i + i2
-}
-
-// Data/String/CodePoints/codepoints.go
-package codepoints
-
-import "github.com/i-am-the-slime/iris-go/prim"
-
-func Eq(left int32, right int32) bool {
-	return left == right
-}
-
-func CodePointFromChar(x rune) int32 {
-	return prim.ToCharCode(x)
-}
-
 // main.go
 package main
 
 import (
-	"fixture/Data/Semiring"
-	"fixture/Data/String/CodePoints"
 	"fixture/shared"
 	"github.com/i-am-the-slime/iris-go/console"
 	"github.com/i-am-the-slime/iris-go/prim"
@@ -82,8 +60,8 @@ func countSpacesUnconsingCountsUpToTwoOrCountSpacesUnconsingCountsUpToTwoJoin(st
 			}
 		default: // shared.CountSpacesUnconsingCountsUpToTwoJoinStep
 			var result int32
-			if codepoints.Eq(head, codepoints.CodePointFromChar(' ')) {
-				result = semiring.Add(count, 1)
+			if head == prim.ToCharCode(' ') {
+				result = count + 1
 			} else {
 				result = count
 			}
