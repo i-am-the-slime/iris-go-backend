@@ -1,0 +1,65 @@
+---
+source: tests-integration/src/fixtures.rs
+---
+// Data/Maybe/maybe.go
+package maybe
+
+const TagNothing = 0
+
+const TagJust = 1
+
+type Int struct {
+	Just int
+	Tag  uint8
+}
+
+// Data/Tuple/tuple.go
+package tuple
+
+type Tuple struct {
+	First  string
+	Second int32
+}
+
+// main.go
+package main
+
+import (
+	"fixture/Data/Tuple"
+	"github.com/i-am-the-slime/iris-go/console"
+	"github.com/i-am-the-slime/iris-go/object"
+	"github.com/i-am-the-slime/iris-go/prim"
+	"strconv"
+)
+
+var main_ = initializeMain_()
+
+func initializeMain_() int {
+	object2 := object.New[int]()
+	for n := 1; n < 3001; n++ {
+		tuple2 := tuple.Tuple{First: strconv.Itoa(n % 97), Second: 1}
+		k := tuple2.First
+		v := int(tuple2.Second)
+		slot, found := object.Slot(object2, k)
+		var lookupST int
+		if found {
+			lookupST = v + object2.Vals[slot]
+		} else {
+			lookupST = v
+		}
+		if found {
+			object2.Vals[slot] = lookupST
+		} else {
+			object.Poke(k, lookupST, object2)
+		}
+	}
+	result, found2 := object.Lookup("7", object2)
+	if !found2 {
+		result = 0
+	}
+	return object.Size(object2) + result
+}
+
+func main() {
+	console.Print(prim.ShowInt(main_))
+}

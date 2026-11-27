@@ -94,6 +94,7 @@ mod unpacked;
 mod unreferenced;
 mod unzip;
 mod updates;
+mod upsert;
 mod vector;
 mod views;
 mod wrappers;
@@ -308,6 +309,9 @@ where
     timed("constant fields", || constant_fields::read_constant_fields(&mut declarations));
     timed("repeated tests", || merging::join_repeated_tests(&mut declarations));
     timed("unpacked", || unpacked::read_found_answers(&mut declarations));
+    let global =
+        |name: &str| emitter.global_names.contains(name) || IMPORTED_PACKAGES.contains(&name);
+    timed("upserts", || upsert::look_up_and_write_once(&mut declarations, &global));
     let mut record_value_name = |type_name: &str| {
         let (&monotype, _) = emitter.record_names.iter().find(|(_, name)| *name == type_name)?;
         Some(emitter.value_base(monotype))
