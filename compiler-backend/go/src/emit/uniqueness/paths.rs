@@ -110,6 +110,24 @@ impl Paths {
         Paths(self.0 | other.0)
     }
 
+    /// The orders of a body that runs any number of times: one that consumes or conflicts
+    /// shares, one that only peeks peeks.
+    pub(in crate::emit) fn repeated(self) -> Paths {
+        let paths: Vec<Path> = self.paths().collect();
+        if paths.iter().any(|path| path.touched()) {
+            Paths::event(Event::Shared)
+        } else if paths.iter().any(|path| path.peeked_first || path.peeked_late) {
+            Paths::event(Event::Peek)
+        } else {
+            Paths::empty()
+        }
+    }
+
+    /// Whether no order of the body consumes the local or a relative of it.
+    pub(in crate::emit) fn never_consumed(self) -> bool {
+        self.paths().all(|path| !path.touched())
+    }
+
     pub(in crate::emit) fn all_linear(self) -> bool {
         self.paths().all(Path::is_linear)
     }

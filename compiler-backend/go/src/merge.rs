@@ -27,6 +27,7 @@ pub fn merge_identical_functions(
     program: Program,
     modules: &Modules,
     monotypes: &mut Monotypes,
+    kept: &crate::maps::KeptOperations,
 ) -> Program {
     let Program { mut functions, entry } = program;
     let collapsed: FxHashMap<MonotypeId, MonotypeId> =
@@ -40,7 +41,8 @@ pub fn merge_identical_functions(
         .enumerate()
         .map(|(index, function)| {
             let id = FunctionId(index as u32);
-            let mergeable = id != entry && !function.parameters.is_empty();
+            let mergeable =
+                id != entry && !function.parameters.is_empty() && !kept.keeps(&function.name);
             mergeable.then(|| HashedShape::of(function, id, &collapsed))
         })
         .collect();

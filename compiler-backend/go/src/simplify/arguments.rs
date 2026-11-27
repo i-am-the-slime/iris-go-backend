@@ -50,6 +50,9 @@ impl Simplifier<'_> {
         arguments: Vec<Expression>,
         monotype: MonotypeId,
     ) -> Result<Expression, Vec<Expression>> {
+        if self.keeps_calls(callee) {
+            return Err(arguments);
+        }
         let Some(templates) = self.known_arguments(callee, &arguments) else {
             return Err(arguments);
         };

@@ -16,6 +16,7 @@ mod foreign;
 mod go_traversal;
 mod graph;
 mod lift;
+mod maps;
 mod merge;
 mod modules;
 mod monomorphic;
@@ -43,6 +44,7 @@ pub use timing::Work;
 
 use crate::specialize::Specializer;
 use crate::timing::timed;
+use rustc_hash::FxHashSet;
 
 pub struct GoProgram {
     /// Each Go source file, by its path relative to the output directory, in
@@ -91,13 +93,50 @@ pub fn compile_program(
     monotypes.erased_newtypes = erased_newtypes;
     let program = monomorphic::Program { functions, entry };
     let eliminators = emit::Eliminators::find(&program, &monotypes);
-    let program = timed("simplify", || {
-        let coverage =
-            foreign_packages.line_directives.as_ref().map(|directives| directives.coverage);
-        simplify::simplify(program, &mut monotypes, next_local, thunk_parameters, coverage)
+    let coverage = foreign_packages.line_directives.as_ref().map(|directives| directives.coverage);
+    let hash_operations = maps::hash_operations(&program, &monotypes, &modules, &mut context);
+    let mut kept = maps::KeptOperations::new(&program, &hash_operations);
+    // The map operations stay calls through simplification only where a Go map does them; a
+    // program whose maps all stay trees is simplified again from its unsimplified functions,
+    // as if none were kept.
+    let unsimplified = (!kept.is_empty()).then(|| {
+        let functions = program.functions.clone();
+        (monomorphic::Program { functions, entry: program.entry }, thunk_parameters.clone())
     });
-    let program =
-        timed("merge", || merge::merge_identical_functions(program, &modules, &mut monotypes));
+    let calls_kept: FxHashSet<_> = hash_operations.keys().copied().collect();
+    let simplified = simplify_and_merge(
+        program,
+        &mut monotypes,
+        (next_local, thunk_parameters, coverage),
+        &calls_kept,
+        &modules,
+        &kept,
+    );
+    let program = match unsimplified {
+        None => simplified,
+        Some((unsimplified, thunk_parameters)) => {
+            let operations = kept.find(&simplified, &modules);
+            let used = emit::hash_map_operations_used(&simplified, &operations);
+            if used.len() == operations.len() {
+                simplified
+            } else {
+                kept.retain(&used);
+                let calls_kept: FxHashSet<_> = hash_operations
+                    .keys()
+                    .copied()
+                    .filter(|&id| kept.keeps(&unsimplified.function(id).name))
+                    .collect();
+                simplify_and_merge(
+                    unsimplified,
+                    &mut monotypes,
+                    (next_local, thunk_parameters, coverage),
+                    &calls_kept,
+                    &modules,
+                    &kept,
+                )
+            }
+        }
+    };
     if std::env::var_os("IRIS_GO_DUMP").is_some() {
         for function in &program.functions {
             eprintln!("{function:#?}");
@@ -132,6 +171,26 @@ pub fn compile_program(
     files.sort();
     let notes = runtime_dictionary_notes.into_iter().chain(notes).collect();
     Ok(GoProgram { files, functions, notes })
+}
+
+/// Simplifies the program and merges its identical functions, keeping the calls of the map
+/// operations that [`maps`] lets a Go map do.
+fn simplify_and_merge(
+    program: monomorphic::Program,
+    monotypes: &mut monotype::Monotypes,
+    (next_local, thunk_parameters, coverage): (
+        u32,
+        FxHashSet<monomorphic::LocalId>,
+        Option<LineCoverage>,
+    ),
+    calls_kept: &FxHashSet<monomorphic::FunctionId>,
+    modules: &modules::Modules,
+    kept: &maps::KeptOperations,
+) -> monomorphic::Program {
+    let program = timed("simplify", || {
+        simplify::simplify(program, monotypes, next_local, thunk_parameters, coverage, calls_kept)
+    });
+    timed("merge", || merge::merge_identical_functions(program, modules, monotypes, kept))
 }
 
 /// The module name a source file declares.

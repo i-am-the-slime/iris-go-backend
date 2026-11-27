@@ -42,6 +42,7 @@ mod from_list;
 mod fusion;
 mod groups;
 mod guards;
+mod hash_maps;
 mod headers;
 mod immediate;
 mod index_arrays;
@@ -135,6 +136,14 @@ use crate::timing::timed;
 pub(crate) use self::closures::Eliminators;
 pub use self::packages::GoSourceFile;
 pub use self::vector::{KERNEL_FILE_SUFFIXES, is_kernel_file};
+
+/// The names of the map operations that some Go map does ([`crate::maps`]).
+pub(crate) fn hash_map_operations_used(
+    program: &Program,
+    operations: &FxHashMap<FunctionId, crate::maps::MapOperation>,
+) -> FxHashSet<smol_str::SmolStr> {
+    hash_maps::operations_used(program, operations)
+}
 
 pub fn emit_program<Q>(
     mut program: Program,

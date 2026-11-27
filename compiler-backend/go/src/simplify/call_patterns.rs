@@ -581,7 +581,7 @@ impl Simplifier<'_> {
         callee: FunctionId,
         arguments: &[Expression],
     ) -> Option<(usize, Shape)> {
-        if callee == self.entry || !self.recursive[callee.0 as usize] {
+        if callee == self.entry || !self.recursive[callee.0 as usize] || self.keeps_calls(callee) {
             return None;
         }
         let function = self.functions[callee.0 as usize].as_ref()?;

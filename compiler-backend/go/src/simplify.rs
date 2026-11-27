@@ -83,6 +83,7 @@ pub fn simplify(
     next_local: u32,
     thunk_parameters: FxHashSet<LocalId>,
     coverage: Option<LineCoverage>,
+    calls_kept: &FxHashSet<FunctionId>,
 ) -> Program {
     let suspension = Suspension::analyse(&program, monotypes);
     let Program { functions, entry } = program;
@@ -126,6 +127,7 @@ pub fn simplify(
         evaluated_constants: FxHashMap::default(),
         stores_built: false,
         source_ranks: SourceRanks { entry: entry_file, home: None },
+        calls_kept: calls_kept.clone(),
     };
     for component in &components {
         for &function in component {
@@ -184,6 +186,9 @@ pub fn simplify(
 }
 
 struct Simplifier<'m> {
+    /// The functions called rather than copied into their callers: the map operations that
+    /// [`crate::maps`] lets a Go map do, which the emitter recognises by their calls.
+    calls_kept: FxHashSet<FunctionId>,
     functions: Vec<Option<Function>>,
     /// The size of each function's body as it stands in `functions`.
     sizes: Vec<usize>,
@@ -328,7 +333,7 @@ impl Simplifier<'_> {
     }
 
     fn inlinable(&self, id: FunctionId) -> Option<&Function> {
-        if id == self.entry || self.recursive[id.0 as usize] {
+        if id == self.entry || self.recursive[id.0 as usize] || self.keeps_calls(id) {
             return None;
         }
         let function = self.functions[id.0 as usize].as_ref()?;
@@ -1790,4 +1795,12 @@ fn choice_at_case(mut distributed: Expression, position: Option<SourcePosition>)
 fn is_built_record(expression: &Expression) -> bool {
     matches!(&expression.kind, ExpressionKind::Record(fields)
         if fields.iter().all(|(_, value)| is_discardable(value)))
+}
+
+impl Simplifier<'_> {
+    /// Whether calls of the function stay calls: it is neither copied into its callers nor
+    /// specialised to their arguments.
+    pub(super) fn keeps_calls(&self, id: FunctionId) -> bool {
+        self.calls_kept.contains(&id)
+    }
 }

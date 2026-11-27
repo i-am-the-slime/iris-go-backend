@@ -17,6 +17,25 @@ pub(in crate::emit) trait Shapes {
     /// Whether a field of type `field` of a cell of type `cell` is part of its spine: a cell of
     /// the same data that the outer cell's owner owns too.
     fn is_spine(&mut self, cell: MonotypeId, field: MonotypeId) -> bool;
+    /// Whether a call hands on the locals it is passed only once every argument is computed, so
+    /// that the others may still read them: `f (lookup k m) m`.
+    fn passes_locals_last(&self) -> bool {
+        false
+    }
+    /// Whether a call runs a callback it is passed while it runs, any number of times, and keeps
+    /// nothing of it: `Array.filter (\x -> member x m) xs`.
+    fn runs_now(&mut self, _call: &Expression, _callback: &Expression) -> bool {
+        false
+    }
+    /// Whether an effect that uses a local only to read it peeks at it, as a callback that runs
+    /// now does: the effect may run any number of times, but reads nothing that changes.
+    fn effects_only_peek(&self) -> bool {
+        false
+    }
+    /// Whether a call does nothing with a local it is passed that counts as a use.
+    fn ignores(&mut self, _call: &Expression, _argument: &Expression) -> bool {
+        false
+    }
 }
 
 /// One branch of an `if` (`Then`, `Otherwise`) or of a `case` (the alternative, and the guarded
@@ -65,6 +84,22 @@ pub(in crate::emit) fn is_unique(
         Scope::Guarded(guarded) => counter.guarded(shapes, guarded),
     };
     paths.all_linear()
+}
+
+/// Whether `target` is only ever read in `scope`: no order consumes it.
+pub(in crate::emit) fn is_only_read(
+    shapes: &mut impl Shapes,
+    target: LocalId,
+    scope: Scope<'_>,
+) -> bool {
+    let relatives = FxHashSet::default();
+    let forced = Forced::default();
+    let counter = Counter { target, field: None, relatives: &relatives, forced: &forced };
+    let paths = match scope {
+        Scope::Expression(expression) => counter.count(shapes, expression),
+        Scope::Guarded(guarded) => counter.guarded(shapes, guarded),
+    };
+    paths.never_consumed()
 }
 
 /// Whether the field `label` of the record `record` is unique in `scope`: on every path the
@@ -169,6 +204,19 @@ impl Counter<'_> {
             ExpressionKind::Local(id) if *id == self.target => Paths::event(Event::Consume),
             ExpressionKind::Local(id) if self.relatives.contains(id) => {
                 Paths::event(Event::Conflict)
+            }
+            ExpressionKind::EffectPure(_)
+            | ExpressionKind::EffectBind { .. }
+            | ExpressionKind::EffectEach { .. }
+                if shapes.effects_only_peek() =>
+            {
+                let mut children = vec![];
+                for_each_child(expression, &mut |child| children.push(child));
+                let mut paths = Paths::empty();
+                for child in children {
+                    paths = paths.then(self.count(shapes, child));
+                }
+                paths.repeated()
             }
             ExpressionKind::Lambda { .. }
             | ExpressionKind::Closure { .. }
@@ -290,6 +338,7 @@ impl Counter<'_> {
         arguments: &[Expression],
         mut paths: Paths,
     ) -> Paths {
+        let mut passed = Paths::empty();
         for argument in arguments {
             let followed = match &argument.kind {
                 ExpressionKind::Local(id) => *id == self.target,
@@ -299,12 +348,24 @@ impl Counter<'_> {
                 }
                 _ => false,
             };
+            if followed && shapes.ignores(call, argument) {
+                continue;
+            }
             let inspected = followed && shapes.inspects(call, argument);
-            let argument_paths =
-                if inspected { Paths::event(Event::Peek) } else { self.count(shapes, argument) };
+            if followed && !inspected && self.field.is_none() && shapes.passes_locals_last() {
+                passed = passed.unordered(Paths::event(Event::Consume));
+                continue;
+            }
+            let argument_paths = match &argument.kind {
+                _ if inspected => Paths::event(Event::Peek),
+                ExpressionKind::Lambda { body, .. } if shapes.runs_now(call, argument) => {
+                    self.count(shapes, body).repeated()
+                }
+                _ => self.count(shapes, argument),
+            };
             paths = paths.unordered(argument_paths);
         }
-        paths
+        paths.then(passed)
     }
 
     /// The uses of the followed field that differ from uses of a local: reading it, reading

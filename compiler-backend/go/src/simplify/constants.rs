@@ -51,7 +51,7 @@ impl Simplifier<'_> {
         id: FunctionId,
         arguments: &[Expression],
     ) -> Option<(Vec<Local>, Expression)> {
-        if id == self.entry || self.recursive[id.0 as usize] {
+        if id == self.entry || self.recursive[id.0 as usize] || self.keeps_calls(id) {
             return None;
         }
         let function = self.functions[id.0 as usize].as_ref()?;
@@ -74,7 +74,11 @@ impl Simplifier<'_> {
         arguments: &[Expression],
         monotype: MonotypeId,
     ) -> Option<Expression> {
-        if self.fuel == 0 || id == self.entry || self.recursive[id.0 as usize] {
+        if self.fuel == 0
+            || id == self.entry
+            || self.recursive[id.0 as usize]
+            || self.keeps_calls(id)
+        {
             return None;
         }
         let function = self.functions[id.0 as usize].as_ref()?;
@@ -691,7 +695,11 @@ impl Simplifier<'_> {
             return Err(record);
         };
         let ExpressionKind::Function(id) = function.kind else { return Err(record) };
-        if self.fuel == 0 || id == self.entry || self.recursive[id.0 as usize] {
+        if self.fuel == 0
+            || id == self.entry
+            || self.recursive[id.0 as usize]
+            || self.keeps_calls(id)
+        {
             return Err(record);
         }
         let Some(callee) = self.functions[id.0 as usize].as_ref() else { return Err(record) };
