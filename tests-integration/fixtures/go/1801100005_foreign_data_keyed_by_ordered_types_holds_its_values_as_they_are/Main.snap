@@ -1,0 +1,173 @@
+---
+source: tests-integration/src/fixtures.rs
+---
+// Data/Maybe/maybe.go
+package maybe
+
+import "fixture/shared"
+
+const TagNothing = 0
+
+const TagJust = 1
+
+type ArrayEdge struct {
+	Just []shared.Edge
+	Tag  uint8
+}
+
+func JustArrayEdge(just []shared.Edge) ArrayEdge {
+	return ArrayEdge{Tag: TagJust, Just: just}
+}
+
+var NoArrayEdge = ArrayEdge{Tag: TagNothing}
+
+type Edge struct {
+	Just shared.Edge
+	Tag  uint8
+}
+
+func JustEdge(just shared.Edge) Edge {
+	return Edge{Tag: TagJust, Just: just}
+}
+
+var NoEdge = Edge{Tag: TagNothing}
+
+type Placed struct {
+	Just shared.Placed
+	Tag  uint8
+}
+
+func JustPlaced(just shared.Placed) Placed {
+	return Placed{Tag: TagJust, Just: just}
+}
+
+var NoPlaced = Placed{Tag: TagNothing}
+
+// Data/Show/show.go
+package show
+
+import "strconv"
+
+func AppendShowArrayArrayInt(buffer []byte, array [][]int) []byte {
+	buffer = append(buffer, '[')
+	for index, element := range array {
+		if index > 0 {
+			buffer = append(buffer, ',')
+		}
+		buffer = AppendShowArrayInt(buffer, element)
+	}
+	buffer = append(buffer, ']')
+	return buffer
+}
+
+func AppendShowArrayArrayArrayInt(buffer []byte, array [][][]int) []byte {
+	buffer = append(buffer, '[')
+	for index, element := range array {
+		if index > 0 {
+			buffer = append(buffer, ',')
+		}
+		buffer = AppendShowArrayArrayInt(buffer, element)
+	}
+	buffer = append(buffer, ']')
+	return buffer
+}
+
+func AppendShowArrayInt(buffer []byte, array []int) []byte {
+	buffer = append(buffer, '[')
+	for index, element := range array {
+		if index > 0 {
+			buffer = append(buffer, ',')
+		}
+		buffer = strconv.AppendInt(buffer, int64(element), 10)
+	}
+	buffer = append(buffer, ']')
+	return buffer
+}
+
+func ArrayArrayArrayInt(array [][][]int) string {
+	return string(AppendShowArrayArrayArrayInt(nil, array))
+}
+
+func ArrayInt(array []int) string {
+	return string(AppendShowArrayInt(nil, array))
+}
+
+// main.go
+package main
+
+import (
+	"fixture/Data/Maybe"
+	"fixture/Data/Show"
+	table "fixture/Table_ffi"
+	"fixture/shared"
+	"strconv"
+)
+
+func main_() []string {
+	byOrigin := table.Empty[int, []shared.Edge]()
+	table.Insert(1, []shared.Edge{{From: 1, To: 2}, {From: 1, To: 3}}, byOrigin)
+	fromOne := table.LookupImpl(maybe.JustArrayEdge, maybe.NoArrayEdge, 1, byOrigin)
+	grid := table.Empty[int, [][]int]()
+	table.Insert(0, [][]int{{1, 2}, {3}}, grid)
+	rows := table.Values(grid)
+	chosen := table.Empty[string, maybe.Edge]()
+	table.Insert("some", maybe.JustEdge(shared.Edge{From: 4, To: 5}), chosen)
+	table.Insert("none", maybe.NoEdge, chosen)
+	choices := table.Values(chosen)
+	places := table.Empty[int, shared.Placed]()
+	table.Insert(7, shared.Placed{Name: "seven", At: shared.XY{X: 1, Y: 2}}, places)
+	seven := table.LookupImpl(maybe.JustPlaced, maybe.NoPlaced, 7, places)
+	var result []shared.Edge
+	switch fromOne.Tag {
+	case maybe.TagNothing:
+		result = []shared.Edge{}
+	default: // maybe.TagJust
+		result = fromOne.Just
+	}
+	mapped := make([]int, len(result))
+	for index := range result {
+		mapped[index] = result[index].To
+	}
+	mapped2 := make([]int, len(choices))
+	for index := range choices {
+		var result2 int
+		switch choices[index].Tag {
+		case maybe.TagNothing:
+			result2 = 0
+		default: // maybe.TagJust
+			result2 = choices[index].Just.To
+		}
+		mapped2[index] = result2
+	}
+	var result3 string
+	switch seven.Tag {
+	case maybe.TagNothing:
+		result3 = ""
+	default: // maybe.TagJust
+		at := seven.Just.At
+		result3 = seven.Just.Name + strconv.Itoa(at.X) + strconv.Itoa(at.Y)
+	}
+	return []string{show.ArrayInt(mapped), show.ArrayArrayArrayInt(rows), show.ArrayInt(mapped2), result3}
+}
+
+func main() {
+	main_()
+}
+
+// shared/shared.go
+package shared
+
+type Edge struct {
+	From int
+	To   int
+}
+
+type XY struct {
+	X int
+	Y int
+}
+
+type Placed struct {
+	Name string
+	At   XY
+}
