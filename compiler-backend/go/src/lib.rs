@@ -116,7 +116,7 @@ pub fn compile_program(
         None => simplified,
         Some((unsimplified, thunk_parameters)) => {
             let operations = kept.find(&simplified, &modules);
-            let used = emit::hash_map_operations_used(&simplified, &operations);
+            let used = emit::hash_map_operations_used(&simplified, &monotypes, &operations);
             if used.len() == operations.len() {
                 simplified
             } else {

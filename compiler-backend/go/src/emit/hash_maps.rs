@@ -2,21 +2,27 @@
 //! updates and queries by key ([`crate::maps`]).
 //!
 //! A map value goes through the program as a *web*: the locals, parameters and results it is
-//! bound to, the map operations that update it, the branches that choose between versions of it
-//! and the folds that carry it. A web is a Go map when
+//! bound to, the map operations that update it, the branches that choose between versions of it,
+//! the folds that carry it and the record fields that hold it. A web is a Go map when
 //!
 //! - every operation on it is one a Go map does ([`MapOperation`]), at a key whose `Ord` is
 //!   Go's `==` and sort;
 //! - every local it is bound to is used linearly ([`uniqueness::is_unique`]): read by those
 //!   operations, then passed on at most once, so that no version is seen after the next one
-//!   was made from it in place;
+//!   was made from it in place; a record local is linear in each field that holds a map
+//!   ([`uniqueness::is_unique_field`]);
 //! - it is made by those operations, or is a fold's seed that the fold then owns.
+//!
+//! A value has a *slot* for every map it holds: a map has one, a record one for each map its
+//! fields hold, in the order of its fields ([`Layout`]), and every slot is a node of a web.
 //!
 //! Anything else a version of the map meets, a function that walks the tree or a value that
 //! keeps it, takes the tree: the map's entries are sorted once by key and built into a balanced
 //! tree there, a value of its own that nothing writes. Nothing writes or hands on the map after
 //! it was converted ([`Ordering`]), so that it is converted at most once on its way. A fold that
 //! starts from a tree turns it into a Go map first, and owns that map.
+
+use std::rc::Rc;
 
 use rustc_hash::{FxHashMap, FxHashSet};
 use smol_str::SmolStr;
@@ -27,9 +33,9 @@ use crate::maps::MapOperation;
 use crate::monomorphic::traversal::for_each_child;
 use crate::monomorphic::{
     Alternative, Binding, Expression, ExpressionKind, Function, FunctionId, Guard, Guarded, Local,
-    LocalId, Program,
+    LocalId, Pattern, PatternKind, Program, RecordUpdate,
 };
-use crate::monotype::{MonotypeId, Monotypes};
+use crate::monotype::{Monotype, MonotypeId, Monotypes};
 
 mod rewrite;
 
@@ -38,6 +44,7 @@ use self::rewrite::Rewrite;
 /// The names of the map operations that some Go map does.
 pub(crate) fn operations_used(
     program: &Program,
+    monotypes: &Monotypes,
     operations: &FxHashMap<FunctionId, MapOperation>,
 ) -> FxHashSet<SmolStr> {
     if operations.is_empty() || !uniqueness::enabled() {
@@ -45,7 +52,7 @@ pub(crate) fn operations_used(
     }
     let shapes = map_shapes(program, operations);
     let readers = readers(program, operations, &shapes);
-    let mut finder = Webs::new(program, operations, &shapes, &readers);
+    let mut finder = Webs::new(program, monotypes, operations, &shapes, &readers);
     finder.find();
     let decided = finder.decide();
     decided
@@ -72,7 +79,7 @@ pub(super) fn choose_hash_maps(
     }
     let readers = readers(program, operations, &shapes);
     let webs = {
-        let mut finder = Webs::new(program, operations, &shapes, &readers);
+        let mut finder = Webs::new(program, monotypes, operations, &shapes, &readers);
         finder.find();
         finder.decide()
     };
@@ -128,58 +135,172 @@ fn map_shapes(
         .collect()
 }
 
+/// The slots of a type's values: one for a map, the slots of each field for a record, in the
+/// order of its fields, and none for anything else.
+#[derive(Default)]
+struct Layout {
+    width: usize,
+    /// The record fields that have slots.
+    fields: Vec<FieldSlots>,
+    /// The labels that lead to each slot's map.
+    paths: Vec<Vec<SmolStr>>,
+}
+
+struct FieldSlots {
+    label: SmolStr,
+    monotype: MonotypeId,
+    start: usize,
+    width: usize,
+}
+
+impl Layout {
+    fn field(&self, label: &str) -> Option<&FieldSlots> {
+        self.fields.iter().find(|field| field.label == label)
+    }
+}
+
+/// The layouts of the types met, made at first need.
+#[derive(Default)]
+struct Layouts {
+    known: FxHashMap<MonotypeId, Rc<Layout>>,
+}
+
+impl Layouts {
+    fn layout(
+        &mut self,
+        monotypes: &Monotypes,
+        shapes: &FxHashMap<MonotypeId, MapShape>,
+        monotype: MonotypeId,
+    ) -> Rc<Layout> {
+        if let Some(layout) = self.known.get(&monotype) {
+            return Rc::clone(layout);
+        }
+        let layout = if shapes.contains_key(&monotype) {
+            Layout { width: 1, fields: vec![], paths: vec![vec![]] }
+        } else if let Monotype::Record(record) = monotypes.get(monotype) {
+            let mut fields = vec![];
+            let mut width = 0;
+            let mut paths = vec![];
+            for field in record.iter() {
+                let inner = self.layout(monotypes, shapes, field.monotype);
+                for path in &inner.paths {
+                    let mut labels = vec![field.label.clone()];
+                    labels.extend(path.iter().cloned());
+                    paths.push(labels);
+                }
+                if inner.width > 0 {
+                    let label = field.label.clone();
+                    let (monotype, start) = (field.monotype, width);
+                    fields.push(FieldSlots { label, monotype, start, width: inner.width });
+                    width += inner.width;
+                }
+            }
+            Layout { width, fields, paths }
+        } else {
+            Layout::default()
+        };
+        let layout = Rc::new(layout);
+        self.known.insert(monotype, Rc::clone(&layout));
+        layout
+    }
+}
+
 /// A place a map value is bound to or made at.
 type Node = usize;
 
+/// The nodes of a value's slots ([`Layout`]).
+type Slots = Vec<Node>;
+
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum Flow {
-    /// An argument to a function's parameter.
+    /// An argument to a function's parameter, a map stored in a record field or read from one.
     Argument,
     /// A fold's seed, to the accumulator the fold owns.
     Seed,
 }
 
 struct SoftEdge {
-    from: Node,
-    to: Node,
+    from: Slots,
+    to: Slots,
     flow: Flow,
     at: *const Expression,
+}
+
+/// The code a local is used in, by address.
+#[derive(Clone, Copy)]
+enum ScopeAt {
+    Expression(*const Expression),
+    Guarded(*const Guarded),
+}
+
+impl ScopeAt {
+    fn of(scope: Scope<'_>) -> ScopeAt {
+        match scope {
+            Scope::Expression(expression) => ScopeAt::Expression(expression),
+            Scope::Guarded(guarded) => ScopeAt::Guarded(guarded),
+        }
+    }
+
+    /// SAFETY of the pointers: the program is borrowed for the whole analysis.
+    fn scope<'p>(self) -> Scope<'p> {
+        match self {
+            ScopeAt::Expression(expression) => Scope::Expression(unsafe { &*expression }),
+            ScopeAt::Guarded(guarded) => Scope::Guarded(unsafe { &*guarded }),
+        }
+    }
+}
+
+/// A local that the slots of a map, or of a record's field, are bound to, which must use them
+/// linearly.
+struct Linear {
+    node: Node,
+    local: LocalId,
+    path: Vec<SmolStr>,
+    scope: ScopeAt,
 }
 
 /// What the program does with its map values, as webs of nodes.
 struct Webs<'p> {
     program: &'p Program,
+    monotypes: &'p Monotypes,
     operations: &'p FxHashMap<FunctionId, MapOperation>,
     shapes: &'p FxHashMap<MonotypeId, MapShape>,
     readers: &'p FxHashSet<LocalId>,
+    layouts: Layouts,
     parents: Vec<Node>,
     /// Whether the node must be a tree: it is made or used in a way only the tree does.
     tree: Vec<bool>,
-    locals: FxHashMap<LocalId, Node>,
-    results: FxHashMap<FunctionId, Node>,
-    /// The node of every map-typed expression.
-    expressions: FxHashMap<*const Expression, Node>,
-    /// The map-typed expressions whose value goes somewhere only a tree may go.
-    escapes: Vec<(Node, *const Expression)>,
+    locals: FxHashMap<LocalId, Slots>,
+    results: FxHashMap<FunctionId, Slots>,
+    /// The slots of every expression whose type has some.
+    expressions: FxHashMap<*const Expression, Slots>,
+    /// The expressions whose value, with its maps, goes somewhere only a tree may go.
+    escapes: Vec<(Slots, *const Expression)>,
     soft: Vec<SoftEdge>,
     /// The nodes that a map operation reads or writes.
     operated: Vec<Node>,
-    /// The locals a map is bound to, with the code they are used in.
-    slots: Vec<(Node, LocalId, *const Expression)>,
+    linear: Vec<Linear>,
     /// The map operations the program calls, each with the node of the map it works on.
     calls: Vec<(FunctionId, Node)>,
+}
+
+/// The representation of each slot of a value: a Go map, or the tree.
+type Natives = Vec<bool>;
+
+/// A value that changes representation where it is: from the representation of its slots to
+/// another.
+struct Conversion {
+    from: Natives,
+    to: Natives,
 }
 
 /// The webs that are Go maps, and where values change representation.
 struct Decided {
     native_nodes: FxHashSet<Node>,
-    expressions: FxHashMap<*const Expression, Node>,
-    locals: FxHashMap<LocalId, Node>,
-    results: FxHashMap<FunctionId, Node>,
-    /// Map-typed expressions whose Go map becomes a tree there.
-    to_tree: FxHashSet<*const Expression>,
-    /// Map-typed expressions whose tree becomes a Go map there.
-    from_tree: FxHashSet<*const Expression>,
+    expressions: FxHashMap<*const Expression, Slots>,
+    locals: FxHashMap<LocalId, Slots>,
+    results: FxHashMap<FunctionId, Slots>,
+    conversions: FxHashMap<*const Expression, Conversion>,
     parents: Vec<Node>,
     calls: Vec<(FunctionId, Node)>,
 }
@@ -195,20 +316,27 @@ impl Decided {
     fn is_native(&self, node: Node) -> bool {
         self.native_nodes.contains(&self.root(node))
     }
+
+    fn natives(&self, slots: &[Node]) -> Natives {
+        slots.iter().map(|&node| self.is_native(node)).collect()
+    }
 }
 
 impl<'p> Webs<'p> {
     fn new(
         program: &'p Program,
+        monotypes: &'p Monotypes,
         operations: &'p FxHashMap<FunctionId, MapOperation>,
         shapes: &'p FxHashMap<MonotypeId, MapShape>,
         readers: &'p FxHashSet<LocalId>,
     ) -> Webs<'p> {
         Webs {
             program,
+            monotypes,
             operations,
             shapes,
             readers,
+            layouts: Layouts::default(),
             parents: vec![],
             tree: vec![],
             locals: FxHashMap::default(),
@@ -217,7 +345,7 @@ impl<'p> Webs<'p> {
             escapes: vec![],
             soft: vec![],
             operated: vec![],
-            slots: vec![],
+            linear: vec![],
             calls: vec![],
         }
     }
@@ -226,11 +354,25 @@ impl<'p> Webs<'p> {
         self.shapes.contains_key(&monotype)
     }
 
+    fn layout(&mut self, monotype: MonotypeId) -> Rc<Layout> {
+        self.layouts.layout(self.monotypes, self.shapes, monotype)
+    }
+
+    /// Whether values of the type hold maps.
+    fn holds_maps(&mut self, monotype: MonotypeId) -> bool {
+        self.layout(monotype).width > 0
+    }
+
     fn fresh(&mut self, tree: bool) -> Node {
         let node = self.parents.len();
         self.parents.push(node);
         self.tree.push(tree);
         node
+    }
+
+    fn fresh_slots(&mut self, monotype: MonotypeId, tree: bool) -> Slots {
+        let width = self.layout(monotype).width;
+        (0..width).map(|_| self.fresh(tree)).collect()
     }
 
     fn root(&mut self, node: Node) -> Node {
@@ -256,27 +398,45 @@ impl<'p> Webs<'p> {
         left
     }
 
+    fn join_slots(&mut self, left: &[Node], right: &[Node]) {
+        for (&left, &right) in left.iter().zip(right) {
+            self.join(left, right);
+        }
+    }
+
     fn force_tree(&mut self, node: Node) {
         let root = self.root(node);
         self.tree[root] = true;
     }
 
-    fn local(&mut self, id: LocalId) -> Node {
-        if let Some(&node) = self.locals.get(&id) {
-            return node;
+    fn force_trees(&mut self, slots: &[Node]) {
+        for &node in slots {
+            self.force_tree(node);
         }
-        let node = self.fresh(false);
-        self.locals.insert(id, node);
-        node
     }
 
-    fn result(&mut self, id: FunctionId) -> Node {
-        if let Some(&node) = self.results.get(&id) {
-            return node;
+    fn local(&mut self, id: LocalId, monotype: MonotypeId) -> Slots {
+        if let Some(slots) = self.locals.get(&id) {
+            return slots.clone();
         }
-        let node = self.fresh(false);
-        self.results.insert(id, node);
-        node
+        let slots = self.fresh_slots(monotype, false);
+        self.locals.insert(id, slots.clone());
+        slots
+    }
+
+    fn result(&mut self, id: FunctionId) -> Slots {
+        if let Some(slots) = self.results.get(&id) {
+            return slots.clone();
+        }
+        let result = self.program.function(id).result;
+        let slots = self.fresh_slots(result, false);
+        self.results.insert(id, slots.clone());
+        slots
+    }
+
+    fn soft(&mut self, from: Slots, to: Slots, flow: Flow, at: &Expression) {
+        let at = std::ptr::from_ref(at);
+        self.soft.push(SoftEdge { from, to, flow, at });
     }
 
     fn operation(&self, function: &Expression, arguments: &[Expression]) -> Option<MapOperation> {
@@ -304,36 +464,36 @@ impl<'p> Webs<'p> {
 
     fn function(&mut self, id: FunctionId, function: &'p Function) {
         for parameter in &function.parameters {
-            if self.is_map(parameter.monotype) {
-                let node = self.local(parameter.id);
-                self.require_linear(node, parameter.id, &function.body);
+            if self.holds_maps(parameter.monotype) {
+                let slots = self.local(parameter.id, parameter.monotype);
+                self.require_linear(&slots, parameter, Scope::Expression(&function.body));
             }
         }
-        if self.is_map(function.result) {
+        if self.holds_maps(function.result) {
             let body = self.value(&function.body);
             let result = self.result(id);
-            self.join(body, result);
+            self.join_slots(&body, &result);
             if function.parameters.is_empty() {
                 // A constant is one value that every use shares.
-                self.force_tree(result);
+                self.force_trees(&result);
             }
         } else {
             self.expression(&function.body);
         }
     }
 
-    fn require_linear(&mut self, node: Node, local: LocalId, scope: &'p Expression) {
-        self.slots.push((node, local, std::ptr::from_ref(scope)));
-        let mut shapes =
+    /// The local must use the maps it holds linearly: a map as a whole, a record each map it
+    /// holds by the fields that lead to it.
+    fn require_linear(&mut self, slots: &[Node], local: &Local, scope: Scope<'p>) {
+        let mut reads =
             Reads { program: self.program, operations: self.operations, readers: self.readers };
-        if !uniqueness::is_unique(
-            &mut shapes,
-            local,
-            &[],
-            Scope::Expression(scope),
-            &Forced::default(),
-        ) {
-            self.force_tree(node);
+        let at = ScopeAt::of(scope);
+        let layout = self.layout(local.monotype);
+        for (&node, path) in slots.iter().zip(&layout.paths) {
+            self.linear.push(Linear { node, local: local.id, path: path.clone(), scope: at });
+            if !is_linear(&mut reads, local.id, path, scope) {
+                self.force_tree(node);
+            }
         }
     }
 
@@ -345,52 +505,55 @@ impl<'p> Webs<'p> {
         }
         let function = self.program.function(id);
         for parameter in &function.parameters {
-            if self.is_map(parameter.monotype) {
-                let node = self.local(parameter.id);
-                self.force_tree(node);
+            if self.holds_maps(parameter.monotype) {
+                let slots = self.local(parameter.id, parameter.monotype);
+                self.force_trees(&slots);
             }
         }
-        if self.is_map(function.result) {
-            let node = self.result(id);
-            self.force_tree(node);
+        if self.holds_maps(function.result) {
+            let slots = self.result(id);
+            self.force_trees(&slots);
         }
     }
 
-    /// The node of a map-typed expression's value.
-    fn value(&mut self, expression: &'p Expression) -> Node {
-        let node = self.value_unrecorded(expression);
-        self.expressions.insert(std::ptr::from_ref(expression), node);
-        node
+    /// The slots of the value of an expression whose type has some.
+    fn value(&mut self, expression: &'p Expression) -> Slots {
+        let slots = self.value_unrecorded(expression);
+        self.expressions.insert(std::ptr::from_ref(expression), slots.clone());
+        slots
     }
 
-    fn value_unrecorded(&mut self, expression: &'p Expression) -> Node {
+    fn value_unrecorded(&mut self, expression: &'p Expression) -> Slots {
         match &expression.kind {
-            ExpressionKind::Local(id) => self.local(*id),
+            ExpressionKind::Local(id) => self.local(*id, expression.monotype),
             ExpressionKind::Function(id) => match self.operations.get(id) {
-                Some(MapOperation::Empty) => {
+                Some(MapOperation::Empty) if self.is_map(expression.monotype) => {
                     let node = self.fresh(false);
                     self.calls.push((*id, node));
-                    node
+                    vec![node]
                 }
                 _ => {
                     let function = self.program.function(*id);
-                    if function.parameters.is_empty() { self.result(*id) } else { self.fresh(true) }
+                    if function.parameters.is_empty() {
+                        self.result(*id)
+                    } else {
+                        self.fresh_slots(expression.monotype, true)
+                    }
                 }
             },
             ExpressionKind::Apply { function, arguments } => {
                 if let Some(operation) = self.operation(function, arguments) {
-                    return self.operation_value(expression, function, operation, arguments);
+                    return vec![self.operation_value(expression, function, operation, arguments)];
                 }
                 if let Some(id) = self.called(function, arguments.len()) {
                     self.arguments(id, arguments);
                     let result = self.result(id);
-                    let answer = self.fresh(false);
-                    let at = std::ptr::from_ref(expression);
-                    self.soft.push(SoftEdge { from: result, to: answer, flow: Flow::Argument, at });
+                    let answer = self.fresh_slots(expression.monotype, false);
+                    self.soft(result, answer.clone(), Flow::Argument, expression);
                     return answer;
                 }
                 self.expression_children(expression);
-                self.fresh(true)
+                self.fresh_slots(expression.monotype, true)
             }
             ExpressionKind::Let { bindings, body } => {
                 self.bindings(expression, bindings);
@@ -400,26 +563,99 @@ impl<'p> Webs<'p> {
                 self.expression(condition);
                 let then = self.value(then);
                 let otherwise = self.value(otherwise);
-                self.join(then, otherwise)
+                self.join_slots(&then, &otherwise);
+                then
             }
             ExpressionKind::Case { scrutinees, alternatives } => {
                 self.scrutinees(scrutinees, alternatives);
-                let mut joined = None;
+                let mut joined: Option<Slots> = None;
                 for body in alternative_bodies(alternatives) {
-                    let node = self.value(body);
-                    joined = Some(match joined {
-                        Some(joined) => self.join(joined, node),
-                        None => node,
-                    });
+                    let slots = self.value(body);
+                    match &joined {
+                        Some(joined) => self.join_slots(joined, &slots),
+                        None => joined = Some(slots),
+                    }
                 }
-                joined.unwrap_or_else(|| self.fresh(true))
+                joined.unwrap_or_else(|| self.fresh_slots(expression.monotype, true))
             }
             ExpressionKind::Foreign { foreign, arguments } if is_fold_left(foreign, arguments) => {
-                self.fold(arguments)
+                self.fold(expression, arguments)
+            }
+            ExpressionKind::Record(fields) => self.record(expression, fields),
+            ExpressionKind::Access { record, label } => {
+                let read = self.field_of(record, label);
+                let answer = self.fresh_slots(expression.monotype, false);
+                self.soft(read, answer.clone(), Flow::Argument, expression);
+                answer
+            }
+            ExpressionKind::Update { record, updates } => {
+                let mut slots = self.value(record);
+                self.updates(record.monotype, &mut slots, updates);
+                slots
             }
             _ => {
                 self.expression_children(expression);
-                self.fresh(true)
+                self.fresh_slots(expression.monotype, true)
+            }
+        }
+    }
+
+    /// A record built of its fields: each map a field holds is stored in the record's slot.
+    fn record(&mut self, expression: &'p Expression, fields: &'p [(SmolStr, Expression)]) -> Slots {
+        let layout = self.layout(expression.monotype);
+        let slots = self.fresh_slots(expression.monotype, false);
+        for (label, value) in fields {
+            match layout.field(label) {
+                Some(field) => {
+                    let stored = self.value(value);
+                    let place = slots[field.start..field.start + field.width].to_vec();
+                    self.soft(stored, place, Flow::Argument, value);
+                }
+                None => self.expression(value),
+            }
+        }
+        slots
+    }
+
+    /// The slots of a record's field, read from the record.
+    fn field_of(&mut self, record: &'p Expression, label: &str) -> Slots {
+        let slots = self.value(record);
+        let layout = self.layout(record.monotype);
+        match layout.field(label) {
+            Some(field) => slots[field.start..field.start + field.width].to_vec(),
+            None => vec![],
+        }
+    }
+
+    /// `record { label = value }`: the fields it replaces hold the maps of their values, the
+    /// others those of the record.
+    fn updates(&mut self, monotype: MonotypeId, slots: &mut [Node], updates: &'p [RecordUpdate]) {
+        let layout = self.layout(monotype);
+        for update in updates {
+            match update {
+                RecordUpdate::Leaf { label, value } => match layout.field(label) {
+                    Some(field) => {
+                        let stored = self.value(value);
+                        let place = self.fresh_slots(field.monotype, false);
+                        self.soft(stored, place.clone(), Flow::Argument, value);
+                        slots[field.start..field.start + field.width].copy_from_slice(&place);
+                    }
+                    None => self.expression(value),
+                },
+                RecordUpdate::Branch { label, updates } => match layout.field(label) {
+                    Some(field) => {
+                        let range = field.start..field.start + field.width;
+                        self.updates(field.monotype, &mut slots[range], updates);
+                    }
+                    None => {
+                        let mut none: [Node; 0] = [];
+                        self.updates(
+                            field_type(self.monotypes, monotype, label),
+                            &mut none,
+                            updates,
+                        );
+                    }
+                },
             }
         }
     }
@@ -459,15 +695,14 @@ impl<'p> Webs<'p> {
             return self.fresh(true);
         }
         let Some(position) = map else { return self.fresh(false) };
-        let node = self.value(&arguments[position]);
+        let node = self.value(&arguments[position])[0];
         self.operated.push(node);
         if operation == MapOperation::Difference {
             // The keys to take away are read, as a Go map when the map is one.
             let other = &arguments[1];
             let removed = self.value(other);
-            self.operated.push(removed);
-            let at = std::ptr::from_ref(other);
-            self.soft.push(SoftEdge { from: removed, to: node, flow: Flow::Seed, at });
+            self.operated.push(removed[0]);
+            self.soft(removed, vec![node], Flow::Seed, other);
         }
         node
     }
@@ -475,85 +710,157 @@ impl<'p> Webs<'p> {
     fn arguments(&mut self, id: FunctionId, arguments: &'p [Expression]) {
         let parameters = &self.program.function(id).parameters;
         for (argument, parameter) in arguments.iter().zip(parameters) {
-            if self.is_map(argument.monotype) && argument.monotype == parameter.monotype {
+            if argument.monotype == parameter.monotype && self.holds_maps(argument.monotype) {
                 let from = self.value(argument);
-                let to = self.local(parameter.id);
-                let at = std::ptr::from_ref(argument);
-                self.soft.push(SoftEdge { from, to, flow: Flow::Argument, at });
+                let to = self.local(parameter.id, parameter.monotype);
+                self.soft(from, to, Flow::Argument, argument);
             } else {
                 self.expression(argument);
             }
         }
     }
 
-    /// `foldl (\accumulator element -> ...) seed array`, whose accumulator is one map.
-    fn fold(&mut self, arguments: &'p [Expression]) -> Node {
+    /// `foldl (\accumulator element -> ...) seed array`, whose accumulator holds maps.
+    fn fold(&mut self, expression: &'p Expression, arguments: &'p [Expression]) -> Slots {
         let [callback, seed, array] = arguments else { unreachable!() };
         let ExpressionKind::Lambda { parameters, body } = &callback.kind else { unreachable!() };
-        let fold = self.fresh(false);
+        let fold = self.fresh_slots(expression.monotype, false);
         let seeded = self.value(seed);
-        let at = std::ptr::from_ref(seed);
-        self.soft.push(SoftEdge { from: seeded, to: fold, flow: Flow::Seed, at });
-        let accumulator = self.local(parameters[0].id);
-        self.join(accumulator, fold);
-        self.require_linear(accumulator, parameters[0].id, body);
-        if self.is_map(parameters[1].monotype) {
-            let element = self.local(parameters[1].id);
-            self.force_tree(element);
+        self.soft(seeded, fold.clone(), Flow::Seed, seed);
+        let accumulator = self.local(parameters[0].id, parameters[0].monotype);
+        self.join_slots(&accumulator, &fold);
+        self.require_linear(&accumulator, &parameters[0], Scope::Expression(body));
+        if self.holds_maps(parameters[1].monotype) {
+            let element = self.local(parameters[1].id, parameters[1].monotype);
+            self.force_trees(&element);
         }
         let stepped = self.value(body);
-        self.join(stepped, fold);
+        self.join_slots(&stepped, &fold);
         self.expression(array);
         fold
     }
 
     fn bindings(&mut self, scope: &'p Expression, bindings: &'p [Binding]) {
         for binding in bindings {
-            if self.is_map(binding.local.monotype) {
+            if self.holds_maps(binding.local.monotype) {
                 let value = self.value(&binding.value);
-                let local = self.local(binding.local.id);
-                self.join(value, local);
-                self.require_linear(local, binding.local.id, scope);
+                let local = self.local(binding.local.id, binding.local.monotype);
+                self.join_slots(&value, &local);
+                self.require_linear(&local, &binding.local, Scope::Expression(scope));
             } else {
                 self.expression(&binding.value);
             }
         }
     }
 
+    /// A map that is matched on is taken apart as a tree; a record that is matched on hands the
+    /// maps of its fields to the locals its patterns bind them to.
     fn scrutinees(&mut self, scrutinees: &'p [Expression], alternatives: &'p [Alternative]) {
-        for scrutinee in scrutinees {
-            if self.is_map(scrutinee.monotype) {
-                let node = self.value(scrutinee);
-                self.force_tree(node);
+        for (position, scrutinee) in scrutinees.iter().enumerate() {
+            let slots = if self.holds_maps(scrutinee.monotype) {
+                let slots = self.value(scrutinee);
+                if self.is_map(scrutinee.monotype) {
+                    self.force_trees(&slots);
+                    None
+                } else {
+                    Some(slots)
+                }
             } else {
                 self.expression(scrutinee);
+                None
+            };
+            for alternative in alternatives {
+                let scope = Scope::Guarded(&alternative.body);
+                let pattern = &alternative.patterns[position];
+                let slots = self.matched(slots.as_deref(), pattern, scrutinee.monotype);
+                self.pattern(pattern, slots.as_deref(), scope);
             }
         }
         for alternative in alternatives {
-            let mut bound = vec![];
-            alternative.for_each_local(&mut |local| bound.push(local.clone()));
-            for local in bound {
-                if self.is_map(local.monotype) {
-                    let node = self.local(local.id);
-                    self.force_tree(node);
-                }
-            }
             if let Guarded::Guards(branches) = &alternative.body {
                 for guard in branches.iter().flat_map(|branch| &branch.guards) {
                     match guard {
                         Guard::Boolean(condition) => self.expression(condition),
-                        Guard::Pattern { value, .. } => self.expression(value),
+                        Guard::Pattern { pattern, value } => {
+                            self.expression(value);
+                            self.pattern(pattern, None, Scope::Guarded(&alternative.body));
+                        }
                     }
                 }
             }
         }
     }
 
-    /// An expression whose value, if it is a map, goes somewhere only a tree may go.
+    /// The locals a pattern binds: to the slots of the value it matches where it takes apart
+    /// only records, to trees elsewhere.
+    fn pattern(&mut self, pattern: &'p Pattern, slots: Option<&[Node]>, scope: Scope<'p>) {
+        match &pattern.kind {
+            PatternKind::Wildcard | PatternKind::Literal(_) => {}
+            PatternKind::Variable(local) => {
+                if !self.holds_maps(local.monotype) {
+                    return;
+                }
+                let bound = self.local(local.id, local.monotype);
+                match slots {
+                    Some(slots) => {
+                        self.join_slots(&bound, slots);
+                        self.require_linear(&bound, local, scope);
+                    }
+                    None => self.force_trees(&bound),
+                }
+            }
+            PatternKind::Named { local, pattern } => {
+                if let Some(slots) = slots {
+                    self.force_trees(slots);
+                }
+                if self.holds_maps(local.monotype) {
+                    let bound = self.local(local.id, local.monotype);
+                    self.force_trees(&bound);
+                }
+                self.pattern(pattern, None, scope);
+            }
+            PatternKind::Record(fields) => {
+                let layout = self.layout(pattern.monotype);
+                for (label, field_pattern) in fields {
+                    let field = slots.zip(layout.field(label)).and_then(|(slots, field)| {
+                        let slots = &slots[field.start..field.start + field.width];
+                        self.matched(Some(slots), field_pattern, field.monotype)
+                    });
+                    self.pattern(field_pattern, field.as_deref(), scope);
+                }
+            }
+            PatternKind::Array(patterns)
+            | PatternKind::Constructor { arguments: patterns, .. }
+            | PatternKind::Closure { captures: patterns, .. } => {
+                for pattern in patterns {
+                    self.pattern(pattern, None, scope);
+                }
+            }
+        }
+    }
+
+    /// The slots of a value of type `monotype` that a pattern takes apart, when the pattern has
+    /// that type; a pattern of another type, on a newtype the program sees through, makes the
+    /// value's maps trees.
+    fn matched(
+        &mut self,
+        slots: Option<&[Node]>,
+        pattern: &Pattern,
+        monotype: MonotypeId,
+    ) -> Option<Slots> {
+        let slots = slots?;
+        if pattern.monotype == monotype {
+            return Some(slots.to_vec());
+        }
+        self.force_trees(slots);
+        None
+    }
+
+    /// An expression whose value, if it holds maps, goes somewhere only a tree may go.
     fn expression(&mut self, expression: &'p Expression) {
-        if self.is_map(expression.monotype) {
-            let node = self.value(expression);
-            self.escapes.push((node, std::ptr::from_ref(expression)));
+        if self.holds_maps(expression.monotype) {
+            let slots = self.value(expression);
+            self.escapes.push((slots, std::ptr::from_ref(expression)));
             return;
         }
         match &expression.kind {
@@ -568,6 +875,10 @@ impl<'p> Webs<'p> {
                     return;
                 }
                 self.expression_children(expression);
+            }
+            ExpressionKind::Access { record, .. } if self.holds_maps(record.monotype) => {
+                // A field that holds no map, read from a record that holds some.
+                self.value(record);
             }
             ExpressionKind::Let { bindings, body } => {
                 self.bindings(expression, bindings);
@@ -594,9 +905,9 @@ impl<'p> Webs<'p> {
 
     fn bound_trees(&mut self, locals: &[Local]) {
         for local in locals {
-            if self.is_map(local.monotype) {
-                let node = self.local(local.id);
-                self.force_tree(node);
+            if self.holds_maps(local.monotype) {
+                let slots = self.local(local.id, local.monotype);
+                self.force_trees(&slots);
             }
         }
     }
@@ -634,9 +945,8 @@ impl<'p> Webs<'p> {
         loop {
             let settled = self.settle();
             let mut forced = vec![];
-            for &(node, local, scope) in &self.slots {
-                let root = root_of(&mut self.parents, node);
-                if settled.tree[root] {
+            for linear in &self.linear {
+                if settled.tree[root_of(&mut self.parents, linear.node)] {
                     continue;
                 }
                 let mut shapes = Ordering {
@@ -645,17 +955,8 @@ impl<'p> Webs<'p> {
                     readers: self.readers,
                     to_tree: &settled.to_tree,
                 };
-                // SAFETY of the pointer: the program is borrowed for the whole analysis.
-                let scope = unsafe { &*scope };
-                let ordered = uniqueness::is_unique(
-                    &mut shapes,
-                    local,
-                    &[],
-                    Scope::Expression(scope),
-                    &Forced::default(),
-                );
-                if !ordered {
-                    forced.push(node);
+                if !is_linear(&mut shapes, linear.local, &linear.path, linear.scope.scope()) {
+                    forced.push(linear.node);
                 }
             }
             if forced.is_empty() {
@@ -668,8 +969,9 @@ impl<'p> Webs<'p> {
     }
 
     /// Which webs are Go maps as the facts stand: a web is a tree when it must be, or when a
-    /// tree reaches a parameter of it; a Go map reaching a tree's parameter, and every escape of
-    /// one, becomes a tree there; a tree that seeds a fold that is a Go map becomes one there.
+    /// tree reaches a parameter or a field of it; a Go map reaching a tree's parameter or field,
+    /// and every escape of one, becomes a tree there; a tree that seeds a fold that is a Go map
+    /// becomes one there.
     fn settle(&mut self) -> Settled {
         let mut tree: Vec<bool> = (0..self.parents.len())
             .map(|node| {
@@ -680,11 +982,16 @@ impl<'p> Webs<'p> {
         loop {
             let mut changed = false;
             for edge in &self.soft {
-                let from = root_of(&mut self.parents, edge.from);
-                let to = root_of(&mut self.parents, edge.to);
-                if edge.flow == Flow::Argument && tree[from] && !tree[to] {
-                    tree[to] = true;
-                    changed = true;
+                if edge.flow != Flow::Argument {
+                    continue;
+                }
+                for (&from, &to) in edge.from.iter().zip(&edge.to) {
+                    let from = root_of(&mut self.parents, from);
+                    let to = root_of(&mut self.parents, to);
+                    if tree[from] && !tree[to] {
+                        tree[to] = true;
+                        changed = true;
+                    }
                 }
             }
             if !changed {
@@ -692,28 +999,42 @@ impl<'p> Webs<'p> {
             }
         }
         self.drop_idle_webs(&mut tree);
-        let mut to_tree = FxHashSet::default();
-        let mut from_tree = FxHashSet::default();
-        for &(node, at) in &self.escapes {
-            let root = root_of(&mut self.parents, node);
-            if !tree[root] {
-                to_tree.insert(at);
-            }
-        }
+        let mut natives = |slots: &[Node]| -> Natives {
+            slots.iter().map(|&node| !tree[root_of(&mut self.parents, node)]).collect()
+        };
+        // An expression may both take its value from elsewhere (a call's result, a field) and
+        // hand it on (an argument, a field): it converts from the first to the second.
+        let mut ends: FxHashMap<*const Expression, (Option<&Slots>, Option<&Slots>, bool)> =
+            FxHashMap::default();
         for edge in &self.soft {
-            let from = root_of(&mut self.parents, edge.from);
-            let to = root_of(&mut self.parents, edge.to);
-            match (tree[from], tree[to]) {
-                (false, true) => {
-                    to_tree.insert(edge.at);
-                }
-                (true, false) => {
-                    from_tree.insert(edge.at);
-                }
-                _ => {}
+            let own = &self.expressions[&edge.at];
+            let end = ends.entry(edge.at).or_default();
+            if *own == edge.to {
+                end.0 = Some(&edge.from);
+            } else {
+                end.1 = Some(&edge.to);
             }
         }
-        Settled { tree, to_tree, from_tree }
+        for (_, at) in &self.escapes {
+            ends.entry(*at).or_default().2 = true;
+        }
+        let mut conversions: FxHashMap<*const Expression, Conversion> = FxHashMap::default();
+        for (at, (from, to, escaped)) in ends {
+            let own = &self.expressions[&at];
+            let from = natives(from.unwrap_or(own));
+            let to = if escaped { vec![false; own.len()] } else { natives(to.unwrap_or(own)) };
+            if from != to {
+                conversions.insert(at, Conversion { from, to });
+            }
+        }
+        let to_tree = conversions
+            .iter()
+            .filter(|(_, conversion)| {
+                conversion.from.iter().zip(&conversion.to).any(|(&from, &to)| from && !to)
+            })
+            .map(|(&at, _)| at)
+            .collect();
+        Settled { tree, to_tree, conversions }
     }
 
     fn decided(mut self, settled: Settled) -> Decided {
@@ -729,8 +1050,7 @@ impl<'p> Webs<'p> {
             expressions: self.expressions,
             locals: self.locals,
             results: self.results,
-            to_tree: settled.to_tree,
-            from_tree: settled.from_tree,
+            conversions: settled.conversions,
             parents: self.parents,
             calls: self.calls,
         }
@@ -739,8 +1059,9 @@ impl<'p> Webs<'p> {
 
 struct Settled {
     tree: Vec<bool>,
+    /// The expressions where some Go map becomes a tree.
     to_tree: FxHashSet<*const Expression>,
-    from_tree: FxHashSet<*const Expression>,
+    conversions: FxHashMap<*const Expression, Conversion>,
 }
 
 impl Webs<'_> {
@@ -749,11 +1070,13 @@ impl Webs<'_> {
     fn drop_idle_webs(&mut self, tree: &mut [bool]) {
         let mut groups: Vec<Node> = (0..self.parents.len()).collect();
         for edge in &self.soft {
-            let from = root_of(&mut self.parents, edge.from);
-            let to = root_of(&mut self.parents, edge.to);
-            if !tree[from] && !tree[to] {
-                let (from, to) = (root_of(&mut groups, from), root_of(&mut groups, to));
-                groups[to] = from;
+            for (&from, &to) in edge.from.iter().zip(&edge.to) {
+                let from = root_of(&mut self.parents, from);
+                let to = root_of(&mut self.parents, to);
+                if !tree[from] && !tree[to] {
+                    let (from, to) = (root_of(&mut groups, from), root_of(&mut groups, to));
+                    groups[to] = from;
+                }
             }
         }
         let mut busy = FxHashSet::default();
@@ -767,6 +1090,27 @@ impl Webs<'_> {
                 tree[root] = true;
             }
         }
+    }
+}
+
+/// Whether a local uses the map it holds, by the labels that lead to it, linearly in `scope`.
+fn is_linear(shapes: &mut impl Shapes, local: LocalId, path: &[SmolStr], scope: Scope<'_>) -> bool {
+    if path.is_empty() {
+        uniqueness::is_unique(shapes, local, &[], scope, &Forced::default())
+    } else {
+        uniqueness::is_unique_path(shapes, local, path, scope)
+    }
+}
+
+/// The type of a record's field.
+fn field_type(monotypes: &Monotypes, record: MonotypeId, label: &str) -> MonotypeId {
+    match monotypes.get(record) {
+        Monotype::Record(fields) => fields
+            .iter()
+            .find(|field| field.label == label)
+            .map(|field| field.monotype)
+            .expect("invariant violated: an update of a field the record lacks"),
+        _ => unreachable!("invariant violated: an update of no record"),
     }
 }
 
@@ -909,6 +1253,10 @@ impl Shapes for Reads<'_> {
     fn effects_only_peek(&self) -> bool {
         true
     }
+
+    fn closures_keep_what_they_read(&self) -> bool {
+        true
+    }
 }
 
 /// The order of a Go map's uses, once it is known where it becomes a tree: a conversion is the
@@ -947,6 +1295,10 @@ impl Shapes for Ordering<'_> {
     }
 
     fn effects_only_peek(&self) -> bool {
+        true
+    }
+
+    fn closures_keep_what_they_read(&self) -> bool {
         true
     }
 }

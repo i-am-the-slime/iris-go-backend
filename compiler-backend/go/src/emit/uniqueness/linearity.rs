@@ -1,6 +1,7 @@
 //! Whether a local is the only reference to its cells wherever a body uses it.
 
 use rustc_hash::{FxHashMap, FxHashSet};
+use smol_str::SmolStr;
 
 use super::paths::{Event, Paths};
 use crate::emit::uses_local;
@@ -34,6 +35,11 @@ pub(in crate::emit) trait Shapes {
     }
     /// Whether a call does nothing with a local it is passed that counts as a use.
     fn ignores(&mut self, _call: &Expression, _argument: &Expression) -> bool {
+        false
+    }
+    /// Whether a closure that reads only fields of a record off the followed field's path keeps
+    /// nothing of that field.
+    fn closures_keep_what_they_read(&self) -> bool {
         false
     }
 }
@@ -111,10 +117,21 @@ pub(in crate::emit) fn is_unique_field(
     label: &str,
     scope: Scope<'_>,
 ) -> bool {
+    is_unique_path(shapes, record, &[SmolStr::new(label)], scope)
+}
+
+/// [`is_unique_field`] of a field of fields: `record.outer.inner` is consumed by reading it,
+/// or by reading or passing on `record.outer` or `record` whole.
+pub(in crate::emit) fn is_unique_path(
+    shapes: &mut impl Shapes,
+    record: LocalId,
+    path: &[SmolStr],
+    scope: Scope<'_>,
+) -> bool {
     let relatives = FxHashSet::default();
     let forced = Forced::default();
     let counter =
-        Counter { target: record, field: Some(label), relatives: &relatives, forced: &forced };
+        Counter { target: record, field: Some(path), relatives: &relatives, forced: &forced };
     let paths = match scope {
         Scope::Expression(expression) => counter.count(shapes, expression),
         Scope::Guarded(guarded) => counter.guarded(shapes, guarded),
@@ -187,8 +204,9 @@ pub(in crate::emit) fn guarded_expressions(guarded: &Guarded) -> Vec<&Expression
 
 struct Counter<'f> {
     target: LocalId,
-    /// The field of the record `target` that is followed instead of the whole value.
-    field: Option<&'f str>,
+    /// The field of the record `target`, by the labels that lead to it, that is followed instead
+    /// of the whole value.
+    field: Option<&'f [SmolStr]>,
     relatives: &'f FxHashSet<LocalId>,
     forced: &'f Forced,
 }
@@ -223,7 +241,13 @@ impl Counter<'_> {
             | ExpressionKind::EffectPure(_)
             | ExpressionKind::EffectBind { .. }
             | ExpressionKind::EffectEach { .. } => {
-                if uses_local(expression, self.target) {
+                let uses = match self.field {
+                    Some(path) if shapes.closures_keep_what_they_read() => {
+                        uses_followed(expression, self.target, path)
+                    }
+                    _ => uses_local(expression, self.target),
+                };
+                if uses {
                     Paths::event(Event::Shared)
                 } else if self.relatives.iter().any(|&conflict| uses_local(expression, conflict)) {
                     Paths::event(Event::Conflict)
@@ -342,9 +366,8 @@ impl Counter<'_> {
         for argument in arguments {
             let followed = match &argument.kind {
                 ExpressionKind::Local(id) => *id == self.target,
-                ExpressionKind::Access { record, label } => {
-                    self.field == Some(label.as_str())
-                        && matches!(record.kind, ExpressionKind::Local(id) if id == self.target)
+                ExpressionKind::Access { .. } => {
+                    self.field.is_some_and(|path| self.depth(argument) == Some(path.len()))
                 }
                 _ => false,
             };
@@ -368,24 +391,39 @@ impl Counter<'_> {
         paths.then(passed)
     }
 
+    /// How many labels of the followed field's path `expression` reads of the target: none for
+    /// the target itself.
+    fn depth(&self, expression: &Expression) -> Option<usize> {
+        match &expression.kind {
+            ExpressionKind::Local(id) if *id == self.target => Some(0),
+            ExpressionKind::Access { record, label } => {
+                let path = self.field?;
+                let depth = self.depth(record)?;
+                (depth < path.len() && path[depth] == *label).then_some(depth + 1)
+            }
+            _ => None,
+        }
+    }
+
     /// The uses of the followed field that differ from uses of a local: reading it, reading
     /// another field, updating the record, matching on the field or on the record.
     fn count_field(
         &self,
         shapes: &mut impl Shapes,
-        field: &str,
+        field: &[SmolStr],
         expression: &Expression,
     ) -> Option<Paths> {
-        let is_target = |record: &Expression| matches!(record.kind, ExpressionKind::Local(id) if id == self.target);
         let paths = match &expression.kind {
-            ExpressionKind::Access { record, label } if is_target(record) => match label == field {
-                true => Paths::event(Event::Consume),
-                false => Paths::empty(),
-            },
-            ExpressionKind::Update { record, updates } if is_target(record) => {
-                let replaced = updates.iter().any(
-                    |update| matches!(update, RecordUpdate::Leaf { label, .. } if label == field),
-                );
+            ExpressionKind::Access { record, label } => {
+                let depth = self.depth(record)?;
+                match field.get(depth) == Some(label) {
+                    true => Paths::event(Event::Consume),
+                    false => Paths::empty(),
+                }
+            }
+            ExpressionKind::Update { record, updates } => {
+                let depth = self.depth(record)?;
+                let replaced = replaces(updates, &field[depth..]);
                 let mut values = vec![];
                 for update in updates {
                     update_values(update, &mut values);
@@ -398,7 +436,7 @@ impl Counter<'_> {
                 paths
             }
             ExpressionKind::Case { scrutinees, .. }
-                if scrutinees.iter().any(|scrutinee| self.matches_field(scrutinee, field)) =>
+                if scrutinees.iter().any(|scrutinee| self.depth(scrutinee).is_some()) =>
             {
                 return Some(self.count_field_case(shapes, field, expression));
             }
@@ -407,23 +445,12 @@ impl Counter<'_> {
         Some(paths)
     }
 
-    fn matches_field(&self, scrutinee: &Expression, field: &str) -> bool {
-        match &scrutinee.kind {
-            ExpressionKind::Local(id) => *id == self.target,
-            ExpressionKind::Access { record, label } => {
-                label == field
-                    && matches!(record.kind, ExpressionKind::Local(id) if id == self.target)
-            }
-            _ => false,
-        }
-    }
-
     /// A `case` on the followed field only peeks at it when its patterns bind nothing of the
     /// field's spine; one that binds the spine, or matches on the whole record, consumes it.
     fn count_field_case(
         &self,
         shapes: &mut impl Shapes,
-        field: &str,
+        field: &[SmolStr],
         expression: &Expression,
     ) -> Paths {
         let ExpressionKind::Case { scrutinees, alternatives } = &expression.kind else {
@@ -431,8 +458,9 @@ impl Counter<'_> {
         };
         let mut paths = Paths::empty();
         for (position, scrutinee) in scrutinees.iter().enumerate() {
+            let depth = self.depth(scrutinee);
             let scrutinised = match &scrutinee.kind {
-                ExpressionKind::Access { .. } if self.matches_field(scrutinee, field) => {
+                ExpressionKind::Access { .. } if depth == Some(field.len()) => {
                     let mut spine = FxHashSet::default();
                     for alternative in alternatives {
                         spine_locals(shapes, &alternative.patterns[position], &mut spine);
@@ -443,9 +471,7 @@ impl Counter<'_> {
                         Paths::event(Event::Shared)
                     }
                 }
-                ExpressionKind::Local(_) if self.matches_field(scrutinee, field) => {
-                    Paths::event(Event::Consume)
-                }
+                _ if depth.is_some() => Paths::event(Event::Consume),
                 _ => self.count(shapes, scrutinee),
             };
             paths = paths.then(scrutinised);
@@ -505,6 +531,33 @@ impl Counter<'_> {
             }
         }
     }
+}
+
+/// Whether `expression` uses `target` otherwise than to read a field off the path to the
+/// followed one.
+fn uses_followed(expression: &Expression, target: LocalId, path: &[SmolStr]) -> bool {
+    match &expression.kind {
+        ExpressionKind::Access { record, label } if matches!(record.kind, ExpressionKind::Local(id) if id == target) => {
+            *label == path[0]
+        }
+        ExpressionKind::Local(id) => *id == target,
+        _ => {
+            let mut found = false;
+            for_each_child(expression, &mut |child| {
+                found = found || uses_followed(child, target, path);
+            });
+            found
+        }
+    }
+}
+
+/// Whether updates replace the field the labels lead to, or a field that holds it.
+fn replaces(updates: &[RecordUpdate], path: &[SmolStr]) -> bool {
+    let Some(first) = path.first() else { return true };
+    updates.iter().any(|update| match update {
+        RecordUpdate::Leaf { label, .. } => label == first,
+        RecordUpdate::Branch { label, updates } => label == first && replaces(updates, &path[1..]),
+    })
 }
 
 fn update_values<'e>(update: &'e RecordUpdate, values: &mut Vec<&'e Expression>) {

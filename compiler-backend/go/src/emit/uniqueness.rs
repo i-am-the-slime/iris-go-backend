@@ -23,7 +23,7 @@ mod paths;
 pub(super) use iteration::{TailLoop, next_iterations};
 pub(super) use linearity::{
     Branch, Forced, Scope, Shapes, guarded_expressions, is_only_read, is_unique, is_unique_field,
-    relatives,
+    is_unique_path, relatives,
 };
 
 /// Whether code may reuse the memory of the values it owns. `IRIS_GO_REUSE=0` turns reuse off.

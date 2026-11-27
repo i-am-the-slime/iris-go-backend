@@ -8,7 +8,7 @@
 use rustc_hash::{FxHashMap, FxHashSet};
 use smol_str::SmolStr;
 
-use super::{Decided, MapShape, is_fold_left};
+use super::{Conversion, Decided, Layouts, MapShape, Natives, is_fold_left};
 use crate::foreign::{Foreign, Operator};
 use crate::maps::{HashMapOperation, MapOperation};
 use crate::monomorphic::traversal::{for_each_child_mut, visit};
@@ -16,7 +16,7 @@ use crate::monomorphic::{
     Alternative, Binding, Expression, ExpressionKind, Function, FunctionId, Guarded, Literal,
     Local, LocalId, Pattern, PatternKind, Program,
 };
-use crate::monotype::{DataType, Monotype, MonotypeId, Monotypes};
+use crate::monotype::{DataType, Monotype, MonotypeId, Monotypes, RecordField};
 
 mod conversions;
 
@@ -35,6 +35,8 @@ pub(super) struct Rewrite<'r> {
     decided: Decided,
     next_local: u32,
     conversions: FxHashMap<MonotypeId, Conversions>,
+    layouts: Layouts,
+    retyped: FxHashMap<(MonotypeId, Natives), MonotypeId>,
     origin: Option<files::FileId>,
 }
 
@@ -56,6 +58,8 @@ impl<'r> Rewrite<'r> {
             decided,
             next_local,
             conversions: FxHashMap::default(),
+            layouts: Layouts::default(),
+            retyped: FxHashMap::default(),
             origin,
         }
     }
@@ -84,14 +88,19 @@ impl<'r> Rewrite<'r> {
             let mut function =
                 std::mem::replace(&mut self.program.functions[index], placeholder_function(unit));
             for parameter in &mut function.parameters {
-                if self.is_native_local(parameter.id) {
-                    parameter.monotype = self.hash_type(parameter.monotype);
+                let monotype = self.local_type(parameter.id, parameter.monotype);
+                if monotype != parameter.monotype {
+                    parameter.monotype = monotype;
                     retyped.insert(id);
                 }
             }
-            if self.decided.results.get(&id).is_some_and(|&node| self.decided.is_native(node)) {
-                function.result = self.hash_type(function.result);
-                retyped.insert(id);
+            if let Some(slots) = self.decided.results.get(&id) {
+                let natives = self.decided.natives(slots);
+                let monotype = self.retype(function.result, &natives);
+                if monotype != function.result {
+                    function.result = monotype;
+                    retyped.insert(id);
+                }
             }
             self.expression_at(&mut function.body, body);
             self.program.functions[index] = function;
@@ -120,8 +129,48 @@ impl<'r> Rewrite<'r> {
             .fold(result, |result, &parameter| self.monotypes.function(parameter, result))
     }
 
-    fn is_native_local(&self, id: LocalId) -> bool {
-        self.decided.locals.get(&id).is_some_and(|&node| self.decided.is_native(node))
+    /// The type of a local, with the Go maps its slots are.
+    fn local_type(&mut self, id: LocalId, monotype: MonotypeId) -> MonotypeId {
+        let Some(slots) = self.decided.locals.get(&id) else { return monotype };
+        let natives = self.decided.natives(slots);
+        self.retype(monotype, &natives)
+    }
+
+    /// The type of values whose slots are Go maps where `natives` says so, and trees elsewhere.
+    fn retype(&mut self, monotype: MonotypeId, natives: &[bool]) -> MonotypeId {
+        if !natives.contains(&true) {
+            return monotype;
+        }
+        let key = (monotype, natives.to_vec());
+        if let Some(&retyped) = self.retyped.get(&key) {
+            return retyped;
+        }
+        let retyped = if self.shapes.contains_key(&monotype) {
+            self.hash_type(monotype)
+        } else {
+            let layout = self.layouts.layout(self.monotypes, self.shapes, monotype);
+            let Monotype::Record(fields) = self.monotypes.get(monotype).clone() else {
+                unreachable!("invariant violated: slots of neither a map nor a record")
+            };
+            let fields: Vec<RecordField> = fields
+                .iter()
+                .map(|field| match layout.field(&field.label) {
+                    Some(slots) => {
+                        let natives = &natives[slots.start..slots.start + slots.width];
+                        let monotype = self.retype(field.monotype, natives);
+                        RecordField { label: field.label.clone(), monotype }
+                    }
+                    None => field.clone(),
+                })
+                .collect();
+            let record = self.monotypes.intern(Monotype::Record(fields.into()));
+            if let Some(spellings) = self.monotypes.record_spellings.get(&monotype).cloned() {
+                self.monotypes.record_spellings.entry(record).or_insert(spellings);
+            }
+            record
+        };
+        self.retyped.insert(key, retyped);
+        retyped
     }
 
     fn expression(&mut self, expression: &mut Expression) {
@@ -131,34 +180,76 @@ impl<'r> Rewrite<'r> {
 
     /// The expression that the analysis saw at `at`.
     fn expression_at(&mut self, expression: &mut Expression, at: *const Expression) {
-        let native =
-            self.decided.expressions.get(&at).is_some_and(|&node| self.decided.is_native(node));
-        let to_tree = self.decided.to_tree.contains(&at);
-        let from_tree = self.decided.from_tree.contains(&at);
+        let own = self.decided.expressions.get(&at).map(|slots| self.decided.natives(slots));
+        let conversion = self.decided.conversions.remove(&at);
+        let scrutinee_types: Vec<MonotypeId> = match &expression.kind {
+            ExpressionKind::Case { scrutinees, .. } => {
+                scrutinees.iter().map(|scrutinee| scrutinee.monotype).collect()
+            }
+            _ => vec![],
+        };
         for_each_child_mut(expression, &mut |child| self.expression(child));
-        self.retype_binders(expression);
-        if native {
-            let tree = expression.monotype;
+        self.retype_binders(expression, &scrutinee_types);
+        let Some(own) = own else {
+            self.read(expression);
+            return;
+        };
+        let natives = conversion.as_ref().map_or(own, |conversion| conversion.from.clone());
+        let tree = expression.monotype;
+        expression.monotype = self.retype(tree, &natives);
+        if self.shapes.contains_key(&tree) && natives[0] {
             self.native(expression);
             self.size_hint(expression);
-            if to_tree {
-                let conversions = self.conversions(tree);
-                *expression = call(conversions.to_tree, vec![take(expression)], tree);
-            }
-        } else if from_tree {
-            let tree = expression.monotype;
-            let conversions = self.conversions(tree);
-            let hash = self.hash_type(tree);
-            *expression = call(conversions.from_tree, vec![take(expression)], hash);
-        } else if to_tree {
-            // A call of a function that answers a Go map, where a tree is wanted.
-            let tree = expression.monotype;
-            expression.monotype = self.hash_type(tree);
-            let conversions = self.conversions(tree);
-            *expression = call(conversions.to_tree, vec![take(expression)], tree);
         } else {
             self.read(expression);
         }
+        if let Some(Conversion { from, to }) = conversion {
+            *expression = self.convert(take(expression), tree, &from, &to);
+        }
+    }
+
+    /// A value of type `tree` whose slots are Go maps where `from` says so, as one whose slots
+    /// are where `to` says so: each map that changes is converted, a record rebuilt of its
+    /// fields.
+    fn convert(
+        &mut self,
+        value: Expression,
+        tree: MonotypeId,
+        from: &[bool],
+        to: &[bool],
+    ) -> Expression {
+        if from == to {
+            return value;
+        }
+        let target = self.retype(tree, to);
+        if self.shapes.contains_key(&tree) {
+            let conversions = self.conversions(tree);
+            let function = if from[0] { conversions.to_tree } else { conversions.from_tree };
+            return call(function, vec![value], target);
+        }
+        let mut bindings = vec![];
+        let record = self.named("record", value, &mut bindings);
+        let layout = self.layouts.layout(self.monotypes, self.shapes, tree);
+        let Monotype::Record(fields) = self.monotypes.get(tree).clone() else {
+            unreachable!("invariant violated: slots of neither a map nor a record")
+        };
+        let mut built = vec![];
+        for field in fields.iter() {
+            let slots =
+                layout.field(&field.label).map(|slots| slots.start..slots.start + slots.width);
+            let (from, to) = match slots {
+                Some(range) => (&from[range.clone()], &to[range]),
+                None => (&[][..], &[][..]),
+            };
+            let monotype = self.retype(field.monotype, from);
+            let label = field.label.clone();
+            let access = ExpressionKind::Access { record: Box::new(record.clone()), label };
+            let read = Expression::new(access, monotype);
+            let converted = self.convert(read, field.monotype, from, to);
+            built.push((field.label.clone(), converted));
+        }
+        let rebuilt = Expression::new(ExpressionKind::Record(built), target);
+        let_in(bindings, rebuilt)
     }
 
     /// A fold over an array that only inserts into a Go map it starts empty: the map is made
@@ -221,23 +312,23 @@ impl<'r> Rewrite<'r> {
         *expression = hash_map(read, arguments, expression.monotype);
     }
 
-    /// The locals a native map is bound to by a `let` or a fold's callback, and the callback's
-    /// type.
-    fn retype_binders(&mut self, expression: &mut Expression) {
+    /// The locals a native map is bound to by a `let`, a fold's callback or a pattern on a
+    /// record whose type changed from `scrutinee_types`.
+    fn retype_binders(&mut self, expression: &mut Expression, scrutinee_types: &[MonotypeId]) {
         match &mut expression.kind {
             ExpressionKind::Let { bindings, .. } => {
                 for binding in bindings {
-                    if self.is_native_local(binding.local.id) {
-                        binding.local.monotype = self.hash_type(binding.local.monotype);
-                    }
+                    binding.local.monotype =
+                        self.local_type(binding.local.id, binding.local.monotype);
                 }
             }
             ExpressionKind::Lambda { parameters, body } => {
-                let mut changed =
-                    matches!(self.monotypes.get(body.monotype), Monotype::HashMap(..));
+                let original = self.results_after(expression.monotype, parameters.len());
+                let mut changed = body.monotype != original;
                 for parameter in parameters.iter_mut() {
-                    if self.is_native_local(parameter.id) {
-                        parameter.monotype = self.hash_type(parameter.monotype);
+                    let monotype = self.local_type(parameter.id, parameter.monotype);
+                    if monotype != parameter.monotype {
+                        parameter.monotype = monotype;
                         changed = true;
                     }
                 }
@@ -248,15 +339,72 @@ impl<'r> Rewrite<'r> {
                     expression.monotype = self.function_type(&parameters, result);
                 }
             }
+            ExpressionKind::Case { scrutinees, alternatives } => {
+                for (position, scrutinee) in scrutinees.iter().enumerate() {
+                    let original = scrutinee_types[position];
+                    if scrutinee.monotype == original {
+                        continue;
+                    }
+                    for alternative in alternatives.iter_mut() {
+                        let pattern = &mut alternative.patterns[position];
+                        self.retype_pattern(pattern, original, scrutinee.monotype);
+                    }
+                }
+            }
+            _ => {}
+        }
+    }
+
+    /// The result of a function type once `count` arguments are applied.
+    fn results_after(&self, mut monotype: MonotypeId, count: usize) -> MonotypeId {
+        for _ in 0..count {
+            let Some((_, result)) = self.monotypes.function_parts(monotype) else { break };
+            monotype = result;
+        }
+        monotype
+    }
+
+    /// A pattern on a record whose fields' maps are Go maps: the record patterns and the locals
+    /// they bind take the record's type.
+    fn retype_pattern(
+        &mut self,
+        pattern: &mut Pattern,
+        original: MonotypeId,
+        monotype: MonotypeId,
+    ) {
+        if pattern.monotype != original {
+            return;
+        }
+        pattern.monotype = monotype;
+        match &mut pattern.kind {
+            PatternKind::Variable(local) => local.monotype = monotype,
+            PatternKind::Record(fields) => {
+                let (Monotype::Record(originals), Monotype::Record(types)) =
+                    (self.monotypes.get(original).clone(), self.monotypes.get(monotype).clone())
+                else {
+                    return;
+                };
+                for (label, field) in fields {
+                    let typed = |fields: &[RecordField]| {
+                        fields
+                            .iter()
+                            .find(|typed| typed.label == *label)
+                            .map(|typed| typed.monotype)
+                    };
+                    if let (Some(original), Some(monotype)) = (typed(&originals), typed(&types))
+                        && original != monotype
+                    {
+                        self.retype_pattern(field, original, monotype);
+                    }
+                }
+            }
             _ => {}
         }
     }
 
     /// A map-typed expression of a web that is a Go map: its type, and the operation it is.
     fn native(&mut self, expression: &mut Expression) {
-        let tree = expression.monotype;
-        let hash = self.hash_type(tree);
-        expression.monotype = hash;
+        let hash = expression.monotype;
         let operation = match &expression.kind {
             ExpressionKind::Apply { function, arguments } => match function.kind {
                 ExpressionKind::Function(id) => self

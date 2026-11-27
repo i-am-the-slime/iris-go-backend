@@ -142,9 +142,10 @@ pub use self::vector::{KERNEL_FILE_SUFFIXES, is_kernel_file};
 /// The names of the map operations that some Go map does ([`crate::maps`]).
 pub(crate) fn hash_map_operations_used(
     program: &Program,
+    monotypes: &Monotypes,
     operations: &FxHashMap<FunctionId, crate::maps::MapOperation>,
 ) -> FxHashSet<smol_str::SmolStr> {
-    hash_maps::operations_used(program, operations)
+    hash_maps::operations_used(program, monotypes, operations)
 }
 
 pub fn emit_program<Q>(

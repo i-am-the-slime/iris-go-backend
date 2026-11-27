@@ -1,0 +1,15 @@
+-- a record used twice keeps its map: each update sees the map before both
+(fromFoldable [3,6,9,12,15,18,100]) (fromFoldable [3,6,9,12,15,18,200])
+(fromFoldable [3,6,9,100]) (fromFoldable [3,6,9,200])
+-- a record a closure captures
+[false,true,false,false,true,true]
+[false,true,false,false,false,true]
+-- a record that is shown or compared
+{ table: (fromFoldable [(Tuple 3 1),(Tuple 6 2),(Tuple 9 3),(Tuple 12 4)]), total: 10 }
+true
+false
+-- a record kept in a ref
+(fromFoldable [3,6,9,50])
+-- records put into an array
+[(fromFoldable [3,6,9]),(fromFoldable [6,9]),(fromFoldable [1,3,6,9])]
+[5,4,6]

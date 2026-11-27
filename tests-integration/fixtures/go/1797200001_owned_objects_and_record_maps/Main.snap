@@ -1,179 +1,6 @@
 ---
 source: tests-integration/src/fixtures.rs
 ---
-// Data/Map/Internal/internal.go
-package internal
-
-type Map struct {
-	Node4 *Map
-	Node5 *Map
-	Node0 int
-	Node1 int
-	Node2 int
-	Node3 int
-}
-
-var SharedMapLeaf = &Map{}
-
-type Window struct {
-	Seen  *Map
-	Start int
-}
-
-func Node(node0 int, node1 int, node2 int, node3 int, node4 *Map, node5 *Map) *Map {
-	return &Map{Node0: node0, Node1: node1, Node2: node2, Node3: node3, Node4: node4, Node5: node5}
-}
-
-func UnsafeNodeInt(k int, v int, l *Map, r *Map) *Map {
-	if l == SharedMapLeaf {
-		if r == SharedMapLeaf {
-			return Node(1, 1, k, v, l, r)
-		}
-		return Node(1+r.Node0, 1+r.Node1, k, v, l, r)
-	}
-	h1 := l.Node0
-	s1 := l.Node1
-	if r == SharedMapLeaf {
-		return Node(1+h1, 1+s1, k, v, l, r)
-	}
-	h2 := r.Node0
-	result := max(h1, h2)
-	return Node(1+result, 1+s1+r.Node1, k, v, l, r)
-}
-
-func UnsafeBalancedNode(k int, v int, l *Map, r *Map, donor *Map) *Map {
-	if l == SharedMapLeaf {
-		if r == SharedMapLeaf {
-			donor.Node0 = 1
-			donor.Node1 = 1
-			donor.Node2 = k
-			donor.Node3 = v
-			donor.Node4 = SharedMapLeaf
-			donor.Node5 = SharedMapLeaf
-			return donor
-		}
-		if r != SharedMapLeaf {
-			rh := r.Node0
-			rk := r.Node2
-			rv := r.Node3
-			rl := r.Node4
-			rr := r.Node5
-			if rh > 1 {
-				return UnsafeBalancedNodeRotateLeft(k, v, l, rk, rv, rl, rr, donor)
-			}
-		}
-		return UnsafeNodeIntReusing(k, v, l, r, donor)
-	}
-	lh := l.Node0
-	lk := l.Node2
-	lv := l.Node3
-	ll := l.Node4
-	lr := l.Node5
-	if r != SharedMapLeaf {
-		rh := r.Node0
-		rk := r.Node2
-		rv := r.Node3
-		rl := r.Node4
-		rr := r.Node5
-		if rh > lh+1 {
-			return UnsafeBalancedNodeRotateLeft(k, v, l, rk, rv, rl, rr, donor)
-		}
-		if lh > rh+1 {
-			return UnsafeBalancedNodeRotateRight(k, v, lk, lv, ll, lr, r, donor)
-		}
-	}
-	if r == SharedMapLeaf {
-		if lh > 1 {
-			return UnsafeBalancedNodeRotateRight(k, v, lk, lv, ll, lr, r, donor)
-		}
-	}
-	return UnsafeNodeIntReusing(k, v, l, r, donor)
-}
-
-func UnsafeNodeIntReusing(k int, v int, l *Map, r *Map, donor *Map) *Map {
-	if l == SharedMapLeaf {
-		if r == SharedMapLeaf {
-			donor.Node0 = 1
-			donor.Node1 = 1
-			donor.Node2 = k
-			donor.Node3 = v
-			donor.Node4 = l
-			donor.Node5 = r
-			return donor
-		}
-		h2 := r.Node0
-		s2 := r.Node1
-		donor.Node0 = 1 + h2
-		donor.Node1 = 1 + s2
-		donor.Node2 = k
-		donor.Node3 = v
-		donor.Node4 = l
-		donor.Node5 = r
-		return donor
-	}
-	h1 := l.Node0
-	s1 := l.Node1
-	if r == SharedMapLeaf {
-		donor.Node0 = 1 + h1
-		donor.Node1 = 1 + s1
-		donor.Node2 = k
-		donor.Node3 = v
-		donor.Node4 = l
-		donor.Node5 = r
-		return donor
-	}
-	h22 := r.Node0
-	s22 := r.Node1
-	result := max(h1, h22)
-	donor.Node0 = 1 + result
-	donor.Node1 = 1 + s1 + s22
-	donor.Node2 = k
-	donor.Node3 = v
-	donor.Node4 = l
-	donor.Node5 = r
-	return donor
-}
-
-func UnsafeBalancedNodeRotateLeft(k int, v int, l *Map, rk int, rv int, rl *Map, rr *Map, donor *Map) *Map {
-	if rl != SharedMapLeaf {
-		lh := rl.Node0
-		lk := rl.Node2
-		lv := rl.Node3
-		ll := rl.Node4
-		lr := rl.Node5
-		var result int
-		if rr == SharedMapLeaf {
-			result = 0
-		} else {
-			result = rr.Node0
-		}
-		if lh > result {
-			return UnsafeNodeIntReusing(lk, lv, UnsafeNodeInt(k, v, l, ll), UnsafeNodeInt(rk, rv, lr, rr), donor)
-		}
-	}
-	return UnsafeNodeIntReusing(rk, rv, UnsafeNodeInt(k, v, l, rl), rr, donor)
-}
-
-func UnsafeBalancedNodeRotateRight(k int, v int, lk int, lv int, ll *Map, lr *Map, r *Map, donor *Map) *Map {
-	if lr != SharedMapLeaf {
-		rh := lr.Node0
-		rk := lr.Node2
-		rv := lr.Node3
-		rl := lr.Node4
-		rr := lr.Node5
-		var result int
-		if ll == SharedMapLeaf {
-			result = 0
-		} else {
-			result = ll.Node0
-		}
-		if result <= rh {
-			return UnsafeNodeIntReusing(rk, rv, UnsafeNodeInt(lk, lv, ll, rl), UnsafeNodeInt(k, v, rr, r), donor)
-		}
-	}
-	return UnsafeNodeIntReusing(lk, lv, ll, UnsafeNodeInt(k, v, lr, r), donor)
-}
-
 // Data/Maybe/maybe.go
 package maybe
 
@@ -186,17 +13,16 @@ type Int struct {
 	Tag  uint8
 }
 
-var NoInt = Int{Tag: TagNothing}
-
 func JustInt(just int) Int {
 	return Int{Tag: TagJust, Just: just}
 }
+
+var NoInt = Int{Tag: TagNothing}
 
 // main.go
 package main
 
 import (
-	"fixture/Data/Map/Internal"
 	"fixture/Data/Maybe"
 	"fixture/shared"
 	"github.com/i-am-the-slime/iris-go/object"
@@ -205,25 +31,31 @@ import (
 func main() {
 	words := []string{"a", "b", "a"}
 	numbers := []int{3, 1, 3, 2}
-	accumulator := internal.Window{Start: 0, Seen: internal.SharedMapLeaf}
+	accumulator := shared.Window{Start: 0, Seen: make(map[int]int)}
 	for _, x := range numbers {
-		seen := accumulator.Seen
-		scrutinee := mainGo(x, seen)
+		window := accumulator
+		value, found := window.Seen[x]
+		var entry maybe.Int
+		if found {
+			entry = maybe.JustInt(value)
+		} else {
+			entry = maybe.NoInt
+		}
 		var start int
-		switch scrutinee.Tag {
+		switch entry.Tag {
 		case maybe.TagJust:
-			at := scrutinee.Just
-			x2 := accumulator.Start
+			at := entry.Just
+			x2 := window.Start
 			if x2 < at {
 				start = at
 			} else {
 				start = x2
 			}
 		default: // maybe.TagNothing
-			start = accumulator.Start
+			start = window.Start
 		}
-		v := start + 1
-		accumulator = internal.Window{Start: start, Seen: mainGoReusing(x, v, seen)}
+		window.Seen[x] = start + 1
+		accumulator = shared.Window{Start: start, Seen: window.Seen}
 	}
 	accumulator2 := object.Empty[int]()
 	accumulator2 = object.Lend(accumulator2)
@@ -237,53 +69,8 @@ func main() {
 		}
 		accumulator2 = object.InsertOwned(word, result, accumulator2)
 	}
-	var result2 int
-	if accumulator.Seen == internal.SharedMapLeaf {
-		result2 = 0
-	} else {
-		result2 = accumulator.Seen.Node1
-	}
-	output := &shared.Ref[int]{Value: object.Size(accumulator2) + accumulator.Start + result2}
+	output := &shared.Ref[int]{Value: object.Size(accumulator2) + accumulator.Start + len(accumulator.Seen)}
 	output.Value = 0
-}
-
-func mainGo(x int, value *internal.Map) maybe.Int {
-	for {
-		if value == internal.SharedMapLeaf {
-			return maybe.NoInt
-		}
-		mk := value.Node2
-		mv := value.Node3
-		ml := value.Node4
-		mr := value.Node5
-		if x < mk {
-			value = ml
-			continue
-		}
-		if x == mk {
-			return maybe.JustInt(mv)
-		}
-		value = mr
-	}
-}
-
-func mainGoReusing(x int, v int, value *internal.Map) *internal.Map {
-	if value == internal.SharedMapLeaf {
-		return internal.Node(1, 1, x, v, internal.SharedMapLeaf, internal.SharedMapLeaf)
-	}
-	mk := value.Node2
-	mv := value.Node3
-	ml := value.Node4
-	mr := value.Node5
-	if x < mk {
-		return internal.UnsafeBalancedNode(mk, mv, mainGoReusing(x, v, ml), mr, value)
-	}
-	if x == mk {
-		value.Node2 = x
-		value.Node3 = v
-		return value
-	}
-	return internal.UnsafeBalancedNode(mk, mv, ml, mainGoReusing(x, v, mr), value)
 }
 
 // shared/shared.go
@@ -291,4 +78,9 @@ package shared
 
 type Ref[T any] struct {
 	Value T
+}
+
+type Window struct {
+	Seen  map[int]int
+	Start int
 }
