@@ -1,0 +1,34 @@
+-- inserts, deletes and alters, then the entries in key order
+(fromFoldable [(Tuple 0 "0"),(Tuple 1 "33"),(Tuple 3 "19"),(Tuple 4 "12"),(Tuple 7 "31"),(Tuple 8 "24"),(Tuple 10 "10"),(Tuple 11 "3"),(Tuple 12 "36"),(Tuple 14 "22"),(Tuple 15 "15"),(Tuple 17 "1"),(Tuple 18 "34"),(Tuple 19 "27"),(Tuple 21 "13"),(Tuple 22 "6"),(Tuple 23 "39"),(Tuple 25 "25"),(Tuple 26 "18"),(Tuple 28 "4"),(Tuple 29 "37"),(Tuple 30 "30"),(Tuple 32 "16"),(Tuple 33 "9"),(Tuple 36 "28"),(Tuple 37 "21"),(Tuple 39 "7")])
+[(Tuple 0 2),(Tuple 1 3),(Tuple 2 3),(Tuple 3 3),(Tuple 4 2),(Tuple 5 3),(Tuple 6 3),(Tuple 7 3),(Tuple 8 2),(Tuple 9 3),(Tuple 10 3)]
+(fromFoldable [0,1])
+(2 : 12 : 30 : 56 : 90 : 132 : 182 : 240 : 306 : 380 : Nil)
+-- folds after updates
+4900
+"0,1,4,9,16,25,"
+4356
+-- size, emptiness and lookups on the way
+[1,2,3,4,5,5,5,5,5,5,5,5]
+true
+[(Just 0),(Just 9),(Just 81),Nothing,Nothing]
+-- singleton, insertWith and fromFoldableWith
+(fromFoldable [(Tuple "a" "?!")])
+(fromFoldable [(Tuple 0 60),(Tuple 1 45),(Tuple 2 50),(Tuple 3 55)])
+-- String keys in JavaScript's order, astral and private-use letters included
+(fromFoldable [(Tuple "" 5),(Tuple "B" 6),(Tuple "a" 7),(Tuple "ab" 4),(Tuple "b" 0),(Tuple "😀" 3),(Tuple "" 2)])
+-- Char keys
+(fromFoldable [(Tuple 'i' 4),(Tuple 'm' 1),(Tuple 'p' 2),(Tuple 's' 4)])
+-- Sets
+[0,1,4,9,16,25,36,49,64,81,100,121,144,169,196,225]
+[3,6,9,12,15,18,21,24,27,30,33,36,39]
+true
+11
+-- a map that starts as a tree and is then owned by a fold
+(fromFoldable [(Tuple 1 10),(Tuple 3 30),(Tuple 5 50),(Tuple 7 70),(Tuple 9 90),(Tuple 11 110),(Tuple 13 130)])
+-- a map that only a reading function sees before it is changed
+[0,1,4,9,16,25,36,49,140]
+-- maps that stay trees: kept in a record, captured by a closure, findMin
+(fromFoldable [(Tuple 0 0),(Tuple 1 1),(Tuple 2 4),(Tuple 3 9),(Tuple 4 16),(Tuple 99 99)])
+[0,1,4,9,16,25,-1]
+[0,1,2,3,4,5,6]
+(fromFoldable [(Tuple { x: 0, y: 3 } 3),(Tuple { x: 1, y: 1 } 1),(Tuple { x: 1, y: 4 } 4),(Tuple { x: 2, y: 2 } 2),(Tuple { x: 2, y: 5 } 5)])

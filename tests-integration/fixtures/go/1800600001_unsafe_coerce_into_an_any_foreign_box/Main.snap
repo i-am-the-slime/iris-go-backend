@@ -1,176 +1,6 @@
 ---
 source: tests-integration/src/fixtures.rs
 ---
-// Data/Map/Internal/internal.go
-package internal
-
-import boxes "fixture/Boxes_ffi"
-
-type Map struct {
-	Node3 boxes.Box
-	Node4 *Map
-	Node5 *Map
-	Node0 int
-	Node1 int
-	Node2 int32
-}
-
-var SharedMapLeaf = &Map{}
-
-func Node(node0 int, node1 int, node2 int, node3 boxes.Box, node4 *Map, node5 *Map) *Map {
-	return &Map{Node0: node0, Node1: node1, Node2: int32(node2), Node3: node3, Node4: node4, Node5: node5}
-}
-
-func UnsafeNodeBox(k int, v boxes.Box, l *Map, r *Map) *Map {
-	if l == SharedMapLeaf {
-		if r == SharedMapLeaf {
-			return Node(1, 1, k, v, l, r)
-		}
-		return Node(1+r.Node0, 1+r.Node1, k, v, l, r)
-	}
-	h1 := l.Node0
-	s1 := l.Node1
-	if r == SharedMapLeaf {
-		return Node(1+h1, 1+s1, k, v, l, r)
-	}
-	h2 := r.Node0
-	result := max(h1, h2)
-	return Node(1+result, 1+s1+r.Node1, k, v, l, r)
-}
-
-func UnsafeBalancedNode(k int, v boxes.Box, l *Map, r *Map, donor *Map) *Map {
-	if l == SharedMapLeaf {
-		if r == SharedMapLeaf {
-			donor.Node0 = 1
-			donor.Node1 = 1
-			donor.Node2 = int32(k)
-			donor.Node3 = v
-			donor.Node4 = SharedMapLeaf
-			donor.Node5 = SharedMapLeaf
-			return donor
-		}
-		if r != SharedMapLeaf {
-			rh := r.Node0
-			rk := int(r.Node2)
-			rv := r.Node3
-			rl := r.Node4
-			rr := r.Node5
-			if rh > 1 {
-				return UnsafeBalancedNodeRotateLeft(k, v, l, rk, rv, rl, rr, donor)
-			}
-		}
-		return UnsafeNodeBoxReusing(k, v, l, r, donor)
-	}
-	lh := l.Node0
-	lk := int(l.Node2)
-	lv := l.Node3
-	ll := l.Node4
-	lr := l.Node5
-	if r != SharedMapLeaf {
-		rh := r.Node0
-		rk := int(r.Node2)
-		rv := r.Node3
-		rl := r.Node4
-		rr := r.Node5
-		if rh > lh+1 {
-			return UnsafeBalancedNodeRotateLeft(k, v, l, rk, rv, rl, rr, donor)
-		}
-		if lh > rh+1 {
-			return UnsafeBalancedNodeRotateRight(k, v, lk, lv, ll, lr, r, donor)
-		}
-	}
-	if r == SharedMapLeaf {
-		if lh > 1 {
-			return UnsafeBalancedNodeRotateRight(k, v, lk, lv, ll, lr, r, donor)
-		}
-	}
-	return UnsafeNodeBoxReusing(k, v, l, r, donor)
-}
-
-func UnsafeNodeBoxReusing(k int, v boxes.Box, l *Map, r *Map, donor *Map) *Map {
-	if l == SharedMapLeaf {
-		if r == SharedMapLeaf {
-			donor.Node0 = 1
-			donor.Node1 = 1
-			donor.Node2 = int32(k)
-			donor.Node3 = v
-			donor.Node4 = l
-			donor.Node5 = r
-			return donor
-		}
-		h2 := r.Node0
-		s2 := r.Node1
-		donor.Node0 = 1 + h2
-		donor.Node1 = 1 + s2
-		donor.Node2 = int32(k)
-		donor.Node3 = v
-		donor.Node4 = l
-		donor.Node5 = r
-		return donor
-	}
-	h1 := l.Node0
-	s1 := l.Node1
-	if r == SharedMapLeaf {
-		donor.Node0 = 1 + h1
-		donor.Node1 = 1 + s1
-		donor.Node2 = int32(k)
-		donor.Node3 = v
-		donor.Node4 = l
-		donor.Node5 = r
-		return donor
-	}
-	h22 := r.Node0
-	s22 := r.Node1
-	result := max(h1, h22)
-	donor.Node0 = 1 + result
-	donor.Node1 = 1 + s1 + s22
-	donor.Node2 = int32(k)
-	donor.Node3 = v
-	donor.Node4 = l
-	donor.Node5 = r
-	return donor
-}
-
-func UnsafeBalancedNodeRotateLeft(k int, v boxes.Box, l *Map, rk int, rv boxes.Box, rl *Map, rr *Map, donor *Map) *Map {
-	if rl != SharedMapLeaf {
-		lh := rl.Node0
-		lk := int(rl.Node2)
-		lv := rl.Node3
-		ll := rl.Node4
-		lr := rl.Node5
-		var result int
-		if rr == SharedMapLeaf {
-			result = 0
-		} else {
-			result = rr.Node0
-		}
-		if lh > result {
-			return UnsafeNodeBoxReusing(lk, lv, UnsafeNodeBox(k, v, l, ll), UnsafeNodeBox(rk, rv, lr, rr), donor)
-		}
-	}
-	return UnsafeNodeBoxReusing(rk, rv, UnsafeNodeBox(k, v, l, rl), rr, donor)
-}
-
-func UnsafeBalancedNodeRotateRight(k int, v boxes.Box, lk int, lv boxes.Box, ll *Map, lr *Map, r *Map, donor *Map) *Map {
-	if lr != SharedMapLeaf {
-		rh := lr.Node0
-		rk := int(lr.Node2)
-		rv := lr.Node3
-		rl := lr.Node4
-		rr := lr.Node5
-		var result int
-		if ll == SharedMapLeaf {
-			result = 0
-		} else {
-			result = ll.Node0
-		}
-		if result <= rh {
-			return UnsafeNodeBoxReusing(rk, rv, UnsafeNodeBox(lk, lv, ll, rl), UnsafeNodeBox(k, v, rr, r), donor)
-		}
-	}
-	return UnsafeNodeBoxReusing(lk, lv, ll, UnsafeNodeBox(k, v, lr, r), donor)
-}
-
 // Data/Maybe/maybe.go
 package maybe
 
@@ -185,18 +15,17 @@ type Box struct {
 	Tag  uint8
 }
 
-var NoBox = Box{Tag: TagNothing}
-
 func JustBox(just boxes.Box) Box {
 	return Box{Tag: TagJust, Just: just}
 }
+
+var NoBox = Box{Tag: TagNothing}
 
 // main.go
 package main
 
 import (
 	boxes "fixture/Boxes_ffi"
-	"fixture/Data/Map/Internal"
 	"fixture/Data/Maybe"
 	journal "fixture/Journal_ffi"
 	"fixture/shared"
@@ -207,108 +36,42 @@ import (
 
 func main() {
 	original := shared.Name{Name: "first"}
-	field := direct.ForeignRecord([]string{"name"}, []any{original.Name})
-	field2 := int(42)
-	cache := mainGoReusing2(field2, mainGoReusing(field, internal.SharedMapLeaf))
+	table := make(map[int]boxes.Box)
+	table[1] = direct.ForeignRecord([]string{"name"}, []any{original.Name})
+	table[2] = int(42)
 	original2 := shared.Name{Name: "boxed"}
 	cell := direct.ForeignRecord([]string{"name"}, []any{original2.Name})
 	journal.Log((shared.Name{Name: direct.ForeignField(cell, "name").(string)}).Name)
-	scrutinee := mainGo(cache)
+	value, found := table[1]
+	var entry maybe.Box
+	if found {
+		entry = maybe.JustBox(value)
+	} else {
+		entry = maybe.NoBox
+	}
 	var result string
-	switch scrutinee.Tag {
+	switch entry.Tag {
 	case maybe.TagNothing:
 		result = "missing"
 	default: // maybe.TagJust
-		result = (shared.Name{Name: direct.ForeignField(scrutinee.Just, "name").(string)}).Name
+		result = (shared.Name{Name: direct.ForeignField(entry.Just, "name").(string)}).Name
 	}
 	journal.Log(result)
-	scrutinee2 := mainGo2(cache)
+	value2, found2 := table[2]
+	var entry2 maybe.Box
+	if found2 {
+		entry2 = maybe.JustBox(value2)
+	} else {
+		entry2 = maybe.NoBox
+	}
 	var result2 int
-	switch scrutinee2.Tag {
+	switch entry2.Tag {
 	case maybe.TagJust:
-		result2 = foreignvalue.Int(scrutinee2.Just)
+		result2 = foreignvalue.Int(entry2.Just)
 	default:
 		result2 = 0
 	}
 	journal.Log(strconv.Itoa(result2))
-}
-
-func mainGo(value *internal.Map) maybe.Box {
-	for {
-		if value == internal.SharedMapLeaf {
-			return maybe.NoBox
-		}
-		mk := int(value.Node2)
-		mv := value.Node3
-		ml := value.Node4
-		mr := value.Node5
-		if 1 < mk {
-			value = ml
-			continue
-		}
-		if 1 == mk {
-			return maybe.JustBox(mv)
-		}
-		value = mr
-	}
-}
-
-func mainGo2(value *internal.Map) maybe.Box {
-	for {
-		if value == internal.SharedMapLeaf {
-			return maybe.NoBox
-		}
-		mk := int(value.Node2)
-		mv := value.Node3
-		ml := value.Node4
-		mr := value.Node5
-		if 2 < mk {
-			value = ml
-			continue
-		}
-		if 2 == mk {
-			return maybe.JustBox(mv)
-		}
-		value = mr
-	}
-}
-
-func mainGoReusing(field boxes.Box, value *internal.Map) *internal.Map {
-	if value == internal.SharedMapLeaf {
-		return internal.Node(1, 1, 1, field, internal.SharedMapLeaf, internal.SharedMapLeaf)
-	}
-	mk := int(value.Node2)
-	mv := value.Node3
-	ml := value.Node4
-	mr := value.Node5
-	if 1 < mk {
-		return internal.UnsafeBalancedNode(mk, mv, mainGoReusing(field, ml), mr, value)
-	}
-	if 1 == mk {
-		value.Node2 = 1
-		value.Node3 = field
-		return value
-	}
-	return internal.UnsafeBalancedNode(mk, mv, ml, mainGoReusing(field, mr), value)
-}
-
-func mainGoReusing2(field boxes.Box, value *internal.Map) *internal.Map {
-	if value == internal.SharedMapLeaf {
-		return internal.Node(1, 1, 2, field, internal.SharedMapLeaf, internal.SharedMapLeaf)
-	}
-	mk := int(value.Node2)
-	mv := value.Node3
-	ml := value.Node4
-	mr := value.Node5
-	if 2 < mk {
-		return internal.UnsafeBalancedNode(mk, mv, mainGoReusing2(field, ml), mr, value)
-	}
-	if 2 == mk {
-		value.Node2 = 2
-		value.Node3 = field
-		return value
-	}
-	return internal.UnsafeBalancedNode(mk, mv, ml, mainGoReusing2(field, mr), value)
 }
 
 // shared/shared.go

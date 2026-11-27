@@ -1,0 +1,5 @@
+-- a tree that the program takes apart keeps the shape its inserts gave it
+8
+4
+4
+[(Tuple 1 1),(Tuple 2 4),(Tuple 3 9),(Tuple 4 16),(Tuple 5 25),(Tuple 6 36)]
