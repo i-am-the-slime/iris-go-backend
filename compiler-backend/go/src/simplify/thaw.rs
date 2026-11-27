@@ -1,6 +1,7 @@
 use super::short_circuit::mentions;
 use crate::foreign::{
-    ARRAY_REPLICATE, ARRAY_THAW, ARRAY_THAW_OWNED, Boundary, Foreign, Iteration, Operator,
+    ARRAY_APPEND, ARRAY_REPLICATE, ARRAY_THAW, ARRAY_THAW_OWNED, Boundary, Foreign, Iteration,
+    Operator,
 };
 use crate::monomorphic::traversal::{for_each_child, for_each_child_mut};
 use crate::monomorphic::{Expression, ExpressionKind, Local, LocalId};
@@ -37,8 +38,17 @@ pub(super) fn thaw_fresh_arrays_in_place(expression: &mut Expression, monotypes:
     }
 }
 
+/// Whether the value is an array that nothing else holds: one `replicate` or `range` makes, or one
+/// that appends such an array or an array literal to another, which copies both, as `cons` does.
 fn is_fresh(value: &Expression) -> bool {
-    matches!(&value.kind, ExpressionKind::Foreign { foreign, .. } if foreign.calls(ARRAY_REPLICATE))
+    let ExpressionKind::Foreign { foreign, arguments } = &value.kind else { return false };
+    let copied = |argument: &Expression| match &argument.kind {
+        ExpressionKind::Array(elements) => !elements.is_empty(),
+        _ => is_fresh(argument),
+    };
+    foreign.calls(ARRAY_REPLICATE)
+        || matches!(foreign, Foreign::Range)
+        || (foreign.calls(ARRAY_APPEND) && arguments.iter().any(copied))
 }
 
 fn count_uses(

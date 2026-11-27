@@ -44,6 +44,7 @@ mod groups;
 mod guards;
 mod headers;
 mod immediate;
+mod index_arrays;
 mod inlining;
 mod inspection;
 mod instantiations;
@@ -312,6 +313,7 @@ where
     let global =
         |name: &str| emitter.global_names.contains(name) || IMPORTED_PACKAGES.contains(&name);
     timed("upserts", || upsert::look_up_and_write_once(&mut declarations, &global));
+    timed("index arrays", || index_arrays::count_instead_of_listing_indices(&mut declarations));
     let mut record_value_name = |type_name: &str| {
         let (&monotype, _) = emitter.record_names.iter().find(|(_, name)| *name == type_name)?;
         Some(emitter.value_base(monotype))
