@@ -1,0 +1,59 @@
+---
+source: tests-integration/src/fixtures.rs
+---
+// main.go
+package main
+
+import (
+	"github.com/i-am-the-slime/iris-go/array"
+	"github.com/i-am-the-slime/iris-go/console"
+	"github.com/i-am-the-slime/iris-go/prim"
+	"slices"
+	"strings"
+)
+
+var main_ = initializeMain_()
+
+func initializeMain_() [][]int {
+	accumulator := []int{}
+	for _, a := range numbers {
+		accumulator = append(accumulator, a)
+	}
+	slices.Reverse(accumulator)
+	accumulator2 := []int{}
+	for _, number := range numbers {
+		if number&1 == 0 {
+			accumulator2 = append(accumulator2, number*10, number)
+		}
+	}
+	slices.Reverse(accumulator2)
+	accumulator3 := []int{}
+	for index := len(numbers) - 1; index >= 0; index-- {
+		number := numbers[index]
+		accumulator3 = append(accumulator3, number*2)
+	}
+	slices.Reverse(accumulator3)
+	accumulator4 := []int{}
+	for range numbers {
+		accumulator4 = array.Append([]int{len(accumulator4)}, accumulator4)
+	}
+	return [][]int{accumulator, array.Append(accumulator2, []int{100}), accumulator3, accumulator4}
+}
+
+var numbers = initializeNumbers()
+
+func initializeNumbers() []int {
+	return array.Range(1, 5)
+}
+
+func main() {
+	texts := make([]string, 0, len(main_))
+	for _, element := range main_ {
+		texts2 := make([]string, 0, len(element))
+		for _, element2 := range element {
+			texts2 = append(texts2, prim.ShowInt(element2))
+		}
+		texts = append(texts, "["+strings.Join(texts2, " ")+"]")
+	}
+	console.Print("[" + strings.Join(texts, " ") + "]")
+}

@@ -72,6 +72,7 @@ mod operators;
 mod overwrite;
 mod ownership;
 mod packages;
+mod prepends;
 mod printing;
 mod project;
 mod ranges;
@@ -147,6 +148,7 @@ pub fn emit_program<Q>(
 where
     Q: checking::ExternalQueries,
 {
+    timed("prepends", || prepends::append_prepending_folds(&mut program, monotypes));
     let arities = crate::arity::choose(&program, monotypes);
     let closure_sets = timed("closures", || {
         closures::defunctionalize(&mut program, monotypes, queries, &arities, eliminators)

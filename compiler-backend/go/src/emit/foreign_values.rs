@@ -406,6 +406,12 @@ where
             let write = GoFunction { package: GoPackage::Object, name };
             return Ok(call(self.go_function(write), values));
         }
+        if let Foreign::OwnedReverse = foreign {
+            let array = self.value(&arguments[0], out)?;
+            let array = self.hoist(array, "reversed", out);
+            out.push(GoStatement::Expression(self.slices("Reverse", vec![array.clone()])));
+            return Ok(array);
+        }
         if let Foreign::Snoc = foreign
             && let Some(built) = self.built_with_spare(&arguments[0], 1, out)?
         {

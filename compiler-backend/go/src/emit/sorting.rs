@@ -276,7 +276,7 @@ where
         Ok(GoExpression::Function { parameters, result: Some(GoType::Int), body })
     }
 
-    fn slices(&mut self, name: &str, arguments: Vec<GoExpression>) -> GoExpression {
+    pub(super) fn slices(&mut self, name: &str, arguments: Vec<GoExpression>) -> GoExpression {
         self.imports.insert("slices".into());
         let function = GoExpression::Qualified { package: "slices".into(), name: name.into() };
         call(function, arguments)

@@ -101,6 +101,8 @@ pub enum Foreign {
     IntFromNumber,
     Range,
     Snoc,
+    /// An array the code owns, reversed in place.
+    OwnedReverse,
     Ordering,
     RecordGet,
     RecordHas,
@@ -574,6 +576,7 @@ impl Foreign {
             Foreign::IntFromNumber => 3,
             Foreign::Ordering => 5,
             Foreign::Range | Foreign::Snoc | Foreign::RecordGet | Foreign::RecordHas => 2,
+            Foreign::OwnedReverse => 1,
             Foreign::Record(operation) => operation.arity(),
             Foreign::Unfoldr | Foreign::Unfoldr1 => 6,
             Foreign::ReferenceWrite | Foreign::ReferenceWriteThrough | Foreign::ReferenceModify => {
