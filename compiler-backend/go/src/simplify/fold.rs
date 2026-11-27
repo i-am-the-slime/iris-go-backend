@@ -547,6 +547,7 @@ fn unary<'l>(operator: Operator, operand: &Value<'l>) -> Option<Value<'l>> {
     Some(match (operator, operand) {
         (Operator::IntNegate, Value::Int(x)) => Value::Int(x.wrapping_neg()),
         (Operator::IntComplement, Value::Int(x)) => Value::Int(!x),
+        (Operator::IntPopulationCount, Value::Int(x)) => Value::Int(i64::from(x.count_ones())),
         (Operator::IntToNumber, Value::Int(x)) => Value::Number(*x as f64),
         (Operator::NumberNegate, Value::Number(x)) => Value::Number(-x),
         (Operator::BooleanNot, Value::Boolean(x)) => Value::Boolean(!x),

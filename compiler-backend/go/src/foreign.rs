@@ -495,6 +495,8 @@ pub enum Operator {
     IntShiftRight,
     IntZeroFillShiftRight,
     IntComplement,
+    /// The number of set bits, Go's `bits.OnesCount`.
+    IntPopulationCount,
     Compare(Comparison),
 }
 
@@ -518,7 +520,8 @@ impl Operator {
             | Operator::BooleanNot
             | Operator::ArrayLength
             | Operator::IntToNumber
-            | Operator::IntComplement => 1,
+            | Operator::IntComplement
+            | Operator::IntPopulationCount => 1,
             _ => 2,
         }
     }

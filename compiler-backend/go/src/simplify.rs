@@ -44,6 +44,7 @@ mod find;
 mod fold;
 mod lengths;
 mod object;
+mod population_count;
 mod record;
 mod record_views;
 mod reductions;
@@ -135,6 +136,17 @@ pub fn simplify(
             simplifier.fuel = INLINE_FUEL;
             current = simplifier.eta_expand(current);
             current.body = simplifier.expression(current.body);
+            if let [only] = component.as_slice()
+                && simplifier.recursive[*only]
+                && let Some(counted) = population_count::population_count(
+                    &current,
+                    FunctionId(*only as u32),
+                    simplifier.monotypes,
+                )
+            {
+                current.body = counted;
+                simplifier.recursive[*only] = false;
+            }
             current = simplifier.absorb_lambdas(current);
             simplifier.adopt_names(&mut current);
             simplifier.sizes[function] = size(&current.body);

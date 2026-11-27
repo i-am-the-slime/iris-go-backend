@@ -93,6 +93,10 @@ where
                     value: Box::new(values.remove(0)),
                 },
                 Operator::IntComplement => unary("^", &mut values),
+                Operator::IntPopulationCount => match int_constant(&values[0]) {
+                    Some(value) => GoExpression::Integer(i64::from(value.count_ones())),
+                    None => self.ones_count(values.remove(0)),
+                },
                 _ => unreachable!(),
             };
         }
@@ -265,5 +269,21 @@ pub(super) fn is_integer_constant(expression: &GoExpression) -> bool {
             matches!(operand.as_ref(), GoExpression::Integer(_))
         }
         _ => false,
+    }
+}
+
+impl<'q, Q> Emitter<'_, '_, 'q, Q>
+where
+    Q: checking::ExternalQueries,
+{
+    /// `bits.OnesCount(uint(value))`: the set bits of the Int's two's complement.
+    fn ones_count(&mut self, value: GoExpression) -> GoExpression {
+        self.imports.insert("math/bits".into());
+        let ones = GoExpression::Qualified { package: "bits".into(), name: "OnesCount".into() };
+        let unsigned = GoExpression::Conversion {
+            type_: GoType::Named("uint".into()),
+            value: Box::new(value),
+        };
+        call(ones, vec![unsigned])
     }
 }
