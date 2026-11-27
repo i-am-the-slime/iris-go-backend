@@ -890,6 +890,12 @@ impl<'t> Typer<'t> {
                     unknown @ Ty::Unknown { .. } => unknown,
                 }
             }
+            GoExpression::Slice { value: holder, low, high } => {
+                for bound in low.iter_mut().chain(high.iter_mut()) {
+                    self.expression(bound, false);
+                }
+                self.expression(holder, false)
+            }
             GoExpression::Index { value: holder, index } => {
                 self.expression(index, false);
                 match self.expression(holder, false) {

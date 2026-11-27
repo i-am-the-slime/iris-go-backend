@@ -17,6 +17,7 @@
 use rustc_hash::{FxHashMap, FxHashSet};
 
 use super::mutable::in_bounds;
+use super::{binary, call, identifier_expression};
 use crate::syntax::{GoExpression, GoStatement, GoType, Name, statements_names};
 
 use crate::go_traversal::{each_block, each_expression_in_statement};
@@ -257,6 +258,32 @@ fn read_ascii_bytes(
             position += 1;
         }
     });
+    let mut cut_names: FxHashSet<String> = FxHashSet::default();
+    each_block(looped, |block| {
+        let mut position = 0;
+        while position < block.len() {
+            let mut cuts = vec![];
+            let asking = matches!(&block[position], GoStatement::Assign { targets, .. }
+                if matches!(targets.as_slice(), [GoExpression::Identifier(name)] if cut_names.contains(name)));
+            if !asking && let Some(values) = evaluated_values(&mut block[position]) {
+                for value in values {
+                    cut_ascii_text(value, view, &mut |cut| {
+                        let name = fresh(format!("{string}Cut"));
+                        cut_names.insert(name.clone());
+                        cuts.push((name.clone(), cut));
+                        GoExpression::Identifier(name)
+                    });
+                }
+            }
+            let mut hoisted = vec![];
+            for (name, cut) in cuts {
+                hoisted.extend(cut.statements(&name, &ascii));
+            }
+            read |= !hoisted.is_empty();
+            position += hoisted.len() + 1;
+            block.splice(position - hoisted.len() - 1..position - hoisted.len() - 1, hoisted);
+        }
+    });
     let value = GoExpression::Call {
         function: Box::new(GoExpression::Field {
             value: Box::new(GoExpression::Identifier(view.to_string())),
@@ -265,6 +292,133 @@ fn read_ascii_bytes(
         arguments: vec![],
     };
     read.then_some((ascii, value))
+}
+
+/// A `view.Take(n)` or `view.Drop(n)` whose `n` is as cheap to repeat as to read.
+struct Cut {
+    take: bool,
+    count: GoExpression,
+    asked: GoExpression,
+}
+
+impl Cut {
+    /// `var cut string` and the test that slices ASCII text and asks the view only otherwise:
+    ///
+    /// ```go
+    /// if n > 0 && n <= len(textASCII) {
+    ///     cut = textASCII[:n]
+    /// } else {
+    ///     cut = textUnits.Take(n)
+    /// }
+    /// ```
+    ///
+    /// and for a drop `n >= 0 && n < len(textASCII)` and `textASCII[n:]`.
+    fn statements(self, name: &str, ascii: &str) -> [GoStatement; 2] {
+        let text = || Box::new(GoExpression::Identifier(ascii.to_string()));
+        let count = || Some(Box::new(self.count.clone()));
+        let (condition, sliced) = match self.take {
+            true => {
+                let length = call(identifier_expression("len"), vec![*text()]);
+                let positive = binary(">", self.count.clone(), GoExpression::Integer(0));
+                let within = binary("<=", self.count.clone(), length);
+                let sliced = GoExpression::Slice { value: text(), low: None, high: count() };
+                (binary("&&", positive, within), sliced)
+            }
+            false => {
+                let sliced = GoExpression::Slice { value: text(), low: count(), high: None };
+                (in_bounds(&self.count, *text()), sliced)
+            }
+        };
+        let assign = |value| GoStatement::Assign {
+            targets: vec![GoExpression::Identifier(name.to_string())],
+            values: vec![value],
+        };
+        [
+            GoStatement::Variable { name: name.to_string(), type_: GoType::String, value: None },
+            GoStatement::If {
+                condition,
+                then: vec![assign(sliced)],
+                otherwise: vec![assign(self.asked)],
+            },
+        ]
+    }
+}
+
+/// The values a statement evaluates before anything else it does, when it is a definition, an
+/// assignment, a call or a return.
+fn evaluated_values(statement: &mut GoStatement) -> Option<Vec<&mut GoExpression>> {
+    match statement {
+        GoStatement::Define { values, .. } => Some(values.iter_mut().collect()),
+        GoStatement::Assign { targets, values } => {
+            let plain = targets.iter().all(|target| matches!(target, GoExpression::Identifier(_)));
+            plain.then(|| values.iter_mut().collect())
+        }
+        GoStatement::Variable { value: Some(value), .. }
+        | GoStatement::Expression(value)
+        | GoStatement::Return(Some(value)) => Some(vec![value]),
+        _ => None,
+    }
+}
+
+/// Replaces each cut of the view in `value`, outside function literals and the branches of `&&`
+/// and `||`, by what `replace` names it.
+fn cut_ascii_text(
+    value: &mut GoExpression,
+    view: &str,
+    replace: &mut dyn FnMut(Cut) -> GoExpression,
+) {
+    if let Some(cut) = cut_of(value, view) {
+        *value = replace(cut);
+        return;
+    }
+    match value {
+        GoExpression::Call { function, arguments } => {
+            cut_ascii_text(function, view, replace);
+            arguments.iter_mut().for_each(|argument| cut_ascii_text(argument, view, replace));
+        }
+        GoExpression::Binary { operator, left, .. } if matches!(*operator, "&&" | "||") => {
+            cut_ascii_text(left, view, replace);
+        }
+        GoExpression::Binary { left, right, .. } => {
+            cut_ascii_text(left, view, replace);
+            cut_ascii_text(right, view, replace);
+        }
+        GoExpression::Composite { fields, .. } => {
+            fields.iter_mut().for_each(|(_, field)| cut_ascii_text(field, view, replace));
+        }
+        GoExpression::Unary { operand: value, .. }
+        | GoExpression::Conversion { value, .. }
+        | GoExpression::Spread(value)
+        | GoExpression::Attributed { value, .. } => cut_ascii_text(value, view, replace),
+        _ => {}
+    }
+}
+
+fn cut_of(value: &GoExpression, view: &str) -> Option<Cut> {
+    let GoExpression::Call { function, arguments } = value else { return None };
+    let GoExpression::Field { value: viewed, name } = &**function else { return None };
+    let (GoExpression::Identifier(viewed), [count]) = (&**viewed, arguments.as_slice()) else {
+        return None;
+    };
+    let take = match name.as_str() {
+        "Take" => true,
+        "Drop" => false,
+        _ => return None,
+    };
+    (viewed == view && is_repeatable_count(count)).then(|| Cut {
+        take,
+        count: count.clone(),
+        asked: value.clone(),
+    })
+}
+
+fn is_repeatable_count(value: &GoExpression) -> bool {
+    match value {
+        GoExpression::Binary { operator: "+" | "-", left, right } => {
+            is_repeatable(left) && is_repeatable(right)
+        }
+        value => is_repeatable(value),
+    }
 }
 
 /// The Maybe that `var maybe T; if found { maybe = just(char) } else { maybe = nothing }` builds

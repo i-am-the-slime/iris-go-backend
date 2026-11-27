@@ -1,0 +1,11 @@
+-- every word one letter away, cut where the letter goes
+["xit","yit","éit","hxt","hyt","hét","hix","hiy","hié"]
+["x","y","é"]
+["x","y","é","x","y","é"]
+-- the same cuts of text that is not ASCII, a pair split in the middle
+["x😀t","y😀t","é😀t","hx�t","hy�t","hé�t","h�xt","h�yt","h�ét","h😀x","h😀y","h😀é"]
+["xté","yté","éxé","éyé","ééé","étx","éty"]
+-- cuts before the start and past the end
+["|word|word|","|word|word|","|word|ord|","w|ord|rd|","wo|rd|d|w","wor|d||wo","word|||wor","word|||word","word|||word"]
+["|w😀rd|w😀rd|","|w😀rd|w😀rd|","|w😀rd|😀rd|","w|😀rd|�rd|","w�|�rd|rd|w","w😀|rd|d|w�","w😀r|d||w😀","w😀rd|||w😀r","w😀rd|||w😀rd","w😀rd|||w😀rd"]
+["|||","|||","|||","|||","|||"]

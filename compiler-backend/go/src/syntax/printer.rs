@@ -720,6 +720,15 @@ impl Printer {
                 let index = self.expression_at(index, 0, depth + 1);
                 format!("{value}[{index}]")
             }
+            GoExpression::Slice { value, low, high } => {
+                let value = self.expression_at(value, 6, 1);
+                let mut bound = |bound: &Option<Box<GoExpression>>| match bound {
+                    Some(bound) => self.expression_at(bound, 0, depth + 1),
+                    None => String::new(),
+                };
+                let (low, high) = (bound(low), bound(high));
+                format!("{value}[{low}:{high}]")
+            }
             GoExpression::Composite { type_, fields } => {
                 let rendered = self.type_(type_);
                 format!("{rendered}{}", self.composite_fields(type_, fields))

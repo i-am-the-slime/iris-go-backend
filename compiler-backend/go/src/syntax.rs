@@ -115,6 +115,12 @@ pub enum GoExpression {
         value: Box<GoExpression>,
         index: Box<GoExpression>,
     },
+    /// `value[low:high]`, either bound left out when it is `None`.
+    Slice {
+        value: Box<GoExpression>,
+        low: Option<Box<GoExpression>>,
+        high: Option<Box<GoExpression>>,
+    },
     Composite {
         type_: GoType,
         fields: Vec<(Option<String>, GoExpression)>,
@@ -229,6 +235,7 @@ impl GoExpression {
         match self {
             GoExpression::Call { .. }
             | GoExpression::Index { .. }
+            | GoExpression::Slice { .. }
             | GoExpression::TypeAssertion { .. } => true,
             GoExpression::Function { .. } => false,
             GoExpression::Binary { left, right, .. } => left.does_work() || right.does_work(),

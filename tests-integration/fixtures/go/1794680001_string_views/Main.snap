@@ -199,11 +199,24 @@ func lastIndexOfLoopViewsTheText(text string, offset int, count int) int {
 func slicesInALoopViewTheText(text string, i int, pieces []string) []string {
 	pieces = slices.Clip(pieces)
 	textUnits := prim.UTF16(text)
+	textASCII := textUnits.ASCII()
 	for {
 		if i >= textUnits.Length() {
 			return pieces
 		}
-		i, pieces = i+2, append(pieces, textUnits.Slice(i, i+2), textUnits.Take(i), textUnits.Drop(i))
+		var textCut string
+		if i > 0 && i <= len(textASCII) {
+			textCut = textASCII[:i]
+		} else {
+			textCut = textUnits.Take(i)
+		}
+		var textCut2 string
+		if i >= 0 && i < len(textASCII) {
+			textCut2 = textASCII[i:]
+		} else {
+			textCut2 = textUnits.Drop(i)
+		}
+		i, pieces = i+2, append(pieces, textUnits.Slice(i, i+2), textCut, textCut2)
 	}
 }
 

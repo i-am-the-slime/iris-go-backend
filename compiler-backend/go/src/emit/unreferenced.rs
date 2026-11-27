@@ -148,6 +148,10 @@ fn effects(value: GoExpression, out: &mut Vec<GoStatement>) {
             effects(*value, out);
             effects(*index, out);
         }
+        GoExpression::Slice { value, low, high } => {
+            effects(*value, out);
+            low.into_iter().chain(high).for_each(|bound| effects(*bound, out));
+        }
         GoExpression::Identifier(_)
         | GoExpression::Qualified { .. }
         | GoExpression::Integer(_)
@@ -193,6 +197,7 @@ fn is_inert(value: &GoExpression) -> bool {
         GoExpression::Unary { operator, operand } => *operator != "*" && is_inert(operand),
         GoExpression::Call { .. }
         | GoExpression::Index { .. }
+        | GoExpression::Slice { .. }
         | GoExpression::TypeAssertion { .. }
         | GoExpression::Type(_)
         | GoExpression::Spread(_)

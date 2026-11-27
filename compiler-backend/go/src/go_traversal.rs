@@ -48,6 +48,10 @@ pub fn expression<W: Walk + ?Sized>(walk: &mut W, value: &mut GoExpression) {
             walk.expression(value);
             walk.expression(index);
         }
+        GoExpression::Slice { value, low, high } => {
+            walk.expression(value);
+            low.iter_mut().chain(high.iter_mut()).for_each(|bound| walk.expression(bound));
+        }
         GoExpression::Unary { operand: value, .. }
         | GoExpression::Field { value, .. }
         | GoExpression::Address(value)

@@ -241,6 +241,12 @@ impl Walk for Function<'_> {
             let lengths = match &mut body[at] {
                 GoStatement::Loop(looped) | GoStatement::LabeledLoop { body: looped, .. } => {
                     let mut hoisted = self.views(looped, &changed);
+                    let changed = self.changed(&mut body[at]);
+                    let (GoStatement::Loop(looped) | GoStatement::LabeledLoop { body: looped, .. }) =
+                        &mut body[at]
+                    else {
+                        unreachable!("invariant violated: a loop stopped being one")
+                    };
                     hoisted.extend(self.invariant_lengths(looped, &changed));
                     hoisted
                 }
