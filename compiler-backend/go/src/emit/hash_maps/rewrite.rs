@@ -8,7 +8,9 @@
 use rustc_hash::{FxHashMap, FxHashSet};
 use smol_str::SmolStr;
 
-use super::{Conversion, Decided, Layouts, MapShape, Natives, is_fold_left};
+use super::{
+    Conversion, Decided, Layouts, MapShape, Natives, PRODUCT_LABELS, fields_of, is_fold_left,
+};
 use crate::foreign::{Foreign, Iteration, Operator};
 use crate::maps::{HashMapOperation, MapOperation};
 use crate::monomorphic::traversal::{for_each_child_mut, visit};
@@ -149,7 +151,7 @@ impl<'r> Rewrite<'r> {
             self.hash_type(monotype)
         } else {
             let layout = self.layouts.layout(self.monotypes, self.shapes, monotype);
-            let Monotype::Record(fields) = self.monotypes.get(monotype).clone() else {
+            let Some(fields) = fields_of(self.monotypes, monotype) else {
                 unreachable!("invariant violated: slots of neither a map nor a record")
             };
             let fields: Vec<RecordField> = fields
@@ -197,6 +199,9 @@ impl<'r> Rewrite<'r> {
         let natives = conversion.as_ref().map_or(own, |conversion| conversion.from.clone());
         let tree = expression.monotype;
         expression.monotype = self.retype(tree, &natives);
+        if expression.monotype != tree {
+            as_record(expression);
+        }
         if self.shapes.contains_key(&tree) && natives[0] {
             self.native(expression);
             self.size_hint(expression);
@@ -227,6 +232,9 @@ impl<'r> Rewrite<'r> {
             let function = if from[0] { conversions.to_tree } else { conversions.from_tree };
             return call(function, vec![value], target);
         }
+        if let Monotype::Data(data) = self.monotypes.get(tree).clone() {
+            return self.convert_product(value, tree, &data, from, to);
+        }
         let mut bindings = vec![];
         let record = self.named("record", value, &mut bindings);
         let layout = self.layouts.layout(self.monotypes, self.shapes, tree);
@@ -250,6 +258,82 @@ impl<'r> Rewrite<'r> {
         }
         let rebuilt = Expression::new(ExpressionKind::Record(built), target);
         let_in(bindings, rebuilt)
+    }
+
+    /// A product converted: its fields read off the record it is where it holds Go maps, or
+    /// bound by a pattern on it where it is the data type, each converted, and built into the
+    /// record or the construction that `to` makes of it. A product built where it is converted
+    /// converts its fields where they are.
+    fn convert_product(
+        &mut self,
+        value: Expression,
+        tree: MonotypeId,
+        data: &DataType,
+        from: &[bool],
+        to: &[bool],
+    ) -> Expression {
+        let target = self.retype(tree, to);
+        let layout = self.layouts.layout(self.monotypes, self.shapes, tree);
+        let Some(fields) = fields_of(self.monotypes, tree) else {
+            unreachable!("invariant violated: a converted product is none")
+        };
+        let slots = |label: &str| {
+            layout.field(label).map_or(0..0, |field| field.start..field.start + field.width)
+        };
+        let convert_parts = |rewrite: &mut Self, parts: Vec<Expression>| -> Vec<Expression> {
+            parts
+                .into_iter()
+                .zip(fields.iter())
+                .map(|(part, field)| {
+                    let range = slots(&field.label);
+                    rewrite.convert(part, field.monotype, &from[range.clone()], &to[range])
+                })
+                .collect()
+        };
+        let build = |parts: Vec<Expression>| {
+            if to.contains(&true) {
+                let labelled = fields.iter().map(|field| field.label.clone()).zip(parts);
+                Expression::new(ExpressionKind::Record(labelled.collect()), target)
+            } else {
+                let data = data.clone();
+                let construct =
+                    ExpressionKind::Construct { data, constructor: 0, arguments: parts };
+                Expression::new(construct, target)
+            }
+        };
+        match value.kind {
+            ExpressionKind::Record(built) => {
+                let parts = built.into_iter().map(|(_, value)| value).collect();
+                build(convert_parts(self, parts))
+            }
+            ExpressionKind::Construct { arguments, .. } => build(convert_parts(self, arguments)),
+            kind if from.contains(&true) => {
+                let mut bindings = vec![];
+                let value = Expression { kind, ..value };
+                let record = self.named("record", value, &mut bindings);
+                let parts = fields
+                    .iter()
+                    .map(|field| {
+                        let monotype = self.retype(field.monotype, &from[slots(&field.label)]);
+                        let label = field.label.clone();
+                        let record = Box::new(record.clone());
+                        Expression::new(ExpressionKind::Access { record, label }, monotype)
+                    })
+                    .collect();
+                let_in(bindings, build(convert_parts(self, parts)))
+            }
+            kind => {
+                let value = Expression { kind, ..value };
+                let locals: Vec<Local> =
+                    fields.iter().map(|field| self.fresh("field", field.monotype)).collect();
+                let parts = locals.iter().map(Local::expression).collect();
+                let built = build(convert_parts(self, parts));
+                let pattern = constructor(data, 0, locals.iter().map(variable).collect(), tree);
+                let alternatives = vec![alternative(pattern, built)];
+                let case = ExpressionKind::Case { scrutinees: vec![value], alternatives };
+                Expression::new(case, target)
+            }
+        }
     }
 
     /// A fold over an array that only inserts into a Go map it starts empty: the map is made
@@ -375,11 +459,17 @@ impl<'r> Rewrite<'r> {
             return;
         }
         pattern.monotype = monotype;
+        if let PatternKind::Constructor { arguments, .. } = &mut pattern.kind {
+            // A pattern on a product that holds Go maps, which is a record there.
+            let arguments = std::mem::take(arguments);
+            let labels = PRODUCT_LABELS.iter().map(|&label| SmolStr::new_static(label));
+            pattern.kind = PatternKind::Record(labels.zip(arguments).collect());
+        }
         match &mut pattern.kind {
             PatternKind::Variable(local) => local.monotype = monotype,
             PatternKind::Record(fields) => {
-                let (Monotype::Record(originals), Monotype::Record(types)) =
-                    (self.monotypes.get(original).clone(), self.monotypes.get(monotype).clone())
+                let (Some(originals), Monotype::Record(types)) =
+                    (fields_of(self.monotypes, original), self.monotypes.get(monotype).clone())
                 else {
                     return;
                 };
@@ -603,6 +693,14 @@ impl<'r> Rewrite<'r> {
             _ => unreachable!("invariant violated: no Go map type"),
         }
     }
+}
+
+/// A product built where it holds Go maps: the record it is there.
+fn as_record(expression: &mut Expression) {
+    let ExpressionKind::Construct { arguments, .. } = &mut expression.kind else { return };
+    let arguments = std::mem::take(arguments);
+    let labels = PRODUCT_LABELS.iter().map(|&label| SmolStr::new_static(label));
+    expression.kind = ExpressionKind::Record(labels.zip(arguments).collect());
 }
 
 fn placeholder_function(unit: MonotypeId) -> Function {

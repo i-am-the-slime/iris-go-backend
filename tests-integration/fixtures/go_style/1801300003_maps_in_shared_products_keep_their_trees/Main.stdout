@@ -1,0 +1,15 @@
+-- a pair taken apart twice: both see the map it was made with
+5 (fromFoldable [1,2,3,4,5,100]) (fromFoldable [1,2,3,4,5])
+2 (fromFoldable [1,2,100]) (fromFoldable [1,2])
+-- pairs of one map kept in an array
+[(Tuple 1 (fromFoldable [1,2,3,4,50])),(Tuple 2 (fromFoldable [2,3,4])),(Tuple 3 (fromFoldable [1,2,3,4]))]
+-- a pair that is shown or compared
+(Tuple 3 (fromFoldable [(Tuple 1 1),(Tuple 2 1),(Tuple 3 1)]))
+true false
+-- a pair inside a Maybe
+(Just (fromFoldable [1,2,3,4,5,6]))
+-- a function handed on as a value and also called by a loop
+[[(Tuple 1 2),(Tuple 2 1)],[(Tuple 1 1),(Tuple 2 3)],[(Tuple 1 1),(Tuple 2 1),(Tuple 3 3)]]
+[(Tuple 1 1),(Tuple 2 2),(Tuple 3 2),(Tuple 4 2),(Tuple 5 2),(Tuple 6 2),(Tuple 7 1)]
+-- a pair whose map is read in order inside the function that made it
+(fromFoldable [1,2,3,4,5,6,7])

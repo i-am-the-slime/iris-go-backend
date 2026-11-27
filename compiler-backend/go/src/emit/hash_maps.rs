@@ -14,7 +14,9 @@
 //! - it is made by those operations, or is a fold's seed that the fold then owns.
 //!
 //! A value has a *slot* for every map it holds: a map has one, a record one for each map its
-//! fields hold, in the order of its fields ([`Layout`]), and every slot is a node of a web.
+//! fields hold, in the order of its fields ([`Layout`]), and every slot is a node of a web. A
+//! product, a data type of one constructor such as `Tuple`, holds its maps as a record of its
+//! fields does, and is that record where it holds Go maps.
 //!
 //! Anything else a version of the map meets, a function that walks the tree or a value that
 //! keeps it, takes the tree: the map's entries are sorted once by key and built into a balanced
@@ -23,6 +25,7 @@
 //! starts from a tree turns it into a Go map first, and owns that map.
 
 use std::rc::Rc;
+use std::sync::Arc;
 
 use rustc_hash::{FxHashMap, FxHashSet};
 use smol_str::SmolStr;
@@ -35,7 +38,7 @@ use crate::monomorphic::{
     Alternative, Binding, Expression, ExpressionKind, Function, FunctionId, Guard, Guarded, Local,
     LocalId, Pattern, PatternKind, Program, RecordUpdate,
 };
-use crate::monotype::{Monotype, MonotypeId, Monotypes};
+use crate::monotype::{DataType, Monotype, MonotypeId, Monotypes, RecordField};
 
 mod rewrite;
 
@@ -163,6 +166,46 @@ impl Layout {
 #[derive(Default)]
 struct Layouts {
     known: FxHashMap<MonotypeId, Rc<Layout>>,
+    /// The types whose layouts are being made, so that a type that holds itself has no slots.
+    visiting: FxHashSet<MonotypeId>,
+}
+
+/// The labels a product's fields have where it holds Go maps and is a record.
+const PRODUCT_LABELS: &[&str] = &[
+    "first", "second", "third", "fourth", "fifth", "sixth", "seventh", "eighth", "ninth", "tenth",
+];
+
+/// The fields of a record, or of a product, a data type of one constructor, as the record a
+/// product is where it holds Go maps: its fields labelled by their order.
+fn fields_of(monotypes: &Monotypes, monotype: MonotypeId) -> Option<Arc<[RecordField]>> {
+    match monotypes.get(monotype) {
+        Monotype::Record(fields) => Some(Arc::clone(fields)),
+        Monotype::Data(data) => {
+            let fields = product_fields(monotypes, data)?;
+            let labelled = fields.iter().zip(PRODUCT_LABELS).map(|(&monotype, &label)| {
+                RecordField { label: SmolStr::new_static(label), monotype }
+            });
+            Some(labelled.collect())
+        }
+        _ => None,
+    }
+}
+
+/// The fields of a data type of one constructor, of a few fields, that nothing refutes.
+fn product_fields(monotypes: &Monotypes, data: &DataType) -> Option<Vec<MonotypeId>> {
+    let constructors = monotypes.known_constructors(data)?;
+    let [constructor] = &constructors[..] else { return None };
+    let count = constructor.fields.len();
+    let fits = !constructor.refuted && count > 0 && count <= PRODUCT_LABELS.len();
+    fits.then(|| constructor.fields.clone())
+}
+
+/// Whether the type is a product ([`product_fields`]).
+fn is_product(monotypes: &Monotypes, monotype: MonotypeId) -> bool {
+    match monotypes.get(monotype) {
+        Monotype::Data(data) => product_fields(monotypes, data).is_some(),
+        _ => false,
+    }
 }
 
 impl Layouts {
@@ -177,7 +220,10 @@ impl Layouts {
         }
         let layout = if shapes.contains_key(&monotype) {
             Layout { width: 1, fields: vec![], paths: vec![vec![]] }
-        } else if let Monotype::Record(record) = monotypes.get(monotype) {
+        } else if let Some(record) = fields_of(monotypes, monotype) {
+            if !self.visiting.insert(monotype) {
+                return Rc::new(Layout::default());
+            }
             let mut fields = vec![];
             let mut width = 0;
             let mut paths = vec![];
@@ -195,6 +241,7 @@ impl Layouts {
                     width += inner.width;
                 }
             }
+            self.visiting.remove(&monotype);
             Layout { width, fields, paths }
         } else {
             Layout::default()
@@ -581,7 +628,15 @@ impl<'p> Webs<'p> {
             ExpressionKind::Foreign { foreign, arguments } if is_fold_left(foreign, arguments) => {
                 self.fold(expression, arguments)
             }
-            ExpressionKind::Record(fields) => self.record(expression, fields),
+            ExpressionKind::Record(fields) => {
+                let fields = fields.iter().map(|(label, value)| (label.as_str(), value));
+                self.record(expression, fields)
+            }
+            ExpressionKind::Construct { arguments, .. }
+                if is_product(self.monotypes, expression.monotype) =>
+            {
+                self.record(expression, PRODUCT_LABELS.iter().copied().zip(arguments))
+            }
             ExpressionKind::Access { record, label } => {
                 let read = self.field_of(record, label);
                 let answer = self.fresh_slots(expression.monotype, false);
@@ -600,8 +655,13 @@ impl<'p> Webs<'p> {
         }
     }
 
-    /// A record built of its fields: each map a field holds is stored in the record's slot.
-    fn record(&mut self, expression: &'p Expression, fields: &'p [(SmolStr, Expression)]) -> Slots {
+    /// A record built of its fields, or a product of its arguments: each map a field holds is
+    /// stored in the value's slot.
+    fn record(
+        &mut self,
+        expression: &'p Expression,
+        fields: impl Iterator<Item = (&'p str, &'p Expression)>,
+    ) -> Slots {
         let layout = self.layout(expression.monotype);
         let slots = self.fresh_slots(expression.monotype, false);
         for (label, value) in fields {
@@ -827,6 +887,18 @@ impl<'p> Webs<'p> {
                         self.matched(Some(slots), field_pattern, field.monotype)
                     });
                     self.pattern(field_pattern, field.as_deref(), scope);
+                }
+            }
+            PatternKind::Constructor { arguments, .. }
+                if slots.is_some() && is_product(self.monotypes, pattern.monotype) =>
+            {
+                let layout = self.layout(pattern.monotype);
+                for (label, argument) in PRODUCT_LABELS.iter().zip(arguments) {
+                    let field = slots.zip(layout.field(label)).and_then(|(slots, field)| {
+                        let slots = &slots[field.start..field.start + field.width];
+                        self.matched(Some(slots), argument, field.monotype)
+                    });
+                    self.pattern(argument, field.as_deref(), scope);
                 }
             }
             PatternKind::Array(patterns)

@@ -237,6 +237,15 @@ impl Monotypes {
         Some(self.constructors.get(data)?.get(constructor)?.name.clone())
     }
 
+    /// The constructors of a plain data type that conversion has met, without converting more:
+    /// none for a variant or an existential family.
+    pub fn known_constructors(&self, data: &DataType) -> Option<Arc<[DataConstructor]>> {
+        if self.variant_row(data).is_some() || self.exists_family(data).is_some() {
+            return None;
+        }
+        self.constructors.get(data).cloned()
+    }
+
     pub fn enumeration_size(&self, data: &DataType) -> Option<usize> {
         let constructors = self.constructors.get(data)?;
         let nullary = constructors.iter().all(|constructor| constructor.fields.is_empty());
