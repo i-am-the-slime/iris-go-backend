@@ -1,0 +1,69 @@
+---
+source: tests-integration/src/fixtures.rs
+---
+// main.go
+package main
+
+import (
+	"fixture/shared"
+	"github.com/i-am-the-slime/iris-go/array"
+	"github.com/i-am-the-slime/iris-go/console"
+	"github.com/i-am-the-slime/iris-go/prim"
+)
+
+var main_ = initializeMain_()
+
+func initializeMain_() int {
+	built := make([]int, 1001)
+	built[0] = 0
+	for index := range 1000 {
+		element := 1000
+		built[index+1] = element
+	}
+	steps := array.ThawOwned(built)
+	elements := *steps
+	for stair := 1; stair < len(built); stair++ {
+		index := stair - 1
+		within := index >= 0 && index < len(elements)
+		var fromBelow int
+		if within {
+			element := elements[index]
+			fromBelow = element + 1
+		} else {
+			fromBelow = 1000
+		}
+		index2 := stair - 3
+		within2 := index2 >= 0 && index2 < len(elements)
+		var fromFurther int
+		if within2 {
+			element := elements[index2]
+			fromFurther = element + 1
+		} else {
+			fromFurther = 1000
+		}
+		result := min(fromBelow, fromFurther)
+		if stair >= 0 && stair < len(elements) {
+			elements[stair] = result
+		}
+	}
+	performed := shared.Frozen(*steps)
+	index3 := len(performed) - 1
+	var result2 int
+	if index3 >= 0 && index3 < len(performed) {
+		result2 = performed[index3]
+	} else {
+		result2 = 0
+	}
+	return result2
+}
+
+func main() {
+	console.Print(prim.ShowInt(main_))
+}
+
+// shared/shared.go
+package shared
+
+func Frozen[T any](elements []T) []T {
+	return elements[:len(elements):len(elements)]
+}
