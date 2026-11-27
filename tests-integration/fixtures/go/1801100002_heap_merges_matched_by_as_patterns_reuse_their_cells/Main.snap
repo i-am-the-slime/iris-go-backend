@@ -1,0 +1,230 @@
+---
+source: tests-integration/src/fixtures.rs
+---
+// main.go
+package main
+
+import (
+	"fixture/shared"
+	"github.com/i-am-the-slime/iris-go/console"
+	"github.com/i-am-the-slime/iris-go/prim"
+)
+
+type Heap struct {
+	Node2 *Heap
+	Node3 *Heap
+	Node0 int
+	Node1 int32
+}
+
+var sharedHeapLeaf = &Heap{}
+
+func Node(node0 int, node1 int, node2 *Heap, node3 *Heap) *Heap {
+	return &Heap{Node0: node0, Node1: int32(node1), Node2: node2, Node3: node3}
+}
+
+var main_ = initializeMain_()
+
+func initializeMain_() int {
+	accumulator := 0
+	for start := 1; start < 21; start++ {
+		accumulator += settleReusing(mergeNodeLeaf(1, start, sharedHeapLeaf, sharedHeapLeaf), 0)
+	}
+	return accumulator
+}
+
+func mergeNodeLeaf(i int, i2 int, heap *Heap, heap2 *Heap) *Heap {
+	return Node(i, i2, heap, heap2)
+}
+
+func settleReusing(frontier *Heap, total int) int {
+	for {
+		if frontier == sharedHeapLeaf {
+			return total
+		}
+		arrival := int(frontier.Node1)
+		if arrival > 500 {
+			var result *Heap
+			if frontier == sharedHeapLeaf {
+				result = sharedHeapLeaf
+			} else {
+				left := frontier.Node2
+				right := frontier.Node3
+				result = mergeReusing(left, right)
+			}
+			frontier, total = result, total+1
+			continue
+		}
+		var result2 *Heap
+		if frontier == sharedHeapLeaf {
+			result2 = sharedHeapLeaf
+		} else {
+			left := frontier.Node2
+			right := frontier.Node3
+			result2 = mergeReusing(left, right)
+		}
+		frontier, total = mergeNodeReusing(1, arrival+7, sharedHeapLeaf, sharedHeapLeaf, mergeNodeReusing(1, arrival+3, sharedHeapLeaf, sharedHeapLeaf, result2)), total+arrival
+	}
+}
+
+func mergeReusing(heap *Heap, heap2 *Heap) *Heap {
+	for {
+		if heap == sharedHeapLeaf {
+			return heap2
+		}
+		if heap2 == sharedHeapLeaf {
+			return heap
+		}
+		first := heap
+		x := int(heap.Node1)
+		left := heap.Node2
+		right := heap.Node3
+		y := int(heap2.Node1)
+		if x <= y {
+			b := mergeReusing(right, heap2)
+			var result int
+			if left == sharedHeapLeaf {
+				result = 0
+			} else {
+				result = left.Node0
+			}
+			var result2 int
+			if b == sharedHeapLeaf {
+				result2 = 0
+			} else {
+				result2 = b.Node0
+			}
+			if result >= result2 {
+				var result3 int
+				if b == sharedHeapLeaf {
+					result3 = 0
+				} else {
+					result3 = b.Node0
+				}
+				heap.Node0 = result3 + 1
+				heap.Node3 = b
+				return heap
+			}
+			var result4 int
+			if left == sharedHeapLeaf {
+				result4 = 0
+			} else {
+				result4 = left.Node0
+			}
+			heap.Node0 = result4 + 1
+			heap.Node2 = b
+			heap.Node3 = left
+			return heap
+		}
+		heap, heap2 = heap2, first
+	}
+}
+
+func mergeNodeReusingOrMergeNodeReusing2(step int, i int, i2 int, heap *Heap, heap2 *Heap, heap3 *Heap) *Heap {
+	for {
+		switch step {
+		case shared.MergeNodeReusingStep:
+			if heap3 == sharedHeapLeaf {
+				return Node(i, i2, heap, heap2)
+			}
+			y := int(heap3.Node1)
+			if i2 <= y {
+				b := mergeReusing(heap2, heap3)
+				var result int
+				if heap == sharedHeapLeaf {
+					result = 0
+				} else {
+					result = heap.Node0
+				}
+				var result2 int
+				if b == sharedHeapLeaf {
+					result2 = 0
+				} else {
+					result2 = b.Node0
+				}
+				if result >= result2 {
+					var result3 int
+					if b == sharedHeapLeaf {
+						result3 = 0
+					} else {
+						result3 = b.Node0
+					}
+					return Node(result3+1, i2, heap, b)
+				}
+				var result4 int
+				if heap == sharedHeapLeaf {
+					result4 = 0
+				} else {
+					result4 = heap.Node0
+				}
+				return Node(result4+1, i2, b, heap)
+			}
+			step, heap, heap2, heap3 = shared.MergeNodeReusing2Step, heap3, heap, heap2
+		default: // shared.MergeNodeReusing2Step
+			if heap == sharedHeapLeaf {
+				return Node(i, i2, heap2, heap3)
+			}
+			first := heap
+			x := int(heap.Node1)
+			left := heap.Node2
+			right := heap.Node3
+			if x <= i2 {
+				b := mergeNodeReusing2(right, i, i2, heap2, heap3)
+				var result int
+				if left == sharedHeapLeaf {
+					result = 0
+				} else {
+					result = left.Node0
+				}
+				var result2 int
+				if b == sharedHeapLeaf {
+					result2 = 0
+				} else {
+					result2 = b.Node0
+				}
+				if result >= result2 {
+					var result3 int
+					if b == sharedHeapLeaf {
+						result3 = 0
+					} else {
+						result3 = b.Node0
+					}
+					heap.Node0 = result3 + 1
+					heap.Node3 = b
+					return heap
+				}
+				var result4 int
+				if left == sharedHeapLeaf {
+					result4 = 0
+				} else {
+					result4 = left.Node0
+				}
+				heap.Node0 = result4 + 1
+				heap.Node2 = b
+				heap.Node3 = left
+				return heap
+			}
+			step, heap, heap2, heap3 = shared.MergeNodeReusingStep, heap2, heap3, first
+		}
+	}
+}
+
+func mergeNodeReusing(i int, i2 int, heap *Heap, heap2 *Heap, heap3 *Heap) *Heap {
+	return mergeNodeReusingOrMergeNodeReusing2(shared.MergeNodeReusingStep, i, i2, heap, heap2, heap3)
+}
+
+func mergeNodeReusing2(heap *Heap, i int, i2 int, heap2 *Heap, heap3 *Heap) *Heap {
+	return mergeNodeReusingOrMergeNodeReusing2(shared.MergeNodeReusing2Step, i, i2, heap, heap2, heap3)
+}
+
+func main() {
+	console.Print(prim.ShowInt(main_))
+}
+
+// shared/shared.go
+package shared
+
+const (
+	MergeNodeReusingStep = iota
+	MergeNodeReusing2Step
+)
