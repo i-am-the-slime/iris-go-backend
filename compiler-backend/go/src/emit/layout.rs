@@ -373,6 +373,7 @@ where
             | Monotype::Lazy(_)
             | Monotype::ConsList(_)
             | Monotype::HashMap(..)
+            | Monotype::OrderedMap(..)
             | Monotype::Recursive(_) => Shape::POINTER,
         })
     }

@@ -2269,7 +2269,9 @@ where
                 Monotype::Record(fields) => {
                     pending.extend(fields.iter().map(|field| field.monotype));
                 }
-                Monotype::HashMap(key, value) => pending.extend([key, value]),
+                Monotype::HashMap(key, value) | Monotype::OrderedMap(key, value) => {
+                    pending.extend([key, value])
+                }
                 Monotype::Data(data) | Monotype::Recursive(data) if data == *cell => {
                     holds = true;
                 }

@@ -1,11 +1,12 @@
 //! The operations of `Data.Map` that a Go map does as well as the persistent tree, at the key
-//! types whose `Ord` agrees with Go's `==`.
+//! types whose `Ord` agrees with Go's `==`, and those that only a map kept in order does.
 //!
 //! A `Map k v` that the program owns along its whole life and only builds, updates and queries
 //! by key can be a Go `map[K]V` instead of the balanced tree ([`crate::emit`] decides which ones
-//! are). The tree's ordered walks are then a sort of the keys away. These operations are called
-//! as functions until then, rather than copied into their callers, so that every use of a map
-//! still says what it does.
+//! are). The tree's ordered walks are then a sort of the keys away. One that also asks for its
+//! least or greatest key, or the keys next to one, can be a B-tree that it changes in place
+//! instead. These operations are called as functions until then, rather than copied into their
+//! callers, so that every use of a map still says what it does.
 
 use checking::TypeId;
 use checking::core::Type;
@@ -36,6 +37,18 @@ pub enum MapOperation {
     IsEmpty,
     /// `difference m other`: `m` without the keys of `other`, a map of the same type.
     Difference,
+    /// `findMin m`: the entry of the least key, a `Maybe { key, value }`.
+    FindMin,
+    /// `findMax m`: the entry of the greatest key.
+    FindMax,
+    /// `lookupLE k m`: the entry of the greatest key at most `k`.
+    LookupLE,
+    /// `lookupLT k m`: the entry of the greatest key below `k`.
+    LookupLT,
+    /// `lookupGE k m`: the entry of the least key at least `k`.
+    LookupGE,
+    /// `lookupGT k m`: the entry of the least key above `k`.
+    LookupGT,
 }
 
 impl MapOperation {
@@ -53,16 +66,46 @@ impl MapOperation {
             "size" => MapOperation::Size,
             "isEmpty" => MapOperation::IsEmpty,
             "difference" => MapOperation::Difference,
+            "findMin" => MapOperation::FindMin,
+            "findMax" => MapOperation::FindMax,
+            "lookupLE" => MapOperation::LookupLE,
+            "lookupLT" => MapOperation::LookupLT,
+            "lookupGE" => MapOperation::LookupGE,
+            "lookupGT" => MapOperation::LookupGT,
             _ => return None,
         })
+    }
+
+    /// Whether the operation reads the map's order, which only the tree and a map kept in order
+    /// know.
+    pub fn reads_order(self) -> bool {
+        matches!(
+            self,
+            MapOperation::FindMin
+                | MapOperation::FindMax
+                | MapOperation::LookupLE
+                | MapOperation::LookupLT
+                | MapOperation::LookupGE
+                | MapOperation::LookupGT
+        )
     }
 
     /// The position of the map among the operation's parameters, once it takes them all.
     pub fn map_position(self) -> Option<usize> {
         match self {
             MapOperation::Empty | MapOperation::Singleton => None,
-            MapOperation::Size | MapOperation::IsEmpty | MapOperation::Difference => Some(0),
-            MapOperation::Lookup | MapOperation::Member | MapOperation::Delete => Some(1),
+            MapOperation::Size
+            | MapOperation::IsEmpty
+            | MapOperation::Difference
+            | MapOperation::FindMin
+            | MapOperation::FindMax => Some(0),
+            MapOperation::Lookup
+            | MapOperation::Member
+            | MapOperation::Delete
+            | MapOperation::LookupLE
+            | MapOperation::LookupLT
+            | MapOperation::LookupGE
+            | MapOperation::LookupGT => Some(1),
             MapOperation::Insert | MapOperation::Alter | MapOperation::Update => Some(2),
             MapOperation::InsertWith => Some(3),
         }
@@ -79,13 +122,14 @@ impl MapOperation {
 
     /// Whether the operation only reads the map it is given.
     pub fn reads(self) -> bool {
-        matches!(
-            self,
-            MapOperation::Lookup
-                | MapOperation::Member
-                | MapOperation::Size
-                | MapOperation::IsEmpty
-        )
+        self.reads_order()
+            || matches!(
+                self,
+                MapOperation::Lookup
+                    | MapOperation::Member
+                    | MapOperation::Size
+                    | MapOperation::IsEmpty
+            )
     }
 }
 
@@ -262,8 +306,9 @@ where
     matches!(name.as_str(), "Int" | "Char" | "String")
 }
 
-/// What a Go map does for a [`MapOperation`] of a map in that representation, and for turning
-/// one into the tree and back.
+/// What a Go map, or a map kept in order ([`crate::monotype::Monotype::OrderedMap`]), does for a
+/// [`MapOperation`] of a map in that representation, and for turning one into the tree and back.
+/// Only a map kept in order answers the entries next to a key.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum HashMapOperation {
     /// `make(map[K]V, n)`, of the number of entries it is made for.
@@ -291,6 +336,18 @@ pub enum HashMapOperation {
     BalancedHeight,
     /// `for k := range other { delete(m, k) }`, of the map and the other, which it answers.
     Difference,
+    /// The entry of the least key of a map kept in order, as a `Maybe { key, value }`.
+    Min,
+    /// The entry of the greatest key.
+    Max,
+    /// The entry of the greatest key at most the key, of the key and the map.
+    AtMost,
+    /// The entry of the greatest key below the key.
+    Below,
+    /// The entry of the least key at least the key.
+    AtLeast,
+    /// The entry of the least key above the key.
+    Above,
 }
 
 impl HashMapOperation {
@@ -300,13 +357,19 @@ impl HashMapOperation {
             | HashMapOperation::Size
             | HashMapOperation::IsEmpty
             | HashMapOperation::SortedEntries
-            | HashMapOperation::BalancedHeight => 1,
+            | HashMapOperation::BalancedHeight
+            | HashMapOperation::Min
+            | HashMapOperation::Max => 1,
             HashMapOperation::Singleton
             | HashMapOperation::Delete
             | HashMapOperation::Lookup
             | HashMapOperation::Member
             | HashMapOperation::Get
-            | HashMapOperation::Difference => 2,
+            | HashMapOperation::Difference
+            | HashMapOperation::AtMost
+            | HashMapOperation::Below
+            | HashMapOperation::AtLeast
+            | HashMapOperation::Above => 2,
             HashMapOperation::Insert => 3,
         }
     }

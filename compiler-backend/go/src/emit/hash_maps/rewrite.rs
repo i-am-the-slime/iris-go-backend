@@ -9,7 +9,7 @@ use rustc_hash::{FxHashMap, FxHashSet};
 use smol_str::SmolStr;
 
 use super::{
-    Conversion, Decided, Layouts, MapShape, Natives, PRODUCT_LABELS, fields_of, is_fold_left,
+    Conversion, Decided, Layouts, MapShape, PRODUCT_LABELS, Representation, fields_of, is_fold_left,
 };
 use crate::foreign::{Foreign, Iteration, Operator};
 use crate::maps::{HashMapOperation, MapOperation};
@@ -22,7 +22,7 @@ use crate::monotype::{DataType, Monotype, MonotypeId, Monotypes, RecordField};
 
 mod conversions;
 
-/// The conversions between a Go map and the tree for one map type.
+/// The conversions between a Go map, or a map kept in order, and the tree for one map type.
 #[derive(Clone, Copy)]
 struct Conversions {
     to_tree: FunctionId,
@@ -36,9 +36,11 @@ pub(super) struct Rewrite<'r> {
     shapes: &'r FxHashMap<MonotypeId, MapShape>,
     decided: Decided,
     next_local: u32,
-    conversions: FxHashMap<MonotypeId, Conversions>,
+    conversions: FxHashMap<(MonotypeId, Representation), Conversions>,
+    /// The function that builds the tree of a map type from its sorted entries.
+    builders: FxHashMap<MonotypeId, FunctionId>,
     layouts: Layouts,
-    retyped: FxHashMap<(MonotypeId, Natives), MonotypeId>,
+    retyped: FxHashMap<(MonotypeId, Vec<Representation>), MonotypeId>,
     origin: Option<files::FileId>,
 }
 
@@ -60,15 +62,25 @@ impl<'r> Rewrite<'r> {
             decided,
             next_local,
             conversions: FxHashMap::default(),
+            builders: FxHashMap::default(),
             layouts: Layouts::default(),
             retyped: FxHashMap::default(),
             origin,
         }
     }
 
-    fn hash_type(&mut self, tree: MonotypeId) -> MonotypeId {
+    /// The type of a map of the tree type in a native representation.
+    fn native_type(&mut self, tree: MonotypeId, representation: Representation) -> MonotypeId {
         let shape = self.shapes[&tree];
-        self.monotypes.intern(Monotype::HashMap(shape.key, shape.value))
+        match representation {
+            Representation::GoMap => {
+                self.monotypes.intern(Monotype::HashMap(shape.key, shape.value))
+            }
+            Representation::Ordered => {
+                self.monotypes.intern(Monotype::OrderedMap(shape.key, shape.value))
+            }
+            Representation::Tree => tree,
+        }
     }
 
     fn unit(&mut self) -> MonotypeId {
@@ -97,8 +109,8 @@ impl<'r> Rewrite<'r> {
                 }
             }
             if let Some(slots) = self.decided.results.get(&id) {
-                let natives = self.decided.natives(slots);
-                let monotype = self.retype(function.result, &natives);
+                let representations = self.decided.representations(slots);
+                let monotype = self.retype(function.result, &representations);
                 if monotype != function.result {
                     function.result = monotype;
                     retyped.insert(id);
@@ -131,24 +143,24 @@ impl<'r> Rewrite<'r> {
             .fold(result, |result, &parameter| self.monotypes.function(parameter, result))
     }
 
-    /// The type of a local, with the Go maps its slots are.
+    /// The type of a local, with the native maps its slots are.
     fn local_type(&mut self, id: LocalId, monotype: MonotypeId) -> MonotypeId {
         let Some(slots) = self.decided.locals.get(&id) else { return monotype };
-        let natives = self.decided.natives(slots);
-        self.retype(monotype, &natives)
+        let representations = self.decided.representations(slots);
+        self.retype(monotype, &representations)
     }
 
-    /// The type of values whose slots are Go maps where `natives` says so, and trees elsewhere.
-    fn retype(&mut self, monotype: MonotypeId, natives: &[bool]) -> MonotypeId {
-        if !natives.contains(&true) {
+    /// The type of values whose slots are in the representations given.
+    fn retype(&mut self, monotype: MonotypeId, representations: &[Representation]) -> MonotypeId {
+        if !representations.iter().any(|slot| slot.is_native()) {
             return monotype;
         }
-        let key = (monotype, natives.to_vec());
+        let key = (monotype, representations.to_vec());
         if let Some(&retyped) = self.retyped.get(&key) {
             return retyped;
         }
         let retyped = if self.shapes.contains_key(&monotype) {
-            self.hash_type(monotype)
+            self.native_type(monotype, representations[0])
         } else {
             let layout = self.layouts.layout(self.monotypes, self.shapes, monotype);
             let Some(fields) = fields_of(self.monotypes, monotype) else {
@@ -158,8 +170,8 @@ impl<'r> Rewrite<'r> {
                 .iter()
                 .map(|field| match layout.field(&field.label) {
                     Some(slots) => {
-                        let natives = &natives[slots.start..slots.start + slots.width];
-                        let monotype = self.retype(field.monotype, natives);
+                        let range = slots.start..slots.start + slots.width;
+                        let monotype = self.retype(field.monotype, &representations[range]);
                         RecordField { label: field.label.clone(), monotype }
                     }
                     None => field.clone(),
@@ -182,7 +194,8 @@ impl<'r> Rewrite<'r> {
 
     /// The expression that the analysis saw at `at`.
     fn expression_at(&mut self, expression: &mut Expression, at: *const Expression) {
-        let own = self.decided.expressions.get(&at).map(|slots| self.decided.natives(slots));
+        let own =
+            self.decided.expressions.get(&at).map(|slots| self.decided.representations(slots));
         let conversion = self.decided.conversions.remove(&at);
         let scrutinee_types: Vec<MonotypeId> = match &expression.kind {
             ExpressionKind::Case { scrutinees, .. } => {
@@ -202,7 +215,7 @@ impl<'r> Rewrite<'r> {
         if expression.monotype != tree {
             as_record(expression);
         }
-        if self.shapes.contains_key(&tree) && natives[0] {
+        if self.shapes.contains_key(&tree) && natives[0].is_native() {
             self.native(expression);
             self.size_hint(expression);
         } else {
@@ -213,24 +226,29 @@ impl<'r> Rewrite<'r> {
         }
     }
 
-    /// A value of type `tree` whose slots are Go maps where `from` says so, as one whose slots
-    /// are where `to` says so: each map that changes is converted, a record rebuilt of its
-    /// fields.
+    /// A value of type `tree` whose slots are in the representations `from`, as one whose slots
+    /// are in those of `to`: each map that changes is converted, through the tree between two
+    /// native representations, and a record rebuilt of its fields.
     fn convert(
         &mut self,
         value: Expression,
         tree: MonotypeId,
-        from: &[bool],
-        to: &[bool],
+        from: &[Representation],
+        to: &[Representation],
     ) -> Expression {
         if from == to {
             return value;
         }
         let target = self.retype(tree, to);
         if self.shapes.contains_key(&tree) {
-            let conversions = self.conversions(tree);
-            let function = if from[0] { conversions.to_tree } else { conversions.from_tree };
-            return call(function, vec![value], target);
+            let value = match from[0] {
+                Representation::Tree => value,
+                native => call(self.conversions(tree, native).to_tree, vec![value], tree),
+            };
+            return match to[0] {
+                Representation::Tree => value,
+                native => call(self.conversions(tree, native).from_tree, vec![value], target),
+            };
         }
         if let Monotype::Data(data) = self.monotypes.get(tree).clone() {
             return self.convert_product(value, tree, &data, from, to);
@@ -269,8 +287,8 @@ impl<'r> Rewrite<'r> {
         value: Expression,
         tree: MonotypeId,
         data: &DataType,
-        from: &[bool],
-        to: &[bool],
+        from: &[Representation],
+        to: &[Representation],
     ) -> Expression {
         let target = self.retype(tree, to);
         let layout = self.layouts.layout(self.monotypes, self.shapes, tree);
@@ -291,7 +309,7 @@ impl<'r> Rewrite<'r> {
                 .collect()
         };
         let build = |parts: Vec<Expression>| {
-            if to.contains(&true) {
+            if to.iter().any(|native| native.is_native()) {
                 let labelled = fields.iter().map(|field| field.label.clone()).zip(parts);
                 Expression::new(ExpressionKind::Record(labelled.collect()), target)
             } else {
@@ -307,7 +325,7 @@ impl<'r> Rewrite<'r> {
                 build(convert_parts(self, parts))
             }
             ExpressionKind::Construct { arguments, .. } => build(convert_parts(self, arguments)),
-            kind if from.contains(&true) => {
+            kind if from.iter().any(|native| native.is_native()) => {
                 let mut bindings = vec![];
                 let value = Expression { kind, ..value };
                 let record = self.named("record", value, &mut bindings);
@@ -381,7 +399,10 @@ impl<'r> Rewrite<'r> {
             return;
         }
         let Some(position) = operation.map_position() else { return };
-        if !matches!(self.monotypes.get(arguments[position].monotype), Monotype::HashMap(..)) {
+        if !matches!(
+            self.monotypes.get(arguments[position].monotype),
+            Monotype::HashMap(..) | Monotype::OrderedMap(..)
+        ) {
             return;
         }
         let read = match operation {
@@ -389,6 +410,12 @@ impl<'r> Rewrite<'r> {
             MapOperation::Member => HashMapOperation::Member,
             MapOperation::Size => HashMapOperation::Size,
             MapOperation::IsEmpty => HashMapOperation::IsEmpty,
+            MapOperation::FindMin => HashMapOperation::Min,
+            MapOperation::FindMax => HashMapOperation::Max,
+            MapOperation::LookupLE => HashMapOperation::AtMost,
+            MapOperation::LookupLT => HashMapOperation::Below,
+            MapOperation::LookupGE => HashMapOperation::AtLeast,
+            MapOperation::LookupGT => HashMapOperation::Above,
             _ => unreachable!("invariant violated: a map read that builds"),
         };
         let arguments = std::mem::take(arguments);
@@ -560,7 +587,13 @@ impl<'r> Rewrite<'r> {
             MapOperation::Lookup
             | MapOperation::Member
             | MapOperation::Size
-            | MapOperation::IsEmpty => {
+            | MapOperation::IsEmpty
+            | MapOperation::FindMin
+            | MapOperation::FindMax
+            | MapOperation::LookupLE
+            | MapOperation::LookupLT
+            | MapOperation::LookupGE
+            | MapOperation::LookupGT => {
                 unreachable!("invariant violated: a map read answers a map")
             }
         }
@@ -689,7 +722,7 @@ impl<'r> Rewrite<'r> {
 
     fn shapes_value(&self, hash: MonotypeId) -> MonotypeId {
         match self.monotypes.get(hash) {
-            Monotype::HashMap(_, value) => *value,
+            Monotype::HashMap(_, value) | Monotype::OrderedMap(_, value) => *value,
             _ => unreachable!("invariant violated: no Go map type"),
         }
     }

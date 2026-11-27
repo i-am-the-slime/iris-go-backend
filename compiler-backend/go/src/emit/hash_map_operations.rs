@@ -24,6 +24,9 @@ where
         monotype: MonotypeId,
         out: &mut Vec<GoStatement>,
     ) -> GoResult<GoExpression> {
+        if self.is_ordered_map_operation(operation, arguments, monotype) {
+            return self.ordered_map_operation(operation, arguments, monotype, out);
+        }
         Ok(match operation {
             HashMapOperation::New => {
                 let hint = self.value(&arguments[0], out)?;
@@ -102,6 +105,14 @@ where
                 let length = GoExpression::Qualified { package: "bits".into(), name: "Len".into() };
                 let unsigned = call(identifier_expression("uint"), vec![count]);
                 call(length, vec![unsigned])
+            }
+            HashMapOperation::Min
+            | HashMapOperation::Max
+            | HashMapOperation::AtMost
+            | HashMapOperation::Below
+            | HashMapOperation::AtLeast
+            | HashMapOperation::Above => {
+                unreachable!("invariant violated: an ordered read of a Go map")
             }
         })
     }

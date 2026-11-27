@@ -1,5 +1,5 @@
 //! Which `Data.Map`s are Go maps: those the program owns along their whole life and only builds,
-//! updates and queries by key ([`crate::maps`]).
+//! updates and queries by key ([`crate::maps`]), and which are kept in order.
 //!
 //! A map value goes through the program as a *web*: the locals, parameters and results it is
 //! bound to, the map operations that update it, the branches that choose between versions of it,
@@ -23,6 +23,13 @@
 //! tree there, a value of its own that nothing writes. Nothing writes or hands on the map after
 //! it was converted ([`Ordering`]), so that it is converted at most once on its way. A fold that
 //! starts from a tree turns it into a Go map first, and owns that map.
+//!
+//! An operation that asks a Go map for its order, its least or greatest key or the keys next to
+//! one, asks the tree it is converted to. Where a write follows, which the conversion does not
+//! allow, the web is kept in order instead: a B-tree that its writes change in place
+//! ([`Representation::Ordered`]), which the same linearity makes safe, and that answers those
+//! operations itself. So is every web it flows to or from without a conversion, which is the
+//! same map there. Its walks into the tree are no sort, its entries being in order already.
 //!
 //! A function's parameters and result are one web for all its callers, so the callers that hand
 //! it Go maps call a variant of it made for them ([`callers`]), and the others the function.
@@ -64,10 +71,16 @@ pub(crate) fn operations_used(
     let decided = match callers::specialise(program, monotypes, operations, &shapes) {
         Specialised::Unchanged(decided) | Specialised::Variants(_, decided) => decided,
     };
+    // A read of the order of a Go map is a read of the tree it is converted to.
+    let does = |id: &FunctionId, node: Node| match decided.representation(node) {
+        Representation::Tree => false,
+        Representation::GoMap => !operations[id].reads_order(),
+        Representation::Ordered => true,
+    };
     decided
         .calls
         .iter()
-        .filter(|&&(_, node)| decided.is_native(node))
+        .filter(|&&(id, node)| does(&id, node))
         .map(|&(id, _)| program.function(id).name.clone())
         .collect()
 }
@@ -159,7 +172,13 @@ fn map_shapes(
                 keys.insert(map, parameter(1));
                 values.insert(map, parameter(2));
             }
-            MapOperation::Delete | MapOperation::Lookup | MapOperation::Member => {
+            MapOperation::Delete
+            | MapOperation::Lookup
+            | MapOperation::Member
+            | MapOperation::LookupLE
+            | MapOperation::LookupLT
+            | MapOperation::LookupGE
+            | MapOperation::LookupGT => {
                 keys.insert(map, parameter(0));
             }
             MapOperation::Alter | MapOperation::Update => {
@@ -168,7 +187,9 @@ fn map_shapes(
             MapOperation::Empty
             | MapOperation::Size
             | MapOperation::IsEmpty
-            | MapOperation::Difference => {}
+            | MapOperation::Difference
+            | MapOperation::FindMin
+            | MapOperation::FindMax => {}
         }
     }
     keys.into_iter()
@@ -368,6 +389,11 @@ struct Webs<'p> {
     soft: Vec<SoftEdge>,
     /// The nodes that a map operation reads or writes.
     operated: Vec<Node>,
+    /// The nodes that a map operation reads the order of, each with the map's expression there.
+    ordering: Vec<(Node, *const Expression)>,
+    /// The webs kept in order, by their roots: those that a write follows a read of their order
+    /// in, which a conversion there would not allow.
+    ordered_roots: FxHashSet<Node>,
     linear: Vec<Linear>,
     /// The map operations the program calls, each with the node of the map it works on.
     calls: Vec<(FunctionId, Node)>,
@@ -406,19 +432,41 @@ pub(super) struct CallSite {
     handed: Vec<(Node, Node)>,
 }
 
-/// The representation of each slot of a value: a Go map, or the tree.
+/// Whether each slot of a value is a Go map or a map kept in order, rather than the tree.
 type Natives = Vec<bool>;
+
+/// What a map is in Go.
+#[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
+enum Representation {
+    /// The persistent balanced tree of `Data.Map`.
+    Tree,
+    /// A Go `map[K]V`.
+    GoMap,
+    /// A B-tree that it changes in place, for a map that is asked for its order.
+    Ordered,
+}
+
+impl Representation {
+    fn is_native(self) -> bool {
+        self != Representation::Tree
+    }
+}
+
+/// The representation of each slot of a value.
+type Representations = Vec<Representation>;
 
 /// A value that changes representation where it is: from the representation of its slots to
 /// another.
 struct Conversion {
-    from: Natives,
-    to: Natives,
+    from: Representations,
+    to: Representations,
 }
 
-/// The webs that are Go maps, and where values change representation.
+/// The webs that are Go maps or maps kept in order, and where values change representation.
 struct Decided {
     native_nodes: FxHashSet<Node>,
+    /// The roots of the native webs that are kept in order.
+    ordered_nodes: FxHashSet<Node>,
     expressions: FxHashMap<*const Expression, Slots>,
     locals: FxHashMap<LocalId, Slots>,
     results: FxHashMap<FunctionId, Slots>,
@@ -442,6 +490,21 @@ impl Decided {
 
     fn natives(&self, slots: &[Node]) -> Natives {
         slots.iter().map(|&node| self.is_native(node)).collect()
+    }
+
+    fn representation(&self, node: Node) -> Representation {
+        let root = self.root(node);
+        if !self.native_nodes.contains(&root) {
+            Representation::Tree
+        } else if self.ordered_nodes.contains(&root) {
+            Representation::Ordered
+        } else {
+            Representation::GoMap
+        }
+    }
+
+    fn representations(&self, slots: &[Node]) -> Representations {
+        slots.iter().map(|&node| self.representation(node)).collect()
     }
 }
 
@@ -468,6 +531,8 @@ impl<'p> Webs<'p> {
             escapes: vec![],
             soft: vec![],
             operated: vec![],
+            ordering: vec![],
+            ordered_roots: FxHashSet::default(),
             linear: vec![],
             calls: vec![],
             sites: vec![],
@@ -836,6 +901,9 @@ impl<'p> Webs<'p> {
         let Some(position) = map else { return self.fresh(false) };
         let node = self.value(&arguments[position])[0];
         self.operated.push(node);
+        if operation.reads_order() {
+            self.ordering.push((node, std::ptr::from_ref(&arguments[position])));
+        }
         if operation == MapOperation::Difference {
             // The keys to take away are read, as a Go map when the map is one.
             let other = &arguments[1];
@@ -1099,7 +1167,9 @@ impl<'p> Webs<'p> {
     }
 
     /// Settles which webs are Go maps, until every local of a Go map is converted to a tree only
-    /// where nothing writes or passes on the map after ([`Ordering`]).
+    /// where nothing writes or passes on the map after ([`Ordering`]). A Go map whose order is
+    /// read where something does is kept in order instead, so that the read needs no tree, and
+    /// is a tree only if that is not enough.
     fn decide(mut self) -> Decided {
         loop {
             let settled = self.settle(Hope::None);
@@ -1121,8 +1191,14 @@ impl<'p> Webs<'p> {
             if forced.is_empty() {
                 return self.decided(settled);
             }
+            let reads_order = self.reads_order(&settled.tree);
             for node in forced {
-                self.force_tree(node);
+                let root = self.root(node);
+                if reads_order[root] && !settled.ordered[root] {
+                    self.ordered_roots.insert(root);
+                } else {
+                    self.force_tree(node);
+                }
             }
         }
     }
@@ -1190,11 +1266,32 @@ impl<'p> Webs<'p> {
             }
         }
         self.drop_idle_webs(&mut tree, hope);
-        let mut natives = |slots: &[Node]| -> Natives {
-            slots.iter().map(|&node| !tree[root_of(&mut self.parents, node)]).collect()
+        let ordered = self.ordered_webs(&tree);
+        let mut read_as_trees = vec![];
+        for &(node, at) in &self.ordering {
+            let root = root_of(&mut self.parents, node);
+            if !tree[root] && !ordered[root] {
+                read_as_trees.push(at);
+            }
+        }
+        let mut representations = |slots: &[Node]| -> Representations {
+            slots
+                .iter()
+                .map(|&node| {
+                    let root = root_of(&mut self.parents, node);
+                    if tree[root] {
+                        Representation::Tree
+                    } else if ordered[root] {
+                        Representation::Ordered
+                    } else {
+                        Representation::GoMap
+                    }
+                })
+                .collect()
         };
         // An expression may both take its value from elsewhere (a call's result, a field) and
-        // hand it on (an argument, a field): it converts from the first to the second.
+        // hand it on (an argument, a field): it converts from the first to the second. A map
+        // whose order is read but that is not kept in order is the tree there.
         let mut ends: FxHashMap<*const Expression, (Option<&Slots>, Option<&Slots>, bool)> =
             FxHashMap::default();
         for edge in &self.soft {
@@ -1209,11 +1306,18 @@ impl<'p> Webs<'p> {
         for (_, at) in &self.escapes {
             ends.entry(*at).or_default().2 = true;
         }
+        for at in read_as_trees {
+            ends.entry(at).or_default().2 = true;
+        }
         let mut conversions: FxHashMap<*const Expression, Conversion> = FxHashMap::default();
         for (at, (from, to, escaped)) in ends {
             let own = &self.expressions[&at];
-            let from = natives(from.unwrap_or(own));
-            let to = if escaped { vec![false; own.len()] } else { natives(to.unwrap_or(own)) };
+            let from = representations(from.unwrap_or(own));
+            let to = if escaped {
+                vec![Representation::Tree; own.len()]
+            } else {
+                representations(to.unwrap_or(own))
+            };
             if from != to {
                 conversions.insert(at, Conversion { from, to });
             }
@@ -1221,23 +1325,85 @@ impl<'p> Webs<'p> {
         let to_tree = conversions
             .iter()
             .filter(|(_, conversion)| {
-                conversion.from.iter().zip(&conversion.to).any(|(&from, &to)| from && !to)
+                let mut changes = conversion.from.iter().zip(&conversion.to);
+                changes.any(|(&from, &to)| from.is_native() && from != to)
             })
             .map(|(&at, _)| at)
             .collect();
-        Settled { tree, to_tree, conversions }
+        Settled { tree, ordered, to_tree, conversions }
+    }
+
+    /// Whether the order of each native web is read, by its root: an operation reads the order
+    /// of a web that it flows to or from without a conversion.
+    fn reads_order(&mut self, tree: &[bool]) -> Vec<bool> {
+        let mut groups: Vec<Node> = (0..self.parents.len()).collect();
+        for edge in &self.soft {
+            for (&from, &to) in edge.from.iter().zip(&edge.to) {
+                let from = root_of(&mut self.parents, from);
+                let to = root_of(&mut self.parents, to);
+                if !tree[from] && !tree[to] {
+                    let (from, to) = (root_of(&mut groups, from), root_of(&mut groups, to));
+                    groups[to] = from;
+                }
+            }
+        }
+        let mut read = FxHashSet::default();
+        for &(node, _) in &self.ordering {
+            let root = root_of(&mut self.parents, node);
+            read.insert(root_of(&mut groups, root));
+        }
+        (0..self.parents.len())
+            .map(|node| {
+                let root = root_of(&mut self.parents, node);
+                !tree[root] && read.contains(&root_of(&mut groups, root))
+            })
+            .collect()
+    }
+
+    /// The native webs kept in order: those chosen to be ([`Webs::decide`]), and every native
+    /// web that one of them flows to or from, which is the same map there.
+    fn ordered_webs(&mut self, tree: &[bool]) -> Vec<bool> {
+        let mut ordered = vec![false; self.parents.len()];
+        if self.ordered_roots.is_empty() {
+            return ordered;
+        }
+        for &root in &self.ordered_roots {
+            ordered[root] = !tree[root];
+        }
+        loop {
+            let mut changed = false;
+            for edge in &self.soft {
+                for (&from, &to) in edge.from.iter().zip(&edge.to) {
+                    let from = root_of(&mut self.parents, from);
+                    let to = root_of(&mut self.parents, to);
+                    if !tree[from] && !tree[to] && ordered[from] != ordered[to] {
+                        ordered[from] = true;
+                        ordered[to] = true;
+                        changed = true;
+                    }
+                }
+            }
+            if !changed {
+                return ordered;
+            }
+        }
     }
 
     fn decided(mut self, settled: Settled) -> Decided {
         let mut native_nodes = FxHashSet::default();
+        let mut ordered_nodes = FxHashSet::default();
         for node in 0..self.parents.len() {
             let root = root_of(&mut self.parents, node);
             if !settled.tree[root] {
                 native_nodes.insert(root);
+                if settled.ordered[root] {
+                    ordered_nodes.insert(root);
+                }
             }
         }
         Decided {
             native_nodes,
+            ordered_nodes,
             expressions: self.expressions,
             locals: self.locals,
             results: self.results,
@@ -1251,7 +1417,9 @@ impl<'p> Webs<'p> {
 
 struct Settled {
     tree: Vec<bool>,
-    /// The expressions where some Go map becomes a tree.
+    /// Whether each native web is kept in order, by its root.
+    ordered: Vec<bool>,
+    /// The expressions where some Go map, or map kept in order, becomes a tree.
     to_tree: FxHashSet<*const Expression>,
     conversions: FxHashMap<*const Expression, Conversion>,
 }

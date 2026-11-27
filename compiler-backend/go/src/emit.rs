@@ -71,6 +71,7 @@ mod mutable;
 mod names;
 mod narrow_fields;
 mod operators;
+mod ordered_map_operations;
 mod overwrite;
 mod ownership;
 mod packages;

@@ -1,0 +1,485 @@
+---
+source: tests-integration/src/fixtures.rs
+---
+// Data/Maybe/maybe.go
+package maybe
+
+import "fixture/shared"
+
+const TagNothing = 0
+
+const TagJust = 1
+
+type KeyValue struct {
+	Just shared.KeyValue
+	Tag  uint8
+}
+
+func JustKeyValue(just shared.KeyValue) KeyValue {
+	return KeyValue{Tag: TagJust, Just: just}
+}
+
+var NoKeyValue = KeyValue{Tag: TagNothing}
+
+// main.go
+package main
+
+import (
+	"fixture/Data/Maybe"
+	"fixture/shared"
+	"github.com/i-am-the-slime/iris-go/console"
+	"github.com/i-am-the-slime/iris-go/prim"
+)
+
+var main_ = initializeMain_()
+
+func initializeMain_() int {
+	accumulator := shared.Recent{Clock: 0, ByTime: new(shared.OrderedMap[int, int])}
+	for value := 1; value < 201; value++ {
+		a := value % 37
+		accumulator.ByTime.Insert(accumulator.Clock, a)
+		added := accumulator.ByTime
+		key, value2, found := added.Min()
+		var entry maybe.KeyValue
+		if found {
+			entry = maybe.JustKeyValue(shared.KeyValue{Key: key, Value: value2})
+		} else {
+			entry = maybe.NoKeyValue
+		}
+		var kept *shared.OrderedMap[int, int]
+		if entry.Tag == maybe.TagJust && added.Len() > 8 {
+			added.Delete(entry.Just.Key)
+		}
+		kept = added
+		accumulator = shared.Recent{Clock: accumulator.Clock + 1, ByTime: kept}
+	}
+	key2, value3, found2 := accumulator.ByTime.AtLeast(100, true)
+	var entry2 maybe.KeyValue
+	if found2 {
+		entry2 = maybe.JustKeyValue(shared.KeyValue{Key: key2, Value: value3})
+	} else {
+		entry2 = maybe.NoKeyValue
+	}
+	var result int
+	switch entry2.Tag {
+	case maybe.TagJust:
+		result = entry2.Just.Value
+	default: // maybe.TagNothing
+		result = accumulator.ByTime.Len()
+	}
+	return result
+}
+
+func main() {
+	console.Print(prim.ShowInt(main_))
+}
+
+// shared/shared.go
+package shared
+
+// OrderedMap is a Data.Map that one owner holds along its whole life, as a B-tree that its writes
+// change in place. A node holds up to 15 entries in ascending order of their keys, every node
+// but the root at least 7, and an inner node one child more than it has entries. The leaves that
+// merges free are kept for the splits to come.
+type OrderedMap[K ~int | ~int32, V any] struct {
+	root   *OrderedMapNode[K, V]
+	size   int
+	exact  bool
+	spares []*OrderedMapNode[K, V]
+}
+
+type OrderedMapNode[K ~int | ~int32, V any] struct {
+	count    int
+	keys     [16]K
+	values   [16]V
+	children *[17]*OrderedMapNode[K, V]
+}
+
+func (m *OrderedMap[K, V]) Len() int {
+	if m == nil {
+		return 0
+	}
+	return m.size
+}
+
+func (m *OrderedMap[K, V]) Lookup(key K) (V, bool) {
+	if m != nil {
+		m.see(key)
+		for node := m.root; node != nil; {
+			at, found := m.search(node, key)
+			if found {
+				return node.values[at], true
+			}
+			if node.children == nil {
+				break
+			}
+			node = node.children[at]
+		}
+	}
+	var none V
+	return none, false
+}
+
+func (m *OrderedMap[K, V]) Member(key K) bool {
+	_, found := m.Lookup(key)
+	return found
+}
+
+func (m *OrderedMap[K, V]) Get(key K) V {
+	value, _ := m.Lookup(key)
+	return value
+}
+
+func (m *OrderedMap[K, V]) Insert(key K, value V) {
+	m.see(key)
+	if m.root == nil {
+		root := &OrderedMapNode[K, V]{count: 1}
+		root.keys[0], root.values[0] = key, value
+		m.root, m.size = root, 1
+		return
+	}
+	split, middleKey, middleValue, right := m.insert(m.root, key, value)
+	if split {
+		root := &OrderedMapNode[K, V]{count: 1, children: new([17]*OrderedMapNode[K, V])}
+		root.keys[0], root.values[0] = middleKey, middleValue
+		root.children[0], root.children[1] = m.root, right
+		m.root = root
+	}
+}
+
+// insert puts the entry under the node, and answers the middle entry and the node of the
+// entries after it when the node overflowed and was split.
+func (m *OrderedMap[K, V]) insert(node *OrderedMapNode[K, V], key K, value V) (bool, K, V, *OrderedMapNode[K, V]) {
+	var noKey K
+	var noValue V
+	count := node.count
+	// A key above every key of the node, as keys that count up are, goes after them all.
+	at, found := count, false
+	if count == 0 || !m.less(node.keys[count-1], key) {
+		at, found = m.search(node, key)
+	}
+	if found {
+		node.values[at] = value
+		return false, noKey, noValue, nil
+	}
+	if node.children != nil {
+		split, middleKey, middleValue, right := m.insert(node.children[at], key, value)
+		if !split {
+			return false, noKey, noValue, nil
+		}
+		key, value = middleKey, middleValue
+		copy(node.children[at+2:count+2], node.children[at+1:count+1])
+		node.children[at+1] = right
+	} else {
+		m.size++
+	}
+	copy(node.keys[at+1:count+1], node.keys[at:count])
+	copy(node.values[at+1:count+1], node.values[at:count])
+	node.keys[at], node.values[at] = key, value
+	count++
+	node.count = count
+	if count < 16 {
+		return false, noKey, noValue, nil
+	}
+	right := m.spare(node.children == nil)
+	right.count = 7
+	copy(right.keys[:], node.keys[9:])
+	copy(right.values[:], node.values[9:])
+	if node.children != nil {
+		copy(right.children[:], node.children[9:])
+		clear(node.children[9:])
+	}
+	middleKey, middleValue := node.keys[8], node.values[8]
+	clear(node.keys[8:])
+	clear(node.values[8:])
+	node.count = 8
+	return true, middleKey, middleValue, right
+}
+
+// spare answers an empty node, a leaf or an inner node, of those freed if there is one.
+func (m *OrderedMap[K, V]) spare(leaf bool) *OrderedMapNode[K, V] {
+	if leaf && len(m.spares) > 0 {
+		last := len(m.spares) - 1
+		node := m.spares[last]
+		m.spares = m.spares[:last]
+		return node
+	}
+	if leaf {
+		return &OrderedMapNode[K, V]{}
+	}
+	return &OrderedMapNode[K, V]{children: new([17]*OrderedMapNode[K, V])}
+}
+
+func (m *OrderedMap[K, V]) Delete(key K) {
+	if m == nil || m.root == nil {
+		return
+	}
+	m.see(key)
+	if !m.delete(m.root, key) {
+		return
+	}
+	m.size--
+	if m.root.count == 0 {
+		if m.root.children == nil {
+			m.root = nil
+		} else {
+			m.root = m.root.children[0]
+		}
+	}
+}
+
+func (m *OrderedMap[K, V]) delete(node *OrderedMapNode[K, V], key K) bool {
+	at, found := m.search(node, key)
+	if node.children == nil {
+		if found {
+			node.remove(at)
+		}
+		return found
+	}
+	if found {
+		node.keys[at], node.values[at] = m.deleteLast(node.children[at])
+	} else if !m.delete(node.children[at], key) {
+		return false
+	}
+	if node.children[at].count < 7 {
+		m.refill(node, at)
+	}
+	return true
+}
+
+// remove takes the entry at a leaf's position out.
+func (node *OrderedMapNode[K, V]) remove(at int) {
+	count := node.count - 1
+	copy(node.keys[at:count], node.keys[at+1:count+1])
+	copy(node.values[at:count], node.values[at+1:count+1])
+	var noKey K
+	var noValue V
+	node.keys[count], node.values[count] = noKey, noValue
+	node.count = count
+}
+
+// deleteLast takes the greatest entry under the node out and answers it.
+func (m *OrderedMap[K, V]) deleteLast(node *OrderedMapNode[K, V]) (K, V) {
+	if node.children == nil {
+		key, value := node.keys[node.count-1], node.values[node.count-1]
+		node.remove(node.count - 1)
+		return key, value
+	}
+	last := node.count
+	key, value := m.deleteLast(node.children[last])
+	if node.children[last].count < 7 {
+		m.refill(node, last)
+	}
+	return key, value
+}
+
+// refill gives the child at the position, which holds one entry too few, an entry of a sibling
+// that can spare one, or merges it with a sibling.
+func (m *OrderedMap[K, V]) refill(node *OrderedMapNode[K, V], at int) {
+	child := node.children[at]
+	var noKey K
+	var noValue V
+	if at > 0 && node.children[at-1].count > 7 {
+		left := node.children[at-1]
+		copy(child.keys[1:child.count+1], child.keys[:child.count])
+		copy(child.values[1:child.count+1], child.values[:child.count])
+		child.keys[0], child.values[0] = node.keys[at-1], node.values[at-1]
+		if child.children != nil {
+			copy(child.children[1:child.count+2], child.children[:child.count+1])
+			child.children[0] = left.children[left.count]
+			left.children[left.count] = nil
+		}
+		child.count++
+		left.count--
+		node.keys[at-1], node.values[at-1] = left.keys[left.count], left.values[left.count]
+		left.keys[left.count], left.values[left.count] = noKey, noValue
+		return
+	}
+	if at < node.count && node.children[at+1].count > 7 {
+		right := node.children[at+1]
+		child.keys[child.count], child.values[child.count] = node.keys[at], node.values[at]
+		if child.children != nil {
+			child.children[child.count+1] = right.children[0]
+			copy(right.children[:right.count], right.children[1:right.count+1])
+			right.children[right.count] = nil
+		}
+		child.count++
+		node.keys[at], node.values[at] = right.keys[0], right.values[0]
+		right.remove(0)
+		return
+	}
+	if at == node.count {
+		at--
+	}
+	left, right := node.children[at], node.children[at+1]
+	left.keys[left.count], left.values[left.count] = node.keys[at], node.values[at]
+	copy(left.keys[left.count+1:], right.keys[:right.count])
+	copy(left.values[left.count+1:], right.values[:right.count])
+	if left.children != nil {
+		copy(left.children[left.count+1:], right.children[:right.count+1])
+	}
+	left.count += 1 + right.count
+	count := node.count
+	copy(node.children[at+1:count], node.children[at+2:count+1])
+	node.children[count] = nil
+	node.remove(at)
+	if right.children == nil && len(m.spares) < 8 {
+		*right = OrderedMapNode[K, V]{}
+		m.spares = append(m.spares, right)
+	}
+}
+
+func (m *OrderedMap[K, V]) Min() (K, V, bool) {
+	if m == nil || m.root == nil {
+		var noKey K
+		var noValue V
+		return noKey, noValue, false
+	}
+	node := m.root
+	for node.children != nil {
+		node = node.children[0]
+	}
+	return node.keys[0], node.values[0], true
+}
+
+func (m *OrderedMap[K, V]) Max() (K, V, bool) {
+	if m == nil || m.root == nil {
+		var noKey K
+		var noValue V
+		return noKey, noValue, false
+	}
+	node := m.root
+	for node.children != nil {
+		node = node.children[node.count]
+	}
+	return node.keys[node.count-1], node.values[node.count-1], true
+}
+
+// AtMost answers the entry of the greatest key at most the key, or of the greatest key below it
+// when the key itself does not count.
+func (m *OrderedMap[K, V]) AtMost(key K, counts bool) (K, V, bool) {
+	var bestKey K
+	var bestValue V
+	found := false
+	if m == nil {
+		return bestKey, bestValue, false
+	}
+	m.see(key)
+	for node := m.root; node != nil; {
+		at, hit := m.search(node, key)
+		if hit && counts {
+			return node.keys[at], node.values[at], true
+		}
+		if at > 0 {
+			bestKey, bestValue, found = node.keys[at-1], node.values[at-1], true
+		}
+		if node.children == nil {
+			break
+		}
+		node = node.children[at]
+	}
+	return bestKey, bestValue, found
+}
+
+// AtLeast answers the entry of the least key at least the key, or of the least key above it
+// when the key itself does not count.
+func (m *OrderedMap[K, V]) AtLeast(key K, counts bool) (K, V, bool) {
+	var bestKey K
+	var bestValue V
+	found := false
+	if m == nil {
+		return bestKey, bestValue, false
+	}
+	m.see(key)
+	for node := m.root; node != nil; {
+		at, hit := m.search(node, key)
+		if hit {
+			if counts {
+				return node.keys[at], node.values[at], true
+			}
+			at++
+		}
+		if at < node.count {
+			bestKey, bestValue, found = node.keys[at], node.values[at], true
+		}
+		if node.children == nil {
+			break
+		}
+		node = node.children[at]
+	}
+	return bestKey, bestValue, found
+}
+
+// Entries answers the keys in ascending order and the values in theirs.
+func (m *OrderedMap[K, V]) Entries() ([]K, []V) {
+	keys := make([]K, 0, m.Len())
+	values := make([]V, 0, m.Len())
+	if m != nil && m.root != nil {
+		keys, values = m.root.entries(keys, values)
+	}
+	return keys, values
+}
+
+func (node *OrderedMapNode[K, V]) entries(keys []K, values []V) ([]K, []V) {
+	if node.children == nil {
+		return append(keys, node.keys[:node.count]...), append(values, node.values[:node.count]...)
+	}
+	for at := range node.count {
+		keys, values = node.children[at].entries(keys, values)
+		keys, values = append(keys, node.keys[at]), append(values, node.values[at])
+	}
+	return node.children[node.count].entries(keys, values)
+}
+
+// Difference deletes the keys of the other map.
+func (m *OrderedMap[K, V]) Difference(other *OrderedMap[K, V]) {
+	if m == nil {
+		return
+	}
+	if m == other {
+		m.root, m.size = nil, 0
+		return
+	}
+	if other != nil && other.root != nil {
+		m.deleteKeys(other.root)
+	}
+}
+
+func (m *OrderedMap[K, V]) deleteKeys(node *OrderedMapNode[K, V]) {
+	for at := range node.count {
+		if node.children != nil {
+			m.deleteKeys(node.children[at])
+		}
+		m.Delete(node.keys[at])
+	}
+	if node.children != nil {
+		m.deleteKeys(node.children[node.count])
+	}
+}
+
+// see notes a key the map meets: an integer key needs nothing.
+func (m *OrderedMap[K, V]) see(key K) {}
+
+// search answers the position of the first key of the node at least the key, and whether it is
+// the key.
+func (m *OrderedMap[K, V]) search(node *OrderedMapNode[K, V], key K) (int, bool) {
+	at := 0
+	for at < node.count && node.keys[at] < key {
+		at++
+	}
+	return at, at < node.count && node.keys[at] == key
+}
+
+func (m *OrderedMap[K, V]) less(key K, other K) bool {
+	return key < other
+}
+
+type Recent struct {
+	ByTime *OrderedMap[int, int]
+	Clock  int
+}
+
+type KeyValue struct {
+	Key   int
+	Value int
+}

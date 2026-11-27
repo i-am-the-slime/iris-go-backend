@@ -6,7 +6,8 @@
 //! tree is filled by walking the tree, made for as many entries as the tree holds.
 
 use super::{
-    Conversions, Rewrite, alternative, call, constructor, hash_map, placeholder_function, variable,
+    Conversions, Representation, Rewrite, alternative, call, constructor, hash_map,
+    placeholder_function, variable,
 };
 use crate::foreign::{Foreign, Operator};
 use crate::maps::HashMapOperation;
@@ -17,23 +18,32 @@ use crate::monotype::{DataType, Monotype, MonotypeId, RecordField};
 use smol_str::SmolStr;
 
 impl Rewrite<'_> {
-    /// The functions that turn a Go map of the tree type into the tree and back, made at first
-    /// need.
-    pub(super) fn conversions(&mut self, tree: MonotypeId) -> Conversions {
-        if let Some(&conversions) = self.conversions.get(&tree) {
+    /// The functions that turn a native map of the tree type into the tree and back, made at
+    /// first need.
+    pub(super) fn conversions(
+        &mut self,
+        tree: MonotypeId,
+        representation: Representation,
+    ) -> Conversions {
+        if let Some(&conversions) = self.conversions.get(&(tree, representation)) {
             return conversions;
         }
-        let hash = self.hash_type(tree);
+        let hash = self.native_type(tree, representation);
         let Monotype::Data(data) = self.monotypes.get(tree).clone() else {
             unreachable!("invariant violated: a map type is no data type")
         };
         let unit = self.unit();
-        let build = self.add_function(placeholder_function(unit));
+        // The tree of sorted entries is built the same way from either native map.
+        let known = self.builders.get(&tree).copied();
+        let build = known.unwrap_or_else(|| self.add_function(placeholder_function(unit)));
         let to_tree = self.add_function(placeholder_function(unit));
         let fill = self.add_function(placeholder_function(unit));
         let from_tree = self.add_function(placeholder_function(unit));
-        let built = self.tree_builder(build, &data, tree);
-        self.program.functions[build.0 as usize] = built;
+        if known.is_none() {
+            let builder = self.tree_builder(build, &data, tree);
+            self.program.functions[build.0 as usize] = builder;
+            self.builders.insert(tree, build);
+        }
         let converted = self.tree_of_table(build, tree, hash);
         self.program.functions[to_tree.0 as usize] = converted;
         let filled = self.table_filler(fill, &data, tree, hash);
@@ -41,7 +51,7 @@ impl Rewrite<'_> {
         let converted = self.table_of_tree(fill, &data, tree, hash);
         self.program.functions[from_tree.0 as usize] = converted;
         let conversions = Conversions { to_tree, from_tree };
-        self.conversions.insert(tree, conversions);
+        self.conversions.insert((tree, representation), conversions);
         conversions
     }
 

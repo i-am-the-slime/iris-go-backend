@@ -1,0 +1,20 @@
+-- a queue whose tree the program takes apart
+20 (Just { key: 15, value: 3 })
+-- a queue shown as the tree it is
+[3] 6 => "3"
+    [1] 2 => "1"
+        Leaf
+        Leaf
+    [2] 12 => "6"
+        [1] 8 => "4"
+            Leaf
+            Leaf
+        [1] 14 => "7"
+            Leaf
+            Leaf
+-- a queue coerced to another map type on the way
+[(Just 3),(Just 3),(Just 2),(Just 2),(Just 1),(Just 1),(Just 0),(Just 1),(Just 2),(Just 2),(Just 2),(Just 1)]
+-- a queue kept in a mutable cell
+(Just { key: "12", value: 11 })(Just { key: "9", value: 5 })8
+-- a queue kept in an ST cell
+[2,6,8,14,18]

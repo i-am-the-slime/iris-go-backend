@@ -43,6 +43,7 @@ where
             Monotype::HashMap(key, value) => {
                 GoType::Map(Box::new(self.go_type(key)?), Box::new(self.go_type(value)?))
             }
+            Monotype::OrderedMap(key, value) => self.ordered_map_type(key, value)?,
             Monotype::Record(_) => self.record_go_type(monotype)?,
             Monotype::Function(..) if self.has_closure_set(monotype) => {
                 self.closure_layout(monotype)?.go_type()
@@ -288,7 +289,9 @@ where
                 | Monotype::Nullable(inner)
                 | Monotype::Lazy(inner)
                 | Monotype::ConsList(inner) => pending.push(inner),
-                Monotype::HashMap(key, value) => pending.extend([key, value]),
+                Monotype::HashMap(key, value) | Monotype::OrderedMap(key, value) => {
+                    pending.extend([key, value])
+                }
                 Monotype::ForeignData(foreign) => {
                     for &argument in foreign.arguments.iter() {
                         let argument = self.monotypes.monotype(&mut self.context, argument);
@@ -354,7 +357,7 @@ where
                 | Monotype::MutableArray(inner)
                 | Monotype::Object(inner)
                 | Monotype::Nullable(inner) => pending.push((inner, argument)),
-                Monotype::HashMap(key, value) => {
+                Monotype::HashMap(key, value) | Monotype::OrderedMap(key, value) => {
                     pending.extend([(key, argument), (value, argument)]);
                 }
                 Monotype::Reference(inner) | Monotype::Lazy(inner) | Monotype::ConsList(inner) => {

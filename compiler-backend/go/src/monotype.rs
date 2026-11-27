@@ -68,6 +68,9 @@ pub enum Monotype {
     /// A `Data.Map` of a key and a value that the program owns along its whole life and uses
     /// only by key, as a Go `map[K]V` ([`crate::maps`]).
     HashMap(MonotypeId, MonotypeId),
+    /// A `Data.Map` that the program owns along its whole life and also asks for its order, as a
+    /// B-tree it changes in place, of the key and the value ([`crate::maps`]).
+    OrderedMap(MonotypeId, MonotypeId),
 }
 
 impl Monotype {
@@ -299,6 +302,9 @@ impl Monotypes {
             Monotype::ConsList(element) => Monotype::ConsList(self.without_causes(element)),
             Monotype::HashMap(key, value) => {
                 Monotype::HashMap(self.without_causes(key), self.without_causes(value))
+            }
+            Monotype::OrderedMap(key, value) => {
+                Monotype::OrderedMap(self.without_causes(key), self.without_causes(value))
             }
             monotype => monotype,
         };
