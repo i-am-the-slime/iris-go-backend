@@ -1,0 +1,80 @@
+---
+source: tests-integration/src/fixtures.rs
+---
+// Data/Show/show.go
+package show
+
+import "strconv"
+
+func AppendShowArrayInt(buffer []byte, array []int) []byte {
+	buffer = append(buffer, '[')
+	for index, element := range array {
+		if index > 0 {
+			buffer = append(buffer, ',')
+		}
+		buffer = strconv.AppendInt(buffer, int64(element), 10)
+	}
+	buffer = append(buffer, ']')
+	return buffer
+}
+
+func ArrayInt(array []int) string {
+	return string(AppendShowArrayInt(nil, array))
+}
+
+// main.go
+package main
+
+import (
+	"fixture/Data/Show"
+	journal "fixture/Journal_ffi"
+	"fixture/shared"
+	"github.com/i-am-the-slime/iris-go/array"
+	"slices"
+)
+
+func main() {
+	journal.Log(show.ArrayInt(overwriteEach([]int{1, 2, 3, 4}, journal.Positions)))
+	journal.Log(show.ArrayInt(overwriteEach([]int{5, 6, 7}, journal.Positions)))
+	journal.Log(show.ArrayInt(pushedCopies(3, journal.Positions)))
+}
+
+func overwriteEach(values []int, positions []int) []int {
+	accumulator := values
+	accumulator = slices.Clip(accumulator)
+	copied := false
+	for _, position := range positions {
+		if position >= 0 && position < len(accumulator) {
+			value := position * 3
+			updated := accumulator
+			if !copied {
+				updated = slices.Clone(updated)
+				copied = true
+			}
+			updated[position] = value
+			accumulator = updated
+		}
+	}
+	return accumulator
+}
+
+func pushedCopies(times int, values []int) []int {
+	for {
+		if times <= 0 {
+			return values
+		}
+		cells := *array.Thaw(values)
+		cells = append(cells, times)
+		array2 := shared.Copied(cells)
+		times, values = times-1, array2
+	}
+}
+
+// shared/shared.go
+package shared
+
+func Copied[T any](elements []T) []T {
+	copied := make([]T, len(elements))
+	copy(copied, elements)
+	return copied
+}

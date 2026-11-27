@@ -459,18 +459,35 @@ impl Packaging<'_> {
             let mut support_imports = BTreeSet::new();
             let mut referenced: BTreeSet<Place> = BTreeSet::new();
             let mut avoided: FxHashSet<String> = FxHashSet::default();
+            // Per declaration, its locals spelled as a global is: a global named lazily, as a
+            // support function is, may take a name an earlier declaration already gave a local,
+            // and that local's uses stay the local's.
+            let mut locals_named_as_globals: Vec<FxHashSet<String>> =
+                Vec::with_capacity(declarations.len());
             for declaration in &mut declarations {
                 for name in declared_names(declaration) {
                     avoided.insert(naming.name(&name, place));
                 }
                 collect_support(declaration, &support, &mut support_imports);
+                let mut locals = FxHashSet::default();
+                let mut elsewhere: Vec<(String, Place)> = vec![];
                 declaration.for_each_reference_mut(&mut |reference| match reference {
                     Reference::Binder(name) => {
                         if !super::locals::is_marked(name) {
                             avoided.insert(name.clone());
+                            if unit_of.contains_key(name.as_str()) {
+                                locals.insert(name.clone());
+                            }
                         }
                     }
-                    Reference::Value(GoExpression::Identifier(name)) | Reference::Type(name) => {
+                    Reference::Value(GoExpression::Identifier(name)) => {
+                        if let Some(&target) = unit_of.get(name.as_str())
+                            && placements[target] != place
+                        {
+                            elsewhere.push((name.clone(), placements[target]));
+                        }
+                    }
+                    Reference::Type(name) => {
                         if let Some(&target) = unit_of.get(name.as_str())
                             && placements[target] != place
                         {
@@ -479,6 +496,13 @@ impl Packaging<'_> {
                     }
                     Reference::Value(_) => {}
                 });
+                referenced.extend(
+                    elsewhere
+                        .into_iter()
+                        .filter(|(name, _)| !locals.contains(name))
+                        .map(|(_, target)| target),
+                );
+                locals_named_as_globals.push(locals);
             }
             let qualifiers: FxHashMap<Place, String> = match places.meeting(place) {
                 [module] => referenced
@@ -500,11 +524,14 @@ impl Packaging<'_> {
                 &avoided,
                 aliases.values(),
             ));
-            for declaration in &mut declarations {
+            for (declaration, locals) in declarations.iter_mut().zip(&locals_named_as_globals) {
                 rename_declared(declaration, &mut |name| naming.name(name, place));
                 declaration.for_each_reference_mut(&mut |reference| match reference {
                     Reference::Value(expression) => {
                         let GoExpression::Identifier(name) = expression else { return };
+                        if locals.contains(name.as_str()) {
+                            return;
+                        }
                         let Some(&target) = unit_of.get(name.as_str()) else { return };
                         let home = placements[target];
                         let renamed = naming.name(name, home);
