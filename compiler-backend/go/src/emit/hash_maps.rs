@@ -620,28 +620,6 @@ impl<'p> Webs<'p> {
         loop {
             let settled = self.settle();
             let mut forced = vec![];
-            for &(node, _) in &self.escapes {
-                if !settled.tree[root_of(&mut self.parents, node)] {
-                    forced.push(node);
-                }
-            }
-            for edge in &self.soft {
-                let from = root_of(&mut self.parents, edge.from);
-                let to = root_of(&mut self.parents, edge.to);
-                match (settled.tree[from], settled.tree[to]) {
-                    (false, true) => forced.push(edge.from),
-                    (true, false) => forced.push(edge.to),
-                    _ => {}
-                }
-            }
-            if !forced.is_empty() {
-                // The tree and a Go map do not convert into each other yet: a web that would
-                // need to stays a tree.
-                for node in forced {
-                    self.force_tree(node);
-                }
-                continue;
-            }
             for &(node, local, scope) in &self.slots {
                 let root = root_of(&mut self.parents, node);
                 if settled.tree[root] {

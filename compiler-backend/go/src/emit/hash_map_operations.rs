@@ -1,14 +1,16 @@
 //! The Go of the operations on a `Data.Map` that is a Go map ([`crate::maps`]): `m[k] = v`,
-//! `delete(m, k)`, `v, found := m[k]` and `len(m)`.
+//! `delete(m, k)`, `v, found := m[k]`, `len(m)`, and the sorted keys that the tree's ordered
+//! walks read.
 //!
 //! A write changes the map in place and answers it. The map is the only version anyone holds
 //! ([`super::hash_maps`] decided so), so the program cannot tell.
 
 use super::{Emitter, binary, call, identifier_expression};
 use crate::error::GoResult;
+use crate::foreign::{GoFunction, GoPackage};
 use crate::maps::HashMapOperation;
 use crate::monomorphic::Expression;
-use crate::monotype::MonotypeId;
+use crate::monotype::{Monotype, MonotypeId};
 use crate::syntax::{GoExpression, GoStatement};
 
 impl<Q> Emitter<'_, '_, '_, Q>
@@ -89,6 +91,18 @@ where
                 let table = self.value(&arguments[1], out)?;
                 entry(table, key)
             }
+            HashMapOperation::SortedKeys => {
+                let table_type = arguments[0].monotype;
+                let table = self.value(&arguments[0], out)?;
+                self.sorted_keys(table, table_type)
+            }
+            HashMapOperation::BalancedHeight => {
+                let count = self.value(&arguments[0], out)?;
+                self.imports.insert("math/bits".into());
+                let length = GoExpression::Qualified { package: "bits".into(), name: "Len".into() };
+                let unsigned = call(identifier_expression("uint"), vec![count]);
+                call(length, vec![unsigned])
+            }
         })
     }
 
@@ -135,6 +149,35 @@ where
             otherwise: vec![GoStatement::Assign { targets: target, values: vec![missing] }],
         });
         Ok(identifier_expression(&name))
+    }
+
+    /// The keys in the order of their `Ord`: Go's own for Ints and Chars, JavaScript's code-unit
+    /// order for Strings.
+    fn sorted_keys(&mut self, table: GoExpression, table_type: MonotypeId) -> GoExpression {
+        self.imports.insert("slices".into());
+        self.imports.insert("maps".into());
+        let keys = call(
+            GoExpression::Qualified { package: "maps".into(), name: "Keys".into() },
+            vec![table],
+        );
+        let key = match self.monotypes.get(table_type) {
+            Monotype::HashMap(key, _) => *key,
+            _ => unreachable!("invariant violated: sorted keys of a value that is no Go map"),
+        };
+        match self.monotypes.get(key) {
+            Monotype::String => {
+                let compare = GoFunction { package: GoPackage::Prim, name: "CompareString" };
+                let compare = self.go_function(compare);
+                let sorted =
+                    GoExpression::Qualified { package: "slices".into(), name: "SortedFunc".into() };
+                call(sorted, vec![keys, compare])
+            }
+            _ => {
+                let sorted =
+                    GoExpression::Qualified { package: "slices".into(), name: "Sorted".into() };
+                call(sorted, vec![keys])
+            }
+        }
     }
 }
 

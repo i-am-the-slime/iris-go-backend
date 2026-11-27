@@ -1,5 +1,6 @@
 //! The program once its Go maps are chosen: every value of a web that is a Go map has the Go map
-//! type, and its map operations are the Go map's.
+//! type, its map operations are the Go map's, and a version that goes where a tree is wanted is
+//! converted there ([`conversions`]).
 //!
 //! `insertWith`, `alter` and `update` become the lookups and writes that do them, with the
 //! function they apply bound to what it is given.
@@ -17,6 +18,15 @@ use crate::monomorphic::{
 };
 use crate::monotype::{DataType, Monotype, MonotypeId, Monotypes};
 
+mod conversions;
+
+/// The conversions between a Go map and the tree for one map type.
+#[derive(Clone, Copy)]
+struct Conversions {
+    to_tree: FunctionId,
+    from_tree: FunctionId,
+}
+
 pub(super) struct Rewrite<'r> {
     program: &'r mut Program,
     monotypes: &'r mut Monotypes,
@@ -24,6 +34,8 @@ pub(super) struct Rewrite<'r> {
     shapes: &'r FxHashMap<MonotypeId, MapShape>,
     decided: Decided,
     next_local: u32,
+    conversions: FxHashMap<MonotypeId, Conversions>,
+    origin: Option<files::FileId>,
 }
 
 impl<'r> Rewrite<'r> {
@@ -35,7 +47,17 @@ impl<'r> Rewrite<'r> {
         decided: Decided,
     ) -> Rewrite<'r> {
         let next_local = crate::emit::reuse::first_unused_local(program);
-        Rewrite { program, monotypes, operations, shapes, decided, next_local }
+        let origin = operations.keys().next().and_then(|&id| program.function(id).origin);
+        Rewrite {
+            program,
+            monotypes,
+            operations,
+            shapes,
+            decided,
+            next_local,
+            conversions: FxHashMap::default(),
+            origin,
+        }
     }
 
     fn hash_type(&mut self, tree: MonotypeId) -> MonotypeId {
@@ -111,11 +133,29 @@ impl<'r> Rewrite<'r> {
     fn expression_at(&mut self, expression: &mut Expression, at: *const Expression) {
         let native =
             self.decided.expressions.get(&at).is_some_and(|&node| self.decided.is_native(node));
+        let to_tree = self.decided.to_tree.contains(&at);
+        let from_tree = self.decided.from_tree.contains(&at);
         for_each_child_mut(expression, &mut |child| self.expression(child));
         self.retype_binders(expression);
         if native {
+            let tree = expression.monotype;
             self.native(expression);
             self.size_hint(expression);
+            if to_tree {
+                let conversions = self.conversions(tree);
+                *expression = call(conversions.to_tree, vec![take(expression)], tree);
+            }
+        } else if from_tree {
+            let tree = expression.monotype;
+            let conversions = self.conversions(tree);
+            let hash = self.hash_type(tree);
+            *expression = call(conversions.from_tree, vec![take(expression)], hash);
+        } else if to_tree {
+            // A call of a function that answers a Go map, where a tree is wanted.
+            let tree = expression.monotype;
+            expression.monotype = self.hash_type(tree);
+            let conversions = self.conversions(tree);
+            *expression = call(conversions.to_tree, vec![take(expression)], tree);
         } else {
             self.read(expression);
         }
@@ -427,6 +467,17 @@ fn placeholder_function(unit: MonotypeId) -> Function {
         body: Expression::new(ExpressionKind::Unit, unit),
         position: None,
     }
+}
+
+fn take(expression: &mut Expression) -> Expression {
+    let monotype = expression.monotype;
+    std::mem::replace(expression, Expression::new(ExpressionKind::Unit, monotype))
+}
+
+fn call(function: FunctionId, arguments: Vec<Expression>, result: MonotypeId) -> Expression {
+    // The callee's type is set once every function's type is known.
+    let callee = Expression::new(ExpressionKind::Function(function), result);
+    Expression::new(ExpressionKind::Apply { function: Box::new(callee), arguments }, result)
 }
 
 fn hash_map(

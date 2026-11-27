@@ -254,7 +254,8 @@ where
     matches!(name.as_str(), "Int" | "Char" | "String")
 }
 
-/// What a Go map does for a [`MapOperation`] of a map in that representation.
+/// What a Go map does for a [`MapOperation`] of a map in that representation, and for turning
+/// one into the tree and back.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum HashMapOperation {
     /// `make(map[K]V, n)`, of the number of entries it is made for.
@@ -273,8 +274,12 @@ pub enum HashMapOperation {
     Size,
     /// `len(m) == 0`.
     IsEmpty,
+    /// The map's keys in ascending order, as an array.
+    SortedKeys,
     /// `m[k]` of a key the map holds, of the key and the map.
     Get,
+    /// The height of a balanced tree of a number of entries, `bits.Len(uint(n))`.
+    BalancedHeight,
     /// `for k := range other { delete(m, k) }`, of the map and the other, which it answers.
     Difference,
 }
@@ -282,7 +287,11 @@ pub enum HashMapOperation {
 impl HashMapOperation {
     pub fn arity(self) -> usize {
         match self {
-            HashMapOperation::New | HashMapOperation::Size | HashMapOperation::IsEmpty => 1,
+            HashMapOperation::New
+            | HashMapOperation::Size
+            | HashMapOperation::IsEmpty
+            | HashMapOperation::SortedKeys
+            | HashMapOperation::BalancedHeight => 1,
             HashMapOperation::Singleton
             | HashMapOperation::Delete
             | HashMapOperation::Lookup
