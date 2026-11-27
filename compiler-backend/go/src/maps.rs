@@ -274,8 +274,9 @@ pub enum HashMapOperation {
     Size,
     /// `len(m) == 0`.
     IsEmpty,
-    /// The map's keys in ascending order, as an array.
-    SortedKeys,
+    /// The map's keys in ascending order and its values in their order, as a record of the two
+    /// arrays `keys` and `values`.
+    SortedEntries,
     /// `m[k]` of a key the map holds, of the key and the map.
     Get,
     /// The height of a balanced tree of a number of entries, `bits.Len(uint(n))`.
@@ -290,7 +291,7 @@ impl HashMapOperation {
             HashMapOperation::New
             | HashMapOperation::Size
             | HashMapOperation::IsEmpty
-            | HashMapOperation::SortedKeys
+            | HashMapOperation::SortedEntries
             | HashMapOperation::BalancedHeight => 1,
             HashMapOperation::Singleton
             | HashMapOperation::Delete

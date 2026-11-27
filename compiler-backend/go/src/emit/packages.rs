@@ -890,6 +890,9 @@ fn collect_support(
     imports: &mut BTreeSet<String>,
 ) {
     let mut packages: Vec<String> = vec![];
+    if let GoDeclaration::Source { template, .. } = declaration {
+        packages.extend(qualifiers(template));
+    }
     declaration.for_each_reference_mut(&mut |reference| match reference {
         Reference::Type(name) => packages.extend(qualifiers(name)),
         Reference::Value(GoExpression::Qualified { package, .. }) => packages.push(package.clone()),

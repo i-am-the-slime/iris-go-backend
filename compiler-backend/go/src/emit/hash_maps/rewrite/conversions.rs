@@ -1,7 +1,8 @@
 //! The functions that turn a Go map into the balanced tree and back, one pair per map type.
 //!
-//! The tree of a Go map is built from its keys in ascending order, the middle key at the root,
-//! so that every node is balanced and its height is the bit length of its size. A Go map of a
+//! The tree of a Go map is built from its entries in ascending order of their keys, the middle
+//! entry at the root, so that every node is balanced and its height is the bit length of its
+//! size. A Go map of a
 //! tree is filled by walking the tree, made for as many entries as the tree holds.
 
 use super::{
@@ -12,7 +13,7 @@ use crate::maps::HashMapOperation;
 use crate::monomorphic::{
     Binding, Expression, ExpressionKind, Function, FunctionId, Literal, Local, Pattern, PatternKind,
 };
-use crate::monotype::{DataType, Monotype, MonotypeId};
+use crate::monotype::{DataType, Monotype, MonotypeId, RecordField};
 use smol_str::SmolStr;
 
 impl Rewrite<'_> {
@@ -31,7 +32,7 @@ impl Rewrite<'_> {
         let to_tree = self.add_function(placeholder_function(unit));
         let fill = self.add_function(placeholder_function(unit));
         let from_tree = self.add_function(placeholder_function(unit));
-        let built = self.tree_builder(build, &data, tree, hash);
+        let built = self.tree_builder(build, &data, tree);
         self.program.functions[build.0 as usize] = built;
         let converted = self.tree_of_table(build, tree, hash);
         self.program.functions[to_tree.0 as usize] = converted;
@@ -67,21 +68,16 @@ impl Rewrite<'_> {
         }
     }
 
-    /// `treeFromKeys keys table low high`: the balanced tree of the entries of `table` under
-    /// `keys[low:high]`, which ascend.
-    fn tree_builder(
-        &mut self,
-        id: FunctionId,
-        data: &DataType,
-        tree: MonotypeId,
-        hash: MonotypeId,
-    ) -> Function {
+    /// `treeFromKeys keys values low high`: the balanced tree of the entries `keys[low:high]`,
+    /// which ascend, and `values[low:high]`.
+    fn tree_builder(&mut self, id: FunctionId, data: &DataType, tree: MonotypeId) -> Function {
         let shape = self.shapes[&tree];
         let int = self.monotypes.intern(Monotype::Int);
         let boolean = self.monotypes.intern(Monotype::Boolean);
         let keys_type = self.monotypes.intern(Monotype::Array(shape.key));
+        let values_type = self.monotypes.intern(Monotype::Array(shape.value));
         let keys = self.fresh("keys", keys_type);
-        let table = self.fresh("table", hash);
+        let values = self.fresh("values", values_type);
         let low = self.fresh("low", int);
         let high = self.fresh("high", int);
         let middle = self.fresh("middle", int);
@@ -97,7 +93,7 @@ impl Rewrite<'_> {
             tree,
         );
         let recurse = |from: Expression, to: Expression| {
-            let arguments = vec![keys.expression(), table.expression(), from, to];
+            let arguments = vec![keys.expression(), values.expression(), from, to];
             call(id, arguments, tree)
         };
         let after_middle = operator(Operator::IntAdd, vec![middle.expression(), one.clone()], int);
@@ -109,9 +105,9 @@ impl Rewrite<'_> {
                     hash_map(HashMapOperation::BalancedHeight, vec![count.expression()], int),
                     count.expression(),
                     key.expression(),
-                    hash_map(
-                        HashMapOperation::Get,
-                        vec![key.expression(), table.expression()],
+                    operator(
+                        Operator::ArrayIndex,
+                        vec![values.expression(), middle.expression()],
                         shape.value,
                     ),
                     recurse(low.expression(), middle.expression()),
@@ -160,17 +156,32 @@ impl Rewrite<'_> {
             },
             tree,
         );
-        self.defined("treeFromKeys", vec![keys, table, low, high], tree, body)
+        self.defined("treeFromKeys", vec![keys, values, low, high], tree, body)
     }
 
-    /// `treeFromTable table`: the tree of a Go map's entries.
+    /// `treeFromTable table`: the tree of a Go map's entries, sorted once by key.
     fn tree_of_table(&mut self, build: FunctionId, tree: MonotypeId, hash: MonotypeId) -> Function {
         let shape = self.shapes[&tree];
         let int = self.monotypes.intern(Monotype::Int);
         let keys_type = self.monotypes.intern(Monotype::Array(shape.key));
+        let values_type = self.monotypes.intern(Monotype::Array(shape.value));
+        let entries_type = self.monotypes.intern(Monotype::Record(
+            vec![
+                RecordField { label: SmolStr::new("keys"), monotype: keys_type },
+                RecordField { label: SmolStr::new("values"), monotype: values_type },
+            ]
+            .into(),
+        ));
         let table = self.fresh("table", hash);
+        let entries = self.fresh("entries", entries_type);
         let keys = self.fresh("keys", keys_type);
-        let sorted = hash_map(HashMapOperation::SortedKeys, vec![table.expression()], keys_type);
+        let values = self.fresh("values", values_type);
+        let sorted =
+            hash_map(HashMapOperation::SortedEntries, vec![table.expression()], entries_type);
+        let field = |label: &str, monotype: MonotypeId| {
+            let record = Box::new(entries.expression());
+            Expression::new(ExpressionKind::Access { record, label: SmolStr::new(label) }, monotype)
+        };
         let length = Expression::new(
             ExpressionKind::Foreign {
                 foreign: Foreign::Operator(Operator::ArrayLength).interned(),
@@ -179,8 +190,13 @@ impl Rewrite<'_> {
             int,
         );
         let zero = Expression::new(ExpressionKind::Literal(Literal::Int(0)), int);
-        let built = call(build, vec![keys.expression(), table.expression(), zero, length], tree);
-        let bindings = vec![Binding { local: keys, value: sorted }];
+        let arguments = vec![keys.expression(), values.expression(), zero, length];
+        let built = call(build, arguments, tree);
+        let bindings = vec![
+            Binding { local: entries.clone(), value: sorted },
+            Binding { local: keys.clone(), value: field("keys", keys_type) },
+            Binding { local: values.clone(), value: field("values", values_type) },
+        ];
         let body = Expression::new(ExpressionKind::Let { bindings, body: Box::new(built) }, tree);
         self.defined("treeFromTable", vec![table], tree, body)
     }

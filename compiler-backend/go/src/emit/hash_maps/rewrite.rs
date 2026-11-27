@@ -9,7 +9,7 @@ use rustc_hash::{FxHashMap, FxHashSet};
 use smol_str::SmolStr;
 
 use super::{Conversion, Decided, Layouts, MapShape, Natives, is_fold_left};
-use crate::foreign::{Foreign, Operator};
+use crate::foreign::{Foreign, Iteration, Operator};
 use crate::maps::{HashMapOperation, MapOperation};
 use crate::monomorphic::traversal::{for_each_child_mut, visit};
 use crate::monomorphic::{
@@ -261,9 +261,8 @@ impl<'r> Rewrite<'r> {
             return;
         }
         let [callback, seed, array] = arguments.as_mut_slice() else { return };
-        if !matches!(array.kind, ExpressionKind::Local(_)) {
-            return;
-        }
+        let Some(array) = as_long_as(array) else { return };
+        let array = array.clone();
         let ExpressionKind::Foreign {
             foreign: Foreign::HashMap(HashMapOperation::New),
             arguments: hint,
@@ -284,7 +283,7 @@ impl<'r> Rewrite<'r> {
         });
         if only_inserts {
             let length = Foreign::Operator(Operator::ArrayLength).interned();
-            let arguments = vec![array.clone()];
+            let arguments = vec![array];
             hint[0] = Expression::new(ExpressionKind::Foreign { foreign: length, arguments }, int);
         }
     }
@@ -626,6 +625,20 @@ fn call(function: FunctionId, arguments: Vec<Expression>, result: MonotypeId) ->
     // The callee's type is set once every function's type is known.
     let callee = Expression::new(ExpressionKind::Function(function), result);
     Expression::new(ExpressionKind::Apply { function: Box::new(callee), arguments }, result)
+}
+
+/// The local an array is as long as: the array itself, or what a `map` maps over.
+fn as_long_as(array: &Expression) -> Option<&Expression> {
+    match &array.kind {
+        ExpressionKind::Local(_) => Some(array),
+        ExpressionKind::Foreign { foreign: Foreign::Call { boundary, .. }, arguments }
+            if matches!(boundary.iteration, Some(Iteration::Map | Iteration::MapWithIndex))
+                && arguments.len() == 2 =>
+        {
+            as_long_as(&arguments[1])
+        }
+        _ => None,
+    }
 }
 
 fn hash_map(
