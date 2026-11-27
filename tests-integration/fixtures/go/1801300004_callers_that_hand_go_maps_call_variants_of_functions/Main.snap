@@ -1,0 +1,356 @@
+---
+source: tests-integration/src/fixtures.rs
+---
+// Data/Map/Internal/internal.go
+package internal
+
+import (
+	"fixture/Data/Maybe"
+	"github.com/i-am-the-slime/iris-go/alloc"
+	"math/bits"
+)
+
+type Map struct {
+	Node4 *Map
+	Node5 *Map
+	Node0 int
+	Node1 int
+	Node2 int
+	Node3 int
+}
+
+var SharedMapLeaf = &Map{}
+
+type Tally struct {
+	ByKey *Map
+	Total int
+}
+
+type Tuple struct {
+	Second Tally
+	First  int
+}
+
+type Entries struct {
+	Keys   []int
+	Values []int
+}
+
+func SortedIntegerEntries[K ~int | ~int32, V any](table map[K]V) ([]K, []V) {
+	count := len(table)
+	keys := make([]K, 0, count)
+	values := make([]V, 0, count)
+	for key, value := range table {
+		keys = append(keys, key)
+		values = append(values, value)
+	}
+	if count <= 32 {
+		for index := 1; index < count; index++ {
+			key, value := keys[index], values[index]
+			at := index
+			for ; at > 0 && keys[at-1] > key; at-- {
+				keys[at], values[at] = keys[at-1], values[at-1]
+			}
+			keys[at], values[at] = key, value
+		}
+		return keys, values
+	}
+	lowest, highest := keys[0], keys[0]
+	for _, key := range keys {
+		lowest = min(lowest, key)
+		highest = max(highest, key)
+	}
+	base := uint64(int64(lowest))
+	span := uint64(int64(highest)) - base
+	spareKeys := make([]K, count)
+	spareValues := make([]V, count)
+	for shift := 0; shift < 64 && span>>shift != 0; shift += 8 {
+		var starts [256]int
+		for _, key := range keys {
+			starts[byte((uint64(int64(key))-base)>>shift)]++
+		}
+		total := 0
+		for digit := range starts {
+			starts[digit], total = total, total+starts[digit]
+		}
+		for index, key := range keys {
+			digit := byte((uint64(int64(key)) - base) >> shift)
+			at := starts[digit]
+			spareKeys[at], spareValues[at] = key, values[index]
+			starts[digit] = at + 1
+		}
+		keys, spareKeys = spareKeys, keys
+		values, spareValues = spareValues, values
+	}
+	return keys, values
+}
+
+func Node(node0 int, node1 int, node2 int, node3 int, node4 *Map, node5 *Map) *Map {
+	return &Map{Node0: node0, Node1: node1, Node2: node2, Node3: node3, Node4: node4, Node5: node5}
+}
+
+func UnsafeBalancedNode(k int, v int, l *Map, r *Map) *Map {
+	if l == SharedMapLeaf {
+		if r == SharedMapLeaf {
+			return Node(1, 1, k, v, SharedMapLeaf, SharedMapLeaf)
+		}
+		if r.Node0 > 1 {
+			return UnsafeBalancedNodeRotateLeft(k, v, l, r.Node2, r.Node3, r.Node4, r.Node5)
+		}
+		return UnsafeNode(k, v, l, r)
+	}
+	lh := l.Node0
+	lk := l.Node2
+	lv := l.Node3
+	ll := l.Node4
+	lr := l.Node5
+	if r != SharedMapLeaf {
+		rh := r.Node0
+		if rh > lh+1 {
+			return UnsafeBalancedNodeRotateLeft(k, v, l, r.Node2, r.Node3, r.Node4, r.Node5)
+		}
+		if lh > rh+1 {
+			return UnsafeBalancedNodeRotateRight(k, v, lk, lv, ll, lr, r)
+		}
+	}
+	if r == SharedMapLeaf {
+		if lh > 1 {
+			return UnsafeBalancedNodeRotateRight(k, v, lk, lv, ll, lr, r)
+		}
+	}
+	return UnsafeNode(k, v, l, r)
+}
+
+func UnsafeNode(k int, v int, l *Map, r *Map) *Map {
+	if l == SharedMapLeaf {
+		if r == SharedMapLeaf {
+			return Node(1, 1, k, v, l, r)
+		}
+		return Node(1+r.Node0, 1+r.Node1, k, v, l, r)
+	}
+	h1 := l.Node0
+	s1 := l.Node1
+	if r == SharedMapLeaf {
+		return Node(1+h1, 1+s1, k, v, l, r)
+	}
+	h2 := r.Node0
+	result := max(h1, h2)
+	return Node(1+result, 1+s1+r.Node1, k, v, l, r)
+}
+
+func LookupGo(k int, value *Map) maybe.Int {
+	for {
+		if value == SharedMapLeaf {
+			return maybe.NoInt
+		}
+		mk := value.Node2
+		mv := value.Node3
+		ml := value.Node4
+		mr := value.Node5
+		if k < mk {
+			value = ml
+			continue
+		}
+		if k == mk {
+			return maybe.JustInt(mv)
+		}
+		value = mr
+	}
+}
+
+func InsertGo(k int, v int, value *Map) *Map {
+	if value == SharedMapLeaf {
+		return Node(1, 1, k, v, SharedMapLeaf, SharedMapLeaf)
+	}
+	mk := value.Node2
+	mv := value.Node3
+	ml := value.Node4
+	mr := value.Node5
+	if k < mk {
+		return UnsafeBalancedNode(mk, mv, InsertGo(k, v, ml), mr)
+	}
+	if k == mk {
+		return Node(value.Node0, value.Node1, k, v, ml, mr)
+	}
+	return UnsafeBalancedNode(mk, mv, ml, InsertGo(k, v, mr))
+}
+
+func UnsafeBalancedNodeRotateLeft(k int, v int, l *Map, rk int, rv int, rl *Map, rr *Map) *Map {
+	if rl != SharedMapLeaf {
+		var result int
+		if rr == SharedMapLeaf {
+			result = 0
+		} else {
+			result = rr.Node0
+		}
+		if rl.Node0 > result {
+			return UnsafeNode(rl.Node2, rl.Node3, UnsafeNode(k, v, l, rl.Node4), UnsafeNode(rk, rv, rl.Node5, rr))
+		}
+	}
+	return UnsafeNode(rk, rv, UnsafeNode(k, v, l, rl), rr)
+}
+
+func UnsafeBalancedNodeRotateRight(k int, v int, lk int, lv int, ll *Map, lr *Map, r *Map) *Map {
+	if lr != SharedMapLeaf {
+		var result int
+		if ll == SharedMapLeaf {
+			result = 0
+		} else {
+			result = ll.Node0
+		}
+		if result <= lr.Node0 {
+			return UnsafeNode(lr.Node2, lr.Node3, UnsafeNode(lk, lv, ll, lr.Node4), UnsafeNode(k, v, lr.Node5, r))
+		}
+	}
+	return UnsafeNode(lk, lv, ll, UnsafeNode(k, v, lr, r))
+}
+
+func TreeFromKeys(keys []int, values []int, low int, high int) *Map {
+	var cells alloc.Cells[Map]
+	return TreeFromKeysChunked(keys, values, low, high, &cells)
+}
+
+func TreeFromKeysChunked(keys []int, values []int, low int, high int, cells *alloc.Cells[Map]) *Map {
+	if low == high {
+		return SharedMapLeaf
+	}
+	var middle int
+	var key int
+	var count int
+	middle = (low + high) >> 1
+	key = keys[middle]
+	count = high - low
+	return cells.New(Map{Node0: bits.Len(uint(count)), Node1: count, Node2: key, Node3: values[middle], Node4: TreeFromKeysChunked(keys, values, low, middle, cells), Node5: TreeFromKeysChunked(keys, values, middle+1, high, cells)})
+}
+
+func TreeFromTable(table map[int]int) *Map {
+	var entries Entries
+	var keys []int
+	var values []int
+	keys2, values2 := SortedIntegerEntries(table)
+	entries = Entries{Keys: keys2, Values: values2}
+	keys = entries.Keys
+	values = entries.Values
+	return TreeFromKeys(keys, values, 0, len(keys))
+}
+
+// Data/Maybe/maybe.go
+package maybe
+
+const TagNothing = 0
+
+const TagJust = 1
+
+type Int struct {
+	Just int
+	Tag  uint8
+}
+
+var NoInt = Int{Tag: TagNothing}
+
+func JustInt(just int) Int {
+	return Int{Tag: TagJust, Just: just}
+}
+
+// main.go
+package main
+
+import (
+	"fixture/Data/Map/Internal"
+	"fixture/Data/Maybe"
+	"fixture/shared"
+	"github.com/i-am-the-slime/iris-go/console"
+	"github.com/i-am-the-slime/iris-go/prim"
+)
+
+var main_ = initializeMain_()
+
+func initializeMain_() int {
+	accumulator := shared.Looped{Tally: shared.Tally{Total: 0, ByKey: make(map[int]int)}, Repeats: 0}
+	for value := 1; value < 201; value++ {
+		key := value % 30
+		scrutinee := countFromHashed([]int{key, key + 1}, 0, 0, accumulator.Tally)
+		accumulator = shared.Looped{Tally: scrutinee.Second, Repeats: accumulator.Repeats + scrutinee.First}
+	}
+	record := countFromHashed([]int{1, 2, 3}, 0, 0, shared.Tally{Total: 0, ByKey: make(map[int]int)})
+	record2 := record.Second
+	scrutinee2 := internal.Tuple{First: record.First, Second: internal.Tally{ByKey: internal.TreeFromTable(record2.ByKey), Total: record2.Total}}
+	start := scrutinee2.Second
+	scrutinee3 := countFrom([]int{1}, 0, 0, start)
+	scrutinee4 := countFrom([]int{1, 2}, 0, 0, start)
+	twice := scrutinee3.First*10 + scrutinee4.First
+	return accumulator.Repeats + len(accumulator.Tally.ByKey) + twice
+}
+
+func countFrom(keys []int, position int, seen int, tally internal.Tally) internal.Tuple {
+	for {
+		if position < len(keys) {
+			field := keys[position]
+			scrutinee := internal.LookupGo(field, tally.ByKey)
+			var before int
+			switch scrutinee.Tag {
+			case maybe.TagNothing:
+				before = 0
+			default: // maybe.TagJust
+				before = scrutinee.Just
+			}
+			updated := tally
+			updated.Total = tally.Total + 1
+			updated.ByKey = internal.InsertGo(field, before+1, tally.ByKey)
+			position, seen, tally = position+1, seen+before, updated
+			continue
+		}
+		return internal.Tuple{First: seen, Second: tally}
+	}
+}
+
+func countFromHashed(keys []int, position int, seen int, tally shared.Tally) shared.FirstSecond {
+	for {
+		if position < len(keys) {
+			field := keys[position]
+			value, found := tally.ByKey[field]
+			var entry maybe.Int
+			if found {
+				entry = maybe.JustInt(value)
+			} else {
+				entry = maybe.NoInt
+			}
+			var before int
+			switch entry.Tag {
+			case maybe.TagNothing:
+				before = 0
+			default: // maybe.TagJust
+				before = entry.Just
+			}
+			updated := tally
+			updated.Total = tally.Total + 1
+			tally.ByKey[field] = before + 1
+			updated.ByKey = tally.ByKey
+			position, seen, tally = position+1, seen+before, updated
+			continue
+		}
+		return shared.FirstSecond{First: seen, Second: tally}
+	}
+}
+
+func main() {
+	console.Print(prim.ShowInt(main_))
+}
+
+// shared/shared.go
+package shared
+
+type Tally struct {
+	ByKey map[int]int
+	Total int
+}
+
+type Looped struct {
+	Tally   Tally
+	Repeats int
+}
+
+type FirstSecond struct {
+	Second Tally
+	First  int
+}

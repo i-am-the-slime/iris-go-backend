@@ -23,6 +23,9 @@
 //! tree there, a value of its own that nothing writes. Nothing writes or hands on the map after
 //! it was converted ([`Ordering`]), so that it is converted at most once on its way. A fold that
 //! starts from a tree turns it into a Go map first, and owns that map.
+//!
+//! A function's parameters and result are one web for all its callers, so the callers that hand
+//! it Go maps call a variant of it made for them ([`callers`]), and the others the function.
 
 use std::rc::Rc;
 use std::sync::Arc;
@@ -40,8 +43,11 @@ use crate::monomorphic::{
 };
 use crate::monotype::{DataType, Monotype, MonotypeId, Monotypes, RecordField};
 
+mod callers;
 mod rewrite;
 
+pub(super) use self::callers::HASHED;
+use self::callers::Specialised;
 use self::rewrite::Rewrite;
 
 /// The names of the map operations that some Go map does.
@@ -54,10 +60,10 @@ pub(crate) fn operations_used(
         return FxHashSet::default();
     }
     let shapes = map_shapes(program, operations);
-    let readers = readers(program, operations, &shapes);
-    let mut finder = Webs::new(program, monotypes, operations, &shapes, &readers);
-    finder.find();
-    let decided = finder.decide();
+    // The map operations keep their places among the functions when variants are added.
+    let decided = match callers::specialise(program, monotypes, operations, &shapes) {
+        Specialised::Unchanged(decided) | Specialised::Variants(_, decided) => decided,
+    };
     decided
         .calls
         .iter()
@@ -80,16 +86,48 @@ pub(super) fn choose_hash_maps(
     if shapes.is_empty() {
         return;
     }
-    let readers = readers(program, operations, &shapes);
-    let webs = {
-        let mut finder = Webs::new(program, monotypes, operations, &shapes, &readers);
-        finder.find();
-        finder.decide()
+    let webs = match callers::specialise(program, monotypes, operations, &shapes) {
+        Specialised::Unchanged(decided) => decided,
+        Specialised::Variants(specialised, decided) => {
+            // The functions move with their program, so that the analysis still finds them.
+            *program = specialised;
+            decided
+        }
     };
     if webs.native_nodes.is_empty() {
         return;
     }
     Rewrite::new(program, monotypes, operations, &shapes, webs).rewrite();
+}
+
+/// What the program's map values do, as found and decided, and what they could be with
+/// variants ([`Hopes`]).
+fn analyse_hopefully(
+    program: &Program,
+    monotypes: &Monotypes,
+    operations: &FxHashMap<FunctionId, MapOperation>,
+    shapes: &FxHashMap<MonotypeId, MapShape>,
+) -> (Decided, Hopes) {
+    let readers = readers(program, operations, shapes);
+    let mut finder = Webs::new(program, monotypes, operations, shapes, &readers);
+    finder.find();
+    let calls = finder.settle(Hope::Calls).tree;
+    finder.could_take = calls.clone();
+    let hopes = Hopes { results: finder.settle(Hope::Results).tree, calls };
+    (finder.decide(), hopes)
+}
+
+/// What the program's map values do, as found and decided.
+fn analyse(
+    program: &Program,
+    monotypes: &Monotypes,
+    operations: &FxHashMap<FunctionId, MapOperation>,
+    shapes: &FxHashMap<MonotypeId, MapShape>,
+) -> Decided {
+    let readers = readers(program, operations, shapes);
+    let mut finder = Webs::new(program, monotypes, operations, shapes, &readers);
+    finder.find();
+    finder.decide()
 }
 
 /// The key and value of a map type that some map operation works on.
@@ -260,8 +298,12 @@ type Slots = Vec<Node>;
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum Flow {
-    /// An argument to a function's parameter, a map stored in a record field or read from one.
+    /// A map stored in a record field or read from one.
     Argument,
+    /// An argument to a function's parameter.
+    Call,
+    /// A function's result to its call.
+    Result,
     /// A fold's seed, to the accumulator the fold owns.
     Seed,
 }
@@ -329,6 +371,39 @@ struct Webs<'p> {
     linear: Vec<Linear>,
     /// The map operations the program calls, each with the node of the map it works on.
     calls: Vec<(FunctionId, Node)>,
+    /// The calls of the program's own functions with all their parameters.
+    sites: Vec<CallSite>,
+    site_of: FxHashMap<*const Expression, usize>,
+    /// Whether each web is a tree under [`Hope::Calls`], once that is settled.
+    could_take: Vec<bool>,
+}
+
+/// Which calls are taken to hand on no trees, as if each called the variant of its function
+/// made for what it passes ([`callers`]).
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Hope {
+    None,
+    /// No call's result is a tree when the call hands its callee a Go map that the callee could
+    /// take ([`Hope::Calls`]): a variant made for it could give Go maps back.
+    Results,
+    /// No parameter or result is a tree but by what its function does itself.
+    Calls,
+}
+
+/// The webs as they would be under each [`Hope`]: whether each node is a tree.
+pub(super) struct Hopes {
+    results: Vec<bool>,
+    calls: Vec<bool>,
+}
+
+/// A call of one of the program's functions with all its parameters: the slots of each
+/// argument that hands its maps to the parameter.
+pub(super) struct CallSite {
+    pub(super) call: *const Expression,
+    pub(super) callee: FunctionId,
+    pub(super) arguments: Vec<Option<Slots>>,
+    /// Each node of the arguments with the node of the parameter it is handed to.
+    handed: Vec<(Node, Node)>,
 }
 
 /// The representation of each slot of a value: a Go map, or the tree.
@@ -350,6 +425,7 @@ struct Decided {
     conversions: FxHashMap<*const Expression, Conversion>,
     parents: Vec<Node>,
     calls: Vec<(FunctionId, Node)>,
+    sites: Vec<CallSite>,
 }
 
 impl Decided {
@@ -394,6 +470,9 @@ impl<'p> Webs<'p> {
             operated: vec![],
             linear: vec![],
             calls: vec![],
+            sites: vec![],
+            site_of: FxHashMap::default(),
+            could_take: vec![],
         }
     }
 
@@ -593,10 +672,10 @@ impl<'p> Webs<'p> {
                     return vec![self.operation_value(expression, function, operation, arguments)];
                 }
                 if let Some(id) = self.called(function, arguments.len()) {
-                    self.arguments(id, arguments);
+                    self.arguments(expression, id, arguments);
                     let result = self.result(id);
                     let answer = self.fresh_slots(expression.monotype, false);
-                    self.soft(result, answer.clone(), Flow::Argument, expression);
+                    self.soft(result, answer.clone(), Flow::Result, expression);
                     return answer;
                 }
                 self.expression_children(expression);
@@ -767,17 +846,25 @@ impl<'p> Webs<'p> {
         node
     }
 
-    fn arguments(&mut self, id: FunctionId, arguments: &'p [Expression]) {
+    fn arguments(&mut self, call: &Expression, id: FunctionId, arguments: &'p [Expression]) {
         let parameters = &self.program.function(id).parameters;
+        let mut passed = vec![];
+        let mut handed = vec![];
         for (argument, parameter) in arguments.iter().zip(parameters) {
             if argument.monotype == parameter.monotype && self.holds_maps(argument.monotype) {
                 let from = self.value(argument);
                 let to = self.local(parameter.id, parameter.monotype);
-                self.soft(from, to, Flow::Argument, argument);
+                passed.push(Some(from.clone()));
+                handed.extend(from.iter().copied().zip(to.iter().copied()));
+                self.soft(from, to, Flow::Call, argument);
             } else {
+                passed.push(None);
                 self.expression(argument);
             }
         }
+        let call = std::ptr::from_ref(call);
+        self.site_of.insert(call, self.sites.len());
+        self.sites.push(CallSite { call, callee: id, arguments: passed, handed });
     }
 
     /// `foldl (\accumulator element -> ...) seed array`, whose accumulator holds maps.
@@ -943,7 +1030,7 @@ impl<'p> Webs<'p> {
                     return;
                 }
                 if let Some(id) = self.called(function, arguments.len()) {
-                    self.arguments(id, arguments);
+                    self.arguments(expression, id, arguments);
                     return;
                 }
                 self.expression_children(expression);
@@ -1015,7 +1102,7 @@ impl<'p> Webs<'p> {
     /// where nothing writes or passes on the map after ([`Ordering`]).
     fn decide(mut self) -> Decided {
         loop {
-            let settled = self.settle();
+            let settled = self.settle(Hope::None);
             let mut forced = vec![];
             for linear in &self.linear {
                 if settled.tree[root_of(&mut self.parents, linear.node)] {
@@ -1044,17 +1131,49 @@ impl<'p> Webs<'p> {
     /// tree reaches a parameter or a field of it; a Go map reaching a tree's parameter or field,
     /// and every escape of one, becomes a tree there; a tree that seeds a fold that is a Go map
     /// becomes one there.
-    fn settle(&mut self) -> Settled {
+    fn settle(&mut self, hope: Hope) -> Settled {
         let mut tree: Vec<bool> = (0..self.parents.len())
             .map(|node| {
                 let root = self.root(node);
                 self.tree[root]
             })
             .collect();
+        let handed: Vec<Vec<(Node, Node)>> = match hope {
+            Hope::Results => self
+                .sites
+                .iter()
+                .map(|site| {
+                    let handed = site.handed.iter();
+                    handed
+                        .map(|&(from, to)| {
+                            (root_of(&mut self.parents, from), root_of(&mut self.parents, to))
+                        })
+                        .collect()
+                })
+                .collect(),
+            Hope::None | Hope::Calls => vec![],
+        };
+        // Whether a call hands a Go map to a parameter of its callee that could take one, so
+        // that a variant of the callee could take it and give Go maps back.
+        let hands_on_hoped_maps = |call: *const Expression, tree: &[bool]| {
+            self.site_of.get(&call).is_some_and(|&site| {
+                handed[site].iter().any(|&(from, to)| !tree[from] && !self.could_take[to])
+            })
+        };
         loop {
             let mut changed = false;
             for edge in &self.soft {
-                if edge.flow != Flow::Argument {
+                let passes_trees = match edge.flow {
+                    Flow::Argument => true,
+                    Flow::Call => hope != Hope::Calls,
+                    Flow::Result => match hope {
+                        Hope::None => true,
+                        Hope::Results => !hands_on_hoped_maps(edge.at, &tree),
+                        Hope::Calls => false,
+                    },
+                    Flow::Seed => false,
+                };
+                if !passes_trees {
                     continue;
                 }
                 for (&from, &to) in edge.from.iter().zip(&edge.to) {
@@ -1070,7 +1189,7 @@ impl<'p> Webs<'p> {
                 break;
             }
         }
-        self.drop_idle_webs(&mut tree);
+        self.drop_idle_webs(&mut tree, hope);
         let mut natives = |slots: &[Node]| -> Natives {
             slots.iter().map(|&node| !tree[root_of(&mut self.parents, node)]).collect()
         };
@@ -1125,6 +1244,7 @@ impl<'p> Webs<'p> {
             conversions: settled.conversions,
             parents: self.parents,
             calls: self.calls,
+            sites: self.sites,
         }
     }
 }
@@ -1139,13 +1259,17 @@ struct Settled {
 impl Webs<'_> {
     /// Keeps as trees the Go maps that no map operation reads or writes, wherever they flow:
     /// made empty and converted, they would only cost the conversion.
-    fn drop_idle_webs(&mut self, tree: &mut [bool]) {
+    ///
+    /// Under a [`Hope`], a call reaches the maps of a variant its callee may have, which may be
+    /// Go maps where its callee's are trees, and so every map a value flows to counts.
+    fn drop_idle_webs(&mut self, tree: &mut [bool], hope: Hope) {
         let mut groups: Vec<Node> = (0..self.parents.len()).collect();
+        let hoped = hope != Hope::None;
         for edge in &self.soft {
             for (&from, &to) in edge.from.iter().zip(&edge.to) {
                 let from = root_of(&mut self.parents, from);
                 let to = root_of(&mut self.parents, to);
-                if !tree[from] && !tree[to] {
+                if hoped || (!tree[from] && !tree[to]) {
                     let (from, to) = (root_of(&mut groups, from), root_of(&mut groups, to));
                     groups[to] = from;
                 }

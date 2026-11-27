@@ -182,9 +182,14 @@ where
     /// The parts of a function's name, with its types' records as records.
     pub(super) fn function_parts(&mut self, name: &str) -> GoResult<Option<Vec<NamePart>>> {
         let Some(spelling) = self.monotypes.function_spellings.get(name).cloned() else {
-            let Some(function) = name.strip_suffix(super::reuse::REUSING) else { return Ok(None) };
+            let suffixes = [super::reuse::REUSING, super::hash_maps::HASHED];
+            let Some((function, suffix)) =
+                suffixes.iter().find_map(|&suffix| Some((name.strip_suffix(suffix)?, suffix)))
+            else {
+                return Ok(None);
+            };
             let Some(mut parts) = self.function_parts(function)? else { return Ok(None) };
-            parts.push(NamePart::Text(super::reuse::REUSING.into()));
+            parts.push(NamePart::Text(suffix.into()));
             return Ok(Some(parts));
         };
         Ok(Some(match spelling {

@@ -1,0 +1,14 @@
+-- a loop hands its map to a function that a shared map is handed to as well
+[(Tuple 0 3),(Tuple 1 3),(Tuple 2 3),(Tuple 3 2),(Tuple 4 5),(Tuple 5 2),(Tuple 6 3),(Tuple 7 3),(Tuple 8 4),(Tuple 9 2)]
+-- the shared map, handed on twice, is seen as it was by both
+[(Tuple 1 3),(Tuple 2 1),(Tuple 3 1)]
+[(Tuple 1 1),(Tuple 2 1),(Tuple 3 2),(Tuple 4 1)]
+[(Tuple 1 1),(Tuple 2 1),(Tuple 3 1)]
+-- a function that answers a pair of a count and the record it updated
+70 40 9
+-- the record handed to it twice: both answers start from the same record
+2 [(Tuple "a" 3),(Tuple "b" 1),(Tuple "c" 1)]
+3 [(Tuple "a" 2),(Tuple "b" 3)]
+[(Tuple "a" 2),(Tuple "b" 1)]
+-- a pair whose record is shown in order
+1 (fromFoldable ["y","z"])

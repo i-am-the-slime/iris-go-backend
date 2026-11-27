@@ -1,0 +1,6 @@
+-- a cache that a loop owns, whose lookups answer it in a pair
+312582 (fromFoldable [4,5,9,11,12,14,16,18,19,23,26,30,33,35,37,38])
+847168 (fromFoldable [3,4])
+-- one cache looked up three times: each lookup starts from the same cache
+[(Just 2),(Just 3),Nothing] [(Tuple 2 { lastUsed: 4, value: 2 }),(Tuple 4 { lastUsed: 3, value: 4 }),(Tuple 9 { lastUsed: 5, value: 9 })] [(Tuple 2 { lastUsed: 1, value: 2 }),(Tuple 3 { lastUsed: 4, value: 3 }),(Tuple 4 { lastUsed: 3, value: 4 })] (fromFoldable [1,2,3]) [(Tuple 3 { lastUsed: 2, value: 3 }),(Tuple 4 { lastUsed: 3, value: 4 }),(Tuple 9 { lastUsed: 4, value: 9 })]
+[(Just 2),Nothing,(Just 5)] [(Tuple 2 { lastUsed: 2, value: 2 }),(Tuple 5 { lastUsed: 1, value: 5 }),(Tuple 9 { lastUsed: 3, value: 9 })] [(Tuple 2 { lastUsed: 0, value: 2 }),(Tuple 5 { lastUsed: 1, value: 5 })] (fromFoldable [0,2]) [(Tuple 2 { lastUsed: 0, value: 2 }),(Tuple 5 { lastUsed: 1, value: 5 }),(Tuple 9 { lastUsed: 2, value: 9 })]
