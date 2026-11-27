@@ -1,0 +1,35 @@
+---
+source: tests-integration/src/fixtures.rs
+---
+data Proxy :: forall k. k -> Prim.Type
+data Proxy @a
+  | Proxy :: Main.Proxy a
+
+interface Labels :: Prim.RowList.RowList Prim.Type -> Prim.Row Prim.Type -> Prim.Constraint
+interface Labels list row where
+
+interface Shape :: Prim.Type -> Prim.Constraint
+interface Shape a where
+
+interface Named :: Prim.Type -> Prim.Constraint
+interface Named a where
+
+interface Mirror :: Prim.Row Prim.Type -> Prim.Row Prim.Type -> Prim.Constraint
+interface Mirror left right where
+
+interface Chosen :: Prim.Type -> Prim.Type -> Prim.Row Prim.Type -> Prim.Constraint
+interface Chosen key other row where
+
+dictionary labelsNilTypeRow :: Main.Labels (Prim.RowList.Nil @Prim.Type) ()
+
+dictionary shapeRecordRow :: Main.Shape {}
+
+dictionary shapeProxyRowRow :: forall t0. Main.Shape (Main.Proxy @(Prim.Row t0) ())
+
+dictionary namedProxyRowTypeClosed :: Main.Named (Main.Proxy @(Prim.Row Prim.Type) Main.Closed)
+
+dictionary mirrorRowRow :: Main.Mirror () ()
+
+dictionary chosenIntProxyRowRowRow ::
+  forall t0.
+  Main.Chosen Prim.Int (Main.Proxy @(Prim.Row t0) ()) ()

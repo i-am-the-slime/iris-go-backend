@@ -111,7 +111,7 @@ pub enum ErrorKind {
         expected: usize,
         actual: usize,
     },
-    InstanceHeadLabeledRow {
+    InvalidInstanceHead {
         class_file: files::FileId,
         class_item: indexing::TypeItemId,
         position: usize,

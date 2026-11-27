@@ -12,7 +12,7 @@ use rustc_hash::FxHashSet;
 
 use crate::context::CheckContext;
 use crate::core::constraint::{CanonicalConstraint, CanonicalConstraintId};
-use crate::core::fd::{self, Positions, get_all_determined, get_functional_dependencies};
+use crate::core::fd::{self, Positions, get_functional_dependencies};
 use crate::core::walk::{TypeWalker, WalkAction, walk_type};
 use crate::core::{
     ApplicationArgument, CheckedInstance, InstanceHead, Type, TypeId, constraint, normalise,
@@ -512,7 +512,10 @@ fn collect_instances_from_checked(
     output.extend(derived);
 }
 
-pub fn validate_rows<Q>(
+/// Reports the instance arguments that purs rejects as `InvalidInstanceHead`: each must be of
+/// the form `T a_1 .. a_n`, with variables, constructors and literals as its parts, except that
+/// an argument the functional dependencies fully determine may also contain rows.
+pub fn validate_head<Q>(
     state: &mut CheckState,
     context: &CheckContext<Q>,
     class_file: FileId,
@@ -522,18 +525,35 @@ pub fn validate_rows<Q>(
 where
     Q: ExternalQueries,
 {
-    let functional_dependencies =
-        get_functional_dependencies(state, context, class_file, class_item)?;
-    let all_determined = get_all_determined(&functional_dependencies);
+    let mut fully_determined = None;
 
     for (position, &argument_type) in arguments.iter().enumerate() {
-        if all_determined.contains(position) {
+        let Some(invalid) = invalid_head_part(state, context, argument_type, false)? else {
             continue;
-        }
+        };
 
-        if HasLabeledRole::contains(state, context, argument_type)? {
-            let type_id = argument_type;
-            state.insert_error(ErrorKind::InstanceHeadLabeledRow {
+        let invalid = if is_row(context, state, invalid) {
+            let fully_determined = match &fully_determined {
+                Some(fully_determined) => fully_determined,
+                None => {
+                    let functional_dependencies =
+                        get_functional_dependencies(state, context, class_file, class_item)?;
+                    let determined =
+                        fd::get_fully_determined(&functional_dependencies, arguments.len());
+                    fully_determined.insert(determined)
+                }
+            };
+            if fully_determined.contains(position) {
+                invalid_head_part(state, context, argument_type, true)?
+            } else {
+                Some(invalid)
+            }
+        } else {
+            Some(invalid)
+        };
+
+        if let Some(type_id) = invalid {
+            state.insert_error(ErrorKind::InvalidInstanceHead {
                 class_file,
                 class_item,
                 position,
@@ -543,6 +563,61 @@ where
     }
 
     Ok(())
+}
+
+fn is_row<Q>(context: &CheckContext<Q>, state: &mut CheckState, id: TypeId) -> bool
+where
+    Q: ExternalQueries,
+{
+    let id = normalise::normalise(state, context, id);
+    matches!(context.lookup_type(id), Type::Row(_))
+}
+
+/// The first part of an instance argument that is not of the form `T a_1 .. a_n`, as purs's
+/// `checkTypeClassInstance` walks it once synonyms are expanded. A row `( | r )` without labels
+/// is its tail `r`, as it is in purs.
+fn invalid_head_part<Q>(
+    state: &mut CheckState,
+    context: &CheckContext<Q>,
+    id: TypeId,
+    rows_allowed: bool,
+) -> QueryResult<Option<TypeId>>
+where
+    Q: ExternalQueries,
+{
+    let id = normalise::expand(state, context, id)?;
+    let parts: Vec<TypeId> = match context.lookup_type(id).clone() {
+        Type::Application(function, argument)
+        | Type::KindApplication(function, argument)
+        | Type::Function(function, argument) => vec![function, argument],
+        Type::Kinded(inner, _) => vec![inner],
+        Type::Row(row_id) => {
+            let row = context.lookup_row_type(row_id);
+            match (row.fields.is_empty(), row.tail) {
+                (true, Some(tail)) => vec![tail],
+                _ if rows_allowed => {
+                    row.fields.iter().map(|field| field.id).chain(row.tail).collect()
+                }
+                _ => return Ok(Some(id)),
+            }
+        }
+        Type::Forall(..) | Type::Constrained(..) => return Ok(Some(id)),
+        Type::Constructor(..)
+        | Type::Synonym(..)
+        | Type::ConstraintOrigin(..)
+        | Type::Integer(_)
+        | Type::String(..)
+        | Type::Rigid(..)
+        | Type::Unification(_)
+        | Type::Free(_)
+        | Type::Unknown(_) => return Ok(None),
+    };
+    for part in parts {
+        if let Some(invalid) = invalid_head_part(state, context, part, rows_allowed)? {
+            return Ok(Some(invalid));
+        }
+    }
+    Ok(None)
 }
 
 struct CollectFileReferences<'a> {
@@ -590,44 +665,3 @@ impl TypeWalker for CollectFileReferences<'_> {
     }
 }
 
-struct HasLabeledRole {
-    contains: bool,
-}
-
-impl HasLabeledRole {
-    fn contains<Q>(
-        state: &mut CheckState,
-        context: &CheckContext<Q>,
-        id: TypeId,
-    ) -> QueryResult<bool>
-    where
-        Q: ExternalQueries,
-    {
-        let mut walker = HasLabeledRole { contains: false };
-        walk_type(state, context, id, &mut walker)?;
-        Ok(walker.contains)
-    }
-}
-
-impl TypeWalker for HasLabeledRole {
-    fn visit<Q>(
-        &mut self,
-        _state: &mut CheckState,
-        context: &CheckContext<Q>,
-        _id: TypeId,
-        t: &Type,
-    ) -> QueryResult<WalkAction>
-    where
-        Q: ExternalQueries,
-    {
-        if let Type::Row(row_id) = t {
-            let row = context.lookup_row_type(*row_id);
-            if !row.fields.is_empty() {
-                self.contains = true;
-                return Ok(WalkAction::Break);
-            }
-        }
-
-        Ok(WalkAction::Continue)
-    }
-}

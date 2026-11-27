@@ -10,16 +10,16 @@ Error! · [CannotUnify] · Main.purs:9:1
   │   ╰──────────────────────
   •
 
-Error! · [InstanceHeadLabeledRow] · Main.purs:9:1
+Error! · [InvalidInstanceHead] · Main.purs:9:1
   •
   │
-  • Instance argument 1 of 'T' cannot contain labelled row '( a :: Int )'
+  • Instance argument 1 of 'T' is invalid due to use of type '( a :: Int )'
   │
   │   instance T ( a :: Int )
   │   ╰──────────────────────
   │
-  • This parameter is not determined by a functional dependency, so only a row variable like '( |
-  │ r )' is allowed
+  • Instance arguments must be of the form 'T a_1 .. a_n', unless functional dependencies fully
+  │ determine them, which allows rows
   •
 
 Error! · [CannotUnify] · Main.purs:10:1
@@ -31,16 +31,16 @@ Error! · [CannotUnify] · Main.purs:10:1
   │   ╰──────────────────────
   •
 
-Error! · [InstanceHeadLabeledRow] · Main.purs:10:1
+Error! · [InvalidInstanceHead] · Main.purs:10:1
   •
   │
-  • Instance argument 1 of 'T' cannot contain labelled row '{ a :: Int }'
+  • Instance argument 1 of 'T' is invalid due to use of type '( a :: Int )'
   │
   │   instance T { a :: Int }
   │   ╰──────────────────────
   │
-  • This parameter is not determined by a functional dependency, so only a row variable like '( |
-  │ r )' is allowed
+  • Instance arguments must be of the form 'T a_1 .. a_n', unless functional dependencies fully
+  │ determine them, which allows rows
   •
 
 Error! · [CannotUnify] · Main.purs:11:1
@@ -52,16 +52,16 @@ Error! · [CannotUnify] · Main.purs:11:1
   │   ╰──────────────────────────────
   •
 
-Error! · [InstanceHeadLabeledRow] · Main.purs:11:1
+Error! · [InvalidInstanceHead] · Main.purs:11:1
   •
   │
-  • Instance argument 1 of 'T' cannot contain labelled row 'Proxy @(Row Type) ( a :: Int )'
+  • Instance argument 1 of 'T' is invalid due to use of type '( a :: Int )'
   │
   │   instance T (Proxy ( a :: Int ))
   │   ╰──────────────────────────────
   │
-  • This parameter is not determined by a functional dependency, so only a row variable like '( |
-  │ r )' is allowed
+  • Instance arguments must be of the form 'T a_1 .. a_n', unless functional dependencies fully
+  │ determine them, which allows rows
   •
 
 Error! · [CannotUnify] · Main.purs:12:1
@@ -73,14 +73,14 @@ Error! · [CannotUnify] · Main.purs:12:1
   │   ╰──────────────────────────────
   •
 
-Error! · [InstanceHeadLabeledRow] · Main.purs:12:1
+Error! · [InvalidInstanceHead] · Main.purs:12:1
   •
   │
-  • Instance argument 1 of 'T' cannot contain labelled row 'Proxy @Type { a :: Int }'
+  • Instance argument 1 of 'T' is invalid due to use of type '( a :: Int )'
   │
   │   instance T (Proxy { a :: Int })
   │   ╰──────────────────────────────
   │
-  • This parameter is not determined by a functional dependency, so only a row variable like '( |
-  │ r )' is allowed
+  • Instance arguments must be of the form 'T a_1 .. a_n', unless functional dependencies fully
+  │ determine them, which allows rows
   •

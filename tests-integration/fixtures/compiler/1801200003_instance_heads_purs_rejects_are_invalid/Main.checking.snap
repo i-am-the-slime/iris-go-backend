@@ -1,0 +1,35 @@
+---
+source: tests-integration/src/fixtures.rs
+---
+Terms
+Proxy :: forall k (@a :: k). Main.Proxy @k (a :: k)
+
+Types
+Proxy :: forall k. k -> Prim.Type
+Labels :: Prim.RowList.RowList Prim.Type -> Prim.Row Prim.Type -> Prim.Constraint
+Shape :: Prim.Type -> Prim.Constraint
+Closed :: Prim.Row Prim.Type
+Named :: Prim.Type -> Prim.Constraint
+Mirror :: Prim.Row Prim.Type -> Prim.Row Prim.Type -> Prim.Constraint
+Chosen :: Prim.Type -> Prim.Type -> Prim.Row Prim.Type -> Prim.Constraint
+
+Synonyms
+type Closed = ()
+
+Classes
+class forall (list :: Prim.RowList.RowList Prim.Type) (row :: Prim.Row Prim.Type). Main.Labels (list :: Prim.RowList.RowList Prim.Type) (row :: Prim.Row Prim.Type)
+class forall (a :: Prim.Type). Main.Shape a
+class forall (a :: Prim.Type). Main.Named a
+class forall (left :: Prim.Row Prim.Type) (right :: Prim.Row Prim.Type). Main.Mirror (left :: Prim.Row Prim.Type) (right :: Prim.Row Prim.Type)
+class forall (key :: Prim.Type) (other :: Prim.Type) (row :: Prim.Row Prim.Type). Main.Chosen key other (row :: Prim.Row Prim.Type)
+
+Instances
+instance Main.Labels (Prim.RowList.Nil @Prim.Type) ()
+instance Main.Shape {}
+instance forall t0. Main.Shape (Main.Proxy @(Prim.Row t0) ())
+instance Main.Named (Main.Proxy @(Prim.Row Prim.Type) Main.Closed)
+instance Main.Mirror () ()
+instance forall t0. Main.Chosen Prim.Int (Main.Proxy @(Prim.Row t0) ()) ()
+
+Roles
+Proxy = [Phantom]

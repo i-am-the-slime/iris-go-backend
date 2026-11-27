@@ -141,6 +141,37 @@ pub fn get_all_determined(functional_dependencies: &[Fd]) -> Positions {
     determined
 }
 
+/// The positions that purs calls fully determined: those in no minimal covering set, which
+/// choosing an instance therefore never looks at. Covering sets are enumerated, which is cheap
+/// for the few arguments a class has; past [`MOST_ENUMERATED`] arguments every position some
+/// dependency determines counts.
+pub fn get_fully_determined(functional_dependencies: &[Fd], argument_count: usize) -> Positions {
+    if functional_dependencies.is_empty() {
+        return Positions::default();
+    }
+    if argument_count > MOST_ENUMERATED {
+        return get_all_determined(functional_dependencies);
+    }
+    let all_positions = Positions::all(argument_count);
+    let subset = |bits: u32| (0..argument_count).filter(move |&position| bits & (1 << position) != 0);
+    let covering: Vec<u32> = (0..1u32 << argument_count)
+        .filter(|&bits| {
+            let positions = subset(bits).collect();
+            positions_cover_all(functional_dependencies, &positions, &all_positions)
+        })
+        .collect();
+    let mut in_minimal = 0u32;
+    for &bits in &covering {
+        let minimal = covering.iter().all(|&other| other == bits || other & !bits != 0);
+        if minimal {
+            in_minimal |= bits;
+        }
+    }
+    (0..argument_count).filter(|&position| in_minimal & (1 << position) == 0).collect()
+}
+
+const MOST_ENUMERATED: usize = 12;
+
 pub fn compute_closure(functional_dependencies: &[Fd], initial_positions: &Positions) -> Positions {
     let mut determined = initial_positions.clone();
     safe_loop! {

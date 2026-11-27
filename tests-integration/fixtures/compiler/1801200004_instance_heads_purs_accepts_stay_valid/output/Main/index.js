@@ -1,0 +1,9 @@
+export const Proxy = "Proxy";
+export const labelsNilTypeRow = {};
+export const labelsConsTypeIntRow = {};
+export const shapeProxy = {};
+export const shapeProxySymbol = {};
+export const shapeProxyInt = {};
+export const shapeFunctionIntProxyTypeInt = {};
+export const recordedIntRecordRow = {};
+export const chosenIntProxyTypeIntRow = {};

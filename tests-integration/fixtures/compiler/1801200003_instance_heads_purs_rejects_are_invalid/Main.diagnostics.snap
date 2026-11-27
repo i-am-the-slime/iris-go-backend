@@ -1,0 +1,86 @@
+---
+source: tests-integration/src/fixtures.rs
+---
+Error! · [InvalidInstanceHead] · Main.purs:12:1
+  •
+  │
+  • Instance argument 2 of 'Labels' is invalid due to use of type '()'
+  │
+  │   instance Labels RowList.Nil ()
+  │   ╰─────────────────────────────
+  │
+  • Instance arguments must be of the form 'T a_1 .. a_n', unless functional dependencies fully
+  │ determine them, which allows rows
+  •
+
+Error! · [InvalidInstanceHead] · Main.purs:17:1
+  •
+  │
+  • Instance argument 1 of 'Shape' is invalid due to use of type '()'
+  │
+  │   instance Shape {}
+  │   ╰────────────────
+  │
+  • Instance arguments must be of the form 'T a_1 .. a_n', unless functional dependencies fully
+  │ determine them, which allows rows
+  •
+
+Error! · [InvalidInstanceHead] · Main.purs:19:1
+  •
+  │
+  • Instance argument 1 of 'Shape' is invalid due to use of type '()'
+  │
+  │   instance Shape (Proxy ())
+  │   ╰────────────────────────
+  │
+  • Instance arguments must be of the form 'T a_1 .. a_n', unless functional dependencies fully
+  │ determine them, which allows rows
+  •
+
+Error! · [InvalidInstanceHead] · Main.purs:27:1
+  •
+  │
+  • Instance argument 1 of 'Named' is invalid due to use of type '()'
+  │
+  │   instance Named (Proxy Closed)
+  │   ╰────────────────────────────
+  │
+  • Instance arguments must be of the form 'T a_1 .. a_n', unless functional dependencies fully
+  │ determine them, which allows rows
+  •
+
+Error! · [InvalidInstanceHead] · Main.purs:32:1
+  •
+  │
+  • Instance argument 1 of 'Mirror' is invalid due to use of type '()'
+  │
+  │   instance Mirror () ()
+  │   ╰────────────────────
+  │
+  • Instance arguments must be of the form 'T a_1 .. a_n', unless functional dependencies fully
+  │ determine them, which allows rows
+  •
+
+Error! · [InvalidInstanceHead] · Main.purs:32:1
+  •
+  │
+  • Instance argument 2 of 'Mirror' is invalid due to use of type '()'
+  │
+  │   instance Mirror () ()
+  │   ╰────────────────────
+  │
+  • Instance arguments must be of the form 'T a_1 .. a_n', unless functional dependencies fully
+  │ determine them, which allows rows
+  •
+
+Error! · [InvalidInstanceHead] · Main.purs:37:1
+  •
+  │
+  • Instance argument 2 of 'Chosen' is invalid due to use of type '()'
+  │
+  │   instance Chosen Int (Proxy ()) ()
+  │   ╰────────────────────────────────
+  │
+  • Instance arguments must be of the form 'T a_1 .. a_n', unless functional dependencies fully
+  │ determine them, which allows rows
+  •

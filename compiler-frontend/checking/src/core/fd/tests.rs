@@ -250,3 +250,25 @@ fn closure_spans_positions_beyond_one_word() {
     low_positions.remove(130);
     assert_eq!(low_positions, Positions::from_iter([0]));
 }
+
+#[test]
+fn fully_determined_positions_are_in_no_minimal_covering_set() {
+    let cases = [
+        (vec![], 2, vec![]),
+        (vec![Fd::new([0], [1])], 2, vec![1]),
+        (vec![Fd::new([0], [1]), Fd::new([1], [0])], 2, vec![]),
+        (vec![Fd::new([0], [1]), Fd::new([1], [0]), Fd::new([1], [2])], 3, vec![2]),
+        (vec![Fd::new([0, 1], [2, 3]), Fd::new([2], [0])], 4, vec![3]),
+        (vec![Fd::new([], [0])], 2, vec![0]),
+    ];
+
+    for (functional_dependencies, argument_count, expected) in cases {
+        let covering_sets = compute_covering_sets(&functional_dependencies, argument_count);
+        let in_no_covering_set = (0..argument_count)
+            .filter(|&position| covering_sets.iter().all(|set| !set.contains(position)));
+        let in_no_covering_set = Positions::from_iter(in_no_covering_set);
+        let actual = get_fully_determined(&functional_dependencies, argument_count);
+        assert_eq!(actual, in_no_covering_set);
+        assert_eq!(actual, Positions::from_iter(expected));
+    }
+}

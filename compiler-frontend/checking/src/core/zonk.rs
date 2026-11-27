@@ -405,9 +405,9 @@ where
             let type_id = zonk(state, context, type_id)?;
             ErrorKind::EscapedSkolem { skolem, type_id }
         }
-        ErrorKind::InstanceHeadLabeledRow { class_file, class_item, position, type_id } => {
+        ErrorKind::InvalidInstanceHead { class_file, class_item, position, type_id } => {
             let type_id = zonk(state, context, type_id)?;
-            ErrorKind::InstanceHeadLabeledRow { class_file, class_item, position, type_id }
+            ErrorKind::InvalidInstanceHead { class_file, class_item, position, type_id }
         }
         ErrorKind::InstanceMemberTypeMismatch { expected, actual } => {
             let expected = zonk(state, context, expected)?;

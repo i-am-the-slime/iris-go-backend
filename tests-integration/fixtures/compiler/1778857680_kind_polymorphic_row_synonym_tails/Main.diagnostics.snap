@@ -1,4 +1,26 @@
 ---
 source: tests-integration/src/fixtures.rs
 ---
+Error! · [InvalidInstanceHead] · Main.purs:16:1
+  •
+  │
+  • Instance argument 1 of 'ConvertOptions' is invalid due to use of type '()'
+  │
+  │   instance
+  │   ╰───────
+  │
+  • Instance arguments must be of the form 'T a_1 .. a_n', unless functional dependencies fully
+  │ determine them, which allows rows
+  •
 
+Error! · [InvalidInstanceHead] · Main.purs:16:1
+  •
+  │
+  • Instance argument 3 of 'ConvertOptions' is invalid due to use of type '( value :: Int )'
+  │
+  │   instance
+  │   ╰───────
+  │
+  • Instance arguments must be of the form 'T a_1 .. a_n', unless functional dependencies fully
+  │ determine them, which allows rows
+  •

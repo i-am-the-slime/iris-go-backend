@@ -1,0 +1,20 @@
+---
+source: tests-integration/src/fixtures.rs
+---
+@export constructor Proxy/0
+
+@export instance labelsNilTypeRow = {  }
+
+@export instance labelsConsTypeIntRow = {  }
+
+@export instance shapeProxy = {  }
+
+@export instance shapeProxySymbol = {  }
+
+@export instance shapeProxyInt = {  }
+
+@export instance shapeFunctionIntProxyTypeInt = {  }
+
+@export instance recordedIntRecordRow = {  }
+
+@export instance chosenIntProxyTypeIntRow = {  }

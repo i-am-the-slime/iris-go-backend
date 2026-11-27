@@ -1,0 +1,37 @@
+---
+source: tests-integration/src/fixtures.rs
+---
+Terms
+Proxy :: forall k (@a :: k). Main.Proxy @k (a :: k)
+
+Types
+Proxy :: forall k. k -> Prim.Type
+Labels :: Prim.RowList.RowList Prim.Type -> Prim.Row Prim.Type -> Prim.Constraint
+Shape :: Prim.Type -> Prim.Constraint
+Recorded :: Prim.Type -> Prim.Type -> Prim.Constraint
+Chosen :: Prim.Type -> Prim.Type -> Prim.Row Prim.Type -> Prim.Constraint
+
+Classes
+class forall (list :: Prim.RowList.RowList Prim.Type) (row :: Prim.Row Prim.Type). Main.Labels (list :: Prim.RowList.RowList Prim.Type) (row :: Prim.Row Prim.Type)
+class forall (a :: Prim.Type). Main.Shape a
+class forall (key :: Prim.Type) (record :: Prim.Type). Main.Recorded key record
+class forall (key :: Prim.Type) (other :: Prim.Type) (row :: Prim.Row Prim.Type). Main.Chosen key other (row :: Prim.Row Prim.Type)
+
+Instances
+instance Main.Labels (Prim.RowList.Nil @Prim.Type) ()
+instance forall (label :: Prim.Symbol) (tail :: Prim.RowList.RowList Prim.Type) (row :: Prim.Row Prim.Type).
+  Main.Labels
+    (Prim.RowList.Cons @Prim.Type
+      (label :: Prim.Symbol)
+      Prim.Int
+      (tail :: Prim.RowList.RowList Prim.Type))
+    ( label :: Prim.Int | (row :: Prim.Row Prim.Type) )
+instance forall t0 (row :: t0). Main.Shape (Main.Proxy @t0 (row :: t0))
+instance Main.Shape (Main.Proxy @Prim.Symbol "name")
+instance Main.Shape (Main.Proxy @Prim.Int 42)
+instance Main.Shape (Prim.Int -> Main.Proxy @Prim.Type Prim.Int)
+instance Main.Recorded Prim.Int { name :: Prim.Int }
+instance Main.Chosen Prim.Int (Main.Proxy @Prim.Type Prim.Int) ( name :: Prim.Int )
+
+Roles
+Proxy = [Phantom]

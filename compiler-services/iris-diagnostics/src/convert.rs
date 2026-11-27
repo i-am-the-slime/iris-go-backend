@@ -1334,20 +1334,20 @@ impl ToDiagnostics for CheckingError {
                 };
                 ("InstanceHeadMismatch", message)
             }
-            ErrorKind::InstanceHeadLabeledRow { class_file, class_item, position, type_id } => {
+            ErrorKind::InvalidInstanceHead { class_file, class_item, position, type_id } => {
                 let position = position + 1;
                 let rendered = render_type(*type_id)?;
                 let message = match type_item_name(context, *class_file, *class_item)? {
                     Some(name) => format!(
-                        "Instance argument {position} of '{name}' cannot contain labelled row '{rendered}'"
+                        "Instance argument {position} of '{name}' is invalid due to use of type '{rendered}'"
                     ),
                     None => {
                         format!(
-                            "Instance argument {position} cannot contain labelled row '{rendered}'"
+                            "Instance argument {position} is invalid due to use of type '{rendered}'"
                         )
                     }
                 };
-                ("InstanceHeadLabeledRow", message)
+                ("InvalidInstanceHead", message)
             }
             ErrorKind::InstanceMemberTypeMismatch { expected, actual } => {
                 let expected = render_type(*expected)?;
@@ -1555,9 +1555,9 @@ impl ToDiagnostics for CheckingError {
                 diagnostic =
                     diagnostic.with_context("This type has no remaining visible 'forall' binder");
             }
-            ErrorKind::InstanceHeadLabeledRow { .. } => {
+            ErrorKind::InvalidInstanceHead { .. } => {
                 diagnostic = diagnostic.with_context(
-                    "This parameter is not determined by a functional dependency, so only a row variable like '( | r )' is allowed",
+                    "Instance arguments must be of the form 'T a_1 .. a_n', unless functional dependencies fully determine them, which allows rows",
                 );
             }
             ErrorKind::DeriveNewtypeCycle => {

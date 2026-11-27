@@ -1,6 +1,4 @@
 ---
 source: tests-integration/src/fixtures.rs
 ---
-@export defaultOptions = {  }
-
-@export instance convertOptionsTypeTypeTypeRecordOptionalTypeRecordRecordAll = {  }
+Module Main rejected; see Main.diagnostics.snap

@@ -166,7 +166,7 @@ where
         canonical = context.intern_constrained(constraint, canonical);
     }
 
-    constraint::instances::validate_rows(state, context, class_file, class_id, &checked_arguments)?;
+    constraint::instances::validate_head(state, context, class_file, class_id, &checked_arguments)?;
 
     let resolution = (class_file, class_id);
     let canonical = zonk::zonk(state, context, canonical)?;
