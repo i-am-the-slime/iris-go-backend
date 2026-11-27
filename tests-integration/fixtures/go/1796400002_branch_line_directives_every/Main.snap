@@ -59,7 +59,7 @@ func main() {
 //line Main.purs:47:14
 	counter := 3
 //line Main.purs:50:3
-	if size(insert(counter, insert(1, insertLeaf(5)))) != 3 {
+	if size(insertReusing(counter, insertReusing(1, insertLeaf(5)))) != 3 {
 //line Main.purs:51:5
 		effectexception.Throw("the size is wrong")
 //line Main.purs:50:3
@@ -153,37 +153,6 @@ func main() {
 //line Main.purs:46:1
 }
 
-//line Main.purs:22:1
-func insert(x int, value *Tree) *Tree {
-//line Main.purs:23:3
-	if value == sharedTreeLeaf {
-//line Main.purs:23:11
-		return Node(sharedTreeLeaf, x, sharedTreeLeaf)
-//line Main.purs:23:3
-	}
-//line Main.purs:24:3
-	left := value.Node0
-//line Main.purs:24:3
-	y := int(value.Node1)
-//line Main.purs:24:3
-	right := value.Node2
-//line Main.purs:25:7
-	if x < y {
-//line Main.purs:25:16
-		return Node(insert(x, left), y, right)
-//line Main.purs:25:7
-	}
-//line Main.purs:26:7
-	if x > y {
-//line Main.purs:26:16
-		return Node(left, y, insert(x, right))
-//line Main.purs:26:7
-	}
-//line Main.purs:27:20
-	return value
-//line Main.purs:22:1
-}
-
 //line Main.purs:30:1
 func size(value *Tree) int {
 //line Main.purs:31:3
@@ -199,32 +168,47 @@ func size(value *Tree) int {
 
 //line Main.purs:22:1
 func insertLeaf(x int) *Tree {
+//line Main.purs:23:11
+	return Node(sharedTreeLeaf, x, sharedTreeLeaf)
+//line Main.purs:22:1
+}
+
+//line Main.purs:22:1
+func insertReusing(x int, value *Tree) *Tree {
 //line Main.purs:23:3
-	if sharedTreeLeaf == sharedTreeLeaf {
+	if value == sharedTreeLeaf {
 //line Main.purs:23:11
 		return Node(sharedTreeLeaf, x, sharedTreeLeaf)
 //line Main.purs:23:3
 	}
 //line Main.purs:24:3
-	left := sharedTreeLeaf.Node0
+	left := value.Node0
 //line Main.purs:24:3
-	y := int(sharedTreeLeaf.Node1)
+	y := int(value.Node1)
 //line Main.purs:24:3
-	right := sharedTreeLeaf.Node2
+	right := value.Node2
 //line Main.purs:25:7
 	if x < y {
 //line Main.purs:25:16
-		return Node(insert(x, left), y, right)
+		field := insertReusing(x, left)
+//line Main.purs:25:16
+		value.Node0 = field
+//line Main.purs:25:16
+		return value
 //line Main.purs:25:7
 	}
 //line Main.purs:26:7
 	if x > y {
 //line Main.purs:26:16
-		return Node(left, y, insert(x, right))
+		field := insertReusing(x, right)
+//line Main.purs:26:16
+		value.Node2 = field
+//line Main.purs:26:16
+		return value
 //line Main.purs:26:7
 	}
 //line Main.purs:27:20
-	return sharedTreeLeaf
+	return value
 //line Main.purs:22:1
 }
 

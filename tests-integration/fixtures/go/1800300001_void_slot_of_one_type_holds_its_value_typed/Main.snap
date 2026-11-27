@@ -16,12 +16,12 @@ type Void struct {
 }
 
 type Hooks struct {
-	OnLine *Void
-	OnWord *Void
+	OnLine Void
+	OnWord Void
 }
 
-func JustVoid(just void.Void) *Void {
-	return &Void{Tag: TagJust, Just: just}
+func JustVoid(just void.Void) Void {
+	return Void{Tag: TagJust, Just: just}
 }
 
 // Data/Void/void.go
