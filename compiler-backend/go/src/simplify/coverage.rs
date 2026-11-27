@@ -271,35 +271,38 @@ pub(super) fn column_outcomes(
 ) -> Option<Vec<ColumnOutcome>> {
     let mut outcomes = Vec::with_capacity(alternatives.len());
     for alternative in alternatives {
-        let pattern = &alternative.patterns[column];
-        let outcome = match (&pattern.kind, &scrutinee.kind) {
-            (PatternKind::Wildcard | PatternKind::Variable(_), _) => ColumnOutcome::Matches,
-            (
-                PatternKind::Constructor { constructor, arguments: patterns, .. },
-                ExpressionKind::Construct { constructor: known, arguments: values, .. },
-            ) => {
-                if constructor != known {
-                    ColumnOutcome::Fails
-                } else {
-                    let binds_or_matches =
-                        |pattern: &Pattern, value: &Expression| match pattern.kind {
-                            _ if irrefutable(pattern) => Some(true),
-                            _ => known_match(pattern, value),
-                        };
-                    all_of(patterns.iter().zip(values).map(|(p, v)| binds_or_matches(p, v)))?
-                }
-            }
-            (PatternKind::Literal(pattern), ExpressionKind::Literal(known)) => {
-                match literals_equal(pattern, known)? {
-                    true => ColumnOutcome::Matches,
-                    false => ColumnOutcome::Fails,
-                }
-            }
-            _ => return None,
-        };
-        outcomes.push(outcome);
+        outcomes.push(pattern_outcome(&alternative.patterns[column], scrutinee)?);
     }
     Some(outcomes)
+}
+
+/// Whether a pattern matches a value the code spells out: an as-pattern as its inner pattern does.
+fn pattern_outcome(pattern: &Pattern, scrutinee: &Expression) -> Option<ColumnOutcome> {
+    Some(match (&pattern.kind, &scrutinee.kind) {
+        (PatternKind::Wildcard | PatternKind::Variable(_), _) => ColumnOutcome::Matches,
+        (PatternKind::Named { pattern, .. }, _) => pattern_outcome(pattern, scrutinee)?,
+        (
+            PatternKind::Constructor { constructor, arguments: patterns, .. },
+            ExpressionKind::Construct { constructor: known, arguments: values, .. },
+        ) => {
+            if constructor != known {
+                ColumnOutcome::Fails
+            } else {
+                let binds_or_matches = |pattern: &Pattern, value: &Expression| match pattern.kind {
+                    _ if irrefutable(pattern) => Some(true),
+                    _ => known_match(pattern, value),
+                };
+                all_of(patterns.iter().zip(values).map(|(p, v)| binds_or_matches(p, v)))?
+            }
+        }
+        (PatternKind::Literal(pattern), ExpressionKind::Literal(known)) => {
+            match literals_equal(pattern, known)? {
+                true => ColumnOutcome::Matches,
+                false => ColumnOutcome::Fails,
+            }
+        }
+        _ => return None,
+    })
 }
 
 /// Whether a pattern that binds nothing matches a value the code spells out, when the value
@@ -365,6 +368,11 @@ struct FieldPath {
 fn pattern_variables(pattern: &Pattern) -> Vec<(LocalId, Option<FieldPath>)> {
     match &pattern.kind {
         PatternKind::Variable(local) => vec![(local.id, None)],
+        PatternKind::Named { local, pattern } => {
+            let mut variables = vec![(local.id, None)];
+            variables.extend(pattern_variables(pattern));
+            variables
+        }
         PatternKind::Constructor { arguments, .. } => {
             let mut variables = vec![];
             for (position, argument) in arguments.iter().enumerate() {
