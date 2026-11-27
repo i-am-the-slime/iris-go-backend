@@ -184,8 +184,16 @@ where
                 Some(FunctionSpelling::Specialized { name, .. }) if name == "showTree"
             );
         if shows_tree {
-            for parameter in &function.parameters {
-                if let Monotype::Data(data) = monotypes.get(parameter.monotype)
+            // Unsimplified, `showTree` takes its dictionaries first and the map after them.
+            let mut arguments: Vec<MonotypeId> =
+                function.parameters.iter().map(|parameter| parameter.monotype).collect();
+            let mut result = function.result;
+            while let Some((argument, rest)) = monotypes.function_parts(result) {
+                arguments.push(argument);
+                result = rest;
+            }
+            for argument in arguments {
+                if let Monotype::Data(data) = monotypes.get(argument)
                     && is_map(data)
                 {
                     shaped.insert(data.clone());

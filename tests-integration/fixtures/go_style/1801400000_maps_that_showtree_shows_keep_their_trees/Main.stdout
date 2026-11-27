@@ -1,0 +1,14 @@
+-- a map that showTree shows keeps the shape its inserts and deletes gave it
+[3] 10 => "5"
+    [2] 6 => "3"
+        [1] 4 => "2"
+            Leaf
+            Leaf
+        [1] 8 => "4"
+            Leaf
+            Leaf
+    [2] 12 => "6"
+        Leaf
+        [1] 14 => "7"
+            Leaf
+            Leaf
