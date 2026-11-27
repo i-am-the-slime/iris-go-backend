@@ -52,11 +52,29 @@ where
             let value = match uncurried.get(position).cloned().flatten() {
                 Some(groups) => {
                     let value = self.grouped_value(argument, &groups, out)?;
-                    match variable_effect_functions.get(&position) {
+                    let unit_valued = match variable_effect_functions.get(&position) {
                         Some(&arity) if self.returns_unit_after(argument.monotype, arity) => {
-                            self.unit_valued_uncurried(value, argument.monotype, arity, out)?
+                            Some(arity)
                         }
-                        _ => value,
+                        _ => None,
+                    };
+                    if self.grouped_crosses_converted(argument.monotype, &groups, crossing)? {
+                        let value = self.shared(value, "function", out);
+                        let unit_valued = unit_valued.is_some();
+                        self.grouped_in_convention(
+                            value,
+                            argument.monotype,
+                            &groups,
+                            unit_valued,
+                            crossing,
+                        )?
+                    } else {
+                        match unit_valued {
+                            Some(arity) => {
+                                self.unit_valued_uncurried(value, argument.monotype, arity, out)?
+                            }
+                            None => value,
+                        }
                     }
                 }
                 None => {
@@ -274,6 +292,89 @@ where
             current = result;
         }
         self.is_unit(self.monotypes.effect_result(current).unwrap_or(current))
+    }
+
+    /// Whether an uncurried callback's parameters or final result cross in another Go type than
+    /// its own, as a record does into a foreign that boxes its type arguments.
+    fn grouped_crosses_converted(
+        &mut self,
+        monotype: MonotypeId,
+        groups: &[usize],
+        crossing: Crossing,
+    ) -> GoResult<bool> {
+        if crossing == Crossing::Native {
+            return Ok(false);
+        }
+        let mut current = monotype;
+        for _ in 0..groups.iter().sum::<usize>() {
+            let Some((parameter, result)) = self.monotypes.function_parts(current) else {
+                return Ok(false);
+            };
+            if self.convention_type(parameter, crossing)?.is_some() {
+                return Ok(true);
+            }
+            current = result;
+        }
+        let returned = self.monotypes.effect_result(current).unwrap_or(current);
+        Ok(self.convention_type(returned, crossing)?.is_some())
+    }
+
+    /// The uncurried callback `function` as the foreign's convention takes it: a layer per
+    /// group that brings its parameters out of the convention and its result into it, and that
+    /// returns Unit's value after it performs where the foreign's result is a variable.
+    fn grouped_in_convention(
+        &mut self,
+        function: GoExpression,
+        monotype: MonotypeId,
+        groups: &[usize],
+        unit_valued: bool,
+        crossing: Crossing,
+    ) -> GoResult<GoExpression> {
+        let Some((&size, rest)) = groups.split_first() else { return Ok(function) };
+        let mut parameters = Vec::with_capacity(size);
+        let mut arguments = Vec::with_capacity(size);
+        let mut body = vec![];
+        let mut current = monotype;
+        for _ in 0..size {
+            let (parameter, result) = self
+                .monotypes
+                .function_parts(current)
+                .expect("invariant violated: grouped arguments are the function's parameters");
+            let base = self.value_base(parameter);
+            let name = self.temporary(&base);
+            let type_ = self.convention_or_native(parameter, crossing)?;
+            let argument = self.out_of_convention(
+                identifier_expression(&name),
+                parameter,
+                crossing,
+                &mut body,
+            )?;
+            arguments.push(self.shared(argument, &base, &mut body));
+            parameters.push((name, type_));
+            current = result;
+        }
+        let called = call(function, arguments);
+        if !rest.is_empty() {
+            let inner = self.grouped_in_convention(called, current, rest, unit_valued, crossing)?;
+            let result = Some(super::application::function_type(&inner));
+            body.push(GoStatement::Return(Some(inner)));
+            return Ok(GoExpression::Function { parameters, result, body });
+        }
+        let returned = self.monotypes.effect_result(current).unwrap_or(current);
+        let result = if self.is_unit(returned) {
+            body.push(GoStatement::Expression(called));
+            if unit_valued {
+                body.push(GoStatement::Return(Some(unit_value())));
+                Some(GoType::EmptyStruct)
+            } else {
+                None
+            }
+        } else {
+            let converted = self.in_convention(called, returned, crossing, &mut body)?;
+            body.push(GoStatement::Return(Some(converted)));
+            Some(self.convention_or_native(returned, crossing)?)
+        };
+        Ok(GoExpression::Function { parameters, result, body })
     }
 
     /// The uncurried callback, returning Unit's value after it performs.

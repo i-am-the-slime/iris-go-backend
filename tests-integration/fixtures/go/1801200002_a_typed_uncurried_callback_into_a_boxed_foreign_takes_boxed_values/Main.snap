@@ -1,0 +1,35 @@
+---
+source: tests-integration/src/fixtures.rs
+---
+// main.go
+package main
+
+import (
+	pipe "fixture/Pipe_ffi"
+	"fixture/shared"
+	"strconv"
+)
+
+func main_() []string {
+	pipe2 := pipe.NewPipe(any(shared.Spot{X: 1, Y: 2}))
+	function := func(spot shared.Spot, open bool) string {
+		return strconv.Itoa(spot.X) + "," + strconv.Itoa(spot.Y) + " " + strconv.FormatBool(open)
+	}
+	taken := pipe.OnTake(pipe2, func(spot any, boolean bool) string {
+		spot2 := spot.(shared.Spot)
+		return function(spot2, boolean)
+	})
+	return []string{taken, strconv.Itoa(pipe.Leaked(pipe2))}
+}
+
+func main() {
+	main_()
+}
+
+// shared/shared.go
+package shared
+
+type Spot struct {
+	X int
+	Y int
+}

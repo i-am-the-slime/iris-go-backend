@@ -465,7 +465,7 @@ where
     }
 }
 
-fn function_type(function: &GoExpression) -> GoType {
+pub(super) fn function_type(function: &GoExpression) -> GoType {
     let GoExpression::Function { parameters, result, .. } = function else {
         unreachable!("invariant violated: a grouped layer is a function")
     };
