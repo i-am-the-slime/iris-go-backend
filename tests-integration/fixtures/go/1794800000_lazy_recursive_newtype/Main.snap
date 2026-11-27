@@ -11,14 +11,14 @@ import (
 	"strings"
 )
 
-type StreamInt = *lazy.Lazy[*TupleInt]
+type StreamInt = *lazy.Lazy[TupleInt]
 
 type TupleInt struct {
 	Second StreamInt
 	First  int
 }
 
-type StreamStreamInt = *lazy.Lazy[*TupleStreamInt]
+type StreamStreamInt = *lazy.Lazy[TupleStreamInt]
 
 type TupleStreamInt struct {
 	First  StreamInt
@@ -42,20 +42,20 @@ func initializeMain_() []string {
 	return []string{strconv.Itoa(scrutinee.First), result, strconv.Itoa(scrutinee5.First)}
 }
 
-func countdown(n int) *lazy.Lazy[*TupleInt] {
-	return lazy.Defer(func() *TupleInt {
+func countdown(n int) *lazy.Lazy[TupleInt] {
+	return lazy.Defer(func() TupleInt {
 		var result StreamInt
 		if n <= 0 {
 			result = nil
 		} else {
 			result = countdown(n - 1)
 		}
-		return &TupleInt{First: n, Second: result}
+		return TupleInt{First: n, Second: result}
 	})
 }
 
-func tails(stream StreamInt) *lazy.Lazy[*TupleStreamInt] {
-	return lazy.Defer(func() *TupleStreamInt {
+func tails(stream StreamInt) *lazy.Lazy[TupleStreamInt] {
+	return lazy.Defer(func() TupleStreamInt {
 		scrutinee := stream.Force()
 		var result StreamStreamInt
 		if scrutinee.Second != nil {
@@ -63,7 +63,7 @@ func tails(stream StreamInt) *lazy.Lazy[*TupleStreamInt] {
 		} else {
 			result = nil
 		}
-		return &TupleStreamInt{First: stream, Second: result}
+		return TupleStreamInt{First: stream, Second: result}
 	})
 }
 
