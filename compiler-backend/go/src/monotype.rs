@@ -65,6 +65,9 @@ pub enum Monotype {
     ForeignData(DataType),
     Recursive(DataType),
     Erased(Erasure),
+    /// A `Data.Map` of a key and a value that the program owns along its whole life and uses
+    /// only by key, as a Go `map[K]V` ([`crate::maps`]).
+    HashMap(MonotypeId, MonotypeId),
 }
 
 impl Monotype {
@@ -294,6 +297,9 @@ impl Monotypes {
             Monotype::Nullable(element) => Monotype::Nullable(self.without_causes(element)),
             Monotype::Lazy(element) => Monotype::Lazy(self.without_causes(element)),
             Monotype::ConsList(element) => Monotype::ConsList(self.without_causes(element)),
+            Monotype::HashMap(key, value) => {
+                Monotype::HashMap(self.without_causes(key), self.without_causes(value))
+            }
             monotype => monotype,
         };
         let collapsed = self.intern(collapsed);

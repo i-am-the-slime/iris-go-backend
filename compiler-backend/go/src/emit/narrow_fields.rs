@@ -105,6 +105,10 @@ impl Census {
                 }
             }
             GoType::Slice(inner) | GoType::Pointer(inner) => self.type_(inner),
+            GoType::Map(key, value) => {
+                self.type_(key);
+                self.type_(value);
+            }
             GoType::Function { parameters, result } => {
                 parameters.iter().for_each(|parameter| self.type_(parameter));
                 result.iter().for_each(|result| self.type_(result));

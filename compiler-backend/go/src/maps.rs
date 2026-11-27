@@ -254,6 +254,46 @@ where
     matches!(name.as_str(), "Int" | "Char" | "String")
 }
 
+/// What a Go map does for a [`MapOperation`] of a map in that representation.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum HashMapOperation {
+    /// `make(map[K]V, n)`, of the number of entries it is made for.
+    New,
+    /// `map[K]V{k: v}`, of the key and the value.
+    Singleton,
+    /// `m[k] = v`, of the key, the value and the map, which it answers.
+    Insert,
+    /// `delete(m, k)`, of the key and the map, which it answers.
+    Delete,
+    /// `m[k]` as a `Maybe`, of the key and the map.
+    Lookup,
+    /// Whether the map holds the key, of the key and the map.
+    Member,
+    /// `len(m)`.
+    Size,
+    /// `len(m) == 0`.
+    IsEmpty,
+    /// `m[k]` of a key the map holds, of the key and the map.
+    Get,
+    /// `for k := range other { delete(m, k) }`, of the map and the other, which it answers.
+    Difference,
+}
+
+impl HashMapOperation {
+    pub fn arity(self) -> usize {
+        match self {
+            HashMapOperation::New | HashMapOperation::Size | HashMapOperation::IsEmpty => 1,
+            HashMapOperation::Singleton
+            | HashMapOperation::Delete
+            | HashMapOperation::Lookup
+            | HashMapOperation::Member
+            | HashMapOperation::Get
+            | HashMapOperation::Difference => 2,
+            HashMapOperation::Insert => 3,
+        }
+    }
+}
+
 /// The map operations of a program by their names, which survive simplification's renumbering
 /// of the functions.
 #[derive(Default)]

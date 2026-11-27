@@ -40,6 +40,9 @@ where
             Monotype::Erased(erasure) => GoType::Erased(erasure),
             Monotype::Opaque => GoType::Erased(Erasure::Foreign),
             Monotype::Array(element) => GoType::Slice(Box::new(self.go_type(element)?)),
+            Monotype::HashMap(key, value) => {
+                GoType::Map(Box::new(self.go_type(key)?), Box::new(self.go_type(value)?))
+            }
             Monotype::Record(_) => self.record_go_type(monotype)?,
             Monotype::Function(..) if self.has_closure_set(monotype) => {
                 self.closure_layout(monotype)?.go_type()
@@ -208,6 +211,10 @@ where
                 arguments.iter_mut().for_each(|argument| self.resolve_aliases(argument));
             }
             GoType::Slice(element) | GoType::Pointer(element) => self.resolve_aliases(element),
+            GoType::Map(key, value) => {
+                self.resolve_aliases(key);
+                self.resolve_aliases(value);
+            }
             GoType::Function { parameters, result } => {
                 parameters.iter_mut().for_each(|parameter| self.resolve_aliases(parameter));
                 if let Some(result) = result {
@@ -281,6 +288,7 @@ where
                 | Monotype::Nullable(inner)
                 | Monotype::Lazy(inner)
                 | Monotype::ConsList(inner) => pending.push(inner),
+                Monotype::HashMap(key, value) => pending.extend([key, value]),
                 Monotype::ForeignData(foreign) => {
                     for &argument in foreign.arguments.iter() {
                         let argument = self.monotypes.monotype(&mut self.context, argument);
@@ -346,6 +354,9 @@ where
                 | Monotype::MutableArray(inner)
                 | Monotype::Object(inner)
                 | Monotype::Nullable(inner) => pending.push((inner, argument)),
+                Monotype::HashMap(key, value) => {
+                    pending.extend([(key, argument), (value, argument)]);
+                }
                 Monotype::Reference(inner) | Monotype::Lazy(inner) | Monotype::ConsList(inner) => {
                     pending.push((inner, true))
                 }

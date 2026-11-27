@@ -135,6 +135,8 @@ pub enum Foreign {
     /// `show` of one ForeignError and the errors, and shows them with go-support's
     /// `foreignvalue.ShowErrors`.
     ShowForeignErrors,
+    /// An operation on a `Data.Map` that is a Go map ([`crate::maps`]).
+    HashMap(crate::maps::HashMapOperation),
 }
 
 /// A typed Yoga.JSON codec, which reads the text straight into the program's
@@ -580,6 +582,7 @@ impl Foreign {
             Foreign::Ordering => 5,
             Foreign::Range | Foreign::Snoc | Foreign::RecordGet | Foreign::RecordHas => 2,
             Foreign::OwnedReverse => 1,
+            Foreign::HashMap(operation) => operation.arity(),
             Foreign::Record(operation) => operation.arity(),
             Foreign::Unfoldr | Foreign::Unfoldr1 => 6,
             Foreign::ReferenceWrite | Foreign::ReferenceWriteThrough | Foreign::ReferenceModify => {

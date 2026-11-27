@@ -135,6 +135,10 @@ fn type_references(type_: &mut GoType, visit: &mut impl FnMut(Reference<'_>)) {
             arguments.iter_mut().for_each(|argument| type_references(argument, visit));
         }
         GoType::Slice(element) | GoType::Pointer(element) => type_references(element, visit),
+        GoType::Map(key, value) => {
+            type_references(key, visit);
+            type_references(value, visit);
+        }
         GoType::Function { parameters, result } => {
             parameters.iter_mut().for_each(|parameter| type_references(parameter, visit));
             if let Some(result) = result {
@@ -280,6 +284,16 @@ impl<F: FnMut(Name<'_>)> Walk for Names<'_, F> {
         match expression {
             GoExpression::Identifier(name) => (self.0)(Name::Reference(name)),
             GoExpression::Address(value) => self.written(value),
+            // `delete(m, k)` and `clear(m)` change the map `m` in place.
+            GoExpression::Call { function, arguments }
+                if matches!(&**function, GoExpression::Identifier(builtin) if builtin == "delete" || builtin == "clear")
+                    && !arguments.is_empty() =>
+            {
+                self.expression(function);
+                let (changed, rest) = arguments.split_at_mut(1);
+                self.written(&mut changed[0]);
+                rest.iter_mut().for_each(|argument| self.expression(argument));
+            }
             GoExpression::Function { parameters, .. } => {
                 for (parameter, _) in parameters.iter_mut() {
                     (self.0)(Name::Binder(parameter));

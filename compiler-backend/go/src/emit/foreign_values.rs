@@ -349,6 +349,9 @@ where
             );
             return self.thunk(&expression, out);
         }
+        if let Foreign::HashMap(operation) = foreign {
+            return self.hash_map_operation(*operation, arguments, monotype, out);
+        }
         if let Foreign::Range = foreign {
             let range = self.go_function(GoFunction { package: GoPackage::Array, name: "Range" });
             let values = self.values(arguments, out)?;

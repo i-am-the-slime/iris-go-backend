@@ -575,6 +575,7 @@ impl Printer {
             }
             GoType::Slice(element) => format!("[]{}", self.type_(element)),
             GoType::Pointer(element) => format!("*{}", self.type_(element)),
+            GoType::Map(key, value) => format!("map[{}]{}", self.type_(key), self.type_(value)),
             GoType::Function { parameters, result } => {
                 let parameters: Vec<String> =
                     parameters.iter().map(|parameter| self.type_(parameter)).collect();

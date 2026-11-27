@@ -191,6 +191,7 @@ pub(crate) fn is_deferrable(expression: &Expression) -> bool {
                         | Foreign::RunEffect
                         | Foreign::UnsafePerformEffect
                         | Foreign::LazyForce
+                        | Foreign::HashMap(_)
                 ) && !foreign.is_effectful()
             }
             ExpressionKind::Reuse { .. }

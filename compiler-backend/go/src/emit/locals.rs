@@ -345,6 +345,10 @@ impl Walk {
             GoType::Any | GoType::Erased(_) => self.free_name("any".into()),
             GoType::EmptyStruct => {}
             GoType::Slice(element) | GoType::Pointer(element) => self.type_(element),
+            GoType::Map(key, value) => {
+                self.type_(key);
+                self.type_(value);
+            }
             GoType::Function { parameters, result } => {
                 parameters.iter_mut().for_each(|parameter| self.type_(parameter));
                 if let Some(result) = result {

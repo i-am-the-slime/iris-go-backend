@@ -242,6 +242,12 @@ impl Walk for Writes<'_> {
         {
             self.written = true;
         }
+        if let GoExpression::Call { function, arguments } = value
+            && matches!(&**function, GoExpression::Identifier(builtin) if builtin == "delete" || builtin == "clear")
+            && arguments.first().is_some_and(|changed| is_named(changed, self.name))
+        {
+            self.written = true;
+        }
         go_traversal::expression(self, value);
     }
 }

@@ -29,7 +29,11 @@ use crate::monomorphic::{
     Alternative, Binding, Expression, ExpressionKind, Function, FunctionId, Guard, Guarded, Local,
     LocalId, Program,
 };
-use crate::monotype::MonotypeId;
+use crate::monotype::{MonotypeId, Monotypes};
+
+mod rewrite;
+
+use self::rewrite::Rewrite;
 
 /// The names of the map operations that some Go map does.
 pub(crate) fn operations_used(
@@ -50,6 +54,32 @@ pub(crate) fn operations_used(
         .filter(|&&(_, node)| decided.is_native(node))
         .map(|&(id, _)| program.function(id).name.clone())
         .collect()
+}
+
+/// Rewrites the program so that the maps that may be Go maps are, and their operations Go map
+/// operations.
+pub(super) fn choose_hash_maps(
+    program: &mut Program,
+    monotypes: &mut Monotypes,
+    operations: &FxHashMap<FunctionId, MapOperation>,
+) {
+    if operations.is_empty() || !uniqueness::enabled() {
+        return;
+    }
+    let shapes = map_shapes(program, operations);
+    if shapes.is_empty() {
+        return;
+    }
+    let readers = readers(program, operations, &shapes);
+    let webs = {
+        let mut finder = Webs::new(program, operations, &shapes, &readers);
+        finder.find();
+        finder.decide()
+    };
+    if webs.native_nodes.is_empty() {
+        return;
+    }
+    Rewrite::new(program, monotypes, operations, &shapes, webs).rewrite();
 }
 
 /// The key and value of a map type that some map operation works on.
@@ -590,6 +620,28 @@ impl<'p> Webs<'p> {
         loop {
             let settled = self.settle();
             let mut forced = vec![];
+            for &(node, _) in &self.escapes {
+                if !settled.tree[root_of(&mut self.parents, node)] {
+                    forced.push(node);
+                }
+            }
+            for edge in &self.soft {
+                let from = root_of(&mut self.parents, edge.from);
+                let to = root_of(&mut self.parents, edge.to);
+                match (settled.tree[from], settled.tree[to]) {
+                    (false, true) => forced.push(edge.from),
+                    (true, false) => forced.push(edge.to),
+                    _ => {}
+                }
+            }
+            if !forced.is_empty() {
+                // The tree and a Go map do not convert into each other yet: a web that would
+                // need to stays a tree.
+                for node in forced {
+                    self.force_tree(node);
+                }
+                continue;
+            }
             for &(node, local, scope) in &self.slots {
                 let root = root_of(&mut self.parents, node);
                 if settled.tree[root] {

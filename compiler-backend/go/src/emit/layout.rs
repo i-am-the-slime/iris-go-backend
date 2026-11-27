@@ -372,6 +372,7 @@ where
             | Monotype::BigInt
             | Monotype::Lazy(_)
             | Monotype::ConsList(_)
+            | Monotype::HashMap(..)
             | Monotype::Recursive(_) => Shape::POINTER,
         })
     }

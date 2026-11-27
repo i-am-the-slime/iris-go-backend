@@ -260,6 +260,7 @@ fn mentions_any(type_: &GoType) -> bool {
     match type_ {
         GoType::Any | GoType::Erased(_) => true,
         GoType::Slice(element) | GoType::Pointer(element) => mentions_any(element),
+        GoType::Map(key, value) => mentions_any(key) || mentions_any(value),
         GoType::Function { parameters, result } => {
             parameters.iter().any(mentions_any) || result.as_deref().is_some_and(mentions_any)
         }

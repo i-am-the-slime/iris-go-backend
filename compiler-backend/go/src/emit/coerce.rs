@@ -569,6 +569,7 @@ where
             Monotype::Nullable(_) => Monotype::Nullable(erased),
             Monotype::Lazy(_) => Monotype::Lazy(erased),
             Monotype::ConsList(_) => Monotype::ConsList(erased),
+            Monotype::HashMap(..) => Monotype::HashMap(erased, erased),
             Monotype::Record(fields) => {
                 let fields = fields
                     .iter()

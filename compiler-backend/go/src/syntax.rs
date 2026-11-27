@@ -23,6 +23,8 @@ pub enum GoType {
     Erased(crate::erasure::Erasure),
     Slice(Box<GoType>),
     Pointer(Box<GoType>),
+    /// `map[K]V`.
+    Map(Box<GoType>, Box<GoType>),
     Function {
         parameters: Vec<GoType>,
         result: Option<Box<GoType>>,
@@ -48,6 +50,7 @@ impl PartialEq for GoType {
             (Int, Int) | (Float64, Float64) | (Bool, Bool) | (Rune, Rune) => true,
             (String, String) | (EmptyStruct, EmptyStruct) => true,
             (Slice(left), Slice(right)) | (Pointer(left), Pointer(right)) => left == right,
+            (Map(left_key, left_value), Map(key, value)) => left_key == key && left_value == value,
             (
                 Function { parameters: left, result: left_result },
                 Function { parameters: right, result: right_result },

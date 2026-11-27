@@ -202,6 +202,7 @@ fn might_hold_cells(type_: &GoType) -> bool {
     match type_ {
         GoType::Named(name) => !SCALARS.contains(&name.as_str()),
         GoType::Slice(element) | GoType::Pointer(element) => might_hold_cells(element),
+        GoType::Map(key, value) => might_hold_cells(key) || might_hold_cells(value),
         GoType::Function { parameters, result } => {
             parameters.iter().any(might_hold_cells)
                 || result.as_deref().is_some_and(might_hold_cells)

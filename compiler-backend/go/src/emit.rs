@@ -42,6 +42,7 @@ mod from_list;
 mod fusion;
 mod groups;
 mod guards;
+mod hash_map_operations;
 mod hash_maps;
 mod headers;
 mod immediate;
@@ -75,6 +76,7 @@ mod ownership;
 mod packages;
 mod prepends;
 mod printing;
+mod probes;
 mod project;
 mod ranges;
 mod recycling;
@@ -153,10 +155,13 @@ pub fn emit_program<Q>(
     foreign_packages: &ForeignPackages,
     modules: &Modules,
     module_path: &str,
+    kept: &crate::maps::KeptOperations,
 ) -> GoResult<(Vec<GoSourceFile>, Vec<String>)>
 where
     Q: checking::ExternalQueries,
 {
+    let operations = kept.find(&program, modules);
+    timed("hash maps", || hash_maps::choose_hash_maps(&mut program, monotypes, &operations));
     timed("prepends", || prepends::append_prepending_folds(&mut program, monotypes));
     let arities = crate::arity::choose(&program, monotypes);
     let closure_sets = timed("closures", || {
@@ -324,6 +329,7 @@ where
     let global =
         |name: &str| emitter.global_names.contains(name) || IMPORTED_PACKAGES.contains(&name);
     timed("upserts", || upsert::look_up_and_write_once(&mut declarations, &global));
+    timed("probes", || probes::probe_once(&mut declarations, &global));
     timed("index arrays", || index_arrays::count_instead_of_listing_indices(&mut declarations));
     let mut record_value_name = |type_name: &str| {
         let (&monotype, _) = emitter.record_names.iter().find(|(_, name)| *name == type_name)?;

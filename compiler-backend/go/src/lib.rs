@@ -153,6 +153,7 @@ pub fn compile_program(
             foreign_packages,
             &modules,
             module_path,
+            &kept,
         )
     })?;
     let go_path = |path: &str| {
